@@ -9,90 +9,117 @@ import "testing"
 // a marker can land on that number (#5301). Every row measured 2026-10-01 on
 // zsh 5.9.2 under `-f -c`, byte for byte; the rows marked control agree with
 // a shell that holds nothing. See interp.Semantics.ACommandHoldsAJobSlot.
+//
+// No row races a sleep against the shell (#5556). The rows used to race sleep
+// lengths of 0.1s to 0.5s against the shell, and under load one failed. Each
+// state is now something the script did, not something the clock allowed:
+//   - A job that has to still be running sleeps thirty seconds and is killed
+//     before the row ends.
+//   - A job that has to end during a command, without being reaped by `wait`,
+//     is a program, and the command waits for it with poll. poll is a
+//     `/bin/sh` that returns once the job's pid is gone. It is bounded at
+//     3000 checks 10ms apart, so a failure cannot leave it spinning. It is a
+//     simple command, so like the `/bin/sleep` it replaces it holds no
+//     slot.
+//   - `(exit 3)` became `/bin/sh -c 'exit 3'`, so the job has a pid to watch.
+//
+// Every row was measured again in this shape, 2026-10-03, on zsh 5.9.2, and
+// prints what it printed before, with 30 in place of each sleep length.
 func TestACommandHoldsAJobSlot(t *testing.T) {
+	// poll returns once the job whose pid is in $p is gone. It is a simple
+	// command, so it holds no slot of its own.
+	const poll = `/bin/sh -c 'i=0; while kill -0 $1 2>/dev/null && [ $i -lt 3000 ]; do /bin/sleep 0.01; i=$((i+1)); done' poll $p`
+	const exit3 = `/bin/sh -c 'exit 3'`
 	for _, c := range []struct{ name, src, want string }{
 		{
-			"a brace group holds 1", `{ /bin/sleep 0.2 & jobs; }; wait`,
-			"[2]  + running    /bin/sleep 0.2\n",
+			"a brace group holds 1",
+			`{ /bin/sleep 30 & jobs; kill $!; }; wait`,
+			"[2]  + running    /bin/sleep 30\n",
 		},
 		{
-			"a function call holds 1", `f() { /bin/sleep 0.2 & jobs; }; f; wait`,
-			"[2]  + running    /bin/sleep 0.2\n",
+			"a function call holds 1",
+			`f() { /bin/sleep 30 & jobs; kill $!; }; f; wait`,
+			"[2]  + running    /bin/sleep 30\n",
 		},
 		{
-			"eval holds 1", `eval '/bin/sleep 0.2 & jobs'; wait`,
-			"[2]  + running    /bin/sleep 0.2\n",
+			"eval holds 1",
+			`eval '/bin/sleep 30 & jobs; kill $!'; wait`,
+			"[2]  + running    /bin/sleep 30\n",
 		},
 		{
-			"control: a job at the top", `/bin/sleep 0.2 & jobs; wait`,
-			"[1]  + running    /bin/sleep 0.2\n",
+			"control: a job at the top",
+			`/bin/sleep 30 & jobs; kill $!; wait`,
+			"[1]  + running    /bin/sleep 30\n",
 		},
 		{
-			"control: the slot goes with the command", `{ :; }; /bin/sleep 0.2 & jobs; wait`,
-			"[1]  + running    /bin/sleep 0.2\n",
+			"control: the slot goes with the command",
+			`{ :; }; /bin/sleep 30 & jobs; kill $!; wait`,
+			"[1]  + running    /bin/sleep 30\n",
 		},
 		{
-			"the + falls to the slot", `f() { (exit 3) & /bin/sleep 0.2; wait %%; wait %-; }; f`,
+			"the + falls to the slot",
+			`f() { ` + exit3 + ` & p=$!; ` + poll + `; wait %%; wait %-; }; f`,
 			"f:wait: %%: no such job\nf:wait: no previous job\n",
 		},
 		{
-			"control: no slot, no current job", `(exit 3) & /bin/sleep 0.2; wait %%`,
+			"control: no slot, no current job",
+			exit3 + ` & p=$!; ` + poll + `; wait %%`,
 			"zsh:wait:1: no current job\n",
 		},
 		{
 			"kill reaches the slot and sends nothing",
-			`f() { (exit 3) & /bin/sleep 0.2; kill -0 %%; echo k=$?; kill -0 %1; echo k=$?; jobs %1; }; f`,
+			`f() { ` + exit3 + ` & p=$!; ` + poll + `; kill -0 %%; echo k=$?; kill -0 %1; echo k=$?; jobs %1; }; f`,
 			"k=0\nk=0\nf:jobs: %1: no such job\n",
 		},
 		{
 			"the - stays on a number the command let go of",
-			`/bin/sleep 0.3 & { /bin/sleep 0.3 & }; jobs; jobs %-; wait`,
-			"[1]    running    /bin/sleep 0.3\n[3]  + running    /bin/sleep 0.3\nzsh:jobs:1: %-: no such job\n",
+			`/bin/sleep 30 & { /bin/sleep 30 & }; jobs; jobs %-; kill %1 %3 %4 2>/dev/null; wait`,
+			"[1]    running    /bin/sleep 30\n[3]  + running    /bin/sleep 30\nzsh:jobs:1: %-: no such job\n",
 		},
 		{
 			"a job that ended during the command left the - on it",
-			`/bin/sleep 0.1 & { /bin/sleep 0.3; }; jobs %%; jobs %-`,
+			`/bin/sleep 0 & p=$!; { ` + poll + `; }; jobs %%; jobs %-`,
 			"zsh:jobs:1: no current job\nzsh:jobs:1: %-: no such job\n",
 		},
 		{
 			"the + on the slot goes with it",
-			`f() { /bin/sleep 0.1 & /bin/sleep 0.3; }; f; jobs %%; jobs %-`,
+			`f() { /bin/sleep 0 & p=$!; ` + poll + `; }; f; jobs %%; jobs %-`,
 			"zsh:jobs:1: no current job\nzsh:jobs:1: no previous job\n",
 		},
 		{
 			"a function with a simple body holds one too",
-			`f() /bin/sleep 0.3; /bin/sleep 0.1 & f; jobs %%; jobs %-`,
+			`f() ` + poll + `; /bin/sleep 0 & p=$!; f; jobs %%; jobs %-`,
 			"zsh:jobs:1: no current job\nzsh:jobs:1: %-: no such job\n",
 		},
 		{
 			"a leaving - is chosen again",
-			`{ /bin/sleep 0.4 & (exit 3) & /bin/sleep 0.4 & /bin/sleep 0.2; jobs %-; }; wait`,
-			"[2]  - running    /bin/sleep 0.4\n",
+			`{ /bin/sleep 30 & ` + exit3 + ` & p=$!; /bin/sleep 30 & ` + poll + `; jobs %-; kill %2 %4 %5 2>/dev/null; }; wait`,
+			"[2]  - running    /bin/sleep 30\n",
 		},
 		{
 			"control: a job that ended before the command leaves no slot behind",
-			`/bin/sleep 0.1 & /bin/sleep 0.3; { jobs %%; jobs %-; }`,
+			`/bin/sleep 0 & p=$!; ` + poll + `; { jobs %%; jobs %-; }`,
 			"zsh:jobs:1: no current job\nzsh:jobs:1: no previous job\n",
 		},
 		{
 			"a bare disown with the + on the slot",
-			`f() { (exit 3) & /bin/sleep 0.2; disown; echo $?; }; f`,
+			`f() { ` + exit3 + ` & p=$!; ` + poll + `; disown; echo $?; }; f`,
 			"f:disown: no current job\n1\n",
 		},
 		{
 			"a bare wait hands the + to the slot",
-			`{ /bin/sleep 0.5 & kill %%; wait; jobs %%; jobs %-; }`,
+			`{ /bin/sleep 30 & kill %%; wait; jobs %%; jobs %-; }`,
 			"zsh:jobs:1: %%: no such job\nzsh:jobs:1: no previous job\n",
 		},
 		{
 			"a command inside a subshell holds nothing more",
-			`( /bin/sleep 0.3 & { /bin/sleep 0.2 & print ${(k)jobstates}; } ); wait`,
+			`( /bin/sleep 30 & a=$!; { /bin/sleep 30 & print ${(k)jobstates}; kill $a $!; } ); wait`,
 			"2 3\n",
 		},
 		{
 			"the - is the highest number, the slot counting",
-			`{ (exit 3) & /bin/sleep 0.4 & /bin/sleep 0.2; jobs %%; jobs %-; }; wait`,
-			"[3]  + running    /bin/sleep 0.4\nzsh:jobs:1: %-: no such job\n",
+			`{ ` + exit3 + ` & p=$!; /bin/sleep 30 & ` + poll + `; jobs %%; jobs %-; kill %3 %4 2>/dev/null; }; wait`,
+			"[3]  + running    /bin/sleep 30\nzsh:jobs:1: %-: no such job\n",
 		},
 	} {
 		t.Run(c.name, func(t *testing.T) {

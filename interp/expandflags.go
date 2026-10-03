@@ -63,6 +63,19 @@ func (r *Runner) expandFlagged(s syntax.Span, sp splitPolicy, head bool) ([]stri
 	if !ok {
 		return nil, true
 	}
+	if !escaped {
+		// A `:s` replacement's live marks are read here, where the words
+		// are escaped, and nowhere further on. See liveMark.
+		for i, w := range words {
+			if strings.Contains(w, liveMark) && quoted {
+				words[i] = stripLiveMarks(w)
+			}
+		}
+	} else {
+		for i, w := range words {
+			words[i] = stripLiveMarks(w)
+		}
+	}
 	if !isList {
 		v := words[0]
 		if quoted {
@@ -75,7 +88,9 @@ func (r *Runner) expandFlagged(s syntax.Span, sp splitPolicy, head bool) ([]stri
 			// An unquoted expansion of an empty value is no field at all.
 			return nil, true
 		}
-		if !escaped &&
+		if !escaped && strings.Contains(v, liveMark) {
+			v = escapeWithLiveMarks(v)
+		} else if !escaped &&
 			!r.ask(r.globSubstAnswer(s), "globbing the result of an expansion") {
 			v = globEscape(v)
 		}
@@ -152,7 +167,9 @@ func (r *Runner) expandFlagged(s syntax.Span, sp splitPolicy, head bool) ([]stri
 			nulls = append(nulls, true)
 			continue
 		}
-		if quoted || !r.ask(r.globSubstAnswer(s), "globbing the result of an expansion") {
+		if strings.Contains(w, liveMark) {
+			w = escapeWithLiveMarks(w)
+		} else if quoted || !r.ask(r.globSubstAnswer(s), "globbing the result of an expansion") {
 			w = globEscape(w)
 		}
 		out = append(out, w)

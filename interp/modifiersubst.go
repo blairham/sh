@@ -93,7 +93,7 @@ func (r *Runner) substituteModifier(value, rest string, global bool, e *syntax.P
 			return out, true
 		}
 	}
-	return r.substituteReplacement(value, pattern, with, global), true
+	return r.substituteReplacement(value, pattern, with, global, e), true
 }
 
 // substitutePattern is `:s` under one shell's `histsubstpattern`, where the
@@ -140,11 +140,11 @@ func (r *Runner) substitutePattern(value, pattern, with string, global bool) (st
 // **not** the same as an empty pattern: `${x:s//new/}` with no previous
 // substitution is refused by name, and `${x:&}` with none is silence. The two
 // reach for the same memory and answer differently when it is empty.
-func (r *Runner) repeatSubstitution(value string, global bool, _ *syntax.ParamExpr) (string, bool) {
+func (r *Runner) repeatSubstitution(value string, global bool, e *syntax.ParamExpr) (string, bool) {
 	if !r.lastSubst.set {
 		return value, true
 	}
-	return r.substituteReplacement(value, r.lastSubst.pattern, r.lastSubst.with, global), true
+	return r.substituteReplacement(value, r.lastSubst.pattern, r.lastSubst.with, global, e), true
 }
 
 // scanDelimited reads up to the next unescaped delim, answering the field as
@@ -320,8 +320,9 @@ func withoutQuotes(s string) string {
 // `"${s:s/a/$b/}"` is `x$by` and `"${s:s/a/"q"/}"` is `xqy`, where
 // `"${s:s/a/'q'/}"` keeps its `'q'`. A glob qualifier's `:s` keeps its own
 // reading.
-func (r *Runner) substituteReplacement(value, pattern, with string, global bool) string {
-	if pattern == "" || r.modifierTextEscaped || !strings.ContainsAny(with, `$'"`) {
+func (r *Runner) substituteReplacement(value, pattern, with string, global bool, e *syntax.ParamExpr) string {
+	live := r.marksLiveReplacement(with, e)
+	if pattern == "" || r.modifierTextEscaped || !live && !strings.ContainsAny(with, `$'"`) {
 		return substituteLiteral(value, pattern, with, global)
 	}
 	quoted := r.inDoubleQuotedSpan()
@@ -352,7 +353,7 @@ func (r *Runner) substituteReplacement(value, pattern, with string, global bool)
 			break
 		}
 		literals(rest[:i])
-		r.spliceReplacement(with, pattern, quoted, expand, literal, literals, &src)
+		r.spliceReplacement(with, pattern, quoted, expand, live, literal, literals, &src)
 		rest = rest[i+len(pattern):]
 		n--
 	}
@@ -379,7 +380,8 @@ func (r *Runner) substituteReplacement(value, pattern, with string, global bool)
 // matched text, a backslash protecting the byte after it, a single-quoted
 // run as text, double quotes dropped, and an unquoted `$` left to expand
 // unless the whole expansion is double-quoted.
-func (r *Runner) spliceReplacement(with, matched string, quoted, expand bool, literal func(byte), literals func(string), src *strings.Builder) {
+func (r *Runner) spliceReplacement(with, matched string, quoted, expand, live bool, literal func(byte), literals func(string), src *strings.Builder) {
+	inDouble := false
 	for i := 0; i < len(with); i++ {
 		c := with[i]
 		switch {
@@ -389,6 +391,7 @@ func (r *Runner) spliceReplacement(with, matched string, quoted, expand bool, li
 		case c == '&':
 			literals(matched)
 		case c == '"':
+			inDouble = !inDouble
 		case c == '\'' && !quoted:
 			j := strings.IndexByte(with[i+1:], '\'')
 			if j < 0 {
@@ -399,9 +402,78 @@ func (r *Runner) spliceReplacement(with, matched string, quoted, expand bool, li
 			i += j + 1
 		case c == '$' && expand:
 			src.WriteByte('$')
+		case live && !inDouble && strings.IndexByte(liveReplacementBytes, c) >= 0:
+			src.WriteString(liveMark)
+			literal(c)
 		default:
 			literal(c)
 		}
+	}
+}
+
+// A pattern character the replacement of `:s` wrote unquoted stays a pattern
+// character in the result: the result is matched against file names, though
+// a parameter's value never is. Measured 2026-10-03 on zsh 5.9.2 under `-f`,
+// in a directory holding `xay` and `xby`, with `s=xQy`:
+//
+//	${s:s/Q/?/}  ${s:s/Q/[ab]/}  ${s:s/Q/*/}  $s:s/Q/?/   xay xby
+//	${s:gs/Q/?/}  ${s:s/Q/?/:s/x/x/}                      xay xby
+//	${s:s/Q/?/}.                          no matches found: x?y.
+//	${(U)s:s/Q/?/}  ${s:s/Q/[a]/:u}       no matches found: X?Y, X[A]Y
+//	s='x?Q'; ${s:s/Q/?/}                  no matches found: x??, the
+//	                                      value's own `?` is text
+//	"${s:s/Q/?/}"  ${s:s/Q/\?/}  ${s:s/Q/'?'/}  ${s:s/Q/"?"/}   x?y
+//	v=${s:s/Q/?/}                         x?y, an assignment does not glob
+//	[[ xay = ${s:s/Q/?/} ]]               matches
+//
+// liveMark goes in front of each such character in the expansion's value, and
+// expansionResult leaves the character unescaped where it would escape the
+// rest. Only the expansion the word loop is expanding is marked, so a value
+// read anywhere else never holds one. See Runner.liveMarksFor.
+
+// liveMark is the sentinel in front of a pattern character a replacement
+// wrote. It is a private-use character, which no value a script makes is
+// expected to hold.
+const liveMark = "\uf8ff"
+
+// liveReplacementBytes are the pattern characters a replacement keeps live.
+const liveReplacementBytes = "*?[]"
+
+// marksLiveReplacement reports whether this replacement's pattern characters
+// are to be marked: the expansion is the one the word loop is expanding, it is
+// not double-quoted, and the replacement holds one.
+//
+// Not under a flag group other than the case and order letters, which carry
+// the marks through: measured, `${(U)s:s/Q/?/}`, `${(o)…}` and `${(@)…}` keep
+// them, `${(%)…}`, `${(V)…}`, `${(e)…}`, `${(z)…}`, `${(Q)…}` and `${(b)…}`
+// drop them, and a count or a padding must not see them at all.
+func (r *Runner) marksLiveReplacement(with string, e *syntax.ParamExpr) bool {
+	return r.liveMarksFor != nil && r.liveMarksFor == e &&
+		strings.Trim(e.Flags, "ULoO@") == "" &&
+		!r.inDoubleQuotedSpan() && strings.ContainsAny(with, liveReplacementBytes)
+}
+
+// stripLiveMarks takes the sentinels out of a value nobody globs.
+func stripLiveMarks(v string) string {
+	if !strings.Contains(v, liveMark) {
+		return v
+	}
+	return strings.ReplaceAll(v, liveMark, "")
+}
+
+// escapeWithLiveMarks is globEscape for a value holding live marks: each
+// marked character is left live and the rest is escaped.
+func escapeWithLiveMarks(v string) string {
+	var b strings.Builder
+	for {
+		i := strings.Index(v, liveMark)
+		if i < 0 || i+len(liveMark) >= len(v) {
+			b.WriteString(globEscape(stripLiveMarks(v)))
+			return b.String()
+		}
+		b.WriteString(globEscape(v[:i]))
+		b.WriteByte(v[i+len(liveMark)])
+		v = v[i+len(liveMark)+1:]
 	}
 }
 

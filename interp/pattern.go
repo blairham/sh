@@ -576,7 +576,19 @@ func (r *Runner) patternSpan(s syntax.Span) (text string, live bool) {
 		// that has the construct where `${p}` alone is false, and
 		// `${v#${~p}}` trims where `${v#${p}}` does not. It is the same
 		// question GlobExpansionResults answers, so it is the same override.
-		text, live := r.expansionPattern(r.expandParam(s.Param), s.Quoting, r.globSubstAnswer(s))
+		savedLive := r.liveMarksFor
+		r.liveMarksFor = s.Param
+		v := r.expandParam(s.Param)
+		r.liveMarksFor = savedLive
+		var text string
+		var live bool
+		if strings.Contains(v, liveMark) {
+			// A replacement's pattern characters stay live in a pattern
+			// too: `s=xQy; [[ xay = ${s:s/Q/?/} ]]` matches. See liveMark.
+			text, live = r.liveMarkedPattern(v), true
+		} else {
+			text, live = r.expansionPattern(v, s.Quoting, r.globSubstAnswer(s))
+		}
 		if tail == nil {
 			return text, live
 		}
@@ -3658,4 +3670,20 @@ func patternHasAnUnknownClass(pattern string, classes patternClasses) bool {
 		i += 2 + end + 1
 	}
 	return false
+}
+
+// liveMarkedPattern is a value holding live marks as pattern text: each marked
+// character is left live and the rest is escaped. See liveMark.
+func (r *Runner) liveMarkedPattern(v string) string {
+	var b strings.Builder
+	for {
+		i := strings.Index(v, liveMark)
+		if i < 0 || i+len(liveMark) >= len(v) {
+			b.WriteString(escapePatternMetaIn(stripLiveMarks(v), r.markedMeta()))
+			return b.String()
+		}
+		b.WriteString(escapePatternMetaIn(v[:i], r.markedMeta()))
+		b.WriteByte(v[i+len(liveMark)])
+		v = v[i+len(liveMark)+1:]
+	}
 }

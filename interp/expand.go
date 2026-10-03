@@ -9546,10 +9546,11 @@ func (r *Runner) nestedInnerFields(e *syntax.ParamExpr) []string {
 //
 //	s=xQyy; ${${s:s/Q/?/}:0:3}  ${${s:s/Q/?/}:s/x?/z/}  xay xby
 //
-// Not past a subscript, whose character searches a mark must not reach,
-// though zsh keeps the characters live there too.
+// Past a subscript only where it names positions with nothing to run; see
+// Runner.positionSubscriptRunsNothing and Runner.markedScalarSubscript.
 func (r *Runner) nestedCarriesLiveMarks(e *syntax.ParamExpr) bool {
-	if r.liveMarksFor != e || r.inDoubleQuotedSpan() || e.Length || e.Index != nil {
+	if r.liveMarksFor != e || r.inDoubleQuotedSpan() || e.Length ||
+		e.Index != nil && !r.positionSubscriptRunsNothing(e) {
 		return false
 	}
 	switch e.Op {
@@ -9561,6 +9562,41 @@ func (r *Runner) nestedCarriesLiveMarks(e *syntax.ParamExpr) bool {
 		return false
 	}
 	return !e.HasFlags || strings.Trim(e.Flags, liveReplacementFlags) == ""
+}
+
+// positionSubscriptRunsNothing reports whether a subscript names positions
+// with an expression that has nothing to run — `[2]`, `[1,3]`, `[i+1,-1]` —
+// which is the one shape a subscript on a nesting carries live characters
+// through (#5653). It is read twice there, once for the characters and once
+// for which of them were live (see Runner.markedScalarSubscript), so it may
+// hold no search, no expansion, no assignment or step, and no parameter whose
+// value is produced as it is read: `[RANDOM%3]` twice is two subscripts.
+func (r *Runner) positionSubscriptRunsNothing(e *syntax.ParamExpr) bool {
+	t := e.IndexText
+	if e.IndexFlags != nil || len(e.Leading) > 0 || t == "" ||
+		strings.Contains(t, "++") || strings.Contains(t, "--") {
+		return false
+	}
+	for i := 0; i < len(t); {
+		c := t[i]
+		switch {
+		case c == '_' || c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z':
+			j := i + 1
+			for j < len(t) && (t[j] == '_' || t[j] >= 'a' && t[j] <= 'z' ||
+				t[j] >= 'A' && t[j] <= 'Z' || t[j] >= '0' && t[j] <= '9') {
+				j++
+			}
+			if r.DynamicParameter(t[i:j]) {
+				return false
+			}
+			i = j
+		case c >= '0' && c <= '9' || strings.IndexByte(" ,+-*/%()", c) >= 0:
+			i++
+		default:
+			return false
+		}
+	}
+	return true
 }
 
 // liveMarkedFields turns escaped fields into their text, with liveMark in

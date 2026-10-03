@@ -595,22 +595,7 @@ func (r *Runner) traceAssignments(assigns []*syntax.Assign, values []string, pre
 // double run #1915 fixed for a scalar's value. Tracked as #1959.
 func (r *Runner) traceAssign(a *syntax.Assign, value string, e *expandedAssign, d Diagnostics) string {
 	var b strings.Builder
-	b.WriteString(a.Name)
-	if a.Index != nil {
-		b.WriteString("[")
-		if e != nil && e.subscriptSet {
-			// What the store resolved it to, in the one column that writes
-			// that — see Semantics.TraceElementSubscriptIsEvaluated.
-			b.WriteString(e.subscript)
-		} else {
-			b.WriteString(syntax.PrintWord(a.Index))
-		}
-		b.WriteString("]")
-	}
-	if a.Append {
-		b.WriteString("+")
-	}
-	b.WriteString("=")
+	b.WriteString(traceAssignTarget(a, e))
 	if a.IsArray {
 		b.WriteString(r.traceArrayLiteral(a.Elems, expandedElemsOf(e),
 			d.TraceArrayLiteral, d, r.traceWordLayout(d)))
@@ -640,6 +625,32 @@ func (r *Runner) traceAssign(a *syntax.Assign, value string, e *expandedAssign, 
 		return b.String()
 	}
 	b.WriteString(r.traceQuote(value, d.TraceQuoting, d.TraceMetacharacters))
+	return b.String()
+}
+
+// traceAssignTarget is the part of an assignment's trace word before its
+// value: the name, the subscript, and the operator. Its own function because
+// one dialect writes it before the value has been expanded — see
+// interp/xtraceopenline.go — and the two halves must agree with the word
+// traceAssign writes whole.
+func traceAssignTarget(a *syntax.Assign, e *expandedAssign) string {
+	var b strings.Builder
+	b.WriteString(a.Name)
+	if a.Index != nil {
+		b.WriteString("[")
+		if e != nil && e.subscriptSet {
+			// What the store resolved it to, in the one column that writes
+			// that — see Semantics.TraceElementSubscriptIsEvaluated.
+			b.WriteString(e.subscript)
+		} else {
+			b.WriteString(syntax.PrintWord(a.Index))
+		}
+		b.WriteString("]")
+	}
+	if a.Append {
+		b.WriteString("+")
+	}
+	b.WriteString("=")
 	return b.String()
 }
 

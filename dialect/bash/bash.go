@@ -1467,6 +1467,14 @@ func Semantics() interp.Semantics {
 	// readonly variable`, and `readonly -p` lists them — `declare -r ENV` in a
 	// shell with no `$ENV` set. ksh93 answers no to all three.
 	s.RestrictedFreezeIsAReadonly = interp.Yes
+	// A writing redirection to a process substitution is refused like any
+	// other: `echo a > >(cat)` is `>(cat): restricted: cannot redirect
+	// output` at 1, measured 2026-10-02 (#5485).
+	s.RestrictedRedirectTakesAProcessSubstitution = interp.No
+	// unanswered RestrictedFreezeRefusesAValuelessDeclaration: the freeze is a
+	// readonly here, so the readonly machinery refuses `local PATH` itself
+	// (`local: PATH: readonly variable`, the function going on) and takes
+	// `export PATH` at 0; the question is never asked.
 	// And none of the ten refusals ends the script: every one of them reports
 	// 1 — or an assignment's 0 — and the line after it runs. Measured with
 	// `echo tail` behind each.

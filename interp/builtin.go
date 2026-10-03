@@ -3841,6 +3841,17 @@ func biExport(r *Runner, _ context.Context, args []string) int {
 			}
 			name = n
 		}
+		if r.restrictedDeclarationRefused(name, declareFlags{export: true, global: true}, hasValue, false) {
+			// A name restricted mode froze, which one dialect will not have
+			// exported even with no value. This loop is where `export`
+			// declares when no letter sent it through declareNames, so the
+			// check stands in both. See Runner.restrictedDeclarationRefused.
+			if r.unspecified || r.ctl == controlExit {
+				return r.status
+			}
+			r.assignFailed = true
+			continue
+		}
 		// The export attribute goes to what a reference points at, and this
 		// loop takes no scope, so there is never a fresh binding for it to be
 		// about instead. See interp/namerefattribute.go.
@@ -7767,6 +7778,15 @@ func biLocal(r *Runner, _ context.Context, args []string) int {
 		// Before the attributes, for the reason biTypeset gives: `-x` here
 		// must not answer for the name this declaration shadows.
 		wasExported := r.isExported(name)
+		if r.restrictedDeclarationRefused(name, f, hasValue, true) {
+			// A name restricted mode froze, which this local may not shadow.
+			// See Runner.restrictedDeclarationRefused.
+			if r.unspecified || r.ctl == controlExit {
+				return r.status
+			}
+			r.assignFailed = true
+			continue
+		}
 		if r.declarationShadowRefused(name) {
 			// See biDeclare: the operand is refused and the rest are still
 			// declared, which is what the shell that refuses does — and the

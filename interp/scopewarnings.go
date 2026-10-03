@@ -3,6 +3,12 @@
 
 package interp
 
+import (
+	"context"
+
+	"github.com/blairham/sh/syntax"
+)
+
 // The two opt-in lints about *where* an assignment inside a function landed.
 //
 // Neither changes what a script computes: the assignment behaves the same way
@@ -91,6 +97,11 @@ func (r *Runner) warnAboutTheScope(name string, kind scopeWarningKind) {
 	if r.writingADeclarationsOperand || r.inFunc == "" {
 		return
 	}
+	if r.storingATakenBackPrefix {
+		// A prefix the command's end takes back is not an assignment that
+		// landed anywhere. See Runner.storePrefixQuietlyIfTakenBack.
+		return
+	}
 	if !r.insideFunctionCall() {
 		// A call *this* shell made, which is not the same as a call the
 		// process is inside: a subshell inherits its caller's frames as
@@ -161,4 +172,23 @@ func (r *Runner) scopeWarningsAreOff() bool {
 // attribute where the option names it (#5155).
 func (r *Runner) warnsNestedSetHere() bool {
 	return r.warnsEnclosingScopeSet || r.warnNestedFuncs[r.inFunc]
+}
+
+// storePrefixQuietlyIfTakenBack is Runner.prefixStore with the two scope
+// lints held off where the command's end takes the prefix back.
+//
+// Measured 2026-10-02 on zsh 5.9.2 under `-f`, with `warncreateglobal` on
+// and with `functions -W` on the function: `f(){ g=2 print hi }`, `g=3 true`,
+// `g=4 command true`, `g=6 eval :` and `g=2 f2` in front of a function each
+// write nothing, where this shell wrote the created-globally or the
+// set-in-enclosing-scope sentence for every one (#5485). A prefix that
+// *persists* is an assignment that stays, and is warned about like one: under
+// `posixbuiltins`, `f(){ g=2 :; }` draws `g created globally in function f`.
+func (r *Runner) storePrefixQuietlyIfTakenBack(ctx context.Context, a *syntax.Assign, landsOn string, stores, fresh, takenBack bool) {
+	if takenBack {
+		outer := r.storingATakenBackPrefix
+		r.storingATakenBackPrefix = true
+		defer func() { r.storingATakenBackPrefix = outer }()
+	}
+	r.prefixStore(ctx, a, landsOn, stores, fresh)
 }

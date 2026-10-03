@@ -848,6 +848,15 @@ func Semantics() interp.Semantics {
 	// only`, and `readonly -p` in the mode lists nothing at all where bash
 	// lists `declare -r ENV`.
 	s.RestrictedFreezeIsAReadonly = interp.No
+	// A local of a frozen name with a value is refused here as in zsh —
+	// `function f { typeset PATH=x; }; f` is `f: line 2: PATH: restricted`
+	// and f ends at 1 — but one with no value is taken: `function g {
+	// typeset PATH; }; g` and `export PATH` are both silent at 0. Measured
+	// 2026-10-02 from a script file (#5485). Which attribute letters ksh93
+	// refuses on these names is #5506.
+	s.RestrictedFreezeRefusesAValuelessDeclaration = interp.No
+	// And `echo a > >(cat)` is refused in the mode, at 1, as bash refuses it.
+	s.RestrictedRedirectTakesAProcessSubstitution = interp.No
 	// And three of the refusals end the script: `.`, `exec` and `command -p`.
 	// The other five report 1 and carry on, which is measured rather than
 	// assumed — see Semantics.RestrictedBuiltinRefusalIsFatal, where the table

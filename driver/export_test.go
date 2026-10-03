@@ -55,7 +55,7 @@ func (sh Shell) FrontEndForTest(r *interp.Runner, name string, dg interp.Diagnos
 // return. Handed a path that cannot be executed, it takes the failure path,
 // which is the one a test can be in the same process as.
 func ReplaceProcessForTest(path string, argv, env []string, files []*os.File) error {
-	return replaceProcess(path, argv, env, files)
+	return replaceProcess("", path, argv, env, files)
 }
 
 // AtPlacementForTest fills in the seam that stands on both sides of the

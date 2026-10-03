@@ -195,6 +195,9 @@ func (r *Runner) replaceSelfWith(ctx context.Context, argv []string, flags execF
 		// unlinked with it, which is what removeProcSubs would have done at
 		// the end of that command had there been an end — a name going away
 		// under an open descriptor is the ordinary case here, not a race.
+		// Where the replacement starts, read while the shell still holds its
+		// directory: cleanUpAtEnd lets go of that hold.
+		dir := r.dirNow()
 		r.cleanUpAtEnd()
 		// And the mask goes onto the process for the same reason it goes on
 		// around a fork: an execve keeps the mask the image had, and this
@@ -208,7 +211,7 @@ func (r *Runner) replaceSelfWith(ctx context.Context, argv []string, flags execF
 		// Semantics.ShellLevelExec — the fallback below is a child and keeps
 		// the count, which is measured and not an omission.
 		name, env := r.namedByTheEnvironment(argv[0], r.replacementEnviron(flags))
-		err := r.ReplaceProcess(path, r.execArgv(argv, flags, name), env, r.replacementFiles())
+		err := r.ReplaceProcess(dir, path, r.execArgv(argv, flags, name), env, r.replacementFiles())
 		releaseMask()
 		// Only reached if the replacement failed, which is the one case where
 		// there is still a shell to report it.

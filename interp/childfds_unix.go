@@ -346,3 +346,9 @@ func (r *Runner) handedProcSubs() []procSubPipe {
 	}
 	return append(slices.Clone(r.enclosingProcSubs), r.procSubs...)
 }
+
+// streamsAreFiles reports whether all three named streams are files, which a
+// replacement can be handed by number. See tailexec.go.
+func (r *Runner) streamsAreFiles() bool {
+	return streamFile(r.inheritedStdin()) != nil && streamFile(r.Stdout) != nil && streamFile(r.Stderr) != nil
+}

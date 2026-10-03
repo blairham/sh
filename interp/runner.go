@@ -235,7 +235,12 @@ type Runner struct {
 	// or `exec >log; exec cmd` writes to the terminal. Entries 0 to 2 are nil
 	// wherever the stream is not a file, and the nil closes the number there
 	// as it does anywhere else in the table.
-	ReplaceProcess func(path string, argv, env []string, files []*os.File) error
+	//
+	// dir is the directory the replacement is to start in, which is this
+	// Runner's and not the process's: `cd /tmp; exec pwd` prints /tmp in
+	// every shell in the panel, and a Runner's `cd` never moved the process.
+	// The hook moves the process there just before the execve.
+	ReplaceProcess func(dir, path string, argv, env []string, files []*os.File) error
 
 	// DieBySignal ends this process with the signal a script sent it and had
 	// no handler for, and nil — the default — stops the script with 128 plus
@@ -3096,6 +3101,12 @@ type Runner struct {
 	// A node rather than a flag, so that a stale value matches nothing: it is
 	// compared by identity at the one command it names.
 	tailCmd syntax.Command
+	// plainTail is the lone simple command the input ends on, where that is
+	// the whole of its statement. See TailExecPlainTopLevel.
+	plainTail *syntax.SimpleCmd
+	// tailInALoop says the tail was handed on through the last pass of a
+	// loop. See TailExecWhereverLastOutsideALoop.
+	tailInALoop bool
 	// jobOrder is the order jobs became *notable*, oldest first: a job is
 	// appended when it enters the table and again, moved to the end, every
 	// time it stops. It is not the table's order, which is slot order, and
@@ -4422,7 +4433,8 @@ type Runner struct {
 	reservedCommand string
 	// runningSimple is the simple command this runner is running, for a
 	// background body that has to know whether it is one a fork would have
-	// exec'd. See bodyInbox.reachedATail.
+	// exec'd (see bodyInbox.reachedATail), and for a shell that may become
+	// its last command (see tailexec.go).
 	runningSimple *syntax.SimpleCmd
 	// inboxGoesToTheParentheses says this body's statement is a `( … )` that
 	// is the fork itself, so the inbox belongs to the subshell the
@@ -5400,6 +5412,7 @@ func (r *Runner) clone() *Runner {
 	// A clone is a fork until the one construct that knows otherwise says so,
 	// and nothing a fork runs is the shell's last. See unforkedtail.go.
 	c.tailCmd, c.unforkedSelf, c.slotOneIsTheBody = nil, false, false
+	c.plainTail, c.tailInALoop = nil, false
 	c.pendingPipeJob = nil
 	c.traceTo = nil
 	c.inParensBody, c.heldInterruptDeath = false, false
@@ -6555,6 +6568,8 @@ func (r *Runner) RunPart(ctx context.Context, f *syntax.File) error {
 		if last && i == len(f.Stmts)-1 {
 			// The last thing this shell runs. See unforkedtail.go.
 			r.tailCmd = tailCommandOf(f.Stmts)
+			r.plainTail = plainTopLevelTail(f.Stmts)
+			r.tailInALoop = false
 		}
 		err := r.stmt(ctx, st)
 		if arg, ok := r.takeInputLevelArgument(); ok {
@@ -7843,7 +7858,9 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 		r.reservedCommand = r.declaresByReservedWord(c)
 		defer func() { r.reservedCommand = saved }()
 	}
-	if r.inbox != nil {
+	if r.inbox != nil || r.tailCmd != nil {
+		// And where this shell has a last command, which it may become
+		// rather than fork. See tailexec.go.
 		saved := r.runningSimple
 		r.runningSimple = c
 		defer func() { r.runningSimple = saved }()
@@ -10039,6 +10056,13 @@ func (r *Runner) exec(ctx context.Context, argv, env []string) error {
 	}
 
 	r.emit(ctx, Event{Kind: EventCommandStart, Action: action})
+
+	// The last thing this shell runs, in the dialects that become it rather
+	// than fork it. Nothing after a successful replacement is this shell.
+	// See tailexec.go.
+	if r.replacesItselfHere() && r.becomeTheProgram(ctx, path, argv, env) {
+		return nil
+	}
 
 	// A command names itself from argv[0], and what it should find there is
 	// the word that was typed rather than the path PATH resolved to. os/exec

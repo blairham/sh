@@ -673,6 +673,8 @@ func Semantics() interp.Semantics {
 	s.ZeroSubscriptIsTheFirstElement = interp.No
 	// BusyBox ash 1.37.0 keeps the export letter of its own parameters (`PS1`, `IFS`, `LINENO`, `OPTIND`) through `unset`; see the axis.
 	s.UnsetKeepsTheShellsOwnAttributes = interp.Yes
+	// BusyBox ash 1.37.0 execs the last command of a `-c` string wherever it is, outside a loop; see interp.TailExec.
+	s.TailExec = interp.TailExecWhereverLastOutsideALoop
 	// unanswered BraceRangeStepPadsTheRange: with no braces to expand there
 	// is no range to write a step in. Measured in the pinned alpine image —
 	// `echo {1..5..01}` is the six characters `{1..5..01}` — which is the

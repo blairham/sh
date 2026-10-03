@@ -187,7 +187,7 @@ func replacedEnv(t *testing.T, sem Semantics, env []string, src string) []string
 	r := newTestRunner(t, &Runner{
 		Semantics: &sem, Diagnostics: &Diagnostics{}, Name: "sh",
 		Env: env, Stdout: out, Stderr: out,
-		ReplaceProcess: func(_ string, _, env []string, _ []*os.File) error {
+		ReplaceProcess: func(_, _ string, _, env []string, _ []*os.File) error {
 			handed = env
 			return errors.New("measured rather than replaced")
 		},

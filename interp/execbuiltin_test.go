@@ -105,7 +105,7 @@ func TestASubshellNeverReplacesTheProcess(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			called := false
 			out, _, _ := execRun(t, t.TempDir(), tc.src, func(r *Runner) {
-				r.ReplaceProcess = func(string, []string, []string, []*os.File) error {
+				r.ReplaceProcess = func(string, string, []string, []string, []*os.File) error {
 					called = true
 					return errors.New("must not be reached")
 				}
@@ -129,7 +129,7 @@ func TestReplaceProcessIsUsedWhenItIsSafe(t *testing.T) {
 	var gotPath string
 	var gotArgv []string
 	out, st, _ := execRun(t, t.TempDir(), `exec echo hi; echo NOT-REACHED`, func(r *Runner) {
-		r.ReplaceProcess = func(path string, argv, _ []string, _ []*os.File) error {
+		r.ReplaceProcess = func(_, path string, argv, _ []string, _ []*os.File) error {
 			gotPath, gotArgv = path, argv
 			// A real replacement does not return. Returning an error is how a
 			// test says "the image could not be replaced", which is the only
@@ -386,7 +386,7 @@ func TestExecOptionsAreADialectQuestion(t *testing.T) {
 	r := newTestRunner(t, &Runner{
 		Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &dg,
 		Dir: t.TempDir(), Name: "testsh", Env: testPATH(),
-		ReplaceProcess: func(_ string, a, _ []string, _ []*os.File) error {
+		ReplaceProcess: func(_, _ string, a, _ []string, _ []*os.File) error {
 			argv = a
 			return os.ErrPermission
 		},
@@ -490,7 +490,7 @@ func TestExecLoginAndClearedEnvironment(t *testing.T) {
 			if tweak != nil {
 				tweak(r.Semantics)
 			}
-			r.ReplaceProcess = func(_ string, a, e []string, _ []*os.File) error {
+			r.ReplaceProcess = func(_, _ string, a, e []string, _ []*os.File) error {
 				argv, env = a, e
 				// A real replacement does not return; an error is how a test
 				// says the image could not be replaced.
@@ -586,7 +586,7 @@ func TestExecBundlesItsOptionLetters(t *testing.T) {
 			r.Semantics.ExecTakesTheLoginLetter = Yes
 			r.Semantics.ExecTakesTheEmptyEnvironmentLetter = Yes
 			r.Semantics.ExecLoginPrefixesTheGivenName = prefixes
-			r.ReplaceProcess = func(_ string, a, _ []string, _ []*os.File) error {
+			r.ReplaceProcess = func(_, _ string, a, _ []string, _ []*os.File) error {
 				argv = a
 				return os.ErrPermission
 			}

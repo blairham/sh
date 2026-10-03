@@ -593,6 +593,7 @@ func (r *Runner) forClause(ctx context.Context, c *syntax.ForClause) error {
 				// The last pass is the shell's last; the ones before it are
 				// not. See unforkedtail.go.
 				r.tailCmd = tailCommandOf(c.Body)
+				r.tailInALoop = true
 			}
 			if err := r.runList(ctx, c.Body); err != nil {
 				return err

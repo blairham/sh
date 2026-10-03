@@ -181,7 +181,7 @@ func TestAValuelessDeclarationThatHidesNothingHandsOverOneEntry(t *testing.T) {
 			sem.ExecFailureOnAPathnameRunsExitTrap = Yes
 			r.Semantics = &sem
 			r.Env = append(r.Env, "IMPORTED=arrived")
-			r.ReplaceProcess = func(_ string, _, env []string, _ []*os.File) error {
+			r.ReplaceProcess = func(_, _ string, _, env []string, _ []*os.File) error {
 				handed = env
 				// A real replacement does not return; an error is how a test
 				// says the image could not be replaced.

@@ -148,6 +148,16 @@ type Job struct {
 	elemsRunning int
 	elemsEnded   chan struct{}
 
+	// oneProgram says the job's whole body is one simple command, so the
+	// program it runs ending is the job ending: once programReaped is closed
+	// the goroutine has nothing left to do but finish. depthAtStart is the
+	// call depth the job started at, so a program a function in the body
+	// runs is not taken for the body's own. See Runner.noticeFinishedJobs.
+	oneProgram    bool
+	depthAtStart  int
+	programReaped chan struct{}
+	reapedOnce    sync.Once
+
 	procsMu sync.Mutex
 	// firstGone says the process the job's PID names has been waited for,
 	// under procsMu. See Runner.jobOutlivingItsFirstProcess.
@@ -846,6 +856,10 @@ func (r *Runner) background(ctx context.Context, st *syntax.Stmt) error {
 	// last element so that one pid is settled once, and inJob is what keeps
 	// the other elements attached to the job they are part of.
 	sub.inJob = job
+	if bodyIsOneSimpleCommand(st) {
+		job.oneProgram, job.depthAtStart = true, sub.depth
+		job.programReaped = make(chan struct{})
+	}
 	// And a job nested inside this one is its own, so it does not answer for
 	// a piece of the job around it.
 	sub.part = nil
@@ -2997,6 +3011,7 @@ func appendBounded(list []*Job, j *Job) []*Job {
 func (r *Runner) noticeFinishedJobs() {
 	var ended []*Job
 	for _, j := range r.jobs {
+		r.awaitAReapedProgramsJob(j)
 		if j.fgPipeline {
 			// Not a job the shell drops when it notices: a listing forgets
 			// it once it has shown it ended. See Runner.pipelineJob.
@@ -3485,4 +3500,69 @@ func (r *Runner) jobCommandOnOneLine(st *syntax.Stmt, e syntax.Expr) string {
 		b.WriteString(line)
 	}
 	return b.String()
+}
+
+// awaitAReapedProgramsJob waits for a job whose one program has been reaped to
+// finish, which it is about to: its goroutine has nothing left to do but
+// return. A real shell learns of a child's end by a signal that arrives before
+// it next reads its table, so a script that has watched the process go — the
+// pid no longer answering `kill -0` — finds the job ended. Here the reaping
+// and the job's own record were two steps on another goroutine, and a script
+// fast enough to look between them found the job still running (#5611,
+// #5602).
+//
+// Never the job this runner is itself running, which would be waiting on its
+// own return. No route reaches that today — a one-program body reads no table
+// after its program — so no test can fail without the guard; it stays because
+// the failure it prevents would be a shell that never returns.
+func (r *Runner) awaitAReapedProgramsJob(j *Job) {
+	if j == r.inJob || !j.oneProgram || j.Finished() {
+		return
+	}
+	select {
+	case <-j.programReaped:
+		<-j.done
+	default:
+	}
+}
+
+// bodyIsOneSimpleCommand reports whether a backgrounded statement is one simple
+// command naming a program — not a pipeline of several, not negated, not a
+// list, not a compound — so that the program ending is the job ending.
+func bodyIsOneSimpleCommand(st *syntax.Stmt) bool {
+	p, ok := st.Expr.(*syntax.Pipeline)
+	if !ok || p.Negated || len(p.Cmds) != 1 {
+		return false
+	}
+	c, ok := p.Cmds[0].(*syntax.SimpleCmd)
+	return ok && len(c.Args) > 0
+}
+
+// afterAJobsProgramIsReaped is nil outside a test. A test sets it to hold the
+// job's goroutine open between the reaping and the job's own record, which is
+// the window #5611 lived in, so the window can be made as wide as a test needs
+// rather than waited for.
+var afterAJobsProgramIsReaped func()
+
+// programOfAJobReaped says a program this runner started has been reaped,
+// which for the program that was the whole of a background job means the job
+// is over bar its goroutine returning. Said where the reaping is, so that the
+// shell can learn of it as a real shell learns of a child's end — before it
+// next reads its table. See awaitAReapedProgramsJob.
+func (r *Runner) programOfAJobReaped() {
+	j := r.inJob
+	if j == nil || !j.oneProgram || r.depth != j.depthAtStart {
+		return
+	}
+	j.reapedOnce.Do(func() { close(j.programReaped) })
+}
+
+// holdTheReapedWindowOpen is the test hook's door, kept apart from the signal
+// above so that a test removing the signal still has its window opened, and
+// opened only on a job's goroutine — held anywhere else it would give the job
+// the time to finish and close the window it is meant to open.
+func (r *Runner) holdTheReapedWindowOpen() {
+	if afterAJobsProgramIsReaped != nil && r.inJob != nil {
+		afterAJobsProgramIsReaped()
+	}
 }

@@ -648,6 +648,16 @@ func (r *Runner) declarableNames() []string {
 		if !r.removed[name] {
 			continue
 		}
+		if r.removedShellOwnIsStillAName(name) {
+			// A parameter of the shell's own that an `unset` removed has no
+			// row in a whole-table listing either, whatever attributes it
+			// kept for its next value: `export HOME=/x; unset HOME; typeset
+			// +` lists no `HOME` in zsh 5.9.2, and neither does `typeset`
+			// or `typeset +x` (#5600). The named forms already say nothing
+			// — see the same question in declarePrintFiltered.
+			delete(seen, name)
+			continue
+		}
 		if _, known := r.declarationOf(name); !known {
 			delete(seen, name)
 		}

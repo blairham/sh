@@ -156,6 +156,11 @@ type Diagnostics struct {
 	TiedNamesRequired string
 	TieToItself       string
 	AlreadyTiedScalar string
+	// AlreadyTiedNonScalar is the same refusal where the name offered as the
+	// scalar is already the *array* half of a tie: `typeset -T t1 t2;
+	// typeset -T t2 t3` is `already tied as non-scalar: t2` on zsh 5.9.2,
+	// where `typeset -T t1 t3` is the scalar sentence (#5151).
+	AlreadyTiedNonScalar string
 	// TieSecondMustBeArray is a scalar value on the array half:
 	// `typeset -T S s=plain`.
 	TieSecondMustBeArray string

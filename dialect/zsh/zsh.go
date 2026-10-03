@@ -4655,6 +4655,7 @@ func Semantics() interp.Semantics {
 	s.TypeDistinguishesSpecialBuiltins = interp.No
 	s.TypePrintsFunctionBody = interp.No
 	s.TypeEndsOptionsWithDashDash = interp.Yes
+	s.TypeLeadingDashWordAsksForTheBareAnswer = interp.No
 	// whence -v under another name, so the letters answer in sentences:
 	// -p searches PATH past the shell's own answer and words the hit the
 	// way plain type does, and -f *prints* a function rather than skipping

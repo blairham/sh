@@ -125,6 +125,7 @@ func TestTypeAndTheDoubleDash(t *testing.T) {
 			out, _ := run(t, `type -- cd`, func(r *Runner) {
 				sem := CoreSemantics()
 				sem.TypeEndsOptionsWithDashDash = tc.ends
+				sem.TypeLeadingDashWordAsksForTheBareAnswer = No
 				dg := Diagnostics{TypeNotFound: "%[1]s: not found"}
 				r.Semantics, r.Diagnostics = &sem, &dg
 			})

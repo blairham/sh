@@ -9878,6 +9878,19 @@ type Semantics struct {
 	// a name there and gets answered as one before the real names are.
 	TypeEndsOptionsWithDashDash Answer
 
+	// TypeLeadingDashWordAsksForTheBareAnswer is what a shell whose `type`
+	// has no options does with a first operand that begins with `-`. dash
+	// looks it up as a name like the rest; BusyBox ash 1.37.0 drops that one
+	// word, whatever follows the dash, and answers every name after it the
+	// way `command -v` does — a bare name for a function, builtin or
+	// reserved word, the path for a file, the definition for an alias, and
+	// silence for nothing, with 127 when any name was nothing.
+	//
+	// Asked only by a dialect where TypeEndsOptionsWithDashDash said no, and
+	// only for a first operand with a leading dash: the shells that end the
+	// options with `--` read the word as options and never meet this.
+	TypeLeadingDashWordAsksForTheBareAnswer Answer
+
 	// TypeOptions is the rest of `type`'s letters, in the getopts spelling
 	// the other optstrings use — `-a` for every resolution a name has, `-p`
 	// and `-P` for the path alone, `-f` to leave the functions out, `-t` for

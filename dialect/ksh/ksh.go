@@ -4037,6 +4037,7 @@ func Semantics() interp.Semantics {
 	s.SpecialBuiltinsBeyondPosix = "alias unalias typeset newgrp"
 	s.TypePrintsFunctionBody = interp.No
 	s.TypeEndsOptionsWithDashDash = interp.Yes
+	s.TypeLeadingDashWordAsksForTheBareAnswer = interp.No
 	// whence -v's letters, and no `-t` among them: that letter is refused
 	// the way `whence` refuses any option it does not have, usage line and
 	// all. -a lists every resolution, -p and -f are

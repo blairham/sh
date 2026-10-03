@@ -2111,6 +2111,9 @@ func Semantics() interp.Semantics {
 	s.SpecialBuiltinsBeyondPosix = "local"
 	s.TypePrintsFunctionBody = interp.No
 	s.TypeEndsOptionsWithDashDash = interp.No
+	// `type -t f` looks `-t` up as a name and answers `f` after it —
+	// `-t: not found` and 127, measured on dash 0.5.12 2026-10-03.
+	s.TypeLeadingDashWordAsksForTheBareAnswer = interp.No
 
 	// `local` reads no options at all here — `local -r x` declares a
 	// variable named `-r` and then refuses it as the bad name it is — so

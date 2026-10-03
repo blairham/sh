@@ -252,7 +252,7 @@ func expandArms(p string, o patternOpts, out *[]string) bool {
 	// other: measured, `L='a|ab'; x=abc; ${x##${~L}}` is `bc` in the shell
 	// that answers Yes, the same reading the written group gets.
 	if o.topGroup {
-		if arms, _ := topAlternatives(p, o.emptyBracket); len(arms) > 1 {
+		if arms, _ := topAlternatives(p, o.emptyBracket, o.bareParenIsText); len(arms) > 1 {
 			for _, arm := range arms {
 				if !expandArms(arm, o, out) {
 					return false

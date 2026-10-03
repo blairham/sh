@@ -35490,13 +35490,14 @@ func (r *Runner) matchPatternR(pattern, s string, surface patternSurface) bool {
 		// shell disagreeing with itself rather than one rule: `case ab in
 		// @(a)(b))` matches and `[[ ab == @(a)(b) ]]` does not. See
 		// patternOpts.armParens for the four surfaces measured in pairs.
-		armParens:    surface == patternInACaseArm,
-		caret:        r.caretNegates(pattern),
-		group:        r.lang().PatternAlternation,
-		topGroup:     r.lang().PatternTopLevelAlternation.ReadsATopLevelBar(condition),
-		quantified:   r.readsQuantifiedGroups(condition),
-		counted:      r.lang().CountedPatternGroup,
-		numericRange: r.numericRanges(),
+		armParens:       surface == patternInACaseArm,
+		caret:           r.caretNegates(pattern),
+		group:           r.lang().PatternAlternation,
+		bareParenIsText: r.lang().BarePatternGroupInsideAWord && !r.lang().PatternAlternation,
+		topGroup:        r.lang().PatternTopLevelAlternation.ReadsATopLevelBar(condition),
+		quantified:      r.readsQuantifiedGroups(condition),
+		counted:         r.lang().CountedPatternGroup,
+		numericRange:    r.numericRanges(),
 		// The run-time option folds exactly the two consumers this function
 		// serves — `case` and the *pattern* operators of `[[ ]]` — and
 		// neither of the others: pathname expansion has a fold of its own,

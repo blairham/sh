@@ -1001,6 +1001,14 @@ type patternOpts struct {
 	// alternation (#2168). markWrittenBars escapes it at the one place a
 	// pattern is built, so the invariant the matcher relies on holds again.
 	topGroup bool
+	// bareParenIsText reads a `(` with no quantifier in front of it, and the
+	// `)` that would close it, as ordinary characters, so a `|` between them
+	// stands at the top level. That is zsh with `shglob` and `kshglob` both
+	// on: the word may hold the parenthesis, but only a quantified one opens
+	// a group. Measured 2026-10-02 on zsh 5.9.2, `[[ S == a(b|c)d ]]` matches
+	// `a(b` and `c)d` and not `abd`, and `[[ 'x(y)z' == x(y)z ]]` matches
+	// (#5467).
+	bareParenIsText bool
 	// period says the subject begins with a character only a period
 	// *written* in the pattern may consume — the other half of the
 	// leading-period rule, and the half that is about this name rather than
@@ -1485,7 +1493,7 @@ func matchTopLevel(pattern, piece string, base int, o patternOpts) bool {
 	if !o.topGroup {
 		return matchHere(pattern, piece, 0, base, o)
 	}
-	arms, armAt := topAlternatives(pattern, o.emptyBracket)
+	arms, armAt := topAlternatives(pattern, o.emptyBracket, o.bareParenIsText)
 	if len(arms) == 1 {
 		return matchHere(pattern, piece, 0, base, o)
 	}
@@ -1511,16 +1519,30 @@ func matchTopLevel(pattern, piece string, base int, o patternOpts) bool {
 // out of as well, and `[a|b]` is measured to be a bracket holding three
 // members rather than two arms — bracketEnd is the same scan the matcher's
 // own bracket reader uses, so the two cannot disagree about where one ends.
-func topAlternatives(pattern string, emptyCompiles bool) (arms []string, offsets []int) {
+func topAlternatives(pattern string, emptyCompiles, bareParenIsText bool) (arms []string, offsets []int) {
 	depth, start := 0, 0
+	// Which open parentheses counted, where a bare one is text: only those
+	// close a level. See patternOpts.bareParenIsText.
+	var counted []bool
 	for i := 0; i < len(pattern); i++ {
 		switch pattern[i] {
 		case '\\':
 			i++
 		case '(':
-			depth++
+			opens := !bareParenIsText || (i > 0 && strings.IndexByte("@?*+!", pattern[i-1]) >= 0)
+			counted = append(counted, opens)
+			if opens {
+				depth++
+			}
 		case ')':
-			depth--
+			if n := len(counted); n > 0 {
+				if counted[n-1] {
+					depth--
+				}
+				counted = counted[:n-1]
+			} else if !bareParenIsText {
+				depth--
+			}
 		case '[':
 			// Past the whole bracket expression, class names included:
 			// measured, `L='[a|b]'` matches `a` and matches `|`, so a bar
@@ -2268,6 +2290,10 @@ func splitGroup(p string, pp int, o *patternOpts) (body string, quant byte, rest
 		// reaches here a bare paren can only have come from somewhere the
 		// dialect allows it.
 		if !o.group && !o.quantified {
+			return "", 0, "", false
+		}
+		if o.bareParenIsText {
+			// Text, not a group — see patternOpts.bareParenIsText.
 			return "", 0, "", false
 		}
 		if p[0] != '(' {
@@ -3415,6 +3441,7 @@ func (r *Runner) patternOpts(pattern string, subjects ...string) patternOpts {
 		unterminatedClass: r.unterminatedClassPolicy(pattern),
 		chars:             r.patternMatchCountsCharacters(pattern, subjects...),
 		group:             r.lang().PatternAlternation,
+		bareParenIsText:   r.lang().BarePatternGroupInsideAWord && !r.lang().PatternAlternation,
 		topGroup:          r.lang().PatternTopLevelAlternation.ReadsATopLevelBar(false),
 		quantified:        r.readsQuantifiedGroups(false),
 		counted:           r.lang().CountedPatternGroup,

@@ -28,7 +28,7 @@ func rmStarRun(t *testing.T, dir, src, answer string) string {
 	if err != nil {
 		t.Skipf("no pseudo-terminal: %v", err)
 	}
-	defer control.Close()
+	defer func() { _ = control.Close() }()
 	// Drained for the whole run and on its own goroutine: a read of the
 	// control side blocks, and an unread one fills and blocks the writer.
 	got := make(chan string, 1)

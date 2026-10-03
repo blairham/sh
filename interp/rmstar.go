@@ -5,7 +5,6 @@ package interp
 
 import (
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/blairham/sh/internal/tty"
@@ -72,7 +71,7 @@ func (r *Runner) declinesRmStar(c *syntax.SimpleCmd) bool {
 		dir = r.Dir + "/" + dir
 	}
 	what := "all the files"
-	if entries, err := os.ReadDir(dir); err == nil {
+	if entries, err := r.readDir(dir); err == nil {
 		n := 0
 		for _, e := range entries {
 			if !strings.HasPrefix(e.Name(), ".") {
@@ -81,7 +80,7 @@ func (r *Runner) declinesRmStar(c *syntax.SimpleCmd) bool {
 		}
 		what = fmt.Sprintf("all %d files", n)
 	}
-	fmt.Fprintf(f, "%s: sure you want to delete %s in %s [yn]? \a", r.name(), what, dir)
+	_, _ = fmt.Fprintf(f, "%s: sure you want to delete %s in %s [yn]? \a", r.name(), what, dir)
 	mode, err := tty.Raw(f)
 	if err == nil {
 		defer func() { _ = mode.Restore() }()

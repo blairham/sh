@@ -57,8 +57,10 @@ import (
 //   - `-u fd` aims the output at a descriptor, the number attached or the next
 //     word. A word that is no number is `number expected after -u: q`; a
 //     number nothing is open at is `bad file number: 9`; a number open for
-//     reading is `bad mode on fd 3`, which is the refusal the write itself
-//     reports — see printWriteFailed. All three are 1.
+//     reading is `bad mode on fd 3`, where the 3 is not the number asked
+//     about but the lowest free one from 3 up — see printDuplicateNumber.
+//     All three are 1. Descriptor 0 is a number like any other here: `print
+//     -u0 a 0>f` writes to the file (#5551).
 //   - `-m` takes the first operand as a pattern and prints only the operands
 //     matching it; with no operand at all it is `no pattern specified`, 1.
 //   - `-o` sorts the operands, `-O` sorts them in reverse and `-i` folds case
@@ -82,16 +84,10 @@ import (
 //
 // An unknown letter is `bad option: -q` at 1, with nothing printed.
 //
-// Two edges are recorded rather than claimed. `print -u0` is `bad mode on fd
-// 3` in zsh — a number that names neither the descriptor asked about nor
-// anything else in the command — and is `bad file number: 0` here, because
-// repeating a wording that is wrong about its own subject would be the worse
-// of the two. The *sentence* is this shell's own and is written where it is
-// true: a descriptor really open for reading gets it, with its own number in
-// it. And `print -m '['` is `bad pattern: [` at 1 there; the core's
-// matcher treats an unterminated bracket as this dialect's fatal pattern,
-// which abandons the script, so the pattern is checked here first and refused
-// with the measured wording and status.
+// One edge is recorded rather than claimed. `print -m '['` is `bad pattern:
+// [` at 1 there; the core's matcher treats an unterminated bracket as this
+// dialect's fatal pattern, which abandons the script, so the pattern is
+// checked here first and refused with the measured wording and status.
 
 // printLetters are the option letters implemented here.
 const printLetters = "rRnlNmoOiszSpufPD"
@@ -284,7 +280,21 @@ func printBuiltin(r *interp.Runner, ctx context.Context, args []string) int {
 		return printAssigned(r, ctx, opts, rest)
 	}
 	out, ok := r.WriterForFd(opts.fd)
-	if !ok {
+	if opts.fdNamed {
+		// A number the script named is looked up as one: nothing open there
+		// is one refusal, and something open that will not take a write is
+		// the other, even at 0. See printDuplicateNumber.
+		var open bool
+		out, open = r.DescriptorForWriting(opts.fd)
+		if !open {
+			r.Diagnosef("bad file number: %d\n", opts.fd)
+			return 1
+		}
+		if out == nil {
+			r.Diagnosef("bad mode on fd %d\n", printDuplicateNumber(r))
+			return 1
+		}
+	} else if !ok {
 		r.Diagnosef("bad file number: %d\n", opts.fd)
 		return 1
 	}
@@ -409,7 +419,7 @@ func printAssigned(r *interp.Runner, ctx context.Context, opts printOptions, res
 // under the first one's wording would be a guess wearing a measurement.
 func printWriteFailed(r *interp.Runner, fd int, named bool, err error) int {
 	if named && errors.Is(err, syscall.EBADF) {
-		r.Diagnosef("bad mode on fd %d\n", fd)
+		r.Diagnosef("bad mode on fd %d\n", printDuplicateNumber(r))
 		return 1
 	}
 	// Not this builtin's sentence, and not nothing either: the shell has one
@@ -1255,4 +1265,25 @@ func printNamedDirectories(r *interp.Runner, words []string) []string {
 		out[i] = r.AbbreviateNamedDirectory(w)
 	}
 	return out
+}
+
+// printDuplicateNumber is the number zsh names in `bad mode on fd N`, which is
+// not the one the script asked for: it is the lowest descriptor from 3 up
+// that nothing holds, where the shell's copy of the named one would land.
+// Measured 2026-10-03 on zsh 5.9.2 under `-f -c` (#5551):
+//
+//	print -u0 a                          bad mode on fd 3
+//	print -u5 a 5<f                      bad mode on fd 3
+//	print -u3 a 3<f                      bad mode on fd 4
+//	print -u1 a 1</dev/null 3>/dev/null  bad mode on fd 4
+//	exec 3</dev/null 4</dev/null; print -u1 a 1</dev/null
+//	                                     bad mode on fd 5
+func printDuplicateNumber(r *interp.Runner) int {
+	fd := 3
+	for {
+		if _, open := r.DescriptorForWriting(fd); !open {
+			return fd
+		}
+		fd++
+	}
 }

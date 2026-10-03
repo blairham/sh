@@ -39,9 +39,13 @@ import (
 // a Contains, which cannot see a line added beside the one it looks for — a
 // `print` that named the mode *and* went on to record the failed write, so
 // that the shell added `write error: bad file descriptor` underneath, passed
-// it unchanged. The number the descriptor was opened at is asked for rather
-// than assumed, because the number this shell hands out is not the reference's
-// and is residue on #4436 in its own right.
+// it unchanged.
+//
+// **The number in the sentence is not the descriptor's.** It reads as one in
+// the measurement above only by coincidence: the reference opened `ro` at 11,
+// and the 3 is the lowest free descriptor from 3 up, where its copy of the
+// named one lands — see printDuplicateNumber and #5551. This test asserted
+// the descriptor's own number for as long as that coincidence was unexamined.
 func TestPrintRefusesADescriptorOpenForReading(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "ro.txt")
@@ -62,7 +66,10 @@ print "fd=$ro"`)
 	if !ok || fd == "" {
 		t.Fatalf("print -u on a read-only descriptor = %q, want st=1, the text unread and the descriptor named", out)
 	}
-	if want := "bad mode on fd " + fd + "\n"; !strings.HasSuffix(errs, want) ||
+	if fd == "3" {
+		t.Fatalf("sysopen chose 3, which cannot tell the two numbers apart")
+	}
+	if want := "bad mode on fd 3\n"; !strings.HasSuffix(errs, want) ||
 		strings.Count(errs, "\n") != 1 {
 		t.Errorf("said %q, want one line ending %q", errs, want)
 	}

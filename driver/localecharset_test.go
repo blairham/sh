@@ -39,6 +39,7 @@ func TestTheBSDLocaleLayoutIsReadOffTheData(t *testing.T) {
 	bsdLocale(t, root, "en_US", "UTF-8", true)
 	bsdLocale(t, root, "fr_FR.ISO8859-1", "NONE:ISO8859-1", true)
 	bsdLocale(t, root, "UTF-8", "UTF-8", false)
+	bsdLocale(t, root, "C.UTF-8", "UTF-8", false)
 	if err := os.MkdirAll(filepath.Join(root, "junk"), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -56,6 +57,9 @@ func TestTheBSDLocaleLayoutIsReadOffTheData(t *testing.T) {
 		{"fr_FR.ISO8859-1", true, "NONE:ISO8859-1", true},
 		{"UTF-8", false, "UTF-8", true},
 		{"UTF-8", true, "", false},
+		// The one name macOS loads whole from an LC_CTYPE alone.
+		{"C.UTF-8", true, "UTF-8", true},
+		{"C.UTF-8", false, "UTF-8", true},
 		{"xx_XX.UTF-8", true, "", false},
 		{"junk", false, "", false},
 		{"../" + filepath.Base(root) + "/en_US", false, "", false},

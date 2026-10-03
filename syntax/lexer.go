@@ -971,10 +971,21 @@ func (l *Lexer) failUnmatched(open Pos, opener, closer, msg string) {
 	if l.wordStart.IsValid() {
 		from = l.wordStart.Offset
 	}
-	near := l.src[from:]
-	if i := strings.IndexByte(near, '\n'); i >= 0 {
-		near = near[:i]
+	// Its line continuations up to the end of the opener are stepped over,
+	// as the lexer stepped over them, and the body after it is named as
+	// written: measured 2026-10-03 on zsh 5.9.2, `$\⏎(` names `$(` and
+	// `$(ec\⏎ho` names `$(ec\`. See withoutContinuations.
+	openEnd := int(open.Offset)
+	if openEnd < len(l.src) && l.src[openEnd] == '$' {
+		openEnd++
 	}
+	for strings.HasPrefix(l.src[openEnd:], "\\\n") {
+		openEnd += 2
+	}
+	for openEnd < len(l.src) && (l.src[openEnd] == '(' || l.src[openEnd] == '{' || l.src[openEnd] == '[') {
+		openEnd++
+	}
+	near := firstLineOf(withoutContinuations(l.src[from:openEnd]) + l.src[openEnd:])
 	after := l.line
 	if len(l.src) > 0 && l.src[len(l.src)-1] != '\n' {
 		// The text stopped mid-line, so the end of it is the line after —

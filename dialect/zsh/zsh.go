@@ -4225,6 +4225,8 @@ func Semantics() interp.Semantics {
 	// reaches an expression with one still in it arrived through a
 	// substitution, and it separates nothing (#2160).
 	s.SubscriptExpressionStopsAtASeparator = interp.Yes
+	// And at a byte the arithmetic cannot read (#5567).
+	s.SubscriptExpressionStopsAtAnUnreadableByte = interp.Yes
 	// Whitespace between the brackets is refused too, and by a different
 	// part of the shell: measured 2026-09-10, `a=(1 2 3); echo $(( a[ ] ))`
 	// is `bad math expression: operand expected at end of string` — the

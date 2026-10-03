@@ -4,6 +4,7 @@
 package syntax_test
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/blairham/sh/syntax"
@@ -80,4 +81,35 @@ func findSpan(f *syntax.File, kind syntax.SpanKind) (syntax.Span, bool) {
 		}
 	}
 	return syntax.Span{}, false
+}
+
+// ProcessSubstitutionAgainstTheRedirectionIsRefused: a redirection target
+// that begins with a substitution running against the operator is refused by
+// its opener, and one running with it is read (#5514).
+func TestASubstitutionAgainstItsRedirectionIsRefused(t *testing.T) {
+	d := syntax.Core()
+	d.ProcessSubstitutionAgainstTheRedirectionIsRefused = true
+	for _, c := range []struct{ src, opener string }{
+		{": <> >(cat)", ">("},
+		{": < >(cat)", ">("},
+		{": 3<> >(cat)", ">("},
+		{": > <(echo)", "<("},
+		{": >> <(echo)", "<("},
+		{": >| <(echo)", "<("},
+		{": <& <(echo)", "<("},
+		{": >& >(cat)", ">("},
+	} {
+		_, err := syntax.Parse(c.src, d)
+		if err == nil || !strings.Contains(err.Error(), "`"+c.opener+"' unexpected") {
+			t.Errorf("%s: got %v, want %s refused", c.src, err, c.opener)
+		}
+		if _, err := syntax.Parse(c.src, syntax.Core()); err != nil {
+			t.Errorf("%s without the flag: %v", c.src, err)
+		}
+	}
+	for _, src := range []string{": < <(echo)", ": <> <(echo)", ": > >(cat)", ": >> >(cat)", "echo >(cat) <(echo)"} {
+		if _, err := syntax.Parse(src, d); err != nil {
+			t.Errorf("%s: %v, want it read", src, err)
+		}
+	}
 }

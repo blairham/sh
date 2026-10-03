@@ -3104,6 +3104,9 @@ func (p *Parser) parseRedirect() *Redirect {
 	// rebuilt from the spans: `$e` and `${e}` are the same word and not the
 	// same text, and it is the text that goes in the message.
 	r.Text = p.textBetween(p.tok.Pos, p.tok.End)
+	if p.refuseProcSubstAgainstTheRedirection(r.Op, r.Word, p.tok.Pos) {
+		return nil
+	}
 	if r.Op == TokTLess && p.refuseProcSubstOutOfPlace(r.Word) {
 		// A here-string's operand is text to be fed in rather than a file to
 		// be opened, and the dialect that admits `cat < <(:)` refuses
@@ -5476,6 +5479,35 @@ func (p *Parser) refuseProcSubstOutOfPlace(w *Word) bool {
 		return true
 	}
 	return false
+}
+
+// refuseProcSubstAgainstTheRedirection refuses a redirection target that
+// begins with a process substitution running against the operator, and
+// reports whether it did. See
+// [Dialect.ProcessSubstitutionAgainstTheRedirectionIsRefused].
+func (p *Parser) refuseProcSubstAgainstTheRedirection(op Kind, w *Word, start Pos) bool {
+	if w == nil || len(w.Spans) == 0 || !p.dialect.ProcessSubstitutionAgainstTheRedirectionIsRefused {
+		return false
+	}
+	s := w.Spans[0]
+	if s.Pos != start || (s.Kind != ProcSubstIn && s.Kind != ProcSubstOut) {
+		return false
+	}
+	var refused bool
+	switch op {
+	case TokLess, TokLessGreat:
+		refused = s.Kind == ProcSubstOut
+	case TokGreat, TokDGreat, TokClobber:
+		refused = s.Kind == ProcSubstIn
+	case TokLessAmp, TokGreatAmp:
+		refused = true
+	}
+	if !refused {
+		return false
+	}
+	opener, _ := procSubstOpener(s.Kind)
+	p.failProcSubstOutOfPlace(s.Pos, opener)
+	return true
 }
 
 // procSubstOpener is the two characters a process substitution is refused by

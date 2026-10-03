@@ -295,6 +295,8 @@ func Semantics() interp.Semantics {
 	// the shell has moved on, which is exactly what No claims. #4002 was
 	// filed on that truncated reading.
 	s.WritingSubstitutionIsWaitedForAtTheCommand = interp.No
+	// `<>` onto a process substitution this command made: BusyBox ash has no process substitution, so this is the reading that asks nothing (#5514).
+	s.ReadWriteRedirectionTakesTheSubstitutionsEnd = interp.No
 
 	// The directory a substitution's path is named after is answerable for
 	// the same reason, and it is /dev/fd: measured 2026-09-21 in the same

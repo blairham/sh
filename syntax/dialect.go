@@ -7896,6 +7896,26 @@ type Dialect struct {
 	//     not rediscovered as this rule.
 	ProcessSubstitutionOnlyWhereACommandTakesAWord bool
 
+	// ProcessSubstitutionAgainstTheRedirectionIsRefused refuses, while
+	// reading, a redirection target that begins with a process substitution
+	// running the other way from the redirection: `>(cmd)` after an operator
+	// that reads, `<(cmd)` after one that writes, and either after a
+	// duplication. The refusal names the opener, as
+	// ProcessSubstitutionOnlyWhereACommandTakesAWord's does.
+	//
+	// ksh93 alone. Measured 2026-10-02 on ksh93u+ 2012-08-01 over a script
+	// file `: OP SUBST` then `echo next`, under `env -i` (#5514):
+	//
+	//	<  <>  3<  3<>   then >(…)   `>(' unexpected, the script ends
+	//	>  >>  >|  3>    then <(…)   `<(' unexpected
+	//	<&  >&           then either  that opener unexpected
+	//	<  3<            then <(…)   runs
+	//	<> 3<>           then <(…)   opens the path, which is refused at run
+	//	>  >>  >|  3>    then >(…)   opens the path
+	//
+	// bash 5.3.20 and zsh 5.9.2 read every row.
+	ProcessSubstitutionAgainstTheRedirectionIsRefused bool
+
 	// FdVariableRedirections is `{name}>file` and its family: the shell
 	// picks the descriptor and the variable receives its number. Consumed
 	// by the lexer, because the adjacency to the operator is the whole

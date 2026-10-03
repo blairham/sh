@@ -2106,6 +2106,8 @@ func Semantics() interp.Semantics {
 	// "PIPE\n" | tee >(read -r v; sleep 0.3; printf "[%s]" "$v") >/dev/null;
 	// printf AFTER` is `AFTER[PIPE]` here and `[PIPE]AFTER` in zsh (#2197).
 	s.WritingSubstitutionIsWaitedForAtTheCommand = interp.No
+	// `<>` onto a process substitution this command made: the path is opened, and refused: `/dev/fd/63: Permission denied` (#5514).
+	s.ReadWriteRedirectionTakesTheSubstitutionsEnd = interp.No
 	// And the path it expands to is `/dev/fd/N` on both platforms, even
 	// where /proc/self/fd is there and /dev/fd is a symlink to it: measured
 	// 2026-09-21, `echo <(true)` is `/dev/fd/63` in the pinned Linux image

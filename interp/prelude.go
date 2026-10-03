@@ -332,6 +332,37 @@ func biDiagnose(r *Runner, _ context.Context, args []string) int {
 	if len(args) == 0 {
 		return 0
 	}
-	r.diagf("%s: %s\n", r.speaking(), strings.Join(args, " "))
+	report := func() { r.diagf("%s: %s\n", r.speaking(), strings.Join(args, " ")) }
+	r.locatedAtTheSpeakersCall(report)
 	return 0
+}
+
+// locatedAtTheSpeakersCall writes report located where the script called the
+// prelude function that is speaking, as a builtin of that name would be
+// located — stepping out of that function's frame and every frame it went on
+// to push. Measured 2026-10-02 on zsh 5.9.2 (`-f`), where the prelude's
+// `popd` reported from inside its own frame (#5447):
+//
+//	zsh -fc popd                      zsh:popd:1: directory stack empty
+//	zsh -fc 'f() { popd; }; f'        f:popd: directory stack empty
+//	f() {⏎dirs -q⏎}⏎f  (-c)         f:dirs:1: bad option: -q
+//	f() { popd; } in a file, called   f:popd: directory stack empty
+//
+// against the binary's path and the prelude function's own line here.
+func (r *Runner) locatedAtTheSpeakersCall(report func()) {
+	if r.speaker == "" || r.speakerDepth <= 0 {
+		report()
+		return
+	}
+	if len(r.frames)-r.outsideCall < r.speakerDepth {
+		// Out at the call, where a function the caller is in is counted as
+		// it would be for the builtin — which the speaking function's own
+		// frame is what turned off. See locationNameAndLine's callers.
+		saved := r.speakerAtTheCall
+		r.speakerAtTheCall = true
+		defer func() { r.speakerAtTheCall = saved }()
+		report()
+		return
+	}
+	r.LocatedAtTheCall(func() { r.locatedAtTheSpeakersCall(report) })
 }

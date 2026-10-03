@@ -461,7 +461,7 @@ func (r *Runner) locationFile() string {
 	if n := len(r.frames) - r.outsideCall; n > 0 {
 		return r.frames[n-1].File
 	}
-	if r.outsideCall > 0 && r.scriptFile != "" && r.sem().DollarZeroNames == DollarZeroIsTheInnermostCall {
+	if r.outsideCall > 0 && !r.speakerAtTheCall && r.scriptFile != "" && r.sem().DollarZeroNames == DollarZeroIsTheInnermostCall {
 		if in, ok := r.innermostCall(r.frames); ok {
 			return in
 		}

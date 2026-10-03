@@ -1734,6 +1734,12 @@ func Semantics() interp.Semantics {
 	s.SpecialBuiltinsBeyondPosix = "local"
 	s.TypePrintsFunctionBody = interp.No
 	s.TypeEndsOptionsWithDashDash = interp.No
+	// But a leading-dash first word is not a name here: measured 2026-10-03
+	// in the pinned image, `type -t f`, `type -w if`, `type -V f` and `type -
+	// f` all drop the word and answer `command -v`-style, `type -- cd ls` is
+	// `cd` and `/bin/ls`, and `type -t -t f` is `f` at 127 — only the first
+	// word goes. Every one of `type`'s oracle rows here turns on it.
+	s.TypeLeadingDashWordAsksForTheBareAnswer = interp.Yes
 	// `ulimit -a` is laid out with bash's labels and letters rather than
 	// dash's; the block unit and the resources it knows were read off that
 	// listing.

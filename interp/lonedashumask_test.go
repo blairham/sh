@@ -122,6 +122,7 @@ func TestTypeAnswersALoneDashOnItsOwnAxis(t *testing.T) {
 		// on PATH, and an unanswered axis on that road would put its own
 		// complaint in the output these rows read.
 		sem.EmptyPathIsTheCurrentDirectory = No
+		sem.TypeLeadingDashWordAsksForTheBareAnswer = No
 		r := newTestRunner(t, &Runner{
 			Stdout: &buf, Stderr: &buf,
 			Semantics: &sem, Diagnostics: &Diagnostics{},

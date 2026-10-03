@@ -3799,6 +3799,7 @@ func Semantics() interp.Semantics {
 	s.TypeDistinguishesSpecialBuiltins = interp.No
 	s.TypePrintsFunctionBody = interp.Yes
 	s.TypeEndsOptionsWithDashDash = interp.Yes
+	s.TypeLeadingDashWordAsksForTheBareAnswer = interp.No
 	// type's letters, all implemented here: -a for every resolution, -p
 	// speaking only where the plain answer would have been a file, -P
 	// forcing the PATH search, -f leaving functions out, and -t — the one

@@ -189,7 +189,7 @@ func (r *Runner) expandWordFieldsTracked(w *syntax.Word, track bool) ([]string, 
 	w = spansCopiedForTildes(w)
 	// How many bytes at the front of the first span the tilde wrote, which
 	// a word whose text splits does not split. See the loop below.
-	tildeLen := r.expandTildeLen(w)
+	tildeLen, _ := r.expandTildeLenThrough(w, true)
 	// And the tildes a word that merely *looks* like an assignment gets in
 	// one column. Beside expandTilde because it is the other half of the same
 	// question — where in a word a `~` is eligible at all — and after it,
@@ -420,6 +420,9 @@ func (r *Runner) expandWordFieldsTracked(w *syntax.Word, track bool) ([]string, 
 	}
 
 	fields := r.wordResult(&b)
+	// A tilde whose name ran through a quote or an expansion, read now that
+	// the word has come to its text. See tildeThroughMark.
+	fields = r.resolveFieldsTildesThrough(fields)
 	if fields == nil && r.braceNameCameToNothing(&b, braceName) {
 		// The quoted null every column keeps, for an alternative that came
 		// to nothing rather than for one somebody wrote.
@@ -1122,11 +1125,13 @@ func (r *Runner) wordTextGlobMarked(w *syntax.Word) string {
 // marks survive it; colonTildes says the word is an assignment's value, where
 // a colon begins a tilde segment of its own.
 func (r *Runner) wordTextUnsplit(w *syntax.Word, mark func(syntax.Span, string) string, keepMarks, colonTildes bool) string {
-	w = r.wordForRun(w)
+	w = spansCopiedForTildes(r.wordForRun(w))
+	// A prefix running through a quote or an expansion is marked and read at
+	// the end. See tildeThroughMark.
 	if colonTildes {
-		r.expandTildeIn(w, tildeEndsAtASlashOrColon)
+		r.expandTildeInThrough(w, tildeEndsAtASlashOrColon)
 	} else {
-		r.expandTilde(w)
+		r.expandTildeLenThrough(w, true)
 	}
 	failed := r.expandErr
 	// "Without globbing" has to reach the *nested* expansions too, and it did
@@ -1182,7 +1187,7 @@ func (r *Runner) wordTextUnsplit(w *syntax.Word, mark func(syntax.Span, string) 
 	}
 	// The same cut an ordinary word's fields get, on the one text this
 	// reading makes. See Runner.cutAtNul.
-	return r.cutAtNul(b.String(), keepMarks)
+	return r.resolveTildesThrough(r.cutAtNul(b.String(), keepMarks), keepMarks)
 }
 
 // expandRedirectTargetViews expands a redirection's target once and returns
@@ -1216,7 +1221,7 @@ func (r *Runner) expandRedirectTargetViews(w *syntax.Word) (fields, words []stri
 	}
 	w = r.wordForRun(w)
 	w = spansCopiedForTildes(w)
-	r.expandTilde(w)
+	r.expandTildeLenThrough(w, true) // marks resolved below; see tildeThroughMark
 	// The word is recorded here for the same reason expandOneWordFields
 	// records its own: a diagnostic raised inside the expansion names the
 	// text it sits in, and a target reached through this second walk was
@@ -1298,13 +1303,13 @@ func (r *Runner) expandRedirectTargetViews(w *syntax.Word) (fields, words []stri
 	}
 	// A substituted NUL ends a target's name where it ends any other word's,
 	// in every one of the three views. See Runner.cutAtNul.
-	plain = r.cutAtNul(globUnescape(b.String()), false)
+	plain = r.resolveTildesThrough(r.cutAtNul(globUnescape(b.String()), false), false)
 
-	words = r.cutFieldsAtNul(u.result())
+	words = r.resolveFieldsTildesThrough(r.cutFieldsAtNul(u.result()))
 	if words != nil {
 		words = r.globFields(words)
 	}
-	fields = r.cutFieldsAtNul(f.result())
+	fields = r.resolveFieldsTildesThrough(r.cutFieldsAtNul(f.result()))
 	if fields == nil {
 		return nil, words, plain
 	}
@@ -1968,6 +1973,13 @@ func (r *Runner) expandColonTildes(w *syntax.Word) {
 			}
 			terminated := k < len(v) || i == len(w.Spans)-1
 			if !terminated {
+				// The segment runs on into a quote or an expansion, which the
+				// dialect that reads a name through one resolves once the
+				// value is expanded. See tildeThroughMark.
+				if !r.ask(r.sem().TildePrefixStopsAtAQuoteOrAnExpansion,
+					"a tilde prefix carrying a quote or an expansion") && !r.unspecified {
+					b.WriteString(tildeThroughColonMark)
+				}
 				continue
 			}
 			switch v[j+2 : k] {
@@ -7818,18 +7830,30 @@ func (r *Runner) expandTilde(w *syntax.Word) {
 // expandTildeLen is expandTilde reporting how many bytes the expansion wrote
 // at the front of the word, and 0 where it wrote none.
 func (r *Runner) expandTildeLen(w *syntax.Word) int {
+	n, _ := r.expandTildeLenThrough(w, false)
+	return n
+}
+
+// expandTildeLenThrough is expandTildeLen for a caller that resolves a prefix
+// running through a quote or an expansion once the word is expanded: with
+// mark, such a prefix is marked and through reports it. See tildeThroughMark.
+func (r *Runner) expandTildeLenThrough(w *syntax.Word, mark bool) (n int, through bool) {
 	if !tildeOpensTheWord(w) {
-		return 0
+		return 0, false
 	}
 	h := r.wordTildeHead(w.Spans)
 	if r.refuseTilde(h.miss) {
-		return 0
+		return 0, false
+	}
+	if mark && h.through {
+		h.markThrough(w.Spans, 0, tildeThroughMark)
+		return 0, true
 	}
 	h.apply(w.Spans, 0)
 	if !h.moved {
-		return 0
+		return 0, false
 	}
-	return len(h.dir)
+	return len(h.dir), false
 }
 
 // expandTildeIn is expandTilde with the closing bytes named, for the road that
@@ -7837,6 +7861,23 @@ func (r *Runner) expandTildeLen(w *syntax.Word) int {
 // surely as a slash does. Unanimous across the panel — `foo=~:x` is the home
 // directory and a colon in all seven columns, and this shell left the `~` as
 // written because it looked for a slash and found none (#4156).
+// expandTildeInThrough is expandTildeIn marking a prefix that runs through a
+// quote or an expansion, for an assignment's value, whose caller resolves it.
+func (r *Runner) expandTildeInThrough(w *syntax.Word, ends string) {
+	if !tildeOpensTheWord(w) {
+		return
+	}
+	h := r.tildeHead(w.Spans, 0, ends)
+	if r.refuseTilde(h.miss) {
+		return
+	}
+	if h.through {
+		h.markThrough(w.Spans, 0, tildeThroughColonMark)
+		return
+	}
+	h.apply(w.Spans, 0)
+}
+
 func (r *Runner) expandTildeIn(w *syntax.Word, ends string) {
 	if !tildeOpensTheWord(w) {
 		return
@@ -7881,6 +7922,20 @@ type tildeHead struct {
 	// miss is a name the dialect refuses, which is reported only once the
 	// reading it belongs to is the one taken. See tildeMiss.
 	miss tildeMiss
+	// through is a prefix that runs on through a quote or an expansion, in
+	// the dialect that reads it so: the name is what the word comes to. See
+	// tildeThroughMark.
+	through bool
+}
+
+// markThrough puts tildeThroughMark (or its colon twin) in front of the tilde
+// a through prefix opens at start, for the caller that resolves it once the
+// word is expanded.
+func (h tildeHead) markThrough(spans []syntax.Span, start int, mark string) {
+	if !h.through {
+		return
+	}
+	spans[0].Value = spans[0].Value[:start] + mark + spans[0].Value[start:]
 }
 
 // same reports whether two readings of one word's prefix came to the same
@@ -8021,14 +8076,13 @@ func (r *Runner) tildeHead(spans []syntax.Span, start int, ends string) tildeHea
 	if r.unspecified {
 		return tildeHead{}
 	}
+	if ran {
+		// The name runs on through the quote or the expansion, so it is
+		// read once the word has been expanded. See tildeThroughMark.
+		return tildeHead{through: true}
+	}
 	dir, _, ok, miss := r.tildeSplit(b.String())
 	if !ok {
-		if ran {
-			// A prefix cut short by a quote or an expansion is not the name
-			// the shell refusing one would look up: zsh reads `~ro"o"t` as
-			// `~root`. Left as written rather than refused for a part.
-			return tildeHead{}
-		}
 		return tildeHead{miss: miss}
 	}
 	return tildeHead{dir: dir, moved: true, span: span, off: off}

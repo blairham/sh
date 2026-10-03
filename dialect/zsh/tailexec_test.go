@@ -55,7 +55,7 @@ func TestTheLastCommandOfACommandStringReplacesTheShell(t *testing.T) {
 		dir := t.TempDir()
 		var replaced, inDir string
 		r := &interp.Runner{
-			Stdout: os.Stdout, Stderr: os.Stderr, Semantics: &sem, Diagnostics: &diag,
+			Stdin: tailDevNull(t), Stdout: os.Stdout, Stderr: os.Stderr, Semantics: &sem, Diagnostics: &diag,
 			Dir: dir, Name: "zsh", Route: interp.RouteCommandString,
 			Vars:    map[string]string{"PATH": "/usr/bin:/bin"},
 			Dialect: presetDialect(),
@@ -90,7 +90,7 @@ func TestTheReplacementStartsWhereTheShellIs(t *testing.T) {
 	sem, diag := zsh.Semantics(), zsh.Diagnostics()
 	var inDir, level string
 	r := &interp.Runner{
-		Stdout: os.Stdout, Stderr: os.Stderr, Semantics: &sem, Diagnostics: &diag,
+		Stdin: tailDevNull(t), Stdout: os.Stdout, Stderr: os.Stderr, Semantics: &sem, Diagnostics: &diag,
 		Dir: t.TempDir(), Name: "zsh", Route: interp.RouteCommandString,
 		Vars:    map[string]string{"PATH": "/usr/bin:/bin"},
 		Dialect: presetDialect(),
@@ -132,7 +132,7 @@ func TestAScriptWithNoInterpreterLineIsNotReplacedInto(t *testing.T) {
 	var out strings.Builder
 	replaced := false
 	r := &interp.Runner{
-		Stdout: &out, Stderr: &out, Semantics: &sem, Diagnostics: &diag,
+		Stdin: tailDevNull(t), Stdout: &out, Stderr: &out, Semantics: &sem, Diagnostics: &diag,
 		Dir: dir, Name: "zsh", Route: interp.RouteCommandString,
 		Vars:    map[string]string{"PATH": "/usr/bin:/bin"},
 		Dialect: presetDialect(),
@@ -165,7 +165,7 @@ func TestAShellWritingToABufferForksItsLastCommand(t *testing.T) {
 	var out strings.Builder
 	replaced := false
 	r := &interp.Runner{
-		Stdout: &out, Stderr: os.Stderr, Semantics: &sem, Diagnostics: &diag,
+		Stdin: tailDevNull(t), Stdout: &out, Stderr: os.Stderr, Semantics: &sem, Diagnostics: &diag,
 		Dir: t.TempDir(), Name: "zsh", Route: interp.RouteCommandString,
 		Vars:    map[string]string{"PATH": "/usr/bin:/bin"},
 		Dialect: presetDialect(),
@@ -180,4 +180,16 @@ func TestAShellWritingToABufferForksItsLastCommand(t *testing.T) {
 	if replaced || out.String() != "hi\n" {
 		t.Errorf("replaced = %v and the buffer holds %q, want a fork that wrote %q", replaced, out.String(), "hi\n")
 	}
+}
+
+// tailDevNull is a standard input that is a file, as a shell's always is,
+// so the replacement has a number to hand over for it.
+func tailDevNull(t *testing.T) *os.File {
+	t.Helper()
+	f, err := os.Open(os.DevNull)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = f.Close() })
+	return f
 }

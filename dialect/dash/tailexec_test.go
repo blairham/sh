@@ -45,7 +45,7 @@ func TestTheLastCommandOfACommandStringReplacesTheShell(t *testing.T) {
 		dir := t.TempDir()
 		var replaced, inDir string
 		r := &interp.Runner{
-			Stdout: os.Stdout, Stderr: os.Stderr, Semantics: &sem, Diagnostics: &diag,
+			Stdin: tailDevNull(t), Stdout: os.Stdout, Stderr: os.Stderr, Semantics: &sem, Diagnostics: &diag,
 			Dir: dir, Name: "dash", Route: interp.RouteCommandString,
 			Vars:    map[string]string{"PATH": "/usr/bin:/bin"},
 			Dialect: presetDialect(),
@@ -64,4 +64,16 @@ func TestTheLastCommandOfACommandStringReplacesTheShell(t *testing.T) {
 			t.Errorf("%s: the replacement starts in %q, want the shell's %q", tc.src, inDir, dir)
 		}
 	}
+}
+
+// tailDevNull is a standard input that is a file, as a shell's always is,
+// so the replacement has a number to hand over for it.
+func tailDevNull(t *testing.T) *os.File {
+	t.Helper()
+	f, err := os.Open(os.DevNull)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = f.Close() })
+	return f
 }

@@ -2229,7 +2229,6 @@ func (r *Runner) expandAtList(s syntax.Span, sp splitPolicy, head bool) ([]strin
 	// `$@` and `$*` under an operator are the *parameters*, one at a time,
 	// and the same rewrite is what says so. See positionalsAsList.
 	if listed, ok := r.positionalsAsList(e); ok {
-		r.liveMarksFollow(e, listed)
 		e = listed
 	}
 	// `${!prefix@}` and `${!prefix*}` yield the *names* that begin with the

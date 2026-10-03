@@ -20946,6 +20946,47 @@ type Semantics struct {
 	// TestATraceLineFollowsTheRedirections.
 	TraceLineFollowsTheRedirections Answer
 
+	// TraceRedirectionsOnALineOfTheirOwn traces a command's redirections on
+	// a line after the command's own, as they are made. Measured 2026-10-03
+	// on ksh93u+ under `-c` (#5558):
+	//
+	//	set -x; true >/dev/null 2>/dev/null
+	//	        `+ true`, `+ 1> /dev/null 2> /dev/null`
+	//	set -x; true 2>/dev/null; echo z
+	//	        `+ true`, `+ 2> /dev/null`, `+ echo z` — the newline goes
+	//	        with the piece, ahead of the install
+	//	set -x; true 2>/dev/null 1>&2; echo z
+	//	        `+ true`, `+ 2> /dev/null + echo z` — the piece for `1>&2`
+	//	        and its newline went where standard error then pointed
+	//	set -x; true >/dev/null 3>/nope/f; echo $?
+	//	        `+ true`, `+ 1> /dev/null ` and the complaint on one line
+	//	set -x; { echo a; } 2>&1 >/dev/null
+	//	        `+ 2>& 1 1> /dev/null`, then `+ echo a`
+	//	set -x; true <>/dev/null        `+ true`, `+ 1<> /dev/null`
+	//	set -x; true 3<<<"a b" <&3      `+ 3<<< a b`, then `0<& 3`
+	//	set -x; cat <<E (body x)        `+ 0<< \E`, `x`, `E`, the body
+	//
+	// The descriptor is always written, a space follows the operator, and a
+	// target is written as it expanded, unquoted. PS4 goes out first, so a
+	// substitution in a target traces in the middle of the line. A `$(<f)`
+	// traces `+ 0< f` the same way. bash 5.3.20, dash 0.5.12, BusyBox ash
+	// and zsh 5.9.2 trace no redirection at all. See interp/xtraceredirs.go.
+	//
+	// Read rather than asked: tracing is not the place to refuse a script.
+	//
+	// unpinned ksh: no corpus row traces a redirection; pinned by
+	// TestARedirectionIsTracedOnALineOfItsOwn.
+	//
+	// unpinned bash: no line, the same reach; pinned by
+	// TestATraceLineFollowsTheRedirections.
+	//
+	// unpinned zsh: the same, pinned by TestATraceLineFollowsTheRedirections.
+	//
+	// unpinned dash: the same, pinned by TestATraceLineFollowsTheRedirections.
+	//
+	// unpinned ash: the same, pinned by TestATraceLineFollowsTheRedirections.
+	TraceRedirectionsOnALineOfTheirOwn Answer
+
 	// BuiltinUsageErrorEscapesBorrowedText keeps an error a builtin reported
 	// about **how it was called** out of the boundary
 	// FatalErrorEndsBorrowedTextOnly draws, so such an error ends the shell

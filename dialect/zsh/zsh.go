@@ -2404,6 +2404,8 @@ func Semantics() interp.Semantics {
 	// Whether a command's trace line waits for its redirections. See
 	// interp.Semantics.TraceLineFollowsTheRedirections (#5547).
 	s.TraceLineFollowsTheRedirections = interp.Yes
+	// See interp.Semantics.TraceRedirectionsOnALineOfTheirOwn (#5558).
+	s.TraceRedirectionsOnALineOfTheirOwn = interp.No
 	// zsh writes each word before its store (#5546).
 	// See interp.Semantics.TraceLineFollowsTheStore.
 	s.TraceLineFollowsTheStore = interp.No

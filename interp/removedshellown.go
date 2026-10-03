@@ -140,9 +140,6 @@ func (r *Runner) wasTheShellsOwnParameter(name string) bool {
 
 // unsetKeepsTheAttributes reports whether the `unset` about to happen should
 // leave the name's attributes behind, and whether the name is exported now.
-// If it keeps them, it also tells clearAttributes, through
-// keepingAttributesOf, to leave the type letters alone. The caller clears
-// that field once the removal is done.
 //
 // The question is asked only of a parameter the shell owns. For every other
 // name the panel agrees that the attributes go. That includes a name an
@@ -157,6 +154,5 @@ func (r *Runner) unsetKeepsTheAttributes(name string) (keep, exported bool) {
 	if !r.ask(r.sem().UnsetKeepsTheShellsOwnAttributes, "whether `unset` keeps the attributes of the shell's own parameter") {
 		return false, false
 	}
-	r.keepingAttributesOf = name
 	return true, r.isExported(name)
 }

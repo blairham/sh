@@ -1352,10 +1352,6 @@ type Runner struct {
 	// it was and every lookup still found it. A name here is gone until
 	// something assigns it again.
 	removed map[string]bool
-	// keepingAttributesOf is the name an `unset` is removing while keeping
-	// its attributes. It is set only for the length of that removal. See
-	// unsetKeepsTheAttributes.
-	keepingAttributesOf string
 
 	// declaredEmpty are names a *declaration* gave a value to, in the
 	// dialect that considers a name declared without one to be set. The

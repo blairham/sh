@@ -3355,6 +3355,9 @@ func Semantics() interp.Semantics {
 	// used to say "ends the script", which is what a probe written inside
 	// `( … )` or under `-c` sees and is not what a script sees (#3485).
 	s.BadSubscriptToUnset = interp.BadSubscriptAbandonsTheCommand
+	// And a `test -v` operand's: see interp.Semantics.BadSubscriptToTestIsSet
+	// (#5590).
+	s.BadSubscriptToTestIsSet = interp.BadSubscriptAbandonsTheCommand
 	// And the store a `read 'r[…]'` or a `printf -v 'r[…]'` operand walks
 	// into gives up exactly as much, which is the half zsh answers
 	// differently.

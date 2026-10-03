@@ -3552,6 +3552,9 @@ func Semantics() interp.Semantics {
 	// And the complaint is the builtin's: `unset` reports 1 and the script
 	// goes on, which is what makes `unset a[@]` survivable here.
 	s.BadSubscriptToUnset = interp.BadSubscriptReported
+	// And a `test -v` operand's: see interp.Semantics.BadSubscriptToTestIsSet
+	// (#5590).
+	s.BadSubscriptToTestIsSet = interp.BadSubscriptReported
 	// The store behind `read 'r[…]'` answers the same way, and it is the one
 	// column where the two questions have the same answer as bash's pair do:
 	// measured 2026-09-17, `read 'r[1/0]' <<< Y; echo same-line` writes the
@@ -4478,6 +4481,8 @@ func Diagnostics() interp.Diagnostics {
 		// The builtin names itself in front of the arithmetic sentence, which
 		// it does not do for the identical failure in an expansion.
 		UnsetBadSubscript: "unset: %[1]s",
+		// And `test -v` names whichever spelling ran (#5590).
+		TestIsSetBadSubscript: "%[2]s: %[1]s",
 		// And the store an operand's brackets walk into names the builtin
 		// that was handed the operand: `read 'r[1/0]'` is `read: 1/0: divide
 		// by zero` here, where bash and zsh write the sentence alone.

@@ -28417,6 +28417,30 @@ type Semantics struct {
 	// a[1]` needs no answer from anyone.
 	BadSubscriptToUnset BadSubscriptPolicy
 
+	// BadSubscriptToTestIsSet is how much `test -v` and `[ -v ]` give up over
+	// an operand whose subscript will not evaluate — the builtin spellings of
+	// the operator whose `[[ -v ]]` form ends the line in every column.
+	//
+	// Measured 2026-10-03 over a script file, `a=(x y z)` and `test -v
+	// 'a[1/0]'` at each site (#5590):
+	//
+	//	                            bash 5.3.20   zsh 5.9.2   ksh93u+
+	//	test …; echo same           no            —           yes
+	//	the next line               runs, $? 1    —           runs, $? 0
+	//	f(){ test …; echo x; }; f   no x          —           x
+	//	( test …; echo sub )        no sub        —           sub
+	//	the complaint names         nothing       nothing     `test:` / `[:`
+	//
+	// An em dash is zsh ending the script at the first one — after running
+	// the test to its end, by ConditionFinishesAfterAnArithmeticError, so
+	// `test ! -v 'a[1/0]'` ends a command string at 0 there. So bash gives up
+	// the command, zsh the script, and ksh93 reports a failed builtin at 1
+	// and carries on: one value each of this type.
+	//
+	// dash and BusyBox ash have neither the operator nor arrays, so neither
+	// answers.
+	BadSubscriptToTestIsSet BadSubscriptPolicy
+
 	// BadSubscriptToAnOutputOperand is the same question one builtin over:
 	// how much a *store* through an operand gives up when the subscript in it
 	// will not evaluate. `read 'a[1/0]'` and `printf -v 'a[1/0]'` are the two

@@ -1874,6 +1874,9 @@ func Semantics() interp.Semantics {
 	// And `getopts` no more than `read` does: this shell has no arrays
 	// (#3555).
 	s.GetoptsOperandTakesASubscript = interp.No
+	// unanswered BadSubscriptToTestIsSet: neither `-v` nor arrays here, so
+	// no subscript of a `test` operand is ever evaluated.
+	//
 	// unanswered BadSubscriptToUnset: there is no subscript to evaluate here,
 	// so the arithmetic the axis is about is never reached. Measured
 	// 2026-09-17: `q=1; unset 'q[b c]'` is `unset: q[b c]: bad variable name`

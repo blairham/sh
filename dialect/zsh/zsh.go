@@ -4255,6 +4255,9 @@ func Semantics() interp.Semantics {
 	// The complaint is the builtin's rather than the script's: `unset` reports
 	// 1 and the next command still runs.
 	s.BadSubscriptToUnset = interp.BadSubscriptReported
+	// And a `test -v` operand's: see interp.Semantics.BadSubscriptToTestIsSet
+	// (#5590).
+	s.BadSubscriptToTestIsSet = interp.BadSubscriptEndsTheScript
 	// A *store* through an operand is the opposite, and this is the column
 	// the two fields exist for: measured 2026-09-17, `read 'r[1/0]' <<< Y`
 	// in a script file writes `division by zero` and the script ends at 1,

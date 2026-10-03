@@ -3599,6 +3599,14 @@ type Diagnostics struct {
 	// identical failure in an expansion without one.
 	UnsetBadSubscript string
 
+	// TestIsSetBadSubscript wraps the sentence about a `test -v` or `[ -v ]`
+	// operand whose subscript would not evaluate. Two verbs: that sentence,
+	// and the builtin's name as it was invoked. Empty leaves the sentence to
+	// stand alone, with no builtin in its location, which is what bash and
+	// zsh write; ksh93 names the builtin in front of it — `test: 1/0: divide
+	// by zero`, `[: 1/0: divide by zero` (#5590).
+	TestIsSetBadSubscript string
+
 	// UnsetSubscriptBeforeTheFirstElement is what `unset a[i]` says about a
 	// subscript that lands before the array's first element. Two verbs: the
 	// name, and the subscript *as written*.

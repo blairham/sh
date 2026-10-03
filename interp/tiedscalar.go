@@ -465,6 +465,17 @@ func (r *Runner) declareTie(builtin string, args []string, f declareFlags) int {
 		// tie to a *different* name is refused. The separator is not part of
 		// that question: re-declaring with another separator is the same
 		// pair.
+		//
+		// Which sentence says so is which half the name already is.
+		// Measured 2026-10-02 on zsh 5.9.2: after `typeset -T t1 t2`,
+		// `typeset -T t1 t3` is `can't tie already tied scalar: t1` and
+		// `typeset -T t2 t3` and `typeset -T t2 t1` are `already tied as
+		// non-scalar: t2`, all at 1 (#5151).
+		if t.array == scalar {
+			r.diagf("%s\n", Wording(r.diag().AlreadyTiedNonScalar,
+				"already tied as non-scalar: %s", scalar))
+			return 1
+		}
 		r.diagf("%s\n", Wording(r.diag().AlreadyTiedScalar,
 			"can't tie already tied scalar: %s", scalar))
 		return 1

@@ -4,6 +4,7 @@
 package interp
 
 import (
+	"maps"
 	"slices"
 
 	"github.com/blairham/sh/syntax"
@@ -31,17 +32,41 @@ import (
 // SetReservedWordEnabled switches one of the dialect's declaration reserved
 // words on or off, and reports whether the name is one.
 func (r *Runner) SetReservedWordEnabled(name string, on bool) bool {
-	if !r.lang().DeclarationReservedWords[name] {
+	declaration := r.lang().DeclarationReservedWords[name]
+	if !declaration && !r.reservedOff[name] && !r.reservedWord(name) {
 		return false
 	}
 	if on {
 		delete(r.reservedOff, name)
-		return true
+	} else {
+		if r.reservedOff == nil {
+			r.reservedOff = map[string]bool{}
+		}
+		r.reservedOff[name] = true
 	}
-	if r.reservedOff == nil {
-		r.reservedOff = map[string]bool{}
+	if !declaration {
+		// A word of the grammar, which the parser decides: the text read
+		// after this line reads it the new way, as every grammar option
+		// reaches it, through a replaced dialect rather than a write
+		// through the shared one. Measured 2026-10-02 on zsh 5.9.2 (`-f`),
+		// from a script file: `disable -r foreach` makes `whence -w foreach`
+		// `none` and `foreach() { … }; foreach x` a function definition and
+		// call, `disable -r if` makes `if() { … }; if` one too, `enable -r
+		// if` gives `if true; then …` back, and a function defined before
+		// the change keeps the reading it was parsed with (#5267).
+		d := r.dialect()
+		off := maps.Clone(d.ReservedWordsOff)
+		if off == nil {
+			off = map[string]bool{}
+		}
+		if on {
+			delete(off, name)
+		} else {
+			off[name] = true
+		}
+		d.ReservedWordsOff = off
+		r.Dialect = &d
 	}
-	r.reservedOff[name] = true
 	return true
 }
 

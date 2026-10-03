@@ -746,6 +746,22 @@ func (r *Runner) describeNameLinking(name string, kind typeKind, skipFuncs bool,
 	if r.unspecified {
 		return 2
 	}
+	// The reserved word first, which is the resolution order and not a
+	// preference: a plain answer names what the shell would reach, and a
+	// word this grammar owns is reached before any table is consulted. It
+	// only ever *shows* in the one dialect where a name is both — zsh's
+	// seven declaration commands — because nowhere else does a builtin share
+	// a name with a word of the grammar (#3291). Before a function of the
+	// same name as well: `function time { :; }; type -t time` is `keyword`
+	// in bash 5.3.20, and `whence -v time` is a keyword in ksh93u+ and a
+	// reserved word in zsh 5.9.2 (#5267).
+	if r.reservedWord(name) {
+		if r.sayKind(kind, name, "keyword", NamedKindWord(NameReserved)) {
+			return 0
+		}
+		r.printf("%s\n", Wording(dg.TypeKeyword, "%[1]s is a shell keyword", name))
+		return 0
+	}
 	// The function, unless a special builtin of the same name outranks it —
 	// which is the search order and not a preference, exactly as the reserved
 	// word below is. A shell that ran the builtin while this named the
@@ -767,19 +783,6 @@ func (r *Runner) describeNameLinking(name string, kind typeKind, skipFuncs bool,
 			// syntax.PrintWith.
 			r.printf("%s", r.listedFunctionLine(name, fn))
 		}
-		return 0
-	}
-	// The reserved word first, which is the resolution order and not a
-	// preference: a plain answer names what the shell would reach, and a
-	// word this grammar owns is reached before any table is consulted. It
-	// only ever *shows* in the one dialect where a name is both — zsh's
-	// seven declaration commands — because nowhere else does a builtin share
-	// a name with a word of the grammar (#3291).
-	if r.reservedWord(name) {
-		if r.sayKind(kind, name, "keyword", NamedKindWord(NameReserved)) {
-			return 0
-		}
-		r.printf("%s\n", Wording(dg.TypeKeyword, "%[1]s is a shell keyword", name))
 		return 0
 	}
 	if r.presentsAsBuiltin(name) {

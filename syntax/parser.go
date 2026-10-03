@@ -693,7 +693,8 @@ func (p *Parser) at(k Kind) bool { return p.tok.Kind == k }
 // atWord reports whether the current token is the given reserved word, written
 // unquoted. Quoting removes the reservation: `"if"` is a command name.
 func (p *Parser) atWord(s string) bool {
-	return p.tok.Kind == TokWord && !p.tok.IsQuoted() && p.tok.Literal() == s
+	return p.tok.Kind == TokWord && !p.tok.IsQuoted() && p.tok.Literal() == s &&
+		!p.dialect.ReservedWordsOff[s]
 }
 
 // stopWords end a list. They are only reserved where a command may begin,
@@ -735,7 +736,8 @@ func (p *Parser) reservedInDialect(name string) bool {
 // grammar reserves, written unquoted. Quoting removes the reservation exactly
 // as it does for [Parser.atWord]: `"if"` is a command name.
 func (p *Parser) atReservedWord() bool {
-	return p.tok.Kind == TokWord && !p.tok.IsQuoted() && reservedWords[p.tok.Literal()]
+	return p.tok.Kind == TokWord && !p.tok.IsQuoted() && reservedWords[p.tok.Literal()] &&
+		!p.dialect.ReservedWordsOff[p.tok.Literal()]
 }
 
 // atReservedPrecommand reports whether the current token is one of the words
@@ -780,7 +782,7 @@ func (p *Parser) wordStopsACommand(w string) bool {
 	if w == "in" {
 		return !p.dialect.InStandsAsACommandName
 	}
-	return stopWords[w]
+	return stopWords[w] && !p.dialect.ReservedWordsOff[w]
 }
 
 // atListEnd reports whether the current token closes the list the parser is

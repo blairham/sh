@@ -193,11 +193,6 @@ func switchReservedWords(r *interp.Runner, builtin string, on bool, names []stri
 		if r.SetReservedWordEnabled(n, on) {
 			continue
 		}
-		if zshReserves(n) {
-			r.Diagnosef("%s: -r %s is not implemented yet\n", builtin, n)
-			status = 2
-			continue
-		}
 		r.Diagnosef("%s: no such hash table element: %s\n", builtin, n)
 		status = 1
 	}

@@ -60,6 +60,8 @@ func TestShGlobWithKshGlobReadsABareParenthesisAsText(t *testing.T) {
 	for _, c := range []struct{ src, want string }{
 		{"setopt shglob kshglob; case 'a(b' in a(b|c)) print C;; esac", "C\n"},
 		{"[[ ab == a(b|c) ]] && print Z", "Z\n"},
+		// Pathname expansion reads it as `[[ ]]` does.
+		{`: > 'a(b' 'c)' ab; setopt shglob kshglob; print -r -- a(b|c)`, "a(b c)\n"},
 		// A trim's operand does not read the bar, and a value's bar is a
 		// character under `shglob`, inside a bare parenthesis or not.
 		{`setopt shglob kshglob; v='a(bX'; print -r -- ${v#a(b|c)}`, "a(bX\n"},

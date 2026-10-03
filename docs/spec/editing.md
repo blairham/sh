@@ -826,6 +826,8 @@ was written, the middle what zsh sent before the run:
 | `fg=red` | `ESC[31m` | `ESC[39m` |
 | `fg=b`, `fg=bl` | `ESC[30m` | `ESC[39m` |
 | `fg=3` | `ESC[33m` | `ESC[39m` |
+| `fg=8`, `fg=15` | `ESC[90m`, `ESC[97m` | `ESC[39m` |
+| `bg=8` | `ESC[100m` | `ESC[49m` |
 | `fg=200` | `ESC[38;5;200m` | `ESC[39m` |
 | `fg=#ff8800` | `ESC[38;2;255;136;0m` | `ESC[39m` |
 | `bg=red` | `ESC[41m` | `ESC[49m` |
@@ -845,8 +847,9 @@ Three things the table settles that the manual leaves open:
   `fg` before `bg`, whatever order they were asked for in.
 - **A palette color above 7 is not `fg_start_code` plus digits.** The manual
   describes `\e[3` followed by "one to three ASCII digits", which would make
-  `fg=200` into `ESC[3200m`. It is `ESC[38;5;200m`, and a hex triplet is
-  `ESC[38;2;r;g;bm`.
+  `fg=200` into `ESC[3200m`. It is `ESC[38;5;200m`, a hex triplet is
+  `ESC[38;2;r;g;bm`, and 8 to 15 are the bright run, `ESC[90m` to
+  `ESC[97m` and `ESC[100m` to `ESC[107m` (#5512).
   That is the default codes only. With `zle_highlight` giving a start code,
   every palette color is that start code, the number and the end code —
   `fg_start_code:"S|" fg_end_code:"|E"` writes `fg=196` as `S|196|E` — and

@@ -84,6 +84,17 @@ func TestATrapFunctionIsScopedWithItsTrap(t *testing.T) {
 	}
 }
 
+// Each row waits on a handshake rather than on a timing: the body's external
+// command creates `ready` and then waits for `go`, and the shell sends the
+// signal only once `ready` exists and creates `go` only after sending it. So
+// the signal always arrives while the external command is running, however
+// loaded the machine is. A 0.2 s sleep standing in for "the body is ready"
+// and a 0.6 s one for "it is still running" lost that race under load
+// (#5473). The external command writes `ready` itself, so a handler cannot
+// run between a line that announces readiness and the command after it.
+// Re-measured that way 2026-10-02 on zsh 5.9.2 (`-f -c`): every row writes
+// what it wrote before.
+//
 // A signal aimed at a background job whose body is this shell's reaches the
 // body's own traps, as it reaches a forked shell's, and not the programs the
 // body has started: the `sleep` goes on to the end and the handler runs
@@ -95,27 +106,27 @@ func TestASignalToABackgroundBodyReachesItsTraps(t *testing.T) {
 	for _, c := range []struct{ name, src, want string }{
 		{
 			"a trapped signal runs the body's handler after its command",
-			"{ trap 'print T' TERM; sleep 0.6; print after $?; } & sleep 0.2; kill -TERM $!; wait",
+			"{ trap 'print T' TERM; /bin/sh -c ': > ready; until [ -e go ]; do sleep 0.01; done'; print after $?; } & until [[ -e ready ]]; do /bin/sleep 0.01; done; kill -TERM $!; : > go; wait",
 			"T\nafter 0\n",
 		},
 		{
 			"on the body's last command",
-			"{ trap 'print T' TERM; sleep 0.6; } & sleep 0.2; kill -TERM $!; wait; print st=$?",
+			"{ trap 'print T' TERM; /bin/sh -c ': > ready; until [ -e go ]; do sleep 0.01; done'; } & until [[ -e ready ]]; do /bin/sleep 0.01; done; kill -TERM $!; : > go; wait; print st=$?",
 			"T\nst=0\n",
 		},
 		{
 			"where the parentheses are the job",
-			"( trap 'print T' TERM; sleep 0.6; print after ) & sleep 0.2; kill -TERM $!; wait",
+			"( trap 'print T' TERM; /bin/sh -c ': > ready; until [ -e go ]; do sleep 0.01; done'; print after ) & until [[ -e ready ]]; do /bin/sleep 0.01; done; kill -TERM $!; : > go; wait",
 			"T\nafter\n",
 		},
 		{
 			"named by a job spec, in a function",
-			"f() { trap 'print T; return 1' TERM; sleep 0.6; print no }; f & sleep 0.2; kill -TERM %1; wait",
+			"f() { trap 'print T; return 1' TERM; /bin/sh -c ': > ready; until [ -e go ]; do sleep 0.01; done'; print no }; f & until [[ -e ready ]]; do /bin/sleep 0.01; done; kill -TERM %1; : > go; wait",
 			"T\n",
 		},
 		{
 			"an ignored signal reaches nothing",
-			"{ trap '' TERM; sleep 0.6; print after $?; } & sleep 0.2; kill -TERM $!; wait",
+			"{ trap '' TERM; /bin/sh -c ': > ready; until [ -e go ]; do sleep 0.01; done'; print after $?; } & until [[ -e ready ]]; do /bin/sleep 0.01; done; kill -TERM $!; : > go; wait",
 			"after 0\n",
 		},
 	} {
@@ -135,7 +146,7 @@ func TestASignalToABackgroundBodyReachesItsTraps(t *testing.T) {
 // dies of the signal untrapped, which is a difference of this shell's that
 // is not asserted here; that S is not written is.
 func TestASignalToABackgroundBodyMissesASubshellInIt(t *testing.T) {
-	const src = "{ ( trap 'print S' TERM; sleep 0.6 ); print after $?; } & sleep 0.2; kill -TERM $!; wait; print end"
+	const src = "{ ( trap 'print S' TERM; /bin/sh -c ': > ready; until [ -e go ]; do sleep 0.01; done' ); print after $?; } & until [[ -e ready ]]; do /bin/sleep 0.01; done; kill -TERM $!; : > go; wait; print end"
 	out, _ := runZshOnPath(t, t.TempDir(), src)
 	if strings.Contains(out, "S") || !strings.HasSuffix(out, "end\n") {
 		t.Errorf("%s\n got %q, want no S and a last line of end", src, out)

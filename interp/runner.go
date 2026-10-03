@@ -3221,6 +3221,10 @@ type Runner struct {
 	// copied with the struct: a subshell must not invent a number one of the
 	// jobs it inherited already holds.
 	jobIdents *atomic.Uint32
+	// inventedJobs is every running job that answers to an invented number,
+	// shared down the clone chain the way the kernel's process ids are shared
+	// by every process: see Runner.reachInventedJob.
+	inventedJobs *inventedJobRegistry
 	// reaped are the jobs a `wait` has already reported the status of, newest
 	// last and bounded by reapedJobsKept.
 	//
@@ -5475,6 +5479,11 @@ func (r *Runner) clone() *Runner {
 	// its own would record a stop nothing above it could ever read. Made on
 	// every clone rather than lazily, so that a script with no subshell in it
 	// carries a nil and pays one nil test per command. See scriptStop.
+	// And the invented numbers' registry, before the copy for the same reason:
+	// a background body must reach the jobs its parent started later.
+	if r.inventedJobs == nil {
+		r.inventedJobs = &inventedJobRegistry{}
+	}
 	if r.scriptStop == nil {
 		r.scriptStop = &scriptStop{}
 	}

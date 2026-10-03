@@ -788,6 +788,7 @@ func (r *Runner) background(ctx context.Context, st *syntax.Stmt) error {
 	// And the elements of a pipeline, in the dialect that lists one a row
 	// at a time. See jobelements.go.
 	r.trackElements(job, st)
+	r.registerInventedJob(job)
 
 	sub := r.clone()
 	if theForkIsTheParentheses(st) {
@@ -942,7 +943,18 @@ func (r *Runner) background(ctx context.Context, st *syntax.Stmt) error {
 	// signal the body was sent while it waits on a pipeline or a `( … )` of
 	// its own — see abandonOnDeath.
 	var endOnce sync.Once
+	// Read here, on the shell's own goroutine, and not asked from the job's.
+	twoFiftySix := r.sem().SignalDeathStatusIsTwoFiftySix == Yes
 	ended := func(status int, sig syscall.Signal) {
+		if sig != 0 && status == 128+int(sig) && twoFiftySix {
+			// A job with no process of its own died of the signal inside
+			// this shell, which wrote the status the way a shell writes its
+			// own; a job reports the encoding a waited-for child gets, as one
+			// with a process does. Measured 2026-10-03 on ksh93u+, whose
+			// `sleep` is a builtin: `sleep 5 & p=$!; kill $p; wait $p` is
+			// 271 there, as it is here for `/bin/sleep`, and was 143 (#5684).
+			status = 256 + int(sig)
+		}
 		endOnce.Do(func() {
 			r.jobReaped(job, status, sig)
 			r.notifyJobEnded(notifyEnded)
@@ -3146,7 +3158,10 @@ func (r *Runner) jobByIdent(n int) *Job {
 			return j
 		}
 	}
-	return nil
+	// Not in this shell's table, which a background body's never is: the
+	// number still reaches the job, as a process id would. See
+	// inventedJobRegistry.
+	return r.reachInventedJob(n)
 }
 
 // jobOutlivingItsFirstProcess is the running job whose `$!` is pid where that

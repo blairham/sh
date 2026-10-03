@@ -19414,6 +19414,16 @@ type Semantics struct {
 	// through, so the dialects that stop at a quote never reach it (#5689).
 	TildeNameEndsOnlyAtAWrittenSlash Answer
 
+	// ABareNumberedTildeOfThreeDigitsIsAName reads `~N` as a directory stack
+	// index only for a bare numeral of one or two characters; three or more
+	// are a user name, while the signed `~+N` and `~-N` stay indexes at any
+	// length. Measured 2026-10-03 on zsh 5.9.2 under -f, after `pushd -q /tmp`:
+	// `~01` is an entry and `~10` past the end, `~100`, `~001` and
+	// `~999999` are `no such user or named directory`, and `~+001`, `~-0001`
+	// are entries and `~+100` past the end. bash 5.3.20 reads `~001` as
+	// entry 1 (see DirectoryStackParameter). zsh Yes; No elsewhere (#5694).
+	ABareNumberedTildeOfThreeDigitsIsAName Answer
+
 	// TildeColonEndsAnOrdinaryWordsPrefix says whether a colon closes a tilde
 	// prefix in an **ordinary word**, the way a slash does.
 	//
@@ -32200,6 +32210,9 @@ func PosixSemantics() Semantics {
 		TildePrefixStopsAtAQuoteOrAnExpansion: Yes,
 		// Not reached where the prefix stops at a quote. See the field.
 		TildeNameEndsOnlyAtAWrittenSlash: No,
+		// A numeral of any length is an index where there is a stack. See
+		// the field.
+		ABareNumberedTildeOfThreeDigitsIsAName: No,
 		// And a word that merely looks like an assignment is not a tilde
 		// context. XCU 2.6.1 gives the expansion to the assignments in front
 		// of a command and to nothing else, which is what dash, ksh93,
@@ -32541,6 +32554,9 @@ func CoreSemantics() Semantics {
 		TildePrefixStopsAtAQuoteOrAnExpansion: Yes,
 		// Not reached where the prefix stops at a quote. See the field.
 		TildeNameEndsOnlyAtAWrittenSlash: No,
+		// A numeral of any length is an index where there is a stack. See
+		// the field.
+		ABareNumberedTildeOfThreeDigitsIsAName: No,
 		// And a word that merely looks like an assignment is not a tilde
 		// context: six of the seven columns leave `make FOO=~/x` alone, and
 		// the seventh does it only outside POSIX mode. Answered here for the

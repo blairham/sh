@@ -165,6 +165,12 @@ func (r *Runner) tildeSplit(v string) (dir, tail string, ok bool, miss tildeMiss
 	if i := strings.IndexByte(rest, '/'); i >= 0 {
 		name, tail = rest[:i], rest[i:]
 	}
+	// What a warning about the name quotes after it: the tail here, unless
+	// the caller holds more of the word than this. See tildeWarnTail.
+	if r.tildeWarnTail == "" {
+		r.tildeWarnTail = tail
+		defer func() { r.tildeWarnTail = "" }()
+	}
 	switch name {
 	case "+", "-":
 		// `~+` is $PWD and `~-` is $OLDPWD in three of the four, and only
@@ -266,6 +272,12 @@ func (r *Runner) directoryStackTilde(name string) (dir string, ok, isIndex bool)
 		if digits[i] < '0' || digits[i] > '9' {
 			return "", false, false
 		}
+	}
+	signed := name[0] == '+' || name[0] == '-'
+	r.warnTruncatedTildeNumber(digits)
+	if !signed && len(digits) > 2 && r.sem().ABareNumberedTildeOfThreeDigitsIsAName == Yes {
+		// A name, which the lookups below the stack answer. See the axis.
+		return "", false, false
 	}
 	// The shape is an index from here on, whatever the stack holds, so every
 	// return below says so.
@@ -432,7 +444,7 @@ func (r *Runner) unresolvedStackTilde() tildeMiss {
 // pattern axis.
 func (r *Runner) unresolvedTilde(name string) tildeMiss {
 	if r.sem().UnresolvedTildeIsAnError != Yes || r.sem().GlobNoMatchIsError != Yes ||
-		!tildeLooksUpTheName(name) {
+		!tildeLooksUpTheName(name) && !r.bareNumeralIsAName(name) {
 		return tildeMiss{}
 	}
 	return tildeMiss{name: name}
@@ -486,4 +498,38 @@ func (r *Runner) currentDirectoryForTheStack() string {
 		return v
 	}
 	return r.workDir()
+}
+
+// warnTruncatedTildeNumber says so where a numbered tilde's digits do not fit
+// a 64-bit count, in the dialect with a sentence for it: one fewer than the
+// digits written, and the rest of the word from the first digit. Measured
+// 2026-10-03 on zsh 5.9.2 under -f: `~99999999999999999999/x` (twenty
+// digits) warns `number truncated after 19 digits: 99999999999999999999/x`,
+// and the nineteen of `~9223372036854775808` and of `~9999999999999999999`
+// after 18 — the count is the length less one, wherever the overflow fell.
+// A warning and not a refusal: what the tilde then comes to is the lookup's
+// answer (#5694).
+func (r *Runner) warnTruncatedTildeNumber(digits string) {
+	wording := r.diag().NumberedTildeTruncated
+	if wording == "" {
+		return
+	}
+	const limit = uint64(1<<63 - 1)
+	var v uint64
+	for i := 0; i < len(digits); i++ {
+		d := uint64(digits[i] - '0')
+		if v > (limit-d)/10 {
+			r.diagf("%s\n", Wording(wording, "", len(digits)-1, digits+r.tildeWarnTail))
+			return
+		}
+		v = v*10 + d
+	}
+}
+
+// bareNumeralIsAName reports a bare numeral of three or more characters in
+// the dialect that reads one as a user name rather than a stack index. See
+// Semantics.ABareNumberedTildeOfThreeDigitsIsAName.
+func (r *Runner) bareNumeralIsAName(name string) bool {
+	return len(name) > 2 && strings.Trim(name, "0123456789") == "" &&
+		r.sem().ABareNumberedTildeOfThreeDigitsIsAName == Yes
 }

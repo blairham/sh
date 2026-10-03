@@ -377,3 +377,38 @@ func indirectTextIsAReference(text string) bool {
 	}
 	return true
 }
+
+// undeclaredIndirection answers a `(P)` written on a plain name nothing has
+// declared, with a `-`, `?` or `#` and no colon. Measured 2026-10-03 on zsh
+// 5.9.2 under `-f`, `print -r -- "<${(P)nope…}>"` with `nope` never set:
+//
+//	-x  ?x  #x  #*  -$y  ?1  - x  -"a"     bad substitution, and the shell
+//	                                       stops (a here-document goes on)
+//	?                                      <>, status 0: no complaint at all
+//	-  #  ##x  %x  +x  =x  :-x  :?x  /a/b  the ordinary answers
+//	nope= , typeset nope, a=(), ${(P)1-x}, ${(P)nope[1]-x}
+//	                                       the ordinary answers too
+//
+// and `${(PU)nope-x}` and `${(Pk)nope-x}` are refused the same way, so the
+// other letters do not matter. refused says the expansion was refused, and
+// empty that it comes to nothing without a word about it.
+func (r *Runner) undeclaredIndirection(e *syntax.ParamExpr) (refused, empty bool) {
+	if !e.HasFlags || !strings.ContainsRune(e.Flags, 'P') || e.Inner != nil || e.Index != nil ||
+		e.Colon || e.Length || e.Indirect {
+		return false, false
+	}
+	switch e.Op {
+	case syntax.ParamDefault, syntax.ParamError, syntax.ParamTrimPrefix:
+	default:
+		return false, false
+	}
+	if !isNameLike(e.Name) || r.parameterExists(e.Name) || r.parameterIsProvided(e.Name) {
+		return false, false
+	}
+	if e.Arg == nil || len(e.Arg.Spans) == 0 {
+		return false, e.Op == syntax.ParamError
+	}
+	r.diagf("%s\n", "bad substitution")
+	r.fatalExpansionQuiet()
+	return true, false
+}

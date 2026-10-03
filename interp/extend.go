@@ -791,15 +791,19 @@ func (r *Runner) SetReservedWords(reserves func(name string) bool) {
 // a builtin, then PATH — which is the order `type` and `command -v` already
 // answer in, from the same lookup rather than from a copy of it.
 func (r *Runner) ResolveName(name string) (NameKind, string) {
-	if _, ok := r.reportedFunc(name); ok {
-		return NameFunction, ""
-	}
-	// The reserved word before the builtin, because that is the order the
-	// grammar is consulted in and the order `type -a` writes the two in
-	// where a name is both. See SetReservedWords: zsh's seven declaration
-	// commands are the only names in the panel that are.
+	// The reserved word first, before a function of the same name, because
+	// the word is read by the grammar before any function is looked up — the
+	// order NameKinds already lists them in. Measured 2026-10-02 with
+	// `function time { :; }`: `type -t time` is `keyword` in bash 5.3.20,
+	// `whence -w time` is `reserved` in zsh 5.9.2, and `whence -v time` is
+	// `time is a keyword` in ksh93u+; this answered `function`. And before
+	// the builtin, for the same reason: zsh's seven declaration commands
+	// are both (#5267).
 	if r.reservedWord(name) {
 		return NameReserved, ""
+	}
+	if _, ok := r.reportedFunc(name); ok {
+		return NameFunction, ""
 	}
 	if r.presentsAsBuiltin(name) {
 		return NameBuiltin, ""

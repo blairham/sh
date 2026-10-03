@@ -6293,6 +6293,12 @@ type Dialect struct {
 	// `typeset "a=1"`, `typeset $x=1`, `builtin typeset a=1` and `private
 	// q=(1)` come back without one: `private` takes an array operand
 	// (DeclarationUtilities) and is not a reserved word (#5138).
+	// ReservedWordsOff are grammar reserved words a script has switched off
+	// — zsh's `disable -r` — which the parser then reads as ordinary words
+	// wherever it would have read them as reserved. Nil reserves every word
+	// the grammar has. A run-time change reaches the text read after it,
+	// through a replaced dialect, as every grammar option does (#5267).
+	ReservedWordsOff         map[string]bool
 	DeclarationReservedWords map[string]bool
 
 	// DeclarationArrayFromTheCommandWord is how the command word must be
@@ -8935,6 +8941,9 @@ func (d Dialect) reservedAtACommandStart(name string) bool {
 }
 
 func (d Dialect) reservesWord(name string) bool {
+	if d.ReservedWordsOff[name] {
+		return false
+	}
 	switch name {
 	case "select":
 		return d.Select

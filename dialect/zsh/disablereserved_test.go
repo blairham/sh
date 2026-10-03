@@ -9,8 +9,9 @@ import "testing"
 // the builtin, so its operands are ordinary words; `enable -r` puts the
 // reserved word back, which runs even where the builtin is disabled. The
 // tables follow: `whence -w` says builtin, `$reswords` loses the word and
-// `$dis_reswords` holds it. A reserved word this shell keeps no table for is
-// refused by name, and a name that is none is no such element. Measured
+// `$dis_reswords` holds it. A name that is none is no such element; a word of
+// the grammar is switched too, and cmd/zsh's
+// TestDisableRSwitchesAGrammarWord has its rows (#5267). Measured
 // 2026-10-02 on zsh 5.9.2, B02typeset's `reserved word and builtin
 // interfaces` (#5142).
 func TestDisableRSwitchesADeclarationWord(t *testing.T) {
@@ -35,11 +36,22 @@ func TestDisableRSwitchesADeclarationWord(t *testing.T) {
 			"(eval):1: command not found: typeset\n[]\n",
 		},
 		{`disable -r nosuch; print $?`, "zsh:disable:1: no such hash table element: nosuch\n1\n"},
-		{`disable -r if; print $?`, "zsh:disable:1: -r if is not implemented yet\n2\n"},
+		{`disable -r if; print $?`, "0\n"},
 	} {
 		out, _ := runZsh(t, t.TempDir(), tc.src)
 		if out != tc.want {
 			t.Errorf("%s = %q, want %q", tc.src, out, tc.want)
 		}
+	}
+}
+
+// A reserved word outranks a function of its name, in the plain answer as in
+// the listing: measured 2026-10-02 on zsh 5.9.2, `function time { :; }`
+// leaves `whence -w time` at `reserved` and `whence -v time` at `time is a
+// reserved word` (#5267).
+func TestAReservedWordOutranksAFunctionOfItsName(t *testing.T) {
+	out, _ := runZsh(t, t.TempDir(), "function time { :; }; whence -w time; whence -v time\n")
+	if want := "time: reserved\ntime is a reserved word\n"; out != want {
+		t.Errorf("got %q, want %q", out, want)
 	}
 }

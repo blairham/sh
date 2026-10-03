@@ -229,7 +229,7 @@ func (r *Runner) patternOf(w *syntax.Word) string {
 		// re-read as a pattern, are literal: every metacharacter is escaped.
 		b.WriteString(escapePatternMetaIn(text, r.markedMeta()))
 	}
-	return r.markWrittenBars(b.String(), fromValue)
+	return r.markWrittenBars(r.resolvePatternTildesThrough(b.String()), fromValue)
 }
 
 // markWrittenBars escapes every top-level `|` that the script *wrote*, leaving
@@ -535,6 +535,13 @@ func (r *Runner) patternTilde(w *syntax.Word, b *strings.Builder) []syntax.Span 
 	// three — so this takes wordTildeHead rather than naming a set. See
 	// Semantics.TildeColonEndsAnOrdinaryWordsPrefix.
 	h := r.wordTildeHead(w.Spans)
+	if h.through {
+		// Read once the pattern has come to its text; see patternOf and
+		// tildeThroughMark.
+		spans := slices.Clone(w.Spans)
+		h.markThrough(spans, 0, tildeThroughMark)
+		return spans
+	}
 	if r.refuseTilde(h.miss) || !h.moved {
 		return w.Spans
 	}

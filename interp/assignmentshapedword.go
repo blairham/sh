@@ -57,6 +57,8 @@ func (r *Runner) expandAssignmentShapedWord(w *syntax.Word, builtin bool) {
 	// with the option on, measured.
 	rest := w.Spans[span:]
 	if h := r.tildeHead(rest, eq+1, tildeEndsAtASlashOrColon); !r.refuseTilde(h.miss) {
+		// The word pipeline resolves a mark. See tildeThroughMark.
+		h.markThrough(rest, eq+1, tildeThroughColonMark)
 		h.apply(rest, eq+1)
 	}
 	// And the colons, through the one helper an assignment's value uses. The

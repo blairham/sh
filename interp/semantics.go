@@ -14990,6 +14990,14 @@ type Semantics struct {
 	// Asked only where a number-taking letter really has a following word of
 	// digits, so a dialect that never meets the shape is never asked.
 	DeclareNumberDetachedOnlyAtTheWordEnd Answer
+	// AttachedNumberEndsAtTheFirstNonDigit reads a number attached to its
+	// letter as ending where its digits do, the rest of the word being more
+	// letters: ksh93, where `typeset -Z3x s=7` is `typeset -x -Z 3 -R 3
+	// s=007`. zsh takes the rest of the word as the number and refuses it,
+	// `bad width value: 3x`, at 1 with nothing declared. Measured 2026-10-03
+	// (#5685). Asked only of such a word. See
+	// Runner.attachedNumberBeforeMoreLetters.
+	AttachedNumberEndsAtTheFirstNonDigit Answer
 
 	// BareFloatLetterResetsThePrecision decides what `-F` or `-E` with no
 	// number does to a name that already has one.

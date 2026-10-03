@@ -4904,6 +4904,9 @@ func Semantics() interp.Semantics {
 	// `typeset -El 3 a=1.5` is `1.50e+00` here and `3: invalid variable
 	// name` in ksh93, which is where the two part.
 	s.DeclareNumberDetachedOnlyAtTheWordEnd = interp.No
+	// And an attached number takes the rest of its word: see
+	// interp.Semantics.AttachedNumberEndsAtTheFirstNonDigit (#5685).
+	s.AttachedNumberEndsAtTheFirstNonDigit = interp.No
 	// `functions` takes none of the letters this engine acts on. Its own
 	// set — -c -k -m -s -t -u -x -z -M -T -U -W, measured 2026-09-08 by
 	// sweeping the alphabet in both cases — is autoloading, tracing, the

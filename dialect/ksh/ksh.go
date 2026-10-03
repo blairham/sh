@@ -4092,6 +4092,9 @@ func Semantics() interp.Semantics {
 	// #1461 and #2559 both deferred; it is the axis below.
 	s.DeclareOptionsTakingANumber = "EFLRZ"
 	s.DeclareNumberDetachedOnlyAtTheWordEnd = interp.Yes
+	// And an attached number ends where its digits do: see
+	// interp.Semantics.AttachedNumberEndsAtTheFirstNonDigit (#5685).
+	s.AttachedNumberEndsAtTheFirstNonDigit = interp.Yes
 	s.FloatFormatLetterE = interp.FloatFormatSignificantDigits
 	// And a bare float letter over a name that already has a precision
 	// resets it to the letter's default here, where zsh keeps it: measured

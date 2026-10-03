@@ -1622,6 +1622,13 @@ type Diagnostics struct {
 	// number it has no layout for — `%[1]s` the builtin, `%[2]s` the number.
 	// Empty is the core's wording, which is zsh's: `bad argument to -p: 2`.
 	DeclarePrintBadLayout string
+	// DeclareAttachedNumberRefused is the declaration builtin refusing a
+	// number attached to its letter with more of the word behind it —
+	// `%[1]s` the builtin, `%[2]s` what the number is (`base`, `precision`,
+	// `width`), `%[3]s` the rest of the word. Empty is the core's wording,
+	// which is zsh's: `bad width value: 3x`. See
+	// Runner.attachedNumberBeforeMoreLetters.
+	DeclareAttachedNumberRefused string
 	// WaitNotOurChild is a number that is a plausible process id and is not
 	// one of this shell's children, taking the number. Empty means nothing
 	// is said, which is two of the four — the status is 127 in all of them

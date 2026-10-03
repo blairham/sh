@@ -3104,6 +3104,10 @@ type Runner struct {
 	// plainTail is the lone simple command the input ends on, where that is
 	// the whole of its statement. See TailExecPlainTopLevel.
 	plainTail *syntax.SimpleCmd
+	// lastWordEdges is what the last word built into fields left at its two
+	// ends, read straight after the build by the one caller that asks. See
+	// keepAnExpansionsEdges.
+	lastWordEdges wordEdges
 	// liveMarksFor is the expansion the word loop is expanding, whose `:s`
 	// replacement may mark the pattern characters it wrote. See liveMark.
 	liveMarksFor *syntax.ParamExpr

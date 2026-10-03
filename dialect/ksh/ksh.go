@@ -2315,6 +2315,8 @@ func Semantics() interp.Semantics {
 	s.ZeroSubscriptIsTheFirstElement = interp.No
 	// ksh93u+ brings the name back plain after `unset`, the shell's own or not; see the axis.
 	s.UnsetKeepsTheShellsOwnAttributes = interp.No
+	// ksh93u+ keeps the edge an expansion leaves at the end of a substituted word; see the axis.
+	s.SubstitutedWordKeepsAnExpansionsEdges = interp.Yes
 	// ksh93u+ execs the last command of a `-c` string wherever it is, outside a loop; see interp.TailExec.
 	s.TailExec = interp.TailExecWhereverLastOutsideALoop
 	s.BraceRangeStepSignHonored = interp.Yes

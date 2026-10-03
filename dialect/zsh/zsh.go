@@ -3062,6 +3062,8 @@ func Semantics() interp.Semantics {
 	s.ZeroSubscriptIsTheFirstElement = interp.No
 	// zsh 5.9.2 keeps the export and type letters of its own parameters through `unset`; see the axis for the table.
 	s.UnsetKeepsTheShellsOwnAttributes = interp.Yes
+	// zsh 5.9.2 under shwordsplit drops the edge an expansion leaves at the end of a substituted word; see the axis.
+	s.SubstitutedWordKeepsAnExpansionsEdges = interp.No
 	// zsh 5.9.2 execs the last command of a `-c` string wherever it is; see interp.TailExec.
 	s.TailExec = interp.TailExecWhereverLast
 	s.BraceRangeStepSignHonored = interp.No

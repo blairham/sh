@@ -18903,6 +18903,16 @@ type Semantics struct {
 	// where the name comes back plain.
 	UnsetKeepsTheShellsOwnAttributes Answer
 
+	// SubstitutedWordKeepsAnExpansionsEdges decides whether the boundary an
+	// expansion inside the word a `-` or `+` substituted leaves at that
+	// word's start or end separates it from the text around the outer
+	// expansion. bash, dash, ksh93 and BusyBox ash keep it: `v=' p '; f
+	// x${u:-$v}y` is three arguments. zsh under `shwordsplit` drops it, so
+	// the same line is the one argument `xpy`, while a boundary the word's own
+	// blanks leave is kept everywhere. Measured 2026-10-03; see
+	// Runner.keepAnExpansionsEdges for the table. Yes keeps it.
+	SubstitutedWordKeepsAnExpansionsEdges Answer
+
 	// ArrayScalarIsTheWholeArray decides what a plain `$a` gives when `a` is
 	// an array: zsh says every element joined by a space, and bash and ksh93
 	// say the first element alone. dash has no arrays, which is why the axis

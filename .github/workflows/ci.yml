@@ -431,7 +431,9 @@ jobs:
       with:
         distribution: goreleaser
         version: "~> v2"
-        args: release --snapshot --clean --skip=publish
+        # `sign` too: a snapshot still runs `signs`, and cosign's keyless
+        # identity is the OIDC token this job deliberately does not have.
+        args: release --snapshot --clean --skip=publish,sign
     # Rendering proves the config parses and every target builds. It does not
     # prove the formula installs what the archive carries: the install list is
     # an explicit `libexec.install "sh", "bash", …` and `libexec.install`

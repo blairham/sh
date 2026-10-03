@@ -265,7 +265,8 @@ checksum:
 # no key to store or leak, and the certificate names the exact workflow and tag
 # that produced the release. Signing checksums.txt covers every archive, since
 # it lists each one's digest. See SECURITY.md for how to verify. A `--snapshot`
-# render skips both blocks, so CI's packaging job needs no OIDC token.
+# render does NOT skip this on its own, so CI's packaging job passes
+# `--skip=sign` -- it has no OIDC token to sign with.
 signs:
 - cmd: cosign
   signature: "${artifact}.sigstore.json"

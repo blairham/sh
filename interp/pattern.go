@@ -578,7 +578,7 @@ func (r *Runner) patternSpan(s syntax.Span) (text string, live bool) {
 		// question GlobExpansionResults answers, so it is the same override.
 		savedLive := r.liveMarksFor
 		r.liveMarksFor = s.Param
-		v := r.expandParam(s.Param)
+		v := r.resolvePending(r.expandParam(s.Param))
 		r.liveMarksFor = savedLive
 		var text string
 		var live bool

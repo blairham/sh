@@ -3147,6 +3147,9 @@ func (r *Runner) arithSpanValue(s syntax.Span) (string, bool) {
 // Quoted, neither applies — that is universal. Unquoted, both are dialect
 // questions, and zsh answers no to both while everything else answers yes.
 func (r *Runner) expansionResult(v string, unquoted bool, glob, split Answer, axis string) (string, bool) {
+	// A `:s` replacement's deferred expansions, which run now that every
+	// modifier and flag has. See pendingMark.
+	v = r.resolvePending(v)
 	if !unquoted {
 		return globEscape(v), false
 	}
@@ -3612,7 +3615,14 @@ func (r *Runner) expandParam(e *syntax.ParamExpr) string {
 			}
 			return itoa(n)
 		}
-		n := r.stringLength(r.expandParam(&inner))
+		// The deferred `:s` source is what is counted, `$` and all, where the
+		// word loop is expanding this expansion: `${#s:s/a/${b}/}` on `xa.y`
+		// is 7. A live mark is not a character. See pendingMark.
+		if r.liveMarksFor == e {
+			r.liveMarksFor = &inner
+			defer func() { r.liveMarksFor = e }()
+		}
+		n := r.stringLength(stripLiveMarks(r.expandParam(&inner)))
 		if r.unspecified {
 			// The same guard the plain length keeps: an unanswered axis
 			// underneath has already spoken, and a number on top of it would

@@ -361,19 +361,105 @@ func (r *Runner) substituteReplacement(value, pattern, with string, global bool,
 	if !expand {
 		return unescapeSpliced(src.String())
 	}
-	f, err := syntax.Parse(`"`+src.String()+`"`, r.dialect())
+	if r.defersTheReplacement(e) {
+		// Expanded at the end, after every later modifier and flag has run
+		// on the source. See pendingMark.
+		return pendSource(src.String())
+	}
+	if out, ok := r.expandSplicedSource(src.String()); ok {
+		return out
+	}
+	return substituteLiteral(value, pattern, withoutQuotes(with), global)
+}
+
+// expandSplicedSource expands the spliced text as a double-quoted word.
+func (r *Runner) expandSplicedSource(src string) (string, bool) {
+	f, err := syntax.Parse(`"`+src+`"`, r.dialect())
 	if err != nil || len(f.Stmts) != 1 {
-		return substituteLiteral(value, pattern, withoutQuotes(with), global)
+		return "", false
 	}
 	p, ok := f.Stmts[0].Expr.(*syntax.Pipeline)
 	if !ok || len(p.Cmds) != 1 {
-		return substituteLiteral(value, pattern, withoutQuotes(with), global)
+		return "", false
 	}
 	c, ok := p.Cmds[0].(*syntax.SimpleCmd)
 	if !ok || len(c.Args) != 1 {
-		return substituteLiteral(value, pattern, withoutQuotes(with), global)
+		return "", false
 	}
-	return r.joinWord(c.Args[0])
+	return r.joinWord(c.Args[0]), true
+}
+
+// The expansions a `:s` replacement wrote are not run where the replacement
+// lands. The text goes on as *source* through every later modifier and the
+// case flags, and is expanded once all of them have run. Measured 2026-10-03
+// on zsh 5.9.2 under `-f`, with `s=xa.y` and `b=Q`:
+//
+//	${(U)s:s/a/$b/}   X.Y       the source is `X$B.Y`, and `$B` is unset
+//	B=W; …            XW.Y
+//	${(L)s:s/a/$b/}   xQ.y      `$b` lowered is still `$b`
+//	${(C)s:s/a/$b/}   X.Y       `X$B.Y`
+//	${s:s/a/$b/:u}    X.Y       a modifier after it too
+//	c=W; ${s:s/a/$b/:s/b/c/}    xW.y   a second `:s` rewrites the name
+//	${s:s/a/$b/:s/\$/D/}        xQ.y   but the `$` is not text it can match
+//	s=xa/y; ${s:s/a/$b/:h}      xQ     `:h` of `x$b/y`
+//	${#s:s/a/$b/}  ${#s:s/a/${b}/}  5  7   the length is the source's
+//
+// pendingMark stands for each `$` the replacement wrote unquoted, and the
+// rest of the source is the text itself. Only the expansion the word loop is
+// expanding defers, under the flags marksLiveReplacement allows; every other
+// one expands where it lands, as before.
+const pendingMark = "\uf8fe"
+
+// defersTheReplacement reports whether this expansion's replacement is kept as
+// source to be expanded at the end.
+func (r *Runner) defersTheReplacement(e *syntax.ParamExpr) bool {
+	return r.liveMarksFor != nil && r.liveMarksFor == e && strings.Trim(e.Flags, "ULCoO@") == ""
+}
+
+// pendSource turns spliced double-quoted source into the deferred value: an
+// escaped byte is itself, and a bare `$` is pendingMark.
+func pendSource(src string) string {
+	var b strings.Builder
+	for i := 0; i < len(src); i++ {
+		switch {
+		case src[i] == '\\' && i+1 < len(src):
+			i++
+			b.WriteByte(src[i])
+		case src[i] == '$':
+			b.WriteString(pendingMark)
+		default:
+			b.WriteByte(src[i])
+		}
+	}
+	return b.String()
+}
+
+// resolvePending expands a deferred value: each pendingMark is a `$` again,
+// and everything else is text. A value with none comes back as it was.
+func (r *Runner) resolvePending(v string) string {
+	if !strings.Contains(v, pendingMark) {
+		return v
+	}
+	orig := v
+	var b strings.Builder
+	for len(v) > 0 {
+		if strings.HasPrefix(v, pendingMark) {
+			b.WriteByte('$')
+			v = v[len(pendingMark):]
+			continue
+		}
+		c := v[0]
+		if c == '$' || c == '\\' || c == '"' || c == '`' {
+			b.WriteByte('\\')
+		}
+		b.WriteByte(c)
+		v = v[1:]
+	}
+	out, ok := r.expandSplicedSource(b.String())
+	if !ok {
+		return strings.ReplaceAll(orig, pendingMark, "$")
+	}
+	return out
 }
 
 // spliceReplacement writes one copy of the replacement into src: `&` as the
@@ -449,7 +535,7 @@ const liveReplacementBytes = "*?[]"
 // drop them, and a count or a padding must not see them at all.
 func (r *Runner) marksLiveReplacement(with string, e *syntax.ParamExpr) bool {
 	return r.liveMarksFor != nil && r.liveMarksFor == e &&
-		strings.Trim(e.Flags, "ULoO@") == "" &&
+		strings.Trim(e.Flags, "ULCoO@") == "" &&
 		!r.inDoubleQuotedSpan() && strings.ContainsAny(with, liveReplacementBytes)
 }
 

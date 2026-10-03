@@ -54,3 +54,9 @@ The agreement text is in `CLA.md`.
 - `make check` must pass. Lint runs in CI.
 - New behavior needs a spec entry in `docs/spec/` with a citation: a
   POSIX section, a manual section, or a recorded oracle run.
+
+## Conduct and security
+
+Participation is under the [Code of Conduct](CODE_OF_CONDUCT.md). A
+vulnerability goes through a private advisory, never a public issue — see
+[SECURITY.md](SECURITY.md) for what counts.

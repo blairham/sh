@@ -70,8 +70,8 @@ jobs:
     name: Pre-commit
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v6
-    - uses: actions/setup-go@v6
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+    - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
       with:
         go-version-file: go.mod
         check-latest: true
@@ -81,7 +81,7 @@ jobs:
       # --new-from-rev HEAD so a developer is shown what the commit
       # introduces. The Lint job below is the unscoped, whole-tree run and
       # is the required check -- see its comment for why it is not scoped.
-      uses: blairham/go-pre-commit@v4.6.6
+      uses: blairham/go-pre-commit@5788df636d2726ba06d337393503a7fe6b3451c2 # v4.6.7
 
   # golangci-lint, in a job of its own, because it does not belong at `git
   # commit` time: it type-checks the whole module and cost ~3GB and 300% CPU
@@ -121,9 +121,9 @@ jobs:
     needs: changes
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       if: needs.changes.outputs.code == 'true'
-    - uses: actions/setup-go@v6
+    - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
       if: needs.changes.outputs.code == 'true'
       with:
         go-version-file: go.mod
@@ -162,7 +162,7 @@ jobs:
     # reported as pending forever, and a matrix job skipped by `if:` never
     # expands at all — so the job always runs and reports, and only the
     # expensive steps are skipped.
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         fetch-depth: 0 # the diff needs the base commit, not just HEAD
     - id: filter
@@ -240,13 +240,13 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest]
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       if: needs.changes.outputs.code == 'true'
       with:
         # The corpus guard compares against a commit, so it needs the
         # history that commit is in. Nothing else in this job does.
         fetch-depth: 0
-    - uses: actions/setup-go@v6
+    - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
       if: needs.changes.outputs.code == 'true'
       with:
         go-version-file: go.mod
@@ -379,9 +379,9 @@ jobs:
       matrix:
         shard: ['0/2', '1/2']
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       if: needs.changes.outputs.code == 'true'
-    - uses: actions/setup-go@v6
+    - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
       if: needs.changes.outputs.code == 'true'
       with:
         go-version-file: go.mod
@@ -405,7 +405,7 @@ jobs:
     # 125,000 limit, measured at v0.0.0. Nothing before the tag could have said
     # so. This is what says so.
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       if: needs.changes.outputs.packaging == 'true'
       with:
         # GoReleaser reads the tag history to build a changelog, and the
@@ -413,7 +413,7 @@ jobs:
         # would render the one case the config special-cases and never the
         # ordinary one.
         fetch-depth: 0
-    - uses: actions/setup-go@v6
+    - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
       if: needs.changes.outputs.packaging == 'true'
       with:
         go-version-file: go.mod
@@ -427,11 +427,13 @@ jobs:
     # to `dist/homebrew/Formula/` -- which is what the next step reads.
     - name: Render a release, and publish none of it
       if: needs.changes.outputs.packaging == 'true'
-      uses: goreleaser/goreleaser-action@v7
+      uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7.2.3
       with:
         distribution: goreleaser
         version: "~> v2"
-        args: release --snapshot --clean --skip=publish
+        # `sign` too: a snapshot still runs `signs`, and cosign's keyless
+        # identity is the OIDC token this job deliberately does not have.
+        args: release --snapshot --clean --skip=publish,sign
     # Rendering proves the config parses and every target builds. It does not
     # prove the formula installs what the archive carries: the install list is
     # an explicit `libexec.install "sh", "bash", …` and `libexec.install`
@@ -448,7 +450,7 @@ jobs:
     # the smoke test below runs both. Assembling them needs no emulation -- the
     # recipe's builder stage is pinned to `$BUILDPLATFORM` -- but *running* the
     # arm64 shell on this runner does.
-    - uses: docker/setup-qemu-action@v3
+    - uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
       if: needs.changes.outputs.packaging == 'true'
 
     - name: Does the formula install every binary the build produced?
@@ -607,9 +609,9 @@ jobs:
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       if: needs.changes.outputs.code == 'true'
-    - uses: actions/setup-go@v6
+    - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
       if: needs.changes.outputs.code == 'true'
       with:
         go-version-file: go.mod
@@ -661,9 +663,9 @@ jobs:
     # this is the outer bound on a build that never gets that far.
     timeout-minutes: 20
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       if: needs.changes.outputs.code == 'true'
-    - uses: actions/setup-go@v6
+    - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
       if: needs.changes.outputs.code == 'true'
       with:
         go-version-file: go.mod

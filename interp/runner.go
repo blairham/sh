@@ -1879,6 +1879,9 @@ type Runner struct {
 	// a `return` written in it rather than by running off its end. See
 	// Runner.forcedByATrapFunction.
 	callEndedOnAReturn bool
+	// trapInterrupt says the shell is unwinding because a `TRAP<signal>`
+	// function returned a status other than zero. See trapinterrupt.go.
+	trapInterrupt bool
 	// locatesFunctions is whether a names-only function listing says where
 	// each function was defined — see Runner.LocatesFunctions.
 	locatesFunctions bool
@@ -6543,6 +6546,9 @@ func (r *Runner) Finish(ctx context.Context) int {
 	// `zsh -fm` over a script with a running job writes `you have running
 	// jobs.` and then `warning: 1 jobs SIGHUPed` (#4542).
 	r.tellOfJobsLeftBehind(false)
+	// A shell a TRAP function interrupted ends its own way. See
+	// trapinterrupt.go.
+	skipExitTrap := r.interruptedAtTheEnd()
 	// Which side of the EXIT trap the hangup falls on is the dialect's, and
 	// the two shells that hang up at all answer it differently: bash writes
 	// the trap's line and *then* the job's handler sees the signal, and zsh
@@ -6553,7 +6559,9 @@ func (r *Runner) Finish(ctx context.Context) int {
 	if r.sem().HangupAtExitPrecedesTheExitTrap == Yes {
 		r.hangUpJobsIfAsked()
 	}
-	r.runExitTrap(ctx)
+	if !skipExitTrap {
+		r.runExitTrap(ctx)
+	}
 	r.runExitHook(ctx)
 	if r.sem().HangupAtExitPrecedesTheExitTrap != Yes {
 		r.hangUpJobsIfAsked()

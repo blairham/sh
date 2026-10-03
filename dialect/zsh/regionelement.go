@@ -125,10 +125,11 @@ func (s regionElementSpec) attrs() regionAttrs {
 
 // parseRegionText parses one element the way zsh does.
 //
-// near is whether `zsh/nearcolor` is loaded, which turns a hex triplet into
-// the nearest palette color as the element is read: measured, the module
+// near is the terminal's color count where `zsh/nearcolor` is loaded and 0
+// where it is not; it turns a hex triplet into the nearest palette color as
+// the element is read: measured, the module
 // loaded, `fg=#ff0000` reads back `fg=196`.
-func parseRegionText(elem string, near bool) regionElement {
+func parseRegionText(elem string, near int) regionElement {
 	var e regionElement
 	rest := strings.TrimLeft(elem, " \t\n")
 	if after, ok := strings.CutPrefix(rest, "P"); ok {
@@ -199,7 +200,7 @@ func regionNumber(s string) (int, string, bool) {
 }
 
 // apply adds one word of a spec.
-func (s *regionElementSpec) apply(part string, near bool) {
+func (s *regionElementSpec) apply(part string, near int) {
 	switch {
 	case part == "none":
 		s.bold, s.standout, s.underline = false, false, false
@@ -219,15 +220,20 @@ func (s *regionElementSpec) apply(part string, near bool) {
 
 // add combines one color into the channel. `default`, and a value that
 // names nothing, change nothing.
-func (c *regionChannel) add(value string, near bool) {
+func (c *regionChannel) add(value string, near int) {
 	if hex, ok := strings.CutPrefix(value, "#"); ok {
 		rgb, ok := parseRegionHex(hex)
 		if !ok {
 			return
 		}
-		if near {
-			c.value |= interp.NearestPaletteColor(rgb>>16&0xff, rgb>>8&0xff, rgb&0xff)
-			c.set = true
+		if near != 0 {
+			// The terminal's palette, or no color at all on one neither
+			// palette fits: measured under TERM=xterm-16color, `fg=#82c9b0`
+			// reads back `none`.
+			if n, ok := interp.NearestColor(near, rgb>>16&0xff, rgb>>8&0xff, rgb&0xff); ok {
+				c.value |= n
+				c.set = true
+			}
 			return
 		}
 		c.value |= rgb

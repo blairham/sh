@@ -316,6 +316,8 @@ func registerTerminfoModules(r *interp.Runner) {
 	// And `$TERM` itself, whose assignment sets an interactive shell's
 	// terminal up again: see terminalsetup.go.
 	r.SetAssignmentAction("TERM", terminalAssigned)
+	// And how many colors `zsh/nearcolor` has to choose from.
+	r.SetNearestColors(func(r *interp.Runner) int { return nearColorCount(r, tables) })
 }
 
 // registerCapabilityParameter installs one of them, with the two things a

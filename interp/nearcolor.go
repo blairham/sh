@@ -84,12 +84,78 @@ func colorLab(r, g, b int) [3]float64 {
 	return [3]float64{116*fy - 16, 500 * (fx - fy), 200 * (fy - fz)}
 }
 
-// SetNearestColors installs what says whether this runner writes a 24-bit
-// color as its nearest palette color — the prompt's `%F{#rrggbb}` and every
-// other place the shell draws a hex triplet. Asked with the runner it answers
-// for, because the answer is the shell's state and a subshell keeps its own.
-func (r *Runner) SetNearestColors(near func(r *Runner) bool) { r.nearestColors = near }
+// NearestColor is the palette index nearest to the 24-bit color r, g, b on a
+// terminal with the given number of colors, and false on one that has
+// neither of the two palettes the mapping knows.
+//
+// Measured 2026-10-02 against the one shell that does this, through
+// `%F{#rrggbb}` with its module loaded and `$TERM` naming each count the
+// terminfo database holds: 256 maps onto the 256-colour palette above;
+// 88 onto the 88-colour one — 202 triplets, all matched by the same L*a*b*
+// distance over palette88RGB; and 8, 16, 52, 64 and 16,777,216 map onto
+// nothing, the color written as the channel's default instead.
+func NearestColor(colors, r, g, b int) (int, bool) {
+	switch colors {
+	case 256:
+		return NearestPaletteColor(r, g, b), true
+	case 88:
+		want := colorLab(r, g, b)
+		best, bestDistance := 16, math.Inf(1)
+		palette := palette88Lab()
+		for i := 16; i < 88; i++ {
+			d := 0.0
+			for k := range want {
+				d += (want[k] - palette[i][k]) * (want[k] - palette[i][k])
+			}
+			if d < bestDistance {
+				best, bestDistance = i, d
+			}
+		}
+		return best, true
+	}
+	return 0, false
+}
 
-// NearestColors reports whether this runner writes a 24-bit color as its
-// nearest palette color. See SetNearestColors.
-func (r *Runner) NearestColors() bool { return r.nearestColors != nil && r.nearestColors(r) }
+// palette88Lab is the 88-colour palette from 16 up in L*a*b*, computed once.
+var palette88Lab = sync.OnceValue(func() (lab [88][3]float64) {
+	for i := 16; i < 88; i++ {
+		lab[i] = colorLab(palette88RGB(i))
+	}
+	return lab
+})
+
+// palette88RGB is 88-colour palette entry i, for i from 16 to 87: a 4×4×4
+// cube over the levels 0, 139, 205 and 255, then eight grays.
+//
+// The grays are the half the measurement fits rather than shows. The 202
+// triplets chose 81, 82, 84, 85, 86 and 87 at 46, 92, 162, 185, 208 and 231,
+// and never chose 80 or 83: every gray between two of those went to one of
+// them or to a cube color. So 80 and 83 are written as ties with an earlier
+// index — black with 16, and 139 with the cube's 37 — which no sample can
+// tell from any other value that never wins, and which is stated here so
+// that nobody reads it as measured.
+func palette88RGB(i int) (r, g, b int) {
+	if i >= 80 {
+		v := [8]int{0, 46, 92, 139, 162, 185, 208, 231}[i-80]
+		return v, v, v
+	}
+	levels := [4]int{0, 139, 205, 255}
+	n := i - 16
+	return levels[n/16], levels[n/4%4], levels[n%4]
+}
+
+// SetNearestColors installs what says whether this runner writes a 24-bit
+// color as its nearest palette color, and on how many colors: zero is not
+// at all, anything else the terminal's color count, which NearestColor turns
+// into a palette or into none. Asked with the runner it answers for, because
+// the answer is the shell's state and a subshell keeps its own.
+func (r *Runner) SetNearestColors(near func(r *Runner) int) { r.nearestColors = near }
+
+// NearestColors is the count SetNearestColors answers, zero where nothing was
+// installed.
+func (r *Runner) NearestColors() int {
+	if r.nearestColors == nil {
+		return 0
+	}
+	return r.nearestColors(r)
+}

@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/blairham/sh/internal/dialecttest"
+	"github.com/blairham/sh/internal/terminfofixture"
 	"github.com/blairham/sh/interp"
 	"github.com/blairham/sh/repl"
 )
@@ -233,7 +234,8 @@ func TestTheNearestPaletteColorIsTheMeasuredOne(t *testing.T) {
 // for `region_highlight` alike, and a subshell that takes it away takes it
 // away from itself. Measured 2026-10-02 on zsh 5.9.2.
 func TestLoadingNearcolorWritesHexAsThePalette(t *testing.T) {
-	out, st, err := preset.Combined(t, dialecttest.Base{Dir: t.TempDir()}, `print -rn -P '%F{#ff0000}'; print
+	dir := colorsFixture(t, 256)
+	out, st, err := preset.Combined(t, dialecttest.Base{Dir: t.TempDir(), Vars: colorsVars(t, dir)}, `print -rn -P '%F{#ff0000}'; print
 zmodload zsh/nearcolor; print -r -- "load=$? [$(zmodload -lF zsh/nearcolor)]"
 print -rn -P '%F{#ff0000}%K{#123456}'; print
 (zmodload -u zsh/nearcolor; print -rn -P '%F{#ff0000}'; print)
@@ -250,7 +252,30 @@ print -rn -P '%F{#ff0000}'; print`)
 		w() { region_highlight=("0 2 fg=#ff0000"); print -rl -- $region_highlight; }
 		zle -N w
 	`)
+	for k, v := range colorsVars(t, dir) {
+		r.SetVar(k, v)
+	}
 	if _, ok, said := runWidget(t, r, buf, "w", repl.Line{Buffer: "ab"}); !ok || said != "0 2 fg=196\n" {
 		t.Errorf("region_highlight read back %q (ran %v), want %q", said, ok, "0 2 fg=196\n")
+	}
+}
+
+// colorsFixture is a terminal description carrying nothing but a count of
+// colors, under fixtureTerm.
+func colorsFixture(t *testing.T, colors int) string {
+	t.Helper()
+	nums := make([]int, numberColors+1)
+	for i := range nums {
+		nums[i] = terminfofixture.Absent
+	}
+	nums[numberColors] = colors
+	return terminfofixture.Database(t, terminfofixture.Description{Name: fixtureTerm, Nums: nums})
+}
+
+// colorsVars is the environment that names a colorsFixture database.
+func colorsVars(t *testing.T, dir string) map[string]string {
+	return map[string]string{
+		"PATH": t.TempDir(), "TERM": fixtureTerm, "TERMINFO": dir,
+		"HOME": t.TempDir(), "TERMINFO_DIRS": "",
 	}
 }

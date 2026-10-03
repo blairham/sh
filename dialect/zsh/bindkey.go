@@ -303,7 +303,10 @@ func buildDefaultBindings() map[string]string {
 
 // registerBindkey installs the builtin.
 func registerBindkey(r *interp.Runner) {
-	r.Register("bindkey", bindkeyBuiltin)
+	r.Register("bindkey", func(r *interp.Runner, ctx context.Context, args []string) int {
+		bootLineEditor(r)
+		return bindkeyBuiltin(r, ctx, args)
+	})
 }
 
 // KeyBindings is what a person has rebound in this session, as the editor's

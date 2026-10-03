@@ -372,7 +372,10 @@ type widgetDefinition struct {
 
 // registerZle installs the builtin.
 func registerZle(r *interp.Runner) {
-	r.Register("zle", zleBuiltin)
+	r.Register("zle", func(r *interp.Runner, ctx context.Context, args []string) int {
+		bootLineEditor(r)
+		return zleBuiltin(r, ctx, args)
+	})
 }
 
 // The letters this builtin has, and the ones it has and this shell has not.

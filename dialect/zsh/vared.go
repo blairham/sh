@@ -126,7 +126,12 @@ const varedArgLetters = "Mmtprif"
 // and these are not.
 const varedLetters = "aAcgheMmtprif"
 
-func registerVared(r *interp.Runner) { r.Register("vared", varedBuiltin) }
+func registerVared(r *interp.Runner) {
+	r.Register("vared", func(r *interp.Runner, ctx context.Context, args []string) int {
+		bootLineEditor(r)
+		return varedBuiltin(r, ctx, args)
+	})
+}
 
 func varedBuiltin(r *interp.Runner, _ context.Context, args []string) int {
 	var array, assoc, create, history, endOnEndOfInput bool

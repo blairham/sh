@@ -158,6 +158,13 @@ type Shell struct {
 	// with nothing to clear.
 	StartLine func(*interp.Runner)
 
+	// BeforeStartupFiles is called once the invocation's options are applied
+	// and before the first startup file is read, for what a dialect's shell
+	// has done by then — zsh's line editor has loaded its module, and the
+	// module's parameter is there for a startup file to unset. Nil does
+	// nothing.
+	BeforeStartupFiles func(*interp.Runner)
+
 	// PromptProviders contribute text to every prompt an interactive session
 	// draws, before the prompt parameter's own text. Nil is the common case
 	// and is what every dialect binary is: a prompt is a prompt parameter.

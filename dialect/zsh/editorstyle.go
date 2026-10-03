@@ -37,7 +37,7 @@ func EditorStyle() repl.EditorStyle {
 		BracketedPaste: true,
 		// And the two sequences are a parameter's, which zle creates when it
 		// loads and a person unsets to turn the bracketing off. See
-		// bracketedPasteDefault.
+		// zleboot.go.
 		BracketedPasteParameter: bracketedPasteParameter,
 		PastedTextStyle:         "\x1b[7m",
 		PastedTextStyleEnd:      "\x1b[27m",

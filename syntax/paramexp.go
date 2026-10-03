@@ -2123,12 +2123,9 @@ func (p *Parser) fillParamArgs(e *ParamExpr, rest string, start Pos, q Quoting) 
 			i = indexUnescaped(rest, '/')
 		}
 		if i >= 0 {
+			// The cut can fall inside a quote, and the two readers already
+			// take a quote left open the way the field says. See it.
 			pattern, replacement := rest[:i], rest[i+1:]
-			if p.dialect.ReplacementSlashIgnoresQuotes {
-				// The cut can fall inside a quote. See the field.
-				ds := p.dialect.DollarSingleQuote
-				pattern, replacement = quoteLeftOpenIsText(pattern, ds), closeQuoteLeftOpen(replacement, ds)
-			}
 			e.Arg = p.patternFrom(pattern, start)
 			e.Arg2 = p.wordFrom(replacement, start, Unquoted)
 			// And the same text read as content of the quoting around the
@@ -2815,47 +2812,4 @@ func indexUnescaped(s string, c byte) int {
 		}
 	}
 	return -1
-}
-
-// openQuoteAt is the offset of a quote in s that nothing closes, or -1. A
-// `$'…'` is one construct, read whole where the dialect has it, so its `\'`
-// closes nothing.
-func openQuoteAt(s string, dollarSingle bool) int {
-	open := -1
-	var quote byte
-	for i := 0; i < len(s); i++ {
-		switch ch := s[i]; {
-		case ch == '\\' && quote != '\'':
-			i++
-		case quote == 0 && dollarSingle && ch == '$' && i+1 < len(s) && s[i+1] == '\'':
-			if end := endOfDollarSingle(s, i+1); end < len(s) {
-				i = end
-			} else {
-				return i + 1
-			}
-		case quote != 0:
-			if ch == quote {
-				quote, open = 0, -1
-			}
-		case ch == '\'' || ch == '"':
-			quote, open = ch, i
-		}
-	}
-	return open
-}
-
-// quoteLeftOpenIsText escapes a quote nothing closes, so it is the character.
-func quoteLeftOpenIsText(s string, dollarSingle bool) string {
-	if i := openQuoteAt(s, dollarSingle); i >= 0 {
-		return s[:i] + "\\" + s[i:]
-	}
-	return s
-}
-
-// closeQuoteLeftOpen closes a quote nothing closes at the end of s.
-func closeQuoteLeftOpen(s string, dollarSingle bool) string {
-	if i := openQuoteAt(s, dollarSingle); i >= 0 {
-		return s + string(s[i])
-	}
-	return s
 }

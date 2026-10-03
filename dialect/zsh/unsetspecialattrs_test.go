@@ -25,6 +25,7 @@ func TestUnsetKeepsTheShellsOwnAttributes(t *testing.T) {
 		{"export SHLVL=5; unset SHLVL; print ${+SHLVL} ${(t)SHLVL}.\n" + env("SHLVL"), "0 .\n"},
 		// The type letters stay too.
 		{`typeset -x HISTSIZE; unset HISTSIZE; HISTSIZE=3+4; print $HISTSIZE ${(t)HISTSIZE}`, "7 integer-export-special\n"},
+		{`unset HISTSIZE; HISTSIZE=2*3; print ${(t)HISTSIZE} $HISTSIZE`, "integer-special 6\n"},
 		{`export SECONDS=5; unset SECONDS; SECONDS=7; print ${(t)SECONDS}`, "integer-export-special\n"},
 		// What is kept is what it had: an unexported one is not exported.
 		{"export SHLVL=5; typeset +x SHLVL; unset SHLVL; SHLVL=3\n" + env("SHLVL"), ""},

@@ -29,6 +29,13 @@ func TestTheElementSelectionOperatorsParse(t *testing.T) {
 		{`echo ${a:#two}`, ParamExclude, "two", "exclusion by pattern"},
 		{`echo ${a:#}`, ParamExclude, "", "exclusion with an empty pattern"},
 		{`echo ${a:#t*}`, ParamExclude, "t*", "a pattern with a metacharacter"},
+		// The trims' other three spellings are the same exclusion, and the
+		// doubled character belongs to the operator, not to the pattern.
+		{`echo ${a:##t*}`, ParamExclude, "t*", "exclusion spelled as a long prefix trim"},
+		{`echo ${a:%t*}`, ParamExclude, "t*", "exclusion spelled as a suffix trim"},
+		{`echo ${a:%%t*}`, ParamExclude, "t*", "exclusion spelled as a long suffix trim"},
+		{`echo ${a:###t}`, ParamExclude, "#t", "a third character is the pattern's"},
+		{`echo ${a:%#t}`, ParamExclude, "#t", "a different second character is the pattern's"},
 		{`echo ${a:|b}`, ParamSetDifference, "b", "set difference"},
 		{`echo ${a:*b}`, ParamSetIntersection, "b", "set intersection"},
 	} {

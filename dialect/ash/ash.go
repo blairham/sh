@@ -472,6 +472,11 @@ func Semantics() interp.Semantics {
 	// string: `set -- one two three four; "${*:1:2}"` is `ne` here and
 	// `one two` in bash, zsh and ksh93.
 	s.SubstringOfPositionalsSlicesTheList = interp.No
+	// A substring of a name with no value reads neither its offset nor its
+	// length: `unset u; "${u:1/0}"` is empty at 0, where `e=; "${e:1/0}"` is
+	// the division. Measured 2026-10-03 in the pinned image. See
+	// Semantics.SubstringOfAnUnsetNameEvaluatesNothing.
+	s.SubstringOfAnUnsetNameEvaluatesNothing = interp.Yes
 	// A negative length whose end falls behind the offset hands back
 	// everything from the offset, in silence and at 0, which is the third
 	// answer on this axis and not either of the readings the other columns

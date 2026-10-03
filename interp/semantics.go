@@ -2840,6 +2840,23 @@ type Semantics struct {
 	// the digest-pinned Alpine image internal/oracle reaches (#2291).
 	SubstringOfPositionalsSlicesTheList Answer
 
+	// SubstringOfAnUnsetNameEvaluatesNothing makes `${u:o:n}` on a parameter
+	// with no value empty without reading its offset or its length, so an
+	// expression there that could not be computed is never reported.
+	//
+	// Measured 2026-10-03 with `unset u; echo "[${u:1/0}]"; echo end`: bash
+	// 5.3.20 and BusyBox ash print `[]` and `end` at 0, and so does bash for
+	// an unset element, `a=(x); "${a[5]:1/0}"`, and for a length of `=A` in
+	// `${u::=A}`; zsh 5.9.2 and ksh93u+ report the division and stop. Set and
+	// empty is a value in all four — `e=; "${e:1/0}"` is the division
+	// everywhere — and under `set -u` the unset name is refused first, so
+	// the question is only ever put about a name with no value at all.
+	//
+	// unpinned dash: there is no substring operator to put the question
+	// with; `${u:1}` is a bad substitution there, refused before any value is
+	// looked at. TestASubstringOfAnUnsetNameReadsNoOffset pins the bash side.
+	SubstringOfAnUnsetNameEvaluatesNothing Answer
+
 	// TransformLetterCheckedOnlyWhenValued delays the check of a `@`
 	// operator's letter until the name has a value. Yes makes `${u@QQ}` on
 	// an unset name empty at status 0 while the identical spelling on a set
@@ -31043,7 +31060,8 @@ func PosixSemantics() Semantics {
 		ArithLeadingZeroIsOctal: Yes,
 		// The standard has no substring operator, so this is the reading
 		// every shell that has one gives but BusyBox ash, which says so.
-		SubstringOfPositionalsSlicesTheList: Yes,
+		SubstringOfPositionalsSlicesTheList:    Yes,
+		SubstringOfAnUnsetNameEvaluatesNothing: No,
 		// One reader: the value a name holds goes through the same octal
 		// rule the literal does, so `k=010; $((k))` is eight. ksh93 is the
 		// one shell whose two readers part.

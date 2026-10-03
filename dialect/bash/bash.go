@@ -1815,6 +1815,10 @@ func Semantics() interp.Semantics {
 	// which is the same verb the list sentence takes. Measured 2026-09-27
 	// against 5.3.20, and 3.2.57 says it in the same words.
 	s.SubstringEndBehindTheStart = interp.SubstringEndBehindStartIsRefused
+	// A substring of a name with no value is empty before its offset and
+	// length are read, so `unset u; "${u:1/0}"` is empty at 0 and `${u::=A}`
+	// reaches no arithmetic. See Semantics.SubstringOfAnUnsetNameEvaluatesNothing.
+	s.SubstringOfAnUnsetNameEvaluatesNothing = interp.Yes
 	s.RegexQuotingMakesLiteral = interp.Yes
 	// An empty right operand is refused rather than matched: `[[ abc =~ "" ]]`
 	// names an empty subexpression and exits 2, where Go's engine would

@@ -1880,8 +1880,15 @@ func (p *Parser) scanParamOp(s string, e *ParamExpr) (ParamOp, string, bool) {
 		return ParamZipCycle, s[3:], true
 	case p.dialect.ParamArrayZip && strings.HasPrefix(s, ":^"):
 		return ParamZip, s[2:], true
+	// The exclusion has four spellings, the trims' own: `:#`, `:##`, `:%`
+	// and `:%%` all drop the elements the pattern matches whole, and the
+	// doubled character is spent by the operator rather than left at the
+	// front of the pattern. See [Dialect.ParamElementSelection].
+	case p.dialect.ParamElementSelection && len(s) >= 3 && s[0] == ':' &&
+		(s[1] == '#' || s[1] == '%') && s[2] == s[1]:
+		return ParamExclude, s[3:], true
 	case p.dialect.ParamElementSelection && len(s) >= 2 && s[0] == ':' &&
-		strings.IndexByte("#|*", s[1]) >= 0:
+		strings.IndexByte("#|*%", s[1]) >= 0:
 		return elementSelectOp(s[1]), s[2:], true
 	// `:/` is the same rule again, one flag further along: the whole-element
 	// replacement, whose operands are the replacement's and whose reading is

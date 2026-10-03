@@ -4000,6 +4000,15 @@ type Dialect struct {
 	// It is only about the colon. `${a:1}` is still an offset with the flag
 	// on, because the disambiguation is the single character after it, and
 	// `${a:-x}` is still a default for the same reason.
+	//
+	// The exclusion is spelled four ways, the four trims' spellings with a
+	// colon in front, and they are one operator. Measured on zsh 5.9.2,
+	// 2026-10-03, with `v=hello`: `${v:#hel*}`, `${v:##hel*}`, `${v:%hello}`
+	// and `${v:%%hello}` are all empty, and `${v:##x*}`, `${v:%lo}` and
+	// `${v:%%l*}` all leave `hello`. A third character is the pattern's:
+	// `${v:###hel*}`, `${v:%%%hello}`, `${v:%#hello}` and `${v:#%hello}` all
+	// leave `hello`, because their patterns begin with a `#` or `%` the value
+	// does not.
 	ParamElementSelection bool
 
 	// ParamArrayZip is `${a:^b}` and `${a:^^b}`: interleave a parameter with

@@ -33,7 +33,6 @@ diag/trap-refusing-a-condition-it-does-not-know
 errexit/negation-exemption-reaches-into-a-function
 expand/brace-range-between-two-characters-in-utf8
 expand/tilde-plus-and-minus
-expansion/a-colon-before-a-trim-is-a-third-reading
 fnlib/add-zsh-hook-autoload-letters
 getopts/a-function-with-its-own-optind
 getopts/a-loop-that-calls-a-function-declaring-local-optind

@@ -1903,6 +1903,12 @@ type Runner struct {
 	// interrupt held while a foreground program runs. See
 	// foregroundinterrupt.go.
 	interrupts *interruptBox
+	// inParensBody says this runner is the body of a `( … )`, and not any
+	// other clone. See interruptAtParenthesesEnd.
+	inParensBody bool
+	// heldInterruptDeath says this runner died of an interrupt held inside
+	// parentheses, which its parent dies of too.
+	heldInterruptDeath bool
 	// locatesFunctions is whether a names-only function listing says where
 	// each function was defined — see Runner.LocatesFunctions.
 	locatesFunctions bool
@@ -5378,6 +5384,7 @@ func (r *Runner) clone() *Runner {
 	// and nothing a fork runs is the shell's last. See unforkedtail.go.
 	c.tailCmd, c.unforkedSelf, c.slotOneIsTheBody = nil, false, false
 	c.pendingPipeJob = nil
+	c.inParensBody, c.heldInterruptDeath = false, false
 	// And one boundary further from the shell that was started. The flag
 	// above cannot answer this: it is already true in a subshell of a
 	// subshell, and a dialect that names the count needs to tell those two

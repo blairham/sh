@@ -6,6 +6,7 @@ package interp
 import (
 	"context"
 	"strings"
+	"syscall"
 
 	"github.com/blairham/sh/syntax"
 )
@@ -175,7 +176,14 @@ func (r *Runner) subshell(ctx context.Context, c *syntax.Subshell) error {
 		// is nothing left of the subshell to hold it open. See
 		// Runner.anchorForkedBody.
 		defer sub.anchorForkedBody()()
+		sub.inParensBody = true
 		err := sub.runList(ctx, c.List)
+		if sub.interruptAtParenthesesEnd() {
+			// An interrupt left pending inside the parentheses ends the
+			// shell as they end. See interruptAtParenthesesEnd.
+			sub.signalDeath("INT", syscall.SIGINT)
+			sub.heldInterruptDeath = true
+		}
 		// What its `alias` *named* outlives it in one column, where the
 		// values it defined do not. Taken here, with the body finished, so
 		// nothing is shared while both are running. See
@@ -190,6 +198,11 @@ func (r *Runner) subshell(ctx context.Context, c *syntax.Subshell) error {
 		// last command a signal killed is a signal death out here too, and
 		// a pipeline substituting the status has to know that.
 		r.status, r.diedOfSig = sub.status, sub.diedOfSig
+		if sub.heldInterruptDeath {
+			// And the shell around them with it, all the way out.
+			r.signalDeath("INT", syscall.SIGINT)
+			r.heldInterruptDeath = true
+		}
 		// And a signal that ended the *parentheses themselves* is a child
 		// this shell has to say something about, in the dialect that says
 		// anything about one. It is the same sentence an external command

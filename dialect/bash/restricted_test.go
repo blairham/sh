@@ -318,3 +318,37 @@ func TestBashRestrictedModeReachesTheCommandHashParameter(t *testing.T) {
 		})
 	}
 }
+
+// TestBashRestrictedProcessSubstitutionIsRefusedByItsText pins two things
+// about a writing redirection into `>(cmd)`. bash refuses it, where zsh's
+// mode takes it, and the refusal names the substitution as written rather
+// than the descriptor path it expanded to. Measured 2026-10-02 on bash 5.3.20
+// (#5485). The control is a parameter, which is named by what it came to.
+func TestBashRestrictedProcessSubstitutionIsRefusedByItsText(t *testing.T) {
+	out, st, err := preset.Combined(t, dialecttest.Base{Dir: t.TempDir()},
+		"f=out; set -r\necho x > >(read l)\necho x > $f\necho st=$?\n")
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	want := "bash: line 2: >(read l): restricted: cannot redirect output\n" +
+		"bash: line 3: out: restricted: cannot redirect output\nst=1\n"
+	if out != want || st != 0 {
+		t.Errorf("got %q at %d, want %q at 0", out, st, want)
+	}
+}
+
+// TestBashRestrictedLocalOfAFrozenNameIsTheReadonlyRefusal pins that the
+// readonly machinery answers a local of a frozen name here, and that `export`
+// with no value is taken. That is why
+// Semantics.RestrictedFreezeRefusesAValuelessDeclaration is never asked in
+// this dialect. Measured 2026-10-02 on bash 5.3.20 (#5485).
+func TestBashRestrictedLocalOfAFrozenNameIsTheReadonlyRefusal(t *testing.T) {
+	out, _, err := preset.Combined(t, dialecttest.Base{Dir: t.TempDir()},
+		"set -r\nf(){ local PATH; echo in; }; f\nexport PATH; echo st=$?\n")
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	if want := "bash: line 2: local: PATH: readonly variable\nin\nst=0\n"; out != want {
+		t.Errorf("got %q, want %q", out, want)
+	}
+}

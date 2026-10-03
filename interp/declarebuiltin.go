@@ -1891,6 +1891,17 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) int {
 		// declaration would otherwise answer a question asked about the name
 		// it shadows. See shadowedExport.
 		wasExported := r.isExported(name)
+		if r.restrictedDeclarationRefused(name, df, hasValue, false) {
+			// A name restricted mode froze, which a local may not shadow
+			// and, in one dialect, no letter may touch. Ahead of the
+			// shadow check, which would let the local through. See
+			// Runner.restrictedDeclarationRefused.
+			if r.unspecified || r.ctl == controlExit {
+				return r.status
+			}
+			r.assignFailed = true
+			continue
+		}
 		if r.declarationShadowRefused(name) {
 			// Reported, and the next operand still declared: bash's
 			// `local y=1 x=5 z=2` over a frozen `x` leaves y and z local.

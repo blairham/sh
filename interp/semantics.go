@@ -4501,6 +4501,34 @@ type Semantics struct {
 	// TraceAssignmentsSeparately gives each assignment of `a=1 b=2` its own
 	// trace line. True in bash and ksh93; dash and zsh put them on one.
 	TraceAssignmentsSeparately Answer
+	// TraceAssignmentListIsWrittenAsItGoes writes the one trace line an
+	// assignment list gets a word at a time, as each assignment is made,
+	// rather than whole once the list is done — so a diagnostic raised by an
+	// assignment lands *inside* the line, after the words already written.
+	//
+	// Asked only where the list shares one line (TraceAssignmentsSeparately
+	// No). Measured 2026-10-02, zsh 5.9.2 under `-f` against dash 0.5.12 and
+	// BusyBox ash 1.37.0 in the pinned image:
+	//
+	//	readonly r; set -x; a=1 r=2
+	//	  zsh     `+zsh:1> a=1 r=2 zsh:1: read-only variable: r`, then a
+	//	          line holding only the newline that ends the trace
+	//	  dash    the refusal alone; no trace line at all
+	//	f(){ g=2 h=3 }; o(){ local g=1 h=1; f }; functions -Wt f; o
+	//	  zsh     `+f:0> g=2 ` then the nested-var warning for g, `h=3 ` then
+	//	          the warning for h, then the newline
+	//
+	// So in zsh each word goes out before the next assignment is expanded and
+	// before its own store, and anything the store says follows it on the
+	// same line. dash and ash write the line only once every assignment has
+	// been made. Their half is the answer this shell already gave; what a
+	// refused list writes there is #5509.
+	//
+	// The *name* half of a word goes out before its value is expanded as
+	// well — `a=1 b=${x?boom}` is `+zsh:1> a=1 b=zsh:1: x: boom` — and the
+	// line is left unfinished when the expansion ends the shell, where a
+	// refused *store* still gets its newline.
+	TraceAssignmentListIsWrittenAsItGoes Answer
 	// TraceArrayLiteralShowsTheExpandedElements prints what an array
 	// literal's elements came to rather than the words the script wrote.
 	//
@@ -25064,6 +25092,62 @@ type Semantics struct {
 	// unpinned ash: the same.
 	RestrictedCommandOptionRefusalIsFatal Answer
 
+	// RestrictedFreezeRefusesAValuelessDeclaration refuses a declaration of
+	// a name restricted mode froze even where it carries no value: a `local`
+	// of the name, or any attribute letter on it, `export` and `readonly`
+	// included.
+	//
+	// Both shells whose freeze is not a readonly refuse a declaration that
+	// carries a value, a function's local included, and that half is asked
+	// of no axis. They part over the declaration with no value. Measured
+	// 2026-10-02 in the mode, zsh 5.9.2 under `-f` and ksh93u+ from a script
+	// file:
+	//
+	//	                              zsh 5.9.2              ksh93u+
+	//	f(){ local PATH=x }; f        `f:local: PATH:        `f: line 2: PATH:
+	//	                              restricted`, ends      restricted`, f at 1
+	//	f(){ local PATH }; f          refused, ends          taken (`typeset`)
+	//	export PATH                   refused, ends          taken, 0
+	//	typeset -g PATH, inside f     taken                  —
+	//	typeset PATH, top level       lists it, 0            lists it, 0
+	//
+	// So in zsh any declaration that would make a binding or name a letter is
+	// refused, and a bare listing is not. ksh93 refuses some attribute
+	// letters on these names as well, and which ones does not follow from a
+	// rule this shell has found yet — `readonly PATH` is refused where
+	// `typeset -r PATH` is taken — so that grid is its own issue (#5506) and
+	// this answer is about the valueless local and `export`.
+	//
+	// unpinned bash: the freeze is a readonly there — see
+	// RestrictedFreezeIsAReadonly — so the readonly machinery answers every
+	// declaration and this is never asked.
+	// TestBashRestrictedLocalOfAFrozenNameIsTheReadonlyRefusal pins what bash
+	// does.
+	// unpinned dash: no restricted mode, so no name is ever mode-frozen.
+	// TestSetRefusesTheRestrictedLetter pins the refusal that keeps it out.
+	// unpinned ash: the same.
+	// TestSetRefusesTheRestrictedLetter pins the refusal that keeps it out.
+	RestrictedFreezeRefusesAValuelessDeclaration Answer
+
+	// RestrictedRedirectTakesAProcessSubstitution exempts a writing
+	// redirection whose whole target is one `>(cmd)` from restricted mode's
+	// refusal: the target is a pipe the shell made, not a file.
+	//
+	// Measured 2026-10-02 in the mode: bash 5.3.20 refuses `echo a >
+	// >(cat)` as `>(cat): restricted: cannot redirect output` at 1, ksh93u+
+	// refuses it in its own words at 1, and zsh 5.9.2 runs it. zsh's
+	// exemption is narrower than the construct, too: `>`, `>|`, `>!`, `<>`
+	// and a numbered `2>` are taken, while `>>`, `2>>`, `&>` and `>&` over the
+	// same target are still `writing redirection not allowed`, and so is a
+	// target that only *holds* the substitution's path, `x=>(cat); print a >
+	// $x`.
+	//
+	// unpinned dash: no restricted mode and no process substitution.
+	// TestSetRefusesTheRestrictedLetter pins the refusal that keeps it out.
+	// unpinned ash: the same.
+	// TestSetRefusesTheRestrictedLetter pins the refusal that keeps it out.
+	RestrictedRedirectTakesAProcessSubstitution Answer
+
 	// KeywordAssignments is `set -k`: with it on, **every** `name=value` word
 	// of a simple command is a prefix assignment and not only the ones
 	// written in front of the command name.
@@ -30191,8 +30275,11 @@ func PosixSemantics() Semantics {
 		UnsetPositionalIsAllowed:          No,
 		TraceShowsItsOwnDisabling:         Yes,
 		TraceAssignmentsSeparately:        No,
-		StatusArgument:                    StatusArgStrict,
-		EqualsExpansion:                   No,
+		// The line is written once the list is done: dash and BusyBox ash,
+		// measured 2026-10-02. zsh writes it a word at a time and says so.
+		TraceAssignmentListIsWrittenAsItGoes: No,
+		StatusArgument:                       StatusArgStrict,
+		EqualsExpansion:                      No,
 		// POSIX gives `test` one spelling of string equality, so `==` is not
 		// an operator; the three shells that accept it added it.
 		TestAcceptsDoubleEqual: No,

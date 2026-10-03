@@ -1273,6 +1273,17 @@ func Semantics() interp.Semantics {
 	// restricted` at 1 and the line after it runs.
 	s.RestrictedModeIsLeftByTheLetter = interp.No
 	s.RestrictedFreezeIsAReadonly = interp.No
+	// And any declaration of a frozen name that would make a binding or name
+	// a letter is refused as well, with no value behind it: measured
+	// 2026-10-02, `f(){ local PATH }; f` is `f:local: PATH: restricted` and
+	// `export PATH` is `zsh:export:1: PATH: restricted`, both fatal, where
+	// `typeset -g PATH` inside a function and a bare `typeset PATH` listing
+	// are taken (#5485).
+	s.RestrictedFreezeRefusesAValuelessDeclaration = interp.Yes
+	// And a writing redirection whose target is one `>(cmd)` is taken in the
+	// mode: `print a > >(cat)` prints `a` at 0 where `>> >(cat)` and a target
+	// that only holds the path are refused (#5485).
+	s.RestrictedRedirectTakesAProcessSubstitution = interp.Yes
 	s.RestrictedBuiltinRefusalIsFatal = interp.Yes
 	s.RestrictedDotRefusesAPath = interp.No
 	s.RestrictedCommandOptionRefusalIsFatal = interp.No
@@ -1544,6 +1555,11 @@ func Semantics() interp.Semantics {
 	// `a=( 'p q' )` — one element, because nothing here splits an unquoted
 	// parameter — which is this column's own expansion in its own trace.
 	s.TraceArrayLiteralShowsTheExpandedElements = interp.Yes
+	// And the one line an assignment list gets is written a word at a time, so
+	// a warning or a refusal from a store lands inside it: `readonly r; set
+	// -x; a=1 r=2` is `+zsh:1> a=1 r=2 zsh:1: read-only variable: r` and then
+	// the line's own newline. Measured 2026-10-02 (#5485).
+	s.TraceAssignmentListIsWrittenAsItGoes = interp.Yes
 	// One line for a subscripted literal as much as for a plain one:
 	// measured 2026-09-17, `typeset -A m; set -x; m=([k]=v [j]=w)` is a
 	// single `m=( … )` line in zsh 5.9.2, with the shell's own separator

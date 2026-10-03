@@ -177,3 +177,29 @@ func TestTheRestrictedModeReachesANestedShell(t *testing.T) {
 		}
 	}
 }
+
+// TestTheRestrictedShellRefusesALocalWithAValue pins that a function's
+// `typeset` of a frozen name is refused when it carries a value, since the
+// local would otherwise shadow the freeze. With no value it is taken, as is
+// `export PATH`, and that is where this shell parts from zsh's mode. A write
+// into `>(cmd)` is refused as bash refuses it. Measured 2026-10-02 on ksh93u+
+// from a script file (#5485).
+//
+// The refusal ends the function in the reference, which then returns 1 to a
+// caller that carries on. This shell ends the script, which is #5508, so the
+// row asserts only the sentence and that the body did not go on.
+func TestTheRestrictedShellRefusesALocalWithAValue(t *testing.T) {
+	dir := t.TempDir()
+	out, _ := runKsh(t, dir, "set -r\nfunction f { typeset PATH=x; echo body; }\nf\n")
+	if !strings.Contains(out, "PATH: restricted") || strings.Contains(out, "body") {
+		t.Errorf("output %q, want the refusal and the body stopped", out)
+	}
+	out, _ = runKsh(t, dir, "set -r\nfunction g { typeset PATH; echo in; }\ng\nexport PATH\necho st=$?\n")
+	if out != "in\nst=0\n" {
+		t.Errorf("output %q, want the valueless forms taken", out)
+	}
+	out, _ = runKsh(t, dir, "set -r\necho a > >(read l)\necho st=$?\n")
+	if !strings.Contains(out, ">(read l): restricted") || !strings.HasSuffix(out, "st=1\n") {
+		t.Errorf("output %q, want the write refused at 1", out)
+	}
+}

@@ -373,6 +373,10 @@ func Semantics() interp.Semantics {
 	// ever mode-frozen.
 	// unanswered RestrictedBuiltinRefusalIsFatal: no restricted mode, so none of
 	// the three refusals exists here (#4205).
+	// unanswered RestrictedFreezeRefusesAValuelessDeclaration: no restricted
+	// mode, so no name is ever mode-frozen.
+	// unanswered RestrictedRedirectTakesAProcessSubstitution: no restricted
+	// mode, and no process substitution either.
 	// unanswered RestrictedDotRefusesAPath, RestrictedCommandOptionRefusalIsFatal:
 	// no restricted mode, so neither refusal exists here.
 	// unanswered MixedTableLiteral, EmptyKeyInATableLiteral: BusyBox has no

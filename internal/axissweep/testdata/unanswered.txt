@@ -241,7 +241,9 @@ ash   RestrictedBuiltinRefusalIsFatal
 ash   RestrictedCommandOptionRefusalIsFatal
 ash   RestrictedDotRefusesAPath
 ash   RestrictedFreezeIsAReadonly
+ash   RestrictedFreezeRefusesAValuelessDeclaration
 ash   RestrictedModeIsLeftByTheLetter
+ash   RestrictedRedirectTakesAProcessSubstitution
 ash   ScalarAppendedToAnArrayBecomesANewElement
 ash   ScalarAssignedOverACompoundReplacesTheName
 ash   ScalarOverACompoundIsAnInconsistentType
@@ -343,6 +345,7 @@ bash  PrintfOutputPrecedesComplaint
 bash  PrintfRefusedOperandKeepsItsLeadingNumber
 bash  ReadArrayDefault
 bash  ReadArrayTakesOneNameOnly
+bash  RestrictedFreezeRefusesAValuelessDeclaration
 bash  SetArrayBadNameLeavesZero
 bash  SetArrayEmptyPrependMakesANonArrayAnEmptyArray
 bash  SetArrayLetter
@@ -604,7 +607,9 @@ dash  RestrictedBuiltinRefusalIsFatal
 dash  RestrictedCommandOptionRefusalIsFatal
 dash  RestrictedDotRefusesAPath
 dash  RestrictedFreezeIsAReadonly
+dash  RestrictedFreezeRefusesAValuelessDeclaration
 dash  RestrictedModeIsLeftByTheLetter
+dash  RestrictedRedirectTakesAProcessSubstitution
 dash  ScalarAppendedToAnArrayBecomesANewElement
 dash  ScalarAssignedOverACompoundReplacesTheName
 dash  ScalarOverACompoundIsAnInconsistentType

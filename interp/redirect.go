@@ -841,7 +841,7 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 			// rule lives now — it was written here first, and the file tests had
 			// the identical bug because the rule had not reached the resolution
 			// they shared (#1189).
-			if r.restricted && flags != os.O_RDONLY {
+			if r.restricted && flags != os.O_RDONLY && !r.restrictedTakesAProcessSubstitution(op, rd.Word) {
 				// A restricted shell writes nowhere it was not already
 				// writing. Every operator that *opens* a file to write is
 				// refused — `>`, `>>`, `>|`, `<>`, `&>` and `&>>` — and a
@@ -861,7 +861,7 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 				// the working directory — measured, `echo x > f` names `f`.
 				// And the command does not run: r.redirErr is what stops it,
 				// exactly as an unopenable target does.
-				r.restrictedRedirect(name)
+				r.restrictedRedirect(restrictedRedirectWord(rd, name))
 				r.status = restrictedStatus
 				r.redirErr = true
 				return closers, nil

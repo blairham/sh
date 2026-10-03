@@ -4809,6 +4809,14 @@ type Runner struct {
 	// compound-variable operand that stands in front of it has been
 	// performed — see interp/compoundoperandorder.go.
 	heldTrace heldTrace
+	// openTrace is an assignment list's trace line while it is being written
+	// a word at a time, in the dialect that writes it so. See
+	// interp/xtraceopenline.go.
+	openTrace *openTraceLine
+	// storingATakenBackPrefix is set while a command's assignment prefix that
+	// the command's end takes back is being stored. See
+	// Runner.storePrefixQuietlyIfTakenBack.
+	storingATakenBackPrefix bool
 	// declarationOperands is where in the command's expanded words the
 	// `name=value` operands stand — the positions the expansion routed
 	// through Runner.expandAssignArg rather than through word expansion.
@@ -5593,6 +5601,7 @@ func (r *Runner) errf(format string, args ...any) {
 // and zsh each name the location differently, and one of them names it not at
 // all.
 func (r *Runner) diagf(format string, args ...any) {
+	r.flushOpenTraceLine()
 	r.errf("%s", r.diagLine(format, args...))
 }
 
@@ -8932,7 +8941,8 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 			// interp/namerefprefix.go (#4110).
 			held := r.prefixEntryName(a.Name)
 			fresh := false
-			if r.subscriptedPrefixTakenBack(a) || scoped {
+			takenBack := r.subscriptedPrefixTakenBack(a) || scoped
+			if takenBack {
 				undo = append(undo, r.saveVar(held))
 				// The prefix's own cell, asked once the binding it displaces
 				// is safely saved — and only where there is a take-back to
@@ -8955,7 +8965,7 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 			// interp/prefixdiscipline.go. A scoped prefix stores into a cell
 			// the call just made, which no hook is watching — see
 			// Runner.prefixScopedToTheCall.
-			r.prefixStore(ctx, a, held, !scoped, fresh)
+			r.storePrefixQuietlyIfTakenBack(ctx, a, held, !scoped, fresh, takenBack)
 			callHeld = append(callHeld, held)
 			// The export attribute for the duration, which the two readings
 			// move in opposite directions rather than one of them leaving it
@@ -9161,9 +9171,10 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 			landsOn := r.prefixEntryName(a.Name)
 			fresh := false
 			persists := r.prefixPersistsAtThisBuiltin(argv[0], kind)
-			if !persists &&
+			takenBack := !persists &&
 				!r.rosterKeepsThisPrefix(argv, c.Redirs) &&
-				r.subscriptedPrefixTakenBack(a) {
+				r.subscriptedPrefixTakenBack(a)
+			if takenBack {
 				// The second reason a prefix is not taken back, and it is a
 				// *different* one: one dialect keeps what stands in front of
 				// `alias` and `hash` while answering no to the specialness
@@ -9191,7 +9202,7 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 			// the name's owner is told of; a special builtin's persists, and
 			// a prefix that reached here through `command` before an
 			// external is the child's store. See interp/prefixdiscipline.go.
-			r.prefixStore(ctx, a, landsOn, kind.kind != prefixBeforeRegularBuiltin, fresh)
+			r.storePrefixQuietlyIfTakenBack(ctx, a, landsOn, kind.kind != prefixBeforeRegularBuiltin, fresh, takenBack)
 			held = append(held, landsOn)
 			if kind.throughCommand {
 				// `command` is a precommand word rather than a command, so
@@ -13429,6 +13440,10 @@ func (r *Runner) assignAll(ctx context.Context, assigns []*syntax.Assign) {
 	}
 	separately := r.ask(r.sem().TraceAssignmentsSeparately,
 		"each assignment getting its own trace line")
+	if !separately && r.assignListIsWrittenAsItGoes(assigns) {
+		r.assignAllAsItGoes(ctx, assigns)
+		return
+	}
 	values := make([]string, len(assigns))
 	prepared := make([]*expandedAssign, len(assigns))
 	for i, a := range assigns {

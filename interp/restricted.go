@@ -6,6 +6,8 @@ package interp
 import (
 	"slices"
 	"strings"
+
+	"github.com/blairham/sh/syntax"
 )
 
 // Restricted mode: the shell one of the panel enters on `set -r`, where a
@@ -142,6 +144,96 @@ func (r *Runner) restrictedFreeze(name string) bool {
 		"a restricted shell's frozen names being readonly names")
 }
 
+// restrictedDeclarationRefused reports whether a declaration operand naming a
+// name this mode froze is refused, having said so.
+//
+// Needed because the freeze rides the readonly machinery, and in the two
+// dialects whose freeze is not a readonly a local is allowed to shadow a
+// readonly — so `f(){ local PATH=x }` made a binding of its own and assigned
+// it at 0, past a freeze whose whole point is that PATH cannot be changed.
+// zsh 5.9.2 and ksh93u+ both refuse it, measured 2026-10-02 (#5485).
+//
+// A **value** is refused only where the declaration makes a binding: at the
+// top level, or under `-g`, the store refuses it exactly as it refuses a bare
+// assignment, and refusing here as well would say so twice. A declaration
+// with **no** value is the dialects' split — see
+// Semantics.RestrictedFreezeRefusesAValuelessDeclaration — and a bare
+// listing, which makes no binding and names no letter, is taken in both.
+//
+// Asked only where the mode's freeze is worded apart from a readonly's: where
+// it is a readonly, as in bash, the readonly machinery already refuses every
+// one of these and this would be a second refusal of the same operand.
+func (r *Runner) restrictedDeclarationRefused(name string, f declareFlags, assigns, local bool) bool {
+	if !r.restricted || !r.restrictedFrozen[name] || !r.restrictedFreeze(name) {
+		return false
+	}
+	binds := r.declarationMakesABinding(name, f, local)
+	if assigns || r.literalOperands[name] {
+		if !binds {
+			return false
+		}
+		return r.refuseReadonly(name, assignedByDeclaration)
+	}
+	if !binds && !f.namesALetter() {
+		return false
+	}
+	if !r.ask(r.sem().RestrictedFreezeRefusesAValuelessDeclaration,
+		"restricted mode refusing a declaration of a frozen name that carries no value") {
+		return false
+	}
+	if r.unspecified {
+		return true
+	}
+	return r.refuseReadonly(name, assignedByDeclaration)
+}
+
+// declarationMakesABinding reports whether a declaration of name would make a
+// binding of its own in the running function, without making it.
+//
+// The same questions Runner.shadowTypeset asks before it takes the copy, in
+// the same order: no scope or `-g` makes none, a function that has already
+// made this name its own is writing over its own binding, and a function
+// without the keyword makes none in the dialect that says so. That last one
+// is `typeset`'s alone — `local` shadows through Runner.shadow, which does not
+// ask it, so local says which word is asking.
+func (r *Runner) declarationMakesABinding(name string, f declareFlags, local bool) bool {
+	if f.global || len(r.scopes) == 0 {
+		return false
+	}
+	sc := r.scopes[len(r.scopes)-1]
+	if sc == nil {
+		return false
+	}
+	if _, own := sc.saved[name]; own {
+		return false
+	}
+	if !local && !sc.keyword && r.ask(r.sem().TypesetLocalNeedsKeywordFunction,
+		"`typeset` needing a keyword-defined function to declare a local") {
+		return false
+	}
+	return true
+}
+
+// namesALetter reports whether a declaration line names an attribute of the
+// operand under either sign, which is what restricted mode's wider refusal
+// reads: zsh refuses `typeset +x PATH` as squarely as `typeset -x PATH`.
+//
+// `export` and `readonly` count as their letters, because the word is the
+// letter there — `export PATH` is refused where `typeset -g PATH` is not. The
+// scope and listing letters do not: `-g` makes no binding and names nothing
+// about the name, and `-p` and `-m` only choose what is listed.
+func (f declareFlags) namesALetter() bool {
+	if f.export || f.readonly {
+		return true
+	}
+	for _, c := range f.letters {
+		if c != 'g' && c != 'm' && c != 'p' {
+			return true
+		}
+	}
+	return false
+}
+
 // restrictedFrozenVariables are the names a restricted shell may no longer
 // assign, because every one of them is a way to reach a command the shell
 // would otherwise not run.
@@ -271,6 +363,43 @@ func (r *Runner) restrictedCommandName(name string) int {
 func (r *Runner) restrictedRedirect(word string) {
 	r.diagf("%s\n", Wording(r.diag().RestrictedRedirect,
 		"%[1]s: restricted: cannot redirect output", word))
+}
+
+// restrictedTakesAProcessSubstitution reports whether a writing redirection
+// is exempt from the mode's refusal because its whole target is one `>(cmd)`:
+// a pipe this shell made, and not a file anywhere on the disk.
+//
+// Only the truncating spellings and `<>`, which is what was measured: in zsh
+// 5.9.2, 2026-10-02, `>`, `>|`, `>!`, `<>` and a numbered `3>` over `>(cat)`
+// all run, and `>>`, `2>>`, `>>|`, `&>`, `&>|` and `>&` over the same target
+// are refused. And only a target written as the substitution — `x=>(cat);
+// print a > $x` is refused, so the exemption is about the word and not about
+// the path it came to. See Semantics.RestrictedRedirectTakesAProcessSubstitution.
+func (r *Runner) restrictedTakesAProcessSubstitution(op syntax.Kind, w *syntax.Word) bool {
+	switch op {
+	case syntax.TokGreat, syntax.TokClobber, syntax.TokClobberBang, syntax.TokLessGreat:
+	default:
+		return false
+	}
+	if w == nil || len(w.Spans) != 1 || w.Spans[0].Kind != syntax.ProcSubstOut {
+		return false
+	}
+	return r.ask(r.sem().RestrictedRedirectTakesAProcessSubstitution,
+		"restricted mode taking a writing redirection into a process substitution")
+}
+
+// restrictedRedirectWord is the target a refused redirection names: the word
+// it came to, except for a process substitution, which is named as written.
+// Measured 2026-10-02 on bash 5.3.20 in the mode: `echo x > $f` names what
+// `$f` holds and `echo x > ~/zz` the expanded path, but `echo x > >(cat)` is
+// `>(cat): restricted: cannot redirect output` and not the descriptor path the
+// substitution expanded to. bash normalizes a longer body — `>(cat|cat)` is
+// named `>(cat | cat)` — which this does not model: the text is the script's.
+func restrictedRedirectWord(rd *syntax.Redirect, expanded string) string {
+	if w := rd.Word; w != nil && len(w.Spans) == 1 && w.Spans[0].Kind == syntax.ProcSubstOut && rd.Text != "" {
+		return rd.Text
+	}
+	return expanded
 }
 
 // restrictedHashEntry reports whether restricted mode refuses a path being

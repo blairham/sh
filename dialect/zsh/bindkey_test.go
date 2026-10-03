@@ -551,3 +551,36 @@ func TestABackslashOrCaretKeyListsAsItReadsBack(t *testing.T) {
 		}
 	}
 }
+
+// The `-L` form names the keymap it was asked about, `main` names the current
+// one, and a keymap the editor is not driven from starts with nothing bound.
+// Measured 2026-10-03 on zsh 5.9.2 under `-fc` (#5691).
+func TestAListingNamesTheKeymapItWasAskedAbout(t *testing.T) {
+	for _, c := range []struct{ src, want string }{
+		{"bindkey -M main '^Xq' foo; bindkey '^Xq'", "\"^Xq\" foo\n"},
+		{"bindkey -v; bindkey -M main '^Xq' foo; bindkey -M viins '^Xq'", "\"^Xq\" foo\n"},
+		{"bindkey -M main -L '^A'", "bindkey \"^A\" beginning-of-line\n"},
+		{"bindkey -M vicmd '^A'", "\"^A\" undefined-key\n"},
+		{"bindkey -a -L '^Xz'", "bindkey -a \"^Xz\" undefined-key\n"},
+		{"bindkey -M emacs -L '^A'", "bindkey -M emacs \"^A\" beginning-of-line\n"},
+		{"bindkey -s -M vicmd qq zz; bindkey -M vicmd -L qq", "bindkey -s -a \"qq\" \"zz\"\n"},
+		{"bindkey -s '^Xf' plain; bindkey -M emacs -L '^Xf'", "bindkey -s -M emacs \"^Xf\" \"plain\"\n"},
+		{"bindkey -v; bindkey -M viins -L '^Xq'", "bindkey -M viins \"^Xq\" undefined-key\n"},
+		{"bindkey -M emacs -L '^Xz'", "bindkey -M emacs \"^Xz\" undefined-key\n"},
+		{"bindkey -M command -L '^Xz'", "bindkey -M command \"^Xz\" undefined-key\n"},
+		{"bindkey -- -x foo; bindkey -L -- -x", "bindkey -- \"-x\" foo\n"},
+		{"bindkey -s -- -x foo; bindkey -L -- -x", "bindkey -s -- \"-x\" \"foo\"\n"},
+		{"bindkey -- -x foo; bindkey -- -x", "\"-x\" foo\n"},
+		{"bindkey -M emacs -- -x foo; bindkey -M emacs -L -- -x", "bindkey -M emacs \"-x\" foo\n"},
+		{"bindkey -M isearch -L; echo done", "done\n"},
+		{"bindkey -a -- -x foo; bindkey -a -L -- -x", "bindkey -a -- \"-x\" foo\n"},
+		// viins is driven by the editor and keeps its keys; these two the
+		// reference agrees on.
+		{"bindkey -v; bindkey '^M'", "\"^M\" accept-line\n"},
+		{"bindkey -v; bindkey '^[[A'", "\"^[[A\" up-line-or-history\n"},
+	} {
+		if out, st := runZsh(t, t.TempDir(), c.src); out != c.want || st != 0 {
+			t.Errorf("%s\n got %q at %d, want %q", c.src, out, st, c.want)
+		}
+	}
+}

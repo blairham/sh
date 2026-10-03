@@ -3127,6 +3127,14 @@ type Runner struct {
 	// subscript is being read, so its readers share one evaluation. See
 	// Runner.holdSubscriptValues.
 	subscriptValuesHeld map[string]heldSubscriptValue
+	// failedExpansionStatus is what a failed expansion leaves in `$?` while
+	// the words being expanded are a declaration's or a `case`'s. See
+	// Semantics.FailedExpansionInADeclarationOrCaseSetsNoStatus.
+	failedExpansionStatus failedExpansionStatus
+	// fatalSetNoStatus records that a fatal error left `$?` alone under
+	// failedExpansionStatus, for an `always` half to read: the error still
+	// ends the construct with the fatal status. See tryClause.
+	fatalSetNoStatus bool
 	// liveMarksAtHead says that expansion opens its word. See headTokenMark.
 	liveMarksAtHead bool
 	// expandingRawText says the expansion running is part of a text read as
@@ -6391,6 +6399,11 @@ func (r *Runner) fatalUnsetParameter(format string, args ...any) {
 // error — see Semantics.ParamErrorIsAnExitRequest for what that is measured
 // against and where it is asked.
 func (r *Runner) fatalParamError(format string, args ...any) {
+	// A failure of its own, whose status is set wherever it is written:
+	// measured, `local x=${nosuch?m}` and `case x in ${nosuch?m})` leave 1 in
+	// the shell that leaves `$?` alone for every other failed expansion
+	// there. See Runner.failedExpansionStatus.
+	defer r.failureSetsItsStatus()()
 	r.fatalExpansion(format, args...)
 	r.abandon, r.errexitStopped = abandonParamError, false
 }
@@ -8066,8 +8079,30 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 	argvBefore := make([]int, 0, len(c.Args))
 	var lexedAt, sourceClosedAt []string
 	endGlobUnit := r.beginGlobUnit()
+	// A failed expansion in a declaration's words leaves `$?` alone, in the
+	// dialect that says so: set word by word, since only the words after a
+	// declaration's name are its own. See
+	// Semantics.FailedExpansionInADeclarationOrCaseSetsNoStatus.
+	keepsTheStatus := r.sem().FailedExpansionInADeclarationOrCaseSetsNoStatus == Yes
+	statusBefore := r.failedExpansionStatus
+	failedUnder, declaredYet := statusBefore, false
 	for i, w := range c.Args {
 		argvBefore = append(argvBefore, len(argv))
+		if keepsTheStatus && r.expandErr {
+			// The word that failed was read under the rule set for it, and
+			// its failure is reported below, after the loop.
+			failedUnder = r.failedExpansionStatus
+		}
+		if keepsTheStatus {
+			// From the first assignment on: measured, `local $((1/0))` and
+			// `local -a $((1/0))` leave 1, and `local x=1 $((1/0))` leaves 0.
+			r.failedExpansionStatus = statusBefore
+			if i > 0 && len(argv) > 0 && (declaredYet ||
+				(r.assignShaped(w) || r.appendOperandShaped(w)) && r.declarationCommand(c, argv)) {
+				declaredYet = true
+				r.failedExpansionStatus = failedExpansionKeepsTheStatus
+			}
+		}
 		if r.expandErr || r.ctl == controlExit {
 			// The command is abandoned at its first failed expansion rather
 			// than diagnosing every word that would fail. Unanimous in the
@@ -8276,6 +8311,11 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 			lexedAt = append(lexedAt, argv[operandStart])
 		}
 	}
+	if keepsTheStatus && r.expandErr && failedUnder == statusBefore {
+		// The last word failed and the loop ended on it.
+		failedUnder = r.failedExpansionStatus
+	}
+	r.failedExpansionStatus = statusBefore
 	endGlobUnit()
 	// The operand positions belong to this command alone: a command
 	// substitution in one of the values has already run, with a set of its
@@ -8461,8 +8501,11 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 		//
 		// *Which* non-zero status it carries is a second axis, asked inside.
 		// The diagnostic was already written by whoever failed, so this adds
-		// none.
+		// none. Under the status rule of the word that failed: see
+		// Runner.failedExpansionStatus.
+		r.failedExpansionStatus = failedUnder
 		r.failedExpansion()
+		r.failedExpansionStatus = statusBefore
 		return nil
 	}
 	if r.ctl == controlExit || r.ctl == controlAbandon {
@@ -8716,7 +8759,15 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 			return nil
 		}
 	}
+	// A declaration's array operands are its words too, read after the rest:
+	// `local x=(~nosuch)` leaves `$?` alone where a failure there does. See
+	// Runner.failedExpansionStatus.
+	keepForArrays := func() {}
+	if len(r.arrayOperands) > 0 {
+		keepForArrays = r.failedExpansionStatusIs(failedExpansionKeepsTheStatus)
+	}
 	r.expandArrayOperands(tableLetterAmongTheOptions(argv))
+	keepForArrays()
 	holdsItsLine := r.holdsItsLineForACompoundOperand()
 	if holdsItsLine {
 		// A compound operand's members are performed in front of the command
@@ -11774,7 +11825,20 @@ func (r *Runner) failedSubscript(format string, args ...any) {
 // Both facts were invisible while only dash, ksh93 and BusyBox ash could reach
 // it — all three answer 2 to both questions — and bash reaching the same path
 // through POSIX mode is what told them apart (#2583).
-func (r *Runner) setFatalStatus() { r.status = r.fatalStatus() }
+func (r *Runner) setFatalStatus() {
+	// A declaration's words and a `case`'s, in the dialect where a failed
+	// expansion there leaves `$?` alone. See Runner.failedExpansionStatus.
+	switch r.failedExpansionStatus {
+	case failedExpansionKeepsTheStatus:
+		r.fatalSetNoStatus = true
+		return
+	case failedExpansionLeavesZero:
+		r.status = 0
+		r.fatalSetNoStatus = true
+		return
+	}
+	r.status = r.fatalStatus()
+}
 
 // fatalStatus is that number without setting it, for the one caller that has
 // to choose between it and another number before either is written. Split
@@ -14578,4 +14642,39 @@ func (r *Runner) awaitForegroundCommand(pid int) (Wait, error) {
 			r.writeFinishedJobNotices()
 		}
 	}
+}
+
+// failedExpansionStatus says what a failed expansion does to `$?`.
+type failedExpansionStatus uint8
+
+const (
+	// failedExpansionSetsTheStatus is the fatal status, everywhere but the
+	// two places below.
+	failedExpansionSetsTheStatus failedExpansionStatus = iota
+	// failedExpansionKeepsTheStatus leaves what `$?` held: a declaration's
+	// words, which a command substitution among them may have moved.
+	failedExpansionKeepsTheStatus
+	// failedExpansionLeavesZero leaves 0: a `case`'s subject and patterns.
+	failedExpansionLeavesZero
+)
+
+// failureSetsItsStatus is for a failure that sets the fatal status wherever
+// it is written, until the returned function runs. See
+// Runner.failedExpansionStatus.
+func (r *Runner) failureSetsItsStatus() func() {
+	saved := r.failedExpansionStatus
+	r.failedExpansionStatus = failedExpansionSetsTheStatus
+	return func() { r.failedExpansionStatus = saved }
+}
+
+// failedExpansionStatusIs sets what a failed expansion leaves in `$?` until
+// the returned function runs, where the dialect says a failure there sets no
+// status of its own.
+func (r *Runner) failedExpansionStatusIs(st failedExpansionStatus) func() {
+	if r.sem().FailedExpansionInADeclarationOrCaseSetsNoStatus != Yes {
+		return func() {}
+	}
+	saved := r.failedExpansionStatus
+	r.failedExpansionStatus = st
+	return func() { r.failedExpansionStatus = saved }
 }

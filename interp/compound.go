@@ -955,9 +955,12 @@ func (r *Runner) caseClause(ctx context.Context, c *syntax.CaseClause) error {
 		r.traceCaseHeader(c.Header)
 		r.beginHeading()
 		restore := r.caseSubjectLine()
+		keep := r.failedExpansionStatusIs(failedExpansionLeavesZero)
 		subject := strings.Join(r.expandWordNoSplit(c.Word), "")
 		restore()
-		if r.failedHeading() {
+		failed := r.failedHeading()
+		keep()
+		if failed {
 			// Before any arm is tested, because a subject that failed is
 			// empty and empty *matches*: the `""` arm fired and the shell
 			// chose a branch from a value it could not compute (#1215).
@@ -1108,6 +1111,8 @@ func (r *Runner) caseItemMatched(item *syntax.CaseItem, subject string) (matched
 	// stops setting control flow would otherwise turn a stale flag into a
 	// refused pattern.
 	r.beginHeading()
+	keep := r.failedExpansionStatusIs(failedExpansionLeavesZero)
+	defer keep()
 	matched = r.caseItemMatches(item, subject)
 	// A pattern the dialect rejects outright, or one whose failure was fatal
 	// on its own, stops the arms here rather than being reported once per

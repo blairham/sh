@@ -1814,6 +1814,24 @@ type Semantics struct {
 	// Runner.unresolvedTilde (#5646).
 	UnresolvedTildeIsAnError Answer
 
+	// FailedExpansionInADeclarationOrCaseSetsNoStatus leaves `$?` alone when
+	// an expansion fails in a declaration's words or a `case`'s subject or
+	// patterns, where everywhere else the failure sets the fatal status. The
+	// script stops either way.
+	//
+	// Measured 2026-10-03 with `false;` in front and the script's exit status
+	// read: zsh 5.9.2 leaves 1 for `local x=$((1/0))` and `export x=~nosuch`
+	// (what `$?` held) and 0 for `case x in $((1/0))) ;; esac` and
+	// `case ~nosuch in` (a `case` starts at 0), and with nothing in front
+	// 0 for all four. `local y=$(false) x=~nosuch` is 1: the substitution
+	// moved it. Only a declaration written as one counts: `builtin local`,
+	// `\local` and `$l` set 1, as `x=~nosuch` and `print $((1/0))` do, and
+	// `${nosuch?m}` sets 1 everywhere, being a failure of its own. bash
+	// 5.3.20 and ksh93u+ exit 1 for all of these, dash and BusyBox ash 2.
+	//
+	// zsh Yes, every other dialect No; read as `== Yes` (#5657).
+	FailedExpansionInADeclarationOrCaseSetsNoStatus Answer
+
 	// DollarSingleBackslashC is what `\c` means inside `$'…'`, and like the
 	// `\c` of a printf format it is three different things rather than a
 	// switch — see DollarSingleControlPolicy. Asked only for a `$'…'` that
@@ -30724,6 +30742,9 @@ func PosixSemantics() Semantics {
 		// and dash, the shell in the panel that targets it, leaves the word
 		// as written. See the field.
 		UnresolvedTildeIsAnError: No,
+		// The standard's fatal expansion error is a status like any other's.
+		// See the field.
+		FailedExpansionInADeclarationOrCaseSetsNoStatus: No,
 		// POSIX has `echo` and `printf` exit greater than zero when "an
 		// error occurred", and a write that went nowhere is one; dash
 		// complies. zsh is the holdout, keeping status 0.

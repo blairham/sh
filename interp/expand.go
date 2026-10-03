@@ -9722,6 +9722,17 @@ func (r *Runner) SetDollarZeroName(name string) { r.zeroNameOverride = name }
 // The longest match at the start is the whole value whenever the whole value
 // matches, so this is the start anchor with every shorter match declined.
 func (r *Runner) replaceWhole(value, pattern string, e *syntax.ParamExpr, cached *func(string) string) string {
+	if searchingFlag(e) {
+		// Anchored at both ends, the match is the whole value or nothing,
+		// so the shortest match is the whole value too. Measured 2026-10-03
+		// on zsh 5.9.2: with `v=abc`, `${(S)v/#%*/X}` and `${(S)v//#%(*)/X}`
+		// are `X`, where the start-anchored search this is read through
+		// took the empty match at the front and left `Xabc` (#5151, a chunk
+		// of D04parameter.ztst).
+		whole := *e
+		whole.Flags = strings.ReplaceAll(whole.Flags, "S", "")
+		e = &whole
+	}
 	out := r.replaceWithReading(value, pattern, e, cached)
 	if !r.matchPatternR(pattern, value, patternInAWord) {
 		return value

@@ -119,7 +119,9 @@ func searchingFlag(e *syntax.ParamExpr) bool {
 // An expression, so `(SI:n+1:)` reads `n`. Only the searching trims read it
 // here; the substitutions' half of the flag is not built (#5151).
 func (r *Runner) matchIndexFlag(e *syntax.ParamExpr) int {
-	if e == nil || e.MatchIndex == "" || !searchingFlag(e) {
+	// Without `(S)` the value is computed and read by nothing: a trim then
+	// has one place to match, and spanByLength counts only for a search.
+	if e == nil || e.MatchIndex == "" {
 		return 1
 	}
 	n, err := r.expressionValue(e.MatchIndex)

@@ -776,10 +776,12 @@ func bindPairs(r *interp.Runner, words []string, text bool) int {
 	for i := 0; i+1 < len(words); i += 2 {
 		target := words[i+1]
 		if text {
-			// A string binding is kept as the text it types, quoted the way
-			// the listing prints it, which is how `bindkey '^X'` tells the two
-			// kinds apart when it says one back.
-			target = quoteKeyString(target)
+			// A string binding is kept as the text it types, read through the
+			// same notation as the key — `bindkey -s '^Xb' '\x41'` types `A`
+			// in zsh 5.9.2, where this kept the four characters (#5672) — and
+			// quoted the way the listing prints it, which is how `bindkey
+			// '^X'` tells the two kinds apart when it says one back.
+			target = quoteKeyString(decodeKeySequence(target))
 		}
 		changeBinding(r, decodeKeySequence(words[i]), target)
 	}
@@ -818,6 +820,13 @@ func writeBinding(r *interp.Runner, seq, widget string, commands bool) {
 	prefix := ""
 	if commands {
 		prefix = "bindkey "
+		if strings.HasPrefix(widget, `"`) {
+			// A string binding is recreated with `-s`: without it the line
+			// read back binds the key to a *widget* of that name. Measured,
+			// `bindkey -s '^Xf' plain; bindkey -L` is `bindkey -s "^Xf"
+			// "plain"` in zsh 5.9.2 (#5672).
+			prefix = "bindkey -s "
+		}
 	}
 	_, _ = fmt.Fprintf(r.Out(), "%s\"%s\" %s\n", prefix, encodeKeySequence(seq), widget)
 }
@@ -941,29 +950,59 @@ func isDigitInBase(c byte, base int) bool {
 	}
 }
 
-// encodeKeySequence writes a sequence back the way this shell prints one:
-// control characters as a caret, the high half as `\M-`, and the four
-// characters that would end or reopen the double quotes escaped.
+// encodeKeySequence writes a sequence back the way this shell prints one,
+// which is two layers: the key notation, and the double quotes the listing
+// puts it in, so that `bindkey -L` read back as shell code binds the same
+// bytes.
+//
+// The notation writes control characters as a caret, the high half as `\M-`,
+// and a backslash and a caret escaped as `\\` and `\^`, so that neither reads
+// as the start of a spelling. The quoting then escapes `"`, `$` and the
+// backquote, and a backslash only where the double quotes would otherwise
+// take it: before another of those four characters, or before the closing
+// quote. Measured 2026-10-03 on zsh 5.9.2, `bindkey "$v" foo; bindkey -L
+// "$v"`, as raw bytes (#5672):
+//
+//	\\ or \     "\\\\"     one backslash: notation \\, each one escaped
+//	\\a       "\\\a"      backslash then a: notation \\a, the second kept
+//	^         "\^"
+//	\\^       "\\\\\^"    backslash then caret: notation \\\^
+//	a"b       "a\"b"
+//	\777      "\M-^?"
 func encodeKeySequence(s string) string {
-	var out strings.Builder
+	var notation strings.Builder
 	for i := 0; i < len(s); i++ {
 		c := s[i]
 		if c >= 0x80 {
-			out.WriteString(`\M-`)
+			notation.WriteString(`\M-`)
 			c &= 0x7f
 		}
 		switch {
 		case c == 0x7f:
-			out.WriteString("^?")
+			notation.WriteString("^?")
 		case c < 0x20:
-			out.WriteByte('^')
-			out.WriteByte(c + '@')
-		case c == '"' || c == '\\' || c == '$' || c == '`':
-			out.WriteByte('\\')
-			out.WriteByte(c)
+			notation.WriteByte('^')
+			notation.WriteByte(c + '@')
+		case c == '\\' || c == '^':
+			notation.WriteByte('\\')
+			notation.WriteByte(c)
 		default:
-			out.WriteByte(c)
+			notation.WriteByte(c)
 		}
+	}
+	n := notation.String()
+	var out strings.Builder
+	for i := 0; i < len(n); i++ {
+		c := n[i]
+		switch c {
+		case '"', '$', '`':
+			out.WriteByte('\\')
+		case '\\':
+			if i+1 == len(n) || strings.IndexByte(`"$\`+"`", n[i+1]) >= 0 {
+				out.WriteByte('\\')
+			}
+		}
+		out.WriteByte(c)
 	}
 	return out.String()
 }

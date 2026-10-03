@@ -2089,6 +2089,9 @@ func Semantics() interp.Semantics {
 	// z=Ab` with the value unfolded, and `typeset -l z=Ab; typeset -lu z=Cd`
 	// lists `typeset z=Cd` (#2541).
 	s.TwoCaseLettersOnOneDeclarationCancel = interp.Yes
+	// The letter that lists is the letter that folds: see
+	// interp.Semantics.CaseListingAndFoldAreSeparate (#5671).
+	s.CaseListingAndFoldAreSeparate = interp.No
 	s.CaseAttributeReplacesTheNumericAttribute = interp.No
 	// The same reading of an undeclared name reached through a subscript:
 	// a name that is not an array here reads as a scalar, so a quoted

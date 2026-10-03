@@ -44,6 +44,10 @@ func testSemantics() Semantics {
 	// status. The suite that is about the other answer is dialect/zsh's
 	// typedvaluefailure_test.go (#5677).
 	s.DeclaredTypedValueFailureLeavesZero = No
+	// A case letter's listing and its fold, at the reading where the letter
+	// that lists is the letter that folds. The suite that is about the other
+	// reading is dialect/ksh's caselisting_test.go (#5671).
+	s.CaseListingAndFoldAreSeparate = No
 
 	// Arrays, subscripts and the expansions that read them. The standard has
 	// no arrays, so it answers none of this and every array test is refused

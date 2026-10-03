@@ -26,6 +26,10 @@ func axisRun(t *testing.T, src string, set func(*Semantics)) (string, int) {
 		sem.ValuelessDeclarationOfAHeldNameListsIt = No
 		sem.ScalarOverACompoundIsAnInconsistentType = No
 		sem.ReadonlyRecordsTheCompoundAttribute = No
+		// A case letter's listing and its fold, at the reading where the letter
+		// that lists is the letter that folds. The suite that is about the other
+		// reading is dialect/ksh's caselisting_test.go (#5671).
+		sem.CaseListingAndFoldAreSeparate = No
 		// And who can see a name a caller declared local, at the answer five
 		// of the six panel columns give — see staticscope_test.go, which is
 		// the suite about the axis and sets both sides itself (#2865).

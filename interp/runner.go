@@ -1411,14 +1411,19 @@ type Runner struct {
 	// interp/compounddeclaredonly.go for both, and
 	// Runner.bareAssignmentValue for the listing that reads this one.
 	compoundHeldAnElement map[string]bool
-	// caseLetterUnlisted is the case letter, 'l' or 'u', that a declaration
-	// writing both on one line left standing without a listing letter. The
-	// value folds by it and the listing writes neither, in the dialect that
-	// answers TwoCaseLettersOnOneDeclarationCancel with No. Honored only
-	// while that letter still stands, so a removal elsewhere cannot leave it
-	// describing a letter the name no longer has. See
-	// Runner.twoCaseLettersOnOneLine.
-	caseLetterUnlisted map[string]byte
+	// caseListing is the case letters a name's **listing** writes, as bits
+	// (caseListsLower, caseListsUpper, and caseListingRecorded to say a
+	// record is there at all), in the dialect where the listing and the fold
+	// are two pieces of state. The fold stays in lowered and uppered. See
+	// Runner.caseLettersKeptApart and Semantics.CaseListingAndFoldAreSeparate.
+	caseListing map[string]byte
+	// caseFoldHeld is the one name whose case fold this declaration operand
+	// holds back from the value, and caseFoldMayBeHeld says a declaration's
+	// operands are being read at all; caseFoldOperandValued is whether the
+	// operand carries a value. See Runner.caseLettersKeptApart.
+	caseFoldHeld          string
+	caseFoldMayBeHeld     bool
+	caseFoldOperandValued bool
 	// scalarHeldUnderTheArrayLetter are names whose indexed array held no
 	// element, and had never held one, when a whole-name scalar store landed
 	// on it. The name is still an array of one, but one listing writes it as
@@ -12454,6 +12459,9 @@ func (r *Runner) attributeFolded(name, value string) (string, bool) {
 // A name never carries both — applyAttributes takes one off when the other
 // arrives — so there is no order to decide here.
 func (r *Runner) caseFolded(name, value string) string {
+	if r.caseFoldHeld != "" && name == r.caseFoldHeld {
+		return value
+	}
 	switch {
 	case r.lowered[name]:
 		return r.caseChanged(value, unicode.ToLower)
@@ -13779,6 +13787,7 @@ func (r *Runner) nameCarriesATypeAttribute(name string) bool {
 }
 
 func (r *Runner) clearTypeAttributes(name string) {
+	delete(r.caseListing, name)
 	delete(r.integer, name)
 	delete(r.lowered, name)
 	delete(r.uppered, name)

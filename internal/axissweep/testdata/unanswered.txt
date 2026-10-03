@@ -301,6 +301,7 @@ ash   TraceElementSubscriptIsEvaluated
 ash   TraceSubscriptedArrayLiteralIsElementAssignments
 ash   TransformLetterCheckedOnlyWhenValued
 ash   TwoCaseLettersOnOneDeclarationCancel
+ash   CaseListingAndFoldAreSeparate
 ash   TypeFSaysTheFunctionBack
 ash   TypeLetterAndAnArrayLiteralIsAnInconsistentType
 ash   TypeLetterOverAFrozenNameWithNoValueIsRefused
@@ -686,6 +687,7 @@ dash  TraceElementSubscriptIsEvaluated
 dash  TraceSubscriptedArrayLiteralIsElementAssignments
 dash  TransformLetterCheckedOnlyWhenValued
 dash  TwoCaseLettersOnOneDeclarationCancel
+dash  CaseListingAndFoldAreSeparate
 dash  TypeFSaysTheFunctionBack
 dash  TypeLetterAndAnArrayLiteralIsAnInconsistentType
 dash  TypeLetterOverAFrozenNameWithNoValueIsRefused

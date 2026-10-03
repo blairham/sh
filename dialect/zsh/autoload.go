@@ -346,6 +346,46 @@ func autoloadMark(r *interp.Runner, names []string, opts autoloadOpts) int {
 	return status
 }
 
+// functionsCopying is `functions` with its `-c OLD NEW`: NEW becomes a copy
+// of OLD, and an OLD still waiting to be loaded is loaded first, in place.
+// Measured 2026-10-02 on zsh 5.9.2 under `-f` (#5148):
+//
+//	functions -c tbc_auto nc        both list the file's body afterwards
+//	functions -c nosuch x           functions: no such function: nosuch, 1
+//	functions -c f, functions -c f a b   functions: -c: requires two arguments, 1
+//	functions -c f g                g replaced
+//	functions -c missing_stub x     missing_stub: function definition file
+//	                                not found, at the line, 1
+func functionsCopying(base interp.Builtin) interp.Builtin {
+	return func(r *interp.Runner, ctx context.Context, args []string) int {
+		if len(args) == 0 || args[0] != "-c" {
+			return base(r, ctx, args)
+		}
+		rest := args[1:]
+		if len(rest) != 2 {
+			r.Diagnosef("-c: requires two arguments\n")
+			return 1
+		}
+		from, to := rest[0], rest[1]
+		if autoloadPending(r, from) {
+			var opts autoloadOpts
+			dir, _ := autoloadMergeStub(r, from, &opts)
+			var dirs []string
+			if dir != "" {
+				dirs = []string{dir}
+			}
+			if code := autoloadResolveIn(r, from, dirs, opts, false); code != 0 {
+				return code
+			}
+		}
+		if !r.CopyFunction(from, to) {
+			r.Diagnosef("no such function: %s\n", from)
+			return 1
+		}
+		return 0
+	}
+}
+
 // autoloadMergeStub folds a pending stub's letters into opts and returns its
 // directory, for a name declared again while it waits. Measured 2026-10-02 on
 // zsh 5.9.2 (#5148):

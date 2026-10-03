@@ -53,8 +53,9 @@ import (
 //
 // **Not modeled here**, and forked instead:
 //
-//   - a `( … )` in the tail, in the dialects that fork the parentheses (here
-//     a subshell is a clone in one process);
+//   - a `( … )` in the tail, in the dialects that fork the parentheses: dash,
+//     ksh93 and ash. Here a subshell is a clone in one process. zsh does not
+//     fork them, and that clone is the shell itself, so it is replaced;
 //   - a shell that still has a job running, or has ever made a process
 //     substitution. Those are goroutines here and would die with the
 //     process. zsh, dash and ksh93 replace themselves anyway, and bash 5.3
@@ -116,7 +117,11 @@ func plainTopLevelTail(list []*syntax.Stmt) *syntax.SimpleCmd {
 // program this shell should become rather than fork.
 func (r *Runner) replacesItselfHere() bool {
 	c := r.runningSimple
-	if c == nil || r.ReplaceProcess == nil || r.inSubshell || r.bg != nil {
+	// A clone is a subshell, and replacing the process from one would take
+	// the parent shell with it. The one exception is a `( … )` the dialect
+	// does not fork because nothing follows it: that clone is the shell
+	// itself. See unforkedtail.go.
+	if c == nil || r.ReplaceProcess == nil || (r.inSubshell && !r.unforkedSelf) || r.bg != nil {
 		return false
 	}
 	switch r.sem().TailExec {
@@ -160,7 +165,12 @@ func (r *Runner) becomeTheProgram(ctx context.Context, path string, argv, env []
 	}
 	_ = ctx
 	dir := r.dirNow()
-	r.cleanUpAtEnd()
+	if r.unforkedSelf {
+		// The parentheses are the shell itself, so its end is this one.
+		r.CleanUp()
+	} else {
+		r.cleanUpAtEnd()
+	}
 	releaseMask := r.holdMaskForFork()
 	name, env := r.namedByTheEnvironment(argv[0], env)
 	args := append([]string{r.dashed(name)}, argv[1:]...)

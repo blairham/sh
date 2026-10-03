@@ -1375,6 +1375,11 @@ type Runner struct {
 	// See baredeclaration.go for the measurement, and for why the record is
 	// carried by nameAttributes rather than saved and restored again here.
 	declaredBare map[string]bool
+	// declaredHoldingNothing are names a declaration brought into being
+	// holding nothing, under the reading where a valueless declaration leaves
+	// the name unset — with letters or without. One dialect still describes
+	// such a name. See Runner.ParameterAttributes (#5439).
+	declaredHoldingNothing map[string]bool
 	// unsetLeftItDeclared are names whose binding an `unset` emptied while
 	// the scope that declared them was running — the same state a bare
 	// declaration leaves and the same listing, reached the other way. See

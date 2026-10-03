@@ -137,7 +137,7 @@ type ParameterAttributes struct {
 // `${+parameters[nosuch]}` be 0 without the dialect keeping a second list of
 // what exists.
 func (r *Runner) ParameterAttributes(name string) (ParameterAttributes, bool) {
-	if name == "" || (r.removedForDescription(name) && !r.declaredBare[name]) {
+	if name == "" || (r.removedForDescription(name) && !r.declaredBare[name] && !r.declaredHoldingNothing[name]) {
 		// Removed, unless what removed it was a declaration hiding an outer
 		// value behind a binding of its own that holds nothing — which is a
 		// name the shell has, and is described below (#5157).
@@ -231,7 +231,7 @@ func (r *Runner) ParameterAttributes(name string) (ParameterAttributes, bool) {
 	// both. An `unset` of the local is not that state — `local v; unset v`
 	// leaves `${(t)v}` empty — and neither is a POSIX_BUILTINS `readonly RO`,
 	// which leaves no record at all (#5157).
-	if !r.parameterIsProvided(name) && !r.parameterExists(name) && !r.declaredBare[name] {
+	if !r.parameterIsProvided(name) && !r.parameterExists(name) && !r.declaredBare[name] && !r.declaredHoldingNothing[name] {
 		return ParameterAttributes{}, false
 	}
 	return a, true

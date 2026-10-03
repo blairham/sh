@@ -354,6 +354,7 @@ func seedTables(r *Runner) {
 	r.declaredOnlyCompound = map[string]bool{"seed": true}
 	r.compoundHeldAnElement = map[string]bool{"seed": true}
 	r.declaredBare = map[string]bool{"seed": true}
+	r.declaredHoldingNothing = map[string]bool{"seed": true}
 	r.unsetLeftItDeclared = map[string]bool{"seed": true}
 	r.compoundVariable = map[string]bool{"seed": true}
 	r.namespaces = map[string]bool{"seed": true}

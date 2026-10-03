@@ -570,17 +570,28 @@ const liveMark = "\uf8ff"
 // liveReplacementBytes are the pattern characters a replacement keeps live.
 const liveReplacementBytes = "*?[]"
 
+// liveReplacementFlags are the flag letters a replacement's live marks pass
+// through. Measured 2026-10-03 on zsh 5.9.2 under -f, in a directory holding
+// `xay` and `xby`, with `s=xQy`: `${(j:,:)s:s/Q/?/}`, `${(q)s:s/Q/?/}` and
+// `${(r:3:)s:s/Q/?/}` are `xay xby`, `${(l:5:)s:s/Q/?/}` is `no matches
+// found:   x?y`, `${(l:2:)s:s/Q/?/}` is `no matches found: ?y`, and over
+// `a=(xQy xQy)`, `${(j:,:)a:s/Q/?/}` is `no matches found: x?y,x?y`.
+// `${(qq)s:s/Q/?/}` is `'x?y'`, which the quoting already answers.
+const liveReplacementFlags = "ULCoOqjlr@"
+
 // marksLiveReplacement reports whether this replacement's pattern characters
 // are to be marked: the expansion is the one the word loop is expanding, it is
 // not double-quoted, and the replacement holds one.
 //
-// Not under a flag group other than the case and order letters, which carry
-// the marks through: measured, `${(U)s:s/Q/?/}`, `${(o)…}` and `${(@)…}` keep
-// them, `${(%)…}`, `${(V)…}`, `${(e)…}`, `${(z)…}`, `${(Q)…}` and `${(b)…}`
-// drop them, and a count or a padding must not see them at all.
+// Not under a flag group other than the letters that carry the marks
+// through: measured, `${(U)s:s/Q/?/}`, `${(o)…}`, `${(@)…}`, `${(j:,:)…}`,
+// `${(q)…}` and `${(l:5:)…}` keep them (#5640), `${(%)…}`, `${(V)…}`,
+// `${(e)…}`, `${(z)…}`, `${(Q)…}` and `${(b)…}` drop them, and a count must
+// not see them at all. A padding counts a marked character as the one
+// character it is; see markedUnits.
 func (r *Runner) marksLiveReplacement(with string, e *syntax.ParamExpr) bool {
 	return r.liveMarksFor != nil && r.liveMarksFor == e &&
-		strings.Trim(e.Flags, "ULCoO@") == "" &&
+		strings.Trim(e.Flags, liveReplacementFlags) == "" &&
 		!r.inDoubleQuotedSpan() && strings.ContainsAny(with, liveReplacementBytes)
 }
 

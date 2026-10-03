@@ -6628,7 +6628,7 @@ func splitLengthFromModifiers(w *syntax.Word) (*syntax.Word, []string, bool) {
 // and `${s:2}` is `llo`; under `LC_ALL=C` the same shells give `é` and `llo`
 // with the `é` cut in half, which is what indexing bytes produces.
 func substring(value string, off int, e *syntax.ParamExpr, r *Runner) string {
-	return strings.Join(substringUnits(r.units(value), off, e, r), "")
+	return strings.Join(substringUnits(r.markedUnits(value), off, e, r), "")
 }
 
 // substringUnits is substring's arithmetic over units already taken apart,
@@ -9457,6 +9457,7 @@ func (r *Runner) nestedInnerFields(e *syntax.ParamExpr) []string {
 	// here. An inner written with quotes of its own keeps them — that is a
 	// different construct, and `${(@f)"$(cmd)"}` is the reason it exists.
 	span, sp := r.nestedInnerSpan(e)
+	carry := r.nestedCarriesLiveMarks(e)
 	defer r.inWord(e.Inner)()
 	r.expandingSpan = 0
 	// What follows is read by the operator around it and not by the command
@@ -9476,7 +9477,11 @@ func (r *Runner) nestedInnerFields(e *syntax.ParamExpr) []string {
 	// value is a character the outer operator matches against and not a
 	// pattern the shell is about to escape for someone: leaving them on
 	// answered `${${v}}` on `a*b` with a backslash in it.
-	words = unescapeAll(words)
+	if carry {
+		words = liveMarkedFields(words)
+	} else {
+		words = unescapeAll(words)
+	}
 	if innerLetterSplitDropsItsEmpties(span) || r.unquotedInnerDropsItsEmpties(e, span) {
 		// A letter split a level down with no `@` beside it leaves no empty
 		// field, inside quotes as well: with `u=a::b:`, `"${(@)${(s.:.)u}}"`
@@ -9495,6 +9500,75 @@ func (r *Runner) nestedInnerFields(e *syntax.ParamExpr) []string {
 		words = kept
 	}
 	return words
+}
+
+// nestedCarriesLiveMarks reports whether the pattern characters the inner of
+// e leaves live are still live in what e comes to (#5640): e is the
+// expansion the word loop is expanding, unquoted, and nothing around the
+// inner makes new text of it. Measured 2026-10-03 on zsh 5.9.2 under -f, in a
+// directory holding `xay` and `xby`, with `s=xQy`:
+//
+//	${${s:s/Q/?/}}  ${${${s:s/Q/?/}}}  ${${s:s/Q/?/}:-z}   xay xby
+//	${(j:,:)${s:s/Q/?/}}  ${(q)…}  ${${s:s/Q/?/}:r}       xay xby
+//	${${s:s/Q/?/}:u}  ${(U)${s:s/Q/?/}}    no matches found: X?Y
+//	${(l:5:)${s:s/Q/?/}}                   no matches found:   x?y
+//	t=x?y; ${${~t}}                         xay xby, any live character
+//	${${s:s/Q/?/}#x}  ${${s:s/Q/?/}/y/y}  ${(e)${s:s/Q/?/}}  text
+//	"${${s:s/Q/?/}}"  v=${${s:s/Q/?/}}     text
+//
+//	s=xQyy; ${${s:s/Q/?/}:0:3}  ${${s:s/Q/?/}:s/x?/z/}  xay xby
+//
+// Not past a subscript, whose character searches a mark must not reach,
+// though zsh keeps the characters live there too.
+func (r *Runner) nestedCarriesLiveMarks(e *syntax.ParamExpr) bool {
+	if r.liveMarksFor != e || r.inDoubleQuotedSpan() || e.Length || e.Index != nil {
+		return false
+	}
+	switch e.Op {
+	case syntax.ParamNone, syntax.ParamDefault:
+	case syntax.ParamSubstring:
+		// A range counts a marked character as one, and a modifier list
+		// written as one carries the marks. See markedUnits.
+	default:
+		return false
+	}
+	return !e.HasFlags || strings.Trim(e.Flags, liveReplacementFlags) == ""
+}
+
+// liveMarkedFields turns escaped fields into their text, with liveMark in
+// front of each pattern character no backslash protected. See
+// nestedCarriesLiveMarks.
+func liveMarkedFields(fields []string) []string {
+	out := make([]string, len(fields))
+	for i, f := range fields {
+		if !strings.ContainsAny(f, liveReplacementBytes) {
+			out[i] = globUnescape(f)
+			continue
+		}
+		var b strings.Builder
+		start, open := 0, false
+		for j := 0; j < len(f); j++ {
+			switch c := f[j]; {
+			case c == '\\':
+				j++
+			case c == ']' && !open:
+				// The escaped form leaves a `]` with no live `[` before it
+				// bare, since it is text either way: `${${:-"l[]o"}:s/[]//}`
+				// is `lo`.
+			case strings.IndexByte(liveReplacementBytes, c) >= 0:
+				open = c == '[' || open && c != ']'
+				b.WriteString(globUnescape(f[start:j]))
+				b.WriteString(liveMark)
+				b.WriteByte(c)
+				start = j + 1
+			}
+		}
+		if start < len(f) {
+			b.WriteString(globUnescape(f[start:]))
+		}
+		out[i] = b.String()
+	}
+	return out
 }
 
 // unquotedInnerDropsItsEmpties says the inner of a nested expansion is a list —

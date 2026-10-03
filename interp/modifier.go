@@ -469,6 +469,20 @@ func (r *Runner) refuseModifier(e *syntax.ParamExpr, name string) {
 // value untouched, because handing back a value that was never computed is
 // the silent kind of wrong.
 func (r *Runner) applyModifier(value string, letter byte, e *syntax.ParamExpr) (string, bool) {
+	if strings.Contains(value, liveMark) {
+		// A `:s` replacement's live characters: `:q` quotes around them and
+		// leaves them live, and the three below that make new text of the
+		// value leave none. Measured 2026-10-03 on zsh 5.9.2 under -f, in a
+		// directory holding `xay` and `xby`, with `s=xQy`: `${s:s/Q/?/:q}` is
+		// `xay xby`, and `${s:s/Q/?/:Q}`, `${s:s/Q/?/:P}` and `:A` are text
+		// (#5640). See liveMark.
+		switch letter {
+		case 'q':
+			return quoteAroundLiveMarks(value, false), true
+		case 'Q', 'P', 'A':
+			value = stripLiveMarks(value)
+		}
+	}
 	switch letter {
 	case 'a':
 		return r.modifierAbsolute(value), true

@@ -105,7 +105,7 @@ func (r *Runner) padFlagged(e *syntax.ParamExpr, words []string) ([]string, bool
 			// half — which is what "the extra padding is applied on the
 			// left" comes to, the left field then having one unit less of
 			// word to hold.
-			u := r.units(w)
+			u := r.markedUnits(w)
 			half := len(u) / 2
 			out[i] = r.padLeftTo(strings.Join(u[:half], ""), lw, lp) +
 				r.padRightTo(strings.Join(u[half:], ""), rw, rp)
@@ -218,7 +218,7 @@ func (r *Runner) padArg(e *syntax.ParamExpr, flag rune, text string, set bool, a
 // `${(l:1:)v}` on `ab` is `b` and `${(l:3:)w}` on `abcdef` is `def`, where the
 // `r` mirror keeps the other end.
 func (r *Runner) padLeftTo(w string, width int, p padding) string {
-	u := r.units(w)
+	u := r.markedUnits(w)
 	if len(u) >= width {
 		return strings.Join(u[len(u)-width:], "")
 	}
@@ -237,7 +237,7 @@ func (r *Runner) padLeftTo(w string, width int, p padding) string {
 // padRightTo is padLeftTo's mirror: the word keeps its *near* end when it is
 // truncated, and both fills are laid out on the other side.
 func (r *Runner) padRightTo(w string, width int, p padding) string {
-	u := r.units(w)
+	u := r.markedUnits(w)
 	if len(u) >= width {
 		return strings.Join(u[:width], "")
 	}
@@ -416,6 +416,26 @@ func reverseUnits(u []string) []string {
 	out := make([]string, len(u))
 	for i, c := range u {
 		out[len(u)-1-i] = c
+	}
+	return out
+}
+
+// markedUnits is units for a value that may hold a `:s` replacement's live
+// marks, where a mark is part of the character it marks rather than a
+// character of its own: `${(l:2:)s:s/Q/?/}` on `xQy` keeps `?y`, and
+// `${${s:s/Q/?/}:1}` is `?y`, the `?` still live. See liveReplacementFlags
+// and nestedCarriesLiveMarks.
+func (r *Runner) markedUnits(w string) []string {
+	if !strings.Contains(w, liveMark) {
+		return r.units(w)
+	}
+	var out []string
+	for i, seg := range strings.Split(w, liveMark) {
+		u := r.units(seg)
+		if i > 0 && len(u) > 0 {
+			u[0] = liveMark + u[0]
+		}
+		out = append(out, u...)
 	}
 	return out
 }

@@ -7513,6 +7513,30 @@ type Semantics struct {
 	// has already gone out.
 	PrintfStarWithoutOperandIsRefused Answer
 
+	// PrintfStarWithoutOperandIsAbsent leaves a field out when the `*`
+	// standing for it finds the operand list already empty, rather than
+	// giving it the value zero.
+	//
+	// zsh alone. Measured 2026-10-03 on zsh 5.9.2, bash 5.3.20 and dash
+	// 0.5.12:
+	//
+	//	                         zsh             bash, dash
+	//	printf '[%.*f]'          [0.000000]      [0]
+	//	printf '[%*.*d]' 3       [  0]           [   ]
+	//	printf '[%.*x]'          [0]             []
+	//	printf '[%5.*d]'         [    0]         [     ]
+	//
+	// A width cannot tell the two apart — no width and a width of zero lay a
+	// field out identically — so it is the precision that shows it, where an
+	// omitted one is the conversion's default and a zero one writes no
+	// digits for a zero value. A star *with* its operand is the operand in
+	// every column: `printf '[%.*d]' 0` is `[]` in zsh too.
+	//
+	// Asked only where a star's operand has run out and
+	// PrintfStarWithoutOperandIsRefused has not refused the directive, so
+	// ksh93 never reaches it.
+	PrintfStarWithoutOperandIsAbsent Answer
+
 	// PrintfStarComplaintCostsTheStatus lets a complaint about the operand a
 	// `*` took report failure, as the same complaint about a conversion's own
 	// operand does.

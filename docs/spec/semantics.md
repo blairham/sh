@@ -21171,6 +21171,28 @@ would put every other complaint in the pass *after* the output it
 currently precedes — a live behavior traded for a dead one. Filed as
 #2664.
 
+**`PrintfStarWithoutOperandIsAbsent`** — bash no · dash no · ksh93 not reached · zsh **yes** · ash no
+
+Leaves a field out when the `*` standing for it finds the operand list
+already empty, rather than giving it the value zero. Measured 2026-10-03
+on zsh 5.9.2, bash 5.3.20 and dash 0.5.12:
+
+    snippet                  zsh             bash, dash
+    printf '[%.*f]'          [0.000000]      [0]
+    printf '[%*.*d]' 3       [  0]           [   ]
+    printf '[%.*x]'          [0]             []
+    printf '[%5.*d]'         [    0]         [     ]
+
+A width cannot tell the two readings apart, since no width and a width of
+zero lay a field out identically, which is why `printf '%s[%*d]' x` is
+`x[0]` everywhere and the axis above could call the missing star a zero in
+six columns. The precision is what shows it: an omitted precision is the
+conversion's default, and a zero one writes no digits for a zero value. A
+star that has its operand is the operand in every column — `printf
+'[%.*d]' 0` is `[]` in zsh too. Asked only where a star's operand has run
+out and `PrintfStarWithoutOperandIsRefused` has not refused the directive,
+so ksh93 never reaches it.
+
 **`PrintfStarComplaintCostsTheStatus`** — bash yes · dash yes · ksh93 yes · zsh yes · ash **no**
 
 Lets a complaint about the operand a `*` took report failure, as the same

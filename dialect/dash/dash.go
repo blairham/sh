@@ -1183,6 +1183,8 @@ func Semantics() interp.Semantics {
 	s.PrintfEmptyIsNotANumber = interp.No
 	s.PrintfAbsentNumberIsAnEmptyOne = interp.No
 	s.PrintfStarWithoutOperandIsRefused = interp.No
+	// A `*` with no operand left is a zero: `printf '[%.*f]'` is `[0]`.
+	s.PrintfStarWithoutOperandIsAbsent = interp.No
 	s.PrintfStarComplaintCostsTheStatus = interp.Yes
 	s.PrintfNonFiniteIsConverted = interp.Yes
 	// No `'` flag: the character is the conversion this shell does not

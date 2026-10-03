@@ -3570,6 +3570,10 @@ func Semantics() interp.Semantics {
 	s.PrintfEmptyIsNotANumber = interp.No
 	s.PrintfAbsentNumberIsAnEmptyOne = interp.No
 	s.PrintfStarWithoutOperandIsRefused = interp.No
+	// A `*` with no operand left leaves its field out rather than setting
+	// it to zero: `printf '[%.*f]'` is `[0.000000]` here, the default
+	// precision, where bash and dash write `[0]`.
+	s.PrintfStarWithoutOperandIsAbsent = interp.Yes
 	s.PrintfStarComplaintCostsTheStatus = interp.Yes
 	// zsh alone writes the bare word: `%G` of an infinity is `inf` and
 	// `%10f` of one is `inf` unpadded.

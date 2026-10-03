@@ -18,6 +18,7 @@ func TestATracedStoreFollowsTheAssignment(t *testing.T) {
 		{`x=0; function x.set { print -u2 SET; }; set -x; x=1`, "SET\n+ x=1\n"},
 		{`set -x; a=1 b=${x?boom} true; echo after`, "+ true\n+ a=1\nksh: x: boom\n+ echo after\nafter\n"},
 		{`set -x; a=1 b=2 true`, "+ true\n+ a=1\n+ b=2\n"},
+		{`readonly r; set -x; a=1 r=2 c=3 true; echo $?`, "+ true\n+ a=1\n+ r=2\n+ c=3\n+ echo 0\n0\n"},
 	} {
 		out, _, err := preset.Combined(t, dialecttest.Base{Dir: t.TempDir()}, c.src)
 		if err != nil {

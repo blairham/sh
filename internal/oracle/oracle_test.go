@@ -1720,3 +1720,28 @@ func TestVersionPrefersTheSpellingAShellAlreadyAnswers(t *testing.T) {
 		t.Errorf("version = %q, want the --version answer", got)
 	}
 }
+
+// TestGradeRecordedReadsTheRecord: the recorded grade takes its answer from
+// the record and not from a shell, and a case the record has no answer for is
+// an error rather than a case quietly left out of the total (#5710).
+func TestGradeRecordedReadsTheRecord(t *testing.T) {
+	c := Case{ID: "t/recorded", Snippet: "echo hi"}
+	rec := &Run{Results: map[string]map[string]Result{
+		c.ID: {"dash": {Stdout: "hi"}, "zsh": {Stdout: "not what /bin/sh prints"}},
+	}}
+	for _, tc := range []struct {
+		against string
+		passed  int
+	}{{"dash", 1}, {"zsh", 0}} {
+		rep, err := GradeRecorded(context.Background(), "/bin/sh", tc.against, nil, []Case{c}, rec)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if rep.Total != 1 || rep.Passed != tc.passed {
+			t.Errorf("against %s: %d/%d, want %d/1", tc.against, rep.Passed, rep.Total, tc.passed)
+		}
+	}
+	if _, err := GradeRecorded(context.Background(), "/bin/sh", "ksh93", nil, []Case{c}, rec); err == nil {
+		t.Error("a column the record does not hold graded without complaint")
+	}
+}

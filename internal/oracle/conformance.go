@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 )
@@ -242,7 +243,32 @@ func RunConformance(ctx context.Context, path, against string, args []string, ca
 		return nil, fmt.Errorf("reference shell %q is not in the panel", against)
 	}
 
-	ours := Found{
+	ours := oursFor(path, args, ref.SelfName)
+
+	rep := &Report{Against: against, Missing: Names(absent)}
+	for _, c := range cases {
+		if !graded(c) {
+			continue
+		}
+		want := Exec(ctx, ref, c)
+		got := Exec(ctx, ours, c)
+		rep.add(c, want, got)
+	}
+	sort.Slice(rep.Matches, func(i, j int) bool { return rep.Matches[i].CaseID < rep.Matches[j].CaseID })
+	return rep, nil
+}
+
+// oursFor is the implementation under test as a panel member, so that it is
+// measured by the same Exec as the shell it is graded against.
+//
+// The path is made absolute because every case runs in a scratch directory of
+// its own: a relative -bin names a file that is not there, and every case
+// grades as a harness error.
+func oursFor(path string, args []string, selfName string) Found {
+	if abs, err := filepath.Abs(path); err == nil {
+		path = abs
+	}
+	return Found{
 		Shell: Shell{
 			Name: "ours",
 			// Whatever flags the binary needs to be the shell it is being
@@ -264,23 +290,11 @@ func RunConformance(ctx context.Context, path, against string, args []string, ca
 			// by a constant reach this comparison spelled alike. The claim
 			// is pinned where it can be: driver.TestSelfNameNamesTheShellAnd
 			// NotTheScript and dialect/zsh's selfname_test.
-			SelfName: ref.SelfName,
+			SelfName: selfName,
 			Why:      "the implementation under test",
 		},
 		Path: path,
 	}
-
-	rep := &Report{Against: against, Missing: Names(absent)}
-	for _, c := range cases {
-		if !graded(c) {
-			continue
-		}
-		want := Exec(ctx, ref, c)
-		got := Exec(ctx, ours, c)
-		rep.add(c, want, got)
-	}
-	sort.Slice(rep.Matches, func(i, j int) bool { return rep.Matches[i].CaseID < rep.Matches[j].CaseID })
-	return rep, nil
 }
 
 // add grades one case into the report. It is the whole of the tally, so that
@@ -348,4 +362,50 @@ func (r *Report) Summary(verbose bool) string {
 		fmt.Fprintf(&b, "  %s\n    want %s\n    got  %s\n", m.CaseID, describe(m.Want), describe(m.Got))
 	}
 	return b.String()
+}
+
+// GradeRecorded grades a binary against the answers the golden record holds
+// for against, rather than against a live run of that shell.
+//
+// It needs no reference shell on the machine at all, which is what lets it
+// run where the panel cannot be installed and cost what running ours alone
+// costs: the five dialect binaries over the whole corpus is under a minute,
+// where the live grade is twice the processes plus a container. It reads the
+// record RunConformance's answers were written into, so the two agree for as
+// long as the record is current — which TestTheCommittedRecordAndDocumentAgree
+// and the Oracle job already watch.
+//
+// A case the record has no answer for in that column is an error, not a
+// skip: a column that silently grades fewer cases reports a higher number.
+func GradeRecorded(ctx context.Context, path, against string, args []string, cases []Case, rec *Run) (*Report, error) {
+	if path == "" {
+		return &Report{NotBuilt: true}, nil
+	}
+	if _, err := os.Stat(path); err != nil {
+		return nil, fmt.Errorf("no binary at %s: %w", path, err)
+	}
+	var panel *Shell
+	for i := range Panel {
+		if Panel[i].Name == against {
+			panel = &Panel[i]
+		}
+	}
+	if panel == nil {
+		return nil, fmt.Errorf("reference shell %q is not in the panel", against)
+	}
+	ours := oursFor(path, args, panel.SelfName)
+
+	rep := &Report{Against: against + " (recorded)"}
+	for _, c := range cases {
+		if !graded(c) {
+			continue
+		}
+		want, ok := rec.Results[c.ID][against]
+		if !ok {
+			return nil, fmt.Errorf("the record has no %s answer for %s; regenerate it with make oracle", against, c.ID)
+		}
+		rep.add(c, want, Exec(ctx, ours, c))
+	}
+	sort.Slice(rep.Matches, func(i, j int) bool { return rep.Matches[i].CaseID < rep.Matches[j].CaseID })
+	return rep, nil
 }

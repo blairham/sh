@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/blairham/sh/dialect/zsh"
 	"github.com/blairham/sh/internal/dialecttest"
 )
 
@@ -21,15 +22,20 @@ import (
 
 // At a prompt, two modules are there that nothing asked for.
 func TestZmodloadModulesAnInteractiveShellHasLoaded(t *testing.T) {
-	out, st, err := preset.Combined(t, dialecttest.Base{
-		Dir: t.TempDir(), Interactive: true, Terminal: true,
-	}, `zmodload -e zsh/zle
+	var outb strings.Builder
+	r := preset.Runner(dialecttest.Base{
+		Dir: t.TempDir(), Interactive: true, Terminal: true, Stdout: &outb, Stderr: &outb,
+	})
+	// What the driver does before the first startup file. See zleboot.go.
+	zsh.BeforeStartupFiles(r)
+	st, err := r.Run(context.Background(), preset.Parse(t, `zmodload -e zsh/zle
 print -r -- "zle=$?"
 zmodload -e zsh/complete
 print -r -- "complete=$?"
 zmodload -e zsh/zleparameter
 print -r -- "zleparameter=$?"
-zmodload`)
+zmodload`))
+	out := outb.String()
 	if err != nil {
 		t.Fatalf("run: %v", err)
 	}
@@ -82,6 +88,7 @@ func TestZmodloadZleIsLoadedInsideAStartupFileAndCompleteIsNot(t *testing.T) {
 		Dir: t.TempDir(), Interactive: true, Terminal: true,
 		Stdout: &buf, Stderr: &buf,
 	})
+	zsh.BeforeStartupFiles(r)
 	rc := preset.Parse(t, `zmodload -e zsh/zle
 print -r -- "zle=$?"
 zmodload -e zsh/complete
@@ -104,6 +111,7 @@ func TestZmodloadCompleteIsLoadedOnceTheStartupFileIsDone(t *testing.T) {
 		Dir: t.TempDir(), Interactive: true, Terminal: true,
 		Stdout: &buf, Stderr: &buf,
 	})
+	zsh.BeforeStartupFiles(r)
 	rc := preset.Parse(t, `zmodload -e zsh/complete
 print -r -- "during=$?"`)
 	if _, err := r.RunStartupFile(context.Background(), rc, "/home/person/.zshrc"); err != nil {
@@ -117,5 +125,35 @@ print -r -- "after=$?"`)
 	want := "during=1\nafter=0\n"
 	if got := buf.String(); got != want {
 		t.Errorf("across the startup file = %q, want %q", got, want)
+	}
+}
+
+// Under `-fiV +Z` neither editor module is there until something loads one:
+// a builtin of `zsh/zle` loads that module alone, and the editor starting a
+// line after `setopt zle` loads both. Measured 2026-10-02 on zsh 5.9.2
+// through a pseudo-terminal (#5524).
+func TestTheEditorModulesWaitForTheEditorUnderPlusZ(t *testing.T) {
+	var buf strings.Builder
+	r := preset.Runner(dialecttest.Base{
+		Dir: t.TempDir(), Interactive: true, Terminal: true, Stdout: &buf, Stderr: &buf,
+	})
+	run := func(src string) {
+		t.Helper()
+		if _, err := r.Run(context.Background(), preset.Parse(t, src)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	const probe = `zmodload -e zsh/zle; z=$?; zmodload -e zsh/complete; print -r -- "z$z c$?"`
+	run("unsetopt zle")
+	zsh.BeforeStartupFiles(r)
+	zsh.StartLine(r)
+	run(probe)
+	run("bindkey -l >/dev/null; " + probe)
+	run("setopt zle")
+	zsh.StartLine(r)
+	run(probe)
+	run("zmodload -u zsh/zle; " + probe)
+	if got, want := buf.String(), "z1 c1\nz0 c1\nz0 c0\nz1 c0\n"; got != want {
+		t.Errorf("got %q, want %q", got, want)
 	}
 }

@@ -5795,8 +5795,9 @@ type Diagnostics struct {
 	// text runs, and `<name>: ` for a parse failure, where the message
 	// already carries `at line N` and this shell does not say it twice.
 	//
-	// **A function frame is not a component.** The `t.sh` row is what says
-	// so: a function that sources a file contributes no `f[…]`, and the
+	// **A POSIX-form function frame is not a component** — a keyword-defined
+	// one is, which is KeywordCallIsACallStackComponent. The `t.sh` row is
+	// what says so: a `f() { … }` that sources a file contributes no `f[…]`, and the
 	// bracket is the line the `.` was written on — which inside a one-line
 	// function is that function's own line. So the chain is over borrowed
 	// texts and not over the call stack the name suggests.
@@ -5828,6 +5829,23 @@ type Diagnostics struct {
 	// everywhere, or nowhere, gets exactly one of the first three rows right,
 	// and no one of them can tell the readings apart alone.
 	BorrowedTextRendersTheCallStack bool
+	// KeywordCallIsACallStackComponent adds the call of a `function name {
+	// … }` body to the chain BorrowedTextRendersTheCallStack writes, as a
+	// component of its own: `<name>[<the line in it that entered the
+	// next>]: `, and `<name>: line N: ` or `<name>[N]: <builtin>: ` where it
+	// is the innermost. A POSIX-form function is still not one — that is the
+	// `t.sh` row above. Measured 2026-10-02 on ksh93u+ 2012-08-01 over
+	// script files (#5508):
+	//
+	//	error in keyword f called on line 1           k.sh[1]: f: line 1: …
+	//	`cd` failing on line 5 of g → f               m.sh[22]: g[12]: f[5]: cd: …
+	//	the same f called from a POSIX h on line 18   m.sh[18]: f[5]: cd: …
+	//	keyword f on line 4 sources p.sh from line 2  t1.sh[4]: f[2]: .: line 2: …
+	//	f called from an eval's line 1 on line 3      t3.sh[3]: eval[1]: f: line 1: …
+	//	an eval on line 3 of f, called on line 7      t4.sh[7]: f[3]: eval: line 2: …
+	//	-c, f called on line 1, then on line 2        /bin/ksh: f: line 1: …
+	//	                                              /bin/ksh[2]: f[1]: cd: …
+	KeywordCallIsACallStackComponent bool
 	// UnterminatedEndsOnNextLine puts the end of input on the line after the
 	// text rather than on its last: `eval "if"` is line 2 in bash and line 1
 	// in the other four. Measured 2026-09-19 over all seven columns — line 2

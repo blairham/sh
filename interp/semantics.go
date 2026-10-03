@@ -5049,6 +5049,29 @@ type Semantics struct {
 	// keyword body with the option off, measured in the same run, and it is
 	// carried on Runner.xtraceByMark rather than on the option.
 	KeywordFunctionSuspendsErrexitAndXtrace Answer
+	// FatalErrorEndsAtAKeywordFunctionCall puts a **boundary** at the call
+	// of a `function name { … }` body: a fatal error raised anywhere inside
+	// it ends the call rather than the script. The body's later lines do not
+	// run, the call answers the error's status, and the caller goes on.
+	//
+	// only-ksh: measured 2026-10-02 on ksh93u+ 2012-08-01 over a script file
+	// under `env -i PATH=/usr/bin:/bin` (#5508):
+	//
+	//	readonly y; function f { y=1; echo in; }; f; echo st=$?
+	//	  ksh93u+  st=1, exit 0     bash 5.3.20, zsh 5.9.2, ash  ends at 1
+	//	the same with f() { … }     ksh93u+ ends at 1 too
+	//
+	// Every producer, not one: an unset parameter under `set -u`, `${u?w}`,
+	// a division by zero, an arithmetic syntax error, a restricted
+	// assignment and a readonly one each give `st=1`; a builtin's usage
+	// error keeps its own number (`unset -Z` is `st=2`). A POSIX-form
+	// function called from a keyword body unwinds as far as the keyword
+	// call, and a keyword call nested in another stops at the inner one.
+	//
+	// What it does not catch is a request to stop: `exit 3` in the body
+	// exits 3, and `set -e` outside the call fires on the 1 it answers.
+	// dash has no `function` keyword, so the shape does not run there.
+	FatalErrorEndsAtAKeywordFunctionCall Answer
 	// SIGPrefixAccepted reads `SIGINT` as a name for the same signal `INT`
 	// names, wherever a signal can be named.
 	//
@@ -30238,6 +30261,9 @@ func PosixSemantics() Semantics {
 		// for, and the majority — bash, zsh and every other panel member but
 		// one — turns off neither.
 		KeywordFunctionSuspendsErrexitAndXtrace: No,
+		// The same: with one definition form there is no keyword call to be
+		// a boundary, and bash, zsh and ash end the script.
+		FatalErrorEndsAtAKeywordFunctionCall: No,
 		// The standard says nothing about what a function call does to the
 		// scan position — `local` is not in it — so the preset keeps the
 		// answer it has always had rather than following a member: a call

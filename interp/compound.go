@@ -2261,6 +2261,14 @@ func (r *Runner) callFuncInPlace(ctx context.Context, fn *syntax.FuncDecl, name 
 		// on where there is no caller.
 		r.ctl = controlNone
 	}
+	// One shell ends a fatal error at the call of a keyword-defined body, the
+	// way it ends one at an `eval`: the status is the error's and the caller
+	// goes on. Asked only once there is an error to catch, so the common path
+	// asks nothing. See Semantics.FatalErrorEndsAtAKeywordFunctionCall.
+	if fn.Keyword && r.pendingFileError() &&
+		r.ask(r.sem().FatalErrorEndsAtAKeywordFunctionCall, "a fatal error ending at the call of a `function` body") {
+		r.takeFileError()
+	}
 	return err
 }
 

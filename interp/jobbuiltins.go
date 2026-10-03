@@ -1202,6 +1202,16 @@ func (r *Runner) findJobQuietly(spec string) (*Job, int) {
 			// subshellSelfLookup.
 			return nil, jobIsTheSubshell
 		}
+		if previous == emptyJobSlot && r.lapsedPrevious != 0 && r.markPrevious == r.lapsedPrevious &&
+			!r.slotHeld(r.markPrevious) {
+			// A `-` an inner command's number took on its way out names
+			// nothing once no command holds that number again: measured
+			// 2026-10-02 on zsh 5.9.2 (#5349), after `f() { eval "$1" }; f
+			// 'sleep 0 & wait'`, `jobs %-` and `{ jobs %- }` are `no previous
+			// job`. A `-` left on a number any other way is still `%-: no
+			// such job` — `f() /bin/sleep 0.3; /bin/sleep 0.1 & f; jobs %-`.
+			return nil, jobMissing
+		}
 		return r.markedLookup(previous)
 	}
 	n, ok := atoi(text)

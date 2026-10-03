@@ -1725,6 +1725,12 @@ type Diagnostics struct {
 	// 0 — and `-l`, `-u`, `-c` and `-t` are taken as attributes of the
 	// function rather than refused. So these are the letters that make a
 	// kind of variable a function cannot be, and not an arbitrary subset.
+	//
+	// **The order of the string is a rank.** Where a line writes more than
+	// one, the letter named is the one earliest here, whatever order the
+	// line wrote them in. Measured 2026-10-03 on bash 5.3.20: `typeset -fan
+	// a` and `typeset -f -A -n a` name `-n`, `-fAi` and `-fai` name `-i`,
+	// and `-faA` and `-fAa` both name `-A` — so `niAa`.
 	VariableOnlyLettersOnAFunctionLine map[string]string
 
 	// MarkingLettersUnderPlus and MarkingUnderPlusRefusal are a pair, and

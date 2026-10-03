@@ -4855,8 +4855,8 @@ func Diagnostics() interp.Diagnostics {
 		UnsetFunctionAndVariable: "unset: cannot simultaneously unset a function and a variable",
 		DeclareMakesNoFunction:   "%[1]s: cannot use `-f' to make functions",
 		VariableOnlyLettersOnAFunctionLine: map[string]string{
-			"declare": "aAin",
-			"typeset": "aAin",
+			"declare": "niAa",
+			"typeset": "niAa",
 		},
 		UnimplementedOptionLetters: map[string]string{
 			// `set` letters bash has and this shell does not: -b job

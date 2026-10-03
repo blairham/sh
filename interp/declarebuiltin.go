@@ -1049,11 +1049,18 @@ func (r *Runner) refuseAFunctionLineLetter(name string, f declareFlags, rest []s
 // on a line that names functions — see
 // Diagnostics.VariableOnlyLettersOnAFunctionLine for the measurement.
 //
-// The first such letter the line wrote under a minus, in the order it was
-// written: `declare -f -i -a f` names `-i`. Operands are required, and a `-p`
+// Which letter is named when the line wrote more than one is the table's
+// order and not the line's — see refuseAVariableOnlyLetterByRank. Operands are required, and a `-p`
 // makes the line a listing again, which is measured — `declare -f -a` alone
 // and `declare -f -p -a f` are both 0.
 func (r *Runner) refuseAVariableOnlyLetter(name string, f declareFlags, rest []string) int {
+	// The letter is asked about ahead of the `=` an operand carries, which
+	// is measured: on bash 5.3.20 `typeset -fi a=1` is `-i: invalid option`
+	// and `typeset -fl a=1`, whose letter a function can carry, is the
+	// sentence about making functions.
+	if code := r.refuseAVariableOnlyLetterByRank(name, f, rest); code != 0 {
+		return code
+	}
 	if w := r.diag().DeclareMakesNoFunction; w != "" && (f.function || f.funcNames) &&
 		!f.functionOff && !f.funcNamesOff && !f.print {
 		for _, operand := range rest {
@@ -1063,15 +1070,25 @@ func (r *Runner) refuseAVariableOnlyLetter(name string, f declareFlags, rest []s
 			}
 		}
 	}
+	return 0
+}
+
+// refuseAVariableOnlyLetterByRank names the variable-only letter the line
+// wrote under a minus, picking by the table's own order rather than by the
+// order the line wrote them in. See
+// Diagnostics.VariableOnlyLettersOnAFunctionLine.
+func (r *Runner) refuseAVariableOnlyLetterByRank(name string, f declareFlags, rest []string) int {
 	refused := r.diag().VariableOnlyLettersOnAFunctionLine[name]
 	if refused == "" || (!f.function && !f.funcNames) || f.functionOff || f.funcNamesOff ||
 		f.print || len(rest) == 0 {
 		return 0
 	}
-	for i, c := range f.letters {
-		if strings.ContainsRune(refused, c) && i < len(f.letterSigns) && f.letterSigns[i] != '+' {
-			r.complainAboutOption(name, "%s: -%c: invalid option\n", r.builtinComplaintName(name), c)
-			return 1
+	for _, c := range refused {
+		for i, w := range f.letters {
+			if w == c && i < len(f.letterSigns) && f.letterSigns[i] != '+' {
+				r.complainAboutOption(name, "%s: -%c: invalid option\n", r.builtinComplaintName(name), c)
+				return 1
+			}
 		}
 	}
 	return 0

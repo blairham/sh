@@ -2307,6 +2307,8 @@ func Semantics() interp.Semantics {
 	s.BraceRangeStepPadsTheRange = interp.No
 	s.BraceBodyIsACharacterClass = interp.No
 	s.ZeroSubscriptIsTheFirstElement = interp.No
+	// ksh93u+ brings the name back plain after `unset`, the shell's own or not; see the axis.
+	s.UnsetKeepsTheShellsOwnAttributes = interp.No
 	s.BraceRangeStepSignHonored = interp.Yes
 	s.BraceRangeNegativeStepReverses = interp.No
 	// It agrees with zsh on the one thing bash does not do at all: a

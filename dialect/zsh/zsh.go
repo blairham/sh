@@ -3058,6 +3058,8 @@ func Semantics() interp.Semantics {
 	s.BraceRangeStepPadsTheRange = interp.Yes
 	s.BraceBodyIsACharacterClass = interp.No
 	s.ZeroSubscriptIsTheFirstElement = interp.No
+	// zsh 5.9.2 keeps the export and type letters of its own parameters through `unset`; see the axis for the table.
+	s.UnsetKeepsTheShellsOwnAttributes = interp.Yes
 	s.BraceRangeStepSignHonored = interp.No
 	s.BraceRangeNegativeStepReverses = interp.Yes
 	// And the endpoints are read after the expansions in them: `n=3;

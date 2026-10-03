@@ -669,6 +669,8 @@ func Semantics() interp.Semantics {
 	// No rather than unmeasured.
 	s.BraceBodyIsACharacterClass = interp.No
 	s.ZeroSubscriptIsTheFirstElement = interp.No
+	// BusyBox ash 1.37.0 keeps the export letter of its own parameters (`PS1`, `IFS`, `LINENO`, `OPTIND`) through `unset`; see the axis.
+	s.UnsetKeepsTheShellsOwnAttributes = interp.Yes
 	// unanswered BraceRangeStepPadsTheRange: with no braces to expand there
 	// is no range to write a step in. Measured in the pinned alpine image —
 	// `echo {1..5..01}` is the six characters `{1..5..01}` — which is the

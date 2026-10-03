@@ -18820,6 +18820,42 @@ type Semantics struct {
 	// ordinary variable, which is the reading four of the five hold.
 	AssignmentRestoresAnUnsetProducedParameter Answer
 
+	// UnsetKeepsTheShellsOwnAttributes decides whether `unset` on a parameter
+	// the shell owns takes its attributes with its value: the export letter
+	// and the type letters. If they stay, a later assignment brings the name
+	// back as the shell's own parameter it was, exported and typed.
+	//
+	// For a name a script made, the attributes go with the value everywhere
+	// (see Runner.clearAttributes). Only the shell's own parameters split.
+	// Measured 2026-10-03 under `env -i PATH=/usr/bin:/bin`, `export NAME=5;
+	// unset NAME; NAME=7`, and then asking a child's environment:
+	//
+	//	                         SHLVL HOME HISTSIZE PS1 IFS LINENO FOO
+	//	zsh 5.9.2                1     1    1        1   1   (ro)   0
+	//	dash 0.5.12              0     0    0        1   1   1      0
+	//	BusyBox ash 1.37.0       0     0    0        1   1   1      0
+	//	bash 5.3.20, bash 3.2    0     0    0        0   0   0      0
+	//	ksh93u+ 2012-08-01       0     0    0        0   0   0      0
+	//
+	// Each shell keeps the letter for the names *it* owns and for no
+	// others. `FOO` is the control in every column, and dash and ash differ
+	// from zsh only in which names are their own. In zsh the type letters
+	// stay as well: `typeset -x HISTSIZE; unset HISTSIZE; HISTSIZE=3+4` is
+	// `7` at `integer-export-special`. While the name is unset, nothing
+	// shows: no environment entry, `${+SHLVL}` 0, and `${(t)SHLVL}` empty.
+	//
+	// The keyed noun is the *shell's own*, which is what a dialect renders as
+	// `special` (ParameterAttributes.Provided). Holding the export letter
+	// fixed, `HOME` (special) keeps it in zsh and `LOGNAME` (an ordinary
+	// exported name) does not. Holding the name fixed, `typeset +x SHLVL` is
+	// not exported again after the assignment. So what is kept is the
+	// attribute the name had, and nothing is added.
+	//
+	// Asked only for a parameter the shell owns, because for any other name
+	// every column agrees. Yes keeps the attributes; No is bash and ksh93,
+	// where the name comes back plain.
+	UnsetKeepsTheShellsOwnAttributes Answer
+
 	// ArrayScalarIsTheWholeArray decides what a plain `$a` gives when `a` is
 	// an array: zsh says every element joined by a space, and bash and ksh93
 	// say the first element alone. dash has no arrays, which is why the axis

@@ -3439,9 +3439,17 @@ func (r *Runner) unsetName(name string) int {
 	// what drops it — see the `shellOwn` deletion in unsetOneName's own
 	// branch above (#4999).
 	ownAgain := r.pairHalfKeepsItsMark(name)
+	keep, wasExported := r.unsetKeepsTheAttributes(name)
 	r.unsetOneName(name)
+	r.keepingAttributesOf = ""
 	if ownAgain {
 		r.MarkShellOwnParameter(name)
+	}
+	if keep && wasExported {
+		// The letter stays on a name that is gone. The environment has no
+		// entry for it until a value comes back, and the assignment that
+		// brings one back finds the name already exported.
+		r.exported[name] = true
 	}
 	// And a local of the scope that is *running* is left declared where the
 	// column says so — the value and the letters go, the shadow stays, and
@@ -3637,6 +3645,11 @@ func (r *Runner) unsetOneName(name string) {
 // shell has, and the associative attribute *is* the table, so deleting the
 // table is what takes the attribute off.
 func (r *Runner) clearAttributes(name string) {
+	if r.keepingAttributesOf == name {
+		// The shell's own parameter, in a dialect where unset takes only
+		// its value. See Semantics.UnsetKeepsTheShellsOwnAttributes.
+		return
+	}
 	if r.isWindowSizeParameter(name) {
 		// Except for a name the *shell* is, whose attributes are not a
 		// script's to lose. Measured on zsh 5.9.2: `unset COLUMNS` leaves

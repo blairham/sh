@@ -6064,6 +6064,36 @@ already promised.
 Corpus: `special/unset-then-assign-a-produced-parameter` and
 `special/unset-then-assign-lineno`.
 
+## `unset` on the shell's own parameter: does it keep its attributes?
+
+The section above is about a *produced* value. This one is about the
+attributes a parameter of the shell's own carries, its export letter and its
+type letters, and about whether `unset` takes them as well as the value. For
+a name a script made, every shell takes them. For the shell's own
+parameters, the shells split. Measured 2026-10-03 under
+`env -i PATH=/usr/bin:/bin`: `export NAME=5; unset NAME; NAME=7`, and then
+what a child's environment holds:
+
+| | `SHLVL` | `HOME` | `HISTSIZE` | `PS1` | `IFS` | `LINENO` | `FOO` |
+|---|---|---|---|---|---|---|---|
+| zsh 5.9.2 | 1 | 1 | 1 | 1 | 1 | read-only | 0 |
+| dash 0.5.12 | 0 | 0 | 0 | 1 | 1 | 1 | 0 |
+| BusyBox ash 1.37.0 | 0 | 0 | 0 | 1 | 1 | 1 | 0 |
+| bash 5.3.20, 3.2 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+| ksh93u+ | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+
+The difference between zsh and dash or ash is only which names are their
+own. zsh keeps the type letters too: `HISTSIZE=3+4` after the `unset` is `7`
+at `integer-export-special`. While the name is unset, nothing of it shows.
+
+So it is `Semantics.UnsetKeepsTheShellsOwnAttributes`: **yes** for zsh, dash
+and BusyBox ash, and **no** for bash and ksh93. It is asked only for a
+parameter the shell owns. `LINENO` is the name this shell produces in every
+dialect, and it is how the dash and ash columns reach the axis. dash and
+ash's other names of their own (`PS1`, `IFS`, `OPTIND`) are not marked as
+the shell's own here, so they come back plain. A D04parameter chunk
+turned on this axis (#5151).
+
 ## `[[ -v a[@] ]]` is not `${a[@]+s}` under another operator
 
 Measured 2026-09-18, `env -i PATH=/usr/bin:/bin LC_ALL=C` with a scratch HOME,

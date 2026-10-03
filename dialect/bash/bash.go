@@ -1764,6 +1764,8 @@ func Semantics() interp.Semantics {
 	s.BraceRangeStepPadsTheRange = interp.No
 	s.BraceBodyIsACharacterClass = interp.No
 	s.ZeroSubscriptIsTheFirstElement = interp.No
+	// bash 5.3.20 and 3.2 bring the name back plain after `unset`, the shell's own or not; see the axis.
+	s.UnsetKeepsTheShellsOwnAttributes = interp.No
 	s.BraceRangeStepSignHonored = interp.No
 	s.BraceRangeNegativeStepReverses = interp.No
 	// Braces finish before parameters begin, so a range cannot be built

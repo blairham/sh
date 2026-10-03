@@ -5,7 +5,6 @@ package interp
 
 import (
 	"path/filepath"
-	"strconv"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -157,8 +156,8 @@ func scanOneModifier(text string, wide bool) (seg, rest string, more bool) {
 	case len(text) > 1 && text[0] == 'f':
 		i = 1
 	case len(text) > 2 && text[0] == 'F':
-		if end := strings.IndexByte(text[2:], text[1]); end >= 0 {
-			i = 2 + end + 1
+		if count, _, ok := repeatCount(text); ok {
+			i = 2 + len(count) + 1
 		}
 	}
 	if i+1 < len(text) && text[i] == 'g' {
@@ -263,7 +262,13 @@ func (r *Runner) applyModifiers(value string, segs []string, e *syntax.ParamExpr
 // and it changes the answer only for `s` and `&`, where it means every
 // occurrence instead of the first.
 func (r *Runner) applyModifierSegment(value, seg string, e *syntax.ParamExpr) (string, bool) {
-	if times, rest, ok := modifierRepeat(seg); ok {
+	if times, rest, ok := r.modifierRepeat(seg); ok {
+		if rest == "" {
+			// A repetition with nothing to repeat names its own letter:
+			// `${f:F:1:}` and `${f:F(2):t}` are `unrecognized modifier `F'`.
+			r.refuseModifier(e, seg[:1])
+			return "", false
+		}
 		return r.repeatModifier(value, rest, times, func(v, seg string) (string, bool) {
 			return r.applyModifierSegment(v, seg, e)
 		})
@@ -646,23 +651,52 @@ func (r *Runner) modifierCommandPath(value string) string {
 // `f`. Measured 2026-10-02 on zsh 5.9.2: with `x=aaa`, `${x:fs/a/b/}` is
 // `bbb`, `${x:F:2:s/a/b/}` is `bba` and `${x:fu}` is `AAA`; `abab` under
 // `:fs/ab/b/` is `bb`, and `a/b/c` under `:fh` is `.` (#5155).
-func modifierRepeat(seg string) (times int, rest string, ok bool) {
+//
+// The count is an expression and its delimiters pair the way a flag's
+// argument's do: measured 2026-10-02 on zsh 5.9.2 with `f=/one/two/three/four`,
+// `${f:F.1.h}`, `${f:F(3)h}`, `${f:F<4>h}` and `${f:F{5}h}` are `/one/two/three`,
+// `/one`, `/` and `/`, `${f:F:1+1:h}` is `/one/two` and `${f:F:0:h}` is the
+// value unchanged, while one that does not evaluate is no repetition at all
+// (#5151).
+func (r *Runner) modifierRepeat(seg string) (times int, rest string, ok bool) {
 	switch {
 	case len(seg) > 1 && seg[0] == 'f':
 		return -1, seg[1:], true
 	case len(seg) > 2 && seg[0] == 'F':
-		delim := seg[1]
-		end := strings.IndexByte(seg[2:], delim)
-		if end < 0 {
+		count, after, closed := repeatCount(seg)
+		if !closed {
 			return 0, "", false
 		}
-		n, err := strconv.Atoi(seg[2 : 2+end])
-		if err != nil || n < 0 {
+		n, err := r.expressionValue(count)
+		if err != nil {
 			return 0, "", false
 		}
-		return n, seg[2+end+1:], true
+		// A negative count is its size: `${f:F:-2:h}` is `/one/two`.
+		return max(n, -n), after, true
 	}
 	return 0, "", false
+}
+
+// repeatCount splits `F<d>count<d>rest` at the delimiter that closes the
+// count, which is the partner of an opening bracket and the same byte
+// otherwise.
+func repeatCount(seg string) (count, rest string, ok bool) {
+	closing := seg[1]
+	switch closing {
+	case '(':
+		closing = ')'
+	case '[':
+		closing = ']'
+	case '{':
+		closing = '}'
+	case '<':
+		closing = '>'
+	}
+	end := strings.IndexByte(seg[2:], closing)
+	if end < 0 {
+		return "", "", false
+	}
+	return seg[2 : 2+end], seg[2+end+1:], true
 }
 
 // maxModifierRepeats bounds `f` over a modifier that never stops changing its

@@ -93,6 +93,11 @@ var signalNumbers = func() map[string]string {
 type signalState struct {
 	mu    sync.Mutex
 	traps map[string]string
+	// origins is where each self-raised arrival came from, a queue per
+	// condition in the order they were raised: a TRAP function's return
+	// interrupts the shell with a status that depends on it. See
+	// interruptByATrapFunction.
+	origins map[string][]trapOrigin
 	// ch is where the runtime forwards a signal that came from outside this
 	// process. Allocated with the state rather than on the first trap, and
 	// buffered so a burst is not lost between commands: a builtin blocked in
@@ -676,6 +681,10 @@ func (r *Runner) selfSignaled(name string) {
 	s := r.sigs()
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if s.origins == nil {
+		s.origins = map[string][]trapOrigin{}
+	}
+	s.origins[name] = append(s.origins[name], r.selfSignalOrigin())
 	if held {
 		// Not between commands: this one waits for the shell to read more of
 		// its program or to finish waiting for a child. See
@@ -1111,17 +1120,32 @@ func (r *Runner) runPendingTraps(ctx context.Context) {
 		s := r.sigs()
 		s.mu.Lock()
 		body, ok := s.traps[name]
+		origin := originElsewhere
+		if q := s.origins[name]; len(q) > 0 {
+			origin, s.origins[name] = q[0], q[1:]
+		}
 		s.mu.Unlock()
 		if !ok || body == "" {
 			continue
 		}
-		r.runTrapHandler(ctx, name, body)
+		r.runTrapHandlerFrom(ctx, name, body, origin)
+		if r.trapInterrupt {
+			// The rest of what arrived waits for nothing: the shell is
+			// unwinding.
+			return
+		}
 	}
 }
 
 // runTrapHandler runs one handler body, with what the interrupted script can
 // see put back around it.
 func (r *Runner) runTrapHandler(ctx context.Context, cond, body string) {
+	r.runTrapHandlerFrom(ctx, cond, body, originElsewhere)
+}
+
+// runTrapHandlerFrom is runTrapHandler told where the arrival came from.
+func (r *Runner) runTrapHandlerFrom(ctx context.Context, cond, body string, origin trapOrigin) {
+	fname := r.trapFuncs[cond]
 	outer := r.status
 	if r.ask(r.sem().SignalHandlerSeesEarlierStatus, "the status a signal handler sees") {
 		r.status = r.statusBefore
@@ -1137,11 +1161,15 @@ func (r *Runner) runTrapHandler(ctx context.Context, cond, body string) {
 	r.trapEntryStatus, r.inATrapAction, r.trapActionOwnBody = outer, true, true
 	r.gaveUpOverAnUnsetParameter = false
 	r.runTrapBody(ctx, cond, body)
+	returned, handlerStatus := r.callEndedOnAReturn && r.ctl == controlNone, r.status
 	r.handlerTakesItsError(cond)
 	r.trapEntryStatus, r.inATrapAction, r.trapActionOwnBody = outerTrap, outerIn, outerOwn
 	if r.ctl == controlNone {
 		r.ctl = ctl
 		r.status = outer
+		if fname != "" && returned && handlerStatus != 0 {
+			r.interruptByATrapFunction(handlerStatus, origin)
+		}
 	}
 }
 

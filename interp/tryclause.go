@@ -49,6 +49,17 @@ func (r *Runner) tryClause(ctx context.Context, c *syntax.TryClause) error {
 		if err := r.runList(ctx, c.Try); err != nil {
 			return err
 		}
+		if r.trapInterrupt && r.ctl == controlExit {
+			// Interrupted by a TRAP function: the always half runs, with
+			// the status the interruption left, and then fails. See
+			// trapinterrupt.go.
+			r.ctl = controlNone
+			err := r.runList(ctx, c.Always)
+			if r.ctl == controlNone {
+				r.ctl, r.status = controlExit, 1
+			}
+			return err
+		}
 		ctl, status, sig := r.ctl, r.status, r.diedOfSig
 		ctlDepth, abandon, abandonLine := r.ctlDepth, r.abandon, r.abandonLine
 		errexitStopped := r.errexitStopped

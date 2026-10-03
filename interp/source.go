@@ -424,6 +424,22 @@ const evalLinesAxis = "the lines of `eval`'s text continuing the caller's"
 // . empty.sh` both end at 0 in every shell in the panel, so an empty script
 // *clears* a failure rather than preserving it.
 func (r *Runner) runSourced(ctx context.Context, src string, s sourced) int {
+	st := r.runSourcedText(ctx, src, s)
+	if r.trapInterrupt && r.ctl == controlExit {
+		// Interrupted by a `TRAP<signal>` function's return. `eval` fails
+		// and the interruption goes on; `.` gives up its file, returns 126 and
+		// the script carries on. See interruptByATrapFunction.
+		if s.eval {
+			return 1
+		}
+		r.ctl, r.trapInterrupt = controlNone, false
+		return 126
+	}
+	return st
+}
+
+// runSourcedText is runSourced's work.
+func (r *Runner) runSourcedText(ctx context.Context, src string, s sourced) int {
 	// Code run by a builtin holds a job slot, where a command does: `eval`
 	// and `.` as much as a brace group. See Semantics.ACommandHoldsAJobSlot.
 	if release := r.holdACommandsJobSlot(true); release != nil {

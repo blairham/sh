@@ -262,7 +262,22 @@ func (r *Runner) signalListingName(name string) string {
 	return name
 }
 
-func biKill(r *Runner, _ context.Context, args []string) int {
+func biKill(r *Runner, ctx context.Context, args []string) int {
+	st := biKillSend(r, args)
+	if !r.inSubshell && r.ctl == controlNone {
+		// What the shell just sent itself is handled before `kill` returns,
+		// and so before the next command of an and-or list: measured
+		// 2026-10-02, `trap 'echo T' USR1; kill -USR1 $$ && echo a` writes T
+		// and then a in bash 5.3.20, bash 3.2.57, dash, ksh93u+, zsh 5.9.2
+		// and BusyBox ash (the pinned image) alike, where this shell wrote a
+		// first. The status is still kill's own, set as it returns (#5359).
+		r.runPendingTraps(ctx)
+	}
+	return st
+}
+
+// biKillSend is `kill`'s work, without what it sent itself being handled.
+func biKillSend(r *Runner, args []string) int {
 	r.forgetANumberNobodyHolds()
 	if len(args) == 0 {
 		return r.killReport(killUsage, "")

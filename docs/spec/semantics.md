@@ -8972,6 +8972,31 @@ mode`, `>/dev/null` included; and `hash name=path`, `hash -d name=path` and
 `dialect/zsh/restricted_test.go` holds the rows. dash and BusyBox ash are the
 two with no such letter and they refuse it outright, ending the input at 2.
 
+**A frozen name cannot be declared around, either.** The freeze rides the
+readonly machinery, and both zsh and ksh93 let a function's local shadow a
+readonly, so `f(){ local PATH=x }` once made a binding of its own and
+assigned it at 0. Both shells refuse it. Measured 2026-10-02, zsh 5.9.2
+under `-f` and ksh93u+ from a script file (#5485):
+
+| | zsh 5.9.2 | ksh93u+ |
+| --- | --- | --- |
+| `f(){ local PATH=x }; f` | `f:local: PATH: restricted`, script ends | `f: line 2: PATH: restricted`, f ends at 1 |
+| `f(){ local PATH }; f` | refused, ends | taken (`typeset PATH` in a `function`) |
+| `export PATH`, `readonly SHELL`, `typeset +x PATH`, `typeset -U PATH` | refused, ends | `export PATH` taken; letters are #5506 |
+| `typeset -g PATH` inside `f`, a bare `typeset PATH` listing | taken | taken |
+
+The valueless half is `Semantics.RestrictedFreezeRefusesAValuelessDeclaration`.
+That ksh93 ends only the function where this shell ends the script is not
+about the mode. It is the keyword function's scope, #5508.
+
+**zsh's mode takes a write into `>(cmd)`**, which the other two refuse: `print
+a > >(cat)` runs, and so do `>|`, `>!`, `<>` and a numbered `3>` over the same
+target, while `>>`, `&>`, `>&` and a target that only holds the path
+(`x=>(cat); print a > $x`) are still `writing redirection not allowed`.
+`Semantics.RestrictedRedirectTakesAProcessSubstitution` is the axis. bash's
+refusal names the substitution as written, `>(cat): restricted: cannot
+redirect output`, and not the descriptor path it expanded to.
+
 `Semantics.SetHasTheRestrictedLetter` is the axis, and it is deliberately one
 question about the letter **and** the mode rather than two. A dialect
 answering yes without the refusals behind it would take `set -r` at 0 and then

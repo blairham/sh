@@ -31,6 +31,8 @@ func TestRestrictedModeRefusesEveryDeclarationOfAFrozenName(t *testing.T) {
 		{on + "export PATH; print after", "zsh:export:1: PATH: restricted\n"},
 		{on + "readonly SHELL; print after", "zsh:readonly:1: SHELL: restricted\n"},
 		{on + "typeset +x PATH; print after", "zsh:typeset:1: PATH: restricted\n"},
+		{on + "typeset -U PATH; print after", "zsh:typeset:1: PATH: restricted\n"},
+		{on + "typeset -H SHELL; print after", "zsh:typeset:1: SHELL: restricted\n"},
 		// The controls: a name the mode did not freeze, `-g` reaching the
 		// global with no value, and a listing.
 		{on + "f(){ local HOME=x; print in }; f; print after", "in\nafter\n"},

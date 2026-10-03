@@ -108,7 +108,7 @@ const autoloadStubPrefix = "builtin autoload -X"
 //     (read a compiled `.zwc` file) are named as missing.
 //     Each is a thing this shell does not do, and a builtin that took the
 //     letter and dropped it would read as one that did.
-const autoloadUnimplemented = "dmtTwW"
+const autoloadUnimplemented = "mtTwW"
 
 func registerAutoload(r *interp.Runner) {
 	r.Register("autoload", autoloadBuiltin)
@@ -244,6 +244,16 @@ type autoloadOpts struct {
 	// strict is the `R` of the pair, which reports a name it cannot find at
 	// once where `-r` says nothing and leaves the search for the call.
 	strict bool
+	// orDefault is `-d`: a name given a directory falls back to `$fpath`
+	// when the file is not there. Measured 2026-10-02 on zsh 5.9.2 (#5148):
+	// `fpath=(.); autoload -dUz $PWD/extra/def; def` runs `./def` where
+	// the same line without the letter is `def: function definition file
+	// not found`. The stub records it as `c` — `autoload -dUz /x/def`
+	// lists `builtin autoload -XUzc /x` — so both letters set it.
+	orDefault bool
+	// byHand is a `-X` the script wrote inside a function of its own, as
+	// against the one a generated stub runs. See autoloadFileNotFound.
+	byHand bool
 }
 
 func autoloadBuiltin(r *interp.Runner, ctx context.Context, args []string) int {
@@ -298,11 +308,17 @@ func autoloadMark(r *interp.Runner, names []string, opts autoloadOpts) int {
 		// path is part of the stub: `autoload -r f` lists as
 		// `builtin autoload -X <dir>`, so the search has to have happened
 		// for there to be a directory to write. A plain declaration says
-		// "search at the call" instead, and a name declared with `-r` once
-		// and plainly afterwards must not keep answering from the first
-		// declaration's file.
+		// "search at the call" instead — for a name not already waiting, since one
+		// that is keeps the directory it was given. See autoloadMergeStub.
+		// A name already waiting keeps what it was given and gains what
+		// this line adds — its directory included, whichever way it got one.
+		// See autoloadMergeStub.
+		opts := opts
+		oldDir, waiting := autoloadMergeStub(r, name, &opts)
 		dir := ""
-		if absolute {
+		if waiting && oldDir != "" && !absolute {
+			dir = oldDir
+		} else if absolute {
 			autoloadRecordPath(r, name, file)
 			dir = dirOfFile
 		} else if opts.fixPath {
@@ -328,6 +344,87 @@ func autoloadMark(r *interp.Runner, names []string, opts autoloadOpts) int {
 		autoloadRecord(r, name)
 	}
 	return status
+}
+
+// functionsCopying is `functions` with its `-c OLD NEW`: NEW becomes a copy
+// of OLD, and an OLD still waiting to be loaded is loaded first, in place.
+// Measured 2026-10-02 on zsh 5.9.2 under `-f` (#5148):
+//
+//	functions -c tbc_auto nc        both list the file's body afterwards
+//	functions -c nosuch x           functions: no such function: nosuch, 1
+//	functions -c f, functions -c f a b   functions: -c: requires two arguments, 1
+//	functions -c f g                g replaced
+//	functions -c missing_stub x     missing_stub: function definition file
+//	                                not found, at the line, 1
+func functionsCopying(base interp.Builtin) interp.Builtin {
+	return func(r *interp.Runner, ctx context.Context, args []string) int {
+		if len(args) == 0 || args[0] != "-c" {
+			return base(r, ctx, args)
+		}
+		rest := args[1:]
+		if len(rest) != 2 {
+			r.Diagnosef("-c: requires two arguments\n")
+			return 1
+		}
+		from, to := rest[0], rest[1]
+		if autoloadPending(r, from) {
+			var opts autoloadOpts
+			dir, _ := autoloadMergeStub(r, from, &opts)
+			var dirs []string
+			if dir != "" {
+				dirs = []string{dir}
+			}
+			if code := autoloadResolveIn(r, from, dirs, opts, false); code != 0 {
+				return code
+			}
+		}
+		if !r.CopyFunction(from, to) {
+			r.Diagnosef("no such function: %s\n", from)
+			return 1
+		}
+		return 0
+	}
+}
+
+// autoloadMergeStub folds a pending stub's letters into opts and returns its
+// directory, for a name declared again while it waits. Measured 2026-10-02 on
+// zsh 5.9.2 (#5148):
+//
+//	autoload -Uz /p/spec; autoload spec       still -XUz /p, and loads from /p
+//	autoload -r def; autoload def             still -X /p
+//	autoload -Uz q; autoload -k q             -XUk — z and k replace each other
+//	autoload -Uz /p/spec2; autoload -r spec2  still -XUz /p
+//
+// so the letters accumulate, the style letter is the newest one written, and
+// a directory once given is not taken back by a line that gives none.
+func autoloadMergeStub(r *interp.Runner, name string, opts *autoloadOpts) (dir string, waiting bool) {
+	line, ok := autoloadStubLine(r, name)
+	if !ok {
+		return "", false
+	}
+	rest := strings.TrimPrefix(line, autoloadStubPrefix)
+	letters, word, _ := strings.Cut(rest, " ")
+	for _, c := range letters {
+		switch c {
+		case 'U':
+			opts.keepAliases = true
+		case 'z':
+			if !opts.kshStyle {
+				opts.zshParse = true
+			}
+		case 'k':
+			if !opts.zshParse {
+				opts.kshStyle = true
+			}
+		case 'c':
+			opts.orDefault = true
+		}
+	}
+	word = strings.TrimSpace(word)
+	if strings.HasPrefix(word, "'") && strings.HasSuffix(word, "'") && len(word) >= 2 {
+		word = strings.ReplaceAll(word[1:len(word)-1], `'\''`, "'")
+	}
+	return word, true
 }
 
 // autoloadFromDeclaration is `typeset -f` with the marking letters: this
@@ -405,6 +502,9 @@ func autoloadStub(opts autoloadOpts, dir string) string {
 	}
 	if opts.kshStyle {
 		body += "k"
+	}
+	if opts.orDefault {
+		body += "c"
 	}
 	if dir != "" {
 		body += " " + autoloadStubWord(dir)
@@ -514,6 +614,8 @@ func autoloadOptions(r *interp.Runner, args []string) (opts autoloadOpts, rest [
 				opts.zshParse = true
 			case letter == 'k':
 				opts.kshStyle = true
+			case letter == 'd' || letter == 'c':
+				opts.orDefault = true
 			case strings.IndexByte(autoloadUnimplemented, letter) >= 0:
 				r.Diagnosef("-%c is not implemented yet\n", letter)
 				return opts, nil, 1
@@ -622,7 +724,8 @@ func autoloadResolveNow(r *interp.Runner, ctx context.Context, opts autoloadOpts
 		if opts.kshStyle {
 			return autoloadKshStyle(r, ctx, name, names, opts, stub)
 		}
-		if code := autoloadResolveIn(r, name, names, opts.keepAliases, stub); code != 0 {
+		opts.byHand = !stub
+		if code := autoloadResolveIn(r, name, names, opts, stub); code != 0 {
 			return code
 		}
 		return autoloadRunResolved(r, ctx, name, stub)
@@ -922,10 +1025,10 @@ func autoloadEnclosingFunction(r *interp.Runner) (string, bool) {
 // a rule about stubs — `unsetopt function_argzero` turns it into the script's
 // own path and line. interp.Runner.LocatedAtTheCall carries both halves.
 //
-// Only the generated stub asks for it. A hand-written `builtin autoload -X`
-// inside a function of the script's own is not a frame the script cannot see,
-// and `+X NAME` is not a call at all — both are already byte-identical where
-// they stand, so both come through here with forCall false.
+// Only the generated stub asks for it. `+X NAME` is not a call at all and
+// comes through here with forCall false. A hand-written `builtin autoload -X`
+// inside a function of the script's own does not come here at all: zsh puts
+// that one at `(eval):1:` — see autoloadResolveIn (#5148).
 func autoloadFileNotFound(r *interp.Runner, name string, forCall bool) int {
 	report := func() {
 		r.DiagnoseAsTheShellf("%s: function definition file not found\n", name)
@@ -946,25 +1049,46 @@ func autoloadFileNotFound(r *interp.Runner, name string, forCall bool) int {
 // is a search that goes on rather than a failure, which is what makes a
 // stale entry harmless.
 func autoloadResolve(r *interp.Runner, name string, keepAliases bool) int {
-	return autoloadResolveIn(r, name, nil, keepAliases, false)
+	return autoloadResolveIn(r, name, nil, autoloadOpts{keepAliases: keepAliases}, false)
 }
 
 // autoloadResolveIn is that with the directory a `-X` was given, where it was
 // given one: the operand replaces the search rather than joining it, so a
 // name that is not in that one directory is not found however much of
 // `$fpath` would have had it.
-func autoloadResolveIn(r *interp.Runner, name string, dirs []string, keepAliases, forCall bool) int {
+func autoloadResolveIn(r *interp.Runner, name string, dirs []string, opts autoloadOpts, forCall bool) int {
+	keepAliases := opts.keepAliases
+	notFound := func() int {
+		if opts.byHand {
+			// The script's own `-X` is reported as text the shell evaluated,
+			// at its first line, wherever the line stood: measured
+			// 2026-10-02 on zsh 5.9.2 from `-c` and from a script file,
+			// `cod() { print hi; autoload -X }; cod` is `(eval):1: cod:
+			// function definition file not found` (#5148).
+			_, _ = fmt.Fprintf(r.Stderr, "(eval):1: %s: function definition file not found\n", name)
+			return 1
+		}
+		return autoloadFileNotFound(r, name, forCall)
+	}
 	if len(dirs) == 1 {
 		path := filepath.Join(dirs[0], name)
 		body, err := r.ReadFileGated(path)
-		if err != nil {
-			return autoloadFileNotFound(r, name, forCall)
+		if err == nil {
+			return autoloadDefineFile(r, name, path, string(body), keepAliases)
 		}
-		return autoloadDefineFile(r, name, path, string(body), keepAliases)
+		if !opts.orDefault {
+			return notFound()
+		}
+		// `-d`: not there, so `$fpath` after all. See autoloadOpts.orDefault.
+		path, text, ok := autoloadLocate(r, name)
+		if !ok {
+			return notFound()
+		}
+		return autoloadDefineFile(r, name, path, text, keepAliases)
 	}
 	path, body, ok := autoloadFile(r, name)
 	if !ok {
-		return autoloadFileNotFound(r, name, forCall)
+		return notFound()
 	}
 	return autoloadDefineFile(r, name, path, body, keepAliases)
 }
@@ -985,6 +1109,9 @@ func autoloadDefineFile(r *interp.Runner, name, path, body string, keepAliases b
 	if inner, lone := autoloadLoneDefinition(name, body); lone {
 		body = inner
 	}
+	if autoloadBodyRefused(r, name, body) {
+		return 1
+	}
 	if !zshDefineFromText(r, name, body, path, keepAliases) {
 		// The file is not something this shell can read as a body. Its own
 		// complaint rather than "not found", because the file *was* found
@@ -993,6 +1120,42 @@ func autoloadDefineFile(r *interp.Runner, name, path, body string, keepAliases b
 		return 1
 	}
 	return 0
+}
+
+// autoloadBodyRefused reads a function file's text as the shell reads it now
+// and, where it will not parse, says so as the parser does, located at the
+// function's name and the file's own line. Measured 2026-10-02 on zsh 5.9.2
+// under `-f` (#5148):
+//
+//	if true; then      ff:2: parse error near `\n'
+//	echo a )           ff:1: parse error near `)'
+//	echo ok, }, echo b ff:2: parse error near `}'
+//	echo $(            ff:2: parse error near `$('
+//
+// and under `setopt ignorebraces` a file of `{ echo OK }` is `ff:3: parse
+// error near `\n'`, which is why the grammar asked is the runner's and not
+// the dialect's.
+func autoloadBodyRefused(r *interp.Runner, name, body string) bool {
+	d := Dialect()
+	if r.Dialect != nil {
+		d = *r.Dialect
+	}
+	p := syntax.NewParser(body, r.ParsingDialect(d))
+	p.Parse()
+	err := p.Err()
+	if err == nil {
+		return false
+	}
+	diag := Diagnostics()
+	if r.Diagnostics != nil {
+		diag = *r.Diagnostics
+	}
+	line := diag.ParseFailureLine(err)
+	if line < 1 {
+		line = 1
+	}
+	_, _ = fmt.Fprintf(r.Stderr, "%s:%d: %s\n", name, line, diag.ParseFailure(err))
+	return true
 }
 
 // autoloadSubstitutionSwallowsTheCloser reports a `$( … )` in an autoload

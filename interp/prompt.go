@@ -2061,8 +2061,11 @@ func (r *Runner) promptField(f PromptField, arg string, braced bool) (string, bo
 	case FieldTab:
 		return "\t", true
 	case FieldSourceFile:
+		// Counted the way the directory's codes are: measured 2026-10-02 on
+		// zsh 5.9.2, `%1x` in a file read as /a/b/px.zsh is `px.zsh` and
+		// `%2x` is `b/px.zsh` (#5148).
 		if fl := r.currentFile(); fl != "" {
-			return fl, true
+			return countedComponents(fl, arg, 0), true
 		}
 		return r.name(), true
 	case FieldUnitName:

@@ -5769,6 +5769,14 @@ func (r *Runner) locationNameAndLine(functionCounts bool) (name string, line int
 	// advances in one dialect, and a complaint it makes carries that line.
 	at := r.lineNow()
 	if d.LocationNamesTheEvalText && d.EvalSourceName != "" && r.locationIsInsideEvalText() {
+		if r.locationNamesInstead != "" {
+			// The override wins over the text's own name too: measured
+			// 2026-10-02 on zsh 5.9.2, `FUNCNEST=0; fn() { true }; fn` on
+			// line 4 of an `eval` is `fn:4: maximum nested function level
+			// reached` and not `(eval):4:`, and the same inside a function's
+			// `eval` names the callee at the eval text's own line (#5148).
+			return r.locationNamesInstead, at, false
+		}
 		return d.EvalSourceName, at, false
 	}
 	if functionCounts && d.LocationNamesTheFunction && r.locationIsInsideAFunctionBody() {

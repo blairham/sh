@@ -1016,6 +1016,29 @@ func (r *Runner) SetFunctionFile(name, file string) {
 	r.recordFunctionOrigin(name, o)
 }
 
+// CopyFunction defines to as a copy of from, body and origin alike, and
+// reports whether from was a function. The copy is a function of its own:
+// `$0` and `%N` name it, while `%x` and `%I` still name the file the body was
+// read from — measured 2026-10-02 on zsh 5.9.2's `functions -c`, where a copy
+// of an autoloaded `line_info` writes `line_info:2` for `%1x:%I` and
+// `change_output:2` for `%N:%i` (#5148).
+func (r *Runner) CopyFunction(from, to string) bool {
+	fn, ok := r.funcs[from]
+	if !ok || fn == nil {
+		return false
+	}
+	cp := *fn
+	cp.Name = to
+	if r.funcs == nil {
+		r.funcs = map[string]*syntax.FuncDecl{}
+	}
+	r.funcs[to] = &cp
+	if o, ok := r.funcOrigins[from]; ok {
+		r.recordFunctionOrigin(to, o)
+	}
+	return true
+}
+
 // FunctionText is a function's definition written back the way this shell
 // prints one, for a builtin that shows a body rather than naming it.
 func (r *Runner) FunctionText(name string) (string, bool) {

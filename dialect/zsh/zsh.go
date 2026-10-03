@@ -5804,7 +5804,7 @@ func Diagnostics() interp.Diagnostics {
 			// `-t` and `-T` have left this list: they mark a function for
 			// tracing and are implemented, in FunctionTraceLetters above
 			// (#5067).
-			"functions": "ckz",
+			"functions": "kz",
 		},
 		// `u` alone, and that is the measurement rather than an omission:
 		// `functions +u` and `typeset +fu` are `invalid option(s)` at 1
@@ -7338,7 +7338,7 @@ func Apply(r *interp.Runner) {
 	// See interp/rehashbuiltin.go (#3109).
 	r.Register("rehash", interp.RehashBuiltin())
 	r.Register("unhash", interp.UnhashBuiltin())
-	r.Register("functions", interp.FunctionsBuiltin())
+	r.Register("functions", functionsCopying(interp.FunctionsBuiltin()))
 	r.Register("unfunction", interp.UnfunctionBuiltin())
 	if typeset, ok := r.Builtin("typeset"); ok {
 		r.Register("declare", typeset)

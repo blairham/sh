@@ -3617,8 +3617,8 @@ echo "reached-after st=$?"`,
 	},
 	{
 		ID: "cd/two-operands-rewrite-the-first-occurrence", Category: "cd",
-		Snippet: `mkdir -p q/w/q/e; cd q/w/q/e; cd w Z; echo "st=$?"; pwd`,
-		Why:     "which occurrence the rewrite replaces, measured rather than assumed: the first in the *string*, so the path rewritten is `…/q/Z/q/e` and not `…/q/w/q/Z`. The directory does not exist, which is the point — what the shells name in the failure is the rewritten path, and that is the only way to read the rule off the answer",
+		Snippet: `mkdir -p q/w@/q/e; cd q/w@/q/e; cd w@ Z; echo "st=$?"; pwd`,
+		Why:     "which occurrence the rewrite replaces, measured rather than assumed: the first in the *string*, so the path rewritten is `…/q/Z/q/e` and not `…/q/w@/q/Z`. The directory does not exist, which is the point — what the shells name in the failure is the rewritten path, and that is the only way to read the rule off the answer. The operand carries an `@` because the first occurrence is searched for in the whole of `$PWD`, scratch prefix included: spelled `w`, it matched a `w` in a CI runner's `/var/folders/…` path and rewrote that instead, and the case answered differently on every machine whose temporary directory happened to hold the letter (#5710). No temporary-directory name holds an `@`",
 	},
 	{
 		ID: "cd/three-operands", Category: "cd",

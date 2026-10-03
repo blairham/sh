@@ -38589,49 +38589,49 @@
     },
     "cd/two-operands-rewrite-the-first-occurrence": {
       "ash": {
-        "Stdout": "st=2~\u003ctmp\u003e/q/w/q/e",
-        "Stderr": "\u003cshell\u003e: cd: line 0: can't cd to w: No such file or directory",
+        "Stdout": "st=2~\u003ctmp\u003e/q/w@/q/e",
+        "Stderr": "\u003cshell\u003e: cd: line 0: can't cd to w@: No such file or directory",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false
       },
       "bash": {
-        "Stdout": "st=2~/private\u003ctmp\u003e/q/w/q/e",
+        "Stdout": "st=2~/private\u003ctmp\u003e/q/w@/q/e",
         "Stderr": "\u003cshell\u003e: line 1: cd: too many arguments",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false
       },
       "bash-as-sh": {
-        "Stdout": "st=2~/private\u003ctmp\u003e/q/w/q/e",
+        "Stdout": "st=2~/private\u003ctmp\u003e/q/w@/q/e",
         "Stderr": "\u003cshell\u003e: line 1: cd: too many arguments",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false
       },
       "bash32": {
-        "Stdout": "st=1~/private\u003ctmp\u003e/q/w/q/e",
-        "Stderr": "\u003cshell\u003e: line 0: cd: w: No such file or directory",
+        "Stdout": "st=1~/private\u003ctmp\u003e/q/w@/q/e",
+        "Stderr": "\u003cshell\u003e: line 0: cd: w@: No such file or directory",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false
       },
       "dash": {
-        "Stdout": "st=2~/private\u003ctmp\u003e/q/w/q/e",
-        "Stderr": "\u003cshell\u003e: 1: cd: can't cd to w",
+        "Stdout": "st=2~/private\u003ctmp\u003e/q/w@/q/e",
+        "Stderr": "\u003cshell\u003e: 1: cd: can't cd to w@",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false
       },
       "ksh93": {
-        "Stdout": "st=1~\u003ctmp\u003e/q/w/q/e",
+        "Stdout": "st=1~\u003ctmp\u003e/q/w@/q/e",
         "Stderr": "\u003cshell\u003e: cd: \u003ctmp\u003e/q/Z/q/e: [No such file or directory]",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false
       },
       "zsh": {
-        "Stdout": "st=1~/private\u003ctmp\u003e/q/w/q/e",
+        "Stdout": "st=1~/private\u003ctmp\u003e/q/w@/q/e",
         "Stderr": "\u003cshell\u003e:cd:1: no such file or directory: /private\u003ctmp\u003e/q/Z/q/e",
         "Status": 0,
         "Signal": 0,

@@ -1956,7 +1956,14 @@ func (r *Runner) expandAt(s syntax.Span, sp splitPolicy, head bool) ([]string, l
 	// is going to read would be answered as `$a[@]` rather than as `$a`
 	// followed by three characters. See baresubscript.go.
 	s, tail := r.unreadBareSubscript(r.indirectionReadAsTheSubscriptFlag(s))
-	if parts, ok := r.expandAtList(s, sp, head); ok {
+	savedLive := r.liveMarksFor
+	if sp != splitNever {
+		// Only where the fields are going on to be words; see liveMark.
+		r.liveMarksFor = s.Param
+	}
+	parts, ok := r.expandAtList(s, sp, head)
+	r.liveMarksFor = savedLive
+	if ok {
 		marks := listMarks{nulls: r.listNulls, edges: r.listEdges}
 		r.listNulls, r.listEdges = nil, listEdges{}
 		if r.substitutedWordSplit == s.Param {
@@ -3022,7 +3029,10 @@ func (r *Runner) expandSpan(s syntax.Span, sp splitPolicy, head bool) (text stri
 		// parameter behind and hands the brackets back as text. See
 		// baresubscript.go.
 		s, tail := r.unreadBareSubscript(r.indirectionReadAsTheSubscriptFlag(s))
+		savedLive := r.liveMarksFor
+		r.liveMarksFor = s.Param
 		v := r.expandParam(s.Param)
+		r.liveMarksFor = savedLive
 		text, split := r.expansionResult(v, unquoted, r.globSubstAnswer(s),
 			splitFlagAnswer(s, sp, r.sem().SplitParamExpansion),
 			"splitting an unquoted parameter expansion")
@@ -3132,7 +3142,7 @@ func (r *Runner) arithSpanValue(s syntax.Span) (string, bool) {
 // questions, and zsh answers no to both while everything else answers yes.
 func (r *Runner) expansionResult(v string, unquoted bool, glob, split Answer, axis string) (string, bool) {
 	if !unquoted {
-		return globEscape(v), false
+		return globEscape(stripLiveMarks(v)), false
 	}
 	// Both axes are asked only when the value could actually differ: a result
 	// with no separator in it is not split either way, and one with no
@@ -3155,6 +3165,11 @@ func (r *Runner) expansionResult(v string, unquoted bool, glob, split Answer, ax
 // copy is what would have kept #1222 alive for `${a[@]}` after the first was
 // fixed.
 func (r *Runner) escapeResult(v string, glob Answer) string {
+	if strings.Contains(v, liveMark) {
+		// A `:s` replacement's pattern characters, which stay live in a
+		// result that is otherwise text. See liveMark.
+		return escapeWithLiveMarks(v)
+	}
 	// The value's own backslashes are marked whatever the answer below is:
 	// they are not metacharacters, and no dialect disagrees about them.
 	//

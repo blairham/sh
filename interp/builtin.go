@@ -7872,6 +7872,13 @@ func biLocal(r *Runner, _ context.Context, args []string) (endStatus int) {
 		slot := ScalarParameter
 		if fresh {
 			slot = r.localSlotKind(name, f)
+			if r.localKeepsTheOuterValue(name) {
+				// A name whose local starts as the outer binding, value and
+				// attributes — a freeze among them, which then refuses this
+				// line's value. See Runner.MarkLocalKeepsTheOuterValue.
+				r.restoreTheOuterBinding(name)
+				r.restoreTheOuterFreeze(name)
+			}
 		}
 		if slot == IntegerParameter {
 			f.integer, f.base, f.baseNamed = true, 10, true

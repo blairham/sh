@@ -68,6 +68,16 @@ func markTheShellsOwnParameters(r *interp.Runner) {
 	// the shell's other integers start at 0 there (#5605).
 	r.MarkLocalKeepsTheOuterValue("HISTSIZE")
 	r.MarkLocalKeepsTheOuterValue("SAVEHIST")
+	// And PPID, whose local is the outer one frozen: `f(){ local PPID }` is
+	// the process's parent and `integer-local-readonly-special`, and `local
+	// PPID=5` is `read-only variable: PPID` (#5619).
+	r.MarkLocalKeepsTheOuterValue("PPID")
+	// The right prompt's indent is the shell's own integer once something
+	// sets it and absent until then: `${(t)ZLE_RPROMPT_INDENT}` is empty in a
+	// fresh shell and `integer-special` after `ZLE_RPROMPT_INDENT=2`, and a
+	// local of it is `integer-local-special` (#5619).
+	r.MarkShellOwnParameterWhileSet("ZLE_RPROMPT_INDENT")
+	r.SetIntegerParameter("ZLE_RPROMPT_INDENT", 10)
 	markTheProcessDepthAndIndex(r)
 	markTheDirectoryStack(r)
 }

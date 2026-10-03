@@ -645,6 +645,12 @@ func (r *Runner) declarableNames() []string {
 		// *compound* half out: a valueless `local -a q` keeps its kind and
 		// no scalar attribute, so the list this built dropped it while
 		// `declare -p q` wrote `declare -a q` from the same state (#1868).
+		if r.ownNameHoldingNothing(name) {
+			// A name the shell owns while set, holding nothing: its
+			// attributes are the slot's and no declaration of the script's.
+			delete(seen, name)
+			continue
+		}
 		if !r.removed[name] {
 			continue
 		}
@@ -778,7 +784,7 @@ func (r *Runner) declarePrintFiltered(names []string, form DeclarationListingFor
 			// having referred to it.
 			continue
 		}
-		if r.removedShellOwnIsStillAName(name) {
+		if r.removedShellOwnIsStillAName(name) || r.ownNameHoldingNothing(name) {
 			// A parameter of the shell's own that an `unset` removed: the
 			// name is still the shell's, nothing is left to print, and the
 			// listing writes nothing at 0 in the one column that tells this
@@ -1887,4 +1893,15 @@ func (r *Runner) declaredAndHoldingNothing(d declaration) bool {
 		return len(d.arr) == 0 && d.declaredOnly
 	}
 	return d.unset || !d.hasValue
+}
+
+// ownNameHoldingNothing reports whether a name is one the shell owns while it
+// holds a value and holds none now: a name the shell has, with nothing for a
+// listing to write. Measured 2026-10-03 on zsh 5.9.2 under `-f`, in a fresh
+// shell, `typeset -p TERM` and `typeset -p ZLE_RPROMPT_INDENT` are both
+// nothing at 0 — where a name nobody has is `no such variable` at 1 — and no
+// whole-table listing has a row for either (#5619). See
+// Runner.MarkShellOwnParameterWhileSet.
+func (r *Runner) ownNameHoldingNothing(name string) bool {
+	return r.shellOwnWhileSet[name] && !r.parameterExists(name)
 }

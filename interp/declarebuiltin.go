@@ -2119,6 +2119,13 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) (endSt
 		slot := ScalarParameter
 		if fresh {
 			slot = r.localSlotKind(name, df)
+			if r.localKeepsTheOuterValue(name) {
+				// A name whose local starts as the outer binding, value and
+				// attributes — a freeze among them, which then refuses this
+				// line's value. See Runner.MarkLocalKeepsTheOuterValue.
+				r.restoreTheOuterBinding(name)
+				r.restoreTheOuterFreeze(name)
+			}
 		}
 		if slot == IntegerParameter {
 			df.integer, df.base, df.baseNamed = true, 10, true

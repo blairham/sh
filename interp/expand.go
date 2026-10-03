@@ -185,7 +185,9 @@ func (r *Runner) expandWordFieldsTracked(w *syntax.Word, track bool) ([]string, 
 	// old one twice — and kept a magicequalsubst reading after the option
 	// went off (#5155).
 	w = spansCopiedForTildes(w)
-	r.expandTilde(w)
+	// How many bytes at the front of the first span the tilde wrote, which
+	// a word whose text splits does not split. See the loop below.
+	tildeLen := r.expandTildeLen(w)
 	// And the tildes a word that merely *looks* like an assignment gets in
 	// one column. Beside expandTilde because it is the other half of the same
 	// question — where in a word a `~` is eligible at all — and after it,
@@ -389,8 +391,23 @@ func (r *Runner) expandWordFieldsTracked(w *syntax.Word, track bool) ([]string, 
 		// that does write a closing field is zsh's, and there the split says
 		// so rather than this line having to know it: see
 		// TrailingSeparatorEndsAField and splitFieldsAskEdge.
+		// What a leading `~` became is not the word's own text and does not
+		// split with it. Measured 2026-10-02 on zsh 5.9.2 under `emulate -L
+		// sh` with `HOME='/a b'`: `${1:-~}` is the one field `/a b`, and
+		// `${1:-~/x y}` is `/a b/x` and `y` (#5151).
+		produced := ""
+		if substituted && i == 0 && tildeLen > 0 && tildeLen <= len(text) {
+			produced, text = text[:tildeLen], text[tildeLen:]
+		}
 		lead := leadingSeparatorEdge(text, nil, ifs, set)
 		fields, openEnd := r.splitFieldsAskEdge(text, nil, ifs, set)
+		if produced != "" {
+			if len(fields) == 0 {
+				fields = []string{produced}
+			} else {
+				fields[0] = produced + fields[0]
+			}
+		}
 		// No marks: what the splitter made of a scalar is an ordinary field,
 		// empty ones included — `IFS=:; v=':b'; $v` is `[][b]` in bash,
 		// ksh93 and dash. The **edges** travel with them, because the
@@ -7588,10 +7605,21 @@ func (r *Runner) equalsPath(name string) (string, bool) {
 // Semantics.TildeColonEndsAnOrdinaryWordsPrefix, and wordTildeHead, which is
 // where the two readings are compared so the axis is asked only where they part.
 func (r *Runner) expandTilde(w *syntax.Word) {
+	r.expandTildeLen(w)
+}
+
+// expandTildeLen is expandTilde reporting how many bytes the expansion wrote
+// at the front of the word, and 0 where it wrote none.
+func (r *Runner) expandTildeLen(w *syntax.Word) int {
 	if !tildeOpensTheWord(w) {
-		return
+		return 0
 	}
-	r.wordTildeHead(w.Spans).apply(w.Spans, 0)
+	h := r.wordTildeHead(w.Spans)
+	h.apply(w.Spans, 0)
+	if !h.moved {
+		return 0
+	}
+	return len(h.dir)
 }
 
 // expandTildeIn is expandTilde with the closing bytes named, for the road that

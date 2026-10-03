@@ -3429,7 +3429,8 @@ type Dialect struct {
 	// ReplacementSlashIgnoresQuotes finds the `/` that ends a replacement's
 	// pattern without regard to quotes, a backslash being the only thing that
 	// protects one. Each half is then read with whatever quote it was cut
-	// in the middle of: an unclosed quote in the pattern is that character,
+	// in the middle of, which the pattern and word readers already take as
+	// that shell does: an unclosed quote in the pattern is that character,
 	// and one in the replacement runs to its end. One shell's reading, under
 	// every emulation. Measured 2026-10-03 on zsh 5.9.2 under `-f`:
 	//

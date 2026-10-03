@@ -62,6 +62,15 @@ func (r *Runner) expandedSubscriptText(operand string) (string, bool) {
 	if !ok || e.Index == nil {
 		return "", false
 	}
+	if r.indexedSubscriptKeepsItsQuoting(e.IndexText, e.Name) {
+		// Arithmetic text, whose apostrophes and backslashes the arithmetic
+		// reads: this round would take them off. It is the text `$(( ))`
+		// would be handed — `unset 'a['1']'`, `declare 'a['1']=Q'` and
+		// `[[ -v 'a['1']' ]]` are `'1': arithmetic syntax error` in bash
+		// 5.3.20, every operand route alike (#5568).
+		got := r.expandArithText(e.IndexText, arithTextWritten)
+		return got, got != e.IndexText
+	}
 	got := strings.Join(r.expandWordNoSplit(e.Index), "")
 	if got == e.IndexText || got == "" {
 		return "", false

@@ -4145,6 +4145,17 @@ func (r *Runner) subscriptOperandParts(operand string, lexed bool) (base, raw, k
 	if lexed {
 		return base, raw, raw, true
 	}
+	if r.indexedSubscriptKeepsItsQuoting(raw, base) {
+		// An indexed subscript is arithmetic text and keeps its apostrophes
+		// and backslashes for the arithmetic to refuse, on this route as on
+		// the one a script writes: `unset 'a['1']'` is `'1': arithmetic
+		// syntax error` in bash 5.3.20, and so are `read`, `declare` and
+		// `printf -v` through the same operand (#5568). A double quotation
+		// is left for the arithmetic, which reads it as `$(( ))` does:
+		// `unset 'a["1"]'` removes element 1. See
+		// Semantics.IndexedSubscriptKeepsItsQuoting.
+		return base, raw, subscriptOperandText(raw), true
+	}
 	return base, raw, subscriptOperandText(r.operandSubscriptUnquoted(raw)), true
 }
 

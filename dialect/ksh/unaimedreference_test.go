@@ -123,16 +123,15 @@ func TestAHereDocumentThroughAnUnaimedReferenceIsRefused(t *testing.T) {
 	}
 }
 
-// Two rows of the family are **recorded rather than reproduced**, and both
-// are about what the refusal costs rather than about whether it is made.
+// Two rows of the family are about what the refusal costs rather than about
+// whether it is made.
 //
 // A conditional's pattern operand ends the script in ksh93u+ and is reported
-// and carried on from here, and a subscript that reads through the reference
-// writes the sentence twice here where the reference writes it once. Both
-// are the expansion-failure machinery either side of this rule — the one
-// FailedExpansionAbandonsTheLine answers, and the double read of a subscript
-// — rather than anything this refusal decides, and pinning them keeps a
-// later change to either deliberate.
+// and carried on from here, which is **recorded rather than reproduced**: it
+// is the machinery FailedExpansionAbandonsTheLine answers, not anything this
+// refusal decides. A subscript that reads through the reference writes the
+// sentence once, as the reference does — it was written twice here until a
+// subscript that would not expand stopped being read again (#5608).
 func TestWhatAnUnaimedReferenceCostsTwoOtherContexts(t *testing.T) {
 	t.Parallel()
 	for _, c := range []struct {
@@ -145,9 +144,9 @@ func TestWhatAnUnaimedReferenceCostsTwoOtherContexts(t *testing.T) {
 			"sh: u: no reference name\nt=1 after\n", 0,
 		},
 		{
-			"a subscript: the sentence is written twice here",
+			"a subscript: the sentence is written once",
 			`typeset -n u; a=(1 2); print -r -- "${a[${u}]}"; print after`,
-			"sh: u: no reference name\nsh: u: no reference name\n", 1,
+			"sh: u: no reference name\n", 1,
 		},
 	} {
 		t.Run(c.name, func(t *testing.T) {

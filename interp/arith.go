@@ -3448,6 +3448,7 @@ func (r *Runner) arithCmd(ctx context.Context, c *syntax.ArithCmdClause) error {
 		// in it reports is placed from the construct's line rather than from
 		// the text's own first. See Runner.inArithCommandText (#3810).
 		putBackLine := r.inArithCommandText(c.Pos())
+		failedBefore := r.expansionHasFailed()
 		tree, text, perr := r.arithTreeOver(c.Parsed, c.Expr, arithTextWritten)
 		putBackLine()
 		// Traced from the expanded text and after the expansion, which is
@@ -3456,6 +3457,17 @@ func (r *Runner) arithCmd(ctx context.Context, c *syntax.ArithCmdClause) error {
 		// will not parse is still reported as having been reached — a trace
 		// that skips what failed is the gap #2126 is about.
 		r.traceArithCommand(text, r.diag().TraceArithCommand)
+		if perr != nil && r.expansionFailedHere(failedBefore) {
+			// The text would not expand, which has been reported where it
+			// failed: the expression it left is no expression, and reading it
+			// would report a second failure the script never caused. What is
+			// left is the status, which is the construct's own failure in the
+			// dialect whose failures are 2 (#5608).
+			if r.ctl == controlNone && r.ask(r.sem().ArithCommandErrorStatusIsTwo, "the status a failed `(( ))` leaves") {
+				r.status = 2
+			}
+			return nil
+		}
 		if perr != nil {
 			r.diagf("%s\n", r.diag().arithConstructFailure("((", r.diag().ParseFailure(perr)))
 			r.status = r.arithCmdFailed(r.diag().StatusForParseError(perr))
@@ -3467,6 +3479,16 @@ func (r *Runner) arithCmd(ctx context.Context, c *syntax.ArithCmdClause) error {
 		v, err := r.evalArithTruth(tree)
 		r.arithConstruct = outerConstruct
 		r.arithCommand--
+		if err == nil && r.expansionFailedHere(failedBefore) {
+			// An expansion the parse-time tree held would not expand, and
+			// has said so: the value it left is no answer, and the status is
+			// the construct's failure in the dialect whose failures are 2 —
+			// `(( ${x:s} ))` is `bad substitution` and 2 in zsh 5.9.2 (#5608).
+			if r.ctl == controlNone && r.ask(r.sem().ArithCommandErrorStatusIsTwo, "the status a failed `(( ))` leaves") {
+				r.status = 2
+				return nil
+			}
+		}
 		if r.unspecified {
 			r.status = 2
 			return nil
@@ -4363,4 +4385,20 @@ func indexUnmarked(s string, c byte) int {
 		}
 	}
 	return -1
+}
+
+// expansionHasFailed reports whether an expansion has failed and been
+// reported: the command is being given up, or a value would not expand.
+func (r *Runner) expansionHasFailed() bool {
+	return r.expandErr || r.givingUpAlready()
+}
+
+// expansionFailedHere reports whether an expansion failed between the moment
+// expansionHasFailed answered before and now — so a failure an earlier
+// construct left standing is not read as this one's (#5608). No row found
+// reaches a construct with one standing, since a failure gives the command up
+// before anything else in it runs; the comparison is kept so that the stops
+// this guards can never skip a subscript over somebody else's failure.
+func (r *Runner) expansionFailedHere(before bool) bool {
+	return !before && r.expansionHasFailed()
 }

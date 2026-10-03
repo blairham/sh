@@ -2310,7 +2310,17 @@ func (r *Runner) expandAtList(s syntax.Span, sp splitPolicy, head bool) ([]strin
 	// below — the slice, the element filter, the per-element operators, the
 	// join and the splitting — is the same question it is for an array. See
 	// listBase, which is the one place the two sources meet.
-	if elems, ok := r.listBase(e); ok {
+	failedBefore := r.expansionHasFailed()
+	elems, listed := r.listBase(e)
+	if listed && r.expansionFailedHere(failedBefore) {
+		// The subscript would not expand, which has been said where it
+		// failed. Everything below reads the subscript again — whether it
+		// joins, whether it is a range — and each reading expands it again,
+		// reporting the same failure a second time and running any
+		// substitution in it twice (#5608).
+		return nil, true
+	}
+	if listed {
 		// `set -u` refuses a subscript that named no element, and this is
 		// the path a plain `${a[9]}` takes — the scalar path's own check
 		// never sees one. See checkNounsetElement (#2911), and

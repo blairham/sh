@@ -57,7 +57,12 @@ func openRegionHighlight(r *interp.Runner) {
 		return elems
 	})
 	r.SetDynamicArrayWriter(regionHighlightName, func(rr *interp.Runner, values []string) {
-		rr.SetArray(zleRegion, values)
+		// Stored as zsh reads it back, not as written: see regionelement.go.
+		normalized := make([]string, len(values))
+		for i, v := range values {
+			normalized[i] = parseRegionText(v).String()
+		}
+		rr.SetArray(zleRegion, normalized)
 	})
 }
 
@@ -155,7 +160,7 @@ type regionLayer struct {
 }
 
 // regionAttrs is what a character is drawn with: three attributes, and a
-// foreground and background color held as regionColor keys.
+// foreground and background color held as regionChannel keys.
 type regionAttrs struct {
 	bold, standout, underline bool
 	fg, bg                    string
@@ -166,66 +171,26 @@ func (a regionAttrs) colored() bool { return a.fg != "" || a.bg != "" }
 
 // parseRegionElement turns one element into a layer, or reports that it is
 // not one this shell can draw. chars is the length of the line in characters.
+//
+// It reads the element the way it is read back — see regionelement.go — so
+// what is drawn is what a script finds in the array.
 func parseRegionElement(elem string, chars int) (regionLayer, bool) {
-	fields := strings.Fields(elem)
-	if len(fields) < 3 {
-		return regionLayer{}, false
-	}
-	// This is also where a `P` element goes, in both of its spellings. The
-	// flag says the offsets count a PREDISPLAY, which this shell does not
-	// have, so the element must not be drawn — and neither `P` nor `P0` is a
-	// number, so it is not.
-	//
-	// **Deliberately not a branch of its own.** One was written first and
-	// mutation testing found it inert: deleting it changed no behavior and
-	// failed no test, because every element it claimed to catch was already
-	// being dropped here. A guard that cannot be removed by a test is a
-	// comment promising something the code does not do.
-	start, err1 := strconv.Atoi(fields[0])
-	end, err2 := strconv.Atoi(fields[1])
-	if err1 != nil || err2 != nil {
+	e := parseRegionText(elem)
+	// A `P` element counts a PREDISPLAY, which this shell does not have, so
+	// it must not be drawn somewhere plausible instead.
+	if e.predisplay {
 		return regionLayer{}, false
 	}
 	// Out of the line's range is dropped rather than clamped, for the reason
 	// the doc comment gives: a clamp invents a region.
-	if start < 0 || end < start || end > chars {
+	if e.start < 0 || e.end < e.start || e.end > chars {
 		return regionLayer{}, false
 	}
-	attrs, ok := regionSpec(fields[2])
-	if !ok {
+	attrs := e.spec.attrs()
+	if attrs == (regionAttrs{}) {
 		return regionLayer{}, false
 	}
-	return regionLayer{start: start, end: end, attrs: attrs}, true
-}
-
-// regionSpec is what one spec asks for, and false for a spec that paints
-// nothing.
-func regionSpec(spec string) (regionAttrs, bool) {
-	var a regionAttrs
-	for _, part := range strings.Split(spec, ",") {
-		part = strings.TrimSpace(part)
-		switch {
-		case part == "bold":
-			a.bold = true
-		case part == "standout":
-			a.standout = true
-		case part == "underline":
-			a.underline = true
-		case strings.HasPrefix(part, "fg="):
-			a.fg = regionColor(strings.TrimPrefix(part, "fg="))
-		case strings.HasPrefix(part, "bg="):
-			a.bg = regionColor(strings.TrimPrefix(part, "bg="))
-		}
-		// Anything else contributes nothing, and that is the whole of what
-		// the rest have in common: `none`, which overrides a default rather
-		// than adding to one; `memo=token`, which names the plugin that wrote
-		// the element so it can find it again and selects nothing to draw; an
-		// empty part, from a trailing comma; and a word this shell does not
-		// know. Each had a case of its own and every one of them was inert —
-		// staticcheck caught the third, and the `P` guard above is the same
-		// story. A branch that only falls through is not documentation.
-	}
-	return a, a != regionAttrs{}
+	return regionLayer{start: e.start, end: e.end, attrs: attrs}, true
 }
 
 // regionWord is what a character covered by the given layers is drawn with.
@@ -371,44 +336,6 @@ var regionColorNames = []string{
 	"black", "red", "green", "yellow", "blue", "magenta", "cyan", "white",
 }
 
-// regionColor is the color one `fg=` or `bg=` value names, as a key: the
-// palette number in decimal, or `#` and the three channels of a hex triplet
-// joined by `;`. regionCodes.color turns it into what is written.
-//
-// Empty for `default`, which measured paints nothing — the parameter's way of
-// saying "leave the terminal's own color alone" — and empty for a value that
-// names nothing, which is the drop this file applies everywhere else. Out of
-// the palette's range is nothing too, rather than a color the person did not
-// ask for.
-func regionColor(value string) string {
-	value = strings.TrimSpace(value)
-	if value == "" || value == "default" {
-		return ""
-	}
-	if after, ok := strings.CutPrefix(value, "#"); ok {
-		r, g, b, ok := parseHexTriplet(after)
-		if !ok {
-			return ""
-		}
-		return "#" + strconv.Itoa(r) + ";" + strconv.Itoa(g) + ";" + strconv.Itoa(b)
-	}
-	if n, err := strconv.Atoi(value); err == nil {
-		if n < 0 || n > 255 {
-			return ""
-		}
-		return strconv.Itoa(n)
-	}
-	// "Colour is also known as color", and both spellings of grey are zsh's
-	// too — but neither is one of the eight, so a name is matched against the
-	// eight and nothing else, as a prefix.
-	for n, name := range regionColorNames {
-		if strings.HasPrefix(name, strings.ToLower(value)) {
-			return strconv.Itoa(n)
-		}
-	}
-	return ""
-}
-
 // regionCodes is how a color is written, which `zle_highlight` can change:
 // each channel's start, end and default-color codes.
 //
@@ -485,33 +412,3 @@ func (c regionChannelCodes) color(key string) string {
 
 // off is what returns this channel to the terminal's own color.
 func (c regionChannelCodes) off() string { return c.start + c.def + c.end }
-
-// parseHexTriplet reads `#rgb` and `#rrggbb`, the two lengths the manual gives.
-//
-// The three-digit form doubles each digit, which is what makes `#f80` and
-// `#ff8800` the same color.
-func parseHexTriplet(s string) (int, int, int, bool) {
-	var width int
-	switch len(s) {
-	case 3:
-		width = 1
-	case 6:
-		width = 2
-	default:
-		return 0, 0, 0, false
-	}
-	out := make([]int, 3)
-	for i := range out {
-		part := s[i*width : (i+1)*width]
-		n, err := strconv.ParseUint(part, 16, 16)
-		if err != nil {
-			return 0, 0, 0, false
-		}
-		if width == 1 {
-			out[i] = int(n)*16 + int(n)
-		} else {
-			out[i] = int(n)
-		}
-	}
-	return out[0], out[1], out[2], true
-}

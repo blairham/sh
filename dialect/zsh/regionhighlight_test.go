@@ -227,3 +227,24 @@ func TestAWidgetSeesItAsASpecialArray(t *testing.T) {
 		t.Errorf("got %q, want a special array that is set", said)
 	}
 }
+
+// What a widget assigns is what it reads back in zsh's spelling, not as it
+// was written — and an append sees the spelling too. Measured 2026-10-02 on
+// zsh 5.9.2 through a pseudo-terminal; regionelement.go has the whole table.
+func TestRegionHighlightReadsBackNormalized(t *testing.T) {
+	r, out := zleRunner(t, `
+		w() {
+			region_highlight=("0 4 bold,fg=green memo=a,b" "x y bold")
+			region_highlight+=("P 1 2 fg=red,fg=blue")
+			print -rl -- $region_highlight
+		}
+		zle -N w
+	`)
+	_, ok, said := runWidget(t, r, out, "w", repl.Line{Buffer: "abcdef"})
+	if !ok {
+		t.Fatal("the widget did not run")
+	}
+	if want := "0 4 fg=green,bold memo=a\n-1 -1 none\nP1 2 fg=magenta\n"; said != want {
+		t.Errorf("read back %q, want %q", said, want)
+	}
+}

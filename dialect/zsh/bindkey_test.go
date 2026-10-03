@@ -493,3 +493,61 @@ func TestEndOfInputSurvivesARedefinedCompletionWidget(t *testing.T) {
 		t.Errorf("Return = %#v, want %#v", got, want)
 	}
 }
+
+// A `-s` string is read through the key notation, and the listing names it with
+// `-s` and quotes it so that the line read back as shell code binds the same
+// bytes. Measured 2026-10-03 on zsh 5.9.2 under `-fc` (#5672).
+func TestAStringBindingIsDecodedAndListedWithItsFlag(t *testing.T) {
+	for _, c := range []struct{ src, want string }{
+		{"bindkey -s '^Xa' '\\777'; bindkey '^Xa'", "\"^Xa\" \"\\M-^?\"\n"},
+		{"bindkey -s '^Xb' '\\x41'; bindkey '^Xb'", "\"^Xb\" \"A\"\n"},
+		{"bindkey -s '^Xd' 'x\\ny'; bindkey '^Xd'", "\"^Xd\" \"x^Jy\"\n"},
+		{"bindkey -s '^Xc' '^A'; bindkey '^Xc'", "\"^Xc\" \"^A\"\n"},
+		{"bindkey -s '^Xc' '\\C-a\\M-b\\e\\E'; bindkey '^Xc'", "\"^Xc\" \"^A\\M-b^[^[\"\n"},
+		{"bindkey -s '^Xc' 'a\"b$c`d\\\\e'; bindkey '^Xc'", "\"^Xc\" \"a\\\"b\\$c\\`d\\\\\\e\"\n"},
+		{"bindkey -s '^Xc' 'tab\tx'; bindkey '^Xc'", "\"^Xc\" \"tab^Ix\"\n"},
+		{"bindkey -s '^Xc' '\\q'; bindkey '^Xc'", "\"^Xc\" \"q\"\n"},
+		{"bindkey -s '^Xc' '^'; bindkey '^Xc'", "\"^Xc\" \"\\^\"\n"},
+		{"bindkey -s '^Xc' 'abc\\'; bindkey '^Xc'", "\"^Xc\" \"abc\\\\\\\\\"\n"},
+		{"bindkey -s '^Xc' ''; bindkey '^Xc'", "\"^Xc\" \"\"\n"},
+		{"bindkey -s '^Xf' plain; bindkey -L '^Xf'", "bindkey -s \"^Xf\" \"plain\"\n"},
+		{"bindkey -s '^Xf' 'a\\nb'; bindkey -L '^Xf'", "bindkey -s \"^Xf\" \"a^Jb\"\n"},
+		{"bindkey -s '^Xf' 'a\"b'; bindkey -L '^Xf'", "bindkey -s \"^Xf\" \"a\\\"b\"\n"},
+		{"bindkey -s '^Xa' x '^Xb' y; bindkey -L '^Xa'; bindkey -L '^Xb'", "bindkey -s \"^Xa\" \"x\"\nbindkey -s \"^Xb\" \"y\"\n"},
+		{"bindkey '^Xg' some-widget; bindkey -L '^Xg'", "bindkey \"^Xg\" some-widget\n"},
+	} {
+		if out, st := runZsh(t, t.TempDir(), c.src); out != c.want || st != 0 {
+			t.Errorf("%s\n got %q at %d, want %q", c.src, out, st, c.want)
+		}
+	}
+}
+
+// The key side's backslash and caret spellings, which print in the notation
+// first and the double quotes second. Measured 2026-10-03 on zsh 5.9.2,
+// `bindkey '<v>' foo; bindkey -L '<v>'` (#5672).
+func TestABackslashOrCaretKeyListsAsItReadsBack(t *testing.T) {
+	for _, c := range []struct{ written, listed string }{
+		{"\\\\", "bindkey \"\\\\\\\\\" foo\n"},
+		{"a\\\\", "bindkey \"a\\\\\\\\\" foo\n"},
+		{"\\\\a", "bindkey \"\\\\\\a\" foo\n"},
+		{"d\\\\e", "bindkey \"d\\\\\\e\" foo\n"},
+		{"\\\\\\\\", "bindkey \"\\\\\\\\\\\\\\\\\" foo\n"},
+		{"\\", "bindkey \"\\\\\\\\\" foo\n"},
+		{"a\\", "bindkey \"a\\\\\\\\\" foo\n"},
+		{"^", "bindkey \"\\^\" foo\n"},
+		{"a^b", "bindkey \"a^B\" foo\n"},
+		{"\\^", "bindkey \"\\^\" foo\n"},
+		{"\\\\^", "bindkey \"\\\\\\\\\\^\" foo\n"},
+		{"a\"b", "bindkey \"a\\\"b\" foo\n"},
+		{"a$b", "bindkey \"a\\$b\" foo\n"},
+		{"a`b", "bindkey \"a\\`b\" foo\n"},
+		{"\\\\`", "bindkey \"\\\\\\\\\\`\" foo\n"},
+		{"\\\\$", "bindkey \"\\\\\\\\\\$\" foo\n"},
+		{"\\\\\"", "bindkey \"\\\\\\\\\\\"\" foo\n"},
+	} {
+		src := "bindkey '" + c.written + "' foo; bindkey -L '" + c.written + "'"
+		if out, st := runZsh(t, t.TempDir(), src); out != c.listed || st != 0 {
+			t.Errorf("%s\n got %q at %d, want %q", c.written, out, st, c.listed)
+		}
+	}
+}

@@ -240,3 +240,25 @@ func (r *Runner) inheritAttributes(name string, a nameAttributes) bool {
 	}
 	return had
 }
+
+// MarkLocalKeepsTheOuterValue says a valueless local of this name holds the
+// value the name had outside it, as though inheriting had been asked for —
+// a fact about the name in the dialect that has it, not a request a script
+// makes. Measured 2026-10-03 on zsh 5.9.2 under `env -i PATH=/usr/bin:/bin`,
+// `-f` (#5605):
+//
+//	f(){ local HISTSIZE; print $HISTSIZE }; f            30
+//	HISTSIZE=50; f(){ local HISTSIZE; print … }; f       50
+//	SAVEHIST=7; f(){ local SAVEHIST; print … }; f        7
+//	f(){ local COLUMNS; print $COLUMNS }; f              0   ← the control
+//
+// and `SHLVL`, `LINES`, `OPTIND` and `FUNCNEST` answer as `COLUMNS` does.
+func (r *Runner) MarkLocalKeepsTheOuterValue(name string) {
+	if r.localKeepsOuter == nil {
+		r.localKeepsOuter = map[string]bool{}
+	}
+	r.localKeepsOuter[name] = true
+}
+
+// localKeepsTheOuterValue is MarkLocalKeepsTheOuterValue's mark read back.
+func (r *Runner) localKeepsTheOuterValue(name string) bool { return r.localKeepsOuter[name] }

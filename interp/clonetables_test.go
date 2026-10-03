@@ -24,6 +24,7 @@ var sharedTables = map[string]string{
 	"dialectCompgen":     "the `compgen -A` actions a dialect registered with SetCompgenAction, written at setup and never again — a script can ask compgen for one but has no way to add, replace or remove one",
 	"onParameterArrival": "what a dialect wants run when a deferred name is first referred to, registered by SetParameterArrival at setup and never again — a script can trigger one but has no way to add, replace or remove one",
 	"shellOwnWhileSet":   "the names a dialect owns while they hold a value, marked at setup by MarkShellOwnParameterWhileSet and never written again",
+	"localKeepsOuter":    "the names a dialect says keep their outer value in a valueless local, marked at setup by MarkLocalKeepsTheOuterValue and never written again",
 	"noticedJobs":        "never written, only replaced whole by noticeFinishedJobs — so a subshell that shares its parent's set and then notices a job gets a set of its own, and neither runner ever sees the other's notices",
 }
 
@@ -422,6 +423,7 @@ func seedTables(r *Runner) {
 	r.shellOwn = map[string]bool{"seed": true}
 	r.notShellOwn = map[string]bool{"seed": true}
 	r.shellOwnWhileSet = map[string]bool{"seed": true}
+	r.localKeepsOuter = map[string]bool{"seed": true}
 	r.envNotAdopted = map[string]bool{"seed": true}
 	r.scopeFixed = map[string]bool{"seed": true}
 	r.kindFixed = map[string]parameterKinds{"seed": kindBit(ArrayParameter)}

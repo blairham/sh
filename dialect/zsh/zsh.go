@@ -3805,6 +3805,9 @@ func Semantics() interp.Semantics {
 	// `-1` and it reads 0 — which is where this column parts from bash's
 	// answer to the same question.
 	s.ShellLevelExec = interp.ShellLevelExecNotCounted
+	// What an interrupt from outside does while a foreground program runs.
+	// See interp.Semantics.InterruptWaitsForTheProgram (#5416).
+	s.InterruptWaitsForTheProgram = interp.InterruptEndsTheShell
 	// And the starting directory is named by what the kernel reports, however
 	// the parent spelled it.
 	s.StartupPwdName = interp.StartupPwdNameFromTheKernel

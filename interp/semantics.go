@@ -6569,6 +6569,52 @@ type Semantics struct {
 	// and the rows that are measured and deliberately not modeled.
 	ShellLevelExec ShellLevelExec
 
+	// InterruptWaitsForTheProgram is what an untrapped SIGINT from outside
+	// does when it reaches the shell while the shell waits for a program it
+	// ran in the foreground (#5416). Measured 2026-10-02 under `-c`, the
+	// signal sent to the shell's own pid by the program itself:
+	//
+	//	/bin/sh -c "kill -INT \$PPID; sleep 0.2; exit 4"; echo survived $?
+	//	        bash 5.3.20, bash 3.2.57, ksh93u+   survived 4
+	//	        zsh 5.9.2, dash, BusyBox ash         die, 130
+	//	/bin/sh -c "kill -INT \$PPID; sleep 0.2; kill -INT \$\$; sleep 1"
+	//	        all six die, 130: the program died of it too
+	//	/bin/sh -c "sleep 0.3; kill -INT $$" & read -t 1 x </dev/zero
+	//	        bash, ksh93: die, 130 — a builtin holds nothing
+	//	f() { /bin/sh -c "kill -INT \$PPID; sleep 0.1"; echo inf; }; f
+	//	        bash, ksh93: inf, survived
+	//	/bin/sh -c "kill -INT \$PPID; sleep 0.1" | cat; echo survived
+	//	        bash: survived; ksh93: dies, 130
+	//	x=$(/bin/sh -c "kill -INT \$PPID; sleep 0.1"); echo survived
+	//	        bash 5.3.20, ksh93: die, 130; bash 3.2.57 survives
+	//
+	// So bash holds it for any program but one in a substitution and ksh93
+	// for one the shell runs itself; zsh, dash and BusyBox ash die where it
+	// lands.
+	//
+	// Not modeled: ksh93 inside `( … )`, which neither survives nor dies of
+	// it — `( /bin/sh -c "kill -INT \$PPID; sleep 0.1" ); echo survived`
+	// writes nothing and exits 0 — and is left dying here.
+	//
+	// Read rather than asked: a signal arriving is not the place to refuse a
+	// script, and the unanswered value is what this package did before.
+	//
+	// unpinned bash: no corpus row sends the shell a signal from outside;
+	// pinned by TestAnInterruptWaitsForTheForegroundProgram.
+	//
+	// unpinned ksh: the same reach, pinned by
+	// TestAnInterruptWaitsForTheForegroundProgram.
+	//
+	// unpinned zsh: the same reach, pinned by
+	// TestAnInterruptWaitsForTheForegroundProgram.
+	//
+	// unpinned dash: the same reach, pinned by
+	// TestAnInterruptWaitsForTheForegroundProgram.
+	//
+	// unpinned ash: the same reach, pinned by
+	// TestAnInterruptWaitsForTheForegroundProgram.
+	InterruptWaitsForTheProgram InterruptDeferral
+
 	// StartupPwdName is the name a shell gives the directory it starts in —
 	// one it was handed in its environment, or the one the kernel reports.
 	// See StartupPwdNamePolicy.

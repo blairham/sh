@@ -75,6 +75,9 @@ type startupFlags struct {
 // time with none of these, and a complaint about it would be the first thing
 // anyone saw.
 func (sh Shell) startup(r *interp.Runner, in source) int {
+	if sh.BeforeStartupFiles != nil {
+		sh.BeforeStartupFiles(r)
+	}
 	// The prompt parameters, before the first file can read them — and
 	// before the escape hatch below, because suppressing the files does not
 	// suppress these: measured, `--norc`, `--noprofile` and `-f` all leave

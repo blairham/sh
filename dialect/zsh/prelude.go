@@ -17,7 +17,6 @@ func Prelude() string {
 	return identity + nullCommands + startupAliases +
 		"WORDCHARS='" + wordCharacters + "'\n" +
 		historyCharactersParameter + "='" + historyCharacters + "'\n" +
-		bracketedPasteDefault +
 		functions
 }
 
@@ -380,23 +379,6 @@ READNULLCMD=more
 `
 
 // bracketedPasteParameter is the array the line editor reads its bracketing
-// sequences from. See repl's EditorStyle.BracketedPasteParameter.
+// sequences from. See repl's EditorStyle.BracketedPasteParameter, and
+// zleboot.go for when it is created.
 const bracketedPasteParameter = "zle_bracketed_paste"
-
-// bracketedPasteDefault gives a shell with the line editor loaded the
-// parameter's default, before any startup file can unset it.
-//
-// Measured 2026-10-02 on zsh 5.9.2: at a prompt on a terminal
-// `${(t)zle_bracketed_paste}` is `array` and `${(qqqq)zle_bracketed_paste}`
-// is `$'\033[?2004h \033[?2004l'` — an ordinary array, so `unset` takes it
-// away and nothing puts it back — while under `-fic` with no terminal, where
-// the editor never loads, `${+zle_bracketed_paste}` is 0. `zmodload zsh/zle`
-// in a script creates it too, which zmodloadSetLoaded answers.
-//
-// One reading this does not take: `-fiV +Z` on a terminal has no parameter
-// in the reference until the option is set and the editor first runs, where
-// this gives it one from the start, because the prelude runs before the
-// argument vector's options. A shell that never turns the option on never
-// reads the parameter, so the difference is a `${+…}` and not a byte drawn.
-const bracketedPasteDefault = `zmodload -e zsh/zle && ` + bracketedPasteParameter + `=($'\e[?2004h' $'\e[?2004l')
-`

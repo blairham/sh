@@ -679,11 +679,10 @@ func zmodloadLoaded(r *interp.Runner) []string {
 
 // zmodloadSetLoaded records that a module is loaded, or that it is not.
 func zmodloadSetLoaded(r *interp.Runner, module string, loaded bool) {
-	// The editor's module creates its parameter as it loads, and only then:
-	// a load of a module already there changes nothing. See
-	// bracketedPasteDefault.
-	if loaded && module == "zsh/zle" && !containsWord(zmodloadLoaded(r), module) {
-		r.SetArray(bracketedPasteParameter, []string{"\x1b[?2004h", "\x1b[?2004l"})
+	// The editor's module creates its parameter as it loads, once. See
+	// zleboot.go.
+	if loaded && module == "zsh/zle" {
+		bootLineEditor(r)
 	}
 	kept := make([]string, 0, len(zmodloadLoaded(r))+1)
 	for _, m := range zmodloadLoaded(r) {

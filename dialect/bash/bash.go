@@ -1962,6 +1962,9 @@ func Semantics() interp.Semantics {
 	// A plain word declared over a name holding an array replaces it and
 	// says nothing.
 	s.ScalarOverACompoundIsAnInconsistentType = interp.No
+	// An array letter given a plain word: see
+	// interp.Semantics.ArrayLetterWithAWordDeclaresAScalar (#5630).
+	s.ArrayLetterWithAWordDeclaresAScalar = interp.No
 	// `readonly -a a` freezes the name and records no kind: it lists as
 	// `declare -r a`, with no `a` in the cluster.
 	s.ReadonlyRecordsTheCompoundAttribute = interp.No

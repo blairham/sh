@@ -260,8 +260,49 @@ func (r *Runner) MarkLocalKeepsTheOuterValue(name string) {
 	r.localKeepsOuter[name] = true
 }
 
-// localKeepsTheOuterValue is MarkLocalKeepsTheOuterValue's mark read back.
-func (r *Runner) localKeepsTheOuterValue(name string) bool { return r.localKeepsOuter[name] }
+// localKeepsTheOuterValue is MarkLocalKeepsTheOuterValue's mark read back, for
+// a local over the **global** binding only. A local over a calling function's
+// local starts from nothing instead — from what the slot holds unset, which
+// is 1 for HISTSIZE and 0 for SAVEHIST. Measured 2026-10-03 on zsh 5.9.2
+// under `-f` (#5630):
+//
+//	g(){ local HISTSIZE=40; f }; f(){ local HISTSIZE; print $HISTSIZE }   1
+//	the same with HISTSIZE=3 or 0 in g, or a valueless local in g         1
+//	g(){ HISTSIZE=40; f } — a global write, no local in g                 40
+//	SAVEHIST=9; g(){ local SAVEHIST=40; f }; f(){ local SAVEHIST; … }     0
+//
+// so the value kept is the global's, and a local in between hides it rather
+// than lending its own — unless that local is frozen, which is PPID's: a
+// local of it in a function a frozen local of it called is the same frozen
+// value, `integer-local-readonly-special` there.
+func (r *Runner) localKeepsTheOuterValue(name string) bool {
+	if !r.localKeepsOuter[name] {
+		return false
+	}
+	return !r.localInAnEnclosingScope(name) || r.outerBindingWasFrozen(name)
+}
+
+// outerBindingWasFrozen reports whether the binding the innermost scope just
+// shadowed was readonly.
+func (r *Runner) outerBindingWasFrozen(name string) bool {
+	if len(r.scopes) == 0 {
+		return false
+	}
+	was, ok := r.scopes[len(r.scopes)-1].savedReadonly[name]
+	return ok && was
+}
+
+// localInAnEnclosingScope reports whether a function calling this one made
+// the name local — any scope but the innermost, which is the one a
+// declaration here is making.
+func (r *Runner) localInAnEnclosingScope(name string) bool {
+	for i := len(r.scopes) - 2; i >= 0; i-- {
+		if r.scopes[i].shadows(name) {
+			return true
+		}
+	}
+	return false
+}
 
 // restoreTheOuterFreeze puts back the freeze the name had outside the scope,
 // for a local that starts as the outer binding. A restore of the value and

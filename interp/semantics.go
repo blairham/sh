@@ -12192,6 +12192,35 @@ type Semantics struct {
 	// script that should have stopped carries on, so everything downstream
 	// of the line runs here and never runs there.
 	ScalarOverACompoundIsAnInconsistentType Answer
+
+	// ArrayLetterWithAWordDeclaresAScalar declares a scalar where a
+	// declaration's array letter is given a plain word, the letter itself
+	// declaring nothing the word does not: ksh93. bash makes the array of that
+	// one word, and zsh refuses the pair as an inconsistent type
+	// (ScalarOverACompoundIsAnInconsistentType).
+	//
+	// Measured 2026-10-03 on ksh93u+ 2012-08-01 under `-c` (#5630):
+	//
+	//	typeset -a x=/y; typeset -p x             x=/y
+	//	typeset -a x=/y; typeset +p x             x            (no `-a`)
+	//	typeset -a x=/y; typeset -a | grep x      nothing
+	//	function f { typeset -a x=/y; typeset -p x; }; f      x=/y
+	//	typeset -a x=/y; x[1]=z; typeset -p x     typeset -a x=(/y z)
+	//	typeset -a x=(/y); typeset -p x           typeset -a x=(/y)  ← control
+	//
+	// against bash 5.3.20's `declare -a x=([0]="/y")` for the first row. The
+	// letter given no value stays: `typeset -a x; x=/y` lists `typeset -a
+	// x=/y` there, which is a listing question this axis does not answer.
+	//
+	// unpinned ksh: no corpus row gives the letter a plain word; pinned by
+	// TestAnArrayLetterWithAWordDeclaresAScalar.
+	//
+	// unpinned bash: likewise, pinned by
+	// TestAnArrayLetterWithAWordMakesAnArrayOfOne.
+	//
+	// unpinned zsh: zsh refuses the pair before this is asked; pinned by
+	// TestTwoDeclarationRowsOverTheShellsOwnParameters.
+	ArrayLetterWithAWordDeclaresAScalar Answer
 	// ReadonlyRecordsTheCompoundAttribute makes `readonly -a` and
 	// `readonly -A` declare an array and a table the way `typeset -a` and
 	// `typeset -A` do, rather than freezing a name and saying nothing about

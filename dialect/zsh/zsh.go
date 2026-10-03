@@ -2034,6 +2034,9 @@ func Semantics() interp.Semantics {
 	// And a plain word declared over a name really holding an array is an
 	// inconsistent type rather than a replacement, fatally.
 	s.ScalarOverACompoundIsAnInconsistentType = interp.Yes
+	// An array letter given a plain word: see
+	// interp.Semantics.ArrayLetterWithAWordDeclaresAScalar (#5630).
+	s.ArrayLetterWithAWordDeclaresAScalar = interp.No
 	// `readonly -a` declares the array as well as freezing the name:
 	// `readonly -a a` lists as `typeset -ar a=(  )`.
 	s.ReadonlyRecordsTheCompoundAttribute = interp.Yes

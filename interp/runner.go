@@ -3104,6 +3104,10 @@ type Runner struct {
 	// plainTail is the lone simple command the input ends on, where that is
 	// the whole of its statement. See TailExecPlainTopLevel.
 	plainTail *syntax.SimpleCmd
+	// expandingRawText says the expansion running is part of a text read as
+	// a double-quoted string is: a here-document body, an arithmetic
+	// expression. See expandRawSpansWith.
+	expandingRawText bool
 	// tailInALoop says the tail was handed on through the last pass of a
 	// loop. See TailExecWhereverLastOutsideALoop.
 	tailInALoop bool

@@ -2052,7 +2052,7 @@ func (r *Runner) expandAtList(s syntax.Span, sp splitPolicy, head bool) ([]strin
 		// shell it claims to be calls it a bad substitution.
 		return nil, false
 	}
-	if !r.namesTheOtherArray(s.Param) {
+	if !r.namesTheOtherArray(s.Param) || r.refusesAListAsAName(s.Param) {
 		return nil, true
 	}
 	r.referredToParameter(s.Param.Name)
@@ -3515,7 +3515,7 @@ func (r *Runner) expandParam(e *syntax.ParamExpr) string {
 		r.reportBadSubstitution(e)
 		return ""
 	}
-	if !r.namesTheOtherArray(e) {
+	if !r.namesTheOtherArray(e) || r.refusesAListAsAName(e) {
 		return ""
 	}
 	r.referredToParameter(e.Name)
@@ -7424,6 +7424,11 @@ func (r *Runner) expandRawSpans(text string) (out, head string, ok bool) {
 // part in order, with whether the span it came from was literal, and returns
 // what to write. See expandArithText, the one caller that passes one.
 func (r *Runner) expandRawSpansWith(text string, hook func(literal bool, part string) string) (out, head string, ok bool) {
+	// Text read the way a double-quoted string is, which one refusal words
+	// differently from the same expansion unquoted. See refusesAListAsAName.
+	saved := r.expandingRawText
+	r.expandingRawText = true
+	defer func() { r.expandingRawText = saved }()
 	spans, ok := r.rawSpans(text)
 	if !ok {
 		return "", "", false

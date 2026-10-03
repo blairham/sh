@@ -36,12 +36,20 @@ import "strings"
 // and everything after it come back as they were written, which is measured
 // and is what a value assembled out of a shell line needs.
 func (r *Runner) unquoteFlagged(v string) string {
+	out, _ := r.unquoteFlaggedReporting(v)
+	return out
+}
+
+// unquoteFlaggedReporting is unquoteFlagged with the complaint the value
+// earned, which only the `X` flag says out loud — see reportUnquoteFailure.
+// Empty where the value read cleanly.
+func (r *Runner) unquoteFlaggedReporting(v string) (string, string) {
 	var b strings.Builder
 	for i := 0; i < len(v); {
 		switch c := v[i]; {
 		case c == '\\':
 			if i+1 >= len(v) {
-				return b.String()
+				return b.String(), ""
 			}
 			if v[i+1] != '\n' {
 				// A `\`-newline pair is a line continuation and leaves
@@ -53,7 +61,7 @@ func (r *Runner) unquoteFlagged(v string) string {
 			end := strings.IndexByte(v[i+1:], '\'')
 			if end < 0 {
 				b.WriteString(v[i:])
-				return b.String()
+				return b.String(), "unmatched '"
 			}
 			b.WriteString(v[i+1 : i+1+end])
 			i += end + 2
@@ -61,7 +69,7 @@ func (r *Runner) unquoteFlagged(v string) string {
 			end := indexDoubleQuoteEnd(v[i+1:])
 			if end < 0 {
 				b.WriteString(v[i:])
-				return b.String()
+				return b.String(), `unmatched "`
 			}
 			writeDoubleQuoted(&b, v[i+1:i+1+end])
 			i += end + 2
@@ -69,7 +77,7 @@ func (r *Runner) unquoteFlagged(v string) string {
 			end := indexDollarSingleEnd(v[i+2:])
 			if end < 0 {
 				b.WriteString(v[i:])
-				return b.String()
+				return b.String(), "unmatched '"
 			}
 			b.WriteString(r.expandDollarSingle(v[i+2 : i+2+end]))
 			i += end + 3
@@ -81,14 +89,28 @@ func (r *Runner) unquoteFlagged(v string) string {
 				i += n
 			case n < 0:
 				b.WriteString(v[i:])
-				return b.String()
+				return b.String(), unclosedGroupComplaint(v[i:])
 			default:
 				b.WriteByte(c)
 				i++
 			}
 		}
 	}
-	return b.String()
+	return b.String(), ""
+}
+
+// unclosedGroupComplaint is what the shell says of a substitution that never
+// closes, by which one it is. Measured 2026-10-02 on zsh 5.9.2 under
+// `${(QX)foo}`: “ `x “ is `unmatched “ ` “, `$(x` is `parse error in
+// parameter value` and `${x` is `closing brace expected`.
+func unclosedGroupComplaint(s string) string {
+	switch {
+	case s[0] == '`':
+		return "unmatched `"
+	case strings.HasPrefix(s, "${"):
+		return "closing brace expected"
+	}
+	return "parse error in parameter value"
 }
 
 // verbatimGroup measures a substitution written at the start of s: a

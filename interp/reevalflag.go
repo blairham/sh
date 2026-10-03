@@ -136,7 +136,7 @@ func (r *Runner) reevalFlagged(e *syntax.ParamExpr, words []string, quoted bool)
 	join := quoted && !r.flagKeepsFields(e)
 	out = make([]string, 0, len(words))
 	for _, w := range words {
-		fields, fok := r.reevalText(w, join)
+		fields, fok := r.reevalText(w, join, reportsFlagErrors(e))
 		if !fok {
 			return nil, false, false
 		}
@@ -167,9 +167,22 @@ func (r *Runner) reevalFlagged(e *syntax.ParamExpr, words []string, quoted bool)
 // are not a pattern here anyway, measured: `${(e)v}` on `a*` is `a*`, and it
 // matches only when `GLOB_SUBST` makes the *result* of the whole expansion a
 // pattern, which is the enclosing expansion's question and not this one's.
-func (r *Runner) reevalText(text string, quoted bool) ([]string, bool) {
+func (r *Runner) reevalText(text string, quoted, xflag bool) ([]string, bool) {
 	// Text that ran out inside an expansion is refused rather than read as
 	// the expansion the lexer had to invent to hand it back; see rawSpans.
+	//
+	// Under `X` a substitution that never closes is the bare `parse error`,
+	// which is that shell's own sentence there — see reportsFlagErrors.
+	// Without it the same shell goes on with a value nothing here could
+	// reproduce honestly, so the refusal stands as it was.
+	if xflag {
+		if _, err := syntax.HeredocSpans(text, r.dialect()); err != nil &&
+			strings.HasPrefix(r.diag().ParseFailure(err), "parse error near") {
+			r.diagf("parse error\n")
+			r.expandErr = true
+			return nil, false
+		}
+	}
 	spans, ok := r.rawSpans(text)
 	if !ok {
 		return nil, false

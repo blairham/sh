@@ -27,3 +27,40 @@ func (r *Runner) indexedSubscriptKeepsItsQuoting(written, name string) bool {
 	return r.ask(r.sem().IndexedSubscriptKeepsItsQuoting,
 		"an indexed array's subscript keeping its quoting for the arithmetic")
 }
+
+// removeSubscriptQuoting takes the quoting off a subscript's text the way a
+// word's quote removal would — what an apostrophe pair holds is kept as it
+// stands, a double quotation keeps what it holds less the backslash before
+// `$`, a backquote, `"`, `\` and a newline, and an unquoted backslash keeps
+// the character after it — for the dialect that reads an indexed subscript
+// without its quoting. See Semantics.IndexedSubscriptKeepsItsQuoting.
+func removeSubscriptQuoting(text string) string {
+	var b strings.Builder
+	for i := 0; i < len(text); i++ {
+		switch c := text[i]; c {
+		case '\'':
+			j := strings.IndexByte(text[i+1:], '\'')
+			if j < 0 {
+				b.WriteString(text[i:])
+				return b.String()
+			}
+			b.WriteString(text[i+1 : i+1+j])
+			i += j + 1
+		case '"':
+			for i++; i < len(text) && text[i] != '"'; i++ {
+				if text[i] == '\\' && i+1 < len(text) && strings.IndexByte("$`\"\\\n", text[i+1]) >= 0 {
+					i++
+				}
+				b.WriteByte(text[i])
+			}
+		case '\\':
+			if i+1 < len(text) {
+				i++
+				b.WriteByte(text[i])
+			}
+		default:
+			b.WriteByte(c)
+		}
+	}
+	return b.String()
+}

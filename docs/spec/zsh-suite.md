@@ -14,7 +14,7 @@ filing the table as work.
     21 real results      <- the number the burndown moves
     487 differing lines
 
-**Since that commit, thirteen files have become real results**, each verified
+**Since that commit, fifteen files have become real results**, each verified
 byte-identical in output and status under the reference's own driver:
 
     C02cond          59 of 59 chunks   82566556f   #5146
@@ -31,6 +31,7 @@ byte-identical in output and status under the reference's own driver:
     E03posix         18 of 18          5d1dc7eaa   #5157, on this Mac and in the suite's image
     V06parameter      5 of 5           c368f04ea   #5159, on this Mac and in the suite's image
     D06subscript     37 of 37          e5ebb3e9a   #5152, on this Mac and in the suite's image
+    X04zlehighlight  12 of 12          29bf413de   #5166, on this Mac and in the suite's image
 
 `E03posix` was measured at `5d1dc7eaa`, 2026-10-02, under the reference's own
 driver run serially from `Test/`: 18 of 18 chunks and 510 driver lines with 0
@@ -61,7 +62,23 @@ key read as written (#5432), `ksh_zero_subscript` (#5441), a flagged pair on
 the left of `=` (#5452), and the `(w)`, `(s:…:)` and `(p)` word letters with
 a chained link read by them.
 
-So the count the burndown moves is **35** today. The roll-up figures above are left at the commit they were taken at
+`X04zlehighlight` was measured at `29bf413de`, 2026-10-02, under the
+reference's own driver run serially from `Test/`: 12 of 12 chunks, `all tests
+successful`, and the driver's 438 lines byte-identical with the run's temp
+directory and the diff timestamps taken out, on this Mac against
+`/opt/homebrew/bin/zsh` (zsh 5.9.2, aarch64-apple-darwin25.4.0); and 12 of 12,
+`all tests successful`, in the column's image
+`ghcr.io/blairham/sh/zsh@sha256:aab8255c…` (zsh 5.9.2,
+aarch64-unknown-linux-gnu). Through the harness, `-only X04zlehighlight.ztst
+-jobs 1` with the binary named `zsh` reads strict 1/1, `of those` 0/1, `ref
+cannot run` 0/1 and line agreement 100.0%. It took nine roots, one pull request
+each: `zle_bracketed_paste` (#5443), `zle -T tc` (#5449), the transitions where
+regions overlap (#5455), `zle_highlight`'s color codes (#5461), `typeset -p`
+on a widget's parameters (#5464), the element read back in zsh's spelling
+(#5471), `zsh/nearcolor` (#5478), `$LASTWIDGET` (#5482) and the ground under a
+cleared screen (#5486).
+
+So the count the burndown moves is **36** today. The roll-up figures above are left at the commit they were taken at
 rather than adjusted by hand: the whole-suite run is CI's, and a line total
 edited in place is a number nobody can reproduce.
 
@@ -358,7 +375,7 @@ front can only move chunks up.
 | 2 | 25 | 23 | 8 | `V10private` | typeset still works with zsh/param/private module loaded |
 | 3 | 5 | 2 | 53 | `E02xtrace` | xtrace with and without redirection |
 | 12 | 12 | 0 | 2 | `V07pcre` | nothing runs; the reference's own first chunk is `Testing PCRE multibyte with locale en_US.UTF-8` |
-| 12 | 12 | 0 | 20 | `X04zlehighlight` | region highlight - standout overlapping on other region_highlight entry |
+| 0 | 12 | 12 | 0 | `X04zlehighlight` | *a real result at `29bf413de` — see the list at the top (#5166)* |
 | 14 | 39 | 25 | 21 | `A05execution` | Bug regression: piping a shell construct to an external process may hang |
 | 15 | 16 | 1 | 10 | `V14system` | zsystem flock invalid time arguments |
 | 16 | 16 | 0 | 11 | `V09datetime` | basic format specifiers |

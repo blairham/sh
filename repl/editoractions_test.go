@@ -235,7 +235,7 @@ func TestTheHandleRidesTheWidgetsContext(t *testing.T) {
 	}
 	e := s.newEditor(t.Context(), nil)
 	e.in, e.out = typing("\a\n"), &out
-	e.runFunc = s.shellWidgets(t.Context())
+	e.runFunc = s.shellWidgets(t.Context(), nil)
 	if _, err := e.readLine(drawPrompt("$ ")); err != nil {
 		t.Fatal(err)
 	}

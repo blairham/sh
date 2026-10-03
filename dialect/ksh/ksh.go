@@ -2187,6 +2187,9 @@ func Semantics() interp.Semantics {
 	// this is a different complaint with a wording of its own.
 	s.AliasInvalidNameFatal = interp.Yes
 	s.EarlierDeclarationLetterBlocksALaterPlus = interp.Yes
+	// And the mirror, a minus word after a plus one: see
+	// interp.Semantics.EarlierPlusMakesALaterLetterARemoval (#5667).
+	s.EarlierPlusMakesALaterLetterARemoval = interp.Yes
 	s.HeredocExpandsInTheCommandsProcess = interp.Yes
 	// A `( … )`'s body is **not**, and this is the column that makes it a
 	// second axis rather than a second reading of the line above. `n=0; (

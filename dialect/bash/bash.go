@@ -3024,6 +3024,9 @@ func Semantics() interp.Semantics {
 	// refusal on line 2 of three, line 3 still runs and the shell exits 0.
 	s.AliasInvalidNameFatal = interp.No
 	s.EarlierDeclarationLetterBlocksALaterPlus = interp.No
+	// And the mirror, a minus word after a plus one: see
+	// interp.Semantics.EarlierPlusMakesALaterLetterARemoval (#5667).
+	s.EarlierPlusMakesALaterLetterARemoval = interp.No
 	// A redirection that cannot be made is where bash parts from POSIX and
 	// from three of the panel: `exec 3>/nope/x; echo after` complains and
 	// prints `after` at status 0. It is the starting value rather than a

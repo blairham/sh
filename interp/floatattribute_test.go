@@ -339,22 +339,28 @@ func TestNoNumberAsksTheDialectNothing(t *testing.T) {
 	}
 }
 
-// A plus word takes no number: the letter is being *removed*, so what follows
-// it is an operand and meets the name check like any other. Measured — zsh
-// declares two names for `typeset +F 3 v=1.5` rather than reading a precision
-// it is in the middle of taking away.
-func TestThePlusFormReadsNoNumber(t *testing.T) {
+// A plus word takes its number too, and the letter comes off. Measured
+// 2026-10-03 on zsh 5.9.2 and ksh93u+ 2012-08-01: `typeset +F 3 v=1.5` sets
+// `v` at status 0 with nothing on stderr in both, where `typeset 3` is refused
+// as a name in both, so the `3` was read as the letter's number and not as a
+// second operand (#5667). This test said the opposite until then, from a
+// reading that neither shell gives.
+func TestThePlusFormReadsItsNumber(t *testing.T) {
 	dg := Diagnostics{BuiltinBadNameNumeric: map[string]string{"typeset": "not an identifier: %[2]s"}}
-	_, errs, _ := floatRun(t, `typeset +F 3 v=1.5`, withFloatLetter, dg)
-	if !strings.Contains(errs, "not an identifier: 3") {
-		t.Errorf("stderr = %q, want the number left an operand under the plus form", errs)
+	out, errs, st := floatRun(t, `typeset +F 3 v=1.5; echo "[$v]"`, withFloatLetter, dg)
+	if st != 0 || errs != "" || strings.TrimSuffix(out, "\n") != "[1.5]" {
+		t.Errorf("with a plus: got %q stderr %q status %d, want [1.5] and no refusal", out, errs, st)
 	}
-	// The control: the same word with a minus reads it as the precision and
-	// says nothing, so the row above is about the sign and not about a
-	// letter that never takes a number at all.
-	out, errs, st := floatRun(t, `typeset -F 3 v=1.5; echo "[$v]"`, withFloatLetter, dg)
+	// The control: the same word with a minus reads it as the precision.
+	out, errs, st = floatRun(t, `typeset -F 3 v=1.5; echo "[$v]"`, withFloatLetter, dg)
 	if st != 0 || errs != "" || strings.TrimSuffix(out, "\n") != "[1.500]" {
 		t.Errorf("with a minus: got %q stderr %q status %d, want [1.500]", out, errs, st)
+	}
+	// And a name in that place is still refused, so the row above is about
+	// the number and not about a check that never runs.
+	_, errs, _ = floatRun(t, `typeset 3`, withFloatLetter, dg)
+	if !strings.Contains(errs, "not an identifier: 3") {
+		t.Errorf("stderr = %q, want a bare number refused as a name", errs)
 	}
 }
 

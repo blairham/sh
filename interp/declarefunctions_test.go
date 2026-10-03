@@ -76,6 +76,9 @@ func declRunWith(t *testing.T, src string, set func(*Semantics), dg Diagnostics,
 	// The plus word takes its letters off, which is three of the four —
 	// the exception is one dialect and its own suite says so.
 	sem.EarlierDeclarationLetterBlocksALaterPlus = No
+	// And a minus word after a plus one adds its letters, the mirror and
+	// again three of the four (#5667).
+	sem.EarlierPlusMakesALaterLetterARemoval = No
 	sem.NumericAttributeReplacesTheArrayAttribute = No
 	sem.ArrayLiteralOverANameNotDeclaredAnArrayStartsItOver = No
 	sem.AppendedArrayLiteralOverANameNotDeclaredAnArrayStartsItOver = No

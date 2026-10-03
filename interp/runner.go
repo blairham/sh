@@ -1403,6 +1403,14 @@ type Runner struct {
 	// interp/compounddeclaredonly.go for both, and
 	// Runner.bareAssignmentValue for the listing that reads this one.
 	compoundHeldAnElement map[string]bool
+	// caseLetterUnlisted is the case letter, 'l' or 'u', that a declaration
+	// writing both on one line left standing without a listing letter. The
+	// value folds by it and the listing writes neither, in the dialect that
+	// answers TwoCaseLettersOnOneDeclarationCancel with No. Honored only
+	// while that letter still stands, so a removal elsewhere cannot leave it
+	// describing a letter the name no longer has. See
+	// Runner.twoCaseLettersOnOneLine.
+	caseLetterUnlisted map[string]byte
 	// scalarHeldUnderTheArrayLetter are names whose indexed array held no
 	// element, and had never held one, when a whole-name scalar store landed
 	// on it. The name is still an array of one, but one listing writes it as

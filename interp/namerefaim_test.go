@@ -28,6 +28,9 @@ func namerefAimSemantics() Semantics {
 	sem.UnsetOptions = "vfn"
 	sem.NamerefCycleIsRefused = No
 	sem.BadNameToDeclarationFatal = No
+	// A minus word after a plus one adds its letters, the reading of the two
+	// dialects with the reference letter besides ksh93 (#5667).
+	sem.EarlierPlusMakesALaterLetterARemoval = No
 	sem.ScalarOverACompoundIsAnInconsistentType = No
 	sem.ArrayScalarIsTheWholeArray = No
 	sem.NamerefArrayRefusal = NamerefArrayCheckedLastOnTheAttribute

@@ -4019,6 +4019,9 @@ func Semantics() interp.Semantics {
 	// `alias 'a b'=echo` is accepted in silence here and the name is listed
 	// back, where the two shells that check refuse it (#2413).
 	s.EarlierDeclarationLetterBlocksALaterPlus = interp.No
+	// And the mirror, a minus word after a plus one: see
+	// interp.Semantics.EarlierPlusMakesALaterLetterARemoval (#5667).
+	s.EarlierPlusMakesALaterLetterARemoval = interp.No
 	// Nor does a redirection that cannot be made end anything: the message
 	// is printed and the script runs on. The starting value only — `emulate
 	// sh` and `emulate ksh` move it to the POSIX answer, and `emulate zsh`

@@ -15456,8 +15456,13 @@ came out of the measurement that the issue did not have:
 - **A bad spec is reported after the rows written before it**, which was
   the other way around.
 
-Two axes, asked where the panel splits:
+Three axes, asked where the panel splits:
 
+- `JobsPidsLetterOutranksTheLongLetter` — `-p` and `-l` together, where
+  `-p` is the ids alone. dash 0.5.12, bash 5.3 and ksh93 let the later
+  letter decide (`jobs -pl` is the long listing, `jobs -lp` the ids);
+  BusyBox ash 1.37.0 prints the ids for `-pl`, `-lp`, `-p -l` and
+  `-l -p` alike. Measured 2026-10-03, ash in the pinned image.
 - `JobsPidsOnlyOption` — whether `-p` is the process ids and nothing
   else. dash, bash and ksh93 yes; zsh reads the same letter as the job's
   process *group* and prints its ordinary rows, which is why

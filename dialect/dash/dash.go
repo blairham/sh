@@ -1948,6 +1948,7 @@ func Semantics() interp.Semantics {
 	// running after the interactive shell that started it exits, and nothing
 	// is said about it.
 	s.JobsPidsOnlyOption = interp.Yes
+	s.JobsPidsLetterOutranksTheLongLetter = interp.No
 
 	// Whether a `&` job's command appears in a `jobs` listing.
 	s.JobsShowBackgroundCommand = interp.No

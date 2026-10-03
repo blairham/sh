@@ -1997,6 +1997,9 @@ func Semantics() interp.Semantics {
 	s.JobNoticeNamesThePID = interp.No
 	s.JobsOptions = "lp"
 	s.JobsPidsOnlyOption = interp.Yes
+	// And it outranks `-l` in either order: `jobs -pl`, `-lp`, `-p -l` and
+	// `-l -p` are all the ids alone, measured 2026-10-03 in the pinned image.
+	s.JobsPidsLetterOutranksTheLongLetter = interp.Yes
 	s.JobsShowBackgroundCommand = interp.No
 	s.AnnouncesBackgroundJob = interp.No
 	s.AnnouncesBackgroundJobWithoutTheMonitor = interp.No
@@ -3135,11 +3138,23 @@ func Diagnostics() interp.Diagnostics {
 
 		// The jobs family: the spec first and the sentence after it, which is
 		// the reverse of dash's order.
-		NoSuchJob:           "%[2]s: no such job",
-		NoSuchJobStatus:     2,
-		KillNoSuchJob:       "%[1]s: no such job",
-		WaitNoSuchJob:       "%[1]s: no such job",
-		WaitNoSuchJobStatus: 2,
+		NoSuchJob:       "%[2]s: no such job",
+		NoSuchJobStatus: 2,
+		// `fg` and `bg` read their operand before noticing there is no job
+		// control, as dash's do, and say so in dash's words. Measured
+		// 2026-10-03 in the pinned image from a script with no terminal:
+		// `sleep 1 & fg` is `fg: job (null) not created under job control`,
+		// `fg %1` and `fg %%` name the spec as written, every one at 2; with
+		// nothing in the table a bare `fg` is `fg: No current job` at 2, and
+		// `fg %9` is the no-such-job line above.
+		JobNotUnderJobControl:       "%[1]s: job %[2]s not created under job control",
+		JobNotUnderJobControlStatus: 2,
+		AbsentJobSpec:               "(null)",
+		NoCurrentJob:                "%[1]s: No current job",
+		NoCurrentJobStatus:          2,
+		KillNoSuchJob:               "%[1]s: no such job",
+		WaitNoSuchJob:               "%[1]s: no such job",
+		WaitNoSuchJobStatus:         2,
 		// An operand that is no job spec at all is refused by the *number*
 		// reader rather than by the job table, and it is the same sentence
 		// this shell writes for `shift -1`, `exit abc` and `return abc` —
@@ -3351,7 +3366,17 @@ func Diagnostics() interp.Diagnostics {
 		// ShiftTooMany here. BusyBox writes nothing and returns 1; the
 		// sentence that used to sit on this line is dash's, and it was
 		// unreachable while ShiftPastEndFatal was dash's too.
-		TimesDecimals:   3,
+		TimesDecimals: 3,
+		// `[1]+  ` and then a 27-wide state, measured byte for byte 2026-10-03
+		// in the pinned image: `sleep 0.4 & jobs` is `[1]+  Running` padded
+		// to 33 bytes, and `Done(1)` pads to the same column. The substrate's
+		// fallback is 24 wide, three short of it.
+		JobLine: "[%[1]d]%[2]s  %-27[3]s%[4]s",
+		// `jobs -l` keeps both spaces after the marker and narrows the state
+		// by what the id took, as dash does: `[1]+  7 Running` and `[1]+  126
+		// Running` both end at byte 33. The 21 is that arithmetic for a
+		// five-digit id, dash's convention for the same shape.
+		JobLineLong:     "[%[1]d]%[2]s  %[3]d %-21[4]s%[5]s",
 		JobRunning:      "Running",
 		JobDone:         "Done",
 		JobExited:       "Done(%[1]d)",

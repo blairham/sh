@@ -3505,6 +3505,7 @@ func Semantics() interp.Semantics {
 	// bash's letter of the same name is a different question that stays
 	// unimplemented (#3390).
 	s.JobsPidsOnlyOption = interp.Yes
+	s.JobsPidsLetterOutranksTheLongLetter = interp.No
 	// With both filters at once the last letter given decides, so
 	// `jobs -rs` lists the stopped jobs and `jobs -sr` the running ones.
 	s.JobsStateFiltersAccumulate = interp.No

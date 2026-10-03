@@ -778,6 +778,18 @@ the parameter and reading the bytes that reached the terminal.
   plugin can find its own elements again; it selects no color and is ignored
   here for the same reason zsh ignores it.
 
+### It is read back in zsh's own spelling
+
+zsh parses each element as it is stored and answers a read with its own
+spelling of the parse, not with the text assigned: `bold,fg=green` reads
+back `fg=green,bold`, `P 0 4` reads `P0 4`, an unknown word is gone, a
+`memo=` keeps only its first token, and an element whose offsets do not read
+as numbers comes back `-1 -1 none`. A color is a number rather than a
+choice, so a second `fg=` combines with the first bit by bit — `fg=red,fg=blue`
+is `fg=magenta` — and that is also what is drawn. Measured 2026-10-02 on zsh
+5.9.2 over 63 elements; `dialect/zsh/regionelement.go` has the rows and the
+five rules they come to.
+
 ### It lives as long as the line does
 
 `${(t)region_highlight}` inside a widget is **`array-local-special`**, and

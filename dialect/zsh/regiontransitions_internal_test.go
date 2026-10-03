@@ -75,6 +75,11 @@ func TestZleHighlightCodesWriteTheColors(t *testing.T) {
 		{defaults, []string{"2 4 fg=1"}, "ab\x1b[31mcd\x1b[3Dmefgh"},
 		{defaults, []string{"2 4 bg=2"}, "ab\x1b[42mcd\x1b[4Gmefgh"},
 		{nil, []string{"2 4 fg=196"}, "ab\x1b[38;5;196mcd\x1b[39mefgh"},
+		// Drawn from the same parse a read gives back: the two colors are one
+		// number, combined bit by bit. Measured the same day.
+		{nil, []string{"0 4 fg=red,fg=196"}, "\x1b[38;5;197mabcd\x1b[39mefgh"},
+		{nil, []string{"0 4 fg=196,fg=#00ff00"}, "\x1b[38;2;0;255;196mabcd\x1b[39mefgh"},
+		{nil, []string{"0 4 fg=red,bold,none"}, "abcdefgh"},
 	} {
 		dialect := Dialect()
 		r := &interp.Runner{Name: "zsh", Dialect: &dialect}

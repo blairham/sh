@@ -1267,6 +1267,11 @@ func (r *Runner) waitFor(j *Job) (status int, sig syscall.Signal, interrupted, s
 		r.noticeStoppedJob(j)
 		return 0, 0, false, true
 	}
+	// And a wait is where the shell notices every other job that has ended
+	// too, not only the one it was waiting for. Measured 2026-10-02 on zsh
+	// 5.9.2 (#5349): `sleep 0 & sleep 0 & wait $!; wait %%; wait %-` is
+	// `no current job` and then `no previous job` — job 1 had gone as well.
+	r.noticeFinishedJobs()
 	// The job this wait was for has just ended, and the dialect that reports
 	// a finished job the moment it ends reports this one **before the wait
 	// returns** — measured 2026-09-25 on zsh 5.9.2, `sleep 0.4 & wait; print

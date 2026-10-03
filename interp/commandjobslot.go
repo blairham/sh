@@ -75,7 +75,14 @@ func (r *Runner) holdACommandsJobSlot(nests bool) func() {
 		// slot — before the slot goes. See Runner.forget.
 		r.dropFinishedJobsWhereAnswered()
 		if r.marksByNumber && r.markCurrent != 0 && r.markCurrent == r.commandSlot &&
-			r.jobByNumber(r.markPrevious) != nil {
+			(r.jobByNumber(r.markPrevious) != nil || r.markPrevious != 0 && r.markPrevious == outerSlot) {
+			// Or where `%-` is the command this one runs inside, which then
+			// takes the `+` while the `-` stays on the number let go of.
+			// Measured 2026-10-02 on zsh 5.9.2 (#5349): after `f() { eval
+			// "$1" }; f 'sleep 0 & wait'`, `{ eval 'jobs %-' }` and `if :;
+			// then if :; then jobs %-; fi; fi` are `%-: no such job` — the
+			// `-` names the second number, held again — where `{ jobs %- }`
+			// holds only the first and is `no previous job`.
 			// The `+` was on the command, and goes where `%-` was — where
 			// `%-` is a job. The `-` is left where it is, even on the
 			// number the command is letting go of: measured, `sleep 1 & {
@@ -91,8 +98,15 @@ func (r *Runner) holdACommandsJobSlot(nests bool) func() {
 			//
 			// The `-` is then chosen again from the jobs and, for a command
 			// inside another, the numbers still held.
+			fromOuter := r.jobByNumber(r.markPrevious) == nil
 			r.markCurrent = r.markPrevious
 			r.markPrevious = r.highestJobBut(r.markCurrent, outerSlot != 0)
+			if fromOuter {
+				// The `-` this leaves is on the number being let go of,
+				// and reads as one only while a command holds it again.
+				// See findJobQuietly.
+				r.lapsedPrevious = r.markPrevious
+			}
 		}
 		r.commandSlotHeld, r.commandSlot, r.commandSerial = outerHeld, outerSlot, outerSerial
 		if outerSlot != 0 {

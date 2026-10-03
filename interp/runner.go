@@ -3072,6 +3072,10 @@ type Runner struct {
 	// marker. See Runner.engageMarksByNumber.
 	marksByNumber             bool
 	markCurrent, markPrevious int
+	// lapsedPrevious is a `-` an inner command's number took as the
+	// command let go of it, which names nothing while no command holds that
+	// number again. See Runner.holdACommandsJobSlot (#5349).
+	lapsedPrevious int
 	// commandSerial counts the commands that have held a slot, so that a
 	// job noticed under one is told from a job noticed under the next — see
 	// Job.noticedInCommand.

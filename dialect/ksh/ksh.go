@@ -1852,6 +1852,9 @@ func Semantics() interp.Semantics {
 	// An array letter given a plain word: see
 	// interp.Semantics.ArrayLetterWithAWordDeclaresAScalar (#5630).
 	s.ArrayLetterWithAWordDeclaresAScalar = interp.Yes
+	// A plus-only line's value, and the letters it takes off: see
+	// interp.Semantics.PlusLetterComesOffAfterTheValueLands (#5663).
+	s.PlusLetterComesOffAfterTheValueLands = interp.Yes
 	// A `-p` listing whose first option word is plus-signed: see
 	// interp.Semantics.PlusSignedPrintListsNoValues (#5642).
 	s.PlusSignedPrintListsNoValues = interp.Yes

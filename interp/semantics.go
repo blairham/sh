@@ -13712,6 +13712,44 @@ type Semantics struct {
 	// letter comes off there (`s=b`), and this stores `B` (#5663).
 	DeclarationAssignmentResetsTheAttributes Answer
 
+	// PlusLetterComesOffAfterTheValueLands stores the value of a declaration
+	// whose letters are all plus-signed through the attributes the name still
+	// carries, and only then takes the letters off: ksh93. bash and zsh take
+	// them off first.
+	//
+	// Measured 2026-10-03 on ksh93u+ 2012-08-01 under `-c` (#5663):
+	//
+	//	typeset -l s=A; typeset +l s=B; typeset -p s         s=b
+	//	typeset -u s=a; typeset +u s=b; typeset -p s         s=B
+	//	typeset -lx s=A; typeset +l s=B; typeset -p s        typeset -x s=b
+	//	typeset -l s=A; typeset +lu s=Bc; typeset -p s       s=bc
+	//	typeset -l -L4 s=A; typeset +L s=B; typeset -p s     typeset -l s='b   '
+	//	typeset -l -a s=(A); typeset +l s=Bc; typeset -p s   typeset -a s=(bc)
+	//	typeset -l s=A; typeset +l s; s=B; typeset -p s      s=B   (the control)
+	//
+	// against bash 5.3.20's `declare -- s="B"` and zsh 5.9's `typeset s=B`
+	// for the first row. A name with no case letter left is reset before
+	// this is asked (DeclarationAssignmentResetsTheAttributes), so
+	// `typeset -i s=1; typeset +i s=2+3` is `2+3` without it. A keyword
+	// function's `typeset +l s=B` is a fresh local, which has nothing to fold
+	// with.
+	//
+	// Left unmodeled: a line mixing the signs. There ksh93 reads a minus
+	// letter beside a plus one as another removal, so `typeset +l -x s=Bc`
+	// over `-l` is `s=bc` with no `-x`. It also has a state carrying both
+	// case letters that lists neither and folds lower (`typeset -u +l s=Bc`).
+	// See #5667.
+	//
+	// unpinned ksh: no corpus row assigns on a plus-only line over a case
+	// letter; pinned by TestAPlusLetterComesOffAfterTheValueLands.
+	//
+	// unpinned bash: likewise, pinned by
+	// TestAPlusLetterComesOffBeforeTheValueLands.
+	//
+	// unpinned zsh: likewise, pinned by
+	// TestAPlusLetterComesOffBeforeTheValueLands.
+	PlusLetterComesOffAfterTheValueLands Answer
+
 	// LocalInheritsTheExportAttribute gives a local declaration the export
 	// attribute of the name it shadows, so a child sees the local's value
 	// under the shadowed name. bash and dash say yes; zsh says no and hands

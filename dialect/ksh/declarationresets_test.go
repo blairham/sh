@@ -26,6 +26,12 @@ func TestADeclarationThatAssignsResetsTheAttributes(t *testing.T) {
 		{`typeset -lx s=Ab; typeset s=7; typeset -p s`, "typeset -x -l s=7\n"},
 		{`typeset -lt s=Ab; typeset s=7; typeset -p s`, "typeset -t -l s=7\n"},
 		{`typeset -lx s=A; readonly s=B; typeset -p s`, "typeset -x -r -l s=b\n"},
+		// Beside a numeric letter `-l` and `-u` are long and unsigned, and
+		// they keep nothing (#5663).
+		{`typeset -il s=1; typeset s=2+3; typeset -p s`, "s=2+3\n"},
+		{`typeset -iu s=1; typeset s=2+3; typeset -p s`, "s=2+3\n"},
+		{`typeset -Fl s=1; typeset s=7; typeset -p s`, "s=7\n"},
+		{`typeset -l -i s=1; typeset +i s=Ab; typeset -p s`, "s=Ab\n"},
 		// One on this declaration does not.
 		{`typeset -x s=1; typeset -l s=B; typeset -p s`, "typeset -l s=b\n"},
 		{`typeset -Z3 s=1; typeset -l s=7; typeset -p s`, "typeset -l s=7\n"},

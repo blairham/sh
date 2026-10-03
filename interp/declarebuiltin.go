@@ -2162,6 +2162,16 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) (endSt
 			if r.unspecified {
 				return r.status
 			}
+			if r.plusLetterComesOffAfterTheValue(name, df) {
+				// The value goes through the letters the name carries
+				// before this line takes any off, so it lands as they would
+				// have shaped it: `typeset -l s=A; typeset +l s=B` holds
+				// `b`, and `+L` over `-l -L4` keeps the padding.
+				value = r.widthPadded(name, r.caseFolded(name, value))
+			}
+			if r.unspecified {
+				return r.status
+			}
 		}
 		// The kind this line names takes the place of the kind the name had,
 		// in the one dialect that answers it that way. Ahead of both the
@@ -5357,7 +5367,7 @@ func (r *Runner) declareEmpty(name string, fresh, keepsTheEnvironmentEntry, name
 // That is narrower than the rule that stood here, which exempted any name the
 // running scope had shadowed.
 func (r *Runner) declarationAssignmentResets(name string, fresh, namesExport, valueToo bool) {
-	if fresh || r.lowered[name] || r.uppered[name] {
+	if fresh || r.caseLetterStands(name) {
 		// A case letter already on the name keeps every attribute, export
 		// included: `typeset -lx s=A; typeset s=7` is `typeset -x -l s=7`
 		// there, and `typeset -lt s=A; export s=B` keeps the `-t`. A case
@@ -5389,7 +5399,49 @@ func (r *Runner) declarationAssignmentResets(name string, fresh, namesExport, va
 		delete(r.fieldWidth, name)
 		delete(r.traced, name)
 		delete(r.hidden, name)
+		// Beside a numeric letter, `-l` and `-u` are long and unsigned
+		// rather than case letters (see caseLetterStands), and they go with
+		// the number.
+		delete(r.lowered, name)
+		delete(r.uppered, name)
 	}
+}
+
+// caseLetterStands reports whether the name carries `-l` or `-u` as a case
+// letter. Beside a numeric letter the same two letters mean long and
+// unsigned, and they keep nothing: `typeset -il s=1; typeset s=2+3` and
+// `typeset -Fl s=1; typeset s=7` reset there like any other name, and so
+// does `-iu` (#5663).
+func (r *Runner) caseLetterStands(name string) bool {
+	if r.integer[name] {
+		return false
+	}
+	if _, float := r.floatPrecision[name]; float {
+		return false
+	}
+	return r.lowered[name] || r.uppered[name]
+}
+
+// plusLetterComesOffAfterTheValue reports whether a line whose letters are
+// all plus-signed stores its value through the attributes the name still
+// carries, before they come off. It is asked only where the answer could
+// show: a case letter still on the name once the reset has run. A width with
+// no case letter beside it is gone by then in the dialect that answers Yes.
+//
+// All plus, because that is what was measured. A line mixing the signs reads
+// differently there (#5667). On a minus-only line the shaping changes nothing,
+// since the store folds through the same letters, so no row tells that guard
+// apart from its absence.
+// See Semantics.PlusLetterComesOffAfterTheValueLands.
+func (r *Runner) plusLetterComesOffAfterTheValue(name string, f declareFlags) bool {
+	if f.letterSigns == "" || strings.Contains(f.letterSigns, "-") {
+		return false
+	}
+	if !r.caseLetterStands(name) {
+		return false
+	}
+	return r.ask(r.sem().PlusLetterComesOffAfterTheValueLands,
+		"a plus-signed letter coming off after the line's value lands")
 }
 
 // carriesAValueAttribute reports whether the name carries one of the

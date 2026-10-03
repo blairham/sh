@@ -29,6 +29,20 @@ func (e *editor) escape(prompt drawnPrompt) keyRead {
 	if got != keyContinues {
 		return got
 	}
+	if e.prefixArgument && (b >= '0' && b <= '9' || b == '-') {
+		// A count for the next keystroke, which this keystroke spends
+		// nothing of. See prefixarg.go.
+		e.count.add(b)
+		return keyContinues
+	}
+	if e.spendCountOnEscape() {
+		// A negative count turns a word move into the other one, and
+		// the replayed key with it.
+		if o, ok := escapeOpposites[b]; ok {
+			b = o
+			e.keyBytes[len(e.keyBytes)-1] = b
+		}
+	}
 	switch b {
 	case '[':
 		return e.controlSequence(prompt)

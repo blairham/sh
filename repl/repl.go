@@ -2608,6 +2608,7 @@ func (s Shell) newEditor(ctx context.Context, state *terminalState) *editor {
 		noTerminal:     state == nil,
 		bracketedPaste: s.Editor.BracketedPaste,
 		pasteCodes:     s.bracketedPasteCodes(),
+		prefixArgument: s.Editor.PrefixArgument,
 		pastedStyle:    s.Editor.PastedTextStyle,
 		pastedStyleEnd: s.Editor.PastedTextStyleEnd,
 		selfInsert:     s.Editor.SelfInsertWidget,

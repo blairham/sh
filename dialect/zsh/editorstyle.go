@@ -39,8 +39,11 @@ func EditorStyle() repl.EditorStyle {
 		// loads and a person unsets to turn the bracketing off. See
 		// zleboot.go.
 		BracketedPasteParameter: bracketedPasteParameter,
-		PastedTextStyle:         "\x1b[7m",
-		PastedTextStyleEnd:      "\x1b[27m",
+		// And ESC with a digit or a minus is a count for the next key.
+		// Measured; see repl's prefixarg.go (#5498).
+		PrefixArgument:     true,
+		PastedTextStyle:    "\x1b[7m",
+		PastedTextStyleEnd: "\x1b[27m",
 		// What this shell calls typing, so a widget put in front of it actually
 		// intercepts a printable key. See repl's EditorStyle.SelfInsertWidget
 		// and #2485.

@@ -106,6 +106,14 @@ func (e *editor) matchBinding(first byte) (Binding, bool, keyRead) {
 		if w, known := defaultKeys[seq]; known {
 			return Binding{Widget: w}, true, keyContinues
 		}
+		if e.prefixArgument && len(seq) == 2 && seq[0] == esc && (seq[1] >= '0' && seq[1] <= '9' || seq[1] == '-') {
+			// ESC and a digit is a count, here as in escape.go: a rebinding
+			// that begins with ESC must not take the counts away with it.
+			// See prefixarg.go.
+			e.count.add(seq[1])
+			e.countKey = true
+			return Binding{}, true, keyContinues
+		}
 		if !anyDefaultStartsWith(seq) {
 			// Nothing anywhere answers to it, and nothing longer could. The
 			// bytes are dropped rather than typed into the line, which is what

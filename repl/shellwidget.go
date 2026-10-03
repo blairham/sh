@@ -58,6 +58,10 @@ type Line struct {
 	// reports as the keymap a widget is running in.
 	ViCommand bool
 
+	// Numeric is the count typed before the key, where one was: zsh's
+	// `$NUMERIC`. Nil where none was typed. See prefixarg.go.
+	Numeric *int
+
 	// Accept says the widget asked for the line to be committed, which is
 	// what `zle accept-line` inside a widget means. It is a *request* carried
 	// back rather than something the widget did, because an accept is the

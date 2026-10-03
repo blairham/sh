@@ -14,7 +14,7 @@ filing the table as work.
     21 real results      <- the number the burndown moves
     487 differing lines
 
-**Since that commit, fifteen files have become real results**, each verified
+**Since that commit, twenty-six files have become real results**, each verified
 byte-identical in output and status under the reference's own driver:
 
     C02cond          59 of 59 chunks   82566556f   #5146
@@ -32,6 +32,17 @@ byte-identical in output and status under the reference's own driver:
     V06parameter      5 of 5           c368f04ea   #5159, on this Mac and in the suite's image
     D06subscript     37 of 37          e5ebb3e9a   #5152, on this Mac and in the suite's image
     X04zlehighlight  12 of 12          29bf413de   #5166, on this Mac and in the suite's image
+    A01grammar      109 of 109         7c2c0da0d   #5138  ┐
+    A05execution     39 of 39          7c2c0da0d   #5140  │
+    B02typeset       79 of 79          7c2c0da0d   #5142  │
+    B03print         66 of 66          7c2c0da0d   #5143  │ re-measured together, see
+    C01arith         73 of 73          7c2c0da0d   #5145  │ "The ranking, re-measured
+    C03traps         75 of 75          7c2c0da0d   #5147  │ after #5448" below; on this
+    C04funcdef       52 of 52          7c2c0da0d   #5148  │ Mac and in the suite's image
+    D07multibyte     53 of 53          7c2c0da0d   #5153  │
+    E01options       94 of 94          7c2c0da0d   #5155  │
+    V10private       25 of 25          7c2c0da0d   #5161  │
+    V14system        16 of 16          7c2c0da0d   #5164  ┘
 
 `E03posix` was measured at `5d1dc7eaa`, 2026-10-02, under the reference's own
 driver run serially from `Test/`: 18 of 18 chunks and 510 driver lines with 0
@@ -78,7 +89,7 @@ on a widget's parameters (#5464), the element read back in zsh's spelling
 (#5471), `zsh/nearcolor` (#5478), `$LASTWIDGET` (#5482) and the ground under a
 cleared screen (#5486).
 
-So the count the burndown moves is **36** today. The roll-up figures above are left at the commit they were taken at
+So the count the burndown moves is **47** today. The roll-up figures above are left at the commit they were taken at
 rather than adjusted by hand: the whole-suite run is CI's, and a line total
 edited in place is a number nobody can reproduce.
 
@@ -93,12 +104,14 @@ and carries 51. 436 + 51 = 487, and real results are 21 either way. A per-file
 sum that does not reconcile with the whole-suite run is a fault in one of
 them — see `instruments.md` §11 for the one it caught here.
 
-## Real results (21 at `37355aae5`, 35 today)
+## Real results (21 at `37355aae5`, 47 today)
 
 These carry a result rather than an agreed refusal. `C02cond`, `D09brace`,
 `V12zparseopts`, `V13zformat`, `C05debug`, `W01history`, `A02alias`,
 `B07emulate`, `V04features`, `D01prompt`, `V09datetime`, `E03posix`,
-`V06parameter` and `D06subscript` are the twenty-second through thirty-fifth and are listed here rather than below; every
+`V06parameter`, `D06subscript`, `X04zlehighlight` and the eleven re-measured
+at `7c2c0da0d` are the twenty-second through forty-seventh and are listed in
+the figures above rather than below; every
 other entry is as measured at the heading's commit.
 
 `V09datetime` is a real result **in the suite's image and not on a Mac**, and
@@ -189,7 +202,51 @@ can reach 0 differing lines without ever carrying a result.
 
 - `Z03run-help`
 
-## Failing (19), ranked by chunks unreached
+## The ranking, re-measured after #5448
+
+**Measured at `7c2c0da0d`, 2026-10-02**, every row of the old table below and
+every refusal-agreement file, one file per driver run, serially, by the method
+in "How to reproduce this table". That method now includes the step #5448 added
+to the harness: the reference's own module directory is linked at
+`Test/Modules`. The harness figure beside each row comes from
+`suitecheck -dialect zsh -only <file> -jobs 1`, with the graded binary named
+`zsh`. The suite's image is `ghcr.io/blairham/sh/zsh@sha256:aab8255c…` (zsh
+5.9.2, aarch64-unknown-linux-gnu), run non-verbose with its own module
+directory linked. This Mac's reference is `/opt/homebrew/bin/zsh` (zsh 5.9.2,
+aarch64-apple-darwin25.4.0).
+
+**Eleven of the nineteen rows are now real results**, and the other lanes'
+closing PRs did the work: `A01grammar`, `A05execution`, `B02typeset`,
+`B03print`, `C01arith`, `C03traps`, `C04funcdef`, `D07multibyte`, `E01options`,
+`V10private` and `V14system`. On this Mac each one gets through every chunk the
+reference does, says `all tests successful`, and reads strict 1/1 with
+`ref cannot run` 0/1 and line agreement 100.0% through the harness. In the
+image each one says `all tests successful` under both shells, with the driver
+output byte-identical. The one exception is `D07multibyte`, whose second line
+names the locale the preparation chose. In this bare image, which has only
+`C`, `C.utf8` and `POSIX`, the reference falls back to `C.utf8` and this shell
+takes `en_US.UTF-8` without data for it. That is #5503, and CI's suite job
+installs `locales-all`, so it should not see the difference.
+
+What is left:
+
+| unreached | ref | ours | harness | file | today's front |
+|---:|---:|---:|---|---|---|
+| 185 | 246 | 61 | strict 0/1, 10 lines | `D04parameter` | `${(QX)...}` (the same front in the image) |
+| 12 | 12 | 0 | strict 0/1, 2 lines | `V07pcre` | *a decline (#4737)* |
+| 61 | 61 | 0 | strict 0/1, 6 lines | `V02zregexparse` | *a decline (#4761)* |
+| 0 | 5 | 5 | strict 1/1, `ref cannot run` 1/1 | `E02xtrace` | *the reference fails its own sixth chunk; both stop at `a function that redefines itself preserves tracing`* |
+
+**The module link moved none of the thirteen refusal agreements.** Each was run
+the same way, and each still has a reference that fails before or at its first
+chunk, with this shell failing at the same place and the harness reading
+`ref cannot run` 1/1. So the list below stands as it was.
+
+The rest of this section is the table as it stood at `d3a708b3d`. It is kept
+for its notes, which are about the instrument and still hold, and not for its
+figures.
+
+## Failing (19 at `d3a708b3d`), ranked by chunks unreached
 
 **Measured at `d3a708b3d`, 2026-09-30**, one file per driver run — every row
 still in the table. The `ref` column of seven rows was corrected afterwards at
@@ -228,13 +285,20 @@ out — a number nobody can reproduce. It is:
 ```
 cd build/suite/zsh-zsh-5.9.2/Test
 ln -sf <the shell being counted> ../Src/zsh
+ln -sfn "$(<reference> -fc 'print -r -- $module_path[1]')" Modules
 ZTST_verbose=2 ZTST_exe=<same shell> <same shell> +Z -f ./ztst.zsh ./<file>.ztst
 ```
 
 and the count is the `Running test` lines, **less one if the run printed
-`: test failed.`** — the chunk it stopped on was attempted, not gotten
-through. Three ways to get it wrong, each of which produces a plausible
-number rather than an error:
+`: test failed.`** (or `: test XPassed.`), because the chunk it stopped on was
+attempted and not gotten through. Match that line anchored, as
+`^\./<file>\.ztst: test (failed|XPassed)\.$`. A file that prints the driver's
+own source also contains the unanchored words, and the first count of the
+re-measure above read two failures into `B02typeset`, which passes. Run the
+`grep` with `LC_ALL=C` and `-a`, because some files write bytes that are not
+text, and a plain `grep` then says `Binary file matches` instead of a count.
+Three more ways to get it wrong, each of which produces a plausible number
+rather than an error:
 
 - **Run it from anywhere but `Test/`.** `ZTST_testdir` comes out as the cwd,
   so the suite's own `$ZTST_testdir/../Src/zsh` misses and the *reference*

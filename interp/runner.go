@@ -1693,6 +1693,13 @@ type Runner struct {
 	// no lines of its own, so the location names the call rather than the
 	// body.
 	speakerLine int
+	// speakerDepth is how many frames stood once that function's own frame
+	// was pushed, which is where a report it makes steps out to. See
+	// biDiagnose.
+	speakerDepth int
+	// speakerAtTheCall says a report the speaking function makes has been
+	// stepped out to its call, so a function the caller is in counts again.
+	speakerAtTheCall bool
 	// sourcingPrelude is on while the dialect's own shell text is being read,
 	// which is what tells a function it defines from one a script does.
 	sourcingPrelude bool
@@ -5855,7 +5862,7 @@ func (r *Runner) locationPrefixNamed(construct string) string {
 		// borrowed text's own name all stay whatever they already were.
 		d.Location = LocationNameOnly
 	}
-	name, line, inBody := r.locationNameAndLine(r.speaker == "")
+	name, line, inBody := r.locationNameAndLine(r.speaker == "" || r.speakerAtTheCall)
 	if construct != "" {
 		name += ": " + construct
 	}
@@ -5871,10 +5878,10 @@ func (r *Runner) locationPrefixNamed(construct string) string {
 			// that names a function in place of a file, and the one
 			// dialect that names borrowed text after the location does
 			// not have it.
-			return d.prefix(name, r.inBuiltin, r.builtinIsSpeaking(), line)
+			return d.prefix(name, r.speaking(), r.builtinIsSpeaking(), line)
 		}
 		// Nothing to count, so nothing is written: `f: ` and not `f:0: `.
-		return d.prefixWithoutLine(name, r.inBuiltin)
+		return d.prefixWithoutLine(name, r.speaking())
 	}
 	if r.speaker != "" {
 		line = r.speakerLine

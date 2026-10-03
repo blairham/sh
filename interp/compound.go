@@ -1855,11 +1855,11 @@ func (r *Runner) callFuncInPlace(ctx context.Context, fn *syntax.FuncDecl, name 
 	// than the script, so what it reports is named after it and located where
 	// it was called. The outermost such call owns both: a prelude helper it
 	// calls in turn adds nothing, because the script named the outer one.
-	savedSpeaker, savedSpeakerLine := r.speaker, r.speakerLine
+	savedSpeaker, savedSpeakerLine, savedSpeakerDepth := r.speaker, r.speakerLine, r.speakerDepth
 	if r.speaker == "" && r.speaksForTheShell(fn) {
-		r.speaker, r.speakerLine = fn.Name, r.line
+		r.speaker, r.speakerLine, r.speakerDepth = fn.Name, r.line, len(r.frames)
 	}
-	defer func() { r.speaker, r.speakerLine = savedSpeaker, savedSpeakerLine }()
+	defer func() { r.speaker, r.speakerLine, r.speakerDepth = savedSpeaker, savedSpeakerLine, savedSpeakerDepth }()
 	// Where the function was written, so a dialect that numbers a message
 	// from the function rather than from the file can subtract it. The frame
 	// above carries the same line, for the dialect that reports it per frame

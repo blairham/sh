@@ -587,7 +587,7 @@ func (r *Runner) badBuiltinName(builtin, operand, name string, fatal Answer) int
 		// own branch rather than BuiltinBadNameNamesTheShellAlone below,
 		// which writes the name the *shell* was invoked by: this one writes
 		// the script's, which is what the reference does.
-		who, _, _ := r.locationNameAndLine(r.speaker == "")
+		who, _, _ := r.locationNameAndLine(r.speaker == "" || r.speakerAtTheCall)
 		r.errf("%s%s\n", d.prefixWithoutLine(who, r.inBuiltin), line)
 	} else if d.BuiltinBadNameNamesTheShellAlone[key] {
 		// This one complaint reports as the shell itself, where the same

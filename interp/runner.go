@@ -4847,6 +4847,11 @@ type Runner struct {
 	// where an assignment's value's tildes do not reach, and is spent by the
 	// word pipeline. See interp/equalscontextposition.go.
 	outsideTheEqualsContext bool
+	// equalsTildeBuiltins names the builtins whose arguments' first `=`
+	// opens a tilde context, and equalsTildeContext is armed for one such
+	// argument. See interp/equalstildebuiltins.go.
+	equalsTildeBuiltins map[string]bool
+	equalsTildeContext  bool
 	// pipeStatus is what the last pipeline's elements reported, and
 	// pipeStatusName is what the dialect calls it. The record is only kept
 	// when a dialect has named it, because nothing else can read it.
@@ -8240,6 +8245,8 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 		restorePosition := func() {}
 		if r.namesTheCommand(c.Args, i) {
 			restorePosition = r.outsideTheEqualsContextWord()
+		} else if r.equalsOpensATildeContextFor(c, argv, i) {
+			restorePosition = r.equalsTildeContextWord()
 		}
 		// expandWord split in two, so the match can be decided between the
 		// halves rather than before the word is read.

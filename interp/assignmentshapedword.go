@@ -35,8 +35,11 @@ import (
 // Called beside expandTilde, which has already answered for a word the tilde
 // *opens*. What is left to this is the tilde after the `=` and the ones after
 // the colons that follow it.
-func (r *Runner) expandAssignmentShapedWord(w *syntax.Word) {
-	span, eq, ok := r.tildeContextEquals(w)
+//
+// builtin says the word is an argument of a builtin whose first `=` opens the
+// context in any case. See interp/equalstildebuiltins.go.
+func (r *Runner) expandAssignmentShapedWord(w *syntax.Word, builtin bool) {
+	span, eq, ok := r.tildeContextEquals(w, builtin)
 	if !ok {
 		return
 	}
@@ -71,7 +74,7 @@ func (r *Runner) expandAssignmentShapedWord(w *syntax.Word) {
 // that could actually move, so that an ordinary `cc -DX=1` asks nothing: a
 // refusal reported for every `=` on a command line would be an axis refusing
 // the shape rather than the behavior.
-func (r *Runner) tildeContextEquals(w *syntax.Word) (span, eq int, ok bool) {
+func (r *Runner) tildeContextEquals(w *syntax.Word, builtin bool) (span, eq int, ok bool) {
 	if len(w.Spans) == 0 {
 		return 0, 0, false
 	}
@@ -83,7 +86,7 @@ func (r *Runner) tildeContextEquals(w *syntax.Word) (span, eq int, ok bool) {
 	if !wOK || !tildeCouldMove(w.Spans, wSpan, wEq) {
 		return 0, 0, false
 	}
-	if r.assignmentShapeIsATildeContext(w, wSpan, wEq) {
+	if builtin || r.assignmentShapeIsATildeContext(w, wSpan, wEq) {
 		return wSpan, wEq, true
 	}
 	if !r.ask(r.sem().TheFirstUnquotedEqualsInAWordOpensATildeContext,

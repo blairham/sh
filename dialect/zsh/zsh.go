@@ -6675,6 +6675,14 @@ func Apply(r *interp.Runner) {
 	// `~[name]` is a directory a script's own function names. See
 	// dynamicdir.go.
 	r.DynamicDirectoryFunctions = zshDynamicDirectoryFunctions
+	// The builtins that read an argument's first `=` as an assignment's, so
+	// `builtin local x=~root` and `alias a=~root` both name the home (#5670).
+	// See interp/equalstildebuiltins.go.
+	for _, name := range []string{
+		"alias", "hash", "typeset", "local", "export", "readonly", "declare", "float", "integer",
+	} {
+		r.MarkBuiltinWhoseEqualsOpensATildeContext(name)
+	}
 	r.NumberedTildeSwapsItsSigns = func(r *interp.Runner) bool { return recordedDeviates(r, "pushdminus") }
 	// This shell has an `enable`, but a different one: it works on hash
 	// tables and takes none of bash's options — `enable -n` is a bad option

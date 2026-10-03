@@ -22,7 +22,10 @@ func TestAReadWriteRedirectionTakesTheSubstitutionsEnd(t *testing.T) {
 		{"print a 3<> >(tr a c) >&3; echo st=$?", "c\nst=0\n", ""},
 		{"{ print x >&4 } 4<> >(tr x y); echo st=$?", "y\nst=0\n", ""},
 		{"cat <> <(echo in); echo st=$?", "in\nst=0\n", ""},
-		{"x=>(cat); print a <> $x; echo st=$?", "st=1\n", "bad file descriptor"},
+		// The wording is the platform's: `bad file descriptor` for the
+		// `/dev/fd` path on macOS, `no such file or directory` for the
+		// `/proc/self/fd` one on Linux. What is asserted is the refusal.
+		{"x=>(cat); print a <> $x; echo st=$?", "st=1\n", "/fd/"},
 	} {
 		var out, errs strings.Builder
 		sh := scratchShell(t)

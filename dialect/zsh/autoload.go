@@ -308,11 +308,17 @@ func autoloadMark(r *interp.Runner, names []string, opts autoloadOpts) int {
 		// path is part of the stub: `autoload -r f` lists as
 		// `builtin autoload -X <dir>`, so the search has to have happened
 		// for there to be a directory to write. A plain declaration says
-		// "search at the call" instead, and a name declared with `-r` once
-		// and plainly afterwards must not keep answering from the first
-		// declaration's file.
+		// "search at the call" instead — for a name not already waiting, since one
+		// that is keeps the directory it was given. See autoloadMergeStub.
+		// A name already waiting keeps what it was given and gains what
+		// this line adds — its directory included, whichever way it got one.
+		// See autoloadMergeStub.
+		opts := opts
+		oldDir, waiting := autoloadMergeStub(r, name, &opts)
 		dir := ""
-		if absolute {
+		if waiting && oldDir != "" && !absolute {
+			dir = oldDir
+		} else if absolute {
 			autoloadRecordPath(r, name, file)
 			dir = dirOfFile
 		} else if opts.fixPath {
@@ -338,6 +344,47 @@ func autoloadMark(r *interp.Runner, names []string, opts autoloadOpts) int {
 		autoloadRecord(r, name)
 	}
 	return status
+}
+
+// autoloadMergeStub folds a pending stub's letters into opts and returns its
+// directory, for a name declared again while it waits. Measured 2026-10-02 on
+// zsh 5.9.2 (#5148):
+//
+//	autoload -Uz /p/spec; autoload spec       still -XUz /p, and loads from /p
+//	autoload -r def; autoload def             still -X /p
+//	autoload -Uz q; autoload -k q             -XUk — z and k replace each other
+//	autoload -Uz /p/spec2; autoload -r spec2  still -XUz /p
+//
+// so the letters accumulate, the style letter is the newest one written, and
+// a directory once given is not taken back by a line that gives none.
+func autoloadMergeStub(r *interp.Runner, name string, opts *autoloadOpts) (dir string, waiting bool) {
+	line, ok := autoloadStubLine(r, name)
+	if !ok {
+		return "", false
+	}
+	rest := strings.TrimPrefix(line, autoloadStubPrefix)
+	letters, word, _ := strings.Cut(rest, " ")
+	for _, c := range letters {
+		switch c {
+		case 'U':
+			opts.keepAliases = true
+		case 'z':
+			if !opts.kshStyle {
+				opts.zshParse = true
+			}
+		case 'k':
+			if !opts.zshParse {
+				opts.kshStyle = true
+			}
+		case 'c':
+			opts.orDefault = true
+		}
+	}
+	word = strings.TrimSpace(word)
+	if strings.HasPrefix(word, "'") && strings.HasSuffix(word, "'") && len(word) >= 2 {
+		word = strings.ReplaceAll(word[1:len(word)-1], `'\''`, "'")
+	}
+	return word, true
 }
 
 // autoloadFromDeclaration is `typeset -f` with the marking letters: this

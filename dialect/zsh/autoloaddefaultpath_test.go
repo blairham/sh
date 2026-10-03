@@ -32,3 +32,19 @@ func TestAutoloadDFallsBackToFpath(t *testing.T) {
 		}
 	}
 }
+
+// TestAutoloadAgainKeepsWhatTheStubHad pins a declaration of a name already
+// waiting. Measured 2026-10-02 on zsh 5.9.2 under `-f` (#5148). See
+// autoloadMergeStub.
+func TestAutoloadAgainKeepsWhatTheStubHad(t *testing.T) {
+	cases := []struct{ src, want string }{
+		{"autoload -Uz /p/spec; autoload spec; functions spec", "spec () {\n\t# undefined\n\tbuiltin autoload -XUz /p\n}\n"},
+		{"autoload -Uz q; autoload -k q; functions q", "q () {\n\t# undefined\n\tbuiltin autoload -XUk\n}\n"},
+		{"autoload -k w; autoload -z w; functions w", "w () {\n\t# undefined\n\tbuiltin autoload -Xz\n}\n"},
+	}
+	for _, c := range cases {
+		if got, _ := runZshOnPath(t, t.TempDir(), c.src); got != c.want {
+			t.Errorf("%s\n got %q\nwant %q", c.src, got, c.want)
+		}
+	}
+}

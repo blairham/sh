@@ -107,3 +107,21 @@ func (r *Runner) rcExpandOn(s syntax.Span) bool {
 	}
 	return r.sem().ParamExpansionDistributesOverTheWord == Yes
 }
+
+// subscriptNamesOneValue reports whether a subscript names a single value,
+// so that a lookup finding nothing comes to the empty string rather than to
+// no values at all: one element or key, or a search letter that answers one
+// match. A whole-array subscript, a range, and the searches that answer
+// every match — `R` and `I`, and `K` over a table — name a list.
+func (r *Runner) subscriptNamesOneValue(e *syntax.ParamExpr) bool {
+	if e.Index == nil || r.wholeArrayIndex(e) || r.subscriptIsARange(e) || dotRanged(e) {
+		return false
+	}
+	if e.IndexFlags != nil {
+		switch lastOf(e.IndexFlags.Flags, searchSubscriptFlags) {
+		case 'R', 'I', 'K':
+			return false
+		}
+	}
+	return true
+}

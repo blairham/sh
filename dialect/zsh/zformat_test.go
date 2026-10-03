@@ -133,15 +133,17 @@ func TestZformatTernaryAsksArithmeticUnderDashFAndWidthUnderDashF(t *testing.T) 
 		// script, so the `echo` after it never runs. A builtin that read it
 		// as 0 would choose the true text and hand its caller a plausible
 		// answer to a question that failed.
+		//
+		// The shell stops at **0**, and after a `false` too: the script ends
+		// on the builtin's own status, where the same division in `$(( ))`
+		// ends it at 1. Measured on zsh 5.9.2 (2026-10-03).
 		name:    "an-expression-that-will-not-evaluate-stops-the-script",
-		snippet: `zformat -f R "%0(c.y.n)" "c:1/0" 2>&1; echo "st=$? [$R]"`,
+		snippet: `false; zformat -f R "%0(c.y.n)" "c:1/0" 2>&1; echo "st=$? [$R]"`,
 		want:    "zsh:1: division by zero\n",
-		status:  1,
 	}, {
 		name:    "and-so-does-one-that-will-not-parse",
-		snippet: `zformat -f R "%0(c.y.n)" "c:1+" 2>&1; echo "st=$? [$R]"`,
+		snippet: `false; zformat -f R "%0(c.y.n)" "c:1+" 2>&1; echo "st=$? [$R]"`,
 		want:    "zsh:1: bad math expression: operand expected at end of string\n",
-		status:  1,
 	}, {
 		name:    "an-unclosed-ternary-is-a-refusal",
 		snippet: `zformat -f R "%(c.y" c:0 2>&1; echo "st=$? [$R]"`,

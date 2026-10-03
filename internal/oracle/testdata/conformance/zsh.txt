@@ -7,7 +7,6 @@ arith/a-subscript-the-source-left-open-takes-the-value-bracket
 arith/an-integer-name-given-a-bare-radix-prefix
 array/a-string-subscript-in-a-utf8-locale
 assoc/a-literal-element-keyed-with-a-blank
-autoload/the-two-signs-of-x
 axis/a-failed-case-subject
 axis/trap-body-line-signal
 case/an-unset-subject-under-u-keeps-its-status
@@ -77,6 +76,4 @@ trap/an-elements-pipe-handler-runs-inside-the-elements-redirections
 variable/allexport-marks-a-declarations-assignment
 xtrace/case-arm-patterns-are-not-expanded-past-the-match
 xtrace/ps4-unset-is-not-the-default-again
-zformat/an-expression-that-will-not-evaluate
-zmodload/autoloading-a-builtin-from-a-module
 zmodload/the-selection-as-the-command-that-would-make-it

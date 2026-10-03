@@ -1144,6 +1144,11 @@ type zmodloadOpts struct {
 	silent   bool // -s: no complaint about a module that will not load
 	quietIf  bool // -i: no complaint about one already in the state asked for
 	depends  bool // -d: the dependency table rather than the module itself
+	autoload bool // -a: register builtins to load from a module on first use
+	// builtinKind is `-b`, the kind of thing `-a` and `-u` act on. Builtins
+	// are the default, so beside either it changes nothing, and on its own
+	// it is refused. See zmodloadautoload.go.
+	builtinKind bool
 	// param is `-P name`: the array a feature listing is put into instead of
 	// being written. Empty for every call that did not spell the letter.
 	// See zmodloadFeatureParameter.
@@ -1152,14 +1157,15 @@ type zmodloadOpts struct {
 
 // zmodloadLetters are the letters implemented here, and
 // zmodloadUnimplemented the ones zsh has and this shell does not — autoloaded
-// builtins and conditions (`-a` with `-b`, `-c`, `-f`, `-p`), module aliases
+// conditions, math functions and parameters (`-c`, `-f`, `-p`), module aliases
 // (`-A`, `-R`), pattern arguments (`-m`), and `-I` and `-P`. Each is named as
 // missing rather than as unknown, so a script can tell a shell that lacks one
 // from a typo.
 //
 // `-d` has left the second set for the first (#4449): the dependency table is
 // a record this builtin can keep whether or not a module can be dlopened, and
-// zmodloadDepends is the whole of it.
+// zmodloadDepends is the whole of it. `-a` and `-b` have left it for the
+// builtin half of autoloading; see zmodloadautoload.go.
 //
 // **`-P` has left it too** (#4969) and is in neither set, because it takes an
 // argument: it is read by its own arm of the option loop, the way a letter
@@ -1169,8 +1175,8 @@ type zmodloadOpts struct {
 // Anything outside both sets is `bad option: -q` and 1, measured against
 // twenty-two letters zsh does not have.
 const (
-	zmodloadLetters       = "eulLFsid"
-	zmodloadUnimplemented = "aAbcfImpR"
+	zmodloadLetters       = "eulLFsidab"
+	zmodloadUnimplemented = "AcfImpR"
 )
 
 func registerZmodload(r *interp.Runner) {
@@ -1184,6 +1190,10 @@ func zmodloadBuiltin(r *interp.Runner, _ context.Context, args []string) int {
 	}
 	if code := zmodloadFeatureParameterRefusal(r, opts); code != 0 {
 		return code
+	}
+	if opts.builtinKind && !opts.autoload && !opts.unload {
+		r.Diagnosef("-b, -c, -f, and -p must be combined with -a or -u\n")
+		return 1
 	}
 	switch {
 	case opts.exists && zmodloadCrowds(opts):
@@ -1220,6 +1230,17 @@ func zmodloadBuiltin(r *interp.Runner, _ context.Context, args []string) int {
 		return zmodloadExists(r, rest)
 	case opts.features:
 		return zmodloadFeatureCommand(r, opts, rest)
+	case opts.unload && (opts.autoload || opts.builtinKind):
+		return zmodloadUnautoload(r, rest)
+	case opts.autoload && len(rest) == 0:
+		return zmodloadAutoloadListing(r, opts.commands)
+	case opts.autoload:
+		// With operands `-L` is not a listing and is not consulted:
+		// `zmodload -La m1 b1` registers, at 0.
+		return zmodloadAutoload(r, rest)
+	case opts.unload && len(rest) == 0:
+		r.Diagnosef("what do you want to unload?\n")
+		return 1
 	case opts.unload:
 		return zmodloadUnload(r, opts, rest)
 	case len(rest) == 0:
@@ -1302,6 +1323,10 @@ func setZmodloadLetter(opts *zmodloadOpts, letter byte) {
 		opts.quietIf = true
 	case 'd':
 		opts.depends = true
+	case 'a':
+		opts.autoload = true
+	case 'b':
+		opts.builtinKind = true
 	}
 }
 
@@ -1414,6 +1439,7 @@ func zmodloadLoadItself(r *interp.Runner, opts zmodloadOpts, module string) int 
 	// still loaded, and still narrowed by the feature that would not go back.
 	code := zmodloadWiden(r, module)
 	zmodloadSetLoaded(r, module, true)
+	zmodloadSettlePromises(r, module)
 	zmodloadRefersToItsParameters(r, module)
 	return code
 }

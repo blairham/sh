@@ -12319,6 +12319,37 @@ What was built, all through the extension seam — registered builtins in each
   four conditions nobody can find and a caller naming something else is asking
   a question this shell can answer.
 
+  **`-a` registers a builtin to be loaded from a module on first use**, and
+  it is a promise rather than a load: measured 2026-10-03 on zsh 5.9.2 under
+  `-f`, `zmodload -a zsh/nosuch mb` is silence and 0. The name is then a
+  builtin to `type` and `whence`, a function of the same name still wins, and
+  calling it — or `builtin mb` — attempts the load: a module that will not
+  load is its ordinary `failed to load module` at 1, and the promise is spent,
+  so the next call is `command not found` at 127. A module that loads but
+  does not define the name is two lines — ``module `zsh/zutil' has no such
+  feature: `b:zfoo': autoload cancelled`` and `autoloading module zsh/zutil
+  failed to define builtin: zfoo` — and ends the script at 1, leaving the
+  module unloaded and the promise standing. A name given no builtin names
+  registers the module's own name, so `zmodload -a zsh/nosuch` is ``zsh/nosuch:
+  `/' is illegal in a builtin`` at 1, and any operand with a `/` is refused
+  the same way while the rest are registered. A name that is already a
+  builtin is ``failed to add builtin `echo'`` at 1 — but a module's builtin
+  is only a promise until its module loads, so `zmodload -a zsh/nosuch
+  zformat` is 0 and the same line after `zmodload zsh/zutil` is refused.
+  `-a` alone lists `name (module)`, or the bare name when it is the module's
+  own; `-La` writes `zmodload -ab module name`; with operands `-L` is not
+  consulted and the line registers. `-ua name` takes a promise back (`name: no
+  such builtin` at 1 for one that is not), `-ua` and `-u` with nothing are
+  `what do you want to unload?` at 1, `-b` beside `-a` or `-u` changes
+  nothing, and `-b` alone is `-b, -c, -f, and -p must be combined with -a or
+  -u`. A registered module is `autoloaded` in `$modules`.
+
+  zsh's own listing also carries two dozen rows nobody registered — `bindkey
+  (zsh/zle)`, `compadd (zsh/complete)` and the rest of that build's modules
+  declaring their builtins autoloadable. This listing holds a script's
+  registrations alone, for the reason `$modules` leaves the installation's
+  roster out: those rows would describe modules this shell does not have.
+
   **And a feature named under `-F` holds its module shut even when it is a
   builtin** (#1634), which is the one place the legibility rule above does not
   reach. `zmodload <module>` is the *shell* inferring what a script wants, so a
@@ -12780,11 +12811,12 @@ What was built, all through the extension seam — registered builtins in each
   `+X name…` resolves the names given and does not run them; `+X` with
   nothing is silence and 0. `-X` takes *no* name — it means "the function
   I am running inside" — so `autoload -X` at the top level and
-  `autoload -X foo` anywhere are both `bad autoload`. zsh ends the script
-  there and this shell reports and runs on: a dialect builtin has no way
-  to say "and stop" that this engine offers, and inventing one for a
-  spelling only the shell's own generated stub ever writes would be more
-  surface than the corner earns.
+  `autoload -X foo` anywhere are both `bad autoload`, and that ends the
+  script at 1 — measured 2026-10-03 on zsh 5.9.2, after a `false` too, so
+  the 1 is the failure's own. A subshell around it gives up the subshell
+  alone and the script carries on with `$?` at 1. This shell reported and
+  ran on until `Runner.StopTheScript` gave a dialect builtin the way to say
+  "and stop".
 
   The one place this shows its own workings is `typeset -f NAME` on a name
   that has not been called yet, and the stub written there is zsh's own:

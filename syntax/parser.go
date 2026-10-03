@@ -8381,8 +8381,10 @@ func withoutContinuations(text string) string {
 }
 
 // firstLineOf is text up to its first newline.
+// A text that is a newline and nothing before it is that newline: the
+// token a refusal names when it stopped at the end of a line.
 func firstLineOf(text string) string {
-	if i := strings.IndexByte(text, '\n'); i >= 0 {
+	if i := strings.IndexByte(text, '\n'); i > 0 {
 		return text[:i]
 	}
 	return text

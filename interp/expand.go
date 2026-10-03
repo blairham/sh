@@ -5478,7 +5478,7 @@ func (r *Runner) rangeSegmentText(w *syntax.Word) string {
 // from, and they take the reading they have always taken.
 func (r *Runner) rangeExpansion(w *syntax.Word) string {
 	if !wordOpensASubscript(w) {
-		return r.joinWord(w)
+		return r.joinWord(r.rangeBackslashesRestored(w))
 	}
 	return r.markedSubscriptWord(w, r.rangeProtectsSpan)
 }
@@ -9806,4 +9806,42 @@ func (r *Runner) equalsHeadField(f string) []string {
 		return []string{text}
 	}
 	return []string{path}
+}
+
+// rangeBackslashesRestored is a range operand with the backslashes the
+// dialect leaves in the expression put back, as single-quoted text so nothing
+// reads them again. See Semantics.RangeOperandBackslash.
+func (r *Runner) rangeBackslashesRestored(w *syntax.Word) *syntax.Word {
+	escaped := false
+	for _, sp := range w.Spans {
+		if sp.Kind == syntax.Literal && sp.Quoting == syntax.BackslashQuoted {
+			escaped = true
+			break
+		}
+	}
+	if !escaped {
+		return w
+	}
+	quoted := r.inDoubleQuotedSpan()
+	var keeps func(c string) bool
+	switch r.sem().RangeOperandBackslash {
+	case RangeBackslashKeptBeforeText:
+		keeps = func(c string) bool { return !strings.ContainsAny(c, "$`") }
+	case RangeBackslashDoubleQuoteRules:
+		keeps = func(c string) bool { return !strings.ContainsAny(c, "$`\"\\\n") }
+	case RangeBackslashAsInTheWord:
+		keeps = func(c string) bool { return quoted && !strings.ContainsAny(c, "$`\"\\\n") }
+	default:
+		r.ask(Unspecified, "what a backslash in a substring range leaves in its expression")
+		return w
+	}
+	c := *w
+	c.Spans = slices.Clone(w.Spans)
+	for i, sp := range c.Spans {
+		if sp.Kind == syntax.Literal && sp.Quoting == syntax.BackslashQuoted && keeps(sp.Value) {
+			c.Spans[i].Quoting = syntax.SingleQuoted
+			c.Spans[i].Value = "\\" + sp.Value
+		}
+	}
+	return &c
 }

@@ -1766,6 +1766,8 @@ func Semantics() interp.Semantics {
 	s.BraceRangeStepPadsTheRange = interp.No
 	s.BraceBodyIsACharacterClass = interp.No
 	s.ZeroSubscriptIsTheFirstElement = interp.No
+	// What a backslash in a substring range leaves; see the axis.
+	s.RangeOperandBackslash = interp.RangeBackslashDoubleQuoteRules
 	// bash 5.3.20 and 3.2 bring the name back plain after `unset`, the shell's own or not; see the axis.
 	s.UnsetKeepsTheShellsOwnAttributes = interp.No
 	// bash 5.3 and 3.2 keep the edge an expansion leaves at the end of a substituted word; see the axis.

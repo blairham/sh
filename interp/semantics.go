@@ -18979,6 +18979,26 @@ type Semantics struct {
 	// arrays count from 0 the question cannot arise.
 	ZeroSubscriptIsTheFirstElement Answer
 
+	// RangeOperandBackslash is what a backslash written in a substring
+	// range's offset or length leaves in the expression it is read as. The
+	// four shells with the construct give four answers. Measured 2026-10-03
+	// with `foo=abc`:
+	//
+	//	                        ${foo:0:\1}          "${foo:0:\1}"        ${foo:0:\"}
+	//	zsh 5.9.2               illegal character: \  the same             the same
+	//	bash 5.3, 3.2           error token "\1"      the same             error token `"`
+	//	ksh93u+                 a                     \\1: syntax error     a quoted `"`, empty
+	//	BusyBox ash 1.37.0      a                     syntax error         syntax error
+	//
+	// So zsh keeps every backslash but one in front of `$` or a backquote —
+	// `${foo:0:\$}` is the whole value and `${foo:0:\`}` is `illegal
+	// character: \`` — bash removes one only before the four
+	// characters a double-quoted string removes it before; and ksh93 and
+	// BusyBox ash read the operand as the word around it does, removing every
+	// one unquoted and those four in double quotes. Asked only of a range
+	// whose operand holds a backslash.
+	RangeOperandBackslash RangeOperandBackslash
+
 	// BareSubscriptIsASubscript reads the `[…]` an *unbraced* `$name`
 	// carries as a subscript, rather than as three ordinary characters
 	// behind the parameter. `$a[1]` is an element where it says yes and
@@ -37348,4 +37368,34 @@ func (f EmptyCommandTraceForm) String() string {
 		return "EmptyCommandTracesABareLine"
 	}
 	return "EmptyCommandTracesNothing"
+}
+
+// RangeOperandBackslash is the answer to Semantics.RangeOperandBackslash.
+type RangeOperandBackslash int
+
+const (
+	// RangeBackslashUnspecified is no answer.
+	RangeBackslashUnspecified RangeOperandBackslash = iota
+	// RangeBackslashKeptBeforeText keeps every backslash except one in front
+	// of `$` or a backquote: zsh.
+	RangeBackslashKeptBeforeText
+	// RangeBackslashDoubleQuoteRules removes one only before `$`, a
+	// backquote, `"` or a backslash: bash.
+	RangeBackslashDoubleQuoteRules
+	// RangeBackslashAsInTheWord removes every one where the expansion is
+	// unquoted and follows the double-quote rules inside quotes: ksh93 and
+	// BusyBox ash.
+	RangeBackslashAsInTheWord
+)
+
+func (b RangeOperandBackslash) String() string {
+	switch b {
+	case RangeBackslashKeptBeforeText:
+		return "RangeBackslashKeptBeforeText"
+	case RangeBackslashDoubleQuoteRules:
+		return "RangeBackslashDoubleQuoteRules"
+	case RangeBackslashAsInTheWord:
+		return "RangeBackslashAsInTheWord"
+	}
+	return "RangeBackslashUnspecified"
 }

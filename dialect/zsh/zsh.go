@@ -3062,6 +3062,8 @@ func Semantics() interp.Semantics {
 	s.BraceRangeStepPadsTheRange = interp.Yes
 	s.BraceBodyIsACharacterClass = interp.No
 	s.ZeroSubscriptIsTheFirstElement = interp.No
+	// What a backslash in a substring range leaves; see the axis.
+	s.RangeOperandBackslash = interp.RangeBackslashKeptBeforeText
 	// zsh 5.9.2 keeps the export and type letters of its own parameters through `unset`; see the axis for the table.
 	s.UnsetKeepsTheShellsOwnAttributes = interp.Yes
 	// zsh 5.9.2 under shwordsplit drops the edge an expansion leaves at the end of a substituted word; see the axis.

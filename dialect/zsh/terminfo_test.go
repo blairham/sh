@@ -558,3 +558,18 @@ print -r -- "default=[${(V)${terminfo[Se]:-FELLTHROUGH}}]"`)
 		t.Errorf("the extended capability = %q (status %d), want %q", out, st, want)
 	}
 }
+
+// A termcap lookup reads the first two characters of the name it is given
+// and no more, in the parameter and in `echotc` alike, while a name shorter
+// than a code finds nothing. Measured 2026-10-02 on zsh 5.9.2 (#5431).
+func TestATermcapLookupReadsTwoCharacters(t *testing.T) {
+	out, _ := runZshTerminfo(t, `zmodload zsh/termcap
+for k in up upx upxyz 'up ' u ' up' le; do print -rn -- "[$k]${+termcap[$k]} "; done; print
+echotc upz; print -r -- " st=$?"
+echotc u; print -r -- "st=$?"`)
+	want := "[up]1 [upx]1 [upxyz]1 [up ]1 [u]0 [ up]0 [le]1 \n" +
+		"\x1b[A st=0\nzsh:echotc:4: no such capability: u\nst=1\n"
+	if out != want {
+		t.Errorf("got %q, want %q", out, want)
+	}
+}

@@ -193,26 +193,25 @@ Three divergences, all of them the *shell* rather than the function:
   neither that order, nor alphabetical, nor the order they were added —
   so there is nothing there to match.
 
-One row is a real gap rather than a cosmetic one: `add-zsh-hook -k` passes
-`-k` to `autoload`, and this shell's `autoload` names `-k` as not
-implemented (`dialect/zsh/autoload.go`, `autoloadUnimplemented`). The
-complaint is correct and it is the shell's, not the function's — passing
-the letter and saying nothing would be worse.
+The letters `-U`, `-z` and `-k` are handed to `autoload`, and **its status is
+the function's**, with the hook installed whatever it answered. `-z` and `-k`
+name two different autoload styles, so `autoload` refuses the pair, and
+measured 2026-10-03 on zsh 5.9.2:
 
-What arrives at the *caller*, though, is a status, and that one disagrees.
-`-z` and `-k` name two different autoload styles, so zsh refuses the pair:
-
-| | zsh 5.9.2 | ours |
+| probe | status | `precmd_functions` after |
 | --- | --- | --- |
-| `add-zsh-hook -k precmd kf` | `0`, silent | `0`, and the complaint |
-| `add-zsh-hook -Uzk precmd kf2` | **`1`** | **`0`** |
-| `add-zsh-hook -q precmd kf3` | `1` | `1` |
+| `add-zsh-hook -k precmd kf` | `0`, silent | `(kf)` |
+| `add-zsh-hook -Uzk precmd kf2` | `1` | `(kf kf2)` |
+| `add-zsh-hook -Uzk precmd kf` with `kf` already there | `1` | `(kf)` |
+| `add-zsh-hook -d -Uzk precmd kf` | `0` | removed |
+| `add-zsh-hook -q precmd kf3` | `1` | unchanged |
 
-The hook is installed either way in both shells, so the status is the whole
-of the difference — which is why the corpus row suppresses standard error:
-the diagnostic names the line the call stands on in the function file, and
-that is a fact about whose file it is rather than about the behavior.
-**#2149.**
+The third row is what fixes the order: `autoload` runs *before* the check for
+a name already in the array, since a name found there still answers 1. This
+shell's copy ignored the status and answered 0 to the second and third rows
+until #5714 (#2149). The corpus row suppresses standard error, because the
+diagnostic names the line the call stands on in the function file, and that
+is a fact about whose file it is rather than about the behavior.
 
 ## `colors`
 

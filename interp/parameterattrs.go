@@ -204,7 +204,7 @@ func (r *Runner) ParameterAttributes(name string) (ParameterAttributes, bool) {
 		// dialect has said is not its own is still a name the shell has, and
 		// folding the statement into the guard below made three of them stop
 		// existing.
-		Provided: r.parameterIsProvided(name) && !r.notShellOwn[name],
+		Provided: (r.parameterIsProvided(name) || r.shellOwnWhileSet[name]) && !r.notShellOwn[name],
 	}
 	a.Tied = r.tieDescribesTheBinding(name)
 	if w, ok := r.fieldWidth[name]; ok {

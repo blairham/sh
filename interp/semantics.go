@@ -23110,6 +23110,20 @@ type Semantics struct {
 	// had redirected, nothing died, and the `wait` after it then ran for as
 	// long as the job would have.
 	KillReadsASignalJoinedToItsOption Answer
+	// KillJoinsANumberToTheNameOption takes a *number* written onto `-s` —
+	// `kill -s9` — as the same thing as `kill -s 9`, where the rule
+	// KillReadsASignalJoinedToItsOption describes joins only a name to `-s`.
+	// Asked only of a shell that reads a joined signal at all.
+	//
+	// dash and ksh93. Measured 2026-10-03 against a background `sleep`:
+	// `kill -s9 $p` kills it at status 0 in dash and in ksh93u+, and a joined
+	// word is read exactly as the spaced one — `kill -s99` is dash's `invalid
+	// signal number or name: 99` and ksh93's `99: unknown signal name`, the
+	// sentences `kill -s 99` gets. bash 5.3.20 refuses it as the signal `s9`
+	// while sending `kill -sKILL`, which is the corpus pair
+	// jobs/a-signal-name-joined-to-kill-s-option and
+	// jobs/a-signal-number-joined-to-kill-s-option-is-not-read.
+	KillJoinsANumberToTheNameOption Answer
 
 	// KillReadsTheNumberOption is whether `-n` is an option of `kill` at
 	// all, taking a signal *number* after it.
@@ -32416,6 +32430,9 @@ func PosixSemantics() Semantics {
 		// operand, so the base reads nothing joined to the option; bash 5.x
 		// and ksh93 override.
 		KillReadsASignalJoinedToItsOption: No,
+		// And so nothing joined to it that is a number either; dash and
+		// ksh93 override.
+		KillJoinsANumberToTheNameOption: No,
 		// The standard has `kill` refuse a signal the shell does not know,
 		// and says nothing about handing an unknown number to the kernel, so
 		// the base checks its own table first; ksh93 and zsh override.

@@ -75,7 +75,6 @@ invoke/the-posix-option-moves-a-quoted-brace-in-a-word-operand
 jobs/a-background-job-outlives-the-shell
 jobs/a-disowned-job-is-not-in-the-listing
 jobs/a-signal-name-joined-to-kill-n-option
-jobs/a-signal-number-joined-to-kill-s-option-is-not-read
 jobs/a-stopped-background-job-in-the-listing
 jobs/bg-with-no-job-control
 jobspec/kill-a-job-that-is-not-there

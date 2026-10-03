@@ -262,6 +262,9 @@ func (r *Runner) applyModifiers(value string, segs []string, e *syntax.ParamExpr
 // and it changes the answer only for `s` and `&`, where it means every
 // occurrence instead of the first.
 func (r *Runner) applyModifierSegment(value, seg string, e *syntax.ParamExpr) (string, bool) {
+	if len(seg) > 1 && seg[0] == 'w' {
+		return r.wordwiseModifier(value, seg[1:], e)
+	}
 	if times, rest, ok := r.modifierRepeat(seg); ok {
 		if rest == "" {
 			// A repetition with nothing to repeat names its own letter:
@@ -721,4 +724,66 @@ func (r *Runner) repeatModifier(value, seg string, times int, apply func(v, seg 
 		value = next
 	}
 	return value, true
+}
+
+// wordwiseModifier is the `w` prefix: the modifier behind it applied to each
+// word of the value, the words being what `$IFS`'s characters separate, and
+// the separators left exactly where they were. Measured 2026-10-02 on zsh
+// 5.9.2 (`-f`, `LC_ALL=C`):
+//
+//	foo="a.b  c.d"; ${foo:wr}          a  c       both blanks kept
+//	foo=" a.b ";    ${foo:wr}          ' a '      and the edges
+//	IFS=:; foo=a.b:c.d; ${foo:wr}      a:c        the separators are IFS's
+//	foo="a.b:c.d e.f";  ${foo:wr}      a.b:c e    under the default IFS
+//	foo="x/y z/w";      ${foo:wt}      y w
+//	foo="a.b c.d";      ${foo:wfr}     a c        a repetition behind it
+//	foo=;               ${foo:wq}      empty      and nothing has no words
+//	foo=' a/b ';        ${foo:wh}      ' a .'     but a trailing separator
+//	                                              leaves one empty word
+//	${foo:w}                           unrecognized modifier `w'
+//
+// (#5151, a chunk of D04parameter.ztst).
+func (r *Runner) wordwiseModifier(value, seg string, e *syntax.ParamExpr) (string, bool) {
+	ifs, _ := r.ifs()
+	var b strings.Builder
+	start := -1
+	flush := func(end int) bool {
+		if start < 0 {
+			return true
+		}
+		out, ok := r.applyModifierSegment(value[start:end], seg, e)
+		if !ok {
+			return false
+		}
+		b.WriteString(out)
+		start = -1
+		return true
+	}
+	for i := 0; i < len(value); i++ {
+		if strings.IndexByte(ifs, value[i]) >= 0 {
+			if !flush(i) {
+				return "", false
+			}
+			b.WriteByte(value[i])
+			continue
+		}
+		if start < 0 {
+			start = i
+		}
+	}
+	if !flush(len(value)) {
+		return "", false
+	}
+	if value != "" && strings.IndexByte(ifs, value[len(value)-1]) >= 0 {
+		// A separator at the very end leaves one empty word behind it, which
+		// the modifier is applied to — where an empty word at the front or
+		// between two separators is not. Measured: `${foo:wh}` is ` .` on a
+		// single blank, `a .` on `a/b `, ` a` on ` a/b` and `.  .` on `a  b`.
+		out, ok := r.applyModifierSegment("", seg, e)
+		if !ok {
+			return "", false
+		}
+		b.WriteString(out)
+	}
+	return b.String(), true
 }

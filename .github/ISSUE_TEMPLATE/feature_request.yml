@@ -1,0 +1,16 @@
+name: Feature request
+description: Something sh should do that no shell it models does today
+labels: [enhancement]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What would you like to do?
+      description: The task, not the implementation.
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: Why does it belong in the shell?
+      description: What you do today instead, and why a wrapper or a function cannot do it.

@@ -67,8 +67,8 @@ jobs:
     # its own 30s per-case timeout; this is the outer bound on the whole run.
     timeout-minutes: 30
     steps:
-    - uses: actions/checkout@v6
-    - uses: actions/setup-go@v6
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+    - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
       with:
         go-version-file: go.mod
         check-latest: true
@@ -297,8 +297,8 @@ jobs:
         # measured nothing**, which is exactly the shape a report-only step is
         # worst at showing. Caught on the first dispatch of this change.
         git config --global --add safe.directory "$GITHUB_WORKSPACE"
-    - uses: actions/checkout@v6
-    - uses: actions/setup-go@v6
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+    - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
       with:
         go-version-file: go.mod
         check-latest: true
@@ -332,7 +332,7 @@ jobs:
     # tree for a different pin, and this column's whole claim is that the
     # bytes it grades are the ones named. A miss should refetch.
     - name: Cache bash's fetched suite
-      uses: actions/cache@v4
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
         path: ${{ steps.pin.outputs.path }}
         key: ${{ steps.pin.outputs.key }}
@@ -532,8 +532,8 @@ jobs:
         # and `|| true` below would turn it into a green job that measured
         # nothing.
         git config --global --add safe.directory "$GITHUB_WORKSPACE"
-    - uses: actions/checkout@v6
-    - uses: actions/setup-go@v6
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+    - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
       with:
         go-version-file: go.mod
         check-latest: true
@@ -635,8 +635,8 @@ jobs:
         # starts and the `|| true` below would turn it into a green job that
         # measured nothing.
         git config --global --add safe.directory "$GITHUB_WORKSPACE"
-    - uses: actions/checkout@v6
-    - uses: actions/setup-go@v6
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+    - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
       with:
         go-version-file: go.mod
         check-latest: true

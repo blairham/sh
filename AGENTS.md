@@ -353,6 +353,31 @@ client, and a checkout says `0.0.0-dev`. It was `cmd/sh`'s alone until
 true while only that binary served the protocol, and false the moment they
 all did. One left unstamped announces `0.0.0-dev` out of a tagged release.
 
+Releases after `v0.0.22` are signed and attested in the same run: keyless
+cosign over `checksums.txt` and each of the six images by digest (`signs`
+and `docker_signs` in `.goreleaser.yaml`), and SLSA build provenance from
+`actions/attest-build-provenance`, uploaded to the release as
+`sh.intoto.jsonl` because Scorecard reads the asset, not the attestation
+store. The commands that verify all three are in `SECURITY.md`; keep them
+working when the workflow or an artifact name changes.
+
+### Repository and supply chain
+
+- Every `uses:` in `.github/workflows/` is pinned by commit SHA with a
+  `# vX.Y.Z` comment, and every workflow is read-only at the top level — a
+  job that writes asks for it. Dependabot bumps the pins and the Go modules
+  monthly; it deliberately does not touch `images/`, whose reference shells
+  are pinned to the versions the oracle grades.
+- CodeQL (`codeql.yml`, `security-extended`) and OpenSSF Scorecard
+  (`scorecard.yml`) run beside `ci.yml`. `Analyze` is a required check.
+- `main` is guarded by a **repository ruleset**, not classic branch
+  protection — Scorecard's token cannot read classic protection. Squash-only,
+  linear history, signed commits, and CI's gating jobs plus `Analyze`
+  required. The admin role bypasses.
+- `SECURITY.md` states what the shell does and does not protect — notably
+  that the sandbox contains the shell and not its children. Keep it true
+  when behavior changes.
+
 ### What a tag waits for, and how to count it
 
 The bar is **countable, not a judgement**: open `P1` = 0. Nothing else gates

@@ -1,0 +1,46 @@
+name: Bug report
+description: Something sh, one of the dialect binaries or shfmt did differently from the shell it models
+labels: [bug]
+body:
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: The output of `sh --version` from the same install (dash and ash have no version flag, as the real ones do not), or a commit.
+    validations:
+      required: true
+  - type: dropdown
+    id: binary
+    attributes:
+      label: Binary
+      options:
+        - sh
+        - bash
+        - zsh
+        - ksh
+        - dash
+        - ash
+        - shfmt
+        - the Go library
+    validations:
+      required: true
+  - type: input
+    id: platform
+    attributes:
+      label: Platform
+      description: e.g. macOS 26 arm64, Ubuntu 24.04 amd64, the ghcr.io image.
+  - type: textarea
+    id: repro
+    attributes:
+      label: Minimal reproduction
+      description: The smallest script or command line that shows it — ideally one `-c` string.
+      render: sh
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, and what does the real shell do?
+      description: Paste both outputs — stdout, stderr and exit status. Name the real shell's version.
+    validations:
+      required: true

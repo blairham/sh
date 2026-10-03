@@ -5,6 +5,16 @@
   </picture>
 </p>
 
+<p align="center">
+  <a href="https://github.com/blairham/sh/actions/workflows/ci.yml"><img src="https://github.com/blairham/sh/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://github.com/blairham/sh/releases/latest"><img src="https://img.shields.io/github/v/release/blairham/sh?sort=semver" alt="Release"></a>
+  <a href="https://github.com/blairham/sh/actions/workflows/codeql.yml"><img src="https://github.com/blairham/sh/actions/workflows/codeql.yml/badge.svg" alt="CodeQL"></a>
+  <a href="https://scorecard.dev/viewer/?uri=github.com/blairham/sh"><img src="https://api.securityscorecards.dev/projects/github.com/blairham/sh/badge" alt="OpenSSF Scorecard"></a>
+  <a href="go.mod"><img src="https://img.shields.io/github/go-mod/go-version/blairham/sh" alt="Go version"></a>
+  <a href="https://pkg.go.dev/github.com/blairham/sh"><img src="https://pkg.go.dev/badge/github.com/blairham/sh.svg" alt="Go Reference"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue.svg" alt="License: Apache-2.0"></a>
+</p>
+
 A shell parser and interpreter in Go.
 
 **Status: early — these are `0.x` tags and they mean it.** The core parser
@@ -181,7 +191,8 @@ needs no Go at all.
 
 ## License
 
-Apache-2.0. See `LICENSE` and `NOTICE`.
+Apache-2.0. See `LICENSE` and `NOTICE`. Report vulnerabilities privately —
+see `SECURITY.md`. Participation is under the `CODE_OF_CONDUCT.md`.
 
 Contributions require a signed CLA — see `CONTRIBUTING.md` and `CLA.md`.
 The CLA exists so the project retains the option to offer different

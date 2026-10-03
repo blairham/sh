@@ -94,7 +94,7 @@ func (r *Runner) expandFlagged(s syntax.Span, sp splitPolicy, head bool) ([]stri
 			return nil, true
 		}
 		if !escaped && strings.Contains(v, liveMark) {
-			v = escapeWithLiveMarks(v)
+			v = r.equalsHeadMark(head, v) + escapeWithLiveMarks(v)
 		} else if !escaped &&
 			!r.ask(r.globSubstAnswer(s), "globbing the result of an expansion") {
 			v = globEscape(v)
@@ -723,7 +723,20 @@ func (r *Runner) flaggedWords(e *syntax.ParamExpr, sp splitPolicy, quoted bool,
 	}
 	if n := strings.Count(e.Flags, "q"); n > 0 {
 		for i, w := range words {
-			words[i] = quoteFlagged(w, n, e.QuoteModifier, nothing || bare != nil && bare[i], r.DoubledQuoteInSingleQuotes())
+			doubled := r.DoubledQuoteInSingleQuotes()
+			empty := nothing || bare != nil && bare[i]
+			if strings.Contains(w, liveMark) {
+				// An operand's own pattern characters: the single `q`
+				// leaves them as they are, live, and every other style
+				// quotes them with the rest. See operandTokenWords.
+				if n == 1 && e.QuoteModifier == 0 {
+					words[i] = quoteAroundLiveMarks(w, empty)
+				} else {
+					words[i] = quoteFlagged(stripLiveMarks(w), n, e.QuoteModifier, empty, doubled)
+				}
+				continue
+			}
+			words[i] = quoteFlagged(w, n, e.QuoteModifier, empty, doubled)
 		}
 	}
 	// And after the quoting, which is the order `${(Vq)}` measures: a tab
@@ -1595,6 +1608,9 @@ func (r *Runner) applyFlagOp(e *syntax.ParamExpr, words []string, set, isList bo
 	case syntax.ParamNone:
 	case syntax.ParamDefault:
 		if fires {
+			if sub, ok := r.operandTokenWords(e, quoted); ok {
+				return sub, len(sub) != 1, true, substitutedNothing(e, sub, fires)
+			}
 			sub := []string{r.joinWord(e.Arg)}
 			return sub, false, true, substitutedNothing(e, sub, fires)
 		}
@@ -1612,6 +1628,9 @@ func (r *Runner) applyFlagOp(e *syntax.ParamExpr, words []string, set, isList bo
 	case syntax.ParamAlternate:
 		if fires {
 			return []string{""}, false, true, false
+		}
+		if sub, ok := r.operandTokenWords(e, quoted); ok {
+			return sub, len(sub) != 1, true, substitutedNothing(e, sub, fires)
 		}
 		sub := []string{r.joinWord(e.Arg)}
 		return sub, false, true, substitutedNothing(e, sub, fires)
@@ -2339,3 +2358,78 @@ const (
 	// are bare in either context and kept unquoted.
 	nestedBareFromAnIFSSplit
 )
+
+// operandTokenWords is the word a `-` or `+` substituted under a flag group,
+// as the words it comes to with its own pattern characters still live, where
+// the group runs on each word and the matching waits for the end. Measured
+// 2026-10-03 on zsh 5.9.2 under `-f`, in a directory holding `xay` and `xby`:
+//
+//	${(U):-{b,c}}   B C, two words     ${(j:-:):-{b,c}}   b-c
+//	${(qq):-{b,c}}  'b' 'c'            the braces make two words first
+//	${(U):-x*}      no matches found: X*    matched after the case flag
+//	${(qq):-x*}     'x*'               quoted before any matching, and so
+//	${(q+):-x?y}    'x?y'              every quoting style but one
+//	${(q):-xa*}     xay                the single `q` leaves `*` live
+//	${(q):-=}  ${(q):-#a}  ${(q):-a^b}   =  #a  a^b, and `=`, `#`, `^` too
+//	${(q):-'xa*'}   xa*                a quoted one is text
+//
+// Only for the expansion the word loop is expanding, unquoted, and under the
+// letters that carry the marks through; the rest join the word as before.
+func (r *Runner) operandTokenWords(e *syntax.ParamExpr, quoted bool) ([]string, bool) {
+	if quoted || e.Arg == nil || r.liveMarksFor != e || strings.Trim(e.Flags, "ULCoOqj@") != "" {
+		return nil, false
+	}
+	fields := r.expandWordEscaped(e.Arg)
+	out := make([]string, 0, len(fields))
+	for _, f := range fields {
+		out = append(out, markOperandTokens(f))
+	}
+	if len(out) == 0 {
+		out = []string{""}
+	}
+	return out, true
+}
+
+// operandTokenBytes are the characters an operand writes unquoted that stay
+// pattern syntax through a flag group.
+const operandTokenBytes = "*?[]()|#^="
+
+// markOperandTokens turns one escaped field into its text, with liveMark in
+// front of each pattern character no backslash protected.
+func markOperandTokens(esc string) string {
+	var b strings.Builder
+	for i := 0; i < len(esc); i++ {
+		c := esc[i]
+		switch {
+		case c == '\\' && i+1 < len(esc):
+			i++
+			b.WriteByte(esc[i])
+		case strings.IndexByte(operandTokenBytes, c) >= 0:
+			b.WriteString(liveMark)
+			b.WriteByte(c)
+		default:
+			b.WriteByte(c)
+		}
+	}
+	return b.String()
+}
+
+// quoteAroundLiveMarks is the single `q` over a word holding live marks: the
+// text between them is quoted and each marked character is left as it is.
+func quoteAroundLiveMarks(w string, empty bool) string {
+	var b strings.Builder
+	for {
+		i := strings.Index(w, liveMark)
+		if i < 0 || i+len(liveMark) >= len(w) {
+			if rest := stripLiveMarks(w); rest != "" || b.Len() == 0 {
+				b.WriteString(quoteWithBackslashes(rest, empty))
+			}
+			return b.String()
+		}
+		if i > 0 {
+			b.WriteString(quoteWithBackslashes(w[:i], false))
+		}
+		b.WriteString(w[i : i+len(liveMark)+1])
+		w = w[i+len(liveMark)+1:]
+	}
+}

@@ -69,3 +69,26 @@ func TestASortKeepsANestedSplitsBareFields(t *testing.T) {
 		}
 	}
 }
+
+// TestAnEqualsSplitsEmptyFieldsAreGhosts pins that the empty fields an `=`
+// split in the group itself made sort last and pad one unit short, as a
+// nested list's do, while an empty value split is a value (#5426). Measured
+// 2026-10-02 on zsh 5.9.2 with `IFS=:`.
+func TestAnEqualsSplitsEmptyFieldsAreGhosts(t *testing.T) {
+	const setup = "show() { print -rn -- \"$#:\"; for w; print -rn -- \"<$w>\"; print }\nIFS=:; u=a::b:; e=\n"
+	for _, tc := range []struct{ src, want string }{
+		{`show ${(@o)=u}`, "4:<a><b><><>\n"},
+		{`show "${(@O)=u}"`, "4:<><><b><a>\n"},
+		{`show "${(@l:2:)=u}"`, "4:< a>< >< b>< >\n"},
+		{`show "${(@r:2::-:)=u}"`, "4:<a-><-><b-><->\n"},
+		{`show "${(@o)=u#a}"`, "4:<b><><><>\n"},
+		{`show "${(@l:2:)=e}"`, "1:<  >\n"},
+		// The control: a letter split's empty fields are not ghosts.
+		{`show "${(@os.:.)u}"`, "4:<><><a><b>\n"},
+	} {
+		got, _ := runZsh(t, t.TempDir(), setup+tc.src)
+		if got != tc.want {
+			t.Errorf("%s\n got %q\nwant %q", tc.src, got, tc.want)
+		}
+	}
+}

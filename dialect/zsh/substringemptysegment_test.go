@@ -17,7 +17,7 @@ func TestAnEmptySubstringSegmentIsAnEmptyModifier(t *testing.T) {
 		{`print ${str:}; echo st=$?`, "zsh:2: unrecognized modifier\n"},
 		{`print ${str::}; echo st=$?`, "zsh:2: unrecognized modifier\n"},
 		// The controls: a blank segment, and one that holds a length.
-		{`print -r -- "<${str:0: }>" ${str:1:1}; echo st=$?`, "<> t\nst=0\n"},
+		{`print -r -- "<${str:0: }>" ${str:1:1} ${str::2}; echo st=$?`, "<> t rt\nst=0\n"},
 	} {
 		got, _ := runZsh(t, t.TempDir(), setup+tc.src)
 		if got != tc.want {

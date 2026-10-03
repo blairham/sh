@@ -2223,11 +2223,13 @@ func (r *Runner) expandAtList(s syntax.Span, sp splitPolicy, head bool) ([]strin
 	// the subscript that says so and the array path below answers it. See
 	// bareArrayAsList for why that is a rewrite rather than a path of its own.
 	if listed, ok := r.bareArrayAsList(e, s, sp); ok {
+		r.liveMarksFollow(e, listed)
 		e = listed
 	}
 	// `$@` and `$*` under an operator are the *parameters*, one at a time,
 	// and the same rewrite is what says so. See positionalsAsList.
 	if listed, ok := r.positionalsAsList(e); ok {
+		r.liveMarksFollow(e, listed)
 		e = listed
 	}
 	// `${!prefix@}` and `${!prefix*}` yield the *names* that begin with the
@@ -9844,4 +9846,15 @@ func (r *Runner) rangeBackslashesRestored(w *syntax.Word) *syntax.Word {
 		}
 	}
 	return &c
+}
+
+// liveMarksFollow hands the word loop's live-mark slot from an expansion to
+// the node it was rewritten to, so a `:s` replacement over a bare array or
+// `$@` marks its pattern characters as `${a[@]:s/…/…/}` does. Measured
+// 2026-10-03 on zsh 5.9.2, beside `xay` and `xby`: `a=(xQy); ${a:gs/Q/?/}`
+// and `set -- xQy; ${@:s/Q/?/}` are `xay xby` (#5639). See liveMark.
+func (r *Runner) liveMarksFollow(from, to *syntax.ParamExpr) {
+	if r.liveMarksFor == from {
+		r.liveMarksFor = to
+	}
 }

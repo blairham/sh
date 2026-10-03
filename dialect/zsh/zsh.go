@@ -3124,6 +3124,11 @@ func Semantics() interp.Semantics {
 	// never reaches `two`. Note it is `[[ ]]` alone: the same expression
 	// in `(( ))` complains and the shell goes on.
 	s.ConditionArithmeticErrorIsFatal = interp.Yes
+	// And the condition runs to its end first, every later arithmetic in it
+	// reading 0, so the shell ends at the condition's own status: `[[ ! -v
+	// 'a[1/0]' ]]` ends it at 0. See
+	// interp.Semantics.ConditionFinishesAfterAnArithmeticError (#5588).
+	s.ConditionFinishesAfterAnArithmeticError = interp.Yes
 	// And a C-style `for` header. Not `(( ))`, which zsh reports and carries
 	// on from — the two are a field apart for exactly that reason. Measured
 	// 2026-09-13; see [interp.Semantics.ForHeaderArithmeticErrorIsFatal].

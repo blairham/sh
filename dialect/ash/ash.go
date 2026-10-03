@@ -1418,6 +1418,9 @@ func Semantics() interp.Semantics {
 	// does: measured 2026-09-18 in the pinned image, `exec /bin/busybox ash
 	// -c 'echo $SHLVL'` reads 2 where this shell holds 1.
 	s.ShellLevelExec = interp.ShellLevelExecCounted
+	// What an interrupt from outside does while a foreground program runs.
+	// See interp.Semantics.InterruptWaitsForTheProgram (#5416).
+	s.InterruptWaitsForTheProgram = interp.InterruptEndsTheShell
 	// A handed-in `PWD` names the starting directory here too, but only where
 	// it really is that directory: measured 2026-09-13 in the pinned image,
 	// `PWD=/link/d` under a symbolic link survives and `PWD=/usr` in a

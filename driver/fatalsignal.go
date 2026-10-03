@@ -75,6 +75,12 @@ var fatalWatch struct {
 	// traps answers whether the current shell has a trap for a signal. Nil
 	// until a shell that owns the process has been built.
 	traps atomic.Pointer[func(syscall.Signal) bool]
+	// held answers whether the current shell is holding an interrupt while
+	// a foreground program runs. See interp.Runner.InterruptHeld.
+	held atomic.Pointer[func() bool]
+	// holdOnce subscribes the watch to SIGINT the first time a shell holds
+	// one, so a shell that never does keeps the runtime's default.
+	holdOnce sync.Once
 	// ch is the watch's subscription, kept so a start that had to ignore
 	// the keyboard signals can hand them back to it. See
 	// startIgnoringInterrupts.
@@ -91,6 +97,9 @@ var fatalWatch struct {
 func watchFatalSignals(r *interp.Runner) {
 	traps := r.TrapsSignal()
 	fatalWatch.traps.Store(&traps)
+	held := r.InterruptHeld()
+	fatalWatch.held.Store(&held)
+	r.HoldInterrupts = holdInterrupts
 	fatalWatch.once.Do(func() {
 		// Buffered, because os/signal drops an arrival rather than blocking
 		// and there are eight of these. Nothing here is slow, but a shell
@@ -108,6 +117,12 @@ func watchFatalSignals(r *interp.Runner) {
 					// The script has claimed it, and interp's own
 					// registration has been handed the same arrival. Two
 					// channels are told; only one of them may act.
+					continue
+				}
+				if held := fatalWatch.held.Load(); sig == syscall.SIGINT && held != nil && (*held)() {
+					// Held until the program the shell waits for is done,
+					// which decides whether the shell dies of it. See
+					// interp.Semantics.InterruptWaitsForTheProgram.
 					continue
 				}
 				// Untrapped, so the shell dies of it — silently, with the
@@ -144,4 +159,15 @@ func startIgnoringInterrupts(start func() error) error {
 		signal.Notify(ch, handBack...)
 	}
 	return err
+}
+
+// holdInterrupts is interp.Runner.HoldInterrupts for a shell that owns the
+// process: SIGINT comes to the watch, which asks the shell before dying of
+// it, rather than ending the process where the runtime's default would.
+func holdInterrupts() {
+	fatalWatch.holdOnce.Do(func() {
+		if fatalWatch.ch != nil && !signal.Ignored(syscall.SIGINT) {
+			signal.Notify(fatalWatch.ch, syscall.SIGINT)
+		}
+	})
 }

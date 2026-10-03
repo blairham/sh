@@ -361,6 +361,14 @@ type Runner struct {
 	// process has. See interp/asyncinterrupts.go.
 	StartIgnoringInterrupts func(start func() error) error
 
+	// HoldInterrupts arranges for an untrapped SIGINT from outside to be
+	// asked about — see InterruptHeld — rather than ending the process
+	// outright, for the dialect that holds one while a foreground program
+	// runs. Nil — the default — means this Runner may not touch the
+	// process's dispositions, and holds nothing. See
+	// interp/foregroundinterrupt.go.
+	HoldInterrupts func()
+
 	// StopThisProcess stops this process the way `suspend` does: it does not
 	// return until something sends SIGCONT. Nil — the default — means this
 	// shell is not the process and cannot stop it, and the builtin refuses.
@@ -1891,6 +1899,10 @@ type Runner struct {
 	// trapInterrupt says the shell is unwinding because a `TRAP<signal>`
 	// function returned a status other than zero. See trapinterrupt.go.
 	trapInterrupt bool
+	// interrupts is the box the shell and its clones share about an
+	// interrupt held while a foreground program runs. See
+	// foregroundinterrupt.go.
+	interrupts *interruptBox
 	// locatesFunctions is whether a names-only function listing says where
 	// each function was defined — see Runner.LocatesFunctions.
 	locatesFunctions bool
@@ -10002,7 +10014,14 @@ func (r *Runner) exec(ctx context.Context, argv, env []string) error {
 		return r.runWatched(ctx, cmd, argv, action, ownGroup)
 	}
 
+	held := r.holdingInterrupts()
 	err := r.startAndWait(cmd, ownGroup)
+	if held {
+		// An interrupt that arrived while this program ran is settled now.
+		// See foregroundinterrupt.go.
+		sig, killed := killedBy(err)
+		r.foregroundProgramEnded(killed && sig == syscall.SIGINT)
+	}
 	r.addChildTime(cmd.ProcessState)
 	var ee *exec.ExitError
 	switch {
@@ -10165,6 +10184,16 @@ func (r *Runner) runWatched(ctx context.Context, cmd *exec.Cmd, argv []string, a
 		}
 	}
 	var w Wait
+	// An interrupt that arrives while this program runs is held for it, in
+	// the dialect that holds one. See foregroundinterrupt.go.
+	held := r.holdingInterrupts()
+	settleHeld := func(diedOfInterrupt bool) {
+		if held {
+			held = false
+			r.foregroundProgramEnded(diedOfInterrupt)
+		}
+	}
+	defer settleHeld(false)
 	for {
 		var err error
 		w, err = r.awaitForegroundCommand(pid)
@@ -10207,6 +10236,7 @@ func (r *Runner) runWatched(ctx context.Context, cmd *exec.Cmd, argv []string, a
 			r.elemCPU.add(w.User, w.System)
 		}
 	}
+	settleHeld(w.Killed && w.Signal == syscall.SIGINT)
 	status, stopped := r.waitResult(w)
 	if !stopped {
 		// Reaped, so a child of this shell has ended — a stop is not one,

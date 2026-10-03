@@ -2817,6 +2817,9 @@ func Semantics() interp.Semantics {
 	// shell it starts reads the same number this one did. The floor above is
 	// what makes an inherited `-1` read 1 on the far side rather than 0.
 	s.ShellLevelExec = interp.ShellLevelExecNotCounted
+	// What an interrupt from outside does while a foreground program runs.
+	// See interp.Semantics.InterruptWaitsForTheProgram (#5416).
+	s.InterruptWaitsForTheProgram = interp.InterruptWaitsForAnyProgram
 	// `PWD` is a different answer from OLDPWD's here: the starting directory
 	// is named by what the kernel reports, in 5.3 and 3.2 alike.
 	s.StartupPwdName = interp.StartupPwdNameFromTheKernel

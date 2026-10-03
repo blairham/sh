@@ -541,8 +541,15 @@ func ViEditing(r *interp.Runner) bool {
 // laid over them.
 func readBindings(r *interp.Runner, keymap string) map[string]string {
 	out := map[string]string{}
-	for seq, w := range defaultBindings {
-		out[seq] = w
+	if keymap == "emacs" || keymap == "viins" {
+		// The defaults are this editor's keys, and only the two keymaps the
+		// editor is driven from have them. Every other keymap starts empty
+		// here: `bindkey -M vicmd '^A'` is `undefined-key` in zsh 5.9.2,
+		// where this answered from the emacs table, and `bindkey -M isearch
+		// -L` lists nothing until something is bound (#5691).
+		for seq, w := range defaultBindings {
+			out[seq] = w
+		}
 	}
 	flat, _ := r.GetArray(bindkeyStore)
 	for i := 0; i+3 <= len(flat); i += 3 {
@@ -597,6 +604,14 @@ func bindkeyBuiltin(r *interp.Runner, _ context.Context, args []string) int {
 	if code != 0 {
 		return code
 	}
+	if opts.keymap == "main" {
+		// `main` is the current keymap under another name, so naming it is
+		// naming nothing: `bindkey -M main '^Xq' foo` binds in emacs or
+		// viins, whichever is selected, and `-M main -L` writes no `-M`.
+		// Measured on zsh 5.9.2, where this stored the binding under a
+		// keymap nothing reads (#5691).
+		opts.keymap = ""
+	}
 	if opts.list {
 		return listKeymaps(r, rest, opts.commands)
 	}
@@ -632,10 +647,10 @@ func bindkeyBuiltin(r *interp.Runner, _ context.Context, args []string) int {
 		}
 		return bindPairs(r, rest, true)
 	case len(rest) == 0:
-		listBindings(r, opts.commands)
+		listBindings(r, opts.commands, opts.keymap)
 		return 0
 	case len(rest) == 1:
-		showBinding(r, rest[0], opts.commands)
+		showBinding(r, rest[0], opts.commands, opts.keymap)
 		return 0
 	default:
 		return bindPairs(r, rest, false)
@@ -790,7 +805,7 @@ func bindPairs(r *interp.Runner, words []string, text bool) int {
 
 // listBindings is the whole keymap, sorted by the bytes each key sends —
 // measured, which is why `^_` comes before a space and `^?` after a tilde.
-func listBindings(r *interp.Runner, commands bool) {
+func listBindings(r *interp.Runner, commands bool, named string) {
 	table := readBindings(r, currentKeymap(r))
 	seqs := make([]string, 0, len(table))
 	for seq := range table {
@@ -800,23 +815,25 @@ func listBindings(r *interp.Runner, commands bool) {
 	}
 	sort.Strings(seqs)
 	for _, seq := range seqs {
-		writeBinding(r, seq, table[seq], commands)
+		writeBinding(r, seq, table[seq], commands, named)
 	}
 }
 
 // showBinding answers for one key. A key nobody bound is `undefined-key` and
 // still status 0 — measured; asking about an unbound key is a question with an
 // answer, not a failure.
-func showBinding(r *interp.Runner, spelled string, commands bool) {
+func showBinding(r *interp.Runner, spelled string, commands bool, named string) {
 	seq := decodeKeySequence(spelled)
 	widget, bound := readBindings(r, currentKeymap(r))[seq]
 	if !bound {
 		widget = undefinedKey
 	}
-	writeBinding(r, seq, widget, commands)
+	writeBinding(r, seq, widget, commands, named)
 }
 
-func writeBinding(r *interp.Runner, seq, widget string, commands bool) {
+// writeBinding says one binding back. named is the keymap `-M` or `-a` named
+// on the command, empty for the current one.
+func writeBinding(r *interp.Runner, seq, widget string, commands bool, named string) {
 	prefix := ""
 	if commands {
 		prefix = "bindkey "
@@ -825,7 +842,26 @@ func writeBinding(r *interp.Runner, seq, widget string, commands bool) {
 			// read back binds the key to a *widget* of that name. Measured,
 			// `bindkey -s '^Xf' plain; bindkey -L` is `bindkey -s "^Xf"
 			// "plain"` in zsh 5.9.2 (#5672).
-			prefix = "bindkey -s "
+			prefix += "-s "
+		}
+		// And the keymap the listing was asked about, so the line binds the
+		// key there again: `bindkey -M emacs -L` writes `bindkey -M emacs`,
+		// and vicmd is spelled `-a`, after any `-s`. Measured on zsh 5.9.2,
+		// where this wrote every line as if for the current keymap (#5691).
+		switch named {
+		case "":
+		case "vicmd":
+			prefix += "-a "
+		default:
+			prefix += "-M " + named + " "
+		}
+		// A key that begins with a dash is written after `--`, so the line
+		// read back does not take it for an option — except after `-M`
+		// and its keymap, where zsh 5.9.2 writes none: `bindkey -L -- -x`
+		// is `bindkey -- "-x" foo`, and with `-M emacs` it is `bindkey -M
+		// emacs "-x" foo` (#5691).
+		if strings.HasPrefix(seq, "-") && (named == "" || named == "vicmd") {
+			prefix += "-- "
 		}
 	}
 	_, _ = fmt.Fprintf(r.Out(), "%s\"%s\" %s\n", prefix, encodeKeySequence(seq), widget)

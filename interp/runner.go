@@ -344,6 +344,15 @@ type Runner struct {
 	// it from the text it was handed would be changing who its *host* is.
 	ChangeIdentity func(which Identity, id int) error
 
+	// LocaleCharset answers whether the C library would load a locale name,
+	// and the codeset of its character type where it would. whole asks for
+	// every category, which is what LC_ALL and LANG ask for. Nil — the
+	// default — reads the encoding off the name as written. See
+	// interp/localeloaded.go.
+	LocaleCharset func(name string, whole bool) (codeset string, ok bool)
+	// ctype is what LocaleCharset last settled. See ctypeInForce.
+	ctype ctypeState
+
 	// StartIgnoringInterrupts runs start — a process start — with SIGINT and
 	// SIGQUIT ignored for its length, so the child it starts inherits the
 	// ignore, and puts the process's own handling back afterwards. Nil — the

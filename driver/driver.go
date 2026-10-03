@@ -2600,6 +2600,10 @@ func (sh Shell) newRunnerAs(name string, params []string, dg interp.Diagnostics,
 		// And who it runs as, for the same reason again: `EUID=1` as root
 		// really is a different process afterwards. See identity.go.
 		r.ChangeIdentity = changeIdentity
+		// And whether the C library would load a locale a script names,
+		// which is the machine's locale data rather than the name's spelling.
+		// See localecharset.go.
+		r.LocaleCharset = hostLocaleCharset
 		// And for the same reason again, `suspend` may really stop it. A
 		// Runner embedded in some other program that could stop that program
 		// until somebody found it and continued it is a library that can be

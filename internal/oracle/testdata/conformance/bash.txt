@@ -34,8 +34,6 @@ declare/the-global-letter-filters-nothing
 expand/tilde-after-a-home-assignment
 expand/tilde-after-a-home-assignment-reaches-every-road
 expand/tilde-with-no-home-at-all
-glob/a-trailing-slash-run-is-reproduced-except-in-bash
-glob/an-empty-component-behind-a-matched-one
 heredoc/stripping-and-joining-are-ordered-and-the-panel-parts-over-which-comes-first
 invoke/a-program-on-a-standard-input-that-is-closed
 jobs/a-background-job-outlives-the-shell

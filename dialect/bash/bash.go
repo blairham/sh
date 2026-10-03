@@ -1819,6 +1819,10 @@ func Semantics() interp.Semantics {
 	// length are read, so `unset u; "${u:1/0}"` is empty at 0 and `${u::=A}`
 	// reaches no arithmetic. See Semantics.SubstringOfAnUnsetNameEvaluatesNothing.
 	s.SubstringOfAnUnsetNameEvaluatesNothing = interp.Yes
+	// `*//` lists `cx/` and `*//ax` lists `cx/ax`: a run of slashes behind
+	// the first pattern component comes back as one, where every other
+	// column writes the run back. See Semantics.SlashRunBehindAPatternIsOneSlash.
+	s.SlashRunBehindAPatternIsOneSlash = interp.Yes
 	s.RegexQuotingMakesLiteral = interp.Yes
 	// An empty right operand is refused rather than matched: `[[ abc =~ "" ]]`
 	// names an empty subexpression and exits 2, where Go's engine would

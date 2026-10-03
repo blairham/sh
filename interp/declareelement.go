@@ -205,12 +205,9 @@ func (r *Runner) declareElement(base string, leading []string, sub, value string
 			break
 		} else if outcome == spanResolved && r.subscriptSplicesCharacters(base) {
 			// And over a string, a span of its characters: `s=abcd;
-			// typeset "s[2,3]"=XY` is `aXYd`.
-			if r.spanIsBelowTheFirstElement(from, to) {
-				r.fatal("%s\n", Wording(r.diag().BadArraySubscript,
-					"%[1]s[%[2]s]: bad array subscript", base, sub))
-				return
-			}
+			// typeset "s[2,3]"=XY` is `aXYd`. No refusal for a span below
+			// the first character here: the one such pair is `0,0`, whose
+			// ends agree and which the single subscript answers.
 			r.spliceCharacterSpan(base, from, to, value, false)
 			break
 		}

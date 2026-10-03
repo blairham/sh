@@ -26823,6 +26823,21 @@ option they do not have, and dash reads it as a name like the rest of its
 operands. That is a table of letters and not a disagreement about
 identical syntax, which is why the axis went.
 
+**`TypeLeadingDashWordAsksForTheBareAnswer`** — dash no · ash yes · bash,
+ksh93, zsh not reached
+
+The two shells whose `type` has no options part over a first operand that
+begins with `-`. dash looks it up as a name — `type -t f` is `-t: not found`,
+then `f is a function`, at 127. BusyBox ash 1.37.0 drops that one word,
+whatever its letters, and answers every name after it the way its `command -v`
+does: the bare name for a function, builtin or reserved word, the path for a
+file, `alias pz='print'` for an alias, and silence for a name that is nothing,
+with 127 if any was. Measured 2026-10-03 in the pinned image: `type -t f`,
+`type -w if`, `type -V f` and `type - f` are all `f`/`if` at 0; `type -- cd
+ls` is `cd` and `/bin/ls`; `type -t -t f` is `f` at 127, so only the first
+word goes. The shells that end the options with `--` read the word as options
+and never meet the question.
+
 **`TypeDistinguishesSpecialBuiltins`** — bash no · dash yes · ksh93 yes ·
 zsh no · ash yes · POSIX preset yes
 

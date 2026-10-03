@@ -143,6 +143,10 @@ type typeMode struct {
 	// kindWins says the `-t` was written *after* the last of `-p` and `-P`,
 	// which is what decides between them. See typeLetterOrder.
 	kindWins bool
+	// commandV is `command -v`'s answer for every name, which one shell
+	// with no options gives after a leading-dash word. See
+	// Semantics.TypeLeadingDashWordAsksForTheBareAnswer.
+	commandV bool
 }
 
 // typeLetterOrder reports whether the kind letter was written after the last
@@ -183,6 +187,21 @@ func (r *Runner) typeOperands(args []string) (names []string, m typeMode, code i
 	// would be refusing to answer.
 	if len(args) == 0 || args[0] == "" || args[0][0] != '-' {
 		return args, m, 0
+	}
+	if r.sem().TypeEndsOptionsWithDashDash == No {
+		// A shell with no options for `type` still splits over a leading
+		// dash: one looks the word up as a name, and one drops it and
+		// answers the rest in `command -v`'s shape. Asked before the lone
+		// dash, because `type - f` is the same dropped word there; a shell
+		// that looks the word up goes on to the readings below.
+		bare := r.ask(r.sem().TypeLeadingDashWordAsksForTheBareAnswer,
+			"`type` answering bare after a leading `-` word")
+		if r.unspecified {
+			return nil, m, 2
+		}
+		if bare {
+			return args[1:], typeMode{commandV: true}, 0
+		}
 	}
 	if args[0] == "-" {
 		// A lone `-` is an option word in one dialect and an operand in the
@@ -256,6 +275,9 @@ func (m typeMode) asked() typeKind {
 
 // typeOneMode dispatches one name to the shape its letters asked for.
 func (r *Runner) typeOneMode(name string, m typeMode) int {
+	if m.commandV {
+		return r.reportWhatRuns(name)
+	}
 	if m.all {
 		return r.typeAll(name, m)
 	}

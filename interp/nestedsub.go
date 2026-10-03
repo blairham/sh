@@ -355,3 +355,40 @@ func (r *Runner) nestedLengthReference(e *syntax.ParamExpr) (string, bool) {
 	}
 	return r.nestedParamReference(e.Inner.Spans[0])
 }
+
+// refusesAListAsAName refuses a nesting whose inner expansion is a `(P)` of a
+// name holding more than one element: the inner has to come to one name for
+// the outer to read, and a list is not one. Measured 2026-10-03 on zsh 5.9.2
+// under `-f -c`, with `x1=abc` and `v=(x1 x2)`:
+//
+//	${${(P)v}}  ${${(P)v}[1]}  ${#${(P)v}}  x=${${(P)v}}
+//	                         parameter name reference used with array, st 1
+//	"${${(P)v}}"  "${${(P)v}:-z}"          bad substitution, st 1
+//	v=(x1); ${${(P)v}[1,2]}  ab            one element is a name
+//	v=(); ${${(P)v}}         empty         and none is no name
+//	${(P)v}  ${(P)${v}}      abc           not nested: the first element
+//	typeset -A h=(k x1 j x2); ${${(P)h}}  refused, as is `${${(P)@}}`
+//
+// Either way the shell stops, and nothing after it on the line runs.
+func (r *Runner) refusesAListAsAName(e *syntax.ParamExpr) bool {
+	if e.Inner == nil || len(e.Inner.Spans) != 1 {
+		return false
+	}
+	span := e.Inner.Spans[0]
+	in := span.Param
+	if span.Kind != syntax.ParamExp || in == nil || in.Bad || !in.HasFlags ||
+		!strings.ContainsRune(in.Flags, 'P') || in.Inner != nil || in.Index != nil {
+		return false
+	}
+	words, _, isList := r.namedBase(in.Name, baseFlags(in.Flags))
+	if !isList || len(words) < 2 {
+		return false
+	}
+	if r.inDoubleQuotedSpan() {
+		r.diagf("%s\n", "bad substitution")
+	} else {
+		r.diagf("%s\n", "parameter name reference used with array")
+	}
+	r.fatalExpansionQuiet()
+	return true
+}

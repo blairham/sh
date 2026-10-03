@@ -2009,6 +2009,9 @@ func (r *Runner) expandAtList(s syntax.Span, sp splitPolicy, head bool) ([]strin
 		// shell it claims to be calls it a bad substitution.
 		return nil, false
 	}
+	if !r.namesTheOtherArray(s.Param) {
+		return nil, true
+	}
 	r.referredToParameter(s.Param.Name)
 	if r.refuseAbsentParameter(s.Param) {
 		// Before every shape below, because the shape that loses the read is
@@ -3467,6 +3470,9 @@ func (r *Runner) expandParam(e *syntax.ParamExpr) string {
 	}
 	if e.Bad {
 		r.reportBadSubstitution(e)
+		return ""
+	}
+	if !r.namesTheOtherArray(e) {
 		return ""
 	}
 	r.referredToParameter(e.Name)

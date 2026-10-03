@@ -3,7 +3,11 @@
 
 package interp
 
-import "github.com/blairham/sh/syntax"
+import (
+	"unicode"
+
+	"github.com/blairham/sh/syntax"
+)
 
 // `${a:^b}` and `${a:^^b}`: interleave a parameter with the array the operand
 // names, one element from each in turn.
@@ -52,6 +56,21 @@ func zipsElements(op syntax.ParamOp) bool {
 func (r *Runner) zipElements(e *syntax.ParamExpr, elems []string) []string {
 	name := r.joinWord(e.Arg)
 	other, named := r.arrayElems(name)
+	if isPositional(name) {
+		// A positional parameter is always there to zip with: one past `$#`
+		// is a single empty element and not an absent array, so `p q` zipped
+		// with an unset `$1` is `p` and an empty word, measured. `0` is the
+		// shell's name, as everywhere else a digit run worth nothing is.
+		other, named = []string{r.positionalForZip(name)}, true
+	}
+	if !named && r.nounset && (e.Op == syntax.ParamZip || e.Op == syntax.ParamZipCycle) {
+		// The zips read the operand as a parameter, and NO_UNSET refuses
+		// one that is not set — the empty name included, `${x:^}` being
+		// `: parameter not set`. The set operators do not: `${x:|nope}`
+		// under the same option is `p q`. Measured on zsh 5.9.2, 2026-10-03.
+		r.fatalUnsetParameter("%s\n", Wording(r.diag().UnboundVariable, "%s: parameter not set", name))
+		return nil
+	}
 	if !named {
 		// A name nothing answers to is no second array at all, and the
 		// parameter comes back as it was — measured, and the opposite of
@@ -80,4 +99,65 @@ func (r *Runner) zipElements(e *syntax.ParamExpr, elems []string) []string {
 		out = append(out, elems[i%len(elems)], other[i%len(other)])
 	}
 	return out
+}
+
+// namesTheOtherArray reports whether a zip or set operator's operand can be the
+// name it has to be, and refuses the expansion when it cannot.
+//
+// The operand is read as a name and never expanded, so the test is on what was
+// written: anything but identifier characters is refused, quoted or not, and
+// whatever the parameter on the left holds — unset, a scalar, a list.
+// Measured on zsh 5.9.2, 2026-10-03, under `-c`:
+//
+//	${x:^^^y}  ${x:^-y}  ${x:|^y}  ${x:*^y}   not an identifier: ^y (-y, ^y, ^y)
+//	${x:^$y}   ${x:^"b"}  ${x:^\b}             not an identifier: $y ("b", \b)
+//	${x:^@}    ${x:^y[1]}  ${x:^ y}             not an identifier: @ (y[1],  y)
+//	${x:^}     ${x:^^}  ${x:|}                  no operand, no zip: `p q`
+//	${x:^12a}  ${x:^_a}  ${x:^é}                accepted
+//
+// It ends the script at status 1, prints nothing of the command it was in, and
+// is an expansion's failure rather than a parse's: `false && print ${x:^-y}`
+// runs on.
+func (r *Runner) namesTheOtherArray(e *syntax.ParamExpr) bool {
+	switch e.Op {
+	case syntax.ParamZip, syntax.ParamZipCycle, syntax.ParamSetDifference, syntax.ParamSetIntersection:
+	default:
+		return true
+	}
+	written := e.ArgText
+	if written == "" && e.Arg != nil {
+		// A node the parser did not fill; the word is all there is.
+		written = syntax.PrintWord(e.Arg)
+	}
+	if identifierCharacters(written) {
+		return true
+	}
+	r.diagf("not an identifier: %s\n", written)
+	r.expandErr = true
+	return false
+}
+
+// identifierCharacters reports whether every character of s may be in a name,
+// a leading digit included.
+func identifierCharacters(s string) bool {
+	for _, c := range s {
+		if c != '_' && !unicode.IsLetter(c) && !unicode.IsDigit(c) {
+			return false
+		}
+	}
+	return true
+}
+
+// positionalForZip is the value of a positional parameter named by digits,
+// empty past the end of the list.
+func (r *Runner) positionalForZip(name string) string {
+	n, _ := atoi(name)
+	if n == 0 {
+		v, _ := r.dollarZero()
+		return v
+	}
+	if p := r.params(); n <= len(p) {
+		return p[n-1]
+	}
+	return ""
 }

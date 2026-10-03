@@ -35,8 +35,12 @@ func TestASubshellNumbersItsOwnJobsFromTwoAndDoesNotMarkThem(t *testing.T) {
 		{"no job in the parent leaves the mark on nobody", 0, "2:"},
 		{"one, and the `+` stays on the number it was on", 1, "2:"},
 		{"two, where the `+` was on number two — so it lands here", 2, "2:+"},
-		{"three, where number two held the `-`", 3, "2:-"},
-		{"four, where neither mark is on number two", 4, "2:"},
+		// The `+` named no job in these two, and a listing reads the table,
+		// which moves it onto the one job there is: `${jobstates}` read
+		// before the listing has `2:-` and `2:`. See
+		// Runner.settleFrozenMarks (#5429).
+		{"three, where number two held the `-`", 3, "2:+"},
+		{"four, where neither mark is on number two", 4, "2:+"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			var src strings.Builder

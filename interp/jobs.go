@@ -740,9 +740,9 @@ func (j *Job) finishRecording(status int, sig syscall.Signal, record func()) (fi
 // limitation worth stating rather than hiding, because the difference is
 // visible the moment anything tries to signal it.
 func (r *Runner) background(ctx context.Context, st *syntax.Stmt) error {
-	// Starting a job is a moment the shell notices what has ended. See
-	// Runner.noticeElementEnds.
-	r.noticeElementEnds()
+	// Starting a job is a moment the shell sees what has ended, without
+	// reaping it. See Runner.noticeElementEndsAs.
+	r.noticeElementEndsAs(false)
 	job := &Job{
 		done:     make(chan struct{}),
 		ready:    make(chan struct{}),

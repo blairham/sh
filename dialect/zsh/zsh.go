@@ -1284,6 +1284,10 @@ func Semantics() interp.Semantics {
 	// mode: `print a > >(cat)` prints `a` at 0 where `>> >(cat)` and a target
 	// that only holds the path are refused (#5485).
 	s.RestrictedRedirectTakesAProcessSubstitution = interp.Yes
+	// And the script that refusal ends exits with the builtin's own status,
+	// which the refusal does not fail: `export PATH` is 0 and `x=1; export
+	// PATH x` is 1. Measured 2026-10-02 (#5515).
+	s.RestrictedRefusalEndsWithTheBuiltinsStatus = interp.Yes
 	s.RestrictedBuiltinRefusalIsFatal = interp.Yes
 	s.RestrictedDotRefusesAPath = interp.No
 	s.RestrictedCommandOptionRefusalIsFatal = interp.No

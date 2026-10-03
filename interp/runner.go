@@ -1120,8 +1120,12 @@ type Runner struct {
 	// restrictedFrozen are the names restricted mode froze, and
 	// restrictedFreezes the extra names this dialect's mode freezes beyond the
 	// substrate's. See interp/restricted.go.
-	restrictedFrozen  map[string]bool
-	restrictedFreezes []string
+	restrictedFrozen map[string]bool
+	// restrictedRefusedOperand is the frozen name a declaration builtin's
+	// operand was just refused over, fatally. See
+	// Runner.restrictedRefusalStatus.
+	restrictedRefusedOperand string
+	restrictedFreezes        []string
 
 	randomSeed   uint64
 	randomDrawn  uint64
@@ -12395,6 +12399,12 @@ func (r *Runner) reportReadonlyRefusal(name string, form assignForm, fatal bool)
 		// readonly path's either way — measured in both shells — so only the
 		// sentence moves here. See Runner.restrictedFreeze.
 		msg = Wording(r.diag().RestrictedVariable, "%[1]s: restricted", name)
+		if fatal && r.inBuiltin != "" {
+			// Recorded for the status the script then ends with, which one
+			// dialect takes from the builtin rather than from the refusal.
+			// See Runner.restrictedRefusalStatus.
+			r.restrictedRefusedOperand = name
+		}
 	}
 	// A refusal made while the builtin was reading a value's hidden literal
 	// names the builtin whatever form the store used, which is the one place

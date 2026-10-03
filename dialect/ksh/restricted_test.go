@@ -203,3 +203,16 @@ func TestTheRestrictedShellRefusesALocalWithAValue(t *testing.T) {
 		t.Errorf("output %q, want the write refused at 1", out)
 	}
 }
+
+// TestARestrictedRefusalOfADeclarationEndsAtOne pins the other answer to
+// zsh's: here a refused declaration ends the script at 1, whatever the
+// operands after it. Measured 2026-10-02 on ksh93u+ from a script file
+// (#5515).
+func TestARestrictedRefusalOfADeclarationEndsAtOne(t *testing.T) {
+	for _, src := range []string{"typeset PATH=/x", "x=1; export PATH=/x x"} {
+		out, st := runKsh(t, t.TempDir(), "set -r\n"+src+"\necho after\n")
+		if st != 1 || strings.Contains(out, "after") {
+			t.Errorf("%s: got %q at %d, want the script ended at 1", src, out, st)
+		}
+	}
+}

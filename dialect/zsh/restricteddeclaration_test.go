@@ -4,6 +4,7 @@
 package zsh_test
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/blairham/sh/interp"
@@ -67,6 +68,42 @@ func TestRestrictedModeTakesAWriteIntoAProcessSubstitution(t *testing.T) {
 	for _, c := range cases {
 		if got, _ := runZshRoute(t, t.TempDir(), c.src, interp.RouteCommandString); got != c.want {
 			t.Errorf("%s\n got %q\nwant %q", c.src, got, c.want)
+		}
+	}
+}
+
+// TestARestrictedRefusalEndsWithTheBuiltinsStatus pins the status a script
+// ends with when zsh's restricted mode refuses a declaration's operand. The
+// refusal sets no failing status of its own, and a later operand that fails
+// does. Measured 2026-10-02 on zsh 5.9.2 under `-f`, reading the shell's own
+// exit status (#5515). The plain assignment is the control: it is not a
+// builtin and ends at 1.
+func TestARestrictedRefusalEndsWithTheBuiltinsStatus(t *testing.T) {
+	const on = "setopt restricted; "
+	cases := []struct {
+		src    string
+		status int
+	}{
+		{on + "export PATH; print after", 0},
+		{on + "false; export PATH=/x; print after", 0},
+		{"SHELL=/x; " + on + "export PATH nosuch SHELL; print after", 0},
+		{on + "typeset PATH=/x; print after", 0},
+		{"SHELL=/x; " + on + "typeset -x SHELL PATH; print after", 0},
+		{on + "x=1; export PATH x; print after", 1},
+		{on + "x=1; typeset PATH=/x x=2; print after", 1},
+		{on + "x=1; readonly PATH x; print after", 1},
+		{on + "x=1; f(){ local PATH x }; f; print after", 0},
+		{on + "f(){ local PATH; print in }; f; print after", 0},
+		{on + "export HOME PATH; print after", 0},
+		// A word that is no name fails, even though this shell refuses it
+		// before the loop where zsh meets it after the refusal.
+		{on + "export PATH 1bad; print after", 1},
+		{on + "PATH=/x; print after", 1},
+	}
+	for _, c := range cases {
+		out, st := runZshRoute(t, t.TempDir(), c.src, interp.RouteCommandString)
+		if st != c.status || strings.Contains(out, "after") {
+			t.Errorf("%s\n got %q at %d, want the script ended at %d", c.src, out, st, c.status)
 		}
 	}
 }

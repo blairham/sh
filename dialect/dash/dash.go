@@ -160,6 +160,8 @@ func Semantics() interp.Semantics {
 	// mode, so no name is ever mode-frozen.
 	// unanswered RestrictedRedirectTakesAProcessSubstitution: no restricted
 	// mode, and no process substitution either.
+	// unanswered RestrictedRefusalEndsWithTheBuiltinsStatus: no restricted
+	// mode, so no refusal ends anything.
 	// unanswered RestrictedDotRefusesAPath, RestrictedCommandOptionRefusalIsFatal:
 	// no restricted mode, so neither refusal exists here.
 	// unanswered MixedTableLiteral, EmptyKeyInATableLiteral: this shell has no

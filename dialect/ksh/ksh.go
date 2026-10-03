@@ -857,6 +857,10 @@ func Semantics() interp.Semantics {
 	s.RestrictedFreezeRefusesAValuelessDeclaration = interp.No
 	// And `echo a > >(cat)` is refused in the mode, at 1, as bash refuses it.
 	s.RestrictedRedirectTakesAProcessSubstitution = interp.No
+	// A refused declaration ends the script at 1, whatever the operands after
+	// it: `typeset PATH=/x`, `readonly PATH` and `export PATH=/x HOME` all exit
+	// 1. Measured 2026-10-02 (#5515).
+	s.RestrictedRefusalEndsWithTheBuiltinsStatus = interp.No
 	// And three of the refusals end the script: `.`, `exec` and `command -p`.
 	// The other five report 1 and carry on, which is measured rather than
 	// assumed — see Semantics.RestrictedBuiltinRefusalIsFatal, where the table

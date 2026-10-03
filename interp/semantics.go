@@ -25218,6 +25218,29 @@ type Semantics struct {
 	// TestSetRefusesTheRestrictedLetter pins the refusal that keeps it out.
 	RestrictedRedirectTakesAProcessSubstitution Answer
 
+	// RestrictedRefusalEndsWithTheBuiltinsStatus ends the script, when
+	// restricted mode refuses a declaration builtin's operand, with the status
+	// the builtin goes on to reach rather than with the refusal's own 1.
+	//
+	// Both shells whose freeze is not a readonly end the script there. They
+	// part over the number. Measured 2026-10-02 from `set -r` and the shell's
+	// own exit status: ksh93u+ exits 1 for `typeset PATH=/x`, `readonly
+	// PATH` and `export PATH=/x HOME` alike, while zsh 5.9.2 exits 0 for
+	// `export PATH`, `export PATH=/x` and `f(){ local PATH }; f`, and 1 only
+	// where a later operand fails: `x=1; export PATH x`. A plain `PATH=/x` is
+	// 1 in both, which is an assignment and not a builtin. See
+	// Runner.restrictedRefusalStatus for zsh's whole grid (#5515).
+	//
+	// unpinned bash: the freeze is a readonly there and no refusal of it ends
+	// the script, so this is never asked.
+	// TestBashRestrictedLocalOfAFrozenNameIsTheReadonlyRefusal pins what bash
+	// does.
+	// unpinned dash: no restricted mode, so nothing is ever refused here.
+	// TestSetRefusesTheRestrictedLetter pins the refusal that keeps it out.
+	// unpinned ash: the same.
+	// TestSetRefusesTheRestrictedLetter pins the refusal that keeps it out.
+	RestrictedRefusalEndsWithTheBuiltinsStatus Answer
+
 	// KeywordAssignments is `set -k`: with it on, **every** `name=value` word
 	// of a simple command is a prefix assignment and not only the ones
 	// written in front of the command name.

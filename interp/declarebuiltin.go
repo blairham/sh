@@ -1213,7 +1213,12 @@ func (r *Runner) exportContainerLetterForThisOperand(name string, f declareFlags
 // Its own function because `integer` is the same declaration under a second
 // name with the integer attribute already decided, and a second copy of this
 // is the thing that would drift. See integerbuiltin.go.
-func (r *Runner) declareNames(name string, args []string, f declareFlags) int {
+func (r *Runner) declareNames(name string, args []string, f declareFlags) (endStatus int) {
+	defer func() {
+		if st, ok := r.restrictedRefusalStatus(args, f, false); ok {
+			endStatus = st
+		}
+	}()
 	// The hide attribute a name was already carrying does not survive this
 	// line changing the name's kind — see kindChangeForgetsTheHide, and
 	// hiddenNameKinds for why a line writing the letter is exempt. Deferred

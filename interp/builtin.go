@@ -3466,6 +3466,10 @@ func (r *Runner) unsetName(name string) int {
 // Split out rather than reached by recursion so that a tie which *survives*
 // the unset cannot send the removal round again — see unsetName.
 func (r *Runner) unsetOneName(name string) {
+	// Read before anything is removed: whether this is the shell's own
+	// parameter in a dialect where unset takes only its value, and whether
+	// it is exported now. See Semantics.UnsetKeepsTheShellsOwnAttributes.
+	keep, wasExported := r.unsetKeepsTheAttributes(name)
 	// Before the removal, because what is recorded is that there *was* a
 	// value here — see interp/shellhome.go.
 	r.noteHomeIsGoing(name)
@@ -3599,7 +3603,9 @@ func (r *Runner) unsetOneName(name string) {
 			r.unsetOneName(m)
 		}
 	}
-	r.clearAttributes(name)
+	if !keep {
+		r.clearAttributes(name)
+	}
 	// Recorded as well as deleted: a name that came from the environment is
 	// not in Vars to begin with, and deleting nothing left it visible to
 	// every lookup — `unset PATH` did not clear PATH.
@@ -3607,6 +3613,12 @@ func (r *Runner) unsetOneName(name string) {
 		r.removed = map[string]bool{}
 	}
 	r.removed[name] = true
+	if keep && wasExported {
+		// The letter stays on a name that is gone. The environment has no
+		// entry for it until a value comes back, and the assignment that
+		// brings one back finds the name already exported.
+		r.exported[name] = true
+	}
 }
 
 // clearAttributes takes a name's attributes away, which is the other half of

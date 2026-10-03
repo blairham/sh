@@ -137,3 +137,36 @@ func (r *Runner) wasTheShellsOwnParameter(name string) bool {
 	}
 	return r.shellOwn[name] || r.DynamicParameter(name) || r.AbsentParameter(name)
 }
+
+// unsetKeepsTheAttributes reports whether the `unset` about to happen should
+// leave the name's attributes behind, and whether the name is exported now.
+//
+// The question is asked only of a parameter the shell owns. For every other
+// name the panel agrees that the attributes go. That includes a name an
+// earlier `unset` has already removed: a second `unset` must not take away
+// the letter the first one kept. Measured, `export SHLVL; unset SHLVL;
+// unset SHLVL; SHLVL=3` still hands the child `SHLVL=3`.
+// See Semantics.UnsetKeepsTheShellsOwnAttributes.
+func (r *Runner) unsetKeepsTheAttributes(name string) (keep, exported bool) {
+	if !r.wasTheShellsOwnParameter(name) {
+		return false, false
+	}
+	exported = r.isExported(name)
+	if !exported && !r.carriesATypeLetter(name) {
+		// Nothing to keep, so the panel agrees and nothing is asked.
+		return false, false
+	}
+	if !r.ask(r.sem().UnsetKeepsTheShellsOwnAttributes, "whether `unset` keeps the attributes of the shell's own parameter") {
+		return false, false
+	}
+	return true, exported
+}
+
+// carriesATypeLetter reports whether a name carries one of the attributes
+// an `unset` would otherwise take with it, apart from export.
+func (r *Runner) carriesATypeLetter(name string) bool {
+	_, width := r.fieldWidth[name]
+	_, prec := r.floatPrecision[name]
+	return r.integer[name] || r.lowered[name] || r.uppered[name] || r.unique[name] ||
+		r.hidden[name] || r.traced[name] || width || prec
+}

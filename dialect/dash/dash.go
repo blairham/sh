@@ -340,6 +340,8 @@ func Semantics() interp.Semantics {
 	// No rather than unmeasured.
 	s.BraceBodyIsACharacterClass = interp.No
 	s.ZeroSubscriptIsTheFirstElement = interp.No
+	// dash 0.5.12 keeps the export letter of its own parameters (`PS1`, `IFS`, `LINENO`) through `unset`; see the axis.
+	s.UnsetKeepsTheShellsOwnAttributes = interp.Yes
 	// unanswered BraceRangeStepPadsTheRange: the same, and for the same
 	// reason as the line above — `echo {1..5..01}` is the word itself here,
 	// so no step is ever read and none of its zeros can pad anything.

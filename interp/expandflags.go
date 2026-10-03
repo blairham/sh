@@ -26,7 +26,7 @@ import (
 // `-` a `q` ate is not in Flags at all, the parser having taken it out into
 // QuoteModifier. `+` is deliberately absent — it is no flag on its own, and
 // the parser refuses every `+` a `q` could not take.
-const implementedParamFlags = "ULC#fsjF@kvP%qMuoOniaQbcwWA~Zze-lr0VtSmBENR"
+const implementedParamFlags = "ULC#fsjF@kvP%qMuoOniaQbcwWA~Zze-lr0VtSmBENRX"
 
 // expandFlagged answers an expansion that carries a flag group, as fields.
 // It reports false only when the node carries no group, so the ordinary
@@ -633,7 +633,13 @@ func (r *Runner) flaggedWords(e *syntax.ParamExpr, sp splitPolicy, quoted bool,
 			}
 		case '#':
 			for i, w := range words {
-				words[i] = r.characterForCodeOf(w)
+				c, complaint := r.characterForCodeReporting(w)
+				if complaint != "" && reportsFlagErrors(e) {
+					r.diagf("%s\n", complaint)
+					r.expandErr = true
+					return nil, false, false, false
+				}
+				words[i] = c
 			}
 		}
 	}
@@ -716,7 +722,13 @@ func (r *Runner) flaggedWords(e *syntax.ParamExpr, sp splitPolicy, quoted bool,
 		// one at the edge, exactly as a letter split does. See expandFlagged.
 		bare = nil
 		for i, w := range words {
-			words[i] = r.unquoteFlagged(w)
+			v, complaint := r.unquoteFlaggedReporting(w)
+			if complaint != "" && reportsFlagErrors(e) {
+				r.diagf("%s\n", complaint)
+				r.expandErr = true
+				return nil, false, false, false
+			}
+			words[i] = v
 		}
 	}
 	// A marked separator's join, held back to here from rule 10.
@@ -1654,20 +1666,45 @@ func (r *Runner) convertCase(v string, upper bool) string {
 //	-1  ff   -200  38   -256  00: a negative value is its low byte
 //	abc            NUL: the word is an expression, and an unset name is 0
 //
-// characterForCodeOf is that over a word not yet evaluated, and an expression
-// that will not evaluate is no character at all and no complaint either:
-// measured, `x='1+'; print -n ${(#)x}` and the same over `1/0` write nothing
-// at status 0, and `a=(65 '1+' 66); print ${(#)a}` writes `A B`.
-func (r *Runner) characterForCodeOf(w string) string {
-	tree, _, err := r.arithTreeOver(nil, w, arithTextArrived)
+// characterForCodeReporting is that over a word not yet evaluated. An
+// expression that will not evaluate is no character at all, and no complaint
+// either unless the `X` flag asks for one: measured, `x='1+'; print -n ${(#)x}`
+// and the same over `1/0` write nothing at status 0, and `a=(65 '1+' 66);
+// print ${(#)a}` writes `A B`. The complaint is the sentence `$(( ))` would
+// write — a failure to read the expression and a failure to evaluate it are
+// worded apart, as there. See reportsFlagErrors.
+func (r *Runner) characterForCodeReporting(w string) (string, string) {
+	tree, text, err := r.arithTreeOver(nil, w, arithTextArrived)
 	if err != nil {
-		return ""
+		return "", r.diag().ParseFailure(err)
 	}
 	n, err := r.evalNum(tree)
 	if err != nil {
-		return ""
+		return "", r.arithFailure(text, err)
 	}
-	return r.characterForCode(n.asInt())
+	return r.characterForCode(n.asInt()), ""
+}
+
+// reportsFlagErrors is the `X` flag: a failure the `Q`, `e` and `#` flags
+// would pass over in silence is reported, and the expansion fails. Measured
+// 2026-10-02 on zsh 5.9.2 (`-f`, `LC_ALL=C`), each ending the line where the
+// unflagged spelling goes on:
+//
+//	foo='unmatched "';  ${(QX)foo}   unmatched "      ${(Q)foo} is the value
+//	foo="a'b";          ${(QX)foo}   unmatched '
+//	foo='$(x';          ${(QX)foo}   parse error in parameter value
+//	foo='${x';          ${(QX)foo}   closing brace expected
+//	foo='`x';           ${(QX)foo}   unmatched `
+//	foo=1+;             ${(X#)foo}   bad math expression: operand expected at
+//	                                 end of string       ${(#)foo} is empty
+//	foo='$(';           ${(Xe)foo}   parse error
+//	foo='a\';           ${(QX)foo}   a                 a trailing backslash
+//	                                                     is no failure
+//
+// A pattern operator's bad pattern is reported with or without it, in that
+// shell and here (#5151).
+func reportsFlagErrors(e *syntax.ParamExpr) bool {
+	return strings.ContainsRune(e.Flags, 'X')
 }
 
 func (r *Runner) characterForCode(n int) string {

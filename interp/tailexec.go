@@ -186,7 +186,7 @@ func kernelStartsIt(path string) bool {
 	if err != nil {
 		return false
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	head := make([]byte, 4)
 	n, _ := f.Read(head)
 	head = head[:n]

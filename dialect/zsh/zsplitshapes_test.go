@@ -12,7 +12,7 @@ import "testing"
 // D04parameter.ztst). Measured 2026-10-02 on zsh 5.9.2
 // (`/opt/homebrew/bin/zsh -f`, `LC_ALL=C`).
 func TestTheShellWordSplitKeepsTheShellsTokens(t *testing.T) {
-	const setup = "z() { local -a w; w=(${(z)1}); print -rn -- \"${#w}:\"; for x in $w; print -rn -- \"<$x>\"; print }\n"
+	const setup = "z() { local -a w; w=(\"${(@z)1}\"); print -rn -- \"${#w}:\"; for x in \"${w[@]}\"; print -rn -- \"<$x>\"; print }\n"
 	for _, tc := range []struct{ src, want string }{
 		{`z 'x=(a b)'`, "4:<x=(><a><b><)>\n"},
 		{`z 'y+=(c)'; z 'a[1]=(x)'`, "3:<y+=(><c><)>\n3:<a[1]=(><x><)>\n"},

@@ -1658,6 +1658,12 @@ func (r *Runner) tracef(format string, args ...any) {
 	// writes and of every runner it clones. See
 	// interp/procsubtracestart.go.
 	defer r.bodyTraceStart.mark()
+	if inherited := r.takeInheritedTraceLine(); inherited != "" {
+		// A child's copy of the line its parent was writing goes first. See
+		// Runner.prefixLineForAChild.
+		format = "%s" + format
+		args = append([]any{inherited}, args...)
+	}
 	if r.traceTo != nil {
 		_, _ = fmt.Fprintf(r.traceTo, format, args...)
 		return

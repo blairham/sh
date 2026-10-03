@@ -38,11 +38,12 @@ import (
 // "Goes out" means something else is written first. The pending text is
 // held here and only written when a diagnostic arrives (see
 // Runner.flushOpenTraceLine) or when the list ends, so a list with nothing
-// to say in the middle writes exactly the line it always did. Process
-// substitution and command substitution traces do not flush it. zsh's own
-// output there reflects a forked child's copy of the unwritten line, which
-// is a fact about how that shell writes and not an ordering of events, and
-// this does not model it. See Semantics.TraceAssignmentListIsWrittenAsItGoes.
+// to say in the middle writes exactly the line it always did. A substitution
+// in a value does not flush it. It runs in a child that has a copy of the
+// unwritten line, and the child writes that copy ahead of its own first
+// line: `set -x; x=$(echo a) y=$(echo b)` is `+zsh:1> x=+zsh:1> echo a`,
+// `+zsh:1> x=a y=+zsh:1> echo b`, then `+zsh:1> x=a y=b ` (#5546). See
+// Runner.prefixLineForAChild and Semantics.TraceAssignmentListIsWrittenAsItGoes.
 
 // openTraceLine is the text of an assignment list's trace line that has not
 // been written yet. owner is the runner writing the list, so that a
@@ -51,6 +52,14 @@ import (
 type openTraceLine struct {
 	owner   *Runner
 	pending string
+	// inherited says this is a child's copy of its parent's line, written
+	// ahead of the child's first trace line rather than ahead of a
+	// diagnostic. See Runner.prefixLineForAChild.
+	inherited bool
+	// unflushed says a diagnostic does not write this line first: a
+	// command's prefix line is written after its complaint, if at all. See
+	// interp/xtraceprefixasitgoes.go.
+	unflushed bool
 }
 
 // assignListIsWrittenAsItGoes reports whether this list's one trace line is
@@ -89,11 +98,20 @@ func (r *Runner) assignAllAsItGoes(ctx context.Context, assigns []*syntax.Assign
 	for _, a := range assigns {
 		target := traceAssignTarget(a, nil)
 		line.pending += target
+		failedBefore := r.expandErr
 		value, fields, globbed := r.expandScalarAssignValue(a.Value)
 		if r.ctl != controlNone {
 			// The expansion ended the shell, and the line stays where it got
 			// to: `b=${x?boom}` leaves `b=` and no newline.
 			return
+		}
+		if r.expandErr && !failedBefore {
+			// A value that would not expand and did not end the shell on its
+			// own: the list stops, nothing is stored, and the line gets its
+			// newline. Measured 2026-10-03, `b=0; set -x; a=1 b=$((1/0)) c=3;
+			// echo "[$b][$c]"` is `+zsh:1> a=1 b=`, the complaint and an empty
+			// line, and nothing after it (#5546).
+			break
 		}
 		e := r.prepareTracedAssign(a, value)
 		e.fields, e.fieldsSet = fields, globbed
@@ -124,7 +142,7 @@ func (r *Runner) traceAssignRest(a *syntax.Assign, value string, e *expandedAssi
 // ahead of a diagnostic about to be written into the middle of it.
 func (r *Runner) flushOpenTraceLine() {
 	line := r.openTrace
-	if line == nil || line.owner != r || line.pending == "" {
+	if line == nil || line.owner != r || line.pending == "" || line.inherited || line.unflushed {
 		return
 	}
 	text := line.pending

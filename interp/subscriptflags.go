@@ -507,11 +507,49 @@ func (r *Runner) renderSubscript(w *syntax.Word, keepEscape func(string) bool) s
 			}
 			b.WriteString(v)
 		default:
+			if s.Quoting == syntax.SingleQuoted {
+				b.WriteString(r.singleQuotedSubscriptText(s.Value, keepEscape))
+				continue
+			}
 			b.WriteString(s.Value)
 		}
 	}
 	b.WriteString(quote(open))
 	return b.String()
+}
+
+// singleQuotedSubscriptText is what the text between a pair of single quotes
+// in a subscript comes to where the subscript is no quoting context: read as
+// though the quotes were not there, its substitutions performed and its
+// escapes taken as the rest of the subscript takes them, the quotes then put
+// back around it by the caller.
+//
+// Measured on zsh 5.9.2 (`-f`, a script file under `env -i
+// PATH=/usr/bin:/bin LC_ALL=C`), 2026-10-03, with `b=X`, listing the key each
+// store left (#5268):
+//
+//	h['a$b']=1          'aX'
+//	h['1$(echo Q)']=1   '1Q'
+//	h['3${b}c']=1       '3Xc'
+//	h['4$((1+1))']=1    '42'
+//	h['6`echo T`']=1    '6T'
+//	h['2\$b']=1        '2$b'      an escaped $ is spent, as outside them
+//	h['2a\\b']=1      '2a\b'
+//	h['1a\"b']=1       '1a\"b'    and an escaped quote keeps its backslash
+//	h['4"x"']=1         '4"x"'
+//	h['7 a  b ']=1      '7 a  b '
+//
+// and a search operand alike: with `'aX'` the third element,
+// `${a[(i)'a$b']}` is 3.
+func (r *Runner) singleQuotedSubscriptText(text string, keepEscape func(string) bool) string {
+	if !strings.ContainsAny(text, "$`\\") || strings.ContainsAny(text, quoteStandIns) {
+		return text
+	}
+	e, ok := r.reference("x[" + standInQuotes(text) + "]")
+	if !ok || e.Index == nil {
+		return text
+	}
+	return restoreQuotes(r.renderSubscript(e.Index, keepEscape))
 }
 
 // searchKeepsEscape answers, for a search operand, whether a backslash stays

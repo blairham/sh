@@ -31,7 +31,10 @@ func TestTheLineParametersSayLocalInTheirType(t *testing.T) {
 		{"BUFFER", "scalar-local-special"},
 		{"LBUFFER", "scalar-local-special"},
 		{"RBUFFER", "scalar-local-special"},
-		{"CURSOR", "scalar-local-special"},
+		// An integer: measured again 2026-10-02 on zsh 5.9.2 through a
+		// pseudo-terminal, `${(t)CURSOR}` in a widget is
+		// `integer-local-special`, and `typeset -p CURSOR` writes `-i10`.
+		{"CURSOR", "integer-local-special"},
 		// #2493 lists WIDGET with LBUFFER and RBUFFER as "the same shape"
 		// and says in the same breath that it was not probed separately. It
 		// is not the same shape: a widget may not assign the name of the

@@ -1400,6 +1400,7 @@ func openWidgetParameters(r *interp.Runner, completion bool) {
 			r.MarkReadonly(name)
 		}
 	}
+	declareWidgetParameters(r)
 	// Every one of them belongs to this call, and zsh says so in the word a
 	// plugin reads: `${(t)BUFFER}` inside a `zle -N` widget is
 	// `scalar-local-special` there and was `scalar-special` here, with
@@ -1458,6 +1459,57 @@ func closeWidgetParameters(r *interp.Runner) {
 	// line parameters". This one is neither: a completion widget may colour
 	// the line it is refused permission to rewrite.
 	closeRegionHighlight(r)
+	for name := range widgetParameterDeclarations {
+		r.UnsetDynamicDeclaration(name)
+	}
+	for _, name := range zleQueueParameters {
+		r.UnsetDynamicDeclaration(name)
+	}
+}
+
+// widgetParameterDeclarations is what `typeset -p` writes for each of the
+// parameters a widget is given, beside the letters the attribute tables
+// already carry. Measured 2026-10-02 on zsh 5.9.2 through a
+// pseudo-terminal, inside a widget on the line `ab`:
+//
+//	typeset BUFFER=ab
+//	typeset -i10 CURSOR=2
+//	typeset LBUFFER=ab
+//	typeset RBUFFER=''
+//	typeset POSTDISPLAY=pd
+//	typeset -r WIDGET=w
+//	typeset -a region_highlight=( '0 1 bold' )
+//	typeset -i10 -r KEYS_QUEUED_COUNT=0
+//
+// Without a declaration a produced parameter is no name to `typeset -p`, and
+// every one of these answered `no such variable`.
+var widgetParameterDeclarations = map[string]interp.ProducedDeclaration{
+	"BUFFER":            {},
+	"CURSOR":            {Integer: true, Base: 10},
+	"LBUFFER":           {},
+	"RBUFFER":           {},
+	postdisplayName:     {},
+	"WIDGET":            {},
+	regionHighlightName: {Array: true, ListsItsElements: true},
+}
+
+// declareWidgetParameters states widgetParameterDeclarations, and the queue
+// counters' integer letter, for the length of one widget call.
+//
+// The parameters are the widget function's own, as a local of it would be:
+// measured, `typeset -p BUFFER` in the widget writes `typeset BUFFER=ab` and
+// the same line in a function the widget calls writes `typeset -g
+// BUFFER=ab`. The widget's call is the scope opened next, which is the one
+// they are stated for.
+func declareWidgetParameters(r *interp.Runner) {
+	own := r.ScopeDepth() + 1
+	for name, d := range widgetParameterDeclarations {
+		d.LocalToScope = own
+		r.SetDynamicDeclaration(name, d)
+	}
+	for _, name := range zleQueueParameters {
+		r.SetDynamicDeclaration(name, interp.ProducedDeclaration{Integer: true, Base: 10, LocalToScope: own})
+	}
 }
 
 // The line a widget is editing, as this file keeps it.

@@ -106,6 +106,13 @@ type ProducedDeclaration struct {
 	// which writes nothing for it and reports 0. Without it the choice is
 	// between a row no shell writes and the `not found` this issue is about.
 	Silent bool
+
+	// LocalToScope, where it is not zero, is the depth of variable scopes at
+	// which the parameter is the innermost scope's own: `typeset -p` there
+	// writes it without the `-g` a global gets inside a function, and from
+	// any deeper scope with it. For a parameter a dialect opens for the
+	// length of one function call — see Runner.ScopeDepth.
+	LocalToScope int
 }
 
 // SetDynamicDeclaration says how a produced parameter lists back.
@@ -141,6 +148,21 @@ func (r *Runner) SetDynamicDeclaration(name string, d ProducedDeclaration) {
 		r.dynamicDeclarations = map[string]ProducedDeclaration{}
 	}
 	r.dynamicDeclarations[name] = d
+}
+
+// ScopeDepth is how many variable scopes are open: zero at the top level,
+// and one more for each function call the shell is inside. See
+// ProducedDeclaration.LocalToScope.
+func (r *Runner) ScopeDepth() int { return len(r.scopes) }
+
+// UnsetDynamicDeclaration takes back what SetDynamicDeclaration stated, for a
+// parameter that exists only for a while — zsh's line-editor parameters,
+// which are there for the length of a widget call and are not names at all
+// outside one. Separate from UnsetDynamic, which leaves a declaration in
+// place on purpose: `unset RANDOM` takes the producer away and the row
+// `typeset -p` writes is decided elsewhere (see Runner.removedForDescription).
+func (r *Runner) UnsetDynamicDeclaration(name string) {
+	delete(r.dynamicDeclarations, name)
 }
 
 // producedDeclaration is what a listing was told about this name, and whether

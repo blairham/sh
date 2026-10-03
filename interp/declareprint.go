@@ -310,6 +310,9 @@ func (r *Runner) declarationOf(name string) (declaration, bool) {
 		// *reading* and an array's elements are not one, so the two produced
 		// branches below take this rather than the withholding on its own.
 		producedIsAnArray = pd.Array
+		if pd.LocalToScope > 0 && pd.LocalToScope == len(r.scopes) {
+			d.localHere = true
+		}
 		producedListsElements = pd.ListsItsElements
 		attributed = true
 	}

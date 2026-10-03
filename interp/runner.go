@@ -4862,6 +4862,9 @@ type Runner struct {
 	// a word at a time, in the dialect that writes it so. See
 	// interp/xtraceopenline.go.
 	openTrace *openTraceLine
+	// heldPrefix is a prefix's trace line that stopped short, written only
+	// if the shell stops. See interp/xtraceprefixasitgoes.go.
+	heldPrefix heldPrefixTrace
 	// storingATakenBackPrefix is set while a command's assignment prefix that
 	// the command's end takes back is being stored. See
 	// Runner.storePrefixQuietlyIfTakenBack.
@@ -5489,6 +5492,14 @@ func (r *Runner) clone() *Runner {
 	// visible. After ownTables, which is what leaves it free to build the
 	// three tables it owns from scratch.
 	c.inheritTraps(r)
+	// A copy of an unfinished trace line, for the dialect whose trace stream
+	// is buffered: the child writes it ahead of its own first line. See
+	// interp/xtraceprefixasitgoes.go.
+	c.heldPrefix = heldPrefixTrace{}
+	c.openTrace = r.prefixLineForAChild()
+	if c.openTrace != nil {
+		c.openTrace.owner = &c
+	}
 	return &c
 }
 
@@ -8751,6 +8762,11 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 		r.prefixTraceJoins, r.prefixGlobMatches = nil, nil
 		r.prefixSpeaker = prefixValueSpeakerNone
 	}()
+	// A prefix's trace line that stopped short is written if the command
+	// stopped the shell. See interp/xtraceprefixasitgoes.go.
+	defer r.writeHeldPrefixTrace()
+	asItGoes := tracesPrefix && !prefixFollows && r.tracesPrefixAsItGoes()
+	failedLate := false
 	tracedHere := false
 	// What this command knew before any prefix value was expanded, so that a
 	// failure the walk *causes* can be told from one that was already on the
@@ -8788,11 +8804,25 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 		// After the redirections, with the prefix expanded there too. See
 		// Semantics.TraceLineFollowsTheRedirections.
 		lateTrace = append(lateTrace, func() {
+			if asItGoes {
+				r.tracePrefixAsItGoes(c, argv, walk)
+				failedLate = r.prefixWalkFailed(walk)
+				return
+			}
 			r.expandPrefixTraceValues(c.Assigns)
 			if !r.assignmentGaveUp() {
 				r.tracePrefixAndCommand(c, argv)
 			}
 		})
+	} else if asItGoes {
+		// A word at a time, and a value that would not expand gives the
+		// command up here. The trace's own expansions take the failure off
+		// the record before the route that would have read it, so without
+		// this `set -x` made `a=$((1/0)) /bin/echo hi` run the program.
+		r.tracePrefixAsItGoes(c, argv, walk)
+		if r.givesUpForAFailedPrefix(walk, r.prefixCommandOf(argv)) {
+			return nil
+		}
 	} else if tracesPrefix && !prefixFollows {
 		// Ahead of the redirections, which is measured and not incidental:
 		// `z=1 cmd >/nope/f` writes `+ z=1` and `+ cmd` and *then* the
@@ -8931,6 +8961,12 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 			r.fatalQuiet()
 		}
 		r.applyArrayOperandsPastAFailedOpen(ctx, c)
+		return nil
+	}
+
+	// The prefix traced after the redirections would not expand. See the
+	// same check ahead of them.
+	if failedLate && r.givesUpForAFailedPrefix(walk, r.prefixCommandOf(argv)) {
 		return nil
 	}
 

@@ -4528,6 +4528,17 @@ type Semantics struct {
 	// well — `a=1 b=${x?boom}` is `+zsh:1> a=1 b=zsh:1: x: boom` — and the
 	// line is left unfinished when the expansion ends the shell, where a
 	// refused *store* still gets its newline.
+	//
+	// A command's prefix is written the same way, and read rather than asked
+	// there. Its line so far is written after the complaint, and only if the
+	// shell stops. A substitution in a value writes a copy of the line so far
+	// ahead of its own. Measured 2026-10-03 on zsh 5.9.2 (#5546):
+	//
+	//	readonly r; set -x; a=1 r=2 true    the refusal, then `+zsh:1> a=1
+	//	                                    r=2 ` with no newline
+	//	set -x; a=$(echo s >&2) true        `+zsh:1> a=+zsh:1> echo s`, …
+	//
+	// See interp/xtraceprefixasitgoes.go.
 	TraceAssignmentListIsWrittenAsItGoes Answer
 	// TraceArrayLiteralShowsTheExpandedElements prints what an array
 	// literal's elements came to rather than the words the script wrote.

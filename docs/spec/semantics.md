@@ -9126,6 +9126,26 @@ Five things there are measurements and not readings of the table.
   1 — so the two doors are two. `Semantics.RestrictedModeIsLeftByTheLetter` is
   the axis, and bash answers No to it with `set: +r: invalid option`.
 
+**An attribute letter on a frozen name is refused where it would change the
+name.** Measured 2026-10-02 from script files under `env -i
+PATH=/usr/bin:/bin SHELL=/bin/sh`, 92 rows over PATH and SHELL (exported
+values) and ENV and FPATH (nothing) (#5506). Every refusal is
+`<script>[N]: <builtin>: <name>: restricted` and ends the script at 1:
+
+| | refused | taken |
+| --- | --- | --- |
+| minus letters | `readonly PATH`, `typeset -r`/`-i`/`-l`/`-u`/`-L5`/`-H`/`-t`/`-n`/`-A` on any of the four, `typeset -a PATH`, `export ENV` | `export PATH`, `typeset -x PATH`, `typeset -a ENV` |
+| plus letters | `typeset +x`/`+l`/`+u`/`+i`/`+H` on PATH, `typeset +i ENV`, `typeset -x +r PATH` | `typeset +r` on all four, `typeset +x`/`+l`/`+u`/`+H` on ENV, `typeset +rx ENV` |
+| no letter | — | `typeset PATH` |
+
+Inside a keyword `function` the declaration makes a binding of its own,
+which holds nothing and is exported nowhere: `typeset -x PATH` is refused
+there and `typeset +x PATH` and `typeset +i PATH` are taken.
+`Semantics.RestrictedFreezeRefusesALetterThatChangesTheName` is the axis.
+`+r` keeps the freeze: `typeset +r PATH; PATH=/x` refuses the assignment.
+One row is not modeled: `typeset -A FPATH` is taken while `typeset -A ENV` is
+refused, and ENV has a default value in that shell that FPATH has not.
+
 `set -o restricted` is real here and was a **recorded** name before #4205: a
 listing carried it, `set -o restricted` reported 0, and nothing acted on it, so
 a script that asked for a restricted shell through the long spelling was told

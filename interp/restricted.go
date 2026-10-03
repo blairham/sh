@@ -200,8 +200,8 @@ func (r *Runner) restrictedDeclarationRefused(name string, f declareFlags, assig
 // restrictedLetterChangesTheName reports whether a declaration's letters
 // would change a frozen name, by the rule measured on ksh93u+ 2012-08-01 from
 // a script file under `env -i PATH=/usr/bin:/bin SHELL=/bin/sh`, 2026-10-02
-// (#5506). Across 92 rows over PATH and SHELL, which hold exported values,
-// and ENV and FPATH, which hold nothing:
+// (#5506). The grid is 92 rows over PATH and SHELL, which hold exported
+// values, and ENV and FPATH, which hold nothing:
 //
 //   - **A minus letter changes the name**, `-i`, `-l`, `-u`, `-L5`, `-H`,
 //     `-t`, `-n`, `-A`, `-r` and `readonly` alike, with two exceptions. `-x`
@@ -210,23 +210,24 @@ func (r *Runner) restrictedDeclarationRefused(name string, f declareFlags, assig
 //     on a name that holds nothing (`typeset -a ENV` is taken, `typeset -a
 //     PATH` refused).
 //   - **A plus letter changes a name that holds a value**: `+x`, `+l`,
-//     `+u`, `+i`, `+L`, `+H`, `+t`, `+n` on PATH are each refused. On a name
-//     holding nothing, only the numeric `+i`, `+E` and `+F` are.
-//   - **`+r` alone is taken on every name** and changes nothing, since the
-//     mode's freeze is not the attribute. That is
-//     Runner.restrictedPlusRIsIgnored, which runs before this.
+//     `+u`, `+L`, `+H`, `+t`, `+n` on PATH are each refused, and the same
+//     letters on ENV are taken.
+//   - **`+r` changes nothing**, since the mode's freeze is not the
+//     attribute. See Runner.restrictedFreezeIsNotTheAttribute, which keeps
+//     the freeze.
 //   - **A binding of the declaration's own is a name holding nothing**: in a
 //     `function`, `typeset -x PATH` is refused and `typeset +x PATH` and
-//     `typeset +i PATH` are taken. The numeric plus letters are the one
-//     place it parts from a global holding nothing, where `typeset +i ENV`
-//     is refused.
-//   - **Both signs on one line are refused**, even where each letter alone
-//     is taken: `typeset -x +r PATH` is refused while `typeset -x PATH` and
-//     `typeset +r PATH` are both taken.
+//     `typeset +i PATH` are taken.
+//
+// Some refusals in the grid need nothing here, because the freeze is a
+// readonly mark underneath and the readonly machinery already refuses them,
+// in the mode's words (see reportReadonlyRefusal): `+i`, `+E` and `+F` on a
+// name holding nothing, and `-x +r` on PATH. The one row the grid and this disagree on is `typeset -A FPATH`,
+// taken there, where `typeset -A ENV` is refused; ENV has a default value in
+// that shell that FPATH has not, and this shell does not model it.
 //
 // That is a fit to the grid, not a rule from any manual, and it is written
-// down as one: a row the grid did not cover is answered by the nearest of
-// these sentences.
+// down as one.
 func (r *Runner) restrictedLetterChangesTheName(name string, f declareFlags, binds bool) bool {
 	minus, plus := map[rune]bool{}, map[rune]bool{}
 	for i, c := range f.letters {
@@ -247,9 +248,6 @@ func (r *Runner) restrictedLetterChangesTheName(name string, f declareFlags, bin
 	if f.readonly && !strings.ContainsRune(f.letters, 'r') {
 		minus['r'] = true
 	}
-	if len(minus) > 0 && len(plus) > 0 {
-		return true
-	}
 	// A declaration that makes a binding of its own is changing that fresh
 	// binding, which holds nothing and is exported nowhere: `function f {
 	// typeset -x PATH; }` is refused where `typeset -x PATH` is taken, and
@@ -268,31 +266,22 @@ func (r *Runner) restrictedLetterChangesTheName(name string, f declareFlags, bin
 		}
 	}
 	for c := range plus {
-		switch {
-		case c == 'r':
-		case holds:
-			return true
-		case !binds && (c == 'i' || c == 'E' || c == 'F'):
+		if c != 'r' && holds {
 			return true
 		}
 	}
 	return false
 }
 
-// restrictedPlusRIsIgnored reports whether a declaration's operand is a lone
-// `+r` over a name the mode froze, which the dialect that does not call the
-// freeze a readonly takes at 0 while keeping the freeze. Measured on ksh93u+,
-// 2026-10-02: `set -r; typeset +r PATH; PATH=/x` is silent at the `typeset`
-// and refuses the assignment after it (#5506). Removing the readonly mark,
-// which carries the freeze here, would have lifted the mode.
-func (r *Runner) restrictedPlusRIsIgnored(name string, f declareFlags) bool {
-	if !r.restricted || !r.restrictedFrozen[name] || !r.restrictedFreeze(name) {
-		return false
-	}
-	if f.letters != "r" || f.export {
-		return false
-	}
-	return len(f.letterSigns) == 1 && f.letterSigns[0] == '+'
+// restrictedFreezeIsNotTheAttribute reports whether a name is frozen by
+// restricted mode in the dialect whose freeze is not the readonly attribute,
+// so that a `+r` over it takes nothing away. Measured on ksh93u+, 2026-10-02:
+// `set -r; typeset +r PATH; PATH=/x` is silent at the `typeset` and refuses
+// the assignment after it, and `typeset +rx ENV` is taken (#5506). Removing
+// the readonly mark, which carries the freeze here, would have lifted the
+// mode for that name.
+func (r *Runner) restrictedFreezeIsNotTheAttribute(name string) bool {
+	return r.restricted && r.restrictedFrozen[name] && r.restrictedFreeze(name)
 }
 
 // restrictedRefusalStatus is the status a script ends with when restricted

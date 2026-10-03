@@ -2686,6 +2686,37 @@ already common ground: `typeset a=($(echo VAL; echo SIDE >&2)) 2>/nope/x`
 shows `SIDE` in every column that has array literals, this shell included.
 This axis is only about the store running afterwards.
 
+## A declaration's array literal is stored even though a letter was refused
+
+The same shape one step earlier: the open has not failed, the *letter* has.
+Measured 2026-10-03, `-c`, each refusal printed with the shell's usage line:
+
+```sh
+typeset -U a=(1 1 2); echo "st=$?"; typeset -p a
+```
+
+| shell | answer |
+| --- | --- |
+| bash 5.3.20 | `-U: invalid option`, `st=2`, then `declare -a a=([0]="1" [1]="1" [2]="2")` |
+| zsh 5.9.2 (with `-Q`, since it has `-U`) | `bad option: -Q`, `st=1`, then `no such variable: a` |
+| ksh93u+ | the refusal, and the shell stops |
+| dash 0.5.12, BusyBox ash | no array literal, so no question |
+
+`Semantics.RefusedDeclarationKeepsItsArrayLiterals`. What bash keeps is
+narrower than the line, and each part of it was measured:
+
+- **The array literal alone.** `declare -U a=(1) b=2 c=(3)` leaves `a` and `c`
+  arrays and `b` not found.
+- **The letters that decide the value, and the one that decides the scope.**
+  `declare -Ui m=(1+1)` is `-ai` holding `2`, `declare -Uu m=(ab)` is `-au`
+  holding `AB`, and `declare -U -A m=([k]=v)` is a table. `declare -Ux m=(1)`
+  and `declare -Ur n=(1)` are plain arrays, neither exported nor frozen.
+- **The scope the word gives.** Inside a function `typeset`, `declare` and
+  `local` make the name the call's local — a `g` anywhere on the line, before
+  or after the refused letter, makes it the global — and `export` and
+  `readonly` store the global. `export -Ui q=(1+1)` is `-ai` although `export`
+  takes no `i`.
+
 ## `--` stands in two places in `kill`, and only one of them is common
 
 Split out of #2145's measurement and filed as #3817, whose title said `--` is

@@ -29,16 +29,9 @@ decl/an-array-literal-operand-over-a-frozen-scalar
 decl/an-array-literal-over-the-other-kind-of-array
 decl/an-index-array-literal-replacing-a-table
 declare/a-plus-signed-attribute-letter-filters-the-whole-table
-declare/an-array-literal-drops-a-scalar-attribute
 declare/marking-a-name-that-is-already-a-function
 declare/the-f-letters-sign-decides-without-a-pattern-too
 declare/the-global-letter-filters-nothing
-declare/unique-attribute-dedupes-a-later-append
-declare/unique-attribute-dedupes-an-array
-declare/unique-attribute-keeps-the-earlier-place
-declare/unique-attribute-listed-back
-declare/unique-attribute-removed
-declare/unset-of-an-element-is-not-unset-of-the-name
 declare/which-numeric-type-letter-wins
 expand/tilde-after-a-home-assignment
 expand/tilde-after-a-home-assignment-reaches-every-road

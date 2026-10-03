@@ -189,6 +189,28 @@ func (r *Runner) declareElement(base string, leading []string, sub, value string
 		}
 		r.setDeclaredAssocElem(base, itoa(idx), value, appends)
 	default:
+		// A pair names a span where the comma is a range, exactly as on the
+		// left of a plain assignment: measured on zsh 5.9.2 with
+		// `a=(p q r s)`, `typeset "a[2,3]"=W` is `p W s` and `typeset
+		// "a[1,0]"=W` is `W p q r s`, where reading the comma as the
+		// arithmetic operator wrote element 3 and refused `1,0` (#5440).
+		if from, to, outcome := r.subscriptSpan(sub, appends); outcome == spanReported {
+			return
+		} else if outcome == spanResolved && r.spanReplacesElements(base) {
+			elems, _ := r.arrayElemsOfTheName(base)
+			r.spliceElementSpan(base, sub, elems, from, to, []string{value})
+			if r.unspecified || r.ctl == controlExit {
+				return
+			}
+			break
+		} else if outcome == spanResolved && r.subscriptSplicesCharacters(base) {
+			// And over a string, a span of its characters: `s=abcd;
+			// typeset "s[2,3]"=XY` is `aXYd`. No refusal for a span below
+			// the first character here: the one such pair is `0,0`, whose
+			// ends agree and which the single subscript answers.
+			r.spliceCharacterSpan(base, from, to, value, false)
+			break
+		}
 		idx, err := r.subscriptValue(sub)
 		if err != nil {
 			r.badSubscriptToADeclaration(sub, err)

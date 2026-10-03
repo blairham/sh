@@ -153,7 +153,7 @@ func Walk(dir string) ([]File, error) {
 		case !d.Type().IsRegular():
 			return nil
 		}
-		src, err := os.ReadFile(p)
+		src, err := os.ReadFile(p) //nolint:gosec // G122: a dev guard reading this repository's own tree
 		if err != nil {
 			return err
 		}

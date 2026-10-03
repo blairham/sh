@@ -159,7 +159,7 @@ func suiteSources(dir string) ([]coverage.Source, error) {
 		if d.IsDir() || !strings.HasSuffix(path, suite.OurExt) {
 			return nil
 		}
-		b, err := os.ReadFile(path)
+		b, err := os.ReadFile(path) //nolint:gosec // G122: a dev tool reading this repository's own tree
 		if err != nil {
 			return err
 		}

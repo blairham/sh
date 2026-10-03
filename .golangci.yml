@@ -72,6 +72,42 @@ run:
 
 linters:
   settings:
+    # gosec, minus the rules a shell trips by being a shell. Measured on
+    # 2026-10-03 with every rule on: 928 findings, 657 of them in tests, and
+    # none of the rest a defect. What is excluded below is the job, not a
+    # blind spot:
+    #
+    # - G204 runs a command from a variable, G304 and G703 open a path from
+    #   one: that is exec and redirection, the two things a shell exists for.
+    # - G301, G302, G306 want 0600/0750. A redirection creates 0666 and mkdir
+    #   0777, both under the umask, because POSIX says so; the files sh owns
+    #   (history, the block store) are already 0600.
+    # - G115 is integer narrowing. Shell arithmetic is 64-bit and wraps the
+    #   way C does where the shells measured wrap; CodeQL's
+    #   go/incorrect-integer-conversion covers the parse-narrowing cases and
+    #   each was triaged by hand.
+    # - G103 is `unsafe`, which appears only in the ioctl/syscall wrappers.
+    # - G404 is math/rand: `$RANDOM` is specified as not cryptographic, and
+    #   `$SRANDOM`, which is, uses crypto/rand.
+    # - G602 is a bounds heuristic; Go checks bounds at run time regardless,
+    #   and every site it raised was guarded.
+    #
+    # What stays on is everything sh has no business doing: weak hashes and
+    # ciphers, TLS configuration, SQL, archive traversal, decompression
+    # bombs, credentials in source (G101 -- annotated at its four false
+    # positives).
+    gosec:
+      excludes:
+      - G103
+      - G115
+      - G204
+      - G301
+      - G302
+      - G304
+      - G306
+      - G404
+      - G602
+      - G703
     misspell:
       # US English, enforced rather than agreed. Prose drifts between the two
       # without anyone deciding to; this decides once, and the build says so
@@ -148,6 +184,7 @@ linters:
   enable:
   - errcheck
   - forbidigo
+  - gosec
   - govet
   - ineffassign
   - staticcheck
@@ -189,6 +226,11 @@ linters:
     - path: _test\.go$
       linters:
       - forbidigo
+    # Tests write fixtures, run binaries and read what they wrote -- the
+    # excluded rules above, in volume (657 of 928).
+    - path: _test\.go$
+      linters:
+      - gosec
 
 formatters:
   enable:

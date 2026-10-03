@@ -2398,7 +2398,7 @@ func (r *Runner) operandTokenWords(e *syntax.ParamExpr, quoted bool) ([]string, 
 
 // operandTokenBytes are the characters an operand writes unquoted that stay
 // pattern syntax through a flag group.
-const operandTokenBytes = "*?[]()|#^="
+const operandTokenBytes = "*?[]()|#^=" //nolint:gosec // G101: pattern bytes, not a token
 
 // markOperandTokens turns one escaped field into its text, with liveMark in
 // front of each pattern character no backslash protected.

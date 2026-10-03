@@ -22,6 +22,12 @@ import (
 //   - BSD and macOS: `/usr/share/locale/<name>/LC_<category>`. The LC_CTYPE
 //     file begins `RuneMag` and a version byte, and the codeset is the
 //     NUL-terminated name after them (`UTF-8`, `NONE:ISO8859-1`, `EUC-JP`).
+//     A whole locale needs every category's file, with one exception: macOS
+//     ships `C.UTF-8` as an LC_CTYPE alone and still loads it through LC_ALL,
+//     spelled exactly so — measured 2026-10-03 on macOS 26, bash 5.3.20 and
+//     zsh 5.9.2 count `héllo` as 5 under `LC_ALL=C.UTF-8` with no warning,
+//     while `LC_ALL=C.utf8` and `LC_ALL=UTF-8` (also an LC_CTYPE alone) make
+//     bash warn `cannot change locale` and leave zsh counting bytes.
 //   - glibc: `/usr/lib/locale/<name>/LC_<category>`, under the name as written
 //     or its normalized spelling (`en_US.utf8`), or the same normalized name
 //     in `/usr/lib/locale/locale-archive`. The codeset is the name's. `C.UTF-8`
@@ -42,7 +48,7 @@ func localeCharsetIn(bsd, glibc, goos, name string, whole bool) (string, bool) {
 	}
 	if goos != "linux" {
 		dir := filepath.Join(bsd, name)
-		if whole {
+		if whole && name != "C.UTF-8" {
 			for _, c := range localeCategories {
 				if _, err := os.Stat(filepath.Join(dir, c)); err != nil {
 					return "", false

@@ -84,16 +84,10 @@ jobspec/kill-a-job-that-is-not-there
 length/a-hash-then-a-special-that-is-not-an-operator
 nounset/a-key-the-association-does-not-have
 param/a-backslash-in-an-expanded-replacement
-param/a-length-in-a-utf8-locale
 param/a-length-is-taken-before-the-joining-and-the-split
-param/a-length-of-an-array-element-in-a-utf8-locale
 param/a-nested-expansion-takes-flags-and-a-substitution
-param/a-pattern-trims-characters-in-a-utf8-locale
-param/a-replacement-runs-over-characters
 param/a-scalar-context-joins-a-flag-groups-words
 param/a-searching-trim-and-the-arms-of-an-alternation
-param/a-substring-from-the-end-in-a-utf8-locale
-param/a-substring-in-a-utf8-locale
 param/a-substring-modifier-reads-its-own-quotes
 param/a-word-after-a-parameter-is-not-an-operand
 param/an-expansion-with-no-name-at-all
@@ -111,8 +105,6 @@ param/the-searching-and-matching-flags-compose
 param/the-searching-flag-makes-a-trim-a-substring-search
 param/the-searching-flag-reaches-only-the-pattern-operators
 param/the-searching-flag-turns-a-substitution-non-greedy
-pat/a-bracket-holds-a-whole-character
-pat/a-bracket-range-is-ranked-by-code-point
 pat/a-case-arms-own-paren-in-front-of-a-group
 pat/a-case-arms-paren-in-front-of-an-expression
 pat/a-character-class-outside-ascii
@@ -121,7 +113,6 @@ pat/a-glob-flag-on-a-later-loop-item
 pat/a-glob-flag-where-an-array-element-begins
 pat/a-numeric-range-in-a-group-starting-a-case-arm
 pat/a-pattern-flag-reaches-to-the-end-of-its-group
-pat/a-question-mark-is-one-character
 pat/alnum-outside-ascii-is-a-letter-or-a-decimal-digit
 pat/an-anchor-binds-to-one-path-component
 pat/an-escaped-dash-in-a-bracket-is-not-a-range

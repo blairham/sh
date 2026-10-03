@@ -23415,6 +23415,16 @@ in it — `LC_ALL=UTF-8`, which is not a locale name — is single-byte
 here; the panel splits on it, and refusing it is what ksh93, zsh and
 dash do.
 
+Whether a name is *in force* is the C library's answer, not the
+spelling's: a name with no data behind it leaves the shell in the locale
+it was in (`interp/localeloaded.go` holds the measurements). macOS has
+one name that loads whole from less data than the rest: `C.UTF-8`, whose
+directory holds only an `LC_CTYPE`, loads through `LC_ALL` all the same —
+measured 2026-10-03 on macOS 26, bash 5.3.20 and zsh 5.9.2 count `héllo`
+as 5 under `LC_ALL=C.UTF-8` without a warning — while `LC_ALL=UTF-8`,
+equally an `LC_CTYPE` alone, and `LC_ALL=C.utf8` both fail (bash warns
+`cannot change locale`, zsh counts 6).
+
 This implementation decodes UTF-8 and nothing else. The single-byte
 encodings are right by that rule (`C`, `POSIX` and `en_US.ISO8859-1` all
 measure as bytes across the panel); `eucJP` and the other multibyte

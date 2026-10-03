@@ -104,3 +104,21 @@ func TestTheEditorKeepsAHighlightersCodesFromTheTransformation(t *testing.T) {
 		t.Errorf("the highlighter's code was not written as it is: %q", drawn)
 	}
 }
+
+// ^L clears the screen and then lays the ground a fresh prompt is drawn on,
+// and the clear is termcap's `cl` to a transformation. Measured 2026-10-02 on
+// zsh 5.9.2 through a pseudo-terminal: `<cl>` then the attribute resets and
+// `<cd>`, then the prompt and the line.
+func TestClearingTheScreenLaysThePromptsGround(t *testing.T) {
+	var out strings.Builder
+	style := EditorStyle{ClearBeforeThePrompt: "\x1b[0m\x1b[27m\x1b[24m\x1b[J"}
+	e := Shell{Editor: style}.newEditor(t.Context(), &terminalState{})
+	e.transformTermcap = func(code, arg string) (string, bool) { return "<" + code + ">", true }
+	e.in, e.out = typing("ab\x0c\r"), &out
+	if _, err := e.readLine(drawPrompt("$ ")); err != nil {
+		t.Fatal(err)
+	}
+	if drawn := out.String(); !strings.Contains(drawn, "<cl>\x1b[0m\x1b[27m\x1b[24m<cd>") {
+		t.Errorf("^L drew %q, want <cl> and then the ground before the prompt", drawn)
+	}
+}

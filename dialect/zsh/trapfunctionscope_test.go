@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 // A handler spelled as a `TRAP…` function is scoped the way the trap it
@@ -106,37 +107,67 @@ func TestASignalToABackgroundBodyReachesItsTraps(t *testing.T) {
 	for _, c := range []struct{ name, src, want string }{
 		{
 			"a trapped signal runs the body's handler after its command",
-			"{ trap 'print T' TERM; /bin/sh -c ': > ready; until [ -e go ]; do sleep 0.01; done'; print after $?; } & until [[ -e ready ]]; do /bin/sleep 0.01; done; kill -TERM $!; : > go; wait",
+			"{ trap 'print T' TERM; /bin/sh -c '" + waitForGo + "'; print after $?; } & until [[ -e ready ]]; do /bin/sleep 0.01; done; kill -TERM $!; : > go; wait",
 			"T\nafter 0\n",
 		},
 		{
 			"on the body's last command",
-			"{ trap 'print T' TERM; /bin/sh -c ': > ready; until [ -e go ]; do sleep 0.01; done'; } & until [[ -e ready ]]; do /bin/sleep 0.01; done; kill -TERM $!; : > go; wait; print st=$?",
+			"{ trap 'print T' TERM; /bin/sh -c '" + waitForGo + "'; } & until [[ -e ready ]]; do /bin/sleep 0.01; done; kill -TERM $!; : > go; wait; print st=$?",
 			"T\nst=0\n",
 		},
 		{
 			"where the parentheses are the job",
-			"( trap 'print T' TERM; /bin/sh -c ': > ready; until [ -e go ]; do sleep 0.01; done'; print after ) & until [[ -e ready ]]; do /bin/sleep 0.01; done; kill -TERM $!; : > go; wait",
+			"( trap 'print T' TERM; /bin/sh -c '" + waitForGo + "'; print after ) & until [[ -e ready ]]; do /bin/sleep 0.01; done; kill -TERM $!; : > go; wait",
 			"T\nafter\n",
 		},
 		{
 			"named by a job spec, in a function",
-			"f() { trap 'print T; return 1' TERM; /bin/sh -c ': > ready; until [ -e go ]; do sleep 0.01; done'; print no }; f & until [[ -e ready ]]; do /bin/sleep 0.01; done; kill -TERM %1; : > go; wait",
+			"f() { trap 'print T; return 1' TERM; /bin/sh -c '" + waitForGo + "'; print no }; f & until [[ -e ready ]]; do /bin/sleep 0.01; done; kill -TERM %1; : > go; wait",
 			"T\n",
 		},
 		{
 			"an ignored signal reaches nothing",
-			"{ trap '' TERM; /bin/sh -c ': > ready; until [ -e go ]; do sleep 0.01; done'; print after $?; } & until [[ -e ready ]]; do /bin/sleep 0.01; done; kill -TERM $!; : > go; wait",
+			"{ trap '' TERM; /bin/sh -c '" + waitForGo + "'; print after $?; } & until [[ -e ready ]]; do /bin/sleep 0.01; done; kill -TERM $!; : > go; wait",
 			"after 0\n",
 		},
 	} {
 		t.Run(c.name, func(t *testing.T) {
-			out, _ := runZshOnPath(t, t.TempDir(), c.src)
+			dir := t.TempDir()
+			releaseTheProgram(t, dir)
+			out, _ := runZshOnPath(t, dir, c.src)
 			if out != c.want {
 				t.Errorf("%s\n got %q\nwant %q", c.src, out, c.want)
 			}
 		})
 	}
+}
+
+// waitForGo is the program these rows background: it says it is ready, waits
+// — boundedly — for `go`, and says it is gone as it leaves.
+const waitForGo = `: > ready; i=0; until [ -e go ] || [ $i -ge 1000 ]; do sleep 0.01; i=$((i+1)); done; : > gone`
+
+// releaseTheProgram makes sure a program running waitForGo in dir has left
+// before the test ends. A body killed while it runs one leaves the program
+// running, as a real shell's orphan runs on, and the test's directory is
+// removed a moment later — after which `[ -e go ]` can never be true, and an
+// unbounded loop spun on, orphaned to init, for as long as the machine was up
+// (#5533). Registered after t.TempDir, so it runs before the removal, on
+// failure and timeout too.
+func releaseTheProgram(t *testing.T, dir string) {
+	t.Helper()
+	t.Cleanup(func() {
+		if _, err := os.Stat(filepath.Join(dir, "ready")); err != nil {
+			return // never started
+		}
+		_ = os.WriteFile(filepath.Join(dir, "go"), nil, 0o600)
+		for deadline := time.Now().Add(15 * time.Second); time.Now().Before(deadline); {
+			if _, err := os.Stat(filepath.Join(dir, "gone")); err == nil {
+				return
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+		t.Errorf("the backgrounded program did not leave; it is still running")
+	})
 }
 
 // A subshell inside the body is a fork of its own, which a signal aimed at
@@ -146,8 +177,10 @@ func TestASignalToABackgroundBodyReachesItsTraps(t *testing.T) {
 // dies of the signal untrapped, which is a difference of this shell's that
 // is not asserted here; that S is not written is.
 func TestASignalToABackgroundBodyMissesASubshellInIt(t *testing.T) {
-	const src = "{ ( trap 'print S' TERM; /bin/sh -c ': > ready; until [ -e go ]; do sleep 0.01; done' ); print after $?; } & until [[ -e ready ]]; do /bin/sleep 0.01; done; kill -TERM $!; : > go; wait; print end"
-	out, _ := runZshOnPath(t, t.TempDir(), src)
+	const src = "{ ( trap 'print S' TERM; /bin/sh -c '" + waitForGo + "' ); print after $?; } & until [[ -e ready ]]; do /bin/sleep 0.01; done; kill -TERM $!; : > go; wait; print end"
+	dir := t.TempDir()
+	releaseTheProgram(t, dir)
+	out, _ := runZshOnPath(t, dir, src)
 	if strings.Contains(out, "S") || !strings.HasSuffix(out, "end\n") {
 		t.Errorf("%s\n got %q, want no S and a last line of end", src, out)
 	}

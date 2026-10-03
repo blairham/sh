@@ -460,6 +460,11 @@ type wordFields struct {
 	// `-` or `+` substituted, rather than arriving in an expansion's result.
 	// Only the written kind asks EmptyQuotesAfterASeparatorAreAField (#3395).
 	sepWritten bool
+	// leadEdge is a separator that arrived before anything else had, and
+	// leadEdgeWritten whether one of those was written in the word rather
+	// than produced by an expansion in it. See separate.
+	leadEdge        bool
+	leadEdgeWritten bool
 	// any is whether anything at all reached the word — a substitution that
 	// produced a field, or literal text, or a quoted empty span. Without it
 	// a word that expanded to nothing cannot be told from a word that was
@@ -644,7 +649,13 @@ func (b *wordFields) separate(written bool) {
 	if b.any {
 		b.sep = true
 		b.sepWritten = written
+		return
 	}
+	// Nothing has reached the word yet, so there is no field for this to
+	// close. It is kept all the same, for the one reader that asks whether
+	// the word opened on a boundary. See Runner.lastWordEdges.
+	b.leadEdge = true
+	b.leadEdgeWritten = b.leadEdgeWritten || written
 }
 
 // separated reports whether a separator is waiting for something to put in
@@ -950,9 +961,22 @@ func (r *Runner) wordResult(b *wordFields) []string {
 			}
 		}
 	}
+	// The boundaries at the word's two ends, which its fields cannot carry.
+	// See Runner.lastWordEdges.
+	r.lastWordEdges = wordEdges{
+		lead: b.leadEdge, leadWritten: b.leadEdgeWritten,
+		trail: b.sep, trailWritten: b.sepWritten,
+	}
 	// A substituted NUL ends its field here, once the field is whole, in
 	// the dialect that reads it that way. See Runner.cutAtNul.
 	return r.cutFieldsAtNul(b.result())
+}
+
+// wordEdges is the boundary a word's split left at either end: lead before
+// anything reached it, trail after the last thing did. Each says whether it
+// was written in the word or produced by an expansion in it.
+type wordEdges struct {
+	lead, leadWritten, trail, trailWritten bool
 }
 
 // globFields is pathname expansion, the last stage of a word: it acts on
@@ -1417,7 +1441,36 @@ func (r *Runner) substitutedWordFields(s syntax.Span, sp splitPolicy, head bool)
 	// fields cannot carry: `x${u:- p }y` is three words. See
 	// substitutedWordEdges.
 	r.listEdges = r.substitutedWordEdges(e.Arg)
+	r.keepAnExpansionsEdges(r.lastWordEdges)
 	return fields, true
+}
+
+// keepAnExpansionsEdges adds the boundaries an *expansion* inside the word a
+// `-` or `+` substituted left at the word's ends, where the dialect keeps
+// them. substitutedWordEdges has already added the ones the word's own
+// literal text left, which every column keeps.
+//
+// Measured 2026-10-03 with `v=' p '` and `f` printing `<%s>` per argument:
+//
+//	                      bash 5.3, 3.2   dash   ksh93u+   ash 1.37   zsh shwordsplit
+//	f x${u:-$v}y          <x><p><y>       same   same      same       <xpy>
+//	f x${u:- $v}y         <x><p><y>       same   same      same       <x><py>
+//	f x${u:-$v }y         <x><p><y>       same   same      same       <xp><y>
+//	f x${u:-a$v}y         <xa><p><y>      same   same      same       <xa><py>
+//	w=1; f x${w:+$v}y     <x><p><y>       same   same      same       <xpy>
+//
+// So zsh keeps a boundary an expansion leaves inside the word (`a$v`) and
+// drops the ones it leaves at the word's ends, and the other five keep them
+// all. Asked only where an expansion left one, since a literal edge is kept
+// everywhere. See Semantics.SubstitutedWordKeepsAnExpansionsEdges.
+func (r *Runner) keepAnExpansionsEdges(w wordEdges) {
+	produced := w.lead && !w.leadWritten || w.trail && !w.trailWritten
+	if !produced || !r.ask(r.sem().SubstitutedWordKeepsAnExpansionsEdges,
+		"keeping the boundary an expansion leaves at the end of a substituted word") {
+		return
+	}
+	r.listEdges.lead = r.listEdges.lead || w.lead
+	r.listEdges.openEnd = r.listEdges.openEnd || w.trail
 }
 
 // substitutedWordEdges is the boundary the literal text at either end of a

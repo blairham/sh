@@ -1768,6 +1768,8 @@ func Semantics() interp.Semantics {
 	s.ZeroSubscriptIsTheFirstElement = interp.No
 	// bash 5.3.20 and 3.2 bring the name back plain after `unset`, the shell's own or not; see the axis.
 	s.UnsetKeepsTheShellsOwnAttributes = interp.No
+	// bash 5.3 and 3.2 keep the edge an expansion leaves at the end of a substituted word; see the axis.
+	s.SubstitutedWordKeepsAnExpansionsEdges = interp.Yes
 	// bash 5.3 execs the last command of a `-c` string only where it is a plain command at the top; see interp.TailExec.
 	s.TailExec = interp.TailExecPlainTopLevel
 	s.BraceRangeStepSignHonored = interp.No

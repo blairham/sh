@@ -18,6 +18,10 @@ func TestUnderShWordSplitAnOperandsBlanksSeparateIt(t *testing.T) {
 		{`setopt shwordsplit; v=1; f x${v:+ p }y`, "<x><p><y>\n"},
 		{`setopt shwordsplit; IFS=:; f x${u:-p:}y`, "<xp><y>\n"},
 		{`f x${:- p }y`, "<x p y>\n"},
+		// An expansion's edges at the word's ends are dropped, and one
+		// inside it is kept (#5592).
+		{`setopt shwordsplit; v=' p '; f x${u:-$v}y x${u:- $v}y`, "<xpy><x><py>\n"},
+		{`setopt shwordsplit; v=' p '; f x${u:-$v }y x${u:-a$v}y`, "<xp><y><xa><py>\n"},
 	} {
 		got, _ := runZsh(t, t.TempDir(), f+tc.src)
 		if got != tc.want {

@@ -342,6 +342,8 @@ func Semantics() interp.Semantics {
 	s.ZeroSubscriptIsTheFirstElement = interp.No
 	// dash 0.5.12 keeps the export letter of its own parameters (`PS1`, `IFS`, `LINENO`) through `unset`; see the axis.
 	s.UnsetKeepsTheShellsOwnAttributes = interp.Yes
+	// dash 0.5.12 keeps the edge an expansion leaves at the end of a substituted word; see the axis.
+	s.SubstitutedWordKeepsAnExpansionsEdges = interp.Yes
 	// dash 0.5.12 execs the last command of a `-c` string wherever it is, outside a loop; see interp.TailExec.
 	s.TailExec = interp.TailExecWhereverLastOutsideALoop
 	// unanswered BraceRangeStepPadsTheRange: the same, and for the same

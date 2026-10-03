@@ -86,6 +86,10 @@ func (r *Runner) padFlagged(e *syntax.ParamExpr, words []string) ([]string, bool
 	ghost := r.flagEmptiesAreGhosts(e, words)
 	out := make([]string, len(words))
 	for i, w := range words {
+		if col := columnPadding(e); col != nil && r.countsCharacters(w+lp.fill+lp.insert+rp.fill+rp.insert) {
+			out[i] = r.padInColumns(w, lw, rw, lp, rp, col)
+			continue
+		}
 		if ghost && w == "" {
 			out[i] = r.padAGhost(lw, rw, lp, rp)
 			continue
@@ -292,4 +296,126 @@ func (r *Runner) padAGhost(lw, rw int, lp, rp padding) string {
 		return r.padRightTo("", rw-1, rp)
 	}
 	return ""
+}
+
+// columnPadding is the width a character is given when `(m)` is written
+// beside the padding pair, and nil where it is not. Measured 2026-10-03 on
+// zsh 5.9.2 in a UTF-8 locale, with `w=日本語`, a `日` two columns wide:
+//
+//	(mr:N:)w   N=1..7  日 日 日本 日本 日本語 日本語 "日本語 "
+//	(ml:N:)w   N=1..7  "" 語 語 本語 本語 日本語 " 日本語"
+//	(mmr:2:)w  (mml:2:)w   日本  本語    `mm` gives every character one
+//	                                     column and a combining one none
+//	(mr:7::日:)日本   日本日日   the right fill crosses the edge too
+//	(ml:8::日:)日本   日日日本
+//	(ml:7::日:)日本   nothing at all, where the left fill cannot land on it
+//	(ml:3:r:3:)日本   " 日本 "   each half in its own field
+//
+// So the right field keeps every character that starts inside it, and the
+// left keeps only what fits. In a single-byte locale the letter changes
+// nothing, as for the length.
+func columnPadding(e *syntax.ParamExpr) func(string) int {
+	switch strings.Count(e.Flags, "m") {
+	case 0:
+		return nil
+	case 1:
+		return displayColumns
+	}
+	return func(u string) int {
+		if displayColumns(u) == 0 {
+			return 0
+		}
+		return 1
+	}
+}
+
+// padInColumns is the padding pair measured in columns. See columnPadding.
+func (r *Runner) padInColumns(w string, lw, rw int, lp, rp padding, col func(string) int) string {
+	switch {
+	case lw > 0 && rw > 0:
+		u := r.units(w)
+		half := len(u) / 2
+		return r.padLeftInColumns(u[:half], lw, lp, col) + r.padRightInColumns(u[half:], rw, rp, col)
+	case lw > 0:
+		return r.padLeftInColumns(r.units(w), lw, lp, col)
+	case rw > 0:
+		return r.padRightInColumns(r.units(w), rw, rp, col)
+	}
+	return w
+}
+
+// padRightInColumns keeps the characters that start inside the field, and
+// fills what is left the same way, a wide fill crossing the edge.
+func (r *Runner) padRightInColumns(u []string, width int, p padding, col func(string) int) string {
+	var b strings.Builder
+	n := 0
+	for _, c := range u {
+		if n >= width {
+			return b.String()
+		}
+		b.WriteString(c)
+		n += col(c)
+	}
+	for _, c := range r.units(p.insert) {
+		if n >= width {
+			return b.String()
+		}
+		b.WriteString(c)
+		n += col(c)
+	}
+	fill := r.units(p.fill)
+	for i := 0; n < width && len(fill) > 0; i++ {
+		c := fill[i%len(fill)]
+		if col(c) == 0 {
+			break
+		}
+		b.WriteString(c)
+		n += col(c)
+	}
+	return b.String()
+}
+
+// padLeftInColumns keeps, from the right, only the characters that fit, and
+// fills from the right the same way. A fill that cannot land exactly on the
+// field's edge leaves nothing at all, which is measured and is that shell's
+// own edge: see columnPadding.
+func (r *Runner) padLeftInColumns(u []string, width int, p padding, col func(string) int) string {
+	kept, n := []string(nil), 0
+	for i := len(u) - 1; i >= 0; i-- {
+		if n+col(u[i]) > width {
+			return strings.Join(reverseUnits(kept), "")
+		}
+		kept = append(kept, u[i])
+		n += col(u[i])
+	}
+	ins := r.units(p.insert)
+	for i := len(ins) - 1; i >= 0; i-- {
+		if n+col(ins[i]) > width {
+			return strings.Join(reverseUnits(kept), "")
+		}
+		kept = append(kept, ins[i])
+		n += col(ins[i])
+	}
+	fill := r.units(p.fill)
+	for i := 0; n < width && len(fill) > 0; i++ {
+		c := fill[len(fill)-1-i%len(fill)]
+		if col(c) == 0 {
+			break
+		}
+		if n+col(c) > width {
+			return ""
+		}
+		kept = append(kept, c)
+		n += col(c)
+	}
+	return strings.Join(reverseUnits(kept), "")
+}
+
+// reverseUnits is the units in the other order.
+func reverseUnits(u []string) []string {
+	out := make([]string, len(u))
+	for i, c := range u {
+		out[len(u)-1-i] = c
+	}
+	return out
 }

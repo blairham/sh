@@ -115,23 +115,19 @@ func TestTheWidthFlagCountsBytesWhereALengthDoes(t *testing.T) {
 	}
 }
 
-// The padding half of the flag is refused **by name**, and the refusal is
-// asserted rather than left to the general unbuilt-flag rule: the letter is
-// now in the implemented set, so nothing else would notice if the composition
-// started answering a field of the wrong width at status 0.
-func TestTheWidthFlagIsRefusedBesideAPaddingFlag(t *testing.T) {
+// The padding pair under the width flag is measured in columns; over text
+// that is all ASCII a column is a character, so these fields are the plain
+// padding's. See interp/padflags.go, columnPadding, for the wide rows.
+func TestTheWidthFlagBesideAPaddingFlagPadsAsWritten(t *testing.T) {
 	for _, tc := range []struct{ name, src, want string }{
-		{"on the left", `v=x; printf "[%s]" "${(ml:4::x:)v}"`, "sh: ${(ml:4::x:)v}: the (m) expansion flag is not implemented beside a padding flag\n"},
-		{"on the right", `v=x; printf "[%s]" "${(mr:4::x:)v}"`, "sh: ${(mr:4::x:)v}: the (m) expansion flag is not implemented beside a padding flag\n"},
-		{"and with the length operator beside it", `v=x; printf "[%s]" "${(ml:4:)#v}"`, "sh: ${(ml:4:)#v}: the (m) expansion flag is not implemented beside a padding flag\n"},
+		{"on the left", `v=x; printf "[%s]" "${(ml:4::x:)v}"`, "[xxxx]"},
+		{"on the right", `v=x; printf "[%s]" "${(mr:4::x:)v}"`, "[xxxx]"},
+		{"and with the length operator beside it", `v=x; printf "[%s]" "${(ml:4:)#v}"`, "[   1]"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			out, st := runGrammar(t, tc.src, selectingWithFlags, nil)
-			if out != tc.want {
-				t.Errorf("output = %q, want %q", out, tc.want)
-			}
-			if st == 0 {
-				t.Errorf("status 0, want the composition refused")
+			if out != tc.want || st != 0 {
+				t.Errorf("got %q (status %d), want %q at 0", out, st, tc.want)
 			}
 		})
 	}

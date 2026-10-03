@@ -271,6 +271,13 @@ func biKill(r *Runner, ctx context.Context, args []string) int {
 		// and then a in bash 5.3.20, bash 3.2.57, dash, ksh93u+, zsh 5.9.2
 		// and BusyBox ash (the pinned image) alike, where this shell wrote a
 		// first. The status is still kill's own, set as it returns (#5359).
+		//
+		// And the handler sees that status already: `false; kill -INT $$`
+		// shows an INT handler `$?` of 0 in bash, dash and ksh93, since the
+		// signal is taken after kill has finished. zsh's handler sees the
+		// status from before the statement instead, which is an axis that
+		// reads statusBefore and not this.
+		r.status = st
 		r.runPendingTraps(ctx)
 	}
 	return st

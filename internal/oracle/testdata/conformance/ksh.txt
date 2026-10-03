@@ -147,7 +147,6 @@ subst/a-body-with-no-terminator-before-its-brace
 subst/a-brace-group-written-in-a-body
 subst/a-paren-body-is-the-parenthesis-and-not-a-list
 system/the-direction-letters-and-what-they-open
-trap/signal-handler-status-diverges
 type/f-skips-or-prints-the-function
 unterminated/a-brace-command-substitution-blamed-where-the-input-ran-out
 unterminated/a-parameter-expansion-behind-a-length-prefix

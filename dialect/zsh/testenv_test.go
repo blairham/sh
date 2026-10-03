@@ -17,7 +17,14 @@ import (
 // work is done on (#1984, #1987). internal/testenv is the guard; its own
 // package comment is the argument for its shape.
 func TestMain(m *testing.M) {
-	if testenv.Assembled() {
+	// And the module helper the same way, which is re-entered by wrapper
+	// scripts a shell under test runs with its own small environment — one
+	// with no SH_TEST_HOME in it, so Assembled cannot see it. Run made it a
+	// fresh home under the system temporary directory, and the helper ends in
+	// os.Exit, so Run never removed it: a dozen empty directories in /tmp per
+	// package run (#5454). The helper starts no shell and reads no home, so
+	// there is nothing for a home of its own to guard.
+	if testenv.Assembled() || os.Getenv(helperMode) != "" {
 		// A copy of this binary re-executed as a helper by a test above. Its
 		// environment was assembled by the parent and then aimed by the test
 		// that started it, so scrubbing it here would erase the question being

@@ -91,15 +91,34 @@ func trapReturnPresets() []struct {
 }
 
 // The entry status is 4 for everybody by construction: the action interrupts a
-// subshell that sleeps and then exits 4, and the signal is sent from a
-// background job well before it ends. Without that the columns differ about
-// *when* the action runs and the axis cannot be read at all — and without it
-// bash and ksh93 would both answer 0 and the probe could not tell them apart,
-// which is the whole reason this one waits rather than signaling itself.
+// subshell that exits 4, and the signal is sent from a background job before
+// that subshell can end. Without that the columns differ about *when* the
+// action runs and the axis cannot be read at all — and without it bash and
+// ksh93 would both answer 0 and the probe could not tell them apart, which is
+// the whole reason this one waits rather than signaling itself.
 //
-// `/bin/sleep` by path because the harness runs with no PATH of its own.
-const trapReturnProbe = "f() { return $1; }\n" +
-	"h() { ( /bin/sleep 0.1; kill -USR1 $$ ) & ( /bin/sleep 0.5; exit 4 ); return 7; }\n" +
+// "Before it can end" is an ordering and not a pause, and it is kept in both
+// directions with two FIFOs. The subshell opens `ready` before anything else,
+// so the signal cannot arrive before the subshell has started. The job sends
+// it only once that open has happened. The subshell then waits in `cat` on
+// `go`, which the job opens only after its `kill` has returned, so the
+// subshell cannot exit first. The first version used two sleeps, 0.1s and
+// 0.5s. Under load the gap between them closed, and ash's column wrote
+// `entry 0 exit 0` (#5570). A one-way FIFO was not enough here: the job's
+// `kill` beat the subshell's start, the action ran at the boundary between
+// commands, and its `return` left the job blocked for good.
+//
+// The wait is in an external program and not a `read`, because ksh93 runs
+// the action at once when the signal interrupts a `read` in its own process
+// (`entry 0`). It waits for a child, as the others do. Measured 2026-10-03,
+// five runs each with this probe: the table above. BusyBox ash, in the
+// pinned alpine digest, gave `entry 4 exit 4` three times out of three.
+//
+// `/bin/cat` and `/usr/bin/mkfifo` by path because the harness runs with no
+// PATH of its own.
+const trapReturnProbe = "/usr/bin/mkfifo go ready\n" +
+	"f() { return $1; }\n" +
+	"h() { ( /bin/cat ready; kill -USR1 $$; : >go ) & ( : >ready; /bin/cat go; exit 4 ); return 7; }\n" +
 	"trap 'printf \"entry %s \" \"$?\"; f 123; return' USR1\n" +
 	"h\n" +
 	"printf 'exit %s\\n' \"$?\"\n" +
@@ -120,7 +139,7 @@ func TestEachDialectAnswersTheTrapReturnAxis(t *testing.T) {
 func TestTheTrapReturnStatusInEveryDialect(t *testing.T) {
 	for _, p := range trapReturnPresets() {
 		t.Run(p.Name, func(t *testing.T) {
-			out, _, err := p.Combined(t, dialecttest.Base{}, trapReturnProbe)
+			out, _, err := p.Combined(t, dialecttest.Base{Dir: t.TempDir()}, trapReturnProbe)
 			if err != nil {
 				t.Fatalf("err %v: %s", err, out)
 			}

@@ -2223,6 +2223,7 @@ func (r *Runner) expandAtList(s syntax.Span, sp splitPolicy, head bool) ([]strin
 	// the subscript that says so and the array path below answers it. See
 	// bareArrayAsList for why that is a rewrite rather than a path of its own.
 	if listed, ok := r.bareArrayAsList(e, s, sp); ok {
+		r.liveMarksFollow(e, listed)
 		e = listed
 	}
 	// `$@` and `$*` under an operator are the *parameters*, one at a time,
@@ -3245,6 +3246,10 @@ func (r *Runner) expansionResult(v string, unquoted bool, glob, split Answer, ax
 // copy is what would have kept #1222 alive for `${a[@]}` after the first was
 // fixed.
 func (r *Runner) escapeResult(v string, glob Answer) string {
+	// The list path reaches here without passing expansionResult, so a
+	// `:s` replacement's deferred expansions are run here too. See
+	// pendingMark.
+	v = r.resolvePending(v)
 	if strings.Contains(v, liveMark) {
 		// A `:s` replacement's pattern characters, which stay live in a
 		// result that is otherwise text. See liveMark.
@@ -9844,4 +9849,15 @@ func (r *Runner) rangeBackslashesRestored(w *syntax.Word) *syntax.Word {
 		}
 	}
 	return &c
+}
+
+// liveMarksFollow hands the word loop's live-mark slot from an expansion to
+// the node it was rewritten to, so a `:s` replacement over a bare array or
+// `$@` marks its pattern characters as `${a[@]:s/…/…/}` does. Measured
+// 2026-10-03 on zsh 5.9.2, beside `xay` and `xby`: `a=(xQy); ${a:gs/Q/?/}`
+// and `set -- xQy; ${@:s/Q/?/}` are `xay xby` (#5639). See liveMark.
+func (r *Runner) liveMarksFollow(from, to *syntax.ParamExpr) {
+	if r.liveMarksFor == from {
+		r.liveMarksFor = to
+	}
 }

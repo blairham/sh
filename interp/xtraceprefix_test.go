@@ -125,20 +125,25 @@ func TestAPrefixValueIsExpandedOnceUnderATrace(t *testing.T) {
 }
 
 // TestAFrozenNameInAPrefixWritesNoLine is what every column does with a
-// prefix that was refused: the command's line stands, and the assignment that
-// did not happen is not written as though it had.
+// prefix that was refused: the assignment that did not happen is not written
+// as though it had. Where the prefix has a line of its own the command's line
+// stands; where the prefix and the command share one line, that line is
+// written once the prefix is in place and so is never written at all (#5509).
 func TestAFrozenNameInAPrefixWritesNoLine(t *testing.T) {
-	for _, style := range []TracePrefixAssignment{
-		TracePrefixOwnLineBefore,
-		TracePrefixOnTheCommandLine,
+	for _, c := range []struct {
+		style       TracePrefixAssignment
+		commandLine bool
+	}{
+		{TracePrefixOwnLineBefore, true},
+		{TracePrefixOnTheCommandLine, false},
 	} {
 		got := traceOf(t, "readonly x=1\nset -x\nx=2 true\n", permissive(),
-			Diagnostics{TracePrefixAssignment: style})
+			Diagnostics{TracePrefixAssignment: c.style})
 		if strings.Contains(got, "x=2") {
-			t.Errorf("style %d wrote %q, want no line for the refused prefix", style, got)
+			t.Errorf("style %d wrote %q, want no line for the refused prefix", c.style, got)
 		}
-		if !strings.Contains(got, "true") {
-			t.Errorf("style %d wrote %q, want the command's own line", style, got)
+		if strings.Contains(got, "+ true") != c.commandLine {
+			t.Errorf("style %d wrote %q, want the command's own line: %v", c.style, got, c.commandLine)
 		}
 	}
 }

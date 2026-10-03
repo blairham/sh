@@ -4,7 +4,6 @@
 package interp_test
 
 import (
-	"strings"
 	"testing"
 
 	. "github.com/blairham/sh/interp"
@@ -29,11 +28,11 @@ func TestTraceAssignmentListIsWrittenAsItGoes(t *testing.T) {
 		t.Errorf("Yes, nothing in the middle: got %q, want %q", got, want)
 	}
 
-	// Under No only the order is asserted: what a refused list's line then
-	// holds is #5509.
+	// Under No the line waits for the whole list, and a refused list never
+	// gets there: the refusal is all that is written (#5509).
 	sem.TraceAssignmentListIsWrittenAsItGoes = No
-	if got, want := traceOf(t, refused, sem, diag), "sh: r: is read only\n+ a=1 r=2"; !strings.HasPrefix(got, want) {
-		t.Errorf("No: got %q, want it to start %q", got, want)
+	if got, want := traceOf(t, refused, sem, diag), "sh: r: is read only\n"; got != want {
+		t.Errorf("No: got %q, want %q", got, want)
 	}
 	if got, want := traceOf(t, `set -x; a=1 b=$(echo x)`, sem, Diagnostics{}), "+ echo x\n+ a=1 b=x\n"; got != want {
 		t.Errorf("No, nothing in the middle: got %q, want %q", got, want)

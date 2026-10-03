@@ -216,12 +216,12 @@ func wordingOnly(want, got Result) bool {
 	return want.Stdout == got.Stdout && sameOutcome(want, got)
 }
 
-func RunConformance(ctx context.Context, path, against string, args []string, cases []Case) (*Report, error) {
-	if path == "" {
+func RunConformance(ctx context.Context, t Target, against string, cases []Case) (*Report, error) {
+	if t.Path == "" {
 		return &Report{NotBuilt: true}, nil
 	}
-	if _, err := os.Stat(path); err != nil {
-		return nil, fmt.Errorf("no binary at %s: %w", path, err)
+	if _, err := os.Stat(t.Path); err != nil {
+		return nil, fmt.Errorf("no binary at %s: %w", t.Path, err)
 	}
 
 	found, absent := Resolve(ctx)
@@ -243,7 +243,10 @@ func RunConformance(ctx context.Context, path, against string, args []string, ca
 		return nil, fmt.Errorf("reference shell %q is not in the panel", against)
 	}
 
-	ours := oursFor(path, args, ref.SelfName)
+	ours, err := t.place(ctx, ref)
+	if err != nil {
+		return nil, err
+	}
 
 	rep := &Report{Against: against, Missing: Names(absent)}
 	for _, c := range cases {
@@ -256,6 +259,59 @@ func RunConformance(ctx context.Context, path, against string, args []string, ca
 	}
 	sort.Slice(rep.Matches, func(i, j int) bool { return rep.Matches[i].CaseID < rep.Matches[j].CaseID })
 	return rep, nil
+}
+
+// Target is the implementation under test: the binary, the flags it needs to
+// be the shell it is graded against, and the package it was built from.
+//
+// Pkg matters only when the reference is reached through a container. Ours is
+// then cross-compiled from it and graded inside that same container, so that
+// both sides see one kernel, one libc-free userland and one /tmp. Graded on
+// the host beside a contained reference instead, every case touching the
+// platform differed for reasons that were not the shell's — BusyBox od's
+// trailing blank, macOS's /private/tmp — 62+ cases of the ash column on
+// 2026-10-03 (#5709).
+type Target struct {
+	Path string
+	Pkg  string
+	Args []string
+}
+
+// place makes the implementation under test a panel member on the same route
+// as ref, refusing rather than grading across two platforms.
+func (t Target) place(ctx context.Context, ref Found) (Found, error) {
+	ours := oursFor(t.Path, t.Args, ref.SelfName)
+	if ref.sess == nil {
+		return ours, nil
+	}
+	if t.Pkg == "" {
+		return Found{}, fmt.Errorf("%s is graded inside its container, so ours has to run there too: "+
+			"name the package that builds %s (oracle -pkg)", ref.Name, t.Path)
+	}
+	if ref.sess.carry == nil {
+		return Found{}, fmt.Errorf("the route %s takes cannot carry a binary in", ref.Name)
+	}
+	stage, err := os.MkdirTemp("", "oracle-ours-")
+	if err != nil {
+		return Found{}, err
+	}
+	// The binary keeps the name it has here, because the harness erases a
+	// shell's own basename from what it prints and that name has to be the
+	// same one on both routes.
+	base := filepath.Base(t.Path)
+	bin := filepath.Join(stage, base)
+	if err := BuildForContainer(ctx, t.Pkg, bin); err != nil {
+		_ = os.RemoveAll(stage)
+		return Found{}, err
+	}
+	dst := "/" + base
+	if err := ref.sess.carry(ctx, bin, dst); err != nil {
+		_ = os.RemoveAll(stage)
+		return Found{}, err
+	}
+	ours.Path = dst
+	ours.sess = ref.sess
+	return ours, nil
 }
 
 // oursFor is the implementation under test as a panel member, so that it is
@@ -377,12 +433,12 @@ func (r *Report) Summary(verbose bool) string {
 //
 // A case the record has no answer for in that column is an error, not a
 // skip: a column that silently grades fewer cases reports a higher number.
-func GradeRecorded(ctx context.Context, path, against string, args []string, cases []Case, rec *Run) (*Report, error) {
-	if path == "" {
+func GradeRecorded(ctx context.Context, t Target, against string, cases []Case, rec *Run) (*Report, error) {
+	if t.Path == "" {
 		return &Report{NotBuilt: true}, nil
 	}
-	if _, err := os.Stat(path); err != nil {
-		return nil, fmt.Errorf("no binary at %s: %w", path, err)
+	if _, err := os.Stat(t.Path); err != nil {
+		return nil, fmt.Errorf("no binary at %s: %w", t.Path, err)
 	}
 	var panel *Shell
 	for i := range Panel {
@@ -393,7 +449,20 @@ func GradeRecorded(ctx context.Context, path, against string, args []string, cas
 	if panel == nil {
 		return nil, fmt.Errorf("reference shell %q is not in the panel", against)
 	}
-	ours := oursFor(path, args, panel.SelfName)
+	// The reference is not run, but where it was run still matters: a
+	// column recorded inside a container is graded with ours inside the same
+	// container, and opening the route is what makes that possible.
+	ref := Found{Shell: *panel}
+	if c, ok := panel.Via.(*ContainerReach); ok {
+		var err error
+		if ref, err = c.open(ctx, *panel); err != nil {
+			return nil, fmt.Errorf("reference shell %q cannot be reached here: %w", against, err)
+		}
+	}
+	ours, err := t.place(ctx, ref)
+	if err != nil {
+		return nil, err
+	}
 
 	rep := &Report{Against: against + " (recorded)"}
 	for _, c := range cases {

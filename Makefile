@@ -452,7 +452,7 @@ conformance-dialects: ## Grade each dialect binary against the shell it claims t
 	@go run ./internal/cmd/oracle -bin $(BINDIR)/our-zsh -against zsh $(ARGS)
 	@go run ./internal/cmd/oracle -bin $(BINDIR)/our-dash -against dash $(ARGS)
 	@go run ./internal/cmd/oracle -bin $(BINDIR)/our-ksh -against ksh93 $(ARGS)
-	@go run ./internal/cmd/oracle -bin $(BINDIR)/our-ash -against ash $(ARGS)
+	@go run ./internal/cmd/oracle -bin $(BINDIR)/our-ash -pkg ./cmd/ash -against ash $(ARGS)
 
 # The same grade against the answers golden.json already holds, so no
 # reference shell runs: our binary alone, about 50s a dialect over the whole
@@ -460,11 +460,12 @@ conformance-dialects: ## Grade each dialect binary against the shell it claims t
 # while working a case; conformance-dialects is the live re-measurement.
 conformance-recorded: ## Grade each dialect binary against the golden record, no reference shells
 	@mkdir -p $(BINDIR)
-	@for d in bash zsh dash ksh; do go build -o $(BINDIR)/our-$$d ./cmd/$$d || exit 1; done
+	@for d in bash zsh dash ksh ash; do go build -o $(BINDIR)/our-$$d ./cmd/$$d || exit 1; done
 	@go run ./internal/cmd/oracle -recorded -bin $(BINDIR)/our-bash -against bash $(ARGS)
 	@go run ./internal/cmd/oracle -recorded -bin $(BINDIR)/our-zsh -against zsh $(ARGS)
 	@go run ./internal/cmd/oracle -recorded -bin $(BINDIR)/our-dash -against dash $(ARGS)
 	@go run ./internal/cmd/oracle -recorded -bin $(BINDIR)/our-ksh -against ksh93 $(ARGS)
+	@go run ./internal/cmd/oracle -recorded -bin $(BINDIR)/our-ash -pkg ./cmd/ash -against ash $(ARGS)
 
 acp-bench: ## Time the protocol's own costs in ns/op, against the process-per-command it replaces
 	@go test ./internal/acpcheck/ -run XXX -bench . -benchtime 50x -count 3 $(ARGS)

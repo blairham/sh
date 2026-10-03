@@ -223,7 +223,7 @@ func (c *ContainerReach) start(ctx context.Context, s Shell) (Found, error) {
 		return Found{}, err
 	}
 	f := Found{Shell: s, Path: conn.path, Version: conn.version}
-	f.sess = &session{exec: conn.exec, close: conn.stop}
+	f.sess = &session{exec: conn.exec, close: conn.stop, carry: conn.carry}
 	registerSession(f.sess)
 	return f, nil
 }
@@ -278,6 +278,12 @@ func (c *ContainerReach) have(ctx context.Context, cli string) error {
 type session struct {
 	exec  func(ctx context.Context, sh Found, c Case) Result
 	close func()
+
+	// carry puts a file from this machine into the route at dst, and keeps
+	// it there across a restart of the route. It is how the implementation
+	// under test is graded *inside* a container column rather than on the
+	// host beside it (#5709).
+	carry func(ctx context.Context, src, dst string) error
 }
 
 var (
@@ -345,6 +351,12 @@ type containerConn struct {
 	path    string
 	version string
 
+	// carried is every file put into the container besides the runner, as
+	// source and destination. A redial makes a new container, so each is
+	// copied in again there; a carried binary that vanished with the first
+	// container would grade every later case as a harness error.
+	carried [][2]string
+
 	mu   sync.Mutex
 	id   string
 	cmd  *exec.Cmd
@@ -391,6 +403,12 @@ func (c *containerConn) dial(ctx context.Context) error {
 	if msg, err := exec.CommandContext(cp, c.cli, "cp", c.runner, c.id+":"+runnerPath).CombinedOutput(); err != nil {
 		c.remove()
 		return fmt.Errorf("copying the runner into the container: %s", firstLine(string(msg)))
+	}
+	for _, put := range c.carried {
+		if msg, err := exec.CommandContext(cp, c.cli, "cp", put[0], c.id+":"+put[1]).CombinedOutput(); err != nil {
+			c.remove()
+			return fmt.Errorf("copying %s into the container: %s", put[1], firstLine(string(msg)))
+		}
 	}
 
 	// Not the caller's ctx: this process outlives any one case, and a
@@ -518,6 +536,29 @@ func (c *containerConn) stop() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.shutdown()
+	for _, put := range c.carried {
+		_ = os.Remove(put[0])
+		_ = os.Remove(filepath.Dir(put[0]))
+	}
+	c.carried = nil
+}
+
+// carry copies src into the running container at dst and remembers it, so a
+// redial puts it back. The source file belongs to the connection from here
+// on and is removed when the connection stops.
+func (c *containerConn) carry(ctx context.Context, src, dst string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.id == "" {
+		return errors.New("no container to carry into")
+	}
+	cp, cancel := context.WithTimeout(ctx, time.Minute)
+	defer cancel()
+	if msg, err := exec.CommandContext(cp, c.cli, "cp", src, c.id+":"+dst).CombinedOutput(); err != nil {
+		return fmt.Errorf("copying %s into the container: %s", dst, firstLine(string(msg)))
+	}
+	c.carried = append(c.carried, [2]string{src, dst})
+	return nil
 }
 
 // shutdown ends the runner and the container. Closing standard input is the

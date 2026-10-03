@@ -28,10 +28,10 @@ record `make oracle` writes, 2026-10-03, 4488 cases each:
 | `zsh` | zsh 5.9.2 | 98.0% | 98.5% |
 | `dash` | dash | 98.3% | 99.5% |
 | `ksh` | ksh93 AJM 93u+ | 95.9% | 97.7% |
-| `ash` | BusyBox 1.37 ash | 92.8% | 95.9%* |
+| `ash` | BusyBox 1.37 ash | 94.6% | 97.7% |
 
-*`ash` is graded with ours on the host and the reference in a Linux
-container, so part of its gap is the platform rather than the shell (#5709).
+`ash` is graded inside the pinned BusyBox container, with ours
+cross-compiled and run beside it, so both sides share one platform (#5709).
 
 **Exact** is byte-identical stdout, stderr and exit status. **Behavioral**
 lets a diagnostic be worded differently so long as the status and the

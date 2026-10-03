@@ -364,13 +364,15 @@ func (r *Runner) nestedLengthReference(e *syntax.ParamExpr) (string, bool) {
 //	${${(P)v}}  ${${(P)v}[1]}  ${#${(P)v}}  x=${${(P)v}}
 //	                         parameter name reference used with array, st 1
 //	"${${(P)v}}"  "${${(P)v}:-z}"          bad substitution, st 1
+//	the same in a here-document           bad substitution, and the next
+//	                                      line runs
 //	v=(x1); ${${(P)v}[1,2]}  ab            one element is a name
 //	v=(); ${${(P)v}}         empty         and none is no name
 //	${(P)v}  ${(P)${v}}      abc           not nested: the first element
 //	typeset -A h=(k x1 j x2); ${${(P)h}}  refused, as is `${${(P)@}}`
 //
 // Either way the shell stops, and nothing after it on the line runs.
-func (r *Runner) refusesAListAsAName(e *syntax.ParamExpr) bool {
+func (r *Runner) refusesAListAsAName(e *syntax.ParamExpr, quoted bool) bool {
 	if e.Inner == nil || len(e.Inner.Spans) != 1 {
 		return false
 	}
@@ -384,7 +386,7 @@ func (r *Runner) refusesAListAsAName(e *syntax.ParamExpr) bool {
 	if !isList || len(words) < 2 {
 		return false
 	}
-	if r.inDoubleQuotedSpan() {
+	if quoted {
 		r.diagf("%s\n", "bad substitution")
 	} else {
 		r.diagf("%s\n", "parameter name reference used with array")

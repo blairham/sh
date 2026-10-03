@@ -360,9 +360,7 @@ func (e *editor) runWidget(b Binding, prompt drawnPrompt) {
 	case WidgetSearchHistoryBackward:
 		e.reverseSearch(prompt)
 	case WidgetClearScreen:
-		e.write("\x1b[H\x1b[2J")
-		e.row = 0
-		e.redraw(prompt)
+		e.clearScreen(prompt)
 	case WidgetDeleteChar:
 		e.deleteForward()
 		e.redraw(prompt)
@@ -399,3 +397,22 @@ func (e *editor) runWidget(b Binding, prompt drawnPrompt) {
 		e.leaveViCommand(e.pos+1, prompt)
 	}
 }
+
+// clearScreen clears the screen and draws the prompt and the line again at
+// the top of it, on the ground a fresh prompt is drawn on.
+//
+// The ground is the half that was missing. Measured 2026-10-02 on zsh 5.9.2
+// through a pseudo-terminal, `^L` on the line `ab` under `PS1='P> '`:
+//
+//	ESC[H ESC[2J  ESC[0m ESC[27m ESC[24m ESC[J  P> ab  ESC[K
+//
+// — the clear, then exactly what goes before every prompt (see
+// EditorStyle.ClearBeforeThePrompt), then the prompt and the line.
+func (e *editor) clearScreen(prompt drawnPrompt) {
+	e.write(clearScreenSequence + e.clearBefore)
+	e.row = 0
+	e.redraw(prompt)
+}
+
+// clearScreenSequence moves the cursor home and erases the whole screen.
+const clearScreenSequence = "\x1b[H\x1b[2J"

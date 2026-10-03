@@ -23,6 +23,7 @@ import (
 //	one column left                      <le>
 //	eighteen columns left, then right    <LE:18><RI:18>
 //	the attribute resets before <cd>     \e[0m\e[27m\e[24m, untouched
+//	clearing the screen with ^L          <cl>
 //
 // This editor composes its output as strings rather than capability by
 // capability, so the names are recovered at the one place every string goes
@@ -108,6 +109,9 @@ func transformTermcapSequences(s string, transform func(code, arg string) (strin
 // name, its count where it carries one, and how many bytes it is. n is 0 for
 // anything else.
 func termcapAt(s string) (code, arg string, n int) {
+	if strings.HasPrefix(s, clearScreenSequence) {
+		return "cl", "", len(clearScreenSequence)
+	}
 	if s[0] == '\b' {
 		return "le", "", 1
 	}

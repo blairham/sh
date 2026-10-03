@@ -654,9 +654,7 @@ func (e *editor) readLine(prompt drawnPrompt) (string, error) {
 			e.redraw(prompt)
 		case ctrlL:
 			// Clear the screen and put the line back at the top of it.
-			e.write("\x1b[H\x1b[2J")
-			e.row = 0
-			e.redraw(prompt)
+			e.clearScreen(prompt)
 		case ctrlO:
 			// `operate-and-get-next`: accept this line and offer the entry
 			// after it at the next prompt. See operateAndGetNext.

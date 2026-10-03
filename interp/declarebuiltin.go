@@ -4229,8 +4229,7 @@ func (r *Runner) caseLettersKeptApart(name string, f declareFlags, numericLine, 
 	// letter over a name that folded nothing before stores this line's value
 	// and keeps the one it had, unfolded: `typeset -lx s=Bc` holds `Bc`,
 	// where `typeset -u s=Ab; typeset -lx s=Bc` holds `bc`.
-	xPlus, xWritten := f.lastSign('x')
-	exporting := f.export && !(xWritten && xPlus)
+	exporting := f.export && !f.letterOff('x')
 	alreadyListed := bits&later != 0 && !r.caseFoldOperandValued
 	if r.caseFoldMayBeHeld && (alreadyListed || (exporting && !foldBefore)) {
 		r.caseFoldHeld = name

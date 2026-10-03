@@ -28124,6 +28124,26 @@ type Semantics struct {
 	// EarlierPlusMakesALaterLetterARemoval.
 	EarlierDeclarationLetterBlocksALaterPlus Answer
 
+	// ALetterUnderBothSignsComesOff takes a letter off when it is written
+	// under both signs on one declaration, whichever came last: bash. zsh takes
+	// the last sign. Measured 2026-10-03, `declare <line> s=Bc` (#5673):
+	//
+	//	                bash 5.3.20     zsh 5.9.2
+	//	-l +l           off             off
+	//	+l -l           off             -l
+	//	+x -x           off             exported
+	//	+r -r           off             frozen
+	//
+	// Asked only of such a letter. ksh93 never reaches it: its lines have one
+	// sign by the time the letters are read (EarlierDeclarationLetterBlocksALaterPlus
+	// and EarlierPlusMakesALaterLetterARemoval).
+	//
+	// unpinned bash: no corpus row writes one letter under both signs; pinned
+	// by TestALetterUnderBothSignsComesOff.
+	//
+	// unpinned zsh: likewise, pinned by TestALetterUnderBothSignsTakesTheLast.
+	ALetterUnderBothSignsComesOff Answer
+
 	// EarlierPlusMakesALaterLetterARemoval reads a minus option word that
 	// follows a plus one as another plus word, so every letter on the line is
 	// a removal: ksh93. It is the mirror of

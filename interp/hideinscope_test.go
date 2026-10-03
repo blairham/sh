@@ -170,14 +170,19 @@ g`, withHidingAndTies, Diagnostics{}, [2]string{"S", "s"})
 }
 
 // The last `h` written decides, whichever sign it carried, which is the rule
-// the other two-sign letters here keep.
+// the other two-sign letters here keep — in the dialect where the last sign
+// wins at all; see Semantics.ALetterUnderBothSignsComesOff.
 func TestTheLastHideLetterWrittenDecides(t *testing.T) {
+	lastSignWins := func(s *Semantics) {
+		withHidingAndTies(s)
+		s.ALetterUnderBothSignsComesOff = No
+	}
 	out, errs, st := declRunTied(t, `S=one:two
 T=one:two
 f() { local -h +h S=zzz; echo "plusLast=[${s[@]}]"; }
 f
 g() { local +h -h T=qqq; echo "minusLast=[${t[@]}]"; }
-g`, withHidingAndTies, Diagnostics{}, [2]string{"S", "s"}, [2]string{"T", "t"})
+g`, lastSignWins, Diagnostics{}, [2]string{"S", "s"}, [2]string{"T", "t"})
 	want := "plusLast=[zzz]\nminusLast=[one two]\n"
 	if out != want || st != 0 || errs != "" {
 		t.Errorf("both signs of the hide letter = %q (stderr %q, status %d), want %q",

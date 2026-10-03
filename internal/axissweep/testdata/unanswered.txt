@@ -124,6 +124,7 @@ ash   DeclareZeroFillLetter
 ash   DisownAlwaysFails
 ash   DisownRemovesTheJob
 ash   EarlierDeclarationLetterBlocksALaterPlus
+ash   ALetterUnderBothSignsComesOff
 ash   EarlierPlusMakesALaterLetterARemoval
 ash   EmptyArithSubscript
 ash   EmptyAssociativeKeyIsAnError
@@ -488,6 +489,7 @@ dash  DotSetCancelsTheRestore
 dash  DotWithNoOperandIsFatal
 dash  DotWithNoOperandIsFatalInPosixMode
 dash  EarlierDeclarationLetterBlocksALaterPlus
+dash  ALetterUnderBothSignsComesOff
 dash  EarlierPlusMakesALaterLetterARemoval
 dash  EchoLastEscapeFlagWins
 dash  EmptyArithSubscript
@@ -755,6 +757,7 @@ ksh   TrapReportsAnUnknownSingleCondition
 ksh   TrapSingleUnknownConditionIsUsage
 ksh   UmaskPermissionCopyBesideLetters
 ksh   UnsetEndsTheProducedPipelineStatus
+ksh   ALetterUnderBothSignsComesOff
 
 zsh   AliasInvalidNameFatal
 zsh   AliasNameCheckReachesALookup

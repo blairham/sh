@@ -3024,6 +3024,9 @@ func Semantics() interp.Semantics {
 	// refusal on line 2 of three, line 3 still runs and the shell exits 0.
 	s.AliasInvalidNameFatal = interp.No
 	s.EarlierDeclarationLetterBlocksALaterPlus = interp.No
+	// A letter written under both signs: see
+	// interp.Semantics.ALetterUnderBothSignsComesOff (#5673).
+	s.ALetterUnderBothSignsComesOff = interp.Yes
 	// And the mirror, a minus word after a plus one: see
 	// interp.Semantics.EarlierPlusMakesALaterLetterARemoval (#5667).
 	s.EarlierPlusMakesALaterLetterARemoval = interp.No

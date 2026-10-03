@@ -11,8 +11,8 @@ import "testing"
 func TestALaterMinusWordStillAddsItsLetters(t *testing.T) {
 	for _, c := range []struct{ src, want string }{
 		{`typeset -x s=Ab; typeset +x -i s=1+2; typeset -p s`, "typeset -i s=3\n"},
-		// The minus letter after the plus one is added. Letters that read
-		// the last word's sign rather than their own are #5673.
+		// The minus letter after the plus one is added. Every letter reads
+		// its own sign; see TestEachLetterTakesItsOwnSign (#5673).
 		{`typeset +i -x s=1+2; typeset -p s`, "export s=1+2\n"},
 		{`typeset +F 3 v=1.5; echo $?; typeset -p v`, "0\ntypeset v=1.5\n"},
 	} {

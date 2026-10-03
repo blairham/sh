@@ -2050,6 +2050,11 @@ type Runner struct {
 	// pretend to be one.
 	prefixTraceAssigns []*syntax.Assign
 	prefixTraceValues  []string
+	// prefixTracedEarly are the prefix entries already written by the
+	// frozen-name walk, ahead of its refusal. See
+	// Runner.expandThePrefixUpToTheFrozenName. A slice, on the terms
+	// prefixTraceAssigns gives.
+	prefixTracedEarly []*syntax.Assign
 	// prefixTraceJoins is the third, and it holds what an **appending**
 	// entry came to: the name's value at the moment this entry expanded,
 	// with the expansion behind it. Recorded rather than derived again,
@@ -8742,6 +8747,7 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 	}
 	defer func() {
 		r.prefixTraceAssigns, r.prefixTraceValues = nil, nil
+		r.prefixTracedEarly = nil
 		r.prefixTraceJoins, r.prefixGlobMatches = nil, nil
 		r.prefixSpeaker = prefixValueSpeakerNone
 	}()
@@ -8945,8 +8951,31 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 		// the branch above: `z=1 cmd >/nope/f` writes the command's line,
 		// then the complaint, and no assignment line at all — the value is
 		// never reached. Measured 2026-09-16 on ksh93u+ 2012-08-01.
-		r.expandPrefixTraceValues(c.Assigns)
-		r.tracePrefixAfterTheCommand(c.Assigns)
+		//
+		// And an entry at a time: each is written as its value is expanded,
+		// so a value that will not expand ends the lines there — measured
+		// 2026-10-02, `set -x; a=1 b=${x?boom} true` writes `+ true`, `+
+		// a=1` and the complaint, and no `+ b=` (#5546).
+		walk := r.beginPrefixWalk(c.Assigns)
+		kind := r.prefixCommandOf(argv)
+		for i := range c.Assigns {
+			one := c.Assigns[i : i+1]
+			if a := one[0]; r.readonly[a.Name] && !a.Operand && !r.prefixRefusalApplies(kind) {
+				// A frozen name the dialect does not refuse here is a
+				// prefix like any other, and is written: measured
+				// 2026-10-02, `readonly r; set -x; a=1 r=2 true` writes
+				// `+ true`, `+ a=1` and `+ r=2` on ksh93u+ (#5546).
+				r.recordPrefixTraceValue(a, r.prefixExpansion(a))
+			}
+			r.expandPrefixTraceValues(one)
+			if r.prefixWalkFailed(walk) {
+				break
+			}
+			r.tracePrefixAfterTheCommand(one)
+		}
+		if r.givesUpForAFailedPrefix(walk, r.prefixCommandOf(argv)) {
+			return nil
+		}
 	}
 
 	// A function shadows a builtin and an external command alike — with one
@@ -13689,6 +13718,11 @@ func (r *Runner) prepareTracedAssign(a *syntax.Assign, value string) *expandedAs
 	}
 	if a.Index != nil && r.ask(r.sem().TraceElementSubscriptIsEvaluated,
 		"a traced subscript written as what it resolved to") {
+		e.tracesAfterTheStore = true
+	}
+	if r.sem().TraceLineFollowsTheStore == Yes {
+		// Every assignment's line waits for its store, which a refused one
+		// never makes. See Semantics.TraceLineFollowsTheStore (#5546).
 		e.tracesAfterTheStore = true
 	}
 	return e

@@ -530,7 +530,7 @@ func (r *Runner) traceAssignments(assigns []*syntax.Assign, values []string, pre
 	words := make([]string, 0, len(assigns))
 	var elementLines []string
 	for i, a := range assigns {
-		if p := prepared[i]; p != nil && p.tracesAfterTheStore && !p.subscriptSet {
+		if p := prepared[i]; p != nil && p.tracesAfterTheStore && a.Index != nil && !p.subscriptSet {
 			// The line waits for the store to resolve its subscript, and
 			// nothing resolved one: the assignment was refused. That column
 			// writes no line for it — `a[1/0]=v` and a frozen name are both

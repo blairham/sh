@@ -1732,6 +1732,9 @@ func Semantics() interp.Semantics {
 	// Whether a command's trace line waits for its redirections. See
 	// interp.Semantics.TraceLineFollowsTheRedirections (#5547).
 	s.TraceLineFollowsTheRedirections = interp.No
+	// ksh93 writes an assignment's line once it is made (#5546).
+	// See interp.Semantics.TraceLineFollowsTheStore.
+	s.TraceLineFollowsTheStore = interp.Yes
 	// And the prefix is worked through before a declaration utility's operand
 	// too, which is a separate measurement rather than the same one read
 	// again: measured 2026-09-19, `PRE=$(echo PRE >&2) export s=$(echo OP

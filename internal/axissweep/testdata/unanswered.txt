@@ -59,6 +59,7 @@ ash   BadNameToPrintfFatal
 ash   BadSubscriptEscapesAnArithmeticCommand
 ash   BadSubscriptToADeclaration
 ash   BadSubscriptToAnOutputOperand
+ash   BadSubscriptToTestIsSet
 ash   BadSubscriptToUnset
 ash   BareElementsInATableLiteralAreEachOneValue
 ash   BareElementsInATableLiteralMustPairOff
@@ -403,6 +404,7 @@ dash  BadNameToPrintfFatal
 dash  BadSubscriptEscapesAnArithmeticCommand
 dash  BadSubscriptToADeclaration
 dash  BadSubscriptToAnOutputOperand
+dash  BadSubscriptToTestIsSet
 dash  BadSubscriptToUnset
 dash  BareElementsInATableLiteralAreEachOneValue
 dash  BareElementsInATableLiteralMustPairOff

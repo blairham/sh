@@ -3658,6 +3658,13 @@ func (r *Runner) subscriptIndex(text string) (int, bool) {
 func (r *Runner) subscriptIndexAsWritten(written, text string) (int, bool) {
 	n, err := r.subscriptValueAsWritten(written, text)
 	if err != nil {
+		if r.heldSubscriptFailure != nil {
+			// A caller that words the failure itself — see
+			// Runner.testIsSetSubscriptFailed.
+			*r.heldSubscriptFailure = r.subscriptFailure(text, err)
+			r.expandErr = true
+			return 0, false
+		}
 		r.diagf("%s\n", r.subscriptFailure(text, err))
 		r.expandErr = true
 		return 0, false

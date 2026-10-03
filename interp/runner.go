@@ -5082,6 +5082,10 @@ type Runner struct {
 	// failure and is running to its end before the line is abandoned. See
 	// Semantics.ConditionFinishesAfterAnArithmeticError.
 	condFinishing bool
+	// heldSubscriptFailure, where it is set, receives the sentence about a
+	// subscript that would not evaluate in place of the shell writing it, for
+	// the one caller that words it as its own. See testIsSetSubscriptFailed.
+	heldSubscriptFailure *string
 	// envNotAdopted names the parameters whose entry in the environment this
 	// shell **did not take over**: the value is the shell's own, the entry
 	// goes to a child as it arrived, and the export the environment brought

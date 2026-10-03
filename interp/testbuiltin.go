@@ -110,6 +110,17 @@ func (r *Runner) runTest(name string, args []string) int {
 
 func (r *Runner) runTestForm(name string, form testForm, args []string) int {
 	ok, err := r.testExpr(form, args)
+	if r.condFinishing {
+		// A test that ran to its end after a subscript in it failed, which
+		// ends the line with the test's own answer. See
+		// testIsSetSubscriptFailed.
+		r.condFinishing = false
+		if err == nil {
+			r.status = r.statusAfterAFinishedCondition(ok)
+			r.abandonOverArithmetic()
+			return r.status
+		}
+	}
 	if errors.Is(err, errTestRegexDoesNotCompile) {
 		return 2
 	}
@@ -1061,7 +1072,19 @@ func (r *Runner) unaryTest(op, operand string) (bool, error) {
 		// reached it as text is rounded here, and `shopt -s
 		// assoc_expand_once` stops the round at this operator alone. See
 		// Semantics.TestIsSetExpandsAFlatSubscript (#3298).
-		return r.testParameterIsSet(operand)
+		//
+		// A subscript that will not evaluate is this builtin's to word and
+		// to give up over, and the panel splits three ways on both — see
+		// testIsSetSubscriptFailed.
+		var failed string
+		outer := r.heldSubscriptFailure
+		r.heldSubscriptFailure = &failed
+		set, err := r.testParameterIsSet(operand)
+		r.heldSubscriptFailure = outer
+		if failed != "" {
+			return r.testIsSetSubscriptFailed(failed)
+		}
+		return set, err
 	case "-R":
 		// Whether the name is a **reference**, which is a question about the
 		// binding rather than about what it points at: the reference answers
@@ -1736,4 +1759,32 @@ func (r *Runner) terminalTestArithmeticFailed(failure string) error {
 		r.abandonOverArithmetic()
 	}
 	return errTerminalTestOperandReported
+}
+
+// testIsSetSubscriptFailed is `test -v` and `[ -v ]` over an element whose
+// subscript would not evaluate: the sentence, worded and placed the way this
+// dialect places it, and as much given up as the dialect gives up. See
+// Semantics.BadSubscriptToTestIsSet.
+func (r *Runner) testIsSetSubscriptFailed(sentence string) (bool, error) {
+	r.expandErr, r.badSubscript = false, false
+	name := r.inBuiltin
+	outer := r.inBuiltin
+	// The location a builtin's complaint carries where the dialect keeps it
+	// for a bad subscript, as `unset`'s does, and the shell's own otherwise.
+	r.inBuiltin = r.keptBuiltinLocation(outer)
+	defer func() { r.inBuiltin = outer }()
+	p := r.sem().BadSubscriptToTestIsSet
+	if p == BadSubscriptEndsTheScript && r.sem().ConditionArithmeticErrorIsFatal == Yes &&
+		r.ask(r.sem().ConditionFinishesAfterAnArithmeticError,
+			"a test running to its end after its arithmetic failed") {
+		// The failed lookup is unset and the test runs on, ending the line
+		// once it has an answer. See
+		// Semantics.ConditionFinishesAfterAnArithmeticError.
+		r.diagf("%s\n", sentence)
+		r.condFinishing = true
+		return false, nil
+	}
+	r.badSubscriptGivesUp(p, "how much a `test -v` operand's unevaluable subscript gives up",
+		Wording(r.diag().TestIsSetBadSubscript, "%[1]s", sentence, name))
+	return false, errTerminalTestOperandReported
 }

@@ -105,6 +105,18 @@ func (r *Runner) anonFunc(ctx context.Context, c *syntax.AnonFunc) error {
 			return nil
 		}
 		r.traceAnonymousCall(name, args)
+		// `$_` is the call's last argument, as it is for a named function's
+		// call: the words written after the body, and empty where there are
+		// none. Measured 2026-10-03 on zsh 5.9.2 under `-f -c`: `print a b;
+		// () { print "[$_]" }` prints `[]`, `… } x y` prints `[y]`, and
+		// `() { echo x y } p q; echo "[$_]"` prints `[q]` after the call,
+		// whatever the body's own commands left. See underscoreframe.go.
+		beforeArg, beforeSet := r.lastArg, r.lastArgSet
+		r.lastArg, r.lastArgSet = "", true
+		if len(args) > 0 {
+			r.lastArg = args[len(args)-1]
+		}
+		defer r.underscoreAcrossAFunctionCall(beforeArg, beforeSet)()
 		decl := &syntax.FuncDecl{
 			Name: name, Keyword: c.Keyword, Body: c.Body, Start: c.Start,
 		}

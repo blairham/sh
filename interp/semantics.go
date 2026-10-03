@@ -11048,6 +11048,18 @@ type Semantics struct {
 	// it after a builtin `sleep` too.
 	BareWaitReportsASignalDeath BareWaitSignalReport
 
+	// ForegroundReapAnnouncesASignalDeath makes the reaping of a foreground
+	// external command, under the monitor, the moment a background job a
+	// signal ended is announced — in the words a foreground command that
+	// signal killed earns — and let go of. Measured 2026-10-03 on ksh93u+
+	// 2012-08-01: `set -m; /bin/sleep 5 & kill -9 %1; /bin/sleep 0.3; echo x`
+	// writes `ksh: N: Killed` before `x`, `kill %1` writes `Terminated` and
+	// `kill -INT %1` nothing; a `jobs` or a `wait` after it finds nothing, a
+	// job that exited by itself is still listed `Done`, the same line with no
+	// monitor or a builtin in the foreground says nothing. bash 5.3.20 says
+	// nothing there. ksh93 Yes; No elsewhere (#5701).
+	ForegroundReapAnnouncesASignalDeath Answer
+
 	// JobNoticeNamesThePID makes a job *notice* name the job's process id —
 	// the long row `jobs -l` writes, rather than the short one `jobs` writes.
 	//
@@ -32284,6 +32296,8 @@ func PosixSemantics() Semantics {
 		BareWaitLeavesJobsForTheListing: No,
 		// And it says nothing of how they ended. See the field.
 		BareWaitReportsASignalDeath: BareWaitReportsNoSignalDeath,
+		// Nor at a foreground reap. See the field.
+		ForegroundReapAnnouncesASignalDeath: No,
 		// A numeral of any length is an index where there is a stack. See
 		// the field.
 		ABareNumberedTildeOfThreeDigitsIsAName: No,
@@ -32632,6 +32646,8 @@ func CoreSemantics() Semantics {
 		BareWaitLeavesJobsForTheListing: No,
 		// And it says nothing of how they ended. See the field.
 		BareWaitReportsASignalDeath: BareWaitReportsNoSignalDeath,
+		// Nor at a foreground reap. See the field.
+		ForegroundReapAnnouncesASignalDeath: No,
 		// A numeral of any length is an index where there is a stack. See
 		// the field.
 		ABareNumberedTildeOfThreeDigitsIsAName: No,

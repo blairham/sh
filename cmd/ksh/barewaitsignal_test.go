@@ -31,3 +31,23 @@ func TestABareWaitReportsSignalDeathsUnderTheMonitor(t *testing.T) {
 		}
 	}
 }
+
+// TestAForegroundReapAnnouncesASignalDeathUnderTheMonitor pins that under
+// `set -m` the reaping of a foreground external command announces a
+// background job a signal ended, as a foreground command that signal killed
+// is reported, and lets it go (#5701). Measured 2026-10-03 on ksh93u+ 2012-08-01.
+func TestAForegroundReapAnnouncesASignalDeathUnderTheMonitor(t *testing.T) {
+	pids := regexp.MustCompile(`[0-9]{3,}`)
+	for _, tc := range []struct{ src, out, errs string }{
+		{"set -m; /bin/sleep 5 & kill -9 %1; /bin/sleep 0.3; jobs; echo x\n", "x\n", "s.sh: line 1: N: Killed\n"},
+		{"set -m; /bin/sleep 5 & kill %1; /bin/sleep 0.3; wait %1; echo st=$?\n", "st=0\n", "s.sh: line 1: N: Terminated\n"},
+		{"set -m; /bin/sleep 5 & kill -INT %1; /bin/sleep 0.3; echo x\n", "x\n", ""},
+		{"/bin/sleep 5 & kill -9 %1; /bin/sleep 0.3; echo x\n", "x\n", ""},
+	} {
+		out, errs, _ := runKshScript(t, tc.src)
+		errs = pids.ReplaceAllString(errs, "N")
+		if out != tc.out || errs != tc.errs {
+			t.Errorf("%s\n got %q %q\nwant %q %q", tc.src, out, errs, tc.out, tc.errs)
+		}
+	}
+}

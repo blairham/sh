@@ -10606,6 +10606,10 @@ func (r *Runner) runWatched(ctx context.Context, cmd *exec.Cmd, argv []string, a
 		// And a finished background job is learned of here. See
 		// Runner.noticeFinishedJobs.
 		r.noticeFinishedJobs()
+		// And in one column, under the monitor, a job a signal ended is
+		// announced and let go of here. See
+		// Semantics.ForegroundReapAnnouncesASignalDeath.
+		r.announceSignalDeathsAtAForegroundReap()
 	}
 	r.status = status
 	if w.Killed {

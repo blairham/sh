@@ -1484,6 +1484,7 @@ func Semantics() interp.Semantics {
 	// (#5687).
 	s.BareWaitLeavesJobsForTheListing = interp.Yes
 	s.BareWaitReportsASignalDeath = interp.BareWaitReportsASignalDeathUnderTheMonitor
+	s.ForegroundReapAnnouncesASignalDeath = interp.Yes
 	// This shell has `$_`, and the row that said it did not was measured
 	// through a `;`-list — the one shape where a shell with the parameter
 	// and a shell without it give the same empty answer. `echo one two`

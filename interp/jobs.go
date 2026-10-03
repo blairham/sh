@@ -1392,6 +1392,13 @@ func (r *Runner) waitOutPolledJob(j *Job) {
 // ambiguity is not reachable. If one ever gains one, the signal wants carrying
 // on the Job instead.
 func (r *Runner) noticeWaitedSignal(j *Job, status int) {
+	r.noticeWaitedSignalIn(j, status, r.diag().WaitSignalNotice)
+}
+
+// noticeWaitedSignalIn is noticeWaitedSignal with the dialect's sentence for
+// it named, for the route that is not a `wait`. See
+// Runner.announceSignalDeathsAtAForegroundReap.
+func (r *Runner) noticeWaitedSignalIn(j *Job, status int, notice string) {
 	// The signal the job recorded, where it recorded one: exact under every
 	// encoding, including the one where 143 is both `exit 143` and a TERM.
 	sig := j.EndSig
@@ -1425,7 +1432,7 @@ func (r *Runner) noticeWaitedSignal(j *Job, status int) {
 		r.status, r.unspecified = said, false
 		return
 	}
-	if w := r.diag().WaitSignalNotice; w != "" {
+	if w := notice; w != "" {
 		r.diagf("%s\n", Wording(w, "wait: %[1]d: %[2]s", j.Ident(), r.signalDescription(syscall.Signal(sig))))
 		return
 	}
@@ -3652,5 +3659,30 @@ func (r *Runner) holdTheUnsaidWindowOpen() {
 func (r *Runner) holdTheReapedWindowOpen() {
 	if afterAJobsProgramIsReaped != nil && r.inJob != nil {
 		afterAJobsProgramIsReaped()
+	}
+}
+
+// announceSignalDeathsAtAForegroundReap says, for each background job a
+// signal has ended, what a foreground command that signal killed would earn,
+// and takes it out of the table, in the dialect whose foreground reap does
+// so under the monitor. Measured 2026-10-03 on ksh93u+ 2012-08-01, `set -m;
+// /bin/sleep 5 & kill -9 %1; /bin/sleep 0.3; jobs`: `ksh: N: Killed` and an
+// empty listing, and a `wait %1` after it finds nothing; an INT says
+// nothing, a job that exited by itself stays to be listed `Done`, and a
+// builtin in the foreground reaps nothing. See
+// Semantics.ForegroundReapAnnouncesASignalDeath (#5701).
+func (r *Runner) announceSignalDeathsAtAForegroundReap() {
+	if !r.monitor || r.sem().ForegroundReapAnnouncesASignalDeath != Yes {
+		return
+	}
+	for _, j := range slices.Clone(r.jobs) {
+		if j == nil || !j.Finished() || j.EndSig == 0 || j.fgPipeline {
+			continue
+		}
+		// The sentence a foreground command a signal killed earns, which is
+		// what the column writes here: `ksh: N: Killed` from `-c`, `s.sh:
+		// line 1: N: Killed` from a script file, measured.
+		r.noticeWaitedSignalIn(j, j.Status, "")
+		r.Forget(j)
 	}
 }

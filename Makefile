@@ -56,7 +56,7 @@ SHELLS := sh bash zsh ksh dash ash
 FUNCSRC := share/sh/functions
 FUNCS := $(sort $(notdir $(wildcard $(FUNCSRC)/*)))
 
-.PHONY: all build test test-cover fmt vet tidy clean check corpus-guard oracle oracle-case oracle-check conformance conformance-gated conformance-dialects conformance-recorded axis-sweep axis-coverage emulate-sweep coverage wild wild-run wild-run-contained fmt-wild smoke prompt-fidelity acp acp-wire acp-bench startup perfgate suite suite-cells suite-guard suite-panel bash-suite zsh-suite ksh-suite dash-suite install uninstall
+.PHONY: all build test test-cover fmt vet tidy clean check corpus-guard oracle oracle-case oracle-check conformance conformance-gated conformance-dialects conformance-recorded conformance-ratchet conformance-baseline axis-sweep axis-coverage emulate-sweep coverage wild wild-run wild-run-contained fmt-wild smoke prompt-fidelity acp acp-wire acp-bench startup perfgate suite suite-cells suite-guard suite-panel bash-suite zsh-suite ksh-suite dash-suite install uninstall
 
 all: build
 
@@ -466,6 +466,24 @@ conformance-recorded: ## Grade each dialect binary against the golden record, no
 	@go run ./internal/cmd/oracle -recorded -bin $(BINDIR)/our-dash -against dash $(ARGS)
 	@go run ./internal/cmd/oracle -recorded -bin $(BINDIR)/our-ksh -against ksh93 $(ARGS)
 	@go run ./internal/cmd/oracle -recorded -bin $(BINDIR)/our-ash -pkg ./cmd/ash -against ash $(ARGS)
+
+# The per-case gate over conformance-recorded (#5710). Each dialect binary is
+# graded against the golden record and checked against the committed list of
+# cases it does not yet match exactly: a failure off the list, or a pass still
+# on it, fails. CI runs it; DIALECTS narrows it, and ash needs Docker.
+DIALECTS ?= bash zsh dash ksh ash
+CONFORMANCE_BASELINES := internal/oracle/testdata/conformance
+conformance-ratchet: ## Fail if a dialect binary's exact-match set moved against its baseline
+	@mkdir -p $(BINDIR)
+	@status=0; for d in $(DIALECTS); do \
+		ref=$$d; [ $$d = ksh ] && ref=ksh93; \
+		go build -o $(BINDIR)/our-$$d ./cmd/$$d || exit 1; \
+		go run ./internal/cmd/oracle -recorded -bin $(BINDIR)/our-$$d -pkg ./cmd/$$d -against $$ref \
+			-baseline $(CONFORMANCE_BASELINES)/$$d.txt $(ARGS) || status=1; \
+	done; exit $$status
+
+conformance-baseline: ## Rewrite the conformance baselines from the current tree
+	@$(MAKE) --no-print-directory conformance-ratchet ARGS=-write-baseline
 
 acp-bench: ## Time the protocol's own costs in ns/op, against the process-per-command it replaces
 	@go test ./internal/acpcheck/ -run XXX -bench . -benchtime 50x -count 3 $(ARGS)

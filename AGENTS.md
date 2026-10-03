@@ -315,7 +315,9 @@ The report targets are `conformance`, `conformance-gated`,
 `conformance-dialects`, `wild`, `wild-run`, `wild-run-contained`, `smoke`,
 `prompt-fidelity`, `acp`, `acp-wire` and `sandbox`. Each is described below. Only `sandbox`
 fails on what it finds, for the reason given there: a conformance number is
-meant to be low and climbing, and a boundary is meant to hold.
+meant to be low and climbing, and a boundary is meant to hold. The one
+conformance gate, `conformance-ratchet`, gates the *direction* rather than
+the number — see below.
 
 ## Installing, and the name collision
 
@@ -820,6 +822,28 @@ stays true. Run the targets for the current scores.
 
 It is deliberately **not** a gate. The number is meant to be low and to
 climb; failing CI on it would only mean failing CI on unfinished work.
+
+**`make conformance-ratchet` is the gate that does not fail on unfinished
+work** (#5710). It grades each dialect binary against the answers
+`golden.json` already holds (`oracle -recorded`, so no reference shell runs)
+and checks the cases that do not match exactly against a committed list,
+`internal/oracle/testdata/conformance/<dialect>.txt`. A failure off the list
+fails CI as a regression; a pass still on the list fails it too, and the job
+prints the line to delete. So **a PR that fixes a case deletes its line in
+the same PR**, and the number can only climb. It is per case, not a count,
+because a total that falls can hide a row that rose. CI runs it (macOS for
+bash/zsh/dash/ksh, whose record was made there; Linux and Docker for ash).
+
+To work one case, grade only it — seconds, ours alone:
+
+    go build -o build/our-ksh ./cmd/ksh
+    go run ./internal/cmd/oracle -recorded -bin build/our-ksh -against ksh93 -only <id> -v
+
+ash adds `-pkg ./cmd/ash`: its reference is recorded inside the pinned
+BusyBox container, so ours is cross-compiled and graded inside that same
+container (#5709) rather than across two platforms. A golden-record
+regeneration that changes an answer changes the lists with it; `make
+conformance-baseline` rewrites them.
 
 `make axis-sweep` moves every axis in `interp.Semantics` to each of its
 other legal values, runs the graded corpus against the shell each dialect

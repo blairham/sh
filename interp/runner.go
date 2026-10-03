@@ -10306,6 +10306,10 @@ func (r *Runner) exec(ctx context.Context, argv, env []string) error {
 // 3.2.57, ksh93u+ and zsh 5.9.2 all sit there. So with it off this stays the
 // plain os/exec wait it has always been, and nothing moves.
 func (r *Runner) waitForBackgroundProcess(cmd *exec.Cmd) int {
+	// The job's one program has been reaped once this returns, however it
+	// was waited for. See Runner.programOfAJobReaped.
+	defer r.holdTheReapedWindowOpen()
+	defer r.programOfAJobReaped()
 	if !r.monitor || r.WaitForCommand == nil || r.bg == nil {
 		if r.inbox != nil {
 			// A body that can be killed while it waits, and then stops

@@ -1433,6 +1433,10 @@ func Semantics() interp.Semantics {
 	// `readonly y; function f { y=1; echo in; }; f; echo st=$?` writes `st=1`
 	// and exits 0. Measured 2026-10-02 on 93u+ 2012-08-01 (#5508).
 	s.FatalErrorEndsAtAKeywordFunctionCall = interp.Yes
+	// A subscript an element is named by in text — `unset 'a[$i]'`, `read
+	// 'a[$i+1]'`, a reference aimed at `a[$i]` — is read as it arrived, so
+	// its `$` is refused by the arithmetic (#5578).
+	s.ReferencedSubscriptIsExpanded = interp.No
 	s.SelectEofEndsPromptLine = interp.No
 	s.SelectEofIsSuccess = interp.No
 	s.SelectTakesUnterminatedReply = interp.No

@@ -19862,6 +19862,37 @@ type Semantics struct {
 	// that row, which the two columns that expand answer differently.
 	DeclarationOperandExpandsItsSubscript Answer
 
+	// ReferencedSubscriptIsExpanded expands the subscript of an element named
+	// by **text** — a builtin's name operand such as `unset 'a[$i]'` or
+	// `read 'a[$i+1]'`, or a reference aimed at `a[$i]` — before its
+	// arithmetic reads it. bash and zsh; ksh93 reads the text as it arrived,
+	// so a `$` in it is a character the arithmetic refuses.
+	//
+	// Measured 2026-10-03 under `-c`, `a=(x y z); i=1` (#5578):
+	//
+	//	                           bash 5.3.20  zsh 5.9.2  ksh93u+
+	//	unset 'a[$i]'              x z          x z        `unset: $i: arithmetic syntax error`
+	//	unset 'a[$((1))]'          x z          x z        refused the same way
+	//	read 'a[$i+1]' <<<R        x y R        x R z      `read: $i+1: arithmetic syntax error`
+	//	typeset -n r='a[$i]'; $r   y            —          `typeset: $i: arithmetic syntax error`
+	//
+	// Not DeclarationOperandExpandsItsSubscript, which is the same answer in
+	// all three columns but reached through a declaration's own round, and
+	// not the flat-subscript axes beside it, which decide what a *key* is: zsh
+	// answers UnsetExpandsAFlatSubscript no and still expands an indexed
+	// subscript here. The controls are the arithmetic's own routes, which
+	// expand an arrived `$` in every column — `e='a[$i]'; $(( $e ))` and
+	// `let "a[$i]=9"` reach element 1 in ksh93 too — so this is the name
+	// operand and the reference, and only those.
+	//
+	// unpinned bash: no corpus row names an element by text with a `$` in
+	// its subscript; pinned by TestAReferencedSubscriptIsExpanded.
+	//
+	// unpinned zsh: likewise, pinned by TestAReferencedSubscriptIsExpanded.
+	//
+	// unpinned ksh: likewise, pinned by TestAReferencedSubscriptIsReadAsItArrived.
+	ReferencedSubscriptIsExpanded Answer
+
 	// UnsetExpandsAFlatSubscript is the same second round at `unset`, whose
 	// operand names an element to take away rather than one to write.
 	//
@@ -30956,6 +30987,11 @@ func PosixSemantics() Semantics {
 		// to take, and the panel member that has both reads the text as it
 		// stands.
 		DeclarationOperandExpandsItsSubscript: No,
+		// The standard has no arrays, so a subscript named by text is a
+		// question it does not put; the reading kept is the one two of the
+		// three shells with arrays give, and the one ksh93 does not is its
+		// own preset's.
+		ReferencedSubscriptIsExpanded: Yes,
 		// And the same three for the surfaces one column lets a script turn
 		// off: the standard has no array for `unset` to reach into, no `-v`
 		// for `printf`, no subscripted operand for `read`, and no `-v` for

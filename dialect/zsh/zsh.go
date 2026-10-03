@@ -2747,6 +2747,9 @@ func Semantics() interp.Semantics {
 	s.UnresolvedTildeIsAnError = interp.Yes
 	// `~N` reads $dirstack with $PWD in front of it. See the field (#5656).
 	s.NumberedTildeReadsThePushedDirectories = interp.Yes
+	// And only a bare numeral of one or two characters is one; see the
+	// field (#5694).
+	s.ABareNumberedTildeOfThreeDigitsIsAName = interp.Yes
 	// A failed expansion in a declaration's words or a `case` leaves `$?`
 	// alone. See the field (#5657).
 	s.FailedExpansionInADeclarationOrCaseSetsNoStatus = interp.Yes
@@ -5227,6 +5230,11 @@ func Semantics() interp.Semantics {
 // Diagnostics is how zsh reports failure.
 func Diagnostics() interp.Diagnostics {
 	return interp.Diagnostics{
+		// A numbered tilde whose digits overflow: measured 2026-10-03,
+		// `~99999999999999999999` warns `number truncated after 19 digits:
+		// 99999999999999999999` and goes on. See
+		// interp.Runner.warnTruncatedTildeNumber (#5694).
+		NumberedTildeTruncated: "number truncated after %d digits: %s",
 		// A table literal mixing `[key]=` heads with bare words, refused
 		// whichever way round it was written and naming neither the variable nor
 		// the element: measured 2026-09-23, `typeset -A a; a=([zero]=5 four)` is

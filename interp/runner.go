@@ -3234,6 +3234,9 @@ type Runner struct {
 	// shared down the clone chain the way the kernel's process ids are shared
 	// by every process: see Runner.reachInventedJob.
 	inventedJobs *inventedJobRegistry
+	// tildeWarnTail is the rest of the word a tilde prefix stands in front
+	// of, for the one warning that quotes it. See warnTruncatedTildeNumber.
+	tildeWarnTail string
 	// reaped are the jobs a `wait` has already reported the status of, newest
 	// last and bounded by reapedJobsKept.
 	//

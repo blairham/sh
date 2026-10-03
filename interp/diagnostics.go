@@ -862,6 +862,10 @@ type Diagnostics struct {
 	// zsh 5.9.2 and bash 5.3.15 — and the substrate must not carry one
 	// shell's spelling as everybody's.
 	GlobNoMatch string
+	// NumberedTildeTruncated warns that a numbered tilde's digits overflow a
+	// 64-bit count: the digits read, then the rest of the word from the first
+	// digit. Empty is no warning. See Runner.warnTruncatedTildeNumber.
+	NumberedTildeTruncated string
 	// CshNullGlobNoMatch is the sentence a word list under one shell's
 	// `cshnullglob` writes when none of its patterns matched: no verbs. See
 	// interp/cshnullglob.go.

@@ -8131,7 +8131,10 @@ func (r *Runner) tildeHead(spans []syntax.Span, start int, ends string) tildeHea
 		}
 		return r.writtenTildeHead(spans, start, ends)
 	}
+	// The rest of the word, for a warning that quotes it; see tildeWarnTail.
+	r.tildeWarnTail = plainTextFrom(spans, span, off)
 	dir, _, ok, miss := r.tildeSplit(b.String())
+	r.tildeWarnTail = ""
 	if !ok {
 		return tildeHead{miss: miss}
 	}
@@ -10104,4 +10107,21 @@ func (r *Runner) liveMarksFollow(from, to *syntax.ParamExpr) {
 	if r.liveMarksFor == from {
 		r.liveMarksFor = to
 	}
+}
+
+// plainTextFrom is the word's literal text from span/off on, as far as its
+// leading run of literal spans reaches.
+func plainTextFrom(spans []syntax.Span, span, off int) string {
+	var b strings.Builder
+	for i := span; i < len(spans); i++ {
+		if spans[i].Kind != syntax.Literal {
+			break
+		}
+		v := spans[i].Value
+		if i == span {
+			v = v[off:]
+		}
+		b.WriteString(v)
+	}
+	return b.String()
 }

@@ -3419,6 +3419,12 @@ func (r *Runner) subscriptValue(text string) (int, error) {
 // stands — it is already a result, and expanding it again ran what the first
 // round had only produced (#3047).
 func (r *Runner) subscriptValueOfReference(text string) (int, error) {
+	if strings.ContainsAny(text, "$`") && !r.ask(r.sem().ReferencedSubscriptIsExpanded,
+		"a subscript that arrived as text expanded before its arithmetic reads it") {
+		// Read as it arrived, so a `$` in it is a character the arithmetic
+		// refuses. See Semantics.ReferencedSubscriptIsExpanded.
+		return r.subscriptValueAsWritten(text, text)
+	}
 	return r.subscriptValueAsWritten(text, r.expandArithText(text, arithTextArrived))
 }
 

@@ -138,7 +138,7 @@ func TestTheActionThatReadsAKeyIsDeclined(t *testing.T) {
 	if ok {
 		t.Error("the editor performed a search from inside a widget")
 	}
-	if want := (Line{Buffer: "abc", Cursor: 3}); got != want {
+	if want := (Line{Buffer: "abc", Cursor: 3, Last: LastWidget{Widget: WidgetSelfInsert, Known: true}}); got != want {
 		t.Errorf("the declined call gave back %+v, want the line untouched at %+v", got, want)
 	}
 	// Everything else is offered. A new action added to widgets.go without a

@@ -254,6 +254,9 @@ const (
 	zleCursor = ".zsh.zle.cursor"
 	zleWidget = ".zsh.zle.widget"
 	zleActive = ".zsh.zle.active"
+	// zleLastWidget is what `$LASTWIDGET` reads for the length of a widget
+	// call. See lastWidgetName.
+	zleLastWidget = ".zsh.zle.lastwidget"
 	// zleAccept is set by `zle accept-line` inside a widget and read once, by
 	// the call that ran the widget. A parameter under a name no script can
 	// spell, the way the rest of this file keeps its state, so a subshell gets
@@ -486,7 +489,15 @@ func zleBuiltin(r *interp.Runner, ctx context.Context, args []string) int {
 		// `zle` with nothing at all: status 1 and not a word, measured.
 		return 1
 	}
-	args, asItself := widgetCallOptions(rest[1:])
+	args, asItself, nolast, refused := widgetCallOptions(r, rest[1:])
+	if refused {
+		return 1
+	}
+	if !nolast && insideWidget(r) {
+		// What ran is the last widget from here on, unless the call said
+		// otherwise. See lastWidgetName.
+		defer r.SetVar(zleLastWidget, rest[0])
+	}
 	if asItself {
 		// `-w`: the called widget sees its own name as `$WIDGET`, for the
 		// call alone. See widgetCallOptions.
@@ -515,9 +526,22 @@ func zleBuiltin(r *interp.Runner, ctx context.Context, args []string) int {
 // `-N` clears the numeric argument, which this shell's editor has none of, so
 // it is read and does nothing. The other letters of that list are left to the
 // widget as operands, as before; see widgetCallArgs.
-func widgetCallOptions(args []string) (rest []string, asItself bool) {
+func widgetCallOptions(r *interp.Runner, args []string) (rest []string, asItself, nolast, refused bool) {
 	for len(args) > 0 {
 		a := args[0]
+		if a == "-f" {
+			// A flag for this call, and `nolast` is the one there is:
+			// measured on zsh 5.9.2, `zle g -f nolast a b` hands g the two
+			// words and leaves `$LASTWIDGET` as it was, and any other word is
+			// `'nolast' expected after -f`.
+			if len(args) < 2 || args[1] != "nolast" {
+				r.Diagnosef("'nolast' expected after -f\n")
+				return nil, false, false, true
+			}
+			nolast = true
+			args = args[2:]
+			continue
+		}
 		if len(a) < 2 || a[0] != '-' || strings.Trim(a[1:], "Nw") != "" {
 			break
 		}
@@ -526,7 +550,7 @@ func widgetCallOptions(args []string) (rest []string, asItself bool) {
 		}
 		args = args[1:]
 	}
-	return args, asItself
+	return args, asItself, nolast, false
 }
 
 // widgetCallArgs is what a called widget is given, with the `--` that ends
@@ -1248,6 +1272,7 @@ func runWidgetFunction(
 	setWidgetLine(r, in)
 	r.SetVar(zleWidget, name)
 	r.SetVar(zleActive, "1")
+	r.SetVar(zleLastWidget, lastWidgetName(in.Last))
 	// A completion widget looks at the line and does not rewrite it, which is
 	// the completer's presence and not a second flag — see openWidgetParameters.
 	openWidgetParameters(r, def.completer != "")
@@ -1381,6 +1406,11 @@ func openWidgetParameters(r *interp.Runner, completion bool) {
 	// change. Lifted again by UnsetDynamic when the call ends, so a script
 	// outside one finds an ordinary variable.
 	r.MarkReadonly("WIDGET")
+	r.SetDynamic("LASTWIDGET", func(rr *interp.Runner) string {
+		name, _ := rr.GetVar(zleLastWidget)
+		return name
+	})
+	r.MarkReadonly("LASTWIDGET")
 	for _, name := range zleQueueParameters {
 		r.SetDynamic(name, func(*interp.Runner) string { return "0" })
 		// `integer-local-readonly-special` in real zsh, measured 2026-09-22
@@ -1439,6 +1469,10 @@ func openWidgetParameters(r *interp.Runner, completion bool) {
 	// completion widget offering a suggestion is not something the measurement
 	// forbids.
 	r.MarkLocal(postdisplayName)
+	// And the widget before this one, which is the call's own for the same
+	// reason: measured, `${(t)LASTWIDGET}` in a widget is
+	// `scalar-local-readonly-special`.
+	r.MarkLocal("LASTWIDGET")
 }
 
 // closeWidgetParameters takes them away again, so a script that is not running
@@ -1454,6 +1488,7 @@ func closeWidgetParameters(r *interp.Runner) {
 	// closed beside it for the same reason: what a script finds between two
 	// keystrokes is nothing at all.
 	r.UnsetDynamic(postdisplayName)
+	r.UnsetDynamic("LASTWIDGET")
 	// Not added to zleParameters, because that list is also what the
 	// completion branch above marks read-only and what the tests walk as "the
 	// line parameters". This one is neither: a completion widget may colour
@@ -1490,6 +1525,7 @@ var widgetParameterDeclarations = map[string]interp.ProducedDeclaration{
 	"RBUFFER":           {},
 	postdisplayName:     {},
 	"WIDGET":            {},
+	"LASTWIDGET":        {},
 	regionHighlightName: {Array: true, ListsItsElements: true},
 }
 
@@ -1582,7 +1618,7 @@ func editorRunning(r *interp.Runner) bool {
 // unsetWidgetState clears what the call left behind, so nothing about one
 // keystroke's widget is visible to the next one's.
 func unsetWidgetState(r *interp.Runner) {
-	for _, name := range []string{zleBuffer, zleCursor, zleWidget, zleActive, zleAccept} {
+	for _, name := range []string{zleBuffer, zleCursor, zleWidget, zleActive, zleAccept, zleLastWidget} {
 		r.SetVar(name, "")
 	}
 }
@@ -1779,4 +1815,29 @@ func TransformTermcap(r *interp.Runner, ctx context.Context, code, arg string) (
 	}
 	reply, _ := r.GetVar("REPLY")
 	return reply, true
+}
+
+// lastWidgetName is what `$LASTWIDGET` says for the widget a keystroke ran:
+// the widget's own name, this shell's name for one of the editor's actions,
+// or `accept-line` for the key that ended the line before.
+//
+// Measured 2026-10-02 on zsh 5.9.2 through a pseudo-terminal, a widget `h`
+// bound to a key and reading the parameter: `self-insert` after a typed
+// character, `backward-char` after the left arrow, `h` after itself, and
+// `accept-line` as the first key of a new line. Inside the widget, a widget it
+// calls with `zle` is the last one from then on — `zle backward-char` makes
+// it `backward-char` — unless the call carried `-f nolast`. It is a readonly
+// local special, `scalar-local-readonly-special`, and not a name at all
+// outside a widget.
+func lastWidgetName(last repl.LastWidget) string {
+	switch {
+	case !last.Known:
+		return ""
+	case last.Function != "":
+		return last.Function
+	case last.Accepted:
+		return "accept-line"
+	default:
+		return widgetNames[last.Widget]
+	}
 }

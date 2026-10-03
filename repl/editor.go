@@ -146,6 +146,12 @@ type editor struct {
 	// Nil is the two fixed sequences in paste.go. See
 	// EditorStyle.BracketedPasteParameter.
 	pasteCodes func() (on, off string)
+	// last is the widget the keystroke before this one ran, keyBytes the
+	// bytes the keystroke in hand has read so far and keyBinding the binding
+	// that claimed it, if one did. See noteLastKey.
+	last       LastWidget
+	keyBytes   []byte
+	keyBinding *Binding
 	// transformTermcap is Shell.TransformTermcap bound to the session's
 	// context, or nil. See termcaptransform.go.
 	transformTermcap func(code, arg string) (string, bool)
@@ -516,6 +522,10 @@ func (e *editor) readLine(prompt drawnPrompt) (string, error) {
 		if n == 0 {
 			continue
 		}
+		// What the keystroke before this one ran, now that it is over, and
+		// the start of this one's record.
+		e.noteLastKey()
+		e.keyBytes, e.keyBinding = append(e.keyBytes[:0], buf[0]), nil
 		e.completedBefore, e.lastTab = e.lastTab, false
 		// And whether the keystroke before this one was a menu completion,
 		// which is what decides between stepping the walk it started and
@@ -559,6 +569,7 @@ func (e *editor) readLine(prompt drawnPrompt) (string, error) {
 		case got == keyAbandoned:
 			return e.abandon(prompt)
 		case claimed && b.Function != "":
+			e.keyBinding = &b
 			// An action of the shell's own rather than one of this editor's.
 			// See shellwidget.go. A widget that asked for the line to be
 			// committed gets the same ending a typed Return gets — which is
@@ -577,6 +588,7 @@ func (e *editor) readLine(prompt drawnPrompt) (string, error) {
 			// case is completedBefore: the fact the second keystroke needs is
 			// on the editor now, so the one implementation serves the key and
 			// the widget that calls the action by name alike.
+			e.keyBinding = &b
 			e.runWidget(b, prompt)
 			continue
 		}
@@ -1505,3 +1517,23 @@ const (
 	// with two keystrokes, for a keyboard where the first is awkward.
 	ctrlUnderscore = 0x1f
 )
+
+// noteLastKey records the keystroke that has just finished as the last
+// widget, where it can say what that was: the binding that claimed it, the
+// action the default keymap gives its bytes, or the typing of a character. A
+// key it cannot name leaves the record as it was.
+func (e *editor) noteLastKey() {
+	switch {
+	case e.keyBinding != nil:
+		e.last = LastWidget{Widget: e.keyBinding.Widget, Function: e.keyBinding.Function, Known: true}
+	case len(e.keyBytes) == 0:
+		return
+	default:
+		if w, ok := defaultKeys[string(e.keyBytes)]; ok {
+			e.last = LastWidget{Widget: w, Known: true}
+		} else if c := e.keyBytes[0]; c >= 0x20 && c != del {
+			e.last = LastWidget{Widget: WidgetSelfInsert, Known: true}
+		}
+	}
+	e.keyBytes, e.keyBinding = e.keyBytes[:0], nil
+}

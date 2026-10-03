@@ -43,12 +43,8 @@ func TestASubshellNumbersItsOwnJobsFromTwoAndDoesNotMarkThem(t *testing.T) {
 		{"four, where neither mark is on number two", 4, "2:+"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			var src strings.Builder
-			for range tc.parentJobs {
-				src.WriteString("sleep 0.4 &\n")
-			}
-			src.WriteString(`( sleep 0.3 & jobs )` + "\n")
-			if got := subshellJobRows(t, src.String()); got != tc.want {
+			src := parentJobs(tc.parentJobs, `( sleep 30 & jobs; kill $! )`)
+			if got := subshellJobRows(t, src); got != tc.want {
 				t.Errorf("subshell's job = %q, want %q", got, tc.want)
 			}
 		})
@@ -66,12 +62,8 @@ func TestASubshellNumbersItsOwnJobsFromTwoAndDoesNotMarkThem(t *testing.T) {
 		{"and a parent of three puts `-` and `+` on the first two", 3, "2:- 3:+ 4:"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			var src strings.Builder
-			for range tc.parentJobs {
-				src.WriteString("sleep 0.4 &\n")
-			}
-			src.WriteString(`( sleep 0.3 & sleep 0.3 & sleep 0.3 & jobs )` + "\n")
-			if got := subshellJobRows(t, src.String()); got != tc.want {
+			src := parentJobs(tc.parentJobs, `( sleep 30 & a=$!; sleep 30 & b=$!; sleep 30 & jobs; kill $a $b $! )`)
+			if got := subshellJobRows(t, src); got != tc.want {
 				t.Errorf("subshell's jobs = %q, want %q", got, tc.want)
 			}
 		})
@@ -90,15 +82,15 @@ func TestWhichBoundariesNumberASubshellsJobsFromTwo(t *testing.T) {
 	for _, tc := range []struct {
 		name, src, want string
 	}{
-		{"a parenthesised subshell", `( sleep 0.3 & jobs )`, "2:"},
-		{"parentheses as a pipeline element", `( sleep 0.3 & jobs ) | cat`, "2:"},
-		{"and backgrounded", `( sleep 0.3 & jobs ) & sleep 0.2`, "2:"},
+		{"a parenthesised subshell", `( sleep 30 & jobs; kill $! )`, "2:"},
+		{"parentheses as a pipeline element", `( sleep 30 & jobs; kill $! ) | cat`, "2:"},
+		{"and backgrounded", `( sleep 30 & jobs; kill $! ) & wait $!`, "2:"},
 		// The two that part the three candidate nouns.
-		{"a group as a pipeline element numbers from one", `{ sleep 0.3 & jobs ; } | cat`, "1:+"},
-		{"and so does a backgrounded group", `{ sleep 0.3 & jobs ; } & sleep 0.2`, "1:+"},
+		{"a group as a pipeline element numbers from one", `{ sleep 30 & jobs; kill $! ; } | cat`, "1:+"},
+		{"and so does a backgrounded group", `{ sleep 30 & jobs; kill $! ; } & wait $!`, "1:+"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := subshellJobRows(t, "sleep 0.4 &\n"+tc.src+"\n"); got != tc.want {
+			if got := subshellJobRows(t, parentJobs(1, tc.src)); got != tc.want {
 				t.Errorf("%s = %q, want %q", tc.name, got, tc.want)
 			}
 		})
@@ -109,7 +101,7 @@ func TestWhichBoundariesNumberASubshellsJobsFromTwo(t *testing.T) {
 // which is what six of the seven columns do and what this tree did before the
 // axis existed.
 func TestADialectThatHasNotAnsweredNumbersASubshellsJobFromOne(t *testing.T) {
-	out, st := run(t, "sleep 0.4 &\n( sleep 0.3 & jobs )\n", func(r *Runner) {
+	out, st := run(t, parentJobs(1, `( sleep 30 & jobs; kill $! )`), func(r *Runner) {
 		sem := CoreSemantics()
 		sem.JobsShowBackgroundCommand, sem.JobsListNewestFirst = Yes, No
 		sem.SubshellJobTable = SubshellJobsCleared
@@ -121,6 +113,26 @@ func TestADialectThatHasNotAnsweredNumbersASubshellsJobFromOne(t *testing.T) {
 	if got := jobRowsOf(out); got != "1:+" {
 		t.Errorf("unanswered = %q, want the subshell's job at 1 and marked", got)
 	}
+}
+
+// parentJobs is src after n jobs the parent starts and keeps running until src
+// is done, then kills. The jobs outlive any schedule rather than a timer, so a
+// row never depends on how quickly the body reaches its listing: with
+// `sleep 0.3` jobs, a body slower than that found its own job ended and listed
+// nothing (#5660). The marks some rows read are on these jobs' numbers, so
+// they have to be alive while the body lists.
+func parentJobs(n int, src string) string {
+	var b strings.Builder
+	var pids []string
+	for i := range n {
+		fmt.Fprintf(&b, "sleep 30 & p%d=$!\n", i)
+		pids = append(pids, fmt.Sprintf("$p%d", i))
+	}
+	b.WriteString(src + "\n")
+	if len(pids) > 0 {
+		b.WriteString("kill " + strings.Join(pids, " ") + "\n")
+	}
+	return b.String()
 }
 
 // subshellJobRows runs src under a zsh-shaped answer and reports the listing

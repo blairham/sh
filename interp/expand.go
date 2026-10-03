@@ -6513,7 +6513,7 @@ func (r *Runner) substringRange(value string, e *syntax.ParamExpr) string {
 		r.refuseModifier(e, "")
 		return ""
 	}
-	if rangeSegmentIsAModifier(e.Arg) {
+	if rangeReadsAsAModifier(e.Arg, e.ArgText) {
 		if !r.ask(r.sem().SubstringRangeReadsModifiers,
 			"a substring range beginning with a letter being a modifier list") {
 			// Not this dialect's reading, so the letter is a name in an
@@ -6529,7 +6529,7 @@ func (r *Runner) substringRange(value string, e *syntax.ParamExpr) string {
 	}
 	// The offset is a number and the length may still be a modifier, applied
 	// to what the offset left: `${x:2:t}` is the tail of `${x:2}`.
-	if e.Arg2 != nil && rangeSegmentIsAModifier(e.Arg2) &&
+	if e.Arg2 != nil && rangeReadsAsAModifier(e.Arg2, e.Arg2Text) &&
 		r.ask(r.sem().SubstringRangeReadsModifiers,
 			"a substring range beginning with a letter being a modifier list") {
 		sliced := substring(value, r.numOf(e.Arg, e, nil), &syntax.ParamExpr{

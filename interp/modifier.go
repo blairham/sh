@@ -46,6 +46,31 @@ import (
 // from `${x:"h"}`, and the second is arithmetic on an unset `h` in that shell
 // as it is everywhere else — so the test is on the word as written and not on
 // what it expands to.
+// rangeReadsAsAModifier is rangeSegmentIsAModifier for a segment whose text
+// as written is known as well. A segment that opens on a nested `${` holding
+// an escaped double quote is read as a modifier too, so it is refused naming
+// its `$`. Measured 2026-10-03 on zsh 5.9.2 under `-f`:
+//
+//	${foo:0:${\"}}  ${foo:${\"}}  ${foo:0:${a\"}}  ${foo:0:${x:-\"}}
+//	                         unrecognized modifier `$'
+//	${foo:0:${\\}}  ${foo:0:${"x"}}   bad substitution
+//	${foo:0:${x}}  ${foo:0:$(echo 1)}  the ordinary range
+//
+// (#5151, a chunk of D04parameter.ztst.)
+func rangeReadsAsAModifier(w *syntax.Word, text string) bool {
+	if rangeSegmentIsAModifier(w) {
+		return true
+	}
+	if !strings.HasPrefix(text, "${") {
+		return false
+	}
+	end := strings.IndexByte(text, '}')
+	if end < 0 {
+		end = len(text)
+	}
+	return strings.Contains(text[:end], `\"`)
+}
+
 func rangeSegmentIsAModifier(w *syntax.Word) bool {
 	if w == nil || len(w.Spans) == 0 {
 		return false

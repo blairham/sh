@@ -1060,6 +1060,10 @@ func Semantics() interp.Semantics {
 	s.JobSpecsByName = interp.Yes
 	s.AmbiguousJobNameIsRefused = interp.Yes
 	s.WaitReportsAMissingJob = interp.Yes
+	// A bare `wait` reports a job a loud signal killed that it reaped itself,
+	// with the row a named one writes. See
+	// Semantics.BareWaitReportsASignalDeath (#5699).
+	s.BareWaitReportsASignalDeath = interp.BareWaitReportsASignalDeathItReaps
 	// Measured 2026-10-01: a finished job stays in the table until something reports it: `(exit 4) & sleep 0.3; wait %%` is 4. See Semantics.FinishedJobLeavesTheTable.
 	s.FinishedJobLeavesTheTable = interp.No
 	// And a job it has already reported stays waitable by its process id

@@ -1309,7 +1309,12 @@ func (r *Runner) waitFor(j *Job) (status int, sig syscall.Signal, interrupted, s
 	// too, not only the one it was waiting for. Measured 2026-10-02 on zsh
 	// 5.9.2 (#5349): `sleep 0 & sleep 0 & wait $!; wait %%; wait %-` is
 	// `no current job` and then `no previous job` — job 1 had gone as well.
-	r.noticeFinishedJobs()
+	//
+	// Except a bare `wait` in the column that leaves its jobs for the next
+	// listing. See Semantics.BareWaitLeavesJobsForTheListing.
+	if !r.bareWaitLeavesJobs {
+		r.noticeFinishedJobs()
+	}
 	// The job this wait was for has just ended, and the dialect that reports
 	// a finished job the moment it ends reports this one **before the wait
 	// returns** — measured 2026-09-25 on zsh 5.9.2, `sleep 0.4 & wait; print
@@ -1387,6 +1392,13 @@ func (r *Runner) waitOutPolledJob(j *Job) {
 // ambiguity is not reachable. If one ever gains one, the signal wants carrying
 // on the Job instead.
 func (r *Runner) noticeWaitedSignal(j *Job, status int) {
+	r.noticeWaitedSignalIn(j, status, r.diag().WaitSignalNotice)
+}
+
+// noticeWaitedSignalIn is noticeWaitedSignal with the dialect's sentence for
+// it named, for the route that is not a `wait`. See
+// Runner.announceSignalDeathsAtAForegroundReap.
+func (r *Runner) noticeWaitedSignalIn(j *Job, status int, notice string) {
 	// The signal the job recorded, where it recorded one: exact under every
 	// encoding, including the one where 143 is both `exit 143` and a TERM.
 	sig := j.EndSig
@@ -1420,7 +1432,7 @@ func (r *Runner) noticeWaitedSignal(j *Job, status int) {
 		r.status, r.unspecified = said, false
 		return
 	}
-	if w := r.diag().WaitSignalNotice; w != "" {
+	if w := notice; w != "" {
 		r.diagf("%s\n", Wording(w, "wait: %[1]d: %[2]s", j.Ident(), r.signalDescription(syscall.Signal(sig))))
 		return
 	}
@@ -1519,13 +1531,34 @@ func biWait(r *Runner, _ context.Context, args []string) int {
 		// job's notice — a *different* job's, ending while this one is
 		// waited out — and a notice forgets what it reports. Ranging over
 		// the live slice read the nils that forgetting leaves behind.
+		if r.sem().BareWaitLeavesJobsForTheListing == Yes {
+			r.bareWaitLeavesJobs = true
+			defer func() { r.bareWaitLeavesJobs = false }()
+		}
 		for _, j := range slices.Clone(r.jobs) {
 			if j == nil {
 				continue
 			}
-			_, sig, hit, stopped := r.waitFor(j)
+			endedBefore := j.Finished()
+			st, sig, hit, stopped := r.waitFor(j)
 			if r.unspecified {
 				return r.status
+			}
+			if !hit && !stopped {
+				// Where the dialect's bare `wait` says how a job ended, it
+				// says what the named route says. Read, not asked: a shell
+				// with no dialect has no row to write. See
+				// Semantics.BareWaitReportsASignalDeath.
+				switch r.sem().BareWaitReportsASignalDeath {
+				case BareWaitReportsASignalDeathItReaps:
+					if !endedBefore {
+						r.noticeWaitedSignal(j, st)
+					}
+				case BareWaitReportsASignalDeathUnderTheMonitor:
+					if r.monitor {
+						r.noticeWaitedSignal(j, st)
+					}
+				}
 			}
 			if hit {
 				// The jobs are left alone: the wait did not finish, so a
@@ -1553,7 +1586,13 @@ func biWait(r *Runner, _ context.Context, args []string) int {
 		// never come and this is the only place they can be let go of: a
 		// shell with no job control that held them here would start listing
 		// finished jobs a shell without this line never listed.
-		if !r.JobControl {
+		//
+		// And one column keeps them for its next listing even so: measured
+		// 2026-10-03 on ksh93u+ from a script, `( exit 3 ) & wait; jobs` lists
+		// the job once and a second `jobs` nothing, where every other column
+		// lists nothing at all. See Semantics.BareWaitLeavesJobsForTheListing
+		// (#5687).
+		if !r.JobControl && r.sem().BareWaitLeavesJobsForTheListing != Yes {
 			// One at a time, so that the markers hear of each: where a
 			// command holds a slot, they are numbers that outlive the jobs
 			// they were on. See Semantics.ACommandHoldsAJobSlot.
@@ -3620,5 +3659,30 @@ func (r *Runner) holdTheUnsaidWindowOpen() {
 func (r *Runner) holdTheReapedWindowOpen() {
 	if afterAJobsProgramIsReaped != nil && r.inJob != nil {
 		afterAJobsProgramIsReaped()
+	}
+}
+
+// announceSignalDeathsAtAForegroundReap says, for each background job a
+// signal has ended, what a foreground command that signal killed would earn,
+// and takes it out of the table, in the dialect whose foreground reap does
+// so under the monitor. Measured 2026-10-03 on ksh93u+ 2012-08-01, `set -m;
+// /bin/sleep 5 & kill -9 %1; /bin/sleep 0.3; jobs`: `ksh: N: Killed` and an
+// empty listing, and a `wait %1` after it finds nothing; an INT says
+// nothing, a job that exited by itself stays to be listed `Done`, and a
+// builtin in the foreground reaps nothing. See
+// Semantics.ForegroundReapAnnouncesASignalDeath (#5701).
+func (r *Runner) announceSignalDeathsAtAForegroundReap() {
+	if !r.monitor || r.sem().ForegroundReapAnnouncesASignalDeath != Yes {
+		return
+	}
+	for _, j := range slices.Clone(r.jobs) {
+		if j == nil || !j.Finished() || j.EndSig == 0 || j.fgPipeline {
+			continue
+		}
+		// The sentence a foreground command a signal killed earns, which is
+		// what the column writes here: `ksh: N: Killed` from `-c`, `s.sh:
+		// line 1: N: Killed` from a script file, measured.
+		r.noticeWaitedSignalIn(j, j.Status, "")
+		r.Forget(j)
 	}
 }

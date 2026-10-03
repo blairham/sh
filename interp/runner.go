@@ -3237,6 +3237,10 @@ type Runner struct {
 	// tildeWarnTail is the rest of the word a tilde prefix stands in front
 	// of, for the one warning that quotes it. See warnTruncatedTildeNumber.
 	tildeWarnTail string
+	// bareWaitLeavesJobs is set while a bare `wait` runs in the column whose
+	// jobs it reaps stay for the next listing. See
+	// Semantics.BareWaitLeavesJobsForTheListing.
+	bareWaitLeavesJobs bool
 	// reaped are the jobs a `wait` has already reported the status of, newest
 	// last and bounded by reapedJobsKept.
 	//
@@ -10602,6 +10606,10 @@ func (r *Runner) runWatched(ctx context.Context, cmd *exec.Cmd, argv []string, a
 		// And a finished background job is learned of here. See
 		// Runner.noticeFinishedJobs.
 		r.noticeFinishedJobs()
+		// And in one column, under the monitor, a job a signal ended is
+		// announced and let go of here. See
+		// Semantics.ForegroundReapAnnouncesASignalDeath.
+		r.announceSignalDeathsAtAForegroundReap()
 	}
 	r.status = status
 	if w.Killed {

@@ -620,12 +620,17 @@ func (r *Runner) jobState(j *Job, noticing bool) string {
 		// One verb, the signal that stopped it, which only one dialect names.
 		return Wording(dg.JobStopped, "Stopped", j.StopSig)
 	case j.Finished():
-		if !r.monitor && r.sem().EndedJobIsListedAsRunningWithoutTheMonitor == Yes {
+		if !r.monitor && r.sem().EndedJobIsListedAsRunningWithoutTheMonitor == Yes && j.EndSig == 0 {
 			// One column reaps a `&` job only under the monitor, so with no
 			// monitor its listing still says the job is running. Read
 			// directly rather than asked, because a shell with no dialect at
 			// all has no such blind spot to reproduce and a complaint here
 			// would land in the middle of a listing.
+			//
+			// Not a job a signal ended, which that column does learn of:
+			// measured 2026-10-03 on ksh93u+, `/bin/sleep 5 & kill %1;
+			// sleep 0.3; jobs` lists it `Terminated` with no monitor, where
+			// `( exit 3 ) &` in the same place is still `Running` (#5698).
 			return Wording(dg.JobRunning, "Running")
 		}
 		state := Wording(dg.JobDone, "Done")

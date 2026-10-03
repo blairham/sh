@@ -1666,19 +1666,13 @@ func (r *Runner) convertCase(v string, upper bool) string {
 //	-1  ff   -200  38   -256  00: a negative value is its low byte
 //	abc            NUL: the word is an expression, and an unset name is 0
 //
-// characterForCodeOf is that over a word not yet evaluated, and an expression
-// that will not evaluate is no character at all and no complaint either:
-// measured, `x='1+'; print -n ${(#)x}` and the same over `1/0` write nothing
-// at status 0, and `a=(65 '1+' 66); print ${(#)a}` writes `A B`.
-func (r *Runner) characterForCodeOf(w string) string {
-	c, _ := r.characterForCodeReporting(w)
-	return c
-}
-
-// characterForCodeReporting is characterForCodeOf with the failure kept as
-// the sentence `$(( ))` would write for it — a failure to read the expression
-// and a failure to evaluate it are worded apart, as there — for the `X` flag
-// that reports it. See reportsFlagErrors.
+// characterForCodeReporting is that over a word not yet evaluated. An
+// expression that will not evaluate is no character at all, and no complaint
+// either unless the `X` flag asks for one: measured, `x='1+'; print -n ${(#)x}`
+// and the same over `1/0` write nothing at status 0, and `a=(65 '1+' 66);
+// print ${(#)a}` writes `A B`. The complaint is the sentence `$(( ))` would
+// write — a failure to read the expression and a failure to evaluate it are
+// worded apart, as there. See reportsFlagErrors.
 func (r *Runner) characterForCodeReporting(w string) (string, string) {
 	tree, text, err := r.arithTreeOver(nil, w, arithTextArrived)
 	if err != nil {

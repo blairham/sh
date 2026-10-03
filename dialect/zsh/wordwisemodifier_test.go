@@ -25,3 +25,24 @@ func TestTheWPrefixAppliesAModifierToEachWord(t *testing.T) {
 		}
 	}
 }
+
+// TestThePrefixesReachTheBareSpellingAndW pins `W<d>sep<d>`, and the prefixes
+// read on the unbraced spelling as on the braced one (#5151, a chunk of
+// D04parameter.ztst). Measured 2026-10-02 on zsh 5.9.2.
+func TestThePrefixesReachTheBareSpellingAndW(t *testing.T) {
+	for _, tc := range []struct{ src, want string }{
+		{`W=FOOBAR; echo $W:W_B_l. ${W:W_B_l}`, "fooBar. fooBar\n"},
+		{`W=xAyAz; echo ${W:W.A.u} ${W:W:A:u}`, "XAYAZ XAYAZ\n"},
+		{`x="a b"; echo $x:wu.`, "A B.\n"},
+		{`x=/a/b/c; echo $x:fh $x:F:1:h`, "/ /a/b\n"},
+		{`x=aXa; echo $x:gs/a/b/ ${x:gs/a/b/:u}`, "bXb BXB\n"},
+		{`x="/a/b /c/d"; echo $x:wfh ${x:wh:u}`, "/ / /A /C\n"},
+		// The controls: what is not a modifier is text.
+		{`x=ab; echo $x:zz $x:w $x:W`, "ab:zz ab:w ab:W\n"},
+	} {
+		got, _ := runZsh(t, t.TempDir(), tc.src)
+		if got != tc.want {
+			t.Errorf("%s\n got %q\nwant %q", tc.src, got, tc.want)
+		}
+	}
+}

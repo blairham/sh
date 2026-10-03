@@ -7426,13 +7426,68 @@ func bareModifierSegment(src string) (int, bool) {
 	if len(src) < 2 || src[0] != ':' {
 		return 0, false
 	}
-	letter := src[1]
+	// The prefixes are taken the way the braced spelling takes them: `g`,
+	// `w` and `f` alone, and `W` and `F` with a delimited argument. Measured
+	// 2026-10-02 on zsh 5.9.2: `$x:wu`, `$x:fh`, `$x:F:1:h`, `$x:gs/a/b/`,
+	// `$W:W_B_l` and `$x:wfh` all modify, where only the plain letter was
+	// read here (#5151).
+	pre := bareModifierPrefixes(src[1:])
+	n, ok := bareModifierLetter(src[1+pre:])
+	if !ok {
+		return 0, false
+	}
+	return 1 + pre + n, true
+}
+
+// bareModifierPrefixes measures the run of modifier prefixes at the front of
+// src, the bytes after a segment's colon.
+func bareModifierPrefixes(src string) int {
+	i := 0
+	for i < len(src) {
+		switch src[i] {
+		case 'g', 'w', 'f':
+			i++
+		case 'W', 'F':
+			if i+1 >= len(src) {
+				return i
+			}
+			closing := src[i+1]
+			switch closing {
+			case '(':
+				closing = ')'
+			case '[':
+				closing = ']'
+			case '{':
+				closing = '}'
+			case '<':
+				closing = '>'
+			}
+			end := strings.IndexByte(src[i+2:], closing)
+			if end < 0 {
+				return i
+			}
+			i += 2 + end + 1
+		default:
+			return i
+		}
+	}
+	return i
+}
+
+// bareModifierLetter measures the modifier letter at the front of src, with
+// the delimited body `s` carries.
+func bareModifierLetter(src string) (int, bool) {
+	if src == "" {
+		return 0, false
+	}
+	letter := src[0]
 	if _, known := ModifierLetters[letter]; !known {
 		return 0, false
 	}
 	if letter != 's' {
-		return 2, true
+		return 1, true
 	}
+	src = ":" + src
 	// `:s` carries a delimited pattern and replacement, whose delimiter is
 	// whatever byte follows the letter. Measured: the closing delimiter may
 	// be left off at the end of the word — `$p:s/a/Z` substitutes — so the
@@ -7452,15 +7507,15 @@ func bareModifierSegment(src string) (int, bool) {
 		case src[i] == delim:
 			seen++
 			if seen == 2 {
-				return i + 1, true
+				return i, true
 			}
 		case bareModifierEnds(src[i]):
 			// The word ends here whatever this scan wanted, so the
 			// substitution is however much of it was written.
-			return i, seen > 0
+			return i - 1, seen > 0
 		}
 	}
-	return len(src), seen > 0
+	return len(src) - 1, seen > 0
 }
 
 // bareModifierEnds reports whether a byte ends the word an unbraced modifier

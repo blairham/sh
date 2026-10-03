@@ -16,6 +16,9 @@ func TestTheRepeatCountIsAnExpressionInPairedDelimiters(t *testing.T) {
 		{`print -r -- ${f:F(3)h} ${f:F<4>h} ${f:F{5}h} ${f:F[2]h}`, "/one / / /one/two\n"},
 		{`print -r -- ${f:F:1+1:h} ${f:F:n:h} ${f:F:-1:h}`, "/one/two /one/two /one/two/three\n"},
 		{`print -r -- ${f:F:0:h} ${f:F:x:h} ${f:F:1:h:t}`, "/one/two/three/four /one/two/three/four three\n"},
+		{`print -r -- ${f:F(2)h:t} ${f:F{1}h:h}`, "two /one/two\n"},
+		// A colon inside paired delimiters is the count's, not a separator.
+		{`print -r -- ${f:F(1?2:3)h} ${f:F(0?2:3)h:t}`, "/one/two one\n"},
 		{`print -r -- ${f:F:1:}`, "zsh:2: unrecognized modifier `F'\n"},
 	} {
 		got, _ := runZsh(t, t.TempDir(), setup+tc.src)

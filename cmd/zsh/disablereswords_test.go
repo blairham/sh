@@ -29,6 +29,8 @@ func TestDisableRSwitchesAGrammarWord(t *testing.T) {
 		{"disable -r while foreach\ndisable -r\nprint -r -- $dis_reswords\nenable -r while\nprint -r -- $dis_reswords", "foreach\nwhile\nwhile foreach\nforeach\n"},
 		{"disable -r select\nselect() { echo S; }\nselect", "S\n"},
 		{"disable -r '!'\n! true; echo st=$?", "dd.zsh:2: command not found: !\nst=127\n"},
+		// A word that ends a list is an ordinary command once it is off.
+		{"disable -r fi done\nfi() { echo FI; }\nfi\n{ done; }", "FI\ndd.zsh:4: command not found: done\n"},
 	} {
 		dir := t.TempDir()
 		t.Chdir(dir)

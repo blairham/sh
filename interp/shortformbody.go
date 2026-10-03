@@ -74,6 +74,20 @@ func (r *Runner) ShortFormBodyIsOneCommandOrNone() bool {
 // The dialect is copied and replaced rather than written through: the pointer
 // is shared with every subshell cloned from this runner, and a script must not
 // change the grammar of the shell that spawned it.
+// SetShortRepeatBody moves syntax.Dialect.ShortRepeatBody, for the dialect
+// whose `shortrepeat` names it.
+func (r *Runner) SetShortRepeatBody(on bool) {
+	d := r.dialect()
+	if d.ShortRepeatBody == on {
+		return
+	}
+	d.ShortRepeatBody = on
+	r.Dialect = &d
+}
+
+// ShortRepeatBody reports it.
+func (r *Runner) ShortRepeatBody() bool { return r.lang().ShortRepeatBody }
+
 func (r *Runner) SetShortFormBodyIsOneCommandOrNone(on bool) {
 	d := r.dialect()
 	if d.ShortFormBody == on {

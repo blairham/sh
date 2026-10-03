@@ -124,9 +124,17 @@ func biCommand(r *Runner, ctx context.Context, args []string) int {
 		outer := r.inBuiltin
 		r.inBuiltin = ""
 		r.diagf("%s\n", Wording(r.diag().RestrictedCommandOption,
-			"%[1]s: %[2]s: restricted", "command", "-p"))
+			"%[1]s: %[2]s: restricted", "command", "-p", args[0]))
 		r.inBuiltin = outer
-		return r.endAfterRestrictedBuiltinRefusal()
+		if r.ask(r.sem().RestrictedCommandOptionRefusalIsFatal,
+			"restricted mode's refusal of `command -p` ending the script") {
+			r.fatalQuiet()
+			return r.status
+		}
+		if r.unspecified {
+			return r.status
+		}
+		return restrictedStatus
 	}
 	if !verbose && !sentence && r.expandedCommandOnlyReports() {
 		// The word `command` arrived through an expansion rather than being

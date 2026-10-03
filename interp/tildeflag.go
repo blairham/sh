@@ -78,7 +78,7 @@ func (r *Runner) tildeFlagHead(s syntax.Span, head bool, text string) string {
 	if !head || !tildeFlagOn(s) {
 		return text
 	}
-	return r.tildeValue(text)
+	return r.substitutedFileValue(text)
 }
 
 // tildeFlagElements applies the tilde half to the elements of a list.
@@ -97,9 +97,27 @@ func (r *Runner) tildeFlagElements(s syntax.Span, head bool, elems []string) []s
 			out[i] = el
 			continue
 		}
-		out[i] = r.tildeValue(el)
+		out[i] = r.substitutedFileValue(el)
 	}
 	return out
+}
+
+// substitutedFileValue is the filename expansion a value substituted under
+// the flag gets: its `~`, and in the one shell that has it its `=cmd`.
+// Measured 2026-10-02 on zsh 5.9.2 (#5155): `foo='=ls'; print ${~foo}` is
+// `/bin/ls`, and under `shfileexpansion` — where filename expansion came
+// before the substitution and is over — `=ls`, and `~/x` stays `~/x`.
+func (r *Runner) substitutedFileValue(v string) string {
+	if r.shFileExpansion {
+		return v
+	}
+	v = r.tildeValue(v)
+	if len(v) > 1 && v[0] == '=' && r.sem().EqualsExpansion == Yes {
+		if path, ok := r.equalsPath(v[1:]); ok {
+			return path
+		}
+	}
+	return v
 }
 
 // tildeValue replaces a leading `~` in one value with the directory it names.

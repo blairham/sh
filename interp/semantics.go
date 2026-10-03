@@ -24971,12 +24971,6 @@ type Semantics struct {
 	// unpinned dash: there is no `-r` letter here at all, so the mode cannot be
 	// entered and `set +r` never reaches this question.
 	// TestSetRefusesTheRestrictedLetter pins the refusal.
-	// unpinned zsh: this shell **does** have the letter and a restricted mode
-	// of its own — measured 2026-09-22, `set -r; cd /` is `cd:3: restricted`
-	// there — and that mode is not built here: the letter maps to a `setopt`
-	// name this dialect records and acts on nothing. So the axis has no mode
-	// to move. TestSetTakesTheRestrictedLetterAndDoesNothing pins what is
-	// there today, and it is not the answer this axis wants.
 	// unpinned ash: the same, measured in the pinned image.
 	// TestSetRefusesTheRestrictedLetter pins the refusal.
 	RestrictedModeIsLeftByTheLetter Answer
@@ -25009,9 +25003,6 @@ type Semantics struct {
 	//
 	// unpinned dash: no restricted mode, so no name is ever mode-frozen.
 	// TestSetRefusesTheRestrictedLetter pins the refusal that keeps it out.
-	// unpinned zsh: this shell has a restricted mode of its own that is not
-	// built here, so no name is ever mode-frozen.
-	// TestSetTakesTheRestrictedLetterAndDoesNothing pins what is there today.
 	// unpinned ash: the same.
 	// TestSetRefusesTheRestrictedLetter pins the refusal that keeps it out.
 	RestrictedFreezeIsAReadonly Answer
@@ -25042,12 +25033,36 @@ type Semantics struct {
 	//
 	// unpinned dash: no restricted mode, so none of the three refusals exists.
 	// TestSetRefusesTheRestrictedLetter pins the refusal that keeps it out.
-	// unpinned zsh: this shell has a restricted mode of its own that is not
-	// built here, so none of the three refusals exists.
-	// TestSetTakesTheRestrictedLetterAndDoesNothing pins what is there today.
 	// unpinned ash: the same.
 	// TestSetRefusesTheRestrictedLetter pins the refusal that keeps it out.
 	RestrictedBuiltinRefusalIsFatal Answer
+
+	// RestrictedDotRefusesAPath refuses `.` and `source` on an operand with a
+	// path separator in it, in restricted mode.
+	//
+	// Measured 2026-10-02 from script files, `. ./x` behind the mode's own
+	// spelling and `echo tail` after it:
+	//
+	//	bash 5.3.20     `.: ./x: restricted`, tail, 0
+	//	ksh93u+         `.: ./x: restricted`, and the script ends at 1
+	//	zsh 5.9.2       the file is read, tail, 0
+	//
+	// unpinned dash: no restricted mode, so nothing is ever refused here.
+	// TestSetRefusesTheRestrictedLetter pins the refusal that keeps it out.
+	// unpinned ash: the same.
+	RestrictedDotRefusesAPath Answer
+
+	// RestrictedCommandOptionRefusalIsFatal ends the script when restricted
+	// mode refuses `command -p cmd`. Split from
+	// RestrictedBuiltinRefusalIsFatal because one shell answers the two
+	// apart: measured 2026-10-02 from script files, zsh 5.9.2 ends the
+	// script at `exec echo hi` and carries on past `command -p echo hi` at
+	// 1, where ksh93u+ ends at both and bash 5.3.20 at neither.
+	//
+	// unpinned dash: no restricted mode, so the refusal does not exist.
+	// TestSetRefusesTheRestrictedLetter pins the refusal that keeps it out.
+	// unpinned ash: the same.
+	RestrictedCommandOptionRefusalIsFatal Answer
 
 	// KeywordAssignments is `set -k`: with it on, **every** `name=value` word
 	// of a simple command is a prefix assignment and not only the ones
@@ -35481,7 +35496,7 @@ func (r *Runner) matchPatternR(pattern, s string, surface patternSurface) bool {
 		topGroup:     r.lang().PatternTopLevelAlternation.ReadsATopLevelBar(condition),
 		quantified:   r.readsQuantifiedGroups(condition),
 		counted:      r.lang().CountedPatternGroup,
-		numericRange: r.lang().NumericRangePattern,
+		numericRange: r.numericRanges(),
 		// The run-time option folds exactly the two consumers this function
 		// serves — `case` and the *pattern* operators of `[[ ]]` — and
 		// neither of the others: pathname expansion has a fold of its own,

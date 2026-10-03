@@ -127,6 +127,9 @@ func TestTheFirstUnquotedEqualsOpensTheEqualsExpansionToo(t *testing.T) {
 func TestAnAssignmentValuesEqualsExpansionFailureIsFatal(t *testing.T) {
 	sem := assignEqualsSem(Yes, No)
 	sem.FatalErrorStatusIsOne = Yes
+	// zsh's default `nomatch`, under which a failed lookup is refused. See
+	// Runner.equalsPath.
+	sem.GlobNoMatchIsError = Yes
 	out, st := run(t, `v==nosuchcommand_xyz; echo after`, withSem(sem))
 	if strings.Contains(out, "after") {
 		t.Errorf("the script continued: %q", out)

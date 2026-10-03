@@ -60,6 +60,19 @@ func (r *Runner) BarePatternGroupsOpenInsideAWord() bool {
 // The dialect is copied and replaced rather than written through: the pointer
 // is shared with every subshell cloned from this runner, and a script must not
 // change the grammar of the shell that spawned it.
+// SetNumericRangesMatch turns the matching of `<n-m>` on and off, for the
+// dialect whose `shglob` takes it away without taking the word's grammar with
+// it: measured 2026-10-02 on zsh 5.9.2, `setopt shglob; print a<1-10>` is
+// still one word — `no matches found: a<1-10>` — and `[[ a9 = a<1-10> ]]`
+// no longer matches while `[[ 'a<1-10>' = $~p ]]` with that text does
+// (#5155).
+func (r *Runner) SetNumericRangesMatch(on bool) { r.numericRangesOff = !on }
+
+// numericRanges reports whether `<n-m>` matches a number here and now.
+func (r *Runner) numericRanges() bool {
+	return r.lang().NumericRangePattern && !r.numericRangesOff
+}
+
 func (r *Runner) SetBarePatternGroups(anywhere, insideAWord bool) {
 	d := r.dialect()
 	if d.PatternAlternation == anywhere && d.BarePatternGroupInsideAWord == insideAWord {

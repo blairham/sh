@@ -691,6 +691,9 @@ type Runner struct {
 	// look alike and mean different shells' different things. See
 	// interp/functiontrace.go.
 	funcTraceMarks map[string]string
+	// warnNestedFuncs are the functions `functions -W` has marked. See
+	// Runner.warnsInThisBody.
+	warnNestedFuncs map[string]bool
 	// xtraceBoundToTheBody is set for the length of a call whose mark says
 	// the trace stops at this body, so that entering a function it calls
 	// turns the option back off. See
@@ -4412,6 +4415,20 @@ type Runner struct {
 	// printExitValue is one dialect's `printexitvalue`. See
 	// Runner.reportExitValue.
 	printExitValue bool
+	// shFileExpansion is one dialect's `shfileexpansion`. See
+	// Runner.SetShFileExpansion.
+	shFileExpansion bool
+	// creatingANumber is set while arithmetic stores a name it is declaring
+	// numeric. See scopeWarningNumeric.
+	creatingANumber bool
+	// localLoops is one dialect's `localloops`. See Runner.endLocalLoops.
+	localLoops bool
+	// rmStarSilent is one dialect's `rmstarsilent`, and rmStarAsks says the
+	// dialect has the question at all. See interp/rmstar.go.
+	rmStarSilent, rmStarAsks bool
+	// numericRangesOff turns off the matching of `<n-m>` while leaving the
+	// word's grammar alone. See Runner.SetNumericRangesMatch.
+	numericRangesOff bool
 	// commandRanAWord records that `command` ran the words behind it rather
 	// than describing them, which takes its own `printexitvalue` report
 	// away: what ran reports for itself, or — an external command — not at
@@ -4423,6 +4440,9 @@ type Runner struct {
 	// zero value is the option on, which is that dialect's default. See
 	// Runner.SetPromptPercent.
 	promptPercentOff bool
+	// restrictedFreezesExact is the whole frozen list where a dialect names
+	// it. See Runner.FreezeOnlyInRestrictedMode.
+	restrictedFreezesExact []string
 	// trapSnapshot is the listing the parent shell would have shown when
 	// this subshell began, kept for the dialects whose `trap` still shows
 	// it there, and dropped the moment this runner modifies any trap.
@@ -7766,12 +7786,27 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 	// reports the `==` and never reaches the `[[a`, so zsh has finished this
 	// phase before pathname expansion begins on the first word.
 	for _, w := range c.Args {
+		// A word with braces in it is answered a name at a time, after the
+		// braces made them, unless `shfileexpansion` puts `=` first: zsh
+		// 5.9.2 writes `/bin/ls =` for `print ={ls,}` and refuses `{ls,}`
+		// with the option on (#5155).
+		if _, braced := findBraceFrom(w.Spans, cursor{0, 0}, '{'); braced && !r.shFileExpansion {
+			continue
+		}
 		r.expandEquals(w)
 	}
 	if r.expandErr {
 		// Only what this pass just set. Testing r.ctl here as well made
 		// every *later* command in an already-abandoned script report a
 		// fresh failure of its own.
+		r.failedExpansion()
+		return nil
+	}
+	if r.declinesRmStar(c) {
+		// The person at the terminal said no, which is asked before any
+		// word is matched: `rm d/*` with no `d` is the question and not
+		// `no matches found`. See interp/rmstar.go.
+		r.status = 1
 		r.failedExpansion()
 		return nil
 	}
@@ -12260,7 +12295,12 @@ func (r *Runner) reportReadonlyRefusal(name string, form assignForm, fatal bool)
 	// assignment to the same name. One table decides both, because a dialect
 	// that puts the name in the sentence is the dialect that keeps the
 	// builtin's location under it.
-	if !r.readonlyRefusalNamesBuiltin(form) {
+	//
+	// And except for a name restricted mode froze, in the dialect that keeps
+	// the builtin's location for that one. See
+	// Diagnostics.RestrictedVariableNamesTheBuiltin.
+	keep := r.diag().RestrictedVariableNamesTheBuiltin && r.restrictedFreeze(name)
+	if !r.readonlyRefusalNamesBuiltin(form) && !keep {
 		outer := r.inBuiltin
 		r.inBuiltin = ""
 		defer func() { r.inBuiltin = outer }()

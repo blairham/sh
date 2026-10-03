@@ -304,6 +304,31 @@ type declareFlags struct {
 // lastSign reports the sign the letter was last written with and whether it
 // was written at all. Last occurrence wins, which is the rule `readonlyOff`
 // already records for the `r` letter and is measured here too.
+// withoutLetter is f with every writing of one letter taken out of the
+// record of what the line said.
+func (f declareFlags) withoutLetter(c rune) declareFlags {
+	var letters, signs strings.Builder
+	i := 0
+	for _, got := range f.letters {
+		if got != c {
+			letters.WriteRune(got)
+			if i < len(f.letterSigns) {
+				signs.WriteByte(f.letterSigns[i])
+			}
+		}
+		i++
+	}
+	f.letters, f.letterSigns = letters.String(), signs.String()
+	return f
+}
+
+// asFunctionListing is f reading as a `functions NAME…` listing.
+func (f declareFlags) asFunctionListing() declareFlags {
+	f.function = true
+	f.functionOff = false
+	return f
+}
+
 func (f declareFlags) lastSign(c rune) (plus, written bool) {
 	i := 0
 	for _, got := range f.letters {

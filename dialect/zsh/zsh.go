@@ -1264,17 +1264,18 @@ func Semantics() interp.Semantics {
 	// letter here, which Semantics.ExportOptions is the statement of — it is
 	// empty in this dialect, so `export -A` is a bad option and the question has
 	// no line to be about. Measured 2026-09-23.
-	// unanswered RestrictedModeIsLeftByTheLetter: this shell *does* have the
-	// letter and a restricted mode of its own — `set -r; cd /` is `cd:3:
-	// restricted` in zsh 5.9.2, measured 2026-09-22 — and that mode is not
-	// built here: the letter reaches a `setopt` name this dialect records and
-	// nothing acts on. So there is no mode for the axis to move.
-	// TestSetTakesTheRestrictedLetterAndDoesNothing pins what is there today,
-	// and #4205 filed the mode rather than claiming it.
-	// unanswered RestrictedFreezeIsAReadonly: the same — no mode here, so no
-	// name is ever mode-frozen.
-	// unanswered RestrictedBuiltinRefusalIsFatal: the same — none of the three
-	// refusals exists here.
+	// Restricted mode, `setopt restricted` or `set -r`. Measured 2026-10-02
+	// on zsh 5.9.2 under `-f`, from `-c` and from script files (#5155):
+	// `set +r` and `unsetopt restricted` are refused, so the mode is never
+	// left; the frozen names are not readonly names — `readonly -p` lists
+	// nothing and the refusal is `PATH: restricted`; `exec echo hi` ends the
+	// script at 1; `. ./x` reads the file; `command -p echo hi` is `echo:
+	// restricted` at 1 and the line after it runs.
+	s.RestrictedModeIsLeftByTheLetter = interp.No
+	s.RestrictedFreezeIsAReadonly = interp.No
+	s.RestrictedBuiltinRefusalIsFatal = interp.Yes
+	s.RestrictedDotRefusesAPath = interp.No
+	s.RestrictedCommandOptionRefusalIsFatal = interp.No
 	// unanswered KeywordPromotesADeclarationsOperand: there is no keyword
 	// option here to reach a declaration with. `-k` is this shell's
 	// `interactivecomments` and `set -o keyword` is `no such option`, both
@@ -4838,7 +4839,7 @@ func Semantics() interp.Semantics {
 	// Semantics.FunctionLettersThatMarkUndefined, which already named them
 	// for the declaration word, and Diagnostics.MarkingLettersUnderPlus for
 	// the half of `-u` this shell refuses.
-	s.FunctionsOptions = "mMuUxstT"
+	s.FunctionsOptions = "mMuUxstTW"
 	// `t` and `T` mark a function for tracing — see
 	// Semantics.FunctionTraceLetters. They are in FunctionsOptions above
 	// because this word spells them and in the declaration's own set
@@ -5339,6 +5340,19 @@ func Diagnostics() interp.Diagnostics {
 		LocationNamesTheFunction: true,
 		SetInvalidOptionName:     "no such option: %[1]s",
 		SetImmovableOptionName:   "can't change option: %[1]s",
+		// Restricted mode's sentences, measured 2026-10-02 on zsh 5.9.2
+		// (#5155). The location names the builtin where one is speaking —
+		// `zsh:cd:1: restricted`, `zsh:exec:1: ls: restricted` — and the
+		// redirection's sentence names no word at all.
+		RestrictedCommandName:             "%[1]s: restricted",
+		RestrictedRedirect:                "writing redirection not allowed in restricted mode",
+		RestrictedVariable:                "%[1]s: restricted",
+		RestrictedUnset:                   "%[1]s: restricted",
+		RestrictedExec:                    "%[2]s: restricted",
+		RestrictedCommandOption:           "%[3]s: restricted",
+		RestrictedHashPath:                "restricted: %[1]s",
+		OptionLetterEchoedWithAMinus:      true,
+		RestrictedVariableNamesTheBuiltin: true,
 		// The bare letter with a dash written in front of it: this shell
 		// echoes `-q` for `set +q` as dash does, rather than the sign it was
 		// asked with. `set` is named in the location, not in the sentence.
@@ -5790,7 +5804,7 @@ func Diagnostics() interp.Diagnostics {
 			// `-t` and `-T` have left this list: they mark a function for
 			// tracing and are implemented, in FunctionTraceLetters above
 			// (#5067).
-			"functions": "ckzW",
+			"functions": "ckz",
 		},
 		// `u` alone, and that is the measurement rather than an omission:
 		// `functions +u` and `typeset +fu` are `invalid option(s)` at 1

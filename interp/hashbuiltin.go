@@ -166,6 +166,10 @@ func biHash(r *Runner, _ context.Context, args []string) int {
 		if entry, path, assigned := strings.Cut(name, "="); assigned {
 			if r.ask(r.sem().HashDefinesAnEntryFromAnAssignment,
 				"`hash name=value` writing the command table") {
+				if r.restrictedHashEntry("hash", path) {
+					status = restrictedStatus
+					continue
+				}
 				r.putHashedCommand(entry, path, 0)
 				if verbose {
 					r.printHashEntry(entry)
@@ -523,6 +527,14 @@ func (r *Runner) hashNamedDirs(args []string, asCommands, clear, patterns, verbo
 			r.diagf("%s\n", Wording(r.diag().HashNamedDirBadName,
 				"hash: invalid character in directory name: %[1]s", name))
 			status = 1
+			continue
+		}
+		// A named directory is a hash entry too, as restricted mode reads
+		// it: measured 2026-10-02 on zsh 5.9.2, `hash -d foo=/tmp` in the
+		// mode is `restricted: /tmp` at 1 (#5155).
+		if r.restricted && r.diag().RestrictedHashPath != "" {
+			r.diagf("%s\n", Wording(r.diag().RestrictedHashPath, "restricted: %[1]s", dir))
+			status = restrictedStatus
 			continue
 		}
 		r.putNamedDir(name, dir)

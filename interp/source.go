@@ -1114,7 +1114,8 @@ func biDot(r *Runner, ctx context.Context, args []string) int {
 		return r.dotNoOperand()
 	}
 
-	if r.restricted && restrictedPath(args[0]) {
+	if r.restricted && restrictedPath(args[0]) &&
+		r.ask(r.sem().RestrictedDotRefusesAPath, "restricted mode refusing `.` on a path") {
 		// A path rather than a bare name, which is the whole of the rule: a
 		// restricted shell still reads a file its own PATH finds, and
 		// refuses one the script *points* at. Measured — `. f` is silent at

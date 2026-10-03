@@ -142,6 +142,38 @@ func biFunctions(r *Runner, _ context.Context, args []string) int {
 		}
 		return code
 	}
+	if plus, ok := f.lastSign('W'); ok {
+		// The nested-scope lint for one body. See Runner.warnsNestedSetHere.
+		// Marked in silence and the status is 1 for a name that is not a
+		// function, as the trace letters are; with no operands it is the
+		// listing of the marked functions. Measured 2026-10-02 on zsh 5.9.2
+		// (#5155).
+		f = f.withoutLetter('W')
+		if len(args) == 0 {
+			if plus {
+				return 0
+			}
+			return r.declareNames(name, r.functionsWarningNested(), f.asFunctionListing())
+		}
+		status := 0
+		for _, n := range args {
+			if _, ok := r.reportedFunc(n); !ok {
+				status = 1
+				continue
+			}
+			if plus {
+				delete(r.warnNestedFuncs, n)
+				continue
+			}
+			if r.warnNestedFuncs == nil {
+				r.warnNestedFuncs = map[string]bool{}
+			}
+			r.warnNestedFuncs[n] = true
+		}
+		if f.letters == "" {
+			return status
+		}
+	}
 	if written, removed := r.traceLettersWritten(f); (written != "" || removed != "") && matching {
 		// A pattern line that *marks* rather than lists: measured on zsh
 		// 5.9.2, `functions -tm 'f*'` writes nothing, answers 0 and leaves

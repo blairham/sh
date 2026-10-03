@@ -3423,7 +3423,7 @@ func (r *Runner) patternOpts(pattern string, subjects ...string) patternOpts {
 		// operand turns this off again and `%` turns it back on — see
 		// operandPatternOpts and trimWith.
 		tildeGlobRead: true,
-		numericRange:  r.lang().NumericRangePattern,
+		numericRange:  r.numericRanges(),
 		escapes:       r.sem().PatternEscapeReaches,
 		bracketMember: r.bracketEscapeIsOnlyAMember(pattern),
 		classes:       r.patternClasses(pattern),

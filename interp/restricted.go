@@ -97,6 +97,13 @@ func (r *Runner) enterRestricted() {
 // The freeze is lifted only for the names the *mode* froze. A script that had
 // already written `readonly PATH` of its own keeps it, which is what makes the
 // record worth keeping rather than re-deriving the list.
+// EnterRestricted puts the shell in restricted mode, for a dialect whose
+// option table carries the mode under a name of its own. See enterRestricted.
+func (r *Runner) EnterRestricted() { r.enterRestricted() }
+
+// Restricted reports whether the shell is in restricted mode.
+func (r *Runner) Restricted() bool { return r.restricted }
+
 func (r *Runner) leaveRestricted() {
 	if !r.restricted {
 		return
@@ -155,6 +162,9 @@ func (r *Runner) restrictedFreeze(name string) bool {
 // derivable from the other, so each dialect names its own through
 // Runner.FreezeInRestrictedMode.
 func (r *Runner) restrictedFrozenVariables() []string {
+	if r.restrictedFreezesExact != nil {
+		return r.restrictedFreezesExact
+	}
 	names := []string{"PATH", "SHELL", "ENV"}
 	if name := r.sem().NonInteractiveStartupVariable; name != "" && !slices.Contains(names, name) {
 		names = append(names, name)
@@ -177,6 +187,14 @@ func (r *Runner) restrictedFrozenVariables() []string {
 // nothing.
 func (r *Runner) FreezeInRestrictedMode(names ...string) {
 	r.restrictedFreezes = append(r.restrictedFreezes, names...)
+}
+
+// FreezeOnlyInRestrictedMode names the whole of what this shell's restricted
+// mode freezes, for the dialect whose list leaves out one of the three POSIX
+// names: zsh 5.9.2 freezes PATH and SHELL but takes `ENV=x` at 0 in the
+// mode, measured 2026-10-02 (#5155).
+func (r *Runner) FreezeOnlyInRestrictedMode(names ...string) {
+	r.restrictedFreezesExact = names
 }
 
 // restrictedRefusal writes `<what>: restricted` and the status every refusal
@@ -283,6 +301,13 @@ func (r *Runner) restrictedRedirect(word string) {
 func (r *Runner) restrictedHashEntry(builtin, path string) bool {
 	if !r.restricted {
 		return false
+	}
+	if w := r.diag().RestrictedHashPath; w != "" {
+		// The dialect that refuses every entry written by hand, whatever
+		// the path looks like and whether or not it could be found. See
+		// Diagnostics.RestrictedHashPath.
+		r.diagf("%s\n", Wording(w, "restricted: %[1]s", path))
+		return true
 	}
 	if restrictedPath(path) {
 		if builtin == "" {

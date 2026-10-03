@@ -156,6 +156,8 @@ func Semantics() interp.Semantics {
 	// ever mode-frozen. The same refusal keeps it out.
 	// unanswered RestrictedBuiltinRefusalIsFatal: no restricted mode, so none of
 	// the three refusals exists here (#4205).
+	// unanswered RestrictedDotRefusesAPath, RestrictedCommandOptionRefusalIsFatal:
+	// no restricted mode, so neither refusal exists here.
 	// unanswered MixedTableLiteral, EmptyKeyInATableLiteral: this shell has no
 	// tables, so there is no keyed literal of its to mix shapes in or to write
 	// an empty key into. Measured 2026-09-23, `typeset -A m` is `typeset: not

@@ -4119,6 +4119,15 @@ func (p *Parser) reservedBehindARedirection() bool {
 		// see redirectionMayPrecedeThisCompound for why — so they are named
 		// here rather than refused.
 		return false
+	case "}":
+		// A `}` there *ends* the command, as it does behind an assignment
+		// prefix: measured 2026-10-02 on zsh 5.9.2, `{ >foo }` and `{ echo
+		// hello | >foo }` are brace bodies whose last statement is a
+		// redirection alone (#5155). The stray one at the top level is
+		// still refused one level out.
+		if p.dialect.CloseBraceAlwaysReserved {
+			return false
+		}
 	}
 	return p.dialect.reservedAtACommandStart(p.tok.Literal())
 }
@@ -7683,7 +7692,7 @@ func (p *Parser) parseRepeat() Command {
 		c.Body, c.Stop = p.braceLoopBody()
 		return c
 	}
-	if p.shortFormBodyFollows() && !p.atWord("do") {
+	if (p.shortFormBodyFollows() || p.dialect.ShortForm && p.dialect.ShortRepeatBody) && !p.atWord("do") {
 		c.Body, c.Stop = p.loopShortBody()
 		return c
 	}

@@ -261,6 +261,7 @@ func (c *Runner) ownTables(r *Runner) {
 	// reason the one above it is: a subshell that marks a function must not
 	// mark it in the shell it came from.
 	c.funcTraceMarks = maps.Clone(r.funcTraceMarks)
+	c.warnNestedFuncs = maps.Clone(r.warnNestedFuncs)
 	c.aliases = maps.Clone(r.aliases)
 	c.suffixAliases = maps.Clone(r.suffixAliases)
 	// And the names one dialect remembers having named, which is owned

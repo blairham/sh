@@ -1521,7 +1521,7 @@ func (r *Runner) setLetters(letters string, on bool) bool {
 				return r.badSetOptionLetter(opt, on)
 			}
 			sign := "-"
-			if !on {
+			if !on && !r.diag().OptionLetterEchoedWithAMinus {
 				sign = "+"
 			}
 			if !r.setNamedOptionSpelled(name, sign+string(opt), on) {
@@ -2595,7 +2595,10 @@ func (r *Runner) unsetReadonly(name string) int {
 	// only` for the assignment refused for the same reason. Measured
 	// 2026-09-12, and both forms were already in this tree with nothing
 	// choosing between them (#2417).
-	if r.diag().NamesBuiltinInLocation && r.diag().UnsetReadonlyIsTheShellsOwn {
+	// Not for a name restricted mode froze, whose refusal stays the
+	// builtin's: measured 2026-10-02 on zsh 5.9.2, `unset SHELL` in the mode
+	// is `zsh:unset:1: SHELL: restricted` (#5155).
+	if r.diag().NamesBuiltinInLocation && r.diag().UnsetReadonlyIsTheShellsOwn && !r.restrictedFreeze(name) {
 		outer := r.inBuiltin
 		r.inBuiltin = ""
 		defer func() { r.inBuiltin = outer }()

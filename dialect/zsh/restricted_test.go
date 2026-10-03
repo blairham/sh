@@ -4,37 +4,46 @@
 package zsh_test
 
 import (
-	"strings"
 	"testing"
+
+	"github.com/blairham/sh/interp"
 )
 
-// `set -r` is taken here and restricts nothing, which is **not** the answer and
-// is pinned as the state it is.
-//
-// This shell has a restricted mode of its own — measured 2026-09-22 from a
-// script file, `set -r; cd /` is `<script>:cd:3: restricted` in zsh 5.9.2 — and
-// that mode is not built here: the letter reaches a `setopt` name this dialect
-// records, and a recorded name is remembered and acted on by nothing. So the
-// letter is silent at 0 and `cd /` moves the shell.
-//
-// Named by the `unpinned zsh` verdicts on
-// Semantics.RestrictedModeIsLeftByTheLetter and its two siblings, and the
-// verdicts say what this test says: there is no mode here for the axes to move.
-// #4205 built ksh93's mode and this one is filed rather than claimed — a test
-// that asserted a refusal would be asserting something this shell does not do,
-// and a test that asserted the mode would not pass.
-func TestSetTakesTheRestrictedLetterAndDoesNothing(t *testing.T) {
-	out, st := runZsh(t, t.TempDir(), "set -r\necho \"st=$?\"\ncd / && echo moved\necho tail\n")
-	if st != 0 {
-		t.Errorf("status %d, want 0 — the letter is taken here", st)
+// TestRestrictedModeRefusesInItsOwnWords pins zsh's restricted mode. Measured
+// 2026-10-02 on zsh 5.9.2 under `-f` (#5155); each row is one refusal, with
+// `print after $?` behind it to show whether the script goes on.
+func TestRestrictedModeRefusesInItsOwnWords(t *testing.T) {
+	const on = "setopt restricted; "
+	cases := []struct{ src, want string }{
+		{"set -r; cd /; print after $?", "zsh:cd:1: restricted\nafter 1\n"},
+		{on + "PATH=/x; print after $?", "zsh:1: PATH: restricted\n"},
+		{on + "path=(/x); print after $?", "zsh:1: path: restricted\n"},
+		{on + "ENV=x; print after $?", "after 0\n"},
+		{on + "unset SHELL; print after $?", "zsh:unset:1: SHELL: restricted\n"},
+		{on + "typeset PATH=/x; print after $?", "zsh:typeset:1: PATH: restricted\n"},
+		{on + "/bin/ls; print after $?", "zsh:1: /bin/ls: restricted\nafter 1\n"},
+		{on + "print a >f; print after $?", "zsh:1: writing redirection not allowed in restricted mode\nafter 1\n"},
+		{on + "exec ls; print after $?", "zsh:exec:1: ls: restricted\n"},
+		{on + "command -p echo hi; print after $?", "zsh:1: echo: restricted\nafter 1\n"},
+		{on + "hash ls=zz; print after $?", "zsh:hash:1: restricted: zz\nafter 1\n"},
+		{on + "hash -d foo=/tmp; print after $?", "zsh:hash:1: restricted: /tmp\nafter 1\n"},
+		{on + "commands[ls]=zz; print after $?", "zsh:1: restricted: zz\nafter 0\n"},
+		{on + "unsetopt restricted; print after $?", "zsh:unsetopt:1: can't change option: restricted\nafter 1\n"},
+		{on + "set +r; print after $?", "zsh:set:1: can't change option: -r\n"},
+		{on + "f(){ setopt localoptions restricted; }; f; [[ -o restricted ]] && print still", "still\n"},
 	}
-	for _, want := range []string{"st=0", "moved", "tail"} {
-		if !strings.Contains(out, want) {
-			t.Errorf("output %q, want %q in it", out, want)
+	for _, c := range cases {
+		if got, _ := runZshRoute(t, t.TempDir(), c.src, interp.RouteCommandString); got != c.want {
+			t.Errorf("%s\n got %q\nwant %q", c.src, got, c.want)
 		}
 	}
-	if strings.Contains(out, "restricted") {
-		t.Errorf("output %q: this shell's restricted mode is not built here, "+
-			"so nothing should say the word", out)
+}
+
+// And `.` on a path is taken in this mode, where the other two refuse it.
+func TestRestrictedModeReadsADotPath(t *testing.T) {
+	dir := t.TempDir()
+	got, _ := runZsh(t, dir, "print 'print sourced' >| x\nsetopt restricted\n. ./x\nprint after $?\n")
+	if want := "sourced\nafter 0\n"; got != want {
+		t.Errorf("got %q, want %q", got, want)
 	}
 }

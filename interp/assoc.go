@@ -547,7 +547,13 @@ func (r *Runner) assocKeyIn(w *syntax.Word, inDoubleQuotes bool) string {
 	// wording goes. See readingQuotedText.
 	defer r.readingQuotedText()()
 	r.expandSubscriptTilde(w)
+	failedBefore := r.expansionHasFailed()
 	quoted := r.expandKeyQuoted(w)
+	if r.expansionFailedHere(failedBefore) {
+		// The key would not expand, which has been reported; rendering it
+		// again would expand it a second time and report again (#5608).
+		return quoted
+	}
 	keep := keyKeepsEscape
 	if inDoubleQuotes {
 		keep = func(c string) bool { return c != `"` && keyKeepsEscape(c) }
@@ -641,7 +647,13 @@ func startsWithAnUnquotedTilde(w *syntax.Word) bool {
 // the spelling, and a diagnostic about how a line was typed is what it is
 // for.
 func (r *Runner) assocAssignKey(name string, w *syntax.Word) (string, bool) {
+	failedBefore := r.expansionHasFailed()
 	key := r.assocKey(w)
+	if r.expansionFailedHere(failedBefore) {
+		// Empty because it would not expand, which has been said: not an
+		// empty key to refuse a second time (#5608).
+		return "", false
+	}
 	if key != "" {
 		return key, true
 	}

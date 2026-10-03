@@ -2521,10 +2521,17 @@ func (r *Runner) subscriptOver(e *syntax.ParamExpr, src subscriptSource) ([]stri
 		return r.flaggedRangeSubscript(e, src)
 	}
 	var written string
+	failedBefore := r.expansionHasFailed()
 	if r.indexedSubscriptKeepsItsQuoting(e.IndexText, src.name) {
 		written = r.expandArithText(e.IndexText, arithTextWritten)
 	} else {
 		written = r.subscriptTextAsWritten(e.Subscript())
+	}
+	if r.expansionFailedHere(failedBefore) {
+		// The subscript would not expand, which has been reported where it
+		// failed; the text it left is no subscript, and reading it would
+		// report again (#5608).
+		return nil, true
 	}
 	idx := trimSubscript(written)
 	if r.wholeArrayIndex(e) {

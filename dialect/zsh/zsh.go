@@ -6808,6 +6808,7 @@ func Apply(r *interp.Runner) {
 	// description `$TERM` names by repl.TerminalCapabilities. See
 	// terminfo.go.
 	registerTerminfoModules(r)
+	r.SetNearestColors(nearColorsLoaded)
 	registerBuiltinSynonyms(r)
 	registerHashFill(r)
 	// And `zsh/langinfo`'s one: the locale's own vocabulary, answered from

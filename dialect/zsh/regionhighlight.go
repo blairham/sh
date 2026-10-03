@@ -60,7 +60,7 @@ func openRegionHighlight(r *interp.Runner) {
 		// Stored as zsh reads it back, not as written: see regionelement.go.
 		normalized := make([]string, len(values))
 		for i, v := range values {
-			normalized[i] = parseRegionText(v).String()
+			normalized[i] = parseRegionText(v, rr.NearestColors()).String()
 		}
 		rr.SetArray(zleRegion, normalized)
 	})
@@ -175,7 +175,7 @@ func (a regionAttrs) colored() bool { return a.fg != "" || a.bg != "" }
 // It reads the element the way it is read back — see regionelement.go — so
 // what is drawn is what a script finds in the array.
 func parseRegionElement(elem string, chars int) (regionLayer, bool) {
-	e := parseRegionText(elem)
+	e := parseRegionText(elem, false)
 	// A `P` element counts a PREDISPLAY, which this shell does not have, so
 	// it must not be drawn somewhere plausible instead.
 	if e.predisplay {

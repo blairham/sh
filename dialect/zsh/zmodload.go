@@ -206,6 +206,11 @@ var zmodloadFeatures = map[string][]string{
 	// langinfo.go, where the one key answered under every locale and the
 	// fifty-four answered only in the C locale are separated out.
 	"zsh/langinfo": {"p:langinfo"},
+	// No features at all — `zmodload -lF zsh/nearcolor` lists nothing — and
+	// the whole of the module is what loading it does: a hex triplet is
+	// written as the nearest palette color from then on. See
+	// interp.NearestPaletteColor and nearColorsLoaded.
+	"zsh/nearcolor": {},
 	// The pair whose **reference** loads the module — see watchpair.go, and
 	// loadWatchModuleOnAReference for the grid that says it is a reference
 	// and not a write.
@@ -2139,4 +2144,13 @@ func zmodloadFeatureParameterFill(r *interp.Runner, opts zmodloadOpts, words []s
 	}
 	r.SetArray(opts.param, words)
 	return true
+}
+
+// nearColorsLoaded says `zsh/nearcolor` is loaded, which is what makes this
+// shell write a hex triplet as the nearest palette color. Measured on zsh
+// 5.9.2: `print -P '%F{#ff0000}x'` is `ESC[38;2;255;0;0m` before
+// `zmodload zsh/nearcolor` and `ESC[38;5;196m` after it, and a
+// `region_highlight` element's `fg=#ff0000` reads back `fg=196`.
+func nearColorsLoaded(r *interp.Runner) bool {
+	return containsWord(zmodloadLoaded(r), "zsh/nearcolor")
 }

@@ -114,3 +114,40 @@ func TestTheReplacementStartsWhereTheShellIs(t *testing.T) {
 		t.Errorf("the replacement is handed SHLVL=%q, want 3", level)
 	}
 }
+
+// TestAScriptWithNoInterpreterLineIsNotReplacedInto pins that a last command
+// the kernel would not start by itself, an executable script with no `#!`,
+// is not handed to the replacement. It runs through this shell as it does
+// when it is forked, and it does run.
+func TestAScriptWithNoInterpreterLineIsNotReplacedInto(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(dir+"/ns", []byte("echo ran\n"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	f, err := syntax.Parse("./ns", zsh.Dialect())
+	if err != nil {
+		t.Fatal(err)
+	}
+	sem, diag := zsh.Semantics(), zsh.Diagnostics()
+	var out strings.Builder
+	replaced := false
+	r := &interp.Runner{
+		Stdout: &out, Stderr: &out, Semantics: &sem, Diagnostics: &diag,
+		Dir: dir, Name: "zsh", Route: interp.RouteCommandString,
+		Vars:    map[string]string{"PATH": "/usr/bin:/bin"},
+		Dialect: presetDialect(),
+		ReplaceProcess: func(_, _ string, _, _ []string, _ []*os.File) error {
+			replaced = true
+			return errors.New("recorded rather than replaced")
+		},
+	}
+	zsh.Apply(r)
+	r.LastPart = true
+	_, _ = r.Run(context.Background(), f)
+	if replaced {
+		t.Error("a script with no interpreter line was handed to the replacement")
+	}
+	if out.String() != "ran\n" {
+		t.Errorf("it printed %q, want %q", out.String(), "ran\n")
+	}
+}

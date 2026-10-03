@@ -6064,6 +6064,48 @@ already promised.
 Corpus: `special/unset-then-assign-a-produced-parameter` and
 `special/unset-then-assign-lineno`.
 
+## The last command of a `-c` string: forked, or become?
+
+A shell with nothing left to run after a program can exec the program in its
+own place. Measured 2026-10-03 under `-c`, with the probe `P` being
+`/bin/sh -c 'echo $PPID'` beside an `echo $$`. **E** means the shell became
+the probe, and **f** means it forked it:
+
+| `-c` string | zsh 5.9.2 | dash 0.5.12 | ksh93u+ | ash 1.37 | bash 5.3 | bash 3.2 |
+|---|---|---|---|---|---|---|
+| `P`, `true; P`, `x=1 P` | E | E | E | E | E | f |
+| `true && P`, `if true; then P; fi`, `{ P; }` | E | E | E | E | f | f |
+| `P >/dev/stdout` | E | E | E | E | f | f |
+| `( P )` | E | E | E | E | f | f |
+| `for i in 1; do P; done` | E | f | f | f | f | f |
+| `P; true`, `trap 'echo t' EXIT; P`, `f() { P; }; f` | f | f | f | f | f | f |
+
+From a script file, every column forks. It is `Semantics.TailExec`:
+
+- `TailExecWhereverLast` for zsh;
+- `TailExecWhereverLastOutsideALoop` for dash, ksh93 and ash;
+- `TailExecPlainTopLevel` for bash, which answers as 5.3.
+
+It reuses the tail that `interp/unforkedtail.go` already follows into the
+compound commands, and it is reached only where the embedder supplies
+`Runner.ReplaceProcess`.
+
+What the program is handed is what `exec` hands it, `$SHLVL` included
+(#3118), so `SHLVL=1 zsh -c 'zsh -c "echo \$SHLVL"'` prints 2 rather than 3.
+The hook also takes the directory to start in. Before this change,
+`cd /tmp; exec pwd` printed the directory the shell was started in, because a
+Runner's `cd` never moved the process.
+
+**Not modeled**, and forked instead:
+
+- `( P )` in the three dialects that fork the parentheses;
+- a shell with a job still running, or one that has made a process
+  substitution, since here those are goroutines that would die with the
+  process;
+- a script with no `#!`.
+
+See `interp/tailexec.go` (#5565).
+
 ## `unset` on the shell's own parameter: does it keep its attributes?
 
 The section above is about a *produced* value. This one is about the

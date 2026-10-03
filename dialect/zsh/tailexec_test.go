@@ -151,3 +151,33 @@ func TestAScriptWithNoInterpreterLineIsNotReplacedInto(t *testing.T) {
 		t.Errorf("it printed %q, want %q", out.String(), "ran\n")
 	}
 }
+
+// TestAShellWritingToABufferForksItsLastCommand pins that a shell whose
+// standard output is not a file does not replace itself: a replacement is
+// handed descriptors by number, and a buffer has none, so the program's
+// output would be lost where a forked child has it copied through a pipe.
+func TestAShellWritingToABufferForksItsLastCommand(t *testing.T) {
+	f, err := syntax.Parse("/bin/echo hi", zsh.Dialect())
+	if err != nil {
+		t.Fatal(err)
+	}
+	sem, diag := zsh.Semantics(), zsh.Diagnostics()
+	var out strings.Builder
+	replaced := false
+	r := &interp.Runner{
+		Stdout: &out, Stderr: os.Stderr, Semantics: &sem, Diagnostics: &diag,
+		Dir: t.TempDir(), Name: "zsh", Route: interp.RouteCommandString,
+		Vars:    map[string]string{"PATH": "/usr/bin:/bin"},
+		Dialect: presetDialect(),
+		ReplaceProcess: func(_, _ string, _, _ []string, _ []*os.File) error {
+			replaced = true
+			return errors.New("recorded rather than replaced")
+		},
+	}
+	zsh.Apply(r)
+	r.LastPart = true
+	_, _ = r.Run(context.Background(), f)
+	if replaced || out.String() != "hi\n" {
+		t.Errorf("replaced = %v and the buffer holds %q, want a fork that wrote %q", replaced, out.String(), "hi\n")
+	}
+}

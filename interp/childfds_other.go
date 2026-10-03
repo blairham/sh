@@ -25,3 +25,7 @@ func (r *Runner) imageFiles() []*os.File { return nil }
 // absence here already stands for, and a platform with no such call has
 // nothing for a replacement to be given.
 func (r *Runner) replacementFiles() []*os.File { return nil }
+
+// streamsAreFiles is false where descriptors are not handed over by number,
+// so a command string's last command is forked there. See tailexec.go.
+func (r *Runner) streamsAreFiles() bool { return false }

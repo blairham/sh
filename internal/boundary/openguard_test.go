@@ -173,6 +173,10 @@ var exempt = map[string]string{
 	// interp. The gate lives here, so most of these are the apparatus: the
 	// wrapper that consults before it calls is not a way around the boundary,
 	// it is the boundary.
+	"interp.kernelStartsIt": "tailexec.go reads the first four bytes of a program the gate has " +
+		"just allowed to run, to decide whether the shell can exec it in its own place or must " +
+		"fork it. The exec was the question the policy was asked, and nothing read here reaches " +
+		"a script: the answer is only which of two ways the same program is started.",
 	"interp.stat": "fsgate.go's own os.Stat, on both sides of the ActionStat consultation. " +
 		"This is the gate rather than a caller of it.",
 	"interp.statEntering": "fsgate.go's own os.Stat again, asked as a chdir asks it — of the " +

@@ -143,6 +143,13 @@ func (r *Runner) replacesItselfHere() bool {
 	if r.holdsATrapWithAnAction() || !r.namedStreamsCanBePlaced() {
 		return false
 	}
+	// A named stream that is not a file has no number to hand over: a
+	// forked child gets its bytes copied through a pipe, and a replacement
+	// would start with the number closed. An embedder's buffer is the usual
+	// case, so this is forked as before.
+	if !r.streamsAreFiles() {
+		return false
+	}
 	// Nothing else of this shell may still be running, because here it is a
 	// goroutine and would go with the process.
 	for _, j := range r.jobs {

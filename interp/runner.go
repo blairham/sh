@@ -5892,6 +5892,11 @@ func (r *Runner) locationPrefixNamed(construct string) string {
 		// is a line below the first. See Runner.locatedWithoutALine.
 		return d.prefixWithoutLine(name, r.inBuiltin)
 	}
+	if inBody && d.bodyLocationKept {
+		// The route's shape stops at the function's door. See
+		// Diagnostics.keepBodyLocation.
+		d.Location, d.BuiltinLocation = d.bodyLocation, d.bodyBuiltinLocation
+	}
 	if inBody {
 		if line > 0 {
 			// No borrowed name here: the function rule is the dialect

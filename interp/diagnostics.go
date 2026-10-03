@@ -9398,6 +9398,12 @@ type Diagnostics struct {
 	// same as BuiltinLocation".
 	PromptBuiltinLocation LocationStyle
 
+	// bodyLocation and bodyBuiltinLocation are Location and BuiltinLocation
+	// as they stood before a route replaced them, for a diagnostic the
+	// function rule locates. See keepBodyLocation.
+	bodyLocation, bodyBuiltinLocation LocationStyle
+	bodyLocationKept                  bool
+
 	// The wordings below replace their unprefixed namesakes for a line typed
 	// at a prompt. Empty — the common answer, and every field for the other
 	// four dialects — leaves the wording alone.
@@ -10509,6 +10515,7 @@ func (d Diagnostics) ForScript() Diagnostics {
 // rather than substituting a name: zsh trims its prefixes and ksh93 brackets
 // the line. A property of the invocation, like ForScript.
 func (d Diagnostics) ForStdin() Diagnostics {
+	d.keepBodyLocation()
 	if d.StdinLocation != LocationNone {
 		d.Location = d.StdinLocation
 	}
@@ -10516,6 +10523,31 @@ func (d Diagnostics) ForStdin() Diagnostics {
 		d.BuiltinLocation = d.StdinBuiltinLocation
 	}
 	return d
+}
+
+// keepBodyLocation remembers the two styles a route is about to replace, for
+// the one place the route does not reach: a diagnostic located by the function
+// rule. Measured 2026-10-02 on zsh 5.9.2, the dialect that has the rule, with
+// `g() {` ⏎ `cd /nonexistent` ⏎ `: ${zz:?unset1}` ⏎ `}` then `g` and a
+// `cd /nonexistent2` at the top, on standard input and at a prompt alike:
+//
+//	g:cd:1: no such file or directory: /nonexistent   inside the body, the
+//	g:2: zz: unset1                                   function and its line
+//	cd: no such file or directory: /nonexistent2      and at the top, the
+//	                                                  route's shape
+//
+// where both lines inside the body came out in the route's shape too —
+// `cd: …` and `g: zz: unset1` — which is the front of D04parameter.ztst
+// (#5151). A body written on one line still names no line, as in a script:
+// `h() { cd /x; }; h` is `h:cd: …`.
+//
+// Held rather than re-derived, because the route's own field is already
+// written over by the time a diagnostic is located. Nothing stacks two
+// routes: with a guard that kept the first call's answer taken out, `-fis`
+// over the same body still wrote `g:cd:1:`, so the guard was removed rather
+// than left untested.
+func (d *Diagnostics) keepBodyLocation() {
+	d.bodyLocation, d.bodyBuiltinLocation, d.bodyLocationKept = d.Location, d.BuiltinLocation, true
 }
 
 // ForPrompt returns the diagnostics a line typed at a prompt should use.
@@ -10532,6 +10564,7 @@ func (d Diagnostics) ForStdin() Diagnostics {
 // line inside its own sentence needs the sentence replaced, which the Prompt
 // wordings say.
 func (d Diagnostics) ForPrompt() Diagnostics {
+	d.keepBodyLocation()
 	if d.PromptLocation != LocationNone {
 		d.Location = d.PromptLocation
 	}

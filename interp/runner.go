@@ -5980,7 +5980,7 @@ func (r *Runner) locationPrefixNamed(construct string) string {
 	if r.speaker != "" {
 		line = r.speakerLine
 	}
-	if d.BorrowedTextRendersTheCallStack && len(r.borrowed) > 0 {
+	if d.BorrowedTextRendersTheCallStack && r.callStackHasAComponent(d) {
 		// One shell writes every borrowed text it is inside, each with the
 		// line that entered the next, and names the innermost where the
 		// script's own name would have gone. See
@@ -6072,7 +6072,7 @@ func (r *Runner) locationFileOrName() string {
 func (r *Runner) borrowedStack(d Diagnostics, outer string) (chain, inner string) {
 	var b strings.Builder
 	name := outer
-	for i, t := range r.borrowed {
+	for i, t := range r.callStackComponents(d) {
 		if i == 0 && !d.locationNamesALineAt(t.callerLine) {
 			// The outermost component is the shell's own name, and where
 			// that name would carry no line neither does the frame: measured
@@ -6093,9 +6093,59 @@ func (r *Runner) borrowedStack(d Diagnostics, outer string) (chain, inner string
 		} else {
 			fmt.Fprintf(&b, "%s[%d]: ", name, t.callerLine)
 		}
-		name = t.sourceName(d)
+		name = t.name
 	}
 	return b.String(), name
+}
+
+// callStackComponent is one entry of the chain borrowedStack renders: what it
+// is called and the line, in the entry outside it, that entered it.
+type callStackComponent struct {
+	name       string
+	callerLine int
+}
+
+// callStackHasAComponent reports whether there is anything for borrowedStack
+// to render.
+func (r *Runner) callStackHasAComponent(d Diagnostics) bool {
+	if len(r.borrowed) > 0 {
+		return true
+	}
+	if d.KeywordCallIsACallStackComponent {
+		for _, f := range r.frames {
+			if f.Keyword {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// callStackComponents is the borrowed texts, and in the dialect that counts
+// them the calls of keyword-defined functions, outermost first.
+//
+// A borrowed text pushed with k frames standing is inside frames 0 to k-1 and
+// outside the rest, so a keyword frame at index j goes in front of every
+// borrowed text pushed with more than j frames. See
+// Diagnostics.KeywordCallIsACallStackComponent.
+func (r *Runner) callStackComponents(d Diagnostics) []callStackComponent {
+	var out []callStackComponent
+	next := 0
+	for j, f := range r.frames {
+		if !d.KeywordCallIsACallStackComponent || !f.Keyword {
+			continue
+		}
+		for ; next < len(r.borrowed) && r.borrowed[next].frames <= j; next++ {
+			t := r.borrowed[next]
+			out = append(out, callStackComponent{t.sourceName(d), t.callerLine})
+		}
+		out = append(out, callStackComponent{f.Name, f.Line})
+	}
+	for ; next < len(r.borrowed); next++ {
+		t := r.borrowed[next]
+		out = append(out, callStackComponent{t.sourceName(d), t.callerLine})
+	}
+	return out
 }
 
 // borrowedAtLocation is the text a diagnostic's line was read from, when that

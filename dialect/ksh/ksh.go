@@ -1412,6 +1412,10 @@ func Semantics() interp.Semantics {
 	// and `set -x` leaves a keyword body untraced. Measured 2026-09-20 on AT&T
 	// 93u+ 2012-08-01, a letter at a time — `e` and `x` alone (#3860).
 	s.KeywordFunctionSuspendsErrexitAndXtrace = interp.Yes
+	// And a fatal error in a keyword body ends the call, not the script:
+	// `readonly y; function f { y=1; echo in; }; f; echo st=$?` writes `st=1`
+	// and exits 0. Measured 2026-10-02 on 93u+ 2012-08-01 (#5508).
+	s.FatalErrorEndsAtAKeywordFunctionCall = interp.Yes
 	s.SelectEofEndsPromptLine = interp.No
 	s.SelectEofIsSuccess = interp.No
 	s.SelectTakesUnterminatedReply = interp.No
@@ -4700,6 +4704,9 @@ func Diagnostics() interp.Diagnostics {
 		// without the brackets writes `./s.sh: .: line 3:`, which is closer
 		// and still wrong (#2461).
 		BorrowedTextRendersTheCallStack: true,
+		// And a keyword function's call is a component of that chain, where
+		// a POSIX-form one is not (#5508).
+		KeywordCallIsACallStackComponent: true,
 		// A failing offset is blamed together with what follows it in the
 		// range: `${x:1+:2}` names `1+:2`. A failing length has nothing after
 		// it and is named on its own.

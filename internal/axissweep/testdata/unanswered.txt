@@ -254,6 +254,7 @@ ash   PlusSignedPrintListsNoValues
 ash   ScalarOverACompoundIsAnInconsistentType
 ash   ScalarStoredOverATableIsRefused
 ash   ScalarHeldUnderTheArrayLetterListsAsAScalar
+ash   PlusLetterComesOffAfterTheValueLands
 ash   ScalarUnderATableDeclaration
 ash   ScalarUnderAnArrayDeclaration
 ash   SelectAssumesUnboundedWidth
@@ -631,6 +632,7 @@ dash  PlusSignedPrintListsNoValues
 dash  ScalarOverACompoundIsAnInconsistentType
 dash  ScalarStoredOverATableIsRefused
 dash  ScalarHeldUnderTheArrayLetterListsAsAScalar
+dash  PlusLetterComesOffAfterTheValueLands
 dash  ScalarUnderATableDeclaration
 dash  ScalarUnderAnArrayDeclaration
 dash  SelectAssumesUnboundedWidth

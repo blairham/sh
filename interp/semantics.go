@@ -6615,9 +6615,10 @@ type Semantics struct {
 	// for one the shell runs itself; zsh, dash and BusyBox ash die where it
 	// lands.
 	//
-	// Not modeled: ksh93 inside `( … )`, which neither survives nor dies of
-	// it — `( /bin/sh -c "kill -INT \$PPID; sleep 0.1" ); echo survived`
-	// writes nothing and exits 0 — and is left dying here.
+	// Inside `( … )`, which ksh93 runs in its own process, the lone program
+	// holds it too, and a held interrupt the program survived stays pending
+	// until the next program clears it or the parentheses end and the shell
+	// dies of it. See Runner.interruptAtParenthesesEnd (#5541).
 	//
 	// Read rather than asked: a signal arriving is not the place to refuse a
 	// script, and the unanswered value is what this package did before.

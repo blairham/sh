@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"strconv"
+	"strings"
 	"syscall"
 	"testing"
 	"time"
@@ -34,6 +35,9 @@ func runHeldAsAShell() {
 	sh := shell()
 	n, _ := strconv.Atoi(os.Getenv(heldDeferral))
 	sh.Semantics.InterruptWaitsForTheProgram = interp.InterruptDeferral(n)
+	// What the rows' output needs answered and none of them is about.
+	sh.Semantics.SignalDeathStatusIsTwoFiftySix = interp.No
+	sh.Semantics.ChildInterruptEndsTheScript = interp.No
 	os.Exit(driver.MainArgs(sh, []string{"testsh", "-c", src}))
 }
 
@@ -80,14 +84,20 @@ func TestAnInterruptWaitsForTheForegroundProgram(t *testing.T) {
 		{"not in a pipeline, for a lone program", `/bin/sh -c "kill -INT \$PPID; sleep 0.1" | cat; echo survived`, interp.InterruptWaitsForALoneProgram, ""},
 		{"not in a substitution", `x=$(/bin/sh -c "kill -INT \$PPID; sleep 0.1"); echo survived`, interp.InterruptWaitsForAnyProgram, ""},
 		{"the program died of it too", `/bin/sh -c "kill -INT \$PPID; sleep 0.2; kill -INT \$\$; sleep 1"; echo survived`, interp.InterruptWaitsForAnyProgram, ""},
+		// Inside parentheses, for a lone program (#5541): pending past the
+		// program, cleared by the next one, and ending the shell when the
+		// parentheses end.
+		{"parentheses: the end of them ends the shell", `( /bin/sh -c "kill -INT \$PPID; sleep 0.1"; echo in $? ); echo after $?`, interp.InterruptWaitsForALoneProgram, "in 0\n" + diesMark},
+		{"parentheses: the next program clears it", `( /bin/sh -c "kill -INT \$PPID; sleep 0.1"; /bin/sleep 0.1; echo in2 ); echo after $?`, interp.InterruptWaitsForALoneProgram, "in2\nafter 0\n"},
+		{"parentheses: nested, the inner end", `( ( /bin/sh -c "kill -INT \$PPID; sleep 0.1"; echo inner ); echo outer ); echo after`, interp.InterruptWaitsForALoneProgram, "inner\n" + diesMark},
 		{"not held at all", survives, interp.InterruptEndsTheShell, ""},
 		{"not held where unanswered", survives, interp.InterruptDeferralUnspecified, ""},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			ws, out := heldRun(t, name, c.src, c.d)
-			if c.out == "" {
-				if !ws.Signaled() || ws.Signal() != syscall.SIGINT {
-					t.Errorf("%s: %v, wrote %q; want killed by SIGINT", c.src, ws, out)
+			if want, dies := strings.CutSuffix(c.out, diesMark); dies || c.out == "" {
+				if !ws.Signaled() || ws.Signal() != syscall.SIGINT || out != want {
+					t.Errorf("%s: %v, wrote %q; want %q and killed by SIGINT", c.src, ws, out, want)
 				}
 				return
 			}
@@ -97,3 +107,7 @@ func TestAnInterruptWaitsForTheForegroundProgram(t *testing.T) {
 		})
 	}
 }
+
+// diesMark ends a row's wanted output where the shell writes that much and
+// then dies of SIGINT.
+const diesMark = "\x00dies"

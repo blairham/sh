@@ -49,6 +49,10 @@ func (d InterruptDeferral) String() string {
 type interruptBox struct {
 	waits   atomic.Int32
 	pending atomic.Bool
+	// sticky says the pending interrupt outlived the program it was held
+	// for inside parentheses, where it waits for the next program or for the
+	// parentheses to end. See Runner.interruptAtParenthesesEnd.
+	sticky atomic.Bool
 }
 
 // InterruptHeld is the question a front end that owns the process asks when
@@ -83,13 +87,21 @@ func (r *Runner) holdingInterrupts() bool {
 	switch r.sem().InterruptWaitsForTheProgram {
 	case InterruptWaitsForAnyProgram:
 	case InterruptWaitsForALoneProgram:
-		if r.inSubshell {
+		if r.inSubshell && !r.inParensBody {
+			// Inside parentheses it is held as at the top: that dialect
+			// runs them in its own process. Not in a pipeline element or
+			// anything else that forks. See interruptAtParenthesesEnd.
 			return false
 		}
 	default:
 		return false
 	}
 	r.HoldInterrupts()
+	if r.interrupts.sticky.Swap(false) {
+		// A later program clears an interrupt left pending inside
+		// parentheses. See interruptAtParenthesesEnd.
+		r.interrupts.pending.Store(false)
+	}
 	r.interrupts.waits.Add(1)
 	return true
 }
@@ -122,6 +134,36 @@ func (r *Runner) foregroundProgramEnded(diedOfInterrupt bool) {
 		return
 	}
 	if left <= 0 {
+		if r.inParensBody && r.sem().InterruptWaitsForTheProgram == InterruptWaitsForALoneProgram {
+			box.sticky.Store(true)
+			return
+		}
 		box.pending.Store(false)
 	}
+}
+
+// interruptAtParenthesesEnd is the end of a `( … )` body with an interrupt
+// still pending from a program inside it, which ends the shell in the dialect
+// that holds one for a lone program — and which runs parentheses in its own
+// process, so the interrupt was the shell's all along. Measured 2026-10-02 on
+// ksh93u+ under `-c`, the program sending SIGINT to the shell (#5541):
+//
+//	( P; echo in $? ); echo after $?          in 0, then 130
+//	( P; echo in $?; /bin/sleep 0.1; echo in2 ); echo after $?
+//	                                          in 0, in2, after 0: the next
+//	                                          program clears it
+//	( ( P; echo inner ); echo outer ); echo after
+//	                                          inner, then 130
+//	P; echo survived $?                       survived 0: at the top level
+//	                                          it is dropped
+//
+// It reports whether the shell is to die of it.
+func (r *Runner) interruptAtParenthesesEnd() bool {
+	box := r.interrupts
+	if box == nil || !box.sticky.Load() || !box.pending.Load() {
+		return false
+	}
+	box.sticky.Store(false)
+	box.pending.Store(false)
+	return true
 }

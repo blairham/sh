@@ -163,7 +163,7 @@ func (e *editor) take(in Line) {
 }
 
 func (e *editor) give() Line {
-	return Line{Buffer: string(e.line), Cursor: e.pos, Postdisplay: e.postdisplay, Last: e.last}
+	return Line{Buffer: string(e.line), Cursor: e.pos, Postdisplay: e.postdisplay, Last: e.last, ViCommand: e.viCommand}
 }
 
 // actionsKey is how the handle rides the widget call's context. A private type

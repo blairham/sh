@@ -74,8 +74,56 @@ func (r *Runner) nestedSubscript(e *syntax.ParamExpr) (words []string, set, isLi
 	// The search a flag group asks for and the ordinary reading are the same
 	// pair a chain's links read, so both go through the one dispatch in
 	// interp/chainedsub.go rather than each keeping its own copy of it.
-	elems, _ := r.subscriptAgainst(e, src)
+	elems, _ := r.markedScalarSubscript(e, src)
 	return r.nestedSubscriptResult(e, elems, !src.scalar && r.subscriptSelectsElements(e))
+}
+
+// markedScalarSubscript is subscriptAgainst for a source that may be one
+// string holding a `:s` replacement's live marks, where a subscript counts a
+// marked character as the one character it is and keeps it live. Measured
+// 2026-10-03 on zsh 5.9.2 under -f, beside `xay` and `xby`, with `s=xQy`:
+// `${${s:s/Q/?/}[1,3]}` is `xay xby` and `${${s:s/Q/?/}[2]}` is `no matches
+// found: ?`.
+//
+// The subscript reads the text without its marks, and reads again a mask the
+// same number of units long saying which units were marked: the two answers
+// are the same positions, and the mask's puts the marks back. Only a subscript
+// with nothing to run reaches here with marks (see
+// Runner.positionSubscriptRunsNothing), so the second reading changes nothing
+// the first did not.
+func (r *Runner) markedScalarSubscript(e *syntax.ParamExpr, src subscriptSource) ([]string, bool) {
+	if !src.scalar || len(src.elems) != 1 || !strings.Contains(src.elems[0], liveMark) {
+		return r.subscriptAgainst(e, src)
+	}
+	var mask strings.Builder
+	for _, u := range r.markedUnits(src.elems[0]) {
+		if strings.HasPrefix(u, liveMark) {
+			mask.WriteByte('1')
+		} else {
+			mask.WriteByte('0')
+		}
+	}
+	plain := stripLiveMarks(src.elems[0])
+	got, ok := r.subscriptAgainst(e, subscriptSource{name: src.name, elems: []string{plain}, scalar: true})
+	marks, _ := r.subscriptAgainst(e, subscriptSource{name: src.name, elems: []string{mask.String()}, scalar: true})
+	if len(marks) != len(got) {
+		return got, ok
+	}
+	for i, g := range got {
+		units := r.units(g)
+		if len(units) != len(marks[i]) {
+			continue
+		}
+		var b strings.Builder
+		for j, u := range units {
+			if marks[i][j] == '1' {
+				b.WriteString(liveMark)
+			}
+			b.WriteString(u)
+		}
+		got[i] = b.String()
+	}
+	return got, ok
 }
 
 // subscriptSelectsElements reports whether this subscript names several of

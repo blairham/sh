@@ -5120,6 +5120,14 @@ func (r *Runner) declareEmpty(name string, fresh, keepsTheEnvironmentEntry, name
 		// The standard's reading of `export name` and `readonly name`, and
 		// of a declaration carrying either attribute: the name is left as
 		// it was. See Semantics.ValuelessDeclarationLeavesTheNameUnset.
+		//
+		// Recorded as declared all the same where the shell's own reading
+		// also leaves a valueless name unset, which is measured: with both
+		// zsh options, `typeset -r R; ${(t)R}` is `scalar-readonly`, and with
+		// POSIX_BUILTINS alone it is empty (#5439).
+		if r.sem().DeclaredNameWithoutValueIsEmpty == No {
+			setBool(&r.declaredHoldingNothing, name, true)
+		}
 		return
 	}
 	if r.declaredNameWithoutValueIsEmpty(standardWord) {
@@ -5192,6 +5200,9 @@ func (r *Runner) declareEmpty(name string, fresh, keepsTheEnvironmentEntry, name
 	if !leavesAnAttribute {
 		r.recordBareDeclaration(name)
 	}
+	// Whatever letters it carries, the name is one the shell has, which is
+	// what a description reads. See Runner.declaredHoldingNothing.
+	setBool(&r.declaredHoldingNothing, name, true)
 	// Whether the *outer* value still shows through is a third disagreement,
 	// and it only arises where a shadow was actually taken: `declare u` at
 	// the top level leaves the global alone in every shell measured.

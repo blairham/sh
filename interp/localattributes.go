@@ -100,6 +100,8 @@ type nameAttributes struct {
 	// binding whose record must not outlive the call, and `unset` takes it
 	// off with everything else. See baredeclaration.go.
 	declaredBare bool
+	// declaredHoldingNothing goes with the binding for the same reason.
+	declaredHoldingNothing bool
 	// unsetLeftItDeclared is the same record made by the other route into
 	// the same state: `unset` of a local the running scope declared, which
 	// leaves the binding standing with its value and its letters gone. A
@@ -122,8 +124,9 @@ func (r *Runner) captureAttributes(name string) nameAttributes {
 		hidden:  r.hidden[name],
 		traced:  r.traced[name],
 
-		declaredBare:        r.declaredBare[name],
-		unsetLeftItDeclared: r.unsetLeftItDeclared[name],
+		declaredBare:           r.declaredBare[name],
+		declaredHoldingNothing: r.declaredHoldingNothing[name],
+		unsetLeftItDeclared:    r.unsetLeftItDeclared[name],
 	}
 	a.base, a.baseSet = r.integerBase[name]
 	a.precision, a.isFloat = r.floatPrecision[name]
@@ -161,6 +164,7 @@ func (r *Runner) dropNameAttributes(name string) {
 	delete(r.traced, name)
 	delete(r.nameref, name)
 	delete(r.declaredBare, name)
+	delete(r.declaredHoldingNothing, name)
 	delete(r.unsetLeftItDeclared, name)
 }
 
@@ -177,6 +181,7 @@ func (r *Runner) restoreAttributes(name string, a nameAttributes) {
 	setBool(&r.hidden, name, a.hidden)
 	setBool(&r.traced, name, a.traced)
 	setBool(&r.declaredBare, name, a.declaredBare)
+	setBool(&r.declaredHoldingNothing, name, a.declaredHoldingNothing)
 	setBool(&r.unsetLeftItDeclared, name, a.unsetLeftItDeclared)
 	setInt(&r.integerBase, name, a.base, a.baseSet)
 	setInt(&r.floatPrecision, name, a.precision, a.isFloat)

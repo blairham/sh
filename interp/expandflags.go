@@ -1738,7 +1738,28 @@ func (r *Runner) characterForCodeReporting(w string) (string, string) {
 	if err != nil {
 		return "", r.arithFailure(text, err)
 	}
+	if code := n.asInt(); code >= 0x80 && r.sem().MultibyteEncodingIsHonored == Yes && r.localeIsASCII() {
+		// Only the `X` flag reports it; without one the byte is written.
+		// A code the locale has no character for. Measured 2026-10-03 on
+		// zsh 5.9.2 under `-f`: `${(#X):-0x80}` is `character not in range`
+		// under LC_ALL=C, LANG=POSIX, LC_CTYPE=C or no locale at all, where
+		// `(#)` alone writes the byte, `nomultibyte` takes any byte, and
+		// en_US.ISO8859-1 and any UTF-8 locale have one (#5151, a chunk of
+		// D04parameter.ztst).
+		return r.characterForCode(code), "character not in range"
+	}
 	return r.characterForCode(n.asInt()), ""
+}
+
+// localeIsASCII reports whether the character locale in force is C or POSIX,
+// a locale nothing names included.
+func (r *Runner) localeIsASCII() bool {
+	for _, name := range localeVariables {
+		if v, _ := r.getVar(name); v != "" {
+			return v == "C" || v == "POSIX"
+		}
+	}
+	return true
 }
 
 // reportsFlagErrors is the `X` flag: a failure the `Q`, `e` and `#` flags

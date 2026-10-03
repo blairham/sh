@@ -10157,6 +10157,18 @@ func (r *Runner) runWatched(ctx context.Context, cmd *exec.Cmd, argv []string, a
 	// and so reads the table the way `jobs` does: see
 	// Runner.forgetANumberNobodyHolds.
 	defer r.forgetANumberNobodyHolds()
+	// An interrupt that arrives while this program runs is held for it, in
+	// the dialect that holds one — counted before the start, because a
+	// program can send one the moment it is running (#5536). See
+	// foregroundinterrupt.go.
+	held := r.holdingInterrupts()
+	settleHeld := func(diedOfInterrupt bool) {
+		if held {
+			held = false
+			r.foregroundProgramEnded(diedOfInterrupt)
+		}
+	}
+	defer settleHeld(false)
 	if err := r.startMasked(cmd); err != nil {
 		if st, ran := r.imageAsScript(ctx, action, cmd.Path, argv, cmd.Env, err); ran {
 			r.status = st
@@ -10192,16 +10204,6 @@ func (r *Runner) runWatched(ctx context.Context, cmd *exec.Cmd, argv []string, a
 		}
 	}
 	var w Wait
-	// An interrupt that arrives while this program runs is held for it, in
-	// the dialect that holds one. See foregroundinterrupt.go.
-	held := r.holdingInterrupts()
-	settleHeld := func(diedOfInterrupt bool) {
-		if held {
-			held = false
-			r.foregroundProgramEnded(diedOfInterrupt)
-		}
-	}
-	defer settleHeld(false)
 	for {
 		var err error
 		w, err = r.awaitForegroundCommand(pid)

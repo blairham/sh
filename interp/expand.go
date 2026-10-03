@@ -8069,6 +8069,9 @@ func (r *Runner) checkNounset(e *syntax.ParamExpr) {
 // one and the bare read found nothing at it — which is what keeps `unset a`
 // naming `a` in the same column.
 func (r *Runner) unboundSubject(e *syntax.ParamExpr) string {
+	if r.unboundByIndirection != nil {
+		return *r.unboundByIndirection
+	}
 	if e.Inner != nil {
 		return e.Name
 	}

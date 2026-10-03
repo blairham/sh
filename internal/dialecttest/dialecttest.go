@@ -32,6 +32,7 @@ import (
 	"io"
 	"reflect"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/blairham/sh/interp"
@@ -249,7 +250,7 @@ func (p Preset) RunLinesOn(t testing.TB, r *interp.Runner, src string) int {
 // test to stop.
 func (p Preset) Combined(t testing.TB, b Base, src string) (out string, status int, err error) {
 	t.Helper()
-	var buf strings.Builder
+	var buf lockedBuffer
 	b.Stdout, b.Stderr = &buf, &buf
 	r := p.Runner(b)
 	// **Through the runner**, which is how a front end parses and is not a
@@ -295,7 +296,7 @@ func (p Preset) CombinedWithPrelude(t testing.TB, b Base, src string) (out strin
 	t.Helper()
 	pre := p.Parse(t, p.Prelude())
 	f := p.Parse(t, src)
-	var buf strings.Builder
+	var buf lockedBuffer
 	b.Stdout, b.Stderr = &buf, &buf
 	r := p.Runner(b)
 	r.SourcingPrelude(true)
@@ -327,7 +328,7 @@ func (p Preset) CombinedWithPrelude(t testing.TB, b Base, src string) (out strin
 func (p Preset) CombinedThroughTheAliases(t testing.TB, b Base, src string) (out string, status int, err error) {
 	t.Helper()
 	pre := p.Parse(t, p.Prelude())
-	var buf strings.Builder
+	var buf lockedBuffer
 	b.Stdout, b.Stderr = &buf, &buf
 	r := p.Runner(b)
 	// What a front end does before it reads anything: the switch the parser
@@ -444,4 +445,27 @@ func (l *Rlimits) apply(r *interp.Runner) {
 		l.Soft[res], l.Hard[res] = soft, hard
 		return nil
 	}
+}
+
+// lockedBuffer is the one buffer the Combined helpers hand a runner for both
+// streams, with every write and the read taking one lock. A program the run
+// leaves behind — a killed background body's, which outlives the shell by
+// design (#5355) — is fed through a pipe and a copy goroutine of os/exec's,
+// and that goroutine can still be writing when the helper reads what was
+// written (#5527).
+type lockedBuffer struct {
+	mu  sync.Mutex
+	buf strings.Builder
+}
+
+func (b *lockedBuffer) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.Write(p)
+}
+
+func (b *lockedBuffer) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.String()
 }

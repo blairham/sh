@@ -98,3 +98,35 @@ import (
 func searchingFlag(e *syntax.ParamExpr) bool {
 	return e != nil && strings.ContainsRune(e.Flags, 'S')
 }
+
+// matchIndexFlag is the `I` flag's argument evaluated: which match a
+// substring search under `(S)` takes, one per starting position counted in
+// the search's own direction, and 1 where the group wrote none. Measured
+// 2026-10-02 on zsh 5.9.2 (`-f`, `LC_ALL=C`) with `str=aXbXc`:
+//
+//	${(SI:1:)str#X*}    abXc     the first position, shortest
+//	${(SI:2:)str#X*}    aXbc     the second
+//	${(SI:3:)str#X*}    aXbXc    no third match, so nothing is taken
+//	${(SI:2:)str##X*}   aXb      the second position, longest
+//	${(SI:1:)str%X*}    aXbc     backward from the end
+//	${(SI:2:)str%X*}    abXc
+//	${(SI:3:)str%X*}    aXbc     and backward, past the last match, the first
+//	                             one comes back — on `%%` too
+//	${(SI:2:)str%%X*}   a
+//	${(BSI:2:)str%X*}   2        and (B), (M) and the rest report the same match
+//	${(SI:0:)…} and ${(SI:-1:)…} are the first match
+//
+// An expression, so `(SI:n+1:)` reads `n`. Only the searching trims read it
+// here; the substitutions' half of the flag is not built (#5151).
+func (r *Runner) matchIndexFlag(e *syntax.ParamExpr) int {
+	// Without `(S)` the value is computed and read by nothing: a trim then
+	// has one place to match, and spanByLength counts only for a search.
+	if e == nil || e.MatchIndex == "" {
+		return 1
+	}
+	n, err := r.expressionValue(e.MatchIndex)
+	if err != nil {
+		return 1
+	}
+	return n
+}

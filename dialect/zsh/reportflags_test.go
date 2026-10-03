@@ -162,15 +162,20 @@ func TestTheReportingFlagsAreRefusedOverAnElementOperator(t *testing.T) {
 	}
 }
 
-// TestTheSearchFlagIsStillTheFifthLetter — `(I:expr:)` sits beside these four
-// in the same block of the vendor manual and is deliberately not implemented:
-// it selects the *n*th match rather than reporting about the one that was
-// found, so it is a counter on the span search rather than a projection of
-// it. It must keep being refused by name rather than quietly reading as one
-// of the four.
-func TestTheSearchFlagIsStillRefused(t *testing.T) {
+// TestTheSearchFlagCountsMatchesAndIsRefusedBesideASubstitution — `(I:expr:)`
+// sits beside these four in the same block of the vendor manual and is not
+// one of them: it selects the *n*th match rather than reporting about the one
+// that was found, a counter on the span search rather than a projection of
+// it. It is carried for a searching trim (see matchIndexFlag) and refused by
+// name beside a substitution, whose half of it is not built. Measured on zsh
+// 5.9.2: `${(SI:2:)str#X*}` on `aXbXc` is `aXbc` (#5151).
+func TestTheSearchFlagCountsMatchesAndIsRefusedBesideASubstitution(t *testing.T) {
 	out, st := runZsh(t, t.TempDir(), `str=aXbXc; print -r -- "${(SI:2:)str#X*}"`)
-	if st == 0 || !strings.Contains(out, "not implemented") {
-		t.Errorf("(I) = %q (status %d), want a refusal", out, st)
+	if out != "aXbc\n" || st != 0 {
+		t.Errorf("(SI:2:) over a trim = %q (status %d), want aXbc at 0", out, st)
+	}
+	out, st = runZsh(t, t.TempDir(), `str=aXbXc; print -r -- "${(I:2:)str/X/Y}"`)
+	if st == 0 || !strings.Contains(out, "(I) expansion flag is not implemented beside a substitution") {
+		t.Errorf("(I) beside a substitution = %q (status %d), want a refusal by name", out, st)
 	}
 }

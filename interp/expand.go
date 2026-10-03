@@ -5449,6 +5449,7 @@ func (r *Runner) trimWith(value, pattern string, e *syntax.ParamExpr) string {
 	// does either prefix trim — which is a quirk of that shell rather than a
 	// rule, and is measured at patternOpts.tildeGlobRead.
 	o.tildeGlobRead = e.Op == syntax.ParamTrimSuffix
+	o.nth = r.matchIndexFlag(e)
 	out, m := trim(value, pattern, e.Op, r.recordingPatternOpts(o, pattern),
 		r.armOrder(), searchingFlag(e))
 	if r.metABadExpansionPattern(bad, pattern) {
@@ -5940,6 +5941,15 @@ func spanByLength(value, pattern string, op syntax.ParamOp, o patternOpts,
 		first, final, step = last, 0, -1
 	}
 
+	// The `I` flag: which match, counted one per starting position in the
+	// direction the search runs. See matchIndexFlag for the rows.
+	want := 1
+	if search && o.nth > 1 {
+		want = o.nth
+	}
+	found := false
+	var firstLo, firstHi int
+	var firstM matchReport
 	for a := first; ; a += step {
 		lo := stops[a]
 		// The ends this start admits, narrowed to the ones the pattern could
@@ -5977,12 +5987,24 @@ func spanByLength(value, pattern string, op syntax.ParamOp, o patternOpts,
 			// unit. Measured on zsh 5.9.2, `x=abcd; ${x#ab(#e)}` leaves
 			// `abcd` alone where `${x#abcd(#e)}` empties it.
 			if ok, m := matchPatternIn(pattern, piece, value, lo, o); ok {
-				return lo, hi, m, true
+				if want--; want == 0 {
+					return lo, hi, m, true
+				}
+				if !found {
+					found, firstLo, firstHi, firstM = true, lo, hi, m
+				}
+				break
 			}
 		}
 		if a == final {
 			break
 		}
+	}
+	if found && !prefix {
+		// A backward search asked for more matches than there are takes the
+		// first one after all, which is measured rather than tidy — see
+		// matchIndexFlag. A forward one takes none.
+		return firstLo, firstHi, firstM, true
 	}
 	return 0, 0, matchReport{}, false
 }

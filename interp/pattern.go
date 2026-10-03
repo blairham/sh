@@ -821,6 +821,10 @@ func (r *Runner) patternMetaSet() string {
 // second axis reached the same code.
 type patternOpts struct {
 	caret bool
+	// nth is which match a substring search takes, counting one per
+	// starting position in the search's own direction: the `I` flag. Zero
+	// and one both mean the first. See matchIndexFlag.
+	nth int
 	// tilde reads a `~(…)` prefix on the pattern, which is one dialect's
 	// pattern-modifier group — see interp/tildemodifier.go. A grammar
 	// answer, because the lexer has to have let the `(` into the word

@@ -510,6 +510,11 @@ type ParamExpr struct {
 	// group means is Flags' question: a `z` in it splits, a `Z` in it splits
 	// when this is non-empty.
 	ShellSplitOpts string
+	// MatchIndex is the `I` flag's argument as written — an arithmetic
+	// expression naming which match a substring search or a substitution
+	// acts on — and empty where the group wrote none. The last one written
+	// is the one read.
+	MatchIndex string
 	// EscapeOpts is the option letters the `g` flag's escape reading runs
 	// with: `o` for octal escapes that need no leading zero, `e` for the
 	// `\M-x` family, and `c` for `^X`. `${(g:oe:)v}` carries "oe" and the
@@ -1405,6 +1410,8 @@ func (p *Parser) scanParamFlags(e *ParamExpr, src string) string {
 				e.SplitSep = arg
 			case 'j':
 				e.JoinSep = arg
+			case 'I':
+				e.MatchIndex = arg
 			case 'l', 'r':
 				// Three slots filled in by position, and only where the
 				// group wrote one. See ParamPad for why a fill written

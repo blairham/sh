@@ -3,7 +3,10 @@
 
 package interp
 
-import "sync/atomic"
+import (
+	"sync"
+	"sync/atomic"
+)
 
 // A background job here is a goroutine, and some of them are only that. An
 // external command gives the job a real process and a real process id; a
@@ -120,4 +123,61 @@ func (r *Runner) inventJobIdent() int {
 		r.jobIdents = new(atomic.Uint32)
 	}
 	return inventedJobIdentBase + int(r.jobIdents.Add(1)&(inventedJobIdentBase-1))
+}
+
+// inventedJobRegistry is every job this shell and its descendants started that
+// answers to an invented number, for the `kill` that names one by number from
+// a shell whose job table does not list it.
+//
+// A real shell's `$!` is a process id, and a process id reaches the process
+// from anywhere: a background body that was handed `$p` signals the job its
+// parent started, though its own `jobs` lists nothing. Measured 2026-10-03 on
+// ksh93u+ 2012-08-01, whose `sleep` is a builtin, with `sleep 0.3 & p=$!`:
+// `{ kill -0 $p && echo alive; } &` prints alive, and `{ kill $p; } & wait
+// $p` terminates the job. Here the number named nothing outside the table, so
+// both said `kill: 1073741825: no such process` (#5684). Only `kill` reads
+// this: a `wait` for a job that is not this shell's child is refused in every
+// column, so the table stays its answer.
+type inventedJobRegistry struct {
+	mu   sync.Mutex
+	jobs map[int]*Job
+}
+
+// registerInventedJob records a job by the number it was invented, dropping
+// any that have finished.
+func (r *Runner) registerInventedJob(j *Job) {
+	if r.inventedJobs == nil {
+		r.inventedJobs = &inventedJobRegistry{}
+	}
+	reg := r.inventedJobs
+	reg.mu.Lock()
+	defer reg.mu.Unlock()
+	if reg.jobs == nil {
+		reg.jobs = map[int]*Job{}
+	}
+	for n, k := range reg.jobs {
+		if k.Finished() {
+			delete(reg.jobs, n)
+		}
+	}
+	reg.jobs[j.ident] = j
+}
+
+// reachInventedJob is the running job an invented number names anywhere in
+// this shell's family, and still answers to: a job that has since started a
+// process answers to that process instead. A finished one is left to its own
+// shell's table, which keeps it answering until a `wait` collects it and
+// then lets it go (TestAnEndedJobStillAnswersKillUntilItIsWaitedFor).
+func (r *Runner) reachInventedJob(n int) *Job {
+	if n < inventedJobIdentBase || r.inventedJobs == nil {
+		return nil
+	}
+	reg := r.inventedJobs
+	reg.mu.Lock()
+	j := reg.jobs[n]
+	reg.mu.Unlock()
+	if j == nil || j.Finished() || j.Ident() != n {
+		return nil
+	}
+	return j
 }

@@ -919,6 +919,14 @@ type Runner struct {
 	// dialect. See dynamicdir.go.
 	DynamicDirectoryFunctions func(r *Runner) []string
 
+	// NumberedTildeSwapsItsSigns says whether `~+N` counts from the bottom of
+	// the directory stack and `~-N` from the top, where the dialect has an
+	// option that swaps them — zsh's `pushdminus`, measured 2026-10-03 on
+	// zsh 5.9.2 over a stack of four: `~+1` is the entry above the bottom and
+	// `~-1` the one below the top, and a bare `~1` still counts from the top.
+	// Nil is never.
+	NumberedTildeSwapsItsSigns func(r *Runner) bool
+
 	// Terminal says this shell has a terminal, which is the fact job control
 	// turns on: the kernel hands SIGINT and SIGTSTP to whatever process group
 	// owns one, so a shell with none has nothing to hand a job and nothing to

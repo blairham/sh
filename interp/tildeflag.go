@@ -199,7 +199,7 @@ func (r *Runner) tildeSplit(v string) (dir, tail string, ok bool, miss tildeMiss
 	}
 	if dir, ok, isIndex := r.directoryStackTilde(name); isIndex {
 		if !ok {
-			return "", "", false, tildeMiss{}
+			return "", "", false, r.unresolvedStackTilde()
 		}
 		return dir, tail, true, tildeMiss{}
 	}
@@ -239,7 +239,9 @@ func (r *Runner) tildeSplit(v string) (dir, tail string, ok bool, miss tildeMiss
 // number is `+N`, which is the spelling scripts use.
 func (r *Runner) directoryStackTilde(name string) (dir string, ok, isIndex bool) {
 	param := r.sem().DirectoryStackParameter
-	if param == "" {
+	pushed := param == "" && r.sem().NumberedTildeReadsThePushedDirectories == Yes &&
+		r.sem().PushedDirectoriesParameter != ""
+	if param == "" && !pushed {
 		return "", false, false
 	}
 	digits, fromBottom := name, false
@@ -248,6 +250,14 @@ func (r *Runner) directoryStackTilde(name string) (dir string, ok, isIndex bool)
 		digits = name[1:]
 	case '-':
 		digits, fromBottom = name[1:], true
+	}
+	if name[0] == '+' || name[0] == '-' {
+		if r.NumberedTildeSwapsItsSigns != nil && r.NumberedTildeSwapsItsSigns(r) {
+			// The option that swaps what `pushd +N` and `-N` count from
+			// swaps the signed tildes with them, and leaves a bare `~N`
+			// counting from the top. See Runner.NumberedTildeSwapsItsSigns.
+			fromBottom = !fromBottom
+		}
 	}
 	if digits == "" {
 		return "", false, false
@@ -265,7 +275,16 @@ func (r *Runner) directoryStackTilde(name string) (dir string, ok, isIndex bool)
 		// there will ever be, which is the same answer as `~99`.
 		return "", false, true
 	}
-	entries, _ := r.arrayElems(param)
+	var entries []string
+	if pushed {
+		// The pushed directories hold every entry but the current one,
+		// which is slot zero. See Semantics.NumberedTildeReadsThePushedDirectories.
+		entries = []string{r.currentDirectoryForTheStack()}
+		more, _ := r.arrayElems(r.sem().PushedDirectoriesParameter)
+		entries = append(entries, more...)
+	} else {
+		entries, _ = r.arrayElems(param)
+	}
 	if fromBottom {
 		n = len(entries) - 1 - n
 	}
@@ -377,6 +396,22 @@ func (r *Runner) substitutedColonTildes(v string) string {
 // taken. The zero value is no refusal.
 type tildeMiss struct {
 	name string
+	// stack is a directory stack index past the end, which is refused in
+	// words of its own. See unresolvedStackTilde.
+	stack bool
+}
+
+// unresolvedStackTilde is the refusal for a numbered tilde past the end of
+// the directory stack, on the same terms as unresolvedTilde. Measured
+// 2026-10-03 on zsh 5.9.2 under -f: `print ~1; print after` with nothing
+// pushed is `not enough directory stack entries.`, status 1, and the script
+// stops, as `pushd -q /tmp; print ~3` and `~-3` are, and `setopt nonomatch`
+// leaves the word. bash 5.3.20 leaves it as written (#5656).
+func (r *Runner) unresolvedStackTilde() tildeMiss {
+	if r.sem().UnresolvedTildeIsAnError != Yes || r.sem().GlobNoMatchIsError != Yes {
+		return tildeMiss{}
+	}
+	return tildeMiss{stack: true}
 }
 
 // unresolvedTilde is the refusal for a name neither the named directories nor
@@ -426,7 +461,7 @@ func tildeLooksUpTheName(name string) bool {
 // refuseTilde reports a tilde the dialect refuses and ends what a failed
 // expansion ends. It reports whether there was one.
 func (r *Runner) refuseTilde(m tildeMiss) bool {
-	if m.name == "" {
+	if m.name == "" && !m.stack {
 		return false
 	}
 	if r.ctl == controlExit || r.ctl == controlAbandon {
@@ -434,7 +469,21 @@ func (r *Runner) refuseTilde(m tildeMiss) bool {
 		// twice, and the refusal leaves the tilde there to be read again.
 		return true
 	}
-	r.diagf("no such user or named directory: %s\n", m.name)
+	if m.stack {
+		r.diagf("not enough directory stack entries.\n")
+	} else {
+		r.diagf("no such user or named directory: %s\n", m.name)
+	}
 	r.failedExpansion()
 	return true
+}
+
+// currentDirectoryForTheStack is slot zero of a directory stack built from
+// the pushed directories: `$PWD`, as `dirs` prints it, and the runner's own
+// directory where the script has unset it.
+func (r *Runner) currentDirectoryForTheStack() string {
+	if v, ok := r.getVar("PWD"); ok && v != "" {
+		return v
+	}
+	return r.workDir()
 }

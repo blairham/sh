@@ -25472,6 +25472,23 @@ type Semantics struct {
 	// zsh's until its own stack is measured.
 	DirectoryStackParameter string
 
+	// NumberedTildeReadsThePushedDirectories makes a numbered tilde index the
+	// stack PushedDirectoriesParameter holds, with the current directory in
+	// front of it as slot zero, where DirectoryStackParameter names nothing.
+	// Measured 2026-10-03 on zsh 5.9.2 under -f, after `pushd -q /tmp;
+	// pushd -q /` in a directory D:
+	//
+	//	~0 ~+0 ~1 ~2       /  /  /tmp  D
+	//	~-0 ~-1 ~-2        D  /tmp  /
+	//	~01 ~+01 ~0/x      /tmp  /tmp  //x
+	//	~0 with no push    D
+	//	x=~1; y=a:~1       D  a:D
+	//
+	// Past the end it is refused; see Runner.unresolvedStackTilde. zsh Yes;
+	// No elsewhere, where the stack parameter or no tilde at all answers
+	// (#5656).
+	NumberedTildeReadsThePushedDirectories Answer
+
 	// SetHasTheErrtraceLetter gives `set` the -E letter, which carries the
 	// ERR trap into functions and subshells the dialect otherwise bounds it
 	// out of. bash and BusyBox ash: dash and ksh93 refuse the letter, and zsh
@@ -30742,6 +30759,8 @@ func PosixSemantics() Semantics {
 		// and dash, the shell in the panel that targets it, leaves the word
 		// as written. See the field.
 		UnresolvedTildeIsAnError: No,
+		// The standard has no directory stack. See the field.
+		NumberedTildeReadsThePushedDirectories: No,
 		// The standard's fatal expansion error is a status like any other's.
 		// See the field.
 		FailedExpansionInADeclarationOrCaseSetsNoStatus: No,

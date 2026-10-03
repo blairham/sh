@@ -28,6 +28,18 @@ import "github.com/blairham/sh/interp"
 // reach, so a subshell has its own copy.
 const zleBooted = zshEngineStorePrefix + "zle.booted"
 
+// zleEditorStarted records that the editor itself has run, or is about to at
+// startup, which is what brings `zsh/complete` with it: under `-fiV +Z` a
+// `bindkey` loads `zsh/zle` and not `zsh/complete`, and `setopt zle` then the
+// next line loads both (#5524).
+const zleEditorStarted = zshEngineStorePrefix + "zle.started"
+
+// lineEditorStarted is zleEditorStarted read.
+func lineEditorStarted(r *interp.Runner) bool {
+	v, _ := r.GetVar(zleEditorStarted)
+	return v != ""
+}
+
 // bootLineEditor loads the line editor's module, if it has not been loaded.
 func bootLineEditor(r *interp.Runner) {
 	if v, _ := r.GetVar(zleBooted); v != "" {
@@ -43,6 +55,7 @@ func bootLineEditor(r *interp.Runner) {
 func BeforeStartupFiles(r *interp.Runner) {
 	if r.Interactive && r.Terminal && editorOptionOn(r) {
 		bootLineEditor(r)
+		r.SetVar(zleEditorStarted, "1")
 	}
 }
 
@@ -51,6 +64,7 @@ func BeforeStartupFiles(r *interp.Runner) {
 func StartLine(r *interp.Runner) {
 	if r.Interactive && r.Terminal && editorOptionOn(r) {
 		bootLineEditor(r)
+		r.SetVar(zleEditorStarted, "1")
 	}
 	ResetRegionHighlight(r)
 }
@@ -60,3 +74,13 @@ func editorOptionOn(r *interp.Runner) bool {
 	on, _ := r.DialectOption("zle")
 	return on
 }
+
+// lineEditorBooted says the line editor's module has loaded.
+func lineEditorBooted(r *interp.Runner) bool {
+	v, _ := r.GetVar(zleBooted)
+	return v != ""
+}
+
+// unbootLineEditor is `zmodload -u zsh/zle`: the next use loads it again, and
+// makes its parameter again with it.
+func unbootLineEditor(r *interp.Runner) { r.SetVar(zleBooted, "") }

@@ -598,12 +598,16 @@ var zmodloadEditorLoads = map[string]func(r *interp.Runner) bool{
 	// There before the first startup file, which is what #4233 turns on:
 	// `add-zle-hook-widget` guards itself with `zmodload -e zsh/zle` and
 	// every plugin that binds a widget calls it from an rc file.
-	"zsh/zle": func(*interp.Runner) bool { return true },
+	//
+	// Once its module has loaded, that is, which at a prompt is before the
+	// first startup file when the editor's option is on — and not at all
+	// under `-fiV +Z` until something loads it (#5524). See zleboot.go.
+	"zsh/zle": lineEditorBooted,
 	// And this one is not there yet while a startup file is running. Asked
 	// of the call stack rather than of a flag, because "a file the shell is
 	// in" is already a frame here — see [interp.Frame.Startup], which marks
 	// the run-commands file, the login profile and `$ENV` alike.
-	"zsh/complete": func(r *interp.Runner) bool { return !zmodloadInStartupFile(r) },
+	"zsh/complete": func(r *interp.Runner) bool { return lineEditorStarted(r) && !zmodloadInStartupFile(r) },
 }
 
 // zmodloadInStartupFile reports whether the shell is running a startup file
@@ -664,9 +668,15 @@ var zmodloadEditorNames = []string{"zsh/complete", "zsh/zle"}
 func zmodloadLoaded(r *interp.Runner) []string {
 	stored, ok := r.GetArray(zmodloadStore)
 	if !ok {
-		return zmodloadStartedWith(r)
+		stored = zmodloadStartedWith(r)
 	}
 	out := append([]string(nil), stored...)
+	// The editor's module loads by being used as well as by being asked for —
+	// a `bindkey` in a script loads it, measured: `zmodload -e zsh/zle` is 1
+	// before and 0 after. See zleboot.go.
+	if lineEditorBooted(r) && !slices.Contains(out, "zsh/zle") {
+		out = append(out, "zsh/zle")
+	}
 	// Sorted because that is the order zsh's listing is in. This was once
 	// unobservable — only a module with no features loaded, and there is
 	// exactly one of those — and it is observable now: `zsh/datetime` has
@@ -681,8 +691,12 @@ func zmodloadLoaded(r *interp.Runner) []string {
 func zmodloadSetLoaded(r *interp.Runner, module string, loaded bool) {
 	// The editor's module creates its parameter as it loads, once. See
 	// zleboot.go.
-	if loaded && module == "zsh/zle" {
-		bootLineEditor(r)
+	if module == "zsh/zle" {
+		if loaded {
+			bootLineEditor(r)
+		} else {
+			unbootLineEditor(r)
+		}
 	}
 	kept := make([]string, 0, len(zmodloadLoaded(r))+1)
 	for _, m := range zmodloadLoaded(r) {

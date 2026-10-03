@@ -11016,6 +11016,38 @@ type Semantics struct {
 	// the ended rows either way.
 	EndedJobIsListedAsRunningWithoutTheMonitor Answer
 
+	// BareWaitLeavesJobsForTheListing keeps the jobs a bare `wait` reaped in
+	// the table of a shell with nobody to send a notice to, so the next
+	// `jobs` lists them once — with whatever state the listing would give a
+	// job it had not seen end, under EndedJobIsListedAsRunningWithoutTheMonitor.
+	// Measured 2026-10-03 from `-c` strings: ksh93u+ 2012-08-01 writes
+	// `[1] +  Running …` for `( exit 3 ) & wait; jobs` and for `/bin/sleep 0.1
+	// & wait; jobs`, `[1] + Terminated …` once a `kill %1` came first, the
+	// same under `set -m`, and nothing on a second `jobs`; `wait %1` instead
+	// of the bare one leaves nothing. bash 5.3.20, zsh 5.9.2, dash and BusyBox
+	// ash list nothing after a bare `wait`. ksh93 Yes; No elsewhere (#5687).
+	BareWaitLeavesJobsForTheListing Answer
+
+	// BareWaitReportsASignalDeath says when a bare `wait` says, for each job
+	// it waited out that a signal ended, what a `wait` naming the job says.
+	// Measured 2026-10-03 from `-c` strings with `/bin/sleep 5 &` killed:
+	//
+	//	                     bash 5.3/3.2  ksh93u+        dash, zsh, ash
+	//	kill -9; wait        the row       nothing        nothing
+	//	set -m; kill; wait   nothing (TERM) wait: N: Terminated  —
+	//	set -m; kill -9; wait  the row     wait: N: Killed —
+	//
+	// The row is the named route's own, so its quiet signals stay quiet:
+	// TERM and INT for bash, INT for ksh93. dash and BusyBox ash report on the
+	// named route only, and zsh on neither (#5687, #5699).
+	//
+	// bash reports only a job the `wait` itself reaps: `kill -9 %1; sleep
+	// 0.3; wait` says nothing in three runs of three, the job having been
+	// collected while the `sleep` ran, and with two jobs killed together it
+	// reports one or both from run to run. ksh93 under the monitor reports
+	// it after a builtin `sleep` too.
+	BareWaitReportsASignalDeath BareWaitSignalReport
+
 	// JobNoticeNamesThePID makes a job *notice* name the job's process id —
 	// the long row `jobs -l` writes, rather than the short one `jobs` writes.
 	//
@@ -32248,6 +32280,10 @@ func PosixSemantics() Semantics {
 		TildePrefixStopsAtAQuoteOrAnExpansion: Yes,
 		// Not reached where the prefix stops at a quote. See the field.
 		TildeNameEndsOnlyAtAWrittenSlash: No,
+		// A bare `wait` lets its jobs go where nobody is told. See the field.
+		BareWaitLeavesJobsForTheListing: No,
+		// And it says nothing of how they ended. See the field.
+		BareWaitReportsASignalDeath: BareWaitReportsNoSignalDeath,
 		// A numeral of any length is an index where there is a stack. See
 		// the field.
 		ABareNumberedTildeOfThreeDigitsIsAName: No,
@@ -32592,6 +32628,10 @@ func CoreSemantics() Semantics {
 		TildePrefixStopsAtAQuoteOrAnExpansion: Yes,
 		// Not reached where the prefix stops at a quote. See the field.
 		TildeNameEndsOnlyAtAWrittenSlash: No,
+		// A bare `wait` lets its jobs go where nobody is told. See the field.
+		BareWaitLeavesJobsForTheListing: No,
+		// And it says nothing of how they ended. See the field.
+		BareWaitReportsASignalDeath: BareWaitReportsNoSignalDeath,
 		// A numeral of any length is an index where there is a stack. See
 		// the field.
 		ABareNumberedTildeOfThreeDigitsIsAName: No,
@@ -37815,4 +37855,34 @@ func (b RangeOperandBackslash) String() string {
 		return "RangeBackslashAsInTheWord"
 	}
 	return "RangeBackslashUnspecified"
+}
+
+// BareWaitSignalReport is when a bare `wait` reports a job a signal ended.
+// See Semantics.BareWaitReportsASignalDeath for the measurements.
+type BareWaitSignalReport uint8
+
+const (
+	// BareWaitSignalReportUnspecified is no answer.
+	BareWaitSignalReportUnspecified BareWaitSignalReport = iota
+	// BareWaitReportsNoSignalDeath says nothing. dash, zsh, BusyBox ash.
+	BareWaitReportsNoSignalDeath
+	// BareWaitReportsASignalDeathUnderTheMonitor says so only under `set -m`.
+	// ksh93.
+	BareWaitReportsASignalDeathUnderTheMonitor
+	// BareWaitReportsASignalDeathItReaps says so whatever the monitor, for a
+	// job still running when the `wait` began — the one the wait itself
+	// reaps. bash.
+	BareWaitReportsASignalDeathItReaps
+)
+
+func (p BareWaitSignalReport) String() string {
+	switch p {
+	case BareWaitReportsNoSignalDeath:
+		return "no signal death"
+	case BareWaitReportsASignalDeathUnderTheMonitor:
+		return "a signal death under the monitor"
+	case BareWaitReportsASignalDeathItReaps:
+		return "a signal death it reaps"
+	}
+	return "unspecified"
 }

@@ -1480,6 +1480,10 @@ func Semantics() interp.Semantics {
 	// Semantics.TildePrefixStopsAtAQuoteOrAnExpansion it corrects (#5689).
 	s.TildePrefixStopsAtAQuoteOrAnExpansion = interp.No
 	s.TildeNameEndsOnlyAtAWrittenSlash = interp.Yes
+	// And a bare `wait` leaves its jobs for one more listing. See the field
+	// (#5687).
+	s.BareWaitLeavesJobsForTheListing = interp.Yes
+	s.BareWaitReportsASignalDeath = interp.BareWaitReportsASignalDeathUnderTheMonitor
 	// This shell has `$_`, and the row that said it did not was measured
 	// through a `;`-list — the one shape where a shell with the parameter
 	// and a shell without it give the same empty answer. `echo one two`
@@ -4590,8 +4594,13 @@ func Diagnostics() interp.Diagnostics {
 		// there. The blind spot is
 		// Semantics.EndedJobIsListedAsRunningWithoutTheMonitor now, and
 		// these are the words for a job this shell knows has ended (#3537).
-		JobDone:   " Done",
-		JobExited: " Done(%[1]d)",
+		JobDone: " Done",
+		// A job a signal ended is named by the signal, with no space in front
+		// where the other states have one: measured 2026-10-03 on ksh93u+,
+		// `[1] + Terminated               <command unknown>` and `[1] +
+		// Killed …` beside `[1] +  Running …` (#5698).
+		JobSignaled: "%[1]s",
+		JobExited:   " Done(%[1]d)",
 		// The name first, then the verb with the OS string bracketed after
 		// it — the same shape ksh93 uses for `.`, which DotCannotOpen
 		// already says.

@@ -3237,6 +3237,10 @@ type Runner struct {
 	// tildeWarnTail is the rest of the word a tilde prefix stands in front
 	// of, for the one warning that quotes it. See warnTruncatedTildeNumber.
 	tildeWarnTail string
+	// bareWaitLeavesJobs is set while a bare `wait` runs in the column whose
+	// jobs it reaps stay for the next listing. See
+	// Semantics.BareWaitLeavesJobsForTheListing.
+	bareWaitLeavesJobs bool
 	// reaped are the jobs a `wait` has already reported the status of, newest
 	// last and bounded by reapedJobsKept.
 	//

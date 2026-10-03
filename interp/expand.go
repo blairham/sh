@@ -3622,7 +3622,7 @@ func (r *Runner) expandParam(e *syntax.ParamExpr) string {
 			r.liveMarksFor = &inner
 			defer func() { r.liveMarksFor = e }()
 		}
-		n := r.stringLength(stripLiveMarks(r.expandParam(&inner)))
+		n := r.stringLength(strings.ReplaceAll(stripLiveMarks(r.expandParam(&inner)), pendingMark, "$"))
 		if r.unspecified {
 			// The same guard the plain length keeps: an unanswered axis
 			// underneath has already spoken, and a number on top of it would

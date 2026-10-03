@@ -321,6 +321,43 @@ func withoutQuotes(s string) string {
 // `"${s:s/a/'q'/}"` keeps its `'q'`. A glob qualifier's `:s` keeps its own
 // reading.
 func (r *Runner) substituteReplacement(value, pattern, with string, global bool, e *syntax.ParamExpr) string {
+	out := r.substituteReplacementBody(value, pattern, with, global, e)
+	if r.replacementOpensTheResult(value, pattern, with, e) && !strings.HasPrefix(out, headTokenMark) {
+		return headTokenMark + out
+	}
+	return out
+}
+
+// A `~` or `=` that a replacement writes at the head of the result opens it
+// the way one written at the head of a word does: the result is a `~`
+// directory or an `=cmd` path, once every modifier and flag has run.
+// Measured 2026-10-03 on zsh 5.9.2 under `-f`, with `s=A`:
+//
+//	${s:s/A/~/}  ${s:s/A/~/}/x       $HOME  $HOME/x
+//	${s:s/A/~root/}  ${s:s/A/=ls/}   /var/root  /bin/ls
+//	${(U)s:s/A/~/}                   $HOME, the case flag having run first
+//	a=(A A); ${a:s/A/~/}             $HOME $HOME
+//	v=${s:s/A/~/}                    $HOME, in an assignment too
+//	x${s:s/A/~/}  s=xA; ${s:s/A/~/}  x~  x~, not at the head
+//	${s:s/A/'~'/}  ${s:s/A/\~/}      ~  ~, quoted
+//	"${s:s/A/~/}"  ${s:s/A/=/}       ~  =
+//
+// headTokenMark opens such a result, and resolvePending, which runs at the
+// end of the expansion, reads it (#5641).
+const headTokenMark = "\uf8fc"
+
+// replacementOpensTheResult reports whether the replacement's unquoted `~` or
+// `=` lands at the head of the result, for the expansion the word loop is
+// expanding.
+func (r *Runner) replacementOpensTheResult(value, pattern, with string, e *syntax.ParamExpr) bool {
+	if pattern == "" || with == "" || (with[0] != '~' && with[0] != '=') || !strings.HasPrefix(value, pattern) {
+		return false
+	}
+	return r.liveMarksFor != nil && r.liveMarksFor == e && r.liveMarksAtHead &&
+		strings.Trim(e.Flags, "ULCoO@") == "" && !r.inDoubleQuotedSpan()
+}
+
+func (r *Runner) substituteReplacementBody(value, pattern, with string, global bool, e *syntax.ParamExpr) string {
 	live := r.marksLiveReplacement(with, e)
 	if pattern == "" || r.modifierTextEscaped || !live && !strings.ContainsAny(with, `$'"`) {
 		return substituteLiteral(value, pattern, with, global)
@@ -437,6 +474,14 @@ func pendSource(src string) string {
 // resolvePending expands a deferred value: each pendingMark is a `$` again,
 // and everything else is text. A value with none comes back as it was.
 func (r *Runner) resolvePending(v string) string {
+	if strings.HasPrefix(v, headTokenMark) {
+		// A head the replacement wrote, read once the value is whole. See
+		// headTokenMark.
+		return r.substitutedFileValue(r.resolvePending(strings.ReplaceAll(v, headTokenMark, "")))
+	}
+	if strings.Contains(v, headTokenMark) {
+		v = strings.ReplaceAll(v, headTokenMark, "")
+	}
 	if !strings.Contains(v, pendingMark) {
 		return v
 	}
@@ -541,6 +586,9 @@ func (r *Runner) marksLiveReplacement(with string, e *syntax.ParamExpr) bool {
 
 // stripLiveMarks takes the sentinels out of a value nobody globs.
 func stripLiveMarks(v string) string {
+	if strings.Contains(v, headTokenMark) {
+		v = strings.ReplaceAll(v, headTokenMark, "")
+	}
 	if !strings.Contains(v, liveMark) {
 		return v
 	}

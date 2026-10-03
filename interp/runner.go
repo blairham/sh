@@ -3116,6 +3116,8 @@ type Runner struct {
 	// liveMarksFor is the expansion the word loop is expanding, whose `:s`
 	// replacement may mark the pattern characters it wrote. See liveMark.
 	liveMarksFor *syntax.ParamExpr
+	// liveMarksAtHead says that expansion opens its word. See headTokenMark.
+	liveMarksAtHead bool
 	// expandingRawText says the expansion running is part of a text read as
 	// a double-quoted string is: a here-document body, an arithmetic
 	// expression. See expandRawSpansWith.

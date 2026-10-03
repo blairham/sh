@@ -576,10 +576,10 @@ func (r *Runner) patternSpan(s syntax.Span) (text string, live bool) {
 		// that has the construct where `${p}` alone is false, and
 		// `${v#${~p}}` trims where `${v#${p}}` does not. It is the same
 		// question GlobExpansionResults answers, so it is the same override.
-		savedLive := r.liveMarksFor
-		r.liveMarksFor = s.Param
+		savedLive, savedHead := r.liveMarksFor, r.liveMarksAtHead
+		r.liveMarksFor, r.liveMarksAtHead = s.Param, true
 		v := r.resolvePending(r.expandParam(s.Param))
-		r.liveMarksFor = savedLive
+		r.liveMarksFor, r.liveMarksAtHead = savedLive, savedHead
 		var text string
 		var live bool
 		if strings.Contains(v, liveMark) {

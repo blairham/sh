@@ -2118,9 +2118,16 @@ func (p *Parser) fillParamArgs(e *ParamExpr, rest string, start Pos, q Quoting) 
 	case ParamReplace, ParamElementReplace:
 		// The separator is an unquoted slash, so a slash inside quotes or
 		// after a backslash belongs to the pattern.
-		if i := indexUnquoted(rest, '/', p.dialect.DollarSingleQuote); i >= 0 {
-			e.Arg = p.patternFrom(rest[:i], start)
-			e.Arg2 = p.wordFrom(rest[i+1:], start, Unquoted)
+		i := indexUnquoted(rest, '/', p.dialect.DollarSingleQuote)
+		if p.dialect.ReplacementSlashIgnoresQuotes {
+			i = indexUnescaped(rest, '/')
+		}
+		if i >= 0 {
+			// The cut can fall inside a quote, and the two readers already
+			// take a quote left open the way the field says. See it.
+			pattern, replacement := rest[:i], rest[i+1:]
+			e.Arg = p.patternFrom(pattern, start)
+			e.Arg2 = p.wordFrom(replacement, start, Unquoted)
 			// And the same text read as content of the quoting around the
 			// expansion, where that could come to something else. See
 			// ParamExpr.Arg2Enclosed.
@@ -2792,4 +2799,17 @@ func markInsideASubscript(w *Word, quoted bool) {
 			s.Param.IndexFlags.PatternSpendsAnEscapedQuote = true
 		}
 	}
+}
+
+// indexUnescaped is the first c in s that no backslash protects.
+func indexUnescaped(s string, c byte) int {
+	for i := 0; i < len(s); i++ {
+		switch s[i] {
+		case '\\':
+			i++
+		case c:
+			return i
+		}
+	}
+	return -1
 }

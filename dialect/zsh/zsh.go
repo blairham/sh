@@ -17,6 +17,8 @@ import (
 // Dialect is what zsh parses.
 func Dialect() syntax.Dialect {
 	d := syntax.Core()
+	// A replacement's `/` is found without regard to quotes. See the field.
+	d.ReplacementSlashIgnoresQuotes = true
 	// `$[expr]`, zsh's other arithmetic spelling and the older one.
 	// Measured 2026-09-06: `echo $[1+1]` is 2, and the same text is
 	// the literal `$[1+1]` in ksh93 and dash. Reading it as a glob is

@@ -129,10 +129,14 @@ func TestAScriptWithNoInterpreterLineIsNotReplacedInto(t *testing.T) {
 		t.Fatal(err)
 	}
 	sem, diag := zsh.Semantics(), zsh.Diagnostics()
-	var out strings.Builder
+	out, err := os.Create(dir + "/out")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = out.Close() }()
 	replaced := false
 	r := &interp.Runner{
-		Stdin: tailDevNull(t), Stdout: &out, Stderr: &out, Semantics: &sem, Diagnostics: &diag,
+		Stdin: tailDevNull(t), Stdout: out, Stderr: out, Semantics: &sem, Diagnostics: &diag,
 		Dir: dir, Name: "zsh", Route: interp.RouteCommandString,
 		Vars:    map[string]string{"PATH": "/usr/bin:/bin"},
 		Dialect: presetDialect(),
@@ -147,8 +151,8 @@ func TestAScriptWithNoInterpreterLineIsNotReplacedInto(t *testing.T) {
 	if replaced {
 		t.Error("a script with no interpreter line was handed to the replacement")
 	}
-	if out.String() != "ran\n" {
-		t.Errorf("it printed %q, want %q", out.String(), "ran\n")
+	if b, _ := os.ReadFile(dir + "/out"); string(b) != "ran\n" {
+		t.Errorf("it printed %q, want %q", b, "ran\n")
 	}
 }
 

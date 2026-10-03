@@ -5071,6 +5071,10 @@ type Runner struct {
 	// interp/shellownparameter.go, and ParameterAttributes.Provided, which
 	// is what reads it.
 	shellOwn map[string]bool
+	// shellOwnWhileSet is the names the shell owns only while they hold a
+	// value — see MarkShellOwnParameterWhileSet. Written at setup and never
+	// again, so a subshell shares it.
+	shellOwnWhileSet map[string]bool
 	// envNotAdopted names the parameters whose entry in the environment this
 	// shell **did not take over**: the value is the shell's own, the entry
 	// goes to a child as it arrived, and the export the environment brought

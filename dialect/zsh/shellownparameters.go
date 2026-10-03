@@ -61,6 +61,9 @@ func markTheShellsOwnParameters(r *interp.Runner) {
 	for _, name := range storedShellOwnParameters {
 		r.MarkShellOwnParameter(name)
 	}
+	for _, name := range shellOwnWhileSet {
+		r.MarkShellOwnParameterWhileSet(name)
+	}
 	markTheProcessDepthAndIndex(r)
 	markTheDirectoryStack(r)
 }
@@ -114,6 +117,28 @@ var storedShellOwnParameters = [...]string{
 	"READNULLCMD",
 	"WORDCHARS",
 	"histchars",
+}
+
+// shellOwnWhileSet are the names this shell calls its own once something has
+// set them, and leaves absent until then — see
+// interp.Runner.MarkShellOwnParameterWhileSet for the measurement (#5575).
+// The terminal and locale names a script or the environment supplies, and
+// the right-hand prompts, whose `PROMPT`-style aliases already answered.
+var shellOwnWhileSet = [...]string{
+	"LANG",
+	"LC_ALL",
+	"LC_COLLATE",
+	"LC_CTYPE",
+	"LC_MESSAGES",
+	"LC_NUMERIC",
+	"LC_TIME",
+	"RPROMPT",
+	"RPROMPT2",
+	"RPS1",
+	"RPS2",
+	"TERM",
+	"TERMINFO",
+	"TERMINFO_DIRS",
 }
 
 // markTheProcessDepthAndIndex is the three names whose *kind* was wrong as

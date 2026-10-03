@@ -135,7 +135,10 @@ func (r *Runner) wasTheShellsOwnParameter(name string) bool {
 	if r.notShellOwn[name] {
 		return false
 	}
-	return r.shellOwn[name] || r.DynamicParameter(name) || r.AbsentParameter(name)
+	// A name owned only while set is asked about by its mark alone: the
+	// question is put as the value goes, and the value is no evidence by
+	// then. See Runner.MarkShellOwnParameterWhileSet.
+	return r.shellOwn[name] || r.shellOwnWhileSet[name] || r.DynamicParameter(name) || r.AbsentParameter(name)
 }
 
 // unsetKeepsTheAttributes reports whether the `unset` about to happen should

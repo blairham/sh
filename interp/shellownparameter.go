@@ -34,6 +34,31 @@ func (r *Runner) MarkShellOwnParameter(name string) {
 	r.shellOwn[name] = true
 }
 
+// MarkShellOwnParameterWhileSet records that a name is the shell's own
+// **while it holds a value**, and an ordinary absent name otherwise.
+//
+// MarkShellOwnParameter is a name the shell *has*: marking one makes it exist,
+// so `${(t)HOME}` answers whatever a script did to it. A second set of names
+// is the shell's own and still absent until something sets it. Measured
+// 2026-10-03 on zsh 5.9.2 under `env -i PATH=/usr/bin:/bin`, `-f`:
+//
+//	                  unset          after `NAME=x`    after `export NAME=y`
+//	${(t)TERM}        (nothing)      scalar-special    scalar-export-special
+//	${(t)LANG}        (nothing)      scalar-special    scalar-export-special
+//	${(t)HISTFILE}    (nothing)      scalar            scalar-export  ← control
+//
+// and `TERMINFO`, `TERMINFO_DIRS`, `LC_ALL`, `LC_CTYPE`, `LC_COLLATE`,
+// `LC_MESSAGES`, `LC_NUMERIC`, `LC_TIME`, `RPROMPT`, `RPS1`, `RPROMPT2` and
+// `RPS2` answer as `TERM` does (#5575). The mark is the fact the word is read
+// off, and it is also what an `unset` asks before deciding the attributes
+// stay: `export TERM=x; unset TERM; TERM=y` hands a child `TERM=y` there.
+func (r *Runner) MarkShellOwnParameterWhileSet(name string) {
+	if r.shellOwnWhileSet == nil {
+		r.shellOwnWhileSet = map[string]bool{}
+	}
+	r.shellOwnWhileSet[name] = true
+}
+
 // ShellOwnParameter reports whether this name is one the shell itself
 // maintains, which is the mark above read back.
 //

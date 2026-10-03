@@ -3165,7 +3165,13 @@ func (r *Runner) localDescribesTheBinding(name string) bool {
 // `typeset -ar q=(a); typeset -gi q=4` row reaches this gate first and would
 // have been refused here with the freeze already stood down.
 func (r *Runner) inconsistentTypeRefused(name string, fresh bool, f declareFlags) bool {
-	if fresh || !r.compoundCell(name) {
+	// A fresh local holds nothing an outer cell held, so a plain word over
+	// it declares a scalar — unless the line's own array letter is what made
+	// it a container, which is the same refusal at any depth: `f(){ local -a
+	// x=/y }` is `x: inconsistent type for assignment` in zsh 5.9.2 exactly
+	// as `typeset -a x=/y` is at the top, and so is `local -a path=/x`
+	// (#5605).
+	if (fresh && !f.array) || !r.compoundCell(name) {
 		return false
 	}
 	if f.namesANumericType(r) {
@@ -5169,6 +5175,12 @@ func (r *Runner) declareEmpty(name string, fresh, keepsTheEnvironmentEntry, name
 				return
 			}
 		}
+	}
+	if fresh && r.localKeepsTheOuterValue(name) && r.restoreTheOuterBinding(name) {
+		// A name whose valueless local holds what it held outside, ahead of
+		// every reading of an empty declaration. See
+		// Runner.MarkLocalKeepsTheOuterValue.
+		return
 	}
 	if keepsTheEnvironmentEntry && r.sem().ValuelessDeclarationLeavesTheNameUnset == Yes {
 		// The standard's reading of `export name` and `readonly name`, and

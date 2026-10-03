@@ -5086,6 +5086,10 @@ type Runner struct {
 	// failure and is running to its end before the line is abandoned. See
 	// Semantics.ConditionFinishesAfterAnArithmeticError.
 	condFinishing bool
+	// localKeepsOuter is the names whose valueless local holds the outer
+	// value. Written at setup and never again, so a subshell shares it. See
+	// MarkLocalKeepsTheOuterValue.
+	localKeepsOuter map[string]bool
 	// heldSubscriptFailure, where it is set, receives the sentence about a
 	// subscript that would not evaluate in place of the shell writing it, for
 	// the one caller that words it as its own. See testIsSetSubscriptFailed.

@@ -64,6 +64,10 @@ func markTheShellsOwnParameters(r *interp.Runner) {
 	for _, name := range shellOwnWhileSet {
 		r.MarkShellOwnParameterWhileSet(name)
 	}
+	// The two history sizes keep the outer value in a valueless local, where
+	// the shell's other integers start at 0 there (#5605).
+	r.MarkLocalKeepsTheOuterValue("HISTSIZE")
+	r.MarkLocalKeepsTheOuterValue("SAVEHIST")
 	markTheProcessDepthAndIndex(r)
 	markTheDirectoryStack(r)
 }

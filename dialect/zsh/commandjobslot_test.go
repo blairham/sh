@@ -107,16 +107,27 @@ func TestACommandHoldsAJobSlot(t *testing.T) {
 // **A finished job's number is free for the next one**, in the dialect where
 // the job leaves the table, and an oldest-first listing is by number (#5301).
 // Measured 2026-10-01 on zsh 5.9.2 under `-f -c`.
+//
+// No row races a sleep against the shell (#5554). It used `/bin/sleep 0.4`
+// jobs that had to be still running when `jobs` listed them, and at load 16
+// they were not. A job that must still be running now sleeps for thirty
+// seconds and is killed at the end, and a job that must have finished is
+// killed and waited for, so each state is something the script did rather
+// than something the clock allowed — and every job is killed by number at
+// the end, one more number than there should be, so a shell that numbered
+// them wrongly fails at once rather than waiting thirty seconds. Both rows
+// were measured again in this shape, 2026-10-03, on zsh 5.9.2, with the same
+// listing.
 func TestAFinishedJobsNumberIsTheNextJobs(t *testing.T) {
 	for _, c := range []struct{ name, src, want string }{
 		{
-			"refilled", `/bin/sleep 0.1 & /bin/sleep 0.3; /bin/sleep 0.2 & jobs; wait`,
-			"[1]  + running    /bin/sleep 0.2\n",
+			"refilled", `/bin/sleep 30 & kill %1; wait %1; /bin/sleep 30 & jobs; kill %1 %2 2>/dev/null; wait`,
+			"[1]  + running    /bin/sleep 30\n",
 		},
 		{
 			"listed by number",
-			`/bin/sleep 0.4 & /bin/sleep 0.4 & /bin/sleep 0.4 & kill %1; wait %1; /bin/sleep 0.2 & jobs; wait`,
-			"[1]  + running    /bin/sleep 0.2\n[2]    running    /bin/sleep 0.4\n[3]  - running    /bin/sleep 0.4\n",
+			`/bin/sleep 30 & /bin/sleep 30 & /bin/sleep 30 & kill %1; wait %1; /bin/sleep 30 & jobs; kill %1 %2 %3 %4 2>/dev/null; wait`,
+			"[1]  + running    /bin/sleep 30\n[2]    running    /bin/sleep 30\n[3]  - running    /bin/sleep 30\n",
 		},
 	} {
 		t.Run(c.name, func(t *testing.T) {

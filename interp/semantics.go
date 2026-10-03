@@ -1800,6 +1800,19 @@ type Semantics struct {
 	// zsh Yes, bash No; read as `== Yes`, so a dialect without the option
 	// never reaches it (#5155).
 	CdVariableIsANamedDirectory Answer
+	// UnresolvedTildeIsAnError refuses a `~name` that neither the named
+	// directories nor the user database answers, as a pattern matching
+	// nothing is refused, rather than leaving the word as written.
+	//
+	// Measured 2026-10-03 with `echo ~nosuchzz ~nosuchzz/x; echo after`:
+	// zsh 5.9.2 says `no such user or named directory: nosuchzz`, status 1,
+	// and stops, where bash 5.3.20, ksh93, dash and BusyBox ash print the
+	// words as written and go on. zsh's own `nonomatch` leaves them as
+	// written too, so the refusal is asked beside GlobNoMatchIsError.
+	//
+	// zsh Yes, every other dialect No; read as `== Yes`. See
+	// Runner.unresolvedTilde (#5646).
+	UnresolvedTildeIsAnError Answer
 
 	// DollarSingleBackslashC is what `\c` means inside `$'…'`, and like the
 	// `\c` of a printf format it is three different things rather than a
@@ -30655,6 +30668,10 @@ func PosixSemantics() Semantics {
 		// variable, so there is no reading of one to take: No, which is
 		// bash 5.3.20's `cdable_vars` as well. See the field.
 		CdVariableIsANamedDirectory: No,
+		// The standard leaves an unknown login name's result unspecified,
+		// and dash, the shell in the panel that targets it, leaves the word
+		// as written. See the field.
+		UnresolvedTildeIsAnError: No,
 		// POSIX has `echo` and `printf` exit greater than zero when "an
 		// error occurred", and a write that went nowhere is one; dash
 		// complies. zsh is the holdout, keeping status 0.

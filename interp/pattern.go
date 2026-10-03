@@ -535,7 +535,7 @@ func (r *Runner) patternTilde(w *syntax.Word, b *strings.Builder) []syntax.Span 
 	// three — so this takes wordTildeHead rather than naming a set. See
 	// Semantics.TildeColonEndsAnOrdinaryWordsPrefix.
 	h := r.wordTildeHead(w.Spans)
-	if !h.moved {
+	if r.refuseTilde(h.miss) || !h.moved {
 		return w.Spans
 	}
 	b.WriteString(escapePatternMeta(h.dir))

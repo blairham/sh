@@ -2736,6 +2736,9 @@ func Semantics() interp.Semantics {
 	// `cdablevars` reads the variable as a named directory. Measured
 	// 2026-10-02 on 5.9.2 (#5155).
 	s.CdVariableIsANamedDirectory = interp.Yes
+	// A `~name` naming nothing is refused, as an unmatched pattern is.
+	// See the field (#5646).
+	s.UnresolvedTildeIsAnError = interp.Yes
 	// echo reads -n, -e and -E, and -e wins over -E whatever the order.
 	s.EchoOptions = "neE"
 	s.EchoLastEscapeFlagWins = interp.No

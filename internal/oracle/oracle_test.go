@@ -628,6 +628,42 @@ func TestConformanceGradesHowARunEnded(t *testing.T) {
 	}
 }
 
+// TestWordingOnlyNeedsTheSameOutput: a case that exits alike and prints
+// something else on standard output is a behavioral divergence, not a
+// wording one. Graded on the status alone, `{α..γ}` left unexpanded scored
+// as a behavioral pass because both shells exit 0 (#5708).
+func TestWordingOnlyNeedsTheSameOutput(t *testing.T) {
+	want := Result{Stdout: "[α][β][γ]", Stderr: "", Status: 0}
+	for _, tc := range []struct {
+		name string
+		got  Result
+		want bool
+	}{
+		{"only the diagnostic differs", Result{Stdout: "[α][β][γ]", Stderr: "sh: nope", Status: 0}, true},
+		{"standard output differs", Result{Stdout: "[{α..γ}]", Status: 0}, false},
+		{"both streams differ", Result{Stdout: "[{α..γ}]", Stderr: "sh: nope", Status: 0}, false},
+		{"the status differs", Result{Stdout: "[α][β][γ]", Status: 1}, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := wordingOnly(want, tc.got); got != tc.want {
+				t.Errorf("wordingOnly = %v, want %v", got, tc.want)
+			}
+		})
+	}
+
+	// And through the report, which is where the number is read: the
+	// divergent case must land in neither the passes nor the wording count.
+	rep := &Report{}
+	rep.add(Case{}, want, Result{Stdout: "[α][β][γ]", Stderr: "sh: nope"})
+	rep.add(Case{}, want, Result{Stdout: "[{α..γ}]"})
+	if rep.Passed != 0 || rep.WordingOnly != 1 {
+		t.Errorf("passed=%d wording=%d, want 0 and 1", rep.Passed, rep.WordingOnly)
+	}
+	if !strings.Contains(rep.Summary(false), "50.0% behavioral") {
+		t.Errorf("summary does not report 50.0%% behavioral:\n%s", rep.Summary(false))
+	}
+}
+
 func TestExecDoesNotInheritTheDevelopersEnvironment(t *testing.T) {
 	// IFS or HOME leaking in from whoever ran the harness would make the
 	// record depend on their shell rather than on the shell under test.

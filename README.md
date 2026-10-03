@@ -19,30 +19,34 @@ A shell parser and interpreter in Go.
 
 **Status: early — these are `0.x` tags and they mean it.** The core parser
 and interpreter are in place, and all five dialect binaries grade against a
-panel of the real shells they model. Measured on macOS with
-`make conformance-dialects`, 2026-09-27, 4488 cases each:
+panel of the real shells they model. Measured on macOS against the golden
+record `make oracle` writes, 2026-10-03, 4488 cases each:
 
 | our binary | graded against | exact | behavioral |
 | --- | --- | --- | --- |
-| `bash` | bash 5.3.20 | 98% | **100%** |
-| `zsh` | zsh 5.9.2 | 98% | 99% |
-| `dash` | dash | 98% | **100%** |
-| `ksh` | ksh93 AJM 93u+ | 96% | 99% |
-| `ash` | BusyBox 1.37 ash | 93% | 99% |
+| `bash` | bash 5.3.20 | 97.7% | 99.1% |
+| `zsh` | zsh 5.9.2 | 98.0% | 98.5% |
+| `dash` | dash | 98.3% | 99.5% |
+| `ksh` | ksh93 AJM 93u+ | 95.9% | 97.7% |
+| `ash` | BusyBox 1.37 ash | 92.8% | 95.9%* |
+
+*`ash` is graded with ours on the host and the reference in a Linux
+container, so part of its gap is the platform rather than the shell (#5709).
 
 **Exact** is byte-identical stdout, stderr and exit status. **Behavioral**
-lets a diagnostic be worded differently so long as the status and the output
-agree.
+lets a diagnostic be worded differently so long as the status and the
+standard output agree; a case that prints something else on standard output
+is a behavioral difference however it exits. Until 2026-10-03 the column
+counted the status alone and read 99–100% (#5708).
 
 **Two bash builds are in play and they do not always agree.** This table is
 the laptop's `bash 5.3.20`; the bash suite in CI is graded against
 `debian:sid-slim`'s **5.3.15**, the same release and a different patch level.
 Where the two disagree, the common denominator of the panel decides and the
 difference is written down — `~` after a `HOME` assignment is the worked
-example, in `docs/spec/grammar/expansion.md`. The distance between the two columns is now mostly wording, which it
-was not when this paragraph last said otherwise: in `ksh`, the column that has
-been counted, the 171 non-exact cases split **142 wording to 29 behavioral**,
-against 93 to 126 on 2026-09-15. Behavior lands spec-first, per `CLEANROOM.md`.
+example, in `docs/spec/grammar/expansion.md`. The distance between the two columns is no longer
+mostly wording: graded on standard output as well as status, the 183
+non-exact `ksh` cases split **82 wording to 101 behavioral**. Behavior lands spec-first, per `CLEANROOM.md`.
 
 ## What makes this different
 

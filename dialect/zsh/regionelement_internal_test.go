@@ -75,7 +75,7 @@ func TestARegionElementReadsBackAsZshSpellsIt(t *testing.T) {
 		{"0 4 underline,none,standout", "0 4 standout"},
 		{"0 4 fg=#ff0000,none", "0 4 none"},
 	} {
-		if got := parseRegionText(c.in).String(); got != c.want {
+		if got := parseRegionText(c.in, false).String(); got != c.want {
 			t.Errorf("%q reads back %q, want %q", c.in, got, c.want)
 		}
 	}

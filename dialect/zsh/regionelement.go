@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+
+	"github.com/blairham/sh/interp"
 )
 
 // One `region_highlight` element, as zsh reads it and as it hands it back.
@@ -122,7 +124,11 @@ func (s regionElementSpec) attrs() regionAttrs {
 }
 
 // parseRegionText parses one element the way zsh does.
-func parseRegionText(elem string) regionElement {
+//
+// near is whether `zsh/nearcolor` is loaded, which turns a hex triplet into
+// the nearest palette color as the element is read: measured, the module
+// loaded, `fg=#ff0000` reads back `fg=196`.
+func parseRegionText(elem string, near bool) regionElement {
 	var e regionElement
 	rest := strings.TrimLeft(elem, " \t\n")
 	if after, ok := strings.CutPrefix(rest, "P"); ok {
@@ -144,7 +150,7 @@ func parseRegionText(elem string) regionElement {
 			e.memo, e.hasMemo = memo, true
 			continue
 		}
-		e.spec.apply(part)
+		e.spec.apply(part, near)
 	}
 	if e.hasMemo {
 		return e
@@ -193,7 +199,7 @@ func regionNumber(s string) (int, string, bool) {
 }
 
 // apply adds one word of a spec.
-func (s *regionElementSpec) apply(part string) {
+func (s *regionElementSpec) apply(part string, near bool) {
 	switch {
 	case part == "none":
 		s.bold, s.standout, s.underline = false, false, false
@@ -205,18 +211,23 @@ func (s *regionElementSpec) apply(part string) {
 	case part == "underline":
 		s.underline = true
 	case strings.HasPrefix(part, "fg="):
-		s.fg.add(strings.TrimPrefix(part, "fg="))
+		s.fg.add(strings.TrimPrefix(part, "fg="), near)
 	case strings.HasPrefix(part, "bg="):
-		s.bg.add(strings.TrimPrefix(part, "bg="))
+		s.bg.add(strings.TrimPrefix(part, "bg="), near)
 	}
 }
 
 // add combines one color into the channel. `default`, and a value that
 // names nothing, change nothing.
-func (c *regionChannel) add(value string) {
+func (c *regionChannel) add(value string, near bool) {
 	if hex, ok := strings.CutPrefix(value, "#"); ok {
 		rgb, ok := parseRegionHex(hex)
 		if !ok {
+			return
+		}
+		if near {
+			c.value |= interp.NearestPaletteColor(rgb>>16&0xff, rgb>>8&0xff, rgb&0xff)
+			c.set = true
 			return
 		}
 		c.value |= rgb

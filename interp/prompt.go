@@ -837,6 +837,10 @@ const (
 	// and a runner with no reader has no answer, so the code's fixed
 	// Sequences string is drawn instead.
 	FieldTerminalCapability
+	// FieldNearestColor is the palette index a 24-bit color, given as
+	// `#rrggbb` in the argument, is written as — answered only where the
+	// runner writes hex triplets that way. See Runner.SetNearestColors.
+	FieldNearestColor
 )
 
 // PromptColor is which half of the screen a color code paints.
@@ -1446,6 +1450,13 @@ func (w *promptWalk) walk(runes []rune) {
 				}
 				arg = num
 			}
+			if len(arg) > 0 && arg[0] == '#' {
+				// A 24-bit color the shell writes as a palette one instead,
+				// where it does. See Runner.SetNearestColors.
+				if n, near := w.field(FieldNearestColor, arg, true); near {
+					arg = n
+				}
+			}
 			seq := colorSequence(layer, arg)
 			w.b.WriteString(seq)
 			// A color code is the one that is always a setting: it names the
@@ -1973,6 +1984,14 @@ func (r *Runner) promptHostName() (string, bool) {
 func (r *Runner) promptField(f PromptField, arg string, braced bool) (string, bool) {
 	st := r.promptStyle
 	switch f {
+	case FieldNearestColor:
+		if !r.NearestColors() {
+			return "", false
+		}
+		if rgb, ok := directColor(arg); ok {
+			return strconv.Itoa(NearestPaletteColor(rgb[0], rgb[1], rgb[2])), true
+		}
+		return "", false
 	case FieldTerminalCapability:
 		if r.terminalCapability == nil {
 			return "", false

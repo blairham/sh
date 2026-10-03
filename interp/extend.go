@@ -1205,6 +1205,55 @@ func (r *Runner) WriterForFd(fd int) (io.Writer, bool) {
 	return nil, false
 }
 
+// DescriptorForWriting is what a builtin asked to write to descriptor fd by
+// number finds there: whether anything is open at it, and the stream to write
+// to where what is open will take a write.
+//
+// Three answers rather than WriterForFd's two, because a builtin that names
+// the descriptor tells them apart. Nothing open — never opened, or closed with
+// `>&-` — is one refusal; open, but a stream this shell holds only for reading
+// — a here-string, a pipe's reading end — is another. An open *file* is handed
+// back whatever its mode, since only the write can say whether the file will
+// take one: `0>f` is a file opened for writing at 0, and `0</dev/null` is one
+// opened for reading that refuses the write with EBADF.
+//
+// Descriptor 0 is where this parts from WriterForFd, which keeps the three
+// numbers in their directions: `print -u0 a 0>f` writes to the file in zsh
+// (#5551).
+func (r *Runner) DescriptorForWriting(fd int) (w io.Writer, open bool) {
+	var v any
+	switch fd {
+	case 0:
+		if r.Stdin == nil {
+			return nil, true
+		}
+		v = r.Stdin
+	case 1:
+		v = r.stdout()
+	case 2:
+		v = r.stderr()
+	default:
+		held, ok := r.fds[fd]
+		if !ok {
+			return nil, false
+		}
+		v = held
+	}
+	// A builtin's output is held while it runs, and what is open at the
+	// number is the stream the hold stands in front of. See heldoutput.go.
+	under := v
+	if h, held := v.(*heldOutput); held {
+		under = h.to
+	}
+	if _, closed := under.(closedFd); closed {
+		return nil, false
+	}
+	if w, ok := v.(io.Writer); ok {
+		return w, true
+	}
+	return nil, true
+}
+
 // ReaderForFd is the reading half of [Runner.WriterForFd]: the stream a
 // builtin reading "from descriptor n" needs, the named one by its number and
 // anything past the three from the shell's own table.

@@ -1175,19 +1175,28 @@ func (r *Runner) heredocReader(body string) (io.Reader, io.Closer) {
 		path := filepath.Join(r.tempHome(),
 			".sh-heredoc-"+strconv.Itoa(os.Getpid())+"-"+
 				strconv.FormatUint(heredocSpoolSeq.Add(1), 10))
-		f, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE|os.O_EXCL, 0o600)
+		w, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
 		if err != nil {
 			return strings.NewReader(body), nil
 		}
+		// And a second descriptor for the command, open for reading only:
+		// the shells that spool a body hand theirs over that way, so a
+		// write to it is refused. Measured 2026-10-03, `print -u0 a <<<x` is
+		// `bad mode on fd 3` at 1 in zsh 5.9.2 and `{ echo w >&0; } <<EOF`
+		// fails at 1 in ksh93u+; with one descriptor open for both, the
+		// write went into the body and answered 0 (#5551).
+		f, err := os.Open(path)
 		// Unlinked at once and read through the descriptor that is already
 		// open on it, so nothing is left behind by a shell that is killed
 		// and nothing in the filesystem names a script's private text.
 		_ = os.Remove(path)
-		if _, err := f.WriteString(body); err != nil {
-			_ = f.Close()
+		if err != nil {
+			_ = w.Close()
 			return strings.NewReader(body), nil
 		}
-		if _, err := f.Seek(0, io.SeekStart); err != nil {
+		_, err = w.WriteString(body)
+		_ = w.Close()
+		if err != nil {
 			_ = f.Close()
 			return strings.NewReader(body), nil
 		}

@@ -50,12 +50,20 @@ func TestAQuotationInAReReadSubscriptStopsTheExpansionItHolds(t *testing.T) {
 	// The table holds the key the expansion would produce and the key the
 	// quotation leaves, so every row tells the two readings apart by which
 	// element it finds rather than by a count.
-	const table = `typeset -A m; kq=q; m[q]=7; m['$kq']=5; `
+	//
+	// The two keys the first row can reach are stored through variables, so
+	// that the store itself reads the same under both answers: `'q'` holds
+	// 5 and `$kq` holds 6. It stored the second with `m['$kq']=5`, whose
+	// spelling the axis also moves — under no, zsh stores that as `'q'`
+	// (#5268) — so the row depended on a store this shell had wrong.
+	// Re-measured 2026-10-03: zsh 5.9.2 `[5][0][7]`, bash 5.3.20 and ksh93u+
+	// `[6][7][7]`.
+	const table = `typeset -A m; kq=q; m[q]=7; sq="'q'"; m[$sq]=5; d='$kq'; m[$d]=6; `
 	for _, tc := range []struct{ name, src, quoting, asWritten string }{
 		{
 			"an apostrophe around the expansion",
 			`e="m['\$kq']"; printf "[%s]" "$(( $e ))"`,
-			`[5]`, `[0]`,
+			`[6]`, `[5]`,
 		},
 		{
 			// The control that makes this one question rather than two: the

@@ -2646,7 +2646,7 @@ func (s Shell) newEditor(ctx context.Context, state *terminalState) *editor {
 		viInsertSkipsBlanks: s.Editor.ViInsertAtStartOfLineSkipsLeadingBlanks,
 		// And how one of the shell's own actions is run, with this session's
 		// context closed over.
-		runFunc: s.shellWidgets(ctx),
+		runFunc: s.shellWidgets(ctx, state),
 		// And how the shell's own completion system is asked, with the same
 		// context closed over for the same reason. Nil where the front end
 		// named none, which is what makes a key's Candidates cost nothing.

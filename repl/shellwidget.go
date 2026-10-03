@@ -143,7 +143,13 @@ func (e *editor) runShellWidget(name string, prompt drawnPrompt) (ran, accept bo
 // shellWidgets is how a session runs an action the shell owns, with the ctx
 // the session was started under closed over — the editor reads keys and has no
 // context of its own to give one.
-func (s Shell) shellWidgets(ctx context.Context) func(string, Line, Actions) (Line, bool) {
+//
+// A widget's output goes out the way a descriptor handler's does — see
+// runHandler — because raw mode has OPOST off and a widget that prints writes
+// plain newlines: measured 2026-10-02, `w() { print one; print two; }` bound
+// to a key writes `one\r\ntwo\r\n` in zsh 5.9.2 and wrote `one\ntwo\n` here,
+// a staircase on a real terminal (#5500).
+func (s Shell) shellWidgets(ctx context.Context, state *terminalState) func(string, Line, Actions) (Line, bool) {
 	if s.RunWidget == nil {
 		return nil
 	}
@@ -158,7 +164,11 @@ func (s Shell) shellWidgets(ctx context.Context) func(string, Line, Actions) (Li
 		// editoractions.go's decision and its file comment carries the
 		// reason: what needs it is a builtin the interpreter reaches, not the
 		// dialect entry point this calls.
-		if guard.Do(func() { out, ok = s.RunWidget(WithActions(ctx, ed), name, in) }) {
+		var panicked bool
+		s.runHandler(state, func() {
+			panicked = guard.Do(func() { out, ok = s.RunWidget(WithActions(ctx, ed), name, in) })
+		})
+		if panicked {
 			return Line{}, false
 		}
 		return out, ok

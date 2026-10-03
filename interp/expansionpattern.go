@@ -81,6 +81,12 @@ func (r *Runner) operandPatternOpts(pattern string, bad *bool, subjects ...strin
 	// at all, so a count is not the only door it has here. See
 	// patternOpts.operandParens.
 	o.operandParens = true
+	// And the bare parenthesis is not text there, which is the one surface
+	// that parts from `[[ ]]`, `case` and pathname expansion: measured on zsh
+	// 5.9.2 with `shglob` and `kshglob`, `v='a(bX'; ${v#a(b|c)}` leaves the
+	// value whole where `[[ 'a(b' == a(b|c) ]]` matches. See
+	// patternOpts.bareParenIsText (#5467).
+	o.bareParenIsText = false
 	// And a `~(K)` group is **not** read on a parameter-expansion operand,
 	// with one exception the caller turns back on: `${v#~(K)x}` leaves the
 	// value alone in that shell where `${v%~(K)x}` trims. See

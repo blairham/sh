@@ -134,7 +134,7 @@ func (r *Runner) indirectTargetValue(e *syntax.ParamExpr, text string) (string, 
 // is where it is reported: asking twice would write the line twice for one
 // expansion.
 func (r *Runner) indirectAimedAtAList(e *syntax.ParamExpr) (*syntax.ParamExpr, bool) {
-	if !e.Indirect || e.Inner != nil || e.Index != nil || e.Length || e.Prefix != 0 {
+	if !e.Indirect || e.Inner != nil || e.Length || e.Prefix != 0 {
 		return nil, false
 	}
 	if r.sem().IndirectionYieldsName != No {

@@ -253,6 +253,7 @@ ash   ArrayLetterWithAWordDeclaresAScalar
 ash   PlusSignedPrintListsNoValues
 ash   ScalarOverACompoundIsAnInconsistentType
 ash   ScalarStoredOverATableIsRefused
+ash   ScalarHeldUnderTheArrayLetterListsAsAScalar
 ash   ScalarUnderATableDeclaration
 ash   ScalarUnderAnArrayDeclaration
 ash   SelectAssumesUnboundedWidth
@@ -629,6 +630,7 @@ dash  ArrayLetterWithAWordDeclaresAScalar
 dash  PlusSignedPrintListsNoValues
 dash  ScalarOverACompoundIsAnInconsistentType
 dash  ScalarStoredOverATableIsRefused
+dash  ScalarHeldUnderTheArrayLetterListsAsAScalar
 dash  ScalarUnderATableDeclaration
 dash  ScalarUnderAnArrayDeclaration
 dash  SelectAssumesUnboundedWidth

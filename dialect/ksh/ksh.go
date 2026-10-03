@@ -1976,6 +1976,9 @@ func Semantics() interp.Semantics {
 	// written and the array kept, and `m=x` over a table is
 	// `typeset -A m=([0]=x [k]=v)`.
 	s.ScalarAssignedOverACompoundReplacesTheName = interp.No
+	// An array holding the scalar a plain store gave it: see
+	// interp.Semantics.ScalarHeldUnderTheArrayLetterListsAsAScalar (#5643).
+	s.ScalarHeldUnderTheArrayLetterListsAsAScalar = interp.Yes
 	// And nothing refuses the store ahead of that. Measured 2026-09-26 on
 	// ksh93u+ 2012-08-01, `typeset -A h=([one]=1); h=string; typeset -p h` is
 	// `typeset -A h=([0]=string [one]=1)` at 0 with the line after it run,

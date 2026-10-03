@@ -118,6 +118,7 @@ func seedStacks(r *Runner) {
 		compoundMarkBefore:  map[string]bool{"seed": true},
 		namespaceOwned:      map[string]bool{"seed": true},
 		heldAnElementBefore: map[string]bool{"seed": true},
+		scalarHeldBefore:    map[string]bool{"seed": true},
 		savedAssoc:          map[string]AssocArray{"seed": {"k": {Str: "v"}}},
 		assocExisted:        map[string]bool{"seed": true},
 		savedReadonly:       map[string]bool{"seed": true},
@@ -359,6 +360,7 @@ func seedTables(r *Runner) {
 	r.declaredEmpty = map[string]bool{"seed": true}
 	r.declaredOnlyCompound = map[string]bool{"seed": true}
 	r.compoundHeldAnElement = map[string]bool{"seed": true}
+	r.scalarHeldUnderTheArrayLetter = map[string]bool{"seed": true}
 	r.declaredBare = map[string]bool{"seed": true}
 	r.declaredHoldingNothing = map[string]bool{"seed": true}
 	r.unsetLeftItDeclared = map[string]bool{"seed": true}

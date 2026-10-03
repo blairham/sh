@@ -3583,6 +3583,9 @@ func (r *Runner) unsetOneName(name string) {
 	// compounddeclaredonly.go.
 	delete(r.declaredOnlyCompound, name)
 	delete(r.compoundHeldAnElement, name)
+	// Not read once the name is gone (see Runner.listsTheScalarItHolds), but
+	// the record goes with it rather than lingering in the table.
+	delete(r.scalarHeldUnderTheArrayLetter, name)
 	// A compound's members are names of their own, so taking the parent away
 	// has to take them with it: `c=(a=1); unset c; ${c.a}` is empty in the
 	// shell, and leaving the member behind read back the value the shell had

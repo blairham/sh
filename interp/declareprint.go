@@ -1104,6 +1104,11 @@ func (r *Runner) clusteredDeclaration(d declaration) string {
 		}
 		b.WriteString(")")
 		return b.String()
+	case d.isArr && r.listsTheScalarItHolds(d):
+		// The scalar a plain store gave it, written as this form's scalar
+		// branch below writes one. See
+		// Semantics.ScalarHeldUnderTheArrayLetterListsAsAScalar.
+		return head + "=" + r.declareQuoted(d.arr[r.arrayBase()].Str, ListedValueAlone)
 	case d.isArr:
 		if len(d.arr) == 0 && d.declaredOnly {
 			// The indexed half of the same distinction, and it moves the
@@ -1468,6 +1473,8 @@ func (r *Runner) bareAssignmentValue(d declaration, place ListedValuePlace) (str
 	case d.isAssoc:
 		pairs, _ := r.bareAssignmentElements(d)
 		return "(" + strings.Join(pairs, " ") + nestTrailingSpace(d.assoc.lastElement()) + ")", true
+	case d.isArr && r.listsTheScalarItHolds(d):
+		return r.declareQuoted(d.arr[r.arrayBase()].Str, place), true
 	case d.isArr:
 		if len(d.arr) == 0 {
 			// An indexed array with nothing in it, which this form answers
@@ -1926,4 +1933,20 @@ func (r *Runner) declaredAndHoldingNothing(d declaration) bool {
 // Runner.MarkShellOwnParameterWhileSet.
 func (r *Runner) ownNameHoldingNothing(name string) bool {
 	return r.shellOwnWhileSet[name] && !r.parameterExists(name)
+}
+
+// listsTheScalarItHolds reports whether an indexed array is listed as the
+// scalar a whole-name store gave it: the name is marked in
+// Runner.scalarHeldUnderTheArrayLetter, it holds exactly its first element,
+// and the dialect writes that as a scalar. See
+// Semantics.ScalarHeldUnderTheArrayLetterListsAsAScalar.
+func (r *Runner) listsTheScalarItHolds(d declaration) bool {
+	if !r.scalarHeldUnderTheArrayLetter[d.name] || len(d.arr) != 1 {
+		return false
+	}
+	if e, ok := d.arr[r.arrayBase()]; !ok || e.Nested != nil || e.Kind != ElementHoldsItsValue {
+		return false
+	}
+	return r.ask(r.sem().ScalarHeldUnderTheArrayLetterListsAsAScalar,
+		"an array holding the scalar a plain store gave it, listed as that scalar")
 }

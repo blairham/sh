@@ -61,6 +61,7 @@ type staticBinding struct {
 	exportedSaid  bool
 	declaredOnly  bool
 	heldAnElement bool
+	scalarHeld    bool
 
 	hasValue    bool
 	hasArray    bool
@@ -118,6 +119,7 @@ func (r *Runner) captureBinding(name string) staticBinding {
 	b.exported, b.exportedSaid = r.exported[name]
 	b.declaredOnly = r.declaredOnlyCompound[name]
 	b.heldAnElement = r.compoundHeldAnElement[name]
+	b.scalarHeld = r.scalarHeldUnderTheArrayLetter[name]
 	return b
 }
 
@@ -151,6 +153,7 @@ func bindingFromScope(sc *scope, name string) staticBinding {
 	}
 	b.declaredOnly, b.hasCompound = sc.declaredOnlyBefore[name]
 	b.heldAnElement = sc.heldAnElementBefore[name]
+	b.scalarHeld = sc.scalarHeldBefore[name]
 	return b
 }
 
@@ -186,6 +189,7 @@ func (r *Runner) installBinding(name string, b staticBinding) {
 			r.compoundWasAssigned(name)
 		}
 		setBool(&r.compoundHeldAnElement, name, b.heldAnElement)
+		setBool(&r.scalarHeldUnderTheArrayLetter, name, b.scalarHeld)
 	}
 	if b.hasRemoved {
 		setBool(&r.removed, name, b.removed)

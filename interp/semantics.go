@@ -12582,14 +12582,20 @@ type Semantics struct {
 	// `typeset -l z=Ab; typeset -u z` is `-u` everywhere. It is one word that
 	// splits them (#2541).
 	//
-	// **No** is the later letter winning, which is what the *value* does in
-	// the shell that answers it that way. Its listing is a third answer this
-	// field has no room for and does not claim: ksh93 keeps both letters and
-	// then writes the name with neither, so `typeset -lu z=Ab; typeset -p z`
-	// is a bare `z=AB` there against this engine's `typeset -u z=AB`. The
-	// value is right in every column and the listing is one letter's worth
-	// wrong in one of them, which is the trade a two-valued answer buys; the
-	// row is in the record so the next reader measures rather than assumes.
+	// **No** is ksh93's reading, measured 2026-10-03 on ksh93u+ 2012-08-01
+	// (#5667): the **later** letter is the one that folds, and the listing
+	// writes **neither**.
+	//
+	//	typeset -ul s=Bc; typeset -p s; s=Qz; echo "[$s]"   s=bc, [qz]
+	//	typeset -lu s=Bc / typeset -l -u s=Bc               s=BC, [QZ]
+	//	typeset -ul s; typeset -p s                         s
+	//
+	// A later line's single case letter lists again: `typeset -ul s=Bc;
+	// typeset -l s` is `typeset -l s=bc`. The record of the unlisted letter
+	// is Runner.caseLetterUnlisted. Left unmodeled: taking one letter of the
+	// pair off with a plus lists the other there while folding nothing
+	// (`typeset -ul s=Bc; typeset +l s` is `typeset -u s=bc`, then `[Qz]`),
+	// where this lists nothing. The folds agree (#5671).
 	TwoCaseLettersOnOneDeclarationCancel Answer
 	// CaseAttributeReplacesTheNumericAttribute is the other direction: `-l`
 	// and `-u` take the integer or float letter off the name they are given.
@@ -13752,11 +13758,10 @@ type Semantics struct {
 	// function's `typeset +l s=B` is a fresh local, which has nothing to fold
 	// with.
 	//
-	// Left unmodeled: a line mixing the signs. There ksh93 reads a minus
-	// letter beside a plus one as another removal, so `typeset +l -x s=Bc`
-	// over `-l` is `s=bc` with no `-x`. It also has a state carrying both
-	// case letters that lists neither and folds lower (`typeset -u +l s=Bc`).
-	// See #5667.
+	// A line mixing the signs reaches this too where its first word is a plus
+	// one: EarlierPlusMakesALaterLetterARemoval rewrites it into an all-plus
+	// line first, so `typeset +l -x s=Bc` over `-l` is `s=bc` with no `-x`
+	// (#5667).
 	//
 	// unpinned ksh: no corpus row assigns on a plus-only line over a case
 	// letter; pinned by TestAPlusLetterComesOffAfterTheValueLands.
@@ -28110,7 +28115,47 @@ type Semantics struct {
 	// letter, and the shape a real script reaches is the first column —
 	// `integer` is `typeset -li` in ksh93, so `integer +i n` *is*
 	// `typeset -li +i n` there (#2345).
+	//
+	// **A valueless operand over a name with no binding gets nothing** on such
+	// a line. Measured 2026-10-03 on ksh93u+: `typeset -i +x s; s=1+2` holds
+	// `1+2`, and `typeset -t +x s; typeset -p s` lists nothing, where the same
+	// lines land their letters over a name that is there and with a value
+	// (#5667). The mirror, a minus word after a plus one, is
+	// EarlierPlusMakesALaterLetterARemoval.
 	EarlierDeclarationLetterBlocksALaterPlus Answer
+
+	// EarlierPlusMakesALaterLetterARemoval reads a minus option word that
+	// follows a plus one as another plus word, so every letter on the line is
+	// a removal: ksh93. It is the mirror of
+	// EarlierDeclarationLetterBlocksALaterPlus, so in that shell the first
+	// word's sign governs the line. bash and zsh read each word by its own
+	// sign.
+	//
+	// Measured 2026-10-03 on ksh93u+ 2012-08-01 under `-c` (#5667), each line
+	// followed by `typeset -p s; s=Qz; echo "[$s]"`:
+	//
+	//	typeset +x -t s=Bc                      s=Bc, [Qz]
+	//	typeset +i -t s=1+2                     s=1+2
+	//	typeset -l s=Ab; typeset +x -t s=Bc     typeset -l s=bc, [qz]
+	//	typeset -l s=Ab; typeset +l -t s=Bc     s=bc, [Qz]
+	//	typeset -i s=1; typeset +x -t s         typeset -i s=1
+	//	typeset -l s=A; typeset -u +l s=Bc      s=bc   (the mirror: -u kept)
+	//
+	// against bash 5.3.20's `declare +x -i s=1+2` giving `declare -i s="3"`
+	// and zsh 5.9's `typeset -i s=3`. Once the words are rewritten the line
+	// is an all-plus line, so a value lands through the case letter still
+	// standing before the letters come off
+	// (PlusLetterComesOffAfterTheValueLands).
+	//
+	// unpinned ksh: no corpus row writes a minus word after a plus one;
+	// pinned by TestAnEarlierPlusMakesALaterLetterARemoval.
+	//
+	// unpinned bash: likewise, pinned by
+	// TestALaterMinusWordStillAddsItsLetters.
+	//
+	// unpinned zsh: likewise, pinned by
+	// TestALaterMinusWordStillAddsItsLetters.
+	EarlierPlusMakesALaterLetterARemoval Answer
 
 	// BuiltinReportsEveryBadOption reports every letter of a bundle the
 	// builtin does not have, rather than stopping at the first. True in

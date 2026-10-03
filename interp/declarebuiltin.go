@@ -103,6 +103,10 @@ type declareFlags struct {
 	// this one is a listing — see the bare-sign branch in parseDeclareFlags,
 	// and Runner.refusePrivateDeclaration for the row that needs them apart.
 	plusAlone bool
+	// plusBlocked says a plus word on this line was read as a minus one by
+	// blockALaterPlus. The line still declares nothing for a valueless
+	// operand over a name with no binding. See Runner.blockALaterPlus.
+	plusBlocked bool
 	// hide is the sign of the last `h` letter written and hideNamed says one
 	// was written at all — the hide-in-scope attribute, which is a tri-state
 	// and not a bool: `-h` sets it, `+h` takes it off, and a declaration with
@@ -455,6 +459,10 @@ const declareOptionLetters = "aAiprx"
 // dialect has and this shell does not is named as missing rather than as
 // unknown, in the dialect's words.
 func (r *Runner) parseDeclareFlags(name string, args []string, known string) (rest []string, f declareFlags, code int) {
+	args = r.minusWordsUnderALeadingPlus(args)
+	if r.unspecified {
+		return nil, f, r.status
+	}
 	i := 0
 	// pending is the letter an option word left waiting for a number,
 	// because the number may arrive as the next word — `typeset -i 16 n=255`
@@ -878,8 +886,7 @@ func (r *Runner) parseDeclareFlags(name string, args []string, known string) (re
 				// into the first and is refused on the second (#1330).
 				f.array = true
 			}
-			if attached || f.remove ||
-				!r.numberEndsTheWord(byte(c), a[at+2:], args[i+1:]) {
+			if attached || !r.numberEndsTheWord(byte(c), a[at+2:], args[i+1:]) {
 				continue
 			}
 			// The next word is this letter's number, so the word ends here
@@ -889,8 +896,12 @@ func (r *Runner) parseDeclareFlags(name string, args []string, known string) (re
 			// A word that already carried its number attached is not this
 			// shape and takes no second one: `typeset -F3 4 x=1.5` is `not
 			// an identifier: 4` in that shell, so the `4` stays an operand.
-			// Neither is a plus word: `typeset +F 3 v=1.5` declares two
-			// names there, the letter taking nothing back.
+			// A plus word takes its number too. Measured 2026-10-03 on ksh93u+
+			// 2012-08-01 and zsh 5.9: `typeset +i 16` is the listing of
+			// integer names in both, where `typeset 16` is refused as a name,
+			// and `typeset +F 3 v=1.5` sets `v` at 0 (#5667). The comment that
+			// stood here said the plus word took nothing and the `3` was a
+			// second name, which neither shell does.
 			pending = byte(c)
 			break
 		}
@@ -1083,6 +1094,50 @@ func numericLetterCount(letters string) int {
 	return n
 }
 
+// minusWordsUnderALeadingPlus is the mirror of blockALaterPlus: where the
+// first option word carries a plus, one dialect reads every later minus word
+// as a plus word too, so each letter on the line is a removal. Rewritten
+// before the words are parsed, so the line is then exactly the all-plus line
+// it reads as, and the rules for one (the value through the standing case
+// letter, the reset) apply unchanged. See
+// Semantics.EarlierPlusMakesALaterLetterARemoval.
+//
+// The scan stops where the options do: at `--`, or at the first word that is
+// neither an option word nor the number a letter takes (`+i 16`).
+func (r *Runner) minusWordsUnderALeadingPlus(args []string) []string {
+	if len(args) == 0 || len(args[0]) < 2 || args[0][0] != '+' {
+		return args
+	}
+	var later []int
+	for i := 1; i < len(args); i++ {
+		a := args[i]
+		if a == "--" {
+			break
+		}
+		if len(a) < 2 || (a[0] != '-' && a[0] != '+') {
+			if isAllDigits(a) {
+				continue
+			}
+			break
+		}
+		if a[0] == '-' {
+			later = append(later, i)
+		}
+	}
+	if len(later) == 0 {
+		return args
+	}
+	if !r.ask(r.sem().EarlierPlusMakesALaterLetterARemoval,
+		"a minus word after a plus word taking its letters off") {
+		return args
+	}
+	out := append([]string(nil), args...)
+	for _, i := range later {
+		out[i] = "+" + out[i][1:]
+	}
+	return out
+}
+
 // blockALaterPlus is one dialect's reading of a declaration that writes both
 // signs: a plus word that follows a minus word takes nothing off.
 //
@@ -1106,6 +1161,7 @@ func (r *Runner) blockALaterPlus(f *declareFlags) {
 	f.remove, f.integerOff, f.readonlyOff, f.functionOff = false, false, false, false
 	f.hide, f.matchNames = f.hideNamed, false
 	f.letterSigns = strings.ReplaceAll(f.letterSigns, "+", "-")
+	f.plusBlocked = true
 }
 
 // numberEndsTheWord reports whether a letter just read is about to take the
@@ -1774,6 +1830,18 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) (endSt
 	defer func(was bool) { r.rereadingAQuotedLiteral = was }(r.rereadingAQuotedLiteral)
 	for _, a := range args {
 		name, value, hasValue, appends := declarationOperand(a)
+		if !hasValue && f.plusBlocked && !r.literalOperands[name] {
+			// A line carrying a plus word declares nothing for a valueless
+			// operand over a name with no binding: not the letters a minus
+			// word wrote, and not a record that the name exists. Measured
+			// 2026-10-03 on ksh93u+, `typeset -i +x s; s=1+2` holds `1+2`
+			// and `typeset -t +x s; typeset -p s` lists nothing, where both
+			// lines land their letters over a name that is there, and with
+			// a value (#5667).
+			if _, known := r.declarationOf(name); !known {
+				continue
+			}
+		}
 		if len(r.arrayOperands) > 0 {
 			// An array literal written earlier on this line, on the name this
 			// operand reaches, is stored first; and a bare name is where one
@@ -3594,6 +3662,15 @@ func (r *Runner) applyAttributes(name string, f declareFlags) {
 	// letter shares the line.
 	numeric := f.integer || f.float
 	canceled := r.caseLettersCancel(name, f)
+	unlisted := byte(0)
+	if !canceled {
+		f, unlisted = r.twoCaseLettersOnOneLine(f)
+	}
+
+	if (f.lower || f.upper || f.capital) && !canceled {
+		// Any case letter written rewrites the record: it is this line's.
+		r.setCaseLetterUnlisted(name, unlisted)
+	}
 	if f.lower && !canceled {
 		if r.lowered == nil {
 			r.lowered = map[string]bool{}
@@ -3941,6 +4018,65 @@ func (r *Runner) numericTypeLetterRetypesFrozen(name string, f declareFlags) boo
 	}
 	return r.ask(r.sem().NumericTypeLetterRetypesAFrozenName,
 		"a numeric type letter retyping a frozen name")
+}
+
+// twoCaseLettersOnOneLine is the reading of a line writing both `-l` and `-u`
+// under a minus where they do not cancel: the later of the two is the one
+// recorded, and it is recorded as unlisted. Measured 2026-10-03 on ksh93u+
+// 2012-08-01 under `-c` (#5667):
+//
+//	typeset -ul s=Bc; typeset -p s; s=Qz; echo "[$s]"   s=bc, [qz]
+//	typeset -lu s=Bc; ...                               s=BC, [QZ]
+//	typeset -u -l s=Bc / -l -u                          the same by order
+//	typeset -u +l s=Bc / -l +u                          the same, the plus
+//	                                                    being an addition
+//	                                                    there (blockALaterPlus)
+//	typeset -ul s; typeset -p s                         s
+//	typeset -u s=a; typeset -l s=Bc                     typeset -l s=bc
+//	                                                    (two lines: listed)
+//
+// It returns the flags with the earlier letter dropped, and the letter that
+// stands unlisted, or 0 where the line does not write both.
+func (r *Runner) twoCaseLettersOnOneLine(f declareFlags) (declareFlags, byte) {
+	if !f.lower || !f.upper {
+		return f, 0
+	}
+	for _, c := range "lu" {
+		if plus, ok := f.lastSign(c); !ok || plus {
+			return f, 0
+		}
+	}
+	if strings.LastIndexByte(f.letters, 'l') > strings.LastIndexByte(f.letters, 'u') {
+		f.upper = false
+		return f, 'l'
+	}
+	f.lower = false
+	return f, 'u'
+}
+
+// setCaseLetterUnlisted records, or with 0 clears, the case letter a name
+// carries without a listing letter. See Runner.caseLetterUnlisted.
+func (r *Runner) setCaseLetterUnlisted(name string, letter byte) {
+	if letter == 0 {
+		delete(r.caseLetterUnlisted, name)
+		return
+	}
+	if r.caseLetterUnlisted == nil {
+		r.caseLetterUnlisted = map[string]byte{}
+	}
+	r.caseLetterUnlisted[name] = letter
+}
+
+// caseLetterIsUnlisted reports whether the case letter a name carries is the
+// one a two-letter line left without a listing letter, and still stands.
+func (r *Runner) caseLetterIsUnlisted(name string) bool {
+	switch r.caseLetterUnlisted[name] {
+	case 'l':
+		return r.lowered[name]
+	case 'u':
+		return r.uppered[name]
+	}
+	return false
 }
 
 // caseLettersCancel reports whether this declaration wrote **both** case

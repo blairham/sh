@@ -78,10 +78,13 @@ type nameAttributes struct {
 	width    fieldWidth
 	hasWidth bool
 	lower    bool
-	upper    bool
-	unique   bool
-	hidden   bool
-	traced   bool
+	// caseUnlisted is Runner.caseLetterUnlisted's entry, which travels with
+	// the case letter it describes.
+	caseUnlisted byte
+	upper        bool
+	unique       bool
+	hidden       bool
+	traced       bool
 	// nameref and isNameref are the name-reference attribute, the same shape
 	// as the two above it: absent as often as present, and what it carries
 	// is a *name* rather than a flag.
@@ -128,6 +131,7 @@ func (r *Runner) captureAttributes(name string) nameAttributes {
 		declaredHoldingNothing: r.declaredHoldingNothing[name],
 		unsetLeftItDeclared:    r.unsetLeftItDeclared[name],
 	}
+	a.caseUnlisted = r.caseLetterUnlisted[name]
 	a.base, a.baseSet = r.integerBase[name]
 	a.precision, a.isFloat = r.floatPrecision[name]
 	a.floatExponent = r.floatExponent[name]
@@ -177,6 +181,7 @@ func (r *Runner) restoreAttributes(name string, a nameAttributes) {
 	setBool(&r.integer, name, a.integer)
 	setBool(&r.lowered, name, a.lower)
 	setBool(&r.uppered, name, a.upper)
+	r.setCaseLetterUnlisted(name, a.caseUnlisted)
 	setBool(&r.unique, name, a.unique)
 	setBool(&r.hidden, name, a.hidden)
 	setBool(&r.traced, name, a.traced)

@@ -124,6 +124,7 @@ ash   DeclareZeroFillLetter
 ash   DisownAlwaysFails
 ash   DisownRemovesTheJob
 ash   EarlierDeclarationLetterBlocksALaterPlus
+ash   EarlierPlusMakesALaterLetterARemoval
 ash   EmptyArithSubscript
 ash   EmptyAssociativeKeyIsAnError
 ash   EmptyAssociativeKeyIsReportedWhenRead
@@ -487,6 +488,7 @@ dash  DotSetCancelsTheRestore
 dash  DotWithNoOperandIsFatal
 dash  DotWithNoOperandIsFatalInPosixMode
 dash  EarlierDeclarationLetterBlocksALaterPlus
+dash  EarlierPlusMakesALaterLetterARemoval
 dash  EchoLastEscapeFlagWins
 dash  EmptyArithSubscript
 dash  EmptyAssociativeKeyIsAnError

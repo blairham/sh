@@ -126,6 +126,7 @@ func (c *Runner) ownTables(r *Runner) {
 	c.floatExact = maps.Clone(r.floatExact)
 	c.fieldWidth = maps.Clone(r.fieldWidth)
 	c.lowered = maps.Clone(r.lowered)
+	c.caseLetterUnlisted = maps.Clone(r.caseLetterUnlisted)
 	c.uppered = maps.Clone(r.uppered)
 	c.capitalized = maps.Clone(r.capitalized)
 	c.hidden = maps.Clone(r.hidden)

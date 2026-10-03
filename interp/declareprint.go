@@ -257,6 +257,11 @@ func (r *Runner) declarationOf(name string) (declaration, bool) {
 
 		declaredOnly: r.declaredOnlyCompound[name],
 	}
+	if r.caseLetterIsUnlisted(name) {
+		// A line that wrote both case letters leaves the later one folding
+		// and neither one listed. See Runner.twoCaseLettersOnOneLine.
+		d.lower, d.upper = false, false
+	}
 	d.nameref, d.isNameref = r.nameref[name]
 	d.compoundVar = r.isCompoundVariable(name)
 	_, d.float = r.floatPrecision[name]
@@ -281,8 +286,12 @@ func (r *Runner) declarationOf(name string) (declaration, bool) {
 	// form that renders this struct.
 	d.hidesTheValue = d.hidden &&
 		r.sem().DeclareHideValueLetter == DeclareHideValueLetterHidesTheValue
+	// An unlisted case letter is still an attribute, so a valueless name
+	// carrying one lists as the bare name: `typeset -ul s; typeset -p s` is
+	// `s` there (#5667).
 	attributed := d.integer || d.float || d.readonly || d.exported || d.lower ||
-		d.upper || d.capital || d.hidden || d.unique || d.traced || d.hasWidth
+		d.upper || d.capital || d.hidden || d.unique || d.traced || d.hasWidth ||
+		r.caseLetterIsUnlisted(name)
 	producedIsAnArray, producedListsElements := false, false
 	if d.isNameref {
 		// A reference lists as itself — `declare -n r="v"` — and the tables
@@ -1581,6 +1590,12 @@ func (r *Runner) bareAssignmentDeclaration(d declaration, place ListedValuePlace
 		// No attributes: a bare assignment, with no command word at all. A
 		// name with neither attributes nor value never reaches here — it is
 		// the missing-name case, which this engine passes over in silence.
+		if !hasValue {
+			// Except for one carrying a case letter the listing does not
+			// write, which is the bare name: `typeset -ul s; typeset -p s`
+			// is `s` (#5667). See Runner.twoCaseLettersOnOneLine.
+			return head
+		}
 		return head + "=" + value
 	}
 	if hasValue {

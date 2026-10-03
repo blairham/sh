@@ -262,3 +262,18 @@ func (r *Runner) MarkLocalKeepsTheOuterValue(name string) {
 
 // localKeepsTheOuterValue is MarkLocalKeepsTheOuterValue's mark read back.
 func (r *Runner) localKeepsTheOuterValue(name string) bool { return r.localKeepsOuter[name] }
+
+// restoreTheOuterFreeze puts back the freeze the name had outside the scope,
+// for a local that starts as the outer binding. A restore of the value and
+// the type letters leaves the freeze off, because inheriting one is not what
+// a script asking for the outer value gets anywhere — but a name whose local
+// *is* the outer binding keeps it: `f(){ local PPID=5 }` is `read-only
+// variable: PPID` in zsh 5.9.2 (#5619).
+func (r *Runner) restoreTheOuterFreeze(name string) {
+	if len(r.scopes) == 0 {
+		return
+	}
+	if was, ok := r.scopes[len(r.scopes)-1].savedReadonly[name]; ok && was {
+		r.markReadonly(name)
+	}
+}

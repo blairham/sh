@@ -607,6 +607,13 @@ func (r *Runner) runPipeline(ctx context.Context, p *syntax.Pipeline, timing *pi
 			}
 			statuses[i] = subs[i].status
 			signals[i] = subs[i].diedOfSig
+			if subs[i].bg != nil {
+				// The element that names a backgrounded pipeline has ended
+				// without settling its pid — it started no program — so it
+				// settles at none now, rather than when every element has.
+				// See the in-current element below (#5530).
+				subs[i].bg.settleNoPID()
+			}
 			if tracked != nil {
 				tracked.elementEnded(i, statuses[i], signals[i])
 			}
@@ -732,6 +739,13 @@ func (r *Runner) runPipeline(ctx context.Context, p *syntax.Pipeline, timing *pi
 			}
 			statuses[i] = r.status
 			signals[i] = r.diedOfSig
+			if r.bg != nil {
+				// The same for the last element run here, in the job's own
+				// runner (#5530): measured 2026-10-02, `/bin/sleep 1 | true &`
+				// returns at once in zsh 5.9.2 and bash 5.3.20, and took the
+				// whole second here.
+				r.bg.settleNoPID()
+			}
 			if tracked != nil {
 				tracked.elementEnded(i, statuses[i], signals[i])
 			}

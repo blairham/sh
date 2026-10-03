@@ -66,11 +66,12 @@ import (
 // the `sleep`, `{ sleep && true } &` and a body that has set an EXIT trap
 // leave it running. See tailCommands.
 //
-// **What is not abandoned yet**: a pipeline or a `( … )` the body is running
-// is waited for to its end before the body dies, because their elements are
-// clones on goroutines of their own rather than a wait this can give up. The
-// status and the output come out the same; the death is late, and a program
-// in them ends rather than running on. That is #5386.
+// **A pipeline or a `( … )` the body is running is abandoned too** (#5386).
+// Their elements are clones on goroutines of their own rather than a wait
+// this can give up, so the job is ended from outside the body the moment the
+// signal arrives — see Runner.abandonOnDeath — and the body's goroutine runs
+// on to its next moment between commands, where it dies without a word, as
+// the orphans of a real fork run on.
 //
 // Not INT or QUIT: a background job in a shell without job control ignores
 // both, measured — `{ sleep 1; print after } & kill -INT $!` prints `after`.
@@ -292,4 +293,37 @@ func (r *Runner) runningJobWithPid(pid int) *Job {
 		}
 	}
 	return nil
+}
+
+// abandonOnDeath ends a background job the moment a signal that ends its
+// body arrives, without waiting for the body's goroutine to reach a moment
+// between commands. Measured 2026-10-02 on zsh 5.9.2 under `-f -c`:
+//
+//	{ /bin/sleep 1.37 | cat } & sleep 0.3; kill -TERM $!; wait; print end
+//	        `end` at 0.3s, and the `sleep` keeps running
+//	{ ( trap 'print S' TERM; sleep 0.6 ); print after $? } & sleep 0.2
+//	kill -TERM $!; wait; print end
+//	        `end` at 0.2s, and no `S` and no `after`
+//
+// where this shell waited out the pipeline and the parentheses first. The
+// job's status is the signal's; HUP is left to the body, which a dialect may
+// read as an orderly exit, and a body that has become its program got no
+// death at all.
+func (r *Runner) abandonOnDeath(j *Job, ended func(int, syscall.Signal)) {
+	b := j.inbox
+	if b == nil {
+		return
+	}
+	go func() {
+		select {
+		case <-b.died:
+		case <-j.done:
+			return
+		}
+		name, sig := b.death()
+		if name == "HUP" || sig == 0 {
+			return
+		}
+		ended(128+int(sig), sig)
+	}()
 }

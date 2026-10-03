@@ -2153,6 +2153,16 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) (endSt
 			df.integer, df.base, df.baseNamed = true, 10, true
 		}
 		held := r.holdTheDeclaration(name)
+		if hasValue && !appends && !df.global && !df.compoundVar {
+			// Before this line's letters land and before the value is
+			// stored, so the letters it writes are the ones it keeps and the
+			// value is read without the ones it drops. See
+			// Runner.declarationAssignmentResets.
+			r.declarationAssignmentResets(name, fresh, df.export, true)
+			if r.unspecified {
+				return r.status
+			}
+		}
 		// The kind this line names takes the place of the kind the name had,
 		// in the one dialect that answers it that way. Ahead of both the
 		// numeric attributes below and the container mark further down,
@@ -2341,10 +2351,6 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) (endSt
 			if r.unspecified || r.operandGaveUpTheBuiltin() {
 				return r.status
 			}
-			r.declarationAssignmentExport(name, df.export)
-			if r.unspecified {
-				return r.status
-			}
 		case hasValue && df.compoundVar:
 			// The value on a `-C` operand is the *name of a variable to copy
 			// from* rather than a value to store, and the kind travels with
@@ -2369,7 +2375,7 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) (endSt
 				return r.status
 			}
 			if !df.global {
-				r.declarationAssignmentExport(name, df.export)
+				r.declarationAssignmentResets(name, fresh, df.export, false)
 				if r.unspecified {
 					return r.status
 				}
@@ -2385,10 +2391,6 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) (endSt
 			r.setVarAs(r.orName(valueTarget, name), value, assignedByDeclaration)
 			if r.ctl == controlExit {
 				// See biExport: the failure's status is the one that stands.
-				return r.status
-			}
-			r.declarationAssignmentExport(name, df.export)
-			if r.unspecified {
 				return r.status
 			}
 		default:
@@ -5333,40 +5335,75 @@ func (r *Runner) declareEmpty(name string, fresh, keepsTheEnvironmentEntry, name
 	}
 }
 
-// declarationAssignmentExport is what a declaration that *assigns* does to the
-// export attribute of the name it assigned to.
+// declarationAssignmentResets is what a declaration that *assigns* does to the
+// attributes the name was carrying. One shell resets them: the name keeps its
+// value, the declaration's own letters land afresh, and no child is told about
+// it again. The other two leave them alone, so this is a switch and not a rule.
+// See Semantics.DeclarationAssignmentResetsTheAttributes.
 //
-// One shell resets it: the name keeps the value and no child is told about it
-// again, at the top level and in a function whose declarations reach the
-// caller alike. The other two leave it alone, so this is a switch and not a
-// rule — see Semantics.DeclarationAssignmentClearsTheExportAttribute.
+// valueToo says the operand stores a plain value, and the reset then reaches
+// the value attributes as well as the export one. It is called ahead of the
+// store, because `typeset -i s=1; typeset s=2+3` holds `2+3` there: the
+// integer letter is gone before the value is read. The appending routes pass
+// false and keep the export-only reset they always had. Nothing measured says
+// an append drops a value attribute: `typeset -p s+=5` over `-Z3` keeps it.
 //
-// namesTheAttribute is `-x` or `+x` on the declaration itself, which settles
-// the question outright and is not this one; `export NAME=value` is the same
-// case by another spelling, which is why that builtin never comes here.
+// namesExport is `-x` on the declaration, or the `export` word itself, which
+// settles that one attribute outright.
 //
-// Asked only where a scope was *not* taken. Where one was, the question is
-// LocalInheritsTheExportAttribute — the same shell's answer from the other
-// side, already applied and already undone when the function returns. Both
-// firing would take the attribute off for good where a keyword function only
-// takes it off for its own duration, which is measurably not what happens.
-func (r *Runner) declarationAssignmentExport(name string, namesTheAttribute bool) {
-	if namesTheAttribute || !r.isExported(name) {
+// fresh is a binding this very declaration made, which starts with nothing to
+// reset. A later declaration of the same local does reset: `function f {
+// typeset -x s=2; typeset s=3; }` tells a child nothing in that shell (#5647).
+// That is narrower than the rule that stood here, which exempted any name the
+// running scope had shadowed.
+func (r *Runner) declarationAssignmentResets(name string, fresh, namesExport, valueToo bool) {
+	if fresh || r.lowered[name] || r.uppered[name] {
+		// A case letter already on the name keeps every attribute, export
+		// included: `typeset -lx s=A; typeset s=7` is `typeset -x -l s=7`
+		// there, and `typeset -lt s=A; export s=B` keeps the `-t`. A case
+		// letter *on this declaration* does not count: `typeset -x s=1;
+		// typeset -l s=B` drops the export.
 		return
 	}
-	if len(r.scopes) > 0 {
-		if _, shadowed := r.scopes[len(r.scopes)-1].saved[name]; shadowed {
-			return
+	exported := !namesExport && r.isExported(name)
+	valued := valueToo && r.carriesAValueAttribute(name)
+	if !exported && !valued {
+		return
+	}
+	if !r.ask(r.sem().DeclarationAssignmentResetsTheAttributes,
+		"a declaration that assigns resetting the attributes the name carried") {
+		return
+	}
+	if exported {
+		if r.exported == nil {
+			r.exported = map[string]bool{}
 		}
+		r.exported[name] = false
 	}
-	if !r.ask(r.sem().DeclarationAssignmentClearsTheExportAttribute,
-		"a declaration that assigns taking the export attribute off the name") {
-		return
+	if valued {
+		delete(r.integer, name)
+		delete(r.integerBase, name)
+		delete(r.floatPrecision, name)
+		delete(r.floatExponent, name)
+		delete(r.floatExact, name)
+		delete(r.fieldWidth, name)
+		delete(r.traced, name)
+		delete(r.hidden, name)
 	}
-	if r.exported == nil {
-		r.exported = map[string]bool{}
-	}
-	r.exported[name] = false
+}
+
+// carriesAValueAttribute reports whether the name carries one of the
+// attributes a resetting declaration takes off with its value: the numeric
+// letters and a base, a field width, the tag and the `-H` letter. Measured
+// one letter at a time on ksh93u+ 2012-08-01: `-i`, `-i 16`, `-F2`, `-E`,
+// `-Z3`, `-L4`, `-R4`, `-t` and `-H` all list as the bare `s=7` after
+// `typeset s=7` (#5647).
+func (r *Runner) carriesAValueAttribute(name string) bool {
+	_, base := r.integerBase[name]
+	_, float := r.floatPrecision[name]
+	_, width := r.fieldWidth[name]
+	return r.integer[name] || base || float || width || r.floatExponent[name] ||
+		r.traced[name] || r.hidden[name]
 }
 
 // declarationStartsAnInheritedNameOver reports whether this declaration takes

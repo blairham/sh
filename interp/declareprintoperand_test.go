@@ -29,7 +29,12 @@ func printOperand(v DeclarePrintOperandPolicy) func(*Semantics) {
 // listing shows what was stored, and the store carries none of the line's
 // letters.
 func TestDeclarePrintPerformsItsOperandPlainly(t *testing.T) {
-	plain := printOperand(DeclarePrintOperandIsAssignedPlainly)
+	// The scope the operand takes is the one a plain `typeset` takes, so the
+	// dialect's answer about that is part of the reading (#5647).
+	plain := func(s *Semantics) {
+		printOperand(DeclarePrintOperandIsDeclaredWithoutLetters)(s)
+		s.TypesetLocalNeedsKeywordFunction = Yes
+	}
 	for _, tc := range []struct{ src, want string }{
 		// The listing is of what this very command stored.
 		{`typeset -p s=5; echo "[$s]"`, "s=5\n[5]"},
@@ -47,8 +52,10 @@ func TestDeclarePrintPerformsItsOperandPlainly(t *testing.T) {
 		// The line's letters do not land: the value is the text and not the
 		// sum it would be under the integer attribute.
 		{`typeset -ip n=3+3; echo "[$n]"`, "n=3+3\n[3+3]"},
-		// Nor is a scope taken, so the name outlives the function.
+		// The scope is a plain `typeset`'s: none in a POSIX function, so the
+		// name outlives it, and a local of its own in a keyword function.
 		{`f() { typeset -p l=7; }; f; echo "[$l]"`, "l=7\n[7]"},
+		{`function g { typeset -p l=7; }; g; echo "[$l]"`, "l=7\n[]"},
 		// An appended operand is performed and contributes no row: the text
 		// before the `=` is not a name this shell has.
 		{`s=ab; typeset -p s+=cd; echo "[$s]"`, "[abcd]"},
@@ -71,7 +78,7 @@ func TestDeclarePrintPerformsItsOperandPlainly(t *testing.T) {
 // frozen name earns says — the sentence carries no builtin name, where
 // `typeset rr=2` on the same name carries one.
 func TestDeclarePrintPlainOperandIsRefusedAsABareAssignment(t *testing.T) {
-	plain := printOperand(DeclarePrintOperandIsAssignedPlainly)
+	plain := printOperand(DeclarePrintOperandIsDeclaredWithoutLetters)
 	dg := Diagnostics{
 		ReadonlyVariable:              "%[1]s: is read only",
 		ReadonlyVariableInDeclaration: "%[2]s: %[1]s: is read only",

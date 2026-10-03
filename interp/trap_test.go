@@ -345,9 +345,17 @@ func TestTrapTakesTheSignalsNobodyCanCatch(t *testing.T) {
 // were the last two held back, and they are taken now as well — see
 // TestTrapTakesTheSignalsNobodyCanCatch, which is where the difference that
 // remains between them and these is pinned.
+//
+// The action is `:`, which prints nothing, because the question is whether
+// the trap is *taken* and not what its action says. Some of these can really
+// arrive while the test runs. URG is the Go runtime's own preemption signal,
+// and a URG trap runs on it (#5109, kept as it is), and CHLD arrives whenever
+// another test in the package reaps a child. An action that printed made the
+// test fail on a delivery nobody sent: 1 run in 400 on a loaded machine
+// (#5517).
 func TestTrapTakesEverySignalTheHostKnows(t *testing.T) {
 	for _, sig := range []string{"CONT", "CHLD", "WINCH", "TSTP", "URG", "IO", "SYS", "TRAP", "XCPU", "USR1"} {
-		if out, st := run(t, `trap 'x' `+sig, nil); st != 0 || out != "" {
+		if out, st := run(t, `trap : `+sig, nil); st != 0 || out != "" {
 			t.Errorf("%s: got %q/%d, want it taken quietly", sig, out, st)
 		}
 	}

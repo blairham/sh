@@ -8757,7 +8757,13 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 		// frozen-name check, so the column that refuses a prefix before it
 		// evaluates anything still evaluates nothing.
 		r.expandPrefixTraceValues(c.Assigns)
-		r.tracePrefixAndCommand(c, argv)
+		if !r.assignmentGaveUp() {
+			// A value that would not expand gives the command up, and the
+			// one line dash and BusyBox ash write for a prefixed command is
+			// never reached: `set -x; a=1 b=${x?boom} true` writes the
+			// complaint and nothing else there (#5509).
+			r.tracePrefixAndCommand(c, argv)
+		}
 	}
 
 	// **The command's own line is written; the last body may run.** This is
@@ -13555,6 +13561,15 @@ func (r *Runner) assignAll(ctx context.Context, assigns []*syntax.Assign) {
 		// Runner.expandScalarAssignValue — and they travel with the value so
 		// that the store below matches nothing a second time.
 		value, fields, globbed := r.expandScalarAssignValue(a.Value)
+		if r.assignmentGaveUp() {
+			// The value would not expand and the shell is on its way out,
+			// so the list is over: nothing after it is stored, and nothing
+			// about it is written. Every column stops its trace at the
+			// failure — the ones with a line each have written the lines
+			// before it, and the ones with one line for the list never
+			// reach the line (#5509).
+			return
+		}
 		values[i] = value
 		prepared[i] = r.prepareTracedAssign(a, values[i])
 		prepared[i].fields, prepared[i].fieldsSet = fields, globbed
@@ -13568,6 +13583,13 @@ func (r *Runner) assignAll(ctx context.Context, assigns []*syntax.Assign) {
 			r.traceAssignments(assigns[i:i+1], values[i:i+1], prepared[i:i+1])
 		}
 		r.withPreparedValue(ctx, prepared[i])
+		if r.assignmentGaveUp() {
+			// The store was refused and the refusal ends the list. A line
+			// already written for it stays; the one line a list-at-once
+			// column writes is never written, which is what dash and BusyBox
+			// ash do with `readonly r; set -x; a=1 r=2` (#5509).
+			return
+		}
 		if separately && after {
 			r.traceAssignments(assigns[i:i+1], values[i:i+1], prepared[i:i+1])
 		}

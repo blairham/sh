@@ -336,6 +336,18 @@ func (r *Runner) prefixTraceWords(assigns []*syntax.Assign, d Diagnostics) []str
 // line dash, BusyBox ash and zsh write.
 func (r *Runner) tracePrefixAndCommand(c *syntax.SimpleCmd, argv []string) {
 	d := r.diag()
+	if d.TracePrefixAssignment == TracePrefixOnTheCommandLine && len(r.frozenPrefixNames(c.Assigns)) > 0 {
+		// The column that writes one line for the prefix and the command
+		// writes it once the prefix is in place, and a frozen name means it
+		// never is: `readonly r; set -x; a=1 r=2 true` is the refusal and no
+		// line at all in dash 0.5.12, and so is the same prefix in front of
+		// a redirection that will not open — the refusal is not written
+		// there either, and neither is the line. A value is still expanded,
+		// so `x=$(echo s >&2) true` traces the substitution's own command.
+		// Measured 2026-10-02 (#5509). BusyBox ash refuses the name before
+		// it gets this far; see Semantics.PrefixToAFrozenNameIsCheckedFirst.
+		return
+	}
 	words := r.prefixTraceWords(c.Assigns, *d)
 	if len(words) == 0 {
 		// Every assignment was refused or is one this shell does not write a
@@ -411,4 +423,12 @@ func (r *Runner) tracesEachPrefixEntryOnItsOwnLine() bool {
 		return true
 	}
 	return false
+}
+
+// assignmentGaveUp reports whether an assignment's value or its store has
+// ended the command: the shell is on its way out, or a value would not
+// expand and the command does not run. Either way nothing more of the
+// assignment list is stored and nothing more of it is traced (#5509).
+func (r *Runner) assignmentGaveUp() bool {
+	return r.expandErr || r.givingUpAlready()
 }

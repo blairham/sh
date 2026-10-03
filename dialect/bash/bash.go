@@ -3881,6 +3881,11 @@ func Semantics() interp.Semantics {
 	s.LocalOptions = "aAgiIlnprtux"
 	// A bad `declare` option is reported and the script goes on.
 	s.TypesetBadOptionFatal = interp.No
+	// And the array literals behind a refused letter are declared and
+	// stored anyway: measured 2026-10-03 on bash 5.3.20, `typeset -U
+	// a=(1 1 2)` refuses `-U` at 2 and leaves `a` holding all three
+	// elements. See Semantics.RefusedDeclarationKeepsItsArrayLiterals.
+	s.RefusedDeclarationKeepsItsArrayLiterals = interp.Yes
 	// A lone `-` or `+` is a *name* here and not an option word, and not one
 	// a script may declare: measured 2026-09-10, ``declare -`` is ``declare:
 	// `-': not a valid identifier`` at 1 where zsh and ksh93 both read it as

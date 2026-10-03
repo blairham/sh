@@ -5009,6 +5009,11 @@ func Semantics() interp.Semantics {
 	s.PrivateOptions = "aAFHhiLlPpRrtuUxZ"
 	// A bad `typeset` option is reported and the script goes on.
 	s.TypesetBadOptionFatal = interp.No
+	// And the refusal takes the whole line with it: measured 2026-10-03 on
+	// zsh 5.9.2, `typeset -Q a=(1)` is `bad option: -Q` at 1 and `a` does
+	// not exist afterwards. See
+	// Semantics.RefusedDeclarationKeepsItsArrayLiterals.
+	s.RefusedDeclarationKeepsItsArrayLiterals = interp.No
 	// `integer` here is `typeset` with the letter prepended rather than a
 	// declaration of its own, and its letter set is *narrower* than
 	// typeset's: measured 2026-09-06, `integer -a`, `-A`, `-f`, `-F`, `-T`

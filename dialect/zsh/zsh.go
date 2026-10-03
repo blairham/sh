@@ -2742,6 +2742,8 @@ func Semantics() interp.Semantics {
 	// A `~name` naming nothing is refused, as an unmatched pattern is.
 	// See the field (#5646).
 	s.UnresolvedTildeIsAnError = interp.Yes
+	// `~N` reads $dirstack with $PWD in front of it. See the field (#5656).
+	s.NumberedTildeReadsThePushedDirectories = interp.Yes
 	// A failed expansion in a declaration's words or a `case` leaves `$?`
 	// alone. See the field (#5657).
 	s.FailedExpansionInADeclarationOrCaseSetsNoStatus = interp.Yes
@@ -6670,6 +6672,7 @@ func Apply(r *interp.Runner) {
 	// `~[name]` is a directory a script's own function names. See
 	// dynamicdir.go.
 	r.DynamicDirectoryFunctions = zshDynamicDirectoryFunctions
+	r.NumberedTildeSwapsItsSigns = func(r *interp.Runner) bool { return recordedDeviates(r, "pushdminus") }
 	// This shell has an `enable`, but a different one: it works on hash
 	// tables and takes none of bash's options — `enable -n` is a bad option
 	// there. Claiming a bash-shaped one would be worse than not having it.

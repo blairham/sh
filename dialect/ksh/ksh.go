@@ -861,6 +861,11 @@ func Semantics() interp.Semantics {
 	// 2026-10-02 from a script file (#5485). Which attribute letters ksh93
 	// refuses on these names is #5506.
 	s.RestrictedFreezeRefusesAValuelessDeclaration = interp.No
+	// But a letter that would change the frozen name is refused: `readonly
+	// PATH`, `typeset +x PATH` and `typeset -x ENV` are, `export PATH` and
+	// `typeset +x ENV` are not. Measured 2026-10-02 (#5506); the grid is in
+	// Runner.restrictedLetterChangesTheName.
+	s.RestrictedFreezeRefusesALetterThatChangesTheName = interp.Yes
 	// And `echo a > >(cat)` is refused in the mode, at 1, as bash refuses it.
 	s.RestrictedRedirectTakesAProcessSubstitution = interp.No
 	// A refused declaration ends the script at 1, whatever the operands after

@@ -2182,7 +2182,9 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) (endSt
 			r.assignFailed = true
 			continue
 		}
-		if df.readonly && df.readonlyOff {
+		// A `+r` over a name the mode froze is taken and takes nothing away.
+		// See Runner.restrictedFreezeIsNotTheAttribute.
+		if df.readonly && df.readonlyOff && !r.restrictedFreezeIsNotTheAttribute(name) {
 			if code := r.removeReadonly(name, hasValue); code != 0 {
 				return code
 			}

@@ -12475,6 +12475,15 @@ func (r *Runner) reportReadonlyRefusal(name string, form assignForm, fatal bool)
 		}
 		msg = Wording(wording, "", name, r.inBuiltin)
 	}
+	// A name restricted mode froze, refused over a letter rather than a
+	// value: the sentence is the mode's operand refusal, naming the builtin,
+	// and the builtin keeps the location. Measured on ksh93u+, `typeset +x
+	// PATH` in the mode is `<script>[2]: typeset: PATH: restricted` and
+	// `readonly PATH` is `<script>[2]: readonly: PATH: restricted` (#5506).
+	restrictedLetter := form == attributeRatherThanAValue && r.inBuiltin != "" && r.restrictedFreeze(name)
+	if restrictedLetter {
+		msg = Wording(r.diag().RestrictedOperand, "%[1]s: %[2]s: restricted", r.inBuiltin, name)
+	}
 	// The builtin has been taken for the wording above where a dialect wants
 	// it, and this message does not carry it in the *location* in the dialect
 	// that puts it there for everything else: zsh writes `zsh:1: read-only
@@ -12492,7 +12501,7 @@ func (r *Runner) reportReadonlyRefusal(name string, form assignForm, fatal bool)
 	// And except for a name restricted mode froze, in the dialect that keeps
 	// the builtin's location for that one. See
 	// Diagnostics.RestrictedVariableNamesTheBuiltin.
-	keep := r.diag().RestrictedVariableNamesTheBuiltin && r.restrictedFreeze(name)
+	keep := restrictedLetter || r.diag().RestrictedVariableNamesTheBuiltin && r.restrictedFreeze(name)
 	if !r.readonlyRefusalNamesBuiltin(form) && !keep {
 		outer := r.inBuiltin
 		r.inBuiltin = ""

@@ -35,3 +35,33 @@ func TestAQuotedIndexedSubscriptIsArithmeticText(t *testing.T) {
 		}
 	}
 }
+
+// The same text arriving in a builtin's operand is arithmetic text too, on
+// every operand route: measured 2026-10-03 on bash 5.3.20 under `-c`, each is
+// `'1': arithmetic syntax error` and the element is left alone. A double
+// quotation is still quoting there, and a key is still a key (#5568).
+func TestAQuotedIndexedSubscriptOperandIsArithmeticText(t *testing.T) {
+	const arr = "a=(x y z); "
+	for _, src := range []string{
+		`unset 'a['\''1'\'']'; echo after`,
+		`unset 'a[\1]'; echo after`,
+		`read 'a['\''1'\'']' <<<Q; echo after`,
+		`declare 'a['\''1'\'']=Q'; echo after`,
+		`printf -v 'a['\''1'\'']' Q; echo after`,
+	} {
+		out, st := runBash(t, t.TempDir(), arr+src)
+		if !strings.Contains(out, `'1': arithmetic syntax error`) && !strings.Contains(out, `\1: arithmetic syntax error`) ||
+			strings.Contains(out, "after") || st == 0 {
+			t.Errorf("%s\n got %q at %d, want the arithmetic refusal and nothing after", src, out, st)
+		}
+	}
+	for _, c := range []struct{ src, want string }{
+		{`unset 'a["1"]'; echo ${a[@]}`, "x z\n"},
+		{`i=1; unset 'a[$i]'; echo ${a[@]}`, "x z\n"},
+		{`declare -A m; m[k]=1; m[j]=2; unset 'm['\''k'\'']'; echo ${!m[@]}`, "j\n"},
+	} {
+		if out, st := runBash(t, t.TempDir(), arr+c.src); out != c.want || st != 0 {
+			t.Errorf("%s\n got %q at %d, want %q at 0", c.src, out, st, c.want)
+		}
+	}
+}

@@ -2221,6 +2221,14 @@ type Runner struct {
 	// things (#1596).
 	expandingNestedInner bool
 
+	// substitutedWordSplit is the `${=…}` node whose operator word was split
+	// as it expanded, so that the fields it came to are not split again.
+	// Set by substitutedWordFields and taken by the list path that called it.
+	substitutedWordSplit *syntax.ParamExpr
+	// arrayAssignSplit is the same for an `(A)` assignment's operand, split
+	// as it was stored; flaggedWords takes it. See assignThroughFlags.
+	arrayAssignSplit *syntax.ParamExpr
+
 	// readingARangeEnd counts the ends of a subscript pair being evaluated,
 	// which a subscript of 0 does not move. See Runner.rangeEndValue.
 	readingARangeEnd int

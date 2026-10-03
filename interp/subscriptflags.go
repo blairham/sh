@@ -541,7 +541,18 @@ func (r *Runner) renderSubscript(w *syntax.Word, keepEscape func(string) bool) s
 //
 // and a search operand alike: with `'aX'` the third element,
 // `${a[(i)'a$b']}` is 3.
+//
+// **Only where the subscript is no quoting context.** The as-written key is
+// rendered in every dialect and the question that picks between it and the
+// quoted one is asked afterwards, so a substitution performed here is
+// performed whichever key wins. In bash and ksh93 the single quotes stop it:
+// `${h['$(touch marker)']}` makes no file there, and made one here (#5569).
+// Read rather than asked, because the ask that decides comes later and an
+// answer this cannot see — no dialect chosen — is the quoted reading's.
 func (r *Runner) singleQuotedSubscriptText(text string, keepEscape func(string) bool) string {
+	if r.sem().SubscriptIsAQuotingContext != No {
+		return text
+	}
 	if !strings.ContainsAny(text, "$`\\") || strings.ContainsAny(text, quoteStandIns) {
 		return text
 	}

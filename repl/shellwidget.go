@@ -54,6 +54,10 @@ type Line struct {
 	// Last is the widget the keystroke before this one ran. See LastWidget.
 	Last LastWidget
 
+	// ViCommand says the key was read in vi's command mode, which a shell
+	// reports as the keymap a widget is running in.
+	ViCommand bool
+
 	// Accept says the widget asked for the line to be committed, which is
 	// what `zle accept-line` inside a widget means. It is a *request* carried
 	// back rather than something the widget did, because an accept is the

@@ -257,6 +257,10 @@ const (
 	// zleLastWidget is what `$LASTWIDGET` reads for the length of a widget
 	// call. See lastWidgetName.
 	zleLastWidget = ".zsh.zle.lastwidget"
+	// zleNumeric is the numeric argument a widget sees, empty where there is
+	// none, and zleKeymap the keymap `$KEYMAP` names. See widgetCall.
+	zleNumeric = ".zsh.zle.numeric"
+	zleKeymap  = ".zsh.zle.keymap"
 	// zleAccept is set by `zle accept-line` inside a widget and read once, by
 	// the call that ran the widget. A parameter under a name no script can
 	// spell, the way the rest of this file keeps its state, so a subshell gets
@@ -489,9 +493,34 @@ func zleBuiltin(r *interp.Runner, ctx context.Context, args []string) int {
 		// `zle` with nothing at all: status 1 and not a word, measured.
 		return 1
 	}
-	args, asItself, nolast, refused := widgetCallOptions(r, rest[1:])
-	if refused {
+	call, ok := widgetCallOptions(r, rest[1:])
+	if !ok {
 		return 1
+	}
+	args, asItself, nolast := call.args, call.asItself, call.nolast
+	if call.keymap != "" && !slices.Contains(keymapsNow(r), call.keymap) {
+		// A keymap there is no such thing as: status 1 and not a word,
+		// measured.
+		return 1
+	}
+	if insideWidget(r) {
+		// The numeric argument and the keymap the called widget sees, for the
+		// call alone. See widgetCallOptions.
+		if call.numeric != nil || call.clearNumeric {
+			was, _ := r.GetVar(zleNumeric)
+			switch {
+			case call.numeric != nil:
+				r.SetVar(zleNumeric, strconv.Itoa(*call.numeric))
+			case was != "":
+				r.SetVar(zleNumeric, "1")
+			}
+			defer r.SetVar(zleNumeric, was)
+		}
+		if call.keymap != "" {
+			was, _ := r.GetVar(zleKeymap)
+			r.SetVar(zleKeymap, call.keymap)
+			defer r.SetVar(zleKeymap, was)
+		}
 	}
 	if !nolast && insideWidget(r) {
 		// What ran is the last widget from here on, unless the call said
@@ -523,22 +552,58 @@ func zleBuiltin(r *interp.Runner, ctx context.Context, args []string) int {
 //	zle inner -wN           W=inner
 //	zle inner               W=outer
 //
-// `-N` clears the numeric argument, which this shell's editor has none of, so
-// it is read and does nothing. The other letters of that list are left to the
-// widget as operands, as before; see widgetCallArgs.
-func widgetCallOptions(r *interp.Runner, args []string) (rest []string, asItself, nolast, refused bool) {
+// And the three that carry a value, measured the same way on 2026-10-02
+// (#5495), a `g` printing `$NUMERIC`, `${(t)NUMERIC}` and `$KEYMAP`:
+//
+//	zle g -n 3 a            NUMERIC=3, integer-local-special; unset again after
+//	zle g -n x              NUMERIC=0, status 0
+//	zle g -n -2             NUMERIC=-2
+//	zle g -n                number expected after -n, status 1
+//	zle g -N                NUMERIC unset where there was none, 1 where there was
+//	zle g -K vicmd          KEYMAP=vicmd; main again after
+//	zle g -K nosuch         status 1, nothing written
+//	zle g -K                keymap expected after -K, status 1
+//	zle g -f nolast a b     a b, and $LASTWIDGET left as it was
+//	zle g -f bogus          'nolast' expected after -f
+type widgetCall struct {
+	args         []string
+	asItself     bool
+	nolast       bool
+	numeric      *int
+	clearNumeric bool
+	keymap       string
+}
+
+// widgetCallOptions reads the options in front of a called widget's
+// arguments. False is a refusal already reported.
+func widgetCallOptions(r *interp.Runner, args []string) (widgetCall, bool) {
+	var c widgetCall
 	for len(args) > 0 {
 		a := args[0]
-		if a == "-f" {
-			// A flag for this call, and `nolast` is the one there is:
-			// measured on zsh 5.9.2, `zle g -f nolast a b` hands g the two
-			// words and leaves `$LASTWIDGET` as it was, and any other word is
-			// `'nolast' expected after -f`.
+		switch a {
+		case "-f":
 			if len(args) < 2 || args[1] != "nolast" {
 				r.Diagnosef("'nolast' expected after -f\n")
-				return nil, false, false, true
+				return c, false
 			}
-			nolast = true
+			c.nolast = true
+			args = args[2:]
+			continue
+		case "-n":
+			if len(args) < 2 {
+				r.Diagnosef("number expected after -n\n")
+				return c, false
+			}
+			n := leadingInteger(args[1])
+			c.numeric = &n
+			args = args[2:]
+			continue
+		case "-K":
+			if len(args) < 2 {
+				r.Diagnosef("keymap expected after -K\n")
+				return c, false
+			}
+			c.keymap = args[1]
 			args = args[2:]
 			continue
 		}
@@ -546,11 +611,29 @@ func widgetCallOptions(r *interp.Runner, args []string) (rest []string, asItself
 			break
 		}
 		if strings.ContainsRune(a, 'w') {
-			asItself = true
+			c.asItself = true
+		}
+		if strings.ContainsRune(a, 'N') {
+			c.clearNumeric = true
 		}
 		args = args[1:]
 	}
-	return args, asItself, nolast, false
+	c.args = args
+	return c, true
+}
+
+// leadingInteger is the number at the front of s, with an optional sign, and
+// 0 where there is none — `-n x` is 0, measured.
+func leadingInteger(s string) int {
+	i := 0
+	if i < len(s) && (s[i] == '-' || s[i] == '+') {
+		i++
+	}
+	for i < len(s) && s[i] >= '0' && s[i] <= '9' {
+		i++
+	}
+	n, _ := strconv.Atoi(s[:i])
+	return n
 }
 
 // widgetCallArgs is what a called widget is given, with the `--` that ends
@@ -1273,6 +1356,13 @@ func runWidgetFunction(
 	r.SetVar(zleWidget, name)
 	r.SetVar(zleActive, "1")
 	r.SetVar(zleLastWidget, lastWidgetName(in.Last))
+	// The keymap the key was read in: `main` while inserting, whichever of
+	// emacs and viins that is, and `vicmd` in vi's command mode — measured.
+	keymap := "main"
+	if in.ViCommand {
+		keymap = "vicmd"
+	}
+	r.SetVar(zleKeymap, keymap)
 	// A completion widget looks at the line and does not rewrite it, which is
 	// the completer's presence and not a second flag — see openWidgetParameters.
 	openWidgetParameters(r, def.completer != "")
@@ -1411,6 +1501,20 @@ func openWidgetParameters(r *interp.Runner, completion bool) {
 		return name
 	})
 	r.MarkReadonly("LASTWIDGET")
+	r.SetDynamic("KEYMAP", func(rr *interp.Runner) string {
+		name, _ := rr.GetVar(zleKeymap)
+		return name
+	})
+	r.MarkReadonly("KEYMAP")
+	// The numeric argument, which is there only while there is one.
+	r.SetDynamic("NUMERIC", func(rr *interp.Runner) string {
+		n, _ := rr.GetVar(zleNumeric)
+		return n
+	})
+	r.SetDynamicPresence("NUMERIC", func(rr *interp.Runner) bool {
+		n, _ := rr.GetVar(zleNumeric)
+		return n != ""
+	})
 	for _, name := range zleQueueParameters {
 		r.SetDynamic(name, func(*interp.Runner) string { return "0" })
 		// `integer-local-readonly-special` in real zsh, measured 2026-09-22
@@ -1473,6 +1577,8 @@ func openWidgetParameters(r *interp.Runner, completion bool) {
 	// reason: measured, `${(t)LASTWIDGET}` in a widget is
 	// `scalar-local-readonly-special`.
 	r.MarkLocal("LASTWIDGET")
+	r.MarkLocal("KEYMAP")
+	r.MarkLocal("NUMERIC")
 }
 
 // closeWidgetParameters takes them away again, so a script that is not running
@@ -1489,6 +1595,8 @@ func closeWidgetParameters(r *interp.Runner) {
 	// keystrokes is nothing at all.
 	r.UnsetDynamic(postdisplayName)
 	r.UnsetDynamic("LASTWIDGET")
+	r.UnsetDynamic("KEYMAP")
+	r.UnsetDynamic("NUMERIC")
 	// Not added to zleParameters, because that list is also what the
 	// completion branch above marks read-only and what the tests walk as "the
 	// line parameters". This one is neither: a completion widget may colour
@@ -1526,6 +1634,8 @@ var widgetParameterDeclarations = map[string]interp.ProducedDeclaration{
 	postdisplayName:     {},
 	"WIDGET":            {},
 	"LASTWIDGET":        {},
+	"KEYMAP":            {},
+	"NUMERIC":           {Integer: true, Base: 10},
 	regionHighlightName: {Array: true, ListsItsElements: true},
 }
 
@@ -1618,7 +1728,7 @@ func editorRunning(r *interp.Runner) bool {
 // unsetWidgetState clears what the call left behind, so nothing about one
 // keystroke's widget is visible to the next one's.
 func unsetWidgetState(r *interp.Runner) {
-	for _, name := range []string{zleBuffer, zleCursor, zleWidget, zleActive, zleAccept, zleLastWidget} {
+	for _, name := range []string{zleBuffer, zleCursor, zleWidget, zleActive, zleAccept, zleLastWidget, zleNumeric, zleKeymap} {
 		r.SetVar(name, "")
 	}
 }

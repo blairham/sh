@@ -6637,6 +6637,11 @@ type Semantics struct {
 	// and the rows that are measured and deliberately not modeled.
 	ShellLevelExec ShellLevelExec
 
+	// TailExec is how far into a command string the shell reaches to find
+	// the program it execs in its own place rather than forking, when
+	// nothing is left to run after it. See TailExec for the panel.
+	TailExec TailExec
+
 	// InterruptWaitsForTheProgram is what an untrapped SIGINT from outside
 	// does when it reaches the shell while the shell waits for a program it
 	// ran in the foreground (#5416). Measured 2026-10-02 under `-c`, the

@@ -342,6 +342,8 @@ func Semantics() interp.Semantics {
 	s.ZeroSubscriptIsTheFirstElement = interp.No
 	// dash 0.5.12 keeps the export letter of its own parameters (`PS1`, `IFS`, `LINENO`) through `unset`; see the axis.
 	s.UnsetKeepsTheShellsOwnAttributes = interp.Yes
+	// dash 0.5.12 execs the last command of a `-c` string wherever it is, outside a loop; see interp.TailExec.
+	s.TailExec = interp.TailExecWhereverLastOutsideALoop
 	// unanswered BraceRangeStepPadsTheRange: the same, and for the same
 	// reason as the line above — `echo {1..5..01}` is the word itself here,
 	// so no step is ever read and none of its zeros can pad anything.

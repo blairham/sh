@@ -106,7 +106,7 @@ func runForReplacement(t *testing.T, dir, src string, coproc bool) []*os.File {
 	r := newTestRunner(t, &Runner{
 		Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &Diagnostics{},
 		Dir: dir, Name: "testsh", Env: testPATH(),
-		ReplaceProcess: func(_ string, _, _ []string, files []*os.File) error {
+		ReplaceProcess: func(_, _ string, _, _ []string, files []*os.File) error {
 			called, got = true, files
 			return os.ErrPermission
 		},

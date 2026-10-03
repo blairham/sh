@@ -145,7 +145,19 @@ func reachedPlacement(where string) {
 // the window is still there and there is no longer anything in it to hit. The
 // interval this function is careful about is what keeps the cost of that a
 // startup detail rather than a second line of defense.
-func replaceProcess(path string, argv, env []string, files []*os.File) error {
+func replaceProcess(dir, path string, argv, env []string, files []*os.File) error {
+	// The process moves to the shell's directory first, because a Runner's
+	// `cd` never moved it: `cd /tmp; exec pwd` printed the directory the
+	// shell was started in. Moved back if the exec fails, so the process is
+	// where it was for whatever this shell does next.
+	if dir != "" {
+		if was, err := os.Getwd(); err == nil {
+			if err := os.Chdir(dir); err != nil {
+				return err
+			}
+			defer func() { _ = os.Chdir(was) }()
+		}
+	}
 	prev := debug.SetGCPercent(-1)
 	// Before the table is touched, because this is the part that allocates.
 	ready, err := prepareExec(path, argv, env)

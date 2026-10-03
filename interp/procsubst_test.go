@@ -598,7 +598,7 @@ func TestTheExecReplacementCleansUpBeforeTheExecve(t *testing.T) {
 	_, st := runGrammar(t, src, withFileSubst, func(rr *Runner) {
 		r = rr
 		rr.Env = append(testPATH(), "TMPDIR="+tmp)
-		rr.ReplaceProcess = func(string, []string, []string, []*os.File) error {
+		rr.ReplaceProcess = func(string, string, []string, []string, []*os.File) error {
 			called = true
 			atTheExecve = subdirs(t, tmp)
 			// Reported as a failure so the test binary survives. The status

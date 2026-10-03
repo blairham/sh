@@ -367,7 +367,12 @@ func (r *Runner) replacedShellLevel(entry string) (string, bool) {
 // here, which is what a subshell of a real shell looks like from outside, and
 // the columns that lower the count do not lower it there either.
 func (r *Runner) replacementEnviron(flags execFlags) []string {
-	env := r.execEnviron(flags)
+	return r.lowerShellLevelIn(r.execEnviron(flags))
+}
+
+// lowerShellLevelIn rewrites the `SHLVL` entry of env for a program that
+// replaces this shell. See replacedShellLevel.
+func (r *Runner) lowerShellLevelIn(env []string) []string {
 	for i, entry := range env {
 		name, value, found := strings.Cut(entry, "=")
 		if !found || name != ShellLevelName {

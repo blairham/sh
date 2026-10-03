@@ -42,7 +42,7 @@ func TestExecHandsItsStandardOutputToTheReplacement(t *testing.T) {
 		Dir: dir, Name: "zsh", Route: interp.RouteScriptFile,
 		Vars:    map[string]string{"PATH": "/usr/bin:/bin"},
 		Dialect: presetDialect(),
-		ReplaceProcess: func(_ string, _, _ []string, files []*os.File) error {
+		ReplaceProcess: func(_, _ string, _, _ []string, files []*os.File) error {
 			handed = files
 			return os.ErrPermission
 		},

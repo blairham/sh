@@ -178,6 +178,8 @@ func (r *Runner) expandWordFieldsTracked(w *syntax.Word, track bool) ([]string, 
 	// inside this word inherits it. See interp/equalscontextposition.go.
 	outside, restorePosition := r.spendTheEqualsContextPosition()
 	defer restorePosition()
+	equalsTilde, restoreEqualsTilde := r.spendTheEqualsTildeContext()
+	defer restoreEqualsTilde()
 	// The tilde passes rewrite the spans they expand, so they are given a
 	// copy: the word belongs to the parsed program, and a function's body is
 	// expanded again on its next call. Writing into the tree kept the first
@@ -194,7 +196,7 @@ func (r *Runner) expandWordFieldsTracked(w *syntax.Word, track bool) ([]string, 
 	// since a word the tilde opens has already been answered. See
 	// interp/assignmentshapedword.go.
 	if !outside {
-		r.expandAssignmentShapedWord(w)
+		r.expandAssignmentShapedWord(w, equalsTilde)
 		r.wordEquals(w)
 	}
 	// Under `shfileexpansion` the word's `=` was answered before its braces

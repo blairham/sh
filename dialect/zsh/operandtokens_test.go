@@ -17,6 +17,7 @@ func TestAFlaggedOperandKeepsItsTokens(t *testing.T) {
 	for _, tc := range []struct{ src, want string }{
 		{`print -l ${(U):-{b,c}} ${(qq):-{b,c}} ${(j:-:):-{b,c}}`, "B\nC\n'b'\n'c'\nb-c\n"},
 		{`print -r -- ${(qq):-x*} ${(q+):-x?y} ${(q):-xa*} ${(q):-x?y}`, "'x*' 'x?y' xay xay xby\n"},
+		{`v=1; print -r -- ${(qq)v:+x*}; print -l ${(U)v:+{b,c}}`, "'x*'\nB\nC\n"},
 		{`print -r -- ${(U):-x*}`, "zsh:2: no matches found: X*\n"},
 		{`print -r -- ${(q):-=} ${(q):-#a} ${(q):-a^b} ${(q):-'xa*'} ${(qq):-=}a`, "= #a a^b xa\\* '='a\n"},
 		{`print -r - ${(qq):-a= {b,c}*}, ${(q-):-a= {b,c}*}`, "'a= b*' 'a= c*', 'a= b*' 'a= c*'\n"},

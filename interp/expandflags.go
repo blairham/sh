@@ -2379,9 +2379,7 @@ func (r *Runner) operandTokenWords(e *syntax.ParamExpr, quoted bool) ([]string, 
 	if quoted || e.Arg == nil || r.liveMarksFor != e || strings.Trim(e.Flags, "ULCoOqj@") != "" {
 		return nil, false
 	}
-	restore := r.withoutGlobbing()
 	fields := r.expandWordEscaped(e.Arg)
-	restore()
 	out := make([]string, 0, len(fields))
 	for _, f := range fields {
 		out = append(out, markOperandTokens(f))

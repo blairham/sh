@@ -7867,6 +7867,15 @@ func biLocal(r *Runner, _ context.Context, args []string) (endStatus int) {
 		// What the name carries before the letters land, so a refused
 		// reference below can put it back — the same hold biDeclare takes,
 		// and one function rather than two. See declarationtakenback.go.
+		// A fresh local of one of the shell's own slots takes the slot's
+		// kind. See Runner.localSlotKind.
+		slot := ScalarParameter
+		if fresh {
+			slot = r.localSlotKind(name, f)
+		}
+		if slot == IntegerParameter {
+			f.integer, f.base, f.baseNamed = true, 10, true
+		}
 		held := r.holdTheDeclaration(name)
 		r.applyAttributes(name, f)
 		// Over a binding this line made only — see biDeclare's call.
@@ -8017,6 +8026,8 @@ func biLocal(r *Runner, _ context.Context, args []string) (endStatus int) {
 			if r.ctl == controlExit {
 				return r.status
 			}
+		case hasValue && slot == ArrayParameter:
+			r.setArray(name, []string{value})
 		case hasValue:
 			r.setVar(name, value)
 			if r.ctl == controlExit {

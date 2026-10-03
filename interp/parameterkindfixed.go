@@ -176,3 +176,47 @@ func (r *Runner) kindLetterOverAShellParameterRefused(name string, f declareFlag
 		"%s: can't change type of a special parameter", name))
 	return true
 }
+
+// localSlotKind is the kind a fresh local of one of the shell's own
+// parameters takes from the slot it shadows, where the declaration wrote no
+// kind letter of its own: an array slot's local is an array, so a scalar
+// value is the array of that one value, and an integer slot's local is an
+// integer, so its value is evaluated. ScalarParameter means nothing is taken.
+// Measured 2026-10-03 on zsh 5.9.2 under `env -i PATH=/usr/bin:/bin`, `-f`
+// (#5598, #5576):
+//
+//	f(){ local path=/somewhere; print ${#path} }       1 — ours was 10
+//	f(){ local fpath=/a/b; print ${(t)fpath} }         array-local-tied-special
+//	f(){ typeset path=/q; print ${(t)path} }           array-local-tied-special
+//	f(){ local SHLVL=4; print ${(t)SHLVL} }            integer-local-special
+//	f(){ local COLUMNS=1+1; print $COLUMNS }           2
+//	f(){ local SHLVL=abc; print $SHLVL }               0
+//	f(){ local HISTSIZE; print ${(t)HISTSIZE} }        integer-local-special
+//
+// and the controls already agreed: `local path=(/a /b)`, `local path;
+// path=/x`, `local PATH=/x`, `local RANDOM=3`, and `local -h path=/x`, which
+// asks for an ordinary parameter. A kind letter on the line is not
+// overridden — `local -a path=/x` is the *refusal* `inconsistent type for
+// assignment` there, which is the existing gate's answer.
+//
+// Only a slot that holds one kind, so that the kind given is never a choice.
+// `SECONDS` is the one slot of two kinds and its local is an integer either
+// way — it is produced, and `f(){ local SECONDS=1.5 }` is `typeset -i10
+// SECONDS=1` in the reference and here — so nothing yet separates the two
+// readings, and the narrower one is kept.
+func (r *Runner) localSlotKind(name string, f declareFlags) ParameterKind {
+	allowed, fixed := r.kindFixed[name]
+	if !fixed || (f.hideNamed && f.hide) {
+		return ScalarParameter
+	}
+	if _, _, written := f.kindLetterWritten(); written || f.array || f.assoc || f.integer || f.float {
+		return ScalarParameter
+	}
+	switch {
+	case allowed.onlyHolds(ArrayParameter):
+		return ArrayParameter
+	case allowed.onlyHolds(IntegerParameter):
+		return IntegerParameter
+	}
+	return ScalarParameter
+}

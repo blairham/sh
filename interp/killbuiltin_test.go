@@ -552,11 +552,17 @@ func TestASignalJoinedToTheOption(t *testing.T) {
 	for _, c := range []struct {
 		src    string
 		joined Answer
+		number Answer
 		want   int
 		refuse bool
 	}{
 		{src: `kill -n0 $$`, joined: Yes, want: 0},
 		{src: `kill -s0 $$`, joined: Yes, want: 1, refuse: true},
+		// The looser reading takes a number onto `-s` as well, and only
+		// where the joined reading is taken at all.
+		{src: `kill -s0 $$`, joined: Yes, number: Yes, want: 0},
+		{src: `kill -sCONT $$`, joined: Yes, number: Yes, want: 0},
+		{src: `kill -s0 $$`, joined: No, number: Yes, want: 1, refuse: true},
 		{src: `kill -n0 $$`, joined: No, want: 1, refuse: true},
 		{src: `kill -sCONT $$`, joined: No, want: 1, refuse: true},
 		// A name onto `-n` and a number onto `-s` are the bare `-SPEC` form
@@ -569,6 +575,10 @@ func TestASignalJoinedToTheOption(t *testing.T) {
 	} {
 		sem := killSem()
 		sem.KillReadsASignalJoinedToItsOption = c.joined
+		sem.KillJoinsANumberToTheNameOption = No
+		if c.number != Unspecified {
+			sem.KillJoinsANumberToTheNameOption = c.number
+		}
 		_, errs, st := killRun(t, c.src, sem, Diagnostics{})
 		if st != c.want {
 			t.Errorf("%s with the axis %v: status %d, want %d", c.src, c.joined, st, c.want)

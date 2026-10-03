@@ -1151,6 +1151,13 @@ func Semantics() interp.Semantics {
 	// complaint, `No arg for -s option`, rather than the signal `s`.
 	s.KillReadsTheNumberOption = interp.No
 	s.KillOptionWithNoArgumentIsASignalName = interp.No
+	// But `-s` takes its signal joined to it as readily as spaced, a name or
+	// a number alike: `kill -sKILL $p` and `kill -s9 $p` both send at 0, and
+	// `kill -s99` is the same `invalid signal number or name: 99` as
+	// `kill -s 99`. Measured 2026-10-03 on dash 0.5.12. `kill -n9` stays
+	// `Illegal option -n`, since `-n` is no option here however it is spelled.
+	s.KillReadsASignalJoinedToItsOption = interp.Yes
+	s.KillJoinsANumberToTheNameOption = interp.Yes
 	s.KillListAcceptsName = interp.No
 	// One subtraction, and everything else is refused — including 0, which
 	// is the one column with no EXIT and no number printed back.

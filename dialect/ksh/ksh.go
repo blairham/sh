@@ -2751,9 +2751,10 @@ func Semantics() interp.Semantics {
 	s.SignalNamesTheShellAlsoReads = "IOT=ABRT"
 	// And a signal written onto the option with no space: `kill -n9` and
 	// `kill -sKILL` both send. Measured 2026-09-12. This shell is looser
-	// still — it takes `kill -s9` too, which the axis records and does not
-	// follow (#2227).
+	// still — it takes `kill -s9` as `kill -s 9` too, measured 2026-10-03,
+	// which is the second axis (#2227).
 	s.KillReadsASignalJoinedToItsOption = interp.Yes
+	s.KillJoinsANumberToTheNameOption = interp.Yes
 	// A numeric signal goes to `kill(2)` unchecked here, so `kill -99 $$` is
 	// `kill: <pid>: no such process` at 1 — the sentence this shell gives
 	// every failed send — rather than a word refused. Measured 2026-09-16;

@@ -5426,7 +5426,7 @@ func Diagnostics() interp.Diagnostics {
 		BuiltinComplaintUnprefixed: map[string]bool{
 			"alias": true, "builtin": true, "pwd": true,
 		},
-		BuiltinUsage: map[string]string{
+		BuiltinUsage: map[string]string{ //nolint:gosec // G101: usage strings, not credentials
 			"set": "Usage: set [-sabefhkmnprtuvxBCGH] [-A name] [-o[option]] [arg ...]",
 			// The same usage block under the array letter, which is what
 			// this shell prints for `set -A` with no name after it.

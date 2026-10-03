@@ -28,7 +28,7 @@ import "strings"
 // answers are a value handed to a Runner, and two Runners must not share one
 // a third could edit.
 func builtinUsage() map[string]string {
-	return map[string]string{
+	return map[string]string{ //nolint:gosec // G101: usage strings, not credentials
 		"set":    "set: usage: set [-abefhkmnptuvxBCEHPT] [-o option-name] [--] [-] [arg ...]",
 		"export": "export: usage: export [-fn] [name[=value] ...] or export -p [-f]",
 		// The six the real-script sweep found missing, and the reason a

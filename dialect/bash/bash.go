@@ -4050,7 +4050,7 @@ func Semantics() interp.Semantics {
 
 // Diagnostics is how bash 5 reports failure.
 func Diagnostics() interp.Diagnostics {
-	return interp.Diagnostics{
+	return interp.Diagnostics{ //nolint:gosec // G101: diagnostic text, not a credential
 		// A math complaint raised by a builtin names it: `let '1+'` is
 		// `bash: line 1: let: 1+: arithmetic syntax error: …`.
 		ArithErrorNamesTheBuiltin: true,

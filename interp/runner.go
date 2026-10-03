@@ -4579,6 +4579,11 @@ type Runner struct {
 	// the core's, because every trace this package writes goes through it.
 	// See Runner.SetTraceSink.
 	traceSink func(*Runner) io.Writer
+	// traceTo, where it is set, is where a trace line goes whatever the
+	// sink or the streams say: the destination a command's trace had before
+	// its redirections were opened, for the line written after them. See
+	// Semantics.TraceLineFollowsTheRedirections.
+	traceTo io.Writer
 	// stderrBeforeRedirs is standard error as it stood when the command now
 	// running was reached, before that command applied redirections of its
 	// own.
@@ -5388,6 +5393,7 @@ func (r *Runner) clone() *Runner {
 	// and nothing a fork runs is the shell's last. See unforkedtail.go.
 	c.tailCmd, c.unforkedSelf, c.slotOneIsTheBody = nil, false, false
 	c.pendingPipeJob = nil
+	c.traceTo = nil
 	c.inParensBody, c.heldInterruptDeath = false, false
 	// And one boundary further from the shell that was started. The flag
 	// above cannot answer this: it is already true in a subshell of a
@@ -8649,10 +8655,21 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 
 	tracesPrefix := r.tracesItsPrefix(c.Assigns, argv)
 	prefixFollows := tracesPrefix && r.tracePrefixFollowsTheCommand(argv)
+	// In the dialect whose line waits for the redirections, the line — and
+	// a prefix expanded only for it — is written once they are open, where
+	// the trace went before they were. See
+	// Semantics.TraceLineFollowsTheRedirections (#5547).
+	traceLater := len(c.Redirs) > 0 && r.tracing() &&
+		r.sem().TraceLineFollowsTheRedirections == Yes
+	var lateTrace []func()
 	if !tracesPrefix || prefixFollows {
 		// With no prefix to write, and in the column that writes it behind
 		// the command, the command's own line comes first and is unchanged.
-		r.traceCommand(argv)
+		if traceLater {
+			lateTrace = append(lateTrace, func() { r.traceCommand(argv) })
+		} else {
+			r.traceCommand(argv)
+		}
 	}
 
 	// A frozen name in the prefix, in the dialect that checks it before
@@ -8761,10 +8778,20 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 	if tracedHere {
 		// The prefix's lines are written; the command's is all that is left.
 		r.traceCommand(argv)
+	} else if tracesPrefix && !prefixFollows && traceLater && !early {
+		// After the redirections, with the prefix expanded there too. See
+		// Semantics.TraceLineFollowsTheRedirections.
+		lateTrace = append(lateTrace, func() {
+			r.expandPrefixTraceValues(c.Assigns)
+			if !r.assignmentGaveUp() {
+				r.tracePrefixAndCommand(c, argv)
+			}
+		})
 	} else if tracesPrefix && !prefixFollows {
 		// Ahead of the redirections, which is measured and not incidental:
 		// `z=1 cmd >/nope/f` writes `+ z=1` and `+ cmd` and *then* the
-		// complaint about the file, in bash and in dash alike. After the
+		// complaint about the file in bash — where dash, BusyBox ash and zsh
+		// write no line at all, which is the branch above (#5547). After the
 		// frozen-name check, so the column that refuses a prefix before it
 		// evaluates anything still evaluates nothing.
 		r.expandPrefixTraceValues(c.Assigns)
@@ -8790,6 +8817,7 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 	if !r.commandRunsInThisShell(argv) {
 		owner = redirOwnerTheCommand
 	}
+	traceDest := r.traceDestination()
 	closers, err := r.applyRedirs(ctx, c.Redirs, false, owner)
 	r.redirectForBuiltin, r.redirForCommandWord = "", ""
 	// Read here rather than in the defer: a builtin that runs a program of its
@@ -8824,6 +8852,17 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 	if closers == nil && len(c.Redirs) > 0 && r.status == 126 {
 		// The gate refused an open; the status is already set.
 		return nil
+	}
+	if !r.redirErr && len(lateTrace) > 0 {
+		// The redirections are open, so the line that waited for them is
+		// written — where the trace went before they were. See
+		// Semantics.TraceLineFollowsTheRedirections.
+		outerTo := r.traceTo
+		r.traceTo = traceDest
+		for _, f := range lateTrace {
+			f()
+		}
+		r.traceTo = outerTo
 	}
 	if r.redirErr {
 		// The open failed — noclobber, a missing directory, a permission.

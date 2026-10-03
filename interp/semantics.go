@@ -20851,6 +20851,46 @@ type Semantics struct {
 	// dash.
 	TraceFromBorrowedTextFollowsItsRedirection Answer
 
+	// TraceLineFollowsTheRedirections writes a simple command's trace line
+	// only once its redirections are open, so a redirection that will not
+	// open leaves no line — and, where the prefix is expanded after the
+	// redirections (PrefixExpandedBeforeTheRedirections), no prefix
+	// expansion either. The line still goes where the trace went before the
+	// redirections: `set -x; true 2>/dev/null` writes `+ true` on the shell's
+	// own standard error in every column. Measured 2026-10-02 under `-c`
+	// (#5547):
+	//
+	//	set -x; true >/nope/f
+	//	        dash 0.5.12, BusyBox ash, zsh 5.9.2: the complaint alone
+	//	        bash 5.3.20, ksh93u+: `+ true`, then the complaint
+	//	set -x; z=1 /bin/echo hi >/nope/f        the same split
+	//	set -x; z=$(echo s >&2) true >/nope/f
+	//	        dash, ash, zsh: the complaint alone — the substitution never
+	//	        runs; bash: `++ echo s`, `s`, `+ z=`, `+ true`, complaint
+	//	set -x; z=$(echo s >&2) true 2>/dev/null
+	//	        dash, ash: `+ z= true` alone — the substitution ran with the
+	//	        redirection in place
+	//
+	// Read rather than asked: tracing is not the place to refuse a script,
+	// and the unanswered value is the line ahead of the redirections, which
+	// is what this package did before.
+	//
+	// unpinned dash: no corpus row traces a command whose redirection fails;
+	// pinned by TestATraceLineFollowsTheRedirections.
+	//
+	// unpinned ash: the same reach, pinned by
+	// TestATraceLineFollowsTheRedirections.
+	//
+	// unpinned zsh: the same reach, pinned by
+	// TestATraceLineFollowsTheRedirections.
+	//
+	// unpinned bash: the same reach, pinned by
+	// TestATraceLineFollowsTheRedirections.
+	//
+	// unpinned ksh: the same reach, pinned by
+	// TestATraceLineFollowsTheRedirections.
+	TraceLineFollowsTheRedirections Answer
+
 	// BuiltinUsageErrorEscapesBorrowedText keeps an error a builtin reported
 	// about **how it was called** out of the boundary
 	// FatalErrorEndsBorrowedTextOnly draws, so such an error ends the shell

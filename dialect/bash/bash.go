@@ -1210,6 +1210,9 @@ func Semantics() interp.Semantics {
 	// then the file complaint, where zsh, dash and BusyBox ash write the
 	// complaint alone (#3449).
 	s.PrefixExpandedBeforeTheRedirections = interp.PrefixExpandedBeforeRedirectionsAlways
+	// Whether a command's trace line waits for its redirections. See
+	// interp.Semantics.TraceLineFollowsTheRedirections (#5547).
+	s.TraceLineFollowsTheRedirections = interp.No
 	// And a declaration utility's operand is reached **before** that prefix,
 	// which is the opposite half of the same sequence: measured 2026-09-19,
 	// `PRE=$(echo PRE >&2) export s=$(echo OP >&2)` writes `OP` and then

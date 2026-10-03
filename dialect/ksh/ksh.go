@@ -1718,6 +1718,9 @@ func Semantics() interp.Semantics {
 	// `f` and `eval :` write their letter, `/usr/bin/true`, `true` and
 	// `print` write none.
 	s.PrefixExpandedBeforeTheRedirections = interp.PrefixExpandedBeforeRedirectionsWhereItPersists
+	// Whether a command's trace line waits for its redirections. See
+	// interp.Semantics.TraceLineFollowsTheRedirections (#5547).
+	s.TraceLineFollowsTheRedirections = interp.No
 	// And the prefix is worked through before a declaration utility's operand
 	// too, which is a separate measurement rather than the same one read
 	// again: measured 2026-09-19, `PRE=$(echo PRE >&2) export s=$(echo OP

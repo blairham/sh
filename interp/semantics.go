@@ -4521,8 +4521,8 @@ type Semantics struct {
 	// So in zsh each word goes out before the next assignment is expanded and
 	// before its own store, and anything the store says follows it on the
 	// same line. dash and ash write the line only once every assignment has
-	// been made. Their half is the answer this shell already gave; what a
-	// refused list writes there is #5509.
+	// been made, so a refused list never reaches its line and writes nothing
+	// (#5509).
 	//
 	// The *name* half of a word goes out before its value is expanded as
 	// well — `a=1 b=${x?boom}` is `+zsh:1> a=1 b=zsh:1: x: boom` — and the

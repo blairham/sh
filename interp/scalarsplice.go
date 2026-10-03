@@ -112,6 +112,18 @@ func (r *Runner) spliceScalarElem(name string, idx int, sub, value string, join 
 //	v[1,0]=X     Xabc     including in front of everything
 //	v[0,0]=X     refused  a span wholly below the first character
 //
+// And what follows the value is the string from the character after the
+// **end**, wherever the end is — which the two rows above cannot show,
+// because there the end is one before the start. Measured 2026-10-02 on zsh
+// 5.9.2 with `s=abcd`:
+//
+//	s[3,1]=XY    abXYbcd     the characters between come out twice
+//	s[4,2]=XY    abcXYcd
+//	s[3,0]=XY    abXYabcd    an end below the first: the whole string follows
+//	s[9,1]=XY    abcdXYbcd   and a start past the last appends, then that
+//
+// where an array's reversed span inserts and keeps nothing twice (#5477).
+//
 // Past the last character the value is **appended and the gap is not padded**,
 // which is the row an array does differently and the reason this is not
 // spliceElementSpan over one string: `v[4]=X` and `v[10]=X` are both `abcX`,
@@ -131,6 +143,15 @@ func (r *Runner) spliceCharacterSpan(name string, from, to int, value string, jo
 	v, _ := r.getVar(name)
 	chars := r.units(v)
 	first, tail, within := r.spanOver(len(chars), from, to)
+	if !join {
+		// The prefix up to the start, the value, and the string from after
+		// the end — the end resolved on its own rather than clamped to the
+		// start. See the rows above.
+		start := min(first, len(chars))
+		after := min(max(spanEndIndex(len(chars), to, r.arrayBase())+1, 0), len(chars))
+		r.setVar(name, strings.Join(chars[:start], "")+value+strings.Join(chars[after:], ""))
+		return
+	}
 	if !within {
 		// The span begins past the last character. Nothing comes out and
 		// nothing is padded — see above.
@@ -175,4 +196,15 @@ func (r *Runner) numericSlice(name, value string, join bool) bool {
 	// reading of `abc` and not a character anywhere.
 	r.setVar(name, value)
 	return true
+}
+
+// spanEndIndex is a span's end as a 0-based index over n units: counted from
+// the base, or back from the end when negative, and held at the last unit.
+// It is not held at the start, which is the difference from spanOver's tail.
+func spanEndIndex(n, to, base int) int {
+	last := to - base
+	if to < 0 {
+		last = n + to
+	}
+	return min(last, n-1)
 }

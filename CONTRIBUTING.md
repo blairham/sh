@@ -51,7 +51,13 @@ The agreement text is in `CLA.md`.
 - No AI-attribution trailers in commit messages or pull request bodies.
 - Every `.go` file carries the two-line SPDX header — see `AGENTS.md`.
   CI fails without it.
-- `make check` must pass. Lint runs in CI.
+- New behavior and bug fixes come with tests in the same pull request: a
+  fix with a test that fails without it, a behavior change with its corpus
+  case in `internal/oracle`.
+- `make test` is the local loop. CI runs `make check`, which adds the
+  oracle — it grades against the real shells, so it needs all of them
+  installed — and lints in a job of its own. Both are CI's job, not a
+  prerequisite for opening a pull request.
 - New behavior needs a spec entry in `docs/spec/` with a citation: a
   POSIX section, a manual section, or a recorded oracle run.
 

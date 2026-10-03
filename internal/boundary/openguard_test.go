@@ -120,6 +120,11 @@ var exempt = map[string]string{
 	"driver.readFdDir": "/dev/fd, listed to learn which descriptors this process was started " +
 		"holding. The capabilities are in the table before a line is read, so there is nothing " +
 		"a refusal could prevent — which is the argument ActionInherit already makes.",
+	"driver.localeCharsetIn": "the C library's own locale data, under /usr/share/locale and " +
+		"/usr/lib/locale, read to answer what setlocale would: whether a locale a script named " +
+		"loads, and its codeset. The name is a script's, but a name holding a slash is refused " +
+		"before anything is read, so it can only select an entry of those two trees — what a " +
+		"real shell's setlocale reads for the same assignment, which no policy is asked about.",
 	"driver.holdLowDescriptors": "os.DevNull, opened once and duplicated to occupy the low " +
 		"descriptor numbers before main. A fixed path, nothing is read from it, and it happens " +
 		"before there is a script — or a policy — to ask about.",

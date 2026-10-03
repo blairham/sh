@@ -48,10 +48,10 @@ func (r *Runner) ctypeInForce() (name, codeset string) {
 		return r.ctype.name, r.ctype.codeset
 	}
 	r.ctype.settled, r.ctype.asked, r.ctype.whole = true, cand, whole
-	switch {
-	case cand == "":
+	switch cand {
+	case "":
 		r.ctype.name, r.ctype.codeset = "", ""
-	case cand == "C" || cand == "POSIX":
+	case "C", "POSIX":
 		r.ctype.name, r.ctype.codeset = cand, ""
 	default:
 		if codeset, ok := r.LocaleCharset(cand, whole); ok {

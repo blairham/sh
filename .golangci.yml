@@ -148,6 +148,7 @@ linters:
   enable:
   - errcheck
   - forbidigo
+  - gosec
   - govet
   - ineffassign
   - staticcheck
@@ -189,6 +190,11 @@ linters:
     - path: _test\.go$
       linters:
       - forbidigo
+
+# SURVEY ONLY -- removed before merge: report every finding.
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
 
 formatters:
   enable:

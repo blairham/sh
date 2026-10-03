@@ -32,7 +32,6 @@ declare/a-plus-signed-attribute-letter-filters-the-whole-table
 declare/marking-a-name-that-is-already-a-function
 declare/the-f-letters-sign-decides-without-a-pattern-too
 declare/the-global-letter-filters-nothing
-declare/which-numeric-type-letter-wins
 expand/tilde-after-a-home-assignment
 expand/tilde-after-a-home-assignment-reaches-every-road
 expand/tilde-naming-a-named-directory

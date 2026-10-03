@@ -85,6 +85,7 @@ func TestAnEqualsSplitsEmptyFieldsAreGhosts(t *testing.T) {
 		{`show "${(@l:2:)=e}"`, "1:<  >\n"},
 		// The control: a letter split's empty fields are not ghosts.
 		{`show "${(@os.:.)u}"`, "4:<><><a><b>\n"},
+		{`show "${(@os.:.)=u}" "${(@l:2:s.:.)=u}"`, "8:<><><a><b>< a><  >< b><  >\n"},
 	} {
 		got, _ := runZsh(t, t.TempDir(), setup+tc.src)
 		if got != tc.want {

@@ -14,6 +14,9 @@ func TestARangeSegmentHoldingAnEscapedQuoteIsAModifier(t *testing.T) {
 		{`: "${foo:0:${\"}}"; echo after`, "zsh:1: unrecognized modifier `$'\n"},
 		{`: ${foo:${\"}}`, "zsh:1: unrecognized modifier `$'\n"},
 		{`: ${foo:0:${x:-\"}}`, "zsh:1: unrecognized modifier `$'\n"},
+		{`: ${(U)foo:0:${\"}}`, "zsh:1: unrecognized modifier `$'\n"},
+		{`a=(x y); : ${(U)a:${\"}}`, "zsh:1: unrecognized modifier `$'\n"},
+		{`a=(x y); : ${(U)a:0:${\"}}`, "zsh:1: unrecognized modifier `$'\n"},
 		// The controls: other broken spellings, and ordinary ranges.
 		{`: ${foo:0:${\\}}`, "zsh:1: bad substitution\n"},
 		{`foo=abc; x=2; print ${foo:0:${x}} ${foo:1:$(echo 1)}`, "ab b\n"},

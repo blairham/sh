@@ -6354,6 +6354,18 @@ func (r *Runner) substringRange(value string, e *syntax.ParamExpr) string {
 	// read.
 	r.rangeRefused = false
 	defer func() { r.rangeRefused = false }()
+	if (e.ArgText == "" || e.Arg2 != nil && e.Arg2Text == "") &&
+		r.ask(r.sem().SubstringRangeReadsModifiers,
+			"a substring range beginning with a letter being a modifier list") {
+		// A segment written with nothing in it is an empty modifier in the
+		// grammar that reads one, and that is refused naming nothing.
+		// Measured 2026-10-02 on zsh 5.9.2: `${str:0:}`, `${str:}` and
+		// `${str::}` are each `unrecognized modifier` and end the line,
+		// where `${str:0: }` — a blank, not nothing — is the empty string
+		// at 0 (#5151).
+		r.refuseModifier(e, "")
+		return ""
+	}
 	if rangeSegmentIsAModifier(e.Arg) {
 		if !r.ask(r.sem().SubstringRangeReadsModifiers,
 			"a substring range beginning with a letter being a modifier list") {

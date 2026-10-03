@@ -40,17 +40,13 @@ decl/a-numeric-type-letter-over-a-frozen-name
 decl/a-subscripted-operand-with-no-value
 decl/an-array-literal-operand-over-a-frozen-scalar
 declare/a-bare-sign-is-an-option-word
-declare/a-kind-letter-narrows-or-joins
-declare/a-numbered-letter-ends-its-word-in-a-listing
 declare/a-standing-type-attribute-and-a-later-array-literal
-declare/an-array-literal-drops-a-scalar-attribute
 declare/an-attribute-does-not-leave-a-subshell
 declare/an-attribute-over-a-keyed-table
 declare/an-fpath-file-that-defines-nothing
 declare/f-says-a-nested-declaration-back
 declare/f-says-a-nested-keyword-declaration-back
 declare/marking-a-name-that-is-already-a-function
-declare/unique-attribute-listed-back
 expand/brace-output-reread-refuses-a-word
 expand/brace-output-reread-shows-in-a-range
 expand/tilde-into-an-expansion-diverges
@@ -127,7 +123,6 @@ procsub/a-writing-body-in-a-command-substitution-is-captured
 read/from-a-standard-input-that-is-closed
 read/interrupted-by-a-trapped-signal
 read/keys-attached-count-must-be-a-number
-readonly/a-declarations-own-array-value-survives-its-flag
 redir/a-wide-duplication-target-with-a-leading-zero
 redir/export-writing-to-a-closed-descriptor
 redir/pwd-writing-to-a-closed-descriptor

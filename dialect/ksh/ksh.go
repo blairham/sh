@@ -4237,6 +4237,11 @@ func Semantics() interp.Semantics {
 	// typeset is one of this shell's own special builtins, so any of its
 	// failures ends the script — a bad option included.
 	s.TypesetBadOptionFatal = interp.Yes
+	// And an option word with more behind its `a` is not an option word:
+	// measured 2026-10-03, `typeset -ai q=(1 2)` is `typeset: -ai: invalid
+	// variable name` and ends the script, where `typeset -ia q=(1 2)` is
+	// taken. See Semantics.ArrayLetterMakesItsWordAName.
+	s.ArrayLetterMakesItsWordAName = interp.Yes
 	// `typeset +f` names the functions here as it does in zsh, and the
 	// *spelling* is this shell's own — see Diagnostics.FunctionNameListing.
 	// Measured 2026-09-12: `f() { :; }; function g { :; }; typeset +f`

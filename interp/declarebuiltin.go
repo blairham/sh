@@ -630,6 +630,14 @@ func (r *Runner) parseDeclareFlags(name string, args []string, known string) (re
 			}
 			break
 		}
+		if r.arrayLetterMakesTheWordAName(a) {
+			// The word is an operand, letters before the `a` and all — see
+			// arrayLetterMakesTheWordAName.
+			break
+		}
+		if r.unspecified {
+			return nil, f, r.status
+		}
 		attached := false
 		if word, code, handled := r.attachedNumberBeforeMoreLetters(name, &f, a, known); handled {
 			// `-Z3x`: a number on a letter with more of the word behind it.
@@ -7096,4 +7104,40 @@ func (r *Runner) namerefLetterIsDropped(df declareFlags) bool {
 // `x='(a b)'` (#5630).
 func (r *Runner) operandIsAPlainWord(name string) bool {
 	return !r.literalOperands[name] && !r.rereadingAQuotedLiteral
+}
+
+// arrayLetterMakesTheWordAName reports whether an option word whose `a` letter
+// has more written behind it is not an option word at all but the first
+// operand, which the operand check then refuses as the name it is not.
+//
+// Measured 2026-10-03 on ksh93u+ 2012-08-01, `-c`, each line ending the
+// script at 1 since `typeset` is special there:
+//
+//	typeset -aU q=(1 2)    typeset: -aU: invalid variable name
+//	typeset -ai q=(1 2)    typeset: -ai: invalid variable name
+//	typeset -iaU q         typeset: -iaU: invalid variable name — the
+//	                       letters in front of the `a` go with it
+//	typeset -aL 3 q=(1 2)  typeset: -aL: invalid variable name
+//	typeset -a1 q          typeset: -a1: invalid variable name
+//	typeset -ia q=(1 2)    typeset -a -i q=(1 2), 0 — the `a` written last
+//	typeset -ra q          0
+//	typeset -a -U q        -U: unknown option — a word of its own is read
+//
+// bash 5.3.20 and zsh 5.9.2 read `-ai` as the two letters. Asked only where
+// the word is a minus word with something behind its `a`, so `-a`, `-ia` and
+// every word without the letter reach no question.
+func (r *Runner) arrayLetterMakesTheWordAName(word string) bool {
+	if len(word) < 3 || word[0] != '-' {
+		return false
+	}
+	at := strings.IndexByte(word[1:], 'a')
+	if at < 0 || at+2 >= len(word) {
+		return false
+	}
+	if strings.IndexFunc(word[1:at+1], func(c rune) bool { return c >= '0' && c <= '9' }) >= 0 {
+		// A number in front of the letter belongs to the letter it rode on,
+		// which is a different shape and not measured here.
+		return false
+	}
+	return r.ask(r.sem().ArrayLetterMakesItsWordAName, "an option word carrying more behind its `a` read as a name")
 }

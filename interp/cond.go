@@ -358,7 +358,16 @@ func (r *Runner) evalCondUnary(x *syntax.CondUnary) (bool, error) {
 		// The word rather than s, because the one thing this route has that
 		// the builtin's does not is which brackets were written: see
 		// condParameterIsSet.
-		return r.condParameterIsSet(x.X, s)
+		set, err := r.condParameterIsSet(x.X, s)
+		if err == nil && r.condOperandDidNotExpand() {
+			// A subscript that would not evaluate has been reported where
+			// it failed, and it ends what a failed expansion ends rather
+			// than making the test false: `[[ -v 'a[1/0]' ]]; echo st=$?`
+			// writes the division and nothing after it in bash 5.3.20, zsh
+			// 5.9.2 and ksh93u+ alike, measured 2026-10-03 (#5579).
+			return false, errCondOperandFailed
+		}
+		return set, err
 	case "-R":
 		// Whether the name is a **reference**, which is a question about the
 		// binding rather than about what it points at: the reference answers

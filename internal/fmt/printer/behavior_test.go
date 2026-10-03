@@ -6,7 +6,10 @@ package printer_test
 import (
 	"bytes"
 	"context"
+	"os"
 	"os/exec"
+	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -46,6 +49,25 @@ func TestFormattingPreservesBehavior(t *testing.T) {
 }
 
 func run(t *testing.T, shell, script string) (stdout, stderr string, status int) {
+	t.Helper()
+	// The shell here is the machine's own bash or zsh, found on PATH, and not
+	// this repository's: these tiers grade the formatter against the reference.
+	// Once, on the macOS runner, that bash reported a builtin's write as
+	// interrupted (`echo: write error: Interrupted system call`) in one of two
+	// identical runs of `procsub-redirect`, run 37083990697 (#5501). That is the
+	// reference's write meeting a signal, and it says nothing about the sample
+	// or the formatter. It was not reproduced locally in about 6400 runs under
+	// load, so a run that shows it is repeated, a bounded number of times.
+	for attempt := 0; ; attempt++ {
+		stdout, stderr, status = runOnce(t, shell, script)
+		if attempt == 2 || !strings.Contains(stderr, "write error: Interrupted system call") {
+			return stdout, stderr, status
+		}
+		t.Logf("%s reported an interrupted write; running the sample again", shell)
+	}
+}
+
+func runOnce(t *testing.T, shell, script string) (stdout, stderr string, status int) {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -101,5 +123,28 @@ func TestEverySampleIsDeterministic(t *testing.T) {
 					s.src, firstOut, againOut, firstErr, againErr, firstStatus, againStatus)
 			}
 		})
+	}
+}
+
+// The rerun is bounded and is for that one report only: a stand-in for the
+// reference that reports the interrupted write once and then runs cleanly is
+// read as its clean run, and one that always reports it still says so.
+func TestAnInterruptedReferenceWriteIsRunAgain(t *testing.T) {
+	dir := t.TempDir()
+	once := filepath.Join(dir, "once")
+	script := "#!/bin/sh\nif [ ! -e " + once + " ]; then : > " + once + "; echo 'bash: line 1: echo: write error: Interrupted system call' >&2; exit 1; fi\necho ok\n"
+	fake := filepath.Join(dir, "fakesh")
+	if err := os.WriteFile(fake, []byte(script), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if out, errs, st := run(t, fake, ":"); out != "ok\n" || errs != "" || st != 0 {
+		t.Errorf("got %q %q %d, want the clean second run", out, errs, st)
+	}
+	always := filepath.Join(dir, "always")
+	if err := os.WriteFile(always, []byte("#!/bin/sh\necho 'x: write error: Interrupted system call' >&2\nexit 1\n"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if _, errs, st := run(t, always, ":"); !strings.Contains(errs, "Interrupted system call") || st != 1 {
+		t.Errorf("got %q %d, want the report kept when every run makes it", errs, st)
 	}
 }

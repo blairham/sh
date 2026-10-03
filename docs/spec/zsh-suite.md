@@ -32,6 +32,7 @@ byte-identical in output and status under the reference's own driver:
     V06parameter      5 of 5           c368f04ea   #5159, on this Mac and in the suite's image
     D06subscript     37 of 37          e5ebb3e9a   #5152, on this Mac and in the suite's image
     X04zlehighlight  12 of 12          29bf413de   #5166, on this Mac and in the suite's image
+    D04parameter    246 of 246         ea66109c5   #5151, on this Mac and in the suite's image
     A01grammar      109 of 109         7c2c0da0d   #5138  ┐
     A05execution     39 of 39          7c2c0da0d   #5140  │
     B02typeset       79 of 79          7c2c0da0d   #5142  │
@@ -73,6 +74,18 @@ key read as written (#5432), `ksh_zero_subscript` (#5441), a flagged pair on
 the left of `=` (#5452), and the `(w)`, `(s:…:)` and `(p)` word letters with
 a chained link read by them.
 
+`D04parameter` was measured at `ea66109c5`, 2026-10-03, under the reference's
+own driver run serially from `Test/`: 246 of 246 chunks and `all tests
+successful`, at status 0, both on this Mac against `/opt/homebrew/bin/zsh` (zsh
+5.9.2, aarch64-apple-darwin25.4.0) and in the column's image
+`ghcr.io/blairham/sh/zsh@sha256:aab8255c…` (zsh 5.9.2,
+aarch64-unknown-linux-gnu), where the reference reports the same. Through the
+harness, `-only D04parameter.ztst -jobs 1` with the binary named `zsh` reads
+strict 1/1, `of those` 0/1, `ref cannot run` 0/1 and line agreement 100.0%.
+It was the largest file on the board and took some thirty roots over #5425 to
+#5634, up from 10 chunks; one of them, #5632, makes ours fail a chunk the way the
+reference does, because that suite marks it as failing in zsh itself.
+
 `X04zlehighlight` was measured at `29bf413de`, 2026-10-02, under the
 reference's own driver run serially from `Test/`: 12 of 12 chunks, `all tests
 successful`, and the driver's 438 lines byte-identical with the run's temp
@@ -104,7 +117,7 @@ and carries 51. 436 + 51 = 487, and real results are 21 either way. A per-file
 sum that does not reconcile with the whole-suite run is a fault in one of
 them — see `instruments.md` §11 for the one it caught here.
 
-## Real results (21 at `37355aae5`, 47 today)
+## Real results (21 at `37355aae5`, 48 today)
 
 These carry a result rather than an agreed refusal. `C02cond`, `D09brace`,
 `V12zparseopts`, `V13zformat`, `C05debug`, `W01history`, `A02alias`,
@@ -168,6 +181,8 @@ lines, and those are the two skipped chunks.
   inherited, so the two colour chunks ran rather than skipped; 16 of 16
   chunks under the reference's own driver)
 - `D06subscript` (closed #5152, strict 1/1; 37 of 37 chunks under the
+  reference's own driver, on this Mac and in the suite's image)
+- `D04parameter` (closed #5151, strict 1/1; 246 of 246 chunks under the
   reference's own driver, on this Mac and in the suite's image)
 
 - `V08zpty`

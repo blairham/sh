@@ -2219,14 +2219,14 @@ func (r *Runner) rangeModifiers(
 			"a substring range beginning with a letter being a modifier list")
 	}
 	switch {
-	case rangeSegmentIsAModifier(e.Arg):
+	case rangeReadsAsAModifier(e.Arg, e.ArgText):
 		if !reads() {
 			return nil, nil, false
 		}
 		return r.modifierSegments(
 			modifierSource(e.ArgText, e.Arg),
 			modifierSource(e.Arg2Text, e.Arg2), e.Arg2 != nil), words, true
-	case e.Arg2 != nil && rangeSegmentIsAModifier(e.Arg2):
+	case e.Arg2 != nil && rangeReadsAsAModifier(e.Arg2, e.Arg2Text):
 		if !reads() {
 			return nil, nil, false
 		}

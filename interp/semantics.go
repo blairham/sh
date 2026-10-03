@@ -15229,13 +15229,38 @@ type Semantics struct {
 	//     a function that has letters; `declare -f NAME` writes the body
 	//     alone.
 	//
-	// The other six columns are silent here rather than different. zsh 5.9.2
+	// ksh93u+ 2012-08-01 has one of the two, `x`, measured 2026-10-03 over
+	// two functions with one marked (#5674): `typeset -fx pa` marks it in
+	// silence, and `typeset -fx` and `typeset +fx` list the marked ones alone,
+	// as bodies and as names. It writes no attribute line after a body
+	// (FunctionBodyListingWritesItsAttributes), tells a child nothing, and
+	// answers `readonly -f` with `unknown option` and ends the script.
+	//
+	// The other columns are silent here rather than different. zsh 5.9.2
 	// reads `-F` as a float's precision and refuses `export -f` outright;
-	// ksh93u+ 2012-08-01, dash 0.5.12 and BusyBox ash 1.37.0 each answer
-	// `readonly -f` with `unknown option` / `Illegal option` and end the
-	// script. Empty is a shell with no notion, where a `-f` line's other
+	// dash 0.5.12 and BusyBox ash 1.37.0 each answer `readonly -f` with
+	// `Illegal option` and end the script. Empty is a shell with no notion, where a `-f` line's other
 	// letters reach nothing and no listing carries one.
 	FunctionAttributeLetters string
+
+	// FunctionBodyListingWritesItsAttributes writes a line naming a
+	// function's attribute letters after its body, in the listings that write
+	// one: bash's `declare -f<letters> NAME`. ksh93 writes the body alone.
+	//
+	// Measured 2026-10-03 over two functions, one exported (#5674):
+	//
+	//	bash 5.3.20   declare -fx pa; declare -f    pa's body, `declare -fx pa`,
+	//	                                            then pb's body
+	//	ksh93u+       typeset -fx pa; typeset -f    the two bodies alone
+	//
+	// Asked only of a function that holds an attribute, so a shell with no
+	// function attribute letters never meets it.
+	//
+	// unpinned ksh: no corpus row lists an exported function; pinned by
+	// TestAFunctionsExportLetterIsItsOwn.
+	//
+	// unpinned bash: pinned by TestABodyListingCarriesTheAttributeLine.
+	FunctionBodyListingWritesItsAttributes Answer
 
 	// IntegerOptions is the set of letters the `integer` builtin takes,
 	// spelled the way DeclareOptions is. It is a separate field rather than

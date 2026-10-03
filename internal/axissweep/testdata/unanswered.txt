@@ -322,6 +322,7 @@ ash   WidthLettersExcludeTheIntegerLetter
 ash   WidthNumberPrecedence
 ash   ZeroFillGoesAfterAnIntegersSign
 ash   ZeroFillKeepsLeadingBlanks
+ash   FunctionBodyListingWritesItsAttributes
 
 bash  ArithDivisionByZeroYieldsAValue
 bash  ArithFloatOverflowIsZero
@@ -707,6 +708,7 @@ dash  ReadWriteRedirectionTakesTheSubstitutionsEnd
 dash  WritingSubstitutionIsWaitedForAtTheCommand
 dash  ZeroFillGoesAfterAnIntegersSign
 dash  ZeroFillKeepsLeadingBlanks
+dash  FunctionBodyListingWritesItsAttributes
 
 ksh   ArithSubscriptSkippedWhenNameUnset
 ksh   AssignmentUpdatesPipelineStatus
@@ -813,3 +815,4 @@ zsh   TrapPrintsWithP
 zsh   TrapSingleUnknownConditionIsUsage
 zsh   UmaskPermissionCopyBesideLetters
 zsh   UnsetReferenceLetterRemovesANonReference
+zsh   FunctionBodyListingWritesItsAttributes

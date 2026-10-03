@@ -3535,6 +3535,9 @@ func Semantics() interp.Semantics {
 	// RETURN traps, which `set -o functrace` asks for wholesale — is not
 	// built, so the mark is recorded and listed and read by nothing.
 	s.FunctionAttributeLetters = "rtx"
+	// The body listing writes a line of those letters after the body: see
+	// interp.Semantics.FunctionBodyListingWritesItsAttributes (#5674).
+	s.FunctionBodyListingWritesItsAttributes = interp.Yes
 
 	// A call does not put the trace back here: measured 2026-09-28 from a
 	// script file under `env -i PATH=/usr/bin:/bin`, `f() { set -x; }; f;

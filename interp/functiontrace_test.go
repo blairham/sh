@@ -131,6 +131,8 @@ func TestTheTraceMarkIsNotTheAttributeTable(t *testing.T) {
 	s.DeclareOptions, s.FunctionsOptions = "aAfFgilprxtvV", "mvV"
 	s.FunctionTraceLetters, s.FunctionTraceLettersBoundToTheBody = "vV", "V"
 	s.FunctionAttributeLetters = "t"
+	// With the line of them after a body, which is bash's (#5674).
+	s.FunctionBodyListingWritesItsAttributes = Yes
 	// The attribute is recorded and listed back under its own letter. This
 	// comes first because it is the positive control: without it the two
 	// cases below would pass against a shell where `-t` does nothing at

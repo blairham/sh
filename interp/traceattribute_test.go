@@ -140,6 +140,8 @@ func TestTheTraceLetterMarksAFunctionAndNarrowsTheListing(t *testing.T) {
 		withTraceLetter(s)
 		s.DeclareOptions = "aAfFiprtx"
 		s.FunctionAttributeLetters = "rtx"
+		// With the line of them after a body, which is bash's (#5674).
+		s.FunctionBodyListingWritesItsAttributes = Yes
 	}
 	out, errs, st := declRun(t,
 		"a() { :; }; b() { :; }; typeset -ft a; typeset -Ft", set, Diagnostics{})

@@ -172,6 +172,7 @@ func (c *capabilityTables) readTable(r *interp.Runner) interp.AssocArray {
 // termcapEntry is one capability by termcap code, and which section it came
 // from, for `echotc`.
 func (c *capabilityTables) termcapEntry(r *interp.Runner, code string) (string, repl.TerminalCapabilityKind, bool) {
+	code = termcapCode(code)
 	reading := c.reading(r, readingCapability)
 	v, ok := reading.termcap[code]
 	return v.Str, reading.termcapKinds[code], ok
@@ -383,6 +384,9 @@ func registerCapabilityParameter(
 	// One key without building the map, which is the shape a capability test
 	// has: a theme asks about a name at a time.
 	r.SetDynamicAssocElement(name, func(r *interp.Runner, key string) (string, bool) {
+		if name == "termcap" {
+			key = termcapCode(key)
+		}
 		table := read(r)
 		if len(table) == 0 {
 			return "", false
@@ -516,4 +520,21 @@ func screenSizeFor(r *interp.Runner, table interp.AssocArray, colsKey, linesKey 
 		return n
 	}
 	return r.ScreenSizeOr(described(linesKey), described(colsKey))
+}
+
+// termcapCode is the code a termcap lookup reads out of the name it is given:
+// its first two characters, since a termcap code is two characters long and
+// the lookup reads no further.
+//
+// Measured 2026-10-02 on zsh 5.9.2, `TERM=xterm-256color`: `$termcap[blx]`,
+// `$termcap[blxyz]` and `$termcap[bl ]` are all `bl`'s bell, `$termcap[cols]`
+// is `co`'s 80, `echotc bla` writes the bell and `echotc cols` writes 80 —
+// while `$termcap[b]` and `echotc b` find nothing and `$termcap[ bl]` is not
+// `bl` (#5431). Only the lookup reads this way; `${(k)termcap}` lists the
+// codes as they are.
+func termcapCode(name string) string {
+	if len(name) > 2 {
+		return name[:2]
+	}
+	return name
 }

@@ -103,6 +103,5 @@ shift/a-count-and-an-array-name
 subscript/a-search-operand-keeps-a-backslash
 subst/a-blank-before-the-pipe-is-not-the-reply-form
 terminfo/cursor-up-the-capability-a-prompt-tests-for
-trap/signal-handler-status-diverges
 xtrace/ps4-unset-is-not-the-default-again
 zsh/an-element-filter-over-the-positional-parameters

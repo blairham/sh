@@ -69,7 +69,6 @@ special/lineno-in-a-file-a-function-sourced
 subst/a-comment-in-a-current-shell-body
 subst/double-paren-count-decides-not-the-expression
 subst/double-paren-is-a-subshell
-trap/signal-handler-status-diverges
 ulimit/the-file-size-block
 unterminated/a-case-arm-closed-by-its-terminator
 unterminated/a-case-arm-with-no-command-at-all

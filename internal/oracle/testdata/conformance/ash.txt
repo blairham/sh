@@ -211,7 +211,6 @@ trap/an-elements-pipe-handler-runs-inside-the-elements-redirections
 trap/an-explicit-return-and-the-failing-call
 trap/lineno-inside-an-action
 trap/listing-in-a-pipeline-element
-trap/signal-handler-status-diverges
 trap/the-err-trap-fires-once-for-a-nested-failure
 type/a-lists-a-keyword
 type/capital-p-on-a-name-that-is-nothing

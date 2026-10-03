@@ -1153,6 +1153,12 @@ type Dialect struct {
 	// body — and reading the two together is what made this look like a split
 	// between emulations before it was measured a separator apart.
 	ShortFormBody bool
+	// ShortRepeatBody gives `repeat` alone its short body back while
+	// [Dialect.ShortFormBody] is off: zsh's `shortrepeat`. Measured
+	// 2026-10-02 on zsh 5.9.2, `unsetopt shortloops; setopt shortrepeat;
+	// eval 'repeat 3 print n'` prints three lines where `for f in a b;
+	// print $f` is still refused (#5155).
+	ShortRepeatBody bool
 	// LoopBodyEndsInEnd reads a loop's body that is neither `do … done` nor
 	// a brace group as a list closed by `end`, the way `foreach`'s is — and
 	// takes the one-command body away. zsh's `cshjunkieloops`. Measured

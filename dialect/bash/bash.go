@@ -1471,6 +1471,10 @@ func Semantics() interp.Semantics {
 	// 1 — or an assignment's 0 — and the line after it runs. Measured with
 	// `echo tail` behind each.
 	s.RestrictedBuiltinRefusalIsFatal = interp.No
+	// `. ./x` is refused, and `command -p` carries on like the rest. See
+	// Semantics.RestrictedDotRefusesAPath, measured 2026-10-02.
+	s.RestrictedDotRefusesAPath = interp.Yes
+	s.RestrictedCommandOptionRefusalIsFatal = interp.No
 	// And the one route it does not reach. Measured: a `-c` string that turns
 	// the option on runs to its end anyway, with `$-` showing `t` throughout.
 	// The other shell with the letter stops there, which is what makes this

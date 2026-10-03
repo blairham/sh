@@ -118,6 +118,10 @@ func (r *Runner) markFunctionTrace(name, written, removed string) {
 // name.
 func (r *Runner) forgetFunctionTrace(name string) {
 	delete(r.funcTraceMarks, name)
+	// The nested-scope mark goes with the body as the trace marks do:
+	// measured 2026-10-02 on zsh 5.9.2, `functions -W f; f(){ g=3 }; f`
+	// warns about nothing (#5155).
+	delete(r.warnNestedFuncs, name)
 }
 
 // redefinesTheRunningBody reports a definition of name written directly in
@@ -150,6 +154,18 @@ func (r *Runner) redefinesTheRunningBody(name string) bool {
 // The same reading Runner.functionsHoldingAttributes records for bash's
 // attribute letters and SetMarkedFunctions for zsh's autoload marks, so the
 // third table here does not invent a fourth rule.
+// functionsWarningNested is the functions `functions -W` has marked, in
+// listing order.
+func (r *Runner) functionsWarningNested() []string {
+	var out []string
+	for _, name := range r.scriptFuncNames() {
+		if r.warnNestedFuncs[name] {
+			out = append(out, name)
+		}
+	}
+	return out
+}
+
 func (r *Runner) functionsHoldingATraceMark(letters string) []string {
 	var out []string
 	for _, name := range r.scriptFuncNames() {

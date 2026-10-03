@@ -1737,6 +1737,9 @@ func (r *Runner) callFuncInPlace(ctx context.Context, fn *syntax.FuncDecl, name 
 	if inPlace != nil {
 		numberFrom = inPlace.numberFrom
 	}
+	// First so that it runs last, once the call has been unwound. See
+	// Runner.endLocalLoops.
+	defer r.endLocalLoops(r.localLoops)
 	// The bound a script may have moved, asked before the shell's own: a
 	// script that set one is asking for a refusal well short of the ceiling
 	// below, and the two say different things and give up different amounts of

@@ -1404,7 +1404,16 @@ var zshOptions = []zshOption{
 	recorded("listpacked", false),
 	recorded("listrowsfirst", false),
 	recorded("listtypes", true),
-	recorded("localloops", false),
+	{
+		// LOCAL_LOOPS: a `break` or `continue` stops at the function it was
+		// written in. See interp.Runner.SetLocalLoops (#5155).
+		base: "localloops", def: false,
+		get: func(r *interp.Runner) bool { return r.LocalLoops() },
+		set: func(r *interp.Runner, on bool) int {
+			r.SetLocalLoops(on)
+			return 0
+		},
+	},
 	recorded("localoptions", false),
 	recorded("localpatterns", false),
 	// LOCAL_TRAPS: a trap a function sets goes back at its return, which is
@@ -2291,11 +2300,43 @@ var zshOptions = []zshOption{
 	recordedOver("rcs", true, func(r *interp.Runner) bool { return !r.StartupFilesSuppressed }),
 	recorded("recexact", false),
 	recorded("rematchpcre", false),
-	recorded("restricted", false),
-	recorded("rmstarsilent", false),
+	{
+		// RESTRICTED: the mode, entered and never left — `unsetopt
+		// restricted` in a restricted shell is `can't change option:
+		// restricted` at 1, measured 2026-10-02 on zsh 5.9.2 (#5155). See
+		// interp/restricted.go for the refusals the mode makes.
+		base: "restricted", def: false,
+		get:       func(r *interp.Runner) bool { return r.Restricted() },
+		immovable: func(r *interp.Runner) bool { return r.Restricted() },
+		set: func(r *interp.Runner, on bool) int {
+			if on {
+				r.EnterRestricted()
+			}
+			return 0
+		},
+	},
+	{
+		// RM_STAR_SILENT: no question before `rm *`. See interp/rmstar.go
+		// (#5155).
+		base: "rmstarsilent", def: false,
+		get: func(r *interp.Runner) bool { return r.RmStarSilent() },
+		set: func(r *interp.Runner, on bool) int {
+			r.SetRmStarSilent(on)
+			return 0
+		},
+	},
 	recorded("rmstarwait", false),
 	recorded("sharehistory", false),
-	recorded("shfileexpansion", false),
+	{
+		// SH_FILE_EXPANSION: `=cmd` before braces and parameters. See
+		// interp.Runner.SetShFileExpansion (#5155).
+		base: "shfileexpansion", def: false,
+		get: func(r *interp.Runner) bool { return r.ShFileExpansion() },
+		set: func(r *interp.Runner, on bool) int {
+			r.SetShFileExpansion(on)
+			return 0
+		},
+	},
 	{
 		// SH_GLOB: sh-style globbing narrows the pattern language to the
 		// standard's, and **it reaches the grammar** — the option decides how
@@ -2436,7 +2477,16 @@ var zshOptions = []zshOption{
 			return 0
 		},
 	},
-	recorded("shortrepeat", false),
+	{
+		// SHORT_REPEAT: `repeat`'s short body survives `unsetopt
+		// shortloops`. See syntax.Dialect.ShortRepeatBody (#5155).
+		base: "shortrepeat", def: false,
+		get: func(r *interp.Runner) bool { return r.ShortRepeatBody() },
+		set: func(r *interp.Runner, on bool) int {
+			r.SetShortRepeatBody(on)
+			return 0
+		},
+	},
 	{
 		base: "shwordsplit", def: false,
 		get: func(r *interp.Runner) bool { return r.Semantics.SplitParamExpansion == interp.Yes },
@@ -3078,6 +3128,15 @@ func registerSetopt(r *interp.Runner) {
 	// does not use for output, and said nothing about the 170 that decide
 	// what it does.
 	r.SetOptionTable(listedOptions, moveOption)
+	// The question before `rm *`. See interp/rmstar.go.
+	r.SetRmStarAsks(true)
+	// What restricted mode freezes here, which is not the other two shells'
+	// list: measured 2026-10-02 on zsh 5.9.2 (#5155), each of these is
+	// `NAME: restricted` in the mode for an assignment, `unset`, `local` and
+	// `export` alike, and `ENV`, `FPATH`, `CDPATH` and `HOME` are taken.
+	r.FreezeOnlyInRestrictedMode("PATH", "path", "SHELL", "HISTFILE", "HISTSIZE",
+		"MODULE_PATH", "module_path", "GID", "EGID", "UID", "EUID", "USERNAME",
+		"LD_LIBRARY_PATH", "LD_PRELOAD", "LD_AOUT_PRELOAD", "LD_AOUT_LIBRARY_PATH")
 	// The third face of the same namespace: this shell's `set` gives a
 	// single letter to most of its options, and the letters are its own
 	// rather than the panel's. See setLetterOptions.
@@ -3744,6 +3803,9 @@ func closeBracesIgnored(r *interp.Runner) bool {
 // own changes nothing and is still readable back.
 func setBareGroupGrammar(r *interp.Runner, shGlob, kshGlob bool) {
 	r.SetBarePatternGroups(!shGlob, kshGlob)
+	// And numeric ranges go with the groups, though not their grammar. See
+	// interp.Runner.SetNumericRangesMatch.
+	r.SetNumericRangesMatch(!shGlob)
 	// And the one place the word rules do not ordinarily reach: a `=~`
 	// operand's parentheses are the regular expression's in every dialect
 	// that has the operator, and `shglob` takes them back off it so that the

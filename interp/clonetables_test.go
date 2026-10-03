@@ -61,6 +61,8 @@ var sharedStacks = map[string]string{
 	"restrictedFreezes": "the extra names this dialect's restricted mode freezes, " +
 		"appended to in Apply at setup and never again — Runner.FreezeInRestrictedMode " +
 		"is a dialect's declaration and not anything a script can reach",
+	"restrictedFreezesExact": "the whole frozen list a dialect names, assigned once in " +
+		"Apply by Runner.FreezeOnlyInRestrictedMode and never appended to",
 }
 
 // seedStacks gives every slice on a Runner an element and spare capacity.
@@ -77,6 +79,7 @@ var sharedStacks = map[string]string{
 func seedStacks(r *Runner) {
 	r.Env = append(make([]string, 0, 4), "SEED=v")
 	r.restrictedFreezes = append(make([]string, 0, 4), "SEEDNAME")
+	r.restrictedFreezesExact = append(make([]string, 0, 4), "SEEDNAME")
 	r.Params = append(make([]string, 0, 4), "seed")
 	r.listNulls = append(make([]bool, 0, 4), false)
 	r.procSubs = append(make([]procSubPipe, 0, 4), procSubPipe{})
@@ -372,6 +375,7 @@ func seedTables(r *Runner) {
 	r.readonlyFuncs = map[string]bool{"seed": true}
 	r.tracedFuncs = map[string]bool{"seed": true}
 	r.funcTraceMarks = map[string]string{"seed": "t"}
+	r.warnNestedFuncs = map[string]bool{"seed": true}
 	r.extraOptions = map[string]bool{"seed": true}
 	r.negatedOptions = map[string]string{"seed": "noseed"}
 	r.immovableOptions = map[string]bool{"seed": true}

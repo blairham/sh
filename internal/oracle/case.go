@@ -24911,7 +24911,7 @@ echo "st=$?"`,
 		ID: "shopt/the-restricted-letter-and-what-the-mode-refuses", Category: "shell options",
 		Script:  true,
 		Snippet: "set -r\necho \"st=$?\"\ncd / && echo moved\nPATH=/bin\necho tail\n",
-		Why:     "`set -r`, and the four answers the panel gives it. dash and BusyBox ash have no such letter and end the input over it; bash and ksh93 each enter a restricted mode and refuse the `cd`, in their own words — one sentence apiece against the single word `restricted` — and they part company on the assignment, where bash makes the frozen names *readonly* and carries on while ksh93 keeps its own refusal and ends the script. zsh is the fourth: it has the letter and a restricted mode of its own that is not built here, so it takes the letter and moves, which is what the row records rather than claims (#4205). The assignment is the last arm on purpose, since it is the one that ends the script in one column",
+		Why:     "`set -r`, and the four answers the panel gives it. dash and BusyBox ash have no such letter and end the input over it; bash and ksh93 each enter a restricted mode and refuse the `cd`, in their own words — one sentence apiece against the single word `restricted` — and they part company on the assignment, where bash makes the frozen names *readonly* and carries on while ksh93 keeps its own refusal and ends the script. zsh is the fourth: it has the letter and a restricted mode of its own, which refuses the `cd` as ksh93 does and ends the script at the assignment with `PATH: restricted` (#4205, #5155). The assignment is the last arm on purpose, since it is the one that ends the script in one column",
 	},
 	{
 		ID: "variable/allexport-marks-a-declarations-assignment", Category: "variables",

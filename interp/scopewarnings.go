@@ -71,6 +71,11 @@ type scopeWarningKind string
 const (
 	scopeWarningScalar scopeWarningKind = "scalar"
 	scopeWarningArray  scopeWarningKind = "array"
+	// scopeWarningNumeric is the word for a name arithmetic declares as it
+	// creates it. Measured 2026-10-02 on zsh 5.9.2, `f() { setopt
+	// warncreateglobal; (( g=1.5 )); let h=2 }; f` names both `numeric
+	// parameter` (#5155).
+	scopeWarningNumeric scopeWarningKind = "numeric"
 )
 
 // warnAboutTheScope writes whichever of the two sentences this assignment has
@@ -80,7 +85,7 @@ const (
 // assignment found: a check behind it would see the name the write had just
 // made and report every creation as a set.
 func (r *Runner) warnAboutTheScope(name string, kind scopeWarningKind) {
-	if !r.warnsGlobalCreatedInAFunction && !r.warnsEnclosingScopeSet {
+	if !r.warnsGlobalCreatedInAFunction && !r.warnsNestedSetHere() {
 		return
 	}
 	if r.writingADeclarationsOperand || r.inFunc == "" {
@@ -105,10 +110,19 @@ func (r *Runner) warnAboutTheScope(name string, kind scopeWarningKind) {
 	if r.localInTheInnermostScope(name) {
 		return
 	}
+	if kind == scopeWarningScalar {
+		// A number arithmetic is creating, or a name already holding one:
+		// measured 2026-10-02 on zsh 5.9.2, `integer g=5; f() { (( g=8 )) }`
+		// under the nested lint is `numeric parameter g set in enclosing
+		// scope` (#5155).
+		if a := r.numericAttributeOf(name); r.creatingANumber || a.isInteger || a.isFloat {
+			kind = scopeWarningNumeric
+		}
+	}
 	d := r.diag()
 	defer r.scopeWarningSpeaksForTheShell()()
 	if r.nameIsSet(name) {
-		if r.warnsEnclosingScopeSet && d.EnclosingScopeSetInAFunction != "" {
+		if r.warnsNestedSetHere() && d.EnclosingScopeSetInAFunction != "" {
 			r.diagf(d.EnclosingScopeSetInAFunction+"\n", kind, name, r.inFunc)
 		}
 		return
@@ -136,5 +150,15 @@ func (r *Runner) scopeWarningSpeaksForTheShell() func() {
 // scopeWarningsAreOff is the cheap test the two call sites make before doing
 // any work at all, so a shell nobody has asked for the lint pays a bool.
 func (r *Runner) scopeWarningsAreOff() bool {
-	return !r.warnsGlobalCreatedInAFunction && !r.warnsEnclosingScopeSet
+	return !r.warnsGlobalCreatedInAFunction && !r.warnsEnclosingScopeSet && len(r.warnNestedFuncs) == 0
+}
+
+// warnsNestedSetHere reports whether a set in an enclosing scope is warned
+// about in the body running now: the option, or a `functions -W` mark on the
+// innermost function. The mark is the body's alone — measured 2026-10-02 on
+// zsh 5.9.2, a function the marked one defines and calls warns about
+// nothing, and E01options' WARN_NESTED_VAR row has `fn2` silent under the
+// attribute where the option names it (#5155).
+func (r *Runner) warnsNestedSetHere() bool {
+	return r.warnsEnclosingScopeSet || r.warnNestedFuncs[r.inFunc]
 }

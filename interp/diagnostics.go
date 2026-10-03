@@ -6480,6 +6480,25 @@ type Diagnostics struct {
 	// two routes really differ — see Runner.restrictedHashEntry, where the
 	// statuses differ too.
 	RestrictedHashNotFound string
+	// RestrictedHashPath is the dialect whose restricted mode refuses every
+	// command-hash or named-directory entry written by hand, with no slash
+	// test and no search behind it. One verb: the path. Measured 2026-10-02
+	// on zsh 5.9.2: `hash ls=zz`, `hash ls=/bin/ls` and `hash -d foo=/tmp`
+	// are each `restricted: <path>` at 1, and `commands[ls]=zz` the same
+	// sentence at an assignment's 0. Empty is the other two shells' reading,
+	// where the slash and the search decide — see Runner.restrictedHashEntry.
+	RestrictedHashPath string
+	// OptionLetterEchoedWithAMinus spells a refused `set` letter with a `-`
+	// whichever way the script asked for it. Measured 2026-10-02 on zsh
+	// 5.9.2: `set +r` in a restricted shell and `set +i` in an interactive
+	// one are `can't change option: -r` and `-i` (#5155).
+	OptionLetterEchoedWithAMinus bool
+	// RestrictedVariableNamesTheBuiltin keeps a declaration builtin in the
+	// location of RestrictedVariable's refusal. Measured 2026-10-02: zsh
+	// 5.9.2 writes `zsh:typeset:1: PATH: restricted` and `zsh:export:1:
+	// UID: restricted`, where ksh93u+ writes `<script>: line 2: PATH:
+	// restricted` for the same `typeset PATH=/x` (#5155).
+	RestrictedVariableNamesTheBuiltin bool
 	// RestrictedVariable refuses an assignment to a name the mode froze, in a
 	// dialect that words it apart from an ordinary readonly's refusal. One
 	// verb: the name.
@@ -6514,9 +6533,10 @@ type Diagnostics struct {
 	ExecRequiresACommand       string
 	ExecFlagRequiresAParameter string
 	ExecUnknownFlag            string
-	// RestrictedCommandOption refuses `command -p`. Two verbs: the builtin's
-	// name and the letter, in that order, and again a dialect may use either —
-	// bash writes `command: -p: restricted` and ksh93 writes `-p: restricted`.
+	// RestrictedCommandOption refuses `command -p`. Three verbs: the builtin's
+	// name, the letter and the command word, in that order, and again a
+	// dialect may use any — bash writes `command: -p: restricted`, ksh93
+	// writes `-p: restricted` and zsh `echo: restricted`.
 	//
 	// Empty is bash's.
 	RestrictedCommandOption string

@@ -15,6 +15,9 @@ import (
 func equalsSem(a Answer) Semantics {
 	s := permissive()
 	s.EqualsExpansion = a
+	// zsh's default, `nomatch` on, which is what a failed lookup refuses
+	// under: with it off the word is left as written. See Runner.equalsPath.
+	s.GlobNoMatchIsError = Yes
 	return s
 }
 

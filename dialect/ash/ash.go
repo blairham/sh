@@ -373,6 +373,8 @@ func Semantics() interp.Semantics {
 	// ever mode-frozen.
 	// unanswered RestrictedBuiltinRefusalIsFatal: no restricted mode, so none of
 	// the three refusals exists here (#4205).
+	// unanswered RestrictedDotRefusesAPath, RestrictedCommandOptionRefusalIsFatal:
+	// no restricted mode, so neither refusal exists here.
 	// unanswered MixedTableLiteral, EmptyKeyInATableLiteral: BusyBox has no
 	// tables either, so neither question has a keyed literal to be about.
 	// Measured 2026-09-23, `typeset -A m` is `typeset: not found` at 127.

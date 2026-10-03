@@ -67,6 +67,11 @@ func (r *Runner) expandWordEscaped(w *syntax.Word) []string {
 	// question, so there is no answer being stepped over — and it is worth
 	// doing because the slice was a fifth of the allocations in the gate's
 	// workload (#1403), which has no brace in it.
+	if r.shFileExpansion {
+		// `=` before the braces and every other expansion, in the order
+		// the option names. See Runner.SetShFileExpansion.
+		r.expandEquals(w)
+	}
 	_, hasBrace := findBraceFrom(w.Spans, cursor{0, 0}, '{')
 	if hasBrace && r.braceFieldsFirst(w) {
 		// The other reading: the word is expanded once with its braces as
@@ -190,7 +195,12 @@ func (r *Runner) expandWordFieldsTracked(w *syntax.Word, track bool) ([]string, 
 		r.expandAssignmentShapedWord(w)
 		r.wordEquals(w)
 	}
-	r.expandEquals(w)
+	// Under `shfileexpansion` the word's `=` was answered before its braces
+	// and its expansions were, so what they produced is not looked at
+	// again. See Runner.SetShFileExpansion.
+	if !r.shFileExpansion {
+		r.expandEquals(w)
+	}
 
 	// Fields are built up span by span. A span joins onto the field before it
 	// unless splitting started a new one, which is what makes x$(f)y attach
@@ -3063,7 +3073,40 @@ func (r *Runner) escapeResult(v string, glob Answer) string {
 	// match from. See markGroupSyntaxFromTheValue and
 	// markPatternLeavesBehindABrace; each is a no-op where the value carries
 	// nothing it reads.
+	if glob == No {
+		// Where the dialect globs no result at all, its group syntax is
+		// text even when this dialect's patterns have no groups just now:
+		// under zsh's `shglob` a parenthesis is not a group, so the value
+		// `a(b)` did not read as a pattern above and reached the glob layer
+		// live, which still knows qualifiers and wrote `unknown file
+		// attribute: b`. Measured 2026-10-02 on zsh 5.9.2, `setopt shglob;
+		// s='a(b)'; print $s` writes `a(b)` (#5155).
+		esc = markLiveBytes(esc, groupSyntax)
+	}
 	return r.markPatternLeavesBehindABrace(r.markGroupSyntaxFromTheValue(esc))
+}
+
+// markLiveBytes puts a backslash in front of every byte of set that no
+// backslash already marks.
+func markLiveBytes(esc, set string) string {
+	if !hasLiveByteOf(esc, set) {
+		return esc
+	}
+	var b strings.Builder
+	b.Grow(len(esc) + 2)
+	for i := 0; i < len(esc); i++ {
+		if esc[i] == '\\' && i+1 < len(esc) {
+			b.WriteByte(esc[i])
+			b.WriteByte(esc[i+1])
+			i++
+			continue
+		}
+		if strings.IndexByte(set, esc[i]) >= 0 {
+			b.WriteByte('\\')
+		}
+		b.WriteByte(esc[i])
+	}
+	return b.String()
 }
 
 // groupSyntax is the three characters that build an extended group: the two
@@ -7432,17 +7475,32 @@ func (r *Runner) expandEquals(w *syntax.Word) {
 	}
 	s := &w.Spans[0]
 	if s.Kind != syntax.Literal || s.Quoting != syntax.Unquoted ||
-		!strings.HasPrefix(s.Value, "=") || len(s.Value) == 1 {
+		!strings.HasPrefix(s.Value, "=") {
+		return
+	}
+	// The head is every unquoted literal span in a row, not only the first:
+	// a brace product arrives as the text before the braces and the text
+	// they made, so `={ls,}` makes `=` and `ls` as two spans of one word,
+	// and zsh 5.9.2 writes `/bin/ls =` for it (#5155).
+	text, n := s.Value, 1
+	for n < len(w.Spans) && w.Spans[n].Kind == syntax.Literal && w.Spans[n].Quoting == syntax.Unquoted {
+		text += w.Spans[n].Value
+		n++
+	}
+	if len(text) == 1 {
 		return
 	}
 	if !r.ask(r.sem().EqualsExpansion, "`=cmd` expanding to a path") {
 		return
 	}
-	path, ok := r.equalsPath(s.Value[1:])
+	path, ok := r.equalsPath(text[1:])
 	if !ok {
 		return
 	}
 	s.Value = path
+	for i := 1; i < n; i++ {
+		w.Spans[i].Value = ""
+	}
 }
 
 // equalsPath is the lookup behind `=cmd`, in the one place both roads reach
@@ -7452,6 +7510,13 @@ func (r *Runner) expandEquals(w *syntax.Word) {
 func (r *Runner) equalsPath(name string) (string, bool) {
 	// The script's PATH, like every other lookup here.
 	path, err := r.lookPath(name)
+	if err != nil && r.sem().GlobNoMatchIsError == No {
+		// With `nomatch` off the word is left as it was written, as an
+		// unmatched pattern is: measured 2026-10-02 on zsh 5.9.2, `unsetopt
+		// nomatch; print =nosuchxyz` writes `=nosuchxyz` and carries on
+		// (#5155).
+		return "", false
+	}
 	if err != nil {
 		// zsh reports the name without a colon and abandons the script,
 		// which is what any failed expansion does here.

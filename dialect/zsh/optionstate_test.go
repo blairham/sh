@@ -47,6 +47,12 @@ func TestASavedTableRestoresEveryOptionThatMoves(t *testing.T) {
 		if o.set == nil {
 			continue
 		}
+		if o.base == "restricted" {
+			// One-way too: measured 2026-10-02 on zsh 5.9.2, a function
+			// that sets it under `localoptions` or `emulate -L` leaves the
+			// shell restricted when it returns (#5155).
+			continue
+		}
 		if o.base == "exec" {
 			// This dialect's name for `set -n` read from the other end, and
 			// that switch is one-way in every shell of the panel and in the

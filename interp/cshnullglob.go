@@ -145,6 +145,54 @@ func (r *Runner) SetPromptPercent(on bool) { r.promptPercentOff = !on }
 // PromptPercent reports it.
 func (r *Runner) PromptPercent() bool { return !r.promptPercentOff }
 
+// SetShFileExpansion turns one shell's `shfileexpansion` on and off: a
+// word's `=cmd` is expanded before its braces and its parameters rather than
+// after them. Measured 2026-10-02 on zsh 5.9.2 under `-f`, with `nomatch`
+// off so a failed lookup leaves the word (#5155):
+//
+//	                         off            on
+//	print ={ls,}             /bin/ls =      =ls =
+//	foo='=ls'; print ${~foo} /bin/ls        =ls
+func (r *Runner) SetShFileExpansion(on bool) { r.shFileExpansion = on }
+
+// ShFileExpansion reports it.
+func (r *Runner) ShFileExpansion() bool { return r.shFileExpansion }
+
+// SetLocalLoops turns one shell's `localloops` on and off. See
+// Runner.endLocalLoops.
+func (r *Runner) SetLocalLoops(on bool) { r.localLoops = on }
+
+// LocalLoops reports it.
+func (r *Runner) LocalLoops() bool { return r.localLoops }
+
+// endLocalLoops ends a call under `localloops`: the option goes back to what
+// the caller had, and a `break` or `continue` still pending when the body
+// finished is reported and goes no further. Measured 2026-10-02 on zsh 5.9.2
+// under `-f` (#5155):
+//
+//	setopt localloops; f(){ break }; for i in 1 2; do print $i; f; done
+//	    1, `break' active at end of function scope, 2, and the same again
+//	f(){ break } and the option off       1, and the loop ends
+//	f(){ setopt localloops }; f            off again afterwards
+//	setopt localloops; f(){ setopt nolocalloops; break }
+//	    the caller's setting decides: both lines and both reports
+//	f(){ continue } under the option       the `continue' report, then the
+//	                                       `break' one, and the loop goes on
+//
+// So the option is local to every call as `localoptions` would make it, and
+// the value that decides is the caller's.
+func (r *Runner) endLocalLoops(caller bool) {
+	r.localLoops = caller
+	if !caller || (r.ctl != controlBreak && r.ctl != controlContinue) {
+		return
+	}
+	if r.ctl == controlContinue {
+		r.diagf("`continue' active at end of function scope\n")
+	}
+	r.diagf("`break' active at end of function scope\n")
+	r.ctl, r.ctlDepth = controlNone, 0
+}
+
 // SetPrintExitValue turns one shell's `printexitvalue` on and off. See
 // Runner.reportExitValue.
 func (r *Runner) SetPrintExitValue(on bool) { r.printExitValue = on }

@@ -885,6 +885,12 @@ func writeZshCommand(r *interp.Runner, name, value string, set bool) {
 		r.ForgetHashedCommand(name)
 		return
 	}
+	// The parameter is a door into the hash like `hash name=path`, and
+	// restricted mode guards it the same way. See
+	// interp.Runner.RestrictedHashPath.
+	if r.RestrictedHashPath(value) {
+		return
+	}
 	r.HashCommand(name, value)
 }
 

@@ -853,6 +853,10 @@ func Semantics() interp.Semantics {
 	// assumed — see Semantics.RestrictedBuiltinRefusalIsFatal, where the table
 	// also says why this is not the special-builtin rule wearing a hat.
 	s.RestrictedBuiltinRefusalIsFatal = interp.Yes
+	// `. ./x` is refused, and `command -p` ends the script with the other
+	// two. See Semantics.RestrictedDotRefusesAPath, measured 2026-10-02.
+	s.RestrictedDotRefusesAPath = interp.Yes
+	s.RestrictedCommandOptionRefusalIsFatal = interp.Yes
 	// And it reaches the command string too, which bash's does not: a two-line
 	// `-c` string that turns the option on writes nothing after it.
 	s.OneCommandStopsACommandString = interp.Yes

@@ -238,6 +238,8 @@ ash   RegexMatchSurvivesAFailedMatch
 ash   ReplacementAnchorsCombine
 ash   ReplacementEmptyMatchDeclined
 ash   RestrictedBuiltinRefusalIsFatal
+ash   RestrictedCommandOptionRefusalIsFatal
+ash   RestrictedDotRefusesAPath
 ash   RestrictedFreezeIsAReadonly
 ash   RestrictedModeIsLeftByTheLetter
 ash   ScalarAppendedToAnArrayBecomesANewElement
@@ -599,6 +601,8 @@ dash  ReplacementAnchorsCombine
 dash  ReplacementEmptyMatchDeclined
 dash  ReplacementOperandTakesTheEnclosingQuoting
 dash  RestrictedBuiltinRefusalIsFatal
+dash  RestrictedCommandOptionRefusalIsFatal
+dash  RestrictedDotRefusesAPath
 dash  RestrictedFreezeIsAReadonly
 dash  RestrictedModeIsLeftByTheLetter
 dash  ScalarAppendedToAnArrayBecomesANewElement
@@ -769,9 +773,6 @@ zsh   ReadonlyReferenceLetter
 zsh   RegexMatchOmitsGroupsThatDidNotMatch
 zsh   RegexMatchSurvivesAFailedMatch
 zsh   ReportsAKilledCommandInACommandSubstitution
-zsh   RestrictedBuiltinRefusalIsFatal
-zsh   RestrictedFreezeIsAReadonly
-zsh   RestrictedModeIsLeftByTheLetter
 zsh   SubstringRangeThirdColonIsABadSubstitution
 zsh   TableLetterReachesItsOwnOperandsSubscript
 zsh   TransformLetterCheckedOnlyWhenValued

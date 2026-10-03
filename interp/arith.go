@@ -1389,6 +1389,11 @@ func (r *Runner) storePlace(p arithPlace, v arithNum, from syntax.ArithExpr) err
 			return nil
 		}
 		if r.arithAssignmentDeclaresANumber(p.name) || (from != nil && r.arithAssignmentReplacesAnArray(p.name)) {
+			// What the scope lint calls the name it is about to see made.
+			// See scopeWarningNumeric.
+			outerNumber := r.creatingANumber
+			r.creatingANumber = true
+			defer func() { r.creatingANumber = outerNumber }()
 			if v.floatKind() {
 				// **The value's type decides which attribute**, and a float
 				// value declares a float. See declareFloatFromArithmetic,

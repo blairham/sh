@@ -30,6 +30,10 @@ func unrunSem(a Answer) Semantics {
 	s := permissive()
 	s.UnrunSimpleCommandReadsItsWords = a
 	s.EqualsExpansion = Yes
+	// The `=word` rows model zsh's default, where `nomatch` is on: with it
+	// off a failed lookup leaves the word as written and refuses nothing.
+	// See Runner.equalsPath.
+	s.GlobNoMatchIsError = Yes
 	s.FatalErrorStatusIsOne = Yes
 	return s
 }

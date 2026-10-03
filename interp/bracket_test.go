@@ -112,6 +112,9 @@ func TestTestBuiltinSurvivesTheBracketPolicy(t *testing.T) {
 func TestEqualsExpansionRunsBeforeGlobbing(t *testing.T) {
 	sem := bracketSem(BracketBadPattern)
 	sem.EqualsExpansion = Yes
+	// zsh's default `nomatch`, under which the `==` is refused rather than
+	// left as written. See Runner.equalsPath.
+	sem.GlobNoMatchIsError = Yes
 	out, _ := run(t, `echo [[a == a]]`, withSem(sem))
 	if strings.Contains(out, "bad pattern") {
 		t.Errorf("globbing ran first: %q", out)

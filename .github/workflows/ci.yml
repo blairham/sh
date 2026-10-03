@@ -393,6 +393,41 @@ jobs:
         SH_DIALECTCOMBO_SHARD: ${{ matrix.shard }}
       run: go test ./syntax -run TestNoDialectCombinationPanics
 
+  # Each dialect binary graded against the golden record, per case, against
+  # a committed list of the cases it does not yet match exactly (#5710). No
+  # reference shell runs -- the record already holds their answers -- so the
+  # cost is our binary alone. It gates where the Oracle job only reports: a
+  # failure off the list is a regression, and a pass still on it is a fix the
+  # list must be told about, so the number can only move one way.
+  #
+  # macOS for the four whose record was made on macOS, so ours sees the same
+  # platform the answers came from; ash on Linux, inside the pinned BusyBox
+  # container the ash column was recorded in.
+  conformance:
+    name: Conformance ratchet (${{ matrix.dialects }})
+    needs: changes
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+        - os: macos-latest
+          dialects: bash zsh dash ksh
+        - os: ubuntu-latest
+          dialects: ash
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      if: needs.changes.outputs.code == 'true'
+    - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      if: needs.changes.outputs.code == 'true'
+      with:
+        go-version-file: go.mod
+        check-latest: true
+        cache: true
+    - name: Did any case move against its baseline?
+      if: needs.changes.outputs.code == 'true'
+      run: make conformance-ratchet DIALECTS="${{ matrix.dialects }}"
+
   packaging:
     name: Render a release
     needs: changes

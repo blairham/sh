@@ -1939,6 +1939,9 @@ func Semantics() interp.Semantics {
 	// one wins and folds. Measured 2026-09-12, `typeset -lu z=Ab` reads `AB`
 	// and `typeset -ul z=Ab` reads `ab` (#2541).
 	s.TwoCaseLettersOnOneDeclarationCancel = interp.No
+	// And the listing of the two letters is kept apart from their fold: see
+	// interp.Semantics.CaseListingAndFoldAreSeparate (#5671).
+	s.CaseListingAndFoldAreSeparate = interp.Yes
 	s.CaseAttributeReplacesTheNumericAttribute = interp.Yes
 	// But an attribute added to a name that already holds a value re-reads
 	// that value at once: `FOO=bar; typeset -i FOO` stores 0 over the text,

@@ -12614,12 +12614,42 @@ type Semantics struct {
 	//	typeset -ul s; typeset -p s                         s
 	//
 	// A later line's single case letter lists again: `typeset -ul s=Bc;
-	// typeset -l s` is `typeset -l s=bc`. The record of the unlisted letter
-	// is Runner.caseLetterUnlisted. Left unmodeled: taking one letter of the
-	// pair off with a plus lists the other there while folding nothing
-	// (`typeset -ul s=Bc; typeset +l s` is `typeset -u s=bc`, then `[Qz]`),
-	// where this lists nothing. The folds agree (#5671).
+	// typeset -l s` is `typeset -l s=bc`. That reading is one row of
+	// CaseListingAndFoldAreSeparate, which holds the rest (#5671).
 	TwoCaseLettersOnOneDeclarationCancel Answer
+	// CaseListingAndFoldAreSeparate keeps what a name's listing says about
+	// the case letters apart from what its stores fold to: ksh93. bash and
+	// zsh list exactly the letter that folds. Measured 2026-10-03 on ksh93u+
+	// 2012-08-01 under `env -i … -c`, each line followed by `typeset -p s;
+	// s=Qz; echo "[$s]"` (#5671):
+	//
+	//	typeset -ul s=Bc; typeset +l s           typeset -u s=bc   [Qz]
+	//	typeset -l s=Bc; typeset +u s            typeset -l s=bc   [Qz]
+	//	typeset -ul s=Bc; typeset +l s; typeset -u s
+	//	                                         typeset -u s=bc   [QZ]
+	//	typeset -l s=A; typeset +l -i s          s=a               [qz]
+	//	typeset -il s=1; typeset +i s            typeset -l s=1    [Qz]
+	//	typeset -i s=1; typeset -l s             typeset -l s=1    [Qz]
+	//	typeset -u s=Bc; typeset -iu s=4; typeset +i s
+	//	                                         typeset -u s=4    [Qz]
+	//	typeset -lx s=Bc                         typeset -x -l s=Bc [qz]
+	//	s=Ab; typeset -lx s                      typeset -x -l s=Ab [qz]
+	//	typeset -u s=Ab; typeset -lx s=Bc        typeset -x -l s=bc [qz]
+	//	typeset -l s=Bc; typeset +u s; s=XY; typeset -l s
+	//	                                         typeset -l s=XY   [qz]
+	//
+	// So the listing is two letters' worth of bits: a minus line lists the
+	// letters it writes (both list as neither), a plus line clears its own.
+	// The fold is the later minus letter written, and a plus letter takes it
+	// off whichever it was. With a numeric letter on the line, or on the name
+	// coming in, the two letters are long and unsigned and change only the
+	// listing. A valueless letter whose listing letter was already there
+	// re-reads nothing, and an `x` beside the letter over a name that folded
+	// nothing stores its value and keeps the one standing unfolded.
+	//
+	// Asked only of a line writing `l` or `u`. See
+	// Runner.caseLettersKeptApart, and Runner.caseListing for the record.
+	CaseListingAndFoldAreSeparate Answer
 	// CaseAttributeReplacesTheNumericAttribute is the other direction: `-l`
 	// and `-u` take the integer or float letter off the name they are given.
 	//

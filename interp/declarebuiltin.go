@@ -1937,11 +1937,19 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) (endSt
 	// being read rather than to the call.
 	defer func(was bool) { r.rereadingAQuotedLiteral = was }(r.rereadingAQuotedLiteral)
 	defer func(was bool) { r.declarationEvaluatesItsValue = was }(r.declarationEvaluatesItsValue)
+	// A fold a case letter holds back from one operand's value. See
+	// caseLettersKeptApart.
+	defer func(was bool) {
+		r.caseFoldMayBeHeld, r.caseFoldHeld = was, ""
+	}(r.caseFoldMayBeHeld)
+	r.caseFoldMayBeHeld = true
 	for _, a := range args {
+		r.caseFoldHeld = ""
 		name, value, hasValue, appends := declarationOperand(a)
 		// This line's numeric letter is what evaluates the value, which is
 		// the question typedValueFatalf asks.
 		r.declarationEvaluatesItsValue = hasValue && (f.integer || f.float)
+		r.caseFoldOperandValued = hasValue
 		if !hasValue && f.plusBlocked && !r.literalOperands[name] {
 			// A line carrying a plus word declares nothing for a valueless
 			// operand over a name with no binding: not the letters a minus
@@ -3536,6 +3544,10 @@ func (f declareFlags) integerComesOff(r *Runner) bool {
 
 // applyAttributes records what a name has been declared to be.
 func (r *Runner) applyAttributes(name string, f declareFlags) {
+	// What the name was before this line's numeric letters land, which the
+	// case letters below ask. See caseLettersKeptApart.
+	_, floatBefore := r.floatPrecision[name]
+	numericBefore := r.integer[name] || floatBefore
 	if f.integer {
 		if r.integer == nil {
 			r.integer = map[string]bool{}
@@ -3781,14 +3793,14 @@ func (r *Runner) applyAttributes(name string, f declareFlags) {
 	// letter shares the line.
 	numeric := f.integer || f.float
 	canceled := r.caseLettersCancel(name, f)
-	unlisted := byte(0)
-	if !canceled {
-		f, unlisted = r.twoCaseLettersOnOneLine(f)
+	if !canceled && r.caseListingMayPart(name, f, numeric || numericBefore) &&
+		r.ask(r.sem().CaseListingAndFoldAreSeparate,
+			"a case letter's listing and its fold being two pieces of state") {
+		r.caseLettersKeptApart(name, f, numeric, numericBefore)
+		f.lower, f.upper = false, false
 	}
-
-	if (f.lower || f.upper || f.capital) && !canceled {
-		// Any case letter written rewrites the record: it is this line's.
-		r.setCaseLetterUnlisted(name, unlisted)
+	if r.unspecified {
+		return
 	}
 	if f.lower && !canceled {
 		if r.lowered == nil {
@@ -4139,63 +4151,131 @@ func (r *Runner) numericTypeLetterRetypesFrozen(name string, f declareFlags) boo
 		"a numeric type letter retyping a frozen name")
 }
 
-// twoCaseLettersOnOneLine is the reading of a line writing both `-l` and `-u`
-// under a minus where they do not cancel: the later of the two is the one
-// recorded, and it is recorded as unlisted. Measured 2026-10-03 on ksh93u+
-// 2012-08-01 under `-c` (#5667):
+// The listing record's bits — see Runner.caseListing.
+const (
+	caseListsLower byte = 1 << iota
+	caseListsUpper
+	// caseListingRecorded marks a record as present, so a name whose
+	// listing writes neither letter is told apart from one with no record.
+	caseListingRecorded
+)
+
+// caseLettersKeptApart is a line writing `l` or `u`, in the dialect that keeps
+// the case letters' **listing** and their **fold** as two pieces of state. The
+// fold stays in Runner.lowered and Runner.uppered, where every store reads it;
+// the listing is Runner.caseListing. See Semantics.CaseListingAndFoldAreSeparate,
+// where the rows are (#5671).
 //
-//	typeset -ul s=Bc; typeset -p s; s=Qz; echo "[$s]"   s=bc, [qz]
-//	typeset -lu s=Bc; ...                               s=BC, [QZ]
-//	typeset -u -l s=Bc / -l -u                          the same by order
-//	typeset -u +l s=Bc / -l +u                          the same, the plus
-//	                                                    being an addition
-//	                                                    there (blockALaterPlus)
-//	typeset -ul s; typeset -p s                         s
-//	typeset -u s=a; typeset -l s=Bc                     typeset -l s=bc
-//	                                                    (two lines: listed)
-//
-// It returns the flags with the earlier letter dropped, and the letter that
-// stands unlisted, or 0 where the line does not write both.
-func (r *Runner) twoCaseLettersOnOneLine(f declareFlags) (declareFlags, byte) {
-	if !f.lower || !f.upper {
-		return f, 0
-	}
-	for _, c := range "lu" {
-		if plus, ok := f.lastSign(c); !ok || plus {
-			return f, 0
+// numericLine is a numeric letter written on this line under either sign, and
+// numericBefore a numeric attribute the name carried coming in: under either,
+// `l` and `u` are long and unsigned, and touch only the listing.
+func (r *Runner) caseLettersKeptApart(name string, f declareFlags, numericLine, numericBefore bool) {
+	rec := r.caseListing[name]
+	if rec == 0 {
+		// A name that took its fold some other way lists by it.
+		switch {
+		case r.lowered[name]:
+			rec = caseListsLower
+		case r.uppered[name]:
+			rec = caseListsUpper
 		}
 	}
-	if strings.LastIndexByte(f.letters, 'l') > strings.LastIndexByte(f.letters, 'u') {
-		f.upper = false
-		return f, 'l'
+	bits := rec &^ caseListingRecorded
+	foldBefore := r.lowered[name] || r.uppered[name]
+	letters := byte(0)
+	if f.lower {
+		letters |= caseListsLower
 	}
-	f.lower = false
-	return f, 'u'
-}
-
-// setCaseLetterUnlisted records, or with 0 clears, the case letter a name
-// carries without a listing letter. See Runner.caseLetterUnlisted.
-func (r *Runner) setCaseLetterUnlisted(name string, letter byte) {
-	if letter == 0 {
-		delete(r.caseLetterUnlisted, name)
+	if f.upper {
+		letters |= caseListsUpper
+	}
+	numeric := numericLine || numericBefore
+	if f.remove {
+		// A plus letter clears its own listing letter and takes the fold off,
+		// whichever letter the fold was: `typeset -l s=Bc; typeset +u s`
+		// still lists `-l` and folds nothing.
+		r.setCaseListing(name, (bits&^letters)|caseListingRecorded)
+		if !numeric {
+			delete(r.lowered, name)
+			delete(r.uppered, name)
+		}
 		return
 	}
-	if r.caseLetterUnlisted == nil {
-		r.caseLetterUnlisted = map[string]byte{}
+	// A minus line lists the letters it writes and no others; both of them
+	// list as neither.
+	r.setCaseListing(name, letters|caseListingRecorded)
+	if numeric {
+		if numericBefore && !numericLine {
+			// The letter still takes the number off, and folds nothing:
+			// `typeset -i s=1; typeset -l s` lists `typeset -l s=1`, and a
+			// later `s=Qz` stays `Qz`.
+			r.caseLetterReplacesTheNumeric(name)
+		}
+		return
 	}
-	r.caseLetterUnlisted[name] = letter
+	// The fold is the later of the letters written.
+	later := caseListsUpper
+	if strings.LastIndexByte(f.letters, 'l') > strings.LastIndexByte(f.letters, 'u') ||
+		!f.upper {
+		later = caseListsLower
+	}
+	if later == caseListsLower {
+		setBool(&r.lowered, name, true)
+		delete(r.uppered, name)
+	} else {
+		setBool(&r.uppered, name, true)
+		delete(r.lowered, name)
+	}
+	delete(r.capitalized, name)
+	r.caseLetterReplacesTheNumeric(name)
+	// And two lines on which the fold reaches no value. A valueless letter
+	// whose listing letter the name already had re-reads nothing: `typeset
+	// -l s=Bc; typeset +u s; s=XY; typeset -l s` holds `XY`. An `x` beside the
+	// letter over a name that folded nothing before stores this line's value
+	// and keeps the one it had, unfolded: `typeset -lx s=Bc` holds `Bc`,
+	// where `typeset -u s=Ab; typeset -lx s=Bc` holds `bc`.
+	exporting := f.export && !f.letterOff('x')
+	alreadyListed := bits&later != 0 && !r.caseFoldOperandValued
+	if r.caseFoldMayBeHeld && (alreadyListed || (exporting && !foldBefore)) {
+		r.caseFoldHeld = name
+	}
 }
 
-// caseLetterIsUnlisted reports whether the case letter a name carries is the
-// one a two-letter line left without a listing letter, and still stands.
-func (r *Runner) caseLetterIsUnlisted(name string) bool {
-	switch r.caseLetterUnlisted[name] {
-	case 'l':
-		return r.lowered[name]
-	case 'u':
-		return r.uppered[name]
+// caseListingMayPart reports whether this line is one on which a case
+// letter's listing and its fold could come apart, which is where
+// Semantics.CaseListingAndFoldAreSeparate is asked: a plus letter, both
+// letters, a numeric letter on the line or the name, an `x` beside it, or a
+// name already carrying a listing record. A single minus letter over a plain
+// name lists and folds alike under either answer.
+func (r *Runner) caseListingMayPart(name string, f declareFlags, numeric bool) bool {
+	if !f.lower && !f.upper {
+		return false
 	}
-	return false
+	return f.remove || (f.lower && f.upper) || numeric || f.export ||
+		r.caseListing[name] != 0
+}
+
+// setCaseListing records a name's listing bits, or with 0 forgets them.
+func (r *Runner) setCaseListing(name string, rec byte) {
+	if rec == 0 {
+		delete(r.caseListing, name)
+		return
+	}
+	if r.caseListing == nil {
+		r.caseListing = map[string]byte{}
+	}
+	r.caseListing[name] = rec
+}
+
+// caseListingOf is the case letters a name's listing writes, where a record
+// says so. Both bits list as neither.
+func (r *Runner) caseListingOf(name string) (lower, upper, recorded bool) {
+	rec := r.caseListing[name]
+	if rec == 0 {
+		return false, false, false
+	}
+	bits := rec &^ caseListingRecorded
+	return bits == caseListsLower, bits == caseListsUpper, true
 }
 
 // caseLettersCancel reports whether this declaration wrote **both** case
@@ -4286,6 +4366,11 @@ func (r *Runner) upperLetterRecordsNothing() bool {
 // float branch, because the two are one family and a second copy is where they
 // would come apart.
 func (r *Runner) numericLetterReplacesTheCase(name string) {
+	// The listing letters go with the number's arrival, whether or not a
+	// fold stood: `typeset -ul s=Bc; typeset +l s; typeset -i s=3` lists
+	// `typeset -i s=3` (#5671). A line writing a case letter beside the
+	// number lists it again after this.
+	delete(r.caseListing, name)
 	if !r.lowered[name] && !r.uppered[name] && !r.capitalized[name] {
 		return
 	}
@@ -5645,6 +5730,13 @@ func (r *Runner) declarationAssignmentResets(name string, fresh, namesExport, va
 		// letter *on this declaration* does not count: `typeset -x s=1;
 		// typeset -l s=B` drops the export.
 		return
+	}
+	if valueToo {
+		// A listing letter that folds nothing is not a case letter that
+		// stands, and it goes with the reset: `typeset -l s=Bc; typeset +u
+		// s; typeset s=XY` is `s=XY` in ksh93u+ (#5671). Only the dialect
+		// that keeps such a record answers this function's question Yes.
+		delete(r.caseListing, name)
 	}
 	exported := !namesExport && r.isExported(name)
 	valued := valueToo && r.carriesAValueAttribute(name)

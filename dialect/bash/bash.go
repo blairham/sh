@@ -2003,6 +2003,9 @@ func Semantics() interp.Semantics {
 	// -- z="Ab"` with the value unfolded, and `typeset -l z=Ab; typeset -lu
 	// z=Cd` lists `declare -- z="Cd"` (#2541).
 	s.TwoCaseLettersOnOneDeclarationCancel = interp.Yes
+	// The letter that lists is the letter that folds: see
+	// interp.Semantics.CaseListingAndFoldAreSeparate (#5671).
+	s.CaseListingAndFoldAreSeparate = interp.No
 	s.CaseAttributeReplacesTheNumericAttribute = interp.No
 	// One reader for both: `$((010))` and `typeset -i d=010` are eight
 	// alike, where ksh93 answers eight and ten.

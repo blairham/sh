@@ -19,10 +19,12 @@ func TestANestedNameReferenceToAListIsRefused(t *testing.T) {
 		{`x=${${(PU)v}}`, "zsh:2: parameter name reference used with array\n"},
 		{`set -- x1 x2; print ${${(P)@}}`, "zsh:2: parameter name reference used with array\n"},
 		{`print "${${(P)v}:-z}"`, "zsh:2: bad substitution\n"},
+		{`print "${${(P)v}[@]}"`, "zsh:2: bad substitution\n"},
+		{`print "${(@)${(P)v}}"`, "zsh:2: bad substitution\n"},
 		{"cat <<E\n${${(P)v}}\nE\necho after", "zsh:2: bad substitution\nafter\n"},
 		{`(print ${${(P)v}}); echo st=$?`, "zsh:2: parameter name reference used with array\nst=1\n"},
 		// The controls: one element, none, and a reference that is not nested.
-		{`v=(x1); print ${${(P)v}[1,2]} ${${(P)v[1]}[1,2]}`, "ab ab\n"},
+		{`print ${${(P)v[1]}[1,2]}; v=(x1); print ${${(P)v}[1,2]}`, "ab\nab\n"},
 		{`v=(); print "[${${(P)v}}]"`, "[]\n"},
 		{`print ${(P)v} ${(P)${v}}`, "abc abc\n"},
 	} {

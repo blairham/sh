@@ -2009,7 +2009,7 @@ func (r *Runner) expandAtList(s syntax.Span, sp splitPolicy, head bool) ([]strin
 		// shell it claims to be calls it a bad substitution.
 		return nil, false
 	}
-	if !r.namesTheOtherArray(s.Param) || r.refusesAListAsAName(s.Param, s.Quoting != syntax.Unquoted) {
+	if !r.namesTheOtherArray(s.Param) || r.refusesAListAsAName(s.Param) {
 		return nil, true
 	}
 	r.referredToParameter(s.Param.Name)
@@ -3472,7 +3472,7 @@ func (r *Runner) expandParam(e *syntax.ParamExpr) string {
 		r.reportBadSubstitution(e)
 		return ""
 	}
-	if !r.namesTheOtherArray(e) || r.refusesAListAsAName(e, r.inDoubleQuotedSpan() || r.expandingRawText) {
+	if !r.namesTheOtherArray(e) || r.refusesAListAsAName(e) {
 		return ""
 	}
 	r.referredToParameter(e.Name)

@@ -26,3 +26,19 @@ func TestAnUnreadableByteEndsASubscriptsExpression(t *testing.T) {
 		}
 	}
 }
+
+// The same stop inside `$(( ))`, where the subscript is read as the
+// expression is evaluated rather than by the parser that read the line.
+// Measured 2026-10-03 on zsh 5.9.2 under `-f -c` (#5583).
+func TestAnUnreadableByteEndsASubscriptInArithmetic(t *testing.T) {
+	for _, c := range []struct{ src, want string }{
+		{`a=(1 2 3); echo $(( a[2@] + 1 )); i=2; echo $(( a[i@] )); k="2@"; echo $(( a[$k] ))`, "3\n2\n2\n"},
+		{`a=(1 2 3); (( a[2@] = 9 )); echo ${a[@]}`, "1 9 3\n"},
+		{`a=(x y z); echo $(( a['2'] ))`, "zsh:1: bad math expression: operand expected at `'2''\n"},
+		{`a=(1 2 3); echo $(( a[1+@] ))`, "zsh:1: bad math expression: operand expected at `@'\n"},
+	} {
+		if out, _ := runZsh(t, t.TempDir(), c.src); out != c.want {
+			t.Errorf("%s\n got %q\nwant %q", c.src, out, c.want)
+		}
+	}
+}

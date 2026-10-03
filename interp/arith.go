@@ -780,6 +780,15 @@ func (r *Runner) arithSubscriptIndex(x *syntax.ArithIndex) (arithNum, error) {
 	// they are no part of what a script wrote. See syntax.ArithValueMark.
 	marked := r.arithSubscriptRead(x.SubMarked, subscriptAsExpression)
 	sub := stripArithValueMarks(marked)
+	// A byte the arithmetic cannot read ends the expression here as it does
+	// in every other subscript, in the dialect where it does: `$(( a[2@] ))`
+	// reads element 2. See subscriptExpressionBeforeAnUnreadableByte (#5583).
+	before, stopErr := r.subscriptExpressionBeforeAnUnreadableByte(marked)
+	if stopErr != nil {
+		return intNum(0), arithError{msg: r.subscriptFailure(sub, unmarkArithFailure(stopErr)), complete: true}
+	}
+	stopped := before != marked
+	marked = before
 	p := syntax.NewParser("", r.dialect())
 	// The subscript's own read rather than the expression's: a double
 	// quotation between an index's brackets comes off wherever the brackets
@@ -818,6 +827,9 @@ func (r *Runner) arithSubscriptIndex(x *syntax.ArithIndex) (arithNum, error) {
 		err = &syntax.Error{Kind: syntax.ErrArithOperandEnd, Expr: sub, Token: sub}
 	}
 	if err != nil {
+		if stopped {
+			err = operandExpectedAtTheRest(err, sub, stripArithValueMarks(marked))
+		}
 		return intNum(0), arithError{msg: r.subscriptFailure(sub, err), complete: true}
 	}
 	n, evalErr := r.evalNum(tree)

@@ -22,6 +22,9 @@ func TestAZipOperandMustBeAName(t *testing.T) {
 		{`print ${x:^@}`, "zsh:2: not an identifier: @\n"},
 		{`print ${nope:^-y}`, "zsh:2: not an identifier: -y\n"},
 		{`print "${x:^^-}"`, "zsh:2: not an identifier: -\n"},
+		// A here-document body is expanded as one string, and is refused
+		// without ending the script.
+		{"cat <<E\n${x:^-y}\nE\necho after", "zsh:2: not an identifier: -y\nafter\n"},
 		// An expansion's failure, not a parse's: an unrun one is no error.
 		{`false && print ${x:^-y}; echo st=$?`, "st=1\n"},
 		// The controls: names, an empty operand, and a leading digit.

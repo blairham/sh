@@ -151,8 +151,22 @@ func (r *Runner) unsetKeepsTheAttributes(name string) (keep, exported bool) {
 	if !r.wasTheShellsOwnParameter(name) {
 		return false, false
 	}
+	exported = r.isExported(name)
+	if !exported && !r.carriesATypeLetter(name) {
+		// Nothing to keep, so the panel agrees and nothing is asked.
+		return false, false
+	}
 	if !r.ask(r.sem().UnsetKeepsTheShellsOwnAttributes, "whether `unset` keeps the attributes of the shell's own parameter") {
 		return false, false
 	}
-	return true, r.isExported(name)
+	return true, exported
+}
+
+// carriesATypeLetter reports whether a name carries one of the attributes
+// an `unset` would otherwise take with it, apart from export.
+func (r *Runner) carriesATypeLetter(name string) bool {
+	_, width := r.fieldWidth[name]
+	_, prec := r.floatPrecision[name]
+	return r.integer[name] || r.lowered[name] || r.uppered[name] || r.unique[name] ||
+		r.hidden[name] || r.traced[name] || width || prec
 }

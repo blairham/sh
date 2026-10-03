@@ -1324,6 +1324,35 @@ func (r *Runner) substitutedWordFields(s syntax.Span, sp splitPolicy, head bool)
 	// inside a brace that never closed, and inside this expansion's quoting
 	// if it had any. See Runner.inBraceOperand and substLevel (#3355).
 	defer r.inBraceOperand(s.Quoting)()
+	if a, written := splitFlagParity(s); written && sp != splitNever {
+		// A `${=spec}` whose word is what substituted splits the word as it
+		// expands rather than the text it came to, so the word's own quoting
+		// still protects: measured 2026-10-02 on zsh 5.9.2 with `set A 'b c'`
+		// and `v='x y'`,
+		//
+		//	${=1+"$@"}        A, b c          a quoted list keeps its fields
+		//	${=1+"$v"$v}      x yx, y         the quoted half is one field
+		//	${=nosuch-"p q" r s}  p q, r, s
+		//	"${=1+a b}"       a, b            the word's text splits in quotes
+		//	"${=1+$v}"        x y             an expansion the quotes reach
+		//	                                  does not
+		//
+		// which is the reading an `(A)` assignment's operand already has —
+		// see splittingTheAssignedWord — and the text is then not split a
+		// second time: see Runner.substitutedWordSplit (#5151).
+		//
+		// A doubled `==` is the same question answered no, and it reaches
+		// the word the same way: under `emulate sh`, `p='1 2' q='3 4';
+		// ${==1:-$p $q}` is the one word `1 2 3 4` — neither the
+		// expansions nor the blank between them split.
+		defer r.splittingTheOperatorWord(a, s.Quoting != syntax.Unquoted)()
+		r.substitutedWordSplit = e
+		if s.Quoting != syntax.Unquoted {
+			defer r.withoutGlobbing()()
+			return escapeAll(r.expandWord(e.Arg)), true
+		}
+		return r.tildeFlagFields(s, head, r.expandWordEscaped(e.Arg)), true
+	}
 	if s.Quoting != syntax.Unquoted {
 		// Quoted, so the word substitutes as *text* and nothing in it is a
 		// pattern. Measured on zsh 5.9.2: `"${nosuch:-*}"` is one asterisk
@@ -1870,7 +1899,12 @@ func (r *Runner) expandAt(s syntax.Span, sp splitPolicy, head bool) ([]string, l
 	if parts, ok := r.expandAtList(s, sp, head); ok {
 		marks := listMarks{nulls: r.listNulls, edges: r.listEdges}
 		r.listNulls, r.listEdges = nil, listEdges{}
-		if splitFlagOn(s, sp) {
+		if r.substitutedWordSplit == s.Param {
+			// The word that substituted was split as it expanded. See
+			// substitutedWordFields.
+			r.substitutedWordSplit = nil
+			marks = listMarks{}
+		} else if splitFlagOn(s, sp) {
 			// `${=a[@]}` joins the list and splits the string, so the
 			// elements are gone before the marks could mean anything —
 			// edges included, since what the flag splits is one string and

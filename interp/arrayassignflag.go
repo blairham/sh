@@ -115,8 +115,15 @@ func (r *Runner) splittingTheAssignedWord(split, quoted bool) func() {
 	if !split {
 		return func() {}
 	}
+	return r.splittingTheOperatorWord(Yes, quoted)
+}
+
+// splittingTheOperatorWord is that arming with the answer given: yes splits
+// the word's own text and its unquoted expansions, and no splits neither,
+// whatever the session's option says. See substitutedWordFields.
+func (r *Runner) splittingTheOperatorWord(answer Answer, quoted bool) func() {
 	savedSem, savedLit := r.Semantics, r.splitWordLiterals
-	r.swapSemantics(func(s *Semantics) { s.SplitParamExpansion = Yes })
-	r.splitWordLiterals = splitLiterals{on: true, answer: Yes, evenQuoted: quoted}
+	r.swapSemantics(func(s *Semantics) { s.SplitParamExpansion = answer })
+	r.splitWordLiterals = splitLiterals{on: true, answer: answer, evenQuoted: quoted && answer == Yes}
 	return func() { r.Semantics, r.splitWordLiterals = savedSem, savedLit }
 }

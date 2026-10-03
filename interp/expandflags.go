@@ -499,6 +499,10 @@ func (r *Runner) flaggedWords(e *syntax.ParamExpr, sp splitPolicy, quoted bool,
 
 	// An `=` beside the group is this same step with IFS for a separator.
 	ifsSplit := splitFlagInGroup(e, sp)
+	if r.arrayAssignSplit == e {
+		r.arrayAssignSplit = nil
+		ifsSplit = false
+	}
 	// The two splits are kept apart because rule 10 below treats them
 	// differently: `(@)` exempts a letter split from the join ahead of it and
 	// leaves the `=` one joining. Only rule 11 wants them together.
@@ -887,6 +891,12 @@ func (r *Runner) assignThroughFlags(e *syntax.ParamExpr, indirect *indirectTarge
 			return nil, false, false
 		}
 		r.setArray(e.Name, elems)
+		// The group's `=` has split the operand already, element by element
+		// as it expanded, so what is substituted is not split a second time:
+		// measured on zsh 5.9.2, `${(A)=foo=a "k p" b}` substitutes `a`,
+		// `k p` and `b` — the three elements it stored — where splitting the
+		// yield again gave four (#5151).
+		r.arrayAssignSplit = e
 		if quoted {
 			// One word, the elements joined — measured with `a=(1 2)`,
 			// `print -rl -- "${(A)u=$a}"` is the one line `1 2`. So the

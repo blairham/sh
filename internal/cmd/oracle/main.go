@@ -42,7 +42,9 @@ func main() {
 		gated  = flag.Bool("gated", false, "run the corpus twice through -bin, with and without a sandbox policy, and report what the policy changed")
 		pol    = flag.String("policy", "", "the policy file -gated uses; empty generates one confining writes to the scratch directory")
 		drop   = flag.Bool("allow-losing-measurements", false, "write the record even though a column has lost measurements the record already holds")
-		only   = flag.String("only", "", "regenerate only these cases, by comma-separated ID, and keep the record for every other")
+		only   = flag.String("only", "", "regenerate only these cases, by comma-separated ID, and keep the record for every other; with -bin, grade only these")
+		pkg    = flag.String("pkg", "", "with -bin, the package that builds it; required when the reference runs in a container, where ours is cross-compiled and graded beside it")
+		recd   = flag.Bool("recorded", false, "with -bin, grade against the golden record's answers instead of running the reference shell")
 	)
 	flag.Parse()
 
@@ -63,7 +65,27 @@ func main() {
 	}
 
 	if *bin != "" {
-		rep, err := oracle.RunConformance(context.Background(), *bin, *ref, strings.Fields(*bargs), oracle.Corpus)
+		cases := oracle.Corpus
+		if ids := splitIDs(*only); len(ids) > 0 {
+			var err error
+			if cases, err = oracle.Select(cases, ids); err != nil {
+				fmt.Fprintln(os.Stderr, "oracle:", err)
+				os.Exit(exitFailure)
+			}
+		}
+		target := oracle.Target{Path: *bin, Pkg: *pkg, Args: strings.Fields(*bargs)}
+		var (
+			rep *oracle.Report
+			err error
+		)
+		if *recd {
+			var rec *oracle.Run
+			if rec, err = oracle.Load(*golden); err == nil {
+				rep, err = oracle.GradeRecorded(context.Background(), target, *ref, cases, rec)
+			}
+		} else {
+			rep, err = oracle.RunConformance(context.Background(), target, *ref, cases)
+		}
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "oracle:", err)
 			os.Exit(exitFailure)

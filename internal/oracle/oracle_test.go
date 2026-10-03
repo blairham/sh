@@ -1617,7 +1617,7 @@ func TestConformanceGradesTheShellAndNotTheBuildPath(t *testing.T) {
 		{ID: "b", Snippet: "set -x; echo a"},
 	}
 
-	rep, err := RunConformance(context.Background(), link, "zsh", nil, cases)
+	rep, err := RunConformance(context.Background(), Target{Path: link}, "zsh", cases)
 	if err != nil {
 		t.Fatalf("RunConformance: %v", err)
 	}
@@ -1643,7 +1643,7 @@ func TestConformanceStillFailsARowThatDiffersInMoreThanTheName(t *testing.T) {
 	}
 	cases := []Case{{ID: "a", Snippet: "nosuchcmd_zz"}}
 
-	rep, err := RunConformance(context.Background(), bash.Path, "zsh", nil, cases)
+	rep, err := RunConformance(context.Background(), Target{Path: bash.Path}, "zsh", cases)
 	if err != nil {
 		t.Fatalf("RunConformance: %v", err)
 	}
@@ -1718,5 +1718,47 @@ func TestVersionPrefersTheSpellingAShellAlreadyAnswers(t *testing.T) {
 
 	if got := version(context.Background(), path); !strings.HasPrefix(got, "GNU bash") {
 		t.Errorf("version = %q, want the --version answer", got)
+	}
+}
+
+// TestGradeRecordedReadsTheRecord: the recorded grade takes its answer from
+// the record and not from a shell, and a case the record has no answer for is
+// an error rather than a case quietly left out of the total (#5710).
+func TestGradeRecordedReadsTheRecord(t *testing.T) {
+	c := Case{ID: "t/recorded", Snippet: "echo hi"}
+	rec := &Run{Results: map[string]map[string]Result{
+		c.ID: {"dash": {Stdout: "hi"}, "zsh": {Stdout: "not what /bin/sh prints"}},
+	}}
+	for _, tc := range []struct {
+		against string
+		passed  int
+	}{{"dash", 1}, {"zsh", 0}} {
+		rep, err := GradeRecorded(context.Background(), Target{Path: "/bin/sh"}, tc.against, []Case{c}, rec)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if rep.Total != 1 || rep.Passed != tc.passed {
+			t.Errorf("against %s: %d/%d, want %d/1", tc.against, rep.Passed, rep.Total, tc.passed)
+		}
+	}
+	if _, err := GradeRecorded(context.Background(), Target{Path: "/bin/sh"}, "ksh93", []Case{c}, rec); err == nil {
+		t.Error("a column the record does not hold graded without complaint")
+	}
+}
+
+// TestAContainedReferenceRefusesAHostBinary: graded against a shell reached
+// through a container, ours must run in that container too, and without the
+// package to build it there the grade is refused rather than measured across
+// two platforms (#5709).
+func TestAContainedReferenceRefusesAHostBinary(t *testing.T) {
+	ref := Found{Shell: Shell{Name: "ash"}, sess: &session{}}
+	if _, err := (Target{Path: "/bin/sh"}).place(context.Background(), ref); err == nil ||
+		!strings.Contains(err.Error(), "-pkg") {
+		t.Errorf("place = %v, want a refusal naming -pkg", err)
+	}
+	local := Found{Shell: Shell{Name: "dash"}}
+	got, err := (Target{Path: "/bin/sh"}).place(context.Background(), local)
+	if err != nil || got.sess != nil || got.Path != "/bin/sh" {
+		t.Errorf("a local reference placed ours at %q (session %v, err %v), want the host binary", got.Path, got.sess != nil, err)
 	}
 }

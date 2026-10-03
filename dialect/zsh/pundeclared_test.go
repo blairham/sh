@@ -19,7 +19,7 @@ func TestAnIndirectionOfAnUndeclaredNameRefusesSomeOperators(t *testing.T) {
 		{`print "<${(P)nope?}>" $?`, "<> 0\n"},
 		// The controls: other operators, a colon, and a name that exists.
 		{`print "<${(P)nope-}${(P)nope##x}${(P)nope:-x}${(P)nope+x}>"`, "<x>\n"},
-		{`nope=; typeset q; a=(); print "<${(P)nope-x}${(P)q-y}${(P)a-z}${(P)1-w}>"`, "<xyzw>\n"},
+		{`nope=; typeset q; a=(); print "<${(P)nope-x}${(P)q-y}${(P)a-z}${(P)1-w}${(P)zz[1]-v}>"`, "<xyzwv>\n"},
 	} {
 		got, _ := runZsh(t, t.TempDir(), tc.src)
 		if got != tc.want {

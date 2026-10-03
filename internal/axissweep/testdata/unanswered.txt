@@ -590,6 +590,7 @@ dash  PrintfRefusedOperandKeepsItsLeadingNumber
 dash  PrintfReportsAMissingHexDigit
 dash  ProducedParameterListing
 dash  QuitResetRestoresTheDefault
+dash  RangeOperandBackslash
 dash  ReadArrayDefault
 dash  ReadArrayTakesOneNameOnly
 dash  ReadCountJudgesTheNamesAfterTheFirst

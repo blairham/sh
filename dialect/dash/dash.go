@@ -1466,6 +1466,8 @@ func Semantics() interp.Semantics {
 	// starts counts from one. Not an omission here — see
 	// interp.ShellLevelPolicy.
 	s.ShellLevel = interp.ShellLevelNotCounted
+	// unanswered RangeOperandBackslash: there is no substring range here to
+	// hold a backslash, `${x:0:1}` being a bad substitution in dash 0.5.12.
 	// unanswered ShellLevelExec: this column has no depth to hand over, so
 	// there is no way to ask it what a replacement does with one. Measured
 	// 2026-09-18 anyway, for the record: `exec /usr/bin/env` from dash 0.5.12

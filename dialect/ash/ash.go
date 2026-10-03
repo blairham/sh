@@ -671,6 +671,8 @@ func Semantics() interp.Semantics {
 	// No rather than unmeasured.
 	s.BraceBodyIsACharacterClass = interp.No
 	s.ZeroSubscriptIsTheFirstElement = interp.No
+	// What a backslash in a substring range leaves; see the axis.
+	s.RangeOperandBackslash = interp.RangeBackslashAsInTheWord
 	// BusyBox ash 1.37.0 keeps the export letter of its own parameters (`PS1`, `IFS`, `LINENO`, `OPTIND`) through `unset`; see the axis.
 	s.UnsetKeepsTheShellsOwnAttributes = interp.Yes
 	// BusyBox ash 1.37.0 keeps the edge an expansion leaves at the end of a substituted word; see the axis.

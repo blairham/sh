@@ -423,16 +423,17 @@ func TestPrintfWritesBytesAndNotEncodedRunes(t *testing.T) {
 // C's `%c` has no precision and Go's `%s` does, so the precision has to be
 // taken back out — the character is written through `%s`.
 //
-// No dialect is consulted, which is the claim as much as the output is: bash
-// 5.3, zsh, ksh93, dash and BusyBox ash all ignore it, so an implementation
-// that reached an axis here would be asking a question the panel does not
-// have. Run under printfSem's core vector for that reason.
+// bash 5.3, zsh, dash and BusyBox ash all ignore it. ksh93 repeats the
+// character to a precision above one, which is
+// Semantics.PrintfCharPrecisionRepeats, answered No here;
+// TestPrintfCharacterPrecisionCanRepeat is the other reading.
 //
 // The width rows are the other half. A `%c` does have a width, and a fix that
 // dropped the whole field rather than the precision would pass every
 // precision row here and quietly stop padding.
 func TestPrintfCharacterIgnoresItsPrecision(t *testing.T) {
 	sem := printfSem()
+	sem.PrintfCharPrecisionRepeats = No
 	for _, tc := range []struct{ name, src, want string }{
 		{"a zero precision does not eat the character", `printf '[%.0c]' abc`, "[a]"},
 		{"nor does a one", `printf '[%.1c]' abc`, "[a]"},
@@ -452,6 +453,38 @@ func TestPrintfCharacterIgnoresItsPrecision(t *testing.T) {
 			}
 		})
 	}
+}
+
+// ksh93's reading of a `%c` precision: a count of the first byte, laid out in
+// the width like the single character is. Zero and one are one character
+// under both readings, so they must not raise the axis at all.
+func TestPrintfCharacterPrecisionCanRepeat(t *testing.T) {
+	sem := printfSem()
+	sem.PrintfCharPrecisionRepeats = Yes
+	for _, tc := range []struct{ name, src, want string }{
+		{"a precision of three is three of it", `printf '[%.3c]' abc`, "[aaa]"},
+		{"zero is still one", `printf '[%.0c]' abc`, "[a]"},
+		{"and so is one", `printf '[%.1c]' abc`, "[a]"},
+		{"a bare point is zero", `printf '[%.c]' abc`, "[a]"},
+		{"the width pads the run", `printf '[%5.3c]' abc`, "[  aaa]"},
+		{"and pads it on the right", `printf '[%-5.2c]' abc`, "[aa   ]"},
+		{"a star is the same count", `printf '[%.*c]' 2 abc`, "[aa]"},
+		{"the byte is what repeats", `printf '[%.2c]' é`, "[\xc3\xc3]"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, st := run(t, tc.src, func(r *Runner) { r.Semantics = &sem })
+			if out != tc.want || st != 0 {
+				t.Errorf("got %q status %d, want %q and 0", out, st, tc.want)
+			}
+		})
+	}
+	t.Run("zero and one never ask the axis", func(t *testing.T) {
+		open := printfSem()
+		open.PrintfCharPrecisionRepeats = Unspecified
+		if out, st := run(t, `printf '[%.1c][%.0c][%3c]' abc abc abc`, func(r *Runner) { r.Semantics = &open }); out != "[a][a][  a]" || st != 0 {
+			t.Errorf("got %q status %d, want the character alone at 0", out, st)
+		}
+	})
 }
 
 // The C length modifiers are a set with three answers, and every one of them

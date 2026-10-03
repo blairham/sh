@@ -8047,6 +8047,26 @@ type Semantics struct {
 	// the two readings differ on (#3067).
 	PrintfZeroFlagSurvivesAPrecision Answer
 
+	// PrintfCharPrecisionRepeats reads a precision on a `%c` as how many
+	// times to write the character, where C's conversion has no precision at
+	// all and every other column ignores it.
+	//
+	// One column, ksh93u+ 2012-08-01, measured 2026-10-03 under `LC_ALL=C`
+	// with the operand `abc`:
+	//
+	//	%.0c  a      %.1c  a      %.3c  aaa    %.c    a
+	//	%5.3c   aaa  %-4.3c xxx (of x), then a blank
+	//
+	// bash 5.3, bash as sh, zsh 5.9.2, dash and BusyBox ash write the one
+	// character whatever the precision said (#2714). The width is the field's
+	// in both readings, laid out around the repeated run. What is repeated is
+	// the first *byte*, as the conversion writes it: `%.3c` of `é` is three
+	// 0xc3 bytes there, and of an empty operand three NULs.
+	//
+	// Asked only where a precision above one is written on a `%c`, since zero
+	// and one write the one character under both readings.
+	PrintfCharPrecisionRepeats Answer
+
 	// PrintfNumberOperand is how a numeric conversion reads an operand that
 	// is not already the whole number C asked for — see PrintfNumberReading.
 	PrintfNumberOperand PrintfNumberReading
@@ -31295,6 +31315,7 @@ func PosixSemantics() Semantics {
 		// on `d`, `i`, `o`, `u`, `x` or `X`. The same deferral answers this,
 		// and ksh93 is the departure a third time.
 		PrintfZeroFlagSurvivesAPrecision: No,
+		PrintfCharPrecisionRepeats:       No,
 		// XCU gives printf's format the XSI escape set and nothing else —
 		// `\\`, `\a`, `\b`, `\f`, `\n`, `\r`, `\t`, `\v` and `\ddd` — so
 		// neither spelling of the escape character is in it and a backslash

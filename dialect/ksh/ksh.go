@@ -2959,6 +2959,9 @@ func Semantics() interp.Semantics {
 	// precision is applied and the field is then filled with `0` rather
 	// than with blanks. See the axis for the table.
 	s.PrintfZeroFlagSurvivesAPrecision = interp.Yes
+	// A precision on a `%c` is how many times to write it: `printf
+	// '[%.3c]' abc` is `[aaa]` here and `[a]` everywhere else.
+	s.PrintfCharPrecisionRepeats = interp.Yes
 	// The same `\c` as the printf format, and the arithmetic is bit 6
 	// toggled rather than bash's five-bit mask: `$'\c1'` is `q`, not 0x11.
 	s.DollarSingleBackslashC = interp.DollarSingleControlToggled

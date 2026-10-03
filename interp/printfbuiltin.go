@@ -1603,7 +1603,14 @@ func (r *Runner) printfConvert(spec string, verb byte, timeFmt string, next func
 		// ksh93, dash and BusyBox ash alike, and handing the one-byte string
 		// to `%.0s` wrote nothing at all (#2714). The width is untouched: it
 		// is the half of the field a `%c` really has.
-		return fmt.Sprintf(printfWithoutPrecision(spec)+"s", arg[:1]), 0, false
+		char := arg[:1]
+		if _, _, prec := printfSpecParts(spec); prec > 1 &&
+			r.ask(r.sem().PrintfCharPrecisionRepeats, "a precision on a `%c` repeating the character") {
+			// One column reads the precision as a count. See
+			// Semantics.PrintfCharPrecisionRepeats.
+			char = strings.Repeat(char, prec)
+		}
+		return fmt.Sprintf(printfWithoutPrecision(spec)+"s", char), 0, false
 	case 'q':
 		if !present && r.ask(r.sem().PrintfQuoteOfNoArgumentIsEmpty, "`%q` with no operand left writing nothing") {
 			return "", 0, false

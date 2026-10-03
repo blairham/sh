@@ -21501,6 +21501,23 @@ call one below the ceiling was right. The two sides of a ceiling have to
 agree; the wide layout asks this axis the same question the narrow one does
 (#3089).
 
+**`PrintfCharPrecisionRepeats`** — bash no · dash no · ksh93 **yes** · zsh no · ash no
+
+Reads a precision on a `%c` as how many times to write the character. C's
+`%c` has no precision, and bash 5.3, bash as sh, zsh, dash and BusyBox ash
+ignore one (#2714). Measured 2026-10-03 on ksh93u+ under `LC_ALL=C`, with
+the operand `abc` unless shown:
+
+    %.0c    a          %.1c   a         %.c     a
+    %.3c    aaa        %5.3c    aaa     %-4.3c of x   `xxx `
+
+The width lays the field out around the repeated run, as it lays out a
+single character. What is repeated is the first byte, which is what the
+conversion writes in every column: `%.3c` of `é` is three 0xc3 bytes in
+ksh93, and of an empty operand three NULs. Zero and one write the single
+character under both readings, so only a precision above one asks the
+dialect.
+
 **`PrintfZeroFlagSurvivesAPrecision`** — bash no · dash no · ksh93 **yes** · zsh no · ash no
 
 Keeps the `0` flag's fill on an integer conversion that also states a

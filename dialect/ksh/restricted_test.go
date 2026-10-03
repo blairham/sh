@@ -194,7 +194,7 @@ func TestTheRestrictedShellRefusesALocalWithAValue(t *testing.T) {
 	if !strings.Contains(out, "PATH: restricted") || strings.Contains(out, "body") {
 		t.Errorf("output %q, want the refusal and the body stopped", out)
 	}
-	out, _ = runKsh(t, dir, "set -r\nfunction g { typeset PATH; echo in; }\ng\nexport PATH\necho st=$?\n")
+	out, _ = runKsh(t, dir, "export PATH\nset -r\nfunction g { typeset PATH; echo in; }\ng\nexport PATH\necho st=$?\n")
 	if out != "in\nst=0\n" {
 		t.Errorf("output %q, want the valueless forms taken", out)
 	}
@@ -214,5 +214,60 @@ func TestARestrictedRefusalOfADeclarationEndsAtOne(t *testing.T) {
 		if st != 1 || strings.Contains(out, "after") {
 			t.Errorf("%s: got %q at %d, want the script ended at 1", src, out, st)
 		}
+	}
+}
+
+// TestTheRestrictedShellRefusesALetterThatChangesAFrozenName pins which
+// attribute letters the mode refuses on a frozen name. Measured 2026-10-02 on
+// ksh93u+ from a script file under `env -i PATH=/usr/bin:/bin SHELL=/bin/sh`,
+// 91 of 92 rows (#5506). PATH holds an exported value and ENV holds nothing.
+// See Runner.restrictedLetterChangesTheName for the rule the grid fits.
+func TestTheRestrictedShellRefusesALetterThatChangesAFrozenName(t *testing.T) {
+	dir := t.TempDir()
+	for _, c := range []struct {
+		src     string
+		refused bool
+	}{
+		{"readonly PATH", true},
+		{"typeset -r PATH", true},
+		{"typeset -i PATH", true},
+		{"typeset -L5 PATH", true},
+		{"typeset +x PATH", true},
+		{"typeset +l PATH", true},
+		{"typeset -a PATH", true},
+		{"typeset -x +r PATH", true},
+		{"export PATH", false},
+		{"typeset -x PATH", false},
+		{"typeset +r PATH", false},
+		{"typeset PATH", false},
+		{"export ENV", true},
+		{"typeset +i ENV", true},
+		{"typeset -l ENV", true},
+		{"typeset +x ENV", false},
+		{"typeset +l ENV", false},
+		{"typeset +rx ENV", false},
+		{"typeset -a ENV", false},
+		// Inside a keyword function the declaration makes a binding of its
+		// own, which holds nothing and is exported nowhere.
+		{"function f { typeset -x PATH; }; f", true},
+		{"function f { typeset +x PATH; typeset +i PATH; }; f", false},
+	} {
+		t.Run(c.src, func(t *testing.T) {
+			// PATH reaches the reference from its environment, so exported.
+			out, _ := runKsh(t, dir, "export PATH\nset -r\n"+c.src+"\necho tail\n")
+			if got := strings.Contains(out, "restricted"); got != c.refused {
+				t.Errorf("output %q: refused = %v, want %v", out, got, c.refused)
+			}
+		})
+	}
+	// The refusal names the builtin, in its location, in the mode's words.
+	out, _ := runKsh(t, dir, "set -r\nreadonly SHELL\n")
+	if !strings.Contains(out, "[2]: readonly: SHELL: restricted\n") {
+		t.Errorf("readonly SHELL: got %q, want the builtin named", out)
+	}
+	// And `+r` takes nothing away: the freeze is the mode's.
+	out, _ = runKsh(t, dir, "set -r\ntypeset +r PATH\nPATH=/x\necho tail\n")
+	if !strings.Contains(out, "PATH: restricted") || strings.Contains(out, "tail") {
+		t.Errorf("+r then an assignment: got %q, want the assignment refused", out)
 	}
 }

@@ -1896,6 +1896,11 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) (endSt
 		// declaration would otherwise answer a question asked about the name
 		// it shadows. See shadowedExport.
 		wasExported := r.isExported(name)
+		if !hasValue && r.restrictedPlusRIsIgnored(name, df) {
+			// Taken, and nothing to do: the freeze is the mode's and not
+			// the attribute. See Runner.restrictedPlusRIsIgnored.
+			continue
+		}
 		if r.restrictedDeclarationRefused(name, df, hasValue, false) {
 			// A name restricted mode froze, which a local may not shadow
 			// and, in one dialect, no letter may touch. Ahead of the
@@ -2182,7 +2187,7 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) (endSt
 			r.assignFailed = true
 			continue
 		}
-		if df.readonly && df.readonlyOff {
+		if df.readonly && df.readonlyOff && !r.restrictedPlusRIsIgnored(name, declareFlags{letters: "r", letterSigns: "+"}) {
 			if code := r.removeReadonly(name, hasValue); code != 0 {
 				return code
 			}

@@ -241,6 +241,7 @@ ash   RestrictedBuiltinRefusalIsFatal
 ash   RestrictedCommandOptionRefusalIsFatal
 ash   RestrictedDotRefusesAPath
 ash   RestrictedFreezeIsAReadonly
+ash   RestrictedFreezeRefusesALetterThatChangesTheName
 ash   RestrictedFreezeRefusesAValuelessDeclaration
 ash   RestrictedModeIsLeftByTheLetter
 ash   RestrictedRedirectTakesAProcessSubstitution
@@ -346,6 +347,7 @@ bash  PrintfOutputPrecedesComplaint
 bash  PrintfRefusedOperandKeepsItsLeadingNumber
 bash  ReadArrayDefault
 bash  ReadArrayTakesOneNameOnly
+bash  RestrictedFreezeRefusesALetterThatChangesTheName
 bash  RestrictedFreezeRefusesAValuelessDeclaration
 bash  RestrictedRefusalEndsWithTheBuiltinsStatus
 bash  SetArrayBadNameLeavesZero
@@ -609,6 +611,7 @@ dash  RestrictedBuiltinRefusalIsFatal
 dash  RestrictedCommandOptionRefusalIsFatal
 dash  RestrictedDotRefusesAPath
 dash  RestrictedFreezeIsAReadonly
+dash  RestrictedFreezeRefusesALetterThatChangesTheName
 dash  RestrictedFreezeRefusesAValuelessDeclaration
 dash  RestrictedModeIsLeftByTheLetter
 dash  RestrictedRedirectTakesAProcessSubstitution
@@ -781,6 +784,7 @@ zsh   ReadonlyReferenceLetter
 zsh   RegexMatchOmitsGroupsThatDidNotMatch
 zsh   RegexMatchSurvivesAFailedMatch
 zsh   ReportsAKilledCommandInACommandSubstitution
+zsh   RestrictedFreezeRefusesALetterThatChangesTheName
 zsh   SubstringRangeThirdColonIsABadSubstitution
 zsh   TableLetterReachesItsOwnOperandsSubscript
 zsh   TransformLetterCheckedOnlyWhenValued

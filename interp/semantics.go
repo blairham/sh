@@ -25183,10 +25183,9 @@ type Semantics struct {
 	//
 	// So in zsh any declaration that would make a binding or name a letter is
 	// refused, and a bare listing is not. ksh93 refuses some attribute
-	// letters on these names as well, and which ones does not follow from a
-	// rule this shell has found yet — `readonly PATH` is refused where
-	// `typeset -r PATH` is taken — so that grid is its own issue (#5506) and
-	// this answer is about the valueless local and `export`.
+	// letters on these names as well, by a narrower rule: see
+	// RestrictedFreezeRefusesALetterThatChangesTheName (#5506). This answer
+	// is about the valueless local and `export` of an exported name.
 	//
 	// unpinned bash: the freeze is a readonly there — see
 	// RestrictedFreezeIsAReadonly — so the readonly machinery answers every
@@ -25198,6 +25197,29 @@ type Semantics struct {
 	// unpinned ash: the same.
 	// TestSetRefusesTheRestrictedLetter pins the refusal that keeps it out.
 	RestrictedFreezeRefusesAValuelessDeclaration Answer
+
+	// RestrictedFreezeRefusesALetterThatChangesTheName refuses an attribute
+	// letter on a name restricted mode froze where the letter would change
+	// the name, in a dialect that does not refuse every letter outright.
+	//
+	// Asked only where RestrictedFreezeRefusesAValuelessDeclaration is No.
+	// ksh93u+ answers yes, by the grid in Runner.restrictedLetterChangesTheName:
+	// `readonly PATH`, `typeset +x PATH` and `typeset -x ENV` are refused,
+	// while `export PATH` and `typeset +x ENV` are taken. Measured 2026-10-02
+	// (#5506).
+	//
+	// unpinned zsh: every letter is refused there by the wider axis, so this
+	// is never asked. TestRestrictedModeRefusesEveryDeclarationOfAFrozenName
+	// pins it.
+	// unpinned bash: the freeze is a readonly there, so the readonly machinery
+	// answers every letter and this is never asked.
+	// TestBashRestrictedLocalOfAFrozenNameIsTheReadonlyRefusal pins what bash
+	// does.
+	// unpinned dash: no restricted mode, so no name is ever mode-frozen.
+	// TestSetRefusesTheRestrictedLetter pins the refusal that keeps it out.
+	// unpinned ash: the same.
+	// TestSetRefusesTheRestrictedLetter pins the refusal that keeps it out.
+	RestrictedFreezeRefusesALetterThatChangesTheName Answer
 
 	// RestrictedRedirectTakesAProcessSubstitution exempts a writing
 	// redirection whose whole target is one `>(cmd)` from restricted mode's

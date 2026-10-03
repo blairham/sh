@@ -1280,6 +1280,8 @@ func Semantics() interp.Semantics {
 	// `typeset -g PATH` inside a function and a bare `typeset PATH` listing
 	// are taken (#5485).
 	s.RestrictedFreezeRefusesAValuelessDeclaration = interp.Yes
+	// unanswered RestrictedFreezeRefusesALetterThatChangesTheName: every letter
+	// is refused by the axis above, so the narrower question is never asked.
 	// And a writing redirection whose target is one `>(cmd)` is taken in the
 	// mode: `print a > >(cat)` prints `a` at 0 where `>> >(cat)` and a target
 	// that only holds the path are refused (#5485).

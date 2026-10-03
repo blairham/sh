@@ -8244,6 +8244,18 @@ func biReadonly(r *Runner, ctx context.Context, args []string) int {
 		// this line's letter recorded on it and given back at the return. See
 		// Runner.compoundMemberThroughAReference.
 		name = r.compoundMemberThroughAReference(name)
+		if r.restrictedDeclarationRefused(name, f, hasValue, false) {
+			// The freeze `readonly` would add over a name restricted mode
+			// froze, which the dialect that words the two apart refuses in
+			// the mode's words. This loop is where `readonly` declares when
+			// the dialect does not send it through declareNames. See
+			// Runner.restrictedDeclarationRefused.
+			if r.unspecified || r.ctl == controlExit {
+				return r.status
+			}
+			r.assignFailed = true
+			continue
+		}
 		if base, subs, subscripted := r.operandSubscripts("readonly", name); subscripted {
 			sub := subs[len(subs)-1]
 			// The readonly attribute on an element is the axis with three

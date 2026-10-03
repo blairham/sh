@@ -335,8 +335,18 @@ func (r *Runner) killSignal(args []string) (string, syscall.Signal, []string, er
 		// this shell has already said so.
 		return "", 0, nil, nil
 	case isJoined && r.ask(r.sem().KillReadsASignalJoinedToItsOption,
-		"a signal written onto `kill -n` or `kill -s` with no space"):
+		"a signal written onto `kill -n` or `kill -s` with no space") &&
+		(a[1] != 'n' || r.ask(r.sem().KillReadsTheNumberOption, "`kill -n signum`")):
+		// `-n` joined is still `-n`, and a shell without that option refuses
+		// it as one: dash's `kill -n9` is `Illegal option -n`.
 		spec, form, args = joined, killSpecOptionFor(args[0][:2]), args[1:]
+	case len(a) > 2 && a[:2] == "-s" && allDigits(a[2:]) &&
+		r.ask(r.sem().KillReadsASignalJoinedToItsOption,
+			"a signal written onto `kill -n` or `kill -s` with no space") &&
+		r.ask(r.sem().KillJoinsANumberToTheNameOption, "a number written onto `kill -s`"):
+		// The looser reading: `-s9` is `-s 9`. See
+		// Semantics.KillJoinsANumberToTheNameOption.
+		spec, form, args = a[2:], killSpecOption, args[1:]
 	case strings.HasPrefix(a, "-") && len(a) > 1:
 		if r.unspecified {
 			// The axis above went unanswered, and this word is exactly the

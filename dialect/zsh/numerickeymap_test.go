@@ -54,3 +54,29 @@ func TestAWidgetCallSetsNumericAndKeymap(t *testing.T) {
 		t.Errorf("in vi command mode: got %q, want %q", said, want)
 	}
 }
+
+// A count typed before the key is `$NUMERIC` in the widget, and the call
+// options move it as before: with ESC 5 typed, `zle g` sees 5, `-N` 1 and
+// `-n 3` 3, and the widget's own is 5 again after. Measured 2026-10-02 on zsh
+// 5.9.2 through a pseudo-terminal (#5498).
+func TestACountTypedBeforeTheKeyIsNumeric(t *testing.T) {
+	r, out := zleRunner(t, `
+		g() { print -rn -- "${NUMERIC-u} "; }
+		zle -N g
+		f() { print -rn -- "${NUMERIC-u} ${(t)NUMERIC} "; zle g; zle g -N; zle g -n 3; zle g -K vicmd; print -r -- "${NUMERIC-u}"; }
+		zle -N f
+	`)
+	five, minus := 5, -1
+	for _, c := range []struct {
+		n    *int
+		want string
+	}{
+		{&five, "5 integer-local-special 5 1 3 5 5\n"},
+		{&minus, "-1 integer-local-special -1 1 3 -1 -1\n"},
+		{nil, "u  u u 3 u u\n"},
+	} {
+		if _, _, said := runWidget(t, r, out, "f", repl.Line{Numeric: c.n}); said != c.want {
+			t.Errorf("got %q, want %q", said, c.want)
+		}
+	}
+}

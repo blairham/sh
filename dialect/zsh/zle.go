@@ -1366,6 +1366,12 @@ func runWidgetFunction(
 		keymap = "vicmd"
 	}
 	r.SetVar(zleKeymap, keymap)
+	// And the count typed before the key, which is `$NUMERIC` (#5498).
+	numeric := ""
+	if in.Numeric != nil {
+		numeric = strconv.Itoa(*in.Numeric)
+	}
+	r.SetVar(zleNumeric, numeric)
 	// A completion widget looks at the line and does not rewrite it, which is
 	// the completer's presence and not a second flag — see openWidgetParameters.
 	openWidgetParameters(r, def.completer != "")

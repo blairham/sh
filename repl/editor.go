@@ -152,6 +152,19 @@ type editor struct {
 	last       LastWidget
 	keyBytes   []byte
 	keyBinding *Binding
+	// count is the prefix argument being typed or about to be spent, and
+	// countRepeat how many more times the keystroke that spent it is to be
+	// played. See prefixarg.go.
+	count       prefixCount
+	countRepeat int
+	// prefixArgument says ESC and a digit, or ESC and a minus, set a count.
+	prefixArgument bool
+	// countKey says the keystroke in hand was more of a count, read while a
+	// binding was being matched, so it spends nothing.
+	countKey bool
+	// keyNumeric is the count the keystroke in hand spent, handed to a widget
+	// of the shell's as Line.Numeric.
+	keyNumeric *int
 	// transformTermcap is Shell.TransformTermcap bound to the session's
 	// context, or nil. See termcaptransform.go.
 	transformTermcap func(code, arg string) (string, bool)
@@ -433,8 +446,10 @@ func (e *editor) readLine(prompt drawnPrompt) (string, error) {
 	// was marked before the prompt hooks ran; this is the return and the
 	// erase that follow them. See groundForPrompt and markUnfinished.
 	e.groundForPrompt()
-	// Nothing is pasted on a line that has not started.
+	// Nothing is pasted on a line that has not started, and no count is
+	// waiting to be spent.
 	e.forgetPaste()
+	e.count, e.countRepeat = prefixCount{}, 0
 	if e.bracketedPaste && !e.noTerminal {
 		// The terminal is asked to mark pasted text for the length of this
 		// read, and the request is taken back on the way out — where the
@@ -499,6 +514,9 @@ func (e *editor) readLine(prompt drawnPrompt) (string, error) {
 		// session with no descriptor armed, which is every session that has
 		// not asked; see watchfd.go.
 		prompt = e.serveDescriptors(prompt)
+		// The keystroke that spent a count is played again, from the bytes it
+		// was read as, before anything else is read. See prefixarg.go.
+		e.replayCountedKey()
 		n, err := e.nextByte(buf[:])
 		if err != nil {
 			if e.noTerminal && len(e.line) > 0 {
@@ -526,6 +544,14 @@ func (e *editor) readLine(prompt drawnPrompt) (string, error) {
 		// the start of this one's record.
 		e.noteLastKey()
 		e.keyBytes, e.keyBinding = append(e.keyBytes[:0], buf[0]), nil
+		// A count typed before this key is spent by it. Some keys spend it
+		// here and are done — see spendCount — and the rest are played as
+		// many times as it says.
+		if handled, b := e.spendCount(buf[0], prompt); handled {
+			continue
+		} else {
+			buf[0] = b
+		}
 		e.completedBefore, e.lastTab = e.lastTab, false
 		// And whether the keystroke before this one was a menu completion,
 		// which is what decides between stepping the walk it started and
@@ -570,6 +596,7 @@ func (e *editor) readLine(prompt drawnPrompt) (string, error) {
 			return e.abandon(prompt)
 		case claimed && b.Function != "":
 			e.keyBinding = &b
+			e.spendCountOnBinding(b)
 			// An action of the shell's own rather than one of this editor's.
 			// See shellwidget.go. A widget that asked for the line to be
 			// committed gets the same ending a typed Return gets — which is
@@ -589,6 +616,7 @@ func (e *editor) readLine(prompt drawnPrompt) (string, error) {
 			// on the editor now, so the one implementation serves the key and
 			// the widget that calls the action by name alike.
 			e.keyBinding = &b
+			e.spendCountOnBinding(b)
 			e.runWidget(b, prompt)
 			continue
 		}

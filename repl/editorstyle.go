@@ -136,6 +136,10 @@ type EditorStyle struct {
 	// empty; unset, a scalar, one element or three, and neither is written.
 	BracketedPasteParameter string
 
+	// PrefixArgument says ESC and a digit, or ESC and a minus, set a count
+	// for the next keystroke. See prefixarg.go for what zsh does with one.
+	PrefixArgument bool
+
 	// PastedTextStyle is written before a run of text that arrived as a
 	// paste, and PastedTextStyleEnd after it. Empty draws the text like any
 	// other, which is what a dialect that does not mark a paste does.

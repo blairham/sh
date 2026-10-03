@@ -3824,6 +3824,9 @@ func (r *Runner) expandArithText(text string, origin arithTextOrigin) string {
 	if !read {
 		return text
 	}
+	// Arithmetic text is read as a double-quoted string is. See
+	// readingQuotedText.
+	defer r.readingQuotedText()()
 	// Where each subscript the *source* wrote lands in the output, collected
 	// here because nothing in the finished text says which brackets were the
 	// script's: an arrived bracket is the same byte. One reader wants it —

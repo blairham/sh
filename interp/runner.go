@@ -14186,7 +14186,9 @@ func (r *Runner) assign(ctx context.Context, a *syntax.Assign) {
 		if r.indexedSubscriptKeepsItsQuoting(a.IndexText, a.Name) {
 			text = r.expandArithText(a.IndexText, arithTextWritten)
 		} else {
+			endText := r.readingQuotedText()
 			text = r.joinWord(a.Index)
+			endText()
 		}
 		// What a refusal quotes back is the subscript as it was *written*,
 		// which is not the text the arithmetic reads: `i=-9; a[$i]=q` is

@@ -2037,6 +2037,9 @@ func Semantics() interp.Semantics {
 	// An array letter given a plain word: see
 	// interp.Semantics.ArrayLetterWithAWordDeclaresAScalar (#5630).
 	s.ArrayLetterWithAWordDeclaresAScalar = interp.No
+	// A `-p` listing whose first option word is plus-signed: see
+	// interp.Semantics.PlusSignedPrintListsNoValues (#5642).
+	s.PlusSignedPrintListsNoValues = interp.No
 	// `readonly -a` declares the array as well as freezing the name:
 	// `readonly -a a` lists as `typeset -ar a=(  )`.
 	s.ReadonlyRecordsTheCompoundAttribute = interp.Yes

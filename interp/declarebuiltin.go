@@ -1571,6 +1571,20 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) (endSt
 		}
 	}
 	if f.print {
+		if strings.HasPrefix(f.letterSigns, "+") {
+			// The first option word plus-signed, which one dialect reads as
+			// the listing without its values: the key is that word's sign
+			// and not the sign on `p`. See
+			// Semantics.PlusSignedPrintListsNoValues.
+			without := r.ask(r.sem().PlusSignedPrintListsNoValues,
+				"a `-p` listing whose first option word is plus-signed")
+			if r.unspecified {
+				return r.status
+			}
+			outer := r.listingWithoutValues
+			r.listingWithoutValues = without
+			defer func() { r.listingWithoutValues = outer }()
+		}
 		if len(args) == 0 && f.attributeLetterWritten() {
 			// `-p` beside an attribute letter and no operand is the
 			// *filtered* listing, and the filter is built: it is the one

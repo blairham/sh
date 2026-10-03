@@ -250,6 +250,7 @@ ash   RestrictedRefusalEndsWithTheBuiltinsStatus
 ash   ScalarAppendedToAnArrayBecomesANewElement
 ash   ScalarAssignedOverACompoundReplacesTheName
 ash   ArrayLetterWithAWordDeclaresAScalar
+ash   PlusSignedPrintListsNoValues
 ash   ScalarOverACompoundIsAnInconsistentType
 ash   ScalarStoredOverATableIsRefused
 ash   ScalarUnderATableDeclaration
@@ -625,6 +626,7 @@ dash  RestrictedRefusalEndsWithTheBuiltinsStatus
 dash  ScalarAppendedToAnArrayBecomesANewElement
 dash  ScalarAssignedOverACompoundReplacesTheName
 dash  ArrayLetterWithAWordDeclaresAScalar
+dash  PlusSignedPrintListsNoValues
 dash  ScalarOverACompoundIsAnInconsistentType
 dash  ScalarStoredOverATableIsRefused
 dash  ScalarUnderATableDeclaration

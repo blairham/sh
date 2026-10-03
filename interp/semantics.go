@@ -12221,6 +12221,35 @@ type Semantics struct {
 	// unpinned zsh: zsh refuses the pair before this is asked; pinned by
 	// TestTwoDeclarationRowsOverTheShellsOwnParameters.
 	ArrayLetterWithAWordDeclaresAScalar Answer
+	// PlusSignedPrintListsNoValues makes a `-p` listing whose **first option
+	// word carries a plus** write each row without its value: the attribute
+	// letters and the name, and the bare name where there are no letters.
+	// ksh93 does this, while bash and zsh write `+p` exactly as they write `-p`.
+	//
+	// Measured 2026-10-03 on ksh93u+ 2012-08-01 under `-c` (#5642):
+	//
+	//	x=/y; typeset +p x                    x
+	//	typeset -i n=1; typeset +p n          typeset -i n
+	//	typeset -a a=(1 2); typeset +p a      typeset -a a
+	//	typeset -rx r=1; typeset +p r         typeset -x -r r
+	//	typeset -Z3 z=1; typeset +p z         typeset -Z 3 -R 3 z
+	//	typeset -n ref=x; typeset +p ref      typeset -n ref
+	//	typeset +p (whole table)              each row as above
+	//	typeset +p s=5                        s   (and `s` holds 5)
+	//
+	// The key is the first word's sign, not the sign of `p`: `typeset +i
+	// -p n` and `typeset +x +p n` drop the value, while `typeset -i +p n`
+	// and `typeset -p +p n` keep it. Against these, bash 5.3.20's `declare +p
+	// x` gives `declare -- x="/y"` and zsh 5.9's `typeset +p x` gives `typeset
+	// x=/y`, as their `-p` does.
+	//
+	// unpinned ksh: no corpus row lists with `+p`; pinned by
+	// TestAPlusSignedPrintListsNoValues.
+	//
+	// unpinned bash: likewise, pinned by TestAPlusPrintListsAsTheMinusDoes.
+	//
+	// unpinned zsh: likewise, pinned by TestAPlusPrintListsAsTheMinusDoes.
+	PlusSignedPrintListsNoValues Answer
 	// ReadonlyRecordsTheCompoundAttribute makes `readonly -a` and
 	// `readonly -A` declare an array and a table the way `typeset -a` and
 	// `typeset -A` do, rather than freezing a name and saying nothing about

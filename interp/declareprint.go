@@ -905,9 +905,31 @@ func (r *Runner) declarePrintFiltered(names []string, form DeclarationListingFor
 			// bare-assignment form is the one this engine renders those with.
 			continue
 		}
+		if r.listingWithoutValues {
+			r.printf("%s\n", r.listedDeclarationWithoutValue(form, d))
+			continue
+		}
 		r.printf("%s\n", r.listedDeclaration(form, d))
 	}
 	return status
+}
+
+// listedDeclarationWithoutValue is a row as a plus-signed `-p` writes it in
+// the dialect that drops values: the form's own row, cut after the name. In
+// the one dialect that answers Yes, that is the letters and the name
+// (`typeset -i n`) and the bare name where there are no letters (`x`). Cut
+// from the rendered row rather than rendered again, so every form drops its
+// value in the same place. No letter word holds an `=`, so the first `name=`
+// in a row is the name's own. See Semantics.PlusSignedPrintListsNoValues.
+func (r *Runner) listedDeclarationWithoutValue(form DeclarationListingForm, d declaration) string {
+	row := r.listedDeclaration(form, d)
+	if strings.HasPrefix(row, d.name+"=") {
+		return d.name
+	}
+	if i := strings.Index(row, " "+d.name+"="); i >= 0 {
+		return row[:i+1+len(d.name)]
+	}
+	return row
 }
 
 func (r *Runner) listedDeclaration(form DeclarationListingForm, d declaration) string {

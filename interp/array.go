@@ -2598,6 +2598,12 @@ func (r *Runner) subscriptOver(e *syntax.ParamExpr, src subscriptSource) ([]stri
 		r.reportBadSubstitution(e)
 		return nil, true
 	}
+	if scalar {
+		// One index, which the readers below each ask about; a range's two
+		// ends are two expressions and are read on their own above, so
+		// `${s[++i,++i]}` still steps twice.
+		defer r.holdSubscriptValues()()
+	}
 	if scalar && r.scalarReadsAsCharacters(elems[0], idx) {
 		if c, ok := r.charAt(elems[0], idx); ok {
 			return []string{c}, true
@@ -3588,6 +3594,40 @@ func (r *Runner) expressionValue(text string) (int, error) {
 	if n, err := strconv.Atoi(strings.TrimSpace(text)); err == nil {
 		return n, nil
 	}
+	if held, ok := r.subscriptValuesHeld[text]; ok {
+		return held.n, held.err
+	}
+	n, err := r.expressionValueOnce(text)
+	if r.subscriptValuesHeld != nil {
+		r.subscriptValuesHeld[text] = heldSubscriptValue{n: n, err: err}
+	}
+	return n, err
+}
+
+// heldSubscriptValue is what one subscript expression came to, kept for the
+// other readers of the same subscript. See Runner.holdSubscriptValues.
+type heldSubscriptValue struct {
+	n   int
+	err error
+}
+
+// holdSubscriptValues makes every reading of a subscript's expression until
+// the returned function runs share one evaluation, so a step or an assignment
+// inside it happens once.
+//
+// A scalar's subscript is asked about by more than one reader — whether it
+// names a character or the element, the character, the element — and each
+// read the expression for itself, so `i=1; s=abc; print ${s[++i]} $i` stepped
+// `i` three times and read past the end where zsh 5.9.2 prints `b 2`, and
+// bash 5.3.20 and ksh93 left `i` at 3 where they leave 1 (#5659).
+func (r *Runner) holdSubscriptValues() func() {
+	saved := r.subscriptValuesHeld
+	r.subscriptValuesHeld = map[string]heldSubscriptValue{}
+	return func() { r.subscriptValuesHeld = saved }
+}
+
+// expressionValueOnce is expressionValue's evaluation.
+func (r *Runner) expressionValueOnce(text string) (int, error) {
 	// Read as written, blanks and all. The complaint quotes the text back and
 	// the caller has only the untrimmed one to quote, so trimming here made
 	// the two disagree: ksh93 answers `${a[ 1/0 ]}` with ` 1/0 : divide by

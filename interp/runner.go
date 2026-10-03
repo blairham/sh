@@ -3123,6 +3123,10 @@ type Runner struct {
 	// liveMarksFor is the expansion the word loop is expanding, whose `:s`
 	// replacement may mark the pattern characters it wrote. See liveMark.
 	liveMarksFor *syntax.ParamExpr
+	// subscriptValuesHeld is what each subscript expression came to while one
+	// subscript is being read, so its readers share one evaluation. See
+	// Runner.holdSubscriptValues.
+	subscriptValuesHeld map[string]heldSubscriptValue
 	// liveMarksAtHead says that expansion opens its word. See headTokenMark.
 	liveMarksAtHead bool
 	// expandingRawText says the expansion running is part of a text read as

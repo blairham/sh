@@ -333,6 +333,9 @@ func (c *Runner) ownTables(r *Runner) {
 	// the table above travels with DynamicAssocs.
 	c.dynamicArrayWriters = maps.Clone(r.dynamicArrayWriters)
 	c.silentToPrint = maps.Clone(r.silentToPrint)
+	// A subshell reads its own subscripts: the held values are one read's,
+	// and the parent's read is not the child's. See holdSubscriptValues.
+	c.subscriptValuesHeld = nil
 	// absentElements travels with DynamicAssocs and the two tables beside
 	// it — the keyed reading and the writer — and copying some of that group
 	// and not the rest would be the split dynamicWriters describes below: a subshell owning the producer while sharing the sentence a key

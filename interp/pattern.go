@@ -283,20 +283,55 @@ func (r *Runner) markWrittenBars(pattern string, valueAt [][2]int) string {
 	}
 	var b strings.Builder
 	depth, last := 0, 0
+	// Where a bare parenthesis is text (patternOpts.bareParenIsText), a bar
+	// inside one stands at the top level, and there the provenance rule is
+	// the other way round: a bar the script wrote divides the pattern and
+	// one a value supplied is a character. Measured on zsh 5.9.2 with
+	// `shglob` and `kshglob`: `[[ 'a(b' == a(b|c) ]]` matches and, with
+	// `L='a(b|c)'`, `[[ 'a(b' == ${~L} ]]` does not (#5467).
+	bare := r.lang().BarePatternGroupInsideAWord && !r.lang().PatternAlternation
+	var counted []bool
+	bareDepth := 0
 	for i := 0; i < len(pattern); i++ {
 		switch pattern[i] {
 		case '\\':
 			i++
 		case '(':
-			depth++
+			opens := !bare || (i > 0 && strings.IndexByte("@?*+!", pattern[i-1]) >= 0)
+			counted = append(counted, opens)
+			if opens {
+				depth++
+			} else {
+				bareDepth++
+			}
 		case ')':
-			depth--
+			if n := len(counted); n > 0 {
+				if counted[n-1] {
+					depth--
+				} else {
+					bareDepth--
+				}
+				counted = counted[:n-1]
+			} else {
+				depth--
+			}
 		case '[':
 			if end, ok := bracketEnd(pattern, i, r.emptyBracketCompiles()); ok {
 				i = end
 			}
 		case '|':
-			if depth != 0 || !written(i) {
+			if depth != 0 {
+				continue
+			}
+			if bareDepth > 0 {
+				if written(i) {
+					continue
+				}
+			} else if !written(i) && r.lang().PatternAlternation {
+				// A value's bar divides the pattern only where groups do:
+				// measured on zsh 5.9.2, `L='a|b'; [[ b == ${~L} ]]` matches,
+				// and does not once `shglob` is on, with or without
+				// `kshglob` (#5467).
 				continue
 			}
 			b.WriteString(pattern[last:i])

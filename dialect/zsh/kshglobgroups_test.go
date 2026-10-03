@@ -60,6 +60,14 @@ func TestShGlobWithKshGlobReadsABareParenthesisAsText(t *testing.T) {
 	for _, c := range []struct{ src, want string }{
 		{"setopt shglob kshglob; case 'a(b' in a(b|c)) print C;; esac", "C\n"},
 		{"[[ ab == a(b|c) ]] && print Z", "Z\n"},
+		// A trim's operand does not read the bar, and a value's bar is a
+		// character under `shglob`, inside a bare parenthesis or not.
+		{`setopt shglob kshglob; v='a(bX'; print -r -- ${v#a(b|c)}`, "a(bX\n"},
+		{`setopt shglob kshglob; L='a(b|c)'; [[ 'a(b' == ${~L} ]] && print no; print end`, "end\n"},
+		{`setopt shglob; L='a|b'; [[ b == ${~L} ]] && print no; v=bX; print -r -- ${v#${~L}}`, "bX\n"},
+		{`emulate sh; L='a|b'; [[ b == ${~L} ]] && print no; print end`, "end\n"},
+		// The control: without `shglob` a value's bar divides the pattern.
+		{`L='a|b'; [[ b == ${~L} ]] && print LV; v=bX; print -r -- ${v#${~L}}`, "LV\nX\n"},
 	} {
 		out, _ := runZsh(t, t.TempDir(), c.src+"\n")
 		if out != c.want {

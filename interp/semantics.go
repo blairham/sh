@@ -9150,6 +9150,37 @@ type Semantics struct {
 	// cleanly never reaches it.
 	ConditionArithmeticErrorIsFatal Answer
 
+	// ConditionFinishesAfterAnArithmeticError lets a `[[ ]]` whose arithmetic
+	// failed run to its end before the line is abandoned, every later
+	// arithmetic evaluation in it reading 0 without being evaluated, so that
+	// the status the shell ends with is the condition's own. zsh. bash and
+	// ksh93 abandon at the failure — and only bash carries on afterwards,
+	// which is ConditionArithmeticErrorIsFatal's question.
+	//
+	// Measured 2026-10-03 on zsh 5.9.2 under `env -i PATH=/usr/bin:/bin`,
+	// `-f -c`, with `a=(x y z)` and `echo after` behind each (#5588). Every
+	// row writes the complaint and no `after`; the column is the exit status:
+	//
+	//	[[ -v 'a[1/0]' ]]                1      the failed lookup is unset
+	//	[[ ! -v 'a[1/0]' ]]              0      and its negation holds
+	//	[[ ! ! -v 'a[1/0]' ]]            1
+	//	[[ -v 'a[1/0]' || 1 -eq 2 ]]     0      0 -eq 0, read after the failure
+	//	[[ -v 'a[1/0]' && 1 -eq 1 ]]     1      the && never reads its right
+	//	[[ 1 -eq 2 || ! -v 'a[1/0]' ]]   0
+	//	[[ 1/0 -eq 1 ]]                  0      the failed side is 0, and so
+	//	[[ 1 -eq 1/0 ]]                  1      is the side read after it
+	//	[[ 2 -gt 1/0 ]]                  0
+	//	[[ ! 1/0 -eq 1 ]]                1
+	//
+	// bash 5.3.20 and ksh93u+ exit 1 on every one of the `-v` rows. The
+	// operand that would not *expand* is not this — `[[ ! $((1/0)) -eq 0 ]]`
+	// is 1 in zsh too — because that failure is the word's and happens
+	// before the condition is evaluated at all.
+	//
+	// Asked only on the failure path, and only where
+	// ConditionArithmeticErrorIsFatal says the failure ends the input.
+	ConditionFinishesAfterAnArithmeticError Answer
+
 	// ArithCommandErrorStatusIsTwo is what `(( expr ))` leaves behind when
 	// the expression could not be evaluated: 2 where this is Yes, 1 where it
 	// is No.
@@ -30877,6 +30908,8 @@ func PosixSemantics() Semantics {
 		// shell goes on, which is what POSIX asks of every failure that is
 		// not a special builtin's.
 		ConditionArithmeticErrorIsFatal: No,
+		// And with nothing fatal there is nothing to finish before.
+		ConditionFinishesAfterAnArithmeticError: No,
 		// The standard has no `(( ))` at all, so nothing here is POSIX's to
 		// say; 1 is what the shells that do have it say, bar one.
 		ArithCommandErrorStatusIsTwo: No,

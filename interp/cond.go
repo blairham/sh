@@ -43,6 +43,16 @@ func (r *Runner) testClause(ctx context.Context, c *syntax.TestClause) error {
 		// abandon this one. See Runner.beginHeading.
 		r.beginHeading()
 		ok, err := r.evalCond(ctx, c.Expr)
+		if r.condFinishing {
+			// The condition ran to its end after its arithmetic failed, and
+			// what it came to is the status the line is abandoned with.
+			r.condFinishing = false
+			if err == nil {
+				r.status = r.statusAfterAFinishedCondition(ok)
+				r.abandonOverArithmetic()
+				return nil
+			}
+		}
 		if r.unspecified {
 			r.status = 2
 			return nil
@@ -359,6 +369,14 @@ func (r *Runner) evalCondUnary(x *syntax.CondUnary) (bool, error) {
 		// the builtin's does not is which brackets were written: see
 		// condParameterIsSet.
 		set, err := r.condParameterIsSet(x.X, s)
+		if err == nil && r.expandErr && r.ctl == controlNone && !r.unspecified &&
+			r.conditionFinishesAfterAFailure() {
+			// The failed lookup is a name that is not set, and the
+			// condition runs on. See Semantics.ConditionFinishesAfterAnArithmeticError.
+			r.expandErr, r.badSubscript = false, false
+			r.condFinishing = true
+			return false, nil
+		}
 		if err == nil && r.condOperandDidNotExpand() {
 			// A subscript that would not evaluate has been reported where
 			// it failed, and it ends what a failed expansion ends rather
@@ -885,11 +903,30 @@ func (r *Runner) conditionSubscriptText(marked, plain string) string {
 // the expression parser has no primary to offer for nothing at all, so the
 // case is answered before it is asked.
 func (r *Runner) condArith(text string) (int, error) {
+	if r.condFinishing {
+		// Read after the failure, which is 0 without being evaluated.
+		return 0, nil
+	}
 	v, msg := r.conditionOperand(text)
 	if msg != "" {
+		if r.conditionFinishesAfterAFailure() {
+			r.diagf("%s\n", r.diag().arithConstructFailure("[[", msg))
+			r.condFinishing = true
+			return 0, nil
+		}
 		return 0, r.condArithFailed(r.diag().arithConstructFailure("[[", msg))
 	}
 	return v, nil
+}
+
+// conditionFinishesAfterAFailure reports whether a `[[ ]]` that met an
+// arithmetic failure runs to its end before the line is abandoned. Asked on
+// the failure path only, behind the fatal answer it refines. See
+// Semantics.ConditionFinishesAfterAnArithmeticError.
+func (r *Runner) conditionFinishesAfterAFailure() bool {
+	return r.sem().ConditionArithmeticErrorIsFatal == Yes &&
+		r.ask(r.sem().ConditionFinishesAfterAnArithmeticError,
+			"a `[[ ]]` running to its end after its arithmetic failed")
 }
 
 // conditionOperand is the reading itself: the value, or the dialect's worded
@@ -1230,4 +1267,26 @@ func (r *Runner) wordAsWritten(w *syntax.Word) string {
 		return text[from:to]
 	}
 	return syntax.PrintWord(w)
+}
+
+// statusAfterAFinishedCondition is the status a `[[ ]]` that ran to its end
+// after a failure leaves the shell it abandons: the condition's own where what
+// ends is a subshell or a command string's own text, and 1 where it is a
+// script read from a file or standard input, or text `eval` or `.` was
+// running. Measured 2026-10-03 on zsh 5.9.2 with `a=(x y z)` and `[[ ! -v
+// 'a[1/0]' ]]`, whose condition holds:
+//
+//	-c, at the top                 exits 0
+//	a script file, at the top      exits 1    and so does standard input
+//	eval '…'; echo st=$?           st=1
+//	( … ); echo st=$?              st=0       on both routes
+//	f() { … }; f                   exits 0 under -c, 1 from a file
+//
+// so the route and the boundary decide it, and the condition only shows
+// through where nothing between it and the exit says 1 (#5588).
+func (r *Runner) statusAfterAFinishedCondition(held bool) int {
+	if r.inSubshell || (r.Route == RouteCommandString && len(r.borrowed) == 0) {
+		return boolInt(!held)
+	}
+	return 1
 }

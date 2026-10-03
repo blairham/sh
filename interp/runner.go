@@ -5078,6 +5078,10 @@ type Runner struct {
 	// value — see MarkShellOwnParameterWhileSet. Written at setup and never
 	// again, so a subshell shares it.
 	shellOwnWhileSet map[string]bool
+	// condFinishing says the `[[ ]]` being evaluated has met an arithmetic
+	// failure and is running to its end before the line is abandoned. See
+	// Semantics.ConditionFinishesAfterAnArithmeticError.
+	condFinishing bool
 	// envNotAdopted names the parameters whose entry in the environment this
 	// shell **did not take over**: the value is the shell's own, the entry
 	// goes to a child as it arrived, and the export the environment brought

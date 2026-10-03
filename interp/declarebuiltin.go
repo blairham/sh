@@ -2351,7 +2351,7 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) (endSt
 				return r.status
 			}
 		case hasValue && slot == ArrayParameter && valueTarget == "":
-			r.setArray(name, []string{value})
+			r.setDeclaredSlotArray(name, value)
 		case hasValue:
 			r.setVarAs(r.orName(valueTarget, name), value, assignedByDeclaration)
 			if r.ctl == controlExit {

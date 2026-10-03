@@ -220,3 +220,19 @@ func (r *Runner) localSlotKind(name string, f declareFlags) ParameterKind {
 	}
 	return ScalarParameter
 }
+
+// setDeclaredSlotArray stores a scalar value a declaration gave one of the
+// shell's own array slots: the array of that one value, and an empty value is
+// no element at all, where the same assignment outside a declaration is one
+// empty element. Measured 2026-10-03 on zsh 5.9.2: `f(){ local path=;
+// print $#path }` is 0, as are `local path=""`, `local fpath=` and
+// `typeset path=`, while a global `path=` is 1 (#5151, a chunk of
+// D04parameter.ztst). One function for `local` and `typeset`, which reach it
+// by two routes.
+func (r *Runner) setDeclaredSlotArray(name, value string) {
+	if value == "" {
+		r.setArray(name, nil)
+		return
+	}
+	r.setArray(name, []string{value})
+}

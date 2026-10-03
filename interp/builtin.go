@@ -8027,7 +8027,7 @@ func biLocal(r *Runner, _ context.Context, args []string) (endStatus int) {
 				return r.status
 			}
 		case hasValue && slot == ArrayParameter:
-			r.setArray(name, []string{value})
+			r.setDeclaredSlotArray(name, value)
 		case hasValue:
 			r.setVar(name, value)
 			if r.ctl == controlExit {

@@ -389,8 +389,23 @@ func (r *Runner) expandWordFieldsTracked(w *syntax.Word, track bool) ([]string, 
 		// that does write a closing field is zsh's, and there the split says
 		// so rather than this line having to know it: see
 		// TrailingSeparatorEndsAField and splitFieldsAskEdge.
+		// What a leading `~` became is not the word's own text and does not
+		// split with it. Measured 2026-10-02 on zsh 5.9.2 under `emulate -L
+		// sh` with `HOME='/a b'`: `${1:-~}` is the one field `/a b`, and
+		// `${1:-~/x y}` is `/a b/x` and `y` (#5151).
+		produced := ""
+		if substituted && s.TildeLen > 0 && s.TildeLen <= len(text) {
+			produced, text = text[:s.TildeLen], text[s.TildeLen:]
+		}
 		lead := leadingSeparatorEdge(text, nil, ifs, set)
 		fields, openEnd := r.splitFieldsAskEdge(text, nil, ifs, set)
+		if produced != "" {
+			if len(fields) == 0 {
+				fields = []string{produced}
+			} else {
+				fields[0] = produced + fields[0]
+			}
+		}
 		// No marks: what the splitter made of a scalar is an ordinary field,
 		// empty ones included — `IFS=:; v=':b'; $v` is `[][b]` in bash,
 		// ksh93 and dash. The **edges** travel with them, because the
@@ -7654,6 +7669,9 @@ func (h tildeHead) same(o tildeHead) bool {
 func (h tildeHead) apply(spans []syntax.Span, start int) {
 	if !h.moved {
 		return
+	}
+	if start == 0 {
+		spans[0].TildeLen = len(h.dir)
 	}
 	if h.span == 0 {
 		spans[0].Value = spans[0].Value[:start] + h.dir + spans[0].Value[h.off:]

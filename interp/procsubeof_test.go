@@ -19,13 +19,11 @@ import (
 
 // `cat <(cmd)` finishes, every time.
 //
-// The regression case for #1079, and it is a stress case because the defect is
-// a race and there is no other honest shape for it. The mechanism, the
-// evidence and the standalone reproduction are in interp.nudgeFifoEOF.
-//
-// It is also what says the reading end #2733 added is not a replacement for
-// that repeated close: with the nudge taken out and only the placeholder
-// left, the second shape below parked at round 991 of 2000.
+// The regression case for #1079, and it is a stress case because the defect was
+// a race and there is no other honest shape for it. The FIFO that race lived in
+// is gone — a substitution is a descriptor's own name now, see
+// newProcSubPipe — and the case stays because a hang here is the one way that
+// change could regress without anything else noticing.
 //
 // # What it detects, measured on the unfixed tree
 //
@@ -63,6 +61,23 @@ import (
 // `cancel()` and then `<-done` returns, which before #1075 it would not have:
 // the runner consults its context now, so a round that would have hung is
 // stopped and the case reports a round number instead of a package timeout.
+//
+// # Why the bound is a minute
+//
+// A hang is forever, so the bound only has to be longer than anything that
+// is not a hang, and this machine's own process creation is not bounded the
+// way a round is. Measured 2026-10-02 on macOS at load 12 to 20 (#5543): a
+// round that passed the old eight-second bound had the shell in `forkExec`
+// waiting for `cat` to start, or `cat` stuck in `exit`, and finished 0.5 to
+// 4.8 seconds later with nothing changed. An independent process spawning
+// `/bin/cat` in a loop at the same time took **24 seconds** for one spawn
+// across the same window, and three separate test processes stalled at the
+// same moment. So the stall was the host's, and an eight-second bound was
+// grading it. The minute is that 24 seconds with room to spare, and it costs
+// nothing on a passing run.
+//
+// It still fires on the defect: with the end-of-file release taken out of
+// procSub, the case stops at round 0 after the minute and names the shape.
 func TestAProcessSubstitutionAlwaysDeliversItsEndOfFile(t *testing.T) {
 	defer runtime.GOMAXPROCS(runtime.GOMAXPROCS(1))
 
@@ -96,7 +111,7 @@ func TestAProcessSubstitutionAlwaysDeliversItsEndOfFile(t *testing.T) {
 					defer close(done)
 					_, _ = r.Run(ctx, f)
 				}()
-				timer := time.NewTimer(8 * time.Second)
+				timer := time.NewTimer(time.Minute)
 				select {
 				case <-done:
 					timer.Stop()

@@ -6,7 +6,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/blairham/sh/actions/workflows/ci.yml"><img src="https://github.com/blairham/sh/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://github.com/blairham/sh/actions/workflows/ci.yml?query=branch%3Amain+event%3Apush"><img src="https://github.com/blairham/sh/actions/workflows/ci.yml/badge.svg?branch=main&amp;event=push" alt="CI"></a>
   <a href="https://github.com/blairham/sh/releases/latest"><img src="https://img.shields.io/github/v/release/blairham/sh?sort=semver" alt="Release"></a>
   <a href="https://github.com/blairham/sh/actions/workflows/codeql.yml"><img src="https://github.com/blairham/sh/actions/workflows/codeql.yml/badge.svg" alt="CodeQL"></a>
   <a href="https://scorecard.dev/viewer/?uri=github.com/blairham/sh"><img src="https://api.securityscorecards.dev/projects/github.com/blairham/sh/badge" alt="OpenSSF Scorecard"></a>

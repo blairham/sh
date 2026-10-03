@@ -2198,6 +2198,22 @@ func (r *Runner) expandAtList(s syntax.Span, sp splitPolicy, head bool) ([]strin
 		// (#2980).
 		r.checkNounsetElement(e, elems)
 		r.checkNounsetWholeArray(e)
+		if len(elems) == 0 && e.Op == syntax.ParamNone && !e.Length && !e.Indirect &&
+			r.rcExpandOn(s) && r.subscriptNamesOneValue(e) {
+			// A lookup that names one value and found none is the empty
+			// string rather than an empty list, so a distributing word keeps
+			// the text around it — and like any empty unquoted value it is
+			// no field on its own. Measured 2026-10-02 on zsh 5.9.2 with
+			// `setopt rcexpandparam`, `a=(p q)` and `typeset -A h; h=(X x)`:
+			//
+			//	n=$a[5]  v=$a[(r)Y]  k=$h[(i)y]  m=$h[zz]   n= v= k= m=
+			//	z=$a[(R)Y]  w=$h[(I)y]                      no word: a list
+			//	print -l S $a[5] E                          S, E
+			//
+			// (#5151, a chunk of D04parameter.ztst).
+			r.listNulls = []bool{true}
+			return []string{""}, true
+		}
 		if e.Indirect && !dotRanged(e) {
 			// A range has already answered with the subscripts it named.
 			//

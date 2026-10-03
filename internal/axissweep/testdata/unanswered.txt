@@ -249,6 +249,7 @@ ash   RestrictedRedirectTakesAProcessSubstitution
 ash   RestrictedRefusalEndsWithTheBuiltinsStatus
 ash   ScalarAppendedToAnArrayBecomesANewElement
 ash   ScalarAssignedOverACompoundReplacesTheName
+ash   ArrayLetterWithAWordDeclaresAScalar
 ash   ScalarOverACompoundIsAnInconsistentType
 ash   ScalarStoredOverATableIsRefused
 ash   ScalarUnderATableDeclaration
@@ -623,6 +624,7 @@ dash  RestrictedRedirectTakesAProcessSubstitution
 dash  RestrictedRefusalEndsWithTheBuiltinsStatus
 dash  ScalarAppendedToAnArrayBecomesANewElement
 dash  ScalarAssignedOverACompoundReplacesTheName
+dash  ArrayLetterWithAWordDeclaresAScalar
 dash  ScalarOverACompoundIsAnInconsistentType
 dash  ScalarStoredOverATableIsRefused
 dash  ScalarUnderATableDeclaration

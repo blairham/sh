@@ -2108,6 +2108,14 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) (endSt
 				continue
 			}
 		}
+		if df.array && hasValue && !appends && r.operandIsAPlainWord(name) &&
+			r.ask(r.sem().ArrayLetterWithAWordDeclaresAScalar,
+				"an array letter declaring a name given a plain word") {
+			// The letter declares nothing the word does not: the name is a
+			// scalar holding the word. See
+			// Semantics.ArrayLetterWithAWordDeclaresAScalar.
+			df.array = false
+		}
 		// What this name carries before the letters land, for the operand
 		// to put back if it is refused: a refusal bash reports leaves the
 		// name exactly as it found it. Read here rather than at the top of
@@ -6598,4 +6606,14 @@ func (r *Runner) namerefLetterIsDropped(df declareFlags) bool {
 	// A local binding is what refuses: inside a function, and not sent to the
 	// global table by `-g`.
 	return df.global || len(r.scopes) == 0
+}
+
+// operandIsAPlainWord reports whether a declaration operand's value is one
+// plain word. An array literal is not one, whether written or read back from
+// inside quotes in a dialect that does that (`x="(1 2)"`). A quoted
+// word that only looks like a literal is a plain word where the dialect does
+// not read it back: ksh93u+ answers `typeset -a x="(a b)"` with the scalar
+// `x='(a b)'` (#5630).
+func (r *Runner) operandIsAPlainWord(name string) bool {
+	return !r.literalOperands[name] && !r.rereadingAQuotedLiteral
 }

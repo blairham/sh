@@ -1849,6 +1849,9 @@ func Semantics() interp.Semantics {
 	s.ValuelessDeclarationOfAHeldNameListsIt = interp.No
 	// And a plain word over a name holding an array is taken.
 	s.ScalarOverACompoundIsAnInconsistentType = interp.No
+	// An array letter given a plain word: see
+	// interp.Semantics.ArrayLetterWithAWordDeclaresAScalar (#5630).
+	s.ArrayLetterWithAWordDeclaresAScalar = interp.Yes
 	// A frozen name refuses a declaration's array literal here, which is the
 	// answer every column but one gives: measured 2026-09-12, `readonly q=1;
 	// typeset -g q=(b)` is `q: is read only` at 1, where zsh replaces the

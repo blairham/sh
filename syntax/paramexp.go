@@ -318,6 +318,11 @@ type ParamExpr struct {
 	//
 	// Empty for a node the parser did not fill, where the reconstruction is
 	// all there is. See interp/modifier.go.
+	//
+	// The two set operators and the two zips fill ArgText too: their operand
+	// is the name of an array, and a name that is not one is refused in the
+	// characters it was written in — `${x:^ y}` names ` y`, space and all.
+	// See interp/arrayzip.go.
 	ArgText, Arg2Text string
 	// OperandUnreadable is the failure of the operand's **second read**, kept
 	// here instead of refusing the file, and nil for every expansion anybody
@@ -2151,6 +2156,11 @@ func (p *Parser) fillParamArgs(e *ParamExpr, rest string, start Pos, q Quoting) 
 		ParamZip, ParamZipCycle:
 		if rest != "" {
 			e.Arg = p.patternFrom(rest, start)
+		}
+		if e.Op == ParamSetDifference || e.Op == ParamSetIntersection || e.Op == ParamZip || e.Op == ParamZipCycle {
+			// The operand is a name, and refused as written when it is not
+			// one. See ParamExpr.ArgText.
+			e.ArgText = rest
 		}
 	default:
 		if rest != "" {

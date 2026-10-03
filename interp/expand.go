@@ -1015,6 +1015,14 @@ func (r *Runner) globFields(fields []string) []string {
 		out = append(out, fields[:upTo]...)
 	}
 	for i, f := range fields {
+		if strings.HasPrefix(f, equalsMark) {
+			// A field that opens on an operand's own `=`. See equalsMark.
+			if out == nil {
+				begin(i, 0)
+			}
+			out = append(out, r.equalsHeadField(f[len(equalsMark):])...)
+			continue
+		}
 		matches, dropped := r.glob(f)
 		switch {
 		case len(matches) > 0:
@@ -9742,4 +9750,39 @@ func (r *Runner) readingQuotedText() func() {
 	saved := r.expandingRawText
 	r.expandingRawText = true
 	return func() { r.expandingRawText = saved }
+}
+
+// equalsMark opens a field whose first character is an `=` an operand wrote
+// unquoted and a flag group kept as it was, which the word then reads as an
+// `=cmd` head. Measured 2026-10-03 on zsh 5.9.2 under `-f`: `print -r -
+// ${(q):-=}a` is `a not found`, as `=a` written there would be, while
+// `${(q):-=}` alone prints `=` and `${(qq):-=}a` prints `'='a`. Only the
+// flagged path at the head of a word sets it; see Runner.equalsHeadMark.
+const equalsMark = "\uf8fd"
+
+// equalsHeadMark is equalsMark where a flagged word at the head of its word
+// opens on a live `=`, and nothing otherwise.
+func (r *Runner) equalsHeadMark(head bool, v string) string {
+	if head && strings.HasPrefix(v, liveMark+"=") {
+		return equalsMark
+	}
+	return ""
+}
+
+// equalsHeadField reads a marked field as `=cmd`: the path where there is a
+// name after the `=`, the refusal where none is found, and the field as it is
+// where it is the `=` alone.
+func (r *Runner) equalsHeadField(f string) []string {
+	text := globUnescape(f)
+	if len(text) < 2 || !r.ask(r.sem().EqualsExpansion, "`=cmd` expanding to a path") {
+		return []string{text}
+	}
+	path, ok := r.equalsPath(text[1:])
+	if !ok {
+		if r.expandErr {
+			return nil
+		}
+		return []string{text}
+	}
+	return []string{path}
 }

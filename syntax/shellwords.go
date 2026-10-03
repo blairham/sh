@@ -3,6 +3,8 @@
 
 package syntax
 
+import "strings"
+
 // ShellSplit says how ShellWords reads the text it is given.
 type ShellSplit struct {
 	// Comments is what a `#` where a word could begin means. See CommentMode.
@@ -113,12 +115,22 @@ func ShellWords(src string, d Dialect, opt ShellSplit) []string {
 
 	var out []string
 	lastWasOneDigitFd := false
+	// The token before this one, for the two joins that need to know what
+	// was written against what.
+	var prevKind Kind
+	var prevEnd, prevStart int32 = -1, -1
+	// The command word the current command opened with, and the open
+	// parentheses of a declaration's array value still being read.
+	cmdWord, atCommand := "", true
+	depth := 0
+	var wordFrom int32
 	for _, t := range toks {
 		if t.Kind == TokEOF {
 			continue
 		}
 		if t.Kind == TokNewline {
 			lastWasOneDigitFd = false
+			cmdWord, atCommand = "", true
 			if opt.NewlineIsBlank {
 				continue
 			}
@@ -162,7 +174,109 @@ func ShellWords(src string, d Dialect, opt ShellSplit) []string {
 		}
 		lastWasOneDigitFd = t.Kind == TokIONumber && len(w) == 1
 
+		n := len(out)
+		if depth > 0 {
+			// Inside a declaration's array value, which is one word.
+			switch t.Kind {
+			case TokLeftParen:
+				depth++
+			case TokRightParen:
+				depth--
+			}
+			out[n-1] = src[wordFrom:t.End.Offset]
+			prevKind, prevEnd = t.Kind, t.End.Offset
+			continue
+		}
+		switch t.Kind {
+		case TokSemi, TokAndAnd, TokOrOr, TokPipe, TokAmp, TokPipeAmp:
+			cmdWord, atCommand = "", true
+		}
+		switch {
+		case t.Kind == TokLeftParen && n > 0 && prevEnd == t.Pos.Offset && endsAnAssignment(out[n-1]):
+			// An array assignment's opening parenthesis is the assignment's:
+			// `x=(a b)` is `x=(`, `a`, `b`, `)`. Only written against the
+			// `=` — `x= (a)` keeps them apart. And an operand of a
+			// declaration is the whole of it, through its closing
+			// parenthesis: `typeset x=(a b)` is `typeset`, `x=(a b)`.
+			out[n-1] += w
+			if isDeclarator(cmdWord) {
+				depth, wordFrom = 1, prevStart
+			}
+			prevKind, prevEnd = t.Kind, t.End.Offset
+			continue
+		case t.Kind == TokRightParen && n > 0 && prevKind == TokLeftParen && prevEnd == t.Pos.Offset && out[n-1] == "(":
+			// An empty pair written as one is one word, the function
+			// definition's `()`: `f() {}` and `() { :; }`.
+			out[n-1] += w
+			prevKind, prevEnd = t.Kind, t.End.Offset
+			continue
+		case n > 0 && out[n-1] == "for" && strings.HasPrefix(w, "((") && strings.HasSuffix(w, "))"):
+			// The arithmetic `for`'s header is its parentheses and each of
+			// its three expressions. See arithForWords.
+			out = append(out, arithForWords(w)...)
+			prevKind, prevEnd = t.Kind, t.End.Offset
+			continue
+		}
+		if t.Kind == TokWord && atCommand {
+			cmdWord, atCommand = w, false
+		}
+		prevKind, prevEnd, prevStart = t.Kind, t.End.Offset, t.Pos.Offset
 		out = append(out, w)
 	}
 	return out
+}
+
+// isDeclarator reports whether a command word is one of the declaration
+// utilities whose operands the shell with the flag reads as whole
+// assignments. Measured on zsh 5.9.2: `typeset x=(a b)` and `local -a
+// y=(1)` each keep the array value as one word, where a plain `x=(a b)` is
+// four.
+func isDeclarator(w string) bool {
+	switch w {
+	case "typeset", "local", "declare", "export", "readonly", "integer", "float":
+		return true
+	}
+	return false
+}
+
+// endsAnAssignment reports whether a word is an assignment with nothing on
+// its right yet — `x=`, `x+=`, `a[1]=` — which a parenthesis written against
+// it opens an array for.
+func endsAnAssignment(w string) bool {
+	if !strings.HasSuffix(w, "=") {
+		return false
+	}
+	name := strings.TrimSuffix(strings.TrimSuffix(w, "="), "+")
+	if i := strings.IndexByte(name, '['); i > 0 && strings.HasSuffix(name, "]") {
+		name = name[:i]
+	}
+	return isName(name)
+}
+
+// arithForWords splits the header of an arithmetic `for` the way the shell
+// with the flag does: the two pairs of parentheses, and each expression with
+// the blanks in front of it dropped and its `;` kept. Measured on zsh 5.9.2:
+//
+//	for (( i = 1 ; i < 10 ; i++ ))   ((  i = 1 ;  i < 10 ;  i++   ))
+//	for ((i=0;i<3;i++))              ((  i=0;  i<3;  i++  ))
+//	for ((  ;  ; ))                  ((  ;  ;  ))
+//
+// The third expression keeps the blanks behind it, and where it is only
+// blanks it is no word at all.
+func arithForWords(w string) []string {
+	body := w[2 : len(w)-2]
+	out := []string{"(("}
+	for {
+		body = strings.TrimLeft(body, " \t")
+		i := strings.IndexByte(body, ';')
+		if i < 0 {
+			break
+		}
+		out = append(out, body[:i+1])
+		body = body[i+1:]
+	}
+	if body != "" {
+		out = append(out, body)
+	}
+	return append(out, "))")
 }

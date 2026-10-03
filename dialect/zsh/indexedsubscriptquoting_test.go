@@ -11,8 +11,7 @@ import (
 // An indexed subscript keeps its apostrophes and backslashes for the
 // arithmetic, which refuses them and ends the script; a double quotation is
 // quoting. Measured 2026-10-03 on zsh 5.9.2 under `-f -c` with `a=(x y z)`
-// (#5562). The wording here is the arithmetic's own; zsh's subscript words
-// it differently, which is #5567.
+// (#5562). The wording is TestAnUnreadableByteEndsASubscriptsExpression's.
 func TestAQuotedIndexedSubscriptIsRefused(t *testing.T) {
 	const arr = "a=(x y z); "
 	for _, c := range []struct{ src, out string }{

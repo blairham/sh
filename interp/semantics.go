@@ -29298,6 +29298,40 @@ type Semantics struct {
 	// expression, which is a different answer again (#2160).
 	SubscriptExpressionStopsAtASeparator Answer
 
+	// SubscriptExpressionStopsAtAnUnreadableByte ends a subscript's
+	// expression at the first byte the arithmetic has no reading for — an
+	// apostrophe, a backslash, `@`, a brace — rather than refusing the byte
+	// the way the same text inside `$(( ))` is refused. zsh; bash and ksh93
+	// read the whole text and refuse the byte.
+	//
+	// Measured 2026-10-03 on zsh 5.9.2 over a script file with `a=(x y z)`
+	// (#5567):
+	//
+	//	subscript    zsh 5.9.2
+	//	2@  2{  i@   y — what follows the 2 is never read
+	//	1 '          x
+	//	1+@          operand expected at `@'
+	//	1+'2'        operand expected at `'2''
+	//	'            operand expected at `''
+	//	(1'x')       ')' expected
+	//	$(( '1' ))   illegal character: ' — the control, outside a subscript
+	//
+	// So it is SubscriptExpressionStopsAtASeparator's rule with a wider set:
+	// the text after the byte is never evaluated, an expression it leaves
+	// incomplete is the operand expected *at* that text, and a parenthesis
+	// it leaves open is still unclosed. Only the subscript: `$(( ))` keeps
+	// its own sentence for the byte.
+	//
+	// unpinned zsh: no corpus row puts such a byte in a subscript; pinned by
+	// TestAnUnreadableByteEndsASubscriptsExpression.
+	//
+	// unpinned bash: likewise, pinned by
+	// TestAQuotedIndexedSubscriptIsArithmeticText.
+	//
+	// unpinned ksh: likewise, pinned by
+	// TestAnUnreadableByteInASubscriptIsRefused.
+	SubscriptExpressionStopsAtAnUnreadableByte Answer
+
 	// BlankArithSubscriptIsTheEmptyExpression reads a subscript holding
 	// whitespace and nothing else — `$(( a[ ] ))` — as the blank expression,
 	// which is zero, so the operand is the *element that subscript names*

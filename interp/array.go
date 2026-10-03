@@ -3429,7 +3429,14 @@ func (r *Runner) subscriptValueAsWritten(written, text string) (int, error) {
 	if err := r.emptySubscriptText(text); err != nil {
 		return 0, err
 	}
-	n, err := r.expressionValue(r.subscriptExpression(written, text))
+	expr, err := r.subscriptExpressionBeforeAnUnreadableByte(text)
+	if err != nil {
+		return 0, err
+	}
+	n, err := r.expressionValue(r.subscriptExpression(written, expr))
+	if err != nil && expr != text {
+		err = operandExpectedAtTheRest(err, text, expr)
+	}
 	if err == nil && n == 0 && r.readingARangeEnd == 0 && r.zeroSubscriptIsTheFirst() {
 		return 1, nil
 	}

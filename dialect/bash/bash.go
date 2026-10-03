@@ -3329,6 +3329,8 @@ func Semantics() interp.Semantics {
 	// operand. This dialect has no ranges for the question to be about
 	// (#2160).
 	s.SubscriptExpressionStopsAtASeparator = interp.No
+	// And at a byte the arithmetic cannot read (#5567).
+	s.SubscriptExpressionStopsAtAnUnreadableByte = interp.No
 	// Whitespace between the brackets is not that text and is not answered
 	// by it: measured 2026-09-10 in 5.3.15 and in 3.2.57, `a=(1 2 3); echo
 	// $(( a[ ] ))` is `1` with a clean stream — the blank expression is

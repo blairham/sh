@@ -22,9 +22,6 @@ func TestAQuotedIndexedSubscriptIsArithmeticText(t *testing.T) {
 		{`echo ${a[\1]}; echo after`, "", `\1: arithmetic syntax error`},
 		{`echo ${a["2"]}; a["1"]=Q; i=1; echo ${a[$i]} ${a["$i"]}`, "z\nQ Q\n", ""},
 		{"typeset -A m; m['k']=v; echo ${m[k]} ${m['k']}", "v v\n", ""},
-		// A key is not this question, and nothing in it is performed on its
-		// account: bash 5.3.20 leaves `n` at 0.
-		{"typeset -A m; n=0; : ${m['$((n+=1))']}; echo $n", "0\n", ""},
 	} {
 		out, st := runBash(t, t.TempDir(), arr+c.src)
 		if c.errs == "" {

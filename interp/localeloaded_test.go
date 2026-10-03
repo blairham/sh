@@ -42,6 +42,8 @@ func TestALocaleTheMachineCannotLoadLeavesTheOneInForce(t *testing.T) {
 		{"an installed name is read", `LC_ALL=here.UTF-8; echo ${#x}`, "1"},
 		{"missing after an installed one keeps it", `LC_ALL=here.UTF-8; echo ${#x}; LC_ALL=xx_XX.UTF-8; echo ${#x}`, "1\n1"},
 		{"missing after C keeps C", `LC_ALL=here.UTF-8; echo ${#x}; LC_ALL=C; echo ${#x}; LC_ALL=xx_XX.UTF-8; echo ${#x}`, "1\n2\n2"},
+		{"two assignments with no read between", `LC_ALL=here.UTF-8; echo ${#x}; LC_ALL=C; LC_ALL=xx_XX.UTF-8; echo ${#x}`, "1\n2"},
+		{"an unset with no read before it", `LANG=xx; LC_ALL=here.UTF-8; echo ${#x}; LC_ALL=C; unset LC_ALL; echo ${#x}`, "1\n2"},
 		{"the data's codeset decides", `LC_ALL=latin.ISO8859-1; echo ${#x}`, "2"},
 		{"a character type is not a locale", `LC_ALL=ctype; echo ${#x}`, "2"},
 		{"but loads as a character type", `LC_CTYPE=ctype; echo ${#x}`, "1"},

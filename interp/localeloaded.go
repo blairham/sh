@@ -31,11 +31,9 @@ package interp
 // codeset, as Runner.LocaleCharset settles it: the name the variables point at
 // where the library would load it, and otherwise the one in force before.
 //
-// Settled when it is read rather than at every assignment: a name that fails
-// has no effect, so what the reader sees is the last name that loaded. Only a
-// sequence of assignments with no read between them can tell the two apart —
-// `LC_ALL=C; LC_ALL=xx` read once is C in the shells and here the name before
-// the `C` — and that is the one difference, noted rather than modeled.
+// Settled when it is read, and also just before a locale variable changes —
+// see settleCtypeBeforeChanging — so that what a failed name falls back to is
+// the locale the variables named a moment ago and not the one last read.
 func (r *Runner) ctypeInForce() (name, codeset string) {
 	cand, whole := "", false
 	for _, v := range localeVariables {
@@ -70,4 +68,23 @@ type ctypeState struct {
 	settled, whole bool
 	asked          string
 	name, codeset  string
+}
+
+// settleCtypeBeforeChanging settles the locale the variables name now, ahead
+// of a change to one of them. Without it two assignments with no read between
+// them skipped the first: `LC_ALL=C; LC_ALL=xx` fell back past the C to
+// whatever had been read before it, where zsh 5.9.2, ksh93u+ and bash 5.3.20
+// all stay in C (#5526). Settling the *outgoing* state rather than the
+// incoming one is what lets this sit in front of the store, where the
+// assignment and unset paths already have a place for side effects of a name.
+func (r *Runner) settleCtypeBeforeChanging(name string) {
+	if r.LocaleCharset == nil {
+		return
+	}
+	for _, v := range localeVariables {
+		if v == name {
+			r.ctypeInForce()
+			return
+		}
+	}
 }

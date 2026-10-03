@@ -12833,6 +12833,10 @@ func (r *Runner) setVarAs(name, value string, form assignForm) {
 		// Noted rather than compared: see optindAssigned.
 		r.optindAssigned = true
 	}
+	// The locale the variables named until now is settled before the new
+	// value replaces it, so a name that will not load falls back to that one
+	// and not to whatever was settled last. See interp/localeloaded.go.
+	r.settleCtypeBeforeChanging(name)
 	if name == "PATH" {
 		// A new PATH makes every remembered answer a guess about a search
 		// nobody has run. Unanimous — bash 5.3.15, zsh 5.9.2, ksh93 and dash

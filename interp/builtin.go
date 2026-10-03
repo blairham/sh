@@ -3304,6 +3304,8 @@ func (r *Runner) unsetName(name string) int {
 	// empty and `${zz.b}` as 2 in ksh93u+, where this removed a name called
 	// `c.a` that nothing held. See Runner.compoundMemberThroughAReference.
 	name = r.compoundMemberThroughAReference(name)
+	// As an assignment does: see Runner.settleCtypeBeforeChanging.
+	r.settleCtypeBeforeChanging(name)
 	// The `.unset` discipline runs *before* the name goes, which is measured
 	// rather than convenient: `u=here; function u.unset { echo "$u"; };
 	// unset u` prints `here` there, so the hook reads the value it is about

@@ -3246,6 +3246,10 @@ func (r *Runner) expansionResult(v string, unquoted bool, glob, split Answer, ax
 // copy is what would have kept #1222 alive for `${a[@]}` after the first was
 // fixed.
 func (r *Runner) escapeResult(v string, glob Answer) string {
+	// The list path reaches here without passing expansionResult, so a
+	// `:s` replacement's deferred expansions are run here too. See
+	// pendingMark.
+	v = r.resolvePending(v)
 	if strings.Contains(v, liveMark) {
 		// A `:s` replacement's pattern characters, which stay live in a
 		// result that is otherwise text. See liveMark.

@@ -15,6 +15,8 @@ func TestASubstitutionsLiveCharactersReachABareArrayAndTheParameters(t *testing.
 		{`a=(xQy); print ${a:gs/Q/?/}; set -- xQy; print ${@:s/Q/?/}`, "xay xby\nxay xby\n"},
 		{`a=(xQy xQz); print ${a:s/Q/?/}`, "zsh:2: no matches found: x?z\n"},
 		{`set -- xQy xQb; print ${*:s/Q/?/}`, "zsh:2: no matches found: x?b\n"},
+		// The replacement's own expansions run there too, on the source.
+		{`b=Q; a=(xa.y); print ${a:s/a/$b/} ${a[@]:gs/a/${b}/} ${(U)a:s/a/$b/}`, "xQ.y xQ.y X.Y\n"},
 		// Quoted, or assigned, the result is text.
 		{`a=(xQy); print "${a:s/Q/?/}"; v=${a:s/Q/?/}; print $v`, "x?y\nx?y\n"},
 	} {

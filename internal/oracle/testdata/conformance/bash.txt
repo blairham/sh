@@ -99,7 +99,6 @@ readonly/a-refused-declaration-operand-reports-one
 redir/a-wide-duplication-target-with-a-leading-zero
 set/listed-value-with-a-byte-above-ascii
 setopt/the-interactive-listing-drops-nohashdirs
-shift/a-count-and-an-array-name
 subscript/a-search-operand-keeps-a-backslash
 subst/a-blank-before-the-pipe-is-not-the-reply-form
 terminfo/cursor-up-the-capability-a-prompt-tests-for

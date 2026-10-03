@@ -3,7 +3,12 @@
 
 package bash_test
 
-import "testing"
+import (
+	"strings"
+	"testing"
+
+	"github.com/blairham/sh/interp"
+)
 
 // A word behind the count of `break`, `continue`, `return`, `exit` or
 // `shift`, which bash refuses and which this shell took as silence (#2298).
@@ -97,6 +102,32 @@ func TestAWordBehindANumericOperandIsTooManyArguments(t *testing.T) {
 			out, st := runBash(t, dir, tc.src)
 			if out != tc.want || st != 0 {
 				t.Errorf("%s = %q at %d, want %q at 0", tc.src, out, st, tc.want)
+			}
+		})
+	}
+}
+
+// The same refusal under `-c` gives up the whole string at 1 rather than
+// resuming at the next line at 2. Measured 2026-10-03 on bash 5.3.20, each
+// program as one `-c` string with `echo "next $?"` on the line after the
+// refusal: `shift 1 2`, `break 1 2` and `continue 1 2` in a loop, `return 1
+// 2` in a function, and `exit 1 2` all exit 1 with nothing after the
+// complaint. This is the route split GiveUpTheCommandAt already draws for
+// `history 1 2`.
+func TestAWordBehindANumericOperandEndsACommandString(t *testing.T) {
+	for _, tc := range []struct{ name, src string }{
+		{"shift", "set -- a b c\nshift 1 2\necho \"next $?\"\n"},
+		{"break", "for i in 1 2; do break 1 2; done\necho \"next $?\"\n"},
+		{"continue", "for i in 1 2; do continue 1 2; done\necho \"next $?\"\n"},
+		{"return", "f() { return 1 2; }\nf\necho \"next $?\"\n"},
+		{"exit", "exit 1 2\necho \"next $?\"\n"},
+		{"shift with an array name", "a=(1 2 3 4); shift 2 a; echo \"[${a[@]}] st=$?\"\n"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, st := posixRouteStatus(t, tc.src, interp.RouteCommandString)
+			if st != 1 || !strings.Contains(out, "too many arguments") ||
+				strings.Contains(out, "next") || strings.Contains(out, "st=") {
+				t.Errorf("= %q status %d, want the complaint alone and 1", out, st)
 			}
 		})
 	}

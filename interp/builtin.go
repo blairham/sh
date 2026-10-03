@@ -163,9 +163,14 @@ func (r *Runner) extraNumericOperands(name string, args []string) (int, bool) {
 		// line runs, and a loop around the refusal stops where it stands.
 		// That is controlAbandon, which the refused readonly assignment
 		// beside it already raises — see interp/compound.go.
-		r.status = 2
-		r.abandonTheCommand()
-		return 2, true
+		//
+		// And a `-c` string is given up whole, at the dialect's fatal status
+		// rather than at 2: measured 2026-10-03 on bash 5.3.20, `bash -c
+		// 'shift 1 2'` then `echo next` on the next line exits 1 without
+		// the `echo`, and `break`, `continue`, `return` and `exit` carry the
+		// same extra operand the same way. That is GiveUpTheCommandAt's
+		// route split exactly.
+		return r.GiveUpTheCommandAt(2), true
 	}
 	// Refused and nothing given up: the loop around it runs on and complains
 	// again on the next pass.

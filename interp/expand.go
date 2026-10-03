@@ -7926,6 +7926,44 @@ type tildeHead struct {
 	// the dialect that reads it so: the name is what the word comes to. See
 	// tildeThroughMark.
 	through bool
+	// written says the name ends only at a closing byte the word writes,
+	// which is at endSpan/endOff, or nowhere where endSpan is negative. See
+	// writtenTildeHead.
+	written         bool
+	endSpan, endOff int
+}
+
+// writtenTildeHead is the through prefix in the dialect whose name ends only
+// at a closing byte the word writes: bare, or inside single or double quotes,
+// but not one an expansion produces or a backslash quotes. A backslash-quoted
+// `/` or `-` in the prefix leaves the word as written. See
+// Semantics.TildeNameEndsOnlyAtAWrittenSlash.
+func (r *Runner) writtenTildeHead(spans []syntax.Span, start int, ends string) tildeHead {
+	if r.tildeColonReach() == TildeColonAlwaysEndsAPrefix && !strings.Contains(ends, ":") {
+		ends += ":"
+	}
+	h := tildeHead{through: true, written: true, endSpan: -1}
+	for i, s := range spans {
+		if s.Kind != syntax.Literal {
+			continue
+		}
+		v := s.Value
+		from := 0
+		if i == 0 {
+			from = start + 1
+		}
+		if s.Quoting == syntax.BackslashQuoted {
+			if v == "/" || v == "-" {
+				return tildeHead{}
+			}
+			continue
+		}
+		if j := strings.IndexAny(v[from:], ends); j >= 0 {
+			h.endSpan, h.endOff = i, from+j
+			return h
+		}
+	}
+	return h
 }
 
 // markThrough puts tildeThroughMark (or its colon twin) in front of the tilde
@@ -7934,6 +7972,15 @@ type tildeHead struct {
 func (h tildeHead) markThrough(spans []syntax.Span, start int, mark string) {
 	if !h.through {
 		return
+	}
+	if h.written {
+		// The name ends where the word writes its end, not wherever its
+		// text does. See writtenTildeHead.
+		mark = tildeThroughWrittenMark
+		if h.endSpan >= 0 {
+			v := spans[h.endSpan].Value
+			spans[h.endSpan].Value = v[:h.endOff] + tildeThroughEndMark + v[h.endOff:]
+		}
 	}
 	spans[0].Value = spans[0].Value[:start] + mark + spans[0].Value[start:]
 }
@@ -8079,7 +8126,10 @@ func (r *Runner) tildeHead(spans []syntax.Span, start int, ends string) tildeHea
 	if ran {
 		// The name runs on through the quote or the expansion, so it is
 		// read once the word has been expanded. See tildeThroughMark.
-		return tildeHead{through: true}
+		if r.sem().TildeNameEndsOnlyAtAWrittenSlash != Yes {
+			return tildeHead{through: true}
+		}
+		return r.writtenTildeHead(spans, start, ends)
 	}
 	dir, _, ok, miss := r.tildeSplit(b.String())
 	if !ok {

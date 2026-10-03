@@ -121,7 +121,6 @@ pipe/both-streams-takes-no-blank-between-its-two-bytes
 print/a-dash-inside-a-bundle-is-an-inert-letter
 printf/a-second-dot-is-an-output-base
 printf/an-output-base-beside-a-precision
-printf/c-ignores-a-precision
 printf/non-finite-is-spelled-c-s-way
 printf/quoted-operand-is-a-character-value
 procsub/a-file-substitution-lives-as-long-as-its-command

@@ -106,7 +106,7 @@ func moveLetterConflicts(f declareFlags) bool {
 	bare := f
 	bare.matching, bare.matchNames = false, false
 	bare.print, bare.added, bare.remove = false, false, false
-	bare.letters, bare.letterSigns = "", ""
+	bare.letters, bare.letterSigns, bare.wordSigns = "", "", ""
 	bare.endedOptions = false
 	return bare != declareFlags{}
 }

@@ -4140,6 +4140,16 @@ func Semantics() interp.Semantics {
 	// why interp.Runner.SetFunctionMarkedUndefined is handed the letters and
 	// not a digested request.
 	s.FunctionLettersThatMarkUndefined = "tu"
+	// `x` is an attribute of a function here: `typeset -fx pa` marks it in
+	// silence, and `typeset -fx` and `typeset +fx` then list the marked ones
+	// alone, as bodies and as names. Measured 2026-10-03 on ksh93u+
+	// 2012-08-01 over two functions with one marked (#5674). A child is told
+	// nothing: `/bin/ksh -c 'typeset +f'` lists no function. See
+	// interp.Semantics.FunctionAttributeLetters.
+	s.FunctionAttributeLetters = "x"
+	// And a body listing writes no line of them after the body. See
+	// interp.Semantics.FunctionBodyListingWritesItsAttributes.
+	s.FunctionBodyListingWritesItsAttributes = interp.No
 	// `-m` is here now, and it is not the letter zsh spells the same way:
 	// it *moves* a parameter — `typeset -m new=old` — where the other
 	// shell selects several by pattern. Measured 2026-09-13 on ksh93u+;

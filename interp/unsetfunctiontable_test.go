@@ -102,6 +102,8 @@ func unsetTableRun(t *testing.T, src string, reaches Answer) (string, int) {
 	sem.UnsetOptions = "vf"
 	sem.LoneDashIsAnOption = No
 	sem.FunctionAttributeLetters = "rx"
+	// With the line of them after a body, which is bash's (#5674).
+	sem.FunctionBodyListingWritesItsAttributes = Yes
 	sem.ReadonlyOptions = "fp"
 	r := newTestRunner(t, &Runner{
 		Stdout: &buf, Stderr: &buf,

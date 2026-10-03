@@ -297,5 +297,9 @@ func (r *Runner) functionAttributeLine(name string) string {
 	if attrs == "" {
 		return ""
 	}
+	if !r.ask(r.sem().FunctionBodyListingWritesItsAttributes,
+		"a function body listing writing its attribute letters after the body") {
+		return ""
+	}
 	return "declare -f" + attrs + " " + name + "\n"
 }

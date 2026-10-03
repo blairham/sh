@@ -103,6 +103,11 @@ type declareFlags struct {
 	// this one is a listing — see the bare-sign branch in parseDeclareFlags,
 	// and Runner.refusePrivateDeclaration for the row that needs them apart.
 	plusAlone bool
+	// wordSigns is the sign of each option word that carried letters, in
+	// order. The function letter is in no letter run (see letters), so a line
+	// whose signs differ only on an `f` word is told apart here. Read by
+	// blockALaterPlus.
+	wordSigns string
 	// plusBlocked says a plus word on this line was read as a minus one by
 	// blockALaterPlus. The line still declares nothing for a valueless
 	// operand over a name with no binding. See Runner.blockALaterPlus.
@@ -607,6 +612,7 @@ func (r *Runner) parseDeclareFlags(name string, args []string, known string) (re
 		// `+i` removes the attribute where `-i` adds it, which is the one
 		// place a shell spells an option with a plus.
 		f.remove = a[0] == '+'
+		f.wordSigns += a[:1]
 	letters:
 		for at, c := range a[1:] {
 			if !strings.ContainsRune(known, c) {
@@ -1150,8 +1156,10 @@ func (r *Runner) minusWordsUnderALeadingPlus(args []string) []string {
 // See Semantics.EarlierDeclarationLetterBlocksALaterPlus, which is where the
 // panel is and why the field names an order.
 func (r *Runner) blockALaterPlus(f *declareFlags) {
-	minus := strings.IndexByte(f.letterSigns, '-')
-	if minus < 0 || strings.LastIndexByte(f.letterSigns, '+') < minus {
+	// By word and not by letter, so the function letter counts: `typeset -f
+	// +f pa` writes the body there, the `+f` being another `-f` (#5674).
+	minus := strings.IndexByte(f.wordSigns, '-')
+	if minus < 0 || strings.LastIndexByte(f.wordSigns, '+') < minus {
 		return
 	}
 	if !r.ask(r.sem().EarlierDeclarationLetterBlocksALaterPlus,
@@ -1461,7 +1469,15 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) (endSt
 			// functions holding either. See
 			// Semantics.FunctionAttributeLetters, and the operand form just
 			// below, which sets instead.
-			if attrs := r.functionAttributeLettersWritten(f); attrs != "" {
+			// A plus letter filters too where the function letter itself was
+			// under a plus: `typeset +fx` is the marked functions' names in
+			// ksh93 as `-fx` is their bodies (#5674). Not beside a minus one:
+			// `declare -F +x` lists every function in bash 5.3.20.
+			attrs := r.functionAttributeLettersWritten(f)
+			if f.functionOff {
+				attrs += r.functionAttributeLettersRemoved(f)
+			}
+			if attrs != "" {
 				args, narrowed = r.functionsHoldingAttributes(attrs), true
 			} else if minus, _ := r.functionLineNamesNoFunction(name, f); minus {
 				// A letter no function can hold: the population is empty

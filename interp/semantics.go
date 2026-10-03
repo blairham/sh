@@ -8921,10 +8921,16 @@ type Semantics struct {
 	//     ArithStoredValueReadsALeadingZeroAsDecimal records them parting
 	//     over a leading zero, and in the same shell.
 	//
-	// Asked only where the dialect has floats and the numeral really did
-	// overflow: an underflow is zero in both columns with nothing to choose
-	// between, and every other numeral is read without this being reached.
-	// So bash, dash and ash never reach it and leave it unanswered.
+	// Asked only where the dialect has floats and the numeral really was out
+	// of range: an underflow all the way to zero is zero in both columns with
+	// nothing to choose between, and every other numeral is read without this
+	// being reached. So bash, dash and ash never reach it and leave it
+	// unanswered. A numeral that lands between zero and the smallest normal
+	// double *is* out of range — C's `strtod` reports it with the same ERANGE
+	// — and the losing column loses it too: `$(( 1e-320 ))` is `0` in ksh93u+
+	// where zsh writes the denormal (measured 2026-10-03). The same reader
+	// takes `printf`'s operands in that column, so `printf '%f' 1e400` is
+	// `-0.000000` there — see printfNumeralLost.
 	//
 	// Silent and arithmetically wrong either way it is answered wrongly, and
 	// in opposite directions: a budget that overflowed reads as nothing at

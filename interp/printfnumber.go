@@ -151,6 +151,9 @@ func (r *Runner) printfFloat(arg string, present bool) (float64, int, bool) {
 		// dialect, and the one it needs is PrintfReportsBadNumber, which was
 		// already here.
 		if ranged {
+			if v, lost := r.printfNumeralLost(text); lost {
+				return v, 0, false
+			}
 			return f, r.printfOutOfRange(arg), false
 		}
 		return f, 0, false
@@ -163,6 +166,40 @@ func (r *Runner) printfFloat(arg string, present bool) (float64, int, bool) {
 		return f, 0, false
 	}
 	return r.printfPartialNumber(arg, text, true)
+}
+
+// printfNumeralLost is the zero an operand C reads with a range error comes
+// to, in the dialect whose arithmetic loses such a numeral — see
+// Semantics.ArithFloatOverflowIsZero, which is the same reader met through
+// `printf` rather than `$(( ))`.
+//
+// Measured 2026-10-03 on ksh93u+ 2012-08-01: `printf '[%f][%f]' 1e400
+// -1e400` is `[-0.000000][0.000000]`, `printf '[%g][%d]' 1e-320 1e400` is
+// `[0][0]`, and nothing is said about any of them. The signs are the
+// evaluator's: an overflowed numeral is a negative zero and an underflowed one
+// a positive zero, and a leading minus is the unary operator applied to it, so
+// `-1e400` is `0` and `-1e-320` is `-0`.
+//
+// Asked only of the reading that evaluates, and only where the dialect has
+// floats at all — the same gate `$(( ))` puts in front of the axis — so the
+// columns that read the operand with `strtod` keep the infinity and the
+// denormal without being questioned.
+func (r *Runner) printfNumeralLost(text string) (float64, bool) {
+	if r.sem().PrintfNumberOperand != PrintfNumberArithmetic || !r.lang().ArithFloat {
+		return 0, false
+	}
+	f, _ := cFloat(text)
+	if !r.ask(r.sem().ArithFloatOverflowIsZero, "a float numeral too large for a double") {
+		return 0, false
+	}
+	z := 0.0
+	if math.IsInf(f, 0) {
+		z = math.Copysign(0, -1)
+	}
+	if strings.HasPrefix(text, "-") {
+		z = -z
+	}
+	return z, true
 }
 
 // printfPartialNumber is the operand no conversion in the panel could read on
@@ -214,11 +251,16 @@ func (r *Runner) printfPartialNumber(arg, text string, float bool) (float64, int
 		}
 		return r.leadingNumber(r.radixParsed(head, float), float), r.printfIncomplete(arg, text), false
 	case PrintfNumberArithmetic:
-		if v, _, whole := cWholeNumber(parsed, true); whole && !radixRefused {
+		if v, ranged, whole := cWholeNumber(parsed, true); whole && !radixRefused {
 			// A numeral is read as a numeral, which is why `printf '%d' 010`
 			// is 10 in ksh93 where `echo $((010))` there is 8. The reading is
 			// C's `strtod` and not the conversion's, so `1e3` is 1000 at `%d`
 			// as well.
+			if ranged {
+				if z, lost := r.printfNumeralLost(text); lost {
+					return z, 0, false
+				}
+			}
 			return v, 0, false
 		}
 		n, err, reading := arithNum{}, error(nil), false

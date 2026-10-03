@@ -24332,9 +24332,24 @@ reader, not a sign rule, and nothing in the corpus asks it.
 
 This shell refused the numeral outright until #2766, which is neither
 reading: the reader returns the infinity **and** an out-of-range report
-together, and both were being thrown away. An **underflow** is not this
-and never asks the axis — `$((1e-400))` is zero in both columns with
-nothing to choose between, and Go's reader signals no error for one.
+together, and both were being thrown away. An underflow all the way to
+zero is not this and never asks the axis — `$((1e-400))` is zero in both
+columns with nothing to choose between. A numeral that lands **between**
+zero and the smallest normal double is, and it is the same rule rather
+than a second one, because C's `strtod` reports it with the same range
+error: `$((1e-320))` is the denormal in zsh and `0` in ksh93, and
+`$((-1e-320))` is `-0` there, a positive zero with the unary minus applied.
+Measured 2026-10-03. Go hands the denormal back with no error, so the
+range is found from the value.
+
+The axis is the reader's and not the expansion's, so it holds wherever
+ksh93 reads an operand with its evaluator, `printf` included: `printf
+'[%f][%f]' 1e400 -1e400` is `[-0.000000][0.000000]`, `printf '[%g][%d]'
+1e-320 1e400` is `[0][0]`, and nothing is said about any of them, where
+the columns that read the operand with `strtod` keep the infinity and the
+denormal. And a negative zero is written as one wherever it arises in a
+column that carries every value in a double: `$((-0.0))` is `-0` in
+ksh93 (measured 2026-10-03).
 bash, dash and ash have no floats, so `1e400` is refused there while the
 word is being read and no value is ever produced for the axis to decide.
 

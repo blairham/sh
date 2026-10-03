@@ -2375,7 +2375,11 @@ func Diagnostics() interp.Diagnostics {
 		},
 		ReadonlyVariable: "%s: is read only",
 		UnsetReadonly:    "unset: %s: is read only",
-		InvalidNumber:    "Illegal number: %s",
+		// The one name this shell refuses to unset without being readonly is
+		// OPTIND, and the sentence names no name at all: it is the number
+		// check meeting an empty value. See Apply.
+		UnsetRefused:  "unset: Illegal number: ",
+		InvalidNumber: "Illegal number: %s",
 		// A conditional with no `:` says which byte it wanted; a missing
 		// value is the ordinary `expecting primary`, so ArithConditionalValue
 		// stays empty.
@@ -2681,6 +2685,15 @@ func Apply(r *interp.Runner) {
 	// it ended at 2 where dash carries on (#3411). See
 	// interp.Runner.SetOptionLetterNames.
 	r.SetOptionLetterNames(map[rune]string{'s': "stdin"})
+	// **OPTIND cannot be unset here.** Measured 2026-10-03 on dash 0.5.12:
+	// `unset OPTIND` and `unset -v OPTIND` are `unset: Illegal number: ` at
+	// 2 and end the script, as any special builtin's error does, whatever
+	// OPTIND held — `OPTIND=3; command unset OPTIND` keeps the 3 and goes on
+	// at 2. The refusal is the readonly one's route with the readonly one's
+	// fatality, and `unset -f OPTIND` is not refused, since it names a
+	// function. Corpus rows getopts/an-unset-optind-is-not-a-fresh-cursor
+	// and its two neighbors.
+	r.RefuseUnset("OPTIND")
 	// dash has no `builtin`.
 	r.Unregister("builtin")
 	// No `compgen` here; it is bash's alone.

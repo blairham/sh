@@ -33,8 +33,6 @@ errexit/negation-exemption-reaches-into-a-function
 expand/tilde-plus-and-minus
 expansion/a-colon-before-a-trim-is-a-third-reading
 fnlib/add-zsh-hook-autoload-letters
-getopts/a-function-with-its-own-optind
-getopts/a-loop-that-calls-a-function-declaring-local-optind
 glob/a-value-backslash-before-something-the-script-quoted
 invoke/a-command-string-attached-to-the-letter
 invoke/c-with-nothing-after-it

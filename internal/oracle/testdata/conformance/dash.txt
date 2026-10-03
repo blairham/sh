@@ -33,9 +33,6 @@ declare/a-table-declaration-over-a-scalar-then-appended
 declare/an-appended-array-literal-over-a-typed-scalar
 declare/an-array-declaration-over-an-unset-name
 declare/local-bad-name
-getopts/an-unset-optind-is-not-a-fresh-cursor
-getopts/optind-unset-then-assigned-in-a-function
-getopts/unsetting-optind-in-a-function-keeps-it-gone
 heredoc/an-expansion-left-unterminated-in-a-body
 heredoc/stripping-and-joining-are-ordered-and-the-panel-parts-over-which-comes-first
 invoke/posix-mode-from-the-invocation-reaches-the-first-line

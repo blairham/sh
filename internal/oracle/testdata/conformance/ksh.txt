@@ -46,7 +46,6 @@ expand/tilde-with-no-home-at-all
 expansion/element-set-difference-and-intersection
 expansion/element-set-operators-against-an-unset-name
 fc/with-no-history
-hash/a-subshell-keeps-its-own-entries
 help/a-bad-option-to-umask-is-named-the-way-the-dialect-names-one
 help/the-help-option-is-the-whole-word-and-stands-where-an-option-stands
 heredoc/a-body-on-a-descriptor-outlives-the-exec-that-opened-it

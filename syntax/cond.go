@@ -740,6 +740,9 @@ func (p *Parser) blameCondition(start Pos) {
 		return
 	}
 	se.Construct, se.ConstructLine = "[[", int(start.Line)
+	if p.aliasSource == "" && se.CondReadText == "" {
+		se.CondReadText = condReadText(p.lex.src, int(se.Pos.Offset), int(se.tokEnd.Offset))
+	}
 	if se.Kind == ErrUnexpected && se.Pos == p.condUndecidedAt && p.condUndecidedAt.IsValid() {
 		// The token refused is the one that stood behind a one-word term, so
 		// it stood where a binary operator could have. See condPrimary.
@@ -1271,7 +1274,7 @@ func (p *Parser) failCondOperand(op, arity string) {
 		return
 	}
 	p.err = &Error{
-		Pos: p.tok.Pos, Kind: ErrCondOperand,
+		Pos: p.tok.Pos, tokEnd: p.tok.End, Kind: ErrCondOperand,
 		Token: p.tokenLiteral(), Class: p.tokenClass(false),
 		Expected: arity, LastToken: op,
 		Msg: p.tokenLiteral() + " unexpected",
@@ -1340,4 +1343,38 @@ func (p *Parser) condOperator() string {
 		return op
 	}
 	return ""
+}
+
+// condReadText is the source text a reader had taken in when it stopped on
+// the token at [start, end) — see Error.CondReadText and conditions.md.
+//
+// The byte after the token is taken too, because that is what told the
+// reader the token had ended. Blanks and newlines at the end of that run are
+// dropped, and what is left reaches back to the nearest blank, newline, `;`,
+// `|` or `&` — over bytes, so quoting does not hold it together — unless the
+// byte taken was one of the last three, which is then the whole of it. Empty where
+// the positions do not fit the source.
+func condReadText(src string, start, end int) string {
+	if start < 0 || end < start || end > len(src) {
+		return ""
+	}
+	i := end
+	if i < len(src) {
+		i++
+	}
+	for i > 0 && (src[i-1] == ' ' || src[i-1] == '\t' || src[i-1] == '\n') {
+		i--
+	}
+	if i == 0 {
+		return ""
+	}
+	j := i - 1
+	if strings.IndexByte(";|&", src[j]) >= 0 {
+		// The byte read was a delimiter, and it is a run of its own.
+		return src[j:i]
+	}
+	for j > 0 && !strings.ContainsRune(" \t\n;|&", rune(src[j-1])) {
+		j--
+	}
+	return src[j:i]
 }

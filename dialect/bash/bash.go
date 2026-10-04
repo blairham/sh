@@ -4711,6 +4711,9 @@ func Diagnostics() interp.Diagnostics {
 		// the measured rows.
 		CondGroupCloserExpected: "unexpected token `%[1]s', expected `%[2]s'",
 		CondSyntaxUnexpected:    "syntax error near `%[1]s'",
+		// And what it quotes there is the text it had read, not the token:
+		// `(a` for the `(` of `(ab)`. See conditions.md.
+		CondSyntaxNamesTheTextRead: true,
 		// And a `[[` the input ran out inside of gets a line of its own,
 		// naming the closer it was waiting for. Measured: this shell writes
 		// it for `[[` and for nothing else — `if`, `for`, `case`, `{` and

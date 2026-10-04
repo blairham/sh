@@ -6056,6 +6056,15 @@ type Diagnostics struct {
 	// because it keeps them everywhere else.
 	CondSyntaxUnexpected string
 
+	// CondSyntaxNamesTheTextRead quotes, in CondSyntaxUnexpected, the source
+	// text the reader had taken in when it stopped rather than the token it
+	// stopped on: `(a` for the `(` of `[[ a == (ab) ]]`, `;` for the `]]`
+	// of `[[ -n ]]; echo`. See syntax.Error.CondReadText for the rule and
+	// conditions.md for the measurements.
+	//
+	// bash only. ksh93 and zsh name the token here as they do everywhere.
+	CondSyntaxNamesTheTextRead bool
+
 	// SyntaxUnexpectedNamesTheOpener writes the *operator* an unexpected
 	// token began with rather than the text it held, where the two differ.
 	//
@@ -10364,6 +10373,9 @@ func (d Diagnostics) unexpectedToken(se *syntax.Error) string {
 		// A token refused inside a condition, where this dialect says
 		// something shorter than it says anywhere else.
 		form = d.CondSyntaxUnexpected
+		if d.CondSyntaxNamesTheTextRead && se.CondReadText != "" {
+			token = se.CondReadText
+		}
 	}
 	line := int(se.Pos.Line)
 	if moved, ok := d.newlineLine(se); ok {

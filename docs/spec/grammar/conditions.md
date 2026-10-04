@@ -308,6 +308,35 @@ bash 5.3.20 under `-c`:
 This document used to say only the first line was written, and this shell
 wrote only the first line; that cost `cond.tests` six lines (#4173).
 
+### What bash's `near` line quotes is the text it had read
+
+Inside a condition, bash's `syntax error near` line does **not** name the
+refused token. It names the run of source text that ends **one byte past
+the token** — the character the reader had already taken to see where the
+token ended — with trailing blanks and newlines dropped, reaching back to
+the nearest blank, newline, `;`, `|` or `&`. Quotes do not count: the scan
+is over bytes. The first line, where there is one, still names the token.
+Measured 2026-10-04 on bash 5.3.20 under `-c`:
+
+| written | `near` |
+| --- | --- |
+| `[[ a == (ab) ]]` | `` `(a' `` |
+| `[[ a == ( ab) ]]` | `` `(' `` — the blank was the byte read, and it is dropped |
+| `[[ a == () ]]` / `((ab))` | `` `()' `` / `` `((' `` |
+| `[[ a == ab(cd) ]]` | `` `ab(c' `` — back past the word in front of the `(` |
+| `[[ a == <b ]]` / `<<b` / `a<b` | `` `<b' `` / `` `<<b' `` / `` `a<b' `` |
+| `[[ a == $(x)(b) ]]` | `` `$(x)(b' `` |
+| `[[ x "y z" w ]]` | `` `z"' `` — the blank inside the quotes stops the scan |
+| `[[ -n ]]` / `[[ -n ]] ; x` | `` `]]' `` |
+| `[[ -n ]]; echo` / `]]&& x` / `]]\|x` | `` `;' `` / `` `&' `` / `` `\|' `` |
+| `[[ x yz; ]]` / `yz&&w` | `` `;' `` / `` `&' `` — a delimiter read is a run of its own |
+| `[[ x yz(w ]]` / `yz>w` | `` `yz(' `` / `` `yz>' `` |
+| `[[ a b⏎c ]]` | `` `b' `` |
+
+ksh93 and zsh name the token there, as they do everywhere, so this is
+`Diagnostics.CondSyntaxNamesTheTextRead` and only bash's preset sets it.
+The text travels on the error as `Error.CondReadText`.
+
 ### The completion conditions are a different question
 
 zsh's `[[ -prefix - ]]` and `[[ -after x ]]` come from the same sweep and

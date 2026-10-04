@@ -39,6 +39,22 @@ func (r *Runner) builtinHelpAnswer(name string) (int, bool) {
 	return orDefault(r.diag().BuiltinHelpStatus, 2), true
 }
 
+// versionOption is the word a builtin answers with its own version line, in
+// the dialect that has one. See Diagnostics.BuiltinVersion.
+const versionOption = "--version"
+
+// builtinVersionAnswer answers `--version` for a builtin, reporting whether
+// there was an answer to give. Standard error, unlike `--help`: measured on
+// ksh93u+ 2012-08-01, `umask --version 2>/dev/null` writes nothing.
+func (r *Runner) builtinVersionAnswer(name string) (int, bool) {
+	line := r.diag().BuiltinVersion[name]
+	if line == "" {
+		return 0, false
+	}
+	r.errf("%s\n", line)
+	return orDefault(r.diag().BuiltinHelpStatus, 2), true
+}
+
 // callBuiltin runs one, answering `--help` written as its first word first.
 //
 // The first word rather than anywhere, because that is all this can know:
@@ -56,6 +72,11 @@ func (r *Runner) builtinHelpAnswer(name string) (int, bool) {
 func (r *Runner) callBuiltin(ctx context.Context, name string, fn Builtin, args []string) int {
 	if len(args) > 0 && args[0] == helpOption {
 		if status, ok := r.builtinHelpAnswer(name); ok {
+			return status
+		}
+	}
+	if len(args) > 0 && args[0] == versionOption {
+		if status, ok := r.builtinVersionAnswer(name); ok {
 			return status
 		}
 	}

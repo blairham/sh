@@ -75,6 +75,11 @@ func biUmask(r *Runner, _ context.Context, args []string) int {
 			args = args[1:]
 			continue
 		}
+		if args[0] == versionOption {
+			if status, ok := r.builtinVersionAnswer("umask"); ok {
+				return status
+			}
+		}
 		d := r.diag()
 		// Named the way every other builtin's bad option is named, which is
 		// the dialect's rule and not this builtin's: `umask --version` is

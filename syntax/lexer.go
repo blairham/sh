@@ -958,7 +958,7 @@ func (l *Lexer) multibyteCharacterAt() (width int, ok bool) {
 // the text from the opener to the end of its line, and the line the input
 // ran out on in both conventions.
 func (l *Lexer) failUnmatched(open Pos, opener, closer, msg string) {
-	if l.err != nil && !l.replacesUnmatched() {
+	if l.err != nil && !l.replacesUnmatched(opener) {
 		return
 	}
 	// From the start of the word rather than from the opener, which is what
@@ -996,8 +996,15 @@ func (l *Lexer) failUnmatched(open Pos, opener, closer, msg string) {
 		// the same convention the parser's unterminated() uses.
 		after++
 	}
+	// What the program inside a construct this one encloses had to say for
+	// itself is carried out with the blame. See Error.BodyRefusal.
+	var inner *Error
+	if prev, ok := l.err.(*Error); ok && opener != "`" {
+		inner = prev.BodyRefusal
+	}
 	l.err = &Error{
-		Pos: open, Kind: ErrUnmatched, Msg: msg,
+		BodyRefusal: inner,
+		Pos:         open, Kind: ErrUnmatched, Msg: msg,
 		Token: opener, Expected: closer, LastToken: near,
 		EndLine: after, EofLine: l.line,
 		// Where the reader was rather than what it ran out on. See
@@ -1062,12 +1069,31 @@ func (l *Lexer) closesQuotesAtEOF() bool {
 // already failed is a different diagnosis and the first one stands, which is
 // what keeps this from turning a real refusal into a report about a
 // delimiter that was merely still open when it happened.
-func (l *Lexer) replacesUnmatched() bool {
+//
+// **Except that a `${` does not take it from a quote.** The parameter form
+// is the one construct that leaves a quote inside it to speak for itself:
+// measured 2026-10-04 on zsh 5.9.2, `echo ${x:-it's` and `echo ${x:-"a`
+// are `unmatched '` and `unmatched "`, and a backquote there names the
+// backquote, where
+// `echo ${x:-$(echo hi` and `echo ${x:-${y:-a` are `closing brace
+// expected` — so it is the quote that keeps the blame, not any construct
+// the brace encloses. A `${` inside double quotes is reported as the quote
+// and is not this opener.
+func (l *Lexer) replacesUnmatched(opener string) bool {
 	if !l.dialect.UnmatchedBlamesTheOutermost {
 		return false
 	}
 	var se *Error
-	return errors.As(l.err, &se) && se.Kind == ErrUnmatched
+	if !errors.As(l.err, &se) || se.Kind != ErrUnmatched {
+		return false
+	}
+	if opener == "${" {
+		switch se.Token {
+		case "'", "\"", "`":
+			return false
+		}
+	}
+	return true
 }
 
 func (l *Lexer) fail(p Pos, format string, args ...any) {
@@ -6540,6 +6566,7 @@ func (l *Lexer) skipSubstitution() bool {
 	open := l.pos()
 	l.advance() // $
 	l.advance() // (
+	body := l.off
 	// And what the skip cannot see, in the one dialect that refuses it —
 	// see Lexer.noteHeredocInsideASkippedSubstitution. Before the skip, so
 	// the read starts where the program does.
@@ -6560,8 +6587,36 @@ func (l *Lexer) skipSubstitution() bool {
 		// are told apart by their closers, which it never reached. The
 		// scanners that *do* know still report their own.
 		l.failUnmatched(open, "$(", ")", "unterminated "+CommandSubst.String())
+		if se, ok := l.err.(*Error); ok && se.Pos == open && se.BodyRefusal == nil {
+			// The skip read no program, so what the body had to say for
+			// itself is read here, the way the scanner that parses a body
+			// would have found it. See Error.BodyRefusal.
+			se.BodyRefusal = l.bodyRefusalFrom(body, int(open.Line))
+		}
 	}
 	return true
+}
+
+// bodyRefusalFrom reads the rest of the input from an offset as the contents
+// of a command substitution that never closed, and returns what that read
+// refused, or nil where it read to the end without complaint; line is the
+// line the body begins on, which the skip that called this has long since
+// passed. It is the
+// refusal [Lexer.parseToClose] keeps, for the scanners that step over a body
+// rather than parse it.
+func (l *Lexer) bodyRefusalFrom(from, line int) *Error {
+	lex := NewLexer(l.src[from:], l.dialect)
+	lex.line = line
+	lex.inProgramParens = true
+	sub := newParserOn(lex, l.dialect)
+	l.lendAliases(sub)
+	sub.InsideASubstitution()
+	sub.parseList()
+	if sub.err == nil && !sub.at(TokEOF) {
+		sub.failUnexpected("")
+	}
+	se, _ := sub.err.(*Error)
+	return se
 }
 
 // skipToDepth consumes input until the given number of parentheses have been

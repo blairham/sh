@@ -5,10 +5,6 @@ arith/a-subscript-the-source-left-open-takes-the-value-bracket
 assoc/a-literal-element-keyed-with-a-blank
 axis/trap-body-line-signal
 complist/the-widget-the-module-defines
-core/an-unbalanced-substitution-inside-those-quotes
-core/an-unreadable-operand-a-branch-does-not-take
-core/an-unreadable-operand-a-branch-takes
-core/single-quotes-in-a-quoted-pattern-operand
 diag/trap-refusing-a-condition-it-does-not-know
 jobs/a-background-job-outlives-the-shell
 param/a-substring-range-blames-what-the-script-wrote
@@ -18,7 +14,6 @@ print/a-prompt-escape-this-shell-has-not
 printf/a-bad-number-can-name-its-base
 procsub/a-file-substitution-opens-only-at-a-word
 prompt/print-P-is-the-same-boundary
-subst/a-comment-in-a-current-shell-body
 subst/a-paren-body-does-not-share-what-it-assigns
 test/a-terminal-test-descriptor-past-the-integer
 trap/an-elements-pipe-handler-runs-inside-the-elements-redirections

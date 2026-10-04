@@ -4715,39 +4715,34 @@ func (r *Runner) listBase(e *syntax.ParamExpr) ([]string, bool) {
 }
 
 // nestedListIsWhatItCameTo reports whether a nested expansion whose inner
-// came to a list yields that list, which for the four conditionals depends on
-// which side of the test ran.
+// came to a list yields that list. A `+` never does: it is its word when the
+// test does not fire and nothing when it does.
 //
-// The other operators distribute over the list and the list is their input,
-// but a conditional chooses between the list and its *word*, and a `+` never
-// yields the list at all: it is its word when the test does not fire and
-// nothing when it does. A word that is written reaches substitutedWordFields
-// before this; a `+` with nothing behind it does not — the parser builds no
-// operand word — and arrived here, where the list came back as though no
-// operator had been written. Measured 2026-10-04 on zsh 5.9.2 under -f, with
-// `a=(x y)` and `y=1`:
+// The other operators distribute over the list and the list is their input.
+// A `+` with a written word reaches substitutedWordFields before this; a `+`
+// with nothing behind it does not — the parser builds no operand word — and
+// arrived here, where the list came back as though no operator had been
+// written. Measured 2026-10-04 on zsh 5.9.2 under -f, with `a=(x y)` and
+// `y=1`:
 //
 //	${$((7))+}  ${$(echo 7)+}  ${$((7)):+}  ${${a}+}  ${${a}:+}   nothing
+//	"${${a[@]}+}"                          one empty field
 //	${${y}+}  "${$((7))+}"                 nothing, and these were right:
 //	                                       a scalar inner is not a list
 //	${$((7))-}  ${${a}-}                   7, and x y: the list, unchanged
 //
 // The arithmetic and command substitutions are lists here because unquoted
-// they always are (see nestedInnerIsAList), which is why powerlevel10k's
-// `${$((_p9k__d+=6))+}` printed the count into every shortened directory
-// (#5866). The scalar path answers the other side, as it already did for a
-// scalar inner.
+// they always are (see nestedInnerIsAList), and a replacement word is read
+// unquoted — which is why powerlevel10k's `Dev${$((_p9k__d+=6))+}` drew the
+// count into every shortened directory (#5866). The scalar path answers the
+// `+`, as it already did for a scalar inner.
 //
-// The firing test reads the inner through the hold, so asking it here runs
-// no command substitution a second time.
+// `-`, `=` and `?` need no answer here. On the side where they substitute
+// their word, a written word went to substitutedWordFields, and an absent one
+// fires only on a list that came to nothing, where the list and the empty
+// word are the same answer.
 func (r *Runner) nestedListIsWhatItCameTo(e *syntax.ParamExpr) bool {
-	switch e.Op {
-	case syntax.ParamAlternate:
-		return false
-	case syntax.ParamDefault, syntax.ParamAssign, syntax.ParamError:
-		return !r.testFires(e)
-	}
-	return true
+	return e.Op != syntax.ParamAlternate
 }
 
 // positionalsAsList gives `$@` and `$*` under an operator the subscript that

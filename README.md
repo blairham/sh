@@ -20,18 +20,25 @@ A shell parser and interpreter in Go.
 **Status: early — these are `0.x` tags and they mean it.** The core parser
 and interpreter are in place, and all five dialect binaries grade against a
 panel of the real shells they model. Measured on macOS against the golden
-record `make oracle` writes, 2026-10-03, 4488 cases each:
+record `make oracle` writes, 2026-10-04, 4488 cases each:
 
 | our binary | graded against | exact | behavioral |
 | --- | --- | --- | --- |
-| `bash` | bash 5.3.20 | 97.7% | 99.1% |
-| `zsh` | zsh 5.9.2 | 98.0% | 98.5% |
-| `dash` | dash | 98.3% | 99.5% |
-| `ksh` | ksh93 AJM 93u+ | 95.9% | 97.7% |
-| `ash` | BusyBox 1.37 ash | 94.6% | 97.7% |
+| `bash` | bash 5.3.20 | 99.8% | 99.8% |
+| `zsh` | zsh 5.9.2 | 99.8% | 99.8% |
+| `dash` | dash | 99.9% | 99.96% |
+| `ksh` | ksh93 AJM 93u+ | 99.1% | 99.5% |
+| `ash` | BusyBox 1.37 ash | 99.5% | 99.6% |
 
 `ash` is graded inside the pinned BusyBox container, with ours
 cross-compiled and run beside it, so both sides share one platform (#5709).
+
+Every case still short of exact is listed per dialect in
+`internal/oracle/testdata/conformance/`, and CI's conformance ratchet fails a
+change that adds to a list or leaves a fixed case on one. Each listed case has
+a written reason in #5761 — the reference shell crashes or hangs, the panel's
+own builds disagree, a C-library quirk rather than the shell, or a deliberate
+choice — so the rest of the distance is decided, not unfinished.
 
 **Exact** is byte-identical stdout, stderr and exit status. **Behavioral**
 lets a diagnostic be worded differently so long as the status and the
@@ -44,9 +51,7 @@ the laptop's `bash 5.3.20`; the bash suite in CI is graded against
 `debian:sid-slim`'s **5.3.15**, the same release and a different patch level.
 Where the two disagree, the common denominator of the panel decides and the
 difference is written down — `~` after a `HOME` assignment is the worked
-example, in `docs/spec/grammar/expansion.md`. The distance between the two columns is no longer
-mostly wording: graded on standard output as well as status, the 183
-non-exact `ksh` cases split **82 wording to 101 behavioral**. Behavior lands spec-first, per `CLEANROOM.md`.
+example, in `docs/spec/grammar/expansion.md`. Behavior lands spec-first, per `CLEANROOM.md`.
 
 ## What makes this different
 

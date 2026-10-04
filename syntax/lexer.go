@@ -4069,6 +4069,42 @@ func (l *Lexer) Tokens() []Token {
 	}
 }
 
+// refuseCloserInsideABracket records the `)` at off as a token the grammar did
+// not want, because a `[` the source opened inside the arithmetic is still
+// open there. See Dialect.ArithUnbalancedBracketIsRefused.
+func (l *Lexer) refuseCloserInsideABracket(off int) {
+	if l.err != nil {
+		return
+	}
+	l.err = &Error{
+		Pos: l.posAt(off), Kind: ErrUnexpected,
+		Token: ")", Class: ClassOperator,
+		Msg: "`)' unexpected",
+	}
+}
+
+// bracketsLeftOpen reports whether text, an arithmetic expansion's source,
+// opens more square brackets than it closes, counting none inside quotes or
+// behind a backslash.
+func bracketsLeftOpen(text string) bool {
+	n := 0
+	for i := 0; i < len(text); i++ {
+		switch text[i] {
+		case '\\':
+			i++
+		case '\'', '"', '`':
+			if j := skipQuotedFrom(text, i); j > i {
+				i = j
+			}
+		case '[':
+			n++
+		case ']':
+			n--
+		}
+	}
+	return n > 0
+}
+
 // doubleParenKind decides what a `$((` opens.
 //
 // Two constructs are spelled with the same three bytes. `$(( … ))` is an
@@ -4775,6 +4811,11 @@ func (l *Lexer) scanParens(kind SpanKind, q Quoting) Span {
 				end -= 2
 			}
 		}
+	}
+	if kind == ArithSubst && l.dialect.ArithUnbalancedBracketIsRefused && end < len(l.src) &&
+		bracketsLeftOpen(l.src[start:end]) {
+		// See Dialect.ArithUnbalancedBracketIsRefused.
+		l.refuseCloserInsideABracket(end)
 	}
 	value := joined(start, end)
 	if kind != ArithSubst {
@@ -6752,6 +6793,10 @@ func (l *Lexer) scanArithCommand(start Pos) (Token, bool) {
 			if l.peekAt(1) != ')' || (l.dialect.ArithBracketsMustBalance && brackets != 0) {
 				joined(exprStart, exprStart)
 				return Token{}, false
+			}
+			if l.dialect.ArithUnbalancedBracketIsRefused && brackets != 0 {
+				// See Dialect.ArithUnbalancedBracketIsRefused.
+				l.refuseCloserInsideABracket(l.off)
 			}
 			exprEnd = l.off
 			l.advance()

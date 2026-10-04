@@ -580,6 +580,9 @@ func Dialect() syntax.Dialect {
 	d.TimesIsReserved = true
 	// Floating point, which POSIX has not and these two do.
 	d.ArithFloat = true
+	// A `))` that arrives with a `[` still open is a syntax error:
+	// `(( a[1 ))` is `)' unexpected.
+	d.ArithUnbalancedBracketIsRefused = true
 	// An exponent letter with no digit behind it is the numeral's and says
 	// nothing: `$(( 1.e ))` is 1 and `$(( 3e+ ))` is 3.
 	d.ArithEmptyExponentIsConsumed = true

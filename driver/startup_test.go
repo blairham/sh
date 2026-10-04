@@ -78,21 +78,38 @@ func TestAMissingStartupFileIsNotAFailure(t *testing.T) {
 	}
 }
 
-// A startup file that does not parse is reported rather than ignored: the
-// person wrote it, and silence would leave them wondering why their settings
-// were not there.
+// A startup file that does not parse is reported rather than ignored, named
+// by its path — and it costs that file alone. What came before the failure
+// has run, the files after it are read, and startup reports no failure, so
+// the program the shell was started for runs. Measured in every column of the
+// panel (#5869); this used to parse the file whole and stop the shell, which
+// ran none of the file and none of the program.
 func TestAStartupFileThatDoesNotParse(t *testing.T) {
 	home := t.TempDir()
-	path := filepath.Join(home, "rc.sh")
-	write(t, path, "if\n")
+	profile := filepath.Join(home, ".profile")
+	write(t, profile, "BEFORE=yes\necho )\nAFTER=yes\n")
+	env := filepath.Join(home, "rc.sh")
+	write(t, env, "ENV_READ=yes\n")
 	var errs strings.Builder
-	sh, r := newTestShell(t, map[string]string{"HOME": home, "ENV": path})
+	sh, r := newTestShell(t, map[string]string{"HOME": home, "ENV": env})
 	sh.Stderr = &errs
-	if code := sh.startup(r, source{interactive: true}); code == 0 {
-		t.Error("a broken startup file reported 0, want a failure")
+	if code := sh.startup(r, source{login: true, interactive: true}); code != 0 {
+		t.Errorf("startup reported %d, want the failure to cost the file only", code)
 	}
-	if !strings.Contains(errs.String(), path) {
+	if _, ok := r.GetVar("BEFORE"); !ok {
+		t.Error("the line before the failure did not run")
+	}
+	if _, ok := r.GetVar("AFTER"); ok {
+		t.Error("the file kept going past a line that would not parse")
+	}
+	if _, ok := r.GetVar("ENV_READ"); !ok {
+		t.Error("the startup file after the broken one was not read")
+	}
+	if !strings.Contains(errs.String(), profile) {
 		t.Errorf("said %q, want the file named", errs.String())
+	}
+	if strings.Contains(errs.String(), "BEFORE=yes") {
+		t.Errorf("said %q, want the file's text kept out of its name", errs.String())
 	}
 }
 

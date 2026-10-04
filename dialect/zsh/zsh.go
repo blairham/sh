@@ -6423,6 +6423,11 @@ func Diagnostics() interp.Diagnostics {
 		// And the same number for a sourced file given up over an *error*,
 		// where a fatal error that reaches the top of a script reports 1.
 		SourcedFatalStatus: 126,
+		// And a parse failure in a startup file leaves the status the line
+		// before it left, where `.` returns 126 for the same text: measured
+		// 2026-10-04 over a `.zshenv` whose last command left 0, 1 and 7,
+		// the `-c` command sees 0, 1 and 7 (#5869).
+		StartupParseFailureStatus: interp.StartupParseStatusKept,
 		// The builtin the script wrote rather than a literal `.`, because
 		// this shell has two names for it and says the one it was given.
 		// Measured 2026-09-12 on zsh 5.9.2 with nothing of that name

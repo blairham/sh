@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	"github.com/blairham/sh/interp"
-	"github.com/blairham/sh/syntax"
 )
 
 // The files a shell reads before it starts asking.
@@ -119,7 +118,7 @@ func (sh Shell) unconditionalStartupFile(r *interp.Runner, in source) int {
 	if code := sh.systemStartupFile(r, in, sh.Semantics.SystemStartupFiles.Unconditional); code != 0 {
 		return code
 	}
-	return sh.sourceFile(r, sh.startupPath(r, sh.Semantics.UnconditionalStartupFile))
+	return sh.sourceFile(r, in, sh.startupPath(r, sh.Semantics.UnconditionalStartupFile))
 }
 
 // systemStartupFile sources one of the files in the directory the machine's
@@ -142,7 +141,7 @@ func (sh Shell) systemStartupFile(r *interp.Runner, in source, name string) int 
 	if in.startup.noSystem {
 		return 0
 	}
-	return sh.sourceFile(r, sh.systemStartupPath(name))
+	return sh.sourceFile(r, in, sh.systemStartupPath(name))
 }
 
 // systemStartupPath names one of the system-wide files, or nothing when this
@@ -181,7 +180,7 @@ func (sh Shell) loginProfile(r *interp.Runner, in source) int {
 		return code
 	}
 	for _, name := range strings.Fields(sh.Semantics.LoginStartupFiles) {
-		if code, found := sh.sourceFoundFile(r, sh.startupPath(r, name)); found {
+		if code, found := sh.sourceFoundFile(r, in, sh.startupPath(r, name)); found {
 			return code
 		}
 	}
@@ -201,7 +200,7 @@ func (sh Shell) lateLoginProfile(r *interp.Runner, in source) int {
 	if code := sh.systemStartupFile(r, in, sh.Semantics.SystemStartupFiles.LateLogin); code != 0 {
 		return code
 	}
-	return sh.sourceFile(r, sh.startupPath(r, sh.Semantics.LateLoginStartupFile))
+	return sh.sourceFile(r, in, sh.startupPath(r, sh.Semantics.LateLoginStartupFile))
 }
 
 // readsLoginProfile answers whether this invocation reads a profile at all.
@@ -272,15 +271,15 @@ func (sh Shell) interactiveStartupFile(r *interp.Runner, in source) int {
 			// `--rcfile` replaces the name rather than adding to it, and it
 			// is read from here rather than from the invocation directly so
 			// that it loses to everything this branch already refused.
-			return sh.sourceFile(r, in.startup.file)
+			return sh.sourceFile(r, in, in.startup.file)
 		}
-		return sh.sourceFile(r, sh.startupPath(r, name))
+		return sh.sourceFile(r, in, sh.startupPath(r, name))
 	}
 	// $ENV is expanded first: it is a path with parameters in it more often
 	// than not, and `$HOME/.shrc` is the usual spelling. An unset or empty
 	// one expands to nothing and names nothing, which sourceFile answers.
 	env, _ := r.GetVar("ENV")
-	return sh.sourceFile(r, r.Expand(env))
+	return sh.sourceFile(r, in, r.Expand(env))
 }
 
 // readsRunCommandsFile answers whether this invocation reads the file a shell
@@ -341,7 +340,7 @@ func (sh Shell) nonInteractiveStartupFile(r *interp.Runner, in source) int {
 		return 0
 	}
 	value, _ := r.GetVar(name)
-	return sh.sourceFile(r, r.Expand(value))
+	return sh.sourceFile(r, in, r.Expand(value))
 }
 
 // logoutFile sources the file a *login* shell reads on its way out.
@@ -365,7 +364,7 @@ func (sh Shell) logoutFile(r *interp.Runner, in source) {
 		return
 	}
 	leaving := r.ExitStatus()
-	sh.sourceFile(r, sh.startupPath(r, sh.Semantics.LogoutFile))
+	sh.sourceFile(r, in, sh.startupPath(r, sh.Semantics.LogoutFile))
 	if !r.Exited() {
 		// The file said nothing about the status, so the number `exit` named
 		// is still the one the shell leaves with — and not whatever the
@@ -375,8 +374,8 @@ func (sh Shell) logoutFile(r *interp.Runner, in source) {
 }
 
 // sourceFile runs a file on the runner, as `.` would.
-func (sh Shell) sourceFile(r *interp.Runner, path string) int {
-	status, _ := sh.sourceFoundFile(r, path)
+func (sh Shell) sourceFile(r *interp.Runner, in source, path string) int {
+	status, _ := sh.sourceFoundFile(r, in, path)
 	return status
 }
 
@@ -387,14 +386,12 @@ func (sh Shell) sourceFile(r *interp.Runner, path string) int {
 // exists, so "ran and said nothing" and "was not there" have to be told apart
 // — a status of zero is both.
 //
-// Guarded per file, and a caught panic costs the file rather than the session.
-// That is the opposite of what a *parse* error in the same file does, and the
-// difference is whose fault it is: a file that will not parse is wrong, and a
-// shell that started anyway would be running with settings a person wrote and
-// the shell silently declined. A file that parsed and then tickled an
-// interpreter bug is the shell being wrong, and a half-configured prompt is a
-// far better answer to that than no prompt at all.
-func (sh Shell) sourceFoundFile(r *interp.Runner, path string) (status int, found bool) {
+// Guarded per file, and a caught panic costs the file rather than the session:
+// a file that tickled an interpreter bug is the shell being wrong, and a
+// half-configured prompt is a far better answer to that than no prompt at all.
+// A file that will not parse costs that file too, which is measured rather
+// than chosen — see sourceText.
+func (sh Shell) sourceFoundFile(r *interp.Runner, in source, path string) (status int, found bool) {
 	if path == "" {
 		return 0, false
 	}
@@ -413,7 +410,7 @@ func (sh Shell) sourceFoundFile(r *interp.Runner, path string) (status int, foun
 		// person out of a shell.
 		return 0, false
 	}
-	if sh.guard().Do(func() { status = sh.sourceText(r, path, string(b)) }) {
+	if sh.guard().Do(func() { status = sh.sourceText(r, in, path, string(b)) }) {
 		return 0, true
 	}
 	return status, true
@@ -421,21 +418,15 @@ func (sh Shell) sourceFoundFile(r *interp.Runner, path string) (status int, foun
 
 // sourceText is sourceFile once the bytes are in hand and a guard is around
 // it.
-func (sh Shell) sourceText(r *interp.Runner, path, text string) int {
-	// A startup file is a file, which is the route the one route-dependent
-	// grammar answer needs: `ksh -c` ends an unterminated quote at the end
-	// of its string, and no file it reads gets that.
-	f, perr := syntax.Parse(text, sh.Dialect.On(syntax.RouteFromScriptFile))
-	if perr != nil {
-		sh.errf("%s", sh.Diagnostics.ParseDiagnostic(path, text, perr, text))
-		return sh.Diagnostics.StatusForParseError(perr)
-	}
-	// As the sourced script it is, which is what gives a `return` in it
-	// something to return from: every shell in the panel accepts one in a
-	// startup file, stops reading the file there and says nothing (#1422).
-	// Run would have made this a script's own top level, where the refusal
-	// belongs.
-	if _, err := r.RunStartupFile(context.Background(), f, path); err != nil {
+func (sh Shell) sourceText(r *interp.Runner, in source, path, text string) int {
+	// Read and run a line at a time, so a line that will not parse costs the
+	// rest of this file and nothing else: what came before it has run, the
+	// files after it are read, and the program still runs. Measured in every
+	// column, and the reason is in Runner.RunStartupFile. It was parsed whole
+	// here first, so a typo on the last line of a `~/.zshenv` ran none of it
+	// and stopped `zsh -c cmd` before cmd (#5869).
+	failed := func(err error, ran bool) int { return sh.startupParseFailure(r, in, path, text, err, ran) }
+	if _, err := r.RunStartupFile(context.Background(), path, text, failed); err != nil {
 		sh.errf("%s", sh.Diagnostics.Report(path, 1, err.Error()+"\n"))
 		return usageStatus
 	}
@@ -451,6 +442,34 @@ func (sh Shell) sourceText(r *interp.Runner, path, text string) int {
 	// the neighboring rule the loop in startup already models on Exited.
 	r.GiveUpTheFile()
 	return 0
+}
+
+// startupParseFailure writes a parse failure in a startup file and says what
+// it leaves in `$?`.
+//
+// Named by the file's path and worded as a script's, which is bash and zsh —
+// `rc.sh: line 3: unexpected EOF while looking for matching `}'` and
+// `.zshenv:5: closing brace expected` — and the two fields are where the other
+// dialects differ: Diagnostics.StartupParseFailureNamesTheShell and
+// Diagnostics.StartupParseFailureWordedAsAtAPrompt carry the measured grid.
+// The text is the file's, for the one dialect that quotes the line back.
+//
+// The path was handed over as the shell's name and the file's whole text as
+// the input's, which put the entire file into bash's diagnostic where its
+// name belonged (#5869).
+func (sh Shell) startupParseFailure(r *interp.Runner, in source, path, text string, err error, ran bool) int {
+	dg := sh.Diagnostics
+	name := path
+	if dg.StartupParseFailureNamesTheShell {
+		name = in.diagName()
+	}
+	if dg.StartupParseFailureWordedAsAtAPrompt {
+		located := dg.Location
+		dg = dg.ForPrompt()
+		dg.Location = located
+	}
+	sh.errf("%s", dg.ParseDiagnosticAfter(name, "", err, text, r.LineReached()))
+	return dg.StartupParseFailureStatusFor(err, r.ExitStatus(), ran, in.interactive)
 }
 
 // startupPath names one of this dialect's startup files, or nothing when there

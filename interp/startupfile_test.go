@@ -27,11 +27,7 @@ func startupRun(t *testing.T, src string, carries Answer) (string, int) {
 	sem.StartupFileReturnCarriesItsArgument = carries
 	dg := Diagnostics{}
 	r := newTestRunner(t, &Runner{Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &dg, Name: "sh"})
-	f, err := syntax.Parse(src, syntax.Core())
-	if err != nil {
-		t.Fatal(err)
-	}
-	st, err := r.RunStartupFile(context.Background(), f, "/rc")
+	st, err := r.RunStartupFile(context.Background(), "/rc", src, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -112,11 +108,7 @@ func TestAStartupFileDoesNotLeaveTheShellLookingSourced(t *testing.T) {
 	dg := Diagnostics{}
 	r := newTestRunner(t, &Runner{Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &dg, Name: "sh"})
 
-	rc, err := syntax.Parse("echo rc\n", syntax.Core())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := r.RunStartupFile(context.Background(), rc, "/rc"); err != nil {
+	if _, err := r.RunStartupFile(context.Background(), "/rc", "echo rc\n", nil); err != nil {
 		t.Fatal(err)
 	}
 	script, err := syntax.Parse("return 7\necho \"after st=$?\"\n", syntax.Core())
@@ -147,11 +139,7 @@ func TestAStartupFileThatReturnsDoesNotStopTheNextOne(t *testing.T) {
 	r := newTestRunner(t, &Runner{Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &dg, Name: "sh"})
 
 	for _, src := range []string{"echo first\nreturn 3\necho no\n", "echo second\n"} {
-		f, err := syntax.Parse(src, syntax.Core())
-		if err != nil {
-			t.Fatal(err)
-		}
-		if _, err := r.RunStartupFile(context.Background(), f, "/rc"); err != nil {
+		if _, err := r.RunStartupFile(context.Background(), "/rc", src, nil); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -200,11 +188,7 @@ func TestAStartupFileIsNamedByTheDiagnosticsItRaises(t *testing.T) {
 	// answer with and what a passing test has to be able to tell apart.
 	r.SetScriptFile("/tmp/main.sh")
 
-	rc, err := syntax.Parse("# a\n# b\nnosuchcmd\n", syntax.Core())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := r.RunStartupFile(context.Background(), rc, "/etc/rc"); err != nil {
+	if _, err := r.RunStartupFile(context.Background(), "/etc/rc", "# a\n# b\nnosuchcmd\n", nil); err != nil {
 		t.Fatal(err)
 	}
 	if !strings.Contains(buf.String(), "/etc/rc:3: ") {
@@ -243,11 +227,7 @@ func TestAStartupFileDoesNotBecomeDollarZero(t *testing.T) {
 	r := newTestRunner(t, &Runner{
 		Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &dg, Name: "testsh",
 	})
-	rc, err := syntax.Parse("echo \"zero=$0\"\n", syntax.Core())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := r.RunStartupFile(context.Background(), rc, "/etc/rc"); err != nil {
+	if _, err := r.RunStartupFile(context.Background(), "/etc/rc", "echo \"zero=$0\"\n", nil); err != nil {
 		t.Fatal(err)
 	}
 	if !strings.Contains(buf.String(), "zero=testsh") {

@@ -35,15 +35,15 @@ func TestAStartupFileIsAFileForTheQuoteRule(t *testing.T) {
 	if !strings.Contains(errs.String(), "unterminated double quote") {
 		t.Errorf("stderr %q, want the startup file's quote refused", errs.String())
 	}
-	// A startup file that will not parse ends the shell — see sourceFoundFile
-	// — so the program never runs. Both halves are asserted because both move
-	// when the route does: with the file taken as a command string the quote
-	// closes, `FROM_FILE="yes` becomes an assignment of "yes\n", and the
-	// program runs and prints it.
-	if out.String() != "" {
-		t.Errorf("out %q, want nothing: the startup file was refused", out.String())
+	// A startup file that will not parse costs that file and not the
+	// program (#5869), so the program runs and shows what the file did. Both
+	// halves move when the route does: with the file taken as a command
+	// string the quote closes, `FROM_FILE="yes` becomes an assignment of
+	// "yes\n", and the program prints that instead.
+	if want := "[unset]\n"; out.String() != want {
+		t.Errorf("out %q, want %q: the startup file was refused", out.String(), want)
 	}
-	if code != 9 {
-		t.Errorf("status %d, want the syntax error's 9", code)
+	if code != 0 {
+		t.Errorf("status %d, want the program's own 0", code)
 	}
 }

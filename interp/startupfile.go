@@ -35,9 +35,40 @@ import (
 // command before it left. See Semantics.StartupFileReturnCarriesItsArgument,
 // which has the grid.
 //
-// The parse is still the caller's. A startup file that will not parse is
-// reported as a file — the path and the line, not `.`: two different questions
-// with two different answers, and this one is about control flow.
+// **Read a line at a time, and run as it is read** (#5869). The front end
+// used to parse the whole file first and stop when that failed, so one typo at
+// the bottom of a `~/.zshenv` ran none of the file and then stopped the shell
+// before the command it was started for. Every column reads a startup file
+// the way it reads a script — measured 2026-10-04 with `echo before`, an
+// unknown command, and then an unclosed `${x` or a stray `)`:
+//
+//	zsh 5.9.2    .zshenv, .zprofile, .zshrc   before, the two complaints, main
+//	bash 5.3.20  $BASH_ENV, .bash_profile,    before, the two complaints, main
+//	             .bashrc
+//	ksh93u+      $ENV under -i and under -E   before, the two complaints, main
+//	dash 0.5.12  $ENV under -i                before, the two complaints, main
+//	BusyBox ash  $ENV under -i                before, the two complaints, main
+//
+// So a failure costs the rest of *that file* and nothing else: zsh goes on to
+// read the startup files after it, and the program still runs. That is the
+// same boundary an error raised while the file runs has, which the caller
+// draws with GiveUpTheFile.
+//
+// Not through `.`'s reader, which already reads this way, because a startup
+// file is not a `.`: ksh93's `.` parses its file whole before running any of
+// it and dash's `.` ends the shell over a parse failure, and neither does so
+// for `$ENV`. Each line goes through RunPart, which is what ran the whole
+// file before, so everything that is not about reading is unchanged.
+//
+// failed is handed a parse failure, and whether any of the file ran before it,
+// and writes it; what it returns is the status the file leaves — the caller's, because how a startup file's failure
+// is named and what it leaves in `$?` are the front end's to say: a startup
+// file is named by its path in three dialects and by the shell in two. It is
+// also handed a line the reader refused on its own (syntax.File.Refused), for
+// the writing alone; that line goes and the next one runs, leaving 1, as it
+// does on every other route that reads a line at a time. Nil writes the
+// failure the way a script's is written, named by the path, and leaves the
+// status a script would exit with.
 //
 // path is what the shell opened, and it is what a diagnostic raised at the top
 // level of the file names. Without it the file had no frame, `currentFile` was
@@ -45,7 +76,7 @@ import (
 // script route is the script's path, so a `set -u` failure on line 3 of a
 // `~/.zshenv` sent a person to line 3 of a script that was fine. Every shell
 // in the panel that reads a startup file names the startup file (#1123).
-func (r *Runner) RunStartupFile(ctx context.Context, f *syntax.File, path string) (int, error) {
+func (r *Runner) RunStartupFile(ctx context.Context, path, src string, failed func(err error, ran bool) int) (int, error) {
 	// The frame a `return` returns from. A count rather than a flag, and
 	// raised the same way `.` raises it, because a startup file may source
 	// another and each of them is its own boundary.
@@ -57,7 +88,72 @@ func (r *Runner) RunStartupFile(ctx context.Context, f *syntax.File, path string
 	// shell — see Frame.Startup.
 	r.pushFrame(Frame{File: path, Startup: true})
 	defer r.popFrame()
-	err := r.RunPart(ctx, f)
+	if failed == nil {
+		failed = func(err error, _ bool) int {
+			r.errf("%s", r.diag().ParseDiagnostic(path, "", err, src))
+			return r.diag().StatusForParseError(err)
+		}
+	}
+	// The line this file has got to is the file's own, for the one dialect
+	// that locates a parse failure there (Diagnostics.ParseFailureIsLocatedWhereTheProgramGotTo):
+	// a failure on the first line of `$ENV` is not at the line the file read
+	// before it reached. Put back afterwards so the program after it starts
+	// from where it would have.
+	outerReached := r.reachedLine
+	r.reachedLine = 0
+	defer func() { r.reachedLine = outerReached }()
+	// A file the shell reads, so the grammar is a file's — `ksh -c` ends an
+	// unterminated quote at the end of its string, and no file it reads gets
+	// that — and the aliases are the ones defined so far, by this file's own
+	// earlier lines as much as by a file before it: `alias a='echo hit'` and
+	// then `a` in a `~/.zshenv` prints `hit` in zsh and bash alike.
+	route := syntax.RouteFromScriptFile
+	p := r.ParseWithAliases(src, r.dialect().On(route))
+	// And the grammar a line sets is the one the next line is read in — the
+	// rule the front end's own reader and `.`'s keep, for the same reason: a
+	// `setopt` or a `shopt -s extglob` in a startup file is there for what
+	// comes after it.
+	dialectRead := r.Dialect
+	// Whether any of the file ran before the failure, which is the one thing
+	// besides the failure itself that the status after it turns on in one
+	// dialect — see Diagnostics.StartupParseFailureStatusFor.
+	stopped, ran := false, false
+	for {
+		if r.Dialect != dialectRead && r.Dialect != nil {
+			dialectRead = r.Dialect
+			p.SetDialect(r.ParsingDialect(r.dialect().On(route)))
+		}
+		// Reading the next unit of a file, which is one of the moments a held
+		// signal waits for. See Runner.ReadingTheNextUnitOfInput.
+		r.releaseSignalsHeldForInput()
+		f, ok := p.NextLine()
+		if !ok || p.Err() != nil {
+			// The end, or a line the reader stopped inside — which comes back
+			// with its statements taken off it, so none of it runs.
+			break
+		}
+		if f.Refused != nil {
+			failed(f.Refused, ran)
+			r.status, ran = 1, true
+			continue
+		}
+		ran = ran || len(f.Stmts) > 0
+		if err := r.RunPart(ctx, f); err != nil {
+			return r.status, err
+		}
+		if r.ctl != controlNone {
+			// `return`, `exit`, or an error that costs the file: whichever it
+			// was, nothing more of the file is read, and the caller says what
+			// it meant.
+			stopped = true
+			break
+		}
+	}
+	if err := p.Err(); err != nil && !stopped {
+		// Everything before it has run, and the rest of the file goes. A
+		// shell that had stopped reading never met the line.
+		r.status = failed(err, ran)
+	}
 	if r.ctl == controlReturn {
 		// Caught, so the shell goes on to the next startup file and then to
 		// the prompt rather than staying in a returning state. Exactly what
@@ -77,5 +173,5 @@ func (r *Runner) RunStartupFile(ctx context.Context, f *syntax.File, path string
 			r.status = r.returnSeenStatus
 		}
 	}
-	return r.status, err
+	return r.status, nil
 }

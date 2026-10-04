@@ -3237,6 +3237,56 @@ statements to the entry point for a *script's own top level* — so there was
 nothing to return from, and the refusal that belongs to the third row fired in
 the first. `interp.Runner.RunStartupFile` is the entry point that does not.
 
+## A startup file that will not parse
+
+**The rule.** A startup file is read and run a line at a time, as a script
+is. A line that will not parse is reported, the rest of *that file* is not
+read, and everything else goes on: the lines before it have run, the startup
+files after it are read, and the program the shell was started for runs.
+
+**Measured** 2026-10-04 with a file of `echo before`, an unknown command, and
+then an unclosed `${x` or a stray `)`, standard input on the null device (bash
+reads no `$BASH_ENV` with a socket there):
+
+| shell, file, route | runs `before` | the program runs | the failure is named |
+|---|---|---|---|
+| zsh 5.9.2, `.zshenv` `.zprofile` `.zshrc`, `-c` `-i` `-l` | yes | yes | `/path/.zshenv:5: closing brace expected` |
+| bash 5.3.20, `$BASH_ENV` `.bash_profile` `.bashrc`, `-c` `-l` `-i` | yes | yes | ``/path/rc.sh: line 3: unexpected EOF while looking for matching `}'`` |
+| ksh93u+, `$ENV`, `-E` and `-i` | yes | yes | ``/path/env.sh: line 2: syntax error: `)' unexpected`` |
+| dash 0.5.12, `$ENV`, `-i` | yes | yes | `dash: 3: Syntax error: ")" unexpected` |
+| BusyBox ash 1.37.0, `$ENV`, `-i` | yes | yes | `ash: syntax error: unexpected ")"` |
+
+zsh goes on to every later file, a second broken one included. ksh93's line
+is the last command the file ran, and it is left out before the second line;
+its sentence is the prompt's, with no `at line N`, under `-E` as much as under
+`-i`. dash and BusyBox ash name the shell rather than the file, as they do for
+everything said from inside `$ENV`. bash quotes the line back after a syntax
+error, as it does in a script. `Diagnostics.StartupParseFailureNamesTheShell`
+and `Diagnostics.StartupParseFailureWordedAsAtAPrompt`.
+
+What the program then sees in `$?` is the split:
+
+| | the file's last command left 0 / 1 / 7 |
+|---|---|
+| zsh | 0 / 1 / 7, and 0 under `-c` but 1 at a prompt where none of the file ran |
+| ksh93 `-E` | 0 / 1 / 7 |
+| ksh93 `-i` | 3 / 3 / 3 |
+| bash | 2 / 2 / 2 |
+| dash, ash (`-i`) | 2 / 2 / 2 |
+
+`Diagnostics.StartupParseFailureStatus`. One bash detail is not modeled: an
+unclosed quote, backquote, `$((` or `${` leaves a *failing* status where it
+found one (1 and 7 above) and 2 only over a success. bash's script route has
+the same split and bash 3.2 has neither, so it is a gap in how this shell
+reads bash's parse failures generally rather than in startup files.
+
+This is not `.`'s rule, although `.` reads the same way in bash and zsh:
+ksh93's `.` parses its file whole before running any of it, and dash's `.`
+ends the shell over a parse failure, where neither does either for `$ENV`.
+It replaced a front end that parsed each startup file whole and stopped the
+shell when that failed — one typo at the bottom of a `~/.zshenv` ran none of
+the file and none of any `zsh -c` on the machine (#5869).
+
 ## The options no shell has: `--policy`, `--audit` and the `--acp` four
 
 **The rule.** The shared front end reads a set of long options that belong

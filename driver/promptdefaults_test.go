@@ -196,7 +196,7 @@ func TestTheDefaultPromptIsNotExported(t *testing.T) {
 	}
 	// Asked of the shell rather than of a map, because what "exported" means
 	// is the shell's answer and a child's environment is where it shows.
-	if code := sh.sourceText(r, "exports", "export -p\n"); code != 0 {
+	if code := sh.sourceText(r, source{}, "exports", "export -p\n"); code != 0 {
 		t.Fatalf("listing the exports reported %d", code)
 	}
 	listed := sh.Stdout.(*strings.Builder).String()

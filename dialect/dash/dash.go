@@ -2384,6 +2384,10 @@ func Diagnostics() interp.Diagnostics {
 		JobDone:                "Done",
 		JobExited:              "Done(%[1]d)",
 		Location:               interp.LocationColonLine,
+		// A parse failure in `$ENV` names the shell and the file's line,
+		// as everything said from inside it does: `dash: 3: Syntax error:
+		// ")" unexpected` (#5869).
+		StartupParseFailureNamesTheShell: true,
 		// The one shell in the panel that tells neither failure from the
 		// other: a script operand that is missing and one that will not open
 		// share a wording and a status, and the status is the 2 it gives a

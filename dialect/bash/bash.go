@@ -1553,6 +1553,9 @@ func Semantics() interp.Semantics {
 	// reports 145 — 128 plus SIGSTOP. See the axis for what the rest of the
 	// panel does, and for why the monitor is the condition (#2227).
 	s.WaitGivesUpOnAStoppedJob = interp.Yes
+	// And a `wait` that reaps a job leaves the finished ones standing out of
+	// the choice of `+` and `-`. Measured 2026-10-03; see the axis.
+	s.AReapLeavesFinishedJobsUnmarked = interp.Yes
 	// And `kill` reads a signal written onto its option with no space:
 	// `kill -n9` and `kill -sKILL` both send. Measured 2026-09-12; bash 3.2
 	// refuses both, which is why this is an axis and not the engine (#2227).

@@ -2106,6 +2106,16 @@ func (sh Shell) operands(args []string, inv invocation) (source, error) {
 	// `-o` name — and a prompt is interactive whether or not anything was
 	// written. Measured, all four shells agree on both.
 	in.interactive = (inv.interactiveWritten && inv.interactive) || in.prompt
+	if in.interactive && !in.prompt && in.invocationRoute() == interp.RouteCommandString &&
+		in.dg.InteractiveCommandStringIsLocatedAsAPrompt {
+		// See Diagnostics.InteractiveCommandStringIsLocatedAsAPrompt.
+		if in.dg.PromptLocation != interp.LocationNone {
+			in.dg.Location = in.dg.PromptLocation
+		}
+		if in.dg.PromptBuiltinLocation != interp.LocationNone {
+			in.dg.BuiltinLocation = in.dg.PromptBuiltinLocation
+		}
+	}
 	// `-s` as written, carried here for the same reason and in the same
 	// place: it survives a route that overrode it, and `sh -s -c cmd` shows
 	// `s` in `$-` in all four shells while running the command string.

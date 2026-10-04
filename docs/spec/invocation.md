@@ -582,6 +582,22 @@ the listing for the row's whole life, reporting `on` under `-l`. `setOption`
 carries a separate `listed` reading for it now, and nothing else in the panel
 needs one.
 
+### bash locates an interactive command string the way it locates a prompt
+
+Measured 2026-10-04 with `-f -i -c 'nosuch; cd /nonexist; f() { nosuch2; }; f'`
+and standard input on the null device:
+
+| shell | written |
+| --- | --- |
+| bash 5.3.20 | `bash: nosuch: command not found`, `bash: cd: /nonexist: …`, `bash: nosuch2: …` — no line |
+| zsh 5.9.2 | `zsh:1: command not found: nosuch`, `zsh:cd:1: …` — the line kept, as under plain `-c` |
+
+So under `-i -c` bash uses its prompt locations for the run-time messages:
+`Diagnostics.InteractiveCommandStringIsLocatedAsAPrompt`. Not followed yet: bash
+does the same for a script file under `-i` and names itself rather than the
+script there, and a parse failure under `-i -c` is also written the prompt's
+way.
+
 ### The letters an interactive shell starts with are a second vector
 
 **The rule.** What `$-` begins with is `Semantics.DefaultOptionLetters` for a

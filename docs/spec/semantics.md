@@ -24606,6 +24606,26 @@ ksh93 (measured 2026-10-03).
 bash, dash and ash have no floats, so `1e400` is refused there while the
 word is being read and no value is ever produced for the axis to decide.
 
+**`ArithKeyReadCreatesTheElement`** — bash no · dash not reached · ksh93 **yes** · zsh no · ash not reached
+
+When an expression reads a key that an association does not have, this
+adds the key to the table with an empty value. Measured 2026-10-03 on
+ksh93u+ 2012-08-01, with `typeset -A m; m[k]=9`:
+
+- `: $(( m[x] ))` leaves `${!m[@]}` as `k x` and `${#m[@]}` as 2.
+- `(( m[z] ))` adds `z` in the same way.
+- On an empty table, `: $(( m[k] ))` makes `typeset -p m` print `typeset -A m=([k]=)`.
+- The expansion `${m[q]}` adds nothing, so the rule belongs to the expression's read, not to reads in general.
+
+This means `$(( m[*] ))` leaves a key named `*`, and a later `${m[*]}`
+joins its empty value with the rest: `[  9]` after reading both `*` and
+`@`. bash 5.3 and zsh 5.9.2 leave the table unchanged. The axis is asked
+only when the key is missing from a stored association.
+
+An indexed array read the same way is recorded but not modeled. In ksh93,
+after `: $(( b[5] ))` the array counts one more element, but
+`typeset -p` does not list it. That is a state rather than a value.
+
 **`ArithIntegerOperatorRefusesFloat`** — bash unspecified · dash unspecified · ksh93 yes · zsh no
 
 Rejects a float where only an integer will do — `7 % 2.5`, `1.5 & 1`, a

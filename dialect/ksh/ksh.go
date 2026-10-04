@@ -1041,6 +1041,8 @@ func Semantics() interp.Semantics {
 	// `$((1e300*1e300))`, is `inf`. The zero is the negative one and the
 	// unary minus applies to it, so `$((-1e400))` is `0`.
 	s.ArithFloatOverflowIsZero = interp.Yes
+	// An expression reading a missing key adds it, empty: `: $(( m[x] ))` leaves `x` in `${!m[@]}`.
+	s.ArithKeyReadCreatesTheElement = interp.Yes
 	// A negative exponent is a float answer here, not a refusal: `2**-1`
 	// is 0.5.
 	s.ArithNegativeExponentIsError = interp.No

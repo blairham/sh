@@ -9115,6 +9115,28 @@ type Semantics struct {
 	// numeral — which is what this shell did before #2766 — is neither.
 	ArithFloatOverflowIsZero Answer
 
+	// ArithKeyReadCreatesTheElement adds the key an expression read to an
+	// association that did not have it, holding the empty string, rather
+	// than leaving the table as it was.
+	//
+	// ksh93 alone. Measured 2026-10-03 on ksh93u+ 2012-08-01: with
+	// `typeset -A m; m[k]=9`, `: $(( m[x] ))` leaves `${!m[@]}` as `k x` and
+	// `${#m[@]}` as 2, `(( m[z] ))` adds `z` the same way, and `typeset -p m`
+	// after `: $(( m[k] ))` on an empty table is `typeset -A m=([k]=)`. The
+	// expansion `${m[q]}` adds nothing, so it is the expression's read and
+	// not every read. So `$(( m[*] ))` leaves a key `*` behind, and a later
+	// `${m[*]}` joins its empty value with the rest. bash 5.3 and zsh 5.9.2
+	// leave the table as it was.
+	//
+	// An indexed array read the same way is left alone here: ksh93 counts an
+	// element after `: $(( b[5] ))` that `typeset -p` does not list, which is
+	// a state rather than a value and is recorded rather than modeled.
+	//
+	// Asked only where the key is missing from a stored association, so a
+	// read of a key that is there never raises it, and neither does a
+	// dialect without associations.
+	ArithKeyReadCreatesTheElement Answer
+
 	// ArithNegativeExponentIsError refuses `2**-1` rather than answering
 	// with a float. bash says yes and stops the expression; ksh93 and zsh
 	// say no and answer 0.5. It does not arise where the grammar has no
@@ -31719,6 +31741,8 @@ func PosixSemantics() Semantics {
 		PrintfZeroFlagSurvivesAPrecision: No,
 		PrintfOutputBase:                 No,
 		PrintfCharPrecisionRepeats:       No,
+		// POSIX has no associations, so no read can add a key to one.
+		ArithKeyReadCreatesTheElement: No,
 		// XCU gives printf's format the XSI escape set and nothing else —
 		// `\\`, `\a`, `\b`, `\f`, `\n`, `\r`, `\t`, `\v` and `\ddd` — so
 		// neither spelling of the escape character is in it and a backslash

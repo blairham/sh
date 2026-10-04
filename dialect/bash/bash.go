@@ -1687,6 +1687,8 @@ func Semantics() interp.Semantics {
 	// bash has no floats, so `2**-1` has no integer answer and stops the
 	// expression; the two shells with floats answer 0.5 instead.
 	s.ArithNegativeExponentIsError = interp.Yes
+	// An expression reading a missing key leaves the table as it was.
+	s.ArithKeyReadCreatesTheElement = interp.No
 	// unanswered FloatLetterChangeRereadsTheRendering: this shell spells
 	// neither float letter, so no declaration of its own can change one and
 	// there is no rendering for a re-read to be about. Measured 2026-09-26

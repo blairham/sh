@@ -32,7 +32,7 @@ func TestAConditionalOperandIsNamedTheOperatorsWay(t *testing.T) {
 		// A bare group, which this dialect has nowhere.
 		{"[[ $k == (a|b) ]]", []string{
 			"line 1: unexpected argument `(' to conditional binary operator",
-			"line 1: syntax error near `('",
+			"line 1: syntax error near `(a'",
 			"line 1: `[[ $k == (a|b) ]]'",
 		}},
 		{"[[ $k = (a|b) ]]", []string{
@@ -157,6 +157,39 @@ func TestAConditionGroupNamesTheCloserItWanted(t *testing.T) {
 			if !strings.Contains(out, w) {
 				t.Errorf("%s: said %q, want a line ending %q", tc.src, out, w)
 			}
+		}
+	}
+}
+
+// TestAConditionsNearLineQuotesTheTextRead — inside `[[ ]]`, bash's `near`
+// line quotes the source it had read when it stopped rather than the token:
+// the run ending one byte past the token, back to the nearest blank, newline,
+// `;`, `|` or `&`. The first line still names the token. Measured 2026-10-04
+// on bash 5.3.20 under `-c`; see conditions.md. Before this every row here
+// named the bare token, which cost #5719 forty-two cases.
+func TestAConditionsNearLineQuotesTheTextRead(t *testing.T) {
+	for _, tc := range []struct{ src, near string }{
+		{"[[ a == (ab) ]]", "(a"},
+		{"[[ a == ( ab) ]]", "("},
+		{"[[ a == () ]]", "()"},
+		{"[[ a == ((ab)) ]]", "(("},
+		{"[[ a == ab(cd) ]]", "ab(c"},
+		{"[[ a == <b ]]", "<b"},
+		{"[[ a == a<b ]]", "a<b"},
+		{"[[ a == $(x)(b) ]]", "$(x)(b"},
+		{`[[ x "y z" w ]]`, `z"`},
+		{"[[ -n ]]", "]]"},
+		{"[[ -n ]] ; x", "]]"},
+		{"[[ -n ]]; echo", ";"},
+		{"[[ -n ]]&& x", "&"},
+		{"[[ x yz&&w ]]", "&"},
+		{"[[ x yz(w ]]", "yz("},
+		{"[[ a b\nc ]]", "b"},
+	} {
+		src := strings.ReplaceAll(tc.src, `\n`, "\n")
+		out := condDiagnostic(t, src)
+		if want := "syntax error near `" + tc.near + "'\n"; !strings.Contains(out, want) {
+			t.Errorf("%q: said %q, want %q", src, out, want)
 		}
 	}
 }

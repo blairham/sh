@@ -1265,7 +1265,7 @@ func (p *Parser) failUnexpectedAt(tok Token, expected string, plain bool) {
 	// makes true of everything else here.
 	p.refusedWaitingForAThen = p.waitsForAThen()
 	p.err = &Error{
-		Pos: tok.Pos, Kind: ErrUnexpected,
+		Pos: tok.Pos, tokEnd: tok.End, Kind: ErrUnexpected,
 		Token: literal, TokenOpener: tokenOpener(tok),
 		TokenSource: source, TokenHoldsExpansion: tokenHoldsAnExpansion(tok),
 		Class: tokenClass(tok, plain), Expected: expected,

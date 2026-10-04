@@ -484,6 +484,19 @@ type Error struct {
 	// Set for a word token and empty for everything else, whose source and
 	// whose spelling are the same characters.
 	TokenSource string
+	// CondReadText is, for a token refused inside `[[ ]]`, the source text
+	// the reader had taken in when it stopped: the run ending one byte past
+	// the token, blanks behind it dropped, back to the nearest blank,
+	// newline, `;`, `|` or `&`. `(a` for the `(` of `(ab)`, `;` for the `]]`
+	// of `]];`. One dialect names that rather than the token — see
+	// Diagnostics.CondSyntaxNamesTheTextRead and conditions.md.
+	//
+	// Empty outside a condition, and where the token came out of an alias,
+	// whose positions do not index the input.
+	CondReadText string
+	// tokEnd is where the refused token ended, kept so blameCondition can
+	// work out CondReadText after the fact.
+	tokEnd Pos
 	// AliasSource is the alias body the failure was inside, where an alias
 	// put the offending token there, and empty otherwise.
 	//

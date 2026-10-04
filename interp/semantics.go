@@ -22491,6 +22491,26 @@ type Semantics struct {
 	// on both the `-c` and the script route.
 	UnderscoreTracksTheLastArgument Answer
 
+	// UnderscoreStopsAtADeclarationsAssignment leaves `$_` on the last word
+	// in front of a declaration's first assignment operand, rather than on
+	// the command's last word. Asked only where UnderscoreTracksTheLastArgument
+	// is Yes, and only of a declaration the grammar read as one —
+	// syntax.SimpleCmd.DeclaresByReservedWord.
+	//
+	// zsh. Measured 2026-10-03 on zsh 5.9.2 under `-f`:
+	//
+	//	export y=2; echo $_        export
+	//	export y=2 z; echo $_      export
+	//	export z y=2; echo $_      z
+	//	export y; echo $_          y      (no assignment: the last word)
+	//	typeset a=1 / readonly r=1 / local l=1 / integer i=1   the command word
+	//	builtin export y=2         y=2    (not a declaration the grammar read)
+	//	v=y=2; export $v           y=2    (nor is an expanded one)
+	//
+	// bash 5.3.20 answers `y=2` for the first, the operand as written, which
+	// is the base (corpus row special/underscore-after-a-declaration-command).
+	UnderscoreStopsAtADeclarationsAssignment Answer
+
 	// UnderscoreMovesBeforeAFunctionBody lets the *body* of a function see
 	// the call's own last argument in `$_`, rather than what the caller had
 	// before the call.
@@ -32376,6 +32396,9 @@ func PosixSemantics() Semantics {
 		FinishedJobNoticeNeedsAPrompt:   Yes,
 		TildePlusMinusExpands:           No,
 		UnderscoreTracksTheLastArgument: No,
+		// The operand is an argument like any other in the base; zsh
+		// overrides.
+		UnderscoreStopsAtADeclarationsAssignment: No,
 		// The substrate keeps no `$_`, so neither of the two questions about
 		// how it moves has anything to move — but both are written rather
 		// than left unanswered, because a caller that turns tracking on

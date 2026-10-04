@@ -2534,6 +2534,9 @@ func Semantics() interp.Semantics {
 	// because this is the column that departs from those two on the
 	// neighboring question above.
 	s.UnderscoreTracksTheLastArgument = interp.Yes
+	// And a declaration's assignment operands are not arguments to it:
+	// `export y=2; echo $_` is `export`. Measured 2026-10-03; see the axis.
+	s.UnderscoreStopsAtADeclarationsAssignment = interp.Yes
 	// The parameter exists before anything has put a value in it: `${_+x}`
 	// is non-empty and `set -u` reads it, even though what it holds is the
 	// empty string until the first command runs.

@@ -51,7 +51,6 @@ procsub/a-file-substitution-opens-only-at-a-word
 prompt/print-P-is-the-same-boundary
 redir/a-multi-target-stream-crosses-a-replacement
 return/digits-followed-by-text-as-the-operand
-special/underscore-after-a-declaration-command
 subst/a-comment-in-a-current-shell-body
 subst/a-paren-body-does-not-share-what-it-assigns
 test/a-terminal-test-descriptor-past-the-integer

@@ -8617,6 +8617,9 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 	r.noteInputLevelArgument(argv)
 	if len(argv) > 0 {
 		r.lastArg, r.lastArgSet = argv[len(argv)-1], true
+		if w, ok := r.underscoreBeforeADeclarationsAssignment(c); ok {
+			r.lastArg = w
+		}
 	} else if len(c.Assigns) > 0 && !modifiersOnly {
 		r.lastArg, r.lastArgSet = "", true
 	}

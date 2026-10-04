@@ -138,6 +138,17 @@ func Semantics() interp.Semantics {
 	// found` at 127, where bash and zsh run `fg` on it. See
 	// interp.Semantics.JobSpecCommandWord.
 	s.JobSpecCommandWord = interp.JobSpecCommandWordIsNotOne
+	// `fg` and `bg` read their options before anything else: measured
+	// 2026-10-04 on dash 0.5.12 with no job control, `bg -x` is `bg: Illegal
+	// option -x`, `bg --version` is `bg: Illegal option --` and `bg --` is
+	// `bg: No current job`. See interp.Semantics.JobResumeRefusesAnOptionFirst.
+	s.JobResumeRefusesAnOptionFirst = interp.Yes
+	// A valueless `local` of a name its own scope already holds lists
+	// nothing and keeps the value: measured 2026-10-04 on dash 0.5.12,
+	// `export FOO=bar; f() { local FOO=x; local FOO; echo "[$FOO]"; }; f`
+	// prints `[x]` and nothing on standard error. zsh is the column that
+	// lists. See interp.Semantics.ValuelessDeclarationOfAHeldNameListsIt.
+	s.ValuelessDeclarationOfAHeldNameListsIt = interp.No
 
 	s.ArithmeticOnlyBodyIsAnArithmeticExpansion = interp.No
 	// unanswered DebugActionArmingErrExitSkipsTheCommand: this shell has no

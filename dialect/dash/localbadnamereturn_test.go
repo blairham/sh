@@ -21,6 +21,8 @@ func TestABadLocalNameWithAValueFailsAtTheReturn(t *testing.T) {
 		{"f() { local 1x=5 2y=3; echo in; }; f; echo st=$?", "in\n2y: bad variable name\n", 2},
 		{"f() { local 1x=5; exit 4; }; f; echo st=$?", "", 4},
 		{"f() { local 1x; echo in; }; f; echo st=$?", "local: 1x: bad variable name\n", 2},
+		// A subscripted name is one of them: measured 2026-10-04.
+		{"f() { local a[1]=v; echo in=$?; }; f; echo st=$?", "in=0\na[1]: bad variable name\n", 2},
 	} {
 		t.Run(tc.src, func(t *testing.T) {
 			out, st := answersRun(t, tc.src)

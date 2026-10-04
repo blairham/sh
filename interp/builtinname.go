@@ -356,6 +356,16 @@ func (r *Runner) builtinNames(builtin string, args []string, explicitVariable bo
 			if r.unspecified {
 				return nil, 2, false
 			}
+			// A subscripted name is a bad name like any other to the
+			// dialect that defers one with a value: measured 2026-10-04 on
+			// dash 0.5.12, `f() { local a[1]=v; echo in=$?; }; f` writes
+			// `in=0` and then `a[1]: bad variable name` at the return.
+			if r.badLocalNameWaitsForTheReturn(builtin, a, name) {
+				continue
+			}
+			if r.unspecified {
+				return nil, 2, false
+			}
 			status = r.badSubscriptOperand(builtin, a, name, fatal)
 			if r.ctl == controlExit {
 				return r.namesAfterARefusal(builtin, rest, args[i+1:], takes), status, true

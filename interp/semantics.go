@@ -24003,8 +24003,10 @@ type Semantics struct {
 	// and `fg --version` are `bg: --version: unknown option` and the usage
 	// line at 2, where `bg %2` and a bare `bg` are the silent 1 a shell with
 	// no job control gives. bash 5.3.20 and zsh 5.9.2 say there is no job
-	// control first, whatever the word; dash reads its options on its own
-	// route. Read as `== Yes` (corpus row jobs/bg-with-no-job-control).
+	// control first, whatever the word. dash 0.5.12 refuses the option first
+	// too, measured 2026-10-04: `bg -x` is `bg: Illegal option -x`, and `bg
+	// --` takes the `--` and says `No current job`. Read as `== Yes` (corpus
+	// row jobs/bg-with-no-job-control).
 	JobResumeRefusesAnOptionFirst Answer
 
 	// EditingModesAreTwoSwitches holds `set -o emacs` and `set -o vi` as two

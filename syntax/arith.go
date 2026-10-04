@@ -911,7 +911,7 @@ func (a *arithParser) unreadableByteBehindAnOperand(i int) (int, bool) {
 	for i < len(src) && isArithSpace(src[i]) {
 		i++
 	}
-	if i >= len(src) || strings.IndexByte(arithTokenStarts, src[i]) >= 0 {
+	if i >= len(src) || strings.IndexByte(arithOperatorStarts, src[i]) >= 0 {
 		return 0, false
 	}
 	c := src[i]
@@ -921,9 +921,9 @@ func (a *arithParser) unreadableByteBehindAnOperand(i int) (int, bool) {
 	return i, true
 }
 
-// arithTokenStarts are the bytes an arithmetic operator or a group begins
+// arithOperatorStarts are the bytes an arithmetic operator or a group begins
 // with — everything a reader looking for the next token can take.
-const arithTokenStarts = "+-*/%<>=!&|^~?:,()"
+const arithOperatorStarts = "+-*/%<>=!&|^~?:,()"
 
 // refusedOutright reports whether the byte at the cursor is one this dialect's
 // arithmetic reader refuses as part of no token.

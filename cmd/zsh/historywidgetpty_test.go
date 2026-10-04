@@ -7,6 +7,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -105,7 +106,11 @@ func TestAWidgetReadsTheHistoryTableAtAPrompt(t *testing.T) {
 // keystroke draws a ladder of prompts down the screen and a one-row `PS1`
 // cannot see it (#2467) — and this test presses a key, which is exactly the
 // event that redraws.
-func widgetSession(t *testing.T) (*os.File, *smoke.Screen) {
+//
+// rc is what else the startup file holds, after the prompt: widgets a test
+// needs in place before its first keystroke, because one that replaces
+// `self-insert` would otherwise take over the lines that define the rest.
+func widgetSession(t *testing.T, rc ...string) (*os.File, *smoke.Screen) {
 	t.Helper()
 	home := scratchHome(t)
 	control, terminal, err := pty.Open()
@@ -118,7 +123,7 @@ func widgetSession(t *testing.T) (*os.File, *smoke.Screen) {
 	if err := pty.SetSize(terminal, 24, 100); err != nil {
 		t.Fatalf("sizing the terminal: %v", err)
 	}
-	writeHomeFile(t, home, ".zshrc", "PS1=$'HWROW\\n"+widgetMark+"'\n")
+	writeHomeFile(t, home, ".zshrc", "PS1=$'HWROW\\n"+widgetMark+"'\n"+strings.Join(rc, "\n"))
 
 	sh := scratchShell(t)
 	sh.Stdin, sh.Stdout, sh.Stderr = terminal, terminal, terminal

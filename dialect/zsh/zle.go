@@ -277,6 +277,9 @@ const (
 	// Beside the widget table and in the same shape, so a subshell gets its
 	// own copy of this too.
 	zleTransform = ".zsh.zle.transform"
+	// zleOpened is how the running call opened its parameters, empty where
+	// none is open. See widgetOpening.
+	zleOpened = ".zsh.zle.opened"
 )
 
 // postdisplayName is what a widget reads the text drawn after the line under.
@@ -1355,6 +1358,9 @@ func runWidgetFunction(
 	if !defined || !r.HasFunction(def.function) {
 		return in, false
 	}
+	// What was there before this call, put back when it ends — see
+	// callerWidgetState for why that is not the same as clearing it.
+	caller := saveWidgetState(r)
 	setWidgetLine(r, in)
 	r.SetVar(zleWidget, name)
 	r.SetVar(zleActive, "1")
@@ -1374,7 +1380,9 @@ func runWidgetFunction(
 	r.SetVar(zleNumeric, numeric)
 	// A completion widget looks at the line and does not rewrite it, which is
 	// the completer's presence and not a second flag — see openWidgetParameters.
-	openWidgetParameters(r, def.completer != "")
+	opened := widgetOpening{completion: def.completer != "", scope: r.ScopeDepth() + 1}
+	openWidgetParameters(r, opened)
+	r.SetVar(zleOpened, opened.String())
 	// Deferred rather than called at the end, because a panic in the widget
 	// function is caught *outside* this call — repl runs it behind the same
 	// guard a typed line runs behind — so a straight-line close would be
@@ -1383,7 +1391,7 @@ func runWidgetFunction(
 	// never be, and only after a crash nobody would connect it to.
 	defer func() {
 		closeWidgetParameters(r)
-		unsetWidgetState(r)
+		caller.restore(r)
 	}()
 	// The status goes in and does not come out, measured: the function sees
 	// what the last command left, and what the function leaves is not what the
@@ -1395,9 +1403,9 @@ func runWidgetFunction(
 		return in, false
 	}
 	out := widgetLine(r)
-	// Read once: the request belongs to this keystroke, and unsetWidgetState
-	// clears it on the way out with the rest of the call's state, so a widget
-	// that accepted cannot leave the next one accepting too.
+	// Read once: the request belongs to this keystroke, and the deferred
+	// restore puts back what was there before the call — nothing, at the
+	// top — so a widget that accepted cannot leave the next one accepting too.
 	if asked, _ := r.GetVar(zleAccept); asked == "1" {
 		out.Accept = true
 	}
@@ -1408,7 +1416,7 @@ func runWidgetFunction(
 // than stored so that each assignment is live in the arithmetic the others
 // answer with — see the file comment for the measurement that requires it.
 //
-// `completion` is whether this is a widget `zle -C` defined, and it makes the
+// `opened.completion` is whether this is a widget `zle -C` defined, and it makes the
 // four line parameters read-only for the length of the call. That is measured
 // and it is not an inference from what completion is for: driving zsh 5.9.2
 // through a pseudo-terminal and pressing a key bound to a `zle -C` widget,
@@ -1420,7 +1428,7 @@ func runWidgetFunction(
 // modeling precisely because it is the half that *refuses* — a completion
 // widget written against a shell that let it rewrite the line is a widget
 // that does not work in zsh.
-func openWidgetParameters(r *interp.Runner, completion bool) {
+func openWidgetParameters(r *interp.Runner, opened widgetOpening) {
 	r.SetDynamic("BUFFER", func(rr *interp.Runner) string { return widgetBuffer(rr) })
 	r.SetDynamicWriter("BUFFER", func(rr *interp.Runner, value string) {
 		// The stored cursor is left alone and every *read* of it clamps — see
@@ -1538,12 +1546,12 @@ func openWidgetParameters(r *interp.Runner, completion bool) {
 		r.MarkReadonly(name)
 		r.MarkLocal(name)
 	}
-	if completion {
+	if opened.completion {
 		for _, name := range zleLineParameters {
 			r.MarkReadonly(name)
 		}
 	}
-	declareWidgetParameters(r)
+	declareWidgetParameters(r, opened.scope)
 	// Every one of them belongs to this call, and zsh says so in the word a
 	// plugin reads: `${(t)BUFFER}` inside a `zle -N` widget is
 	// `scalar-local-special` there and was `scalar-special` here, with
@@ -1655,9 +1663,10 @@ var widgetParameterDeclarations = map[string]interp.ProducedDeclaration{
 // measured, `typeset -p BUFFER` in the widget writes `typeset BUFFER=ab` and
 // the same line in a function the widget calls writes `typeset -g
 // BUFFER=ab`. The widget's call is the scope opened next, which is the one
-// they are stated for.
-func declareWidgetParameters(r *interp.Runner) {
-	own := r.ScopeDepth() + 1
+// they are stated for — own, which the caller works out once, because a call
+// reopened for its widget after a nested one closed is no longer at that
+// depth. See callerWidgetState.
+func declareWidgetParameters(r *interp.Runner, own int) {
 	for name, d := range widgetParameterDeclarations {
 		d.LocalToScope = own
 		r.SetDynamicDeclaration(name, d)
@@ -1719,8 +1728,8 @@ func widgetLine(r *interp.Runner) repl.Line {
 // edit, which is what tells a widget apart from a script.
 //
 // Non-empty rather than merely set, and that is a fix mutation testing found
-// rather than a style: unsetWidgetState clears these names by storing the
-// empty string in them, which GetVar reports as *set*. So after one widget had
+// rather than a style: a call ending clears these names by storing the empty
+// string in them, which GetVar reports as *set*. So after one widget had
 // run, a plain script could invoke widgets for the rest of the session —
 // status 0 and the function actually ran — where the shell being modeled
 // refuses every time. Nothing in the suite noticed, because every other test
@@ -1734,11 +1743,97 @@ func editorRunning(r *interp.Runner) bool {
 	return active != ""
 }
 
-// unsetWidgetState clears what the call left behind, so nothing about one
-// keystroke's widget is visible to the next one's.
-func unsetWidgetState(r *interp.Runner) {
-	for _, name := range []string{zleBuffer, zleCursor, zleWidget, zleActive, zleAccept, zleLastWidget, zleNumeric, zleKeymap} {
-		r.SetVar(name, "")
+// widgetOpening is how one widget call opened its parameters: whether it is
+// a completion widget, which makes the line read-only, and the scope depth
+// the parameters are stated local to. Kept so that the call can be opened
+// again, exactly as it was, after a widget it ran has closed them — see
+// callerWidgetState.
+type widgetOpening struct {
+	completion bool
+	scope      int
+}
+
+// String is the opening as zleOpened holds it, which is "" for no call at
+// all: a parameter no script can spell, beside the rest of this file's.
+func (o widgetOpening) String() string {
+	kind := "n"
+	if o.completion {
+		kind = "c"
+	}
+	return kind + strconv.Itoa(o.scope)
+}
+
+// parseWidgetOpening reads zleOpened back, and false is no call open.
+func parseWidgetOpening(s string) (widgetOpening, bool) {
+	if len(s) < 2 {
+		return widgetOpening{}, false
+	}
+	scope, err := strconv.Atoi(s[1:])
+	if err != nil {
+		return widgetOpening{}, false
+	}
+	return widgetOpening{completion: s[0] == 'c', scope: scope}, true
+}
+
+// widgetCallState is every name this file keeps a call's state under — the
+// line, the cursor, what is drawn after it, the widget's name and the one
+// before it, the keymap, the count, the accept request, whether the editor
+// is running, and how the parameters were opened.
+//
+// **One list, read by both halves**, which is the reason it is a list: the
+// save and the restore must agree name for name, and the bug this exists for
+// was a state that could be cleared but not put back.
+var widgetCallState = []string{
+	zleBuffer, zleCursor, zlePostdisplay, zleWidget, zleLastWidget, zleKeymap,
+	zleNumeric, zleAccept, zleActive, zleOpened,
+}
+
+// callerWidgetState is what was there before a widget call, put back when
+// the call ends.
+//
+// **Put back, not cleared**, and the difference is #5864. A call is not
+// always the outermost thing: the editor runs `zle-line-pre-redraw` from a
+// redraw, a redraw can happen in the middle of another widget, and a call
+// that cleared everything on its way out left the widget it ran inside with
+// no `$WIDGET`, no `$BUFFER`, no `PENDING` or `KEYS_QUEUED_COUNT` and no
+// `region_highlight` — so zsh-autosuggestions' `(( $PENDING > 0 || … ))`
+// failed on every key, and the line the widget handed back was empty, which
+// is a Return that never runs anything. Measured 2026-10-04 against zsh
+// 5.9.2, from inside a `self-insert` replacement on `e`, after `zle
+// .self-insert`: `W=[self-insert] LW=[.self-insert] B=[e] P=[0] K=[0]`, with
+// the widget's own `POSTDISPLAY` and `region_highlight` still standing and
+// every `${(t)…}` unchanged.
+//
+// At the top, where nothing was running, the saved state is empty and putting
+// it back is the clearing this used to do. A plain `zle -F` handler is the
+// middle case: the editor is running and the line is held, but no parameters
+// are open, and that is what comes back.
+type callerWidgetState struct {
+	values []string
+	opened widgetOpening
+	open   bool
+}
+
+func saveWidgetState(r *interp.Runner) callerWidgetState {
+	values := make([]string, len(widgetCallState))
+	for i, name := range widgetCallState {
+		values[i], _ = r.GetVar(name)
+	}
+	raw, _ := r.GetVar(zleOpened)
+	opened, open := parseWidgetOpening(raw)
+	return callerWidgetState{values: values, opened: opened, open: open}
+}
+
+// restore puts the state back, and the caller's parameters with it: the call
+// that is ending closed them on its way out, and a widget that is still
+// running must find them as it left them — opened the way it opened them, at
+// the depth it opened them at, which is not this one.
+func (c callerWidgetState) restore(r *interp.Runner) {
+	for i, name := range widgetCallState {
+		r.SetVar(name, c.values[i])
+	}
+	if c.open {
+		openWidgetParameters(r, c.opened)
 	}
 }
 

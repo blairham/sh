@@ -157,9 +157,16 @@ func (a editorActions) PushKeys(s string) { a.e.pushKeys(s) }
 // The cursor is clamped on the way in for the reason Line.Cursor gives: an
 // action that walked off the end is asking for the end, and refusing it would
 // make every widget that sets `CURSOR=$#BUFFER` a special case.
+//
+// And what is drawn after the line, which is part of what the action is
+// holding: a widget that set `POSTDISPLAY` and then called `zle .self-insert`
+// still has it afterwards in zsh 5.9.2, measured 2026-10-04, and an editor
+// that kept its own copy handed back the one from before the widget ran —
+// the empty string, on every keystroke that had not drawn one yet (#5864).
 func (e *editor) take(in Line) {
 	e.line = []rune(in.Buffer)
 	e.pos = min(max(in.Cursor, 0), len(e.line))
+	e.postdisplay = in.Postdisplay
 }
 
 func (e *editor) give() Line {

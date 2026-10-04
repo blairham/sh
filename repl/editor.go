@@ -181,9 +181,10 @@ type editor struct {
 	// specials says the shell has special widgets to ask for at all. See
 	// EditorStyle.SpecialWidgets.
 	specials bool
-	// inSpecial says a special widget is running, so a redraw it makes asks
-	// for no other. See specialwidgets.go.
-	inSpecial bool
+	// inShell says one of the shell's own actions is running — a widget, a
+	// special widget or a descriptor handler — so a redraw it makes asks for
+	// no special widget. See specialwidgets.go.
+	inShell bool
 
 	// noTerminal says this session's input is **not** a terminal, which is not
 	// the same question as whether there is an editor: the editor reads bytes

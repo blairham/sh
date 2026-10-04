@@ -521,7 +521,12 @@ func (e *editor) serveDescriptors(prompt drawnPrompt) drawnPrompt {
 // *the line is untouched and the screen is the shell's problem* rather than
 // meaning the shell declined.
 func (e *editor) serveDescriptor(fd int, prompt drawnPrompt) {
+	// Held for the handler as for a widget: its `zle -R` asks for no
+	// pre-redraw, measured. See specialWidget.
+	was := e.inShell
+	e.inShell = true
 	out, changed := e.descriptorReady(fd, e.give(), editorActions{e: e, prompt: prompt})
+	e.inShell = was
 	if !changed {
 		return
 	}

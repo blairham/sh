@@ -3755,6 +3755,11 @@ func Semantics() interp.Semantics {
 	// A `( … )` or `$( … )` hashes into this shell's own table, and empties
 	// it with `hash -r`. Measured 2026-10-03; see the axis.
 	s.SubshellSharesTheCommandHash = interp.Yes
+	// A `read` waiting when a trapped signal arrives is given up, every name
+	// emptied, and answers 256 plus the signal: INT is 258. Measured
+	// 2026-10-03; see the two axes.
+	s.ReadIsAbandonedByATrappedSignal = interp.Yes
+	s.ReadAbandonedReportsTheSignal = interp.Yes
 	// And this is the column where the monitor is *not* enough: `set -m` is
 	// granted in a script with no terminal, and `fg` still answers 1 without
 	// a word — on a pseudo-terminal too, which is what says the missing

@@ -4315,6 +4315,9 @@ type Runner struct {
 	// negatedSoleCalled says that sole element was a function call or an
 	// `eval`. See Runner.judgeANegatedCall.
 	negatedSoleCalled bool
+	// readAbandonedBy is the trapped signal that gave up the `read` now
+	// finishing, or 0. See Runner.trapInterruptibleByteSource.
+	readAbandonedBy syscall.Signal
 
 	// programEnd is the line after the script's last, which is where the
 	// shell has got to once the script has run — what one dialect calls the

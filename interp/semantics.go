@@ -15767,6 +15767,24 @@ type Semantics struct {
 	// unpinned ash: the same as dash.
 	SignAloneListingCarriesAttributeWords Answer
 
+	// UndefinedFunctionLoadsBeforeTheRedirections reads the body of a function
+	// the shell is still waiting for before the call's own redirections are
+	// opened, so the file's output and its failure escape them.
+	//
+	// Measured 2026-10-03 on ksh93u+: with an FPATH file that defines nothing,
+	// `bb >/dev/null 2>/dev/null` still writes the file's output and the
+	// `not found in` refusal to the shell's own streams. zsh 5.9.2 reads the
+	// file under the call's redirections. See
+	// Runner.loadsAnUndefinedFunctionFirst.
+	//
+	// unpinned bash: bash has no undefined-function loader, so the question
+	// is never put.
+	//
+	// unpinned dash: likewise.
+	//
+	// unpinned ash: likewise.
+	UndefinedFunctionLoadsBeforeTheRedirections Answer
+
 	// SignAloneIsAnOptionWord reads a declaration's `-` or `+` written with
 	// no letters after it as an option word rather than as an operand.
 	//
@@ -32973,6 +32991,8 @@ func PosixSemantics() Semantics {
 		BareDeclarationListing: DeclareListingCommandWord,
 		BareLocalListing:       BareLocalListsNothing,
 		TypesetBadOptionFatal:  No,
+		// Where the load always was: behind the call's redirections.
+		UndefinedFunctionLoadsBeforeTheRedirections: No,
 		// What this engine wrote before the axis.
 		SignAloneListingCarriesAttributeWords: Yes,
 		// The dialect's fatal status, which is what this engine wrote.
@@ -33655,6 +33675,10 @@ func PosixSemantics() Semantics {
 // line rather than one per axis.
 func CoreSemantics() Semantics {
 	return Semantics{
+		// The load stays behind the call's redirections, which is where it
+		// always was: the question is put to every call wherever a loader is
+		// installed. See Semantics.UndefinedFunctionLoadsBeforeTheRedirections.
+		UndefinedFunctionLoadsBeforeTheRedirections: No,
 		// A substring's numbers count what `${#x}` counts, which is what this
 		// package did before the axis existed and what bash, ksh93 and zsh
 		// answer. Answered here because the question

@@ -9037,6 +9037,12 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 			r.redirectForBuiltin = argv[0]
 		}
 	}
+	if r.loadsAnUndefinedFunctionFirst(ctx, argv) {
+		// The file was read and left nothing to call, and the dialect has
+		// already said so. See Runner.loadsAnUndefinedFunctionFirst.
+		r.redirectForBuiltin, r.redirForCommandWord = "", ""
+		return nil
+	}
 	if r.refuseExecWithoutACommand(argv) {
 		// Ahead of every redirection on the line. See
 		// interp/execwithoutacommand.go.
@@ -14991,4 +14997,50 @@ func (r *Runner) failedExpansionStatusIs(st failedExpansionStatus) func() {
 	saved := r.failedExpansionStatus
 	r.failedExpansionStatus = st
 	return func() { r.failedExpansionStatus = saved }
+}
+
+// loadsAnUndefinedFunctionFirst reads the body of a function the shell is
+// still waiting for **before** the command's redirections are opened, where
+// the dialect does, and reports whether that left nothing to call.
+//
+// Measured 2026-10-03 on ksh93u+ 2012-08-01, with `fns/bb` holding `echo "bare
+// body"` and nothing else, `FPATH=$PWD/fns; typeset -fu bb` first:
+//
+//	bb >/dev/null 2>/dev/null; echo "after=$?"
+//	    `bare body` on the shell's own standard output, then `function,
+//	    built-in or type definition for bb not found in …` on its own
+//	    standard error, and the script ends at 126
+//	{ bb; } 2>/dev/null; echo "after=$?"
+//	    `bare body`, nothing on stderr, `after=126` — the group's
+//	    redirection is open around the call, so it is the *call's* own
+//	    redirections the load stands in front of
+//
+// So the file runs, and its failure is reported, as part of finding the
+// command rather than of running it. zsh reads the file under the call's
+// redirections. See Semantics.UndefinedFunctionLoadsBeforeTheRedirections.
+//
+// The load is the same Runner.loadUndefinedFunction the call site asks; done
+// here, it has already taken the mark off, so the second asking finds nothing
+// to do.
+func (r *Runner) loadsAnUndefinedFunctionFirst(ctx context.Context, argv []string) bool {
+	if len(argv) == 0 || r.loadUndefined == nil {
+		return false
+	}
+	if _, ok := r.funcs[r.namespaceFuncLookup(argv[0])]; !ok ||
+		r.presentedButSwitchedOff(argv[0]) || r.specialBuiltinOutranksAFunction(argv[0]) {
+		return false
+	}
+	// Asked of every call to a function where the dialect installed a loader
+	// at all, which is the narrowest place the question can be put without
+	// the load having already happened — and a dialect with a loader answers
+	// it. The core answers No, which is where the load always was.
+	if !r.ask(r.sem().UndefinedFunctionLoadsBeforeTheRedirections,
+		"an undefined function's body read before the call's redirections") {
+		return false
+	}
+	if !r.loadUndefinedFunction(ctx, argv[0]) {
+		return false
+	}
+	_, still := r.funcs[argv[0]]
+	return !still
 }

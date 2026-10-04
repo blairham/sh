@@ -8646,6 +8646,11 @@ type Diagnostics struct {
 	// writes, and whether the expression survives it, is
 	// Semantics.EmptyArithSubscript; this is only the wording.
 	ArithEmptySubscript string
+	// ArithEmptySubscriptWrittenTwice writes ArithEmptySubscript twice for
+	// each read of the empty subscript, which is what bash does: measured
+	// 2026-10-04 on 5.3.20, `$(( a[] ))` is two identical lines and
+	// `$(( a[] * a[] ))` is four, with the expression carrying on at zero.
+	ArithEmptySubscriptWrittenTwice bool
 	// ArithEmptySubscriptTarget is the same emptiness where the brackets name
 	// a place to *write*: `(( m[] = 4 ))` and `(( m[]++ ))`. One verb, the
 	// name, and the sentences carry their own brackets because the two shells

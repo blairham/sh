@@ -5759,6 +5759,13 @@ func (r *Runner) paramSubject(e *syntax.ParamExpr) string {
 	if e.Index == nil {
 		return e.Name
 	}
+	if (e.Name == "@" || e.Name == "*") && !e.Index.Start.IsValid() {
+		// A subscript nobody wrote: the positional parameters taken as a
+		// list carry one so the array path can read them, and `${@:#}` is
+		// named `@` and not `@[@]` — measured on bash 5.3.20, 2026-10-04.
+		// See Runner.positionalsAsList.
+		return e.Name
+	}
 	// The subscript as it was *written*, flag group included: a diagnostic
 	// about `${a[(re)x]}` that named `a[x]` would name a subscript the
 	// script does not contain. Every subscript of a chain, for the same

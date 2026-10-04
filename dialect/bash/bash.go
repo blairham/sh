@@ -92,6 +92,12 @@ func Dialect() syntax.Dialect {
 	// a[']']=5; (( a[']'] ))` is 5 in 5.3.20 and under the `sh` name alike.
 	// See syntax.Dialect.ArithSubscriptQuoting (#3302).
 	d.ArithSubscriptQuoting = true
+	// Where an operator belonged, a byte that begins no token is a missing
+	// operand behind a group and a bad operator anywhere else, and the reader
+	// has already taken the token behind an operand standing there. Measured
+	// 2026-10-04 on 5.3.20; see docs/spec/arithmetic.md.
+	d.ArithBadByteAfterAGroupWantsAnOperand = true
+	d.ArithLeftoverOperandReadsTheNextToken = true
 	// bash is the panel's holdout: it expands interactively and needs `shopt
 	// -s expand_aliases` anywhere else. Measured 2026-09-12 on all three
 	// routes, and in `eval`, `$( )`, a sourced file and a trap body — nothing
@@ -4492,9 +4498,12 @@ func Diagnostics() interp.Diagnostics {
 		EmptyAssociativeKeyRead:                  "%[1]s: bad array subscript",
 		EmptyAssociativeKeyLength:                "[%[1]s]: bad array subscript",
 		ArithEmptySubscript:                      "%[1]s[]: bad array subscript",
-		ArithEmptySubscriptTarget:                "`%[1]s[]': not a valid identifier",
-		ArrayAttributeNotRemovable:               "%[2]s: %[1]s: cannot destroy array variables in this way",
-		BareElementInASubscriptedTableLiteral:    "%[1]s: %[2]s: must use subscript when assigning associative array",
+		// And written twice for every read, measured 2026-10-04 on 5.3.20:
+		// `$(( a[] ))` is two lines, `$(( a[] * a[] ))` four.
+		ArithEmptySubscriptWrittenTwice:       true,
+		ArithEmptySubscriptTarget:             "`%[1]s[]': not a valid identifier",
+		ArrayAttributeNotRemovable:            "%[2]s: %[1]s: cannot destroy array variables in this way",
+		BareElementInASubscriptedTableLiteral: "%[1]s: %[2]s: must use subscript when assigning associative array",
 		// A declaration's operand names the value it came to, single-quoted,
 		// where the assignment above names the text as written.
 		BareElementInASubscriptedTableLiteralOperand: "%[1]s: '%[2]s': must use subscript when assigning associative array",

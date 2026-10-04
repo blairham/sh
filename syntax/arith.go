@@ -795,6 +795,14 @@ func (p *Parser) parseArithIn(src string, at Pos, expanded, dequote bool) ArithE
 		if kind == ErrArithIllegalByte {
 			token = a.src[a.off : a.off+1]
 		}
+		if kind == ErrArithOperator && a.dial.ArithLeftoverOperandReadsTheNextToken {
+			// The reader has already taken the token behind the operand,
+			// and a byte it could not read refuses first. See
+			// [Dialect.ArithLeftoverOperandReadsTheNextToken].
+			if at, ok := a.unreadableByteBehindAnOperand(a.off); ok {
+				kind, token = ErrArithBadOperator, a.src[at:]
+			}
+		}
 		a.failArith(kind, token)
 	}
 	if a.format != nil {
@@ -848,8 +856,74 @@ func (a *arithParser) leftoverKind() ErrorKind {
 	if a.refusedOutright() {
 		return ErrArithIllegalByte
 	}
+	if a.dial.ArithBadByteAfterAGroupWantsAnOperand && a.followsAGroup() {
+		// See [Dialect.ArithBadByteAfterAGroupWantsAnOperand].
+		return ErrArithOperand
+	}
 	return ErrArithBadOperator
 }
+
+// followsAGroup reports whether the last byte before the cursor, blanks
+// passed over, closed a parenthesized group.
+func (a *arithParser) followsAGroup() bool {
+	i := a.off
+	for i > 0 && isArithSpace(a.src[i-1]) {
+		i--
+	}
+	return i > 0 && a.src[i-1] == ')'
+}
+
+// unreadableByteBehindAnOperand passes over the operand that begins at i — a
+// name with any subscripts, or a numeral — and the blanks after it, and
+// reports where the next byte stands if it is one that can begin no token.
+// See [Dialect.ArithLeftoverOperandReadsTheNextToken].
+func (a *arithParser) unreadableByteBehindAnOperand(i int) (int, bool) {
+	src := a.src
+	start := i
+	for i < len(src) && (src[i] == '_' || src[i] >= '0' && src[i] <= '9' ||
+		src[i] >= 'a' && src[i] <= 'z' || src[i] >= 'A' && src[i] <= 'Z') {
+		i++
+	}
+	if i == start {
+		return 0, false
+	}
+	if c := src[start]; c < '0' || c > '9' {
+		// A name may carry subscripts; a numeral may not.
+		for i < len(src) && src[i] == '[' {
+			depth := 0
+			for i < len(src) {
+				if src[i] == '[' {
+					depth++
+				} else if src[i] == ']' {
+					depth--
+					if depth == 0 {
+						i++
+						break
+					}
+				}
+				i++
+			}
+			if depth != 0 {
+				return 0, false
+			}
+		}
+	}
+	for i < len(src) && isArithSpace(src[i]) {
+		i++
+	}
+	if i >= len(src) || strings.IndexByte(arithTokenStarts, src[i]) >= 0 {
+		return 0, false
+	}
+	c := src[i]
+	if c == '_' || c >= '0' && c <= '9' || c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' {
+		return 0, false
+	}
+	return i, true
+}
+
+// arithTokenStarts are the bytes an arithmetic operator or a group begins
+// with — everything a reader looking for the next token can take.
+const arithTokenStarts = "+-*/%<>=!&|^~?:,()"
 
 // refusedOutright reports whether the byte at the cursor is one this dialect's
 // arithmetic reader refuses as part of no token.

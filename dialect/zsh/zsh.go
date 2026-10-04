@@ -1515,6 +1515,10 @@ func Semantics() interp.Semantics {
 	// closed by `exec >&-` instead — a `write error` with the status still 0
 	// — is measured in docs/spec/semantics.md and not reproduced.
 	s.BuiltinWriteErrorFailsTheCommand = interp.No
+	// `set -a` marks an array or a table as surely as a scalar, whoever
+	// stored it: `set -a; A=(1); typeset -p A` is `typeset -ax A=( 1 )`.
+	// Measured 2026-10-03; see the axis.
+	s.AllexportMarksACompound = interp.Yes
 	// And the opposite answer for the other errno, which is the half of the
 	// pair this shell reverses. A builtin writing into a pipe nobody is
 	// reading, with SIGPIPE disarmed, reports 1 here -- where `echo hi >&-`

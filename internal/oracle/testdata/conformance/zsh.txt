@@ -51,7 +51,6 @@ subst/a-comment-in-a-current-shell-body
 subst/a-paren-body-does-not-share-what-it-assigns
 test/a-terminal-test-descriptor-past-the-integer
 trap/an-elements-pipe-handler-runs-inside-the-elements-redirections
-variable/allexport-marks-a-declarations-assignment
 xtrace/case-arm-patterns-are-not-expanded-past-the-match
 xtrace/ps4-unset-is-not-the-default-again
 zmodload/the-selection-as-the-command-that-would-make-it

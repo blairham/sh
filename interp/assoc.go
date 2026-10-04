@@ -180,6 +180,7 @@ func (r *Runner) markAssoc(name string) {
 	r.localizeMemberWrite(name)
 	r.compoundVariableRetyped(name)
 	r.AssocArrays[name] = AssocArray{}
+	r.markCompoundForAllexport(name)
 	// Declared and not assigned, which is the state one listing writes
 	// without the `=()` — see compounddeclaredonly.go.
 	r.compoundDeclaredOnly(name)
@@ -238,6 +239,7 @@ func (r *Runner) setAssocElemAs(name, key, value string, kind ElementKind) {
 		r.compoundVariableRetyped(name)
 		r.AssocArrays[name] = a
 	}
+	r.markCompoundForAllexport(name)
 	// What the name's attributes make of the value, the same fold an array's
 	// elements get in storeArray and a scalar gets in setVarAs — asked for
 	// rather than assumed, because an element is where the panel splits. See

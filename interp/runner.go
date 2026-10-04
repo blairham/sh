@@ -13330,6 +13330,22 @@ func (r *Runner) markForAllexport(name string) {
 	if !r.allexport {
 		return
 	}
+	r.markExportedByAllexport(name)
+}
+
+// markCompoundForAllexport is the same mark for an array or a table, in the
+// one shell whose option reaches them — see Semantics.AllexportMarksACompound.
+// Read rather than asked: it is reached from every store of a compound, and
+// the base's No is the answer of every shell that has not said otherwise.
+func (r *Runner) markCompoundForAllexport(name string) {
+	if !r.allexport || r.sem().AllexportMarksACompound != Yes {
+		return
+	}
+	r.markExportedByAllexport(name)
+}
+
+// markExportedByAllexport is the mark itself.
+func (r *Runner) markExportedByAllexport(name string) {
 	if r.exported == nil {
 		r.exported = map[string]bool{}
 	}

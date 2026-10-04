@@ -375,6 +375,7 @@ func (r *Runner) storeArray(name string, a Array) {
 	// write goes through, and compoundElemsFolded, which is what a store
 	// replacing the whole name asks.
 	r.Arrays[name] = a
+	r.markCompoundForAllexport(name)
 	// And the members of a compound no element holds any more, which is the
 	// same one chokepoint reached from the other side: an element write
 	// mutates the array it was handed, so what the name holds *now* is the
@@ -504,6 +505,7 @@ func (r *Runner) markIndexed(name string) {
 	r.localizeMemberWrite(name)
 	r.compoundVariableRetyped(name)
 	r.Arrays[name] = Array{}
+	r.markCompoundForAllexport(name)
 	// Declared and not assigned — see compounddeclaredonly.go.
 	r.compoundDeclaredOnly(name)
 }

@@ -23363,6 +23363,21 @@ type Semantics struct {
 	// had redirected, nothing died, and the `wait` after it then ran for as
 	// long as the job would have.
 	KillReadsASignalJoinedToItsOption Answer
+
+	// AllexportMarksACompound makes `set -a` mark an array or an association
+	// for export when it is stored, as it marks a scalar.
+	//
+	// zsh alone. Measured 2026-10-03 on zsh 5.9.2 under `-f`, with `set -a`
+	// on: `A=(1)`, `typeset -a B=(2)`, `typeset -A H=(k v)`, `local -a
+	// E=(1)` in a function, `C[1]=x`, `D+=(2)`, a bare `typeset -a G`, `read
+	// -A arr` and `set -A sa x y` each list with the `x` letter —
+	// `typeset -ax A=( 1 )` — and so does `match` after a `=~` the shell
+	// filled itself. None of it reaches a child's environment, which holds
+	// no arrays; the mark is what the listing shows. bash 5.3.20 lists
+	// `set -a; declare -a A=(1)` as `declare -a A=([0]="1")` with no `x`,
+	// and ksh93u+ the same, which is the base (corpus row
+	// variable/allexport-marks-a-declarations-assignment).
+	AllexportMarksACompound Answer
 	// KillJoinsANumberToTheNameOption takes a *number* written onto `-s` —
 	// `kill -s9` — as the same thing as `kill -s 9`, where the rule
 	// KillReadsASignalJoinedToItsOption describes joins only a name to `-s`.
@@ -32696,6 +32711,9 @@ func PosixSemantics() Semantics {
 		// four of the six sort by name, so the base does and dash and ash,
 		// which walk their table, override.
 		AliasListingWalksTheTable: No,
+		// `set -a` is about the environment, which holds strings; four of the
+		// columns that have arrays leave them unmarked, and zsh overrides.
+		AllexportMarksACompound: No,
 		// And so nothing joined to it that is a number either; dash and
 		// ksh93 override.
 		KillJoinsANumberToTheNameOption: No,

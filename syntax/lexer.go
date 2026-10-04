@@ -4647,6 +4647,16 @@ func (l *Lexer) scanParens(kind SpanKind, q Quoting) Span {
 				}
 				break
 			}
+			if kind == ArithSubst && l.dialect.ArithSubstClosesOnlyAtTwoParens {
+				// A quote inside the expression that ran out with it is
+				// not what is blamed there: `echo "[$((echo a) )]"` is
+				// `Missing '))'` in dash 0.5.12 and BusyBox ash, measured
+				// 2026-10-04, though the closing `"` was read as opening
+				// one. See Dialect.ArithSubstClosesOnlyAtTwoParens.
+				if se, ok := l.err.(*Error); ok && se.Kind == ErrUnmatched && se.Pos.Offset > open.Offset {
+					l.err = nil
+				}
+			}
 			l.failedToClose(open, kind, refusal)
 			break
 		}
@@ -4725,6 +4735,13 @@ func (l *Lexer) scanParens(kind SpanKind, q Quoting) Span {
 			depth++
 			l.advance()
 		case ')':
+			if kind == ArithSubst && depth == 2 && l.peekAt(1) != ')' &&
+				l.dialect.ArithSubstClosesOnlyAtTwoParens {
+				// A lone `)` where only `))` closes: text. See
+				// Dialect.ArithSubstClosesOnlyAtTwoParens.
+				l.advance()
+				continue
+			}
 			if !closerSettled {
 				depth--
 			}

@@ -3224,8 +3224,11 @@ func (r *Runner) arithSpanValue(s syntax.Span) (string, bool) {
 	// the text really is empty.
 	if strings.TrimSpace(s.Value) == "" &&
 		r.ask(r.sem().EmptyArithExpressionIsAnError, "an empty arithmetic expression being an error") {
+		// The expression is quoted back blanks and all: measured
+		// 2026-10-04 on dash 0.5.12, `$(( ))` is `expecting primary: " "`
+		// and `$((  ))` is the same with two.
 		r.diagf("%s\n", Wording(r.diag().ArithEmptyExpression,
-			`arithmetic expression: expecting primary: ""`))
+			`arithmetic expression: expecting primary: "%[1]s"`, s.Value))
 		r.expandErr = true
 		return "", false
 	}

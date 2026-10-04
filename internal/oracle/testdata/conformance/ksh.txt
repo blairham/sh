@@ -93,7 +93,6 @@ read/interrupted-by-a-trapped-signal
 read/keys-attached-count-must-be-a-number
 redir/a-wide-duplication-target-with-a-leading-zero
 redirection/a-script-file-of-its-own-takes-a-number-in-one-shell
-set/listed-value-with-a-byte-above-ascii
 socket/a-message-across-a-unix-socket
 startup/an-option-names-the-interactive-file
 subst/a-body-with-no-terminator-before-its-brace

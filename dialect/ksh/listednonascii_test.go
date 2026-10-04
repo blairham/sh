@@ -7,8 +7,25 @@ import (
 	"testing"
 
 	"github.com/blairham/sh/dialect/ksh"
+	"github.com/blairham/sh/internal/dialecttest"
 	"github.com/blairham/sh/interp"
 )
+
+// runKshInAUTF8Locale is runKsh with `LC_ALL=en_US.UTF-8` set, which is the
+// column every row in this file was measured in: under `LC_ALL=C` — and with
+// no locale at all, which this shell reads as C — every byte above ASCII is
+// spelled out instead. See Semantics.ListedNonAsciiFollowsTheLocale and
+// TestAListingSpellsHighBytesByTheLocale.
+func runKshInAUTF8Locale(t *testing.T, dir, src string) (string, int) {
+	t.Helper()
+	out, st, err := preset.CombinedThroughTheAliases(t, dialecttest.Base{
+		Dir: dir, Vars: map[string]string{"PATH": dir}, Env: []string{"LC_ALL=en_US.UTF-8"},
+	}, src)
+	if err != nil {
+		t.Fatalf("run %q: %v", src, err)
+	}
+	return out, st
+}
 
 // A non-ASCII **character** is written as itself in every listing surface
 // here, and a high byte that is not one is spelled out — #4770.
@@ -30,10 +47,10 @@ import (
 //
 // The recorded value came from the first column — the corpus harness pins
 // `LC_ALL=C` — and its stated reason was that this shell spells the byte out
-// `in every locale`, which the second column contradicts. bash answers the
-// same axis the same way round, and `dialect/bash` already states the choice
-// this now follows: the preset carries the reading a person's terminal sees,
-// and the corpus goes on recording the `C` cell.
+// `in every locale`, which the second column contradicts. Both columns are
+// modeled now: these rows run in the second, and
+// Semantics.ListedNonAsciiFollowsTheLocale is what gives the first back under
+// `LC_ALL=C` (#5712).
 //
 // The last row is the control and it is what makes this `Yes` rather than a
 // third answer: a high byte that is **not** part of a character is spelled
@@ -66,7 +83,7 @@ func TestAListedNonAsciiCharacterIsWrittenAsItself(t *testing.T) {
 		{"one in the middle of a value", `y=$'a\xc1z'; typeset -p y`, "y=$'a\\xc1z'\n"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			out, st := runKsh(t, t.TempDir(), tc.src)
+			out, st := runKshInAUTF8Locale(t, t.TempDir(), tc.src)
 			if out != tc.want || st != 0 {
 				t.Errorf("%s = %q (status %d), want %q", tc.src, out, st, tc.want)
 			}
@@ -154,7 +171,7 @@ func TestAListedNonAsciiCharacterIsACodePointInsideDollarQuotes(t *testing.T) {
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			out, st := runKsh(t, dir, tc.src)
+			out, st := runKshInAUTF8Locale(t, dir, tc.src)
 			if out != tc.want || st != 0 {
 				t.Errorf("%s = %q (status %d), want %q", tc.src, out, st, tc.want)
 			}
@@ -243,7 +260,7 @@ func TestOnlyAnAlphabeticCharacterAboveAsciiListsBare(t *testing.T) {
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			out, st := runKsh(t, dir, tc.src)
+			out, st := runKshInAUTF8Locale(t, dir, tc.src)
 			if out != tc.want || st != 0 {
 				t.Errorf("%s = %q (status %d), want %q", tc.src, out, st, tc.want)
 			}
@@ -299,7 +316,7 @@ func TestACharacterAboveAsciiIsANameInTheListingRules(t *testing.T) {
 		{"a bare head and a quoted tail", `v='é=b c'; typeset -p v`, "v=é='b c'\n"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			out, st := runKsh(t, dir, tc.src)
+			out, st := runKshInAUTF8Locale(t, dir, tc.src)
 			if out != tc.want || st != 0 {
 				t.Errorf("%s = %q (status %d), want %q", tc.src, out, st, tc.want)
 			}

@@ -15610,6 +15610,21 @@ type Semantics struct {
 	// engine did before.
 	LocalBadNameWithAValueFailsAtReturn Answer
 
+	// ListedNonAsciiFollowsTheLocale makes a listing spell every byte above
+	// ASCII out as a byte where the locale in force is not a UTF-8 one, so
+	// that what counts as printable is the locale's to say.
+	//
+	// Measured 2026-10-03: under `LC_ALL=C`, `v=é; set` writes
+	// `v=$'\303\251'` in bash 5.3.20 and `v=$'\xc3\xa9'` in ksh93u+, and
+	// `v=é` in both under `en_US.UTF-8`; zsh 5.9.2 writes `v=é` under
+	// either. See Runner.listingReadsBytesHere.
+	//
+	// unpinned dash: every dash listing single-quotes its values and never
+	// reaches `$'...'`, so the question is not put.
+	//
+	// unpinned ash: the same as dash.
+	ListedNonAsciiFollowsTheLocale Answer
+
 	// SignAloneIsAnOptionWord reads a declaration's `-` or `+` written with
 	// no letters after it as an option word rather than as an operand.
 	//
@@ -32731,6 +32746,8 @@ func PosixSemantics() Semantics {
 		BareDeclarationListing: DeclareListingCommandWord,
 		BareLocalListing:       BareLocalListsNothing,
 		TypesetBadOptionFatal:  No,
+		// What this engine did before the axis: the character reading.
+		ListedNonAsciiFollowsTheLocale: No,
 		// No is the immediate refusal this engine always made.
 		LocalBadNameWithAValueFailsAtReturn: No,
 		// POSIX has no array literal; No is what this engine did before.

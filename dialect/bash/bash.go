@@ -968,8 +968,8 @@ func Semantics() interp.Semantics {
 	// The character and not the escape, which is bash's answer in every
 	// locale but `C` — measured 2026-09-15 on one binary, `LC_ALL=C`
 	// writing `$'\303\251'` and every other setting, including none at
-	// all, writing `é`. The corpus runs in `C` and records that cell;
-	// this shell carries the reading a person's terminal sees.
+	// all, writing `é`. This is the character reading; the `C` cell is
+	// ListedNonAsciiFollowsTheLocale's, which this dialect answers Yes.
 	s.ListedNonAsciiIsOrdinary = interp.Yes
 	// And the character is written as **itself** inside a `$'...'` a control
 	// byte put this shell in, rather than as a code point, and no text in
@@ -3927,6 +3927,11 @@ func Semantics() interp.Semantics {
 	s.LocalOptions = "aAgiIlnprtux"
 	// A bad `declare` option is reported and the script goes on.
 	s.TypesetBadOptionFatal = interp.No
+	// A listing spells bytes above ASCII out where the locale has no
+	// characters there: measured 2026-10-03, `v=é; set` under `LC_ALL=C`
+	// writes the bytes escaped and under a UTF-8 locale the character. See
+	// Semantics.ListedNonAsciiFollowsTheLocale.
+	s.ListedNonAsciiFollowsTheLocale = interp.Yes
 	// A declaration's array literal over a frozen name, or over the other
 	// kind of array under an explicit letter, is refused ahead of the
 	// command and its redirections, as a bare assignment: measured

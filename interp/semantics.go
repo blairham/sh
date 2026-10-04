@@ -26106,6 +26106,32 @@ type Semantics struct {
 	// by, and measured the same way (#2037).
 	LinenoCountsFromTheFunction Answer
 
+	// LinenoCountsTheFunctionsLineAsOne is the other function-relative
+	// `$LINENO`: while a function runs, the line is the one being read less
+	// the line the function was written on, plus one — and that is so for a
+	// line of a file the function sourced, or of text it handed `eval`,
+	// whose own numbering is what is read.
+	//
+	// dash. Measured 2026-10-03 on dash 0.5.12 from script files, with
+	// `f(){` on line 3:
+	//
+	//	echo $LINENO on line 4                         2
+	//	the same on line 6                             4
+	//	`f()` on 3, `{` on 4, echo on 5                3
+	//	`f() { echo $LINENO; }` on 3                   1
+	//	`( echo $LINENO )` on 5                        3
+	//	eval "echo \$LINENO" on 4                     -1  (line 1 of the text)
+	//	a file it sources, lines 1 to 3                -1, 0, 1
+	//	at the top level after the call                9   (the file's line)
+	//
+	// A diagnostic is located by the file's own line all the same — `5:
+	// nosuchcmd: not found` from line 5 — so this is the parameter alone.
+	// The measurement under LinenoCountsFromTheFunction put the echo on the
+	// line below `f(){` written on line 1, where this reading and the file's
+	// both say 2. bash 5.3.20 and ksh93u+ count from the file; zsh is the
+	// axis above (corpus row special/lineno-in-a-file-a-function-sourced).
+	LinenoCountsTheFunctionsLineAsOne Answer
+
 	// EvalTextContinuesTheCallersLines numbers the lines of `eval`'s text on
 	// from the line the `eval` word is written on, rather than from one.
 	//
@@ -33262,6 +33288,8 @@ func PosixSemantics() Semantics {
 		// operand, so the base reads nothing joined to the option; bash 5.x
 		// and ksh93 override.
 		KillReadsASignalJoinedToItsOption: No,
+		// `$LINENO` is the file's line in the base.
+		LinenoCountsTheFunctionsLineAsOne: No,
 		// The refusal's status stands in the base; zsh overrides.
 		SetListingAfterARefusalLeavesZero: No,
 		// A negated command is exempt in the base; zsh overrides for a call.

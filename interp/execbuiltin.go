@@ -355,7 +355,16 @@ func (r *Runner) namedStreamsCanBePlaced() bool {
 
 // isMultiTarget reports whether a stream is one the shell built out of
 // several targets.
+//
+// Through a builtin's held output, which is how `exec` sees its own standard
+// output: the hold wraps the stream for as long as a builtin runs, so `exec
+// >a >b; exec /bin/echo hi` found a *heldOutput rather than the writer over
+// two files, read it as placeable, and replaced the process with standard
+// output closed (redir/a-multi-target-stream-crosses-a-replacement).
 func isMultiTarget(v any) bool {
+	if h, held := v.(*heldOutput); held {
+		v = h.to
+	}
 	_, ok := v.(multiTarget)
 	return ok
 }

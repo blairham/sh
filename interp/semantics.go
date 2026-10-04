@@ -2864,6 +2864,17 @@ type Semantics struct {
 	// the digest-pinned Alpine image internal/oracle reaches (#2291).
 	SubstringOfPositionalsSlicesTheList Answer
 
+	// AFiredAlternateOnAnEmptyListIsOneField makes a quoted `+` whose test
+	// fired on a list with no elements one empty field, where the list it
+	// stands for would be none.
+	//
+	// Measured 2026-10-03 with `set --; set -- "${@:+w}"; echo $#`: zsh 5.9.2
+	// and dash answer 1, bash 5.3 and ksh93u+ answer 0. zsh says the same of
+	// an empty array, `a=(); set -- "${a[@]:+w}"` is 1. With elements the
+	// test does not fire and every column gives the word. Read rather than
+	// asked: No is what this did before the axis.
+	AFiredAlternateOnAnEmptyListIsOneField Answer
+
 	// ExpandedReplacementBackslashQuotesABackslash reads a backslash that an
 	// unquoted expansion put in a `${v/pattern/replacement}` replacement as a
 	// quote on a backslash behind it, and as itself in front of anything else.
@@ -31864,6 +31875,7 @@ func PosixSemantics() Semantics {
 		// The standard has no substring operator, so this is the reading
 		// every shell that has one gives but BusyBox ash, which says so.
 		SubstringOfPositionalsSlicesTheList:          Yes,
+		AFiredAlternateOnAnEmptyListIsOneField:       No,
 		ExpandedReplacementBackslashQuotesABackslash: No,
 		MatchedBracketSkipsToAnEscapedBracket:        No,
 		SubstringOfAnUnsetNameEvaluatesNothing:       No,

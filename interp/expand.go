@@ -1770,6 +1770,11 @@ func (r *Runner) yieldsTheArray(e *syntax.ParamExpr) bool {
 		// safe only while a fired `+` implied an empty list, which was the
 		// assumption before that axis existed.
 		elems, _, ok := r.wholeListElements(e)
+		if ok && len(elems) == 0 && r.sem().AFiredAlternateOnAnEmptyListIsOneField == Yes {
+			// The scalar path's one empty field, in the dialects that give
+			// one. See Semantics.AFiredAlternateOnAnEmptyListIsOneField.
+			return false
+		}
 		return !ok || len(elems) == 0
 	}
 	return false
@@ -4737,6 +4742,21 @@ func (r *Runner) positionalsAsList(e *syntax.ParamExpr) (*syntax.ParamExpr, bool
 	}
 	listed := *e
 	listed.Index = &syntax.Word{Spans: []syntax.Span{{Kind: syntax.Literal, Value: e.Name}}}
+	switch e.Op {
+	case syntax.ParamDefault, syntax.ParamAssign, syntax.ParamError:
+		if r.sem().OperatorDistributesOverTheFieldList == No {
+			// The dialects that join the list before an operator answer
+			// from the joined string, which is one field however empty.
+			break
+		}
+		// The test was taken on the parameter itself and did not fire, so
+		// what this stands for is the list as it is. Asked again of the
+		// rewritten node, the test would read an array with no elements —
+		// unset — where the dialect calls `$@` with none set, and substitute
+		// the word: `set --; set -- "${@-w}"` left one field in zsh 5.9.2's
+		// column where the shell leaves none.
+		listed.Op, listed.Arg, listed.Colon = syntax.ParamNone, nil, false
+	}
 	return &listed, true
 }
 

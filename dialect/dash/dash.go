@@ -1076,6 +1076,9 @@ func Semantics() interp.Semantics {
 	// either — so the axis is unreachable in this column rather than
 	// unanswered.
 	s.PositionalListWithNoneIsSet = interp.Yes
+	// And a fired `+` on an empty list is one empty field: `set --; set --
+	// "${@:+w}"` leaves one. See Semantics.AFiredAlternateOnAnEmptyListIsOneField.
+	s.AFiredAlternateOnAnEmptyListIsOneField = interp.Yes
 	// An empty `$@` takes nothing with it here: a quoted expansion beside it is
 	// a field whether or not it produced anything, so `"$e$@"` and `"$@$e"` are
 	// each one empty argument.

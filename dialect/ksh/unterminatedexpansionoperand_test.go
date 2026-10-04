@@ -4,6 +4,8 @@
 package ksh_test
 
 import (
+	"bytes"
+	"context"
 	"strings"
 	"testing"
 
@@ -12,6 +14,7 @@ import (
 	"github.com/blairham/sh/dialect/dash"
 	"github.com/blairham/sh/dialect/ksh"
 	"github.com/blairham/sh/dialect/zsh"
+	"github.com/blairham/sh/interp"
 	"github.com/blairham/sh/syntax"
 )
 
@@ -67,7 +70,7 @@ func TestAnUnterminatedExpansionOperandRuns(t *testing.T) {
 		// arrives because nothing swallowed it.
 		{`s=abc; echo ${s}`, "abc\nAFTER\n", 0},
 	} {
-		out, st := kshOut(t, tc.src+"; echo AFTER")
+		out, st := kshRouteOut(t, tc.src+"; echo AFTER", syntax.RouteFromCommandString)
 		if tc.want == refused {
 			if st != -1 || !strings.HasPrefix(out, refused) {
 				t.Errorf("%s\n got %q at %d\nwant a refusal", tc.src, out, st)
@@ -80,12 +83,58 @@ func TestAnUnterminatedExpansionOperandRuns(t *testing.T) {
 	}
 }
 
+// And only on a command string. The same text from a script file or standard
+// input is refused by the reference as an unmatched `{` at status 3 and
+// nothing run, measured 2026-10-04 on ksh93u+ 2012-08-01 over `echo ${x:-a`
+// and `echo after` on the next line (#5717). A `${ cmd;}` body is refused on
+// every route, `-c` included, because it is a program and not an operand.
+func TestAnUnterminatedExpansionOperandRunsOnlyFromAString(t *testing.T) {
+	for _, tc := range []struct {
+		name, src string
+		route     syntax.ProgramRoutes
+	}{
+		{"a script file", "echo ${x:-a\necho after\n", syntax.RouteFromScriptFile},
+		{"standard input", "echo ${x:-a\necho after\n", syntax.RouteOnStandardInput},
+		{"a body with no terminator", `echo ${ echo hi}`, syntax.RouteFromCommandString},
+		{"a body whose group opened a level", `echo ${ echo {a,b};}`, syntax.RouteFromCommandString},
+		{"a body that ran out", "echo ${ echo hi\necho after\n", syntax.RouteFromCommandString},
+	} {
+		out, st := kshRouteOut(t, tc.src, tc.route)
+		if st != -1 || !strings.HasPrefix(out, "parse:") {
+			t.Errorf("%s: %q\n got %q at %d\nwant a refusal", tc.name, tc.src, out, st)
+		}
+	}
+	// The control: the same operand from a command string runs.
+	if out, st := kshRouteOut(t, "echo ${x:-a\necho after\n", syntax.RouteFromCommandString); out != "a echo after\n" || st != 0 {
+		t.Errorf("command string: got %q at %d, want the operand to take the rest", out, st)
+	}
+}
+
+// kshRouteOut is kshOut with the program's route said, which is what the
+// run-out reading asks.
+func kshRouteOut(t *testing.T, src string, route syntax.ProgramRoutes) (string, int) {
+	t.Helper()
+	f, err := syntax.Parse(src, ksh.Dialect().On(route))
+	if err != nil {
+		return "parse: " + err.Error(), -1
+	}
+	var out bytes.Buffer
+	s, d := ksh.Semantics(), ksh.Diagnostics()
+	r := &interp.Runner{Stdout: &out, Stderr: &out, Semantics: &s, Diagnostics: &d, Name: "ksh", Dialect: presetDialect()}
+	ksh.Apply(r)
+	st, rerr := r.Run(context.Background(), f)
+	if rerr != nil {
+		t.Fatal(rerr)
+	}
+	return out.String(), st
+}
+
 // And it is one dialect's. A flag test beside the behavior, because the four
 // other columns refuse every row above and a change that turned the reading on
 // for them would be a change to shells nobody measured that way.
 func TestAnUnterminatedExpansionOperandIsKshsAlone(t *testing.T) {
-	if !ksh.Dialect().UnterminatedExpansionOperandIsAValue {
-		t.Error("ksh: UnterminatedExpansionOperandIsAValue is off, want it on")
+	if got := ksh.Dialect().UnterminatedExpansionOperandIsAValue; got != syntax.RouteFromCommandString {
+		t.Errorf("ksh: UnterminatedExpansionOperandIsAValue = %v, want the command-string route alone", got)
 	}
 	for _, tc := range []struct {
 		name string
@@ -96,7 +145,7 @@ func TestAnUnterminatedExpansionOperandIsKshsAlone(t *testing.T) {
 		{"dash", dash.Dialect()},
 		{"ash", ash.Dialect()},
 	} {
-		if tc.d.UnterminatedExpansionOperandIsAValue {
+		if tc.d.UnterminatedExpansionOperandIsAValue != syntax.RouteOnNoRoute {
 			t.Errorf("%s: UnterminatedExpansionOperandIsAValue is on, want it off", tc.name)
 		}
 	}

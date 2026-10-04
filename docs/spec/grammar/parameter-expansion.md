@@ -510,6 +510,17 @@ replacement.
 the input ended inside a `${`, so a prompt asks for more rather than running
 a line somebody is still typing, and every row above is `-c`.
 
+**It is a command-string rule.** The same text from a script file or on
+standard input is refused there: measured 2026-10-04 on ksh93u+ over `echo
+${x:-a` with `echo after` on the next line, `-c` and `eval` write `a echo
+after`, and a file or standard input is ``syntax error at line 1: `{'
+unmatched`` at status 3 with nothing run. It is the route split the same shell
+draws for an unterminated quote, so the flag is a set of routes, and the
+command-string route alone is ksh's. And it is the **parameter** form's: a
+`${ cmd;}` body is a program rather than an operand, and one that runs out —
+`echo ${ echo hi}`, `echo ${ echo {a,b};}` — is `` `{' unmatched `` on every
+route, `-c` included (#5717).
+
 ### A second reading that runs off the end blames the brace
 
 The re-read can want a division that does not exist: a word the parse

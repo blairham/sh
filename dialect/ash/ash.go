@@ -1824,6 +1824,8 @@ func Semantics() interp.Semantics {
 	// either fires or does not and there is no third thing for a
 	// dialect to be silent about.
 	s.DebugTrapCompoundHeads = interp.DebugTrapHeadsNone
+	// Never reached: there is no DEBUG condition.
+	s.DebugListLoopHeadKeepsTheLine = interp.No
 	// And a pipeline fires nothing, for the reason the line above says
 	// nothing fires: BusyBox refuses `trap … DEBUG` outright. The value is
 	// the absence of a pipeline rule rather than a reading of one.

@@ -16,8 +16,6 @@ assignment/arithmetic-that-will-not-parse-in-a-command
 assoc/a-subscript-search-is-a-list-of-its-matches
 autoload/the-two-signs-of-x
 axis/a-whole-array-subscript-inside-an-expression
-axis/debug-head-of-a-for-loop
-axis/debug-head-of-a-select
 axis/printf-c99-float-conversions
 axis/printf-non-finite-is-converted
 axis/trap-body-line-signal

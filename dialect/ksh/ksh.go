@@ -3250,6 +3250,8 @@ func Semantics() interp.Semantics {
 	// repeats with its words, and an arithmetic `for`'s initializer or step
 	// that the script did not write fires nothing.
 	s.DebugTrapCompoundHeads = interp.DebugTrapHeadsEveryPassAndWrittenParts
+	// A repeated `for` or `select` head names the line the body got to.
+	s.DebugListLoopHeadKeepsTheLine = interp.Yes
 	// And a pipeline has no rule of its own here: the trap is carried into
 	// a subshell, so each element fires wherever it runs, with that
 	// element's redirections already in place. Measured: `trap 'echo d'

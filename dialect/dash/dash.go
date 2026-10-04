@@ -1593,6 +1593,8 @@ func Semantics() interp.Semantics {
 	// either fires or does not and there is no third thing for a
 	// dialect to be silent about.
 	s.DebugTrapCompoundHeads = interp.DebugTrapHeadsNone
+	// Never reached: there is no DEBUG condition.
+	s.DebugListLoopHeadKeepsTheLine = interp.No
 	// And a pipeline fires nothing either, because there is no condition to
 	// fire: `trap … DEBUG` is refused here before a pipeline is reached.
 	// The value is the absence of a pipeline rule rather than a reading of

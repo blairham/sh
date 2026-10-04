@@ -19680,12 +19680,28 @@ round there and one in ksh93, and that holds for every combination of the
 three parts a script can leave out — so it is the reading and not a rule
 about emptiness.
 
-A **third** ksh93 departure is recorded rather than modeled: a `for` or
-`select` head that fires again on a later pass names wherever the line
-record has got to, which is the body's last line, where the bash columns
-name the head's own line every time. Modeling it would need a line rule
-that is right for the two list loops and wrong for the arithmetic one,
-whose parts name the head's line on every pass in ksh93 too.
+A **third** ksh93 departure is the line a repeated head names, and it is
+its own axis, `DebugListLoopHeadKeepsTheLine` below.
+
+**`DebugListLoopHeadKeepsTheLine`** — bash no · dash not reached · ksh93 **yes** · zsh not reached · ash not reached
+
+When a `for` or `select` head fires the DEBUG trap again on a later
+pass, this leaves the line record where the body put it, instead of
+moving it back to the head's own line. Measured 2026-10-03 from a
+script file with `trap 'echo D=$LINENO' DEBUG`, the loop head on line 2,
+and its one body command on line 4:
+
+                  for i in a b                select w in a b, two replies
+    bash 5.3      D=2 D=4 a D=2 D=4 b         D=2 D=4 got=a D=4 got=b
+    ksh93u+       D=2 D=4 a D=4 D=4 b         D=2 D=4 got=a D=4 D=4 got=b
+
+The first pass names the loop's line in both columns, because that is
+where the record stands when the loop starts. A later pass names the
+body's last line in ksh93. This is a separate axis from the one above
+and not a line rule for every repeated head, because ksh93's arithmetic
+`for` names its head's line on every pass, so only the two list loops
+ask. zsh fires one head for the whole loop, and dash and ash have no
+DEBUG condition, so none of the three ever reaches the question.
 
 A function's **body** is never a head, in any column — even the one that
 writes a head for a `{ }` standing on its own. That is why bash's extra

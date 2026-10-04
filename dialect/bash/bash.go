@@ -2968,6 +2968,8 @@ func Semantics() interp.Semantics {
 	// definition write nothing. The zero value, and the same in all three
 	// bash columns.
 	s.DebugTrapCompoundHeads = interp.DebugTrapHeadsWordAndArithmetic
+	// A repeated `for` head names its own line on every pass.
+	s.DebugListLoopHeadKeepsTheLine = interp.No
 	// A pipeline fires once for each element that is a **simple command**,
 	// and it fires in the shell running the pipeline rather than in the
 	// element — which is what lets a trap fire at all here, since this

@@ -37,13 +37,13 @@ import (
 // which one a dialect takes cannot be derived from anything else it answers.
 // dash and BusyBox ash have no DEBUG condition and never reach the question.
 //
-// Two of ksh93's three departures from the bash columns are modeled here and
-// the third is recorded rather than modeled: a `for` or `select` head that
-// fires again on a later pass names **wherever the line record has got to** —
-// the body's last line — where the bash columns name the head's own line on
-// every pass. Reproducing that would mean a line rule that is right for the
-// list loops and wrong for the arithmetic one, which names the head's line on
-// every pass in ksh93 too.
+// ksh93's third departure is the line a repeated head names: a `for` or
+// `select` head that fires again on a later pass names **wherever the line
+// record has got to** — the body's last line — where the bash columns name
+// the head's own line on every pass. That is
+// Semantics.DebugListLoopHeadKeepsTheLine, asked only of the list loops,
+// because the arithmetic `for` names its head's line on every pass in ksh93
+// too.
 
 // DebugTrapHeads is which compound commands fire the DEBUG trap.
 type DebugTrapHeads int
@@ -143,6 +143,24 @@ func (r *Runner) debugCompoundHead(ctx context.Context, c syntax.Command) {
 // after the first fires with that record sitting on the body's last command.
 // It is put back afterward, so nothing about the body's own reporting moves.
 func (r *Runner) debugPass(ctx context.Context, c syntax.Command) {
+	if r.sem().DebugTrapCompoundHeads.headsPerPass() && r.debugTrap != nil && *r.debugTrap != "" {
+		// Asked only with a DEBUG trap set, since nothing can name a line
+		// otherwise.
+		switch keep := r.sem().DebugListLoopHeadKeepsTheLine; keep {
+		case Yes:
+			// The line record is left where the body put it, so a pass after
+			// the first names the body's last line and the first pass the
+			// line the loop started on. See
+			// Semantics.DebugListLoopHeadKeepsTheLine.
+			r.recordRunning(c, WholeCommand)
+			r.runDebugTrap(ctx)
+			return
+		case No:
+		default:
+			r.ask(keep, "a repeated `for` or `select` head naming the line the body got to")
+			return
+		}
+	}
 	r.debugPassOf(ctx, c, WholeCommand)
 }
 

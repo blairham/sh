@@ -3962,6 +3962,8 @@ func Semantics() interp.Semantics {
 	// `repeat` and a function *definition* among them — and a loop's passes
 	// are inside that once rather than beside it.
 	s.DebugTrapCompoundHeads = interp.DebugTrapHeadsEveryCompound
+	// Never reached: one head fires for the whole loop.
+	s.DebugListLoopHeadKeepsTheLine = interp.No
 	// A pipeline is one statement here and fires once, in the shell running
 	// it, however many elements it has — and no element fires a head of its
 	// own. Measured: `trap 'echo d' DEBUG; echo a | tr a-z A-Z` writes

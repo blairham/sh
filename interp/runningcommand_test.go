@@ -38,6 +38,7 @@ func runningRun(t *testing.T, src string, set func(*Semantics)) string {
 	sem.DebugTrapRunsInsideCalls = No
 	sem.DebugTrapRunsInSubshells = No
 	sem.DebugTrapRefiresOnEnteringAFunction = No
+	sem.DebugListLoopHeadKeepsTheLine = No
 	if set != nil {
 		set(&sem)
 	}

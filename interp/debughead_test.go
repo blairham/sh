@@ -31,6 +31,7 @@ func headSem(heads DebugTrapHeads) func(*Semantics) {
 		s.DebugTrapRunsInSubshells = No
 		s.DebugTrapRefiresOnEnteringAFunction = No
 		s.DebugTrapCompoundHeads = heads
+		s.DebugListLoopHeadKeepsTheLine = No
 	}
 }
 
@@ -129,6 +130,32 @@ func TestAForHeadNamesItsOwnLineOnEveryPass(t *testing.T) {
 	// Two passes: the head on line 2 and the body on line 4, twice each.
 	if want := "at=2\nat=4\nat=2\nat=4\n"; out != want {
 		t.Errorf("lines named: %q, want %q", out, want)
+	}
+}
+
+// The other reading of the same row: ksh93's repeated head leaves the line
+// record where the body put it, so the second pass names line 4. The first
+// pass names the loop's own line, because that is where the record stands
+// when the loop starts. Measured 2026-10-03 on ksh93u+.
+func TestARepeatedListLoopHeadCanKeepTheBodysLine(t *testing.T) {
+	src := "trap 'echo at=$LINENO' DEBUG\nfor i in a b\ndo\n  :\ndone"
+	out, _, _ := trapRun(t, src, func(s *Semantics) {
+		headSem(DebugTrapHeadsEveryPassAndWrittenParts)(s)
+		s.CommandTrapBodyLine = TrapBodyLineOffsetFromWhereItFired
+		s.DebugListLoopHeadKeepsTheLine = Yes
+	}, Diagnostics{Location: LocationLineWord})
+	if want := "at=2\nat=4\nat=4\nat=4\n"; out != want {
+		t.Errorf("lines named: %q, want %q", out, want)
+	}
+	// The arithmetic loop is not a list loop and keeps naming its head.
+	src = "trap 'echo at=$LINENO' DEBUG\nfor ((i=0; i<2; i++))\ndo\n  :\ndone"
+	out, _, _ = trapRun(t, src, func(s *Semantics) {
+		headSem(DebugTrapHeadsEveryPassAndWrittenParts)(s)
+		s.CommandTrapBodyLine = TrapBodyLineOffsetFromWhereItFired
+		s.DebugListLoopHeadKeepsTheLine = Yes
+	}, Diagnostics{Location: LocationLineWord})
+	if strings.Count(out, "at=2\n") != strings.Count(out, "at=")-2 {
+		t.Errorf("arithmetic loop lines named: %q, want its head's line on every firing but the two bodies", out)
 	}
 }
 

@@ -18572,6 +18572,28 @@ type Semantics struct {
 	// fire the DEBUG trap. See DebugTrapHeads, which carries the panel.
 	DebugTrapCompoundHeads DebugTrapHeads
 
+	// DebugListLoopHeadKeepsTheLine leaves the line record where the body put
+	// it when a `for` or `select` head fires the DEBUG trap again on a later
+	// pass, rather than moving it back to the head's own line.
+	//
+	// ksh93 alone. Measured 2026-10-03 from a script file with `trap 'echo
+	// D=$LINENO' DEBUG` over a loop whose head is on line 2 and whose one
+	// body command is on line 4:
+	//
+	//	              for i in a b                select w in a b, two replies
+	//	bash 5.3      D=2 D=4 a D=2 D=4 b         D=2 D=4 got=a D=4 got=b
+	//	ksh93u+       D=2 D=4 a D=4 D=4 b         D=2 D=4 got=a D=4 D=4 got=b
+	//
+	// The first pass names the loop's line in both, because that is where the
+	// record stands when the loop starts; a later pass names the body's last
+	// line in ksh93. The arithmetic `for` is not this: it names its head's
+	// line on every pass in ksh93 too, so it never asks.
+	//
+	// Asked only where a list loop's head fires per pass, so zsh, which fires
+	// one head for the construct, and dash and BusyBox ash, which have no
+	// DEBUG condition, never reach it.
+	DebugListLoopHeadKeepsTheLine Answer
+
 	// DebugTrapPipelines is how a pipeline fires the DEBUG trap: once per
 	// simple element in the shell running it, once for the pipeline as a
 	// statement, or not at all as a pipeline, leaving each element to fire

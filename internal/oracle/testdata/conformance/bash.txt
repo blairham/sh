@@ -27,10 +27,8 @@ cond/regex-that-will-not-compile
 decl/an-array-literal-operand-over-a-frozen-scalar
 decl/an-array-literal-over-the-other-kind-of-array
 decl/an-index-array-literal-replacing-a-table
-declare/a-plus-signed-attribute-letter-filters-the-whole-table
 declare/marking-a-name-that-is-already-a-function
 declare/the-f-letters-sign-decides-without-a-pattern-too
-declare/the-global-letter-filters-nothing
 expand/tilde-after-a-home-assignment
 expand/tilde-after-a-home-assignment-reaches-every-road
 expand/tilde-with-no-home-at-all

@@ -3916,6 +3916,11 @@ func Semantics() interp.Semantics {
 	s.LocalOptions = "aAgiIlnprtux"
 	// A bad `declare` option is reported and the script goes on.
 	s.TypesetBadOptionFatal = interp.No
+	// A plus letter selects nothing in a listing: measured 2026-10-03 on
+	// bash 5.3.20, `typeset +x` and `typeset +i` are the bare listing with
+	// values, and `typeset +x -i` the integers. See
+	// Semantics.PlusLetterSelectsAListing.
+	s.PlusLetterSelectsAListing = interp.No
 	// And the array literals behind a refused letter are declared and
 	// stored anyway: measured 2026-10-03 on bash 5.3.20, `typeset -U
 	// a=(1 1 2)` refuses `-U` at 2 and leaves `a` holding all three

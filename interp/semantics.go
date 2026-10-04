@@ -15510,6 +15510,22 @@ type Semantics struct {
 	// unpinned ash: the same as dash — BusyBox ash has no array literal.
 	RefusedDeclarationKeepsItsArrayLiterals Answer
 
+	// PlusLetterSelectsAListing reads a letter written under a plus, on a
+	// declaration with no operands, as selecting which names the listing
+	// writes.
+	//
+	// Measured 2026-10-03: `typeset +x` names the exported names in zsh
+	// 5.9.2 and ksh93u+, and in bash 5.3.20 is the bare listing — the whole
+	// table with values — as is every other plus letter there, while the
+	// minus letters beside one select as they would alone (`typeset +x -i`
+	// is the integers). See Runner.plusLettersSelectNothing. Asked only
+	// where a listing carries a plus letter.
+	//
+	// unpinned dash: there is no `typeset`, so the question cannot be put.
+	//
+	// unpinned ash: the same as dash.
+	PlusLetterSelectsAListing Answer
+
 	// SignAloneIsAnOptionWord reads a declaration's `-` or `+` written with
 	// no letters after it as an option word rather than as an operand.
 	//
@@ -32477,6 +32493,9 @@ func PosixSemantics() Semantics {
 		TypesetBadOptionFatal:  No,
 		// POSIX has no `typeset`, so no option word carries an `a`.
 		ArrayLetterMakesItsWordAName: No,
+		// POSIX has no `typeset` and so no plus letter to read; Yes is
+		// what this engine did before the axis.
+		PlusLetterSelectsAListing: Yes,
 		// POSIX has no array literal, so a refused letter has nothing
 		// behind it to keep.
 		RefusedDeclarationKeepsItsArrayLiterals: No,

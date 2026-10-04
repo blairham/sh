@@ -297,11 +297,11 @@ func substTextLines(span syntax.Span, body, text string, start int) []string {
 		return nil
 	}
 	first, _, _ := strings.Cut(body, "\n")
-	if !strings.Contains(lines[start-1], substOpener(span)+first) &&
-		!(span.CurrentShell && currentShellOpensBefore(lines[start-1], first)) {
-		return nil
+	if strings.Contains(lines[start-1], substOpener(span)+first) ||
+		span.CurrentShell && currentShellOpensBefore(lines[start-1], first) {
+		return lines
 	}
-	return lines
+	return nil
 }
 
 // currentShellOpensBefore reports whether line holds a current-shell

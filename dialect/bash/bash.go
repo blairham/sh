@@ -260,6 +260,8 @@ func Dialect() syntax.Dialect {
 	// BusyBox ash take only a join that began at the start of a line and
 	// ksh93 takes neither (#2430).
 	d.HeredocDelimiterAcrossAContinuation = syntax.HeredocDelimiterOnTheJoinedLine
+	// See syntax.Dialect.HeredocLeadingContinuationStripsTheNextLine, measured 2026-10-03.
+	d.HeredocLeadingContinuationStripsTheNextLine = true
 	// A `<<-` delimiter written with a leading tab — quoted, since nothing
 	// else can start with one — is met by a body line spelled exactly like
 	// it before its tabs are stripped. zsh and ksh93 strip the delimiter too

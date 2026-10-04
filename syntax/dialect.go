@@ -3441,6 +3441,28 @@ type Dialect struct {
 	// (corpus row heredoc/quoting-the-delimiter-is-what-makes-the-body-literal).
 	HeredocDelimiterKeepsAQuotedExpansion bool
 
+	// HeredocLeadingContinuationStripsTheNextLine strips the tabs of a
+	// `<<-` body line that a continuation standing before any text brought
+	// in, as it strips the line's own: the joined text is what loses its
+	// tabs. bash 5.3.20, and dash where no tab stood before the backslash
+	// (see HeredocStrippedLoneBackslashIsKept for where one did). Measured 2026-10-03 from script files, `cat <<-EOF`
+	// over `→\` ⏎ `→EOF` ⏎ `X` ⏎ `→EOF`: bash ends the document at the second
+	// line and runs `X`; over `→\` ⏎ `→foo` it writes `foo`, and over `→\`
+	// ⏎ `→\` ⏎ `→→bar` it writes `bar`. A continuation after text joins as
+	// everywhere: `→a\` ⏎ `→b` is `a→b` (corpus row heredoc/stripping-and-
+	// joining-are-ordered-and-the-panel-parts-over-which-comes-first).
+	HeredocLeadingContinuationStripsTheNextLine bool
+
+	// HeredocStrippedLoneBackslashIsKept keeps the backslash and the newline
+	// of a `<<-` body line that is tabs and one backslash, and takes the line
+	// under it as written — not stripped and never the delimiter. dash. The
+	// same measurements: `→\` ⏎ `→EOF` ⏎ `X` ⏎ `→EOF` writes `\`, `→EOF` and
+	// `X` and ends at the last line; `→\` ⏎ `→\` ⏎ `→→bar` writes `\` and
+	// `→→→bar`, the second line's own continuation joining as usual. A line
+	// that is the backslash alone, with no tab before it, joins as the
+	// leading continuation it is.
+	HeredocStrippedLoneBackslashIsKept bool
+
 	// StrippedHeredocDelimiter is what `<<-` does with a delimiter written
 	// with leading tabs, which only a quoted delimiter can be. See
 	// [HeredocDelimiterTabs], which carries the measurement.

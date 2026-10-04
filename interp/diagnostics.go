@@ -2003,6 +2003,13 @@ type Diagnostics struct {
 	// A map rather than a flag for the reason SubscriptRefusalNamesBuiltin
 	// is one: it is a fact about a builtin and not about the dialect.
 	BuiltinNamesTheShellAlone map[string]bool
+	// KillNoSuchJobIsLocated writes `kill`'s refusal of a job spec that
+	// names no job with the ordinary builtin location, in the dialect that
+	// lists `kill` in BuiltinNamesTheShellAlone for everything else it
+	// says. Measured 2026-10-04 in the pinned image: `kill %9`, `kill -9 %9`,
+	// `kill -s TERM %7` and `kill %x` are each `ash: kill: line 0: %9: no
+	// such job` at 2 (#5723).
+	KillNoSuchJobIsLocated bool
 
 	// SubscriptRefusalNamesBuiltin is which of those name the builtin in the
 	// *location*. One does and one does not, in the same shell, which is why
@@ -9366,6 +9373,19 @@ type Diagnostics struct {
 	// about `!`, about `=` and about whether a `~` counts anywhere or only
 	// at the front (#2141).
 	TraceMetacharacters TraceMetacharacters
+	// TraceQuotesReservedWords is the words a trace quotes for *being*
+	// reserved words, standing as a command's name or argument, whatever
+	// TraceMetacharacters says of their characters. Empty in every dialect
+	// but one.
+	//
+	// BusyBox ash. Measured 2026-10-04 in the pinned image, `set -x; echo
+	// in do done if fi for x case esac then else elif while until function
+	// select time ! { } [[ ]]` traces `'in' 'do' 'done' 'if' 'fi' 'for' x
+	// 'case' 'esac' 'then' 'else' 'elif' 'while' 'until' 'function' select
+	// time '!' '{' '}' '[[' ]]` — the last five through the alphabet already
+	// — and `f in` traces `f 'in'`. An assignment's value is not one: `a=in`
+	// traces bare (#5723).
+	TraceQuotesReservedWords []string
 	// TraceEscape is how the bytes *inside* that `$'…'` are spelled, and
 	// which words reach it at all. A third field because the panel splits
 	// three ways on the spelling where TraceQuoting splits it two — see the

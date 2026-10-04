@@ -6,10 +6,8 @@ axis/printf-non-finite-is-converted
 axis/trap-body-parse-failure-location
 axis/trap-body-runs-what-parsed
 axis/trap-body-will-not-parse
-cond/regex-empty-operand
 core/a-refused-older-body-leaves-an-empty-field
 declare/a-numeric-letter-does-not-reach-a-later-local-array
-env/the-interactive-file-sees-the-invocations-parameters
 expansion/a-replacement-scan-stops-where-the-last-match-ended
 harness/a-dashed-argv-zero-is-a-login-shell
 harness/an-undashed-argv-zero-is-not-a-login-shell
@@ -17,8 +15,6 @@ heredoc/stripping-and-joining-are-ordered-and-the-panel-parts-over-which-comes-f
 invoke/a-name-that-is-not-sh-does-not-start-in-posix-mode
 invoke/a-name-that-is-not-sh-leaves-a-special-builtins-usage-error-alone
 jobs/a-background-job-outlives-the-shell
-jobs/bg-with-no-job-control
-jobspec/kill-a-job-that-is-not-there
 jobspec/wait-for-the-next-job
 kill/signaling-a-process-that-is-not-ours
 param/a-replacement-runs-over-characters
@@ -40,12 +36,10 @@ subst/a-comment-in-a-current-shell-body
 subst/double-paren-count-decides-not-the-expression
 subst/double-paren-is-a-subshell
 trap/an-elements-pipe-handler-runs-inside-the-elements-redirections
-ulimit/a-limit-it-cannot-read
 ulimit/the-file-size-block
 unterminated/a-case-arm-closed-by-its-terminator
 unterminated/a-case-arm-with-no-command-at-all
 unterminated/a-case-arms-terminator-after-a-separator
 unterminated/an-arms-open-paren-with-nothing-behind-it
 variable/a-seeded-random-draws-a-sequence-of-its-own
-xtrace/prefix-diverges
 zparseopts/a-refusal-leaves-the-name-as-it-found-it

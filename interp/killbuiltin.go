@@ -1951,6 +1951,13 @@ func (r *Runner) killFailed(err error) int {
 	if bare {
 		say = r.errf
 	}
+	if ke.kind == killNoSuchJob && d.KillNoSuchJobIsLocated {
+		// The one `kill` complaint that is located as an ordinary builtin's
+		// in the dialect whose others name the shell alone. See
+		// Diagnostics.KillNoSuchJobIsLocated.
+		r.locatedDespiteTheShellAlone = true
+		defer func() { r.locatedDespiteTheShellAlone = false }()
+	}
 	for _, line := range ke.lines(*d) {
 		say("%s\n", line)
 	}

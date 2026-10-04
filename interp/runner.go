@@ -3472,6 +3472,10 @@ type Runner struct {
 	// field in characters" — see Semantics.PrintfLongModifierCountsCharacters.
 	// Carried here for the reason printfLostStars is.
 	printfLongModifier bool
+	// locatedDespiteTheShellAlone lets one complaint from a builtin in
+	// Diagnostics.BuiltinNamesTheShellAlone carry the ordinary location. Set
+	// for the length of that complaint and no longer.
+	locatedDespiteTheShellAlone bool
 	// printfFormatRest is the format from the `%` of the conversion being
 	// formatted to its end, as written, for the one refusal that is raised
 	// past the point the scan knew the position: a `%q` the dialect does not
@@ -5881,7 +5885,7 @@ func (r *Runner) diagLine(format string, args ...any) string {
 // Runner.locationPrefixNamed.
 func (r *Runner) diagLineNamed(construct, format string, args ...any) string {
 	msg := fmt.Sprintf(format, args...)
-	if name := r.speaking(); name != "" && r.diag().BuiltinNamesTheShellAlone[name] {
+	if name := r.speaking(); name != "" && r.diag().BuiltinNamesTheShellAlone[name] && !r.locatedDespiteTheShellAlone {
 		// A builtin that reports as the shell itself rather than as a line of
 		// a script. See Diagnostics.BuiltinNamesTheShellAlone: the name is
 		// the basename the shell was invoked by, on every route, and the

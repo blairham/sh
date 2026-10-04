@@ -499,6 +499,11 @@ type Shell struct {
 	// several shells behind one connection — sets it and this leaves it alone.
 	Session string
 
+	// ScriptDescriptor is the descriptor number a script file is kept open on
+	// while it runs, or 0 for a shell that keeps no such descriptor. See
+	// holdTheScript. ksh93 keeps it on 10.
+	ScriptDescriptor int
+
 	// KeepProcess stops `exec cmd` from replacing this process, which a
 	// binary being a shell does not want and a test does.
 	//
@@ -2810,6 +2815,7 @@ func (sh Shell) runInput(in source) int {
 	// along with the diagnostic, which is a thing no shell in the panel does.
 	src, name, dg := in.src, in.name, in.dg
 	r := sh.newRunnerAs(name, in.params, dg, in.invocationRoute(), in.invocationEmulation())
+	sh.holdTheScript(r, in)
 	if in.zero != "" {
 		// `$0` where it is not the name diagnostics use — see source.zero.
 		// Through the rename seam rather than through Runner.Name, which is

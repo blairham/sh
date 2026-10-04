@@ -3511,6 +3511,9 @@ func Semantics() interp.Semantics {
 	// And `set -e` judges `! f` and `! eval …` by the inverted status, where
 	// every other negated command is exempt. Measured 2026-10-03; see the axis.
 	s.ErrexitJudgesANegatedCall = interp.Yes
+	// A refused `set -o` name followed by a listing ends the script at the
+	// listing's 0. Measured 2026-10-03; see the axis.
+	s.SetListingAfterARefusalLeavesZero = interp.Yes
 	// A name may hold the locale's letters and digits past ASCII, until
 	// `posix_identifiers` says otherwise — see setopt.go. Measured
 	// 2026-10-02 on 5.9.2 (#5153).

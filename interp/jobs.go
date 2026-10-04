@@ -229,6 +229,11 @@ type Job struct {
 	// is running again, and a note that fired before it was resumed must not
 	// put it back to stopped the next time anything looks.
 	noticedStop bool
+	// unmarked says this finished job takes neither marker any more: a
+	// `wait` reaped another job while it stood finished, in the dialect
+	// where that leaves the finished ones out of the choice. See
+	// Semantics.AReapLeavesFinishedJobsUnmarked.
+	unmarked bool
 }
 
 // expectPart says one more piece of this job has still to start.
@@ -2882,7 +2887,7 @@ func (r *Runner) pickMarkedJob(skip *Job) *Job {
 	var newest *Job
 	for i := len(r.jobOrder) - 1; i >= 0; i-- {
 		j := r.jobOrder[i]
-		if j == skip || !slices.Contains(r.jobs, j) {
+		if j == skip || !slices.Contains(r.jobs, j) || j.unmarked {
 			continue
 		}
 		if stopped && j.Stopped {
@@ -2970,6 +2975,15 @@ func (r *Runner) reap(j *Job) {
 		return
 	}
 	r.Forget(j)
+	if r.sem().AReapLeavesFinishedJobsUnmarked == Yes {
+		// The finished jobs left standing are no longer candidates for the
+		// markers. See Semantics.AReapLeavesFinishedJobsUnmarked.
+		for _, other := range r.jobs {
+			if other != nil && other.Finished() {
+				other.unmarked = true
+			}
+		}
+	}
 	if j == r.answeringDropped {
 		// A job the table had dropped, answering the one `wait` by id it
 		// gets: it is reported now and remembered nowhere. Measured

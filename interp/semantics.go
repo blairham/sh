@@ -11366,6 +11366,22 @@ type Semantics struct {
 	// or nothing, and the `wait` is not one of the things that report it.
 	WaitLeavesTheJobForTheListing Answer
 
+	// AReapLeavesFinishedJobsUnmarked takes every finished job out of the
+	// choice of `+` and `-` once a `wait` has reaped a job: the markers go
+	// to running and stopped jobs, and with none left neither is shown.
+	//
+	// bash 5.3.20. Measured 2026-10-03 from -c strings:
+	//
+	//	false & sleep 0.05 & wait %2; jobs                [1]   Exit 1
+	//	false & sleep 0.05 & wait $!; jobs                [1]   Exit 1
+	//	false & sleep .05 & sleep .01 & wait %2; jobs     [1] [3] both blank
+	//	sleep .3 & sleep .3 & sleep .3 & wait %1; jobs    [2]- [3]+ running
+	//	false & sleep 0.05 & sleep .2; jobs               [1]- [2]+  (no reap)
+	//
+	// Other columns keep a finished job a candidate (corpus row
+	// jobs/a-job-that-is-neither-current-nor-previous).
+	AReapLeavesFinishedJobsUnmarked Answer
+
 	// JobsListingForgetsEachRowAsItGoes takes a finished job out of the
 	// table the moment its row is written, so the `+` and `-` of every row
 	// after it are read off what is left.
@@ -33395,6 +33411,8 @@ func PosixSemantics() Semantics {
 		BareWaitLeavesJobsForTheListing: No,
 		// A trapped signal leaves a `read` waiting. See the field.
 		ReadIsAbandonedByATrappedSignal: No,
+		// A finished job stays a candidate for the markers. See the field.
+		AReapLeavesFinishedJobsUnmarked: No,
 		// And where it is given up, it answers 1. See the field.
 		ReadAbandonedReportsTheSignal: No,
 		// And a named one, and a listing marks the table as it stood. See
@@ -33796,6 +33814,8 @@ func CoreSemantics() Semantics {
 		BareWaitLeavesJobsForTheListing: No,
 		// A trapped signal leaves a `read` waiting. See the field.
 		ReadIsAbandonedByATrappedSignal: No,
+		// A finished job stays a candidate for the markers. See the field.
+		AReapLeavesFinishedJobsUnmarked: No,
 		// And where it is given up, it answers 1. See the field.
 		ReadAbandonedReportsTheSignal: No,
 		// And a named one, and a listing marks the table as it stood. See

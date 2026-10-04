@@ -17619,6 +17619,21 @@ wording rather than a reading. Extending the text before *evaluating* it
 instead invents a second failure — `${x:2:1+}` reported that `2:1+` would
 not parse and then that `1+` would not, where the shell reports one.
 
+### A single quotation in a range keeps its quotes
+
+The range's expression is read with a single quotation's quotes still
+on it, in every column. Measured 2026-10-04 with `x=abcdef`:
+
+    ${x:'1'}     bash 5.3.20   x: '1': … operand expected (error token is "'1'")
+                 zsh 5.9.2     bad math expression: illegal character: '
+                 BusyBox ash   arithmetic syntax error
+                 ksh93u+       empty — `'1'` is a character constant, 49
+    ${x:"1"}     bcdef in bash and ksh93: a double quotation does come off
+
+So `${x:'&&'}` blames `'&&'` because `'&&'` is what was evaluated, not
+because the complaint quotes the source back. This shell took the
+quotes off and answered `bcdef` everywhere (#5719).
+
 ### A substring of a name with no value
 
 Whether the range is read at all is a question in front of the wording.

@@ -39,7 +39,6 @@ jobs/a-signal-name-joined-to-kill-n-option
 jobs/a-stopped-background-job-in-the-listing
 jobspec/kill-a-job-that-is-not-there
 nounset/a-key-the-association-does-not-have
-param/a-substring-modifier-reads-its-own-quotes
 param/an-expansion-with-no-name-at-all
 pat/a-case-arms-own-paren-in-front-of-a-group
 pat/a-case-arms-paren-in-front-of-an-expression

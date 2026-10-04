@@ -3440,6 +3440,19 @@ type Dialect struct {
 	// ksh93u+ refuses `(( a[1 ))` as `syntax error: `)' unexpected` (#5378).
 	ArithBracketsMustBalance bool
 
+	// ArithUnbalancedBracketIsRefused is the third reading of the same
+	// question: where the closing `))` of an arithmetic command or a `$((`
+	// substitution arrives with a `[` the source opened still open, the
+	// `)` is a syntax error. ksh93 alone. Measured 2026-10-03 on ksh93u+
+	// 2012-08-01: `(( a[1 ))`, `echo $(( a[1 ))`, `echo "$(( a[1 ))"` and
+	// `echo $(( 1 + [ ))` are each `syntax error: `)' unexpected` at status
+	// 3, and so is `echo $(( a[1 )) ]))`, where a `]` does come later. Only
+	// the *source's* brackets count: `k="1]"; $(( a[$k ))` is refused too,
+	// the `]` a value brings being no closer the reader could have seen.
+	// bash reads every one of them as arithmetic, and zsh gives the
+	// arithmetic reading up (ArithBracketsMustBalance).
+	ArithUnbalancedBracketIsRefused bool
+
 	// QuotedNewlineIsUnmatched refuses a newline written inside quotes — `'…'`,
 	// `"…"`, `$'…'` and a backquoted substitution — as the quote that never
 	// closed, unless a backslash escapes it, and then it is the newline with

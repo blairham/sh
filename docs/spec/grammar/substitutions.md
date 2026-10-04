@@ -113,6 +113,25 @@ layout where an omitted one is a changed program.
 The choice belongs to the lexer, since by the time the parser sees tokens
 it has been made.
 
+**A `))` inside an open bracket.** When the source opens a `[` inside
+the arithmetic and the closing `))` arrives before the bracket closes,
+the panel gives three answers. Measured 2026-10-03 on bash 5.3.20, zsh
+5.9.2 and ksh93u+:
+
+| snippet | bash | zsh | ksh93 |
+| --- | --- | --- | --- |
+| `(( a[1 ))` | `bad array subscript`, 1 | `bad pattern: a[1`, 1 | `` `)' unexpected ``, 3 |
+| `echo $(( a[1 ))` | `bad array subscript`, 1 | `bad pattern: a[1`, 0 | `` `)' unexpected ``, 3 |
+| `k="1]"; echo "$(( a[$k ))"` | the element, 8 | `bad pattern: a[1]`, 0 | `` `)' unexpected ``, 3 |
+| `echo $(( a[1 )) ]))` | syntax error, 2 | parse error, 1 | `` `)' unexpected ``, 3 |
+
+zsh gives up the arithmetic reading (`Dialect.ArithBracketsMustBalance`).
+ksh93 refuses the `)` as a syntax error
+(`Dialect.ArithUnbalancedBracketIsRefused`). Only
+the brackets written in the source count. A `]` that arrives in a value,
+as in the third row, is not a closer the reader could have seen, and
+neither is a bracket inside quotes.
+
 ## Backticks
 
     `echo hi`               →  hi

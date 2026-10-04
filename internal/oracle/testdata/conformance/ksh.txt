@@ -4,7 +4,6 @@
 alias/a-quote-a-body-leaves-open-is-unterminated
 alias/an-inner-body-opens-a-quote-nothing-closes
 alias/both-kinds-at-once-is-refused
-arith/a-subscript-the-source-left-open-takes-the-value-bracket
 array/a-literal-value-holding-a-bracket
 array/a-literal-with-a-space-before-it
 array/a-name-before-a-literal-elements-bracket

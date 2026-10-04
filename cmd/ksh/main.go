@@ -48,6 +48,9 @@ func shell() driver.Shell {
 		PromptStyle:            ksh.PromptStyle(),
 		EditorStyle:            ksh.EditorStyle(),
 		HistoryStyle:           ksh.HistoryStyle(),
+		// The script it is running is kept open on 10. See
+		// driver.Shell.ScriptDescriptor.
+		ScriptDescriptor: 10,
 	}
 }
 

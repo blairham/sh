@@ -41,7 +41,6 @@ expansion/element-set-operators-against-an-unset-name
 fc/with-no-history
 help/a-bad-option-to-umask-is-named-the-way-the-dialect-names-one
 help/the-help-option-is-the-whole-word-and-stands-where-an-option-stands
-heredoc/a-body-on-a-descriptor-outlives-the-exec-that-opened-it
 heredoc/a-substitution-in-the-delimiter-is-its-own-text
 heredoc/an-expansion-left-unterminated-in-a-body
 invoke/leaving-the-posix-mode-a-startup-option-turned-on
@@ -89,7 +88,6 @@ read/from-a-standard-input-that-is-closed
 read/interrupted-by-a-trapped-signal
 read/keys-attached-count-must-be-a-number
 redir/a-wide-duplication-target-with-a-leading-zero
-redirection/a-script-file-of-its-own-takes-a-number-in-one-shell
 socket/a-message-across-a-unix-socket
 startup/an-option-names-the-interactive-file
 subst/a-body-with-no-terminator-before-its-brace

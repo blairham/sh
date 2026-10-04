@@ -1693,6 +1693,12 @@ nothing and is refused — the same rule, not a second one. And `5$(echo q)`
 comes to `5q`, refused, where a reading of the literal text would have taken
 it.
 
+bash names the target **as written** in that sentence — `5$v`, not `55` —
+except where what was written is itself a plain run of digits, which it
+names as the number: `>&08` and `<&007` are `8: Bad file descriptor` and
+`7: Bad file descriptor` on bash 5.3.20, measured 2026-10-04, while
+`x=08; >&$x` is still `$x`.
+
 Two rows are the control that the *word* is read in every column, and that a
 parameter is as good as a digit on both sides of the pair:
 

@@ -4,7 +4,6 @@
 assoc/a-table-lists-in-a-different-order-than-it-expands
 compgen/an-action-this-shell-does-not-generate
 compgen/there-is-no-short-letter-for-function
-cond/regex-that-will-not-compile
 decl/an-index-array-literal-replacing-a-table
 expand/tilde-after-a-home-assignment
 expand/tilde-after-a-home-assignment-reaches-every-road
@@ -18,7 +17,6 @@ posassign/a-list-replaces-the-one-it-names
 posassign/an-empty-list-removes-it
 posassign/appending-a-list-follows-it
 read/from-a-standard-input-that-is-closed
-redir/a-wide-duplication-target-with-a-leading-zero
 setopt/the-interactive-listing-drops-nohashdirs
 subst/a-blank-before-the-pipe-is-not-the-reply-form
 xtrace/ps4-unset-is-not-the-default-again

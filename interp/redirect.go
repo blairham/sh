@@ -2273,7 +2273,10 @@ func (r *Runner) dupTargetText(rd *syntax.Redirect, moveFrom int) string {
 		}
 		return ""
 	}
-	if r.diag().NamesTheDuplicationTargetAsWritten {
+	if r.diag().NamesTheDuplicationTargetAsWritten && (rd.Text == "" || !allDigits(rd.Text)) {
+		// As written — but a target written as a plain number is named as
+		// the number it is: `>&08` is `8: Bad file descriptor` in bash
+		// 5.3.20, measured 2026-10-04, where `>&$x` is `$x`.
 		return rd.Text
 	}
 	return ""

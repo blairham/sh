@@ -62,7 +62,11 @@ func retrying[T any](do func() (T, error)) (T, error) {
 
 // openat opens name relative to dirfd, waiting through an interruption.
 func openat(dirfd int, name string, flags int, perm uint32) (int, error) {
-	return retrying(func() (int, error) { return openatOnce(dirfd, name, flags, perm) })
+	// Held as well as retried: a retry is what loses a FIFO's peer. See
+	// WithSignalsHeld.
+	return retrying(func() (int, error) {
+		return WithSignalsHeld(func() (int, error) { return openatOnce(dirfd, name, flags, perm) })
+	})
 }
 
 // readlinkat reads the link at name relative to dirfd, on the same terms.

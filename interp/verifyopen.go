@@ -115,7 +115,10 @@ func (r *Runner) openGated(ctx context.Context, a *Action, path string, flags in
 func (r *Runner) openGatedFile(ctx context.Context, a *Action, path string, flags int) (*os.File, error) {
 	perm := r.createMode(0o666)
 	if r.Gate == nil {
-		return os.OpenFile(path, flags, perm)
+		// With the thread's signals held, because a redirection to a FIFO
+		// waits in the open for its peer, and an interrupted wait can lose a
+		// peer that came and went (#5763). See opened.WithSignalsHeld.
+		return opened.WithSignalsHeld(func() (*os.File, error) { return os.OpenFile(path, flags, perm) })
 	}
 	return opened.Verified(path, flags, perm, func(reached opened.Reached) error {
 		if !r.verifyOpened(ctx, a, reached) {

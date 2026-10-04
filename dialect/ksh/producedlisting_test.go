@@ -18,17 +18,17 @@ import (
 //	typeset -p LINENO    typeset -i LINENO=1
 //	typeset -p SECONDS   typeset -F 3 SECONDS=0.001
 //
-// `SECONDS` is deliberately not registered and the row above says why: the
-// places after `-F` are a word no listing form here writes (#1461), so the
-// choice is between the `not found` it says today and a `typeset -F
-// SECONDS=…` that is closer and still not what the shell writes. This test
-// pins the two that can be right and leaves the third to the issue that owns
-// it — a row asserted as "closer" is a row nobody can grade.
+// `SECONDS` was left out while the places after `-F` were a word no listing
+// form wrote (#1461); it lists with them now, by name and in the bare listing
+// alike, read or not (special/listing-a-produced-parameter and
+// special/the-letters-a-produced-clock-lists-with, re-measured 2026-10-03).
 func TestAProducedParameterListsBack(t *testing.T) {
 	dir := t.TempDir()
 	for _, tc := range []struct{ src, want string }{
 		{"typeset -p RANDOM", `^typeset -i RANDOM=[0-9]+\n$`},
 		{"typeset -p LINENO", `^typeset -i LINENO=1\n$`},
+		{"typeset -p SECONDS", `^typeset -F 3 SECONDS=[0-9]+\.[0-9]{3}\n$`},
+		{`typeset -p >l; while read -r a; do case $a in *" SECONDS="*) print -r -- "$a";; esac; done <l`, `^typeset -F 3 SECONDS=[0-9]+\.[0-9]{3}\n$`},
 	} {
 		out, st := runKsh(t, dir, tc.src)
 		if !regexp.MustCompile(tc.want).MatchString(out) || st != 0 {

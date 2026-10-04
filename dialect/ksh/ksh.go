@@ -6270,14 +6270,12 @@ func Apply(r *interp.Runner) {
 	r.SetDynamic("SECONDS", func(rr *interp.Runner) string {
 		return strconv.FormatFloat(rr.SecondsFrom(), 'f', 3, 64)
 	})
-	// Deliberately no declaration for it, and the reason is a listing this
-	// engine cannot yet write rather than an oversight: ksh93 lists it
-	// `typeset -F 3 SECONDS=0.001`, with the places as a word of their own,
-	// and no listing form here writes that number (#1461). Registering the
-	// bare `-F` would put out `typeset -F SECONDS=0.001` — closer than the
-	// `not found` it says today and still not what the shell writes, and a
-	// corpus row cannot tell "closer" from "right". So the row stays wrong
-	// in the way it already was until the places can be written (#2451).
+	// And it lists with the places as a word of their own, read or not:
+	// `typeset -F 3 SECONDS=0.001`, measured 2026-10-03 on ksh93u+ both by
+	// name and in the operand-less listing, before and after a `$SECONDS`.
+	// The listing could not write the places when this was first measured
+	// (#1461, #2451); it can now.
+	r.SetDynamicDeclaration("SECONDS", interp.ProducedDeclaration{Float: true, Places: 3})
 	r.Unregister("local")
 	// Five words this shell reaches only through its own preset aliases, and
 	// none of them is a command. `integer` is `typeset -li`, `nameref` is

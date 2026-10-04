@@ -315,6 +315,9 @@ func (r *Runner) declarationOf(name string) (declaration, bool) {
 		// are taken *over* whatever the tables happened to hold, so that one
 		// answer to "how does this name list" cannot come from two places.
 		d.integer, d.base, d.float = pd.Integer, pd.Base, pd.Float
+		if pd.Float {
+			d.precision = pd.Places
+		}
 		d.silent = pd.Silent
 		// See ProducedDeclaration.Array: the operand-less listing withholds a
 		// *reading* and an array's elements are not one, so the two produced

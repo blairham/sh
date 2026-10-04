@@ -58,12 +58,11 @@ type ProducedDeclaration struct {
 	// side. See unreadProducedLetters, and note that the *named*
 	// `typeset -p SECONDS` writes the letter in both states (#2451).
 	IntegerOnceRead bool
-	// Float is the `-F` letter. The *places* beside it are ksh93's
-	// `typeset -F 3` and are not written by any listing form here yet
-	// (#1461), which is why ksh93's `SECONDS` is deliberately not registered:
-	// `typeset -F SECONDS=0.001` would be closer than `not found` and still
-	// not right, and a corpus row cannot tell "closer" from "right".
+	// Float is the `-F` letter.
 	Float bool
+	// Places is the number written beside that letter — ksh93's
+	// `typeset -F 3 SECONDS=0.001`. Zero writes the letter alone.
+	Places int
 	// Array says the producer answers with **elements** rather than a value,
 	// which a listing needs to know for a reason a scalar's letters do not
 	// raise: the operand-less listing withholds a produced *reading* — see

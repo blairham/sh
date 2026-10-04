@@ -105,8 +105,6 @@ redir/a-wide-duplication-target-with-a-leading-zero
 redirection/a-script-file-of-its-own-takes-a-number-in-one-shell
 set/listed-value-with-a-byte-above-ascii
 socket/a-message-across-a-unix-socket
-special/listing-a-produced-parameter
-special/the-letters-a-produced-clock-lists-with
 startup/an-option-names-the-interactive-file
 subst/a-body-with-no-terminator-before-its-brace
 subst/a-brace-group-written-in-a-body

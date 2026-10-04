@@ -1169,7 +1169,8 @@ scan:
 		return e
 	}
 	if !ok {
-		if !p.dialect.BadSubstitutionAtParseTime || s[0] == '@' {
+		if !p.dialect.BadSubstitutionAtParseTime || s[0] == '@' ||
+			p.dialect.BadSubstitutionAfterAFixedNameIsDeferred && fixedNameDefers(e, s[0]) {
 			// The majority defers: the node is kept, marked, and diagnosed
 			// only if the expansion is ever reached — an unrecognized
 			// operator in a branch never taken is not an error at all.
@@ -1994,6 +1995,33 @@ func (p *Parser) scanParamOp(s string, e *ParamExpr) (ParamOp, string, bool) {
 		return ParamToggleFirst, s[1:], true
 	}
 	return 0, "", false
+}
+
+// fixedNameDefers reports whether the character c, standing right after the
+// parameter an expansion names, leaves the refusal for the run in the grammar
+// that otherwise refuses an unreadable expansion while reading. See
+// Dialect.BadSubstitutionAfterAFixedNameIsDeferred for the measurement: it is
+// a letter, or a parenthesis, after a special or positional parameter, and a
+// letter or an underscore after a subscript — and nothing after a name that
+// could have gone on.
+func fixedNameDefers(e *ParamExpr, c byte) bool {
+	letter := c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z'
+	if e.Index != nil {
+		return letter || c == '_'
+	}
+	n := e.Name
+	if n == "" || !letter && c != '(' {
+		return false
+	}
+	if len(n) == 1 && strings.IndexByte("$-?#!@*", n[0]) >= 0 {
+		return true
+	}
+	for i := 0; i < len(n); i++ {
+		if n[i] < '0' || n[i] > '9' {
+			return false
+		}
+	}
+	return true
 }
 
 func condOp(c byte) ParamOp {

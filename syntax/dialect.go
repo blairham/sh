@@ -3572,6 +3572,30 @@ type Dialect struct {
 	// parse time refuses the whole file.
 	BadSubstitutionAtParseTime bool
 
+	// BadSubstitutionAfterAFixedNameIsDeferred keeps one shape out of
+	// BadSubstitutionAtParseTime: certain characters right after a special
+	// parameter, a positional parameter, or a name a subscript has closed are
+	// refused when the expansion is reached, not while reading.
+	//
+	// Measured 2026-10-03 on ksh93u+ 2012-08-01, each body written as
+	// `if false; then echo "<body>"; fi; echo reached; echo "<body>"`:
+	//
+	//	reached, then `"<body>": bad substitution` at 1:
+	//	  ${?x} ${1x} ${0x} ${*x} ${$x} ${#@x} ${#$w} ${-x}
+	//	  ${?(x)} ${1(x)} ${@(x)} ${$(f)} ${a[1]x} ${a[1]_}
+	//	a syntax error while reading, naming the character, at 3:
+	//	  ${?1} ${-1} ${?_} ${?.} ${? } ${?"x"} ${1$} ${1$x} ${$$}
+	//	  ${?[1]} ${1[2]} ${@[1]} ${a[1]$} ${a[1](x)}
+	//	  ${a b} ${ab!} ${#ab c} ${!x y} ${.sh.x y}
+	//	  ${${a}}, which names `!`
+	//
+	// So a letter defers after either kind of fixed name, a parenthesis only
+	// after a special or positional one, and an underscore only after a
+	// subscript; everything else, and anything after a name that could have
+	// gone on, is refused while reading. The shells that defer every bad
+	// substitution never ask.
+	BadSubstitutionAfterAFixedNameIsDeferred bool
+
 	// ParamSubstring enables `${x:off:len}`. Absent from dash.
 	ParamSubstring bool
 

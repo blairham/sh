@@ -73,17 +73,12 @@ jobs/a-signal-name-joined-to-kill-n-option
 jobs/a-stopped-background-job-in-the-listing
 jobs/bg-with-no-job-control
 jobspec/kill-a-job-that-is-not-there
-length/a-hash-then-a-special-that-is-not-an-operator
 nounset/a-key-the-association-does-not-have
 param/a-backslash-in-an-expanded-replacement
 param/a-length-is-taken-before-the-joining-and-the-split
-param/a-nested-expansion-takes-flags-and-a-substitution
-param/a-scalar-context-joins-a-flag-groups-words
 param/a-searching-trim-and-the-arms-of-an-alternation
 param/a-substring-modifier-reads-its-own-quotes
-param/a-word-after-a-parameter-is-not-an-operand
 param/an-expansion-with-no-name-at-all
-param/an-unquoted-substitution-in-the-name-position
 param/padding-runs-after-the-rest-of-the-group
 param/prompt-percent-result-is-not-a-pattern
 param/the-index-of-no-match-in-a-nested-expansion-is-zero

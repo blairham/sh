@@ -266,10 +266,12 @@ func (r *Runner) errTrapFiresHere(refuse bool) bool {
 	//
 	// In bash. BusyBox ash's errtrace reaches into a function and stops at
 	// the subshell: see Semantics.ErrtraceReachesSubshells.
-	if r.errTrapInherited &&
-		!(r.errtrace && answered(r.sem().ErrtraceReachesSubshells, "errtrace carrying the ERR trap into a subshell")) &&
-		!answered(r.sem().ErrTrapRunsInSubshells, "the ERR trap inside a subshell") {
-		return false
+	if r.errTrapInherited {
+		carried := r.errtrace &&
+			answered(r.sem().ErrtraceReachesSubshells, "errtrace carrying the ERR trap into a subshell")
+		if !carried && !answered(r.sem().ErrTrapRunsInSubshells, "the ERR trap inside a subshell") {
+			return false
+		}
 	}
 	return true
 }

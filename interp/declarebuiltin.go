@@ -189,8 +189,14 @@ type declareFlags struct {
 	// off — which leaves the bare word. See the plus branch in declareNames.
 	funcNamesOff bool
 	funcNames    bool
-	remove       bool
-	print        bool
+	// functionMinus and functionPlus are whether either function letter, `f`
+	// or `F`, was written anywhere on the line under that sign — which is
+	// what the dialect that reads the plus as taking the attribute off
+	// decides by, rather than by the last sign. See
+	// Runner.functionLineUnderBothSigns.
+	functionMinus, functionPlus bool
+	remove                      bool
+	print                       bool
 	// matching is the `m` letter — the operands are patterns rather than
 	// names — and matchNames is its sign, which chooses between the two
 	// listings it has: `-m` writes each match's value and `+m` writes each
@@ -849,6 +855,8 @@ func (r *Runner) parseDeclareFlags(name string, args []string, known string) (re
 			case 'f':
 				f.function = true
 				f.functionOff = f.remove
+				f.functionPlus = f.functionPlus || f.remove
+				f.functionMinus = f.functionMinus || !f.remove
 			case 'm':
 				// The operands are patterns. Recorded rather than acted on
 				// here, because what it does depends on every other letter
@@ -917,6 +925,8 @@ func (r *Runner) parseDeclareFlags(name string, args []string, known string) (re
 				}
 				f.funcNames = true
 				f.funcNamesOff = f.remove
+				f.functionPlus = f.functionPlus || f.remove
+				f.functionMinus = f.functionMinus || !f.remove
 			case 'L', 'R', 'Z':
 				if !r.declareOptionTakesANumber(byte(c)) {
 					// The dialect spells the letter but not as a width, so
@@ -1537,6 +1547,9 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) (endSt
 		// `typeset +fm '_*'` names its matches and `typeset -fm '_*'` writes
 		// their bodies. Asking `f.funcNames` alone here is what left the
 		// plus form printing bodies while the pattern form printed names.
+		if code, done := r.functionLineUnderBothSigns(args, &f); done {
+			return code
+		}
 		namesOnly := f.funcNames && !f.funcNamesOff
 		if f.functionOff || f.funcNamesOff {
 			if !r.ask(r.sem().FunctionNamesUnderPlus, "`typeset +f` naming its functions") {
@@ -7215,4 +7228,38 @@ func (r *Runner) plusLettersSelectNothing(name string, f declareFlags) declareFl
 		return f
 	}
 	return g
+}
+
+// functionLineUnderBothSigns settles a line that wrote a function letter
+// under both signs, in the dialect where a plus takes the function attribute
+// off rather than asking for names. done reports that the line has been
+// answered here; otherwise f has been settled for the reading below.
+//
+// The rule there is not the last sign. Measured 2026-10-03 on bash 5.3.20,
+// with `f` defined:
+//
+//	typeset -f +f f      silent, 0     typeset -f +f    f's body
+//	typeset +f -f f      silent, 0     typeset +f -f    f's body
+//	typeset -f +f -f f   silent, 0     typeset +f -f +f f's body
+//	typeset +F -f f      silent, 0     typeset -F +f    declare -f f
+//	                                   typeset -f +F    declare -f f
+//
+// So with operands a plus anywhere makes the line the silent removal, and
+// without them a minus anywhere makes it the function listing — the names
+// wherever an `F` was written at all, the bodies otherwise.
+func (r *Runner) functionLineUnderBothSigns(args []string, f *declareFlags) (int, bool) {
+	if !f.functionPlus || !f.functionMinus {
+		return 0, false
+	}
+	if r.ask(r.sem().FunctionNamesUnderPlus, "`typeset +f` naming its functions") {
+		return 0, false
+	}
+	if r.unspecified {
+		return r.status, true
+	}
+	if len(args) > 0 {
+		return 0, true
+	}
+	f.functionOff, f.funcNamesOff = false, false
+	return 0, false
 }

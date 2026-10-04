@@ -33,6 +33,16 @@ const (
 	functionAttributeTraced = 't'
 )
 
+// isFunctionCaseLetter is whether a letter is one of the three case letters,
+// which are attributes of a function in the dialect that lists `declare -fu
+// f`. Measured 2026-10-03 on bash 5.3.20: `typeset -fu f` is a silent 0,
+// `declare -F` then writes `declare -fu f`, a later `typeset -fl f` leaves
+// `declare -fl f` — each takes the other two off, as on a variable — `+u`
+// takes it away, and a function holding every letter lists as `declare
+// -frtxc f`. What the letter would do to a function is nothing anyone
+// measured; it is recorded and listed.
+func isFunctionCaseLetter(c rune) bool { return c == 'l' || c == 'u' || c == 'c' }
+
 // functionAttributes is the letters one function holds, in the dialect's
 // order — the text that goes after `declare -f` in a listing.
 //
@@ -63,6 +73,9 @@ func (r *Runner) functionHoldsAttribute(name string, letter rune) bool {
 	case functionAttributeTraced:
 		return r.tracedFuncs[name]
 	}
+	if isFunctionCaseLetter(letter) {
+		return r.caseFuncs[name] == letter
+	}
 	return false
 }
 
@@ -85,6 +98,12 @@ func (r *Runner) markFunctionAttribute(name string, letter rune) {
 		}
 		r.tracedFuncs[name] = true
 	}
+	if isFunctionCaseLetter(letter) {
+		if r.caseFuncs == nil {
+			r.caseFuncs = map[string]rune{}
+		}
+		r.caseFuncs[name] = letter
+	}
 }
 
 // unmarkFunctionAttribute takes one letter off one function.
@@ -96,6 +115,9 @@ func (r *Runner) unmarkFunctionAttribute(name string, letter rune) {
 		delete(r.exportedFuncs, name)
 	case functionAttributeTraced:
 		delete(r.tracedFuncs, name)
+	}
+	if isFunctionCaseLetter(letter) && r.caseFuncs[name] == letter {
+		delete(r.caseFuncs, name)
 	}
 }
 

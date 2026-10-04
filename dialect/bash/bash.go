@@ -3572,7 +3572,13 @@ func Semantics() interp.Semantics {
 	// -frtx a`. What a traced function *does* here — inherit the DEBUG and
 	// RETURN traps, which `set -o functrace` asks for wholesale — is not
 	// built, so the mark is recorded and listed and read by nothing.
-	s.FunctionAttributeLetters = "rtx"
+	//
+	// And the three case letters, after the other three and in that order,
+	// one at a time since each takes the others off: measured 2026-10-03,
+	// `typeset -fu f` is a silent 0 and `declare -F` then writes `declare
+	// -fu f`, and a function marked `-fx`, `-fl`, `-ft` lists as `declare
+	// -ftxl f`.
+	s.FunctionAttributeLetters = "rtxluc"
 	// The body listing writes a line of those letters after the body: see
 	// interp.Semantics.FunctionBodyListingWritesItsAttributes (#5674).
 	s.FunctionBodyListingWritesItsAttributes = interp.Yes

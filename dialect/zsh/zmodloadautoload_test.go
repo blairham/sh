@@ -51,12 +51,12 @@ zmodload -a
 zfoo 2>&1
 print -r -- never`,
 		"st=0\n"+
-			"zsh:3: module `zsh/zutil' has no such feature: `b:zfoo': autoload cancelled\n"+
+			"zsh:3: module `zsh/zutil' has no such feature: `b:zfoo': autoload cancelled\n"+ //nolint:misspell // zsh's spelling
 			"zsh:3: autoloading module zsh/zutil failed to define builtin: zfoo\n"+
 			"sub=1\n"+
 			"e=1\n"+
 			"zfoo (zsh/zutil)\n"+
-			"zsh:8: module `zsh/zutil' has no such feature: `b:zfoo': autoload cancelled\n"+
+			"zsh:8: module `zsh/zutil' has no such feature: `b:zfoo': autoload cancelled\n"+ //nolint:misspell // zsh's spelling
 			"zsh:8: autoloading module zsh/zutil failed to define builtin: zfoo\n", 1)
 }
 

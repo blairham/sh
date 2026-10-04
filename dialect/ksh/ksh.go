@@ -4302,6 +4302,11 @@ func Semantics() interp.Semantics {
 	// typeset is one of this shell's own special builtins, so any of its
 	// failures ends the script — a bad option included.
 	s.TypesetBadOptionFatal = interp.Yes
+	// A listing spells bytes above ASCII out where the locale has no
+	// characters there: measured 2026-10-03, `v=é; set` under `LC_ALL=C`
+	// writes the bytes escaped and under a UTF-8 locale the character. See
+	// Semantics.ListedNonAsciiFollowsTheLocale.
+	s.ListedNonAsciiFollowsTheLocale = interp.Yes
 	// And an option word with more behind its `a` is not an option word:
 	// measured 2026-10-03, `typeset -ai q=(1 2)` is `typeset: -ai: invalid
 	// variable name` and ends the script, where `typeset -ia q=(1 2)` is

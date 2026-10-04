@@ -103,7 +103,12 @@ func TestHowAListingSpellsTheThreeBytesThePanelSplitsOn(t *testing.T) {
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			out, st, err := presets[tc.dialect].Combined(t, dialecttest.Base{}, tc.src)
+			// A UTF-8 locale, because the character rows are that column's:
+			// under C two of the three dialects spell the byte out — see
+			// Semantics.ListedNonAsciiFollowsTheLocale.
+			out, st, err := presets[tc.dialect].Combined(t, dialecttest.Base{
+				Env: []string{"LC_ALL=en_US.UTF-8"},
+			}, tc.src)
 			if err != nil || st != 0 {
 				t.Fatalf("status %d, err %v: %s", st, err, out)
 			}

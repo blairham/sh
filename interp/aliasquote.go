@@ -316,8 +316,9 @@ func (r *Runner) listedValueIsBare(v string) bool {
 // it writes the character. zsh writes the character either way and ksh93
 // spells it out either way, so the two of them answer a question about the
 // byte and bash answers one about the encoding. This axis carries the
-// character reading, which is what a person's terminal sees; the corpus runs
-// `LC_ALL=C` and records bash's other spelling there rather than here.
+// character reading, and Semantics.ListedNonAsciiFollowsTheLocale is what
+// takes it back where the locale has no characters above ASCII — see
+// Runner.listingReadsBytesHere.
 //
 // Read rather than asked, and the answer a dialect has not given is the one
 // that quotes: a listing that quotes more than it must still reads back, and
@@ -353,7 +354,7 @@ func (r *Runner) listedNeedsDollar(v string) bool {
 	if hasControl(v) {
 		return true
 	}
-	if r.sem().ListedNonAsciiIsOrdinary == Yes {
+	if r.sem().ListedNonAsciiIsOrdinary == Yes && !r.listingReadsBytesHere(v) {
 		if r.sem().ListedNonAsciiIsBareOnlyWhenAlphabetic == Yes &&
 			nonAlphabeticAboveAscii(v) {
 			// The same column narrows *which* characters above ASCII are
@@ -808,7 +809,7 @@ func doubleQuoted(v string) string {
 // character.
 func (r *Runner) dollarQuoted(v string) string {
 	style := r.sem().ListingControlEscape
-	ordinary := r.sem().ListedNonAsciiIsOrdinary == Yes
+	ordinary := r.sem().ListedNonAsciiIsOrdinary == Yes && !r.listingReadsBytesHere(v)
 	// And whether such a character is written as its code point rather than
 	// as itself, which is the one column that does — see
 	// Semantics.ListedNonAsciiIsSpelledAsACodePoint. Only where the byte is
@@ -982,4 +983,38 @@ func controlEscaped(style ControlEscapeStyle, c byte) string {
 		return fmt.Sprintf(`\x%02x`, c)
 	}
 	return fmt.Sprintf(`\%03o`, c)
+}
+
+// listingReadsBytesHere reports whether a listing spells every byte above
+// ASCII out as a byte, because the locale in force has no characters above
+// ASCII to call printable — in the dialects whose listing follows the locale.
+//
+// Measured 2026-10-03 with `v1=é` (two bytes), `v2=$'a\tbé'` and the stray
+// `v3=$'\303'`, over `set` and `typeset -p`/`declare -p`:
+//
+//	                     LC_ALL=C                     LC_ALL=en_US.UTF-8
+//	bash 5.3.20   v1=$'\303\251'  v2=$'a\tb\303\251'   v1=é  v2=$'a\tbé'
+//	ksh93u+       v1=$'\xc3\xa9'  v2=$'a\tb\xc3\xa9'   v1=é  v2=$'a\tb\u[e9]'
+//	zsh 5.9.2     v1=é  v2=$'a\tbé'                 the same
+//
+// So bash and ksh93 decide printable by the locale and zsh by the bytes,
+// whatever the locale. The listing used to carry the character reading in
+// every locale. See Semantics.ListedNonAsciiFollowsTheLocale.
+//
+// Asked only of a value holding a byte above ASCII, so an ASCII listing asks
+// nothing.
+func (r *Runner) listingReadsBytesHere(v string) bool {
+	if isASCII(v) {
+		return false
+	}
+	if r.sem().ListedNonAsciiFollowsTheLocale != Yes {
+		return false
+	}
+	switch r.localeEncoding() {
+	case localeUTF8:
+		return false
+	case localeUnnamed:
+		return !r.unsetLocaleIsUnicodeAware()
+	}
+	return true
 }

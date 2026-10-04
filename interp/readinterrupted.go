@@ -55,11 +55,12 @@ func (r *Runner) trapInterruptibleByteSource(in io.Reader) (next func() (byte, i
 		}
 		req <- struct{}{}
 		done := <-ready
-		if _, trapped, _ := r.awaitOrTrap(done, nil); trapped {
+		if sig, trapped, _ := r.awaitOrTrap(done, nil); trapped {
 			// Given up, as at the end of the input: nothing is assigned
 			// and the status is 1. The handler runs once the builtin has
 			// returned, like any other trap between commands.
 			finished = true
+			r.readAbandonedBy = sig
 			return 0, evEOF
 		}
 		if got.eof {

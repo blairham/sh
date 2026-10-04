@@ -17197,6 +17197,16 @@ type Semantics struct {
 	// and of ksh93 are not modeled: those columns answer no here and keep
 	// reading, which is the row recorded for them.
 	ReadIsAbandonedByATrappedSignal Answer
+	// ReadAbandonedReportsTheSignal has a `read` given up for a trapped
+	// signal answer 256 plus the signal's number, rather than the 1 an end
+	// of input answers. Read only where the read was given up that way.
+	//
+	// ksh93u+, which also gives the read up. Measured 2026-10-03 from -c
+	// with a FIFO on descriptor 3 and the signal sent by a background job:
+	// INT is 258, USR1 286 and TERM 271 on macOS, the handler runs and every
+	// name is emptied, `read -r a b` included; dash and BusyBox ash answer
+	// 1 (corpus row read/interrupted-by-a-trapped-signal).
+	ReadAbandonedReportsTheSignal Answer
 	// DisownRemovesTheJob makes `disown` take the job out of the table, so
 	// a later `jobs` no longer lists it: bash and zsh. ksh93's disown only
 	// shields the job from the HUP an exiting shell would send, and its
@@ -33365,6 +33375,8 @@ func PosixSemantics() Semantics {
 		BareWaitLeavesJobsForTheListing: No,
 		// A trapped signal leaves a `read` waiting. See the field.
 		ReadIsAbandonedByATrappedSignal: No,
+		// And where it is given up, it answers 1. See the field.
+		ReadAbandonedReportsTheSignal: No,
 		// And a named one, and a listing marks the table as it stood. See
 		// the fields.
 		WaitLeavesTheJobForTheListing:     No,
@@ -33764,6 +33776,8 @@ func CoreSemantics() Semantics {
 		BareWaitLeavesJobsForTheListing: No,
 		// A trapped signal leaves a `read` waiting. See the field.
 		ReadIsAbandonedByATrappedSignal: No,
+		// And where it is given up, it answers 1. See the field.
+		ReadAbandonedReportsTheSignal: No,
 		// And a named one, and a listing marks the table as it stood. See
 		// the fields.
 		WaitLeavesTheJobForTheListing:     No,

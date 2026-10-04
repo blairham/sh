@@ -6676,6 +6676,7 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 		r.settleBackgroundJobBeforeABlockingRead(in)
 		// Or one a trapped signal gives up, in the dialect that does. See
 		// Semantics.ReadIsAbandonedByATrappedSignal.
+		r.readAbandonedBy = 0
 		if src, stop, ok := r.trapInterruptibleByteSource(in); ok && !buffered {
 			next = src
 			defer stop()
@@ -6723,6 +6724,15 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 		}
 	case endEOF:
 		status = 1
+		if sig := r.readAbandonedBy; sig != 0 {
+			// Given up for a trapped signal rather than at the end of the
+			// input, which one dialect reports as the signal: 256 plus its
+			// number. See Semantics.ReadAbandonedReportsTheSignal.
+			r.readAbandonedBy = 0
+			if r.sem().ReadAbandonedReportsTheSignal == Yes {
+				status = 256 + int(sig)
+			}
+		}
 		switch {
 		case exact:
 			// Both shells with the letter report the short read; whether

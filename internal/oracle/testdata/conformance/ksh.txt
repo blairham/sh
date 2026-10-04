@@ -59,7 +59,6 @@ printf/non-finite-is-spelled-c-s-way
 printf/quoted-operand-is-a-character-value
 procsub/a-writing-body-in-a-command-substitution-is-captured
 read/from-a-standard-input-that-is-closed
-read/interrupted-by-a-trapped-signal
 read/keys-attached-count-must-be-a-number
 redir/a-wide-duplication-target-with-a-leading-zero
 socket/a-message-across-a-unix-socket

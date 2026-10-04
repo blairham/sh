@@ -2847,6 +2847,9 @@ type Runner struct {
 	// because both names are the standard's and every shell in the panel has
 	// them.
 	editingMode EditingMode
+	// editingSwitches are `emacs` and `vi` held apart, in the dialect that
+	// holds them so. See Semantics.EditingModesAreTwoSwitches.
+	emacsSwitch, viSwitch bool
 	// posixMode is `set -o posix`, and the posixSaved fields are the answers
 	// the axes it moves held before it was turned on, so turning it off
 	// restores the dialect's rather than asserting the standard's opposite.

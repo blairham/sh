@@ -140,8 +140,8 @@ var commonSetOptions = map[string]setOption{
 	// other, measured in bash 5.3 and ksh93 both: `set -o vi; set +o vi`
 	// reports `emacs off` and `vi off`.
 	"vi": {
-		apply: func(r *Runner, on bool) { r.setEditingMode(EditingModeVi, on) },
-		get:   func(r *Runner) bool { return r.EditingMode() == EditingModeVi },
+		apply: func(r *Runner, on bool) { r.setEditingSwitch(EditingModeVi, on) },
+		get:   func(r *Runner) bool { return r.editingSwitch(EditingModeVi) },
 	},
 }
 
@@ -219,6 +219,32 @@ func (r *Runner) EditingMode() EditingMode {
 // shell that has chosen nothing and *would* read emacs writes the refusal
 // down: measured on bash 5.3.15, `bash -i -c 'set +o emacs; set -o'` reports
 // both names off, and `bash -i -c 'set +o vi; set -o'` leaves emacs on.
+// setEditingSwitch is `set -o emacs` and `set -o vi`. Where the dialect holds
+// the two as switches of their own each name keeps its own answer — see
+// Semantics.EditingModesAreTwoSwitches — and the editor still follows the
+// last one turned on.
+func (r *Runner) setEditingSwitch(mode EditingMode, on bool) {
+	if r.sem().EditingModesAreTwoSwitches == Yes {
+		if mode == EditingModeVi {
+			r.viSwitch = on
+		} else {
+			r.emacsSwitch = on
+		}
+	}
+	r.setEditingMode(mode, on)
+}
+
+// editingSwitch reads one of the two names back.
+func (r *Runner) editingSwitch(mode EditingMode) bool {
+	if r.sem().EditingModesAreTwoSwitches == Yes {
+		if mode == EditingModeVi {
+			return r.viSwitch
+		}
+		return r.emacsSwitch
+	}
+	return r.EditingMode() == mode
+}
+
 func (r *Runner) setEditingMode(mode EditingMode, on bool) {
 	switch {
 	case on:
@@ -250,8 +276,8 @@ var extraSetOptions = map[string]setOption{
 	// names, so it applies through the same method and a dialect that has
 	// only one of the pair still cannot make them disagree.
 	"emacs": {
-		apply: func(r *Runner, on bool) { r.setEditingMode(EditingModeEmacs, on) },
-		get:   func(r *Runner) bool { return r.EditingMode() == EditingModeEmacs },
+		apply: func(r *Runner, on bool) { r.setEditingSwitch(EditingModeEmacs, on) },
+		get:   func(r *Runner) bool { return r.editingSwitch(EditingModeEmacs) },
 	},
 	// And no history for `nolog` to leave a function definition out of, so
 	// it is recorded the way `notify` and `ignoreeof` are.

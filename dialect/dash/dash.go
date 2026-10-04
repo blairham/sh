@@ -1655,6 +1655,9 @@ func Semantics() interp.Semantics {
 	// A bare listing walks the table: by bucket, then by when the name was
 	// first defined. Measured 2026-10-03; see the axis.
 	s.AliasListingWalksTheTable = interp.Yes
+	// `emacs` and `vi` are two options here and not one keymap: `set -o vi;
+	// set -o emacs` lists both on. Measured 2026-10-03; see the axis.
+	s.EditingModesAreTwoSwitches = interp.Yes
 	s.TrapQuoting = interp.ListingQuoteAlwaysDoubled
 	s.TrapActionIsParsedWhenSet = interp.No
 	s.TrapParseFailureNamesWhereItFired = interp.No
@@ -2277,8 +2280,10 @@ func Diagnostics() interp.Diagnostics {
 			// `s` was the sixth and is gone: the letter abbreviates the
 			// `stdin` name this dialect already lists, so it is declared in
 			// the letter table Apply installs and moves the same state the
-			// name moves (#3411).
-			"set": "biEIV",
+			// name moves (#3411). `b`, `E`, `I` and `V` went the same way on
+			// 2026-10-03: each abbreviates a name this dialect lists —
+			// notify, emacs, ignoreeof, vi — and is in `$-` when on.
+			"set": "i",
 		},
 		// Said whichever spelling asked, so the verb goes unused; status 0,
 		// the field's default, is what makes it a remark rather than an
@@ -2718,7 +2723,14 @@ func Apply(r *interp.Runner) {
 	// Diagnostics.UnimplementedOptionLetters above and a script that wrote
 	// it ended at 2 where dash carries on (#3411). See
 	// interp.Runner.SetOptionLetterNames.
-	r.SetOptionLetterNames(map[rune]string{'s': "stdin"})
+	//
+	// And `E` and `V`, which are `emacs` and `vi` spelled short and are in
+	// `$-` when on: measured 2026-10-03, `set -E` is 0 with `$-` reading `E`
+	// and the listing `emacs on`, where this refused the letter as not
+	// implemented and ended the script at 2 (opt/set-e-carries-the-err-trap).
+	r.SetOptionLetterNames(map[rune]string{
+		's': "stdin", 'E': "emacs", 'V': "vi", 'b': "notify", 'I': "ignoreeof",
+	})
 	// **OPTIND cannot be unset here.** Measured 2026-10-03 on dash 0.5.12:
 	// `unset OPTIND` and `unset -v OPTIND` are `unset: Illegal number: ` at
 	// 2 and end the script, as any special builtin's error does, whatever

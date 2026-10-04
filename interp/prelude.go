@@ -77,7 +77,7 @@ const diagnoseCommand = "diagnose"
 func (r *Runner) SourcingPrelude(on bool) {
 	r.sourcingPrelude = on
 	if !on {
-		r.line, r.prevLine, r.enteredLine = 0, 0, 0
+		r.line, r.prevLine, r.enteredLine, r.reachedLine = 0, 0, 0, 0
 	}
 }
 

@@ -4956,6 +4956,30 @@ type Diagnostics struct {
 	// this is not simply the script location being absent.
 	ParseFailureNamesItsOwnLine bool
 
+	// ParseFailureIsLocatedWhereTheProgramGotTo puts the line of the last
+	// command the program ran in front of a failure to read a later part of
+	// it, where ParseFailureNamesItsOwnLine would otherwise leave the
+	// location bare. The two lines are different numbers: one is where the
+	// shell had got to, the other where the reading gave out.
+	//
+	// ksh93 alone. Measured 2026-10-04 on ksh93u+ 2012-08-01, a script file
+	// whose last line is an unclosed `(`:
+	//
+	//	echo one / echo two / (               line 2: syntax error at line 4
+	//	echo one / v=SET / echo "${v-'$('}"   line 2: syntax error at line 3
+	//	f() { … } spanning 1-3 / f / (        line 4: syntax error at line 6
+	//	if true; then / : / fi / (            line 2: syntax error at line 5
+	//	echo one / (                          syntax error at line 3
+	//	echo a / # c / (                      syntax error at line 4
+	//	echo a; echo b / (blank) / (          syntax error at line 4
+	//
+	// So it is the last *command* run — a function definition counts, a
+	// comment does not, and a call names the line it was called from — and
+	// the first line is left out, which is the rule this dialect's location
+	// already follows under `-c`. A failure before anything ran has no such
+	// line and keeps the bare location.
+	ParseFailureIsLocatedWhereTheProgramGotTo bool
+
 	// HeredocBodyRefusalNamesTheLineItIsLocatedAt makes that sentence's line,
 	// for a substitution refused in a **here-document body**, the line the
 	// message is located at rather than the line the body holds the
@@ -10987,8 +11011,22 @@ func (d Diagnostics) ReportFrom(name, input string, line int, msg string) string
 // name is the shell or the script; input is what the front end calls the
 // origin, "-c" or empty; src is the whole script, for the echo.
 func (d Diagnostics) ParseDiagnostic(name, input string, err error, src string) string {
+	return d.ParseDiagnosticAfter(name, input, err, src, 0)
+}
+
+// ParseDiagnosticAfter is ParseDiagnostic for a failure met part-way through
+// a program, where reached is the line of the last command that program ran
+// — nought where nothing has. Only the dialect that locates the failure there
+// reads it; see Diagnostics.ParseFailureIsLocatedWhereTheProgramGotTo.
+func (d Diagnostics) ParseDiagnosticAfter(name, input string, err error, src string, reached int) string {
 	_, runtime := d.runtimeRefusal(err)
-	if d.ParseFailureNamesItsOwnLine && !runtime {
+	at := 0
+	if d.ParseFailureNamesItsOwnLine && !runtime && d.ParseFailureIsLocatedWhereTheProgramGotTo && reached > 1 {
+		// The wording says where the reading gave out, and the location
+		// says where the program had got to. Kept on whichever style the
+		// dialect locates with; both of its spellings agree past line 1.
+		at = reached
+	} else if d.ParseFailureNamesItsOwnLine && !runtime {
 		// The wording says where it was, so the location says only who.
 		//
 		// Only for a failure this dialect words as a parse failure. A
@@ -11037,7 +11075,11 @@ func (d Diagnostics) ParseDiagnostic(name, input string, err error, src string) 
 			d.Location = LocationNameOnly
 		}
 	}
-	out += d.ReportFrom(name, input, line, d.ParseFailure(err)+"\n")
+	located := line
+	if at > 0 {
+		located = at
+	}
+	out += d.ReportFrom(name, input, located, d.ParseFailure(err)+"\n")
 	return out + d.echoLine(name, input, line, err, src)
 }
 

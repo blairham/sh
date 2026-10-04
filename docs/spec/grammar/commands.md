@@ -4213,6 +4213,23 @@ blame lands accordingly. Committing at the paren also accepts more names
 than `FunctionNamePunctuation` does on its own — `f+x()`, `@weird()` —
 which is why the two flags are separate.
 
+ksh93's refusal at the `(` is not at the `(`'s own *line*, where the
+`(` follows a command's only word and that word could have been a name.
+Measured 2026-10-04 on ksh93u+ 2012-08-01 from a script file, each shape
+followed by two blank lines and `x`:
+
+    echo (      "echo" (      a-b (         syntax error at line 3
+    $x (        echo a (      a=b c (       syntax error at line 1
+    echo ( x                                syntax error at line 1
+    echo (#i)ab*  with nothing after it      syntax error at line 2
+
+So the line is where the token after the `(` stands, newlines stepped
+over — what follows the `(` in the last row is a comment, so that token
+is the end of the input. A word holding an expansion, a second word, an
+assignment or a redirection in front of the `(` leaves it at the `(`.
+The token blamed is the `(` in every row. Grammar flag:
+`ParenAfterANameIsRefusedWhereTheNextTokenStands`, on for ksh93 alone.
+
 ## `times` is a reserved word in one shell
 
     times extra

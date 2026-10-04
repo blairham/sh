@@ -2048,6 +2048,24 @@ type Dialect struct {
 	// function called `[[` to a shell without `[[`.
 	FuncDefAtParen bool
 
+	// ParenAfterANameIsRefusedWhereTheNextTokenStands numbers the refusal of
+	// a `(` that follows a command's only word at the line of the token
+	// after the `(`, newlines skipped, rather than at the `(`'s own line.
+	// The token blamed is still the `(`.
+	//
+	// ksh93 alone, and only where the word could have been a name: one word,
+	// written with no expansion in it — quoted or not — and nothing else in
+	// front of the `(`. Measured 2026-10-04 on ksh93u+ 2012-08-01 from a
+	// script file, each shape followed by two blank lines and an `x`:
+	//
+	//	echo (       line 3      "echo" (     line 3      a-b (     line 3
+	//	$x (         line 1      a=b c (      line 1      c >f (    line 1
+	//	echo ( x     line 1      echo (;      line 1
+	//
+	// and `echo (#i)ab*` with nothing after it is line 2, the end of the
+	// input: what follows the `(` there is a comment.
+	ParenAfterANameIsRefusedWhereTheNextTokenStands bool
+
 	// FuncBodyMustBeCompound refuses `f() echo hi`: bash alone wants a
 	// compound command after the parens, where dash, ksh93 and zsh take a
 	// simple command as a one-command body and run it.

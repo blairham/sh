@@ -17,10 +17,10 @@ import (
 // A paste the terminal marked is text in the line, newlines and all, and
 // nothing in it runs until Return is pressed.
 //
-// Until #5865 this was true of the bash dialect and false of this one. zsh's
-// standard keymap puts sequences beginning `\e[` in the binding table from the
-// first prompt, and the lookup that reads that table gave up on the paste's
-// opening marker at `\e[2`: it dropped those three bytes, `00~` and the paste
+// Until #5865 this was false whenever anything bound began with ESC — and
+// macOS's `/etc/zshrc` binds the arrows by `$terminfo[kcuu1]`, so on that
+// machine it was every session. The lookup that reads the bindings gave up on
+// the paste's opening marker at `\e[2`: it dropped those three bytes, `00~` and the paste
 // behind it were typed a key at a time, and the first newline ran the first
 // line. Measured at v0.0.25 with this paste: `> 00~echo one`, then `zsh:
 // command not found: 00~echo`, then `> echo two01~` left in the line.
@@ -35,7 +35,12 @@ import (
 // where the cursor is, tells the two apart. What ran is read off the files the
 // two lines create, which nothing on the screen can fake.
 func TestABracketedPasteIsTextInTheLineUntilReturn(t *testing.T) {
-	control, screen, home := jobNoticeSessionRC(t, "", "zsh", "-i")
+	// The binding `/etc/zshrc` makes on a Mac, written out so the session has
+	// it on every platform: the harness's `TERM=dumb` has no `kcuu1` for the
+	// system file to bind, and a Linux runner has no such file. Without one
+	// the lookup never reads past the ESC and this passes against the bug,
+	// which is how its first version did.
+	control, screen, home := jobNoticeSessionRC(t, "bindkey '^[OA' up-line-or-search\n", "zsh", "-i")
 	const (
 		first  = ": > ran1"
 		second = ": > ran2"

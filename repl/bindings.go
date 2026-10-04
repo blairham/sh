@@ -125,10 +125,13 @@ func (e *editor) matchBinding(first byte) (Binding, bool, keyRead) {
 				// which for a control sequence is the middle of it, and the
 				// rest of the sequence was typed into the line.
 				//
-				// That was #5865, and a paste was the worst of it. A table
-				// holding anything that begins `\e[` — every zsh session
-				// has some, since its standard keymap does — gave up on a
-				// paste's opening marker at `\e[2`, so `00~` and then the
+				// That was #5865, and a paste was the worst of it. Any
+				// binding at all that begins with ESC sends the lookup down
+				// this road — macOS's `/etc/zshrc` binds the arrows by
+				// `$terminfo[kcuu1]`, so every zsh session on that machine
+				// has some, and so does any rc that binds an arrow — and it
+				// gave up on a paste's opening marker at `\e[2`, so `00~` and
+				// then the
 				// pasted text arrived as keystrokes, and the first newline in
 				// the paste ran its first line. Function keys lost the same
 				// way: `\e[15~` put `5~` in the line and `\e[1;5C` put `5C`.

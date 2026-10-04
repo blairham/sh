@@ -12,17 +12,21 @@ import "testing"
 // not hold until #5865. The binding lookup reads a key while anything bound
 // could still be it and gave up at the first byte nothing continued to,
 // dropping what it had read — which for a control sequence is the middle of
-// it, so the rest was typed into the line. zsh's standard keymap puts
-// sequences beginning `\e[` in the table from the first prompt, so every zsh
-// session had the bug: a paste's opening marker gave up at `\e[2` and typed
-// `00~` and then the paste, newline and all.
+// it, so the rest was typed into the line. Any binding beginning with ESC was
+// enough, and macOS's `/etc/zshrc` makes three by `$terminfo[kcuu1]` and its
+// fellows, so every zsh session on that machine had the bug: a paste's opening
+// marker gave up at `\e[2` and typed `00~` and then the paste, newline and all.
 //
-// The table here holds one `\e[` sequence nobody presses, so every row below
-// reaches the give-up and none of them is answered by the binding itself.
-// Each is compared against the same keys with no table, which is the editor's
-// own dispatch — escape.go — reading the sequence whole.
+// Two tables, each holding one sequence nobody presses here: the
+// application-mode arrow that `/etc/zshrc` binds, and a `\e[` one, which
+// reaches the give-up by the other prefix. Every row is compared against the
+// same keys with no table, which is the editor's own dispatch — escape.go —
+// reading the sequence whole.
 func TestAKeyNobodyBoundIsTheSameKeyWhateverElseIsBound(t *testing.T) {
-	table := map[string]Binding{"\x1b[99Z": {Widget: WidgetKillWholeLine}}
+	tables := map[string]map[string]Binding{
+		"an application-mode arrow": {"\x1bOA": {Widget: WidgetPreviousHistoryMatching}},
+		"a control sequence":        {"\x1b[99Z": {Widget: WidgetKillWholeLine}},
+	}
 	for _, row := range []struct {
 		name, seq string
 		// want is the accepted line for "ab cd" + seq + "Z\n", so that the
@@ -46,9 +50,11 @@ func TestAKeyNobodyBoundIsTheSameKeyWhateverElseIsBound(t *testing.T) {
 				t.Fatalf("with nothing bound %q gave %q, want %q — the row is wrong, not the lookup",
 					keys, plain, row.want)
 			}
-			if got := typedBound(t, table, keys); got != plain {
-				t.Errorf("with %q bound, %q gave %q; with nothing bound it gives %q",
-					"\\e[99Z", keys, got, plain)
+			for name, table := range tables {
+				if got := typedBound(t, table, keys); got != plain {
+					t.Errorf("with %s bound, %q gave %q; with nothing bound it gives %q",
+						name, keys, got, plain)
+				}
 			}
 		})
 	}

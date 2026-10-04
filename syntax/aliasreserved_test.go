@@ -315,3 +315,47 @@ func TestTheHeadExpansionKeepsTheRestOfTheAlgorithm(t *testing.T) {
 		t.Errorf("`! true` came to %q, want `! echo X true`", got)
 	}
 }
+
+// An alias at the head of a pipeline whose expansion leaves `!` there negates
+// the pipeline — a value that is `! `, and a value ending in a blank followed
+// by a written `!` — under either setting of the flag, since `!` itself is
+// not an alias here. Unanimous across dash, ksh93, bash 5.3.20 and zsh 5.9.2,
+// measured 2026-10-03; this parser read the `!` as a command name.
+//
+// Asked of the tree and not of the printed form: a command named `!` with
+// the argument `true` prints exactly as the negation of `true` does.
+func TestAnAliasCanLeaveANegationAtTheHead(t *testing.T) {
+	t.Parallel()
+	a := table("sp", " ", "n", "! ", "e", "echo")
+	for _, c := range []struct {
+		src     string
+		negated bool
+		cmds    int
+	}{
+		{"sp ! true", true, 1},
+		{"n true", true, 1},
+		{"sp sp ! true", true, 1},
+		{"sp ! true | false", true, 2},
+		{"n e hi", true, 1},
+		// The control: an ordinary head is no negation.
+		{"e hi", false, 1},
+	} {
+		for _, expand := range []bool{true, false} {
+			p := syntax.NewParser(c.src, wholeGrammar(expand))
+			p.Aliases = a
+			f := p.Parse()
+			if err := p.Err(); err != nil {
+				t.Errorf("%q: %v", c.src, err)
+				continue
+			}
+			negated, cmds := false, 1
+			if pl, ok := f.Stmts[0].Expr.(*syntax.Pipeline); ok {
+				negated, cmds = pl.Negated, len(pl.Cmds)
+			}
+			if negated != c.negated || cmds != c.cmds {
+				t.Errorf("with the flag %v, %q: negated=%v over %d, want negated=%v over %d",
+					expand, c.src, negated, cmds, c.negated, c.cmds)
+			}
+		}
+	}
+}

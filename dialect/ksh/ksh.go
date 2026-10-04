@@ -466,6 +466,9 @@ func Dialect() syntax.Dialect {
 	// ksh93 alone refuses an unrecognized ${...} operator while reading the
 	// script; the other three wait until the expansion is reached.
 	d.BadSubstitutionAtParseTime = true
+	// Except right after a special, a positional or a subscripted name, which
+	// is refused when reached. See Dialect.BadSubstitutionAfterAFixedNameIsDeferred.
+	d.BadSubstitutionAfterAFixedNameIsDeferred = true
 	// A `.` is a name character here, which is how `${.sh.version}` is
 	// spelled and how a compound variable's member is addressed. One rule
 	// covering both — see syntax.Dialect.DottedName for the probes (#2620).

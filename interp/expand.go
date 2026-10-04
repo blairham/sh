@@ -3596,6 +3596,12 @@ func (r *Runner) badSubstitutionSubject(e *syntax.ParamExpr) string {
 		// `"${u:-${x@Z}}"` and `"${v#x${x@Z}y}"` are each blamed entire,
 		// measured on ksh93 2026-09-12.
 		text = syntax.PrintWord(r.expandingOuterWord)
+		if text != "" {
+			// An assignment's value is blamed with the assignment in front
+			// of it: `x=${a@Z}` and `x+=pre${?x}` are named whole, measured on
+			// ksh93u+ 2026-10-03, where an array literal's element is not.
+			text = r.assignmentWrittenBefore(r.expandingOuterWord, text) + text
+		}
 	} else {
 		text = syntax.PrintWordQuotingRun(r.expandingWord, r.expandingSpan)
 	}
@@ -3606,6 +3612,36 @@ func (r *Runner) badSubstitutionSubject(e *syntax.ParamExpr) string {
 		return "${" + e.Src + "}"
 	}
 	return text
+}
+
+// assignmentWrittenBefore is the `name=` or `name+=` an assignment's value is
+// written behind, or nothing when w is not such a value. A value word starts
+// where its assignment does, so the name is read off the source at w's own
+// position, and a word that already spells it — `echo a=${x}` — gets nothing.
+func (r *Runner) assignmentWrittenBefore(w *syntax.Word, printed string) string {
+	if w == nil {
+		return ""
+	}
+	text, _ := r.textInForce()
+	i := int(w.Start.Offset)
+	if i < 0 || i >= len(text) || !isNameStartByte(text[i]) {
+		return ""
+	}
+	j := i
+	for j < len(text) && isNameByte(text[j]) {
+		j++
+	}
+	if j < len(text) && text[j] == '+' {
+		j++
+	}
+	if j >= len(text) || text[j] != '=' {
+		return ""
+	}
+	prefix := text[i : j+1]
+	if strings.HasPrefix(printed, prefix) {
+		return ""
+	}
+	return prefix
 }
 
 // transformHasValue reports whether the name a `@` operator was written on has

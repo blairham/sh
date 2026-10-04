@@ -14,7 +14,6 @@ core/an-unbalanced-substitution-inside-those-quotes
 core/an-unreadable-operand-a-branch-does-not-take
 core/an-unreadable-operand-a-branch-takes
 core/single-quotes-in-a-quoted-pattern-operand
-declare/a-local-over-a-produced-readonly-parameter
 diag/trap-refusing-a-condition-it-does-not-know
 fnlib/add-zsh-hook-autoload-letters
 jobs/a-background-job-outlives-the-shell

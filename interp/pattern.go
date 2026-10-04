@@ -1224,6 +1224,10 @@ type patternOpts struct {
 	// Set only where the pattern really holds one, so the axis is asked
 	// where it decides and nowhere else.
 	bracketMember bool
+	// matchSkipsToAnyBracket says that once a member matches, the rest of
+	// the bracket expression is skipped to the next `]` byte, escaped or
+	// not. See Semantics.MatchedBracketSkipsToAnEscapedBracket.
+	matchSkipsToAnyBracket bool
 }
 
 // bracketPolicy is what the text an unterminated bracket left behind means,
@@ -2676,9 +2680,24 @@ func matchBracket(p string, c string, o *patternOpts) (rest string, ok bool) {
 	// because that is the noun: `[]a]` is a two-member set in every column
 	// and `[]` is a set with no members in one of them.
 	first := !o.emptyBracket || memberReadingCloses(p, 0)
+	// Where the rest of the pattern starts once a member has matched, in the
+	// dialect whose scan stops there at the next `]` byte whatever stands in
+	// front of it. -1 is the ordinary reading: the bracket's own end.
+	skipTo := -1
+	hit := func(next int) {
+		if o.matchSkipsToAnyBracket && skipTo < 0 && !matched {
+			if k := strings.IndexByte(p[next:], ']'); k >= 0 {
+				skipTo = next + k + 1
+			}
+		}
+		matched = true
+	}
 	for i < len(p) {
 		if p[i] == ']' && !first {
 			i++
+			if skipTo >= 0 && !negate && !frozen {
+				return p[skipTo:], true
+			}
 			if frozen && !matched {
 				// The scan gave up before anything matched, and there is
 				// nothing for a `!` to invert: measured, `[!a[:nope:]b]`
@@ -2761,7 +2780,7 @@ func matchBracket(p string, c string, o *patternOpts) (rest string, ok bool) {
 				if !frozen &&
 					(inClass(name, c, o.classes) ||
 						(o.foldClass && inClass(name, swapUnitCase(c, false), o.classes))) {
-					matched = true
+					hit(i)
 				}
 				continue
 			}
@@ -2840,13 +2859,13 @@ func matchBracket(p string, c string, o *patternOpts) (rest string, ok bool) {
 			from, to := ordOf(lo), ordOf(hi)
 			if !frozen && (inRange(ordOf(c), from, to) ||
 				(o.fold && inRange(ordOf(swapUnitCase(c, o.foldWide)), from, to))) {
-				matched = true
+				hit(after)
 			}
 			i = after
 			continue
 		}
 		if !frozen && eqUnit(lo, c, o.fold, o.foldWide) {
-			matched = true
+			hit(next)
 		}
 		i = next
 	}
@@ -3535,8 +3554,10 @@ func (r *Runner) patternOpts(pattern string, subjects ...string) patternOpts {
 		numericRange:  r.numericRanges(),
 		escapes:       r.sem().PatternEscapeReaches,
 		bracketMember: r.bracketEscapeIsOnlyAMember(pattern),
-		classes:       r.patternClasses(pattern),
-		collating:     r.collatingElements(pattern),
+		matchSkipsToAnyBracket: r.sem().MatchedBracketSkipsToAnEscapedBracket == Yes &&
+			strings.Contains(pattern, `\]`),
+		classes:   r.patternClasses(pattern),
+		collating: r.collatingElements(pattern),
 		// The bracket axis above is deliberately not resolved on this path
 		// and this one is, because the two are not the same question here.
 		// A bare `[` reaching pathname expansion or a trim is literal in

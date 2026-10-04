@@ -97,6 +97,15 @@ func jobNoticeSession(t *testing.T) (*os.File, *smoke.Screen) {
 // read paths this package has are both a session away.
 func jobNoticeSessionArgs(t *testing.T, argv ...string) (*os.File, *smoke.Screen) {
 	t.Helper()
+	control, screen, _ := jobNoticeSessionRC(t, "", argv...)
+	return control, screen
+}
+
+// jobNoticeSessionRC is jobNoticeSessionArgs with more of a startup file: rc
+// goes in after the two-row `PS1`. It also hands back the scratch home, which
+// is the session's working directory.
+func jobNoticeSessionRC(t *testing.T, rc string, argv ...string) (*os.File, *smoke.Screen, string) {
+	t.Helper()
 	home := scratchHome(t)
 	control, terminal, err := pty.Open()
 	if errors.Is(err, pty.ErrUnsupported) {
@@ -108,7 +117,7 @@ func jobNoticeSessionArgs(t *testing.T, argv ...string) (*os.File, *smoke.Screen
 	if err := pty.SetSize(terminal, 24, 100); err != nil {
 		t.Fatalf("sizing the terminal: %v", err)
 	}
-	writeHomeFile(t, home, ".zshrc", "PS1=$'JNROW\\n"+jobNoticeMark+"'\n")
+	writeHomeFile(t, home, ".zshrc", "PS1=$'JNROW\\n"+jobNoticeMark+"'\n"+rc)
 
 	sh := scratchShell(t)
 	sh.Stdin, sh.Stdout, sh.Stderr = terminal, terminal, terminal
@@ -138,7 +147,7 @@ func jobNoticeSessionArgs(t *testing.T, argv ...string) (*os.File, *smoke.Screen
 	if err := screen.Await(jobNoticeMark, jobNoticeBudget); err != nil {
 		t.Fatalf("no first prompt: %v", err)
 	}
-	return control, screen
+	return control, screen, home
 }
 
 // jobNoticeType sends a line and waits for the prompt that follows it.

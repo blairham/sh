@@ -4,10 +4,13 @@
 package main
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/blairham/sh/internal/cellgrid"
 	"github.com/blairham/sh/internal/smoke"
 )
 
@@ -160,5 +163,100 @@ func TestAnUnpromptedNoticeReachesASessionWithNoLineEditor(t *testing.T) {
 	if got := screen.Text()[len(before):]; !strings.Contains(got, "AFTER") {
 		t.Errorf("the line after the notice did not run:\n%s",
 			smoke.Readable(smoke.LastLines(got, 8)))
+	}
+}
+
+// A job that ends with nothing to report leaves the cursor where the prompt
+// left it, right after the prompt's last row.
+//
+// A disowned job is never in the job table, so there is never a notice for
+// it, but its ending still wakes the editor. The editor used to write the
+// newline a notice starts with before asking whether there was a notice, so
+// each such job moved the cursor down a row to column 0 with nothing drawn
+// there. That is how a real `.zshrc` under powerlevel10k came to start with
+// the cursor two rows below `❯`: a plugin's deferred load refreshes a
+// completion cache with `{ … } &|`, after the first prompt is up (#5862).
+//
+// Measured 2026-10-04 through a pseudo-terminal against `/opt/homebrew/bin/zsh`
+// (zsh 5.9.2, aarch64-apple-darwin25.4.0) with `PS1=$'upper row\n> '`:
+// `precmd() { sleep 1 &! }` leaves the cursor at row 1, column 2, and zsh
+// writes nothing when the job ends. This shell left it at row 2, column 0,
+// and at row 3 with two jobs.
+//
+// The jobs are started from `precmd` and not from the startup file. A job the
+// startup file starts ends before the editor is listening, so it wakes
+// nothing, and a test written that way passes against the bug. The position
+// is read through a terminal model rather than off the text: the prompt
+// itself is drawn correctly either way, and only the cursor is wrong.
+func TestAJobEndingWithNothingToReportLeavesTheCursorOnThePrompt(t *testing.T) {
+	const rc = `precmd() {
+  (( ${+jn_started} )) && return
+  jn_started=1
+  { sleep 0.2; : > ended1 } &!
+  { sleep 0.4; : > ended2 } &!
+}
+`
+	control, screen, home := jobNoticeSessionRC(t, rc, "zsh", "-i")
+
+	// Both jobs have ended once both files are there. A job that is still
+	// running cannot have moved anything yet, so asking before then would
+	// pass against the bug.
+	for _, name := range []string{"ended1", "ended2"} {
+		deadline := time.Now().Add(jobNoticeBudget)
+		for {
+			if _, err := os.Stat(filepath.Join(home, name)); err == nil {
+				break
+			}
+			if time.Now().After(deadline) {
+				t.Fatalf("the disowned job writing %s never finished:\n%s",
+					name, smoke.Readable(smoke.LastLines(screen.Text(), 8)))
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+	}
+
+	// Then a quiet period. The editor answers a job's ending within
+	// milliseconds, so a stray newline that is coming arrives well inside
+	// it, and the cursor has to stay put for the whole of it.
+	cols := 100
+	where := func() (row, col, promptRow int, grid *cellgrid.Grid) {
+		grid = cellgrid.New(cols)
+		_, _ = grid.Write([]byte(screen.Text()))
+		promptRow = -1
+		for r := range grid.Rows() {
+			if strings.HasPrefix(grid.Text(r), strings.TrimRight(jobNoticeMark, " ")) {
+				promptRow = r
+			}
+		}
+		row, col = grid.Cursor()
+		return row, col, promptRow, grid
+	}
+	for deadline := time.Now().Add(time.Second); time.Now().Before(deadline); time.Sleep(10 * time.Millisecond) {
+		row, col, promptRow, grid := where()
+		if row != promptRow || col != len(jobNoticeMark) {
+			t.Fatalf("after two disowned jobs ended the cursor is at row %d, column %d; "+
+				"want row %d, column %d, right after the prompt:\n%s\nraw: %q",
+				row, col, promptRow, len(jobNoticeMark), grid, screen.Text())
+		}
+	}
+
+	// And the model can tell a cursor that moved from one that did not: a
+	// typed character moves it one column along the prompt's row. Without
+	// this, a model that never moved the cursor at all would pass the check
+	// above.
+	if _, err := control.WriteString("x"); err != nil {
+		t.Fatalf("typing: %v", err)
+	}
+	deadline := time.Now().Add(jobNoticeBudget)
+	for {
+		row, col, promptRow, grid := where()
+		if row == promptRow && col == len(jobNoticeMark)+1 && strings.HasSuffix(grid.Text(row), "x") {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("a typed character did not move the cursor along the prompt's row: "+
+				"cursor at row %d, column %d:\n%s", row, col, grid)
+		}
+		time.Sleep(10 * time.Millisecond)
 	}
 }

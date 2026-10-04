@@ -88,23 +88,26 @@ func TestTheJobWakeIsArmedOnlyWhereTheDialectReportsAtOnce(t *testing.T) {
 	})
 }
 
-// A wake with nothing owed behind it draws nothing over the line.
+// A wake with nothing owed behind it writes nothing at all.
 //
-// The race this is about is ordinary rather than exceptional: the job ends
-// just as the prompt is being drawn, the prompt's own report takes the line,
-// and the byte in the pipe arrives at an editor with nothing left to say. A
-// redraw there would put a second copy of the prompt on the screen for a
-// notice nobody wrote.
+// Two ordinary ways to get one: the job ends just as the prompt is being drawn
+// and the prompt's own report takes the line, or the job was disowned and was
+// never in the table to be reported. A redraw there would put a second copy of
+// the prompt on the screen for a notice nobody wrote. A newline alone is worse,
+// because nothing is drawn after it and the cursor is left a row below the
+// line, at column 0 (#5862).
 func TestAJobWakeWithNothingOwedDrawsNoSecondPrompt(t *testing.T) {
 	for _, tc := range []struct {
 		name    string
-		notices func() bool
+		notices func(before func()) bool
 		want    []string
 		absent  []string
+		// exact, when set, is the whole of what the terminal may be given.
+		exact *string
 	}{
 		{
 			"a notice to write",
-			func() bool { return true },
+			func(before func()) bool { before(); return true },
 			// A row of its own, then the prompt's leading rows, then the
 			// line back under them. Measured on zsh 5.9.2 — see
 			// jobnotify.go, and cmd/zsh's pty test for the same shape at a
@@ -115,12 +118,14 @@ func TestAJobWakeWithNothingOwedDrawsNoSecondPrompt(t *testing.T) {
 			// where the kernel has stopped adding it. See editor.newline.
 			[]string{"\nLEAD\n", "$ ", "typed"},
 			nil,
+			nil,
 		},
 		{
 			"nothing owed after all",
-			func() bool { return false },
-			[]string{"\n"},
+			func(func()) bool { return false },
+			nil,
 			[]string{"LEAD", "typed"},
+			new(string),
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -140,6 +145,9 @@ func TestAJobWakeWithNothingOwedDrawsNoSecondPrompt(t *testing.T) {
 				if strings.Contains(out.String(), absent) {
 					t.Errorf("the terminal was given %q, which redraws for a notice nobody wrote", out.String())
 				}
+			}
+			if tc.exact != nil && out.String() != *tc.exact {
+				t.Errorf("the terminal was given %q for a wake with nothing owed, want %q", out.String(), *tc.exact)
 			}
 		})
 	}

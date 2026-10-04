@@ -5436,6 +5436,28 @@ func (r *Runner) numOf(w *syntax.Word, e *syntax.ParamExpr, tail *syntax.Word) i
 	// instead, and one printed into a log is a stray NUL — the same carve-out
 	// arithTreeOver makes. See stripArithValueMarks.
 	text := stripArithValueMarks(marked)
+	if tail != nil && strings.TrimSpace(text) == "" && r.lang().ParamSubstringOffsetTakesALeadingColon {
+		// An offset with nothing in it, ahead of a length, in the dialect
+		// whose offset expression takes a leading colon: there the range is
+		// one expression, read after it is expanded, and an empty offset
+		// leaves the colon at its front. Measured 2026-10-03 on ksh93u+:
+		// `w=; ${x:$w:2}` is `:2: arithmetic syntax error` exactly as the
+		// written `${x::2}` is, and `${x: :2}` is ` :2: …`, the blank kept.
+		// With no length behind it the empty offset is zero there too:
+		// `${x:$w}` is the whole value. See
+		// syntax.Dialect.ParamSubstringOffsetTakesALeadingColon.
+		restore := r.withoutGlobbing()
+		whole := text + ":" + stripArithValueMarks(r.rangeSegmentText(tail))
+		restore()
+		if _, err := r.expressionValue(whole); err != nil {
+			r.diagf("%s\n", Wording(r.diag().SubstringRangeError, "%[2]s",
+				r.paramSubject(e), r.expressionFailure(whole, err)))
+			r.expandErr = true
+			r.badRange = true
+			r.rangeRefused = true
+			return 0
+		}
+	}
 	// The range's own reader, not the subscript's: an offset that expanded
 	// to nothing is zero in every column, where the same emptiness in a
 	// subscript is refused in one of them.

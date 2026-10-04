@@ -18,7 +18,6 @@ autoload/the-two-signs-of-x
 axis/printf-c99-float-conversions
 axis/printf-non-finite-is-converted
 axis/trap-body-line-signal
-axis/what-an-empty-subscript-text-does-not-reach
 axis/where-a-substitution-has-no-arm-to-choose
 builtin/the-location-names-the-builtin-that-ran
 cmd/a-function-name-may-hold-an-expansion

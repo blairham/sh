@@ -17900,6 +17900,20 @@ keep in step:
     ${x:2:1+}    ksh93  1+: more tokens expected      a length has nothing after it
     ${x:1+:2}    ksh93  1+:2: arithmetic syntax error
 
+The same reading covers an offset that **expanded to nothing**. The range
+is read after it has been expanded, so an empty offset leaves the colon at
+the front of the expression, just as the written `${x::2}` does (see
+`Dialect.ParamSubstringOffsetTakesALeadingColon`). Measured 2026-10-03:
+
+    w=; ${x:$w:2}    ksh93  :2: arithmetic syntax error, and the script ends
+    w=; ${x:$w}      ksh93  the whole value: with no length, an empty offset is zero
+    w=; ${x:1:$w}    ksh93  empty: an empty length is zero
+    w=; ${x:$w:2}    bash   `ab`: the offset is zero
+
+ksh93 keeps a blank offset in what it reports (`${x: :2}` is ` :2: …`),
+but this shell reports `:2: …`. That wording difference is recorded here
+and not modeled.
+
 #### zsh's third wording: a byte the reader refuses outright
 
 Issue #698. zsh has a third sentence for a byte that is part of no

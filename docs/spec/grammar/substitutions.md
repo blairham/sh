@@ -504,6 +504,31 @@ substitution, either end of a pipeline, a background job and an `eval`
 all write it, and each contains the stop exactly as far as that construct
 contains any fatal error (#3013).
 
+**What the refusal names is decided by the word's first group.** Measured
+2026-10-04 on ksh93u+ 2012-08-01, under `-c`:
+
+    echo "${(U)x}${(U)y}"           `x}${(U)y}""' — the later group is text
+    echo "${(S)w##(a|ab)}${v%%(}"   `w##' — and so is a later refusal
+    echo "${(U)x}a[(i)]"            `x}a[' — a `(` after [ ] . / : = , ^ #
+                                    or a name character ends the tail
+    echo "${(U)x}a-(b)c"            `x}a-(b)c""' — after } % ~ + * ? ! - @ $
+                                    it does not
+    echo ${(U)x:-ab(N)}             `(' — the same stop outside quotes
+                                    blames the parenthesis
+    echo "${(U)#a}"                 `end of file' unexpected, one line past
+                                    the command — the `#` opens a comment
+
+and the text inside the group is read as a list of commands, a name with a
+colon at the start of a command being a label:
+
+    ${(j:|:)x}  ${(|a)x}  ${(a:|b)x}    `|' unexpected
+    ${(||a)x}  ${(a:&&b)x}              `||' and `&&' unexpected
+    ${()x}  ${(a|)x}  ${(a:)x}  ${(&)x}  `)' unexpected
+    ${(a|b)x}  ${(a:b|c)x}  ${(x a:|b)x}  the tail, as before
+
+The shapes those rows do not settle — `(;|a)` reads where `(a;|b)` does
+not — are left on the tail.
+
 `${((expr))}` is **not** this construct: two adjacent parentheses are
 ksh93's braced arithmetic, `${((1+2))}` is 3 there and `${((echo hi))}`
 an arithmetic syntax error, where one space apart `${( (1+2) )}` is a

@@ -56,7 +56,10 @@ func TestAFlagGroupsRefusalIsCarriedWhereTheGrammarSaysSo(t *testing.T) {
 		`echo ${(U)x}`,
 		`echo "[${(U)x}]"`,
 		`echo a${(f)x}b c`,
-		`echo ${(j:|:)x}`,
+		// Not `${(j:|:)x}`, which used to stand here: its text does not
+		// read as a list, so it names the `|` and carries no tail at all.
+		// See TestTheFirstFlagGroupDecidesTheRefusal in dialect/ksh.
+		`echo ${(j:-:)x}`,
 	} {
 		raised, err := syntax.Parse(src+"\n", deferredDialect(false))
 		if err == nil {

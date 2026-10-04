@@ -958,8 +958,12 @@ func (r *Runner) emptyArithSubscript(name string) (handled bool, v arithNum, err
 		// Reported and then answered: the expression keeps going and the
 		// operand is zero, which is why this writes here rather than
 		// returning an error for a caller to word.
-		r.errf("%s\n", r.diag().Report(r.name(), r.line,
-			Wording(r.diag().ArithEmptySubscript, "%[1]s[]: bad array subscript", name)))
+		line := r.diag().Report(r.name(), r.line,
+			Wording(r.diag().ArithEmptySubscript, "%[1]s[]: bad array subscript", name))
+		r.errf("%s\n", line)
+		if r.diag().ArithEmptySubscriptWrittenTwice {
+			r.errf("%s\n", line)
+		}
 		return true, intNum(0), nil
 	case EmptyArithSubscriptIsInvalid:
 		// complete, because the sentence is the subscript machinery's whole

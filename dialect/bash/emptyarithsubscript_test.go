@@ -15,8 +15,10 @@ import "testing"
 // on one that is.
 //
 // The real shell writes the sentence *twice* for one subscript, in both
-// builds; that is an artifact of evaluating the word twice rather than a fact
-// about the construct, and once is what this writes.
+// builds. This wrote it once on the reading that the second was an artifact,
+// and it now writes both: the count is exactly two per read in every shape
+// measured, which makes it as much the shell's answer as the wording is
+// (#5719, Diagnostics.ArithEmptySubscriptWrittenTwice).
 func TestAnEmptyArithmeticSubscriptIsReportedAndZero(t *testing.T) {
 	for _, src := range []string{
 		`echo $(( m[] )); echo after`,
@@ -37,7 +39,7 @@ func TestAnEmptyArithmeticSubscriptIsReportedAndZero(t *testing.T) {
 	// the subscript would have named — which is the row that tells this
 	// answer from ksh93's.
 	out, st := runBash(t, t.TempDir(), `declare -a a=(5 6 7); echo $(( a[] ))`)
-	want := "bash: line 1: a[]: bad array subscript\n0\n"
+	want := "bash: line 1: a[]: bad array subscript\nbash: line 1: a[]: bad array subscript\n0\n"
 	if out != want || st != 0 {
 		t.Errorf("got %q (status %d), want %q at 0", out, st, want)
 	}

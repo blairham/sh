@@ -1100,6 +1100,31 @@ dialect that ends a script over a failed `(( ))` ended it at a syntax error's
 3 where its reference ends it at the arithmetic 1, and a script trapping on 1
 could not tell this from an unmatched quote (#3071).
 
+### What bash calls a byte it cannot read, where an operator belonged
+
+bash words a byte that can begin no token two ways, and which one depends
+on what stands in front of it. Behind a closing parenthesis it is a missing
+*operand*; behind a number, a name or a subscript it is a bad *operator*.
+And bash's reader has already taken the token behind an operand before the
+grammar refuses that operand, so an unreadable byte straight after a second
+operand is what gets refused. Measured 2026-10-04 on bash 5.3.20, `$(( … ))`:
+
+| written | bash 5.3.20 |
+| --- | --- |
+| `(1)@`, `-(1)@`, `((1))@`, `(1) @`, `(1)[2]`, `(1)#`, `(1)]` | `operand expected` |
+| `1@`, `x@`, `x[1]@`, `x++@`, `1[2]`, `bet\a` | `invalid arithmetic operator` |
+| `1 x@`, `(1)x@`, `(1)x[2]@`, `(r)bet\a` | `invalid arithmetic operator`, naming from the byte |
+| `1 x y`, `(1)x`, `(1)(2)`, `1 x+` | `syntax error in expression`, naming the operand on |
+
+`Dialect.ArithBadByteAfterAGroupWantsAnOperand` and
+`Dialect.ArithLeftoverOperandReadsTheNextToken`, both bash only. A
+subscript is an expression too, so `${s[(r)[lo]]}` is the first row's
+`operand expected` naming `[lo]`.
+
+bash also writes `a[]: bad array subscript` **twice** for each read of an
+empty subscript — `$(( a[] ))` is two lines and `$(( a[] * a[] ))` four —
+which is `Diagnostics.ArithEmptySubscriptWrittenTwice`.
+
 ### A stray `:` is one shell's one reversal
 
 Every math complaint ksh93 makes is `<expression>: <reason>` — except for a

@@ -5436,6 +5436,26 @@ type Dialect struct {
 	// operator belonged.
 	ArithBytesRefusedOutright string
 
+	// ArithBadByteAfterAGroupWantsAnOperand words a byte that can begin no
+	// token, standing where an operator belonged right behind a closing
+	// parenthesis, as a missing *operand* rather than as a bad operator.
+	// Measured 2026-10-04 on bash 5.3.20: `$(( (1)@ ))`, `$(( -(1)@ ))`,
+	// `$(( (1) @ ))` and `$(( (1)[2] ))` are each `operand expected`, where
+	// `$(( 1@ ))`, `$(( x@ ))` and `$(( x[1]@ ))` — the same byte behind a
+	// number, a name or a subscript — are `invalid arithmetic operator`.
+	// bash only; see docs/spec/arithmetic.md.
+	ArithBadByteAfterAGroupWantsAnOperand bool
+
+	// ArithLeftoverOperandReadsTheNextToken reads one token past an operand
+	// standing where an operator belonged before refusing it, so a byte that
+	// can begin no token right after that operand is what gets refused.
+	// Measured 2026-10-04 on bash 5.3.20: `$(( 1 x@ ))` and `$(( (1)x[2]@ ))`
+	// are `invalid arithmetic operator (error token is "@ ")`, where
+	// `$(( 1 x y ))` and `$(( (1)x ))` — nothing unreadable behind the
+	// operand — keep `syntax error in expression` naming the operand on.
+	// bash only; see docs/spec/arithmetic.md.
+	ArithLeftoverOperandReadsTheNextToken bool
+
 	// ArithDoubleQuote is what a `"` standing inside an arithmetic expression
 	// is: a byte the reader passes over, a byte it removes from the text
 	// before reading it at all, or no part of any token. See

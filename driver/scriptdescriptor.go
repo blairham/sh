@@ -6,10 +6,10 @@ package driver
 import (
 	"context"
 	"io"
-	"os"
 	"strings"
 	"sync"
 
+	"github.com/blairham/sh/internal/boundary"
 	"github.com/blairham/sh/interp"
 )
 
@@ -34,7 +34,10 @@ func (sh Shell) holdTheScript(r *interp.Runner, in source) {
 	if n <= 0 || in.file == "" {
 		return
 	}
-	f, err := os.Open(in.file)
+	// Through the gate, as the read that took the script's text was: the
+	// file is the one the invocation named, and a policy that let the shell
+	// read it is asked again rather than stepped around.
+	f, err := sh.boundary().OpenFile(context.Background(), boundary.File{Path: in.file})
 	if err != nil {
 		return
 	}

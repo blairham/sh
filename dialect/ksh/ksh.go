@@ -2459,6 +2459,10 @@ func Semantics() interp.Semantics {
 	// A character outside ASCII is alpha and nothing else: `é` is not alnum,
 	// lower, print or graph here. See Semantics.WideCharacterIsInAlphaAlone.
 	s.WideCharacterIsInAlphaAlone = interp.Yes
+	// A value's `\\` in a replacement is one backslash: `q='\\';
+	// ${v/b/$q}` is `a\c`. See
+	// Semantics.ExpandedReplacementBackslashQuotesABackslash.
+	s.ExpandedReplacementBackslashQuotesABackslash = interp.Yes
 	// The parameter whose patterns take names back out of a pathname
 	// expansion, spelled `FIGNORE` here and `GLOBIGNORE` in bash. The
 	// facility is the same and the model is not: measured on ksh93u+,

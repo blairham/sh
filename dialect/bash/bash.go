@@ -4248,7 +4248,11 @@ func Diagnostics() interp.Diagnostics {
 		HeredocBraceRanOutInTheName: "%s: bad substitution",
 		HeredocBraceUnclosed:        "bad substitution: no closing `}' in %s",
 		BadSubstitutionNames:        interp.NamesTheQuotingRun,
-		ParamNullOrNotSet:           "parameter null or not set",
+		// The run as a function listing writes it, and inside `$(( ))` the
+		// expression instead. See the two fields.
+		BadSubstitutionRunIsListed:                    true,
+		BadSubstitutionInArithmeticNamesTheExpression: true,
+		ParamNullOrNotSet:                             "parameter null or not set",
 		// `${!v}` refusing its source, which 5.3 has and 3.2 does not; see
 		// interp.Runner.refuseIndirection.
 		IndirectionUndeclared: "%[1]s: invalid indirect expansion",

@@ -136,14 +136,15 @@ func (r *Runner) expandWordEscaped(w *syntax.Word) []string {
 // line holds, not the operand a failure happened to be reached through.
 func (r *Runner) inWord(w *syntax.Word) func() {
 	prevWord, prevSpan := r.expandingWord, r.expandingSpan
-	prevOuter := r.expandingOuterWord
+	prevOuter, prevArith := r.expandingOuterWord, r.expandingArith
 	r.expandingWord, r.expandingSpan = w, 0
+	r.expandingArith = ""
 	if r.expandingOuterWord == nil {
 		r.expandingOuterWord = w
 	}
 	return func() {
 		r.expandingWord, r.expandingSpan = prevWord, prevSpan
-		r.expandingOuterWord = prevOuter
+		r.expandingOuterWord, r.expandingArith = prevOuter, prevArith
 	}
 }
 
@@ -3624,6 +3625,13 @@ func (r *Runner) badSubstitutionSubject(e *syntax.ParamExpr) string {
 			// ksh93u+ 2026-10-03, where an array literal's element is not.
 			text = r.assignmentWrittenBefore(r.expandingOuterWord, text) + text
 		}
+	} else if r.expandingArith != "" && r.diag().BadSubstitutionInArithmeticNamesTheExpression {
+		// Inside an arithmetic expansion the run is the expression itself,
+		// blanks and all. See the field.
+		return r.expandingArith
+	} else if r.diag().BadSubstitutionRunIsListed {
+		// The run as this shell lists it. See the field.
+		text = syntax.PrintWordQuotingRunWith(r.expandingWord, r.expandingSpan, r.functionLayout)
 	} else {
 		text = syntax.PrintWordQuotingRun(r.expandingWord, r.expandingSpan)
 	}

@@ -2399,6 +2399,27 @@ dialect gives and one as core behavior:
 
   A `case` arm and a `[[ ]]` operand are whole words already, so the two
   readings coincide there and those rows cannot tell the answers apart.
+
+  bash writes the run **as it lists it** — the text `declare -f` shows
+  for the same word — and not as the substrate prints a word. Inside an
+  arithmetic expansion it names the *expression* instead. Measured
+  2026-10-04 on bash 5.3.20 with `x=1` and `${x@Z}` as the refused
+  expansion:
+
+  | written | named |
+  | --- | --- |
+  | `"${v}${x@Z}"` | `${v}${x@Z}` — the braces kept |
+  | `"$(echo  >>  m)${x@Z}"` | `$(echo >> m)${x@Z}` — the body laid out again |
+  | `"$(if true; then echo x; fi)${x@Z}"` | over three lines, as the listing has it |
+  | `"${x//$'\t'/a}${x@Z}"` | `${x//'⇥'/a}${x@Z}` — the value, single-quoted |
+  | `` "a`echo  b`${x@Z}" `` | as written: a backquoted body is not laid out |
+  | `"$(( ${x@Z} + 1 ))"`, `$(( ${x@Z} + 1 ))` | ` ${x@Z} + 1 ` |
+  | `"a$(( ${x@Z} ))b"` | ` ${x@Z} ` |
+
+  `Diagnostics.BadSubstitutionRunIsListed` and
+  `BadSubstitutionInArithmeticNamesTheExpression`. Two shapes are still
+  not followed: bash keeps a `\\` inside double quotes where this drops
+  one, and names `pre${x@Z}'q'` whole where this stops at the quote.
 - **Whether the letter is checked on a name with no value** is
   `Semantics.TransformLetterCheckedOnlyWhenValued`, reached only by a
   grammar that *has* the family. It is an axis with one measured answer

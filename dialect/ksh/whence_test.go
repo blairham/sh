@@ -84,9 +84,7 @@ func TestWhenceQIsQuiet(t *testing.T) {
 }
 
 // An unknown letter is `unknown option` with the usage line after it at 2; so
-// is a whence with nothing to ask about, the bare line alone. The letters
-// ksh93 has and this shell does not — -a, -f — are refused as not
-// implemented rather than unknown, which would be a worse answer.
+// is a whence with nothing to ask about, the bare line alone.
 func TestWhenceRefusals(t *testing.T) {
 	out, st := runKsh(t, t.TempDir(), `whence -z ls`)
 	if st != 2 || !strings.Contains(out, "whence: -z: unknown option") ||
@@ -97,11 +95,34 @@ func TestWhenceRefusals(t *testing.T) {
 	if st != 2 || out != "Usage: whence [-afpqv] name  ...\n" {
 		t.Errorf("out %q status %d, want the bare usage at 2", out, st)
 	}
-	// `-f` is the letter still missing; `-a` was on this list until #633 and
-	// is built now — see TestWhenceAListsEveryResolution.
-	out, st = runKsh(t, t.TempDir(), `whence -f echo`)
-	if st != 2 || !strings.Contains(out, "whence: -f is not implemented yet") {
-		t.Errorf("out %q status %d, want the not-implemented refusal at 2", out, st)
+}
+
+// `-f` leaves functions out of the search. A name a builtin or PATH also holds
+// answers as that, and a name only a function holds is an undefined function
+// at 0 — the sentence under `-v`, the name bare. Measured 2026-10-04 on
+// ksh93u+ 2012-08-01 (#5717).
+func TestWhenceFLeavesFunctionsOut(t *testing.T) {
+	dir := t.TempDir()
+	path := toolOnPath(t, dir)
+	out, st := runKsh(t, dir, `f() { :; }; tool() { :; }; echo() { :; }
+type -f f; print "st=$?"
+whence -f f; whence -fv f
+whence -f tool; whence -fv tool
+whence -f echo; whence -fv echo
+whence -fa f; whence -fa echo
+whence -fq f; print "q=$?"
+whence -fp f; print "p=$?"
+whence -v f`)
+	want := "f is an undefined function\nst=0\n" +
+		"f\nf is an undefined function\n" +
+		path + "\ntool is a tracked alias for " + path + "\n" +
+		"echo\necho is a shell builtin\n" +
+		"f is an undefined function\necho is a shell builtin\n" +
+		"q=0\n" +
+		"p=1\n" +
+		"f is a function\n"
+	if out != want || st != 0 {
+		t.Errorf("got %q at %d\nwant %q at 0", out, st, want)
 	}
 }
 

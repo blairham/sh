@@ -539,6 +539,9 @@ func Dialect() syntax.Dialect {
 	// not modeled: it reads as an incremental matcher failing to back out
 	// rather than as a rule, and it costs only the spelling of the body.
 	d.HeredocDelimiterAcrossAContinuation = syntax.NoHeredocDelimiterAcrossAContinuation
+	// And a body line that only starts the delimiter keeps its continuation.
+	// Measured 2026-10-03; see the field.
+	d.HeredocPrefixLineKeepsItsContinuation = true
 	// A `<<-` delimiter written with leading tabs has them stripped the way
 	// the body lines do, so `EOF` ends a `<tab>EOF` document. zsh agrees;
 	// bash and dash do not. See syntax.HeredocDelimiterTabs.

@@ -7064,7 +7064,7 @@ func (l *Lexer) readOneHeredoc(r *Redirect, quoted bool) {
 			l.markHeredocEnd(linePos)
 			break
 		}
-		line, done, join := l.heredocLine(strip, !quoted)
+		line, done, join := l.heredocLine(strip, !quoted, delim)
 		if l.delimiterMatches(line, done, delim, strip, join) {
 			// The delimiter's own line is the command's last, and it is not
 			// part of the body.
@@ -7254,9 +7254,10 @@ func (l *Lexer) delimiterIsReachable(j heredocJoin) bool {
 // first physical line, and not from what a continuation brings into it —
 // `<<-EOF` over `→A\` and `→B` is `A→B` in every column of the panel, so the
 // tab the second line opens with survives the join.
-func (l *Lexer) heredocLine(strip, join bool) (line, content string, j heredocJoin) {
+func (l *Lexer) heredocLine(strip, join bool, delim string) (line, content string, j heredocJoin) {
 	begin := l.off
 	var joined strings.Builder
+	kept := false
 	for {
 		from := l.off
 		for !l.eof() && l.peek() != '\n' {
@@ -7267,6 +7268,13 @@ func (l *Lexer) heredocLine(strip, join bool) (line, content string, j heredocJo
 			// Tabs only. Spaces are not stripped, which is why a delimiter
 			// indented with spaces never matches.
 			text = strings.TrimLeft(text, "\t")
+		}
+		if join && from == begin && !l.eof() && l.dialect.HeredocPrefixLineKeepsItsContinuation &&
+			startsTheDelimiterThenContinues(text, delim) {
+			// The continuation is kept as text. See
+			// [Dialect.HeredocPrefixLineKeepsItsContinuation].
+			kept = true
+			join = false
 		}
 		if !join || l.eof() || !endsInAnOddBackslashRun(text) {
 			joined.WriteString(text)
@@ -7291,7 +7299,25 @@ func (l *Lexer) heredocLine(strip, join bool) (line, content string, j heredocJo
 	if strip {
 		line = strings.TrimLeft(line, "\t")
 	}
+	if kept {
+		// The body is re-read at expansion, where a backslash before the
+		// newline would still remove both; doubling the last one leaves a
+		// backslash and the newline standing, which is the text ksh93 writes.
+		cut := strings.LastIndexByte(line, '\\')
+		line = line[:cut] + `\` + line[cut:]
+	}
 	return line, joined.String(), j
+}
+
+// startsTheDelimiterThenContinues reports whether a body line is a non-empty
+// start of the delimiter — the whole of it included — followed by an odd run
+// of backslashes. See [Dialect.HeredocPrefixLineKeepsItsContinuation].
+func startsTheDelimiterThenContinues(text, delim string) bool {
+	if !endsInAnOddBackslashRun(text) {
+		return false
+	}
+	head := strings.TrimRight(text, `\`)
+	return head != "" && strings.HasPrefix(delim, head)
 }
 
 // endsInAnOddBackslashRun reports whether the backslashes ending s leave one

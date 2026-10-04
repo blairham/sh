@@ -3350,6 +3350,31 @@ type Dialect struct {
 	// throughout, continuation included, and never reaches this.
 	HeredocDelimiterAcrossAContinuation ContinuedHeredocDelimiter
 
+	// HeredocPrefixLineKeepsItsContinuation keeps the backslash and the
+	// newline of an unquoted here-document body line that is nothing but a
+	// non-empty start of the delimiter and the backslash, rather than joining
+	// it to the line under it. ksh93u+ alone.
+	//
+	// Measured 2026-10-03 on ksh93u+ 2012-08-01, delimiter ABC, each body
+	// printed by `cat`:
+	//
+	//	AB\ ⏎ X        AB\ ⏎ X    kept: AB starts the delimiter
+	//	A\ ⏎ BC        A\ ⏎ BC    kept, so the joined ABC is never formed
+	//	ABC\ ⏎ X       ABC\ ⏎ X   kept: the whole delimiter counts
+	//	→AB\ ⏎ X       AB\ ⏎ X    under <<-, after the tabs are stripped
+	//	B\ ⏎ X         BX         joined: B does not start it
+	//	xA\ ⏎ X        xAX        joined: nor does xA
+	//	\ ⏎ X          X          joined: an empty start is no start
+	//
+	// It reads as the delimiter matcher failing to back out of a partial
+	// match, and the shapes around it say so — `AB\` over `X`, a backslash
+	// pair that ends no line anywhere else, joins there, and `A$v\` over `X`
+	// joins with `$v` left unexpanded. Those two are not modeled: this is
+	// the one shape whose answer is a rule rather than an accident, and it is
+	// the one the corpus records (heredoc/a-body-line-opening-with-the-
+	// delimiters-own-letters, heredoc/a-joined-line-that-spells-the-delimiter).
+	HeredocPrefixLineKeepsItsContinuation bool
+
 	// StrippedHeredocDelimiter is what `<<-` does with a delimiter written
 	// with leading tabs, which only a quoted delimiter can be. See
 	// [HeredocDelimiterTabs], which carries the measurement.

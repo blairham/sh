@@ -381,6 +381,7 @@ func seedTables(r *Runner) {
 	r.withdrawnFuncs = map[string]withdrawnFunction{"seed": {}}
 	r.readonlyFuncs = map[string]bool{"seed": true}
 	r.tracedFuncs = map[string]bool{"seed": true}
+	r.caseFuncs = map[string]rune{"seed": 'u'}
 	r.funcTraceMarks = map[string]string{"seed": "t"}
 	r.warnNestedFuncs = map[string]bool{"seed": true}
 	r.extraOptions = map[string]bool{"seed": true}

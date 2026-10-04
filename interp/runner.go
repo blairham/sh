@@ -706,6 +706,12 @@ type Runner struct {
 	// Runner.SetTracedFunctions' answer and that dialect has not filled it
 	// in, so this is the listing's record alone (#3051).
 	tracedFuncs map[string]bool
+	// caseFuncs is the case letter — `l`, `u` or `c` — a function line has
+	// put on each function, in the one dialect where those are attributes
+	// of a function; one letter per function, since each takes the others
+	// off. Recorded and listed back and read by nothing else. See
+	// interp/functionattribute.go.
+	caseFuncs map[string]rune
 	// funcTraceMarks are the letters each function holds of
 	// Semantics.FunctionTraceLetters — the *other* trace mark, the one that
 	// turns the `xtrace` option on for a call rather than deciding which

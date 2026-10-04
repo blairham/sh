@@ -6380,6 +6380,8 @@ func Apply(r *interp.Runner) {
 	// both halves — the narrowest seed in the panel and a shifted state. See
 	// random.go, and `docs/spec/random.md` (#4240).
 	registerRandoms(r)
+	// And `hist`, which the preset `fc` alias names. See registerHist.
+	registerHist(r)
 	// `typeset -i RANDOM=7000`, measured — where this shell answered
 	// `RANDOM: not found` from a name it had just expanded a number for
 	// (#2451). `LINENO` lists the same way here and does not in bash 5.3,

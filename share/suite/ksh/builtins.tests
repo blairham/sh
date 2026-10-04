@@ -114,3 +114,10 @@ printf 'status: %s\n' "$?"
 ) 2>&1
 # The control: an unfrozen name says nothing and reports the read's own status.
 ( a=A; printf 'x\n' | { read a; printf 'st=%s [%s]\n' "$?" "$a"; } ) 2>&1
+
+# `fc` is an alias for `hist` here, and a script keeps no history, so `hist`
+# refuses the range it would have reached and reports 1. The sentence is
+# `hist: 1-1: invalid range` for the row below; only the status is graded,
+# because the location in front of it is the file's (#5716).
+hist -l 1 2 2>/dev/null; echo "hist st=$?"
+fc -l 2>/dev/null; echo "fc st=$?"

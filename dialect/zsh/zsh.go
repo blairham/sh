@@ -3223,10 +3223,14 @@ func Semantics() interp.Semantics {
 	// `s=hello`, `${s[2]}` is `e` here and nothing in the four that read a
 	// scalar as an array of one.
 	s.ScalarSubscriptIsACharacter = interp.Yes
-	// unanswered ExpansionResultSuppliesGroupSyntax: read only where
-	// GlobExpansionResults says yes, and zsh answers that one no — it does
-	// not match the result of an expansion against the filesystem at all, so
-	// there is no pattern here whose group syntax could count.
+	// An expansion result's `(`, `)` and `|` build a group where the result
+	// is matched against the filesystem, which here is under `globsubst`:
+	// measured 2026-10-03 on zsh 5.9.2 in a directory holding `aa`, `ab` and
+	// a file named `aa|ab`, `P='aa|ab'; set -- $P` is the two names `aa ab`,
+	// and so are `(aa|ab)`, `a(a|b)` and, under kshglob, `@(aa|ab)`. Without
+	// the option no result is a pattern, so the question is never put. See
+	// Semantics.ExpansionResultSuppliesGroupSyntax.
+	s.ExpansionResultSuppliesGroupSyntax = interp.Yes
 	// unanswered TableLetterReachesItsOwnOperandsSubscript: zsh refuses the
 	// shape the axis is about rather than answering it — measured 2026-09-12,
 	// `typeset -A m[k]=v` is `m[k]: inconsistent type for assignment` and

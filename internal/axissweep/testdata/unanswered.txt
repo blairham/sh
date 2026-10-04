@@ -782,7 +782,6 @@ zsh   BraceMakesAProducedStarOrBracketText
 zsh   DeclarationMayShadowAnEnclosingScopesReadonly
 zsh   DeclarationRereadsAParenthesizedValue
 zsh   DeclarationThroughAReferenceNamesTheOperand
-zsh   ExpansionResultSuppliesGroupSyntax
 zsh   ExportContainerLetterNeedsAValue
 zsh   ExportOrReadonlyTakesAReferenceToAnElement
 zsh   ForNameWhenTheLoopRuns

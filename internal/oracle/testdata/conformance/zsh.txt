@@ -26,7 +26,6 @@ param/a-substring-range-blames-what-the-script-wrote
 param/an-empty-positional-list-under-a-colonless-test
 param/prompt-percent-refuses-an-escape-by-name
 pat/a-whole-match-flag-in-mid-pattern
-pattern/a-top-level-bar-against-the-filesystem
 print/a-prompt-escape-this-shell-has-not
 printf/a-bad-number-can-name-its-base
 procsub/a-file-substitution-opens-only-at-a-word

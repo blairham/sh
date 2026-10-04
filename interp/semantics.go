@@ -23603,6 +23603,24 @@ type Semantics struct {
 	// long as the job would have.
 	KillReadsASignalJoinedToItsOption Answer
 
+	// SubshellSharesTheCommandHash makes a `( … )` and a `$( … )` work on the
+	// shell's own command hash rather than a copy of it.
+	//
+	// ksh93, whose subshells are not forked. Measured 2026-10-03 on ksh93u+
+	// with a command `zzc` on PATH and nothing hashed:
+	//
+	//	( zzc ); hash                    zzc=…/zzc
+	//	x=$(zzc); hash                   zzc=…/zzc
+	//	( hash zzd ); hash               zzd=…/zzd
+	//	hash zzc; ( hash -r ); hash      (empty)
+	//	( zzc ) & wait; hash             (empty)
+	//	zzc | cat; hash                  cat only
+	//
+	// so a background job and a pipeline element keep their own, as in every
+	// other column: bash 5.3.20, zsh 5.9.2 and dash leave the parent's table
+	// as it was for all six (corpus row hash/a-subshell-keeps-its-own-entries).
+	SubshellSharesTheCommandHash Answer
+
 	// JobResumeRefusesAnOptionFirst has `fg` and `bg` refuse a word that
 	// looks like an option before anything else — before saying there is no
 	// job control, and before reading any job.
@@ -32995,6 +33013,8 @@ func PosixSemantics() Semantics {
 		// operand, so the base reads nothing joined to the option; bash 5.x
 		// and ksh93 override.
 		KillReadsASignalJoinedToItsOption: No,
+		// A subshell's hash is its own in every column but ksh93's.
+		SubshellSharesTheCommandHash: No,
 		// The job-control check comes first in the base; ksh93 overrides.
 		JobResumeRefusesAnOptionFirst: No,
 		// Every shell but one that has both names makes them one state.

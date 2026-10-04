@@ -3727,6 +3727,9 @@ func Semantics() interp.Semantics {
 	// But an option word is refused before that. Measured 2026-10-03; see
 	// the axis.
 	s.JobResumeRefusesAnOptionFirst = interp.Yes
+	// A `( … )` or `$( … )` hashes into this shell's own table, and empties
+	// it with `hash -r`. Measured 2026-10-03; see the axis.
+	s.SubshellSharesTheCommandHash = interp.Yes
 	// And this is the column where the monitor is *not* enough: `set -m` is
 	// granted in a script with no terminal, and `fg` still answers 1 without
 	// a word — on a pseudo-terminal too, which is what says the missing

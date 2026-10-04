@@ -189,6 +189,8 @@ func (r *Runner) subshell(ctx context.Context, c *syntax.Subshell) error {
 		// nothing is shared while both are running. See
 		// Runner.adoptAliasNames.
 		r.adoptAliasNames(sub)
+		// And the command hash, in the dialect whose parentheses share it.
+		r.adoptCommandHash(sub)
 		// The subshell is over, which for a real shell is a process exit: its
 		// own EXIT trap runs here, before the status is read, so a handler
 		// that exits with one of its own is the status these parentheses

@@ -358,3 +358,21 @@ func (r *Runner) lookPathReporting(name string) (string, error) {
 	// Runner.lookPathSpelled.
 	return spelled, nil
 }
+
+// adoptCommandHash takes a finished subshell's command hash as this shell's,
+// in the dialect whose parentheses and command substitutions share it — see
+// Semantics.SubshellSharesTheCommandHash.
+//
+// At the boundary, as adoptAliasNames is and for its reason: a `( … )` and a
+// `$( … )` run to completion before this shell goes on, so taking the table
+// back afterwards is the same as one table and needs no map the two hold at
+// once. The whole table and not the additions, because a `hash -r` in there
+// empties it out here too.
+func (r *Runner) adoptCommandHash(sub *Runner) {
+	if r.sem().SubshellSharesTheCommandHash != Yes {
+		return
+	}
+	r.cmdHash = sub.cmdHash
+	r.cmdHashOrder = sub.cmdHashOrder
+	r.cmdHashFilled = sub.cmdHashFilled
+}

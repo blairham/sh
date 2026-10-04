@@ -5385,6 +5385,12 @@ func Diagnostics() interp.Diagnostics {
 		// what the second table is for.
 		ReadonlyAttributeRefusalNamesBuiltin: map[string]bool{"typeset": true},
 		ReadBadFileDescriptor:                "read: bad file unit number [Bad file descriptor]",
+		// And a number that is not one names the letter, not the word, with
+		// the usage under it — see Diagnostics.ReadBadNumberUsageLetters.
+		ReadBadDescriptorSpec:     "read: -%[2]s: numeric fd argument expected",
+		ReadBadCount:              "read: -%[2]s: numeric count argument expected",
+		ReadBadNumberUsageLetters: "unN",
+		ReadFromAClosedDescriptor: "read: bad file unit number",
 		// ksh93 calls the coprocess the query process, and `read -p` with
 		// none running says so — the only reachable answer here, this
 		// grammar having no `|&`.

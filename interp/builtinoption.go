@@ -297,8 +297,8 @@ func (r *Runner) complainAboutOption(builtin, format string, args ...any) {
 // whether the dialect *has* the option and this shell simply does not.
 func (r *Runner) refuseOption(builtin, word, known string) int {
 	letter, name := r.badOption(word, known)
-	if has := r.diag().UnimplementedOptionLetters[builtin]; has != "" &&
-		strings.IndexByte(has, letter) >= 0 {
+	has := r.diag().UnimplementedOptionLetters[builtin]
+	if has != "" && strings.IndexByte(has, letter) >= 0 {
 		// An option the dialect really has. Saying it is unknown would be a
 		// different and worse answer than saying it is missing — and it is
 		// named the way the dialect names a bad one, the letter rather than
@@ -312,7 +312,11 @@ func (r *Runner) refuseOption(builtin, word, known string) int {
 	// reads the same either way, and a dialect that has never been measured
 	// here should not be made to say so over a word where it does not matter.
 	if r.diag().BadOptionNaming != BadOptionWholeWord || !strings.HasPrefix(word, "--") {
-		if bad := r.everyBadOption(word, known); len(bad) > 1 &&
+		// The letters the dialect has and this shell does not are not bad
+		// ones, and naming them beside the bad ones says the dialect lacks
+		// them: `read -kv` is `-k: unknown option` alone in ksh93, whose
+		// `read` has `-v` (#5722).
+		if bad := r.everyBadOption(word, known+has); len(bad) > 1 &&
 			r.ask(r.sem().BuiltinReportsEveryBadOption, "a builtin naming every bad letter of a bundle") {
 			return r.badBuiltinOption(builtin, bad...)
 		}

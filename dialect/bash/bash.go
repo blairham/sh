@@ -5014,9 +5014,10 @@ func Diagnostics() interp.Diagnostics {
 		// bash's own words for the two -u failures it can meet here; the
 		// non-number wordings per letter are not modeled yet, so those fall
 		// back to the substrate's.
-		ReadBadFileDescriptor: "read: %[1]s: invalid file descriptor: Bad file descriptor",
-		ReadBadTimeout:        "read: %[1]s: invalid timeout specification",
-		ReadBadDescriptorSpec: "read: %[1]s: invalid file descriptor specification",
+		ReadBadFileDescriptor:     "read: %[1]s: invalid file descriptor: Bad file descriptor",
+		ReadBadTimeout:            "read: %[1]s: invalid timeout specification",
+		ReadBadDescriptorSpec:     "read: %[1]s: invalid file descriptor specification",
+		ReadFromAClosedDescriptor: "read: %[1]s: read error: Bad file descriptor",
 		// 128 plus SIGALRM, the signal a timeout is.
 		ReadTimeoutStatus: 142,
 		HereDocumentAtEOF: "warning: here-document at line %[1]d " +

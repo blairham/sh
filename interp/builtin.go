@@ -5,6 +5,7 @@ package interp
 
 import (
 	"context"
+	"errors"
 	"io"
 	"io/fs"
 	"os"
@@ -6349,11 +6350,13 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 			in = &coprocReader{Reader: rd, r: r}
 		}
 	}
+	readFd := 0
 	if word, ok := optArg['u']; ok {
 		fd, numeric := atoi(word)
 		if !numeric || fd < 0 {
-			return r.readBadNumberFor(r.diag().ReadBadDescriptorSpec, word)
+			return r.readBadNumberFor(r.diag().ReadBadDescriptorSpec, word, 'u')
 		}
+		readFd = fd
 		rd, open := r.readerForFd(fd)
 		if !open {
 			// Three answers with one status: bash and ksh93 complain in
@@ -6368,6 +6371,12 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 			return 1
 		}
 		in = rd
+	}
+	if w := r.diag().ReadFromAClosedDescriptor; w != "" && streamIsClosed(in) {
+		// Not the end of the input but no input at all, which two dialects
+		// say out loud. See Diagnostics.ReadFromAClosedDescriptor.
+		r.diagf("%s\n", Wording(w, w, strconv.Itoa(readFd)))
+		return 1
 	}
 
 	// The first operand, judged before the stream is *read* in the dialects
@@ -6455,14 +6464,14 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 	if word, ok := optArg['n']; ok {
 		n, numeric := atoi(word)
 		if !numeric || n < 0 {
-			return r.readBadNumberFor(r.diag().ReadBadCount, word)
+			return r.readBadNumberFor(r.diag().ReadBadCount, word, 'n')
 		}
 		count = n
 	}
 	if word, ok := optArg['N']; ok {
 		n, numeric := atoi(word)
 		if !numeric || n < 0 {
-			return r.readBadNumberFor(r.diag().ReadBadCount, word)
+			return r.readBadNumberFor(r.diag().ReadBadCount, word, 'N')
 		}
 		count, exact = n, true
 	}
@@ -6562,12 +6571,12 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 				return r.status
 			}
 			if !ok {
-				return r.readBadNumberFor(r.diag().ReadBadTimeout, word)
+				return r.readBadNumberFor(r.diag().ReadBadTimeout, word, 't')
 			}
 			secs = n
 		}
 		if secs < 0 {
-			return r.readBadNumberFor(r.diag().ReadBadTimeout, word)
+			return r.readBadNumberFor(r.diag().ReadBadTimeout, word, 't')
 		}
 		timeout, timed = time.Duration(secs*float64(time.Second)), true
 	}
@@ -7263,11 +7272,19 @@ func (r *Runner) readTimeoutArithmetic(word string) (float64, bool) {
 // have a field, since the one column that words all three separately needed
 // the third (#3367). The wrapper that passed no wording went with it — four
 // call sites and none of them wanted the fallback.
-func (r *Runner) readBadNumberFor(wording, word string) int {
+//
+// letter is the option the number was for, which one dialect names in place
+// of the word (%[2]s) and follows with the usage line — see
+// Diagnostics.ReadBadNumberUsageLetters.
+func (r *Runner) readBadNumberFor(wording, word string, letter byte) int {
 	if wording == "" {
 		wording = r.diag().ReadBadNumber
 	}
-	r.diagf("%s\n", Wording(wording, "read: %[1]s: invalid number", word))
+	r.diagf("%s\n", Wording(wording, "read: %[1]s: invalid number", word, string(letter)))
+	if strings.IndexByte(r.diag().ReadBadNumberUsageLetters, letter) >= 0 {
+		r.builtinUsageLine("read")
+		return orDefault(r.diag().BuiltinBadOptionStatus, 2)
+	}
 	return orDefault(r.diag().ReadBadNumberStatus, 1)
 }
 
@@ -9192,4 +9209,21 @@ func (r *Runner) firstBadReadName(args []string) int {
 		}
 	}
 	return -1
+}
+
+// streamIsClosed reports a stream that is no descriptor at all: one a
+// redirection closed, or a file whose descriptor the shell was started
+// without.
+func streamIsClosed(rd io.Reader) bool {
+	switch v := rd.(type) {
+	case closedFd:
+		return true
+	case *os.File:
+		if v == nil {
+			return true
+		}
+		_, err := v.Stat()
+		return errors.Is(err, syscall.EBADF)
+	}
+	return false
 }

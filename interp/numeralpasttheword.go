@@ -152,7 +152,10 @@ func (r *Runner) numeralPastTheWord(digits string, base int, tail string) (int64
 			if i := strings.Index(tail, digits); i >= 0 {
 				quoted = tail[i:]
 			}
-			r.diagf("%s\n", Wording(r.diag().ArithNumberTruncated,
+			// A warning of arithmetic's and not of a builtin that happened
+			// to read the number: zsh 5.9.2 writes `zsh:1: number truncated
+			// …` for `[ -t 99999999999999999999 ]` and for `let` alike.
+			r.arithDiagf("%s\n", Wording(r.diag().ArithNumberTruncated,
 				"number truncated after %[1]d digits: %[2]s", read, quoted))
 		}
 		return n, true

@@ -118,9 +118,8 @@ func TestABadSubstitutionInARenderingStillLetsTheCommandRun(t *testing.T) {
 // so from the outside — a boundary written at the `${(%%)…}` reader alone
 // would leave this route abandoning the script.
 //
-// The diagnostic is not asserted here: this shell still names the builtin in
-// the location where zsh names only the shell, which is #2131 and is a
-// question about the whole panel rather than about this boundary.
+// The diagnostic's location is TestTheShellSpeaksInsideABuiltin's, not this
+// boundary's.
 func TestPrintPIsTheSameBoundary(t *testing.T) {
 	dir := t.TempDir()
 	out, st, errs := runZshSplit(t, dir, `setopt promptsubst; print -P 'PRE-$((nofunc()))-POST'; print -r -- "TWO=still-running"`)

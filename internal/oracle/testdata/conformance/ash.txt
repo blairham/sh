@@ -16,7 +16,6 @@ assoc/a-dollar-single-quoted-subscript-decodes-its-escapes
 axis/a-substring-offset-takes-a-leading-colon
 axis/an-empty-subscript-in-a-parameter-expansion
 axis/printf-non-finite-is-converted
-axis/trap-body-line-signal
 axis/trap-body-parse-failure-location
 axis/trap-body-runs-what-parsed
 axis/trap-body-will-not-parse

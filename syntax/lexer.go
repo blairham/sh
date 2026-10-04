@@ -7380,19 +7380,40 @@ func (l *Lexer) delimiterIsReachable(j heredocJoin) bool {
 // tab the second line opens with survives the join.
 func (l *Lexer) heredocLine(strip, join bool, delim string) (line, content string, j heredocJoin) {
 	begin := l.off
-	var joined strings.Builder
+	var joined, raw strings.Builder
 	kept := false
+	loneKept := false
 	for {
 		from := l.off
 		for !l.eof() && l.peek() != '\n' {
 			l.advance()
 		}
 		text := l.src[from:l.off]
-		if strip && from == begin {
+		written := text
+		if strip && (from == begin ||
+			(joined.Len() == 0 && !loneKept && l.dialect.HeredocLeadingContinuationStripsTheNextLine)) {
 			// Tabs only. Spaces are not stripped, which is why a delimiter
-			// indented with spaces never matches.
+			// indented with spaces never matches. A line after a
+			// continuation that stood before any text is stripped too where
+			// the dialect strips the joined line — see
+			// [Dialect.HeredocLeadingContinuationStripsTheNextLine].
 			text = strings.TrimLeft(text, "\t")
+			written = text
 		}
+		if join && from == begin && !l.eof() && strip && text == `\` && len(l.src[from:l.off]) > 1 &&
+			l.dialect.HeredocStrippedLoneBackslashIsKept {
+			// A line of tabs and one backslash keeps the backslash and the
+			// newline, and the line under it is taken as it is written. See
+			// [Dialect.HeredocStrippedLoneBackslashIsKept].
+			loneKept = true
+			raw.WriteString(`\\`)
+			raw.WriteString("\n")
+			l.advance() // the newline
+			j = heredocJoinedAfterText
+			joined.WriteString(`\`)
+			continue
+		}
+		raw.WriteString(written)
 		if join && from == begin && !l.eof() && l.dialect.HeredocPrefixLineKeepsItsContinuation &&
 			startsTheDelimiterThenContinues(text, delim) {
 			// The continuation is kept as text. See
@@ -7404,6 +7425,7 @@ func (l *Lexer) heredocLine(strip, join bool, delim string) (line, content strin
 			joined.WriteString(text)
 			if !l.eof() {
 				l.advance() // the newline
+				raw.WriteString("\n")
 			}
 			break
 		}
@@ -7418,11 +7440,9 @@ func (l *Lexer) heredocLine(strip, join bool, delim string) (line, content strin
 		// line goes on into the one below it.
 		joined.WriteString(text[:len(text)-1])
 		l.advance() // the newline
+		raw.WriteString("\n")
 	}
-	line = l.src[begin:l.off]
-	if strip {
-		line = strings.TrimLeft(line, "\t")
-	}
+	line = raw.String()
 	if kept {
 		// The body is re-read at expansion, where a backslash before the
 		// newline would still remove both; doubling the last one leaves a

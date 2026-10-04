@@ -28,7 +28,6 @@ declare/a-numeric-letter-does-not-reach-a-later-local-array
 declare/a-table-declaration-over-a-scalar-then-appended
 declare/an-appended-array-literal-over-a-typed-scalar
 declare/an-array-declaration-over-an-unset-name
-heredoc/stripping-and-joining-are-ordered-and-the-panel-parts-over-which-comes-first
 jobs/a-background-job-outlives-the-shell
 jobs/bg-with-no-job-control
 local/a-subscripted-operand-to-local

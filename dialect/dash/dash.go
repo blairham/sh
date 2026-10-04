@@ -25,6 +25,12 @@ func Dialect() syntax.Dialect {
 	// `ABC` document — and one that joined after text does not. bash and zsh
 	// take both and ksh93 neither (#2430).
 	d.HeredocDelimiterAcrossAContinuation = syntax.HeredocDelimiterAfterALeadingContinuation
+	// See syntax.Dialect.HeredocStrippedLoneBackslashIsKept, measured 2026-10-03.
+	d.HeredocStrippedLoneBackslashIsKept = true
+	// And a line a leading continuation brought in loses its tabs too:
+	// `\` ⏎ `→foo` writes `foo`. See
+	// syntax.Dialect.HeredocLeadingContinuationStripsTheNextLine.
+	d.HeredocLeadingContinuationStripsTheNextLine = true
 	// `${!name}` is refused **past the parse** rather than ending it, which
 	// is where this shell refuses every other expansion it cannot read.
 	// Measured 2026-09-28 from a script file under `env -i`, with `set -n`

@@ -32,6 +32,7 @@ func printfUnitRun(t *testing.T, src string, plain, long Answer) (string, string
 	sem.PrintfFieldCountsCharacters = plain
 	sem.PrintfLongModifierCountsCharacters = long
 	sem.PrintfQuote = PrintfQuoteAnsiCWord
+	sem.PrintfBTakesAField = Yes
 	var out, errs bytes.Buffer
 	r := newTestRunner(t, &Runner{
 		Stdout: &out, Stderr: &errs, Semantics: &sem,

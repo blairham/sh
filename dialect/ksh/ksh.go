@@ -2829,6 +2829,7 @@ func Semantics() interp.Semantics {
 	s.SubstringRangeThirdColonIsABadSubstitution = interp.Yes
 	s.PrintfReportsBadNumber = interp.No
 	s.PrintfNumberOperand = interp.PrintfNumberArithmetic
+	s.PrintfIntegerCharConstantAfterBlanks = interp.Yes
 	// C99's three, with a default precision of its own: `printf '%a' 1.5`
 	// is `0x1.800000000000p+0` in ksh93u+ where bash and dash write
 	// `0x1.8p+0`, and `printf '%a' 0.1` is `0x1.99999999999ap-4` — twelve
@@ -2950,6 +2951,7 @@ func Semantics() interp.Semantics {
 	// property of the stop — with nothing stopping it this shell pads and
 	// truncates like the rest.
 	s.PrintfBStopIsPadded = interp.No
+	s.PrintfBTakesAField = interp.Yes
 	// The same set bash takes, and ignored the same way. ksh93 will also
 	// read a width *after* the modifier — `%l5d` is a padded 42 there — but
 	// that is its free-order conversion prefix rather than this axis: `%5-d`

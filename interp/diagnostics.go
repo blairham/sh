@@ -1187,6 +1187,13 @@ type Diagnostics struct {
 	PrintfPositionOutOfRange string
 	// PrintfBadVerbStatus is what that reports. Zero means 1.
 	PrintfBadVerbStatus int
+
+	// PrintfBadVerbNamesTheRestOfTheFormat names, in PrintfBadVerb's second
+	// verb, the whole of the format from the conversion's `%` to its end, as
+	// it was written, rather than the directive alone. BusyBox ash 1.37.0:
+	// `printf 'a%kb\n'` is `%kb\n: invalid format`, measured 2026-10-03 in
+	// the pinned image.
+	PrintfBadVerbNamesTheRestOfTheFormat bool
 	// PrintfMissingVerb is a format that ended before its conversion
 	// character — `%`, `%5`, `%ll` with nothing after them. One verb: the
 	// whole directive as written, since there is no conversion character in

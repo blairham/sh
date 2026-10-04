@@ -1320,6 +1320,9 @@ func Semantics() interp.Semantics {
 	// And what it stopped is not padded out: `printf "%b|" "a\c"` is `a` and
 	// nothing after it.
 	s.PrintfBStopIsPadded = interp.No
+	// But only a bare `%b`: `%5b` is `invalid format` here, measured
+	// 2026-10-03 in the pinned image.
+	s.PrintfBTakesAField = interp.No
 	// `[ a == a ]` is 0, so `test` takes the doubled operator beside `=`.
 	s.TestAcceptsDoubleEqual = interp.Yes
 	// Both string-ordering operators, and none of the three unary additions
@@ -1402,6 +1405,9 @@ func Semantics() interp.Semantics {
 	s.SubstringRangeThirdColonIsABadSubstitution = interp.No
 	s.PrintfReportsBadNumber = interp.Yes
 	s.PrintfNumberOperand = interp.PrintfNumberWholeOperand
+	// `printf '%d' " 'A"` is 65 here, measured 2026-10-03 in the pinned
+	// image; `%f` of the same word is a bad number.
+	s.PrintfIntegerCharConstantAfterBlanks = interp.Yes
 	// Exact: `printf '%d' 9007199254740993` is itself in BusyBox v1.37.0,
 	// so the reader behind it is an integer one (#2907).
 	// A flag past a field is no flag at all: the prefix ends there and the
@@ -3462,8 +3468,12 @@ func Diagnostics() interp.Diagnostics {
 		BuiltinNamesTheShellAlone: map[string]bool{
 			"printf": true, "kill": true, "test": true, "[": true, "[[": true,
 		},
-		PrintfBadVerb:     "%[2]s: invalid format",
-		PrintfMissingVerb: "%[1]s: invalid format",
+		PrintfBadVerb: "%[2]s: invalid format",
+		// And what it names is the rest of the format as written, from the
+		// `%` on: `printf 'a%kb\n'` is `%kb\n: invalid format`, measured
+		// 2026-10-03 in the pinned image.
+		PrintfBadVerbNamesTheRestOfTheFormat: true,
+		PrintfMissingVerb:                    "%[1]s: invalid format",
 		// And the directive it names is written without the length
 		// modifiers it just read past: `printf '%z' x` is
 		// `ash: %: invalid format` where every other column names what was

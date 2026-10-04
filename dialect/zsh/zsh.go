@@ -3627,6 +3627,7 @@ func Semantics() interp.Semantics {
 	// what to call the refusal never arises.
 	s.PrintfReportsBadNumber = interp.No
 	s.PrintfNumberOperand = interp.PrintfNumberArithmetic
+	s.PrintfIntegerCharConstantAfterBlanks = interp.No
 	// Exact, though the reading is an expression: this shell's arithmetic is
 	// an integer one and `printf '%d' 123456789012345678` is the operand
 	// (#2907). It is ksh93 alone that rounds.
@@ -3714,6 +3715,7 @@ func Semantics() interp.Semantics {
 	// The octal wants its `\0`, as in ksh93.
 	s.PrintfBOctalWithoutZero = interp.No
 	s.PrintfBStopIsPadded = interp.Yes
+	s.PrintfBTakesAField = interp.Yes
 	// One of `h`, `l` and `L`, which is C89's set: `%ld` is a decimal and
 	// `%lld`, `%zX` and `%jd` are invalid directives.
 	s.PrintfLengthModifiers = interp.PrintfLengthModifiersC89

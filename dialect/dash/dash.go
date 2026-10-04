@@ -1221,6 +1221,7 @@ func Semantics() interp.Semantics {
 	// refusal is of the construct and never reaches the bound.
 	s.PrintfReportsBadNumber = interp.Yes
 	s.PrintfNumberOperand = interp.PrintfNumberLeadingNumber
+	s.PrintfIntegerCharConstantAfterBlanks = interp.No
 	// Exact, as in bash: `printf '%d' 1000000000000000001` keeps its last
 	// digit (#2907).
 	// A flag past a field is no flag at all: the prefix ends there and the
@@ -1294,6 +1295,7 @@ func Semantics() interp.Semantics {
 	// bash agree on that ksh93 and zsh do not.
 	s.PrintfBOctalWithoutZero = interp.Yes
 	s.PrintfBStopIsPadded = interp.Yes
+	s.PrintfBTakesAField = interp.Yes
 	// None: `%ld` is the conversion `l`, which dash does not have.
 	s.PrintfLengthModifiers = interp.PrintfLengthModifiersAbsent
 	// Bytes in every locale — dash decodes none — and no `l` to ask about:

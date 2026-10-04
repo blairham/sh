@@ -4466,7 +4466,10 @@ func Diagnostics() interp.Diagnostics {
 		// such file or directory` where the same line in a script names one
 		// (#2024).
 		PromptBuiltinLocation: interp.LocationNameOnly,
-		NotFound:              "%s: command not found",
+		// And a command string run by `-i` is located the same way. See the
+		// field.
+		InteractiveCommandStringIsLocatedAsAPrompt: true,
+		NotFound: "%s: command not found",
 		// The four restricted-shell refusals, measured a spelling at a time
 		// on bash 5.3.20, 2026-09-22. Each reports 1 and leaves the shell
 		// running; see interp/restricted.go.

@@ -12,4 +12,3 @@ invoke/a-program-on-a-standard-input-that-is-closed
 jobs/a-background-job-outlives-the-shell
 param/a-substring-modifier-that-substitutes
 read/from-a-standard-input-that-is-closed
-setopt/the-interactive-listing-drops-nohashdirs

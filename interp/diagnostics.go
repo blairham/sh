@@ -9723,6 +9723,14 @@ type Diagnostics struct {
 	// answer before this existed, so every dialect wrote a line no shell
 	// writes there (#1892).
 	PromptLocation LocationStyle
+	// InteractiveCommandStringIsLocatedAsAPrompt locates a command string
+	// run by an interactive shell — `-i -c` — the way PromptLocation and
+	// PromptBuiltinLocation locate a line typed at a prompt, for the run-time
+	// messages. Measured 2026-10-04 on bash 5.3.20 with `bash -f -i -c`:
+	// `nosuch` is `bash: nosuch: command not found` and `cd /nonexist` is
+	// `bash: cd: /nonexist: …`, with no line, where `bash -c` names `line 1`.
+	// zsh 5.9.2 keeps `zsh:1:` there, so it is one dialect's.
+	InteractiveCommandStringIsLocatedAsAPrompt bool
 	// PromptCountsTheSessionsLines numbers a line typed at a prompt by how
 	// many the **session** has read, rather than restarting at 1 for every
 	// construct.

@@ -4961,6 +4961,13 @@ type Runner struct {
 	// type letter over exactly that shape. See
 	// Semantics.TypeLetterAndAnArrayLiteralIsAnInconsistentType.
 	literalOperands map[string]bool
+	// operandsOverANonArray is the subset of literalOperands whose name was
+	// not an array and carried an attribute a re-creation drops *before* the
+	// line ran, on a line writing no type letter of its own — read by
+	// Runner.arrayLiteralStartsTheNameOver once the utility has run, by which
+	// time the name may be an array the line's own `-a` made. See
+	// interp/operandrecreates.go.
+	operandsOverANonArray map[string]bool
 	// compoundOperands is the narrower subset whose operand is a *compound*
 	// literal — `c=(a=1)`, whose items are assignments — rather than an
 	// element list. Both spellings are parenthesized and both answer
@@ -9756,6 +9763,9 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 		// z=(1 2)` is refused in the same words as `typeset -i z=(1 2)`.
 		outerLiterals := r.literalOperands
 		r.literalOperands = arrayLiteralOperands(c)
+		outerOverANonArray := r.operandsOverANonArray
+		r.operandsOverANonArray = r.literalOperandsOverANonArray(argv)
+		defer func() { r.operandsOverANonArray = outerOverANonArray }()
 		// How long the command's word list is, so that a builtin reading its
 		// operands **by position** can find them in it: the operands are its
 		// tail, and `args` has neither the utility's own word nor its
@@ -13834,7 +13844,7 @@ func (r *Runner) assignOperands(ctx context.Context, c *syntax.SimpleCmd) {
 // separate axis because ksh93 keeps on a join what it drops on a store.
 func (r *Runner) arrayLiteralStartsTheNameOver(a *syntax.Assign) bool {
 	if a.Operand {
-		return false
+		return r.operandLiteralStartsTheNameOver(a)
 	}
 	if !r.nameCarriesAnAttributeAReCreationDrops(a.Name) {
 		return false
@@ -14418,7 +14428,14 @@ func (r *Runner) assign(ctx context.Context, a *syntax.Assign) {
 			// new elements for the one that is there, so the attributes go
 			// before the elements land — see
 			// Semantics.ArrayLiteralAssignmentStartsTheNameOver.
-			r.clearAttributesAReCreationDrops(a.Name)
+			if a.Operand {
+				// A declaration's own literal takes the type letters away
+				// and leaves the export alone — see
+				// interp/operandrecreates.go for why.
+				r.clearTypeAttributes(a.Name)
+			} else {
+				r.clearAttributesAReCreationDrops(a.Name)
+			}
 		}
 		if r.unspecified {
 			return

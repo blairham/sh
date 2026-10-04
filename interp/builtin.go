@@ -7760,6 +7760,14 @@ func biLocal(r *Runner, _ context.Context, args []string) (endStatus int) {
 	}
 	defer func(was bool) { r.declarationEvaluatesItsValue = was }(r.declarationEvaluatesItsValue)
 	for _, a := range args {
+		// The line's letters, copied per operand: what one operand adds to
+		// them is its own. A fresh local of one of the shell's own integer
+		// slots takes the integer letter below, and written onto the line's
+		// flags it reached every name after it — `local OPTIND o` made `o`
+		// an integer, so `getopts ab o` stored 0 for every letter, where zsh
+		// 5.9.2 leaves `o` a plain scalar (getopts/a-function-with-its-own-
+		// optind). A subscripted operand's array letter is the same shape.
+		f := f
 		name, value, hasValue, appends := declarationOperand(a)
 		// See declareNames: this line's numeric letter evaluates the value.
 		r.declarationEvaluatesItsValue = hasValue && (f.integer || f.float)

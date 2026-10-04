@@ -1804,6 +1804,30 @@ type Diagnostics struct {
 	// ReadBadNumberStatus is what any of those four reports. Zero means 1,
 	// which is bash's; BusyBox ash answers 2.
 	ReadBadNumberStatus int
+	// ReadBadNumberUsageLetters are the letters whose non-number argument is
+	// a usage error rather than a failed read: the sentence, `read`'s usage
+	// line under it, and the bad-option status. ksh93 alone, for `-u`, `-n`
+	// and `-N` and not for `-t`, whose argument is an expression there and is
+	// refused as one at 1. Its wordings name the letter (%[2]s in the
+	// wordings above) rather than the word. Measured 2026-10-04 on ksh93u+
+	// 2012-08-01:
+	//
+	//	read -u line x   read: -u: numeric fd argument expected      + usage, 2
+	//	read -u 9x x     the same
+	//	read -n x v      read: -n: numeric count argument expected   + usage, 2
+	//	read -N x v      read: -N: numeric count argument expected   + usage, 2
+	//	read -t 3abc x   read: 3abc: arithmetic syntax error, 1
+	ReadBadNumberUsageLetters string
+	// ReadFromAClosedDescriptor is `read` from a descriptor that is not open
+	// at all — standard input closed, or `-u` naming one closed under it —
+	// where the reading itself is refused rather than finding the end. %[1]s
+	// is the number. Empty means nothing is said, which is dash's and zsh's
+	// answer; every column reports 1. Measured 2026-10-04 with `read a <&-`
+	// and with standard input closed for the whole shell:
+	//
+	//	bash 5.3.20     read: 0: read error: Bad file descriptor
+	//	ksh93u+         read: bad file unit number
+	ReadFromAClosedDescriptor string
 	// ReadBadFileDescriptor is `read -u` on a descriptor this shell holds
 	// nothing open at, taking the number as given. Empty means nothing is
 	// said — one shell in the panel reports 1 in silence — so this path has

@@ -8,5 +8,4 @@ param/prompt-percent-refuses-an-escape-by-name
 pat/a-whole-match-flag-in-mid-pattern
 print/a-prompt-escape-this-shell-has-not
 trap/an-elements-pipe-handler-runs-inside-the-elements-redirections
-xtrace/case-arm-patterns-are-not-expanded-past-the-match
 zmodload/the-selection-as-the-command-that-would-make-it

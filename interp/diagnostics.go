@@ -663,6 +663,21 @@ type Diagnostics struct {
 	// TestIntegerExpected is a non-numeric operand to `-eq` and its siblings.
 	// One verb: the operand.
 	TestIntegerExpected string
+	// TestIntegerTrailingJunk is the same refusal for an operand that *began*
+	// as a number and then held something else, where a dialect words the
+	// two apart. One verb: the operand. Empty means TestIntegerExpected
+	// covers both.
+	//
+	// BusyBox ash alone. Measured 2026-10-04 in the pinned image over `[ "$v"
+	// -eq 1 ]`: `abc`, `n`, `n=9`, `-`, `+`, ` x` and the empty word are
+	// `out of range`, and so is `99999999999999999999` and even
+	// `9999999999999999999x`, whose digits overflow before the junk is
+	// reached; while `1+1`, `16#10`, `1x1`, `3/0`, `0x10`, `1.5`, `12a`,
+	// `-5x` and ` 1/0 ` are `bad number`. `5 ` and ` 5` are taken. So the
+	// line is drawn after the leading blanks, the sign and the digits: no
+	// digits, or too many, is the first sentence; digits and then anything
+	// but blanks is the second (#5723).
+	TestIntegerTrailingJunk string
 	// TestOperandExpected is an operator with nothing after it. No verbs.
 	TestOperandExpected string
 	// TestTrailingBinaryOperandExpected is the same complaint with the

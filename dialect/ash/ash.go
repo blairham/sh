@@ -3440,6 +3440,11 @@ func Diagnostics() interp.Diagnostics {
 		TestUnaryExpected:                 "%[1]s: unknown operand",
 		TestBinaryExpected:                "%[1]s: unknown operand",
 		TestIntegerExpected:               "%[1]s: out of range",
+		// And the operand that began as a number and did not end as one,
+		// which is a second sentence: `[ 1x1 -eq 0 ]` is `1x1: bad number`
+		// where `[ abc -eq 0 ]` is `abc: out of range`. See the field for
+		// the measurement (#5723).
+		TestIntegerTrailingJunk: "%[1]s: bad number",
 		// The word the parse stopped at is named here too, which the bare
 		// sentence could not say: `[ -z a b c ]` is `b: unknown operand`,
 		// the first word past `-z a`, where dash names the last word its own

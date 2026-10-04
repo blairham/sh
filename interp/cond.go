@@ -358,7 +358,7 @@ func (r *Runner) evalCondUnary(x *syntax.CondUnary) (bool, error) {
 		on, isNumber := r.terminalTest(s)
 		if !isNumber &&
 			r.ask(r.sem().TerminalTestRequiresANumber, "`[[ -t x ]]` refusing a non-number") {
-			return false, arithError{msg: Wording(r.diag().TestIntegerExpected,
+			return false, arithError{msg: Wording(r.diag().testIntegerWording(s),
 				"%[2]s: %[1]s: integer expected", s, "[[")}
 		}
 		return on, nil

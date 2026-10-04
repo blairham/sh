@@ -318,7 +318,7 @@ func (e *testError) format(d Diagnostics) string {
 	case errIncorrectSyntax:
 		return d.TestIncorrectSyntax
 	case errIntegerExpected:
-		return d.TestIntegerExpected
+		return d.testIntegerWording(e.operand)
 	case errArithmeticOperand:
 		// No dialect wording: the sentence is the arithmetic's, which each
 		// dialect has already worded through its own math diagnostics.
@@ -1787,4 +1787,49 @@ func (r *Runner) testIsSetSubscriptFailed(sentence string) (bool, error) {
 	r.badSubscriptGivesUp(p, "how much a `test -v` operand's unevaluable subscript gives up",
 		Wording(r.diag().TestIsSetBadSubscript, "%[1]s", sentence, name))
 	return false, errTerminalTestOperandReported
+}
+
+// testIntegerWording is the dialect's refusal of a comparison operand that is
+// not an integer, chosen between its two sentences by where the reading of a
+// number stopped. See Diagnostics.TestIntegerTrailingJunk.
+func (d Diagnostics) testIntegerWording(operand string) string {
+	if d.TestIntegerTrailingJunk != "" && numeralWithTrailingJunk(operand) {
+		return d.TestIntegerTrailingJunk
+	}
+	return d.TestIntegerExpected
+}
+
+// numeralWithTrailingJunk reports whether s reads as a number up to some
+// point and then holds something other than blanks: leading blanks, an
+// optional sign, at least one decimal digit that does not overflow, and then
+// a byte that is not a blank. ` 12a` is one; `abc`, `-` and an overflowing
+// run of digits are not.
+func numeralWithTrailingJunk(s string) bool {
+	i := 0
+	for i < len(s) && isTestBlank(s[i]) {
+		i++
+	}
+	if i < len(s) && (s[i] == '-' || s[i] == '+') {
+		i++
+	}
+	start := i
+	for i < len(s) && s[i] >= '0' && s[i] <= '9' {
+		i++
+	}
+	if i == start {
+		return false
+	}
+	if _, err := strconv.ParseInt(s[start:i], 10, 64); err != nil {
+		return false
+	}
+	for j := i; j < len(s); j++ {
+		if !isTestBlank(s[j]) {
+			return true
+		}
+	}
+	return false
+}
+
+func isTestBlank(c byte) bool {
+	return c == ' ' || c == '\t' || c == '\n' || c == '\v' || c == '\f' || c == '\r'
 }

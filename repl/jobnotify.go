@@ -193,16 +193,29 @@ func (s Shell) jobNotifying() (*jobWake, func()) {
 // same notice the next prompt would have written, written now.
 //
 // It answers whether anything was written, because the caller draws around it
-// and must not draw around nothing. A wake and an empty report is the ordinary
-// race and not an error — the job ended just as the prompt was being drawn,
-// the prompt's own call to reportFinishedJobs took the line, and the byte in
-// the pipe arrives at an editor with nothing left to say.
-func (s Shell) reportingFinishedJobs() func() bool {
-	return func() bool {
+// and must not draw around nothing. A wake and an empty report is ordinary
+// and not an error, and there are two ways to get one. The first is a race: the
+// job ended just as the prompt was being drawn, the prompt's own call to
+// reportFinishedJobs took the line, and the byte in the pipe arrives at an
+// editor with nothing left to say. The second needs no race at all. Every job
+// that ends pokes the wake, and a *disowned* one is never in the table to be
+// reported, so its ending is always a wake with nothing behind it. A plugin
+// that refreshes a cache with `{ … } &|` from a deferred load does that once
+// per session (#5862).
+//
+// before runs once, just ahead of the first notice, and not at all when there
+// is none. Whatever the caller writes to make room for a notice goes there.
+// Written up front, it would land on the screen with no notice after it, and
+// on a terminal that moves the cursor off the line being typed.
+func (s Shell) reportingFinishedJobs() func(before func()) bool {
+	return func(before func()) bool {
 		if s.Runner == nil {
 			return false
 		}
 		lines := s.Runner.FinishedJobNotices()
+		if len(lines) > 0 && before != nil {
+			before()
+		}
 		for _, line := range lines {
 			s.errf("%s\n", line)
 		}
@@ -219,16 +232,23 @@ func (s Shell) reportingFinishedJobs() func() bool {
 // afterwards, because the redraw below rewrites only the row the line is on,
 // which is the rule readLine is built on and the reason reprompt.go has to go
 // up past them too.
+//
+// The newline goes ahead of the first notice and only if there is one. With
+// nothing owed this writes nothing at all, which is what zsh 5.9.2 does when a
+// disowned job ends under its prompt. Measured 2026-10-04 through a
+// pseudo-terminal with `precmd() { sleep 1 &! }`: zsh leaves the cursor after
+// the prompt, and this editor used to write a newline anyway and draw nothing
+// after it, so the cursor dropped to column 0 a row down, one row per job
+// (#5862). It is not the same byte a job's own output would cost, because the
+// job wrote nothing.
 func (e *editor) reportJobs(prompt drawnPrompt) {
 	if e.jobNotices == nil {
 		return
 	}
-	e.write(e.newline())
-	if !e.jobNotices() {
-		// Nothing to say after all, and nothing has been drawn over: the
-		// newline above is the one byte this costs, and it is the same byte a
-		// job's own output would have cost. Redrawing here would put a second
-		// copy of the prompt on the screen for no reason.
+	if !e.jobNotices(func() { e.write(e.newline()) }) {
+		// Nothing to say after all, so nothing was written and the screen is
+		// as it was. Redrawing here would put a second copy of the prompt on
+		// the screen for no reason.
 		return
 	}
 	e.write(prompt.lead)
@@ -275,6 +295,8 @@ func (e *editor) awaitFinishedJobs() {
 			return
 		}
 		e.jobWoke()
-		e.jobNotices()
+		// No room to make: with the editor off the notice goes where the
+		// cursor is. See the comment above.
+		e.jobNotices(nil)
 	}
 }

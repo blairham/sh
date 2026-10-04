@@ -365,7 +365,8 @@ type editor struct {
 	// jobWake is a second descriptor of exactly that shape, and it becomes
 	// readable when a background job has *ended*. jobWoke takes the readiness
 	// back off it and jobNotices writes what there is to say, reporting
-	// whether it said anything. All three nil in a session whose dialect
+	// whether it said anything. The function it is handed runs just ahead of
+	// the first notice and never when there is none. See reportJobs. All three nil in a session whose dialect
 	// holds the notice for the next prompt, which is four dialects of five.
 	//
 	// Separate from wake rather than folded into it because the two are
@@ -375,7 +376,7 @@ type editor struct {
 	// plainly. See jobnotify.go.
 	jobWake    func() int
 	jobWoke    func()
-	jobNotices func() bool
+	jobNotices func(before func()) bool
 
 	// width is how many columns the terminal has, asked each time it is
 	// needed; nil, or an answer of 0, means it will not say. row is which

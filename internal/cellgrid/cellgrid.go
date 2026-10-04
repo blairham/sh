@@ -148,6 +148,15 @@ func (g *Grid) Cols() int { return g.cols }
 // Rows is how many rows have been touched.
 func (g *Grid) Rows() int { return len(g.rows) }
 
+// Cursor is where the next character would go: the row, counted from the
+// first row anything was drawn on, and the column. A column equal to Cols is
+// the cursor at the edge with the wrap still pending.
+//
+// A prompt that looks right can still have the cursor in the wrong place.
+// Typing lands at the cursor, not after the last thing drawn, and comparing
+// text cannot see the difference (#5862).
+func (g *Grid) Cursor() (row, col int) { return g.row, g.col }
+
 // Cell is what is at a position, or a blank cell past the end.
 func (g *Grid) Cell(row, col int) Cell {
 	if row < 0 || row >= len(g.rows) || col < 0 || col >= len(g.rows[row]) {

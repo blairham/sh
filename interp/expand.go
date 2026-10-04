@@ -5666,7 +5666,7 @@ func (r *Runner) rangeSegmentText(w *syntax.Word) string {
 // from, and they take the reading they have always taken.
 func (r *Runner) rangeExpansion(w *syntax.Word) string {
 	if !wordOpensASubscript(w) {
-		return r.joinWord(r.rangeBackslashesRestored(w))
+		return r.joinWord(r.rangeBackslashesRestored(rangeSingleQuotesKept(w)))
 	}
 	return r.markedSubscriptWord(w, r.rangeProtectsSpan)
 }
@@ -10274,6 +10274,40 @@ func (r *Runner) equalsHeadField(f string) []string {
 		return []string{text}
 	}
 	return []string{path}
+}
+
+// rangeSingleQuotesKept writes a substring range's single quotations back with
+// their quotes on, because the range's expression is read with them there.
+//
+// Unanimous across the panel, measured 2026-10-04 with `x=abcdef` and
+// `${x:'1'}`: bash 5.3.20 refuses `'1'` as `operand expected (error token is
+// "'1'")`, zsh 5.9.2 as `illegal character: '`, BusyBox ash as an arithmetic
+// syntax error, and ksh93u+ reads `'1'` as a character constant and answers
+// the empty string from offset 49. This shell took the quotes off and answered
+// `bcdef` in every dialect. A double quotation does come off — `${x:"1"}` is
+// `bcdef` in bash and ksh93 alike — so only the single kind is restored.
+//
+// Run before rangeBackslashesRestored, which writes the backslashes it keeps
+// back as single-quoted spans of its own: those were never quotations.
+func rangeSingleQuotesKept(w *syntax.Word) *syntax.Word {
+	quoted := false
+	for _, sp := range w.Spans {
+		if sp.Kind == syntax.Literal && sp.Quoting == syntax.SingleQuoted {
+			quoted = true
+			break
+		}
+	}
+	if !quoted {
+		return w
+	}
+	c := *w
+	c.Spans = slices.Clone(w.Spans)
+	for i, sp := range c.Spans {
+		if sp.Kind == syntax.Literal && sp.Quoting == syntax.SingleQuoted {
+			c.Spans[i].Value = "'" + sp.Value + "'"
+		}
+	}
+	return &c
 }
 
 // rangeBackslashesRestored is a range operand with the backslashes the

@@ -4535,6 +4535,11 @@ func Semantics() interp.Semantics {
 	// behavior: `set -oerrexit zzznosuch` is errexit with `zzznosuch` as $1,
 	// and `set -oe` is `no such option: e`.
 	s.SetOLetterAttachesItsName = interp.Yes
+	// `zsh -o` with nothing behind it is `string expected after -o` at 1 and
+	// no listing; `zsh -e -q` is `bad option: -q` at 1, exactly as `zsh -q`
+	// is. Both measured 2026-10-03 on 5.9.2.
+	s.InvocationBareOListsTheOptions = interp.No
+	s.InvocationLetterRefusedUnderErrexitFails = interp.No
 	// The option loop goes on *applying* the words behind one it refused,
 	// which is the other half of the same loop from SetReportsEveryBadOption
 	// and splits the panel the other way. Measured 2026-09-18 from a script
@@ -5619,9 +5624,12 @@ func Diagnostics() interp.Diagnostics {
 		// why this is a verb rather than a fixed sentence. Measured
 		// 2026-09-22 on zsh 5.9.2.
 		InvocationMissingOptionArgument: "string expected after %[1]s",
-		ScriptNotFoundStatus:            127,
-		ScriptNotReadableStatus:         127,
-		Location:                        interp.LocationTightLine,
+		// At 1, where the other columns exit with their usage status 2.
+		// Measured 2026-10-03 on `zsh -c` and `zsh -o` alike.
+		InvocationMissingOptionArgumentStatus: 1,
+		ScriptNotFoundStatus:                  127,
+		ScriptNotReadableStatus:               127,
+		Location:                              interp.LocationTightLine,
 		// And no line at a prompt, which is the same answer this shell gives
 		// a program on standard input: measured 2026-09-11 under `-i`,
 		// `if; then` then end of input is `zsh: parse error near `\n'` where

@@ -3871,6 +3871,14 @@ func Semantics() interp.Semantics {
 	// an option *name* rather than reading it as a letter. Its own usage
 	// line spells the form, `[-o[option]]`.
 	s.SetOLetterAttachesItsName = interp.Yes
+	// `ksh -e -q` is `-q: unknown option` and the usage line at 2, exactly
+	// as `ksh -q` is. Measured 2026-10-03 on 93u+.
+	s.InvocationLetterRefusedUnderErrexitFails = interp.No
+	// unanswered InvocationBareOListsTheOptions: it lists — `ksh -o` with
+	// standard input on /dev/null writes the table at 0 — but from a state
+	// earlier than the one a script sees: braceexpand and trackall read off
+	// there and on in `ksh -c 'set -o'`. Measured 2026-10-03 on 93u+. Until
+	// that earlier state is modeled the front end goes on refusing it.
 	s.LongOptionNamesASetOption = interp.Yes
 	// The second column with a route split inside one shell: the three names
 	// Apply declares immovable are refused to a script and taken on the

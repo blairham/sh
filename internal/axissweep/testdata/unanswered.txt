@@ -170,6 +170,7 @@ ash   IntegerBaseNegativeIsTwosComplement
 ash   IntegerBaseTenIsNoBase
 ash   IntegerPlusFormTakesAttributesOff
 ash   InteractiveStartupFileWhenLogin
+ash   InvocationBareOListsTheOptions
 ash   JobsListsWhatChangedSinceTheLastReport
 ash   JobsStateFiltersAccumulate
 ash   KeptTrapListingIncludesExit
@@ -547,6 +548,7 @@ dash  IntegerBaseNegativeIsTwosComplement
 dash  IntegerBaseTenIsNoBase
 dash  IntegerPlusFormTakesAttributesOff
 dash  InteractiveStartupFileWhenLogin
+dash  InvocationBareOListsTheOptions
 dash  JobsListsWhatChangedSinceTheLastReport
 dash  JobsStateFiltersAccumulate
 dash  KeptTrapListingIncludesExit
@@ -740,6 +742,7 @@ ksh   HangupAtExitPrecedesTheExitTrap
 ksh   HangupAtExitSkipsStoppedJobs
 ksh   HeldExitListsTheJobs
 ksh   InteractiveStartupFileWhenLogin
+ksh   InvocationBareOListsTheOptions
 ksh   JobsStateFiltersAccumulate
 ksh   KillKeepsGoingPastAJobSpecThatNamesNoJob
 ksh   LocalDashSavesTheShellOptions

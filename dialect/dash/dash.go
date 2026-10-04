@@ -2008,6 +2008,15 @@ func Semantics() interp.Semantics {
 	// As in bash: `set -oe x` is `Illegal option -o x`, and `set -ozzznosuch`
 	// with nothing behind it lists the options and then stops at `-z`.
 	s.SetOLetterAttachesItsName = interp.No
+	// `dash -e -q` is `Illegal option -q` at 2, exactly as `dash -q` is.
+	// Measured 2026-10-03.
+	s.InvocationLetterRefusedUnderErrexitFails = interp.No
+	// unanswered InvocationBareOListsTheOptions: it does list — `dash -o` with
+	// standard input on /dev/null writes the table at 0 — but the states the
+	// table shows are not the shell's: errexit and noglob read on
+	// with none of them asked for, where `dash -c 'set -o'` lists them off.
+	// Measured 2026-10-03. Nothing here models a listing of state the shell
+	// does not hold, so the front end goes on refusing the bare letter.
 	// Measured 2026-09-16: `dash --xtrace -c 'echo ran'` is `dash: 0: Illegal
 	// option --`. It does not reach the name at all — the word is two dashes
 	// and a tail, and the tail is never read.

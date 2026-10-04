@@ -34,8 +34,6 @@ expand/tilde-plus-and-minus
 expansion/a-colon-before-a-trim-is-a-third-reading
 fnlib/add-zsh-hook-autoload-letters
 glob/a-value-backslash-before-something-the-script-quoted
-invoke/a-command-string-attached-to-the-letter
-invoke/c-with-nothing-after-it
 jobs/a-background-job-outlives-the-shell
 opt/the-option-listing-is-written-once-and-at-the-end
 param/a-negative-length-past-the-end-is-not-refused

@@ -585,6 +585,14 @@ func MainArgs(sh Shell, argv []string) int {
 			sh.errf("%s: %s\n", sh.Name, er.text)
 			return er.status
 		}
+		var me *missingArgumentError
+		if errors.As(err, &me) {
+			// The dialect's status rather than this front end's usage
+			// status, which one column does not use for it. See
+			// Diagnostics.InvocationMissingOptionArgumentStatus.
+			sh.errf("%s: %s\n", sh.Name, me.text)
+			return sh.Diagnostics.MissingOptionArgumentStatus()
+		}
 		var oe *optionError
 		if errors.As(err, &oe) {
 			// An option word this front end could not place. The dialect's
@@ -1109,6 +1117,10 @@ type source struct {
 	// shell in the panel has. See route, where it is carried instead of
 	// returned, and runInput, where it is raised.
 	scriptErr *scriptError
+	// missingCommand is `-c` with no operand to be the command string, held
+	// until the options have been judged for the reason scriptErr is. See
+	// route.
+	missingCommand bool
 	// help says the invocation asked this shell to describe itself and there
 	// is nothing to run. Beside version and for its reasons, and it beats it
 	// where both were written: see Semantics.HelpOption.
@@ -1276,6 +1288,10 @@ type optionSpec struct {
 	// -O ''` is `: invalid shell option name` at status 2, measured — and a
 	// spec string cannot tell "no word" from "an empty one".
 	shellListing bool
+	// listing is the `-o` letter with no word after it, in the dialect that
+	// reads that as the `set -o` listing. See
+	// Semantics.InvocationBareOListsTheOptions.
+	listing bool
 	// on is `-` rather than `+`. Both signs work on every option, which is
 	// measured and unanimous: `sh +x script` is how xtrace is kept *off*
 	// regardless of what the parent had.
@@ -1495,7 +1511,7 @@ func (sh Shell) startupOption(spelling string, args []string, inv *invocation) (
 		// which is not one a shell can guess at, and every other option here
 		// that takes an argument is refused the same way.
 		if len(args) < 1 {
-			return nil, true, errors.New(sh.Diagnostics.MissingOptionArgument(spelling))
+			return nil, true, &missingArgumentError{text: sh.Diagnostics.MissingOptionArgument(spelling)}
 		}
 		inv.startup.file = args[0]
 		return args[1:], true, nil
@@ -1794,6 +1810,14 @@ func (sh Shell) optionWord(a string, args []string, inv *invocation) (rest []str
 		// front end's: the roster, the `no` fallback and the `=value` are
 		// all the dialect's, and this front end has no option table at all.
 		// So the word travels whole, the way a `-o` name does.
+		if name := a[2:]; on && slices.Contains(strings.Fields(sh.Semantics.LongOptionsNamingSetOptions), name) {
+			// One of the few `--name` words a dialect takes for a `set -o`
+			// name without taking the whole spelling — bash's `--posix`.
+			// See Semantics.LongOptionsNamingSetOptions.
+			inv.opts = append(inv.opts, optionSpec{spec: name, isName: true, on: true})
+			sh.noteNamedOption(inv, name, true)
+			return args, nil
+		}
 		if sh.Semantics.LongOptionNamesASetOption == interp.Yes {
 			inv.opts = append(inv.opts,
 				optionSpec{spec: a[2:], isName: true, long: true, on: on})
@@ -1938,12 +1962,17 @@ func (sh Shell) optionWord(a string, args []string, inv *invocation) (rest []str
 			}
 			flush()
 			if len(args) < 1 {
-				// Refused rather than listed. With no name at all three of
-				// the four print the option table and read on; zsh refuses
-				// with "string expected after -o". A listing at invocation
-				// is not worth the machinery until something needs it, and
-				// refusing is the honest half of a split panel.
-				return nil, errors.New(sh.Diagnostics.MissingOptionArgument(a))
+				// With no name at all three of the four print the option
+				// table and read on, and zsh refuses with "string expected
+				// after -o" — so it is the dialect's, and the refusal is
+				// what a dialect that has not answered gets. Whatever was
+				// welded behind the `o` is still more letters, read next.
+				// See Semantics.InvocationBareOListsTheOptions.
+				if sh.Semantics.InvocationBareOListsTheOptions == interp.Yes {
+					inv.opts = append(inv.opts, optionSpec{listing: true, on: on})
+					continue
+				}
+				return nil, &missingArgumentError{text: sh.Diagnostics.MissingOptionArgument(a)}
 			}
 			inv.opts = append(inv.opts, optionSpec{spec: args[0], isName: true, on: on})
 			// Read here as well as carried, because *where* it was written
@@ -1988,6 +2017,14 @@ func (sh Shell) reportScriptError(se *scriptError) int {
 	sh.errf("%s", sh.Diagnostics.ScriptDiagnostic(name, se.path, se.err))
 	return sh.Diagnostics.ScriptStatus(se.err)
 }
+
+// missingArgumentError is an option word that takes an argument and was the
+// last word of the invocation, carried as its own type so that the status it
+// exits with can be the dialect's. text is the dialect's sentence, with no
+// name in front of it.
+type missingArgumentError struct{ text string }
+
+func (e *missingArgumentError) Error() string { return e.text }
 
 // scriptError is a script operand the shell could not read, carried as its own
 // type so that the one place which knows an invocation went wrong can still
@@ -2131,7 +2168,19 @@ func (sh Shell) route(args []string, inv invocation) (source, error) {
 		// for `sh -cs cmd` and for `sh -ci cmd` — neither reading standard
 		// input nor prompting — and take the string from the first operand.
 		if len(args) == 0 {
-			return source{}, errors.New(sh.Diagnostics.MissingOptionArgument("-c"))
+			// Carried rather than returned, for the reason a script operand
+			// that will not open is: every shell in the panel judges the
+			// option words first. Measured 2026-10-03 — `-cq` names the
+			// letter in bash 5.3.20, zsh 5.9.2, ksh93u+ and dash alike, and
+			// `-c -o nosuch` names the option, where ours complained that
+			// the command string was missing. And `bash -co` writes the
+			// option table before it says so, which only applying the
+			// options first can reproduce.
+			return source{
+				missingCommand: true,
+				name:           sh.Name, dg: sh.Diagnostics,
+				opts: inv.opts,
+			}, nil
 		}
 		if inv.fromStdin && len(args) > 1 {
 			// The operand question, and the standard-input half below is
@@ -2940,6 +2989,12 @@ func (sh Shell) runInput(in source) int {
 		// through the one helper both routes report from.
 		return sh.reportScriptError(in.scriptErr)
 	}
+	if in.missingCommand {
+		// The same place and for the same reason: the options have all been
+		// judged, and none of them refused.
+		sh.errf("%s: %s\n", sh.Name, sh.Diagnostics.MissingOptionArgument("-c"))
+		return sh.Diagnostics.MissingOptionArgumentStatus()
+	}
 	if in.scriptListing || in.stringCatalog || in.stringCatalogPortable {
 		// The invocation asked for the program rather than a run of it, so
 		// nothing below this happens: no startup file is read and no line is
@@ -3116,6 +3171,10 @@ func (sh Shell) applyOptions(r *interp.Runner, opts []optionSpec) (int, bool) {
 			// minus is the two-column listing and plus the re-inputtable
 			// one.
 			apply = func(_ string, on bool) int { r.ListShellOptions(!on); return 0 }
+		case o.listing:
+			// The same for the `set` namespace, and for the same reason:
+			// it cannot fail, and the sign picks the form.
+			apply = func(_ string, on bool) int { r.ListSetOptions(!on); return 0 }
 		case o.shell:
 			apply = r.SetShellOption
 		case o.long:

@@ -2001,6 +2001,11 @@ func (r *Runner) saySetRefusal(msg string, usage, isName bool) {
 		name = r.invokedAs()
 	}
 	r.errf("%s%s\n", d.invocationPrefix(name), strings.TrimPrefix(msg, "set: "))
+	if !isName && r.letterRefusedUnderErrexit() {
+		// An ordinary failure rather than a usage error, so the sentence is
+		// the whole of it. See Semantics.InvocationLetterRefusedUnderErrexitFails.
+		return
+	}
 	// A `--name` gets the block that names long options, where the dialect
 	// writes a second one — see Diagnostics.InvocationLongOptionUsage for the
 	// two measured rows. Drawn through the vector's own helper rather than
@@ -2010,6 +2015,14 @@ func (r *Runner) saySetRefusal(msg string, usage, isName bool) {
 	if u := d.invocationUsageBlock(r.name(), r.longSetOptionSpelling); u != "" {
 		r.errf("%s\n", u)
 	}
+}
+
+// letterRefusedUnderErrexit reports whether an option letter being refused
+// now is the invocation's, read with errexit already on, in the dialect that
+// answers that as an ordinary failure. See
+// Semantics.InvocationLetterRefusedUnderErrexitFails.
+func (r *Runner) letterRefusedUnderErrexit() bool {
+	return r.atInvocation && r.errexit && r.sem().InvocationLetterRefusedUnderErrexitFails == Yes
 }
 
 // setUsageBlock is the usage the `set` builtin writes under a refusal, which
@@ -2083,6 +2096,10 @@ func (sp setRefusalSpelling) fatal(s *Semantics) Answer {
 // ones behind the first. See Semantics.SetReportsEveryBadOption, and
 // finishSetRefusals, which pays both debts.
 func (r *Runner) setRefusalStatus(sp setRefusalSpelling, why string) bool {
+	if sp == refusedOptionLetter && r.letterRefusedUnderErrexit() {
+		r.setOptionStatus = 1
+		return false
+	}
 	if sp == refusedOptionLetter && r.setLettersWelded && !r.atInvocation {
 		// A letter the validating pass never read, because it was welded
 		// behind an `-o` and is the `-o`'s operand to that pass. What refuses

@@ -10,6 +10,4 @@ local/a-subscripted-operand-to-local
 path/binary-content-is-not-run-as-a-script
 redir/a-picked-descriptor-may-outlive-its-command
 subst/a-comment-in-a-current-shell-body
-subst/double-paren-count-decides-not-the-expression
-subst/double-paren-is-a-subshell
 ulimit/the-file-size-block

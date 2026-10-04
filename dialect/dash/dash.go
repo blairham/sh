@@ -89,6 +89,9 @@ func Dialect() syntax.Dialect {
 	// on.
 	d.FuncDefAtParen = true
 	d.ParenAfterAWordEndsTheCommand = true
+	// And a `$((` that does not close on `))` is refused while reading.
+	// See syntax.Dialect.ArithSubstWantsItsDoubleCloser (#5723).
+	d.ArithSubstWantsItsDoubleCloser = true
 	d.CaseRunsOutAtAPattern = true
 	// And a quoted word, or one holding an expansion, is a definition there
 	// too, whose name is refused once the parens close: `"f"() { :; }` is

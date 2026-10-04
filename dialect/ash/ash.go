@@ -182,6 +182,9 @@ func Dialect() syntax.Dialect {
 	// which is what decides the token a malformed definition is blamed on.
 	d.FuncDefAtParen = true
 	d.ParenAfterAWordEndsTheCommand = true
+	// And a `$((` that does not close on `))` is refused while reading.
+	// See syntax.Dialect.ArithSubstWantsItsDoubleCloser (#5723).
+	d.ArithSubstWantsItsDoubleCloser = true
 	d.CaseRunsOutAtAPattern = true
 	// And a name with punctuation in it is a name: `a.b() { echo hi; }; a.b`
 	// prints hi.

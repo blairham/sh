@@ -4,9 +4,7 @@
 alias/a-backslash-the-body-ends-with-and-nothing-after-it
 arith/a-subscript-the-source-left-open-takes-the-value-bracket
 assoc/a-literal-element-keyed-with-a-blank
-axis/a-failed-case-subject
 axis/trap-body-line-signal
-case/an-unset-subject-under-u-keeps-its-status
 complist/the-widget-the-module-defines
 cond/a-leading-groups-range-shape-is-exact
 cond/a-mid-word-groups-operator-ends-the-word

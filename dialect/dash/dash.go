@@ -1663,6 +1663,9 @@ func Semantics() interp.Semantics {
 	// `emacs` and `vi` are two options here and not one keymap: `set -o vi;
 	// set -o emacs` lists both on. Measured 2026-10-03; see the axis.
 	s.EditingModesAreTwoSwitches = interp.Yes
+	// `$LINENO` inside a function counts from the function's own line as 1,
+	// in every text it reads. Measured 2026-10-03; see the axis.
+	s.LinenoCountsTheFunctionsLineAsOne = interp.Yes
 	s.TrapQuoting = interp.ListingQuoteAlwaysDoubled
 	s.TrapActionIsParsedWhenSet = interp.No
 	s.TrapParseFailureNamesWhereItFired = interp.No

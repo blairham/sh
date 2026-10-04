@@ -162,6 +162,14 @@ func (r *Runner) ensureSpecials() {
 			// origin that stood when the pin was taken, never against the
 			// callee's: see Runner.functionLineOrigin (#4758).
 			at := r.lineNow()
+			if origin := r.functionLineOrigin(); r.inFunc != "" && origin > 0 &&
+				r.sem().LinenoCountsTheFunctionsLineAsOne == Yes {
+				// The other function-relative reading: every line read while
+				// a function runs, a sourced file's and an `eval`'s own
+				// included, less the function's line, plus one. See
+				// Semantics.LinenoCountsTheFunctionsLineAsOne.
+				return strconv.Itoa(at - origin + 1)
+			}
 			if origin := r.functionLineOrigin(); r.locationIsInsideAFunctionBody() &&
 				!r.locationIsInsideEvalTextNumberedFromItself() &&
 				origin > 0 &&

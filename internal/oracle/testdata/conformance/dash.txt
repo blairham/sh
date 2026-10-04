@@ -55,7 +55,6 @@ read/interrupted-by-a-trapped-signal
 readonly/a-compound-append-is-refused
 readonly/an-array-literal-inside-a-function
 redir/a-picked-descriptor-may-outlive-its-command
-special/lineno-in-a-file-a-function-sourced
 subst/a-comment-in-a-current-shell-body
 subst/double-paren-count-decides-not-the-expression
 subst/double-paren-is-a-subshell

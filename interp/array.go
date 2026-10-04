@@ -2582,7 +2582,8 @@ func (r *Runner) subscriptOver(e *syntax.ParamExpr, src subscriptSource) ([]stri
 			r.ask(r.sem().SubscriptCommaIsARange, "`${a[1,3]}` naming a range rather than one subscript") {
 			return nil, r.reportIndexAndRange()
 		}
-		return r.rangeSubscript(src, idx, lo, hi)
+		return r.rangeSubscript(src, idx, lo, hi,
+			subscriptLength{is: e.Length, written: r.writtenSubscript(e, idx)})
 	}
 	// The *written* text, because a third comma is a fact about what was
 	// typed: `${a[1,2,3]}` is a bad substitution in the shell with ranges,
@@ -3007,13 +3008,20 @@ func topLevelComma(idx string) (at int, extra bool) {
 // only when they disagree — `${a[2,2]}` is the second element whether the
 // comma separates a range or joins two expressions, so it needs no answer, and
 // neither does a pair either reading refuses.
-func (r *Runner) rangeSubscript(src subscriptSource, idx, lo, hi string) ([]string, bool) {
+//
+// length is what the expansion says about a `${#…}` in front of it, handed
+// to the one-subscript reading for the reason the other read routes hand it
+// on: the comma reading is a subscript like any other, and `${#a[-8,-8]}` on
+// five elements is bash's `[-8,-8]: bad array subscript` with the line given
+// up, exactly as `${#a[-8]}` is (measured 2026-10-03, bash 5.3.20). Without
+// it the read's own sentence was written and the length came back 0.
+func (r *Runner) rangeSubscript(src subscriptSource, idx, lo, hi string, length subscriptLength) ([]string, bool) {
 	span, badEnd, spanErr := r.rangeElems(src.elems, src.scalar, lo, hi)
 	whole, wholeErr := r.subscriptValue(idx)
 	var one []string
 	oneOK := wholeErr == nil
 	if oneOK {
-		if v, found := r.elemAt(src.name, src.elems, whole); found {
+		if v, found := r.elemAtFor(src.name, src.elems, whole, length); found {
 			one = []string{v}
 		}
 	}

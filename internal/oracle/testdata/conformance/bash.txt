@@ -3,7 +3,6 @@
 # fails on a case that fails without being listed or passes while listed.
 arithmetic/an-empty-subscript-on-a-name-that-is-not-set
 arithmetic/an-empty-subscript-on-a-name-that-is-set
-array/a-range-starting-outside-the-array-names-one-empty-element
 array/a-subscript-search-over-a-scalar-searches-both-ways
 assoc/a-table-lists-in-a-different-order-than-it-expands
 compgen/an-action-this-shell-does-not-generate

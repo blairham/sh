@@ -4966,6 +4966,12 @@ func (p *Parser) looksLikeFuncDef() bool {
 	if p.dialect.FunctionNameIsAnyBareWord {
 		return p.bareWordFuncDef()
 	}
+	if p.wordAtParenIsARefusedName() {
+		// The paren announces a definition whatever the word is, and the
+		// name is refused once the parentheses close. See
+		// Parser.wordAtParenIsARefusedName.
+		return p.peekIsLeftParen()
+	}
 	// A quoted name is not a definition in most dialects, and quoting is not
 	// an expansion: `'q'() { :; }` is refused here as it was before the flag.
 	// Two dialects read one, by different routes: the one whose names are any
@@ -5017,7 +5023,20 @@ func (p *Parser) looksLikeFuncDef() bool {
 		// Unless the dialect lets a name hold one and the word is not an
 		// assignment. See [Dialect.FunctionNameMayHoldAnEquals].
 		lit := p.tok.Literal()
-		return (!strings.Contains(lit, "=") || p.funcNameHoldsAnEquals(lit)) && p.peekIsLeftParen()
+		if p.dialect.FunctionNameMayHoldAnEquals {
+			return (!strings.Contains(lit, "=") || p.funcNameHoldsAnEquals(lit)) && p.peekIsLeftParen()
+		}
+		// Elsewhere it is an assignment *word* that is excluded, and nothing
+		// else with an `=` in it. Measured 2026-10-04 on dash 0.5.12: `a=(x)`
+		// and `f=() { :; }` are `"(" unexpected`, while `x+=(a b)`,
+		// `a[1]=(x)` and `"a"=(x)` are each `word unexpected (expecting ")")`
+		// and `x+=()` and `1=() { :; }` are `Bad function name` — none of
+		// those is an assignment there, so each is a name the definition
+		// refuses.
+		if _, isAssign := p.isAssign(p.tok); isAssign {
+			return false
+		}
+		return p.peekIsLeftParen()
 	}
 	// A function name is a name — plus the punctuation the dialect allows —
 	// so it cannot contain `=`. Without this, `a=()` — an empty array — was
@@ -5047,6 +5066,23 @@ func (p *Parser) looksLikeFuncDef() bool {
 		return false
 	}
 	return p.peekIsFuncParens()
+}
+
+// wordAtParenIsARefusedName reports whether the current word, quoted or
+// holding an expansion, is still the name of a definition in the dialect that
+// commits at the paren and reads a name as neither source text nor a word to
+// expand — which makes it a name that definition refuses.
+//
+// See [Dialect.WordAtParenIsARefusedName]. An assignment word is the
+// exception, as it is for a plain word.
+func (p *Parser) wordAtParenIsARefusedName() bool {
+	d := p.dialect
+	if !d.FuncDefAtParen || !d.WordAtParenIsARefusedName || d.FunctionNameIsSourceText || d.FunctionNameExpands ||
+		(!p.tok.IsQuoted() && p.tokenIsPlainText(p.tok)) {
+		return false
+	}
+	_, isAssign := p.isAssign(p.tok)
+	return !isAssign
 }
 
 // funcNameHoldsAnEquals reports whether text is a function name with an `=` in
@@ -5230,6 +5266,11 @@ func (p *Parser) peekIsFuncNameListThenParens() bool {
 
 func (p *Parser) parseFuncPosix() Command {
 	fn := &FuncDecl{Name: p.tok.Literal(), Start: p.tok.Pos}
+	if p.wordAtParenIsARefusedName() {
+		// No name at all, so the check behind the parentheses refuses it
+		// whatever the quotes held. See wordAtParenIsARefusedName.
+		fn.Name = ""
+	}
 	switch text := p.funcNameText(p.tok); {
 	case p.dialect.FunctionNameIsAnyBareWord && !tokenIsWrittenBare(p.tok):
 		// The dialect where the *spelling* decides it, given a word that was

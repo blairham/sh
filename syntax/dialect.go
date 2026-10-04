@@ -2066,6 +2066,16 @@ type Dialect struct {
 	// input: what follows the `(` there is a comment.
 	ParenAfterANameIsRefusedWhereTheNextTokenStands bool
 
+	// WordAtParenIsARefusedName reads a quoted word, or one holding an
+	// expansion, as the name of a definition where the dialect commits at the
+	// paren ([Dialect.FuncDefAtParen]), and refuses that name once the
+	// parentheses close — where without it the `(` after such a word is
+	// refused where it stands. An assignment word is still an assignment.
+	// Measured 2026-10-04 on dash 0.5.12: `"f"() { :; }`, `''() { :; }`,
+	// `"f g"() { :; }` and `$f() { :; }` are each `Bad function name`, and
+	// `"a"=(x)` is `word unexpected (expecting ")")`.
+	WordAtParenIsARefusedName bool
+
 	// CommentRunningOutCountsANewline numbers the end of the input one line
 	// further on where a comment runs into it with no newline of its own, as
 	// though the comment had been ended by one. ksh93: measured 2026-10-04

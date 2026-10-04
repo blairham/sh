@@ -453,7 +453,14 @@ func (r *Runner) arithElement(x *syntax.ArithIndex) (arithNum, error) {
 	// answer `$(( m[k] ))` with 7. Evaluating it instead read the wrong
 	// element and said nothing, which is the silent half of a wrong answer.
 	if a, ok := r.assocFor(x.Name); ok {
-		return r.arithElemValue(arithIndexWritten(x), a[r.arithAssocKey(r.arithSubscriptRead(x.SubMarked, subscriptAsKey))].scalar())
+		key := r.arithAssocKey(r.arithSubscriptRead(x.SubMarked, subscriptAsKey))
+		if _, there := a[key]; !there && r.stored(x.Name) &&
+			r.ask(r.sem().ArithKeyReadCreatesTheElement, "an expression reading a key an association does not have, creating it") {
+			// The read leaves the key behind, empty — see
+			// Semantics.ArithKeyReadCreatesTheElement.
+			r.setAssocElem(x.Name, key, "")
+		}
+		return r.arithElemValue(arithIndexWritten(x), a[key].scalar())
 	}
 	if r.reportArithWholeArraySubscript(x) {
 		// Named and answered: the operand is zero and the expression keeps
@@ -478,6 +485,13 @@ func (r *Runner) arithElement(x *syntax.ArithIndex) (arithNum, error) {
 		return intNum(0), nil
 	}
 	return r.arithElemValue(arithIndexWritten(x), v)
+}
+
+// stored reports a name whose association is a stored table rather than one
+// a producer answers for, which is the only kind a read can add a key to.
+func (r *Runner) stored(name string) bool {
+	_, ok := r.AssocArrays[r.throughNameref(name)]
+	return ok
 }
 
 // arithFlaggedElement is a subscript that opened with a flag group, read

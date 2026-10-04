@@ -1541,6 +1541,8 @@ func Semantics() interp.Semantics {
 	// `$((-1e400))` is `-Inf`, the same answers the arithmetic gives for a
 	// value that overflowed while being computed.
 	s.ArithFloatOverflowIsZero = interp.No
+	// An expression reading a missing key leaves the table as it was.
+	s.ArithKeyReadCreatesTheElement = interp.No
 	// A negative exponent is a float answer here, not a refusal: `2**-1`
 	// is 0.5.
 	s.ArithNegativeExponentIsError = interp.No

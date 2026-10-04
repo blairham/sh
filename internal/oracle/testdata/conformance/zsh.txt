@@ -18,7 +18,6 @@ declare/a-local-over-a-produced-readonly-parameter
 declare/a-standing-type-attribute-and-a-later-array-literal
 diag/trap-refusing-a-condition-it-does-not-know
 fnlib/add-zsh-hook-autoload-letters
-glob/a-value-backslash-before-something-the-script-quoted
 jobs/a-background-job-outlives-the-shell
 opt/the-option-listing-is-written-once-and-at-the-end
 param/a-substring-range-blames-what-the-script-wrote

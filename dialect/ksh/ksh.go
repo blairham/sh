@@ -4970,6 +4970,7 @@ func Diagnostics() interp.Diagnostics {
 		ArithExpressionRanOut:     "more tokens expected",
 		ArithOperatorExpected:     "arithmetic syntax error",
 		ArithUnmatchedCloseParen:  "unbalanced parenthesis",
+		ArithColonInAGroup:        "unbalanced parenthesis",
 		// A stray `:` is the one construct this shell writes back to front:
 		// the byte, the reason, and then the expression after a ` - `, where
 		// every other math complaint it makes is `<expression>: <reason>`.

@@ -3,8 +3,6 @@
 # fails on a case that fails without being listed or passes while listed.
 array/a-literal-value-holding-a-bracket
 array/a-name-before-a-literal-elements-bracket
-array/a-subscript-flag-group-counts-matches-and-moves-the-start
-array/a-subscript-flag-group-start-below-the-first-element
 assignment/arithmetic-that-will-not-parse
 assignment/arithmetic-that-will-not-parse-in-a-command
 assoc/a-subscript-search-is-a-list-of-its-matches

@@ -131,3 +131,26 @@ func TestAStopNoteThatNeverComesCostsTheWindowAndNoMore(t *testing.T) {
 		t.Errorf("the sentence is %q, want RUNNING: no stop was ever reported", got)
 	}
 }
+
+// And a `jobs` listing waits for it too, so `kill -STOP $p; jobs %1` lists the
+// job stopped, as bash 5.3.20 and ksh93u+ do under the monitor. The note is
+// published on the test's own timer, the window shape the exit rows above use;
+// without the wait the listing reads `Running` every time.
+func TestAListingWaitsForTheStopKillAskedFor(t *testing.T) {
+	var out, errs strings.Builder
+	r := leavingRunner(t, &errs)
+	r.Stdout = &out
+	r.Diagnostics.JobStopped = "Stopped"
+	r.Diagnostics.JobRunning = "Running"
+	j := expectedStopJob(r)
+	j.stopExpected = true
+	go func() {
+		time.Sleep(20 * time.Millisecond)
+		j.noteStopped(syscall.SIGSTOP)
+	}()
+
+	biJobs(r, t.Context(), nil)
+	if !strings.Contains(out.String(), "Stopped") {
+		t.Errorf("the listing is %q, want the job stopped: the stop the script asked for was not waited for", out.String())
+	}
+}

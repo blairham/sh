@@ -38,7 +38,6 @@ heredoc/stripping-and-joining-are-ordered-and-the-panel-parts-over-which-comes-f
 invoke/a-program-on-a-standard-input-that-is-closed
 jobs/a-background-job-outlives-the-shell
 jobs/a-job-that-is-neither-current-nor-previous
-jobs/a-stopped-background-job-in-the-listing
 param/a-nested-inner-runs-once-under-a-conditional
 param/a-substring-modifier-reads-its-own-quotes
 param/a-substring-modifier-that-substitutes

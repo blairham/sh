@@ -23603,6 +23603,21 @@ type Semantics struct {
 	// long as the job would have.
 	KillReadsASignalJoinedToItsOption Answer
 
+	// SetListingAfterARefusalLeavesZero has a `set` that refused an option
+	// name and then wrote a `-o` or `+o` listing end the script at 0 — the
+	// listing's status — rather than at the refusal's.
+	//
+	// zsh. Measured 2026-10-03 on zsh 5.9.2 under -f -c: `set -o nosuch -o`,
+	// `set -o nosuch +o`, `set +o nosuch -o` and `set -o -e -o` write the
+	// refusal and the listing and end at 0, the line after them never
+	// running; `set -o nosuch` and `set -o nosuch -e` end at 1, and `set -o
+	// nosuch -o nosuch2` at 1 too, its last word being a second refusal.
+	// From a script file the first row ends at 1, as every fatal exit left
+	// at 0 does there — see Runner.fatalExitTurnsZeroToFailure.
+	// ksh93u+ and bash 5.3.20 end at 2 for every row, which is the base
+	// (corpus row opt/the-option-listing-is-written-once-and-at-the-end).
+	SetListingAfterARefusalLeavesZero Answer
+
 	// ErrexitJudgesANegatedCall puts the inverted status of a negated
 	// function call or `eval` to `set -e`, where every other negated command
 	// is exempt.
@@ -33035,6 +33050,8 @@ func PosixSemantics() Semantics {
 		// operand, so the base reads nothing joined to the option; bash 5.x
 		// and ksh93 override.
 		KillReadsASignalJoinedToItsOption: No,
+		// The refusal's status stands in the base; zsh overrides.
+		SetListingAfterARefusalLeavesZero: No,
 		// A negated command is exempt in the base; zsh overrides for a call.
 		ErrexitJudgesANegatedCall: No,
 		// A subshell's hash is its own in every column but ksh93's.

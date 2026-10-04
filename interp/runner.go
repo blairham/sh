@@ -3547,6 +3547,9 @@ type Runner struct {
 	// Nothing else may read either: both are set and consumed inside one
 	// call of the builtin.
 	setRefusalOwed bool
+	// setListedAfterARefusal says a `set -o` listing was written after the
+	// refusal above. See Semantics.SetListingAfterARefusalLeavesZero.
+	setListedAfterARefusal bool
 
 	// setSortsOperands is `set -s` in the dialect whose letter sorts: the
 	// letter is read before the operands are, so what it asks for has to

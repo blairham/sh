@@ -999,6 +999,10 @@ func (r *Runner) setOptionWordsAndOperands(_ context.Context, args []string) int
 					r.pendingOptionListing = listingAsTable
 				default:
 					st = r.listOptions(!on)
+					// A listing written behind a refused word, which one
+					// dialect ends on rather than on the refusal. See
+					// Semantics.SetListingAfterARefusalLeavesZero.
+					r.setListedAfterARefusal = r.setRefusalOwed
 				}
 				// And in the shells that do not weld, what follows the `o`
 				// is more option letters, read after the listing rather than
@@ -2233,10 +2237,23 @@ func (r *Runner) finishSetRefusals() int {
 	}
 	sp := r.setRefusalSpelling
 	status := sp.status(*r.diag())
+	// Only where the shell ends on the status it was left: a script file or
+	// standard input turns that 0 into a failure as it leaves. See
+	// Runner.fatalExitTurnsZeroToFailure.
+	listedLast := r.setListedAfterARefusal && r.sem().SetListingAfterARefusalLeavesZero == Yes &&
+		!r.fatalExitTurnsZeroToFailure()
+	r.setListedAfterARefusal = false
+	if listedLast {
+		status = 0
+	}
 	if r.ask(sp.fatal(r.sem()),
 		"a refused `set` option ending the script after every bad word is reported") {
 		r.status = status
 		r.fatalUsageQuiet()
+		if listedLast {
+			// The script still ends; it ends on the listing's status.
+			r.status = status
+		}
 	}
 	r.setOptionStatus = 0
 	return status

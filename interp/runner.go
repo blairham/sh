@@ -1214,6 +1214,12 @@ type Runner struct {
 	// and put back after it, the way privateDeclarationRan is. See
 	// interp/refusedlineliterals.go.
 	refusedLineKeptItsLiterals bool
+	// badLocalNamePending says the running call has already put a bad
+	// `local` name aside for its return. See
+	// Runner.badLocalNameWaitsForTheReturn.
+	badLocalNamePending bool
+	// badLocalNameAtReturn is the name that refusal will give.
+	badLocalNameAtReturn string
 	// privateDeclared says this shell has taken a private shadow at least
 	// once, and it is the whole of what a shell without the word pays: one
 	// bool compared against false at each function call, and nothing at all

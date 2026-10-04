@@ -17462,6 +17462,23 @@ wording rather than a reading. Extending the text before *evaluating* it
 instead invents a second failure — `${x:2:1+}` reported that `2:1+` would
 not parse and then that `1+` would not, where the shell reports one.
 
+### A substring of a name with no value
+
+Whether the range is read at all is a question in front of the wording.
+Measured 2026-10-03 with `unset u; echo "[${u:1/0}]"; echo end`:
+
+    bash 5.3.20     []  end           status 0
+    BusyBox ash     []  end           status 0
+    zsh 5.9.2       division by zero  the line stops
+    ksh93u+         1/0: divide by zero
+
+bash also leaves an unset *element* alone (`a=(x); "${a[5]:1/0}"` is
+empty) and so never reaches the length `=A` in `${u::=A}`, which is the
+arithmetic error it reports for the same spelling on a set name. A set and
+empty name is a value in all four — `e=; "${e:1/0}"` is the division
+everywhere — and `set -u` refuses the unset name before the range would
+be read. `Semantics.SubstringOfAnUnsetNameEvaluatesNothing` is the split.
+
 ### A substring range is a modifier list where the letter decides
 
 Issue #662. `${x:…}` is a substring in three of the panel and is *also*

@@ -31,7 +31,6 @@ declare/a-standing-type-attribute-and-a-later-array-literal
 diag/trap-refusing-a-condition-it-does-not-know
 errexit/negation-exemption-reaches-into-a-function
 expand/tilde-plus-and-minus
-expansion/a-colon-before-a-trim-is-a-third-reading
 fnlib/add-zsh-hook-autoload-letters
 glob/a-value-backslash-before-something-the-script-quoted
 jobs/a-background-job-outlives-the-shell

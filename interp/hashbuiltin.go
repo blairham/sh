@@ -368,6 +368,19 @@ func (r *Runner) hashForget(names []string) int {
 		if r.forgetHashedCommand(name) {
 			continue
 		}
+		// A name with a slash in it cannot be in the table, and the shell
+		// that passes over such an operand when hashing passes over it
+		// when forgetting too: measured 2026-10-03 on bash 5.3.20, `hash -d
+		// a/b`, `hash -d /tmp` and `hash -d nd=/tmp` are silent at 0 where
+		// `hash -d zz` and `hash -d a=b` say `not found` at 1. See
+		// Semantics.HashIgnoresAnOperandWithASlash.
+		if strings.ContainsRune(name, '/') && r.ask(r.sem().HashIgnoresAnOperandWithASlash,
+			"`hash` passing over an operand written with a slash") {
+			continue
+		}
+		if r.unspecified {
+			return r.status
+		}
 		r.diagf("%s\n", Wording(r.diag().HashNotFound, "hash: %[1]s: not found", name))
 		status = 1
 	}

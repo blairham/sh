@@ -115,7 +115,6 @@ param/a-substring-modifier-after-an-offset-and-a-length
 param/a-substring-modifier-that-substitutes
 param/an-empty-positional-list-under-a-colonless-test
 param/prompt-percent-names-the-script
-param/the-always-assign-operator
 pat/a-case-arm-needs-a-paren-left-to-close-it
 pat/a-case-arms-leading-paren-may-be-the-patterns
 pat/a-case-arms-pattern-group-may-carry-text

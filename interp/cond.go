@@ -537,6 +537,14 @@ func (r *Runner) evalCondBinary(x *syntax.CondBinary) (bool, error) {
 		// Unquoted, the right operand is a pattern; quoted, a literal. Only
 		// the spans still know which, which is why the tree keeps a word.
 		pat := r.patternOf(x.Y)
+		// A pattern that did not expand is a failed operand like any other,
+		// and ends what the dialect says a failed expansion ends: bash stops
+		// a `-c` script at `[[ x == ${~p} ]]` with `bad substitution` at 1,
+		// exactly as it stops at `echo ${~p}`, where this used to answer the
+		// comparison and carry on.
+		if r.condOperandDidNotExpand() {
+			return false, errCondOperandFailed
+		}
 		// The trace prints the pattern the matcher is about to be handed,
 		// backslashes and all, rather than a quoted value — which is what two
 		// of the three shells do and is the more informative of the two

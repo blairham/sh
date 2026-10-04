@@ -34,7 +34,6 @@ declare/the-f-letters-sign-decides-without-a-pattern-too
 declare/the-global-letter-filters-nothing
 expand/tilde-after-a-home-assignment
 expand/tilde-after-a-home-assignment-reaches-every-road
-expand/tilde-naming-a-named-directory
 expand/tilde-with-no-home-at-all
 glob/a-trailing-slash-run-is-reproduced-except-in-bash
 glob/an-empty-component-behind-a-matched-one
@@ -47,9 +46,7 @@ param/a-nested-inner-runs-once-under-a-conditional
 param/a-substring-modifier-reads-its-own-quotes
 param/a-substring-modifier-that-substitutes
 param/a-substring-range-blames-what-the-script-wrote
-param/the-always-assign-operator
 param/the-index-of-no-match-in-a-nested-expansion-is-zero
-param/the-pattern-quoting-flag-round-trips-into-a-pattern
 param/the-reeval-flag-is-one-dialects
 param/the-tilde-flag-in-a-group-is-not-the-written-one
 param/the-tilde-flag-in-a-group-marks-the-separator
@@ -57,7 +54,6 @@ param/the-tilde-flag-in-a-group-marks-what-follows-it
 param/the-tilde-flag-in-a-group-survives-quoting
 pat/a-backreference-group-holds-an-expansions-value
 pat/a-case-insensitive-pattern-flag
-pat/a-closure-at-the-front-of-a-pattern
 pat/a-closure-repeats-one-item
 pat/a-group-that-did-not-participate
 pat/a-numeric-range-is-any-number
@@ -67,7 +63,6 @@ pat/a-pattern-flag-reaches-to-the-end-of-its-group
 pat/a-whole-match-flag-in-mid-pattern
 pat/an-anchor-lets-another-branch-carry-the-match
 pat/an-anchor-may-not-share-its-flag-group
-pat/an-escape-in-a-bracket-expression-from-a-forced-pattern
 pat/an-exclusion-binds-looser-than-an-alternation
 pat/backreference-numbering-is-the-pattern-not-the-path
 pat/backreferences-fill-three-arrays

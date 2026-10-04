@@ -126,10 +126,10 @@ func TestAHereDocumentThroughAnUnaimedReferenceIsRefused(t *testing.T) {
 // Two rows of the family are about what the refusal costs rather than about
 // whether it is made.
 //
-// A conditional's pattern operand ends the script in ksh93u+ and is reported
-// and carried on from here, which is **recorded rather than reproduced**: it
-// is the machinery FailedExpansionAbandonsTheLine answers, not anything this
-// refusal decides. A subscript that reads through the reference writes the
+// A conditional's pattern operand ends the script in ksh93u+, and here too:
+// a pattern that did not expand is a failed operand like the left-hand one,
+// and ends what FailedExpansionAbandonsTheLine says a failed expansion ends.
+// It used to be reported and carried on from. A subscript that reads through the reference writes the
 // sentence once, as the reference does — it was written twice here until a
 // subscript that would not expand stopped being read again (#5608).
 func TestWhatAnUnaimedReferenceCostsTwoOtherContexts(t *testing.T) {
@@ -139,9 +139,9 @@ func TestWhatAnUnaimedReferenceCostsTwoOtherContexts(t *testing.T) {
 		status          int
 	}{
 		{
-			"a conditional's pattern operand: the script carries on here",
+			"a conditional's pattern operand: the script ends",
 			`typeset -n u; [[ x == ${u} ]]; print "t=$? after"`,
-			"sh: u: no reference name\nt=1 after\n", 0,
+			"sh: u: no reference name\n", 1,
 		},
 		{
 			"a subscript: the sentence is written once",

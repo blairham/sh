@@ -4159,6 +4159,10 @@ func (r *Runner) expandParam(e *syntax.ParamExpr) string {
 		return r.replaceWith(value, r.patternOf(e.Arg), e)
 
 	case syntax.ParamSubstring:
+		if !set && !rangeIsLiteral(e) && r.ask(r.sem().SubstringOfAnUnsetNameEvaluatesNothing,
+			"a substring of an unset parameter reading its offset and length") {
+			return ""
+		}
 		return r.substringRange(value, e)
 
 	case syntax.ParamExclude, syntax.ParamSetDifference, syntax.ParamSetIntersection,
@@ -4174,6 +4178,36 @@ func (r *Runner) expandParam(e *syntax.ParamExpr) string {
 	}
 	// Anything else is left empty rather than guessed at.
 	return ""
+}
+
+// rangeIsLiteral reports whether a substring's offset and length are written
+// as plain numbers, so reading them can neither fail nor change anything and
+// a name with no value comes to the empty string whether or not they are
+// read. That is what keeps SubstringOfAnUnsetNameEvaluatesNothing from being
+// asked about `${u:1}`, which no shell disagrees about.
+func rangeIsLiteral(e *syntax.ParamExpr) bool {
+	plain := func(w *syntax.Word, text string) bool {
+		if w == nil {
+			return true
+		}
+		t := strings.TrimSpace(text)
+		if t == "" {
+			// Nothing written, which every shell reads as no number at all
+			// without an expression to evaluate.
+			return true
+		}
+		t = strings.TrimPrefix(t, "-")
+		if t == "" {
+			return false
+		}
+		for i := 0; i < len(t); i++ {
+			if t[i] < '0' || t[i] > '9' {
+				return false
+			}
+		}
+		return true
+	}
+	return plain(e.Arg, e.ArgText) && plain(e.Arg2, e.Arg2Text)
 }
 
 // reachesItsOperand reports whether an expansion whose test has already been

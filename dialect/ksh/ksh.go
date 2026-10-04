@@ -651,8 +651,10 @@ func Dialect() syntax.Dialect {
 	// at the end of the input and runs, where bash, zsh and dash all refuse
 	// the script: `s=abc; echo "${s#x"` writes `abc` here and is a refusal
 	// there. See syntax.Dialect.UnterminatedExpansionOperandIsAValue, which
-	// carries the eleven rows and the two controls (#4973).
-	d.UnterminatedExpansionOperandIsAValue = true
+	// carries the eleven rows and the two controls (#4973). On a command
+	// string only — `-c` and `eval` — because a script file and standard input
+	// refuse the same text with `` `{' unmatched `` (#5717).
+	d.UnterminatedExpansionOperandIsAValue = syntax.RouteFromCommandString
 	// And a `|` standing outside every group is an alternation of the whole
 	// pattern, **however it arrived** — which is a different reading from
 	// the one zsh has, not a wider setting of the same one (#2528).

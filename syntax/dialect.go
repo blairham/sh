@@ -6357,7 +6357,22 @@ type Dialect struct {
 	// `Lexer.ranOut` still records that the input ended inside a `${`, so a
 	// prompt asks for more rather than running a line the person is still
 	// typing. Every row above is `-c`. See #4973.
-	UnterminatedExpansionOperandIsAValue bool
+	//
+	// **And it is a route rule**, which is why the field is a set of routes
+	// rather than a boolean. Measured 2026-10-04 on ksh93u+ 2012-08-01 with
+	// `echo ${x:-a` followed by `echo after`: `-c` and `eval` run it (`a echo
+	// after`), while the same text as a script file, or on standard input, is
+	// ``syntax error at line 1: `{' unmatched`` at status 3 with nothing run —
+	// with or without a trailing newline, and with the second command on the
+	// same line or the next. It is the route split [Dialect.CloseQuotesAtEOF]
+	// already draws for an unterminated quote, by the same shell.
+	//
+	// **Only the parameter form.** A `${ cmd;}` body that runs out is refused
+	// on every route there, `-c` included: `echo ${ echo hi}` and `echo ${
+	// echo {a,b};}` are both `` `{' unmatched `` (see [BraceProgramBodyEnd]).
+	// The body is a program, not an operand, so nothing in it consumes the
+	// rest of the input.
+	UnterminatedExpansionOperandIsAValue ProgramRoutes
 
 	// PatternTopLevelAlternation reads a `|` standing outside every group and
 	// bracket as an alternation of the whole pattern — `a|b` matching `a` or

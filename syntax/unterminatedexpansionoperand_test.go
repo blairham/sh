@@ -28,7 +28,7 @@ func TestAnUnterminatedExpansionOperandEndsAtTheEndOfTheInput(t *testing.T) {
 		d := Core()
 		d.ParamSubstitution = true
 		d.BareBraceNestsInAQuotedPatternOperand = true
-		d.UnterminatedExpansionOperandIsAValue = true
+		d.UnterminatedExpansionOperandIsAValue = RouteFromCommandString
 		// The quoted rows below need this as well, and that is the shape of
 		// the measurement rather than scaffolding: every probe is `-c`, and
 		// the expansion swallows the closing quote, so the word is left
@@ -95,7 +95,28 @@ func TestAnUnterminatedExpansionIsUnfinishedInputWithoutAnOperand(t *testing.T) 
 	}()
 	on := func() Dialect {
 		d := off
-		d.UnterminatedExpansionOperandIsAValue = true
+		d.UnterminatedExpansionOperandIsAValue = RouteFromCommandString
+		d.ProgramRoute = RouteFromCommandString
+		return d
+	}()
+	// The flag on and the program from a file or standard input, which the
+	// reference refuses with `` `{' unmatched `` (#5717).
+	file := func() Dialect {
+		d := on
+		d.ProgramRoute = RouteFromScriptFile
+		return d
+	}()
+	stdin := func() Dialect {
+		d := on
+		d.ProgramRoute = RouteOnStandardInput
+		return d
+	}()
+	// And a `${ cmd;}` body, which is a program rather than an operand and
+	// is refused on every route — `-c` included.
+	body := func() Dialect {
+		d := on
+		d.CurrentShellSubstitution = true
+		d.BraceProgramBodyEnd = BraceProgramBodyEndsAtATokenStart
 		return d
 	}()
 	for _, c := range []struct {
@@ -107,6 +128,11 @@ func TestAnUnterminatedExpansionIsUnfinishedInputWithoutAnOperand(t *testing.T) 
 		{"the flag on, a bare name", `echo ${s`, on},
 		{"the flag on, a length", `echo ${#s`, on},
 		{"the flag on, a bare name quoted", `echo "${s`, on},
+		{"the flag on, a script file", "echo ${x:-a\necho after\n", file},
+		{"the flag on, standard input", "echo ${x:-a\necho after\n", stdin},
+		{"the flag on, a body with no terminator", `echo ${ echo hi}`, body},
+		{"the flag on, a body whose group opened a level", `echo ${ echo {a,b};}`, body},
+		{"the flag on, a body that ran out", "echo ${ echo hi\necho after\n", body},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			t.Parallel()

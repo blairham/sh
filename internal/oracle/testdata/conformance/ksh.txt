@@ -84,16 +84,9 @@ redir/a-wide-duplication-target-with-a-leading-zero
 redirection/a-script-file-of-its-own-takes-a-number-in-one-shell
 socket/a-message-across-a-unix-socket
 startup/an-option-names-the-interactive-file
-subst/a-body-with-no-terminator-before-its-brace
-subst/a-brace-group-written-in-a-body
 subst/a-paren-body-is-the-parenthesis-and-not-a-list
 system/the-direction-letters-and-what-they-open
 type/f-skips-or-prints-the-function
-unterminated/a-brace-command-substitution-blamed-where-the-input-ran-out
-unterminated/a-parameter-expansion-behind-a-length-prefix
-unterminated/a-parameter-expansion-blamed-at-the-brace
-unterminated/a-parameter-expansion-whose-name-is-the-hash
-unterminated/a-parameter-expansion-whose-operator-was-read
 xtrace/case-arm-patterns-are-not-expanded-past-the-match
 xtrace/condition-operand-quoting-diverges
 xtrace/condition-regex-operator-diverges

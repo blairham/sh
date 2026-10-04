@@ -5874,7 +5874,7 @@ func (l *Lexer) scanBraces(q Quoting) Span {
 	for depth > 0 {
 		if l.eof() {
 			l.ranOut("${")
-			if l.dialect.UnterminatedExpansionOperandIsAValue &&
+			if !brace && l.dialect.UnterminatedExpansionOperandIsAValue.Has(l.dialect.ProgramRoute) &&
 				l.braceOperandHasBegun(l.src[bodies[len(bodies)-1]:l.off]) {
 				// One dialect runs the command it built rather than refusing
 				// the script: an operand consumes to the end of the input, so

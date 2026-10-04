@@ -24375,6 +24375,18 @@ type Semantics struct {
 	// the panel answers a=[X].
 	ReadRefusesABadNameBeforeReading Answer
 
+	// ReadJudgesEveryNameBeforeReading judges every operand of `read` as a
+	// name before it goes to the stream, not only the first. BusyBox ash
+	// 1.37.0 does: measured 2026-10-03 in the pinned image, `printf 'X Y
+	// Z\nNEXT\n' | { c=keep; read a 1bad c; read n; }` refuses `1bad` at 1,
+	// leaves a empty and c as keep, and the next reader gets `X Y Z`; `read
+	// -n 3 a 1bad` is the same. bash 5.3, dash 0.5.12, ksh93 and zsh 5.9.2
+	// read first and fill the names in front of the bad one (see
+	// ReadRefusesABadNameBeforeReading).
+	//
+	// Asked only where a bad name stands past the first operand.
+	ReadJudgesEveryNameBeforeReading Answer
+
 	// ReadCountJudgesTheNamesAfterTheFirst keeps judging `read`'s operands
 	// as names when `-n` or `-N` gave it a count.
 	//

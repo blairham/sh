@@ -122,10 +122,7 @@ printf/quoting-a-byte-each-shell-spells-differently
 printf/quoting-a-newline-has-to-round-trip
 printf/quoting-a-value-with-nothing-unwritable-in-it
 prompt/a-failed-rendering-costs-the-rendering-not-the-script
-read/a-bad-name-and-the-line-it-did-or-did-not-eat
-read/a-count-and-the-names-after-the-first
 read/interrupted-by-a-trapped-signal
-read/the-names-in-front-of-a-bad-one
 readonly/an-array-literal-inside-a-function
 readonly/an-associative-element-is-refused
 readonly/an-element-append-is-refused

@@ -23286,7 +23286,18 @@ Unanswered in dash, which refuses a bare `read` outright: see
 The question is put only where the trim would take something off, which
 is what keeps `while read; do` from consulting it.
 
-**`ReadRefusesABadNameBeforeReading`** — bash yes · dash no · ksh93 yes · zsh no
+**`ReadJudgesEveryNameBeforeReading`** — bash no · dash no · ksh93 no · zsh
+no · ash yes
+
+BusyBox ash 1.37.0 judges every operand of `read` before it reads, not only
+the first. `printf 'X Y Z\nNEXT\n' | { c=keep; read a 1bad c; read n; }`
+refuses `1bad` at 1, fills nothing, and leaves `X Y Z` for the next reader.
+`read -n 3 a 1bad` behaves the same way. The other four read first and fill
+the names in front of the bad one. Measured 2026-10-03 in the pinned image,
+where ash also answers `ReadRefusesABadNameBeforeReading` yes:
+`(read 1bad); read next` leaves `AAA` for the second reader.
+
+**`ReadRefusesABadNameBeforeReading`** — bash yes · dash no · ksh93 yes · zsh no · ash yes
 
 Judges `read`'s first operand as a name before it goes to the stream,
 rather than after.

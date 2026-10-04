@@ -6379,6 +6379,21 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 		if r.unspecified {
 			return 2
 		}
+	} else if bad := r.firstBadReadName(args); bad > 0 {
+		// A bad name further along. Most of the panel reads first and fills
+		// the names in front of it; one shell judges the whole list before
+		// it reads anything, so nothing is filled and the line is left. See
+		// Semantics.ReadJudgesEveryNameBeforeReading.
+		if r.unspecified {
+			return 2
+		}
+		if r.ask(r.sem().ReadJudgesEveryNameBeforeReading,
+			"`read` judging every operand before it reads") {
+			return r.badReadName(args[bad])
+		}
+		if r.unspecified {
+			return 2
+		}
 	}
 
 	// The prompt: written to standard error, no newline, and only when the
@@ -9132,4 +9147,15 @@ func hasAnyOption(args []string, letters string) bool {
 		}
 	}
 	return false
+}
+
+// firstBadReadName is the index of the first operand of `read` that is not a
+// name it can fill, or -1.
+func (r *Runner) firstBadReadName(args []string) int {
+	for i, name := range args {
+		if !r.isReadName(name) {
+			return i
+		}
+	}
+	return -1
 }

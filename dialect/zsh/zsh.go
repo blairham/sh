@@ -4156,6 +4156,7 @@ func Semantics() interp.Semantics {
 	// a subshell because the refusal is fatal here, which is the only way to
 	// have a reader left to ask.
 	s.ReadRefusesABadNameBeforeReading = interp.No
+	s.ReadJudgesEveryNameBeforeReading = interp.No
 	// ReadCountJudgesTheNamesAfterTheFirst is left unanswered here too.
 	// This shell's `-n` is a flag rather than a count and its `-k` reads
 	// from the terminal — `printf 'XYZW\n' | zsh -c 'read -k 3 a'` answers

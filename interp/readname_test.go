@@ -37,6 +37,7 @@ func readRun(t *testing.T, tweak func(*Semantics), dg Diagnostics, src string) (
 	t.Helper()
 	return optRun(t, func(s *Semantics) {
 		s.BadNameToReadFatal = No
+		s.ReadJudgesEveryNameBeforeReading = No
 		if tweak != nil {
 			tweak(s)
 		}
@@ -709,5 +710,22 @@ func TestAZeroOutputOperandNamesTheFramesDollarZero(t *testing.T) {
 				t.Errorf("under PlainNamesOnly: said %q, want `$0` underived", out)
 			}
 		})
+	}
+}
+
+// TestEveryReadNameJudgedFirst: where ReadJudgesEveryNameBeforeReading says
+// so, a bad name past the first fills nothing and leaves the line.
+func TestEveryReadNameJudgedFirst(t *testing.T) {
+	for _, tc := range []struct {
+		every Answer
+		want  string
+	}{{Yes, "a=[] c=[keep] n=[X Y Z]"}, {No, "a=[X] c=[keep] n=[NEXT]"}} {
+		out, _ := readRun(t, func(s *Semantics) {
+			s.ReadRefusesABadNameBeforeReading = Yes
+			s.ReadJudgesEveryNameBeforeReading = tc.every
+		}, Diagnostics{}, `printf 'X Y Z\nNEXT\n' | { c=keep; read a 1bad c; read n; echo "a=[$a] c=[$c] n=[$n]"; }`)
+		if !strings.Contains(out, tc.want) {
+			t.Errorf("every=%v: said %q, want %q", tc.every, out, tc.want)
+		}
 	}
 }

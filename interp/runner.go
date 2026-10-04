@@ -8948,6 +8948,11 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 	if r.refusePrefixesEarly(c.Assigns, argv) {
 		return nil
 	}
+	// And an array-literal operand its own store will refuse, in the dialect
+	// that refuses it ahead of the command. See interp/operandrefusedearly.go.
+	if r.refuseArrayOperandsEarly(argv) {
+		return nil
+	}
 	// On the record while the redirections are opened, so a dialect that
 	// counts a redirection opened for a builtin as the builtin's own can
 	// say so. Cleared before the builtin runs: from there on it is the

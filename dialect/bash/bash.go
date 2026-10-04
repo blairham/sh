@@ -3923,6 +3923,12 @@ func Semantics() interp.Semantics {
 	s.LocalOptions = "aAgiIlnprtux"
 	// A bad `declare` option is reported and the script goes on.
 	s.TypesetBadOptionFatal = interp.No
+	// A declaration's array literal over a frozen name, or over the other
+	// kind of array under an explicit letter, is refused ahead of the
+	// command and its redirections, as a bare assignment: measured
+	// 2026-10-03 on bash 5.3.20. See
+	// Semantics.ArrayOperandRefusedBeforeTheCommand.
+	s.ArrayOperandRefusedBeforeTheCommand = interp.Yes
 	// A plus letter selects nothing in a listing: measured 2026-10-03 on
 	// bash 5.3.20, `typeset +x` and `typeset +i` are the bare listing with
 	// values, and `typeset +x -i` the integers. See

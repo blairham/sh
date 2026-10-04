@@ -24,8 +24,6 @@ cond/a-pattern-operands-group-ends-at-an-operator
 cond/an-operator-with-no-operand-at-all
 cond/option-test-missing-operand
 cond/regex-that-will-not-compile
-decl/an-array-literal-operand-over-a-frozen-scalar
-decl/an-array-literal-over-the-other-kind-of-array
 decl/an-index-array-literal-replacing-a-table
 expand/tilde-after-a-home-assignment
 expand/tilde-after-a-home-assignment-reaches-every-road
@@ -70,8 +68,6 @@ posassign/an-empty-list-removes-it
 posassign/appending-a-list-follows-it
 procsub/a-file-substitution-in-a-condition
 read/from-a-standard-input-that-is-closed
-readonly/a-refused-array-operand-gives-up-the-line
-readonly/a-refused-declaration-operand-reports-one
 redir/a-wide-duplication-target-with-a-leading-zero
 set/listed-value-with-a-byte-above-ascii
 setopt/the-interactive-listing-drops-nohashdirs

@@ -4116,6 +4116,12 @@ func (p *Parser) parseSimple() Command {
 			if len(c.Assigns) == 0 && len(c.Redirs) == 0 && p.refuseParenAfterAName(c.Args) {
 				return c
 			}
+			if p.dialect.ParenAfterAWordEndsTheCommand {
+				// The command ends here and the list reading it refuses the
+				// `(`. See Dialect.ParenAfterAWordEndsTheCommand.
+				c.Stop = p.tok.Pos
+				return c
+			}
 			p.failUnexpected("")
 			return c
 		default:
@@ -4351,6 +4357,11 @@ func (p *Parser) parseAssign(h assignHead) *Assign {
 	if a.Value == nil && p.at(TokLeftParen) &&
 		(p.touchesPrevious(a.Stop) || p.dialect.ArrayLiteralAfterABlank) {
 		if !p.dialect.ArrayLiteral {
+			if p.dialect.ParenAfterAWordEndsTheCommand {
+				// The assignment ends here and the list refuses the `(`.
+				// See Dialect.ParenAfterAWordEndsTheCommand.
+				return a
+			}
 			p.failUnexpected("")
 			return a
 		}
@@ -7523,6 +7534,17 @@ func (p *Parser) parseFor() Command {
 		c.Body, c.Stop = body, stop
 		return c
 	}
+	if c.HasItems && !p.at(TokSemi) && !p.at(TokNewline) && !p.at(TokEOF) && !p.atWord("do") {
+		// A token that ended the word list without being able to end the
+		// header: it is refused as itself, with no expectation, which is the
+		// difference the two dialects that print one show. Measured
+		// 2026-10-04 on dash 0.5.12 and in the pinned BusyBox ash image,
+		// `for x in a (b); do :; done` is `"(" unexpected` and `for i in a
+		// >f; do :; done` is `redirection unexpected`, where a header with
+		// its separator and then the wrong word is `(expecting "do")`.
+		p.failUnexpected("")
+		return c
+	}
 	p.requireSep("do")
 	// A brace group where `do … done` stands. The separator `requireSep` has
 	// just consumed is what makes the form reachable at all: with nothing
@@ -8257,11 +8279,22 @@ func (p *Parser) parseCase() Command {
 					}
 					return c
 				}
-				// No expectation named: either `;;` or `esac` would be
-				// valid here, so naming one of them would be inventing a
-				// grammar the parser does not have — and the one dialect
-				// that prints expectations does not print one here either.
-				p.failUnexpected("")
+				// `;;` is what is expected, though `esac` would do as well:
+				// it is what the two dialects that print an expectation
+				// name. Measured 2026-10-04 on dash 0.5.12 and in the
+				// pinned BusyBox ash image, `case x in x) echo ) ;; esac`
+				// and the same arm ended by `(`, `}`, `fi`, `done` or
+				// `then` are each `… unexpected (expecting ";;")`.
+				//
+				// Not a separator standing where a command would begin,
+				// which is refused as itself: `case x in x) ; echo;; esac`
+				// and `x) echo; & esac` are `";" unexpected` and `"&"
+				// unexpected` there, measured the same day.
+				if p.at(TokSemi) || p.at(TokAmp) {
+					p.failUnexpected("")
+					return c
+				}
+				p.failUnexpected(";;")
 				return c
 			}
 		}
@@ -8279,6 +8312,10 @@ func (p *Parser) parseCase() Command {
 		// unmatched `` for `case x { … esac`, which is the unterminated
 		// shape rather than a word in the wrong place.
 		p.expectWord("}")
+	} else if p.at(TokEOF) && p.dialect.CaseRunsOutAtAPattern {
+		// The input ran out where an arm's pattern would begin. See
+		// Dialect.CaseRunsOutAtAPattern.
+		p.failUnexpected(")")
 	} else {
 		p.expectWord("esac")
 	}
@@ -8360,6 +8397,14 @@ func (p *Parser) casePatterns(it *CaseItem, parenthesized bool) bool {
 		default:
 			w := p.word()
 			if w == nil {
+				// What runs out here is an arm's pattern, and the closer
+				// it wanted is the arm's paren: `case x in (` is `end of
+				// file unexpected (expecting ")")` in dash 0.5.12 and in
+				// BusyBox ash, measured 2026-10-04.
+				if p.at(TokEOF) {
+					p.failUnexpected(")")
+					return false
+				}
 				p.failUnexpected("")
 				return false
 			}

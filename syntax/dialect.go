@@ -2076,6 +2076,28 @@ type Dialect struct {
 	// `"a"=(x)` is `word unexpected (expecting ")")`.
 	WordAtParenIsARefusedName bool
 
+	// ParenAfterAWordEndsTheCommand ends a simple command at a `(` standing
+	// after one of its words, and leaves the refusal to whatever was reading
+	// the list the command is in — so the closer *that* construct wanted is
+	// what the complaint expects. Measured 2026-10-04 on dash 0.5.12 and in
+	// the pinned BusyBox ash image:
+	//
+	//	{ a=(x); }              "(" unexpected (expecting "}")
+	//	if a=(x); then :; fi    "(" unexpected (expecting "then")
+	//	( a=(x) )               "(" unexpected (expecting ")")
+	//	a=(x)                   "(" unexpected
+	//
+	// The other dialects that print an expectation have none here.
+	ParenAfterAWordEndsTheCommand bool
+
+	// CaseRunsOutAtAPattern reads the end of the input, where a `case` arm's
+	// pattern would begin, as a pattern that never reached its `)` — and not
+	// as a `case` waiting for its `esac`. Measured 2026-10-04 on dash 0.5.12
+	// and in the pinned BusyBox ash image: `case x in` and `case x in x) :
+	// ;;` are both `end of file unexpected (expecting ")")`. The other three
+	// name the construct or the last token, and say the same either way.
+	CaseRunsOutAtAPattern bool
+
 	// CommentRunningOutCountsANewline numbers the end of the input one line
 	// further on where a comment runs into it with no newline of its own, as
 	// though the comment had been ended by one. ksh93: measured 2026-10-04

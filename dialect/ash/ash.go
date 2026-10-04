@@ -181,6 +181,8 @@ func Dialect() syntax.Dialect {
 	// `f(x) { :; }` is refused for the word rather than for the parenthesis,
 	// which is what decides the token a malformed definition is blamed on.
 	d.FuncDefAtParen = true
+	d.ParenAfterAWordEndsTheCommand = true
+	d.CaseRunsOutAtAPattern = true
 	// And a name with punctuation in it is a name: `a.b() { echo hi; }; a.b`
 	// prints hi.
 	d.FunctionNamePunctuation = true

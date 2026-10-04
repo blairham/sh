@@ -1278,7 +1278,13 @@ var paramFlagArgs = map[byte]int{
 // character outside this set is an "error in flags" with a position, which
 // is measured, and a letter inside it that this interpreter does not carry
 // is refused by name.
-const paramFlagChars = "#%@AabcCDefFgiIjklLmMnNoOpPqQrRsStuUvVwWXxzZ0~^=*BE-+_"
+//
+// `=` and `^` are not in it, though they are expansion modifiers outside the
+// group (`${=x}`, `${^x}`): measured 2026-10-04 on zsh 5.9.2, `${(=)x}` and
+// `${(^)x}` are both `error in flags near position 4`, and `${(v=2; echo x)}`
+// is position 5 — the `=` — where reading it as a flag moved the blame on to
+// the `2`.
+const paramFlagChars = "#%@AabcCDefFgiIjklLmMnNoOpPqQrRsStuUvVwWXxzZ0~*BE-+_"
 
 // scanParamFlags reads the parenthesized group src opens with, filling the
 // flag fields, and returns the text after the closing parenthesis.

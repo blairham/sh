@@ -10104,6 +10104,42 @@ func (d Diagnostics) parseFailureLineInTheInput(err error) int {
 	return int(se.Pos.Line)
 }
 
+// pointOpensAFloatAfterAnOperand reports whether a refused token that begins
+// with a point is a whole floating literal standing where an operator
+// belonged — `.5` behind `0x10`, `a`, `(1)` or a blank — rather than a point
+// the reader could not make a literal of.
+//
+// Measured 2026-10-04 on zsh 5.9.2: `$(( 0x10.5 ))`, `$(( 2#1.1 ))`,
+// `$(( a.5 ))`, `$(( 1 .5 ))` and `$(( (1).5 ))` are all `operator expected
+// at `.5'`, where a point with no digit behind it — `0x1.`, `0xf.f`,
+// `0x1 .x` — is the floating-constant refusal. So is a point straight after a
+// decimal numeral, `1.5.5`, `.5.5` and `1e3.5`, which that numeral's own reader took
+// as part of itself.
+func pointOpensAFloatAfterAnOperand(token, expr string) bool {
+	if len(token) < 2 || token[1] < '0' || token[1] > '9' || !strings.HasSuffix(expr, token) {
+		return false
+	}
+	before := expr[:len(expr)-len(token)]
+	// Back over the operand the point stands against, if it touches one.
+	i := len(before)
+	for i > 0 && (isNameByte(before[i-1]) || before[i-1] == '.' || before[i-1] == '#') {
+		i--
+	}
+	operand := before[i:]
+	// A numeral may begin with its own point, `.5`, and then it is a decimal
+	// one: `$(( .5.5 ))` is the floating-constant refusal too.
+	numeral := strings.TrimPrefix(operand, ".")
+	if numeral == "" || numeral[0] < '0' || numeral[0] > '9' {
+		// A blank, a group or a name: nothing read the point as its own.
+		return true
+	}
+	// A numeral. Only a decimal one reads a point as part of itself.
+	if strings.ContainsAny(operand, "#xX") {
+		return true
+	}
+	return false
+}
+
 // arithParseFailure words an expression the parser refused, blaming expr.
 //
 // The text blamed is a parameter rather than the error's own, because it is
@@ -10119,7 +10155,8 @@ func (d Diagnostics) arithParseFailure(se *syntax.Error, expr string) string {
 		// failure. See ArithDoubledPointInTheNumeral.
 		return Wording(w, ".: invalid character in expression - %[1]s", expr)
 	}
-	if d.ArithBadFloatConstant != "" && strings.HasPrefix(se.Token, ".") {
+	if d.ArithBadFloatConstant != "" && strings.HasPrefix(se.Token, ".") &&
+		!pointOpensAFloatAfterAnOperand(se.Token, expr) {
 		// A point that begins a refused token is a floating literal this
 		// dialect committed to reading and could not, which it words as
 		// neither operand complaint and quotes nothing in. See

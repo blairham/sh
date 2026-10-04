@@ -332,6 +332,18 @@ func parseGlobQualifiers(list string) (globQualifiers, string, bool) {
 				kind, id = 'g', uint64(uint32(osGetegid()))
 			}
 			section = append(section, globTest{kind: kind, negated: negate, follow: follow, id: id})
+		case 'e':
+			// The qualifier that runs a string of code per match, which this
+			// engine does not carry. Its argument is still *read*, and a list
+			// that leaves it unclosed is refused for that before the letter is
+			// weighed at all: measured 2026-10-04 on zsh 5.9.2, `echo x(e)`,
+			// `x(echo)` and `x=(echo hi)` are all `missing end of string` —
+			// the last being a mid-word group read as qualifiers, its first
+			// letter `e` and its delimiter `c`.
+			if _, _, closed := delimitedArgumentOrNone(list[i:]); !closed {
+				return q, "missing end of string", false
+			}
+			return q, "unknown file attribute: e", false
 		case '.', '/', '@', 'p', '%',
 			'r', 'w', 'x', 'A', 'I', 'E', 'R', 'W', 'X',
 			's', 'S', 't':

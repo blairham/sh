@@ -755,10 +755,11 @@ func (r *Runner) assignAssocLiteral(name string, elems []*syntax.ArrayElem, appe
 		// sentence, measured. See interp/scopewarnings.go.
 		r.warnAboutTheScope(r.throughNameref(name), scopeWarningArray)
 	}
-	// Before the elements are expanded, because one reading refuses the shape
-	// and a refusal must not run what the literal holds: measured, zsh writes
-	// its sentence without the `$(…)` in a later element having run.
-	reads, refuseBare, ok := r.tableLiteralShape(elems)
+	// Before the elements are stored, because one reading refuses the shape.
+	// That reading expands them first, which tableLiteralShape does on its
+	// way to the refusal — measured 2026-10-04 on zsh 5.9.2, a `$(…)` in a
+	// later element runs before the sentence is written.
+	reads, refuseBare, ok := r.tableLiteralShape(name, elems)
 	if !ok {
 		return
 	}
@@ -789,7 +790,7 @@ func (r *Runner) assignAssocLiteral(name string, elems []*syntax.ArrayElem, appe
 // where the literal really mixes the two shapes, which is the narrowest point the
 // columns part: a literal whose elements all carry a head, and one where none
 // does, reaches the same table under every reading.
-func (r *Runner) tableLiteralShape(elems []*syntax.ArrayElem) (reads, refuseBare, ok bool) {
+func (r *Runner) tableLiteralShape(name string, elems []*syntax.ArrayElem) (reads, refuseBare, ok bool) {
 	heads, bare := 0, 0
 	for _, el := range elems {
 		if el.Word == nil {
@@ -815,6 +816,15 @@ func (r *Runner) tableLiteralShape(elems []*syntax.ArrayElem) (reads, refuseBare
 		first := elems[0].Word != nil && syntax.SubscriptedElement(elems[0].Word)
 		return first, first, true
 	case MixedTableLiteralRefused:
+		// The words are expanded first, and a failure there is what the
+		// shell reports instead: measured 2026-10-04 on zsh 5.9.2,
+		// `m=( [one]=1 [two words]=2 )` is `bad pattern: [two` and
+		// `m=( [one]=1 two $(echo ran >&2) )` writes `ran` before the
+		// shape refusal.
+		if _, ok := r.literalElems(elems, true,
+			r.bareLiteralElementIsOneValue(name, elems, false)); !ok {
+			return false, false, false
+		}
 		r.fatal("%s\n", Wording(r.diag().MixedTableLiteralRefusal,
 			"bad [key]=value syntax for associative array"))
 		return false, false, false

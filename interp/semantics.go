@@ -15579,6 +15579,24 @@ type Semantics struct {
 	// unpinned ash: the same as dash.
 	ArrayOperandRefusedBeforeTheCommand Answer
 
+	// OperandValueOverAFrozenNameRefusedFirst refuses a declaration whose
+	// operand carries a value for a frozen name — scalar or array literal —
+	// ahead of the command's redirections, as a bare assignment's refusal
+	// that ends the script.
+	//
+	// Measured 2026-10-03 on ksh93u+: `readonly q=1; typeset q=4
+	// 2>/dev/null; echo st=$?` writes `q: is read only` to the shell's own
+	// stderr and stops. bash 5.3.20 refuses a scalar operand under the
+	// utility (`st=1`, the script going on) and only the array literal early
+	// — ArrayOperandRefusedBeforeTheCommand. See
+	// interp/operandrefusedearly.go.
+	//
+	// unpinned dash: `export` and `readonly` are its only such utilities and
+	// it was not measured here; the preset's No is what this engine did.
+	//
+	// unpinned ash: the same as dash.
+	OperandValueOverAFrozenNameRefusedFirst Answer
+
 	// SignAloneIsAnOptionWord reads a declaration's `-` or `+` written with
 	// no letters after it as an option word rather than as an operand.
 	//
@@ -32701,7 +32719,8 @@ func PosixSemantics() Semantics {
 		BareLocalListing:       BareLocalListsNothing,
 		TypesetBadOptionFatal:  No,
 		// POSIX has no array literal; No is what this engine did before.
-		ArrayOperandRefusedBeforeTheCommand: No,
+		ArrayOperandRefusedBeforeTheCommand:     No,
+		OperandValueOverAFrozenNameRefusedFirst: No,
 		// POSIX has no `typeset`, so no option word carries an `a`.
 		ArrayLetterMakesItsWordAName: No,
 		// POSIX has no `typeset` and so no plus letter to read; Yes is

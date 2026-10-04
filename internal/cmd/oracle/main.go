@@ -50,6 +50,17 @@ func main() {
 	)
 	flag.Parse()
 
+	// An -only that was given and names nothing is refused rather than read
+	// as "no narrowing". The flag's whole job is to make a run smaller, and
+	// its usual caller is a script passing "$IDS": a variable that came up
+	// empty turned a one-case grade into the whole corpus — three times in
+	// one campaign (#5707) — and would turn a one-case regeneration into a
+	// full `make oracle`. Leaving the flag off is how to ask for everything.
+	if onlyGivenEmpty(flag.CommandLine, *only) {
+		fmt.Fprintln(os.Stderr, "oracle: -only names no case; leave the flag off to mean the whole corpus")
+		os.Exit(exitFailure)
+	}
+
 	// Whatever routes the panel opened are closed here, however this command
 	// returns. A container column is the only one that holds anything, and a
 	// stray container on a machine running a dozen sessions is exactly the
@@ -145,6 +156,18 @@ func ratchet(rep *oracle.Report, path, against string, write, narrowed bool) int
 		}
 	}
 	return exitDrift
+}
+
+// onlyGivenEmpty reports whether -only was passed on the command line and
+// names no case once its commas and blanks are taken out.
+func onlyGivenEmpty(fs *flag.FlagSet, only string) bool {
+	given := false
+	fs.Visit(func(f *flag.Flag) {
+		if f.Name == "only" {
+			given = true
+		}
+	})
+	return given && len(splitIDs(only)) == 0
 }
 
 // splitIDs reads the -only list. Empty means the whole corpus, which is what

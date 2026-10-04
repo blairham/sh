@@ -178,7 +178,12 @@ func TestAnUnbalancedNestedBackquoteNamesTheBackquote(t *testing.T) {
 		// carried the first line alone until then (#3961). See
 		// Diagnostics.SubstitutionParseFailureSentence.
 		{"zsh", "A\nzsh:1: unmatched `\nzsh:1: parse error in command substitution\n", 1},
-		{"ksh", "A\nksh: syntax error at line 1: ``' unmatched\n", 3},
+		// ksh93 does not object at all: the body is read as a command
+		// string, so the inner backquote closes at the end of it and `n`
+		// is printed. Measured 2026-10-04 on ksh93u+ 2012-08-01 under `-c`
+		// and from a script file; this row said `` `' unmatched `` at 3
+		// until #5717. See syntax.Dialect.BackquotedBodyIsACommandString.
+		{"ksh", "A\nn\nB\n", 0},
 		{"dash", "dash: 1: Syntax error: EOF in backquote substitution\n", 2},
 	} {
 		out, st, err := presets[c.name].Combined(t, dialecttest.Base{}, src)

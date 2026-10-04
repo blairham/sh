@@ -8295,6 +8295,29 @@ type Dialect struct {
 	// at all, which is what leaves that answer to the front end.
 	CloseQuotesAtEOF ProgramRoutes
 
+	// BackquotedBodyIsACommandString reads the body of the older
+	// substitution, `` `…` ``, as a program handed over as a string — the
+	// route [RouteFromCommandString] names — whatever route the text holding
+	// it arrived by. So every rule asked of that route applies inside the
+	// body: in the shell that has this, an unterminated quote closes at the
+	// end of the body, which is [Dialect.CloseQuotesAtEOF].
+	//
+	// Measured 2026-10-04 on ksh93u+ 2012-08-01, each line a script file
+	// followed by `echo B`:
+	//
+	//	written                       ksh93
+	//	echo "`echo 'abc`"            abc, then B
+	//	echo `echo "abc`              abc, then B
+	//	echo "`echo \`echo n`"        n, then B
+	//	echo `echo \`echo n`          n, then B
+	//	echo $(echo "abc)             `"' unmatched at status 3, nothing run
+	//
+	// The last row is the control: the newer spelling's body is read with the
+	// line and keeps the file's refusal. The older one is text the shell
+	// reads again when it runs, and it reads it the way it reads `eval`'s
+	// operand. The other five columns refuse every row.
+	BackquotedBodyIsACommandString bool
+
 	// BackslashAtEndOfInput is what an unquoted backslash the input ends
 	// immediately after becomes. See [EndOfInputBackslash], where the rows
 	// are.

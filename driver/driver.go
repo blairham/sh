@@ -590,6 +590,11 @@ func MainArgs(sh Shell, argv []string) int {
 			sh.errf("%s: %s\n", sh.Name, er.text)
 			return er.status
 		}
+		var vr *verbatimRefusal
+		if errors.As(err, &vr) {
+			sh.errf("%s\n", vr.text)
+			return vr.status
+		}
 		var me *missingArgumentError
 		if errors.As(err, &me) {
 			// The dialect's status rather than this front end's usage
@@ -1572,6 +1577,16 @@ func (sh Shell) emulationOption(spelling string, args []string, inv *invocation)
 // to both of its refusals where a word this front end could not place is 2,
 // so returning a plain error would have exited the wrong number while
 // printing the right sentence — the shape #483 records one level up.
+// verbatimRefusal is an invocation word answered with a line of the
+// dialect's own and nothing around it: no shell name in front and no usage
+// block under it. See Diagnostics.InvocationPosixWordWritesTheOptionString.
+type verbatimRefusal struct {
+	text   string
+	status int
+}
+
+func (e *verbatimRefusal) Error() string { return e.text }
+
 type emulationRefusal struct {
 	text   string
 	status int
@@ -1822,6 +1837,12 @@ func (sh Shell) optionWord(a string, args []string, inv *invocation) (rest []str
 			inv.opts = append(inv.opts, optionSpec{spec: name, isName: true, on: true})
 			sh.noteNamedOption(inv, name, true)
 			return args, nil
+		}
+		if text := sh.Diagnostics.InvocationPosixWordWritesTheOptionString; text != "" &&
+			len(a) > 2 && strings.HasPrefix("posix", a[2:]) {
+			// The one name that shell answers with its option string rather
+			// than with a refusal. See the field.
+			return nil, &verbatimRefusal{text: text, status: usageStatus}
 		}
 		if sh.Semantics.LongOptionNamesASetOption == interp.Yes {
 			inv.opts = append(inv.opts,

@@ -249,6 +249,15 @@ against: `bash -o nosuchname /nope/x.sh` is `bash: line 0: bash: nosuchname:
 invalid option name`, word for word what the same option draws with no operand
 at all.
 
+**And the same when the operand would open**, which is the half the table
+above does not ask. Measured 2026-10-04 with a script `x.sh` that exists:
+`bash -o nosuch x.sh` is `bash: line 0: bash: nosuch: …`, `dash -o nosuch
+x.sh` is `dash: 0: Illegal option -o nosuch`, and `ksh -o posix x.sh` is `ksh:
+posix: bad option(s)` with `Usage: ksh …` under it. This shell had named the
+script in all three, since the route was already the file's by the time the
+option was applied — so the runner names the shell it was started as for the
+length of an invocation option on that route.
+
 **One namespace is judged last**, and that is bash's alone because only bash
 has a second one. Measured in the same run, each with `-c :` behind it:
 
@@ -321,6 +330,16 @@ spelling: `bash --posix -c 'shopt -o posix'` reports it on, a later `set +o
 posix` turns it off, and `bash --verbose -c 'echo $-'` echoes the line and
 answers `hvBc`. Measured 2026-10-03 on 5.3.20. See
 `Semantics.LongOptionsNamingSetOptions`.
+
+### ksh93's `--posix`
+
+ksh93u+ has no `posix` option, and it does not refuse the word the way it
+refuses every other name it lacks: `ksh --posix -c 'echo ran'` writes
+`cilrsDER:abefhkmno:prtuvxBCGH` — its option string — alone on standard
+error and exits 2, running nothing. So does every beginning of the word
+(`--p`, `--po`, `--pos`, `--posi`), and so does `ksh --posix x.sh`; `--posixx`
+and `--posix=1` are ordinary `bad option(s)`. Measured 2026-10-04 on 93u+
+2012-08-01. See `Diagnostics.InvocationPosixWordWritesTheOptionString`.
 
 ### `--help`
 

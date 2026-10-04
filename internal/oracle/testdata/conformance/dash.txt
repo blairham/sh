@@ -29,11 +29,9 @@ declare/a-table-declaration-over-a-scalar-then-appended
 declare/an-appended-array-literal-over-a-typed-scalar
 declare/an-array-declaration-over-an-unset-name
 heredoc/stripping-and-joining-are-ordered-and-the-panel-parts-over-which-comes-first
-invoke/posix-mode-from-the-invocation-reaches-the-first-line
 jobs/a-background-job-outlives-the-shell
 jobs/bg-with-no-job-control
 local/a-subscripted-operand-to-local
-opt/set-t-at-the-invocation
 pat/a-case-arm-needs-a-paren-left-to-close-it
 pat/a-case-arms-leading-paren-may-be-the-patterns
 pat/a-case-arms-pattern-group-may-carry-text

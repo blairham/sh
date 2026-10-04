@@ -5463,6 +5463,23 @@ type Diagnostics struct {
 	// the shell was invoked by, then that name's last path element.
 	InvocationLongOptionUsage string
 
+	// InvocationPosixWordWritesTheOptionString is what a shell writes, alone
+	// on a line and with nothing in front of it, for an invocation word
+	// spelled `--` and then a beginning of `posix` — and that it then exits
+	// at 2 having run nothing.
+	//
+	// ksh93u+ alone, whose roster has no such name and which answers the
+	// word with its own option string rather than with the `bad option(s)`
+	// every other unknown name gets. Measured 2026-10-04 on 93u+ 2012-08-01:
+	//
+	//	ksh --posix -c 'echo ran'    cilrsDER:abefhkmno:prtuvxBCGH, 2
+	//	ksh --p, --po, --pos, --posi the same
+	//	ksh --posix x.sh             the same, and the script never runs
+	//	ksh --posixx, --posix=1      posixx: bad option(s) and the usage
+	//
+	// Empty for every dialect that has no such answer.
+	InvocationPosixWordWritesTheOptionString string
+
 	// InvocationBadLongOption is what a shell says about a `--word` its front
 	// end could not place at all: not a startup file, not a version request,
 	// not an option name its namespace carries.

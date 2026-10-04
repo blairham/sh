@@ -1915,6 +1915,8 @@ func Semantics() interp.Semantics {
 	// here, and this is the one that describes what zsh did.
 	s.TrapBodyRunsWhatParsed = interp.No
 	s.ExitTrapFiresPastTheEnd = interp.Yes
+	// unanswered ExitTrapFiresWhereTheScriptStopped: asked only where the
+	// axis above says no, and it says yes here.
 	// A `kill -CHLD` naming the shell runs nothing: the condition is a child
 	// of this shell changing state, and a signal the script sent is not that.
 	// Measured 2026-09-26 over a script file, `trap 'echo C' CHLD` /
@@ -3982,6 +3984,7 @@ func Semantics() interp.Semantics {
 	s.TrapIsNamedByAFunction = interp.Yes
 	s.ErrTrapRunsInsideFunctions = interp.Yes
 	s.ErrTrapRunsInSubshells = interp.Yes
+	// unanswered ErrtraceReachesSubshells: see the axis; never reached here.
 	// One failure, one firing, however deeply the command that failed was
 	// called: `f(){ g; }; g(){ h; }; h(){ false; }; f` writes a single E,
 	// and with the action printing `${funcstack[*]}` it reads `h g f` — so
@@ -4041,6 +4044,7 @@ func Semantics() interp.Semantics {
 	// EXIT trap from it: `trap 'echo x' USR1; trap | cat` prints the trap
 	// and the same shape with an EXIT trap prints nothing. Measured, each.
 	s.PipelineElementKeepsTrapListing = interp.Yes
+	s.ALoneTrapCommandKeepsTrapListing = interp.No
 	s.KeptTrapListingIncludesExit = interp.No
 	s.SubshellHidesInheritedIgnoredTraps = interp.Yes
 	s.UmaskPrintsFourDigits = interp.No

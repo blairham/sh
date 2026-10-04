@@ -3440,12 +3440,23 @@ is the last thing a script does:
     jobs -p | cat; echo T      bash, ksh93 → the pid   dash, zsh → nothing
 
 Two rows and two different pairs, so no yes-or-no holds both. `Semantics.
-SubshellJobTable` is a policy with four values: cleared everywhere (dash,
-ash), kept everywhere (ksh93), kept where the subshell was made for a
+SubshellJobTable` is a policy with five values: cleared everywhere (dash),
+kept everywhere (ksh93), kept where the subshell was made for a
 simple command or a substitution while cleared where it was made for a
-compound (bash), and — zsh — **kept in every subshell of a shell whose
+compound (bash), — zsh — **kept in every subshell of a shell whose
 monitor is on and cleared in every subshell of a shell whose monitor is
-off**.
+off**, and — BusyBox ash — **kept only where the forked body is nothing
+but one simple command written `jobs`**.
+
+That last one is keyed on the body and not on the boundary. Measured
+2026-10-03 in the pinned image: `jobs -p | cat`, `$(jobs -p)`, `{ jobs
+-p; } | cat` and `x=1 jobs -p 2>/dev/null | cat` show the pid; `(jobs
+-p)`, `f | cat` with f running `jobs -p`, `{ :; jobs -p; } | cat`, `$j -p
+| cat` with j=jobs, `command jobs -p | cat`, `jobs -p &` and `$(jobs -p |
+cat)` show nothing. The word as written decides, braces count only where
+they carry no redirection, and the last row is the same rule one level
+down: the substitution's body is a pipeline. The listing of a lone `trap`
+follows the identical rule — see `ALoneTrapCommandKeepsTrapListing`.
 
 The `; echo T` is load-bearing, and leaving it off is how the question
 gets the wrong answer. `(jobs -p)` alone prints the pid in dash, because a
@@ -19513,7 +19524,22 @@ bash and ksh93 list it; zsh keeps a pipeline element's listing and still
 drops EXIT from it. Unanswerable where nothing is kept, so dash never
 reaches the question.
 
-**`PipelineElementKeepsTrapListing`** — bash yes · dash no · ksh93 no · zsh yes
+**`ALoneTrapCommandKeepsTrapListing`** — bash unspecified · dash no · ksh93 no · zsh no · ash yes
+
+Keeps the parent's listing across a pipeline element or a substitution
+whose own answer is no, where the forked body is nothing but one simple
+command written `trap`. BusyBox ash 1.37.0, measured 2026-10-03 in the
+pinned image with a USR1 and an EXIT trap set: `trap | cat`, `$(trap)`,
+`` `trap` ``, `{ trap; } | cat`, `x=1 trap | cat` and `trap 2>/dev/null |
+cat` list both; `(trap)`, `trap & wait`, `f | cat` with f running `trap`,
+`$t | cat` with t=trap, `"trap" | cat`, `\trap | cat`, `command trap |
+cat`, `{ echo a; trap; } | cat`, `{ trap; } 2>&1 | cat`, `$(trap; echo z)`
+and `$(trap | cat)` list nothing. So the noun is the word as written, not
+the command that runs. dash, ksh93 and zsh measured no the same day at the
+boundaries where each clears the listing; bash keeps the listing at every
+boundary this is asked behind and never reaches it.
+
+**`PipelineElementKeepsTrapListing`** — bash yes · dash no · ksh93 no · zsh yes · ash no
 
 Is the same question asked of a pipeline element that runs in a subshell
 environment, and the panel pairs off the other way: bash and zsh keep
@@ -19545,10 +19571,17 @@ zsh alone. The other three store the text: `trap "if" EXIT` is taken and
 complains at the end, and `trap "if" INT` is taken and never complains
 at all, because the trap never fires.
 
-**`TrapBodyLine`** — bash TrapBodyLineWithin · dash TrapBodyLineWithin · ksh93 TrapBodyLineOffsetFromWhereItFired · zsh TrapBodyLineWhereItFired
+**`TrapBodyLine`** — bash TrapBodyLineWithin · dash TrapBodyLineWithin · ksh93 TrapBodyLineOffsetFromWhereItFired · zsh TrapBodyLineWhereItFired · ash TrapBodyLineWhereItFired
 
 Is which lines a diagnostic from inside a trap's body names. See
 TrapBodyLineStyle.
+
+BusyBox ash 1.37.0 answers as zsh does, for `CommandTrapBodyLine` too.
+Measured 2026-10-03 in the pinned image over a script file: a body `echo
+a $LINENO` / `nosuchcmd` / `echo b $LINENO` on USR1 fired from line 6
+writes `line 6: nosuchcmd: not found`, `a 6` and `b 6`; an ERR body of
+the same shape fired from line 4 writes `at=4` and locates its failure on
+line 4. A function the body calls still numbers its own lines.
 
 **`TrapBodyRunsWhatParsed`** — bash yes · dash yes · ksh93 no · zsh no
 
@@ -19999,7 +20032,20 @@ different options: a sourced file bounds DEBUG there and does not bound
 ERR — measured, with a top-level trap of each, `false` inside a dotted
 file fires ERR and the commands of the same file fire no DEBUG.
 
-**`ErrTrapRunsInSubshells`** — bash no · dash unspecified · ksh93 no · zsh yes
+**`ErrtraceReachesSubshells`** — bash yes · dash unspecified · ksh93 unspecified · zsh unspecified · ash no
+
+Makes `set -o errtrace` carry the ERR trap into a subshell as well as
+into a function. bash does: `set -E; trap 'echo E' ERR; (false)` writes
+two E lines. BusyBox ash 1.37.0 takes the option and it reaches a
+function — `trap 'echo E' ERR; f() { false; echo in-f; }; f` writes
+`in-f` alone, and `E in-f` with `set -E` — but stops at the fork:
+`( false; echo sub )` and `x=$(false; echo hi)` write no E inside, and
+`( trap )` lists no ERR trap, with the option off or on. Measured
+2026-10-03 in the pinned image. Unreachable in ksh93, which has no such
+option; in zsh, where the trap already runs in a subshell; and in dash,
+which has no ERR condition.
+
+**`ErrTrapRunsInSubshells`** — bash no · dash unspecified · ksh93 no · zsh yes · ash no
 
 Fires the ERR trap for a failure inside a subshell or a command
 substitution. zsh alone: `trap 'echo E' ERR; x=$(false; echo hi)`
@@ -20007,7 +20053,7 @@ captures an E there and nowhere else. bash and ksh93 reset the trap on
 the way into the child, the way they reset every trap that is not
 ignored.
 
-**`ErrTrapRunsInsideFunctions`** — bash no · dash unspecified · ksh93 yes · zsh yes
+**`ErrTrapRunsInsideFunctions`** — bash no · dash unspecified · ksh93 yes · zsh yes · ash no
 
 Fires the ERR trap for a failure inside a function the trap was not set
 in. bash does not — there a function does not inherit the ERR trap, so
@@ -20251,7 +20297,7 @@ say so. The name is taken for what it moves rather than refused for what
 it does not, which is the same partial honesty `set -o posix` keeps —
 and with the record above, #2476's itemized remainder is closed.
 
-**`ExitTrapFiresPastTheEnd`** — bash no · dash unspecified · ksh93 no · zsh yes
+**`ExitTrapFiresPastTheEnd`** — bash no · dash unspecified · ksh93 no · zsh yes · ash no
 
 Counts the EXIT trap as having fired on the line after the script's
 last, rather than on its first.
@@ -20289,6 +20335,16 @@ firing at the call, and it is the core's bookkeeping rather than an axis: the
 line is put back at a call's return, where it used to be left on the body's last
 command. bash read the body's line and ksh93 read it twice. The RETURN trap keeps
 the body's line, which is its own measured answer (#4173).
+
+**`ExitTrapFiresWhereTheScriptStopped`** — bash no · dash unspecified · ksh93 no · zsh unspecified · ash yes
+
+Counts the EXIT trap as having fired on the line of the last command the
+script ran. Asked only behind `ExitTrapFiresPastTheEnd`'s no. BusyBox ash
+1.37.0, measured 2026-10-03 in the pinned image over script files with
+`trap 'echo x $LINENO' EXIT` on line 1: `:` / `echo last` / a blank line /
+`# c` / a blank line writes `x 3`; an `exit 3` on line 4 inside an `if`
+writes `x 4` with lines after it; a function defined on lines 2-4 and
+called on line 5 writes `x 5`. Neither the first line nor past the end.
 
 **`ExitTrapIsFunctionLocal`** — bash no · dash no · ksh93 no · zsh yes
 

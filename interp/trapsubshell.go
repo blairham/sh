@@ -43,7 +43,21 @@ const (
 	trapContextSubshell trapContext = iota
 	trapContextPipeline
 	trapContextBackground
+
+	// trapContextLoneTrap marks a pipeline element or a substitution whose
+	// whole body is one `trap` command, OR'd onto the kind. See
+	// Semantics.ALoneTrapCommandKeepsTrapListing.
+	trapContextLoneTrap trapContext = 1 << 7
 )
+
+// loneTrapBoundary is the kind a pipeline element or a substitution is
+// retagged with: its own, marked where the body is nothing but `trap`.
+func loneTrapBoundary(kind trapContext, lone bool) trapContext {
+	if lone {
+		return kind | trapContextLoneTrap
+	}
+	return kind
+}
 
 // inheritTraps gives a fresh clone the trap state a subshell starts with:
 // its own table holding only the parent's ignored signals, no EXIT trap, the
@@ -163,7 +177,7 @@ func (r *Runner) keptTrapListing() (entries []savedTrap, refused bool) {
 	for _, ctx := range r.trapContexts {
 		var keep Answer
 		var what string
-		switch ctx {
+		switch ctx &^ trapContextLoneTrap {
 		case trapContextPipeline:
 			keep = r.sem().PipelineElementKeepsTrapListing
 			what = "`trap` in a pipeline element listing the parent's traps"
@@ -173,6 +187,13 @@ func (r *Runner) keptTrapListing() (entries []savedTrap, refused bool) {
 		default:
 			keep = r.sem().SubshellKeepsTrapListing
 			what = "`trap` in a subshell listing the parent's traps"
+		}
+		// A boundary that clears the listing may still keep it for a body
+		// that is nothing but `trap`, and that is a second question asked
+		// only behind the first one's no.
+		if keep == No && ctx&trapContextLoneTrap != 0 {
+			keep = r.sem().ALoneTrapCommandKeepsTrapListing
+			what = "a forked body that is nothing but `trap` listing the parent's traps"
 		}
 		if !r.ask(keep, what) {
 			return nil, r.unspecified
@@ -241,7 +262,12 @@ func (r *Runner) inheritedPseudoListed(name string) (listed, refused bool) {
 	switch name {
 	case "ERR":
 		if r.errtrace {
-			return true, false
+			if r.ask(r.sem().ErrtraceReachesSubshells, "errtrace carrying the ERR trap into a subshell") {
+				return true, false
+			}
+			if r.unspecified {
+				return false, true
+			}
 		}
 		listed = r.ask(r.sem().ErrTrapRunsInSubshells, "the ERR trap inside a subshell")
 	case "DEBUG":

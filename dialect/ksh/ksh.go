@@ -1407,6 +1407,7 @@ func Semantics() interp.Semantics {
 	// question has the same answer as the first.
 	s.CommandTrapBodyLine = interp.TrapBodyLineOffsetFromWhereItFired
 	s.ExitTrapFiresPastTheEnd = interp.No
+	s.ExitTrapFiresWhereTheScriptStopped = interp.No
 	// A `kill -CHLD` naming the shell runs nothing: the condition is a child
 	// of this shell changing state, and a signal the script sent is not that.
 	// Measured 2026-09-26 over a script file, `trap 'echo C' CHLD` /
@@ -3228,6 +3229,7 @@ func Semantics() interp.Semantics {
 	s.TrapHasReturnCondition = interp.No
 	s.ErrTrapRunsInsideFunctions = interp.Yes
 	s.ErrTrapRunsInSubshells = interp.No
+	// unanswered ErrtraceReachesSubshells: see the axis; never reached here.
 	// And every call is a second place it fires, whatever the trap was
 	// doing when the call began: with the trap carried into functions as
 	// well, `f(){ g; }; g(){ h; }; h(){ false; }; f` writes four E lines —
@@ -3307,6 +3309,7 @@ func Semantics() interp.Semantics {
 	// background job lists nothing: `trap | cat` is empty where `(trap)` is
 	// not, which is the split issue #339 measured.
 	s.SubshellKeepsTrapListing = interp.Yes
+	s.ALoneTrapCommandKeepsTrapListing = interp.No
 	s.KeptTrapListingIncludesExit = interp.Yes
 	s.UmaskPrintsFourDigits = interp.Yes
 	s.UmaskSetWithSPrints = interp.No

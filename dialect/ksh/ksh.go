@@ -707,6 +707,11 @@ func Dialect() syntax.Dialect {
 	// truncated script run under our ksh with status 0 and no diagnostic
 	// (#1424).
 	d.CloseQuotesAtEOF = syntax.RouteFromCommandString
+	// And the older substitution's body is a command string for that
+	// purpose, whatever route the script came by: `echo `echo "abc`` from a
+	// file prints abc here. See syntax.Dialect.BackquotedBodyIsACommandString
+	// (#5717).
+	d.BackquotedBodyIsACommandString = true
 	// `exec {a[1]}>&-`: the name inside the braces may be a subscripted one.
 	// Measured — this shell closes the descriptor the element holds, as bash
 	// does and zsh does not.

@@ -1330,6 +1330,13 @@ leniency applied everywhere because the difference is visible in what a
 script *does*, not only in whether it is diagnosed: a truncated file ends
 up running a command under one shell and not another.
 
+**Inside the older substitution's body it holds on every route.** That body is
+text ksh93 reads again when it runs, and it reads it as it reads a command
+string: from a script file, `` echo `echo "abc` `` and `` echo "`echo \`echo
+n`" `` print `abc` and `n` and the script carries on, while the newer spelling
+`echo $(echo "abc)` is `` `"' unmatched `` at status 3 with nothing run.
+Grammar flag: `BackquotedBodyIsACommandString` — ksh only (#5717).
+
 ## Heredoc delimiters
 
 Whether the delimiter is quoted decides whether the body is expanded, and

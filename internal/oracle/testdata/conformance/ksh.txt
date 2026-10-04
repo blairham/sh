@@ -21,8 +21,6 @@ cmd/an-expanded-function-name-is-fixed-at-the-definition
 commands/an-and-or-with-a-terminator-after-it
 core/a-bare-brace-in-a-nested-quoted-operand
 core/a-bare-brace-inside-a-quoted-expansion
-core/a-refused-older-body-leaves-an-empty-field
-core/an-unbalanced-nested-backquote
 core/appending-an-empty-array-literal-to-a-scalar
 decl/a-subscripted-operand-with-no-value
 declare/an-attribute-does-not-leave-a-subshell

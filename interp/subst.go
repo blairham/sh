@@ -566,6 +566,13 @@ func (r *Runner) localizeReply() func() {
 func (r *Runner) bodyDialect(span syntax.Span) syntax.Dialect {
 	d := r.dialect()
 	d.Comments = span.Comments
+	if span.Backquoted && d.BackquotedBodyIsACommandString {
+		// The older spelling's body is text read again when it runs, and one
+		// dialect reads it the way it reads a command string: a quote left
+		// open closes at the end of the body. See
+		// syntax.Dialect.BackquotedBodyIsACommandString.
+		d.ProgramRoute = syntax.RouteFromCommandString
+	}
 	if !span.Backquoted && d.SubstitutionBodyRefusesASteppedOverSeparator &&
 		d.SeparatorWhereACommandBelongs != syntax.NoSeparatorWhereACommandBelongs {
 		// A `;` standing where a command belongs is read here by the

@@ -204,6 +204,7 @@ func (p *Parser) expandPipelineHead() {
 	readsBang := p.atWord("!")
 	readsTime := p.dialect.TimeKeyword && p.atWord("time")
 	if !readsBang && !readsTime {
+		p.expandOrdinaryPipelineHead()
 		return
 	}
 	p.expandCommandStart()
@@ -211,6 +212,54 @@ func (p *Parser) expandPipelineHead() {
 	// not offer it again. True even when the table declined — the word is
 	// then still `!` or `time`, parsePipeline consumes it, and next clears
 	// this before the word behind it is reached.
+	p.aliasHeadHandled = true
+}
+
+// expandOrdinaryPipelineHead offers an ordinary word at the head of a pipeline
+// to the alias table here rather than in parseCommand, so that what the
+// expansion leaves at the head is read by the grammar that reads a head.
+//
+// The two words parsePipeline reads for itself are only reachable that way.
+// An alias whose value is or begins with `!` negates the pipeline, and so does
+// one whose value ends in a blank and is followed by `!`, in every shell in
+// the panel. Measured 2026-10-03 from a script file, with `alias sp=' '` and
+// `alias n='! '`, on dash 0.5.12, ksh93u+, bash 5.3.20 (also under --posix,
+// with expand_aliases) and zsh 5.9.2 alike:
+//
+//	sp ! true; echo $?            1
+//	n true; echo $?               1
+//	sp ! true | false; echo $?    0
+//	sp sp ! true; echo $?         1
+//
+// where this parser expanded the alias inside the first command, found `!`
+// standing as a command name, and ran it: `!: not found` at 127. The corpus
+// row is alias/a-reserved-word-after-an-alias-ending-in-a-blank.
+//
+// What the expansion does is the same expandCommandStart parseCommand would
+// have run on the same token, and the token is then marked offered so
+// parseCommand does not run it twice — which is what keeps a self-naming
+// alias such as `alias echo='echo x'` to one round.
+func (p *Parser) expandOrdinaryPipelineHead() {
+	if !p.at(TokWord) || p.Aliases == nil {
+		return
+	}
+	if _, ok := p.Aliases(p.tok.Text); !ok {
+		// Nothing to expand, so the word goes on to parseCommand untouched
+		// and everything it asks there is asked exactly as before.
+		return
+	}
+	p.expandCommandStart()
+	// And a value ending in a blank makes the word after it eligible, which
+	// at the head is still the head: `sp sp ! true` is `! true` too. The
+	// same step the arguments loop takes, with the same fresh set, asked
+	// here because parseCommand will not see this token as a command word.
+	for p.aliasNextWord && p.aliasSpliced == 0 && p.at(TokWord) {
+		if _, ok := p.Aliases(p.tok.Text); !ok {
+			break
+		}
+		p.aliasNextWord = false
+		p.expandAlias(map[string]bool{}, p.Aliases)
+	}
 	p.aliasHeadHandled = true
 }
 

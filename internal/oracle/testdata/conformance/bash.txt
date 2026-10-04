@@ -14,5 +14,4 @@ jobs/a-background-job-outlives-the-shell
 param/a-substring-modifier-that-substitutes
 read/from-a-standard-input-that-is-closed
 setopt/the-interactive-listing-drops-nohashdirs
-subst/a-blank-before-the-pipe-is-not-the-reply-form
 xtrace/ps4-unset-is-not-the-default-again

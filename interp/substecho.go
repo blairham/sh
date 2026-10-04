@@ -297,19 +297,34 @@ func substTextLines(span syntax.Span, body, text string, start int) []string {
 		return nil
 	}
 	first, _, _ := strings.Cut(body, "\n")
-	if !strings.Contains(lines[start-1], substOpener(span)+first) {
+	if !strings.Contains(lines[start-1], substOpener(span)+first) &&
+		!(span.CurrentShell && currentShellOpensBefore(lines[start-1], first)) {
 		return nil
 	}
 	return lines
 }
 
+// currentShellOpensBefore reports whether line holds a current-shell
+// substitution opening in front of a body beginning first: `${`, then the
+// blank or `|` the spelling is chosen by, then the body. Those spellings are
+// one character longer than `$(`, and holding them to it found no opener at
+// all, so a refused `${ | REPLY=hi;}` went without the echoed line bash
+// writes under the complaint (#5719).
+func currentShellOpensBefore(line, first string) bool {
+	for _, opener := range []string{"${", "${ ", "${\t", "${\n", "${|"} {
+		if strings.Contains(line, opener+first) {
+			return true
+		}
+	}
+	return false
+}
+
 // substOpener is the two characters a substitution's text begins with, for
 // the spellings that have a body a refusal is written about.
 //
-// `$(` for a command substitution however it is written — the current-shell
-// spellings open `${ ` and `${|` and are one character longer, so the pair is
-// still what stands before the body — and the direction's own bracket for a
-// process substitution.
+// `$(` for a command substitution — the current-shell spellings open `${ `
+// and `${|` and are asked separately, see currentShellOpensBefore — and the
+// direction's own bracket for a process substitution.
 func substOpener(span syntax.Span) string {
 	switch span.Kind {
 	case syntax.ProcSubstIn:

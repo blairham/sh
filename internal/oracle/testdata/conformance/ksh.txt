@@ -25,7 +25,6 @@ declare/f-says-a-nested-keyword-declaration-back
 expand/tilde-with-no-home-at-all
 expansion/element-set-difference-and-intersection
 expansion/element-set-operators-against-an-unset-name
-fc/with-no-history
 help/the-help-option-is-the-whole-word-and-stands-where-an-option-stands
 heredoc/a-substitution-in-the-delimiter-is-its-own-text
 heredoc/an-expansion-left-unterminated-in-a-body

@@ -25,7 +25,6 @@ fnlib/add-zsh-hook-autoload-letters
 glob/a-value-backslash-before-something-the-script-quoted
 jobs/a-background-job-outlives-the-shell
 opt/the-option-listing-is-written-once-and-at-the-end
-param/a-negative-length-past-the-end-is-not-refused
 param/a-substring-range-blames-what-the-script-wrote
 param/an-empty-positional-list-under-a-colonless-test
 param/prompt-percent-refuses-an-escape-by-name

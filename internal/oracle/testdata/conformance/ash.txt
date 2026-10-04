@@ -6,9 +6,7 @@ arith/a-base-of-one-with-a-byte-the-reader-refuses-alone
 arith/a-base-of-one-with-a-digit-it-has-no-room-for
 arith/a-colon-after-a-complete-conditional
 arith/a-colon-with-no-question-and-a-value-after-it
-arith/a-condition-operand-is-blamed-as-it-was-written
 arith/a-fatal-math-error-gives-up-the-sourced-file-alone
-arith/a-zero-padded-operand-in-a-word-comparison
 arithmetic/an-increment-on-something-that-cannot-be-assigned-to
 array/a-literal-holding-an-operator-in-a-function-body
 arrays/a-second-subscript-on-a-declaration-operand
@@ -22,7 +20,6 @@ axis/trap-body-line-signal
 axis/trap-body-parse-failure-location
 axis/trap-body-runs-what-parsed
 axis/trap-body-will-not-parse
-cond/an-unreadable-comparison-operand
 cond/regex-empty-operand
 core/a-refused-older-body-leaves-an-empty-field
 core/a-trap-body-does-not-disturb-the-pipeline-record
@@ -84,9 +81,6 @@ source/a-syntax-error-quotes-the-offending-line
 subst/a-comment-in-a-current-shell-body
 subst/double-paren-count-decides-not-the-expression
 subst/double-paren-is-a-subshell
-test/a-comparison-operand-that-will-not-read
-test/a-comparison-operands-leading-zeros
-test/comparison-operands-are-arithmetic
 trap/an-elements-pipe-handler-runs-inside-the-elements-redirections
 ulimit/a-limit-it-cannot-read
 ulimit/the-file-size-block

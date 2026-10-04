@@ -64,6 +64,9 @@ func TestTheUndefinedMarkReadsTheBodyFromFPath(t *testing.T) {
 		{name: "whence says undefined", src: `typeset -fu zz; whence -v zz`, want: "zz is an undefined function\n"},
 		// The call reads the file and runs what it defines.
 		{name: "the call loads it", src: `typeset -fu zz; zz hello; echo "st=$?"`, want: "zz def hello\nst=0\n"},
+		// A name with a body already keeps it: the mark does not go on, so
+		// the call runs the body and never looks for the file (#5712).
+		{name: "a defined function keeps its body", src: `zz(){ echo mine; }; typeset -fu zz; zz; typeset -f zz`, want: "mine\nzz(){ echo mine; };"},
 		{name: "and the body is there afterwards", src: `typeset -fu zz; zz hi >/dev/null; typeset -f zz`, want: "zz(){ echo \"zz def $1\"; }\n"},
 		{name: "and whence says so too", src: `typeset -fu zz; zz hi >/dev/null; whence -v zz`, want: "zz is a function\n"},
 		// The file is read **once**: a second call runs the body it left and

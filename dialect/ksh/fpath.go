@@ -127,14 +127,21 @@ func markFunctions(r *interp.Runner, names []string, letters string, remove bool
 				removeMark(r, markedUndefined, name)
 				continue
 			}
-			if _, defined := r.FunctionText(name); !defined {
-				// The name has to *be* a function for the call to reach the
-				// loader at all, and an empty body is what stands in for the
-				// one the file will bring. It is never listed — the listing
-				// writes the declaration instead — and never run: the load
-				// replaces the declaration before the call is made.
-				r.DefineFunction(name, "{ :; }")
+			if _, defined := r.FunctionText(name); defined {
+				// A name that already has a body keeps it, and the mark does
+				// not go on: measured 2026-10-03 on ksh93u+ 2012-08-01, `f(){
+				// echo body; }; typeset -fu f; f; functions f` writes `body`
+				// and then `f(){ echo body; };`. A plugin manager writes the
+				// same marking on every reload, and a mark here sent the next
+				// call to the loader to find a file that is not there.
+				continue
 			}
+			// The name has to *be* a function for the call to reach the
+			// loader at all, and an empty body is what stands in for the
+			// one the file will bring. It is never listed — the listing
+			// writes the declaration instead — and never run: the load
+			// replaces the declaration before the call is made.
+			r.DefineFunction(name, "{ :; }")
 			addMark(r, markedUndefined, name)
 		}
 		if strings.ContainsRune(letters, 't') {

@@ -29226,6 +29226,29 @@ that reaches this axis by the other spelling.
 The preset is no. POSIX has an exported name keep the attribute for the
 life of the shell, and both other shells with the builtin agree.
 
+**`LocalBadNameWithAValueIsRefusedAtTheReturn`** — bash no · dash no · ksh93 no · zsh no · ash yes
+
+Takes a `local` operand whose name is not a name, where it carries a value,
+without a word, and refuses it when the call returns — located where the
+shell has got to, with no `local:` in front, and ending the shell at 2.
+BusyBox ash 1.37.0, measured 2026-10-03 in the pinned image over script
+files: `f() { local 1x=5; echo "in=$?"; echo two; }; f` writes `in=0` and
+`two` and then `line N: 1x: bad variable name`; `local a=1 1x=5 b=2`
+declares `a` and `b`; `local 1x` with no value is refused on the spot as
+everywhere else. The other columns refuse on the spot.
+
+**`AHiddenExportStillReachesAChild`** — bash yes · dash yes · ksh93 yes · zsh yes · ash no
+
+Hands a child the value an exported name held when a valueless local hid
+it, though the shell reads the name as unset. bash does: `export FOO=bar;
+f() { local FOO; env; }` reads `${FOO-UNSET}` as UNSET and tells the child
+`FOO=bar`. BusyBox ash 1.37.0 tells the child nothing, though its locals
+inherit the attribute — `local FOO=x` tells a child `FOO=x`. Measured
+2026-10-03 in the pinned image, over an exported global, a caller's local
+the callee hid, and an inherited `TERM`. Reached only where a valueless
+local really hid an exported value, so the dash, ksh93 and zsh entries are
+the preset's and are never asked.
+
 **`LocalInheritsTheExportAttribute`** — bash yes · dash yes · ksh93 no · zsh no
 
 Gives a local declaration the export attribute of the name it shadows,

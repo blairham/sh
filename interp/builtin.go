@@ -7844,6 +7844,7 @@ func biLocal(r *Runner, _ context.Context, args []string) (endStatus int) {
 		// refused twice is reported twice.
 		return r.declareNames(word, args, f)
 	}
+	args = r.badNamesHeldForTheReturn(word, args, nowhere)
 	args, status, ended := r.builtinNames(word, args, false)
 	if r.unspecified {
 		return status

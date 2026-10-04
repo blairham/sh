@@ -1181,7 +1181,13 @@ func (r *Runner) renderTracePrefix(v string) string {
 	if v == "" {
 		return ""
 	}
-	out, _, _ := RenderPromptValue(r.promptStyle, r, v, r.tracePromptField, r.promptQuantity)
+	style := r.promptStyle
+	if style.TraceTakesNoEscapes {
+		// The prompt's expansion and none of its table: see
+		// PromptStyle.TraceTakesNoEscapes.
+		style.Escape, style.Codes, style.Sequences = 0, nil, nil
+	}
+	out, _, _ := RenderPromptValue(style, r, v, r.tracePromptField, r.promptQuantity)
 	return out
 }
 

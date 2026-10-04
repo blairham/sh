@@ -1457,6 +1457,10 @@ func (r *Runner) popScope(sc *scope) {
 	r.unsealPrivateNames(sc)
 	r.unsealCallerLocals(sc)
 	r.scopes = r.scopes[:len(r.scopes)-1]
+	// And a bad name a `local` took without a word is refused now, where
+	// the call gives back what it declared. See
+	// Semantics.LocalBadNameWithAValueIsRefusedAtTheReturn.
+	r.refuseTheBadNamesHeldForTheReturn(sc)
 	// And the message for every name the unwind moved, last of all: an
 	// action that reads the name back has to see what the caller sees, and
 	// the enclosing declarations above are the final word on that.

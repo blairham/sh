@@ -1614,9 +1614,14 @@ type Semantics struct {
 	// so the name is checked ahead of the redirection in front of a function
 	// and a special builtin and behind it in front of a regular builtin and
 	// an external — the same split PrefixRedirectionOrder draws, and the
-	// same set this shell keeps a prefix for. The two are read apart because
-	// one shell holds them apart: BusyBox ash checks the name first and
-	// expands nothing first.
+	// same set this shell keeps a prefix for.
+	//
+	// BusyBox ash is with dash, re-measured 2026-10-03 in the pinned image:
+	// `x=2 /bin/echo RAN >/nope/f` complains about the file alone, and
+	// `x=$(echo SUB >&2) /bin/true` writes SUB before `x: is read only`. It
+	// had been recorded as checking first from a `${u:=set}` value leaving
+	// `u` unset, which it does for a reason of its own: a prefix value's
+	// side assignment goes with the prefix.
 	//
 	// The issue's own case is the first row seen through a redirection that
 	// *succeeds*: `readonly V=0; V=1 export > /dev/null 2>&1` writes the
@@ -2775,9 +2780,10 @@ type Semantics struct {
 	// own status and quietly loses the text.
 	//
 	// Whether anything is *said* about it is the dialect's wording —
-	// Diagnostics.BuiltinWriteError — not a second axis: bash, dash and ash
-	// complain, ksh93 fails silently, and zsh has nothing to word because it
-	// does not fail. Asked only when a write has actually failed, so `echo
+	// Diagnostics.BuiltinWriteError — not a second axis: bash and dash
+	// complain, ash's `echo` alone does (Diagnostics.BuiltinWriteErrorFrom),
+	// ksh93 fails silently, and zsh has nothing to word because it does not
+	// fail. Asked only when a write has actually failed, so `echo
 	// hi` on an open stream needs no dialect.
 	//
 	// This one is about a **closed descriptor** and not about every failed
@@ -14187,6 +14193,51 @@ type Semantics struct {
 	// shell's `typeset` takes the attribute off any name it assigns, at the
 	// top level as well as in a function. Only the local half is modeled.
 	LocalInheritsTheExportAttribute Answer
+
+	// AHiddenExportStillReachesAChild hands a child the value an exported
+	// name held when a valueless local hid it, though the shell itself reads
+	// the name as unset.
+	//
+	// bash says yes: `export FOO=bar; f() { local FOO; env; }` reads
+	// `${FOO-UNSET}` as UNSET and tells the child `FOO=bar`, and a caller's
+	// local the callee hid reaches its child the same way. BusyBox ash says
+	// no — the hidden name reaches no child — though its locals inherit the
+	// attribute (`local FOO=x` tells a child `FOO=x`). Measured 2026-10-03 in
+	// the pinned image:
+	//
+	//	export FOO=bar; f() { local FOO; env | grep ^FOO=; }     nothing
+	//	export FOO=bar; g() { local FOO; env | grep ^FOO=; }
+	//	  f() { local FOO=mid; g; }                              nothing
+	//	f() { local TERM; env | grep ^TERM=; }, TERM inherited   nothing
+	//
+	// Asked only where a valueless local really hid an exported value:
+	// zsh's and ksh93's locals do not inherit the attribute, and dash's
+	// valueless local leaves the outer value showing.
+	AHiddenExportStillReachesAChild Answer
+
+	// LocalBadNameWithAValueIsRefusedAtTheReturn takes a `local` operand
+	// whose name is not a name, where it carries a value, without a word —
+	// and refuses it when the call returns, located where the shell has got
+	// to and ending the shell.
+	//
+	// BusyBox ash 1.37.0. Measured 2026-10-03 in the pinned image over
+	// script files:
+	//
+	//	f() { local 1x=5; echo "in=$?"; echo two; }; f   in=0, two, then
+	//	                         `line N: 1x: bad variable name` at 2
+	//	f() { local a=1 1x=5 b=2; echo "$a $b"; }; f     1 2, then the same
+	//	f() { local 'a b=5'; echo in; }; f               in, then `a b: …`
+	//	f() { local 1x; echo in; }; f                    `local: line N: 1x:
+	//	                         bad variable name` at once, at 2
+	//
+	// So it is the value that defers it: an operand with none is refused on
+	// the spot, as everywhere else. dash refuses both at once; bash, ksh93
+	// and zsh refuse at once and go on.
+	//
+	// unpinned bash: refused on the spot, the preset's answer.
+	// unpinned zsh: likewise.
+	// unpinned ksh: likewise, through `typeset` in a function.
+	LocalBadNameWithAValueIsRefusedAtTheReturn Answer
 	// TypesetLocalNeedsKeywordFunction restricts `typeset`'s local scope to
 	// functions defined with the `function` word. ksh93 says yes: in
 	// `f() { typeset x=1; }` the assignment reaches the caller's `x`, and in
@@ -33046,6 +33097,11 @@ func PosixSemantics() Semantics {
 		TildeNameEndsOnlyAtAWrittenSlash: No,
 		// A bare `wait` lets its jobs go where nobody is told. See the field.
 		BareWaitLeavesJobsForTheListing: No,
+		// A hidden export reaches a child, which is what this package did
+		// before the axis existed. See the field.
+		AHiddenExportStillReachesAChild: Yes,
+		// A bad `local` name is refused on the spot. See the field.
+		LocalBadNameWithAValueIsRefusedAtTheReturn: No,
 		// And it says nothing of how they ended. See the field.
 		BareWaitReportsASignalDeath: BareWaitReportsNoSignalDeath,
 		// Nor at a foreground reap. See the field.
@@ -33420,6 +33476,11 @@ func CoreSemantics() Semantics {
 		TildeNameEndsOnlyAtAWrittenSlash: No,
 		// A bare `wait` lets its jobs go where nobody is told. See the field.
 		BareWaitLeavesJobsForTheListing: No,
+		// A hidden export reaches a child, which is what this package did
+		// before the axis existed. See the field.
+		AHiddenExportStillReachesAChild: Yes,
+		// A bad `local` name is refused on the spot. See the field.
+		LocalBadNameWithAValueIsRefusedAtTheReturn: No,
 		// And it says nothing of how they ended. See the field.
 		BareWaitReportsASignalDeath: BareWaitReportsNoSignalDeath,
 		// Nor at a foreground reap. See the field.

@@ -5230,6 +5230,7 @@ type Diagnostics struct {
 	//	dash   <shell>: 0: cannot open nosuch.sh: No such file
 	//	ksh93  <shell>: nosuch.sh: not found
 	//	zsh    <shell>: can't open input file: nosuch.sh
+	//	ash    <shell>: can't open 'nosuch.sh': No such file or directory
 	//
 	// Empty means the substrate's own, `%[1]s: %[2]s`.
 	ScriptNotFound string
@@ -5240,6 +5241,16 @@ type Diagnostics struct {
 	// it could not open as a usage error rather than as a program it could
 	// not run.
 	ScriptNotFoundStatus int
+
+	// ScriptReasonIsTheSystems gives ScriptNotFound and ScriptNotReadable the
+	// system's own text for the reason, where FileNotFound rewords it for a
+	// redirection: BusyBox ash, whose redirection says `no such file` and
+	// whose script operand says `No such file or directory`. Measured
+	// 2026-10-03 in the pinned image, `ash nosuch.sh` is `can't open
+	// 'nosuch.sh': No such file or directory` at 2, and a mode-000 file
+	// read by an ordinary user is `can't open '/tmp/u': Permission denied`
+	// at 2.
+	ScriptReasonIsTheSystems bool
 
 	// ScriptNotReadable is the same for a script that *is* there and would
 	// not open: no read permission, or a path that is not a file at all.
@@ -9071,6 +9082,24 @@ type Diagnostics struct {
 	// so silence here is a wording rather than a behavior.
 	BuiltinWriteError string
 
+	// BuiltinWriteErrorFrom narrows BuiltinWriteError to the builtins named,
+	// space-separated; the others fail in silence. Empty means every builtin.
+	//
+	// BusyBox ash names `echo` alone. Measured 2026-10-03 in the pinned
+	// image over a script file, each `( … )` on its own line: `echo hi >&-`,
+	// `exec 1>&-; echo hi` and a function running `echo` under `>&-` each
+	// write `ash: write error: Bad file descriptor` and leave 1, where
+	// `printf`, `pwd`, `type` and `set` leave 1 and write nothing. A broken
+	// pipe is the same: `ash: write error: Broken pipe`.
+	BuiltinWriteErrorFrom string
+
+	// BuiltinWriteErrorNamesTheShellAlone writes BuiltinWriteError behind
+	// the name the shell was invoked by and nothing else — no script name and
+	// no line — wherever the write failed: BusyBox ash, whose complaint is
+	// the multi-call binary's own and reads `ash: write error: …` from a
+	// script file as from `-c`.
+	BuiltinWriteErrorNamesTheShellAlone bool
+
 	// InheritedClosedStreamWriteError is a builtin's failed write to a stream
 	// that *this command's own redirection list* did not close — the sentence
 	// one shell has on a route where it says nothing about the other.
@@ -10738,7 +10767,11 @@ func (d Diagnostics) ScriptDiagnostic(shell, path string, err error) string {
 	if !errors.Is(err, fs.ErrNotExist) && d.ScriptNotReadable != "" {
 		format = d.ScriptNotReadable
 	}
-	msg := Wording(format, "%[1]s: %[2]s", path, d.openReason(err, false))
+	why := d.openReason(err, false)
+	if d.ScriptReasonIsTheSystems {
+		why = reason(err)
+	}
+	msg := Wording(format, "%[1]s: %[2]s", path, why)
 	return d.invocationPrefix(shell) + msg + "\n"
 }
 

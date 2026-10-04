@@ -2046,3 +2046,15 @@ Corpus: `core/two-operators-run-together-under-a-syntax-check`,
 `core/two-operators-run-together-when-it-runs`,
 `core/two-operators-run-together-before-a-refusal`,
 `core/two-operators-run-together-are-refused-without-the-remark`.
+
+## A NUL byte in the program's text
+
+bash, dash and BusyBox ash read a program as though a NUL byte in its text
+were not there; zsh keeps the byte in the word it stands in, and ksh93
+refuses it as `zero byte` unexpected. Measured 2026-10-03 over a script
+file holding `echo t\0wo` and `echo "q\0r"`: `two` and `qr` in bash 5.3.20,
+dash 0.5.12 and BusyBox v1.37.0 in the pinned image, the byte written back
+in zsh 5.9.2, and ksh93u+ stopping at line 2. The same holds for a file run
+because the kernel would not start it, which only BusyBox ash does with a
+NUL in it: `printf 'echo ran\0more\n' > b.img; chmod +x b.img; ./b.img`
+writes `ranmore`. `syntax.Dialect.SourceDropsNulBytes`, set for the three.

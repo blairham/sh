@@ -41,10 +41,6 @@ core/a-refused-older-body-leaves-an-empty-field
 core/a-trap-body-does-not-disturb-the-pipeline-record
 declare/a-numeric-letter-and-the-array-letter-on-one-line
 declare/a-numeric-letter-does-not-reach-a-later-local-array
-declare/local-bad-name
-declare/valueless-local-shadowing-a-callers-local
-declare/valueless-local-shadowing-an-exported-name
-declare/valueless-local-shadowing-an-imported-name
 dot/error-operator-ends-the-shell-in-zsh
 dot/fatal-error-ends-one-file-not-the-stack
 dot/fatal-error-ends-the-sourced-file-only
@@ -62,8 +58,6 @@ heredoc/an-expansion-left-unterminated-in-a-body
 heredoc/stripping-and-joining-are-ordered-and-the-panel-parts-over-which-comes-first
 invoke/a-name-that-is-not-sh-does-not-start-in-posix-mode
 invoke/a-name-that-is-not-sh-leaves-a-special-builtins-usage-error-alone
-invoke/a-script-that-is-not-there
-invoke/a-script-under-a-directory-that-is-not-there
 invoke/called-sh-a-second-reading-that-runs-off-the-end-of-the-word
 invoke/called-sh-and-then-leaving-posix-mode
 invoke/called-sh-outranks-the-invocations-own-posix-option
@@ -104,7 +98,6 @@ pat/a-glob-flag-where-a-loop-item-begins
 pat/a-quoted-operator-in-a-group-reaches-every-route
 pat/alnum-outside-ascii-is-a-letter-or-a-decimal-digit
 pat/an-escape-in-a-bracket-expression-globs
-path/binary-content-is-not-run-as-a-script
 printf/a-length-modifier-c99-added
 printf/c-ignores-a-precision
 printf/no-format-at-all
@@ -119,13 +112,7 @@ readonly/an-array-literal-inside-a-function
 readonly/an-associative-element-is-refused
 readonly/an-element-append-is-refused
 redir/a-descriptor-number-over-the-open-file-limit
-redir/a-group-writing-to-a-closed-descriptor
-redir/a-parked-close-the-writing-command-restates
-redir/a-write-into-a-broken-pipe-with-the-signal-disarmed
-redir/a-write-to-a-closed-descriptor-fails
-redir/a-write-to-a-stream-exec-parked-closed
 return/a-bare-name-as-the-operand-in-a-sourced-file
-roprefix/a-redirection-that-cannot-be-opened
 set/a-name-only-one-shell-has
 set/leaving-posix-mode-restores-a-special-builtins-usage-error
 set/leaving-posix-mode-restores-a-transient-assignment-prefix
@@ -157,7 +144,5 @@ unterminated/an-arms-open-paren-with-nothing-behind-it
 variable/a-function-name-that-cannot-be-exported
 variable/a-seeded-random-draws-a-sequence-of-its-own
 xtrace/prefix-diverges
-xtrace/ps4-draws-the-user-escape
 xtrace/ps4-unset-is-not-the-default-again
-xtrace/ps4-user-escape-is-not-a-variable
 zparseopts/a-refusal-leaves-the-name-as-it-found-it

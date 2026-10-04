@@ -813,6 +813,14 @@ Three readings, and they are the three halves of one question:
 - **the expansion is the same question again.** Three shells expand the value
   at every trace and zsh does not unless a script has turned prompt
   substitution on — `PromptStyle.Expand`, which is a function for this reason.
+
+**BusyBox ash is the exception to the first reading.** Its `PS1` reads a
+backslash table of its own, and its `PS4` reads none of it. Measured
+2026-10-03 in the pinned image, `PS4='<\u|\w|\h|\e|\101|\x41|\[|\$|\\|$((1+1))> '`
+traces `<\u|\w|\h|\e|\101|\x41|\[|$|\|2> ` — expansion's work on a
+backslash and nothing else, which is dash's reading. So the prefix asks the
+prompt's style with its table taken away there:
+`PromptStyle.TraceTakesNoEscapes`.
 - **an escape with no answer is the drawer's policy, not a script's.** A prefix
   has to draw something, so a code in no table falls through to
   `PromptStyle.Unknown` rather than being refused by name the way `${(%)…}`

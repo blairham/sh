@@ -11224,6 +11224,16 @@ func (r *Runner) hiddenExports(yield func(name, value string) bool) {
 				// as `foo=zz` in both (#4050).
 				continue
 			}
+			if _, own := r.Vars[name]; !own &&
+				!r.ask(r.sem().AHiddenExportStillReachesAChild,
+					"an exported name a valueless local hid still reaching a child") {
+				// Hidden from the child as well as from the script, in the
+				// dialect that does. See Semantics.AHiddenExportStillReachesAChild.
+				if r.unspecified {
+					return
+				}
+				continue
+			}
 			if !yield(name, value) {
 				return
 			}
@@ -11336,6 +11346,10 @@ func (r *Runner) inheritedValue(name string) (string, bool) {
 type scope struct {
 	saved   map[string]string
 	existed map[string]bool
+	// badNamesForTheReturn are the operands of a `local` this call took
+	// without a word, in the dialect that refuses them only when the call
+	// returns. See Semantics.LocalBadNameWithAValueIsRefusedAtTheReturn.
+	badNamesForTheReturn []string
 	// savedArrays is the same for arrays, which are a second table: shadowing
 	// only Vars left `f() { local a; a=(x y); }` setting a *global* array,
 	// because nothing had saved the array of that name to put back.

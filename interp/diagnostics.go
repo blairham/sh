@@ -8509,6 +8509,14 @@ type Diagnostics struct {
 	// `unbalanced parenthesis`. Empty falls back to ArithOperatorExpected,
 	// which is bash 5.3.20's `arithmetic syntax error in expression` for it.
 	ArithUnmatchedCloseParen string
+	// ArithColonInAGroup is the reason when a group meets a `:` where its
+	// `)` belongs — a colon no `?` asked for. ksh93: measured 2026-10-04 on
+	// ksh93u+ 2012-08-01, `$(( (1:2) ))`, `$(( (1 :2) ))`, `$(( (x:) ))`
+	// and the subscript `${a[(rn:2:)*a]}` are each `unbalanced parenthesis`,
+	// where `$(( (1 2) ))` keeps `arithmetic syntax error` and `$(( 1:2 ))`
+	// outside a group is the invalid-character sentence. Empty falls back to
+	// what any other text in that place draws.
+	ArithColonInAGroup string
 	// ArithConditionalThen and ArithConditionalElse are a conditional missing
 	// one of the two values it chooses between: `$(( 1 ? ))` and
 	// `$(( 1 ? 2 : ))`. No verbs. Empty falls through to the ordinary
@@ -10217,6 +10225,11 @@ func (d Diagnostics) arithParseFailure(se *syntax.Error, expr string) string {
 		}
 	case syntax.ErrArithMissingCloseParen:
 		reason, fallback = d.ArithMissingCloseParen, "operator expected"
+		if d.ArithColonInAGroup != "" && strings.HasPrefix(strings.TrimLeft(se.Token, " \t"), ":") {
+			// A colon where the `)` belongs, in the dialect with a sentence
+			// for it. See the field.
+			reason = d.ArithColonInAGroup
+		}
 		if reason == "" {
 			// A dialect with no sentence of its own for the unclosed group
 			// says what it says about any text an expression could not use,

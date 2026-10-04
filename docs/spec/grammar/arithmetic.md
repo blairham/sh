@@ -1294,6 +1294,15 @@ expanded yet, and is: `unset 'a[$i]'`, `read 'v[${#v}+1]'` and
 quotes protect it, so the expansion happens when the subscript is read. It
 is once either way, which is the whole of the rule (#1852).
 
+### A colon where a group's `)` belongs
+
+ksh93 has a sentence of its own for a `:` no `?` asked for, standing where
+a parenthesized group should close: `$(( (1:2) ))`, `$(( (1 :2) ))`,
+`$(( (x:) ))` and the subscript `${a[(rn:2:)*a]}` are each `unbalanced
+parenthesis`, where `$(( (1 2) ))` is still `arithmetic syntax error` and
+`$(( 1:2 ))`, with no group, is the invalid-character sentence. Measured
+2026-10-04 on ksh93u+ 2012-08-01. `Diagnostics.ArithColonInAGroup`.
+
 ## A subscript inside an expression
 
 `a[i]` written inside `$(( ))` is the element `${a[i]}` is, and the

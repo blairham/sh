@@ -117539,6 +117539,57 @@
         "TimedOut": false
       }
     },
+    "jobs/fg-and-bg-on-a-job-that-has-ended": {
+      "ash": {
+        "Stdout": "fg=2~bg=2",
+        "Stderr": "\u003cscript\u003e: set: line 1: can't access tty; job control turned off~\u003cscript\u003e: fg: line 4: job (null) not created under job control~\u003cscript\u003e: bg: line 6: job (null) not created under job control",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "fg=1~bg=1",
+        "Stderr": "\u003cscript\u003e: line 4: fg: job has terminated~\u003cscript\u003e: line 6: bg: job has terminated",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "fg=1~bg=1",
+        "Stderr": "\u003cscript\u003e: line 4: fg: job has terminated~\u003cscript\u003e: line 6: bg: job has terminated",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "fg=1~bg=1",
+        "Stderr": "\u003cscript\u003e: line 4: fg: job has terminated~\u003cscript\u003e: line 6: bg: job has terminated",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "fg=2~bg=2",
+        "Stderr": "\u003cscript\u003e: 1: set: can't access tty; job control turned off~\u003cscript\u003e: 4: fg: job (null) not created under job control~\u003cscript\u003e: 6: bg: job (null) not created under job control",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "fg=1~bg=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e:set:1: can't change option: -m",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "jobs/fg-with-no-monitor-in-a-script": {
       "ash": {
         "Stdout": "rc=2",

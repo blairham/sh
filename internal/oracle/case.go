@@ -20854,6 +20854,20 @@ echo "rc=$?"`,
 		Why: "whether the monitor is enough for `fg` to run a job, with no terminal on any stream — which is the state a script on a pipe is in, and the state every column of `jobs/bg-with-no-job-control` above was measured in. bash grants `set -m` here silently, because its background jobs already have process groups of their own, and its `fg` then names the job and reports 0; ksh93 grants the monitor just as silently and still answers 1 without a word, so the missing thing there is a person and not a terminal — measured on a pseudo-terminal too, where ksh93 still refuses and bash still runs it. dash and BusyBox ash deny the monitor without a terminal and their `fg` then names the job it has none for, and zsh ends the script over `set -m` outright. So the row separates `Semantics.MonitorAloneResumesAJob` from the terminal question `MonitorNeedsATerminal` already answers. This shell had one gate for both and refused every column (#2720). The job is a second long so that it is still running when `fg` reaches it: it was `sleep 0`, and a job that has already ended is a different question -- bash answers `fg: job has terminated` and 1 for it, measured with a pause before the `fg` -- so on a loaded runner the row asked that one instead, in the reference as much as here, and failed the conformance ratchet at random (#5763)",
 	},
 	{
+		ID: "jobs/fg-and-bg-on-a-job-that-has-ended", Category: "commands",
+		// The pause is what makes the job ended rather than running when the
+		// builtins reach it, so the row does not ask the scheduler.
+		Script: true,
+		Snippet: `set -m
+sleep 0 &
+sleep 1
+fg
+echo "fg=$?"
+bg
+echo "bg=$?"`,
+		Why: "the row above with the job already over by the time `fg` asks for it. bash refuses both builtins with `job has terminated` at 1, before anything else is said, and the job stays in the table -- so the `bg` after it is refused the same way rather than reporting no such job; bash 3.2 and bash as `sh` agree. ksh93 answers 1 for both without a word, as it does for a live job here, and dash, ash and zsh never reach the job at all, for the reasons the row above gives. This shell printed the job's command line on stdout as though it were putting it back in front, then failed on the continue with `no such process`, and `bg` called the ended job already in the background and reported 0 (#5791)",
+	},
+	{
 		ID: "jobs/fg-with-no-monitor-in-a-script", Category: "commands",
 		Script: true,
 		Snippet: `sleep 0 &

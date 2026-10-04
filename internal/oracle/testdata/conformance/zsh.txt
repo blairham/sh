@@ -15,7 +15,6 @@ core/an-unreadable-operand-a-branch-takes
 core/single-quotes-in-a-quoted-pattern-operand
 declare/a-local-over-a-produced-readonly-parameter
 diag/trap-refusing-a-condition-it-does-not-know
-fnlib/add-zsh-hook-autoload-letters
 jobs/a-background-job-outlives-the-shell
 param/a-substring-range-blames-what-the-script-wrote
 param/prompt-percent-refuses-an-escape-by-name

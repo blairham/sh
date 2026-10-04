@@ -234,6 +234,33 @@ func TestAddZshHookAnswersWhatZshAnswers(t *testing.T) {
 	}
 }
 
+// The letters add-zsh-hook hands to autoload, and the status that comes back.
+// Measured 2026-10-03 on zsh 5.9.2 with this snippet byte for byte. `-zk`
+// names two autoload styles and autoload refuses it, and the function answers
+// what autoload answered while installing the hook anyway — including when
+// the name was already there, which is what says autoload runs before that
+// check. This shell's copy answered 0 to both of those rows (#2149).
+//
+// Standard error is dropped because the complaint names the line of the
+// function file it came from, which is a fact about whose file it is.
+func TestAddZshHookAnswersWithAutoloadsStatus(t *testing.T) {
+	out, st := runShipped(t, `autoload -Uz add-zsh-hook
+show() { print -r -- "$1 st=$2 (${precmd_functions[@]})" }
+{ add-zsh-hook -k precmd kf } 2>/dev/null; show k $?
+{ add-zsh-hook -Uzk precmd kf2 } 2>/dev/null; show Uzk $?
+{ add-zsh-hook -Uzk precmd kf } 2>/dev/null; show Uzk-already-there $?
+{ add-zsh-hook -d -Uzk precmd kf } 2>/dev/null; show d-Uzk $?
+{ add-zsh-hook -q precmd kf3 } 2>/dev/null; show q $?`)
+	want := "k st=0 (kf)\n" +
+		"Uzk st=1 (kf kf2)\n" +
+		"Uzk-already-there st=1 (kf kf2)\n" +
+		"d-Uzk st=0 (kf2)\n" +
+		"q st=1 (kf2)\n"
+	if out != want || st != 0 {
+		t.Errorf("add-zsh-hook statuses = %q (status %d), want %q", out, st, want)
+	}
+}
+
 const addZshHookProbe = `autoload -Uz add-zsh-hook
 f1() { : }
 f2() { : }

@@ -20,7 +20,7 @@
 #     a hook nothing has ever set;
 #   * `-U`, `-z` and `-k` are handed to `autoload`, and the name is autoloaded
 #     whether or not any of them was given — so a hook can be declared before
-#     the file that defines it is read;
+#     the file that defines it is read — and autoload's status is the status;
 #   * an unknown hook, no operands, or more than two is the usage on standard
 #     error and status 1;
 #   * `-L` writes each hook array back as a `typeset`, takes an optional hook
@@ -32,9 +32,10 @@
 # match.  What it writes is one `typeset -p` per hook, so it carries that
 # builtin's spelling — including the missing `-g` of #2041.
 #
-# `-k` is handed straight through, and this shell's `autoload` names it as not
-# implemented.  The complaint is the shell's and it is correct; taking the
-# letter and dropping it would read as a shell that had it.
+# `-U`, `-z` and `-k` are handed straight through, and what `autoload` answers
+# is what this returns: `-zk` names two autoload styles at once and is refused
+# there, so `add-zsh-hook -Uzk precmd f` is 1 — with the hook installed all the
+# same, and the same 1 when the name was already in the array.
 
 emulate -L zsh
 
@@ -110,9 +111,12 @@ if (( remove )); then
 	return 0
 fi
 
-for entry in $current; do
-	[[ $entry == $fn ]] && return 0
-done
+# The status is autoload's, and autoload runs first: the name is added (or
+# found already there) whatever it answered.
 autoload $autoloadopts -- $fn
+integer loaded=$?
+for entry in $current; do
+	[[ $entry == $fn ]] && return loaded
+done
 eval "typeset -ga $array; $array+=( \"\$fn\" )"
-return 0
+return loaded

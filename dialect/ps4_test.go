@@ -82,6 +82,26 @@ func TestEveryDialectDrawsItsTracePrefixFromPS4(t *testing.T) {
 	}
 }
 
+// TestAnUnsetPS4DrawsNoPrefixButInKsh — the default prefix is a value the
+// shell assigned, so `unset PS4` takes it away in four columns, and ksh93
+// draws `+ ` again. Measured 2026-10-04; see prompt.md.
+func TestAnUnsetPS4DrawsNoPrefixButInKsh(t *testing.T) {
+	for _, d := range []struct {
+		name  string
+		shell func() driver.Shell
+		want  string
+	}{
+		{"bash", bashShell, "eval :\n:\n"},
+		{"zsh", zshShell, "eval :\n:\n"},
+		{"dash", dashShell, "eval :\n:\n"},
+		{"ksh", kshShell, "+ eval :\n+ :\n"},
+	} {
+		if got := traced(t, d.shell(), `unset PS4; set -x; eval :`); got != d.want {
+			t.Errorf("%s traced %q, want %q", d.name, got, d.want)
+		}
+	}
+}
+
 // traced runs a snippet under one dialect's whole shell — prelude, builtins
 // and prompt style — and returns what went to standard error.
 //

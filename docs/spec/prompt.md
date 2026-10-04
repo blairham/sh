@@ -775,12 +775,17 @@ is the same on every machine. See `prompt/the-default-prompt-is-a-parameter-at-a
 - **`PS3`.** ksh93 and zsh set it (`#? ` and `?# `). It is not assigned here
   and not read: `select` writes its own prompt. Measured and recorded; not
   implemented.
-- **What `unset PS4` does.** Measured 2026-09-17 over a script file: bash
-  5.3.20, zsh 5.9.2 and dash 0.5.12 then draw **no prefix at all** and ksh93u+
-  draws `+ ` again. This shell falls back to its dialect's prefix in every
-  case, which is ksh93's answer in four columns. Recorded rather than fixed:
-  it is one axis over a parameter a script has to go out of its way to remove.
-  See `xtrace/ps4-unset-is-not-the-default-again`.
+
+### What `unset PS4` does
+
+Measured 2026-09-17 over a script file and again 2026-10-04 with `unset PS4;
+set -x; eval :`: bash 5.3.20, zsh 5.9.2, dash 0.5.12 and BusyBox ash then draw
+**no prefix at all** — `eval :` and `:` bare — and ksh93u+ draws `+ ` again.
+This shell seeds `PS4` in every dialect, so an unset one is one the script
+unset, and `Semantics.UnsetPS4TracesNoPrefix` answers it: yes in the core and
+the POSIX preset, no in ksh. It used to fall back to the dialect's prefix
+everywhere, which was ksh93's answer in four columns
+(`xtrace/ps4-unset-is-not-the-default-again`, #5719).
 
 ## The trace prefix is a prompt
 

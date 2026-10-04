@@ -1087,12 +1087,10 @@ func (r *Runner) traceLineText(line string, d Diagnostics) string {
 // assigned in the shell or inherited from the environment. This drew the
 // built-in `+ ` in every case until #1454.
 //
-// Unset is the dialect's own prefix rather than nothing, which is what the
-// shells start with: the parameter holds `+ ` before any script runs in three
-// of them and a name-and-line form in the fourth. What a script's own
-// `unset PS4` does — three draw nothing at all and ksh93 keeps `+ ` — needs
-// that default to be a *parameter* this shell seeds as well, and is measured
-// and deliberately not modeled; see docs/spec/invocation.md.
+// Each dialect's front end seeds the parameter with its default before any
+// script runs. What a script's own `unset PS4` then draws is
+// Semantics.UnsetPS4TracesNoPrefix: nothing in four columns, the dialect's own
+// prefix again in ksh93. A runner nobody seeded draws the dialect's prefix.
 // sourceTraceWord is what stands where a traced command's words would go on
 // the line a sourced file's entry writes. A literal, because the event is not
 // a command and there is nothing of the script to render there.
@@ -1126,6 +1124,12 @@ func (r *Runner) traceSourcedFile() {
 func (r *Runner) tracePrefix() string {
 	if v, ok := r.getVar("PS4"); ok {
 		return r.tracePrefixDepth(r.renderTracePrefix(v))
+	}
+	if r.removed["PS4"] && r.ask(r.sem().UnsetPS4TracesNoPrefix, "an unset PS4 tracing with no prefix") {
+		// The default was a value, and the script took it away. Only where
+		// the script did: a runner nothing seeded never had one to take,
+		// and draws the dialect's prefix. See Semantics.UnsetPS4TracesNoPrefix.
+		return ""
 	}
 	if r.diag().TraceStyle == TraceNameLine {
 		// This dialect's prefix *is* a location, so it is the one a

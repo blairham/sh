@@ -17935,6 +17935,17 @@ type Semantics struct {
 	// run to have. The two answers cannot be told apart there.
 	TrapBodyRunsWhatParsed Answer
 
+	// UnsetPS4TracesNoPrefix draws no prefix at all in front of a traced
+	// command once the script has unset `PS4`, rather than the dialect's own
+	// default prefix. The default is a *value* the shell assigned before the
+	// script ran, so unsetting the parameter takes it away. Measured
+	// 2026-10-04 with `unset PS4; set -x; eval :`: bash 5.3.20, zsh 5.9.2,
+	// dash 0.5.12 and BusyBox ash trace `eval :` and `:` bare, and ksh93u+
+	// draws `+ ` again, `PS4` being a parameter that comes back there.
+	// Asked only when the script itself unset `PS4`; a runner nothing seeded
+	// draws the dialect's prefix.
+	UnsetPS4TracesNoPrefix Answer
+
 	// TrapParseFailureNamesWhereItFired puts the runtime location in front
 	// of a trap body's parse failure — where the trap fired — rather than
 	// the line the parse gave out on.
@@ -32055,6 +32066,9 @@ func PosixSemantics() Semantics {
 		// A builtin's output goes out as it is written: the reading that
 		// needs no buffer, and bash's and ash's.
 		BuiltinOutputHeldUntilItReturns: No,
+		// An unset PS4 traces with no prefix, which is four of the five
+		// columns. See UnsetPS4TracesNoPrefix.
+		UnsetPS4TracesNoPrefix: Yes,
 		// XCU 2.13.1 makes a `/` in a pattern a separator whatever stands
 		// around it and says nothing about the bracket one lands inside, so
 		// the bracket stays a bracket that matches nothing — which is what
@@ -33754,6 +33768,10 @@ func CoreSemantics() Semantics {
 		// is put to every range over a value with a wide character. See
 		// Semantics.SubstringCountsBytes.
 		SubstringCountsBytes: No,
+		// An unset PS4 traces with no prefix, as four of the five columns
+		// do. Answered here because the question is put to every trace
+		// after `unset PS4`. See Semantics.UnsetPS4TracesNoPrefix.
+		UnsetPS4TracesNoPrefix: Yes,
 		// `-ai` is the two letters, which is what this package did before the
 		// axis existed and what two of the three columns with the builtin
 		// answer. Answered here because the question is put to every `-ai`,

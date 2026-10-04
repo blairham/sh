@@ -54,5 +54,4 @@ unterminated/a-case-arm-closed-by-its-terminator
 unterminated/a-case-arm-with-no-command-at-all
 unterminated/a-case-arms-terminator-after-a-separator
 unterminated/an-arms-open-paren-with-nothing-behind-it
-xtrace/ps4-unset-is-not-the-default-again
 zparseopts/a-refusal-leaves-the-name-as-it-found-it

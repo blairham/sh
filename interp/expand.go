@@ -3542,6 +3542,11 @@ func (r *Runner) resultReadsAsPattern(esc string) bool {
 	if r.sem().UnterminatedBracket == BracketBadPattern && hasUnterminatedBracket(esc, r.emptyBracketCompiles()) {
 		return true
 	}
+	// And a `]`, in that dialect, which marks a quoted one: a value's `]`
+	// must not close a bracket the source opened. See Runner.globEscape.
+	if r.sem().UnterminatedBracket == BracketBadPattern && hasUnescapedByte(esc, ']') {
+		return true
+	}
 	// And a group nothing closes, which is #1386's gap arriving through the
 	// other bracket. A lone `(` is deliberately not a metacharacter —
 	// hasUnescapedMeta asks closesGroup and an unclosed one answers no — so

@@ -135,6 +135,14 @@ func globEscape(s string) string { return globEscapeIn(s, markedByGlobEscape) }
 // `a)c`, `a\c` and `abc`, and a quoted `-` to `a-c` and `a\c`: the
 // same answers its `case` gives.
 func (r *Runner) globEscape(s string) string {
+	if r.sem().UnterminatedBracket == BracketBadPattern {
+		// And the dialect that refuses an unclosed bracket outright marks a
+		// quoted `]` too, because there a quoted `]` cannot close one:
+		// measured 2026-10-04 on zsh 5.9.2, `echo nos[a"]"` and `k=']';
+		// echo nos[a$k` are both `bad pattern: nos[a]`, where reading the
+		// value's bracket as the closer answered `no matches found`.
+		return globEscapeIn(s, markedByGlobEscape+"]")
+	}
 	if r.sem().BracketEscape != BracketEscapeIsOnlyAMember {
 		return globEscape(s)
 	}

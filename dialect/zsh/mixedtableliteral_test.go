@@ -82,3 +82,22 @@ func TestTheTableLiteralPoliciesAreThisDialects(t *testing.T) {
 		t.Errorf("EmptyKeyInATableLiteral = %v, want accepted", got)
 	}
 }
+
+// The words are expanded before the shape is refused, so a word that cannot
+// expand is what the shell reports instead, and a substitution in a later
+// element has run by the time the refusal is written. Measured 2026-10-04 on
+// zsh 5.9.2.
+func TestAMixedTableLiteralIsExpandedBeforeItIsRefused(t *testing.T) {
+	for _, tc := range []struct{ name, src, want string }{
+		{"a bad pattern among the words", "typeset -A m\nm=( [one]=1 [two words]=2 )", "bad pattern: [two"},
+		{"a pattern with no match", "typeset -A m\nm=( [one]=1 two nomatch-zz* )", "no matches found: nomatch-zz*"},
+		{"a substitution runs first", "typeset -A m\nm=( [one]=1 two $(printf ran >&2) )", "ran"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, _ := answersRun(t, tc.src)
+			if !strings.Contains(out, tc.want) {
+				t.Errorf("= %q, want it to contain %q", out, tc.want)
+			}
+		})
+	}
+}

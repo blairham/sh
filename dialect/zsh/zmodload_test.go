@@ -246,16 +246,18 @@ print -r -- "lF-absent=$?"`)
 //
 // `-d` used to be the middle row and has left the list: it is implemented
 // since #4449, so the row would have gone on asserting a refusal the builtin
-// no longer makes. `-A` is a letter zsh still has and this shell still has
-// not — module aliases — and it is the same pair of wordings.
+// no longer makes. `-a` was the first row and has left it the same way, for
+// the builtin half of autoloading; `-m` stands in it now. `-A` is a letter
+// zsh still has and this shell still has not — module aliases — and it is
+// the same pair of wordings.
 func TestZmodloadTellsAMissingLetterFromAnUnknownOne(t *testing.T) {
-	out, st := runZsh(t, t.TempDir(), `zmodload -a zsh/x mybuiltin 2>&1
+	out, st := runZsh(t, t.TempDir(), `zmodload -m zsh/x 2>&1
 print -r -- "a=$?"
 zmodload -A zsh/main 2>&1
 print -r -- "A=$?"
 zmodload -X zsh/main 2>&1
 print -r -- "X=$?"`)
-	want := "zsh:zmodload:1: -a is not implemented yet\na=1\n" +
+	want := "zsh:zmodload:1: -m is not implemented yet\na=1\n" +
 		"zsh:zmodload:3: -A is not implemented yet\nA=1\n" +
 		"zsh:zmodload:5: bad option: -X\nX=1\n"
 	if out != want || st != 0 {

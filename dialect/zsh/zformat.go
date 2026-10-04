@@ -154,7 +154,15 @@ func zformatSubstInto(r *interp.Runner, mode zformatMode, param, format string, 
 		// already reported that and stopped, and saying `malformed` on top of
 		// `division by zero` would blame the format for the expression's
 		// failure.
-		return 1
+		//
+		// And the status is 0, which is what the shell then exits with:
+		// measured on zsh 5.9.2, `false; zformat -f R "%0(c.y.n)" c:1/0`
+		// stops the script at 0, where the same division in `$(( ))` stops
+		// it at 1. The script ends on the builtin's own answer, and the
+		// builtin's answer is that it did not fail. The evaluation has
+		// already written the fatal status, so it is written back here.
+		r.SetExitStatus(0)
+		return 0
 	}
 	if !isStoreOperandName(param) {
 		r.DiagnoseAsTheShellf("not an identifier: %s\n", param)

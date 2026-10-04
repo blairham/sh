@@ -34,10 +34,10 @@ import "github.com/blairham/sh/interp"
 // reason builtInTies leaves `FPATH`'s default out: those fourteen names are
 // one machine's `/etc/zshrc` and one zsh build's module directory, and
 // writing them down would hand a script another installation's roster as
-// though this shell had it. This shell autoloads no module — `zmodload -a`
-// registers nothing here — so the honest answer is that there is nothing in
-// that population, and the day there is, it arrives from the same set
-// `zmodload -a` fills rather than from a list in this file.
+// though this shell had it. What a *script* registers with `zmodload -a` is
+// a different matter — it is the script's own — and those modules are
+// written as `autoloaded` from the same set the builtin keeps (see
+// zmodloadautoload.go) rather than from a list in this file.
 //
 // So a fresh shell answers one row, `zsh/main loaded`, which is what
 // zmodloadAlwaysLoaded already says about itself through every other surface
@@ -45,6 +45,13 @@ import "github.com/blairham/sh/interp"
 func zshModulesView(r *interp.Runner) interp.AssocArray {
 	loaded := zmodloadLoaded(r)
 	out := make(interp.AssocArray, len(loaded))
+	// A module a registration names and nobody has loaded is the second
+	// word. Measured 2026-10-03 on zsh 5.9.2 under `-f`: after `zmodload -a
+	// zsh/nosuch mb`, `$modules[zsh/nosuch]` is `autoloaded`. Written first
+	// so that a module both loaded and named is `loaded`.
+	for _, m := range zmodloadAutoloadedModules(r) {
+		out[m] = interp.Scalar(zshModuleAutoloadedWord)
+	}
 	for _, m := range loaded {
 		out[m] = interp.Scalar(zshModuleLoadedWord)
 	}
@@ -52,11 +59,12 @@ func zshModulesView(r *interp.Runner) interp.AssocArray {
 }
 
 // zshModuleLoadedWord is the state word a module a script has loaded carries.
-//
-// The other word this table can hold is `autoloaded`, and it is deliberately
-// unreachable rather than missing — see zshModulesView, where the population
-// that would carry it is argued.
 const zshModuleLoadedWord = "loaded"
+
+// zshModuleAutoloadedWord is the word a module carries when a `zmodload -a`
+// registration names it and it is not loaded. Only a script's registrations
+// reach it — see zshModulesView for the installation's own, which do not.
+const zshModuleAutoloadedWord = "autoloaded"
 
 // registerModuleRoster installs `$modules`.
 //

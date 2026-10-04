@@ -116,22 +116,31 @@ noisy`)
 // answers say so: `+X` with nothing is silence and 0, `-X` with nothing is
 // `bad autoload`, `-X` with a *name* is `bad autoload` too — it never takes
 // one — and `+X` with a name it cannot find is the not-found message.
+//
+// `bad autoload` **ends the script**, so the two `-X` lines are each inside a
+// subshell, which gives up the subshell alone, and the last line is one at the
+// top level that nothing after it survives. Measured on zsh 5.9.2
+// (2026-10-03) with this script byte for byte: the same eight lines and an
+// exit of 1. This shell reported and ran on until then.
 func TestTheTwoSignsOfXAreTwoCommands(t *testing.T) {
 	out, st := runZsh(t, t.TempDir(), `fpath=()
 autoload +X
 print -r -- "1 plus-none st=$?"
-autoload -X 2>&1
+( autoload -X ) 2>&1
 print -r -- "2 minus-none st=$?"
-autoload -X foo 2>&1
+( autoload -X foo ) 2>&1
 print -r -- "3 minus-name st=$?"
 autoload +X missing 2>&1
-print -r -- "4 plus-missing st=$?"`)
+print -r -- "4 plus-missing st=$?"
+autoload -X 2>&1
+print -r -- "5 never"`)
 	want := "1 plus-none st=0\n" +
 		"zsh:autoload:4: bad autoload\n2 minus-none st=1\n" +
 		"zsh:autoload:6: bad autoload\n3 minus-name st=1\n" +
-		"zsh:8: missing: function definition file not found\n4 plus-missing st=1\n"
-	if out != want || st != 0 {
-		t.Errorf("the two signs = %q (status %d), want %q", out, st, want)
+		"zsh:8: missing: function definition file not found\n4 plus-missing st=1\n" +
+		"zsh:autoload:10: bad autoload\n"
+	if out != want || st != 1 {
+		t.Errorf("the two signs = %q (status %d), want %q at 1", out, st, want)
 	}
 }
 

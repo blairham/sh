@@ -970,13 +970,15 @@ func autoloadRunResolved(r *interp.Runner, ctx context.Context, name string, stu
 
 // autoloadBad is `-X` where there is no function for it to be about.
 //
-// zsh ends the script here and this shell reports and runs on, which is a
-// difference the corpus records rather than one to hide: a dialect builtin
-// has no way to say "and stop" that this engine offers, and inventing one
-// for a spelling only the shell's own generated stub ever writes would be
-// more surface than the corner earns.
+// It is the end of the script and not only a refusal: measured 2026-10-03 on
+// zsh 5.9.2, `autoload -X; echo after` and `autoload -X foo; echo after` both
+// write the complaint, never reach the `echo`, and exit 1 — after a `false`
+// too, so the 1 is the failure's and not a status carried over — while `(
+// autoload -X ); echo after=$?` gives up the subshell alone and carries on at
+// 1. That is the unwinding Runner.StopTheScript provides.
 func autoloadBad(r *interp.Runner) int {
 	r.Diagnosef("bad autoload\n")
+	r.StopTheScript(1)
 	return 1
 }
 

@@ -8286,11 +8286,13 @@ func (p *Parser) parseCase() Command {
 				// and the same arm ended by `(`, `}`, `fi`, `done` or
 				// `then` are each `… unexpected (expecting ";;")`.
 				//
-				// Not a separator standing where a command would begin,
-				// which is refused as itself: `case x in x) ; echo;; esac`
-				// and `x) echo; & esac` are `";" unexpected` and `"&"
-				// unexpected` there, measured the same day.
-				if p.at(TokSemi) || p.at(TokAmp) {
+				// Not an operator standing where a command would begin,
+				// which is refused as itself: `case x in x) ; echo;; esac`,
+				// `x) echo; & esac`, `x) | ;; esac`, `x) && ;; esac` and
+				// `x) || ;; esac` are each `"…" unexpected` with no
+				// expectation there, measured the same day.
+				if p.at(TokSemi) || p.at(TokAmp) || p.at(TokPipe) || p.at(TokPipeAmp) ||
+					p.at(TokAndAnd) || p.at(TokOrOr) {
 					p.failUnexpected("")
 					return c
 				}

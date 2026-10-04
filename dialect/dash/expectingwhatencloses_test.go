@@ -27,6 +27,8 @@ func TestARefusalExpectsWhatTheEnclosingConstructWanted(t *testing.T) {
 		// itself.
 		{`case x in x) ; echo two;; esac`, `";" unexpected`},
 		{`case x in x) echo; & esac`, `"&" unexpected`},
+		{`case x in x) | ;; esac`, `"|" unexpected`},
+		{`case x in x) && ;; esac`, `"&&" unexpected`},
 		// The input running out where an arm's pattern would begin.
 		{`case x in`, `end of file unexpected (expecting ")")`},
 		{`case x in x) : ;;`, `end of file unexpected (expecting ")")`},

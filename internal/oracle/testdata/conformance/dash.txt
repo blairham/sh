@@ -37,7 +37,6 @@ jobs/a-background-job-outlives-the-shell
 jobs/a-job-that-is-neither-current-nor-previous
 jobs/bg-with-no-job-control
 local/a-subscripted-operand-to-local
-opt/set-e-carries-the-err-trap
 opt/set-t-at-the-invocation
 param/an-empty-positional-list-under-a-colonless-test
 pat/a-case-arm-needs-a-paren-left-to-close-it

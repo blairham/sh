@@ -23514,6 +23514,16 @@ type Semantics struct {
 	// long as the job would have.
 	KillReadsASignalJoinedToItsOption Answer
 
+	// EditingModesAreTwoSwitches holds `set -o emacs` and `set -o vi` as two
+	// options of their own rather than as one choice of keymap under two
+	// names.
+	//
+	// dash. Measured 2026-10-03 on dash 0.5.12: `set -o vi; set -o emacs`
+	// lists `vi on` and `emacs on` and leaves `$-` as `EV`; `set -V; set -E;
+	// set +V` leaves `E`. bash 5.3.20 and ksh93u+ make the two one state —
+	// `set -o vi; set -o emacs` lists `vi off` — which is the base.
+	EditingModesAreTwoSwitches Answer
+
 	// AllexportMarksACompound makes `set -a` mark an array or an association
 	// for export when it is stored, as it marks a scalar.
 	//
@@ -32865,6 +32875,8 @@ func PosixSemantics() Semantics {
 		// operand, so the base reads nothing joined to the option; bash 5.x
 		// and ksh93 override.
 		KillReadsASignalJoinedToItsOption: No,
+		// Every shell but one that has both names makes them one state.
+		EditingModesAreTwoSwitches: No,
 		// The standard leaves the order of a bare `alias` listing unspecified;
 		// four of the six sort by name, so the base does and dash and ash,
 		// which walk their table, override.

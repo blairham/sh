@@ -1590,9 +1590,31 @@ input in blocks and writes back everything it had taken, so `echo one` / `fi` /
 *before* the last command runs. The amount is a property of its buffer rather
 than of the language, so the corpus rows are shaped to put the failure on the
 last line, where the question does not arise. ksh93 also prefixes a syntax
-error with the line it had reached — `./s.sh: line 2: syntax error at line 3:`
-— but only when `set -v` was turned on from inside the script, which is the
-other reason those rows put the letter on the invocation.
+error with the line it had reached — `./s.sh: line 2: syntax error at line 3:`.
+That was once written down here as a property of `set -v` turned on from
+inside the script, which is the other reason those rows put the letter on the
+invocation; it is not. It is the line of the **last command the script ran**,
+`set -v` or anything else, and it is left out when that is line 1 or nothing
+has run. Measured 2026-10-04 on ksh93u+ 2012-08-01 over script files ending in
+an unclosed `(`:
+
+| the script before the `(` | the prefix |
+| --- | --- |
+| `echo one` / `echo two` | `line 2:` |
+| `echo one` / `v=SET` | `line 2:` — an assignment is a command |
+| `echo one` / `f() { :; }` | `line 2:` — so is a definition |
+| `echo a` / `# c` | none — a comment is not |
+| `echo one` | none — line 1 |
+| `if true; then` / `:` / `fi` | `line 2:`, the `:` |
+| `f() {` … `}` on 1-4, `f` on 6 | `line 6:` — a call is its own line |
+| `echo a` / `:` / a `for` loop on 3-5 | `line 2:` — a finished loop puts it back |
+| the same with `for ((…))` | `line 3:` — that loop's header counts |
+| `echo a` / `( : )` over 2-4 | none — a subshell never moved it |
+| `echo a` / `{ : }` over 2-4 | `line 3:` — a group did |
+
+The same under `-c`. Modeled as
+`Diagnostics.ParseFailureIsLocatedWhereTheProgramGotTo` with the line from
+`Runner.LineReached`.
 
 ### Which standard error it writes to
 

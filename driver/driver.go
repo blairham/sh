@@ -3475,7 +3475,7 @@ func (sh Shell) executeLines(
 				// the same way — measured, an unterminated quote piped in
 				// is one complaint and status 1 in all four.
 				say(verboseUpTo(pr.text(), err))
-				sh.errf("%s", in.dg.ParseDiagnostic(in.diagName(), in.input, err, pr.text()))
+				sh.errf("%s", in.dg.ParseDiagnosticAfter(in.diagName(), in.input, err, pr.text(), r.LineReached()))
 				return in.dg.StatusForParseError(err), endingParseFailure
 			}
 			// Whatever is left once the last line has been handed out is
@@ -3490,7 +3490,7 @@ func (sh Shell) executeLines(
 			// The line did not parse, so none of it runs — not even the
 			// statements before the failure, which is measured.
 			say(verboseUpTo(pr.text(), err))
-			sh.errf("%s", in.dg.ParseDiagnostic(in.diagName(), in.input, err, pr.text()))
+			sh.errf("%s", in.dg.ParseDiagnosticAfter(in.diagName(), in.input, err, pr.text(), r.LineReached()))
 			if sh.readOn(r, pr, in, err) {
 				continue
 			}

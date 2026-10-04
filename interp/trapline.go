@@ -220,3 +220,10 @@ func (t TrapListingSequence) String() string {
 	}
 	return "TrapListingLowestFirst"
 }
+
+// LineReached is the line of the last command the shell ran, nought before
+// it has run one, with a finished loop counted as not having moved it. The
+// front end reads it to locate a failure to read the rest of a program — see
+// Diagnostics.ParseFailureIsLocatedWhereTheProgramGotTo and
+// Runner.reachedLine.
+func (r *Runner) LineReached() int { return r.reachedLine }

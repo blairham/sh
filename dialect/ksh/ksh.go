@@ -23,6 +23,9 @@ func Dialect() syntax.Dialect {
 	// expression here, so `${x::2}` is the expression `:2` and a refusal
 	// rather than an offset of nothing (#2818).
 	d.ParamSubstringOffsetTakesALeadingColon = true
+	// A `(` after a command's only word is refused at the line of the token
+	// after it — `echo (` and two blank lines is line 3. See the field.
+	d.ParenAfterANameIsRefusedWhereTheNextTokenStands = true
 	// A backslash inside a `"` run written in an operand that itself stands
 	// in double quotes escapes whatever follows it: with `u` unset,
 	// `"${u-"A\pB"}"` is `ApB` here as in bash, and `A\pB` in dash, zsh and
@@ -4834,6 +4837,9 @@ func Diagnostics() interp.Diagnostics {
 		// with two shapes to choose between (#4683).
 		PrefixFailureIsTheBuiltins:  true,
 		ParseFailureNamesItsOwnLine: true,
+		// Except part-way through a program, where the line the program had
+		// got to goes in front: `line 2: syntax error at line 4`.
+		ParseFailureIsLocatedWhereTheProgramGotTo: true,
 		// And for a here-document body that line is the one the message is
 		// located at rather than the body's own. See
 		// interp/heredocbodyrefusalline.go (#4715).

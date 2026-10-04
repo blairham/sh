@@ -4028,6 +4028,19 @@ func (p *Parser) parseSimple() Command {
 			// `[[ ( -n x ) ]]` an error where `[[` is not a construct — both
 			// of which used to run as ordinary commands with surprising
 			// arguments.
+			if p.dialect.ParenAfterANameIsRefusedWhereTheNextTokenStands &&
+				len(c.Args) == 1 && len(c.Assigns) == 0 && len(c.Redirs) == 0 &&
+				!funcNameWaitsForTheShell(c.Args[0].Spans) {
+				// Still the `(` that is blamed, numbered where the token
+				// after it stands. The parse ends here, so reading on to
+				// find that token costs nothing that would have been read.
+				paren := p.tok
+				p.next()
+				p.skipNewlines()
+				paren.Pos.Line = p.tok.Pos.Line
+				p.failUnexpectedAt(paren, "", false)
+				return c
+			}
 			p.failUnexpected("")
 			return c
 		default:

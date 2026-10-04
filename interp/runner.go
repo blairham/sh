@@ -3498,6 +3498,13 @@ type Runner struct {
 	// of the input — see Runner.lastStatementLine. One diagnostic names it:
 	// see Diagnostics.CoprocessAlreadyRunningNamesTheLastStatementEntered.
 	enteredLine int
+	// reachedLine is the line of the last command this shell ran, as the one
+	// dialect that names it after a failure to read on counts it: what a
+	// loop ran inside it does not count once the loop is done, and a call
+	// counts as its own line. See
+	// Diagnostics.ParseFailureIsLocatedWhereTheProgramGotTo and
+	// Runner.LineReached.
+	reachedLine int
 	// jobEnded is poked, from the goroutine a background job ended on, so
 	// that a shell **blocked** on something else can notice.
 	//
@@ -7858,7 +7865,21 @@ func (r *Runner) command(ctx context.Context, c syntax.Command) error {
 		// crashing. Our own parser never produces one, so no test can see
 		// the difference; an embedder building a tree by hand can, and this
 		// package is a library.
+		reachedBefore := r.reachedLine
 		r.prevLine, r.line = r.line, r.commandLine(c)
+		r.reachedLine = r.line
+		switch c.(type) {
+		case *syntax.LoopClause, *syntax.ForClause, *syntax.SelectClause, *syntax.Subshell:
+			// Once a loop is done the shell is back where it was before
+			// it — measured on ksh93u+, `:` on line 2 and then a loop on
+			// lines 3-5 locates a later failure at line 2 — and a subshell
+			// never moved it, its parentheses included.
+			defer func() { r.reachedLine = reachedBefore }()
+		case *syntax.ForArithClause:
+			// Except that the arithmetic form's header counts as run: the
+			// same `:` and an arithmetic loop on lines 3-5 is line 3.
+			defer func(at int) { r.reachedLine = at }(r.line)
+		}
 		switch c.(type) {
 		case *syntax.Group, *syntax.Subshell, *syntax.NamespaceClause:
 			// A grouping's head is not a statement, so it does not advance

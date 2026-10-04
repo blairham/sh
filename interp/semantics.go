@@ -2858,6 +2858,21 @@ type Semantics struct {
 	// the digest-pinned Alpine image internal/oracle reaches (#2291).
 	SubstringOfPositionalsSlicesTheList Answer
 
+	// ExpandedReplacementBackslashQuotesABackslash reads a backslash that an
+	// unquoted expansion put in a `${v/pattern/replacement}` replacement as a
+	// quote on a backslash behind it, and as itself in front of anything else.
+	//
+	// Measured 2026-10-03 on ksh93u+ with `v=abc`, `${v/b/$q}`:
+	//
+	//	q='\\'     a\c        q='\\\\'   a\\c
+	//	q='x\\y'   ax\yc      q='\&'      a\&c
+	//	q='\a'     a\ac       q='\\\&'    a\\&c
+	//
+	// and `"$q"` in the replacement keeps both backslashes of `\\`, as a
+	// written `\\\\` does. bash, zsh and dash leave the value's backslashes
+	// as they came. Read rather than asked: No is every other column's answer.
+	ExpandedReplacementBackslashQuotesABackslash Answer
+
 	// MatchedBracketSkipsToAnEscapedBracket ends a bracket expression, once a
 	// member has matched, at the next `]` byte — an escaped one included —
 	// so the rest of the pattern is read from there.
@@ -31596,12 +31611,13 @@ func PosixSemantics() Semantics {
 		ArithLeadingZeroIsOctal: Yes,
 		// The standard has no substring operator, so this is the reading
 		// every shell that has one gives but BusyBox ash, which says so.
-		SubstringOfPositionalsSlicesTheList:    Yes,
-		MatchedBracketSkipsToAnEscapedBracket:  No,
-		SubstringOfAnUnsetNameEvaluatesNothing: No,
-		SlashRunBehindAPatternIsOneSlash:       No,
-		QuotedDashInABracketIsARange:           No,
-		WideCharacterIsInAlphaAlone:            No,
+		SubstringOfPositionalsSlicesTheList:          Yes,
+		ExpandedReplacementBackslashQuotesABackslash: No,
+		MatchedBracketSkipsToAnEscapedBracket:        No,
+		SubstringOfAnUnsetNameEvaluatesNothing:       No,
+		SlashRunBehindAPatternIsOneSlash:             No,
+		QuotedDashInABracketIsARange:                 No,
+		WideCharacterIsInAlphaAlone:                  No,
 		// One reader: the value a name holds goes through the same octal
 		// rule the literal does, so `k=010; $((k))` is eight. ksh93 is the
 		// one shell whose two readers part.

@@ -6964,7 +6964,34 @@ func (r *Runner) diagnosticWordText(w *syntax.Word) string {
 // prints the four characters. Both follow from GlobExpansionResults once the
 // replacement stops globbing on its own.
 func (r *Runner) replacementOf(w *syntax.Word) string {
+	if w != nil && r.sem().ExpandedReplacementBackslashQuotesABackslash == Yes {
+		// Read rather than asked: every other column leaves the value as it
+		// came, which is the line below. See
+		// Semantics.ExpandedReplacementBackslashQuotesABackslash.
+		return r.wordTextNoSplit(w, func(s syntax.Span, text string) string {
+			if s.Quoting != syntax.Unquoted || s.Kind == syntax.Literal {
+				return text
+			}
+			return collapseBackslashPairs(text)
+		})
+	}
 	return strings.Join(r.expandWordNoSplit(w), "")
+}
+
+// collapseBackslashPairs reads each backslash in front of a backslash as a
+// quote that is spent, and leaves every other backslash as it stands.
+func collapseBackslashPairs(text string) string {
+	if !strings.Contains(text, `\\`) {
+		return text
+	}
+	var b strings.Builder
+	for i := 0; i < len(text); i++ {
+		if text[i] == '\\' && i+1 < len(text) && text[i+1] == '\\' {
+			i++
+		}
+		b.WriteByte(text[i])
+	}
+	return b.String()
 }
 
 // replacementFor reads the replacement word and answers the function from the

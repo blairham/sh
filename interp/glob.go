@@ -1213,9 +1213,15 @@ func (r *Runner) glob(field string) ([]string, bool) {
 	// already follows unanimously, `cx//*` being `cx//ax` in all six
 	// columns, so it is the reading that stays consistent rather than the
 	// one that needs a second rule for the end of the word. bash's collapse
-	// is a divergence recorded in the corpus and not implemented; it is a
-	// question about a shape no script writes.
+	// is the other answer to an axis, below.
 	trail := field[len(strings.TrimRight(field, "/")):]
+	// Except in the dialect that rebuilds what it walked: there every run of
+	// slashes behind the first component that describes rather than spells
+	// comes back as one, at the end and in the middle alike. See
+	// Semantics.SlashRunBehindAPatternIsOneSlash.
+	if len(trail) > 1 && r.slashRunIsOneSlash(parts) {
+		trail = "/"
+	}
 
 	// The order the dialect's sort parameter asks for, read once for the
 	// whole expansion — it cannot change while one runs — and false for the
@@ -1314,6 +1320,9 @@ func (r *Runner) glob(field string) ([]string, bool) {
 		if part == "" {
 			held++
 			continue
+		}
+		if held > 0 && r.slashRunIsOneSlash(parts[:i]) {
+			held = 0
 		}
 		flush()
 		onward = nil
@@ -1787,6 +1796,19 @@ func (r *Runner) spelledOut(ahead []string) bool {
 		}
 	}
 	return true
+}
+
+// slashRunIsOneSlash reports whether a run of slashes written after the
+// components ahead comes back as a single slash. Asked only where it matters:
+// a run is there, and something ahead of it described names rather than
+// spelling one — literal text before the first pattern is written back as
+// written in every column.
+func (r *Runner) slashRunIsOneSlash(ahead []string) bool {
+	if r.spelledOut(ahead) {
+		return false
+	}
+	return r.ask(r.sem().SlashRunBehindAPatternIsOneSlash,
+		"a run of slashes behind a pattern component coming back as one")
 }
 
 func lastComponent(parts []string, i int) bool {

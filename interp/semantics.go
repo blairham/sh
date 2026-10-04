@@ -2875,6 +2875,26 @@ type Semantics struct {
 	// looked at. TestASubstringOfAnUnsetNameReadsNoOffset pins the bash side.
 	SubstringOfAnUnsetNameEvaluatesNothing Answer
 
+	// SlashRunBehindAPatternIsOneSlash writes a run of slashes back as a
+	// single slash in a pathname expansion's matches, wherever the run comes
+	// after the first component that is a pattern.
+	//
+	// Measured 2026-10-03, bash 5.3.20 against dash, ksh93u+, zsh 5.9.2 and
+	// BusyBox ash, in a tree holding `cx/dx/ax`:
+	//
+	//	*//           bash  cx/        the others  cx//
+	//	*//ax         bash  cx/ax      the others  cx//ax
+	//	c*/dx//a*     bash  cx/dx/ax
+	//	cx//d*//ax    bash  cx//dx/ax  — the run ahead of the pattern is kept
+	//	.//c*//ax     bash  .//cx/ax
+	//	cx//*         cx//ax in every column
+	//
+	// So bash keeps the literal text ahead of the first pattern component as
+	// written and rebuilds the rest from what it walked; bash 3.2 answers the
+	// same. The others reproduce every run. Asked only where a run of two or
+	// more stands behind a pattern component.
+	SlashRunBehindAPatternIsOneSlash Answer
+
 	// TransformLetterCheckedOnlyWhenValued delays the check of a `@`
 	// operator's letter until the name has a value. Yes makes `${u@QQ}` on
 	// an unset name empty at status 0 while the identical spelling on a set
@@ -31293,6 +31313,7 @@ func PosixSemantics() Semantics {
 		// every shell that has one gives but BusyBox ash, which says so.
 		SubstringOfPositionalsSlicesTheList:    Yes,
 		SubstringOfAnUnsetNameEvaluatesNothing: No,
+		SlashRunBehindAPatternIsOneSlash:       No,
 		// One reader: the value a name holds goes through the same octal
 		// rule the literal does, so `k=010; $((k))` is eight. ksh93 is the
 		// one shell whose two readers part.

@@ -2098,19 +2098,6 @@ type Dialect struct {
 	// name the construct or the last token, and say the same either way.
 	CaseRunsOutAtAPattern bool
 
-	// ArithSubstWantsItsDoubleCloser refuses, while reading, a `$((` whose
-	// parenthesis count closes on a `)` with no second `)` straight behind
-	// it — the shape the dialects with ArithSubstFallsBackToCommandSubst
-	// read as a command substitution. Without either flag such text is
-	// arithmetic and fails only when it is expanded.
-	//
-	// dash and BusyBox ash. Measured 2026-10-04 in the pinned image:
-	// `echo "[$((echo ab cde) )]"`, `echo "[$(( (1+2)) )]"`, `echo
-	// "[$((1+2) )]"` and `echo "[$((x ) )]"` are each `syntax error: missing
-	// '))'` at 2 before anything runs, where `$(( (1+2) ))` is 3. dash
-	// 0.5.12 says the same in its own words (#5723).
-	ArithSubstWantsItsDoubleCloser bool
-
 	// CommentRunningOutCountsANewline numbers the end of the input one line
 	// further on where a comment runs into it with no newline of its own, as
 	// though the comment had been ended by one. ksh93: measured 2026-10-04

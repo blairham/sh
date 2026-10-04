@@ -25,6 +25,7 @@ func charConst(t *testing.T, src string, vars map[string]string) (string, int) {
 	sem := printfSem()
 	sem.PrintfReportsBadNumber = Yes
 	sem.MultibyteEncodingIsHonored = Yes
+	sem.PrintfIntegerCharConstantAfterBlanks = No
 	return run(t, src, func(r *Runner) {
 		r.Semantics = &sem
 		r.Vars = vars
@@ -58,8 +59,9 @@ func TestAQuotedOperandIsTheCharactersValue(t *testing.T) {
 	}
 }
 
-// TestTheQuoteHasToBeTheFirstCharacter. A blank in front of it makes the word
-// an ordinary operand again — six of the seven columns report a bad number,
+// TestTheQuoteHasToBeTheFirstCharacter where PrintfIntegerCharConstantAfterBlanks
+// says no. A blank in front of it makes the word an ordinary operand again —
+// five of the seven columns report a bad number,
 // and it matters because the operand is *not* trimmed before this reading
 // where a plain numeral is.
 func TestTheQuoteHasToBeTheFirstCharacter(t *testing.T) {

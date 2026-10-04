@@ -3648,9 +3648,10 @@ func (r *Runner) printfWritesThrough() bool {
 // Three details, each measured:
 //
 //   - The quote has to be the operand's first byte. A blank in front of it
-//     makes the word an ordinary operand again and a bad number — six of the
-//     seven, ksh93 alone reading through the blank — so the text is not
-//     trimmed before this, where a plain numeral is.
+//     makes the word an ordinary operand again and a bad number in five of
+//     the seven — ksh93, and BusyBox ash's integer reader, read through the
+//     blank, which is Semantics.PrintfIntegerCharConstantAfterBlanks — so
+//     the text is not trimmed before this, where a plain numeral is.
 //   - Anything after the first character is ignored rather than refused:
 //     `'AB` is 65 in every column, ksh93 printing a warning beside the same
 //     answer.

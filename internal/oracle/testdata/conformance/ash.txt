@@ -41,14 +41,8 @@ pat/a-glob-flag-where-a-case-arm-begins
 pat/a-glob-flag-where-a-loop-item-begins
 pat/a-quoted-operator-in-a-group-reaches-every-route
 pat/alnum-outside-ascii-is-a-letter-or-a-decimal-digit
-printf/a-length-modifier-c99-added
 printf/c-ignores-a-precision
-printf/no-format-at-all
 printf/non-finite-is-spelled-c-s-way
-printf/quote-diverges
-printf/quoting-a-byte-each-shell-spells-differently
-printf/quoting-a-newline-has-to-round-trip
-printf/quoting-a-value-with-nothing-unwritable-in-it
 readonly/an-array-literal-inside-a-function
 subst/a-comment-in-a-current-shell-body
 subst/double-paren-count-decides-not-the-expression

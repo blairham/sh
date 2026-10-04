@@ -520,7 +520,9 @@ func (r *Runner) printfOnce(format string, operands []string) (int, int, printfP
 				}
 				took = -1
 			}
+			r.printfFormatRest = format[i-n:]
 			text, code, stop := r.printfVerb(spec, verb, timeFmt, take)
+			r.printfFormatRest = ""
 			if code != 0 {
 				status = code
 			}
@@ -2207,7 +2209,13 @@ func (r *Runner) printfQuote(spec, arg string) (string, int, bool) {
 		return printfByteField(spec, kshSingleQuote(arg)), 0, false
 	case PrintfQuoteAbsent:
 		// A conversion the shell does not have stops the output where it is,
-		// as any other unknown one does.
+		// as any other unknown one does — and is named as any other is, the
+		// rest of the format where the dialect names that: measured
+		// 2026-10-04 in the pinned image, `printf '[%q]\n' x` is `%q]\n:
+		// invalid format` and `printf '[%5q]' a` is `%5q]` (#5723).
+		if rest := r.printfFormatRest; rest != "" && r.diag().PrintfBadVerbNamesTheRestOfTheFormat {
+			return "", r.printfBadVerbNamed(rest, "q"), true
+		}
 		return "", r.printfBadVerb("%q", "q"), true
 	}
 	return "", r.status, true
@@ -2384,15 +2392,25 @@ func (r *Runner) quotedDirective(conversion string) string {
 	if !r.diag().PrintfDirectiveDropsLengthModifiers {
 		return conversion
 	}
-	var b strings.Builder
-	b.Grow(len(conversion))
-	for i := 0; i < len(conversion); i++ {
-		if strings.IndexByte("hlzLjt", conversion[i]) >= 0 {
-			continue
-		}
-		b.WriteByte(conversion[i])
+	// The run of length modifiers in the directive the text begins with, and
+	// nothing after it. Measured 2026-10-04 in the pinned image: `printf
+	// 'a%5.2lzb\n'` is `%5.2b\n: invalid format`, while `printf
+	// '[%jd][%lld]\n'` is `%jd][%lld]\n` — `j` is no modifier here, and the
+	// `ll` of a *later* directive is text this complaint quotes, which a
+	// filter over the whole text had been deleting along with every `h`,
+	// `l`, `z` and `L` in the literal text around it (#5723).
+	i := 0
+	if i < len(conversion) && conversion[i] == '%' {
+		i++
 	}
-	return b.String()
+	for i < len(conversion) && strings.IndexByte("-+ #0'123456789.*", conversion[i]) >= 0 {
+		i++
+	}
+	j := i
+	for j < len(conversion) && strings.IndexByte("hlzL", conversion[j]) >= 0 {
+		j++
+	}
+	return conversion[:i] + conversion[j:]
 }
 
 // timeZone is the zone a date is written in, which is `$TZ` — the Runner's,

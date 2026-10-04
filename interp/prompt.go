@@ -483,6 +483,14 @@ type PromptStyle struct {
 	// Not exported: measured, a child of any column in the panel has no PS4
 	// in its environment unless one was inherited.
 	DefaultTrace string
+	// TraceTakesNoEscapes reads `PS4` with expansion alone, where the prompt
+	// parameters read this style's escapes as well: BusyBox ash. Measured
+	// 2026-10-03 in the pinned image, `PS4='<\u|\w|\h|\e|\101|\x41|\[|\$|\\|$((1+1))> '`
+	// traces `<\u|\w|\h|\e|\101|\x41|\[|$|\|2> ` — every escape written
+	// back as it stands, and only what expansion does to a backslash done to
+	// it — where the same codes in PS1 draw the user, the directory and the
+	// rest. So the trace prefix is dash's there, and the prompt is not.
+	TraceTakesNoEscapes bool
 	// DefaultTraceUnderEmulation is DefaultTrace for a shell *started* in one
 	// of TraceEmulations, whitespace-separated mode words. Measured
 	// 2026-10-02 on zsh 5.9.2 with nothing inherited: started as `sh` or

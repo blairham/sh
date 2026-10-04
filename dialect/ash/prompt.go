@@ -114,5 +114,9 @@ func PromptStyle() interp.PromptStyle {
 		AssignsWithNobodyToPrompt:          true,
 		DefaultWithNobodyToPrompt:          `\w \$ `,
 		DefaultContinuedWithNobodyToPrompt: "> ",
+
+		// And PS4 is dash's in what it reads, too: expansion and no codes.
+		// See interp.PromptStyle.TraceTakesNoEscapes.
+		TraceTakesNoEscapes: true,
 	}
 }

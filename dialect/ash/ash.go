@@ -88,6 +88,8 @@ func Dialect() syntax.Dialect {
 	d.DoubleBracketIsACommand = true
 	d.ProcessSubstitution = true
 	d.FunctionKeyword = true
+	// A NUL byte in the program's text is not there. See the flag.
+	d.SourceDropsNulBytes = true
 	d.FunctionKeywordParens = true
 	d.ParamSubstring = true
 	d.ParamSubstitution = true
@@ -1086,6 +1088,16 @@ func Semantics() interp.Semantics {
 	// exactly — no `${!prefix@}` and no compound for a declaration to bring
 	// into being, so the axis is never asked.
 	s.ValuelessDeclarationHidesTheOuterValue = interp.Yes
+	// And what it hides it hides from a child too, where bash still hands
+	// the child the hidden value. See
+	// interp.Semantics.AHiddenExportStillReachesAChild for the rows,
+	// measured 2026-10-03 in the pinned image.
+	s.AHiddenExportStillReachesAChild = interp.No
+	// A `local` operand with a bad name and a value is taken in silence and
+	// refused when the call returns, fatally. See
+	// interp.Semantics.LocalBadNameWithAValueIsRefusedAtTheReturn, measured
+	// 2026-10-03 in the pinned image.
+	s.LocalBadNameWithAValueIsRefusedAtTheReturn = interp.Yes
 	// `local` outside a function is refused and the refusal is fatal:
 	// `local x=1` at the top level is `local: not in a function` and the
 	// script ends at 2.
@@ -1336,11 +1348,23 @@ func Semantics() interp.Semantics {
 	s.TestStringOrder = interp.TestStringOrderBoth
 	// `set -o` lists `pipefail`, which dash's does not have.
 	s.PipefailOption = interp.Yes
-	// A frozen name in a command prefix is refused before anything else
-	// happens: `unset u; readonly x=1; x=${u:=set} /bin/true` is `x: is read
-	// only` and leaves `u` unset, so neither the value nor the command was
-	// reached. dash answers the other way (#1943).
-	s.PrefixToAFrozenNameIsCheckedFirst = interp.FrozenPrefixCheckedFirst
+	// A frozen name in a command prefix is refused with the command, as in
+	// dash: the words, the values and the redirections come first. Measured
+	// 2026-10-03 in the pinned image, `readonly x=1` and then, each in its
+	// own `( … )`:
+	//
+	//	x=2 /bin/echo RAN >/nope/f     the file alone, 1, and the line goes on
+	//	x=2 : >/nope/f, x=2 f >/nope/f the same, for a special builtin and a
+	//	                               function
+	//	x=$((1/0)) /bin/true           the division
+	//	x=$(echo SUB >&2) /bin/true    SUB, then `x: is read only`
+	//	x=2 /bin/true $(echo ARG >&2)  ARG, then the same
+	//
+	// This was recorded as checked first (#1943), from `unset u;
+	// x=${u:=set} /bin/true` leaving `u` unset — which it does here, but
+	// because what a prefix value assigns goes with the prefix, not because
+	// the value was never expanded: `$(echo SUB >&2)` in the same place runs.
+	s.PrefixToAFrozenNameIsCheckedFirst = interp.FrozenPrefixCheckedWithTheCommand
 	// And this column is on *both* sides of the pair, which is what makes
 	// the two separate fields: the name is checked ahead of the
 	// redirections as in bash, and the name's own value is still evaluated
@@ -3005,6 +3029,22 @@ func Diagnostics() interp.Diagnostics {
 		// not this change.
 		DotCannotOpen: "can't open '%[1]s': %[2]s",
 		DotNotFound:   "%[1]s: not found",
+		// And a script operand the shell could not open is worded the same
+		// way, with the system's reason and dash's 2 for either failure.
+		// Measured 2026-10-03 in the pinned image: `ash nosuch.sh` and `ash
+		// nodir/x.sh` are `can't open 'nosuch.sh': No such file or
+		// directory` at 2, and a mode-000 file read by an ordinary user is
+		// `can't open '/tmp/u': Permission denied` at 2.
+		ScriptNotFound:           "can't open '%[1]s': %[2]s",
+		ScriptNotFoundStatus:     2,
+		ScriptNotReadableStatus:  2,
+		ScriptReasonIsTheSystems: true,
+		// A failed write is said by `echo` alone, behind the applet's own
+		// name and nothing else. See Diagnostics.BuiltinWriteErrorFrom,
+		// measured 2026-10-03 in the pinned image.
+		BuiltinWriteError:                   "write error: %[2]s",
+		BuiltinWriteErrorFrom:               "echo",
+		BuiltinWriteErrorNamesTheShellAlone: true,
 		// And a missing operand is an error with no sentence for it, which
 		// is the one place these two questions come apart in the panel. See
 		// Diagnostics.DotNoOperandSilent.

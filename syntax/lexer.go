@@ -687,6 +687,10 @@ func (l *Lexer) queueHeredoc(r *Redirect, quoted bool) {
 
 // NewLexer returns a Lexer over src.
 func NewLexer(src string, d Dialect) *Lexer {
+	if d.SourceDropsNulBytes && strings.IndexByte(src, 0) >= 0 {
+		// Gone before anything reads the text. See Dialect.SourceDropsNulBytes.
+		src = strings.ReplaceAll(src, "\x00", "")
+	}
 	return &Lexer{src: src, dialect: d, comments: d.Comments, line: 1, col: 1}
 }
 

@@ -15,6 +15,8 @@ import (
 // Dialect is what bash 5 parses.
 func Dialect() syntax.Dialect {
 	d := syntax.Core()
+	// A NUL byte in the program's text is not there. See the flag.
+	d.SourceDropsNulBytes = true
 	// `$[expr]`, the older spelling of `$((expr))`. Measured
 	// 2026-09-06: `echo $[1+1]` is 2 here and in the 3.2 macOS ships,
 	// and the same text is the literal `$[1+1]` in ksh93 and dash.
@@ -2125,6 +2127,7 @@ func Semantics() interp.Semantics {
 	s.ArrayLiteralAssignmentStartsTheNameOver = interp.No
 	// `local u` hides the caller's `u` — the local exists unset.
 	s.ValuelessDeclarationHidesTheOuterValue = interp.Yes
+	s.AHiddenExportStillReachesAChild = interp.Yes
 	s.TypesetLocalNeedsKeywordFunction = interp.No
 	s.ReadonlyReassignmentFatal = interp.No
 	// `${1:=abc}` is refused rather than assigned: `$1: cannot assign in

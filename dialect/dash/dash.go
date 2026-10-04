@@ -13,6 +13,8 @@ import (
 func Dialect() syntax.Dialect {
 	// dash is the POSIX shell language and nothing more.
 	d := syntax.POSIX()
+	// A NUL byte in the program's text is not there. See the flag.
+	d.SourceDropsNulBytes = true
 	// dash expands aliases in a script, with no option to turn on, and by
 	// every route: `-c`, a file and standard input all expand.
 	// A here-document body line that joined *before* any text of it was

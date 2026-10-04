@@ -2409,8 +2409,16 @@ func (r *Runner) builtinWriteStatus(name string, st int) int {
 	// `zsh:6: write error: broken pipe`, in that order and for `printf` as
 	// well as `echo`.
 	if fails {
-		if w := r.diag().BuiltinWriteError; w != "" {
-			r.diagf("%s\n", fmt.Sprintf(w, name, r.diag().reasonText(reason(err))))
+		d := r.diag()
+		if w := d.BuiltinWriteError; w != "" &&
+			(d.BuiltinWriteErrorFrom == "" || slices.Contains(strings.Fields(d.BuiltinWriteErrorFrom), name)) {
+			line := fmt.Sprintf(w, name, d.reasonText(reason(err)))
+			if d.BuiltinWriteErrorNamesTheShellAlone {
+				// See Diagnostics.BuiltinWriteErrorNamesTheShellAlone.
+				r.errf("%s: %s\n", filepath.Base(r.invokedAs()), line)
+			} else {
+				r.diagf("%s\n", line)
+			}
 		}
 	}
 	// Said whether or not the axis failed the command, and that is the whole

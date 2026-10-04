@@ -638,6 +638,9 @@ func cloneScopes(scopes []*scope) []*scope {
 		// the runner that registered them, so one registered by the parent
 		// still unwinds the parent.
 		c.onReturn = slices.Clone(sc.onReturn)
+		// And the names a `local` put off refusing, appended to in place
+		// by the same call's later lines.
+		c.badNamesForTheReturn = slices.Clone(sc.badNamesForTheReturn)
 		out[i] = &c
 	}
 	return out

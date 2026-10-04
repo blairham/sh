@@ -3553,6 +3553,18 @@ type Dialect struct {
 	// is how ksh93 came to accept a form it rejects.
 	FunctionKeywordParens bool
 
+	// SourceDropsNulBytes reads a program as though every NUL byte in its
+	// text were not there. bash, dash and BusyBox ash do; zsh keeps the byte
+	// in the word it stands in, and ksh93 refuses it as `zero byte`
+	// unexpected. Measured 2026-10-03 over a script file holding `echo
+	// t\0wo` and `echo "q\0r"`: `two` and `qr` in bash 5.3.20, dash 0.5.12
+	// and BusyBox v1.37.0 in the pinned image, where zsh 5.9.2 writes the
+	// byte back and ksh93u+ stops at line 2. The same holds for a file run
+	// because the kernel would not start it: `printf 'echo ran\0more\n' >
+	// b.img; chmod +x b.img; ./b.img` writes `ranmore` in BusyBox ash, the
+	// one column that runs such a file at all.
+	SourceDropsNulBytes bool
+
 	// ParamSubstitution enables `${x/pat/rep}` and the spellings that put a
 	// `#` or a `%` after the `/`. Absent from dash.
 	//

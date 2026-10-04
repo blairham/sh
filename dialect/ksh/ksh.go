@@ -4311,6 +4311,10 @@ func Semantics() interp.Semantics {
 	// typeset is one of this shell's own special builtins, so any of its
 	// failures ends the script — a bad option included.
 	s.TypesetBadOptionFatal = interp.Yes
+	// A sign written alone lists no attribute words: `typeset -` is the
+	// `set` listing and `typeset +` the bare names, measured 2026-10-03.
+	// See Semantics.SignAloneListingCarriesAttributeWords.
+	s.SignAloneListingCarriesAttributeWords = interp.No
 	// A listing spells bytes above ASCII out where the locale has no
 	// characters there: measured 2026-10-03, `v=é; set` under `LC_ALL=C`
 	// writes the bytes escaped and under a UTF-8 locale the character. See

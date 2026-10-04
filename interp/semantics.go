@@ -15752,6 +15752,21 @@ type Semantics struct {
 	// unpinned ash: likewise.
 	ProducedFreezeUnderALocalEndsAtZero Answer
 
+	// SignAloneListingCarriesAttributeWords lists a declaration written with
+	// nothing but a sign — `typeset -` or `typeset +` — with each name's
+	// attribute words in front of it.
+	//
+	// Measured 2026-10-03: zsh 5.9.2 writes `integer qb=2` and `integer qb`;
+	// ksh93u+ writes `qb=2` and `qb`, its minus listing being its `set`
+	// listing. See Runner.signAloneListingCarriesAttributeWords. Asked only
+	// where a bare sign is an option word at all — see
+	// SignAloneIsAnOptionWord, which bash answers No.
+	//
+	// unpinned dash: there is no `typeset`, so the question cannot be put.
+	//
+	// unpinned ash: the same as dash.
+	SignAloneListingCarriesAttributeWords Answer
+
 	// SignAloneIsAnOptionWord reads a declaration's `-` or `+` written with
 	// no letters after it as an option word rather than as an operand.
 	//
@@ -32958,6 +32973,8 @@ func PosixSemantics() Semantics {
 		BareDeclarationListing: DeclareListingCommandWord,
 		BareLocalListing:       BareLocalListsNothing,
 		TypesetBadOptionFatal:  No,
+		// What this engine wrote before the axis.
+		SignAloneListingCarriesAttributeWords: Yes,
 		// The dialect's fatal status, which is what this engine wrote.
 		ProducedFreezeUnderALocalEndsAtZero: No,
 		// What this engine did before the axis: the character reading.

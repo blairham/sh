@@ -103,6 +103,10 @@ type declareFlags struct {
 	// this one is a listing — see the bare-sign branch in parseDeclareFlags,
 	// and Runner.refusePrivateDeclaration for the row that needs them apart.
 	plusAlone bool
+	// minusAlone is the same record for a bare `-`, which in one dialect is a
+	// listing of its own rather than the bare word's — see
+	// Semantics.SignAloneListingCarriesAttributeWords.
+	minusAlone bool
 	// wordSigns is the sign of each option word that carried letters, in
 	// order. The function letter is in no letter run (see letters), so a line
 	// whose signs differ only on an `f` word is told apart here. Read by
@@ -577,6 +581,7 @@ func (r *Runner) parseDeclareFlags(name string, args []string, known string) (re
 			// reads it — see Runner.refusePrivateDeclaration, where `private
 			// + path` is taken and `private +h path` is refused.
 			f.plusAlone = a == "+"
+			f.minusAlone = a == "-"
 			if f.function {
 				// And it reaches the function listing where the `f` letter
 				// has already been read, which is the same sign meaning the
@@ -4558,7 +4563,13 @@ func (r *Runner) declarationListing(f declareFlags) (int, bool) {
 			if r.unspecified {
 				return r.status, true
 			}
-			return r.declarationNameListingOf(names, produced, listing), true
+			return r.declarationNameListingOf(names, produced, listing, f.plusAlone), true
+		}
+		if f.minusAlone && !r.signAloneListingCarriesAttributeWords() {
+			// The minus written alone is every variable with its value and
+			// no attribute words, which is the `set` listing's row rather
+			// than the bare word's — measured, see the field.
+			return r.setListing(), true
 		}
 		return r.bareDeclarationListing(), true
 	}
@@ -7262,4 +7273,23 @@ func (r *Runner) functionLineUnderBothSigns(args []string, f *declareFlags) (int
 	}
 	f.functionOff, f.funcNamesOff = false, false
 	return 0, false
+}
+
+// signAloneListingCarriesAttributeWords asks whether a declaration written
+// with nothing but a sign lists its names with their attribute words.
+//
+// Measured 2026-10-03 with `qa=1; typeset -i qb=2; typeset -x qc=3`:
+//
+//	             typeset -                     typeset +
+//	zsh 5.9.2    qa=1  integer qb=2  qc=3      qa  integer qb  qc
+//	ksh93u+      qa=1  qb=2  qc=3              qa  qb  qc
+//
+// and ksh93's minus listing is its `set` listing row for row — `qa='a b'`,
+// `qd=(1 2)`, `qe=([k]=v)` in both. Its bare `typeset` is a third listing
+// again, the attributed names alone (`integer qb`, `export qc`), which is
+// why the minus has to be told apart from the bare word. See
+// Semantics.SignAloneListingCarriesAttributeWords.
+func (r *Runner) signAloneListingCarriesAttributeWords() bool {
+	return r.ask(r.sem().SignAloneListingCarriesAttributeWords,
+		"a sign written alone listing its names with their attribute words")
 }

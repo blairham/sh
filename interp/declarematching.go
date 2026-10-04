@@ -213,7 +213,7 @@ func withoutMatching(f declareFlags) declareFlags {
 	// And the record of a sign written *alone*, which is the same fact as
 	// `remove` read one way further: it says what the word was, not what a
 	// name carries. See declareFlags.plusAlone.
-	f.plusAlone = false
+	f.plusAlone, f.minusAlone = false, false
 	// And the inheritance letter, which is not something a *name* carries:
 	// it says where the binding this declaration makes starts from, and it
 	// leaves no attribute behind for a listing to filter on or for a bare
@@ -536,7 +536,7 @@ func (r *Runner) matchedListing(patterns []string, namesOnly bool) int {
 		return r.status
 	}
 	if namesOnly {
-		return r.declarationNameListingOf(names, produced, listing)
+		return r.declarationNameListingOf(names, produced, listing, false)
 	}
 	for _, name := range names {
 		d, _ := r.listedDeclarationOf(name, produced[name], listing)
@@ -581,7 +581,10 @@ func (r *Runner) matchedListedNames(patterns []string) ([]string, map[string]boo
 // whole table. Those reached the same rows by two routes before, and only one
 // of the routes existed — the plus form with no pattern wrote nothing at all
 // (#1576). Choosing the names is the caller's; writing them is here.
-func (r *Runner) declarationNameListingOf(names []string, produced map[string]bool, listing ProducedListing) int {
+//
+// signAlone says the line was a bare `+`, which in one dialect writes the names
+// with no attribute words — see Runner.signAloneListingCarriesAttributeWords.
+func (r *Runner) declarationNameListingOf(names []string, produced map[string]bool, listing ProducedListing, signAlone bool) int {
 	locals := r.innermostLocalNames()
 	for _, name := range names {
 		d, _ := r.listedDeclarationOf(name, produced[name], listing)
@@ -600,7 +603,11 @@ func (r *Runner) declarationNameListingOf(names []string, produced map[string]bo
 			r.printf("%s\n", r.deferredParameterRow(d, locals[name]))
 			continue
 		}
-		r.printf("%s\n", r.attributeWordHead(d, locals[name])+r.listedName(name))
+		head := ""
+		if !signAlone || r.signAloneListingCarriesAttributeWords() {
+			head = r.attributeWordHead(d, locals[name])
+		}
+		r.printf("%s\n", head+r.listedName(name))
 	}
 	return 0
 }

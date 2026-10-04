@@ -25,7 +25,6 @@ core/a-refused-older-body-leaves-an-empty-field
 core/an-unbalanced-nested-backquote
 core/appending-an-empty-array-literal-to-a-scalar
 decl/a-subscripted-operand-with-no-value
-declare/a-bare-sign-is-an-option-word
 declare/an-attribute-does-not-leave-a-subshell
 declare/an-attribute-over-a-keyed-table
 declare/an-fpath-file-that-defines-nothing

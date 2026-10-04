@@ -56,6 +56,21 @@ func (r *Runner) printfNumber(arg string, present bool) (int64, int, bool) {
 		return n, 0, false
 	}
 	text := afterLeadingBlanks(arg)
+	if text != arg && text != "" && (text[0] == '\'' || text[0] == '"') {
+		// Blanks and then a quote: an ordinary operand and a bad number in
+		// most of the panel, and the character's value in the shells whose
+		// integer reader skips the blanks first. See
+		// Semantics.PrintfIntegerCharConstantAfterBlanks.
+		through := r.ask(r.sem().PrintfIntegerCharConstantAfterBlanks,
+			"a numeric `printf` operand with blanks in front of its quote")
+		if r.unspecified {
+			return 0, r.status, true
+		}
+		if through {
+			n, _ := r.charConstant(text)
+			return n, 0, false
+		}
+	}
 	_, radixRefused := r.radixRefusesThePoint(text)
 	if v, ok := cAgreedInteger(r.radixParsed(text, false)); ok && !radixRefused {
 		// The operand is an integer every reading in the panel agrees about,

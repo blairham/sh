@@ -17,6 +17,7 @@ func printfSem() Semantics {
 	s := CoreSemantics()
 	s.PrintfReportsBadNumber = No
 	s.PrintfEmptyIsNotANumber = No
+	s.PrintfBTakesAField = Yes
 	s.PrintfBackslashC = PrintfBackslashCLiteral
 	s.PrintfQuote = PrintfQuoteAnsiCWord
 	s.PrintfLengthModifiers = PrintfLengthModifiersAbsent

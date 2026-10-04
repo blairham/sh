@@ -430,12 +430,27 @@ func (r *Runner) printfOnce(format string, operands []string) (int, int, printfP
 				b.writeByte('%')
 				continue
 			}
+			if verb == 'b' && len(spec) > 1 {
+				// A flag, a width or a precision on a `%b`: padded and cut
+				// like a `%s` in most of the panel, and a conversion one
+				// shell does not have at all. See Semantics.PrintfBTakesAField.
+				takes := r.ask(r.sem().PrintfBTakesAField, "a `%b` with a flag, a width or a precision")
+				if r.unspecified {
+					b.end(mark, false)
+					return used, r.status, printfPassStopped
+				}
+				if !takes {
+					code := r.printfBadVerbAt(format, i-n, i, "b")
+					b.end(mark, false)
+					return used, code, printfPassStopped
+				}
+			}
 			if verb == 0 {
 				if spec != "" {
 					// The complaint before the close, because it is what
 					// tells the writer to let out the text in front of this
 					// conversion. See printfWriter.end.
-					code := r.printfBadVerb(format[:i], badVerbName(format, i))
+					code := r.printfBadVerbAt(format, i-n, i, badVerbName(format, i))
 					b.end(mark, false)
 					return used, code, printfPassStopped
 				}
@@ -3062,10 +3077,26 @@ const (
 // further, since the modifier belongs to the directive and is not the
 // character: zsh calls `%lQ` exactly that and bash calls it `Q`.
 func (r *Runner) printfBadVerb(conversion, verb string) int {
-	d := r.diag()
 	if i := strings.LastIndexByte(conversion, '%'); i >= 0 {
 		conversion = conversion[i:]
 	}
+	return r.printfBadVerbNamed(conversion, verb)
+}
+
+// printfBadVerbAt is printfBadVerb for a conversion found in a format at
+// format[start:end], which is what lets the one dialect that names the whole
+// rest of the format do so: BusyBox ash writes `%kb\n: invalid format` for
+// `printf 'a%kb\n'`, the format from the `%` on and as it was written. See
+// Diagnostics.PrintfBadVerbNamesTheRestOfTheFormat.
+func (r *Runner) printfBadVerbAt(format string, start, end int, verb string) int {
+	if r.diag().PrintfBadVerbNamesTheRestOfTheFormat {
+		return r.printfBadVerbNamed(format[start:], verb)
+	}
+	return r.printfBadVerb(format[:end], verb)
+}
+
+func (r *Runner) printfBadVerbNamed(conversion, verb string) int {
+	d := r.diag()
 	// The directive is named up to a NUL in it and no further, which is the
 	// one shell whose arguments can hold one: measured 2026-10-02 on zsh
 	// 5.9.2, `printf $'%\0'` is `%: invalid directive` and `printf $'%5\0d'`

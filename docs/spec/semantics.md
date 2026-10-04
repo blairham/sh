@@ -5335,6 +5335,15 @@ written in bash 3.2, dash and ksh93; `printf 'a\u0041Z'` moves ksh93 into
 the first group. Nothing here decodes them at either site, which is a gap
 the change for #798 left exactly where it found it.
 
+**`PrintfBTakesAField`** — bash, dash, zsh, ksh93 yes · ash no. A flag,
+a width or a precision on a `%b` is a field in five of the six; BusyBox ash
+1.37.0 has no such conversion, and `%5b`, `%.1b`, `%-3b` and `%0b` are each
+`invalid format` at 1, with what came before them written and nothing after.
+Its complaint names the rest of the format as written, from the `%` on —
+`%5b][%s]\n: invalid format` — which is
+`Diagnostics.PrintfBadVerbNamesTheRestOfTheFormat`, and it says the same of
+any conversion it lacks. Measured 2026-10-03 in the pinned image.
+
 One more divergence lives in the corner where the stop meets a conversion's
 field, and it is `PrintfBStopIsPadded`. Five of the six put the text a `\c`
 cut short through the field exactly as they would any other; ksh93 alone
@@ -21328,6 +21337,13 @@ five macOS columns write `[nan]`: musl's formatter takes the `+` flag
 before it looks at the value, and BSD's clears the sign of a not-a-number
 outright. This shell writes `nan` unsigned in every dialect, and the
 corpus row records ash's column as the fact it is.
+
+**`PrintfIntegerCharConstantAfterBlanks`** — ksh93, ash yes · bash, dash,
+zsh no. `printf '%d' " 'A"` is 65 where the integer reader skips blanks before
+looking for the quote, and a bad number and 0 where it does not. In ash it is
+the integer reader's alone: `%x` of the same word is 41, tabs count, and `%f`
+of it is `invalid number ' 'A'` and `0.000000`. Measured 2026-10-03, ash in
+the pinned image.
 
 **`PrintfNumberOperand`** — bash *the number at the front* · dash *the
 number at the front* · ksh93 *an arithmetic expression* · zsh *an

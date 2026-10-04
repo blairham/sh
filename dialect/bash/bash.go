@@ -2566,6 +2566,7 @@ func Semantics() interp.Semantics {
 	s.SubstringRangeThirdColonIsABadSubstitution = interp.No
 	s.PrintfReportsBadNumber = interp.Yes
 	s.PrintfNumberOperand = interp.PrintfNumberLeadingNumber
+	s.PrintfIntegerCharConstantAfterBlanks = interp.No
 	// The digits are written back exactly: `printf '%d' 123456789012345678`
 	// is the operand, not a double's nearest neighbor (#2907).
 	// A flag past a field is no flag at all: the prefix ends there and the
@@ -2677,6 +2678,7 @@ func Semantics() interp.Semantics {
 	// What a `\c` left goes through the conversion's field like any other
 	// text: `printf '[%5b]' 'a\cb'` is `[    a`.
 	s.PrintfBStopIsPadded = interp.Yes
+	s.PrintfBTakesAField = interp.Yes
 	// `%zX`, `%ld`, `%jd` and any run of the letters, all of them read and
 	// thrown away: `%hhd` with 300 is 300.
 	s.PrintfLengthModifiers = interp.PrintfLengthModifiersC99

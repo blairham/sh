@@ -7322,6 +7322,16 @@ type Semantics struct {
 	// Asked only where a `\c` actually stopped a `%b` *and* the field would
 	// change the text, so an ordinary `printf '%b' 'a\cb'` needs no dialect.
 	PrintfBStopIsPadded Answer
+
+	// PrintfBTakesAField pads and cuts a `%b` the way a `%s` is, where a flag,
+	// a width or a precision is written on it. bash 5.3, dash 0.5.12, zsh
+	// 5.9.2 and ksh93 do: `printf '[%5b]' ab` is `[   ab]`. BusyBox ash
+	// 1.37.0 has no such conversion — `%5b`, `%.1b`, `%-3b` and `%0b` are
+	// each `invalid format` at 1, with what came before them written and
+	// nothing after. Measured 2026-10-03, ash in the pinned image.
+	//
+	// Asked only where something stands between the `%` and the `b`.
+	PrintfBTakesAField Answer
 	// PrintfBOctalWithoutZero reads a `%b` argument's `\nnn` as octal with no
 	// leading zero to introduce it. bash and dash do; ksh93 and zsh want the
 	// `\0` and write `\101` as the four characters it is.
@@ -8133,6 +8143,18 @@ type Semantics struct {
 	// PrintfNumberOperand is how a numeric conversion reads an operand that
 	// is not already the whole number C asked for — see PrintfNumberReading.
 	PrintfNumberOperand PrintfNumberReading
+
+	// PrintfIntegerCharConstantAfterBlanks lets an integer conversion read a
+	// quoted character behind leading blanks: `printf '%d' " 'A"` is 65.
+	// ksh93 and BusyBox ash 1.37.0 do; bash 5.3, dash 0.5.12 and zsh 5.9.2
+	// call the word a bad number and write 0. Measured 2026-10-03, ash in
+	// the pinned image, where `%x` of the same word is 41 and tabs count as
+	// blanks too — but `%f` of it is `invalid number ' 'A'` and 0.000000,
+	// so this is the integer reader's alone. ksh93 reads both, through its
+	// arithmetic, which PrintfNumberOperand already answers.
+	//
+	// Asked only for an operand that has blanks and then a quote.
+	PrintfIntegerCharConstantAfterBlanks Answer
 
 	// ArithDivisionByZeroYieldsAValue goes on evaluating past a division by
 	// zero, with **0** for a division and the **dividend** for a remainder,

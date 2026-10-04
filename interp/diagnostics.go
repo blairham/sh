@@ -9516,6 +9516,21 @@ type Diagnostics struct {
 	// values. Empty, the operator is `=~` and the operands are values, which
 	// is bash 5.3's reading (#5347).
 	TraceRegexMatch string
+	// TraceConditionAsKsh93 traces a `[[ … ]]` pattern the way ksh93 does,
+	// as the pattern that shell reads it as: `=` is written `==`, a `==` or
+	// `!=` operand that is all text is written as its quoted value and any
+	// other one as a pattern with the characters the script quoted marked by
+	// a backslash, and `=~` is written `==` against an extended-regex group,
+	// `~(E)…`. Measured 2026-10-04 on ksh93u+ 2012-08-01 under `set -x`:
+	//
+	//	x="a b"; [[ $x == "a b" ]]   [[ 'a b' == 'a b' ]]
+	//	[[ abc = "a*" ]]             [[ abc == 'a*' ]]
+	//	[[ abc == a"*"b* ]]          [[ abc == a\*b* ]]
+	//	[[ abc =~ ^a.c$ ]]           [[ abc == ~(E)^a.c\$ ]]
+	//	[[ abc =~ "a b" ]]           [[ abc == ~(E)a\ b ]]
+	//
+	// See interp/cond.go's ksh93TraceEscape for the per-character table.
+	TraceConditionAsKsh93 bool
 	// TracePatternEscapesLiterals writes a traced pattern — a `[[ … ]]`
 	// pattern operand and a `case` arm alike — with the characters that are
 	// text rather than pattern marked by a backslash, where false writes the

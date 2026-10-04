@@ -47,7 +47,4 @@ printf/non-finite-is-spelled-c-s-way
 procsub/a-writing-body-in-a-command-substitution-is-captured
 read/from-a-standard-input-that-is-closed
 subst/a-paren-body-is-the-parenthesis-and-not-a-list
-xtrace/case-arm-patterns-are-not-expanded-past-the-match
-xtrace/condition-operand-quoting-diverges
-xtrace/condition-regex-operator-diverges
 xtrace/ps4-repeats-inside-a-trap-body

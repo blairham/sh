@@ -260,7 +260,7 @@ func (r *Runner) namedCondition(x *syntax.CondUnknown) (ok, answered bool, err e
 	// operand with everything the script quoted turned into letters. Which
 	// of the two the matcher gets is the dialect's answer about quoting, and
 	// it is the same answer, because this is the same operator.
-	text, literal, digitClass := r.condRegexOperand(x.Words[0])
+	text, literal, digitClass, _ := r.condRegexOperand(x.Words[0])
 	if r.condOperandDidNotExpand() {
 		return false, true, errCondOperandFailed
 	}
@@ -512,7 +512,7 @@ func (r *Runner) evalCondBinary(x *syntax.CondBinary) (bool, error) {
 		// The control that says the escaping still happens where it should
 		// is the row a quote is *about*: `[[ axb =~ "a.b" ]]` is 1 and
 		// `[[ a.b =~ "a.b" ]]` is 0, in bash and here alike.
-		text, literal, digitClass := r.condRegexOperand(x.Y)
+		text, literal, digitClass, traced := r.condRegexOperand(x.Y)
 		if r.condOperandDidNotExpand() {
 			return false, errCondOperandFailed
 		}
@@ -520,7 +520,11 @@ func (r *Runner) evalCondBinary(x *syntax.CondBinary) (bool, error) {
 		// the match is about to apply: bash traces `[[ ab =~ ab ]]` for
 		// `[[ ab =~ "a"b ]]`, so the line says what the words came to rather
 		// than how the matcher was told to read them.
-		if spelled := r.diag().TraceRegexMatch; spelled != "" {
+		if r.diag().TraceConditionAsKsh93 {
+			// One dialect traces the match as the pattern it is to that
+			// shell: `==` and an extended-regex group. See the field.
+			r.traceConditionPrimary(r.traceCondOperand(left), "==", "~(E)"+traced)
+		} else if spelled := r.diag().TraceRegexMatch; spelled != "" {
 			r.traceConditionPrimary(r.wordAsWritten(x.X), spelled, r.wordAsWritten(x.Y))
 		} else {
 			r.traceConditionPrimary(r.traceCondOperand(left), x.Op, r.traceCondOperand(text))
@@ -557,7 +561,11 @@ func (r *Runner) evalCondBinary(x *syntax.CondBinary) (bool, error) {
 		// costs nothing, since re-expanding the word to print it would run a
 		// substitution in it twice (#1915). ksh93 quotes the unexpanded value
 		// instead and is recorded rather than modeled.
-		r.traceConditionPrimary(r.traceCondOperand(left), x.Op, r.tracePattern(pat))
+		if r.diag().TraceConditionAsKsh93 {
+			r.traceConditionPrimary(r.traceCondOperand(left), ksh93TraceOperator(x.Op), r.ksh93TracePattern(x.Y, pat))
+		} else {
+			r.traceConditionPrimary(r.traceCondOperand(left), x.Op, r.tracePattern(pat))
+		}
 		got := r.matchPatternR(pat, left, patternInACondition)
 		if x.Op == "!=" {
 			return !got, nil
@@ -693,18 +701,22 @@ func (r *Runner) condOperandText(w *syntax.Word) string {
 // one difference that matters — a dialect can re-read an expansion's result
 // as a *pattern*, and no dialect re-reads one as an expression, so there is
 // no axis in the middle of this one.
-func (r *Runner) condRegexOperand(w *syntax.Word) (text, literal string, digitClass bool) {
+//
+// traced is the operand as the dialect that traces it as a pattern writes it
+// — see Diagnostics.TraceConditionAsKsh93 and ksh93TraceEscape.
+func (r *Runner) condRegexOperand(w *syntax.Word) (text, literal string, digitClass bool, traced string) {
 	if r.condWordQualifies(w) {
 		// A word that ends in a glob qualifier group has already matched
 		// against the filesystem, so what comes back is a path and not
 		// something a quote could have divided. See interp/condqualifier.go.
 		t := syntax.UnmarkArithValue(r.condGlobbedOperand(w))
-		return t, t, false
+		return t, t, false, ksh93TraceEscape(t, false)
 	}
-	var b strings.Builder
+	var b, tb strings.Builder
 	text = r.wordTextNoSplit(w, func(s syntax.Span, part string) string {
 		switch {
 		case regexSpanIsLive(s):
+			tb.WriteString(ksh93TraceEscape(part, false))
 			// A `\d` the operand arrived with rather than one the script
 			// wrote is the same escape and reaches the same engine, which
 			// is measured: `r='za\db'; [[ za1b =~ $r ]]` matches in ksh93u+
@@ -730,8 +742,10 @@ func (r *Runner) condRegexOperand(w *syntax.Word) (text, literal string, digitCl
 				digitClass = true
 			}
 			b.WriteString(`\` + part)
+			tb.WriteString(`\` + part)
 			return `\` + part
 		default:
+			tb.WriteString(ksh93TraceEscape(part, true))
 			// **Marked rather than escaped.** A backslash in front of a
 			// quoted character is the right spelling everywhere but inside a
 			// bracket expression, where a backslash is an ordinary member and
@@ -751,7 +765,89 @@ func (r *Runner) condRegexOperand(w *syntax.Word) (text, literal string, digitCl
 		}
 		return part
 	})
-	return text, b.String(), digitClass
+	return text, b.String(), digitClass, tb.String()
+}
+
+// ksh93TraceAlwaysEscaped and ksh93TraceQuotedEscaped are the characters
+// that shell's trace writes with a backslash in a pattern operand: the first
+// set however they were written, the second only where the script quoted
+// them. Measured 2026-10-04 on ksh93u+ 2012-08-01, a character at a time in
+// `[[ abc =~ "aCb" ]]` and bare where it can be:
+//
+//	escaped however written   blank, tab, ; & < > $
+//	escaped where quoted      * ? [ ] ( ) | \ { }
+//	never escaped             ^ . # ~ ! = % , - @ + '
+//
+// so `^a.c$` is `^a.c\$`, `"a b"` is `a\ b` and `a|b` is `a|b` where
+// `"a|b"` is `a\|b`.
+const (
+	ksh93TraceAlwaysEscaped = " \t;&<>$"
+	ksh93TraceQuotedEscaped = "*?[]()|\\{}"
+)
+
+// ksh93TraceEscape writes part the way that trace writes a pattern operand's
+// text, quoted saying whether the script quoted it.
+func ksh93TraceEscape(part string, quoted bool) string {
+	var b strings.Builder
+	for i := 0; i < len(part); i++ {
+		c := part[i]
+		if strings.IndexByte(ksh93TraceAlwaysEscaped, c) >= 0 ||
+			(quoted && strings.IndexByte(ksh93TraceQuotedEscaped, c) >= 0) {
+			b.WriteByte('\\')
+		}
+		b.WriteByte(c)
+	}
+	return b.String()
+}
+
+// ksh93TraceOperator is a pattern operator as that trace spells it: `=` is
+// written `==`, measured — `[[ abc = "a b" ]]` traces `[[ abc == 'a b' ]]`.
+func ksh93TraceOperator(op string) string {
+	if op == "=" {
+		return "=="
+	}
+	return op
+}
+
+// ksh93TracePattern is a `==` or `!=` pattern operand as that trace writes
+// it, from the pattern the matcher was handed (a backslash before each
+// character the script quoted). A word with no expansion in it and no live
+// pattern character is written as the value it is, quoted the way the trace
+// quotes a value; anything else is written as a pattern, by ksh93TraceEscape.
+// Measured 2026-10-04 on ksh93u+ 2012-08-01:
+//
+//	"a b"   'a b'      a\ b    'a b'     a" "b   'a b'      ""   ''
+//	a"*"b*  a\*b*      "a b"*  a\ b*     $p      a\ b  (p='a b')
+//	"$p"    a\ b       @(a|b)  @(a|b)    $p      a*    (p='a*')
+func (r *Runner) ksh93TracePattern(w *syntax.Word, pat string) string {
+	var value, traced strings.Builder
+	live := false
+	for i := 0; i < len(pat); i++ {
+		c, quoted := pat[i], false
+		if c == '\\' && i+1 < len(pat) {
+			i++
+			c, quoted = pat[i], true
+		} else if strings.IndexByte("*?[(|", c) >= 0 {
+			live = true
+		}
+		value.WriteByte(c)
+		traced.WriteString(ksh93TraceEscape(string(c), quoted))
+	}
+	if !live && !spansHoldAnExpansion(w) {
+		return r.traceCondOperand(value.String())
+	}
+	return traced.String()
+}
+
+// spansHoldAnExpansion reports whether any span of w is something other
+// than text the script wrote.
+func spansHoldAnExpansion(w *syntax.Word) bool {
+	for _, s := range w.Spans {
+		if s.Kind != syntax.Literal {
+			return true
+		}
+	}
+	return false
 }
 
 // regexKeepsWrittenBackslash reports whether this span of a `=~` operand is a

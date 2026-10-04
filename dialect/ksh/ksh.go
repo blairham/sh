@@ -1288,6 +1288,8 @@ func Semantics() interp.Semantics {
 	s.CommandWordListingNeedsAKindLetter = interp.No
 	s.TrapActionIsParsedWhenSet = interp.No
 	s.TrapParseFailureNamesWhereItFired = interp.Yes
+	// An arm's patterns are tried from the last. See the axis.
+	s.CaseTriesTheLastAlternativeFirst = interp.Yes
 	s.SymbolicMaskTakesMoreThanOneOperator = interp.Yes
 	s.SymbolicMaskWhoAloneSetsIt = interp.Yes
 	s.SymbolicMaskOmittedWhoHonorsTheMask = interp.No
@@ -4847,6 +4849,9 @@ func Diagnostics() interp.Diagnostics {
 		// this shell parts from bash: `[[ "a b" == "a b" ]]` traces
 		// `[[ 'a b' == 'a b' ]]` here and `[[ a b == a b ]]` there.
 		TraceConditionQuoting: interp.QuoteDollar,
+		// And a pattern operand is traced as the pattern this shell reads it
+		// as, `=~` included. See the field.
+		TraceConditionAsKsh93: true,
 		// `((n))` and `(( n + 1 ))`: the text between the parentheses, with
 		// nothing added. bash and zsh add a space on each side.
 		TraceArithCommand: interp.TraceArithTight,

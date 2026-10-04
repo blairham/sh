@@ -17958,6 +17958,24 @@ type Semantics struct {
 	// what is recorded here is that a one-line body cannot confirm it.
 	TrapParseFailureNamesWhereItFired Answer
 
+	// CaseTriesTheLastAlternativeFirst tries a `case` arm's `|`-separated
+	// patterns from the last to the first, expanding each as it is reached
+	// and stopping at the one that matches.
+	//
+	// ksh93 alone. It decides nothing about *which* arm is taken and
+	// everything about which of an arm's patterns are expanded, which a
+	// substitution in one makes visible. Measured 2026-10-04 on ksh93u+
+	// 2012-08-01 under `set -x`:
+	//
+	//	case a in $(echo a)|$(echo b)) …            + echo b, + echo a
+	//	case a in $(echo x)|$(echo y)|$(echo a)|$(echo z)) …
+	//	                                            + echo z, + echo a
+	//	case a in $(echo b)|$(echo a)) …            + echo a
+	//
+	// where bash 5.3.20, zsh 5.9.2 and dash expand from the first and stop at
+	// the match, so the first row runs `echo a` alone there.
+	CaseTriesTheLastAlternativeFirst Answer
+
 	// SymbolicMaskTakesMoreThanOneOperator lets one `umask` clause turn on
 	// several: `umask u+rw-x` is 0122 from 022 in four of the five — bash,
 	// ksh93, dash and BusyBox ash. zsh alone takes a single operator per
@@ -32820,6 +32838,7 @@ func PosixSemantics() Semantics {
 		// majority too, but only for a multi-line body — see the axis, where
 		// a one-line body moves two columns across.
 		TrapParseFailureNamesWhereItFired: No,
+		CaseTriesTheLastAlternativeFirst:  No,
 		// POSIX gives `trap` the signals and EXIT, and nothing else — ERR,
 		// DEBUG and RETURN are conditions the shells added. dash still
 		// refuses all three.

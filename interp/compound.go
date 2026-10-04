@@ -5,6 +5,7 @@ package interp
 
 import (
 	"context"
+	"slices"
 	"strings"
 	"syscall"
 
@@ -1132,7 +1133,15 @@ func (r *Runner) caseItemMatches(item *syntax.CaseItem, subject string) bool {
 	// than up front, and nothing is expanded that the match did not need.
 	tracing := r.tracing() && r.diag().TraceCaseHeader == TraceCaseArm
 	var tried []string
-	for _, p := range item.Patterns {
+	patterns := item.Patterns
+	if len(patterns) > 1 && r.ask(r.sem().CaseTriesTheLastAlternativeFirst,
+		"a `case` arm's patterns tried from the last") {
+		// Last first, and still expanded only as each is reached. See
+		// Semantics.CaseTriesTheLastAlternativeFirst.
+		patterns = slices.Clone(patterns)
+		slices.Reverse(patterns)
+	}
+	for _, p := range patterns {
 		// A pattern is a word: unquoted it is a pattern, quoted a literal,
 		// and only the spans still know which.
 		pat := r.patternOf(p)

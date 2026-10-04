@@ -1984,9 +1984,23 @@ which is printed from the string the matcher was handed: a metacharacter
 that came from quoted text carries a backslash and a live one does not, so
 `p='a*'; [[ abc == $p ]]` traces `a\*` in zsh and `a*` in bash — the same
 word, two renderings, each faithful to what its shell was about to match.
-ksh93 quotes the unescaped value there, and zsh renames `=~` to
-`-regex-match` while ksh93 rewrites it as `== ~(E)…`; a table of three
-names for one operator is decoration nothing else reads.
+zsh renames `=~` to `-regex-match`.
+
+**ksh93's rendering is modeled since #5722**, and it needs no second
+expansion either: it is the same marked string written by a table. An
+operand that is all text with no live pattern character is the quoted value
+(`"a b"` and `a" "b` are `'a b'`); anything else is the pattern with the
+characters the script quoted marked by a backslash, plus a blank, tab, `;`,
+`&`, `<`, `>` and `$` marked however they were written (`a"*"b*` is
+`a\*b*`, `"$p"` with `p='a b'` is `a\ b`); `=` is written `==`; and `=~` is
+written `== ~(E)` before the regex in the same marking (`^a.c$` is
+`~(E)^a.c\$`, `"a|b"` is `~(E)a\|b`). Measured 2026-10-04 on ksh93u+
+2012-08-01. See `Diagnostics.TraceConditionAsKsh93`.
+
+That shell also tries a `case` arm's patterns from the **last**, which a
+trace shows and a substitution in a pattern runs: `case a in
+$(echo a)|$(echo b))` traces `+ echo b` and then `+ echo a`.
+`Semantics.CaseTriesTheLastAlternativeFirst`.
 
 The others are visible only in a debugging aid, and reproducing them costs
 more than the fidelity is worth — which is a judgement, and is written here

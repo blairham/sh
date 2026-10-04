@@ -5080,6 +5080,11 @@ func Semantics() interp.Semantics {
 	s.PrivateOptions = "aAFHhiLlPpRrtuUxZ"
 	// A bad `typeset` option is reported and the script goes on.
 	s.TypesetBadOptionFatal = interp.No
+	// A local's value refused over a produced frozen parameter ends the
+	// shell at 0: measured 2026-10-03, `f() { local PPID=5; }; f; echo
+	// after` exits 0 with nothing after the refusal. See
+	// Semantics.ProducedFreezeUnderALocalEndsAtZero.
+	s.ProducedFreezeUnderALocalEndsAtZero = interp.Yes
 	// And the refusal takes the whole line with it: measured 2026-10-03 on
 	// zsh 5.9.2, `typeset -Q a=(1)` is `bad option: -Q` at 1 and `a` does
 	// not exist afterwards. See

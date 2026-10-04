@@ -15731,6 +15731,27 @@ type Semantics struct {
 	// unpinned ash: the same as dash.
 	ListedNonAsciiFollowsTheLocale Answer
 
+	// ProducedFreezeUnderALocalEndsAtZero ends the shell at status 0, not
+	// the dialect's fatal status, when a declaration that made the name the
+	// running call's local is refused a value over a frozen parameter the
+	// shell produces.
+	//
+	// Measured 2026-10-03 on zsh 5.9.2: `f() { local PPID=5; }; f; echo
+	// after` writes `f: read-only variable: PPID` and exits 0 under `-c` —
+	// 1 from a script file or standard input — where `export PPID=5` in the
+	// same body exits 1 by every route. See
+	// Runner.producedFreezeUnderALocalEndsAtZero.
+	//
+	// unpinned bash: bash's refusal of a read-only special is not fatal, so
+	// the status is never the fatal one to begin with.
+	//
+	// unpinned ksh: ksh93 has no produced parameter frozen this way.
+	//
+	// unpinned dash: likewise.
+	//
+	// unpinned ash: likewise.
+	ProducedFreezeUnderALocalEndsAtZero Answer
+
 	// SignAloneIsAnOptionWord reads a declaration's `-` or `+` written with
 	// no letters after it as an option word rather than as an operand.
 	//
@@ -32937,6 +32958,8 @@ func PosixSemantics() Semantics {
 		BareDeclarationListing: DeclareListingCommandWord,
 		BareLocalListing:       BareLocalListsNothing,
 		TypesetBadOptionFatal:  No,
+		// The dialect's fatal status, which is what this engine wrote.
+		ProducedFreezeUnderALocalEndsAtZero: No,
 		// What this engine did before the axis: the character reading.
 		ListedNonAsciiFollowsTheLocale: No,
 		// No is the immediate refusal this engine always made.

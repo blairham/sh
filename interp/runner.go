@@ -1218,6 +1218,10 @@ type Runner struct {
 	// `local` name aside for its return. See
 	// Runner.badLocalNameWaitsForTheReturn.
 	badLocalNamePending bool
+	// fatalStatusSettled says a fatal refusal inside the builtin now running
+	// chose the status the shell ends with, so the builtin's own return must
+	// not be written over it. Cleared where it is read.
+	fatalStatusSettled bool
 	// badLocalNameAtReturn is the name that refusal will give.
 	badLocalNameAtReturn string
 	// privateDeclared says this shell has taken a private shadow at least
@@ -9946,6 +9950,7 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 		r.globalLetterHere = outerGlobal
 		r.heldListing = outerHeldListing
 		if fatal {
+			r.fatalStatusSettled = false
 			return nil
 		}
 		// A builtin can consult an axis of its own — `echo` asks about
@@ -9953,6 +9958,13 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 		// as before, and its status is discarded when one went unanswered.
 		if r.unspecified {
 			r.status = 2
+			return nil
+		}
+		if r.fatalStatusSettled {
+			// A fatal refusal inside the builtin settled the status the
+			// shell ends with, and the builtin's own return is not it. See
+			// Runner.producedFreezeUnderALocalEndsAtZero.
+			r.fatalStatusSettled = false
 			return nil
 		}
 		r.status = st
@@ -12934,9 +12946,54 @@ func (r *Runner) reportReadonlyRefusal(name string, form assignForm, fatal bool)
 	}
 	if fatal {
 		r.fatal("%s\n", msg)
+		if r.producedFreezeUnderALocalEndsAtZero(name, form) {
+			r.status, r.fatalStatusSettled = 0, true
+		}
 		return
 	}
 	r.diagf("%s\n", msg)
+}
+
+// producedFreezeUnderALocalEndsAtZero reports a fatal refusal whose status is
+// 0 rather than the dialect's fatal one: a declaration that made the name the
+// running call's own local, written over a frozen parameter the shell
+// produces, with a value.
+//
+// Measured 2026-10-03 on zsh 5.9.2, `-c`:
+//
+//	f() { local PPID=5; }; f; echo after     `f: read-only variable: PPID`,
+//	                                         nothing after it, exit 0
+//	f() { local -i PPID=5; }; f              the same, 0
+//	f() { readonly PPID=5; }; f              the same, 0 — readonly is a
+//	                                         local-making typeset there
+//	f() { false; local ARGC=5; }; f          0, whatever stood in $? before
+//	f() { export PPID=5; }; f                1 — export makes no local
+//	f() { local -r q=1; local q=2; }; f      1 — a name the script froze
+//	typeset PPID=5                           1 — no call, no local
+//
+// Every 0 above is a `-c` string's. The first row from a script file, or fed
+// on standard input, ends at 1.
+//
+// So it is the shadow over a produced parameter, and not the freeze or the
+// function, that the status follows. See
+// Semantics.ProducedFreezeUnderALocalEndsAtZero.
+func (r *Runner) producedFreezeUnderALocalEndsAtZero(name string, form assignForm) bool {
+	// The shadow is the call's own and what it shadowed was frozen: the one
+	// shape the rows above share. A script's own freeze never reaches here
+	// through a local — `readonly r=1; f(){ local r=5; }` is taken there —
+	// so a frozen outer binding under a fresh local is the shell's.
+	//
+	// And the write is the declaration's own: a bare `ARGC=3` after a
+	// valueless `typeset ARGC` is refused at 1 in the same shell.
+	//
+	// And only a `-c` string: the same lines from a script file or standard
+	// input end at 1, measured the same day.
+	if r.Route != RouteCommandString || form == assignedAlone ||
+		!r.localInTheInnermostScope(name) || !r.outerBindingWasFrozen(name) {
+		return false
+	}
+	return r.ask(r.sem().ProducedFreezeUnderALocalEndsAtZero,
+		"a local's refused value over a produced frozen parameter ending the shell at 0")
 }
 
 // refuseReadonly reports whether an assignment to a frozen name is refused,

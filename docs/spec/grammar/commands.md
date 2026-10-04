@@ -4248,6 +4248,17 @@ assignment or a redirection in front of the `(` leaves it at the `(`.
 The token blamed is the `(` in every row. Grammar flag:
 `ParenAfterANameIsRefusedWhereTheNextTokenStands`, on for ksh93 alone.
 
+A loop's word list is read the same way: `for x in a (` then a newline and
+`b` is refused at line 2, and `for x in a b (` and `for x in (` at the `(`.
+And where what follows the `(` is a comment the input runs out in, that
+comment counts the newline the input never had — `echo (#i)` with nothing
+after it is line 2 under `-c`. The same is true of every refusal worded as
+the end of the input (`a=( #c` and `a=( (#i)zz ); echo after` are
+``line 2: `end of file' unexpected``), and of none that names a construct
+left open (`if true #c` is `` `if' unmatched `` at line 1). Measured
+2026-10-04 on ksh93u+ 2012-08-01. Grammar flag:
+`CommentRunningOutCountsANewline`.
+
 ## `times` is a reserved word in one shell
 
     times extra

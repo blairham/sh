@@ -26,6 +26,8 @@ func Dialect() syntax.Dialect {
 	// A `(` after a command's only word is refused at the line of the token
 	// after it — `echo (` and two blank lines is line 3. See the field.
 	d.ParenAfterANameIsRefusedWhereTheNextTokenStands = true
+	// And a comment that runs out with the input ends a line of its own.
+	d.CommentRunningOutCountsANewline = true
 	// A backslash inside a `"` run written in an operand that itself stands
 	// in double quotes escapes whatever follows it: with `u` unset,
 	// `"${u-"A\pB"}"` is `ApB` here as in bash, and `A\pB` in dash, zsh and

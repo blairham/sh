@@ -10766,9 +10766,17 @@ func (d Diagnostics) ParseFailure(err error) string {
 		if se.ExpectedIsAClass && d.UnterminatedExpectingAClass != "" {
 			form = d.UnterminatedExpectingAClass
 		}
+		line := se.Pos.Line
+		if se.Construct == "" && se.CommentRanOut {
+			// The comment took the newline the input never had, for the
+			// refusal worded as the end of the input; a construct left
+			// open is still named at the line the input ran out on. See
+			// syntax.Dialect.CommentRunningOutCountsANewline.
+			line++
+		}
 		return Wording(form, "syntax error: unterminated %[1]s",
 			se.Construct, se.ConstructLine, se.Innermost, se.Expected,
-			escapeToken(se.LastToken), se.Pos.Line)
+			escapeToken(se.LastToken), line)
 	}
 	return Wording(d.SyntaxError, "%[1]s", se.Msg, se.Pos.Line)
 }

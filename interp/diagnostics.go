@@ -7874,6 +7874,39 @@ type Diagnostics struct {
 	// which is bash's and ksh93's; ash sets 2.
 	JobStartedWithoutJobControlStatus int
 
+	// JobHasTerminated is `fg` or `bg` on a job that has already ended but
+	// is still in the table, because nothing has listed it yet. One verb:
+	// the builtin's name.
+	//
+	//	set -m; sleep 0 & sleep 0.5; fg      (from a file, no terminal)
+	//	  bash 5.3   fg: job has terminated, 1
+	//	  bash 3.2   fg: job has terminated, 1
+	//	  bash -o posix, and `bg` in place of `fg`: the same
+	//	  ksh93      nothing at all, 1
+	//
+	// Refused before anything is said on stdout and before any signal is
+	// sent: the job's command line is the notice of a job being resumed,
+	// and this one is not. This shell used to print it and then fail on the
+	// continue with `no such process` — or `operation not permitted` where
+	// the child was still a zombie — and `bg` called the ended job `already
+	// in background` and reported 0 (#5791).
+	//
+	// After the started-without-job-control refusal and not before it:
+	// measured, `true & set -m; sleep 0.3; fg` gets that one in bash. And
+	// the job stays in the table: a second `fg` is refused the same way,
+	// and only once `jobs` has reported it `Done` does the spec stop naming
+	// a job at all.
+	//
+	// Recorded rather than modeled per column, for the reason the field
+	// above gives: ksh93 refuses `fg` without a person before it reaches a
+	// job, zsh and dash refuse `set -m` without a terminal, and ash turns
+	// the monitor off — so none of them reaches this state from a script,
+	// and the fallback is bash's wording.
+	JobHasTerminated string
+	// JobHasTerminatedStatus is what that reports. Zero means 1, which is
+	// the one measured answer.
+	JobHasTerminatedStatus int
+
 	// JobNotUnderJobControl is the other half of the same refusal: `fg` or
 	// `bg` in a shell with no job control, for the dialect that reads its
 	// operand *first* and reaches this only once the spec has resolved to a

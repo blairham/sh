@@ -1031,6 +1031,16 @@ func (r *Runner) resume(args []string, name string) (*Job, int) {
 			"%[1]s: job %[2]d started without job control", name, r.jobNumber(j)))
 		return nil, orDefault(d.JobStartedWithoutJobControlStatus, 1)
 	}
+	if j.Finished() {
+		// Ended but not yet listed, so the spec still names it. Neither
+		// builtin has anything to resume, and both refuse before the notice
+		// and before the continue — see Diagnostics.JobHasTerminated. Here
+		// rather than in either builtin so that `bg` cannot call an ended
+		// job one that is already running in the background (#5791).
+		d := r.diag()
+		r.diagf("%s\n", Wording(d.JobHasTerminated, "%[1]s: job has terminated", name))
+		return nil, orDefault(d.JobHasTerminatedStatus, 1)
+	}
 	return j, 0
 }
 

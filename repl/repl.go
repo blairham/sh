@@ -21,6 +21,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/blairham/sh/internal/blocks"
@@ -825,6 +826,7 @@ func (s Shell) Run(ctx context.Context) (int, error) {
 			// lines of an unfinished construct — which is the whole point of
 			// it at a continuation prompt.
 			s.abandon(&pending)
+			s.interruptedAtThePrompt()
 			continue
 		case errors.Is(err, io.EOF):
 			if s.heldForJobsAtExit(state) {
@@ -2115,7 +2117,31 @@ func (s Shell) refused(err error) {
 	if s.ParseFailureStatus == nil {
 		return
 	}
-	s.Runner.SetExitStatus(s.ParseFailureStatus(err))
+	s.Runner.SetPromptStatus(s.ParseFailureStatus(err))
+}
+
+// interruptedAtThePrompt sets the status a line abandoned with ^C leaves:
+// 128 plus the signal's number, as though the line had been a command the
+// signal ended.
+//
+// Measured 2026-10-04 through a pseudo-terminal against bash 5.3.20 and zsh
+// 5.9.2, no startup files: on an empty line, a half-typed one and a
+// continuation prompt alike, `$?` is 130 afterwards whatever it was before,
+// a second ^C leaves it 130, the prompt hooks — precmd, PROMPT_COMMAND — run
+// and see 130, and an `exit` with no operand leaves with it. This loop used
+// to abandon the line and leave the previous command's status in place, so a
+// prompt that draws the status drew nothing for a ^C (#5867).
+//
+// Not under `trap "" INT`, where both leave the status alone.
+//
+// Through SetPromptStatus, the same door a refused line goes through, so
+// the dialect that makes the status its pipeline record as well does it for
+// both.
+func (s Shell) interruptedAtThePrompt() {
+	if s.Runner.IgnoresSignal(syscall.SIGINT) {
+		return
+	}
+	s.Runner.SetPromptStatus(128 + int(syscall.SIGINT))
 }
 
 // refusedForGood reports whether a parse failure is one no further line could

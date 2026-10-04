@@ -19772,6 +19772,32 @@ type Semantics struct {
 	// driver/promptecho_test.go carries it to the front end
 	// (TestTheFrontEndCarriesWhetherAPromptEchoesTheLine).
 	PromptEchoesTheLineWhereThereIsNoTerminal bool
+	// PromptStatusWritesThePipelineRecord makes a status the prompt sets for
+	// a line that ran nothing — 130 for a line abandoned with ^C, the parse
+	// failure's status for a refused one — the pipeline-status record too, as
+	// one element. See Runner.SetPromptStatus, the one place that sets it.
+	//
+	// Measured 2026-10-04 through a pseudo-terminal, no startup files, after
+	// `true | false`:
+	//
+	//	                  ^C at the prompt      a refused `)`
+	//	bash 5.3.20       $? 130, PIPESTATUS 130  $? 2, PIPESTATUS 2
+	//	zsh 5.9.2         $? 130, pipestatus 0 1  $? 1, pipestatus 0 1
+	//
+	// So both shells set `$?` and only bash writes the record: bash writes it
+	// whenever it sets a status, and zsh writes it for a job, which neither
+	// line made. ksh93 and dash keep no record and never reach the question.
+	//
+	// Read without asking, for the reason the two prompt answers above it are
+	// plain bools: a prompt has no way to refuse a line over an unanswered
+	// axis, and the shell that keeps no record answers no.
+	//
+	// unpinned: reached, and the corpus cannot discriminate. Every case runs
+	// under `-c` or a script with no prompt, so no row has a line the prompt
+	// abandoned or refused. cmd/bash/interruptstatuspty_test.go presses ^C at
+	// a real prompt and pins the record
+	// (TestControlCAtThePromptSetsTheStatus).
+	PromptStatusWritesThePipelineRecord bool
 
 	// EditorReadsKeysWhereThereIsNoTerminal gives a session whose input is a
 	// pipe or a file a **line editor**: the editing keys are read as keys

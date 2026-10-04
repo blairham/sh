@@ -2898,6 +2898,12 @@ func (r *Runner) readArithNum(s, tail string, written bool) (arithNum, error) {
 		}
 		return intNum(0), arithError{msg: msg, token: s, badNumeral: true}
 	}
+	if r.lang().ArithEmptyExponentIsConsumed {
+		// A trailing exponent letter with no digits, which the dialect's
+		// reader took into the numeral and reads as absent — see
+		// syntax.Dialect.ArithEmptyExponentIsConsumed.
+		s = withoutAnEmptyExponent(s)
+	}
 	f, err := strconv.ParseFloat(s, 64)
 	if errors.Is(err, strconv.ErrRange) {
 		// The numeral is well formed and too large: ParseFloat has already
@@ -2926,6 +2932,20 @@ func (r *Runner) readArithNum(s, tail string, written bool) (arithNum, error) {
 		return floatNum(0), nil
 	}
 	return floatNum(f), nil
+}
+
+// withoutAnEmptyExponent drops an exponent letter, and the sign after it,
+// from the end of a decimal numeral that has no exponent digits: `1.e` is
+// `1.`, `3e+` is `3`. Anything else comes back as it was.
+func withoutAnEmptyExponent(s string) string {
+	t := strings.TrimRight(s, "+-")
+	if len(s)-len(t) > 1 {
+		return s
+	}
+	if n := len(t); n > 1 && (t[n-1] == 'e' || t[n-1] == 'E') && t[n-2] != 'e' && t[n-2] != 'E' {
+		return t[:n-1]
+	}
+	return s
 }
 
 // minNormalFloat is the smallest normal double, below which C's `strtod`

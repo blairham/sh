@@ -24699,6 +24699,22 @@ integer-only operator refuses a float on either side there, `1 << 1.5`,
 `1 & 1.5` and `~1.5` included, which makes `%`'s dividend the one operand
 in the shell that is taken rather than questioned.
 
+**`Dialect.ArithEmptyExponentIsConsumed`** — a grammar flag, ksh93 alone
+
+A decimal float's exponent letter, and a sign after it, belong to the
+numeral even when no digit follows, and the numeral is then read as if
+the exponent were absent. Measured 2026-10-03 on ksh93u+ 2012-08-01:
+
+    1.e    1       1.e+   1       2.5e    2.5     1.e*2    2
+    1e     1       3e+    3       1.ex    refused 2e-x     refused
+
+The last two rows are what make this a matter of tokens rather than
+values. The `x` after `1.e` is a byte after the numeral, not part of it.
+In `2e-x` the sign is taken with the letter, so `2e-x` is refused rather
+than read as a subtraction. zsh ends the numeral before the letter, so
+`$(( 1.e ))` is a number followed by a name, and zsh's operator
+complaint follows from that. bash, dash and ash have no floats at all.
+
 **`Dialect.ArithHexFloat`** — a grammar flag, ksh93 alone
 
 C's hexadecimal spelling of a float inside `$(( ))`: a hexadecimal
@@ -24716,9 +24732,9 @@ bash 5.3, bash 3.2, bash-as-`sh`, zsh 5.9.2, dash 0.5.12 and BusyBox ash
 Three of those are the whole reason it is not a two-line reader. `0x1e5`
 is the integer 485: `e` is a hexadecimal digit and only a point or a `p`
 makes the literal a float. The exponent's digits may be *missing* where
-the letter is present — `0x1p`, `0x1p+` and `0x1p-` are all 1 — which is
-the opposite of the decimal rule, where `1e` ends the numeral at the
-`1`. And the two refusals are about a missing mantissa digit rather than
+the letter is present — `0x1p`, `0x1p+` and `0x1p-` are all 1. ksh93
+reads the decimal exponent the same way (`Dialect.ArithEmptyExponentIsConsumed`,
+below), so in that shell this is not a contrast with the decimal rule. And the two refusals are about a missing mantissa digit rather than
 a missing exponent.
 
 A grammar flag rather than an axis for the reason `ArithFloat` and

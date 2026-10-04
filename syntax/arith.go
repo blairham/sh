@@ -1938,6 +1938,12 @@ func (a *arithParser) floatTail(begin int) {
 	if after < len(a.src) && a.src[after] >= '0' && a.src[after] <= '9' {
 		a.off = after
 		a.decimalDigits()
+		return
+	}
+	if a.dial.ArithEmptyExponentIsConsumed {
+		// The letter and its sign are the numeral's even with no digit
+		// behind them — see Dialect.ArithEmptyExponentIsConsumed.
+		a.off = next
 	}
 }
 

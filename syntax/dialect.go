@@ -5288,6 +5288,19 @@ type Dialect struct {
 	// does not.
 	ArithFloat bool
 
+	// ArithEmptyExponentIsConsumed takes a decimal float's exponent letter,
+	// and a sign after it, into the numeral even where no digit follows, and
+	// reads the numeral as though the exponent were not there.
+	//
+	// ksh93 alone. Measured 2026-10-03 on ksh93u+ 2012-08-01: `$(( 1.e ))`,
+	// `$(( 1e ))`, `$(( 1.e+ ))` and `$(( 3e+ ))` are 1, 1, 1 and 3, and
+	// `$(( 2.5e ))` is 2.5, while `$(( 1.ex ))` is still `arithmetic syntax
+	// error` — the `x` is a byte after the numeral and not part of it. The
+	// hexadecimal float's `p` already reads this way in the same shell (see
+	// hexFloatTail). zsh ends the numeral before the letter, so `1.e` is a
+	// number and then a name, and its operator complaint follows.
+	ArithEmptyExponentIsConsumed bool
+
 	// ArithBytesRefusedOutright are the bytes this shell's arithmetic reader
 	// refuses as part of no token at all, and reports at the byte rather than
 	// as a missing operand: `$((@))` is `illegal character: @` in the one

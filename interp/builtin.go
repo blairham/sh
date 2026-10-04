@@ -1275,12 +1275,12 @@ func (r *Runner) unknownSetOption(args []string, names, report bool) (preceded, 
 		}
 		return r.badSetOptionLetter(opt, sign)
 	}
-	refuseName := func(name string) bool {
+	refuseName := func(name string, on bool) bool {
 		mark()
 		if !report {
 			return false
 		}
-		return r.badSetOptionName(name)
+		return r.badSetOptionName(name, on)
 	}
 	for i := 0; i < len(args); i++ {
 		a := args[i]
@@ -1311,7 +1311,7 @@ func (r *Runner) unknownSetOption(args []string, names, report bool) (preceded, 
 				// is where the report is made: the applying loop never
 				// reaches a word this one has already refused.
 				r.longSetOptionSpelling = true
-				keep := refuseName(nm)
+				keep := refuseName(nm, true)
 				r.longSetOptionSpelling = false
 				if !keep {
 					return
@@ -1331,7 +1331,7 @@ func (r *Runner) unknownSetOption(args []string, names, report bool) (preceded, 
 				// generous: an unanswered axis leaves the applying pass to
 				// report the missing dialect, and a name refused here would
 				// be a refusal that pass might never have made.
-				if names && !r.hasSetOptionName(after) && !refuseName(after) {
+				if names && !r.hasSetOptionName(after) && !refuseName(after, sign) {
 					return
 				}
 			case after == "" && i+1 < len(args) &&
@@ -1343,7 +1343,7 @@ func (r *Runner) unknownSetOption(args []string, names, report bool) (preceded, 
 				// is: a pass that applies nothing must not be the one that
 				// refuses a dialect for an unanswered axis.
 				i++
-				if names && !r.hasSetOptionName(args[i]) && !refuseName(args[i]) {
+				if names && !r.hasSetOptionName(args[i]) && !refuseName(args[i], sign) {
 					return
 				}
 			}
@@ -1954,9 +1954,13 @@ func (r *Runner) restrictedLetterTurnedOff() bool {
 	return false
 }
 
-func (r *Runner) badSetOptionName(name string) bool {
+func (r *Runner) badSetOptionName(name string, on bool) bool {
 	d := r.diag()
-	msg := Wording(d.SetInvalidOptionName, "set: %[1]s: invalid option name", name)
+	sign := "+"
+	if on {
+		sign = "-"
+	}
+	msg := Wording(d.SetInvalidOptionName, "set: %[1]s: invalid option name", name, sign)
 	r.saySetRefusal(msg, d.SetInvalidOptionNameUsage, true)
 	return r.setRefusalStatus(refusedOptionName, "an unknown `set -o` name ending the script")
 }
@@ -2315,11 +2319,11 @@ func (r *Runner) applySetOption(name, spelled string, on bool) bool {
 			// same word would only obscure it.
 			return true
 		}
-		return r.badSetOptionName(spelled)
+		return r.badSetOptionName(spelled, on)
 	}
 	o, ok := r.lookupSetOption(name)
 	if !ok {
-		return r.badSetOptionName(spelled)
+		return r.badSetOptionName(spelled, on)
 	}
 	if r.immovableName(name) {
 		// A name this shell lists and will not take, in either direction —
@@ -2347,7 +2351,7 @@ func (r *Runner) applySetOption(name, spelled string, on bool) bool {
 		// had. Granting it here would trade `bad option(s)` for a
 		// `not implemented` those shells never say.
 		if !r.atInvocation || r.sem().ImmovableOptionsSetAtInvocation != Yes || o.apply == nil {
-			return r.badSetOptionName(spelled)
+			return r.badSetOptionName(spelled, on)
 		}
 	}
 	if r.inertOptions[name] {

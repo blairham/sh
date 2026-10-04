@@ -3179,9 +3179,15 @@ func Diagnostics() interp.Diagnostics {
 		UnsetReadonly:         "%s: is read only",
 		LocalOutsideAFunction: "not in a function",
 
-		// The option refusals: lower case, and the letter alone.
-		SetInvalidOptionName:   "illegal option -o %[1]s",
-		SetInvalidOptionLetter: "illegal option -%[2]s",
+		// The option refusals: lower case, and the sign echoed back as it
+		// was asked, which is where this shell parts from dash. Measured
+		// 2026-10-04 in the pinned image: `set +B` is `illegal option +B`,
+		// `set +o zzz` is `illegal option +o zzz`, and `ash +o posix -c :`
+		// is `illegal option +o posix` — while `set -o emacs` beside `set
+		// +o emacs` writes one of each, so the sign is the request's and
+		// not the option's (#5723).
+		SetInvalidOptionName:   "illegal option %[2]so %[1]s",
+		SetInvalidOptionLetter: "illegal option %[1]s",
 		// A `--word` this front end could not place, and it is **not** the
 		// letter's sentence one word over: measured 2026-09-16 on BusyBox ash
 		// 1.37.0 in the pinned Alpine image, `ash -q` is `illegal option -q`

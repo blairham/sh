@@ -3913,7 +3913,7 @@ type Diagnostics struct {
 	LocationNamesTheEvalText bool
 
 	// SetInvalidOptionName is a long `set -o` name this shell does not have.
-	// One verb: the name.
+	// Two verbs: the name, and the sign it was asked with — `-` or `+`.
 	//
 	//	bash   set: bogusname: invalid option name
 	//	dash   set: Illegal option -o bogusname
@@ -3921,7 +3921,8 @@ type Diagnostics struct {
 	//	zsh    set: no such option: bogusname
 	//
 	// dash writes `-o` whichever way it was asked, so the operator is part
-	// of the wording rather than a verb. zsh puts the builtin's name in the
+	// of the wording rather than a verb; BusyBox ash echoes the sign back —
+	// `illegal option +o zzz` — and takes the second verb for it (#5723). zsh puts the builtin's name in the
 	// location instead of in the sentence, which the location already does.
 	// ksh93 follows it with the usage line it keeps in BuiltinUsage.
 	SetInvalidOptionName string

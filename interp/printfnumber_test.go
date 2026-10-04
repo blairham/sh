@@ -606,35 +606,42 @@ func TestPrintfArithArgumentTypeIsTheStatusToo(t *testing.T) {
 // the same column says nothing about at `%f` — so the range is the
 // conversion's and not the operand's (#2765).
 func TestPrintfIntegerOverflowIsTheConversionsRange(t *testing.T) {
+	// The column that reports this carries its arithmetic in a double, so
+	// the numeral comes back from it as one and is clamped here — rather than
+	// being one of the integer readings ArithNumeralPastTheWord holds.
+	floats := func(d *syntax.Dialect) { d.ArithFloat = true }
 	sem := printfSem()
 	sem.PrintfNumberOperand = PrintfNumberArithmetic
+	sem.ArithValuesAreCarriedInAFloat = Yes
+	sem.ArithFloatOverflowIsZero = Yes
 	diag := Diagnostics{PrintfIntegerOverflow: "printf: warning: %[1]s: overflow exception"}
 	set := func(r *Runner) {
 		r.Semantics = &sem
 		r.Diagnostics = &diag
 	}
-	out, st := run(t, `printf '[%d]' 99999999999999999999`, set)
+	out, st := runGrammar(t, `printf '[%d]' 99999999999999999999`, floats, set)
 	if want := "sh: printf: warning: 99999999999999999999: overflow exception\n[9223372036854775807]"; out != want || st != 1 {
 		t.Errorf("got %q status %d, want %q and 1", out, st, want)
 	}
 	// The clamp is to the extreme of the type in both directions.
-	out, st = run(t, `printf '[%d]' -99999999999999999999`, set)
+	out, st = runGrammar(t, `printf '[%d]' -99999999999999999999`, floats, set)
 	if want := "sh: printf: warning: -99999999999999999999: overflow exception\n[-9223372036854775808]"; out != want || st != 1 {
 		t.Errorf("got %q status %d, want %q and 1", out, st, want)
 	}
 	// The same operand at a float conversion is a perfectly good number.
-	if out, st := run(t, `printf '[%f]' 99999999999999999999`, set); out != "[100000000000000000000.000000]" || st != 0 {
+	if out, st := runGrammar(t, `printf '[%f]' 99999999999999999999`, floats, set); out != "[100000000000000000000.000000]" || st != 0 {
 		t.Errorf("at %%f: got %q status %d, want the value in silence at 0", out, st)
 	}
 	// An operand that overflowed a *double* is not asked about: the column
 	// that reports this answers zero for it and says nothing (#2766).
-	if out, st := run(t, `printf '[%d]' 1e400`, set); strings.Contains(out, "overflow") || st != 0 {
+	if out, st := runGrammar(t, `printf '[%d]' 1e400`, floats, set); out != "[0]" || st != 0 {
 		t.Errorf("at 1e400: got %q status %d, want silence at 0", out, st)
 	}
 	// And a dialect without the wording says nothing at all.
 	plain := printfSem()
 	plain.PrintfNumberOperand = PrintfNumberArithmetic
-	if out, st := run(t, `printf '[%d]' 99999999999999999999`, func(r *Runner) { r.Semantics = &plain }); strings.Contains(out, "overflow") || st != 0 {
+	plain.ArithValuesAreCarriedInAFloat = Yes
+	if out, st := runGrammar(t, `printf '[%d]' 99999999999999999999`, floats, func(r *Runner) { r.Semantics = &plain }); strings.Contains(out, "overflow") || st != 0 {
 		t.Errorf("without the wording: got %q status %d, want silence at 0", out, st)
 	}
 }
@@ -1052,4 +1059,53 @@ func TestPrintfEvaluatedInfinityIsAnOverflow(t *testing.T) {
 			t.Errorf("got %q status %d, want [0] and 0", out, st)
 		}
 	})
+}
+
+// An integer numeral past the machine word, at an integer conversion, in the
+// dialect that reads its operands with its arithmetic and whose arithmetic
+// keeps the digits that fit. Measured 2026-10-03 on zsh 5.9.2:
+// `printf '[%d]' 99999999999999999999` is `[-8446744073709551617]` with the
+// evaluator's own truncation sentence, which is `$(( ))`'s reading and not the
+// saturated value `strtoimax` would give. The value is past what a double
+// holds exactly, so a reading that went through one would be off in the last
+// digit — the row is chosen for that.
+func TestPrintfIntegerPastTheWordIsTheArithmeticsNumeral(t *testing.T) {
+	sem := printfSem()
+	sem.PrintfNumberOperand = PrintfNumberArithmetic
+	sem.ArithNumeralPastTheWord = NumeralPastTheWordKeepsTheDigitsThatFit
+	sem.ArithValuesAreCarriedInAFloat = No
+	// The location names a builtin for the builtin's own complaints, and the
+	// truncation is the evaluator's: `zsh:1:`, not `zsh:printf:1:`.
+	diag := Diagnostics{
+		ArithNumberTruncated:   "number truncated after %d digits: %s",
+		NamesBuiltinInLocation: true,
+		Location:               LocationTightLine,
+	}
+	set := func(r *Runner) {
+		r.Semantics = &sem
+		r.Diagnostics = &diag
+	}
+	for _, tc := range []struct{ src, want string }{
+		{`printf '[%d]' 99999999999999999999`, "sh:1: number truncated after 19 digits: 99999999999999999999\n[-8446744073709551617]"},
+		{`printf '[%d]' -99999999999999999999`, "sh:1: number truncated after 19 digits: 99999999999999999999\n[8446744073709551617]"},
+		{`printf '[%d]' 9999999999999999999`, "sh:1: number truncated after 18 digits: 9999999999999999999\n[999999999999999999]"},
+		// Inside the word nothing is asked and nothing is said.
+		{`printf '[%d]' 9223372036854775807`, "[9223372036854775807]"},
+	} {
+		if out, st := run(t, tc.src, set); out != tc.want || st != 0 {
+			t.Errorf("%s: got %q status %d, want %q and 0", tc.src, out, st, tc.want)
+		}
+	}
+	// The float conversion is a different reader and keeps the value.
+	if out, st := run(t, `printf '[%.0f]' 99999999999999999999`, set); out != "[100000000000000000000]" || st != 0 {
+		t.Errorf("at %%f: got %q status %d, want the value in silence", out, st)
+	}
+	// An arithmetic with no answer for the numeral refuses it out loud rather
+	// than falling back to a reading nobody chose.
+	open := sem
+	open.ArithNumeralPastTheWord = NumeralPastTheWordUnspecified
+	out, st := run(t, `printf '[%d]' 99999999999999999999`, func(r *Runner) { r.Semantics = &open })
+	if st != 2 || !strings.Contains(out, "no dialect was chosen") {
+		t.Errorf("unanswered: got %q status %d, want the axis refused at 2", out, st)
+	}
 }

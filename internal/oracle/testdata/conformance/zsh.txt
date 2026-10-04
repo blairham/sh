@@ -43,8 +43,6 @@ pat/a-whole-match-flag-in-mid-pattern
 pattern/a-top-level-bar-against-the-filesystem
 print/a-prompt-escape-this-shell-has-not
 printf/a-bad-number-can-name-its-base
-printf/a-range-error-keeps-the-value
-printf/a-refused-operand-says-what-type-and-what-it-costs
 printf/a-refused-star-rewinds-the-pass
 procsub/a-file-substitution-opens-only-at-a-word
 prompt/print-P-is-the-same-boundary

@@ -79,11 +79,68 @@ func (r *Runner) printfNumber(arg string, present bool) (int64, int, bool) {
 		}
 		return v, 0, false
 	}
+	if v, ok := r.printfIntegerPastTheWord(text); ok {
+		return v, 0, false
+	} else if r.unspecified {
+		return 0, r.status, true
+	}
 	f, code, stop := r.printfPartialNumber(arg, text, false)
 	if code == 0 && !stop {
 		code = r.printfIntegerOverflow(arg, f, false)
 	}
 	return floatToInt64(f), code, stop
+}
+
+// printfIntegerPastTheWord reads an integer numeral too large for the machine
+// word the way the dialect's arithmetic reads one, where the dialect reads
+// its operands with its arithmetic at all.
+//
+// Measured 2026-10-03 on zsh 5.9.2: `printf '[%d]' 99999999999999999999` is
+// `[-8446744073709551617]` with `number truncated after 19 digits:
+// 99999999999999999999` on stderr and status 0, and the same operand with a
+// minus is the same value negated with the same sentence. That is exactly
+// `$(( 99999999999999999999 ))` there — Semantics.ArithNumeralPastTheWord,
+// truncatedNumeral's rule — and not the saturated value C's `strtoimax`
+// gives, which is what this shell wrote.
+//
+// The value comes back as an integer rather than through the float the rest
+// of the arithmetic reading carries, because -8446744073709551617 is not a
+// double: rounding it would be wrong in the last digit. A dialect whose
+// arithmetic carries the numeral in a double instead (ksh93) gets that double
+// back here and is left to the reading below, which clamps it and says so.
+func (r *Runner) printfIntegerPastTheWord(text string) (int64, bool) {
+	if r.sem().PrintfNumberOperand != PrintfNumberArithmetic {
+		return 0, false
+	}
+	if n := cIntegerRun(text); n == 0 || n != len(text) {
+		return 0, false
+	}
+	if _, over := cInteger(text); !over {
+		return 0, false
+	}
+	digits, neg := text, false
+	if digits[0] == '-' || digits[0] == '+' {
+		neg, digits = digits[0] == '-', digits[1:]
+	}
+	// The truncation is the evaluator's sentence and not the builtin's, so
+	// it leaves `printf` out of the location as every other complaint the
+	// evaluator makes from here does: `zsh:1: number truncated ...`.
+	restore := r.builtinAsideForAMathFailure()
+	n, err := r.readArithNum(digits, text, true)
+	restore()
+	if err != nil && r.unspecified {
+		// The arithmetic has no answer for the numeral, and says so in the
+		// words every unanswered axis is refused with.
+		r.errf("%s\n", r.diag().Report(r.name(), r.line, err.Error()))
+		return 0, false
+	}
+	if err != nil || n.float {
+		return 0, false
+	}
+	if neg {
+		return -int64(n.i), true
+	}
+	return int64(n.i), true
 }
 
 // printfIntegerOverflow reports a value an *integer* conversion cannot hold,

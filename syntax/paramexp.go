@@ -2916,11 +2916,11 @@ func flagGroupBodyRefusal(body string) string {
 	state := atStart
 	for i := 0; i < len(body); {
 		c := body[i]
-		switch {
-		case c == ' ' || c == '\t':
+		switch c {
+		case ' ', '\t':
 			i++
 			continue
-		case c == '|' || c == '&' || c == ';':
+		case '|', '&', ';':
 			op := string(c)
 			if i+1 < len(body) && body[i+1] == c && c != ';' {
 				op += string(c)

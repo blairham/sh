@@ -4687,6 +4687,9 @@ func (r *Runner) listBase(e *syntax.ParamExpr) ([]string, bool) {
 			// twice. See holdNested.
 			return nil, false
 		}
+		if !r.nestedListIsWhatItCameTo(e) {
+			return nil, false
+		}
 		return words, true
 	}
 	if e.Index == nil {
@@ -4709,6 +4712,42 @@ func (r *Runner) listBase(e *syntax.ParamExpr) ([]string, bool) {
 		return nil, false
 	}
 	return r.arraySubscript(e)
+}
+
+// nestedListIsWhatItCameTo reports whether a nested expansion whose inner
+// came to a list yields that list, which for the four conditionals depends on
+// which side of the test ran.
+//
+// The other operators distribute over the list and the list is their input,
+// but a conditional chooses between the list and its *word*, and a `+` never
+// yields the list at all: it is its word when the test does not fire and
+// nothing when it does. A word that is written reaches substitutedWordFields
+// before this; a `+` with nothing behind it does not — the parser builds no
+// operand word — and arrived here, where the list came back as though no
+// operator had been written. Measured 2026-10-04 on zsh 5.9.2 under -f, with
+// `a=(x y)` and `y=1`:
+//
+//	${$((7))+}  ${$(echo 7)+}  ${$((7)):+}  ${${a}+}  ${${a}:+}   nothing
+//	${${y}+}  "${$((7))+}"                 nothing, and these were right:
+//	                                       a scalar inner is not a list
+//	${$((7))-}  ${${a}-}                   7, and x y: the list, unchanged
+//
+// The arithmetic and command substitutions are lists here because unquoted
+// they always are (see nestedInnerIsAList), which is why powerlevel10k's
+// `${$((_p9k__d+=6))+}` printed the count into every shortened directory
+// (#5866). The scalar path answers the other side, as it already did for a
+// scalar inner.
+//
+// The firing test reads the inner through the hold, so asking it here runs
+// no command substitution a second time.
+func (r *Runner) nestedListIsWhatItCameTo(e *syntax.ParamExpr) bool {
+	switch e.Op {
+	case syntax.ParamAlternate:
+		return false
+	case syntax.ParamDefault, syntax.ParamAssign, syntax.ParamError:
+		return !r.testFires(e)
+	}
+	return true
 }
 
 // positionalsAsList gives `$@` and `$*` under an operator the subscript that

@@ -8710,6 +8710,11 @@ echo "st=$?"`,
 		Why:     "the same characters without the quotes, and a different program: an unquoted substitution standing where a name belongs is split on IFS *before* the outer expansion sees it, so `${$(printf \"a b\")}` is `[a][b]` and not `[a b]`, and `${(@f)$(printf \"a b\\nc\")}` is `[a][b][c]` and not the `[a b][c]` its quoted spelling gives. `echo` cannot see either — two fields print as one line and one field holding a newline prints as two — which is how the divergence stayed hidden, so `printf \"[%s]\"` is the instrument. It is what a completion dump's `autoload` line is built out of: `$^fpath/(${(o~j.|.)$(typeset +fm '_*')})(N:t)` joins the names with `|` to make an alternation, and one field holding newlines is a pattern that matches no file, so the line came out with no names on it and the dump cached nothing (#1697, #976)",
 	},
 	{
+		ID: "param/an-empty-alternate-over-a-nested-list", Category: "parameter expansion",
+		Snippet: `a=(p q); x=aXb; printf "[%s]" ${$((7))+} ${${a}+} ${$((7)):+} "${x/X/${$((7))+}}" "${x//X/${$(echo 7)+}}" ${$((7))-} ${${a}-}; echo`,
+		Why:     "a `+` over an inner that came to a list is its word or nothing, and never the list: zsh writes `[ab][ab][7][p][q]`. With nothing written behind the `+` there is no operand word, and the list path handed the inner's fields back as though no operator had been written, so `${$((7))+}` was `7` — which is how powerlevel10k's `Dev${$((_p9k__d+=6))+}` drew `Dev-11` in a shortened directory, the replacement word being read unquoted where an arithmetic inner is a list. The two `-` fields are the other side of the same test, where the list is the answer (#5866)",
+	},
+	{
 		ID: "param/a-flag-group-over-an-unquoted-substitution", Category: "parameter expansion",
 		Snippet: `f() { printf "b b\na a\nc\n"; }; a=( ${(oj:-:)$(f)} ); printf "[%s]" "${a[@]}"; echo`,
 		Why:     "the fields are what the group works on, which is the half a shell that hands it one string gets silently wrong: five fields sorted and joined is `[a-a-b-b-c]`, where one field holding two newlines sorts to itself and joins to itself and comes out unchanged. Status 0 either way and no diagnostic — the sort and the join are simply no-ops on a single field, which is what makes it worth a row of its own beside the plain unquoted spelling above",

@@ -147,7 +147,12 @@ func PrintArrayElemWith(e *ArrayElem, l Layout) string {
 // Literal text goes in as it stands. There are no quotes around the result to
 // protect anything from, so escaping it would add characters that were never
 // written — `"\"${x@QQ}\""` names `"${x@QQ}"`, measured.
-func PrintWordQuotingRun(w *Word, i int) string {
+func PrintWordQuotingRun(w *Word, i int) string { return PrintWordQuotingRunWith(w, i, Layout{}) }
+
+// PrintWordQuotingRunWith is PrintWordQuotingRun with an arrangement, for a
+// shell whose diagnostic names the run the way it lists it: braces as
+// written, a `$'…'` as its value, a command substitution laid out again.
+func PrintWordQuotingRunWith(w *Word, i int, l Layout) string {
 	if w == nil || i < 0 || i >= len(w.Spans) {
 		return ""
 	}
@@ -159,7 +164,7 @@ func PrintWordQuotingRun(w *Word, i int) string {
 	for hi < len(w.Spans) && w.Spans[hi].Quoting == q {
 		hi++
 	}
-	var p printer
+	p := printer{layout: l}
 	p.raw = true
 	for j := lo; j < hi; j++ {
 		if w.Spans[j].Kind == Literal {

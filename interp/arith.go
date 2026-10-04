@@ -3873,6 +3873,9 @@ func (r *Runner) arithPrecedenceOptionInCharge() bool { return r.arithPrecedence
 // It is the same scan a here-document body gets, and for the same reason: in
 // both, a quote is an ordinary character and only the expansions matter.
 func (r *Runner) expandArithText(text string, origin arithTextOrigin) string {
+	prevArith := r.expandingArith
+	r.expandingArith = text
+	defer func() { r.expandingArith = prevArith }()
 	// The double quotes a script wrote come out as the text is joined, which
 	// is a step later than it reads: the quotation is a quoting context while
 	// the expansions in it are performed and is gone from the result. Both

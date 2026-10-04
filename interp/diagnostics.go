@@ -6602,6 +6602,21 @@ type Diagnostics struct {
 	// and do not agree on how much of a word counts, which is why this is
 	// three answers and not a flag.
 	BadSubstitutionNames BadSubstitutionSubject
+	// BadSubstitutionRunIsListed prints the run NamesTheQuotingRun names
+	// the way the shell lists a function — `${v}` keeps its braces, a
+	// `$'\e'` is written as its value in single quotes, and a `$( … )` is
+	// laid out again — rather than as the substrate prints a word. Measured
+	// 2026-10-04 on bash 5.3.20: `"${v}${x@Z}"` names `${v}${x@Z}`, and
+	// `"$(a >/dev/null;b)${x@Z}"` names `$(a > /dev/null; b)${x@Z}`, the
+	// same text `declare -f` lists for that word. See docs/spec/grammar/
+	// parameter-expansion.md.
+	BadSubstitutionRunIsListed bool
+	// BadSubstitutionInArithmeticNamesTheExpression names an expansion
+	// refused while an arithmetic expansion's text is being substituted by
+	// that expression's text, blanks and all, rather than by the word around
+	// it: `"[$(( ${x@Z} + 1 ))]"` is ` ${x@Z} + 1 : bad substitution` on bash
+	// 5.3.20, measured 2026-10-04.
+	BadSubstitutionInArithmeticNamesTheExpression bool
 	// ExpansionFlagsError is a character a parenthesized expansion-flag
 	// group could not carry, reported when the expansion is reached. Two
 	// verbs: the 1-based position counted from the `$`, and the whole

@@ -2228,6 +2228,12 @@ type Runner struct {
 	// from one field made each dialect right on whichever route the other
 	// was not.
 	expandingOuterWord *syntax.Word
+	// expandingArith is the text of the arithmetic expansion whose
+	// parameters are being substituted, and empty outside one — cleared by
+	// every word entered inside it, so it names only an expansion standing
+	// directly in the expression. See
+	// Diagnostics.BadSubstitutionInArithmeticNamesTheExpression.
+	expandingArith string
 
 	// substLevel is what is still open, lexically, around the substitution
 	// being expanded — at *this* level of substitution nesting and no other.

@@ -13,12 +13,9 @@ heredoc/stripping-and-joining-are-ordered-and-the-panel-parts-over-which-comes-f
 invoke/a-program-on-a-standard-input-that-is-closed
 jobs/a-background-job-outlives-the-shell
 jobs/a-job-that-is-neither-current-nor-previous
-param/a-nested-inner-runs-once-under-a-conditional
 param/a-substring-modifier-reads-its-own-quotes
 param/a-substring-modifier-that-substitutes
 param/a-substring-range-blames-what-the-script-wrote
-param/the-index-of-no-match-in-a-nested-expansion-is-zero
-param/the-reeval-flag-is-one-dialects
 posassign/a-list-replaces-the-one-it-names
 posassign/an-empty-list-removes-it
 posassign/appending-a-list-follows-it
@@ -26,5 +23,4 @@ read/from-a-standard-input-that-is-closed
 redir/a-wide-duplication-target-with-a-leading-zero
 setopt/the-interactive-listing-drops-nohashdirs
 subst/a-blank-before-the-pipe-is-not-the-reply-form
-terminfo/cursor-up-the-capability-a-prompt-tests-for
 xtrace/ps4-unset-is-not-the-default-again

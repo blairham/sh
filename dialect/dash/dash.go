@@ -88,6 +88,8 @@ func Dialect() syntax.Dialect {
 	// comes next, which is what decides the token a malformed one is blamed
 	// on.
 	d.FuncDefAtParen = true
+	d.ParenAfterAWordEndsTheCommand = true
+	d.CaseRunsOutAtAPattern = true
 	// And a quoted word, or one holding an expansion, is a definition there
 	// too, whose name is refused once the parens close: `"f"() { :; }` is
 	// `Bad function name`. See syntax.Dialect.WordAtParenIsARefusedName.

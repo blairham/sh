@@ -350,6 +350,22 @@ func (r *Runner) jobDirectoryLine(j *Job) string {
 // jobsForm reads `-l` and `-p` out of the letters that were given.
 func (r *Runner) jobsForm(opts string) (jobsForm, int) {
 	form := jobsStateRow
+	if strings.ContainsRune(opts, 'l') && strings.ContainsRune(opts, 'p') {
+		// Both letters: the later one decides in most of the panel, and
+		// one shell lets the ids win whatever the order.
+		if r.ask(r.sem().JobsPidsOnlyOption, "`jobs -p` printing process ids and nothing else") {
+			outranks := r.ask(r.sem().JobsPidsLetterOutranksTheLongLetter, "`jobs -p` winning over `-l` in either order")
+			if r.unspecified {
+				return form, 2
+			}
+			if outranks {
+				return jobsPidsAlone, 0
+			}
+		}
+		if r.unspecified {
+			return form, 2
+		}
+	}
 	for i := len(opts) - 1; i >= 0; i-- {
 		switch opts[i] {
 		case 'l':

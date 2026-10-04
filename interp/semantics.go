@@ -16702,6 +16702,18 @@ type Semantics struct {
 	// Asked only where the letter was given, and only in a dialect that has
 	// it, so a listing with no `-p` never reaches it.
 	JobsPidsOnlyOption Answer
+
+	// JobsPidsLetterOutranksTheLongLetter makes `-p` win over `-l` however
+	// the two were ordered. dash 0.5.12, bash 5.3 and ksh93 let the later
+	// letter decide — `jobs -pl` is the long listing and `jobs -lp` the ids;
+	// BusyBox ash 1.37.0 prints the ids for `-pl`, `-lp`, `-p -l` and `-l
+	// -p` alike, measured 2026-10-03 in the pinned image.
+	//
+	// Asked only where both letters were given and `-p` is the ids alone.
+	//
+	// unpinned zsh: its `-p` is not the ids alone, so JobsPidsOnlyOption
+	// answers first and this is never asked there.
+	JobsPidsLetterOutranksTheLongLetter Answer
 	// JobsStateFiltersAccumulate decides `jobs -r -s`, where both of the
 	// state filters are named at once: zsh lists a job matching *either*
 	// state, bash lets the last letter given decide and lists only the jobs

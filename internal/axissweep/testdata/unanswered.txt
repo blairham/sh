@@ -788,6 +788,7 @@ zsh   IgnoredNamesMatchTheLastComponent
 zsh   IgnoredNamesValueIsOnePattern
 zsh   IndirectionYieldsName
 zsh   JobsListsWhatChangedSinceTheLastReport
+zsh   JobsPidsLetterOutranksTheLongLetter
 zsh   KeywordPromotesADeclarationsOperand
 zsh   LocalOutsideAFunctionIsFatal
 zsh   LocalThroughCommandDeclaresNothing

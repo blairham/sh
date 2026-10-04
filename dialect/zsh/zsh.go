@@ -4419,6 +4419,9 @@ func Semantics() interp.Semantics {
 	// bash's letter of the same name is a different question that stays
 	// unimplemented (#3390).
 	s.JobsPidsOnlyOption = interp.No
+	// unanswered JobsPidsLetterOutranksTheLongLetter: this `-p` is not the
+	// ids alone, so JobsPidsOnlyOption answers first and `-p` beside `-l` never
+	// reaches the question.
 	// Both filters at once list a job in either state here, where bash lets
 	// the last letter given decide.
 	s.JobsStateFiltersAccumulate = interp.Yes

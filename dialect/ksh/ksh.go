@@ -3741,6 +3741,7 @@ func Semantics() interp.Semantics {
 	// question and stays unimplemented there.
 	s.JobsListsWhatChangedSinceTheLastReport = interp.Yes
 	s.JobsPidsOnlyOption = interp.Yes
+	s.JobsPidsLetterOutranksTheLongLetter = interp.No
 
 	// unanswered HangupAtExitNeedsALoginShell, HangupAtExitSkipsStoppedJobs,
 	// HangupAtExitPrecedesTheExitTrap: all three are about what happens once

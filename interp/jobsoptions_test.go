@@ -92,21 +92,29 @@ func TestJobsDashLPutsTheProcessIdInTheRow(t *testing.T) {
 	}
 }
 
-// The two format letters are exclusive and the last one given decides, which
-// is the same in every shell that has both.
+// The two format letters are exclusive. Where the later letter decides,
+// `-lp` is the ids and `-pl` the listing; where `-p` outranks `-l`, both
+// orders are the ids. See Semantics.JobsPidsLetterOutranksTheLongLetter.
 func TestJobsFormatLettersTheLastOneWins(t *testing.T) {
 	for _, tc := range []struct {
 		name, opts string
+		outranks   Answer
 		wantIDOnly bool
 	}{
-		{"-lp is the ids", "-lp", true},
-		{"-pl is the listing", "-pl", false},
-		{"-l -p is the ids", "-l -p", true},
-		{"-p -l is the listing", "-p -l", false},
+		{"-lp is the ids", "-lp", No, true},
+		{"-pl is the listing", "-pl", No, false},
+		{"-l -p is the ids", "-l -p", No, true},
+		{"-p -l is the listing", "-p -l", No, false},
+		{"-pl is the ids where -p outranks", "-pl", Yes, true},
+		{"-p -l is the ids where -p outranks", "-p -l", Yes, true},
+		{"-lp is the ids where -p outranks", "-lp", Yes, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			out, st := jobsRun(t, `sleep 0.3 & echo "bang=$!"; jobs `+tc.opts+`; wait`,
-				func(s *Semantics) { s.JobsPidsOnlyOption = Yes })
+				func(s *Semantics) {
+					s.JobsPidsOnlyOption = Yes
+					s.JobsPidsLetterOutranksTheLongLetter = tc.outranks
+				})
 			if st != 0 {
 				t.Fatalf("status %d: %s", st, out)
 			}

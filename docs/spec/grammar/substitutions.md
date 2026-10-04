@@ -1557,6 +1557,12 @@ The closer named is the construct's own. `v=${ echo hi; ;}` is
 ``syntax error near unexpected token `;' while looking for matching `}'``
 in the same shell.
 
+And the line is echoed under it as for `$( … )`, whichever of the
+current-shell spellings opened it: `echo "[${ | REPLY=hi;}]"`, `x=${|;}` and
+`echo "[${ )x;}]"` each write the complaint and then the whole line back on
+bash 5.3.20, measured 2026-10-04. This shell looked for the body behind a
+`$(` and, finding `${` there instead, wrote the complaint alone (#5719).
+
 ## Where a body's lines are counted from
 
 A substitution's body is parsed on its own, so something has to say which file

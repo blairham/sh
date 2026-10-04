@@ -5458,6 +5458,21 @@ type Dialect struct {
 	// `$(( (1+2)) )` runs `1+2` as a command where `$(( (1+2) ))` is 3.
 	ArithSubstFallsBackToCommandSubst bool
 
+	// ArithSubstClosesOnlyAtTwoParens ends an arithmetic expansion only at a
+	// `))` standing where its own parentheses are balanced. A lone `)` there
+	// is text the expression will refuse, and input that runs out first is
+	// the unclosed `$((`. Measured 2026-10-04 on dash 0.5.12 and in the
+	// pinned BusyBox ash image:
+	//
+	//	echo $((echo a) )         Missing '))'
+	//	echo "[$(( (1+2)) )]"     Missing '))'
+	//	echo $(( (1+2)) ))        expecting EOF: " (1+2)) " — the `))` at
+	//	                          the end closes it, the lone `)` was text
+	//
+	// The two that do not fall back to a command substitution; see
+	// ArithSubstFallsBackToCommandSubst for the three that do.
+	ArithSubstClosesOnlyAtTwoParens bool
+
 	// Whether `0100` is sixty-four or one hundred is deliberately *not* a
 	// field here. A literal is kept as written, so the tree bakes in no
 	// answer and nothing in the parser has the question to ask; the answer

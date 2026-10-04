@@ -8207,7 +8207,7 @@ type Diagnostics struct {
 	// 2 to 36 inclusive): 64` in zsh 5.9.2.
 	ArithInvalidBase string
 	// ArithEmptyExpression is `$(( ))` in the dialect that wants a primary
-	// there. No verbs.
+	// there. One verb: the expression as written, blanks and all.
 	ArithEmptyExpression string
 
 	// DigitTooGreatForBase is the reason when a literal carries a digit its

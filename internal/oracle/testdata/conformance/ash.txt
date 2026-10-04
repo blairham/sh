@@ -20,8 +20,6 @@ pat/alnum-outside-ascii-is-a-letter-or-a-decimal-digit
 printf/c-ignores-a-precision
 printf/non-finite-is-spelled-c-s-way
 subst/a-comment-in-a-current-shell-body
-subst/double-paren-count-decides-not-the-expression
-subst/double-paren-is-a-subshell
 trap/an-elements-pipe-handler-runs-inside-the-elements-redirections
 ulimit/the-file-size-block
 variable/a-seeded-random-draws-a-sequence-of-its-own

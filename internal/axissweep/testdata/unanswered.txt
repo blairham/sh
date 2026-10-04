@@ -69,6 +69,7 @@ ash   BareTypesetListing
 ash   BlankArithSubscriptIsTheEmptyExpression
 ash   BraceBodyReadAfterExpansion
 ash   BraceCharRangeSpansAnyCharacter
+ash   BraceLetterRangeMayCrossCase
 ash   BraceEmptyAlternativeIsAField
 ash   BraceFanExpandsEachNameOnItsOwn
 ash   BraceFreesProducedGroupSyntax
@@ -427,6 +428,7 @@ dash  BareTypesetListing
 dash  BlankArithSubscriptIsTheEmptyExpression
 dash  BraceBodyReadAfterExpansion
 dash  BraceCharRangeSpansAnyCharacter
+dash  BraceLetterRangeMayCrossCase
 dash  BraceEmptyAlternativeIsAField
 dash  BraceFanExpandsEachNameOnItsOwn
 dash  BraceFreesProducedGroupSyntax

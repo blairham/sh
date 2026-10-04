@@ -1789,6 +1789,7 @@ func Semantics() interp.Semantics {
 	// one rather than never arriving, so `{1..2..0}` is `1 2`, and a body
 	// that is range-shaped with a gap in it is the word as written.
 	s.BraceCharRangeSpansAnyCharacter = interp.No
+	s.BraceLetterRangeMayCrossCase = interp.Yes
 	s.BraceRangeMissingEndCountsFromZero = interp.No
 	s.BraceRangeZeroStepCountsAsOne = interp.Yes
 	s.BraceRangeNumberMayCarryAPlus = interp.Yes

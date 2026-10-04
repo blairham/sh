@@ -44,8 +44,6 @@ declare/an-fpath-file-that-defines-nothing
 declare/f-says-a-nested-declaration-back
 declare/f-says-a-nested-keyword-declaration-back
 declare/marking-a-name-that-is-already-a-function
-expand/brace-output-reread-refuses-a-word
-expand/brace-output-reread-shows-in-a-range
 expand/tilde-into-an-expansion-diverges
 expand/tilde-with-no-home-at-all
 expansion/element-set-difference-and-intersection
@@ -90,15 +88,12 @@ param/the-searching-flag-reaches-only-the-pattern-operators
 param/the-searching-flag-turns-a-substitution-non-greedy
 pat/a-case-arms-own-paren-in-front-of-a-group
 pat/a-case-arms-paren-in-front-of-an-expression
-pat/a-character-class-outside-ascii
 pat/a-glob-flag-on-a-later-array-element
 pat/a-glob-flag-on-a-later-loop-item
 pat/a-glob-flag-where-an-array-element-begins
 pat/a-numeric-range-in-a-group-starting-a-case-arm
 pat/a-pattern-flag-reaches-to-the-end-of-its-group
-pat/alnum-outside-ascii-is-a-letter-or-a-decimal-digit
 pat/an-anchor-binds-to-one-path-component
-pat/an-escaped-dash-in-a-bracket-is-not-a-range
 pat/an-extended-flag-against-the-filesystem
 pat/the-tilde-flag-in-a-group-decides-snippet-from-plugin
 pat/the-walk-reports-no-match

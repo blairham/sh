@@ -978,6 +978,15 @@ func (r *Runner) charRange(body, lo, hi, stepText string, hasStep bool) ([]strin
 	letters := len(lo) == 1 && len(hi) == 1 && isRangeLetter(lo[0]) && isRangeLetter(hi[0])
 	loRune, hiRune, twoChars := r.charRangeEndpoints(body)
 	renderRune := func(i int) string { return niceRangeChar(rune(i)) }
+	if letters && isUpperByte(lo[0]) != isUpperByte(hi[0]) &&
+		r.sem().BraceLetterRangeMayCrossCase == No {
+		// The reading that keeps a letter range inside one case leaves the
+		// word as written. Read rather than asked: crossing is what every
+		// other column does and what this did before the axis, so a vector
+		// that never answered has a right answer to fall back on. See
+		// Semantics.BraceLetterRangeMayCrossCase.
+		return nil, false
+	}
 	if letters && !hasStep {
 		// A letter range walks the code points, which is also what makes
 		// `{a..C}` produce the punctuation between the cases — measured, not
@@ -1015,6 +1024,8 @@ func (r *Runner) charRange(body, lo, hi, stepText string, hasStep bool) ([]strin
 	}
 	return r.walkRange(int(lo[0]), int(hi[0]), n, true, negStep, renderRune)
 }
+
+func isUpperByte(c byte) bool { return c >= 'A' && c <= 'Z' }
 
 // niceRangeChar is one element of a character range as the measured shell
 // writes it: a character that cannot be printed comes back in that shell's

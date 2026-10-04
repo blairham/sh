@@ -3115,6 +3115,7 @@ func Semantics() interp.Semantics {
 	// loses its *braces* rather than standing whole: `{1..}` is `1..`,
 	// `{..3}` is `..3`, and a written step of zero goes the same way.
 	s.BraceCharRangeSpansAnyCharacter = interp.Yes
+	s.BraceLetterRangeMayCrossCase = interp.Yes
 	s.BraceRangeMissingEndCountsFromZero = interp.No
 	s.BraceRangeZeroStepCountsAsOne = interp.No
 	s.BraceRangeNumberMayCarryAPlus = interp.No

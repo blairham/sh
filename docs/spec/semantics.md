@@ -21540,6 +21540,34 @@ ksh93, and of an empty operand three NULs. Zero and one write the single
 character under both readings, so only a precision above one asks the
 dialect.
 
+**`PrintfOutputBase`** — bash no · dash no · ksh93 **yes** · zsh no · ash no
+
+Reads the field after a second `.` in an integer conversion as the base to
+write the number in. The other columns stop at the second `.` and refuse
+it as a conversion character. Measured 2026-10-03 on ksh93u+ 2012-08-01
+under `LC_ALL=C`:
+
+    %..36d 1295   zz        %..2d 5      101      %.3.16d 255  0ff
+    %..16d -255   -ff       %#..16d 255  16#ff    %..*d 2 5    101
+    %..37d 36     A         %..64d 63    _        %..1d 7      7
+    %08..16d -255 -00000ff  %#08..2d 5   2#000101 %..2x 5      5
+
+The field is C's integer field with other digits. The precision is a
+minimum count of digits, the sign comes first, then the `#` flag's `base#`
+prefix, then any zero fill, then the digits. The digits run past nine
+through the lower-case letters, the capitals, `@` and `_`. A base outside
+two to sixty-four is no base, and the number is written in decimal. A `*`
+for the base takes the operand after the precision's. Only `%d`, `%i` and
+`%u` take a base. `%x`, `%X` and `%o` read the field but keep their own
+base, and `%u` writes the 64-bit pattern, as it does in base ten. A
+further `.` and digits after the base are read and ignored, so `%..2.d` of
+5 is `101`.
+
+ksh93 also reads the field ahead of `%s` and `%c`, but it does not use it
+as a base there: `printf '[%..2s]' ab cd` is `[abcd]`, both operands in one
+field. That reading is left refused, because the rule behind it has not
+been measured.
+
 **`PrintfZeroFlagSurvivesAPrecision`** — bash no · dash no · ksh93 **yes** · zsh no · ash no
 
 Keeps the `0` flag's fill on an integer conversion that also states a

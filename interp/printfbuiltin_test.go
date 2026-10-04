@@ -2343,3 +2343,56 @@ func TestPrintfZeroFlagAgainstAPrecision(t *testing.T) {
 		})
 	}
 }
+
+// ksh93's output base: the field after a second `.` in an integer
+// conversion. Every row is a measurement of ksh93u+ 2012-08-01, 2026-10-03.
+func TestPrintfOutputBase(t *testing.T) {
+	sem := printfSem()
+	sem.PrintfOutputBase = Yes
+	sem.PrintfZeroFlagSurvivesAPrecision = Yes
+	for _, tc := range []struct{ name, src, want string }{
+		{"base thirty-six", `printf '[%..36d]' 1295`, "[zz]"},
+		{"base two", `printf '[%..2d]' 5`, "[101]"},
+		{"a precision beside it is digits", `printf '[%.3.16d]' 255`, "[0ff]"},
+		{"the sign stays in front", `printf '[%..16d]' -255`, "[-ff]"},
+		{"past thirty-six the capitals", `printf '[%..37d][%..37d]' 36 62`, "[A][1p]"},
+		{"and then @ and _", `printf '[%..64d][%..64d]' 62 63`, "[@][_]"},
+		{"outside two to sixty-four is decimal", `printf '[%..1d][%..65d]' 7 70`, "[7][70]"},
+		{"the # flag writes the base", `printf '[%#..16d][%#..10d]' 255 5`, "[16#ff][10#5]"},
+		{"zero fill after the sign", `printf '[%08..16d]' -255`, "[-00000ff]"},
+		{"and after the prefix", `printf '[%#08..2d]' 5`, "[2#000101]"},
+		{"left-justified", `printf '[%-#8..2d]' 5`, "[2#101   ]"},
+		{"the sign flags", `printf '[%+..2d][% ..16d]' 5 255`, "[+101][ ff]"},
+		{"a zero precision of zero is nothing", `printf '[%.0..2d]' 0`, "[]"},
+		{"%u is the bit pattern", `printf '[%#..16u]' -1`, "[16#ffffffffffffffff]"},
+		{"%x keeps its own base", `printf '[%..2x][%..2o]' 5 5`, "[5][5]"},
+		{"a star base is read after the precision's", `printf '[%.*.*d]' 3 16 255`, "[0ff]"},
+		{"a star base alone", `printf '[%..*d]' 2 5`, "[101]"},
+		{"a further dot is read and ignored", `printf '[%..2.d]' 5`, "[101]"},
+		{"an empty base is no base", `printf '[%.3.d]' 5`, "[005]"},
+		{"a length modifier between is read", `printf '[%..16ld]' 255`, "[ff]"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s := sem
+			s.PrintfLengthModifiers = PrintfLengthModifiersC89
+			out, st := run(t, tc.src, func(r *Runner) { r.Semantics = &s })
+			if out != tc.want || st != 0 {
+				t.Errorf("got %q status %d, want %q and 0", out, st, tc.want)
+			}
+		})
+	}
+	t.Run("the other columns refuse the second dot", func(t *testing.T) {
+		s := printfSem()
+		s.PrintfOutputBase = No
+		if out, st := run(t, `printf '[%..2d]' 5`, func(r *Runner) { r.Semantics = &s }); st == 0 || strings.Contains(out, "101") {
+			t.Errorf("got %q status %d, want the `.` refused", out, st)
+		}
+	})
+	t.Run("an ordinary precision never asks", func(t *testing.T) {
+		s := printfSem()
+		s.PrintfOutputBase = Unspecified
+		if out, st := run(t, `printf '[%.2d][%5.3x]' 5 255`, func(r *Runner) { r.Semantics = &s }); out != "[05][  0ff]" || st != 0 {
+			t.Errorf("got %q status %d, want [05][  0ff] at 0", out, st)
+		}
+	})
+}

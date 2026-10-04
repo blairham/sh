@@ -8102,6 +8102,34 @@ type Semantics struct {
 	// and one write the one character under both readings.
 	PrintfCharPrecisionRepeats Answer
 
+	// PrintfOutputBase reads the field after a second `.` in an integer
+	// conversion as the base to write the number in, rather than refusing
+	// the `.` as a conversion character.
+	//
+	// ksh93 alone. Measured 2026-10-03 on ksh93u+ 2012-08-01 under
+	// `LC_ALL=C`:
+	//
+	//	%..36d 1295   zz        %..2d 5      101      %.3.16d 255  0ff
+	//	%..16d -255   -ff       %#..16d 255  16#ff    %..*d 2 5    101
+	//	%..37d 36     A         %..64d 63    _        %..1d 7      7
+	//	%..2x 5       5         %..2u -5     sixty-one ones, then 011
+	//
+	// The precision before the base is a minimum count of digits, as it is in
+	// base ten; the `#` flag writes the base and a `#` ahead of the digits;
+	// the base's digits run on past nine through the lower-case letters, the
+	// capitals, `@` and `_`; and a base outside two to sixty-four is no base
+	// at all. Only `%d`, `%i` and `%u` take it — `%x`, `%X` and `%o` read the
+	// field and keep their own base. bash, zsh, dash and BusyBox ash stop at
+	// the second `.` and refuse it as a conversion, each in its own words.
+	//
+	// ksh93 reads the field ahead of `%s` and `%c` too and does something
+	// there that is not a base — `printf '[%..2s]' ab cd` is `[abcd]` — which
+	// is left refused rather than guessed at.
+	//
+	// Asked only where a second `.` follows a precision ahead of an integer
+	// conversion, so `%.2d` never raises it.
+	PrintfOutputBase Answer
+
 	// PrintfNumberOperand is how a numeric conversion reads an operand that
 	// is not already the whole number C asked for — see PrintfNumberReading.
 	PrintfNumberOperand PrintfNumberReading
@@ -31435,6 +31463,7 @@ func PosixSemantics() Semantics {
 		// on `d`, `i`, `o`, `u`, `x` or `X`. The same deferral answers this,
 		// and ksh93 is the departure a third time.
 		PrintfZeroFlagSurvivesAPrecision: No,
+		PrintfOutputBase:                 No,
 		PrintfCharPrecisionRepeats:       No,
 		// XCU gives printf's format the XSI escape set and nothing else —
 		// `\\`, `\a`, `\b`, `\f`, `\n`, `\r`, `\t`, `\v` and `\ddd` — so

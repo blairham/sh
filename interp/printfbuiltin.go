@@ -532,6 +532,8 @@ func (r *Runner) printfVerb(spec string, verb byte, timeFmt string, next func() 
 	starCode := 0
 	lost := r.printfLostStars
 	r.printfLostStars = printfLostStars{}
+	base := r.printfOutputBase
+	r.printfOutputBase = ""
 	if strings.IndexByte(spec, '*') >= 0 || lost.any() {
 		// Guarded, so an ordinary `printf '%d' 5` never reaches the star
 		// code and never consults the axis inside it.
@@ -539,6 +541,37 @@ func (r *Runner) printfVerb(spec string, verb byte, timeFmt string, next func() 
 		if spec, starCode, stop = r.printfStars(spec, lost, next); stop {
 			return "", starCode, true
 		}
+	}
+	if base == "*" {
+		// The base's own star is read after the width's and the
+		// precision's, in the order they are written: `printf '[%.*.*d]'
+		// 3 16 255` is `[0ff]` in ksh93u+.
+		n, absent, code, stop := r.printfStarOperand(next)
+		if stop {
+			return "", code, true
+		}
+		if code != 0 {
+			starCode = code
+		}
+		base = ""
+		if !absent {
+			base = strconv.FormatInt(n, 10)
+		}
+	}
+	if b, err := strconv.Atoi(base); err == nil && b >= 2 && b <= 64 && (verb == 'd' || verb == 'i' || verb == 'u') {
+		// A base outside two to sixty-four is no base, and the conversion is
+		// written in decimal as though none were given: `%..1d` and `%..65d`
+		// of 7 and 70 are `7` and `70`. The other integer conversions keep
+		// their own: `%..2x` of 5 is `5`.
+		arg, present := next()
+		n, code, stop := r.printfNumber(arg, present)
+		if stop {
+			return "", code, true
+		}
+		if code == 0 {
+			code = starCode
+		}
+		return printfInBase(spec, n, b, verb != 'u'), code, false
 	}
 	text, code, stop := r.printfConvert(spec, verb, timeFmt, next)
 	if code == 0 {
@@ -2479,7 +2512,115 @@ func (r *Runner) printfSpecPrefix(s string) (int, string, int) {
 	// sixth result to scanPrintfSpec for a shape one dialect can write would
 	// put it in every other caller's signature too.
 	r.printfLostStars = lost
+	r.printfOutputBase = ""
+	if end < len(s) && s[end] == '.' && strings.IndexByte(spec, '.') >= 0 {
+		if past, base, ok := printfOutputBaseAt(s, end); ok {
+			// A second `.` after the precision, ahead of an integer
+			// conversion. Asked only here, so `%.2d` and every format the
+			// other columns read never raise it. See Semantics.PrintfOutputBase.
+			if r.ask(r.sem().PrintfOutputBase, "`printf` reading the field after a second `.` as an output base") {
+				r.printfOutputBase, end = base, past
+			}
+			if r.unspecified {
+				return end, spec, r.status
+			}
+		}
+	}
 	return end, spec, 0
+}
+
+// printfOutputBaseAt reads the output base that starts at the `.` at i: a run
+// of digits or a single `*`, and then any further `.` and digits, which are
+// read and ignored — `%..2.d` of 5 is `101` in ksh93u+ and `%...16d` of 255
+// is `255`. It reports where the conversion character's length modifiers
+// begin, the base as written, and whether what follows is a conversion the
+// base belongs to at all.
+//
+// Only the integer conversions are taken. ksh93 reads the field ahead of
+// `%s` and `%c` as well and does something there that is not a base —
+// `printf '[%..2s]' ab cd` is `[abcd]`, both operands in one field — which is
+// left refused rather than guessed at.
+func printfOutputBaseAt(s string, i int) (int, string, bool) {
+	i++ // past the second `.`
+	start := i
+	if i < len(s) && s[i] == '*' {
+		i++
+	} else {
+		for i < len(s) && s[i] >= '0' && s[i] <= '9' {
+			i++
+		}
+	}
+	base := s[start:i]
+	for i < len(s) && s[i] == '.' {
+		i++
+		for i < len(s) && s[i] >= '0' && s[i] <= '9' {
+			i++
+		}
+	}
+	j := i + runOfBytes(s, i, "hljztL")
+	if j >= len(s) || strings.IndexByte("diuoxX", s[j]) < 0 {
+		return 0, "", false
+	}
+	return i, base, true
+}
+
+// printfBaseDigits are the digits of an output base up to 64, in the order
+// the shell that has one writes them: `%..36d` of 35 is `z`, `%..37d` of 36
+// is `A`, and `%..64d` of 62 and 63 are `@` and `_` in ksh93u+.
+const printfBaseDigits = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ@_"
+
+// printfInBase lays out an integer conversion in an output base — see
+// Semantics.PrintfOutputBase. signed says the conversion is `%d` or `%i`;
+// `%u` writes the operand's 64-bit pattern, as it does in base ten.
+//
+// The field is C's integer field with the digits swapped: the precision is a
+// minimum count of digits and a zero precision writes nothing for a zero; the
+// sign, then the `#` flag's `base#` prefix, then a zero fill, then the digits.
+// Measured 2026-10-03 on ksh93u+ 2012-08-01: `%08..16d` of -255 is
+// `-00000ff`, `%#08..2d` of 5 is `2#000101`, `%-#8..2d` is `2#101   `,
+// `%+..2d` is `+101`, `% ..16d` of 255 is ` ff`, `%#..10d` of 5 is `10#5`,
+// and `%..2u` of -5 is sixty-one ones and then `011`.
+func printfInBase(spec string, n int64, base int, signed bool) string {
+	flags, width, prec := printfSpecParts(spec)
+	neg := signed && n < 0
+	u := uint64(n)
+	if neg {
+		u = -u
+	}
+	var digits []byte
+	for v := u; v > 0; v /= uint64(base) {
+		digits = append(digits, printfBaseDigits[v%uint64(base)])
+	}
+	slices.Reverse(digits)
+	if u == 0 && prec != 0 {
+		digits = []byte{'0'}
+	}
+	body := string(digits)
+	if prec > len(body) {
+		body = strings.Repeat("0", prec-len(body)) + body
+	}
+	head := ""
+	switch {
+	case neg:
+		head = "-"
+	case signed && strings.IndexByte(flags, '+') >= 0:
+		head = "+"
+	case signed && strings.IndexByte(flags, ' ') >= 0:
+		head = " "
+	}
+	if strings.IndexByte(flags, '#') >= 0 {
+		head += strconv.Itoa(base) + "#"
+	}
+	pad := width - len(head) - len(body)
+	switch {
+	case pad <= 0:
+		return head + body
+	case strings.IndexByte(flags, '-') >= 0:
+		return head + body + strings.Repeat(" ", pad)
+	case strings.IndexByte(flags, '0') >= 0:
+		return head + strings.Repeat("0", pad) + body
+	}
+	return strings.Repeat(" ", pad) + head + body
 }
 
 // printfStarBesideDigits reports whether the prefix at s holds a width or a

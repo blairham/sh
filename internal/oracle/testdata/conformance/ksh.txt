@@ -118,8 +118,6 @@ pat/the-tilde-flag-in-a-group-decides-snippet-from-plugin
 pat/the-walk-reports-no-match
 pipe/both-streams-takes-no-blank-between-its-two-bytes
 print/a-dash-inside-a-bundle-is-an-inert-letter
-printf/a-second-dot-is-an-output-base
-printf/an-output-base-beside-a-precision
 printf/non-finite-is-spelled-c-s-way
 printf/quoted-operand-is-a-character-value
 procsub/a-file-substitution-lives-as-long-as-its-command

@@ -5021,7 +5021,10 @@ func Diagnostics() interp.Diagnostics {
 		// bash's own words for the two -u failures it can meet here; the
 		// non-number wordings per letter are not modeled yet, so those fall
 		// back to the substrate's.
-		ReadBadFileDescriptor:     "read: %[1]s: invalid file descriptor: Bad file descriptor",
+		ReadBadFileDescriptor: "read: %[1]s: invalid file descriptor: Bad file descriptor",
+		// A `=~` pattern that will not compile, with regcomp's reason.
+		// Measured 2026-10-03; see interp.Diagnostics.InvalidRegex.
+		InvalidRegex:              "[[: invalid regular expression `%[1]s': %[2]s",
 		ReadBadTimeout:            "read: %[1]s: invalid timeout specification",
 		ReadBadDescriptorSpec:     "read: %[1]s: invalid file descriptor specification",
 		ReadFromAClosedDescriptor: "read: %[1]s: read error: Bad file descriptor",

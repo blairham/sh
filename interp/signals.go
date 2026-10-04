@@ -1160,7 +1160,14 @@ func (r *Runner) runTrapHandlerFrom(ctx context.Context, cond, body string, orig
 	outerTrap, outerIn, outerOwn := r.trapEntryStatus, r.inATrapAction, r.trapActionOwnBody
 	r.trapEntryStatus, r.inATrapAction, r.trapActionOwnBody = outer, true, true
 	r.gaveUpOverAnUnsetParameter = false
+	// The action is the shell's own text and no builtin is speaking in it,
+	// whichever one was running when the signal arrived: measured
+	// 2026-10-04 on zsh 5.9.2, a handler fired by `kill -INT $$` reports a
+	// missing command as `s.sh:4: command not found: …`, with no `kill:`.
+	outerBuiltin, outerSpeaker := r.inBuiltin, r.speaker
+	r.inBuiltin, r.speaker = "", ""
 	r.runTrapBody(ctx, cond, body)
+	r.inBuiltin, r.speaker = outerBuiltin, outerSpeaker
 	returned, handlerStatus := r.callEndedOnAReturn && r.ctl == controlNone, r.status
 	r.handlerTakesItsError(cond)
 	r.trapEntryStatus, r.inATrapAction, r.trapActionOwnBody = outerTrap, outerIn, outerOwn

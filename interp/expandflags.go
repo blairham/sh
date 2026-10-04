@@ -1919,6 +1919,14 @@ func (r *Runner) promptEscapes(v string, e *syntax.ParamExpr, subst bool) (strin
 	}
 	if subst {
 		expand = func(st PromptStyle, text string, f PromptResolver, q PromptQuantityResolver) (string, string, bool) {
+			// What the substitution pass says is the shell's, not the
+			// builtin's that asked for it: measured 2026-10-04 on zsh
+			// 5.9.2, `setopt promptsubst; print -P '${x?boom}'` is
+			// `zsh:1: x: boom`, and a bad substitution, a math failure and
+			// a command not found inside it name no builtin either.
+			outer := r.inBuiltin
+			r.inBuiltin = ""
+			defer func() { r.inBuiltin = outer }()
 			return RenderPromptValue(st, r, text, f, q)
 		}
 	}

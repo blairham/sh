@@ -360,7 +360,7 @@ func (r *Runner) valuelessDeclarationLists(name string, f declareFlags, redeclar
 // tree: a letter added to declareFlags has to reach both listings or neither.
 func declarationCarriesNoLetters(f declareFlags) bool {
 	letters := f
-	letters.remove, letters.plusAlone = false, false
+	letters.remove, letters.plusAlone, letters.minusAlone = false, false, false
 	return letters == (declareFlags{}) || f.onlyAConflictedWidth()
 }
 

@@ -720,6 +720,11 @@ func Semantics() interp.Semantics {
 	// are one answer in five of the panel, and this shell and zsh split them
 	// in opposite directions (#770).
 	s.BrokenPipeWriteErrorFailsTheCommand = interp.No
+	// And a closed descriptor fails only the three builtins whose output is
+	// the point of running them: `echo`, `print` and `printf` are 1, and
+	// `pwd`, `export`, `readonly` and every other listing are 0 in silence.
+	// Measured 2026-10-03; see Semantics.BuiltinWriteErrorFailsOnlyThese.
+	s.BuiltinWriteErrorFailsOnlyThese = "echo print printf"
 	// An unquoted list is its elements taken one at a time, never their
 	// join: `IFS=:; set -- "x:" y; printf "[%s]" $@` is `[x][y]` here and
 	// `[x][][y]` in bash, which joins to `x::y` first.

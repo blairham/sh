@@ -11927,14 +11927,44 @@ func (r *Runner) setFatalStatus() {
 	// expansion there leaves `$?` alone. See Runner.failedExpansionStatus.
 	switch r.failedExpansionStatus {
 	case failedExpansionKeepsTheStatus:
+		if r.status == 0 && r.fatalExitTurnsZeroToFailure() {
+			break
+		}
 		r.fatalSetNoStatus = true
 		return
 	case failedExpansionLeavesZero:
+		if r.fatalExitTurnsZeroToFailure() {
+			break
+		}
 		r.status = 0
 		r.fatalSetNoStatus = true
 		return
 	}
 	r.status = r.fatalStatus()
+}
+
+// fatalExitTurnsZeroToFailure reports whether the status a failed expansion
+// left alone is one the shell ends on, or one it turns into a failure first.
+//
+// The status stands only where the shell was given its program as a command
+// string, or where what ends is a subshell. Measured 2026-10-03 on zsh 5.9.2
+// under -f, the same line from a script file, from standard input and through
+// -c, with nothing in front of it:
+//
+//	                                        file   stdin   -c
+//	local x=$((1/0))                        1      1       0
+//	export x=~nosuch                        1      1       0
+//	case x in $((1/0))) ;; esac             1      1       0
+//	set -u; case ${NOPEV} in *) ;; esac     1      1       0
+//	the same inside a function or a group   1      1       0
+//
+// and `f(){ return 3; }; f; local x=$((1/0))` ends at 3 by every route, so the
+// file and stdin routes end on the status as it stood unless that was 0. A
+// `( case x in $((1/0))) ;; esac ); echo $?` writes 0 by both routes: the
+// subshell ends on the status it left. The corpus row is
+// case/an-unset-subject-under-u-keeps-its-status, read from a file.
+func (r *Runner) fatalExitTurnsZeroToFailure() bool {
+	return !r.inSubshell && (r.Route == RouteScriptFile || r.Route == RouteStandardInput)
 }
 
 // fatalStatus is that number without setting it, for the one caller that has

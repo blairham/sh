@@ -117599,21 +117599,21 @@
         "TimedOut": false
       },
       "bash": {
-        "Stdout": "sleep 0~rc=0",
+        "Stdout": "sleep 1~rc=0",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false
       },
       "bash-as-sh": {
-        "Stdout": "sleep 0~rc=0",
+        "Stdout": "sleep 1~rc=0",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false
       },
       "bash32": {
-        "Stdout": "sleep 0~rc=0",
+        "Stdout": "sleep 1~rc=0",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,
@@ -134533,7 +134533,7 @@
     },
     "param/an-assignment-prefix-to-a-produced-parameter": {
       "ash": {
-        "Stdout": "a=~b=~c=300",
+        "Stdout": "a=0~b=0~c=3",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,
@@ -134547,7 +134547,7 @@
         "TimedOut": false
       },
       "bash-as-sh": {
-        "Stdout": "a=0~b=0~c=300",
+        "Stdout": "a=0~b=0~c=3",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,
@@ -134561,14 +134561,14 @@
         "TimedOut": false
       },
       "dash": {
-        "Stdout": "a=~b=~c=300",
+        "Stdout": "a=0~b=0~c=3",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false
       },
       "ksh93": {
-        "Stdout": "a=0.000~b=200.000~c=300.000",
+        "Stdout": "a=0~b=2~c=3",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,

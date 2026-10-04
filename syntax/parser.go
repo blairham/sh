@@ -4265,6 +4265,11 @@ func (p *Parser) parseAssign(h assignHead) *Assign {
 	// decides *which* error, and the non-adjacent form now falls through to
 	// the paren-after-a-word rule in parseSimple. Specified in the array
 	// assignment section of docs/spec/grammar/commands.md.
+	if a.Value != nil && p.dialect.ArrayLiteralAfterRepeatedEquals && onlyEqualsSigns(a.Value) &&
+		p.at(TokLeftParen) && p.touchesPrevious(a.Stop) {
+		// `f==(a b)` is `f=(a b)`. See [Dialect.ArrayLiteralAfterRepeatedEquals].
+		a.Value = nil
+	}
 	if a.Value == nil && p.at(TokLeftParen) && p.touchesPrevious(a.Stop) {
 		if !p.dialect.ArrayLiteral {
 			p.failUnexpected("")
@@ -8447,4 +8452,15 @@ func tokenIsAnAssignmentWord(t Token) bool {
 	}
 	name, _, found := strings.Cut(first.Value, "=")
 	return found && isName(name)
+}
+
+// onlyEqualsSigns reports whether a value is written as one or more `=` and
+// nothing else, unquoted.
+func onlyEqualsSigns(w *Word) bool {
+	if len(w.Spans) != 1 {
+		return false
+	}
+	s := w.Spans[0]
+	return s.Kind == Literal && s.Quoting == Unquoted && s.Value != "" &&
+		strings.Trim(s.Value, "=") == ""
 }

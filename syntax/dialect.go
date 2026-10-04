@@ -7489,6 +7489,17 @@ type Dialect struct {
 	// the other changes where the word boundaries fall.
 	ArrayLiteralShapeFollowsTheFirstElement bool
 
+	// ArrayLiteralAfterRepeatedEquals reads `name==(…)` — an assignment whose
+	// value is nothing but more `=` signs with a parenthesis touching them —
+	// as the array literal `name=(…)`, the extra signs dropped.
+	//
+	// ksh93u+. Measured 2026-10-03 under -c: `f==(a b)` and `f===(a b)` both
+	// list as `typeset -a f=(a b)`, and `f==(echo hi)` leaves `$f` holding
+	// `echo`; `f==a` is the plain scalar `=a`. bash 5.3.20 and dash refuse
+	// the parenthesis, and zsh reads `=(…)` as its file substitution (corpus
+	// row procsub/a-file-substitution-lives-as-long-as-its-command).
+	ArrayLiteralAfterRepeatedEquals bool
+
 	// SubscriptSpansSeparatorsInRedirect extends the reading above to a
 	// redirection's target, so `> m[foo bar] echo hi` writes one file named
 	// `m[foo bar]` where a grammar without the flag writes `m[foo` and then

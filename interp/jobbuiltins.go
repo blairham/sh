@@ -942,6 +942,15 @@ func biBg(r *Runner, _ context.Context, args []string) int {
 // afterwards — which put a line of output in a script that had written
 // `fg 2>/dev/null` precisely so there would be none (#2657).
 func (r *Runner) resume(args []string, name string) (*Job, int) {
+	if len(args) > 0 && len(args[0]) > 1 && args[0][0] == '-' &&
+		r.sem().JobResumeRefusesAnOptionFirst == Yes {
+		// An option word is refused ahead of everything, the job-control
+		// check included. See Semantics.JobResumeRefusesAnOptionFirst.
+		if args[0] != "--" {
+			return nil, r.refuseOption(name, args[0], "")
+		}
+		args = args[1:]
+	}
 	first := false
 	if !r.canResume() {
 		first = r.ask(r.sem().JobControlAbsenceIsReportedFirst, "`bg` with no job control refusing before reading its operand")

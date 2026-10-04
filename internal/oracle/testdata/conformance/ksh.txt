@@ -61,7 +61,6 @@ jobs/a-background-job-outlives-the-shell
 jobs/a-disowned-job-is-not-in-the-listing
 jobs/a-signal-name-joined-to-kill-n-option
 jobs/a-stopped-background-job-in-the-listing
-jobs/bg-with-no-job-control
 jobspec/kill-a-job-that-is-not-there
 nounset/a-key-the-association-does-not-have
 param/a-backslash-in-an-expanded-replacement

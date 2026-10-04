@@ -23588,6 +23588,18 @@ type Semantics struct {
 	// long as the job would have.
 	KillReadsASignalJoinedToItsOption Answer
 
+	// JobResumeRefusesAnOptionFirst has `fg` and `bg` refuse a word that
+	// looks like an option before anything else — before saying there is no
+	// job control, and before reading any job.
+	//
+	// ksh93. Measured 2026-10-03 on ksh93u+ under -c: `bg --version`, `bg -x`
+	// and `fg --version` are `bg: --version: unknown option` and the usage
+	// line at 2, where `bg %2` and a bare `bg` are the silent 1 a shell with
+	// no job control gives. bash 5.3.20 and zsh 5.9.2 say there is no job
+	// control first, whatever the word; dash reads its options on its own
+	// route. Read as `== Yes` (corpus row jobs/bg-with-no-job-control).
+	JobResumeRefusesAnOptionFirst Answer
+
 	// EditingModesAreTwoSwitches holds `set -o emacs` and `set -o vi` as two
 	// options of their own rather than as one choice of keymap under two
 	// names.
@@ -32955,6 +32967,8 @@ func PosixSemantics() Semantics {
 		// operand, so the base reads nothing joined to the option; bash 5.x
 		// and ksh93 override.
 		KillReadsASignalJoinedToItsOption: No,
+		// The job-control check comes first in the base; ksh93 overrides.
+		JobResumeRefusesAnOptionFirst: No,
 		// Every shell but one that has both names makes them one state.
 		EditingModesAreTwoSwitches: No,
 		// The standard leaves the order of a bare `alias` listing unspecified;

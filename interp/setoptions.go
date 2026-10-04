@@ -1514,7 +1514,7 @@ func (r *Runner) setNamedOptionSpelled(name, spelled string, on bool) bool {
 	}
 	switch r.optionMover(r, name, on) {
 	case OptionNotFound:
-		return r.badSetOptionName(spelled)
+		return r.badSetOptionName(spelled, on)
 	case OptionMoved:
 		return true
 	case OptionRefusedAndSaid:

@@ -424,6 +424,16 @@ said* below and accounts for a large share of this column's wording-only
 mismatches, and a refused `-o` **name at an invocation**, which writes the
 complaint, declines to run the command string, and exits **0** (#2639).
 
+## A refused `set` option keeps the sign it was asked with
+
+dash writes `-` into every refusal whichever sign was asked; this shell
+echoes the request back. Measured 2026-10-04 in the digest-pinned image,
+BusyBox v1.37.0: `set +B` is `illegal option +B`, `set +o zzz` is
+`illegal option +o zzz`, `ash +o posix -c :` is `illegal option +o
+posix`, and `set -o emacs; set +o emacs` writes one of each. So both
+refusals — the letter and the long name — carry the sign as a verb of the
+wording rather than a `-` written into it (#5723).
+
 ## The `set -o` table is this shell's own, and it was dash's
 
 `dialect/ash` held dash's fourteen names, sorted. Three things were wrong

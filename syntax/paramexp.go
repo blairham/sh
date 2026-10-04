@@ -2003,7 +2003,7 @@ func fixedNameDefers(e *ParamExpr, c byte) bool {
 		return letter || c == '_'
 	}
 	n := e.Name
-	if n == "" || !(letter || c == '(') {
+	if n == "" || !letter && c != '(' {
 		return false
 	}
 	if len(n) == 1 && strings.IndexByte("$-?#!@*", n[0]) >= 0 {

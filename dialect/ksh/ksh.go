@@ -4746,6 +4746,8 @@ func Diagnostics() interp.Diagnostics {
 		// CannotOpen is worded reason-first in one of the other dialects
 		// (#734).
 		DuplicationSourceNotOpen: "%[1]s: cannot open [%[2]s]",
+		// Named as written: `>&08` is `08: cannot open …`.
+		NamesADuplicationNumberAsWritten: true,
 		// And past this shell's own ceiling of 64 the sentence is about the
 		// number and carries no errno at all: `echo x >&63` is `cannot open
 		// [Bad file descriptor]` and `echo x >&64` is this (#3210).
@@ -5394,6 +5396,8 @@ func Diagnostics() interp.Diagnostics {
 		ReadBadCount:              "read: -%[2]s: numeric count argument expected",
 		ReadBadNumberUsageLetters: "unN",
 		ReadFromAClosedDescriptor: "read: bad file unit number",
+		// A quoted printf operand that is not one character is warned about.
+		PrintfCharConstantWarning: "printf: warning: %[1]s: invalid character constant",
 		// `--version` where a builtin's options stand writes the builtin's
 		// own version line on standard error at 2. Measured 2026-10-04 on
 		// ksh93u+ 2012-08-01, `NAME --version`, for the builtins that are

@@ -1037,6 +1037,16 @@ type Diagnostics struct {
 	// PrintfBadNumber is a numeric conversion given something that is not a
 	// number. One verb: the operand.
 	PrintfBadNumber string
+	// PrintfCharConstantWarning is written beside the value an integer
+	// conversion takes from a quoted operand that is not exactly one
+	// character after its quote — and the status is then 1, though the
+	// value is still printed. %[1]s is the operand. ksh93 alone; every other
+	// column takes the first character, or zero, in silence. Measured
+	// 2026-10-04 on ksh93u+ 2012-08-01: `printf '%d' "'AB"` is `printf:
+	// warning: 'AB: invalid character constant` and 65 at 1, `"'"` the same
+	// sentence and 0, and `"'é"` is 233 at 0 under UTF-8. Empty says
+	// nothing.
+	PrintfCharConstantWarning string
 	// PrintfBadNumberStatus is what that reports. Zero means 1.
 	PrintfBadNumberStatus int
 	// PrintfIncompleteNumber is a numeric conversion given an operand whose
@@ -7708,6 +7718,12 @@ type Diagnostics struct {
 	// be a rule about redirection targets in general: `n=nosuch; cat <$n` is
 	// `nosuch: No such file or directory` in bash (#734).
 	NamesTheDuplicationTargetAsWritten bool
+	// NamesADuplicationNumberAsWritten names a target written as digits
+	// the way it was written, leading zeros and all, where the field above
+	// names it as the number it comes to. ksh93: measured 2026-10-04 on
+	// ksh93u+ 2012-08-01, `>&08`, `>&012`, `1>&009`, `<&07` and `exec 5>&08`
+	// are each `08: cannot open [Bad file descriptor]` and the like.
+	NamesADuplicationNumberAsWritten bool
 
 	// NamesTheMoveSuffixInTheTarget keeps the `-` of `6<&5-` in that same
 	// message. The two shells with the move operator disagree: bash reads the

@@ -44,10 +44,8 @@ pat/a-pattern-flag-reaches-to-the-end-of-its-group
 pat/the-tilde-flag-in-a-group-decides-snippet-from-plugin
 pipe/both-streams-takes-no-blank-between-its-two-bytes
 printf/non-finite-is-spelled-c-s-way
-printf/quoted-operand-is-a-character-value
 procsub/a-writing-body-in-a-command-substitution-is-captured
 read/from-a-standard-input-that-is-closed
-redir/a-wide-duplication-target-with-a-leading-zero
 subst/a-paren-body-is-the-parenthesis-and-not-a-list
 xtrace/case-arm-patterns-are-not-expanded-past-the-match
 xtrace/condition-operand-quoting-diverges

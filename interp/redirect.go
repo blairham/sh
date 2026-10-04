@@ -2279,6 +2279,11 @@ func (r *Runner) dupTargetText(rd *syntax.Redirect, moveFrom int) string {
 		// 5.3.20, measured 2026-10-04, where `>&$x` is `$x`.
 		return rd.Text
 	}
+	if r.diag().NamesADuplicationNumberAsWritten && rd.Text != "" && allDigits(rd.Text) {
+		// The digits as written, which only part from the number where a
+		// zero leads them. See the field.
+		return rd.Text
+	}
 	return ""
 }
 

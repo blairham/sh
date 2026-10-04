@@ -60,6 +60,12 @@ func (r *Runner) firedAt() int {
 	if r.ask(r.sem().ExitTrapFiresPastTheEnd, "where the EXIT trap counts as having fired") {
 		return r.programEnd
 	}
+	// BusyBox ash names the line the script had got to: see
+	// Semantics.ExitTrapFiresWhereTheScriptStopped. Asked only behind a no,
+	// so a refusal above is not followed by a second one.
+	if r.sem().ExitTrapFiresPastTheEnd == No && r.ask(r.sem().ExitTrapFiresWhereTheScriptStopped, "where the EXIT trap counts as having fired") {
+		return r.line
+	}
 	return 1
 }
 

@@ -19000,6 +19000,29 @@ type Semantics struct {
 	// makes an EXIT body read like a small script of its own.
 	ExitTrapFiresPastTheEnd Answer
 
+	// ExitTrapFiresWhereTheScriptStopped counts the EXIT trap as having fired
+	// on the line of the last command the script ran, rather than on its
+	// first line. Asked only where ExitTrapFiresPastTheEnd says no.
+	//
+	// BusyBox ash, whose every trap body names the line it fired on. Measured
+	// 2026-10-03 in the pinned image over script files with `trap 'echo x
+	// $LINENO' EXIT` on line 1:
+	//
+	//	: / echo last / (blank) / # c / (blank)   x 3   the last command, not the end
+	//	: / if true; then / exit 3 / fi / : / :   x 4   the `exit`, wherever it is
+	//	f() { … } over lines 2-4 / f              x 5   the call, not f's body
+	//
+	// So it is neither of the two values the axis above holds: the trailing
+	// comment and blank lines are not counted, and the line is not the
+	// first. ksh93 and bash say no; bash never asks, since its EXIT body is
+	// numbered from its own first line.
+	//
+	// unpinned zsh: ExitTrapFiresPastTheEnd says yes there, so this is never
+	// reached.
+	// unpinned dash: every trap body counts from its own first line, so no
+	// firing line is ever asked for.
+	ExitTrapFiresWhereTheScriptStopped Answer
+
 	// SelfAimedChildSignalRunsTheTrap runs the `CHLD` handler for a `kill`
 	// that names the shell itself.
 	//
@@ -28227,6 +28250,31 @@ type Semantics struct {
 	// every trap that is not ignored.
 	ErrTrapRunsInSubshells Answer
 
+	// ErrtraceReachesSubshells makes `set -o errtrace` carry the ERR trap
+	// into a subshell as well as into a function, where the trap would not
+	// otherwise reach it.
+	//
+	// bash says yes: measured in bash 5.3.15, `trap 'echo E' ERR; (false)`
+	// writes one E and `set -E` in front of it writes two — the subshell's
+	// failure and then the subshell command's — and `( trap )` lists the ERR
+	// trap. BusyBox ash says no. Measured 2026-10-03 in the pinned image,
+	// with `trap 'echo E' ERR`:
+	//
+	//	                         set -E off    set -E on
+	//	f() { false; echo in-f; }; f    in-f          E in-f
+	//	x=$(false; echo hi)             x=hi          x=hi
+	//	( false; echo sub )             sub           sub
+	//	( trap )                        nothing       nothing
+	//
+	// so the option is real and reaches a function, and stops at the fork.
+	//
+	// unpinned ksh: the shell has no errtrace option to turn on, so this is
+	// never reached.
+	// unpinned zsh: ErrTrapRunsInSubshells already says yes there, and the
+	// option is `no such option` besides.
+	// unpinned dash: there is no ERR condition at all.
+	ErrtraceReachesSubshells Answer
+
 	// ErrTrapRefiresForTheCommandItFiredInside says what a command owes the
 	// ERR trap when the failure it is *reporting* has already fired it —
 	// the call whose body failed, the `.` whose file failed, the `eval`
@@ -28407,6 +28455,33 @@ type Semantics struct {
 	// bash and zsh and nothing in the other two — the shape issue #339
 	// measured.
 	PipelineElementKeepsTrapListing Answer
+
+	// ALoneTrapCommandKeepsTrapListing keeps the parent's listing across a
+	// pipeline element or a substitution whose answer above is no, where
+	// the body is nothing but one simple command written `trap`.
+	//
+	// BusyBox ash, which keys the question on the body rather than on the
+	// boundary. Measured 2026-10-03 in the pinned image, the parent holding
+	// a USR1 and an EXIT trap:
+	//
+	//	trap | cat, $(trap), `trap`, { trap; } | cat     the parent's traps
+	//	x=1 trap | cat, trap 2>/dev/null | cat            the parent's traps
+	//	(trap), trap & wait, f | cat (f runs trap)        nothing
+	//	$t | cat with t=trap, "trap" | cat, \trap | cat   nothing
+	//	command trap | cat, { echo a; trap; } | cat       nothing
+	//	{ trap; } 2>&1 | cat, $(trap; echo z), $(trap | cat)  nothing
+	//
+	// So it is the word as written — not the command that runs, not the
+	// command after expansion — and braces count only where they carry no
+	// redirection of their own. See loneCommandNamed.
+	//
+	// dash, ksh93 and zsh say no: measured the same day, `trap | cat` is
+	// empty in dash and ksh93 and `$(trap)` is empty in dash and zsh, the
+	// boundaries where each of them clears the listing.
+	//
+	// unpinned bash: every boundary this is asked behind keeps the listing
+	// there, so it is never reached.
+	ALoneTrapCommandKeepsTrapListing Answer
 
 	// BackgroundJobKeepsTrapListing asks it of `… &`. bash alone: the other
 	// three list nothing the parent had there.

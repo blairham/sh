@@ -54,6 +54,7 @@ func TestATrapBodyCanBeCountedFromWhereItFired(t *testing.T) {
 	offset := func(s *Semantics) {
 		s.TrapBodyLine = TrapBodyLineOffsetFromWhereItFired
 		s.ExitTrapFiresPastTheEnd = No
+		s.ExitTrapFiresWhereTheScriptStopped = No
 	}
 	if got := trapLineOf(t, exitBody, offset); !strings.Contains(got, "line 2:") {
 		t.Errorf("EXIT: got %q, want the body's second line", got)
@@ -90,6 +91,7 @@ func TestWhereTheExitTrapFiredIsItsOwnQuestion(t *testing.T) {
 	first := trapLineOf(t, exitBody, func(s *Semantics) {
 		s.TrapBodyLine = TrapBodyLineWhereItFired
 		s.ExitTrapFiresPastTheEnd = No
+		s.ExitTrapFiresWhereTheScriptStopped = No
 	})
 	past := trapLineOf(t, exitBody, func(s *Semantics) {
 		s.TrapBodyLine = TrapBodyLineWhereItFired

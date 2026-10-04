@@ -146,6 +146,7 @@ func TestTheCommandTrapStyleDoesNotOutlastTheBody(t *testing.T) {
 		s.TrapBodyLine = TrapBodyLineWithin
 		s.CommandTrapBodyLine = TrapBodyLineOffsetFromWhereItFired
 		s.ExitTrapFiresPastTheEnd = No
+		s.ExitTrapFiresWhereTheScriptStopped = No
 	})
 	if !strings.Contains(got, "exit=1") {
 		t.Errorf("output %q: want the EXIT body counted by its own rule", got)

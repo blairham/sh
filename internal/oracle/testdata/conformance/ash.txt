@@ -20,8 +20,6 @@ assoc/a-dollar-single-quoted-subscript-decodes-its-escapes
 axis/a-substring-offset-takes-a-leading-colon
 axis/an-empty-subscript-in-a-parameter-expansion
 axis/printf-non-finite-is-converted
-axis/trap-body-line-err
-axis/trap-body-line-exit
 axis/trap-body-line-signal
 axis/trap-body-parse-failure-location
 axis/trap-body-runs-what-parsed
@@ -71,10 +69,7 @@ invoke/called-sh-and-then-leaving-posix-mode
 invoke/called-sh-outranks-the-invocations-own-posix-option
 invoke/posix-mode-from-the-invocation-reaches-the-first-line
 jobs/a-background-job-outlives-the-shell
-jobs/a-group-in-a-pipeline-and-the-parents-jobs
 jobs/a-job-that-is-neither-current-nor-previous
-jobs/a-pipeline-element-and-the-parents-jobs
-jobs/a-substitution-and-the-parents-jobs
 jobs/bg-with-no-job-control
 jobs/wait-p-writes-through-an-array-element
 jobspec/kill-a-job-that-is-not-there
@@ -84,11 +79,8 @@ local/a-subscripted-operand-to-local
 location/a-sourced-file-below-the-first-line-of-a-command-string
 opt/a-refused-letter-echoes-the-sign
 opt/a-set-o-listing-sources-back
-opt/an-err-trap-and-a-function-with-nothing-asked
-opt/an-err-trap-and-a-subshell-with-nothing-asked
 opt/an-unknown-long-name-is-refused
 opt/leaving-posix-mode-puts-the-set-refusals-back
-opt/set-o-errtrace-carries-the-err-trap-into-a-subshell
 opt/set-plus-p-is-privileged-under-a-letter
 opt/set-plus-t-is-granted-where-set-t-is-refused
 opt/set-t-at-the-invocation
@@ -153,12 +145,7 @@ subst/double-paren-is-a-subshell
 test/a-comparison-operand-that-will-not-read
 test/a-comparison-operands-leading-zeros
 test/comparison-operands-are-arithmetic
-trap/a-failure-three-calls-deep
 trap/an-elements-pipe-handler-runs-inside-the-elements-redirections
-trap/an-explicit-return-and-the-failing-call
-trap/lineno-inside-an-action
-trap/listing-in-a-pipeline-element
-trap/the-err-trap-fires-once-for-a-nested-failure
 ulimit/a-limit-it-cannot-read
 ulimit/the-file-size-block
 unterminated/a-case-arm-closed-by-its-terminator

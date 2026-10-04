@@ -1620,6 +1620,7 @@ func Semantics() interp.Semantics {
 	// includes EXIT is left unanswered: nothing is ever kept to ask it of.
 	s.SubshellKeepsTrapListing = interp.No
 	s.PipelineElementKeepsTrapListing = interp.No
+	s.ALoneTrapCommandKeepsTrapListing = interp.No
 	s.BackgroundJobKeepsTrapListing = interp.No
 	s.SubshellHidesInheritedIgnoredTraps = interp.No
 	s.UmaskPrintsFourDigits = interp.Yes
@@ -1774,6 +1775,8 @@ func Semantics() interp.Semantics {
 	// signal. Measured 2026-09-26 over a script file, `trap 'echo W' WINCH` /
 	// `kill -WINCH $$; echo a` / `echo b` reads `W a b` (#4755).
 	s.SelfAimedWindowChangeWaitsForInputOrAChild = interp.No
+	// unanswered ExitTrapFiresWhereTheScriptStopped: the same, one step
+	// further in.
 	// unanswered ExitTrapFiresPastTheEnd: the axis is the line a trap body
 	// counts as having fired on, and it is only asked where a body's lines
 	// are numbered from that line at all. Every trap body here counts from

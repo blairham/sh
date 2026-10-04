@@ -471,11 +471,11 @@ func (r *Runner) runPipeline(ctx context.Context, p *syntax.Pipeline, timing *pi
 		// A pipeline element is a subshell whose trap listing survives in a
 		// different pair of shells than `( … )` does, so the boundary says
 		// what kind it is.
-		sub.retagTrapBoundary(trapContextPipeline)
+		sub.retagTrapBoundary(loneTrapBoundary(trapContextPipeline, loneCommandIn(p.Cmds[i], "trap")))
 		// And a different question again for the job table, which one
 		// dialect answers by the *shape* of the element: `jobs -p | cat`
 		// lists the parent's jobs there and `{ jobs -p; } | cat` does not.
-		sub.inheritJobs(pipelineJobBoundary(p.Cmds[i]))
+		sub.inheritJobsFor(pipelineJobBoundary(p.Cmds[i]), loneCommandIn(p.Cmds[i], "jobs"))
 		// And whether the element is parentheses, which is a different
 		// question again from the two above: `( … ) | cat` numbers a job it
 		// starts from two and `{ … } | cat` from one, so this is keyed on

@@ -137,9 +137,6 @@ ash   EmptyKeyInATableLiteral
 ash   EmptyParamSubscriptIsAnError
 ash   EmptySubscriptTextIsAMathError
 ash   EmptySubscriptToAnAssignment
-ash   ErrTrapRunsInSubshells
-ash   ErrTrapRunsInsideFunctions
-ash   ExitTrapFiresPastTheEnd
 ash   ExpansionResultSuppliesGroupSyntax
 ash   ExportContainerLetterNeedsAValue
 ash   ExportLetterDeclaresAGlobal
@@ -330,6 +327,7 @@ ash   ZeroFillGoesAfterAnIntegersSign
 ash   ZeroFillKeepsLeadingBlanks
 ash   FunctionBodyListingWritesItsAttributes
 
+bash  ALoneTrapCommandKeepsTrapListing
 bash  ArithDivisionByZeroYieldsAValue
 bash  ArithFloatOverflowIsZero
 bash  ArithIntegerOperatorRefusesFloat
@@ -515,9 +513,11 @@ dash  ErrTrapFiresForAnErrorTheShellGaveUpOver
 dash  ErrTrapRefiresForTheCommandItFiredInside
 dash  ErrTrapRunsInSubshells
 dash  ErrTrapRunsInsideFunctions
+dash  ErrtraceReachesSubshells
 dash  ErrexitSeesPipefailFailure
 dash  ExecOptionsRequireACommand
 dash  ExitTrapFiresPastTheEnd
+dash  ExitTrapFiresWhereTheScriptStopped
 dash  ExpansionResultSuppliesGroupSyntax
 dash  ExportContainerLetterNeedsAValue
 dash  ExportLetterDeclaresAGlobal
@@ -738,6 +738,7 @@ ksh   DeclareGlobalReachesPastALocal
 ksh   EchoLastEscapeFlagWins
 ksh   EmptyKeyInATableLiteral
 ksh   EmptySubscriptToAnAssignment
+ksh   ErrtraceReachesSubshells
 ksh   ExportContainerLetterNeedsAValue
 ksh   HangupAtExitNeedsALoginShell
 ksh   HangupAtExitPrecedesTheExitTrap
@@ -782,6 +783,8 @@ zsh   BraceMakesAProducedStarOrBracketText
 zsh   DeclarationMayShadowAnEnclosingScopesReadonly
 zsh   DeclarationRereadsAParenthesizedValue
 zsh   DeclarationThroughAReferenceNamesTheOperand
+zsh   ErrtraceReachesSubshells
+zsh   ExitTrapFiresWhereTheScriptStopped
 zsh   ExportContainerLetterNeedsAValue
 zsh   ExportOrReadonlyTakesAReferenceToAnElement
 zsh   ForNameWhenTheLoopRuns

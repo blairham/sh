@@ -125,6 +125,30 @@ const (
 	// of this shell` at 127. See Runner.jobsInherited, which is what holds
 	// that apart.
 	SubshellJobsKeptUnderTheMonitor
+
+	// SubshellJobsKeptForALoneJobsCommand keeps them only where the body the
+	// subshell was made for is nothing but one simple command written
+	// `jobs`, and clears them everywhere else: BusyBox ash.
+	//
+	// The noun is the *body*, not the boundary. Measured 2026-10-03 in the
+	// pinned image, `sleep 0.4 &` and then:
+	//
+	//	jobs -p | cat, $(jobs -p), `jobs -p`         the pid
+	//	{ jobs -p; } | cat, { { jobs -p; }; } | cat  the pid
+	//	x=1 jobs -p 2>/dev/null | cat, jobs -p | cat | cat  the pid
+	//	(jobs -p), ( jobs -p ) | cat, jobs -p & …    nothing
+	//	f | cat with f running jobs -p                nothing
+	//	{ echo a; jobs -p; } | cat, $(echo a; jobs -p)  nothing
+	//	$j -p | cat with j=jobs, "jobs" -p | cat     nothing
+	//	command jobs -p | cat                        nothing
+	//	$(jobs -p | cat), $(echo "$(jobs -p)")       nothing
+	//
+	// The last row is the same rule one level down: the substitution's body
+	// is a pipeline, so the substitution clears the table, and the `jobs`
+	// element inside it keeps an empty one. It is the same reading the
+	// shell gives a lone `trap` — see Semantics.ALoneTrapCommandKeepsTrapListing
+	// and loneCommandNamed, which both answers share.
+	SubshellJobsKeptForALoneJobsCommand
 )
 
 func (t SubshellJobTable) String() string {
@@ -137,6 +161,8 @@ func (t SubshellJobTable) String() string {
 		return "kept outside a compound"
 	case SubshellJobsKeptUnderTheMonitor:
 		return "kept under the monitor"
+	case SubshellJobsKeptForALoneJobsCommand:
+		return "kept for a lone jobs command"
 	}
 	return "unspecified"
 }
@@ -175,6 +201,12 @@ const (
 // answer is read only when the parent had a job to disagree about, which
 // keeps a script that never backgrounded anything off the axis entirely.
 func (r *Runner) inheritJobs(kind jobBoundary) {
+	r.inheritJobsFor(kind, false)
+}
+
+// inheritJobsFor is inheritJobs for a boundary whose body may be nothing but
+// `jobs`, which one dialect reads: see SubshellJobsKeptForALoneJobsCommand.
+func (r *Runner) inheritJobsFor(kind jobBoundary, loneJobs bool) {
 	// The memory of the jobs this shell has already waited out is never
 	// inherited, whatever the table does. It is not the table — nothing lists
 	// it and no `%` spec reaches it — and it answers one question only: a
@@ -212,6 +244,10 @@ func (r *Runner) inheritJobs(kind jobBoundary) {
 	case SubshellJobsKept:
 	case SubshellJobsKeptOutsideACompound:
 		if kind == jobBoundaryCompound {
+			r.jobs, r.jobOrder = nil, nil
+		}
+	case SubshellJobsKeptForALoneJobsCommand:
+		if !loneJobs {
 			r.jobs, r.jobOrder = nil, nil
 		}
 	default:

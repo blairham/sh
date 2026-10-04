@@ -263,7 +263,11 @@ func (r *Runner) errTrapFiresHere(refuse bool) bool {
 	// measured in bash 5.3.15, `trap 'echo E' ERR; (false)` writes one E and
 	// `set -E` in front of it writes two — the subshell's failure and then
 	// the subshell command's.
-	if r.errTrapInherited && !r.errtrace &&
+	//
+	// In bash. BusyBox ash's errtrace reaches into a function and stops at
+	// the subshell: see Semantics.ErrtraceReachesSubshells.
+	if r.errTrapInherited &&
+		!(r.errtrace && answered(r.sem().ErrtraceReachesSubshells, "errtrace carrying the ERR trap into a subshell")) &&
 		!answered(r.sem().ErrTrapRunsInSubshells, "the ERR trap inside a subshell") {
 		return false
 	}

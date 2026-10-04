@@ -27,6 +27,7 @@ func trapSem() Semantics {
 	s.SubshellKeepsTrapListing = No
 	s.PipelineElementKeepsTrapListing = No
 	s.BackgroundJobKeepsTrapListing = No
+	s.ALoneTrapCommandKeepsTrapListing = No
 	s.KeptTrapListingIncludesExit = Yes
 	s.SubshellHidesInheritedIgnoredTraps = No
 	s.SubshellRunsOnAfterSignalingTheShell = Yes
@@ -117,6 +118,23 @@ func TestPipelineElementListingIsItsOwnBoundary(t *testing.T) {
 	s.SubshellKeepsTrapListing = Yes
 	if got, _ := run(t, `trap 'echo x' USR1; trap | cat; echo done`, withSem(s)); got != "done\n" {
 		t.Errorf("a subshell answer does not leak into a pipeline: got %q", got)
+	}
+}
+
+// TestALoneTrapIsAskedBehindTheBoundarysNo: where a pipeline element or a
+// substitution clears the listing, a body that is nothing but `trap` asks the
+// second question, and nothing else does.
+func TestALoneTrapIsAskedBehindTheBoundarysNo(t *testing.T) {
+	s := trapSem()
+	s.ALoneTrapCommandKeepsTrapListing = Yes
+	const src = `trap 'echo x' USR1; trap | cat; echo "$(trap)"; { echo a; trap; } | cat; (trap); echo done`
+	want := "trap -- 'echo x' USR1\ntrap -- 'echo x' USR1\na\ndone\n"
+	if got, _ := run(t, src, withSem(s)); got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+	s.ALoneTrapCommandKeepsTrapListing = No
+	if got, _ := run(t, src, withSem(s)); got != "\na\ndone\n" {
+		t.Errorf("answered no: got %q", got)
 	}
 }
 

@@ -1132,6 +1132,7 @@ func Semantics() interp.Semantics {
 	// line: inside the EXIT trap the pair is `1`/`2`, not the `6`/`7` that
 	// counting past the end would give (#4193).
 	s.ExitTrapFiresPastTheEnd = interp.No
+	s.ExitTrapFiresWhereTheScriptStopped = interp.No
 	// A `kill -CHLD` naming the shell runs nothing: the condition is a child
 	// of this shell changing state, and a signal the script sent is not that.
 	// Measured 2026-09-26 over a script file, `trap 'echo C' CHLD` /
@@ -2942,6 +2943,7 @@ func Semantics() interp.Semantics {
 	s.TrapHasReturnCondition = interp.Yes
 	s.ErrTrapRunsInsideFunctions = interp.No
 	s.ErrTrapRunsInSubshells = interp.No
+	s.ErrtraceReachesSubshells = interp.Yes
 	// And the command that *ran* a failure fires the condition again, but
 	// only where a trap was set before that command began. Both halves are
 	// measured, from a script file with the action printing $LINENO: with
@@ -3018,6 +3020,8 @@ func Semantics() interp.Semantics {
 	// `(trap)` still lists the trap.
 	s.SubshellKeepsTrapListing = interp.Yes
 	s.PipelineElementKeepsTrapListing = interp.Yes
+	// unanswered ALoneTrapCommandKeepsTrapListing: every boundary it is
+	// asked behind keeps the listing here, so it is never reached.
 	s.BackgroundJobKeepsTrapListing = interp.Yes
 	s.KeptTrapListingIncludesExit = interp.Yes
 	s.UlimitBlockIsKilobyte = interp.Yes

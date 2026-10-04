@@ -561,6 +561,7 @@ func TestATrapBodysParseFailureCanNameWhereItFired(t *testing.T) {
 		s.BuiltinSyntaxErrorFatal = No
 		s.TrapBodyLine = TrapBodyLineOffsetFromWhereItFired
 		s.ExitTrapFiresPastTheEnd = No
+		s.ExitTrapFiresWhereTheScriptStopped = No
 	}
 	dg := Diagnostics{Location: LocationLineWord}
 	// The trap spans lines 1 and 2, so `kill` is on line 4 and that is where
@@ -591,6 +592,7 @@ func TestTheFiringLineIsLeftOutOnTheFirstLine(t *testing.T) {
 		s.BuiltinSyntaxErrorFatal = No
 		s.TrapBodyLine = TrapBodyLineOffsetFromWhereItFired
 		s.ExitTrapFiresPastTheEnd = No
+		s.ExitTrapFiresWhereTheScriptStopped = No
 		s.TrapParseFailureNamesWhereItFired = Yes
 	}
 	dg := Diagnostics{Location: LocationLineWord}
@@ -622,6 +624,7 @@ func TestEveryLineInAParseFailureMovesTogether(t *testing.T) {
 		s.BuiltinSyntaxErrorFatal = No
 		s.TrapBodyLine = TrapBodyLineOffsetFromWhereItFired
 		s.ExitTrapFiresPastTheEnd = No
+		s.ExitTrapFiresWhereTheScriptStopped = No
 		s.TrapParseFailureNamesWhereItFired = No
 	}
 	dg := Diagnostics{

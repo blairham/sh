@@ -1817,6 +1817,15 @@ func Semantics() interp.Semantics {
 	// 2026-10-02 on BusyBox 1.37.0, see interp.HandlerErrorReach (#5360).
 	s.AHandlersErrorEnds = interp.HandlerErrorEndsAnErrHandler
 	s.ErrTrapFiresForAnErrorTheShellGaveUpOver = interp.No
+	// The ERR trap stays in the frame that set it, and errtrace carries it
+	// into a function but not into a subshell. Measured 2026-10-03 in the
+	// pinned image, `trap 'echo E' ERR; f() { false; echo in-f; }; f` writes
+	// `in-f` alone, and `set -E` in front of it writes `E in-f`; `( false;
+	// echo sub )` and `x=$(false; echo hi)` write no E inside with the
+	// option off or on. The grid is on ErrtraceReachesSubshells.
+	s.ErrTrapRunsInsideFunctions = interp.No
+	s.ErrTrapRunsInSubshells = interp.No
+	s.ErrtraceReachesSubshells = interp.No
 	// `read -d £` stops at the first byte of the `£` under `LC_ALL=C.UTF-8`,
 	// measured 2026-10-02 on BusyBox 1.37.0 (#5153).
 	// unanswered ArithStoreRefusalIsAnError: there are no arrays to store an
@@ -1889,19 +1898,33 @@ func Semantics() interp.Semantics {
 	// signal. Measured 2026-09-26 over a script file, `trap 'echo W' WINCH` /
 	// `kill -WINCH $$; echo a` / `echo b` reads `W a b` (#4755).
 	s.SelfAimedWindowChangeWaitsForInputOrAChild = interp.No
-	// unanswered ExitTrapFiresPastTheEnd: the axis is the line a trap body
-	// counts as having fired on, and it is only asked where a body's lines
-	// are numbered from that line at all. Every trap body here counts from
-	// its own first line — TrapBodyLine and CommandTrapBodyLine are both
-	// left alone — and the one other reader is a body's parse failure being
-	// located at the firing line, which is ksh93's alone. Measured 2026-09-22:
-	// the shell refuses `trap … DEBUG` outright, so the route bash reaches it
-	// by does not exist here either (#4193).
+	// Every trap body names the line it fired on, for every line of it, and
+	// a diagnostic from it is located there too — zsh's answer, not dash's.
+	// Measured 2026-10-03 in the pinned image over a script file, a two-line
+	// body `echo a $LINENO` / `nosuchcmd` / `echo b $LINENO` on USR1 fired
+	// from line 6 reads `line 6: nosuchcmd: not found`, `a 6`, `b 6`; and
+	// an ERR body of the same shape fired by a `false` on line 4 reports
+	// `at=4` and locates its failure on line 4. A function the body calls
+	// still numbers its own lines: `f` defined on lines 1-4 and called from
+	// a USR1 body reads 2 and 3 inside f and the firing line after it. This
+	// replaces a 2026-09-22 note that said every body counted from its own
+	// first line.
+	s.TrapBodyLine = interp.TrapBodyLineWhereItFired
+	s.CommandTrapBodyLine = interp.TrapBodyLineWhereItFired
+	// And the EXIT trap, which has no line of its own, fired on the line of
+	// the last command the script ran: neither the first line nor past the
+	// end. See ExitTrapFiresWhereTheScriptStopped for the three rows.
+	s.ExitTrapFiresPastTheEnd = interp.No
+	s.ExitTrapFiresWhereTheScriptStopped = interp.Yes
 	s.TrapBodyRunsWhatParsed = interp.Yes
 	// A subshell's listing shows only what survived the entry, which is the
 	// POSIX answer and is measured rather than assumed.
 	s.SubshellKeepsTrapListing = interp.No
 	s.PipelineElementKeepsTrapListing = interp.No
+	// Except for a body that is nothing but `trap`, which keeps it in a
+	// pipeline element and in a substitution alike. Measured 2026-10-03;
+	// the grid is on the axis.
+	s.ALoneTrapCommandKeepsTrapListing = interp.Yes
 	s.BackgroundJobKeepsTrapListing = interp.No
 	s.SubshellHidesInheritedIgnoredTraps = interp.No
 	// An EXIT trap does not run when a signal kills the shell: `trap 'echo
@@ -1995,7 +2018,9 @@ func Semantics() interp.Semantics {
 	// `return 256` is 0, where `return -1` and `return +3` are `Illegal
 	// number` and end the script at 2.
 	s.StatusArgument = interp.StatusArgStrictMasked
-	s.SubshellJobTable = interp.SubshellJobsCleared
+	// A subshell keeps the parent's jobs only where its body is nothing but
+	// `jobs`. Measured 2026-10-03; the grid is on the value.
+	s.SubshellJobTable = interp.SubshellJobsKeptForALoneJobsCommand
 	// A job started with `&` reads an empty standard input: `ash -c
 	// '/bin/cat & wait; echo ---' < f` writes `---` and nothing else.
 	s.BackgroundJobInput = interp.BackgroundJobInputEmpty

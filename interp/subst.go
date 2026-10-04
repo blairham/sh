@@ -154,7 +154,10 @@ func (r *Runner) runCommandSubst(ctx context.Context, span syntax.Span) string {
 	// still writing into it has to be joined first. See Runner.collectBodies
 	// for the measurement.
 	defer sub.collectBodies()()
-	sub.inheritJobs(jobBoundarySubstitution)
+	sub.inheritJobsFor(jobBoundarySubstitution, loneCommandNamed(f.Stmts, "jobs"))
+	// A substitution is a subshell for a trap listing, except where its body
+	// is nothing but `trap`. See Semantics.ALoneTrapCommandKeepsTrapListing.
+	sub.retagTrapBoundary(loneTrapBoundary(trapContextSubshell, loneCommandNamed(f.Stmts, "trap")))
 	// A substitution's body is parentheses too as far as job numbering is
 	// concerned — measured, `$( … )`, a backquoted substitution and
 	// `<( … )` all number a job they start from two. See

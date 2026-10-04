@@ -82,6 +82,12 @@ func TestTheUndefinedMarkReadsTheBodyFromFPath(t *testing.T) {
 			name: "the file's own commands run", src: `typeset -fu bb; bb hello; echo "never"`,
 			want: "bare body \nksh: function, built-in or type definition for bb not found in ", status: 126,
 		},
+		// And it is read before the call's own redirections open, so neither
+		// the file's output nor the refusal is theirs to send anywhere (#5712).
+		{
+			name: "the load stands in front of the call's redirections", src: `typeset -fu bb; bb >/dev/null 2>/dev/null; echo "never"`,
+			want: "bare body \nksh: function, built-in or type definition for bb not found in ", status: 126,
+		},
 		{
 			name: "a file that defines the wrong name", src: `typeset -fu other; other; echo "never"`,
 			want: "ksh: function, built-in or type definition for other not found in ", status: 126,

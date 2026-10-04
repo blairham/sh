@@ -2175,6 +2175,12 @@ func Semantics() interp.Semantics {
 	// name`` at 2, which is the name check answering and not a listing.
 	s.SetListing = interp.SetListingAssignments
 	s.SetListingQuoting = interp.ListingQuoteAlwaysDoubled
+	// And a bad name carrying a value is taken in silence and refused when
+	// the function returns, fatally: measured 2026-10-03, `f() { local
+	// 1x=5; echo in=$?; }; f; echo st=$?` writes `in=0`, then `1x: bad
+	// variable name`, and ends at 2. See
+	// Semantics.LocalBadNameWithAValueFailsAtReturn.
+	s.LocalBadNameWithAValueFailsAtReturn = interp.Yes
 	// A descriptor number the process cannot hold is not checked here: with
 	// `ulimit -n 6`, `exec 8>f` reports success and the descriptor is
 	// unusable afterwards, where bash and ksh93 hand the kernel's refusal
@@ -2576,13 +2582,14 @@ func Diagnostics() interp.Diagnostics {
 			// how a caller tells it from the 1 that means end of input.
 			"read": "%[1]s: %[2]s: bad variable name",
 		},
-		// A `local` name that starts with a digit is refused with the
-		// builtin's name left off — `1y: bad variable name` against
-		// `local: -r: bad variable name` — where its other bad names keep
-		// it. Measured from both shapes.
-		BuiltinBadNameNumeric: map[string]string{
-			"local": "%[2]s: bad variable name",
-		},
+		// The sentence a bad `local` name with a value earns when the
+		// function returns, which leaves the builtin's name off: the
+		// refusal is the unwinding's and not the builtin's. Measured
+		// 2026-10-03, `f() { local 1x=5; }; f` and `f() { local a-b=5; };
+		// f` alike — the leading digit that this used to be keyed on is not
+		// what decides it, the value is: `local 1x` is `local: 1x: bad
+		// variable name` at once.
+		LocalBadNameAtReturn: "%[1]s: bad variable name",
 		BuiltinBadNameStatus: 2,
 		// `ulimit -a`, row for row as the engine writes it.
 		// The twelve rows dash 0.5.12 prints on Linux; macOS has neither of

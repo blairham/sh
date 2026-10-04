@@ -29,7 +29,6 @@ declare/a-numeric-letter-does-not-reach-a-later-local-array
 declare/a-table-declaration-over-a-scalar-then-appended
 declare/an-appended-array-literal-over-a-typed-scalar
 declare/an-array-declaration-over-an-unset-name
-declare/local-bad-name
 heredoc/an-expansion-left-unterminated-in-a-body
 heredoc/stripping-and-joining-are-ordered-and-the-panel-parts-over-which-comes-first
 invoke/posix-mode-from-the-invocation-reaches-the-first-line

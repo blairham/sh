@@ -368,12 +368,64 @@ func (r *Runner) builtinNames(builtin string, args []string, explicitVariable bo
 		if r.unspecified {
 			return nil, 2, false
 		}
+		if r.badLocalNameWaitsForTheReturn(builtin, a, name) {
+			continue
+		}
+		if r.unspecified {
+			return nil, 2, false
+		}
 		status = r.badBuiltinName(builtin, a, name, fatal)
 		if r.ctl == controlExit {
 			return r.namesAfterARefusal(builtin, rest, args[i+1:], takes), status, true
 		}
 	}
 	return rest, status, false
+}
+
+// badLocalNameWaitsForTheReturn takes a `local` operand whose name is bad and
+// which carries a value, in the dialect that refuses it only when the function
+// returns, and reports whether it did.
+//
+// Measured 2026-10-03 on dash 0.5.12, `-c`:
+//
+//	f() { local 1x=5; echo in=$?; }; f; echo st=$?
+//	    `in=0`, then `1x: bad variable name` — no builtin named — and the
+//	    script ends at 2 before `st=`
+//	f() { local 1x=5 y=2; echo in $y; }; f       `in 2`, then the same
+//	f() { local a-b=5; echo in; }; f             the same for any bad name
+//	f() { local 1x=5; exit 4; }; f               exits 4, nothing said
+//	(f; echo sub); echo st=$?                    the subshell ends at 2
+//	f() { local 1x; echo in; }; f                `local: 1x: bad variable
+//	                                             name` at once — no value,
+//	                                             not this rule
+//
+// So the operand is accepted, the line and the body carry on, and the
+// refusal is raised as the call unwinds, once, naming the last bad operand. See Semantics.LocalBadNameWithAValueFailsAtReturn.
+func (r *Runner) badLocalNameWaitsForTheReturn(builtin, operand, name string) bool {
+	if builtin != "local" || !strings.Contains(operand, "=") || r.inFunc == "" {
+		return false
+	}
+	if !r.ask(r.sem().LocalBadNameWithAValueFailsAtReturn,
+		"a bad `local` name with a value refused when the function returns") {
+		return false
+	}
+	// The *last* one is named, because the names are unwound newest first:
+	// `local 1x=5 2y=3` is `2y: bad variable name` there.
+	r.badLocalNameAtReturn = name
+	if r.badLocalNamePending {
+		return true
+	}
+	r.badLocalNamePending = true
+	r.AtFunctionReturn(func() {
+		r.badLocalNamePending = false
+		if r.ctl == controlExit {
+			return
+		}
+		r.diagf("%s\n", Wording(r.diag().LocalBadNameAtReturn, "%[1]s: bad variable name", r.badLocalNameAtReturn))
+		r.status = orDefault(r.diag().BuiltinBadNameStatus, 2)
+		r.fatalUsageQuiet()
+	})
+	return true
 }
 
 // declarationAppendOperandAxis is the axis that says whether this dialect

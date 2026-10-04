@@ -15597,6 +15597,19 @@ type Semantics struct {
 	// unpinned ash: the same as dash.
 	OperandValueOverAFrozenNameRefusedFirst Answer
 
+	// LocalBadNameWithAValueFailsAtReturn takes a `local NAME=value` whose
+	// name is not a name in silence, and refuses it — fatally — when the
+	// function returns.
+	//
+	// Measured 2026-10-03 on dash 0.5.12: `f() { local 1x=5; echo in=$?; };
+	// f; echo st=$?` writes `in=0`, then `1x: bad variable name`, and ends at
+	// 2. Without a value the same word is refused at once. See
+	// Runner.badLocalNameWaitsForTheReturn.
+	//
+	// unpinned ash: BusyBox ash was not measured for this; No is what this
+	// engine did before.
+	LocalBadNameWithAValueFailsAtReturn Answer
+
 	// SignAloneIsAnOptionWord reads a declaration's `-` or `+` written with
 	// no letters after it as an option word rather than as an operand.
 	//
@@ -32718,6 +32731,8 @@ func PosixSemantics() Semantics {
 		BareDeclarationListing: DeclareListingCommandWord,
 		BareLocalListing:       BareLocalListsNothing,
 		TypesetBadOptionFatal:  No,
+		// No is the immediate refusal this engine always made.
+		LocalBadNameWithAValueFailsAtReturn: No,
 		// POSIX has no array literal; No is what this engine did before.
 		ArrayOperandRefusedBeforeTheCommand:     No,
 		OperandValueOverAFrozenNameRefusedFirst: No,

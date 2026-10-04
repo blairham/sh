@@ -2352,6 +2352,11 @@ type Diagnostics struct {
 	// identifier: 1x` for `1x` and `not valid in this context: a-b` for
 	// `a-b`. An empty entry means the dialect says the same to both.
 	BuiltinBadNameNumeric map[string]string
+	// LocalBadNameAtReturn is the refusal of a bad `local` name, raised when
+	// the function returns, in the dialect that waits for it — see
+	// Semantics.LocalBadNameWithAValueFailsAtReturn. One verb: the name.
+	// Empty falls back to `NAME: bad variable name`.
+	LocalBadNameAtReturn string
 
 	// BuiltinBadNameBracketed is that wording where the operand holds a `[`
 	// but is not a subscripted name — `typeset 'm[a]b]'=v`, where the

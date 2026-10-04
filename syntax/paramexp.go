@@ -828,8 +828,24 @@ func (p *Parser) parseParamExp(src string, start Pos, q Quoting, bare bool) *Par
 					// The dialect that refuses here quotes the rest of the
 					// word back rather than the `(`, and only newWord knows
 					// where the word ends — see Error.FlagGroupWordTail.
-					if n := flagGroupClose(src); n >= 0 {
-						p.flagTailFrom = start.Offset + int32(len("${")+n+1)
+					//
+					// The word's *first* group and no later one: what that
+					// shell quotes back runs from the first group's `)` and
+					// carries every later group in it as text, so `${(U)x}${(U)y}`
+					// is `x}${(U)y}` and never `y}`. The refusal was carried
+					// past the parse, so nothing else says a group has been
+					// seen in this word — flagGroupAt does.
+					if p.flagGroupAt == 0 {
+						p.flagGroupAt = start.Offset + 1
+						if n := flagGroupClose(src); n >= 0 {
+							// And a group whose text that shell cannot read
+							// is blamed on the token it stopped at instead.
+							if tok := flagGroupBodyRefusal(src[1:n]); tok != "" {
+								pe.Token = tok
+							} else {
+								p.flagTailFrom = start.Offset + int32(len("${")+n+1)
+							}
+						}
 					}
 					if p.dialect.FlagGroupRefusedAtExpansion {
 						// The same failure, carried past the parse instead
@@ -2722,6 +2738,17 @@ const flagGroupTailExpandable = "$`*?[(){"
 // "a b")"}` quotes the whole tail back, blank and all, and so does
 // `${(U)`printf a b`}` — which is why the scan tracks a paren depth and a
 // backtick rather than stopping at the first operator character it sees.
+// flagGroupTailStopsBeforeParen are the characters other than a name's that
+// stop a tail at a `(` written straight after them. Measured 2026-10-04 on
+// ksh93u+ 2012-08-01, `echo "${(U)x}aC(b)c"` for each C:
+//
+//	stops at the (     ] [ . / : = , ^ #
+//	reads on past it   } % ~ + * ? ! - @ $
+//
+// so `"${(S)str[(i)X]}"` is quoted back as `str[` and `${(S)w##(a|ab)}` as
+// `w##`.
+const flagGroupTailStopsBeforeParen = "[]./:=,^#"
+
 func flagGroupTailEnd(src string) int {
 	depth, tick := 0, false
 	for i := 0; i < len(src); i++ {
@@ -2743,7 +2770,7 @@ func flagGroupTailEnd(src string) int {
 			// index given as an interior one: a digit counts here, since
 			// what is being asked is whether the character before the `(`
 			// could have ended a function's name.
-			if i > 0 && isNameByte(src[i-1], 1) {
+			if i > 0 && (isNameByte(src[i-1], 1) || strings.IndexByte(flagGroupTailStopsBeforeParen, src[i-1]) >= 0) {
 				return i
 			}
 			depth++
@@ -2847,4 +2874,144 @@ func indexUnescaped(s string, c byte) int {
 		}
 	}
 	return -1
+}
+
+// flagGroupBodyRefusal is the token the dialect with no flag groups blames
+// when the text inside a group's parentheses is one it cannot read, or ""
+// where that text reads and the rest of the word is quoted back instead.
+//
+// That shell reads the parentheses after `${` as a list of commands, and
+// a word ending in `:` at the start of a command as a label that a command
+// must follow. So the refusals are the ones a list makes: an operator with
+// no command in front of it, a pipe with none after it, and a label with
+// nothing to label. Measured 2026-10-04 on ksh93u+ 2012-08-01, `echo
+// ${GROUPx}y` under `-c`:
+//
+//	(|)  (|a)  (j:|:)  (a:|b)  (a: |b)  (a.b:|c)   `|' unexpected
+//	(||a)  (j:||:)  (a:||b)                        `||' unexpected
+//	(&&a)  (a:&&b)                                 `&&' unexpected
+//	(a|;b)  (a:;b)                                 `;' unexpected
+//	(a;|b)                                         `|' unexpected
+//	()  (a|)  (a||)  (a&&)  (a:)  (a: )  (&)  (a:&)   `)' unexpected
+//
+// and the tail as before for `(a|b)`, `(a||b)`, `(a | b)`, `(:|a)`,
+// `(a:b|c)`, `(a:b:|c)`, `('a:'|b)`, `(a\:|b)`, `(x a:|b)`, `(a&b)`,
+// `(&a)`, `(a&)`, `(a:&b)`, `(a;)`, `(;)`, `(a&;)` and `(a&|b)`. A label is
+// a name, dots allowed, then the colon, at the start of a command: `a:b:`
+// is a word, and so is anything quoted.
+//
+// The shapes the table does not settle — `(;|a)` reads where `(a;|b)` does
+// not, and `&` is let through in places a pipe is not — are answered with
+// "" rather than guessed, which leaves them on the tail they had before.
+func flagGroupBodyRefusal(body string) string {
+	const (
+		atStart   = iota // nothing yet
+		afterWord        // a command has a word
+		needsCmd         // after |, || or &&
+		afterSemi        // after a ; that followed a command
+		afterAmp         // after a & that followed a command
+		startAmp         // after a & with nothing in front of it
+		label            // after a label
+	)
+	state := atStart
+	for i := 0; i < len(body); {
+		c := body[i]
+		switch c {
+		case ' ', '\t':
+			i++
+			continue
+		case '|', '&', ';':
+			op := string(c)
+			if i+1 < len(body) && body[i+1] == c && c != ';' {
+				op += string(c)
+			} else if c == ';' && i+1 < len(body) && body[i+1] == ';' {
+				return ""
+			}
+			i += len(op)
+			switch op {
+			case "|", "||", "&&":
+				switch state {
+				case afterWord:
+					state = needsCmd
+				case atStart, label, afterSemi:
+					return op
+				case needsCmd:
+					return op
+				default:
+					return ""
+				}
+			case ";":
+				switch state {
+				case afterWord:
+					state = afterSemi
+				case needsCmd, label:
+					return ";"
+				default:
+					return ""
+				}
+			case "&":
+				switch state {
+				case afterWord:
+					state = afterAmp
+				case atStart:
+					state = startAmp
+				case label:
+				default:
+					return ""
+				}
+			}
+			continue
+		}
+		// A word, up to a blank or an operator.
+		start := i
+		quoted := false
+		for i < len(body) && !strings.ContainsRune(" \t|&;", rune(body[i])) {
+			switch body[i] {
+			case '\\':
+				quoted = true
+				i++
+			case '\'', '"':
+				quoted = true
+				if j := strings.IndexByte(body[i+1:], body[i]); j >= 0 {
+					i += j + 1
+				}
+			}
+			i++
+		}
+		word := body[start:min(i, len(body))]
+		switch state {
+		case atStart, needsCmd, afterSemi, startAmp:
+			if !quoted && isFlagGroupLabel(word) {
+				state = label
+				continue
+			}
+		case label:
+			// A second label, or a word after one, is a shape the table
+			// does not hold apart from a command. Answer nothing.
+			if !quoted && isFlagGroupLabel(word) {
+				return ""
+			}
+		}
+		state = afterWord
+	}
+	switch state {
+	case atStart, needsCmd, label, startAmp:
+		return ")"
+	}
+	return ""
+}
+
+// isFlagGroupLabel reports a word that is a name, dots allowed, then a colon.
+func isFlagGroupLabel(w string) bool {
+	name, ok := strings.CutSuffix(w, ":")
+	if !ok || name == "" {
+		return false
+	}
+	for i := 0; i < len(name); i++ {
+		c := name[i]
+		if c != '.' && !isNameByte(c, i) {
+			return false
+		}
+	}
+	return true
 }

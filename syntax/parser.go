@@ -133,6 +133,11 @@ type Parser struct {
 	// is the one place that knows where the word ends. Zero when no flag
 	// group has been refused. See Error.FlagGroupWordTail.
 	flagTailFrom int32
+	// flagGroupAt is where the word's first refused flag group stands, so
+	// that a word read *inside* that word — another expansion's operand —
+	// does not spend what belongs to the word around it. Zero when there is
+	// none.
+	flagGroupAt int32
 	// refused is a failure that gives up the line being read rather than the
 	// file, held here from the moment it is raised until NextLine hands it
 	// back on the File. See File.Refused.
@@ -2966,9 +2971,47 @@ func (p *Parser) newWord(spans []Span, start, stop Pos) *Word {
 	// while reading it, so the tail lands on the error rather than on a
 	// node. Same word and same end; a different start, because that shell
 	// quotes back only what follows the group's `)`.
-	if from := p.flagTailFrom; from > 0 {
-		p.flagTailFrom = 0
-		tail := flagGroupTail(p.sourceBetween(Pos{Offset: from, Line: 1, Col: 1}, stop))
+	from, groupAt := p.flagTailFrom, p.flagGroupAt
+	if groupAt == 0 || groupAt < start.Offset || groupAt >= stop.Offset {
+		// No group, or one this word does not hold: an operand read inside
+		// the word that does leaves the word's group for it.
+		from, groupAt = 0, 0
+	} else {
+		// Spent with the word, whether its first group left a tail or not.
+		p.flagTailFrom, p.flagGroupAt = 0, 0
+	}
+	defer p.groupRefusalReadsTheRestAsText(out, groupAt)
+	if from > 0 {
+		raw := p.sourceBetween(Pos{Offset: from, Line: 1, Col: 1}, stop)
+		if strings.HasPrefix(raw, "#") {
+			// A `#` straight after the group opens a comment to that shell,
+			// which then runs off the end of the text looking for the
+			// quote or the brace the comment swallowed: `${(U)#a}` is
+			// ``syntax error at line 2: `end of file' unexpected`` for a
+			// command on line 1, and at line 4 for one on line 3 of a
+			// script, wherever the input really ends. Measured 2026-10-04 on
+			// ksh93u+ 2012-08-01, and only when the word is expanded, like
+			// every refusal of a group there.
+			for i := range out {
+				if out[i].Kind != ParamExp || out[i].Param == nil {
+					continue
+				}
+				if pe := out[i].Param.RefusedAtExpansion; pe != nil && pe.Token == "(" {
+					pe.Token = "end of file"
+					pe.Pos.Line++
+				}
+			}
+			return &Word{Spans: out, Start: start, Stop: stop}
+		}
+		if end := flagGroupTailEnd(raw); end < len(raw) && raw[end] == '(' && !p.groupIsQuoted(out) {
+			// Where the tail stops at a `(` outside double quotes, that
+			// shell blames the parenthesis itself, which is where an
+			// unquoted word may not hold one: `${(U)x:-ab(N)}` is `(`
+			// where `"${(U)x:-ab(N)}"` is `x:-ab`. Measured 2026-10-04 on
+			// ksh93u+ 2012-08-01. The `(` the refusal already names stands.
+			return &Word{Spans: out, Start: start, Stop: stop}
+		}
+		tail := flagGroupTail(raw)
 		if pe, isErr := p.err.(*Error); isErr && pe.FlagGroupWordTail == "" {
 			pe.FlagGroupWordTail = tail
 		}
@@ -2986,6 +3029,47 @@ func (p *Parser) newWord(spans []Span, start, stop Pos) *Word {
 		}
 	}
 	return &Word{Spans: out, Start: start, Stop: stop}
+}
+
+// groupIsQuoted reports whether the word's first refused flag group was
+// written inside double quotes.
+func (p *Parser) groupIsQuoted(out []Span) bool {
+	for i := range out {
+		if out[i].Kind == ParamExp && out[i].Param != nil && out[i].Param.RefusedAtExpansion != nil {
+			return out[i].Param.EnclosedInDoubleQuotes
+		}
+	}
+	return false
+}
+
+// groupRefusalReadsTheRestAsText puts the word's first refused flag group's
+// failure in place of one raised later in the same word.
+//
+// The dialect with no flag groups stops reading the word's expansions at the
+// group: what follows is the text it quotes back, so a construct further on
+// that it would refuse on its own is never reached. Measured 2026-10-04 on
+// ksh93u+ 2012-08-01: `"${(S)w##(a|ab)}${v%%(bc|cbc)}"` is refused at
+// `w##` where `"${v%%(bc|cbc)}"` alone is refused at the `(`.
+//
+// groupAt is one past where the group's `${` stands, nought for a word that
+// holds none.
+func (p *Parser) groupRefusalReadsTheRestAsText(out []Span, groupAt int32) {
+	if groupAt == 0 {
+		return
+	}
+	later, ok := p.err.(*Error)
+	if !ok || later.Pos.Offset < groupAt {
+		return
+	}
+	for i := range out {
+		if out[i].Kind != ParamExp || out[i].Param == nil {
+			continue
+		}
+		if pe := out[i].Param.RefusedAtExpansion; pe != nil && pe != later {
+			p.err = pe
+			return
+		}
+	}
 }
 
 // sourceBetween is the input between two positions, or empty where they do

@@ -66,7 +66,6 @@ param/a-substring-modifier-reads-its-own-quotes
 param/an-expansion-with-no-name-at-all
 param/padding-runs-after-the-rest-of-the-group
 param/prompt-percent-result-is-not-a-pattern
-param/the-index-of-no-match-in-a-nested-expansion-is-zero
 param/the-length-flags-count-characters-and-words
 param/the-matching-flag-elsewhere-does-nothing
 param/the-matching-flag-keeps-what-a-trim-took

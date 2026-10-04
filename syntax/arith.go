@@ -708,6 +708,17 @@ func MarkedExpansion(src string) bool {
 // question. The read has to happen either way for the tree, and the error is
 // the only part of it that was ever wrong.
 func (p *Parser) parseArithLater(src string, at Pos) ArithExpr {
+	if p.dialect.BadSubstitutionAtParseTime {
+		// The one exception to deferring: the dialect that refuses an
+		// unreadable `${...}` while reading refuses one inside an
+		// expression too, before the expression's own reading is put off.
+		// Measured 2026-10-03 on ksh93u+: `if false; then echo $(( ${a b}
+		// )); fi; echo r` is `syntax error at line 1: ` ' unexpected` and
+		// prints nothing, as `(( ${a b} ))` and `$(( ${${a}} ))` (naming
+		// `!`) are, while `$(( ${$x} ))` waits for the run like `${$x}`
+		// does outside one.
+		p.readExpansionsIn(src, at)
+	}
 	saved := p.err
 	e := p.parseArith(src, at)
 	if p.err != saved {
@@ -2592,4 +2603,59 @@ func (a *arithParser) name() (string, bool) {
 	begin := a.off
 	a.off += a.dial.nameLength(a.src[a.off:])
 	return a.src[begin:a.off], true
+}
+
+// readExpansionsIn reads every `${...}` in an expression's text the way the
+// word it would have been is read, so a refusal the dialect makes while
+// reading is made here too. What is built is thrown away: the expression is
+// still expanded and read when it runs.
+func (p *Parser) readExpansionsIn(src string, at Pos) {
+	for i := 0; i+1 < len(src) && p.err == nil; i++ {
+		switch src[i] {
+		case '\\':
+			i++
+			continue
+		case '\'':
+			if j := strings.IndexByte(src[i+1:], '\''); j >= 0 {
+				i += j + 1
+			}
+			continue
+		}
+		if src[i] != '$' || src[i+1] != '{' {
+			continue
+		}
+		end := closingBrace(src, i+2)
+		if end < 0 {
+			return
+		}
+		p.parseParamExp(src[i+2:end], at, Unquoted, false)
+		i = end
+	}
+}
+
+// closingBrace is the index of the `}` that closes a `${` whose body starts
+// at from, counting the braces of nested expansions and stepping over quoted
+// text, or -1 where nothing closes it.
+func closingBrace(src string, from int) int {
+	depth := 1
+	for i := from; i < len(src); i++ {
+		switch src[i] {
+		case '\\':
+			i++
+		case '\'':
+			j := strings.IndexByte(src[i+1:], '\'')
+			if j < 0 {
+				return -1
+			}
+			i += j + 1
+		case '{':
+			depth++
+		case '}':
+			depth--
+			if depth == 0 {
+				return i
+			}
+		}
+	}
+	return -1
 }

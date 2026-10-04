@@ -139,6 +139,15 @@ func biJobs(r *Runner, _ context.Context, args []string) int {
 	if code != 0 {
 		return code
 	}
+	// A stop this shell has just asked for is part of what the listing
+	// reports. `kill -STOP $p; jobs %1` lists the job `Stopped` in bash 5.3
+	// and ksh93 under the monitor, because the shell is told of the stop
+	// before it runs the next command; here the note comes from the
+	// goroutine waiting on the process and could still be on its way, so the
+	// listing read `Running` whenever it won the race — a row that passed
+	// and failed by the load on the machine (jobs/a-stopped-background-job-
+	// in-the-listing). The same bounded wait the way out of a script takes.
+	r.awaitExpectedStops()
 	// What `bg` let go of may have ended since the last prompt, and a listing
 	// that did not ask would report it as still running.
 	r.reapJobs()

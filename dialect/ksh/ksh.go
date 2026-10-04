@@ -2959,6 +2959,9 @@ func Semantics() interp.Semantics {
 	// precision is applied and the field is then filled with `0` rather
 	// than with blanks. See the axis for the table.
 	s.PrintfZeroFlagSurvivesAPrecision = interp.Yes
+	// The field after a second `.` is the base to write an integer in:
+	// `printf '%..2d' 5` is `101` here and a refused `.` everywhere else.
+	s.PrintfOutputBase = interp.Yes
 	// A precision on a `%c` is how many times to write it: `printf
 	// '[%.3c]' abc` is `[aaa]` here and `[a]` everywhere else.
 	s.PrintfCharPrecisionRepeats = interp.Yes

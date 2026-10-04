@@ -3439,6 +3439,11 @@ type Runner struct {
 	// field in characters" — see Semantics.PrintfLongModifierCountsCharacters.
 	// Carried here for the reason printfLostStars is.
 	printfLongModifier bool
+	// printfOutputBase is the output base the conversion just scanned wrote
+	// after a second `.` — its digits, `*` for an operand, or empty for none.
+	// Carried here for the reason printfLostStars is. See
+	// Semantics.PrintfOutputBase.
+	printfOutputBase string
 	// line is where execution currently is, for diagnostics that name it.
 	// Real shells report the line of the command that failed, so this is
 	// updated per statement rather than per token.

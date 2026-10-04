@@ -5324,6 +5324,26 @@ func sliceElems(elems []string, off int, e *syntax.ParamExpr, r *Runner) []strin
 	if off < 0 {
 		off = 0
 	}
+	if off >= len(elems) && lenWord != nil && !r.rangeRefused &&
+		r.sem().ListSliceNegativeLengthIsAnError != Yes && r.sem().SubstringNegativeLengthIsEmpty != Yes {
+		// Nothing to slice, and still the length is read and its end held to
+		// the offset in the dialect that counts a negative length from the
+		// end: measured 2026-10-03 on zsh 5.9.2, `a=(ax bx cx)` with
+		// `${a[@]:3:-1}` is `substring expression: 2 < 3` and `b=();
+		// ${b[@]:0:-1}` is `-1 < 0`, where bash and ksh93 answer empty at 0.
+		// Read rather than asked, the refusal included: the two dialects that
+		// answer otherwise have already said so on the axes above, and every
+		// other reading of an offset at the end is the empty list this
+		// returned before.
+		if n := r.numOf(lenWord, e, nil); n < 0 && !r.rangeRefused {
+			if end := len(elems) + n; end-off < 0 &&
+				r.sem().SubstringEndBehindTheStart == SubstringEndBehindStartIsRefused {
+				reportEnd, reportStart := positionalSliceBound(e, end, off)
+				r.substringEndBehindTheStart(lenWord, reportEnd, reportStart)
+			}
+		}
+		return nil
+	}
 	if off > len(elems) {
 		return nil
 	}

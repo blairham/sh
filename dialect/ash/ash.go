@@ -3382,11 +3382,19 @@ func Diagnostics() interp.Diagnostics {
 		// by what the id took, as dash does: `[1]+  7 Running` and `[1]+  126
 		// Running` both end at byte 33. The 21 is that arithmetic for a
 		// five-digit id, dash's convention for the same shape.
-		JobLineLong:     "[%[1]d]%[2]s  %[3]d %-21[4]s%[5]s",
-		JobRunning:      "Running",
-		JobDone:         "Done",
-		JobExited:       "Done(%[1]d)",
-		PrintfBadNumber: "invalid number '%[1]s'",
+		JobLineLong: "[%[1]d]%[2]s  %[3]d %-21[4]s%[5]s",
+		// A command a signal ended is reported by the words alone — no
+		// shell name, no line, no process id, no command — exactly as dash
+		// does. Measured 2026-10-03 in the pinned image: `/bin/sh -c 'kill
+		// -USR1 $$'` writes `User defined signal 1` on standard error, and
+		// `-TERM`, `-KILL` and `-HUP` write `Terminated`, `Killed` and
+		// `Hangup` the same way.
+		KilledCommandNotice:           "%[2]s",
+		KilledCommandNoticeUnprefixed: true,
+		JobRunning:                    "Running",
+		JobDone:                       "Done",
+		JobExited:                     "Done(%[1]d)",
+		PrintfBadNumber:               "invalid number '%[1]s'",
 		// And the operand is quoted back from its first non-blank byte:
 		// `printf '%d' "  7  "` is `invalid number '7  '` here, where bash
 		// and dash echo the blanks they were handed (#2905).

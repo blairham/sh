@@ -179,11 +179,6 @@ setarray/an-empty-prepend-over-a-name-that-is-not-an-array
 setarray/the-line-a-hook-installer-assigns-with
 shift/a-count-with-a-plus-sign
 shift/a-dash-zero-count
-signal/a-command-a-signal-ended
-signal/a-command-a-signal-ended-in-a-group
-signal/a-command-a-signal-ended-in-a-substitution
-signal/a-command-ended-by-a-terminate
-signal/a-pipeline-element-that-is-not-the-last
 source/a-syntax-error-quotes-the-offending-line
 special/a-bare-set-and-a-produced-parameter
 special/assigning-random-seeds-it

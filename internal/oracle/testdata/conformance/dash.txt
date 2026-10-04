@@ -3,8 +3,6 @@
 # fails on a case that fails without being listed or passes while listed.
 alias/a-reserved-word-after-an-alias-ending-in-a-blank
 alias/nested-text-expands-where-the-command-string-did-not
-alias/operands-as-patterns
-alias/the-two-kinds-are-two-namespaces
 arith/an-empty-expression-diverges
 array/a-literal-holding-an-operator-in-a-function-body
 array/a-subscript-range-on-the-left-of-a-table

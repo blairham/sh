@@ -1037,6 +1037,9 @@ func Semantics() interp.Semantics {
 	s.SetListingQuoting = interp.ListingQuoteAlwaysDoubled
 	s.AliasQuoting = interp.ListingQuoteAlwaysDoubled
 	s.AliasListingQuotesTheName = interp.No
+	// A bare listing walks the table: by bucket, then by when the name was
+	// first defined. Measured 2026-10-03; see the axis.
+	s.AliasListingWalksTheTable = interp.Yes
 	s.TrapQuoting = interp.ListingQuoteAlwaysDoubled
 	// A bare `local` in a function writes nothing.
 	// `local -` saves the `set` table, as in dash: measured 2026-09-15 in

@@ -1643,6 +1643,9 @@ func Semantics() interp.Semantics {
 	s.UnaliasAllRefusesOperands = interp.No
 	s.AliasQuoting = interp.ListingQuoteAlwaysDoubled
 	s.AliasListingQuotesTheName = interp.No
+	// A bare listing walks the table: by bucket, then by when the name was
+	// first defined. Measured 2026-10-03; see the axis.
+	s.AliasListingWalksTheTable = interp.Yes
 	s.TrapQuoting = interp.ListingQuoteAlwaysDoubled
 	s.TrapActionIsParsedWhenSet = interp.No
 	s.TrapParseFailureNamesWhereItFired = interp.No

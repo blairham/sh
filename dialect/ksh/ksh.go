@@ -580,6 +580,9 @@ func Dialect() syntax.Dialect {
 	d.TimesIsReserved = true
 	// Floating point, which POSIX has not and these two do.
 	d.ArithFloat = true
+	// An exponent letter with no digit behind it is the numeral's and says
+	// nothing: `$(( 1.e ))` is 1 and `$(( 3e+ ))` is 3.
+	d.ArithEmptyExponentIsConsumed = true
 	// And C's hexadecimal spelling of one, which this shell alone reads:
 	// `$(( 0x1p4 ))` is 16 and `$(( 0x1.8 ))` is 1.5, while `$(( 0x1e5 ))`
 	// stays the integer 485 because `e` is a hexadecimal digit.

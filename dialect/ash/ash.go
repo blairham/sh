@@ -2981,6 +2981,15 @@ func Diagnostics() interp.Diagnostics {
 		UnmatchedBraceSubst:                 "syntax error: missing '}'",
 		UnmatchedArithSubst:                 "syntax error: missing '))'",
 		BadSubstitution:                     "syntax error: bad substitution",
+		// And it is placed at the line the reader had reached rather than
+		// the line the command began on — see the field for the rows.
+		BadSubstitutionIsLocatedAtTheReader: true,
+		// `echo ${x` with the input running out at the newline after the
+		// name is a line earlier than the end of the input, as in dash:
+		// measured 2026-10-04 in the pinned image, `echo ${x⏎echo after⏎`
+		// is `line 2: syntax error: missing '}'` and `echo ${x⏎⏎⏎` is
+		// `line 3`. See UnmatchedBraceSubstDropsTheNameNewline (#5723).
+		UnmatchedBraceSubstDropsTheNameNewline: true,
 		// The bare name, which is dash's sentence and this shell's too —
 		// measured 2026-09-20, BusyBox v1.37.0 in the pinned image, `set --`
 		// implied by a script file with no operands: `echo "${@:=abc}"` is

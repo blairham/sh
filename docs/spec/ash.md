@@ -424,6 +424,26 @@ said* below and accounts for a large share of this column's wording-only
 mismatches, and a refused `-o` **name at an invocation**, which writes the
 complaint, declines to run the command string, and exits **0** (#2639).
 
+## Three lines this shell counts differently
+
+Measured 2026-10-04 in the digest-pinned image, BusyBox v1.37.0 (#5723):
+
+- **A sourced file counts from 1 on every route.** `-c` numbers its own
+  program from 0, and the offset reaches an `eval`'s text, but not a file
+  `.` reads: `ash -c '. ./inc.sh'` over a file with `nosuchcmd` on its
+  second line is `./inc.sh: line 2: nosuchcmd: not found`, as from a
+  script.
+- **A bad substitution is placed where the reader stood.** `echo
+  one⏎echo ${a[1]}⏎echo two` prints `one` and reports `line 3`: the line
+  after the one the command was read to, because a newline ended it, and
+  the last line where the input ran out. A function's report is placed at
+  its call's reader position, and a substitution body's at the command
+  holding it. `nosuch; echo ${a[1]}` on line 2 says `line 2` for the
+  `not found` and `line 3` for this, so it is this report's place and not
+  the command's.
+- **An unterminated `${x` that ran into a newline** is a line earlier than
+  the end of the input, as in dash: `echo ${x⏎echo after⏎` is `line 2`.
+
 ## A refused `set` option keeps the sign it was asked with
 
 dash writes `-` into every refusal whichever sign was asked; this shell

@@ -1676,6 +1676,17 @@ func (r *Runner) readableFile(path string) bool {
 // file become its positional parameters, it runs in a frame of its own, and
 // the RETURN trap fires as it finishes.
 func (r *Runner) runDotText(ctx context.Context, args []string, display string, b []byte) int {
+	// A sourced file numbers its lines from one whatever route the shell
+	// itself was started by. The command string's origin of zero is the
+	// route's, and it reaches `eval`'s borrowed text but not a file: measured
+	// 2026-10-04 in the pinned image, `ash -c '. ./inc.sh'` over a file with
+	// `nosuchcmd` on its second line is `./inc.sh: line 2: nosuchcmd: not
+	// found`, exactly as `ash m.sh` sourcing the same file says, where the
+	// same command written into the command string is located on line 1.
+	// See Runner.lineOrigin (#5723).
+	savedOrigin := r.lineOrigin
+	r.lineOrigin = 0
+	defer func() { r.lineOrigin = savedOrigin }()
 	// Whether the caller's parameters come back, which is not settled until
 	// the file has run: one dialect lets a `set` the file ran itself stand.
 	// See Semantics.DotSetCancelsTheRestore, asked at the bottom of this

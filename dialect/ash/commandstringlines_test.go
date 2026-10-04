@@ -74,6 +74,12 @@ func TestACommandStringIsNumberedFromZero(t *testing.T) {
 			"the offset survives into text that resets the *other* offset — an `eval`'s " +
 				"program is line 1 of itself, and it is still written as 0 here",
 		},
+		{
+			"a sourced file",
+			"printf 'echo one\\nnosuchcmd\\n' > inc.sh\n. ./inc.sh\n", "./inc.sh: line 2: nosuchcmd: not found",
+			"and not into a file: `ash -c '. ./inc.sh'` numbers the file from 1, as a script " +
+				"sourcing it does (#5723)",
+		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			if out := runCommandString(t, tc.src); !strings.Contains(out, tc.want) {

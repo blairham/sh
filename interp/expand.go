@@ -3593,6 +3593,13 @@ func (r *Runner) reportBadSubstitution(e *syntax.ParamExpr) {
 	if w == "" {
 		w = r.diag().BadSubstitution
 	}
+	if r.diag().BadSubstitutionIsLocatedAtTheReader && r.readerStoodAt > 0 && !r.runText.borrowed {
+		// Placed where the reader stood rather than where the command
+		// began. See Diagnostics.BadSubstitutionIsLocatedAtTheReader.
+		saved := r.line
+		r.line = r.readerStoodAt
+		defer func() { r.line = saved }()
+	}
 	r.diagf("%s\n", Wording(w, "${%[1]s}: bad substitution", r.badSubstitutionSubject(e)))
 	if e.BadTransform {
 		// The family exists here and only the letter was wrong, which makes

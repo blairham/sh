@@ -6637,6 +6637,23 @@ type Diagnostics struct {
 	// `${x@j}: bad substitution` when reached. Empty falls back to
 	// BadSubstitution, which is a runtime wording everywhere else.
 	BadSubstitutionAtRun string
+	// BadSubstitutionIsLocatedAtTheReader places the run-time report at the
+	// line the reader had reached when it handed over the command being run
+	// at the top of the script, rather than at the line the command began
+	// on: the line after it when a newline ended what was read, and the last
+	// line where the input ran out. A function body's report is placed at
+	// the line its *call* was read to, and so is a substitution's.
+	//
+	// BusyBox ash alone. Measured 2026-10-04 in the pinned image over script
+	// files, each failing on `${a[1]}`: `echo one⏎echo ${a[1]}⏎echo two`
+	// prints `one` and is `line 3`; the same with no newline after the last
+	// line is the last line; `if true; then⏎ echo ${a[1]}⏎fi⏎` is `line 4`;
+	// a body `f() { echo ${a[1]}; }` on line 1 called from line 3 is `line
+	// 4`; `x=$(echo ${a[1]})⏎:` is `line 2`; and `nosuch; echo ${a[1]}` on
+	// line 2 writes `line 2: nosuch: not found` and then `line 3` for this
+	// one, which is the control that says it is this report's own place and
+	// not the command's (#5723).
+	BadSubstitutionIsLocatedAtTheReader bool
 	// BadSubstitutionNames is what the verb above is filled with. The
 	// default names the expansion; two dialects name the *word* it sits in
 	// and do not agree on how much of a word counts, which is why this is

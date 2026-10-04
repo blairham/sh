@@ -1741,6 +1741,10 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) (endSt
 	}
 
 	if len(args) == 0 && !f.tie {
+		f = r.plusLettersSelectNothing(name, f)
+		if r.unspecified {
+			return r.status
+		}
 		if code, answered := r.declarationListing(f); answered {
 			return code
 		}
@@ -7157,4 +7161,58 @@ func (r *Runner) arrayLetterMakesTheWordAName(word string) bool {
 		return false
 	}
 	return r.ask(r.sem().ArrayLetterMakesItsWordAName, "an option word carrying more behind its `a` read as a name")
+}
+
+// plusLettersSelectNothing is a listing's letters with every letter written
+// under a plus taken out, where the dialect says such a letter selects
+// nothing. f is returned unchanged where no letter carries a plus, which is
+// the only place the question is asked.
+//
+// Measured 2026-10-03 with `qa=1; export qb=2; typeset -i qc=3` and the
+// listing filtered to those names:
+//
+//	                 bash 5.3.20            zsh 5.9.2   ksh93u+
+//	typeset +x       qa=1 qb=2 qc=3         qb          qb
+//	typeset +xi      qa=1 qb=2 qc=3         qb qc
+//	typeset +x -i    declare -i qc="3"      qb qc       (nothing)
+//	typeset -x       declare -x qb="2"
+//
+// So in bash a plus letter does not select at all — every one measured, `+i`
+// `+r` `+a` `+A` `+l` `+u` `+n` `+t` `+I` and `+c`, writes the bare listing
+// — and the minus letters beside it select exactly as they would alone.
+// zsh and ksh93 read the plus letter as a filter, and disagree about how it
+// combines with a minus one; that is not this question.
+func (r *Runner) plusLettersSelectNothing(name string, f declareFlags) declareFlags {
+	if !strings.ContainsRune(f.letterSigns, '+') {
+		return f
+	}
+	if r.ask(r.sem().PlusLetterSelectsAListing, "a plus-signed letter selecting what a listing writes") {
+		return f
+	}
+	if r.unspecified {
+		return f
+	}
+	// The print letter is kept under either sign: it says how the listing is
+	// written, not which names are in it, and `typeset +p` and `typeset +x
+	// +p` are both `-p`'s whole listing there.
+	var minus strings.Builder
+	i := 0
+	for _, c := range f.letters {
+		if c == 'p' || (i < len(f.letterSigns) && f.letterSigns[i] == '-') {
+			minus.WriteRune(c)
+		}
+		i++
+	}
+	if minus.Len() == 0 {
+		return declareFlags{}
+	}
+	known := r.sem().DeclareOptions
+	if known == "" {
+		known = declareOptionLetters
+	}
+	_, g, code := r.parseDeclareFlags(name, []string{"-" + minus.String()}, known)
+	if code != 0 {
+		return f
+	}
+	return g
 }

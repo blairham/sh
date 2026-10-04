@@ -2717,6 +2717,24 @@ narrower than the line, and each part of it was measured:
   `readonly` store the global. `export -Ui q=(1+1)` is `-ai` although `export`
   takes no `i`.
 
+## An option word with more behind its `a` is a name in ksh93
+
+Measured 2026-10-03, `-c`:
+
+| line | ksh93u+ | bash 5.3.20, zsh 5.9.2 |
+| --- | --- | --- |
+| `typeset -ai q=(1 2)` | `typeset: -ai: invalid variable name`, script ends | the two letters |
+| `typeset -iaU q` | `typeset: -iaU: invalid variable name` | (`U` is zsh's) |
+| `typeset -aL 3 q=(1 2)` | `typeset: -aL: invalid variable name` | |
+| `typeset -ia q=(1 2)` | `typeset -a -i q=(1 2)`, 0 | the two letters |
+| `typeset -a -U q` | `-U: unknown option` | |
+
+So in ksh93 a minus word whose `a` has anything behind it — another letter, a
+digit, a dash — is not an option word: it is the first operand, refused as a
+name like any other, letters in front of the `a` included. The `a` written last
+in its word, or in a word of its own, is the letter.
+`Semantics.ArrayLetterMakesItsWordAName`.
+
 ## `--` stands in two places in `kill`, and only one of them is common
 
 Split out of #2145's measurement and filed as #3817, whose title said `--` is

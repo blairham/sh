@@ -15340,6 +15340,22 @@ type Semantics struct {
 	// refusal has happened, so a shell with no `typeset` never meets it.
 	TypesetBadOptionFatal Answer
 
+	// ArrayLetterMakesItsWordAName reads a declaration's option word whose
+	// `a` letter has more written behind it — `-aU`, `-ai`, `-iaL` — as the
+	// first operand rather than as letters, so the operand check refuses it
+	// as a name.
+	//
+	// Measured 2026-10-03: ksh93u+ answers `typeset -ai q=(1 2)` with
+	// `typeset: -ai: invalid variable name` and ends the script, and takes
+	// `typeset -ia q=(1 2)`; bash 5.3.20 and zsh 5.9.2 read both as the two
+	// letters. See Runner.arrayLetterMakesTheWordAName.
+	//
+	// unpinned dash: there is no `typeset`, so the question cannot be put;
+	// the preset's No is the reading that invents nothing.
+	//
+	// unpinned ash: the same as dash.
+	ArrayLetterMakesItsWordAName Answer
+
 	// RefusedDeclarationKeepsItsArrayLiterals declares and stores a
 	// declaration's array-literal operands although one of its letters was
 	// refused, with the letters the line could read.
@@ -32218,6 +32234,8 @@ func PosixSemantics() Semantics {
 		BareDeclarationListing: DeclareListingCommandWord,
 		BareLocalListing:       BareLocalListsNothing,
 		TypesetBadOptionFatal:  No,
+		// POSIX has no `typeset`, so no option word carries an `a`.
+		ArrayLetterMakesItsWordAName: No,
 		// POSIX has no array literal, so a refused letter has nothing
 		// behind it to keep.
 		RefusedDeclarationKeepsItsArrayLiterals: No,
@@ -32855,6 +32873,12 @@ func PosixSemantics() Semantics {
 // line rather than one per axis.
 func CoreSemantics() Semantics {
 	return Semantics{
+		// `-ai` is the two letters, which is what this package did before the
+		// axis existed and what two of the three columns with the builtin
+		// answer. Answered here because the question is put to every `-ai`,
+		// and a substrate refusing `declare -ai` would refuse a common line.
+		// See Semantics.ArrayLetterMakesItsWordAName.
+		ArrayLetterMakesItsWordAName: No,
 		// A `..` is canceled unseen, which is what this package did before
 		// the axis existed. Answered here rather than left to refuse because
 		// the question is put to every `cd` whose operand holds a `..` — a

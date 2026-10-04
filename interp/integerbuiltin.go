@@ -331,11 +331,16 @@ func groupDigits(s string, group int) string {
 //
 // 0 when the text names none, which is every text in the dialect that does
 // not learn.
+//
+// A bare `0x` with no digits after it names sixteen as squarely as `16#`
+// does: measured 2026-10-03 on zsh 5.9.2, `typeset -i b; b=0x` reads back
+// `16#0` and `typeset -p` lists `typeset -i16 b=0`, as `b=16#` already did
+// here.
 func integerBaseOfLiteral(text string) int {
 	text = strings.TrimSpace(text)
 	text = strings.TrimPrefix(text, "-")
 	text = strings.TrimPrefix(text, "+")
-	if len(text) > 2 && text[0] == '0' && (text[1] == 'x' || text[1] == 'X') {
+	if len(text) >= 2 && text[0] == '0' && (text[1] == 'x' || text[1] == 'X') {
 		return 16
 	}
 	if at := strings.IndexByte(text, '#'); at > 0 && isAllDigits(text[:at]) {

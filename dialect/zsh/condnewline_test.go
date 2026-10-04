@@ -33,11 +33,18 @@ func TestATermsFirstWordMayEndItsLineHere(t *testing.T) {
 			t.Errorf("parse %q: %v", src, err)
 		}
 	}
-	// And not around a binary operator, which this shell refuses too: the
-	// flag is about a term with no verdict, not about newlines.
+	// And on either side of a binary operator, which this shell takes too.
+	// This used to assert a refusal for both, against the measurement the
+	// flag's own table records; re-measured 2026-10-03 on zsh 5.9.2,
+	// `[[ y` ⏎ `== y ]]` and `[[ y ==` ⏎ `y ]]` both hold and the `z`
+	// spellings are both 1. See syntax.Dialect.ConditionNewlineMayPrecedeAnOperand.
 	for _, src := range []string{"[[ y\n== z ]]\n", "[[ y ==\nz ]]\n"} {
-		if _, err := syntax.Parse(src, d.On(syntax.RouteFromScriptFile)); err == nil {
-			t.Errorf("%q parsed, want a refusal", src)
+		if _, err := syntax.Parse(src, d.On(syntax.RouteFromScriptFile)); err != nil {
+			t.Errorf("parse %q: %v", src, err)
 		}
+	}
+	// What it does not do is join two words into a term.
+	if _, err := syntax.Parse("[[ a\nb ]]\n", d.On(syntax.RouteFromScriptFile)); err == nil {
+		t.Error(`"[[ a\nb ]]" parsed, want a refusal`)
 	}
 }

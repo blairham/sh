@@ -3318,6 +3318,11 @@ type Runner struct {
 	// the environment where it arrived, and re-deciding per chunk would stat
 	// it again on every line a person types. See settleInheritedOldpwd.
 	oldpwdSettled bool
+
+	// leftDirectory is the directory the last successful `cd` left, which one
+	// dialect's `cd -` reads instead of OLDPWD. See
+	// Semantics.CdDashFollowsTheShellsOwnRecord.
+	leftDirectory string
 	// bg is set on the runner *inside* a background job, so the process it
 	// starts can be recorded against the job.
 	bg *Job
@@ -5165,6 +5170,11 @@ type Runner struct {
 	// failure and is running to its end before the line is abandoned. See
 	// Semantics.ConditionFinishesAfterAnArithmeticError.
 	condFinishing bool
+
+	// finishedConditionAbandoned says the line being abandoned was ended by
+	// such a condition, which one dialect's `&&` reads. See
+	// Semantics.AndAfterAFinishedConditionFails.
+	finishedConditionAbandoned bool
 	// localKeepsOuter is the names whose valueless local holds the outer
 	// value. Written at setup and never again, so a subshell shares it. See
 	// MarkLocalKeepsTheOuterValue.
@@ -7560,6 +7570,14 @@ func (r *Runner) expr(ctx context.Context, e syntax.Expr) error {
 		r.tested--
 		if err != nil {
 			return err
+		}
+		if x.Op == syntax.TokAndAnd && r.status == 0 && r.finishedConditionAbandoned &&
+			r.ctl == controlExit && r.abandon == abandonError &&
+			r.ask(r.sem().AndAfterAFinishedConditionFails,
+				"an `&&` behind a `[[ ]]` that ran to its end after its arithmetic failed") {
+			// See Semantics.AndAfterAFinishedConditionFails.
+			r.status = 1
+			return nil
 		}
 		// && runs the right side when the left succeeded, || when it failed.
 		// Both are one level and left-associative, which the tree already

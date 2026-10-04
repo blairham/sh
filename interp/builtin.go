@@ -451,6 +451,10 @@ func biReturn(r *Runner, _ context.Context, args []string) int {
 	operand, haveOperand := 0, false
 	if len(args) > 0 {
 		switch n, ok := r.statusOperand("return", args[0]); {
+		case ok && r.ctl == controlExit:
+			// The operand's arithmetic failed and ended the line, at the
+			// status that set. See Semantics.ReturnOperandArithmeticErrorIsFatal.
+			return r.status
 		case ok:
 			if st, done := r.extraNumericOperands("return", args); done {
 				return st
@@ -640,7 +644,7 @@ func (r *Runner) statusOperand(builtin, arg string) (int, bool) {
 	case StatusArgLeadingDigits:
 		return mask8(leadingDecimal(arg)), true
 	case StatusArgArithmetic:
-		return r.arithmeticStatusOperand(arg)
+		return r.arithmeticStatusOperand(builtin, arg)
 	}
 	// No dialect answered. statusArgument has already reported it and set
 	// r.unspecified, which is what the callers read to tell this apart from
@@ -660,10 +664,15 @@ func (r *Runner) statusOperand(builtin, arg string) (int, bool) {
 // empty expression already evaluates to 0 through this same reader, which is
 // what `$(( ))` is. One was written here anyway, and a mutation run showed it
 // was dead — disabling it changed nothing.
-func (r *Runner) arithmeticStatusOperand(expr string) (int, bool) {
+func (r *Runner) arithmeticStatusOperand(builtin, expr string) (int, bool) {
 	tree, perr := r.arithTree(nil, expr)
 	if perr != nil {
-		r.diagf("%s\n", r.diag().ParseFailure(perr))
+		// Without the builtin in the location, which is how this dialect
+		// reports every math failure a builtin meets: `f(){ return 3abc; }`
+		// is `f: bad math expression: …`, not `f:return: …`. Measured
+		// 2026-10-03 on zsh 5.9.2, and `exit 3abc` the same.
+		r.arithDiagf("%s\n", r.diag().ParseFailure(perr))
+		r.abandonOverAStatusOperand(builtin)
 		// Reported as a math error rather than as a refused operand, and 0
 		// is what the shell exits with after one: `exit 3abc` complains and
 		// leaves 0. Returning ok here keeps the numeric-argument wording —
@@ -680,10 +689,25 @@ func (r *Runner) arithmeticStatusOperand(expr string) (int, bool) {
 		return 0, false
 	}
 	if err != nil {
-		r.diagf("%v\n", err)
+		r.arithDiagf("%v\n", err)
+		r.abandonOverAStatusOperand(builtin)
 		return 0, true
 	}
 	return v, true
+}
+
+// abandonOverAStatusOperand ends the line over a `return` operand whose
+// arithmetic failed, in the dialect where that failure is fatal, at the status
+// an abandoned line leaves on this route. See
+// Semantics.ReturnOperandArithmeticErrorIsFatal.
+func (r *Runner) abandonOverAStatusOperand(builtin string) {
+	if builtin != "return" ||
+		!r.ask(r.sem().ReturnOperandArithmeticErrorIsFatal,
+			"a `return` operand whose arithmetic failed ending the line") {
+		return
+	}
+	r.status = r.statusAfterAFinishedCondition(true)
+	r.abandonOverArithmetic()
 }
 
 // mask8 is the eight bits a status can carry.
@@ -2696,6 +2720,14 @@ func (r *Runner) unsetOnlyRefusingReadonly(names []string) int {
 }
 
 func (r *Runner) unsetWithoutOperands(name string) int {
+	if d := r.diag(); d.UnsetNoOperandsIsAUsageError {
+		// See Diagnostics.UnsetNoOperandsIsAUsageError.
+		r.builtinUsageLine(name)
+		if r.badOptionEndsTheScript(name) {
+			r.fatalUsageQuiet()
+		}
+		return orDefault(d.BuiltinBadOptionStatus, 2)
+	}
 	wording := r.diag().UnsetNoOperands
 	if wording == "" {
 		return 0
@@ -5746,6 +5778,7 @@ func biCd(r *Runner, ctx context.Context, args []string) int {
 	}
 	r.holdDirectory()
 	r.setVar("OLDPWD", old)
+	r.leftDirectory = old
 	r.setVar("PWD", dir)
 	// The directory just left, pushed for the one shell whose `cd` does
 	// that — see Semantics.CdPushesTheDirectoryItLeaves, which is zsh's
@@ -5952,7 +5985,7 @@ func (r *Runner) cdDestination(args []string, old string) (dir string, dash bool
 	case "-":
 		// The previous directory, which is why cd records one.
 		dash = true
-		dir, _ = r.getVar("OLDPWD")
+		dir = r.previousDirectory()
 		if dir == "" {
 			if code, stop := r.cdNowhere(r.diag().CdOldpwdNotSet, "cd: OLDPWD not set"); stop {
 				return "", true, code, true
@@ -5964,6 +5997,21 @@ func (r *Runner) cdDestination(args []string, old string) (dir string, dash bool
 		}
 	}
 	return dir, dash, 0, false
+}
+
+// previousDirectory is where `cd -` and `~-` go: the OLDPWD parameter, or the
+// directory this shell last left where the dialect keeps a record of its own
+// rather than reading the parameter. See
+// Semantics.CdDashFollowsTheShellsOwnRecord.
+func (r *Runner) previousDirectory() string {
+	if r.sem().CdDashFollowsTheShellsOwnRecord == Yes {
+		if r.leftDirectory != "" {
+			return r.leftDirectory
+		}
+		return r.workDir()
+	}
+	dir, _ := r.getVar("OLDPWD")
+	return dir
 }
 
 // cdHome is `cd` with no operand at all.

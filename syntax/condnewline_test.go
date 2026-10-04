@@ -131,7 +131,7 @@ func TestWhetherATermsFirstWordMayEndItsLine(t *testing.T) {
 		src string
 		// Refused under the flag as well, which is what says the flag
 		// reaches this position and not newlines in a condition generally:
-		// an operator with no operand behind it, and input that ran out.
+		// input that ran out.
 		refusedEitherWay bool
 	}{
 		{"[[ y\n]]", false},
@@ -139,7 +139,11 @@ func TestWhetherATermsFirstWordMayEndItsLine(t *testing.T) {
 		{"[[ y\n|| -n z ]]", false},
 		{"[[ ( y\n) ]]", false},
 		{"[[ -n x && y\n]]", false},
-		{"[[ y\n== z ]]", true},
+		// The operator on the next line is taken too, as the comment above
+		// has always said: this row used to be marked refused, against that
+		// measurement, and re-measured 2026-10-03 `[[ y` ⏎ `== y ]]` holds
+		// in zsh 5.9.2.
+		{"[[ y\n== z ]]", false},
 		{"[[ y\n", true},
 	} {
 		for _, may := range []bool{false, true} {

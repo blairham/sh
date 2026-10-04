@@ -1489,6 +1489,9 @@ func Semantics() interp.Semantics {
 	s.CdHasSymlinkFreeOption = interp.No
 	s.CdLastPathOptionWins = interp.Yes
 	s.CdDashPrintsTheDirectory = interp.Yes
+	// `cd -` reads the OLDPWD parameter: `cd /; OLDPWD=/usr; cd -` goes to
+	// /usr. Measured 2026-10-03.
+	s.CdDashFollowsTheShellsOwnRecord = interp.No
 	// BusyBox ash refuses, as dash does. Measured 2026-09-26 in the pinned
 	// alpine digest, BusyBox v1.37.0: with `d` renamed to `e`, `cd .` writes
 	// `cd: line 0: can't cd to .: No such file or directory` and exits 2,

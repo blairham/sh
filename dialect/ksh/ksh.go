@@ -3157,6 +3157,9 @@ func Semantics() interp.Semantics {
 	s.StartupFillsAnAbsentHome = interp.No
 	s.CdRemembersAHomeThatWasUnset = interp.No
 	s.CdDashPrintsTheDirectory = interp.Yes
+	// `cd -` reads the OLDPWD parameter: `cd /; OLDPWD=/usr; cd -` goes to
+	// /usr. Measured 2026-10-03.
+	s.CdDashFollowsTheShellsOwnRecord = interp.No
 	// ksh93 moves and then keeps the name it had already built. Measured
 	// 2026-09-26 on /bin/ksh (AT&T 93u+): with `d` renamed to `e`, `cd .` is
 	// 0 and `$PWD` stays `…/d`, `cd s` is 0 and `$PWD` reads `…/d/s` — and
@@ -4702,12 +4705,22 @@ func Diagnostics() interp.Diagnostics {
 		// `ksh -c` with nothing behind it, which is the panel's one
 		// spelling without the article. Measured 2026-09-22 on ksh93u+.
 		InvocationMissingOptionArgument: "%[1]s requires argument",
-		ScriptNotFoundStatus:            127,
-		ScriptNotReadable:               "%[1]s: cannot open [%[2]s]",
-		ScriptNotReadableStatus:         126,
-		Location:                        interp.LocationLineWordAfterFirst,
-		TraceQuoting:                    interp.QuoteDollar,
-		TraceEscape:                     interp.TraceEscapeHex,
+		// A `=~` pattern that will not compile is a match that did not
+		// happen, at 1, and nothing is said: `[`, `(`, `a{1`, a trailing
+		// backslash, `a{2,1}`, `[[:foo:]]`, `*a` and `+` all measured
+		// 2026-10-03 on 93u+. See interp.Diagnostics.InvalidRegexSaysNothing.
+		InvalidRegexStatus:      1,
+		InvalidRegexSaysNothing: true,
+		// `unset` with nothing to unset is its usage line, at 2, and ends the
+		// script. Measured 2026-10-03 on 93u+. See
+		// interp.Diagnostics.UnsetNoOperandsIsAUsageError.
+		UnsetNoOperandsIsAUsageError: true,
+		ScriptNotFoundStatus:         127,
+		ScriptNotReadable:            "%[1]s: cannot open [%[2]s]",
+		ScriptNotReadableStatus:      126,
+		Location:                     interp.LocationLineWordAfterFirst,
+		TraceQuoting:                 interp.QuoteDollar,
+		TraceEscape:                  interp.TraceEscapeHex,
 		// The tilde and the hash count anywhere here rather than only at the
 		// front, `=` counts only at the front, and `^` and `!` do not count
 		// at all — three splits from bash in one set. Measured 2026-09-12.

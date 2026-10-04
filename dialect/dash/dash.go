@@ -1498,6 +1498,9 @@ func Semantics() interp.Semantics {
 	// existed. See Semantics.CdRemembersAHomeThatWasUnset.
 	s.CdRemembersAHomeThatWasUnset = interp.No
 	s.CdDashPrintsTheDirectory = interp.Yes
+	// `cd -` reads the OLDPWD parameter: `cd /; OLDPWD=/usr; cd -` goes to
+	// /usr. Measured 2026-10-03.
+	s.CdDashFollowsTheShellsOwnRecord = interp.No
 	// dash refuses. Measured 2026-09-26 on /bin/dash: with `d` renamed to
 	// `e`, `cd .` writes `cd: can't cd to .` and exits 2, and so does `cd s`.
 	// Its *children* still run in `e` and its own `pwd -P` still prints `…/e`,

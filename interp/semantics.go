@@ -7097,6 +7097,23 @@ type Semantics struct {
 	// True in bash, dash and ksh93; zsh alone is silent.
 	CdDashPrintsTheDirectory Answer
 
+	// CdDashFollowsTheShellsOwnRecord takes `cd -`, and `~-`, from the
+	// directory the shell itself last left rather than from the OLDPWD
+	// parameter, so an assignment to the parameter moves neither.
+	//
+	// zsh alone. Measured 2026-10-03, starting in a directory D:
+	//
+	//	cd /; OLDPWD=/usr; cd -          zsh: D            the rest: /usr
+	//	cd /; OLDPWD=/x; cd -            zsh: D at 0       the rest: /x refused
+	//	cd /; unset OLDPWD; cd -         zsh: D            bash: OLDPWD not set
+	//	cd /; OLDPWD=/usr; echo ~-       zsh: D            bash: /usr
+	//
+	// bash 5.3.20, dash, ksh93u+ and BusyBox ash read the parameter, which
+	// is POSIX's text for `cd -`. Before any `cd` the record is the
+	// directory the shell started in, which is what zsh's own OLDPWD starts
+	// as too (InheritedOldpwdIgnored).
+	CdDashFollowsTheShellsOwnRecord Answer
+
 	// PrintfReportsBadNumber complains when a numeric conversion is given
 	// something that is not a number. True in bash — all three builds —
 	// dash and BusyBox ash, false in ksh93 and zsh — and all five print the
@@ -9343,6 +9360,46 @@ type Semantics struct {
 	// Asked only on the failure path, and only where
 	// ConditionArithmeticErrorIsFatal says the failure ends the input.
 	ConditionFinishesAfterAnArithmeticError Answer
+
+	// AndAfterAFinishedConditionFails ends the line at 1 when the left side
+	// of an `&&` is a `[[ ]]` that ran to its end after its arithmetic
+	// failed and came to 0 — the status ConditionFinishesAfterAnArithmeticError
+	// leaves a command string at — rather than at that 0.
+	//
+	// Measured 2026-10-03 on zsh 5.9.2 under `-c`, each row writing the
+	// complaint and nothing else, with `X` for `[[ 1/0 -eq 1 ]]`:
+	//
+	//	X                              0
+	//	X && :      X && : && :        1
+	//	X || :      X; :               0
+	//	{ X && :; }   f() { X && :; }; f   1
+	//	if X; then :; fi               0
+	//
+	// So it is the `&&` that would have gone on and did not, and it is not
+	// the sequence or the `||`. The comparison's own answer does not enter
+	// into it — `[[ 1/0 -eq 0 ]] && :` is 1 as well. A loop around the
+	// condition is 1 too (`for i in 1; do X; done`, `while X; do …`), which
+	// is measured and not modeled here.
+	//
+	// Asked only on that path: an abandoned line at 0 behind an `&&`.
+	AndAfterAFinishedConditionFails Answer
+
+	// ReturnOperandArithmeticErrorIsFatal ends the line — not only the
+	// function — when the operand of `return` is an arithmetic expression
+	// that fails, in the dialect whose StatusArgument reads it as one.
+	//
+	// Measured 2026-10-03 on zsh 5.9.2, `f(){ return 3abc; }; f; echo
+	// "st=$?"`: the complaint and nothing after it, exiting 0 under `-c`
+	// and 1 from a script file — the same split a `[[ ]]` that ran to its
+	// end leaves, see Runner.statusAfterAFinishedCondition — and a subshell
+	// around the call ends at 0 and the line after it runs. `(( 3abc ))` and
+	// `let 3abc` in the same place report and go on, so it is the operand
+	// and not the arithmetic.
+	//
+	// Asked only where it decides something: a `return` whose operand was
+	// read as arithmetic and failed. No other column reads it that way, so
+	// No in each of them stands for "never reached".
+	ReturnOperandArithmeticErrorIsFatal Answer
 
 	// ArithCommandErrorStatusIsTwo is what `(( expr ))` leaves behind when
 	// the expression could not be evaluated: 2 where this is Yes, 1 where it
@@ -21846,8 +21903,11 @@ type Semantics struct {
 	// consults this and no row can observe it moving.
 	// unpinned dash: as bash — nothing catches, so nothing asks.
 	// unpinned ash: as bash — nothing catches, so nothing asks.
-	// unpinned zsh: reached, and the shell has no fatal usage error for a
-	// row to raise inside an `eval`, for the reason above.
+	// zsh answers No and moves to Yes under `posixbuiltins`, which is the one
+	// route where it has a fatal usage error to raise inside an `eval` at all:
+	// `( eval 'set -Z'; echo alive )` writes `alive` without the option and
+	// ends at 1 under it, measured 2026-10-03, and that is
+	// `cmd/posixbuiltins-does-not-bound-a-fatal-error-raised-inside`.
 	// TestAUsageErrorEscapesBorrowedTextWhereTheDialectSaysSo pins it in Go,
 	// both ways, and share/suite/ksh/evaldot.tests grades the ksh93 half
 	// against the shell itself.
@@ -31719,6 +31779,12 @@ func PosixSemantics() Semantics {
 		ConditionArithmeticErrorIsFatal: No,
 		// And with nothing fatal there is nothing to finish before.
 		ConditionFinishesAfterAnArithmeticError: No,
+		// Unreachable behind the No above, which is what every shell but
+		// one answers: no condition runs to its end after a failure.
+		AndAfterAFinishedConditionFails: No,
+		// Unreachable for the same kind of reason: only an arithmetic
+		// status operand can fail this way, and POSIX's is digits.
+		ReturnOperandArithmeticErrorIsFatal: No,
 		// The standard has no `(( ))` at all, so nothing here is POSIX's to
 		// say; 1 is what the shells that do have it say, bar one.
 		ArithCommandErrorStatusIsTwo: No,

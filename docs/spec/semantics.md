@@ -3336,6 +3336,40 @@ holds. zsh refuses nothing either, but for the opposite reason — the
 operand is an **arithmetic expression** there, so `return r` is the value
 of `r` and `return r+1` is one more.
 
+**zsh's arithmetic failure in the operand of `return` ends the line**, not
+only the call: `f(){ return 3abc; }; f; echo "st=$?"` writes `f: bad math
+expression: operator expected at `abc'` — the function's name and not the
+builtin's — and nothing after it, exiting 0 under `-c` and 1 from a script
+file, which is the split an abandoned line already has. `(( 3abc ))` and
+`let 3abc` in the same place report and go on. Measured 2026-10-03;
+`ReturnOperandArithmeticErrorIsFatal`.
+
+**And a `[[ ]]` that ran to its end leaves an `&&` behind it at 1.** `[[ 1/0
+-eq 1 ]]` exits a `-c` string at 0 (ConditionFinishesAfterAnArithmeticError),
+and `[[ 1/0 -eq 1 ]] && :` at 1, while `|| :`, `; :` and `if … then` leave
+the 0. Measured 2026-10-03 on zsh 5.9.2; `AndAfterAFinishedConditionFails`.
+A loop around the condition is 1 too, measured and not modeled.
+
+**zsh's `cd -` goes where the shell last was, not where OLDPWD says.** `cd
+/; OLDPWD=/usr; cd -` goes back to the starting directory, `cd /; OLDPWD=/x;
+cd -` does the same at 0, and `~-` reads the same record; bash, dash, ksh93
+and ash read the parameter, which is POSIX's text. Measured 2026-10-03;
+`CdDashFollowsTheShellsOwnRecord`. And zsh's `cd -s` takes the operand's own
+`..` pairs out before it looks for a link: `cd -s link/../real` moves where
+`cd -s real/../link` is refused.
+
+**Under `posixbuiltins` an `eval` or a `.` stops catching an error about how
+a special builtin was called** in zsh: `( eval 'set -Z'; echo alive )`, `eval
+'. /no/x'` and `eval 'exec 3</no/x'` end the subshell at 1 with the option and
+write `alive` without it, while a division by zero or a readonly assignment
+there is caught either way. Measured 2026-10-03; the option moves
+`BuiltinUsageErrorEscapesBorrowedText`.
+
+**A `$` in arithmetic text that was already expanded is the process id** in
+zsh, with a name behind it or not: `k='$i'; echo $(( $k ))` and `[[ $k -eq 7
+]]` are both `operator expected at `i'`. Measured 2026-10-03; the parser
+reads it under `ArithSpecialParameterOperands`.
+
 Four behaviors on a line rather than two sides, so `StatusArgument` is a
 policy with four values — the shape `UnterminatedBracket` established,
 used a second time without argument.

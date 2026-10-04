@@ -26,7 +26,6 @@ cmd/a-function-name-may-hold-an-expansion
 cmd/an-expanded-function-name-is-fixed-at-the-definition
 commands/a-write-to-a-coprocess-that-has-ended-notices-it
 commands/an-and-or-with-a-terminator-after-it
-cond/regex-that-will-not-compile
 core/a-bare-brace-in-a-nested-quoted-operand
 core/a-bare-brace-inside-a-quoted-expansion
 core/a-refused-older-body-leaves-an-empty-field
@@ -51,7 +50,6 @@ expand/tilde-with-no-home-at-all
 expansion/element-set-difference-and-intersection
 expansion/element-set-operators-against-an-unset-name
 fc/with-no-history
-functions/nothing-to-unset-however-it-is-spelled
 hash/a-subshell-keeps-its-own-entries
 help/a-bad-option-to-umask-is-named-the-way-the-dialect-names-one
 help/the-help-option-comes-before-what-the-builtin-cannot-do
@@ -103,7 +101,6 @@ pat/an-extended-flag-against-the-filesystem
 pat/the-tilde-flag-in-a-group-decides-snippet-from-plugin
 pat/the-walk-reports-no-match
 pipe/both-streams-takes-no-blank-between-its-two-bytes
-print/a-dash-inside-a-bundle-is-an-inert-letter
 printf/non-finite-is-spelled-c-s-way
 printf/quoted-operand-is-a-character-value
 procsub/a-file-substitution-lives-as-long-as-its-command

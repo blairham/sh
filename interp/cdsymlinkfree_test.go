@@ -4,6 +4,8 @@
 package interp_test
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -39,24 +41,40 @@ func TestCdSymlinkFreeRefusesALinkedOperand(t *testing.T) {
 		name    string
 		cmd     string
 		refused bool
+		// viaLink starts the shell in a directory reached through a link,
+		// which is the one thing backing out of a link asks about.
+		viaLink bool
 	}{
-		{"a path with no link in it", "cd -s real", false},
-		{"the link itself", "cd -s link", true},
-		{"a link partway along", "cd -s link/sub", true},
-		{"a link canceled by a later ..", "cd -s link/../real", true},
+		{"a path with no link in it", "cd -s real", false, false},
+		{"the link itself", "cd -s link", true, false},
+		{"a link partway along", "cd -s link/sub", true, false},
+		// Backed out of, a link is answered against the path the shell
+		// stands in: measured 2026-10-03 on zsh 5.9.2, it moves from a
+		// directory with no link above it and is refused from one reached
+		// through a link. Backing out of an ordinary directory never asks.
+		{"a link canceled by a later ..", "cd -s link/../real", false, false},
+		{"the same from a linked directory", "cd -s link/../real", true, true},
+		{"an ordinary directory from a linked one", "cd -s real/sub/..", false, true},
 		// `.` and `..` are not links, so a path that only goes through them
 		// is accepted — the walk lstats each component where it stands
 		// rather than cleaning the path first.
-		{"a dot component", "cd -s ./real", false},
-		{"a parent component", "cd -s real/sub/..", false},
-		{"a round trip through the parent", "cd -s real/../real", false},
+		{"a dot component", "cd -s ./real", false, false},
+		{"a parent component", "cd -s real/sub/..", false, false},
+		{"a round trip through the parent", "cd -s real/../real", false, false},
 		// The letter is a letter: bundled and repeated it still reads as one.
-		{"bundled with -P", "cd -sP link", true},
-		{"repeated", "cd -s -s link", true},
-		{"bundled with -P, other order", "cd -Ps real", false},
+		{"bundled with -P", "cd -sP link", true, false},
+		{"repeated", "cd -s -s link", true, false},
+		{"bundled with -P, other order", "cd -Ps real", false, false},
 	} {
 		t.Run(c.name, func(t *testing.T) {
-			dir, _ := cdTree(t)
+			_, dir := cdTree(t)
+			if c.viaLink {
+				via := filepath.Join(t.TempDir(), "via")
+				if err := os.Symlink(dir, via); err != nil {
+					t.Fatal(err)
+				}
+				dir = via
+			}
 			out, errs := &strings.Builder{}, &strings.Builder{}
 			r := cdSymlinkFreeRunner(t, dir, out, errs)
 			runCd(t, r, c.cmd+"\necho st=$?\n")

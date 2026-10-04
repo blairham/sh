@@ -8229,11 +8229,15 @@ func (r *Runner) tildeDirVar(name string) (string, bool) {
 	if !r.ask(r.sem().TildePlusMinusExpands, "`~+` and `~-` expanding to the directories") {
 		return "", false
 	}
-	which := "PWD"
 	if name == "-" {
-		which = "OLDPWD"
+		// The same place `cd -` goes, which is the parameter except in the
+		// dialect that keeps a record of its own.
+		if v := r.previousDirectory(); v != "" {
+			return v, true
+		}
+		return "", false
 	}
-	v, ok := r.getVar(which)
+	v, ok := r.getVar("PWD")
 	if !ok || v == "" {
 		return "", false
 	}

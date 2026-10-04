@@ -2259,6 +2259,12 @@ func (p *Parser) parseAndOr() Expr {
 				}
 				continue
 			}
+			if p.at(TokEOF) && p.dialect.OpenEndedAndOrAtTheEndOfInput.Has(p.dialect.ProgramRoute) {
+				// The input ended on the operator, on a route where that ends
+				// the list. See [Dialect.OpenEndedAndOrAtTheEndOfInput].
+				p.open = p.open[:depth]
+				return left
+			}
 			if p.dialect.OpenEndedAndOr && (p.atListEnd() || p.atASubstitutionCloser()) {
 				// The right-hand side is absent and the list ends here, so
 				// the operator is dropped: `{ : || ⏎ }` is `{ : ⏎ }`.

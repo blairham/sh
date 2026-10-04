@@ -5882,6 +5882,26 @@ type Dialect struct {
 	// this one is a term with no verdict (#3627).
 	ConditionNewlineMayFollowATermsFirstWord bool
 
+	// ConditionNewlineMayPrecedeAnOperand passes over newlines standing where
+	// a condition's operand belongs — behind a unary or a binary operator,
+	// and between the operands of a term the shell resolves when it runs
+	// (see ConditionIsResolvedWhenItRuns) — as it passes over blanks.
+	//
+	// Additive, and one column adds it. Measured 2026-10-03 on zsh 5.9.2
+	// under `-c`:
+	//
+	//	[[ -n \n x ]] && echo y          y
+	//	[[ a == \n a ]] && echo y        y
+	//	[[ -n x \n -z "" ]]              unknown condition: -n, status 2
+	//	[[ -foo a \n b ]]                unknown condition: -foo, status 2
+	//	[[ a \n b ]]                     condition expected: a, status 1
+	//
+	// So the last row is the control: a newline behind a term's *first word*
+	// is ConditionNewlineMayFollowATermsFirstWord's question, and it does not
+	// make two words into one term. bash 5.3.20 and ksh93u+ refuse the first
+	// four, each naming the newline.
+	ConditionNewlineMayPrecedeAnOperand bool
+
 	// ConditionTermMissingBlamesTheTokenAfterTheCloser reports a condition
 	// with no term in it at the token **behind** the `]]` rather than at the
 	// `]]` itself — the closer is consumed and whatever stands after it is
@@ -6802,6 +6822,26 @@ type Dialect struct {
 	// in every dialect, which is right for the terminal in every column and
 	// right for four of the five dialects everywhere else.
 	OpenEndedAndOr bool
+
+	// OpenEndedAndOrAtTheEndOfInput is the set of routes on which the end of
+	// the input ends an and-or list whose operator was the last thing read,
+	// the operator being dropped as OpenEndedAndOr drops one: `echo one &&`
+	// prints `one` and answers 0.
+	//
+	// The question OpenEndedAndOr parks, answered where it can be: by route,
+	// exactly as CloseQuotesAtEOF is, so that a prompt — which is no route —
+	// still draws a continuation prompt for the same text. Measured
+	// 2026-10-03 on zsh 5.9.2: `-c 'echo one &&'`, `-c 'echo one ||'`, `-c
+	// 'false &&'` (status 1), a script file holding `echo one &&` with and
+	// without a final newline, and `eval 'echo one &&'` all end the list;
+	// `-c 'echo one |'` is still a parse error, because the pipeline never
+	// takes it. bash 5.3.20, ksh93u+ and dash refuse every one of them.
+	//
+	// Standard input is left out of zsh's set although zsh takes it there
+	// too, because that route is read a piece at a time and the end of a
+	// piece is not the end of the input: answering it here would end
+	// `a &&` at the line break before `b` arrived.
+	OpenEndedAndOrAtTheEndOfInput ProgramRoutes
 
 	// SeparatorWhereACommandBelongs lets a `;` stand where the grammar wants
 	// a command, and steps over it.

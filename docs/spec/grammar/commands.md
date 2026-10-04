@@ -148,6 +148,16 @@ every closing context — a `}`, a `)`, `fi`, `else`, `elif`, `done`,
 `esac`, `;;`, a function body's brace and a command substitution's paren.
 Grammar flag: `OpenEndedAndOr` — core: **off**; `zsh`: on.
 
+**And the end of the input ends one too, on the routes that have an end.**
+Measured 2026-10-03 on zsh 5.9.2: `-c 'echo one &&'` prints `one` at 0,
+`-c 'false &&'` is 1, a script file holding `echo one &&` (with or without
+a final newline) and `eval 'echo one &&'` print `one`, and `-c 'echo one |'`
+is still `parse error near `|'`. A prompt asks for more, so this is a set of
+routes like `CloseQuotesAtEOF` rather than a flag: `OpenEndedAndOrAtTheEndOfInput`
+— core: none; `zsh`: the command string and the script file. Standard input
+is left out because that route is read a piece at a time and the end of a
+piece is not the end of the input.
+
 A **terminator** does not close the list for this purpose. `: || & b` and
 `: || ;;` with no `case` open are parse errors in zsh, so `&` and a bare
 `case` terminator are not among the tokens that may stand there. A `;` is

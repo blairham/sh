@@ -1133,6 +1133,7 @@ func (p *Parser) unterminated(expected string) *Error {
 		}
 	}
 	e.EndLine = int(p.tok.Pos.Line)
+	e.CommentRanOut = p.dialect.CommentRunningOutCountsANewline && p.at(TokEOF) && p.lex.CommentRanToTheEnd()
 	if !strings.HasSuffix(p.lex.src, "\n") {
 		// The text stopped mid-line, so the end of it is the line after.
 		e.EndLine++
@@ -4112,17 +4113,7 @@ func (p *Parser) parseSimple() Command {
 			// `[[ ( -n x ) ]]` an error where `[[` is not a construct — both
 			// of which used to run as ordinary commands with surprising
 			// arguments.
-			if p.dialect.ParenAfterANameIsRefusedWhereTheNextTokenStands &&
-				len(c.Args) == 1 && len(c.Assigns) == 0 && len(c.Redirs) == 0 &&
-				!funcNameWaitsForTheShell(c.Args[0].Spans) {
-				// Still the `(` that is blamed, numbered where the token
-				// after it stands. The parse ends here, so reading on to
-				// find that token costs nothing that would have been read.
-				paren := p.tok
-				p.next()
-				p.skipNewlines()
-				paren.Pos.Line = p.tok.Pos.Line
-				p.failUnexpectedAt(paren, "", false)
+			if len(c.Assigns) == 0 && len(c.Redirs) == 0 && p.refuseParenAfterAName(c.Args) {
 				return c
 			}
 			p.failUnexpected("")
@@ -7560,10 +7551,42 @@ func (p *Parser) itemList(items *[]*Word, end Pos) Pos {
 		*items = append(*items, w)
 	}
 	p.lex.inArgument = saved
+	if p.at(TokLeftParen) && p.refuseParenAfterAName(*items) {
+		// The same refusal a command's only word gets, and for a list of
+		// one word only: `for x in a (` is numbered where the token after
+		// the `(` stands, `for x in a b (` and `for x in (` at the `(`.
+		// Measured 2026-10-04 on ksh93u+ 2012-08-01.
+		return end
+	}
 	if n := len(*items); n > 0 {
 		end = (*items)[n-1].End()
 	}
 	return end
+}
+
+// refuseParenAfterAName refuses the `(` the parser stands at, behind words,
+// numbered at the token after it — in the dialect that does so, where words
+// is one word that could have been a name — and reports whether it did. See
+// Dialect.ParenAfterANameIsRefusedWhereTheNextTokenStands.
+func (p *Parser) refuseParenAfterAName(words []*Word) bool {
+	if !p.dialect.ParenAfterANameIsRefusedWhereTheNextTokenStands || len(words) != 1 ||
+		funcNameWaitsForTheShell(words[0].Spans) {
+		return false
+	}
+	// Still the `(` that is blamed, numbered where the token after it
+	// stands. The parse ends here, so reading on to find that token costs
+	// nothing that would have been read.
+	paren := p.tok
+	p.next()
+	p.skipNewlines()
+	paren.Pos.Line = p.tok.Pos.Line
+	if p.at(TokEOF) && p.dialect.CommentRunningOutCountsANewline && p.lex.CommentRanToTheEnd() {
+		// And a comment the input ran out in counts its newline, which is
+		// where that token then stands: `echo (#i)` is line 2.
+		paren.Pos.Line++
+	}
+	p.failUnexpectedAt(paren, "", false)
+	return true
 }
 
 // forName reads the word standing where a loop's variable belongs and reports

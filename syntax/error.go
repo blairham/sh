@@ -739,6 +739,11 @@ type Error struct {
 	// own count — the same point EndLine names in the next-line
 	// convention. Two dialects report this one for an unmatched quote.
 	EofLine int
+	// CommentRanOut says the input ended inside a comment with no newline
+	// of its own, in the dialect that counts that comment as ending a line —
+	// see [Dialect.CommentRunningOutCountsANewline]. Read where the refusal
+	// is worded as the end of the input being unexpected.
+	CommentRanOut bool
 }
 
 func (e *Error) Error() string { return e.Pos.String() + ": " + e.Msg }

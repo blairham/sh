@@ -2066,6 +2066,14 @@ type Dialect struct {
 	// input: what follows the `(` there is a comment.
 	ParenAfterANameIsRefusedWhereTheNextTokenStands bool
 
+	// CommentRunningOutCountsANewline numbers the end of the input one line
+	// further on where a comment runs into it with no newline of its own, as
+	// though the comment had been ended by one. ksh93: measured 2026-10-04
+	// on ksh93u+ 2012-08-01 under `-c`, `a=(` and `a=( x` are refused at
+	// line 1 and `a=( # c`, `a=( x #c` and `a=( (#i)` at line 2 — the last
+	// because `#i)` is a comment there.
+	CommentRunningOutCountsANewline bool
+
 	// FuncBodyMustBeCompound refuses `f() echo hi`: bash alone wants a
 	// compound command after the parens, where dash, ksh93 and zsh take a
 	// simple command as a one-command body and run it.

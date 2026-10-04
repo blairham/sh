@@ -1021,8 +1021,13 @@ scan:
 			e.Bad, e.Src = true, src
 			return e
 		}
+		first := p.err == nil
 		p.failKind(ErrBadSubstitution, "expected a parameter name in ${%s}", src)
-		if pe, isErr := p.err.(*Error); isErr {
+		// Only the failure this raised: an earlier one in the same word has
+		// already said what the line is refused for, and naming this one's
+		// character on it put the last refusal's token on the first one's
+		// sentence — `"${:-a}${%x}"` blamed `%` where ksh93 blames `:`.
+		if pe, isErr := p.err.(*Error); isErr && first {
 			// The character standing where the name belonged, for the one
 			// dialect that words this as a syntax error naming the token —
 			// left empty, it printed `' unexpected.
@@ -1208,8 +1213,10 @@ scan:
 		// The operator itself travels with the failure: one dialect does not
 		// call this a bad substitution at all, but a syntax error naming the
 		// character it could not read.
+		first := p.err == nil
 		p.failKind(ErrBadSubstitution, "unknown operator in ${%s}", src)
-		if pe, isErr := p.err.(*Error); isErr {
+		// Only the failure this raised, as above.
+		if pe, isErr := p.err.(*Error); isErr && first {
 			pe.Token = firstRune(s)
 			// And whether what stood in the name position was a second
 			// expansion, which one dialect blames a character of its own

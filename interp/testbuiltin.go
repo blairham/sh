@@ -499,6 +499,15 @@ func (r *Runner) testExprRead(form testForm, args []string) (bool, error) {
 			// operator and that is the refusal this replaces.
 			return false, nil
 		}
+		if form.patterns && args[1] == "=~" && !r.isTestUnary(args[0]) &&
+			r.diag().TestTrailingBinaryOperandExpected != "" {
+			// The match operator is a binary operator of the bracket form
+			// that has it, so a right operand that expanded to nothing is
+			// missing as any other operator's is: measured 2026-10-04 in the
+			// pinned image, `p=; [[ abc =~ $p ]]` is `=~: argument expected`
+			// where `[ abc =~ ]` is `=~: unknown operand` (#5723).
+			return false, &testError{kind: errTrailingOperandExpected, operand: args[1]}
+		}
 		return r.unaryTest(args[0], args[1])
 	case 3:
 		if ok, err, handled := r.binaryTest(form, args[0], args[1], args[2]); handled {

@@ -6,6 +6,7 @@ package interp
 import (
 	"fmt"
 	"io"
+	"slices"
 	"strings"
 	"unicode/utf8"
 
@@ -464,7 +465,15 @@ func (r *Runner) traceCommandWords(words []string, d Diagnostics) []string {
 				continue
 			}
 		}
-		quoted[i] = r.traceQuote(w, d.TraceQuoting, d.TraceMetacharacters)
+		meta := d.TraceMetacharacters
+		if slices.Contains(d.TraceQuotesReservedWords, w) {
+			// A word the dialect quotes for being a reserved word rather
+			// than for any character in it: an alphabet of the word's own
+			// characters is what makes it need quoting. See
+			// Diagnostics.TraceQuotesReservedWords.
+			meta = TraceMetacharacters{Anywhere: w}
+		}
+		quoted[i] = r.traceQuote(w, d.TraceQuoting, meta)
 	}
 	return quoted
 }

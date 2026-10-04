@@ -1948,6 +1948,12 @@ func Semantics() interp.Semantics {
 	// `/bin/echo x`, a pipeline, `v=$(/bin/echo x)` or `( /bin/echo x )`,
 	// each followed by `echo a`: every one of them runs the handler (#4780).
 	s.ChildConditionCountsEveryReapedChild = interp.Yes
+	// `fg` and `bg` refuse an option word before anything else, a job in
+	// the table or not, and step over `--`. Measured 2026-10-04 in the
+	// pinned image: `fg -x` is `fg: line 0: illegal option -x`, `bg
+	// --version` is `illegal option --`, `sleep 1 & bg -q %1` is `illegal
+	// option -q`, each at 2, where `bg -- %1` goes on to the job (#5723).
+	s.JobResumeRefusesAnOptionFirst = interp.Yes
 	// And a `WINCH` aimed the same way runs between commands like every other
 	// signal. Measured 2026-09-26 over a script file, `trap 'echo W' WINCH` /
 	// `kill -WINCH $$; echo a` / `echo b` reads `W a b` (#4755).
@@ -3336,8 +3342,13 @@ func Diagnostics() interp.Diagnostics {
 		// wrong — the same message a numeric mask gets.
 		UmaskBadSymbolicMode: "illegal mode: %[1]s",
 		UmaskBadMaskStatus:   2,
-		UlimitBadNumber:      "bad number",
-		UlimitCannotChange:   "error setting limit: %[3]s",
+		// The operand quoted back, and the shell's name alone in front of it
+		// — `ulimit` is in BuiltinNamesTheShellAlone. Measured 2026-10-04 in
+		// the pinned image from a script: `ulimit -n abc` is `ash: invalid
+		// number 'abc'` at 1, and `ulimit -n 99999999` as a user is `ash:
+		// error setting limit: Operation not permitted` (#5723).
+		UlimitBadNumber:    "invalid number '%[1]s'",
+		UlimitCannotChange: "error setting limit: %[3]s",
 
 		// The jobs family: the spec first and the sentence after it, which is
 		// the reverse of dash's order.
@@ -3356,6 +3367,7 @@ func Diagnostics() interp.Diagnostics {
 		NoCurrentJob:                "%[1]s: No current job",
 		NoCurrentJobStatus:          2,
 		KillNoSuchJob:               "%[1]s: no such job",
+		KillNoSuchJobIsLocated:      true,
 		WaitNoSuchJob:               "%[1]s: no such job",
 		WaitNoSuchJobStatus:         2,
 		// An operand that is no job spec at all is refused by the *number*
@@ -3506,6 +3518,13 @@ func Diagnostics() interp.Diagnostics {
 		// spellings of the same sentence.
 		MonitorDenied:         "can't access tty; job control turned off",
 		NoJobControlAtStartup: "can't access tty; job control turned off",
+		// Behind `$0` rather than the shell's own name, as in dash. Measured
+		// 2026-10-04 in the pinned image with no terminal: `ash -i -c 'echo
+		// main' name A` is `name: can't access tty; …`, `/bin/ash -i -c` is
+		// `/bin/ash: …`, and `ash -i -s` is `ash: …` — `$0` on every route.
+		// `ash -i /tmp/s.sh` is `/tmp/s.sh: line 0: …`, whose line this
+		// field does not write (#5723).
+		NoJobControlAtStartupNamesTheScript: true,
 
 		// `alias -g` is a name this shell cannot find, said with nothing in
 		// front of it at all — no shell, no line.
@@ -3557,6 +3576,12 @@ func Diagnostics() interp.Diagnostics {
 		// zsh against bash. `+,-./:@_` are bare wherever they sit.
 		TraceMetacharacters: interp.TraceMetacharacters{
 			Anywhere: "*?[{}~#!=%",
+		},
+		// And the reserved words, whole, wherever they stand as a word of
+		// the command — see the field for the row (#5723).
+		TraceQuotesReservedWords: []string{
+			"in", "do", "done", "if", "fi", "for", "case", "esac", "then",
+			"else", "elif", "while", "until", "function",
 		},
 		// A fourth reading of the bracket line, and it needs no exemption to
 		// express: `[ 1 -lt 2 ]` traces as `'[' 1 -lt 2 ]`, with the opening
@@ -3630,6 +3655,7 @@ func Diagnostics() interp.Diagnostics {
 		// `<file>: <builtin>: line N:`, which is the control (#3278).
 		BuiltinNamesTheShellAlone: map[string]bool{
 			"printf": true, "kill": true, "test": true, "[": true, "[[": true,
+			"ulimit": true,
 		},
 		PrintfBadVerb: "%[2]s: invalid format",
 		// And what it names is the rest of the format as written, from the

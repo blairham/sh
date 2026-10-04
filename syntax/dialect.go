@@ -2185,6 +2185,17 @@ type Dialect struct {
 	// grammar of names.
 	FunctionNamePunctuation bool
 
+	// FunctionNameMayHoldAnEquals lets a POSIX-form function name carry `=`
+	// where the word is not an assignment — where what stands before its
+	// first `=` is not a name. Measured 2026-10-04 on bash 5.3.20:
+	// `2=() { echo hi; }; echo ok` and `1x=() { echo in; }; 1x=` define and
+	// call the functions, and so `1=(a b)` is a definition whose `(` wants a
+	// `)` — `syntax error near unexpected token `a'` — and `2=()` one whose
+	// body never came (`;`). `a=b=() …` and `f=g() …` stay assignments,
+	// refused at the `(`. bash only; the other columns either assign to a
+	// positional (zsh) or refuse the parenthesis.
+	FunctionNameMayHoldAnEquals bool
+
 	// FunctionKeywordNameIsAnyWord makes the word after the `function`
 	// keyword a name whatever its text is: `function '' { … }`,
 	// `function 'a b' { … }`, `function 'a;b' { … }`, `function '@#%' { … }`

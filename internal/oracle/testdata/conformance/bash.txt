@@ -12,9 +12,6 @@ heredoc/stripping-and-joining-are-ordered-and-the-panel-parts-over-which-comes-f
 invoke/a-program-on-a-standard-input-that-is-closed
 jobs/a-background-job-outlives-the-shell
 param/a-substring-modifier-that-substitutes
-posassign/a-list-replaces-the-one-it-names
-posassign/an-empty-list-removes-it
-posassign/appending-a-list-follows-it
 read/from-a-standard-input-that-is-closed
 setopt/the-interactive-listing-drops-nohashdirs
 subst/a-blank-before-the-pipe-is-not-the-reply-form

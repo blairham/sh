@@ -3409,6 +3409,24 @@ acceptable in every shell, which says the rule is about the body rather
 than about redirecting a function. Grammar flag:
 `FuncBodyTakesNoRedirection`, on for `ksh` alone.
 
+### A name with an `=` in it, where the word is not an assignment — bash only
+
+A word is an assignment when what stands before its first `=` is a name.
+When it is not, bash reads the `=` as part of a function name like any
+other character, and a `(` after the word opens a definition. Measured
+2026-10-04 on bash 5.3.20 under `-c`:
+
+| written | bash 5.3.20 |
+| --- | --- |
+| `2=() { echo hi; }; echo ok` | `ok` — a function called `2=` |
+| `1x=() { echo in; }; 1x=` | `in` |
+| `1=(a b)`, `1+=(z)`, `a.b=(c)` | `syntax error near unexpected token `a'` (`z`, `c`): the definition wants `)` |
+| `1=() ;` | near `` `;' ``: the body never came |
+| `a=b=() { :; }`, `f=g() { :; }` | near `` `(' ``: an assignment, refused at the parenthesis |
+
+Grammar flag: `FunctionNameMayHoldAnEquals`. Not followed yet: `=` alone
+and `a[1]x=` as names, which bash also defines.
+
 ### How far a keyword body reaches
 
 **In zsh a body that is not a brace group takes the whole and-or list.**

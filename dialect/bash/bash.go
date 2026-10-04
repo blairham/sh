@@ -290,6 +290,9 @@ func Dialect() syntax.Dialect {
 	// the two shells that remove the quotes define `f`. See
 	// syntax.Dialect.FunctionNameIsSourceText for the six columns (#1566).
 	d.FunctionNameIsSourceText = true
+	// And a name may hold an `=` where the word is not an assignment:
+	// `1x=() { :; }` defines `1x=`. See the field (#5719).
+	d.FunctionNameMayHoldAnEquals = true
 	// And the `function` keyword's name is any word *written bare*, whatever
 	// its characters: `function a=2 { :; }`, `function [ { :; }` and
 	// `function a*b { :; }` all define here and are called by those names,

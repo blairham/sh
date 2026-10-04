@@ -5023,7 +5023,10 @@ func (p *Parser) looksLikeFuncDef() bool {
 		//
 		// `=` is still excluded, and for the reason below: an assignment of an
 		// array is a parenthesis after a word too.
-		return !strings.Contains(p.tok.Literal(), "=") && p.peekIsLeftParen()
+		// Unless the dialect lets a name hold one and the word is not an
+		// assignment. See [Dialect.FunctionNameMayHoldAnEquals].
+		lit := p.tok.Literal()
+		return (!strings.Contains(lit, "=") || p.funcNameHoldsAnEquals(lit)) && p.peekIsLeftParen()
 	}
 	// A function name is a name — plus the punctuation the dialect allows —
 	// so it cannot contain `=`. Without this, `a=()` — an empty array — was
@@ -5048,10 +5051,28 @@ func (p *Parser) looksLikeFuncDef() bool {
 		}
 		return p.peekIsFuncParens()
 	}
-	if !isFuncName(p.tok.Literal(), p.dialect.FunctionNamePunctuation) {
+	if !isFuncName(p.tok.Literal(), p.dialect.FunctionNamePunctuation) &&
+		!p.funcNameHoldsAnEquals(p.tok.Literal()) {
 		return false
 	}
 	return p.peekIsFuncParens()
+}
+
+// funcNameHoldsAnEquals reports whether text is a function name with an `=` in
+// it, in the dialect that has them: the name punctuation plus `=`, in a word
+// that is not an assignment. See [Dialect.FunctionNameMayHoldAnEquals].
+func (p *Parser) funcNameHoldsAnEquals(text string) bool {
+	if !p.dialect.FunctionNameMayHoldAnEquals || !strings.Contains(text, "=") {
+		return false
+	}
+	if !isFuncName(strings.ReplaceAll(text, "=", ""), p.dialect.FunctionNamePunctuation) {
+		return false
+	}
+	// What stands before the first `=` — an append's `+` aside — is what
+	// makes the word an assignment, and an assignment it stays: `a=b=()` is
+	// refused at the parenthesis in the same shell that defines `1=`.
+	before := strings.TrimSuffix(text[:strings.IndexByte(text, '=')], "+")
+	return !isName(before)
 }
 
 // tokenIsPlainText reports whether t holds text and nothing the shell would

@@ -54,6 +54,7 @@ dot/fatal-error-resumes-the-function-that-sourced
 dot/the-borrowed-chain-two-levels-down
 dot/the-borrowed-text-in-the-prefix
 dot/unterminated-file-names-the-source
+editing-mode/the-two-names-are-one-state-with-three-values
 env/the-interactive-file-sees-the-invocations-parameters
 expand/brace-turned-off-by-letter
 expansion/a-replacement-scan-stops-where-the-last-match-ended

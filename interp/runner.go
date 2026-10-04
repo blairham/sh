@@ -10634,6 +10634,9 @@ func (r *Runner) waitForBackgroundProcess(cmd *exec.Cmd) int {
 	// Run first of the three: the window between the kernel's reaping and
 	// the signal above (#5651).
 	defer r.holdTheUnsaidWindowOpen()
+	// And the window before any of them, where the program has exited and
+	// nothing has reaped it (#5854).
+	r.holdTheUnreapedWindowOpen()
 	if !r.monitor || r.WaitForCommand == nil || r.bg == nil {
 		if r.inbox != nil {
 			// A body that can be killed while it waits, and then stops

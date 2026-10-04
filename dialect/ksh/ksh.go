@@ -728,6 +728,9 @@ func Dialect() syntax.Dialect {
 // Semantics is what ksh93 means where the shells conflict.
 func Semantics() interp.Semantics {
 	s := interp.PosixSemantics()
+	// `unset PS4` does not take the trace prefix away here: `+ ` comes
+	// back. Measured 2026-10-04 on 93u+; see the field.
+	s.UnsetPS4TracesNoPrefix = interp.No
 	// The command that named a `>(cmd)` does not wait for its body, which is
 	// bash's answer and not zsh's — measured as an ordering, `AFTER[PIPE]`
 	// against zsh's `[PIPE]AFTER` (#2197).

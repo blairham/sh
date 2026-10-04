@@ -56,5 +56,4 @@ unterminated/a-case-arms-terminator-after-a-separator
 unterminated/an-arms-open-paren-with-nothing-behind-it
 variable/a-seeded-random-draws-a-sequence-of-its-own
 xtrace/prefix-diverges
-xtrace/ps4-unset-is-not-the-default-again
 zparseopts/a-refusal-leaves-the-name-as-it-found-it

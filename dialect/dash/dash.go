@@ -1028,6 +1028,10 @@ func Semantics() interp.Semantics {
 	// zsh adds the backslash to the set as well and BusyBox ash protects
 	// nothing, so this value is what five of the seven columns share (#3271).
 	s.BracketEscape = interp.BracketEscapeProtectsTheMember
+	// But a matched member skips to the next `]` byte, escaped or not, so
+	// `[a\]b]` does not match `a`. See
+	// Semantics.MatchedBracketSkipsToAnEscapedBracket.
+	s.MatchedBracketSkipsToAnEscapedBracket = interp.Yes
 	// `echo .*` is `. .. .dot` here and `echo .*/` is `../ ./`, which is
 	// ksh93's and bash 3.2's answer rather than bash 5.3's. Measured
 	// 2026-09-14 (#2748). There is no parameter of GLOBIGNORE's kind, so

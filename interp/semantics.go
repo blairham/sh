@@ -2858,6 +2858,28 @@ type Semantics struct {
 	// the digest-pinned Alpine image internal/oracle reaches (#2291).
 	SubstringOfPositionalsSlicesTheList Answer
 
+	// MatchedBracketSkipsToAnEscapedBracket ends a bracket expression, once a
+	// member has matched, at the next `]` byte — an escaped one included —
+	// so the rest of the pattern is read from there.
+	//
+	// Measured 2026-10-03 on dash with each subject against the pattern:
+	//
+	//	[a\]b]      `]` and `b`; not `a`
+	//	[a\]]       `]` alone
+	//	[\]a]       `a` and `]`
+	//	[a-c\]x]    `]` and `x`
+	//	[a\]b]c     `]c` and `bc`; not `ac`
+	//	[!a\]b]     `c`, `x` and `d`; not `a`, `]` or `b`
+	//	[a"]"b]      `]` and `b`, the quoted spelling alike
+	//
+	// So the escape does make `]` a member, and the set does hold `a` — the
+	// negated row refuses it — but a subject the `a` matched is then held to
+	// `b]` as the rest of the pattern, and fails. bash, ksh93 and zsh match
+	// all three of `a`, `]` and `b`. BusyBox ash reads the backslash as a
+	// member of its own (BracketEscape) and never reaches this. Read rather
+	// than asked, and only for a pattern holding an escaped `]`.
+	MatchedBracketSkipsToAnEscapedBracket Answer
+
 	// SubstringOfAnUnsetNameEvaluatesNothing makes `${u:o:n}` on a parameter
 	// with no value empty without reading its offset or its length, so an
 	// expression there that could not be computed is never reported.
@@ -31559,6 +31581,7 @@ func PosixSemantics() Semantics {
 		// The standard has no substring operator, so this is the reading
 		// every shell that has one gives but BusyBox ash, which says so.
 		SubstringOfPositionalsSlicesTheList:    Yes,
+		MatchedBracketSkipsToAnEscapedBracket:  No,
 		SubstringOfAnUnsetNameEvaluatesNothing: No,
 		SlashRunBehindAPatternIsOneSlash:       No,
 		QuotedDashInABracketIsARange:           No,
@@ -37127,10 +37150,12 @@ func (r *Runner) matchPatternR(pattern, s string, surface patternSurface) bool {
 		// its operand is a regular expression — and it has RegexFoldsCase,
 		// which bash's `nocasematch` turns on beside this one and zsh's turns
 		// on instead of it.
-		fold:              r.MatchOption(MatchFoldsCase),
-		chars:             r.patternMatchCountsCharacters(pattern, s),
-		escapes:           r.sem().PatternEscapeReaches,
-		bracketMember:     r.bracketEscapeIsOnlyAMember(pattern),
+		fold:          r.MatchOption(MatchFoldsCase),
+		chars:         r.patternMatchCountsCharacters(pattern, s),
+		escapes:       r.sem().PatternEscapeReaches,
+		bracketMember: r.bracketEscapeIsOnlyAMember(pattern),
+		matchSkipsToAnyBracket: r.sem().MatchedBracketSkipsToAnEscapedBracket == Yes &&
+			strings.Contains(pattern, `\]`),
 		classes:           r.patternClasses(pattern),
 		collating:         r.collatingElements(pattern),
 		unknownClass:      r.unknownClassPolicy(pattern),

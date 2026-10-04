@@ -46,7 +46,6 @@ pat/a-glob-flag-on-a-later-loop-item
 pat/a-glob-flag-where-a-case-arm-begins
 pat/a-glob-flag-where-a-loop-item-begins
 pat/a-quoted-operator-in-a-group-reaches-every-route
-pat/an-escaped-bracket-is-a-member-not-the-terminator
 path/binary-content-is-not-run-as-a-script
 posassign/a-list-replaces-the-one-it-names
 posassign/an-empty-list-removes-it

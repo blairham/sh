@@ -6559,6 +6559,16 @@ func (r *Runner) name() string {
 	if n := r.diag().SelfName; n != "" && r.Route != RouteScriptFile {
 		return n
 	}
+	if r.atInvocation && r.Route == RouteScriptFile && r.Invocation != "" {
+		// An option word the shell was started with is refused before the
+		// script it names has been opened, so it is the shell that speaks
+		// and not the script. Measured 2026-10-04 with `SH -o nosuch x.sh`:
+		// bash 5.3.20 writes `<shell>: line 0: <shell>: nosuch: …`, dash
+		// `<shell>: 0: Illegal option -o nosuch` and ksh93u+ `ksh: nosuch:
+		// bad option(s)` with `Usage: ksh …` under it, where this named the
+		// script in every one of those places.
+		return r.Invocation
+	}
 	if r.Name == "" && !r.diag().NamedByAnEmptyWord {
 		return "sh"
 	}

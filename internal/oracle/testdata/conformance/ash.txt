@@ -50,7 +50,6 @@ invoke/a-name-that-is-not-sh-leaves-a-special-builtins-usage-error-alone
 invoke/called-sh-a-second-reading-that-runs-off-the-end-of-the-word
 invoke/called-sh-and-then-leaving-posix-mode
 invoke/called-sh-outranks-the-invocations-own-posix-option
-invoke/posix-mode-from-the-invocation-reaches-the-first-line
 jobs/a-background-job-outlives-the-shell
 jobs/bg-with-no-job-control
 jobs/wait-p-writes-through-an-array-element
@@ -65,7 +64,6 @@ opt/an-unknown-long-name-is-refused
 opt/leaving-posix-mode-puts-the-set-refusals-back
 opt/set-plus-p-is-privileged-under-a-letter
 opt/set-plus-t-is-granted-where-set-t-is-refused
-opt/set-t-at-the-invocation
 opt/turning-off-a-name-a-shell-does-not-implement
 param/a-nested-inner-runs-once-under-a-conditional
 param/a-replacement-runs-over-characters

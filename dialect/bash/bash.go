@@ -1053,6 +1053,7 @@ func Semantics() interp.Semantics {
 	// makes is this shell's own. Measured 2026-09-26 on bash 5.3.
 	s.ShiftNamesAreArrays = interp.No
 	s.ShiftNegativeIsOutOfRange = interp.Yes
+	s.ShiftCountTakesASign = interp.Yes
 	s.WaitReadsOptions = interp.Yes
 	// Job specs by command text, with a second match refused as ambiguous;
 	// `wait` complains about a spec that names nothing, has -n, and

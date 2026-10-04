@@ -1678,6 +1678,7 @@ func Semantics() interp.Semantics {
 	// 2026-09-26 on dash 0.5.13.
 	s.ShiftNamesAreArrays = interp.No
 	s.ShiftNegativeIsOutOfRange = interp.No
+	s.ShiftCountTakesASign = interp.Yes
 	s.WaitReadsOptions = interp.Yes
 	// Only numbers, `%%`, `%+` and `%-` resolve here: a `%name` is a job
 	// that is not there. `wait` complains about it with its own wording and

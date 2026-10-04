@@ -1830,6 +1830,7 @@ func Semantics() interp.Semantics {
 	s.ExtraNumericOperand = interp.ExtraNumericOperandRefused
 	s.ShiftNamesAreArrays = interp.Yes
 	s.ShiftNegativeIsOutOfRange = interp.Yes
+	s.ShiftCountTakesASign = interp.Yes
 	s.WaitReadsOptions = interp.No
 	// Job specs by command text, a second match taken rather than refused;
 	// `wait` complains about a spec that names nothing, has no -n, and

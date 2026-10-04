@@ -123,7 +123,7 @@ func biLet(r *Runner, _ context.Context, args []string) int {
 			// (#1985). The text is the expanded one the tree was built from,
 			// which is what the shells quote back.
 			r.mathDiagf("%s", r.arithFailure(text, err))
-			return 1
+			return orDefault(r.diag().LetFailureStatus, 1)
 		}
 		// Every expression is evaluated — they have side effects, and
 		// `let x++ y=2` is two of them — but only the last decides.

@@ -10,7 +10,6 @@ arith/a-colon-after-a-complete-conditional
 arith/a-colon-with-no-question-and-a-value-after-it
 arith/a-condition-operand-is-blamed-as-it-was-written
 arith/a-fatal-math-error-gives-up-the-sourced-file-alone
-arith/a-let-operand-is-a-result
 arith/a-zero-padded-operand-in-a-word-comparison
 arithmetic/an-increment-on-something-that-cannot-be-assigned-to
 array/a-literal-holding-an-operator-in-a-function-body
@@ -87,11 +86,6 @@ jobs/wait-p-writes-through-an-array-element
 jobspec/kill-a-job-that-is-not-there
 jobspec/wait-for-the-next-job
 kill/signaling-a-process-that-is-not-ours
-let/a-math-complaint-names-the-builtin-or-does-not
-let/a-math-complaint-that-evaluates-names-the-expression
-let/an-illegal-character-is-not-any-math-failure
-let/an-illegal-character-keeps-the-value-before-it
-let/with-nothing-to-evaluate
 local/a-subscripted-operand-to-local
 locale/an-unset-locale-and-a-multibyte-length
 location/a-sourced-file-below-the-first-line-of-a-command-string
@@ -163,7 +157,6 @@ redir/a-write-into-a-broken-pipe-with-the-signal-disarmed
 redir/a-write-to-a-closed-descriptor-fails
 redir/a-write-to-a-stream-exec-parked-closed
 return/a-bare-name-as-the-operand-in-a-sourced-file
-return/a-status-over-two-hundred-and-fifty-five
 roprefix/a-redirection-that-cannot-be-opened
 set/a-name-only-one-shell-has
 set/leaving-posix-mode-restores-a-special-builtins-usage-error
@@ -173,8 +166,6 @@ set/leaving-posix-mode-restores-the-shells-own-answer
 setarray/a-prepend-goes-through-the-case-attribute
 setarray/an-empty-prepend-over-a-name-that-is-not-an-array
 setarray/the-line-a-hook-installer-assigns-with
-shift/a-count-with-a-plus-sign
-shift/a-dash-zero-count
 source/a-syntax-error-quotes-the-offending-line
 special/a-bare-set-and-a-produced-parameter
 special/assigning-random-seeds-it

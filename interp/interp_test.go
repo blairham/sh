@@ -1118,13 +1118,15 @@ func TestANegativeShiftCountIsOutOfRangeOrNotANumber(t *testing.T) {
 	}
 }
 
-// TestAShiftCountMayCarryASign, which is unanimous: `shift +1` moves one in
-// every shell in the panel, and the count reader had no sign at all — which
-// is also how a negative count reached a slice bound and panicked.
+// TestAShiftCountMayCarryASign where ShiftCountTakesASign says so: `shift +1`
+// moves one in four of the five shells, and the count reader had no sign at
+// all — which is also how a negative count reached a slice bound and
+// panicked. It was unanimous until BusyBox ash was measured refusing it.
 func TestAShiftCountMayCarryASign(t *testing.T) {
 	sem := CoreSemantics()
 	sem.ShiftOptionWords = ShiftOptionWordsNone
 	sem.ShiftCountIsArithmetic = No
+	sem.ShiftCountTakesASign = Yes
 	out, _ := run(t, `set -- a b c; shift +2; echo "st=$? rest=[$*]"`, func(r *Runner) {
 		dg := Diagnostics{}
 		r.Semantics, r.Diagnostics = &sem, &dg

@@ -17720,6 +17720,14 @@ type Semantics struct {
 	// only after a `--`: a bare `-1` is an option there.
 	ShiftNegativeIsOutOfRange Answer
 
+	// ShiftCountTakesASign reads a count written with a leading `+` or `-`
+	// as the number it spells. dash 0.5.12, bash 5.3, ksh93 and zsh 5.9.2
+	// shift two for `shift +2` and nothing for `shift -0`; BusyBox ash
+	// 1.37.0 refuses both as `Illegal number` and ends the script at 2,
+	// measured 2026-10-03 in the pinned image. Asked only for a signed word
+	// that is otherwise a plain number, so `shift 2` asks nothing.
+	ShiftCountTakesASign Answer
+
 	// WaitReadsOptions reads a leading `-` word as an option rather than as
 	// a job to wait for. Three of the four do; zsh has none, and answers
 	// `wait -x` with the job it could not find.
@@ -33525,6 +33533,12 @@ const (
 	// operand was discarded and `$?` handed back in its place, so a function
 	// meaning to return 3 returned whatever ran last.
 	StatusArgArithmetic
+	// StatusArgStrictMasked is StatusArgStrict's reading with bash's mask:
+	// decimal digits only, no sign and no text, a refusal that ends the
+	// script — and eight bits of what was read. BusyBox ash 1.37.0, measured
+	// 2026-10-03 in the pinned image: `return 300` is 44, `return 256` is 0,
+	// and `return -1` is `Illegal number: -1` at 2 with the script ended.
+	StatusArgStrictMasked
 )
 
 func (e StatusArgumentPolicy) String() string {
@@ -33537,6 +33551,8 @@ func (e StatusArgumentPolicy) String() string {
 		return "leading digits"
 	case StatusArgArithmetic:
 		return "arithmetic"
+	case StatusArgStrictMasked:
+		return "strict, masked"
 	}
 	return "unspecified"
 }

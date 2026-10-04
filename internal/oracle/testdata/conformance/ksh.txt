@@ -44,7 +44,6 @@ help/the-help-option-is-the-whole-word-and-stands-where-an-option-stands
 heredoc/a-body-on-a-descriptor-outlives-the-exec-that-opened-it
 heredoc/a-substitution-in-the-delimiter-is-its-own-text
 heredoc/an-expansion-left-unterminated-in-a-body
-heredoc/quoting-the-delimiter-is-what-makes-the-body-literal
 invoke/leaving-the-posix-mode-a-startup-option-turned-on
 invoke/posix-mode-from-the-invocation-reaches-the-first-line
 invoke/the-posix-option-moves-a-quoted-brace-in-a-word-operand

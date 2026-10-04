@@ -545,6 +545,9 @@ func Dialect() syntax.Dialect {
 	// And a body line that only starts the delimiter keeps its continuation.
 	// Measured 2026-10-03; see the field.
 	d.HeredocPrefixLineKeepsItsContinuation = true
+	// And a delimiter's double-quoted expansion keeps its quotes. Measured
+	// 2026-10-03; see the field.
+	d.HeredocDelimiterKeepsAQuotedExpansion = true
 	// A `<<-` delimiter written with leading tabs has them stripped the way
 	// the body lines do, so `EOF` ends a `<tab>EOF` document. zsh agrees;
 	// bash and dash do not. See syntax.HeredocDelimiterTabs.

@@ -3392,6 +3392,26 @@ type Dialect struct {
 	// delimiters-own-letters, heredoc/a-joined-line-that-spells-the-delimiter).
 	HeredocPrefixLineKeepsItsContinuation bool
 
+	// HeredocDelimiterKeepsAQuotedExpansion leaves a double-quoted part of a
+	// here-document delimiter that holds an expansion as it was written,
+	// quotes and all, rather than taking the quotes away.
+	//
+	// ksh93u+. Measured 2026-10-03 from script files, each delimiter written
+	// again on a line of its own under the body:
+	//
+	//	"$d"      ends at a line reading "$d"
+	//	"$d"x     ends at "$d"x
+	//	a"$d"     ends at a"$d"
+	//	"${d}"    ends at "${d}"
+	//	"`x`"     ends at "`x`"
+	//	"EOF"     ends at EOF       — no expansion, the quotes go
+	//	"$" "a$"  end at $ and a$   — a dollar that starts nothing
+	//	\$d '$d'  end at $d
+	//
+	// bash 5.3.20, zsh 5.9.2 and dash take the quotes away in every row
+	// (corpus row heredoc/quoting-the-delimiter-is-what-makes-the-body-literal).
+	HeredocDelimiterKeepsAQuotedExpansion bool
+
 	// StrippedHeredocDelimiter is what `<<-` does with a delimiter written
 	// with leading tabs, which only a quoted delimiter can be. See
 	// [HeredocDelimiterTabs], which carries the measurement.

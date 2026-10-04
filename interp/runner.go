@@ -3472,6 +3472,11 @@ type Runner struct {
 	// field in characters" — see Semantics.PrintfLongModifierCountsCharacters.
 	// Carried here for the reason printfLostStars is.
 	printfLongModifier bool
+	// printfFormatRest is the format from the `%` of the conversion being
+	// formatted to its end, as written, for the one refusal that is raised
+	// past the point the scan knew the position: a `%q` the dialect does not
+	// have. See Diagnostics.PrintfBadVerbNamesTheRestOfTheFormat.
+	printfFormatRest string
 	// printfOutputBase is the output base the conversion just scanned wrote
 	// after a second `.` — its digits, `*` for an operand, or empty for none.
 	// Carried here for the reason printfLostStars is. See

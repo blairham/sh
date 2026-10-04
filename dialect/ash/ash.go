@@ -3301,6 +3301,10 @@ func Diagnostics() interp.Diagnostics {
 		},
 		UmaskBadOption:  "illegal option %[1]s",
 		PrintfBadOption: "illegal option %[1]s",
+		// `printf` with no format at all. Measured 2026-10-04 in the pinned
+		// image: `printf; echo st=$?` is `ash: usage: printf FORMAT
+		// [ARGUMENT...]` and `st=2` (#5723).
+		PrintfUsage: "printf: usage: printf FORMAT [ARGUMENT...]",
 
 		// Numbers. The capital is this shell's, on a message it otherwise
 		// words like the lower-case ones around it.

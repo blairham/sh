@@ -8,6 +8,7 @@ import (
 	"math"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/blairham/sh/syntax"
 )
@@ -53,6 +54,12 @@ func (r *Runner) printfNumber(arg string, present bool) (int64, int, bool) {
 		return 0, 0, false
 	}
 	if n, ok := r.charConstant(arg); ok {
+		if w := r.diag().PrintfCharConstantWarning; w != "" && !r.isOneCharacter(arg[1:]) {
+			// The value stands, with a warning beside it and a failed
+			// status. See the field.
+			r.diagf("%s\n", Wording(w, w, arg))
+			return n, 1, false
+		}
 		return n, 0, false
 	}
 	text := afterLeadingBlanks(arg)
@@ -952,4 +959,16 @@ func (r *Runner) radixRefusesThePoint(text string) (head string, refused bool) {
 		return text, false
 	}
 	return before, true
+}
+
+// isOneCharacter reports whether s is exactly one character, counted the way
+// the rest of printf counts them in this locale.
+func (r *Runner) isOneCharacter(s string) bool {
+	if s == "" {
+		return false
+	}
+	if r.countsCharacters(s) {
+		return utf8.RuneCountInString(s) == 1
+	}
+	return len(s) == 1
 }

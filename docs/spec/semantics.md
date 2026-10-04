@@ -19767,6 +19767,13 @@ and dash name the parse position in both places. zsh is not asked,
 because it reads the action when the trap is set and never reaches a
 parse failure at fire time.
 
+**A body fired inside a builtin is not that builtin speaking.** A signal
+`kill $$` sends is taken while `kill` is still running, and a not-found in
+the body is located as a script's is: measured 2026-10-04, `t.sh: line 6:`
+in ksh93u+ (not `t.sh[6]:`) and `t.sh:5:` in zsh 5.9.2 (not
+`t.sh:kill:5:`), while a builtin the body runs itself — `cd` — still names
+itself.
+
 **`TrapParsesOptions`** — bash yes · dash yes · ksh93 yes · zsh no
 
 Reads a leading `-` word as an option rather than as the action to run.

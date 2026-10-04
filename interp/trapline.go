@@ -166,12 +166,21 @@ func (r *Runner) enterTrapBody(cond string) func() {
 	// bash 5.3.15, the traced command reports its own line; this engine
 	// reported the last line the body ran.
 	line := r.line
+	// And the builtin that was speaking when the trap fired is not the body's
+	// speaker. A signal that `kill $$` sends is taken while `kill` is still
+	// running, and a body's not-found then wore that builtin's location:
+	// `t.sh[5]:` for `t.sh: line 5:` in ksh93 and `t.sh:kill:4:` for
+	// `t.sh:4:` in zsh, measured 2026-10-04 on ksh93u+ 2012-08-01 and zsh
+	// 5.9.2. A builtin the body runs itself still speaks for itself.
+	speaking := r.inBuiltin
+	r.inBuiltin = ""
 	restore := func() {
 		r.lineBase, r.linePin, r.inCommandTrap, r.inTrapBody = base, pin, command, inTrap
 		r.linePinEndsAtACall, r.linePinFuncLine = pinEnds, pinFunc
 		r.trapBodyCond = trapCond
 		r.runText = text
 		r.line, r.indirection = line, indirection
+		r.inBuiltin = speaking
 	}
 	switch r.bodyLineStyle() {
 	case TrapBodyLineOffsetFromWhereItFired:

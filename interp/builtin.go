@@ -6674,6 +6674,12 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 		// The read that never returns, which is the one a coprocess makes
 		// by construction.
 		r.settleBackgroundJobBeforeABlockingRead(in)
+		// Or one a trapped signal gives up, in the dialect that does. See
+		// Semantics.ReadIsAbandonedByATrappedSignal.
+		if src, stop, ok := r.trapInterruptibleByteSource(in); ok && !buffered {
+			next = src
+			defer stop()
+		}
 	}
 	if query {
 		return r.readQueryInto(next, keys, r.readKeyTarget(array, named, args))

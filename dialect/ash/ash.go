@@ -88,9 +88,17 @@ func Dialect() syntax.Dialect {
 	d.DoubleBracketIsACommand = true
 	d.ProcessSubstitution = true
 	d.FunctionKeyword = true
+	// An unterminated `${` in a here-document body is refused with the
+	// line. See the flag.
+	d.HeredocBodyBraceIsReadWithTheLine = true
 	// A NUL byte in the program's text is not there. See the flag.
 	d.SourceDropsNulBytes = true
 	d.FunctionKeywordParens = true
+	// And the pair, where it is written, is a pair: see the flag for the
+	// grid, measured 2026-10-03 in the pinned image.
+	d.FunctionKeywordParensAreAPair = true
+	// And a word spelled as an assignment is not a name there: see the flag.
+	d.FunctionKeywordRefusesAnAssignment = true
 	d.ParamSubstring = true
 	d.ParamSubstitution = true
 	// `$((2**3))` is 8 and `$((10#08))` is 8, where dash refuses both; `i=1;
@@ -450,6 +458,13 @@ func Semantics() interp.Semantics {
 	// there is no `[[ … ]]` here either — so the axis is unreachable in this
 	// column rather than unanswered.
 	s.PositionalListWithNoneIsSet = interp.Yes
+	// And a fired `+` on an empty list is one empty field, as in dash:
+	// `n() { echo "$#"; }; set --; n "${@:+x}"` is 1. Measured 2026-10-03
+	// in the pinned image. See Semantics.AFiredAlternateOnAnEmptyListIsOneField.
+	s.AFiredAlternateOnAnEmptyListIsOneField = interp.Yes
+	// See interp.Semantics.SubstitutionRunsTheBodyReadWithItsLine, measured
+	// 2026-10-03.
+	s.SubstitutionRunsTheBodyReadWithItsLine = interp.Yes
 	// And it answers what an empty `$@` takes with it the way dash does: an
 	// expansion beside it is a field however empty it came out.
 	s.EmptyListTakesTheWord = interp.EmptyListReachNothing
@@ -880,12 +895,14 @@ func Semantics() interp.Semantics {
 	// `typeset: not found` at 127, so neither the tie nor the type reading
 	// of the letter can be put to this shell (#2419).
 	// unanswered DeclareHideValueLetter: the same, for `typeset -H q=1`.
-	// unanswered ProducedParameterListing: the axis is what a listing with no
-	// operands writes for a produced parameter, and there is no listing.
-	// Measured 2026-09-13 in the pinned image, `typeset -p` and `declare -p`
-	// are both `not found` at 127 — and unlike dash this shell *does* have a
-	// `$RANDOM`, so the wall is the missing builtin and not the missing
-	// parameter (#2518).
+	// A produced parameter lists its last reading, and nothing until it has
+	// one: bash's gate. There is no `typeset -p` or `declare -p` here — both
+	// are `not found` at 127 (#2518) — but since #2722 a bare `set` asks the
+	// same question, and it answers. Measured 2026-10-03 in the pinned
+	// image, `set | grep ^RANDOM` writes nothing before `$RANDOM` has been
+	// expanded, `RANDOM='17972'` after a reading of 17972 and the same row
+	// again on a second `set`, and `RANDOM='5'` after `RANDOM=5`.
+	s.ProducedParameterListing = interp.ProducedListingLastReading
 	// unanswered NumberRadix: the axis is what a shell does about a locale
 	// whose radix character is not the point, and this column cannot be in one.
 	// musl carries no locale data at all — recorded under #2675, where bash on
@@ -1431,6 +1448,10 @@ func Semantics() interp.Semantics {
 	s.PrintfStarBeyondAnInt = interp.PrintfStarIsNotANumber
 	s.CaseSubjectKeepsThePreviousLine = interp.No
 	s.SubstringRangeThirdColonIsABadSubstitution = interp.No
+	// A range's numbers count bytes, though `${#x}` counts characters: see
+	// interp.Semantics.SubstringCountsBytes for the grid, measured
+	// 2026-10-03 in the pinned image.
+	s.SubstringCountsBytes = interp.Yes
 	s.PrintfReportsBadNumber = interp.Yes
 	s.PrintfNumberOperand = interp.PrintfNumberWholeOperand
 	// `printf '%d' " 'A"` is 65 here, measured 2026-10-03 in the pinned
@@ -2081,6 +2102,15 @@ func Semantics() interp.Semantics {
 	s.JobsListFinishedJobs = interp.Yes
 	// Every ended job is listed as ended, monitor or no monitor.
 	s.EndedJobIsListedAsRunningWithoutTheMonitor = interp.No
+	// A job a `wait` reaped — bare or named — stays in the table for the
+	// next listing to report, and a listing takes each finished job out as
+	// it writes the row, so every row after it is marked against what is
+	// left. Measured 2026-10-03 on BusyBox v1.37.0 in the pinned image: `false & wait %1; wait %1; jobs`
+	// answers 1 twice and then lists `Done(1)`, and `true & true & true &
+	// sleep 0.2; jobs` marks all three rows `+`. See the three fields.
+	s.BareWaitLeavesJobsForTheListing = interp.Yes
+	s.WaitLeavesTheJobForTheListing = interp.Yes
+	s.JobsListingForgetsEachRowAsItGoes = interp.Yes
 	// No pid in a notice: measured 2026-09-25 inside the pinned alpine
 	// image, BusyBox v1.37.0 on a pseudo-terminal under `/bin/ash -i` with
 	// `set -m`, `[1]+  Done                       sleep 0.2`. Measured in
@@ -2178,6 +2208,9 @@ func Semantics() interp.Semantics {
 	// image. Measured 2026-09-13.
 	s.WaitPNamesTheFinishedJob = interp.No
 	s.WaitForAJobFailsWhenInterrupted = interp.No
+	// A trapped signal gives up a waiting `read` at 1. See
+	// interp.Semantics.ReadIsAbandonedByATrappedSignal, measured 2026-10-03.
+	s.ReadIsAbandonedByATrappedSignal = interp.Yes
 
 	// ---- control flow and redirection ----
 
@@ -2314,9 +2347,14 @@ func Semantics() interp.Semantics {
 	// carry on at 1 — which is RedirectFailureStatus and not the fatal
 	// status. Measured 2026-09-26 in the pinned 1.37.0 image (#4684).
 	s.HeredocBodyFailureIsTheRedirections = interp.Yes
-	// A descriptor number the process cannot hold is not checked before the
-	// open.
-	s.FdNumberBoundedByOpenFileLimit = interp.No
+	// A descriptor number the process cannot hold is refused once the open
+	// has happened — the old note here said it was not checked at all.
+	// Re-measured 2026-10-03 in the pinned image, `ulimit
+	// -n 64; exec 70>fresh` is `dup2(3,70): Bad file descriptor` and ends the
+	// shell at 1, `echo hi 70>fresh` is the same sentence at 1 and the
+	// script goes on, and `exec 63>f` is 0 where `exec 64>g` is refused. The
+	// file is created either way. See Diagnostics.FdNumberOverLimit.
+	s.FdNumberBoundedByOpenFileLimit = interp.Yes
 	// No descriptor-number ceiling of this shell's own (#3210), a `-t` that
 	// is refused rather than evaluated — `read: invalid timeout` at 2
 	// (#3209) — and a `-v` echo that writes a line as it was read (#3130).
@@ -3028,7 +3066,10 @@ func Diagnostics() interp.Diagnostics {
 		// then says the name was not found. That is a separate row and is
 		// not this change.
 		DotCannotOpen: "can't open '%[1]s': %[2]s",
-		DotNotFound:   "%[1]s: not found",
+		// A descriptor number over the process's limit names the one the
+		// open produced. See Diagnostics.FdNumberOverLimit.
+		FdNumberOverLimit: "dup2(%[3]d,%[1]d): %[2]s",
+		DotNotFound:       "%[1]s: not found",
 		// And a script operand the shell could not open is worded the same
 		// way, with the system's reason and dash's 2 for either failure.
 		// Measured 2026-10-03 in the pinned image: `ash nosuch.sh` and `ash
@@ -3595,6 +3636,21 @@ func Apply(r *interp.Runner) {
 	// substrate's common table instead: `set -o emacs` and `set -o nolog`
 	// are each `illegal option -o …` at 1 here.
 	r.AddSetOptions("errtrace", "pipefail")
+	// `RANDOM` is a produced parameter here, which dash has not got. Measured
+	// 2026-10-03 in the pinned image: `${RANDOM-}` is a number, `RANDOM=5;
+	// a=$RANDOM` reads something other than 5, the same seed twice draws the
+	// same pair, and `unset RANDOM; RANDOM=9` stores 9 like any name. A bare
+	// `set` lists it only once something has read it, as in bash.
+	//
+	// The *sequence* a seed draws is BusyBox's own and is not reproduced:
+	// `RANDOM=42` draws 20351 then 9206 there, which none of the generators
+	// in this tree produces, and nothing short of the implementation says
+	// which one it is. A seeded script here is reproducible with numbers of
+	// its own. Recorded on #5761.
+	r.SetDynamic("RANDOM", func(rr *interp.Runner) string { return rr.Randoms() })
+	r.SetDynamicWriter("RANDOM", func(rr *interp.Runner, value string) { rr.SeedRandoms(value) })
+	// Listed by a bare `set`; see ProducedParameterListing above for the rows.
+	r.SetDynamicDeclaration("RANDOM", interp.ProducedDeclaration{})
 	// Two letters this shell spells its own way. `-b` is `notify` and `-I`
 	// is `ignoreeof` — measured at 0 in the pinned image, with `$-` gaining
 	// the letter each time, which is the half that says the letter reached

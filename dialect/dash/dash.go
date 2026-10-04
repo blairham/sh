@@ -13,6 +13,9 @@ import (
 func Dialect() syntax.Dialect {
 	// dash is the POSIX shell language and nothing more.
 	d := syntax.POSIX()
+	// An unterminated `${` in a here-document body is refused with the
+	// line. See the flag.
+	d.HeredocBodyBraceIsReadWithTheLine = true
 	// A NUL byte in the program's text is not there. See the flag.
 	d.SourceDropsNulBytes = true
 	// dash expands aliases in a script, with no option to turn on, and by
@@ -1079,6 +1082,9 @@ func Semantics() interp.Semantics {
 	// And a fired `+` on an empty list is one empty field: `set --; set --
 	// "${@:+w}"` leaves one. See Semantics.AFiredAlternateOnAnEmptyListIsOneField.
 	s.AFiredAlternateOnAnEmptyListIsOneField = interp.Yes
+	// See interp.Semantics.SubstitutionRunsTheBodyReadWithItsLine, measured
+	// 2026-10-03.
+	s.SubstitutionRunsTheBodyReadWithItsLine = interp.Yes
 	// An empty `$@` takes nothing with it here: a quoted expansion beside it is
 	// a field whether or not it produced anything, so `"$e$@"` and `"$@$e"` are
 	// each one empty argument.
@@ -1728,6 +1734,9 @@ func Semantics() interp.Semantics {
 	// A trapped signal cuts a `wait` short with 128 plus the signal, and the
 	// form that names a job answers the same as the bare one.
 	s.WaitForAJobFailsWhenInterrupted = interp.No
+	// A trapped signal gives up a waiting `read` at 1. See
+	// interp.Semantics.ReadIsAbandonedByATrappedSignal, measured 2026-10-03.
+	s.ReadIsAbandonedByATrappedSignal = interp.Yes
 	s.CommandRejectsUnknownOption = interp.Yes
 	// Whether `command -v` answers for every name it was given, and what
 	// decides the status when it found some of them. See
@@ -1782,6 +1791,7 @@ func Semantics() interp.Semantics {
 	s.SelfAimedWindowChangeWaitsForInputOrAChild = interp.No
 	// unanswered ExitTrapFiresWhereTheScriptStopped: the same, one step
 	// further in.
+	// unanswered SubstringCountsBytes: there is no `${x:offset:length}` here.
 	// unanswered ExitTrapFiresPastTheEnd: the axis is the line a trap body
 	// counts as having fired on, and it is only asked where a body's lines
 	// are numbered from that line at all. Every trap body here counts from
@@ -1962,6 +1972,15 @@ func Semantics() interp.Semantics {
 	s.SubshellIsAJobInItsOwnTable = interp.No
 	s.JobsListFinishedJobs = interp.Yes
 	s.EndedJobIsListedAsRunningWithoutTheMonitor = interp.No
+	// A job a `wait` reaped — bare or named — stays in the table for the
+	// next listing to report, and a listing takes each finished job out as
+	// it writes the row, so every row after it is marked against what is
+	// left. Measured 2026-10-03 on dash 0.5.12: `false & wait %1; wait %1; jobs`
+	// answers 1 twice and then lists `Done(1)`, and `true & true & true &
+	// sleep 0.2; jobs` marks all three rows `+`. See the three fields.
+	s.BareWaitLeavesJobsForTheListing = interp.Yes
+	s.WaitLeavesTheJobForTheListing = interp.Yes
+	s.JobsListingForgetsEachRowAsItGoes = interp.Yes
 	// No pid in a notice: measured 2026-09-25 on a pseudo-terminal under
 	// `dash -i` with `set -m`, `[1] + Done                       sleep 0.2`.
 	s.JobNoticeNamesThePID = interp.No

@@ -6056,6 +6056,14 @@ func (p *Parser) parseFuncKeyword() Command {
 		p.failUnexpectedWord()
 		return fn
 	}
+	if p.dialect.FunctionKeywordRefusesAnAssignment && tokenIsAnAssignmentWord(p.tok) {
+		// See [Dialect.FunctionKeywordRefusesAnAssignment]: the word is
+		// passed over and what follows it is refused.
+		p.next()
+		p.skipNewlines()
+		p.failUnexpected("")
+		return fn
+	}
 	first, ok := p.funcKeywordName()
 	switch {
 	case ok:
@@ -6108,6 +6116,12 @@ func (p *Parser) parseFuncKeyword() Command {
 		}
 		p.next()
 	}
+	if p.dialect.FunctionKeywordParensAreAPair {
+		// A newline does not separate the name from the pair here. See
+		// [Dialect.FunctionKeywordParensAreAPair].
+		p.skipNewlines()
+	}
+	parens := false
 	if p.at(TokLeftParen) {
 		// The hybrid `function f() {}`: bash and zsh take it, ksh93 rejects
 		// it. Accepting it everywhere the keyword exists meant the ksh
@@ -6119,6 +6133,10 @@ func (p *Parser) parseFuncKeyword() Command {
 		p.next()
 		if p.at(TokRightParen) {
 			p.next()
+			parens = true
+		} else if p.dialect.FunctionKeywordParensAreAPair {
+			p.failUnexpected(")")
+			return fn
 		}
 	}
 	// A separator may stand in front of the body where the dialect reads one
@@ -6157,7 +6175,7 @@ func (p *Parser) parseFuncKeyword() Command {
 		p.failUnexpectedAt(body, "", false)
 		return fn
 	}
-	if !p.funcKeywordBodyIsTakenHere(fn.Body, bracedBody) {
+	if !p.funcKeywordBodyIsTakenHere(fn.Body, bracedBody, parens) {
 		p.failUnexpectedAt(body, "", false)
 	}
 	return fn
@@ -6202,7 +6220,15 @@ func (p *Parser) funcKeywordBody() Command {
 // wants one after the parentheses too, and the shell that wants a brace group
 // after the keyword takes a bare simple command after the parentheses. See
 // [Dialect.FunctionKeywordBodyMustBeBraceGroup].
-func (p *Parser) funcKeywordBodyIsTakenHere(body Command, braced bool) bool {
+func (p *Parser) funcKeywordBodyIsTakenHere(body Command, braced, parens bool) bool {
+	if p.dialect.FunctionKeywordParensAreAPair && !parens {
+		// No pair, so a compound body or nothing: see
+		// [Dialect.FunctionKeywordParensAreAPair]. `[[ … ]]` counts as one
+		// though this dialect runs it as a builtin: measured 2026-10-03,
+		// `function a [[ 1 = 2 ]]; a` defines a and answers 1.
+		sc, isSimple := body.(*SimpleCmd)
+		return !isSimple || len(sc.Args) > 0 && sc.Args[0].Literal() == "[[" && !sc.Args[0].IsQuoted()
+	}
 	if p.dialect.FunctionKeywordBodyMustBeBraceGroup {
 		_, isGroup := body.(*Group)
 		return isGroup && braced
@@ -8394,4 +8420,18 @@ func firstLineOf(text string) string {
 		return text[:i]
 	}
 	return text
+}
+
+// tokenIsAnAssignmentWord reports whether a token is spelled as an
+// assignment: unquoted text whose part before the first `=` is a name.
+func tokenIsAnAssignmentWord(t Token) bool {
+	if t.Kind != TokWord || len(t.Spans) == 0 {
+		return false
+	}
+	first := t.Spans[0]
+	if first.Kind != Literal || first.Quoting != Unquoted {
+		return false
+	}
+	name, _, found := strings.Cut(first.Value, "=")
+	return found && isName(name)
 }

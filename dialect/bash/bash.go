@@ -2578,6 +2578,7 @@ func Semantics() interp.Semantics {
 	s.PrintfStarBeyondAnInt = interp.PrintfStarIsOutOfRange
 	s.CaseSubjectKeepsThePreviousLine = interp.No
 	s.SubstringRangeThirdColonIsABadSubstitution = interp.No
+	s.SubstringCountsBytes = interp.No
 	s.PrintfReportsBadNumber = interp.Yes
 	s.PrintfNumberOperand = interp.PrintfNumberLeadingNumber
 	s.PrintfIntegerCharConstantAfterBlanks = interp.No
@@ -3320,6 +3321,9 @@ func Semantics() interp.Semantics {
 	// is `word` and `"${@+word}"` is empty in 5.3.15, 3.2.57 and as `sh`,
 	// where dash and zsh answer the other way round (#1941).
 	s.PositionalListWithNoneIsSet = interp.No
+	// See interp.Semantics.SubstitutionRunsTheBodyReadWithItsLine, measured
+	// 2026-10-03.
+	s.SubstitutionRunsTheBodyReadWithItsLine = interp.No
 	// And an empty expansion written beside a `$@` that produced nothing does
 	// not bring the word back, on either side: `set --; e=; f "$e$@"` and
 	// `f "$@$e"` are both no argument at all, where `f "x$@"` is one.

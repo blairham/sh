@@ -308,6 +308,7 @@ func TestACloneOwnsEveryScopeTable(t *testing.T) {
 // whether it belongs in ownTables or in sharedTables.
 func seedTables(r *Runner) {
 	r.noticedJobs = map[*Job]bool{{}: true}
+	r.keptSubstBodies = map[substBodyKey]keptSubstBody{{text: "seed"}: {}}
 	r.Vars = map[string]string{"seed": "v"}
 	r.Arrays = map[string]Array{"seed": {0: {Str: "v"}}}
 	r.AssocArrays = map[string]AssocArray{"seed": {"k": {Str: "v"}}}

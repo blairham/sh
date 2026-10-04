@@ -119,10 +119,33 @@ const valueBackslashRanOutOfValue = "\x00\x00"
 // glob.tests' lines to agreeing and two the other way (#4158).
 const markedByGlobEscape = "*?[\\<()|/\x00" + extendedPatternMeta
 
-func globEscape(s string) string {
+func globEscape(s string) string { return globEscapeIn(s, markedByGlobEscape) }
+
+// globEscape is the escaped form under this dialect's marks.
+//
+// Every dialect but one marks the whole of markedByGlobEscape, where a
+// surplus mark is a character standing for itself. The one where a backslash
+// inside a bracket expression is a member rather than protection reads every
+// surplus mark there as a surplus member, so it marks what it reads and no
+// more: the three metacharacters, the backslash, the three that mean
+// something inside a bracket and the negating caret — the set
+// Runner.markedMeta gives a `case` pattern — with the separator and NUL this
+// form needs for its own sake. Measured 2026-10-03 in the pinned image, a
+// quoted `)` in `a[\)]c` expands to `a)c` alone over a directory holding
+// `a)c`, `a\c` and `abc`, and a quoted `-` to `a-c` and `a\c`: the
+// same answers its `case` gives.
+func (r *Runner) globEscape(s string) string {
+	if r.sem().BracketEscape != BracketEscapeIsOnlyAMember {
+		return globEscape(s)
+	}
+	return globEscapeIn(s, r.markedMeta()+"/\x00")
+}
+
+// globEscapeIn is globEscape over a named set.
+func globEscapeIn(s, marked string) string {
 	var b strings.Builder
 	for i := 0; i < len(s); i++ {
-		if strings.IndexByte(markedByGlobEscape, s[i]) >= 0 {
+		if strings.IndexByte(marked, s[i]) >= 0 {
 			b.WriteByte('\\')
 		}
 		b.WriteByte(s[i])

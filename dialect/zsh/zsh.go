@@ -2714,6 +2714,7 @@ func Semantics() interp.Semantics {
 	// rather than as an arithmetic offset — so `${x:i:2}` is refused where
 	// the other three take a substring. Measured against zsh 5.9.2.
 	s.SubstringRangeReadsModifiers = interp.Yes
+	s.SubstringCountsBytes = interp.No
 	// A subscript's expanded text is handed back to the bracket scanner
 	// here, so a key holding `]` or `[` is read as syntax rather than as
 	// the string a key is: with `key='x],b['` already stored, `(( m[$key]++
@@ -4300,6 +4301,8 @@ func Semantics() interp.Semantics {
 	// And a fired `+` on an empty list is one empty field: `set --; set --
 	// "${@:+w}"` leaves one. See Semantics.AFiredAlternateOnAnEmptyListIsOneField.
 	s.AFiredAlternateOnAnEmptyListIsOneField = interp.Yes
+	// unanswered SubstitutionRunsTheBodyReadWithItsLine: every body is read
+	// when it runs here, so nothing was read with the line.
 	// The third reading of what an empty `$@` takes with it, and the one that
 	// makes the axis three-valued: only what stands *before* the list goes with
 	// it, so `"$e$@"` is no argument and `"$@$e"` is one.

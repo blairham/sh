@@ -11336,9 +11336,53 @@ type Semantics struct {
 	// `[1] +  Running …` for `( exit 3 ) & wait; jobs` and for `/bin/sleep 0.1
 	// & wait; jobs`, `[1] + Terminated …` once a `kill %1` came first, the
 	// same under `set -m`, and nothing on a second `jobs`; `wait %1` instead
-	// of the bare one leaves nothing. bash 5.3.20, zsh 5.9.2, dash and BusyBox
-	// ash list nothing after a bare `wait`. ksh93 Yes; No elsewhere (#5687).
+	// of the bare one leaves nothing. bash 5.3.20 and zsh 5.9.2 list nothing
+	// after a bare `wait` (#5687).
+	//
+	// dash and BusyBox ash list it too, which #5687 recorded the other way.
+	// Re-measured 2026-10-03 from `-c` strings and script files, dash 0.5.12
+	// and BusyBox v1.37.0 in the pinned image: `( exit 3 ) & wait; jobs`
+	// writes `[1] + Done(3)` and `[1]+  Done(3)`, and `/bin/sleep 0.1 & wait;
+	// jobs` the `Done` row — the ended state, under
+	// EndedJobIsListedAsRunningWithoutTheMonitor's no. They keep a job a
+	// `wait` *named* as well, which ksh93 does not: see
+	// WaitLeavesTheJobForTheListing. ksh93, dash and ash Yes; bash and zsh No.
 	BareWaitLeavesJobsForTheListing Answer
+
+	// WaitLeavesTheJobForTheListing keeps a job a `wait` named — by `%`
+	// spec or by process id — in the table of a shell with nobody to send a
+	// notice to, so the next `jobs` lists it once, and a second `wait` for it
+	// before that listing answers its status again.
+	//
+	// dash and BusyBox ash. Measured 2026-10-03, dash 0.5.12 and BusyBox
+	// v1.37.0 in the pinned image, from `-c` strings and script files:
+	//
+	//	false & wait %1; wait %1; jobs         1, 1, then `[1] + Done(1)`
+	//	sleep .05 & p=$!; wait $p; jobs; wait $p   0, the Done row, then 127
+	//
+	// bash 5.3.20 and zsh 5.9.2 answer the second `wait %1` with `no such
+	// job` at 127 and list nothing; ksh93u+ lists nothing and answers the
+	// second at 0. So the job is reported by whichever comes first, a listing
+	// or nothing, and the `wait` is not one of the things that report it.
+	WaitLeavesTheJobForTheListing Answer
+
+	// JobsListingForgetsEachRowAsItGoes takes a finished job out of the
+	// table the moment its row is written, so the `+` and `-` of every row
+	// after it are read off what is left.
+	//
+	// dash and BusyBox ash. Measured 2026-10-03 from a script file, `true &
+	// true & true & sleep 0.2; jobs`:
+	//
+	//	dash 0.5.12      [3] + Done   [2] + Done   [1] + Done
+	//	BusyBox ash      [3]+  Done   [2]+  Done   [1]+  Done
+	//	bash 5.3.20      [1]   Done   [2]   Done   [3]+  Done
+	//	ksh93u+          [3] + …      [2] - …      [1]   …
+	//
+	// Each listing that starts from the newest reaches every row as the
+	// newest job left, so every row is current; a running job after them is
+	// marked the same way — `sleep 1 & true & sleep 0.2; jobs` writes `[2]+
+	// Done` and `[1]+ Running` in ash. bash marks the table as it stood.
+	JobsListingForgetsEachRowAsItGoes Answer
 
 	// BareWaitReportsASignalDeath says when a bare `wait` says, for each job
 	// it waited out that a signal ended, what a `wait` naming the job says.
@@ -17065,6 +17109,25 @@ type Semantics struct {
 	// agree. Measured with a background job outliving the signal, so the
 	// answer is about the interruption and not about the job's own status.
 	WaitForAJobFailsWhenInterrupted Answer
+
+	// ReadIsAbandonedByATrappedSignal gives up a `read` that is waiting when
+	// a trapped signal arrives: nothing is assigned, the status is 1 and the
+	// handler runs once the builtin has returned. The other reading runs the
+	// handler and goes on reading.
+	//
+	// Measured 2026-10-03 with a `read -r l <&3` on a fifo, an INT trap
+	// `echo T`, and a job that sends INT 0.3s in and writes `late` to the
+	// fifo 0.5s after that:
+	//
+	//	dash 0.5.12, BusyBox ash 1.37.0   T, st=1 l=[]
+	//	bash 5.3.20, bash 3.2, zsh 5.9.2  T, st=0 l=[late]
+	//	bash 5.3.20 as sh                 T, st=130 l=[]
+	//	ksh93u+                           T, st=258 l=[]
+	//
+	// So four answers, and the two abandoning statuses of bash's POSIX mode
+	// and of ksh93 are not modeled: those columns answer no here and keep
+	// reading, which is the row recorded for them.
+	ReadIsAbandonedByATrappedSignal Answer
 	// DisownRemovesTheJob makes `disown` take the job out of the table, so
 	// a later `jobs` no longer lists it: bash and zsh. ksh93's disown only
 	// shields the job from the HUP an exiting shell would send, and its
@@ -25632,6 +25695,25 @@ type Semantics struct {
 	// all.
 	SubstringNegativeLengthIsEmpty Answer
 
+	// SubstringCountsBytes takes `${x:offset:length}`'s numbers in bytes
+	// where the value has a character wider than one, though `${#x}` counts
+	// it in characters: BusyBox ash 1.37.0. Measured 2026-10-03 in the
+	// pinned image under `LC_ALL=C.UTF-8`, `s=héllo` (six bytes, five
+	// characters):
+	//
+	//	              ${#s}  ${s:1:2}  ${s:3}  ${s: -4}    ${s:1:-1}
+	//	ash           5      é         llo     \xa9llo    éll
+	//	bash, ksh93, zsh 5   él        lo      éllo        éll
+	//
+	// So the offset can land inside a character and hand back half of it,
+	// which is what the bytes give. bash 5.3, ksh93u+ and zsh 5.9.2 say no.
+	//
+	// Asked only where the value has a character wider than a byte, the one
+	// place the two readings part.
+	//
+	// unpinned dash: there is no `${x:offset:length}` to ask with.
+	SubstringCountsBytes Answer
+
 	// SubstringEndBehindTheStart answers `${v:1:-9}` on a six-character
 	// value: a negative length whose end falls *behind* the offset rather
 	// than inside the value.
@@ -30274,6 +30356,26 @@ type Semantics struct {
 	// spelled `@` is an array and answers elsewhere (#1941).
 	PositionalListWithNoneIsSet Answer
 
+	// SubstitutionRunsTheBodyReadWithItsLine runs the tree a `$( … )` body
+	// was read into with the line that holds it, rather than reading the text
+	// again when the substitution runs — which is what decides the alias
+	// table the body's commands see.
+	//
+	// dash and BusyBox ash say yes: `alias t=echo; v=$(t S); echo "v=$v"` on
+	// one line writes `t: not found` and `v=` there, because the body was
+	// read before the `alias` beside it ran, while `eval "t E"` on the same
+	// line writes `E`. bash 5.3 reads the body with its line too and says
+	// no: the same line answers `v=S`, the body expanded against the table
+	// as it stands when the word is expanded. Measured 2026-10-03, dash
+	// 0.5.12, bash 5.3.20 and BusyBox v1.37.0 in the pinned image.
+	//
+	// Asked only where a body was read with its line: syntax.Dialect's
+	// SubstitutionBodyRead.
+	//
+	// unpinned ksh: reads every body when it runs, so is never asked.
+	// unpinned zsh: likewise.
+	SubstitutionRunsTheBodyReadWithItsLine Answer
+
 	// EmptyListTakesTheWord says how far a quoted list expansion that produced
 	// **no fields** reaches when it takes the word with it. `"$@"` with no
 	// positional parameters is no word at all in every column — that much is
@@ -33158,6 +33260,12 @@ func PosixSemantics() Semantics {
 		TildeNameEndsOnlyAtAWrittenSlash: No,
 		// A bare `wait` lets its jobs go where nobody is told. See the field.
 		BareWaitLeavesJobsForTheListing: No,
+		// A trapped signal leaves a `read` waiting. See the field.
+		ReadIsAbandonedByATrappedSignal: No,
+		// And a named one, and a listing marks the table as it stood. See
+		// the fields.
+		WaitLeavesTheJobForTheListing:     No,
+		JobsListingForgetsEachRowAsItGoes: No,
 		// A hidden export reaches a child, which is what this package did
 		// before the axis existed. See the field.
 		AHiddenExportStillReachesAChild: Yes,
@@ -33462,6 +33570,12 @@ func PosixSemantics() Semantics {
 // line rather than one per axis.
 func CoreSemantics() Semantics {
 	return Semantics{
+		// A substring's numbers count what `${#x}` counts, which is what this
+		// package did before the axis existed and what bash, ksh93 and zsh
+		// answer. Answered here because the question
+		// is put to every range over a value with a wide character. See
+		// Semantics.SubstringCountsBytes.
+		SubstringCountsBytes: No,
 		// `-ai` is the two letters, which is what this package did before the
 		// axis existed and what two of the three columns with the builtin
 		// answer. Answered here because the question is put to every `-ai`,
@@ -33539,6 +33653,12 @@ func CoreSemantics() Semantics {
 		TildeNameEndsOnlyAtAWrittenSlash: No,
 		// A bare `wait` lets its jobs go where nobody is told. See the field.
 		BareWaitLeavesJobsForTheListing: No,
+		// A trapped signal leaves a `read` waiting. See the field.
+		ReadIsAbandonedByATrappedSignal: No,
+		// And a named one, and a listing marks the table as it stood. See
+		// the fields.
+		WaitLeavesTheJobForTheListing:     No,
+		JobsListingForgetsEachRowAsItGoes: No,
 		// A hidden export reaches a child, which is what this package did
 		// before the axis existed. See the field.
 		AHiddenExportStillReachesAChild: Yes,

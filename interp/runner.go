@@ -3259,6 +3259,9 @@ type Runner struct {
 	// tildeWarnTail is the rest of the word a tilde prefix stands in front
 	// of, for the one warning that quotes it. See warnTruncatedTildeNumber.
 	tildeWarnTail string
+	// keptSubstBodies are the substitution bodies read with their line, in
+	// the dialect that runs those trees. See keptsubstbody.go.
+	keptSubstBodies map[substBodyKey]keptSubstBody
 	// bareWaitLeavesJobs is set while a bare `wait` runs in the column whose
 	// jobs it reaps stay for the next listing. See
 	// Semantics.BareWaitLeavesJobsForTheListing.

@@ -1800,3 +1800,14 @@ precedence, the parameter-expansion operator set, and what a
 `${x/pat/rep}` pattern means. Those are needed by expansion, not by
 tokenization, and each is its own document. Recorded here so their
 absence is a known gap rather than an oversight.
+
+## Which tree a substitution runs
+
+dash and BusyBox ash read a `$( … )` body with the line that holds it and
+run *that* tree, so its commands see the alias table as it stood when the
+line was read. bash 5.3 reads the body with its line too, and then reads it
+again when the word is expanded. Measured 2026-10-03 on one line, `alias
+t=echo; eval "t E"; v=$(t S); echo "v=$v"`: dash 0.5.12 and BusyBox v1.37.0
+in the pinned image write `E`, `t: not found` and `v=`; the `eval` reads its
+text when it runs, and a later line's `$(t L)` sees the alias. bash
+(with `expand_aliases`) writes `v=S`. `Semantics.SubstitutionRunsTheBodyReadWithItsLine`.

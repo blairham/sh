@@ -1405,7 +1405,7 @@ func (r *Runner) substitutedWordFields(s syntax.Span, sp splitPolicy, head bool)
 		r.substitutedWordSplit = e
 		if s.Quoting != syntax.Unquoted {
 			defer r.withoutGlobbing()()
-			return escapeAll(r.expandWord(e.Arg)), true
+			return r.escapeAll(r.expandWord(e.Arg)), true
 		}
 		return r.tildeFlagFields(s, head, r.expandWordEscaped(e.Arg)), true
 	}
@@ -1419,7 +1419,7 @@ func (r *Runner) substitutedWordFields(s syntax.Span, sp splitPolicy, head bool)
 		// Switched off through the same field `set -f` uses, because it is
 		// the same question asked from a different place.
 		defer r.withoutGlobbing()()
-		return escapeAll(r.expandWord(e.Arg)), true
+		return r.escapeAll(r.expandWord(e.Arg)), true
 	}
 	if sp == splitNever {
 		// Nothing here is going to be split, so the word is a *value* and
@@ -2288,12 +2288,12 @@ func (r *Runner) expandAtList(s syntax.Span, sp splitPolicy, head bool) ([]strin
 		if e.Prefix == '*' {
 			joined := strings.Join(names, r.ifsFirst(ifs, set))
 			if s.Quoting != syntax.Unquoted {
-				return []string{globEscape(joined)}, true
+				return []string{r.globEscape(joined)}, true
 			}
 			return r.splitFieldsAskPlain(joined, ifs, set), true
 		}
 		if s.Quoting != syntax.Unquoted {
-			return escapeAll(names), true
+			return r.escapeAll(names), true
 		}
 		return names, true
 	}
@@ -2537,7 +2537,7 @@ func (r *Runner) expandAtList(s syntax.Span, sp splitPolicy, head bool) ([]strin
 			// one field per parameter, because `@` keeps its fields
 			// however it is subscripted.
 			if s.Quoting != syntax.Unquoted {
-				return []string{globEscape(strings.Join(elems, r.ifsFirst(ifs, set)))}, true
+				return []string{r.globEscape(strings.Join(elems, r.ifsFirst(ifs, set)))}, true
 			}
 			// Unquoted, the join is a dialect's answer rather than the
 			// spelling's, and it is the same answer `[@]` asks — measured,
@@ -2602,7 +2602,7 @@ func (r *Runner) expandAtList(s syntax.Span, sp splitPolicy, head bool) ([]strin
 					return []string{""}, true
 				}
 			}
-			return escapeAll(elems), true
+			return r.escapeAll(elems), true
 		}
 		return r.tildeFlagElements(s, head, r.listElementFields(e, s, sp, elems)), true
 	}
@@ -2618,9 +2618,9 @@ func (r *Runner) expandAtList(s syntax.Span, sp splitPolicy, head bool) ([]strin
 		if s.Quoting != syntax.Unquoted {
 			if e.Name == "*" {
 				ifs, set := r.ifs()
-				return []string{globEscape(strings.Join(elems, r.ifsFirst(ifs, set)))}, true
+				return []string{r.globEscape(strings.Join(elems, r.ifsFirst(ifs, set)))}, true
 			}
-			return escapeAll(elems), true
+			return r.escapeAll(elems), true
 		}
 		// Unquoted, both spellings go the way every other unquoted list
 		// expansion goes. This branch used to join `*` and split what came
@@ -2661,7 +2661,7 @@ func (r *Runner) expandAtList(s syntax.Span, sp splitPolicy, head bool) ([]strin
 		// Escaped for the same reason every other quoted expansion is: the
 		// fields go on to pathname expansion, and a `*` in a *value* is not
 		// a pattern. Returning them raw made `set -- "$x"` glob.
-		return escapeAll(r.params()), true
+		return r.escapeAll(r.params()), true
 	}
 	// Unquoted, each parameter goes through the same two stages every other
 	// expansion does.
@@ -3097,7 +3097,7 @@ func (r *Runner) expandSpan(s syntax.Span, sp splitPolicy, head bool) (text stri
 			// missing: the quoting was recorded, nothing read it, and the
 			// escape reached the output as the two characters it was written
 			// as. The result is quoted text like any other.
-			return globEscape(r.expandDollarSingle(s.Value)), false
+			return r.globEscape(r.expandDollarSingle(s.Value)), false
 		}
 		// Literal text is never split, however it was written. Its
 		// metacharacters stay live only when it was unquoted; quoting is
@@ -3132,7 +3132,7 @@ func (r *Runner) expandSpan(s syntax.Span, sp splitPolicy, head bool) (text stri
 			// other reader, and it is kept here for what it *says*.
 			return "\\" + s.Value, false
 		}
-		return globEscape(s.Value), false
+		return r.globEscape(s.Value), false
 	case syntax.ParamExp:
 		// An unbraced subscript the run does not read as one leaves the
 		// parameter behind and hands the brackets back as text. See
@@ -3167,7 +3167,7 @@ func (r *Runner) expandSpan(s syntax.Span, sp splitPolicy, head bool) (text stri
 		if !ok {
 			return "", false
 		}
-		return globEscape(path), false
+		return r.globEscape(path), false
 	case syntax.ArithSubst:
 		// Through the subscript hold, which is what keeps `${a[$((i++))]}` to
 		// one move of `i` however many readers the expansion has. See
@@ -3254,7 +3254,7 @@ func (r *Runner) expansionResult(v string, unquoted bool, glob, split Answer, ax
 	// modifier and flag has. See pendingMark.
 	v = r.resolvePending(v)
 	if !unquoted {
-		return globEscape(v), false
+		return r.globEscape(v), false
 	}
 	// Both axes are asked only when the value could actually differ: a result
 	// with no separator in it is not split either way, and one with no
@@ -3309,7 +3309,7 @@ func (r *Runner) escapeResult(v string, glob Answer) string {
 		// zsh does not treat the result of an expansion as a pattern. The
 		// same rule decides `[[ abc == $p ]]`, which is one behavior
 		// observed twice rather than two quirks.
-		return globEscape(v)
+		return r.globEscape(v)
 	}
 	// Two marks over one value, and they are different questions about the
 	// same result: which of its characters may build a pattern *group*, and
@@ -6786,7 +6786,28 @@ func splitLengthFromModifiers(w *syntax.Word) (*syntax.Word, []string, bool) {
 // and `${s:2}` is `llo`; under `LC_ALL=C` the same shells give `é` and `llo`
 // with the `é` cut in half, which is what indexing bytes produces.
 func substring(value string, off int, e *syntax.ParamExpr, r *Runner) string {
-	return strings.Join(substringUnits(r.markedUnits(value), off, e, r), "")
+	units := r.markedUnits(value)
+	if len(units) != len(value)-strings.Count(value, liveMark)*len(liveMark) &&
+		r.ask(r.sem().SubstringCountsBytes, "a substring's numbers counting bytes") {
+		// A character wider than a byte, in the dialect that counts the
+		// range in bytes anyway: see Semantics.SubstringCountsBytes.
+		units = markedBytes(value)
+	}
+	return strings.Join(substringUnits(units, off, e, r), "")
+}
+
+// markedBytes is markedUnits with every unit one byte: the mark stays on the
+// unit after it, as it does there.
+func markedBytes(w string) []string {
+	var out []string
+	for i, seg := range strings.Split(w, liveMark) {
+		u := singleBytes(seg)
+		if i > 0 && len(u) > 0 {
+			u[0] = liveMark + u[0]
+		}
+		out = append(out, u...)
+	}
+	return out
 }
 
 // substringUnits is substring's arithmetic over units already taken apart,
@@ -8335,10 +8356,10 @@ func (r *Runner) tildeDirVar(name string) (string, bool) {
 
 // escapeAll marks every field's metacharacters as literal, for the fields
 // that reach pathname expansion without having gone through expandSpan.
-func escapeAll(in []string) []string {
+func (r *Runner) escapeAll(in []string) []string {
 	out := make([]string, len(in))
 	for i, s := range in {
-		out[i] = globEscape(s)
+		out[i] = r.globEscape(s)
 	}
 	return out
 }

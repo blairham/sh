@@ -1805,9 +1805,24 @@ func (r *Runner) refuseFdOverLimit(fd int) bool {
 		return false
 	}
 	r.diagf("%s\n", Wording(r.diag().FdNumberOverLimit, "%[1]d: %[2]s",
-		fd, r.diag().reasonText(reason(syscall.EBADF))))
+		fd, r.diag().reasonText(reason(syscall.EBADF)), r.lowestFreeDescriptor()))
 	r.status = r.redirectFailureStatus()
 	return true
+}
+
+// lowestFreeDescriptor is the number an open would have produced: the lowest
+// one past the three named streams that this shell's table does not hold.
+// It is the third verb FdNumberOverLimit is given, for the dialect whose
+// sentence names the descriptor the open produced alongside the one it could
+// not be moved to.
+func (r *Runner) lowestFreeDescriptor() int {
+	n := 3
+	for {
+		if _, held := r.fds[n]; !held {
+			return n
+		}
+		n++
+	}
 }
 
 // refuseFdOverLimitFor routes the two refusals a number over the process's

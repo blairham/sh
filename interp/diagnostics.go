@@ -7594,6 +7594,11 @@ type Diagnostics struct {
 	// descriptor`, which is what bash says here and is the shared wording
 	// rather than a special case. ksh93 names the thing instead of the number
 	// and quotes a different errno, so it says so.
+	//
+	// A third verb, %[3]d, is the number the open produced, which BusyBox ash
+	// names: `ulimit -n 64; exec 70>fresh` is `dup2(3,70): Bad file
+	// descriptor` there, and `dup2(4,70)` with 3 already open. Measured
+	// 2026-10-03 in the pinned image; the file is created either way.
 	FdNumberOverLimit string
 
 	// FdPickedNumberUnusable is the sentence one shell writes **before** the

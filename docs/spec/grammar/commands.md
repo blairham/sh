@@ -3364,6 +3364,30 @@ Until #1833 the flag was read in the parenthesized production and
 nowhere else, so both bash and ksh **defined** these bodies at status 0 —
 a wrong acceptance, which nothing reports.
 
+**BusyBox ash answers the same three rows by a different rule**, and it
+reads the keyword as a prefix to one of two shapes: the `()` pair and then
+any body its parenthesized form takes (which includes a simple command), or
+no pair and a compound body. A `(` after the name is always the pair's first
+half, on the same line or the next. Measured 2026-10-03 in the pinned image:
+
+    function a echo B            unexpected word
+    function a( echo B )         unexpected word (expecting ")")
+    function a\n( echo B )       unexpected word (expecting ")")
+    function a\n(( 1 ))          unexpected "(" (expecting ")")
+    function a zz\n{ … }         unexpected word, at zz
+    function a() echo B          defined
+    function a\n{ … }, if, for   defined
+    function a [[ 1 = 2 ]]       defined, though `[[` is a builtin there
+
+`FunctionKeywordParensAreAPair`, ash alone. It is why the subshell row
+fails there at the *closer* the pair wanted rather than at the `(`.
+
+And a word spelled as an assignment after the keyword is no name there:
+`function a=b { … }` is `unexpected "{"`, `function a=b;` is `unexpected
+";"`, and `function a=b` alone runs out of file — where `function =ab`,
+`function a-b=c` and the quoted `function "a=b"` define a function like any
+other word. `FunctionKeywordRefusesAnAssignment`, measured the same day.
+
 **ksh93 has a third answer, and it is not a weaker version of bash's.**
 It takes the simple command and refuses a *redirection* in it, wherever
 the operator stands (measured 2026-09-05, rows

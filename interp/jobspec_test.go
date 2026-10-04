@@ -199,7 +199,11 @@ func TestWaitNextJobIsTheFirstToSucceed(t *testing.T) {
 		},
 		{
 			"nothing to wait for", "wait -n\necho st=$?",
-			"st=0", "where the other reading answers 127",
+			"st=127", "an empty table is 127 under both readings, re-measured 2026-10-03",
+		},
+		{
+			"only jobs that had ended", "{ exit 7; } &\n/bin/sleep 0.3\nwait -n\necho st=$?",
+			"st=0", "nothing was waited out, so nothing failed to succeed",
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

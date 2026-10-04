@@ -115,3 +115,20 @@ func TestAZshrcThatFailsOnItsFirstLeavesOneAtThePrompt(t *testing.T) {
 		}
 	}
 }
+
+// And it is what lets an alias the file defines reach the file's own later
+// lines, which a whole-file parse had already read past. Measured on the same
+// zsh: a `.zshenv` of `alias a='echo hit'` and then `a` prints `hit`.
+func TestAnAliasAZshStartupFileDefinesReachesItsNextLine(t *testing.T) {
+	home := scratchHome(t)
+	writeHomeFile(t, home, ".zshenv", "alias a='echo hit'\na\n")
+	var o, e bytes.Buffer
+	sh := scratchShell(t)
+	sh.Stdout, sh.Stderr = &o, &e
+	if code := driver.MainArgs(sh, []string{"zsh", "-c", "echo main"}); code != 0 {
+		t.Errorf("status %d, want 0", code)
+	}
+	if want := "hit\nmain\n"; o.String() != want || e.Len() != 0 {
+		t.Errorf("stdout %q and stderr %q, want %q and nothing", o.String(), e.String(), want)
+	}
+}

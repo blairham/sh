@@ -69,3 +69,24 @@ func TestABashEnvThatWillNotParseRunsUpToTheFailure(t *testing.T) {
 		})
 	}
 }
+
+// Reading a line at a time is also what lets a line of the file change how the
+// next one is read. Measured on the same bash: a `$BASH_ENV` of `shopt -s
+// extglob` and then `echo @(a|b)`, run from an empty directory, prints the
+// pattern and then the command's output. Read whole, the second line was
+// parsed before the option existed and refused.
+func TestABashEnvsGrammarOptionReachesItsNextLine(t *testing.T) {
+	home := scratchHome(t)
+	writeHomeFile(t, home, "rc.sh", "shopt -s extglob\necho @(a|b)\n")
+	t.Setenv("BASH_ENV", filepath.Join(home, "rc.sh"))
+	t.Chdir(t.TempDir())
+	var o, e bytes.Buffer
+	sh := scratchShell(t)
+	sh.Stdout, sh.Stderr = &o, &e
+	if code := driver.MainArgs(sh, []string{"bash", "-c", "echo main"}); code != 0 {
+		t.Errorf("status %d, want 0", code)
+	}
+	if want := "@(a|b)\nmain\n"; o.String() != want || e.Len() != 0 {
+		t.Errorf("stdout %q and stderr %q, want %q and nothing", o.String(), e.String(), want)
+	}
+}

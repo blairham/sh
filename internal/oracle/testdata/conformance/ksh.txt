@@ -60,9 +60,7 @@ hash/a-subshell-keeps-its-own-entries
 help/a-bad-option-to-umask-is-named-the-way-the-dialect-names-one
 help/the-help-option-comes-before-what-the-builtin-cannot-do
 help/the-help-option-is-the-whole-word-and-stands-where-an-option-stands
-heredoc/a-body-line-opening-with-the-delimiters-own-letters
 heredoc/a-body-on-a-descriptor-outlives-the-exec-that-opened-it
-heredoc/a-joined-line-that-spells-the-delimiter
 heredoc/a-substitution-in-the-delimiter-is-its-own-text
 heredoc/an-expansion-left-unterminated-in-a-body
 heredoc/quoting-the-delimiter-is-what-makes-the-body-literal

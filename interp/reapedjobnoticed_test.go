@@ -5,7 +5,9 @@ package interp
 
 import (
 	"context"
+	"runtime"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -20,8 +22,7 @@ import (
 // that matters: without the wait on the reaped program, `jobs` finds the job
 // still running every time.
 func TestAReapedProgramsJobIsNoticedBeforeTheTableIsRead(t *testing.T) {
-	afterAJobsProgramIsReaped = func() { time.Sleep(300 * time.Millisecond) }
-	t.Cleanup(func() { afterAJobsProgramIsReaped = nil })
+	holdTheWindow(t, &afterAJobsProgramIsReaped, 300*time.Millisecond)
 	const src = `/bin/sh -c 'exit 3' & p=$!
 /bin/sh -c 'i=0; while kill -0 $1 2>/dev/null && [ $i -lt 3000 ]; do /bin/sleep 0.01; i=$((i+1)); done' poll $p
 jobs
@@ -52,10 +53,45 @@ echo end`
 // Without the kernel's answer, `jobs` finds the job still running every time
 // the hook holds this window open.
 func TestAProgramTheKernelReapedIsNoticedBeforeTheGoroutineSaysSo(t *testing.T) {
-	beforeAJobsProgramIsSaidReaped = func() { time.Sleep(300 * time.Millisecond) }
-	t.Cleanup(func() { beforeAJobsProgramIsSaidReaped = nil })
+	holdTheWindow(t, &beforeAJobsProgramIsSaidReaped, 300*time.Millisecond)
 	const src = `/bin/sh -c 'exit 3' & p=$!
 /bin/sh -c 'i=0; while kill -0 $1 2>/dev/null && [ $i -lt 3000 ]; do /bin/sleep 0.01; i=$((i+1)); done' poll $p
+jobs
+echo end`
+	f, err := syntax.Parse(src, syntax.Core())
+	if err != nil {
+		t.Fatal(err)
+	}
+	sem := PosixSemantics()
+	sem.JobsListFinishedJobs = Yes
+	sem.JobsShowBackgroundCommand = Yes
+	out := &strings.Builder{}
+	r := newTestRunner(t, &Runner{
+		Semantics: &sem, Diagnostics: &Diagnostics{}, Name: "sh",
+		Stdout: out, Stderr: out, Env: []string{"PATH=/usr/bin:/bin"},
+	})
+	if _, err := r.Run(context.Background(), f); err != nil {
+		t.Fatal(err)
+	}
+	got := out.String()
+	if !strings.Contains(got, "Done") || strings.Contains(got, "Running") || !strings.HasSuffix(got, "end\n") {
+		t.Errorf("got %q, want the job listed as ended at 3", got)
+	}
+}
+
+// And the window before either: the program has exited and nothing has reaped
+// it yet, because the goroutine whose wait it is has not run (#5854). A zombie
+// still answers `kill -0`, so the script watches /proc for the Z instead, and
+// the hook holds the goroutine off its wait for longer than that takes.
+// Without the waitid peek, `jobs` finds the job still running every time.
+// Linux only, because the peek is: elsewhere the window is the signal's.
+func TestAProgramThatExitedUnreapedIsNoticedBeforeTheTableIsRead(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("the waitid peek and /proc are Linux's")
+	}
+	holdTheWindow(t, &beforeAJobsProgramIsWaitedFor, 2*time.Second)
+	const src = `/bin/sh -c 'exit 3' & p=$!
+/bin/sh -c 'i=0; until grep -q "^[0-9]* ([^)]*) Z" /proc/$1/stat 2>/dev/null || [ $i -ge 1000 ]; do /bin/sleep 0.01; i=$((i+1)); done' poll $p
 jobs
 echo end`
 	f, err := syntax.Parse(src, syntax.Core())
@@ -142,4 +178,13 @@ echo end`
 	if took := time.Since(begun); took > 2*time.Second || !strings.Contains(out.String(), "Running") {
 		t.Errorf("took %v and wrote %q, want the job listed running at once", took, out.String())
 	}
+}
+
+// holdTheWindow sets a window hook to hold a job's goroutine for d, until the
+// test ends.
+func holdTheWindow(t *testing.T, hook *atomic.Pointer[func()], d time.Duration) {
+	t.Helper()
+	hold := func() { time.Sleep(d) }
+	hook.Store(&hold)
+	t.Cleanup(func() { hook.Store(nil) })
 }

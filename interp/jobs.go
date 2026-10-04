@@ -3643,7 +3643,16 @@ func (r *Runner) awaitAReapedProgramsJob(j *Job) {
 	// waiter has reaped it, because only the parent reaps, and the job is as
 	// over as the signal would say. A reused pid answers as alive, which
 	// leaves the job to the signal, as before.
-	if pid := j.bodysProgram.Load(); pid > 0 && childIsGone(int(pid)) {
+	//
+	// And one step earlier still: the program has exited and nobody has
+	// reaped it yet, because the goroutine whose wait it is has not been
+	// scheduled. A real shell's SIGCHLD reaches it then, and a `wait` that
+	// returns reaps every child that has ended — so zsh's `sleep 0 & sleep 0
+	// & wait $!; wait %%` finds job 1 gone. A zombie answers `kill -0`, so
+	// the check above cannot see it, and on a loaded Linux runner `wait %%`
+	// found job 1 still running (#5854). Only the reaping is left, and that
+	// is our own goroutine's to do.
+	if pid := int(j.bodysProgram.Load()); pid > 0 && (childIsGone(pid) || childHasExited(pid)) {
 		<-j.done
 	}
 }
@@ -3664,13 +3673,28 @@ func bodyIsOneSimpleCommand(st *syntax.Stmt) bool {
 // job's goroutine open between the reaping and the job's own record, which is
 // the window #5611 lived in, so the window can be made as wide as a test needs
 // rather than waited for.
-var afterAJobsProgramIsReaped func()
+var afterAJobsProgramIsReaped atomic.Pointer[func()]
+
+// beforeAJobsProgramIsWaitedFor is the same kind of hook for the window before
+// the goroutine waits at all. The program has exited and is a zombie nobody
+// has reaped, so `kill -0` still answers and neither signal has come (#5854).
+var beforeAJobsProgramIsWaitedFor atomic.Pointer[func()]
+
+// holdIfHooked runs a window hook, on a job's goroutine only. The hooks are
+// atomic because a job one test leaves running reaches its wait whenever it
+// gets there, which can be while the next test is setting a hook — a race
+// `go test -race -count=N` reports.
+func (r *Runner) holdIfHooked(hook *atomic.Pointer[func()]) {
+	if hold := hook.Load(); hold != nil && r.inJob != nil {
+		(*hold)()
+	}
+}
 
 // beforeAJobsProgramIsSaidReaped is the same kind of hook for the window
 // before programReaped is closed. The kernel has reaped the program and the
 // goroutine has not said so yet, so the pid is gone while the signal is
 // still to come (#5651).
-var beforeAJobsProgramIsSaidReaped func()
+var beforeAJobsProgramIsSaidReaped atomic.Pointer[func()]
 
 // programOfAJobStarted records the pid of the program a one-program job's
 // body runs, at the body's own depth, so that a program a function in the
@@ -3701,16 +3725,17 @@ func (r *Runner) programOfAJobReaped() {
 // opened, and opened only on a job's goroutine — held anywhere else it would
 // give the job the time to finish and close the window it is meant to open.
 func (r *Runner) holdTheUnsaidWindowOpen() {
-	if beforeAJobsProgramIsSaidReaped != nil && r.inJob != nil {
-		beforeAJobsProgramIsSaidReaped()
-	}
+	r.holdIfHooked(&beforeAJobsProgramIsSaidReaped)
+}
+
+// holdTheUnreapedWindowOpen is the same door for beforeAJobsProgramIsWaitedFor.
+func (r *Runner) holdTheUnreapedWindowOpen() {
+	r.holdIfHooked(&beforeAJobsProgramIsWaitedFor)
 }
 
 // holdTheReapedWindowOpen is the same door for afterAJobsProgramIsReaped.
 func (r *Runner) holdTheReapedWindowOpen() {
-	if afterAJobsProgramIsReaped != nil && r.inJob != nil {
-		afterAJobsProgramIsReaped()
-	}
+	r.holdIfHooked(&afterAJobsProgramIsReaped)
 }
 
 // announceSignalDeathsAtAForegroundReap says, for each background job a

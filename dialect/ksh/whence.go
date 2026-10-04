@@ -6,6 +6,7 @@ package ksh
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/blairham/sh/interp"
@@ -56,11 +57,19 @@ import (
 //     with a function defined do. So it is a PATH search, which this
 //     substrate has, rather than the function-path walk #633 took it for.
 //
-// `-f` is ksh93's too and is not implemented here — the letter is refused the
-// way the substrate refuses an option a dialect has but this shell does not,
-// and docs/spec/semantics.md records the boundary. An unknown letter is
-// `unknown option` with the usage line after it, 2; so is a whence with
-// nothing to ask about.
+//   - `-f`: the search with functions left out. A name that is also a builtin
+//     or on PATH answers as that; a name that is *only* a function is not
+//     reported missing but as `N is an undefined function` under `-v` and as
+//     `N` bare, at 0. Measured 2026-10-04 on ksh93u+ 2012-08-01: `f() { :;
+//     }; whence -fv f` is that sentence, `ls() { :; }; whence -fv ls` is the
+//     tracked alias for /bin/ls, `echo() { :; }; whence -fv echo` is a shell
+//     builtin, and `type -fa echo` lists the builtin, the PATH hit and the
+//     undefined function — the function's own line gone and the builtin it
+//     hid back in view. `-p` already leaves functions out, so `-fp f` is
+//     silence at 1 as `-p f` is.
+//
+// An unknown letter is `unknown option` with the usage line after it, 2; so is
+// a whence with nothing to ask about.
 const whenceUsage = "Usage: whence [-afpqv] name  ..."
 
 // registerWhence installs the builtin.
@@ -95,11 +104,8 @@ func whenceOptions(r *interp.Runner, args []string) (names []string, opts string
 		}
 		for _, letter := range word[1:] {
 			switch letter {
-			case 'v', 'p', 'q', 'a':
+			case 'v', 'p', 'q', 'a', 'f':
 				opts += string(letter)
-			case 'f':
-				r.Diagnosef("whence: -%c is not implemented yet\n", letter)
-				return nil, "", 2
 			default:
 				r.Diagnosef("whence: -%c: unknown option\n", letter)
 				_, _ = fmt.Fprintf(r.Err(), "%s\n", whenceUsage)
@@ -145,10 +151,11 @@ func whenceOne(r *interp.Runner, ctx context.Context, name, opts string) int {
 		verbose := max(strings.LastIndexByte(opts, 'v'), strings.LastIndexByte(opts, 'a')) > lastP
 		return whencePath(r, name, verbose, quiet, strings.ContainsRune(opts, 'a'))
 	}
+	skipFunctions := strings.ContainsRune(opts, 'f')
 	if strings.ContainsRune(opts, 'a') {
 		// `-a` speaks in the sentences whether or not `-v` was written:
 		// `whence -a echo` and `whence -av echo` are the same three lines.
-		return whenceAll(r, name, quiet)
+		return whenceAll(r, name, quiet, skipFunctions)
 	}
 	if value, ok := r.ReportedAlias(name); ok {
 		// The one resolution the core's lookup cannot see: the table is the
@@ -162,6 +169,9 @@ func whenceOne(r *interp.Runner, ctx context.Context, name, opts string) int {
 			_, _ = fmt.Fprintf(r.Out(), "%s\n", quoteWhenNeeded(value))
 		}
 		return 0
+	}
+	if kind, _ := r.ResolveName(name); skipFunctions && kind == interp.NameFunction {
+		return whenceUnderTheFunction(r, name, verbose, quiet)
 	}
 	inner := "command"
 	innerArgs := []string{"-v", name}
@@ -180,6 +190,34 @@ func whenceOne(r *interp.Runner, ctx context.Context, name, opts string) int {
 	return fn(r, ctx, innerArgs)
 }
 
+// whenceUnderTheFunction is `-f` on a name a function answers: what the name
+// resolves to with the function left out, and the undefined-function answer
+// when nothing else holds it. See the table at the top of the file.
+func whenceUnderTheFunction(r *interp.Runner, name string, verbose, quiet bool) int {
+	var line string
+	switch path, onPath := r.LookPath(name); {
+	case slices.Contains(r.NameKinds(name), interp.NameBuiltin):
+		line = name
+		if verbose {
+			line = r.BuiltinSentence(name)
+		}
+	case onPath:
+		line = path
+		if verbose {
+			line = r.TypeExternalSentence(name, path)
+		}
+	default:
+		line = name
+		if verbose {
+			line = name + " is an undefined function"
+		}
+	}
+	if !quiet {
+		_, _ = fmt.Fprintf(r.Out(), "%s\n", line)
+	}
+	return 0
+}
+
 // whenceAll is `-a`: every resolution the shell can see, in the order ksh93
 // lists them, and always as sentences.
 //
@@ -188,13 +226,25 @@ func whenceOne(r *interp.Runner, ctx context.Context, name, opts string) int {
 // actually run, while an alias hides nothing: `alias echo=x; whence -a echo`
 // is four lines and `echo() { :; }; whence -a echo` is three with no builtin
 // among them.
-func whenceAll(r *interp.Runner, name string, quiet bool) int {
+//
+// skipFunctions is `-f`, which takes the function's line away and with it the
+// shadow it cast: the builtin it hid is listed again, and a name that is only
+// a function is the undefined-function line alone.
+func whenceAll(r *interp.Runner, name string, quiet, skipFunctions bool) int {
 	var lines []string
 	shadowed := false
 	if value, ok := r.ReportedAlias(name); ok {
 		lines = append(lines, fmt.Sprintf("%s is an alias for %s", name, quoteWhenNeeded(value)))
 	}
-	switch kind, _ := r.ResolveName(name); kind {
+	kind, _ := r.ResolveName(name)
+	isFunction := kind == interp.NameFunction
+	if skipFunctions && isFunction {
+		kind = interp.NameNotFound
+		if slices.Contains(r.NameKinds(name), interp.NameBuiltin) {
+			kind = interp.NameBuiltin
+		}
+	}
+	switch kind {
 	case interp.NameReserved:
 		lines = append(lines, name+" is a keyword")
 	case interp.NameFunction:
@@ -228,9 +278,10 @@ func whenceAll(r *interp.Runner, name string, quiet bool) int {
 		}
 		lines = append(lines, fmt.Sprintf("%s is %s", name, path))
 	}
-	if shadowed && len(paths) > 0 {
+	if (shadowed && len(paths) > 0) || (skipFunctions && isFunction && len(lines) == 0) {
 		// The FPATH candidate, which is a PATH fact here rather than a
-		// function-path one — see the table above.
+		// function-path one — see the table above. Under `-f` it is also
+		// the whole answer for a name only a function holds.
 		lines = append(lines, name+" is an undefined function")
 	}
 	if len(lines) == 0 {

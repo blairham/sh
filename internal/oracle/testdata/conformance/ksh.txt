@@ -65,7 +65,6 @@ socket/a-message-across-a-unix-socket
 startup/an-option-names-the-interactive-file
 subst/a-paren-body-is-the-parenthesis-and-not-a-list
 system/the-direction-letters-and-what-they-open
-type/f-skips-or-prints-the-function
 xtrace/case-arm-patterns-are-not-expanded-past-the-match
 xtrace/condition-operand-quoting-diverges
 xtrace/condition-regex-operator-diverges

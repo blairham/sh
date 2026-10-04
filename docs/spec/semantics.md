@@ -12105,6 +12105,15 @@ What was built, all through the extension seam — registered builtins in each
   file on PATH — do not print it, while `whence -a alias` and a function
   named after a PATH command do. So it is a PATH search, which this
   substrate has.
+
+  `-f` leaves functions out of the search (#5717). A name that a builtin or
+  PATH also holds answers as that — `ls() { :; }; whence -fv ls` is the
+  tracked alias, `echo() { :; }; whence -fv echo` a shell builtin — and a
+  name that only a function holds is not missing: `whence -fv f` is `f is an
+  undefined function` and `whence -f f` is `f`, both at 0. Under `-a` the
+  function's line goes and the builtin it hid comes back, so `type -fa echo`
+  is the builtin, the PATH hit and the undefined function. Measured
+  2026-10-04 on ksh93u+ 2012-08-01.
 - **zsh `whence`, `which` and `where`** (dialect/zsh/whence.go): bare, `-v`,
   `-c`, `-a`, `-p`, `-w`, `-f`, with `which` as `whence -c` and `where` as
   `whence -ca` under names of their own. Each name **stops offering the
@@ -13249,10 +13258,9 @@ than missing:
   on this list, refused for want of a restore-on-return seam. The seam is
   `Runner.AtEveryFunctionCall` and the rule is `LOCAL_OPTIONS`, which is what
   the letter turns out to be; see dialect/zsh/localoptions.go.)
-- ksh93 `print -v`/`-C` and `whence -f`: value quoting, compound output and
-  the function skip; each is refused as not implemented rather than unknown,
-  which would be the worse answer. `whence -a` was on this list and is
-  built now, above.
+- ksh93 `print -v`/`-C`: value quoting and compound output; each is refused
+  as not implemented rather than unknown, which would be the worse answer.
+  `whence -a` and `whence -f` were on this list and are built now, above.
 
   Two divergences it inherits rather than introduces, both visible at
   `whence -v` and `whence` already: this shell's builtin set is not ksh93's

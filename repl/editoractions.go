@@ -88,6 +88,19 @@ type Actions interface {
 	// of anything the terminal has already delivered and ahead of anything
 	// pushed before them.
 	PushKeys(s string)
+
+	// Paste reads the paste whose opening marker began this keystroke,
+	// through its closing marker, and hands back its text **without putting
+	// it in the line**.
+	//
+	// For the one spelling of the paste action that does not insert: zsh's
+	// `zle .bracketed-paste NAME` stores the text in the parameter and leaves
+	// the line alone, which is how a widget gets to look at a paste before
+	// deciding what of it to keep. Measured against zsh 5.9.2, a paste of
+	// `a⏎b` read that way leaves `$'a\nb'` in the parameter and the buffer as
+	// it was. The text is the same text Perform would have inserted, line
+	// endings as newlines, by the same reader — see paste.go.
+	Paste() string
 }
 
 // performable reports whether an action can be run from outside the editor.
@@ -150,6 +163,11 @@ func (a editorActions) Redisplay(in Line) {
 }
 
 func (a editorActions) PushKeys(s string) { a.e.pushKeys(s) }
+
+func (a editorActions) Paste() string {
+	text, _ := a.e.readPaste()
+	return string(text)
+}
 
 // take adopts the line an action outside the editor is holding, and give hands
 // it back.

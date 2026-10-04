@@ -95,6 +95,10 @@ func widgetProbe(w Widget) keyProbe {
 		return keyProbe{func(key string) string { return "ab" + key + "\n" }, true}
 	case WidgetUndo:
 		return keyProbe{func(key string) string { return "ab cd\x17" + key + "\n" }, true}
+	case WidgetBracketedPaste:
+		// A paste with a newline in it, which is what shows the action ran:
+		// without it the newline is a Return and the line ends at `abX`.
+		return keyProbe{func(key string) string { return "ab" + key + "X\nY\x1b[201~\n" }, true}
 	default:
 		// The clear, the two history keys and completion. Each is still
 		// compared against the same widget through the override layer, which

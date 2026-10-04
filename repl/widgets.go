@@ -199,6 +199,29 @@ const (
 	WidgetViCommandMode
 	WidgetViInsertMode
 	WidgetViAppendMode
+
+	// A paste the terminal marked: everything up to the closing marker put in
+	// the line as text, newlines and all, and nothing run. See paste.go.
+	//
+	// **An action and not only a branch of escape.go**, which is what it was
+	// until #5865, because a shell names it and people redefine it. zsh lists
+	// `"^[[200~" bracketed-paste` in its standard keymap and bash `"\e[200~":
+	// bracketed-paste-begin`; and zsh's paste plugins work by `zle -N
+	// bracketed-paste their-function`, then reaching the original with `zle
+	// .bracketed-paste` from inside it. Measured 2026-10-04 against zsh 5.9.2
+	// through a pseudo-terminal, a paste of `echo one⏎echo two`:
+	//
+	//	zle -N bracketed-paste w   w() { zle .bracketed-paste; BUFFER="<$BUFFER>" }
+	//	                           → `<echo one⏎echo two>`, nothing run
+	//	                           w() { zle .bracketed-paste P }
+	//	                           → the line untouched and P holding the paste
+	//	                           w() { : }
+	//	                           → the paste is not read, and its text arrives
+	//	                             as keystrokes after the widget returns
+	//
+	// The last row is why the paste is read by the action and not before it:
+	// what the key does with the text behind it is the widget's to decide.
+	WidgetBracketedPaste
 )
 
 // UsesCandidates reports whether an action asks a completer what the word
@@ -395,6 +418,12 @@ func (e *editor) runWidget(b Binding, prompt drawnPrompt) {
 		e.leaveViCommand(e.pos, prompt)
 	case WidgetViAppendMode:
 		e.leaveViCommand(e.pos+1, prompt)
+	case WidgetBracketedPaste:
+		// The same reader escape.go reaches for the same marker, which is the
+		// point: a key bound by name and a key nobody bound are one paste.
+		// What it reports about the input is not this action's to act on —
+		// an input that ended mid-paste ends at the next read either way.
+		e.insertPaste(prompt)
 	}
 }
 

@@ -4,83 +4,72 @@
 package zsh_test
 
 import (
-	"bytes"
-	"context"
+	"slices"
 	"testing"
 
-	"github.com/blairham/sh/dialect/zsh"
-	"github.com/blairham/sh/internal/dialecttest"
+	"github.com/blairham/sh/repl"
 )
 
-// `zle_bracketed_paste` comes into being when the line editor's module loads,
-// and only then. Measured 2026-10-02 on zsh 5.9.2 through a
-// pseudo-terminal; see zleboot.go (#5497).
-func TestTheBracketedPasteParameterIsTheEditorsOwn(t *testing.T) {
-	const kind = `print -r -- ${(t)zle_bracketed_paste} ${(qqqq)zle_bracketed_paste}`
-	for _, c := range []struct {
-		name                  string
-		interactive, terminal bool
-		zleOff                bool
-		src, want             string
-	}{
-		{"at a prompt", true, true, false, kind, "array $'\\033[?2004h' $'\\033[?2004l'\n"},
-		{"at a prompt with the editor off", true, true, true, `print -r -- ${+zle_bracketed_paste}`, "0\n"},
-		{
-			"the editor off, then a builtin of its module", true, true, true,
-			`bindkey -l >/dev/null; print -r -- ${+zle_bracketed_paste}`, "1\n",
-		},
-		{"interactive with no terminal", true, false, false, `print -r -- ${+zle_bracketed_paste}`, "0\n"},
-		{"a script", false, false, false, `print -r -- ${+zle_bracketed_paste}`, "0\n"},
-		{
-			"a script that loads the editor", false, false, false,
-			`zmodload zsh/zle; print -r -- ${(t)zle_bracketed_paste}; unset zle_bracketed_paste; zmodload zsh/zle; bindkey -l >/dev/null; print -r -- ${+zle_bracketed_paste}`,
-			"array\n0\n",
-		},
-	} {
-		t.Run(c.name, func(t *testing.T) {
-			var out bytes.Buffer
-			r := preset.Runner(dialecttest.Base{
-				Dir: t.TempDir(), Interactive: c.interactive, Terminal: c.terminal,
-				Stdout: &out, Stderr: &out,
-			})
-			if c.zleOff {
-				if _, err := r.Run(context.Background(), preset.Parse(t, "unsetopt zle")); err != nil {
-					t.Fatal(err)
-				}
-			}
-			zsh.BeforeStartupFiles(r)
-			if _, err := r.Run(context.Background(), preset.Parse(t, c.src)); err != nil {
-				t.Fatalf("run: %v", err)
-			}
-			if got := out.String(); got != c.want {
-				t.Errorf("got %q, want %q", got, c.want)
-			}
-		})
-	}
+// `bracketed-paste` is a widget a person can call and redefine, and both of
+// the spellings a paste plugin uses from inside its own widget reach the
+// editor's paste (#5865).
+//
+// Measured 2026-10-04 against zsh 5.9.2 through a pseudo-terminal, with
+// `zle -N bracketed-paste w` and a paste of `a⏎b`:
+//
+//	w() { zle .bracketed-paste; BUFFER="<$BUFFER>" }    → `<a⏎b>` in the line
+//	w() { zle .bracketed-paste P; BUFFER="got:${(q)P}" } → `got:a$'\n'b`, status 0
+//
+// The second inserts nothing: the paste goes in the parameter and the line is
+// the widget's to write. What the editor reads off the terminal is repl's to
+// answer and its tests pin it; this pins the naming — that the dotted name
+// reaches WidgetBracketedPaste, and that a name after it asks for the text
+// rather than the insert.
+func TestABracketedPasteWidgetReachesTheEditorsPaste(t *testing.T) {
+	t.Run("inserted", func(t *testing.T) {
+		r, out := zleRunner(t, "w() { zle .bracketed-paste; print -r -- \"rc=$?\"; }\nzle -N bracketed-paste w\n")
+		ed := &stubEditor{gives: map[repl.Widget]repl.Line{
+			repl.WidgetBracketedPaste: {Buffer: "a\nb", Cursor: 3},
+		}}
+		line, ok, printed, _ := runWidgetWatching(t, r, out, "bracketed-paste", repl.Line{}, ed)
+		if !ok {
+			t.Fatal("the widget did not run")
+		}
+		if want := []repl.Widget{repl.WidgetBracketedPaste}; !slices.Equal(ed.performed, want) {
+			t.Errorf("the editor was asked for %v, want %v", ed.performed, want)
+		}
+		if printed != "rc=0\n" {
+			t.Errorf("the widget printed %q, want %q", printed, "rc=0\n")
+		}
+		if want := (repl.Line{Buffer: "a\nb", Cursor: 3}); line != want {
+			t.Errorf("line back = %+v, want %+v", line, want)
+		}
+	})
+	t.Run("into a parameter", func(t *testing.T) {
+		r, out := zleRunner(t, "w() { zle .bracketed-paste P; print -r -- \"rc=$? ${(q)P}\"; }\nzle -N bracketed-paste w\n")
+		ed := &stubEditor{paste: "a\nb"}
+		line, ok, printed, _ := runWidgetWatching(t, r, out, "bracketed-paste", repl.Line{Buffer: "x", Cursor: 1}, ed)
+		if !ok {
+			t.Fatal("the widget did not run")
+		}
+		if want := "rc=0 a$'\\n'b\n"; printed != want {
+			t.Errorf("the widget printed %q, want %q", printed, want)
+		}
+		if len(ed.performed) != 0 {
+			t.Errorf("the editor was asked to insert as well: %v", ed.performed)
+		}
+		if want := (repl.Line{Buffer: "x", Cursor: 1}); line != want {
+			t.Errorf("line back = %+v, want %+v — the paste went into the line", line, want)
+		}
+	})
 }
 
-// The editor starting a line loads the module where nothing had: `setopt
-// zle` under `-fiV +Z` brings the parameter at the next line, and a script
-// that unset it after the load does not get it back from the next line.
-func TestStartingALineLoadsTheEditorsModuleOnce(t *testing.T) {
-	var out bytes.Buffer
-	r := preset.Runner(dialecttest.Base{
-		Dir: t.TempDir(), Interactive: true, Terminal: true, Stdout: &out, Stderr: &out,
-	})
-	run := func(src string) {
-		if _, err := r.Run(context.Background(), preset.Parse(t, src)); err != nil {
-			t.Fatal(err)
-		}
-	}
-	run("unsetopt zle")
-	zsh.BeforeStartupFiles(r)
-	zsh.StartLine(r)
-	run(`print -r -- ${+zle_bracketed_paste}; setopt zle`)
-	zsh.StartLine(r)
-	run(`print -r -- ${+zle_bracketed_paste}; unset zle_bracketed_paste`)
-	zsh.StartLine(r)
-	run(`print -r -- ${+zle_bracketed_paste}`)
-	if got, want := out.String(), "0\n1\n0\n"; got != want {
-		t.Errorf("got %q, want %q", got, want)
+// And the key is listed under its name, the way the standard keymap lists it:
+// `bindkey | grep 200` in zsh 5.9.2 is `"^[[200~" bracketed-paste`, and with
+// the widget missing this shell listed no such key at all.
+func TestTheStandardKeymapListsThePasteMarker(t *testing.T) {
+	_, out := zleRunner(t, "bindkey '^[[200~'\n")
+	if want := "\"^[[200~\" bracketed-paste\n"; out.String() != want {
+		t.Errorf("bindkey '^[[200~' = %q, want %q", out.String(), want)
 	}
 }

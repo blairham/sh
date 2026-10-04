@@ -115,10 +115,41 @@ func (e *editor) matchBinding(first byte) (Binding, bool, keyRead) {
 			return Binding{}, true, keyContinues
 		}
 		if !anyDefaultStartsWith(seq) {
+			if seq[0] == esc {
+				// An escape sequence nobody bound, and the editor's own
+				// dispatch is where it goes — **all of it, from the ESC**.
+				// See escape.go, which reads a sequence by its shape to its
+				// final byte and acts on the keys it knows. Dropping what had
+				// been read here stopped part-way through: this loop gives up
+				// at the first byte nothing in either table continues to,
+				// which for a control sequence is the middle of it, and the
+				// rest of the sequence was typed into the line.
+				//
+				// That was #5865, and a paste was the worst of it. A table
+				// holding anything that begins `\e[` — every zsh session
+				// has some, since its standard keymap does — gave up on a
+				// paste's opening marker at `\e[2`, so `00~` and then the
+				// pasted text arrived as keystrokes, and the first newline in
+				// the paste ran its first line. Function keys lost the same
+				// way: `\e[15~` put `5~` in the line and `\e[1;5C` put `5C`.
+				//
+				// Given back rather than re-read here, so that there is one
+				// reader of escape sequences and not two that can disagree.
+				// What a key does must not depend on whether somebody bound a
+				// *different* key with the same first byte, and handing the
+				// sequence to the dispatch is the only answer to that which
+				// cannot drift. The record of the keystroke gives the bytes
+				// back too, or `$KEYS` would hold them twice.
+				e.pushKeys(seq[1:])
+				if n := len(e.keyBytes) - (len(seq) - 1); n >= 1 {
+					e.keyBytes = e.keyBytes[:n]
+				}
+				return Binding{}, false, keyContinues
+			}
 			// Nothing anywhere answers to it, and nothing longer could. The
-			// bytes are dropped rather than typed into the line, which is what
-			// the editor does with any escape sequence it does not recognize —
-			// see escape.go, where reading a key whole is the point.
+			// bytes are dropped rather than typed into the line: a prefix
+			// somebody bound and then did not finish is not a request for its
+			// first key — see the exact-entry rule above.
 			return Binding{}, true, keyContinues
 		}
 		next, got := e.readByte()

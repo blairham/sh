@@ -1111,7 +1111,13 @@ func accepts(name string) bool {
 // `zle complete-word` from inside a widget completes in zsh exactly as the Tab
 // key does, second-keystroke listing included, and a plugin that falls back to
 // the standard completion had a shell that printed an error instead.
-func callBuiltinWidget(r *interp.Runner, ctx context.Context, name string) int {
+//
+// The paste is the one action here that reads an argument. With a name after
+// it, `zle .bracketed-paste NAME` puts the paste in that parameter instead of
+// in the line — see repl.Actions.Paste for the measurement — and that is the
+// spelling a paste plugin uses to look at what was pasted before keeping any
+// of it. Every other action ignores what follows it, as it did before.
+func callBuiltinWidget(r *interp.Runner, ctx context.Context, name string, args []string) int {
 	if accepts(name) {
 		r.SetVar(zleAccept, "1")
 		return 0
@@ -1128,6 +1134,10 @@ func callBuiltinWidget(r *interp.Runner, ctx context.Context, name string) int {
 		// than by a script, which callWidget has already turned away with its
 		// own wording. Silence, because there is no editor to have refused.
 		return 1
+	}
+	if widget == repl.WidgetBracketedPaste && len(args) > 0 {
+		r.SetVar(args[0], actions.Paste())
+		return 0
 	}
 	out, performed := actions.Perform(widget, widgetLine(r))
 	if !performed {
@@ -1236,15 +1246,15 @@ func callWidget(r *interp.Runner, ctx context.Context, name string, args []strin
 	// word — and `_p9k_widget` reads a failed call as *there was nothing to
 	// call* and carries on. `^L` wrote nothing at all.
 	if builtin, isDotted := strings.CutPrefix(name, "."); isDotted && builtinWidget(builtin) {
-		return callBuiltinWidget(r, ctx, builtin)
+		return callBuiltinWidget(r, ctx, builtin, args)
 	}
 	def, defined := widgetDefinitionOf(r, name)
 	if !defined {
 		if accepts(name) {
-			return callBuiltinWidget(r, ctx, name)
+			return callBuiltinWidget(r, ctx, name, args)
 		}
 		if _, editors := bindkeyWidgets[name]; editors {
-			return callBuiltinWidget(r, ctx, name)
+			return callBuiltinWidget(r, ctx, name, args)
 		}
 		// Silence, measured: a widget invoking a name nothing answers to is
 		// status 1 and not a word, with its own stderr watched to be sure.

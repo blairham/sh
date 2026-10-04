@@ -160,6 +160,10 @@ var bindkeyWidgets = map[string]repl.Widget{
 	"vi-insert":     repl.WidgetViInsertMode,
 	"vi-insert-bol": repl.WidgetViInsertMode,
 	"vi-add-next":   repl.WidgetViAppendMode,
+	// A paste the terminal marked, on `^[[200~` in the standard keymap. See
+	// repl.WidgetBracketedPaste, and callBuiltinWidget for the spelling that
+	// stores the paste rather than inserting it.
+	"bracketed-paste": repl.WidgetBracketedPaste,
 	// The key that means "this key does nothing", which is what `-r` leaves
 	// behind and what `bindkey` prints for a key nobody bound.
 	undefinedKey: repl.WidgetNone,
@@ -223,6 +227,7 @@ var widgetNames = map[repl.Widget]string{
 	repl.WidgetViCommandMode:           "vi-cmd-mode",
 	repl.WidgetViInsertMode:            "vi-insert",
 	repl.WidgetViAppendMode:            "vi-add-next",
+	repl.WidgetBracketedPaste:          "bracketed-paste",
 }
 
 // editorControlKeys are the keys the editor reads that are not actions a key

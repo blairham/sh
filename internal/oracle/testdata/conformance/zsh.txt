@@ -5,10 +5,6 @@ arith/a-subscript-the-source-left-open-takes-the-value-bracket
 assoc/a-literal-element-keyed-with-a-blank
 axis/trap-body-line-signal
 complist/the-widget-the-module-defines
-cond/a-leading-groups-range-shape-is-exact
-cond/a-mid-word-groups-operator-ends-the-word
-cond/a-pattern-operands-group-ends-at-an-operator
-cond/a-regex-operands-group-keeps-its-operators
 core/an-unbalanced-substitution-inside-those-quotes
 core/an-unreadable-operand-a-branch-does-not-take
 core/an-unreadable-operand-a-branch-takes

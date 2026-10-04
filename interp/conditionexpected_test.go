@@ -127,3 +127,23 @@ func TestOneConditionSentenceServesBoth(t *testing.T) {
 		t.Errorf("got %q, want %q", got, want)
 	}
 }
+
+// A whole two-operand condition followed by a token that is not a word is no
+// group to refuse: the condition is complete, so the refusal names the token,
+// as every column does. That is the shape a pattern group cut short by its own
+// `<` takes — `[[ $k == (a<b) ]]` is parse error near `<' in zsh 5.9.2 —
+// and the contrast row is three words whose middle one is no operator, which
+// is still the group sentence (measured 2026-10-04).
+func TestACompleteConditionStoppedOnAnOperatorNamesTheToken(t *testing.T) {
+	for _, tc := range []struct{ src, want string }{
+		{`[[ p -eq q ; ]]`, "near `;'"},
+		{`[[ p == q & ]]`, "near `&'"},
+		{`[[ p < q ; ]]`, "near `;'"},
+		{`[[ p != q > ]]`, "near `>'"},
+		{`[[ p q r ; ]]`, "condition expected: q"},
+	} {
+		if got := condRefusal(t, tc.src, condDiags()); got != tc.want {
+			t.Errorf("%s: got %q, want %q", tc.src, got, tc.want)
+		}
+	}
+}

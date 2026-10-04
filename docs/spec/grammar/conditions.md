@@ -616,6 +616,27 @@ found — it is two of the files the zsh column's static read refused and the
 reference read (#4437) — and it is what
 `Dialect.ConditionIsResolvedWhenItRuns` now answers in both positions.
 
+### A whole condition is no group to refuse
+
+The `condition expected` sentences are about a group of words that is not a
+condition. Where the three words read **are** one — a two-operand operator
+between two operands — and the parse stops on the token behind them, there is
+no such group, and zsh names the token the way every column does. Measured
+2026-10-04 on zsh 5.9.2:
+
+| written | zsh 5.9.2 |
+| --- | --- |
+| `[[ p -eq q ; ]]` | ``parse error near `;'`` |
+| `[[ p != q > ]]` | ``parse error near `>'`` |
+| `[[ $k == (a<b) ]]` | ``parse error near `<'`` |
+| `[[ $k =~ (a<b) ]]` | ``parse error near `<'`` |
+| `[[ p q r ; ]]` | `condition expected: q` |
+
+The pattern-group rows are this shape: the group's `<` ends the third word,
+so the condition `$k == (a` is whole and the `<` is the token refused. The
+last row holds the count fixed and takes the operator away, and is the group
+sentence again.
+
 ## A process substitution as an operand — bash only
 
     [[ x == <(:) ]]

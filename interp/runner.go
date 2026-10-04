@@ -4289,6 +4289,9 @@ type Runner struct {
 	// in its own right; this is the one that needs carrying. Measured on zsh
 	// 5.9.2: `! true` reads back `! true`, and `! { print x }` keeps its `!`.
 	negatedSole *syntax.Pipeline
+	// negatedSoleCalled says that sole element was a function call or an
+	// `eval`. See Runner.judgeANegatedCall.
+	negatedSoleCalled bool
 
 	// programEnd is the line after the script's last, which is where the
 	// shell has got to once the script has run — what one dialect calls the
@@ -7666,6 +7669,10 @@ func (r *Runner) pipeline(ctx context.Context, p *syntax.Pipeline) error {
 		r.tested++
 		defer func() { r.tested-- }()
 	}
+	outerTested := r.tested
+	if p.Negated {
+		outerTested--
+	}
 	r.pipefailRaised = false
 	if len(p.Cmds) == 0 {
 		// A `!` written with no pipeline after it, which one grammar flag
@@ -7678,9 +7685,9 @@ func (r *Runner) pipeline(ctx context.Context, p *syntax.Pipeline) error {
 			// See Runner.negatedSole. Restored rather than cleared: a
 			// negated pipeline of one can hold a body with another inside
 			// it, and clearing would hand the inner element the outer `!`.
-			saved := r.negatedSole
-			r.negatedSole = p
-			defer func() { r.negatedSole = saved }()
+			saved, savedCall := r.negatedSole, r.negatedSoleCalled
+			r.negatedSole, r.negatedSoleCalled = p, false
+			defer func() { r.negatedSole, r.negatedSoleCalled = saved, savedCall }()
 		}
 		if timing != nil {
 			// One element, run in the current shell like any other single
@@ -7713,8 +7720,32 @@ func (r *Runner) pipeline(ctx context.Context, p *syntax.Pipeline) error {
 		} else {
 			r.status = 0
 		}
+		r.judgeANegatedCall(ctx, outerTested)
 	}
 	return nil
+}
+
+// judgeANegatedCall puts the inverted status of `! f` to `set -e` in the one
+// dialect that judges it — see Semantics.ErrexitJudgesANegatedCall. Only where
+// the negation's sole command was a function call or an `eval`, and only where
+// nothing around the negation is tested.
+func (r *Runner) judgeANegatedCall(ctx context.Context, outerTested int) {
+	if !r.negatedSoleCalled || outerTested != 0 || r.status == 0 ||
+		r.sem().ErrexitJudgesANegatedCall != Yes {
+		return
+	}
+	r.tested = outerTested
+	defer func() { r.tested = outerTested + 1 }()
+	r.checkErrExit(ctx)
+}
+
+// noteANegatedCall records that the command now running as the sole element
+// of a negated pipeline is a function call or an `eval`. See
+// judgeANegatedCall.
+func (r *Runner) noteANegatedCall(c syntax.Command) {
+	if r.negatedSole != nil && len(r.negatedSole.Cmds) == 1 && c == r.negatedSole.Cmds[0] {
+		r.negatedSoleCalled = true
+	}
 }
 
 // negationInverts reports whether the `!` in front of a pipeline moves the
@@ -9238,6 +9269,7 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 	// interp/namespace.go.
 	if fn, ok := r.funcs[r.namespaceFuncLookup(argv[0])]; ok && !r.presentedButSwitchedOff(argv[0]) &&
 		!r.specialBuiltinOutranksAFunction(argv[0]) {
+		r.noteANegatedCall(c)
 		// A name the dialect's prelude presents is a builtin to every
 		// question asked about it, so switching it off has to stop the word
 		// finding it — and the implementation is a function in the one table
@@ -9483,6 +9515,9 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 	// A builtin runs in this shell, which is the whole reason it is one:
 	// `set` and `shift` change state a child process could not.
 	if fn, ok := r.lookupBuiltin(argv[0]); ok {
+		if argv[0] == "eval" {
+			r.noteANegatedCall(c)
+		}
 		// `$_` belongs to this call where the builtin's job is to run the
 		// script's own commands — `eval` and `.` — exactly as it belongs to
 		// a function call. See Runner.underscoreAcrossABuiltinsOwnCommands,

@@ -23603,6 +23603,28 @@ type Semantics struct {
 	// long as the job would have.
 	KillReadsASignalJoinedToItsOption Answer
 
+	// ErrexitJudgesANegatedCall puts the inverted status of a negated
+	// function call or `eval` to `set -e`, where every other negated command
+	// is exempt.
+	//
+	// zsh. Measured 2026-10-03 on zsh 5.9.2 under -f -c, each with `set -e`
+	// and `; echo reached` behind it:
+	//
+	//	f(){ false; echo inner; }; ! f      inner, and the shell ends
+	//	f(){ true; }; ! f                    ends
+	//	f(){ false; }; ! f                   reached (the inversion is 0)
+	//	! eval true                          ends
+	//	! true / ! /usr/bin/true / ! (true) / ! { false; } / ! builtin true
+	//	                                     reached
+	//	f(){ true; }; ! f | cat              reached (not the sole command)
+	//	f(){ true; }; ! f && echo and        reached (an and-or tests it)
+	//	g(){ ! f; echo g; }; g               ends
+	//
+	// The body of the call is still exempt — `false` inside `f` does not end
+	// it. bash 5.3.20, ksh93u+ and dash carry on in every row, which is the
+	// base (corpus row errexit/negation-exemption-reaches-into-a-function).
+	ErrexitJudgesANegatedCall Answer
+
 	// SubshellSharesTheCommandHash makes a `( … )` and a `$( … )` work on the
 	// shell's own command hash rather than a copy of it.
 	//
@@ -33013,6 +33035,8 @@ func PosixSemantics() Semantics {
 		// operand, so the base reads nothing joined to the option; bash 5.x
 		// and ksh93 override.
 		KillReadsASignalJoinedToItsOption: No,
+		// A negated command is exempt in the base; zsh overrides for a call.
+		ErrexitJudgesANegatedCall: No,
 		// A subshell's hash is its own in every column but ksh93's.
 		SubshellSharesTheCommandHash: No,
 		// The job-control check comes first in the base; ksh93 overrides.

@@ -14396,6 +14396,12 @@ the bases something is written in would answer that listing wrong and
 every other row right. Corpus:
 `declare/a-learned-output-base-says-itself-back`.
 
+A prefix with no digits after it is still a base. `typeset -i b; b=0x`
+reads back `16#0` on zsh 5.9.2 and lists as `typeset -i16 b=0`, exactly as
+`b=16#` does, so the prefix teaches the base whether or not any digits
+follow it (measured 2026-10-03). Corpus:
+`arith/an-integer-name-given-a-bare-radix-prefix`.
+
 **`Semantics.IntegerBaseNegativeIsTwosComplement`** — bash no · dash no · ksh93 yes · zsh no
 
     typeset -i16 h=-255    ksh93 16#ffffffffffffff01    zsh -16#FF

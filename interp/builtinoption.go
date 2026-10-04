@@ -133,6 +133,11 @@ func (r *Runner) builtinOptionsArg(name string, args []string, known string) (re
 		if a == "--" {
 			return args[1:], opts, optArg, true, 0
 		}
+		if a == versionOption {
+			if status, ok := r.builtinVersionAnswer(name); ok {
+				return nil, opts, optArg, false, status
+			}
+		}
 		if a == helpOption {
 			// Here rather than before the loop, so it is only `--help`
 			// standing where an *option* stands. `-- --help` has already
@@ -154,7 +159,7 @@ func (r *Runner) builtinOptionsArg(name string, args []string, known string) (re
 		for i := start; i < len(a); i++ {
 			takes, ok := optionLetter(known, a[i])
 			if !ok {
-				return nil, opts, optArg, false, r.refuseOption(name, a, known)
+				return nil, opts, optArg, false, r.refuseOptionBefore(name, a, known, args[1:])
 			}
 			opts += string(a[i])
 			if takes == argNone {
@@ -296,6 +301,16 @@ func (r *Runner) complainAboutOption(builtin, format string, args ...any) {
 // offending one, whether the dialect names that letter or the whole word, and
 // whether the dialect *has* the option and this shell simply does not.
 func (r *Runner) refuseOption(builtin, word, known string) int {
+	return r.refuseOptionBefore(builtin, word, known, nil)
+}
+
+// refuseOptionBefore is refuseOption where the words after the refused one are
+// known, so a dialect that reports every bad letter reports the ones in later
+// option words as well. Measured 2026-10-04 on ksh93u+ 2012-08-01: `alias -g
+// -s` names `-g` and `-s`, `read -q -r -z x` names `-q` and `-z`, and the
+// walk stops at an operand or a `--` — `read -q x -z` and `read -q -- -z`
+// name `-q` alone.
+func (r *Runner) refuseOptionBefore(builtin, word, known string, later []string) int {
 	letter, name := r.badOption(word, known)
 	has := r.diag().UnimplementedOptionLetters[builtin]
 	if has != "" && strings.IndexByte(has, letter) >= 0 {
@@ -316,7 +331,11 @@ func (r *Runner) refuseOption(builtin, word, known string) int {
 		// ones, and naming them beside the bad ones says the dialect lacks
 		// them: `read -kv` is `-k: unknown option` alone in ksh93, whose
 		// `read` has `-v` (#5722).
-		if bad := r.everyBadOption(word, known+has); len(bad) > 1 &&
+		bad := r.everyBadOption(word, known+has)
+		if !strings.HasPrefix(word, "--") {
+			bad = append(bad, r.laterBadOptions(later, known+has)...)
+		}
+		if len(bad) > 1 &&
 			r.ask(r.sem().BuiltinReportsEveryBadOption, "a builtin naming every bad letter of a bundle") {
 			return r.badBuiltinOption(builtin, bad...)
 		}
@@ -410,6 +429,33 @@ func (r *Runner) badOptionEndsTheScript(name string) bool {
 // See Semantics.BuiltinReportsEveryBadOption. The walk ends at a letter the
 // builtin *does* have and that takes an argument, because what follows in the
 // word is that argument and not more letters.
+// laterBadOptions are the bad letters in the option words after a refused
+// one, up to the first operand or `--`. A letter that takes an argument
+// takes the rest of its word, or the next word where nothing is left.
+func (r *Runner) laterBadOptions(words []string, known string) []string {
+	var bad []string
+	for i := 0; i < len(words); i++ {
+		w := words[i]
+		if w == "--" || len(w) < 2 || (w[0] != '-' && w[0] != '+') || strings.HasPrefix(w, "--") {
+			break
+		}
+		for j := 1; j < len(w); j++ {
+			takes, ok := optionLetter(known, w[j])
+			if !ok {
+				bad = append(bad, w[:1]+string(w[j]))
+				continue
+			}
+			if takes == argRequired && j+1 == len(w) {
+				i++
+			}
+			if takes != argNone {
+				break
+			}
+		}
+	}
+	return bad
+}
+
 func (r *Runner) everyBadOption(word, known string) []string {
 	sign := "-"
 	if strings.HasPrefix(word, "+") {

@@ -347,6 +347,15 @@ func (r *Runner) killSignal(args []string) (string, syscall.Signal, []string, er
 		// `-n` joined is still `-n`, and a shell without that option refuses
 		// it as one: dash's `kill -n9` is `Illegal option -n`.
 		spec, form, args = joined, killSpecOptionFor(args[0][:2]), args[1:]
+	case len(a) > 2 && a[:2] == "-n" && r.diag().KillBadSignumIsAUsageError &&
+		r.ask(r.sem().KillReadsTheNumberOption, "`kill -n signum`"):
+		// The dialect whose `-n` takes the rest of its word whatever it
+		// holds, so `-nKILL` is `-n KILL` — a signum that is not a number,
+		// and the usage error that is there. Measured 2026-10-04 on ksh93u+
+		// 2012-08-01: `kill -nKILL`, `kill -nZ` and `kill -n KILL` each write
+		// the usage block alone at 2, where reading the word as letters
+		// named five unknown options (#5722).
+		spec, form, args = a[2:], killSpecNumberOption, args[1:]
 	case len(a) > 2 && a[:2] == "-s" && allDigits(a[2:]) &&
 		r.ask(r.sem().KillReadsASignalJoinedToItsOption,
 			"a signal written onto `kill -n` or `kill -s` with no space") &&

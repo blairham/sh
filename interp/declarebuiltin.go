@@ -680,6 +680,14 @@ func (r *Runner) parseDeclareFlags(name string, args []string, known string) (re
 		f.wordSigns += a[:1]
 	letters:
 		for at, c := range a[1:] {
+			if strings.ContainsRune(r.diag().UsageOnlyLettersOnAFunctionLine[name], c) &&
+				(f.function || optionWordsHoldLetter(args[i:], 'f')) {
+				// A letter that is a misuse of a function line rather than
+				// a missing option: the bare usage block, wherever on the
+				// line the `f` was written. See the field.
+				r.builtinUsageLine(name)
+				return nil, f, orDefault(r.diag().BuiltinBadOptionStatus, 2)
+			}
 			if !strings.ContainsRune(known, c) {
 				return nil, f, r.refuseOption(name, a, known)
 			}
@@ -7292,4 +7300,18 @@ func (r *Runner) functionLineUnderBothSigns(args []string, f *declareFlags) (int
 func (r *Runner) signAloneListingCarriesAttributeWords() bool {
 	return r.ask(r.sem().SignAloneListingCarriesAttributeWords,
 		"a sign written alone listing its names with their attribute words")
+}
+
+// optionWordsHoldLetter reports whether c is among the letters of the option
+// words at the front of words, up to the first operand or `--`.
+func optionWordsHoldLetter(words []string, c rune) bool {
+	for _, w := range words {
+		if w == "--" || len(w) < 2 || (w[0] != '-' && w[0] != '+') {
+			return false
+		}
+		if strings.ContainsRune(w[1:], c) {
+			return true
+		}
+	}
+	return false
 }

@@ -2465,6 +2465,19 @@ type Diagnostics struct {
 	// option parser answers this rather than a pre-scan of the argument
 	// list, since only the parser knows which letters take an argument.
 	BuiltinHelp map[string]string
+	// BuiltinVersion is the line a builtin writes for `--version` standing
+	// where its options do, on standard error, at BuiltinHelpStatus — keyed
+	// by the builtin's name. A name with no entry refuses the word as the
+	// option it is not. ksh93 alone; see dialect/ksh for the measured lines.
+	BuiltinVersion map[string]string
+	// UsageOnlyLettersOnAFunctionLine are the letters of a declaration
+	// builtin that are a usage error on a line naming functions — the bare
+	// usage block and the bad-option status, wherever on the line the `f`
+	// stands — keyed by the builtin. ksh93's `typeset` with `X`: measured
+	// 2026-10-04 on ksh93u+ 2012-08-01, `typeset -fX`, `typeset -X -f`,
+	// `typeset -f -X q`, `functions -X` and `autoload +X` each write the
+	// four-line usage block alone at 2, which ends the script there.
+	UsageOnlyLettersOnAFunctionLine map[string]string
 
 	// BuiltinHelpStatus is what a builtin exits with after answering
 	// `--help`. Zero means 2, the substrate's answer for the adjacent

@@ -10961,6 +10961,12 @@ answers `umask: --: invalid option`. Which part of a `--` word a
 complaint names is `BadOptionNaming`, a rule about the dialect and not
 about the builtin, and it now goes through the same reader as the rest.
 
+ksh93 also answers `--version` where a builtin's options stand, with a
+line of its own on standard error at 2: `umask --version` is `  version
+umask (AT&T Research) 1999-04-07`, and `umask -S --version` the same.
+Measured 2026-10-04 on ksh93u+ 2012-08-01 for the builtins that are not
+special; `Diagnostics.BuiltinVersion` holds the lines.
+
 Corpus: `help/a-builtin-answers-the-help-option`,
 `help/the-help-option-comes-before-what-the-builtin-cannot-do`,
 `help/a-builtin-with-nothing-to-say-takes-it-as-a-word`,
@@ -10983,6 +10989,14 @@ on is the **run** rather than the word. Measured 2026-09-18 against ksh93u+
     print -qfFMT x   -q | the usage             2   an argument ends the run
     print -qu3 x     -q | the usage             2
     print -z foo     -z | the usage             2   one letter reads the same either way
+
+**And the run crosses words for every builtin, not only `print`.** Measured
+2026-10-04 on the same build: `read -q -r -z x` and `read -q -u 3 -z x` name
+`-q` and `-z`, `alias -g -s q=v` names both letters, and the walk ends at an
+operand or a `--` — `read -q x -z` and `read -q -- -z` name `-q` alone. A
+letter the dialect has and this shell has not built
+(`Diagnostics.UnimplementedOptionLetters`) is stepped over like one it has:
+`read -kv` is `-k` alone, since that `read` has `-v`.
 
 So the walk crosses word boundaries, steps over a letter the builtin really
 has, and stops at a letter that takes an argument — which is the rule

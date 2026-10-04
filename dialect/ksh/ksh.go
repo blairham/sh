@@ -5394,6 +5394,28 @@ func Diagnostics() interp.Diagnostics {
 		ReadBadCount:              "read: -%[2]s: numeric count argument expected",
 		ReadBadNumberUsageLetters: "unN",
 		ReadFromAClosedDescriptor: "read: bad file unit number",
+		// `--version` where a builtin's options stand writes the builtin's
+		// own version line on standard error at 2. Measured 2026-10-04 on
+		// ksh93u+ 2012-08-01, `NAME --version`, for the builtins that are
+		// not special — those end the script over a usage error, which is a
+		// question this table does not ask.
+		// And `X` on a line of functions is a usage error. See the field.
+		UsageOnlyLettersOnAFunctionLine: map[string]string{"typeset": "X"},
+		BuiltinVersion: map[string]string{
+			"builtin": "  version         builtin (AT&T Research) 2010-08-04",
+			"cd":      "  version         cd (AT&T Research) 1999-06-05",
+			"command": "  version         command (AT&T Research) 2003-08-01",
+			"getopts": "  version         getopts (AT&T Research) 2005-01-01",
+			"kill":    "  version         kill (AT&T Research) 2012-04-13",
+			"print":   "  version         print (AT&T Research) 2008-11-26",
+			"printf":  "  version         printf (AT&T Research) 2009-02-02",
+			"pwd":     "  version         pwd (AT&T Research) 1999-06-07",
+			"read":    "  version         read (AT&T Research) 2006-12-19",
+			"sleep":   "  version         sleep (AT&T Research) 2009-03-12",
+			"umask":   "  version         umask (AT&T Research) 1999-04-07",
+			"wait":    "  version         wait (AT&T Research) 1999-06-17",
+			"whence":  "  version         whence (AT&T Research) 2007-04-24",
+		},
 		// ksh93 calls the coprocess the query process, and `read -p` with
 		// none running says so — the only reachable answer here, this
 		// grammar having no `|&`.
@@ -6224,6 +6246,18 @@ func Apply(r *interp.Runner) {
 		for _, name := range args {
 			if _, ok := rr.Builtin(name); !ok {
 				_, _ = fmt.Fprintf(rr.Stderr, "builtin: %s: not found\n", name)
+				status = 1
+				continue
+			}
+			if rr.IsSpecialBuiltinHere(name) {
+				// A special builtin cannot be registered again, and the
+				// refusal says so rather than passing it over. Measured
+				// 2026-10-04 on ksh93u+ 2012-08-01: `builtin shift`,
+				// `export`, `break`, `eval`, `exec`, `exit`, `readonly`,
+				// `return`, `set`, `trap`, `typeset`, `unset` and `alias`
+				// are each `builtin: NAME: restricted name` at 1, where
+				// `cd`, `echo`, `wait` and `read` are silent at 0 (#5722).
+				_, _ = fmt.Fprintf(rr.Stderr, "builtin: %s: restricted name\n", name)
 				status = 1
 			}
 		}

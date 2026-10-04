@@ -4354,7 +4354,11 @@ func (p *Parser) parseAssign(h assignHead) *Assign {
 		// `f==(a b)` is `f=(a b)`. See [Dialect.ArrayLiteralAfterRepeatedEquals].
 		a.Value = nil
 	}
-	if a.Value == nil && p.at(TokLeftParen) && p.touchesPrevious(a.Stop) {
+	// One dialect lets blanks stand between the two — see
+	// [Dialect.ArrayLiteralAfterABlank]. A newline is its own token, so a
+	// `(` on the next line is never `at` here.
+	if a.Value == nil && p.at(TokLeftParen) &&
+		(p.touchesPrevious(a.Stop) || p.dialect.ArrayLiteralAfterABlank) {
 		if !p.dialect.ArrayLiteral {
 			p.failUnexpected("")
 			return a

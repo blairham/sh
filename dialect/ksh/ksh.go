@@ -66,6 +66,9 @@ func Dialect() syntax.Dialect {
 	// bash, against zsh 5.9.2, which refuses the text. See
 	// [syntax.Dialect.SubscriptSpansSeparators].
 	d.SubscriptSpansSeparators = true
+	// `a= (x y)` is the array literal here, blanks and all — see
+	// [syntax.Dialect.ArrayLiteralAfterABlank].
+	d.ArrayLiteralAfterABlank = true
 	// And every quoting construct holds a `]` back from ending a `${a[ … ]}`
 	// subscript on the way back out, `$'…'` included — the widest row of the
 	// panel, and the one cell where this shell and bash part. Measured

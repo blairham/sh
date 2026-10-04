@@ -6630,6 +6630,23 @@ type Dialect struct {
 	// one is safe to be wrong about loudly.
 	ArrayLiteral bool
 
+	// ArrayLiteralAfterABlank reads `name= (x y)` — blanks between the `=`
+	// and the `(` — as the array literal `name=(x y)` rather than as an
+	// empty assignment followed by a parenthesis.
+	//
+	// Measured 2026-10-03 on ksh93u+ 2012-08-01: `a= (echo x)` leaves `a`
+	// holding `echo` and `x`, and so does any run of blanks, an append (`a+=
+	// (x)`), a subscripted name, a declaration operand (`typeset a= (x)`) and
+	// an assignment prefix (`a= (x) echo hi` runs the `echo`). A newline is
+	// not a blank: `a=` then `(x)` on the next line is an empty assignment
+	// and then a subshell running `x`. bash 5.3.20, zsh 5.9.2 and dash refuse
+	// the blank form as a syntax error, which is the grammar without the
+	// flag.
+	//
+	// Additive: the flag makes text that is otherwise an error mean the
+	// literal, and changes nothing that parses without it.
+	ArrayLiteralAfterABlank bool
+
 	// ArrayLiteralRunningOutIsUnmatched reports an array literal whose `)`
 	// never came as a construct that ran out — `unexpected EOF while looking
 	// for matching `)'`, blamed at the parenthesis — rather than as a token

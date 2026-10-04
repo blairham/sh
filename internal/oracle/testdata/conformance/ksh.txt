@@ -3,7 +3,6 @@
 # fails on a case that fails without being listed or passes while listed.
 alias/both-kinds-at-once-is-refused
 array/a-literal-value-holding-a-bracket
-array/a-literal-with-a-space-before-it
 array/a-name-before-a-literal-elements-bracket
 array/a-subscript-flag-group-counts-matches-and-moves-the-start
 array/a-subscript-flag-group-start-below-the-first-element

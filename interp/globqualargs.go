@@ -406,6 +406,15 @@ func delimitedArgument(s string) (string, int, bool) {
 	return s[1 : 1+end], end + 2, true
 }
 
+// delimitedArgumentOrNone is delimitedArgument for text that may be empty,
+// which has no delimiter to close and so is not closed.
+func delimitedArgumentOrNone(s string) (string, int, bool) {
+	if s == "" {
+		return "", 0, false
+	}
+	return delimitedArgument(s)
+}
+
 // A numeric qualifier's argument: a number, and which way the file's own
 // number has to stand against it.
 //

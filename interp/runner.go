@@ -7265,6 +7265,18 @@ func (r *Runner) reportTrapParseFailure(err error, body string) {
 	// own first line, and what makes the third name the same line here as it
 	// would for a command that failed in the same place.
 	err = shiftParseError(err, r.lineBase)
+	if r.bodyLineStyle() == TrapBodyLineWhereItFired {
+		// And in the dialect whose every line of a body is the line it
+		// fired on, a failure to read the body is placed there too, whatever
+		// line of the body it gave out on. Measured 2026-10-04 in the pinned
+		// image over script files: `trap 'echo a⏎if' USR1` fired by a `kill`
+		// on line 5 is `line 5: syntax error: unexpected end of file
+		// (expecting "then")`, and the same body on EXIT after a last command
+		// on line 4 is `line 4` (#5723).
+		if own := r.diag().ParseFailureLine(err); own > 0 {
+			err = shiftParseError(err, r.firedAt()-own)
+		}
+	}
 	if r.ask(r.sem().TrapParseFailureNamesWhereItFired, "a trap body's parse failure naming where the trap fired") {
 		r.reportTrapParseFailureAtFiringLine(err, body)
 	} else if !r.unspecified {

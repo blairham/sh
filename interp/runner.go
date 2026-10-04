@@ -11147,6 +11147,16 @@ func (r *Runner) exportedCompound(name string) (string, bool) {
 		"an exported name holding a compound reaching a child at all") {
 		return "", true
 	}
+	if _, table := r.assocFor(name); table &&
+		!r.ask(r.sem().ExportedTableReachesAChild, "an exported keyed table reaching a child") {
+		// The one column that hands a child an array's first element hands
+		// it nothing for a table. Measured 2026-10-03 on ksh93u+: `typeset
+		// -A m=([k]=v); export m; env` has no `m=` — nor with the key `0`,
+		// nor after `typeset -i m` folded the element to `0` — where `a=(x
+		// y); export a` gives the child `a=x`. See
+		// Semantics.ExportedTableReachesAChild.
+		return "", true
+	}
 	if len(values) == 0 {
 		return "", true
 	}

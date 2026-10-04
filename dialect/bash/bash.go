@@ -2544,6 +2544,8 @@ func Semantics() interp.Semantics {
 	s.PrintfEmptyIsNotANumber = interp.Yes
 	s.PrintfAbsentNumberIsAnEmptyOne = interp.No
 	s.PrintfStarWithoutOperandIsRefused = interp.No
+	// A `*` with no operand left is a zero: `printf '[%.*f]'` is `[0]`.
+	s.PrintfStarWithoutOperandIsAbsent = interp.No
 	s.PrintfStarComplaintCostsTheStatus = interp.Yes
 	// C's own reading, which is C's library: `%G` of an infinity is `INF`
 	// and `%10f` of one pads to ten.

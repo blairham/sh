@@ -1371,6 +1371,8 @@ func Semantics() interp.Semantics {
 	s.PrintfEmptyIsNotANumber = interp.Yes
 	s.PrintfAbsentNumberIsAnEmptyOne = interp.Yes
 	s.PrintfStarWithoutOperandIsRefused = interp.No
+	// A `*` with no operand left is a zero: `printf '[%.*f]'` is `[0]`.
+	s.PrintfStarWithoutOperandIsAbsent = interp.No
 	s.PrintfStarComplaintCostsTheStatus = interp.No
 	s.PrintfNonFiniteIsConverted = interp.Yes
 	// No `'` flag, as dash has none: `%'d` is `invalid format` at 1.

@@ -705,9 +705,11 @@ func (r *Runner) printfDropStars(n int, next func() (string, bool)) (int, bool) 
 // the conversion itself would read and so carries the same complaints.
 //
 // The operand list running out is where this parts from the conversion. A
-// star with nothing left is a silent zero in six of the seven, ash included —
-// and ash is the column that *does* complain about an absent operand at the
-// conversion, so the two cases are not one question. ksh93 is the seventh and
+// star with nothing left is silent in six of the seven, ash included — and
+// ash is the column that *does* complain about an absent operand at the
+// conversion, so the two cases are not one question. Five of those six read
+// it as zero and zsh leaves the field out (see
+// Semantics.PrintfStarWithoutOperandIsAbsent). ksh93 is the seventh and
 // refuses the directive outright.
 func (r *Runner) printfStarOperand(next func() (string, bool)) (n int64, absent bool, code int, stop bool) {
 	// ksh93 names `.` for a `*` operand in the second complaint line as well
@@ -734,6 +736,15 @@ func (r *Runner) printfStarOperand(next func() (string, bool)) (n int64, absent 
 			// `%*.*f` both report `.` — so the name is the constant it
 			// measured as rather than anything read out of the format.
 			return 0, false, r.printfBadVerb(".", "."), true
+		}
+		if r.unspecified {
+			return 0, false, r.status, true
+		}
+		if r.ask(r.sem().PrintfStarWithoutOperandIsAbsent, "a `printf` `*` the operands ran out before leaving its field out") {
+			// zsh: the field the star stood for is left out, so a precision
+			// is the conversion's default rather than zero — see
+			// Semantics.PrintfStarWithoutOperandIsAbsent.
+			return 0, true, 0, false
 		}
 		if r.unspecified {
 			return 0, false, r.status, true

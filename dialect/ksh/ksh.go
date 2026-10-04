@@ -2781,6 +2781,8 @@ func Semantics() interp.Semantics {
 	s.PrintfEmptyIsNotANumber = interp.No
 	s.PrintfAbsentNumberIsAnEmptyOne = interp.No
 	s.PrintfStarWithoutOperandIsRefused = interp.Yes
+	// Never reached: the refusal above is asked first and answers.
+	s.PrintfStarWithoutOperandIsAbsent = interp.No
 	s.PrintfStarComplaintCostsTheStatus = interp.Yes
 	// Unmeasurable rather than measured — ksh93 reads `inf` through its
 	// arithmetic evaluator and never reaches the conversion — so it takes

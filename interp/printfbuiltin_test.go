@@ -34,6 +34,7 @@ func printfSem() Semantics {
 	s.PrintfBStopIsPadded = Yes
 	s.PrintfAbsentNumberIsAnEmptyOne = No
 	s.PrintfStarWithoutOperandIsRefused = No
+	s.PrintfStarWithoutOperandIsAbsent = No
 	s.PrintfStarComplaintCostsTheStatus = Yes
 	s.PrintfGroupingFlag = Yes
 	s.PrintfGroupingFlagAfterTheWidth = No
@@ -483,6 +484,42 @@ func TestPrintfCharacterPrecisionCanRepeat(t *testing.T) {
 		open.PrintfCharPrecisionRepeats = Unspecified
 		if out, st := run(t, `printf '[%.1c][%.0c][%3c]' abc abc abc`, func(r *Runner) { r.Semantics = &open }); out != "[a][a][  a]" || st != 0 {
 			t.Errorf("got %q status %d, want the character alone at 0", out, st)
+		}
+	})
+}
+
+// A star whose operand has run out is a zero in five columns and leaves its
+// field out in zsh, which only a precision can show: an omitted precision is
+// the conversion's default, a zero one writes no digits for a zero value.
+func TestPrintfStarWithoutOperandCanLeaveTheFieldOut(t *testing.T) {
+	for _, tc := range []struct {
+		src          string
+		absent, zero string
+	}{
+		{`printf '[%.*f]'`, "[0.000000]", "[0]"},
+		{`printf '[%*.*d]' 3`, "[  0]", "[   ]"},
+		{`printf '[%.*x]'`, "[0]", "[]"},
+		{`printf '[%5.*d]'`, "[    0]", "[     ]"},
+		// A star that has its operand is the operand under both readings.
+		{`printf '[%.*d]' 0`, "[]", "[]"},
+	} {
+		for _, a := range []Answer{Yes, No} {
+			sem := printfSem()
+			sem.PrintfStarWithoutOperandIsAbsent = a
+			want := tc.zero
+			if a == Yes {
+				want = tc.absent
+			}
+			if out, st := run(t, tc.src, func(r *Runner) { r.Semantics = &sem }); out != want || st != 0 {
+				t.Errorf("%s answered %v: got %q status %d, want %q and 0", tc.src, a, out, st, want)
+			}
+		}
+	}
+	t.Run("a star with its operand never asks", func(t *testing.T) {
+		sem := printfSem()
+		sem.PrintfStarWithoutOperandIsAbsent = Unspecified
+		if out, st := run(t, `printf '[%*.*d]' 3 1 5`, func(r *Runner) { r.Semantics = &sem }); out != "[  5]" || st != 0 {
+			t.Errorf("got %q status %d, want [  5] at 0", out, st)
 		}
 	})
 }

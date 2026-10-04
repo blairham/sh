@@ -584,8 +584,8 @@ func (r *Runner) refusedReturnOperand(arg string) int {
 // that carries on.
 //
 // The eight-bit mask rides on the policy rather than being an axis of its
-// own: each of the four either masks or does not, and the four answers line
-// up one-to-one with the four readings. What comes back is the *shell's*
+// own: each of the five either masks or does not, and the answers line up
+// one-to-one with the readings. What comes back is the *shell's*
 // reading — `return 300` is 300 under dash and zsh and 44 under bash and
 // ksh93 — and `exit` truncates it again on its way out, because a process
 // carries eight bits whatever the shell decided. So `exit 300` is 44 in all
@@ -622,6 +622,13 @@ func (r *Runner) statusOperand(builtin, arg string) (int, bool) {
 		// 300 and refuses `return -1` outright.
 		if n, err := strconv.Atoi(arg); err == nil && n >= 0 {
 			return n, true
+		}
+		return 0, false
+	case StatusArgStrictMasked:
+		// The same digits, and then the mask: ash hands back 44 for
+		// `return 300` where it refuses `return -1` as dash does.
+		if n, err := strconv.Atoi(arg); err == nil && n >= 0 && allDigits(arg) {
+			return mask8(n), true
 		}
 		return 0, false
 	case StatusArgNumeric:
@@ -4693,9 +4700,21 @@ func (r *Runner) shiftCount(operand string, marked bool, n *int) (int, bool) {
 		}
 	}
 	if v, ok := atoiSigned(operand); ok {
+		if v >= 0 && (operand[0] == '+' || operand[0] == '-') {
+			// A sign is a number to four of the five and a word that is
+			// not one to the fifth, `-0` included. A count below zero is
+			// left to ShiftNegativeIsOutOfRange, whose "not a number"
+			// answer is the same refusal this one makes.
+			signed := r.ask(r.sem().ShiftCountTakesASign, "a `shift` count written with a sign")
+			if r.unspecified {
+				return r.status, true
+			}
+			if !signed {
+				return r.shiftBadNumber(operand)
+			}
+		}
 		// A plain number, which every reading agrees on. Nothing is asked
-		// for a count of zero or more: `shift 2` is two everywhere, and so
-		// is `shift +2` — the sign is unanimous.
+		// for an unsigned count: `shift 2` is two everywhere.
 		return r.shiftTakeCount(v, operand, n)
 	}
 	if r.ask(r.sem().ShiftCountIsArithmetic, "`shift n` reading its count as an expression") {

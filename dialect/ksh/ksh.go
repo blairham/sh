@@ -1297,6 +1297,7 @@ func Semantics() interp.Semantics {
 	// this shell's own words. Measured 2026-09-26 on ksh93u+ 2012-08-01.
 	s.ShiftNamesAreArrays = interp.No
 	s.ShiftNegativeIsOutOfRange = interp.Yes
+	s.ShiftCountTakesASign = interp.Yes
 	s.WaitReadsOptions = interp.Yes
 	// Job specs by command text, a second match taken rather than refused.
 	// A `wait` whose spec names nothing says nothing at all and reports 0;

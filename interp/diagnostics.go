@@ -2133,6 +2133,12 @@ type Diagnostics struct {
 	// usage line.
 	LetNoExpressionUnprefixed bool
 
+	// LetFailureStatus is what `let` reports when an expression it was given
+	// could not be evaluated — a division by zero, a name that will not take
+	// the value. Zero means 1, which bash, ksh93 and zsh report; BusyBox ash
+	// 1.37.0 reports 2, the same number its unreadable expressions get.
+	LetFailureStatus int
+
 	// UlimitBadOption is an option `ulimit` does not have — which includes a
 	// resource letter this dialect lacks. One verb: the letter.
 	UlimitBadOption string

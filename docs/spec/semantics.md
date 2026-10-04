@@ -3322,6 +3322,13 @@ Four behaviors on a line rather than two sides, so `StatusArgument` is a
 policy with four values — the shape `UnterminatedBracket` established,
 used a second time without argument.
 
+BusyBox ash 1.37.0 is a fifth: dash's reading with bash's mask. Measured
+2026-10-03 in the pinned image, `return -1` and `return +3` are `Illegal
+number` and end the script at 2, as dash's refusals do, while `return 300`
+is 44 and `return 256` is 0. That is `StatusArgStrictMasked`, and it is why
+the mask can be said to ride on the policy: no reading the panel has
+splits from another on the mask alone.
+
 **One axis for two builtins.** Every row above was measured on `exit` and
 on `return`, and the two never parted: zsh answers 3 for `exit r` exactly
 as it does for `return r`. A second field for `return` would have been the
@@ -26919,6 +26926,17 @@ number, which is the same complaint it makes about `-x`.
 
 In ksh93 a negative count is only reachable *after* the marker, because
 a bare `-1` is an option there.
+
+**`ShiftCountTakesASign`** — bash yes · dash yes · ksh93 yes · zsh yes ·
+ash no
+
+Reads a count written with a leading `+` or `-` as the number it spells.
+`shift +2` shifts two and `shift -0` shifts nothing in four of the five;
+BusyBox ash 1.37.0 refuses both as `Illegal number` and ends the script at
+2, and refuses `shift " 1"` the same way, while `shift 01` shifts one.
+Measured 2026-10-03, ash in the pinned image. `-0` is the row that needs
+the axis: it is no negative count, so `ShiftNegativeIsOutOfRange` never
+sees it.
 
 A count may also carry a `+`, which is unanimous and asks nothing:
 `shift +1` moves one in all six. The count reader had no sign at all

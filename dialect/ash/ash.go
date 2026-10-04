@@ -1543,6 +1543,10 @@ func Semantics() interp.Semantics {
 	// image, BusyBox v1.37.0.
 	s.ShiftNamesAreArrays = interp.No
 	s.ShiftNegativeIsOutOfRange = interp.No
+	// And a sign of either kind is not a number at all: `shift +1` and
+	// `shift -0` are `Illegal number` at 2, measured 2026-10-03 in the
+	// pinned image, where the other four shift one and nothing.
+	s.ShiftCountTakesASign = interp.No
 	s.ShiftCountIsArithmetic = interp.No
 	// `shift` past the end is **not** fatal here, which is BusyBox siding
 	// with bash rather than with the dash this preset starts from: `shift 5`
@@ -1968,6 +1972,11 @@ func Semantics() interp.Semantics {
 	// policy; `kill 999999 999998` was the row that showed it, at 1 where
 	// the real shell says 2.
 	s.KillStatus = interp.KillStatusFailureCount
+	// `return`'s operand is dash's digits-only reading with bash's mask:
+	// measured 2026-10-03 in the pinned image, `return 300` is 44 and
+	// `return 256` is 0, where `return -1` and `return +3` are `Illegal
+	// number` and end the script at 2.
+	s.StatusArgument = interp.StatusArgStrictMasked
 	s.SubshellJobTable = interp.SubshellJobsCleared
 	// A job started with `&` reads an empty standard input: `ash -c
 	// '/bin/cat & wait; echo ---' < f` writes `---` and nothing else.
@@ -3413,7 +3422,15 @@ func Diagnostics() interp.Diagnostics {
 		JobRunning:                    "Running",
 		JobDone:                       "Done",
 		JobExited:                     "Done(%[1]d)",
-		PrintfBadNumber:               "invalid number '%[1]s'",
+		// `let` refuses at 2 whatever went wrong, and names itself in front
+		// of a math complaint the way bash does. Measured 2026-10-03 in the
+		// pinned image: `let` alone is `let: line 0: expression expected` at
+		// 2, `let 1/0` is `let: line 0: divide by zero` at 2, and `let 1+`
+		// is `let: line 0: arithmetic syntax error` at 2; `let 0` is 1.
+		LetNoExpressionStatus:     2,
+		LetFailureStatus:          2,
+		ArithErrorNamesTheBuiltin: true,
+		PrintfBadNumber:           "invalid number '%[1]s'",
 		// And the operand is quoted back from its first non-blank byte:
 		// `printf '%d' "  7  "` is `invalid number '7  '` here, where bash
 		// and dash echo the blanks they were handed (#2905).

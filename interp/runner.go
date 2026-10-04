@@ -3916,6 +3916,12 @@ type Runner struct {
 	// AtFunctionDefinition; see extend.go, and dialect/zsh's sticky
 	// emulation for the one reader there is.
 	atFunctionDefinition []func(*Runner, string)
+	// readerStoodAt is the line the reader had reached when it handed over the
+	// chunk now running: the line after the one the chunk ended on when a
+	// newline ended it, and that line itself at the end of the input. Zero
+	// where no chunk set it. Read by the one diagnostic one dialect places
+	// there — see Diagnostics.BadSubstitutionIsLocatedAtTheReader.
+	readerStoodAt int
 	// lineBase is how far into the script the input being run starts.
 	//
 	// A command substitution's body is parsed on its own, so its positions
@@ -6674,6 +6680,11 @@ func (r *Runner) RunPart(ctx context.Context, f *syntax.File) error {
 	// fields for what that buys over remembering it forever.
 	r.toldOfJobsAtExit, r.tellingOfJobsAtExit = r.tellingOfJobsAtExit, false
 	r.ensureLineOrigin()
+	if !r.inSubstBody {
+		// A substitution's body is run as a file of its own, and the reader
+		// that matters is still the one that read the command holding it.
+		r.readerStoodAt = r.chunkReaderLine(f)
+	}
 	r.ensurePWD()
 	r.ensureSpecials()
 	r.ensureImportedFunctions()
@@ -15072,4 +15083,23 @@ func (r *Runner) loadsAnUndefinedFunctionFirst(ctx context.Context, argv []strin
 	}
 	_, still := r.funcs[argv[0]]
 	return !still
+}
+
+// chunkReaderLine is where the reader stood once it had read f: the line
+// after f's last when the token that ended f was a newline, which the reader
+// has consumed, and f's last line itself where the input ran out. See
+// Runner.readerStoodAt.
+//
+// Read from the program text the front end handed over, because a position
+// cannot say what character it is at; with no text, or a text the position
+// does not fall inside, it is the last line alone.
+func (r *Runner) chunkReaderLine(f *syntax.File) int {
+	if f == nil || !f.Last.IsValid() {
+		return 0
+	}
+	line := int(f.Last.Line)
+	if off := int(f.Last.Offset); off >= 0 && off < len(r.scriptText) && r.scriptText[off] == '\n' {
+		line++
+	}
+	return line + r.lineOrigin
 }

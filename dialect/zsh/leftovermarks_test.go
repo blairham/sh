@@ -45,8 +45,15 @@ func TestTheMarkersAJobLeavesBehind(t *testing.T) {
 			"zsh:jobs:1: %-: no such job\n",
 		},
 		{
+			// Job 2 outlives job 1 by construction rather than by luck: it
+			// polls job 1's pid until the shell has reaped it. Two bare
+			// `sleep 0`s left the order to the scheduler, and on a loaded
+			// runner job 1 was sometimes still running when the wait for job
+			// 2 returned — in this shell and in zsh alike, which is no
+			// difference to measure (#5854). zsh 5.9.2 under `-f -c` writes
+			// the same two lines for this shape.
 			"a wait notices every job that ended",
-			`/bin/sleep 0 & /bin/sleep 0 & wait $!; wait %% 2>&1; wait %- 2>&1`,
+			`/bin/sleep 0 & /bin/sh -c 'while kill -0 $1 2>/dev/null; do /bin/sleep 0.01; done' - $! & wait $!; wait %% 2>&1; wait %- 2>&1`,
 			"zsh:wait:1: no current job\nzsh:wait:1: no previous job\n",
 		},
 		{

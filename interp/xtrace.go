@@ -995,6 +995,19 @@ func (r *Runner) traceCaseArm(subject string, patterns []string) {
 	r.tracef("%scase %s (%s)\n", r.tracePrefix(), subject, strings.Join(shown, " | "))
 }
 
+// traceCaseArmRest writes what traceCaseArm would have, less the part of the
+// line already written ahead of a complaint.
+func (r *Runner) traceCaseArmRest(subject string, patterns []string, written string) {
+	shown := make([]string, len(patterns))
+	for i, p := range patterns {
+		shown[i] = r.tracePattern(p)
+	}
+	line := r.tracePrefix() + "case " + subject + " (" + strings.Join(shown, " | ") + ")"
+	r.awaitTraceTurn()
+	defer r.releaseTraceTurn()
+	r.tracef("%s\n", strings.TrimPrefix(line, written))
+}
+
 // tracePattern is how a pattern the matcher was handed is written in a trace:
 // as it stands, or with its text marked — Diagnostics.TracePatternEscapesLiterals.
 func (r *Runner) tracePattern(pat string) string {

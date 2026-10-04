@@ -1144,9 +1144,22 @@ func (r *Runner) caseItemMatches(item *syntax.CaseItem, subject string) bool {
 	for _, p := range patterns {
 		// A pattern is a word: unquoted it is a pattern, quoted a literal,
 		// and only the spans still know which.
-		pat := r.patternOf(p)
+		pat, written := r.patternOfTracedArm(p, subject, tried, tracing)
 		if tracing {
 			tried = append(tried, pat)
+		}
+		if written != "" {
+			// Something was written into the middle of the open line, and
+			// it was a complaint rather than a child's trace: the expansion
+			// failed. The line is finished where it stands — `)` and its
+			// newline — unless the failure ended the shell, which leaves it
+			// as it is. Measured 2026-10-04 on zsh 5.9.2: `case a in
+			// $((1/0))) ;; esac` traces `+zsh:1> case a (`, the complaint,
+			// and `)`, and `${x?boom}` there ends at the complaint.
+			if r.ctl == controlNone {
+				r.traceCaseArmRest(subject, tried, written)
+			}
+			return false
 		}
 		if r.matchPatternR(pat, subject, patternInACaseArm) {
 			if tracing {
@@ -1159,6 +1172,45 @@ func (r *Runner) caseItemMatches(item *syntax.CaseItem, subject string) bool {
 		r.traceCaseArm(subject, tried)
 	}
 	return false
+}
+
+// patternOfTracedArm is patternOf for an arm being traced, with the arm's
+// line open while the pattern expands.
+//
+// The line is written as the patterns are reached, so a substitution in one
+// that traces lines of its own writes them into the middle of it. Measured
+// 2026-10-04 on zsh 5.9.2, `set -x; case a in b|$(echo a)) : ;; esac` traces
+//
+//	+zsh:1> case a (b+zsh:1> echo a
+//	+zsh:1> case a (b | a)
+//
+// — the line so far, then the child's own, then the whole line. The open line
+// is the one an assignment list keeps for the same reason, and a child writes
+// its copy ahead of its first trace line. See interp/xtraceopenline.go.
+//
+// written is the part of the line a complaint made it write, and empty where
+// nothing did — a child writes its own copy and leaves this one open.
+func (r *Runner) patternOfTracedArm(p *syntax.Word, subject string, tried []string, tracing bool) (pat, written string) {
+	if !tracing {
+		return r.patternOf(p), ""
+	}
+	shown := make([]string, len(tried))
+	for i, t := range tried {
+		shown[i] = r.tracePattern(t)
+	}
+	line := &openTraceLine{
+		owner:   r,
+		pending: r.tracePrefix() + "case " + subject + " (" + strings.Join(shown, " | "),
+	}
+	opened := line.pending
+	outer := r.openTrace
+	r.openTrace = line
+	defer func() { r.openTrace = outer }()
+	pat = r.patternOf(p)
+	if line.pending == "" {
+		written = opened
+	}
+	return pat, written
 }
 
 // isPlainFuncName reports a name POSIX would call one — the shape every

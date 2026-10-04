@@ -245,7 +245,16 @@ func (r *Runner) rewriteValueBackslashes(field string, p ValueBackslashPolicy) s
 				b.WriteString(globEscape(unit))
 			case p == ValueBackslashQuotesWhatFollows:
 				b.WriteString(globEscape(unit))
-			case p == ValueBackslashIsData && live:
+			case (p == ValueBackslashIsData || p == ValueBackslashDisarmsWhatFollows) && live:
+				// A character, and what follows it stays live. The reading
+				// that disarms a value's backslash disarms only what the
+				// *value* holds: with the value spent, the next unit is the
+				// script's, and the script left it live. Measured 2026-10-03
+				// on zsh 5.9.2 under `${~v}` and under globsubst, with
+				// `v='a\'` in a directory holding `a*b`, `a\*b` and
+				// `a\\*b`: `${~v}*b` lists `a\*b` and `a\\*b`, `${~v}?b`
+				// and `${~v}[*]b` list `a\*b`, and `${~v}"*"b` lists `a\*b`
+				// alone, which is the quoted row below.
 				b.WriteString(`\\`)
 				b.WriteString(unit)
 			default:

@@ -43,10 +43,13 @@ func TestABackslashThatEndsAValueQuotesTheFieldsNextCharacter(t *testing.T) {
 		// it was written — backslash and all, since no shell removes an
 		// expansion's quoting.
 		{"quotes what follows", ValueBackslashQuotesWhatFollows, `[x\?]`, `[x\*]`},
-		// The backslash is a character of the pattern and what follows it is
-		// not live, so the field spells the name `x\?`, which nothing here is
-		// called.
-		{"disarms what follows", ValueBackslashDisarmsWhatFollows, `[x\?]`, `[x\*]`},
+		// The backslash is a character of the pattern, and what follows it
+		// is the script's and not the value's, so it is not disarmed: the
+		// same field the data reading makes. Measured 2026-10-03 on zsh 5.9.2
+		// under globsubst in this tree — `x${bs}?` and `x${bs}*` are both
+		// `[x\y]` — where this row once said `x\?`, a reading nothing had
+		// measured.
+		{"disarms what follows", ValueBackslashDisarmsWhatFollows, `[x\y]`, `[x\y]`},
 		// The backslash is a character and the metacharacter stays live, so
 		// the pattern is a literal backslash and then any name.
 		{"data", ValueBackslashIsData, `[x\y]`, `[x\y]`},

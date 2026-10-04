@@ -96,9 +96,6 @@ startup/an-option-names-the-interactive-file
 subst/a-paren-body-is-the-parenthesis-and-not-a-list
 system/the-direction-letters-and-what-they-open
 type/f-skips-or-prints-the-function
-unterminated/a-parameter-expansion-behind-a-length-prefix
-unterminated/a-parameter-expansion-blamed-at-the-brace
-unterminated/a-parameter-expansion-whose-name-is-the-hash
 xtrace/case-arm-patterns-are-not-expanded-past-the-match
 xtrace/condition-operand-quoting-diverges
 xtrace/condition-regex-operator-diverges

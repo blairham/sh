@@ -19,7 +19,6 @@ diag/trap-refusing-a-condition-it-does-not-know
 fnlib/add-zsh-hook-autoload-letters
 jobs/a-background-job-outlives-the-shell
 param/a-substring-range-blames-what-the-script-wrote
-param/an-empty-positional-list-under-a-colonless-test
 param/prompt-percent-refuses-an-escape-by-name
 pat/a-whole-match-flag-in-mid-pattern
 print/a-prompt-escape-this-shell-has-not

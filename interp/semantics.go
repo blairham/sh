@@ -15563,6 +15563,22 @@ type Semantics struct {
 	// unpinned ash: the same as dash.
 	PlusLetterSelectsAListing Answer
 
+	// ArrayOperandRefusedBeforeTheCommand refuses a declaration's array
+	// literal that its store would refuse — a frozen name, or the other kind
+	// of array under an explicit kind letter — ahead of the command's
+	// redirections, as a bare assignment's refusal that gives up the line.
+	//
+	// Measured 2026-10-03: bash 5.3.20 writes `q: readonly variable` for
+	// `readonly q=1; typeset q=(b) 2>/dev/null` to its own standard error and
+	// never runs the rest of the line. zsh 5.9.2 retypes the frozen scalar.
+	// See interp/operandrefusedearly.go.
+	//
+	// unpinned dash: there is no array literal, so the question cannot be
+	// put.
+	//
+	// unpinned ash: the same as dash.
+	ArrayOperandRefusedBeforeTheCommand Answer
+
 	// SignAloneIsAnOptionWord reads a declaration's `-` or `+` written with
 	// no letters after it as an option word rather than as an operand.
 	//
@@ -32572,6 +32588,8 @@ func PosixSemantics() Semantics {
 		BareDeclarationListing: DeclareListingCommandWord,
 		BareLocalListing:       BareLocalListsNothing,
 		TypesetBadOptionFatal:  No,
+		// POSIX has no array literal; No is what this engine did before.
+		ArrayOperandRefusedBeforeTheCommand: No,
 		// POSIX has no `typeset`, so no option word carries an `a`.
 		ArrayLetterMakesItsWordAName: No,
 		// POSIX has no `typeset` and so no plus letter to read; Yes is

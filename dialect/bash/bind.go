@@ -192,6 +192,10 @@ var bindFunctions = map[string]repl.Widget{
 	"vi-insertion-mode": repl.WidgetViInsertMode,
 	"vi-insert-mode":    repl.WidgetViInsertMode,
 	"vi-append-mode":    repl.WidgetViAppendMode,
+
+	// A paste the terminal marked. bash 5.3 lists `"\e[200~":
+	// bracketed-paste-begin`; see repl.WidgetBracketedPaste.
+	"bracketed-paste-begin": repl.WidgetBracketedPaste,
 }
 
 // bindFunctionNames is the name a listing prints for each action — the
@@ -222,6 +226,7 @@ var bindFunctionNames = map[repl.Widget]string{
 	repl.WidgetViCommandMode:         "vi-movement-mode",
 	repl.WidgetViInsertMode:          "vi-insertion-mode",
 	repl.WidgetViAppendMode:          "vi-append-mode",
+	repl.WidgetBracketedPaste:        "bracketed-paste-begin",
 }
 
 // editorControlKeys are the keys the editor reads that are not actions a key

@@ -93,6 +93,8 @@ type stubEditor struct {
 	// drawn is every Redisplay, and pushed is every PushKeys.
 	drawn  []repl.Line
 	pushed []string
+	// paste is what Paste hands back.
+	paste string
 }
 
 func (e *stubEditor) Perform(w repl.Widget, in repl.Line) (repl.Line, bool) {
@@ -108,7 +110,9 @@ func (e *stubEditor) Perform(w repl.Widget, in repl.Line) (repl.Line, bool) {
 }
 
 func (e *stubEditor) Redisplay(in repl.Line) { e.drawn = append(e.drawn, in) }
-func (e *stubEditor) PushKeys(s string)      { e.pushed = append(e.pushed, s) }
+
+func (e *stubEditor) Paste() string     { return e.paste }
+func (e *stubEditor) PushKeys(s string) { e.pushed = append(e.pushed, s) }
 
 // TestAWidgetIsDefinedAndSaidBack is the honest minimum the issue asked for:
 // an rc file that defines a widget runs to the end, and the widget is there

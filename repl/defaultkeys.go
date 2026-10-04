@@ -92,6 +92,11 @@ var defaultKeys = map[string]Widget{
 	"\x1b[7~": WidgetBeginningOfLine,
 	"\x1b[4~": WidgetEndOfLine,
 	"\x1b[8~": WidgetEndOfLine,
+
+	// A paste's opening marker, which both shells list as a key — see
+	// WidgetBracketedPaste. Only the opening one: the closing marker is read
+	// by the paste, and on its own it is a sequence nothing acts on.
+	"\x1b[200~": WidgetBracketedPaste,
 }
 
 // DefaultBindings is the key each of this editor's actions arrives on with

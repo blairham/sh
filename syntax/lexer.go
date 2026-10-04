@@ -4174,17 +4174,6 @@ func bracketsLeftOpen(text string) bool {
 // for the dispatcher that routed here.
 func (l *Lexer) doubleParenKind(skip int) SpanKind {
 	if !l.dialect.ArithSubstFallsBackToCommandSubst {
-		if l.dialect.ArithSubstWantsItsDoubleCloser {
-			from := l.off + 3 + skip + l.arithOpenerContinuationAt(l.off+2+skip)
-			if !doubleParenIsArith(l.src, from, l.dialect.ContinuationPartsTheArithmeticCloser,
-				l.dialect.ArithSubstScanIgnoresQuoting, l.dialect.ArithBracketsMustBalance) {
-				// The count closed on a `)` with no second one behind it,
-				// which the five that fall back read as a command
-				// substitution and these refuse. See
-				// Dialect.ArithSubstWantsItsDoubleCloser.
-				l.failUnmatched(l.pos(), "$((", "))", "missing '))'")
-			}
-		}
 		return ArithSubst
 	}
 	// The expression begins behind `$`, the pair the `$` reached across, `(`,

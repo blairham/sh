@@ -94,9 +94,10 @@ func TestWhetherThatBackslashJoinsTheNextLineFollowsTheAxis(t *testing.T) {
 		`printf "[%s]" aecho two`; got != want {
 		t.Errorf("joining: got %q, want %q", got, want)
 	}
-	// Not joined, the next line is a line of its own — and the backslash is
-	// still in the word, which is what the printer writes back escaped.
-	want := `printf "[%s]" a` + "\\\\\necho two"
+	// Not joined, the next line is a line of its own — and the backslash
+	// escapes the blank the seam supplies, so the word ends in one: zsh 5.9.2
+	// prints `[a ]` there (measured 2026-10-03).
+	want := `printf "[%s]" a\ ` + "\necho two"
 	if got := parsed(t, table("q", `printf "[%s]" a\`), src); got != want {
 		t.Errorf("not joining: got %q, want %q", got, want)
 	}

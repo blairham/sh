@@ -529,6 +529,21 @@ func (p *Parser) spliceAlias(name, value string) {
 		if rest := p.tokTail + p.lex.src[p.lex.off:]; rest == "" || !isBlank(rest[0]) {
 			value += " "
 		}
+	} else if !p.dialect.AliasBodyBackslashJoinsTheNextLine && !strings.Contains(value, "<<") &&
+		endsInAnOddBackslashRun(value) {
+		// And the seam a backslash ending the value meets, where the alias
+		// word was the last thing on its line: the blank is what the
+		// backslash escapes, so the field ends in a blank and the next line
+		// stays a line of its own. Measured 2026-10-03 on zsh 5.9.2 from a
+		// script file, `alias q='printf "[%s]" a\'` used as `q` with `echo
+		// two` under it: `[a ]two`, where this printed `[a]two`
+		// (alias/a-backslash-the-body-ends-with-and-nothing-after-it). The
+		// same value followed on its line by ` b` is `[a b]` there, the
+		// written blank being the one escaped, so only what is not a blank —
+		// a newline, the end of the input, an operator: `q;echo x` is `[a ]x`.
+		if rest := p.tokTail + p.lex.src[p.lex.off:]; rest == "" || !isBlank(rest[0]) {
+			value += " "
+		}
 	}
 	at := p.tok.Pos
 	end := p.tok.End

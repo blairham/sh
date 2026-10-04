@@ -46,6 +46,15 @@ import (
 // `base#digits`, `++`, `&>` and `>|`, every one of which dash refuses.
 func Dialect() syntax.Dialect {
 	d := syntax.POSIX()
+	// `:` is a math token wherever it stands, as it is in zsh: the reader
+	// takes it and then wants a value. Measured 2026-10-04 in the pinned
+	// image: `$(( 1 : 2 ))`, `$(( 1 ? 2 : 3 : 4 ))` and `$(( 1 && 2 : 3 ))`
+	// are `malformed ?: operator`, where `$(( 1 : ))` runs out of input and
+	// `$(( 1 ? 2 : 3 : 4 ? 5 ))` finds a `?` with no `:` after the colon
+	// was taken, and both of those are the ordinary `arithmetic syntax
+	// error`. A reader that stopped at the byte would give all five one
+	// answer. See syntax.Dialect.ArithColonIsAToken (#5723).
+	d.ArithColonIsAToken = true
 	// Nine constructs beyond POSIX, each run and watched rather than read
 	// about. `echo $'a\tb'` writes a tab; `[[ a = a ]]` succeeds where dash
 	// answers `[[: not found`; `cat <(echo hi)` writes hi; `function f {
@@ -3014,6 +3023,17 @@ func Diagnostics() interp.Diagnostics {
 		ArithOperatorExpected: "arithmetic syntax error",
 		DigitTooGreatForBase:  "arithmetic syntax error",
 		ArithConditionalColon: "arithmetic syntax error",
+		// The colon the reader took as a token and then found standing
+		// without a `?` — see the grammar flag in Dialect above.
+		ArithColonWithoutQuestion: "malformed ?: operator",
+		// And two more that are not reasons of their own here. Measured
+		// 2026-10-04 in the pinned image: `$((1#0))`, `$((1#5))`,
+		// `$((0#1))` and `$((65#1))` are each `arithmetic syntax error`
+		// where `$((64#1))` is 1, so a base out of range names no base; and
+		// `$(( 1++ ))`, `$(( 1-- ))` and `$(( 7=4 ))` are the same sentence,
+		// so a step with nothing to step names no operator (#5723).
+		ArithInvalidBase:          "arithmetic syntax error",
+		ArithIncrementNeedsAPlace: "arithmetic syntax error",
 		// The one arithmetic reason that is not `arithmetic syntax error`,
 		// and it is `divide` where the substrate and three of the panel
 		// write `division`. Measured 2026-09-14, `: $((1/0))` and `: $((1%0))`

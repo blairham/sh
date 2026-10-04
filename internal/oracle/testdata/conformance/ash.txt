@@ -81,7 +81,6 @@ jobspec/kill-a-job-that-is-not-there
 jobspec/wait-for-the-next-job
 kill/signaling-a-process-that-is-not-ours
 local/a-subscripted-operand-to-local
-locale/an-unset-locale-and-a-multibyte-length
 location/a-sourced-file-below-the-first-line-of-a-command-string
 opt/a-refused-letter-echoes-the-sign
 opt/a-set-o-listing-sources-back
@@ -165,8 +164,6 @@ trap/listing-in-a-pipeline-element
 trap/the-err-trap-fires-once-for-a-nested-failure
 ulimit/a-limit-it-cannot-read
 ulimit/the-file-size-block
-umask/symbolic-clauses-run-left-to-right
-umask/symbolic-set-with-no-who
 unterminated/a-case-arm-closed-by-its-terminator
 unterminated/a-case-arm-with-no-command-at-all
 unterminated/a-case-arms-terminator-after-a-separator

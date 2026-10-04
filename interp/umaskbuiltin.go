@@ -399,11 +399,27 @@ func (r *Runner) parseSymbolicUmask(s string, current int) (mask int, fail maskF
 				sawLetter = true
 				perms |= bit<<6 | bit<<3 | bit
 			}
+			grant := perms & who
+			if !named && op != '-' && grant&current != 0 {
+				// No who, and the mask the command started from would
+				// withhold some of what is granted: POSIX's chmod reading
+				// filters the grant through that mask, and four of the five
+				// shells grant it whole. Asked only where the two differ.
+				// See Semantics.SymbolicMaskOmittedWhoHonorsTheMask.
+				honors := r.ask(r.sem().SymbolicMaskOmittedWhoHonorsTheMask,
+					"a `umask` clause with no who granting what the mask withholds")
+				if r.unspecified {
+					return 0, maskFailure{}, false
+				}
+				if honors {
+					grant &^= current
+				}
+			}
 			switch op {
 			case '=':
-				allowed = allowed&^who | perms&who
+				allowed = allowed&^who | grant
 			case '+':
-				allowed |= perms & who
+				allowed |= grant
 			case '-':
 				allowed &^= perms & who
 			}

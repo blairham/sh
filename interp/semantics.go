@@ -17635,6 +17635,20 @@ type Semantics struct {
 	// answers it with the complaint it gives a number it could not read.
 	SymbolicMaskWhoAloneSetsIt Answer
 
+	// SymbolicMaskOmittedWhoHonorsTheMask filters what a `umask` clause with
+	// no who grants through the mask the command started from, the way
+	// chmod reads an omitted who. BusyBox ash 1.37.0 does; bash 5.3, dash
+	// 0.5.12, ksh93 and zsh 5.9.2 grant it to all three groups. Measured
+	// 2026-10-03, ash in the pinned image, from `umask 022`: `umask =w` is
+	// 0577 there and 0555 elsewhere, and `umask a=r,+w` is 0133 against
+	// 0111 — the mask that filters is the one the command started from, not
+	// the one the first clause left. What a clause clears is not filtered:
+	// `umask a+w,=r` is 0333 in ash.
+	//
+	// Asked only for a `+` or `=` with no who whose grant the starting mask
+	// would cut.
+	SymbolicMaskOmittedWhoHonorsTheMask Answer
+
 	// SymbolicMaskTakesTheSetuidLetter accepts `s` in a clause, which
 	// changes no bits — a umask has no setuid bit to deny — and is accepted
 	// by bash, ksh93 and dash all the same. zsh refuses it at 1, and so does

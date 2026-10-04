@@ -1823,6 +1823,7 @@ func Semantics() interp.Semantics {
 	// before `=`, and neither `s` nor `t`.
 	s.SymbolicMaskTakesMoreThanOneOperator = interp.No
 	s.SymbolicMaskWhoAloneSetsIt = interp.No
+	s.SymbolicMaskOmittedWhoHonorsTheMask = interp.No
 	s.SymbolicMaskTakesTheSetuidLetter = interp.No
 	// Neither: `bad symbolic mode permission: u`, and the same for X.
 	s.SymbolicMaskTakesAPermissionCopy = interp.No

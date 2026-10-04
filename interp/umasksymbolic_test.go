@@ -35,7 +35,9 @@ func TestASymbolicMaskIsAccepted(t *testing.T) {
 		{0o022, "u+w", 0o022},
 		{0o077, "g+r", 0o037},
 		// An omitted who is all three, not the owner: `umask 022; umask -w`
-		// is 222 in all four.
+		// is 222 in all four. Granting through it is the panel's majority
+		// here; TestAnOmittedWhoGrantIsFilteredByTheStartingMask has the
+		// other answer.
 		{0o022, "+w", 0o000},
 		{0o022, "-w", 0o222},
 		{0o022, "=w", 0o555},
@@ -397,6 +399,29 @@ func TestASymbolicMaskCopiesAndTakesTheConditionalExecute(t *testing.T) {
 		}
 		if held != 0o022 {
 			t.Errorf("umask %s without the axis: mask moved to %04o", c.expr, held)
+		}
+	}
+}
+
+// TestAnOmittedWhoGrantIsFilteredByTheStartingMask: where
+// SymbolicMaskOmittedWhoHonorsTheMask says so, a clause with no who grants
+// only what the mask the command started from allows, and clears whole.
+func TestAnOmittedWhoGrantIsFilteredByTheStartingMask(t *testing.T) {
+	honor := func(s *Semantics) { s.SymbolicMaskOmittedWhoHonorsTheMask = Yes }
+	for _, c := range []struct {
+		start int
+		expr  string
+		want  int
+	}{
+		{0o022, "=w", 0o577},
+		{0o022, "a=r,+w", 0o133},
+		{0o022, "a+w,=r", 0o333},
+		{0o027, "=rx", 0o227},
+		{0o022, "-w", 0o222},
+	} {
+		out, _, held := umaskRun(t, c.start, honor, "umask -- "+c.expr)
+		if held != c.want {
+			t.Errorf("umask %04o; umask %s: mask %04o, want %04o (%s)", c.start, c.expr, held, c.want, out)
 		}
 	}
 }

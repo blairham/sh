@@ -4371,6 +4371,17 @@ type Semantics struct {
 	// Asked only where the two readings differ. A range between two single
 	// letters with no step is unanimous and must never become a question.
 	BraceCharRangeSpansAnyCharacter Answer
+	// BraceLetterRangeMayCrossCase counts a letter range whose endpoints are
+	// in different cases, walking the code points between them. No leaves
+	// the word as written.
+	//
+	// Measured 2026-10-03: bash 5.3.20 and zsh 5.9.2 count `{Z..a}` as the
+	// eight characters from `Z` to `a`, backtick and backslash included, and
+	// `{A..z..10}` as `A K U _ i s`; ksh93u+ leaves `{Z..a}`, `{A..z}`,
+	// `{a..Z}`, `{A..a}` and `{A..z..10}` as written, while `{A..C}`,
+	// `{z..a}` and `{a..z..10}` count there as everywhere. Asked only where
+	// the endpoints are letters of different cases.
+	BraceLetterRangeMayCrossCase Answer
 	// BraceRangeMissingEndCountsFromZero reads a range whose *second*
 	// endpoint is not there as one ending at zero: ksh93's `{1..}` is `1 0`,
 	// its `{5..}` is `5 4 3 2 1 0` and its `{-1..}` is `-1 0`. bash and zsh
@@ -20227,6 +20238,39 @@ type Semantics struct {
 	// expression, so an ordinary `[a-z]` puts no question to the dialect.
 	BracketEscape BracketEscapePolicy
 
+	// QuotedDashInABracketIsARange leaves a *quoted* dash inside a bracket
+	// expression the range operator, where an escaped one is a member.
+	//
+	// Measured 2026-10-03 with each of a, `-`, z and b against the pattern:
+	//
+	//	                        [a\-z]       [a"-"z]  ["a-z"]  v=-; [a"$v"z]
+	//	bash, dash, zsh         a - z         a - z    a - z    a - z
+	//	ksh93u+                 a - z         a z b    a z b    a z b
+	//
+	// So ksh93 reads the escape and not the quotes as the protection; quoting
+	// still protects a `]` there (`[a"]"b]` holds three members). BusyBox
+	// ash reads the range for the escape too, which BracketEscape already
+	// records, so its answer here is the same range by the other route. Read
+	// rather than asked, and only where quoted text in a pattern holds a dash.
+	QuotedDashInABracketIsARange Answer
+
+	// WideCharacterIsInAlphaAlone puts a character outside ASCII in the alpha
+	// class and in no other POSIX class: not alnum, not upper or lower, not
+	// print or graph, not space or punct.
+	//
+	// Measured 2026-10-03 on ksh93u+ under LC_ALL=C.UTF-8, one character per
+	// row against all twelve classes:
+	//
+	//	É 日 Ⅷ ٣ ５ ª ʰ Ａ ٠       alpha, and nothing else
+	//	· € ½ ² U+00A0 U+2003 U+3000  nothing at all
+	//	U+0301 U+0085 U+2028          nothing at all
+	//
+	// Where bash 5.3, bash 3.2 and zsh 5.9.2 put `é` in alpha, alnum, lower,
+	// print and graph — the reading inWideClass gives. ksh93's alpha takes the
+	// letters and the Nd and Nl numbers and not No. Read rather than asked:
+	// No is every other column's answer and needs no dialect to give it.
+	WideCharacterIsInAlphaAlone Answer
+
 	// LongestMatchTakesTheWrittenArm decides which match `${x##pat}` removes,
 	// and which one `${x//pat/rep}` replaces, when `pat` holds an alternation
 	// whose arms take different lengths: the arm that was written first, or
@@ -31449,6 +31493,8 @@ func PosixSemantics() Semantics {
 		SubstringOfPositionalsSlicesTheList:    Yes,
 		SubstringOfAnUnsetNameEvaluatesNothing: No,
 		SlashRunBehindAPatternIsOneSlash:       No,
+		QuotedDashInABracketIsARange:           No,
+		WideCharacterIsInAlphaAlone:            No,
 		// One reader: the value a name holds goes through the same octal
 		// rule the literal does, so `k=010; $((k))` is eight. ksh93 is the
 		// one shell whose two readers part.

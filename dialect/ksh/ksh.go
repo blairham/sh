@@ -2379,6 +2379,9 @@ func Semantics() interp.Semantics {
 	// and leaves the word as written. A step of zero is not read as one
 	// either — `{1..2..0}` stays whole where bash counts `1 2`.
 	s.BraceCharRangeSpansAnyCharacter = interp.No
+	// A letter range keeps to one case: `{Z..a}` and `{A..z}` stay as
+	// written. See Semantics.BraceLetterRangeMayCrossCase.
+	s.BraceLetterRangeMayCrossCase = interp.No
 	s.BraceRangeMissingEndCountsFromZero = interp.Yes
 	s.BraceRangeZeroStepCountsAsOne = interp.No
 	s.BraceRangeNumberMayCarryAPlus = interp.Yes
@@ -2447,6 +2450,12 @@ func Semantics() interp.Semantics {
 	// zsh adds the backslash to the set as well and BusyBox ash protects
 	// nothing, so this value is what five of the seven columns share (#3271).
 	s.BracketEscape = interp.BracketEscapeProtectsTheMember
+	// But quoting does not protect the range operator: `[a"-"z]` is the range.
+	// See Semantics.QuotedDashInABracketIsARange.
+	s.QuotedDashInABracketIsARange = interp.Yes
+	// A character outside ASCII is alpha and nothing else: `é` is not alnum,
+	// lower, print or graph here. See Semantics.WideCharacterIsInAlphaAlone.
+	s.WideCharacterIsInAlphaAlone = interp.Yes
 	// The parameter whose patterns take names back out of a pathname
 	// expansion, spelled `FIGNORE` here and `GLOBIGNORE` in bash. The
 	// facility is the same and the model is not: measured on ksh93u+,

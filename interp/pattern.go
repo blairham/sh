@@ -227,7 +227,17 @@ func (r *Runner) patternOf(w *syntax.Word) string {
 		}
 		// Quoted text, and the result of an expansion the dialect does not
 		// re-read as a pattern, are literal: every metacharacter is escaped.
-		b.WriteString(escapePatternMetaIn(text, r.markedMeta()))
+		meta := r.markedMeta()
+		if s.Quoting != syntax.BackslashQuoted && strings.IndexByte(text, '-') >= 0 &&
+			r.sem().QuotedDashInABracketIsARange == Yes {
+			// The dialect whose quoting does not reach the range operator:
+			// the dash is left bare, so inside a bracket it is a range and
+			// outside one it was never anything but itself. Read rather than
+			// asked, for the reason WideCharacterIsInAlphaAlone is: No is
+			// every other column's answer and needs no dialect to give it.
+			meta = strings.ReplaceAll(meta, "-", "")
+		}
+		b.WriteString(escapePatternMetaIn(text, meta))
 	}
 	return r.markWrittenBars(r.resolvePatternTildesThrough(b.String()), fromValue)
 }
@@ -3142,6 +3152,9 @@ func posixClassName(name string) bool {
 }
 
 func inClass(name string, unit string, extra patternClasses) bool {
+	if extra.wideAlphaOnly && len(unit) > 1 && posixClassName(name) {
+		return name == "alpha" && inWideAlphaAlone(ordOf(unit))
+	}
 	if inPosixClass(name, unit) {
 		return true
 	}
@@ -3171,6 +3184,9 @@ type patternClasses struct {
 	// asciiNames says a name is ASCII only, so `[[:IDENT:]]` is too. See
 	// Semantics.NamesTakeTheLocalesLetters.
 	asciiNames bool
+	// wideAlphaOnly says a character outside ASCII is in alpha and in no
+	// other POSIX class. See Semantics.WideCharacterIsInAlphaAlone.
+	wideAlphaOnly bool
 }
 
 // holds answers one of the extra names, and answers false for any name the
@@ -3434,6 +3450,14 @@ func inWideClass(name string, c rune) bool {
 	return false
 }
 
+// inWideAlphaAlone is alpha for the dialect whose wide characters are in no
+// other class: the letters, and the two kinds of number that are digits or
+// letters in their own scripts — `٣` U+0663 (Nd) and `Ⅷ` U+2167 (Nl) — but
+// not `½` U+00BD (No). Measured on ksh93u+ under LC_ALL=C.UTF-8, 2026-10-03.
+func inWideAlphaAlone(c rune) bool {
+	return unicode.IsLetter(c) || unicode.Is(unicode.Nd, c) || unicode.Is(unicode.Nl, c)
+}
+
 // inRange reports whether a unit ranks inside a bracket range.
 func inRange(c, lo, hi rune) bool { return c >= lo && c <= hi }
 
@@ -3592,10 +3616,18 @@ func (r *Runner) readsQuantifiedGroups(condition bool) bool {
 // begins and there is no other spelling.
 func (r *Runner) patternClasses(pattern string) patternClasses {
 	names := r.sem().PatternClasses
-	if names == "" || !strings.Contains(pattern, "[:") {
+	if !strings.Contains(pattern, "[:") {
 		return patternClasses{}
 	}
-	c := patternClasses{names: names}
+	// Read rather than asked, the way Runner.failedExpansion reads its axis:
+	// No is the reading every other column gives and what this matcher did
+	// before the axis existed, so an unanswered vector has a right answer to
+	// fall back on rather than a question to refuse over.
+	wideAlphaOnly := r.sem().WideCharacterIsInAlphaAlone == Yes
+	if names == "" {
+		return patternClasses{wideAlphaOnly: wideAlphaOnly}
+	}
+	c := patternClasses{names: names, wideAlphaOnly: wideAlphaOnly}
 	if classDeclared(names, "IFS") || classDeclared(names, "IFSSPACE") {
 		c.ifs, _ = r.ifs()
 		c.space = r.ifsSpace(c.ifs)

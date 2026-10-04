@@ -4321,6 +4321,10 @@ func Semantics() interp.Semantics {
 	// typeset is one of this shell's own special builtins, so any of its
 	// failures ends the script — a bad option included.
 	s.TypesetBadOptionFatal = interp.Yes
+	// An exported table reaches no child, where an exported array hands it
+	// the first element: measured 2026-10-03. See
+	// Semantics.ExportedTableReachesAChild.
+	s.ExportedTableReachesAChild = interp.No
 	// An FPATH body is read before the call's redirections open: measured
 	// 2026-10-03, a file that defines nothing still writes its output and
 	// the refusal through `bb >/dev/null 2>/dev/null`. See

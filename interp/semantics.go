@@ -15785,6 +15785,24 @@ type Semantics struct {
 	// unpinned ash: likewise.
 	UndefinedFunctionLoadsBeforeTheRedirections Answer
 
+	// ExportedTableReachesAChild hands a child the first value of an exported
+	// keyed table, in a dialect whose exported arrays reach a child at all —
+	// see ExportedCompoundReachesAChildAsItsFirstValue, which is asked first.
+	//
+	// Measured 2026-10-03 on ksh93u+: `a=(x y); export a` gives a child
+	// `a=x` and `typeset -A m=([k]=v); export m` gives it nothing, whatever
+	// the key. See Runner.exportedCompound.
+	//
+	// unpinned bash: bash's exported arrays reach no child, so the question
+	// is never put.
+	//
+	// unpinned zsh: the same as bash.
+	//
+	// unpinned dash: no arrays.
+	//
+	// unpinned ash: no arrays.
+	ExportedTableReachesAChild Answer
+
 	// SignAloneIsAnOptionWord reads a declaration's `-` or `+` written with
 	// no letters after it as an option word rather than as an operand.
 	//
@@ -32991,6 +33009,8 @@ func PosixSemantics() Semantics {
 		BareDeclarationListing: DeclareListingCommandWord,
 		BareLocalListing:       BareLocalListsNothing,
 		TypesetBadOptionFatal:  No,
+		// What this engine did before the axis: a table as an array.
+		ExportedTableReachesAChild: Yes,
 		// Where the load always was: behind the call's redirections.
 		UndefinedFunctionLoadsBeforeTheRedirections: No,
 		// What this engine wrote before the axis.

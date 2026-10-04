@@ -3193,6 +3193,23 @@ type Dialect struct {
 	// <(cat <<EOF)` — while `${ cat <<EOF; }`, that shell's shared-state
 	// form, is refused with the same sentence.
 	HeredocBodyMustBeInsideTheSubstitution bool
+
+	// HeredocBodyBraceIsReadWithTheLine refuses an unterminated `${` in an
+	// unquoted here-document body when the command is read, rather than when
+	// the body is expanded — so the command never runs and the refusal is the
+	// script's, at the fatal 2 and located past the delimiter. dash and
+	// BusyBox ash. Measured 2026-10-03 over a script file `echo before` /
+	// `cat <<EOF; echo same` / `W${` / `EOF` / `echo after`: dash 0.5.12
+	// writes `before` and `5: Syntax error: Missing '}'` and ends at 2, and
+	// BusyBox v1.37.0 in the pinned image `before` and `line 5: syntax error:
+	// missing '}'` at 2, with neither `W`, `same` nor `after`. bash, ksh93
+	// and zsh run the line and report the body when they expand it.
+	//
+	// The line named is where the input ends, not the body's: the `${` reads
+	// on past the delimiter looking for its `}`. Over files of three, four,
+	// five and seven lines both name the last line a newline closed, and the
+	// same text through `-c` with no newline at its end names one fewer.
+	HeredocBodyBraceIsReadWithTheLine bool
 	// HeredocDelimiterSubstitutions is what a delimiter may be written as.
 	// See [HeredocDelimiterSubstitution], which carries the panel (#4691).
 	HeredocDelimiterSubstitutions HeredocDelimiterSubstitution
@@ -3564,6 +3581,40 @@ type Dialect struct {
 	// b.img; chmod +x b.img; ./b.img` writes `ranmore` in BusyBox ash, the
 	// one column that runs such a file at all.
 	SourceDropsNulBytes bool
+
+	// FunctionKeywordParensAreAPair reads the `function` keyword as a prefix
+	// to one of two things, and nothing else: the `()` pair and then any body
+	// the parenthesized form takes, or no parentheses and a compound body.
+	// BusyBox ash.
+	//
+	// Measured 2026-10-03 in the pinned image under `-c`, `function a` and
+	// then:
+	//
+	//	{ echo B; }, a newline then { … }, if/for/while/case …   defined
+	//	[[ 1 = 2 ]], which this shell otherwise runs as a builtin defined
+	//	() { … }, () echo B, a newline after () then echo B     defined
+	//	echo B, a newline then echo B          unexpected word
+	//	( echo B ), a newline then ( echo B )   unexpected word (expecting ")")
+	//	(( 1 )), a newline then (( 1 ))         unexpected "(" (expecting ")")
+	//	zz then a newline and { … }             unexpected word, at zz
+	//
+	// So a `(` after the name is always the first of the pair — a newline
+	// in front of it changes nothing, and a subshell body is out of reach
+	// without the `()` — and a bare simple command is a body only behind the
+	// pair. Three readings that the other dialects answer separately, and
+	// one shell that has all three; a flag per reading would be three
+	// answers nobody else gives.
+	FunctionKeywordParensAreAPair bool
+
+	// FunctionKeywordRefusesAnAssignment refuses a `function` keyword whose
+	// next word is spelled as an assignment, at whatever stands after that
+	// word: BusyBox ash. Measured 2026-10-03 in the pinned image under `-c`:
+	// `function a=b { … }` and `function a= { … }` are `unexpected "{"`, `a=b`
+	// then a newline and `{` the same, `function a=b;` is `unexpected ";"`
+	// and `function a=b` alone `unexpected end of file`, where `function
+	// =ab`, `function a-b=c`, `function "a=b"` and `function a\=b` are names
+	// like any other word and define a function.
+	FunctionKeywordRefusesAnAssignment bool
 
 	// ParamSubstitution enables `${x/pat/rep}` and the spellings that put a
 	// `#` or a `%` after the `/`. Absent from dash.

@@ -7137,6 +7137,26 @@ func (l *Lexer) readOneHeredoc(r *Redirect, quoted bool) {
 		Start: start,
 		Stop:  l.pos(),
 	}
+	if !quoted && l.dialect.HeredocBodyBraceIsReadWithTheLine && l.err == nil {
+		// Read now for the one refusal these dialects make here rather than
+		// when the body is expanded, located where the reader stands — past
+		// the delimiter. See [Dialect.HeredocBodyBraceIsReadWithTheLine].
+		if _, err := HeredocSpans(body.String(), l.dialect); err != nil {
+			if se, ok := err.(*Error); ok && se.Token == "${" && se.BraceParamFormUnclosed {
+				// Located where the input runs out: the body's `${` reads on
+				// past the delimiter to the end looking for its `}`, and the
+				// line named is the last one a newline closed. Measured on
+				// both shells, the number follows the input's length and not
+				// the body's, and `-c` text with no newline at its end names
+				// one line fewer than the same text from a file.
+				moved := *se
+				moved.Pos = l.pos()
+				moved.Pos.Line += int32(strings.Count(l.src[l.off:], "\n")) - 1
+				moved.EndLine, moved.EofLine = 0, 0
+				l.err = &moved
+			}
+		}
+	}
 }
 
 // delimiterMatches reports whether a body line just read ends the document.

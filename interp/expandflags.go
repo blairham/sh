@@ -85,7 +85,7 @@ func (r *Runner) expandFlagged(s syntax.Span, sp splitPolicy, head bool) ([]stri
 		v := words[0]
 		if quoted {
 			if !escaped {
-				v = globEscape(v)
+				v = r.globEscape(v)
 			}
 			return []string{v}, true
 		}
@@ -97,7 +97,7 @@ func (r *Runner) expandFlagged(s syntax.Span, sp splitPolicy, head bool) ([]stri
 			v = r.equalsHeadMark(head, v) + escapeWithLiveMarks(v)
 		} else if !escaped &&
 			!r.ask(r.globSubstAnswer(s), "globbing the result of an expansion") {
-			v = globEscape(v)
+			v = r.globEscape(v)
 		}
 		// `${(U)~g}` is measured: the group is read, the case applied, and
 		// the tilde marks what came out. The tilde may only follow the
@@ -175,7 +175,7 @@ func (r *Runner) expandFlagged(s syntax.Span, sp splitPolicy, head bool) ([]stri
 		if strings.Contains(w, liveMark) {
 			w = escapeWithLiveMarks(w)
 		} else if quoted || !r.ask(r.globSubstAnswer(s), "globbing the result of an expansion") {
-			w = globEscape(w)
+			w = r.globEscape(w)
 		}
 		out = append(out, w)
 		nulls = append(nulls, false)

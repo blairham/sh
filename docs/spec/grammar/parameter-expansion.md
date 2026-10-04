@@ -60,7 +60,11 @@ is #1541 and reached by every dialect the moment the operator fires.
 
 The **colon** forms are unanimous and ask nothing: `${@:-word}` is `word`
 and `${@:+word}` is empty in all six, because an empty value fires the
-test whichever way the set-ness reads. The one place the colon form still
+test whichever way the set-ness reads. *Empty* is two things, though, and
+the panel parts over which: quoted, `"${@:+word}"` with nothing set is one
+empty field in dash, BusyBox ash and zsh 5.9.2 and no field at all in bash
+5.3 and ksh93u+, measured 2026-10-03 with `n() { echo "$#"; }` —
+`Semantics.AFiredAlternateOnAnEmptyListIsOneField`. The one place the colon form still
 depends on the answer is the *sentence* `${@:?}` writes, which names the
 null where the list is set and says "not set" where it is not.
 

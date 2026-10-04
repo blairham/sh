@@ -335,6 +335,12 @@ func (r *Runner) printJobs(jobs []*Job, form jobsForm, wanted jobState, explicit
 		if showDir {
 			r.printf("%s\n", r.jobDirectoryLine(row.job))
 		}
+		if row.job.Finished() && wanted == anyJobState && form != jobsPidsAlone &&
+			r.sem().JobsListingForgetsEachRowAsItGoes == Yes {
+			// Gone before the next row is marked. See
+			// Semantics.JobsListingForgetsEachRowAsItGoes.
+			r.Forget(row.job)
+		}
 	}
 	return 0
 }

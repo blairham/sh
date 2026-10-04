@@ -227,7 +227,6 @@ ash   PrintfOutputPrecedesComplaint
 ash   PrintfQuoteOfNoArgumentIsEmpty
 ash   PrintfRefusedOperandKeepsItsLeadingNumber
 ash   PrintfTimeOperandIsADateString
-ash   ProducedParameterListing
 ash   ReadArrayDefault
 ash   ReadArrayTakesOneNameOnly
 ash   ReadEchoLettersWriteTheValues
@@ -722,6 +721,7 @@ dash  WritingSubstitutionIsWaitedForAtTheCommand
 dash  ZeroFillGoesAfterAnIntegersSign
 dash  ZeroFillKeepsLeadingBlanks
 dash  FunctionBodyListingWritesItsAttributes
+dash  SubstringCountsBytes
 
 ksh   ArithSubscriptSkippedWhenNameUnset
 ksh   AssignmentUpdatesPipelineStatus
@@ -773,6 +773,7 @@ ksh   TrapSingleUnknownConditionIsUsage
 ksh   UmaskPermissionCopyBesideLetters
 ksh   UnsetEndsTheProducedPipelineStatus
 ksh   ALetterUnderBothSignsComesOff
+ksh   SubstitutionRunsTheBodyReadWithItsLine
 
 zsh   AliasInvalidNameFatal
 zsh   AliasNameCheckReachesALookup
@@ -834,3 +835,4 @@ zsh   TrapSingleUnknownConditionIsUsage
 zsh   UmaskPermissionCopyBesideLetters
 zsh   UnsetReferenceLetterRemovesANonReference
 zsh   FunctionBodyListingWritesItsAttributes
+zsh   SubstitutionRunsTheBodyReadWithItsLine

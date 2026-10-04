@@ -30,7 +30,7 @@ echo "$(trap; echo z)"; echo "$(trap | cat)"; trap & wait`
 func TestALoneJobsKeepsTheTable(t *testing.T) {
 	dir := t.TempDir()
 	src := `cd '` + dir + `' || exit
-sleep 1 & j=jobs; f() { jobs -p; }
+sleep 30 & j=jobs; f() { jobs -p; }
 jobs -p | cat >a; (jobs -p) >b; f | cat >c; { jobs -p; } | cat >d
 command jobs -p | cat >e; $j -p | cat >g; { :; jobs -p; } | cat >h
 x=1 jobs -p 2>/dev/null | cat >i; echo "$(jobs -p)" >k; echo "$(jobs -p | cat)" >l

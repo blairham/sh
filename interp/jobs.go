@@ -32,6 +32,11 @@ type Job struct {
 	// exactly where this is 0.
 	PID    int
 	Status int
+	// heldForTheListing says a `wait` has reported this job and the table
+	// is keeping it only for the next listing, in the dialect that does. It
+	// holds its number until then, and gives it up to the next job started:
+	// see Semantics.WaitLeavesTheJobForTheListing and Runner.addJob.
+	heldForTheListing bool
 	// noticedInCommand is the running command that was holding a job slot
 	// when this job was noticed as finished, by its serial, or zero. A job
 	// dropped later, at the spec that reads it, left the table in the
@@ -1544,6 +1549,12 @@ func biWait(r *Runner, _ context.Context, args []string) int {
 			if r.unspecified {
 				return r.status
 			}
+			if !hit && !stopped && r.bareWaitLeavesJobs && r.sem().WaitLeavesTheJobForTheListing == Yes {
+				// Reported by this wait as a named one would have been, so
+				// its number goes the same way: `true & wait; false & sleep
+				// 0.1; jobs` lists the second job as `[1]` alone there.
+				j.heldForTheListing = true
+			}
 			if !hit && !stopped {
 				// Where the dialect's bare `wait` says how a job ended, it
 				// says what the named route says. Read, not asked: a shell
@@ -1869,9 +1880,17 @@ func (r *Runner) waitUntilOneSucceeds(opts waitOpts) int {
 	}
 	if !waited {
 		// Nothing was waited out, so nothing failed to succeed: measured,
-		// `wait -n` with no jobs at all is 0 there, where the other reading
-		// answers 127. The 129 is what a run that *did* wait and found no
-		// success reports.
+		// `wait -n` over jobs that had all ended is 0 there. The 129 is what
+		// a run that *did* wait and found no success reports.
+		//
+		// But a table with nothing in it at all is 127, as it is in the
+		// other reading: re-measured 2026-10-03 in the pinned image, `wait
+		// -n` alone is 127 from a script and from `-c`, and `(exit 3) &
+		// sleep 0.2; wait -n; wait -n` is 0 twice, the ended job staying in
+		// the table until a listing reports it.
+		if len(r.jobs) == 0 {
+			return 127
+		}
 		return 0
 	}
 	return waitNextJobNoneSucceeded
@@ -2654,6 +2673,18 @@ func (r *Runner) addJob(job *Job) {
 		// is `[1]` in zsh 5.9.2 and ksh93u+, where the lazy drop numbered
 		// it 2. See Semantics.FinishedJobLeavesTheTable.
 		r.dropFinishedJobsWhereAnswered()
+		// And a job a `wait` reported and the table kept for a listing
+		// gives its number up here, unlisted. Measured 2026-10-03 on dash
+		// 0.5.12 and BusyBox v1.37.0: `/bin/sh -c 'exit 7' & p=$!; wait
+		// "$p"; /bin/sh -c 'exit 4' & wait %1` answers 4, and `true &
+		// sleep 0.1; false & wait %2; sleep 1 & jobs` lists the new job as
+		// `[2]` and the unwaited `[1]` as Done — a finished job no `wait`
+		// reached keeps its number. See Semantics.WaitLeavesTheJobForTheListing.
+		for _, held := range slices.Clone(r.jobs) {
+			if held.heldForTheListing {
+				r.Forget(held)
+			}
+		}
 		job.num = r.nextJobNumber()
 	}
 	// Where the job started, recorded here because here is where "the job
@@ -2932,6 +2963,12 @@ func (r *Runner) Jobs() []*Job { return slices.Clone(r.jobs) }
 // but ksh93u+, where it is 127. See Semantics.WaitRemembersAReapedJob, and the
 // narrower reading two columns hold that is not modeled here.
 func (r *Runner) reap(j *Job) {
+	if !r.JobControl && r.sem().WaitLeavesTheJobForTheListing == Yes {
+		// Left where it is for the next listing, which is what reports it
+		// in this dialect: see Semantics.WaitLeavesTheJobForTheListing.
+		j.heldForTheListing = true
+		return
+	}
 	r.Forget(j)
 	if j == r.answeringDropped {
 		// A job the table had dropped, answering the one `wait` by id it

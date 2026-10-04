@@ -48,6 +48,9 @@ func testSemantics() Semantics {
 	// that lists is the letter that folds. The suite that is about the other
 	// reading is dialect/ksh's caselisting_test.go (#5671).
 	s.CaseListingAndFoldAreSeparate = No
+	// A substring counts what a length counts. The suite that is about the
+	// other answer is dialect/ash's substringbytes_test.go.
+	s.SubstringCountsBytes = No
 
 	// Arrays, subscripts and the expansions that read them. The standard has
 	// no arrays, so it answers none of this and every array test is refused

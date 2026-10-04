@@ -2058,3 +2058,17 @@ in zsh 5.9.2, and ksh93u+ stopping at line 2. The same holds for a file run
 because the kernel would not start it, which only BusyBox ash does with a
 NUL in it: `printf 'echo ran\0more\n' > b.img; chmod +x b.img; ./b.img`
 writes `ranmore`. `syntax.Dialect.SourceDropsNulBytes`, set for the three.
+
+## An unterminated `${` in a here-document body
+
+dash and BusyBox ash refuse it when the command is read, not when the body
+is expanded: the command never runs, the shell ends at 2, and the refusal is
+located where the input ends — the `${` reads on past the delimiter looking
+for its `}`. Measured 2026-10-03, dash 0.5.12 and BusyBox v1.37.0 in the
+pinned image, over `echo before` / `cat <<EOF; echo same` / `W${` / `EOF` /
+`echo after`: `before`, then `line 5: syntax error: missing '}'` (ash) and
+`5: Syntax error: Missing '}'` (dash), and nothing else. Over files of three,
+four, five and seven lines the number is the last line a newline closed;
+`-c` text without a final newline names one fewer. bash, ksh93 and zsh run
+the line and report the body when they expand it.
+`syntax.Dialect.HeredocBodyBraceIsReadWithTheLine`.

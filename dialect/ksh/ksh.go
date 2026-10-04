@@ -2841,6 +2841,7 @@ func Semantics() interp.Semantics {
 	// A third segment in a substring range is a bad substitution here, named
 	// after the whole word: `${x:1:5:t}` (#2818).
 	s.SubstringRangeThirdColonIsABadSubstitution = interp.Yes
+	s.SubstringCountsBytes = interp.No
 	s.PrintfReportsBadNumber = interp.No
 	s.PrintfNumberOperand = interp.PrintfNumberArithmetic
 	s.PrintfIntegerCharConstantAfterBlanks = interp.Yes
@@ -3557,6 +3558,8 @@ func Semantics() interp.Semantics {
 	// and `${@=abc}` is `${@=abc}: bad substitution` because the operator
 	// fires at all (#1941).
 	s.PositionalListWithNoneIsSet = interp.No
+	// unanswered SubstitutionRunsTheBodyReadWithItsLine: every body is read
+	// when it runs here, so nothing was read with the line.
 	// It agrees with bash about what an empty `$@` takes with it, which is the
 	// one of the three brace-free readings that reaches both sides of the list:
 	// `"$e$@"` and `"$@$e"` are each no argument at all.

@@ -16959,6 +16959,33 @@ that never reaps anything, so a probe without a completed job in it cannot
 tell them apart — which is the same trap the `before` column above exists
 to close.
 
+### dash and ash keep a reported job for the listing
+
+The number goes back, and in dash and BusyBox ash the job does not go with
+it: a job any `wait` reported — bare, by `%` spec or by process id — stays
+in the table of a shell with nobody to notify until a `jobs` listing
+reports it once, or until the next job started takes its number. Measured
+2026-10-03, dash 0.5.12 and BusyBox v1.37.0 in the pinned image, from `-c`
+and from script files:
+
+    false & wait %1; wait %1; jobs     1, 1, then the Done(1) row
+    ( exit 3 ) & wait; jobs            the Done(3) row
+    true & sleep .1; false & wait %2; sleep 1 & jobs
+                                       [2] Running, [1] Done — the waited
+                                       job gave 2 up, the unwaited one kept 1
+
+bash 5.3.20 and zsh 5.9.2 answer the second `wait %1` with `no such job`
+and list nothing; ksh93u+ keeps a job a *bare* `wait` reported and not a
+named one. `Semantics.BareWaitLeavesJobsForTheListing`, which recorded dash
+and ash as listing nothing — they list it — and
+`WaitLeavesTheJobForTheListing`.
+
+And a listing in those two takes each finished job out as it writes the
+row, so every row after it is marked against what is left:
+`true & true & true & sleep 0.2; jobs` marks all three `+` there, where bash
+writes `[1]`, `[2]`, `[3]+` and ksh93 `+`, `-`, blank.
+`JobsListingForgetsEachRowAsItGoes`.
+
 ### Where the status of a reaped job lives
 
 `Semantics.WaitRemembersAReapedJob`. The number is free; the status may or
@@ -17600,6 +17627,23 @@ arithmetic error it reports for the same spelling on a set name. A set and
 empty name is a value in all four — `e=; "${e:1/0}"` is the division
 everywhere — and `set -u` refuses the unset name before the range would
 be read. `Semantics.SubstringOfAnUnsetNameEvaluatesNothing` is the split.
+
+### A substring's numbers, in bytes or characters
+
+`${#x}` and `${x:o:l}` count the same unit in bash 5.3, ksh93u+ and zsh
+5.9.2: characters under a UTF-8 locale, bytes under `C`. BusyBox ash 1.37.0
+counts the length in characters and the range in **bytes**. Measured
+2026-10-03 in the pinned image under `LC_ALL=C.UTF-8`, `s=héllo` (six bytes,
+five characters):
+
+                    ${#s}  ${s:1:2}  ${s:3}  ${s: -4}   ${s:1:-1}
+    ash             5      é         llo     \xa9llo    éll
+    bash ksh93 zsh  5      él        lo      éllo       éll
+
+So an offset can land inside a character and hand back half of it.
+`Semantics.SubstringCountsBytes`, asked only where the value has a wide
+character. A pattern over the same value is a different question and is not
+this: `${t/??/X}` on `héllo` is `Xllo` there too.
 
 ### A substring range is a modifier list where the letter decides
 
@@ -26228,7 +26272,7 @@ questions rather than one; the sentence is
 `Diagnostics.FileSubstitutionReadError`. An open that fails is a
 different event and is already `redirectFailureStatus`.
 
-**`FdNumberBoundedByOpenFileLimit`** — bash yes · dash no · ksh93 yes · zsh no
+**`FdNumberBoundedByOpenFileLimit`** — bash yes · dash no · ksh93 yes · zsh no · ash yes
 
 Refuses a redirection whose descriptor number is at or above the
 process's soft limit on open files.
@@ -26277,6 +26321,12 @@ number below the limit is nobody's question, and a Runner with no
 `GetRlimit` has no limit to be asked about — a library that was handed no
 limits is not the place to invent one. Recorded as
 `redir/a-descriptor-number-over-the-open-file-limit`.
+
+BusyBox ash 1.37.0 refuses too, once the open has happened: `ulimit -n 64;
+exec 70>fresh` creates `fresh` and writes `dup2(3,70): Bad file descriptor`
+— the number the open produced, then the one asked for — and `exec` ends the
+shell at 1, where `echo hi 70>fresh` goes on at 1. Measured 2026-10-03 in the
+pinned image; the old answer here was no.
 
 **`RedirectTargetIsAnOrdinaryWord`** — bash yes · dash no · ksh93 no · zsh no
 
@@ -28739,7 +28789,7 @@ engines rather than two answers — see DeclarationListingForm.
 
 **`ProducedParameterListing`** — bash ProducedListingNameOnly · dash
 ProducedListingUnspecified · ksh93 ProducedListingWithValue · zsh
-ProducedListingWithValue · ash ProducedListingUnspecified
+ProducedListingWithValue · ash ProducedListingLastReading
 
 Is what `declare -p` and `typeset -p` **with no operands** write for a
 parameter the dialect produces. The named `typeset -p RANDOM` is a different
@@ -28756,6 +28806,12 @@ a script file. The `RANDOM` row out of the listing, before and after a plain
 | --- | --- | --- | --- | --- |
 | dash | 127 | — | — | — |
 | BusyBox ash | 127 | — | — | — |
+
+BusyBox ash has neither `typeset` nor `declare`, so the row above is the
+missing builtin. It answers through a bare `set`, which asks the same
+question since #2722: measured 2026-10-03 in the pinned image, nothing before
+a read, `RANDOM='17972'` after one, and the same row again on a second `set`
+— bash's gate, so `ProducedListingLastReading`.
 | bash 5.3 | 0 | `declare -i RANDOM` | `declare -i RANDOM="22963"` | `declare -i RANDOM="22963"` |
 | bash-as-`sh` | 0 | `declare -i RANDOM` | same as bash 5.3 | same |
 | bash 3.2 | 0 | *no row* | `RANDOM=3261` | `RANDOM=3261` |
@@ -33024,3 +33080,22 @@ which is the neighboring question `invocation.md` answers.
 The axis is consulted only where an `ARGV0` is actually in the environment
 being handed over, so a core with no dialect chosen refuses the script
 that uses the name rather than every command it starts.
+
+### A `read` a trapped signal arrives during
+
+`Semantics.ReadIsAbandonedByATrappedSignal`. Measured 2026-10-03 with `read
+-r l <&3` waiting on a fifo, an INT trap `echo T`, and a job that sends INT
+0.3s in and writes `late` to the fifo 0.5s after that:
+
+| column | output |
+| --- | --- |
+| dash 0.5.12, BusyBox ash 1.37.0 | `T`, `st=1 l=[]` |
+| bash 5.3.20, bash 3.2, zsh 5.9.2 | `T`, `st=0 l=[late]` |
+| bash 5.3.20 as `sh` | `T`, `st=130 l=[]` |
+| ksh93u+ | `T`, `st=258 l=[]` |
+
+dash and ash give the read up as at the end of input and run the handler once
+the builtin has returned; the field answers yes there. The abandoning
+statuses of bash's POSIX mode and of ksh93 are not modeled: those columns
+answer no and keep reading. A byte that arrives after an abandoned read was
+given up is lost, the cost `read -t` already carries over a pipe.

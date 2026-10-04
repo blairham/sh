@@ -2,10 +2,18 @@
 
 `RANDOM` is a produced parameter: reading it yields a number in `0`..`32767`,
 and assigning to it seeds the generator, so a script that assigns gets a
-sequence that is a function of the seed alone. Three shells in the panel have
-it — bash, ksh93 and zsh — and **dash and BusyBox ash have no such parameter**,
+sequence that is a function of the seed alone. Four shells in the panel have
+it — bash, ksh93, zsh and BusyBox ash — and **dash has no such parameter**,
 where `$RANDOM` is an ordinary unset variable and `RANDOM=42` an ordinary
 assignment.
+
+BusyBox ash was recorded here as having none, which was wrong: measured
+2026-10-03 in the pinned image, `${RANDOM-}` is a number, `RANDOM=5` seeds
+rather than stores, the same seed draws the same pair, and `unset RANDOM`
+makes it an ordinary name. Its *sequence* is not reproduced — `RANDOM=42`
+draws `20351 9206` and `RANDOM=4` draws `29829`, which none of the three fits
+below produces and which this file has not fitted — so a seeded ash script
+here is reproducible with numbers of its own (#5761).
 
 That much was already recorded (`semantics.md`, and #2827, which made a seeded
 sequence reproducible here). What this file adds is the **sequence itself**,

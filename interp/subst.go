@@ -95,7 +95,10 @@ func (r *Runner) runCommandSubst(ctx context.Context, span syntax.Span) string {
 	// this is the second read of the same text. See
 	// Runner.readLineSubstitutions for which and for why the first read does
 	// not stand in for this one.
-	f, base, _, ok := r.readSubstBody(span)
+	f, base, ok := r.keptSubstBody(span)
+	if !ok {
+		f, base, _, ok = r.readSubstBody(span)
+	}
 	if !ok {
 		return ""
 	}
@@ -1216,14 +1219,14 @@ func (r *Runner) readSubstBody(span syntax.Span) (*syntax.File, int, int, bool) 
 // file for them; an embedder handing a whole script to Run gets the shell's
 // own granularity from here rather than a different one.
 //
-// The tree is **thrown away**, which is measured rather than convenient: bash
+// The tree is **thrown away** in bash, which is measured rather than convenient: bash
 // 5.3 expands a body against the alias table as it stands when the word is
 // expanded, not the one the line was read under — `alias t=echo; v=$(t hi)`
 // on one line answers `[hi]` there — so a kept tree would be wrong for that
 // column. dash keeps its own and answers `t: not found`, which is a second
-// question this does not answer: its column of
-// `alias/nested-text-expands-where-the-command-string-did-not` is where it
-// shows, and it is no worse for this.
+// question this does not answer here: it is
+// Semantics.SubstitutionRunsTheBodyReadWithItsLine, which keeps the tree in
+// the dialects that run it — see keptsubstbody.go.
 //
 // The list is in reading order and a line never goes backwards in it, so a
 // cursor is enough to say what has been read.
@@ -1254,10 +1257,11 @@ func (r *Runner) readSubstitutionsUpTo(f *syntax.File, from int, limit int32) in
 // is still placed in the file rather than in whichever body most recently
 // began.
 func (r *Runner) readNestedSubstitutions(span syntax.Span) bool {
-	body, _, textBase, ok := r.readSubstBody(span)
+	body, base, textBase, ok := r.readSubstBody(span)
 	if !ok {
 		return false
 	}
+	r.keepSubstBody(span, body, base)
 	if len(body.Substitutions) == 0 {
 		return true
 	}

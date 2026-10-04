@@ -88,6 +88,9 @@ func (c *Runner) ownTables(r *Runner) {
 	//	               so what a bare `$c` reads and what `typeset -p` writes
 	//	               come from the members stored under it
 	c.removed = maps.Clone(r.removed)
+	// A subshell reads its own lines' substitutions and keeps their trees
+	// itself. See keptsubstbody.go.
+	c.keptSubstBodies = maps.Clone(r.keptSubstBodies)
 	c.assigned = maps.Clone(r.assigned)
 	c.absentParams = maps.Clone(r.absentParams)
 	c.deferredParams = maps.Clone(r.deferredParams)

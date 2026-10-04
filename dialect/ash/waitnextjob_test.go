@@ -44,9 +44,17 @@ func TestWaitNextJobIsTheFirstToSucceed(t *testing.T) {
 			"st=129", "which is what says the number is not the job's",
 		},
 		{
+			// Re-measured 2026-10-03: 127, as in bash. It was recorded as 0
+			// here, which is the answer for a table holding only jobs that
+			// had already ended — the row below.
 			"nothing to wait for",
 			"wait -n\necho st=$?",
-			"st=0", "where bash answers 127",
+			"st=127", "a table with nothing in it",
+		},
+		{
+			"only jobs that had already ended",
+			"{ exit 7; } &\n/bin/sleep 0.2\nwait -n\necho st=$?\nwait -n\necho st=$?",
+			"st=0\nst=0", "nothing was waited out, and the job stays for a listing",
 		},
 		{
 			"an operand is a plain wait",

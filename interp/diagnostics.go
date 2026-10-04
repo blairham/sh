@@ -237,6 +237,40 @@ type Diagnostics struct {
 	// ksh93 need no answer here.
 	SourcedFatalStatus int
 
+	// StartupParseFailureNamesTheShell names the shell, and not the file, in
+	// front of a parse failure in a startup file — the front end's
+	// SelfName-or-`$0` rule, as for a failure on the route itself.
+	//
+	// The two dialects that set it name the shell for everything said from
+	// inside `$ENV`, which is the only startup file either reads, and a parse
+	// failure is no exception. Measured 2026-10-04 over an `$ENV` holding
+	// `echo before`, `false`, `echo )`, read by `-i -c`:
+	//
+	//	dash 0.5.12      /bin/dash: 3: Syntax error: ")" unexpected
+	//	BusyBox 1.37.0   /bin/ash: syntax error: unexpected ")"
+	//	ksh93u+          /…/env.sh: line 2: syntax error: `)' unexpected
+	//	bash 5.3.20      /…/rc.sh: line 3: syntax error near unexpected token `)'
+	//	zsh 5.9.2        /…/.zshenv:3: parse error near `)'
+	//
+	// — the last two for `$BASH_ENV` and `.zshenv`. The line, where there is
+	// one, is the file's in all five (#5869).
+	StartupParseFailureNamesTheShell bool
+
+	// StartupParseFailureWordedAsAtAPrompt words a parse failure in a startup
+	// file the way the dialect words one typed at a prompt, while keeping the
+	// route's location — which is ksh93's, under `-E` as much as under `-i`,
+	// so it is not about whether a person is there. In the grid above it is
+	// `syntax error: `)' unexpected` with no `at line 3` in the sentence; a
+	// script or a `.` would have had one. The location is the line of the
+	// last command the file ran and is left out before the second line —
+	// Diagnostics.ParseFailureIsLocatedWhereTheProgramGotTo, which this
+	// shell already answers for a script.
+	StartupParseFailureWordedAsAtAPrompt bool
+
+	// StartupParseFailureStatus is what a parse failure in a startup file
+	// leaves in `$?` for whatever runs after it. See StartupParseStatus.
+	StartupParseFailureStatus StartupParseStatus
+
 	// DotSearchPathMiss is a `. -p list file` whose list did not hold the
 	// file. One verb: the operand as written.
 	//
@@ -11902,6 +11936,62 @@ func (d Diagnostics) SyntaxStatus() int {
 		return 2
 	}
 	return d.SyntaxErrorStatus
+}
+
+// StartupParseStatus is what a parse failure in a startup file leaves in `$?`,
+// which is not what `.` returns for the same failure and not one answer across
+// the panel. Measured 2026-10-04 by the status the `-c` command sees, with the
+// command before the failure leaving 0, 1 and 7 in turn:
+//
+//	zsh 5.9.2      0  1  7    under -c, -i and -l alike, and 0 under -c and
+//	                          1 under -i where nothing in the file ran
+//	ksh93u+        0  1  7    under -E
+//	ksh93u+        3  3  3    under -i
+//	bash 5.3.20    2  2  2    under -c, -i and -l alike
+//	dash, ash      2  2  2    under -i, the only route that reads `$ENV`
+//
+// bash has a further split this does not model: an unclosed quote or `${`
+// leaves a failing status where it found one and 2 only over a success. Its
+// script route has the same split and the same gap, which is why it is one
+// gap rather than two.
+type StartupParseStatus int
+
+const (
+	// StartupParseStatusSyntax leaves the status the dialect exits with
+	// over the same failure in a script. The zero value, and bash's, dash's
+	// and BusyBox ash's.
+	StartupParseStatusSyntax StartupParseStatus = iota
+	// StartupParseStatusKept leaves whatever the last command the file ran
+	// left, as if the failure had not been there: zsh. Where none of the file
+	// ran — the failure on its first line — it is 0, which is what a startup
+	// file with nothing in it leaves there too, and at a prompt it is the
+	// syntax-error status instead: measured 2026-10-04, `if` alone in a
+	// `.zprofile` after a `.zshenv` of `false` leaves 0 for `zsh -l -c` and 1
+	// for `zsh -l -i`, and `x=1` in front of it leaves 0 for both.
+	StartupParseStatusKept
+	// StartupParseStatusKeptUnlessInteractive is the first in an interactive
+	// shell and the second in any other: ksh93.
+	StartupParseStatusKeptUnlessInteractive
+)
+
+// StartupParseFailureStatusFor is the status a parse failure in a startup file
+// leaves, given the status before it, whether any of the file ran before it,
+// and whether the shell is interactive.
+func (d Diagnostics) StartupParseFailureStatusFor(err error, before int, ran, interactive bool) int {
+	switch d.StartupParseFailureStatus {
+	case StartupParseStatusKept:
+		switch {
+		case ran:
+			return before
+		case !interactive:
+			return 0
+		}
+	case StartupParseStatusKeptUnlessInteractive:
+		if !interactive {
+			return before
+		}
+	}
+	return d.StatusForParseError(err)
 }
 
 // sourcedSyntaxStatus is SyntaxStatus for text `.` read from a file, which is

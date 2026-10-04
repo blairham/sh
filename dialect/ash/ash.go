@@ -2877,6 +2877,10 @@ func Diagnostics() interp.Diagnostics {
 		Location:       interp.LocationNameOnly,
 		ScriptLocation: interp.LocationLineWord,
 		StdinLocation:  interp.LocationNameOnly,
+		// And a parse failure in `$ENV` names the shell and no line, as
+		// everything said from inside it does under `-i`: `ash: syntax
+		// error: unexpected ")"` (#5869).
+		StartupParseFailureNamesTheShell: true,
 		// A builtin names itself between the script and the line, and on
 		// every route rather than only where the shell's own message carries
 		// a line. Measured 2026-09-14, BusyBox v1.37.0 in the pinned image:

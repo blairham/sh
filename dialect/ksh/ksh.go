@@ -4889,6 +4889,12 @@ func Diagnostics() interp.Diagnostics {
 		// Except part-way through a program, where the line the program had
 		// got to goes in front: `line 2: syntax error at line 4`.
 		ParseFailureIsLocatedWhereTheProgramGotTo: true,
+		// And `$ENV` is named by its path, located the same way and worded as
+		// at a prompt — `env.sh: line 2: syntax error: `)' unexpected` — and
+		// leaves 3 at a prompt and the status before it under `-E`. See the
+		// two fields for the grid (#5869).
+		StartupParseFailureWordedAsAtAPrompt: true,
+		StartupParseFailureStatus:            interp.StartupParseStatusKeptUnlessInteractive,
 		// And for a here-document body that line is the one the message is
 		// located at rather than the body's own. See
 		// interp/heredocbodyrefusalline.go (#4715).

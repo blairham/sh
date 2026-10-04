@@ -89,11 +89,10 @@ func TestZmodloadZleIsLoadedInsideAStartupFileAndCompleteIsNot(t *testing.T) {
 		Stdout: &buf, Stderr: &buf,
 	})
 	zsh.BeforeStartupFiles(r)
-	rc := preset.Parse(t, `zmodload -e zsh/zle
+	if _, err := r.RunStartupFile(context.Background(), "/home/person/.zshrc", `zmodload -e zsh/zle
 print -r -- "zle=$?"
 zmodload -e zsh/complete
-print -r -- "complete=$?"`)
-	if _, err := r.RunStartupFile(context.Background(), rc, "/home/person/.zshrc"); err != nil {
+print -r -- "complete=$?"`, nil); err != nil {
 		t.Fatalf("run startup file: %v", err)
 	}
 	want := "zle=0\ncomplete=1\n"
@@ -112,9 +111,8 @@ func TestZmodloadCompleteIsLoadedOnceTheStartupFileIsDone(t *testing.T) {
 		Stdout: &buf, Stderr: &buf,
 	})
 	zsh.BeforeStartupFiles(r)
-	rc := preset.Parse(t, `zmodload -e zsh/complete
-print -r -- "during=$?"`)
-	if _, err := r.RunStartupFile(context.Background(), rc, "/home/person/.zshrc"); err != nil {
+	if _, err := r.RunStartupFile(context.Background(), "/home/person/.zshrc", `zmodload -e zsh/complete
+print -r -- "during=$?"`, nil); err != nil {
 		t.Fatalf("run startup file: %v", err)
 	}
 	after := preset.Parse(t, `zmodload -e zsh/complete

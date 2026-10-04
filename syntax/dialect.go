@@ -8497,6 +8497,13 @@ type Dialect struct {
 	// anything looking around: the scanners recurse, so the innermost to run
 	// out reports first and the enclosing ones follow it outwards. Keeping
 	// the first report is the default; this makes each replace the last.
+	//
+	// Two refinements, measured 2026-10-04 on zsh 5.9.2. A `${` does not
+	// take the blame from a quote or backquote inside it — `echo ${x:-"a`
+	// is `unmatched "` — though it does from a `$(` or a nested `${`. And
+	// what a `$(`'s body refused travels out with the blame and is written
+	// first: `echo "$(for` is `parse error near `for'` and then
+	// `unmatched "`. See Lexer.replacesUnmatched and Error.BodyRefusal.
 	UnmatchedBlamesTheOutermost bool
 
 	// Coproc is `coproc command`: the command runs in the background with a

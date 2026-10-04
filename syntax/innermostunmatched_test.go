@@ -69,10 +69,20 @@ func TestWhichNestedConstructIsBlamedWhenTheInputRunsOut(t *testing.T) {
 			outmost:   "$(",
 		},
 		{
+			// The exception to the outermost reading: a `${` does not take
+			// the blame from a quote or a backquote inside it. Measured
+			// 2026-10-04 on zsh 5.9.2: the row's line names the backquote.
+			// See Lexer.replacesUnmatched.
 			why:       "a backquote inside an expansion's body",
 			src:       "echo ${x:-`echo hi",
 			innermost: "`",
-			outmost:   "${",
+			outmost:   "`",
+		},
+		{
+			why:       "a quote inside an expansion's body",
+			src:       `echo ${x:-"a`,
+			innermost: `"`,
+			outmost:   `"`,
 		},
 		{
 			why:       "a substitution inside an expansion's body",
@@ -173,6 +183,38 @@ func TestTheOpenWordIsUnchangedByTheSkippersReporting(t *testing.T) {
 		open := p.Open()
 		if len(open) != 1 || open[0].Word != tc.word {
 			t.Errorf("%q: open = %v, want the one word %q", tc.src, open, tc.word)
+		}
+	}
+}
+
+// What the body of a substitution that never closed had to say for itself
+// travels out with the blame, in the dialect that hands the blame to the
+// enclosing construct — and is found for a substitution a `${` steps over as
+// well as for one the scanner parses. Measured 2026-10-04 on zsh 5.9.2:
+// `echo "$(for` and `echo "${x:-$(for` both write the body's refusal and then
+// `unmatched "`, and `echo "${x:-'a$(b'}"` writes `unmatched '` before it.
+// The last row is the control: a body that parses has nothing to say.
+func TestTheBodysRefusalTravelsOutWithTheBlame(t *testing.T) {
+	t.Parallel()
+	outer := Core()
+	outer.UnmatchedBlamesTheOutermost = true
+	for _, tc := range []struct {
+		src      string
+		wantBody bool
+	}{
+		{`echo "$(for`, true},
+		{`echo "${x:-$(for`, true},
+		{`echo "${x:-'a$(b'}"`, true},
+		{`echo ${x:-$(for`, true},
+		{`echo "$(echo hi`, false},
+	} {
+		_, err := Parse(tc.src, outer)
+		var se *Error
+		if !errors.As(err, &se) || se.Kind != ErrUnmatched {
+			t.Fatalf("%q: got %v, want an unmatched construct", tc.src, err)
+		}
+		if got := se.BodyRefusal != nil; got != tc.wantBody {
+			t.Errorf("%q: body refusal carried = %v, want %v", tc.src, got, tc.wantBody)
 		}
 	}
 }

@@ -132,6 +132,15 @@ a binary operator with no operand is refused in every column, including the
 one that takes the rest, so the flag reaches a term with no verdict and not
 a newline anywhere in the construct.
 
+**Where an operand belongs, zsh passes over newlines as it does blanks.**
+Measured 2026-10-03 on zsh 5.9.2: `[[ -n` ⏎ `x ]]` and `[[ a ==` ⏎ `a ]]`
+hold, `[[ -n x` ⏎ `-z "" ]]` is one term with three operands and is refused
+when it runs as `unknown condition: -n` at 2, and `[[ a` ⏎ `b ]]` is still
+`condition expected: a`, because a newline behind a term's first word is the
+question below and does not join two words into a term. bash and ksh93
+refuse the first three, each naming the newline.
+`ConditionNewlineMayPrecedeAnOperand` is that flag, on in zsh alone.
+
 `ConditionNewlineMayFollowATermsFirstWord` is the flag, **off** in the core:
 two of the three refuse, and what moves is what the parser accepts rather
 than how a refusal is worded. Reading it as core-accepts is what made this
@@ -807,6 +816,23 @@ position. `Diagnostics.EmptyRegexOperand` carries the sentence and
 same number a condition that simply did not hold gives. `[[ abc =~ b ]]`
 at 0 and `[[ abc =~ x ]]` at 1 are the controls that say the operator
 works in both (#3279).
+
+**A pattern that will not compile splits the same three ways.** Measured
+2026-10-03 with `p='['; [[ 'a[' =~ $p ]]`:
+
+| shell | says | status |
+| --- | --- | --- |
+| bash 5.3.20 | ``[[: invalid regular expression `[': brackets ([ ]) not balanced`` | 2 |
+| zsh 5.9.2 | `failed to compile regex: brackets ([ ]) not balanced` | **1** |
+| ksh93u+ | nothing | **1** |
+
+The reason is POSIX regcomp's own vocabulary and is the same words in the
+two columns that write one — `parentheses not balanced`, `braces not
+balanced`, `trailing backslash (\)`, `invalid repetition count(s)`,
+`repetition-operator operand invalid`. ksh93 was silent at 1 for every
+malformed pattern tried. `Diagnostics.InvalidRegex` is the sentence, with
+the pattern and the reason as its verbs, `InvalidRegexStatus` the number and
+`InvalidRegexSaysNothing` ksh93's silence.
 
 ## `=~` matches a regular expression
 

@@ -2888,6 +2888,9 @@ func Semantics() interp.Semantics {
 	// that never had one answers. See Semantics.CdRemembersAHomeThatWasUnset.
 	s.CdRemembersAHomeThatWasUnset = interp.No
 	s.CdDashPrintsTheDirectory = interp.Yes
+	// `cd -` reads the OLDPWD parameter: `cd /; OLDPWD=/usr; cd -` goes to
+	// /usr. Measured 2026-10-03.
+	s.CdDashFollowsTheShellsOwnRecord = interp.No
 	// `cd .` in a directory that has been renamed out from under the shell
 	// moves, and `$PWD` becomes the new name. Measured 2026-09-26 on
 	// /opt/homebrew/bin/bash (5.3) and /bin/bash (3.2) alike: with `d`

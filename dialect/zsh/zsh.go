@@ -297,6 +297,11 @@ func Dialect() syntax.Dialect {
 	// and the line after it closes the block, so a shell that refuses this
 	// cannot read the file.
 	d.OpenEndedAndOr = true
+	// And the end of a `-c` string or a script file ends one too, where a
+	// prompt asks for more. Measured 2026-10-03. See
+	// syntax.Dialect.OpenEndedAndOrAtTheEndOfInput, which says why standard
+	// input is not in the set.
+	d.OpenEndedAndOrAtTheEndOfInput = syntax.RouteFromCommandString | syntax.RouteFromScriptFile
 	// A `;` written where a command belongs is stepped over, as many as are
 	// written and anywhere — `; b`, `a ; ; b`, `a & ; b`, `a && ; b` and
 	// `a | ; b` all run here. The `;` is absorbed rather than standing in for
@@ -531,6 +536,10 @@ func Dialect() syntax.Dialect {
 	// column alone: bash 5.3, bash 3.2 and ksh93 all name the newline there.
 	// See syntax.Dialect.ConditionNewlineMayFollowATermsFirstWord (#3627).
 	d.ConditionNewlineMayFollowATermsFirstWord = true
+	// And where an operand belongs: `[[ -n x` and `-z "" ]]` on the next line
+	// is one term with three operands, refused when it runs as `unknown
+	// condition: -n`. See syntax.Dialect.ConditionNewlineMayPrecedeAnOperand.
+	d.ConditionNewlineMayPrecedeAnOperand = true
 	// A written-out reserved word keeps its reading behind an assignment
 	// prefix here, where bash 5.3, bash 3.2, ksh93, dash and BusyBox ash all
 	// drop it and read the word as an ordinary command name — so the
@@ -3172,6 +3181,15 @@ func Semantics() interp.Semantics {
 	// 'a[1/0]' ]]` ends it at 0. See
 	// interp.Semantics.ConditionFinishesAfterAnArithmeticError (#5588).
 	s.ConditionFinishesAfterAnArithmeticError = interp.Yes
+	// And an `&&` behind such a condition ends the line at 1, where the
+	// condition alone ends a command string at 0: `[[ 1/0 -eq 1 ]] && :` is
+	// 1 under `-c`, measured 2026-10-03. See
+	// interp.Semantics.AndAfterAFinishedConditionFails.
+	s.AndAfterAFinishedConditionFails = interp.Yes
+	// `return 3abc` in a function ends the line and not only the call.
+	// Measured 2026-10-03. See
+	// interp.Semantics.ReturnOperandArithmeticErrorIsFatal.
+	s.ReturnOperandArithmeticErrorIsFatal = interp.Yes
 	// And a C-style `for` header. Not `(( ))`, which zsh reports and carries
 	// on from — the two are a field apart for exactly that reason. Measured
 	// 2026-09-13; see [interp.Semantics.ForHeaderArithmeticErrorIsFatal].
@@ -3901,6 +3919,10 @@ func Semantics() interp.Semantics {
 	// table beside cdNowhere. See Semantics.CdRemembersAHomeThatWasUnset.
 	s.CdRemembersAHomeThatWasUnset = interp.Yes
 	s.CdDashPrintsTheDirectory = interp.No
+	// And it goes where the shell last was, whatever OLDPWD has been set to:
+	// `cd /; OLDPWD=/usr; cd -` goes back. Measured 2026-10-03. See
+	// interp.Semantics.CdDashFollowsTheShellsOwnRecord.
+	s.CdDashFollowsTheShellsOwnRecord = interp.Yes
 	// The same as bash, and it is the chunk `B01cd.ztst` ends on. Measured
 	// 2026-09-26 on zsh 5.9.2 (`-f`): with `d` renamed to `e`, `cd .` is 0
 	// and `$PWD` becomes `…/e` while a bare `pwd` goes on printing `…/d` —
@@ -5641,9 +5663,14 @@ func Diagnostics() interp.Diagnostics {
 		// At 1, where the other columns exit with their usage status 2.
 		// Measured 2026-10-03 on `zsh -c` and `zsh -o` alike.
 		InvocationMissingOptionArgumentStatus: 1,
-		ScriptNotFoundStatus:                  127,
-		ScriptNotReadableStatus:               127,
-		Location:                              interp.LocationTightLine,
+		// A `=~` pattern that will not compile is a match that did not
+		// happen, at 1, with the engine's reason and not the pattern.
+		// Measured 2026-10-03 on zsh 5.9.2. See interp.Diagnostics.InvalidRegex.
+		InvalidRegex:            "failed to compile regex: %[2]s",
+		InvalidRegexStatus:      1,
+		ScriptNotFoundStatus:    127,
+		ScriptNotReadableStatus: 127,
+		Location:                interp.LocationTightLine,
 		// And no line at a prompt, which is the same answer this shell gives
 		// a program on standard input: measured 2026-09-11 under `-i`,
 		// `if; then` then end of input is `zsh: parse error near `\n'` where

@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"regexp"
+	resyntax "regexp/syntax"
 	"strings"
 
 	"github.com/blairham/sh/syntax"
@@ -42,6 +43,7 @@ func (r *Runner) testClause(ctx context.Context, c *syntax.TestClause) error {
 		// anything, and a failure left over from the previous command would
 		// abandon this one. See Runner.beginHeading.
 		r.beginHeading()
+		r.finishedConditionAbandoned = false
 		ok, err := r.evalCond(ctx, c.Expr)
 		if r.condFinishing {
 			// The condition ran to its end after its arithmetic failed, and
@@ -50,6 +52,7 @@ func (r *Runner) testClause(ctx context.Context, c *syntax.TestClause) error {
 			if err == nil {
 				r.status = r.statusAfterAFinishedCondition(ok)
 				r.abandonOverArithmetic()
+				r.finishedConditionAbandoned = true
 				return nil
 			}
 		}
@@ -1119,6 +1122,52 @@ func procSubSource(s syntax.Span) string {
 	return open + s.Value + ")"
 }
 
+// invalidRegex writes a pattern's refusal in the dialect's own words and
+// answers the status it leaves, or nil where the dialect named neither and
+// the substrate's own refusal stands. See Diagnostics.InvalidRegex.
+func (r *Runner) invalidRegex(pat string, err error) error {
+	d := r.diag()
+	if d.InvalidRegex == "" && !d.InvalidRegexSaysNothing {
+		return nil
+	}
+	if !d.InvalidRegexSaysNothing {
+		r.diagf("%s\n", Wording(d.InvalidRegex, "", unmarkRegex(pat), regexFailureReason(err)))
+	}
+	return condStatus{code: orDefault(d.InvalidRegexStatus, 2)}
+}
+
+// regexFailureReason is the reason POSIX regcomp gives for a pattern, read off
+// whichever check refused it: the ERE validation, whose refusals carry their
+// reason, or the engine's own parse, whose error codes map onto the same
+// vocabulary. Empty for a code nothing here has been measured against.
+func regexFailureReason(err error) string {
+	var ne errNotAnERE
+	if errors.As(err, &ne) {
+		return ne.reason
+	}
+	var se *resyntax.Error
+	if !errors.As(err, &se) {
+		return ""
+	}
+	switch se.Code {
+	case resyntax.ErrMissingBracket:
+		return "brackets ([ ]) not balanced"
+	case resyntax.ErrMissingParen, resyntax.ErrUnexpectedParen:
+		return "parentheses not balanced"
+	case resyntax.ErrTrailingBackslash:
+		return `trailing backslash (\)`
+	case resyntax.ErrInvalidRepeatSize:
+		return "invalid repetition count(s)"
+	case resyntax.ErrInvalidRepeatOp, resyntax.ErrMissingRepeatArgument:
+		return regexBadRepeat
+	case resyntax.ErrInvalidCharRange:
+		return regexBadRange
+	case resyntax.ErrInvalidCharClass:
+		return "invalid character class"
+	}
+	return ""
+}
+
 // regexMatch is `=~`: whether left holds a match for the extended regular
 // expression pat, with the captures recorded the way the dialect names them.
 // Shared by the conditional and by the `[[` that is a command, which differ
@@ -1165,6 +1214,9 @@ func (r *Runner) regexMatch(pat, left string, digitClass bool) (bool, error) {
 		expr, err = asERE(pat, digitClass)
 	}
 	if err != nil {
+		if refusal := r.invalidRegex(pat, err); refusal != nil {
+			return false, refusal
+		}
 		// The pattern as the script wrote it and never the rewrite, which is
 		// empty where the rewrite is what failed.
 		// The pattern as the script wrote it, marks off: the message
@@ -1176,6 +1228,9 @@ func (r *Runner) regexMatch(pat, left string, digitClass bool) (bool, error) {
 	expr, subject, back := r.regexOperands(pat, left)
 	re, err := regexp.Compile(expr)
 	if err != nil {
+		if refusal := r.invalidRegex(pat, err); refusal != nil {
+			return false, refusal
+		}
 		// The pattern as the script wrote it, never the folded spelling:
 		// a script that never asked for `(?i)` must not read about one.
 		// The pattern as the script wrote it, marks off: the message

@@ -213,6 +213,12 @@ func readPrintOptions(r *interp.Runner, args []string, opts *printOptions) (rest
 				i = len(word)
 			case 'n':
 				opts.newline = false
+			case '-':
+				// A dash inside a bundle is an inert letter, and the bundle
+				// goes on being read: measured 2026-10-03 on ksh93u+, `print
+				// -n-r x` writes `x` with no newline and `print -rn- x` the
+				// same, where a word of dashes alone is an operand — `print
+				// ---` writes `---`.
 			case 's':
 				opts.history = true
 			case 'p':

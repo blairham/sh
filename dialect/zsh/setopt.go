@@ -1861,6 +1861,16 @@ var zshOptions = []zshOption{
 			setAxis(r, func(s *interp.Semantics) *interp.Answer {
 				return &s.GetoptsErrorEndsTheWord
 			}, answer(on))
+			// And the `eval` and the `.` stop catching an error about how a
+			// special builtin was called: measured 2026-10-03 on zsh 5.9.2,
+			// `( eval 'set -Z'; echo alive )`, `( eval '. /no/x'; echo alive )`
+			// and `( eval 'exec 3</no/x'; echo alive )` all write `alive`
+			// without the option and end the subshell at 1 under it, while a
+			// division by zero or a readonly assignment in the same place is
+			// caught either way. See interp.Semantics.BuiltinUsageErrorEscapesBorrowedText.
+			setAxis(r, func(s *interp.Semantics) *interp.Answer {
+				return &s.BuiltinUsageErrorEscapesBorrowedText
+			}, answer(on))
 			// And `readonly -p` writes the standard's form: measured
 			// 2026-10-02 on zsh 5.9.2, `readonly foo=bar; readonly -p` is
 			// `readonly foo=bar` under the option and `typeset -r foo=bar`

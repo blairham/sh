@@ -1367,6 +1367,15 @@ type Diagnostics struct {
 	// in the corpus rather than approximated here.
 	UnsetNoOperands string
 
+	// UnsetNoOperandsIsAUsageError answers that same `unset` with the
+	// builtin's usage line, at the status a bad option draws, and ends the
+	// script where a special builtin's bad option does. The ksh93 shape the
+	// paragraph above leaves out, measured 2026-10-03 on 93u+: `unset`,
+	// `unset -v` and `unset -f` each write `Usage: unset [-nfv] name...` with
+	// nothing in front of it and end a script at 2, a subshell around it
+	// ends at 2 and `command unset` reports 2 and carries on.
+	UnsetNoOperandsIsAUsageError bool
+
 	// UnaliasUsageUnprefixed writes that without the shell and line in front.
 	UnaliasUsageUnprefixed bool
 
@@ -4216,6 +4225,30 @@ type Diagnostics struct {
 	// happen. Zero means 2, which is the value the construct's ordinary
 	// failure leaves (#3279).
 	EmptyRegexOperandStatus int
+
+	// InvalidRegex is the refusal of a `=~` pattern that will not compile,
+	// in a dialect that words it its own way. Two verbs: the pattern as the
+	// script wrote it, and the reason, which is POSIX regcomp's own
+	// vocabulary — `brackets ([ ]) not balanced`, `parentheses not
+	// balanced` — and so the same words in every column that writes one.
+	//
+	// Measured 2026-10-03 with `p='['; [[ 'a[' =~ $p ]]`:
+	//
+	//	bash 5.3.20  [[: invalid regular expression `[': brackets ([ ]) not balanced   2
+	//	zsh 5.9.2    failed to compile regex: brackets ([ ]) not balanced              1
+	//	ksh93u+      nothing at all                                                   1
+	//
+	// Empty leaves the substrate's own sentence and status, unless
+	// InvalidRegexSaysNothing is set.
+	InvalidRegex string
+	// InvalidRegexStatus is what the condition answers under that refusal.
+	// Zero means 2.
+	InvalidRegexStatus int
+	// InvalidRegexSaysNothing makes the refusal silent: the pattern is a
+	// match that did not happen, at InvalidRegexStatus, with nothing written.
+	// ksh93's answer for every malformed pattern measured — `[`, `(`,
+	// `a{1`, a trailing backslash, `a{2,1}`, `[[:foo:]]`, `*a`, `+`.
+	InvalidRegexSaysNothing bool
 
 	// CompletionConditionOutsideCompletion is `[[ -prefix … ]]` or
 	// `[[ -suffix … ]]` reached anywhere but a completion function, for the

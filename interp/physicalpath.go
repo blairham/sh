@@ -275,6 +275,20 @@ func joinRemainder(resolved string, pending []string) string {
 // `/tmp` is a link — a lexical clean makes that operand `/tmp`, finds the
 // link, and refuses a move the shell makes.
 //
+// **A `..` that cancels a component of the operand's own takes it out**, and
+// a `.` is dropped, so a link the operand names and then backs out of is not
+// one it crosses — with one exception, which is where zsh shows how it does
+// the canceling. Measured 2026-10-03 on zsh 5.9.2 beside a `link` to `real`:
+//
+//	from a directory with no link above it    link/../real, ./link/.. move
+//	from one reached through a link           link/../real, link/.. refused
+//	(a logical PWD under /var on macOS)       real/sub/.. still moves
+//	from either                               real/../link refused
+//
+// So backing out of a *link* is answered against the whole path the shell is
+// standing in: it is refused exactly when a component of that path, from the
+// root, is itself a link. Backing out of an ordinary directory never asks.
+//
 // A component that cannot be lstatted ends the walk with no refusal. What to
 // say about a path that is not there is the ordinary failure's to say, and
 // saying it here would answer `cd -s nosuchdir` with `not a directory`, which
@@ -284,16 +298,68 @@ func joinRemainder(resolved string, pending []string) string {
 // is a walk over the filesystem that a script chose the path for, so a policy
 // has to see each step of it.
 func (r *Runner) operandCrossesASymlink(base, operand string) bool {
-	at := base
+	root := base
 	if filepath.IsAbs(operand) {
-		at = filepath.VolumeName(operand) + string(filepath.Separator)
+		root = filepath.VolumeName(operand) + string(filepath.Separator)
+	}
+	type step struct {
+		comp string
+		link bool
+	}
+	var kept []step
+	at := func(comp string) string {
+		p := root
+		for _, s := range kept {
+			p = joinComponent(p, s.comp)
+		}
+		return joinComponent(p, comp)
 	}
 	for _, comp := range splitPathComponents(operand) {
-		if strings.HasSuffix(at, string(filepath.Separator)) {
-			at += comp
-		} else {
-			at += string(filepath.Separator) + comp
+		switch {
+		case comp == ".":
+			continue
+		case comp == ".." && len(kept) > 0 && kept[len(kept)-1].comp != "..":
+			top := kept[len(kept)-1]
+			kept = kept[:len(kept)-1]
+			if top.link && r.pathHoldsALink(root) {
+				// A link canceled by the `..` behind it, from a directory
+				// that is itself reached through one. See the doc above.
+				return true
+			}
+			continue
 		}
+		info, err := r.lstat(at(comp))
+		if err != nil {
+			return false
+		}
+		kept = append(kept, step{comp: comp, link: info.Mode()&fs.ModeSymlink != 0})
+	}
+	for _, s := range kept {
+		if s.link {
+			return true
+		}
+	}
+	return false
+}
+
+// joinComponent puts one component on the end of a path by concatenation,
+// never cleaning: see operandCrossesASymlink for why `..` must stand.
+func joinComponent(at, comp string) string {
+	if strings.HasSuffix(at, string(filepath.Separator)) {
+		return at + comp
+	}
+	return at + string(filepath.Separator) + comp
+}
+
+// pathHoldsALink reports whether any component of an absolute path, walked
+// from the root, is a symbolic link.
+func (r *Runner) pathHoldsALink(path string) bool {
+	if !filepath.IsAbs(path) {
+		return false
+	}
+	at := filepath.VolumeName(path) + string(filepath.Separator)
+	for _, comp := range splitPathComponents(path[len(filepath.VolumeName(path)):]) {
+		at = joinComponent(at, comp)
 		info, err := r.lstat(at)
 		if err != nil {
 			return false

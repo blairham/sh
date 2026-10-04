@@ -370,6 +370,10 @@ func (p *Parser) condWord() *Word { return p.condWordAt(false) }
 func (p *Parser) condTermWord() *Word { return p.condWordAt(true) }
 
 func (p *Parser) condWordAt(term bool) *Word {
+	if !term && p.dialect.ConditionNewlineMayPrecedeAnOperand {
+		// See [Dialect.ConditionNewlineMayPrecedeAnOperand].
+		p.skipNewlines()
+	}
 	if p.atWord("]]") &&
 		(!term || !p.dialect.ConditionCloserIsAWordWhereATermBegins) {
 		return nil
@@ -933,6 +937,12 @@ func (p *Parser) condPrimary() CondExpr {
 	// The plain form, and the only one whose words are recorded: see
 	// Error.CondWords for why the operator forms are not.
 	p.condWords = append(p.condWords, condWord{word: left})
+	if p.dialect.ConditionNewlineMayFollowATermsFirstWord && p.at(TokNewline) {
+		// The operator may stand on the next line, which is what the flag
+		// lets the rest of the term do: measured 2026-10-03 on zsh 5.9.2,
+		// `[[ y` ⏎ `== y ]]` holds and `[[ y` ⏎ `== z ]]` is 1.
+		p.skipNewlines()
+	}
 	op := p.condOperator()
 	if op == "" {
 		if x := p.condUnknownBinary(left); x != nil {
@@ -1186,7 +1196,14 @@ func (p *Parser) condSurplusOperands(operand *Word) []*Word {
 		return nil
 	}
 	var extra []*Word
-	for p.err == nil && p.tok.Kind == TokWord && !p.atWord("]]") {
+	for p.err == nil {
+		if p.dialect.ConditionNewlineMayPrecedeAnOperand {
+			// See [Dialect.ConditionNewlineMayPrecedeAnOperand].
+			p.skipNewlines()
+		}
+		if p.tok.Kind != TokWord || p.atWord("]]") {
+			break
+		}
 		w := p.condWord()
 		if w == nil {
 			break

@@ -1545,7 +1545,14 @@ func (a *arithParser) primary() ArithExpr {
 	if a.dial.ArithSpecialParameterOperands {
 		// `?`, and a `$` with no name after it: the special parameters. See
 		// Dialect.ArithSpecialParameterOperands.
-		if c := a.src[a.off]; c == '?' || c == '$' && (a.off+1 >= len(a.src) || !nameByte(a.src[a.off+1], 0, a.dial.DottedName)) {
+		//
+		// In text that is already expanded the `$` is the parameter even
+		// with a name behind it, because nothing there is an expansion
+		// waiting to happen: measured 2026-10-03 on zsh 5.9.2, `k='$i';
+		// echo $(( $k ))` and `[[ $k -eq 7 ]]` are both `operator expected
+		// at `i'`, the `$` having been read as the process id and the name
+		// left over, and `k='$'; echo $(( $k ))` is the process id.
+		if c := a.src[a.off]; c == '?' || c == '$' && (a.expanded || a.off+1 >= len(a.src) || !nameByte(a.src[a.off+1], 0, a.dial.DottedName)) {
 			a.off++
 			return &ArithVar{Name: string(c), Special: true, Start: start, Stop: start}
 		}

@@ -29,9 +29,7 @@ core/a-refused-older-body-leaves-an-empty-field
 core/an-unbalanced-nested-backquote
 core/an-unreadable-operand-a-branch-does-not-take
 core/appending-an-empty-array-literal-to-a-scalar
-decl/a-numeric-type-letter-over-a-frozen-name
 decl/a-subscripted-operand-with-no-value
-decl/an-array-literal-operand-over-a-frozen-scalar
 declare/a-bare-sign-is-an-option-word
 declare/a-standing-type-attribute-and-a-later-array-literal
 declare/an-attribute-does-not-leave-a-subshell

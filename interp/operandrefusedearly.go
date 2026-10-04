@@ -47,6 +47,9 @@ import "strings"
 // refuseArrayOperandsEarly reports whether one of the command's array-literal
 // operands was refused ahead of the command, which then does not run.
 func (r *Runner) refuseArrayOperandsEarly(argv []string) bool {
+	if r.refuseFrozenOperandValuesEarly(argv) {
+		return true
+	}
 	if len(r.arrayOperands) == 0 || len(argv) == 0 {
 		return false
 	}
@@ -103,4 +106,85 @@ func declarationLettersAhead(argv []string) (indexed, table bool) {
 		}
 	}
 	return indexed, table
+}
+
+// refuseFrozenOperandValuesEarly is the other column's form of the same order:
+// every operand of a declaration that carries a value — a scalar `q=4` as much
+// as a literal `q=(b)` — refused ahead of the command when it names a frozen
+// name, and the refusal ends the script.
+//
+// Measured 2026-10-03 on ksh93u+ 2012-08-01, `-c`, with `readonly q=1` first:
+//
+//	typeset q=4 2>/dev/null; echo st=$?     `q: is read only` on the shell's
+//	                                        own stderr, and nothing after
+//	typeset -i q=4 2>/dev/null              the same
+//	export q=4 >/dev/null 2>&1              the same
+//	typeset x=1 q=5 2>/dev/null             the same, wherever q stands
+//	typeset -i q 2>/dev/null; echo st=$?    `st=0` — no value, no refusal
+//	f(){ typeset q=4; }; f 2>/dev/null      `st=1` under f's redirection and
+//	                                        the script goes on, so a command
+//	                                        run from a function body is not
+//	                                        this rule
+//
+// bash refuses only the array literal this way and gives up the line rather
+// than the script — refuseArrayOperandsEarly above. See
+// Semantics.OperandValueOverAFrozenNameRefusedFirst.
+// valueDeclaringWords are the utilities whose `name=value` operands store a
+// value. `nameref` is not one: its value names another parameter.
+var valueDeclaringWords = map[string]bool{
+	"typeset": true, "declare": true, "local": true, "export": true,
+	"readonly": true, "integer": true, "float": true,
+}
+
+func (r *Runner) refuseFrozenOperandValuesEarly(argv []string) bool {
+	if len(argv) < 2 || r.inFunc != "" || !valueDeclaringWords[argv[0]] {
+		return false
+	}
+	if _, ok := r.lookupBuiltin(argv[0]); !ok {
+		// A word this dialect does not have — ksh93's `declare r=2` is
+		// `declare: not found` and the script goes on.
+		return false
+	}
+	var frozen string
+	for _, a := range r.arrayOperands {
+		if a.assign.Members != nil {
+			// A compound body is its own question: over a name frozen with no
+			// value it is taken (`readonly c; typeset -C c=(a=1)` is 0), and
+			// over one holding a compound it is refused ahead of the trace
+			// line as well — see interp/compoundoperandorder.go, which
+			// already answers both.
+			return false
+		}
+		if r.readonly[a.assign.Name] {
+			frozen = a.assign.Name
+			break
+		}
+	}
+	if frozen == "" {
+		options := true
+		for _, w := range argv[1:] {
+			if options && len(w) > 1 && (w[0] == '-' || w[0] == '+') {
+				continue
+			}
+			options = false
+			eq := strings.IndexByte(w, '=')
+			if eq <= 0 {
+				continue
+			}
+			name := strings.TrimSuffix(w[:eq], "+")
+			if isPlainName(name) && r.readonly[name] {
+				frozen = name
+				break
+			}
+		}
+	}
+	if frozen == "" {
+		return false
+	}
+	if !r.ask(r.sem().OperandValueOverAFrozenNameRefusedFirst,
+		"a declaration's value over a frozen name refused before the command runs") {
+		return r.unspecified
+	}
+	r.refuseWithTheReadonlySentence(frozen, assignedAlone, Yes)
+	return true
 }

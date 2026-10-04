@@ -4301,6 +4301,12 @@ func Semantics() interp.Semantics {
 	// variable name` and ends the script, where `typeset -ia q=(1 2)` is
 	// taken. See Semantics.ArrayLetterMakesItsWordAName.
 	s.ArrayLetterMakesItsWordAName = interp.Yes
+	// A declaration's value over a frozen name is refused before the
+	// command and its redirections, and ends the script: measured
+	// 2026-10-03, `readonly q=1; typeset q=4 2>/dev/null` writes `q: is
+	// read only` on the shell's own stderr. See
+	// Semantics.OperandValueOverAFrozenNameRefusedFirst.
+	s.OperandValueOverAFrozenNameRefusedFirst = interp.Yes
 	// `typeset +f` names the functions here as it does in zsh, and the
 	// *spelling* is this shell's own — see Diagnostics.FunctionNameListing.
 	// Measured 2026-09-12: `f() { :; }; function g { :; }; typeset +f`

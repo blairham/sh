@@ -1983,7 +1983,24 @@ func (r *Runner) expandColonTildes(w *syntax.Word) {
 				// value is expanded. See tildeThroughMark.
 				if !r.ask(r.sem().TildePrefixStopsAtAQuoteOrAnExpansion,
 					"a tilde prefix carrying a quote or an expansion") && !r.unspecified {
-					b.WriteString(tildeThroughColonMark)
+					if r.sem().TildeNameEndsOnlyAtAWrittenSlash != Yes {
+						b.WriteString(tildeThroughColonMark)
+						continue
+					}
+					// The name ends only where the word writes its end, as
+					// it does for a leading tilde. Measured 2026-10-03 on
+					// ksh93u+ with `u=/x` and `HOME=/H`: `v=a:~$u` is
+					// `a:~/x`, `v=a:~\/x` is `a:~/x` and `v=a:~"/x"` is
+					// `a:/H/x`. See writtenTildeHead.
+					h := r.writtenTildeHead(w.Spans[i:], j+1, tildeEndsAtASlashOrColon)
+					if !h.through {
+						continue
+					}
+					b.WriteString(tildeThroughWrittenMark)
+					if h.endSpan > 0 {
+						end := &w.Spans[i+h.endSpan]
+						end.Value = end.Value[:h.endOff] + tildeThroughEndMark + end.Value[h.endOff:]
+					}
 				}
 				continue
 			}

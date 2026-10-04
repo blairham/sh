@@ -1022,6 +1022,7 @@ func Semantics() interp.Semantics {
 	s.TrapParseFailureNamesWhereItFired = interp.No
 	s.SymbolicMaskTakesMoreThanOneOperator = interp.Yes
 	s.SymbolicMaskWhoAloneSetsIt = interp.No
+	s.SymbolicMaskOmittedWhoHonorsTheMask = interp.No
 	s.SymbolicMaskTakesTheSetuidLetter = interp.Yes
 	// Both are 5.x additions: bash 3.2 calls the `u` of `g=u` and the `X`
 	// of `u=X` invalid symbolic mode characters, and this preset is 5.3.

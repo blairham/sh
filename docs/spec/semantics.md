@@ -11315,6 +11315,11 @@ what makes it one axis, `Semantics.UnsetLocaleIsUnicodeAware`, rather than
 one question per operator. The case row is spelled per shell (`${x^^}`,
 `typeset -u`, `${(U)x}`), and bash 3.2.57 has none of those spellings.
 
+BusyBox ash 1.37.0 is on bash's side. Measured 2026-10-03 in the pinned
+image with `LC_ALL=` and no other locale variable, `s=héllo; echo ${#s}` is
+5. It is the same 5 that ash gives under `LC_ALL=C`, because its decoder
+does not depend on a locale at all.
+
 The standard's preset answers **no**: XBD ranks the variables and then
 leaves the case where none of them is set to the implementation-defined
 default locale, and the default a C program starts in is the C locale —
@@ -19432,6 +19437,18 @@ the two letters are not answered together, and the ash column is the
 proof rather than an assertion: it takes the letter dash refuses and
 refuses the letter dash takes. Measured 2026-09-17 — `umask u+t` and
 `umask o+t` are both 0 there.
+
+**`SymbolicMaskOmittedWhoHonorsTheMask`** — bash no · dash no · ksh93 no ·
+zsh no · ash yes
+
+In a clause with no who, BusyBox ash 1.37.0 grants only what the mask the
+command *started* from allows, which is how chmod reads an omitted who. The
+other four grant to all three groups. Measured 2026-10-03, ash in the pinned
+image, starting from `umask 022`: `umask =w` is 0577 in ash and 0555
+elsewhere, and `umask a=r,+w` is 0133 against 0111. In the second, the
+starting mask filters the `+w` even though the first clause has already
+changed the mask. Clearing is not filtered: `umask a+w,=r` is 0333 in all
+five.
 
 **`SymbolicMaskWhoAloneSetsIt`** — bash no · dash no · ksh93 yes · zsh no
 

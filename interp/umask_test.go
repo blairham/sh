@@ -72,6 +72,7 @@ func umaskRun(t *testing.T, start int, tweak func(*Semantics), src string) (stri
 	sem := permissive()
 	sem.UmaskPrintsFourDigits = Yes
 	sem.UmaskSetWithSPrints = No
+	sem.SymbolicMaskOmittedWhoHonorsTheMask = No
 	if tweak != nil {
 		tweak(&sem)
 	}

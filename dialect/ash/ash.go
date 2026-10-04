@@ -493,6 +493,10 @@ func Semantics() interp.Semantics {
 	// harness's fixed `LC_ALL=C`: `s=héllo; echo ${#s}` is 5 here and 6 in
 	// dash.
 	s.MultibyteEncodingIsHonored = interp.Yes
+	// And a locale nothing names is no different: measured 2026-10-03 in the
+	// pinned image with `LC_ALL=` and no other locale variable,
+	// `s=héllo; echo ${#s}` is 5.
+	s.UnsetLocaleIsUnicodeAware = interp.Yes
 	// The decoder does not reach the readers, though, which is the pair of
 	// answers zsh holds the other way round. Measured 2026-09-23 in the
 	// pinned image under `LC_ALL=zh_TW.Big5` with the Big5 spelling of
@@ -1522,6 +1526,9 @@ func Semantics() interp.Semantics {
 	s.UmaskSetWithSPrints = interp.No
 	s.SymbolicMaskTakesMoreThanOneOperator = interp.Yes
 	s.SymbolicMaskWhoAloneSetsIt = interp.No
+	// And a clause with no who grants only what the starting mask allows:
+	// `umask 022; umask =w` is 0577, measured 2026-10-03 in the pinned image.
+	s.SymbolicMaskOmittedWhoHonorsTheMask = interp.Yes
 	// The two bits a umask has no room for split this shell the opposite way
 	// from dash, and both were inherited rather than measured until #3237.
 	// Measured 2026-09-17 in the pinned image, BusyBox v1.37.0, with

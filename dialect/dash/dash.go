@@ -1660,6 +1660,7 @@ func Semantics() interp.Semantics {
 	s.TrapParseFailureNamesWhereItFired = interp.No
 	s.SymbolicMaskTakesMoreThanOneOperator = interp.Yes
 	s.SymbolicMaskWhoAloneSetsIt = interp.No
+	s.SymbolicMaskOmittedWhoHonorsTheMask = interp.No
 	s.SymbolicMaskTakesTheSetuidLetter = interp.Yes
 	// Both, in silence — this shell sets and prints nothing.
 	s.SymbolicMaskTakesAPermissionCopy = interp.Yes

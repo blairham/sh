@@ -1263,6 +1263,7 @@ func Semantics() interp.Semantics {
 	s.TrapParseFailureNamesWhereItFired = interp.Yes
 	s.SymbolicMaskTakesMoreThanOneOperator = interp.Yes
 	s.SymbolicMaskWhoAloneSetsIt = interp.Yes
+	s.SymbolicMaskOmittedWhoHonorsTheMask = interp.No
 	s.SymbolicMaskTakesTheSetuidLetter = interp.Yes
 	// The letter but not the copy, which is why the two are two axes:
 	// `umask g=u` is `bad format` here and `umask u=X` is taken.

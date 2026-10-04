@@ -1140,6 +1140,18 @@ func (p *Parser) recordCondGroup() {
 	if len(words) < 2 {
 		return
 	}
+	if len(words) == 3 && condBinaryOperatorWord(words[1]) {
+		// A whole two-operand condition was read and the parse stopped on
+		// the token after it, which is not a word: a `;`, `&`, `<` or `>`
+		// that ended the third word early, as a group's operator does in
+		// `[[ $k == (a<b) ]]`. There is no group to refuse here — the
+		// condition is complete — so it is the token that is named, the way
+		// every column names it. Measured on zsh 5.9.2, 2026-10-04:
+		// `[[ p -eq q ; ]]` and `[[ $k == (a<b) ]]` are ``parse error near
+		// `;'`` and ``parse error near `<'``, where `[[ p q r ; ]]`, whose
+		// middle word is no operator, is `condition expected: q`.
+		return
+	}
 	if !p.dialect.ConditionIsResolvedWhenItRuns &&
 		(namedConditionWord(words[0]) || namedConditionWord(words[1])) {
 		// A `-word` long enough to be a *named* condition is refused by
@@ -1164,6 +1176,13 @@ func (p *Parser) recordCondGroup() {
 		return
 	}
 	se.CondWords = words
+}
+
+// condBinaryOperatorWord reports whether a recorded condition word is a
+// two-operand operator: a word operator, or the `<` and `>` the parser
+// reinterprets.
+func condBinaryOperatorWord(s string) bool {
+	return condBinaryWordOps[s] || s == "<" || s == ">"
 }
 
 // namedConditionWord reports whether a word is long enough to be looked up as

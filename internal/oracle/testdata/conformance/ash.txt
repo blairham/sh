@@ -3,9 +3,6 @@
 # fails on a case that fails without being listed or passes while listed.
 array/a-literal-holding-an-operator-in-a-function-body
 axis/printf-non-finite-is-converted
-axis/trap-body-parse-failure-location
-axis/trap-body-runs-what-parsed
-axis/trap-body-will-not-parse
 core/a-refused-older-body-leaves-an-empty-field
 declare/a-numeric-letter-does-not-reach-a-later-local-array
 expansion/a-replacement-scan-stops-where-the-last-match-ended

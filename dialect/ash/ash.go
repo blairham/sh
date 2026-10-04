@@ -2311,7 +2311,13 @@ func Semantics() interp.Semantics {
 	// A bare `read` hands REPLY the record as it came, spaces at both ends
 	// and all, which is bash's answer rather than ksh93's and zsh's.
 	s.BareReadTakesTheLineWhole = interp.Yes
-	s.ReadRefusesABadNameBeforeReading = interp.No
+	// The whole list is judged before anything is read: measured 2026-10-03
+	// in the pinned image, `(read 1bad); read next` over `AAA BBB` leaves
+	// AAA for the second reader, and `read a 1bad c` fills nothing and
+	// leaves the line too. It was No here, which the corpus row says is
+	// dash's answer and not this shell's.
+	s.ReadRefusesABadNameBeforeReading = interp.Yes
+	s.ReadJudgesEveryNameBeforeReading = interp.Yes
 	s.BadNameDeclaresTheOperandsAfterIt = interp.No
 	s.InteractiveSelectsEmacs = interp.No
 

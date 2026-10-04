@@ -3375,6 +3375,7 @@ func Semantics() interp.Semantics {
 	// The first operand is judged before the stream is touched:
 	// `printf 'AAA\nBBB\n' | { read 1bad; cat; }` prints both lines.
 	s.ReadRefusesABadNameBeforeReading = interp.Yes
+	s.ReadJudgesEveryNameBeforeReading = interp.No
 	// A count stops it judging past the first operand, though:
 	// `read -n 3 a 1bad` is quiet here and `read a 1bad` is not, measured
 	// with both count letters. The first operand is still judged —

@@ -521,6 +521,10 @@ type Shell struct {
 	// count for the session.
 	hooks *hookState
 
+	// listSeen is the shell's own history list as this session last left it.
+	// A pointer for the reason hooks is one. See historyfollow.go.
+	listSeen *listSeen
+
 	// mail is when this session last looked at its mailboxes. A pointer for
 	// the reason hooks is one: Shell is copied by value and a check made
 	// once has to stay made. See mailcheck.go.
@@ -592,6 +596,12 @@ func (s Shell) Run(ctx context.Context) (int, error) {
 		s.Runner.SetHistoryListFilledByTheReader(true)
 	}
 	s.counts = &counts{history: len(earlier)}
+	// Before the startup files' own lines are lost to it: a `.zshrc` that
+	// read a second file with `fc -R` put those entries in the shell's list
+	// ahead of the ones just seeded, and the editor walks that list rather
+	// than the file alone (#5903).
+	s.listSeen = &listSeen{}
+	earlier = s.startFollowing(earlier)
 	s.hooks = &hookState{reported: map[string]bool{}, themeReported: map[string]bool{}}
 	// The mail check's baseline is the session's start, not the epoch:
 	// measured, mail already sitting unread in the box when the shell starts
@@ -797,6 +807,9 @@ func (s Shell) Run(ctx context.Context) (int, error) {
 			// there and draws no prompt, so this one does not read a line.
 			return s.status(), nil
 		}
+		// After the prompt hooks, because a hook is a place a list is read
+		// into as well — and before the read, which is what walks it.
+		s.followTheList(ed)
 		var line string
 		var err error
 		if editing {
@@ -1558,6 +1571,7 @@ func (s Shell) runPlain(
 			// the prompt this had ready is not written either.
 			return s.status(), nil
 		}
+		s.followTheList(recall)
 		s.errf("%s", drawn.lead+drawn.text)
 
 		line, err := in.ReadString('\n')
@@ -2375,6 +2389,9 @@ func (s Shell) recording(recall recalls, added, at *[]string) func(string) {
 		if s.Runner != nil {
 			s.Runner.RecordHistoryEntry(line)
 		}
+		// And this is the session's own change to that list, so it is not
+		// one for the next prompt to follow.
+		s.sawTheList()
 		kept = true
 	}
 }
@@ -2394,6 +2411,10 @@ type recalls interface {
 	// duplicate" is measured against; see (*editor).newest for why it is the
 	// list rather than the file.
 	newest() string
+	// replace puts down a whole list in place of the one remembered, which
+	// is what a command that changed the shell's own list asks for. See
+	// historyfollow.go.
+	replace(lines []string)
 }
 
 // lineList is [recalls] for a session with no editor: the list and nothing
@@ -2410,6 +2431,8 @@ func (l *lineList) remember(line string) {
 	}
 	l.lines = append(l.lines, line)
 }
+
+func (l *lineList) replace(lines []string) { l.lines = lines }
 
 func (l *lineList) newest() string {
 	if len(l.lines) == 0 {

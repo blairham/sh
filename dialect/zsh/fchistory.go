@@ -126,6 +126,16 @@ func registerFcHistory(r *interp.Runner) {
 	// written. #4177 is the same finding one list along, and dialect/bash
 	// passes an adder to this seam for the same reason.
 	r.SetHistoryStore(fcEntries, fcRemember)
+	// And the lines a session starts from, which are the file `$HISTFILE`
+	// names, read once the startup files have run. Into the same list, after
+	// whatever those files put there with `fc -R` or `print -s`: measured
+	// 2026-10-04 through a pty on zsh 5.9.2, a `.zshrc` reading a three-line
+	// file with `fc -R` beside a two-line `$HISTFILE` lists five entries,
+	// the `fc -R` three first, and Up walks the file's two before reaching
+	// them. With no seed `fc -l` at the first prompt listed nothing the file
+	// held, and the editor — which walks this list (#5903) — would have lost
+	// the file's lines the moment a startup file added any of its own.
+	r.SetHistorySeed(fcSeed)
 	// And which entry is the line a builtin is written on, now that the
 	// reader puts one there. `fc`'s default range ends at the command
 	// *before* itself — measured 2026-09-24 through a pseudo-terminal on zsh
@@ -316,6 +326,13 @@ func fcEntries(r *interp.Runner) []string {
 // this dialect deliberately has no startup read into a script's list.
 func fcLoadText(r *interp.Runner, text string) {
 	r.SetArray(fcHistoryStore, append(fcEntries(r), repl.HistoryEntriesIn(HistoryStyle(), text)...))
+	fcTrimToSize(r, fcHistorySize(r))
+}
+
+// fcSeed puts a session's starting lines at the end of the list, already
+// decoded by the front end, and holds the list at its size as `fc -R` does.
+func fcSeed(r *interp.Runner, lines []string) {
+	r.SetArray(fcHistoryStore, append(fcEntries(r), lines...))
 	fcTrimToSize(r, fcHistorySize(r))
 }
 

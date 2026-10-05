@@ -28250,6 +28250,32 @@ type Semantics struct {
 	// same string under either reading.
 	ScriptImageSeesTheResolvedPath Answer
 
+	// PathHitFromTheCurrentDirectoryRunsBare hands the kernel the bare name
+	// for a command PATH found through an entry that names the current
+	// directory — `.` or an empty entry — rather than that hit as the
+	// dialect writes it back.
+	//
+	// What a command is started by is otherwise the hit as
+	// [Semantics.PathHitSpelled] writes it, and a word with a slash in it is
+	// started as written: the path a real shell hands to execve is the one it
+	// joined, and the kernel passes it on to a `#!` script as its `$0`.
+	// Measured 2026-10-05 with a script that prints `$0`, run from its own
+	// directory against bash 5.3 (/opt/homebrew/bin/bash), zsh 5.9.2, ksh93u+
+	// (/bin/ksh), dash and BusyBox ash in the pinned alpine image, the same
+	// on a second run, after the name is hashed (#6090):
+	//
+	//	PATH entry    bash       zsh        ksh93           dash, ash
+	//	(empty)       ./z0       z0         z0              z0
+	//	.             ./z0       z0         z0              ./z0
+	//	./            ./z0       .//z0      $PWD/./z0       .//z0
+	//	deep/..       deep/../z0 deep/../z0 $PWD/deep/../z0 deep/../z0
+	//	./sub/./z0 typed, every column: ./sub/./z0
+	//
+	// Every cell but the two marked bare is the column's written-back
+	// spelling; zsh and ksh93 alone start a current-directory hit by its
+	// name, though both write it back otherwise.
+	PathHitFromTheCurrentDirectoryRunsBare Answer
+
 	// EmptyInterpreterLineIsNotAScript refuses a file whose first line is a
 	// `#!` with no interpreter word after it, rather than reading the file as
 	// a shell script the way a file with no `#!` at all is read.
@@ -33596,6 +33622,8 @@ func PosixSemantics() Semantics {
 		// script found on PATH.
 		BinaryContentIsNotRunAsAScript: Yes,
 		ScriptImageSeesTheResolvedPath: Yes,
+		// The written-back spelling, a current-directory hit included.
+		PathHitFromTheCurrentDirectoryRunsBare: No,
 		// And the two halves of the `#!` line, which the standard leaves to
 		// the system: it says nothing about a `#!` at all, so the preset is
 		// what the kernel does with one and what six of the seven columns

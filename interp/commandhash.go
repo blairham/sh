@@ -43,6 +43,11 @@ import (
 type hashedCommand struct {
 	// path is what the name resolved to.
 	path string
+	// written is the hit as PATH spelled it, entry and name and nothing
+	// tidied, for an entry a search made — what a later run of the name
+	// decides how it is started from. See Runner.runSpelling. Empty for an
+	// entry the script wrote, which is its own spelling.
+	written string
 	// hits is how many lookups this entry has answered since it was made —
 	// a run, a `type`, a `command -v`, a `hash -t`, and not a listing. See
 	// hashCommandHit. One dialect prints it; the rest keep no such column,
@@ -61,7 +66,7 @@ type hashedCommand struct {
 //
 // Only a bare name: a word with a slash in it never went through PATH, so
 // there is nothing for a table of PATH results to remember about it.
-func (r *Runner) hashCommandRun(name, path string) {
+func (r *Runner) hashCommandRun(name, path, written string) {
 	if strings.ContainsRune(name, '/') {
 		return
 	}
@@ -72,6 +77,9 @@ func (r *Runner) hashCommandRun(name, path string) {
 		return
 	}
 	r.putHashedCommand(name, path, 1)
+	e := r.cmdHash[name]
+	e.written = written
+	r.cmdHash[name] = e
 }
 
 // hashCommandHit counts a lookup that the table answered.
@@ -118,7 +126,17 @@ func (r *Runner) retrackCommand(name, path string) {
 	if !ok || e.path == path {
 		return
 	}
-	r.cmdHash[name] = hashedCommand{path: path, hits: e.hits}
+	r.cmdHash[name] = hashedCommand{path: path, written: path, hits: e.hits}
+}
+
+// hashedCommandWritten is the spelling a search found a remembered name by,
+// and the remembered path itself for an entry nothing searched for.
+func (r *Runner) hashedCommandWritten(name string) string {
+	e := r.cmdHash[name]
+	if e.written != "" {
+		return e.written
+	}
+	return e.path
 }
 
 // hashedCommandPath is what the table holds for a name, if anything.
@@ -340,7 +358,7 @@ func (r *Runner) lookPathReporting(name string) (string, error) {
 			return hashed, nil
 		}
 	}
-	path, spelled, _, err := r.lookPathSpelled(name)
+	path, spelled, written, err := r.lookPathSpelled(name)
 	if err != nil {
 		return path, err
 	}
@@ -350,7 +368,7 @@ func (r *Runner) lookPathReporting(name string) (string, error) {
 		// absolute path: the lookup resolves a remembered entry against this
 		// runner's directory on the way in, which is also how `hash -p
 		// relfile` has always worked (#6044).
-		r.hashCommandRun(name, spelled)
+		r.hashCommandRun(name, spelled, written)
 	}
 	// And the spelling is the answer, which is the whole of why the search
 	// hands back two: a PATH entry that is relative is written back as the

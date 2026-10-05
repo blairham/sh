@@ -1567,6 +1567,9 @@ func Semantics() interp.Semantics {
 	// measured 2026-10-05 with `command -v`, `PATH=/bin/` is `/bin/ls` and
 	// `PATH=`, `.` and `./` are all `./zz` — one separator, and an empty
 	// entry as `.` (#6044). See Semantics.PathHitSpelled.
+	// And what the hit is started by: measured 2026-10-05, `PATH=.` and an empty entry start `./z0`
+	// (#6090). See Semantics.PathHitFromTheCurrentDirectoryRunsBare.
+	s.PathHitFromTheCurrentDirectoryRunsBare = interp.No
 	s.PathHitSpelled = interp.PathHitJoinedOnce
 	// And a prompt is enough without the monitor: measured 2026-10-05
 	// through a pseudo-terminal, `shopt -s checkjobs; set +m`, `sleep 3 &`,

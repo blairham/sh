@@ -3812,6 +3812,9 @@ func Semantics() interp.Semantics {
 	// How a PATH hit is written back, before the command runs and after:
 	// measured 2026-10-05 with `command -v`, `PATH=.` and an empty entry are `$PWD/zz`, `PATH=./` is `$PWD/./zz`, `PATH=/bin/` is `/bin/ls` (#6044). See
 	// Semantics.PathHitSpelled.
+	// And what the hit is started by: measured 2026-10-05, `PATH=.` and an empty entry start `z0`, though `command -v` writes `$PWD/z0`
+	// (#6090). See Semantics.PathHitFromTheCurrentDirectoryRunsBare.
+	s.PathHitFromTheCurrentDirectoryRunsBare = interp.Yes
 	s.PathHitSpelled = interp.PathHitFromTheWorkingDirectory
 	// A prompt holds whatever the monitor says: measured 2026-10-05 through
 	// a pseudo-terminal, `set +m`, `sleep 5 & kill -STOP $!`, `exit` is `You

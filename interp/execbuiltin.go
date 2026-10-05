@@ -135,10 +135,13 @@ func (r *Runner) replaceSelfWith(ctx context.Context, argv []string, flags execF
 		return r.endAfterRestrictedBuiltinRefusal()
 	}
 
-	path, lookErr := r.lookPath(argv[0])
+	path, spelled, written, lookErr := r.lookPathSpelled(argv[0])
 	if lookErr != nil {
 		path = argv[0]
 	}
+	// What the program is started by, which is not the path that was looked
+	// up: see Runner.runSpelling and Runner.execRunSpelling (#6090).
+	run := r.execRunSpelling(r.runSpelling(argv[0], path, spelled, written))
 	action := r.act(Action{Kind: ActionExec, Path: path, Args: argv})
 	if !r.allowed(ctx, action) {
 		// A denied action is a command that failed rather than a broken
@@ -211,7 +214,7 @@ func (r *Runner) replaceSelfWith(ctx context.Context, argv []string, flags execF
 		// Semantics.ShellLevelExec — the fallback below is a child and keeps
 		// the count, which is measured and not an omission.
 		name, env := r.namedByTheEnvironment(argv[0], r.replacementEnviron(flags))
-		err := r.ReplaceProcess(dir, path, r.execArgv(argv, flags, name), env, r.replacementFiles())
+		err := r.ReplaceProcess(dir, run, r.execArgv(argv, flags, name), env, r.replacementFiles())
 		releaseMask()
 		// Only reached if the replacement failed, which is the one case where
 		// there is still a shell to report it.
@@ -219,7 +222,7 @@ func (r *Runner) replaceSelfWith(ctx context.Context, argv []string, flags execF
 		// A file the kernel will not start may still be a shell script — see
 		// noexecscript.go, and execImageAsScript for why the same helper
 		// answers both this door and a command word's.
-		if st, ran := r.execImageAsScript(ctx, action, path, argv, r.execEnviron(flags), err); ran {
+		if st, ran := r.execImageAsScript(ctx, action, path, run, argv, r.execEnviron(flags), err); ran {
 			return st
 		}
 		// And a `#!` naming an interpreter with no slash in it, which this
@@ -255,6 +258,10 @@ func (r *Runner) replaceSelfWith(ctx context.Context, argv []string, flags execF
 	name, env := r.namedByTheEnvironment(argv[0], r.execEnviron(flags))
 	cmd := exec.CommandContext(ctx, path, argv[1:]...)
 	cmd.Args[0] = r.execArgv(argv, flags, name)[0]
+	// Started by the spelling, set after construction so os/exec never
+	// searches its own PATH for a bare one; cmd.Dir below is where it is
+	// relative to. See Runner.runSpelling.
+	cmd.Path = run
 	// Standing in for a process replacement means standing where the process
 	// is, which is the directory itself rather than the name this shell has
 	// for it. The same reading as an ordinary external command — see
@@ -270,7 +277,7 @@ func (r *Runner) replaceSelfWith(ctx context.Context, argv []string, flags execF
 	cmd.ExtraFiles = r.childFiles()
 
 	if err := r.startMasked(cmd); err != nil {
-		if st, ran := r.execImageAsScript(ctx, action, path, argv, cmd.Env, err); ran {
+		if st, ran := r.execImageAsScript(ctx, action, path, run, argv, cmd.Env, err); ran {
 			return st
 		}
 		// And a `#!` naming an interpreter with no slash in it, which this

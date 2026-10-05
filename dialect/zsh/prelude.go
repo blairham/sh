@@ -216,6 +216,17 @@ __dirs_minus() {
 		esac
 	fi
 }
+__dirs_shown() {
+	# An interactive shell writes the stack after pushd and popd move it,
+	# unless pushdsilent is set or the call said -q; a script writes nothing
+	# (#5982).
+	[[ -o interactive ]] || return 0
+	[[ -o pushdsilent ]] && return 0
+	case $__DIRS_OPTS in
+	*q*) return 0 ;;
+	esac
+	dirs
+}
 pushd() {
 	local __old=$PWD __spec= __DIRS_OPTS= __target= __d __gone=
 	while [ $# -gt 0 ]; do
@@ -228,8 +239,9 @@ pushd() {
 	done
 	if [ -n "$__spec" ]; then
 		__dirs_minus "$__spec"
-		__dirs_rotate "$__spec" ${__DIRS_OPTS:+-$__DIRS_OPTS}
-		return $?
+		__dirs_rotate "$__spec" ${__DIRS_OPTS:+-$__DIRS_OPTS} || return $?
+		__dirs_shown
+		return 0
 	fi
 	if [ $# -eq 0 ] && [[ -o pushdtohome ]]; then
 		# pushdtohome: no operand is the home directory, pushed as one.
@@ -241,12 +253,14 @@ pushd() {
 			# where it was — where bash refuses and stays put.
 			cd ${__DIRS_OPTS:+-$__DIRS_OPTS} "$HOME" || return 1
 			dirstack=("$__old")
+			__dirs_shown
 			return 0
 		fi
 		set -- ${dirstack[@]+"${dirstack[@]}"}
 		cd ${__DIRS_OPTS:+-$__DIRS_OPTS} "$1" || return 1
 		shift
 		dirstack=("$__old" "$@")
+		__dirs_shown
 		return 0
 	fi
 	__target=$1
@@ -265,6 +279,7 @@ pushd() {
 		done
 	fi
 	dirstack=("$__old" "$@")
+	__dirs_shown
 }
 popd() {
 	local __spec= __i __k __len __DIRS_OPTS=
@@ -299,6 +314,7 @@ popd() {
 		cd ${__DIRS_OPTS:+-$__DIRS_OPTS} "$1" || return 1
 		shift
 		dirstack=("$@")
+		__dirs_shown
 		return 0
 	fi
 	# Any other entry is taken out where it stands and the shell does not
@@ -316,6 +332,7 @@ popd() {
 	done
 	shift
 	dirstack=("$@")
+	__dirs_shown
 }
 `
 

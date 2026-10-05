@@ -56,6 +56,20 @@ func (e *editor) change(continues bool, edit func()) {
 	e.changes = append(e.changes, was)
 }
 
+// undo is the undo a key asks for: undoLine, unless that would take the line
+// back past the limit a widget set (see Actions.UndoLimit).
+//
+// Measured 2026-10-04 through a pseudo-terminal against zsh 5.9.2: type `ab
+// c`, a widget runs `UNDO_LIMIT_NO=$UNDO_CHANGE_NO`, type `d e`, and `^_`
+// walks back to `ab c` and no further however often it is pressed. A limit
+// past the current change stops every undo (#5898).
+func (e *editor) undo() {
+	if e.undoLimit > 0 && len(e.changes)+1 <= e.undoLimit {
+		return
+	}
+	e.undoLine()
+}
+
 // undoLine puts the line back as it was before the last change.
 func (e *editor) undoLine() {
 	n := len(e.changes)

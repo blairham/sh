@@ -213,16 +213,16 @@ import (
 // A `zle` that accepted everything would be worse than the `command not
 // found` it replaces, because a plugin would then believe its widget existed.
 // So the letters this shell has not got are refused with the wording `whence`
-// and `bindkey` use for the same case — `-M is not implemented yet` — which a
+// and `bindkey` use for the same case — `-I is not implemented yet` — which a
 // script can tell apart from a typo, and the spellings of *invoking* that need
 // a seam repl has not got are refused by name too:
 //
-//   - **`zle -M` and `zle reset-prompt`**. Both write somewhere other than the
-//     line — a status line under the prompt, and the prompt itself — and both
-//     belong with the question of who owns the prompt while a widget is
-//     running. `zle -R` has left this list: bare, it is a redraw and repl can
-//     do that; **with a display string it is still refused**, because the
-//     string goes on the status line `-M` would need.
+//   - **`zle -R` with a display string**. Bare, it is a redraw and repl does
+//     that; the string is still refused. `zle -M` and `zle reset-prompt` have
+//     left this list: the message row under the line is repl's
+//     Actions.Message (#5942) and the prompt drawn again is its reset-prompt
+//     (#5940), so the string `-R` would show has somewhere to go now and
+//     only wants measuring.
 //
 // The editor's own actions have all left this list, the two that read a key
 // last: a completion that may stop to ask about a listing (#3043), and the

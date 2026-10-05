@@ -155,7 +155,11 @@ func (r *Runner) lookPathSpelled(name string) (path, spelled, written string, er
 				return earlier, earlier, earlier, nil
 			}
 			r.hashCommandHit(name)
-			return full, full, full, nil
+			// The table's own spelling is the report, and what runs is the
+			// absolute path: the table keeps the hit as it was spelled when
+			// it was found, so a report after the run is the report before
+			// it — see Semantics.PathHitSpelled (#6044).
+			return full, hashed, hashed, nil
 		}
 		if r.ask(r.sem().CommandHashIsTrusted, "a hashed path used without looking for it again") &&
 			!r.checksHashedCommand {
@@ -198,17 +202,10 @@ func (r *Runner) lookPathSpelled(name string) (path, spelled, written string, er
 	var skipped []string
 	for _, dir := range r.pathElements(r.commandSearchPath()) {
 		written := writtenPathHit(dir, name)
+		joined := r.spelledPathHit(dir, name)
 		if dir == "" {
 			dir = "."
 		}
-		// A **prefix** join and not filepath.Join, which is the same
-		// distinction Runner.reportedPath draws and for the same reason:
-		// Join cleans, so a `.` entry would come back as the bare name and
-		// name nothing. One trailing slash is dropped and exactly one is
-		// written — measured 2026-09-22 on bash 5.3.20 over a scratch tree,
-		// `PATH=.` and `PATH=` both answer `./e`, `PATH=sub` and
-		// `PATH=sub/` both answer `sub/e`, and `PATH=./sub` keeps its dot.
-		joined := strings.TrimSuffix(dir, "/") + "/" + name
 		candidate := r.absolute(filepath.Join(dir, name))
 		err := r.runnable(candidate)
 		if err == nil {
@@ -567,7 +564,7 @@ func (r *Runner) lookPathAll(name string) []string {
 // pathHit is one candidate the walk found: the absolute path that would run,
 // and the path as PATH spells it — see writtenPathHit.
 type pathHit struct {
-	path, written string
+	path, written, spelled string
 }
 
 // lookPathHits is lookPathAll with each hit's written spelling kept beside
@@ -577,7 +574,7 @@ func (r *Runner) lookPathHits(name string) []pathHit {
 	if strings.ContainsRune(name, '/') {
 		full := r.absolute(name)
 		if r.runnable(full) == nil {
-			return []pathHit{{path: full, written: full}}
+			return []pathHit{{path: full, written: full, spelled: full}}
 		}
 		if !r.searchesTheSlashedName(name) {
 			return nil
@@ -587,15 +584,27 @@ func (r *Runner) lookPathHits(name string) []pathHit {
 	path, _ := r.getVar("PATH")
 	for _, dir := range r.pathElements(path) {
 		written := writtenPathHit(dir, name)
+		spelled := r.spelledPathHit(dir, name)
 		if dir == "" {
 			dir = "."
 		}
 		candidate := r.absolute(filepath.Join(dir, name))
 		if r.runnable(candidate) == nil {
-			hits = append(hits, pathHit{path: candidate, written: written})
+			hits = append(hits, pathHit{path: candidate, written: written, spelled: spelled})
 		}
 	}
 	return hits
+}
+
+// lookPathAllSpelled is every hit as the dialect writes it back — see
+// Runner.spelledPathHit — for the listings that report them.
+func (r *Runner) lookPathAllSpelled(name string) []string {
+	hits := r.lookPathHits(name)
+	out := make([]string, len(hits))
+	for i, hit := range hits {
+		out[i] = hit.spelled
+	}
+	return out
 }
 
 // writtenPathHit is a PATH entry and a name put together with nothing

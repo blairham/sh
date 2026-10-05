@@ -700,7 +700,7 @@ func (r *Runner) Runnable(path string) bool { return r.runnable(r.absolute(path)
 // this dialect writes one — see Runner.reportedPath — so a `whence -a` built
 // on this lists what the shell it claims to be lists.
 func (r *Runner) LookPathAll(name string) []string {
-	hits := r.lookPathAll(name)
+	hits := r.lookPathAllSpelled(name)
 	for i, path := range hits {
 		hits[i] = r.reportedPath(name, path)
 	}

@@ -829,6 +829,10 @@ func Semantics() interp.Semantics {
 	// the neighboring row, since dash writes `You have stopped jobs.` for a
 	// stopped one (#4542).
 	s.MonitorAloneAccountsForJobsAtExit = interp.No
+	// How a PATH hit is written back, before the command runs and after:
+	// measured 2026-10-05 with `command -v`, in the pinned alpine image: `PATH=/bin/` is `/bin//ls`, `PATH=./` is `.//zz`, an empty entry is the bare name (#6044). See
+	// Semantics.PathHitSpelled.
+	s.PathHitSpelled = interp.PathHitAsWritten
 	// unanswered MonitorOffSilencesJobsAtExit: measured 2026-10-05 in the
 	// pinned image through a pseudo-terminal, `exit` with a stopped job
 	// leaves saying nothing whether the monitor is on or off, so this shell

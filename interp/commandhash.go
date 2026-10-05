@@ -345,11 +345,12 @@ func (r *Runner) lookPathReporting(name string) (string, error) {
 		return path, err
 	}
 	if r.rememberingLookups() && r.sem().ALookupRemembersThePath == Yes {
-		// The table remembers what would **run**, which is the absolute
-		// path: a relative entry remembered as written would send a later
-		// run through os/exec's own resolution against the process's
-		// directory. Only what is printed takes the spelling.
-		r.hashCommandRun(name, path)
+		// The table remembers the hit as this dialect spells it, which is
+		// what every later report reads back. What *runs* is still the
+		// absolute path: the lookup resolves a remembered entry against this
+		// runner's directory on the way in, which is also how `hash -p
+		// relfile` has always worked (#6044).
+		r.hashCommandRun(name, spelled)
 	}
 	// And the spelling is the answer, which is the whole of why the search
 	// hands back two: a PATH entry that is relative is written back as the

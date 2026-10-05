@@ -1167,6 +1167,20 @@ func (r *Runner) runTrapHandler(ctx context.Context, cond, body string) {
 // runTrapHandlerFrom is runTrapHandler told where the arrival came from.
 func (r *Runner) runTrapHandlerFrom(ctx context.Context, cond, body string, origin trapOrigin) {
 	fname := r.trapFuncs[cond]
+	returned, handlerStatus, resumed := r.runTrapAction(ctx, cond, body)
+	if resumed && fname != "" && returned && handlerStatus != 0 {
+		r.interruptByATrapFunction(handlerStatus, origin)
+	}
+}
+
+// runTrapAction runs one handler body with what the interrupted script can
+// see put back around it, and answers whether the action ended on a
+// `return` written in it, the status the action itself ended with, and
+// whether the script resumes — no `exit` or other unwinding came out of it.
+// What a non-zero return then does is the caller's: a script is interrupted
+// by one (runTrapHandlerFrom), and a prompt decides its line by one
+// (InterruptAtThePrompt).
+func (r *Runner) runTrapAction(ctx context.Context, cond, body string) (returned bool, handlerStatus int, resumed bool) {
 	outer := r.status
 	if r.ask(r.sem().SignalHandlerSeesEarlierStatus, "the status a signal handler sees") {
 		r.status = r.statusBefore
@@ -1189,16 +1203,15 @@ func (r *Runner) runTrapHandlerFrom(ctx context.Context, cond, body string, orig
 	r.inBuiltin, r.speaker = "", ""
 	r.runTrapBody(ctx, cond, body)
 	r.inBuiltin, r.speaker = outerBuiltin, outerSpeaker
-	returned, handlerStatus := r.callEndedOnAReturn && r.ctl == controlNone, r.status
+	returned, handlerStatus = r.callEndedOnAReturn && r.ctl == controlNone, r.status
 	r.handlerTakesItsError(cond)
 	r.trapEntryStatus, r.inATrapAction, r.trapActionOwnBody = outerTrap, outerIn, outerOwn
-	if r.ctl == controlNone {
-		r.ctl = ctl
-		r.status = outer
-		if fname != "" && returned && handlerStatus != 0 {
-			r.interruptByATrapFunction(handlerStatus, origin)
-		}
+	if r.ctl != controlNone {
+		return returned, handlerStatus, false
 	}
+	r.ctl = ctl
+	r.status = outer
+	return returned, handlerStatus, true
 }
 
 // stopSignals releases the handlers a runner installed.

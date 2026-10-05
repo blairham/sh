@@ -68,6 +68,10 @@ func TestControlCWithTheEditorOffGivesUpTheLine(t *testing.T) {
 		{"no trap", "", ": typed after\n", "130-0 1", "0-0"},
 		{"no trap, then ^D", "", "\x04", "130-0 1", "0-0"},
 		{"trap \"\" INT", "trap '' INT\n", ": typed after\n", "0-0", "0-0"},
+		// And a trap the line is kept by, which is the same answer the
+		// editor's ^C gets (#5888): measured, zsh runs the handler and the
+		// line typed after the ^C runs.
+		{"TRAPINT returning 0", "TRAPINT() { return 0 }\n", ": typed after\n", "0-0", "0-0"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			control, screen := zleOffChildSession(t, tc.rc)

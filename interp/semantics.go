@@ -19799,6 +19799,21 @@ type Semantics struct {
 	// (TestControlCAtThePromptSetsTheStatus).
 	PromptStatusWritesThePipelineRecord bool
 
+	// PromptInterruptTrap is what a ^C typed at an interactive prompt does
+	// when the script has a trap with a body on INT. See
+	// PromptInterruptTrapping for the three answers and the measurements.
+	//
+	// Read without asking, for the reason the prompt answers above it are:
+	// a prompt has no way to refuse a keystroke over an unanswered axis, and
+	// the zero value is a measured answer rather than none.
+	//
+	// unpinned: reached, and the corpus cannot discriminate. Every case runs
+	// under `-c` or a script with no prompt, so no row has a ^C typed at
+	// one. cmd/zsh/interrupttrappty_test.go and
+	// cmd/bash/interrupttrappty_test.go press ^C at a real prompt and pin
+	// both answers (TestControlCAtThePromptRunsTheTrap).
+	PromptInterruptTrap PromptInterruptTrapping
+
 	// EditorReadsKeysWhereThereIsNoTerminal gives a session whose input is a
 	// pipe or a file a **line editor**: the editing keys are read as keys
 	// there, and not as characters of the line.
@@ -34398,6 +34413,54 @@ const (
 	// inside the function, ash writes two where bash writes one.
 	ErrTrapAlwaysRefires
 )
+
+// PromptInterruptTrapping is what a ^C at an interactive prompt does with a
+// trap on INT. See Semantics.PromptInterruptTrap.
+//
+// Measured 2026-10-04 through a pseudo-terminal, no startup files: set the
+// trap, run a command, type `abc`, press ^C, and read `$?` and what the trap
+// recorded on the next line — with and without a ^U first, which is what
+// says whether `abc` was still on the line.
+//
+//	                       trap 'ti=$?' INT          trap "" INT
+//	bash 5.3.20            ti=130, line gone, 130     line kept, $? alone
+//	zsh 5.9.2              ti=$?, line kept, $? alone line kept, $? alone
+//	ksh93u+ (emacs)        ti=$?, line gone, $? alone
+//	dash                   ti=$?, $? alone
+//
+// zsh's line is decided by the action's own return: `TRAPINT() { return
+// 130 }` and `trap 'return 1' INT` give the line up and leave 130 and 1, and
+// `TRAPINT() { return 0 }` and `trap false INT` keep it. An ignore keeps the
+// line in every shell and is not this axis's question; neither is a ^C with
+// no trap at all, which gives the line up and leaves 130 everywhere.
+type PromptInterruptTrapping uint8
+
+const (
+	// PromptInterruptTrapThenGiveUp runs the trap with `$?` as it stands,
+	// gives the line up and leaves the status alone: ksh93 and dash.
+	PromptInterruptTrapThenGiveUp PromptInterruptTrapping = iota
+
+	// PromptInterruptStatusThenTrap sets the status to 130 first, so the
+	// trap reads it, and gives the line up: bash.
+	PromptInterruptStatusThenTrap
+
+	// PromptInterruptTrapDecides runs the trap with `$?` as it stands and
+	// keeps the line, unless the action returned a status other than zero —
+	// then the line is given up and that status is left: zsh.
+	PromptInterruptTrapDecides
+)
+
+func (p PromptInterruptTrapping) String() string {
+	switch p {
+	case PromptInterruptTrapThenGiveUp:
+		return "the trap runs and the line is given up"
+	case PromptInterruptStatusThenTrap:
+		return "the status is set, the trap runs and the line is given up"
+	case PromptInterruptTrapDecides:
+		return "the trap's return decides the line"
+	}
+	return "unknown"
+}
 
 func (e ErrTrapRefiring) String() string {
 	switch e {

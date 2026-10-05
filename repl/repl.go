@@ -812,6 +812,10 @@ func (s Shell) Run(ctx context.Context) (int, error) {
 		s.followTheList(ed)
 		var line string
 		var err error
+		// A ^C during this read is the prompt's, and is answered for the
+		// length of the read only: the same editor serves a command that
+		// asks a person for a line, and that read is not a prompt.
+		ed.answerInterrupt = func() bool { return s.answerInterrupt(ctx, state) }
 		if editing {
 			line, err = ed.readLine(drawn)
 			// Whether that read wrote the word this session leaves with, which
@@ -828,6 +832,7 @@ func (s Shell) Run(ctx context.Context) (int, error) {
 			// session running, so the value does not belong to the session.
 			wroteLeaving = false
 		}
+		ed.answerInterrupt = nil
 		// A seed belongs to the read it was set for and to no later one: the
 		// next prompt after a verified line is an empty one whichever way
 		// this read ended, ^C included. Cleared here rather than on each way
@@ -838,8 +843,9 @@ func (s Shell) Run(ctx context.Context) (int, error) {
 			// ^C abandons whatever was half-typed, including the earlier
 			// lines of an unfinished construct — which is the whole point of
 			// it at a continuation prompt.
+			// The status is already settled: the read asked answerInterrupt
+			// before it gave the line up.
 			s.abandon(&pending)
-			s.interruptedAtThePrompt()
 			continue
 		case errors.Is(err, io.EOF):
 			if s.heldForJobsAtExit(state) {
@@ -2183,9 +2189,13 @@ func (s Shell) refused(err error) {
 	s.Runner.SetPromptStatus(s.ParseFailureStatus(err))
 }
 
-// interruptedAtThePrompt sets the status a line abandoned with ^C leaves:
-// 128 plus the signal's number, as though the line had been a command the
-// signal ended.
+// answerInterrupt answers a ^C typed at the prompt, and reports whether the
+// line being typed is kept. Every route that reads a prompt's line comes
+// here — the editor's key and the byte a terminal with no editor hands over —
+// and interp.Runner.InterruptAtThePrompt is the one place the answer is made.
+//
+// With no trap the line is given up and the status is 128 plus the signal's
+// number, as though the line had been a command the signal ended.
 //
 // Measured 2026-10-04 through a pseudo-terminal against bash 5.3.20 and zsh
 // 5.9.2, no startup files: on an empty line, a half-typed one and a
@@ -2195,16 +2205,21 @@ func (s Shell) refused(err error) {
 // to abandon the line and leave the previous command's status in place, so a
 // prompt that draws the status drew nothing for a ^C (#5867).
 //
-// Not under `trap "" INT`, where both leave the status alone.
+// Under `trap "" INT` both keep the line and leave the status alone, and a
+// trap with a body runs — what then happens to the line is the dialect's
+// answer (#5888). See interp.Semantics.PromptInterruptTrap.
 //
-// Through SetPromptStatus, the same door a refused line goes through, so
-// the dialect that makes the status its pipeline record as well does it for
-// both.
-func (s Shell) interruptedAtThePrompt() {
-	if s.Runner.IgnoresSignal(syscall.SIGINT) {
-		return
+// In the terminal's own discipline where a trap's action is about to run,
+// because it is commands and writes like any other — and only there: handing
+// the terminal over and taking it back is a window in which a key typed
+// straight after the ^C can be caught between two disciplines, and an ignore
+// or a line with no trap runs nothing that needs it.
+func (s Shell) answerInterrupt(ctx context.Context, state *terminalState) (keep bool) {
+	if !s.Runner.TrapsSignal()(syscall.SIGINT) || s.Runner.IgnoresSignal(syscall.SIGINT) {
+		return s.Runner.InterruptAtThePrompt(ctx)
 	}
-	s.Runner.SetPromptStatus(128 + int(syscall.SIGINT))
+	s.inLineDiscipline(state, func() { keep = s.Runner.InterruptAtThePrompt(ctx) })
+	return keep
 }
 
 // refusedForGood reports whether a parse failure is one no further line could

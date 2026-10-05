@@ -4138,6 +4138,9 @@ func Semantics() interp.Semantics {
 	// refusal — is PIPESTATUS as well as `$?`, where zsh leaves its record
 	// alone. See Semantics.PromptStatusWritesThePipelineRecord.
 	s.PromptStatusWritesThePipelineRecord = true
+	// What a ^C at the prompt does with a trap on INT: bash sets 130 before the INT trap runs at a prompt, and gives the line up.
+	// See Semantics.PromptInterruptTrap.
+	s.PromptInterruptTrap = interp.PromptInterruptStatusThenTrap
 	return s
 }
 

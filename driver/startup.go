@@ -497,7 +497,7 @@ func (sh Shell) sourceText(r *interp.Runner, in source, path, text string) int {
 	// Not `exit`, which GiveUpTheFile deliberately does not catch: `exit 3`
 	// in a startup file exits 3 and the files after it are not read, which is
 	// the neighboring rule the loop in startup already models on Exited.
-	r.GiveUpTheFile()
+	r.GiveUpTheStartupFile()
 	return 0
 }
 

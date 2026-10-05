@@ -2205,6 +2205,9 @@ func Semantics() interp.Semantics {
 	// A file `.` reads from a startup file is numbered from its own first line, measured in the pinned image (#6013). See
 	// Semantics.SourcedFileContinuesTheStartupLineCount.
 	s.SourcedFileContinuesTheStartupLineCount = interp.No
+	// A startup file given up over a fatal error: BusyBox ash reads `$ENV` only when interactive and leaves 2 there, measured in the pinned image (#6046).
+	// See Semantics.StartupFileGivenUpLeavesTheStatusBefore.
+	s.StartupFileGivenUpLeavesTheStatusBefore = interp.No
 	// unanswered JobStartedWithoutTheMonitorIsRefused: BusyBox ash turns the
 	// monitor off and says so where there is no job control to give it, so the
 	// state the axis is about was not reached here; no ash runs under a

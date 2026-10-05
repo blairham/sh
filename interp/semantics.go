@@ -22645,6 +22645,51 @@ type Semantics struct {
 	// TestAFileSourcedFromEnvContinuesItsLineCount.
 	SourcedFileContinuesTheStartupLineCount Answer
 
+	// StartupFileGivenUpLeavesTheStatusBefore leaves `$?` as it stood before
+	// the command whose fatal error gave up a startup file, instead of the
+	// status the error carries. True in ksh93 alone.
+	//
+	// Measured 2026-10-05 with `$ENV` (`$BASH_ENV` for bash) of `<pre>`,
+	// `echo ${unset?boom}` and `echo after`, then `-c 'echo main $?'` (ksh93
+	// under `-E`):
+	//
+	//	<pre>          ksh93u+   bash 5.3.20
+	//	true           main 0    main 1
+	//	false          main 1    main 1
+	//	(exit 7)       main 7    main 1
+	//
+	// and the same in ksh93 for `set -u` with an unset name, `$((1/0))` and a
+	// readonly reassignment. It is the command and not the line: `false;
+	// echo ${unset?boom}` leaves 1, and a function whose body ran `(exit 4)`
+	// and then failed leaves 4. Only at this boundary: a `.` and an `eval`
+	// that the same error gives up leave 1 in ksh93, as a script ending over
+	// it exits 1 (#6046).
+	//
+	// Read here as the status before the failing *statement*, which parts
+	// from ksh93 in one shape: `(exit 4); echo $(exit 5) ${unset?boom}`
+	// leaves 5 there, the substitution's status, because the error sets no
+	// status at all; this leaves 4. Answering that would take the status at
+	// every place a fatal error is raised rather than at the one boundary
+	// that reads it.
+	//
+	// zsh keeps the error's own status here as in a script. dash and BusyBox
+	// ash read `$ENV` only when interactive, where the file is given up at 2
+	// whatever ran before. An interactive bash or ksh93 gives up only the
+	// line (StartupFileErrorWhenInteractive), so this is not reached there.
+	//
+	// unpinned bash: no corpus row reads a startup file; pinned by the
+	// measurement above and by TestABashEnvGivenUpLeavesOne.
+	//
+	// unpinned zsh: the same reach.
+	//
+	// unpinned dash: the same reach.
+	//
+	// unpinned ash: the same reach; measured in the pinned image.
+	//
+	// unpinned ksh: the same reach; pinned by
+	// TestAGivenUpEnvLeavesTheStatusBefore.
+	StartupFileGivenUpLeavesTheStatusBefore Answer
+
 	// StartupFileErrorWhenInteractive is what a fatal error in a startup file
 	// costs in an interactive shell: the file, with `${x?word}` still read
 	// the way ParamErrorIsAnExitRequest reads it (the zero value, zsh's);

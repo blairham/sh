@@ -1752,6 +1752,9 @@ func Semantics() interp.Semantics {
 	// A file `.` reads from a startup file is numbered from its own first line (#6013). See
 	// Semantics.SourcedFileContinuesTheStartupLineCount.
 	s.SourcedFileContinuesTheStartupLineCount = interp.No
+	// A startup file given up over a fatal error: dash reads `$ENV` only when interactive and leaves 2 there (#6046).
+	// See Semantics.StartupFileGivenUpLeavesTheStatusBefore.
+	s.StartupFileGivenUpLeavesTheStatusBefore = interp.No
 	// A fatal error in an interactive shell's startup file: dash gives up the rest of `$ENV`, `${x?word}` included, and draws its prompt (#6009).
 	// See Semantics.StartupFileErrorWhenInteractive.
 	s.StartupFileErrorWhenInteractive = interp.StartupErrorCostsTheFileWhatever

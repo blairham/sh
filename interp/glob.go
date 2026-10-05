@@ -2288,6 +2288,6 @@ func (r *Runner) workDir() string {
 // the 4. See Semantics.FailedExpansionInACommandKeepsAFailingStatus (#6067).
 func (r *Runner) refuseUnmatchedPattern(pattern string) {
 	r.diagf("%s\n", Wording(r.diag().GlobNoMatch, "no matches found: %s", pattern))
-	defer r.failureSetsItsStatus()()
+	defer r.globRefusalSetsItsStatus()()
 	r.failedExpansion()
 }

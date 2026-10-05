@@ -49,7 +49,7 @@ func (r *Runner) beginGlobUnit() func() {
 			r.diagf("%s\n", Wording(r.diag().CshNullGlobNoMatch, "no match"))
 			// Sets its status as an unmatched pattern does — see
 			// Runner.refuseUnmatchedPattern.
-			restore := r.failureSetsItsStatus()
+			restore := r.globRefusalSetsItsStatus()
 			r.failedExpansion()
 			restore()
 		}

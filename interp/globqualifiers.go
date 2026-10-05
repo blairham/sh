@@ -581,7 +581,7 @@ func (r *Runner) fieldQualifiers(field string) (pattern string, q globQualifiers
 	// pattern does: measured 2026-10-05 on zsh 5.9.2, `(exit 4); print
 	// *(.zzq)` and `(exit 4); print *([1,])` exit 1, where `$((1/0))` in the
 	// same place leaves the 4. See Runner.refuseUnmatchedPattern (#6067).
-	defer r.failureSetsItsStatus()()
+	defer r.globRefusalSetsItsStatus()()
 	if strings.HasPrefix(list, "#") && !strings.HasPrefix(list, "#q") &&
 		r.MatchOption(ExtendedPatternOperators) {
 		// A trailing `(#…)` that is not the `(#q…)` spelling is a pattern

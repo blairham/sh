@@ -15287,6 +15287,20 @@ const (
 	failedExpansionKeepsAFailingStatus
 )
 
+// globRefusalSetsItsStatus is for a refusal of the glob phase — an unmatched
+// pattern, a qualifier list that will not read — which sets the fatal status
+// in a command's words, where another failed expansion keeps a failing one,
+// and keeps it in a declaration's words as every failure there does.
+// Measured 2026-10-05 on zsh 5.9.2: `(exit 4); print zz*zz` and `(exit 4);
+// print *(.zzq)` exit 1, and `(exit 4); local -a x=(zz*zz)` and the same
+// with `*(.zzq)` exit 4 (#6067). Undone by the returned function.
+func (r *Runner) globRefusalSetsItsStatus() func() {
+	if r.failedExpansionStatus != failedExpansionKeepsAFailingStatus {
+		return func() {}
+	}
+	return r.failureSetsItsStatus()
+}
+
 // failureSetsItsStatus is for a failure that sets the fatal status wherever
 // it is written, until the returned function runs. See
 // Runner.failedExpansionStatus.

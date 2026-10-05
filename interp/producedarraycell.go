@@ -47,6 +47,18 @@ func (r *Runner) writableArrayCell(name string) (Array, bool) {
 	}
 	produce, produced := r.DynamicArrays[name]
 	if !produced {
+		// The pipeline record is produced by a path of its own, and is a
+		// cell to write in where the dialect gave its name a writer: an
+		// element write lands among the statuses already there (#6088).
+		if elems, record := r.pipelineStatuses(name); record {
+			if _, writable := r.dynamicArrayWriters[name]; writable {
+				a := NewArray(len(elems))
+				for i, v := range elems {
+					a.Set(i, Scalar(v))
+				}
+				return a, true
+			}
+		}
 		return nil, false
 	}
 	if _, writable := r.dynamicArrayWriters[name]; !writable {

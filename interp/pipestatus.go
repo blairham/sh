@@ -75,6 +75,20 @@ func (r *Runner) putStatusBack(k keptStatus) { r.status, r.pipeStatus = k.status
 // invisible, and a guard no test can distinguish is not worth the line. The
 // check that matters is in recordSingleStatus, where it stops an axis being
 // asked in a shell that could not observe the answer.
+// WritePipelineStatus is a script's write to the record, for the dialect whose
+// name for it takes one: each value is read as C's atoi reads a number — the
+// leading digits, so `1+1` is 1, `x` and the empty string are 0. Measured
+// 2026-10-05 on zsh 5.9.2 after `true|false`: `pipestatus[1]=9` is `9 1`,
+// `pipestatus[3]=9` is `0 1 9`, `pipestatus[1]=1+1` is `1 1`, `pipestatus=5`
+// is `5` and `pipestatus=2*3` is `2` (#6088).
+func (r *Runner) WritePipelineStatus(values []string) {
+	st := make([]int, len(values))
+	for i, v := range values {
+		st[i] = leadingNumber(v, false)
+	}
+	r.recordPipeStatus(st)
+}
+
 func (r *Runner) recordPipeStatus(statuses []int) {
 	// A fresh slice rather than the old one refilled. A subshell clones the
 	// runner by value, which copies the slice header and leaves both sharing
@@ -163,8 +177,20 @@ func (r *Runner) countsForPipelineStatus(c syntax.Command) bool {
 		if len(x.Args) > 0 || len(x.Assigns) == 0 || len(x.Redirs) > 0 {
 			return true
 		}
-		return r.ask(r.sem().AssignmentUpdatesPipelineStatus,
-			"a bare assignment counting as a command for the pipeline status")
+		if r.ask(r.sem().AssignmentUpdatesPipelineStatus,
+			"a bare assignment counting as a command for the pipeline status") {
+			return true
+		}
+		// And the one kind of bare assignment the shell that says no to
+		// the rest counts all the same. See
+		// Semantics.ArrayAssignmentUpdatesPipelineStatus.
+		for _, as := range x.Assigns {
+			if as.IsArray {
+				return r.ask(r.sem().ArrayAssignmentUpdatesPipelineStatus,
+					"a bare array assignment counting as a command for the pipeline status")
+			}
+		}
+		return false
 	case *syntax.TestClause:
 		if len(x.Redirs) > 0 {
 			return true

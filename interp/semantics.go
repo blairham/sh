@@ -19674,6 +19674,22 @@ type Semantics struct {
 	// because the redirection is what makes it a job. Negation does the
 	// same, and for the same reason — see recordSingleStatus.
 	AssignmentUpdatesPipelineStatus Answer
+
+	// ArrayAssignmentUpdatesPipelineStatus counts a bare assignment of an
+	// array literal as a command for the record, in the shell that does not
+	// count the other bare assignments. Asked only where
+	// AssignmentUpdatesPipelineStatus said no.
+	//
+	// Measured 2026-10-05 on zsh 5.9.2 after `true|false`: `arr=(1 2)`,
+	// `arr+=(1)` and `x=1 arr=(1)` leave `$pipestatus` at `0`, where `x=1`
+	// and `arr[1]=3` leave `0 1`. So `pipestatus=(5 6)` reads back `0` too —
+	// the write and then the command's own record over it (#6088).
+	//
+	// unpinned zsh: no corpus row; pinned by TestAZshPipestatusTakesAWrite.
+	//
+	// unpinned bash: the axis is not reached, bash counting every bare
+	// assignment.
+	ArrayAssignmentUpdatesPipelineStatus Answer
 	// TestAndArithmeticUpdatePipelineStatus counts `[[ … ]]` and `(( … ))`
 	// as commands for the pipeline-status record. bash says yes; zsh says no
 	// and leaves the elements the last pipeline left, which is what makes

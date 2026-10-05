@@ -1621,6 +1621,9 @@ func Semantics() interp.Semantics {
 	s.KeyedTableScalarIsTheFirstValue = interp.Yes
 	s.ArrayNameWithoutSubscriptIsTheList = interp.Yes
 	s.AssignmentUpdatesPipelineStatus = interp.No
+	// But an array literal counts: `true|false; arr=(1 2)` leaves 0 (#6088).
+	// See Semantics.ArrayAssignmentUpdatesPipelineStatus.
+	s.ArrayAssignmentUpdatesPipelineStatus = interp.Yes
 	s.TestAndArithmeticUpdatePipelineStatus = interp.No
 	// And where bash writes the record after negating one of those two, this
 	// shell writes what the construct itself reported: `false | true;
@@ -7213,6 +7216,9 @@ func Apply(r *interp.Runner) {
 	// The statuses of the last pipeline's elements. The core keeps the
 	// record and this names it; ksh93 and dash have no name for it at all.
 	r.SetPipelineStatus("pipestatus")
+	// And a write to it lands in the record, each value read as a number:
+	// see interp.Runner.WritePipelineStatus (#6088).
+	r.SetDynamicArrayWriter("pipestatus", func(r *interp.Runner, values []string) { r.WritePipelineStatus(values) })
 	// And the shape a listing writes it in, which is the same line
 	// dialect/bash gives `PIPESTATUS` and is here for the same reason: the
 	// record is not in any of the tables a listing walks, so without a

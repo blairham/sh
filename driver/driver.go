@@ -3601,6 +3601,10 @@ func (sh Shell) executeLines(
 			sh.errf("%s", in.dg.Report(in.diagName(), 1, err.Error()+"\n"))
 			return usageStatus, endingRefused
 		}
+		// An interactive shell's program may cost only its line over a fatal
+		// error, and the next line runs. See
+		// interp.Runner.GiveUpTheProgramLine.
+		r.GiveUpTheProgramLine(in.programRoute() == syntax.RouteFromScriptFile)
 		// What ended while that line was running, said before the next line
 		// starts. That is where the panel puts it and it is measured rather
 		// than assumed: on `-i script.sh` dash, ksh93 and zsh all write the

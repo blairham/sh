@@ -1874,6 +1874,9 @@ func Semantics() interp.Semantics {
 	// A startup file given up over a fatal error: zsh leaves the error's own status, as in a script (#6046).
 	// See Semantics.StartupFileGivenUpLeavesTheStatusBefore.
 	s.StartupFileGivenUpLeavesTheStatusBefore = interp.No
+	// A fatal error in an interactive shell's program: zsh gives up the line of a script under `-i`, and ends a `-c` string (#6073).
+	// See Semantics.InteractiveProgramErrorWhenInteractive.
+	s.InteractiveProgramErrorWhenInteractive = interp.InteractiveProgramErrorCostsAScriptsLine
 	// At a prompt, zsh numbers the session (#6074). See Semantics.PromptNumbersEachInputFromOne.
 	s.PromptNumbersEachInputFromOne = interp.No
 	// A fatal error in `.` or `eval` text: an interactive zsh gives up the text (#6057).

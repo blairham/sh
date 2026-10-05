@@ -22680,6 +22680,39 @@ type Semantics struct {
 	// unpinned ksh: the same reach.
 	BorrowedTextErrorWhenInteractiveCostsTheLine Answer
 
+	// InteractiveProgramErrorWhenInteractive is what a fatal error costs the
+	// program an interactive shell was started with, a `-c` string or a
+	// script under `-i`: the program, or only the line it was on.
+	//
+	// Measured 2026-10-05, `env -i` with a scratch HOME and stdin
+	// /dev/null, `<line>; echo same` and then `echo after $?`, for `<line>`
+	// each of `echo ${u?b}`, `set -u; echo $nope`, `readonly r=1; r=2`,
+	// `echo $((1/0))` and `f(){ echo ${u?b}; }; f`:
+	//
+	//	                 -i -c                  -i s.sh
+	//	bash 5.3.20      after 1, every row     after 1, every row
+	//	ksh93u+          after 1, every row     after 1, every row
+	//	zsh 5.9.2 (-f)   nothing after          after 1, but nothing after
+	//	                                        for ${u?b}
+	//	dash 0.5.12      nothing after          nothing after
+	//	BusyBox ash      nothing after          nothing after (pinned image)
+	//
+	// and `same` in none. The shell then exits 0 having run `after`, or 1
+	// where the failing line was the last. This ended the program in every
+	// column (#6073).
+	//
+	// unpinned bash: no corpus row is interactive; pinned by
+	// TestAnInteractiveProgramErrorCostsTheLine.
+	//
+	// unpinned zsh: the same reach.
+	//
+	// unpinned dash: the same reach.
+	//
+	// unpinned ash: the same reach.
+	//
+	// unpinned ksh: the same reach.
+	InteractiveProgramErrorWhenInteractive InteractiveProgramErrorCost
+
 	// PromptNumbersEachInputFromOne numbers each construct typed at a prompt
 	// from its own first line, rather than from the line of the session it
 	// began on. True in ksh93 alone.
@@ -39676,6 +39709,25 @@ func (p BareWaitSignalReport) String() string {
 // StartupErrorCost is what a fatal error in an interactive shell's startup
 // file costs. See Semantics.StartupFileErrorWhenInteractive.
 type StartupErrorCost uint8
+
+// InteractiveProgramErrorCost is what a fatal error costs the program an
+// interactive shell was started with. See
+// Semantics.InteractiveProgramErrorWhenInteractive.
+type InteractiveProgramErrorCost uint8
+
+const (
+	// InteractiveProgramErrorEndsTheProgram is the error ending the program
+	// as it would without `-i`: dash and BusyBox ash.
+	InteractiveProgramErrorEndsTheProgram InteractiveProgramErrorCost = iota
+	// InteractiveProgramErrorCostsAScriptsLine gives up only the line of a
+	// script under `-i`, with `${x?word}` still read as
+	// ParamErrorIsAnExitRequest says, and ends a `-c` string as without
+	// `-i`: zsh.
+	InteractiveProgramErrorCostsAScriptsLine
+	// InteractiveProgramErrorCostsTheLine gives up only the line of a
+	// script or a `-c` string: bash and ksh93.
+	InteractiveProgramErrorCostsTheLine
+)
 
 const (
 	// StartupErrorCostsTheFile gives up the rest of the file, and reads

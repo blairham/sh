@@ -132,6 +132,13 @@ type Job struct {
 	// there: the two are one fact about one process, and a reader that saw
 	// the pid without knowing which kind of target it is would have to guess.
 	ownGroup bool
+	// startedWithoutMonitor says the monitor was off when the job started.
+	// For a job with a process ownGroup says the same thing; a job with none
+	// — a builtin or a compound body this shell runs without forking — has
+	// no group to ask, and is refused by `fg` all the same in the shell that
+	// forks it: `true & set -m; fg` is `job 1 started without job control`
+	// in bash 5.3 and 3.2 (#5859). See resume.
+	startedWithoutMonitor bool
 
 	// num is the number this job is listed under and named by: `%2` is the
 	// job whose num is 2, for as long as the job is in the table. Assigned
@@ -784,6 +791,10 @@ func (r *Runner) background(ctx context.Context, st *syntax.Stmt) error {
 		// is raised here rather than inside the goroutine so that nothing can
 		// read the count before it is there.
 		parts: 1,
+		// Whether the monitor was off as it started, which is what decides
+		// a later `fg` once `set -m` has turned it on — for a job with no
+		// process as much as for one with. See Job.startedWithoutMonitor.
+		startedWithoutMonitor: !r.monitor,
 		// What was typed. The words are about to be expanded and the
 		// process started, and after that nothing else remembers how the
 		// command was spelled — which is what a `jobs` listing shows.

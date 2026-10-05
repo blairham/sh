@@ -81,6 +81,32 @@ func listingRows(candidates []Candidate, width int, layout listLayout) []string 
 		if block.group.OnePerLine || len(drawn[i]) == 0 {
 			continue
 		}
+		if _, widths, ok := packedArrangement(drawn[i], width, block.arrangement(layout)); ok {
+			// **A packed block spans its own columns too**, where they are
+			// wider than its uniform grid would be — and then no more than
+			// two short of the screen. Measured on zsh 5.9.2, 2026-10-05,
+			// a packed block followed by an unpacked block of two or three
+			// matches:
+			//
+			//	cols  uniform  packed  second block's matches at
+			//	100   51       88      44
+			//	100   88       100     49; of three, 32 and 64 (98 split)
+			//	101   89       101     of three, 33 and 66 (99 split)
+			//	40    28       26      9 and 18 (28 split)
+			//
+			// so the wider of the two counts, the packed span capped at the
+			// screen less two. The cap is the packed span's alone: an
+			// unpacked 40-column grid at 40 columns spreads the next block
+			// 20 apart.
+			span := 0
+			for _, w := range widths {
+				span += w
+			}
+			if width > 2 {
+				span = min(span, width-2)
+			}
+			shared = max(shared, span)
+		}
 		cell, cols := uniformGrid(drawn[i], width)
 		shared = max(shared, cell*cols)
 	}
@@ -100,7 +126,7 @@ func listingRows(candidates []Candidate, width int, layout listLayout) []string 
 			out = append(out, rows...)
 			continue
 		}
-		out = append(out, arrange(rows, width, shared, layout)...)
+		out = append(out, arrange(rows, width, shared, block.arrangement(layout))...)
 	}
 	return out
 }
@@ -152,15 +178,11 @@ func arrange(matches []string, width, shared int, layout listLayout) []string {
 	if len(matches) == 0 {
 		return nil
 	}
+	if rows, widths, ok := packedArrangement(matches, width, layout); ok {
+		return placeCells(matches, rows, widths, false)
+	}
 	cell, cols := uniformGrid(matches, width)
 	nrows := (len(matches) + cols - 1) / cols
-	if layout.packed && !layout.rowsFirst && width > 0 {
-		for r := 1; r < nrows; r++ {
-			if widths, ok := packedWidths(matches, r, width); ok {
-				return placeCells(matches, r, widths, false)
-			}
-		}
-	}
 	if spread := shared / cols; spread > cell {
 		cell = spread
 	}
@@ -173,6 +195,32 @@ func arrange(matches []string, width, shared int, layout listLayout) []string {
 		widths[i] = cell
 	}
 	return placeCells(matches, nrows, widths, layout.rowsFirst)
+}
+
+// packedArrangement is the packed layout of a block — how many rows, and each
+// column's width — where the layout asks for one and it takes fewer rows than
+// the uniform grid would.
+func packedArrangement(matches []string, width int, layout listLayout) (int, []int, bool) {
+	if !layout.packed || layout.rowsFirst || width <= 0 || len(matches) == 0 {
+		return 0, nil, false
+	}
+	_, cols := uniformGrid(matches, width)
+	nrows := (len(matches) + cols - 1) / cols
+	for r := 1; r < nrows; r++ {
+		if widths, ok := packedWidths(matches, r, width); ok {
+			return r, widths, true
+		}
+	}
+	return 0, nil, false
+}
+
+// arrangement is the layout this block is drawn with: the listing's, packed
+// where the block itself asked to be. See Group.Packed.
+func (b block) arrangement(layout listLayout) listLayout {
+	if b.group.Packed {
+		layout.packed = true
+	}
+	return layout
 }
 
 // packedWidths is each column's width when the matches are laid down rows to a
@@ -251,10 +299,11 @@ func (b block) rows() []string {
 			// what every listing here was before a candidate could carry one.
 			c.Display = c.Word
 		}
-		if c.Display == "" {
+		if c.Display == "" && !c.Filler {
 			// Neither: a candidate that exists so its block does. See
 			// Candidate, and the message a completion system draws over a
-			// block with nothing in it.
+			// block with nothing in it. A filler is the exception: it is
+			// a cell, and leaving it out would move every cell after it.
 			continue
 		}
 		kept = append(kept, c)

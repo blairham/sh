@@ -5,6 +5,7 @@ package zsh
 
 import (
 	"context"
+	"strconv"
 	"strings"
 
 	"github.com/blairham/sh/interp"
@@ -100,6 +101,17 @@ type describeState struct {
 	// already been answered — see group(), where one definition becomes two
 	// groups because the two halves are drawn differently.
 	pending []describeRun
+
+	// width is the second argument, the widest a row of names sharing one
+	// description may be before it wraps. See compdescribepack.go.
+	width int
+	// grouped is the `-g` after the explanation array: names that share a
+	// description are drawn on one row. packing is that grid being answered,
+	// cell by cell, and packTried that the question has been asked.
+	grouped   bool
+	packTried bool
+	packing   bool
+	cells     []packedCell
 }
 
 // describeGroup is one definition: where the names and descriptions come
@@ -150,6 +162,7 @@ func compdescribeDefine(r *interp.Runner, st *computilState, descriptions bool, 
 	if descriptions {
 		d.separator = args[2]
 	}
+	d.width, _ = strconv.Atoi(args[1])
 	d.expl = args[lead-1]
 	// The explanation array is read now and not at `-g`, and it has to be an
 	// array. Measured on zsh 5.9.2, 2026-10-05: an array assigned between
@@ -161,7 +174,13 @@ func compdescribeDefine(r *interp.Runner, st *computilState, descriptions bool, 
 		return 1
 	}
 	d.explanation, _ = r.GetArray(d.expl)
-	for _, words := range splitOnDoubleDash(args[lead:]) {
+	defs := args[lead:]
+	if len(defs) > 0 && defs[0] == "-g" {
+		// The arrangement for names that share a description, asked for
+		// once for the whole call. See compdescribepack.go.
+		d.grouped, defs = true, defs[1:]
+	}
+	for _, words := range splitOnDoubleDash(defs) {
 		group, ok := describeGroupOf(r, words)
 		if !ok {
 			return 1
@@ -220,6 +239,27 @@ func (d *describeState) group(r *interp.Runner, into []string) int {
 	if len(into) < 4 {
 		r.Diagnosef("not enough arguments\n")
 		return 1
+	}
+	if d.grouped && d.descriptions && !d.packTried {
+		d.packTried = true
+		d.cells = d.pack(r)
+		d.packing = d.cells != nil
+	}
+	if d.packing {
+		if len(d.cells) == 0 {
+			return 1
+		}
+		cell := d.cells[0]
+		d.cells = d.cells[1:]
+		listing := ""
+		if cell.packed {
+			listing = "packed"
+		}
+		r.SetVar(into[0], listing)
+		r.SetArray(into[1], cell.options)
+		r.SetArray(into[2], cell.words)
+		r.SetArray(into[3], cell.displays)
+		return 0
 	}
 	for {
 		if len(d.pending) > 0 {
@@ -281,9 +321,9 @@ type describeRun struct {
 //
 // By the row rather than by the pair, because that is what the arrangement
 // turns on: describeRows already decided which names got a description
-// written after them — a `-i` call gives none of them one, and a pair with an
-// empty description after the colon gets the name back — so a display that is
-// not the word is exactly a row that needs a line to itself.
+// written after them — a `-i` call gives none of them one, and a pair with no
+// colon gets the name back — so a display that is not the word is exactly a
+// row that needs a line to itself.
 func splitByDescription(words, displays []string) (described, bare describeRun) {
 	for i, word := range words {
 		row := ""
@@ -338,18 +378,24 @@ func (d *describeState) options(g describeGroup, described bool) []string {
 func describeRows(pairs, matches []string, d *describeState) ([]string, []string) {
 	names := make([]string, 0, len(pairs))
 	descrs := make([]string, 0, len(pairs))
+	described := make([]bool, 0, len(pairs))
 	width := 0
 	for _, pair := range pairs {
-		name, descr, _ := strings.Cut(pair, ":")
+		name, descr, has := strings.Cut(pair, ":")
 		names = append(names, name)
 		descrs = append(descrs, descr)
+		described = append(described, has)
 		if len(name) > width {
 			width = len(name)
 		}
 	}
 	displays := make([]string, 0, len(names))
 	for i, name := range names {
-		if !d.descriptions || descrs[i] == "" {
+		// **The colon decides, not what follows it** (#6161). Measured on
+		// zsh 5.9.2, 2026-10-05: `G=(alpha:one beta: gam)` comes back as
+		// `-l` rows `alpha  -- one` and `beta   -- `, and `gam` alone in
+		// the bare group. A pair with an empty description is described.
+		if !d.descriptions || !described[i] {
 			displays = append(displays, name)
 			continue
 		}

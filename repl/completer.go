@@ -140,6 +140,15 @@ type Candidate struct {
 	// Group is the block of the listing this candidate is drawn in.
 	Group Group
 
+	// Filler is a cell of the listing that is drawn even where it has
+	// nothing to draw: a blank in a grid whose columns line up rows of
+	// names. zsh's `compadd -E n` adds these, and the arrangement the
+	// completion system builds for options that share a description is a
+	// grid of names, blanks and descriptions — so a blank that took no
+	// cell would pull every later cell of its column up a row. Never
+	// inserted, since its Word is empty.
+	Filler bool
+
 	// Open inserts a lone match exactly as it stands, with no space after it
 	// and no quote closed: the word is not finished. readline's answer for a
 	// symlinked directory it has not marked — see
@@ -208,7 +217,19 @@ type Group struct {
 	// not, which is why it is a property of the block rather than of the
 	// listing.
 	OnePerLine bool
+
+	// Packed lets each column be as wide as its own longest row, as the
+	// listing's packed option does, for this block whatever the option says.
+	// It is how a completion asks for it: zsh's `compstate[list]` holding
+	// `packed`, which its completion system writes when it hands the editor
+	// a grid of names and descriptions that only lines up packed.
+	Packed bool
 }
+
+// DisplayWidth is how many columns a string takes in a listing: what a
+// completer laying out a grid of its own has to measure with, so that its
+// columns are the ones the listing will draw.
+func DisplayWidth(s string) int { return displayWidth(s) }
 
 // Completer answers what the word under the cursor could become.
 //

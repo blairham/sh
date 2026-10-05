@@ -117,6 +117,20 @@ type completionState struct {
 	// blocks are drawn in the order they were added.
 	groupOrder []string
 
+	// keepingAll is the blocks a `compadd -2` named, by name: the ones an
+	// `-E` filler joins whichever of `-J` and `-V` it was itself given. See
+	// compadd.go's fillerGroup.
+	keepingAll map[string]repl.Group
+
+	// fillers is how many `-E` cells have been added, which
+	// `$compstate[nmatches]` counts as matches although nothing inserts
+	// them. See compadd.go's addFillers.
+	fillers int
+
+	// packedGroups is the blocks a `compadd` reached while
+	// `$compstate[list]` held `packed`. See compadd.go's packGroup.
+	packedGroups map[repl.Group]bool
+
 	// computil is what the eight `zsh/computil` builtins keep for the length
 	// of this one completion — the parsed `_arguments` specs, the tag loop,
 	// and the rest. Made on first use, because most completions never reach

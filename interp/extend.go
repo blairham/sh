@@ -771,9 +771,17 @@ func (r *Runner) LookPathAsWritten(name string) (string, bool) {
 	if strings.ContainsRune(name, '/') {
 		return r.LookPath(name)
 	}
-	_, _, written, err := r.lookPathSpelled(name)
+	_, spelled, written, err := r.lookPathSpelled(name)
 	if err != nil {
 		return "", false
+	}
+	// And remembered, as any lookup is in the dialect whose lookups remember:
+	// measured 2026-10-05 on zsh 5.9.2, `whence`, `whence -v`, `whence -p`,
+	// `whence -c` and `which` each leave the name in the table, as `type`
+	// and `command -v` already did here, and `whence -a` does not (#6111).
+	// See Semantics.ALookupRemembersThePath.
+	if r.rememberingLookups() && r.sem().ALookupRemembersThePath == Yes {
+		r.hashCommandRun(name, spelled, written)
 	}
 	return r.NameReportWord(written), true
 }

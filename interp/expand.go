@@ -2581,7 +2581,7 @@ func (r *Runner) expandAtList(s syntax.Span, sp splitPolicy, head bool) ([]strin
 		}
 		if s.Quoting != syntax.Unquoted {
 			if len(elems) == 0 && e.Op == syntax.ParamNone {
-				if !r.wholeArrayIndex(e) && !dotRanged(e) {
+				if !r.wholeArrayIndex(e) && !dotRanged(e) && !r.subscriptIsARange(e) {
 					// A subscript naming *one* element is one field
 					// whatever the element turned out to be, exactly as
 					// `"$unset"` is one empty field. Quoting is the whole
@@ -2597,6 +2597,15 @@ func (r *Runner) expandAtList(s syntax.Span, sp splitPolicy, head bool) ([]strin
 					// an *empty list* makes, and how many a quoted
 					// expansion of *one* element makes. Only the first is
 					// a dialect's.
+					//
+					// A range is a list, and an empty one is no field —
+					// which is what reaches here from `@`, the one name
+					// whose range keeps its fields in quotes. Measured on
+					// zsh 5.9.2 with one parameter, `"${@[2,-1]}"` is no
+					// word, exactly as `"${(@)argv[2,-1]}"` is; the cells
+					// where a range *does* make one empty word, `[2,3]`
+					// there, arrive with that word already in elems
+					// (#5955).
 					return []string{""}, true
 				}
 				if r.subscriptNameIsAbsent(e) &&

@@ -1007,7 +1007,8 @@ func (r *Runner) resume(args []string, name string) (*Job, int) {
 		r.diagf("%s\n", Wording(d.JobNotUnderJobControl, "%[1]s: no job control", name, spec))
 		return nil, orDefault(d.JobNotUnderJobControlStatus, 1)
 	}
-	if j.PID != 0 && !j.ownGroup || j.PID == 0 && j.startedWithoutMonitor {
+	if (j.PID != 0 && !j.ownGroup || j.PID == 0 && j.startedWithoutMonitor) &&
+		r.ask(r.sem().JobStartedWithoutTheMonitorIsRefused, "`fg` or `bg` on a job started before the monitor was on") {
 		// A job started while the monitor was off runs in the shell's own
 		// process group, so there is no group of its own to put in front of
 		// the terminal. Every column that can reach the question refuses it

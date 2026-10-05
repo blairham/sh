@@ -1868,6 +1868,9 @@ func Semantics() interp.Semantics {
 	s.WaitReportsAMissingJob = interp.Yes
 	// Measured 2026-10-01: a finished job nothing will report is gone from the table at once: `(exit 4) & sleep 0.3; wait %%` is `no current job`, 127. See Semantics.FinishedJobLeavesTheTable.
 	s.FinishedJobLeavesTheTable = interp.Yes
+	// A job started before `set -m`, under a terminal: zsh resumes it and waits it out (#5927). See
+	// Semantics.JobStartedWithoutTheMonitorIsRefused.
+	s.JobStartedWithoutTheMonitorIsRefused = interp.No
 	// Measured 2026-10-01: `e=; set -x; $e` traces a bare newline. See Semantics.EmptyCommandTrace.
 	s.EmptyCommandTrace = interp.EmptyCommandTracesABareLine
 	// Measured 2026-10-01: `{ sleep 1 & jobs }` is `[2]  + running    sleep 1`, the brace group holding 1 while it runs. See Semantics.ACommandHoldsAJobSlot.

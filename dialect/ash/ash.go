@@ -2197,6 +2197,10 @@ func Semantics() interp.Semantics {
 	s.WaitReportsAMissingJob = interp.Yes
 	// Measured 2026-10-01: a finished job stays in the table until reported: `(exit 4) & sleep 0.3; wait %%` is 4. See Semantics.FinishedJobLeavesTheTable.
 	s.FinishedJobLeavesTheTable = interp.No
+	// unanswered JobStartedWithoutTheMonitorIsRefused: BusyBox ash turns the
+	// monitor off and says so where there is no job control to give it, so the
+	// state the axis is about was not reached here; no ash runs under a
+	// terminal on this machine to try (#5927).
 	// Measured 2026-10-01: `e=; set -x; $e` traces the prefix alone. See Semantics.EmptyCommandTrace.
 	s.EmptyCommandTrace = interp.EmptyCommandTracesThePrefix
 	// And a job it has already reported stays waitable by its process id.

@@ -1081,6 +1081,9 @@ func Semantics() interp.Semantics {
 	s.BareWaitReportsASignalDeath = interp.BareWaitReportsASignalDeathItReaps
 	// Measured 2026-10-01: a finished job stays in the table until something reports it: `(exit 4) & sleep 0.3; wait %%` is 4. See Semantics.FinishedJobLeavesTheTable.
 	s.FinishedJobLeavesTheTable = interp.No
+	// A job started before `set -m`, under a terminal: bash refuses it: `fg: job 1 started without job control` (#5927). See
+	// Semantics.JobStartedWithoutTheMonitorIsRefused.
+	s.JobStartedWithoutTheMonitorIsRefused = interp.Yes
 	// And a job it has already reported stays waitable by its process id
 	// once the job has left the table — measured on both routes into it,
 	// `wait %1; wait "$p"` and `wait "$p"` twice, in 5.3.15 and 3.2.57

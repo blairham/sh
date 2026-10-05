@@ -18,8 +18,9 @@ import (
 // is the only place the status of an interrupted prompt is set, so the editor
 // and the read without one cannot answer differently.
 //
-// With no trap the line is given up and the status is 128 plus SIGINT, in
-// every shell measured (#5867). Under `trap "" INT` the ^C is nothing at all:
+// With no trap the line is given up and the status is the one a command
+// SIGINT ended would leave: 130 in bash, zsh and dash (#5867), 258 in ksh93
+// (#5936). Under `trap "" INT` the ^C is nothing at all:
 // the line is kept and the status left alone (#5888). A trap with a body is
 // the dialect's answer — see Semantics.PromptInterruptTrap.
 func (r *Runner) InterruptAtThePrompt(ctx context.Context) (keep bool) {
@@ -50,7 +51,12 @@ func (r *Runner) interruptAtThePrompt(ctx context.Context, answer PromptInterrup
 	s.mu.Lock()
 	body, trapped := s.traps[name]
 	s.mu.Unlock()
-	interrupted := 128 + int(syscall.SIGINT)
+	// The status a command the signal ended would leave, in the dialect's own
+	// encoding: measured 2026-10-04 through a pseudo-terminal, ksh93u+ reads
+	// `$?` as 258 after a ^C at its prompt, with and without `set -o emacs`,
+	// where bash, zsh and dash read 130 (#5936). See
+	// Semantics.SignalDeathStatusIsTwoFiftySix.
+	interrupted := r.signalDeathStatus(syscall.SIGINT)
 	switch {
 	case trapped && body == "":
 		return true

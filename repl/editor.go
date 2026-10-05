@@ -26,6 +26,13 @@ import (
 // and the prompt comes back; it is not an error the shell should report.
 var ErrInterrupted = errors.New("interrupted")
 
+// ErrBroken is a line given up without running: zsh's `send-break`, and a
+// widget that ended on an error the line cannot survive (see Line.Broken).
+// The prompt comes back with `$?` 1 and nothing recorded — measured
+// 2026-10-04 through a pseudo-terminal against zsh 5.9.2, `echo X` then `^G`
+// leaves `$?` 1 at the next prompt and `echo X` in no history (#5913).
+var ErrBroken = errors.New("broken")
+
 // editor holds the line being typed and the history behind it.
 type editor struct {
 	in  io.Reader
@@ -236,6 +243,19 @@ type editor struct {
 	// undoLimit is the change a key's undo stops at, 0 for none. See
 	// Actions.UndoLimit.
 	undoLimit int
+	// sendBreakOnControlG is EditorStyle.SendBreakOnControlG.
+	sendBreakOnControlG bool
+	// breakRequested is a send-break an action asked for, which the key loop
+	// acts on at its top. See keyLoop.
+	breakRequested bool
+	// breakRings is whether that send-break rings the bell: true but for one
+	// a widget asked for by name. See sendBreak.
+	breakRings bool
+	// recursive is how many recursive-edits are running, and recursiveBroke
+	// whether the innermost one ended other than by accepting. See
+	// recursiveEdit.
+	recursive      int
+	recursiveBroke bool
 	// broken is a widget the shell ran having ended on an error the line
 	// gives up for. See Line.Broken.
 	broken bool
@@ -586,8 +606,22 @@ func (e *editor) readLine(prompt drawnPrompt) (string, error) {
 		e.redraw(prompt)
 	}
 
+	return e.keyLoop(prompt)
+}
+
+// keyLoop reads keys and acts on them until the line ends — the read loop of
+// readLine with none of the starting of a line, so that recursive-edit can run
+// it again over the line a widget is holding. See recursiveEdit.
+func (e *editor) keyLoop(prompt drawnPrompt) (string, error) {
 	var buf [1]byte
 	for {
+		// A send-break an action asked for — `zle send-break` from a widget,
+		// or a key bound to it — ends the read here, the one place every
+		// key's path comes back through.
+		if e.breakRequested {
+			e.breakRequested = false
+			return e.sendBreak(prompt, e.breakRings)
+		}
 		// A draw a typed character put off because more input was in hand,
 		// and the input has run out without anything drawing it. That is a
 		// read that ended on a key which draws nothing — `abc` and an
@@ -806,6 +840,14 @@ func (e *editor) readLine(prompt drawnPrompt) (string, error) {
 		case ctrlT:
 			e.change(false, e.transpose)
 			e.redraw(prompt)
+		case ctrlG:
+			// send-break in a dialect whose emacs keymap has it on `^G`:
+			// zsh's does and its vi keymaps do not, measured with `bindkey`
+			// on zsh 5.9.2. Anywhere else the key is ignored, as every
+			// unbound control key is.
+			if e.sendBreakOnControlG && !e.viEditing() {
+				return e.sendBreak(prompt, true)
+			}
 		case ctrlUnderscore:
 			e.undo()
 			e.redraw(prompt)
@@ -993,6 +1035,13 @@ func (e *editor) keepsTheLineOnInterrupt(prompt drawnPrompt) bool {
 // echoes nothing in raw mode, so without it the next prompt would land on top
 // of what was typed.
 func (e *editor) abandon(prompt drawnPrompt) (string, error) {
+	if e.recursive > 0 {
+		// ^C ends a recursive-edit and not the line under it, at status 1
+		// with `$KEYS` empty — measured against zsh 5.9.2 (#5899).
+		e.keyBytes = e.keyBytes[:0]
+		e.recursiveBroke = true
+		return "", ErrInterrupted
+	}
 	e.endLine(prompt, e.interrupt)
 	return "", ErrInterrupted
 }
@@ -1004,6 +1053,12 @@ func (e *editor) abandon(prompt drawnPrompt) (string, error) {
 // rather than an interrupt's, which the shell has already set.
 func (e *editor) giveUp(prompt drawnPrompt) (string, error) {
 	e.broken = false
+	if e.recursive > 0 {
+		// Inside recursive-edit, the error ends that edit and not the line.
+		e.write("\a")
+		e.recursiveBroke = true
+		return "", ErrBroken
+	}
 	// The diagnostic went out through the shell's streams and left the
 	// cursor on a row of its own, so the line is drawn there whole once
 	// more before it is ended — zsh's own screen, measured: the message,
@@ -1013,7 +1068,28 @@ func (e *editor) giveUp(prompt drawnPrompt) (string, error) {
 	e.write("\a")
 	e.redraw(prompt)
 	e.endLine(prompt, "")
-	return "", ErrInterrupted
+	return "", ErrBroken
+}
+
+// sendBreak gives the line up the way zsh's `send-break` does: a bell, and
+// the line ended where it stands, neither run nor recorded, with `$?` 1.
+// Inside recursive-edit it ends that edit instead, at status 1, and the line
+// goes on (#5899).
+//
+// The bell is a key's: measured, `^G` rings it and `zle send-break` from a
+// widget does not, and the rest of that widget does not run either — which is
+// the shell's to stop, see dialect/zsh's callBuiltinWidget.
+func (e *editor) sendBreak(prompt drawnPrompt, bell bool) (string, error) {
+	e.breakRings = true
+	if bell {
+		e.write("\a")
+	}
+	if e.recursive > 0 {
+		e.recursiveBroke = true
+		return "", ErrBroken
+	}
+	e.endLine(prompt, "")
+	return "", ErrBroken
 }
 
 // stopped ends a read the end-of-input key ended, with the word the session

@@ -172,7 +172,9 @@ var bindkeyWidgets = map[string]repl.Widget{
 	"down-line":                         repl.WidgetDownLine,
 	// The prompt drawn again, which a widget that changed what it shows asks
 	// for (#5940).
-	"reset-prompt": repl.WidgetResetPrompt,
+	"reset-prompt":   repl.WidgetResetPrompt,
+	"send-break":     repl.WidgetSendBreak,
+	"recursive-edit": repl.WidgetRecursiveEdit,
 	// The key that means "this key does nothing", which is what `-r` leaves
 	// behind and what `bindkey` prints for a key nobody bound.
 	undefinedKey: repl.WidgetNone,
@@ -252,6 +254,8 @@ var widgetNames = map[repl.Widget]string{
 	repl.WidgetPatternSearchHistoryBackward: "history-incremental-pattern-search-backward",
 	repl.WidgetPatternSearchHistoryForward:  "history-incremental-pattern-search-forward",
 	repl.WidgetResetPrompt:                  "reset-prompt",
+	repl.WidgetSendBreak:                    "send-break",
+	repl.WidgetRecursiveEdit:                "recursive-edit",
 }
 
 // editorControlKeys are the keys the editor reads that are not actions a key
@@ -316,6 +320,9 @@ var editorControlKeys = map[string]string{
 // the drop asks that the key still hold its own default name, so `bindkey '^D'
 // beginning-of-line` and `bindkey -r '^D'` both survive it.
 var endOfInputKeys = map[string]bool{"\x04": true}
+
+// sendBreakKey is `^G`, send-break in the emacs keymap.
+const sendBreakKey = "\x07"
 
 func buildDefaultBindings() map[string]string {
 	out := map[string]string{}
@@ -586,6 +593,12 @@ func readBindings(r *interp.Runner, keymap string) map[string]string {
 		for seq, w := range defaultBindings {
 			out[seq] = w
 		}
+	}
+	if keymap == "emacs" {
+		// `^G` is send-break in this keymap alone; viins has list-expand
+		// there, which this shell does not have. See
+		// repl.EditorStyle.SendBreakOnControlG (#5913).
+		out[sendBreakKey] = widgetNames[repl.WidgetSendBreak]
 	}
 	flat, _ := r.GetArray(bindkeyStore)
 	for i := 0; i+3 <= len(flat); i += 3 {

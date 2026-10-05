@@ -160,7 +160,9 @@ func (e *editor) runShellWidget(name string, prompt drawnPrompt) (ran, accept bo
 	}
 	e.line = []rune(out.Buffer)
 	e.pos = min(max(out.Cursor, 0), len(e.line))
-	e.broken = out.Broken
+	// A widget that broke because it asked for send-break is the break and
+	// not an error: the key loop gives the line up for it. See sendBreak.
+	e.broken = out.Broken && !e.breakRequested
 	// A widget of the shell's is not a kill, whatever it called: a kill key
 	// pressed after one starts afresh. See Actions.WidgetCalled.
 	e.killing = false

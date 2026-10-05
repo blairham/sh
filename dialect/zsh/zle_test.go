@@ -108,6 +108,8 @@ type stubEditor struct {
 	cut string
 	// calls is how many times WidgetCalled was told a call finished.
 	calls int
+	// limit is the undo limit UndoLimit answers and SetUndoLimit moves.
+	limit int
 }
 
 func (e *stubEditor) Perform(w repl.Widget, in repl.Line) (repl.Line, bool) {
@@ -154,6 +156,10 @@ func (e *stubEditor) CutBuffer() string { return e.cut }
 func (e *stubEditor) SetCutBuffer(text string) { e.cut = text }
 
 func (e *stubEditor) WidgetCalled() { e.calls++ }
+
+func (e *stubEditor) UndoLimit() int { return e.limit }
+
+func (e *stubEditor) SetUndoLimit(n int) { e.limit = n }
 
 func (e *stubEditor) UndoTo(n int, in repl.Line) (repl.Line, bool) {
 	e.undoneTo = append(e.undoneTo, n)

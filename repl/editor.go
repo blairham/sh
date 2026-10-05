@@ -233,6 +233,9 @@ type editor struct {
 	// widgets.go.
 	typedKey   rune
 	selfInsert string
+	// undoLimit is the change a key's undo stops at, 0 for none. See
+	// Actions.UndoLimit.
+	undoLimit int
 	// broken is a widget the shell ran having ended on an error the line
 	// gives up for. See Line.Broken.
 	broken bool
@@ -516,6 +519,7 @@ func (e *editor) readLine(prompt drawnPrompt) (string, error) {
 	// in both shells however much was edited on the line before it, so the
 	// stack belongs to the line rather than to the session.
 	e.changes = nil
+	e.undoLimit = 0
 	e.lastArg = lastArgWalk{}
 	// Every line starts in insert mode, which is measured: Escape leaves
 	// command mode nowhere, and a line accepted from it is followed by a
@@ -803,7 +807,7 @@ func (e *editor) readLine(prompt drawnPrompt) (string, error) {
 			e.change(false, e.transpose)
 			e.redraw(prompt)
 		case ctrlUnderscore:
-			e.undoLine()
+			e.undo()
 			e.redraw(prompt)
 		case ctrlL:
 			// Clear the screen and put the line back at the top of it.
@@ -858,7 +862,7 @@ func (e *editor) readLine(prompt drawnPrompt) (string, error) {
 				return e.abandon(prompt)
 			case got != keyContinues:
 			case b == ctrlU:
-				e.undoLine()
+				e.undo()
 				e.redraw(prompt)
 			default:
 				// A dialect's own keys behind the prefix — the two searches,

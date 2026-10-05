@@ -449,7 +449,7 @@ func (e *editor) runWidget(b Binding, prompt drawnPrompt) {
 	case WidgetMenuCompleteBackward:
 		e.menuComplete(e.completerFor(b.Candidates), -1, prompt)
 	case WidgetUndo:
-		e.undoLine()
+		e.undo()
 		e.redraw(prompt)
 	case WidgetInsertLastWord:
 		// The one action that draws itself, because walking the history for a

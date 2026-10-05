@@ -237,6 +237,36 @@ func openUndoChangeNumber(r *interp.Runner, a repl.Actions, scope int) {
 	r.MarkReadonly(undoChangeNumberName)
 	r.MarkLocal(undoChangeNumberName)
 	r.SetDynamicDeclaration(undoChangeNumberName, interp.ProducedDeclaration{Integer: true, Base: 10, LocalToScope: scope})
+	// And the limit an undo stops at, which is the editor's to keep: it
+	// outlives the widget that set it and is 0 on the next line (#5898).
+	// Measured 2026-10-04 against zsh 5.9.2, `integer-local-special` and 0
+	// in a widget that has set nothing, and outside a widget not there at
+	// all — so a widget that assigns it without `local`, as
+	// bracketed-paste-magic does, leaves no global behind.
+	r.SetDynamic(undoLimitName, func(*interp.Runner) string {
+		return strconv.Itoa(a.UndoLimit())
+	})
+	r.SetDynamicWriter(undoLimitName, func(_ *interp.Runner, value string) {
+		if n, err := strconv.Atoi(strings.TrimSpace(value)); err == nil {
+			a.SetUndoLimit(n)
+		}
+	})
+	r.MarkInteger(undoLimitName)
+	r.MarkLocal(undoLimitName)
+	r.SetDynamicDeclaration(undoLimitName, interp.ProducedDeclaration{Integer: true, Base: 10, LocalToScope: scope})
+}
+
+// undoLimitName is the parameter a widget sets the undo limit through.
+const undoLimitName = "UNDO_LIMIT_NO"
+
+// closeUndoParameters takes the two away again, attributes and all, so a
+// script between keystrokes finds ordinary names.
+func closeUndoParameters(r *interp.Runner) {
+	for _, name := range []string{undoChangeNumberName, undoLimitName} {
+		r.UnsetDynamic(name)
+		r.UnsetDynamicDeclaration(name)
+		r.UnmarkInteger(name)
+	}
 }
 
 // selectWidgetKeymap is `zle -K NAME`: the keys read after it, for the rest

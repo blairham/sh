@@ -1836,8 +1836,7 @@ func closeWidgetParameters(r *interp.Runner) {
 	r.UnsetDynamic("LASTWIDGET")
 	r.UnsetDynamic("KEYMAP")
 	r.UnsetDynamic("KEYS")
-	r.UnsetDynamic(undoChangeNumberName)
-	r.UnsetDynamicDeclaration(undoChangeNumberName)
+	closeUndoParameters(r)
 	r.UnsetDynamic("NUMERIC")
 	// The attribute goes with the parameter, so a script between two
 	// keystrokes that assigns one of these names assigns text, as it does

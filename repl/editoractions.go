@@ -156,6 +156,14 @@ type Actions interface {
 	CutBuffer() string
 	SetCutBuffer(text string)
 
+	// UndoLimit is the change an undo may not take the line back past, and
+	// SetUndoLimit moves it. zsh's `$UNDO_LIMIT_NO`: 0 is none, and it is
+	// the line's — measured 2026-10-04 against zsh 5.9.2, a limit a widget
+	// set holds for the keys after it and is 0 again on the next line. The
+	// numbers are ChangeNumber's. A numbered undo, UndoTo, is not limited.
+	UndoLimit() int
+	SetUndoLimit(n int)
+
 	// WidgetCalled says a widget call that is not one of this editor's own
 	// actions has finished: a widget of the shell's called from another, or
 	// an action the shell performs itself. Neither is a kill, so a kill after
@@ -355,6 +363,10 @@ func (a editorActions) ChangeNumber(in Line) int {
 func (a editorActions) CutBuffer() string { return string(a.e.killed) }
 
 func (a editorActions) SetCutBuffer(text string) { a.e.killed = []rune(text) }
+
+func (a editorActions) UndoLimit() int { return a.e.undoLimit }
+
+func (a editorActions) SetUndoLimit(n int) { a.e.undoLimit = n }
 
 func (a editorActions) WidgetCalled() { a.e.killing, a.e.called = false, true }
 

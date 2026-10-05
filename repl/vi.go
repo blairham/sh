@@ -337,7 +337,7 @@ func (e *editor) viAct(count int, key byte, prompt drawnPrompt) viOutcome {
 	// EditorStyle.UndoRestoresTheCursorToWhereItWas, whose measurement in
 	// emacs mode and this one in command mode agree.
 	case 'u':
-		e.undoLine()
+		e.undo()
 		e.viClamp()
 		e.redraw(prompt)
 

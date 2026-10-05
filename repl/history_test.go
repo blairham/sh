@@ -399,3 +399,48 @@ func TestTheSessionTakesItsDefaultFileFromTheDialect(t *testing.T) {
 		t.Errorf("a dialect with no default gave %q, want none", got)
 	}
 }
+
+// A dialect that names its own count reads it as zsh reads `SAVEHIST`: zero
+// leaves the file exactly as it was, where bash's `HISTFILESIZE=0` empties it,
+// and the count does not default to `HISTSIZE`. And the bound is enforced at
+// the end of a session that added nothing, which both shells do. Measured
+// 2026-10-04 on zsh 5.9.2 and bash 5.3; the table is on savedBy (#5902).
+func TestADialectsOwnCountDecidesWhetherTheFileIsWritten(t *testing.T) {
+	t.Parallel()
+	saved := func(set map[string]string) historyFile {
+		return historyFile{size: 100}.savedBy(vars(set), "SAVEHIST")
+	}
+	for _, tc := range []struct {
+		name  string
+		h     historyFile
+		added []string
+		want  string
+	}{
+		{name: "zero", h: saved(map[string]string{"SAVEHIST": "0"}), added: []string{"c"}, want: "a\nb\nx\n"},
+		{name: "unset, under a HISTSIZE", h: saved(map[string]string{"HISTSIZE": "5"}), added: []string{"c"}, want: "a\nb\nx\n"},
+		{name: "two", h: saved(map[string]string{"SAVEHIST": "2"}), added: []string{"c"}, want: "x\nc\n"},
+		{name: "two, nothing added", h: saved(map[string]string{"SAVEHIST": "2"}), want: "b\nx\n"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			tc.h.path = filepath.Join(t.TempDir(), "hist")
+			if err := os.WriteFile(tc.h.path, []byte("a\nb\nx\n"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			if err := tc.h.save(t.Context(), nil, tc.added, nil, false); err != nil {
+				t.Fatal(err)
+			}
+			data, err := os.ReadFile(tc.h.path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if string(data) != tc.want {
+				t.Errorf("the file holds %q, want %q", data, tc.want)
+			}
+		})
+	}
+	// And a session that names no count is bash's, untouched.
+	if h := (historyFile{file: 7}).savedBy(vars(map[string]string{"SAVEHIST": "0"}), ""); h.file != 7 || h.zeroWritesNothing {
+		t.Errorf("no count named gave %+v, want the file's own bound", h)
+	}
+}

@@ -138,7 +138,9 @@ func TestBlocksEveryShell(t *testing.T) {
 // dialect anyway. A dialect with no entry has no spelling for the rule and is
 // not asked: `sh` has neither, so there is nothing there to honor.
 var ignoreSpaceSetting = map[string]string{
-	"zsh":  "setopt hist_ignore_space\n",
+	// SAVEHIST too, because the premise below reads the history file and a
+	// zsh session with no count writes none (#5902).
+	"zsh":  "SAVEHIST=100\nsetopt hist_ignore_space\n",
 	"bash": "HISTCONTROL=ignorespace\n",
 }
 

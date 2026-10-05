@@ -61,6 +61,10 @@ func HistoryStyle() repl.HistoryStyle {
 		// called `XX`, where bash runs `echo zXXone` and ksh93 `echo zoneXX`.
 		// See repl.HistoryStyle.SearchNewlineAcceptsTheLine.
 		SearchNewlineAcceptsTheLine: true,
+		// And the file is bounded, and written at all, by `SAVEHIST`, whose
+		// zero — the value a session that never set it has — writes nothing.
+		// See repl.HistoryStyle.SaveCountVariable (#5902).
+		SaveCountVariable: "SAVEHIST",
 		// And `C-c` abandons the search rather than the line, like `C-g`.
 		// See repl.HistoryStyle.SearchInterruptAbortsTheSearch.
 		SearchInterruptAbortsTheSearch: true,

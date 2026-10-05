@@ -6450,6 +6450,10 @@ func Diagnostics() interp.Diagnostics {
 		// 2026-10-04 over a `.zshenv` whose last command left 0, 1 and 7,
 		// the `-c` command sees 0, 1 and 7 (#5869).
 		StartupParseFailureStatus: interp.StartupParseStatusKept,
+		// And a script, standard input or a prompt keeps a failing status
+		// over any parse failure: `sh -c "exit 7"` and then `echo )` ends a
+		// script at 7. See interp.FailingStatusKeptOverAnyFailure (#5989).
+		ParseFailureKeepsAFailingStatus: interp.FailingStatusKeptOverAnyFailure,
 		// And a run-time failure in one is located as in a file even at a
 		// prompt: `.zshrc:3: command not found` under `zsh -i`, as under
 		// `zsh -i -c` (#5870).

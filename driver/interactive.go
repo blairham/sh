@@ -468,7 +468,10 @@ func (sh Shell) frontEndWith(r *interp.Runner, name string, dg interp.Diagnostic
 		// parse failure to us and a run-time failure to bash, and it carries
 		// bash's run-time status through here for the same reason it does
 		// through a script.
-		ParseFailureStatus: dg.StatusForParseError,
+		// The status the last command left goes in, which one dialect keeps
+		// over a line that will not parse — see
+		// interp.Diagnostics.ParseFailureKeepsAFailingStatus.
+		ParseFailureStatus: func(err error) int { return dg.StatusForParseErrorAfter(err, r.ExitStatus()) },
 		// And what it says about input it accepted anyway, worded by the same
 		// route: one dialect warns about a here-document the input ran out
 		// inside, at a prompt exactly as in a script, and the prompt had no

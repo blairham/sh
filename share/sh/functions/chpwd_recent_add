@@ -1,0 +1,29 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# chpwd_recent_add directory — puts the directory at the front of the list in
+# reply, taking it out of wherever else it was, unless the recent-dirs-prune
+# style in :chpwd: rules it out: an element pattern:<pattern> is a pattern,
+# always with extended globbing, that a directory to be left out matches;
+# parent drops the directory at the front when the new one is below it.
+# Status 1 when the directory was not added.
+#
+# Written from zshcontrib(1) and from what the installed shell answers, never
+# from its function files; docs/spec/functions.md has the measurements.
+
+emulate -L zsh
+setopt extendedglob
+
+local dir=$1 prune
+local -a prunes
+zstyle -a ":chpwd:${PWD}" recent-dirs-prune prunes
+for prune in $prunes; do
+	if [[ $prune == pattern:* && $dir == ${~prune#pattern:} ]]; then
+		return 1
+	fi
+done
+if (( ${prunes[(Ie)parent]} )) && [[ -n $reply[1] && $dir == ${reply[1]%/}/* ]]; then
+	shift reply
+fi
+reply=( $dir ${reply:#$dir} )
+return 0

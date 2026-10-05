@@ -1,0 +1,112 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# cdr [ N ] | -l | -r | -e | -p pattern | -P pattern
+#
+# Changes to the Nth most recent directory that chpwd_recent_dirs kept, 1 by
+# default; the current directory is kept but not offered. -l lists them,
+# numbered, with ~ put back; -r sets reply to them; -e edits the list; -p and
+# -P take out every one a pattern matches, -p first showing what is left and
+# asking when standard output is a terminal. Styles in :chpwd:, besides the
+# ones chpwd_recent_filehandler reads: recent-dirs-default makes an argument
+# that is not a number, or more than one, go to cd; recent-dirs-pushd uses
+# pushd.
+#
+# Written from zshcontrib(1) and from what the installed shell answers, never
+# from its function files; docs/spec/functions.md has the measurements.
+
+emulate -L zsh
+setopt extendedglob
+
+autoload -Uz chpwd_recent_filehandler chpwd_recent_add
+
+# reply is the caller's: -r hands the list back in it, and anything else
+# leaves it as it was.
+local opt list= give= mode= pattern dir hadreply=${+reply}
+local -a dirs saved
+saved=( "${reply[@]}" )
+integer i
+while getopts lrep:P: opt; do
+	case $opt in
+	(l) list=1 ;;
+	(r) give=1 ;;
+	(e) mode=e ;;
+	(p|P) mode=$opt pattern=$OPTARG ;;
+	(*) return 1 ;;
+	esac
+done
+shift $(( OPTIND - 1 ))
+
+chpwd_recent_filehandler
+local -a all
+all=( $reply )
+dirs=( ${all:#$PWD} )
+if [[ -n $give ]]; then
+	reply=( $dirs )
+elif (( hadreply )); then
+	reply=( "${saved[@]}" )
+else
+	unset reply
+fi
+
+if [[ -n $list ]]; then
+	# ~ is put back by hand, as the (D) flag is not there yet (#5980), so
+	# a directory under a named directory keeps its full name.
+	for (( i = 1; i <= $#dirs; i++ )); do
+		dir=$dirs[i]
+		if [[ $dir == $HOME ]]; then
+			dir='~'
+		elif [[ $dir == $HOME/* ]]; then
+			dir="~/${(q)dir#$HOME/}"
+		else
+			dir=${(q)dir}
+		fi
+		print -r -- "${(r:4:)i} $dir"
+	done
+	return 0
+fi
+[[ -n $give ]] && return 0
+
+case $mode in
+(e)
+	local text=${(F)all}
+	vared -c text || return 1
+	chpwd_recent_filehandler ${(f)text}
+	return
+	;;
+(p|P)
+	local -a kept
+	kept=( ${all:#${~pattern}} )
+	if [[ $mode == p && -t 1 ]]; then
+		print -rl -- $kept
+		read -q "?Prune the list to these? " || { print; return 1 }
+		print
+	fi
+	chpwd_recent_filehandler $kept
+	return 0
+	;;
+esac
+
+if (( $# > 1 )) || [[ $# -eq 1 && $1 != <-> ]]; then
+	if zstyle -t ":chpwd:${PWD}" recent-dirs-default; then
+		if zstyle -t ":chpwd:${PWD}" recent-dirs-pushd; then
+			pushd "$@"
+		else
+			cd "$@"
+		fi
+		return
+	fi
+	print -r -- "Usage: cdr [ N | -l | -r | -e | -p pattern | -P pattern ]; cdr -l lists the directories"
+	return 1
+fi
+
+integer n=${1:-1}
+if (( n < 1 || n > $#dirs )); then
+	print -u2 -r -- "cdr: no directory $n: $#dirs to choose from"
+	return 1
+fi
+if zstyle -t ":chpwd:${PWD}" recent-dirs-pushd; then
+	pushd -- $dirs[n]
+else
+	cd -- $dirs[n]
+fi

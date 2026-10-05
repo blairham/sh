@@ -1,0 +1,31 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# zstyle+ context style value ... [ + subcontext style value ... ] ...
+#
+# zstyle, with a `+` word starting another setting whose context is the first
+# context with the next word added to it: an empty word reuses the first
+# context as it is.
+#
+# Written from zshcontrib(1) and from what the installed shell answers, never
+# from its function files; docs/spec/functions.md has the measurements. The
+# `+` has to be a word of its own, as zsh's has: `+':baz'` written as one
+# word is a value like any other.
+
+local base=$1 context=$1
+local -a setting
+(( $# )) && shift
+while (( $# )); do
+	if [[ $1 == + ]]; then
+		zstyle $context "${setting[@]}"
+		setting=()
+		shift
+		(( $# )) || return 0
+		context=$base$1
+		shift
+		continue
+	fi
+	setting+=( "$1" )
+	shift
+done
+zstyle $context "${setting[@]}"

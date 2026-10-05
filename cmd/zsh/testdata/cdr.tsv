@@ -1,0 +1,42 @@
+# cdr and chpwd_recent_dirs against zsh 5.9.2's own copies: each row is a
+# line typed into zsh -f -i, after the hook is installed, and what standard
+# output held, each newline written ⏎ and nothing at all written
+# (nothing). Measured 2026-10-05 under env -i with
+# PATH=/usr/bin:/bin and a HOME of its own; @D and @H stand for the
+# directories TestCdrAnswersWhatZshAnswers makes.
+cd @D/a; cd @D/b; cd '@D/sp ace'; cd @D/c; cdr -l; print ---; cat $HOME/.chpwd-recent-dirs	1    @D/sp\ ace⏎2    @D/b⏎3    @D/a⏎⏎$'@D/c'⏎$'@D/sp ace'⏎$'@D/b'⏎$'@D/a'⏎
+cd @D/a; cd @D/b; cd @D/c; cdr 2; pwd; cdr -l	@D/a⏎1    @D/c⏎2    @D/b⏎
+cd @D/a; cd @D/b; cd @D/c; cdr; pwd; cdr; pwd	@D/b⏎@D/c⏎
+cd @D/a; cd @D/b; cdr -r; print -l $reply; print ${(t)reply}	@D/a⏎array⏎
+cd @D/a; cdr 5; print st=$?	st=1⏎
+cdr; print st=$?	st=1⏎
+zstyle ':chpwd:*' recent-dirs-default true; cd @D/a; cd @D/b; cdr @D/c; pwd; cdr 1; pwd	@D/c⏎@D/b⏎
+zstyle ':chpwd:*' recent-dirs-max 2; cd @D/a; cd @D/b; cd @D/c; cdr -l; cat $HOME/.chpwd-recent-dirs	1    @D/b⏎$'@D/c'⏎$'@D/b'⏎
+zstyle ':chpwd:*' recent-dirs-prune parent; cd @D; cd @D/a; cdr -l; print ---; cd @D/b; cdr -l	⏎1    @D/a⏎
+zstyle ':chpwd:*' recent-dirs-file $HOME/alt; cd @D/a; cd @D/b; cat $HOME/alt; ls $HOME	$'@D/b'⏎$'@D/a'⏎alt⏎
+cd @D/a; cd @D/b; cd @D/c; cd @D/a; cdr -l	1    @D/c⏎2    @D/b⏎
+cd @D/a; cd @D/b; cd @D/c; cdr -P '*/b'; cdr -l	1    @D/a⏎
+cd @D/a; cd @D/b; cdr -z; print st=$?	st=1⏎
+cd @D/a; (cd @D/b); eval "cd @D/c"; cdr -l	1    @D/a⏎
+f() { cd @D/c }; cd @D/a; f; cdr -l	1    @D/a⏎
+cd @D/a; cd -q @D/b; cdr -l	1    @D/a⏎
+print -r -- "\$'@D/c'" "\$'@D/b'" > $HOME/.chpwd-recent-dirs; cdr -l; cdr 1; pwd	1    @D/c⏎@D/c⏎
+cd ~; cd @D/a; cdr -l	1    ~⏎
+cd @D/a; cd @D/b; cd @D/c; cdr 5; print st=$?	st=1⏎
+cd @D/a; cd @D/b; cdr 9 2>/dev/null; print st=$?	st=1⏎
+chpwd() { chpwd_recent_dirs }; add-zsh-hook -d chpwd chpwd_recent_dirs; cd @D/a; cd @D/b; cdr -l	1    @D/a⏎
+zstyle ':chpwd:*' recent-dirs-prune parent; cd @D/x; cd @D/x/y; cd @D/a; cdr -l	1    @D/x/y⏎
+zstyle ':chpwd:*' recent-dirs-prune parent; cd @D/x/y; cd @D/x; cdr -l	1    @D/x/y⏎
+mkdir -p $HOME/sub\ dir; cd $HOME/sub\ dir; cd @D/a; cdr -l	1    ~/sub\ dir⏎
+cd @D/a; cd @D/b; cdr -p '*/a'; cdr -l	(nothing)
+zstyle ':chpwd:*' recent-dirs-max 0; cd @D/a; cd @D/b; cd @D/c; cd @D/x; cdr -l	1    @D/c⏎2    @D/b⏎3    @D/a⏎
+zstyle ':chpwd:*' recent-dirs-file $HOME/one $HOME/two; print -r -- "\$'@D/x'" > $HOME/two; cd @D/a; cd @D/b; cdr -l; print ---; cat $HOME/one; print ---; cat $HOME/two	1    @D/a⏎2    @D/x⏎⏎$'@D/b'⏎$'@D/a'⏎$'@D/x'⏎⏎$'@D/x'⏎
+zstyle ':chpwd:*' recent-dirs-file $HOME/one +; print -r -- "\$'@D/x'" > $HOME/.chpwd-recent-dirs; cd @D/a; cd @D/b; cdr -l	1    @D/a⏎2    @D/x⏎
+cd @D/a; cd @D/b; cd @D/a; cat $HOME/.chpwd-recent-dirs	$'@D/a'⏎$'@D/b'⏎
+zstyle ':chpwd:*' recent-dirs-default true; cd @D/a; cd @D/b; cdr nosuchdir; print st=$?; pwd	st=1⏎@D/b⏎
+cd @D/a; cd @D/b; cdr -l -r; print $reply	1    @D/a⏎@D/a⏎
+cd @D; cd a; cd ../b; cdr -l	1    @D/a⏎2    @D⏎
+cd @D/a; cd @D/b; reply=(old); cdr -l >/dev/null; print -r -- "$reply"	old⏎
+cd @D/a; cd @D/b; reply=(old); cdr 1; print -r -- "$reply"	old⏎
+cd @D/a; cd @D/b; cd @D/c; cdr -r -l; print -r -- "$reply"	1    @D/b⏎2    @D/a⏎@D/b @D/a⏎
+cd @D/a; cd @D/b; reply=(old); cdr -P '*/a'; print -r -- "$reply"	old⏎

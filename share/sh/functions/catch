@@ -1,0 +1,23 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# catch exception-pattern — in the always part of `{ ... } always { ... }`,
+# status 0 when an exception was thrown and its name matches the pattern,
+# which also clears the error so that the script carries on after the always
+# part; status 1 otherwise. CAUGHT is set to the name. A shell error that was
+# not thrown matches the empty pattern. Loading it also defines the alias
+# that keeps the pattern from being taken as a glob.
+#
+# Written from zshcontrib(1) and from what the installed shell answers, never
+# from its function files; docs/spec/functions.md has the measurements.
+
+alias catch='noglob catch'
+
+(( TRY_BLOCK_ERROR > 0 )) || return 1
+if [[ ${EXCEPTION-} == ${~1} ]]; then
+	typeset -g CAUGHT="${EXCEPTION-}"
+	unset EXCEPTION
+	(( TRY_BLOCK_ERROR = 0 ))
+	return 0
+fi
+return 1

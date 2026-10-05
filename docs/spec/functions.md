@@ -867,12 +867,81 @@ Differences, each on purpose:
 Found on the way: a `:#` filter over a nested, quoted command substitution
 subscripts as a scalar (#5978), which the function works around.
 
+### `cdr`, `chpwd_recent_dirs` and their helpers
+
+`chpwd_recent_dirs` is a chpwd hook that keeps a list of the directories
+changed to, newest first, in `${ZDOTDIR:-$HOME}/.chpwd-recent-dirs`. `cdr N`
+goes back to the Nth of them. `chpwd_recent_filehandler` reads and writes the
+file, and `chpwd_recent_add` puts a directory at the front. The hook keeps a
+change only in an interactive shell, so these were measured by typing into
+`zsh -f -i` on a pipe. The 36 rows are committed as `cmd/zsh/testdata/cdr.tsv`
+and run against this copy through the same kind of session by
+`cmd/zsh/cdr_test.go`.
+
+| what | zsh 5.9.2 |
+| --- | --- |
+| which changes are kept | a `cd` at the prompt, with the hook called as a hook or from a `chpwd` function; not one made by a function the line called, by `eval`, in a subshell, or with `cd -q` |
+| the file | one directory a line, quoted as `$'…'`; a directory already there moves to the front |
+| `cdr -l` | `N` padded to four, a space, the directory quoted with `~` put back; the current directory is not offered |
+| `cdr`, `cdr N` | the first, or the Nth |
+| `cdr -r` | `reply` set to the list, nothing printed; without `-r`, `reply` is left alone |
+| `cdr -P pattern` | every directory the pattern matches taken out; `-p` is the same when standard output is not a terminal |
+| `recent-dirs-max` | 20 by default; 0 or less, no limit |
+| `recent-dirs-file` | several files: the first is written, the rest are read after it, and `+` is the default file |
+| `recent-dirs-prune parent` | a change straight down drops the directory it came from |
+| `recent-dirs-default` | a word that is not a number, or more than one, goes to `cd` |
+
+Differences:
+* **`pattern:` prune elements are zsh patterns here, as the manual says.**
+  zsh's copy hands them to the regular-expression matcher, which on this
+  machine refuses the manual's own example `pattern:/tmp(|/*)` (`failed to
+  compile regex`) and keeps the directory anyway.
+* When there are fewer directories than asked for, zsh says `Not enough
+  directories (-1 possibilities)` with -1 whatever the count. Here the
+  message is this file's own and gives the real count. The usage is this
+  file's own too. Both go to the same streams as zsh's: standard error for
+  the first, standard output for the usage.
+* `cdr -l` puts `~` back for `$HOME` only. The `(D)` flag that would also
+  put back a named directory is not implemented yet (#5980).
+* With `recent-dirs-pushd`, zsh's `pushd` prints the stack in an interactive
+  shell. This shell's does not yet (#5982).
+* `cdr -e` edits the list with `vared`. It has no row, because there is no
+  terminal to edit at.
+
+### `catch`, `throw`
+
+Exceptions on top of `{ … } always { … }`. `throw name` raises an error
+carrying the name, and `catch pattern` in the always part answers 0 if the
+name matches, clearing the error so the script carries on. 15 rows, measured
+against zsh's own copies, are committed in `dialect/zsh/testdata/contrib5.tsv`
+together with the rows below them. What they show:
+
+* an exception thrown from a nested function lands in the nearest always
+  part;
+* a `throw` in the always part outlives it, as an error in the try part
+  would, so one caught there can be thrown on;
+* `catch` outside an always part, or after a try part that raised nothing,
+  answers 1 and sets nothing;
+* after a catch, `CAUGHT` holds the name and `EXCEPTION` is unset;
+* an unhandled exception ends the script, at status 1;
+* the `noglob` alias for `catch` exists only once `catch` has run, so before
+  that an unquoted pattern is globbed.
+
+### `zmathfunc`, `zstyle+`
+
+`zmathfunc` defines `min` and `max` (one argument or more) and `sum` (none or
+more), for integers and floats mixed. Of two equal arguments the first wins:
+`min(2, 2.0)` is `2`. `zstyle+ context style value + subcontext style value …`
+sets each style with the first context, plus the word after a `+` when there
+is one. As in zsh, the `+` has to be a word of its own: the manual's
+`+':baz'`, written as one word, is just a value.
+
 ## What is not shipped, and why
 
 #5894 is shipping the contrib functions in batches, most used first, and the
-ones not yet written are listed here until they are. Next: `cdr` and its
-helpers, `catch` and `throw`, `zmathfunc` and `zstyle+`, then the smaller
-widgets.
+ones not yet written are listed here until they are. Next: the smaller
+widgets, `history-search-end`, `smart-insert-last-word`, `copy-earlier-word`
+and `incarg`.
 
 `zed` is not shipped yet. It edits a file or a function in the line editor
 under a keymap of its own, built from `main` with `bindkey -N` and selected

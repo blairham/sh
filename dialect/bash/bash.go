@@ -3835,6 +3835,10 @@ func Semantics() interp.Semantics {
 	// `(exit 5)` as the last line leaves 5. So the file's status does
 	// carry out and the number on the `return` does not.
 	s.StartupFileReturnCarriesItsArgument = interp.No
+	// A startup file that runs no command keeps the status before it: measured,
+	// an empty `$BASH_ENV` after a `.bash_profile` of `false` leaves 1 for
+	// `bash -l -c` (#5883).
+	s.StartupFileThatRunsNothingLeavesZero = interp.No
 	s.LoneDashIsAnOption = interp.No
 	s.UnsetFunctionChecksTheName = interp.No
 	s.UnsetFunctionReportsMissing = interp.No

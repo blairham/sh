@@ -10679,6 +10679,37 @@ type Semantics struct {
 	// frame rather than of `return`.
 	StartupFileReturnCarriesItsArgument Answer
 
+	// StartupFileThatRunsNothingLeavesZero makes a startup file with no
+	// command in it — empty, blank, or comments only — leave `$?` as 0,
+	// instead of leaving the status the file before it left. True in zsh
+	// alone.
+	//
+	// Measured 2026-10-05 with an earlier startup file whose last command was
+	// `false` and a later one holding nothing, reading `$?` in the command or
+	// at the first prompt:
+	//
+	//	shell        files                              empty  comment  `true`
+	//	zsh 5.9.2    .zshenv, then .zshrc (-i -c)           0        0       0
+	//	zsh 5.9.2    .zshenv, then .zlogin (-l -i -c)       0        0       0
+	//	bash 5.3.20  .bash_profile, then $BASH_ENV (-l -c)  1        1       0
+	//	bash 3.2     the same                               1        —       —
+	//	dash 0.5.12  .profile, then $ENV (-l -i -c)         1        —       0
+	//	ksh93u+      the same                               1        —       0
+	//	BusyBox ash  the same, measured 2026-10-04           1        —       —
+	//
+	// zsh's answer is the one `.` gives in every column — `false; . empty.sh`
+	// ends at 0 everywhere — so this is about a startup file and not about
+	// reading nothing. It is not a fresh status either: `$?` read inside a
+	// `.zshrc` after a `.zshenv` of `false` is 1, so the status is carried
+	// into the file and cleared only when the file turns out to have run no
+	// command. A file that is not there clears nothing, in zsh too.
+	//
+	// Asked only where it matters: when the file ran no command and the
+	// status it found is not already 0. A line that will not parse is not
+	// this question — Diagnostics.StartupParseFailureStatus answers that one
+	// (#5883).
+	StartupFileThatRunsNothingLeavesZero Answer
+
 	// UnknownConditionOptionIsAStatus makes `[[ -o name ]]` with a name this
 	// shell does not have a status of its own with a complaint, instead of
 	// the plain false that a name it has but has not set would give. True in

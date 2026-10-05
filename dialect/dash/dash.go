@@ -2151,6 +2151,10 @@ func Semantics() interp.Semantics {
 	// bash leaves 0 and 1. A `return` with no argument means the last
 	// command's status here as everywhere.
 	s.StartupFileReturnCarriesItsArgument = interp.Yes
+	// A startup file that runs no command keeps the status before it: measured,
+	// an empty `$ENV` after a `.profile` of `false` leaves 1 for `dash -l -i -c`
+	// (#5883).
+	s.StartupFileThatRunsNothingLeavesZero = interp.No
 	s.LoneDashIsAnOption = interp.No
 	// `-t`'s operand is a number this shell could not read rather than an
 	// expression it evaluated: measured in dash 0.5.12, `x=0; [ -t x ]`

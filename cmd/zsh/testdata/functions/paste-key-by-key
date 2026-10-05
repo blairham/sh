@@ -1,0 +1,38 @@
+# A paste widget that takes its paste back a key at a time, written for this
+# shell's tests from zsh's documented zle interface (zshzle(1)). It asks for
+# what the paste functions zsh distributes ask for, so that a session can be
+# driven through that machinery without shipping or reading one of them:
+#
+#   - it is loaded with `autoload -Uz` and runs itself only when
+#     $zsh_eval_context ends in `loadautofunc`, so its first call is the load;
+#   - it stores the paste with `zle .bracketed-paste NAME`;
+#   - it notes $UNDO_CHANGE_NO, splits the undo there and empties the line;
+#   - it pushes the paste back with `zle -U -` and reads it with
+#     `zle .read-command`, typing each key with `zle self-insert -w` or
+#     `zle .self-insert` according to what $REPLY says it is bound to;
+#   - it selects the keymap it started in with `zle -K`, undoes back to the
+#     change it noted, and inserts what it built as one paste, by pushing it
+#     back with the closing marker and calling `zle .bracketed-paste --`.
+
+paste-key-by-key() {
+  local pasted REPLY
+  zle .bracketed-paste pasted || return
+  integer start=$UNDO_CHANGE_NO
+  zle .split-undo
+  BUFFER=
+  zle -U - "$pasted"
+  while [[ -n $pasted ]] && zle .read-command; do
+    pasted=${pasted#"$KEYS"}
+    case $REPLY in
+      (self-insert) zle self-insert -w ;;
+      (*) zle .self-insert ;;
+    esac
+  done
+  pasted=$BUFFER
+  zle -K main
+  zle .undo $start
+  zle -U - "$pasted"$'\e[201~'
+  zle .bracketed-paste --
+}
+
+[[ $zsh_eval_context == *loadautofunc ]] && paste-key-by-key "$@"

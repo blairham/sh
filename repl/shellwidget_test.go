@@ -51,7 +51,7 @@ func TestAShellActionIsGivenTheLineAndItsAnswerIsTaken(t *testing.T) {
 		saw = in
 		return Line{Buffer: "rewritten", Cursor: 3}, true
 	}, "abc\a\n")
-	if saw != (Line{Buffer: "abc", Cursor: 3, Last: LastWidget{Widget: WidgetSelfInsert, Known: true}}) {
+	if saw != (Line{Buffer: "abc", Cursor: 3, Last: LastWidget{Widget: WidgetSelfInsert, Known: true}, Keys: "\a"}) {
 		t.Errorf("the action was given %+v, want the typed line with the cursor at its end", saw)
 	}
 	if want := "rewritten"; got != want {

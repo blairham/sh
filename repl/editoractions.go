@@ -3,7 +3,11 @@
 
 package repl
 
-import "context"
+import (
+	"context"
+	"slices"
+	"unicode/utf8"
+)
 
 // The editor, reached from inside an action the shell is running.
 //
@@ -101,6 +105,35 @@ type Actions interface {
 	// it was. The text is the same text Perform would have inserted, line
 	// endings as newlines, by the same reader — see paste.go.
 	Paste() string
+
+	// ReadKeyByte reads the next byte of input the way the editor reads the
+	// first byte of a key — what was pushed back before the terminal — and
+	// hands it over without acting on it. false is input that has ended.
+	//
+	// For an action that reads a key sequence of its own and decides what it
+	// means: zsh's `read-command`, which a widget calls to learn what the
+	// next key would run without running it. Nothing is read past and nothing
+	// is turned into an abandoned line: a `^C` among keys pushed back is a
+	// byte of what was pushed, as it is in a paste.
+	ReadKeyByte() (byte, bool)
+
+	// InputPending reports whether a byte is already in hand, pushed back or
+	// delivered, so that reading one more would not wait on the terminal.
+	// It is what decides whether a key that is complete as read, and also
+	// the start of a longer one, is read on.
+	InputPending() bool
+
+	// ChangeNumber closes the change the line is in and reports its number:
+	// a later change is a new one, and UndoTo with this number puts the line
+	// back as it stands now. zsh's `UNDO_CHANGE_NO`, and its `split-undo`,
+	// which is the same closing with the number not asked for.
+	ChangeNumber(in Line) int
+
+	// UndoTo takes back every change made since the one numbered n, and
+	// hands back the line it left. zsh's `zle undo N`. false is a number
+	// below the first change, which takes the line back to how it began and
+	// says so. See undo.go.
+	UndoTo(n int, in Line) (Line, bool)
 }
 
 // performable reports whether an action can be run from outside the editor.
@@ -169,6 +202,32 @@ func (a editorActions) Paste() string {
 	return string(text)
 }
 
+func (a editorActions) ReadKeyByte() (byte, bool) {
+	var buf [1]byte
+	for {
+		n, err := a.e.nextByte(buf[:])
+		if err != nil {
+			return 0, false
+		}
+		if n == 1 {
+			return buf[0], true
+		}
+	}
+}
+
+func (a editorActions) InputPending() bool { return a.e.inputPending() }
+
+func (a editorActions) ChangeNumber(in Line) int {
+	a.e.take(in)
+	return a.e.changeNumber()
+}
+
+func (a editorActions) UndoTo(n int, in Line) (Line, bool) {
+	a.e.take(in)
+	reached := a.e.undoTo(n)
+	return a.e.give(), reached
+}
+
 // take adopts the line an action outside the editor is holding, and give hands
 // it back.
 //
@@ -181,14 +240,68 @@ func (a editorActions) Paste() string {
 // still has it afterwards in zsh 5.9.2, measured 2026-10-04, and an editor
 // that kept its own copy handed back the one from before the widget ran —
 // the empty string, on every keystroke that had not drawn one yet (#5864).
+//
+// **What the action did to the line is a change**, kept the way a key's is,
+// so that an undo asked for afterwards can take it back. Measured 2026-10-04
+// against zsh 5.9.2 through a pseudo-terminal, a widget on the line `xy`
+// running `BUFFER=one; zle .split-undo; LBUFFER+=two; zle .undo` is left with
+// `one`: the assignments were each a change. Taking the line over silently
+// left the stack holding only what keys had done, so an undo inside a widget
+// took back the last key before it instead.
+//
+// And the keys the action says it is about, where they are not the ones this
+// keystroke read: `read-command` reads a key for a widget, and a `zle
+// self-insert` after it inserts *that* key. See adoptKeys.
 func (e *editor) take(in Line) {
-	e.line = []rune(in.Buffer)
+	line := []rune(in.Buffer)
+	if !slices.Equal(line, e.line) {
+		e.changes = append(e.changes, snapshot{line: e.line, pos: e.pos})
+	}
+	e.line = line
 	e.pos = min(max(in.Cursor, 0), len(e.line))
 	e.postdisplay = in.Postdisplay
+	if in.Keys != "" && in.Keys != string(e.keyBytes) {
+		e.adoptKeys(in.Keys)
+	}
 }
 
 func (e *editor) give() Line {
-	return Line{Buffer: string(e.line), Cursor: e.pos, Postdisplay: e.postdisplay, Last: e.last, ViCommand: e.viCommand, Numeric: e.keyNumeric}
+	return Line{Buffer: string(e.line), Cursor: e.pos, Postdisplay: e.postdisplay, Last: e.last, ViCommand: e.viCommand, Numeric: e.keyNumeric, Keys: string(e.keyBytes)}
+}
+
+// adoptKeys makes keys an action read the ones a self-insert types.
+//
+// A byte at a time where the keys are part of a character, because that is
+// how they arrive: measured 2026-10-04 against zsh 5.9.2, `read-command` over
+// a pushed `é` answers twice, `self-insert` with one byte in `$KEYS` each
+// time. So the first half is held and types nothing, and the second completes
+// the character. Otherwise the last character of the keys is what is typed.
+//
+// A line ending types a newline, which is what a paste puts in the line for
+// one — see pastedRunes — and is the case a paste read a key at a time
+// arrives with: zsh's paste function runs `zle .self-insert` for every pasted
+// key whose own widget it does not run, the newlines among them, so that the
+// paste stays text. Any other control character types nothing, which is what
+// this editor does with one pressed and with one pasted.
+func (e *editor) adoptKeys(keys string) {
+	if len(e.partialKey) > 0 || len(keys) == 1 && keys[0] >= utf8.RuneSelf {
+		e.partialKey = append(e.partialKey, keys...)
+		e.typedKey = 0
+		if !utf8.FullRune(e.partialKey) {
+			return
+		}
+		keys, e.partialKey = string(e.partialKey), nil
+	}
+	r, _ := utf8.DecodeLastRuneInString(keys)
+	if r == '\r' || r == '\n' {
+		e.typedKey = '\n'
+		return
+	}
+	if r == utf8.RuneError || r < 0x20 || r == del {
+		e.typedKey = 0
+		return
+	}
+	e.typedKey = r
 }
 
 // actionsKey is how the handle rides the widget call's context. A private type

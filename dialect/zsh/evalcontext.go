@@ -41,6 +41,28 @@ import (
 //	eval inside eval                  …:eval:eval
 //	a function inside a sourced file  toplevel:file:shfunc
 //
+// # Loading a function is on the stack too, once
+//
+// Measured 2026-10-04 the same way, with each function in a file on `$fpath`
+// and `autoload -Uz` (or `-Uk`) ahead of the calls, reading
+// `$zsh_eval_context` under `zsh -c`:
+//
+//	first call of a -z function           cmdarg shfunc loadautofunc
+//	second call of it                     cmdarg shfunc
+//	a function the body calls, first call cmdarg shfunc loadautofunc shfunc
+//	a file holding only the definition    cmdarg shfunc loadautofunc
+//	a -k file, while it runs              cmdarg shfunc evalautofunc
+//	the definition it left, first call    cmdarg shfunc loadautofunc
+//
+// So the word is pushed over the call's own `shfunc` for the run of the body
+// the load produced, and only on the call that loaded it. It is what a
+// function file reads to know the load is what is running it: zsh's own
+// contributed functions end in `[[ $zsh_eval_context = *loadautofunc ]]` and
+// call the function they just defined only when that holds, so without the
+// word their first call defined everything and did nothing. That was #5880 —
+// `bracketed-paste-magic` bound as the paste widget let the first paste of a
+// session through as typed keys, newline and all.
+//
 // **The apparatus is in the answer**, which is why the table is written with
 // its own shape beside each row. A sweep that wraps every cell in a command
 // substitution — the obvious way to keep going past a name that might refuse
@@ -138,4 +160,6 @@ var evalContextWord = map[interp.EvalContext]string{
 	interp.EvalContextProcessSubstitutionRead:  "outsubst",
 	interp.EvalContextProcessSubstitutionWrite: "insubst",
 	interp.EvalContextTempFileSubstitution:     "equalsubst",
+	interp.EvalContextAutoloadedBody:           "loadautofunc",
+	interp.EvalContextAutoloadedFile:           "evalautofunc",
 }

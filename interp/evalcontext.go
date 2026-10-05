@@ -53,6 +53,16 @@ const (
 	// EvalContextTempFileSubstitution is `=( … )`, the spelling with a file
 	// where the other two have a pipe.
 	EvalContextTempFileSubstitution
+	// EvalContextAutoloadedBody is a function's body on the call that loaded
+	// it: the first call of a name declared for loading, which reads the
+	// function's file and runs what it defined, and no call after that. One
+	// dialect publishes it, and a function file reads it to tell the call
+	// that loaded it apart from being sourced or run as a script.
+	EvalContextAutoloadedBody
+	// EvalContextAutoloadedFile is a function's file being run as a script
+	// so that it can define the function, which is what a ksh-style load
+	// does before it runs the definition the file left.
+	EvalContextAutoloadedFile
 )
 
 // EvalContextStack is the stack outermost first, with the route's own entry
@@ -88,6 +98,13 @@ func (r *Runner) enterEvalContext(c EvalContext) func() {
 		}
 	}
 }
+
+// EnterEvalContext is enterEvalContext for a dialect, whose construct the
+// core cannot see: loading a function is a dialect's builtin running a body
+// the core was handed, so it is the dialect that knows when that body is the
+// one the load is running. Written `defer r.EnterEvalContext(c)()` for the
+// reason enterEvalContext gives.
+func (r *Runner) EnterEvalContext(c EvalContext) func() { return r.enterEvalContext(c) }
 
 // pushEvalContext is enterEvalContext for a context that ends with the runner
 // it is pushed on: a substitution's body runs in a clone, so the entry goes

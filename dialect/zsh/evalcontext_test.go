@@ -127,3 +127,58 @@ func TestTheCommandStringRouteNamesItself(t *testing.T) {
 		t.Errorf("got %q, want %q", out, want)
 	}
 }
+
+// TestLoadingAFunctionIsOnTheStackOnce — `loadautofunc` over the call's own
+// `shfunc` on the call that loads a function, and on no call after it; and
+// `evalautofunc` while a ksh-style file runs to define its function (#5880).
+//
+// Measured 2026-10-04 against `/opt/homebrew/bin/zsh` — `zsh 5.9.2
+// (aarch64-apple-darwin25.4.0)` — with these files on `$fpath`, every row
+// below byte-identical. The word is what zsh's own function files test to
+// decide whether to call the function they have just defined, so without it
+// a function written that way did nothing on its first call: the paste widget
+// in #5880 let the first paste of a session through as typed keys.
+//
+// The second call of each name is the control: a stack that always ended in
+// the word, rather than ending in it for the load, passes every first row.
+func TestLoadingAFunctionIsOnTheStackOnce(t *testing.T) {
+	dir := t.TempDir()
+	for name, text := range map[string]string{
+		// A body, which is what `-z` reads a file as.
+		"lbody": "print -r -- \"body [$ZSH_EVAL_CONTEXT]\"\n",
+		// A body that calls a function, which sees the word beneath its own.
+		"lnest": "g\n",
+		// A file that is nothing but the definition, which is the function.
+		"ldef": "ldef() { print -r -- \"def [$ZSH_EVAL_CONTEXT]\" }\n",
+		// The idiom zsh's own function files end with.
+		"lidiom": "lidiom() { print -r -- \"idiom ran $*\" }\n" +
+			"[[ $zsh_eval_context == *loadautofunc ]] && lidiom \"$@\"\n",
+		// A ksh-style file, which runs as a script and then has its
+		// definition called.
+		"lksh": "print -r -- \"file [$ZSH_EVAL_CONTEXT]\"\n" +
+			"lksh() { print -r -- \"ksh [$ZSH_EVAL_CONTEXT]\" }\n",
+	} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(text), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	src := "fpath=(" + dir + ")\n" +
+		"g() { print -r -- \"g [$ZSH_EVAL_CONTEXT]\" }\n" +
+		"autoload -Uz lbody lnest ldef lidiom\nautoload -Uk lksh\n" +
+		"lbody; lbody\nlnest; lnest\nldef; ldef\nlidiom a; lidiom b\nlksh; lksh\n"
+	out, _ := runZsh(t, dir, src)
+	want := "body [toplevel:shfunc:loadautofunc]\n" +
+		"body [toplevel:shfunc]\n" +
+		"g [toplevel:shfunc:loadautofunc:shfunc]\n" +
+		"g [toplevel:shfunc:shfunc]\n" +
+		"def [toplevel:shfunc:loadautofunc]\n" +
+		"def [toplevel:shfunc]\n" +
+		"idiom ran a\n" +
+		"idiom ran b\n" +
+		"file [toplevel:shfunc:evalautofunc]\n" +
+		"ksh [toplevel:shfunc:loadautofunc]\n" +
+		"ksh [toplevel:shfunc]\n"
+	if out != want {
+		t.Errorf("got\n%s\nwant\n%s", out, want)
+	}
+}

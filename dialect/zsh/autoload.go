@@ -797,7 +797,7 @@ func autoloadKshStyle(r *interp.Runner, ctx context.Context, name string, dirs [
 		return 1
 	}
 	installed, _ := r.FunctionText(name)
-	if _, err := autoloadKshRun(r, ctx, name, stub); err != nil {
+	if _, err := autoloadKshRun(r, ctx, name, stub, interp.EvalContextAutoloadedFile); err != nil {
 		r.Diagnosef("%s: %v\n", name, err)
 		return 1
 	}
@@ -810,7 +810,7 @@ func autoloadKshStyle(r *interp.Runner, ctx context.Context, name string, dirs [
 		})
 		return 1
 	}
-	if _, err := autoloadKshRun(r, ctx, name, stub); err != nil {
+	if _, err := autoloadKshRun(r, ctx, name, stub, interp.EvalContextAutoloadedBody); err != nil {
 		r.Diagnosef("%s: %v\n", name, err)
 		return 1
 	}
@@ -820,8 +820,14 @@ func autoloadKshStyle(r *interp.Runner, ctx context.Context, name string, dirs [
 // autoloadKshRun runs a name's body in the call's own frame where the stub
 // opened one, and calls it with the replaced function's arguments otherwise
 // — the split autoloadRunResolved makes, for the reason it gives.
-func autoloadKshRun(r *interp.Runner, ctx context.Context, name string, stub bool) (bool, error) {
+//
+// inside is what the run is on the stack `$zsh_eval_context` reads: the file
+// running so that it can define the name, and then the definition it left.
+// Pushed only where the body runs in the stub's own frame, for the reason
+// autoloadRunResolved gives.
+func autoloadKshRun(r *interp.Runner, ctx context.Context, name string, stub bool, inside interp.EvalContext) (bool, error) {
 	if stub {
+		defer r.EnterEvalContext(inside)()
 		return r.RunFunctionBodyInPlace(ctx, name)
 	}
 	args := append([]string(nil), r.Params...)
@@ -947,6 +953,15 @@ func autoloadRunResolved(r *interp.Runner, ctx context.Context, name string, stu
 			// No arguments: the frame the body is running in is the call's
 			// own, so its positional parameters already are the ones the
 			// declaration's name was called with.
+			//
+			// And the run is the load's, which `$zsh_eval_context` says by
+			// a word over the frame's own — see dialect/zsh/evalcontext.go
+			// for the measurement, and for the function file that does
+			// nothing on its first call without it (#5880). Not on the
+			// hand-written spelling below: the word belongs over the body's
+			// frame, and that call opens its frame inside CallFunction,
+			// after anything pushed here.
+			defer r.EnterEvalContext(interp.EvalContextAutoloadedBody)()
 			return r.RunFunctionBodyInPlace(ctx, name)
 		}
 		// A copy, because the call replaces r.Params for the length of the

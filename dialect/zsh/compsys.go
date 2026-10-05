@@ -7,6 +7,7 @@ import (
 	"context"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/blairham/sh/interp"
 	"github.com/blairham/sh/repl"
@@ -192,9 +193,20 @@ func RunCompletion(
 	// takes the completers to try as its arguments, so a widget name arrived
 	// as one and came back as `command not found: expand-or-complete`. The
 	// name is still reachable, as `$WIDGET`.
-	_, err := r.CallFunction(withCompletion(ctx, cs), def.function)
+	//
+	// Through runWidgetFunction, so the function has the widget parameters a
+	// key's widget has, read-only as a completion widget's are. Measured
+	// 2026-10-04 through a pseudo-terminal against zsh 5.9.2, with `cf()
+	// { print "W=$WIDGET t=${(t)BUFFER}"; BUFFER=zz; ran=widget }` behind
+	// `zle -C cw complete-word cf` on a key: `W=cw
+	// t=scalar-local-readonly-special`, then `read-only variable: BUFFER`,
+	// the function stops there, and the line is kept. This called the
+	// function bare, so `$WIDGET` was empty, `BUFFER=zz` was an ordinary
+	// assignment, and the function ran on (#5999).
+	in := repl.Line{Buffer: c.Line, Cursor: utf8.RuneCountInString(c.Line[:min(max(c.Point, 0), len(c.Line))])}
+	_, ran := runWidgetFunction(r, withCompletion(ctx, cs), name, in)
 	r.SetExitStatus(status)
-	if err != nil {
+	if !ran {
 		return nil
 	}
 	return cs.groupedMatches()

@@ -89,6 +89,8 @@ func (r *Runner) RunStartupFile(ctx context.Context, path, src string, failed fu
 	// shell — see Frame.Startup.
 	r.pushFrame(Frame{File: path, Startup: true})
 	defer r.popFrame()
+	r.startupDepth++
+	defer func() { r.startupDepth-- }()
 	// A file, in the dialect that locates one as a file at a prompt too, so
 	// a prompt's wording does not reach the lines in it. The same counter a
 	// sourced file raises — see Runner.promptLocated and

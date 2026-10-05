@@ -22609,6 +22609,42 @@ type Semantics struct {
 	// family of a diagnostic.
 	ParamErrorIsAnExitRequest Answer
 
+	// SourcedFileContinuesTheStartupLineCount numbers a file `.` reads from
+	// a startup file on from the startup file's own count, and moves that
+	// count on by every line the sourced file held, instead of numbering
+	// each file from its own first line. True in ksh93 alone.
+	//
+	// Measured 2026-10-05 with `$ENV` (or `$BASH_ENV`, `.zshenv`) of
+	// `nosuch1`, `. ./a.sh`, `nosuch3`, and a.sh three lines whose second
+	// and third fail:
+	//
+	//	ksh93u+, -E and -i   @: nosuch1, @[2]: .: line 4: noA2,
+	//	                     @[2]: .: line 5: noA3, @: line 6: nosuch3
+	//	bash 5.3.20          ./a.sh: line 2, line 3; @: line 3
+	//	zsh 5.9.2            ./a.sh:2, ./a.sh:3; .zshenv:3
+	//	BusyBox ash 1.37.0   ./a.sh: line 2, line 3; nosuch3 (no line)
+	//
+	// So in ksh93 a.sh's line n reads as the `.`'s line plus n, and the
+	// startup file's lines after it read three higher; a second `.` on its
+	// line 4 is `[7]`, and its file's line 2 is 9. A four-line file moves
+	// the count by four, blank lines included. `eval` moves nothing, and a
+	// script's `.` numbers the file from one as everywhere (#6013).
+	//
+	// Asked only of a `.` inside a startup file.
+	//
+	// unpinned bash: no corpus row reads a startup file that sources; pinned
+	// by the measurement above.
+	//
+	// unpinned zsh: the same reach.
+	//
+	// unpinned dash: the same reach.
+	//
+	// unpinned ash: the same reach.
+	//
+	// unpinned ksh: the same reach; pinned by
+	// TestAFileSourcedFromEnvContinuesItsLineCount.
+	SourcedFileContinuesTheStartupLineCount Answer
+
 	// StartupFileErrorWhenInteractive is what a fatal error in a startup file
 	// costs in an interactive shell: the file, with `${x?word}` still read
 	// the way ParamErrorIsAnExitRequest reads it (the zero value, zsh's);

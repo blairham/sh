@@ -1744,6 +1744,9 @@ func Semantics() interp.Semantics {
 	s.WaitReportsAMissingJob = interp.Yes
 	// Measured 2026-10-01: a finished job stays in the table until reported: `(exit 4) & sleep 0.3; wait %%` is 4. See Semantics.FinishedJobLeavesTheTable.
 	s.FinishedJobLeavesTheTable = interp.No
+	// A file `.` reads from a startup file is numbered from its own first line (#6013). See
+	// Semantics.SourcedFileContinuesTheStartupLineCount.
+	s.SourcedFileContinuesTheStartupLineCount = interp.No
 	// A fatal error in an interactive shell's startup file: dash gives up the rest of `$ENV`, `${x?word}` included, and draws its prompt (#6009).
 	// See Semantics.StartupFileErrorWhenInteractive.
 	s.StartupFileErrorWhenInteractive = interp.StartupErrorCostsTheFileWhatever

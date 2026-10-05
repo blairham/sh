@@ -515,7 +515,7 @@ func (sh Shell) frontEndWith(r *interp.Runner, name string, dg interp.Diagnostic
 		// And what it writes as the session ends, which is one word in one
 		// dialect and nothing at all in the rest.
 		// See Diagnostics.LeavingAPromptSession.
-		Leaving: leavingWord(dg, r.LoginShell),
+		Leaving: leavingWord(dg, r != nil && r.LoginShell),
 		Style:   sh.PromptStyle,
 		Editor:  sh.EditorStyle,
 		History: sh.HistoryStyle,

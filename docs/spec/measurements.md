@@ -16850,6 +16850,10 @@ y][x][y]`. The row exists because the plausible implementation is a split follow
 | case | dash | bash | bash-as-sh | bash32 | ksh93 | zsh | ash |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `exec/a-command-is-named-as-it-was-written` | `basename: illegal option -- -` | `basename: illegal option -- -` | `basename: illegal option -- -` | `basename: illegal option -- -` | `basename: illegal option -- -` | `basename: illegal option -- -` | `basename: unrecognized option: bad` |
+| `hash/a-hit-from-a-relative-entry` | `rel~rel~b3/qq~st=0~b3/qq` | `rel~rel~hits	command~   2	b3/qq~st=0~hits	command~   0	b3/qq` | `rel~rel~hits	command~   2	b3/qq~st=0~hits	command~   0	b3/qq` | `rel~rel~hits	command~   2	b3/qq~st=0~hits	command~   0	b3/qq` | `rel~rel~qq=D/b3/qq~st=0~qq=D/b3/qq` | `rel~rel~qq=D/b2/qq~<shell>:hash:3: no such command: qq~st=1` | `rel~rel~b3/qq~st=0~b3/qq` |
+| `hash/a-current-directory-hit-in-the-listing` | `./qq~qq~.//qq` | `hits	command~   1	./qq~hits	command~   1	./qq~hits	command~   1	./qq` | `hits	command~   1	./qq~hits	command~   1	./qq~hits	command~   1	./qq` | `hits	command~   1	./qq~hits	command~   1	./qq~hits	command~   1	./qq` | `qq=qq~qq=qq~qq=D/./qq` | *(no output, status 0)* | `./qq~qq~.//qq` |
+| `hash/a-remembered-relative-path-is-reported` | `b3/qq~qq is a tracked alias for b3/qq~<shell>: 2: hash: Illegal option -t` *(status 2)* | `./b3/qq~qq is hashed (./b3/qq)~./b3/qq` | `./b3/qq~qq is hashed (./b3/qq)~./b3/qq` | `./b3/qq~qq is hashed (./b3/qq)~./b3/qq` | `<tmp>/b3/qq~qq is a tracked alias for <tmp>/b3/qq~alias: -t: bad option(s)` *(status 1)* | `b3/qq~qq is b3/qq~<shell>:hash:2: bad option: -t` *(status 1)* | `b3/qq~qq is b3/qq~<shell>: hash: line 1: illegal option -t` *(status 2)* |
+| `hash/each-directory-is-listed-once` | `-a: not found~qq is D/b2/qq~<shell>: 3: whence: not found` | `qq is D/b2/qq~qq is D/b4/qq~qq is b2/qq~qq is D/b3/../b2/qq~qq is D/b3/qq~<shell>: line 3: whence: command not found` | `qq is D/b2/qq~qq is D/b4/qq~qq is D/b2/qq~qq is D/b3/../b2/qq~qq is D/b3/qq~<shell>: line 3: whence: command not found` | `qq is D/b2/qq~qq is D/b4/qq~qq is b2/qq~qq is D/b3/../b2/qq~qq is D/b3/qq~<shell>: line 2: whence: command not found` | `qq is a tracked alias for D/b2/qq~qq is D/b3/qq~qq is a tracked alias for D/b2/qq~qq is D/b3/qq` | `qq is D/b2/qq~qq is D/b4/qq~qq is b2/qq~qq is D/b3/../b2/qq~qq is D/b3/qq~D/b2/qq~D/b4/qq~b2/qq~D/b3/../b2/qq~D/b3/qq` | `D/b2/qq~<shell>: whence: not found` |
 | `exec/a-script-is-started-by-the-spelling-its-shell-joined` | `0=z0~0=z0~0=./z0~0=./z0~0=.//z0~0=deep/../z0~0=./deep/../z0~0=../sub//z0` | `0=./z0~0=./z0~0=./z0~0=./z0~0=./z0~0=deep/../z0~0=./deep/../z0~0=../sub//z0` | `0=./z0~0=./z0~0=./z0~0=./z0~0=./z0~0=deep/../z0~0=./deep/../z0~0=../sub//z0` | `0=./z0~0=./z0~0=./z0~0=./z0~0=./z0~0=deep/../z0~0=./deep/../z0~0=../sub//z0` | `0=z0~0=z0~0=z0~0=z0~0=<tmp>/sub/./z0~0=<tmp>/sub/deep/../z0~0=./deep/../z0~0=../sub//z0` | `0=z0~0=z0~0=z0~0=z0~0=.//z0~0=deep/../z0~0=./deep/../z0~0=../sub//z0` | `0=z0~0=z0~0=./z0~0=./z0~0=.//z0~0=deep/../z0~0=./deep/../z0~0=../sub//z0` |
 | `exec/a-script-exec-starts-by-the-spelling-its-shell-joined` | `0=./z0~0=deep/../z0~0=./deep/../z0` | `0=/private<tmp>/sub/z0~0=/private<tmp>/sub/deep/../z0~0=/private<tmp>/sub/deep/../z0` | `0=/private<tmp>/sub/z0~0=/private<tmp>/sub/deep/../z0~0=/private<tmp>/sub/deep/../z0` | `0=/private<tmp>/sub/z0~0=/private<tmp>/sub/deep/../z0~0=/private<tmp>/sub/deep/../z0` | `0=z0~0=<tmp>/sub/deep/../z0~0=./deep/../z0` | `0=z0~0=deep/../z0~0=./deep/../z0` | `0=./z0~0=deep/../z0~0=./deep/../z0` |
 | `exec/a-file-run-as-a-script-sees-the-spelling-its-shell-joined` | `n0=.//n0~n0=deep/../n0~n0=./n0` | `n0=./n0~n0=deep/../n0~n0=./n0` | `n0=./n0~n0=deep/../n0~n0=./n0` | `n0=./n0~n0=deep/../n0~n0=./n0` | `n0=n0~n0=n0~n0=n0` | `n0=.//n0~n0=deep/../n0~n0=n0` | `n0=.//n0~n0=deep/../n0~n0=./n0` |
@@ -16951,6 +16955,31 @@ y][x][y]`. The row exists because the plausible implementation is a split follow
 - `exec/a-command-is-named-as-it-was-written` — a command names itself from `argv[0]`, and what belongs there is the word that was typed rather than the path PATH resolved to. Unanimous, invisible until something fails, and then it is in the output of a program the shell did not write — which is why a whole-machine run sweep had eighteen lines differing by nothing else
   ```sh
   basename --bad 2>&1 | head -1
+  ```
+- `hash/a-hit-from-a-relative-entry` — what the command table keeps for a command found through a relative PATH entry. zsh keeps none: the relative copy runs both times, the table takes the copy an absolute entry holds, and `hash qq` with only a relative entry holding it finds nothing at 1. The others keep the hit as each spells it — including for an explicit `hash qq`, which wrote the absolute path here in every column (#6069)
+  ```sh
+  mkdir -p b2 b3 && printf '#!/bin/sh\necho rel\n' > b3/qq && printf '#!/bin/sh\necho abs\n' > b2/qq && chmod +x b2/qq b3/qq && P=$PATH
+  PATH=b3:$PWD/b2:$P; qq; qq; hash | sed "s|$PWD|D|"
+  hash -r; PATH=b3:$P; hash qq 2>&1; echo "st=$?"; hash | sed "s|$PWD|D|"
+  ```
+- `hash/a-current-directory-hit-in-the-listing` — the listing of a hit through `.`, an empty entry and `./`. ksh93 lists the first two by the bare name though `command -v` writes the directory in front of them, and lists `./` with it; zsh has nothing to list; the others list the hit as they spell it (#6069)
+  ```sh
+  mkdir -p b2 b3 && printf '#!/bin/sh\necho rel\n' > b3/qq && printf '#!/bin/sh\necho abs\n' > b2/qq && chmod +x b2/qq b3/qq && P=$PATH
+  cd b3
+  PATH=.:$P; qq >/dev/null; hash | sed "s|$PWD|D|"; hash -r
+  PATH=:$P; qq >/dev/null; hash | sed "s|$PWD|D|"; hash -r
+  PATH=./:$P; qq >/dev/null; hash | sed "s|$PWD|D|"
+  ```
+- `hash/a-remembered-relative-path-is-reported` — a remembered relative path, reported by the builtins the table answers. bash writes it under `./` — `./b3/qq` for all three — where every other column writes `b3/qq` or its own directory-joined spelling (#6069)
+  ```sh
+  mkdir -p b2 b3 && printf '#!/bin/sh\necho rel\n' > b3/qq && printf '#!/bin/sh\necho abs\n' > b2/qq && chmod +x b2/qq b3/qq && P=$PATH
+  PATH=b3:$P; qq >/dev/null; command -v qq; type qq; hash -t qq 2>&1
+  ```
+- `hash/each-directory-is-listed-once` — every copy of one name on a PATH that reaches one directory four ways — by name, through a link, relative and through `..` — and a second directory. ksh93 lists each directory once, keyed on the directory and not the spelling; bash and zsh list every entry (#6069)
+  ```sh
+  mkdir -p b2 b3 && printf '#!/bin/sh\necho rel\n' > b3/qq && printf '#!/bin/sh\necho abs\n' > b2/qq && chmod +x b2/qq b3/qq && P=$PATH
+  ln -s b2 b4; PATH=$PWD/b2:$PWD/b4:b2:$PWD/b3/../b2:$PWD/b3:$P
+  type -a qq | sed "s|$PWD|D|"; whence -a qq 2>&1 | sed "s|$PWD|D|"
   ```
 - `exec/a-script-is-started-by-the-spelling-its-shell-joined` — the kernel hands a `#!` interpreter the path it was given as the script, so `$0` inside it is whatever the shell joined — and every column joins what it was given rather than resolving it: a typed `./deep/../z0` is `./deep/../z0` in all of them, and a PATH hit is the hit as that column writes it back, except that zsh and ksh93 start a hit through `.` or an empty entry by its bare name. The second runs are the hashed route. Ours started everything by the absolute path it looked up (#6090)
   ```sh

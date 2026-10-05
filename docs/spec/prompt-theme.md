@@ -361,13 +361,31 @@ the two readings coincide.
 
 ### The right prompt is new here
 
-Nothing in this tree draws a right prompt today. `RPROMPT`/`RPS1` appears
-only in `dialect/zsh/promptnames.go`, as the name-aliasing measurement,
-and no drawing code reads it.
+When this was written nothing in this tree drew a right prompt.
+`RPROMPT`/`RPS1` appeared only in `dialect/zsh/promptnames.go`, as the
+name-aliasing measurement, and no drawing code read it.
 
 Building it in `repl` is therefore a capability addition and not a theme
 detail: bash, ksh, dash and ash get a right prompt they have never had,
 and the zsh dialect gets to *name* the one the substrate draws.
+
+The naming landed in #5893, as `PromptStyle.RightPrompt`,
+`RightContinued` and `RightIndent`. Measured 2026-10-04 against zsh 5.9.2
+through a pseudo-terminal, interactive with a startup file:
+
+- `RPS1` and `RPROMPT` are each drawn; with both set the one assigned
+  last wins, which an ordered list of names cannot say, so this draws
+  `RPS1` first.
+- `RPS2`/`RPROMPT2` is drawn beside a continuation prompt, and nothing is
+  drawn there when only `RPS1` is set.
+- The value is read as `PS1` is: `%F{red}%n%f`, `%{…%}` and `%h` all draw.
+- `ZLE_RPROMPT_INDENT` replaces the blank column at the edge: at 0 the
+  right prompt ends in the last column, at 3 three short of it, a negative
+  value draws as 0, and the threshold below becomes
+  `columns − right − indent − 1`.
+- On a window resize zsh redraws the prompt at once with the right prompt
+  at the new edge; this shell places it at the new edge on the next
+  redraw.
 
 #### Measured, because zsh is the only place the answers exist
 

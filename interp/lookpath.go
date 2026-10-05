@@ -82,7 +82,7 @@ var errNotFound = errors.New("not found")
 // one such entry is the one thing here the panel disagrees about — see
 // pathElements.
 func (r *Runner) lookPath(name string) (string, error) {
-	path, _, err := r.lookPathSpelled(name)
+	path, _, _, err := r.lookPathSpelled(name)
 	return path, err
 }
 
@@ -106,16 +106,23 @@ func (r *Runner) lookPath(name string) (string, error) {
 // answers: a name with a slash was never searched for — how *that* is
 // written back is Runner.reportedPath's axis — and a remembered path is the
 // hash table's own spelling, which lookPathReporting answers for.
-func (r *Runner) lookPathSpelled(name string) (path, spelled string, err error) {
+//
+// written is the third spelling of a PATH hit, and the plainest: the entry
+// exactly as PATH holds it, a slash, and the name, with an empty entry
+// standing for the name alone. Nothing is trimmed and nothing is cleaned —
+// see Runner.LookPathAsWritten for the shell that reports it and the
+// measurement. Every answer that was not a PATH hit is the same string in
+// all three.
+func (r *Runner) lookPathSpelled(name string) (path, spelled, written string, err error) {
 	slashed := strings.ContainsRune(name, '/')
 	if slashed {
 		full := r.absolute(name)
 		err := r.runnable(full)
 		if err == nil {
-			return full, full, nil
+			return full, full, full, nil
 		}
 		if !r.searchesTheSlashedName(name) {
-			return "", "", &pathError{
+			return "", "", "", &pathError{
 				name: name, resolved: full,
 				missing: errors.Is(err, os.ErrNotExist), err: err,
 			}
@@ -145,10 +152,10 @@ func (r *Runner) lookPathSpelled(name string) (path, spelled string, err error) 
 				// table is pointed at it. See
 				// Semantics.HashedPathShadowsAnEarlierDirectory.
 				r.retrackCommand(name, earlier)
-				return earlier, earlier, nil
+				return earlier, earlier, earlier, nil
 			}
 			r.hashCommandHit(name)
-			return full, full, nil
+			return full, full, full, nil
 		}
 		if r.ask(r.sem().CommandHashIsTrusted, "a hashed path used without looking for it again") &&
 			!r.checksHashedCommand {
@@ -158,7 +165,7 @@ func (r *Runner) lookPathSpelled(name string) (path, spelled string, err error) 
 			// `/tmp/hb/zzcmd: No such file or directory` where the other
 			// three have already found the next copy and run it.
 			r.hashCommandHit(name)
-			return "", "", &pathError{
+			return "", "", "", &pathError{
 				name: hashed, resolved: full,
 				missing: errors.Is(err, os.ErrNotExist), err: err,
 			}
@@ -190,6 +197,7 @@ func (r *Runner) lookPathSpelled(name string) (path, spelled string, err error) 
 	var kept *pathError
 	var skipped []string
 	for _, dir := range r.pathElements(r.commandSearchPath()) {
+		written := writtenPathHit(dir, name)
 		if dir == "" {
 			dir = "."
 		}
@@ -204,7 +212,7 @@ func (r *Runner) lookPathSpelled(name string) (path, spelled string, err error) 
 		candidate := r.absolute(filepath.Join(dir, name))
 		err := r.runnable(candidate)
 		if err == nil {
-			return candidate, joined, nil
+			return candidate, joined, written, nil
 		}
 		isDir := errors.Is(err, errIsDirectory)
 		switch {
@@ -255,17 +263,17 @@ func (r *Runner) lookPathSpelled(name string) (path, spelled string, err error) 
 		// them was then the entry before them is still the last searched.
 		for i := len(skipped) - 1; i >= 0; i-- {
 			if r.pathEntryIsADirectory(skipped[i]) {
-				return "", "", &pathError{name: name, missing: true, err: errNotFound}
+				return "", "", "", &pathError{name: name, missing: true, err: errNotFound}
 			}
 		}
 		if kept != nil {
-			return "", "", kept
+			return "", "", "", kept
 		}
-		return "", "", &pathError{name: name, missing: true, err: errNotFound}
+		return "", "", "", &pathError{name: name, missing: true, err: errNotFound}
 	}
 	if r.sem().PathCandidateReported == FirstExistingCandidate {
 		if firstExisting == nil {
-			return "", "", &pathError{name: name, missing: true, err: errNotFound}
+			return "", "", "", &pathError{name: name, missing: true, err: errNotFound}
 		}
 		if firstExisting.onPathDirectory &&
 			!r.ask(r.sem().DirectoryOnPathIsACandidate,
@@ -275,21 +283,21 @@ func (r *Runner) lookPathSpelled(name string) (path, spelled string, err error) 
 			// status it gives a name that was never on PATH at all. Keeping
 			// it is still what suppresses the later non-executable file,
 			// which is the whole difference from the other reading.
-			return "", "", &pathError{name: name, missing: true, err: errNotFound}
+			return "", "", "", &pathError{name: name, missing: true, err: errNotFound}
 		}
 		if r.unspecified {
-			return "", "", &pathError{name: name, missing: true, err: errNotFound}
+			return "", "", "", &pathError{name: name, missing: true, err: errNotFound}
 		}
-		return "", "", firstExisting
+		return "", "", "", firstExisting
 	}
 	if denied != nil {
-		return "", "", denied
+		return "", "", "", denied
 	}
 	if dirDenied != nil &&
 		r.ask(r.sem().DirectoryOnPathIsACandidate, "a directory found on PATH standing as the failed candidate") {
-		return "", "", dirDenied
+		return "", "", "", dirDenied
 	}
-	return "", "", &pathError{name: name, missing: true, err: errNotFound}
+	return "", "", "", &pathError{name: name, missing: true, err: errNotFound}
 }
 
 // pathEntryIsADirectory reports whether a PATH entry is a directory that
@@ -548,27 +556,58 @@ func (r *Runner) cannotRun(err error, how naming) int {
 // deduplicate either. A name with a slash is its own answer, the same rule
 // the single search applies.
 func (r *Runner) lookPathAll(name string) []string {
+	hits := r.lookPathHits(name)
+	paths := make([]string, len(hits))
+	for i, hit := range hits {
+		paths[i] = hit.path
+	}
+	return paths
+}
+
+// pathHit is one candidate the walk found: the absolute path that would run,
+// and the path as PATH spells it — see writtenPathHit.
+type pathHit struct {
+	path, written string
+}
+
+// lookPathHits is lookPathAll with each hit's written spelling kept beside
+// it, one walk for both so the two lists cannot disagree about what was
+// found.
+func (r *Runner) lookPathHits(name string) []pathHit {
 	if strings.ContainsRune(name, '/') {
 		full := r.absolute(name)
 		if r.runnable(full) == nil {
-			return []string{full}
+			return []pathHit{{path: full, written: full}}
 		}
 		if !r.searchesTheSlashedName(name) {
 			return nil
 		}
 	}
-	var hits []string
+	var hits []pathHit
 	path, _ := r.getVar("PATH")
 	for _, dir := range r.pathElements(path) {
+		written := writtenPathHit(dir, name)
 		if dir == "" {
 			dir = "."
 		}
 		candidate := r.absolute(filepath.Join(dir, name))
 		if r.runnable(candidate) == nil {
-			hits = append(hits, candidate)
+			hits = append(hits, pathHit{path: candidate, written: written})
 		}
 	}
 	return hits
+}
+
+// writtenPathHit is a PATH entry and a name put together with nothing
+// tidied: the entry as written, one slash, the name — and an empty entry,
+// which means the current directory, as the name alone. So `/usr/../bin`
+// gives `/usr/../bin/ls`, `/bin/` gives `/bin//ls` and `.` gives `./ls`.
+// See Runner.LookPathAsWritten, which is where the measurement is.
+func writtenPathHit(dir, name string) string {
+	if dir == "" {
+		return name
+	}
+	return dir + "/" + name
 }
 
 // autoCdInstead reads a command word that named a directory as a `cd`, and

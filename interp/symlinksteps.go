@@ -111,13 +111,37 @@ func (r *Runner) oneSymlinkStep(path string) (string, bool) {
 // (`-f`, 2026-09-26), `type -s sp` is `sp is '/…/w d/sp' -> /bin/ls`, so the
 // quoting a dialect puts round a path reaches the path and not the resolution
 // after it.
+//
+// Two more rules, both measured 2026-10-05 on zsh 5.9.2 under `-f` with the
+// path reported as PATH spells it (#6015):
+//
+//	PATH=/usr/../bin   whence -s ls    /usr/../bin/ls -> /bin/ls
+//	PATH=/usr/../bin   whence -S ls    /usr/../bin/ls
+//	PATH=/bin/         whence -s ls    /bin//ls -> /bin/ls
+//	PATH=sub           whence -s lnk   sub/lnk          (lnk -> /bin/ls)
+//	PATH=sub           whence -S lnk   sub/lnk
+//
+// `-s` names where the path really is whenever that is not what was
+// written, with or without a link on the way, so a `..` or a doubled slash
+// draws an arrow to the clean path; `-S` lists links and only links, so the
+// same path draws nothing there. And a **relative** path draws no arrow in
+// either, even when it is a link.
 func (r *Runner) SymlinkArrow(path string, chain bool) string {
-	steps := r.SymlinkSteps(path)
-	if len(steps) == 0 {
+	if !filepath.IsAbs(path) {
 		return ""
 	}
+	steps := r.SymlinkSteps(path)
 	if chain {
+		if len(steps) == 0 {
+			return ""
+		}
 		return " -> " + strings.Join(steps, " -> ")
 	}
-	return " -> " + steps[len(steps)-1]
+	if len(steps) > 0 {
+		return " -> " + steps[len(steps)-1]
+	}
+	if real, err := r.physicalPath(path); err == nil && real != path {
+		return " -> " + real
+	}
+	return ""
 }

@@ -4943,8 +4943,11 @@ func Diagnostics() interp.Diagnostics {
 		AmbiguousJobSpec:   "%[1]s: %[2]s: ambiguous job spec",
 		KillNoSuchJob:      "kill: %[1]s: no such job",
 		DisownNoCurrentJob: "disown: current: no such job",
-		WaitBadJobStatus:   1,
-		WaitNotOurChild:    "wait: pid %[1]d is not a child of this shell",
+		// And `fg` and `bg` with no operand and no current job, in the
+		// same words: bash names the spec it defaulted to (#5860).
+		NoCurrentJob:     "%[1]s: current: no such job",
+		WaitBadJobStatus: 1,
+		WaitNotOurChild:  "wait: pid %[1]d is not a child of this shell",
 		// A job given up on because it stopped, in the two wordings bash has
 		// for it: the bare `wait` names the job and its process, and the one
 		// that named a job speaks from inside its own wait (#2227).

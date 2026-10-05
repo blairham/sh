@@ -5,6 +5,7 @@ package interp
 
 import (
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/blairham/sh/syntax"
@@ -333,6 +334,13 @@ func (r *Runner) pathEntries(runnableOnly bool) map[string]string {
 	out := map[string]string{}
 	path, _ := r.getVar("PATH")
 	for _, entry := range r.pathElements(path) {
+		if !filepath.IsAbs(entry) && r.sem().CommandTableHoldsOnlyAbsoluteEntries == Yes {
+			// The table these listings are knows no relative entry: measured
+			// 2026-10-05 on zsh 5.9.2, `PATH=b3:$PWD/b2; ${(k)commands}`
+			// names what `b2` holds and nothing only `b3` does (#6069). See
+			// Semantics.CommandTableHoldsOnlyAbsoluteEntries.
+			continue
+		}
 		dir := entry
 		if dir == "" {
 			dir = "."

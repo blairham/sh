@@ -143,6 +143,12 @@ func (r *Runner) lookPathSpelled(name string) (path, spelled, written string, er
 	// deleted — the arrangement that tells the readings apart, since with
 	// one copy all four fail and only the wording moves.
 	if hashed, ok := r.hashedCommandPath(name); ok && !slashed && r.rememberingLookups() {
+		if hit, found := r.relativeHitBefore(name); found {
+			// A relative entry in front of the remembered one, which this
+			// dialect's table never stands in front of. Not counted: the
+			// table answered nothing.
+			return hit.path, hit.spelled, hit.written, nil
+		}
 		full := r.absolute(hashed)
 		err := r.runnable(full)
 		if err == nil {
@@ -161,7 +167,7 @@ func (r *Runner) lookPathSpelled(name string) (path, spelled, written string, er
 			// absolute path: the table keeps the hit as it was spelled when
 			// it was found, so a report after the run is the report before
 			// it — see Semantics.PathHitSpelled (#6044).
-			return full, hashed, r.hashedCommandWritten(name), nil
+			return full, r.reportedHashed(hashed), r.hashedCommandWritten(name), nil
 		}
 		if r.ask(r.sem().CommandHashIsTrusted, "a hashed path used without looking for it again") &&
 			!r.checksHashedCommand {

@@ -209,17 +209,11 @@ func biHash(r *Runner, _ context.Context, args []string) int {
 		// A shell that searches PATH alone has no way to reach a written
 		// pathname, so the operand falls through to the missing-name
 		// question rather than being remembered as itself.
-		if !pathname || !pathAlone {
-			if path, err := r.lookPath(name); err == nil {
-				// Zero hits, not one: an explicit `hash ls` after `ls` has
-				// run puts the count back to 0 in the one dialect that shows
-				// it.
-				r.putHashedCommand(name, path, 0)
-				if verbose {
-					r.printHashEntry(name)
-				}
-				continue
+		if (!pathname || !pathAlone) && r.hashFound(name, pathname) {
+			if verbose {
+				r.printHashEntry(name)
 			}
+			continue
 		}
 		if r.ask(r.sem().HashReportsAMissingName, "`hash` reporting a name that resolves to nothing") {
 			r.diagf("%s\n", Wording(r.diag().HashNotFound, "hash: %[1]s: not found", name))
@@ -348,6 +342,9 @@ func (r *Runner) hashReportPaths(names []string, asCommands bool) int {
 		if asCommands {
 			r.printf("%s\n", hashAsCommand(name, path))
 			continue
+		}
+		if r.runnable(r.absolute(path)) == nil {
+			path = r.reportedHashed(path)
 		}
 		if len(names) == 1 {
 			r.printf("%s\n", path)
@@ -615,8 +612,39 @@ func (r *Runner) printHashEntry(name string) {
 	case HashListingHitsAndPath:
 		r.printf("%4d\t%s\n", e.hits, e.path)
 	case HashListingNameEqualsPath:
-		r.printf("%s=%s\n", name, e.path)
+		r.printf("%s=%s\n", name, r.listedHashPath(name, e))
 	default:
 		r.printf("%s\n", e.path)
 	}
+}
+
+// hashFound is an explicit `hash name`: the search a run would make, and the
+// entry it leaves, reporting whether there was one.
+//
+// Zero hits, not one: an explicit `hash ls` after `ls` has run puts the count
+// back to 0 in the one dialect that shows it. And the hit as the dialect
+// spells it, which is what a run remembers — this wrote the absolute path, so
+// `PATH=b3; hash qq` listed `$PWD/b3/qq` where the panel lists what `qq`
+// running would have left (#6069). An entry already in the table keeps what
+// it holds, and in the dialect whose table holds only absolute entries a hit
+// only a relative entry has is no hit at all.
+func (r *Runner) hashFound(name string, pathname bool) bool {
+	path, spelled, written, err := r.lookPathSpelled(name)
+	if err != nil {
+		return false
+	}
+	e, had := r.cmdHash[name]
+	switch {
+	case pathname:
+		r.putHashedCommand(name, path, 0)
+	case had:
+		r.putHashedHit(name, e.path, e.written, 0)
+	default:
+		kept, keptWritten, ok := r.tableHit(name, spelled, written)
+		if !ok {
+			return false
+		}
+		r.putHashedHit(name, kept, keptWritten, 0)
+	}
+	return true
 }

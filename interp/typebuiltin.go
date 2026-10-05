@@ -398,7 +398,7 @@ func (r *Runner) typePath(name string, m typeMode) int {
 // bare path or silence — one dialect's letter, so there is no second shape
 // to ask about.
 func (r *Runner) typeBarePath(name string, kind bool) int {
-	path, err := r.lookPath(name)
+	path, spelled, _, err := r.lookPathSpelled(name)
 	if err != nil {
 		return orDefault(r.diag().TypeNotFoundStatus, 1)
 	}
@@ -409,6 +409,15 @@ func (r *Runner) typeBarePath(name string, kind bool) int {
 	// Written the dialect's way, and only here: `-P` with `-t` answers
 	// `file` above and never reaches a path, so the axis is not asked where
 	// nothing would show it — see Runner.reportedPath.
+	//
+	// A PATH hit is the hit as the dialect spells it, the same answer `type
+	// -p` gives: measured 2026-10-05 on bash 5.3, `PATH=bin; type -P mm` is
+	// `bin/mm` and `PATH=.` gives `./zz`, where this wrote the absolute path
+	// (#6069). reportedPath is the question for a word with a slash in it.
+	if !strings.ContainsRune(name, '/') {
+		r.printf("%s\n", spelled)
+		return 0
+	}
 	path = r.reportedPath(name, path)
 	if r.unspecified {
 		return r.status

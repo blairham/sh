@@ -28370,6 +28370,42 @@ type Semantics struct {
 	// name, though both write it back otherwise.
 	PathHitFromTheCurrentDirectoryRunsBare Answer
 
+	// HashedRelativePathReportedUnderDot writes a remembered relative path
+	// that still runs with `./` in front, wherever the table is the answer:
+	// `type`, `type -P`, `command -v`, `command -V`, `hash -t` and the path
+	// the command is started by. A listing that would put the entry back
+	// (`hash -l`) keeps the path as it was stored.
+	//
+	// bash alone, measured 2026-10-05 on 5.3 (#6069): `hash -p b3/qq x;
+	// type x` is `x is hashed (./b3/qq)`, `../d/b3/qq` is reported
+	// `./../d/b3/qq` and `.hid/hx` is `./.hid/hx`, while `./b3/qq` is left
+	// as it is. A path that would not run — a plain file, one that is not
+	// there — is written as stored. dash, ksh93, zsh and ash write what the
+	// table holds.
+	HashedRelativePathReportedUnderDot Answer
+
+	// CommandTableHoldsOnlyAbsoluteEntries keeps a PATH entry that is not
+	// absolute out of the command table altogether: a command found through
+	// one is run and not remembered, the table takes the first copy an
+	// absolute entry holds instead, `hash name` finds nothing a relative
+	// entry alone holds, and `$commands` lists no relative directory. Since
+	// such an entry is never in the table it is never shadowed by it either:
+	// a remembered path stands in front of the absolute entries after its
+	// own, and never in front of a relative one before it — an entry the
+	// script wrote with `hash name=path` does.
+	//
+	// zsh alone, measured 2026-10-05 on 5.9.2 under `-f` with `b3/qq` and
+	// `<d>/b2/qq` two different scripts (#6069):
+	//
+	//	PATH=b3:<d>/b2; qq; hash        b3's copy runs; qq=<d>/b2/qq
+	//	PATH=b3; qq; hash               b3's copy runs; nothing listed
+	//	PATH=b3; hash qq                no such command: qq, at 1
+	//	PATH=/bin:b3:<d>/b2; hash qq; qq  b3's copy runs
+	//	PATH=b3:/bin; hash qq=<d>/b2/qq; qq  b2's copy runs
+	//
+	// bash, dash, ksh93 and ash remember the relative hit as they spell it.
+	CommandTableHoldsOnlyAbsoluteEntries Answer
+
 	// EmptyInterpreterLineIsNotAScript refuses a file whose first line is a
 	// `#!` with no interpreter word after it, rather than reading the file as
 	// a shell script the way a file with no `#!` at all is read.
@@ -33718,6 +33754,8 @@ func PosixSemantics() Semantics {
 		ScriptImageSeesTheResolvedPath: Yes,
 		// The written-back spelling, a current-directory hit included.
 		PathHitFromTheCurrentDirectoryRunsBare: No,
+		HashedRelativePathReportedUnderDot:     No,
+		CommandTableHoldsOnlyAbsoluteEntries:   No,
 		// And the two halves of the `#!` line, which the standard leaves to
 		// the system: it says nothing about a `#!` at all, so the preset is
 		// what the kernel does with one and what six of the seven columns

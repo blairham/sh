@@ -6753,6 +6753,35 @@ echo "st=$?"`,
 		Why:     "a command names itself from `argv[0]`, and what belongs there is the word that was typed rather than the path PATH resolved to. Unanimous, invisible until something fails, and then it is in the output of a program the shell did not write — which is why a whole-machine run sweep had eighteen lines differing by nothing else",
 	},
 	{
+		ID: "hash/a-hit-from-a-relative-entry", Category: "commands",
+		Snippet: "mkdir -p b2 b3 && printf '#!/bin/sh\\necho rel\\n' > b3/qq && printf '#!/bin/sh\\necho abs\\n' > b2/qq && chmod +x b2/qq b3/qq && P=$PATH\n" +
+			"PATH=b3:$PWD/b2:$P; qq; qq; hash | sed \"s|$PWD|D|\"\n" +
+			"hash -r; PATH=b3:$P; hash qq 2>&1; echo \"st=$?\"; hash | sed \"s|$PWD|D|\"\n",
+		Why: "what the command table keeps for a command found through a relative PATH entry. zsh keeps none: the relative copy runs both times, the table takes the copy an absolute entry holds, and `hash qq` with only a relative entry holding it finds nothing at 1. The others keep the hit as each spells it — including for an explicit `hash qq`, which wrote the absolute path here in every column (#6069)",
+	},
+	{
+		ID: "hash/a-current-directory-hit-in-the-listing", Category: "commands",
+		Snippet: "mkdir -p b2 b3 && printf '#!/bin/sh\\necho rel\\n' > b3/qq && printf '#!/bin/sh\\necho abs\\n' > b2/qq && chmod +x b2/qq b3/qq && P=$PATH\n" +
+			"cd b3\n" +
+			"PATH=.:$P; qq >/dev/null; hash | sed \"s|$PWD|D|\"; hash -r\n" +
+			"PATH=:$P; qq >/dev/null; hash | sed \"s|$PWD|D|\"; hash -r\n" +
+			"PATH=./:$P; qq >/dev/null; hash | sed \"s|$PWD|D|\"\n",
+		Why: "the listing of a hit through `.`, an empty entry and `./`. ksh93 lists the first two by the bare name though `command -v` writes the directory in front of them, and lists `./` with it; zsh has nothing to list; the others list the hit as they spell it (#6069)",
+	},
+	{
+		ID: "hash/a-remembered-relative-path-is-reported", Category: "commands",
+		Snippet: "mkdir -p b2 b3 && printf '#!/bin/sh\\necho rel\\n' > b3/qq && printf '#!/bin/sh\\necho abs\\n' > b2/qq && chmod +x b2/qq b3/qq && P=$PATH\n" +
+			"PATH=b3:$P; qq >/dev/null; command -v qq; type qq; hash -t qq 2>&1\n",
+		Why: "a remembered relative path, reported by the builtins the table answers. bash writes it under `./` — `./b3/qq` for all three — where every other column writes `b3/qq` or its own directory-joined spelling (#6069)",
+	},
+	{
+		ID: "hash/each-directory-is-listed-once", Category: "commands",
+		Snippet: "mkdir -p b2 b3 && printf '#!/bin/sh\\necho rel\\n' > b3/qq && printf '#!/bin/sh\\necho abs\\n' > b2/qq && chmod +x b2/qq b3/qq && P=$PATH\n" +
+			"ln -s b2 b4; PATH=$PWD/b2:$PWD/b4:b2:$PWD/b3/../b2:$PWD/b3:$P\n" +
+			"type -a qq | sed \"s|$PWD|D|\"; whence -a qq 2>&1 | sed \"s|$PWD|D|\"\n",
+		Why: "every copy of one name on a PATH that reaches one directory four ways — by name, through a link, relative and through `..` — and a second directory. ksh93 lists each directory once, keyed on the directory and not the spelling; bash and zsh list every entry (#6069)",
+	},
+	{
 		ID: "exec/a-script-is-started-by-the-spelling-its-shell-joined", Category: "commands",
 		Snippet: "mkdir -p sub/deep && printf '#!/bin/sh\\necho \"0=$0\"\\n' > sub/z0 && printf 'echo \"n0=$0\"\\n' > sub/n0 && chmod +x sub/z0 sub/n0 && cd sub && P=$PATH\n" +
 			"PATH=:$P; z0; z0\n" +

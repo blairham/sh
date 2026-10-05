@@ -107441,6 +107441,108 @@
         "TimedOut": false
       }
     },
+    "hash/a-current-directory-hit-in-the-listing": {
+      "ash": {
+        "Stdout": "./qq~qq~.//qq",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "hits\tcommand~   1\t./qq~hits\tcommand~   1\t./qq~hits\tcommand~   1\t./qq",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "hits\tcommand~   1\t./qq~hits\tcommand~   1\t./qq~hits\tcommand~   1\t./qq",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "hits\tcommand~   1\t./qq~hits\tcommand~   1\t./qq~hits\tcommand~   1\t./qq",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "./qq~qq~.//qq",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "qq=qq~qq=qq~qq=D/./qq",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "hash/a-hit-from-a-relative-entry": {
+      "ash": {
+        "Stdout": "rel~rel~b3/qq~st=0~b3/qq",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "rel~rel~hits\tcommand~   2\tb3/qq~st=0~hits\tcommand~   0\tb3/qq",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "rel~rel~hits\tcommand~   2\tb3/qq~st=0~hits\tcommand~   0\tb3/qq",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "rel~rel~hits\tcommand~   2\tb3/qq~st=0~hits\tcommand~   0\tb3/qq",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "rel~rel~b3/qq~st=0~b3/qq",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "rel~rel~qq=D/b3/qq~st=0~qq=D/b3/qq",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "rel~rel~qq=D/b2/qq~\u003cshell\u003e:hash:3: no such command: qq~st=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "hash/a-lookup-that-only-reports-a-path": {
       "ash": {
         "Stdout": "zzc",
@@ -107743,6 +107845,57 @@
         "Stdout": "p=1",
         "Stderr": "\u003cshell\u003e:1: command not found: zzq",
         "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "hash/a-remembered-relative-path-is-reported": {
+      "ash": {
+        "Stdout": "b3/qq~qq is b3/qq~\u003cshell\u003e: hash: line 1: illegal option -t",
+        "Stderr": "",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "./b3/qq~qq is hashed (./b3/qq)~./b3/qq",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "./b3/qq~qq is hashed (./b3/qq)~./b3/qq",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "./b3/qq~qq is hashed (./b3/qq)~./b3/qq",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "b3/qq~qq is a tracked alias for b3/qq~\u003cshell\u003e: 2: hash: Illegal option -t",
+        "Stderr": "",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "\u003ctmp\u003e/b3/qq~qq is a tracked alias for \u003ctmp\u003e/b3/qq~alias: -t: bad option(s)",
+        "Stderr": "",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "b3/qq~qq is b3/qq~\u003cshell\u003e:hash:2: bad option: -t",
+        "Stderr": "",
+        "Status": 1,
         "Signal": 0,
         "TimedOut": false
       }
@@ -108200,6 +108353,57 @@
       },
       "zsh": {
         "Stdout": "st=0~1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "hash/each-directory-is-listed-once": {
+      "ash": {
+        "Stdout": "D/b2/qq~\u003cshell\u003e: whence: not found",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "qq is D/b2/qq~qq is D/b4/qq~qq is b2/qq~qq is D/b3/../b2/qq~qq is D/b3/qq~\u003cshell\u003e: line 3: whence: command not found",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "qq is D/b2/qq~qq is D/b4/qq~qq is D/b2/qq~qq is D/b3/../b2/qq~qq is D/b3/qq~\u003cshell\u003e: line 3: whence: command not found",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "qq is D/b2/qq~qq is D/b4/qq~qq is b2/qq~qq is D/b3/../b2/qq~qq is D/b3/qq~\u003cshell\u003e: line 2: whence: command not found",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "-a: not found~qq is D/b2/qq~\u003cshell\u003e: 3: whence: not found",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "qq is a tracked alias for D/b2/qq~qq is D/b3/qq~qq is a tracked alias for D/b2/qq~qq is D/b3/qq",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "qq is D/b2/qq~qq is D/b4/qq~qq is b2/qq~qq is D/b3/../b2/qq~qq is D/b3/qq~D/b2/qq~D/b4/qq~b2/qq~D/b3/../b2/qq~D/b3/qq",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,

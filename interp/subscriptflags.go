@@ -1189,7 +1189,9 @@ func (r *Runner) flaggedRangeSubscript(e *syntax.ParamExpr, src subscriptSource)
 	if e.IndexRange.Lo.Flags == nil && e.IndexRange.Hi.Flags == nil {
 		lo, hi = r.zeroPairIsTheFirst(lo, hi)
 	}
-	return r.rangeSpan(src, lo, hi), true
+	// After both ends, so that an end that writes the array is seen by the
+	// span it bounds. See Runner.elementReadIsDeferred.
+	return r.rangeSpan(r.readDeferred(src), lo, hi), true
 }
 
 // rangeEnd is the subscript one end of such a pair comes to, as a number the

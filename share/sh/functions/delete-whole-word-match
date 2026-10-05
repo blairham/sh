@@ -1,0 +1,36 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# delete-whole-word-match — deletes the word around the cursor: the word the cursor is inside or at
+# the start of, or the one it has just passed at the end of the line. On the
+# blanks between two words it does nothing. Where the widget's name contains
+# `kill` — `zle -N kill-whole-word-match delete-whole-word-match` — what
+# is removed is the kill.
+#
+# Written from zshcontrib(1) and from what the installed shell answers, never
+# from its function files; docs/spec/functions.md has the measurements. The
+# words are the ones match-words-by-style finds for the context
+# `:zle:<widget>`, so the styles select-word-style sets decide them.
+
+emulate -L zsh
+setopt extendedglob
+autoload -Uz match-words-by-style
+
+local curcontext=":zle:$WIDGET"
+local -a matched_words
+match-words-by-style
+[[ -z $matched_words[4] ]] || return 0
+local before=
+[[ -z $matched_words[3] ]] && before=$matched_words[2]
+local text=$before$matched_words[5]
+[[ -n $text ]] || return 0
+LBUFFER=${LBUFFER[1,-$#before-1]}
+RBUFFER=${RBUFFER[$#matched_words[5]+1,-1]}
+if [[ $WIDGET == *kill* ]]; then
+	if [[ $LASTWIDGET == *kill* ]]; then
+		CUTBUFFER+=$text
+	else
+		CUTBUFFER=$text
+	fi
+fi
+return 0

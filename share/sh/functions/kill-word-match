@@ -1,0 +1,39 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# kill-word-match — kill-word by the word styles: the blanks at the cursor and the word after
+# them are killed. A kill straight after another kill joins it, after it.
+#
+# Written from zshcontrib(1) and from what the installed shell answers, never
+# from its function files; docs/spec/functions.md has the measurements. The
+# words are the ones match-words-by-style finds for the context
+# `:zle:<widget>`, so the styles select-word-style sets decide them.
+
+emulate -L zsh
+setopt extendedglob
+autoload -Uz match-words-by-style
+
+local curcontext=":zle:$WIDGET" killed= text
+local -a matched_words
+integer count=${NUMERIC:-1} done=0
+
+if (( count < 0 )); then
+	(( NUMERIC = -count ))
+	zle ${WIDGET/kill-word/backward-kill-word}
+	return
+fi
+while (( count-- > 0 )); do
+	match-words-by-style
+	text=$matched_words[4]$matched_words[5]
+	[[ -n $text ]] || break
+	killed+=$text
+	RBUFFER=${RBUFFER[$#text+1,-1]}
+	(( done++ ))
+done
+(( done )) || return 1
+if [[ $LASTWIDGET == *kill* ]]; then
+	CUTBUFFER+=$killed
+else
+	CUTBUFFER=$killed
+fi
+return 0

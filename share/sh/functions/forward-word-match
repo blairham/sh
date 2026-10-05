@@ -1,0 +1,39 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# forward-word-match — forward-word by the word styles: to the start of the next word, or, where
+# the skip-whitespace-first style is true, past the next word to its end.
+# From inside the blanks before a word it stops at the word.
+#
+# Written from zshcontrib(1) and from what the installed shell answers, never
+# from its function files; docs/spec/functions.md has the measurements. The
+# words are the ones match-words-by-style finds for the context
+# `:zle:<widget>`, so the styles select-word-style sets decide them.
+
+emulate -L zsh
+setopt extendedglob
+autoload -Uz match-words-by-style
+
+local curcontext=":zle:$WIDGET" skipfirst=
+local -a matched_words
+integer count=${NUMERIC:-1} move
+zstyle -t $curcontext skip-whitespace-first && skipfirst=1
+
+if (( count < 0 )); then
+	(( NUMERIC = -count ))
+	zle ${WIDGET/forward/backward}
+	return
+fi
+while (( count-- > 0 )); do
+	match-words-by-style
+	if [[ -n $skipfirst ]]; then
+		move=$(( $#matched_words[4] + $#matched_words[5] ))
+	elif [[ -n $matched_words[4] ]]; then
+		move=$#matched_words[4]
+	else
+		move=$(( $#matched_words[5] + $#matched_words[6] ))
+	fi
+	(( move )) || return 1
+	(( CURSOR += move ))
+done
+return 0

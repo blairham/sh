@@ -1,0 +1,26 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# transpose-words-match — transpose-words by the word styles: the word before the cursor and the
+# word at or after it change places, what was between them staying between,
+# and the cursor goes to the end of the second. Measured: with no word before
+# the cursor the swap is with nothing, so the line is unchanged and the cursor
+# moves past the word after it.
+#
+# Written from zshcontrib(1) and from what the installed shell answers, never
+# from its function files; docs/spec/functions.md has the measurements. The
+# words are the ones match-words-by-style finds for the context
+# `:zle:<widget>`, so the styles select-word-style sets decide them.
+
+emulate -L zsh
+setopt extendedglob
+autoload -Uz match-words-by-style
+
+local curcontext=":zle:$WIDGET"
+local -a matched_words
+match-words-by-style
+[[ -n $matched_words[2]$matched_words[5] ]] || return 1
+local left=$matched_words[1]$matched_words[5]$matched_words[3]$matched_words[4]$matched_words[2]
+BUFFER=$left$matched_words[6]$matched_words[7]
+CURSOR=$#left
+return 0

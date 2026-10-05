@@ -279,9 +279,12 @@ func TestTheShippedFunctionsSitWhereTheSearchLooks(t *testing.T) {
 	}
 	sort.Strings(names)
 	want := []string{
-		"add-zle-hook-widget", "add-zsh-hook", "bashcompinit", "colors", "compaudit", "compdump", "compinit",
-		"down-line-or-beginning-search", "edit-command-line", "is-at-least", "regexp-replace",
-		"up-line-or-beginning-search", "url-quote-magic",
+		"add-zle-hook-widget", "add-zsh-hook", "backward-kill-word-match", "backward-word-match", "bashcompinit",
+		"capitalize-word-match", "colors", "compaudit", "compdump", "compinit", "delete-whole-word-match",
+		"down-case-word-match", "down-line-or-beginning-search", "edit-command-line", "forward-word-match",
+		"is-at-least", "kill-word-match", "match-word-context", "match-words-by-style", "regexp-replace",
+		"select-word-style", "transpose-words-match", "up-case-word-match", "up-line-or-beginning-search",
+		"url-quote-magic",
 	}
 	if strings.Join(names, " ") != strings.Join(want, " ") {
 		t.Errorf("%s holds %v, want %v", shipped, names, want)

@@ -154,7 +154,7 @@ func tagsVerb(word string, level int) (string, int) {
 // function that offers its tags and asks for one straight away — `_tags
 // processes; _requested processes`, with no loop and so no `-N` — is told
 // yes. Measured on zsh 5.9.2, 2026-10-05, from inside a `zle -C` widget,
-// `comptags -i ” a b c; comptry a; comptry b c` and then `-R` for each tag:
+// `comptags -i "" a b c; comptry a; comptry b c` and then `-R` for each tag:
 //
 //	before -N          a=0 b=1 c=1
 //	after one -N       a=0 b=1 c=1   the first -N lands on the same set

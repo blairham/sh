@@ -81,6 +81,29 @@ func putMode(f *os.File, saved modeState) error {
 	return ioctl(f.Fd(), tcSets, &saved)
 }
 
+// interruptAsLineEnd answers InterruptEndsTheLine.
+func interruptAsLineEnd(f *os.File) (*Mode, byte, error) {
+	if f == nil {
+		return nil, 0, ErrUnsupported
+	}
+	fd := f.Fd()
+	var t syscall.Termios
+	if err := ioctl(fd, tcGets, &t); err != nil {
+		return nil, 0, err
+	}
+	saved := &Mode{f: f, saved: t}
+	intr := t.Cc[syscall.VINTR]
+	if intr == vdisable || t.Lflag&syscall.ICANON == 0 || t.Lflag&syscall.ISIG == 0 {
+		return saved, 0, nil
+	}
+	t.Cc[syscall.VINTR] = vdisable
+	t.Cc[syscall.VEOL] = intr
+	if err := ioctl(fd, tcSets, &t); err != nil {
+		return nil, 0, err
+	}
+	return saved, intr, nil
+}
+
 // postProcessesOutput answers TranslatesNewlines.
 func postProcessesOutput(f *os.File) bool {
 	if f == nil {

@@ -6250,6 +6250,9 @@ func Diagnostics() interp.Diagnostics {
 		// And text `eval` is running is named for itself over both — see
 		// Diagnostics.LocationNamesTheEvalText, where the nine rows are.
 		LocationNamesTheEvalText: true,
+		// At a prompt it is the typed line's outside a function, and a
+		// script's inside one (#6075).
+		EvalTextAtAPromptSpeaksAsTheLine: true,
 		// zsh does not quote the expression, where the other three do.
 		ArithError:          "%[2]s",
 		ArithInvalidBase:    "invalid base (must be 2 to 36 inclusive): %[1]s",

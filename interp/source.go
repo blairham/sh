@@ -342,6 +342,12 @@ func (r *Runner) reportBorrowedParseFailure(err error, s sourced, src string) {
 		r.errf("%s: %s\n", r.name(), d.ParseFailure(err))
 		return
 	}
+	if s.eval && r.evalTextAtAPrompt(false) {
+		// Worded as the typed line's: see
+		// Diagnostics.EvalTextAtAPromptSpeaksAsTheLine.
+		r.errf("%s", d.Report(r.name(), line, d.ParseFailure(err)+"\n"))
+		return
+	}
 	if d.BorrowedTextRendersTheCallStack {
 		// The chain, and then the innermost text's name with no location
 		// after it: the message this shell writes already carries `at line

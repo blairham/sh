@@ -1218,7 +1218,7 @@ func callBuiltinWidget(r *interp.Runner, ctx context.Context, name string, args 
 	}
 	regionsFollow(r, out.Buffer, out.Cursor)
 	setWidgetLine(r, out)
-	if widget == repl.WidgetSearchHistoryBackward {
+	if widget.IsIncrementalSearch() {
 		// The one action that reads its own keys and leaves `$KEYS` saying
 		// which ended it — `^M`, `^G`, or nothing after `C-c` — measured
 		// against zsh 5.9.2; see repl's editorActions.Perform. Every other

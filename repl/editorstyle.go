@@ -10,6 +10,12 @@ package repl
 // is text the shell was given and transforms; this is text the shell adds of
 // its own accord, and the dialects disagree about whether to add it at all.
 type EditorStyle struct {
+	// SearchOnControlX puts the two plain incremental searches on `^X r` and
+	// `^X s` as well as on `C-r` and `C-s`. zsh's emacs keymap does, measured
+	// 2026-10-04 with `bindkey -M emacs` on zsh 5.9.2; bash binds `^X s` to
+	// spell correction and leaves `^X r` unbound, so the zero value is its.
+	SearchOnControlX bool
+
 	// Interrupt is what marks a line abandoned with ^C, drawn where the
 	// cursor was before the line ends.
 	//

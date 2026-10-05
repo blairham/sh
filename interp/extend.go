@@ -2198,6 +2198,18 @@ func (r *Runner) MatchPattern(pattern, s string) bool {
 	return r.matchPatternR(pattern, s, patternInAWord)
 }
 
+// MatchPatternQuietly is MatchPattern for a pattern somebody is still typing:
+// one the dialect will not compile answers wellFormed false rather than being
+// refused out loud — which in a script ends it — and a match publishes
+// nothing into the parameters a match reports to.
+//
+// The caller this was added for is a history search reading its query as a
+// pattern, where `[` on its way to `[b]` is a query half typed, not a fault
+// (#5904).
+func (r *Runner) MatchPatternQuietly(pattern, s string) (matched, wellFormed bool) {
+	return r.matchPatternChecked(pattern, s, patternInAWord, true)
+}
+
 // Expand performs parameter and command expansion on raw text.
 //
 // For a caller that holds a *setting* which is a path with parameters in it —

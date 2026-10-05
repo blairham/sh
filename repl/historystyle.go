@@ -83,6 +83,32 @@ type HistoryStyle struct {
 	// search that works.
 	SearchFailedPrompt string
 
+	// SearchForwardPrompt and SearchForwardFailedPrompt are the same two for
+	// a search walking forward — `C-s`, or `C-s` inside a `C-r` search.
+	// Measured 2026-10-04 through a pty with the terminal's flow control off:
+	//
+	//	zsh 5.9.2   fwd-i-search: alpha_       failing fwd-i-search: alpha_
+	//	bash 5.3    (i-search)`alpha': …       (failed i-search)`alpha': …
+	//
+	// A pattern search is worded as the plain one in zsh, in both directions.
+	SearchForwardPrompt       string
+	SearchForwardFailedPrompt string
+
+	// SearchInvalidPrompt and SearchForwardInvalidPrompt are drawn while a
+	// pattern search's query is one the shell will not compile yet — `tw[`
+	// on its way to `tw[o]`. zsh 5.9.2 draws `invalid bck-i-search: tw[_`
+	// and `invalid fwd-i-search: t[_`, measured 2026-10-04, with the last
+	// match left on the line.
+	SearchInvalidPrompt        string
+	SearchForwardInvalidPrompt string
+
+	// SearchForwardCursorAtMatchEnd puts the cursor after a forward match
+	// rather than on its first character. Measured 2026-10-04 through a pty,
+	// `C-r alpha C-r C-s` over `echo …alpha one`: zsh 5.9.2 leaves the
+	// cursor after `alpha`, bash 5.3 (with `stty -ixon`) on its `a`. A
+	// backward match is at its start in both.
+	SearchForwardCursorAtMatchEnd bool
+
 	// SearchBelowTheLine draws the search on its own row under the command
 	// line, leaving the prompt and the line where they were. zsh does; bash
 	// replaces the prompt instead.
@@ -362,8 +388,12 @@ func (h HistoryStyle) InForce(get func(string) (string, bool)) HistoryStyle {
 // default borrowed from one of them would make the others look like
 // deviations from it.
 const (
-	defaultSearchPrompt = "(reverse-search)`%s': "
-	defaultSearchFailed = "(failed reverse-search)`%s': "
+	defaultSearchPrompt         = "(reverse-search)`%s': "
+	defaultSearchFailed         = "(failed reverse-search)`%s': "
+	defaultSearchForward        = "(forward-search)`%s': "
+	defaultSearchForwardFailed  = "(failed forward-search)`%s': "
+	defaultSearchInvalid        = "(invalid reverse-search)`%s': "
+	defaultSearchForwardInvalid = "(invalid forward-search)`%s': "
 )
 
 // HashTimestampLines is how a history file's `#<digits>` lines are read, and

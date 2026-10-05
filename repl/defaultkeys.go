@@ -46,6 +46,7 @@ var defaultKeys = map[string]Widget{
 	"\x0e":     WidgetNextHistory,
 	"\x10":     WidgetPreviousHistory,
 	"\x12":     WidgetSearchHistoryBackward,
+	"\x13":     WidgetSearchHistoryForward,
 	"\x14":     WidgetTransposeChars,
 	"\x15":     WidgetKillWholeLine,
 	"\x17":     WidgetKillWordBefore,
@@ -97,6 +98,37 @@ var defaultKeys = map[string]Widget{
 	// WidgetBracketedPaste. Only the opening one: the closing marker is read
 	// by the paste, and on its own it is a sequence nothing acts on.
 	"\x1b[200~": WidgetBracketedPaste,
+}
+
+// controlXSearchKeys are the keys EditorStyle.SearchOnControlX adds to the
+// table: the two plain searches' second spellings, which one dialect's keymap
+// has and the other's does not (#5904).
+var controlXSearchKeys = map[string]Widget{
+	"\x18r": WidgetSearchHistoryBackward,
+	"\x18s": WidgetSearchHistoryForward,
+}
+
+// ControlXSearchBindings is controlXSearchKeys for a dialect's key listing,
+// as a copy for the reason DefaultBindings gives.
+func ControlXSearchBindings() map[string]Widget {
+	out := make(map[string]Widget, len(controlXSearchKeys))
+	for seq, w := range controlXSearchKeys {
+		out[seq] = w
+	}
+	return out
+}
+
+// defaultKey is what this editor does with a key nobody rebound: the shared
+// table, and the dialect's own additions to it.
+func (e *editor) defaultKey(seq string) (Widget, bool) {
+	if w, ok := defaultKeys[seq]; ok {
+		return w, true
+	}
+	if e.searchOnControlX {
+		w, ok := controlXSearchKeys[seq]
+		return w, ok
+	}
+	return WidgetNone, false
 }
 
 // DefaultBindings is the key each of this editor's actions arrives on with

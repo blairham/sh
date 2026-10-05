@@ -233,7 +233,26 @@ const (
 	// beginningsearch.go.
 	WidgetUpLine
 	WidgetDownLine
+
+	// The other three incremental searches beside WidgetSearchHistoryBackward:
+	// forward, and both directions with the query read as a pattern. One
+	// mechanism with a direction and a matcher; see search.go (#5904).
+	WidgetSearchHistoryForward
+	WidgetPatternSearchHistoryBackward
+	WidgetPatternSearchHistoryForward
 )
+
+// IsIncrementalSearch is whether the action is one of the four searches,
+// which read their own keys and end with a status and a `$KEYS` of their own
+// — see searchEnd.status.
+func (w Widget) IsIncrementalSearch() bool {
+	switch w {
+	case WidgetSearchHistoryBackward, WidgetSearchHistoryForward,
+		WidgetPatternSearchHistoryBackward, WidgetPatternSearchHistoryForward:
+		return true
+	}
+	return false
+}
 
 // UsesCandidates reports whether an action asks a completer what the word
 // under the cursor could become.
@@ -394,7 +413,13 @@ func (e *editor) runWidget(b Binding, prompt drawnPrompt) {
 	case WidgetSearchHistoryBackward:
 		// How it ended is what a widget that called it by name is answered
 		// with; see searchEnd.status. A key pressed has no one to tell.
-		e.actionStatus = e.reverseSearch(prompt).status()
+		e.actionStatus = e.incrementalSearch(prompt, searchBackward, false).status()
+	case WidgetSearchHistoryForward:
+		e.actionStatus = e.incrementalSearch(prompt, searchForward, false).status()
+	case WidgetPatternSearchHistoryBackward:
+		e.actionStatus = e.incrementalSearch(prompt, searchBackward, true).status()
+	case WidgetPatternSearchHistoryForward:
+		e.actionStatus = e.incrementalSearch(prompt, searchForward, true).status()
 	case WidgetClearScreen:
 		e.clearScreen(prompt)
 	case WidgetDeleteChar:

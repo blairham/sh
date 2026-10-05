@@ -254,9 +254,24 @@ type editor struct {
 
 	// What a reverse incremental search is drawn as, and where. See
 	// HistoryStyle.
-	searchPrompt string
-	searchFailed string
-	searchBelow  bool
+	searchPrompt        string
+	searchFailed        string
+	searchForward       string
+	searchForwardFailed string
+	searchBelow         bool
+	// searchMatch is the shell's own pattern matcher, which a pattern search
+	// reads its query with. Nil reads every query as plain text.
+	searchMatch func(pattern, s string) (matched, wellFormed bool)
+	// searchInvalid and searchForwardInvalid are the wording for a pattern
+	// query the shell will not compile yet. See HistoryStyle.
+	searchInvalid        string
+	searchForwardInvalid string
+	// searchOnControlX puts the two plain searches behind `^X r` and `^X s`
+	// as well, which one dialect's default keymap does. See
+	// EditorStyle.SearchOnControlX.
+	searchOnControlX bool
+	// searchForwardEndsAtMatchEnd is HistoryStyle.SearchForwardCursorAtMatchEnd.
+	searchForwardEndsAtMatchEnd bool
 	// searchNewlineAccepts is one dialect's answer and the zero value is the
 	// other two's, deliberately: a newline ending the search is the search's in
 	// bash and ksh93 and accepts the line in zsh, so an editor built as a bare
@@ -738,7 +753,9 @@ func (e *editor) readLine(prompt drawnPrompt) (string, error) {
 		case ctrlN:
 			e.browse(+1, prompt)
 		case ctrlR:
-			e.reverseSearch(prompt)
+			e.incrementalSearch(prompt, searchBackward, false)
+		case ctrlS:
+			e.incrementalSearch(prompt, searchForward, false)
 		case backspace, del:
 			e.change(false, e.deleteBackward)
 			e.redraw(prompt)
@@ -778,6 +795,14 @@ func (e *editor) readLine(prompt drawnPrompt) (string, error) {
 			case b == ctrlU:
 				e.undoLine()
 				e.redraw(prompt)
+			default:
+				// A dialect's own keys behind the prefix — the two searches,
+				// where EditorStyle.SearchOnControlX says so — through the
+				// same table the override layer falls back on, so a key a
+				// person bound beside them cannot take them away.
+				if w, ok := e.defaultKey(string([]byte{ctrlX, b})); ok {
+					e.runWidget(Binding{Widget: w}, prompt)
+				}
 			}
 		default:
 			if c < 0x20 {
@@ -1601,6 +1626,7 @@ const (
 	ctrlU     = 0x15
 	ctrlW     = 0x17
 	ctrlX     = 0x18
+	ctrlS     = 0x13
 	ctrlY     = 0x19
 	tab       = 0x09
 	esc       = 0x1b
@@ -1640,7 +1666,7 @@ func (e *editor) finishedKey() LastWidget {
 	case len(e.keyBytes) == 0:
 		return e.last
 	}
-	if w, ok := defaultKeys[string(e.keyBytes)]; ok {
+	if w, ok := e.defaultKey(string(e.keyBytes)); ok {
 		return LastWidget{Widget: w, Known: true}
 	}
 	if c := e.keyBytes[0]; c >= 0x20 && c != del {

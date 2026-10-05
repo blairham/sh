@@ -12,6 +12,9 @@ import "github.com/blairham/sh/repl"
 func EditorStyle() repl.EditorStyle {
 	return repl.EditorStyle{
 		Interrupt: "",
+		// `^X r` and `^X s` are the plain searches too, in this keymap
+		// alone. See repl.EditorStyle.SearchOnControlX (#5904).
+		SearchOnControlX: true,
 		// Measured under a pty. The threshold is the same hundred, and
 		// everything about the question is different: it names the shell,
 		// counts the rows the matches would take as well as the matches,

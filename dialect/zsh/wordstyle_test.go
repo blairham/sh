@@ -146,22 +146,17 @@ zle -N down-case-word down-case-word-match
 	}
 }
 
-// The usage, on standard error, byte for byte as zsh 5.9.2 writes it, for an
-// unknown style.
+// An unknown style is the usage on standard error and status 1, as zsh 5.9.2
+// answers. The wording after the first line is this shell's own: zsh's is its
+// documentation, which is not copied, so what is pinned is the stream, the
+// status and the synopsis.
 func TestSelectWordStyleUsage(t *testing.T) {
 	out, _ := runShipped(t, `autoload -Uz select-word-style
-select-word-style foo 2>&1 >/dev/null; print -r -- st=$?`)
-	const want = "Usage: select-word-style word-style\n" +
-		"where word-style is one of the characters in parentheses:\n" +
-		"(b)ash:       Word characters are alphanumerics only\n" +
-		"(n)ormal:     Word characters are alphanumerics plus $WORDCHARS\n" +
-		"(s)hell:      Words are command arguments using shell syntax\n" +
-		"(w)hitespace: Words are whitespace-delimited\n" +
-		"(d)efault:    Use default, no special handling (usually same as `n')\n" +
-		"(q)uit:       Quit without setting a new style\n" +
-		"\nst=1\n"
+select-word-style foo 2>/dev/null; print -r -- "stdout above, st=$?"
+select-word-style foo 2>&1 >/dev/null | { read -r first; print -r -- "first: $first" }`)
+	const want = "stdout above, st=1\nfirst: Usage: select-word-style word-style\n"
 	if out != want {
-		t.Errorf("got\n%s\nwant\n%s", out, want)
+		t.Errorf("got %q, want %q", out, want)
 	}
 }
 

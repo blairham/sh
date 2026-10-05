@@ -33,12 +33,17 @@ for w in forward-word backward-word kill-word backward-kill-word \
 	zle -N $w $w-match
 done
 
-local detail="(b)ash:       Word characters are alphanumerics only
-(n)ormal:     Word characters are alphanumerics plus \$WORDCHARS
-(s)hell:      Words are command arguments using shell syntax
-(w)hitespace: Words are whitespace-delimited
-(d)efault:    Use default, no special handling (usually same as \`n')
-(q)uit:       Quit without setting a new style"
+# The usage and the question are this file's own words. zsh prints a usage
+# of its own here, and its text is that shell's documentation rather than a
+# behavior, so what is matched is where it goes and the status.
+local detail="The first letter of word-style picks the style:
+  b  bash: a word is letters and digits
+  n  normal: letters, digits and the characters in \$WORDCHARS
+  s  shell: a word is a shell argument, quotes and all
+  w  whitespace: a word is whatever lies between blanks
+  d  default: drop the settings select-word-style made
+  q  quit, changing nothing
+An upper-case B, N, S or W adds subword matching."
 
 local style=$1
 if [[ -z $style && -n $WIDGET ]]; then
@@ -46,10 +51,7 @@ if [[ -z $style && -n $WIDGET ]]; then
 	# means and asks again, and a key that is none of them is passed over.
 	# The question is drawn under the line with `zle -M`, where the editor
 	# can draw one.
-	local REPLY prompt="Word styles (hit return for more detail):
-(b)ash (n)ormal (s)hell (w)hitespace (d)efault (q)uit
-(B), (N), (S), (W) as above with subword matching
-? "
+	local REPLY prompt="Word style: b, n, s, w or d, q to quit (Return for more)? "
 	zle -M -- "$prompt" 2>/dev/null
 	while read -k 1; do
 		case $REPLY in
@@ -90,9 +92,7 @@ case $style in
 	;;
 (*)
 	print -u2 -r -- "Usage: select-word-style word-style
-where word-style is one of the characters in parentheses:
-$detail
-"
+$detail"
 	return 1
 	;;
 esac

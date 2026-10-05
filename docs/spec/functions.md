@@ -539,7 +539,9 @@ first time, puts eight widgets in place of the editor's own: `forward-word`,
 Nothing else is deleted, so `bash` then `shell` leaves `word-chars ''`. Any other
 argument, `q` included, prints the usage on standard error and answers 1. Run as
 a widget with no argument it reads one letter. Return explains each letter and
-asks again, and a key that is not a letter is skipped.
+asks again, and a key that is not a letter is skipped. The usage and the
+question are worded here, not copied: zsh's text is its documentation, so what
+is matched is the stream, the status and the synopsis line.
 
 All eight are written over `match-words-by-style`, which splits the line into
 seven parts around the cursor: start, the word before it, what lies between that

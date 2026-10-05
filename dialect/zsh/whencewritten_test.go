@@ -16,7 +16,8 @@ import (
 // what was written, while `-S` lists links alone and a relative path draws
 // no arrow at all. Every row measured on zsh 5.9.2 (/opt/homebrew/bin/zsh,
 // -f), 2026-10-05, in a directory `<d>` holding an executable `bin/man` and
-// a link `sub/lnk -> /bin/sh`.
+// a link `sub/lnk -> <d>/bin/man`. Nothing outside `<d>` is named, because
+// the host's own `/bin` is a link on some systems.
 func TestWhenceReportsAPathHitAsWritten(t *testing.T) {
 	dir, err := filepath.EvalSymlinks(t.TempDir())
 	if err != nil {
@@ -30,31 +31,29 @@ func TestWhenceReportsAPathHitAsWritten(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "bin", "man"), []byte("#!/bin/sh\n"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.Symlink("/bin/sh", filepath.Join(dir, "sub", "lnk")); err != nil {
+	if err := os.Symlink(filepath.Join(dir, "bin", "man"), filepath.Join(dir, "sub", "lnk")); err != nil {
 		t.Fatal(err)
 	}
 	for _, tc := range []struct{ path, src, want string }{
-		{"/usr/../bin", `whence -s sh`, "/usr/../bin/sh -> /bin/sh\nst=0"},
-		{"/usr/../bin", `whence -S sh`, "/usr/../bin/sh\nst=0"},
-		{"/usr/../bin", `whence -p sh`, "/usr/../bin/sh\nst=0"},
-		{"/usr/../bin", `whence -v sh`, "sh is /usr/../bin/sh\nst=0"},
-		{"/usr/../bin", `which sh`, "/usr/../bin/sh\nst=0"},
-		{"/usr/../bin", `whence -sa sh`, "/usr/../bin/sh -> /bin/sh\nst=0"},
-		{"/bin/", `whence -a sh`, "/bin//sh\nst=0"},
-		{"/bin/", `whence -s sh`, "/bin//sh -> /bin/sh\nst=0"},
 		{"<d>/sub/../bin", `whence -s man`, "<d>/sub/../bin/man -> <d>/bin/man\nst=0"},
 		{"<d>/sub/../bin", `whence -S man`, "<d>/sub/../bin/man\nst=0"},
+		{"<d>/sub/../bin", `whence -p man`, "<d>/sub/../bin/man\nst=0"},
+		{"<d>/sub/../bin", `whence -v man`, "man is <d>/sub/../bin/man\nst=0"},
+		{"<d>/sub/../bin", `which man`, "<d>/sub/../bin/man\nst=0"},
+		{"<d>/sub/../bin", `whence -sa man`, "<d>/sub/../bin/man -> <d>/bin/man\nst=0"},
+		{"<d>/bin/", `whence -a man`, "<d>/bin//man\nst=0"},
+		{"<d>/bin/", `whence -s man`, "<d>/bin//man -> <d>/bin/man\nst=0"},
 		{"bin", `whence -s man`, "bin/man\nst=0"},
 		{"./bin", `whence -va man`, "man is ./bin/man\nst=0"},
 		{"bin/:<d>/bin", `whence -a man`, "bin//man\n<d>/bin/man\nst=0"},
-		{"<d>/./sub", `whence -S lnk`, "<d>/./sub/lnk -> /bin/sh\nst=0"},
+		{"<d>/./sub", `whence -S lnk`, "<d>/./sub/lnk -> <d>/bin/man\nst=0"},
 		// A relative path draws no arrow, even through a link.
 		{"sub", `whence -s lnk`, "sub/lnk\nst=0"},
 		{"sub", `whence -S lnk`, "sub/lnk\nst=0"},
 		{"sub", `type -s lnk`, "lnk is sub/lnk\nst=0"},
 		// Controls: a clean absolute path and a real link answer as before.
-		{"/bin", `whence -s sh`, "/bin/sh\nst=0"},
-		{"<d>/bin:<d>/sub", `whence -sa man lnk`, "<d>/bin/man\n<d>/sub/lnk -> /bin/sh\nst=0"},
+		{"<d>/bin", `whence -s man`, "<d>/bin/man\nst=0"},
+		{"<d>/bin:<d>/sub", `whence -sa man lnk`, "<d>/bin/man\n<d>/sub/lnk -> <d>/bin/man\nst=0"},
 	} {
 		path := strings.ReplaceAll(tc.path, "<d>", dir)
 		want := strings.ReplaceAll(tc.want, "<d>", dir) + "\n"

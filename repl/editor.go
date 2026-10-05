@@ -522,6 +522,18 @@ func (e *editor) readLine(prompt drawnPrompt) (string, error) {
 
 	var buf [1]byte
 	for {
+		// A draw a typed character put off because more input was in hand,
+		// and the input has run out without anything drawing it. That is a
+		// read that ended on a key which draws nothing — `abc` and an
+		// unbound `\e[15~`, `\ez` or an empty paste in one write — and
+		// without this the `abc` sits in the line, invisible, until the next
+		// keystroke (#5881). Here, before anything waits, because this is
+		// the one place every key's path comes back through: zsh 5.9.2 shows
+		// `abc` for each of those at once. A count about to replay its key
+		// is more input, so it is left to that key's own draw.
+		if e.pendingDraw && !e.inputPending() && e.countRepeat <= 0 {
+			e.redraw(prompt)
+		}
 		// Whatever the shell asked to be told about goes first, because this
 		// is where a session waits and there is nowhere else to notice from.
 		// Here rather than inside nextByte, and that is the load-bearing

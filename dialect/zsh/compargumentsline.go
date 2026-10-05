@@ -34,7 +34,7 @@ func (a *argumentsState) analyze(r *interp.Runner, cs *completionState) {
 			continue
 		}
 		if options && (strings.HasPrefix(word, "-") || strings.HasPrefix(word, "+")) && word != "-" {
-			if cursor && !a.stacking && a.cursorWritesAnArgumentLater(word) {
+			if cursor && !a.readsAsALetterStack(word) && a.cursorWritesAnArgumentLater(word) {
 				// A name whose argument can only be reached by typing more
 				// into this same word is not yet an option: the person has
 				// written a prefix of one. Measured — see
@@ -77,6 +77,11 @@ func (a *argumentsState) analyze(r *interp.Runner, cs *completionState) {
 					// than a normal one. Which of them is how many the option
 					// had already taken when it reached this word.
 					a.cursorOptArg = a.optionArgumentAfterTheWord(word, at-i-1)
+					if n := at - i - 1; a.cursorOptArg == nil && n < len(a.stackArgs) {
+						// A stack's letters took the words after it.
+						here := a.stackArgs[n]
+						a.cursorOptArg = &here
+					}
 				}
 				i += skip
 				continue
@@ -120,7 +125,7 @@ func (a *argumentsState) analyze(r *interp.Runner, cs *completionState) {
 	a.stackInProgress = a.continuingAStack(cs)
 	a.optionsPossible = options
 	a.optionsHere = options && a.optionsCompletable(cs)
-	if a.cursorOptArg == nil && !a.cursorIsOption {
+	if (a.cursorOptArg == nil && !a.cursorIsOption) || a.cursorInAnOptionalWord() {
 		a.here = a.applicable(position)
 	}
 	a.line = a.normalArguments(r, cs)
@@ -167,7 +172,7 @@ func (a *argumentsState) takeOption(word string, after []string, cursor bool) in
 		if !a.stackable(word) {
 			return -1
 		}
-		return a.takeStack(word, cursor)
+		return a.takeStack(word, after, cursor, true)
 	}
 	a.spend(name, cursor)
 	spec := a.optionNamed(name)
@@ -210,14 +215,39 @@ func (a *argumentsState) takeOption(word string, after []string, cursor bool) in
 // and records them under the option's name.
 func (a *argumentsState) eatOptionArgs(name string, want []argumentSpec, after []string) int {
 	eaten := 0
-	for _, arg := range want {
-		if arg.optional || eaten >= len(after) {
+	for range want {
+		if eaten >= len(after) {
 			break
 		}
-		a.pushOptArg(name, after[eaten])
+		a.pushEatenWord(name, after[eaten])
 		eaten++
 	}
 	return eaten
+}
+
+// pushEatenWord records a word an option took as one of its arguments.
+//
+// **An optional argument takes the next word as a required one does**, and
+// **a word an option takes is still read as an option if it names one.**
+// Measured on zsh 5.9.2, 2026-10-05 from inside a `zle -C` widget, with
+// `-a[all]`, `-q[q]::qq:`, `-n[n]:nn:` and `1:first:(a b)` declared, asking
+// `-D` and `-W` (#6189):
+//
+//	cmd -q a b <TAB>   argument-rest   opt_args -q a         $line=(b '')
+//	cmd -q -z <TAB>    argument-1      opt_args -q -z        $line=('')
+//	cmd -q -a <TAB>    argument-1      opt_args -q -a, -a ''
+//	cmd -n -a <TAB>    argument-1      opt_args -n -a, -a '' and -O no longer offers -a
+//
+// This stopped at an optional argument, so its word was the command's first
+// normal one, and an option's word that named an option was only a value.
+func (a *argumentsState) pushEatenWord(name, word string) {
+	a.pushOptArg(name, word)
+	if named, _, attached := a.lookupOption(word); named == word && !attached {
+		if spec := a.optionNamed(named); spec != nil {
+			a.spend(named, false)
+			a.openOptArg(named, spec)
+		}
+	}
 }
 
 // openOptArg records that the option is on the line, whether or not it has
@@ -292,18 +322,120 @@ func (a *argumentsState) stackable(word string) bool {
 //
 // so `-az` spends nothing and is described as the first argument, while
 // `-na` — every letter an option — spends both.
-func (a *argumentsState) takeStack(word string, cursor bool) int {
-	for i := 1; i < len(word); i++ {
-		if a.optionNamed(word[:1]+word[i:i+1]) == nil {
-			return -1
+//
+// **Unless a letter takes its argument in the word, which ends the walk**
+// (#6189): see stackSplit for where, and for what the option is given. And a
+// letter whose argument is a word of its own takes the words after the
+// stack, in the order the letters are written — `cmd -na <TAB>` and
+// `cmd -an x<TAB>` are both describing `-n`'s argument in zsh 5.9.2.
+//
+// record is false for the second walk normalArguments makes, which only
+// counts the words and must not record the stack a second time.
+func (a *argumentsState) takeStack(word string, after []string, cursor, record bool) int {
+	letters, attach, ok := a.stackSplit(word)
+	if !ok {
+		return -1
+	}
+	if record {
+		a.stackArgs = a.stackArgs[:0]
+	}
+	eaten := 0
+	for i, letter := range letters {
+		spec := a.optionNamed(letter)
+		if record {
+			a.spend(letter, cursor)
+			if spec == nil || len(spec.optargs) == 0 {
+				a.optArgs[letter] = ""
+			} else {
+				a.openOptArg(letter, spec)
+			}
 		}
+		if spec == nil || len(spec.optargs) == 0 {
+			continue
+		}
+		want := spec.optargs
+		if i == len(letters)-1 && attach > 0 {
+			if record {
+				a.pushOptArg(letter, word[1:])
+			}
+			want = want[1:]
+		} else if !spec.style.takesTheNextWord() {
+			continue
+		}
+		taken := len(spec.optargs) - len(want)
+		for _, arg := range want {
+			if eaten >= len(after) {
+				break
+			}
+			taken++
+			if record {
+				a.pushEatenWord(letter, after[eaten])
+				a.stackArgs = append(a.stackArgs, optionArgHere{name: letter, index: taken, spec: arg})
+			}
+			eaten++
+		}
+	}
+	return eaten
+}
+
+// readsAsALetterStack is whether the bare name of an option whose argument
+// comes after an `=` is read, at the cursor, as a stack of one letter rather
+// than as a prefix of the option still being typed: only under `-s`, and
+// only for a single-letter name. Measured on zsh 5.9.2, 2026-10-05 from
+// inside a `zle -C` widget, with `--opt=[o]:oo:` and `-o=[oo]:ooo:` beside
+// `1:first:(a b)`:
+//
+//	                -s                                   no -s
+//	cmd -o<TAB>     option-o-1 [-o|], opt_args -o ''     argument-1, $line=(-o)
+//	cmd --opt<TAB>  argument-1, $line=(--opt)            the same
+//
+// This kept the prefix reading for every name whenever `-s` was absent and
+// for none when it was given, so `cmd --opt<TAB>` under `-s` described
+// nothing and put `--opt` in `$opt_args` (#6189). An `=-` letter is not read
+// this way: `cmd -e<TAB>` against `-e=-[ee]:…` describes nothing either way.
+func (a *argumentsState) readsAsALetterStack(word string) bool {
+	return a.stacking && singleLetterOption(word)
+}
+
+// stackSplit reads a word as a stack of single-letter options: the letters,
+// and where the argument attached to the last of them begins, or 0 where
+// none is written in the word. ok is false for a word that is not a stack.
+//
+// **A letter whose argument may be written against it takes the rest of the
+// word**, whatever that rest holds. Measured on zsh 5.9.2, 2026-10-05 from
+// inside a `zle -C` widget under `-s`, with `-a[all]`, `-f+[file]:…`,
+// `-x-[dir]:…`, `-o=[oo]:…`, `-e=-[ee]:…`, `-n[n]:…` and `-q[q]::…`, asking
+// `-D` at the end of the word and `-W` with the cursor after it:
+//
+//	cmd -afz    option-f-1  [-af|z]     opt_args -a '' -f afz
+//	cmd -afaa   option-f-1  [-af|aa]    the rest need not be letters it lacks
+//	cmd -axq    option-x-1  [-ax|q]
+//	cmd -aoz    option-o-1  [-ao|z]     an `=` form needs no `=` in a stack
+//	cmd -ao=z   option-o-1  [-ao=|z]    and takes one where it is written
+//	cmd -aez    option-e-1  [-ae|z]     `=-` as well
+//	cmd -af=z   option-f-1  [-af|=z]    while `+` keeps it as argument text
+//	cmd -anz    argument-rest           `-n`'s argument is a word of its own
+//	cmd -aqz    argument-rest           and so is an optional one
+//
+// The value `opt_args` gives the option is the **whole word without its
+// dash** — `afz`, `ao=z` — and not the text after the letter, which is how
+// zsh reports it and so how it is recorded here.
+func (a *argumentsState) stackSplit(word string) (letters []string, attach int, ok bool) {
+	if !a.stackable(word) {
+		return nil, 0, false
 	}
 	for i := 1; i < len(word); i++ {
 		letter := word[:1] + word[i:i+1]
-		a.spend(letter, cursor)
-		a.optArgs[letter] = ""
+		spec := a.optionNamed(letter)
+		if spec == nil {
+			return nil, 0, false
+		}
+		letters = append(letters, letter)
+		if i+1 < len(word) && len(spec.optargs) > 0 && spec.style.attachesInAStack() {
+			return letters, i + 1, true
+		}
 	}
-	return 0
+	return letters, 0, true
 }
 
 // spend records that an option is on the line, and shuts off whatever its
@@ -538,7 +670,7 @@ func (a *argumentsState) normalArguments(r *interp.Runner, cs *completionState) 
 			continue
 		}
 		if options && (strings.HasPrefix(word, "-") || strings.HasPrefix(word, "+")) && word != "-" &&
-			(i != cs.current-1 || a.stacking || !a.cursorWritesAnArgumentLater(word)) {
+			(i != cs.current-1 || a.readsAsALetterStack(word) || !a.cursorWritesAnArgumentLater(word)) {
 			// The same rule analyze applies, and it has to be applied here
 			// too: a name whose argument can only be reached by typing more
 			// into this word is a normal argument being written, and `$line`
@@ -565,7 +697,7 @@ func (a *argumentsState) takeOptionQuietly(word string, after []string) int {
 		if a.stackable(word) {
 			// The bookkeeping is the first walk's; this one only counts
 			// words, so what the stack shuts off does not matter here.
-			return a.takeStack(word, false)
+			return a.takeStack(word, after, false, false)
 		}
 		return -1
 	}
@@ -579,14 +711,9 @@ func (a *argumentsState) takeOptionQuietly(word string, after []string) int {
 		// takeOption, which counts them the same way.
 		want = want[min(1, len(want)):]
 	}
-	eaten := 0
-	for _, arg := range want {
-		if arg.optional || eaten >= len(after) {
-			break
-		}
-		eaten++
-	}
-	return eaten
+	// Every argument takes a word, optional ones included: see
+	// pushEatenWord.
+	return min(len(want), len(after))
 }
 
 // describeArguments is `-D`: the message, the action and the tag of every
@@ -599,9 +726,21 @@ func (a *argumentsState) describeArguments(r *interp.Runner, cs *completionState
 		// `git checkout --orphan=<TAB>` wants a branch name; neither is the
 		// command's first argument, and the tag says so — `option-S-1` rather
 		// than `argument-1`.
-		r.SetArray(names[0], []string{o.spec.message})
-		r.SetArray(names[1], []string{o.spec.action})
-		r.SetArray(names[2], []string{o.tag()})
+		descrs, actions, subcs := []string{o.spec.message}, []string{o.spec.action}, []string{o.tag()}
+		if a.cursorInAnOptionalWord() {
+			// An optional argument that is a word of its own is described
+			// beside the normal argument the same word could be: measured,
+			// `cmd -q <TAB>` and `cmd -q x<TAB>` against `-q[q]::qq:` and
+			// `1:first:(a b)` describe `qq` and then `first` (#6189).
+			for _, i := range a.here {
+				descrs = append(descrs, a.args[i].message)
+				actions = append(actions, a.args[i].action)
+				subcs = append(subcs, a.args[i].tag())
+			}
+		}
+		r.SetArray(names[0], descrs)
+		r.SetArray(names[1], actions)
+		r.SetArray(names[2], subcs)
 		o.moveOptionIntoIPrefix(cs)
 		return 0
 	}
@@ -715,6 +854,34 @@ func (a *argumentsState) argumentsBefore(r *interp.Runner, cs *completionState) 
 // offerOptions is `-O`: the options still available here, sorted into the
 // four arrays by where their argument may be written.
 func (a *argumentsState) offerOptions(r *interp.Runner, names []string) int {
+	if o := a.cursorOptArg; o != nil && o.inWord == 0 && !o.spec.optional {
+		// **The cursor is in an option's argument that is a word of its own,
+		// and no option goes there.** Unless the argument is optional, when
+		// an option may go there instead: `cmd -q <TAB>` against
+		// `-q[q]::qq:` offers `-a` and `-n` at 0. Non-zero, nothing assigned (see
+		// compargumentsQuery), and 2 rather than 1 for the first argument of
+		// a single-letter option under `-s`. Measured on zsh 5.9.2,
+		// 2026-10-05 from inside a `zle -C` widget, the four names set to a
+		// marker first (#6189):
+		//
+		//	                       -s    no -s
+		//	cmd -n <TAB>           2     1      `-n[n]:nn:`
+		//	cmd -n x<TAB>          2     1
+		//	cmd -o <TAB>           2     1      `-o=[oo]:ooo:`
+		//	cmd -f <TAB>           2     1      `-f+[file]:fname:`
+		//	cmd -T <TAB>           2     1      `-T[t]:t1:(a):t2:(b)`
+		//	cmd -T a <TAB>         1     1      its second argument
+		//	cmd --opt <TAB>        1     1      `--opt=[o]:oo:`
+		//	cmd --long <TAB>       1     1      `--long[l]:ll:`
+		//	cmd -an x<TAB>         2            a stack's letter, `-a[all]` first
+		//
+		// This offered every option the position could take, as if the word
+		// were the next normal argument.
+		if a.inALettersFirstArgumentWord() {
+			return 2
+		}
+		return 1
+	}
 	lists := make([][]string, 4)
 	if a.optionsPossible {
 		for _, opt := range a.opts {
@@ -959,6 +1126,14 @@ func (a *argumentsState) reportLine(r *interp.Runner, names []string) int {
 // `-e=-` each answer with an empty parameter — so they are left unwritten
 // rather than guessed at.
 func (a *argumentsState) reportStack(r *interp.Runner, cs *completionState, names []string) int {
+	if a.inALettersFirstArgumentWord() {
+		// The same position `-O` answers 2 for, and `-s` answers it as a
+		// stack with nothing to say: measured, `cmd -n <TAB>`, `cmd -f <TAB>`
+		// and `cmd -an x<TAB>` under `-s` are 0 with the parameter emptied,
+		// where `cmd -T a <TAB>` and `cmd --opt <TAB>` are 1 (#6189).
+		r.SetVar(names[0], "")
+		return 0
+	}
 	if !a.stackInProgress {
 		return 1
 	}
@@ -1003,12 +1178,28 @@ func (a *argumentsState) continuingAStack(cs *completionState) bool {
 	if len(word) > 2 && a.optionNamed(word) != nil {
 		return false
 	}
-	for i := 1; i < len(word); i++ {
-		if a.optionNamed(word[:1]+word[i:i+1]) == nil {
-			return false
-		}
-	}
-	return true
+	// A letter that has taken the rest of the word as its argument ends the
+	// stack: measured, `cmd -fx<TAB>` with `-f+[file]:…` and `-x-[dir]:…`
+	// both declared answers `-s` with 1 and leaves the parameter alone,
+	// where `cmd -af<TAB>` answers 0.
+	_, attach, ok := a.stackSplit(word)
+	return ok && attach == 0
+}
+
+// cursorInAnOptionalWord is whether the cursor is in an option's optional
+// argument written as a word of its own, which is also where a normal
+// argument may be.
+func (a *argumentsState) cursorInAnOptionalWord() bool {
+	o := a.cursorOptArg
+	return o != nil && o.inWord == 0 && o.spec.optional
+}
+
+// inALettersFirstArgumentWord is whether the cursor is in the first argument
+// of a single-letter option, written as a word of its own, under `-s` — the
+// one position `-O` answers 2 for and `-s` answers 0. See offerOptions.
+func (a *argumentsState) inALettersFirstArgumentWord() bool {
+	o := a.cursorOptArg
+	return o != nil && o.inWord == 0 && a.stacking && singleLetterOption(o.name) && o.index == 1
 }
 
 // singleOption is the value `-s` writes into the parameter it names: `next`
@@ -1071,6 +1262,11 @@ func (a *argumentsState) optionArgumentInTheWord(word string) *optionArgHere {
 		return nil
 	}
 	if !attached && !spec.style.attachesToTheName() {
+		if a.readsAsALetterStack(word) && spec.style == optArgEqual {
+			// A one-letter stack, whose argument goes straight against the
+			// letter: see readsAsALetterStack.
+			return &optionArgHere{name: name, index: 1, spec: spec.optargs[0], inWord: len(word)}
+		}
 		// The name alone, and the argument is not written against it. The
 		// cursor is at the end of a whole option rather than inside one of
 		// its arguments.
@@ -1129,26 +1325,26 @@ func (a *argumentsState) optionArgumentAfterTheWord(word string, taken int) *opt
 // included: a stack is written without separators by definition, and the
 // argument goes straight against the letter.
 //
-// **The bare `-o` under `-s` is not this and is a known difference.** zsh
-// answers `cmd -o<TAB>` with `option-o-1` when `-s` is given and with the
-// first *normal* argument when it is not; this shell answers neither,
-// because the word matches an option name exactly and so never reaches the
-// stack reading. The two readings of one word one switch apart are measured
-// and unexplained, and guessing at a rule from two cells is what
-// docs/spec/oracle.md warns against — see #3229.
+// **The bare `-o` under `-s` is a stack of one letter**, and is answered by
+// optionArgumentInTheWord — see readsAsALetterStack (#6189).
 func (a *argumentsState) optionArgumentInTheStack(word string) *optionArgHere {
-	if !a.stacking || !a.stackable(word) {
+	letters, attach, ok := a.stackSplit(word)
+	if !ok {
 		return nil
 	}
-	for i := 1; i < len(word); i++ {
-		if a.optionNamed(word[:1]+word[i:i+1]) == nil {
-			return nil
+	last := letters[len(letters)-1]
+	spec := a.optionNamed(last)
+	if spec == nil || len(spec.optargs) == 0 || !spec.style.attachesInAStack() {
+		return nil
+	}
+	inWord := len(word)
+	if attach > 0 {
+		// The option's part of the word is the stack up to its letter, and
+		// the `=` an `=` form may be written with: see stackSplit.
+		inWord = attach
+		if (spec.style == optArgEqual || spec.style == optArgEqualDirect) && word[attach] == '=' {
+			inWord++
 		}
 	}
-	last := word[:1] + word[len(word)-1:]
-	spec := a.optionNamed(last)
-	if spec == nil || len(spec.optargs) == 0 || spec.style == optArgSeparate {
-		return nil
-	}
-	return &optionArgHere{name: last, index: 1, spec: spec.optargs[0], inWord: len(word)}
+	return &optionArgHere{name: last, index: 1, spec: spec.optargs[0], inWord: inWord}
 }

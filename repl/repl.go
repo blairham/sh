@@ -1214,10 +1214,63 @@ func (s Shell) beforeReading(ctx context.Context, state *terminalState, pending 
 	if drawn, drawing := s.themedPrompt(continuing, cols); drawing {
 		return drawn
 	}
+	var drawn drawnPrompt
 	if continuing {
-		return drawPrompt(s.contributed(true, cols) + s.prompt("PS2", or(s.Style.DefaultContinued, "> ")))
+		drawn = drawPrompt(s.contributed(true, cols) + s.prompt("PS2", or(s.Style.DefaultContinued, "> ")))
+	} else {
+		drawn = drawPrompt(s.contributed(false, cols) + s.prompt("PS1", or(s.Style.Default, "$ ")))
 	}
-	return drawPrompt(s.contributed(false, cols) + s.prompt("PS1", or(s.Style.Default, "$ ")))
+	s.parameterRight(&drawn, continuing)
+	return drawn
+}
+
+// parameterRight fills in the right half of a prompt drawn from the
+// parameters, from the ones the dialect names for it.
+//
+// zsh's `RPS1` and `RPROMPT`, and `RPS2` and `RPROMPT2` at a continuation —
+// see interp.PromptStyle.RightPrompt. Read and rendered exactly as PS1 is,
+// because it is: measured against zsh 5.9.2, `%F{red}%n%f`, `%{…%}` and
+// `%h` in `RPS1` draw what they draw on the left, and the `%{ %}` is what
+// keeps the escapes out of the width it is placed by. Until #5893 nothing
+// read these at all, and only a theme ever filled the right half.
+//
+// Unlike the theme, a continuation line has one: measured, `RPS2` is drawn
+// beside `dquote> ` and nothing is drawn there when only `RPS1` is set.
+func (s Shell) parameterRight(drawn *drawnPrompt, continuing bool) {
+	if s.Runner == nil {
+		return
+	}
+	names := s.Style.RightPrompt
+	if continuing {
+		names = s.Style.RightContinued
+	}
+	for _, name := range names {
+		if v, ok := s.Runner.GetVar(name); ok && v != "" {
+			drawn.setRight(s.render(v), s.rightIndent())
+			return
+		}
+	}
+}
+
+// rightIndent is how many columns a right prompt keeps clear of the
+// right-hand edge: the dialect's parameter for it if that is set, and 1
+// otherwise. See interp.PromptStyle.RightIndent.
+//
+// Measured against zsh 5.9.2: `ZLE_RPROMPT_INDENT=0` draws into the last
+// column, 3 leaves three empty, and -2 draws as 0 does.
+func (s Shell) rightIndent() int {
+	if s.Runner == nil || s.Style.RightIndent == "" {
+		return 1
+	}
+	v, ok := s.Runner.GetVar(s.Style.RightIndent)
+	if !ok {
+		return 1
+	}
+	n, err := strconv.Atoi(strings.TrimSpace(v))
+	if err != nil {
+		return 1
+	}
+	return max(n, 0)
 }
 
 // themedPrompt is the prompt half of beforeReading: what the theme draws,
@@ -1239,12 +1292,8 @@ func (s Shell) themedPrompt(continuing bool, cols int) (drawnPrompt, bool) {
 	// out and the width still has to be counted.
 	drawn := drawPrompt(themed)
 	if right != "" {
-		// The same treatment and for the same reason — a right prompt is
-		// mostly escapes, and the editor places it by its *cells*. It has no
-		// rows of its own: it is drawn on the row being typed on or it is
-		// not drawn.
-		measured := drawPrompt(right)
-		drawn.right, drawn.rightCells = measured.text, measured.cells
+		// Measured the way the left one is; see setRight.
+		drawn.setRight(right, s.rightIndent())
 	}
 	return drawn, true
 }

@@ -8,11 +8,11 @@ import "strings"
 // The right prompt: text drawn against the right-hand edge of the row the
 // line is being typed on.
 //
-// No dialect in this tree has ever drawn one. `RPROMPT`/`RPS1` appears in
-// dialect/zsh/promptnames.go as the name-aliasing measurement and no drawing
-// code reads it, so this is a capability addition rather than a theme detail
-// — bash, ksh, dash and ash get a right prompt they have never had, and the
-// zsh dialect gets to *name* the one the substrate draws.
+// A theme draws one in every dialect, and a dialect *names* the parameters a
+// person sets one with — interp.PromptStyle.RightPrompt, which is zsh's
+// `RPS1` and `RPROMPT` and nothing in the other columns. The naming was
+// promised when this was written and wired only in #5893: until then a
+// startup file setting `RPS1` drew nothing.
 //
 // **What it does was measured rather than decided**, because zsh is the only
 // column in the panel that has one. zsh 5.9.2 through a pseudo-terminal,
@@ -36,38 +36,44 @@ import "strings"
 // width the terminal had at the time — a resize smears it, and it is
 // decoration attached to output people actually read. See rightPromptErase.
 
-// rightFits reports whether a right prompt of rightCells can be drawn beside
-// a line of lineCells under a prompt of promptCells.
+// rightFits reports whether prompt's right half can be drawn beside a line of
+// lineCells.
 //
-// The two spare cells are the measurement: one blank column at the right-hand
-// edge, which the right prompt never occupies, and one blank column between
-// the end of the line and the start of the right prompt. A right prompt of no
-// width is not drawn at all, which keeps every prompt that has no right half
-// on exactly the path it was on before this existed.
-func rightFits(promptCells, lineCells, rightCells, cols int) bool {
-	if rightCells <= 0 || cols <= 0 {
+// The spare cells are the measurement: the indent at the right-hand edge,
+// which the right prompt never occupies, and one blank column between the end
+// of the line and the start of the right prompt. The indent is 1 unless a zsh
+// session sets `ZLE_RPROMPT_INDENT` — measured 2026-10-04 at 40 columns with
+// a two-cell prompt and a four-cell right one, the widest line kept is 33 at
+// an indent of 0, 32 at 1 and 30 at 3, which is this formula at each. A right
+// prompt of no width is not drawn at all, which keeps every prompt that has
+// no right half on exactly the path it was on before this existed.
+func rightFits(prompt drawnPrompt, lineCells, cols int) bool {
+	if prompt.rightCells <= 0 || cols <= 0 {
 		// No right half, or no width to place one in. A width of zero is not
 		// a width of eighty: placing against an edge nobody knows is how a
 		// frame ends up wrapped.
 		return false
 	}
-	return promptCells+lineCells+rightCells+2 <= cols
+	return prompt.cells+lineCells+prompt.rightCells+prompt.rightIndent+1 <= cols
 }
 
 // rightPromptAt is where a right prompt starts, counted in columns from the
 // left-hand edge with the first column numbered **zero**.
 //
 // Against the edge rather than after the line, which is what makes it stay
-// still while the line grows under it. The extra one is the blank column at
-// the edge: measured, zsh at 40 columns puts a five-cell right prompt in
-// columns 35 through 39 and leaves column 40 empty, which is columns 34
-// through 38 counted from zero.
+// still while the line grows under it. The indent is the blank columns at the
+// edge: measured, zsh at 40 columns puts a five-cell right prompt in columns
+// 35 through 39 and leaves column 40 empty, which is columns 34 through 38
+// counted from zero; with `ZLE_RPROMPT_INDENT=0` a four-cell one fills the
+// last four columns, and with 3 it leaves three empty.
 //
 // The off-by-one here is the whole of the difference between drawing against
 // the edge and drawing *over* it, and a terminal with automatic margins turns
 // the second into a wrap — so the table in TestTheRightPromptSitsWhereZshPutsIt
 // is the measurement rather than a rounding of it.
-func rightPromptAt(rightCells, cols int) int { return cols - rightCells - 1 }
+func rightPromptAt(prompt drawnPrompt, cols int) int {
+	return cols - prompt.rightCells - prompt.rightIndent
+}
 
 // writeRightPrompt draws the right prompt and returns the cursor to the start
 // of the row.
@@ -83,10 +89,10 @@ func rightPromptAt(rightCells, cols int) int { return cols - rightCells - 1 }
 // prompt, so a right prompt that no longer fits is gone by the time this
 // declines to write one.
 func writeRightPrompt(b *strings.Builder, prompt drawnPrompt, lineCells, cols int) bool {
-	if !rightFits(prompt.cells, lineCells, prompt.rightCells, cols) {
+	if !rightFits(prompt, lineCells, cols) {
 		return false
 	}
-	forward := rightPromptAt(prompt.rightCells, cols) - (prompt.cells + lineCells)
+	forward := rightPromptAt(prompt, cols) - (prompt.cells + lineCells)
 	if forward > 0 {
 		b.WriteString("\x1b[")
 		b.WriteString(itoa(forward))
@@ -110,7 +116,7 @@ func writeRightPrompt(b *strings.Builder, prompt drawnPrompt, lineCells, cols in
 // because a single erase-to-end-of-row takes the gap and the prompt together
 // and there is nothing between them to keep.
 func rightPromptErase(b *strings.Builder, prompt drawnPrompt, lineCells, cols, curCol int) {
-	if !rightFits(prompt.cells, lineCells, prompt.rightCells, cols) {
+	if !rightFits(prompt, lineCells, cols) {
 		return
 	}
 	b.WriteString("\r")

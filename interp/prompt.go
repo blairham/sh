@@ -458,6 +458,29 @@ type PromptStyle struct {
 	// screen.
 	Default, DefaultContinued string
 
+	// RightPrompt and RightContinued name the parameters this dialect draws
+	// against the right-hand edge of the row being typed on: the first for a
+	// fresh line, the second for a continuation line. Several names are
+	// spellings of one prompt, read in order, and the first one set and
+	// non-empty is drawn. None means the dialect has no right prompt, which
+	// is every column but zsh.
+	//
+	// zsh's are `RPS1` or `RPROMPT`, and `RPS2` or `RPROMPT2` at a
+	// continuation. Measured 2026-10-04 through a pseudo-terminal against
+	// zsh 5.9.2, either name of either pair is drawn, and the value is read
+	// as PS1 is, codes and `%{ %}` included. The two names of a pair are not
+	// two spellings of one stored value there — see
+	// dialect/zsh/promptnames.go — and with both set the one assigned last
+	// is drawn, which an order of names cannot say; that case is the only
+	// one this list answers differently.
+	RightPrompt, RightContinued []string
+
+	// RightIndent names the integer parameter holding how many columns the
+	// right prompt keeps clear of the right-hand edge, `ZLE_RPROMPT_INDENT`
+	// in zsh. Unset, empty or unnamed is 1, and a negative value is 0 —
+	// both measured against zsh 5.9.2.
+	RightIndent string
+
 	// DefaultTrace is what this dialect puts in PS4, the prefix `set -x`
 	// writes in front of a traced line. Empty means the dialect has not said,
 	// and the substrate's own prefix stands as the thing the tracer falls

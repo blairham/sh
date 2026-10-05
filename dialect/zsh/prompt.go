@@ -314,6 +314,11 @@ func PromptStyle() interp.PromptStyle {
 		},
 		Default:          "%m%# ",
 		DefaultContinued: "%_> ",
+		// The right prompt, which nothing read until #5893: a startup file
+		// setting either name drew nothing. See the field.
+		RightPrompt:    []string{"RPS1", "RPROMPT"},
+		RightContinued: []string{"RPS2", "RPROMPT2"},
+		RightIndent:    "ZLE_RPROMPT_INDENT",
 		// The one column whose trace prefix is a *location*, spelled in this
 		// shell's own prompt language: the unit being read and the line in
 		// it. Measured 2026-09-17 with nothing inherited, `-c` and `-i`

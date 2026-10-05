@@ -114,7 +114,7 @@ func (e *editor) repaint(prompt drawnPrompt, cols int) bool {
 		return false
 	}
 	shown := e.displayed()
-	if rightFits(prompt.cells, cells(shown), prompt.rightCells, cols) != d.right {
+	if rightFits(prompt, cells(shown), cols) != d.right {
 		// The line has just grown into the right prompt, or shrunk back off
 		// it. An incremental repaint writes what changed and erases nothing,
 		// so it cannot take one off; the whole-line draw clears to the end of
@@ -231,7 +231,7 @@ func (e *editor) promptDrawn(prompt drawnPrompt) {
 		cols:   cols,
 		// A fresh prompt has an empty line under it, so whether a right
 		// prompt was drawn is decided by the prompt's own width alone.
-		right: rightFits(prompt.cells, 0, prompt.rightCells, cols),
+		right: rightFits(prompt, 0, cols),
 		row:   0, col: prompt.cells,
 		endRow: 0, endCol: prompt.cells,
 	}

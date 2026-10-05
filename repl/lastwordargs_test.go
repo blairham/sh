@@ -148,3 +148,17 @@ func TestHistNoNumbersTheLineBeingEdited(t *testing.T) {
 		}
 	}
 }
+
+// TestInsertLastWordWalksWithinOneWidget: a widget calling it twice inserts
+// the word from two lines back, measured — `three` — because the second call
+// follows the first.
+func TestInsertLastWordWalksWithinOneWidget(t *testing.T) {
+	line, _ := typedReachingBackStyled(t, lastWordStyle, nil, lastWordHistory, func(in Line, ed Actions) (Line, bool) {
+		in, _ = ed.Perform(WidgetInsertLastWord, in)
+		in, _ = ed.Perform(WidgetInsertLastWord, in)
+		return in, true
+	}, "\a\n")
+	if line != "three" {
+		t.Errorf("line %q, want %q", line, "three")
+	}
+}

@@ -2969,17 +2969,11 @@ func (s Shell) newEditor(ctx context.Context, state *terminalState) *editor {
 		pastedStyle:    s.Editor.PastedTextStyle,
 		pastedStyleEnd: s.Editor.PastedTextStyleEnd,
 		// And a control character's caret. See controlglyph.go.
-		controlStyle:    s.Editor.ControlCharacterStyle,
-		controlStyleEnd: s.Editor.ControlCharacterStyleEnd,
-		selfInsert:      s.Editor.SelfInsertWidget,
-		tabOnBlank:      s.Editor.TabOnABlankLineTypesItself,
-		specials:        s.Editor.SpecialWidgets,
-		// Whether the matches are drawn on the keystroke that found them
-		// ambiguous, whether the bell rings at all, and what to do about
-		// output that never ended its line: four fields the dialect's
-		// options decide, read on every key and every prompt because a
-		// person sets each of them at the prompt. See readEditorOptions.
-		liveOptions:          s.readEditorOptions,
+		controlStyle:         s.Editor.ControlCharacterStyle,
+		controlStyleEnd:      s.Editor.ControlCharacterStyleEnd,
+		selfInsert:           s.Editor.SelfInsertWidget,
+		tabOnBlank:           s.Editor.TabOnABlankLineTypesItself,
+		specials:             s.Editor.SpecialWidgets,
 		clearBefore:          s.Editor.ClearBeforeThePrompt,
 		listQueryStrict:      s.Editor.ListQueryAcceptsOnlyYesOrNo,
 		listQueryTakesItsRow: s.Editor.ListQueryAnswerTakesTheQuestionsRow,
@@ -3050,7 +3044,16 @@ func (s Shell) newEditor(ctx context.Context, state *terminalState) *editor {
 		// editor.listQueryAsks.
 		height: func() int { return terminalHeight(s.inFile()) },
 	}
+	// Whether the matches are drawn on the keystroke that found them
+	// ambiguous, whether the bell rings at all, and what to do about output
+	// that never ended its line: four fields the dialect's options decide,
+	// read now and again on every key and every prompt, because a person sets
+	// each of them at the prompt. A session with no shell behind it has no
+	// options to read and keeps what it was given. See readEditorOptions.
 	s.readEditorOptions(ed)
+	if s.Runner != nil {
+		ed.liveOptions = s.readEditorOptions
+	}
 	return ed
 }
 

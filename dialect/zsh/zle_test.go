@@ -1134,6 +1134,9 @@ func TestTheLineIsReadOnlyInsideACompletionWidget(t *testing.T) {
 		if strings.Contains(printed, "unreached") {
 			t.Errorf("%s: printed %q, want the widget to have stopped at the refusal", name, printed)
 		}
+		// The status the refusal left rides back in Status (#5939); the
+		// question here is only the line.
+		line.Status = 0
 		if want := (repl.Line{Buffer: "abcd", Cursor: 2}); line != want {
 			t.Errorf("%s: line = %+v, want %+v — a completion widget does not rewrite it", name, line, want)
 		}

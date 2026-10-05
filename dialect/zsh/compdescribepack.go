@@ -81,8 +81,12 @@ import (
 //   - **Each name carries its own definition's options**, so a row may hold
 //     names that `compadd` adds with different suffixes. The empty cells and
 //     the descriptions carry the options of the definition that owns the
-//     last row's first name — with `G=(-a:s -b:t -z)` given `-Q` and
-//     `H=(--aa:s -c:u -y)` given `-S=`, the runs come back with `-S=`.
+//     **first row's first name**: with `G` given `-Q` and `H` given `-S=`,
+//     `G=(--aa:s -z:u) H=(-a:s -b:t)` answers its runs with `-Q` and
+//     `G=(-z:u -a:s) H=(--aa:s -b:t)` with `-S=` — `--aa` heads the first
+//     row both times, and it is the last definition only the second time.
+//     The `ls -<TAB>` trace agrees: its runs carry `--all`'s definition's
+//     options and not the last definition's `-qS=`.
 //   - **The undescribed names come last**, one answer per definition, not
 //     packed, with the definition's options and the explanation *without*
 //     its `-X` heading: `-z` above comes back `(-Q -J ej)`.
@@ -206,8 +210,7 @@ func (d *describeState) pack(r *interp.Runner) []packedCell {
 	}
 	room = max(room, 0)
 
-	lastDef := lines[len(lines)-1].names[0].def
-	fillOptions := d.groups[lastDef].options
+	fillOptions := d.groups[lines[0].names[0].def].options
 	var out []packedCell
 	run := func(n int, displays []string) {
 		if n == 0 {

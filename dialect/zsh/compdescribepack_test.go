@@ -74,6 +74,32 @@ func TestCompdescribeGroupsNamesThatShareADescription(t *testing.T) {
 				"packed(-E2 -J ej -X ex)/ packed(-E5 -J ej -X ex)/,,,-- s#96,-- t#96 ",
 		},
 		{
+			// The fillers carry the options of the first row's first name's
+			// definition — here the second definition's, which is also the
+			// last; the next row is the one that tells the two apart.
+			"the fillers' options, from the first row",
+			"G=(-z:u -a:s); H=(--aa:s -b:t)", "-I '' 60 '-- ' E -g G -Q -- H -S=",
+			"packed(-S= -2V ej -X ex)--aa/--aa packed(-S= -2V ej -X ex)-b/-b packed(-Q -2V ej -X ex)-z/-z " +
+				"packed(-Q -2V ej -X ex)-a/-a packed(-E2 -S= -J ej -X ex)/ " +
+				"packed(-E3 -S= -J ej -X ex)/-- s#108,-- t#108,-- u#108 ",
+		},
+		{
+			"and not from the last definition",
+			"G=(--aa:s -z:u); H=(-a:s -b:t)", "-I '' 60 '-- ' E -g G -Q -- H -S=",
+			"packed(-Q -2V ej -X ex)--aa/--aa packed(-S= -2V ej -X ex)-b/-b packed(-Q -2V ej -X ex)-z/-z " +
+				"packed(-S= -2V ej -X ex)-a/-a packed(-E2 -Q -J ej -X ex)/ " +
+				"packed(-E3 -Q -J ej -X ex)/-- s#108,-- t#108,-- u#108 ",
+		},
+		{
+			// A line takes a name only while the total stays below the
+			// width: three eleven-column names are 33, which 33 does not hold.
+			"the width is a bound it stays below",
+			"G=(--aaaaaaa:s --bbbbbbb:s --ccccccc:s -x:t)", "-I '' 33 '-- ' E -g G",
+			"packed(-2V ej -X ex)--bbbbbbb/--bbbbbbb packed(-2V ej -X ex)--ccccccc/--ccccccc " +
+				"packed(-2V ej -X ex)-x/-x packed(-2V ej -X ex)--aaaaaaa/--aaaaaaa " +
+				"packed(-E2 -J ej -X ex)/ packed(-E3 -J ej -X ex)/,-- s#96,-- t#96 ",
+		},
+		{
 			// One name a line saves no row, so the answer is the ordinary one.
 			"packing that saves nothing",
 			"G=(--aaaaaaa:s --bbbbbbb:s -x:t)", "-I '' 12 '-- ' E -g G",

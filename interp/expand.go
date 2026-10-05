@@ -9628,7 +9628,10 @@ func (r *Runner) nestedWords(e *syntax.ParamExpr) (words []string, set, isList b
 	// the *third* reader found nothing and expanded the inner again.
 	// `${${$(cmd):-d}}` ran its command twice for that reason, and a run is
 	// not recoverable from the value.
-	defer func() { r.holdNested(e, words, set, isList) }()
+	defer func() {
+		r.holdNested(e, words, set, isList)
+		r.nestedShape = nestedShapeMemo{node: e, isList: isList, known: true}
+	}()
 	if words, set, isList, ok := r.takeNested(e); ok {
 		// Already expanded for this span. Every answer is handed over,
 		// list-ness included: the question is about the inner's shape, and

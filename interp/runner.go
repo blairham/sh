@@ -2375,6 +2375,10 @@ type Runner struct {
 	// of a span's expansion to the scalar half so the inner runs once. See
 	// nestedHold.
 	nestedHeld nestedHold
+	// nestedShape is whether the nested expansion expanded last came to a
+	// list, kept past the hold so the expansion one level out can ask it.
+	// See nestedShapeOf.
+	nestedShape nestedShapeMemo
 	// sourceHeld is one parameter's source, kept for the other readers of
 	// the same node in the same span so that an expansion reads its
 	// parameter once — see sourceHold, where the three things a second read

@@ -5017,6 +5017,42 @@ type Diagnostics struct {
 	// at the same number.
 	JobsAtExitLocatedInAScript bool
 
+	// JobsAtExitOnACommandString is the same two sentences on the `-c`
+	// route, which is not the script route's rule: the end of the string
+	// names no job at all, an `exit` names them located where a diagnostic
+	// of that line would be, and the hangup warning is located at line 1
+	// whatever line the shell stopped on.
+	//
+	// Measured 2026-10-05 through a pseudo-terminal, `zsh -c` against
+	// zsh 5.9.2 (#6035):
+	//
+	//	set -m; sleep 1 & echo x          x / zsh:1: warning: 1 jobs SIGHUPed
+	//	set -m⏎sleep 1 &⏎exit             zsh:3: you have running jobs. /
+	//	                                  zsh:1: warning: 1 jobs SIGHUPed
+	//	set -m⏎sleep 1 &⏎f() {⏎:⏎exit⏎}⏎f   f:2: you have running jobs. /
+	//	                                  zsh:1: warning: 1 jobs SIGHUPed
+	//	set -m; sleep 5 & kill -STOP $!; echo x    x, and nothing more
+	//
+	// where this shell wrote `zsh: you have running jobs.` at the end of the
+	// string as well and located neither line. Two more rows, the same day:
+	//
+	//	set -m⏎sleep 1 &⏎setopt nocheckjobs⏎:⏎:⏎exit 3
+	//	                                  zsh:6: warning: 1 jobs SIGHUPed, 3
+	//	trap 'print END' EXIT⏎set -m⏎sleep 1 &⏎exit
+	//	                                  zsh:4: you have running jobs. /
+	//	                                  zsh:1: warning …, and no END
+	//
+	// so an `exit` that wrote no sentence puts the warning on its own line,
+	// and one that did write it leaves with 0 and runs **no EXIT trap** —
+	// which the script route does run, measured beside it. And where the
+	// string runs off its end the warning comes **after** the EXIT trap's
+	// line rather than before it: `trap 'print END' EXIT; set -m; sleep 1 &
+	// print x` is `x`, `END`, then the warning, where an `exit` in place of
+	// the `print` writes the warning first, as the script route does. The last row is the first one
+	// with a stopped job: no sentence, and nothing hung up, since a stopped
+	// job is not sent to.
+	JobsAtExitOnACommandString bool
+
 	// HeldExitInAScriptStatus is what an `exit N` leaves with when it was
 	// the thing that wrote the jobs-at-exit sentence and the shell has no
 	// prompt to stay at. Zero leaves the operand alone, which is what a

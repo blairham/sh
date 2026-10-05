@@ -62,6 +62,10 @@ func (r *Runner) hangUpJobsIfAsked() {
 		if j.Stopped && skipStopped {
 			continue
 		}
+		if j.startedWithoutMonitor && r.sem().HangupAtExitSkipsJobsStartedWithoutTheMonitor == Yes {
+			// See Semantics.HangupAtExitSkipsJobsStartedWithoutTheMonitor.
+			continue
+		}
 		if r.signalJob(j, syscall.SIGHUP) == nil {
 			sent++
 		}

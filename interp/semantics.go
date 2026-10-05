@@ -24561,6 +24561,26 @@ type Semantics struct {
 	// above it is, and read the same way.
 	HangupAtExitSkipsStoppedJobs Answer
 
+	// HangupAtExitSkipsJobsStartedWithoutTheMonitor says a job that started
+	// while the monitor was off is left out of that send and its count, even
+	// though the monitor is on by the time the shell leaves.
+	//
+	// zsh Yes. Measured 2026-10-05 through a pseudo-terminal, `zsh -c`
+	// (#6035):
+	//
+	//	sleep 1 & set -m; echo x               x, and nothing more
+	//	sleep 1 & set -m; sleep 1 & echo x     zsh:1: warning: 1 jobs SIGHUPed
+	//	set -m; sleep 1 & sleep 1 & echo x     zsh:1: warning: 2 jobs SIGHUPed
+	//
+	// so the count is of the jobs started under the monitor, and the job in
+	// front of `set -m` is not one of them. bash No: at a login prompt with
+	// `huponexit` and the monitor turned off before the job started, the
+	// job is still hung up (`Hangup`, measured the same day).
+	//
+	// Unreachable in dash, ksh93 and BusyBox ash for the reason the axes
+	// above it are, and read the same way.
+	HangupAtExitSkipsJobsStartedWithoutTheMonitor Answer
+
 	// HangupAtExitPrecedesTheExitTrap says the send happens before the EXIT
 	// trap runs rather than after it. The two shells disagree, and the
 	// disagreement is visible to any script that traps both ends.

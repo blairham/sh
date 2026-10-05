@@ -1602,6 +1602,10 @@ func Semantics() interp.Semantics {
 	// three rows are on their axes.
 	s.HangupAtExitNeedsALoginShell = interp.Yes
 	s.HangupAtExitSkipsStoppedJobs = interp.No
+	// A job started with the monitor off is hung up like any other:
+	// measured 2026-10-05 at a login prompt with `huponexit`, `set +m`
+	// before the job, and `exit` is `Hangup` (#6035).
+	s.HangupAtExitSkipsJobsStartedWithoutTheMonitor = interp.No
 	s.HangupAtExitPrecedesTheExitTrap = interp.No
 	// `autocd` says what it did before doing it: with the option on, a bare
 	// `subdir` writes `cd -- subdir` and then moves. Measured 2026-09-08

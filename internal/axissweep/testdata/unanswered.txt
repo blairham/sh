@@ -151,6 +151,7 @@ ash   FunctionNamesUnderPlus
 ash   GlobalReplacementAnchors
 ash   HangupAtExitNeedsALoginShell
 ash   HangupAtExitPrecedesTheExitTrap
+ash   HangupAtExitSkipsJobsStartedWithoutTheMonitor
 ash   HangupAtExitSkipsStoppedJobs
 ash   HeldExitListsTheJobs
 ash   IgnoredNamesFollowTheParameter
@@ -534,6 +535,7 @@ dash  FunctionNamesUnderPlus
 dash  GlobalReplacementAnchors
 dash  HangupAtExitNeedsALoginShell
 dash  HangupAtExitPrecedesTheExitTrap
+dash  HangupAtExitSkipsJobsStartedWithoutTheMonitor
 dash  HangupAtExitSkipsStoppedJobs
 dash  HeldExitListsTheJobs
 dash  IgnoredNamesFollowTheParameter
@@ -743,6 +745,7 @@ ksh   ErrtraceReachesSubshells
 ksh   ExportContainerLetterNeedsAValue
 ksh   HangupAtExitNeedsALoginShell
 ksh   HangupAtExitPrecedesTheExitTrap
+ksh   HangupAtExitSkipsJobsStartedWithoutTheMonitor
 ksh   HangupAtExitSkipsStoppedJobs
 ksh   HeldExitListsTheJobs
 ksh   InteractiveStartupFileWhenLogin

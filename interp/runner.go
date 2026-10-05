@@ -3609,6 +3609,10 @@ type Runner struct {
 	// background jobs included — see where it is written for why that is not
 	// Runner.line. Read only by the two sentences about abandoned jobs.
 	lastStmtLine int
+	// heldExitSkipsTheExitTrap says the shell is leaving behind an `exit`
+	// that wrote the jobs-at-exit sentence on a route where that ends the
+	// shell without its EXIT trap. See Diagnostics.JobsAtExitOnACommandString.
+	heldExitSkipsTheExitTrap bool
 	// caseSubjectPrev is that line while a `case` subject is being expanded,
 	// and zero everywhere else. Runner.lineNow is where it is taken up; it
 	// is held here rather than written into line so that a subject reading
@@ -6999,7 +7003,7 @@ func (r *Runner) Finish(ctx context.Context) int {
 	r.tellOfJobsLeftBehind(false)
 	// A shell a TRAP function interrupted ends its own way. See
 	// trapinterrupt.go.
-	skipExitTrap := r.interruptedAtTheEnd()
+	skipExitTrap := r.interruptedAtTheEnd() || r.heldExitSkipsTheExitTrap
 	// Which side of the EXIT trap the hangup falls on is the dialect's, and
 	// the two shells that hang up at all answer it differently: bash writes
 	// the trap's line and *then* the job's handler sees the signal, and zsh
@@ -7007,14 +7011,20 @@ func (r *Runner) Finish(ctx context.Context) int {
 	// Semantics.HangupAtExitPrecedesTheExitTrap for both measurements, and
 	// note that this is the same call either way — the order is the only
 	// thing that moves.
-	if r.sem().HangupAtExitPrecedesTheExitTrap == Yes {
+	hangupFirst := r.sem().HangupAtExitPrecedesTheExitTrap == Yes
+	if hangupFirst && r.Route == RouteCommandString && !r.exitRan && r.diag().JobsAtExitOnACommandString {
+		// Except where a command string ran off its end, which hangs up
+		// after the trap. See Diagnostics.JobsAtExitOnACommandString.
+		hangupFirst = false
+	}
+	if hangupFirst {
 		r.hangUpJobsIfAsked()
 	}
 	if !skipExitTrap {
 		r.runExitTrap(ctx)
 	}
 	r.runExitHook(ctx)
-	if r.sem().HangupAtExitPrecedesTheExitTrap != Yes {
+	if !hangupFirst {
 		r.hangUpJobsIfAsked()
 	}
 	r.finishHistoryFile()

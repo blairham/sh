@@ -8838,6 +8838,15 @@ func biExit(r *Runner, ctx context.Context, args []string) int {
 	// of it the same script leaves with 7.
 	if !r.JobControl && r.tellOfJobsLeftBehind(true) && r.diag().HeldExitInAScriptStatus != 0 {
 		r.status = r.diag().HeldExitInAScriptStatus
+		if r.Route == RouteCommandString && r.diag().JobsAtExitOnACommandString {
+			// And 0 on the `-c` route, not the script route's 1 and not the
+			// operand: measured 2026-10-05 through a pseudo-terminal, `zsh -c
+			// 'set -m; sleep 1 & exit 7'` writes the sentence and leaves with
+			// 0, and with `setopt nocheckjobs` in front leaves with 7 — and
+			// the EXIT trap does not run behind the sentence (#6035).
+			r.status = 0
+			r.heldExitSkipsTheExitTrap = true
+		}
 		r.stopTheShellForExit()
 		return r.status
 	}

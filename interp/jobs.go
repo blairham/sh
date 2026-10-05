@@ -2618,6 +2618,12 @@ func (r *Runner) tellOfJobsLeftBehind(atTheExit bool) bool {
 	for _, j := range r.jobs {
 		r.noticeStoppedJob(j)
 	}
+	// After the sweep and not before it: the end of a command string names
+	// no job, but the hangup that follows still reads which ones stopped.
+	if !atTheExit && r.Route == RouteCommandString && r.diag().JobsAtExitOnACommandString {
+		// See Diagnostics.JobsAtExitOnACommandString.
+		return false
+	}
 	wording := r.jobsAtExitSentence(r.jobsAtExitName(atTheExit))
 	if wording == "" {
 		return false
@@ -2640,6 +2646,13 @@ func (r *Runner) tellOfJobsLeftBehind(atTheExit bool) bool {
 // line, and a shell running off the end of a script is one line past the last
 // one it read.
 func (r *Runner) jobsAtExitName(atTheExit bool) string {
+	if r.Route == RouteCommandString && r.diag().JobsAtExitOnACommandString {
+		// Where a diagnostic of the `exit`'s own line is: the function's
+		// name and its line inside one. See
+		// Diagnostics.JobsAtExitOnACommandString.
+		name, line, _ := r.locationNameAndLine(true)
+		return name + ":" + strconv.Itoa(line)
+	}
 	if !r.diag().JobsAtExitLocatedInAScript || r.Route != RouteScriptFile {
 		return r.name()
 	}
@@ -2659,6 +2672,15 @@ func (r *Runner) jobsAtExitName(atTheExit bool) string {
 // not the `exit` itself — and a script that ran off the end writes both at the
 // same number whether or not there was a sentence.
 func (r *Runner) jobsHungUpName() string {
+	if r.Route == RouteCommandString && r.diag().JobsAtExitOnACommandString {
+		// The `exit`'s line where an `exit` ran and wrote no sentence, and
+		// line 1 otherwise — at the end of the string, and behind a sentence
+		// an `exit` wrote. See Diagnostics.JobsAtExitOnACommandString.
+		if r.exitRan && !r.toldOfJobsAtExit {
+			return r.name() + ":" + strconv.Itoa(r.lastStmtLine)
+		}
+		return r.name() + ":1"
+	}
 	if !r.diag().JobsAtExitLocatedInAScript || r.Route != RouteScriptFile {
 		return r.name()
 	}

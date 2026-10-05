@@ -394,6 +394,16 @@ type editor struct {
 	woke     func()
 	rerender func(cols int) (drawnPrompt, bool)
 
+	// promptAgain renders the prompt afresh for `zle reset-prompt`, or is nil
+	// in an editor with no shell behind it. See Shell.promptAgain.
+	promptAgain func(cols int) drawnPrompt
+
+	// promptNow is the prompt drawn in place of the one this read began
+	// with, once something has drawn one — a reset-prompt or a re-render.
+	// The read loop, the actions a widget calls and the redraws all carry
+	// the prompt by value, so each asks live for the one on the screen.
+	promptNow *drawnPrompt
+
 	// answerInterrupt answers a ^C typed during the read, and reports whether
 	// the line is kept. Set by the session for the length of a prompt's read
 	// and nil otherwise, where a ^C gives the line up as it always has. See
@@ -449,6 +459,7 @@ type editor struct {
 // exit — and ErrInterrupted for ^C, which abandons the line without exiting.
 func (e *editor) readLine(prompt drawnPrompt) (string, error) {
 	e.line, e.pos = e.line[:0], 0
+	e.promptNow = nil
 	// Nothing has been written on the way out of this read yet. Here rather
 	// than where the word is written, so that the answer belongs to the read
 	// being started and not to whichever earlier one last ended in ^D.
@@ -552,6 +563,9 @@ func (e *editor) readLine(prompt drawnPrompt) (string, error) {
 		// the one place every key's path comes back through: zsh 5.9.2 shows
 		// `abc` for each of those at once. A count about to replay its key
 		// is more input, so it is left to that key's own draw.
+		// The prompt on the screen, which a widget the last key ran may have
+		// replaced. See promptNow.
+		prompt = e.live(prompt)
 		if e.pendingDraw && !e.inputPending() && e.countRepeat <= 0 {
 			e.redraw(prompt)
 		}
@@ -1123,6 +1137,7 @@ func (e *editor) moveTo(pos int, prompt drawnPrompt) {
 // behind it. The whole line otherwise, which is what this always used to do
 // and is what every case below falls back to.
 func (e *editor) redraw(prompt drawnPrompt) {
+	prompt = e.live(prompt)
 	e.specialWidget("zle-line-pre-redraw", prompt)
 	e.pendingDraw = false
 	cols := e.cols()
@@ -1277,6 +1292,7 @@ func (e *editor) toLastRow(prompt drawnPrompt) {
 // endLine finishes the line on the screen: down past the last row of it, then
 // a newline, and the next draw starts from the top again.
 func (e *editor) endLine(prompt drawnPrompt, before string) {
+	prompt = e.live(prompt)
 	if e.pendingDraw {
 		// A line accepted straight out of a paste was never drawn — the
 		// newline was in the same write as the text, so the input never ran

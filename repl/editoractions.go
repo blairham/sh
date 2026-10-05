@@ -200,7 +200,7 @@ func (a editorActions) Perform(w Widget, in Line) (Line, bool) {
 	// up-line-or-history` must be the same action, including where the cursor
 	// lands and what the walk leaves behind at each step. A second
 	// implementation here is how the two would come to disagree.
-	a.e.runWidget(Binding{Widget: w}, a.prompt)
+	a.e.runWidget(Binding{Widget: w}, a.e.live(a.prompt))
 	if w.IsIncrementalSearch() {
 		// The keys the widget is about are now the key that ended the
 		// search: measured 2026-10-04 against zsh 5.9.2, `$KEYS` after the
@@ -217,7 +217,7 @@ func (a editorActions) Perform(w Widget, in Line) (Line, bool) {
 
 func (a editorActions) Redisplay(in Line) {
 	a.e.take(in)
-	a.e.redraw(a.prompt)
+	a.e.redraw(a.e.live(a.prompt))
 }
 
 func (a editorActions) PushKeys(s string) { a.e.pushKeys(s) }

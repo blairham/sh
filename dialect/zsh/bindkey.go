@@ -170,6 +170,9 @@ var bindkeyWidgets = map[string]repl.Widget{
 	"history-beginning-search-forward":  repl.WidgetHistoryBeginningSearchForward,
 	"up-line":                           repl.WidgetUpLine,
 	"down-line":                         repl.WidgetDownLine,
+	// The prompt drawn again, which a widget that changed what it shows asks
+	// for (#5940).
+	"reset-prompt": repl.WidgetResetPrompt,
 	// The key that means "this key does nothing", which is what `-r` leaves
 	// behind and what `bindkey` prints for a key nobody bound.
 	undefinedKey: repl.WidgetNone,
@@ -248,6 +251,7 @@ var widgetNames = map[repl.Widget]string{
 	repl.WidgetSearchHistoryForward:         "history-incremental-search-forward",
 	repl.WidgetPatternSearchHistoryBackward: "history-incremental-pattern-search-backward",
 	repl.WidgetPatternSearchHistoryForward:  "history-incremental-pattern-search-forward",
+	repl.WidgetResetPrompt:                  "reset-prompt",
 }
 
 // editorControlKeys are the keys the editor reads that are not actions a key

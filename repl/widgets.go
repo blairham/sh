@@ -267,7 +267,23 @@ const (
 
 // takesItsCount is whether the action reads the count itself, so that a key
 // pressed with one is performed once and not played again as many times.
-func (w Widget) takesItsCount() bool { return w == WidgetBackwardKillLine }
+func (w Widget) takesItsCount() bool {
+	switch w {
+	case WidgetBackwardKillLine, WidgetHistoryBeginningSearchBackward, WidgetHistoryBeginningSearchForward:
+		return true
+	}
+	return false
+}
+
+// countOrOne is the count the keystroke or the call carries, and one where
+// there is none or it is nought — the count an action that reads its own
+// takes, for the actions where nought means once.
+func (e *editor) countOrOne() int {
+	if e.keyNumeric == nil || *e.keyNumeric == 0 {
+		return 1
+	}
+	return *e.keyNumeric
+}
 
 // IsIncrementalSearch is whether the action is one of the four searches,
 // which read their own keys and end with a status and a `$KEYS` of their own
@@ -491,9 +507,9 @@ func (e *editor) runWidget(b Binding, prompt drawnPrompt) {
 	case WidgetViAppendMode:
 		e.leaveViCommand(e.pos+1, prompt)
 	case WidgetHistoryBeginningSearchBackward:
-		e.actionStatus = e.beginningSearch(-1, prompt)
+		e.actionStatus = e.beginningSearch(-e.countOrOne(), prompt)
 	case WidgetHistoryBeginningSearchForward:
-		e.actionStatus = e.beginningSearch(+1, prompt)
+		e.actionStatus = e.beginningSearch(e.countOrOne(), prompt)
 	case WidgetResetPrompt:
 		e.resetPrompt(prompt)
 	case WidgetSendBreak:

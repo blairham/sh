@@ -51,6 +51,7 @@ hn() { LBUFFER=H$HISTNO }; zle -N hn; bindkey '^Xh' hn
 		{"hse8", "hse", []string{": echo apple\r", "zzz\x02\x02", "\x10"}, "zzz|1"},
 		{"hse9", "hse", []string{": echo apple\r", "zzz\x02\x02", "\x0e"}, "zzz|1"},
 		{"hse10", "hse", []string{": echo apple\r", ": ls x\r", ": echo banana\r", ": ec", "\x10\x02\x10"}, ": echo banana|12"},
+		{"hse11", "hse", []string{": echo apple\r", ": ls x\r", ": echo banana\r", ": ec", "\x1b2\x10"}, ": echo apple|12"},
 		{"inc1", "inc", []string{"a 41 b\x01\x06\x06\x06", "\x18+"}, "a 42 b|3"},
 		{"inc2", "inc", []string{"a -5 b\x01\x06\x06", "\x18+"}, "a -5 b|2"},
 		{"inc3", "inc", []string{"a -5 b\x01\x06\x06\x06", "\x18+"}, "a -6 b|3"},

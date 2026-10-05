@@ -52,16 +52,32 @@ import "strings"
 // beginningSearch walks to the nearest entry in direction dir that begins with
 // the text before the cursor, and leaves the cursor where it was. The status
 // is 1 when nothing does, with the line untouched.
+//
+// dir is also how many matches to go: the count, which goes to that match
+// or nowhere, and the other way when it is negative. Measured 2026-10-05
+// against zsh 5.9.2 with `: echo apple`, `: ls x`, `: echo banana` and `: ec`
+// typed: a count of 2 backward is `: echo apple`, 3 is no match at status 1
+// with the line left as it was, nought is 1, and -1 backward from the typed
+// line finds nothing newer. From `: echo apple`, 2 forward is the typed line
+// again — the bottom of the walk is a match like any other — and 3 forward
+// is nothing (#5988).
 func (e *editor) beginningSearch(dir int, prompt drawnPrompt) int {
 	if len(e.history) == 0 {
 		return 1
 	}
+	step, left := 1, dir
+	if dir < 0 {
+		step, left = -1, -dir
+	}
 	pos := e.pos
 	prefix := string(e.line[:pos])
 	current := string(e.line)
-	for to := e.browsing + dir; to >= 0 && to <= len(e.history); to += dir {
+	for to := e.browsing + step; to >= 0 && to <= len(e.history); to += step {
 		candidate, ok := e.searchCandidate(to)
 		if !ok || candidate == current || !strings.HasPrefix(candidate, prefix) {
+			continue
+		}
+		if left--; left > 0 {
 			continue
 		}
 		// Through browse's own step, so the drafts and what the bottom of

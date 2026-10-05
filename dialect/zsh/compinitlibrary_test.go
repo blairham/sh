@@ -70,3 +70,43 @@ func TestTheShippedCompinitBindsNothingWithoutMainComplete(t *testing.T) {
 		t.Errorf("widgets on _main_complete = %q, want none", out)
 	}
 }
+
+// TestTheShippedCompinitMovesTabWhenTheCompleterExpands is #6216: with
+// `_expand` among the words of the `completer` style at `:completion:` and
+// Tab on `expand-or-complete`, compinit puts Tab on `complete-word`, as
+// zshcompsys(1) says. Every row recorded from zsh 5.9.2 under `-f -c`,
+// 2026-10-05, `bindkey '^I'` after `compinit -D`.
+func TestTheShippedCompinitMovesTabWhenTheCompleterExpands(t *testing.T) {
+	lib := t.TempDir()
+	if err := os.Chmod(lib, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(lib, "_main_complete"), []byte("#autoload\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range []struct{ setup, tab string }{
+		{`zstyle ':completion:*' completer _expand _complete`, "complete-word"},
+		{`zstyle ':completion:' completer _complete _expand`, "complete-word"},
+		{`zstyle '*' completer _expand`, "complete-word"},
+		{`zstyle ':completion:*:*:*' completer _expand _complete`, "expand-or-complete"},
+		{`zstyle ':completion:::::' completer _expand _complete`, "expand-or-complete"},
+		{`zstyle ':completion:*' completer _expand_alias _complete`, "expand-or-complete"},
+		{`zstyle ':completion:*' completer _expand:foo _complete`, "expand-or-complete"},
+		{`zstyle ':completion:*' completer _expand; bindkey '^I' menu-complete`, "menu-complete"},
+		{`:`, "expand-or-complete"},
+	} {
+		t.Run(c.setup, func(t *testing.T) {
+			out, _ := runShipped(t, `fpath=($fpath `+lib+`); `+c.setup+`
+autoload -Uz compinit; compinit -D -u; bindkey '^I'`)
+			if want := "\"^I\" " + c.tab + "\n"; out != want {
+				t.Errorf("got %q, want %q", out, want)
+			}
+		})
+	}
+	// The main keymap only: under `bindkey -v` that is `viins`.
+	out, _ := runShipped(t, `fpath=($fpath `+lib+`); zstyle ':completion:*' completer _expand; bindkey -v
+autoload -Uz compinit; compinit -D -u; bindkey -M viins '^I'; bindkey -M emacs '^I'`)
+	if want := "\"^I\" complete-word\n\"^I\" expand-or-complete\n"; out != want {
+		t.Errorf("under bindkey -v: got %q, want %q", out, want)
+	}
+}

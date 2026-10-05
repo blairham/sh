@@ -103,7 +103,7 @@ func (e *editor) matchBinding(first byte) (Binding, bool, keyRead) {
 		// byte nothing continues to must leave the line alone rather than run
 		// beginning-of-line. Measured in zsh, and pinned by
 		// TestAnAbandonedSequenceDoesNotRunItsFirstKey.
-		if w, known := defaultKeys[seq]; known {
+		if w, known := e.defaultKey(seq); known {
 			return Binding{Widget: w}, true, keyContinues
 		}
 		if e.prefixArgument && len(seq) == 2 && seq[0] == esc && (seq[1] >= '0' && seq[1] <= '9' || seq[1] == '-') {

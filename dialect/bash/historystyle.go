@@ -48,6 +48,12 @@ func HistoryStyle() repl.HistoryStyle {
 		DefaultFile:        ".bash_history",
 		SearchPrompt:       "(reverse-i-search)`%s': ",
 		SearchFailedPrompt: "(failed reverse-i-search)`%s': ",
+		// And walking forward, measured 2026-10-04 through a pty on bash 5.3
+		// with `stty -ixon` so the key reaches readline at all: `C-s` inside
+		// a `C-r` search draws `(i-search)`, and `(failed i-search)` once
+		// nothing newer matches (#5904).
+		SearchForwardPrompt:       "(i-search)`%s': ",
+		SearchForwardFailedPrompt: "(failed i-search)`%s': ",
 		// The file's own encoding, measured 2026-09-21 on bash 5.3.20 from
 		// script files with no terminal and a scratch HOME. bash writes a
 		// `#<epoch>` line in front of each entry when it was told to record

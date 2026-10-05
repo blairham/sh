@@ -201,7 +201,7 @@ func (a editorActions) Perform(w Widget, in Line) (Line, bool) {
 	// lands and what the walk leaves behind at each step. A second
 	// implementation here is how the two would come to disagree.
 	a.e.runWidget(Binding{Widget: w}, a.prompt)
-	if w == WidgetSearchHistoryBackward {
+	if w.IsIncrementalSearch() {
 		// The keys the widget is about are now the key that ended the
 		// search: measured 2026-10-04 against zsh 5.9.2, `$KEYS` after the
 		// call is `^M` when Return ended it, `^E` for `C-e`, `^G` for

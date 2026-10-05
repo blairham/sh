@@ -52,7 +52,17 @@ func HistoryStyle() repl.HistoryStyle {
 	return repl.HistoryStyle{
 		SearchPrompt:       "bck-i-search: %s_",
 		SearchFailedPrompt: "failing bck-i-search: %s_",
-		SearchBelowTheLine: true,
+		// And walking forward, measured 2026-10-04 through a pty on zsh 5.9.2
+		// with FLOW_CONTROL off. The pattern searches are worded as these
+		// two, in both directions (#5904).
+		SearchForwardPrompt:        "fwd-i-search: %s_",
+		SearchForwardFailedPrompt:  "failing fwd-i-search: %s_",
+		SearchInvalidPrompt:        "invalid bck-i-search: %s_",
+		SearchForwardInvalidPrompt: "invalid fwd-i-search: %s_",
+		// And a forward match leaves the cursor after it. See
+		// repl.HistoryStyle.SearchForwardCursorAtMatchEnd.
+		SearchForwardCursorAtMatchEnd: true,
+		SearchBelowTheLine:            true,
 		// And the newline that ends a search accepts the line here, where bash
 		// and ksh93 take it for the search and leave the line to go on being
 		// edited. Measured 2026-09-23 through a pseudo-terminal, one keystroke

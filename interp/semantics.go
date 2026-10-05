@@ -37858,6 +37858,15 @@ const (
 
 // matchPatternR is matchPattern with the caret axis resolved from the dialect.
 func (r *Runner) matchPatternR(pattern, s string, surface patternSurface) bool {
+	matched, _ := r.matchPatternChecked(pattern, s, surface, false)
+	return matched
+}
+
+// matchPatternChecked is matchPatternR with the refusal as an answer: a
+// pattern the dialect will not compile reports wellFormed false, and quiet
+// keeps it from being the fatal refusal it is in a script and from
+// publishing what a match matched. See Runner.MatchPatternQuietly.
+func (r *Runner) matchPatternChecked(pattern, s string, surface patternSurface, quiet bool) (matched, wellFormed bool) {
 	condition := surface == patternInACondition
 	o := patternOpts{
 		// A `case` arm reads a bare `(` behind a pattern group as a group
@@ -37941,8 +37950,10 @@ func (r *Runner) matchPatternR(pattern, s string, surface patternSurface) bool {
 		// on zsh 5.9.2 (`-f -c`), `case zzz in (x[[:alpha:]))` is `bad
 		// pattern` there and took the `*` arm here, while the same arm
 		// without the `x` was refused by both (#4659).
-		r.fatalPattern(pattern, r.refusedPatternStatus(surface, badStatus))
-		return false
+		if !quiet {
+			r.fatalPattern(pattern, r.refusedPatternStatus(surface, badStatus))
+		}
+		return false, false
 	}
 	// The whole-subject question, like matchPattern's: a condition, a `case`
 	// arm and an element filter each ask whether the pattern describes the
@@ -37959,6 +37970,9 @@ func (r *Runner) matchPatternR(pattern, s string, surface patternSurface) bool {
 		o = r.recordingPatternOpts(o, pattern)
 	}
 	matched, report := matchPatternIn(pattern, s, s, 0, o)
+	if quiet {
+		return matched && !bad, !bad
+	}
 	if bad {
 		// zsh gives up over the pattern rather than failing the match, and
 		// what that costs is the number this carries. Re-measured
@@ -37979,8 +37993,10 @@ func (r *Runner) matchPatternR(pattern, s string, surface patternSurface) bool {
 		// success to whatever ran it, which is the shape that turns a broken
 		// script into a green build (#3398). The condition's own 2 still
 		// wins where there is one.
-		r.fatalPattern(pattern, r.refusedPatternStatus(surface, badStatus))
-		return false
+		if !quiet {
+			r.fatalPattern(pattern, r.refusedPatternStatus(surface, badStatus))
+		}
+		return false, false
 	}
 	// The surfaces this function serves are the ones that report a match
 	// into `$match` and `$MATCH` — a condition, a `case`, the element
@@ -37991,7 +38007,7 @@ func (r *Runner) matchPatternR(pattern, s string, surface patternSurface) bool {
 		r.publishMatch(report)
 		r.recordPatternMatch(report)
 	}
-	return matched
+	return matched, true
 }
 
 // refusedPatternStatus is what a pattern the dialect will not compile costs.

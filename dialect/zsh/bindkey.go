@@ -173,6 +173,12 @@ var bindkeyWidgets = map[string]repl.Widget{
 	// The key that means "this key does nothing", which is what `-r` leaves
 	// behind and what `bindkey` prints for a key nobody bound.
 	undefinedKey: repl.WidgetNone,
+
+	// The other three incremental searches. One mechanism with
+	// history-incremental-search-backward; see repl's search.go (#5904).
+	"history-incremental-search-forward":          repl.WidgetSearchHistoryForward,
+	"history-incremental-pattern-search-backward": repl.WidgetPatternSearchHistoryBackward,
+	"history-incremental-pattern-search-forward":  repl.WidgetPatternSearchHistoryForward,
 }
 
 // undefinedKey is what this shell calls a key with nothing on it.
@@ -238,6 +244,10 @@ var widgetNames = map[repl.Widget]string{
 	repl.WidgetHistoryBeginningSearchForward:  "history-beginning-search-forward",
 	repl.WidgetUpLine:                         "up-line",
 	repl.WidgetDownLine:                       "down-line",
+
+	repl.WidgetSearchHistoryForward:         "history-incremental-search-forward",
+	repl.WidgetPatternSearchHistoryBackward: "history-incremental-pattern-search-backward",
+	repl.WidgetPatternSearchHistoryForward:  "history-incremental-pattern-search-forward",
 }
 
 // editorControlKeys are the keys the editor reads that are not actions a key
@@ -312,6 +322,13 @@ func buildDefaultBindings() map[string]string {
 	}
 	for seq, name := range editorControlKeys {
 		out[seq] = name
+	}
+	// And the two searches' second spellings, which this keymap has and the
+	// editor's shared table does not — bash puts spell correction on `^X s`.
+	// See repl.EditorStyle.SearchOnControlX, which is what makes the editor
+	// act on them (#5904).
+	for seq, w := range repl.ControlXSearchBindings() {
+		out[seq] = widgetNames[w]
 	}
 	return out
 }

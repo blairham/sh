@@ -2742,9 +2742,17 @@ func (s Shell) newEditor(ctx context.Context, state *terminalState) *editor {
 		transposeAtStart:           s.Editor.TransposeAtTheStartSwapsTheFirstTwo,
 		// And what a reverse search looks like, which the two shells with a
 		// line editor disagree about in wording and in placement alike.
-		searchPrompt: s.History.SearchPrompt,
-		searchFailed: s.History.SearchFailedPrompt,
-		searchBelow:  s.History.SearchBelowTheLine,
+		searchPrompt:         s.History.SearchPrompt,
+		searchFailed:         s.History.SearchFailedPrompt,
+		searchForward:        s.History.SearchForwardPrompt,
+		searchForwardFailed:  s.History.SearchForwardFailedPrompt,
+		searchBelow:          s.History.SearchBelowTheLine,
+		searchMatch:          s.searchMatcher(),
+		searchInvalid:        s.History.SearchInvalidPrompt,
+		searchForwardInvalid: s.History.SearchForwardInvalidPrompt,
+		searchOnControlX:     s.Editor.SearchOnControlX,
+		// And where a forward match leaves the cursor.
+		searchForwardEndsAtMatchEnd: s.History.SearchForwardCursorAtMatchEnd,
 		// Whether the newline that ends a search also accepts the line. One
 		// dialect's answer; see HistoryStyle.SearchNewlineAcceptsTheLine.
 		searchNewlineAccepts: s.History.SearchNewlineAcceptsTheLine,
@@ -2878,4 +2886,13 @@ func (s *Shell) keySequenceWait() func() (time.Duration, bool) {
 		// waits through a one-second gap and not through a three-second one.
 		return time.Duration(n) * 10 * time.Millisecond, false
 	}
+}
+
+// searchMatcher is the shell's own pattern matcher for a pattern search, or
+// nil where there is no shell to ask.
+func (s Shell) searchMatcher() func(pattern, text string) (matched, wellFormed bool) {
+	if s.Runner == nil {
+		return nil
+	}
+	return s.Runner.MatchPatternQuietly
 }

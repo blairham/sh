@@ -997,6 +997,11 @@ func (e *editor) remember(line string) {
 	e.history = append(e.history, line)
 }
 
+// replace puts down the shell's list in place of the one this editor kept.
+// Between reads only: a read starts its walk from the end of whatever is
+// here, and a `C-o` pointing past the end is dropped where it is read.
+func (e *editor) replace(lines []string) { e.history = lines }
+
 // newest is the last line remembered, or nothing at all.
 //
 // What "a duplicate" is measured against, and it is the list rather than the

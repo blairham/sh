@@ -86,10 +86,10 @@ import (
 //     a block and there is nothing to head.
 //  5. **`-x` wins over `-X`** where a call carries both.
 //
-// **Menus and match specifications are still read and ignored.** `-1`, `-2`,
-// `-o` and `-M` name behavior this editor has not got — there is no menu
-// completion here and no second sort order — so they are consumed rather than
-// refused, for compctl.go's reason: a builtin that refused every call naming
+// **Menus are still read and ignored.** `-1`, `-2` and `-o` name behavior
+// this editor has not got — there is no menu completion here and no second
+// sort order — so they are consumed rather than refused, for compctl.go's
+// reason: a builtin that refused every call naming
 // one would stop functions that are otherwise entirely servable.
 
 func registerCompadd(r *interp.Runner) { r.Register("compadd", compaddBuiltin) }
@@ -174,6 +174,12 @@ type compaddOptions struct {
 	heading    string // -X: the row drawn above the block
 	message    string // -x: the same, and drawn with no matches under it
 	hasMessage bool   // -x was given, which an empty message still is
+
+	// matchSpec is every `-M` given, joined: the completion system writes
+	// the letter more than once in one call — measured, `_path_files` adds
+	// `-M 'r:|/=* r:|=*'` after the matcher-list's own — and the matchers
+	// are one list. See compmatch.go.
+	matchSpec string
 }
 
 func compaddBuiltin(r *interp.Runner, ctx context.Context, args []string) int {
@@ -306,6 +312,11 @@ func compaddArgument(o *compaddOptions, letter byte, value string) {
 		o.heading = value
 	case 'x':
 		o.message, o.hasMessage = value, true
+	case 'M':
+		if o.matchSpec != "" {
+			o.matchSpec += " "
+		}
+		o.matchSpec += value
 	}
 }
 
@@ -373,13 +384,24 @@ func (cs *completionState) add(
 	// The rows, read now rather than when `-d` was seen: the array a caller
 	// names is filled between the two.
 	displays := compaddArray(r, o.display)
+	spec := parseMatchSpec(o.matchSpec)
 	for i, candidate := range candidates {
 		// What is matched is the hidden prefix and suffix around the
 		// candidate; what `-P` and `-S` add is not part of it. Measured —
 		// see the file comment.
 		subject := o.hiddenPre + candidate + o.hiddenSuf
-		if !o.unfiltered && !strings.HasPrefix(subject, cs.prefix) {
-			continue
+		inserted := subject
+		if !o.unfiltered {
+			// Under the call's match specification, which an upper-case
+			// matcher can answer with the word's own characters written
+			// into what is inserted. Only into what is inserted: measured,
+			// `-O` under `M:_=` with `f_o` typed stores `foo`, and `f_oo`
+			// is what Tab puts on the line. See compmatch.go.
+			written, ok := spec.matchCandidate(cs.prefix, subject)
+			if !ok {
+				continue
+			}
+			inserted = written
 		}
 		kept[i] = true
 		matched = append(matched, subject)
@@ -388,7 +410,7 @@ func (cs *completionState) add(
 			// array is as long as the candidate list the caller passed, so a
 			// candidate the prefix struck out still costs its own row. That
 			// is the same by-position rule `-D` is measured to follow.
-			cs.offer(subject, o, display(displays, i), group)
+			cs.offer(inserted, o, display(displays, i), group)
 			offered++
 		}
 	}

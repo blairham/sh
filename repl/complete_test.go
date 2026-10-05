@@ -192,3 +192,36 @@ func TestCommonPrefix(t *testing.T) {
 		}
 	}
 }
+
+// A fill never throws away what was typed.
+//
+// A completion system matching under a specification can answer candidates
+// that hold the word somewhere other than at the front — `pl` in `xapple` —
+// and their common prefix is then text the person did not type in place of
+// text they did. Measured on zsh 5.9.2, 2026-10-05: a fill keeps the typed
+// characters, in order and allowing a change of case (`re` to `READ`, `f.b`
+// to `foo.bar.`), and where the candidates agree on nothing that keeps them,
+// the line is left alone and they are listed (#6152).
+func TestAFillKeepsWhatWasTyped(t *testing.T) {
+	for _, tc := range []struct {
+		name, typed, want string
+		words             []string
+		listed            bool
+	}{
+		{"a prefix that drops the word", ": pl", ": pl", []string{"xapple", "xaple"}, true},
+		{"a prefix that drops it again", ": pl", ": pl", []string{"abcpl", "abcqpl"}, true},
+		{"a change of case is kept", ": re", ": READ", []string{"README.md", "READY"}, false},
+		{"the word spread through the fill", ": f.b", ": foo.bar.", []string{"foo.bar.baz", "foo.bar.qux"}, false},
+		{"the ordinary prefix", ": ap", ": apple", []string{"apple.txt", "apples.txt"}, false},
+	} {
+		c := CompleterFunc(func(Completion) []Candidate { return Words(tc.words...) })
+		e := &editor{line: []rune(tc.typed), pos: len([]rune(tc.typed)), out: &strings.Builder{}}
+		got, _ := e.complete(c)
+		if string(e.line) != tc.want {
+			t.Errorf("%s: line is %q, want %q", tc.name, string(e.line), tc.want)
+		}
+		if (got != nil) != tc.listed {
+			t.Errorf("%s: listed %v, want listed=%v", tc.name, got, tc.listed)
+		}
+	}
+}

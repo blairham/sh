@@ -1350,6 +1350,9 @@ func Semantics() interp.Semantics {
 	// the silent miss, where the builtin `sleep` reaps nothing and leaves it
 	// there at 4. See Semantics.FinishedJobLeavesTheTable (#5302).
 	s.FinishedJobLeavesTheTable = interp.Yes
+	// A fatal error in an interactive shell's startup file: ksh93 gives up the line and runs the rest of `$ENV` (#6009).
+	// See Semantics.StartupFileErrorWhenInteractive.
+	s.StartupFileErrorWhenInteractive = interp.StartupErrorCostsTheLine
 	// A job started before `set -m`, under a terminal: ksh93 refuses it in silence at 1 (#5927). See
 	// Semantics.JobStartedWithoutTheMonitorIsRefused.
 	s.JobStartedWithoutTheMonitorIsRefused = interp.Yes

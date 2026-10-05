@@ -22609,6 +22609,37 @@ type Semantics struct {
 	// family of a diagnostic.
 	ParamErrorIsAnExitRequest Answer
 
+	// StartupFileErrorWhenInteractive is what a fatal error in a startup file
+	// costs in an interactive shell: the file, with `${x?word}` still read
+	// the way ParamErrorIsAnExitRequest reads it (the zero value, zsh's);
+	// the file, `${x?word}` included (dash); or only the line it was on, the
+	// rest of the file still running (bash and ksh93).
+	//
+	// Measured 2026-10-05 with each shell's interactive rc file holding the
+	// failing line and then `echo after`, `-i` with `echo X $?` on a pipe:
+	//
+	//	                  ${unset?boom}  set -u; $NOPE  r=2 (readonly)  $((1+))
+	//	bash 5.3.20       after, X 0     after, X 0     after, X 0      after, X 0
+	//	ksh93u+ ($ENV)    after, X 0     after, X 0     after, X 0      after, X 0
+	//	dash 0.5.12       X 2            X 2            X 2             X 2
+	//	zsh 5.9.2         X 1            X 1            X 1             X 1
+	//
+	// where `after` is the file's next line running, and the rest of the
+	// failing line does not run in any of them (`readonly r=1; r=2; echo
+	// same` writes no `same`). `-i -c` agrees in bash, ksh93 and dash — `main`
+	// runs, after `after` in the first two and at 2 in dash — and parts in
+	// zsh, which ends the shell over `${x?word}` under `-c` as
+	// ParamErrorIsAnExitRequest says and gives up only the file at a prompt.
+	// Here dash ended its session over `${x?word}` in `$ENV`, and bash and
+	// ksh93 gave up the file (#6009).
+	//
+	// Not interactive, every shell gives up the file: a `$BASH_ENV`, ksh93's
+	// `$ENV` under `-E`, a `~/.zshenv` under `-c`.
+	//
+	// unpinned ash: BusyBox ash was not measured; the zero value keeps what
+	// this shell did before.
+	StartupFileErrorWhenInteractive StartupErrorCost
+
 	// DotWithNoOperandIsAnError decides whether `.` with no filename is a
 	// failure at all. False in dash, which does nothing and reports success;
 	// true in bash, ksh93 and zsh.
@@ -39381,3 +39412,20 @@ func (p BareWaitSignalReport) String() string {
 	}
 	return "unspecified"
 }
+
+// StartupErrorCost is what a fatal error in an interactive shell's startup
+// file costs. See Semantics.StartupFileErrorWhenInteractive.
+type StartupErrorCost uint8
+
+const (
+	// StartupErrorCostsTheFile gives up the rest of the file, and reads
+	// `${x?word}` as ParamErrorIsAnExitRequest says: zsh.
+	StartupErrorCostsTheFile StartupErrorCost = iota
+	// StartupErrorCostsTheFileWhatever gives up the rest of the file over
+	// `${x?word}` as well, however the dialect reads that operand in a
+	// script: dash.
+	StartupErrorCostsTheFileWhatever
+	// StartupErrorCostsTheLine gives up the line and goes on with the rest
+	// of the file, as at a prompt: bash and ksh93.
+	StartupErrorCostsTheLine
+)

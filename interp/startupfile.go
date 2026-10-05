@@ -163,6 +163,12 @@ func (r *Runner) RunStartupFile(ctx context.Context, path, src string, failed fu
 		if err := r.RunPart(ctx, f); err != nil {
 			return r.status, err
 		}
+		if r.Interactive && r.pendingFileError() &&
+			r.sem().StartupFileErrorWhenInteractive == StartupErrorCostsTheLine && r.GiveUpTheLine() {
+			// An interactive shell gives up the line and reads on, as it
+			// does at a prompt. See Semantics.StartupFileErrorWhenInteractive.
+			continue
+		}
 		if r.ctl != controlNone {
 			// `return`, `exit`, or an error that costs the file: whichever it
 			// was, nothing more of the file is read, and the caller says what

@@ -2396,7 +2396,12 @@ func (r *Runner) noticeStoppedJob(j *Job) bool {
 // job stopping afterwards starts the count again. Any other command in between
 // does not — bash and zsh both warn again after an `echo`, and both warn again
 // after the `echo $?` that reads the held exit's own status.
-func (r *Runner) HoldsExitForJobs() bool {
+func (r *Runner) HoldsExitForJobs() bool { return r.holdsExitForJobs(nil) }
+
+// holdsExitForJobs is HoldsExitForJobs with something to write before the
+// sentence when the exit is held: the `exit` builtin's word for leaving, which
+// is written before the shell knows it is staying. See biExit.
+func (r *Runner) holdsExitForJobs(first func()) bool {
 	if !r.JobControl || r.toldOfJobsAtExit {
 		return false
 	}
@@ -2430,6 +2435,9 @@ func (r *Runner) HoldsExitForJobs() bool {
 	// leaves, and the end of input twice leaves without any chunk running
 	// between the two.
 	r.toldOfJobsAtExit, r.tellingOfJobsAtExit = true, true
+	if first != nil {
+		first()
+	}
 	// Written plainly rather than through the dialect's location prefix: one
 	// of the two shells that says this names itself in the sentence and the
 	// other names nobody at all, and neither writes the line number a prompt's

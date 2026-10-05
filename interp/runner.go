@@ -5362,6 +5362,12 @@ type Runner struct {
 	// Kept the way Runner.privateDeclarationRan is, and for the same reason.
 	// See Runner.hiddenNameKinds.
 	hideLetterWritten bool
+	// hideWatching says a bare assignment is being run, and hideKindsWatched
+	// is the kind each hidden name it has written held when it started —
+	// only the names it has written, since every store announces the name it
+	// writes. See Runner.watchHiddenKinds.
+	hideWatching     bool
+	hideKindsWatched map[string]ParameterKind
 	// tied holds the ties `typeset -T` made — see tiedscalar.go — under
 	// both of each tie's names, so either half finds it.
 	tied map[string]tie
@@ -13480,6 +13486,9 @@ func (r *Runner) setVarAs(name, value string, form assignForm) {
 		}
 		name = target
 	}
+	// The name is the one this write lands on from here, and nothing has
+	// moved yet. See Runner.watchHiddenKinds.
+	r.noteHiddenWrite(name)
 	if r.refuseReadonly(name, form) {
 		return
 	}
@@ -14444,7 +14453,9 @@ func (r *Runner) assign(ctx context.Context, a *syntax.Assign) {
 	// does — `v=(p q)` over a scalar — and the hide attribute goes with the
 	// kind either way. No letters here, so nothing is ever exempt. See
 	// Runner.kindChangeForgetsTheHide.
-	defer r.kindChangeForgetsTheHide(r.hiddenNameKinds())
+	if w, on := r.watchHiddenKinds(a.Name); on {
+		defer r.endHiddenWatch(w)
+	}
 	if a.Name != "" {
 		// A script writing the name is a reference to it, so a parameter
 		// waiting on its first one arrives here — measured, and the row that

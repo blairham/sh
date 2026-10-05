@@ -343,6 +343,10 @@ func (c *Runner) ownTables(r *Runner) {
 	// A subshell reads its own subscripts: the held values are one read's,
 	// and the parent's read is not the child's. See holdSubscriptValues.
 	c.subscriptValuesHeld = nil
+	// And a watch on the hidden names' kinds, which is the line the parent was
+	// running when it cloned and not the clone's: a store the clone makes must
+	// not land in the parent's record. See Runner.watchHiddenKinds.
+	c.hideWatching, c.hideKindsWatched = false, nil
 	// And the subshell's commands are its own: a failure inside a `$(…)` in a
 	// `case` subject is a command's and sets its status. See
 	// Runner.failedExpansionStatus.

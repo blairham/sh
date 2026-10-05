@@ -162,6 +162,7 @@ func (r *Runner) assocDeclared(name string) bool {
 // `declare -A` and `typeset -A` do. Declaring twice keeps the elements.
 func (r *Runner) markAssoc(name string) {
 	name = r.namespaceWriteName(name)
+	r.noteHiddenWrite(name)
 	if _, produced := r.DynamicAssocs[name]; produced {
 		// A produced association already has the attribute — assocDeclared
 		// answers from this very table — and giving it a stored table would put an empty one
@@ -216,6 +217,7 @@ func (r *Runner) setAssocElem(name, key, value string) {
 func (r *Runner) setAssocElemAs(name, key, value string, kind ElementKind) {
 	name = r.namespaceWriteName(name)
 	name = r.throughNameref(name)
+	r.noteHiddenWrite(name)
 	if r.refuseFrozenTableElement(name, key) {
 		// A produced table whose elements are frozen, which refuses under
 		// the **key's** name. Ahead of the writer, because such a table has

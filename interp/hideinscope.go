@@ -159,8 +159,9 @@ func (r *Runner) dropHideInScope(name string) {
 }
 
 // The kind a hidden name held when a line started, for every name carrying
-// the attribute — which is nearly always none of them, so the map is nil and
-// the check below costs a length.
+// the attribute. That is often none of them and the map is then nil, but one
+// dialect registers some forty of its own parameters with the attribute, so a
+// bare assignment — far the commonest line — asks watchHiddenKinds instead.
 //
 // The names come from r.hideInScope and not from shadowIsHidden, and that is
 // the whole of what keeps this about the binding in front of the line: a
@@ -187,6 +188,95 @@ func (r *Runner) hiddenNameKinds() map[string]ParameterKind {
 		}
 	}
 	return kinds
+}
+
+// watchHiddenKinds is hiddenNameKinds for a bare assignment, which can retype
+// a name only by storing to it: it records the kind a hidden name held when
+// the assignment started, at the moment the first store to that name is
+// announced, and endHiddenWatch, handed what this returns, forgets the
+// attribute of every name whose kind the assignment changed. It reports
+// false, and watches nothing, where nothing is hidden or where the line writes
+// the letter itself.
+//
+// The same answer hiddenNameKinds gives, from the names the line actually
+// wrote rather than from every name carrying the attribute — and that
+// difference is the whole of why it exists. The rule was written for a shell
+// where the attribute is rare, and one dialect registers some forty of its own
+// parameters with it before a script runs, so every assignment in a session
+// of it took the kind of all forty twice: about four microseconds an
+// assignment, and roughly 70ms of an interactive start on the maintainer's
+// real configuration (2026-10-05). A name the line never wrote has the kind
+// it started with, so leaving it out changes no answer.
+//
+// The claim this rests on is that a bare assignment retypes a name only by
+// storing to it, and every store says which name before it moves anything —
+// setVarAs, storeArray, markIndexed, markAssoc and setAssocElemAs, the stores
+// compoundVariableRetyped hangs off, each call noteHiddenWrite on entry. The
+// target is recorded up front as well, through any reference it names, since
+// the value is expanded first. A value can write other names — `${v::=x}`, an
+// arithmetic `y = 1` — and those arrive through the same stores. A
+// declaration is not covered, because its letters retype a name without
+// storing to it (`typeset -i v`); it keeps hiddenNameKinds.
+//
+// Nested, the inner watch hands the outer one what it saw: a name the outer
+// had not seen yet was unwritten until the inner started, so the kind the
+// inner recorded is the kind it held when the outer did.
+func (r *Runner) watchHiddenKinds(target string) (hiddenWatch, bool) {
+	if r.hideLetterWritten || len(r.hideInScope) == 0 {
+		return hiddenWatch{}, false
+	}
+	w := hiddenWatch{outer: r.hideKindsWatched, outerOn: r.hideWatching}
+	r.hideKindsWatched, r.hideWatching = nil, true
+	if target != "" {
+		// The name the assignment is written to, through whatever reference
+		// it names, before anything is expanded: the store for it is the
+		// last thing the line does, and the value's expansion comes first.
+		resolved, _, _ := r.namerefWalk(target)
+		r.noteHiddenWrite(resolved)
+	}
+	return w, true
+}
+
+// hiddenWatch is what a watch started by watchHiddenKinds puts back when it
+// ends: the enclosing watch, if there was one. A value rather than a closure
+// so that ending it allocates nothing.
+type hiddenWatch struct {
+	outer   map[string]ParameterKind
+	outerOn bool
+}
+
+// endHiddenWatch ends a watch, forgetting the attribute of every name whose
+// kind the watched line changed, and hands what it saw to the enclosing one.
+func (r *Runner) endHiddenWatch(w hiddenWatch) {
+	was := r.hideKindsWatched
+	r.hideKindsWatched, r.hideWatching = w.outer, w.outerOn
+	if w.outerOn {
+		for name, kind := range was {
+			if _, seen := r.hideKindsWatched[name]; seen {
+				continue
+			}
+			if r.hideKindsWatched == nil {
+				r.hideKindsWatched = map[string]ParameterKind{}
+			}
+			r.hideKindsWatched[name] = kind
+		}
+	}
+	r.kindChangeForgetsTheHide(was)
+}
+
+// noteHiddenWrite is the store's half of watchHiddenKinds: the kind a hidden
+// name holds just before the first store to it in the watched line.
+func (r *Runner) noteHiddenWrite(name string) {
+	if !r.hideWatching || !r.hideInScope[name] {
+		return
+	}
+	if _, seen := r.hideKindsWatched[name]; seen {
+		return
+	}
+	if r.hideKindsWatched == nil {
+		r.hideKindsWatched = map[string]ParameterKind{}
+	}
+	r.hideKindsWatched[name] = r.parameterKind(name)
 }
 
 // kindChangeForgetsTheHide takes the hide attribute off every name whose kind

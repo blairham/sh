@@ -320,6 +320,7 @@ func (r *Runner) setArray(name string, elems []string) {
 // storeArray puts an array back and keeps the scalar view in step.
 func (r *Runner) storeArray(name string, a Array) {
 	name = r.namespaceWriteName(name)
+	r.noteHiddenWrite(name)
 	if write, produced := r.dynamicArrayWriters[name]; produced {
 		// A *produced* array, whose elements are not this table's to keep:
 		// the producer answers ahead of anything stored here, so a write left
@@ -488,6 +489,7 @@ func (r *Runner) elemPos(a Array, idx int) (int, bool) {
 // the table away on the strength of a guess would lose its elements.
 func (r *Runner) markIndexed(name string) {
 	name = r.namespaceWriteName(name)
+	r.noteHiddenWrite(name)
 	if _, produced := r.DynamicArrays[name]; produced {
 		return
 	}

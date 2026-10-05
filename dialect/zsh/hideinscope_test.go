@@ -250,6 +250,32 @@ func TestAKindChangeTakesTheHideWordOff(t *testing.T) {
 			`f(){ typeset -h v; typeset -F v; print "${(t)v}" }; f`,
 			"float-local\n",
 		},
+		// **A name the assignment's value retypes** is the assignment's to
+		// forget as well, and these are the rows that say the rule watches
+		// the stores rather than only the name before the `=`. Measured
+		// 2026-10-05 on zsh 5.9.2 under `-f` from a script file, `env -i
+		// PATH=/usr/bin:/bin`: both lose the word, while the same two shapes
+		// over a name whose kind stands still keep it (the next rows).
+		{
+			"an array retyped by an assigning expansion in a value",
+			`f(){ typeset -h -a v; x=${v::=str}; print "${(t)v}" }; f`,
+			"scalar-local\n",
+		},
+		{
+			"an array retyped by arithmetic in a value",
+			`f(){ typeset -h -a v; x=$(( v = 3 )); print "${(t)v}" }; f`,
+			"integer-local\n",
+		},
+		{
+			"a scalar written by an assigning expansion in a value",
+			`f(){ typeset -h v; x=${v::=str}; print "${(t)v}" }; f`,
+			"scalar-local-hide\n",
+		},
+		{
+			"an integer written by an assigning expansion in a value",
+			`f(){ typeset -h -i v; x=${v::=str}; print "${(t)v}" }; f`,
+			"integer-local-hide\n",
+		},
 		// And the kind standing still keeps it, whatever else the line does.
 		// The last of these is the pair that says `-F` and `-E` name one
 		// kind between them and not two.

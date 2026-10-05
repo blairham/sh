@@ -322,6 +322,7 @@ func seedTables(r *Runner) {
 	r.dynamicArrayWriters = map[string]func(*Runner, []string){"seed": func(*Runner, []string) {}}
 	r.silentToPrint = map[string]bool{"seed": true}
 	r.subscriptValuesHeld = map[string]heldSubscriptValue{"seed": {}}
+	r.hideKindsWatched = map[string]ParameterKind{"seed": ScalarParameter}
 	r.unsetRefused = map[string]bool{"seed": true}
 	r.tableFrozenByKey = map[string]bool{"seed": true}
 	r.dynamicAssocWriters = map[string]func(*Runner, string, string, bool){

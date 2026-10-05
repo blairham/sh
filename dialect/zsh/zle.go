@@ -1156,7 +1156,7 @@ func callBuiltinWidget(r *interp.Runner, ctx context.Context, name string, args 
 		if !inside {
 			return 1
 		}
-		return action(r, actions)
+		return action(r, actions, args)
 	}
 	widget, editors := bindkeyWidgets[name]
 	if !editors {

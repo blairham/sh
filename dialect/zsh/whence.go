@@ -138,7 +138,11 @@ func registerWhence(r *interp.Runner) {
 // `type -cm zq` is `bad option: -c` at 1, as `type -c zq` is.
 func typeBuiltin(core interp.Builtin) interp.Builtin {
 	return func(r *interp.Runner, ctx context.Context, args []string) int {
-		if !optionWordsHold(args, 'm') {
+		// `-a` comes here as well as `-m`: `type` is `whence -v`, and the
+		// `-a` walk is the one whenceAllPaths knows the slashed-name rule of
+		// (#5956) — the core's `type -a` would describe `./bin/man` as the
+		// file in the working directory.
+		if !optionWordsHold(args, 'm') && !optionWordsHold(args, 'a') {
 			return core(r, ctx, args)
 		}
 		names, m, code := whenceOptions(r, args, typeLetters, whenceMode{verbose: true})
@@ -422,7 +426,7 @@ func whencePattern(r *interp.Runner, pattern string, m whenceMode) bool {
 		// put there both write nothing and answer 0.
 		found = true
 		if m.all {
-			for _, path := range r.LookPathAll(name) {
+			for _, path := range whenceAllPaths(r, name) {
 				writeLine(r, resolvedAnswer(r, name, interp.NameFile, path, m))
 			}
 			continue
@@ -473,7 +477,7 @@ func whenceAll(r *interp.Runner, ctx context.Context, name string, m whenceMode)
 		found = true
 		writeLine(r, resolvedAnswer(r, name, kind, "", m))
 	}
-	for _, path := range r.LookPathAll(name) {
+	for _, path := range whenceAllPaths(r, name) {
 		found = true
 		writeLine(r, resolvedAnswer(r, name, interp.NameFile, path, m))
 	}
@@ -495,7 +499,7 @@ func whenceAll(r *interp.Runner, ctx context.Context, name string, m whenceMode)
 // the ksh dialect's `whence` was missing (#3198).
 func whencePath(r *interp.Runner, name string, m whenceMode) int {
 	if m.all {
-		paths := r.LookPathAll(name)
+		paths := whenceAllPaths(r, name)
 		if len(paths) == 0 {
 			return whenceMissing(r, name, m)
 		}
@@ -727,4 +731,44 @@ func whenceLinkArrow(r *interp.Runner, path string, m whenceMode) string {
 	// same shell writes this identical tail and a second copy is how two
 	// spellings of one question come to disagree. See interp.Runner.SymlinkArrow.
 	return r.SymlinkArrow(path, m.chain)
+}
+
+// whenceAllPaths is every file `-a` lists for a name.
+//
+// **A relative name with a slash in it is looked up along PATH and nowhere
+// else.** The search that runs a command finds `./bin/man` in the working
+// directory, and `whence -v` without `-a` says so; with `-a`, each PATH entry
+// has the name appended to it as written. Measured 2026-10-05 on zsh 5.9.2
+// under -f, in a directory `<d>` holding an executable `bin/man`:
+//
+//	PATH=/usr/bin:/bin   whence -va ./bin/man   ./bin/man not found   1
+//	PATH=/usr/bin:/bin   whence -v ./bin/man    ./bin/man is ./bin/man
+//	PATH=<d>:/usr/bin    whence -va ./bin/man   ./bin/man is <d>/./bin/man
+//	PATH=<d>/:/bin       whence -va bin/man     bin/man is <d>//bin/man
+//	PATH=.:/usr/bin      whence -va bin/man     bin/man is ./bin/man
+//	PATH=:/usr/bin       whence -va ./bin/man   ./bin/man is ./bin/man
+//	PATH=/usr/bin:/bin   whence -va /bin/ls     /bin/ls is /bin/ls
+//
+// So the candidate is the entry, a slash and the name with nothing cleaned up,
+// an empty entry is the name itself, and an absolute name is only itself.
+// `type -a` and `which -a` are this builtin and answer the same (#5956).
+func whenceAllPaths(r *interp.Runner, name string) []string {
+	if !strings.ContainsRune(name, '/') || strings.HasPrefix(name, "/") {
+		return r.LookPathAll(name)
+	}
+	path, _ := r.GetVar("PATH")
+	if path == "" {
+		return nil
+	}
+	var hits []string
+	for _, dir := range strings.Split(path, ":") {
+		candidate := name
+		if dir != "" {
+			candidate = dir + "/" + name
+		}
+		if r.Runnable(candidate) {
+			hits = append(hits, candidate)
+		}
+	}
+	return hits
 }

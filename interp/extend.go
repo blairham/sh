@@ -679,6 +679,13 @@ func (r *Runner) LookPath(name string) (string, bool) {
 	return r.reportedPath(name, path), true
 }
 
+// Runnable reports whether a path names something the operating system would
+// start — an executable file and not a directory — resolved against this
+// runner's directory and asked through its gate. It is the test the PATH
+// search makes of each candidate, for a builtin that builds its candidates
+// itself.
+func (r *Runner) Runnable(path string) bool { return r.runnable(r.absolute(path)) == nil }
+
 // LookPathAll is every PATH entry a name resolves to, in PATH order and
 // duplicates included, for a builtin whose job is to list them all rather than
 // to pick one.

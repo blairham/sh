@@ -85,8 +85,10 @@ import (
 // Said in place rather than left to be found, because a parameter that exists
 // and is ignored is its own kind of wrong answer:
 //
-//   - `SAVEHIST` is read — see fcSaveHistOn — and zero is what unset already
-//     meant, so this changes no save.
+//   - `SAVEHIST` is read — by fcSaveHistOn for `fc -W` and `fc -A`, and as
+//     repl.HistoryStyle.SaveCountVariable when a session ends — and zero
+//     writes nothing on both routes, which is what a session that never set
+//     it gets (#5902).
 //   - `TIMEFMT` **is** read back since #4910 — the per-command line is
 //     rendered through it, in the vocabulary of its own that
 //     interp/timeformatunits.go implements.

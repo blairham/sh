@@ -1762,6 +1762,9 @@ func Semantics() interp.Semantics {
 	// A startup file given up over a fatal error: dash reads `$ENV` only when interactive and leaves 2 there (#6046).
 	// See Semantics.StartupFileGivenUpLeavesTheStatusBefore.
 	s.StartupFileGivenUpLeavesTheStatusBefore = interp.No
+	// A failed expansion in a command's words: dash sets 2 (#6067).
+	// See Semantics.FailedExpansionInACommandKeepsAFailingStatus.
+	s.FailedExpansionInACommandKeepsAFailingStatus = interp.No
 	// A fatal error in an interactive shell's program: dash ends the program under `-i` as without it (#6073).
 	// See Semantics.InteractiveProgramErrorWhenInteractive.
 	s.InteractiveProgramErrorWhenInteractive = interp.InteractiveProgramErrorEndsTheProgram

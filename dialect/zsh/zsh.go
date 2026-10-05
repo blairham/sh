@@ -1874,6 +1874,9 @@ func Semantics() interp.Semantics {
 	// A startup file given up over a fatal error: zsh leaves the error's own status, as in a script (#6046).
 	// See Semantics.StartupFileGivenUpLeavesTheStatusBefore.
 	s.StartupFileGivenUpLeavesTheStatusBefore = interp.No
+	// A failed expansion in a command's words: zsh keeps a failing status: `(exit 4); print $((1/0))` exits 4 (#6067).
+	// See Semantics.FailedExpansionInACommandKeepsAFailingStatus.
+	s.FailedExpansionInACommandKeepsAFailingStatus = interp.Yes
 	// A fatal error in an interactive shell's program: zsh gives up the line of a script under `-i`, and ends a `-c` string (#6073).
 	// See Semantics.InteractiveProgramErrorWhenInteractive.
 	s.InteractiveProgramErrorWhenInteractive = interp.InteractiveProgramErrorCostsAScriptsLine

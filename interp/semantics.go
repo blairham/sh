@@ -1835,7 +1835,38 @@ type Semantics struct {
 	// 5.3.20 and ksh93u+ exit 1 for all of these, dash and BusyBox ash 2.
 	//
 	// zsh Yes, every other dialect No; read as `== Yes` (#5657).
+	//
+	// The `false;` in front could not tell "sets 1" from "keeps a 1", and
+	// the rows above that say `print $((1/0))`, `builtin local` and `\local`
+	// set 1 are the second: see FailedExpansionInACommandKeepsAFailingStatus.
 	FailedExpansionInADeclarationOrCaseSetsNoStatus Answer
+
+	// FailedExpansionInACommandKeepsAFailingStatus leaves `$?` alone when an
+	// expansion fails in any simple command's words and `$?` was already a
+	// failure, and sets the fatal status over a 0. zsh alone.
+	//
+	// Measured 2026-10-05 on zsh 5.9.2, `-fc` and a script file alike, the
+	// exit status after `(exit 4);` and then the row:
+	//
+	//	print $((1/0)), print a $((1/0)), builtin print $((1/0))    4
+	//	print ~nosuch, print ${x!!}, $((1/0)) as the command word   4
+	//	x=1 print $((1/0)), \local x=$((1/0))                       4
+	//	setopt nounset; (exit 4); print $nope                       4
+	//	if print $((1/0)); then :; fi                               4
+	//	true; print $((1/0)), or nothing in front                   1
+	//	x=$((1/0)), [[ -n ${x!!} ]], a `for` list                   1
+	//	print ${x?boom}, ${x:?boom}                                 1
+	//
+	// and `(exit 4); echo $(exit 5) $((1/0))` is 5, the substitution's.
+	// bash and ksh93 set 1 for all of these, dash and BusyBox ash 2. This
+	// set 1 everywhere (#6067).
+	//
+	// `${x?word}` sets 1 only without a person there: at a prompt, and
+	// under `-i -c` or `-i` with a script, `(exit 3); echo ${unset?boom}`
+	// leaves 3, as does the same inside `eval`.
+	//
+	// zsh Yes, every other dialect No; read as `== Yes`.
+	FailedExpansionInACommandKeepsAFailingStatus Answer
 	// DeclaredTypedValueFailureLeavesZero ends the script at 0, not at the
 	// fatal status, when a declaration's own numeric letter evaluates its value
 	// and the value will not evaluate: zsh. bash and ksh93 end at 1. Measured

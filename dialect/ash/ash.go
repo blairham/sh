@@ -2215,6 +2215,9 @@ func Semantics() interp.Semantics {
 	// A startup file given up over a fatal error: BusyBox ash reads `$ENV` only when interactive and leaves 2 there, measured in the pinned image (#6046).
 	// See Semantics.StartupFileGivenUpLeavesTheStatusBefore.
 	s.StartupFileGivenUpLeavesTheStatusBefore = interp.No
+	// A failed expansion in a command's words: BusyBox ash sets 2 (#6067).
+	// See Semantics.FailedExpansionInACommandKeepsAFailingStatus.
+	s.FailedExpansionInACommandKeepsAFailingStatus = interp.No
 	// A fatal error in an interactive shell's program: BusyBox ash ends the program under `-i`, measured in the pinned image (#6073).
 	// See Semantics.InteractiveProgramErrorWhenInteractive.
 	s.InteractiveProgramErrorWhenInteractive = interp.InteractiveProgramErrorEndsTheProgram

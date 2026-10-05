@@ -83,8 +83,7 @@ import (
 // first, the escapes follow the letter, and the descriptor is where the rows
 // go.
 func printColumnLines(r *interp.Runner, opts printOptions, words []string) (string, bool, bool) {
-	rows := (len(words) + opts.columns - 1) / opts.columns
-	if rows <= 0 {
+	if len(words) == 0 {
 		return "", true, false
 	}
 	// The **processed** text of every operand first, because that is what the
@@ -104,7 +103,13 @@ func printColumnLines(r *interp.Runner, opts printOptions, words []string) (stri
 		}
 		fields[i] = text
 	}
-	width := columnWidth(fields, rows)
+	var rows, width int
+	if opts.columns > 0 {
+		rows = (len(fields) + opts.columns - 1) / opts.columns
+		width = columnWidth(fields, rows)
+	} else {
+		rows, width = screenLayout(r, fields)
+	}
 	var b strings.Builder
 	for row := 0; row < rows; row++ {
 		for i := row; i < len(fields); i += rows {
@@ -219,4 +224,45 @@ func columnDisplayWidth(s string) int {
 		b.WriteRune(r)
 	}
 	return interp.DisplayColumns(b.String())
+}
+
+// laidOut reports whether the operands are written as a column layout at all.
+func (o printOptions) laidOut() bool { return o.columns > 0 || o.screen }
+
+// screenLayout is `print -c`: the rows and the field width when the number of
+// columns is whatever `$COLUMNS` holds room for.
+//
+// **The width is the longest word of all plus two**, the last column's
+// included — which is where this parts from `-C`, whose width leaves the last
+// column out. And a row may end one column short of the screen, because the
+// last field of a row is not padded and so needs only the word and one space
+// of the gap. Measured 2026-10-05 on zsh 5.9.2 under -f, laying out the
+// fourteen words `alias bg cd disown echo exec fc if typeset unset while zle
+// zmodload zstyle` (the longest is `zmodload`, eight, so ten wide):
+//
+//	COLUMNS  41 40 39   four columns
+//	COLUMNS  38 30      three
+//	COLUMNS  19 20      two
+//	COLUMNS  18 9 0     one, the least there is
+//	COLUMNS  80         eight columns' room, and so two rows: seven are used
+//
+// So the column count is `($COLUMNS + 1) / width`, at least one, and the rows
+// follow from it. With `-C` written beside it, `-C` decides alone: `print -cC2
+// aaa b cc dddd` is the five-wide layout `print -C2` gives, not six.
+func screenLayout(r *interp.Runner, fields []string) (rows, width int) {
+	for _, f := range fields {
+		if n := columnDisplayWidth(f); n > width {
+			width = n
+		}
+	}
+	width += columnGap
+	screen := 0
+	if v, ok := r.GetVar("COLUMNS"); ok {
+		screen, _ = strconv.Atoi(strings.TrimSpace(v))
+	}
+	cols := (screen + 1) / width
+	if cols < 1 {
+		cols = 1
+	}
+	return (len(fields) + cols - 1) / cols, width
 }

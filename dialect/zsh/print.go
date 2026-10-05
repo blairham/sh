@@ -90,7 +90,7 @@ import (
 // checked here first and refused with the measured wording and status.
 
 // printLetters are the option letters implemented here.
-const printLetters = "rRnlNmoOiszSpufPD"
+const printLetters = "rRnlNmoOiszSpufPDc"
 
 // printUnimplemented are the letters zsh's print has that this one does not:
 // the column layouts (`-a`, `-c`, `-C`), the bindkey-style escapes (`-b`),
@@ -105,10 +105,9 @@ const printLetters = "rRnlNmoOiszSpufPD"
 // **`-C` has left it too** (#4967): it takes a number and lays the operands
 // out in that many columns, filled down. It is not in printLetters either,
 // because it is one of the three letters that take an argument — see the
-// `f`/`u`/`C` arm of the option reader. `-a` and `-c` are the other two
-// column layouts and stay here: they are the *across* fill and the
-// terminal-width one, and neither is this letter.
-const printUnimplemented = "acb"
+// `f`/`u`/`C` arm of the option reader. `-c`, the terminal-width layout,
+// has left as well (#5957); `-a`, the *across* fill, stays here.
+const printUnimplemented = "ab"
 
 // registerPrint installs the builtin.
 func registerPrint(r *interp.Runner) {
@@ -120,7 +119,10 @@ type printOptions struct {
 	// columns is `-C n`: how many columns the operands are laid out in,
 	// filled down. Zero is no layout at all, which is every `print` that
 	// did not write the letter. See printcolumns.go.
-	columns  int
+	columns int
+	// screen is `-c`: as many columns as `$COLUMNS` allows, filled down.
+	// See printcolumns.go.
+	screen   bool
 	raw      bool
 	echoMode bool
 	noTerm   bool
@@ -299,7 +301,7 @@ func printBuiltin(r *interp.Runner, ctx context.Context, args []string) int {
 		return 1
 	}
 	text, ok, refused := printText(r, opts, rest)
-	if opts.columns > 0 {
+	if opts.laidOut() {
 		// The column layout, which replaces the join rather than decorating
 		// it: `-l` and `-N`'s separators do not reach it and `-n` takes no
 		// terminator off it. See printcolumns.go.
@@ -342,7 +344,7 @@ func printBuiltin(r *interp.Runner, ctx context.Context, args []string) int {
 //	print -v x -n hello    `hello`     print -v x           empty
 func printAssigned(r *interp.Runner, ctx context.Context, opts printOptions, rest []string) int {
 	text, ok, refused := printText(r, opts, rest)
-	if opts.columns > 0 {
+	if opts.laidOut() {
 		text, ok, refused = printColumnLines(r, opts, rest)
 	}
 	if !ok {
@@ -351,7 +353,7 @@ func printAssigned(r *interp.Runner, ctx context.Context, opts printOptions, res
 	if refused {
 		r.RefuseCodePoint()
 	}
-	if opts.columns == 0 && !opts.lineSep {
+	if !opts.laidOut() && !opts.lineSep {
 		text = strings.TrimSuffix(text, opts.terminator())
 	}
 	printf, found := r.Builtin("printf")
@@ -819,6 +821,8 @@ func setPrintLetter(r *interp.Runner, letter byte, opts *printOptions) int {
 		opts.prompt = true
 	case 'D':
 		opts.named = true
+	case 'c':
+		opts.screen = true
 	case 'p':
 		fd, running := r.CoprocWrite()
 		if !running {

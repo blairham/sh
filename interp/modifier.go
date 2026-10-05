@@ -478,7 +478,7 @@ func (r *Runner) applyModifier(value string, letter byte, e *syntax.ParamExpr) (
 		// (#5640). See liveMark.
 		switch letter {
 		case 'q':
-			return quoteAroundLiveMarks(value, false), true
+			return quoteAroundLiveMarks(value, false, r.historyQuoting().plain), true
 		case 'Q', 'P', 'A':
 			value = stripLiveMarks(value)
 		}
@@ -506,7 +506,7 @@ func (r *Runner) applyModifier(value string, letter byte, e *syntax.ParamExpr) (
 		if value == "" {
 			return "", true
 		}
-		return quoteWithBackslashes(value, false), true
+		return quoteWithBackslashes(value, false, r.historyQuoting().plain), true
 	case 'Q':
 		return r.unquoteFlagged(value), true
 	}

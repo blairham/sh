@@ -2204,7 +2204,7 @@ func (r *Runner) printfQuote(spec, arg string) (string, int, bool) {
 		// shell's `%q` and its `q` flag were measured against each other over
 		// every printable byte at three positions and every control byte, and
 		// they agree everywhere.
-		return printfByteField(spec, quoteWithBackslashes(arg, false)), 0, false
+		return printfByteField(spec, quoteWithBackslashes(arg, false, r.historyQuoting().plain)), 0, false
 	case PrintfQuoteSingle:
 		return printfByteField(spec, kshSingleQuote(arg)), 0, false
 	case PrintfQuoteAbsent:

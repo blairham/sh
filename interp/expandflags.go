@@ -707,13 +707,13 @@ func (r *Runner) flaggedWords(e *syntax.ParamExpr, sp splitPolicy, quoted bool,
 				// leaves them as they are, live, and every other style
 				// quotes them with the rest. See operandTokenWords.
 				if n == 1 && e.QuoteModifier == 0 {
-					words[i] = quoteAroundLiveMarks(w, empty)
+					words[i] = quoteAroundLiveMarks(w, empty, r.historyQuoting().plain)
 				} else {
-					words[i] = quoteFlagged(stripLiveMarks(w), n, e.QuoteModifier, empty, doubled)
+					words[i] = quoteFlagged(stripLiveMarks(w), n, e.QuoteModifier, empty, doubled, r.historyQuoting())
 				}
 				continue
 			}
-			words[i] = quoteFlagged(w, n, e.QuoteModifier, empty, doubled)
+			words[i] = quoteFlagged(w, n, e.QuoteModifier, empty, doubled, r.historyQuoting())
 		}
 	}
 	// Rule 14's third spelling: `(b)` marks the *pattern* metacharacters and
@@ -795,7 +795,7 @@ func (r *Runner) flaggedWords(e *syntax.ParamExpr, sp splitPolicy, quoted bool,
 				head, drawn = drawn[:len(drawn)-len(tail)], tail
 			}
 			if drawn != "" {
-				drawn = quoteFlagged(drawn, 1, 0, false, doubled)
+				drawn = quoteFlagged(drawn, 1, 0, false, doubled, r.historyQuoting())
 			}
 			words[i] = head + drawn
 		}
@@ -2116,16 +2116,16 @@ func (r *Runner) promptUnitName() string {
 // `${(qqqq)}` and `${(q-)}` are byte-identical in both states of it, the
 // first and last writing an embedded quote with a backslash outside any
 // quoting and the middle two not being single-quoted spellings at all.
-func quoteFlagged(v string, count int, mod byte, nothing, doubled bool) string {
+func quoteFlagged(v string, count int, mod byte, nothing, doubled bool, hist historyQuoting) string {
 	switch mod {
 	case '-':
-		return quoteMinimal(v)
+		return quoteMinimal(v, hist.plain)
 	case '+':
-		return quoteExtended(v, doubled)
+		return quoteExtended(v, doubled, hist.plain)
 	}
 	switch count {
 	case 1:
-		return quoteWithBackslashes(v, nothing)
+		return quoteWithBackslashes(v, nothing, hist.plain)
 	case 2:
 		if doubled {
 			return singleQuoted(v, "''", false)
@@ -2135,7 +2135,7 @@ func quoteFlagged(v string, count int, mod byte, nothing, doubled bool) string {
 		var b strings.Builder
 		b.WriteByte('"')
 		for i := 0; i < len(v); i++ {
-			if strings.IndexByte("\\`\"$", v[i]) >= 0 {
+			if strings.IndexByte("\\`\"$", v[i]) >= 0 || hist.plain != 0 && v[i] == hist.plain {
 				b.WriteByte('\\')
 			}
 			b.WriteByte(v[i])
@@ -2151,8 +2151,9 @@ func quoteFlagged(v string, count int, mod byte, nothing, doubled bool) string {
 				b.WriteString(`\'`)
 			case c == '\\':
 				b.WriteString(`\\`)
-			case c == '!':
-				b.WriteString(`\!`)
+			case hist.dollar != 0 && c == hist.dollar:
+				b.WriteByte('\\')
+				b.WriteByte(c)
 			case c < 0x20 || c >= 0x7f:
 				b.WriteString(controlEscapeBefore(c, v[i+1:]))
 			default:
@@ -2173,7 +2174,7 @@ func quoteFlagged(v string, count int, mod byte, nothing, doubled bool) string {
 // the question all three ask is the same one and a second copy of the answer
 // is how two of them come to disagree. The table is where the two start-only
 // specials live: measured, `${(q)…}` on `a~b` is `a~b` and on `~x` is `\~x`.
-func quoteWithBackslashes(v string, nothing bool) string {
+func quoteWithBackslashes(v string, nothing bool, hist byte) string {
 	if v == "" {
 		// `''` is what an empty *value* has to be written as, backslashes
 		// having no way to spell one. A word branch that substituted nothing
@@ -2198,7 +2199,7 @@ func quoteWithBackslashes(v string, nothing bool) string {
 			// and a newline are in it, and here they are `$'\t'` and `$'\n'`
 			// rather than a backslash and a raw byte.
 			b.WriteString("$'" + controlEscapeBefore(c, v[i+1:]) + "'")
-		case quotableByte(i, c):
+		case quotableByteWith(i, c, hist):
 			b.WriteByte('\\')
 			b.WriteByte(c)
 		default:
@@ -2506,18 +2507,18 @@ func markOperandTokens(esc string) string {
 
 // quoteAroundLiveMarks is the single `q` over a word holding live marks: the
 // text between them is quoted and each marked character is left as it is.
-func quoteAroundLiveMarks(w string, empty bool) string {
+func quoteAroundLiveMarks(w string, empty bool, hist byte) string {
 	var b strings.Builder
 	for {
 		i := strings.Index(w, liveMark)
 		if i < 0 || i+len(liveMark) >= len(w) {
 			if rest := stripLiveMarks(w); rest != "" || b.Len() == 0 {
-				b.WriteString(quoteWithBackslashes(rest, empty))
+				b.WriteString(quoteWithBackslashes(rest, empty, hist))
 			}
 			return b.String()
 		}
 		if i > 0 {
-			b.WriteString(quoteWithBackslashes(w[:i], false))
+			b.WriteString(quoteWithBackslashes(w[:i], false, hist))
 		}
 		b.WriteString(w[i : i+len(liveMark)+1])
 		w = w[i+len(liveMark)+1:]

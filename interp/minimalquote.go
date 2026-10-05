@@ -5,6 +5,7 @@ package interp
 
 import (
 	"strings"
+	"unicode/utf8"
 
 	"github.com/blairham/sh/syntax"
 )
@@ -78,6 +79,15 @@ const quotableAtStart = "~="
 // quotableByte reports whether the byte at offset i of a value has to be
 // quoted for the value to read back as itself.
 func quotableByte(i int, c byte) bool {
+	return quotableByteWith(i, c, 0)
+}
+
+// quotableByteWith is quotableByte with the history character added to the
+// set where one is to be quoted — see Runner.historyQuoting. Zero adds nothing.
+func quotableByteWith(i int, c, hist byte) bool {
+	if hist != 0 && c == hist {
+		return true
+	}
 	if strings.IndexByte(quotableAtStart, c) >= 0 {
 		return i == 0
 	}
@@ -133,10 +143,10 @@ func quoteInRuns(v string, needsQuotes func(run string, at int) bool) string {
 // rather than zero, because the two start-only specials are special at the
 // *value's* start and not at each run's: measured, `'~x` is `\'~x`, the `~`
 // needing nothing a byte into the word, where `~'a` is `'~'\'a`.
-func quoteMinimal(v string) string {
+func quoteMinimal(v string, hist byte) string {
 	return quoteInRuns(v, func(run string, at int) bool {
 		for i := range len(run) {
-			if quotableByte(at+i, run[i]) {
+			if quotableByteWith(at+i, run[i], hist) {
 				return true
 			}
 		}
@@ -151,7 +161,7 @@ func quoteMinimal(v string) string {
 // is where the two spellings part. The decision above it does not move with
 // it: a value with a quote in it needs quoting under either reading, `'`
 // being in quotableSpecials for that reason already.
-func quoteExtended(v string, doubled bool) string {
+func quoteExtended(v string, doubled bool, hist byte) string {
 	if v == "" {
 		return "''"
 	}
@@ -162,7 +172,7 @@ func quoteExtended(v string, doubled bool) string {
 	// that a `~` or an `=` counts wherever it stands.
 	quote := false
 	eachQuotableByte(v, func(_ int, c byte) {
-		if quotableByte(0, c) {
+		if quotableByteWith(0, c, hist) {
 			quote = true
 		}
 	}, func(int, string) {})
@@ -341,4 +351,49 @@ func extendedQuoteRefusal(e *syntax.ParamExpr) bool {
 // so this is a containment test and not a disambiguation.
 func signedSortFlag(e *syntax.ParamExpr) bool {
 	return e != nil && strings.ContainsRune(e.Flags, '-')
+}
+
+// historyQuoting is the history character the quoting styles add to what
+// they quote, and when.
+//
+// Measured 2026-10-05 on zsh 5.9.2 over `c='a!b'`, interactive with the
+// program on a pipe against `-f` on a script and `-i -c`:
+//
+//	           a prompt    a script, -c, -i -c
+//	(q), :q    a\!b        a!b
+//	(q-)       'a!b'       a!b
+//	(q+)       'a!b'       a!b
+//	(qqq)      "a\!b"      "a!b"
+//	(qqqq)     $'a\!b'     $'a\!b'
+//	printf %q  a\!b        a!b
+//
+// So two answers. Most styles quote it only where history expansion is on,
+// which is a prompt — a `.zshrc` and a file it sources included, `-i -c` and
+// `-i script` not — and `$'…'` quotes it wherever the option is on, the
+// expander or not. Both follow `histchars`: with `histchars='@^#'` it is `@`
+// that is quoted and `!` that is not, and with `unsetopt banghist` or an
+// empty `histchars` neither is (#5933).
+type historyQuoting struct {
+	plain, dollar byte
+}
+
+// historyQuoting is this runner's answer. See the type.
+func (r *Runner) historyQuoting() historyQuoting {
+	c := r.HistoryChars()
+	if c.Event == 0 || c.Event >= utf8.RuneSelf {
+		return historyQuoting{}
+	}
+	ev := byte(c.Event)
+	var q historyQuoting
+	if r.histExpand && r.AtPrompt {
+		// The expander on and a prompt being read: `setopt banghist` in a
+		// script turns the first on without making the second true, and
+		// zsh still writes `a!b` there.
+		q.plain = ev
+	}
+	// The option rather than the expander: nothing has turned it off.
+	if r.histExpand || !r.histExpandMoved {
+		q.dollar = ev
+	}
+	return q
 }

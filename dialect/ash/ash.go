@@ -829,6 +829,11 @@ func Semantics() interp.Semantics {
 	// the neighboring row, since dash writes `You have stopped jobs.` for a
 	// stopped one (#4542).
 	s.MonitorAloneAccountsForJobsAtExit = interp.No
+	// unanswered MonitorOffSilencesJobsAtExit: measured 2026-10-05 in the
+	// pinned image through a pseudo-terminal, `exit` with a stopped job
+	// leaves saying nothing whether the monitor is on or off, so this shell
+	// accounts for no job at the prompt either way and neither value moves
+	// it (#6028).
 	s.InteractiveMonitorNeedsATerminal = interp.Yes
 
 	// ---- builtins ----

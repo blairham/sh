@@ -24069,6 +24069,43 @@ type Semantics struct {
 	// by each dialect's own vector table.
 	MonitorAloneAccountsForJobsAtExit Answer
 
+	// MonitorOffSilencesJobsAtExit says a shell at a **prompt** with the
+	// monitor off says nothing about the jobs it is leaving and hangs none of
+	// them up: no held `exit`, no sentence naming them, no SIGHUP and no
+	// sentence counting one.
+	//
+	// The other half of MonitorAloneAccountsForJobsAtExit — that one asks
+	// whether the monitor is enough without a prompt, and this whether a
+	// prompt is enough without the monitor — and the panel does not divide it
+	// the same way. Measured 2026-10-05 through a pseudo-terminal, scratch
+	// HOME, `TERM=dumb`, the monitor turned off with `set +m` at the prompt,
+	// then a background job and `exit`:
+	//
+	//	zsh 5.9.2   `sleep 3 &`                 leaves, nothing said, job runs on
+	//	dash        `sleep 5 & kill -STOP $!`   leaves, nothing said
+	//	bash 5.3    `sleep 3 &`, checkjobs      There are running jobs. and stays
+	//	ksh93u+     `sleep 5 & kill -STOP $!`   You have stopped jobs and stays
+	//
+	// with the monitor left on as the control in every column: zsh, bash,
+	// ksh93 and dash all hold. And bash hangs the job up with the monitor off
+	// as with it on (`shopt -s huponexit`, `-l`: `Hangup` either way), where
+	// zsh's `setopt hup` sends nothing — the same gate in front of both
+	// mechanisms, as the sibling axis records. zsh -i on a pipe, where the
+	// monitor cannot be turned on at all, is the same row (#6028).
+	//
+	// Read rather than asked, as the sibling is, and with no as what an
+	// unanswered field reads as: that is what this shell did before the
+	// question was put, and a preset that has not chosen had better go on
+	// doing it than write "the shells disagree here" as a shell leaves.
+	//
+	// unpinned ash: measured in the pinned alpine image through a
+	// pseudo-terminal, and BusyBox ash leaves at the first `exit` saying
+	// nothing with the monitor on as well as off, so neither value moves it.
+	// The rows that pin the axis are cmd/zsh's
+	// TestAPromptWithTheMonitorOffLeavesItsJobsAlone and interp's
+	// TestTheMonitorOffMaySilenceJobsAtExit.
+	MonitorOffSilencesJobsAtExit Answer
+
 	// StoppedJobsHoldTheExit keeps an interactive shell alive when leaving
 	// would abandon a job that is stopped: the shell says so and stays, and
 	// the attempt has to be made a second time.

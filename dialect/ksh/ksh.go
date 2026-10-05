@@ -3800,6 +3800,10 @@ func Semantics() interp.Semantics {
 	// monitor and is StoppedJobsHoldTheExit's route rather than this axis's
 	// (#4542).
 	s.MonitorAloneAccountsForJobsAtExit = interp.No
+	// A prompt holds whatever the monitor says: measured 2026-10-05 through
+	// a pseudo-terminal, `set +m`, `sleep 5 & kill -STOP $!`, `exit` is `You
+	// have stopped jobs` and the shell stays, as with the monitor on (#6028).
+	s.MonitorOffSilencesJobsAtExit = interp.No
 	// The panel's lone dissent on the current-job marker: it goes to the
 	// newest job here rather than staying with one that stopped. Measured
 	// 2026-09-12 through a pseudo-terminal, `sleep 40` stopped with ^Z and

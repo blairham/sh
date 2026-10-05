@@ -1554,6 +1554,12 @@ func Semantics() interp.Semantics {
 	// the pair `huponexit` needs at a prompt — so neither noun reaches this
 	// shell without a prompt (#4542).
 	s.MonitorAloneAccountsForJobsAtExit = interp.No
+	// And a prompt is enough without the monitor: measured 2026-10-05
+	// through a pseudo-terminal, `shopt -s checkjobs; set +m`, `sleep 3 &`,
+	// `exit` is `There are running jobs.` and the shell stays, and with
+	// `huponexit` at a login prompt the job is hung up, both as with the
+	// monitor on (#6028).
+	s.MonitorOffSilencesJobsAtExit = interp.No
 	// A stopped job holds the exit back: the shell says so and stays,
 	// and the next attempt leaves. Measured through a pseudo-terminal for
 	// `exit` and for ^D alike.

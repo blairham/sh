@@ -330,3 +330,70 @@ func TestAPackedBlockLendsItsSpan(t *testing.T) {
 		t.Errorf("the block after drew %q, want %q (y2 at 44)", last, want)
 	}
 }
+
+// #6203, both measured on zsh 5.9.2 through a pseudo-terminal on 2026-10-05
+// under LIST_PACKED.
+//
+// A packed block is spread across the shared grid as an unpacked one is,
+// the room left over shared out evenly among its own columns: at 100
+// columns `aaaaaaaaaaaa b … j` above `d1 d2 d3` draws `b` at 19 and each
+// letter 8 after the last — (98 - 41) / 10 = 5 more per column — where at
+// 40 columns there is no room left over and it packs into two rows as it
+// did. The same holds with more than one row: a 12-letter match and thirty
+// one-letter ones at 100 columns pack into two rows of 14+2 and 3+2.
+func TestAPackedBlockIsSpreadAcrossTheSharedGrid(t *testing.T) {
+	var a []Candidate
+	for _, w := range []string{"aaaaaaaaaaaa", "b", "c", "d", "e", "f", "g", "h", "i", "j"} {
+		a = append(a, Candidate{Word: w, Group: Group{Name: "a"}})
+	}
+	b := []Candidate{{Word: "d1", Group: Group{Name: "b"}}, {Word: "d2", Group: Group{Name: "b"}}, {Word: "d3", Group: Group{Name: "b"}}}
+	got := listingRows(append(a, b...), 100, listLayout{packed: true})
+	want := "aaaaaaaaaaaa" + strings.Repeat(" ", 7) + "b"
+	for _, l := range "cdefghij" {
+		want += strings.Repeat(" ", 7) + string(l)
+	}
+	if got[0] != want {
+		t.Errorf("at 100 columns the packed row is\n%q, want\n%q", got[0], want)
+	}
+	got = listingRows(append(a, b...), 40, listLayout{packed: true})
+	if want := "aaaaaaaaaaaa  c  e  g  i"; got[0] != want {
+		t.Errorf("at 40 columns the packed row is %q, want %q", got[0], want)
+	}
+	var two []Candidate
+	for _, w := range append([]string{"aaaaaaaaaaaa"}, strings.Split("b c d e f g h i j k l m n o p q r s t u v w x y z A B C D E", " ")...) {
+		two = append(two, Candidate{Word: w, Group: Group{Name: "a"}})
+	}
+	got = listingRows(append(two, b...), 100, listLayout{packed: true})
+	// Sorted by bytes here, so the long match is the third column; zsh
+	// sorts by collation (#6168) and puts it first, 16 wide, the rest 5.
+	if want := "A    C    E" + strings.Repeat(" ", 15) + "b    d"; !strings.HasPrefix(got[0], want) {
+		t.Errorf("two packed rows begin %q, want columns of 5 and the long one 16: %q…", got[0], want)
+	}
+}
+
+// And a block whose widest match is wider than the screen lends the grid
+// nothing: a 49-column match among one-letter ones at 40 columns leaves the
+// next block's `y1  y2` unspread, packed or not; one 38 columns wide (its
+// cell exactly 40) still spreads them 20 apart.
+func TestABlockWiderThanTheScreenLendsNoSpan(t *testing.T) {
+	for _, c := range []struct {
+		widest int
+		packed bool
+		want   string
+	}{
+		{49, true, "y1  y2"},
+		{49, false, "y1  y2"},
+		{39, true, "y1  y2"},
+		{38, true, "y1" + strings.Repeat(" ", 18) + "y2"},
+	} {
+		in := []Candidate{{Word: strings.Repeat("w", c.widest)}}
+		for _, w := range []string{"a", "b", "c"} {
+			in = append(in, Candidate{Word: w})
+		}
+		in = append(in, Candidate{Word: "y1", Group: Group{Name: "b"}}, Candidate{Word: "y2", Group: Group{Name: "b"}})
+		got := listingRows(in, 40, listLayout{packed: c.packed})
+		if last := got[len(got)-1]; last != c.want {
+			t.Errorf("widest %d, packed %v: the block after drew %q, want %q", c.widest, c.packed, last, c.want)
+		}
+	}
+}

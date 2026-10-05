@@ -274,6 +274,11 @@ const (
 	// what is on the screen and takes back what the widget left, so nothing
 	// here has to know when a line ended. See repl.Line.Postdisplay (#4217).
 	zlePostdisplay = ".zsh.zle.postdisplay"
+	// zleCutBuffer is the kill `$CUTBUFFER` reads and writes for the length
+	// of a call: fetched from the editor when the call opens and handed back
+	// when it ends, and around every action the widget asks the editor for.
+	// See repl.Actions.CutBuffer (#5916).
+	zleCutBuffer = ".zsh.zle.cutbuffer"
 	// zleTransform is the transformation table `zle -T` writes: a flat array
 	// of pairs, the transformation's name and the widget registered for it.
 	// Beside the widget table and in the same shape, so a subshell gets its
@@ -291,6 +296,11 @@ const (
 // opened, marked local and closed again, and three spellings of one string is
 // how one of them comes to be missed.
 const postdisplayName = "POSTDISPLAY"
+
+// cutBufferName is the text of the last kill, as a widget reads and writes it.
+// Opened, marked local and closed beside POSTDISPLAY and for the same reason:
+// it is line state a widget may change, and nothing outside a widget has it.
+const cutBufferName = "CUTBUFFER"
 
 // zleLineParameters are the four a widget reads and writes the line through.
 //
@@ -1156,6 +1166,10 @@ func callBuiltinWidget(r *interp.Runner, ctx context.Context, name string, args 
 		if !inside {
 			return 1
 		}
+		// None of these kills through the editor, and one of them —
+		// copy-region-as-kill — sets the kill itself, so it is handed over
+		// when the action is done rather than read back.
+		defer handBackCutBuffer(r, actions)
 		return action(r, actions, args)
 	}
 	widget, editors := bindkeyWidgets[name]
@@ -1171,6 +1185,10 @@ func callBuiltinWidget(r *interp.Runner, ctx context.Context, name string, args 
 		// own wording. Silence, because there is no editor to have refused.
 		return 1
 	}
+	// The kill a widget assigned goes to the editor before the action, so a
+	// yank inserts it, and the action's own kill comes back after it.
+	handBackCutBuffer(r, actions)
+	defer fetchCutBuffer(r, actions)
 	if widget == repl.WidgetBracketedPaste && len(args) > 0 {
 		r.SetVar(args[0], actions.Paste())
 		return 0
@@ -1446,6 +1464,7 @@ func runWidgetFunction(
 	actions, editing := repl.ActionsFrom(ctx)
 	if editing {
 		openUndoChangeNumber(r, actions, opened.scope)
+		fetchCutBuffer(r, actions)
 	}
 	r.SetVar(zleOpened, opened.String())
 	// Deferred rather than called at the end, because a panic in the widget
@@ -1455,6 +1474,9 @@ func runWidgetFunction(
 	// prompt would then find `$BUFFER` set, which is the one thing they must
 	// never be, and only after a crash nobody would connect it to.
 	defer func() {
+		if editing {
+			handBackCutBuffer(r, actions)
+		}
 		closeWidgetParameters(r)
 		caller.restore(r)
 		if caller.open && editing {
@@ -1566,6 +1588,16 @@ func openWidgetParameters(r *interp.Runner, opened widgetOpening) {
 	r.SetDynamicWriter(postdisplayName, func(rr *interp.Runner, value string) {
 		rr.SetVar(zlePostdisplay, value)
 	})
+	// `CUTBUFFER`, the last kill, measured `scalar-local-special` the same
+	// way and writable the same way: what a widget assigns is what the next
+	// yank inserts. See repl.Actions.CutBuffer (#5916).
+	r.SetDynamic(cutBufferName, func(rr *interp.Runner) string {
+		text, _ := rr.GetVar(zleCutBuffer)
+		return text
+	})
+	r.SetDynamicWriter(cutBufferName, func(rr *interp.Runner, value string) {
+		rr.SetVar(zleCutBuffer, value)
+	})
 	// `region_highlight` is opened here and is not one of the five: the other
 	// parameters are the line, and this one is what the widget wants *done*
 	// with it. It is also the only one backed by a store that outlives the
@@ -1668,6 +1700,7 @@ func openWidgetParameters(r *interp.Runner, opened widgetOpening) {
 	// completion widget offering a suggestion is not something the measurement
 	// forbids.
 	r.MarkLocal(postdisplayName)
+	r.MarkLocal(cutBufferName)
 	// And the widget before this one, which is the call's own for the same
 	// reason: measured, `${(t)LASTWIDGET}` in a widget is
 	// `scalar-local-readonly-special`.
@@ -1690,6 +1723,7 @@ func closeWidgetParameters(r *interp.Runner) {
 	// closed beside it for the same reason: what a script finds between two
 	// keystrokes is nothing at all.
 	r.UnsetDynamic(postdisplayName)
+	r.UnsetDynamic(cutBufferName)
 	r.UnsetDynamic("LASTWIDGET")
 	r.UnsetDynamic("KEYMAP")
 	r.UnsetDynamic("KEYS")
@@ -1731,6 +1765,7 @@ var widgetParameterDeclarations = map[string]interp.ProducedDeclaration{
 	"LBUFFER":           {},
 	"RBUFFER":           {},
 	postdisplayName:     {},
+	cutBufferName:       {},
 	"WIDGET":            {},
 	"LASTWIDGET":        {},
 	"KEYMAP":            {},
@@ -1756,6 +1791,19 @@ func declareWidgetParameters(r *interp.Runner, own int) {
 	}
 	for _, name := range zleQueueParameters {
 		r.SetDynamicDeclaration(name, interp.ProducedDeclaration{Integer: true, Base: 10, LocalToScope: own})
+	}
+}
+
+// fetchCutBuffer is the editor's kill, put where `$CUTBUFFER` reads it.
+func fetchCutBuffer(r *interp.Runner, actions repl.Actions) {
+	r.SetVar(zleCutBuffer, actions.CutBuffer())
+}
+
+// handBackCutBuffer gives the editor the kill `$CUTBUFFER` holds, where the
+// widget changed it — assigned it, or `zle copy-region-as-kill STRING`.
+func handBackCutBuffer(r *interp.Runner, actions repl.Actions) {
+	if cut, _ := r.GetVar(zleCutBuffer); cut != actions.CutBuffer() {
+		actions.SetCutBuffer(cut)
 	}
 }
 
@@ -1869,7 +1917,7 @@ func parseWidgetOpening(s string) (widgetOpening, bool) {
 // was a state that could be cleared but not put back.
 var widgetCallState = []string{
 	zleBuffer, zleCursor, zlePostdisplay, zleWidget, zleLastWidget, zleKeymap,
-	zleNumeric, zleAccept, zleActive, zleOpened, zleKeys,
+	zleNumeric, zleAccept, zleActive, zleOpened, zleKeys, zleCutBuffer,
 }
 
 // callerWidgetState is what was there before a widget call, put back when

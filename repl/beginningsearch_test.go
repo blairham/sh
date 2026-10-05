@@ -124,15 +124,20 @@ func TestTheBeginningSearchAndLineMovesAnswerAWidget(t *testing.T) {
 	}
 }
 
-// `zle copy-region-as-kill STRING`: the text is what the next yank brings
-// back, and the line is left alone.
-func TestAKillHandedInIsWhatTheNextYankBringsBack(t *testing.T) {
+// A kill set from outside is what the next yank brings back — zsh's
+// `CUTBUFFER=…` and `zle copy-region-as-kill STRING` both arrive this way —
+// and a kill an action makes is what CutBuffer reads afterwards.
+func TestAKillSetFromOutsideIsWhatTheNextYankBringsBack(t *testing.T) {
 	e := Shell{}.newEditor(t.Context(), nil)
 	e.in, e.out = typing(""), io.Discard
 	a := editorActions{e: e, prompt: drawPrompt("$ ")}
-	a.Kill("foo bar")
+	a.SetCutBuffer("foo bar")
 	out, _ := a.Perform(WidgetYank, Line{Buffer: "xy", Cursor: 1})
 	if out.Buffer != "xfoo bary" || out.Cursor != 8 {
 		t.Errorf("got %q @%d, want %q @8", out.Buffer, out.Cursor, "xfoo bary")
+	}
+	a.Perform(WidgetKillWordBefore, Line{Buffer: "one two", Cursor: 7})
+	if got := a.CutBuffer(); got != "two" {
+		t.Errorf("the kill reads %q, want %q", got, "two")
 	}
 }

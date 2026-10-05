@@ -41,19 +41,22 @@ var widgetFunctionActions = map[string]func(*interp.Runner, repl.Actions, []stri
 }
 
 // copyRegionAsKill is `zle copy-region-as-kill STRING`: the string put where
-// the next yank takes it from, and the line left alone. See repl.Actions.Kill
-// for the measurement.
+// the next yank takes it from, and the line left alone. Measured against zsh
+// 5.9.2: line and cursor untouched, a following yank inserts the string, and
+// a builtin kill straight after it starts afresh rather than joining it.
 //
 // Only the spelling with a string. Without one it copies from the mark to the
 // cursor, and this editor has no mark to copy from, so that is refused by
 // name rather than answered with something else. A second operand is
 // ignored, measured: `zle copy-region-as-kill a b` kills `a`.
-func copyRegionAsKill(r *interp.Runner, a repl.Actions, args []string) int {
+func copyRegionAsKill(r *interp.Runner, _ repl.Actions, args []string) int {
 	if len(args) == 0 {
 		r.Diagnosef("copy-region-as-kill without a string is not implemented yet\n")
 		return 1
 	}
-	a.Kill(args[0])
+	// Into the kill `$CUTBUFFER` reads, which callBuiltinWidget hands to the
+	// editor when this returns. See repl.Actions.CutBuffer.
+	r.SetVar(zleCutBuffer, args[0])
 	return 0
 }
 

@@ -141,14 +141,20 @@ type Actions interface {
 	// says so. See undo.go.
 	UndoTo(n int, in Line) (Line, bool)
 
-	// Kill puts text where the next yank takes it from, as if it had just
-	// been killed, and leaves the line alone. zsh's `zle copy-region-as-kill
-	// STRING`, which is how a widget that worked out for itself what to
-	// remove — the `*-kill-*-match` family — makes `^Y` bring it back.
-	// Measured against zsh 5.9.2: the line and cursor are untouched, a
-	// following yank inserts the text, and an empty string leaves a yank
-	// inserting nothing.
-	Kill(text string)
+	// CutBuffer is the text of the last kill, which is what a yank inserts,
+	// and SetCutBuffer replaces it. zsh's `$CUTBUFFER`: a widget reads it to
+	// join a kill of its own onto the one before, and assigning it — or
+	// `zle copy-region-as-kill STRING` — makes the next yank insert what was
+	// assigned (#5916). Measured 2026-10-04 through a pseudo-terminal against
+	// zsh 5.9.2: `CUTBUFFER=hello` then `zle yank` inserts `hello`, the next
+	// widget reads `hello` back, and after `zle backward-kill-word` over `one
+	// two` it reads `two`.
+	//
+	// Asked for rather than carried in Line, because the kill is not the
+	// line: it outlives it, and a front end that builds a Line of its own
+	// knowing nothing about kills must not be able to empty one.
+	CutBuffer() string
+	SetCutBuffer(text string)
 }
 
 // Every action this editor has can be performed from outside it, the two that
@@ -241,12 +247,9 @@ func (a editorActions) ChangeNumber(in Line) int {
 	return a.e.changeNumber()
 }
 
-func (a editorActions) Kill(text string) {
-	a.e.killed = []rune(text)
-	// A kill of its own rather than a part of the one before it: the next
-	// kill after it starts afresh unless it follows straight on.
-	a.e.killing = true
-}
+func (a editorActions) CutBuffer() string { return string(a.e.killed) }
+
+func (a editorActions) SetCutBuffer(text string) { a.e.killed = []rune(text) }
 
 func (a editorActions) UndoTo(n int, in Line) (Line, bool) {
 	a.e.take(in)

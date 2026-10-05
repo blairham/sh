@@ -1597,6 +1597,14 @@ func openWidgetParameters(r *interp.Runner, opened widgetOpening) {
 			setWidgetCursor(rr, n)
 		}
 	})
+	// And it carries the attribute, which is what makes interp read what is
+	// assigned as arithmetic before this writer sees it (#5929). Measured
+	// 2026-10-04 through a pseudo-terminal against zsh 5.9.2, on the line
+	// `abcdefghij`: `CURSOR=1; CURSOR+=2` is 3, not `12` clamped to 10;
+	// `CURSOR=5; CURSOR=CURSOR-1` is 4; `CURSOR+=x` adds nothing. The listing
+	// already said `typeset -i10 CURSOR`, which is a declaration and not the
+	// attribute. Lifted again in closeWidgetParameters.
+	r.MarkInteger("CURSOR")
 	r.SetDynamic("LBUFFER", func(rr *interp.Runner) string {
 		runes := []rune(widgetBuffer(rr))
 		return string(runes[:widgetCursor(rr)])
@@ -1695,6 +1703,19 @@ func openWidgetParameters(r *interp.Runner, opened widgetOpening) {
 		n, _ := rr.GetVar(zleNumeric)
 		return n != ""
 	})
+	// And a widget may set it, which is how a count is handed to the widgets
+	// it calls (#5941). Measured 2026-10-04 through a pseudo-terminal against
+	// zsh 5.9.2, from a key pressed with no count: `NUMERIC=2` reads back 2
+	// as `integer-local-special`, a widget called next sees 2, `zle
+	// forward-word` moves two words, `NUMERIC+=3` is 5, `NUMERIC=x` is 0, and
+	// `unset NUMERIC` leaves the next call with none. An integer, for the
+	// same reason CURSOR is one.
+	r.SetDynamicWriter("NUMERIC", func(rr *interp.Runner, value string) {
+		if n, err := strconv.Atoi(strings.TrimSpace(value)); err == nil {
+			rr.SetVar(zleNumeric, strconv.Itoa(n))
+		}
+	})
+	r.MarkInteger("NUMERIC")
 	for _, name := range zleQueueParameters {
 		r.SetDynamic(name, func(*interp.Runner) string { return "0" })
 		// `integer-local-readonly-special` in real zsh, measured 2026-09-22
@@ -1783,6 +1804,14 @@ func closeWidgetParameters(r *interp.Runner) {
 	r.UnsetDynamic(undoChangeNumberName)
 	r.UnsetDynamicDeclaration(undoChangeNumberName)
 	r.UnsetDynamic("NUMERIC")
+	// The attribute goes with the parameter, so a script between two
+	// keystrokes that assigns one of these names assigns text, as it does
+	// in zsh, where outside a widget they are not specials at all.
+	r.UnmarkInteger("CURSOR")
+	r.UnmarkInteger("NUMERIC")
+	for _, name := range zleQueueParameters {
+		r.UnmarkInteger(name)
+	}
 	// Not added to zleParameters, because that list is also what the
 	// completion branch above marks read-only and what the tests walk as "the
 	// line parameters". This one is neither: a completion widget may colour
@@ -1906,7 +1935,26 @@ func setWidgetLine(r *interp.Runner, in repl.Line) {
 func widgetLine(r *interp.Runner) repl.Line {
 	post, _ := r.GetVar(zlePostdisplay)
 	keys, _ := r.GetVar(zleKeys)
-	return repl.Line{Buffer: widgetBuffer(r), Cursor: widgetCursor(r), Postdisplay: post, Keys: keys}
+	return repl.Line{
+		Buffer: widgetBuffer(r), Cursor: widgetCursor(r), Postdisplay: post, Keys: keys,
+		Numeric: widgetNumeric(r),
+	}
+}
+
+// widgetNumeric is `$NUMERIC` as the editor takes a count: none where it is
+// unset, which is what an action performed from a widget is then given. A
+// count typed before the key and one the widget assigned are the same
+// thing by the time an action is asked for (#5941).
+//
+// Read through the parameter rather than the store behind it, so that `unset
+// NUMERIC` — which leaves the store and hides the name — is no count too.
+func widgetNumeric(r *interp.Runner) *int {
+	raw, _ := r.GetVar("NUMERIC")
+	n, err := strconv.Atoi(raw)
+	if err != nil {
+		return nil
+	}
+	return &n
 }
 
 // editorRunning reports whether the editor is holding a line for something to

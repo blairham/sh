@@ -883,6 +883,14 @@ func (r *Runner) UnsetDynamic(name string) {
 	delete(r.hidden, name)
 	delete(r.hideInScope, name)
 	delete(r.localMarked, name)
+	// The removal `unset` records, and the note that an assignment after it
+	// ended the producer, which the comment above always promised and this
+	// never did. A widget's `unset POSTDISPLAY` left the name removed for
+	// the rest of the session, so every later widget found it gone where zsh
+	// 5.9.2 gives each call its parameters afresh (#5917). The two callers in
+	// unset itself record the removal after calling this, so they keep it.
+	delete(r.removed, name)
+	delete(r.endedProducers, name)
 }
 
 // SetSpecial gives a parameter a fixed value unless a script has already set

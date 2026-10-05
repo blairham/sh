@@ -3274,11 +3274,12 @@ What the program then sees in `$?` is the split:
 | bash | 2 / 2 / 2 |
 | dash, ash (`-i`) | 2 / 2 / 2 |
 
-`Diagnostics.StartupParseFailureStatus`. One bash detail is not modeled: an
-unclosed quote, backquote, `$((` or `${` leaves a *failing* status where it
-found one (1 and 7 above) and 2 only over a success. bash's script route has
-the same split and bash 3.2 has neither, so it is a gap in how this shell
-reads bash's parse failures generally rather than in startup files.
+`Diagnostics.StartupParseFailureStatus`. One bash detail sits under the 2:
+an unclosed quote, backquote, `$((` or `${` leaves a *failing* status where it
+found one (1 and 7 above) and 2 only over a success. bash's script, `-c` and
+standard-input routes have the same split and bash 3.2 has neither, so it is
+answered for bash's parse failures generally rather than for startup files —
+`Diagnostics.UnmatchedAtTheEndKeepsAFailingStatus` (#5882).
 
 This is not `.`'s rule, although `.` reads the same way in bash and zsh:
 ksh93's `.` parses its file whole before running any of it, and dash's `.`

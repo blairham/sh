@@ -3525,7 +3525,7 @@ func (sh Shell) executeLines(
 				// is one complaint and status 1 in all four.
 				say(verboseUpTo(pr.text(), err))
 				sh.errf("%s", in.dg.ParseDiagnosticAfter(in.diagName(), in.input, err, pr.text(), r.LineReached()))
-				return in.dg.StatusForParseError(err), endingParseFailure
+				return in.dg.StatusForParseErrorAfter(err, r.ExitStatus()), endingParseFailure
 			}
 			// Whatever is left once the last line has been handed out is
 			// still input the shell read, and `set -v` writes back what it
@@ -3543,7 +3543,7 @@ func (sh Shell) executeLines(
 			if sh.readOn(r, pr, in, err) {
 				continue
 			}
-			return in.dg.StatusForParseError(err), endingParseFailure
+			return in.dg.StatusForParseErrorAfter(err, r.ExitStatus()), endingParseFailure
 		}
 		if line.Refused != nil {
 			// A construct inside the line did not read, and only the line
@@ -3938,6 +3938,6 @@ func (sh Shell) readOn(r *interp.Runner, pr *program, in source, err error) bool
 	if !in.onStdin || !in.dg.StdinProgramSurvivesAParseFailure {
 		return false
 	}
-	r.SetExitStatus(in.dg.StatusForParseError(err))
+	r.SetExitStatus(in.dg.StatusForParseErrorAfter(err, r.ExitStatus()))
 	return pr.fill(true)
 }

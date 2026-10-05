@@ -4797,6 +4797,10 @@ func Diagnostics() interp.Diagnostics {
 		UnmatchedReportedAtOpener: true,
 		CmdSubstUnmatchedAtEnd:    true,
 		SyntaxErrorStatus:         2,
+		// Except over a failure, when the input ran out inside a quote, a
+		// `${` or a `$((`: `false` and then `echo "abc` exits 1, and over
+		// `exit 7` it exits 7. bash 3.2 says 2 for both (#5882).
+		UnmatchedAtTheEndKeepsAFailingStatus: true,
 		// Measured: `.` of a file it cannot open reports 1 and carries on,
 		// where a missing operand is 2 — two numbers for what reads like one
 		// failure, which is why they are two fields.

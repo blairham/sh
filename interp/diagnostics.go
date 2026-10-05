@@ -204,6 +204,38 @@ type Diagnostics struct {
 	// Zero means the substrate's own, which is 2.
 	SyntaxErrorStatus int
 
+	// UnmatchedAtTheEndKeepsAFailingStatus makes input that runs out inside
+	// a quote, a backquote, a `${`, a `$((` or a `$[` leave the status the last command left when that was a failure, and
+	// SyntaxErrorStatus only over a success. bash 5.3 alone.
+	//
+	// Measured 2026-10-05 on bash 5.3.20 with standard input on the null
+	// device, a first line of `false` (or `sh -c "exit 7"`) and a second
+	// that will not parse, the status the shell exits with:
+	//
+	//	second line          script  -c  stdin  `.` and eval
+	//	echo "abc            1 (7)   1   1      2
+	//	echo 'abc, echo $'a  1       1   1      2
+	//	echo ${x, echo `x    1 (7)   1   1      2
+	//	echo $((1+, $[1+     1       1   1      2
+	//	a=(1 2               1       1   1      1
+	//	echo $(echo "x       1       1   1      2
+	//	echo $(, <(x, >(x    2       2   2      2
+	//	echo "$(echo         2       2   2      2
+	//	echo ), if; then     2       2   2      2
+	//
+	// So it is the end of the input inside one of the constructs the reader
+	// matches on its own, with a substitution's or process substitution's
+	// `(` the exception — syntax.Error's ErrUnmatched with any Token but
+	// those three. An array literal is 1 over anything, which is its own
+	// rule and not this one, so its `(` is left out too. A command on the failing line itself never ran and does
+	// not count: `false; echo "abc` alone is 2, and `false` and then
+	// `true; echo "abc` is 1. `.` and `eval` say 2 whatever came before, and
+	// so does bash 3.2 on every route, which is what makes this the 5.3
+	// preset's answer rather than the dialect's. dash (2), ksh93 (3) and
+	// BusyBox ash keep their syntax status here. zsh keeps a failing status
+	// over every parse failure, which is #5989 (#5882).
+	UnmatchedAtTheEndKeepsAFailingStatus bool
+
 	// SourcedSyntaxErrorStatus is what a parse failure in a file read by `.`
 	// reports, when that differs from SyntaxErrorStatus.
 	//
@@ -11916,6 +11948,31 @@ func (d Diagnostics) StatusForParseError(err error) int {
 	return d.SyntaxStatus()
 }
 
+// StatusForParseErrorAfter is StatusForParseError for a program read a line
+// at a time, given the status the last command that ran left — which one
+// dialect keeps over some failures. See
+// Diagnostics.UnmatchedAtTheEndKeepsAFailingStatus.
+func (d Diagnostics) StatusForParseErrorAfter(err error, before int) int {
+	if before != 0 && d.UnmatchedAtTheEndKeepsAFailingStatus && unmatchedInTheReader(err) {
+		return before
+	}
+	return d.StatusForParseError(err)
+}
+
+// unmatchedInTheReader reports input that ran out inside a construct other
+// than a command or process substitution.
+func unmatchedInTheReader(err error) bool {
+	var se *syntax.Error
+	if !errors.As(err, &se) || se.Kind != syntax.ErrUnmatched {
+		return false
+	}
+	switch se.Token {
+	case "$(", "<(", ">(", "(":
+		return false
+	}
+	return true
+}
+
 // runtimeRefusal reports whether the dialect refuses this at *run* time rather
 // than while parsing, and with what status.
 //
@@ -11971,10 +12028,10 @@ func (d Diagnostics) SyntaxStatus() int {
 //	bash 5.3.20    2  2  2    under -c, -i and -l alike
 //	dash, ash      2  2  2    under -i, the only route that reads `$ENV`
 //
-// bash has a further split this does not model: an unclosed quote or `${`
-// leaves a failing status where it found one and 2 only over a success. Its
-// script route has the same split and the same gap, which is why it is one
-// gap rather than two.
+// bash has a further split, shared with its script route: an unclosed quote
+// or `${` leaves a failing status where it found one and 2 only over a
+// success. That is Diagnostics.UnmatchedAtTheEndKeepsAFailingStatus, which
+// the syntax-status answer here goes through (#5882).
 type StartupParseStatus int
 
 const (
@@ -12012,7 +12069,7 @@ func (d Diagnostics) StartupParseFailureStatusFor(err error, before int, ran, in
 			return before
 		}
 	}
-	return d.StatusForParseError(err)
+	return d.StatusForParseErrorAfter(err, before)
 }
 
 // sourcedSyntaxStatus is SyntaxStatus for text `.` read from a file, which is

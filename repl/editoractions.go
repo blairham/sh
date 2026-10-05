@@ -301,7 +301,10 @@ func (a editorActions) Perform(w Widget, in Line) (Line, bool) {
 			// with a count of 2 come back from one yank.
 			a.e.killedBefore = true
 		}
-		a.e.runWidget(Binding{Widget: w}, a.e.live(a.prompt))
+		// With the shell completion PerformCompletion named, if it named
+		// one — the source a completion action asks first, exactly as a key
+		// bound to that completion widget would.
+		a.e.runWidget(Binding{Widget: w, Candidates: a.e.performCandidates}, a.e.live(a.prompt))
 	}
 	if back >= 0 {
 		a.e.pos = back
@@ -407,6 +410,40 @@ func (a editorActions) Message(text string) {
 func (a editorActions) UndoLimit() int { return a.e.undoLimit }
 
 func (a editorActions) SetUndoLimit(n int) { a.e.undoLimit = n }
+
+// CompletionActions is the handle's half for a completion widget a shell
+// defined, called by name from inside another widget — asked for with a type
+// assertion like ArgumentActions.
+//
+// A key bound to such a widget is a Binding whose Candidates names it, and
+// the editor's completion asks that shell completion first. A widget that
+// calls it by name has to reach the same thing, or the function runs bare,
+// outside any completion, and every `compadd` in it refuses. That is the
+// ordinary shape on a real machine rather than an exotic one:
+// zsh-autosuggestions wraps every widget, the completion widgets included,
+// and its wrapper calls the original by name, so with `compinit` loaded every
+// Tab went through this route. Measured 2026-10-05 through a pseudo-terminal
+// against zsh 5.9.2: `f() { compadd alpha alpine }`, `zle -C mycomp
+// .complete-word f`, `w() { zle mycomp }` on Tab — `x al` and Tab is `x alp`,
+// and a second Tab lists both, Tab's own two-keystroke rule reached by name.
+//
+// w is the completer's own action and candidates the widget's name; an
+// action that asks no completer is performed as Perform performs it.
+type CompletionActions interface {
+	PerformCompletion(w Widget, candidates string, in Line) (Line, bool)
+}
+
+// PerformCompletion is Perform with the shell completion named. See
+// CompletionActions.
+func (a editorActions) PerformCompletion(w Widget, candidates string, in Line) (Line, bool) {
+	if !w.UsesCandidates() {
+		return a.Perform(w, in)
+	}
+	saved := a.e.performCandidates
+	a.e.performCandidates = candidates
+	defer func() { a.e.performCandidates = saved }()
+	return a.Perform(w, in)
+}
 
 // ArgumentActions is the handle's further half for an action a widget calls
 // with arguments of its own — `zle insert-last-word -- -1 -2` — asked for

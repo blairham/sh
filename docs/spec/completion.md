@@ -337,7 +337,11 @@ _main_complete` — and that widget's function is the whole of the
 per-command language above.
 
 **A key bound to such a widget asks the widget's function first and
-falls back to the completion specified here.** The function contributes
+falls back to the completion specified here** — and so does a widget that
+calls it by name (`w() { zle mycomp }`), which is how zsh-autosuggestions
+reaches every completion widget it wraps. Measured 2026-10-05 against zsh
+5.9.2: the wrapper's key fills in `x al` to `x alp` and lists on the next
+press, with `$WIDGET` inside the function still the wrapper's (#6142). The function contributes
 candidates with `compadd`; if it has none — because it is not defined,
 because it failed, or because it had nothing to say about this word —
 the answer above stands unchanged, and Tab goes on completing filenames

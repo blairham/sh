@@ -1170,6 +1170,13 @@ func accepts(name string) bool {
 // spelling a paste plugin uses to look at what was pasted before keeping any
 // of it. Every other action ignores what follows it, as it did before.
 func callBuiltinWidget(r *interp.Runner, ctx context.Context, name string, args []string) int {
+	return callEditorWidget(r, ctx, name, "", args)
+}
+
+// callEditorWidget is callBuiltinWidget with the shell completion a
+// completion action is to ask first, which is empty for every call but a
+// completion widget's — see callWidget, and repl.CompletionActions.
+func callEditorWidget(r *interp.Runner, ctx context.Context, name, candidates string, args []string) int {
 	if accepts(name) {
 		r.SetVar(zleAccept, "1")
 		return 0
@@ -1233,6 +1240,8 @@ func callBuiltinWidget(r *interp.Runner, ctx context.Context, name string, args 
 		// offset, the word, and whether the offset counts from the line
 		// being edited (#5987). See repl's insertLastWordWith.
 		out, performed = with.PerformWith(widget, widgetLine(r), args)
+	} else if completes, takes := actions.(repl.CompletionActions); takes && candidates != "" {
+		out, performed = completes.PerformCompletion(widget, candidates, widgetLine(r))
 	} else {
 		out, performed = actions.Perform(widget, widgetLine(r))
 	}
@@ -1418,6 +1427,20 @@ func callWidget(r *interp.Runner, ctx context.Context, name string, args []strin
 	if !r.HasFunction(def.function) {
 		return 1
 	}
+	if def.completer != "" {
+		// **A completion widget called by name completes**, the way a key
+		// bound to it does: its completer is the editor action and its
+		// function is the source that action asks first. Calling the
+		// function bare ran it outside any completion, so its first
+		// `compadd` refused — and that is every Tab on a real rc, because
+		// zsh-autosuggestions wraps the completion widgets and its wrapper
+		// calls the original by name. Measured 2026-10-05 through a
+		// pseudo-terminal against zsh 5.9.2: `w() { zle mycomp }` over
+		// `zle -C mycomp .complete-word f` fills in `x al` to `x alp` on one
+		// Tab and lists on the next, with `$WIDGET` still `w` inside `f`.
+		// See completionBinding, which is the same answer for a key.
+		return callEditorWidget(r, ctx, strings.TrimPrefix(def.completer, "."), name, args)
+	}
 	if !insideWidget(r) {
 		// **`zle some-widget` from a plain `zle -F` handler is the widget's
 		// own context and not a nested call**, because there is no outer
@@ -1571,7 +1594,17 @@ func runWidgetCall(
 	// callerWidgetState for why that is not the same as clearing it.
 	caller := saveWidgetState(r)
 	setWidgetLine(r, in)
-	r.SetVar(zleWidget, name)
+	// `$WIDGET` is the call's own name, except for a completion widget that
+	// another widget called by name: measured 2026-10-05 against zsh 5.9.2,
+	// `w() { zle mycomp }` over `zle -C mycomp .complete-word f` shows `f`
+	// a `$WIDGET` of `w`, as any widget called from another shows the outer
+	// one's (see callWidget). A key bound to the completion widget is not
+	// nested and reads its own name. Only the completion route reaches here
+	// nested from inside a widget, because callWidget calls every other
+	// widget's function directly.
+	if outer, _ := r.GetVar(zleWidget); !nested || def.completer == "" || outer == "" {
+		r.SetVar(zleWidget, name)
+	}
 	r.SetVar(zleActive, "1")
 	last := lastWidgetName(in.Last)
 	if held, _ := r.GetVar(zleHeldLast); !in.Last.Known && held != "" {

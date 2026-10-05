@@ -103,9 +103,40 @@ func (s shellCompleter) pathCandidates(word string, keep func(dir string, e os.D
 		default:
 			c.Word += "/"
 		}
+		if s.listTypes != nil {
+			c.Display = s.markedRow(dir, e, escapeName(e.Name(), quote, atStart))
+		}
 		out = append(out, c)
 	}
 	return out
+}
+
+// markedRow is how a listing draws a file under a dialect's ListTypesOption:
+// the name and the mark `ls -F` gives it where the option is set, and the
+// name alone where it is not — with a blank in the mark's place, because the
+// column it would take is kept. Measured 2026-10-05 against zsh 5.9.2 with no
+// completion system loaded, 40 columns, `ls <TAB>`:
+//
+//	setopt listtypes    dlink@  fifo|   plain       exe*    link@   sub/
+//	unsetopt listtypes  dlink   fifo    plain       exe     link    sub
+//
+// down the columns, and both in cells of eight — where a name with no mark,
+// `plain`, takes its own width and two either way. The same rule
+// dialect/zsh's `compadd -f` draws by (#6157), with the same table: see
+// FileTypeMark.
+func (s shellCompleter) markedRow(dir string, e os.DirEntry, name string) string {
+	info, err := e.Info()
+	if err != nil {
+		return name
+	}
+	mark := FileTypeMark(info.Mode())
+	switch {
+	case mark == "":
+		return name
+	case s.listTypes():
+		return name + mark
+	}
+	return name + " "
 }
 
 // symlinkUnmarked reports whether a symlink to a directory goes without its

@@ -309,6 +309,11 @@ type shellCompleter struct {
 	// EditorStyle.SymlinkedDirectoryMarkedWhenNamedWhole.
 	symlinkMarkedWhenWhole bool
 
+	// listTypes is whether a listing of files draws `ls -F`'s marks, asked at
+	// the keystroke because it is an option a person sets at the prompt. Nil
+	// is a dialect with no such option. See EditorStyle.ListTypesOption.
+	listTypes func() bool
+
 	// emptyWordOffersNothing withholds the command list from a command word
 	// that is empty — bash's `no_empty_cmd_completion`, read from the shell
 	// rather than settled once, because the option is one a person turns on

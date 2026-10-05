@@ -5,7 +5,6 @@ package zsh
 
 import (
 	"context"
-	"os"
 	"slices"
 	"sort"
 	"strconv"
@@ -634,24 +633,7 @@ func fileMark(r *interp.Runner, ctx context.Context, o compaddOptions, candidate
 	if err != nil {
 		return ""
 	}
-	mode := info.Mode()
-	switch {
-	case mode&os.ModeSymlink != 0:
-		return "@"
-	case mode.IsDir():
-		return "/"
-	case mode&os.ModeNamedPipe != 0:
-		return "|"
-	case mode&os.ModeSocket != 0:
-		return "="
-	case mode&os.ModeCharDevice != 0:
-		return "%"
-	case mode&os.ModeDevice != 0:
-		return "#"
-	case mode&0o111 != 0:
-		return "*"
-	}
-	return ""
+	return repl.FileTypeMark(info.Mode())
 }
 
 // display is the nth row of a `-d` list, or none where the caller gave no

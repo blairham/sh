@@ -244,8 +244,14 @@ func (a editorActions) Perform(w Widget, in Line) (Line, bool) {
 	// first call of a keystroke asks the keystroke before. See WidgetCalled.
 	if a.e.called {
 		a.e.killedBefore = a.e.killing
+		// And whether this insert-last-word walks on from the last one,
+		// which is the same question: measured against zsh 5.9.2, a widget
+		// calling `zle insert-last-word` twice inserts the word from two
+		// lines back, and a widget key pressed twice walks too (#5987).
+		a.e.lastArg.walkingBefore = a.e.lastArg.walking
 	}
 	a.e.killing, a.e.called = false, true
+	a.e.lastArg.walking = false
 	// Through runWidget and not a copy of it, which is the whole point: a key
 	// bound to `up-line-or-history` and a widget that calls `zle
 	// up-line-or-history` must be the same action, including where the cursor
@@ -268,6 +274,16 @@ func (a editorActions) Perform(w Widget, in Line) (Line, bool) {
 		if times < 0 {
 			times, back = -times, a.e.pos
 		}
+	}
+	if w == WidgetInsertLastWord && a.e.lastWordArguments {
+		// The call's own count and its own arguments, and performed once —
+		// the count picks a word rather than playing the walk again. See
+		// insertLastWordWith.
+		saved := a.e.keyNumeric
+		a.e.keyNumeric = in.Numeric
+		a.e.runWidget(Binding{Widget: w}, a.e.live(a.prompt))
+		a.e.keyNumeric, a.e.actionArgs = saved, nil
+		times = 0
 	}
 	if w.takesItsCount() {
 		// Told the count rather than played it: the call's own, which is
@@ -392,6 +408,25 @@ func (a editorActions) UndoLimit() int { return a.e.undoLimit }
 
 func (a editorActions) SetUndoLimit(n int) { a.e.undoLimit = n }
 
+// ArgumentActions is the handle's further half for an action a widget calls
+// with arguments of its own — `zle insert-last-word -- -1 -2` — asked for
+// with a type assertion, so that an editor without it is one that takes
+// none. Only insert-last-word reads them (#5987).
+type ArgumentActions interface {
+	PerformWith(w Widget, in Line, args []string) (Line, bool)
+}
+
+// PerformWith is Perform with the call's arguments.
+func (a editorActions) PerformWith(w Widget, in Line, args []string) (Line, bool) {
+	a.e.actionArgs = args
+	defer func() { a.e.actionArgs = nil }()
+	return a.Perform(w, in)
+}
+
+// A walk of insert-last-word is not broken by it: measured 2026-10-05
+// against zsh 5.9.2, a widget of the shell's that calls `zle
+// .insert-last-word`, called in turn by copy-earlier-word, walks on at the
+// next press (#5987). Only another action performed breaks the walk.
 func (a editorActions) WidgetCalled() { a.e.killing, a.e.called = false, true }
 
 func (a editorActions) UndoTo(n int, in Line) (Line, bool) {
@@ -442,7 +477,7 @@ func (e *editor) give() Line {
 	if e.prebuffer != nil {
 		prebuffer = e.prebuffer()
 	}
-	return Line{Prebuffer: prebuffer, Buffer: string(e.line), Cursor: e.pos, Postdisplay: e.postdisplay, Last: e.last, ViCommand: e.viCommand, Numeric: e.keyNumeric, Keys: string(e.keyBytes)}
+	return Line{Prebuffer: prebuffer, Buffer: string(e.line), Cursor: e.pos, Postdisplay: e.postdisplay, Last: e.last, ViCommand: e.viCommand, Numeric: e.keyNumeric, Keys: string(e.keyBytes), HistNo: e.histNo()}
 }
 
 // adoptKeys makes keys an action read the ones a self-insert types.

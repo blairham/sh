@@ -8,8 +8,8 @@ import (
 	"testing"
 )
 
-// history-search-end, incarg, smart-insert-last-word and
-// bracketed-paste-url-magic, driven through a session on a pseudo-terminal
+// history-search-end, incarg, smart-insert-last-word,
+// bracketed-paste-url-magic and copy-earlier-word, driven through a session on a pseudo-terminal
 // with the shipped files on $fpath. Every expected line was measured
 // 2026-10-05 through a pseudo-terminal against /opt/homebrew/bin/zsh (zsh
 // 5.9.2) with its own copies, the same keys and the same history.
@@ -29,6 +29,12 @@ bindkey '^N' history-beginning-search-forward-end
 		"inc": "autoload -Uz incarg; zle -N incarg; bindkey '^X+' incarg\n",
 		"sil": "autoload -Uz smart-insert-last-word; zle -N insert-last-word smart-insert-last-word; bindkey '\\e.' insert-last-word\n",
 		"url": "autoload -Uz bracketed-paste-url-magic; zle -N bracketed-paste bracketed-paste-url-magic\n",
+		"cew": "autoload -Uz copy-earlier-word; zle -N copy-earlier-word; bindkey '\\e,' copy-earlier-word\n",
+		"ilw": `wa() { zle insert-last-word -- -1 -2 }; zle -N wa; bindkey '^Xa' wa
+wb() { zle insert-last-word -- 0 -3 }; zle -N wb; bindkey '^Xb' wb
+wc() { zle insert-last-word -- -1 1 1 }; zle -N wc; bindkey '^Xc' wc
+hn() { LBUFFER=H$HISTNO }; zle -N hn; bindkey '^Xh' hn
+`,
 	}
 	for _, tc := range []struct {
 		name, rc string
@@ -86,6 +92,24 @@ bindkey '^N' history-beginning-search-forward-end
 		{"url17", "url", []string{"\x1b[200~http://x/$(id)\x1b[201~"}, "'http://x/$(id)'|16"},
 		{"url18", "url", []string{"ab\x02\x1b[200~http://x/?\x1b[201~"}, "a'http://x/?'b|13"},
 		{"urlssh", "url", []string{"\x1b[200~ssh://h/?x\x1b[201~"}, "'ssh://h/?x'|12"},
+		// copy-earlier-word, and the insert-last-word it is built on (#5987).
+		{"cew1", "cew", []string{": one two three\r", ": alpha beta gamma\r", "\x1b.\x1b,"}, "beta|4"},
+		{"cew2", "cew", []string{": one two three\r", ": alpha beta gamma\r", "\x1b.\x1b,\x1b,"}, "alpha|5"},
+		{"cew3", "cew", []string{": one two three\r", ": alpha beta gamma\r", "\x1b.\x1b,\x1b,\x1b,\x1b,\x1b,"}, ":|1"},
+		{"cew4", "cew", []string{": one two three\r", ": alpha beta gamma\r", "p q r \x1b,"}, "p q r r|7"},
+		{"cew5", "cew", []string{": one two three\r", ": alpha beta gamma\r", "p q r \x1b,\x1b,"}, "p q r q|7"},
+		{"cew6", "cew", []string{": one two three\r", ": alpha beta gamma\r", "p q r \x1b,\x1b,\x1b,\x1b,"}, "p q r |6"},
+		{"cew7", "cew", []string{": one two three\r", ": alpha beta gamma\r", "p q r \x1b2\x1b,"}, "p q r q|7"},
+		{"cew8", "cew", []string{": one two three\r", ": alpha beta gamma\r", "\x1b.\x1b2\x1b,"}, "alpha|5"},
+		{"cew9", "cew", []string{": one two three\r", ": alpha beta gamma\r", "\x1b.\x1b.\x1b,"}, "two|3"},
+		{"cew10", "cew", []string{": one two three\r", ": alpha beta gamma\r", "p q r \x1b,\x1b."}, "p q r gamma|11"},
+		{"cew11", "cew", []string{": one two three\r", ": alpha beta gamma\r", "\x1b.x\x1b,"}, "gammaxgammax|12"},
+		{"ilw1", "ilw", []string{": one two three\r", ": alpha beta gamma\r", "\x18a"}, "beta|4"},
+		{"ilw2", "ilw", []string{": one two three\r", ": alpha beta gamma\r", "\x1b.\x18b"}, "alpha|5"},
+		{"ilw3", "ilw", []string{": one two three\r", ": alpha beta gamma\r", "\x1b2\x1b."}, "beta|4"},
+		{"ilw4", "ilw", []string{": one two three\r", ": alpha beta gamma\r", "p q r \x18c"}, "p q r :|7"},
+		{"ilw5", "ilw", []string{": one two three\r", ": alpha beta gamma\r", "\x1b.\x1b2\x1b."}, "two|3"},
+		{"histno", "ilw", []string{": one two three\r", ": alpha beta gamma\r", "\x18h"}, "H3|2"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			control, screen, home := contribSession(t, rcs[tc.rc]+

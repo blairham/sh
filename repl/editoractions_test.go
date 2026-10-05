@@ -92,6 +92,9 @@ func TestAnActionCanAskTheEditorToWalkHistory(t *testing.T) {
 		t.Fatalf("walked %+v, want %+v", walked, want)
 	}
 	for i := range want {
+		// The history number is the session's to count, and this editor
+		// has none; see TestHistNoNumbersTheLineBeingEdited.
+		walked[i].HistNo = 0
 		if walked[i] != want[i] {
 			t.Errorf("step %d = %+v, want %+v", i+1, walked[i], want[i])
 		}
@@ -189,7 +192,7 @@ func TestTheSearchRunsFromInsideAnAction(t *testing.T) {
 			if calls != 1 {
 				t.Errorf("the action ran %d times, want once — the search's keys are its own", calls)
 			}
-			got.Last = LastWidget{}
+			got.Last, got.HistNo = LastWidget{}, 0
 			if got != c.want {
 				t.Errorf("the search gave back %+v, want %+v", got, c.want)
 			}

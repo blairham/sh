@@ -281,7 +281,7 @@ func TestTheShippedFunctionsSitWhereTheSearchLooks(t *testing.T) {
 	want := []string{
 		"add-zle-hook-widget", "add-zsh-hook", "backward-kill-word-match", "backward-word-match", "bashcompinit",
 		"bracketed-paste-magic", "bracketed-paste-url-magic", "capitalize-word-match", "catch", "cdr", "chpwd_recent_add",
-		"chpwd_recent_dirs", "chpwd_recent_filehandler", "colors", "compaudit", "compdump", "compinit",
+		"chpwd_recent_dirs", "chpwd_recent_filehandler", "colors", "compaudit", "compdump", "compinit", "copy-earlier-word",
 		"delete-whole-word-match", "down-case-word-match", "down-line-or-beginning-search", "edit-command-line",
 		"forward-word-match", "history-search-end", "incarg", "is-at-least", "kill-word-match", "match-word-context",
 		"match-words-by-style", "prompt_default_setup", "prompt_off_setup", "prompt_restore_setup", "promptinit",

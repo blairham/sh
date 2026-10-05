@@ -2910,6 +2910,8 @@ func (s Shell) newEditor(ctx context.Context, state *terminalState) *editor {
 		undoPerKeystroke:     s.Editor.UndoTakesBackOneKeystrokeAtATime,
 		undoRestoresCursor:   s.Editor.UndoRestoresTheCursorToWhereItWas,
 		lastArgStaysOnOldest: s.Editor.LastArgumentStaysOnTheOldestLine,
+		lastWordArguments:    s.Editor.InsertLastWordTakesArguments,
+		historyCount:         func() int { return s.counted().history },
 		// And what a person rebound, asked fresh for every key.
 		bindings: s.KeyBindings,
 		vi:       s.ViEditing,

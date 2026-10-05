@@ -1,0 +1,50 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# copy-earlier-word — a widget that copies words back off a line, an earlier
+# one each time it is pressed again:
+#
+#   autoload -Uz copy-earlier-word
+#   zle -N copy-earlier-word
+#   bindkey '^[,' copy-earlier-word
+#
+# Straight after insert-last-word it walks back through the words of the
+# history line that one used, putting each in place of the last. Otherwise
+# it works on the line being edited, starting from its last word. A numeric
+# argument N picks the Nth word, counting from the end when it is negative.
+# The widget style in :copy-earlier-word names the widget it calls for the
+# line being edited, which takes insert-last-word's arguments.
+#
+# Written from zshcontrib(1) and from what the installed shell answers, never
+# from its function files; docs/spec/functions.md has the measurements.
+# Measured beyond the manual:
+#
+#   * after insert-last-word the walk stops on a line's first word, and on
+#     the line being edited a press past its first word takes the copy away;
+#   * a count counts from the start of the line, nought is the last word,
+#     and pressed again after one the walk wraps from the first word to the
+#     last;
+#   * after insert-last-word the widget style is not asked.
+
+emulate -L zsh
+
+integer n
+if (( ${+NUMERIC} )); then
+	n=$NUMERIC
+elif [[ $LASTWIDGET == $WIDGET ]]; then
+	n=$(( _cew_word - 1 ))
+elif [[ $LASTWIDGET == *insert-last-word ]]; then
+	n=-2
+else
+	n=-1
+fi
+if [[ $LASTWIDGET == *insert-last-word ]] || { [[ $LASTWIDGET == $WIDGET ]] && (( _cew_history )); }; then
+	typeset -gi _cew_history=1
+	zle .insert-last-word -- 0 $n
+else
+	typeset -gi _cew_history=0
+	local widget
+	zstyle -s ":$WIDGET" widget widget || widget=.insert-last-word
+	zle $widget -- 0 $n
+fi
+typeset -gi _cew_word=$n

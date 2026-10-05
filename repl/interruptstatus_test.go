@@ -33,7 +33,7 @@ func TestAControlCAtThePromptIsAnsweredOnce(t *testing.T) {
 			// happens below.
 			t.Cleanup(func() { _ = runScript(t, r, "trap - INT") })
 			_ = runScript(t, r, tc.setup)
-			keep := Shell{Runner: r}.answerInterrupt(t.Context(), nil)
+			keep := Shell{Runner: r}.answerInterrupt(t.Context(), nil, true)
 			if got := r.ExitStatus(); got != tc.want {
 				t.Errorf("after %q and ^C, $? = %d, want %d", tc.setup, got, tc.want)
 			}

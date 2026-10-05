@@ -148,7 +148,7 @@ func editorOptionSession(t *testing.T, option string, on bool, typed string) (ra
 			// a shell that was never asked.
 			BracketedPaste:       true,
 			ClearBeforeThePrompt: editorGround,
-			RunsUnderTheOption:   option,
+			RunsUnderTheOptions:  []string{option},
 		},
 	}
 	if _, err := s.Run(t.Context()); err != nil {

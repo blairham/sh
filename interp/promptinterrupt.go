@@ -23,6 +23,28 @@ import (
 // the line is kept and the status left alone (#5888). A trap with a body is
 // the dialect's answer — see Semantics.PromptInterruptTrap.
 func (r *Runner) InterruptAtThePrompt(ctx context.Context) (keep bool) {
+	return r.interruptAtThePrompt(ctx, r.sem().PromptInterruptTrap)
+}
+
+// InterruptInATerminalRead is InterruptAtThePrompt for a prompt whose line the
+// terminal is gathering, with no line editor in the shell: there a trap with a
+// body decides the line the way PromptInterruptTrapDecides says, whatever the
+// dialect's answer for its editor is.
+//
+// That is the shape of the thing rather than a dialect's choice. The terminal
+// sends a signal, the shell's handler runs, and the read the signal arrived
+// during carries on unless the handler gave the line up. Measured 2026-10-04
+// through a pseudo-terminal: bash 5.3.20 under `set +o emacs +o vi`, with
+// `trap 'echo tr-$?' INT` after `false`, writes `tr-1`, keeps reading and
+// leaves `$?` 1 — where the same bash with readline gives the line up and
+// leaves 130 — and zsh 5.9.2 under `unsetopt zle` keeps the line for
+// `TRAPINT() { return 0 }` and gives it up for `return 130`, as its editor
+// does.
+func (r *Runner) InterruptInATerminalRead(ctx context.Context) (keep bool) {
+	return r.interruptAtThePrompt(ctx, PromptInterruptTrapDecides)
+}
+
+func (r *Runner) interruptAtThePrompt(ctx context.Context, answer PromptInterruptTrapping) (keep bool) {
 	name, _ := signalName(syscall.SIGINT)
 	s := r.sigs()
 	s.mu.Lock()
@@ -43,7 +65,7 @@ func (r *Runner) InterruptAtThePrompt(ctx context.Context) (keep bool) {
 	before := r.statusBefore
 	r.statusBefore = r.status
 	defer func() { r.statusBefore = before }()
-	switch r.sem().PromptInterruptTrap {
+	switch answer {
 	case PromptInterruptStatusThenTrap:
 		r.SetPromptStatus(interrupted)
 		r.runPromptTrapAction(ctx, name, body)

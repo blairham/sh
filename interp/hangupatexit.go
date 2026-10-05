@@ -79,7 +79,19 @@ func (r *Runner) hangUpJobsIfAsked() {
 			// reaching for one is how a shell ends up signaling whatever was
 			// given the number next. Only the one dialect with the sentence
 			// reads the count.
+			//
+			// And the shell leaves with 1, whatever the last command left:
+			// the hangup that reached nothing is a failure, and it is the
+			// last thing the shell does (#6170). Measured 2026-10-05 through
+			// a pty against zsh 5.9.2: `f(){return 5}; set -m; setopt
+			// nonotify; sleep 0.1 & /bin/sleep 0.5; echo end; f` leaves with
+			// 1, and an EXIT trap there still sees 0; with only a running
+			// job counted it leaves with 5; with `nohup`, or `set +m` before
+			// the end, nothing is counted and it leaves with 5; and with
+			// both streams sent to /dev/null it still leaves with 1, so it
+			// is the count and not the sentence that decides.
 			sent++
+			r.status = 1
 			continue
 		}
 		if j.Stopped && skipStopped {

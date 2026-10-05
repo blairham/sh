@@ -4806,7 +4806,10 @@ func Diagnostics() interp.Diagnostics {
 		// Except over a failure, when the input ran out inside a quote, a
 		// `${` or a `$((`: `false` and then `echo "abc` exits 1, and over
 		// `exit 7` it exits 7. bash 3.2 says 2 for both (#5882).
-		ParseFailureKeepsAFailingStatus: interp.FailingStatusKeptOverAnUnmatchedOpener,
+		// An interactive shell names itself, by its name's last component,
+		// and no line, whatever text the message comes from (#6008).
+		InteractiveShellSpeaksAsAtAPrompt: true,
+		ParseFailureKeepsAFailingStatus:   interp.FailingStatusKeptOverAnUnmatchedOpener,
 		// Measured: `.` of a file it cannot open reports 1 and carries on,
 		// where a missing operand is 2 — two numbers for what reads like one
 		// failure, which is why they are two fields.

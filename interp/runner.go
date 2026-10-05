@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path"
+	"path/filepath"
 	"slices"
 	"sort"
 	"strings"
@@ -6158,7 +6159,7 @@ func (r *Runner) locationNameAndLine(functionCounts bool) (name string, line int
 		// would be written. See Runner.dotFailureNamesItsOperand.
 		return r.dotFailureFile, at, false
 	}
-	if d.LocationNamesTheCurrentFile {
+	if d.LocationNamesTheCurrentFile && !r.speaksAsAtAPrompt() {
 		// locationFile rather than currentFile: a message located at the call
 		// it came from is one frame further out than the shell is. At the top
 		// level of a script the current file is the script, and under `-c` or
@@ -6653,6 +6654,13 @@ func (r *Runner) fatalExpansionQuiet() {
 // is why the answer is read from Diagnostics rather than written into
 // Runner.Name, which would change `$0` with it.
 func (r *Runner) name() string {
+	if r.speaksAsAtAPrompt() {
+		// The last component of the name the shell was started as, a
+		// login's dash kept. See Diagnostics.InteractiveShellSpeaksAsAtAPrompt.
+		if n := r.Invocation; n != "" {
+			return filepath.Base(n)
+		}
+	}
 	if r.startupFileName != "" {
 		// A startup file standing in for the shell's name while it runs.
 		// See Diagnostics.StartupFileNamedInPlaceOfTheShell.

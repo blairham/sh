@@ -5,6 +5,7 @@ package driver
 
 import (
 	"context"
+	"path/filepath"
 	"strings"
 
 	"github.com/blairham/sh/interp"
@@ -524,7 +525,17 @@ func (sh Shell) startupParseFailure(r *interp.Runner, in source, path, text stri
 		dg = dg.ForPrompt()
 		dg.Location = located
 	}
-	sh.errf("%s", dg.ParseDiagnosticAfter(name, "", err, text, r.LineReached()))
+	msg := dg.ParseDiagnosticAfter(name, "", err, text, r.LineReached())
+	if dg.InteractiveShellSpeaksAsAtAPrompt && in.interactive {
+		// Its own name in front of every line, as for any file this shell
+		// reports a parse failure in while it is interactive: measured
+		// 2026-10-05 on bash 5.3.20, `echo )` on line 1 of `.bashrc` under
+		// `-i` is `bash: /…/.bashrc: line 1: syntax error near unexpected
+		// token `)'` and then `bash: /…/.bashrc: line 1: `echo )'` (#6008).
+		lead := filepath.Base(r.Invocation) + ": "
+		msg = lead + strings.ReplaceAll(strings.TrimSuffix(msg, "\n"), "\n", "\n"+lead) + "\n"
+	}
+	sh.errf("%s", msg)
 	return dg.StartupParseFailureStatusFor(err, r.ExitStatus(), ran, in.interactive)
 }
 

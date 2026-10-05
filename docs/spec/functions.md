@@ -987,13 +987,11 @@ replaces the list. No manual page describes this function, so every row is
 measured, the style's name included: setting `schema` to `ssh://` alone stops
 `http://` being quoted.
 
-Differences, both the shell's:
-* a numeric argument to the search widgets is lost (#5988), so `M-2` with
-  `history-beginning-search-backward-end` lands on the first match where zsh
-  lands on the second;
-* `smart-insert-last-word`, given a numeric argument or arguments, hands
-  them to `insert-last-word`. Since #5987 that takes both, but this form of
-  `smart-insert-last-word` has not been measured on its own.
+One form is unmeasured: `smart-insert-last-word` given a numeric argument
+or arguments hands them to `insert-last-word`. Since #5987 that takes both,
+but this form of `smart-insert-last-word` has not been measured on its own.
+`history-search-end` passes a count through to the search, which goes to
+that match (#5988): `M-2` lands on the second.
 
 ### `copy-earlier-word`, and the `insert-last-word` it is built on
 

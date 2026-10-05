@@ -183,6 +183,13 @@ type EditorStyle struct {
 	ControlCharacterStyle    string
 	ControlCharacterStyleEnd string
 
+	// TabOnABlankLineTypesItself has a Tab that asks this editor's own
+	// completion for a word, with nothing but blanks before the cursor, put a
+	// tab in the line instead. zsh's, measured 2026-10-05 against 5.9.2 with
+	// no completion system loaded; bash 5.3 completes every command there is
+	// on the same keystroke. See editor.tabOnABlankLine (#6119).
+	TabOnABlankLineTypesItself bool
+
 	// ListQueryEchoesTheKey writes the key that answered the question back
 	// to the screen. zsh does; bash does not.
 	ListQueryEchoesTheKey bool
@@ -339,6 +346,15 @@ type EditorStyle struct {
 	// ringing the bell at anything else. bash does. zsh takes the first key
 	// whatever it is and treats everything but `y` as no.
 	ListQueryAcceptsOnlyYesOrNo bool
+
+	// ListQueryAnswerTakesTheQuestionsRow erases the question once it is
+	// answered: a listing starts on the row the question was on, and a
+	// declined one puts the cursor back on the line, which is drawn again
+	// where it was. Measured 2026-10-05 through a pseudo-terminal: zsh 5.9.2
+	// writes `\r\e[J` before the listing and `\r\e[J\e[A` before redrawing a
+	// line it declined to list for; bash 5.3 leaves the question and starts
+	// the listing, or a fresh prompt, on the row below (#6119).
+	ListQueryAnswerTakesTheQuestionsRow bool
 
 	// WordCharacters is what counts as part of a word besides letters and
 	// digits, for `M-b`, `M-f` and the word kills.

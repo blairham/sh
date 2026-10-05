@@ -484,15 +484,15 @@ func (e *editor) runWidget(b Binding, prompt drawnPrompt) {
 		// e.complete alone here, which dropped the matches on the floor and
 		// could never list — the bug the key loop worked around with a case
 		// of its own, and which this editor's own seam still had (#3043).
-		e.completeKey(e.completerFor(b.Candidates), e.completedBefore, prompt)
+		e.completeKey(e.completerFor(b.Candidates), e.ownCompletion(b.Candidates), e.completedBefore, prompt)
 	case WidgetListChoices:
 		e.listChoices(e.completerFor(b.Candidates), prompt)
 	case WidgetDeleteCharOrList:
 		e.deleteCharOrList(e.completerFor(b.Candidates), prompt)
 	case WidgetMenuComplete:
-		e.menuComplete(e.completerFor(b.Candidates), +1, prompt)
+		e.menuComplete(e.completerFor(b.Candidates), e.ownCompletion(b.Candidates), +1, prompt)
 	case WidgetMenuCompleteBackward:
-		e.menuComplete(e.completerFor(b.Candidates), -1, prompt)
+		e.menuComplete(e.completerFor(b.Candidates), e.ownCompletion(b.Candidates), -1, prompt)
 	case WidgetUndo:
 		e.undo()
 		e.redraw(prompt)

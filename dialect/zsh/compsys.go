@@ -215,6 +215,18 @@ func RunCompletion(
 	if !ran {
 		return nil
 	}
+	if strings.Contains(cs.state["insert"], "tab") {
+		// The function asked for the key to be typed instead: `tab`
+		// anywhere in `compstate[insert]`. Measured 2026-10-05 against zsh
+		// 5.9.2 with a completion widget setting it: `tab`, `tabx`, `xtab`
+		// and `automenu tab` all type the key, `ta`, `menu` and `automenu`
+		// do not, and matches it added make no difference. It is how the
+		// completion system's `insert-tab` style types a Tab on an empty
+		// line, which here went on to complete every command there is and
+		// ask whether to list them all (#6119). See
+		// repl.CompletionInsertsTheKey.
+		return repl.CompletionInsertsTheKey()
+	}
 	return cs.groupedMatches()
 }
 

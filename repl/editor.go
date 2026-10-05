@@ -247,6 +247,8 @@ type editor struct {
 	// message is the text a widget's `zle -M` put under the line. See
 	// Actions.Message.
 	message string
+	// tabOnBlank is EditorStyle.TabOnABlankLineTypesItself.
+	tabOnBlank bool
 	// rowEnded is a diagnostic having taken the line's row while a widget
 	// ran, so the next draw puts the whole prompt back. See diagnosticrow.go.
 	rowEnded bool
@@ -389,6 +391,11 @@ type editor struct {
 	listQuery       string
 	listQueryEchoes bool
 	listQueryStrict bool
+	// listQueryTakesItsRow is EditorStyle.ListQueryAnswerTakesTheQuestionsRow,
+	// and listHere is the question having been answered yes under it: the
+	// listing starts on the row the cursor is already on.
+	listQueryTakesItsRow bool
+	listHere             bool
 	// listThreshold is how many matches it takes before the question is
 	// asked, read fresh on every completion because it is a parameter a
 	// person sets at the prompt — the same shape `bindings` has and for the
@@ -937,7 +944,7 @@ func (e *editor) keyLoop(prompt drawnPrompt) (string, error) {
 			e.change(false, e.deleteBackward)
 			e.redraw(prompt)
 		case tab:
-			e.completeKey(e.comp, e.completedBefore, prompt)
+			e.completeKey(e.comp, true, e.completedBefore, prompt)
 			continue
 		case esc:
 			if e.viEditing() && e.escapeIsTheModeSwitch() {
@@ -1800,7 +1807,13 @@ func place(promptWidth int, line []rune, pos, cols int) (curRow, curCol, endRow,
 // each as wide as the longest match plus two, filled down one column before
 // starting the next, so that reading in sorted order means reading downwards.
 func (e *editor) list(matches []Candidate, prompt drawnPrompt) {
-	e.endLine(prompt, "")
+	if e.listHere {
+		// A question answered yes has already taken the line's row away and
+		// cleared its own. See confirmList.
+		e.listHere = false
+	} else {
+		e.endLine(prompt, "")
+	}
 	// Through listingRows rather than straight to columns: a listing is one
 	// block or several, and which rows share an arrangement is the
 	// completer's answer rather than this editor's. See completelist.go.

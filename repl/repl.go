@@ -2901,15 +2901,17 @@ func (s Shell) newEditor(ctx context.Context, state *terminalState) *editor {
 		controlStyle:    s.Editor.ControlCharacterStyle,
 		controlStyleEnd: s.Editor.ControlCharacterStyleEnd,
 		selfInsert:      s.Editor.SelfInsertWidget,
+		tabOnBlank:      s.Editor.TabOnABlankLineTypesItself,
 		specials:        s.Editor.SpecialWidgets,
 		// What to do about output that never ended its line. Read through the
 		// options rather than taken as values, because both are options a
 		// person turns off — and the return is the outer of the two, so a
 		// dialect whose person cleared it gets neither. See freshRow.
-		unfinishedMark:  s.markIfAsked(),
-		returnsFirst:    s.dialectOption(s.Editor.ReturnBeforeThePromptOption),
-		clearBefore:     s.Editor.ClearBeforeThePrompt,
-		listQueryStrict: s.Editor.ListQueryAcceptsOnlyYesOrNo,
+		unfinishedMark:       s.markIfAsked(),
+		returnsFirst:         s.dialectOption(s.Editor.ReturnBeforeThePromptOption),
+		clearBefore:          s.Editor.ClearBeforeThePrompt,
+		listQueryStrict:      s.Editor.ListQueryAcceptsOnlyYesOrNo,
+		listQueryTakesItsRow: s.Editor.ListQueryAnswerTakesTheQuestionsRow,
 		// What this dialect calls a word, and what its kills do with one.
 		wordChars:                  s.Editor.WordCharacters,
 		wholeLineKill:              s.Editor.KillToStartOfLineTakesTheWholeLine,

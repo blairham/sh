@@ -1087,6 +1087,8 @@ func Semantics() interp.Semantics {
 	// A startup file given up over a fatal error: bash leaves 1, the fatal status of a file, whatever ran before (#6046).
 	// See Semantics.StartupFileGivenUpLeavesTheStatusBefore.
 	s.StartupFileGivenUpLeavesTheStatusBefore = interp.No
+	// At a prompt, bash numbers the session (#6074). See Semantics.PromptNumbersEachInputFromOne.
+	s.PromptNumbersEachInputFromOne = interp.No
 	// A fatal error in `.` or `eval` text: an interactive bash gives up the line of `.` or `eval` text a fatal error was on and reads on (#6057).
 	// See Semantics.BorrowedTextErrorWhenInteractiveCostsTheLine.
 	s.BorrowedTextErrorWhenInteractiveCostsTheLine = interp.Yes

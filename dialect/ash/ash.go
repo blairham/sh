@@ -2212,6 +2212,8 @@ func Semantics() interp.Semantics {
 	// A startup file given up over a fatal error: BusyBox ash reads `$ENV` only when interactive and leaves 2 there, measured in the pinned image (#6046).
 	// See Semantics.StartupFileGivenUpLeavesTheStatusBefore.
 	s.StartupFileGivenUpLeavesTheStatusBefore = interp.No
+	// At a prompt, BusyBox ash numbers the session, measured in the pinned image (#6074). See Semantics.PromptNumbersEachInputFromOne.
+	s.PromptNumbersEachInputFromOne = interp.No
 	// A fatal error in `.` or `eval` text: BusyBox ash under `-i -c` gives up the text, measured in the pinned image (#6057).
 	// See Semantics.BorrowedTextErrorWhenInteractiveCostsTheLine.
 	s.BorrowedTextErrorWhenInteractiveCostsTheLine = interp.No

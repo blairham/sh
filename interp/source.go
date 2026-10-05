@@ -328,6 +328,15 @@ func (r *Runner) reportBorrowedParseFailure(err error, s sourced, src string) {
 			bare = true
 		}
 	}
+	if s.eval && r.evalTextKeepsItsLocationAtAPrompt() && r.AtPrompt && r.borrowedFiles == 0 && !r.inFunctionReadFromAFile() {
+		// The run-time half of that rule and not the parse half: measured
+		// 2026-10-05 on ksh93u+ at a prompt, `eval "echo )"` is `ksh: eval:
+		// syntax error: `)' unexpected`, worded as the prompt words it,
+		// where `ksh -c` writes `at line 1`. See
+		// Diagnostics.EvalTextAtAPromptKeepsItsLocation.
+		pd := r.Diagnostics.ForPrompt()
+		d = &pd
+	}
 	line, own := r.line, d.ParseFailureLine(err)
 	if own > 0 {
 		// The route's origin as well as the text's offset, which is what

@@ -22680,6 +22680,36 @@ type Semantics struct {
 	// unpinned ksh: the same reach.
 	BorrowedTextErrorWhenInteractiveCostsTheLine Answer
 
+	// PromptNumbersEachInputFromOne numbers each construct typed at a prompt
+	// from its own first line, rather than from the line of the session it
+	// began on. True in ksh93 alone.
+	//
+	// Measured 2026-10-05 through a pseudo-terminal, `echo L=$LINENO` typed
+	// three times:
+	//
+	//	ksh93u+                          L=1 L=1 L=1
+	//	bash 5.3.20, zsh 5.9.2, dash     L=1 L=2 L=3
+	//	BusyBox ash 1.37.0 (-i, a pipe)  L=1 L=2
+	//
+	// and in ksh93 a `function h {` typed over three lines and then called
+	// is `ksh: h[3]: .: line 2: …` for a `.` on the third, and a `.` inside
+	// a function called from the prompt names no line for the prompt's own
+	// part, `ksh: .: line 2: …`. This counted the session's lines, so those
+	// were `ksh[6]: h[5]: …` and `ksh[7]: .: …` (#6074).
+	//
+	// unpinned bash: no corpus row is at a prompt; pinned by the measurement
+	// above.
+	//
+	// unpinned zsh: the same reach.
+	//
+	// unpinned dash: the same reach.
+	//
+	// unpinned ash: the same reach.
+	//
+	// unpinned ksh: the same reach; pinned by
+	// TestAKshPromptNumbersEachInputFromOne.
+	PromptNumbersEachInputFromOne Answer
+
 	// StartupFileGivenUpLeavesTheStatusBefore leaves `$?` as it stood before
 	// the command whose fatal error gave up a startup file, instead of the
 	// status the error carries. True in ksh93 alone.

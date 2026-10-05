@@ -514,6 +514,8 @@ func (sh Shell) frontEndWith(r *interp.Runner, name string, dg interp.Diagnostic
 		// typed, which is the one dialect that names a line at a prompt at
 		// all. See Diagnostics.PromptCountsTheSessionsLines.
 		CountSessionLines: dg.PromptCountsTheSessionsLines,
+		// See Semantics.PromptNumbersEachInputFromOne.
+		NumberEachInputFromOne: sh.Semantics.PromptNumbersEachInputFromOne == interp.Yes,
 		// And whether a line read from something that is not a terminal is
 		// written back, which nothing but the shell can do there and which
 		// one of the five does. Carried rather than decided here, for the

@@ -4108,6 +4108,22 @@ type Diagnostics struct {
 	// function or not (#6075).
 	EvalTextAtAPromptSpeaksAsTheLine bool
 
+	// EvalTextAtAPromptKeepsItsLocation locates a diagnostic from `eval`'s
+	// text at a prompt as the same text is located anywhere else — by its
+	// own line — inside a function or not.
+	//
+	// ksh93's. Measured 2026-10-05 on ksh93u+ (`ksh -i`) through a
+	// pseudo-terminal, f holding `(exit 3)` and `echo ${unset?boom}`:
+	//
+	//	eval "$(cat f)"                          ksh: eval: line 2: unset: boom
+	//	eval "echo \${unset?boom}"               ksh: eval: line 1: unset: boom
+	//	function e2 { eval "…"; }; e2            ksh: e2[1]: eval: line 1: …
+	//
+	// which is what `ksh -c` writes for each. A file `.` reads is located
+	// that way at a prompt already, for being a file. This wrote `ksh:
+	// eval: unset: boom`, no line (#6074).
+	EvalTextAtAPromptKeepsItsLocation bool
+
 	// SetInvalidOptionName is a long `set -o` name this shell does not have.
 	// Two verbs: the name, and the sign it was asked with — `-` or `+`.
 	//
@@ -12357,7 +12373,15 @@ func (r *Runner) promptLocated() bool {
 	if r.speaksAsAtAPrompt() {
 		return true
 	}
-	return r.AtPrompt && r.borrowedFiles == 0 && !r.inFunctionReadFromAFile() && !r.evalTextAtAPrompt(true)
+	return r.AtPrompt && r.borrowedFiles == 0 && !r.inFunctionReadFromAFile() && !r.evalTextAtAPrompt(true) &&
+		!r.evalTextKeepsItsLocationAtAPrompt()
+}
+
+// evalTextKeepsItsLocationAtAPrompt reports whether the line being located is
+// in `eval`'s text, in the dialect that locates that text at a prompt as it
+// does anywhere. See Diagnostics.EvalTextAtAPromptKeepsItsLocation.
+func (r *Runner) evalTextKeepsItsLocationAtAPrompt() bool {
+	return r.Diagnostics != nil && r.Diagnostics.EvalTextAtAPromptKeepsItsLocation && r.evalTextFloor > 0
 }
 
 // evalTextAtAPrompt reports whether the line being located is in `eval`'s

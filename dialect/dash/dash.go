@@ -1759,6 +1759,8 @@ func Semantics() interp.Semantics {
 	// A startup file given up over a fatal error: dash reads `$ENV` only when interactive and leaves 2 there (#6046).
 	// See Semantics.StartupFileGivenUpLeavesTheStatusBefore.
 	s.StartupFileGivenUpLeavesTheStatusBefore = interp.No
+	// At a prompt, dash numbers the session (#6074). See Semantics.PromptNumbersEachInputFromOne.
+	s.PromptNumbersEachInputFromOne = interp.No
 	// A fatal error in `.` or `eval` text: an interactive dash gives up the text (#6057).
 	// See Semantics.BorrowedTextErrorWhenInteractiveCostsTheLine.
 	s.BorrowedTextErrorWhenInteractiveCostsTheLine = interp.No

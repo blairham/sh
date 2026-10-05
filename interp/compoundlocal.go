@@ -52,10 +52,36 @@ import "strings"
 // Runner.shadow runs for every name every declaration in every dialect
 // touches — and is false for the whole of bash, zsh, dash and ash, which have
 // no spelling that could set it.
+//
+// A name that **begins** with the separator does not set it. That spelling is
+// a namespace's own — ksh93's `.sh.version`, or a name a dialect keeps out of a
+// script's reach, as zsh's option store `.zsh.setopt` is — and a declaration
+// never takes such a name's members with it: measured on ksh93u+ 2012-08-01,
+// 2026-10-05, `.foo=x; .foo.bar=1; function f { typeset .foo=2; print
+// ${.foo.bar}; }; f` prints `1` inside the call, where the same shape on `c`
+// and `c.a` prints nothing. So it is no evidence that a member exists, and
+// counting it was what held the flag on in every zsh session: that dialect
+// writes its option store on the first `setopt`, and from then on every
+// `local` in the shell walked every name it held — about thirty microseconds
+// a declaration with two thousand parameters, against the reference's tenth
+// of one. See isMemberParent.
 func (r *Runner) noteMemberName(name string) {
-	if !r.memberNamesInUse && strings.Contains(name, memberSep) {
+	if !r.memberNamesInUse && isMemberName(name) {
 		r.memberNamesInUse = true
 	}
+}
+
+// isMemberName is whether a name is spelled as some other name's member: a
+// separator, with a parent in front of it that is not itself a namespace.
+func isMemberName(name string) bool {
+	return len(name) > 0 && name[0] != memberSep[0] && strings.Contains(name, memberSep)
+}
+
+// isMemberParent is whether a declaration of this name takes the names under
+// it along. Every name can, except one spelled as a namespace — see
+// noteMemberName for the measurement.
+func isMemberParent(name string) bool {
+	return len(name) > 0 && name[0] != memberSep[0]
 }
 
 // shadowCompoundNamespace is the second half of Runner.shadow: the members
@@ -141,9 +167,11 @@ func (r *Runner) liveNamesUnder(name string) []string {
 // list Runner.compoundVariableRetyped hangs off and for the same reason: the
 // store is the authority and there are five of them.
 func (r *Runner) localizeMemberWrite(name string) {
-	if strings.IndexByte(name, memberSep[0]) < 0 {
+	if !isMemberName(name) {
 		// The overwhelming majority of names, and the whole of four dialects:
-		// a name with no separator in it can be under no namespace.
+		// a name with no separator in it can be under no namespace. Nor can
+		// one spelled as a namespace, whose parents are all namespaces too
+		// and are never taken along by a declaration — see noteMemberName.
 		return
 	}
 	r.noteMemberName(name)

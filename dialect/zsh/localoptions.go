@@ -64,12 +64,13 @@ func (b optionBits) on(i int) bool { return b[i/64]&(1<<uint(i%64)) != 0 }
 // recorded names share, and one bit for each of the rest.
 //
 // Nothing here is a live pointer into the runner's option state. The vector
-// is swapped copy-on-write and the store is rebuilt rather than sorted in
-// place — see swapAxes, setAxis and setRecordedDeviation — so holding either
-// as it stands is holding what it *was*, and neither has to be copied to be
+// is swapped copy-on-write — see swapAxes and setAxis — so holding it as it
+// stands is holding what it *was*, and it does not have to be copied to be
 // saved. setAxis declining to swap at all when an axis is already where it is
 // being put does not weaken that: what it skips is making a copy nobody would
-// be able to tell from the one already held.
+// be able to tell from the one already held. The recorded store is the one
+// part that is copied: interp.Runner.GetAssoc hands back a map of its own,
+// and restore hands it to SetAssoc, which builds the table afresh.
 type optionState struct {
 	sem *interp.Semantics
 	// dialect is the grammar, and it is saved for the reason the vector is:
@@ -85,7 +86,7 @@ type optionState struct {
 	// taken from the same moment this pointer is.
 	dialect  *syntax.Dialect
 	mode     string
-	recorded []string
+	recorded map[string]string
 	on       optionBits
 	// localOptions is where `localoptions` itself stood, which rule 3 needs
 	// separately: it goes back even on the return that restores nothing else.
@@ -125,8 +126,8 @@ func setLocalPatterns(r *interp.Runner, on bool) {
 // them would only buy a branch.
 func saveOptionState(r *interp.Runner) optionState {
 	s := optionState{sem: r.Semantics, dialect: r.Dialect, mode: currentEmulation(r)}
-	// The store held as it stands rather than copied: see the type's comment.
-	s.recorded, _ = r.GetArray(zshRecordedStore)
+	// A copy of the store, which GetAssoc makes: see the type's comment.
+	s.recorded, _ = r.GetAssoc(zshRecordedStore)
 	for i := range zshOptions {
 		o := &zshOptions[i]
 		if o.set == nil || o.recorded {
@@ -144,7 +145,7 @@ func saveOptionState(r *interp.Runner) optionState {
 func (s optionState) restore(r *interp.Runner) {
 	r.Semantics = s.sem
 	r.Dialect = s.dialect
-	setRecordedOptions(r, s.recorded)
+	r.SetAssoc(zshRecordedStore, s.recorded)
 	for i := range zshOptions {
 		o := &zshOptions[i]
 		if o.set == nil || o.recorded {

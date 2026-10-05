@@ -329,6 +329,7 @@ func (r *Runner) storeArray(name string, a Array) {
 		// — a literal, an append, an element, a splice — so the producer
 		// hears about all four rather than about whichever one a hook was
 		// written beside. See SetDynamicArrayWriter.
+		r.nameIsBack(name)
 		write(r, r.readArray(a))
 		return
 	}
@@ -2329,7 +2330,7 @@ func (r *Runner) arrayElems(name string) ([]string, bool) {
 	// Produced rather than stored, and asked after the stored table so that
 	// a script assigning to the name gets its own value back — the same
 	// order the scalar ones follow.
-	if produce, ok := r.DynamicArrays[name]; ok {
+	if produce, ok := r.DynamicArrays[name]; ok && !r.removed[name] {
 		return produce(r), true
 	}
 	if v, ok := r.getVar(name); ok {

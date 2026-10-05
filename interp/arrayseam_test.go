@@ -54,7 +54,11 @@ func TestEveryWriteToAProducedArrayStartsFromWhatItHolds(t *testing.T) {
 	for _, tc := range []struct{ name, src, want string }{
 		{"an element assignment", `view[2]=Z; printf '[%s]' "${view[@]}"`, "[a][Z][c]"},
 		{"an append", `view+=(d); printf '[%s]' "${view[@]}"`, "[a][b][c][d]"},
-		{"an unset", `unset view; printf '[%s]' "${view[@]}" "end"`, "[end]"},
+		// The producer is told no elements, and the name is unset until a
+		// write brings it back: zsh's `unset argv` leaves `${+argv}` and
+		// `$#` at 0, and an append after it starts from nothing and sets
+		// the name again — `argv+=(q)` is `q` (#5961).
+		{"an unset", `unset view; printf '[%s]' "${view+set}" "${#view[@]}"; view+=(q); printf '[%s]' "${view+set}" "${view[@]}"`, "[][0][set][q]"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			var out, errs strings.Builder

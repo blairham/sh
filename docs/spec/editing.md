@@ -1148,7 +1148,7 @@ editor reads as a byte into a signal.
 
 ## Measured, and deliberately not a field
 
-Four places where the two shells differ and the difference is written down
+Five places where the two shells differ and the difference is written down
 here instead of being answered by every dialect ever added. The precedent is
 the `^W`, `^K`, `^W`, `^Y` join above; the test is whether anyone's fingers
 would notice.
@@ -1172,6 +1172,23 @@ would notice.
   move in bash and steps to `true alp`⎸`ha …` in zsh. bash's answer is taken,
   and it is also vi's own. A field would have to be answered by every dialect
   ever added for a pair of keystrokes nobody presses expecting to stay put.
+
+- **A character typed in the C locale reaches a `self-insert` wrapper once,
+  where zsh calls it once per byte (#5971).** Measured 2026-10-05 against zsh
+  5.9.2 through a pseudo-terminal with `LANG=C`, `si() { print -r --
+  "K=<${(q)KEYS}> n=${#KEYS} B=[$BUFFER]"; zle .self-insert }` as
+  `self-insert`, typing `é` and `x`: zsh calls it with `K=<\xc3>` over an
+  empty line and then `K=<\xa9>` over `B=[\xc3]`; this shell calls it once
+  with both bytes in `$KEYS`. The line ends up the same, and in a UTF-8 locale
+  the two agree. Matching it would mean a line that can hold a lone byte —
+  the editor holds runes — for a configuration nobody types non-ASCII in.
+  Checked first that nothing depends on the count: of the wrappers in the
+  maintainer's `~/.zi` (zsh-autosuggestions, F-Sy-H, history-substring-search,
+  powerlevel10k), none counts `self-insert` calls. They read `$KEYS` only as
+  `[[ $KEYS == [[:print:]] ]]`, which a two-byte `é` fails in the C locale
+  whether it arrives in one call or two, and `PENDING`/`KEYS_QUEUED_COUNT`,
+  which say whether input is waiting and not how many calls there were.
+  zsh-vi-mode is not installed there and was not checked.
 
 ## What is still missing
 

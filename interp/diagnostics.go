@@ -5132,6 +5132,34 @@ type Diagnostics struct {
 	// job is not sent to.
 	JobsAtExitOnACommandString bool
 
+	// FinishedJobsReportedAtExit writes the notice a finished job is still
+	// owed as the shell leaves, ahead of everything else it says about its
+	// jobs then: with the monitor on and NOTIFY off, a job that ended and
+	// that nothing has reported is reported by the way out.
+	//
+	// Measured 2026-10-05 through a pseudo-terminal against zsh 5.9.2
+	// (#6148), with `set -m; setopt nonotify; sleep 0.1 & /bin/sleep 0.5`
+	// in front of each:
+	//
+	//	-c '…; echo end; exit'      end, then [1]  + done       sleep 0.1
+	//	-c '…; echo end'            end, then the hangup warning instead
+	//	script file, exit or not    end, then the done line
+	//	-i: … &, a pause, exit      exit, then the done line
+	//	…; sleep 3 &; …; exit       the done line, `you have running jobs.`,
+	//	                            then the warning
+	//	trap 'echo T' EXIT; …       the done line, then T
+	//
+	// So it is written on standard output, before the EXIT trap and before
+	// the running-jobs sentence, and an interactive `exit` held for a running
+	// job writes it before its sentence as well. The command string that runs
+	// off its end counts the job in its warning instead — see
+	// JobsAtExitOnACommandString and Runner.finishedJobCountsAtExit. Nothing
+	// is written with the monitor off, with NOTIFY on (the job's notice went
+	// out, to nobody, when it was noticed), or in a subshell.
+	//
+	// bash 5.3 and ksh93 write nothing at the exit on the same lines.
+	FinishedJobsReportedAtExit bool
+
 	// HeldExitInAScriptStatus is what an `exit N` leaves with when it was
 	// the thing that wrote the jobs-at-exit sentence and the shell has no
 	// prompt to stay at. Zero leaves the operand alone, which is what a

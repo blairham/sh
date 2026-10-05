@@ -5678,6 +5678,8 @@ func Diagnostics() interp.Diagnostics {
 		// jobs where a diagnostic of its line would be, and the warning is
 		// at line 1. Measured 2026-10-05 (#6035).
 		JobsAtExitOnACommandString: true,
+		// See interp.Diagnostics.FinishedJobsReportedAtExit (#6148).
+		FinishedJobsReportedAtExit: true,
 		HeldExitInAScriptStatus:    1,
 		// And the three stops that are not ^Z carry a word of their own.
 		// Measured 2026-09-26 — see Diagnostics.JobStoppedBySignal for the

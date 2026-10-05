@@ -147,11 +147,7 @@ func (e *editor) spendCountOnEscape() bool {
 	}
 	n := e.count.n()
 	e.count = prefixCount{}
-	// The count as it was typed, sign and all, and not the variable the
-	// replay below turns positive: an action that reads the count itself
-	// is told -1 for `ESC -` (#5960).
-	told := n
-	e.keyNumeric = &told
+	e.keyNumeric = &n
 	negative := n < 0
 	if negative {
 		n = -n
@@ -176,6 +172,9 @@ func (e *editor) spendCountOnBinding(b Binding) {
 	}
 	n := e.count.n()
 	e.count = prefixCount{}
+	// The count as it was typed, sign and all, and not the variable the
+	// replay below turns positive: an action that reads the count itself
+	// is told -1 for `ESC -` (#5960).
 	told := n
 	e.keyNumeric = &told
 	if b.Function != "" {

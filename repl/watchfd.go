@@ -523,10 +523,13 @@ func (e *editor) serveDescriptors(prompt drawnPrompt) drawnPrompt {
 func (e *editor) serveDescriptor(fd int, prompt drawnPrompt) {
 	// Held for the handler as for a widget: its `zle -R` asks for no
 	// pre-redraw, measured. See specialWidget.
+	//
+	// And handed the key before it as the last widget, which it is by now —
+	// see finishedKey.
 	was := e.inShell
 	e.inShell = true
-	out, changed := e.descriptorReady(fd, e.give(), editorActions{e: e, prompt: prompt})
-	e.inShell = was
+	defer func() { e.inShell = was }()
+	out, changed := e.descriptorReady(fd, e.giveFinished(), editorActions{e: e, prompt: prompt})
 	if !changed {
 		return
 	}
@@ -540,5 +543,9 @@ func (e *editor) serveDescriptor(fd int, prompt drawnPrompt) {
 	// its synchronous path — a keystroke's own widget, which comes back
 	// through runShellWidget — was right (#4413).
 	e.postdisplay = out.Postdisplay
+	// Drawn with no pre-redraw widget, and the handler's own redraw asks for
+	// none either: measured 2026-10-04 against zsh 5.9.2, a handler whose
+	// `zle inner` appends to the line is followed by no pre-redraw at all —
+	// the next one is the next key's (#5875).
 	e.redraw(prompt)
 }

@@ -39,7 +39,9 @@ func (e *editor) specialWidget(name string, prompt drawnPrompt) bool {
 	if !e.specials || e.runFunc == nil || e.inShell {
 		return false
 	}
-	out, ok := e.runShell(name, prompt)
+	// Run after the key's own action, so the key is the last widget to
+	// them. See finishedKey.
+	out, ok := e.runShell(name, e.giveFinished(), prompt)
 	if !ok {
 		return false
 	}
@@ -70,9 +72,9 @@ func (e *editor) accepted(prompt drawnPrompt) string {
 // of the call, so nothing the widget makes the editor do asks for a special
 // widget. Put back rather than cleared, because the editor can be inside one
 // action already when it starts another.
-func (e *editor) runShell(name string, prompt drawnPrompt) (Line, bool) {
+func (e *editor) runShell(name string, in Line, prompt drawnPrompt) (Line, bool) {
 	was := e.inShell
 	e.inShell = true
 	defer func() { e.inShell = was }()
-	return e.runFunc(name, e.give(), editorActions{e: e, prompt: prompt})
+	return e.runFunc(name, in, editorActions{e: e, prompt: prompt})
 }

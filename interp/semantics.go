@@ -22645,6 +22645,41 @@ type Semantics struct {
 	// TestAFileSourcedFromEnvContinuesItsLineCount.
 	SourcedFileContinuesTheStartupLineCount Answer
 
+	// BorrowedTextErrorWhenInteractiveCostsTheLine makes a fatal error in
+	// the text of `.` or `eval` cost only the line of that text it was on
+	// in an interactive shell, the text reading on from the next line,
+	// instead of the text the boundary gives up or the shell it ends. True
+	// in bash alone.
+	//
+	// Measured 2026-10-05 through a pseudo-terminal, f holding `(exit 3)`,
+	// `echo ${unset?boom}; echo same` and `echo after`, typed `. ./f` and
+	// then `eval "$(cat f)"`, each followed by `echo X $?`:
+	//
+	//	bash 5.3.20       after, X 0 — and the same for eval
+	//	ksh93u+           X 1, no after
+	//	zsh 5.9.2         X 126 for `.`, X 3 for eval, no after
+	//	dash 0.5.12       X 2, no after
+	//
+	// and `same` in none of them. bash answers the same under `set -u` with
+	// an unset name, inside a function the line calls (`f; echo same` loses
+	// both, and the next line reads `$?` as 1), from `-i -c` and from a
+	// `.bashrc` that sources f. BusyBox ash under `-i -c` gives up the text
+	// and the string with it, measured in the pinned image (#6057).
+	//
+	// This shell gave up the whole text in bash, at 1.
+	//
+	// unpinned bash: no corpus row is interactive; pinned by
+	// TestAnErrorInDotTextAtAPromptCostsTheLine.
+	//
+	// unpinned zsh: the same reach.
+	//
+	// unpinned dash: the same reach.
+	//
+	// unpinned ash: the same reach.
+	//
+	// unpinned ksh: the same reach.
+	BorrowedTextErrorWhenInteractiveCostsTheLine Answer
+
 	// StartupFileGivenUpLeavesTheStatusBefore leaves `$?` as it stood before
 	// the command whose fatal error gave up a startup file, instead of the
 	// status the error carries. True in ksh93 alone.

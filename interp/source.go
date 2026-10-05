@@ -89,6 +89,12 @@ type sourced struct {
 	// run in any shell in the panel. So eval is transparent to control flow
 	// and `.` is a boundary for exactly one kind of it.
 	catchReturn bool
+
+	// builtinText marks the text as `.`'s or `eval`'s own, rather than text
+	// another builtin or a hook borrowed the same reader for. Those two are
+	// the boundary Semantics.BorrowedTextErrorWhenInteractiveCostsTheLine was
+	// measured at, and nothing else is asked it.
+	builtinText bool
 }
 
 // borrowedLines is one group of physical lines as the reader consumed them.
@@ -935,6 +941,10 @@ func (r *Runner) runSourcedText(ctx context.Context, src string, s sourced) int 
 				r.ctl, abandoned = controlNone, r.abandonLine
 				continue
 			}
+			if r.givesUpTheBorrowedLine(s) {
+				// The rest of this line goes and the text reads on.
+				break
+			}
 			if r.ctl != controlNone {
 				stopped = true
 				break
@@ -992,6 +1002,25 @@ func (r *Runner) runSourcedText(ctx context.Context, src string, s sourced) int 
 	return r.status
 }
 
+// givesUpTheBorrowedLine catches a fatal error in a line of `.`'s or `eval`'s
+// text in the dialect where an interactive shell gives up only that line and
+// reads on — see Semantics.BorrowedTextErrorWhenInteractiveCostsTheLine — and
+// reports whether it did.
+//
+// Not in a subshell, which is not interactive: measured on bash 5.3.20,
+// `bash -i -c '( . ./f; echo in ); echo X $?'` with the error on f's first
+// line ends the subshell at 1 and writes no `in`.
+func (r *Runner) givesUpTheBorrowedLine(s sourced) bool {
+	if !s.builtinText || !r.Interactive || r.inSubshell || !r.pendingFileError() {
+		return false
+	}
+	if !r.ask(r.sem().BorrowedTextErrorWhenInteractiveCostsTheLine,
+		"an error in `.` or `eval` text costing only its line in an interactive shell") {
+		return false
+	}
+	return r.GiveUpTheLine()
+}
+
 // caughtBorrowedError catches an error the text just run gave up over,
 // reporting the status the builtin should carry.
 //
@@ -1011,6 +1040,18 @@ func (r *Runner) caughtBorrowedError(s sourced) (int, bool) {
 		r.ask(r.sem().ParamErrorIsAnExitRequest, "`${x?word}` ending the shell rather than the text it is in") {
 		// The one operand a dialect calls a request to stop rather than an
 		// error, so the catch above does not apply to it.
+		if r.Interactive && s.fatalStatus != 0 {
+			// But an interactive shell does not stop, and the line it
+			// unwinds to leaves the status a file `.` gave up over an
+			// error reports. Measured 2026-10-05 on zsh 5.9.2 through a
+			// pseudo-terminal, `. ./f` at the prompt with `${unset?boom}`
+			// in f: `X 126` after it, and still nothing after the `.` runs
+			// — `g(){ . ./f; echo in; }; g` writes no `in` and leaves 126
+			// too, where `set -u` and an unset name in the same place
+			// write `in 126`. `zsh -i -c '. ./f'` exits 126; without `-i`
+			// it exits 1 (#6057).
+			r.status = s.fatalStatus
+		}
 		return 0, false
 	}
 	if r.abandon == abandonUsage &&
@@ -1081,6 +1122,7 @@ func biEval(r *Runner, ctx context.Context, args []string) int {
 		eval:         true,
 		label:        "eval",
 		syntaxStatus: r.diag().SyntaxStatus(),
+		builtinText:  true,
 	})
 }
 
@@ -1794,6 +1836,7 @@ func (r *Runner) runDotText(ctx context.Context, args []string, display string, 
 		syntaxStatus: r.diag().sourcedSyntaxStatus(),
 		fatalStatus:  r.diag().SourcedFatalStatus,
 		catchReturn:  true,
+		builtinText:  true,
 	})
 	// The RETURN trap fires as a sourced file finishes — wherever the trap
 	// was set, which is the half of the rule functions do not share. The

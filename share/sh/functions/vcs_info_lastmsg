@@ -1,0 +1,28 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# vcs_info_lastmsg — prints each vcs_info_msg_N_ that max-exports in
+# :vcs_info:formats:command:-all- allows, as $vcs_info_msg_N_: "value", with
+# its prompt escapes expanded unless use-prompt-escapes is false there.
+# Running vcs_info autoloads it.
+#
+# Written from zshcontrib(1) and from what the installed shell answers, never
+# from its function files; docs/spec/functions.md has the measurements.
+
+emulate -L zsh
+local value
+integer i max
+# max-exports read as vcs_info reads it, so that this needs nothing of it.
+zstyle -s ':vcs_info:formats:command:-all-' max-exports value || value=2
+if [[ $value != <-> ]] || (( value < 1 )); then
+	print -r -- "vcs_info: max-exports has to be a number of at least 1, not $value; taking 2"
+	value=2
+fi
+max=$value
+for (( i = 0; i < max; i++ )); do
+	value=${(P)${:-vcs_info_msg_${i}_}}
+	if zstyle -T ':vcs_info:formats:command:-all-' use-prompt-escapes; then
+		value=${(%)value}
+	fi
+	print -r -- "\$vcs_info_msg_${i}_: \"$value\""
+done

@@ -813,12 +813,12 @@ own prints nothing, measured with two defined.
 `vcs_info [ user-context ]` sets `vcs_info_msg_0_`, `vcs_info_msg_1_`, … from
 the repository the current directory is in, for a prompt to show. It is
 configured with `zstyle` under `:vcs_info:<vcs>:<user-context>:<repo-root-name>`,
-and running it defines `vcs_info_hookadd`, `vcs_info_hookdel`,
+and running it autoloads `vcs_info_hookadd`, `vcs_info_hookdel`,
 `vcs_info_lastmsg`, `vcs_info_printsys` and `vcs_info_setsys`. To measure it,
 zsh's own `vcs_info` was run in 31 git repositories built in fixed states:
 clean, changed, unborn, detached, bare, a linked worktree, inside `.git`, and
 part-way through a merge, rebases of three kinds, an am, cherry-picks, a
-revert and a bisect. That is 160 rows, committed as
+revert and a bisect. That is 163 rows, committed as
 `dialect/zsh/testdata/vcs_info.tsv` beside `vcs_info-fixtures.sh`, which
 builds the repositories, and `dialect/zsh/vcsinfo_test.go` runs them against
 this copy. git 2.56.0 and Apple git 2.54.0 agreed on every row. The shape of
@@ -936,19 +936,103 @@ sets each style with the first context, plus the word after a `+` when there
 is one. As in zsh, the `+` has to be a word of its own: the manual's
 `+':baz'`, written as one word, is just a value.
 
+### `history-search-end`, `incarg`, `smart-insert-last-word`, `bracketed-paste-url-magic`
+
+Four more widgets. Each was measured through a pseudo-terminal against zsh
+5.9.2 with its own copy, and `cmd/zsh/smallwidgetspty_test.go` replays every
+row through a real session.
+
+`history-search-end` gives the widgets `history-beginning-search-backward-end`
+and `history-beginning-search-forward-end`. Each runs the search its name
+ends in and then goes to the end of the line. A press straight after either
+of them first puts the cursor back where the first press found it, so the
+search keeps the same beginning. With history `: echo apple`, `: ls x`,
+`: echo banana`, and `: ech` typed with the cursor after `: e`:
+
+| keys | zsh 5.9.2 |
+| --- | --- |
+| backward | `: echo banana`, 13 |
+| backward twice | `: echo apple`, 12, and the same again past the oldest |
+| backward, forward | `: ech`, 5: back at the typed line, at its end |
+| forward alone | `: ech`, 3: nothing found, the cursor where it was |
+| `zzz`, cursor at 1, either | `zzz`, 1 |
+| backward, a key, backward | the second press is a new search, from where the key left the cursor |
+
+`incarg` adds the numeric argument, else `$incarg`, else 1, to the number
+under the cursor:
+
+| line, cursor | zsh 5.9.2 |
+| --- | --- |
+| `a 41 b`, on the 1 | `a 42 b`; the cursor stays |
+| `a 41 b`, on the 4, `M-5` | `a 46 b` |
+| `x 1`, `M-- M-5` | `x -4` |
+| `v=009` | `v=10` |
+| `a -5 b`, on the 5 | `a -6 b`: the number is its digits, and the sign stays outside it |
+| on the `-`, a space, or past the end | nothing |
+
+`smart-insert-last-word` replaces `insert-last-word`. It inserts the
+rightmost word of the last command line that holds a letter, a slash or a
+backslash, or that matches the `match` style in `:<widget>`. Pressed again,
+it puts the same kind of word from the line before in its place. Words are
+split as the shell splits them, so a comment's words count, and a line with
+no such word gives its last word. With `auto-previous` set, the lines before
+are searched instead. After the oldest line, the word stays.
+
+`bracketed-paste-url-magic` replaces `bracketed-paste`. A paste that starts
+with `http://`, `https://`, `ftp://`, `ftps://`, `file://`, `ssh://`,
+`sftp://` or `magnet:` goes in quoted with the shell's least quoting, `(q-)`,
+so a URL with nothing special in it goes in as it is. The match is at the
+very start and by case, and the `schema` style in `:bracketed-paste-url-magic`
+replaces the list. No manual page describes this function, so every row is
+measured, the style's name included: setting `schema` to `ssh://` alone stops
+`http://` being quoted.
+
+Differences, both the shell's:
+* a numeric argument to the search widgets is lost (#5988), so `M-2` with
+  `history-beginning-search-backward-end` lands on the first match where zsh
+  lands on the second;
+* `smart-insert-last-word`, given a numeric argument or arguments, hands
+  them to `insert-last-word`, which ignores them here (#5987). Its other
+  form is the one measured.
+
+### `vcs_info_hookadd` and the other helpers are files
+
+As in zsh, `vcs_info_hookadd`, `vcs_info_hookdel`, `vcs_info_lastmsg`,
+`vcs_info_printsys` and `vcs_info_setsys` are files of their own. Running
+`vcs_info` autoloads them, so they can be called after it, or before it once
+a startup file has autoloaded them. zsh's own `vcs_info_lastmsg`, autoloaded
+before `vcs_info` has run, stops on a helper it does not have and then prints
+`$vcs_info_msg_-1_`. Here it reads max-exports for itself.
+
 ## What is not shipped, and why
 
-#5894 is shipping the contrib functions in batches, most used first, and the
-ones not yet written are listed here until they are. Next: the smaller
-widgets, `history-search-end`, `smart-insert-last-word`, `copy-earlier-word`
-and `incarg`.
+#5894 is finished: every function from zsh's distribution that a startup file
+commonly loads is shipped, apart from the ones below. Each one left out has a
+reason.
 
-`zed` is not shipped yet. It edits a file or a function in the line editor
-under a keymap of its own, built from `main` with `bindkey -N` and selected
-with `bindkey -A`, and this shell refuses both (#5969).
+| function | why not |
+| --- | --- |
+| `zed`, `zed-set-file-name`, and its `fned`/`histed` forms | it builds a keymap of its own with `bindkey -N` and selects it with `bindkey -A`, which this shell refuses (#5969) |
+| `copy-earlier-word` | it walks back through a line's words by calling `insert-last-word` with arguments, which are ignored here (#5987) |
+| `select-word-match`, `narrow-to-region`, `narrow-to-region-invisible`, `select-bracketed`, `select-quoted`, `surround` | they need the mark and the region, or vi text objects, which this editor does not have |
+| `read-from-minibuffer`, `history-pattern-search`, `replace-string`, `replace-string-again`, `replace-argument` | they read their argument with a recursive edit, which this editor does not have |
+| `predict-on`, `incremental-complete-word`, `cycle-completion-positions`, `quote-and-complete-word` | they drive the completion system from a widget |
+| `transpose-lines`, `move-line-in-buffer` | rarely bound. zsh's `transpose-lines` also corrupts the buffer when it moves a line onto the last one (`aa⏎bb⏎cc⏎dd` with `M-3` from the second line becomes `bb⏎cc⏎dd⏎aadd`), so there is no right answer to measure against |
+| `which-command`, `expand-absolute-path` | rarely bound. The builtin `which-command` widget the first replaces is not implemented either, and the second abbreviates with the `(D)` flag (#5980) |
+| `history-beginning-search-menu`, `insert-files`, `insert-composed-char`, `insert-unicode-char`, `define-composed-chars`, `send-invisible`, `vi-pipe`, `zcalc-auto-insert`, `split-shell-arguments`, `modify-current-argument`, `keymap+widget` | rarely bound, and each would need its own round of measurement; left for a later change if a startup file asks for one |
+| `zsh-mime-setup`, `zsh-mime-handler`, `zsh-mime-contexts`, `pick-web-browser` | they install suffix aliases from the system's mailcap and mime.types files, which is another program's configuration |
+| `zkbd`, `zsh-newuser-install`, `compinstall` | interactive setup wizards that write a startup file |
+| `zrecompile` | a maintenance tool for `zcompile` digests rather than something a startup file needs in order to work; left for a later change |
+| `zsh_directory_name_cdr`, `zsh_directory_name_generic` | they hook dynamic directory naming (`~[...]`), which is not measured here yet |
+| `run-help-git` and the other `run-help-<command>` helpers | `run-help` calls a `run-help-<command>` function when one is defined; the eight zsh ships are not |
+| `vcs_info` backends other than git, quilt, and the `test-repo-git-*` helpers | git is the one backend. See `vcs_info` above |
+| the fifteen decorative prompt themes, `prompt_special_chars`, `promptnl` | a theme is a design; see `promptinit` above |
+| `calendar` and its helpers, `tcp_*`, `zf*` (the zftp front end), `tetris`, `tetriscurses`, `xtermctl`, `nslookup`, `sticky-note`, `ztodo`, `keeper`, `checkmail`, `getjobs`, `allopt`, `harden`, `mere`, `relative`, `age`, `before`, `after` | applications and conveniences, not startup-file functions |
 
-`select-word-match` is left out for good, for the reason given with the word
-styles above: it needs a mark and a region, and this editor has neither.
+`zcp` and `zln` are not files in zsh's distribution either. The manual says
+to make them by linking `zmv` to those names, and that works here: `zmv`
+reads the name it was called by. Measured with `-n`, `zln` gives `ln --`,
+`zln -s` gives `ln -s --`, and `zcp` gives `cp --`, the same as zsh.
 
 ## Loading, and aliases
 

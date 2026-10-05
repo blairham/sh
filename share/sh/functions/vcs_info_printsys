@@ -1,0 +1,27 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# vcs_info_printsys [ user-context ] — lists the systems vcs_info reads, one
+# it will not look for marked #. git is the one there is. Running vcs_info
+# autoloads it.
+#
+# Written from zshcontrib(1) and from what the installed shell answers, never
+# from its function files; docs/spec/functions.md has the measurements.
+
+emulate -L zsh
+setopt extendedglob
+local sys context=":vcs_info:-init-:${1:-default}:-all-"
+local -a enable disable
+# The enable and disable styles read as vcs_info reads them.
+zstyle -a $context enable enable || enable=( ALL )
+zstyle -a $context disable disable
+print -r -- "# the systems vcs_info can read; one it will not look for is marked #"
+for sys in git; do
+	if (( ${enable[(I)(#i)none]} )) ||
+		{ (( ${enable[(I)(#i)all]} )) && (( ${disable[(Ie)$sys]} )) } ||
+		{ (( ! ${enable[(I)(#i)all]} )) && (( ! ${enable[(Ie)$sys]} )) }; then
+		print -r -- "#$sys"
+	else
+		print -r -- $sys
+	fi
+done

@@ -725,11 +725,11 @@ A `run-help-<word>` function, where one is defined, is given the rest of the
 words in place of the manual. zsh's own answers that case with `shift count
 must be <= $#` when called with words, so there was no behavior to copy.
 
-Differences that are the shell's: for a word holding a slash, this shell's
-`whence -va` describes the file where zsh's says `not found` (#5956). The topic
-columns are laid out here because `print -c` is not implemented (#5957), and the
-rest of the words are passed with `shift` because `"${@[2,-1]}"` gives one empty
-word when there is nothing to give (#5955).
+The function was written around three shell gaps that have since closed:
+`whence -va` on a word holding a slash (#5956), `print -c` (#5957), and
+`"${@[2,-1]}"` giving one empty word when there was nothing to give (#5955).
+So the topic columns are laid out by hand here and the rest of the words are
+passed with `shift`. Both still give zsh's answers.
 
 The default `run-help` alias for `man` stays, as it is in zsh, so a startup file
 switches to this function with `unalias run-help` and `autoload -Uz run-help`.

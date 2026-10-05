@@ -319,5 +319,6 @@ func keymapIsCommandMode(_ *interp.Runner, name string) bool { return name == "v
 // keymapHasADispatch reports whether this editor reads keys in the keymap at
 // all: `main`, whichever keymap `main` is currently, and vi's command mode.
 func keymapHasADispatch(r *interp.Runner, name string) bool {
-	return name == "main" || name == "vicmd" || name == currentKeymap(r)
+	id, _ := keymapID(r, name)
+	return name == "main" || name == "vicmd" || id == currentKeymap(r)
 }

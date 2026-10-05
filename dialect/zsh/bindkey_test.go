@@ -209,7 +209,7 @@ func TestTheListingIsSortedByTheBytesTheKeySends(t *testing.T) {
 // TestWhatIsNotBuiltIsRefusedAsMissing keeps a gap distinguishable from a
 // typo, which is the split `whence` makes for the same reason.
 func TestWhatIsNotBuiltIsRefusedAsMissing(t *testing.T) {
-	for _, letter := range []string{"p", "R", "N", "A", "D", "d"} {
+	for _, letter := range []string{"p", "R", "D", "d"} {
 		out, st := runZsh(t, t.TempDir(), "bindkey -"+letter+" x y\n")
 		if !strings.Contains(out, "-"+letter+" is not implemented yet") || st != 1 {
 			t.Errorf("-%s gave %q at %d, want it refused as missing", letter, out, st)

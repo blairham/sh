@@ -274,8 +274,10 @@ const (
 	// what is on the screen and takes back what the widget left, so nothing
 	// here has to know when a line ended. See repl.Line.Postdisplay (#4217).
 	zlePostdisplay = ".zsh.zle.postdisplay"
-	// zleCutBuffer is the kill `$CUTBUFFER` reads and writes, carried in and
-	// out with the line. See repl.Line.CutBuffer (#5916).
+	// zleCutBuffer is the kill `$CUTBUFFER` reads and writes for the length
+	// of a call: fetched from the editor when the call opens and handed back
+	// when it ends, and around every action the widget asks the editor for.
+	// See repl.Actions.CutBuffer (#5916).
 	zleCutBuffer = ".zsh.zle.cutbuffer"
 	// zleTransform is the transformation table `zle -T` writes: a flat array
 	// of pairs, the transformation's name and the widget registered for it.
@@ -1164,6 +1166,10 @@ func callBuiltinWidget(r *interp.Runner, ctx context.Context, name string, args 
 		if !inside {
 			return 1
 		}
+		// None of these kills through the editor, and one of them —
+		// copy-region-as-kill — sets the kill itself, so it is handed over
+		// when the action is done rather than read back.
+		defer handBackCutBuffer(r, actions)
 		return action(r, actions, args)
 	}
 	widget, editors := bindkeyWidgets[name]
@@ -1179,6 +1185,10 @@ func callBuiltinWidget(r *interp.Runner, ctx context.Context, name string, args 
 		// own wording. Silence, because there is no editor to have refused.
 		return 1
 	}
+	// The kill a widget assigned goes to the editor before the action, so a
+	// yank inserts it, and the action's own kill comes back after it.
+	handBackCutBuffer(r, actions)
+	defer fetchCutBuffer(r, actions)
 	if widget == repl.WidgetBracketedPaste && len(args) > 0 {
 		r.SetVar(args[0], actions.Paste())
 		return 0
@@ -1454,6 +1464,7 @@ func runWidgetFunction(
 	actions, editing := repl.ActionsFrom(ctx)
 	if editing {
 		openUndoChangeNumber(r, actions, opened.scope)
+		fetchCutBuffer(r, actions)
 	}
 	r.SetVar(zleOpened, opened.String())
 	// Deferred rather than called at the end, because a panic in the widget
@@ -1463,6 +1474,9 @@ func runWidgetFunction(
 	// prompt would then find `$BUFFER` set, which is the one thing they must
 	// never be, and only after a crash nobody would connect it to.
 	defer func() {
+		if editing {
+			handBackCutBuffer(r, actions)
+		}
 		closeWidgetParameters(r)
 		caller.restore(r)
 		if caller.open && editing {
@@ -1576,7 +1590,7 @@ func openWidgetParameters(r *interp.Runner, opened widgetOpening) {
 	})
 	// `CUTBUFFER`, the last kill, measured `scalar-local-special` the same
 	// way and writable the same way: what a widget assigns is what the next
-	// yank inserts. See repl.Line.CutBuffer (#5916).
+	// yank inserts. See repl.Actions.CutBuffer (#5916).
 	r.SetDynamic(cutBufferName, func(rr *interp.Runner) string {
 		text, _ := rr.GetVar(zleCutBuffer)
 		return text
@@ -1780,6 +1794,19 @@ func declareWidgetParameters(r *interp.Runner, own int) {
 	}
 }
 
+// fetchCutBuffer is the editor's kill, put where `$CUTBUFFER` reads it.
+func fetchCutBuffer(r *interp.Runner, actions repl.Actions) {
+	r.SetVar(zleCutBuffer, actions.CutBuffer())
+}
+
+// handBackCutBuffer gives the editor the kill `$CUTBUFFER` holds, where the
+// widget changed it — assigned it, or `zle copy-region-as-kill STRING`.
+func handBackCutBuffer(r *interp.Runner, actions repl.Actions) {
+	if cut, _ := r.GetVar(zleCutBuffer); cut != actions.CutBuffer() {
+		actions.SetCutBuffer(cut)
+	}
+}
+
 // The line a widget is editing, as this file keeps it.
 func widgetBuffer(r *interp.Runner) string {
 	buf, _ := r.GetVar(zleBuffer)
@@ -1821,21 +1848,12 @@ func setWidgetLine(r *interp.Runner, in repl.Line) {
 	// what a plugin's wrapper does: it saves the suggestion, clears it while a
 	// new one is fetched, and puts one of the two back.
 	r.SetVar(zlePostdisplay, in.Postdisplay)
-	if in.CutBuffer != nil {
-		r.SetVar(zleCutBuffer, *in.CutBuffer)
-	}
 }
 
 func widgetLine(r *interp.Runner) repl.Line {
 	post, _ := r.GetVar(zlePostdisplay)
 	keys, _ := r.GetVar(zleKeys)
-	line := repl.Line{Buffer: widgetBuffer(r), Cursor: widgetCursor(r), Postdisplay: post, Keys: keys}
-	// The kill only where one was handed in: a line that came from somewhere
-	// that carries none must not empty the editor's.
-	if cut, set := r.GetVar(zleCutBuffer); set {
-		line.CutBuffer = &cut
-	}
-	return line
+	return repl.Line{Buffer: widgetBuffer(r), Cursor: widgetCursor(r), Postdisplay: post, Keys: keys}
 }
 
 // editorRunning reports whether the editor is holding a line for something to

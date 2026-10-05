@@ -124,26 +124,20 @@ func TestTheBeginningSearchAndLineMovesAnswerAWidget(t *testing.T) {
 	}
 }
 
-// A kill handed in with the line is what the next yank brings back — zsh's
+// A kill set from outside is what the next yank brings back — zsh's
 // `CUTBUFFER=…` and `zle copy-region-as-kill STRING` both arrive this way —
-// and a kill the action makes comes back out with the line.
-func TestAKillHandedInIsWhatTheNextYankBringsBack(t *testing.T) {
+// and a kill an action makes is what CutBuffer reads afterwards.
+func TestAKillSetFromOutsideIsWhatTheNextYankBringsBack(t *testing.T) {
 	e := Shell{}.newEditor(t.Context(), nil)
 	e.in, e.out = typing(""), io.Discard
 	a := editorActions{e: e, prompt: drawPrompt("$ ")}
-	cut := "foo bar"
-	out, _ := a.Perform(WidgetYank, Line{Buffer: "xy", Cursor: 1, CutBuffer: &cut})
+	a.SetCutBuffer("foo bar")
+	out, _ := a.Perform(WidgetYank, Line{Buffer: "xy", Cursor: 1})
 	if out.Buffer != "xfoo bary" || out.Cursor != 8 {
 		t.Errorf("got %q @%d, want %q @8", out.Buffer, out.Cursor, "xfoo bary")
 	}
-	out, _ = a.Perform(WidgetKillWordBefore, Line{Buffer: "one two", Cursor: 7, CutBuffer: &cut})
-	if out.CutBuffer == nil || *out.CutBuffer != "two" {
-		t.Errorf("the kill that came back is %v, want %q", out.CutBuffer, "two")
-	}
-	// And a line that carries no kill leaves the editor's alone, so a front
-	// end that knows nothing about kills cannot empty one.
-	out, _ = a.Perform(WidgetYank, Line{Buffer: "", Cursor: 0})
-	if out.Buffer != "two" {
-		t.Errorf("a line with no kill yanked %q, want the editor's own %q", out.Buffer, "two")
+	a.Perform(WidgetKillWordBefore, Line{Buffer: "one two", Cursor: 7})
+	if got := a.CutBuffer(); got != "two" {
+		t.Errorf("the kill reads %q, want %q", got, "two")
 	}
 }

@@ -140,6 +140,21 @@ type Actions interface {
 	// below the first change, which takes the line back to how it began and
 	// says so. See undo.go.
 	UndoTo(n int, in Line) (Line, bool)
+
+	// CutBuffer is the text of the last kill, which is what a yank inserts,
+	// and SetCutBuffer replaces it. zsh's `$CUTBUFFER`: a widget reads it to
+	// join a kill of its own onto the one before, and assigning it — or
+	// `zle copy-region-as-kill STRING` — makes the next yank insert what was
+	// assigned (#5916). Measured 2026-10-04 through a pseudo-terminal against
+	// zsh 5.9.2: `CUTBUFFER=hello` then `zle yank` inserts `hello`, the next
+	// widget reads `hello` back, and after `zle backward-kill-word` over `one
+	// two` it reads `two`.
+	//
+	// Asked for rather than carried in Line, because the kill is not the
+	// line: it outlives it, and a front end that builds a Line of its own
+	// knowing nothing about kills must not be able to empty one.
+	CutBuffer() string
+	SetCutBuffer(text string)
 }
 
 // Every action this editor has can be performed from outside it, the two that
@@ -232,6 +247,10 @@ func (a editorActions) ChangeNumber(in Line) int {
 	return a.e.changeNumber()
 }
 
+func (a editorActions) CutBuffer() string { return string(a.e.killed) }
+
+func (a editorActions) SetCutBuffer(text string) { a.e.killed = []rune(text) }
+
 func (a editorActions) UndoTo(n int, in Line) (Line, bool) {
 	a.e.take(in)
 	reached := a.e.undoTo(n)
@@ -270,26 +289,13 @@ func (e *editor) take(in Line) {
 	e.line = line
 	e.pos = min(max(in.Cursor, 0), len(e.line))
 	e.postdisplay = in.Postdisplay
-	e.adoptCutBuffer(in.CutBuffer)
 	if in.Keys != "" && in.Keys != string(e.keyBytes) {
 		e.adoptKeys(in.Keys)
 	}
 }
 
 func (e *editor) give() Line {
-	killed := string(e.killed)
-	return Line{
-		Buffer: string(e.line), Cursor: e.pos, Postdisplay: e.postdisplay, Last: e.last,
-		ViCommand: e.viCommand, Numeric: e.keyNumeric, Keys: string(e.keyBytes), CutBuffer: &killed,
-	}
-}
-
-// adoptCutBuffer takes the kill an action outside the editor left, where it
-// carried one. See Line.CutBuffer.
-func (e *editor) adoptCutBuffer(cut *string) {
-	if cut != nil && *cut != string(e.killed) {
-		e.killed = []rune(*cut)
-	}
+	return Line{Buffer: string(e.line), Cursor: e.pos, Postdisplay: e.postdisplay, Last: e.last, ViCommand: e.viCommand, Numeric: e.keyNumeric, Keys: string(e.keyBytes)}
 }
 
 // adoptKeys makes keys an action read the ones a self-insert types.

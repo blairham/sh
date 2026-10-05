@@ -45,12 +45,12 @@ func TestCopyRegionAsKillHandsTheStringToTheEditor(t *testing.T) {
 zle -N w
 `)
 	ed := &stubEditor{}
-	line, ok, said, _ := runWidgetWatching(t, r, out, "w", repl.Line{Buffer: "xy", Cursor: 1}, ed)
+	_, ok, said, _ := runWidgetWatching(t, r, out, "w", repl.Line{Buffer: "xy", Cursor: 1}, ed)
 	if !ok {
 		t.Fatal("the widget did not run")
 	}
-	if line.CutBuffer == nil || *line.CutBuffer != "foo bar" {
-		t.Errorf("the kill that came back is %v, want %q", line.CutBuffer, "foo bar")
+	if ed.cut != "foo bar" {
+		t.Errorf("the editor's kill is %q, want %q", ed.cut, "foo bar")
 	}
 	const want = "st=0 [xy|1]\nw:zle: copy-region-as-kill without a string is not implemented yet\nst=1\n"
 	if said != want {

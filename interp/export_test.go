@@ -77,3 +77,8 @@ const (
 	ValueBackslashMarkForTest          = valueBackslashMark
 	ValueBackslashRanOutOfValueForTest = valueBackslashRanOutOfValue
 )
+
+// MemberNamesInUseForTest reports whether this runner has seen a name spelled
+// as some other name's member, the gate that turns on the namespace walk every
+// local declaration otherwise skips. See compoundlocal.go.
+func (r *Runner) MemberNamesInUseForTest() bool { return r.memberNamesInUse }

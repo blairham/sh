@@ -6727,7 +6727,7 @@ func (r *Runner) shadow(name string) (fresh, redeclared bool) {
 			// the number is — see shadowGetoptsCursor.
 			r.shadowGetoptsCursor(sc)
 		}
-		if r.memberNamesInUse {
+		if r.memberNamesInUse && isMemberParent(name) {
 			// And the names *under* this one, which a declaration displaces
 			// with it: a compound variable's members are ordinary names
 			// spelled with a dot, so shadowing the bare name alone left them

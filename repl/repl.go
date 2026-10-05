@@ -2920,6 +2920,15 @@ func (s Shell) newEditor(ctx context.Context, state *terminalState) *editor {
 		// ambiguous. Read through the option rather than taken as a value,
 		// because it is one a person turns off at the prompt.
 		listsMatches: s.dialectOption(s.Editor.ListMatchesWithoutASecondKeyOption),
+		// And how a listing is arranged, which two options decide. Read on
+		// the keystroke, because a person sets them at the prompt and this
+		// editor outlives every line of the session.
+		layout: func() listLayout {
+			return listLayout{
+				packed:    s.dialectOption(s.Editor.ListPackedOption),
+				rowsFirst: s.dialectOption(s.Editor.ListRowsFirstOption),
+			}
+		},
 		// And whether an ambiguous completion rings even while it fills a
 		// prefix in, which is one shell's answer and not the other's.
 		bellsOnAPartialCompletion: s.Editor.BellRingsOnAnAmbiguousCompletionThatInserts,

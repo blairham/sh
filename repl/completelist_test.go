@@ -24,12 +24,16 @@ func TestAListingIsDrawnBlockByBlock(t *testing.T) {
 		{Word: "charlie", Display: "charlie", Group: first},
 		{Word: "zulu", Display: "zulu", Group: second},
 		{Word: "bravo", Display: "bravo", Group: second},
-	}, 40)
+	}, 40, listLayout{})
 	want := []string{
 		"first group",
 		"alpha    charlie  delta",
 		"second group",
-		"bravo  zulu",
+		// Spread across the 27 columns the first block's grid spans, which
+		// is the row the measurement in completelist.go's comment draws and
+		// what this test asserted the packed `bravo  zulu` against until
+		// #6157.
+		"bravo        zulu",
 	}
 	if strings.Join(got, "|") != strings.Join(want, "|") {
 		t.Errorf("drew %q, want %q", got, want)
@@ -47,7 +51,7 @@ func TestARowGoesWhereItsWordGoes(t *testing.T) {
 	got := listingRows([]Candidate{
 		{Word: "delta", Display: "delta:A"},
 		{Word: "alpha", Display: "alpha:Z"},
-	}, 0)
+	}, 0, listLayout{})
 	want := []string{"alpha:Z", "delta:A"}
 	if strings.Join(got, "|") != strings.Join(want, "|") {
 		t.Errorf("drew %q, want %q", got, want)
@@ -66,7 +70,7 @@ func TestAnUnsortedBlockKeepsTheOrderItWasGiven(t *testing.T) {
 		{Word: "yankee", Display: "yankee", Group: kept},
 		{Word: "zeta", Display: "zeta", Group: sorted},
 		{Word: "beta", Display: "beta", Group: sorted},
-	}, 0)
+	}, 0, listLayout{})
 	want := []string{"zulu", "bravo", "yankee", "beta", "zeta"}
 	if strings.Join(got, "|") != strings.Join(want, "|") {
 		t.Errorf("drew %q, want %q", got, want)
@@ -86,7 +90,7 @@ func TestOneRowPerLineIsABlocksAnswerAndNotTheListings(t *testing.T) {
 		{Word: "-f", Display: "-f  -- force overwrite", Group: described},
 		{Word: "-1", Display: "-1", Group: bare},
 		{Word: "-2", Display: "-2", Group: bare},
-	}, 80)
+	}, 80, listLayout{})
 	want := []string{"-d  -- decompress", "-f  -- force overwrite", "-1  -2"}
 	if strings.Join(got, "|") != strings.Join(want, "|") {
 		t.Errorf("drew %q, want %q", got, want)
@@ -100,7 +104,7 @@ func TestAHeadingOfSeveralRowsDrawsSeveralRows(t *testing.T) {
 	got := listingRows([]Candidate{
 		{Word: "gamma", Display: "gamma", Group: g},
 		{Word: "delta", Display: "delta", Group: g},
-	}, 0)
+	}, 0, listLayout{})
 	want := []string{"first heading", "second heading", "delta", "gamma"}
 	if strings.Join(got, "|") != strings.Join(want, "|") {
 		t.Errorf("drew %q, want %q", got, want)
@@ -115,7 +119,7 @@ func TestAHeadingOfSeveralRowsDrawsSeveralRows(t *testing.T) {
 func TestABlockWithNothingInItDrawsOnlyWhatItHasToSay(t *testing.T) {
 	said := Group{Name: "said", Heading: "a message"}
 	silent := Group{Name: "silent"}
-	got := listingRows([]Candidate{{Group: said}, {Group: silent}}, 0)
+	got := listingRows([]Candidate{{Group: said}, {Group: silent}}, 0, listLayout{})
 	if strings.Join(got, "|") != "a message" {
 		t.Errorf("drew %q, want the message alone", got)
 	}
@@ -167,5 +171,109 @@ func TestARowThatIsNotAMatchIsNeverInserted(t *testing.T) {
 	}
 	if got := string(e.line); got != "echo banana.txt " {
 		t.Errorf("line is %q, want the one real match completed", got)
+	}
+}
+
+// The blocks of one listing share one grid width, and the options that
+// rearrange a block do what they were measured to do. Every row is zsh
+// 5.9.2's, 2026-10-05, through a pseudo-terminal 40 columns wide with a
+// `.list-choices` widget adding the blocks; this shell draws the same rows
+// once trailing blanks are taken off (#6157).
+func TestAListingsBlocksShareOneGrid(t *testing.T) {
+	block := func(name string, words ...string) []Candidate {
+		out := make([]Candidate, len(words))
+		for i, w := range words {
+			out[i] = Candidate{Word: w, Group: Group{Name: name}}
+		}
+		return out
+	}
+	join := func(blocks ...[]Candidate) []Candidate {
+		var out []Candidate
+		for _, b := range blocks {
+			out = append(out, b...)
+		}
+		return out
+	}
+	four := block("a", "alpha", "beta", "gamma", "zeta")
+	ten := block("a", "a1", "a2", "a3", "a4", "a5", "a6", "a7", "a8", "a9", "a10")
+	long := block("a", "aaaaaaaaaaaa", "b", "c", "d", "e", "f", "g", "h", "i", "j")
+	for _, c := range []struct {
+		name   string
+		in     []Candidate
+		layout listLayout
+		want   []string
+	}{
+		{
+			"two across the first block's grid", join(four, block("b", "delta", "eps")),
+			listLayout{},
+			[]string{"alpha  beta   gamma  zeta", "delta         eps"},
+		},
+		{
+			"three across it", join(four, block("b", "d1", "d2", "d3")),
+			listLayout{},
+			[]string{"alpha  beta   gamma  zeta", "d1       d2       d3"},
+		},
+		{
+			"never narrower than its own cell", join(four, block("b", "d1", "d2", "d3", "d4", "d5", "d6", "d7")),
+			listLayout{},
+			[]string{"alpha  beta   gamma  zeta", "d1  d2  d3  d4  d5  d6  d7"},
+		},
+		{
+			"a later block widens an earlier one", join(block("a", "alpha", "beta"), block("b", "d1", "d2", "d3", "d4", "d5", "d6", "d7")),
+			listLayout{},
+			[]string{"alpha         beta", "d1  d2  d3  d4  d5  d6  d7"},
+		},
+		{
+			"the grid counts the cells that fit, used or not", join(ten, block("b", "d1", "d2", "d3")),
+			listLayout{},
+			[]string{"a1   a2   a4   a6   a8", "a10  a3   a5   a7   a9", "d1           d2           d3"},
+		},
+		{
+			"a block a row each takes no part", join([]Candidate{{Word: "x", Display: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", Group: Group{Name: "a", OnePerLine: true}}}, block("b", "d1", "d2", "d3")),
+			listLayout{},
+			[]string{"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "d1  d2  d3"},
+		},
+		{
+			"packed where it takes fewer rows", long,
+			listLayout{packed: true},
+			[]string{"aaaaaaaaaaaa  c  e  g  i", "b             d  f  h  j"},
+		},
+		{
+			"packed, and the last column counts", block("a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m", "n", "o", "p", "xxxxxxxxxxxxxxxxx"),
+			listLayout{packed: true},
+			[]string{"b  d  f  h  j  l  n  p", "c  e  g  i  k  m  o  xxxxxxxxxxxxxxxxx"},
+		},
+		{
+			"packed, columns of their own widths", block("a", "aaaaaaaa", "bb", "cccccc", "d", "eeeeeeeee", "ff", "ggg", "h", "iiiiiii", "jj", "kkkkk", "l", "m"),
+			listLayout{packed: true},
+			[]string{"aaaaaaaa  d          ggg      jj     m", "bb        eeeeeeeee  h        kkkkk", "cccccc    ff         iiiiiii  l"},
+		},
+		{
+			"not packed where it saves no row", join(ten, block("b", "d1", "d2", "d3")),
+			listLayout{packed: true},
+			[]string{"a1   a2   a4   a6   a8", "a10  a3   a5   a7   a9", "d1           d2           d3"},
+		},
+		{
+			"a packed block still spans the shared grid", join(long, block("b", "d1", "d2", "d3")),
+			listLayout{packed: true},
+			[]string{"aaaaaaaaaaaa  c  e  g  i", "b             d  f  h  j", "d1       d2       d3"},
+		},
+		{
+			"across the rows", join(ten, block("b", "d1", "d2", "d3")),
+			listLayout{rowsFirst: true},
+			[]string{"a1   a10  a2   a3   a4   a5   a6   a7", "a8   a9", "d1           d2           d3"},
+		},
+		{
+			"across the rows, two to a row", long,
+			listLayout{rowsFirst: true},
+			[]string{"aaaaaaaaaaaa  b", "c             d", "e             f", "g             h", "i             j"},
+		},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			got := listingRows(c.in, 40, c.layout)
+			if strings.Join(got, "|") != strings.Join(c.want, "|") {
+				t.Errorf("drew\n%s\nwant\n%s", strings.Join(got, "\n"), strings.Join(c.want, "\n"))
+			}
+		})
 	}
 }

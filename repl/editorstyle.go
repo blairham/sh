@@ -542,6 +542,17 @@ type EditorStyle struct {
 	// no such option, and the listing waits for a second key.
 	ListMatchesWithoutASecondKeyOption string
 
+	// ListPackedOption names the option that lets each column of a listing
+	// be as wide as its own longest match, where that takes fewer rows, and
+	// ListRowsFirstOption the one that fills a listing across its rows
+	// rather than down its columns. Measured on zsh 5.9.2, 2026-10-05: see
+	// arrange in completelist.go for the rows each one draws. Named rather
+	// than given as values for the reason ListMatchesWithoutASecondKeyOption
+	// is: a person sets them at the prompt. Empty is a dialect with neither,
+	// and the listing is laid down its columns with one width for all.
+	ListPackedOption    string
+	ListRowsFirstOption string
+
 	// BellRingsOnAnAmbiguousCompletionThatInserts sounds the bell for a
 	// completion with more than one match even where it put a prefix on the
 	// line.

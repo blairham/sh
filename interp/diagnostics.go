@@ -7975,14 +7975,24 @@ type Diagnostics struct {
 	// them has a message that shows the spec of a builtin given none.
 	AbsentJobSpec string
 
-	// NoCurrentJob is a bare `fg` or `bg` with no job in the table at all,
-	// for a dialect that gets that far. One verb: the builtin's name.
+	// NoCurrentJob is a bare `fg` or `bg` with no current job — an empty
+	// table, or one whose only job has been reported done. One verb: the
+	// builtin's name.
 	//
-	// Reached only where JobControlAbsenceIsReportedFirst is No — the other
-	// three members refuse before they look — so dash is the only measured
-	// column: `fg: No current job`, at status 2. A separate sentence from
-	// NoSuchJob, and it has to be: dash's NoSuchJob names the spec, and a
-	// builtin with no operand has none to name.
+	// Without job control every member but dash refuses before it looks
+	// (JobControlAbsenceIsReportedFirst), so dash's `fg: No current job`, at
+	// status 2, was the first column measured. With the monitor on the others
+	// reach it too, and measured 2026-10-04 (`set -m; fg` and `set -m; sleep
+	// 0 & sleep 0.3; jobs; fg`, under a terminal where the shell needs one):
+	//
+	//	bash 5.3, 3.2, --posix   fg: current: no such job, 1   (#5860)
+	//	zsh 5.9.2                fg: no current job, 1
+	//	ksh93                    nothing at all, 1
+	//
+	// bash names the spec it defaulted to, as its bare `disown` does — see
+	// DisownNoCurrentJob. A separate sentence from NoSuchJob, and it has to
+	// be: dash's NoSuchJob names the spec, and a builtin with no operand has
+	// none to name.
 	NoCurrentJob string
 
 	// NoCurrentJobStatus is what that reports. Zero means 1; dash reports 2.

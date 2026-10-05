@@ -423,6 +423,12 @@ func setWhenceLetter(m *whenceMode, letter byte) {
 // until `rehash`, so a file added to PATH later can be missing from its
 // listing. This walks the directories each time.
 func whencePatterns(r *interp.Runner, patterns []string, m whenceMode) int {
+	// A pattern lookup fills the command table the way a read of `$commands`
+	// does, and whatever HASH_LIST_ALL says: measured 2026-10-05 on zsh 5.9.2,
+	// `PATH=$PWD/b2; whence -m qq; hash` lists every name `b2` holds, under
+	// `nohashlistall` and `nohashcmds` alike, and leaves out a file with no
+	// execute bit under `hashexecutablesonly` (#6111).
+	fillCommandHash(r)
 	found := false
 	for _, pattern := range patterns {
 		if whencePattern(r, pattern, m) {

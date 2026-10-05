@@ -708,6 +708,21 @@ func (r *Runner) LookPathAll(name string) []string {
 	return hits
 }
 
+// RememberLookup puts what a PATH search finds for name into the command
+// table, in the dialect whose lookups remember — see
+// Semantics.ALookupRemembersThePath — for a dialect's own builtin that looks
+// a name up by some other route. Measured 2026-10-05 on ksh93u+: `whence -a`,
+// `whence -p` and `whence -pa` leave the name tracked as plain `whence` does
+// (#6111).
+func (r *Runner) RememberLookup(name string) {
+	if strings.ContainsRune(name, '/') || !r.rememberingLookups() || r.sem().ALookupRemembersThePath != Yes {
+		return
+	}
+	if _, spelled, written, err := r.lookPathSpelled(name); err == nil {
+		r.hashCommandRun(name, spelled, written)
+	}
+}
+
 // LookPathAllOncePerDirectory is LookPathAll with a hit dropped when the
 // directory it is in is one an earlier hit was in — the same directory
 // reached by another PATH entry, however it was spelled.
@@ -771,9 +786,17 @@ func (r *Runner) LookPathAsWritten(name string) (string, bool) {
 	if strings.ContainsRune(name, '/') {
 		return r.LookPath(name)
 	}
-	_, _, written, err := r.lookPathSpelled(name)
+	_, spelled, written, err := r.lookPathSpelled(name)
 	if err != nil {
 		return "", false
+	}
+	// And remembered, as any lookup is in the dialect whose lookups remember:
+	// measured 2026-10-05 on zsh 5.9.2, `whence`, `whence -v`, `whence -p`,
+	// `whence -c` and `which` each leave the name in the table, as `type`
+	// and `command -v` already did here, and `whence -a` does not (#6111).
+	// See Semantics.ALookupRemembersThePath.
+	if r.rememberingLookups() && r.sem().ALookupRemembersThePath == Yes {
+		r.hashCommandRun(name, spelled, written)
 	}
 	return r.NameReportWord(written), true
 }

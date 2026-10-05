@@ -124,5 +124,5 @@ func (r *Runner) finishedJobCountsAtExit(j *Job) bool {
 	if r.noticedJobs[j] {
 		return !j.reportedToNobody
 	}
-	return !(r.monitor && r.reportsFinishedJobsToNobody())
+	return !r.monitor || !r.reportsFinishedJobsToNobody()
 }

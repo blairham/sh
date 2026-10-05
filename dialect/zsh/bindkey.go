@@ -172,9 +172,11 @@ var bindkeyWidgets = map[string]repl.Widget{
 	"down-line":                         repl.WidgetDownLine,
 	// The prompt drawn again, which a widget that changed what it shows asks
 	// for (#5940).
-	"reset-prompt":   repl.WidgetResetPrompt,
-	"send-break":     repl.WidgetSendBreak,
-	"recursive-edit": repl.WidgetRecursiveEdit,
+	"reset-prompt":      repl.WidgetResetPrompt,
+	"send-break":        repl.WidgetSendBreak,
+	"recursive-edit":    repl.WidgetRecursiveEdit,
+	"push-line":         repl.WidgetPushLine,
+	"push-line-or-edit": repl.WidgetPushLineOrEdit,
 	// The key that means "this key does nothing", which is what `-r` leaves
 	// behind and what `bindkey` prints for a key nobody bound.
 	undefinedKey: repl.WidgetNone,
@@ -256,6 +258,8 @@ var widgetNames = map[repl.Widget]string{
 	repl.WidgetResetPrompt:                  "reset-prompt",
 	repl.WidgetSendBreak:                    "send-break",
 	repl.WidgetRecursiveEdit:                "recursive-edit",
+	repl.WidgetPushLine:                     "push-line",
+	repl.WidgetPushLineOrEdit:               "push-line-or-edit",
 }
 
 // editorControlKeys are the keys the editor reads that are not actions a key

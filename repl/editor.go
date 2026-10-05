@@ -502,6 +502,16 @@ type editor struct {
 	// nothing has to remember to invalidate it.
 	drawn drawnLine
 
+	// prebuffer is the lines of the command already entered at a
+	// continuation prompt, asked of the session — see Line.Prebuffer.
+	prebuffer func() string
+	// bufferStack is the lines push-line put aside, the last on the end;
+	// editAgain and editAgainText are a push-line-or-edit waiting to end the
+	// read. See pushline.go.
+	bufferStack   []string
+	editAgain     bool
+	editAgainText string
+
 	// lineStart is the text this read begins from, where a command handed the
 	// editor one rather than a prompt asking for a fresh line. Zero is every
 	// read at a prompt. See lineread.go, which is the whole of it.
@@ -520,6 +530,12 @@ func (e *editor) readLine(prompt drawnPrompt) (string, error) {
 	// than where the word is written, so that the answer belongs to the read
 	// being started and not to whichever earlier one last ended in ^D.
 	e.wroteLeaving = false
+	// A line push-line put aside comes back here, on the main prompt's
+	// read only: a continuation prompt is the same command and not the next
+	// one. See pushline.go.
+	if e.prebuffer == nil || e.prebuffer() == "" {
+		e.popPushedLine()
+	}
 	if e.lineStart.seeded {
 		// A command handed over the line rather than asking for a fresh one,
 		// so the text it supplied is what is on it and the cursor is after
@@ -622,6 +638,9 @@ func (e *editor) keyLoop(prompt drawnPrompt) (string, error) {
 		// A send-break an action asked for — `zle send-break` from a widget,
 		// or a key bound to it — ends the read here, the one place every
 		// key's path comes back through.
+		if e.editAgain {
+			return e.editTheWholeCommand(prompt)
+		}
 		if e.breakRequested {
 			e.breakRequested = false
 			quiet := e.breakQuiet

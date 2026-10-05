@@ -263,6 +263,10 @@ const (
 	// zleKeys is the key sequence `$KEYS` holds: the keystroke the call is
 	// for, until `read-command` reads another. See readCommand.
 	zleKeys = ".zsh.zle.keys"
+	// zlePrebuffer is what `$PREBUFFER` reads: the lines of a command already
+	// entered at a continuation prompt, handed in by the editor. See
+	// repl.Line.Prebuffer.
+	zlePrebuffer = ".zsh.zle.prebuffer"
 	// zleAccept is set by `zle accept-line` inside a widget and read once, by
 	// the call that ran the widget. A parameter under a name no script can
 	// spell, the way the rest of this file keeps its state, so a subshell gets
@@ -1223,6 +1227,15 @@ func callBuiltinWidget(r *interp.Runner, ctx context.Context, name string, args 
 		r.Diagnosef("%s: calling a built-in widget is not implemented yet\n", name)
 		return 1
 	}
+	if widget == repl.WidgetPushLineOrEdit && holds(r, zlePrebuffer) {
+		// At a continuation prompt the read ends here, and so does the
+		// widget: measured 2026-10-04 against zsh 5.9.2, nothing after
+		// `zle push-line-or-edit` in the widget runs once the command has
+		// been pulled back (#5931). At the main prompt it is push-line and
+		// the widget goes on. The stop is the same one send-break takes.
+		r.StopTheScript(0)
+		return 0
+	}
 	if widget == repl.WidgetSendBreak {
 		// The rest of the widget does not run: measured 2026-10-04 against
 		// zsh 5.9.2, `w() { zle send-break; print after }` prints nothing,
@@ -1243,6 +1256,12 @@ func callBuiltinWidget(r *interp.Runner, ctx context.Context, name string, args 
 		r.SetVar(zleKeys, out.Keys)
 	}
 	return out.Status
+}
+
+// holds reports whether one of this file's state names holds anything.
+func holds(r *interp.Runner, name string) bool {
+	v, _ := r.GetVar(name)
+	return v != ""
 }
 
 // redisplay is `zle -R`: draw the line as it stands, in the middle of a widget.
@@ -1546,6 +1565,7 @@ func runWidgetFunction(
 	}
 	r.SetVar(zleKeymap, keymap)
 	r.SetVar(zleKeys, in.Keys)
+	r.SetVar(zlePrebuffer, in.Prebuffer)
 	// And the count typed before the key, which is `$NUMERIC` (#5498).
 	numeric := ""
 	if in.Numeric != nil {
@@ -1772,6 +1792,17 @@ func openWidgetParameters(r *interp.Runner, opened widgetOpening) {
 		return keys
 	})
 	r.MarkReadonly("KEYS")
+	// The lines already entered at a continuation prompt, and empty at the
+	// first. Measured 2026-10-04 against zsh 5.9.2:
+	// `scalar-local-readonly-special`, set in every widget, and `if true;
+	// then⏎` after that line was entered and while `echo x` is being typed
+	// (#5931). Read-only: an assignment answers `read-only variable:
+	// PREBUFFER` and stops the widget.
+	r.SetDynamic("PREBUFFER", func(rr *interp.Runner) string {
+		text, _ := rr.GetVar(zlePrebuffer)
+		return text
+	})
+	r.MarkReadonly("PREBUFFER")
 	// The numeric argument, which is there only while there is one.
 	r.SetDynamic("NUMERIC", func(rr *interp.Runner) string {
 		n, _ := rr.GetVar(zleNumeric)
@@ -1859,6 +1890,7 @@ func openWidgetParameters(r *interp.Runner, opened widgetOpening) {
 	r.MarkLocal("LASTWIDGET")
 	r.MarkLocal("KEYMAP")
 	r.MarkLocal("KEYS")
+	r.MarkLocal("PREBUFFER")
 	r.MarkLocal("NUMERIC")
 }
 
@@ -1879,6 +1911,7 @@ func closeWidgetParameters(r *interp.Runner) {
 	r.UnsetDynamic("LASTWIDGET")
 	r.UnsetDynamic("KEYMAP")
 	r.UnsetDynamic("KEYS")
+	r.UnsetDynamic("PREBUFFER")
 	closeUndoParameters(r)
 	r.UnsetDynamic("NUMERIC")
 	// The attribute goes with the parameter, so a script between two
@@ -1929,6 +1962,7 @@ var widgetParameterDeclarations = map[string]interp.ProducedDeclaration{
 	"LASTWIDGET":        {},
 	"KEYMAP":            {},
 	"KEYS":              {},
+	"PREBUFFER":         {},
 	"NUMERIC":           {Integer: true, Base: 10},
 	regionHighlightName: {Array: true, ListsItsElements: true},
 }
@@ -2096,6 +2130,7 @@ func parseWidgetOpening(s string) (widgetOpening, bool) {
 var widgetCallState = []string{
 	zleBuffer, zleCursor, zlePostdisplay, zleWidget, zleLastWidget, zleKeymap,
 	zleNumeric, zleAccept, zleActive, zleOpened, zleKeys, zleCutBuffer,
+	zlePrebuffer,
 }
 
 // callerWidgetState is what was there before a widget call, put back when

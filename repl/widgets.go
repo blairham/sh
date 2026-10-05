@@ -251,6 +251,12 @@ const (
 	// accepted or broken off (see recursiveEdit). #5913, #5899.
 	WidgetSendBreak
 	WidgetRecursiveEdit
+
+	// The line put aside for the next prompt, and at a continuation prompt
+	// the whole command pulled back into one line to edit. See pushline.go
+	// (#5931).
+	WidgetPushLine
+	WidgetPushLineOrEdit
 )
 
 // IsIncrementalSearch is whether the action is one of the four searches,
@@ -477,6 +483,10 @@ func (e *editor) runWidget(b Binding, prompt drawnPrompt) {
 		e.breakRequested = true
 	case WidgetRecursiveEdit:
 		e.actionStatus = e.recursiveEdit(prompt)
+	case WidgetPushLine:
+		e.pushLine(prompt)
+	case WidgetPushLineOrEdit:
+		e.pushLineOrEdit(prompt)
 	case WidgetUpLine:
 		e.actionStatus = e.lineMotion(-1, prompt)
 	case WidgetDownLine:

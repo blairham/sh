@@ -52,10 +52,14 @@ import (
 // then writes the word's own characters into the match in place of what they
 // matched, measured through Tab: `M:_=` takes `f_o` to `f_oo`, `L:|-=` takes
 // `-f` to `-foo`, `M:{a-z}={A-Z}` takes `rea` to `reaDME`, and `L:|=* r:|=*`
-// takes `pl` against `apple` to `ple`. Where a lower-case matcher could match
-// the same characters, the manual says it wins; the search tries every
-// lower-case matcher before any upper-case one, so the first path found is
-// that one.
+// takes `pl` against `apple` to `ple`.
+//
+// The manual says that where a lower-case and an upper-case matcher both
+// match the same characters, the lower-case one wins. Measured, what decides
+// is the order they are written in: `M:{a-z}={A-Z} m:{a-z}={A-Z}` takes `rea`
+// to `reaDME` and the same two the other way round take it to `README`, and
+// `M:_= m:_=` takes `f_o` to `f_oo`. So the matchers are tried in the order
+// given and the first that leads to a match is the one whose writing counts.
 
 // matchSpec is one `-M` argument read, or several joined: the matchers up to
 // the first `x:`.
@@ -475,16 +479,11 @@ func (s *matchSearch) from(i, j int) (string, bool) {
 			return string(s.c[j]) + rest, true
 		}
 	}
-	// Lower-case matchers before upper-case ones: where both could match
-	// the same characters, the manual says the lower-case one wins.
-	for _, upper := range []bool{false, true} {
-		for _, m := range s.spec {
-			if m.upper != upper {
-				continue
-			}
-			if out, ok := s.apply(m, i, j); ok {
-				return out, true
-			}
+	// In the order the specification gives them, and the first that leads
+	// to a match is the one whose writing counts. See the file comment.
+	for _, m := range s.spec {
+		if out, ok := s.apply(m, i, j); ok {
+			return out, true
 		}
 	}
 	s.failed[key] = true

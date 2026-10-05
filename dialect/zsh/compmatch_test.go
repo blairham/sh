@@ -86,6 +86,11 @@ func TestAnUpperCaseMatcherWritesTheWordIn(t *testing.T) {
 		{"m:{a-z}={A-Z}", "README.md", "rea", "README.md"},
 		{"M:{a-z}={A-Z}", "README", "rea", "reaDME"},
 		{"L:|=* r:|=*", "apple", "pl", "ple"},
+		// Two matchers for the same characters: the one written first
+		// decides, whichever its case.
+		{"M:{a-z}={A-Z} m:{a-z}={A-Z}", "README", "rea", "reaDME"},
+		{"m:{a-z}={A-Z} M:{a-z}={A-Z}", "README", "rea", "README"},
+		{"M:_= m:_=", "foo", "f_o", "f_oo"},
 	} {
 		t.Run(c.spec, func(t *testing.T) {
 			got := completionFor(t, widgetOf("compadd -M "+shellQuote(c.spec)+" -- "+c.candidate), "x "+c.word)

@@ -121,7 +121,7 @@ func (e *editor) menuComplete(c Completer, step int, prompt drawnPrompt) {
 	switch len(words) {
 	case 0:
 	case 1:
-		e.change(false, func() { e.replaceWord(start, words[0]+completionSuffix(word, words[0])) })
+		e.change(false, func() { e.replaceWord(start, words[0]+loneSuffix(matches, word)) })
 	default:
 		first := 0
 		if step < 0 {

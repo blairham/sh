@@ -27,8 +27,19 @@ import (
 // word with a slash in it is answered with the things that could run rather
 // than with everything.
 func (s shellCompleter) paths(word string, keep func(dir string, e os.DirEntry) bool) []string {
+	cands := s.pathCandidates(word, keep)
+	out := make([]string, 0, len(cands))
+	for _, c := range cands {
+		out = append(out, c.Word)
+	}
+	return out
+}
+
+// pathCandidates is paths with what a word cannot carry: whether a lone match
+// is a finished word. See symlinkUnmarked.
+func (s shellCompleter) pathCandidates(word string, keep func(dir string, e os.DirEntry) bool) []Candidate {
 	if isUserWord(word) {
-		return s.users(word[1:])
+		return Words(s.users(word[1:])...)
 	}
 	prefix := wordPrefix(word)
 	base := strings.TrimPrefix(dequote(word), dequote(prefix))
@@ -79,15 +90,40 @@ func (s shellCompleter) paths(word string, keep func(dir string, e os.DirEntry) 
 	// awkward name together at the top.
 	sort.Slice(matched, func(i, j int) bool { return matched[i].Name() < matched[j].Name() })
 
-	out := make([]string, 0, len(matched))
+	out := make([]Candidate, 0, len(matched))
 	for _, e := range matched {
-		text := prefix + escapeName(e.Name(), quote, atStart)
-		if s.isDir(dir, e) {
-			text += "/"
+		c := Candidate{Word: prefix + escapeName(e.Name(), quote, atStart)}
+		switch {
+		case !s.isDir(dir, e):
+		case s.symlinkUnmarked(e, base):
+			// Unmarked in the line and marked in a listing: measured, the
+			// same bash lists `linkdir/   linkother/` on the Tab that lists.
+			c.Open = true
+			c.Display = escapeName(e.Name(), quote, atStart) + "/"
+		default:
+			c.Word += "/"
 		}
-		out = append(out, text)
+		out = append(out, c)
 	}
 	return out
+}
+
+// symlinkUnmarked reports whether a symlink to a directory goes without its
+// slash because the word does not name it whole yet — readline's default,
+// `mark-symlinked-directories` off.
+//
+// Measured 2026-10-04 through a pseudo-terminal against bash 5.3.20 with no
+// startup files, in a directory holding `realdir/` and `linkdir -> realdir`:
+//
+//	ls link⇥      ls linkdir      no slash, and no space after it
+//	ls link⇥⇥     ls linkdir/     the second Tab, on the whole name
+//	ls linkdir⇥   ls linkdir/
+//	ls real⇥      ls realdir/
+//	ls link⇥⇥⇥    lists linkdir/   linkother/
+//
+// zsh marks the link at once, as this completer always has.
+func (s shellCompleter) symlinkUnmarked(e os.DirEntry, base string) bool {
+	return s.symlinkMarkedWhenWhole && e.Type()&os.ModeSymlink != 0 && e.Name() != base
 }
 
 // correctedDir is a directory to read instead of the one that was typed, and

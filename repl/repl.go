@@ -2119,6 +2119,7 @@ func (s Shell) completer(ctx context.Context) Completer {
 	if s.Runner != nil {
 		all = append(all, runnerCompleter{
 			r: s.Runner, hidden: s.Editor.CompletionMatchesHiddenFiles,
+			symlinkMarkedWhenWhole: s.Editor.SymlinkedDirectoryMarkedWhenNamedWhole,
 			// The session's boundary and the session's context, so a
 			// directory listed to answer Tab is asked about the same way one
 			// listed by a glob is. The history file above is handed the same
@@ -2140,7 +2141,9 @@ type runnerCompleter struct {
 	r *interp.Runner
 	// hidden is the dialect's answer and not the shell's, so it is settled
 	// once when the session starts rather than read again per keystroke.
-	hidden bool
+	// symlinkMarkedWhenWhole is the same kind of answer.
+	hidden                 bool
+	symlinkMarkedWhenWhole bool
 
 	// bound and ctx are the session's gate, sink and context. Held here
 	// because the Completer seam carries neither and cannot be widened to;
@@ -2165,7 +2168,7 @@ func (c runnerCompleter) shell() shellCompleter {
 	home, _ := c.r.GetVar("HOME")
 	return shellCompleter{
 		names: c.names(), path: path, dir: c.r.Dir,
-		home: home, hidden: c.hidden,
+		home: home, hidden: c.hidden, symlinkMarkedWhenWhole: c.symlinkMarkedWhenWhole,
 		// Asked per keystroke rather than settled with hidden, because this
 		// one moves during a session: `shopt -s no_empty_cmd_completion` is a
 		// line a person types, and a completer built once at startup would

@@ -300,10 +300,33 @@ func (r *Runner) reportBorrowedParseFailure(err error, s sourced, src string) {
 	// `bash: ./bad: line 1: syntax error near unexpected token `)'` and then
 	// `bash: ./bad: line 1: `echo )'` (#6008). See
 	// Diagnostics.InteractiveShellSpeaksAsAtAPrompt.
-	d, lead := r.diag(), ""
-	if r.speaksAsAtAPrompt() && !s.eval {
+	//
+	// And `eval`'s text is worded as a typed line where no file is being
+	// read — the sentence alone after the shell's name, no `eval:` and no
+	// line quoted back — and as a script's `eval` is, with the line of the
+	// file, where one is. Measured 2026-10-05 on bash 5.3.20 with `eval
+	// "echo )"`:
+	//
+	//	typed at the prompt, under -i -c,     bash: syntax error near
+	//	in a function a file defined          unexpected token `)'
+	//	and the prompt called
+	//	line 2 of .bashrc, of a file . read   bash: eval: line 2: syntax error
+	//	at the prompt, of an -i script        near unexpected token `)'
+	//	                                      bash: eval: line 2: `echo )'
+	//
+	// where this wrote `bash: eval: …` and quoted the text back everywhere,
+	// with no line (#6056).
+	d, lead, bare := r.diag(), "", false
+	if r.speaksAsAtAPrompt() {
 		raw := *r.Diagnostics
-		d, lead = &raw, r.name()+": "
+		switch {
+		case !s.eval:
+			d, lead = &raw, r.name()+": "
+		case r.sourceDepth > 0 || r.Route == RouteScriptFile:
+			d = &raw
+		default:
+			bare = true
+		}
 	}
 	line, own := r.line, d.ParseFailureLine(err)
 	if own > 0 {
@@ -314,6 +337,10 @@ func (r *Runner) reportBorrowedParseFailure(err error, s sourced, src string) {
 		// `eval: line 1` against BusyBox's `line 0` (#3141).
 		line = own + r.lineBase + r.lineOrigin
 		err = shiftParseError(err, r.lineBase+r.lineOrigin)
+	}
+	if bare {
+		r.errf("%s: %s\n", r.name(), d.ParseFailure(err))
+		return
 	}
 	if d.BorrowedTextRendersTheCallStack {
 		// The chain, and then the innermost text's name with no location

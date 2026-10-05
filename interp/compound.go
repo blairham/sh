@@ -1861,6 +1861,13 @@ func (r *Runner) callFuncInPlace(ctx context.Context, fn *syntax.FuncDecl, name 
 	// after both refusals so that a call which never happens is not recorded
 	// as one. See interp/evalcontext.go.
 	defer r.enterEvalContext(EvalContextFunctionBody)()
+	// And the word a dialect asked to stand over the next body it calls,
+	// taken by this call and no later one. See CallNextBodyAs.
+	if r.nextBodyContextSet {
+		c := r.nextBodyContext
+		r.nextBodyContextSet = false
+		defer r.enterEvalContext(c)()
+	}
 	// Where the call was made, for the line the shell is back at once it
 	// returns. Read before anything moves into the body.
 	calledAt := r.line

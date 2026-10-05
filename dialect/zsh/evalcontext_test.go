@@ -182,3 +182,44 @@ func TestLoadingAFunctionIsOnTheStackOnce(t *testing.T) {
 		t.Errorf("got\n%s\nwant\n%s", out, want)
 	}
 }
+
+// TestAHandWrittenLoadRunsUnderEval — the stub a script writes itself,
+// `f() { builtin autoload -XUz }`, which is what zi writes for every function
+// a plugin autoloads (#5897).
+//
+// Measured 2026-10-04 against `/opt/homebrew/bin/zsh` — `zsh 5.9.2
+// (aarch64-apple-darwin25.4.0)` — with these files on `$fpath`, every row
+// byte-identical: on the call that loads it the body runs under `eval` and
+// its own frame with `loadautofunc` over that, `$funcstack` names the stub,
+// `(eval)` and the body; the call after it is the body alone; the body's
+// status is the call's; and a file ending in the `*loadautofunc` idiom runs
+// its function on the first call. This shell ran the body straight under the
+// stub — `toplevel:shfunc:shfunc`, two frames — so the idiom did nothing
+// and the first call answered 1.
+func TestAHandWrittenLoadRunsUnderEval(t *testing.T) {
+	dir := t.TempDir()
+	for name, text := range map[string]string{
+		"hs": "print -r -- \"hb [$ZSH_EVAL_CONTEXT] ${#funcstack} [$funcstack] [$*]\"\nreturn 3\n",
+		"hi": "hi() { print -r -- \"hi [$ZSH_EVAL_CONTEXT] [$*]\" }\n" +
+			"[[ $zsh_eval_context == *loadautofunc ]] && hi \"$@\"\n",
+	} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(text), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	src := "fpath=(" + dir + ")\n" +
+		"hs() { builtin autoload -XUz }\n" +
+		"function hi { local -a fpath; fpath=( " + dir + " ${fpath} ); builtin autoload -X -Uz; }\n" +
+		"hs a b; print -r -- st=$?; hs c; print -r -- st=$?\nhi x y; print -r -- st=$?; hi z\n"
+	out, _ := runZsh(t, dir, src)
+	want := "hb [toplevel:shfunc:eval:shfunc:loadautofunc] 3 [hs (eval) hs] [a b]\n" +
+		"st=3\n" +
+		"hb [toplevel:shfunc] 1 [hs] [c]\n" +
+		"st=3\n" +
+		"hi [toplevel:shfunc:eval:shfunc:loadautofunc:shfunc] [x y]\n" +
+		"st=0\n" +
+		"hi [toplevel:shfunc] [z]\n"
+	if out != want {
+		t.Errorf("got\n%s\nwant\n%s", out, want)
+	}
+}

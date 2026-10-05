@@ -1040,7 +1040,7 @@ func TestTheConduitsNewlinesArriveWholeInEitherMode(t *testing.T) {
 			var state *terminalState
 			if tc.raw {
 				var err error
-				if state, err = makeRaw(terminal); err != nil {
+				if state, err = makeRaw(terminal, true); err != nil {
 					t.Fatalf("raw mode: %v", err)
 				}
 				t.Cleanup(func() { _ = state.restore() })
@@ -1073,7 +1073,7 @@ func TestACarriageReturnAcrossAWriteIsNotDoubled(t *testing.T) {
 	if _, err := io.WriteString(out, "one\r"); err != nil {
 		t.Fatalf("writing: %v", err)
 	}
-	state, err := makeRaw(terminal)
+	state, err := makeRaw(terminal, true)
 	if err != nil {
 		t.Fatalf("raw mode: %v", err)
 	}

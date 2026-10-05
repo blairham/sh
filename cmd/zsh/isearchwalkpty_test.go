@@ -30,6 +30,9 @@ import (
 func TestTheFourSearchesOnATerminal(t *testing.T) {
 	const up = "\x1b[A"
 	rc := []string{
+		// As in the measurement: with the option set, `C-s` is the
+		// terminal's and never reaches the search (#5943).
+		`unsetopt flowcontrol`,
 		`bindkey '^Xp' history-incremental-pattern-search-backward`,
 		`wp() { zle .history-incremental-pattern-search-backward; print -rn -- " ST$(( 40 + 2 ))=$?" }`,
 		`wf() { zle .history-incremental-search-forward; print -rn -- " ST$(( 40 + 2 ))=$?" }`,

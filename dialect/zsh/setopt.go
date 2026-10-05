@@ -944,7 +944,10 @@ var zshOptions = []zshOption{
 	setOptBacked("exec", true, "noexec", true),
 	matchBacked("extendedglob", false, interp.ExtendedPatternOperators, false),
 	recorded("extendedhistory", false),
-	recorded("flowcontrol", true),
+	// FLOW_CONTROL is read by the line editor every time it takes the
+	// terminal — repl.EditorStyle.FlowControlOption names it — so it is
+	// acted on, which is what `recorded` would deny (#5943).
+	storeBacked("flowcontrol", true),
 	{
 		// FORCE_FLOAT: every operand arithmetic reads is a float, constants
 		// and names alike, so `$(( 3/4 ))` is 0.75. Measured 2026-10-02 on

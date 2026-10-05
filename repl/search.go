@@ -72,8 +72,9 @@ import (
 // What `C-s` itself is: zsh leaves the terminal's flow control on while
 // `FLOW_CONTROL` is set, which is the default, so a `C-s` typed at the prompt
 // stops the output and never reaches the editor; bash does the same. This
-// editor takes the terminal raw and has always received the key, so here it
-// searches — a pre-existing difference, not one this mechanism makes.
+// editor does too since #5943 — see EditorStyle.FlowControlOption — so the key
+// reaches a search only after `unsetopt flowcontrol` or `stty -ixon`, and
+// `^X s` is the spelling that reaches the forward search either way.
 
 // searchDir is which way a search walks: older entries, or newer ones.
 type searchDir int

@@ -34,7 +34,9 @@ type modeState = syscall.Termios
 
 // setMode reads the current discipline, keeps it, and writes back a changed
 // copy. raw is the editor's mode; otherwise only the waiting is turned off.
-func setMode(f *os.File, raw bool) (*Mode, error) {
+// flow says whether the editor's mode leaves the terminal's XON/XOFF as it
+// was found; see [Raw].
+func setMode(f *os.File, raw, flow bool) (*Mode, error) {
 	if f == nil {
 		return nil, ErrUnsupported
 	}
@@ -52,7 +54,10 @@ func setMode(f *os.File, raw bool) (*Mode, error) {
 	t.Cc[syscall.VTIME] = 0
 	if raw {
 		t.Iflag &^= syscall.IGNBRK | syscall.BRKINT | syscall.PARMRK | syscall.ISTRIP |
-			syscall.INLCR | syscall.IGNCR | syscall.ICRNL | syscall.IXON
+			syscall.INLCR | syscall.IGNCR | syscall.ICRNL
+		if !flow {
+			t.Iflag &^= syscall.IXON
+		}
 		t.Oflag &^= syscall.OPOST
 		t.Lflag &^= syscall.ECHO | syscall.ECHONL | syscall.ISIG | syscall.IEXTEN
 		t.Cflag &^= syscall.CSIZE | syscall.PARENB

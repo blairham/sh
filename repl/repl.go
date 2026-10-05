@@ -1071,7 +1071,7 @@ func (s Shell) inLineDiscipline(state *terminalState, f func()) {
 		// something else was writing to it — see crlf.forget.
 		s.forgetWhatTheTerminalSaw()
 		if raw {
-			if err := state.takeRaw(); err != nil {
+			if err := state.takeRaw(s.flowControl()); err != nil {
 				s.errf("%v\n", err)
 			}
 		}
@@ -1092,7 +1092,7 @@ func (s Shell) holdTerminal(state *terminalState, raw bool) {
 	}
 	var err error
 	if raw {
-		err = state.takeRaw()
+		err = state.takeRaw(s.flowControl())
 	} else {
 		err = state.restore()
 	}
@@ -2722,6 +2722,14 @@ func (s Shell) historyRules() historyRules {
 	// session that answered any of them itself would be a second shell
 	// disagreeing with the first about what it was told.
 	return historyRulesFrom(s.History, s.Runner.GetVar, s.Runner.DialectOption, s.Runner.MatchPattern)
+}
+
+// flowControl reports whether the editor leaves the terminal's XON/XOFF on —
+// everywhere, unless the dialect names an option for it and that option is
+// unset. See EditorStyle.FlowControlOption.
+func (s Shell) flowControl() bool {
+	name := s.Editor.FlowControlOption
+	return name == "" || s.dialectOption(name)
 }
 
 // dialectOption answers whether a named option is on in this session, and

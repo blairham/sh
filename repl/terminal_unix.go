@@ -63,8 +63,11 @@ func terminalFor(f *os.File) (*terminalState, error) {
 // its own. That is what a *command* asking the person to edit a line wants —
 // see lineread.go — where the session's own state is reached through takeRaw
 // below.
-func makeRaw(f *os.File) (*terminalState, error) {
-	mode, err := tty.Raw(f)
+//
+// flow is whether the terminal's XON/XOFF is left as it was found — see
+// Shell.flowControl, which is where every caller gets it.
+func makeRaw(f *os.File, flow bool) (*terminalState, error) {
+	mode, err := tty.Raw(f, flow)
 	if err != nil {
 		return nil, err
 	}
@@ -78,11 +81,14 @@ func makeRaw(f *os.File) (*terminalState, error) {
 // there now, which after a restore is the right answer and in raw mode is raw
 // — so a second capture is how a session loses the discipline it is supposed
 // to hand back.
-func (s *terminalState) takeRaw() error {
+//
+// flow is makeRaw's, asked again every time, because it is an option a person
+// moves between two prompts.
+func (s *terminalState) takeRaw(flow bool) error {
 	if s == nil || s.raw {
 		return nil
 	}
-	if _, err := tty.Raw(s.f); err != nil {
+	if _, err := tty.Raw(s.f, flow); err != nil {
 		return err
 	}
 	s.raw = true

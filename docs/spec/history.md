@@ -214,6 +214,18 @@ What they agree about:
 | Return (`C-m`) | accepts the found line and **runs** it |
 | `C-e`, `C-k`, an arrow, Tab | ends the search, keeps the found line, **and acts** |
 
+`C-s` is not in the table because neither shell's editor hears it by
+default. Both leave the terminal's flow control (`IXON`) on while a line
+is edited, so `C-s` stops the output and `C-q` starts it again; zsh
+turns it off while `FLOW_CONTROL` is unset, and bash never does.
+Measured 2026-10-05 through a pseudo-terminal by reading the line
+discipline at the prompt: `unsetopt flowcontrol` typed is live at the
+next prompt, not for the rest of a line a widget unset it on, and a
+`stty -ixon` is kept in both shells. With the key reaching the editor,
+zsh's `C-s` is `fwd-i-search:` and bash's is `(i-search)`. This editor
+does the same (#5943): `repl.EditorStyle.FlowControlOption` names the
+option, and zsh's `^X s` reaches the forward search either way.
+
 That last row is the one worth writing down. `C-r cho C-e` leaves the
 search, keeps `echo two`, and moves the cursor to the end of it; `C-r
 cho C-k` leaves `e`. The key that closes the mode is not swallowed by

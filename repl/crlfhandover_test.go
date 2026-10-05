@@ -27,7 +27,7 @@ func TestTakingTheTerminalBackDropsWhatTheStreamsRemember(t *testing.T) {
 	_, tty := openTerminal(t)
 	var out, errs strings.Builder
 	s := Shell{In: tty, Out: translating(&out), Err: translating(&errs)}
-	state, err := makeRaw(tty)
+	state, err := makeRaw(tty, true)
 	if err != nil {
 		t.Skipf("no raw mode: %v", err)
 	}

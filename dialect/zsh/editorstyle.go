@@ -73,6 +73,12 @@ func EditorStyle() repl.EditorStyle {
 		// line from having the prompt drawn against it (#2477).
 		MarkUnfinishedOutputOption:  "PROMPT_SP",
 		ReturnBeforeThePromptOption: "PROMPT_CR",
+		// And the terminal's flow control, which the editor leaves on while
+		// this option is set — the default — so `C-s` and `C-q` are XON/XOFF
+		// and never reach a widget; `unsetopt flowcontrol` hands both keys to
+		// the editor from the next prompt. See repl.EditorStyle.FlowControlOption
+		// and internal/tty's Raw for the measurement (#5943).
+		FlowControlOption: "FLOW_CONTROL",
 		// And the option the whole editor runs under, which this shell alone
 		// in the panel has: `unsetopt zle` is an interactive shell with no
 		// line editor, and `-o interactive +o zle` — `-fiV +Z` — is how zsh's

@@ -49,7 +49,29 @@ type Mode struct {
 // characters already there; canonical mode has to go because otherwise nothing
 // arrives until Return; and ISIG has to go so that ^C arrives as a byte the
 // editor can act on rather than as a signal racing a read already in progress.
-func Raw(f *os.File) (*Mode, error) { return setMode(f, true) }
+//
+// **Except the terminal's flow control, which is the caller's to say.** With
+// flowControl true, XON/XOFF (`IXON`) is left exactly as it was found, so
+// `C-s` and `C-q` pause and resume the output and never reach the editor;
+// false turns it off for the length of the mode, and the two keys arrive as
+// bytes. Measured 2026-10-05 through a pseudo-terminal, reading the line
+// discipline from the controlling side while each shell sat at its prompt:
+//
+//	zsh 5.9.2, defaults                         ixon  -icanon
+//	zsh, `unsetopt flowcontrol` typed           -ixon at the next prompt
+//	zsh, `setopt flowcontrol` typed again       ixon at the next prompt
+//	zsh, `unsetopt flowcontrol` in a widget     ixon for the rest of that line,
+//	                                            -ixon from the next prompt
+//	zsh, `stty -ixon` typed, option still set   -ixon: never turned back on
+//	bash 5.3, defaults                          ixon  -icanon
+//	bash, `stty -ixon` typed                    -ixon
+//
+// So neither shell ever turns flow control *on*; zsh turns it off while the
+// option is unset, and bash never does (#5943). The `-icanon` column is what
+// says the reading was taken in the editor's mode and not the command's.
+// It is a parameter rather than a second function so that no caller can take
+// raw mode without having answered the question.
+func Raw(f *os.File, flowControl bool) (*Mode, error) { return setMode(f, true, flowControl) }
 
 // Current reads a terminal's discipline and changes nothing.
 //
@@ -74,7 +96,7 @@ func Current(f *os.File) (*Mode, error) { return currentMode(f) }
 // What `read -k` wants: the characters as they are typed, without taking the
 // terminal away from whatever else is using it. See the file comment for the
 // measurement that says echo stays.
-func Cbreak(f *os.File) (*Mode, error) { return setMode(f, false) }
+func Cbreak(f *os.File) (*Mode, error) { return setMode(f, false, true) }
 
 // Restore puts the line discipline back, and is safe on a nil Mode and safe
 // twice.

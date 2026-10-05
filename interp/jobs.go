@@ -927,7 +927,16 @@ func (r *Runner) background(ctx context.Context, st *syntax.Stmt) error {
 	// the job either: it moves under a running session — `unsetopt notify` —
 	// so it is asked by the front end, late, on the goroutine that owns it.
 	// See notifyJobEnded and Runner.NotifiesAsAJobEnds (#4576).
-	notifyEnded := r.JobEnded
+	//
+	// **Carried as a box rather than as the function**, because the front end
+	// may not have written the field yet: a job the startup file started
+	// began before there was a session to tell, and carrying the nil it read
+	// then meant its ending woke nobody — its notice waited for the next
+	// command where zsh writes it at once (#5892). The box is filled from the
+	// field here and again each time the front end asks NotifiesAsAJobEnds,
+	// both on the shell's own goroutine, and read under its lock on the
+	// job's. See jobEndedHook.
+	notifyEnded := r.publishJobEndedHook()
 	// And this shell's own note, for the same reason and read on the same
 	// goroutine: a shell blocked on a foreground command or on a `wait` is
 	// not idle, so the front end's wake reaches nobody. Made here rather
@@ -1149,8 +1158,58 @@ func (r *Runner) canAnnounce() bool {
 // which made all three a read of state another goroutine writes with nothing
 // synchronizing the pair (#4576). Deleting that read is the fix; asking twice
 // was what made it possible.
+//
+// Asking it also hands Runner.JobEnded to the jobs already running, which is
+// why it is the front end's question and asked where its wait is: a session
+// that wired the hook after a job started — the startup file's — is woken by
+// that job's ending from the first time round the wait (#5892). See
+// jobEndedHook.
 func (r *Runner) NotifiesAsAJobEnds() bool {
+	r.publishJobEndedHook()
 	return r.JobControl && r.monitor && r.sem().FinishedJobNoticeArrivesAtOnce == Yes
+}
+
+// jobEndedHook is Runner.JobEnded as the jobs see it: one box per shell, which
+// every job carries from its start and reads under the lock when it ends.
+//
+// A box rather than the function because the function can arrive after the
+// job: the startup file runs before the front end has a session to wire, so a
+// job started there read a nil and kept it. The front end writes the field on
+// its own goroutine and a job ends on another, so the field cannot be read
+// from the job either — see where background takes this. The box is the
+// handover: filled on the shell's goroutine, read on the job's.
+type jobEndedHook struct {
+	mu sync.Mutex
+	fn func()
+}
+
+// publishJobEndedHook puts Runner.JobEnded in the box, making the box the
+// first time, and answers the box. On the shell's own goroutine.
+func (r *Runner) publishJobEndedHook() *jobEndedHook {
+	if r.jobEndedHook == nil {
+		// Made even with nothing to put in it, because that is the case the
+		// box is for: a job started before the front end wired the hook has
+		// to be carrying the box the front end's hook will be put in.
+		r.jobEndedHook = &jobEndedHook{}
+	}
+	h := r.jobEndedHook
+	h.mu.Lock()
+	h.fn = r.JobEnded
+	h.mu.Unlock()
+	return h
+}
+
+// call pokes the hook the box holds now, from the goroutine the job ended on.
+func (h *jobEndedHook) call() {
+	if h == nil {
+		return
+	}
+	h.mu.Lock()
+	fn := h.fn
+	h.mu.Unlock()
+	if fn != nil {
+		fn()
+	}
 }
 
 // notifyJobEnded tells the shell around this one that a job has ended, on the
@@ -1168,11 +1227,8 @@ func (r *Runner) NotifiesAsAJobEnds() bool {
 // The hook itself is *handed in* rather than read off the Runner, because the
 // front end writes that field from its own goroutine when the session ends.
 // See where background takes it.
-func (r *Runner) notifyJobEnded(notify func()) {
-	if notify == nil {
-		return
-	}
-	notify()
+func (r *Runner) notifyJobEnded(notify *jobEndedHook) {
+	notify.call()
 }
 
 // ownJobEndedNote is this shell's inward note, made on the shell's own

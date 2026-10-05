@@ -43,10 +43,12 @@ func (r *Runner) FunctionDefinitionTakesANameList() bool {
 // is shared with every subshell cloned from this runner, and a script must not
 // change the grammar of the shell that spawned it.
 func (r *Runner) SetFunctionDefinitionTakesANameList(on bool) {
-	d := r.dialect()
-	if d.FunctionMultipleNames == on {
+	// Asked of the dialect in place, so a request for the state it is
+	// already in copies nothing. See Runner.lang.
+	if r.lang().FunctionMultipleNames == on {
 		return
 	}
+	d := r.dialect()
 	d.FunctionMultipleNames = on
 	r.Dialect = &d
 }

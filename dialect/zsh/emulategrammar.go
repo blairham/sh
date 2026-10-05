@@ -80,6 +80,12 @@ type grammarAxis struct {
 	// replaced at all: a replacement nobody needs makes the front end re-hand
 	// the parser a language identical to the one it had.
 	apply func(d *syntax.Dialect, mode string) bool
+
+	// moves reports whether apply would move anything, without writing.
+	// It lets an emulation that changes no grammar — every `emulate -L zsh`
+	// in a zsh shell — leave the dialect where it is without first copying
+	// it to find out (#6100). Nil means unknown, and the copy is made.
+	moves func(d *syntax.Dialect, mode string) bool
 }
 
 // emulationGrammar is the per-mode grammar table.
@@ -127,6 +133,10 @@ func grammarFlag(name string, field func(*syntax.Dialect) *bool, byMode map[stri
 			*p = want
 			return true
 		},
+		moves: func(d *syntax.Dialect, mode string) bool {
+			want, stated := byMode[mode]
+			return stated && *field(d) != want
+		},
 	}
 }
 
@@ -159,11 +169,25 @@ func setEmulationGrammar(r *interp.Runner, mode string) {
 		// shell was reading with, and there is nothing here to read off.
 		return
 	}
+	if !grammarMoves(r.Dialect, mode) {
+		return
+	}
 	d, moved := emulateDialect(*r.Dialect, mode)
 	if !moved {
 		return
 	}
 	r.Dialect = &d
+}
+
+// grammarMoves reports whether this mode's grammar differs from d's, asked
+// of the dialect in place.
+func grammarMoves(d *syntax.Dialect, mode string) bool {
+	for _, a := range emulationGrammar {
+		if a.moves == nil || a.moves(d, mode) {
+			return true
+		}
+	}
+	return false
 }
 
 // grammarTableHoles names every (axis, mode) pair the table does not answer.

@@ -667,8 +667,18 @@ func (r *Runner) dialect() syntax.Dialect {
 // ArithPrecedence is the order the binary arithmetic operators bind in for
 // this runner right now: the dialect's, unless a dialect's own option has
 // moved it.
+//
+// Answered from the two places dialect would take it from rather than by
+// building a dialect to read one field off: a zsh option table reads this on
+// every save and restore of its options, which is every function call.
 func (r *Runner) ArithPrecedence() syntax.ArithPrecedencePolicy {
-	return r.dialect().ArithPrecedence
+	if r.arithPrecedenceMoved {
+		return r.arithPrecedence
+	}
+	if r.Dialect != nil {
+		return r.Dialect.ArithPrecedence
+	}
+	return coreLanguage.ArithPrecedence
 }
 
 // SetArithPrecedence moves it, for a dialect whose option namespace has a

@@ -74,10 +74,12 @@ func (r *Runner) numericRanges() bool {
 }
 
 func (r *Runner) SetBarePatternGroups(anywhere, insideAWord bool) {
-	d := r.dialect()
-	if d.PatternAlternation == anywhere && d.BarePatternGroupInsideAWord == insideAWord {
+	// Asked of the dialect in place, so a request for the state it is
+	// already in copies nothing. See Runner.lang.
+	if r.lang().PatternAlternation == anywhere && r.lang().BarePatternGroupInsideAWord == insideAWord {
 		return
 	}
+	d := r.dialect()
 	d.PatternAlternation = anywhere
 	d.BarePatternGroupInsideAWord = insideAWord
 	r.Dialect = &d
@@ -101,10 +103,12 @@ func (r *Runner) RegexOperandParenthesisIsTheShellsOwn() bool {
 // The dialect is copied and replaced rather than written through, for the
 // reason the setter above is.
 func (r *Runner) SetRegexOperandParenthesisIsTheShellsOwn(on bool) {
-	d := r.dialect()
-	if d.RegexParenthesisIsTheShellsOwn == on {
+	// Asked of the dialect in place, so a request for the state it is
+	// already in copies nothing. See Runner.lang.
+	if r.lang().RegexParenthesisIsTheShellsOwn == on {
 		return
 	}
+	d := r.dialect()
 	d.RegexParenthesisIsTheShellsOwn = on
 	r.Dialect = &d
 }
@@ -126,10 +130,12 @@ func (r *Runner) CommandWordSubscriptHasAFlagGroup() bool {
 // The dialect is copied and replaced rather than written through, for the
 // reason the setters above are.
 func (r *Runner) SetCommandWordSubscriptHasAFlagGroup(on bool) {
-	d := r.dialect()
-	if d.CommandWordSubscriptHasNoFlagGroup == !on {
+	// Asked of the dialect in place, so a request for the state it is
+	// already in copies nothing. See Runner.lang.
+	if r.lang().CommandWordSubscriptHasNoFlagGroup == !on {
 		return
 	}
+	d := r.dialect()
 	d.CommandWordSubscriptHasNoFlagGroup = !on
 	r.Dialect = &d
 }

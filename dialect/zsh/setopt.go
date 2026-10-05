@@ -6,7 +6,6 @@ package zsh
 import (
 	"context"
 	"fmt"
-	"sort"
 	"strings"
 
 	"github.com/blairham/sh/interp"
@@ -2869,11 +2868,12 @@ func checkRunningJobsBit(r *interp.Runner) bool {
 // kinds at the top of this file: the state is real, readable and reported,
 // and nothing in the shell reads it.
 func recorded(base string, def bool) zshOption {
+	slot := slotFor(base)
 	return zshOption{
 		base: base, def: def, recorded: true,
-		get: func(r *interp.Runner) bool { return def != recordedDeviates(r, base) },
+		get: func(r *interp.Runner) bool { return def != slot.deviates(r) },
 		set: func(r *interp.Runner, on bool) int {
-			setRecordedDeviation(r, base, on != def)
+			r.DialectOptions.Set(slot.i, on != def)
 			return 0
 		},
 	}
@@ -2889,11 +2889,12 @@ func recorded(base string, def bool) zshOption {
 // the front end was told. Everything else is `recorded`'s bargain unchanged —
 // remembered, reported, and acted on by nothing.
 func recordedOver(base string, def bool, state func(*interp.Runner) bool) zshOption {
+	slot := slotFor(base)
 	return zshOption{
 		base: base, def: def, recorded: true, over: state,
-		get: func(r *interp.Runner) bool { return state(r) != recordedDeviates(r, base) },
+		get: func(r *interp.Runner) bool { return state(r) != slot.deviates(r) },
 		set: func(r *interp.Runner, on bool) int {
-			setRecordedDeviation(r, base, on != state(r))
+			r.DialectOptions.Set(slot.i, on != state(r))
 			return 0
 		},
 	}
@@ -2952,72 +2953,106 @@ func storeBacked(base string, def bool) zshOption {
 	return o
 }
 
-// zshRecordedStore is where the recorded options live: the canonical names
-// whose state differs from the table's default, as the keys of an
-// association under a name no script can reach — the shape `zstyle` and
-// `emulate` already use, and for the same reason. A subshell deep-copies the
-// tables, so `(setopt auto_cd)` stays in the subshell exactly as an
-// axis-backed option does.
+// The recorded options live in interp.Runner.DialectOptions: one bit per
+// entry of zshOptions, set where that name's state differs from its base —
+// the table's default, or a recordedOver name's own. Deviations rather than
+// states, so that a runner that has never run `setopt` holds nothing and
+// every name reads back at its default.
 //
-// Deviations rather than states, so that a runner that has never run `setopt`
-// holds nothing and every name reads back at its default.
+// They lived in the variable store until #6100, as the keys of an
+// association under a name no script can reach, and before #6019 as a list.
+// Both were right about isolation and wrong about cost. The question asked
+// of the store is membership and it is asked very often: every `emulate -L
+// zsh` at the top of a zsh function reaches every option that names the
+// store, through the save on the way in, the emulation itself and the
+// restore on the way out. Measured on the maintainer's real configuration
+// (powerlevel10k, zi, 31 plugins), 2026-10-05: **423,491** membership
+// questions in one interactive start. As a list each one walked the store; as
+// an association each one found a variable and then a key, and every save
+// copied the table and every restore built a fresh one. As bits a question
+// is a mask and a save is a copy of four words.
 //
-// An association and not a list, because the question asked of it is
-// membership and it is asked very often: every `emulate -L zsh` at the top of
-// a zsh function reaches every option that names the store, through the save
-// on the way in, the emulation itself and the restore on the way out.
-// Measured on the maintainer's real configuration (powerlevel10k, zi, 31
-// plugins), 2026-10-05: **423,491** membership questions in one interactive
-// start. A list answered each one by walking every name in it; a key is one
-// lookup.
-const zshRecordedStore = ".zsh.setopt"
+// A subshell keeps its own because the runner is copied by value into one:
+// `(setopt auto_cd)` stays in the subshell exactly as an axis-backed option
+// does.
+
+// optionSlot is one name's place in the table, resolved once the table is
+// built. A closure in the table cannot hold its own index — the index is
+// known only after the literal it stands in is complete — and asking
+// zshOptionIndex on every read would hash the name each time, which is the
+// cost the bits exist to remove.
+type optionSlot struct {
+	base string
+	i    int
+}
+
+// optionSlots is every slot handed out, resolved by init below.
+var optionSlots []*optionSlot
+
+// slotFor is the slot for base. Called while the table is being built, so
+// the index is filled in afterwards.
+func slotFor(base string) *optionSlot {
+	s := &optionSlot{base: base, i: -1}
+	optionSlots = append(optionSlots, s)
+	return s
+}
+
+// bitOf is zshOptionIndex under a name with no initializer, so that the
+// functions below may read it without making the table's own initializer
+// depend on itself: a getter in the table calls recordedDeviates, and an
+// initialized map built from the table would close that loop.
+var bitOf map[string]int
+
+// optionBases is each bit's name, filled in beside bitOf and for its reason.
+var optionBases []string
+
+func init() {
+	bitOf = zshOptionIndex
+	for _, o := range zshOptions {
+		optionBases = append(optionBases, o.base)
+	}
+	for _, s := range optionSlots {
+		i, ok := zshOptionIndex[s.base]
+		if !ok {
+			panic("zsh: no option " + s.base + " for a recorded slot")
+		}
+		s.i = i
+	}
+}
+
+// deviates reports whether the slot's name has been moved off its base.
+func (s *optionSlot) deviates(r *interp.Runner) bool { return r.DialectOptions.Has(s.i) }
 
 // recordedDeviates reports whether one recorded name has been moved off its
 // default.
 func recordedDeviates(r *interp.Runner, base string) bool {
-	_, ok := r.AssocElement(zshRecordedStore, base)
-	return ok
+	i, ok := bitOf[base]
+	return ok && r.DialectOptions.Has(i)
 }
 
-// recordedNames is every name the store holds, sorted.
+// recordedNames is every name the store holds, sorted — which is table order,
+// since the table is sorted by base.
 func recordedNames(r *interp.Runner) []string {
-	set, _ := r.GetAssoc(zshRecordedStore)
-	names := make([]string, 0, len(set))
-	for n := range set {
-		names = append(names, n)
-	}
-	sort.Strings(names)
+	var names []string
+	r.DialectOptions.Each(func(i int) { names = append(names, optionBases[i]) })
 	return names
 }
 
 // setRecordedDeviation records or clears one name's deviation.
 func setRecordedDeviation(r *interp.Runner, base string, dev bool) {
-	if recordedDeviates(r, base) == dev {
-		// Already where it is being put, so the store as it stands is the
-		// store this would write. The same reasoning as setAxis, on the
-		// other half of this dialect's option state.
-		return
+	if i, ok := bitOf[base]; ok {
+		r.DialectOptions.Set(i, dev)
 	}
-	set, _ := r.GetAssoc(zshRecordedStore)
-	if set == nil {
-		set = map[string]string{}
-	}
-	if dev {
-		set[base] = ""
-	} else {
-		delete(set, base)
-	}
-	r.SetAssoc(zshRecordedStore, set)
 }
 
 // setRecordedOptions replaces the store wholesale, which is how an emulation
 // resets every recorded name to its default at once.
 func setRecordedOptions(r *interp.Runner, names []string) {
-	set := make(map[string]string, len(names))
+	mode := r.DialectOptions.Mode
+	r.DialectOptions = interp.DialectOptions{Mode: mode}
 	for _, n := range names {
-		set[n] = ""
+		setRecordedDeviation(r, n, true)
 	}
-	r.SetAssoc(zshRecordedStore, set)
 }
 
 // swapAxes changes semantics copy-on-write: a subshell clone shares the

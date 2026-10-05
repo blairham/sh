@@ -467,8 +467,10 @@ const _ = uint(matchOptionBits - lastMatchOption)
 // and a script must not change the grammar of the shell that spawned it.
 func (r *Runner) SetMatchOption(o MatchOption, on bool) {
 	if o == QuantifiedGroupsEverywhere {
-		d := r.dialect()
-		if d.ExtendedPattern != on {
+		// Asked of the dialect in place first, so a request for the state
+		// it is already in copies nothing. See Runner.lang.
+		if r.lang().ExtendedPattern != on {
+			d := r.dialect()
 			d.ExtendedPattern = on
 			r.Dialect = &d
 		}

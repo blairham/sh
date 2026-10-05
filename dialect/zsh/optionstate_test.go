@@ -10,7 +10,7 @@ import (
 	"github.com/blairham/sh/interp"
 )
 
-func optionStateRunner(t *testing.T) *interp.Runner {
+func optionStateRunner(t testing.TB) *interp.Runner {
 	t.Helper()
 	sem, diag, dl := Semantics(), Diagnostics(), Dialect()
 	r := &interp.Runner{

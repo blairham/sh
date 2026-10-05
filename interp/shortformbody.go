@@ -77,10 +77,12 @@ func (r *Runner) ShortFormBodyIsOneCommandOrNone() bool {
 // SetShortRepeatBody moves syntax.Dialect.ShortRepeatBody, for the dialect
 // whose `shortrepeat` names it.
 func (r *Runner) SetShortRepeatBody(on bool) {
-	d := r.dialect()
-	if d.ShortRepeatBody == on {
+	// Asked of the dialect in place, so a request for the state it is
+	// already in copies nothing. See Runner.lang.
+	if r.lang().ShortRepeatBody == on {
 		return
 	}
+	d := r.dialect()
 	d.ShortRepeatBody = on
 	r.Dialect = &d
 }
@@ -89,10 +91,12 @@ func (r *Runner) SetShortRepeatBody(on bool) {
 func (r *Runner) ShortRepeatBody() bool { return r.lang().ShortRepeatBody }
 
 func (r *Runner) SetShortFormBodyIsOneCommandOrNone(on bool) {
-	d := r.dialect()
-	if d.ShortFormBody == on {
+	// Asked of the dialect in place, so a request for the state it is
+	// already in copies nothing. See Runner.lang.
+	if r.lang().ShortFormBody == on {
 		return
 	}
+	d := r.dialect()
 	d.ShortFormBody = on
 	r.Dialect = &d
 }
@@ -118,10 +122,12 @@ func (r *Runner) FunctionKeywordBodyIsOneCommandOrNone() bool {
 // is shared with every subshell cloned from this runner, and a script must not
 // change the grammar of the shell that spawned it.
 func (r *Runner) SetFunctionKeywordBodyIsOneCommandOrNone(on bool) {
-	d := r.dialect()
-	if d.FunctionKeywordBodyIsOptional == on && d.FunctionKeywordBodyMustBeBraceGroup == !on {
+	// Asked of the dialect in place, so a request for the state it is
+	// already in copies nothing. See Runner.lang.
+	if r.lang().FunctionKeywordBodyIsOptional == on && r.lang().FunctionKeywordBodyMustBeBraceGroup == !on {
 		return
 	}
+	d := r.dialect()
 	d.FunctionKeywordBodyIsOptional = on
 	d.FunctionKeywordBodyMustBeBraceGroup = !on
 	r.Dialect = &d
@@ -136,10 +142,12 @@ func (r *Runner) LoopBodyEndsInEnd() bool { return r.lang().LoopBodyEndsInEnd }
 // name for the reading — zsh's `cshjunkieloops`. Copied and replaced for the
 // reason SetShortFormBodyIsOneCommandOrNone is.
 func (r *Runner) SetLoopBodyEndsInEnd(on bool) {
-	d := r.dialect()
-	if d.LoopBodyEndsInEnd == on {
+	// Asked of the dialect in place, so a request for the state it is
+	// already in copies nothing. See Runner.lang.
+	if r.lang().LoopBodyEndsInEnd == on {
 		return
 	}
+	d := r.dialect()
 	d.LoopBodyEndsInEnd = on
 	r.Dialect = &d
 }
@@ -147,15 +155,17 @@ func (r *Runner) SetLoopBodyEndsInEnd(on bool) {
 // QuotedNewlineIsUnmatched reports the grammar flag of that name, which one
 // dialect's `cshjunkiequotes` turns on and off at run time. See
 // syntax.Dialect.QuotedNewlineIsUnmatched.
-func (r *Runner) QuotedNewlineIsUnmatched() bool { return r.dialect().QuotedNewlineIsUnmatched }
+func (r *Runner) QuotedNewlineIsUnmatched() bool { return r.lang().QuotedNewlineIsUnmatched }
 
 // SetQuotedNewlineIsUnmatched sets that flag for what this runner reads from
 // here on, the way SetLoopBodyEndsInEnd does for its own.
 func (r *Runner) SetQuotedNewlineIsUnmatched(on bool) {
-	d := r.dialect()
-	if d.QuotedNewlineIsUnmatched == on {
+	// Asked of the dialect in place, so a request for the state it is
+	// already in copies nothing. See Runner.lang.
+	if r.lang().QuotedNewlineIsUnmatched == on {
 		return
 	}
+	d := r.dialect()
 	d.QuotedNewlineIsUnmatched = on
 	r.Dialect = &d
 }

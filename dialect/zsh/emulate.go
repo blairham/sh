@@ -74,16 +74,14 @@ import (
 // `unknown argument`, 1; `-c code` runs the code under the emulation and
 // then restores everything, options included, reporting the code's status.
 
-// emulationMode is where the current mode lives. A parameter rather than a
-// package variable because a subshell must keep its own: the Vars table is
-// deep-copied into a clone and closure state would be shared across it. The
-// name is unreachable from a script, the way ksh93 hides its own state under
-// `.sh.*`, and it is only written once something emulates.
-const emulationMode = ".zsh.emulation"
-
-// currentEmulation reads the mode.
+// currentEmulation reads the mode, which lives in
+// interp.Runner.DialectOptions beside the recorded options. It was a
+// parameter under a name no script can reach until #6100, for the reason it
+// is on the runner now: a subshell must keep its own, and the runner is
+// copied by value into one. Empty until something emulates, which is zsh's
+// own mode.
 func currentEmulation(r *interp.Runner) string {
-	if m, ok := r.GetVar(emulationMode); ok && m != "" {
+	if m := r.DialectOptions.Mode; m != "" {
 		return m
 	}
 	return "zsh"
@@ -226,6 +224,7 @@ var emulations = map[string]struct {
 // strict is the `-R` form, which widens the set from 81 names to 176 and is
 // the only thing the letter does here.
 func applyEmulation(r *interp.Runner, mode string, strict bool) {
+	em := emulations[mode]
 	// The first of the axes with no option name over it. The five that used
 	// to be swapped here — `shwordsplit`, `nomatch`, `ksharrays`,
 	// `posixbuiltins` and the redirection rule `posixbuiltins` carries — are
@@ -239,81 +238,33 @@ func applyEmulation(r *interp.Runner, mode string, strict bool) {
 	// moves with the name.
 	setAxis(r, func(s *interp.Semantics) *interp.Answer {
 		return &s.CdWithoutHomeIsAnError
-	}, answer(emulations[mode].cdNowhere))
+	}, answer(em.cdNowhere))
 	// The second, and the one that has to be in place before the shell reads
 	// its `HOME` for the first time: a startup that seeds one is a startup,
 	// and an emulation taken from argv[0] is applied before anything runs.
 	// See interp/shellhome.go.
 	setAxis(r, func(s *interp.Semantics) *interp.Answer {
 		return &s.StartupFillsAnAbsentHome
-	}, answer(emulations[mode].fillsHome))
+	}, answer(em.fillsHome))
 	// The fourth, and the only one of them a script meets on an ordinary
 	// line rather than at a boundary: whether a declaration with no value on
 	// it gives the name one. See the table above for the measurement and for
 	// the control that keeps it about the declaration and not about the name.
 	setAxis(r, func(s *interp.Semantics) *interp.Answer {
 		return &s.DeclaredNameWithoutValueIsEmpty
-	}, answer(emulations[mode].declaredEmpty))
+	}, answer(em.declaredEmpty))
 	// The fifth: where a pipeline's last element runs. See the table.
 	setAxis(r, func(s *interp.Semantics) *interp.Answer {
 		return &s.LastPipelineElementInCurrentShell
-	}, answer(emulations[mode].lastPipeHere))
+	}, answer(em.lastPipeHere))
 	// The sixth: whether `inf` and `nan` are constants. See the table.
 	setAxis(r, func(s *interp.Semantics) *interp.Answer {
 		return &s.ArithInfAndNaNAreConstants
-	}, answer(emulations[mode].infNaN))
-	// The recorded names in one write rather than one write each. The store
-	// holds deviations, so dropping a name from it is that option back at the
-	// table's default — and this emulation's default is not always the
-	// table's, which is what the second loop puts back in. The names this
-	// emulation leaves alone stay exactly as they were.
-	names := recordedNames(r)
-	kept := make([]string, 0, len(names))
-	for _, n := range names {
-		if !resetByEmulation(n, strict) {
-			kept = append(kept, n)
-		}
-	}
-	before := len(kept)
-	for _, o := range zshOptions {
-		if !o.recorded || !resetByEmulation(o.base, strict) {
-			continue
-		}
-		// A name whose base state is not the table's default needs the
-		// deviation *written* rather than dropped, and it is the one case
-		// where dropping is wrong in both directions. The store is read
-		// against the base, so a dropped `rcs` in a `zsh -f` shell reads off
-		// — the invocation's answer, which is exactly what the emulation was
-		// asked to undo.
-		//
-		// Measured on zsh 5.9.2, 2026-09-25, `zsh +Z -f -c`: the four
-		// recordedOver names read `rcs` off, `hashdirs` off, `login` off and
-		// `zle` off in that shell, and after `emulate -R zsh` — or `-R sh`,
-		// `-R ksh`, `-R csh`, which agree — `rcs` and `hashdirs` read **on**
-		// while `login` and `zle` stay off. The last two are the control:
-		// both are in emulationNeverReset, so neither reaches this branch,
-		// and a change that put every recordedOver name back would be wrong
-		// about them. A bare `emulate sh` leaves all four, since the two
-		// that move are in emulationStrictReset rather than in the 81.
-		if o.over != nil {
-			if emulationDefault(o, mode) != o.over(r) {
-				kept = append(kept, o.base)
-			}
-			continue
-		}
-		if dev, known := emulationDeviates(o, mode); known && dev {
-			kept = append(kept, o.base)
-		}
-	}
-	if len(kept) != len(names) || before != len(kept) {
-		setRecordedOptions(r, kept)
-	}
-	for _, o := range zshOptions {
-		if o.set == nil || o.recorded || !resetByEmulation(o.base, strict) {
-			continue
-		}
-		_ = o.set(r, emulationDefault(o, mode))
-	}
+	}, answer(em.infNaN))
+	// The option table, from a plan compiled once per mode — see
+	// emulationplan.go, which says what each part of the plan is and why it
+	// is the same answer the per-name walk gave.
+	planFor(mode, strict).apply(r)
 	// And the grammar, which is the part of an emulation that reaches how the
 	// *next line is read* rather than what a line already read means.
 	//
@@ -325,7 +276,7 @@ func applyEmulation(r *interp.Runner, mode string, strict bool) {
 	// overlap would then be visible as an option that stopped taking effect
 	// rather than as a grammar that intermittently did.
 	setEmulationGrammar(r, mode)
-	r.SetVar(emulationMode, mode)
+	r.DialectOptions.Mode = mode
 }
 
 // registerEmulate installs the builtin.
@@ -422,7 +373,7 @@ func emulateBuiltin(r *interp.Runner, ctx context.Context, args []string) int {
 // runs in a subshell afterwards, and the bare `setopt` listing is taken
 // against sh's defaults.
 func listEmulation(r *interp.Runner, mode string, strict, local bool) {
-	r.SetVar(emulationMode, mode)
+	r.DialectOptions.Mode = mode
 	setAxis(r, func(s *interp.Semantics) *interp.Answer {
 		return &s.LastPipelineElementInCurrentShell
 	}, answer(emulations[mode].lastPipeHere))

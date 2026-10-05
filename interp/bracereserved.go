@@ -67,11 +67,13 @@ func (r *Runner) BraceReservedWordReadings() (open, closing, endsWord bool) {
 // is shared with every subshell cloned from this runner, and a script must not
 // change the grammar of the shell that spawned it.
 func (r *Runner) SetBraceReservedWordReadings(open, closing, endsWord bool) {
-	d := r.dialect()
-	if d.OpenBraceNeedsNoBlank == open && d.CloseBraceAlwaysReserved == closing &&
-		d.CloseBraceEndsAWord == endsWord {
+	// Asked of the dialect in place, so a request for the state it is
+	// already in copies nothing. See Runner.lang.
+	if r.lang().OpenBraceNeedsNoBlank == open && r.lang().CloseBraceAlwaysReserved == closing &&
+		r.lang().CloseBraceEndsAWord == endsWord {
 		return
 	}
+	d := r.dialect()
 	d.OpenBraceNeedsNoBlank = open
 	d.CloseBraceAlwaysReserved = closing
 	d.CloseBraceEndsAWord = endsWord

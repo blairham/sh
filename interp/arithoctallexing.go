@@ -41,10 +41,12 @@ func (r *Runner) ArithLeadingZeroNamesOctalDigits() bool {
 // is shared with every subshell cloned from this runner, and a script must
 // not change the grammar of the shell that spawned it.
 func (r *Runner) SetArithLeadingZeroNamesOctalDigits(on bool) {
-	d := r.dialect()
-	if d.ArithLeadingZeroNamesOctalDigits == on {
+	// Asked of the dialect in place, so a request for the state it is
+	// already in copies nothing. See Runner.lang.
+	if r.lang().ArithLeadingZeroNamesOctalDigits == on {
 		return
 	}
+	d := r.dialect()
 	d.ArithLeadingZeroNamesOctalDigits = on
 	r.Dialect = &d
 }

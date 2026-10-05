@@ -84,10 +84,12 @@ type optionState struct {
 	// back by the loop below as well; that is a second write of a value
 	// already restored rather than a disagreement, since the loop's answer is
 	// taken from the same moment this pointer is.
-	dialect  *syntax.Dialect
-	mode     string
-	recorded map[string]string
-	on       optionBits
+	dialect *syntax.Dialect
+	// options is the recorded names and the emulation mode, which the
+	// runner keeps by value — see interp.DialectOptions — so this is a
+	// snapshot as it stands and putting it back is an assignment.
+	options interp.DialectOptions
+	on      optionBits
 	// localOptions is where `localoptions` itself stood, which rule 3 needs
 	// separately: it goes back even on the return that restores nothing else.
 	localOptions bool
@@ -118,6 +120,30 @@ func setLocalPatterns(r *interp.Runner, on bool) {
 	_ = zshOptions[localPatternsIndex].set(r, on)
 }
 
+// liveOptions is every name a save reads one at a time: the ones that can
+// move and keep their state somewhere other than the recorded bits, which
+// the save takes whole. restoredOptions is the same less the four the
+// vector restore already has — `shwordsplit`, `nomatch`, `ksharrays` and
+// `localtraps` — since re-setting them would swap in a fresh copy of the
+// vector for nothing. Both are indexes into zshOptions, worked out once
+// rather than by testing every entry of the table on every function call.
+var liveOptions, restoredOptions []int
+
+func init() {
+	for i := range zshOptions {
+		o := &zshOptions[i]
+		if o.set == nil || o.recorded {
+			continue
+		}
+		liveOptions = append(liveOptions, i)
+		switch o.base {
+		case "shwordsplit", "nomatch", "ksharrays", "localtraps":
+			continue
+		}
+		restoredOptions = append(restoredOptions, i)
+	}
+}
+
 // saveOptionState takes the table as it stands.
 //
 // The three axis-backed names are read like the rest and put back with the
@@ -125,15 +151,9 @@ func setLocalPatterns(r *interp.Runner, on bool) {
 // recorded, because the loop that reads them is the same loop and skipping
 // them would only buy a branch.
 func saveOptionState(r *interp.Runner) optionState {
-	s := optionState{sem: r.Semantics, dialect: r.Dialect, mode: currentEmulation(r)}
-	// A copy of the store, which GetAssoc makes: see the type's comment.
-	s.recorded, _ = r.GetAssoc(zshRecordedStore)
-	for i := range zshOptions {
-		o := &zshOptions[i]
-		if o.set == nil || o.recorded {
-			continue
-		}
-		if o.get(r) {
+	s := optionState{sem: r.Semantics, dialect: r.Dialect, options: r.DialectOptions}
+	for _, i := range liveOptions {
+		if zshOptions[i].get(r) {
 			s.on.set(i)
 		}
 	}
@@ -145,23 +165,18 @@ func saveOptionState(r *interp.Runner) optionState {
 func (s optionState) restore(r *interp.Runner) {
 	r.Semantics = s.sem
 	r.Dialect = s.dialect
-	r.SetAssoc(zshRecordedStore, s.recorded)
-	for i := range zshOptions {
+	// The recorded names and the mode together, which the old code put
+	// back as two writes at either end of the loop below. Nothing in the
+	// loop reads the mode, so where in the restore it lands is not
+	// observable; the recorded names have to be back before the loop for
+	// the reason shoptionletters gives below.
+	r.DialectOptions = s.options
+	for _, i := range restoredOptions {
 		o := &zshOptions[i]
-		if o.set == nil || o.recorded {
-			continue
-		}
-		switch o.base {
-		case "shwordsplit", "nomatch", "ksharrays", "localtraps":
-			// The vector restore above has these, and re-setting them would
-			// swap in a fresh copy for nothing.
-			continue
-		}
 		if want := s.on.on(i); o.get(r) != want {
 			_ = o.set(r, want)
 		}
 	}
-	r.SetVar(emulationMode, s.mode)
 	// And the letter set, which is a *table* rather than a bit and so is not
 	// put back by the loop above. `shoptionletters` keeps its state in the
 	// recorded store, which the wholesale write two lines up has already put

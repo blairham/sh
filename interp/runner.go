@@ -96,6 +96,10 @@ type Runner struct {
 	// Semantics is where the shells disagree about what identical syntax
 	// means, as distinct from which syntax they accept. Nil means bash's.
 	Semantics *Semantics
+	// DialectOptions is the part of a dialect's option namespace that only
+	// the dialect reads, held by value so that a copy of it is a snapshot.
+	// See DialectOptions.
+	DialectOptions DialectOptions
 
 	// Stdin, Stdout and Stderr are the shell's three streams, and nil means
 	// *empty* — a reader with nothing in it and a writer that discards —

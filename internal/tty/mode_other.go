@@ -11,7 +11,7 @@ import "os"
 // every call in mode.go answer ErrUnsupported rather than pretend.
 type modeState = struct{}
 
-func setMode(*os.File, bool) (*Mode, error) { return nil, ErrUnsupported }
+func setMode(*os.File, bool, bool) (*Mode, error) { return nil, ErrUnsupported }
 
 func currentMode(*os.File) (*Mode, error) { return nil, ErrUnsupported }
 

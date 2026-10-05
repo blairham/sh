@@ -231,6 +231,22 @@ type EditorStyle struct {
 	// also what makes the marking possible.
 	ReturnBeforeThePromptOption string
 
+	// FlowControlOption names the option that, while it is *unset*, takes
+	// the terminal's flow control away for the length of an edit — zsh's
+	// FLOW_CONTROL. An empty name is a dialect with no such option, and the
+	// editor leaves XON/XOFF exactly as it found the terminal, which is what
+	// bash does (#5943).
+	//
+	// The default either way is the terminal's: with `ixon` on, which is how
+	// a terminal starts, `C-s` stops the output and `C-q` starts it again and
+	// neither reaches the editor; a person who wants the keys runs `stty
+	// -ixon`, and the editor starts from what it found. The option is read
+	// each time the editor takes the terminal, so `unsetopt flowcontrol`
+	// typed at a prompt is live at the next one — and not for the rest of a
+	// line a widget changed it on, which is zsh's answer too. See
+	// internal/tty's Raw for the measurement.
+	FlowControlOption string
+
 	// RunsUnderTheOptions names the options this dialect's line editor runs
 	// under: it runs while any of them is on. With it off the session still reads lines and still runs them —
 	// it is the *editor* that goes away, so the terminal keeps its own line

@@ -83,7 +83,7 @@ func TestRawTakesEchoAndTheSignalCharacters(t *testing.T) {
 	t.Cleanup(func() { _ = control.Close(); _ = terminal.Close() })
 
 	before := probe(t, terminal.Fd())
-	mode, err := tty.Raw(terminal)
+	mode, err := tty.Raw(terminal, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -144,7 +144,7 @@ func TestOnlyATerminalTakesAMode(t *testing.T) {
 	if _, err := tty.Cbreak(nil); err == nil {
 		t.Error("a nil file took a mode")
 	}
-	if _, err := tty.Raw(nil); err == nil {
+	if _, err := tty.Raw(nil, true); err == nil {
 		t.Error("a nil file took a mode")
 	}
 	if err := tty.RawOutput(nil); err == nil {
@@ -193,7 +193,7 @@ func TestCurrentReadsTheDisciplineAndChangesNothing(t *testing.T) {
 	}
 	// And what it captured is enough to put back what a later raw mode takes,
 	// which is the other half of it being worth having.
-	if _, err := tty.Raw(terminal); err != nil {
+	if _, err := tty.Raw(terminal, true); err != nil {
 		t.Fatal(err)
 	}
 	if err := mode.Restore(); err != nil {
@@ -202,5 +202,54 @@ func TestCurrentReadsTheDisciplineAndChangesNothing(t *testing.T) {
 	after := probe(t, terminal.Fd())
 	if after.Lflag&syscall.ICANON == 0 {
 		t.Error("the captured discipline did not restore the line buffering")
+	}
+}
+
+// Raw leaves the terminal's flow control where it was found unless the caller
+// says to take it, which is the one flag it does not decide for itself (#5943):
+// zsh leaves `IXON` on while FLOW_CONTROL is set and bash always does, so a
+// raw mode that cleared it handed `C-s` and `C-q` to the editor where both
+// shells leave them to the terminal. Both starting states, so "kept" cannot be
+// read off a mode that always sets it.
+func TestRawLeavesFlowControlToTheCaller(t *testing.T) {
+	for _, tc := range []struct {
+		name        string
+		found, flow bool
+		want        bool
+	}{
+		{"kept on", true, true, true},
+		{"kept off", false, true, false},
+		{"taken", true, false, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			control, terminal, err := pty.Open()
+			if err != nil {
+				t.Skipf("no pseudo-terminal: %v", err)
+			}
+			t.Cleanup(func() { _ = control.Close(); _ = terminal.Close() })
+			start := probe(t, terminal.Fd())
+			if tc.found {
+				start.Iflag |= syscall.IXON
+			} else {
+				start.Iflag &^= syscall.IXON
+			}
+			if _, _, errno := syscall.Syscall6(syscall.SYS_IOCTL, terminal.Fd(), probeSets,
+				uintptr(unsafe.Pointer(&start)), 0, 0, 0); errno != 0 {
+				t.Fatalf("setting the terminal up: %v", errno)
+			}
+			mode, err := tty.Raw(terminal, tc.flow)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := probe(t, terminal.Fd()).Iflag&syscall.IXON != 0; got != tc.want {
+				t.Errorf("IXON is %v in raw mode, want %v", got, tc.want)
+			}
+			if err := mode.Restore(); err != nil {
+				t.Fatal(err)
+			}
+			if got := probe(t, terminal.Fd()).Iflag&syscall.IXON != 0; got != tc.found {
+				t.Errorf("IXON is %v after the restore, want %v as found", got, tc.found)
+			}
+		})
 	}
 }

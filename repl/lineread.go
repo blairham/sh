@@ -100,7 +100,7 @@ func (s Shell) lineReader(ed *editor) func(interp.LineEdit) (string, interp.Line
 		// see the file comment. The state captured here is the *command's*
 		// terminal and not the session's, which is what makes handing it back
 		// correct: the command goes on running after this returns.
-		state, err := makeRaw(s.inFile())
+		state, err := makeRaw(s.inFile(), s.flowControl())
 		if err != nil {
 			s.errf("%v\n", err)
 			return "", interp.LineEditUnavailable

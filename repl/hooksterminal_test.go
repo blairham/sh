@@ -33,7 +33,7 @@ import (
 // to print will find, whatever that turns out to be.
 func TestWorkHandedTheTerminalBackFindsItsOwnLineDiscipline(t *testing.T) {
 	_, terminal := openTerminal(t)
-	state, err := makeRaw(terminal)
+	state, err := makeRaw(terminal, true)
 	if err != nil {
 		t.Fatalf("raw mode: %v", err)
 	}
@@ -93,7 +93,7 @@ func TestNothingIsStillOnItsWayWhenRawModeComesBack(t *testing.T) {
 		_, _ = io.Copy(io.Discard, control)
 	}()
 
-	state, err := makeRaw(terminal)
+	state, err := makeRaw(terminal, true)
 	if err != nil {
 		t.Fatalf("raw mode: %v", err)
 	}

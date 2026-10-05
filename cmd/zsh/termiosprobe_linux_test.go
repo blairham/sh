@@ -3,11 +3,8 @@
 
 //go:build linux
 
-package tty_test
+package main
 
 import "syscall"
 
-const (
-	probeGets = syscall.TCGETS
-	probeSets = syscall.TCSETS
-)
+const probeTcGets = syscall.TCGETS

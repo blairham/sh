@@ -81,7 +81,7 @@ func (r *Runner) declinesRmStar(c *syntax.SimpleCmd) bool {
 		what = fmt.Sprintf("all %d files", n)
 	}
 	_, _ = fmt.Fprintf(f, "%s: sure you want to delete %s in %s [yn]? \a", r.name(), what, dir)
-	mode, err := tty.Raw(f)
+	mode, err := tty.Raw(f, true)
 	if err == nil {
 		defer func() { _ = mode.Restore() }()
 	}

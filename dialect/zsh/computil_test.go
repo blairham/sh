@@ -789,7 +789,9 @@ func TestCompdescribe(t *testing.T) {
 		// them; the trace of that line is in compdescribe.go (#3232).
 		{
 			"a definition with both kinds is two groups",
-			`local -a g=(alpha:one bare: beta:two) expl=()
+			// `bare` with no colon: `bare:` is described, its description
+			// empty (#6161).
+			`local -a g=(alpha:one bare beta:two) expl=()
 			 compdescribe -I '' 40 '-- ' expl g || return
 			 local csl; local -a a m d; local out=
 			 while compdescribe -g csl a m d; do out="${out}[${a[*]}|${m[*]}]"; done

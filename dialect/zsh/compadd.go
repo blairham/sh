@@ -6,6 +6,7 @@ package zsh
 import (
 	"context"
 	"os"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -178,6 +179,8 @@ type compaddOptions struct {
 	heading    string // -X: the row drawn above the block
 	message    string // -x: the same, and drawn with no matches under it
 	hasMessage bool   // -x was given, which an empty message still is
+	fillers    int    // -E: how many empty cells to add after the matches
+	keepAll    bool   // -2: a block that keeps every match it is given
 
 	// matchSpec is every `-M` given, joined: the completion system writes
 	// the letter more than once in one call — measured, `_path_files` adds
@@ -196,9 +199,24 @@ func compaddBuiltin(r *interp.Runner, ctx context.Context, args []string) int {
 	if !ok {
 		return 1
 	}
+	if opts.fillers < 0 {
+		r.Diagnosef("invalid number: %d\n", opts.fillers)
+		return 1
+	}
 	group := cs.group(opts)
+	packed := slices.Contains(strings.Fields(cs.state["list"]), "packed")
+	if packed {
+		cs.packGroup(group)
+	}
 	candidates := compaddCandidates(r, opts, rest)
 	offered := cs.add(r, ctx, opts, group, candidates)
+	if opts.fillers > 0 {
+		group = cs.fillerGroup(opts, group)
+		if packed {
+			cs.packGroup(group)
+		}
+		offered += cs.addFillers(r, opts, group, len(candidates))
+	}
 	// After the matches and not with the group, because what an explanation
 	// draws depends on them: its `%n` is how many this call added, and an
 	// explanation whose call added none is not drawn at all. See explain.
@@ -287,6 +305,8 @@ func compaddFlag(o *compaddOptions, letter byte) {
 		o.onePerLine = true
 	case 'f':
 		o.files = true
+	case '2':
+		o.keepAll = true
 	}
 }
 
@@ -320,6 +340,8 @@ func compaddArgument(o *compaddOptions, letter byte, value string) {
 		o.heading = value
 	case 'x':
 		o.message, o.hasMessage = value, true
+	case 'E':
+		o.fillers = leadingCount(value)
 	case 'M':
 		if o.matchSpec != "" {
 			o.matchSpec += " "
@@ -439,7 +461,7 @@ func (cs *completionState) add(
 	// that the block exists with nothing in it, and `$compstate[nmatches]` is
 	// what a completion function tests to decide whether anything was
 	// offered.
-	cs.state["nmatches"] = strconv.Itoa(len(insertableWords(cs.matches)))
+	cs.state["nmatches"] = strconv.Itoa(len(insertableWords(cs.matches)) + cs.fillers)
 	return offered
 }
 
@@ -671,7 +693,99 @@ func (cs *completionState) group(o compaddOptions) repl.Group {
 	if _, seen := cs.groups[key]; !seen {
 		cs.groups[key] = nil
 	}
+	if o.keepAll {
+		if cs.keepingAll == nil {
+			cs.keepingAll = map[string]repl.Group{}
+		}
+		cs.keepingAll[o.group] = key
+	}
 	return key
+}
+
+// packGroup records that a block was added to while `$compstate[list]` said
+// `packed`, which packs that block's columns whatever LIST_PACKED says.
+//
+// **When the call is made, not when the listing is drawn.** Measured on zsh
+// 5.9.2, 2026-10-05, forty-two two-letter matches and one of fifty-eight
+// letters added under `-J g`: two columns of twenty-two rows as they stand,
+// three packed rows with `compstate[list]='list packed'` set before the
+// `compadd`, and two columns of twenty-two again with it set after. It is
+// how the completion system asks for the grid compdescribe.go builds to be
+// drawn as one.
+func (cs *completionState) packGroup(key repl.Group) {
+	if cs.packedGroups == nil {
+		cs.packedGroups = map[repl.Group]bool{}
+	}
+	cs.packedGroups[key] = true
+}
+
+// fillerGroup is the block an `-E` call's empty cells go into: the block a
+// `-2` call made under the same name, where there is one, and the call's own
+// otherwise.
+//
+// That is what lets the completion system add the names of a grid with
+// `-2V ej` and its blanks and descriptions with `-J ej` and still have one
+// grid. Measured on zsh 5.9.2, 2026-10-05, each a widget's whole body:
+//
+//	compadd -2V ej -- -b -a; compadd -E1 -J ej -d '(DESC)'   -b  -a  DESC
+//	compadd -2V ej -- -b -a; compadd -E1 -V ej -d '(DESC)'   -b  -a  DESC
+//	compadd -V ej -- -b -a;  compadd -E1 -J ej -d '(DESC)'   -b  -a / DESC
+//	compadd -J ej -- -b -a;  compadd -E1 -J ej -d '(DESC)'   -a  -b / DESC
+//	compadd -2V ej -- -b -a; compadd -E1 -J other -d …       -b  -a / DESC
+//
+// so the `-2` and the name decide it, and the filler's own `-J` or `-V`
+// does not: without the `-2` the description is a block of its own, drawn on
+// a line after the names — the fourth row's `DESC` even shares the `-J ej`
+// the names were given, and is still not in their grid.
+//
+// That block is told apart by its name, which nothing draws: the call's own
+// name with a byte no name can hold after it.
+func (cs *completionState) fillerGroup(o compaddOptions, own repl.Group) repl.Group {
+	if key, ok := cs.keepingAll[o.group]; ok {
+		return key
+	}
+	own.Name += "\x00fillers"
+	if _, seen := cs.groups[own]; !seen {
+		cs.groups[own] = nil
+	}
+	return own
+}
+
+// addFillers is `-E n`: n cells that are listed and never inserted, each
+// drawn as the `-d` row at its place after the call's own candidates, or
+// blank.
+//
+// They are matches as far as `$compstate[nmatches]` is concerned, which is
+// measured — `compadd -E2 -J g` answers 0 and leaves `nmatches` at 2, and a
+// further `compadd -E1 -J g -- aa` takes it to 4 — and an explanation is
+// drawn over them as over any other: `compadd -E2 -J g -X HEAD -d d` lists
+// `HEAD` and then the two rows.
+func (cs *completionState) addFillers(r *interp.Runner, o compaddOptions, group repl.Group, after int) int {
+	displays := compaddArray(r, o.display)
+	for i := range o.fillers {
+		cs.matches = append(cs.matches, repl.Candidate{
+			Display: display(displays, after+i), Group: group, Filler: true,
+		})
+	}
+	cs.fillers += o.fillers
+	cs.state["nmatches"] = strconv.Itoa(len(insertableWords(cs.matches)) + cs.fillers)
+	return o.fillers
+}
+
+// leadingCount reads `-E`'s number the way zsh does: the digits it starts
+// with, a minus sign in front of them included, and nothing at all as zero.
+// Measured — `compadd -Ex` adds nothing and answers 1, and `compadd -E-1` is
+// `invalid number: -1`.
+func leadingCount(s string) int {
+	sign, i := 1, 0
+	if strings.HasPrefix(s, "-") {
+		sign, i = -1, 1
+	}
+	n := 0
+	for ; i < len(s) && s[i] >= '0' && s[i] <= '9'; i++ {
+		n = n*10 + int(s[i]-'0')
+	}
+	return sign * n
 }
 
 // explain records a call's explanation against its block, drawn the way the
@@ -697,7 +811,19 @@ func (cs *completionState) explain(r *interp.Runner, o compaddOptions, key repl.
 	if text == "" {
 		return
 	}
-	cs.groups[key] = append(cs.groups[key], explanationText(r, text, count))
+	drawn := explanationText(r, text, count)
+	for _, have := range cs.groups[key] {
+		if have == drawn {
+			// **The same heading twice is drawn once.** Measured on zsh
+			// 5.9.2, 2026-10-05: `-J g -X HH -- alpha` then `-J g -X HH --
+			// beta` draws `HH` over `alpha  beta`, and `H1`, `H2`, `H1`
+			// over three calls draws `H1` and `H2`. The completion system
+			// writes one explanation on every cell of a grid, and drew it
+			// once a cell here.
+			return
+		}
+	}
+	cs.groups[key] = append(cs.groups[key], drawn)
 }
 
 // groupedMatches is what `compadd` collected with each block's headings
@@ -709,9 +835,11 @@ func (cs *completionState) explain(r *interp.Runner, o compaddOptions, key repl.
 func (cs *completionState) groupedMatches() []repl.Candidate {
 	out := make([]repl.Candidate, len(cs.matches))
 	for i, c := range cs.matches {
+		packed := cs.packedGroups[c.Group]
 		if headings := cs.groups[c.Group]; len(headings) > 0 {
 			c.Group.Heading = strings.Join(headings, "\n")
 		}
+		c.Group.Packed = packed
 		out[i] = c
 	}
 	// And into the order `compgroups` asked for, where it was called. A

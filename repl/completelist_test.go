@@ -277,3 +277,56 @@ func TestAListingsBlocksShareOneGrid(t *testing.T) {
 		})
 	}
 }
+
+// A grid of names and descriptions, as a completion system builds it for
+// options that share a description: the names in an unsorted block, blank
+// fillers where a row has fewer names than the widest, and the descriptions
+// as a last column of fillers padded out to what the names leave. Packed,
+// it draws a row per description; without the fillers taking their cells,
+// every later cell of a column would rise a row (#6178).
+//
+// The rows are zsh 5.9.2's, measured 2026-10-05 on a 100-column terminal
+// with the cells `compdescribe -g` answered for `-a:same -b:same -c:same
+// -d:other` — see dialect/zsh/compdescribepack.go.
+func TestAFillerKeepsItsCellInAPackedGrid(t *testing.T) {
+	grid := Group{Name: "ej", Unsorted: true, Packed: true}
+	pad := func(s string) string { return s + strings.Repeat(" ", 86-len(s)) }
+	got := listingRows([]Candidate{
+		{Word: "-c", Display: "-c", Group: grid},
+		{Word: "-d", Display: "-d", Group: grid},
+		{Word: "-b", Display: "-b", Group: grid},
+		{Filler: true, Group: grid},
+		{Word: "-a", Display: "-a", Group: grid},
+		{Filler: true, Group: grid},
+		{Filler: true, Display: pad("-- same"), Group: grid},
+		{Filler: true, Display: pad("-- other"), Group: grid},
+		{Word: "-y", Group: Group{Name: "ej-bare"}},
+		{Word: "-z", Group: Group{Name: "ej-bare"}},
+	}, 100, listLayout{})
+	want := []string{
+		"-c  -b  -a  " + pad("-- same"),
+		"-d          " + pad("-- other"),
+		// And the block after it spreads across the grid's span, which is
+		// the whole screen less two: `-z` at 49.
+		"-y" + strings.Repeat(" ", 47) + "-z",
+	}
+	if strings.Join(got, "|") != strings.Join(want, "|") {
+		t.Errorf("drew\n%s\nwant\n%s", strings.Join(got, "\n"), strings.Join(want, "\n"))
+	}
+}
+
+// The span a packed block lends the blocks after it: its own columns where
+// they are wider than its uniform grid, capped two short of the screen.
+// Measured on zsh 5.9.2, 2026-10-05; see listingRows.
+func TestAPackedBlockLendsItsSpan(t *testing.T) {
+	long := []Candidate{{Word: strings.Repeat("a", 49)}}
+	for _, w := range []string{"b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m", "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z1", "z2", "z3", "z4", "z5", "z6", "z7", "z8", "z9"} {
+		long = append(long, Candidate{Word: w})
+	}
+	next := []Candidate{{Word: "y1", Group: Group{Name: "b"}}, {Word: "y2", Group: Group{Name: "b"}}}
+	got := listingRows(append(long, next...), 100, listLayout{packed: true})
+	want := "y1" + strings.Repeat(" ", 42) + "y2"
+	if last := got[len(got)-1]; last != want {
+		t.Errorf("the block after drew %q, want %q (y2 at 44)", last, want)
+	}
+}

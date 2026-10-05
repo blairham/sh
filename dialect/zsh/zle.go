@@ -1598,6 +1598,7 @@ func runWidgetFunction(
 		openUndoChangeNumber(r, actions, opened.scope)
 		fetchCutBuffer(r, actions)
 	}
+	openHistNo(r, actions, editing)
 	r.SetVar(zleOpened, opened.String())
 	// Deferred rather than called at the end, because a panic in the widget
 	// function is caught *outside* this call — repl runs it behind the same
@@ -1615,6 +1616,9 @@ func runWidgetFunction(
 			// The caller's own, which closing this call took away with
 			// the rest. The same editor is on both ends of a nested call.
 			openUndoChangeNumber(r, actions, caller.opened.scope)
+		}
+		if caller.open {
+			openHistNo(r, actions, editing)
 		}
 	}()
 	// The status goes in and does not come out, measured: the function sees
@@ -1872,16 +1876,12 @@ func openWidgetParameters(r *interp.Runner, opened widgetOpening) {
 	// against zsh 5.9.2: 3 at a fresh prompt after two commands, 2 and 1
 	// after Up once and twice, and `integer-local-special` (#5987).
 	//
-	// **Read-only here, where zsh's is not**: assigning it there moves the
-	// history walk to that line, which this editor has no route for from a
-	// widget yet. A writer that stored the number and moved nothing would be
-	// the silent no-op this file avoids, so `HISTNO=1` is refused out loud.
+	// Assigning it moves the walk, which is the editor's — see openHistNo.
 	r.SetDynamic("HISTNO", func(rr *interp.Runner) string {
 		n, _ := rr.GetVar(zleHistNo)
 		return n
 	})
 	r.MarkInteger("HISTNO")
-	r.MarkReadonly("HISTNO")
 	for _, name := range zleQueueParameters {
 		r.SetDynamic(name, func(*interp.Runner) string { return "0" })
 		// `integer-local-readonly-special` in real zsh, measured 2026-09-22
@@ -2102,6 +2102,37 @@ func setWidgetLine(r *interp.Runner, in repl.Line) {
 	// what a plugin's wrapper does: it saves the suggestion, clears it while a
 	// new one is fetched, and puts one of the two back.
 	r.SetVar(zlePostdisplay, in.Postdisplay)
+	// And the line's number, which an action that walks the history moves:
+	// measured 2026-10-05 against zsh 5.9.2, `zle up-history` in a widget
+	// after two commands leaves `$HISTNO` 2 (#6050).
+	if in.HistNo > 0 {
+		r.SetVar(zleHistNo, strconv.Itoa(in.HistNo))
+	}
+}
+
+// openHistNo gives `$HISTNO` its writer, which moves the history walk to the
+// line numbered: measured 2026-10-05 through a pseudo-terminal against zsh
+// 5.9.2, after `: one` and `: two` with `ab` typed, `HISTNO=1` in a widget
+// reads `$BUFFER` back as `: one` at once, with the cursor at its end, and a
+// number no line has — 0, 9, or text, which is 0 — moves nothing at status
+// 0 (#6050). Without an editor that can walk, it is read-only, because a
+// writer that moved nothing would be a silent no-op.
+func openHistNo(r *interp.Runner, actions repl.Actions, editing bool) {
+	walker, walks := actions.(repl.HistoryActions)
+	if !editing || !walks {
+		r.MarkReadonly("HISTNO")
+		return
+	}
+	r.SetDynamicWriter("HISTNO", func(rr *interp.Runner, value string) {
+		n, err := strconv.Atoi(strings.TrimSpace(value))
+		if err != nil {
+			return
+		}
+		regionsAnchor(rr, widgetBuffer(rr))
+		out := walker.WalkTo(n, widgetLine(rr))
+		regionsFollow(rr, out.Buffer, out.Cursor)
+		setWidgetLine(rr, out)
+	})
 }
 
 func widgetLine(r *interp.Runner) repl.Line {

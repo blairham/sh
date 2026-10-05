@@ -1028,10 +1028,9 @@ lacks the word leaves the line alone, and the call returns 1. `$HISTNO` in a
 widget is the number of the line being edited. The full table of measured
 rows is on `insertLastWordWith` in `repl/lastarg.go`.
 
-Differences, all of them this shell's:
-* `HISTNO` is read-only here. In zsh, assigning it moves the history walk.
-* how the third argument behaves while the history is being walked has not
-  been measured or modeled.
+Difference, this shell's: how the third argument behaves while the history
+is being walked has not been measured or modeled. Assigning `HISTNO` moves
+the walk to that line, as in zsh (#6050).
 
 ### `vcs_info_hookadd` and the other helpers are files
 

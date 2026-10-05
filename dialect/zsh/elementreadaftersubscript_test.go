@@ -23,3 +23,20 @@ func TestAnElementReadSeesWhatItsSubscriptWrote(t *testing.T) {
 		}
 	}
 }
+
+// A range is taken after its ends have been evaluated, so an end that writes
+// the array is seen by the span it bounds. Measured 2026-10-05 with zsh 5.9.2:
+// the first two rows read `x y` before #6120, the span having been read before
+// its end assigned. The third is the control: a search in an end needs the
+// array before the end, so it is read first as it always was.
+func TestARangeIsReadAfterItsEnds(t *testing.T) {
+	for _, c := range []struct{ src, want string }{
+		{`a=(x y); print -r -- "${a[1,a[2]=9]}"`, "x 9\n"},
+		{`a=(x y); print -r -- $a[1,a[2]=9]`, "x 9\n"},
+		{`a=(p q r); print -r -- "${a[(r)q,3]}"`, "q r\n"},
+	} {
+		if out, st := runZsh(t, t.TempDir(), c.src); out != c.want || st != 0 {
+			t.Errorf("%s = %q (status %d), want %q", c.src, out, st, c.want)
+		}
+	}
+}

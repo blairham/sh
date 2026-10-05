@@ -1096,6 +1096,11 @@ func (r *Runner) unsetSubscriptRange(name, sub string) (handled bool, code int) 
 	if !ok {
 		return false, 0
 	}
+	if isRange, settled := r.subscriptCommaReading(); settled && !isRange {
+		// The comma is the arithmetic operator, so the single subscript's
+		// reading is the whole answer and the ends are never evaluated.
+		return false, 0
+	}
 	from, errLo := r.rangeEndValue(lo)
 	to, errHi := r.rangeEndValue(hi)
 	if errLo == nil && errHi == nil && from == to {
@@ -1406,6 +1411,11 @@ func (r *Runner) subscriptSpan(text string, appended bool) (from, to int, outcom
 	}
 	lo, hi, ok := splitSubscriptPair(text)
 	if !ok {
+		return 0, 0, spanNotARange
+	}
+	if isRange, settled := r.subscriptCommaReading(); settled && !isRange {
+		// See unsetSubscriptRange: no range reading to compare, so the ends
+		// are not evaluated and the subscript steps once.
 		return 0, 0, spanNotARange
 	}
 	from, errLo := r.rangeEndValue(lo)
@@ -2552,12 +2562,20 @@ type subscriptSource struct {
 // the subscript is seen by the read it is the subscript of — where the copy
 // made it `x`.
 //
-// Only the plainest spelling, of a stored array: one subscript, no flags, no
-// range, no `@` or `*`, no reference to follow, no produced record behind
-// the name and no `.get` hook. Everything else reads the whole array as it
-// did, because each of those readings needs the list.
+// A range is read the same way, and for the same reason: `a=(x y); print
+// "${a[1,a[2]=9]}"` is `x 9` in zsh 5.9.2, the span taken after its ends have
+// been evaluated (#6120). The array is read whole once both ends are numbers.
+//
+// Only the plainest spelling, of a stored array: no flags on the expansion or
+// on either end of a range, no `@` or `*`, no reference to follow, no
+// produced record behind the name and no `.get` hook. Everything else reads
+// the whole array as it did, because each of those readings needs the list —
+// a search in an end of a range searches it.
 func (r *Runner) elementReadIsDeferred(e *syntax.ParamExpr) bool {
-	if e.IndexRange != nil || e.HasFlags || e.Name == "@" || e.Name == "*" {
+	if e.HasFlags || e.Name == "@" || e.Name == "*" {
+		return false
+	}
+	if e.IndexRange != nil && (e.IndexRange.Lo.Flags != nil || e.IndexRange.Hi.Flags != nil) {
 		return false
 	}
 	if _, stored := r.Arrays[e.Name]; !stored {
@@ -2631,15 +2649,26 @@ func (r *Runner) lengthCountsTheArray(e *syntax.ParamExpr) func() {
 	return func() { r.countOnlyRead = held }
 }
 
-// readDeferred reads the whole of a deferred source, for the one spelling
-// that turns out to need it only after the subscript has been expanded: a
-// range written in the expanded text.
+// readDeferred reads the whole of a deferred source, for a range: the span
+// is taken from the array as it stands once both ends have been evaluated.
 func (r *Runner) readDeferred(src subscriptSource) subscriptSource {
 	if src.deferred {
 		src.elems, _ = r.arrayElems(src.name)
 		src.deferred = false
 	}
 	return src
+}
+
+// sourceElemAt is the element subscript n names in src: read from the store
+// as it stands now when the source is deferred, and counted through the
+// elements in hand otherwise. Every reading of one subscript asks here, so
+// that a subscript that writes the array is seen by the read it belongs to
+// whichever route it took.
+func (r *Runner) sourceElemAt(src subscriptSource, n int, length subscriptLength) (string, bool) {
+	if src.deferred {
+		return r.deferredElemAt(src.name, n, length)
+	}
+	return r.elemAtFor(src.name, src.elems, n, length)
 }
 
 // deferredElemAt is elemAtFor for a deferred source: the element subscript n
@@ -2719,7 +2748,6 @@ func (r *Runner) subscriptOver(e *syntax.ParamExpr, src subscriptSource) ([]stri
 		// A grammar whose parser does not separate a written pair, where the
 		// only text there is to split is the expanded one. See
 		// pairsAreSplitWhenWritten, which is the whole of the difference.
-		src = r.readDeferred(src)
 		if r.subscriptIsReadAsItsIndex(e, src) &&
 			r.ask(r.sem().SubscriptCommaIsARange, "`${a[1,3]}` naming a range rather than one subscript") {
 			return nil, r.reportIndexAndRange()
@@ -2790,15 +2818,7 @@ func (r *Runner) subscriptOver(e *syntax.ParamExpr, src subscriptSource) ([]stri
 		// already run the hook for it.
 		return nil, true
 	}
-	var v string
-	var held bool
-	if src.deferred {
-		v, held = r.deferredElemAt(src.name, n,
-			subscriptLength{is: e.Length, written: r.writtenSubscript(e, idx)})
-	} else {
-		v, held = r.elemAtFor(src.name, elems, n,
-			subscriptLength{is: e.Length, written: r.writtenSubscript(e, idx)})
-	}
+	v, held := r.sourceElemAt(src, n, subscriptLength{is: e.Length, written: r.writtenSubscript(e, idx)})
 	if !r.disciplineIsWatching(src.name, disciplineGet) {
 		// Before forwardSubscriptIndex, which counts a negative subscript
 		// from the array *base* — an axis a runner with no dialect cannot
@@ -3164,13 +3184,42 @@ func topLevelComma(idx string) (at int, extra bool) {
 // five elements is bash's `[-8,-8]: bad array subscript` with the line given
 // up, exactly as `${#a[-8]}` is (measured 2026-10-03, bash 5.3.20). Without
 // it the read's own sentence was written and the length came back 0.
+//
+// Where the dialect has answered the axis only its own reading is worked out,
+// because each reading *evaluates* the text: comparing the two made a
+// subscript that steps or assigns do it twice, so `a=(x y z); i=0; echo
+// "${a[i++,i++]}" $i` was ` 4` where bash 5.3.20 and ksh93u+ print `y 2`, and
+// the read happened before the subscript had run, so `a=(x y); echo
+// "${a[a[0]=7,0]}"` was `x` where both print `7` (#6120). See
+// subscriptCommaReading.
 func (r *Runner) rangeSubscript(src subscriptSource, idx, lo, hi string, length subscriptLength) ([]string, bool) {
-	span, badEnd, spanErr := r.rangeElems(src.elems, src.scalar, lo, hi)
+	if isRange, settled := r.subscriptCommaReading(); settled {
+		if isRange {
+			span, badEnd, err := r.rangeElems(src, lo, hi)
+			if err != nil {
+				r.diagf("%s\n", r.subscriptFailure(badEnd, err))
+				r.expandErr = true
+				return nil, true
+			}
+			return span, true
+		}
+		whole, err := r.subscriptValue(idx)
+		if err != nil {
+			r.diagf("%s\n", r.subscriptFailure(idx, err))
+			r.expandErr = true
+			return nil, true
+		}
+		if v, found := r.sourceElemAt(src, whole, length); found {
+			return []string{v}, true
+		}
+		return nil, true
+	}
+	span, badEnd, spanErr := r.rangeElems(src, lo, hi)
 	whole, wholeErr := r.subscriptValue(idx)
 	var one []string
 	oneOK := wholeErr == nil
 	if oneOK {
-		if v, found := r.elemAtFor(src.name, src.elems, whole, length); found {
+		if v, found := r.sourceElemAt(src, whole, length); found {
 			one = []string{v}
 		}
 	}
@@ -3197,6 +3246,27 @@ func (r *Runner) rangeSubscript(src subscriptSource, idx, lo, hi string, length 
 		return nil, true
 	}
 	return one, true
+}
+
+// subscriptCommaReading is Semantics.SubscriptCommaIsARange where the dialect
+// has answered it: whether a comma in a subscript separates a range, and
+// whether that is settled at all.
+//
+// The axis is asked only where the two readings differ, so that `${a[2,2]}`
+// needs no answer — and telling whether they differ means working out both,
+// which evaluates the text twice. That is right only for a vector that leaves
+// the axis unset. Where it is answered there is nothing to compare, and every
+// route that reads a comma — an expansion, an assignment's span, `unset` —
+// asks here first and evaluates the one reading the dialect takes, so a
+// subscript that steps or assigns does it once (#6120).
+func (r *Runner) subscriptCommaReading() (isRange, settled bool) {
+	switch r.sem().SubscriptCommaIsARange {
+	case Yes:
+		return true, true
+	case No:
+		return false, true
+	}
+	return false, false
 }
 
 // rangeElems is the range reading of `[lo,hi]`, over elements or characters.
@@ -3250,7 +3320,7 @@ func (r *Runner) rangeSubscript(src subscriptSource, idx, lo, hi string, length 
 //
 // badEnd is the end that would not evaluate, named so that a caller reporting
 // spanErr blames the half the shell blames rather than the whole pair.
-func (r *Runner) rangeElems(elems []string, scalar bool, lo, hi string) (span []string, badEnd string, err error) {
+func (r *Runner) rangeElems(src subscriptSource, lo, hi string) (span []string, badEnd string, err error) {
 	from, err := r.rangeEndValue(lo)
 	if err != nil {
 		return nil, lo, err
@@ -3260,7 +3330,7 @@ func (r *Runner) rangeElems(elems []string, scalar bool, lo, hi string) (span []
 		return nil, hi, err
 	}
 	from, to = r.zeroPairIsTheFirst(from, to)
-	return r.rangeSpan(subscriptSource{elems: elems, scalar: scalar}, from, to), "", nil
+	return r.rangeSpan(r.readDeferred(src), from, to), "", nil
 }
 
 // rangeSpan is rangeElems with both ends already evaluated, which is what a

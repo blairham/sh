@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"unicode"
 
 	"github.com/blairham/sh/internal/boundary"
 )
@@ -52,11 +53,36 @@ func (e *editor) complete(c Completer) (matches []Candidate, did completionOutco
 	}
 	// Several. Fill in as far as they agree, which is what makes a second Tab
 	// worth pressing rather than a repeat of the first.
-	if common := commonPrefix(words); len(words) > 1 && len(common) > len(word) {
+	if common := commonPrefix(words); len(words) > 1 && len(common) > len(word) && keepsWhatWasTyped(word, common) {
 		e.replaceWord(start, common)
 		return nil, completionFilledInWhatTheyAgreeOn
 	}
 	return displayCandidates(candidates, word), completionHadNothingToInsert
+}
+
+// keepsWhatWasTyped answers whether filling in common keeps every character
+// of the word that was typed, in order and allowing a change of case.
+//
+// The candidates usually begin with the word, and then this is that. Under a
+// completion system's match specification they need not: `l:|=* r:|=*`
+// matches `pl` in the middle of `xapple` and `xaple`, whose common prefix is
+// `xap`, and putting that on the line would throw the typed `pl` away. zsh
+// never does — measured on zsh 5.9.2, 2026-10-05, a fill under a match
+// specification keeps what was typed: `re` against `README.md READY` under
+// `m:{a-z}={A-Z}` becomes `READ`, and `f.b` against `foo.bar.baz foo.bar.qux`
+// under `r:|[._-]=*` becomes `foo.bar.`, while `pl` against `abcpl abcqpl`
+// leaves the line alone and lists. What zsh puts on the line where the
+// candidates agree on something other than a prefix (`ple`, with the cursor
+// in front of it) is not drawn here; listing instead loses nothing.
+func keepsWhatWasTyped(word, common string) bool {
+	typed := []rune(word)
+	k := 0
+	for _, c := range common {
+		if k < len(typed) && unicode.ToLower(c) == unicode.ToLower(typed[k]) {
+			k++
+		}
+	}
+	return k == len(typed)
 }
 
 // completionOutcome is what one completion keystroke did, in the three states

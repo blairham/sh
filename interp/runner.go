@@ -10511,7 +10511,7 @@ func (r *Runner) exec(ctx context.Context, argv, env []string) error {
 	}
 	// This runner's PATH, not the process's — see lookpath.go for why that
 	// distinction is the whole bug and not a detail.
-	path, spelled, _, lookErr := r.lookPathSpelled(argv[0])
+	path, spelled, written, lookErr := r.lookPathSpelled(argv[0])
 	if lookErr != nil {
 		// A word nothing would run may still be somewhere to go — see
 		// autoCdInstead, which answers false in every shell that has not
@@ -10539,7 +10539,7 @@ func (r *Runner) exec(ctx context.Context, argv, env []string) error {
 			// The hit as this dialect spells it, which is what every later
 			// report reads back; the run resolves it again on the way in.
 			// See Semantics.PathHitSpelled (#6044).
-			r.hashCommandRun(argv[0], spelled)
+			r.hashCommandRun(argv[0], spelled, written)
 		}
 	}
 	action := r.act(Action{Kind: ActionExec, Path: path, Args: argv})
@@ -10567,7 +10567,8 @@ func (r *Runner) exec(ctx context.Context, argv, env []string) error {
 	// The last thing this shell runs, in the dialects that become it rather
 	// than fork it. Nothing after a successful replacement is this shell.
 	// See tailexec.go.
-	if r.replacesItselfHere() && r.becomeTheProgram(ctx, path, argv, env) {
+	run := r.runSpelling(argv[0], path, spelled, written)
+	if r.replacesItselfHere() && r.becomeTheProgram(ctx, path, run, argv, env) {
 		return nil
 	}
 
@@ -10586,6 +10587,12 @@ func (r *Runner) exec(ctx context.Context, argv, env []string) error {
 	name, env := r.namedByTheEnvironment(argv[0], env)
 	cmd := exec.CommandContext(ctx, path, argv[1:]...)
 	cmd.Args[0] = r.dashed(name)
+	// Started by the spelling and not by the path that was looked up, set
+	// after the construction so os/exec never searches its own PATH for a
+	// bare one; the child starts in cmd.Dir, below, so a relative spelling
+	// names the same file. The absolute path stays in action.Path for every
+	// door below that has to read the file. See Runner.runSpelling.
+	cmd.Path = run
 	ownGroup := (r.bg != nil && r.monitor) ||
 		(r.bg == nil && r.monitor && r.Terminal && r.WaitForCommand != nil)
 	if ownGroup {
@@ -10688,7 +10695,7 @@ func (r *Runner) exec(ctx context.Context, argv, env []string) error {
 			// which is this shell's to run — see noexecscript.go. Asked at
 			// every door a start can fail at, because a door that did not ask
 			// would be the same bug in a different room.
-			if st, ran := r.imageAsScript(ctx, action, path, argv, env, err); ran {
+			if st, ran := r.imageAsScript(ctx, action, path, run, argv, env, err); ran {
 				r.status = st
 				return nil
 			}
@@ -10745,7 +10752,7 @@ func (r *Runner) exec(ctx context.Context, argv, env []string) error {
 			r.reportKilled(sig, cmd.Process.Pid)
 		}
 	default:
-		if st, ran := r.imageAsScript(ctx, action, path, argv, env, err); ran {
+		if st, ran := r.imageAsScript(ctx, action, path, run, argv, env, err); ran {
 			r.status = st
 			return nil
 		}
@@ -10883,14 +10890,17 @@ func (r *Runner) runWatched(ctx context.Context, cmd *exec.Cmd, argv []string, a
 	}
 	defer settleHeld(false)
 	if err := r.startMasked(cmd); err != nil {
-		if st, ran := r.imageAsScript(ctx, action, cmd.Path, argv, cmd.Env, err); ran {
+		// action.Path, the file, and not cmd.Path, which is the spelling it
+		// was started by and may be relative to cmd.Dir rather than to this
+		// process. See Runner.runSpelling.
+		if st, ran := r.imageAsScript(ctx, action, action.Path, cmd.Path, argv, cmd.Env, err); ran {
 			r.status = st
 			return nil
 		}
-		if ran, runErr := r.startViaNamedInterpreter(ctx, cmd.Path, argv, cmd.Env, err); ran {
+		if ran, runErr := r.startViaNamedInterpreter(ctx, action.Path, argv, cmd.Env, err); ran {
 			return runErr
 		}
-		r.status = r.reportStartFailure(ctx, action, argv, cmd.Path, err)
+		r.status = r.reportStartFailure(ctx, action, argv, action.Path, err)
 		return nil
 	}
 	pid := cmd.Process.Pid

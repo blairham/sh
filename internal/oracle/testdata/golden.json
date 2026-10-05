@@ -91223,6 +91223,57 @@
         "TimedOut": false
       }
     },
+    "exec/a-file-run-as-a-script-sees-the-spelling-its-shell-joined": {
+      "ash": {
+        "Stdout": "n0=.//n0~n0=deep/../n0~n0=./n0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "n0=./n0~n0=deep/../n0~n0=./n0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "n0=./n0~n0=deep/../n0~n0=./n0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "n0=./n0~n0=deep/../n0~n0=./n0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "n0=.//n0~n0=deep/../n0~n0=./n0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "n0=n0~n0=n0~n0=n0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "n0=.//n0~n0=deep/../n0~n0=n0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "exec/a-line-is-the-unit-not-a-statement": {
       "ash": {
         "Stdout": "one",
@@ -91270,6 +91321,108 @@
         "Stdout": "one",
         "Stderr": "\u003cscript\u003e:2: parse error near `fi'",
         "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "exec/a-script-exec-starts-by-the-spelling-its-shell-joined": {
+      "ash": {
+        "Stdout": "0=./z0~0=deep/../z0~0=./deep/../z0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "0=/private\u003ctmp\u003e/sub/z0~0=/private\u003ctmp\u003e/sub/deep/../z0~0=/private\u003ctmp\u003e/sub/deep/../z0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "0=/private\u003ctmp\u003e/sub/z0~0=/private\u003ctmp\u003e/sub/deep/../z0~0=/private\u003ctmp\u003e/sub/deep/../z0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "0=/private\u003ctmp\u003e/sub/z0~0=/private\u003ctmp\u003e/sub/deep/../z0~0=/private\u003ctmp\u003e/sub/deep/../z0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "0=./z0~0=deep/../z0~0=./deep/../z0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "0=z0~0=\u003ctmp\u003e/sub/deep/../z0~0=./deep/../z0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "0=z0~0=deep/../z0~0=./deep/../z0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "exec/a-script-is-started-by-the-spelling-its-shell-joined": {
+      "ash": {
+        "Stdout": "0=z0~0=z0~0=./z0~0=./z0~0=.//z0~0=deep/../z0~0=./deep/../z0~0=../sub//z0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "0=./z0~0=./z0~0=./z0~0=./z0~0=./z0~0=deep/../z0~0=./deep/../z0~0=../sub//z0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "0=./z0~0=./z0~0=./z0~0=./z0~0=./z0~0=deep/../z0~0=./deep/../z0~0=../sub//z0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "0=./z0~0=./z0~0=./z0~0=./z0~0=./z0~0=deep/../z0~0=./deep/../z0~0=../sub//z0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "0=z0~0=z0~0=./z0~0=./z0~0=.//z0~0=deep/../z0~0=./deep/../z0~0=../sub//z0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "0=z0~0=z0~0=z0~0=z0~0=\u003ctmp\u003e/sub/./z0~0=\u003ctmp\u003e/sub/deep/../z0~0=./deep/../z0~0=../sub//z0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "0=z0~0=z0~0=z0~0=z0~0=.//z0~0=deep/../z0~0=./deep/../z0~0=../sub//z0",
+        "Stderr": "",
+        "Status": 0,
         "Signal": 0,
         "TimedOut": false
       }

@@ -391,7 +391,10 @@ func (r *Runner) classifyImage(ctx context.Context, path string, err error) ([]b
 //
 // The status is the script's own. `printf 'exit 7\n' > e.scr` and `./e.scr`
 // is 7 in all seven columns, as is a `$?` of 0 for a script that ends well.
-func (r *Runner) imageAsScript(ctx context.Context, action Action, path string, argv, env []string, err error) (int, bool) {
+//
+// path is the file, and run the spelling it was started by — see
+// Runner.runSpelling — which is what decides the script's `$0`.
+func (r *Runner) imageAsScript(ctx context.Context, action Action, path, run string, argv, env []string, err error) (int, bool) {
 	image, verdict := r.classifyImage(ctx, path, err)
 	switch verdict {
 	case imageNotOurs:
@@ -407,7 +410,7 @@ func (r *Runner) imageAsScript(ctx context.Context, action Action, path string, 
 			fallback: "%[1]s: not found",
 		}), true
 	}
-	status := r.runImageAsScript(ctx, r.imageZero(argv[0], path, false), path, argv, env, image)
+	status := r.runImageAsScript(ctx, r.imageZero(argv[0], run, false), path, argv, env, image)
 	r.emit(ctx, Event{Kind: EventCommandEnd, Action: action, Status: status})
 	return status, true
 }
@@ -424,7 +427,7 @@ func (r *Runner) imageAsScript(ctx context.Context, action Action, path string, 
 // The binary half ends the shell too, and by the road every other failed
 // `exec` takes: measured, `exec ./elf64_hdr.bin; echo NOT-REACHED` prints no
 // NOT-REACHED anywhere, at 126 in five columns.
-func (r *Runner) execImageAsScript(ctx context.Context, action Action, path string, argv, env []string, err error) (int, bool) {
+func (r *Runner) execImageAsScript(ctx context.Context, action Action, path, run string, argv, env []string, err error) (int, bool) {
 	image, verdict := r.classifyImage(ctx, path, err)
 	switch verdict {
 	case imageNotOurs:
@@ -433,7 +436,7 @@ func (r *Runner) execImageAsScript(ctx context.Context, action Action, path stri
 		r.emit(ctx, Event{Kind: EventError, Action: action, Err: err})
 		return r.execFailed(&pathError{name: argv[0], resolved: path, err: notAnImage}), true
 	}
-	status := r.runImageAsScript(ctx, r.imageZero(argv[0], path, true), path, argv, env, image)
+	status := r.runImageAsScript(ctx, r.imageZero(argv[0], run, true), path, argv, env, image)
 	r.emit(ctx, Event{Kind: EventCommandEnd, Action: action, Status: status})
 	// The shell stops, and the EXIT trap does not run, for the reason the
 	// replacement beside this one says: the trap died with the process the
@@ -463,6 +466,9 @@ func (r *Runner) execImageAsScript(ctx context.Context, action Action, path stri
 // The axis is asked at the disagreement and nowhere else: with a slash in the
 // word the two readings are the same string, and a shell with nothing to
 // decide must not be able to refuse.
+//
+// path is the spelling the file was started by rather than the file itself,
+// so the `$0` is what the kernel would have handed a `#!` line (#6090).
 func (r *Runner) imageZero(word, path string, byExec bool) string {
 	if strings.ContainsRune(word, '/') {
 		if byExec && r.diag().NamesResolvedPath {

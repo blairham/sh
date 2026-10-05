@@ -159,7 +159,7 @@ func (r *Runner) lookPathSpelled(name string) (path, spelled, written string, er
 			// absolute path: the table keeps the hit as it was spelled when
 			// it was found, so a report after the run is the report before
 			// it — see Semantics.PathHitSpelled (#6044).
-			return full, hashed, hashed, nil
+			return full, hashed, r.hashedCommandWritten(name), nil
 		}
 		if r.ask(r.sem().CommandHashIsTrusted, "a hashed path used without looking for it again") &&
 			!r.checksHashedCommand {
@@ -336,7 +336,13 @@ func (r *Runner) executableBeforeTheHashedPath(name, hashed string) (string, boo
 			dir = "."
 		}
 		candidate := r.pathCandidate(dir, name)
-		if candidate == hashed {
+		// Compared cleaned, because the two are spelled by different hands:
+		// the candidate keeps a `.` entry's `/./` for the kernel and the
+		// table keeps the dialect's spelling, so `PATH=.` puts `$PWD/./z0`
+		// against `$PWD/z0` and the walk ran past its own entry — reading
+		// the remembered copy as one that had appeared in front of itself.
+		// Equality is all this asks, and one entry cleans to one string.
+		if filepath.Clean(candidate) == filepath.Clean(hashed) {
 			return "", false
 		}
 		if r.runnable(candidate) == nil {
@@ -396,6 +402,60 @@ func (r *Runner) absolute(path string) string {
 		return uncleanedJoin(wd, at)
 	}
 	return at
+}
+
+// runSpelling is the path a command is handed to the kernel by: the word as
+// written when it has a slash in it, and otherwise the PATH hit as this
+// dialect writes it back — with the one exception
+// Semantics.PathHitFromTheCurrentDirectoryRunsBare names, a hit through `.`
+// or an empty entry started by its name.
+//
+// Not the absolute path that was looked up, which is what this used to be.
+// The kernel hands the path it was given to a `#!` interpreter as the script,
+// so a script's `$0` is whatever its shell joined, and every column in the
+// panel joins the words it was given rather than resolving them: `./sub/./z0`
+// typed is `./sub/./z0` inside the script in all six (#6090). The child is
+// started in this runner's directory, so a relative spelling names the file
+// the lookup found; see the Dir the callers set.
+//
+// path is what the lookup found, and spelled and written its two spellings —
+// see Runner.lookPathSpelled.
+func (r *Runner) runSpelling(word, path, spelled, written string) string {
+	if strings.ContainsRune(word, '/') {
+		if path == r.absolute(word) {
+			return word
+		}
+		// A slashed word this dialect looked for down PATH, which is a hit
+		// like any other.
+		return spelled
+	}
+	if spelled == "" {
+		return path
+	}
+	// Asked only of a hit that came through the current directory, which
+	// is where the columns part; written is `./name` for a `.` entry and
+	// the name alone for an empty one, in every dialect.
+	if (written == word || written == "./"+word) &&
+		r.ask(r.sem().PathHitFromTheCurrentDirectoryRunsBare, "a current-directory PATH hit started by its name") {
+		return word
+	}
+	return spelled
+}
+
+// execRunSpelling is runSpelling for `exec`, which one dialect starts by an
+// absolute path where it starts the same word run without it by the spelling:
+// measured 2026-10-05 on bash 5.3, `PATH=.; exec z0` hands the script
+// `$PWD/z0`, `PATH=deep/..` hands it `$PWD/deep/../z0`, and `exec
+// ./deep/../z0` hands it `$PWD/deep/../z0` — the leading `./` gone and the
+// rest under the directory — where zsh, ksh93, dash and ash start what they
+// would start without the `exec` (#6090). The same habit
+// Diagnostics.NamesResolvedPath records for the failure, and read from there
+// for the reason imageZero gives.
+func (r *Runner) execRunSpelling(run string) string {
+	if !r.diag().NamesResolvedPath || run == "" || filepath.IsAbs(run) {
+		return run
+	}
+	return uncleanedJoin(r.dirNow(), strings.TrimPrefix(run, "./"))
 }
 
 // pathCandidate is the file a PATH entry offers for name, as the operating

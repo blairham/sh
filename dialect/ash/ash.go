@@ -832,6 +832,9 @@ func Semantics() interp.Semantics {
 	// How a PATH hit is written back, before the command runs and after:
 	// measured 2026-10-05 with `command -v`, in the pinned alpine image: `PATH=/bin/` is `/bin//ls`, `PATH=./` is `.//zz`, an empty entry is the bare name (#6044). See
 	// Semantics.PathHitSpelled.
+	// And what the hit is started by: measured 2026-10-05, `PATH=.` starts `./z0` and an empty entry the bare name, both as written
+	// (#6090). See Semantics.PathHitFromTheCurrentDirectoryRunsBare.
+	s.PathHitFromTheCurrentDirectoryRunsBare = interp.No
 	s.PathHitSpelled = interp.PathHitAsWritten
 	// unanswered MonitorOffSilencesJobsAtExit: measured 2026-10-05 in the
 	// pinned image through a pseudo-terminal, `exit` with a stopped job

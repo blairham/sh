@@ -166,7 +166,11 @@ func (r *Runner) replacesItselfHere() bool {
 // becomeTheProgram replaces this shell with the program at path, as `exec`
 // would. It reports false if the program could not be started that way. In
 // that case the caller forks the program as usual.
-func (r *Runner) becomeTheProgram(ctx context.Context, path string, argv, env []string) bool {
+//
+// path is the file and run the spelling it is started by — see
+// Runner.runSpelling. The replacement moves into dir before it starts, so a
+// relative spelling names the file path does.
+func (r *Runner) becomeTheProgram(ctx context.Context, path, run string, argv, env []string) bool {
 	if !kernelStartsIt(path) {
 		return false
 	}
@@ -181,7 +185,7 @@ func (r *Runner) becomeTheProgram(ctx context.Context, path string, argv, env []
 	releaseMask := r.holdMaskForFork()
 	name, env := r.namedByTheEnvironment(argv[0], env)
 	args := append([]string{r.dashed(name)}, argv[1:]...)
-	err := r.ReplaceProcess(dir, path, args, r.lowerShellLevelIn(env), r.replacementFiles())
+	err := r.ReplaceProcess(dir, run, args, r.lowerShellLevelIn(env), r.replacementFiles())
 	releaseMask()
 	return err == nil
 }

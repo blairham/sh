@@ -105,7 +105,7 @@ func biPrintf(r *Runner, _ context.Context, args []string) (status int) {
 	perPass := false
 	if assign != "" && r.sem().PrintfVTakesAnElementPerPass == Yes {
 		name := r.throughNameref(assign)
-		_, assoc := r.assocFor(name)
+		assoc := r.assocDeclared(name)
 		perPass = !assoc && r.nameIsAnArray(name)
 	}
 	if assign != "" {

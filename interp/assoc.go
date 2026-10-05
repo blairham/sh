@@ -4,6 +4,7 @@
 package interp
 
 import (
+	"slices"
 	"sort"
 	"strings"
 
@@ -1554,6 +1555,55 @@ func (r *Runner) SetDynamicAssocElement(name string, value func(r *Runner, key s
 		r.dynamicAssocElements = map[string]func(*Runner, string) (string, bool){}
 	}
 	r.dynamicAssocElements[name] = value
+}
+
+// SetDynamicAssocKeys gives a produced association a keys-only reading: what
+// `${(k)m}` substitutes, answered without producing a single value.
+//
+// The same contract SetDynamicAssocElement states, from the other side. The
+// names must be exactly the keys the whole-table producer would yield — this
+// is a shorter route to the same answer and never a second opinion about it —
+// and they are put in the table's order here, sorted or by
+// SetDynamicAssocKeyOrder, exactly as the produced table's keys would be.
+//
+// The reason is cost rather than meaning. `$functions` holds a body per name,
+// and producing it renders every function in the shell through the printer;
+// a startup that loads its plugins through a manager which snapshots
+// `${(k)functions}` before and after each one paid for those renderings a
+// few dozen times over, to read names it already had.
+//
+// The keys answer only while the whole-table producer is registered beside
+// them, so a name withdrawn or hidden by a scope, which takes that producer
+// out, has no keys-only reading left over to contradict it. And a stored
+// table shadows this as it shadows the other two readings — see assocFor.
+func (r *Runner) SetDynamicAssocKeys(name string, keys func(r *Runner) []string) {
+	if r.dynamicAssocKeys == nil {
+		r.dynamicAssocKeys = map[string]func(*Runner) []string{}
+	}
+	r.dynamicAssocKeys[name] = keys
+}
+
+// producedAssocKeys is the keys-only reading of a name, if it has one: the
+// same keys, in the same order, that assocKeys would give for the table
+// assocFor produces.
+func (r *Runner) producedAssocKeys(name string) ([]string, bool) {
+	resolved := r.throughNameref(name)
+	if _, stored := r.AssocArrays[resolved]; stored {
+		return nil, false
+	}
+	if _, produced := r.DynamicAssocs[resolved]; !produced {
+		return nil, false
+	}
+	keysOf, ok := r.dynamicAssocKeys[resolved]
+	if !ok {
+		return nil, false
+	}
+	keys := slices.Clone(keysOf(r))
+	sort.Strings(keys)
+	if order, ok := r.dynamicAssocKeyOrder[resolved]; ok {
+		keys = order(keys)
+	}
+	return keys, true
 }
 
 // assocElementProducer is the one-key reading a name has, if it has one and

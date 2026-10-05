@@ -8743,7 +8743,7 @@ func (r *Runner) subscriptReadsCharacters(e *syntax.ParamExpr) bool {
 	if r.sem().ScalarSubscriptIsACharacter != Yes || e.IndexFlags != nil {
 		return false
 	}
-	if _, isAssoc := r.assocFor(e.Name); isAssoc {
+	if isAssoc := r.assocDeclared(e.Name); isAssoc {
 		return false
 	}
 	_, scalar, ok := r.subscriptTarget(e)

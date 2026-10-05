@@ -7,6 +7,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -801,4 +802,70 @@ func seamView(r *Runner, name string, table map[string]string) {
 		}
 		table[key] = "through:" + value
 	})
+}
+
+// The keys-only reading of a produced association: the names alone, without
+// the whole-table producer, in the order the table's keys would come in, and
+// shadowed by a stored table the way the other two readings are. See
+// SetDynamicAssocKeys.
+func TestAKeysOnlyProducerAnswersTheNamesInTheTablesOrder(t *testing.T) {
+	d := syntax.Core()
+	d.ParamExpansionFlags = true
+	sem := permissive()
+	sem.SplitParamExpansion = No
+	sem.GlobExpansionResults = No
+	var out, errs strings.Builder
+	r := newTestRunner(t, &Runner{Stdout: &out, Stderr: &errs, Dialect: &d, Semantics: &sem, Name: "testsh"})
+	whole := 0
+	r.SetDynamicAssoc("view", func(*Runner) AssocArray {
+		whole++
+		return AssocArray{"a": Scalar("1"), "b": Scalar("2"), "c": Scalar("3")}
+	})
+	// Handed back unsorted, so the order asserted below is the reading's.
+	r.SetDynamicAssocKeys("view", func(*Runner) []string { return []string{"c", "a", "b"} })
+	run := func(src string) {
+		t.Helper()
+		f, err := syntax.Parse(src, d)
+		if err != nil {
+			t.Fatalf("parse %q: %v", src, err)
+		}
+		if _, err := r.Run(context.Background(), f); err != nil {
+			t.Fatalf("run %q: %v", src, err)
+		}
+	}
+	run(`printf '[%s]' "${(k)view}" ${(k)view[@]}`)
+	if got, want := out.String(), "[a b c][a][b][c]"; got != want {
+		t.Errorf("the names = %q, want %q", got, want)
+	}
+	if whole != 0 {
+		t.Errorf("the names produced the whole table %d times, want 0", whole)
+	}
+	// A stated order is the reading's too, exactly as it is the table's.
+	out.Reset()
+	r.SetDynamicAssocKeyOrder("view", func(keys []string) []string {
+		slices.Reverse(keys)
+		return keys
+	})
+	run(`printf '[%s]' "${(k)view}"`)
+	if got, want := out.String(), "[c b a]"; got != want {
+		t.Errorf("the names under a stated order = %q, want %q", got, want)
+	}
+	// Values still need the table: the control that the count above is the
+	// keys route and not a producer nothing reaches.
+	out.Reset()
+	run(`printf '[%s]' "${(kv)view}"`)
+	if got, want := out.String(), "[c 3 b 2 a 1]"; got != want {
+		t.Errorf("names and values = %q, want %q", got, want)
+	}
+	if whole == 0 {
+		t.Error("`(kv)` did not reach the whole-table producer")
+	}
+	// And a stored table in front of the producer answers instead. No writer
+	// is registered, so the assignment lands in one — see
+	// TestAStoredTableShadowsTheKeyedProducerToo.
+	out.Reset()
+	run(`view[z]=9; printf '[%s]' "${(k)view}"`)
+	if got, want := out.String(), "[z]"; got != want {
+		t.Errorf("the names behind a stored table = %q, want %q", got, want)
+	}
 }

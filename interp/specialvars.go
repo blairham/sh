@@ -878,6 +878,7 @@ func (r *Runner) UnsetDynamic(name string) {
 	delete(r.dynamicAssocElements, name)
 	delete(r.dynamicAssocWriters, name)
 	delete(r.dynamicAssocEmptied, name)
+	delete(r.dynamicAssocKeys, name)
 	delete(r.assigned, name)
 	delete(r.readonly, name)
 	delete(r.hidden, name)

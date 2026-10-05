@@ -1306,9 +1306,12 @@ func (r *Runner) flagBase(e *syntax.ParamExpr) (words []string, set, isList bool
 		return words, set, isList
 	}
 	if e.Index != nil {
+		if keys, ok := r.wholeTableKeys(e); ok {
+			return keys, len(keys) > 0, true
+		}
 		if list, lok := r.arraySubscript(e); lok {
 			if r.wholeArrayIndex(e) {
-				if _, isAssoc := r.assocFor(e.Name); isAssoc {
+				if isAssoc := r.assocDeclared(e.Name); isAssoc {
 					// `${(kv)m[@]}` is `${(kv)m}`: a whole-array subscript
 					// on an association selects every pair, and `k` and `v`
 					// then say which half of each pair is substituted.
@@ -1378,6 +1381,25 @@ func (r *Runner) flagBase(e *syntax.ParamExpr) (words []string, set, isList bool
 	return r.namedBase(e.Name, baseFlags(e.Flags))
 }
 
+// wholeTableKeys is `${(k)m[@]}` on a produced association that can name its
+// keys without producing its values: the answer the branch below reaches
+// through namedBase, taken before arraySubscript reads every value of the
+// table only for that branch to set them aside.
+//
+// Only that one shape. A chain, or `v` beside the `k`, or a table something
+// has stored over, all go the long way — producedAssocKeys refuses the last,
+// and the first two need the values.
+func (r *Runner) wholeTableKeys(e *syntax.ParamExpr) ([]string, bool) {
+	if len(e.Leading) > 0 || !r.wholeArrayIndex(e) {
+		return nil, false
+	}
+	flags := baseFlags(e.Flags)
+	if !strings.ContainsRune(flags, 'k') || strings.ContainsRune(flags, 'v') {
+		return nil, false
+	}
+	return r.producedAssocKeys(e.Name)
+}
+
 // baseFlags is the group as the lookup that produces the *base* reads it.
 //
 // `k` and `v` are answered by whichever lookup the substituted value is
@@ -1429,9 +1451,17 @@ func (r *Runner) namedBase(name, flags string) (words []string, set, isList bool
 	case "":
 		return []string{""}, false, false
 	}
-	if a, aok := r.assocFor(name); aok {
+	if r.assocDeclared(name) {
 		hasK := strings.ContainsRune(flags, 'k')
 		hasV := strings.ContainsRune(flags, 'v')
+		if hasK && !hasV {
+			// The names alone, which a produced table may be able to give
+			// without producing a single value — see SetDynamicAssocKeys.
+			if keys, ok := r.producedAssocKeys(name); ok {
+				return keys, len(keys) > 0, true
+			}
+		}
+		a, _ := r.assocFor(name)
 		switch {
 		case hasK && hasV:
 			keys := r.assocKeys(name, a)
@@ -1491,7 +1521,7 @@ func (r *Runner) assocSubscriptKey(e *syntax.ParamExpr, elems []string) (string,
 		strings.ContainsRune(flags, 'v') {
 		return "", false
 	}
-	if _, isAssoc := r.assocFor(e.Name); !isAssoc {
+	if isAssoc := r.assocDeclared(e.Name); !isAssoc {
 		return "", false
 	}
 	if e.IndexFlags != nil {
@@ -2353,7 +2383,7 @@ func (r *Runner) nestedElementsAreBare(e *syntax.ParamExpr) nestedBareKind {
 	if _, ok := r.arrayElems(p.Name); ok {
 		return nestedBareFromAList
 	}
-	if _, isAssoc := r.assocFor(p.Name); isAssoc {
+	if isAssoc := r.assocDeclared(p.Name); isAssoc {
 		return nestedBareFromAList
 	}
 	return nestedBareNone

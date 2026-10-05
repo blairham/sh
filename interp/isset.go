@@ -494,7 +494,7 @@ func (r *Runner) scalarHasNoElements(name string) bool {
 	if _, isArray := r.Arrays[name]; isArray {
 		return false
 	}
-	if _, isTable := r.assocFor(name); isTable {
+	if isTable := r.assocDeclared(name); isTable {
 		return false
 	}
 	return true

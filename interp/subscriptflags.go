@@ -814,7 +814,7 @@ func (r *Runner) assocSearchSubscript(e *syntax.ParamExpr) bool {
 	if lastOf(e.IndexFlags.Flags, searchSubscriptFlags) == 0 {
 		return false
 	}
-	_, isAssoc := r.assocFor(e.Name)
+	isAssoc := r.assocDeclared(e.Name)
 	return isAssoc
 }
 
@@ -1003,7 +1003,7 @@ func (r *Runner) flaggedTargetPlace(e *syntax.ParamExpr, endsTheLine bool) (flag
 		}
 		return one(idx, true)
 	}
-	if _, isAssoc := r.assocFor(a.Name); isAssoc {
+	if isAssoc := r.assocDeclared(a.Name); isAssoc {
 		// A search over a table names several elements and no place to write,
 		// and answering with the ordered array's rule would write to a
 		// plausible wrong key. The shell's own sentence for it, through the
@@ -1120,7 +1120,7 @@ func (r *Runner) subscriptIsReadAsItsIndex(e *syntax.ParamExpr, src subscriptSou
 	if !strings.ContainsRune(flags, 'k') || strings.ContainsRune(flags, 'v') {
 		return false
 	}
-	_, isAssoc := r.assocFor(e.Name)
+	isAssoc := r.assocDeclared(e.Name)
 	return !isAssoc
 }
 

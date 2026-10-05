@@ -5982,7 +5982,7 @@ func (r *Runner) declaresAType(name string) bool {
 // compoundNameHolds reports whether the name is holding an array or a keyed
 // table — the two values a scalar re-read has nothing to say about.
 func (r *Runner) compoundNameHolds(name string) bool {
-	if _, ok := r.assocFor(name); ok {
+	if ok := r.assocDeclared(name); ok {
 		return true
 	}
 	a, ok := r.Arrays[name]

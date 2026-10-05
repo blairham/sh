@@ -530,7 +530,7 @@ func (r *Runner) subscriptNamesNoElementAtAll(e *syntax.ParamExpr) bool {
 	if len(e.Leading) > 0 || e.IndexFlags != nil {
 		return false
 	}
-	if _, isAssoc := r.assocFor(e.Name); isAssoc {
+	if isAssoc := r.assocDeclared(e.Name); isAssoc {
 		return false
 	}
 	n, err := r.subscriptValue(r.subscriptText(e.Subscript()))

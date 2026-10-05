@@ -362,7 +362,7 @@ func (r *Runner) paramIsAList(e *syntax.ParamExpr) bool {
 // The association is the one source that function does not answer for, since
 // arraySubscript takes an association down its own path before reaching it.
 func (r *Runner) nameIsAList(name string) bool {
-	if _, isAssoc := r.assocFor(name); isAssoc {
+	if isAssoc := r.assocDeclared(name); isAssoc {
 		return true
 	}
 	_, scalar, held := r.subscriptTarget(&syntax.ParamExpr{Name: name})

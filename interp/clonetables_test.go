@@ -318,6 +318,7 @@ func seedTables(r *Runner) {
 	r.dynamicAssocElements = map[string]func(*Runner, string) (string, bool){
 		"seed": func(*Runner, string) (string, bool) { return "", false },
 	}
+	r.dynamicAssocKeys = map[string]func(*Runner) []string{"seed": func(*Runner) []string { return nil }}
 	r.dynamicArrayWriters = map[string]func(*Runner, []string){"seed": func(*Runner, []string) {}}
 	r.silentToPrint = map[string]bool{"seed": true}
 	r.subscriptValuesHeld = map[string]heldSubscriptValue{"seed": {}}

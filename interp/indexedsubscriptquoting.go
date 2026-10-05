@@ -20,7 +20,7 @@ func (r *Runner) indexedSubscriptKeepsItsQuoting(written, name string) bool {
 	if name == "" || !strings.ContainsAny(written, `'\`) {
 		return false
 	}
-	if _, assoc := r.assocFor(r.throughNameref(name)); assoc {
+	if assoc := r.assocDeclared(r.throughNameref(name)); assoc {
 		// A key, which is SubscriptIsAQuotingContext's question.
 		return false
 	}

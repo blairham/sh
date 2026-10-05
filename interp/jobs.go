@@ -1092,7 +1092,7 @@ func (r *Runner) announceJob(job *Job) {
 		// rather than assumed either way — see the axis (#1738).
 		return
 	}
-	r.errf("%s\n", Wording(r.diag().JobStarted, "[%[1]d] %[2]d", job.num, job.Ident()))
+	r.noticef("%s\n", Wording(r.diag().JobStarted, "[%[1]d] %[2]d", job.num, job.Ident()))
 }
 
 // canAnnounce reports whether this shell has anybody to tell that a job
@@ -1290,7 +1290,7 @@ func (r *Runner) jobNoticeWake() <-chan struct{} {
 // a line, because FinishedJobNotices forgets what it reports.
 func (r *Runner) writeFinishedJobNotices() {
 	for _, line := range r.FinishedJobNotices() {
-		r.errf("%s\n", line)
+		r.noticef("%s\n", line)
 	}
 }
 
@@ -2254,11 +2254,11 @@ func (r *Runner) announceStopped(j *Job) {
 		// two of the four start the notice on a line of its own and the other
 		// two write it straight after the echo. The same shape as the newline
 		// the prompt writes after a ^C, and measured the same way.
-		r.errf("\n")
+		r.noticef("\n")
 	}
 	i := r.jobNumber(j)
 	if w := dg.JobStoppedNotice; w != "" && !r.namesThePIDInANotice() {
-		r.errf("%s\n", Wording(w, "", i, r.jobMarker(j), r.name(), j.Command))
+		r.noticef("%s\n", Wording(w, "", i, r.jobMarker(j), r.name(), j.Command))
 		return
 	}
 	// Nothing said otherwise, so the notice is the listing's own row, which is
@@ -2270,7 +2270,7 @@ func (r *Runner) announceStopped(j *Job) {
 	// and `[1]  + 98875 suspended  sleep 5` with it on (#4491). A sentence
 	// with no job number and no marker has nowhere to put a pid, which is why
 	// the option reaches past the wording rather than growing a twin of it.
-	r.errf("%s\n", r.jobNoticeLine(i, j, true, false))
+	r.noticef("%s\n", r.jobNoticeLine(i, j, true, false))
 }
 
 // reapJobs asks after the jobs nothing is waiting on, and is how a job that
@@ -2723,7 +2723,7 @@ func (r *Runner) listJobsHeldAtExit() {
 		if j.Finished() {
 			continue
 		}
-		r.errf("%s\n", r.jobLineAs(j.num, j, true, false))
+		r.noticef("%s\n", r.jobLineAs(j.num, j, true, false))
 	}
 }
 

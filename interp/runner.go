@@ -897,6 +897,38 @@ type Runner struct {
 	// what a script parses, and it is byte-identical with or without this.
 	NotFoundHint func(name string) string
 
+	// BeforeDiagnostic, where it is set, is called with the stream a
+	// diagnostic is about to be written to, before a word of it is — the one
+	// moment a front end drawing something on the terminal can get out of the
+	// way of it (#6085).
+	//
+	// zsh's line editor needs exactly this: a widget's function that hits an
+	// error has the editor end the row the line is on before the message, so
+	// the message gets a row of its own and the prompt is drawn afresh under
+	// it. Measured 2026-10-05 through a pseudo-terminal against zsh 5.9.2,
+	// and **the deciding variable is who writes, not whether the error is
+	// fatal**: `typeset -Q x`, `cd /nx` and `kill -9 999999` carry on and
+	// still get the fresh row, while `command not found` and a command that
+	// would not start — which zsh's forked child writes — never do, nor
+	// does anything a subshell writes. So it is called from errf, the door
+	// diagf and every hand-spelled diagnostic already go through, and from
+	// nowhere else: a second door is how a message comes to be written at
+	// the cursor because its site went round the first. What goes to the
+	// same stream and is *not* a diagnostic — the trace, a job's notices, a
+	// prompt — says so by going through noticef.
+	//
+	// The stream is passed so the caller can tell where the words are going:
+	// `cd /nx 2>/dev/null` writes nothing to the terminal, and zsh leaves the
+	// row alone there too. Not inherited by a subshell — see clone — and not
+	// called for what cannotRun writes, which is the child's in zsh.
+	BeforeDiagnostic func(to io.Writer)
+
+	// diagnosingForTheChild is true while cannotRun writes, which is a message
+	// the shells this one is measured against write from the forked child —
+	// so it is not one a line editor gets out of the way of. See
+	// Runner.BeforeDiagnostic.
+	diagnosingForTheChild bool
+
 	// UserHomeDir answers `~user`: the home directory of the user so named,
 	// and false where the system has no such user.
 	//
@@ -5691,6 +5723,10 @@ func (r *Runner) clone() *Runner {
 	// A clone is a fork until the one construct that knows otherwise says so,
 	// and nothing a fork runs is the shell's last. See unforkedtail.go.
 	c.tailCmd, c.unforkedSelf, c.slotOneIsTheBody = nil, false, false
+	// And a subshell's diagnostics are its own process's in the shells this
+	// one is measured against, which no line editor ever hears about. See
+	// Runner.BeforeDiagnostic.
+	c.BeforeDiagnostic = nil
 	c.plainTail, c.tailInALoop = nil, false
 	c.pendingPipeJob = nil
 	c.traceTo = nil
@@ -5943,6 +5979,30 @@ func (r *Runner) printf(format string, args ...any) {
 
 func (r *Runner) errf(format string, args ...any) {
 	r.releaseHeldTraceBeforeWriting()
+	// What this shell writes to its standard error is a diagnostic unless its
+	// site says otherwise with noticef — which is the side to err on: a
+	// notice taken for a diagnostic costs a row in a widget, a diagnostic
+	// taken for a notice is written over the line being edited. See
+	// Runner.BeforeDiagnostic (#6085).
+	if r.BeforeDiagnostic != nil && !r.diagnosingForTheChild {
+		r.BeforeDiagnostic(r.stderr())
+	}
+	r.writeStderrf(format, args...)
+}
+
+// noticef is errf for what this shell writes to its standard error that is
+// not a diagnostic: the trace, a job's notices, `select`'s menu and a
+// prompt a builtin reads under. Measured 2026-10-05 against zsh 5.9.2 in a
+// widget, `sleep 0 &` writes its `[1] pid` straight after the line and the
+// trace does the same, where a diagnostic would have had a row of its own.
+// See Runner.BeforeDiagnostic.
+func (r *Runner) noticef(format string, args ...any) {
+	r.releaseHeldTraceBeforeWriting()
+	r.writeStderrf(format, args...)
+}
+
+// writeStderrf is the write errf and noticef share.
+func (r *Runner) writeStderrf(format string, args ...any) {
 	if r.printfOut != nil && r.printfOut.hold(fmt.Sprintf(format, args...)) {
 		// A `printf` conversion is being formatted, and what it says waits
 		// for it: the output in front of it is released first, or the pass

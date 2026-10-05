@@ -1088,7 +1088,7 @@ func (h fcHistory) edit(r *Runner, ctx context.Context, rest []string, editor st
 // its one line to and was measured the same way: `fc -e cat >/dev/null` still
 // writes the command and `2>/dev/null` does not.
 func (r *Runner) fcRead(b borrowedLines) {
-	r.errf("%s", b.text)
+	r.noticef("%s", b.text)
 	if b.whole {
 		// Read through before any of it ran, so there were no boundaries to
 		// record it at: the text is one entry, which is what this road did

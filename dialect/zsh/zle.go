@@ -6,6 +6,7 @@ package zsh
 import (
 	"context"
 	"fmt"
+	"io"
 	"slices"
 	"sort"
 	"strconv"
@@ -1604,6 +1605,9 @@ func runWidgetCall(
 	opened := widgetOpening{completion: def.completer != "", scope: r.ScopeDepth() + 1}
 	openWidgetParameters(r, opened)
 	actions, editing := repl.ActionsFrom(ctx)
+	if editing && !nested {
+		defer endTheRowBeforeADiagnostic(r, actions)()
+	}
 	if editing {
 		openUndoChangeNumber(r, actions, opened.scope)
 		fetchCutBuffer(r, actions)
@@ -2502,4 +2506,46 @@ func lastWidgetName(last repl.LastWidget) string {
 	default:
 		return widgetNames[last.Widget]
 	}
+}
+
+// endTheRowBeforeADiagnostic has the editor end the line's row before the
+// first diagnostic this shell writes to the terminal while a widget runs, and
+// hands back what puts the runner's hook back (#6085).
+//
+// "To the terminal" is the two streams the call started with: measured
+// 2026-10-05 against zsh 5.9.2, `{ cd /nx } 2>/dev/null` in the function
+// leaves the row alone and `cd /nx 2>&1` does not. Only at the top: a nested
+// call is part of its caller's, whose hook is already in place. See
+// interp.Runner.BeforeDiagnostic for what reaches it and what does not, and
+// repl's diagnosticrow.go for the measurement of what the editor does.
+func endTheRowBeforeADiagnostic(r *interp.Runner, actions repl.Actions) func() {
+	ender, ok := actions.(repl.DiagnosticActions)
+	if !ok {
+		return func() {}
+	}
+	before := r.BeforeDiagnostic
+	terminal := [...]io.Writer{r.Stdout, r.Stderr}
+	r.BeforeDiagnostic = func(to io.Writer) {
+		for _, w := range terminal {
+			if sameWriter(to, w) {
+				ender.EndTheRowForADiagnostic()
+				return
+			}
+		}
+	}
+	return func() { r.BeforeDiagnostic = before }
+}
+
+// sameWriter reports whether two streams are one, without the panic an
+// interface comparison raises when both hold the same uncomparable type.
+func sameWriter(a, b io.Writer) (same bool) {
+	if a == nil || b == nil {
+		return false
+	}
+	defer func() {
+		if recover() != nil {
+			same = false
+		}
+	}()
+	return a == b
 }

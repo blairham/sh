@@ -86,3 +86,22 @@ func TestTheStartingFileIsInTheShellsList(t *testing.T) {
 		t.Errorf("out %q, want %q", out, want)
 	}
 }
+
+// An entry HISTSIZE drops while the file is read still moves the event
+// numbers on (#5921). Measured 2026-10-04, zsh 5.9.2 `-d -i` on a pipe, with
+// `HISTSIZE=3`, a five-line `$HISTFILE` and two lines read by `fc -R` first:
+// `fc -l 1` lists `6 echo h4` and `7 echo h5`. The front end used to hand
+// the list the file already held to HISTSIZE, so the same two were 3 and 4.
+func TestEntriesTheSizeDropsStillCount(t *testing.T) {
+	home := scratchHome(t)
+	writeHomeFile(t, home, "hf", "echo h1\necho h2\necho h3\necho h4\necho h5\n")
+	writeHomeFile(t, home, "seed", "echo s1\necho s2\n")
+	writeHomeFile(t, home, ".zshrc", "HISTSIZE=3; HISTFILE=~/hf; fc -R ~/seed\n")
+	out, errs, code := prompt(t, "fc -l 1\n", "zsh", "-d", "-i")
+	if code != 0 {
+		t.Fatalf("status %d, stderr %q", code, errs)
+	}
+	if want := "    6  echo h4\n    7  echo h5\n"; out != want {
+		t.Errorf("out %q, want %q", out, want)
+	}
+}

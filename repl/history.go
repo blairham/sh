@@ -390,7 +390,12 @@ func countFrom(get func(string) (string, bool), name string, fallback int) int {
 func (h historyFile) Lines(ctx context.Context) []string { return h.load(ctx) }
 
 // load reads the lines a previous session left.
-func (h historyFile) load(ctx context.Context) []string {
+func (h historyFile) load(ctx context.Context) []string { return h.within(h.whole(ctx)) }
+
+// whole is the file's entries before HISTSIZE holds them: what a dialect's
+// list is seeded with, so that the entries the size drops are still counted
+// where the dialect counts them — see Shell.Run (#5921).
+func (h historyFile) whole(ctx context.Context) []string {
 	if h.path == "" || h.size == 0 {
 		// Nothing to open, so nothing to ask a policy about: a history that
 		// is turned off is not an access that was refused.
@@ -426,7 +431,11 @@ func (h historyFile) load(ctx context.Context) []string {
 	// empty line is an entry included. This used to drop the blanks itself,
 	// which made the session's reading of a file differ from a script's
 	// reading of the very same file (#4024).
-	entries := decodeText(string(data), h.encoding())
+	return decodeText(string(data), h.encoding())
+}
+
+// within is entries held to HISTSIZE, the newest kept.
+func (h historyFile) within(entries []string) []string {
 	if len(entries) > h.size {
 		entries = entries[len(entries)-h.size:]
 	}

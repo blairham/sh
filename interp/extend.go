@@ -9,6 +9,7 @@ import (
 	"io"
 	"io/fs"
 	"os"
+	"path/filepath"
 	"slices"
 	"sort"
 	"strconv"
@@ -705,6 +706,42 @@ func (r *Runner) LookPathAll(name string) []string {
 		hits[i] = r.reportedPath(name, path)
 	}
 	return hits
+}
+
+// LookPathAllOncePerDirectory is LookPathAll with a hit dropped when the
+// directory it is in is one an earlier hit was in — the same directory
+// reached by another PATH entry, however it was spelled.
+//
+// For the shell whose `whence -a` lists each directory once: measured
+// 2026-10-05 on ksh93u+ (#6069), `PATH=b2:b2`, `b2:b2/../b2`, `b2:b4` with
+// `b4` a link to `b2`, and `b2:$PWD/b2` are each one line, while `b3/ql`
+// linking to `b2/ql` — the same *file* in another directory — is still two.
+// bash's `type -a` and zsh's `whence -a` list every entry.
+func (r *Runner) LookPathAllOncePerDirectory(name string) []string {
+	paths := r.LookPathAll(name)
+	if strings.ContainsRune(name, '/') {
+		return paths
+	}
+	var seen []os.FileInfo
+	out := paths[:0:0]
+	for _, path := range paths {
+		info, err := r.stat(filepath.Dir(r.absolute(path)))
+		if err == nil {
+			dup := false
+			for _, s := range seen {
+				if os.SameFile(s, info) {
+					dup = true
+					break
+				}
+			}
+			if dup {
+				continue
+			}
+			seen = append(seen, info)
+		}
+		out = append(out, path)
+	}
+	return out
 }
 
 // LookPathAsWritten is LookPath for a shell that reports a PATH hit exactly

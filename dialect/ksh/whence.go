@@ -263,7 +263,7 @@ func whenceAll(r *interp.Runner, name string, quiet, skipFunctions bool) int {
 		// A file is listed by the PATH loop below, which shows every hit
 		// rather than the first.
 	}
-	paths := r.LookPathAll(name)
+	paths := r.LookPathAllOncePerDirectory(name)
 	for _, path := range paths {
 		if len(lines) == 0 {
 			// The PATH hit standing alone keeps the sentence `-v` gives it,
@@ -308,7 +308,7 @@ func whenceAll(r *interp.Runner, name string, quiet, skipFunctions bool) int {
 func whencePath(r *interp.Runner, name string, verbose, quiet, all bool) int {
 	paths := []string{}
 	if all {
-		paths = r.LookPathAll(name)
+		paths = r.LookPathAllOncePerDirectory(name)
 	} else if path, ok := r.LookPath(name); ok {
 		paths = append(paths, path)
 	}

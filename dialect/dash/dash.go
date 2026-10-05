@@ -450,6 +450,12 @@ func Semantics() interp.Semantics {
 	// Semantics.PathHitSpelled.
 	// And what the hit is started by: measured 2026-10-05, `PATH=.` starts `./z0` and an empty entry the bare name, both as written
 	// (#6090). See Semantics.PathHitFromTheCurrentDirectoryRunsBare.
+	// A remembered relative path written under `./` where the table answers,
+	// and a table that holds only absolute entries: measured 2026-10-05
+	// (#6069). See Semantics.HashedRelativePathReportedUnderDot and
+	// Semantics.CommandTableHoldsOnlyAbsoluteEntries.
+	s.HashedRelativePathReportedUnderDot = interp.No
+	s.CommandTableHoldsOnlyAbsoluteEntries = interp.No
 	s.PathHitFromTheCurrentDirectoryRunsBare = interp.No
 	s.PathHitSpelled = interp.PathHitAsWritten
 	// And with the monitor turned off at a prompt, a stopped job no longer

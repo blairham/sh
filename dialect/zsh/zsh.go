@@ -2716,6 +2716,12 @@ func Semantics() interp.Semantics {
 	// Semantics.PathHitSpelled.
 	// And what the hit is started by: measured 2026-10-05, `PATH=.` starts `z0`, though `command -v` writes `./z0`
 	// (#6090). See Semantics.PathHitFromTheCurrentDirectoryRunsBare.
+	// A remembered relative path written under `./` where the table answers,
+	// and a table that holds only absolute entries: measured 2026-10-05
+	// (#6069). See Semantics.HashedRelativePathReportedUnderDot and
+	// Semantics.CommandTableHoldsOnlyAbsoluteEntries.
+	s.HashedRelativePathReportedUnderDot = interp.No
+	s.CommandTableHoldsOnlyAbsoluteEntries = interp.Yes
 	s.PathHitFromTheCurrentDirectoryRunsBare = interp.Yes
 	s.PathHitSpelled = interp.PathHitAsWritten
 	// And the prompt is not enough without it: `set +m` at a session, or

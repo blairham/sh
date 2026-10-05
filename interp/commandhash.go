@@ -4,6 +4,7 @@
 package interp
 
 import (
+	"path/filepath"
 	"slices"
 	"strings"
 )
@@ -76,10 +77,102 @@ func (r *Runner) hashCommandRun(name, path, written string) {
 	if _, ok := r.cmdHash[name]; ok {
 		return
 	}
-	r.putHashedCommand(name, path, 1)
+	spelled, written, ok := r.tableHit(name, path, written)
+	if !ok {
+		return
+	}
+	r.putHashedHit(name, spelled, written, 1)
+}
+
+// putHashedHit writes an entry a search made: the hit as the dialect spells
+// it, and as PATH wrote it — see hashedCommand.written.
+func (r *Runner) putHashedHit(name, spelled, written string, hits int) {
+	r.putHashedCommand(name, spelled, hits)
 	e := r.cmdHash[name]
 	e.written = written
 	r.cmdHash[name] = e
+}
+
+// tableHit is what the command table keeps for a hit a search found: the hit
+// itself, or — in the dialect whose table holds only absolute entries — the
+// first copy an absolute entry holds, and nothing when none does. See
+// Semantics.CommandTableHoldsOnlyAbsoluteEntries.
+//
+// Asked only of a hit through a relative entry, which is where the columns
+// part; written is relative exactly then, an empty entry's bare name
+// included.
+func (r *Runner) tableHit(name, spelled, written string) (string, string, bool) {
+	if filepath.IsAbs(written) ||
+		!r.ask(r.sem().CommandTableHoldsOnlyAbsoluteEntries, "a command table holding only absolute PATH entries") {
+		return spelled, written, true
+	}
+	for _, hit := range r.lookPathHits(name) {
+		if filepath.IsAbs(hit.written) {
+			return hit.spelled, hit.written, true
+		}
+	}
+	return "", "", false
+}
+
+// relativeHitBefore is a copy a relative PATH entry holds in front of every
+// absolute one, in the dialect whose table never holds such an entry and so
+// never stands in front of one — see
+// Semantics.CommandTableHoldsOnlyAbsoluteEntries. Only for an entry a search
+// made; what the script wrote into the table is the answer as written.
+//
+// Read rather than asked: this runs in front of every remembered command, and
+// a PATH with no relative entry in it has nothing to find, so the walk is
+// taken only when there is one.
+func (r *Runner) relativeHitBefore(name string) (pathHit, bool) {
+	e := r.cmdHash[name]
+	if e.written == "" || r.sem().CommandTableHoldsOnlyAbsoluteEntries != Yes {
+		return pathHit{}, false
+	}
+	path, _ := r.getVar("PATH")
+	relative := false
+	for _, dir := range r.pathElements(path) {
+		if !filepath.IsAbs(dir) {
+			relative = true
+			break
+		}
+	}
+	if !relative {
+		return pathHit{}, false
+	}
+	for _, hit := range r.lookPathHits(name) {
+		if filepath.IsAbs(hit.written) {
+			return pathHit{}, false
+		}
+		return hit, true
+	}
+	return pathHit{}, false
+}
+
+// reportedHashed is a remembered path that runs, written where the table is
+// the answer: under `./` when it is relative, in the dialect that writes it
+// so. See Semantics.HashedRelativePathReportedUnderDot.
+func (r *Runner) reportedHashed(hashed string) string {
+	if filepath.IsAbs(hashed) || strings.HasPrefix(hashed, "./") {
+		return hashed
+	}
+	if r.ask(r.sem().HashedRelativePathReportedUnderDot, "a remembered relative path reported under `./`") {
+		return "./" + hashed
+	}
+	return hashed
+}
+
+// listedHashPath is how an entry is written in a bare listing: the path it
+// holds, or — where a hit through the current directory is started by its
+// name — that name, which is what a listing of that dialect's table shows.
+// Measured 2026-10-05 on ksh93u+: `PATH=.; zz; hash` lists `zz=zz` while
+// `command -v zz` says `$PWD/zz`, and `PATH=./` lists `zz=$PWD/./zz`
+// (#6069). See Semantics.PathHitFromTheCurrentDirectoryRunsBare.
+func (r *Runner) listedHashPath(name string, e hashedCommand) string {
+	if (e.written == name || e.written == "./"+name) &&
+		r.sem().PathHitFromTheCurrentDirectoryRunsBare == Yes {
+		return name
+	}
+	return e.path
 }
 
 // hashCommandHit counts a lookup that the table answered.

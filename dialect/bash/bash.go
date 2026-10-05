@@ -1574,6 +1574,12 @@ func Semantics() interp.Semantics {
 	// entry as `.` (#6044). See Semantics.PathHitSpelled.
 	// And what the hit is started by: measured 2026-10-05, `PATH=.` and an empty entry start `./z0`
 	// (#6090). See Semantics.PathHitFromTheCurrentDirectoryRunsBare.
+	// A remembered relative path written under `./` where the table answers,
+	// and a table that holds only absolute entries: measured 2026-10-05
+	// (#6069). See Semantics.HashedRelativePathReportedUnderDot and
+	// Semantics.CommandTableHoldsOnlyAbsoluteEntries.
+	s.HashedRelativePathReportedUnderDot = interp.Yes
+	s.CommandTableHoldsOnlyAbsoluteEntries = interp.No
 	s.PathHitFromTheCurrentDirectoryRunsBare = interp.No
 	s.PathHitSpelled = interp.PathHitJoinedOnce
 	// And a prompt is enough without the monitor: measured 2026-10-05

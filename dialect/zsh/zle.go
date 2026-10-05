@@ -1180,18 +1180,25 @@ func callBuiltinWidget(r *interp.Runner, ctx context.Context, name string, args 
 		// gave. Read the way a number is read here, so a word that is not
 		// one is 0 — measured, `zle .undo abc` takes the line back to how
 		// it began at status 1, which is what 0 does. See repl's undoTo.
+		regionsAnchor(r, widgetBuffer(r))
 		out, reached := actions.UndoTo(leadingInteger(args[0]), widgetLine(r))
+		regionsFollow(r, out.Buffer, out.Cursor)
 		setWidgetLine(r, out)
 		if !reached {
 			return 1
 		}
 		return 0
 	}
+	// The line as the widget has it is where the offsets stand — an
+	// assignment before this call moved none of them — and what the action
+	// does to it moves them. See regionsFollow.
+	regionsAnchor(r, widgetBuffer(r))
 	out, performed := actions.Perform(widget, widgetLine(r))
 	if !performed {
 		r.Diagnosef("%s: calling a built-in widget is not implemented yet\n", name)
 		return 1
 	}
+	regionsFollow(r, out.Buffer, out.Cursor)
 	setWidgetLine(r, out)
 	if widget == repl.WidgetSearchHistoryBackward {
 		// The one action that reads its own keys and leaves `$KEYS` saying
@@ -1418,6 +1425,15 @@ func runWidgetFunction(
 	if !defined || !r.HasFunction(def.function) {
 		return in, false
 	}
+	// `region_highlight` lined up with the line it is handed. From the
+	// editor, that line is what the editor did, and the offsets follow it;
+	// from another widget's `zle`, it is what that widget assigned, and they
+	// stay. See regionsFollow.
+	if editorRunning(r) {
+		regionsAnchor(r, in.Buffer)
+	} else {
+		regionsFollow(r, in.Buffer, in.Cursor)
+	}
 	// What was there before this call, put back when it ends — see
 	// callerWidgetState for why that is not the same as clearing it.
 	caller := saveWidgetState(r)
@@ -1469,6 +1485,9 @@ func runWidgetFunction(
 	status := r.ExitStatus()
 	_, err := r.CallFunction(ctx, def.function, args...)
 	r.SetExitStatus(status)
+	// What the function left the line as is the editor's from here, and
+	// whatever it assigned moved no offset.
+	regionsAnchor(r, widgetBuffer(r))
 	if err != nil {
 		return in, false
 	}

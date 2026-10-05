@@ -943,6 +943,17 @@ func (s Shell) Run(ctx context.Context) (int, error) {
 // the editor: it may want echo, it may want ^C to interrupt it, and it will
 // print lines that need the terminal translating them.
 func (s Shell) run(ctx context.Context, state *terminalState, typed string, stmts []*syntax.File) bool {
+	// An interrupt still pending when a typed line starts belongs to the line
+	// before it — interrupted drops what is left when that line ends, and
+	// this drops what arrived after: the signal a dying foreground program
+	// shared with the shell reaches the interpreter's flag through two
+	// goroutines, and on a loaded machine that can be after the program has
+	// been reaped and the line is over (#5923). A ^C typed at the prompt is
+	// never one of these: the editor reads it as a byte, and the read without
+	// an editor has the terminal hand it over as one.
+	if s.Runner.TakeInterrupt != nil {
+		s.Runner.TakeInterrupt()
+	}
 	var done bool
 	s.inLineDiscipline(state, func() { done = s.runStmts(ctx, typed, stmts) })
 	return done

@@ -46,7 +46,10 @@ func TestCompaddSuffixesAndFileMarks(t *testing.T) {
 		{"the test leaves -p out", "", "compadd -W " + w + " -p pre/ -f dd", "pre/dd/", "dd/", true},
 		{"an executable is starred", "", "compadd -W " + w + " -f exe", "exe", "exe*", false},
 		{"a link is a link", "", "compadd -W " + w + " -f link", "link", "link@", false},
-		{"nolisttypes draws no marks", "setopt nolisttypes\n", "compadd -W " + w + " -f dd", "dd/", "dd", true},
+		// No mark, and its column kept: a blank where the slash would be
+		// (#6157).
+		{"nolisttypes draws no marks", "setopt nolisttypes\n", "compadd -W " + w + " -f dd", "dd/", "dd ", true},
+		{"nolisttypes keeps no column for no mark", "setopt nolisttypes\n", "compadd -W " + w + " -f ff", "ff", "ff", false},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			got := completionCandidatesFor(t, c.setup+widgetOf(c.call), "x ")

@@ -164,3 +164,13 @@ func setEcho(f *os.File, on bool) error {
 	}
 	return ioctl(fd, tcSets, &t)
 }
+
+// turnBackOn sets line buffering and echo in a saved state, for Kept.
+func turnBackOn(t *syscall.Termios, canonical, echo bool) {
+	if canonical {
+		t.Lflag |= syscall.ICANON
+	}
+	if echo {
+		t.Lflag |= syscall.ECHO
+	}
+}

@@ -90,6 +90,24 @@ func Raw(f *os.File, flowControl bool) (*Mode, error) { return setMode(f, true, 
 // run a line editor now never takes the mode at all.
 func Current(f *os.File) (*Mode, error) { return currentMode(f) }
 
+// Kept captures the terminal's settings as they are now, the way [Current]
+// does, with line buffering and echo turned back on in the copy where the
+// caller asks. Nothing is written to the terminal; [Mode.Restore] writes it.
+//
+// It is what a shell keeps after a command has had the terminal (#6105). The
+// shells keep what a command changed, with exceptions. Measured 2026-10-05
+// through a pty with `sh -c 'stty -echo -icanon -isig -icrnl'`: bash 5.3
+// gives the next command `icanon` and keeps the rest, `-echo` included, and
+// zsh 5.9.2 gives it `icanon` and `echo` and keeps the rest.
+func Kept(f *os.File, canonical, echo bool) (*Mode, error) {
+	m, err := currentMode(f)
+	if err != nil {
+		return nil, err
+	}
+	turnBackOn(&m.saved, canonical, echo)
+	return m, nil
+}
+
 // Cbreak turns off line buffering and leaves the rest — echo included — where
 // it was found.
 //

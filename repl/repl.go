@@ -1042,6 +1042,7 @@ func (s Shell) inLineDiscipline(state *terminalState, f func()) {
 			s.errf("%v\n", err)
 		}
 	}
+	signaled, stopped := s.unsettledEnds()
 	defer func() {
 		// **Nothing may still be on its way to the terminal when OPOST goes
 		// off again.** A command's output does not always go straight to the
@@ -1070,6 +1071,9 @@ func (s Shell) inLineDiscipline(state *terminalState, f func()) {
 		// terminal last saw, because f is precisely the window in which
 		// something else was writing to it — see crlf.forget.
 		s.forgetWhatTheTerminalSaw()
+		// The settings f left behind become the ones handed back from now
+		// on, or the old ones go back now. See settleTerminal.
+		s.settleTerminal(state, signaled, stopped)
 		if raw {
 			if err := state.takeRaw(s.flowControl()); err != nil {
 				s.errf("%v\n", err)
@@ -1077,6 +1081,41 @@ func (s Shell) inLineDiscipline(state *terminalState, f func()) {
 		}
 	}()
 	f()
+}
+
+// settleTerminal decides what happens to the terminal settings something
+// left behind while it had the terminal: they are kept, or the settings from
+// before it are put back. signaled and stopped are Runner.UnsettledEnds from
+// before it ran.
+//
+// Kept unless the terminal is frozen (zsh's `ttyctl -f`), a command was
+// suspended by a stop, or a command was ended by a signal in a dialect that
+// does not keep what a signal left. See EditorStyle.KeptCanonical for the
+// measurements (#6105).
+func (s Shell) settleTerminal(state *terminalState, signaled, stopped int) {
+	if state == nil || s.Runner == nil {
+		return
+	}
+	nowSignaled, nowStopped := s.Runner.UnsettledEnds()
+	keep := !s.Runner.TerminalFrozen && nowStopped == stopped &&
+		(nowSignaled == signaled || s.Editor.KeepsWhatASignalLeft)
+	var err error
+	if keep {
+		err = state.keep(s.Editor.KeptCanonical, s.Editor.KeptEcho)
+	} else if !state.isRaw() {
+		err = state.mode.Restore()
+	}
+	if err != nil {
+		s.errf("%v\n", err)
+	}
+}
+
+// unsettledEnds is the runner's counts, or none with no runner.
+func (s Shell) unsettledEnds() (signaled, stopped int) {
+	if s.Runner == nil {
+		return 0, 0
+	}
+	return s.Runner.UnsettledEnds()
 }
 
 // holdTerminal puts the terminal into the discipline the next read wants.

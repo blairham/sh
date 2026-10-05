@@ -267,6 +267,29 @@ type EditorStyle struct {
 	// internal/tty's Raw for the measurement.
 	FlowControlOption string
 
+	// What the session keeps of the terminal settings a command leaves
+	// behind (#6105). Every shell in the panel keeps a change a command made
+	// and exited from: `stty -ixon` typed at the prompt lasts in zsh 5.9.2,
+	// bash 5.3, ksh93 and dash. These three fields are where they part.
+	// Measured 2026-10-05 through a pty:
+	//
+	//	                                   zsh   bash  ksh93
+	//	sh -c 'stty -icanon'  next sees    icanon icanon -icanon
+	//	sh -c 'stty -echo'    next sees    echo  -echo  -echo
+	//	sh -c 'stty -ixon; kill -TERM $$'  -ixon ixon  ixon
+	//
+	// A command a stop suspended keeps nothing in any of the three. zsh's
+	// `ttyctl -f` keeps nothing at all until `ttyctl -u`. See
+	// interp.Runner.TerminalFrozen.
+	//
+	// KeptCanonical turns line buffering back on in what is kept.
+	KeptCanonical bool
+	// KeptEcho turns echo back on in what is kept.
+	KeptEcho bool
+	// KeepsWhatASignalLeft keeps the settings of a command a signal ended,
+	// where the other shells put back what was there before it.
+	KeepsWhatASignalLeft bool
+
 	// RunsUnderTheOptions names the options this dialect's line editor runs
 	// under: it runs while any of them is on. With it off the session still reads lines and still runs them —
 	// it is the *editor* that goes away, so the terminal keeps its own line

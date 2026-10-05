@@ -233,6 +233,9 @@ type editor struct {
 	// widgets.go.
 	typedKey   rune
 	selfInsert string
+	// broken is a widget the shell ran having ended on an error the line
+	// gives up for. See Line.Broken.
+	broken bool
 	// partialKey is the first part of a character an action handed in a
 	// byte at a time, held until the rest arrives. See adoptKeys.
 	partialKey []byte
@@ -718,6 +721,9 @@ func (e *editor) readLine(prompt drawnPrompt) (string, error) {
 			if _, accept := e.runShellWidget(b.Function, prompt); accept {
 				return e.accepted(prompt), nil
 			}
+			if e.broken {
+				return e.giveUp(prompt)
+			}
 			continue
 		case claimed:
 			// Completion goes through runWidget like everything else, which
@@ -894,6 +900,9 @@ func (e *editor) readLine(prompt drawnPrompt) (string, error) {
 			e.typedKey = r
 			if e.selfInsert != "" {
 				if ran, accept := e.runShellWidget(e.selfInsert, prompt); ran {
+					if e.broken {
+						return e.giveUp(prompt)
+					}
 					if accept {
 						// A wrapper that committed the line while handling a
 						// printable key. Unlikely and not ours to refuse.
@@ -981,6 +990,25 @@ func (e *editor) keepsTheLineOnInterrupt(prompt drawnPrompt) bool {
 // of what was typed.
 func (e *editor) abandon(prompt drawnPrompt) (string, error) {
 	e.endLine(prompt, e.interrupt)
+	return "", ErrInterrupted
+}
+
+// giveUp ends a read whose widget broke on an error: a bell, and the line
+// ended where it stands, neither run nor recorded — see Line.Broken. The
+// same way out of the read as ^C, because the session answers the two
+// alike, but with no interrupt mark and with the status the error left
+// rather than an interrupt's, which the shell has already set.
+func (e *editor) giveUp(prompt drawnPrompt) (string, error) {
+	e.broken = false
+	// The diagnostic went out through the shell's streams and left the
+	// cursor on a row of its own, so the line is drawn there whole once
+	// more before it is ended — zsh's own screen, measured: the message,
+	// the bell, and the prompt with the line on the row under it. The bell
+	// goes through write, which is what tells the draw after it that the
+	// screen is no longer the one it last drew.
+	e.write("\a")
+	e.redraw(prompt)
+	e.endLine(prompt, "")
 	return "", ErrInterrupted
 }
 

@@ -1543,7 +1543,34 @@ func runWidgetFunction(
 	status := r.ExitStatus()
 	_, err := r.CallFunction(ctx, def.function, args...)
 	returned := r.ExitStatus()
+	// A fatal error in the function costs the line, the way one in a typed
+	// line does (#5959): measured 2026-10-04 against zsh 5.9.2, a widget
+	// whose function assigns `KEYS` or expands `${nosuch?gone}` prints the
+	// diagnostic, and the line is given up with `$?` 1 and the editor still
+	// reading keys. Here the error was left standing, so every command the
+	// session ran afterwards — the next widget's whole body included — was
+	// skipped, and the terminal was never taken back for the line.
+	//
+	// Only at the top. A widget called from another is part of the caller's
+	// call, so the error ends the caller too, and it is the caller's own
+	// return through here that gives the line up.
+	//
+	// And not for a completion widget, which keeps the line: measured the
+	// same way, `cf() { BUFFER=zz }` behind `zle -C` prints `read-only
+	// variable: BUFFER` and a bell and the line stays, with the next
+	// widget seeing `$?` 0. The error is still taken back, or it would go on
+	// skipping everything after it.
+	broke := !nested && r.GiveUpTheLine() && def.completer == ""
 	r.SetExitStatus(status)
+	if broke {
+		if returned == 0 {
+			returned = 1
+		}
+		r.SetExitStatus(returned)
+		out := widgetLine(r)
+		out.Broken, out.Status = true, returned
+		return out, true
+	}
 	// What the function left the line as is the editor's from here, and
 	// whatever it assigned moved no offset.
 	if !nested {

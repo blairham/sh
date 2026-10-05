@@ -147,6 +147,12 @@ func registerHistory(r *interp.Runner) {
 	// See interp.Runner.SetHistorySeed.
 	r.SetHistorySeed(historySeed)
 	r.SetHistorySkipsTheFile(historySkipsTheFile)
+	// And what the session writes as it ends, which is the newest entries
+	// the unwritten count covers — a startup file's `history -s` line among
+	// them — rather than the lines typed (#5967).
+	r.SetHistoryUnwritten(func(r *interp.Runner) ([]string, []string) {
+		return historyNewest(r), historyNewestTimes(r)
+	})
 	r.SetHistoryNumbering(historyFirst)
 	// And the parameter whose assignment truncates the file where it
 	// stands, which is the moment nothing else could reach: see

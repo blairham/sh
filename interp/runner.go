@@ -3061,6 +3061,9 @@ type Runner struct {
 	// histSkipsFile is the dialect's answer to whether an interactive
 	// session reads its history file at all. See SetHistorySkipsTheFile.
 	histSkipsFile func(*Runner) bool
+	// histUnwritten is the dialect's account of what a session still has to
+	// write. See SetHistoryUnwritten.
+	histUnwritten func(*Runner) (entries, times []string)
 
 	// fds are the descriptors beyond the three named streams — what
 	// `exec 6>&1` saves and `>&6` finds again. Values are the io.Reader or

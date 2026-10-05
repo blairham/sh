@@ -448,6 +448,25 @@ func (r *Runner) SetHistorySeed(seed func(*Runner, []string)) { r.histSeed = see
 // is not read. See dialect/bash's historySkipsTheFile for the measurement.
 func (r *Runner) SetHistorySkipsTheFile(skips func(*Runner) bool) { r.histSkipsFile = skips }
 
+// SetHistoryUnwritten hands the Runner the dialect's own account of what an
+// interactive session still has to write to its history file as it ends: the
+// entries and their times. Nil leaves it to the lines the front end recorded,
+// which is every dialect but one — bash, which counts what is unwritten and
+// lets `history -s`, `-a` and `-c` move the count. See repl's toWrite.
+func (r *Runner) SetHistoryUnwritten(unwritten func(*Runner) (entries, times []string)) {
+	r.histUnwritten = unwritten
+}
+
+// HistoryUnwritten is the dialect's answer, and whether it gave one. See
+// SetHistoryUnwritten.
+func (r *Runner) HistoryUnwritten() (entries, times []string, ok bool) {
+	if r.histUnwritten == nil {
+		return nil, nil, false
+	}
+	entries, times = r.histUnwritten(r)
+	return entries, times, true
+}
+
 // HistorySkipsTheFile reports whether an interactive session should leave its
 // history file unread. See SetHistorySkipsTheFile.
 func (r *Runner) HistorySkipsTheFile() bool {

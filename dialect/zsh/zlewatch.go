@@ -357,6 +357,9 @@ func runPlainHandler(
 	// zsh-autosuggestions' whole async path drawing nothing (#4413), while
 	// the same plugin's synchronous path, which reaches the line through a
 	// keystroke's own widget, was right all along.
+	// The offsets follow what the editor did before the handler was called,
+	// for the reason a widget's do. See regionsFollow.
+	regionsFollow(r, in.Buffer, in.Cursor)
 	setWidgetLine(r, in)
 	defer clearHeldLine(r)
 	status := r.ExitStatus()

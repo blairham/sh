@@ -83,6 +83,122 @@ func closeRegionHighlight(r *interp.Runner) {
 // code that knows a line was accepted is the read loop.
 func ResetRegionHighlight(r *interp.Runner) {
 	r.SetArray(zleRegion, nil)
+	r.SetVar(zleRegionLine, "")
+}
+
+// zleRegionLine is the line the store's offsets were last lined up with, so
+// that what the editor did to the line since can be told from what a widget
+// assigned to it. Hidden for the reason the store is.
+const zleRegionLine = ".zsh.zle.region.line"
+
+// The offsets follow the line when the *editor* edits it, and stay where
+// they are when a widget assigns to it.
+//
+// Measured 2026-10-04 against zsh 5.9.2 through a pseudo-terminal, with
+// `abcdefgh` in the line and `1 3 bold`, `4 6 underline` and `6 7 standout
+// memo=m` in `region_highlight` (#5874):
+//
+//	self-insert at 1, 2, 3, 6     every offset at or after the insert moves
+//	                              right — `1 3` is `2 4`, `1 4`, `1 4`, `1 3`
+//	delete-char at 2              `1 2 bold|3 5 underline|5 6 standout`
+//	backward-kill-word from 5     `0 0 bold|0 1 underline|1 2 standout`
+//	kill-line from 3              `1 3 bold|3 3 underline|3 3 standout`
+//	yank `XY` at 2                `1 5 bold|6 8 underline|8 9 standout`
+//	a key typed with no widget    the same as the widget's self-insert
+//	BUFFER=, LBUFFER+=, RBUFFER=  nothing moves
+//
+// So an insert of n characters at q moves every offset at or after q by n,
+// and a removal of [s, e) puts every offset inside it at s and moves every
+// one after it back by e - s. A `P` element moves with the rest, and a memo
+// is kept.
+//
+// What the editor did is not told to this package edit by edit; it is read
+// off the difference between the line the store was lined up with and the
+// line as it is now, which is one replacement. That is exact for an insert
+// or a removal, which is what one action is, and for a run of them at one
+// place — a paste, a key and its Backspace. Where the edit sits in a run of
+// equal characters the difference alone cannot place it, so the cursor
+// after the edit decides, where it is known.
+
+// regionsFollow moves the store's offsets for what the editor did to the
+// line since they were last lined up with it, and lines them up with line.
+// cursor is where the editor left the cursor, or -1 where it is not known.
+func regionsFollow(r *interp.Runner, line string, cursor int) {
+	was, known := r.GetVar(zleRegionLine)
+	if was == line {
+		return
+	}
+	r.SetVar(zleRegionLine, line)
+	if !known {
+		// Nothing has lined the offsets up with any line yet, so there is no
+		// edit to read: a difference from nothing would be the whole line
+		// inserted in front of them.
+		return
+	}
+	elems, _ := r.GetArray(zleRegion)
+	if len(elems) == 0 {
+		return
+	}
+	at, removed, inserted := lineEdit([]rune(was), []rune(line), cursor)
+	moved := make([]string, len(elems))
+	for i, elem := range elems {
+		e := parseRegionText(elem, 0)
+		e.start = shiftRegionOffset(e.start, at, removed, inserted)
+		e.end = shiftRegionOffset(e.end, at, removed, inserted)
+		moved[i] = e.String()
+	}
+	r.SetArray(zleRegion, moved)
+}
+
+// regionsAnchor lines the store up with line without moving anything: the
+// difference is a widget's assignment, which moves nothing.
+func regionsAnchor(r *interp.Runner, line string) {
+	r.SetVar(zleRegionLine, line)
+}
+
+// shiftRegionOffset is where an offset lands after removed characters at at
+// are replaced by inserted ones.
+func shiftRegionOffset(p, at, removed, inserted int) int {
+	if p < at {
+		return p
+	}
+	if p < at+removed {
+		p = at
+	} else {
+		p -= removed
+	}
+	return p + inserted
+}
+
+// lineEdit is the one replacement that turns was into now: where it starts,
+// how many characters it removed and how many it inserted.
+//
+// The common prefix and suffix, which places an insert or a removal inside a
+// run of equal characters at the run's far end. The cursor moves it back
+// where it says the edit was: after an insert, at the insert's end, and
+// after a removal, at its start.
+func lineEdit(was, now []rune, cursor int) (at, removed, inserted int) {
+	for at < len(was) && at < len(now) && was[at] == now[at] {
+		at++
+	}
+	suffix := 0
+	for suffix < len(was)-at && suffix < len(now)-at && was[len(was)-1-suffix] == now[len(now)-1-suffix] {
+		suffix++
+	}
+	removed, inserted = len(was)-at-suffix, len(now)-at-suffix
+	switch {
+	case removed == 0 && inserted > 0:
+		if q := cursor - inserted; q >= 0 && q < at &&
+			slices.Equal(was[:q], now[:q]) && slices.Equal(was[q:], now[q+inserted:]) {
+			at = q
+		}
+	case inserted == 0 && removed > 0:
+		if q := cursor; q >= 0 && q < at &&
+			slices.Equal(was[:q], now[:q]) && slices.Equal(was[q+removed:], now[q:]) {
+			at = q
+		}
+	}
+	return at, removed, inserted
 }
 
 // RegionHighlights is what the store means, as the codes repl writes between
@@ -106,6 +222,15 @@ func RegionHighlights(r *interp.Runner, line string) []repl.Highlight {
 	elems, _ := r.GetArray(zleRegion)
 	if len(elems) == 0 {
 		return nil
+	}
+	// Lined up with the line before it is read: a key the editor handled on
+	// its own has moved the text under the offsets since a widget last saw
+	// them. Not inside a widget, where the line is drawn by `zle -R` after an
+	// assignment, which moves nothing, or by an action part-way through,
+	// which the `zle` that called it follows once it returns.
+	if !editorRunning(r) {
+		regionsFollow(r, line, -1)
+		elems, _ = r.GetArray(zleRegion)
 	}
 	// The rune offsets of every byte boundary, built once: an element is
 	// three small integer lookups after this, where converting per element

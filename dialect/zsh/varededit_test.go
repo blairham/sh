@@ -149,6 +149,9 @@ func TestVaredSaysWhatTheReadIs(t *testing.T) {
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			_, _, asked := varedEdit(t, c.src, "", interp.LineEditAccepted)
+			// Every read's prompt is a prompt value (#5965), so it is part
+			// of what every row expects rather than written into each.
+			c.want.ExpandPrompt = true
 			if asked != c.want {
 				t.Errorf("the read asked for %+v, want %+v", asked, c.want)
 			}
@@ -226,5 +229,35 @@ func TestVaredWithATerminalAndNoEditorSaysSo(t *testing.T) {
 	want := "zsh:vared:1: the line editor cannot be re-entered from a command yet\n"
 	if buf.String() != want {
 		t.Errorf("output = %q, want %q", buf.String(), want)
+	}
+}
+
+// What was edited keeps its kind: a scalar stays a scalar, local or global,
+// and an array stays an array. Measured 2026-10-05 through a pty against zsh
+// 5.9.2 — `local l=x; vared l` leaves `${(t)l}` at `scalar-local`, and the
+// pattern substitution after it works on the string (#5966).
+func TestVaredKeepsTheKindItEdited(t *testing.T) {
+	for _, c := range []struct{ name, src, accepted, want string }{
+		{"a local scalar", `f() { local l=x; vared l; print -r -- "${(t)l} ${#l} ${#l//[^)]/}"; }; f`, "(1+", "scalar-local 3 0"},
+		{"a local with no value", `f() { local l; vared l; print -r -- "${(t)l} [$l]"; }; f`, "ab", "scalar-local [ab]"},
+		{"a global scalar", `g=; vared g; print -r -- "${(t)g} [$g]"`, "cd", "scalar [cd]"},
+		{"an array", `a=(p q); vared a; print -r -- "${(t)a} ${#a}"`, "p q r", "array 3"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			out, st, _ := varedEdit(t, c.src, c.accepted, interp.LineEditAccepted)
+			if got := strings.TrimSuffix(out, "\n"); got != c.want || st != 0 {
+				t.Errorf("after accepting %q: %q (status %d), want %q", c.accepted, got, st, c.want)
+			}
+		})
+	}
+}
+
+// The prompt is asked for as a prompt value, which the session renders as it
+// renders PS1 (#5965) — repl's TestAPromptValueInARequestIsRendered is the
+// half that draws it.
+func TestVaredAsksForItsPromptToBeExpanded(t *testing.T) {
+	_, _, asked := varedEdit(t, `v=x; vared -p '%1v> ' v`, "x", interp.LineEditAccepted)
+	if asked.Prompt != "%1v> " || !asked.ExpandPrompt {
+		t.Errorf("asked for %+v, want the prompt %q marked for expansion", asked, "%1v> ")
 	}
 }

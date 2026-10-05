@@ -516,6 +516,18 @@ func (r *Runner) ArrayHolds(name, value string) bool {
 // GetArray is the list an indexed array holds, and whether there is one.
 func (r *Runner) GetArray(name string) ([]string, bool) { return r.arrayElems(name) }
 
+// HoldsAList reports whether a name holds an indexed array, stored or
+// produced, rather than a scalar.
+//
+// GetArray cannot say: it answers a scalar as an array of one, which is right
+// for reading the value and wrong for deciding what kind of value to write
+// back. A builtin that edits a value in place and stores it again — zsh's
+// `vared` — asks this, so a scalar stays a scalar (#5966).
+func (r *Runner) HoldsAList(name string) bool {
+	_, ok := r.arrayElemsOfTheName(r.throughNameref(name))
+	return ok
+}
+
 // BuiltinNames is every builtin this runner has, sorted.
 //
 // For a shell that has to offer them: a completer at a prompt needs to know

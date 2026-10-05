@@ -30,6 +30,12 @@ type LineEdit struct {
 	// which is the ordinary case and is not the same as a prompt of a space.
 	Prompt string
 
+	// ExpandPrompt says Prompt is a prompt *value*, drawn the way the session
+	// draws its own prompt parameters — the dialect's escapes, and the
+	// expansion where the session's options ask for it. False draws Prompt as
+	// the characters it holds.
+	ExpandPrompt bool
+
 	// Initial is the text the line starts from, with the cursor after it.
 	// This is the whole difference from the read at a prompt, where the line
 	// starts empty.

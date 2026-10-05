@@ -106,6 +106,7 @@ const (
 	FieldJobCount           = interp.FieldJobCount
 	FieldTerminalName       = interp.FieldTerminalName
 	FieldExitStatus         = interp.FieldExitStatus
+	FieldPromptArrayElement = interp.FieldPromptArrayElement
 	FieldNonPrintingStart   = interp.FieldNonPrintingStart
 	FieldNonPrintingEnd     = interp.FieldNonPrintingEnd
 	FieldCountedColumn      = interp.FieldCountedColumn

@@ -115,7 +115,14 @@ func (s Shell) lineReader(ed *editor) func(interp.LineEdit) (string, interp.Line
 		// crlf.forget, and inLineDiscipline, which does this for the same
 		// reason on the way out.
 		s.forgetWhatTheTerminalSaw()
-		line, err := ed.readValue(drawPrompt(req.Prompt), req)
+		prompt := req.Prompt
+		if req.ExpandPrompt {
+			// The same render a prompt parameter gets, resolvers and all, so
+			// a code that needs the session — `%h`, `%j` — is answered here
+			// exactly as it is in PS1.
+			prompt = s.render(prompt)
+		}
+		line, err := ed.readValue(drawPrompt(prompt), req)
 		switch {
 		case errors.Is(err, ErrInterrupted):
 			return "", interp.LineEditInterrupted

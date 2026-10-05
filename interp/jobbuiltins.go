@@ -1007,7 +1007,7 @@ func (r *Runner) resume(args []string, name string) (*Job, int) {
 		r.diagf("%s\n", Wording(d.JobNotUnderJobControl, "%[1]s: no job control", name, spec))
 		return nil, orDefault(d.JobNotUnderJobControlStatus, 1)
 	}
-	if j.PID != 0 && !j.ownGroup {
+	if j.PID != 0 && !j.ownGroup || j.PID == 0 && j.startedWithoutMonitor {
 		// A job started while the monitor was off runs in the shell's own
 		// process group, so there is no group of its own to put in front of
 		// the terminal. Every column that can reach the question refuses it
@@ -1019,10 +1019,13 @@ func (r *Runner) resume(args []string, name string) (*Job, int) {
 		// catches is the one in between — a job started with the monitor
 		// off, in a shell that has since turned it on.
 		//
-		// Asked of the process and not of the job, because a job with no
-		// process of its own has no group either way and is not refused:
+		// Asked of the process where there is one. A job with none has no
+		// group either way, so for it the question is when it started:
 		// `set -m; { sleep 4; } & fg` resumes in bash exactly as it does
-		// here.
+		// here, and `true & set -m; sleep 0.3; fg` is refused, because bash
+		// forks even `true` and that process is in the shell's group
+		// (#5859). The refusal comes before the job-has-terminated one
+		// below, as bash's does.
 		//
 		// This is #3020. Without it the job was resumed and waited out,
 		// which is how a suite file bash finishes in 11 ms cost 30 seconds.

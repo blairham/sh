@@ -42,8 +42,24 @@ func TestAJobStartedWithoutJobControlIsNotResumedHere(t *testing.T) {
 			`sleep 4 & set -m; bg; echo "st=$?"`,
 			"st=1", "bg: job 1 started without job control",
 		},
+		// And a job with no process: bash forks even `true`, so it is a
+		// process in the shell's group and gets this refusal ahead of `job
+		// has terminated`. Measured 2026-10-04 on bash 5.3.20 and 3.2.57
+		// (#5859); this shell runs the builtin unforked and said `fg: job
+		// has terminated`.
+		{
+			`true & set -m; sleep 0.3; fg; echo "st=$?"`,
+			"st=1", "fg: job 1 started without job control",
+		},
+		{
+			`true & set -m; sleep 0.3; bg; echo "st=$?"`,
+			"st=1", "bg: job 1 started without job control",
+		},
 	} {
 		out, _ := answersRun(t, tc.src)
+		if strings.Contains(out, "terminated") {
+			t.Errorf("%s: said %q, which is the refusal for a job started with the monitor on", tc.src, out)
+		}
 		if !strings.Contains(out, tc.wantErr) {
 			t.Errorf("%s: said %q, want it to carry %q", tc.src, out, tc.wantErr)
 		}
@@ -75,6 +91,9 @@ func TestAJobStartedUnderJobControlIsNotClaimedByTheRefusalHere(t *testing.T) {
 	for _, src := range []string{
 		`set -m; sleep 1 & fg; echo "st=$?"`,
 		`set -m; { sleep 1; } & fg; echo "st=$?"`,
+		// A job with no process, started under the monitor, is not one
+		// started without it: bash says `fg: job has terminated` here.
+		`set -m; true & sleep 0.3; fg; echo "st=$?"`,
 	} {
 		out, _ := answersRun(t, src)
 		if strings.Contains(out, "started without job control") {

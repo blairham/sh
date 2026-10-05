@@ -35,6 +35,9 @@ func EditorStyle() repl.EditorStyle {
 		ListQueryThresholdParameter: "LISTMAX",
 		KeySequenceWaitParameter:    "KEYTIMEOUT",
 		ListQueryEchoesTheKey:       true,
+		// And the answer takes the question's row. See
+		// repl.EditorStyle.ListQueryAnswerTakesTheQuestionsRow (#6119).
+		ListQueryAnswerTakesTheQuestionsRow: true,
 		// Measured 2026-09-14 through a pseudo-terminal: this shell writes
 		// `\e[?2004h` after the prompt and `\e[?2004l\r` after the line it
 		// read, and draws a paste that arrives in reverse video until the
@@ -55,6 +58,10 @@ func EditorStyle() repl.EditorStyle {
 		// see repl.EditorStyle.ControlCharacterStyle (#5972).
 		ControlCharacterStyle:    "\x1b[7m",
 		ControlCharacterStyleEnd: "\x1b[27m",
+		// And a Tab with nothing but blanks before the cursor is a tab, when
+		// this editor's own completion is the one asked. Measured; see
+		// repl.EditorStyle.TabOnABlankLineTypesItself (#6119).
+		TabOnABlankLineTypesItself: true,
 		// What this shell calls typing, so a widget put in front of it actually
 		// intercepts a printable key. See repl's EditorStyle.SelfInsertWidget
 		// and #2485.

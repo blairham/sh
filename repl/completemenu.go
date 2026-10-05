@@ -107,7 +107,10 @@ type menuWalk struct {
 // keystroke inserted `uniq_alpha` and drew nothing, while `list-choices` went
 // on listing. A menu implemented as "complete and also list" would have passed
 // the first probe and been wrong about what the action is.
-func (e *editor) menuComplete(c Completer, step int, prompt drawnPrompt) {
+func (e *editor) menuComplete(c Completer, builtin bool, step int, prompt drawnPrompt) {
+	if !e.menu.before && builtin && e.tabOnABlankLine(prompt) {
+		return
+	}
 	if e.menu.before && len(e.menu.words) > 1 {
 		n := len(e.menu.words)
 		e.menu.index = (e.menu.index + step + n) % n
@@ -117,6 +120,12 @@ func (e *editor) menuComplete(c Completer, step int, prompt drawnPrompt) {
 		return
 	}
 	start, word, matches := e.candidates(c)
+	var typed bool
+	e.change(false, func() { typed = e.typesTheKey(matches) })
+	if typed {
+		e.redraw(prompt)
+		return
+	}
 	words := insertableWords(matches)
 	switch len(words) {
 	case 0:

@@ -39,6 +39,9 @@ func (e *editor) complete(c Completer) (matches []Candidate, did completionOutco
 	if len(candidates) == 0 {
 		return nil, completionFoundNothing
 	}
+	if e.typesTheKey(candidates) {
+		return nil, completionSettledTheWord
+	}
 	// The words are what is inserted and what the prefix is computed over;
 	// a candidate with no word is a row of a listing and nothing else, so
 	// two of those and one word is a lone match rather than three.
@@ -517,16 +520,36 @@ func (e *editor) confirmList(matches []Candidate, prompt drawnPrompt) bool {
 			continue
 		}
 		c := buf[0]
+		yes := c == 'y' || c == 'Y'
 		if e.listQueryEchoes {
-			e.write(string(rune(c)))
+			// The key, where it can be drawn, and `n` for one that cannot:
+			// measured 2026-10-05 against zsh 5.9.2, `x` is echoed as `x`,
+			// and `^X` and the Escape an arrow key starts with as `n`. This
+			// wrote the raw byte (#6119).
+			if c >= 0x20 && c < del || yes {
+				e.write(string(rune(c)))
+			} else {
+				e.write("n")
+			}
 		}
 		switch {
-		case c == 'y' || c == 'Y':
+		case yes:
+			if e.listQueryTakesItsRow {
+				// The listing goes where the question was. See
+				// EditorStyle.ListQueryAnswerTakesTheQuestionsRow.
+				e.write("\r\x1b[J")
+				e.listHere = true
+				return true
+			}
 			e.write("\r\n")
 			return true
 		case c == 'n' || c == 'N', !e.listQueryStrict:
 			// Anything at all declines where a shell takes the first key it
 			// is given; only `n` does where one waits for an answer.
+			if e.listQueryTakesItsRow {
+				e.backToTheLine(prompt)
+				return false
+			}
 			e.write("\r\n")
 			return false
 		default:
@@ -553,6 +576,14 @@ func (e *editor) confirmList(matches []Candidate, prompt drawnPrompt) bool {
 // The name is per keystroke and the chain is not cached, because the two
 // facts it is built from move independently: a key's binding is read fresh on
 // every key, and the session's own completer is built once.
+// ownCompletion reports whether a key bound to complete with the shell
+// completion named name is answered by this editor's own completion first —
+// which it is where the binding names none or the session has no way to ask.
+// See tabOnABlankLine, which is asked only then.
+func (e *editor) ownCompletion(name string) bool {
+	return name == "" || e.shellComplete == nil
+}
+
 func (e *editor) completerFor(name string) Completer {
 	if name == "" || e.shellComplete == nil {
 		return e.comp
@@ -595,7 +626,10 @@ func (e *editor) completerFor(name string) Completer {
 // and dropped the matches on the floor, so it could never list. See the case
 // in editor.go that calls this, and lastTab for why the listing is the second
 // keystroke's and not the first's.
-func (e *editor) completeKey(c Completer, wasTab bool, prompt drawnPrompt) {
+func (e *editor) completeKey(c Completer, builtin, wasTab bool, prompt drawnPrompt) {
+	if builtin && e.tabOnABlankLine(prompt) {
+		return
+	}
 	var matches []Candidate
 	var did completionOutcome
 	e.change(false, func() { matches, did = e.complete(c) })
@@ -693,4 +727,72 @@ func (e *editor) listQueryAsks(matches []Candidate) bool {
 	default:
 		return len(matches) >= n
 	}
+}
+
+// typesTheKey types the key that asked for a completion, where the completion
+// answered that it should be typed instead — see CompletionInsertsTheKey —
+// and reports whether it did. The last character of the key, the way a
+// self-insert types one.
+func (e *editor) typesTheKey(matches []Candidate) bool {
+	if len(matches) != 1 || !matches[0].insertKey {
+		return false
+	}
+	e.adoptKeys(string(e.keyBytes))
+	if e.typedKey != 0 {
+		e.insert(e.typedKey)
+	}
+	return true
+}
+
+// tabOnABlankLine types a Tab that asked this editor's own completion for a
+// word with nothing but blanks before the cursor, where the dialect says so,
+// and reports whether it did.
+//
+// Measured 2026-10-05 through a pseudo-terminal against zsh 5.9.2 with no
+// completion system loaded: Tab on an empty line, on `  `, and with the
+// cursor at the start of `ls` or after the one blank of ` ls` puts a tab in
+// the line, under `expand-or-complete`, `complete-word` and `menu-complete`
+// alike; the same widgets on `^T` complete — so it is the key and not the
+// widget — and `list-choices` on Tab lists. The completion system, where one
+// is loaded, makes the same decision itself (its `insert-tab` style) and
+// answers with CompletionInsertsTheKey, so this is asked only of the
+// editor's own completion. In a real configuration whose completion system
+// was not found this editor's completion is the one answering, and a Tab at
+// an empty prompt asked whether to list every command there is (#6119).
+// See EditorStyle.TabOnABlankLineTypesItself.
+func (e *editor) tabOnABlankLine(prompt drawnPrompt) bool {
+	if !e.tabOnBlank || string(e.keyBytes) != "\t" {
+		return false
+	}
+	for _, r := range e.line[:e.pos] {
+		if r != ' ' && r != '\t' {
+			return false
+		}
+	}
+	e.change(false, func() { e.insert('\t') })
+	e.redraw(prompt)
+	e.lastTab = false
+	return true
+}
+
+// backToTheLine takes a declined question off the screen and puts the cursor
+// back on the line it was asked under, which is where zsh draws the line
+// again: measured 2026-10-05 against zsh 5.9.2, a declined question is
+// followed by `\r\e[J\e[A` and the line redrawn on its own row, where this
+// drew a fresh prompt under the question and left the question on the screen
+// (#6119). See EditorStyle.ListQueryAnswerTakesTheQuestionsRow.
+func (e *editor) backToTheLine(prompt drawnPrompt) {
+	e.write("\r\x1b[J\x1b[A")
+	cols := e.cols()
+	if cols <= 0 {
+		e.row = 0
+		return
+	}
+	// The row endLine left the line from, counted the way toLastRow counts
+	// it, which is the row the question was written under.
+	_, _, endRow, endCol := place(prompt.cells, e.displayed(), e.pos, cols)
+	if endCol == cols {
+		endRow++
+	}
+	e.row = endRow
 }

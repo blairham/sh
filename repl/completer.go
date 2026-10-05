@@ -148,7 +148,22 @@ type Candidate struct {
 
 	// stop marks CompletionStopped's answer, and nothing else sets it.
 	stop bool
+
+	// insertKey marks CompletionInsertsTheKey's answer, and nothing else sets
+	// it.
+	insertKey bool
 }
+
+// CompletionInsertsTheKey is what a shell's completion answers when it asked
+// for the key to be typed rather than a word completed: zsh's
+// `compstate[insert]` holding `tab`, which its completion system sets for a
+// Tab with nothing but blanks before the cursor — the `insert-tab` style,
+// on by default. Measured 2026-10-05 against zsh 5.9.2 through a
+// pseudo-terminal: Tab on an empty line leaves a tab in it, a function
+// setting `compstate[insert]=tab` on `^T` leaves `^T`, and on `^Xt` leaves
+// `t` — the last character of the key, as a self-insert would type (#6119).
+// Nothing is listed and no bell rings, whatever matches were added.
+func CompletionInsertsTheKey() []Candidate { return []Candidate{{insertKey: true}} }
 
 // CompletionStopped is what a shell's completion answers when its function
 // stopped on an error: no matches, and not "nothing to say" either, so the

@@ -17095,6 +17095,17 @@ type Semantics struct {
 	//
 	// ksh93 holds the same two answers above this one and writes nothing:
 	// its `jobs` lists the job as Done and its `fg` misses in silence.
+	//
+	// unpinned zsh: the corpus has no terminal and zsh refuses `set -m`
+	// without one; pinned by TestAJobBuiltinReportsAFinishedJobUnderNonotify.
+	//
+	// unpinned bash: likewise, the monitor needs a terminal.
+	//
+	// unpinned ksh: likewise.
+	//
+	// unpinned dash: likewise.
+	//
+	// unpinned ash: likewise.
 	FinishedJobIsReportedByAJobBuiltin Answer
 
 	// JobStartedWithoutTheMonitorIsRefused makes `fg` and `bg` refuse a job

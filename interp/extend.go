@@ -701,6 +701,54 @@ func (r *Runner) LookPathAll(name string) []string {
 	return hits
 }
 
+// LookPathAsWritten is LookPath for a shell that reports a PATH hit exactly
+// as the entry spells it, rather than as the path that will run.
+//
+// Measured 2026-10-05 on zsh 5.9.2 under `-f`, with `env -i PATH=<entry>`
+// and `whence ls` (`man` an executable in a directory `bin` under the
+// working directory, for the relative rows):
+//
+//	PATH=/usr/../bin   /usr/../bin/ls
+//	PATH=/bin/         /bin//ls
+//	PATH=/bin//        /bin///ls
+//	PATH=bin           bin/man
+//	PATH=./bin         ./bin/man
+//	PATH=bin/../bin    bin/../bin/man
+//	PATH=.             ./man         (run inside bin)
+//	PATH=:/bin         man           (run inside bin)
+//
+// So nothing is cleaned and nothing is trimmed, a relative entry stays
+// relative, and an empty entry — the current directory — is the name alone.
+// `whence -p`, `-a`, `-v`, `-c` and `$commands` all agree (#6015). The path
+// that *runs* is still the absolute one; only the report is this.
+//
+// A name with a slash in it was never a PATH hit and is LookPath's answer,
+// and so is a name the command hash answered: the table holds what it holds.
+func (r *Runner) LookPathAsWritten(name string) (string, bool) {
+	if strings.ContainsRune(name, '/') {
+		return r.LookPath(name)
+	}
+	_, _, written, err := r.lookPathSpelled(name)
+	if err != nil {
+		return "", false
+	}
+	return r.NameReportWord(written), true
+}
+
+// LookPathAllAsWritten is LookPathAll with each PATH hit spelled the way
+// LookPathAsWritten spells one.
+func (r *Runner) LookPathAllAsWritten(name string) []string {
+	if strings.ContainsRune(name, '/') {
+		return r.LookPathAll(name)
+	}
+	hits := r.lookPathHits(name)
+	out := make([]string, len(hits))
+	for i, hit := range hits {
+		out[i] = r.NameReportWord(hit.written)
+	}
+	return out
+}
+
 // NameKind is what a shell would run for a word: the resolution itself, with
 // no wording attached to it.
 //

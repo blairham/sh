@@ -221,6 +221,9 @@ func whenceNames(r *interp.Runner, ctx context.Context, names []string, m whence
 	if m.pattern {
 		return whencePatterns(r, names, m)
 	}
+	if m.all {
+		return whenceAllNames(r, ctx, names, m)
+	}
 	status := 0
 	for _, name := range names {
 		if st := whenceOne(r, ctx, name, m); st != 0 {
@@ -228,6 +231,71 @@ func whenceNames(r *interp.Runner, ctx context.Context, names []string, m whence
 		}
 	}
 	return status
+}
+
+// whenceAllNames is `-a` over several operands, where a miss counts only
+// until something has been found.
+//
+// Measured 2026-10-05 on zsh 5.9.2 under `-f`, `env -i PATH=/usr/bin:/bin`
+// (#6016):
+//
+//	whence -va ls nosuch              ls is /bin/ls                  0
+//	whence -va nosuch ls              nosuch not found, ls is …      1
+//	whence -va nosuch ls nosuch2      nosuch not found, ls is …      1
+//	whence -va nosuch nosuch2 ls      both not found, ls is …        1
+//	whence -wa nosuch ls nosuch2      nosuch: none, ls: command      1
+//	whence -ca ls nosuch nosuch2      /bin/ls                        0
+//	whence -a nosuch ls nosuch2       /bin/ls                        0
+//	whence -a nosuch                  (nothing)                      1
+//	whence -pa nosuch ls              /bin/ls                        0
+//
+// So once any operand has been found, a later miss writes nothing and leaves
+// the status alone. A miss before that is answered as a miss always is — the
+// line in the shapes that write one, and the failing status with it — except
+// that in the shapes with no line (the bare form, `-p`, `-s`) the miss leaves
+// no mark at all and the status is 1 only when nothing was found anywhere.
+// `type -a`, `which -a` and `where` are this walk and answer the same.
+// Without `-a` every operand is answered, which is whenceNames.
+func whenceAllNames(r *interp.Runner, ctx context.Context, names []string, m whenceMode) int {
+	status := 0
+	found := false
+	for _, name := range names {
+		if found && !whenceFinds(r, name, m) {
+			continue
+		}
+		if whenceOne(r, ctx, name, m) == 0 {
+			found = true
+			continue
+		}
+		if whenceSaysMissing(m) {
+			status = 1
+		}
+	}
+	if !found {
+		return 1
+	}
+	return status
+}
+
+// whenceFinds reports whether `-a` would write anything for a name, without
+// writing it — the same three sources whenceAll and whencePath list.
+func whenceFinds(r *interp.Runner, name string, m whenceMode) bool {
+	if len(whenceAllPaths(r, name)) > 0 {
+		return true
+	}
+	if m.path {
+		return false
+	}
+	if _, _, _, ok := r.AliasForName(name); ok {
+		return true
+	}
+	return len(r.NameKinds(name)) > 0
+}
+
+// whenceSaysMissing is whether a miss is a line in this shape — `-w`, `-v`
+// and the csh spellings — which is whenceMissing's own switch.
+func whenceSaysMissing(m whenceMode) bool {
+	return m.kind || m.verbose || m.csh
 }
 
 // whenceOptions reads the leading option words.
@@ -456,6 +524,13 @@ func whenceOne(r *interp.Runner, ctx context.Context, name string, m whenceMode)
 	if kind == interp.NameNotFound {
 		return whenceMissing(r, name, m)
 	}
+	if kind == interp.NameFile {
+		// The hit as PATH spells it, not the path that runs — see
+		// interp.Runner.LookPathAsWritten (#6015).
+		if written, ok := r.LookPathAsWritten(name); ok {
+			path = written
+		}
+	}
 	writeLine(r, resolvedAnswer(r, name, kind, path, m))
 	return 0
 }
@@ -508,7 +583,7 @@ func whencePath(r *interp.Runner, name string, m whenceMode) int {
 		}
 		return 0
 	}
-	path, ok := r.LookPath(name)
+	path, ok := r.LookPathAsWritten(name)
 	if !ok {
 		return whenceMissing(r, name, m)
 	}
@@ -753,7 +828,11 @@ func whenceLinkArrow(r *interp.Runner, path string, m whenceMode) string {
 // an empty entry is the name itself, and an absolute name is only itself.
 // `type -a` and `which -a` are this builtin and answer the same (#5956).
 func whenceAllPaths(r *interp.Runner, name string) []string {
-	if !strings.ContainsRune(name, '/') || strings.HasPrefix(name, "/") {
+	if !strings.ContainsRune(name, '/') {
+		// Spelled as PATH spells each hit, nothing cleaned (#6015).
+		return r.LookPathAllAsWritten(name)
+	}
+	if strings.HasPrefix(name, "/") {
 		return r.LookPathAll(name)
 	}
 	path, _ := r.GetVar("PATH")

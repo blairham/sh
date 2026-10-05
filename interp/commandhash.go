@@ -340,7 +340,7 @@ func (r *Runner) lookPathReporting(name string) (string, error) {
 			return hashed, nil
 		}
 	}
-	path, spelled, err := r.lookPathSpelled(name)
+	path, spelled, _, err := r.lookPathSpelled(name)
 	if err != nil {
 		return path, err
 	}

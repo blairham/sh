@@ -746,6 +746,15 @@ func autoloadResolveNow(r *interp.Runner, ctx context.Context, opts autoloadOpts
 	}
 	status := 0
 	for _, name := range names {
+		// An absolute path names its file, as it does for the marking form
+		// (#5392): the function is the base name, read from exactly there.
+		// Measured 2026-10-05 on zsh 5.9.2, `autoload -Uz +X -- $PWD/fns/myh`
+		// is 0 and leaves `myh is a shell function from …/fns/myh`, where
+		// this searched `$fpath` for the whole path and found nothing (#6186).
+		var dirs []string
+		if file, dirOfFile, absolute := autoloadAbsolute(name); absolute {
+			name, dirs = file[len(dirOfFile)+1:], []string{dirOfFile}
+		}
 		if autoloadDefined(r, name) {
 			// A function that is already there is not resolved over, and the
 			// refusal is silent: measured, `myfn() { echo body; }; autoload
@@ -766,7 +775,7 @@ func autoloadResolveNow(r *interp.Runner, ctx context.Context, opts autoloadOpts
 			}
 			continue
 		}
-		if code := autoloadResolve(r, name, opts.keepAliases); code != 0 {
+		if code := autoloadResolveIn(r, name, dirs, autoloadOpts{keepAliases: opts.keepAliases}, false); code != 0 {
 			status = code
 		}
 	}

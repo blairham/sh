@@ -47,6 +47,15 @@ type HistoryStyle struct {
 	// disk shifts every absolute event number by however many lines it held.
 	DefaultFile string
 
+	// SaveCountVariable names the variable that says how many entries the
+	// history file keeps, for a dialect where that is not bash's
+	// `HISTFILESIZE` — and naming it says the rest of that dialect's reading:
+	// zero or unset writes nothing at all and leaves the file alone, and the
+	// count does not default to `HISTSIZE`. zsh's is `SAVEHIST`; the
+	// measurement is on historyFile.savedBy. The zero value is
+	// `HISTFILESIZE`'s reading, which is bash's (#5902).
+	SaveCountVariable string
+
 	// SearchPrompt is what replaces the prompt, or is drawn under the line,
 	// while a reverse incremental search is running. One verb: the query
 	// typed so far.

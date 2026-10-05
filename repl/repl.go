@@ -1976,7 +1976,7 @@ func (s Shell) historyFile() historyFile {
 	// HISTFILE — see HistoryStyle.DefaultFile, and note that an empty one is
 	// a shell that records nothing rather than one that records somewhere
 	// standard.
-	h := historyFrom(s.Runner.GetVar, home, s.History.DefaultFile)
+	h := historyFrom(s.Runner.GetVar, home, s.History.DefaultFile).savedBy(s.Runner.GetVar, s.History.SaveCountVariable)
 	// The session's boundary, so an open this package makes is asked about
 	// the same way one the interpreter makes is.
 	h.bound = boundary.Boundary{Gate: s.Gate, Events: s.Events, Session: s.Session}

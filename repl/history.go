@@ -49,8 +49,15 @@ type historyFile struct {
 
 	// file is HISTFILESIZE: how many lines the file keeps. Its default is
 	// HISTSIZE's value, which is measured — bash's manual says so and bash
-	// with only HISTSIZE set trims to it.
+	// with only HISTSIZE set trims to it. Under a dialect that names its
+	// own count it is that variable's instead — see savedBy.
 	file int
+
+	// zeroWritesNothing is the reading of a file count of zero under a
+	// dialect whose count is HistoryStyle.SaveCountVariable: the file is left
+	// exactly as it was, where bash's `HISTFILESIZE=0` empties it. See
+	// savedBy.
+	zeroWritesNothing bool
 	// bound is the session's gate and event sink, because this file is
 	// inside the boundary rather than beside it: HISTFILE is a shell
 	// variable, so the path is one a line typed at the prompt can change,
@@ -317,6 +324,44 @@ func historyFrom(get func(string) (string, bool), home, deflt string) historyFil
 	// check for it — so there is nothing to do here but carry it through.
 	size := countFrom(get, "HISTSIZE", defaultHistorySize)
 	return historyFile{path: path, size: size, file: countFrom(get, "HISTFILESIZE", size)}
+}
+
+// savedBy is this file bounded by the dialect's own count, where it has one.
+//
+// zsh's is `SAVEHIST`, and it is two answers in one variable: how many entries
+// the file keeps, and whether the file is written at all. Measured 2026-10-04
+// through a pty against zsh 5.9.2 with `GLOBAL_RCS` off — `/etc/zshrc` sets
+// `SAVEHIST=1000` on this machine and answers every row below "written" if
+// it is left on, which is how #5902's first table came to read `unset
+// SAVEHIST` as a save. `.zshrc` set `HISTSIZE` and the setting, the session
+// typed `echo hi`, `echo two` and `exit`:
+//
+//	setting                      file before    file after
+//	(none)                       none           none
+//	SAVEHIST=0                   none           none
+//	SAVEHIST=0                   a1 a2          a1 a2 — left alone
+//	SAVEHIST=3                   a1 … a6        echo hi, echo two, exit
+//	SAVEHIST=3, ^D at once       a1 … a6        a4 a5 a6
+//	SAVEHIST=10, HISTSIZE=2      a1 … a4        a1 … a4, echo two, exit
+//
+// So zero and unset write nothing and leave a file that is there alone,
+// rather than emptying it as bash's `HISTFILESIZE=0` does; a positive count
+// is the bound the file is trimmed to, and is the only bound — `HISTSIZE`
+// still decides which of the session's lines are appended, but is not where
+// the file is cut. The defaults go with it: an unset count is zero, not
+// `HISTSIZE`.
+//
+// One row is not reproduced: in zsh `SAVEHIST=5; unset SAVEHIST` still saves,
+// because the shell keeps the number it was last given while the parameter
+// reads as unset. Here the variable is read when the session ends, so an
+// unset one is zero.
+func (h historyFile) savedBy(get func(string) (string, bool), name string) historyFile {
+	if name == "" {
+		return h
+	}
+	h.file = countFrom(get, name, 0)
+	h.zeroWritesNothing = true
+	return h
 }
 
 // countFrom reads one of the two size variables, or leaves the default alone.
@@ -645,6 +690,10 @@ func (h historyFile) save(ctx context.Context, earlier, added, times []string, r
 		// as a file that keeps nothing: see below.
 		return nil
 	}
+	if h.file == 0 && h.zeroWritesNothing {
+		// A dialect whose count also says whether to save, saying no.
+		return nil
+	}
 	if h.file == 0 {
 		// A file that keeps nothing is **emptied**, not left alone, and it
 		// is created if it was not there. Measured 2026-09-22 on bash 5.3.20,
@@ -656,7 +705,12 @@ func (h historyFile) save(ctx context.Context, earlier, added, times []string, r
 		return h.empty(ctx)
 	}
 	if len(added) == 0 {
-		return nil
+		// Nothing to add, but the bound is still the bound: zsh 5.9.2 under
+		// `SAVEHIST=3`, a six-line file and a session that typed nothing
+		// leaves the last three (measured 2026-10-04, see savedBy). bash
+		// 5.3.20 under `HISTFILESIZE=3` leaves the same three. A file that is
+		// not there stays not there — trim opens nothing it did not find.
+		return h.trim(ctx)
 	}
 	if rewrite && len(added) > h.size {
 		// The list rather than what was added, because that is what the

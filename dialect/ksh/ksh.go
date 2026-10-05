@@ -1350,6 +1350,10 @@ func Semantics() interp.Semantics {
 	// the silent miss, where the builtin `sleep` reaps nothing and leaves it
 	// there at 4. See Semantics.FinishedJobLeavesTheTable (#5302).
 	s.FinishedJobLeavesTheTable = interp.Yes
+	// Whether a job builtin writes a finished job's notice first, with the
+	// monitor on and no prompt (#6064). See
+	// Semantics.FinishedJobIsReportedByAJobBuiltin.
+	s.FinishedJobIsReportedByAJobBuiltin = interp.No
 	// A file `.` reads from a startup file numbers on from the `.`, and the startup file's later lines move by the file's length (#6013). See
 	// Semantics.SourcedFileContinuesTheStartupLineCount.
 	s.SourcedFileContinuesTheStartupLineCount = interp.Yes

@@ -1308,6 +1308,27 @@ func (r *Runner) FinishedJobNotices() []string {
 	if !r.JobControl {
 		return nil
 	}
+	return r.takeFinishedJobNotices()
+}
+
+// reportFinishedJobsAtAJobBuiltin writes what is owed about finished jobs
+// where a job builtin is about to look at the table, in the dialect whose
+// builtins report them — see Semantics.FinishedJobIsReportedByAJobBuiltin.
+// Only with the monitor on and nothing else to report them: a prompt writes
+// its own, and a notice written as the job ended has already let it go.
+func (r *Runner) reportFinishedJobsAtAJobBuiltin() {
+	if !r.monitor || r.JobControl || r.reportsFinishedJobsToNobody() ||
+		r.sem().FinishedJobIsReportedByAJobBuiltin != Yes {
+		return
+	}
+	for _, line := range r.takeFinishedJobNotices() {
+		r.printf("%s\n", line)
+	}
+}
+
+// takeFinishedJobNotices is FinishedJobNotices with the question of who is
+// listening already answered.
+func (r *Runner) takeFinishedJobNotices() []string {
 	if !r.monitor {
 		// Shared ground rather than an axis: measured 2026-09-10 on a
 		// pseudo-terminal with the monitor off, no shell in the panel says
@@ -1532,6 +1553,7 @@ const maxNamedSignal = 64
 // bare `wait` a status of its own.
 func biWait(r *Runner, _ context.Context, args []string) int {
 	r.forgetANumberNobodyHolds()
+	r.reportFinishedJobsAtAJobBuiltin()
 	// Whatever this wait is for, the shell is about to reap what it can —
 	// which is where a coprocess that ended is noticed. See
 	// Runner.retireCoproc for the measurements, and note that a `wait` is one

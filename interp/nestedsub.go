@@ -308,17 +308,17 @@ func (r *Runner) nestedResultIsAList(e *syntax.ParamExpr, words []string, quoted
 // yieldsTheArray, which is the same source expandAtList already uses for it,
 // so the two cannot come to different answers.
 func (r *Runner) paramIsAList(e *syntax.ParamExpr) bool {
-	if e.Inner != nil || e.Bad || e.Length || e.Indirect {
-		// A nested inner is a value: measured, `${${${s}}[2]}` on `hello` is
-		// `e`, so the depth does not make a list of a string. An inner that
-		// came to a list is refused a level down, by name.
+	if e.Inner != nil && !e.Bad && !e.Length && !e.Indirect {
+		return r.nestedShapeOf(e)
+	}
+	if e.Bad || e.Length || e.Indirect {
+		// A count, a bad expansion and an indirection are each one value.
 		//
-		// The nesting clause is also what keeps this from *asking*: the four
+		// This clause is also what keeps this from *asking*: the four
 		// conditionals below read yieldsTheArray, which expands a nested
-		// inner again to find out whether the test fired. No answer changes
-		// — a nested inner is not a list either way — so a mutation that
-		// drops it shows nothing but one more run of the inner's command
-		// substitution, which is #1404's subject rather than this one's.
+		// inner again to find out whether the test fired. A nested inner is
+		// answered above, from what it came to when it ran, for the same
+		// reason — see nestedShapeOf.
 		return false
 	}
 	if e.Prefix != 0 {
@@ -449,4 +449,49 @@ func (r *Runner) refusesAListAsAName(e *syntax.ParamExpr) bool {
 	// a command line, and only the arithmetic command inside `(( ))`.
 	r.expandErr = true
 	return true
+}
+
+// nestedShapeMemo is whether one nested expansion came to a list, as
+// nestedWords decided it the last time it expanded that node.
+type nestedShapeMemo struct {
+	node   *syntax.ParamExpr
+	isList bool
+	known  bool
+}
+
+// nestedShapeOf reports whether a nested expansion — one with an inner of its
+// own — came to a list, for the expansion one level out that is asking.
+//
+// The shape is carried up through each level rather than reset at it: what
+// decides it is the shape the level below handed over, changed only by what
+// this level does to it. Measured on zsh 5.9.2 under -f, 2026-10-05, with
+// `x=$'two\nthree'`, unquoted:
+//
+//	${${${(f)x}:#tw*}[1]}      three  a filter over a list is a list,
+//	                                  even of one
+//	${${${(f)x}[2,2]}[1]}      three  and so is a range of one
+//	${${${(f)x}[2]}[1]}        t      while one element is a string
+//	y=three; ${${(f)y}[1]}     t      and so is a split that found one
+//	s=hello; ${${${s}}[2]}     e      depth alone makes no list of a string
+//
+// Rows one and three are the pair: the same inner, the same one surviving
+// value, and the level between them decides. A field count cannot tell them
+// apart — both hand up the single word `three` — and the level's own shape
+// cannot be read off its node without its inner's, which is a word count when
+// the inner is a split. So it is asked of the expansion that has just run:
+// nestedWords keeps what it decided for the node, and the level out reads it
+// straight after expanding its inner, before anything else can expand.
+//
+// Each level's own split, join and count are answered by the caller before
+// this is reached, as they are for a name. The four conditionals are left as
+// they were — the word may be what such an inner came to, and that is a
+// different shape — and an inner nothing has expanded is a value, as it
+// always was here (#5978).
+func (r *Runner) nestedShapeOf(e *syntax.ParamExpr) bool {
+	switch e.Op {
+	case syntax.ParamDefault, syntax.ParamAssign, syntax.ParamError, syntax.ParamAlternate:
+		return false
+	}
+	m := r.nestedShape
+	return m.known && m.node == e && m.isList
 }

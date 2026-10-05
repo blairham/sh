@@ -204,37 +204,12 @@ type Diagnostics struct {
 	// Zero means the substrate's own, which is 2.
 	SyntaxErrorStatus int
 
-	// UnmatchedAtTheEndKeepsAFailingStatus makes input that runs out inside
-	// a quote, a backquote, a `${`, a `$((` or a `$[` leave the status the last command left when that was a failure, and
-	// SyntaxErrorStatus only over a success. bash 5.3 alone.
-	//
-	// Measured 2026-10-05 on bash 5.3.20 with standard input on the null
-	// device, a first line of `false` (or `sh -c "exit 7"`) and a second
-	// that will not parse, the status the shell exits with:
-	//
-	//	second line          script  -c  stdin  `.` and eval
-	//	echo "abc            1 (7)   1   1      2
-	//	echo 'abc, echo $'a  1       1   1      2
-	//	echo ${x, echo `x    1 (7)   1   1      2
-	//	echo $((1+, $[1+     1       1   1      2
-	//	a=(1 2               1       1   1      1
-	//	echo $(echo "x       1       1   1      2
-	//	echo $(, <(x, >(x    2       2   2      2
-	//	echo "$(echo         2       2   2      2
-	//	echo ), if; then     2       2   2      2
-	//
-	// So it is the end of the input inside one of the constructs the reader
-	// matches on its own, with a substitution's or process substitution's
-	// `(` the exception — syntax.Error's ErrUnmatched with any Token but
-	// those three. An array literal is 1 over anything, which is its own
-	// rule and not this one, so its `(` is left out too. A command on the failing line itself never ran and does
-	// not count: `false; echo "abc` alone is 2, and `false` and then
-	// `true; echo "abc` is 1. `.` and `eval` say 2 whatever came before, and
-	// so does bash 3.2 on every route, which is what makes this the 5.3
-	// preset's answer rather than the dialect's. dash (2), ksh93 (3) and
-	// BusyBox ash keep their syntax status here. zsh keeps a failing status
-	// over every parse failure, which is #5989 (#5882).
-	UnmatchedAtTheEndKeepsAFailingStatus bool
+	// ParseFailureKeepsAFailingStatus is which parse failures leave the
+	// status the last command left, when that was a failure, rather than
+	// SyntaxErrorStatus — on the routes that read a program a line at a
+	// time. See FailingStatusKept for the two answers and their
+	// measurements; the zero value keeps nothing (#5882, #5989).
+	ParseFailureKeepsAFailingStatus FailingStatusKept
 
 	// SourcedSyntaxErrorStatus is what a parse failure in a file read by `.`
 	// reports, when that differs from SyntaxErrorStatus.
@@ -11991,13 +11966,80 @@ func (d Diagnostics) StatusForParseError(err error) int {
 // StatusForParseErrorAfter is StatusForParseError for a program read a line
 // at a time, given the status the last command that ran left — which one
 // dialect keeps over some failures. See
-// Diagnostics.UnmatchedAtTheEndKeepsAFailingStatus.
+// Diagnostics.ParseFailureKeepsAFailingStatus.
 func (d Diagnostics) StatusForParseErrorAfter(err error, before int) int {
-	if before != 0 && d.UnmatchedAtTheEndKeepsAFailingStatus && unmatchedInTheReader(err) {
+	if before == 0 {
+		return d.StatusForParseError(err)
+	}
+	switch d.ParseFailureKeepsAFailingStatus {
+	case FailingStatusKeptOverAnUnmatchedOpener:
+		if unmatchedInTheReader(err) {
+			return before
+		}
+	case FailingStatusKeptOverAnyFailure:
 		return before
 	}
 	return d.StatusForParseError(err)
 }
+
+// FailingStatusKept is which parse failures leave a failing status in place.
+// See Diagnostics.ParseFailureKeepsAFailingStatus.
+type FailingStatusKept uint8
+
+const (
+	// FailingStatusKeptNever reports SyntaxErrorStatus over anything: dash
+	// (2), ksh93 (3), BusyBox ash, and bash 3.2.
+	FailingStatusKeptNever FailingStatusKept = iota
+
+	// FailingStatusKeptOverAnUnmatchedOpener keeps it where the input ran
+	// out inside a quote, a backquote, a `${`, a `$((` or a `$[`: bash 5.3.
+	//
+	// Measured 2026-10-05 on bash 5.3.20 with standard input on the null
+	// device, a first line of `false` (or `sh -c "exit 7"`) and a second
+	// that will not parse, the status the shell exits with:
+	//
+	//	second line          script  -c  stdin  `.` and eval
+	//	echo "abc            1 (7)   1   1      2
+	//	echo 'abc, echo $'a  1       1   1      2
+	//	echo ${x, echo `x    1 (7)   1   1      2
+	//	echo $((1+, $[1+     1       1   1      2
+	//	a=(1 2               1       1   1      1
+	//	echo $(echo "x       1       1   1      2
+	//	echo $(, <(x, >(x    2       2   2      2
+	//	echo "$(echo         2       2   2      2
+	//	echo ), if; then     2       2   2      2
+	//
+	// So it is the end of the input inside one of the constructs the reader
+	// matches on its own, with a substitution's or process substitution's
+	// `(` the exception — syntax.Error's ErrUnmatched with any Token but
+	// those three. An array literal is 1 over anything, which is its own
+	// rule and not this one, so its `(` is left out too. A command on the
+	// failing line itself never ran and does not count: `false; echo "abc`
+	// alone is 2, and `false` and then `true; echo "abc` is 1. `.` and
+	// `eval` say 2 whatever came before, and so does bash 3.2 on every
+	// route, which is what makes this the 5.3 preset's answer rather than
+	// the dialect's (#5882).
+	FailingStatusKeptOverAnUnmatchedOpener
+
+	// FailingStatusKeptOverAnyFailure keeps it over every parse failure: zsh.
+	//
+	// Measured 2026-10-05 on zsh 5.9.2 (`-f`), a first line of `sh -c "exit
+	// 7"` — not `false`, whose 1 is zsh's syntax status too and so cannot
+	// show the rule — and a second that will not parse:
+	//
+	//	second line                       script  stdin  a prompt  -c
+	//	echo "abc, echo ${x, echo `x,     7       7      —         1
+	//	  echo $((1+, echo $(
+	//	echo ), if true; then, a=(1 2     7       7      7         1
+	//	true in front instead             1       1      1         1
+	//	f() { return 5 }; f in front      5
+	//
+	// `-c` reads its whole string before running any of it, so nothing has
+	// run and nothing is kept; `.` is 126 and `eval` 1 whatever came before.
+	// A prompt is the one route the opener cases cannot reach, since it asks
+	// for more instead (#5989).
+	FailingStatusKeptOverAnyFailure
+)
 
 // unmatchedInTheReader reports input that ran out inside a construct other
 // than a command or process substitution.
@@ -12070,7 +12112,7 @@ func (d Diagnostics) SyntaxStatus() int {
 //
 // bash has a further split, shared with its script route: an unclosed quote
 // or `${` leaves a failing status where it found one and 2 only over a
-// success. That is Diagnostics.UnmatchedAtTheEndKeepsAFailingStatus, which
+// success. That is Diagnostics.ParseFailureKeepsAFailingStatus, which
 // the syntax-status answer here goes through (#5882).
 type StartupParseStatus int
 

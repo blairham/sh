@@ -830,7 +830,7 @@ func (e *editor) readLine(prompt drawnPrompt) (string, error) {
 				// hand the parser something no one typed.
 				continue
 			}
-			r, err := e.readRune(c)
+			r, err := e.readTypedRune(c)
 			if err != nil {
 				return "", err
 			}
@@ -979,6 +979,26 @@ func (e *editor) stopped(prompt drawnPrompt) (string, error) {
 // several. Inserting them one at a time would put half a rune in the line and
 // draw a cursor between the halves.
 func (e *editor) readRune(first byte) (rune, error) {
+	r, _, err := e.readRuneBytes(first)
+	return r, err
+}
+
+// readTypedRune is readRune for a character that is the keystroke itself, so
+// the rest of its bytes belong in the keystroke's record as well as in the
+// line: `$KEYS` in a widget the key runs is the whole character, measured
+// 2026-10-04 against zsh 5.9.2 in a UTF-8 locale — typing `é` runs a
+// `self-insert` widget once with `${#KEYS}` of 1 and two bytes in it, where
+// this shell handed over the first byte alone (#5900).
+func (e *editor) readTypedRune(first byte) (rune, error) {
+	r, buf, err := e.readRuneBytes(first)
+	if err == nil && len(e.keyBytes) > 0 {
+		e.keyBytes = append(e.keyBytes, buf[1:]...)
+	}
+	return r, err
+}
+
+// readRuneBytes is readRune with the bytes the character arrived as.
+func (e *editor) readRuneBytes(first byte) (rune, []byte, error) {
 	buf := []byte{first}
 	for !utf8.FullRune(buf) && len(buf) < utf8.UTFMax {
 		var next [1]byte
@@ -989,7 +1009,7 @@ func (e *editor) readRune(first byte) (rune, error) {
 		// pasted `日` after the bytes that followed it.
 		n, err := e.nextByte(next[:])
 		if err != nil {
-			return 0, err
+			return 0, nil, err
 		}
 		if n == 0 {
 			continue
@@ -997,7 +1017,7 @@ func (e *editor) readRune(first byte) (rune, error) {
 		buf = append(buf, next[0])
 	}
 	r, _ := utf8.DecodeRune(buf)
-	return r, nil
+	return r, buf, nil
 }
 
 // browse walks the history. -1 is older, +1 is newer.

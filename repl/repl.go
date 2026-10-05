@@ -2249,9 +2249,14 @@ func (s Shell) completer(ctx context.Context) Completer {
 	var all completers
 	all = append(all, s.Completers...)
 	if s.Runner != nil {
+		var listTypes func() bool
+		if name := s.Editor.ListTypesOption; name != "" {
+			listTypes = func() bool { return s.dialectOption(name) }
+		}
 		all = append(all, runnerCompleter{
 			r: s.Runner, hidden: s.Editor.CompletionMatchesHiddenFiles,
 			symlinkMarkedWhenWhole: s.Editor.SymlinkedDirectoryMarkedWhenNamedWhole,
+			listTypes:              listTypes,
 			// The session's boundary and the session's context, so a
 			// directory listed to answer Tab is asked about the same way one
 			// listed by a glob is. The history file above is handed the same
@@ -2276,6 +2281,9 @@ type runnerCompleter struct {
 	// symlinkMarkedWhenWhole is the same kind of answer.
 	hidden                 bool
 	symlinkMarkedWhenWhole bool
+	// listTypes reads the dialect's ListTypesOption at the keystroke, or is
+	// nil where it names none.
+	listTypes func() bool
 
 	// bound and ctx are the session's gate, sink and context. Held here
 	// because the Completer seam carries neither and cannot be widened to;
@@ -2301,6 +2309,7 @@ func (c runnerCompleter) shell() shellCompleter {
 	return shellCompleter{
 		names: c.names(), path: path, dir: c.r.Dir,
 		home: home, hidden: c.hidden, symlinkMarkedWhenWhole: c.symlinkMarkedWhenWhole,
+		listTypes: c.listTypes,
 		// Asked per keystroke rather than settled with hidden, because this
 		// one moves during a session: `shopt -s no_empty_cmd_completion` is a
 		// line a person types, and a completer built once at startup would

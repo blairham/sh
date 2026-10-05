@@ -3,6 +3,8 @@
 
 package repl
 
+import "os"
+
 // The public completion seam: how something other than this package answers
 // Tab.
 //
@@ -224,6 +226,31 @@ type Group struct {
 	// `packed`, which its completion system writes when it hands the editor
 	// a grid of names and descriptions that only lines up packed.
 	Packed bool
+}
+
+// FileTypeMark is the mark `ls -F` draws after a file of this mode, and the
+// one a listing draws under a dialect's ListTypesOption: the link's own mark
+// for a link, whatever it points at, and nothing for a plain file. One table
+// for every listing that marks files, so a completer's own and a completion
+// system's cannot draw two different marks for one file.
+func FileTypeMark(mode os.FileMode) string {
+	switch {
+	case mode&os.ModeSymlink != 0:
+		return "@"
+	case mode.IsDir():
+		return "/"
+	case mode&os.ModeNamedPipe != 0:
+		return "|"
+	case mode&os.ModeSocket != 0:
+		return "="
+	case mode&os.ModeCharDevice != 0:
+		return "%"
+	case mode&os.ModeDevice != 0:
+		return "#"
+	case mode&0o111 != 0:
+		return "*"
+	}
+	return ""
 }
 
 // DisplayWidth is how many columns a string takes in a listing: what a

@@ -170,6 +170,10 @@ func EditorStyle() repl.EditorStyle {
 		// See repl.EditorStyle.ListPackedOption (#6157).
 		ListPackedOption:    "LIST_PACKED",
 		ListRowsFirstOption: "LIST_ROWS_FIRST",
+		// And whether a listing of files marks each one as `ls -F` does,
+		// which is the completion system's `compadd -f` answer too. See
+		// repl.EditorStyle.ListTypesOption (#6179).
+		ListTypesOption: "LIST_TYPES",
 		// Measured: a bare Tab in a directory holding a `.hidden` lists
 		// everything except it, and `.` completes it outright because it is
 		// then the only match. Left false rather than written out, so that

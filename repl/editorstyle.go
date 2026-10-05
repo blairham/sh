@@ -553,6 +553,24 @@ type EditorStyle struct {
 	ListPackedOption    string
 	ListRowsFirstOption string
 
+	// ListTypesOption names the option under which a listing of files draws
+	// each one with the mark `ls -F` gives it — `/` a directory, `@` a link,
+	// `*` an executable, `|` a FIFO, `=` a socket, `%` and `#` a device —
+	// and under whose absence it draws none, the directory's slash
+	// included, though the column a mark would take is kept. Measured
+	// 2026-10-05 against zsh 5.9.2 with no completion system loaded, `ls
+	// <TAB>` over a link to a directory, an executable, a FIFO, a link to a
+	// file, a file and a directory:
+	//
+	//	LIST_TYPES set    dlink@  exe*    fifo|   link@   plain   sub/
+	//	LIST_TYPES unset  dlink   exe     fifo    link    plain   sub
+	//
+	// and the link to a directory is inserted as a directory either way,
+	// `ls dl<TAB>` giving `ls dlink/`, so the mark is the listing's and not
+	// the word's. Empty is a dialect with no such option, whose listing
+	// draws a directory's slash and nothing else. See FileTypeMark.
+	ListTypesOption string
+
 	// BellRingsOnAnAmbiguousCompletionThatInserts sounds the bell for a
 	// completion with more than one match even where it put a prefix on the
 	// line.

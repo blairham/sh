@@ -5,7 +5,6 @@ package interp
 
 import (
 	"errors"
-	"sort"
 	"strconv"
 	"strings"
 
@@ -230,36 +229,6 @@ func (a Array) equal(b Array) bool {
 		}
 	}
 	return true
-}
-
-// subscripts returns the assigned subscripts, in order.
-func (a Array) subscripts() []int {
-	out := make([]int, 0, a.Len())
-	for k := range a.All() {
-		out = append(out, k)
-	}
-	sort.Ints(out)
-	return out
-}
-
-// bounds is the lowest and highest subscript assigned, and whether there are
-// any.
-//
-// A scan rather than the two ends of subscripts(), which is the same answer
-// for a great deal more work: sorting a store to read one number off the end
-// of it was measured at a third of what a real startup spent in this file,
-// and every caller of the two below wants a number and not an order.
-func (a Array) bounds() (lo, hi int, any bool) {
-	for k := range a.All() {
-		if !any || k < lo {
-			lo = k
-		}
-		if !any || k > hi {
-			hi = k
-		}
-		any = true
-	}
-	return lo, hi, any
 }
 
 // extent is the range a dense reading walks: the base up to the highest

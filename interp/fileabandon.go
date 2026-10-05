@@ -3,6 +3,8 @@
 
 package interp
 
+import "slices"
+
 // A fatal error and a request to stop unwind the shell identically, and they
 // are caught in different places.
 //
@@ -109,6 +111,7 @@ func (r *Runner) stopTheShell() {
 // stopTheShell plus the one note only this producer can take: whether a file
 // was being read when the word ran. See Runner.ExitRanOutsideAFile.
 func (r *Runner) stopTheShellForExit() {
+	r.captureLeavingContexts(true)
 	r.exitRan = true
 	r.exitRanOutsideAFile = r.sourceDepth == 0
 	r.stopTheShell()
@@ -209,6 +212,45 @@ func (r *Runner) ExitFoundStatus() int { return r.exitFoundStatus }
 // 5.9.2, `.zlogout` reads `toplevel file` after a typed `exit` and `file` at
 // the end of input (#5996). See EvalContextStartupFile.
 func (r *Runner) ReadingLogoutAfterExit(byExit bool) { r.logoutByExit = byExit }
+
+// LeftFromInside reports whether what is ending the shell stopped it from
+// inside the program — an `exit`, or a hangup taken as an orderly exit —
+// rather than the program running out or an error ending it. A logout file
+// read for such an ending is read from where the shell stopped. See
+// Runner.captureLeavingContexts.
+func (r *Runner) LeftFromInside() bool { return r.leavingCaptured }
+
+// captureLeavingContexts records what the shell is inside as something
+// stops it from inside the program, for a logout file read afterwards.
+//
+// Measured 2026-10-05 on zsh 5.9.2, `zsh -l -i -c` with a `.zlogout` that
+// prints `$zsh_eval_context`:
+//
+//	exit                                cmdarg file
+//	. ./ex.zsh, which exits             cmdarg file file
+//	. ./ex2.zsh, which sources ex.zsh   cmdarg file file file
+//	eval 'exit 4'                       cmdarg eval file
+//	a trap on USR1 running exit 5       cmdarg trap file
+//	f(){ exit 3 } called, or f(){ . ./ex.zsh } or f(){ eval 'exit 4' }
+//	                                    cmdarg file
+//	kill -HUP $$                        cmdarg file
+//	f(){ kill -HUP $$ } called          cmdarg shfunc file
+//	. ./hup.zsh, which sends it         cmdarg file file
+//
+// So the file is read from the middle of whatever the shell was inside,
+// except that an `exit` has already left every function by then — it is cut
+// at the first one — where a hangup is taken right where it arrived. An
+// error ending the shell, or the program running out, reads the file alone
+// (`file`). This read the file over an empty stack every time (#6005).
+func (r *Runner) captureLeavingContexts(cutAtAFunction bool) {
+	stack := r.evalContexts
+	if cutAtAFunction {
+		if i := slices.Index(stack, EvalContextFunctionBody); i >= 0 {
+			stack = stack[:i]
+		}
+	}
+	r.leavingContexts, r.leavingCaptured = slices.Clone(stack), true
+}
 
 func (r *Runner) ResumeAfterExit() bool {
 	if r.ctl != controlExit {

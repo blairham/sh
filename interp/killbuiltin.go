@@ -1327,6 +1327,7 @@ func (r *Runner) signalDeath(name string, sig syscall.Signal) {
 	if name == "HUP" && r.ask(r.sem().HangupIsAnOrderlyExit,
 		"whether an untrapped HUP exits the shell rather than killing it") {
 		r.status = hangupExitStatus
+		r.captureLeavingContexts(false)
 		r.stopTheShell()
 		return
 	}

@@ -1353,6 +1353,9 @@ func Semantics() interp.Semantics {
 	// A file `.` reads from a startup file numbers on from the `.`, and the startup file's later lines move by the file's length (#6013). See
 	// Semantics.SourcedFileContinuesTheStartupLineCount.
 	s.SourcedFileContinuesTheStartupLineCount = interp.Yes
+	// A startup file given up over a fatal error: ksh93 under `-E` leaves `$?` as it was before the failing command: `(exit 7)` and then `${unset?boom}` leaves 7 (#6046).
+	// See Semantics.StartupFileGivenUpLeavesTheStatusBefore.
+	s.StartupFileGivenUpLeavesTheStatusBefore = interp.Yes
 	// A fatal error in an interactive shell's startup file: ksh93 gives up the line and runs the rest of `$ENV` (#6009).
 	// See Semantics.StartupFileErrorWhenInteractive.
 	s.StartupFileErrorWhenInteractive = interp.StartupErrorCostsTheLine

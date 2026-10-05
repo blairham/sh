@@ -302,6 +302,25 @@ func (r *Runner) GiveUpTheFile() bool {
 	return true
 }
 
+// GiveUpTheStartupFile is GiveUpTheFile for a startup file the front end has
+// just run, which also says what the file leaves in `$?`: the error's own
+// status, or — in the dialect that sets none for it there — the status from
+// before the command that failed. See
+// Semantics.StartupFileGivenUpLeavesTheStatusBefore (#6046).
+//
+// Runner.statusBefore is that number because the failing command is the last
+// statement to have started: nothing runs between the error and this catch.
+func (r *Runner) GiveUpTheStartupFile() bool {
+	before := r.statusBefore
+	if !r.GiveUpTheFile() {
+		return false
+	}
+	if r.ask(r.sem().StartupFileGivenUpLeavesTheStatusBefore, "the status a startup file given up over an error leaves") {
+		r.status = before
+	}
+	return true
+}
+
 // GiveUpTheLine is the same boundary at an interactive prompt: the unit is the
 // line a person typed, and an error in it costs that line rather than the
 // session.

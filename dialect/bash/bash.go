@@ -1084,6 +1084,9 @@ func Semantics() interp.Semantics {
 	// A file `.` reads from a startup file is numbered from its own first line (#6013). See
 	// Semantics.SourcedFileContinuesTheStartupLineCount.
 	s.SourcedFileContinuesTheStartupLineCount = interp.No
+	// A startup file given up over a fatal error: bash leaves 1, the fatal status of a file, whatever ran before (#6046).
+	// See Semantics.StartupFileGivenUpLeavesTheStatusBefore.
+	s.StartupFileGivenUpLeavesTheStatusBefore = interp.No
 	// A fatal error in an interactive shell's startup file: bash gives up the line and runs the rest of its `.bashrc` (#6009).
 	// See Semantics.StartupFileErrorWhenInteractive.
 	s.StartupFileErrorWhenInteractive = interp.StartupErrorCostsTheLine

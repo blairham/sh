@@ -6642,9 +6642,19 @@ func (r *Runner) fatalParamError(format string, args ...any) {
 // So the discriminator is the boundary rather than the frame: a function is
 // the same shell and keeps the answer, and a copy of it does not. Route is
 // carried by the clone, which is why asking it alone put 127 on all six.
+//
+// And it is the *string's* number, so a startup file read before the string
+// runs does not carry it, though the route is already the command string's
+// while it is read. Measured 2026-10-05 on bash 5.3.20, `$BASH_ENV` with
+// `${unset?boom}` on its second line and then `-c 'echo main $?'`: `main 1`,
+// whatever the line before it left, and the same through a file `.` reads
+// from `$BASH_ENV`; this left 127 (#6046). A function the startup file
+// defined and the string calls is the string's again — `f; echo no` exits
+// 127 — which is why the question is what is being read rather than where
+// the text came from.
 func (r *Runner) fatalExpansionQuiet() {
 	r.fatalQuiet()
-	if n := r.diag().ExpansionFailureStatusFromCommandString; n != 0 && r.Route == RouteCommandString && !r.inSubshell {
+	if n := r.diag().ExpansionFailureStatusFromCommandString; n != 0 && r.Route == RouteCommandString && !r.inSubshell && r.startupDepth == 0 {
 		r.status = n
 	}
 }

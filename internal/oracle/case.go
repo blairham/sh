@@ -6782,6 +6782,13 @@ echo "st=$?"`,
 		Why: "every copy of one name on a PATH that reaches one directory four ways — by name, through a link, relative and through `..` — and a second directory. ksh93 lists each directory once, keyed on the directory and not the spelling; bash and zsh list every entry (#6069)",
 	},
 	{
+		ID: "hash/an-explicit-hash-of-a-remembered-name", Category: "commands",
+		Snippet: "mkdir -p b2 b3 && printf '#!/bin/sh\\necho b2\\n' > b2/qq && chmod +x b2/qq\n" +
+			"PATH=$PWD/b3:$PWD/b2:$PATH; qq; cp b2/qq b3/qq; hash qq\n" +
+			"hash | grep qq | sed \"s|$PWD|D|\"\n",
+		Why: "`hash qq` for a name the table already holds, with a copy that has since appeared earlier on PATH. bash, dash, ksh93 and ash search again and remember the new copy; zsh keeps what it had (#6110)",
+	},
+	{
 		ID: "exec/a-script-is-started-by-the-spelling-its-shell-joined", Category: "commands",
 		Snippet: "mkdir -p sub/deep && printf '#!/bin/sh\\necho \"0=$0\"\\n' > sub/z0 && printf 'echo \"n0=$0\"\\n' > sub/n0 && chmod +x sub/z0 sub/n0 && cd sub && P=$PATH\n" +
 			"PATH=:$P; z0; z0\n" +

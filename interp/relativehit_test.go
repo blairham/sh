@@ -135,3 +135,28 @@ func TestEachDirectoryIsListedOnce(t *testing.T) {
 		t.Errorf("LookPathAll = %q, want all five", got)
 	}
 }
+
+// TestAnExplicitHashSearchesAgain is #6110: `hash qq` for a name the table
+// already holds, with a copy that has since appeared earlier on PATH. One
+// reading searches again and remembers the new copy; the other keeps the
+// entry. And a search that finds nothing leaves the table as it was.
+func TestAnExplicitHashSearchesAgain(t *testing.T) {
+	root := relativeHitTree(t)
+	src := "PATH=" + root + "/b4:" + root + "/b3; hash -p " + root + "/b3/qq qq; hash qq; command -v qq; " +
+		"PATH=/nowhere; hash -p " + root + "/b3/qq qq; hash qq; command -v qq\n"
+	for _, c := range []struct {
+		again Answer
+		want  string
+	}{
+		{Yes, root + "/b4/qq\n" + root + "/b3/qq\n"},
+		{No, root + "/b3/qq\n" + root + "/b3/qq\n"},
+	} {
+		got := relativeHitRun(t, root, src, func(s *Semantics) {
+			s.HashNameSearchesAgain = c.again
+			s.HashReportsAMissingName = No
+		}, Diagnostics{})
+		if got != c.want {
+			t.Errorf("searches again = %v: got %q, want %q", c.again, got, c.want)
+		}
+	}
+}

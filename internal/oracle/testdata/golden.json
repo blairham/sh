@@ -108104,6 +108104,57 @@
         "TimedOut": false
       }
     },
+    "hash/an-explicit-hash-of-a-remembered-name": {
+      "ash": {
+        "Stdout": "b2~D/b3/qq",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "b2~   0\tD/b3/qq",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "b2~   0\tD/b3/qq",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "b2~   0\tD/b3/qq",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "b2~D/b3/qq",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "b2~qq=D/b3/qq",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "b2~qq=D/b2/qq",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "hash/assigning-path-empties-the-table": {
       "ash": {
         "Stdout": "",

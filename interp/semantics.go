@@ -23450,6 +23450,16 @@ type Semantics struct {
 	// CommandHashIsTrusted and the reason the two belong to one dialect.
 	HashTakesAPathToRemember Answer
 
+	// HashNameSearchesAgain makes an explicit `hash name` for a name the
+	// table already holds search PATH again and remember what it finds,
+	// rather than keep the entry it has.
+	//
+	// Measured 2026-10-05 (#6110) with `qq` run and remembered from the
+	// second of two PATH directories, and a copy then put in the first:
+	// `hash qq` names the first directory's copy in bash 5.3, dash, ksh93
+	// and BusyBox ash, and zsh 5.9.2 keeps the second's.
+	HashNameSearchesAgain Answer
+
 	// HashForgetsOneName is `hash -d name`: one entry out, where `-r` is all
 	// of them. bash alone. zsh has the letter and means something else by it
 	// — its named-directory table — which is why this is a question about
@@ -33849,11 +33859,13 @@ func PosixSemantics() Semantics {
 		HashListingIsSorted:                 No,
 		HashListsAsCommands:                 No,
 		HashTakesAPathToRemember:            No,
-		HashForgetsOneName:                  No,
-		HashDefinesANamedDirectory:          No,
-		HashReportsThePath:                  No,
-		HashObeysCommandTracking:            No,
-		HashRefusesWhileTrackingIsOff:       No,
+		// The standard: `hash name` adds the location found by a search.
+		HashNameSearchesAgain:         Yes,
+		HashForgetsOneName:            No,
+		HashDefinesANamedDirectory:    No,
+		HashReportsThePath:            No,
+		HashObeysCommandTracking:      No,
+		HashRefusesWhileTrackingIsOff: No,
 		// dash is the closest reading of the standard here and it hashes
 		// what it was only asked about; so do zsh and ksh93, and bash
 		// overrides.

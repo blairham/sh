@@ -389,7 +389,10 @@ func (r *Runner) absolute(path string) string {
 	if at == "" || filepath.IsAbs(at) {
 		return at
 	}
-	if wd, err := os.Getwd(); err == nil {
+	// No directory of its own, which is only a Runner nobody gave one: the
+	// fallback filepath.Abs always was, with the operand put under it as
+	// written rather than through Abs's clean.
+	if wd, err := filepath.Abs("."); err == nil {
 		return uncleanedJoin(wd, at)
 	}
 	return at

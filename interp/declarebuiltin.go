@@ -3251,6 +3251,14 @@ func (r *Runner) arrayDeclared(name string) bool {
 	if _, produced := r.DynamicArrays[name]; produced {
 		return true
 	}
+	// And the pipeline record, which is produced by a path of its own: a
+	// declaration of it declares nothing new. Measured 2026-10-05 on bash
+	// 5.3.20, `declare -a PIPESTATUS=(z); declare -p PIPESTATUS` is
+	// `declare -a PIPESTATUS=([0]="0")`, where an empty array declared over
+	// the record here hid it and listed `declare -a PIPESTATUS` (#6053).
+	if _, produced := r.pipelineStatuses(name); produced {
+		return true
+	}
 	_, ok := r.Arrays[name]
 	return ok
 }

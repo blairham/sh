@@ -5408,6 +5408,15 @@ func Apply(r *interp.Runner) {
 	// `declare -p PIPESTATUS` is `declare -a PIPESTATUS=([0]="0")` in bash
 	// 5.3.20 and was `PIPESTATUS: not found` here (#3099).
 	r.SetDynamicDeclaration("PIPESTATUS", interp.ProducedDeclaration{Array: true, ListsItsElements: true})
+	// And an assignment to it is discarded, as the call-stack arrays' are:
+	// measured 2026-10-05 on bash 5.3.20, `PIPESTATUS=(z); declare -p
+	// PIPESTATUS` is `declare -a PIPESTATUS=([0]="0")` — the record the
+	// assignment's own command left — and so is the same after `unset
+	// PIPESTATUS`, which does not end the name in bash. This stored the
+	// write and listed it back (#6053). The first command of a shell is the
+	// recorded exception: `bash -c 'PIPESTATUS=5; declare -p PIPESTATUS'`
+	// is `declare -- PIPESTATUS="5"`, a scalar, before any pipeline has run.
+	r.SetDynamicArrayWriter("PIPESTATUS", func(*interp.Runner, []string) {})
 	// What the last `=~` captured — the whole match, then the groups. The
 	// core keeps the record and this names it; ksh93 and zsh keep their
 	// captures under names and shapes of their own, never this one.

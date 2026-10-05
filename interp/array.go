@@ -494,13 +494,9 @@ func (r *Runner) elemPos(a Array, idx int) (int, bool) {
 func (r *Runner) markIndexed(name string) {
 	name = r.namespaceWriteName(name)
 	r.noteHiddenWrite(name)
-	if _, produced := r.DynamicArrays[name]; produced {
-		return
-	}
-	if r.assocDeclared(name) {
-		return
-	}
-	if _, ok := r.Arrays[name]; ok {
+	// An array already, stored or produced — the pipeline record included,
+	// which arrayDeclared knows and a test of DynamicArrays alone did not.
+	if r.arrayDeclared(name) || r.assocDeclared(name) {
 		return
 	}
 	if r.Arrays == nil {

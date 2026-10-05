@@ -46,10 +46,13 @@ import (
 //   - `-T` is whether any set was built. Measured from both sides: straight
 //     after `-i` it is 1, and after one `comptry` that matched it is 0.
 //   - `-N` steps to the next set, 1 when there is none left.
-//   - `-R tag` is whether that tag is in the set `-N` last stepped to.
+//   - `-R tag` is whether that tag is in the set `-N` last stepped to, and
+//     before any `-N` in the first set — see requested.
 //   - `-A tag curtag spec` is `-R` plus the label iteration `_next_label`
 //     runs: the first call in a set answers 0 with both parameters set to the
-//     tag, and the second answers 1 with the spec emptied.
+//     tag, and the second answers 1 and assigns nothing. (The spec looks
+//     emptied in a trace through `_next_label`; the builtin itself leaves it
+//     alone — see nextLabel.)
 //
 // # One state and not a stack
 //
@@ -144,12 +147,29 @@ func tagsVerb(word string, level int) (string, int) {
 	return word, level
 }
 
-// requested is whether a tag is in the set `-N` last stepped to.
+// requested is whether a tag is in the set `-N` last stepped to — or, before
+// the first `-N`, in the first set.
+//
+// **Before any `-N` the first set is the one asked about**, which is how a
+// function that offers its tags and asks for one straight away — `_tags
+// processes; _requested processes`, with no loop and so no `-N` — is told
+// yes. Measured on zsh 5.9.2, 2026-10-05, from inside a `zle -C` widget,
+// `comptags -i ” a b c; comptry a; comptry b c` and then `-R` for each tag:
+//
+//	before -N          a=0 b=1 c=1
+//	after one -N       a=0 b=1 c=1   the first -N lands on the same set
+//	after two          a=1 b=0 c=0
+//	after three (1)    a=1 b=1 c=1
+//
+// and the same with a context named rather than empty, so it is the missing
+// `-N` and not the context that decides. This answered 1 for every tag until
+// the first `-N`, so `_requested` said no (#6172).
 func (t *tagsState) requested(tag string) bool {
-	if t.at < 0 || t.at >= len(t.sets) {
+	at := max(t.at, 0)
+	if at >= len(t.sets) {
 		return false
 	}
-	for _, have := range t.sets[t.at] {
+	for _, have := range t.sets[at] {
 		if have == tag {
 			return true
 		}
@@ -168,7 +188,11 @@ func (t *tagsState) nextLabel(r *interp.Runner, names []string) int {
 	tag := names[0]
 	key := itoa(t.at) + ":" + tag
 	if !t.requested(tag) || t.labeled[key] {
-		r.SetVar(names[2], "")
+		// **Nothing is assigned on a 1.** Measured on zsh 5.9.2,
+		// 2026-10-05, with both names set to markers before each call: a
+		// second `-A a` and an `-A` for a tag not in the set both answer 1
+		// and leave the markers where they were. This emptied the spec,
+		// which a caller reading it after the loop saw as cleared.
 		return 1
 	}
 	t.labeled[key] = true

@@ -108,11 +108,24 @@ var moduleKeymaps = map[string][]string{
 // Sorted, which is the order zsh's `bindkey -l` prints and is plain byte order
 // with the dot-prefixed name first: `.safe command emacs isearch listscroll
 // main menuselect vicmd viins viopp visual`, measured after the load.
+//
+// And the names `bindkey -N` and `bindkey -A` added — see keymaps.go.
 func keymapsNow(r *interp.Runner) []string {
+	table := keymapTable(r)
+	out := make([]string, 0, len(table))
+	for name := range table {
+		out = append(out, name)
+	}
+	sort.Strings(out)
+	return out
+}
+
+// builtinKeymapNames is the keymaps the shell itself has right now: the ones
+// it starts with and the ones a loaded module added.
+func builtinKeymapNames(r *interp.Runner) []string {
 	out := append([]string(nil), keymapNames...)
 	for _, module := range zmodloadLoaded(r) {
 		out = append(out, moduleKeymaps[module]...)
 	}
-	sort.Strings(out)
 	return out
 }

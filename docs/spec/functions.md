@@ -1012,10 +1012,10 @@ reason.
 
 | function | why not |
 | --- | --- |
-| `zed`, `zed-set-file-name`, and its `fned`/`histed` forms | it builds a keymap of its own with `bindkey -N` and selects it with `bindkey -A`, which this shell refuses (#5969) |
+| `zed`, `zed-set-file-name`, and its `fned`/`histed` forms | it builds a keymap of its own with `bindkey -N` and selects it with `bindkey -A`. Both were refused until #5969 and work now, but nobody has measured `zed` itself since |
 | `copy-earlier-word` | it walks back through a line's words by calling `insert-last-word` with arguments, which are ignored here (#5987) |
 | `select-word-match`, `narrow-to-region`, `narrow-to-region-invisible`, `select-bracketed`, `select-quoted`, `surround` | they need the mark and the region, or vi text objects, which this editor does not have |
-| `read-from-minibuffer`, `history-pattern-search`, `replace-string`, `replace-string-again`, `replace-argument` | they read their argument with a recursive edit, which this editor does not have |
+| `read-from-minibuffer`, `history-pattern-search`, `replace-string`, `replace-string-again`, `replace-argument` | they read their argument with a recursive edit. This editor got `recursive-edit` in #5899, but nobody has measured these functions since |
 | `predict-on`, `incremental-complete-word`, `cycle-completion-positions`, `quote-and-complete-word` | they drive the completion system from a widget |
 | `transpose-lines`, `move-line-in-buffer` | rarely bound. zsh's `transpose-lines` also corrupts the buffer when it moves a line onto the last one (`aa⏎bb⏎cc⏎dd` with `M-3` from the second line becomes `bb⏎cc⏎dd⏎aadd`), so there is no right answer to measure against |
 | `which-command`, `expand-absolute-path` | rarely bound. The builtin `which-command` widget the first replaces is not implemented either, and the second abbreviates with the `(D)` flag (#5980) |

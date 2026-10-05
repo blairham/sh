@@ -43,10 +43,11 @@ import (
 //     out what a key does. What it answers is what this editor will actually
 //     do. The same rule `compgen` follows: an answer that cannot be
 //     generated is refused rather than invented.
-//   - **`-p`, `-R`, `-N`, `-A`, `-D` and `-d`** — prefix bindings, ranges of
-//     keys, and making, aliasing or destroying a keymap — are refused as not
-//     implemented, in the wording `whence` uses for the same case, so a script
-//     can tell a shell that lacks something from a typo.
+//   - **`-p`, `-R`, `-D` and `-d`** — prefix bindings, ranges of keys, and
+//     destroying a keymap — are refused as not implemented, in the wording
+//     `whence` uses for the same case, so a script can tell a shell that
+//     lacks something from a typo. Making and aliasing one, `-N` and `-A`,
+//     are in keymaps.go (#5969).
 
 // bindkeyStore is the table of what a person rebound, and bindkeyMap is which
 // keymap is current.
@@ -403,7 +404,7 @@ func KeyBindings(r *interp.Runner, km repl.Keymap) map[string]repl.Binding {
 			// editor's own there — see repl.EditorStyle.SendBreakOnControlG —
 			// and is listed rather than carried in defaultBindings because
 			// viins shares that table and has no such key.
-			if seq == sendBreakKey && widget == widgetNames[repl.WidgetSendBreak] && currentKeymap(r) == "emacs" {
+			if seq == sendBreakKey && widget == widgetNames[repl.WidgetSendBreak] && keymapBase(r, currentKeymap(r)) == "emacs" {
 				continue
 			}
 		}
@@ -584,8 +585,13 @@ func keymapBindings(r *interp.Runner, km repl.Keymap) map[string]string {
 // plainly in emacs. The option reaches the keymap where it should — see
 // editingOption in setopt.go, which is the seam #3140 was the absence of —
 // and this reads the one piece of state both commands write.
+//
+// A keymap `bindkey -N` copied from one of the vi keymaps is that keymap as
+// far as this question goes: the copy is what a vi-mode plugin makes and
+// selects, and this editor's vi editing is a mode rather than a table, so
+// the name alone would put it in emacs editing with vi's keys (#5969).
 func ViEditing(r *interp.Runner) bool {
-	switch currentKeymap(r) {
+	switch keymapBase(r, currentKeymap(r)) {
 	case "viins", "vicmd":
 		return true
 	}
@@ -655,12 +661,12 @@ func currentKeymap(r *interp.Runner) string {
 func selectKeymap(r *interp.Runner, name string) { r.SetVar(bindkeyMap, name) }
 
 // bindkeyLetters are the option letters this builtin answers to.
-const bindkeyLetters = "lLeavrsM"
+const bindkeyLetters = "lLeavrsMNA"
 
 // bindkeyUnimplemented are the letters this shell has that this one does not,
 // refused as missing rather than as unknown — the same split `whence` makes,
 // so a script can tell a gap from a typo.
-const bindkeyUnimplemented = "pRNADd"
+const bindkeyUnimplemented = "pRDd"
 
 func bindkeyBuiltin(r *interp.Runner, _ context.Context, args []string) int {
 	opts, rest, code := bindkeyOptions(r, args)
@@ -675,7 +681,12 @@ func bindkeyBuiltin(r *interp.Runner, _ context.Context, args []string) int {
 		// keymap nothing reads (#5691).
 		opts.keymap = ""
 	}
-	if opts.list {
+	switch {
+	case opts.newKeymap:
+		return bindkeyNew(r, rest)
+	case opts.link:
+		return bindkeyLink(r, rest)
+	case opts.list:
 		return listKeymaps(r, rest, opts.commands)
 	}
 	if opts.selected != "" {
@@ -692,7 +703,10 @@ func bindkeyBuiltin(r *interp.Runner, _ context.Context, args []string) int {
 	// answering from emacs afterwards.
 	saved := currentKeymap(r)
 	if opts.keymap != "" {
-		r.SetVar(bindkeyMap, opts.keymap)
+		// The keymap the name names, which is the name itself for a
+		// built-in one nobody pointed elsewhere. See keymaps.go.
+		id, _ := keymapID(r, opts.keymap)
+		r.SetVar(bindkeyMap, id)
 		defer r.SetVar(bindkeyMap, saved)
 	}
 	switch {
@@ -758,10 +772,17 @@ func listKeymaps(r *interp.Runner, names []string, commands bool) int {
 		switch {
 		case !commands:
 			_, _ = fmt.Fprintf(r.Out(), "%s\n", name)
-		case name == "main":
-			_, _ = fmt.Fprintf(r.Out(), "bindkey -A %s main\n", currentKeymap(r))
 		case name == ".safe":
 		default:
+			// A keymap is listed under the name it was made with, and every
+			// other name for it as an alias of that one — `main` included,
+			// which is how this listing says which keymap is selected. See
+			// keymaps.go for why the made-with name and not a current one.
+			id, _ := keymapID(r, name)
+			if primary := keymapPrimary(r, id); primary != name {
+				_, _ = fmt.Fprintf(r.Out(), "bindkey -A %s %s\n", primary, name)
+				continue
+			}
 			_, _ = fmt.Fprintf(r.Out(), "bindkey -N %s\n", name)
 		}
 	}
@@ -776,6 +797,9 @@ type bindkeyOpts struct {
 	strings  bool   // -s: bind to text rather than to a widget
 	keymap   string // -M or -a: the keymap this command acts on
 	selected string // -e or -v: the keymap to make current
+
+	newKeymap bool // -N: make a keymap
+	link      bool // -A: give a keymap another name
 }
 
 // bindkeyOptions reads the leading option words.
@@ -832,6 +856,10 @@ func setBindkeyLetter(opts *bindkeyOpts, letter byte) {
 		opts.remove = true
 	case 's':
 		opts.strings = true
+	case 'N':
+		opts.newKeymap = true
+	case 'A':
+		opts.link = true
 	case 'a':
 		opts.keymap = "vicmd"
 	case 'e':

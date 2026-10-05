@@ -131,6 +131,22 @@ func (r *Runner) enterEvalContext(c EvalContext) func() {
 // reason enterEvalContext gives.
 func (r *Runner) EnterEvalContext(c EvalContext) func() { return r.enterEvalContext(c) }
 
+// CallNextBodyAs puts c over the body of the next function call to open a
+// frame, inside that frame, and hands back what takes the request back if no
+// call took it. Written `defer r.CallNextBodyAs(c)()` around the code that
+// makes the call.
+//
+// For a dialect whose load runs the body through a route it does not own the
+// frame of. zsh's hand-written `autoload -X` is the case: measured 2026-10-04
+// on zsh 5.9.2, the body it loads runs under `eval` and then its own frame,
+// and the word for a load stands over that frame —
+// `cmdarg shfunc eval shfunc loadautofunc` — so it cannot be pushed before the
+// call the way EnterEvalContext would push it (#5897).
+func (r *Runner) CallNextBodyAs(c EvalContext) func() {
+	r.nextBodyContext, r.nextBodyContextSet = c, true
+	return func() { r.nextBodyContextSet = false }
+}
+
 // pushEvalContext is enterEvalContext for a context that ends with the runner
 // it is pushed on: a substitution's body runs in a clone, so the entry goes
 // on that clone and nothing has to take it off again.

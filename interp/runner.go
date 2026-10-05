@@ -5302,6 +5302,11 @@ type Runner struct {
 	// with the route's own entry left out — see interp/evalcontext.go, and
 	// Runner.EvalContextStack, which puts it back.
 	evalContexts []EvalContext
+	// nextBodyContext is a context a dialect asked to stand over the next
+	// function body to open, and nextBodyContextSet whether one is waiting.
+	// See CallNextBodyAs.
+	nextBodyContext    EvalContext
+	nextBodyContextSet bool
 	// notShellOwn names the produced parameters that are **not** the shell's
 	// own, which is the one case ParameterAttributes.Provided gets wrong by
 	// deriving it from a shape. See interp/shellownparameter.go.

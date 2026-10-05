@@ -964,10 +964,23 @@ func autoloadRunResolved(r *interp.Runner, ctx context.Context, name string, stu
 			defer r.EnterEvalContext(interp.EvalContextAutoloadedBody)()
 			return r.RunFunctionBodyInPlace(ctx, name)
 		}
-		// A copy, because the call replaces r.Params for the length of the
-		// body and restores the slice header afterwards.
-		args := append([]string(nil), r.Params...)
-		return r.CallFunction(ctx, name, args...)
+		// The hand-written spelling, `f() { autoload -X }`, runs the body
+		// under `eval` and then the body's own frame, with the load's word
+		// over that frame: measured 2026-10-04 on zsh 5.9.2,
+		// `$zsh_eval_context` in the loaded body is `cmdarg shfunc eval
+		// shfunc loadautofunc` and `$funcstack` is `f (eval) f` on the call
+		// that loads it (#5897). zi writes this stub for every function a
+		// plugin autoloads, so a function file that ends in the
+		// `*loadautofunc` idiom did nothing on its first call when zi
+		// loaded it.
+		evalBuiltin, ok := r.Builtin("eval")
+		if !ok {
+			args := append([]string(nil), r.Params...)
+			return r.CallFunction(ctx, name, args...)
+		}
+		defer r.CallNextBodyAs(interp.EvalContextAutoloadedBody)()
+		r.RunBuiltinAs("eval", "", evalBuiltin, ctx, []string{shellQuoteWord(name) + ` "$@"`})
+		return true, nil
 	}
 	ran, err := run()
 	if err != nil {
@@ -1685,4 +1698,10 @@ const autoloadPathStore = ".zsh.autoload.path"
 func kshAutoloadOn(r *interp.Runner) bool {
 	o, inverted, ok := resolveOptionName("kshautoload")
 	return ok && o.get(r) != inverted
+}
+
+// shellQuoteWord is name as one single-quoted word, for the text a load
+// hands `eval`: a function's name can hold anything a word can.
+func shellQuoteWord(name string) string {
+	return "'" + strings.ReplaceAll(name, "'", `'\''`) + "'"
 }

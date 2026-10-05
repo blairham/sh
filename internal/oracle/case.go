@@ -3598,6 +3598,13 @@ echo "reached-after st=$?"`,
 		Why: "logical `cd` is the one route where a `..` may be taken out by text, and the panel splits on whether the component it cancels is looked at first. The second line is the control. ksh93 looks only at what the operand put there, and the first line's `nosuch` is the operand's own though a `..` reached into the directory before it — ksh93 refuses both lines, where ours refused only the second (#6081)",
 	},
 	{
+		ID: "cd/a-refusal-that-climbs-is-named-where-it-climbs", Category: "cd",
+		Snippet: "mkdir -p d/sub/deep && cd d/sub\n" +
+			"(cd ../nosuch); (cd ..//nosuch/..); (cd -P ../nosuch/..); (cd deep/../../nosuch/..); (cd nosuch)\n" +
+			"echo done\n",
+		Why: "what a refused `cd` is named when the operand starts by climbing. ksh93 names the path it climbs to — the leading `..` taken off the directory and the rest written after it as typed, a doubled slash included — and names an operand that climbs later as written, which is what the other columns do for all of them; dash and ash take the second and fourth by text and move (#6091)",
+	},
+	{
 		ID: "cd/an-empty-operand", Category: "cd",
 		Snippet: `cd /; cd ""; echo "st=$?"; pwd`,
 		Why:     "an empty operand is not the same thing as no operand, and it is not nothing either. dash, bash 3.2 and zsh take it as the directory they are already in; bash 5.3 and the same binary called as `sh` say `cd: null directory` and ksh93 `cd: bad directory`, both at 1 and both staying put. That is a fifth branch — neither `cannot change` nor `HOME not set` — and ours read the empty string as *no* operand and went home (#1491)",

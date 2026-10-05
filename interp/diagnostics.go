@@ -969,6 +969,25 @@ type Diagnostics struct {
 	// which is why it is a row here rather than one of dash's: measured
 	// 2026-09-19, and it is the row the four-shell table left out.
 	CdCannotChange string
+	// CdNamesALeadingDotDotFromTheDirectory names a refused operand that
+	// starts by climbing — `..`, and any `.` among the leading run — as the
+	// path it climbs to: those leading components taken off the directory
+	// the shell is logically in, and the rest of the operand written after
+	// it exactly as typed. ksh93 alone, measured 2026-10-05 on 93u+
+	// 2012-08-01 from `<d>/sub` (#6091):
+	//
+	//	../nosuch            cd: <d>/nosuch: [No such file or directory]
+	//	./../nosuch/..       cd: <d>/nosuch/..: […]
+	//	..//nosuch/..        cd: <d>//nosuch/..: […]
+	//	../nosuch/../x       cd: <d>/nosuch/../x: […]
+	//	deep/../../nosuch/.. cd: deep/../../nosuch/..: […]
+	//	-P ../nosuch/..      cd: <d>/nosuch/..: […]
+	//
+	// and from a directory reached through a link, the link's own parent —
+	// the logical one. An operand that climbs later than its first
+	// component is named as written; bash, zsh, dash and ash name every
+	// operand as written.
+	CdNamesALeadingDotDotFromTheDirectory bool
 	// CdStatus is what that reports. dash and BusyBox ash say 2; the three
 	// bash columns, ksh93 and zsh say 1. Zero means the substrate's own, 1.
 	CdStatus int

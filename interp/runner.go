@@ -7122,6 +7122,10 @@ func (r *Runner) Finish(ctx context.Context) int {
 	// is the order the sentences are written in — measured 2026-09-25,
 	// `zsh -fm` over a script with a running job writes `you have running
 	// jobs.` and then `warning: 1 jobs SIGHUPed` (#4542).
+	// The notices finished jobs are still owed come first of all, ahead of
+	// that sentence and of the EXIT trap. See
+	// Diagnostics.FinishedJobsReportedAtExit.
+	r.reportFinishedJobsAtExit(false)
 	r.tellOfJobsLeftBehind(false)
 	// A shell a TRAP function interrupted ends its own way. See
 	// trapinterrupt.go.

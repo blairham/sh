@@ -1323,8 +1323,7 @@ func (r *Runner) FinishedJobNotices() []string {
 // Only with the monitor on and nothing else to report them: a prompt writes
 // its own, and a notice written as the job ended has already let it go.
 func (r *Runner) reportFinishedJobsAtAJobBuiltin() {
-	if !r.monitor || r.JobControl || r.reportsFinishedJobsToNobody() ||
-		r.sem().FinishedJobIsReportedByAJobBuiltin != Yes {
+	if !r.finishedJobsAwaitAJobBuiltin() {
 		return
 	}
 	for _, line := range r.takeFinishedJobNotices() {
@@ -1332,9 +1331,38 @@ func (r *Runner) reportFinishedJobsAtAJobBuiltin() {
 	}
 }
 
+// finishedJobsAwaitAJobBuiltin reports whether a finished job stays in the
+// table, unreported, until a job builtin or the way out reports it: the
+// monitor on, no prompt to write the notice before, NOTIFY off, and a dialect
+// whose job builtins report. See reportFinishedJobsAtAJobBuiltin and
+// Diagnostics.FinishedJobsReportedAtExit.
+//
+// A `wait` does not report the job it waited out on this route, so the job
+// stays for that report too. Measured 2026-10-05 on zsh 5.9.2 through a
+// pseudo-terminal, `zsh -c 'set -m; setopt nonotify; sleep 0.1 & …'` (#6148):
+//
+//	wait; jobs; echo end          [1]  + done  sleep 0.1, then end
+//	wait %1; echo $?; jobs        0, then the done line
+//	wait; wait %1                 the done line, then `%1: no such job`, 127
+//	wait; echo end; exit          end, then the done line
+//
+// and with NOTIFY at its default the same `wait; jobs` lists nothing: the
+// notice went out, to nobody, when the job was noticed.
+func (r *Runner) finishedJobsAwaitAJobBuiltin() bool {
+	return r.monitor && !r.JobControl && !r.reportsFinishedJobsToNobody() &&
+		r.sem().FinishedJobIsReportedByAJobBuiltin == Yes
+}
+
 // takeFinishedJobNotices is FinishedJobNotices with the question of who is
 // listening already answered.
 func (r *Runner) takeFinishedJobNotices() []string {
+	return r.takeFinishedJobNoticesWhere(nil)
+}
+
+// takeFinishedJobNoticesWhere is takeFinishedJobNotices for the finished jobs
+// owed answers yes to, or for all of them where owed is nil. A finished job
+// it answers no for stays where it is.
+func (r *Runner) takeFinishedJobNoticesWhere(owed func(*Job) bool) []string {
 	if !r.monitor {
 		// Shared ground rather than an axis: measured 2026-09-10 on a
 		// pseudo-terminal with the monitor off, no shell in the panel says
@@ -1353,7 +1381,7 @@ func (r *Runner) takeFinishedJobNotices() []string {
 	var left []int
 	kept := r.jobs[:0]
 	for _, j := range r.jobs {
-		if !j.Finished() {
+		if !j.Finished() || (owed != nil && !owed(j)) {
 			kept = append(kept, j)
 			continue
 		}
@@ -1703,7 +1731,9 @@ func biWait(r *Runner, _ context.Context, args []string) int {
 		// the job once and a second `jobs` nothing, where every other column
 		// lists nothing at all. See Semantics.BareWaitLeavesJobsForTheListing
 		// (#5687).
-		if !r.JobControl && r.sem().BareWaitLeavesJobsForTheListing != Yes {
+		// Nor where a job builtin or the way out still reports them, which is
+		// a notice yet to come. See finishedJobsAwaitAJobBuiltin.
+		if !r.JobControl && r.sem().BareWaitLeavesJobsForTheListing != Yes && !r.finishedJobsAwaitAJobBuiltin() {
 			// One at a time, so that the markers hear of each: where a
 			// command holds a slot, they are numbers that outlive the jobs
 			// they were on. See Semantics.ACommandHoldsAJobSlot.
@@ -3184,6 +3214,11 @@ func (r *Runner) Jobs() []*Job { return slices.Clone(r.jobs) }
 // but ksh93u+, where it is 127. See Semantics.WaitRemembersAReapedJob, and the
 // narrower reading two columns hold that is not modeled here.
 func (r *Runner) reap(j *Job) {
+	if r.finishedJobsAwaitAJobBuiltin() {
+		// Left for the report that is still to come, which is what lets it
+		// go. See finishedJobsAwaitAJobBuiltin.
+		return
+	}
 	if !r.JobControl && r.sem().WaitLeavesTheJobForTheListing == Yes {
 		// Left where it is for the next listing, which is what reports it
 		// in this dialect: see Semantics.WaitLeavesTheJobForTheListing.

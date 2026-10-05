@@ -8821,6 +8821,10 @@ func (r *Runner) readonlyScopesItsOperands() bool {
 func biExit(r *Runner, ctx context.Context, args []string) int {
 	// What a logout file will read in `$?`, before anything here moves it.
 	r.exitFoundStatus = r.status
+	// The finished jobs' notices come before anything said about the
+	// running ones, whether or not the shell then stays. See
+	// Diagnostics.FinishedJobsReportedAtExit.
+	r.reportFinishedJobsAtExit(true)
 	// Asked before the operand is read, because the shell is not going
 	// anywhere: `exit 3` with a job the shell is checking for stays, and the
 	// 3 is never used.

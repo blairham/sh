@@ -19,6 +19,8 @@ import (
 // (/opt/homebrew/bin/zsh) under `-f`: each verb below writes `[1]  + done
 // /bin/sleep 0.1` and then its own answer, and `echo` writes nothing — the
 // control, which is what says the row is the builtin's and not the job's end.
+// The script's end then writes the row for a job nothing reported (#6148),
+// so the control is read up to the script's last line.
 func TestAJobBuiltinReportsAFinishedJobUnderNonotify(t *testing.T) {
 	const done = "[1]  + done       /bin/sleep 0.1"
 	for _, c := range []struct {
@@ -33,7 +35,13 @@ func TestAJobBuiltinReportsAFinishedJobUnderNonotify(t *testing.T) {
 		t.Run(c.verb, func(t *testing.T) {
 			body := "set -m\nsetopt nonotify\n/bin/sleep 0.1 &\n/bin/sleep 0.5\n" + c.verb + "\nprint -r -- rc=$?\nprint -r -- " + monitorExitFence + "\n"
 			screen := monitorExitScript(t, []string{"-f"}, body)
-			got := strings.Contains(screen, done)
+			// Before the fence: the script's end writes the row too, as it
+			// leaves, which is #6148's and not the builtin's.
+			fence := strings.Index(screen, monitorExitFence)
+			if fence < 0 {
+				fence = len(screen)
+			}
+			got := strings.Contains(screen[:fence], done)
 			if got != c.reports {
 				t.Errorf("%s: done row written = %v, want %v; the screen was\n%s", c.verb, got, c.reports, smoke.Readable(smoke.LastLines(screen, 10)))
 			}

@@ -248,9 +248,9 @@ type editor struct {
 	// breakRequested is a send-break an action asked for, which the key loop
 	// acts on at its top. See keyLoop.
 	breakRequested bool
-	// breakRings is whether that send-break rings the bell: true but for one
-	// a widget asked for by name. See sendBreak.
-	breakRings bool
+	// breakQuiet is that send-break being one a widget asked for by name,
+	// which rings no bell. See sendBreak.
+	breakQuiet bool
 	// recursive is how many recursive-edits are running, and recursiveBroke
 	// whether the innermost one ended other than by accepting. See
 	// recursiveEdit.
@@ -620,7 +620,9 @@ func (e *editor) keyLoop(prompt drawnPrompt) (string, error) {
 		// key's path comes back through.
 		if e.breakRequested {
 			e.breakRequested = false
-			return e.sendBreak(prompt, e.breakRings)
+			quiet := e.breakQuiet
+			e.breakQuiet = false
+			return e.sendBreak(prompt, !quiet)
 		}
 		// A draw a typed character put off because more input was in hand,
 		// and the input has run out without anything drawing it. That is a
@@ -1080,7 +1082,6 @@ func (e *editor) giveUp(prompt drawnPrompt) (string, error) {
 // widget does not, and the rest of that widget does not run either — which is
 // the shell's to stop, see dialect/zsh's callBuiltinWidget.
 func (e *editor) sendBreak(prompt drawnPrompt, bell bool) (string, error) {
-	e.breakRings = true
 	if bell {
 		e.write("\a")
 	}

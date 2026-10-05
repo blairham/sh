@@ -394,6 +394,13 @@ func KeyBindings(r *interp.Runner, km repl.Keymap) map[string]repl.Binding {
 			if standard, isDefault := defaultBindings[seq]; isDefault && standard == widget {
 				continue
 			}
+			// And `^G` at send-break in the emacs keymap, which is the
+			// editor's own there — see repl.EditorStyle.SendBreakOnControlG —
+			// and is listed rather than carried in defaultBindings because
+			// viins shares that table and has no such key.
+			if seq == sendBreakKey && widget == widgetNames[repl.WidgetSendBreak] && currentKeymap(r) == "emacs" {
+				continue
+			}
 		}
 		if defined {
 			// **A completion widget is answered by its completer, not by its
@@ -595,9 +602,11 @@ func readBindings(r *interp.Runner, keymap string) map[string]string {
 		}
 	}
 	if keymap == "emacs" {
-		// `^G` is send-break in this keymap alone; viins has list-expand
-		// there, which this shell does not have. See
-		// repl.EditorStyle.SendBreakOnControlG (#5913).
+		// `^G` is send-break in this keymap alone, measured with `bindkey`
+		// on zsh 5.9.2; viins has list-expand there, which this shell does
+		// not have. The editor acts on it by itself — see
+		// repl.EditorStyle.SendBreakOnControlG — so this is the listing's
+		// half (#5913).
 		out[sendBreakKey] = widgetNames[repl.WidgetSendBreak]
 	}
 	flat, _ := r.GetArray(bindkeyStore)

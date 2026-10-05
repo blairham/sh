@@ -277,7 +277,7 @@ func (a editorActions) Perform(w Widget, in Line) (Line, bool) {
 	}
 	if w == WidgetSendBreak {
 		// Asked for by name, which rings no bell. See sendBreak.
-		a.e.breakRings = false
+		a.e.breakQuiet = true
 	}
 	if w.IsIncrementalSearch() {
 		// The keys the widget is about are now the key that ended the

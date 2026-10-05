@@ -3980,6 +3980,14 @@ func (r *Runner) subscriptIndexAsWritten(written, text string) (int, bool) {
 // an array at all, either kind.
 func (r *Runner) arrayElementCount(name string) (int, bool) {
 	name = r.throughNameref(name)
+	// The produced record first, in the order arrayElems reads it. Without
+	// it the name was not an array to anything that counts: `false | true;
+	// print $#pipestatus` measured the join `1 0` as 3 where zsh 5.9.2 counts
+	// 2, and bash's `set -u; echo ${#PIPESTATUS[@]}` was refused as unbound
+	// (#6121).
+	if r.namesTheProducedPipelineStatus(name) {
+		return len(r.pipeStatus), true
+	}
 	if a, ok := r.Arrays[name]; ok {
 		if els, contiguous := a.contiguous(); contiguous {
 			// Every reading of an array with no gap is all of it, so the

@@ -5070,6 +5070,9 @@ type Runner struct {
 	// when a dialect has named it, because nothing else can read it.
 	pipeStatus     []int
 	pipeStatusName string
+	// beforePrelude is the status pair as it stood when a prelude began,
+	// put back when it ends. See SourcingPrelude.
+	beforePrelude keptStatus
 	// engineOwnedPrefix is the prefix a dialect keeps its *own* state under,
 	// in the parameter tables because that is what a subshell copies. No
 	// listing a script can reach walks past it — see engineowned.go.

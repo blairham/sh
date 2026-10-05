@@ -535,6 +535,10 @@ func (r *Runner) markIndexed(name string) {
 // has both, and that is why one rule needs two spellings to show it.
 func (r *Runner) setArrayElem(name string, idx int, sub, value string) {
 	name = r.throughNameref(name)
+	// Before anything reads the elements the write starts from: `read`,
+	// `printf -v` and `declare` reach an element by this route and not by
+	// the assignment statement. See Runner.endProducerUnsetEnded.
+	r.endProducerUnsetEnded(name)
 	if r.elementWriteRefusesAReferenceToAnElement(name) {
 		// A reference aimed at an element, with a subscript of its own
 		// written after it — `typeset -n r='A[0]'; r[1]=v`. Two subscripts

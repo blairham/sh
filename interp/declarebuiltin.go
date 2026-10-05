@@ -2896,6 +2896,11 @@ func (r *Runner) refuseArrayAttributeRemoval(name string) bool {
 // bash 3.2.57 and zsh 5.9.2, and the ksh93 spelling `typeset -a a` is 0 too,
 // where a one-element scalar answers 1.
 func (r *Runner) markDeclaredCompound(name string, fresh bool, f declareFlags, hasValue bool) bool {
+	// A declaration is a write, so a produced parameter `unset` ended is an
+	// ordinary name before this asks what kind of compound it holds — or
+	// `unset GROUPS; declare -A GROUPS` refuses to convert the producer's
+	// array. See Runner.endProducerUnsetEnded.
+	r.endProducerUnsetEnded(name)
 	// Ahead of the `remove` return, because a fresh cell holds nothing
 	// whatever the declaration's letters say: `local +a arr` is still a
 	// declaration into a cell this call made.

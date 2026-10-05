@@ -14545,6 +14545,11 @@ func (r *Runner) assign(ctx context.Context, a *syntax.Assign) {
 		// is *refused* has referred to the name too: the freeze it meets is
 		// the freeze the arrival put there. See interp/deferredparam.go.
 		r.referredToParameter(a.Name)
+		// A produced parameter `unset` ended is an ordinary name from this
+		// write on, and it has to be one *before* an element or an append
+		// reads what the name holds — or the write starts from what the
+		// producer would have said. See Runner.endProducerUnsetEnded.
+		r.endProducerUnsetEnded(a.Name)
 	}
 	// The refusal stands in front of all three, and it used to stand in front
 	// of one: setVarAs is where it lived, and only the scalar branch below

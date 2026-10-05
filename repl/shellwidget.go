@@ -109,6 +109,15 @@ type Line struct {
 	// for itself is what a self-insert after it types — see editor.take.
 	Keys string
 
+	// Broken is a widget that ended on an error the line cannot survive — a
+	// fatal error in its function, such as an assignment to a read-only
+	// parameter or `${x?word}`. The line is given up the way a typed line
+	// that hit one is: measured 2026-10-04 through a pseudo-terminal against
+	// zsh 5.9.2, the diagnostic, a bell, the line drawn as it stood, and then
+	// a fresh prompt with the line neither run nor recorded and `$?` 1
+	// (#5959). The editor reads it on the way back and nowhere else.
+	Broken bool
+
 	// Status is what an action performed from outside the editor ends with,
 	// for the one whose ending a widget can see: the incremental search,
 	// which answers 1 for a search that ended failing and 3 for one that was
@@ -151,6 +160,7 @@ func (e *editor) runShellWidget(name string, prompt drawnPrompt) (ran, accept bo
 	}
 	e.line = []rune(out.Buffer)
 	e.pos = min(max(out.Cursor, 0), len(e.line))
+	e.broken = out.Broken
 	// A widget of the shell's is not a kill, whatever it called: a kill key
 	// pressed after one starts afresh. See Actions.WidgetCalled.
 	e.killing = false

@@ -93,8 +93,22 @@ func TestParamExpansionFlagsErrorPosition(t *testing.T) {
 		src string
 		pos int
 	}{
-		{`echo ${(!)x}`, 4},    // not a flag at all
-		{`echo ${(Ux}`, 5},     // the closing parenthesis never arrives
+		{`echo ${(!)x}`, 4}, // not a flag at all
+		{`echo ${(Ux}`, 5},  // no flag is called x, measured
+		// The closing parenthesis never arrives: the position is the `}`
+		// where it should have been, measured on zsh 5.9.2 (#6114).
+		{`echo ${(Q}`, 5},
+		{`echo ${(Qz}`, 6},
+		{`echo ${(%%}`, 6},
+		{`echo ${(}`, 4},
+		{`echo ${(j.a.}`, 8},
+		{`echo ${(l:3:}`, 8},
+		{`echo "${(Q}"`, 5},
+		// Not a flag letter in zsh 5.9.2, whether the group closes or not,
+		// and a fill must follow the width's delimiter directly (#6114).
+		{`echo ${(x)a}`, 4},
+		{`echo ${(l:3:x:)a}`, 8},
+		{`echo ${(l:3:x:}`, 8},
 		{`echo ${(s)x}`, 5},    // an argument-taking flag with no argument
 		{`echo ${(s:x)y}`, 5},  // an argument whose delimiter never closes
 		{`echo ${(s:::)x}`, 7}, // a third delimiter where a flag should be

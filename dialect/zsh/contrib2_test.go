@@ -163,18 +163,20 @@ func TestRunHelpAnswersWhatZshAnswers(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	// Where echo is depends on the machine (/bin/echo on a Mac, /usr/bin/echo
-	// on a Linux runner), so it is looked up the way the shell will.
-	echo := ""
-	for _, d := range []string{"/usr/bin", "/bin"} {
-		if _, err := os.Stat(filepath.Join(d, "echo")); err == nil {
-			echo = filepath.Join(d, "echo")
-			break
-		}
-	}
 	tool := filepath.Join(bin, "mytool")
 	const reverse, plain = "\x1b[7m", "\x1b[27m"
 	const ask = reverse + "Press any key for more help or q to quit" + plain + "not interactive and can't open terminal\n\n"
+	// Where echo is depends on the machine: /bin/echo on a Mac, and on a
+	// Linux runner both /usr/bin/echo and /bin/echo, /bin being a link to
+	// /usr/bin. Each one on the path is a meaning of its own, with the
+	// question before it, so the expectation is built the way the shell
+	// will look.
+	echoes := ""
+	for _, d := range []string{"/usr/bin", "/bin"} {
+		if _, err := os.Stat(filepath.Join(d, "echo")); err == nil {
+			echoes += ask + "echo is " + filepath.Join(d, "echo") + "\nMAN:echo\n"
+		}
+	}
 	for _, tc := range []struct{ call, want string }{
 		{`\run-help cd`, "PAGER:cd\n"},
 		{`\run-help if`, "PAGER:if\n"},
@@ -182,7 +184,7 @@ func TestRunHelpAnswersWhatZshAnswers(t *testing.T) {
 		{`\run-help ll`, "ll is an alias for mytool -l\nmytool is " + tool + "\nMAN:mytool\n"},
 		{`\run-help nosuch`, "nosuch not found\nMAN:nosuch\n"},
 		{`\run-help mytool sub -x`, "mytool is " + tool + "\nMAN:mytool sub -x\n"},
-		{`\run-help echo`, "echo is a shell builtin\nMAN:zshbuiltins\n" + ask + "echo is " + echo + "\nMAN:echo\n"},
+		{`\run-help echo`, "echo is a shell builtin\nMAN:zshbuiltins\n" + echoes},
 		{`\run-help typeset`, "typeset is a reserved word\nMAN:zshmisc\n" + ask + "typeset is a shell builtin\nMAN:zshbuiltins\n"},
 		{`\run-help`, "Here is a list of topics for which special help is available:\n\ncd  if\n"},
 	} {

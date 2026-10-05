@@ -6652,9 +6652,13 @@ func (r *Runner) fatalParamError(format string, args ...any) {
 // defined and the string calls is the string's again — `f; echo no` exits
 // 127 — which is why the question is what is being read rather than where
 // the text came from.
+//
+// Nor an interactive shell's: `bash -i -c 'echo ${unset?boom}'`, `set -u`
+// and an unset name, and the same failure inside a function all exit 1
+// there, measured 2026-10-05 on bash 5.3.20 (#6057).
 func (r *Runner) fatalExpansionQuiet() {
 	r.fatalQuiet()
-	if n := r.diag().ExpansionFailureStatusFromCommandString; n != 0 && r.Route == RouteCommandString && !r.inSubshell && r.startupDepth == 0 {
+	if n := r.diag().ExpansionFailureStatusFromCommandString; n != 0 && r.Route == RouteCommandString && !r.inSubshell && r.startupDepth == 0 && !r.Interactive {
 		r.status = n
 	}
 }

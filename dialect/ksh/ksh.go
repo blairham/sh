@@ -1356,6 +1356,9 @@ func Semantics() interp.Semantics {
 	// A startup file given up over a fatal error: ksh93 under `-E` leaves `$?` as it was before the failing command: `(exit 7)` and then `${unset?boom}` leaves 7 (#6046).
 	// See Semantics.StartupFileGivenUpLeavesTheStatusBefore.
 	s.StartupFileGivenUpLeavesTheStatusBefore = interp.Yes
+	// A fatal error in `.` or `eval` text: an interactive ksh93 gives up the text (#6057).
+	// See Semantics.BorrowedTextErrorWhenInteractiveCostsTheLine.
+	s.BorrowedTextErrorWhenInteractiveCostsTheLine = interp.No
 	// A fatal error in an interactive shell's startup file: ksh93 gives up the line and runs the rest of `$ENV` (#6009).
 	// See Semantics.StartupFileErrorWhenInteractive.
 	s.StartupFileErrorWhenInteractive = interp.StartupErrorCostsTheLine

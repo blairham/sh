@@ -45,8 +45,9 @@ alias which-command=whence
 
 // The directory stack, as shell. The same machinery the bash dialect's
 // prelude carries, with the measured differences kept: this engine's `pushd`
-// and `popd` move in silence — only `dirs` prints, one line, current
-// directory first, $HOME abbreviated to `~`. An empty stack refuses `popd`
+// and `popd` print the stack only in an interactive shell, and not under
+// `pushdsilent` or `-q` (#5982); `dirs` prints one line, current directory
+// first, $HOME abbreviated to `~`. An empty stack refuses `popd`
 // with status 1, and says so through `diagnose`, which is what puts this
 // shell's own location — the builtin's name between the file and the line —
 // in front of a sentence written here (#603, interp/prelude.go).

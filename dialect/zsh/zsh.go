@@ -5492,9 +5492,10 @@ func Diagnostics() interp.Diagnostics {
 		// ordinary function here and does not say it is: measured,
 		// `whence -v myfn` and `type myfn` both write this line, and the
 		// same name after one call writes TypeFunction instead.
-		TypeUndefinedFunction:  "%[1]s is an autoload shell function",
-		TypeNotFound:           "%[1]s not found",
-		TypeNotFoundUnprefixed: true,
+		TypeUndefinedFunction:     "%[1]s is an autoload shell function",
+		TypeUndefinedFunctionFrom: "%[1]s is an autoload shell function from %[2]s",
+		TypeNotFound:              "%[1]s not found",
+		TypeNotFoundUnprefixed:    true,
 		// And on standard output, which is the other half of treating it as
 		// an answer rather than a complaint: `type -- nope ls` prints the
 		// miss and the hit on one stream, in the order they were asked for.

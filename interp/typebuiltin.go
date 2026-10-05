@@ -444,6 +444,11 @@ func (r *Runner) FunctionSentence(name string) string {
 
 func (r *Runner) typeFunctionLine(dg Diagnostics, name string) string {
 	if _, undefined := r.undefinedFunction(name); undefined && dg.TypeUndefinedFunction != "" {
+		if r.undefinedFunctionFiles != nil && dg.TypeUndefinedFunctionFrom != "" {
+			if file, known := r.undefinedFunctionFiles(name); known {
+				return Wording(dg.TypeUndefinedFunctionFrom, "%[1]s is an undefined function from %[2]s", name, file)
+			}
+		}
 		return Wording(dg.TypeUndefinedFunction, "%[1]s is an undefined function", name)
 	}
 	if origin, ok := r.functionOrigin(name); ok && dg.TypeFunctionFrom != "" {

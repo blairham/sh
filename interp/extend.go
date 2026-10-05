@@ -1224,6 +1224,15 @@ func (r *Runner) SetUndefinedFunctions(undefined func(name string) (string, bool
 	r.undefinedFunctions = undefined
 }
 
+// SetUndefinedFunctionFiles installs where a function whose body has not been
+// read yet will be read from, for the names whose file the shell already
+// knows — a declaration that resolved it at once, or one written with the
+// file's own path. A name it does not know answers false, and the sentence
+// `type` writes for it has no file in it (#6155).
+func (r *Runner) SetUndefinedFunctionFiles(files func(name string) (string, bool)) {
+	r.undefinedFunctionFiles = files
+}
+
 // undefinedFunction is that hook asked, for a shell that installed one.
 func (r *Runner) undefinedFunction(name string) (string, bool) {
 	if r.undefinedFunctions == nil {

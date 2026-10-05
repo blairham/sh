@@ -745,6 +745,10 @@ type Runner struct {
 	xtraceBoundToTheBody               bool
 	importedFuncs                      bool
 	funcExportPrefix, funcExportSuffix string
+	// undefinedFunctionFiles is the dialect's answer to "which file will
+	// this undefined function be read from", where it already knows. See
+	// SetUndefinedFunctionFiles.
+	undefinedFunctionFiles func(name string) (string, bool)
 	// undefinedFunctions is the dialect's answer to "has this function's body
 	// been read yet, and what does a listing write where it has not" — see
 	// SetUndefinedFunctions. Nil in a shell with no such thing, which is two

@@ -2778,6 +2778,15 @@ type Diagnostics struct {
 	// place and by the same rule that decides how it lists.
 	TypeUndefinedFunction string
 
+	// TypeUndefinedFunctionFrom is the same line for one whose file is
+	// already known — the dialect's [Runner.SetUndefinedFunctionFiles]
+	// answers where. Two verbs: the name and the file. Measured 2026-10-05
+	// on zsh 5.9.2 (#6155): `autoload -Uzr myf` and `autoload -Uz /dir/myf`
+	// both answer `myf is an autoload shell function from /dir/myf`, and a
+	// plain `autoload -Uz myf` answers without the clause. Empty is no such
+	// line, and the plain one is written instead.
+	TypeUndefinedFunctionFrom string
+
 	// TypeNotFound is a name `type` could not account for. One verb: the
 	// name. Two of the four write it with no shell name or location in
 	// front, which TypeNotFoundUnprefixed says.

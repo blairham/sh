@@ -67,6 +67,39 @@ func monitorExitScript(t *testing.T, args []string, body string) string {
 	if err := os.WriteFile(path, []byte(monitorExitTrap+body), 0o600); err != nil {
 		t.Fatalf("writing the script: %v", err)
 	}
+	screen, _ := monitorExitRun(t, home, append(append([]string{"zsh"}, args...), path), monitorExitEnd)
+	return screen
+}
+
+// monitorExitCommandString is monitorExitScript on the `-c` route: the same
+// terminal, the same EXIT-trap marker in front of the body — so a line number
+// the shell writes is one more than the body's own — and the body handed over
+// as the command string.
+//
+// last is what the shell writes last, in order, and what the run waits for —
+// not always the marker on this route: a string that runs off its end hangs
+// its jobs up *after* the EXIT trap, and an `exit` that wrote the
+// jobs-at-exit sentence runs no EXIT trap at all (see
+// interp.Diagnostics.JobsAtExitOnACommandString). So each row names the
+// text it ends on rather than a screen that has only reached the trap.
+func monitorExitCommandString(t *testing.T, body string, last ...string) string {
+	t.Helper()
+	screen, _ := monitorExitCommandStatus(t, body, last...)
+	return screen
+}
+
+// monitorExitCommandStatus is monitorExitCommandString with the status the
+// shell left with.
+func monitorExitCommandStatus(t *testing.T, body string, last ...string) (string, int) {
+	t.Helper()
+	home := scratchHome(t)
+	return monitorExitRun(t, home, []string{"zsh", "-c", monitorExitTrap + body}, last...)
+}
+
+// monitorExitRun is the run both of those share, so the wait discipline
+// recorded below is in one place.
+func monitorExitRun(t *testing.T, home string, argv []string, last ...string) (string, int) {
+	t.Helper()
 	control, terminal, err := pty.Open()
 	if errors.Is(err, pty.ErrUnsupported) {
 		t.Skip("no pseudo-terminal on this platform")
@@ -88,13 +121,14 @@ func monitorExitScript(t *testing.T, args []string, body string) string {
 	}
 	screen := smoke.Watch(control)
 	done := make(chan int, 1)
-	go func() { done <- driver.MainArgs(sh, append(append([]string{"zsh"}, args...), path)) }()
+	go func() { done <- driver.MainArgs(sh, argv) }()
 	t.Cleanup(func() {
 		_ = terminal.Close()
 		_ = control.Close()
 	})
+	var code int
 	select {
-	case <-done:
+	case code = <-done:
 	case <-time.After(monitorExitBudget):
 		t.Fatalf("the script did not end; the screen was\n%s", smoke.Readable(screen.Text()))
 	}
@@ -127,11 +161,13 @@ func monitorExitScript(t *testing.T, args []string, body string) string {
 	// from any sentence: it asserts an **absence**, and an absence has
 	// nothing of its own to wait for, so it wants a mark the shell writes
 	// after the point where the sentence would have been.
-	if err := screen.Await(monitorExitEnd, monitorExitBudget); err != nil {
-		t.Fatalf("the shell never finished writing: %v\n%s",
-			err, smoke.Readable(screen.Text()))
+	for _, text := range last {
+		if err := screen.Await(text, monitorExitBudget); err != nil {
+			t.Fatalf("the shell never finished writing: %v\n%s",
+				err, smoke.Readable(screen.Text()))
+		}
 	}
-	return screen.Text()
+	return screen.Text(), code
 }
 
 // monitorExitFence is written by the script's own last line, so a row that

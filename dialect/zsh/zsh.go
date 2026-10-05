@@ -2734,6 +2734,10 @@ func Semantics() interp.Semantics {
 	// EXIT_TRAP' EXIT` the warning comes first. Each row is on its axis.
 	s.HangupAtExitNeedsALoginShell = interp.No
 	s.HangupAtExitSkipsStoppedJobs = interp.Yes
+	// And a job that started before `set -m` is neither sent to nor counted:
+	// `sleep 1 & set -m; sleep 1 & echo x` under `-c` on a terminal is
+	// `warning: 1 jobs SIGHUPed`. Measured 2026-10-05 (#6035).
+	s.HangupAtExitSkipsJobsStartedWithoutTheMonitor = interp.Yes
 	s.HangupAtExitPrecedesTheExitTrap = interp.Yes
 	// CDPATH moves in silence here.
 	s.CdpathAnnouncesTheDirectory = interp.No
@@ -5640,6 +5644,10 @@ func Diagnostics() interp.Diagnostics {
 		// `zsh:` with no line, and a held `exit N` there leaves with 1
 		// rather than with N. Measured 2026-09-26; see the fields (#4545).
 		JobsAtExitLocatedInAScript: true,
+		// And on the `-c` route: the end names nothing, an `exit` names the
+		// jobs where a diagnostic of its line would be, and the warning is
+		// at line 1. Measured 2026-10-05 (#6035).
+		JobsAtExitOnACommandString: true,
 		HeldExitInAScriptStatus:    1,
 		// And the three stops that are not ^Z carry a word of their own.
 		// Measured 2026-09-26 — see Diagnostics.JobStoppedBySignal for the

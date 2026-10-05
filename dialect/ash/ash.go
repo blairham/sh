@@ -2144,7 +2144,7 @@ func Semantics() interp.Semantics {
 	// the container rather than derived from dash, which is the column next
 	// to it and not evidence about it.
 	// unanswered HangupAtExitNeedsALoginShell, HangupAtExitSkipsStoppedJobs,
-	// HangupAtExitPrecedesTheExitTrap: all three are about what happens once
+	// HangupAtExitPrecedesTheExitTrap, HangupAtExitSkipsJobsStartedWithoutTheMonitor: all three are about what happens once
 	// a session has been asked to send SIGHUP to the jobs it is leaving, and
 	// this shell has no way to ask. The switch is
 	// interp.Runner.SendsHangupToJobsAtExit, which only bash's `shopt -s

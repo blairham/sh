@@ -2046,7 +2046,7 @@ func Semantics() interp.Semantics {
 	// bash's letter of the same name is a different question that stays
 	// unimplemented (#3390).
 	// unanswered HangupAtExitNeedsALoginShell, HangupAtExitSkipsStoppedJobs,
-	// HangupAtExitPrecedesTheExitTrap: all three are about what happens once
+	// HangupAtExitPrecedesTheExitTrap, HangupAtExitSkipsJobsStartedWithoutTheMonitor: all three are about what happens once
 	// a session has been asked to send SIGHUP to the jobs it is leaving, and
 	// this shell has no way to ask. The switch is
 	// interp.Runner.SendsHangupToJobsAtExit, which only bash's `shopt -s

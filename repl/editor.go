@@ -210,6 +210,11 @@ type editor struct {
 	// a word killed on one line yanks back on the next.
 	killed                []rune
 	killing, killedBefore bool
+	// called is whether a widget call has finished since this keystroke
+	// began, which is what says whose kill a kill joins: the keystroke's
+	// before it for the first call, and the call before it after that. See
+	// Actions.WidgetCalled.
+	called bool
 
 	// search is the history walk restricted to what the line already said —
 	// the state that makes a run of them one walk rather than a new search per
@@ -670,7 +675,7 @@ func (e *editor) readLine(prompt drawnPrompt) (string, error) {
 		// no kill returns from here, and the next keystroke read is the next
 		// line's first. So the text a kill took survives the line it came off
 		// — measured — and the joining does not.
-		e.killedBefore, e.killing = e.killing, false
+		e.killedBefore, e.killing, e.called = e.killing, false, false
 		// The same for whether the keystroke before this one typed a
 		// character into the line, and whether it was `M-.`. Both decide what
 		// this keystroke does rather than what it is: a run of typing is one

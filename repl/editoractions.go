@@ -155,6 +155,27 @@ type Actions interface {
 	// knowing nothing about kills must not be able to empty one.
 	CutBuffer() string
 	SetCutBuffer(text string)
+
+	// WidgetCalled says a widget call that is not one of this editor's own
+	// actions has finished: a widget of the shell's called from another, or
+	// an action the shell performs itself. Neither is a kill, so a kill after
+	// it starts afresh where it would have joined.
+	//
+	// Whether a kill joins the one before is decided by the widget call
+	// before it, not by the keystroke — measured 2026-10-04 through a
+	// pseudo-terminal against zsh 5.9.2, a yank after each (#5918):
+	//
+	//	w() { zle backward-kill-word; zle backward-kill-word }   one kill
+	//	^W, then w() { zle k }, k() { zle backward-kill-word }   one kill
+	//	w() { zle k; zle backward-kill-word }                    two kills
+	//	^W, then w() { zle copy-region-as-kill X; zle backward-kill-word }
+	//	                                                         two kills
+	//	w() { zle backward-kill-word }, then ^W                  two kills
+	//
+	// The editor sees its own actions; this is how it hears about the rest.
+	// An assignment to `CUTBUFFER` is not a call and does not end a run of
+	// kills: one between two kills is joined onto.
+	WidgetCalled()
 }
 
 // Every action this editor has can be performed from outside it, the two that
@@ -206,6 +227,12 @@ func (a editorActions) Perform(w Widget, in Line) (Line, bool) {
 		a.e.adoptKeys(in.Keys)
 	}
 	a.e.actionStatus = 0
+	// Whether this call's kill joins is the call before it's to say, and the
+	// first call of a keystroke asks the keystroke before. See WidgetCalled.
+	if a.e.called {
+		a.e.killedBefore = a.e.killing
+	}
+	a.e.killing, a.e.called = false, true
 	// Through runWidget and not a copy of it, which is the whole point: a key
 	// bound to `up-line-or-history` and a widget that calls `zle
 	// up-line-or-history` must be the same action, including where the cursor
@@ -328,6 +355,8 @@ func (a editorActions) ChangeNumber(in Line) int {
 func (a editorActions) CutBuffer() string { return string(a.e.killed) }
 
 func (a editorActions) SetCutBuffer(text string) { a.e.killed = []rune(text) }
+
+func (a editorActions) WidgetCalled() { a.e.killing, a.e.called = false, true }
 
 func (a editorActions) UndoTo(n int, in Line) (Line, bool) {
 	a.e.take(in)

@@ -1168,7 +1168,9 @@ func callBuiltinWidget(r *interp.Runner, ctx context.Context, name string, args 
 		}
 		// None of these kills through the editor, and one of them —
 		// copy-region-as-kill — sets the kill itself, so it is handed over
-		// when the action is done rather than read back.
+		// when the action is done rather than read back. Each is a widget
+		// call that is not a kill, so the next kill starts afresh (#5918).
+		defer actions.WidgetCalled()
 		defer handBackCutBuffer(r, actions)
 		return action(r, actions, args)
 	}
@@ -1378,6 +1380,12 @@ func callWidget(r *interp.Runner, ctx context.Context, name string, args []strin
 	// still reports the *outer* one's name.
 	status := r.ExitStatus()
 	ran, err := r.CallFunction(ctx, def.function, args...)
+	// A widget of the shell's is a call that is not a kill, whatever it
+	// called inside: measured, `zle k; zle backward-kill-word`, where k
+	// kills, leaves two kills (#5918).
+	if actions, editing := repl.ActionsFrom(ctx); editing {
+		actions.WidgetCalled()
+	}
 	if err != nil || !ran {
 		r.SetExitStatus(status)
 		return 1

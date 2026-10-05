@@ -106,6 +106,8 @@ type stubEditor struct {
 	undoneTo     []int
 	// cut is the kill, which CutBuffer reads and SetCutBuffer writes.
 	cut string
+	// calls is how many times WidgetCalled was told a call finished.
+	calls int
 }
 
 func (e *stubEditor) Perform(w repl.Widget, in repl.Line) (repl.Line, bool) {
@@ -150,6 +152,8 @@ func (e *stubEditor) ChangeNumber(repl.Line) int {
 func (e *stubEditor) CutBuffer() string { return e.cut }
 
 func (e *stubEditor) SetCutBuffer(text string) { e.cut = text }
+
+func (e *stubEditor) WidgetCalled() { e.calls++ }
 
 func (e *stubEditor) UndoTo(n int, in repl.Line) (repl.Line, bool) {
 	e.undoneTo = append(e.undoneTo, n)

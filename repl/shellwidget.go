@@ -151,6 +151,9 @@ func (e *editor) runShellWidget(name string, prompt drawnPrompt) (ran, accept bo
 	}
 	e.line = []rune(out.Buffer)
 	e.pos = min(max(out.Cursor, 0), len(e.line))
+	// A widget of the shell's is not a kill, whatever it called: a kill key
+	// pressed after one starts afresh. See Actions.WidgetCalled.
+	e.killing = false
 	// And what the widget left to be drawn after the line, which is this
 	// editor's to keep for the rest of the read: measured, a postdisplay
 	// survives the keystrokes after the one that set it and is redrawn with

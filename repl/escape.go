@@ -32,7 +32,7 @@ func (e *editor) escape(prompt drawnPrompt) keyRead {
 	if e.prefixArgument && (b >= '0' && b <= '9' || b == '-') {
 		// A count for the next keystroke, which this keystroke spends
 		// nothing of. See prefixarg.go.
-		e.count.add(b)
+		e.countMore(b)
 		return keyContinues
 	}
 	if e.spendCountOnEscape() {

@@ -26,7 +26,7 @@ import (
 // `-` a `q` ate is not in Flags at all, the parser having taken it out into
 // QuoteModifier. `+` is deliberately absent — it is no flag on its own, and
 // the parser refuses every `+` a `q` could not take.
-const implementedParamFlags = "ULC#fsjF@kvP%qMuoOniaQbcwWA~Zze-lr0VtSmBENRXI"
+const implementedParamFlags = "ULC#fsjF@kvP%qMuoOniaQbcwWA~Zze-lr0VtSmBENRXID"
 
 // expandFlagged answers an expansion that carries a flag group, as fields.
 // It reports false only when the node carries no group, so the ordinary
@@ -716,14 +716,6 @@ func (r *Runner) flaggedWords(e *syntax.ParamExpr, sp splitPolicy, quoted bool,
 			words[i] = quoteFlagged(w, n, e.QuoteModifier, empty, doubled)
 		}
 	}
-	// And after the quoting, which is the order `${(Vq)}` measures: a tab
-	// comes out `a$'\t'b`, so the quoting saw the control character and
-	// this did not. See visibleflag.go.
-	if strings.ContainsRune(e.Flags, 'V') {
-		for i, w := range words {
-			words[i] = r.visibleFlagText(w)
-		}
-	}
 	// Rule 14's third spelling: `(b)` marks the *pattern* metacharacters and
 	// nothing else. It stands beside `q` rather than before or behind it
 	// because the grammar makes the pair unwritable — the two are one family
@@ -767,6 +759,60 @@ func (r *Runner) flaggedWords(e *syntax.ParamExpr, sp splitPolicy, quoted bool,
 				return nil, false, false, false
 			}
 			words[i] = v
+		}
+	}
+	// `D`: each value written as a directory the way `%~` draws one — under
+	// the home as `~`, under a named directory as `~name` — and then quoted
+	// as a single `q` would quote it. Measured 2026-10-05 on zsh 5.9.2
+	// under -f, with `HOME=/Users/x`, `hash -d proj=/opt/p pp=/opt/p/src`:
+	//
+	//	a=/Users/x/doc     ${(D)a}          ~/doc
+	//	b=/opt/p/src       ${(D)b}          ~pp     the shortest drawing wins
+	//	c=/tmp             ${(D)c}          /tmp
+	//	v='/Users/x/a b'   ${(D)v}          ~/a\ b  quoted, abbreviated or not:
+	//	                   ${(D):-/q/it's}  /q/it\'s
+	//	x='~/q'            ${(D)x}          \~/q
+	//	e=                 "[${(D)e}]"      []      and no '' for an empty one
+	//	                   ${(UD)a}         /USERS/X/DOC  after the case,
+	//	                   ${(qqD)v}        \'/Users/x/a\ b\'  the quoting,
+	//	                   ${(DQ):-/Users/x/a\\ b}   ~/a\ b  and the unquoting
+	//	                   ${(D)a:h}        ~       and after the operator
+	//	arr=(/Users/x /tmp) "${(D)arr}"     joined first, then drawn
+	//
+	// So it is the last of the value's rewrites, and it is the directory
+	// drawing `print -D` and the prompt already share (#5980).
+	if strings.ContainsRune(e.Flags, 'D') {
+		bare = nil
+		doubled := r.DoubledQuoteInSingleQuotes()
+		for i, w := range words {
+			w = stripLiveMarks(w)
+			// The tilde word the drawing put in front is not quoted, and the
+			// rest is: `~/a\ b` and not `\~/a\ b`, while a `~` that was in
+			// the value is quoted like any other character.
+			drawn, head := r.abbreviatedDirectory(w), ""
+			if drawn != w {
+				tail := drawnTail(drawn)
+				head, drawn = drawn[:len(drawn)-len(tail)], tail
+			}
+			if drawn != "" {
+				drawn = quoteFlagged(drawn, 1, 0, false, doubled)
+			}
+			words[i] = head + drawn
+		}
+	}
+	// And after the quoting, which is the order `${(Vq)}` measures: a tab
+	// comes out `a$'\t'b`, so the quoting saw the control character and
+	// this did not. See visibleflag.go.
+	//
+	// After the unquoting and the directory drawing too, which is measured
+	// on zsh 5.9.2 (2026-10-05): with `t=$'a\tb'`, `${(VQ)t}` is `a\tb` —
+	// a `Q` that ran after this would have taken the backslash and left
+	// `atb`, which is what this answered while it stood ahead of `Q` — and
+	// with `HOME=/Users/x`, `${(DV)t}` on `/Users/x/a<TAB>b` is
+	// `~/a$'\t'b`, the `D` quoting having seen the tab (#5980).
+	if strings.ContainsRune(e.Flags, 'V') {
+		for i, w := range words {
+			words[i] = r.visibleFlagText(w)
 		}
 	}
 	// A marked separator's join, held back to here from rule 10.

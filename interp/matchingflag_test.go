@@ -101,7 +101,6 @@ func TestTheMatchingFlagSubstitutesWhatThePatternTook(t *testing.T) {
 func TestTheUnbuiltFlagsAreStillRefusedByName(t *testing.T) {
 	for _, tc := range []struct{ name, src, want string }{
 		{"t", `v=x; printf "[%s]" "${(t)v}"`, "sh: ${(t)v}: the (t) expansion flag is not implemented\n"},
-		{"D", `v=x; printf "[%s]" "${(D)v}"`, "sh: ${(D)v}: the (D) expansion flag is not implemented\n"},
 		// `m` was on this list whole and is now half-built: it is carried for
 		// the length operator (#2119) and still refused beside the padding
 		// pair, which is asserted in its own test rather than here — see

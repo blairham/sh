@@ -243,12 +243,14 @@ type editor struct {
 	// undoLimit is the change a key's undo stops at, 0 for none. See
 	// Actions.UndoLimit.
 	undoLimit int
+	// sendBreakOnControlG is EditorStyle.SendBreakOnControlG.
+	sendBreakOnControlG bool
 	// breakRequested is a send-break an action asked for, which the key loop
 	// acts on at its top. See keyLoop.
 	breakRequested bool
-	// breakQuiet is that send-break being one a widget asked for by name,
-	// which rings no bell. See sendBreak.
-	breakQuiet bool
+	// breakRings is whether that send-break rings the bell: true but for one
+	// a widget asked for by name. See sendBreak.
+	breakRings bool
 	// recursive is how many recursive-edits are running, and recursiveBroke
 	// whether the innermost one ended other than by accepting. See
 	// recursiveEdit.
@@ -618,9 +620,7 @@ func (e *editor) keyLoop(prompt drawnPrompt) (string, error) {
 		// key's path comes back through.
 		if e.breakRequested {
 			e.breakRequested = false
-			quiet := e.breakQuiet
-			e.breakQuiet = false
-			return e.sendBreak(prompt, !quiet)
+			return e.sendBreak(prompt, e.breakRings)
 		}
 		// A draw a typed character put off because more input was in hand,
 		// and the input has run out without anything drawing it. That is a
@@ -840,6 +840,14 @@ func (e *editor) keyLoop(prompt drawnPrompt) (string, error) {
 		case ctrlT:
 			e.change(false, e.transpose)
 			e.redraw(prompt)
+		case ctrlG:
+			// send-break in a dialect whose emacs keymap has it on `^G`:
+			// zsh's does and its vi keymaps do not, measured with `bindkey`
+			// on zsh 5.9.2. Anywhere else the key is ignored, as every
+			// unbound control key is.
+			if e.sendBreakOnControlG && !e.viEditing() {
+				return e.sendBreak(prompt, true)
+			}
 		case ctrlUnderscore:
 			e.undo()
 			e.redraw(prompt)
@@ -1072,6 +1080,7 @@ func (e *editor) giveUp(prompt drawnPrompt) (string, error) {
 // widget does not, and the rest of that widget does not run either — which is
 // the shell's to stop, see dialect/zsh's callBuiltinWidget.
 func (e *editor) sendBreak(prompt drawnPrompt, bell bool) (string, error) {
+	e.breakRings = true
 	if bell {
 		e.write("\a")
 	}

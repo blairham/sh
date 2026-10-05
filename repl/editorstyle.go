@@ -16,6 +16,13 @@ type EditorStyle struct {
 	// spell correction and leaves `^X r` unbound, so the zero value is its.
 	SearchOnControlX bool
 
+	// SendBreakOnControlG puts send-break on `^G` in the emacs keymap: the
+	// line is given up with a bell and `$?` 1 (see ErrBroken). zsh's emacs
+	// keymap does, measured 2026-10-04 with `bindkey '^G'` on zsh 5.9.2; its
+	// vi keymaps do not, and bash's `^G` is readline's abort, which keeps the
+	// line — so the zero value ignores the key, as this editor always did.
+	SendBreakOnControlG bool
+
 	// Interrupt is what marks a line abandoned with ^C, drawn where the
 	// cursor was before the line ends.
 	//

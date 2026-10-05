@@ -2857,6 +2857,7 @@ func (s Shell) newEditor(ctx context.Context, state *terminalState) *editor {
 		searchInvalid:        s.History.SearchInvalidPrompt,
 		searchForwardInvalid: s.History.SearchForwardInvalidPrompt,
 		searchOnControlX:     s.Editor.SearchOnControlX,
+		sendBreakOnControlG:  s.Editor.SendBreakOnControlG,
 		searchSmartCase:      s.History.SearchIgnoresCaseUnlessTold,
 		searchCaretAnchors:   s.History.SearchCaretAnchors,
 		// And where a forward match leaves the cursor.

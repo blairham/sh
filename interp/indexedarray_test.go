@@ -196,8 +196,10 @@ func appendN(n int) Array {
 //
 // A ratio of two sizes rather than a number, so the machine's speed and load
 // cancel; the best of several runs, so one descheduled run does not decide
-// it. Linear is a ratio near 2 and quadratic one near 4, and the threshold
-// sits between them with room either way.
+// it. Four times the elements rather than twice: linear is a ratio near 4 and
+// quadratic one near 16, and the bound at 10 sits between them with room a busy
+// runner cannot close — at twice the elements linear is 2 and quadratic 4, and
+// cache and allocator noise alone took the macOS runner past 3 (#6175).
 //
 // **With the collector held off while a run is timed.** The larger run builds
 // twice the live heap, and a collection during it scans all of it, so on a
@@ -222,10 +224,10 @@ func TestAppendingToAnIndexedArrayIsLinear(t *testing.T) {
 		}
 		return b
 	}
-	small, large := best(n), best(2*n)
-	if ratio := float64(large) / float64(small); ratio > 3 {
-		t.Fatalf("appending %d took %v and %d took %v: ratio %.2f, want about 2 (linear)",
-			n, small, 2*n, large, ratio)
+	small, large := best(n), best(4*n)
+	if ratio := float64(large) / float64(small); ratio > 10 {
+		t.Fatalf("appending %d took %v and %d took %v: ratio %.2f, want about 4 (linear)",
+			n, small, 4*n, large, ratio)
 	}
 }
 

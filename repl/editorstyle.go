@@ -571,6 +571,14 @@ type EditorStyle struct {
 	// draws a directory's slash and nothing else. See FileTypeMark.
 	ListTypesOption string
 
+	// ListReturnsToTheLineOption names the option under which a listing is
+	// followed by the cursor going back up to the line, the listing staying
+	// on the screen below it until the line ends — zsh's ALWAYS_LAST_PROMPT,
+	// on by default (#6129). Empty is a dialect without it, whose listing is
+	// followed by the line drawn again under it. Named rather than a value
+	// because a person sets it at the prompt. See editor.returnToTheLine.
+	ListReturnsToTheLineOption string
+
 	// BellRingsOnAnAmbiguousCompletionThatInserts sounds the bell for a
 	// completion with more than one match even where it put a prefix on the
 	// line.

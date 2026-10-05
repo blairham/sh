@@ -674,7 +674,7 @@ func (e *editor) completeKey(c Completer, builtin, wasTab bool, prompt drawnProm
 		e.ring()
 	}
 	if listing && e.confirmList(matches, prompt) {
-		e.list(matches, prompt)
+		e.returnToTheLine(e.list(matches, prompt), prompt)
 	}
 	e.redraw(prompt)
 	// Set after the redraw, and the only key that leaves it set: two

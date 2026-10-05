@@ -2932,6 +2932,11 @@ func (s Shell) newEditor(ctx context.Context, state *terminalState) *editor {
 		// And how a listing is arranged, which two options decide. Read on
 		// the keystroke, because a person sets them at the prompt and this
 		// editor outlives every line of the session.
+		// And whether a listing returns the cursor to the line, read on the
+		// keystroke for the same reason.
+		returnsToTheLine: func() bool {
+			return s.Editor.ListReturnsToTheLineOption != "" && s.dialectOption(s.Editor.ListReturnsToTheLineOption)
+		},
 		layout: func() listLayout {
 			return listLayout{
 				packed:    s.dialectOption(s.Editor.ListPackedOption),

@@ -382,7 +382,9 @@ var zshOptions = []zshOption{
 	// it. `A02alias.ztst` stopped on this.
 	switchBacked("aliasfuncdef", false, aliasFuncDefOn, setAliasFuncDef),
 	setOptBacked("allexport", false, "allexport", false),
-	recorded("alwayslastprompt", true),
+	// Read by the line editor after a listing — see
+	// repl.EditorStyle.ListReturnsToTheLineOption — so not `recorded` (#6129).
+	storeBacked("alwayslastprompt", true),
 	recorded("alwaystoend", false),
 	recorded("appendcreate", false),
 	recorded("appendhistory", true),

@@ -411,6 +411,14 @@ type editor struct {
 	// listing starts on the row the cursor is already on.
 	listQueryTakesItsRow bool
 	listHere             bool
+	// returnsToTheLine is whether a listing is followed by the cursor going
+	// back up to the line rather than by the line drawn again under it —
+	// zsh's ALWAYS_LAST_PROMPT, read on the keystroke. Nil is never. And
+	// listingBelow is that a listing is on the screen under the line, so
+	// drawing the line must not erase below it until the line is ended.
+	// See returnToTheLine.
+	returnsToTheLine func() bool
+	listingBelow     bool
 	// listThreshold is how many matches it takes before the question is
 	// asked, read fresh on every completion because it is a parameter a
 	// person sets at the prompt — the same shape `bindings` has and for the
@@ -1478,10 +1486,20 @@ func (e *editor) redraw(prompt drawnPrompt) {
 	// Erase to the end of the *screen* rather than the end of the row: what
 	// is being replaced may be several rows of it, and clearing only the
 	// first leaves the rest of the old line below the new one.
-	b.WriteString("\x1b[J")
+	// Not under a listing the line was returned to, which stays on the
+	// screen until the line ends; there the line's own rows are cleared as
+	// they are written over. See returnToTheLine.
+	if e.listingBelow {
+		b.WriteString("\x1b[K")
+	} else {
+		b.WriteString("\x1b[J")
+	}
 	b.WriteString(prompt.text)
 	styled := e.styled()
 	b.WriteString(e.spell(styled, prompt.cells, cols))
+	if e.listingBelow {
+		b.WriteString("\x1b[K")
+	}
 
 	// After the line and before the cursor is placed, because it is drawn
 	// from where the line ends and the placement below counts from column
@@ -1611,6 +1629,14 @@ func (e *editor) endLine(prompt drawnPrompt, before string) {
 	prompt = e.trimPrompt(prompt)
 	e.toLastRow(prompt)
 	e.write(before + e.newline())
+	if e.listingBelow {
+		// The listing the line was returned to goes when the line does:
+		// measured, zsh ends a line under one with `\r\r\n\e[J`.
+		e.listingBelow = false
+		if e.message == "" {
+			e.write("\x1b[J")
+		}
+	}
 	if e.message != "" {
 		// The message row is the row the line's end just moved to, so it
 		// is cleared rather than left for the command's output to land on,
@@ -1821,7 +1847,7 @@ func place(promptWidth int, line []rune, pos, cols int) (curRow, curCol, endRow,
 // Measured, bash and zsh lay them out the same way — as many columns as fit,
 // each as wide as the longest match plus two, filled down one column before
 // starting the next, so that reading in sorted order means reading downwards.
-func (e *editor) list(matches []Candidate, prompt drawnPrompt) {
+func (e *editor) list(matches []Candidate, prompt drawnPrompt) int {
 	if e.listHere {
 		// A question answered yes has already taken the line's row away and
 		// cleared its own. See confirmList.
@@ -1833,7 +1859,8 @@ func (e *editor) list(matches []Candidate, prompt drawnPrompt) {
 	// block or several, and which rows share an arrangement is the
 	// completer's answer rather than this editor's. See completelist.go.
 	attributes := false
-	for _, row := range listingRows(matches, e.cols(), e.listLayout()) {
+	rows := listingRows(matches, e.cols(), e.listLayout())
+	for _, row := range rows {
 		e.write(row)
 		e.write(e.newline())
 		attributes = attributes || strings.ContainsRune(row, '\x1b')
@@ -1848,6 +1875,43 @@ func (e *editor) list(matches []Candidate, prompt drawnPrompt) {
 	}
 	// The prompt and the line are not written back here: the caller redraws,
 	// and the redraw now knows it is starting from a fresh row.
+	return len(rows)
+}
+
+// returnToTheLine puts the cursor back on the line a listing was drawn under,
+// where a dialect asks for it — zsh's ALWAYS_LAST_PROMPT, on by default.
+// Measured 2026-10-05 through a pseudo-terminal against zsh 5.9.2, with a
+// two-row prompt and `ls x` Tab over three matches: the listing is drawn,
+// the cursor goes up past it (`\e[A`) and the line is drawn again on its own
+// row, and the listing stays on the screen while the line is edited — `b`,
+// two Backspaces and `yy` leave it — until the line is ended, which erases it
+// (#6129). With the option off, or a listing too tall to come back over, the
+// line is drawn again under the listing as it was before.
+//
+// The rows were written by list, which ended on a fresh row under the last of
+// them; the line's own last row is that many rows and one more up, and from
+// there the draw goes up to where the line starts the way backToTheLine's
+// does.
+func (e *editor) returnToTheLine(listed int, prompt drawnPrompt) bool {
+	if e.returnsToTheLine == nil || !e.returnsToTheLine() {
+		return false
+	}
+	cols, height := e.cols(), e.rows()
+	if cols <= 0 || height <= 0 {
+		return false
+	}
+	_, _, endRow, endCol := place(e.live(prompt).cells, e.displayed(), e.pos, cols)
+	if endCol == cols {
+		endRow++
+	}
+	if listed+endRow+1 >= height {
+		return false
+	}
+	e.write("\x1b[" + itoa(listed+1) + "A")
+	e.row = endRow
+	e.drawn = drawnLine{}
+	e.listingBelow = true
+	return true
 }
 
 // listLayout is the arrangement a listing drawn now is in.

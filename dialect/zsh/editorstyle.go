@@ -174,6 +174,9 @@ func EditorStyle() repl.EditorStyle {
 		// which is the completion system's `compadd -f` answer too. See
 		// repl.EditorStyle.ListTypesOption (#6179).
 		ListTypesOption: "LIST_TYPES",
+		// And whether the cursor goes back up to the line after a listing.
+		// See repl.EditorStyle.ListReturnsToTheLineOption (#6129).
+		ListReturnsToTheLineOption: "ALWAYS_LAST_PROMPT",
 		// Measured: a bare Tab in a directory holding a `.hidden` lists
 		// everything except it, and `.` completes it outright because it is
 		// then the only match. Left false rather than written out, so that

@@ -52,7 +52,7 @@ eval 'print -r -- ev=$zsh_eval_context'
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer null.Close()
+	defer func() { _ = null.Close() }()
 	sh.Stdin = null
 	driver.MainArgs(sh, []string{"zsh", "-l", "-i", "-c", "print main=$zsh_eval_context"})
 	want := ".zshenv " + each +

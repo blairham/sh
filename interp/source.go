@@ -288,7 +288,18 @@ func (r *Runner) reportBorrowedParseFailure(err error, s sourced, src string) {
 	// sentence agreeing, since `syntax error: unexpected end of file from
 	// \`if\' command on line N` carries a second one that has to shift with
 	// the first (#2462).
-	line, own := r.line, r.diag().ParseFailureLine(err)
+	// The dialect whose interactive shell speaks as at its prompt still
+	// locates a *file's* parse failure as a file, and puts its own name in
+	// front: measured 2026-10-05 on bash 5.3.20, `. ./bad` at a prompt is
+	// `bash: ./bad: line 1: syntax error near unexpected token `)'` and then
+	// `bash: ./bad: line 1: `echo )'` (#6008). See
+	// Diagnostics.InteractiveShellSpeaksAsAtAPrompt.
+	d, lead := r.diag(), ""
+	if r.speaksAsAtAPrompt() && !s.eval {
+		raw := *r.Diagnostics
+		d, lead = &raw, r.name()+": "
+	}
+	line, own := r.line, d.ParseFailureLine(err)
 	if own > 0 {
 		// The route's origin as well as the text's offset, which is what
 		// Runner.lineOf adds for every *run-time* diagnostic from the same
@@ -298,7 +309,6 @@ func (r *Runner) reportBorrowedParseFailure(err error, s sourced, src string) {
 		line = own + r.lineBase + r.lineOrigin
 		err = shiftParseError(err, r.lineBase+r.lineOrigin)
 	}
-	d := r.diag()
 	if d.BorrowedTextRendersTheCallStack {
 		// The chain, and then the innermost text's name with no location
 		// after it: the message this shell writes already carries `at line
@@ -320,10 +330,10 @@ func (r *Runner) reportBorrowedParseFailure(err error, s sourced, src string) {
 			if bodyLine < 0 {
 				bodyLine = line
 			}
-			r.errf("%s\n", d.SourceReport(s.naming(*d), r.name(), s.sourceName(*d),
+			r.errf("%s%s\n", lead, d.SourceReport(s.naming(*d), r.name(), s.sourceName(*d),
 				bodyLine+r.lineBase+r.lineOrigin, d.ParseFailure(body)))
 		}
-		r.errf("%s\n", d.SourceReport(s.naming(*d), r.name(), s.sourceName(*d),
+		r.errf("%s%s\n", lead, d.SourceReport(s.naming(*d), r.name(), s.sourceName(*d),
 			line, d.ParseFailure(err)))
 	}
 	// And the offending line quoted back, for the dialect that writes
@@ -335,7 +345,9 @@ func (r *Runner) reportBorrowedParseFailure(err error, s sourced, src string) {
 		// the quote. The same number for both is right only where the text
 		// numbers itself from one, and wrong in exactly the dialects the line
 		// above shifts (#3194).
-		r.errf("%s", d.SourceEcho(s.naming(*d), r.name(), s.sourceName(*d), line, own, err, src))
+		if echo := d.SourceEcho(s.naming(*d), r.name(), s.sourceName(*d), line, own, err, src); echo != "" {
+			r.errf("%s%s", lead, echo)
+		}
 	}
 }
 

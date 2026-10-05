@@ -274,6 +274,31 @@ type Diagnostics struct {
 	// shell already answers for a script.
 	StartupParseFailureWordedAsAtAPrompt bool
 
+	// InteractiveShellSpeaksAsAtAPrompt words every diagnostic of an
+	// interactive shell the way it words a line typed at its prompt — named
+	// by the last component of the name the shell was started as, with no
+	// line — whatever text it comes from: a startup file, a file `.` read,
+	// a function one of them defined, the `-c` string, a script.
+	//
+	// bash's. Measured 2026-10-05 on bash 5.3.20 through a pseudo-terminal
+	// and on a pipe alike, `env -i HOME=<scratch>`, started as
+	// `/opt/homebrew/bin/bash`:
+	//
+	//	nosuchRC on line 2 of .bashrc        bash: nosuchRC: command not found
+	//	. ./g at the prompt, g's line 2      bash: nosuch: command not found
+	//	g's line 3, ${unset?boom}            bash: unset: boom
+	//	f defined at the prompt, called      bash: nosuch3: command not found
+	//	-i -c 'nosuchC; . ./g'               bash: nosuchC …, bash: nosuch …
+	//	-i s.sh, its line 1 and g's lines    bash: nosuchS …, bash: nosuch …
+	//	-l -i, line 2 of .bash_profile       bash: nosuchP: command not found
+	//	started as ./weird/mybash            mybash: nosuchA: command not found
+	//
+	// where the same files read without `-i` are named by their paths and
+	// lines, and `bash -c` names itself by the whole of `$0`. This shell
+	// named the files at a prompt too, with no line, and wrote the whole of
+	// `$0` (#6008).
+	InteractiveShellSpeaksAsAtAPrompt bool
+
 	// StartupFileLocatedAsAFileAtAPrompt locates a run-time diagnostic from a
 	// startup file read by an interactive shell the way the same file is
 	// located under `-c` — by its path and line — instead of the way a line
@@ -12272,7 +12297,17 @@ func CoreDiagnostics() Diagnostics { return Diagnostics{} }
 // handed back untouched, and once to make the adjustment — and two spellings
 // of one question is how the fast path comes to disagree with the slow one.
 func (r *Runner) promptLocated() bool {
+	if r.speaksAsAtAPrompt() {
+		return true
+	}
 	return r.AtPrompt && r.borrowedFiles == 0 && !r.inFunctionReadFromAFile()
+}
+
+// speaksAsAtAPrompt is the dialect whose interactive shell words everything
+// it says the way it words a line typed at its prompt. See
+// Diagnostics.InteractiveShellSpeaksAsAtAPrompt.
+func (r *Runner) speaksAsAtAPrompt() bool {
+	return r.Interactive && r.Diagnostics != nil && r.Diagnostics.InteractiveShellSpeaksAsAtAPrompt
 }
 
 // diag reports the runner's diagnostics, defaulting to the substrate's own.

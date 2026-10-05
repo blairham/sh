@@ -1839,8 +1839,16 @@ func (r *Runner) callFuncInPlace(ctx context.Context, fn *syntax.FuncDecl, name 
 	// `() { sleep 1 & jobs }` is [1] in zsh 5.9.2, measured 2026-10-02, and
 	// `() { if true; then sleep 1 & jobs; fi }` is [2]. See
 	// Semantics.ACommandHoldsAJobSlot.
+	//
+	// Not a call the editor or the prompt loop makes between commands, which
+	// holds nothing and leaves its body to hold as a typed line would. See
+	// Runner.BetweenCommands.
+	betweenCommands := inPlace == nil && r.callsHoldNoSlot
 	if inPlace == nil {
-		if release := r.holdACommandsJobSlot(false); release != nil {
+		if betweenCommands {
+			r.callsHoldNoSlot = false
+			defer func() { r.callsHoldNoSlot = true }()
+		} else if release := r.holdACommandsJobSlot(false); release != nil {
 			defer release()
 		}
 	}
@@ -2206,9 +2214,12 @@ func (r *Runner) callFuncInPlace(ctx context.Context, fn *syntax.FuncDecl, name 
 	outerConstruct := r.constructLine
 	r.constructLine = 0
 	restoreOpen := r.openRuntimeFresh(fn.Body)
-	if inPlace != nil {
+	if inPlace != nil || betweenCommands {
 		// A nameless function's body is not a brace group that holds a
 		// number of its own: `() { sleep 1 & jobs }` is [1]. See holdsAJobSlot.
+		// Nor is the body of one called between commands, which holds
+		// nothing either: `precmd() { sleep 1 & }` is [1] where
+		// `precmd() { { sleep 1 & } }` is [2]. See Runner.BetweenCommands.
 		outerBody := r.bodyHoldsNoSlot
 		r.bodyHoldsNoSlot = fn.Body
 		defer func() { r.bodyHoldsNoSlot = outerBody }()

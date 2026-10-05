@@ -116,6 +116,32 @@ func (r *Runner) holdACommandsJobSlot(nests bool) func() {
 	}
 }
 
+// BetweenCommands runs what the shell does between commands on its own
+// account — a prompt hook, a widget a key ran, a completion function, a
+// descriptor handler — so that a function it calls holds no job slot. The
+// function's body holds as a line typed at the prompt would.
+//
+// Measured 2026-10-04 on zsh 5.9.2 through a pseudo-terminal, each function
+// body `sleep 1 & print ${(k)jobstates}` and nothing else in the table (#5891):
+//
+//	precmd, a precmd_functions member, preexec      [1]
+//	a widget a key ran, a `zle -C` completion        [1]
+//	a `zle -F` handler                               [1]
+//	precmd() { { J } }                               [2]: the brace group holds
+//	a widget a `zle w2` in another widget ran        [2]: `zle` is a command
+//	chpwd from a typed `cd`, a trap, zshexit         [2]: a command is running
+//
+// So the line is who is calling, not what kind of function is called: the
+// same widget is [1] from a key and [2] from `zle`. Every call made directly
+// under run holds nothing — a hook chain is several — and none made from
+// inside one of their bodies is affected.
+func (r *Runner) BetweenCommands(run func()) {
+	saved := r.callsHoldNoSlot
+	r.callsHoldNoSlot = true
+	defer func() { r.callsHoldNoSlot = saved }()
+	run()
+}
+
 // slotHeld is whether a running command holds number n: the innermost
 // command or one it runs inside.
 func (r *Runner) slotHeld(n int) bool {

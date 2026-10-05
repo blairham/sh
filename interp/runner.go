@@ -3235,6 +3235,11 @@ type Runner struct {
 	// silentToPrint are the names a `-p` listing writes nothing for, named or
 	// whole. See Runner.SetSilentToPrint.
 	silentToPrint map[string]bool
+	// callsHoldNoSlot says a function called from here holds no job slot:
+	// the shell is between commands, calling a function on the line
+	// editor's or the prompt loop's account. Cleared for the body the call
+	// runs. See Runner.BetweenCommands.
+	callsHoldNoSlot bool
 	// bodyHoldsNoSlot is the body of the nameless function being entered,
 	// which runs as that function and not as the brace group it is written
 	// as. See holdsAJobSlot.

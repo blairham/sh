@@ -110,13 +110,16 @@ func TestAReadBackVerbThatAnswersNonZeroAssignsNothing(t *testing.T) {
 
 // TestAnOptionWrittenWithItsEqualsIsOfferedBack is `-O` while the cursor is
 // after an option's `=`: that option is still in the `equal` array, which is
-// what sends `_arguments` on to `-L`. The two forms whose argument attaches
-// without an `=` are spent, as before.
+// what sends `_arguments` on to `-L` — where its name is longer than one
+// letter. The two forms whose argument attaches without an `=` are spent, as
+// before.
 func TestAnOptionWrittenWithItsEqualsIsOfferedBack(t *testing.T) {
 	for _, c := range []struct{ line, want string }{
 		{"cmd --color=", "-x:dir|-f:file|--color:col --opt:o -o:oo"},
 		{"cmd --color=al", "-x:dir|-f:file|--color:col --opt:o -o:oo"},
 		{"cmd --opt=o", "-x:dir|-f:file|--color:col --opt:o -o:oo"},
+		// A one-letter name is spent even after its `=`.
+		{"cmd -o=v", "-x:dir|-f:file|--color:col --opt:o"},
 		{"cmd -fx", "-x:dir||--color:col --opt:o -o:oo"},
 		{"cmd -xq", "|-f:file|--color:col --opt:o -o:oo"},
 	} {

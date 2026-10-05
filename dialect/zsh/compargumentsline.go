@@ -399,14 +399,22 @@ func (a *argumentsState) lookupOption(word string) (string, string, bool) {
 //	cmd -fx<TAB>         odirect=()           — attached with no `=`: spent
 //	cmd -xq<TAB>         direct=()            — and the same
 //
-// This offered neither of the first three back, so `ls --color=<TAB>` never
-// reached the `-L` that describes the colors.
+// **And only a name longer than one letter.** `-o=[out]:out:` beside
+// `--oo=[o2]:out:`, with and without `-s`:
+//
+//	cmd -o=val<TAB>      equal=(--oo:o2 --color:col)          — `-o` is spent
+//	cmd -o=<TAB>         equal=(--oo:o2 --color:col)
+//	cmd --oo=val<TAB>    equal=(-o:out --oo:o2 --color:col)   — `--oo` is not
+//
+// which is the same split by length spend draws for what a cursor option
+// shuts off. This offered none of the long ones back, so `ls --color=<TAB>`
+// never reached the `-L` that describes the colors.
 func (a *argumentsState) optionSpelledOut(word string) string {
 	name, _, attached := a.lookupOption(word)
 	if name == word {
 		return name
 	}
-	if spec := a.optionNamed(name); attached && spec != nil &&
+	if spec := a.optionNamed(name); attached && spec != nil && !singleLetterOption(name) &&
 		(spec.style == optArgEqual || spec.style == optArgEqualDirect) {
 		return name
 	}

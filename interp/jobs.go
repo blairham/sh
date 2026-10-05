@@ -3106,7 +3106,7 @@ func (r *Runner) reap(j *Job) {
 // as finished — see noticeFinishedJobs. Each job goes the way a
 // waited-for one does, so its process id still answers `wait`.
 func (r *Runner) dropFinishedJobs() {
-	if r.monitor {
+	if r.monitor && !r.reportsFinishedJobsToNobody() {
 		// A notice before the next prompt, or a listing, reports it, and
 		// that is when every column lets it go. The option and not the
 		// terminal: measured 2026-10-01, ksh93u+ `-c 'set -m; (exit 3) &
@@ -3137,7 +3137,7 @@ func (r *Runner) dropFinishedJobs() {
 // job is JobsListFinishedJobs, and what an id answers is the job's status
 // either way the first time.
 func (r *Runner) dropFinishedJobsWhereAnswered() {
-	if r.monitor || r.sem().FinishedJobLeavesTheTable != Yes {
+	if (r.monitor && !r.reportsFinishedJobsToNobody()) || r.sem().FinishedJobLeavesTheTable != Yes {
 		return
 	}
 	var finished []*Job
@@ -3147,6 +3147,35 @@ func (r *Runner) dropFinishedJobsWhereAnswered() {
 		}
 	}
 	r.dropJobs(finished)
+}
+
+// reportsFinishedJobsToNobody is the monitor's half of "nothing is going to
+// report it": the monitor is on and a finished job is reported the moment it
+// ends — Semantics.FinishedJobNoticeArrivesAtOnce, zsh's NOTIFY — but there is
+// no prompt to report it to, so the report has already happened, unheard, and
+// the job goes the way it goes with the monitor off.
+//
+// Measured 2026-10-05 on zsh 5.9.2 through a pseudo-terminal, `zsh -c` with
+// NOTIFY at its default (#6033):
+//
+//	set -m; sleep 0.1 & /bin/sleep 0.5; fg         fg: no current job, 1
+//	set -m; sleep 0.1 & /bin/sleep 0.5; fg %1      fg: %1: no such job, 127
+//	set -m; sleep 0.1 & /bin/sleep 0.5; wait %1    wait: %1: no such job, 127
+//	set -m; sleep 0.1 & /bin/sleep 0.5; sleep 2 & jobs   [1], the number free
+//
+// with nothing written about the job's end, where this shell said `job has
+// terminated` from a table still holding it. `setopt nonotify` is the
+// control, and it is the other reading: the job stays until something
+// reports it, and `jobs` then lists `done` before it goes.
+//
+// A prompt is not this, because the notice is written there. And it is not a
+// question of its own: the one dialect whose NOTIFY is a switch is the one
+// that answers FinishedJobLeavesTheTable yes, and the others hold the notify
+// axis at no — bash 5.3's `set -b` is recorded and not modeled, and measured
+// it keeps the job (`fg: job has terminated`) exactly as its answer to that
+// axis says.
+func (r *Runner) reportsFinishedJobsToNobody() bool {
+	return !r.JobControl && r.sem().FinishedJobNoticeArrivesAtOnce == Yes
 }
 
 // dropJobs takes jobs out of the table into the memory of dropped ones.

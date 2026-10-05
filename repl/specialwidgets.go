@@ -55,6 +55,12 @@ func (e *editor) specialWidget(name string, prompt drawnPrompt) bool {
 // finish widget, and then the ordinary ending. It answers with the line as
 // the widgets left it, which is what runs.
 func (e *editor) accepted(prompt drawnPrompt) string {
+	if e.recursive > 0 {
+		// Accepting ends a recursive-edit and not the line: no finishing
+		// widgets and no end of the row. See recursiveEdit.
+		e.recursiveBroke = false
+		return string(e.line)
+	}
 	// The key that ends the line is the next line's last widget, whatever
 	// spelled it. See LastWidget.
 	e.last, e.keyBytes, e.keyBinding = LastWidget{Accepted: true, Known: true}, nil, nil

@@ -172,7 +172,9 @@ var bindkeyWidgets = map[string]repl.Widget{
 	"down-line":                         repl.WidgetDownLine,
 	// The prompt drawn again, which a widget that changed what it shows asks
 	// for (#5940).
-	"reset-prompt": repl.WidgetResetPrompt,
+	"reset-prompt":   repl.WidgetResetPrompt,
+	"send-break":     repl.WidgetSendBreak,
+	"recursive-edit": repl.WidgetRecursiveEdit,
 	// The key that means "this key does nothing", which is what `-r` leaves
 	// behind and what `bindkey` prints for a key nobody bound.
 	undefinedKey: repl.WidgetNone,
@@ -252,6 +254,8 @@ var widgetNames = map[repl.Widget]string{
 	repl.WidgetPatternSearchHistoryBackward: "history-incremental-pattern-search-backward",
 	repl.WidgetPatternSearchHistoryForward:  "history-incremental-pattern-search-forward",
 	repl.WidgetResetPrompt:                  "reset-prompt",
+	repl.WidgetSendBreak:                    "send-break",
+	repl.WidgetRecursiveEdit:                "recursive-edit",
 }
 
 // editorControlKeys are the keys the editor reads that are not actions a key
@@ -316,6 +320,9 @@ var editorControlKeys = map[string]string{
 // the drop asks that the key still hold its own default name, so `bindkey '^D'
 // beginning-of-line` and `bindkey -r '^D'` both survive it.
 var endOfInputKeys = map[string]bool{"\x04": true}
+
+// sendBreakKey is `^G`, send-break in the emacs keymap.
+const sendBreakKey = "\x07"
 
 func buildDefaultBindings() map[string]string {
 	out := map[string]string{}
@@ -385,6 +392,13 @@ func KeyBindings(r *interp.Runner, km repl.Keymap) map[string]repl.Binding {
 			// widget without rebinding a key, which is the ordinary shape
 			// rather than an exotic one (#3039).
 			if standard, isDefault := defaultBindings[seq]; isDefault && standard == widget {
+				continue
+			}
+			// And `^G` at send-break in the emacs keymap, which is the
+			// editor's own there — see repl.EditorStyle.SendBreakOnControlG —
+			// and is listed rather than carried in defaultBindings because
+			// viins shares that table and has no such key.
+			if seq == sendBreakKey && widget == widgetNames[repl.WidgetSendBreak] && currentKeymap(r) == "emacs" {
 				continue
 			}
 		}
@@ -586,6 +600,14 @@ func readBindings(r *interp.Runner, keymap string) map[string]string {
 		for seq, w := range defaultBindings {
 			out[seq] = w
 		}
+	}
+	if keymap == "emacs" {
+		// `^G` is send-break in this keymap alone, measured with `bindkey`
+		// on zsh 5.9.2; viins has list-expand there, which this shell does
+		// not have. The editor acts on it by itself — see
+		// repl.EditorStyle.SendBreakOnControlG — so this is the listing's
+		// half (#5913).
+		out[sendBreakKey] = widgetNames[repl.WidgetSendBreak]
 	}
 	flat, _ := r.GetArray(bindkeyStore)
 	for i := 0; i+3 <= len(flat); i += 3 {

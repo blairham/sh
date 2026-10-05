@@ -15,6 +15,9 @@ func EditorStyle() repl.EditorStyle {
 		// `^X r` and `^X s` are the plain searches too, in this keymap
 		// alone. See repl.EditorStyle.SearchOnControlX (#5904).
 		SearchOnControlX: true,
+		// And `^G` gives the line up. See
+		// repl.EditorStyle.SendBreakOnControlG (#5913).
+		SendBreakOnControlG: true,
 		// Measured under a pty. The threshold is the same hundred, and
 		// everything about the question is different: it names the shell,
 		// counts the rows the matches would take as well as the matches,

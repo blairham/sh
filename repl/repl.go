@@ -866,6 +866,12 @@ func (s Shell) Run(ctx context.Context) (int, error) {
 		// out below, because there are five of them.
 		ed.lineStart = lineStart{}
 		switch {
+		case errors.Is(err, ErrBroken):
+			// A line given up without running, and anything pending with
+			// it: the status is 1 whatever it was. See ErrBroken.
+			s.Runner.SetExitStatus(1)
+			s.abandon(&pending)
+			continue
 		case errors.Is(err, ErrInterrupted):
 			// ^C abandons whatever was half-typed, including the earlier
 			// lines of an unfinished construct — which is the whole point of
@@ -2851,6 +2857,7 @@ func (s Shell) newEditor(ctx context.Context, state *terminalState) *editor {
 		searchInvalid:        s.History.SearchInvalidPrompt,
 		searchForwardInvalid: s.History.SearchForwardInvalidPrompt,
 		searchOnControlX:     s.Editor.SearchOnControlX,
+		sendBreakOnControlG:  s.Editor.SendBreakOnControlG,
 		searchSmartCase:      s.History.SearchIgnoresCaseUnlessTold,
 		searchCaretAnchors:   s.History.SearchCaretAnchors,
 		// And where a forward match leaves the cursor.

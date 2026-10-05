@@ -1218,9 +1218,18 @@ func callBuiltinWidget(r *interp.Runner, ctx context.Context, name string, args 
 		r.Diagnosef("%s: calling a built-in widget is not implemented yet\n", name)
 		return 1
 	}
+	if widget == repl.WidgetSendBreak {
+		// The rest of the widget does not run: measured 2026-10-04 against
+		// zsh 5.9.2, `w() { zle send-break; print after }` prints nothing,
+		// and the line is given up with `$?` 1 (#5913). The stop is taken
+		// back where the widget's call ends, which is what hands the line
+		// to the editor to give up.
+		r.StopTheScript(1)
+		return 1
+	}
 	regionsFollow(r, out.Buffer, out.Cursor)
 	setWidgetLine(r, out)
-	if widget.IsIncrementalSearch() {
+	if widget.IsIncrementalSearch() || widget == repl.WidgetRecursiveEdit {
 		// The one action that reads its own keys and leaves `$KEYS` saying
 		// which ended it — `^M`, `^G`, or nothing after `C-c` — measured
 		// against zsh 5.9.2; see repl's editorActions.Perform. Every other

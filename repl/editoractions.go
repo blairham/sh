@@ -275,6 +275,10 @@ func (a editorActions) Perform(w Widget, in Line) (Line, bool) {
 	if back >= 0 {
 		a.e.pos = back
 	}
+	if w == WidgetSendBreak {
+		// Asked for by name, which rings no bell. See sendBreak.
+		a.e.breakQuiet = true
+	}
 	if w.IsIncrementalSearch() {
 		// The keys the widget is about are now the key that ended the
 		// search: measured 2026-10-04 against zsh 5.9.2, `$KEYS` after the

@@ -124,7 +124,7 @@ func (s Shell) lineReader(ed *editor) func(interp.LineEdit) (string, interp.Line
 		}
 		line, err := ed.readValue(drawPrompt(prompt), req)
 		switch {
-		case errors.Is(err, ErrInterrupted):
+		case errors.Is(err, ErrInterrupted), errors.Is(err, ErrBroken):
 			return "", interp.LineEditInterrupted
 		case errors.Is(err, io.EOF):
 			return "", interp.LineEditEndOfInput

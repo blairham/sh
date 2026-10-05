@@ -245,6 +245,12 @@ const (
 	// a widget that changed something the prompt shows asks for. See
 	// resetPrompt (#5940).
 	WidgetResetPrompt
+
+	// Giving the line up without running it (see ErrBroken), and editing
+	// the line in a read loop of its own from inside a widget until it is
+	// accepted or broken off (see recursiveEdit). #5913, #5899.
+	WidgetSendBreak
+	WidgetRecursiveEdit
 )
 
 // IsIncrementalSearch is whether the action is one of the four searches,
@@ -467,6 +473,10 @@ func (e *editor) runWidget(b Binding, prompt drawnPrompt) {
 		e.actionStatus = e.beginningSearch(+1, prompt)
 	case WidgetResetPrompt:
 		e.resetPrompt(prompt)
+	case WidgetSendBreak:
+		e.breakRequested = true
+	case WidgetRecursiveEdit:
+		e.actionStatus = e.recursiveEdit(prompt)
 	case WidgetUpLine:
 		e.actionStatus = e.lineMotion(-1, prompt)
 	case WidgetDownLine:

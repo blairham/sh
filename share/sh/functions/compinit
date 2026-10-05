@@ -233,6 +233,20 @@ if (( ${+seen[_main_complete]} )); then
 		menu-expand-or-complete reverse-menu-complete; do
 		zle -C $widget .$widget _main_complete
 	done
+	# And `menu-select` beside them, where zsh/complist has made it.
+	(( $+widgets[menu-select] )) && zle -C menu-select .menu-select _main_complete
+	# The rebind zshcompsys(1) promises "if completion styles are set up to
+	# perform expansion as well as completion by default" (#6216).  Measured
+	# on zsh 5.9.2: the `completer` style is looked up at `:completion:`
+	# exactly — `:completion:*` and `*` reach it, `:completion:*:*:*` and
+	# `:completion:::::` do not — the word must be `_expand` itself, and only
+	# Tab in the main keymap moves, and only from `expand-or-complete`.
+	local -a completers
+	if zstyle -a ':completion:' completer completers &&
+		(( ${completers[(Ie)_expand]} )) &&
+		[[ $(bindkey '^I') == *' expand-or-complete' ]]; then
+		bindkey '^I' complete-word
+	fi
 fi
 
 # Waiting to be read again rather than gone: measured, `whence -w compinit`

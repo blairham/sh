@@ -474,6 +474,16 @@ Two divergences, both deliberate:
   of this bullet said the scan alone did it; that measurement had run zsh's
   own compinit, because `FPATH` named only zsh's library.
 
+With `_expand` a word of the `completer` style looked up at `:completion:`
+exactly, and Tab in the main keymap on `expand-or-complete`, compinit moves
+Tab to `complete-word`, as zshcompsys(1) says it does (#6216). Measured on
+zsh 5.9.2: `:completion:*` and `*` reach that context and
+`:completion:*:*:*` and `:completion:::::` do not; `_expand_alias` and
+`_expand:foo` are not `_expand`; a Tab on `menu-complete` and an
+`expand-or-complete` on another key are left alone; and under `bindkey -v`
+only `viins` moves. `menu-select` goes on `_main_complete` too where the
+widget exists, which in this shell it does not yet.
+
 compinit also matches zsh's in two smaller ways since #6183 and #6155: a
 function file that is a **link** to one registers (`_*(N-.)`, since every
 file of a Homebrew zsh's library is a link into its Cellar), and each name is

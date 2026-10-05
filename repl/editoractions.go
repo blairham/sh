@@ -200,7 +200,19 @@ func (a editorActions) Perform(w Widget, in Line) (Line, bool) {
 	// up-line-or-history` must be the same action, including where the cursor
 	// lands and what the walk leaves behind at each step. A second
 	// implementation here is how the two would come to disagree.
-	a.e.runWidget(Binding{Widget: w}, a.e.live(a.prompt))
+	//
+	// As many times as the count says, which is the line's Numeric — zsh's
+	// `$NUMERIC`, whether typed before the key or assigned by the widget.
+	// See countedAction.
+	w, times := countedAction(w, in.Numeric)
+	for i := range times {
+		if i > 0 && a.e.killing {
+			// One kill for the whole count, measured: two words killed
+			// with a count of 2 come back from one yank.
+			a.e.killedBefore = true
+		}
+		a.e.runWidget(Binding{Widget: w}, a.e.live(a.prompt))
+	}
 	if w.IsIncrementalSearch() {
 		// The keys the widget is about are now the key that ended the
 		// search: measured 2026-10-04 against zsh 5.9.2, `$KEYS` after the
@@ -213,6 +225,51 @@ func (a editorActions) Perform(w Widget, in Line) (Line, bool) {
 	out := a.e.give()
 	out.Status = a.e.actionStatus
 	return out, true
+}
+
+// countedActions is the actions a count performed from outside the editor
+// plays more than once, each with the action a negative count turns it into.
+//
+// Measured 2026-10-04 through a pseudo-terminal against zsh 5.9.2, from a
+// widget on the line `aa bb cc dd ee` with the cursor at 7 that sets
+// `NUMERIC` and calls the action: a count of 2 moves or deletes two
+// characters or words, -2 does the same in the other direction, and 0 does
+// nothing at all. `beginning-of-line` and `end-of-line` are not repeated —
+// there is only one end to go to — but -2 sends each to the other end and 0
+// leaves the cursor where it was (#5941).
+var countedActions = map[Widget]struct {
+	opposite Widget
+	repeats  bool
+}{
+	WidgetForwardChar:        {WidgetBackwardChar, true},
+	WidgetBackwardChar:       {WidgetForwardChar, true},
+	WidgetForwardWord:        {WidgetBackwardWord, true},
+	WidgetBackwardWord:       {WidgetForwardWord, true},
+	WidgetKillWordAfter:      {WidgetKillWordBefore, true},
+	WidgetKillWordBefore:     {WidgetKillWordAfter, true},
+	WidgetDeleteChar:         {WidgetBackwardDeleteChar, true},
+	WidgetBackwardDeleteChar: {WidgetDeleteChar, true},
+	WidgetBeginningOfLine:    {WidgetEndOfLine, false},
+	WidgetEndOfLine:          {WidgetBeginningOfLine, false},
+}
+
+// countedAction is the action a count makes of w, and how many times to
+// perform it. With no count, or an action the count does not reach, that is
+// w once — what every other action does whatever the count, and what a key
+// pressed with a count already did by its own route (see prefixarg.go).
+func countedAction(w Widget, numeric *int) (Widget, int) {
+	counted, ok := countedActions[w]
+	if numeric == nil || !ok {
+		return w, 1
+	}
+	n := *numeric
+	if n < 0 {
+		w, n = counted.opposite, -n
+	}
+	if !counted.repeats {
+		n = min(n, 1)
+	}
+	return w, n
 }
 
 func (a editorActions) Redisplay(in Line) {

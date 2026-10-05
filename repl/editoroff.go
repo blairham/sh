@@ -6,6 +6,7 @@ package repl
 import (
 	"io"
 	"strings"
+	"syscall"
 )
 
 // editorIsOff reports whether this shell's line editor is turned off right
@@ -46,8 +47,9 @@ func (s Shell) editorIsOff() bool {
 // Everything else the session does stays exactly as it is: the interrupt is
 // still caught, the history is still the editor's list, the prompt hooks still
 // fire, and a construct still spans as many lines as it needs. Only the read
-// is different.
-func (s Shell) readWithoutTheEditor(state *terminalState, ed *editor, prompt drawnPrompt) (string, error) {
+// is different — and so is what a ^C does to it, which is the terminal's to
+// deliver here and not the editor's to read. See interruptedWhileReading.
+func (s Shell) readWithoutTheEditor(state *terminalState, ed *editor, prompt drawnPrompt, sig *interrupts) (string, error) {
 	s.errf("%s%s", prompt.lead, prompt.text)
 	var (
 		line string
@@ -73,7 +75,41 @@ func (s Shell) readWithoutTheEditor(state *terminalState, ed *editor, prompt dra
 		// and for the same reason.
 		line = ed.lineStart.text + line
 	}
+	if err == nil && s.interruptedWhileReading(sig) {
+		return "", ErrInterrupted
+	}
 	return line, err
+}
+
+// interruptedWhileReading reports whether a ^C arrived while the terminal was
+// gathering the line just read, so that the line is given up rather than run.
+//
+// With the editor off, ^C is not a byte this shell reads: the terminal's own
+// discipline turns it into SIGINT, throws away what was typed, and goes on
+// gathering. The read does not end on it — it ends on the next newline — and
+// the handler the session installed for running commands is the one that
+// hears it. Left there, the arrival waited for the next command and killed it
+// (#5890).
+//
+// Measured 2026-10-04 through a pseudo-terminal against zsh 5.9.2, `-f -i`,
+// `unsetopt zle`: after `abc` and ^C, zsh writes nothing, and the line typed
+// next — up to its newline — is given up whole and never run. The prompt then
+// comes back fresh, a construct waiting at PS2 is abandoned with it, and `$?`
+// is 130. Under `trap "" INT`, and under a trap with a body, the line typed
+// after the ^C runs.
+//
+// Both flags are taken, whatever the answer: the interpreter's, so no command
+// is killed by an arrival that belonged to the read, and the prompt's, so no
+// newline is written for a ^C the terminal's own echo of the newline already
+// moved past.
+func (s Shell) interruptedWhileReading(sig *interrupts) bool {
+	if sig == nil || !sig.take() {
+		return false
+	}
+	sig.took()
+	// A trap of either kind keeps the line. What a trap with a body runs at
+	// the prompt is #5888's question; here it is only that the line stands.
+	return !s.Runner.TrapsSignal()(syscall.SIGINT)
 }
 
 // readCookedLine reads one line from a terminal that is gathering lines

@@ -808,7 +808,7 @@ func (s Shell) Run(ctx context.Context) (int, error) {
 			// afterwards has its own word to write.
 			wroteLeaving = ed.wroteLeaving
 		} else {
-			line, err = s.readWithoutTheEditor(state, ed, drawn)
+			line, err = s.readWithoutTheEditor(state, ed, drawn, sig)
 			// And a read with no editor in it wrote nothing on its way out,
 			// whatever the read before it did. Said rather than left over:
 			// a ^D held back for a stopped job sets the flag and leaves the

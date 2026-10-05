@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"sort"
 	"strings"
 	"testing"
@@ -292,5 +293,55 @@ func TestTheShippedFunctionsSitWhereTheSearchLooks(t *testing.T) {
 	}
 	if strings.Join(names, " ") != strings.Join(want, " ") {
 		t.Errorf("%s holds %v, want %v", shipped, names, want)
+	}
+}
+
+// TestAnotherInstallationsLibraryComesLast is #6128: the library the dialect
+// binary finds goes after this installation's own two directories, so every
+// name this installation ships is found first, and it is asked with the search
+// path the shell started with.
+func TestAnotherInstallationsLibraryComesLast(t *testing.T) {
+	t.Setenv("PATH", "/the/path")
+	var asked []string
+	sh := searchShell()
+	sh.SystemFunctionDirectories = func(path string) []string {
+		asked = append(asked, path)
+		return []string{"/other/site-functions", "/other/functions"}
+	}
+	out, errs, code := runArgs(t, sh, "testsh", "-c", `printf '%s\n' "${sh_test_search[@]}"`)
+	if code != 0 {
+		t.Fatalf("status %d, stderr %q", code, errs)
+	}
+	dirs := strings.Split(strings.TrimSuffix(out, "\n"), "\n")
+	if len(dirs) != 4 {
+		t.Fatalf("search path = %q, want this installation's two and then the other's two", dirs)
+	}
+	if !strings.HasSuffix(dirs[1], filepath.Join("share", "sh", "functions")) {
+		t.Errorf("second entry %q is not this installation's functions", dirs[1])
+	}
+	if dirs[2] != "/other/site-functions" || dirs[3] != "/other/functions" {
+		t.Errorf("last two = %q, want the other installation's, in its order", dirs[2:])
+	}
+	if !slices.Equal(asked, []string{"/the/path"}) {
+		t.Errorf("asked with %q, want the PATH the shell started with, once", asked)
+	}
+}
+
+// TestAnEnvironmentSearchPathLooksForNoOtherLibrary keeps the environment's
+// rule whole: a search path the environment names replaces the default, the
+// other installation's library included, and nothing is looked for at all.
+func TestAnEnvironmentSearchPathLooksForNoOtherLibrary(t *testing.T) {
+	t.Setenv("SH_TEST_SEARCH", "/x/y")
+	sh := searchShell()
+	sh.SystemFunctionDirectories = func(string) []string {
+		t.Error("looked for another library with the search path set in the environment")
+		return []string{"/other/functions"}
+	}
+	out, errs, code := runArgs(t, sh, "testsh", "-c", `printf '%s\n' "$SH_TEST_SEARCH"`)
+	if code != 0 {
+		t.Fatalf("status %d, stderr %q", code, errs)
+	}
+	if out != "/x/y\n" {
+		t.Errorf("search path = %q, want the environment's alone", out)
 	}
 }

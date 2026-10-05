@@ -49,14 +49,18 @@ import (
 // below is whether the environment *mentions* the name, not whether what it
 // says is worth anything.
 //
-// What this does **not** do is point the search at another shell's function
-// library. It is reachable — a person can put one on `FPATH` — and it is the
-// only thing that makes a stock `add-zsh-hook` load today, since this
-// installation ships no functions of its own yet. It is not the default,
-// because it cannot be found portably (the two builds above) and because
-// which library a shell reads is a decision about what this shell *is*.
-// A name that cannot be found still refuses by name, which says more than a
-// silent empty does.
+// **Another installation's library comes after this one's** (#6128). The
+// paragraph that stood here said the default would never name another
+// shell's function library, because it cannot be found portably and because
+// which library a shell reads is a decision about what the shell *is*. The
+// maintainer took that decision the other way on 2026-10-05: when an
+// installed copy of the imitated shell has a function library, it is
+// appended after this installation's own two directories, so its completion
+// system is reachable from a real startup file — and this installation's own
+// files still win every name both of them have. Finding it portably is the
+// dialect's job and the binary's (driver.Shell.SystemFunctionDirectories),
+// since the layouts are that shell's and the roots are the machine's; this
+// file only puts the answer last.
 
 // functionSearchDirs are the directories an installation of this shell keeps
 // function definition files in, most preferred first.
@@ -139,10 +143,25 @@ func (sh Shell) seedFunctionSearch(r *interp.Runner) {
 		return
 	}
 	dirs := functionSearchDirs(installPrefix(exe))
+	if sh.SystemFunctionDirectories != nil {
+		// Last, so that every name this installation ships is found here
+		// first: the other library is what is reachable *beyond* it.
+		dirs = append(dirs, sh.SystemFunctionDirectories(environmentValue(r.Env, "PATH"))...)
+	}
 	if len(dirs) == 0 {
 		return
 	}
 	r.SetVar(name, strings.Join(dirs, ":"))
+}
+
+// environmentValue is what an environment list says a name holds, or "".
+func environmentValue(env []string, name string) string {
+	for _, kv := range env {
+		if k, v, ok := strings.Cut(kv, "="); ok && k == name {
+			return v
+		}
+	}
+	return ""
 }
 
 // environmentNames reports whether an environment list mentions a name at all,

@@ -79,3 +79,37 @@ zle -N w
 		t.Errorf("after the widget: %q, want %q", got, want)
 	}
 }
+
+// TestAnUnsetLineParameterEmptiesWhatItStandsFor: in the widget that runs
+// it, `unset` of a line parameter empties that part of the line, as well as
+// taking the name away. Measured 2026-10-05 through a pseudo-terminal
+// against zsh 5.9.2, on `abcd` with the cursor at 2 (#6038).
+func TestAnUnsetLineParameterEmptiesWhatItStandsFor(t *testing.T) {
+	r, out := zleRunner(t, `w() { unset $1; print -r -- "[${(P)+1}][$BUFFER][$CURSOR][$POSTDISPLAY][$CUTBUFFER]" }
+for n in BUFFER LBUFFER RBUFFER CURSOR POSTDISPLAY CUTBUFFER; do
+  eval "u$n() { POSTDISPLAY=pp; CUTBUFFER=kk; w $n }; zle -N u$n"
+done
+`)
+	for _, c := range []struct {
+		name, said, buffer string
+		cursor             int
+	}{
+		{"BUFFER", "[0][][0][pp][kk]\n", "", 0},
+		{"LBUFFER", "[0][cd][0][pp][kk]\n", "cd", 0},
+		{"RBUFFER", "[0][ab][2][pp][kk]\n", "ab", 2},
+		{"CURSOR", "[0][abcd][][pp][kk]\n", "abcd", 2},
+		{"POSTDISPLAY", "[0][abcd][2][][kk]\n", "abcd", 2},
+		{"CUTBUFFER", "[0][abcd][2][pp][]\n", "abcd", 2},
+	} {
+		line, _, said := runWidget(t, r, out, "u"+c.name, repl.Line{Buffer: "abcd", Cursor: 2})
+		if said != c.said || line.Buffer != c.buffer || line.Cursor != c.cursor {
+			t.Errorf("unset %s: said %q, line %q at %d; want %q, %q at %d",
+				c.name, said, line.Buffer, line.Cursor, c.said, c.buffer, c.cursor)
+		}
+	}
+	// And outside a widget the names are ordinary: an unset there is only
+	// an unset.
+	if got, _ := runZshVars(t, r, `LBUFFER=x; unset LBUFFER; print -r -- "[${LBUFFER-gone}]"`); got != "[gone]\n" {
+		t.Errorf("outside a widget: %q", got)
+	}
+}

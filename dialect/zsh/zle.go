@@ -1782,7 +1782,8 @@ func openWidgetParameters(r *interp.Runner, opened widgetOpening) {
 	// `${+…}` 0 each time and the next widget seeing the same line; `unset
 	// POSTDISPLAY` and `unset CUTBUFFER` leave nothing drawn and nothing to
 	// yank. `unset CURSOR` changes nothing, so it has no action here (#6038).
-	// Asked only inside a widget: outside one the names are ordinary.
+	// Outside a widget the action empties only stores no read reaches
+	// there, which each call seeds again, so the names stay ordinary.
 	for name, empty := range map[string]func(*interp.Runner){
 		"BUFFER": func(rr *interp.Runner) { rr.SetVar(zleBuffer, "") },
 		"LBUFFER": func(rr *interp.Runner) {
@@ -1797,11 +1798,7 @@ func openWidgetParameters(r *interp.Runner, opened widgetOpening) {
 		postdisplayName: func(rr *interp.Runner) { rr.SetVar(zlePostdisplay, "") },
 		cutBufferName:   func(rr *interp.Runner) { rr.SetVar(zleCutBuffer, "") },
 	} {
-		r.SetUnsetAction(name, func(rr *interp.Runner) {
-			if insideWidget(rr) {
-				empty(rr)
-			}
-		})
+		r.SetUnsetAction(name, empty)
 	}
 	// `region_highlight` is opened here and is not one of the five: the other
 	// parameters are the line, and this one is what the widget wants *done*

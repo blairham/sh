@@ -6383,6 +6383,31 @@ call — where one answering no elements is an empty array, `declare -a
 BASH_ARGV=()`. That is the contract a producer already answers an expansion
 under, and the listing now says the same two things.
 
+### One divergence recorded rather than reproduced: FUNCNAME after `unset`
+
+`unset FUNCNAME` takes the producer away here as in bash (#6039), and an
+array assigned to the name afterwards is an ordinary array. In bash 5.3.20
+that array is still *shifted* by every call: on entry each index moves up by
+one and `[0]` becomes the function's name, and on return `[0]` is removed and
+the rest move down. Nothing else about the array is special. Measured
+2026-10-05, `bash -c`, with `unset FUNCNAME` in front of each row:
+
+| script | bash 5.3.20 | here |
+| --- | --- | --- |
+| `FUNCNAME=(z y); f(){ echo ${FUNCNAME[*]}; }; f` | `f z y` | `z y` |
+| `FUNCNAME=([3]=z); f(){ declare -p FUNCNAME; }; f` | `([0]="f" [4]="z")` | `([3]="z")` |
+| `FUNCNAME=(z); f(){ FUNCNAME[0]=Q; FUNCNAME+=(w); }; f` | `(z w)` after it, the pop taking the `Q` | `(Q w)` |
+| `FUNCNAME=(z); f(){ local FUNCNAME=(L); }; f` | `([0]="f" [1]="z")` after it | `([0]="z")` |
+| `FUNCNAME=x` (a scalar) | untouched | untouched |
+
+Not modeled. The shape needs `unset FUNCNAME` and then an assignment to the
+same name, and nothing that reads FUNCNAME writes it. A search for `unset
+FUNCNAME` or an assignment to `FUNCNAME`, proven against this tree's own
+dialect/bash tests, found none in Homebrew's installed bash completions and
+Cellar, `~/.zi`, `share/suite` or `internal/wild`. Modeling it would hang a
+per-call hook on an ordinary parameter whose only observable is this sequence
+(#6054).
+
 ## The four identity parameters, and which shell has which
 
 Measured 2026-09-25 on a machine whose uid and gid differ — `uid=501(bhamilton)

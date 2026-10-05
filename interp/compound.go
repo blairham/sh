@@ -1845,11 +1845,22 @@ func (r *Runner) callFuncInPlace(ctx context.Context, fn *syntax.FuncDecl, name 
 	// Runner.BetweenCommands.
 	betweenCommands := inPlace == nil && r.callsHoldNoSlot
 	if inPlace == nil {
-		if betweenCommands {
+		switch {
+		case betweenCommands:
 			r.callsHoldNoSlot = false
 			defer func() { r.callsHoldNoSlot = true }()
-		} else if release := r.holdACommandsJobSlot(false); release != nil {
-			defer release()
+		case r.callsNestASlot:
+			// Called while a command runs, which takes a number of its own
+			// inside one that holds one. See Runner.whileACommandRuns.
+			r.callsNestASlot = false
+			defer func() { r.callsNestASlot = true }()
+			if release := r.holdACommandsJobSlot(true); release != nil {
+				defer release()
+			}
+		default:
+			if release := r.holdACommandsJobSlot(false); release != nil {
+				defer release()
+			}
 		}
 	}
 	if r.depth >= maxDepth {

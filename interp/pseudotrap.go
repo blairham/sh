@@ -193,7 +193,12 @@ func (r *Runner) runPseudoTrapBody(ctx context.Context, name, body string, sees 
 	// RETURN body 7 and 8.
 	r.inCommandTrap = name == "DEBUG" || name == "ERR" || name == "RETURN"
 	r.gaveUpOverAnUnsetParameter = false
-	r.runTrapBody(ctx, name, body)
+	// Between commands rather than on one's account, so a function the
+	// action calls holds no job number: measured 2026-10-05 on zsh 5.9.2
+	// under `-f`, `TRAPZERR() { J }; false` and `TRAPDEBUG() { J }; :` are 1
+	// where a function called at the top is 2, and text holds nothing either
+	// way (#5909). See Runner.BetweenCommands.
+	r.BetweenCommands(func() { r.runTrapBody(ctx, name, body) })
 	r.handlerTakesItsError(name)
 	r.inCommandTrap = outer
 	acted := r.status

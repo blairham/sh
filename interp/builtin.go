@@ -5835,7 +5835,8 @@ func biCd(r *Runner, ctx context.Context, args []string) int {
 	// letter means; the flag is read here rather than at the option loop
 	// because here is where there is something to suppress.
 	if !opts.quiet {
-		r.FireHook(ctx, nil, r.sem().DirectoryChangeHook)
+		// On `cd`'s account, while it runs: see Runner.whileACommandRuns.
+		r.whileACommandRuns(func() { r.FireHook(ctx, nil, r.sem().DirectoryChangeHook) })
 	}
 	return 0
 }

@@ -1167,6 +1167,23 @@ func (r *Runner) runTrapHandler(ctx context.Context, cond, body string) {
 // runTrapHandlerFrom is runTrapHandler told where the arrival came from.
 func (r *Runner) runTrapHandlerFrom(ctx context.Context, cond, body string, origin trapOrigin) {
 	fname := r.trapFuncs[cond]
+	// The action holds a job number of its own while it runs, inside a
+	// command that holds one too, whether it is text or a function: it runs
+	// on the account of the command the signal arrived during. Measured
+	// 2026-10-05 on zsh 5.9.2 under `-f`, `J` being `sleep 1 & print
+	// ${(k)jobstates}` and the signal sent by `kill -USR1 $$; :` (#5909):
+	//
+	//	trap 'J' USR1, at the top                 2
+	//	the same inside f()                       3: f holds 1, the trap 2
+	//	TRAPUSR1() { J }, at the top and in f()   2 and 3
+	//
+	// where text held nothing here and a function took no number of its own
+	// inside f. A function trap's call then takes nothing more, a command
+	// holding one already. See Runner.whileACommandRuns for `chpwd`, the
+	// other caller of this kind.
+	if release := r.holdACommandsJobSlot(true); release != nil {
+		defer release()
+	}
 	returned, handlerStatus, resumed := r.runTrapAction(ctx, cond, body)
 	if resumed && fname != "" && returned && handlerStatus != 0 {
 		r.interruptByATrapFunction(handlerStatus, origin)

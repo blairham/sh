@@ -142,6 +142,29 @@ func (r *Runner) BetweenCommands(run func()) {
 	run()
 }
 
+// whileACommandRuns runs what the shell calls on a command's account while
+// that command runs — `cd`'s `chpwd` hook — so that a function it calls takes
+// a job slot of its own even inside a command that holds one, the way `if`
+// and `eval` do rather than the way a function called from a function does.
+//
+// Measured 2026-10-05 on zsh 5.9.2 under `-f`, with `J` standing for `sleep 1
+// & print ${(k)jobstates}` and the function's own call the only one holding
+// anything (#5909):
+//
+//	chpwd() { J }; cd /                       2
+//	chpwd() { J }; f() { cd / }; f            3: f holds 1, chpwd 2
+//	g() { J }; f() { g }; f                   2: g takes nothing of its own
+//	the same with chpwd_functions=(h) too     each item its own, 2 3 and 3 4
+//
+// A signal's trap is the other caller of this kind and holds its number
+// itself, string or function — see Runner.runTrapHandlerFrom.
+func (r *Runner) whileACommandRuns(run func()) {
+	saved := r.callsNestASlot
+	r.callsNestASlot = true
+	defer func() { r.callsNestASlot = saved }()
+	run()
+}
+
 // slotHeld is whether a running command holds number n: the innermost
 // command or one it runs inside.
 func (r *Runner) slotHeld(n int) bool {

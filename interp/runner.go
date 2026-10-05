@@ -3274,6 +3274,11 @@ type Runner struct {
 	// editor's or the prompt loop's account. Cleared for the body the call
 	// runs. See Runner.BetweenCommands.
 	callsHoldNoSlot bool
+	// callsNestASlot says a function called from here takes a job slot of
+	// its own even inside a command that holds one: the shell is calling it
+	// while a command runs, as `cd` calls `chpwd`. Cleared for the body the
+	// call runs. See Runner.whileACommandRuns.
+	callsNestASlot bool
 	// bodyHoldsNoSlot is the body of the nameless function being entered,
 	// which runs as that function and not as the brace group it is written
 	// as. See holdsAJobSlot.
@@ -7114,7 +7119,25 @@ func (r *Runner) runExitTrap(ctx context.Context) (exitedInTheBody bool) {
 	// reports this rather than whatever the body's last command did.
 	r.inExitTrap, r.exitTrapEntryStatus = true, before
 	r.runningExitTrap = &body
-	r.runTrapBody(ctx, "EXIT", body)
+	// On `exit`'s account where an `exit` is what is ending the shell, and
+	// between commands where the script simply ran out — measured 2026-10-05
+	// on zsh 5.9.2 under `-f`, `J` being `sleep 1 & print ${(k)jobstates}`
+	// (#5909):
+	//
+	//	trap 'J' EXIT; exit, and from inside f()   2
+	//	TRAPEXIT() { J }; exit                      2
+	//	trap 'J' EXIT, the script running out       1
+	//	TRAPEXIT() { J }, the same                  1
+	//
+	// where text held nothing on either and a function held on both.
+	if r.exitRan {
+		if release := r.holdACommandsJobSlot(true); release != nil {
+			defer release()
+		}
+		r.runTrapBody(ctx, "EXIT", body)
+	} else {
+		r.BetweenCommands(func() { r.runTrapBody(ctx, "EXIT", body) })
+	}
 	// Cleared for hygiene rather than for effect: the EXIT trap is the last
 	// thing a shell runs, so nothing reads this afterwards.
 	r.inExitTrap, r.runningExitTrap = false, nil
@@ -7190,7 +7213,17 @@ func (r *Runner) fireExitHook(ctx context.Context) {
 	// see the driver's `if r.Exited()` after the startup files, which is one
 	// of the callers that reads it afterwards.
 	entered := r.ctl
-	r.FireChain(r.HookChain(name), func(fn string) {
+	// A function called on `exit`'s account holds a job number and one
+	// called because the script ran out holds none, as for the EXIT trap:
+	// measured 2026-10-05 on zsh 5.9.2 under `-f`, `zshexit() { J }` is 1 at
+	// the end of a script and 2 after `exit` (#5909). See runExitTrap.
+	fire := r.FireChain
+	if !r.exitRan {
+		fire = func(items []string, run func(string)) {
+			r.BetweenCommands(func() { r.FireChain(items, run) })
+		}
+	}
+	fire(r.HookChain(name), func(fn string) {
 		// Cleared before the call rather than once before the loop, because
 		// the item before this one may have exited — and an item that ran
 		// under the flag would not run at all.

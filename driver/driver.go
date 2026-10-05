@@ -2872,6 +2872,12 @@ func (sh Shell) runInput(in source) int {
 	// files are read, which is readsLoginProfile's question and not this
 	// one.
 	r.LoginShell = in.loginShell()
+	// And the word an `exit` says on the way out on this route, which the
+	// runner writes itself only when jobs hold the exit back. See
+	// interp.Runner.LeavingWord and sayLeaving.
+	if in.interactive && in.dg.LeavingIsAlsoSaidOnTheseRoutes.Has(in.programRoute()) {
+		r.LeavingWord = leavingWord(in.dg, in.loginShell())
+	}
 	// And the third invocation fact an option namespace publishes: whether
 	// this shell was told to read none of its startup files. Carried over
 	// for the reason the two above are, and *before* the invocation's own

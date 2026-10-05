@@ -94,6 +94,9 @@ func (sh Shell) session(argv []string, in source) int {
 	// It is also the condition `shopt -s huponexit` turns on, so a session's
 	// background jobs outlived the session it was set in (#4149).
 	r.LoginShell = in.loginShell()
+	// And the word the session says as it ends, which an `exit` jobs hold
+	// back writes too. See interp.Runner.LeavingWord.
+	r.LeavingWord = leavingWord(dg, in.loginShell())
 	// Whether the invocation said to read no startup files, handed over here
 	// for the reason the three facts above are stated here: the prompt route
 	// never reaches the place the script routes carry it. Before

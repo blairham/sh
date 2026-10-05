@@ -8823,7 +8823,23 @@ func biExit(r *Runner, ctx context.Context, args []string) int {
 	// 3 is never used.
 	// The status is the dialect's, and the two that stay disagree about it —
 	// bash reports a builtin that failed, zsh reports nothing of the kind.
-	if r.HoldsExitForJobs() {
+	//
+	// The word the shell says on its way out comes first even when it then
+	// stays: measured 2026-10-05 on bash 5.3.20 through a pseudo-terminal,
+	// `shopt -s checkjobs`, `sleep 3 &`, `exit` writes `exit` and then
+	// `There are running jobs.` and the job; a stopped job's `There are
+	// stopped jobs.` follows it too, a login shell writes `logout`, and
+	// `bash -i -c` writes it before its sentence and goes on to the next
+	// command. Not for `logout`, which says nothing either way, nor inside
+	// a file the shell is reading (#6058).
+	if r.holdsExitForJobs(func() {
+		if r.LeavingWord != "" && !r.leavingWithheld && r.sourceDepth == 0 {
+			r.errf("%s\n", r.LeavingWord)
+		}
+	}) {
+		// The shell stays, so `logout`'s silence was for this attempt only:
+		// measured, a held `logout` and then an `exit` writes `logout`.
+		r.leavingWithheld = false
 		return r.diag().StoppedJobsAtExitStatus
 	}
 	// A shell with no prompt cannot hold an exit — there is nowhere to stay

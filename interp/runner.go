@@ -874,6 +874,13 @@ type Runner struct {
 	// Runner.diag, which stops applying the prompt's wording there.
 	AtPrompt bool
 
+	// LeavingWord is the word this shell writes as `exit` ends it, where the
+	// front end has decided it says one — an interactive session, on a route
+	// whose dialect speaks it. The front end writes it itself as the session
+	// ends; the runner needs it only for an `exit` that does *not* end the
+	// session, which a job held back. See Runner.HoldsExitForJobs (#6058).
+	LeavingWord string
+
 	// NotFoundHint is a second line to write after a bare name was not
 	// found, and nothing where it returns the empty string or is nil.
 	//

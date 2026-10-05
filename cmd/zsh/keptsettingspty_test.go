@@ -25,9 +25,11 @@ import (
 //	ttyctl -f; stty -ixon                       ixon
 //	ttyctl -f; ttyctl -u; stty -ixon            -ixon
 //	sh -c 'stty -echo -icanon -isig -icrnl'     echo icanon -isig -icrnl
+//	sh -c 'stty -ixon; kill -TERM $$'           -ixon
 //
-// The last row is zsh keeping what a command changed with line buffering and
-// echo turned back on.
+// The fourth row is zsh keeping what a command changed with line buffering
+// and echo turned back on. The fifth is zsh keeping the settings of a command
+// a signal ended, where bash puts back what was there before it.
 func TestTheNextCommandGetsTheSettingsTheLastOneLeft(t *testing.T) {
 	for _, tc := range []struct {
 		name  string
@@ -35,6 +37,7 @@ func TestTheNextCommandGetsTheSettingsTheLastOneLeft(t *testing.T) {
 		want  map[string]bool
 	}{
 		{"kept", []string{"stty -ixon"}, map[string]bool{"ixon": false}},
+		{"signaled", []string{"sh -c 'stty -ixon; kill -TERM $$'"}, map[string]bool{"ixon": false}},
 		{"frozen", []string{"ttyctl -f", "stty -ixon"}, map[string]bool{"ixon": true}},
 		{"unfrozen", []string{"ttyctl -f", "ttyctl -u", "stty -ixon"}, map[string]bool{"ixon": false}},
 		{

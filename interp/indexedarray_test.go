@@ -6,6 +6,8 @@ package interp
 import (
 	"maps"
 	"math/rand/v2"
+	"runtime"
+	"runtime/debug"
 	"slices"
 	"strconv"
 	"testing"
@@ -196,14 +198,22 @@ func appendN(n int) Array {
 // cancel; the best of several runs, so one descheduled run does not decide
 // it. Linear is a ratio near 2 and quadratic one near 4, and the threshold
 // sits between them with room either way.
+//
+// **With the collector held off while a run is timed.** The larger run builds
+// twice the live heap, and a collection during it scans all of it, so on a
+// loaded runner the collector's share alone pushed the ratio past 3 — 3.42,
+// 3.39 and 5.26 on the macOS runner in one afternoon, each passing on rerun
+// (#6175). What the test is about is the appends, so they are what is timed.
 func TestAppendingToAnIndexedArrayIsLinear(t *testing.T) {
 	if testing.Short() {
 		t.Skip("times two runs")
 	}
+	defer debug.SetGCPercent(debug.SetGCPercent(-1))
 	const n = 100_000
 	best := func(n int) time.Duration {
 		b := time.Duration(1<<63 - 1)
 		for range 5 {
+			runtime.GC()
 			start := time.Now()
 			if a := appendN(n); a.Len() != n {
 				t.Fatalf("appended %d, have %d", n, a.Len())

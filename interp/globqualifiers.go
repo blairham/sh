@@ -450,8 +450,19 @@ func parseGlobQualifiers(list string) (globQualifiers, string, bool) {
 
 // keep reports whether one path survives the list: every test in a section
 // has to hold, and any section will do.
+//
+// **A section with no test in it counts only when it is the last one.**
+// Measured 2026-10-05 on zsh 5.9.2 under -f, in a directory holding regular
+// files, a directory `d` and a link `lnk`: `*(,/)` is `d`, `*(N,/)` and
+// `*(on,/)` are `d` as well (a letter that is no test leaves its section
+// empty), and `*(/,,.)` is everything but `lnk` — while `*(/,)`, `*(.,)` and
+// `*(,)` are every name, and so is `*(/,:t)`, the section a `:` ends being the
+// last (#5995).
 func (q globQualifiers) keep(f *globFile) bool {
-	for _, section := range q.sections {
+	for i, section := range q.sections {
+		if len(section) == 0 && i < len(q.sections)-1 {
+			continue
+		}
 		if sectionKeeps(section, f) {
 			return true
 		}

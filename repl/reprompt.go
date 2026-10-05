@@ -61,9 +61,40 @@ func (e *editor) reprompt(prompt drawnPrompt) drawnPrompt {
 		return prompt
 	}
 
+	e.drawPromptAgain(prompt, fresh)
+	return fresh
+}
+
+// resetPrompt is `zle reset-prompt`: the prompt rendered afresh and drawn
+// again, whether or not it changed.
+//
+// Drawn from where the editor believes the line's first row is, exactly as a
+// re-render is — and that is zsh's arithmetic too: measured 2026-10-04 against
+// zsh 5.9.2 with `PS1=$'up\n> '`, a widget that prints `hi` and then runs
+// `zle reset-prompt` is followed by `\r\r\e[A…\e[Jup\r\n> ab`, one row up
+// from where the print left the cursor, so the prompt goes back over the
+// output's row rather than under it (#5940).
+func (e *editor) resetPrompt(prompt drawnPrompt) {
+	fresh := prompt
+	if e.promptAgain != nil {
+		fresh = e.promptAgain(e.cols())
+	}
+	e.drawPromptAgain(prompt, fresh)
+}
+
+// drawPromptAgain puts fresh on the screen in place of old, with the line
+// under it, and makes it the prompt the rest of the read is drawn with.
+func (e *editor) drawPromptAgain(old, fresh drawnPrompt) {
+	e.promptNow = &fresh
+	if e.cols() <= 0 {
+		// None of the arithmetic below can be done without a width; the
+		// prompt is still the new one for whatever is drawn next.
+		e.redraw(fresh)
+		return
+	}
 	var b strings.Builder
 	b.WriteString("\r")
-	if up := e.row + leadRows(prompt.lead); up > 0 {
+	if up := e.row + leadRows(old.lead); up > 0 {
 		b.WriteString("\x1b[")
 		b.WriteString(itoa(up))
 		b.WriteString("A")
@@ -81,5 +112,13 @@ func (e *editor) reprompt(prompt drawnPrompt) drawnPrompt {
 	// editor invalidates it. Nothing here has to remember to.
 	e.row = 0
 	e.redraw(fresh)
-	return fresh
+}
+
+// live is the prompt on the screen: the one a reset-prompt or a re-render
+// drew, where one has, and otherwise the one the caller was carrying.
+func (e *editor) live(prompt drawnPrompt) drawnPrompt {
+	if e.promptNow != nil {
+		return *e.promptNow
+	}
+	return prompt
 }

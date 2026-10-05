@@ -240,6 +240,11 @@ const (
 	WidgetSearchHistoryForward
 	WidgetPatternSearchHistoryBackward
 	WidgetPatternSearchHistoryForward
+
+	// The prompt rendered again and redrawn, with the line under it — what
+	// a widget that changed something the prompt shows asks for. See
+	// resetPrompt (#5940).
+	WidgetResetPrompt
 )
 
 // IsIncrementalSearch is whether the action is one of the four searches,
@@ -460,6 +465,8 @@ func (e *editor) runWidget(b Binding, prompt drawnPrompt) {
 		e.actionStatus = e.beginningSearch(-1, prompt)
 	case WidgetHistoryBeginningSearchForward:
 		e.actionStatus = e.beginningSearch(+1, prompt)
+	case WidgetResetPrompt:
+		e.resetPrompt(prompt)
 	case WidgetUpLine:
 		e.actionStatus = e.lineMotion(-1, prompt)
 	case WidgetDownLine:

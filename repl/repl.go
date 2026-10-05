@@ -770,6 +770,7 @@ func (s Shell) Run(ctx context.Context) (int, error) {
 	// exists, because a re-render has to know whether it is drawing the
 	// prompt for a new command or for the rest of an unfinished one.
 	ed.rerender = s.rerender(&pending)
+	ed.promptAgain = s.promptAgain(&pending)
 	for {
 		// Whether this read has a line editor at all, asked once per read
 		// because the option that decides it is one a person can type — see
@@ -1230,6 +1231,15 @@ func (s Shell) beforeReading(ctx context.Context, state *terminalState, pending 
 	// is a column" have to be taken out of both and the count has to cover
 	// both. Two drawnPrompts added together would be a text of two halves and
 	// a width of one.
+	return s.promptHalf(continuing, cols)
+}
+
+// promptHalf is the prompt itself: what the theme draws, or the parameters
+// rendered and measured, with no hook fired and no window asked about.
+//
+// The part of beforeReading that `zle reset-prompt` runs again part-way
+// through a line — see Shell.promptAgain.
+func (s Shell) promptHalf(continuing bool, cols int) drawnPrompt {
 	if drawn, drawing := s.themedPrompt(continuing, cols); drawing {
 		return drawn
 	}
@@ -1331,6 +1341,18 @@ func (s Shell) themedPrompt(continuing bool, cols int) (drawnPrompt, bool) {
 // part-way through a line: the working directory cannot move while somebody
 // is typing, so a re-render writes back the value beforeReading already
 // wrote.
+// promptAgain is how the editor renders the prompt afresh when a widget asks
+// for it with `zle reset-prompt`: the prompt half of beforeReading, theme or
+// parameters, and never the hooks. Measured 2026-10-04 against zsh 5.9.2, a
+// widget that assigns PS1 and runs `zle reset-prompt` has the new prompt
+// drawn at once, and the call answers 0 (#5940).
+//
+// Unlike rerender it is never nil: a prompt written in the parameters is
+// what reset-prompt is mostly for.
+func (s Shell) promptAgain(pending *strings.Builder) func(cols int) drawnPrompt {
+	return func(cols int) drawnPrompt { return s.promptHalf(pending.Len() > 0, cols) }
+}
+
 func (s Shell) rerender(pending *strings.Builder) func(cols int) (drawnPrompt, bool) {
 	if s.Theme == nil {
 		return nil

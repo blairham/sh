@@ -3999,6 +3999,9 @@ func Semantics() interp.Semantics {
 	// says which happened. A subshell still fires on both sides, which is
 	// the axis above and not this one.
 	s.ErrTrapRefiresForTheCommandItFiredInside = interp.ErrTrapFiresOnceForTheFailure
+	// What a ^C at the prompt does with a trap on INT: zsh keeps the line unless the INT trap's action returns non-zero.
+	// See Semantics.PromptInterruptTrap.
+	s.PromptInterruptTrap = interp.PromptInterruptTrapDecides
 	// An error inside a handler ends the handler and nothing more, for a
 	// signal's, ERR's and DEBUG's alike; and an error the shell gives up
 	// over raises ZERR first. Measured 2026-10-02 on 5.9.2 under `-f`, see

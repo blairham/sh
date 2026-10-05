@@ -379,6 +379,12 @@ type editor struct {
 	woke     func()
 	rerender func(cols int) (drawnPrompt, bool)
 
+	// answerInterrupt answers a ^C typed during the read, and reports whether
+	// the line is kept. Set by the session for the length of a prompt's read
+	// and nil otherwise, where a ^C gives the line up as it always has. See
+	// Shell.answerInterrupt and keepsTheLineOnInterrupt.
+	answerInterrupt func() bool
+
 	// jobWake is a second descriptor of exactly that shape, and it becomes
 	// readable when a background job has *ended*. jobWoke takes the readiness
 	// back off it and jobNotices writes what there is to say, reporting
@@ -623,6 +629,9 @@ func (e *editor) readLine(prompt drawnPrompt) (string, error) {
 		// See bindings.go.
 		switch b, claimed, got := e.matchBinding(buf[0]); {
 		case got == keyAbandoned:
+			if e.keepsTheLineOnInterrupt(prompt) {
+				continue
+			}
 			return e.abandon(prompt)
 		case claimed && b.Function != "":
 			e.keyBinding = &b
@@ -660,6 +669,9 @@ func (e *editor) readLine(prompt drawnPrompt) (string, error) {
 			case viAccepted:
 				return e.accepted(prompt), nil
 			case viAbandoned:
+				if e.keepsTheLineOnInterrupt(prompt) {
+					continue
+				}
 				return e.abandon(prompt)
 			case viStopped:
 				return e.stopped(prompt)
@@ -668,6 +680,9 @@ func (e *editor) readLine(prompt drawnPrompt) (string, error) {
 		}
 		switch c := buf[0]; c {
 		case ctrlC:
+			if e.keepsTheLineOnInterrupt(prompt) {
+				continue
+			}
 			return e.abandon(prompt)
 		case ctrlD:
 			if len(e.line) == 0 && (!e.lineStart.seeded || e.lineStart.endOnEndOfInput) {
@@ -740,6 +755,9 @@ func (e *editor) readLine(prompt drawnPrompt) (string, error) {
 				continue
 			}
 			if e.escape(prompt) == keyAbandoned {
+				if e.keepsTheLineOnInterrupt(prompt) {
+					continue
+				}
 				return e.abandon(prompt)
 			}
 		case ctrlX:
@@ -752,6 +770,9 @@ func (e *editor) readLine(prompt drawnPrompt) (string, error) {
 			b, got := e.readByte()
 			switch {
 			case got == keyAbandoned:
+				if e.keepsTheLineOnInterrupt(prompt) {
+					continue
+				}
 				return e.abandon(prompt)
 			case got != keyContinues:
 			case b == ctrlU:
@@ -856,6 +877,18 @@ func (e *editor) nextByte(buf []byte) (int, error) {
 // clothing — reading past this buffer to the descriptor underneath. See
 // serveDescriptors in watchfd.go, and the reads in search.go and complete.go.
 func (e *editor) inputPending() bool { return len(e.pushed) > 0 || e.heldPos < e.heldLen }
+
+// keepsTheLineOnInterrupt asks whether a ^C keeps the line rather than giving
+// it up, which only a trap can make it do: zsh keeps the line under one, and
+// both shells keep it under `trap "" INT`. Kept, the line is drawn again,
+// since the trap's action may have written over it.
+func (e *editor) keepsTheLineOnInterrupt(prompt drawnPrompt) bool {
+	if e.answerInterrupt == nil || !e.answerInterrupt() {
+		return false
+	}
+	e.redraw(prompt)
+	return true
+}
 
 // abandon ends a line the person gave up on with ^C.
 //

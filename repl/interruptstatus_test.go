@@ -5,28 +5,27 @@ package repl
 
 import "testing"
 
-// What a line abandoned with ^C leaves in `$?` (#5867), asked of the method
-// the loop calls rather than through a terminal, because the third row cannot
-// be asked through one yet.
+// What a ^C at the prompt leaves in `$?` and whether it keeps the line
+// (#5867, #5888), asked of the method every read calls rather than through a
+// terminal.
 //
-// Measured 2026-10-04 through a pseudo-terminal against bash 5.3.20 and zsh
-// 5.9.2: 130 whatever the status was before, and under `trap "" INT` the
-// status left alone. Both shells also leave the half-typed line in
-// place there, where this editor abandons it — so a session test of the
-// ignored row would be waiting for a prompt the right answer never draws.
-// cmd/bash and cmd/zsh carry the session tests for the rows that draw one.
-func TestAControlCAtThePromptSetsOneHundredThirty(t *testing.T) {
+// Measured 2026-10-04 through a pseudo-terminal: with no trap the line is
+// given up and `$?` is 130 whatever it was before, in every shell; under
+// `trap "" INT` the line is kept and the status left alone. A trap with a body
+// is the dialect's answer, and this runner's semantics are the core's, whose
+// answer is ksh93's and dash's: the trap runs, the line is given up and the
+// status stands. cmd/bash and cmd/zsh carry the session tests for theirs.
+func TestAControlCAtThePromptIsAnsweredOnce(t *testing.T) {
 	for _, tc := range []struct {
 		name  string
 		setup string
 		want  int
+		keep  bool
+		ran   string
 	}{
-		{"with no trap", "false", 130},
-		// bash's answer. zsh runs the body at the prompt, keeps the line
-		// and leaves the status — and this session runs no trap at the
-		// prompt at all, which is a gap of its own rather than this row's.
-		{"under a trap with a body", "trap : INT; false", 130},
-		{"not under trap '' INT", "trap '' INT; false", 1},
+		{"with no trap", "false", 130, false, ""},
+		{"under a trap with a body", "trap 'ran=yes' INT; false", 1, false, "yes"},
+		{"under trap '' INT", "trap '' INT; false", 1, true, ""},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			r := newTestRunner(nil)
@@ -34,9 +33,15 @@ func TestAControlCAtThePromptSetsOneHundredThirty(t *testing.T) {
 			// happens below.
 			t.Cleanup(func() { _ = runScript(t, r, "trap - INT") })
 			_ = runScript(t, r, tc.setup)
-			Shell{Runner: r}.interruptedAtThePrompt()
+			keep := Shell{Runner: r}.answerInterrupt(t.Context(), nil)
 			if got := r.ExitStatus(); got != tc.want {
 				t.Errorf("after %q and ^C, $? = %d, want %d", tc.setup, got, tc.want)
+			}
+			if keep != tc.keep {
+				t.Errorf("after %q and ^C, kept the line = %v, want %v", tc.setup, keep, tc.keep)
+			}
+			if got, _ := r.GetVar("ran"); got != tc.ran {
+				t.Errorf("after %q and ^C, the trap left ran=%q, want %q", tc.setup, got, tc.ran)
 			}
 		})
 	}

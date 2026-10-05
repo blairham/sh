@@ -84,7 +84,7 @@ func (s Shell) readWithoutTheEditor(state *terminalState, ed *editor, prompt dra
 		// and for the same reason.
 		line = ed.lineStart.text + line
 	}
-	if err == nil && s.interruptedWhileReading(sig) {
+	if err == nil && s.interruptedWhileReading(ed, sig) {
 		return "", ErrInterrupted
 	}
 	return line, err
@@ -108,19 +108,22 @@ func (s Shell) readWithoutTheEditor(state *terminalState, ed *editor, prompt dra
 // up whole and never run. The prompt then comes back fresh, a construct
 // waiting at PS2 is abandoned with it, and `$?` is 130. Under `trap "" INT`
 // the ^C throws away what was typed before it and the line typed after it
-// runs, with `$?` left alone. Under a trap with a body zsh runs the trap and
-// the line typed after the ^C runs as well; the line is kept here the same
-// way, and what a ^C at the prompt runs is #5888's question.
+// runs, with `$?` left alone. Under a trap with a body zsh runs the trap, and
+// its action's return decides the same two ways: `TRAPINT() { return 0 }`
+// keeps reading, `return 130` gives the rest of the read up and leaves 130.
+// The answer is the session's, the same one the editor's ^C gets — see
+// Shell.answerInterrupt.
 func (s Shell) readCookedLineAtThePrompt(ed *editor, intr byte) (string, error) {
 	for {
 		line, err := readCookedLine(ed, intr)
 		if !errors.Is(err, errInterruptTyped) {
 			return line, err
 		}
-		if s.Runner.TrapsSignal()(syscall.SIGINT) {
-			// What the terminal's discipline does with a ^C the shell does
-			// not die of: what was typed before it is thrown away and the
-			// read goes on.
+		if ed.answerInterrupt == nil || ed.answerInterrupt() {
+			// Kept — an ignore, or a trap that keeps the line. What the
+			// terminal's discipline does with a ^C the shell does not give
+			// the line up for: what was typed before it is thrown away and
+			// the read goes on.
 			continue
 		}
 		// And the rest of the read is given up with it, to its newline — or
@@ -161,14 +164,16 @@ var errInterruptTyped = errors.New("interrupt typed")
 // command is killed by an arrival that belonged to the read, and the prompt's,
 // so no newline is written for a ^C the terminal's own echo of the newline
 // already moved past.
-func (s Shell) interruptedWhileReading(sig *interrupts) bool {
+func (s Shell) interruptedWhileReading(ed *editor, sig *interrupts) bool {
 	if sig == nil || !sig.take() {
 		return false
 	}
 	sig.took()
-	// A trap of either kind keeps the line: zsh runs a trap with a body and
-	// keeps the line, and an ignore is nothing at all.
-	return !s.Runner.TrapsSignal()(syscall.SIGINT)
+	// A trap of either kind is the signal's to answer: interp heard it too.
+	if s.Runner.TrapsSignal()(syscall.SIGINT) {
+		return false
+	}
+	return ed.answerInterrupt == nil || !ed.answerInterrupt()
 }
 
 // readCookedLine reads one line from a terminal that is gathering lines

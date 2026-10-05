@@ -139,6 +139,12 @@ type Candidate struct {
 
 	// Group is the block of the listing this candidate is drawn in.
 	Group Group
+
+	// Open inserts a lone match exactly as it stands, with no space after it
+	// and no quote closed: the word is not finished. readline's answer for a
+	// symlinked directory it has not marked — see
+	// EditorStyle.SymlinkedDirectoryMarkedWhenNamedWhole.
+	Open bool
 }
 
 // Group is a block of a listing: candidates whose Group compares equal are

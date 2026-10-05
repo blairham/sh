@@ -6,6 +6,7 @@ package repl
 import (
 	"context"
 	"fmt"
+	"os"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -43,7 +44,7 @@ func (e *editor) complete(c Completer) (matches []Candidate, did completionOutco
 	// two of those and one word is a lone match rather than three.
 	words := insertableWords(candidates)
 	if len(words) == 1 {
-		e.replaceWord(start, words[0]+completionSuffix(word, words[0]))
+		e.replaceWord(start, words[0]+loneSuffix(candidates, word))
 		return nil, completionSettledTheWord
 	}
 	// Several. Fill in as far as they agree, which is what makes a second Tab
@@ -176,6 +177,22 @@ func (e *editor) replaceWord(start int, with string) {
 	e.line = append(e.line, rest...)
 }
 
+// loneSuffix is completionSuffix for the one insertable candidate among
+// candidates, which may say that nothing follows it at all. See
+// Candidate.Open.
+func loneSuffix(candidates []Candidate, word string) string {
+	for _, c := range candidates {
+		if c.Word == "" {
+			continue
+		}
+		if c.Open {
+			return ""
+		}
+		return completionSuffix(word, c.Word)
+	}
+	return ""
+}
+
 // completionSuffix is what follows a single match.
 //
 // A directory already carries its slash and gets nothing more, because the
@@ -257,6 +274,11 @@ type shellCompleter struct {
 	// hidden offers names beginning with a dot to a word that does not begin
 	// with one. See EditorStyle.CompletionMatchesHiddenFiles.
 	hidden bool
+
+	// symlinkMarkedWhenWhole withholds a symlinked directory's slash until
+	// the word names it whole. See
+	// EditorStyle.SymlinkedDirectoryMarkedWhenNamedWhole.
+	symlinkMarkedWhenWhole bool
 
 	// emptyWordOffersNothing withholds the command list from a command word
 	// that is empty — bash's `no_empty_cmd_completion`, read from the shell
@@ -403,7 +425,19 @@ func (s shellCompleter) files(word string) []string { return s.paths(word, nil) 
 // a caller's completer and this one are looking at the same fact rather than
 // each deciding for itself.
 func (s shellCompleter) Complete(c Completion) []Candidate {
+	if !c.Command || hasPathSeparator(c.Word) {
+		return s.pathCandidates(c.Word, s.keepFor(c))
+	}
 	return Words(s.words(c)...)
+}
+
+// keepFor is the narrowing a path in this position gets: what could run, for
+// a command word, and everything otherwise.
+func (s shellCompleter) keepFor(c Completion) func(string, os.DirEntry) bool {
+	if c.Command {
+		return s.runnable
+	}
+	return nil
 }
 
 // words is this completer's answer before it is dressed as candidates. A

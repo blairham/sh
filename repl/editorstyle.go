@@ -461,4 +461,22 @@ type EditorStyle struct {
 	// A word that *does* begin with a dot matches them in either case, so
 	// this decides one thing only: what an empty name matches.
 	CompletionMatchesHiddenFiles bool
+
+	// SymlinkedDirectoryMarkedWhenNamedWhole withholds the slash from a
+	// symlink to a directory until the word already names it whole, and puts
+	// nothing after it in the meantime — readline's `mark-symlinked-directories`
+	// off, which is its default.
+	//
+	// Measured 2026-10-04 through a pseudo-terminal, no startup files, with
+	// `realdir/` and `linkdir -> realdir`:
+	//
+	//	              link⇥        link⇥⇥        real⇥
+	//	bash 5.3.20   linkdir      linkdir/      realdir/
+	//	zsh 5.9.2     linkdir/                   realdir/
+	//
+	// readline's two variables are not settable here (see dialect/bash's
+	// bind.go on `-v`), so this is the default and only the default: with
+	// `mark-symlinked-directories` on bash marks the link at once, and with
+	// `mark-directories` off it marks neither.
+	SymlinkedDirectoryMarkedWhenNamedWhole bool
 }

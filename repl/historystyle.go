@@ -113,6 +113,22 @@ type HistoryStyle struct {
 	// with a second between each.
 	SearchNewlineAcceptsTheLine bool
 
+	// SearchInterruptAbortsTheSearch says `C-c` during a reverse incremental
+	// search abandons the search, as `C-g` does, rather than the line.
+	//
+	// Measured 2026-10-04 through a pseudo-terminal, with `abc` typed, then
+	// `C-r` `bra` finding `echo bravo two`, then `C-c`, then `echo AFTER$?`
+	// and Return:
+	//
+	//	bash 5.3.20   the line abandoned, a new prompt, AFTER130
+	//	zsh 5.9.2     the search abandoned, `abc` back on the same line,
+	//	              which then runs as `abcecho AFTER$?`
+	//
+	// zsh answers the same with the search run from inside a widget, where
+	// the call's status is 3, as it is for `C-g` (#5895). The zero value is
+	// bash's, which is also what this editor did everywhere before.
+	SearchInterruptAbortsTheSearch bool
+
 	// How the history *file* encodes an entry, which is two facts and not
 	// one — they were measured separately and one shell has both while the
 	// default has neither.

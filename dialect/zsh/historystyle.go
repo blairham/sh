@@ -61,6 +61,9 @@ func HistoryStyle() repl.HistoryStyle {
 		// called `XX`, where bash runs `echo zXXone` and ksh93 `echo zoneXX`.
 		// See repl.HistoryStyle.SearchNewlineAcceptsTheLine.
 		SearchNewlineAcceptsTheLine: true,
+		// And `C-c` abandons the search rather than the line, like `C-g`.
+		// See repl.HistoryStyle.SearchInterruptAbortsTheSearch.
+		SearchInterruptAbortsTheSearch: true,
 		// The file's own encoding, measured 2026-09-12 by driving zsh 5.9.2
 		// through a pseudo-terminal and reading what it left behind. Both
 		// answers are yes, and they are two answers: a multi-line command is

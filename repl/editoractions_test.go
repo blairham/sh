@@ -26,13 +26,16 @@ func typedReachingBack(
 	t *testing.T, history []string, act func(Line, Actions) (Line, bool), keys string,
 ) (string, string) {
 	t.Helper()
-	return typedReachingBackStyled(t, EditorStyle{}, history, act, keys)
+	return typedReachingBackStyled(t, EditorStyle{}, nil, history, act, keys)
 }
 
 // typedReachingBackStyled is typedReachingBack in an editor of one dialect's
-// style, for an answer the dialects give differently.
+// style, for an answer the dialects give differently. dialect, when not nil,
+// sets an answer that lives outside EditorStyle on the editor once it is
+// built — the search's, which is HistoryStyle's.
 func typedReachingBackStyled(
-	t *testing.T, style EditorStyle, history []string, act func(Line, Actions) (Line, bool), keys string,
+	t *testing.T, style EditorStyle, dialect func(*editor), history []string,
+	act func(Line, Actions) (Line, bool), keys string,
 ) (string, string) {
 	t.Helper()
 	var out strings.Builder
@@ -44,6 +47,9 @@ func typedReachingBackStyled(
 	e.in, e.out = typing(keys), &out
 	e.history = history
 	e.browsing = len(history)
+	if dialect != nil {
+		dialect(e)
+	}
 	// Straight into runFunc rather than through Shell.RunWidget, because the
 	// handle is what is being tested and the context carriage in between has
 	// a test of its own below.
@@ -118,57 +124,105 @@ func TestAskingForAnActionGetsTheEditorsOwn(t *testing.T) {
 	}
 }
 
-// The one action that is a mode of its own is declined, and the line comes
-// back untouched so a caller that reports the refusal has lost nothing.
+// The incremental search runs from inside an action, with its own keys, and
+// what comes back is the line it found and how it ended.
 //
-// It is the whole of what the seam will not do, and the reason is the one
-// shellwidget.go used to give for the whole seam: a reverse incremental search
-// has a read loop and a drawing of its own, so running it from inside a widget
-// is re-entering the read loop mid-keystroke.
+// This used to be the one action the seam declined, on the reasoning that it
+// has a read loop of its own and running it from a widget would re-enter the
+// editor's. It does not: the search reads through the editor's buffer, and the
+// key loop is waiting on the action rather than on the terminal. The refusal
+// cost `C-r` to everyone running zsh-autosuggestions, whose wrapper calls the
+// search by name (#5895).
 //
-// **This used to name two, and the second was measured wrong.** A completion
-// was declined on the reasoning that it may stop to ask about a long listing
-// and so reads a key too. It does, through the editor's own buffer, with the
-// key loop waiting on the call rather than on the terminal — so there is no
-// second reader. Measured 2026-09-18 through a pseudo-terminal against zsh
-// 5.9.2, with a widget whose whole body is `zle complete-word`: pressing its
-// key filled in what the matches agree on and pressing it again listed them,
-// which is the Tab key's own two-keystroke rule reached by name from inside a
-// widget (#3043). The refusal turned a plugin's fallback to the standard
-// completion into an error.
-func TestTheActionThatReadsAKeyIsDeclined(t *testing.T) {
-	if performable(WidgetSearchHistoryBackward) {
-		t.Error("the search is offered, want it declined — it is a mode of its own")
+// The key that ends the search is the key loop's, read after the action
+// returns: Return runs the line the search found, which is what zsh 5.9.2
+// does with the same wrapper, measured 2026-10-04.
+func TestTheSearchRunsFromInsideAnAction(t *testing.T) {
+	history := []string{"echo alpha one", "echo bravo two", "printf charlie"}
+	cases := []struct {
+		name      string
+		keys      string
+		interrupt bool
+		want      Line
+		accepted  string
+	}{
+		{
+			"found, then Return", "\abra\r", false,
+			Line{Buffer: "echo bravo two", Cursor: 5, Keys: "\r"},
+			"echo bravo two",
+		},
+		{
+			"an empty query", "\a\r", false,
+			Line{Keys: "\r"},
+			"",
+		},
+		{
+			"failing, then Return", "ab\azzz\r", false,
+			Line{Buffer: "ab", Cursor: 2, Status: 1, Keys: "\r"},
+			"ab",
+		},
+		{
+			"abandoned with C-g", "ab\abra\a\r", false,
+			Line{Buffer: "ab", Cursor: 2, Status: 3, Keys: "\a"},
+			"ab",
+		},
+		{
+			"abandoned with C-c, where C-c is the search's", "ab\abra\x03\r", true,
+			Line{Buffer: "ab", Cursor: 2, Status: 3},
+			"ab",
+		},
 	}
-	// And through the seam, with the line intact.
-	var got Line
-	var ok bool
-	typedReachingBack(t, nil, func(in Line, ed Actions) (Line, bool) {
-		got, ok = ed.Perform(WidgetSearchHistoryBackward, in)
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			var got Line
+			var ok bool
+			calls := 0
+			line, _ := typedReachingBackStyled(t, EditorStyle{}, func(e *editor) { e.searchInterruptAborts = c.interrupt }, history,
+				func(in Line, ed Actions) (Line, bool) {
+					calls++
+					got, ok = ed.Perform(WidgetSearchHistoryBackward, in)
+					return got, true
+				}, c.keys)
+			if !ok {
+				t.Fatal("the editor declined the search from inside an action")
+			}
+			if calls != 1 {
+				t.Errorf("the action ran %d times, want once — the search's keys are its own", calls)
+			}
+			got.Last = LastWidget{}
+			if got != c.want {
+				t.Errorf("the search gave back %+v, want %+v", got, c.want)
+			}
+			if line != c.accepted {
+				t.Errorf("accepted %q, want %q", line, c.accepted)
+			}
+		})
+	}
+}
+
+// And `C-c` where it is the line's, which is bash's answer and the zero value:
+// the search ends and the byte goes back to the key loop, which abandons the
+// line — so the action's code after the call still runs first.
+func TestAnInterruptInTheSearchIsTheLinesByDefault(t *testing.T) {
+	var after bool
+	var out strings.Builder
+	s := Shell{
+		KeyBindings: func(Keymap) map[string]Binding { return map[string]Binding{"\a": {Function: "w"}} },
+	}
+	e := s.newEditor(t.Context(), nil)
+	e.in, e.out = typing("ab\abra\x03"), &out
+	e.history = []string{"echo bravo two"}
+	e.browsing = 1
+	e.runFunc = func(_ string, in Line, ed Actions) (Line, bool) {
+		in, _ = ed.Perform(WidgetSearchHistoryBackward, in)
+		after = true
 		return in, true
-	}, "abc\a\n")
-	if ok {
-		t.Error("the editor performed a search from inside a widget")
 	}
-	if want := (Line{Buffer: "abc", Cursor: 3, Last: LastWidget{Widget: WidgetSelfInsert, Known: true}, Keys: "\a"}); got != want {
-		t.Errorf("the declined call gave back %+v, want the line untouched at %+v", got, want)
+	if line, err := e.readLine(drawPrompt("$ ")); err == nil {
+		t.Errorf("readLine = %q, want the line abandoned", line)
 	}
-	// Everything else is offered. A new action added to widgets.go without a
-	// thought for this seam should default to reachable, which is what this
-	// asserts: the list of exceptions is closed and short.
-	for _, w := range []Widget{
-		WidgetBeginningOfLine, WidgetEndOfLine, WidgetBackwardChar, WidgetForwardChar,
-		WidgetBackwardWord, WidgetForwardWord, WidgetKillLine, WidgetKillWholeLine,
-		WidgetKillWordBefore, WidgetKillWordAfter, WidgetYank, WidgetTransposeChars,
-		WidgetPreviousHistory, WidgetNextHistory, WidgetClearScreen, WidgetDeleteChar,
-		WidgetBackwardDeleteChar, WidgetUndo, WidgetInsertLastWord,
-		WidgetViCommandMode, WidgetViInsertMode, WidgetViAppendMode,
-		WidgetComplete, WidgetListChoices, WidgetDeleteCharOrList,
-		WidgetMenuComplete, WidgetMenuCompleteBackward,
-	} {
-		if !performable(w) {
-			t.Errorf("widget %d is declined, want it offered", w)
-		}
+	if !after {
+		t.Error("the action's code after the search did not run")
 	}
 }
 

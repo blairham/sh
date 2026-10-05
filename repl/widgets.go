@@ -381,7 +381,9 @@ func (e *editor) runWidget(b Binding, prompt drawnPrompt) {
 	case WidgetNextHistoryMatching:
 		e.browseMatching(+1, prompt)
 	case WidgetSearchHistoryBackward:
-		e.reverseSearch(prompt)
+		// How it ended is what a widget that called it by name is answered
+		// with; see searchEnd.status. A key pressed has no one to tell.
+		e.actionStatus = e.reverseSearch(prompt).status()
 	case WidgetClearScreen:
 		e.clearScreen(prompt)
 	case WidgetDeleteChar:

@@ -6,6 +6,7 @@ package zsh_test
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"slices"
 	"strings"
 	"testing"
@@ -84,8 +85,8 @@ type stubEditor struct {
 	// was handed.
 	performed []repl.Widget
 	lines     []repl.Line
-	// refuse is the actions this editor declines, standing in for the two the
-	// real one will not perform from inside a widget.
+	// refuse is the actions this editor declines. The real one declines none
+	// since #5895, but the contract still lets an editor say no.
 	refuse map[repl.Widget]bool
 	// gives is what an action hands back, by action. An action with no entry
 	// hands back the line it was given.
@@ -661,9 +662,9 @@ func TestTheEditorIsGivenTheLineTheWidgetIsHoldingNow(t *testing.T) {
 // An action the editor will not perform from inside a widget is still refused
 // out loud, in the wording a letter this shell has not got gets.
 //
-// There are two of them and they are the two that read a key of their own —
-// which two is repl's answer, so this test names the refusal rather than the
-// pair. A refusal a script can see beats a call that appears to work.
+// repl's editor refuses nothing since #5895, so this is the contract rather
+// than a case anyone meets: a refusal a script can see beats a call that
+// appears to work.
 func TestAnActionTheEditorDeclinesIsRefusedByName(t *testing.T) {
 	r, out := zleRunner(t,
 		"a() { zle history-incremental-search-backward; print -r -- \"rc=$?\"; }\nzle -N a\n")
@@ -676,6 +677,30 @@ func TestAnActionTheEditorDeclinesIsRefusedByName(t *testing.T) {
 		"calling a built-in widget is not implemented yet\nrc=1\n"
 	if printed != want {
 		t.Errorf("output = %q, want %q", printed, want)
+	}
+}
+
+// The call's status is the action's own, which is how a wrapper around the
+// incremental search learns how the search ended: 0 for a match, 1 for a
+// search that ended failing, 3 for one abandoned. Measured 2026-10-04 against
+// zsh 5.9.2 with an autosuggestions-style wrapper; see repl's searchEnd.
+// The line comes back with it, so `$BUFFER` after an abandoned search is the
+// line as it was, and so does the key that ended it, as `$KEYS`.
+func TestTheSearchStatusIsTheCallsStatus(t *testing.T) {
+	for _, status := range []int{0, 1, 3} {
+		r, out := zleRunner(t, `a() { zle .history-incremental-search-backward; print -r -- "rc=$? B=$BUFFER C=$CURSOR K=${(q)KEYS}"; }
+zle -N a
+`)
+		ed := &stubEditor{gives: map[repl.Widget]repl.Line{
+			repl.WidgetSearchHistoryBackward: {Buffer: "echo bravo", Cursor: 5, Status: status, Keys: "\r"},
+		}}
+		_, ok, printed, _ := runWidgetWatching(t, r, out, "a", repl.Line{}, ed)
+		if !ok {
+			t.Fatal("the widget did not run")
+		}
+		if want := fmt.Sprintf("rc=%d B=echo bravo C=5 K=$'\\r'\n", status); printed != want {
+			t.Errorf("output = %q, want %q", printed, want)
+		}
 	}
 }
 

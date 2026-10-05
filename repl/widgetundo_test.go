@@ -28,7 +28,7 @@ func TestANumberedUndoGoesBackToTheChangeItWasTakenAt(t *testing.T) {
 	var steps []step
 	// In zsh's style, where an undo puts the cursor back where it was.
 	zsh := EditorStyle{UndoRestoresTheCursorToWhereItWas: true}
-	typedReachingBackStyled(t, zsh, nil, func(in Line, ed Actions) (Line, bool) {
+	typedReachingBackStyled(t, zsh, nil, nil, func(in Line, ed Actions) (Line, bool) {
 		a := ed.ChangeNumber(in)
 		nums = append(nums, a, ed.ChangeNumber(in))
 		in.Buffer = "one"

@@ -33,7 +33,18 @@ import (
 // The line and the cursor are left where the search wants them, and the byte
 // that ended the mode — if it means something outside it — is pushed back for
 // the caller's own switch to read on its next turn.
-func (e *editor) reverseSearch(prompt drawnPrompt) {
+//
+// How it ended is the answer, for the one caller that can see it: a widget
+// that ran the search by name, which is how every plugin wrapping the key
+// reaches it (#5895). The key loop has nothing to do with it and drops it.
+//
+// **Run from inside a widget, this loop is nested and that is safe**, for the
+// reason a completion's listing question is: it reads through nextByte, the
+// editor's own buffer, and the key loop is waiting on the widget call rather
+// than on the terminal, so there is still exactly one reader. The key that
+// ends the search is pushed back the same way either route, and is read by
+// the key loop once the widget returns — which is when zsh runs it too.
+func (e *editor) reverseSearch(prompt drawnPrompt) searchEnd {
 	// What to put back if the search is abandoned. Both shells restore the
 	// line as it was before `C-r`, which is the whole use of `C-g`: a search
 	// that cannot be backed out of is one people stop starting.
@@ -44,6 +55,7 @@ func (e *editor) reverseSearch(prompt drawnPrompt) {
 	e.drafts[e.browsing] = saved
 
 	var query []rune
+	e.searchKey = e.searchKey[:0]
 	// at is the entry the line is showing, and -1 is the caller's own line —
 	// which is what an empty query shows, measured: `C-r` on a half-typed
 	// line draws the search prompt with that line still after it.
@@ -63,7 +75,7 @@ func (e *editor) reverseSearch(prompt drawnPrompt) {
 			// and the caller's own read reports the same error a moment later.
 			e.line, e.pos, e.browsing = saved, savedPos, savedAt
 			e.redraw(prompt)
-			return
+			return searchAbandoned
 		}
 		if n == 0 {
 			continue
@@ -91,7 +103,24 @@ func (e *editor) reverseSearch(prompt drawnPrompt) {
 		case ctrlG:
 			e.line, e.pos, e.browsing = saved, savedPos, savedAt
 			e.redraw(prompt)
-			return
+			e.searchKey = append(e.searchKey, c)
+			return searchAbandoned
+		case ctrlC:
+			if !e.searchInterruptAborts {
+				e.searchKey = append(e.searchKey, c)
+				// The line is abandoned, which is the key loop's to do: the
+				// byte goes back for it like any other key that ends the
+				// mode. See HistoryStyle.SearchInterruptAbortsTheSearch for
+				// the dialect where it does not.
+				e.redraw(prompt)
+				e.pushBack(c)
+				return searchEnded(failed)
+			}
+			// No key at all, measured: zsh's `$KEYS` is empty after a search
+			// `C-c` abandoned, where it is `^G` after one `C-g` abandoned.
+			e.line, e.pos, e.browsing = saved, savedPos, savedAt
+			e.redraw(prompt)
+			return searchAbandoned
 		case backspace, del:
 			if len(query) == 0 {
 				// Nothing left to take away. A backspace here is not a
@@ -118,19 +147,66 @@ func (e *editor) reverseSearch(prompt drawnPrompt) {
 					// three answers are measured.
 					e.pushBack(c)
 				}
-				return
+				e.searchKey = append(e.searchKey, c)
+				return searchEnded(failed)
 			}
 			r, err := e.readRune(c)
 			if err != nil {
 				e.line, e.pos, e.browsing = saved, savedPos, savedAt
 				e.redraw(prompt)
-				return
+				return searchAbandoned
 			}
 			query = append(query, r)
 			at, failed = e.research(query, at)
 		}
 		e.drawSearch(prompt, query, failed)
 	}
+}
+
+// searchEnd is how a reverse search ended.
+type searchEnd int
+
+const (
+	// searchFound ended on a line the query matched, or on an empty query.
+	searchFound searchEnd = iota
+	// searchFailing ended while nothing older matched — the line that last
+	// did is still on the screen, and kept.
+	searchFailing
+	// searchAbandoned put the line back as it was before the search.
+	searchAbandoned
+)
+
+func searchEnded(failed bool) searchEnd {
+	if failed {
+		return searchFailing
+	}
+	return searchFound
+}
+
+// status is the ending as a widget's call of the search answers it.
+//
+// Measured 2026-10-04 against zsh 5.9.2 through a pseudo-terminal, with a
+// widget wrapping `zle .history-incremental-search-backward` the way
+// zsh-autosuggestions does and reading `$?` after the call:
+//
+//	C-r bra Return            0   the match kept, the line then runs
+//	C-r Return                0   an empty query is not a failing one
+//	C-r bra C-e               0   the match kept, C-e then moves the cursor
+//	C-r zzz Return            1   failing: the line as it was, and runs
+//	C-r bra C-r (no older)    1   failing: the match kept
+//	C-r bra C-g               3   the line put back
+//	C-r bra C-c               3   the same, in the dialect where C-c aborts
+//
+// Three is zsh's own number and not a convention this package invents: it is
+// what the measurement said, on both of the keys that abandon.
+func (s searchEnd) status() int {
+	switch s {
+	case searchFailing:
+		return 1
+	case searchAbandoned:
+		return 3
+	}
+	return 0
 }
 
 // research answers a changed query, and says where the line came from.

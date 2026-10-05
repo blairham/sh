@@ -223,13 +223,12 @@ import (
 //     running. `zle -R` has left this list: bare, it is a redraw and repl can
 //     do that; **with a display string it is still refused**, because the
 //     string goes on the status line `-M` would need.
-//   - **The two editor actions that read a key** — an incremental search, and
-//     a completion that may stop to ask about a long listing. Running either
-//     from inside a widget really would be re-entering the read loop
-//     mid-keystroke. The rest of the editor's actions have left this list;
-//     they transform the line and repl performs them on request, which is
-//     repl.Actions and callBuiltinWidget below. Which two are refused is
-//     repl's answer and not this file's — see repl's performable.
+//
+// The editor's own actions have all left this list, the two that read a key
+// last: a completion that may stop to ask about a listing (#3043), and the
+// incremental search (#5895). Both read through the editor's buffer while its
+// key loop waits on the call, so nothing is re-entered. repl performs them on
+// request, which is repl.Actions and callBuiltinWidget below.
 //
 // `vared`, `zcompile` and `zregexparse` are not here, and the three took
 // three different answers rather than one (#1405): `zcompile` is built and is
@@ -1131,16 +1130,16 @@ func accepts(name string) bool {
 // cursor lands where the key would have left it, which is why this runs the
 // editor's own action rather than a copy of it.
 //
-// The one the editor will not perform from here is the one that is a mode of
-// its own — an incremental search, which has its own read loop and its own
-// drawing. It is refused out loud, in the same words a letter this shell has
-// not got gets, because a refusal a script can see beats a call that appears
-// to work. repl decides which; see repl's performable.
-//
-// A completion was the second until #3043, and the refusal was measured wrong:
-// `zle complete-word` from inside a widget completes in zsh exactly as the Tab
-// key does, second-keystroke listing included, and a plugin that falls back to
-// the standard completion had a shell that printed an error instead.
+// **The status is the action's own**, and it is 0 for all of them but one. The
+// incremental search answers how it ended — 1 for a search that ended failing,
+// 3 for one abandoned with `C-g` or `C-c` — measured against zsh 5.9.2 and
+// written down beside repl's searchEnd.status. It used to be refused here, as
+// a mode with its own read loop, and that cost `C-r` to everyone running
+// zsh-autosuggestions, whose wrapper calls it by name (#5895). A completion
+// was refused for the same reason until #3043, and was measured wrong the same
+// way. An editor that does refuse an action is still reported out loud, in the
+// same words a letter this shell has not got gets, because a refusal a script
+// can see beats a call that appears to work.
 //
 // The paste is the one action here that reads an argument. With a name after
 // it, `zle .bracketed-paste NAME` puts the paste in that parameter instead of
@@ -1194,7 +1193,15 @@ func callBuiltinWidget(r *interp.Runner, ctx context.Context, name string, args 
 		return 1
 	}
 	setWidgetLine(r, out)
-	return 0
+	if widget == repl.WidgetSearchHistoryBackward {
+		// The one action that reads its own keys and leaves `$KEYS` saying
+		// which ended it — `^M`, `^G`, or nothing after `C-c` — measured
+		// against zsh 5.9.2; see repl's editorActions.Perform. Every other
+		// action leaves `$KEYS` alone, which is what keeps a `read-command`
+		// before it meaning what it read.
+		r.SetVar(zleKeys, out.Keys)
+	}
+	return out.Status
 }
 
 // redisplay is `zle -R`: draw the line as it stands, in the middle of a widget.

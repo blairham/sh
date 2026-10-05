@@ -107,17 +107,18 @@ print -r -- "[${(%)v}]"`)
 // still are still are.
 //
 // `-D` used to stand here as the still-missing one and is implemented now
-// (#4444), and so is `-v`, which took its place (#5143); the control is `-c`,
-// which this shell spells and this engine does not.
+// (#4444), and so is `-v`, which took its place (#5143), and `-c` after it
+// (#5957); the control is `-a`, which this shell spells and this engine does
+// not.
 func TestPrintDashPIsNoLongerRefusedAsMissing(t *testing.T) {
 	out, _ := runZsh(t, t.TempDir(), `print -P 'x' 2>&1
-print -c 'x' 2>&1
+print -a 'x' 2>&1
 print -r -- "st=$?"`)
 	if strings.Contains(out, "-P is not implemented yet") {
 		t.Errorf("got %q, want -P implemented", out)
 	}
-	if !strings.Contains(out, "zsh:print:2: -c is not implemented yet") {
-		t.Errorf("got %q, want -c still named as missing", out)
+	if !strings.Contains(out, "zsh:print:2: -a is not implemented yet") {
+		t.Errorf("got %q, want -a still named as missing", out)
 	}
 }
 

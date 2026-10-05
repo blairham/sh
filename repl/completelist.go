@@ -108,6 +108,14 @@ func listingRows(candidates []Candidate, width int, layout listLayout) []string 
 			shared = max(shared, span)
 		}
 		cell, cols := uniformGrid(drawn[i], width)
+		if width > 0 && cell > width {
+			// A block whose widest match does not fit the screen lends the
+			// grid nothing: measured on zsh 5.9.2, a 49-column match among
+			// one-letter ones at 40 columns leaves the next block's `y1  y2`
+			// as they are, packed or not, where at 100 columns the same
+			// block spreads them 49 apart (#6203).
+			continue
+		}
 		shared = max(shared, cell*cols)
 	}
 	if width > 0 {
@@ -179,6 +187,17 @@ func arrange(matches []string, width, shared int, layout listLayout) []string {
 		return nil
 	}
 	if rows, widths, ok := packedArrangement(matches, width, layout); ok {
+		// Spread across the shared grid like an unpacked block, the room
+		// left over shared out evenly among the columns (#6203).
+		span := 0
+		for _, w := range widths {
+			span += w
+		}
+		if extra := (shared - span) / len(widths); extra > 0 {
+			for i := range widths {
+				widths[i] += extra
+			}
+		}
 		return placeCells(matches, rows, widths, false)
 	}
 	cell, cols := uniformGrid(matches, width)

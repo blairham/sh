@@ -531,6 +531,9 @@ func (e *editor) confirmList(matches []Candidate, prompt drawnPrompt) bool {
 	e.endLine(prompt, "")
 	e.write(fmt.Sprintf(e.listQuery, len(matches), len(listingRows(matches, e.cols(), e.listLayout()))))
 	for {
+		// A shell's watched descriptors are served while the question
+		// waits, as they are while the line does. See serveWhileAsking.
+		e.serveWhileAsking()
 		var buf [1]byte
 		// Through nextByte and not the reader: this editor buffers what the
 		// terminal delivered, so a read that went straight to the descriptor

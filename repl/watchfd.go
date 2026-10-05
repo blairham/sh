@@ -525,6 +525,43 @@ func (e *editor) serveDescriptors(prompt drawnPrompt) drawnPrompt {
 	}
 }
 
+// serveWhileAsking is serveDescriptors for the one other place this editor
+// waits on a key: the question before a long listing. zsh runs a `zle -F`
+// handler while that question waits — measured 2026-10-05 against zsh 5.9.2,
+// a handler that prints `H` when its descriptor turns readable 1.5 s after
+// Tab prints it after the question and the question goes on waiting (#6130)
+// — so a handler such as a prompt's status callback is not held until the
+// question is answered.
+//
+// Only the shell's watched descriptors, and nothing redrawn: the line is not
+// on the screen while the question is, so there is no prompt to draw again,
+// and what a handler prints lands after the question as it does there.
+func (e *editor) serveWhileAsking() {
+	if e.watch == nil || e.descriptorReady == nil || e.inputPending() {
+		return
+	}
+	for {
+		fds := e.watch()
+		if len(fds) == 0 {
+			return
+		}
+		terminal := -1
+		if e.inFd != nil {
+			terminal = e.inFd()
+		}
+		ready, terminalReady, err := fdset.Wait(terminal, fds)
+		if err != nil || terminalReady || len(ready) == 0 {
+			return
+		}
+		for _, fd := range ready {
+			was := e.inShell
+			e.inShell = true
+			e.descriptorReady(fd, e.giveFinished(), editorActions{e: e})
+			e.inShell = was
+		}
+	}
+}
+
 // serveDescriptor runs the handler for one descriptor and draws whatever it
 // left behind, which is usually nothing.
 //

@@ -457,6 +457,9 @@ type nestedShapeMemo struct {
 	node   *syntax.ParamExpr
 	isList bool
 	known  bool
+	// set and empty are what the inner came to, which is what a conditional
+	// on the node tests: see nestedShapeOf.
+	set, empty bool
 }
 
 // nestedShapeOf reports whether a nested expansion — one with an inner of its
@@ -483,15 +486,43 @@ type nestedShapeMemo struct {
 // straight after expanding its inner, before anything else can expand.
 //
 // Each level's own split, join and count are answered by the caller before
-// this is reached, as they are for a name. The four conditionals are left as
-// they were — the word may be what such an inner came to, and that is a
-// different shape — and an inner nothing has expanded is a value, as it
-// always was here (#5978).
+// this is reached, as they are for a name. An inner nothing has expanded is a
+// value, as it always was here (#5978).
+//
+// **A conditional is the shape of whichever side it came to.** Where the test
+// fires, the word is what the level came to and its own fields decide —
+// `$a` unquoted is a list, `"$a"` a string; where it does not, `:+` comes to
+// nothing and the other three to the inner, whose shape is the memo's.
+// Measured on zsh 5.9.2 under -f, 2026-10-05, with `x=$'two\nthree'`,
+// `a=(hello)`, `e=` and `s=hello`:
+//
+//	${${${(f)x}:+$a}[1]}     hello   fired: the word, a list of one
+//	${${${(f)x}:+"$a"}[1]}   h       fired: the word, quoted, a string
+//	${${${(f)x}:-$a}[1]}     two     not fired: the inner's list
+//	${${${(f)e}:-$a}[1]}     hello   fired the other way
+//	${${${s}:+$a}[1]}        hello   whatever the inner was
+//	${${${s}:-zz}[1]}        h       not fired: the inner's string
+//
+// (#5985).
 func (r *Runner) nestedShapeOf(e *syntax.ParamExpr) bool {
-	switch e.Op {
-	case syntax.ParamDefault, syntax.ParamAssign, syntax.ParamError, syntax.ParamAlternate:
+	m := r.nestedShape
+	if !m.known || m.node != e {
 		return false
 	}
-	m := r.nestedShape
-	return m.known && m.node == e && m.isList
+	switch e.Op {
+	case syntax.ParamDefault, syntax.ParamAssign, syntax.ParamError, syntax.ParamAlternate:
+		fires := !m.set || (e.Colon && m.empty)
+		if e.Op == syntax.ParamAlternate {
+			// `+` substitutes its word where the inner is set, which is the
+			// test the other three fire on turned round.
+			if fires {
+				return false
+			}
+			return r.wordIsAList(e.Arg)
+		}
+		if fires {
+			return r.wordIsAList(e.Arg)
+		}
+	}
+	return m.isList
 }

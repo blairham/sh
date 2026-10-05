@@ -9639,7 +9639,10 @@ func (r *Runner) nestedWords(e *syntax.ParamExpr) (words []string, set, isList b
 	// not recoverable from the value.
 	defer func() {
 		r.holdNested(e, words, set, isList)
-		r.nestedShape = nestedShapeMemo{node: e, isList: isList, known: true}
+		r.nestedShape = nestedShapeMemo{
+			node: e, isList: isList, known: true,
+			set: set, empty: strings.Join(words, "") == "",
+		}
 	}()
 	if words, set, isList, ok := r.takeNested(e); ok {
 		// Already expanded for this span. Every answer is handed over,

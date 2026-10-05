@@ -44,3 +44,31 @@ func TestANestedListKeepsItsShapeThroughALevel(t *testing.T) {
 		}
 	}
 }
+
+// TestANestedConditionalIsTheShapeOfWhatItCameTo is #5985: a conditional on a
+// nested inner is the shape of the word where the test fires and of the inner
+// where it does not. Every row measured on zsh 5.9.2 under -f, 2026-10-05.
+func TestANestedConditionalIsTheShapeOfWhatItCameTo(t *testing.T) {
+	const pre = `x=$'two\nthree'; a=(hello); b=(p q); e=; s=hello
+`
+	rows := []struct{ src, want string }{
+		{`print -r -- ${${${(f)x}:+$a}[1]}`, "hello"},
+		{`print -r -- ${${${(f)x}+$a}[1]}`, "hello"},
+		{`print -r -- ${${${(f)x}:+"$a"}[1]}`, "h"},
+		{`print -r -- ${${${(f)x}:-$a}[1]}`, "two"},
+		{`print -r -- ${${${(f)e}:-$a}[1]}`, "hello"},
+		{`print -r -- ${${${(f)e}:+$a}[1]}`, ""},
+		{`print -r -- ${${${(f)e}-$a}[1]}`, ""},
+		{`print -r -- ${${${s}:+$a}[1]}`, "hello"},
+		{`print -r -- ${${${s}:-zz}[1]}`, "h"},
+		{`print -r -- ${${${(f)x}:+$b}[2]}`, "q"},
+		{`print -r -- ${${${s}:+${(f)x}}[1]}`, "two"},
+		{`print -r -- ${${${(f)e}:-xyz}[1]}`, "x"},
+	}
+	for _, row := range rows {
+		out, _ := runZsh(t, t.TempDir(), pre+row.src+"\n")
+		if out != row.want+"\n" {
+			t.Errorf("%s\n got %q\nwant %q", row.src, out, row.want+"\n")
+		}
+	}
+}

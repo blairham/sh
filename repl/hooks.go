@@ -300,7 +300,12 @@ func (s Shell) fireHook(ctx context.Context, name string, args ...string) {
 		return
 	}
 	guard := s.guard()
-	s.Runner.FireHook(ctx, func(call func()) { guard.Do(call) }, name, args...)
+	// Between commands, which is what a prompt hook's call is: it holds no
+	// job number, and a job its body starts is [1] where nothing else is in
+	// the table (#5891). See interp.Runner.BetweenCommands.
+	s.Runner.BetweenCommands(func() {
+		s.Runner.FireHook(ctx, func(call func()) { guard.Do(call) }, name, args...)
+	})
 }
 
 // reportUnfiredHooks names the hooks this dialect has, this session has been

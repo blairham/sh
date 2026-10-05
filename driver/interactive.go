@@ -241,12 +241,17 @@ func (sh Shell) viEditing(r *interp.Runner) func() bool {
 // runWidget and runScheduled do the same for the other two seams a dialect
 // reaches the session through, and are nil for the same reason: repl asks
 // whether it has one before it does the work of asking one.
+//
+// What the editor runs for a key, for a completion, for a terminal operation
+// or for a descriptor that woke runs between commands: a function it calls
+// holds no job number. See interp.Runner.BetweenCommands (#5891).
 func (sh Shell) runWidget(r *interp.Runner) func(context.Context, string, repl.Line) (repl.Line, bool) {
 	if sh.RunWidget == nil {
 		return nil
 	}
-	return func(ctx context.Context, name string, in repl.Line) (repl.Line, bool) {
-		return sh.RunWidget(r, ctx, name, in)
+	return func(ctx context.Context, name string, in repl.Line) (out repl.Line, ran bool) {
+		r.BetweenCommands(func() { out, ran = sh.RunWidget(r, ctx, name, in) })
+		return out, ran
 	}
 }
 
@@ -257,8 +262,9 @@ func (sh Shell) runCompletion(r *interp.Runner) func(context.Context, string, re
 	if sh.RunCompletion == nil {
 		return nil
 	}
-	return func(ctx context.Context, name string, c repl.Completion) []repl.Candidate {
-		return sh.RunCompletion(r, ctx, name, c)
+	return func(ctx context.Context, name string, c repl.Completion) (got []repl.Candidate) {
+		r.BetweenCommands(func() { got = sh.RunCompletion(r, ctx, name, c) })
+		return got
 	}
 }
 
@@ -286,8 +292,9 @@ func (sh Shell) transformTermcap(r *interp.Runner) func(context.Context, string,
 	if sh.TransformTermcap == nil {
 		return nil
 	}
-	return func(ctx context.Context, code, arg string) (string, bool) {
-		return sh.TransformTermcap(r, ctx, code, arg)
+	return func(ctx context.Context, code, arg string) (out string, ok bool) {
+		r.BetweenCommands(func() { out, ok = sh.TransformTermcap(r, ctx, code, arg) })
+		return out, ok
 	}
 }
 
@@ -322,8 +329,9 @@ func (sh Shell) descriptorReady(r *interp.Runner) func(context.Context, int, rep
 	if sh.DescriptorReady == nil {
 		return nil
 	}
-	return func(ctx context.Context, fd int, in repl.Line) (repl.Line, bool) {
-		return sh.DescriptorReady(r, ctx, fd, in)
+	return func(ctx context.Context, fd int, in repl.Line) (out repl.Line, ran bool) {
+		r.BetweenCommands(func() { out, ran = sh.DescriptorReady(r, ctx, fd, in) })
+		return out, ran
 	}
 }
 

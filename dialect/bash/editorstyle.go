@@ -54,6 +54,10 @@ func EditorStyle() repl.EditorStyle {
 		// readline marks a symlinked directory only once the word names it
 		// whole. See repl.EditorStyle.SymlinkedDirectoryMarkedWhenNamedWhole.
 		SymlinkedDirectoryMarkedWhenNamedWhole: true,
+		// readline runs under the editing modes: `set +o emacs +o vi`
+		// turns it off and the terminal gathers the line (#5922). See
+		// repl.EditorStyle.RunsUnderTheOptions.
+		RunsUnderTheOptions: []string{"emacs", "vi"},
 		// And the bell, which this shell rings for an ambiguous completion
 		// whether or not it fills a prefix in. Measured 2026-09-19 through a
 		// pseudo-terminal on twelve directories agreeing on `aa`: one Tab

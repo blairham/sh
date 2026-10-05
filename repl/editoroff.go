@@ -22,13 +22,21 @@ import (
 // name as off would take the line editor away from every dialect that never
 // installed the option, and the failure would look like an editor that
 // stopped working in a shell whose option table has nothing to say about one.
+//
+// With several names the editor runs while any of them is on, and is off only
+// when every one is known and off — bash's, which runs under `emacs` and `vi`
+// and is turned off by `set +o emacs +o vi`.
 func (s Shell) editorIsOff() bool {
-	name := s.Editor.RunsUnderTheOption
-	if name == "" || s.Runner == nil {
+	names := s.Editor.RunsUnderTheOptions
+	if len(names) == 0 || s.Runner == nil {
 		return false
 	}
-	on, known := s.Runner.DialectOption(name)
-	return known && !on
+	for _, name := range names {
+		if on, known := s.Runner.DialectOption(name); on || !known {
+			return false
+		}
+	}
+	return true
 }
 
 // readWithoutTheEditor reads one line with the terminal in its own line
@@ -38,7 +46,7 @@ func (s Shell) editorIsOff() bool {
 // newline, so there is nothing for this shell to draw: no ground cleared under
 // the prompt, no bracketed-paste request, no redraw per keystroke. That is the
 // whole of what `+Z` buys, and it is measured — see
-// [EditorStyle.RunsUnderTheOption].
+// [EditorStyle.RunsUnderTheOptions].
 //
 // The prompt is written **before** the terminal is handed back, through the
 // stream the session wrapped rather than straight at the terminal. Raw mode is
@@ -53,6 +61,14 @@ func (s Shell) editorIsOff() bool {
 // is different — and so is what a ^C does to it, which is the terminal's to
 // deliver here and not the editor's to read. See interruptedWhileReading.
 func (s Shell) readWithoutTheEditor(state *terminalState, ed *editor, prompt drawnPrompt, sig *interrupts) (string, error) {
+	// The interrupt character is made a byte first — before the prompt is
+	// written, because a ^C typed the moment the prompt appears would
+	// otherwise be the signal again, and before the job-notice wait below,
+	// which is a wait for a whole line. See readCookedLineAtThePrompt. The
+	// terminal is already in its own discipline here: the loop handed it over
+	// before the prompt hooks ran.
+	intr, restore := interruptAsAByte(state)
+	defer restore()
 	s.errf("%s%s", prompt.lead, prompt.text)
 	var (
 		line string
@@ -68,12 +84,6 @@ func (s Shell) readWithoutTheEditor(state *terminalState, ed *editor, prompt dra
 		// loop looks at, looked at from the one other place this session
 		// waits. Nothing at all in the four dialects that hold the notice
 		// for the next prompt. See jobnotify.go.
-		//
-		// The interrupt character is made a byte first, because the wait
-		// is a wait for a whole line: a ^C typed during it would otherwise
-		// be the signal again. See readCookedLineAtThePrompt.
-		intr, restore := interruptAsAByte(state)
-		defer restore()
 		ed.awaitFinishedJobs()
 		line, err = s.readCookedLineAtThePrompt(ed, intr)
 	})
@@ -113,6 +123,11 @@ func (s Shell) readWithoutTheEditor(state *terminalState, ed *editor, prompt dra
 // keeps reading, `return 130` gives the rest of the read up and leaves 130.
 // The answer is the session's, the same one the editor's ^C gets — see
 // Shell.answerInterrupt.
+//
+// bash, whose readline is off under `set +o emacs +o vi`, ends the read at the
+// ^C instead: measured on bash 5.3.20, `abc` and ^C draw `^C`, a newline and
+// a fresh prompt at once, and the line typed next runs. See
+// EditorStyle.InterruptWithoutTheEditorTakesTheNextLine.
 func (s Shell) readCookedLineAtThePrompt(ed *editor, intr byte) (string, error) {
 	for {
 		line, err := readCookedLine(ed, intr)
@@ -125,6 +140,12 @@ func (s Shell) readCookedLineAtThePrompt(ed *editor, intr byte) (string, error) 
 			// the line up for: what was typed before it is thrown away and
 			// the read goes on.
 			continue
+		}
+		if !s.Editor.InterruptWithoutTheEditorTakesTheNextLine {
+			// The read ends at the ^C: the terminal echoed `^C` where the
+			// cursor was, and the newline is this shell's to write.
+			s.errf("\n")
+			return "", ErrInterrupted
 		}
 		// And the rest of the read is given up with it, to its newline — or
 		// to a ^D, which ends the read it is given up with and not the

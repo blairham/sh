@@ -224,17 +224,19 @@ type EditorStyle struct {
 	// also what makes the marking possible.
 	ReturnBeforeThePromptOption string
 
-	// RunsUnderTheOption names the option this dialect's line editor runs
-	// under. With it off the session still reads lines and still runs them —
+	// RunsUnderTheOptions names the options this dialect's line editor runs
+	// under: it runs while any of them is on. With it off the session still reads lines and still runs them —
 	// it is the *editor* that goes away, so the terminal keeps its own line
 	// discipline, echoes the keystrokes itself, and nothing the editor would
 	// have drawn is written.
 	//
 	// Empty is a dialect whose editor is not something a person can turn off,
-	// which is four of the five. The fifth is zsh, where the option is `zle`
-	// and `-o interactive +o zle` is how a test suite drives the shell
-	// through a pseudo-terminal without one — see
-	// interp.Semantics and dialect/zsh's EditorStyle.
+	// which is three of the five. zsh's option is `zle`, and `-o interactive
+	// +o zle` is how a test suite drives the shell through a pseudo-terminal
+	// without one — see dialect/zsh's EditorStyle. bash's are `emacs` and
+	// `vi`, the editing modes: `set +o emacs +o vi` turns readline off, and
+	// measured on bash 5.3.20 the prompt then writes no bracketed-paste
+	// request and the terminal gathers the line (#5922).
 	//
 	// A *name* rather than a bool, for the reason
 	// [Shell.CommentsNeedTheOption] is one: the state moves while the session
@@ -250,7 +252,22 @@ type EditorStyle struct {
 	// has never heard of is **not** an option that is off — see
 	// [Shell.editorIsOff], which is the same rule and the same reason as
 	// [Shell.commentsAreOff].
-	RunsUnderTheOption string
+	RunsUnderTheOptions []string
+
+	// InterruptWithoutTheEditorTakesTheNextLine makes a ^C at a prompt read
+	// with the editor off give up the rest of that read, through the next
+	// newline, where otherwise the read ends at the ^C.
+	//
+	// Measured 2026-10-04 through a pseudo-terminal, `abc` and ^C:
+	//
+	//	zsh 5.9.2, unsetopt zle       `^C`, nothing more until a newline is
+	//	                              typed; that line is given up and never
+	//	                              run; then a fresh prompt
+	//	bash 5.3.20, set +o emacs +o vi  `^C`, a newline and a fresh prompt
+	//	                              at once; the next line runs
+	//
+	// `$?` is 130 after either. See Shell.readCookedLineAtThePrompt.
+	InterruptWithoutTheEditorTakesTheNextLine bool
 
 	// UnfinishedOutputMark is what the marker looks like, written where the
 	// output stopped. zsh draws a bold, inverse `%`; a dialect with no such

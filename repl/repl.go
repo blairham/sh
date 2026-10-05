@@ -842,7 +842,7 @@ func (s Shell) Run(ctx context.Context) (int, error) {
 		// A ^C during this read is the prompt's, and is answered for the
 		// length of the read only: the same editor serves a command that
 		// asks a person for a line, and that read is not a prompt.
-		ed.answerInterrupt = func() bool { return s.answerInterrupt(ctx, state) }
+		ed.answerInterrupt = func() bool { return s.answerInterrupt(ctx, state, editing) }
 		if editing {
 			line, err = ed.readLine(drawn)
 			// Whether that read wrote the word this session leaves with, which
@@ -2288,11 +2288,19 @@ func (s Shell) refused(err error) {
 // the terminal over and taking it back is a window in which a key typed
 // straight after the ^C can be caught between two disciplines, and an ignore
 // or a line with no trap runs nothing that needs it.
-func (s Shell) answerInterrupt(ctx context.Context, state *terminalState) (keep bool) {
-	if !s.Runner.TrapsSignal()(syscall.SIGINT) || s.Runner.IgnoresSignal(syscall.SIGINT) {
-		return s.Runner.InterruptAtThePrompt(ctx)
+//
+// editing is whether this read has a line editor; without one the terminal is
+// gathering the line, and a trap's answer is the terminal's shape rather than
+// the editor's — see interp.Runner.InterruptInATerminalRead.
+func (s Shell) answerInterrupt(ctx context.Context, state *terminalState, editing bool) (keep bool) {
+	answer := s.Runner.InterruptAtThePrompt
+	if !editing {
+		answer = s.Runner.InterruptInATerminalRead
 	}
-	s.inLineDiscipline(state, func() { keep = s.Runner.InterruptAtThePrompt(ctx) })
+	if !s.Runner.TrapsSignal()(syscall.SIGINT) || s.Runner.IgnoresSignal(syscall.SIGINT) {
+		return answer(ctx)
+	}
+	s.inLineDiscipline(state, func() { keep = answer(ctx) })
 	return keep
 }
 

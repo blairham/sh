@@ -86,7 +86,10 @@ func EditorStyle() repl.EditorStyle {
 		// `\e[?2004l\r` around every line, so it is not that this shell emits
 		// no escapes — it is that with the option off there is no editor to
 		// emit them (#4472).
-		RunsUnderTheOption: "ZLE",
+		RunsUnderTheOptions: []string{"ZLE"},
+		// And a ^C at a prompt read with it off gives up the line typed
+		// after it too. See repl.EditorStyle.InterruptWithoutTheEditorTakesTheNextLine.
+		InterruptWithoutTheEditorTakesTheNextLine: true,
 		// And the ground under the prompt, which is neither option's doing:
 		// measured, this shell writes all four sequences with both options
 		// turned off, and bash writes nothing in any case. The three resets

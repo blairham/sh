@@ -139,13 +139,13 @@ func (r *Runner) relativeHitBefore(name string) (pathHit, bool) {
 	if !relative {
 		return pathHit{}, false
 	}
-	for _, hit := range r.lookPathHits(name) {
-		if filepath.IsAbs(hit.written) {
-			return pathHit{}, false
-		}
-		return hit, true
+	// The first hit decides: a relative one runs in front of the table, and
+	// an absolute one is the table's own to answer.
+	hits := r.lookPathHits(name)
+	if len(hits) == 0 || filepath.IsAbs(hits[0].written) {
+		return pathHit{}, false
 	}
-	return pathHit{}, false
+	return hits[0], true
 }
 
 // reportedHashed is a remembered path that runs, written where the table is

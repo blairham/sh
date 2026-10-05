@@ -40,6 +40,9 @@ import (
 // command. Measured against the same zsh with `trap "" INT` in `.zshrc`:
 // `$?` reads 1 and pipestatus `0 1`, as before the ^C.
 //
+// And a ^D after the ^C ends the read that is being given up, not the
+// session: zsh draws a fresh prompt and `$?` is 130.
+//
 // **The shell is a process of its own, in a session of its own with the
 // terminal as its controlling one**, which is what makes the ^C byte a signal
 // at all: the kernel sends SIGINT to the controlling terminal's foreground
@@ -52,12 +55,15 @@ import (
 func TestControlCWithTheEditorOffGivesUpTheLine(t *testing.T) {
 	for _, tc := range []struct {
 		name, rc string
+		// after is typed after the ^C, and ends the read it interrupted.
+		after string
 		// want is `$?` and pipestatus read by the line after the one typed
 		// after the ^C, and then by the line after that.
 		want, then string
 	}{
-		{"no trap", "", "130-0 1", "0-0"},
-		{"trap \"\" INT", "trap '' INT\n", "1-0 1", "0-0"},
+		{"no trap", "", "\n", "130-0 1", "0-0"},
+		{"no trap, then ^D", "", "\x04", "130-0 1", "0-0"},
+		{"trap \"\" INT", "trap '' INT\n", "\n", "1-0 1", "0-0"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			control, screen := zleOffChildSession(t, tc.rc)
@@ -69,10 +75,17 @@ func TestControlCWithTheEditorOffGivesUpTheLine(t *testing.T) {
 			if err := screen.Await("^C", jobNoticeBudget); err != nil {
 				t.Fatalf("the terminal did not echo the ^C: %v", err)
 			}
-			// The line the read ends on. In the first row it is given up, so
-			// what it would print is not printed either way it is spelled; the
-			// assertion is on the lines after it.
-			interruptType(t, control, screen, "")
+			// What the read ends on. Where it is given up, what it would
+			// print is not printed either way it is spelled; the assertion is
+			// on the lines after it.
+			if _, err := control.WriteString(tc.after); err != nil {
+				t.Fatalf("typing %q: %v", tc.after, err)
+			}
+			for _, mark := range []string{"JNROW", jobNoticeMark} {
+				if err := screen.Await(mark, jobNoticeBudget); err != nil {
+					t.Fatalf("no prompt after %q: %v", tc.after, err)
+				}
+			}
 			if got := interruptAnswer(t, control, screen, "print -r -- st-$?-${pipestatus[*]}", interruptStatusLine); got != tc.want {
 				t.Errorf("after ^C the line after next read %q, want %q; drawn:\n%q", got, tc.want, screen.Text()[from:])
 			}

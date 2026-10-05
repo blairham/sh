@@ -125,3 +125,20 @@ func SetEcho(f *os.File, on bool) error { return setEcho(f, on) }
 // thing that is wrong would be a second change hidden inside this one — which
 // is why it is not spelled as a [Mode]: there is nothing to put back.
 func RawOutput(f *os.File) error { return clearOutputPostProcessing(f) }
+
+// InterruptEndsTheLine changes a terminal that is gathering lines so that the
+// interrupt character ends the line as data instead of sending a signal, and
+// answers the mode to restore and the character.
+//
+// The character becomes the end-of-line one, VEOL, so a read waiting for a
+// line returns at once with it as the last byte — the terminal echoes it as it
+// echoes any other key, `^C` under the usual settings. It sends no signal, so
+// what an interrupt means is decided by whoever reads it, from a byte in hand,
+// rather than by whichever goroutine os/signal hands the arrival to first. The
+// other signal characters are left as they are.
+//
+// A character of zero is an answer and not a failure: the terminal has no
+// interrupt character, gathers no lines, or sends no signals, and nothing was
+// changed. The mode is still one to restore, so a caller can restore it either
+// way.
+func InterruptEndsTheLine(f *os.File) (*Mode, byte, error) { return interruptAsLineEnd(f) }

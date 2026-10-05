@@ -12,3 +12,7 @@ import "syscall"
 const tcGets = syscall.TCGETS
 
 const tcSets = syscall.TCSETS
+
+// vdisable is _POSIX_VDISABLE: the value a special character is set to so that
+// no byte is that character. Linux spells it NUL.
+const vdisable = 0

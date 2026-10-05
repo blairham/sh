@@ -38,7 +38,22 @@
 #     another's files.  `-d`, `-D` and `-C` are taken and change nothing else;
 #   * this shell ships no `_main_complete`: Tab reaches one only where an
 #     installed zsh's library is on $fpath (by default since #6128), and
-#     otherwise keeps this shell's own completion.
+#     otherwise keeps this shell's own completion.  Where zsh's compinit,
+#     with too few completion files, goes looking for more and runs
+#     compinstall, this one binds nothing and stays quiet.
+#
+# The widgets (#6184).  The manual says compinit "will then re-define all
+# widgets that do completion to use the new system"; measured, that is the
+# eight completion widgets the `#compdef -k` paragraph names, each
+# `zle -C name .name _main_complete`, and `menu-select` beside them only
+# while zsh/complist has made that widget.  A second run defines the same
+# eight again.  And the rebind the same section promises: with `_expand`
+# among the words of the `completer` style looked up in the context
+# `:completion:` exactly — `:completion:*` and `*` match it,
+# `:completion:*:*:*` does not — and Tab in the main keymap on
+# `expand-or-complete`, Tab is put on `complete-word`.  Only that key, only
+# that keymap, and only from that widget: `_expand_alias` is not `_expand`,
+# and a Tab on `menu-complete` is left where it is.
 
 emulate -L zsh -o extendedglob
 
@@ -171,6 +186,22 @@ for dir in $scan; do
 		esac
 	done
 done
+
+if (( $+functions[_main_complete] )); then
+	local widget
+	for widget in complete-word delete-char-or-list expand-or-complete \
+		expand-or-complete-prefix list-choices menu-complete \
+		menu-expand-or-complete reverse-menu-complete; do
+		zle -C $widget .$widget _main_complete
+	done
+	(( $+widgets[menu-select] )) && zle -C menu-select .menu-select _main_complete
+	local -a completers
+	if zstyle -a ':completion:' completer completers &&
+		(( ${completers[(Ie)_expand]} )) &&
+		[[ $(bindkey '^I') == *' expand-or-complete' ]]; then
+		bindkey '^I' complete-word
+	fi
+fi
 
 # Waiting to be read again rather than gone: measured, `whence -w compinit`
 # afterwards is a function whose body is still to be loaded, and a second

@@ -114,3 +114,48 @@ print -r -- $_comps[c2]`)
 		t.Errorf("got\n%s\nwant\n%s", out, want)
 	}
 }
+
+// TestTheShippedCompinitHandsTheCompletionWidgetsToMainComplete is #6184:
+// with a `_main_complete` among the files it reads, compinit redefines the
+// eight completion widgets on it, and puts Tab on `complete-word` when the
+// `completer` style looked up at `:completion:` names `_expand` and Tab is
+// on `expand-or-complete`. Recorded from zsh 5.9.2 on 2026-10-05 under
+// `-f -c` with the same fixture ahead of its own library, run twice, and
+// the style asked in the contexts that do and do not reach `:completion:`.
+// Without a `_main_complete` nothing is redefined, so the editor keeps its
+// own completion.
+func TestTheShippedCompinitHandsTheCompletionWidgetsToMainComplete(t *testing.T) {
+	fix := compinitFixture(t)
+	without, _ := runShipped(t, `fpath=(`+fix+` $fpath); zstyle ':completion:*' completer _expand _complete
+autoload -Uz compinit; compinit -D -u; print -r -- "widgets=$(zle -lL)"; bindkey '^I'`)
+	if want := "widgets=\n\"^I\" expand-or-complete\n"; without != want {
+		t.Errorf("without a _main_complete: got\n%s\nwant\n%s", without, want)
+	}
+	if err := os.WriteFile(filepath.Join(fix, "_main_complete"), []byte("#autoload\nprint main\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range []struct{ style, tab string }{
+		{`zstyle ':completion:*' completer _expand _complete`, "complete-word"},
+		{`zstyle ':completion:' completer _complete _expand`, "complete-word"},
+		{`zstyle '*' completer _expand`, "complete-word"},
+		{`zstyle ':completion:*:*:*' completer _expand _complete`, "expand-or-complete"},
+		{`zstyle ':completion:*' completer _expand_alias _complete`, "expand-or-complete"},
+		{`zstyle ':completion:*' completer _expand; bindkey '^I' menu-complete`, "menu-complete"},
+		{`:`, "expand-or-complete"},
+	} {
+		out, _ := runShipped(t, `fpath=(`+fix+` $fpath); `+c.style+`
+autoload -Uz compinit; compinit -D -u; compinit -D -u; zle -lL; bindkey '^I'`)
+		want := "zle -C complete-word .complete-word _main_complete\n" +
+			"zle -C delete-char-or-list .delete-char-or-list _main_complete\n" +
+			"zle -C expand-or-complete .expand-or-complete _main_complete\n" +
+			"zle -C expand-or-complete-prefix .expand-or-complete-prefix _main_complete\n" +
+			"zle -C list-choices .list-choices _main_complete\n" +
+			"zle -C menu-complete .menu-complete _main_complete\n" +
+			"zle -C menu-expand-or-complete .menu-expand-or-complete _main_complete\n" +
+			"zle -C reverse-menu-complete .reverse-menu-complete _main_complete\n" +
+			"\"^I\" " + c.tab + "\n"
+		if out != want {
+			t.Errorf("%s: got\n%s\nwant\n%s", c.style, out, want)
+		}
+	}
+}

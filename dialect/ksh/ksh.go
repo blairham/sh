@@ -5138,6 +5138,10 @@ func Diagnostics() interp.Diagnostics {
 		// standard input alike, where the name is the shell's own.
 		GetoptsNamesNoLine: true,
 		CdCannotChange:     "cd: %[1]s: [%[2]s]",
+		// And a refused operand that starts by climbing is named as the
+		// path it climbs to (#6091). See
+		// interp.Diagnostics.CdNamesALeadingDotDotFromTheDirectory.
+		CdNamesALeadingDotDotFromTheDirectory: true,
 		// One message for both, where bash names which variable was missing.
 		CdHomeNotSet: "cd: bad directory",
 		// The same sentence for an empty operand and for a HOME set to

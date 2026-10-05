@@ -5440,6 +5440,9 @@ func biCd(r *Runner, ctx context.Context, args []string) int {
 	// rather than a second guard beside the first, because a second guard is
 	// what the spelling correction below would have had to add.
 	named := dir
+	if r.diag().CdNamesALeadingDotDotFromTheDirectory {
+		named = climbedName(old, dir)
+	}
 	// `cd -s` refuses an operand that crosses a symbolic link, and refuses it
 	// *here* — before CDPATH, before the join, and before the operand's
 	// existence is asked about. That order is measured: `cd -s /tmp/no/such`
@@ -9258,4 +9261,47 @@ func streamIsClosed(rd io.Reader) bool {
 		return errors.Is(err, syscall.EBADF)
 	}
 	return false
+}
+
+// climbedName is the name a refused `cd` operand is given in the dialect that
+// names one by where it climbs to — see
+// Diagnostics.CdNamesALeadingDotDotFromTheDirectory. The leading run of `.`
+// and `..` components comes off base, logically, and whatever follows is
+// written after it as typed, separators included: `..//x` from `/a/b` is
+// `/a//x`. An operand that does not start by climbing, an absolute one, and
+// one with no base to climb from are their own names.
+func climbedName(base, operand string) string {
+	if base == "" || filepath.IsAbs(operand) {
+		return operand
+	}
+	rest, climbed := operand, false
+	for {
+		comp, after, found := strings.Cut(rest, "/")
+		if comp != "." && comp != ".." {
+			break
+		}
+		if comp == ".." {
+			climbed = true
+			if i := strings.LastIndex(base, "/"); i > 0 {
+				base = base[:i]
+			} else {
+				base = "/"
+			}
+		}
+		if !found {
+			rest = ""
+			break
+		}
+		rest = after
+	}
+	if !climbed {
+		return operand
+	}
+	if rest == "" {
+		return base
+	}
+	if strings.HasSuffix(base, "/") {
+		return base + rest
+	}
+	return base + "/" + rest
 }

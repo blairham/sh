@@ -366,3 +366,25 @@ func (r *Runner) locatedAtTheSpeakersCall(report func()) {
 	}
 	r.LocatedAtTheCall(func() { r.locatedAtTheSpeakersCall(report) })
 }
+
+// abbreviateDirCommand is the third prelude-only name, beside diagnoseCommand
+// and promptEngineCommand and on their terms: `abbreviatedir NAME PATH` sets
+// NAME to PATH written the way a prompt writes a directory — the home as `~`,
+// and a named directory as `~name` in the dialect that has them.
+//
+// It exists so that a prelude's `dirs` has no rule of its own. Both preludes
+// wrote `${d/#$HOME/\~}`, a bare prefix test, so `HOME=/` drew `/usr` as
+// `~usr`, `HOME=/us` drew it as `~r`, an empty `HOME` put `~` in front of
+// every entry, and zsh's named directories were never drawn at all (#6025).
+// Runner.abbreviatedDirectory already held every one of those measurements,
+// for `%~`, `\w`, `print -D` and the `(D)` flag, so the stack is drawn by the
+// same function rather than by a copy that has to be kept in step with it.
+const abbreviateDirCommand = "abbreviatedir"
+
+func biAbbreviateDir(r *Runner, _ context.Context, args []string) int {
+	if len(args) != 2 {
+		return 2
+	}
+	r.setVar(args[0], r.abbreviatedDirectory(args[1]))
+	return 0
+}

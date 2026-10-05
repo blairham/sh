@@ -147,7 +147,7 @@ dirs() {
 	__d=
 	for __c in "$@"; do
 		if [ -z "$__long" ]; then
-			__c=${__c/#$HOME/\~}
+			abbreviatedir __c "$__c"
 		fi
 		if [ -n "$__numbers" ]; then
 			printf '%d\t%s\n' "$__i" "$__c"

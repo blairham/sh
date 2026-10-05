@@ -69,6 +69,17 @@ func (c prefixCount) n() int {
 	return v
 }
 
+// countMore adds a keystroke's digit or minus to the count.
+//
+// The keystroke is not a widget call a kill can see: measured 2026-10-04
+// against zsh 5.9.2, `aa bb cc`, `^W`, `ESC 2 ^W` and a yank bring back
+// `aa bb cc` as one kill (#5918). So whatever run of kills was going on
+// before it is still going on after it.
+func (e *editor) countMore(b byte) {
+	e.count.add(b)
+	e.killing = e.killedBefore
+}
+
 // opposites is the keys a negative count turns into another key: the moves
 // and the deletes that have one.
 var opposites = map[byte]byte{

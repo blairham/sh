@@ -110,7 +110,7 @@ func (e *editor) matchBinding(first byte) (Binding, bool, keyRead) {
 			// ESC and a digit is a count, here as in escape.go: a rebinding
 			// that begins with ESC must not take the counts away with it.
 			// See prefixarg.go.
-			e.count.add(seq[1])
+			e.countMore(seq[1])
 			e.countKey = true
 			return Binding{}, true, keyContinues
 		}

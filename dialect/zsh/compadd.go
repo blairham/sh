@@ -320,10 +320,10 @@ func compaddCandidates(r *interp.Runner, o compaddOptions, words []string) []str
 	var out []string
 	for _, name := range words {
 		if o.keys {
-			if assoc, ok := r.GetAssoc(name); ok {
-				for key := range assoc {
-					out = append(out, key)
-				}
+			// Stored or produced: `compadd -k commands` is how the command
+			// names are offered, and `commands` is a produced table.
+			if keys, ok := r.AssocKeys(name); ok {
+				out = append(out, keys...)
 				continue
 			}
 		}

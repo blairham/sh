@@ -13,11 +13,16 @@ import (
 // line ones read-only, on a real terminal (#5999).
 //
 // Measured 2026-10-04 against zsh 5.9.2 under `zsh -i` on a pseudo-terminal
-// with this startup file: `x` and ^T print `cf: read-only variable: BUFFER`,
-// and ^Xs then draws `GOT[W=cw t=scalar-local-readonly-special|x|unset]` —
-// the function saw its widget's name and a read-only line, stopped at the
-// assignment, and the line was kept. Before the fix it drew `GOT[W=
-// t=|x|widget]`.
+// with this startup file: `qzq` and ^T print `cf: read-only variable:
+// BUFFER`, and ^Xs then draws `GOT[W=cw t=scalar-local-readonly-special|qzq|
+// unset]` — the function saw its widget's name and a read-only line, stopped
+// at the assignment, and the line was kept. Before the fix it drew `GOT[W=
+// t=|qzq|widget]`.
+//
+// A word no command begins with, because a completion function that offers
+// nothing hands the key to this editor's own completion: after `x` that is
+// every command beginning with it, which on a Linux runner is enough for a
+// list query to take the next keys.
 func TestACompletionWidgetOnItsKeyHasItsParameters(t *testing.T) {
 	control, screen := widgetSession(t, `cf() { seen="W=$WIDGET t=${(t)BUFFER}"; BUFFER=zz; ran=widget }
 zle -C cw complete-word cf; bindkey '^T' cw
@@ -28,8 +33,8 @@ c() { BUFFER= }; zle -N c; bindkey '^Xc' c
 	steps := []struct{ keys, want string }{
 		// With the carriage return: the function's output goes out the way a
 		// widget's does, and raw mode alone writes a bare line feed.
-		{"x\x14", "cf: read-only variable: BUFFER\r\n"},
-		{"\x18s", "GOT[W=cw t=scalar-local-readonly-special|x|unset]"},
+		{"qzq\x14", "cf: read-only variable: BUFFER\r\n"},
+		{"\x18s", "GOT[W=cw t=scalar-local-readonly-special|qzq|unset]"},
 		{"\x18cprint -r -- END$((1+1))\r", "END2"},
 	}
 	for _, step := range steps {

@@ -119,3 +119,53 @@ func TestACommandStringsHeldExitLeavesWithZero(t *testing.T) {
 		t.Errorf("no sentence was asked for:\n%s", smoke.Readable(screen))
 	}
 }
+
+// TestACountedFinishedJobLeavesTheCommandStringWithOne is #6170: where a
+// command string runs off its end and the hangup warning counts a finished
+// job, the shell leaves with 1 rather than the last command's status. A count
+// of running jobs alone leaves the status as it was, and so does a finished
+// job nothing counts.
+//
+// Measured 2026-10-05 through a pseudo-terminal on zsh 5.9.2
+// (/opt/homebrew/bin/zsh), each row ending in a function that returns 5 so
+// that 1 and the last status cannot be confused.
+func TestACountedFinishedJobLeavesTheCommandStringWithOne(t *testing.T) {
+	const f = "f() { return 5 }; "
+	for _, c := range []struct {
+		name, body string
+		last       []string
+		want       int
+	}{
+		{
+			name: "a finished job counted",
+			body: f + "set -m; setopt nonotify; /bin/sleep 0.1 & /bin/sleep 0.5; f",
+			last: []string{monitorExitEnd, "zsh:1: warning: 1 jobs SIGHUPed"},
+			want: 1,
+		},
+		{
+			name: "a finished job beside a running one",
+			body: f + "set -m; setopt nonotify; /bin/sleep 0.1 & /bin/sleep 5 & /bin/sleep 0.5; f",
+			last: []string{monitorExitEnd, "zsh:1: warning: 2 jobs SIGHUPed"},
+			want: 1,
+		},
+		{
+			name: "a running job only",
+			body: f + "set -m; /bin/sleep 5 & f",
+			last: []string{monitorExitEnd, "zsh:1: warning: 1 jobs SIGHUPed"},
+			want: 5,
+		},
+		{
+			name: "a finished job under nohup",
+			body: f + "set -m; setopt nonotify nohup; /bin/sleep 0.1 & /bin/sleep 0.5; f",
+			last: []string{monitorExitEnd},
+			want: 5,
+		},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			screen, code := monitorExitCommandStatus(t, c.body, c.last...)
+			if code != c.want {
+				t.Errorf("left with %d, want %d; the screen was\n%s", code, c.want, smoke.Readable(smoke.LastLines(screen, 10)))
+			}
+		})
+	}
+}

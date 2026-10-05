@@ -128,7 +128,7 @@ dirs() {
 			shift
 			__i=$(( __i - 1 ))
 		done
-		if [ -n "$__long" ]; then __d=$1; else __d=${1/#$HOME/\~}; fi
+		if [ -n "$__long" ]; then __d=$1; else abbreviatedir __d "$1"; fi
 		# The -v letter numbers one entry too — see the note above this text.
 		if [ -n "$__numbers" ]; then
 			printf '%2d  %s\n' "$__at" "$__d"
@@ -140,7 +140,7 @@ dirs() {
 	__i=0
 	for __d in "$@"; do
 		if [ -z "$__long" ]; then
-			__d=${__d/#$HOME/\~}
+			abbreviatedir __d "$__d"
 		fi
 		if [ -n "$__numbers" ]; then
 			printf '%2d  %s\n' "$__i" "$__d"

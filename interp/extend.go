@@ -128,6 +128,12 @@ func (r *Runner) lookupBuiltin(name string) (Builtin, bool) {
 		// it, which is a command that was not found. See prelude.go.
 		return biDiagnose, true
 	}
+	if name == abbreviateDirCommand && r.speaker != "" {
+		// The prelude's directory-drawing seam, on the same terms: the
+		// stack a prelude's `dirs` prints is drawn by the prompt's own
+		// rule. See prelude.go.
+		return biAbbreviateDir, true
+	}
 	if fn, ok := r.promptEngineBuiltin(name); ok {
 		// The prompt theme engine's seam, on the same terms and for the same
 		// reason: the word exists for the prelude's own text, so that the

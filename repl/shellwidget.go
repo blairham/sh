@@ -109,6 +109,19 @@ type Line struct {
 	// for itself is what a self-insert after it types — see editor.take.
 	Keys string
 
+	// CutBuffer is the text of the last kill — what a yank inserts — where
+	// the round trip carries it. zsh's `$CUTBUFFER`: a widget reads it to
+	// join a kill of its own onto the one before, and assigning it makes the
+	// next yank insert what was assigned (#5916). Measured 2026-10-04 against
+	// zsh 5.9.2 through a pseudo-terminal: `CUTBUFFER=hello` then `zle yank`
+	// inserts `hello`, the next widget reads `hello` back, and after `zle
+	// backward-kill-word` over `one two` it reads `two`.
+	//
+	// A pointer because nil has to mean "not carried": a caller that builds a
+	// Line of its own and knows nothing about kills must leave the editor's
+	// kill alone rather than empty it.
+	CutBuffer *string
+
 	// Status is what an action performed from outside the editor ends with,
 	// for the one whose ending a widget can see: the incremental search,
 	// which answers 1 for a search that ended failing and 3 for one that was
@@ -153,6 +166,7 @@ func (e *editor) runShellWidget(name string, prompt drawnPrompt) (ran, accept bo
 	// survives the keystrokes after the one that set it and is redrawn with
 	// the line. See Line.Postdisplay.
 	e.postdisplay = out.Postdisplay
+	e.adoptCutBuffer(out.CutBuffer)
 	e.redraw(prompt)
 	return true, out.Accept
 }

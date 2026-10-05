@@ -540,5 +540,6 @@ func (e *editor) serveDescriptor(fd int, prompt drawnPrompt) {
 	// its synchronous path — a keystroke's own widget, which comes back
 	// through runShellWidget — was right (#4413).
 	e.postdisplay = out.Postdisplay
+	e.adoptCutBuffer(out.CutBuffer)
 	e.redraw(prompt)
 }

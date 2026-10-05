@@ -274,6 +274,9 @@ const (
 	// what is on the screen and takes back what the widget left, so nothing
 	// here has to know when a line ended. See repl.Line.Postdisplay (#4217).
 	zlePostdisplay = ".zsh.zle.postdisplay"
+	// zleCutBuffer is the kill `$CUTBUFFER` reads and writes, carried in and
+	// out with the line. See repl.Line.CutBuffer (#5916).
+	zleCutBuffer = ".zsh.zle.cutbuffer"
 	// zleTransform is the transformation table `zle -T` writes: a flat array
 	// of pairs, the transformation's name and the widget registered for it.
 	// Beside the widget table and in the same shape, so a subshell gets its
@@ -291,6 +294,11 @@ const (
 // opened, marked local and closed again, and three spellings of one string is
 // how one of them comes to be missed.
 const postdisplayName = "POSTDISPLAY"
+
+// cutBufferName is the text of the last kill, as a widget reads and writes it.
+// Opened, marked local and closed beside POSTDISPLAY and for the same reason:
+// it is line state a widget may change, and nothing outside a widget has it.
+const cutBufferName = "CUTBUFFER"
 
 // zleLineParameters are the four a widget reads and writes the line through.
 //
@@ -1566,6 +1574,16 @@ func openWidgetParameters(r *interp.Runner, opened widgetOpening) {
 	r.SetDynamicWriter(postdisplayName, func(rr *interp.Runner, value string) {
 		rr.SetVar(zlePostdisplay, value)
 	})
+	// `CUTBUFFER`, the last kill, measured `scalar-local-special` the same
+	// way and writable the same way: what a widget assigns is what the next
+	// yank inserts. See repl.Line.CutBuffer (#5916).
+	r.SetDynamic(cutBufferName, func(rr *interp.Runner) string {
+		text, _ := rr.GetVar(zleCutBuffer)
+		return text
+	})
+	r.SetDynamicWriter(cutBufferName, func(rr *interp.Runner, value string) {
+		rr.SetVar(zleCutBuffer, value)
+	})
 	// `region_highlight` is opened here and is not one of the five: the other
 	// parameters are the line, and this one is what the widget wants *done*
 	// with it. It is also the only one backed by a store that outlives the
@@ -1668,6 +1686,7 @@ func openWidgetParameters(r *interp.Runner, opened widgetOpening) {
 	// completion widget offering a suggestion is not something the measurement
 	// forbids.
 	r.MarkLocal(postdisplayName)
+	r.MarkLocal(cutBufferName)
 	// And the widget before this one, which is the call's own for the same
 	// reason: measured, `${(t)LASTWIDGET}` in a widget is
 	// `scalar-local-readonly-special`.
@@ -1690,6 +1709,7 @@ func closeWidgetParameters(r *interp.Runner) {
 	// closed beside it for the same reason: what a script finds between two
 	// keystrokes is nothing at all.
 	r.UnsetDynamic(postdisplayName)
+	r.UnsetDynamic(cutBufferName)
 	r.UnsetDynamic("LASTWIDGET")
 	r.UnsetDynamic("KEYMAP")
 	r.UnsetDynamic("KEYS")
@@ -1731,6 +1751,7 @@ var widgetParameterDeclarations = map[string]interp.ProducedDeclaration{
 	"LBUFFER":           {},
 	"RBUFFER":           {},
 	postdisplayName:     {},
+	cutBufferName:       {},
 	"WIDGET":            {},
 	"LASTWIDGET":        {},
 	"KEYMAP":            {},
@@ -1800,12 +1821,21 @@ func setWidgetLine(r *interp.Runner, in repl.Line) {
 	// what a plugin's wrapper does: it saves the suggestion, clears it while a
 	// new one is fetched, and puts one of the two back.
 	r.SetVar(zlePostdisplay, in.Postdisplay)
+	if in.CutBuffer != nil {
+		r.SetVar(zleCutBuffer, *in.CutBuffer)
+	}
 }
 
 func widgetLine(r *interp.Runner) repl.Line {
 	post, _ := r.GetVar(zlePostdisplay)
 	keys, _ := r.GetVar(zleKeys)
-	return repl.Line{Buffer: widgetBuffer(r), Cursor: widgetCursor(r), Postdisplay: post, Keys: keys}
+	line := repl.Line{Buffer: widgetBuffer(r), Cursor: widgetCursor(r), Postdisplay: post, Keys: keys}
+	// The kill only where one was handed in: a line that came from somewhere
+	// that carries none must not empty the editor's.
+	if cut, set := r.GetVar(zleCutBuffer); set {
+		line.CutBuffer = &cut
+	}
+	return line
 }
 
 // editorRunning reports whether the editor is holding a line for something to
@@ -1869,7 +1899,7 @@ func parseWidgetOpening(s string) (widgetOpening, bool) {
 // was a state that could be cleared but not put back.
 var widgetCallState = []string{
 	zleBuffer, zleCursor, zlePostdisplay, zleWidget, zleLastWidget, zleKeymap,
-	zleNumeric, zleAccept, zleActive, zleOpened, zleKeys,
+	zleNumeric, zleAccept, zleActive, zleOpened, zleKeys, zleCutBuffer,
 }
 
 // callerWidgetState is what was there before a widget call, put back when

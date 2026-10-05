@@ -104,8 +104,6 @@ type stubEditor struct {
 	changes      int
 	changesAsked int
 	undoneTo     []int
-	// killed is what Kill was last handed.
-	killed string
 }
 
 func (e *stubEditor) Perform(w repl.Widget, in repl.Line) (repl.Line, bool) {
@@ -146,8 +144,6 @@ func (e *stubEditor) ChangeNumber(repl.Line) int {
 	e.changesAsked++
 	return e.changes
 }
-
-func (e *stubEditor) Kill(text string) { e.killed = text }
 
 func (e *stubEditor) UndoTo(n int, in repl.Line) (repl.Line, bool) {
 	e.undoneTo = append(e.undoneTo, n)

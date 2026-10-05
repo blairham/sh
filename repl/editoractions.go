@@ -140,15 +140,6 @@ type Actions interface {
 	// below the first change, which takes the line back to how it began and
 	// says so. See undo.go.
 	UndoTo(n int, in Line) (Line, bool)
-
-	// Kill puts text where the next yank takes it from, as if it had just
-	// been killed, and leaves the line alone. zsh's `zle copy-region-as-kill
-	// STRING`, which is how a widget that worked out for itself what to
-	// remove — the `*-kill-*-match` family — makes `^Y` bring it back.
-	// Measured against zsh 5.9.2: the line and cursor are untouched, a
-	// following yank inserts the text, and an empty string leaves a yank
-	// inserting nothing.
-	Kill(text string)
 }
 
 // Every action this editor has can be performed from outside it, the two that
@@ -241,13 +232,6 @@ func (a editorActions) ChangeNumber(in Line) int {
 	return a.e.changeNumber()
 }
 
-func (a editorActions) Kill(text string) {
-	a.e.killed = []rune(text)
-	// A kill of its own rather than a part of the one before it: the next
-	// kill after it starts afresh unless it follows straight on.
-	a.e.killing = true
-}
-
 func (a editorActions) UndoTo(n int, in Line) (Line, bool) {
 	a.e.take(in)
 	reached := a.e.undoTo(n)
@@ -286,13 +270,26 @@ func (e *editor) take(in Line) {
 	e.line = line
 	e.pos = min(max(in.Cursor, 0), len(e.line))
 	e.postdisplay = in.Postdisplay
+	e.adoptCutBuffer(in.CutBuffer)
 	if in.Keys != "" && in.Keys != string(e.keyBytes) {
 		e.adoptKeys(in.Keys)
 	}
 }
 
 func (e *editor) give() Line {
-	return Line{Buffer: string(e.line), Cursor: e.pos, Postdisplay: e.postdisplay, Last: e.last, ViCommand: e.viCommand, Numeric: e.keyNumeric, Keys: string(e.keyBytes)}
+	killed := string(e.killed)
+	return Line{
+		Buffer: string(e.line), Cursor: e.pos, Postdisplay: e.postdisplay, Last: e.last,
+		ViCommand: e.viCommand, Numeric: e.keyNumeric, Keys: string(e.keyBytes), CutBuffer: &killed,
+	}
+}
+
+// adoptCutBuffer takes the kill an action outside the editor left, where it
+// carried one. See Line.CutBuffer.
+func (e *editor) adoptCutBuffer(cut *string) {
+	if cut != nil && *cut != string(e.killed) {
+		e.killed = []rune(*cut)
+	}
 }
 
 // adoptKeys makes keys an action read the ones a self-insert types.

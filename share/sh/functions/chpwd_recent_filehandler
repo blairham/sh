@@ -1,0 +1,48 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# chpwd_recent_filehandler [ directory ... ]
+#
+# The file behind cdr. With no arguments, the recent directories into reply,
+# newest first; with arguments, those directories written to the file, one a
+# line, quoted as $'...'. The recent-dirs-file style in :chpwd: names the
+# file, ${ZDOTDIR:-$HOME}/.chpwd-recent-dirs by default; given more than one,
+# the first is written and the rest are read after it to fill the list up to
+# recent-dirs-max, and `+` among them is the default file.
+#
+# Written from zshcontrib(1) and from what the installed shell answers, never
+# from its function files; docs/spec/functions.md has the measurements.
+
+emulate -L zsh
+setopt extendedglob
+
+local -a files lines words
+local file line dir
+integer max
+zstyle -a ":chpwd:${PWD}" recent-dirs-file files || files=( + )
+files=( ${files/#+/${ZDOTDIR:-$HOME}/.chpwd-recent-dirs} )
+zstyle -s ":chpwd:${PWD}" recent-dirs-max max || max=20
+
+if (( $# )); then
+	(( max > 0 && $# > max )) && argv=( ${argv[1,max]} )
+	print -rl -- ${(qqqq)@} >| $files[1] 2>/dev/null
+	return
+fi
+
+reply=()
+for file in $files; do
+	(( max > 0 && $#reply >= max )) && break
+	[[ -r $file ]] || continue
+	lines=( ${(f)"$(<$file)"} )
+	for line in $lines; do
+		# The first word of the line, as the shell would read it; through an
+		# array, since a split of one word subscripts as a string.
+		words=( ${(z)line} )
+		dir=${(Q)words[1]}
+		[[ -n $dir ]] || continue
+		(( ${reply[(Ie)$dir]} )) && continue
+		reply+=( $dir )
+		(( max > 0 && $#reply >= max )) && break
+	done
+done
+return 0

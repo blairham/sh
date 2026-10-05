@@ -1,0 +1,40 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# zmathfunc — defines three math functions: min and max of one or more
+# arguments, and sum of none or more, of any mix of integers and floats.
+#
+# Written from zshcontrib(1) and from what the installed shell answers, never
+# from its function files; docs/spec/functions.md has the measurements. Of
+# two equal arguments the first is the answer: min(2, 2.0) is 2.
+
+zsh_math_func_min() {
+	local result=$1 arg
+	shift
+	for arg; do
+		(( arg < result )) && result=$arg
+	done
+	(( result ))
+	true
+}
+zsh_math_func_max() {
+	local result=$1 arg
+	shift
+	for arg; do
+		(( arg > result )) && result=$arg
+	done
+	(( result ))
+	true
+}
+zsh_math_func_sum() {
+	local sum=0 arg
+	for arg; do
+		(( sum += arg ))
+	done
+	(( sum ))
+	true
+}
+functions -M min 1 -1 zsh_math_func_min
+functions -M max 1 -1 zsh_math_func_max
+functions -M sum 0 -1 zsh_math_func_sum
+return 0

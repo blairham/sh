@@ -1,0 +1,34 @@
+# catch, throw, zmathfunc and zstyle+ against zsh 5.9.2's own copies: each
+# row is the code run after `autoload -Uz catch throw zmathfunc zstyle+` on
+# the line before it, what the run printed, standard error on the same pipe
+# and each newline written `~`, and the exit status. Measured 2026-10-05 with
+# /opt/homebrew/bin/zsh -f under env -i, PATH=/usr/bin:/bin.
+{ throw MyExcept; print notreached } always { if catch MyExcept; then print "caught $CAUGHT"; fi }; print after st=$?	caught MyExcept~after st=1~	0
+{ throw Other } always { if catch MyExcept; then print mine; elif catch '*'; then print "other $CAUGHT"; fi }; print after	other Other~after~	0
+{ throw Other } always { catch My && print mine }; print after-unhandled		1
+f() { throw Deep }; g() { f; print notreached }; { g } always { catch Deep && print "deep $CAUGHT" }; print after	deep Deep~after~	0
+{ print ${undefined?boom} } always { catch '' && print "shell error [$CAUGHT]" }; print after	zsh:2: undefined: boom~	1
+{ throw A } always { catch A && throw B }; print notreached		1
+{ { throw A } always { catch A && throw B } } always { catch B && print "rethrown $CAUGHT" }; print after	rethrown B~after~	0
+catch '*'; print st=$? ${+CAUGHT} ${+EXCEPTION}	st=1 0 0~	0
+{ throw X } always { print ${+EXCEPTION} $EXCEPTION; catch X; print ${+EXCEPTION} }	1 X~0~	1
+setopt extendedglob; { throw abc } always { catch (#i)ABC && print ci }	zsh:2: no matches found: (#i)ABC~	1
+{ throw x } always { catch x* && print glob }	zsh:2: no matches found: x*~	1
+throw; print st=$?		1
+{ throw 'a b' } always { catch 'a b' && print "spaced [$CAUGHT]" }	spaced [a b]~	1
+whence -w catch throw; alias catch	catch: function~throw: function~	1
+{ true } always { catch '*'; print st=$? }	st=1~	0
+zmathfunc; print $(( min(3,1,2) )) $(( max(3,1,2) )) $(( sum(3,1,2) )) $(( sum() ))	1 3 6 0~	0
+zmathfunc; print $(( min(1.5,2) )) $(( max(1,2.5) )) $(( sum(1,2.5) )) $(( min(-1,-2) ))	1.5 2.5 3.5 -2~	0
+zmathfunc; print $(( min(4) )) $(( max(4) )) $(( sum(4) ))	4 4 4~	0
+zmathfunc; print $(( min() ))	zsh:2: wrong number of arguments: min()~	1
+zmathfunc; print $(( max() ))	zsh:2: wrong number of arguments: max()~	1
+zmathfunc; print $(( sum(1,2,3,4,5,6,7,8,9,10,11) ))	66~	0
+zmathfunc; print $(( min(2, 2.0) )) $(( max(2.0, 2) ))	2 2.~	0
+zmathfunc a; print st=$?	st=0~	0
+zstyle+ ':foo:bar' s1 v1 + ':baz' s2 v2 + ':frob' s3 v3a v3b; zstyle -a :foo:bar s1 a; zstyle -a :foo:bar:baz s2 b; zstyle -a :foo:bar:frob s3 c; print -r -- "$a|$b|$c|${#c}"	v1|v2|v3a v3b|2~	0
+zstyle+ ':foo' s1 v1 + '' s2 v2; zstyle -s :foo s1 a; zstyle -s :foo s2 b; print -r -- "$a|$b"	v1|v2~	0
+zstyle+ ':foo' s1; zstyle -a :foo s1 a; print -r -- "st=$? ${#a}"	st=0 0~	0
+zstyle+ ':foo' s1 v1 +':x' s2 v2; zstyle -a :foo s1 a; print -r -- "${(j:,:)a}"; zstyle -s :foo:x s2 b || print none	v1,+:x,s2,v2~none~	0
+zstyle+ ':foo' s1 v1 + ; zstyle -s :foo s1 a; print -r -- "$a st=$?"	v1 st=0~	0
+zstyle+ ':a' s 1 + ':b' t 2 + ':c' u 3; zstyle -s :a:b t x; zstyle -s :a:c u y; zstyle -s :a:b:c u z || print nested-no; print -r -- $x $y	nested-no~2 3~	0

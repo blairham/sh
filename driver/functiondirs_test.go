@@ -280,12 +280,14 @@ func TestTheShippedFunctionsSitWhereTheSearchLooks(t *testing.T) {
 	sort.Strings(names)
 	want := []string{
 		"add-zle-hook-widget", "add-zsh-hook", "backward-kill-word-match", "backward-word-match", "bashcompinit",
-		"bracketed-paste-magic", "capitalize-word-match", "colors", "compaudit", "compdump", "compinit",
+		"bracketed-paste-magic", "capitalize-word-match", "catch", "cdr", "chpwd_recent_add", "chpwd_recent_dirs",
+		"chpwd_recent_filehandler", "colors", "compaudit", "compdump", "compinit",
 		"delete-whole-word-match", "down-case-word-match", "down-line-or-beginning-search", "edit-command-line",
 		"forward-word-match", "is-at-least", "kill-word-match", "match-word-context", "match-words-by-style",
 		"prompt_default_setup", "prompt_off_setup", "prompt_restore_setup", "promptinit", "regexp-replace",
-		"run-help", "select-word-style", "transpose-words-match", "up-case-word-match",
-		"up-line-or-beginning-search", "url-quote-magic", "vcs_info", "zargs", "zcalc", "zmathfuncdef", "zmv",
+		"run-help", "select-word-style", "throw", "transpose-words-match", "up-case-word-match",
+		"up-line-or-beginning-search", "url-quote-magic", "vcs_info", "zargs", "zcalc", "zmathfunc",
+		"zmathfuncdef", "zmv", "zstyle+",
 	}
 	if strings.Join(names, " ") != strings.Join(want, " ") {
 		t.Errorf("%s holds %v, want %v", shipped, names, want)

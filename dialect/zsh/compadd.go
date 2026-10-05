@@ -5,6 +5,7 @@ package zsh
 
 import (
 	"context"
+	"os"
 	"sort"
 	"strconv"
 	"strings"
@@ -155,6 +156,9 @@ var compaddOrders = map[string]bool{
 // compaddOptions is one call's letters, gathered.
 type compaddOptions struct {
 	prefix, suffix       string   // -P, -S: inserted, not matched
+	suffixSet            bool     // -S given at all, even empty
+	files                bool     // -f: the candidates are file names
+	fileDir              string   // -W: what a file name is tested under
 	hiddenPre, hiddenSuf string   // -p, -s: inserted *and* matched
 	arrays               bool     // -a: the words name arrays
 	keys                 bool     // -k: the words name associations
@@ -194,7 +198,7 @@ func compaddBuiltin(r *interp.Runner, ctx context.Context, args []string) int {
 	}
 	group := cs.group(opts)
 	candidates := compaddCandidates(r, opts, rest)
-	offered := cs.add(r, opts, group, candidates)
+	offered := cs.add(r, ctx, opts, group, candidates)
 	// After the matches and not with the group, because what an explanation
 	// draws depends on them: its `%n` is how many this call added, and an
 	// explanation whose call added none is not drawn at all. See explain.
@@ -281,6 +285,8 @@ func compaddFlag(o *compaddOptions, letter byte) {
 		o.raw = true
 	case 'l':
 		o.onePerLine = true
+	case 'f':
+		o.files = true
 	}
 }
 
@@ -289,7 +295,9 @@ func compaddArgument(o *compaddOptions, letter byte, value string) {
 	case 'P':
 		o.prefix = value
 	case 'S':
-		o.suffix = value
+		o.suffix, o.suffixSet = value, true
+	case 'W':
+		o.fileDir = value
 	case 'p':
 		o.hiddenPre = value
 	case 's':
@@ -376,7 +384,7 @@ func compaddCandidates(r *interp.Runner, o compaddOptions, words []string) []str
 // the end of the candidate list is left alone. Measured with a two-element
 // array against three candidates, above.
 func (cs *completionState) add(
-	r *interp.Runner, o compaddOptions, group repl.Group, candidates []string,
+	r *interp.Runner, ctx context.Context, o compaddOptions, group repl.Group, candidates []string,
 ) int {
 	var matched []string
 	kept := make([]bool, len(candidates))
@@ -410,7 +418,12 @@ func (cs *completionState) add(
 			// array is as long as the candidate list the caller passed, so a
 			// candidate the prefix struck out still costs its own row. That
 			// is the same by-position rule `-D` is measured to follow.
-			cs.offer(inserted, o, display(displays, i), group)
+			open, slash := fileSuffix(r, ctx, o, candidate)
+			row := display(displays, i)
+			if row == "" && o.files {
+				row = fileRow(r, ctx, o, candidate)
+			}
+			cs.offer(inserted, o, row, group, open, slash)
 			offered++
 		}
 	}
@@ -470,18 +483,108 @@ func strikeUnmatched(values []string, kept []bool) []string {
 // Duplicates are dropped rather than offered twice, which is what a listing
 // with one entry per name needs and what makes a second Tab fill in from a
 // set rather than from a bag.
-func (cs *completionState) offer(subject string, o compaddOptions, row string, group repl.Group) {
+func (cs *completionState) offer(subject string, o compaddOptions, row string, group repl.Group, open, slash bool) {
 	body := cs.iprefix + o.prefix + subject
 	word := cs.c.Escape(body) + o.suffix
 	if o.raw {
 		word = cs.qiprefix + body + o.suffix
+	}
+	if slash {
+		word += "/"
 	}
 	for _, have := range cs.matches {
 		if have.Word == word {
 			return
 		}
 	}
-	cs.matches = append(cs.matches, repl.Candidate{Word: word, Display: row, Group: group})
+	cs.matches = append(cs.matches, repl.Candidate{Word: word, Display: row, Group: group, Open: open})
+}
+
+// fileSuffix is what a lone match is finished with, where it is not the
+// space every other match gets: whether it is left open, and whether a slash
+// goes on it first.
+//
+// Measured 2026-10-05 through a pseudo-terminal against zsh 5.9.2, a
+// completion widget adding one match to `x ` and then `Z` typed:
+//
+//	compadd ff                      x ff Z
+//	compadd -S '' ff                x ffZ      a suffix of any kind,
+//	compadd -S x ff                 x ffxZ     the empty one included,
+//	compadd -f -S x dd              x ddxZ     is the whole of it
+//	compadd -f dd                   x dd/Z     a directory: a slash
+//	compadd -f ff                   x ff Z     a file: the space
+//	compadd -f nosuch               x nosuchZ  neither: nothing at all
+//	compadd -W <tree>/ -f inner     x inner/Z  tested under -W's directory,
+//	compadd -W <tree> -f dd         x ddZ      joined with no slash between,
+//	compadd -W <tree>/ -p pre/ -f dd x pre/dd/Z and without -p's prefix
+//
+// The shipped `_path_files` adds every file with `-f` and `-W`, so without
+// this a directory completed through it ended in a space where zsh leaves
+// the slash and the word open.
+func fileSuffix(r *interp.Runner, ctx context.Context, o compaddOptions, candidate string) (open, slash bool) {
+	if o.suffixSet {
+		return true, false
+	}
+	if !o.files {
+		return false, false
+	}
+	info, err := fileStat(r, ctx, filePath(o, candidate))
+	switch {
+	case err != nil:
+		return true, false
+	case info.IsDir():
+		return true, true
+	}
+	return false, false
+}
+
+// filePath is where a `-f` candidate is tested: `-W`'s directory with the
+// candidate written straight after it. A relative one is the shell's own
+// directory's, which the gated stat resolves; going through the gate means a
+// sandbox that refuses the probe answers "nothing there".
+func filePath(o compaddOptions, candidate string) string {
+	return o.fileDir + candidate
+}
+
+// fileRow is how a listing draws a `-f` candidate: the name alone — not the
+// directory `-p` carries in front of it — and, under LIST_TYPES, the mark `ls
+// -F` would give it. Measured 2026-10-05 through a pseudo-terminal against
+// zsh 5.9.2, `ls <TAB>` over a directory, a file, an executable, a FIFO, a
+// link to the file and a link to the directory:
+//
+//	dlink@  exe*    fifo|   link@   plain   sub/
+//
+// and with `setopt nolisttypes` none of the marks, the directory's slash
+// included — though a lone directory still inserts with one. The link to a
+// directory is drawn as a link and inserted as a directory (`ls dl<TAB>` is
+// `ls dlink/`), so the mark is the link's own and the slash fileSuffix adds is
+// its target's.
+func fileRow(r *interp.Runner, ctx context.Context, o compaddOptions, candidate string) string {
+	if recordedDeviates(r, "listtypes") {
+		return candidate
+	}
+	info, err := fileLstat(r, ctx, filePath(o, candidate))
+	if err != nil {
+		return candidate
+	}
+	mode := info.Mode()
+	switch {
+	case mode&os.ModeSymlink != 0:
+		return candidate + "@"
+	case mode.IsDir():
+		return candidate + "/"
+	case mode&os.ModeNamedPipe != 0:
+		return candidate + "|"
+	case mode&os.ModeSocket != 0:
+		return candidate + "="
+	case mode&os.ModeCharDevice != 0:
+		return candidate + "%"
+	case mode&os.ModeDevice != 0:
+		return candidate + "#"
+	case mode&0o111 != 0:
+		return candidate + "*"
+	}
+	return candidate
 }
 
 // display is the nth row of a `-d` list, or none where the caller gave no

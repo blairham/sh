@@ -1,0 +1,462 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# vcs_info [ user-context ]
+#
+# Sets vcs_info_msg_0_, vcs_info_msg_1_, ... from the version control system
+# of the current directory, for a prompt to show:
+#
+#   autoload -Uz vcs_info
+#   precmd() { vcs_info }
+#   setopt promptsubst
+#   PS1='%~ ${vcs_info_msg_0_}%# '
+#
+# Configured with zstyle under :vcs_info:<vcs>:<user-context>:<repo-root-name>.
+# Running it also defines vcs_info_hookadd, vcs_info_hookdel,
+# vcs_info_lastmsg, vcs_info_printsys and vcs_info_setsys.
+#
+# Written from zshcontrib(1) and from what the installed shell answers, never
+# from its function files; docs/spec/functions.md has the measurements. git
+# is the one backend; a directory under any other system reads as no system
+# at all. Measured beyond the manual:
+#
+#   * every vcs_info_msg_N_ there is goes first, and max-exports of them are
+#     set again, empty, before anything is looked at;
+#   * a detached HEAD is named the way `git name-rev` names it (main~1,
+#     tags/v1), or by its short hash when nothing names it;
+#   * the action is rebase-i for a rebase-merge directory holding
+#     `interactive` and rebase-m otherwise, rebase or am for a rebase-apply
+#     one, merge, cherry or cherry-seq, and bisect — and nothing for a revert;
+#   * %m is the patch in progress during a rebase, an am, a merge or a
+#     cherry-pick, `%p (%n applied)` by default, and nothing otherwise;
+#   * the static hooks run before the ones the hooks style names, and a hook
+#     function that returns nonzero ends the chain;
+#   * with no system found the no-vcs hook runs, and nvcsformats is looked up,
+#     with -quilt- as the system.
+
+emulate -L zsh
+setopt extendedglob
+
+# --- the helper functions, defined by running this once -----------------
+
+vcs_info_hookadd() {
+	emulate -L zsh
+	if (( $# < 2 )); then
+		print -r -- "vcs_info_hookadd: give a hook and one or more functions"
+		return 1
+	fi
+	local hook=$1
+	shift
+	local -a funcs
+	zstyle -a ":vcs_info-static_hooks:$hook" hooks funcs
+	zstyle ":vcs_info-static_hooks:$hook" hooks $funcs "$@"
+}
+
+vcs_info_hookdel() {
+	emulate -L zsh
+	local all=
+	if [[ $1 == -a ]]; then
+		all=1
+		shift
+	fi
+	if (( $# < 2 )); then
+		print -r -- "vcs_info_hookdel: give [ -a ] a hook and one or more functions"
+		return 1
+	fi
+	local hook=$1 f
+	shift
+	local -a funcs
+	integer i
+	zstyle -a ":vcs_info-static_hooks:$hook" hooks funcs
+	for f; do
+		if [[ -n $all ]]; then
+			funcs=( ${funcs:#$f} )
+		elif (( i = ${funcs[(I)$f]} )); then
+			funcs[i]=()
+		fi
+	done
+	if (( $#funcs )); then
+		zstyle ":vcs_info-static_hooks:$hook" hooks $funcs
+	else
+		zstyle -d ":vcs_info-static_hooks:$hook" hooks
+	fi
+	return 0
+}
+
+vcs_info_lastmsg() {
+	emulate -L zsh
+	integer i max
+	_vcs_info_max_exports formats command
+	local value
+	for (( i = 0; i < max; i++ )); do
+		value=${(P)${:-vcs_info_msg_${i}_}}
+		if zstyle -T ':vcs_info:formats:command:-all-' use-prompt-escapes; then
+			value=${(%)value}
+		fi
+		print -r -- "\$vcs_info_msg_${i}_: \"$value\""
+	done
+}
+
+vcs_info_printsys() {
+	emulate -L zsh
+	local sys
+	print -r -- "# the systems vcs_info can read; one it will not look for is marked #"
+	for sys in git; do
+		if _vcs_info_enabled ${1:-default} $sys; then
+			print -r -- $sys
+		else
+			print -r -- "#$sys"
+		fi
+	done
+}
+
+vcs_info_setsys() {
+	return 0
+}
+
+# _vcs_info_max_exports vcs user-context — the max-exports style, into max;
+# it has to be a number of at least 1, and the warning when it is not goes to
+# standard output, as zsh's does.
+_vcs_info_max_exports() {
+	local value
+	zstyle -s ":vcs_info:$1:$2:-all-" max-exports value || value=2
+	if [[ $value != <-> ]] || (( value < 1 )); then
+		print -r -- "vcs_info: max-exports has to be a number of at least 1, not $value; taking 2"
+		value=2
+	fi
+	max=$value
+}
+
+# _vcs_info_enabled user-context sys — whether the enable and disable styles
+# let vcs_info look for sys.
+_vcs_info_enabled() {
+	emulate -L zsh
+	setopt extendedglob
+	local -a enable disable
+	zstyle -a ":vcs_info:-init-:$1:-all-" enable enable || enable=( ALL )
+	(( ${enable[(I)(#i)none]} )) && return 1
+	if (( ${enable[(I)(#i)all]} )); then
+		zstyle -a ":vcs_info:-init-:$1:-all-" disable disable
+		(( ! ${disable[(Ie)$2]} ))
+	else
+		(( ${enable[(Ie)$2]} ))
+	fi
+}
+
+# --- the call -------------------------------------------------------------
+
+local usercontext=${1:-default} vcs=-init- rrn=-all- context
+local git gitdir base inside action branch headname line revision staged
+local unstaged stagedstr unstagedstr maincontext subdir basename patchsystem
+local f subject id head msg misc appliedstring unappliedstring escape format
+local k pattern checkstaged checkunstaged
+local -a patterns enable applied unapplied words todo formats lines
+local -A hook_com
+integer max i ret n next last
+_vcs_info_max_exports -preinit- $usercontext
+
+# _vcs_info_hook name [ arg ... ] — runs the static functions registered for
+# the hook and then the ones the hooks style names, as +vi-<name>, until one
+# returns nonzero; ret is what they leave in it.
+_vcs_info_hook() {
+	local hook=$1 debug= f
+	shift
+	local context=":vcs_info:${vcs}+${hook}:${usercontext}:${rrn}"
+	local -a static named
+	zstyle -a ":vcs_info-static_hooks:$hook" hooks static
+	zstyle -a $context hooks named
+	zstyle -t $context debug && debug=1
+	if [[ -n $debug ]]; then
+		print -r -- "vcs_info: hook $hook, context $context"
+		print -r -- "vcs_info: static functions: $static"
+		print -r -- "vcs_info: named functions: $named"
+	fi
+	ret=0
+	for f in $static $named; do
+		if (( ! $+functions[+vi-$f] )); then
+			[[ -n $debug ]] && print -r -- "vcs_info: no function +vi-$f"
+			continue
+		fi
+		+vi-$f "$@" || break
+	done
+}
+
+# Every message variable there is goes, and max-exports of them come back
+# empty.
+unset -m 'vcs_info_msg_<->_'
+for (( i = 0; i < max; i++ )); do
+	typeset -g vcs_info_msg_${i}_=
+done
+
+# _vcs_info_nvcs — the messages for a directory under no system: the
+# nvcsformats list, as it is.
+_vcs_info_nvcs() {
+	local -a formats
+	_vcs_info_max_exports $vcs $usercontext
+	zstyle -a ":vcs_info:${vcs}:${usercontext}:${rrn}" nvcsformats formats
+	for (( i = 0; i < max; i++ )); do
+		typeset -g vcs_info_msg_${i}_="${formats[i+1]}"
+	done
+}
+
+zstyle -a ":vcs_info:-init-:${usercontext}:-all-" disable-patterns patterns
+for pattern in $patterns; do
+	if [[ $PWD == ${~pattern} ]]; then
+		vcs=-quilt-
+		_vcs_info_nvcs
+		return 0
+	fi
+done
+
+_vcs_info_hook start-up
+case $ret in
+(1) return 0 ;;
+(2) vcs=-quilt-; _vcs_info_nvcs; return 0 ;;
+esac
+
+zstyle -a ":vcs_info:-init-:${usercontext}:-all-" enable enable
+(( ${enable[(I)(#i)none]} )) && return 0
+
+# Detection. git is the one backend.
+if _vcs_info_enabled $usercontext git; then
+	zstyle -s ":vcs_info:git:${usercontext}:-all-" command git || git=git
+	gitdir=$($git rev-parse --git-dir 2>/dev/null) || gitdir=
+fi
+if [[ -z $gitdir ]]; then
+	vcs=-quilt-
+	_vcs_info_hook no-vcs
+	_vcs_info_nvcs
+	return 0
+fi
+vcs=git
+gitdir=${gitdir:A}
+inside=$($git rev-parse --is-inside-work-tree 2>/dev/null)
+if [[ $inside == true ]]; then
+	base=$($git rev-parse --show-toplevel 2>/dev/null)
+else
+	base=$gitdir
+fi
+
+_vcs_info_hook pre-get-data
+case $ret in
+(1) return 0 ;;
+(2) vcs=-quilt-; _vcs_info_nvcs; return 0 ;;
+esac
+
+# The action, and the branch it is happening on.
+if [[ -d $gitdir/rebase-apply ]]; then
+	if [[ -f $gitdir/rebase-apply/rebasing ]]; then
+		action=rebase
+	elif [[ -f $gitdir/rebase-apply/applying ]]; then
+		action=am
+	else
+		action=am/rebase
+	fi
+	[[ -r $gitdir/rebase-apply/head-name ]] && headname=$(<$gitdir/rebase-apply/head-name)
+elif [[ -d $gitdir/rebase-merge ]]; then
+	if [[ -f $gitdir/rebase-merge/interactive ]]; then
+		action=rebase-i
+	else
+		action=rebase-m
+	fi
+	[[ -r $gitdir/rebase-merge/head-name ]] && headname=$(<$gitdir/rebase-merge/head-name)
+elif [[ -f $gitdir/MERGE_HEAD ]]; then
+	action=merge
+elif [[ -f $gitdir/CHERRY_PICK_HEAD ]]; then
+	if [[ -d $gitdir/sequencer ]]; then
+		action=cherry-seq
+	else
+		action=cherry
+	fi
+elif [[ -f $gitdir/BISECT_LOG ]]; then
+	action=bisect
+fi
+
+if [[ -n $headname && $headname != detached* ]]; then
+	branch=${headname#refs/heads/}
+elif branch=$($git symbolic-ref HEAD 2>/dev/null); then
+	branch=${branch#refs/heads/}
+else
+	branch=$($git name-rev --name-only --no-undefined HEAD 2>/dev/null) ||
+		branch=$($git rev-parse --short HEAD 2>/dev/null)
+fi
+
+maincontext=":vcs_info:git:${usercontext}:-all-"
+if zstyle -t $maincontext get-revision; then
+	revision=$($git rev-parse --quiet --verify HEAD 2>/dev/null)
+fi
+zstyle -s $maincontext stagedstr stagedstr || stagedstr=S
+zstyle -s $maincontext unstagedstr unstagedstr || unstagedstr=U
+if [[ $inside == true ]]; then
+	if zstyle -t $maincontext check-for-changes; then
+		checkstaged=1 checkunstaged=1
+	elif zstyle -t $maincontext check-for-staged-changes; then
+		checkstaged=1
+	fi
+	if [[ -n $checkstaged ]]; then
+		if $git rev-parse --quiet --verify HEAD >/dev/null 2>&1; then
+			$git diff-index --cached --quiet --ignore-submodules=dirty HEAD -- 2>/dev/null || staged=$stagedstr
+		elif [[ -n $($git ls-files 2>/dev/null) ]]; then
+			staged=$stagedstr
+		fi
+	fi
+	if [[ -n $checkunstaged ]]; then
+		$git diff --no-ext-diff --ignore-submodules=dirty --quiet --exit-code 2>/dev/null || unstaged=$unstagedstr
+	fi
+fi
+
+subdir=${${PWD:A}#$base}
+subdir=${subdir#/}
+: ${subdir:=.}
+basename=${base:t}
+
+# The patches in progress, the newest applied first.
+if [[ $action == (rebase|am|am/rebase) ]]; then
+	patchsystem=1
+	next=$(<$gitdir/rebase-apply/next) last=$(<$gitdir/rebase-apply/last)
+	for (( n = 1; n <= last; n++ )); do
+		f=$gitdir/rebase-apply/${(l:4::0:)n}
+		subject=
+		id=$n
+		# Through an array: a filter over a nested "$(...)" is not
+		# subscripted right yet (#5978).
+		if [[ -r $f ]]; then
+			lines=( ${(f)"$(<$f)"} )
+			subject=${${(M)lines:#Subject: *}[1]#Subject: }
+			if [[ $action == rebase ]]; then
+				id=${${lines[1]#From }[1,7]}
+			fi
+		fi
+		if (( n == next )); then
+			if [[ -r $gitdir/rebase-apply/final-commit ]]; then
+				lines=( ${(f)"$(<$gitdir/rebase-apply/final-commit)"} )
+				subject=$lines[1]
+			fi
+			[[ $action == rebase && -r $gitdir/rebase-apply/original-commit ]] &&
+				id=$(<$gitdir/rebase-apply/original-commit)
+		fi
+		if (( n <= next )); then
+			applied=( "$id $subject" $applied )
+		else
+			unapplied+=( "$id $subject" )
+		fi
+	done
+elif [[ $action == rebase-(i|m) ]]; then
+	patchsystem=1
+	if [[ -r $gitdir/rebase-merge/done ]]; then
+		for line in ${(f)"$(<$gitdir/rebase-merge/done)"}; do
+			[[ $line == (\#*|) ]] && continue
+			words=( ${=line} )
+			if (( $#words > 1 )); then
+				applied=( "${line#* }" $applied )
+			else
+				applied=( "$line ?" $applied )
+			fi
+		done
+	fi
+	if [[ -r $gitdir/rebase-merge/git-rebase-todo ]]; then
+		for line in ${(f)"$(<$gitdir/rebase-merge/git-rebase-todo)"}; do
+			[[ $line == (\#*|) ]] && continue
+			unapplied+=( "${line#* }" )
+		done
+	fi
+elif [[ $action == (merge|cherry|cherry-seq) ]]; then
+	patchsystem=1
+	msg=
+	if [[ $action == merge ]]; then
+		head=$(<$gitdir/MERGE_HEAD)
+	else
+		head=$(<$gitdir/CHERRY_PICK_HEAD)
+	fi
+	if [[ -r $gitdir/MERGE_MSG ]]; then
+		lines=( ${(f)"$(<$gitdir/MERGE_MSG)"} )
+		msg=$lines[1]
+	fi
+	applied=( "${head%%$'\n'*} $msg" )
+	if [[ $action == cherry-seq && -r $gitdir/sequencer/todo ]]; then
+		todo=( ${(f)"$(<$gitdir/sequencer/todo)"} )
+		todo=( ${todo:#(\#*|)} )
+		for line in ${todo[2,-1]}; do
+			unapplied+=( "${line#* }" )
+		done
+	fi
+fi
+
+if [[ -n $patchsystem ]]; then
+	escape=1
+	if (( $#applied )); then
+		hook_com=()
+		_vcs_info_hook gen-applied-string $applied
+		if (( ret )); then
+			appliedstring=${hook_com[applied-string]}
+			escape=
+		else
+			appliedstring=${applied[1]}
+		fi
+	fi
+	hook_com=()
+	_vcs_info_hook gen-unapplied-string $unapplied
+	if (( ret )); then
+		unappliedstring=${hook_com[unapplied-string]}
+		escape=
+	else
+		unappliedstring=$#unapplied
+	fi
+	if (( $#applied )); then
+		zstyle -s ":vcs_info:git:${usercontext}:${basename}" patch-format format || format='%p (%n applied)'
+	else
+		zstyle -s ":vcs_info:git:${usercontext}:${basename}" nopatch-format format || format='no patch applied'
+	fi
+	hook_com=( applied "$appliedstring" unapplied "$unappliedstring"
+		applied-n $#applied unapplied-n $#unapplied all-n $(( $#applied + $#unapplied )) )
+	rrn=$basename
+	_vcs_info_hook set-patch-format "$format"
+	if (( ret )); then
+		misc=${hook_com[patch-replace]}
+	else
+		if [[ -n $escape ]]; then
+			hook_com[applied]=${hook_com[applied]//\%/%%}
+		fi
+		zformat -f misc "$format" p:"${hook_com[applied]}" u:"${hook_com[unapplied]}" \
+			n:${hook_com[applied-n]} c:${hook_com[unapplied-n]} a:${hook_com[all-n]}
+	fi
+	rrn=-all-
+fi
+
+# What the hooks after the backend see, and may change.
+hook_com=(
+	action "$action" branch "$branch" base "$base" base-name "$basename"
+	subdir "$subdir" staged "$staged" unstaged "$unstaged" revision "$revision"
+	misc "$misc" vcs "$vcs"
+)
+for k in ${(k)hook_com}; do
+	hook_com[${k}_orig]=${hook_com[$k]}
+done
+
+rrn=$basename
+_vcs_info_hook post-backend
+_vcs_info_hook pre-addon-quilt
+hook_com[quilt]=
+
+_vcs_info_max_exports git $usercontext
+if [[ -n ${hook_com[action]} ]]; then
+	zstyle -a ":vcs_info:git:${usercontext}:${rrn}" actionformats formats ||
+		formats=( ' (%s)-[%b|%a]%u%c-' )
+else
+	zstyle -a ":vcs_info:git:${usercontext}:${rrn}" formats formats ||
+		formats=( ' (%s)-[%b]%u%c-' )
+fi
+(( $#formats > max )) && formats=( ${formats[1,max]} )
+for (( i = 0; i < $#formats; i++ )); do
+	_vcs_info_hook set-message $i "${formats[i+1]}"
+	if (( ret )); then
+		msg=${hook_com[message]}
+	else
+		zformat -f msg "${formats[i+1]}" s:"${hook_com[vcs]}" b:"${hook_com[branch]}" \
+			a:"${hook_com[action]}" i:"${hook_com[revision]}" c:"${hook_com[staged]}" \
+			u:"${hook_com[unstaged]}" R:"${hook_com[base]}" r:"${hook_com[base-name]}" \
+			S:"${hook_com[subdir]}" m:"${hook_com[misc]}" Q:"${hook_com[quilt]}"
+	fi
+	typeset -g vcs_info_msg_${i}_="$msg"
+done
+return 0

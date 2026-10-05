@@ -13871,6 +13871,19 @@ shell's `autoload` at another shell's function library, so a pair the
 environment says nothing about starts empty — which is what the same
 shell does for `CDPATH`.
 
+`MODULE_PATH` is a deliberate difference, and the evidence for leaving it
+empty was gathered rather than assumed (#6133). Measured 2026-10-05 with
+`zsh -fc`: zsh 5.9.2 answers `print -r -- $#module_path $module_path` with
+`1 /opt/homebrew/Cellar/zsh/5.9.2/lib`, and this shell answers `0`. This
+shell has no loadable-module directory, because its modules are built in,
+so there is no true path to put there. Nothing that reads the parameter
+needs one. In `~/.zi` (zi, F-Sy-H, p10k and the rest of the plugin tree)
+and the startup files, the only use is zi's `module_path+=( … )` advice
+for its own `zpmod`, and appending works the same on an empty array. The
+zsh-suite harness reads `$module_path[1]` from the *reference* shell to
+find that shell's modules, never from this one. A script that tests the
+array for being non-empty sees no modules, which is accurate here.
+
 **A `local` of one half of a tie has two answers, and which one it gets
 depends on who made the tie.** The shell's own pairs are *special*
 parameters — the tie belongs to the name — so a `local` of either half

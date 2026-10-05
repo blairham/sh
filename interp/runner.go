@@ -6630,7 +6630,15 @@ func (r *Runner) fatalParamError(format string, args ...any) {
 	// measured, `local x=${nosuch?m}` and `case x in ${nosuch?m})` leave 1 in
 	// the shell that leaves `$?` alone for every other failed expansion
 	// there. See Runner.failedExpansionStatus.
-	defer r.failureSetsItsStatus()()
+	//
+	// Not in an interactive shell, where it keeps a failing status as every
+	// other failed expansion of a command's words does: measured 2026-10-05
+	// on zsh 5.9.2, `(exit 3); echo ${unset?boom}` leaves 3 at a prompt and
+	// under `-i -c`, and 1 without `-i`. See
+	// Semantics.FailedExpansionInACommandKeepsAFailingStatus (#6067).
+	if !r.Interactive || r.sem().FailedExpansionInACommandKeepsAFailingStatus != Yes {
+		defer r.failureSetsItsStatus()()
+	}
 	r.fatalExpansion(format, args...)
 	r.abandon, r.errexitStopped = abandonParamError, false
 }
@@ -8449,6 +8457,20 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 	// Semantics.FailedExpansionInADeclarationOrCaseSetsNoStatus.
 	keepsTheStatus := r.sem().FailedExpansionInADeclarationOrCaseSetsNoStatus == Yes
 	statusBefore := r.failedExpansionStatus
+	// And any command's words keep a failing status, in the dialect that
+	// says so — see Semantics.FailedExpansionInACommandKeepsAFailingStatus.
+	// The rule the words are read under outside a declaration's own.
+	wordsRule := statusBefore
+	//
+	// Not inside a loop, however far in, where the failure sets 1 whatever
+	// `$?` held: measured on zsh 5.9.2, `for i in 1; do (exit 6); print
+	// $((1/0)); done` exits 1, and so does a function doing the same called
+	// from a loop's body, where the function called outside one exits 6.
+	if statusBefore == failedExpansionSetsTheStatus && r.loopDepth == 0 &&
+		r.sem().FailedExpansionInACommandKeepsAFailingStatus == Yes {
+		wordsRule = failedExpansionKeepsAFailingStatus
+		r.failedExpansionStatus = wordsRule
+	}
 	failedUnder, declaredYet := statusBefore, false
 	for i, w := range c.Args {
 		argvBefore = append(argvBefore, len(argv))
@@ -8460,7 +8482,7 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 		if keepsTheStatus {
 			// From the first assignment on: measured, `local $((1/0))` and
 			// `local -a $((1/0))` leave 1, and `local x=1 $((1/0))` leaves 0.
-			r.failedExpansionStatus = statusBefore
+			r.failedExpansionStatus = wordsRule
 			if i > 0 && len(argv) > 0 && (declaredYet ||
 				(r.assignShaped(w) || r.appendOperandShaped(w)) && r.declarationCommand(c, argv)) {
 				declaredYet = true
@@ -12290,6 +12312,15 @@ func (r *Runner) setFatalStatus() {
 		r.status = 0
 		r.fatalSetNoStatus = true
 		return
+	case failedExpansionKeepsAFailingStatus:
+		if r.status != 0 {
+			// Not fatalSetNoStatus: the status kept is the one the
+			// construct ends on as well. Measured 2026-10-05 on zsh 5.9.2,
+			// `(exit 4); { echo $((1/0)); } always { echo in=$? }` writes
+			// `in=4` and exits 4, where a declaration's kept status ends
+			// the construct at 1 (#6067).
+			return
+		}
 	}
 	r.status = r.fatalStatus()
 }
@@ -15249,7 +15280,26 @@ const (
 	failedExpansionKeepsTheStatus
 	// failedExpansionLeavesZero leaves 0: a `case`'s subject and patterns.
 	failedExpansionLeavesZero
+	// failedExpansionKeepsAFailingStatus leaves what `$?` held where that
+	// was a failure, and sets the fatal status over a 0: any other simple
+	// command's words, in the dialect that says so. See
+	// Semantics.FailedExpansionInACommandKeepsAFailingStatus.
+	failedExpansionKeepsAFailingStatus
 )
+
+// globRefusalSetsItsStatus is for a refusal of the glob phase — an unmatched
+// pattern, a qualifier list that will not read — which sets the fatal status
+// in a command's words, where another failed expansion keeps a failing one,
+// and keeps it in a declaration's words as every failure there does.
+// Measured 2026-10-05 on zsh 5.9.2: `(exit 4); print zz*zz` and `(exit 4);
+// print *(.zzq)` exit 1, and `(exit 4); local -a x=(zz*zz)` and the same
+// with `*(.zzq)` exit 4 (#6067). Undone by the returned function.
+func (r *Runner) globRefusalSetsItsStatus() func() {
+	if r.failedExpansionStatus != failedExpansionKeepsAFailingStatus {
+		return func() {}
+	}
+	return r.failureSetsItsStatus()
+}
 
 // failureSetsItsStatus is for a failure that sets the fatal status wherever
 // it is written, until the returned function runs. See

@@ -1356,6 +1356,9 @@ func Semantics() interp.Semantics {
 	// A startup file given up over a fatal error: ksh93 under `-E` leaves `$?` as it was before the failing command: `(exit 7)` and then `${unset?boom}` leaves 7 (#6046).
 	// See Semantics.StartupFileGivenUpLeavesTheStatusBefore.
 	s.StartupFileGivenUpLeavesTheStatusBefore = interp.Yes
+	// A failed expansion in a command's words: ksh93 sets 1 (#6067).
+	// See Semantics.FailedExpansionInACommandKeepsAFailingStatus.
+	s.FailedExpansionInACommandKeepsAFailingStatus = interp.No
 	// A fatal error in an interactive shell's program: ksh93 gives up the line of a `-c` string or a script under `-i` (#6073).
 	// See Semantics.InteractiveProgramErrorWhenInteractive.
 	s.InteractiveProgramErrorWhenInteractive = interp.InteractiveProgramErrorCostsTheLine

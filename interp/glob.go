@@ -2281,7 +2281,13 @@ func (r *Runner) workDir() string {
 // ends — Semantics.FailedExpansionAbandonsTheLine — which is how one call
 // site produces bash giving up the statement and going on to the next, and
 // zsh stopping the script, with neither dialect named.
+//
+// And it sets its status wherever it is written, as `${x?word}` does: measured
+// 2026-10-05 on zsh 5.9.2, `(exit 4); print zz*zz` and `(exit 4); local
+// zz*zz` exit 1, where a failed arithmetic expansion in the same place leaves
+// the 4. See Semantics.FailedExpansionInACommandKeepsAFailingStatus (#6067).
 func (r *Runner) refuseUnmatchedPattern(pattern string) {
 	r.diagf("%s\n", Wording(r.diag().GlobNoMatch, "no matches found: %s", pattern))
+	defer r.globRefusalSetsItsStatus()()
 	r.failedExpansion()
 }

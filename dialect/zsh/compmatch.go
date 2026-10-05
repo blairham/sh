@@ -248,7 +248,7 @@ func parseMatchSet(src []rune) (matchElem, int, bool) {
 	first := true
 	for i < len(src) {
 		c := src[i]
-		if c == closer && !(first && !brace) {
+		if c == closer && (!first || brace) {
 			return e, i + 1, true
 		}
 		first = false
@@ -557,7 +557,7 @@ func (s *matchSearch) apply(m matcher, i, j int) (string, bool) {
 			if m.match.stars == 1 && !m.edge && m.anchor.containsMatch(span) {
 				break
 			}
-			if lw == 0 && k == j && !(m.kind == 'r' && m.edge) {
+			if lw == 0 && k == j && (m.kind != 'r' || !m.edge) {
 				// An empty `*` for an empty word-pattern is no move at
 				// all; the literal and the other matchers cover it.
 				continue

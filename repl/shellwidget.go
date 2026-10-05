@@ -139,7 +139,7 @@ func (e *editor) runShellWidget(name string, prompt drawnPrompt) (ran, accept bo
 		// what a binding to an action this shell cannot perform means.
 		return false, false
 	}
-	out, ok := e.runShell(name, prompt)
+	out, ok := e.runShell(name, e.give(), prompt)
 	if !ok {
 		// The shell declined to run it: no such action, or one whose
 		// definition has gone. It has said so itself if it had anything to

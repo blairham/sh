@@ -1580,21 +1580,46 @@ const (
 )
 
 // noteLastKey records the keystroke that has just finished as the last
-// widget, where it can say what that was: the binding that claimed it, the
-// action the default keymap gives its bytes, or the typing of a character. A
-// key it cannot name leaves the record as it was.
+// widget, where it can say what that was — see finishedKey — and starts the
+// next keystroke's record.
 func (e *editor) noteLastKey() {
+	e.last = e.finishedKey()
+	e.keyBytes, e.keyBinding = e.keyBytes[:0], nil
+}
+
+// finishedKey is what the keystroke in hand ran, as the last widget: the
+// binding that claimed it, the action the default keymap gives its bytes, or
+// the typing of a character. A key it cannot name, or no key at all, leaves
+// the record as it was.
+//
+// Asked on its own, without moving the record, by what runs *after* a
+// keystroke and before the next one is read — the pre-redraw widget and a
+// descriptor handler — because the record moves only when the next key
+// arrives, and to them the key in hand is already the last one. Measured
+// 2026-10-04 against zsh 5.9.2 through a pseudo-terminal: typing `e`, the
+// pre-redraw widget reads `LASTWIDGET` as `self-insert`, and a `zle -F`
+// handler armed by a key bound to `arm` hands `arm` to the widget it calls
+// (#5875).
+func (e *editor) finishedKey() LastWidget {
 	switch {
 	case e.keyBinding != nil:
-		e.last = LastWidget{Widget: e.keyBinding.Widget, Function: e.keyBinding.Function, Known: true}
+		return LastWidget{Widget: e.keyBinding.Widget, Function: e.keyBinding.Function, Known: true}
 	case len(e.keyBytes) == 0:
-		return
-	default:
-		if w, ok := defaultKeys[string(e.keyBytes)]; ok {
-			e.last = LastWidget{Widget: w, Known: true}
-		} else if c := e.keyBytes[0]; c >= 0x20 && c != del {
-			e.last = LastWidget{Widget: WidgetSelfInsert, Known: true}
-		}
+		return e.last
 	}
-	e.keyBytes, e.keyBinding = e.keyBytes[:0], nil
+	if w, ok := defaultKeys[string(e.keyBytes)]; ok {
+		return LastWidget{Widget: w, Known: true}
+	}
+	if c := e.keyBytes[0]; c >= 0x20 && c != del {
+		return LastWidget{Widget: WidgetSelfInsert, Known: true}
+	}
+	return e.last
+}
+
+// giveFinished is give with the key in hand as the last widget. See
+// finishedKey.
+func (e *editor) giveFinished() Line {
+	in := e.give()
+	in.Last = e.finishedKey()
+	return in
 }

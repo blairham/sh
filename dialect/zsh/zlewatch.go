@@ -361,6 +361,10 @@ func runPlainHandler(
 	// for the reason a widget's do. See regionsFollow.
 	regionsFollow(r, in.Buffer, in.Cursor)
 	setWidgetLine(r, in)
+	// And the last widget, which a widget the handler calls reads as its
+	// `LASTWIDGET`: measured 2026-10-04 against zsh 5.9.2, a handler armed by
+	// a key bound to `arm` calls a widget that reads `arm` (#5875).
+	r.SetVar(zleHeldLast, lastWidgetName(in.Last))
 	defer clearHeldLine(r)
 	status := r.ExitStatus()
 	_, _ = r.CallFunction(ctx, handler, arg)
@@ -392,7 +396,12 @@ func clearHeldLine(r *interp.Runner) {
 	r.SetVar(zleCursor, "")
 	r.SetVar(zlePostdisplay, "")
 	r.SetVar(zleAccept, "")
+	r.SetVar(zleHeldLast, "")
 }
+
+// zleHeldLast is the last widget's name for the length of a plain handler,
+// held beside its line for the widgets it calls. See runPlainHandler.
+const zleHeldLast = ".zsh.zle.heldlast"
 
 // openEditorActive marks the editor as running for the length of a call, and
 // hands back what puts it as it was.

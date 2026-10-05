@@ -1474,7 +1474,13 @@ func runWidgetFunction(
 	setWidgetLine(r, in)
 	r.SetVar(zleWidget, name)
 	r.SetVar(zleActive, "1")
-	r.SetVar(zleLastWidget, lastWidgetName(in.Last))
+	last := lastWidgetName(in.Last)
+	if held, _ := r.GetVar(zleHeldLast); !in.Last.Known && held != "" {
+		// Called from a plain handler, which holds the line without a last
+		// widget in it — see runPlainHandler.
+		last = held
+	}
+	r.SetVar(zleLastWidget, last)
 	// The keymap the key was read in: `main` while inserting, whichever of
 	// emacs and viins that is, and `vicmd` in vi's command mode — measured.
 	keymap := "main"

@@ -9684,6 +9684,46 @@ func (r *Runner) nestedWords(e *syntax.ParamExpr) (words []string, set, isList b
 		// all. The fields below are the whole of what it reads.
 		return r.nestedSubscript(e)
 	}
+	if span := e.Inner.Spans[0]; span.Kind == syntax.ParamExp && span.Param != nil {
+		if refused, empty := r.undeclaredIndirection(span.Param); refused {
+			// `${(P)nope-x}` on a name nothing declared is a bad
+			// substitution nested as well as not, and refused before its
+			// word runs: measured on zsh 5.9.2, `"${${(P)nope-$(echo RAN
+			// >&2)}}"` says `bad substitution` and nothing else, where
+			// `"${${(P)nope:-dflt}}"` is empty.
+			return []string{""}, false, false
+		} else if empty {
+			// And `${(P)nope?}` with no word comes to nothing, without a
+			// word about it, as it does not nested.
+			return []string{""}, true, false
+		}
+	}
+	if name, isRef := r.nestedParamReference(e.Inner.Spans[0]); isRef {
+		// A `(P)` inner is a *reference* here, as it is to a subscript on
+		// it: the rest of its group runs on the name, and what the nesting
+		// reads is the parameter that name refers to, elements and all.
+		// Measured on zsh 5.9.2 with `b=(yy x)`, `B=(Q R)` and `n=b`
+		// (#6191):
+		//
+		//	"${(j:|:)${(P)n}}"        yy|x   the elements reach the join,
+		//	"${(j:|:)"${(P)n}"}"      yy|x   quoted inner or not
+		//	"${(j:|:)${(PU)n}}"       Q|R    `U` ran on the name, `b` to `B`
+		//	"${(j:|:)${(P)n/b/B}}"    Q|R    and so does the operator
+		//	"${(j:|:)${(P)u:-n}}"     b      `${n}`, with `u` unset
+		//	"${(j:|:)${(P)n:#b}}"     ``     the name filtered away
+		//	b=(x '' y); ${(j:|:)${(P)n}}  x||y   an empty element is a value
+		//
+		// where the same `(P)` not nested runs its operator on the value:
+		// `${(P)n/y/z}` is `zy x`. The reading a level up is the ordinary
+		// one, so `"${(j:|:)${${(P)n}}}"` is `yy x` — the middle level
+		// joined what it was handed, as quotes join a list.
+		ref := r.referenceNode(name, nil, e.Src)
+		words, set, isList = r.flagBase(ref)
+		if len(words) == 0 {
+			return []string{""}, set, isList
+		}
+		return words, set, isList || len(words) > 1
+	}
 	words = r.nestedInnerFields(e)
 	if len(words) == 0 {
 		// No field is still a *value*: the empty string, and set. Measured —

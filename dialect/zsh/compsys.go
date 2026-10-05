@@ -180,6 +180,7 @@ func RunCompletion(
 		return nil
 	}
 	cs := newCompletionState(c)
+	expandCommandAlias(r, cs)
 	openCompletionParameters(r, cs)
 	defer closeCompletionParameters(r)
 	// The status goes in and does not come out, which is runWidgetFunction's
@@ -290,10 +291,32 @@ func wordOpeningQuote(word string) string {
 	return ""
 }
 
-// completionWords is `$words` and `$CURRENT`: the line as words, as typed,
-// and which of them the cursor is in.
+// completionWords is `$words` and `$CURRENT`: the words of the command the
+// cursor is in, as typed, and which of them the cursor is in.
 //
-// Split at unquoted blanks and nowhere else, which is the word boundary
+// **The command the cursor is in, not the line** (#6174). Measured
+// 2026-10-05 against zsh 5.9.2 through a pseudo-terminal, a `zle -C` widget
+// writing `$words` and `$CURRENT` to a file:
+//
+//	echo a | grep -          (grep -) 2
+//	true && grep -           (grep -) 2
+//	(grep -    echo $(grep -    echo `grep -     (grep -) 2
+//	for i in a b; do grep -  (grep -) 2
+//	if grep -    { grep -    ! grep -           (grep -) 2
+//	x=1 grep -               (grep -) 2
+//	grep a > out -           (grep a -) 3
+//	grep a 2>/dev/null -     (grep a -) 3
+//	grep -a<cursor>; echo b  (grep -a) 2
+//
+// So a separator — `;` `&` `|` `(` `)` a newline, `$(` and a backquote —
+// starts the words afresh; at the start of a command a reserved word and an
+// assignment are not among them; a redirection is not, nor the word it
+// takes when it is written apart; and the words after the cursor stop at the
+// next separator. This took every word on the line, so `ps aux | grep -<TAB>`
+// was a completion for `ps` (`$words[1]` is how the completion system picks
+// the command's completion).
+//
+// Split at unquoted blanks within a command, which is the word boundary
 // docs/spec/completion.md measured for this editor — not bash's readline set,
 // which breaks `--opt=value` in the middle. The current word is whatever the
 // editor said it was, so the two can never disagree about where it starts.
@@ -301,16 +324,204 @@ func wordOpeningQuote(word string) string {
 // A trailing blank makes an empty last word rather than no word, which is
 // measured: `git ` reports `words=(git )` and `CURRENT=2`.
 func completionWords(c repl.Completion) ([]string, int) {
-	before := splitCompletionWords(c.Line[:c.Start])
+	before := commandWordsBefore(c.Line[:c.Start])
 	words := append(before, c.Word)
 	// Whatever is past the cursor is on the line too, and a completion
-	// function that looks at `$words[-1]` is looking at it.
-	words = append(words, splitCompletionWords(c.Line[min(c.Point, len(c.Line)):])...)
+	// function that looks at `$words[-1]` is looking at it — up to the end
+	// of this command.
+	words = append(words, commandWordsAfter(c.Line[min(c.Point, len(c.Line)):])...)
 	return words, len(before) + 1
 }
 
+// expandCommandAlias puts an alias in command position into `$words` as what
+// it stands for, unless COMPLETE_ALIASES is set or the cursor is in that
+// word. Measured 2026-10-05 against zsh 5.9.2 (#6174, #6154): with
+// `alias ll='gls -h --x'`, `ll -<TAB>` is `words=(gls -h --x -)` and
+// `CURRENT=4`, and under `setopt completealiases` it stays `(ll -)`. It is how
+// zsh completes `ls -` as GNU `gls` where `ls` is an alias for it.
+func expandCommandAlias(r *interp.Runner, cs *completionState) {
+	if recordedDeviates(r, "completealiases") || cs.current < 2 || len(cs.words) == 0 {
+		return
+	}
+	seen := map[string]bool{}
+	for !seen[cs.words[0]] {
+		value, ok := r.LookupAlias(cs.words[0])
+		if !ok {
+			return
+		}
+		seen[cs.words[0]] = true
+		var expanded []string
+		for _, tok := range splitCompletionTokens(value) {
+			if !tok.sep {
+				expanded = append(expanded, tok.text)
+			}
+		}
+		if len(expanded) == 0 {
+			return
+		}
+		cs.words = append(expanded, cs.words[1:]...)
+		cs.current += len(expanded) - 1
+	}
+}
+
+// completionToken is one word, or a separator between commands.
+type completionToken struct {
+	text string
+	sep  bool
+}
+
+// splitCompletionTokens breaks text at blanks a backslash or a quotation does
+// not protect, and at the characters that end a command, handing back the
+// words with their quoting still on them.
+func splitCompletionTokens(text string) []completionToken {
+	var out []completionToken
+	var cur strings.Builder
+	var quote byte
+	started := false
+	flush := func() {
+		if started {
+			out = append(out, completionToken{text: cur.String()})
+			cur.Reset()
+			started = false
+		}
+	}
+	for i := 0; i < len(text); i++ {
+		ch := text[i]
+		switch {
+		case quote == 0 && ch == '\\' && i+1 < len(text):
+			cur.WriteByte(ch)
+			i++
+			cur.WriteByte(text[i])
+			started = true
+		case quote == 0 && (ch == '"' || ch == '\''):
+			quote = ch
+			cur.WriteByte(ch)
+			started = true
+		case quote != 0 && ch == quote:
+			quote = 0
+			cur.WriteByte(ch)
+		case quote != 0:
+			cur.WriteByte(ch)
+		case ch == ' ' || ch == '\t':
+			flush()
+		case ch == '&' && !started && i+1 < len(text) && text[i+1] == '>':
+			// `&>`, which is a redirection and not a separator.
+			cur.WriteByte(ch)
+			started = true
+		case ch == '$' && i+1 < len(text) && text[i+1] == '(':
+			flush()
+			out = append(out, completionToken{sep: true})
+			i++
+		case strings.IndexByte(";&|()\n`", ch) >= 0:
+			if (ch == '&' || ch == '|') && redirectionOperator(cur.String()+string(ch)) {
+				// `>&` and `>|` are one operator, not a separator after `>`.
+				cur.WriteByte(ch)
+				continue
+			}
+			flush()
+			out = append(out, completionToken{sep: true})
+		default:
+			cur.WriteByte(ch)
+			started = true
+		}
+	}
+	flush()
+	return out
+}
+
+// commandWordsBefore is the words of the last command in text: everything
+// since the last separator, less the reserved words and assignments at its
+// start and the redirections anywhere in it.
+func commandWordsBefore(text string) []string {
+	var words []string
+	atStart, skipNext := true, false
+	for _, tok := range splitCompletionTokens(text) {
+		if tok.sep {
+			words, atStart, skipNext = nil, true, false
+			continue
+		}
+		if skipNext {
+			skipNext = false
+			continue
+		}
+		if _, rest, ok := redirection(tok.text); ok {
+			skipNext = rest == ""
+			continue
+		}
+		if atStart && (completionReservedWords[tok.text] || isAssignmentWord(tok.text)) {
+			continue
+		}
+		atStart = false
+		words = append(words, tok.text)
+	}
+	return words
+}
+
+// commandWordsAfter is the words after the cursor up to the end of its
+// command.
+func commandWordsAfter(text string) []string {
+	var words []string
+	for _, tok := range splitCompletionTokens(text) {
+		if tok.sep {
+			break
+		}
+		words = append(words, tok.text)
+	}
+	return words
+}
+
+// completionReservedWords are the words that open a command rather than
+// being one, at the start of a command.
+var completionReservedWords = map[string]bool{
+	"if": true, "then": true, "else": true, "elif": true, "while": true, "until": true,
+	"do": true, "!": true, "{": true, "}": true, "time": true, "nocorrect": true,
+}
+
+// isAssignmentWord is `name=…` or `name+=…`, which a command starts with
+// without it being one of the command's words.
+func isAssignmentWord(w string) bool {
+	eq := strings.IndexByte(w, '=')
+	if eq <= 0 {
+		return false
+	}
+	name := strings.TrimSuffix(w[:eq], "+")
+	if name == "" || (name[0] >= '0' && name[0] <= '9') {
+		return false
+	}
+	for i := 0; i < len(name); i++ {
+		c := name[i]
+		if c != '_' && (c < 'a' || c > 'z') && (c < 'A' || c > 'Z') && (c < '0' || c > '9') {
+			return false
+		}
+	}
+	return true
+}
+
+// redirection splits a word that is a redirection into its operator and the
+// target written against it — `2>/dev/null` is `2>` and `/dev/null`, a bare
+// `>` is `>` and nothing, so its target is the next word.
+func redirection(w string) (op, rest string, ok bool) {
+	i := 0
+	for i < len(w) && w[i] >= '0' && w[i] <= '9' {
+		i++
+	}
+	for _, o := range []string{"<<<", ">>|", "&>>", ">>", "<<", "<>", ">&", "<&", ">|", "&>", ">", "<"} {
+		if strings.HasPrefix(w[i:], o) {
+			return w[:i+len(o)], w[i+len(o):], true
+		}
+	}
+	return "", "", false
+}
+
+// redirectionOperator reports whether w is, so far, a redirection operator
+// and nothing else — which is when a following `&` or `|` belongs to it.
+func redirectionOperator(w string) bool {
+	op, rest, ok := redirection(w)
+	return ok && rest == "" && op == w
+}
+
 // splitCompletionWords breaks text at blanks a backslash or a quotation does
-// not protect, and hands back the words with their quoting still on them.
+// not protect, and nowhere else — a pattern's `|` and `(` are part of it, and hands back the words with their quoting still on them.
 func splitCompletionWords(text string) []string {
 	var out []string
 	var cur strings.Builder

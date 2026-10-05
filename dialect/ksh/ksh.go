@@ -1356,6 +1356,8 @@ func Semantics() interp.Semantics {
 	// A startup file given up over a fatal error: ksh93 under `-E` leaves `$?` as it was before the failing command: `(exit 7)` and then `${unset?boom}` leaves 7 (#6046).
 	// See Semantics.StartupFileGivenUpLeavesTheStatusBefore.
 	s.StartupFileGivenUpLeavesTheStatusBefore = interp.Yes
+	// At a prompt, ksh93 numbers each typed input from 1: `echo $LINENO` is 1 every time (#6074). See Semantics.PromptNumbersEachInputFromOne.
+	s.PromptNumbersEachInputFromOne = interp.Yes
 	// A fatal error in `.` or `eval` text: an interactive ksh93 gives up the text (#6057).
 	// See Semantics.BorrowedTextErrorWhenInteractiveCostsTheLine.
 	s.BorrowedTextErrorWhenInteractiveCostsTheLine = interp.No
@@ -4572,6 +4574,9 @@ const kshKillUsage = "Usage: kill [-lL] [-n signum] [-s signame] job ...\n" +
 
 func Diagnostics() interp.Diagnostics {
 	d := interp.Diagnostics{
+		// `eval`'s text at a prompt is located by its own line, as under
+		// `-c` (#6074).
+		EvalTextAtAPromptKeepsItsLocation: true,
 		// The refusal a frozen name draws when a `{name}>&-` would close the
 		// descriptor it holds. This shell reaches for its ordinary readonly
 		// sentence rather than one about the descriptor, which is what tells

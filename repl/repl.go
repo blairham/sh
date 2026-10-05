@@ -169,6 +169,13 @@ type Shell struct {
 	// dialect/bash's `extquote` note keeps.
 	CountSessionLines bool
 
+	// NumberEachInputFromOne gives the parser a base of 1 for every construct
+	// typed, instead of the session line it began on. ksh93's: measured
+	// 2026-10-05 through a pseudo-terminal, `echo $LINENO` typed three times
+	// is 1, 1, 1 there and 1, 2, 3 in bash, zsh, dash and BusyBox ash. See
+	// interp.Semantics.PromptNumbersEachInputFromOne (#6074).
+	NumberEachInputFromOne bool
+
 	// EchoTheLineWithoutATerminal writes each line this session read back to
 	// the error stream, behind the prompt it was read at, where the input is
 	// not a terminal.
@@ -1815,7 +1822,7 @@ func (s Shell) accept(pending *strings.Builder, remember func(string), line stri
 	pending.WriteString("\n")
 	text := pending.String()
 
-	p := syntax.NewParserAt(text, s.parseDialect(), first)
+	p := syntax.NewParserAt(text, s.parseDialect(), s.parseBase(first))
 	// The hook goes on unconditionally, unlike the script path: every shell
 	// in the panel expands aliases at a prompt, and the dialect's answer is
 	// only about a *non-interactive* one. This is the place that knows there
@@ -1978,6 +1985,16 @@ func (s Shell) countLine(startsPending bool) int {
 // noticed. Which of them a dialect writes is Diagnostics.PromptLocation's, and
 // what neither of them is is a reason to give the parser a position that is not
 // where the text is.
+// parseBase is the line the parser numbers the accumulating text from: the
+// session line it began on, or 1 in the dialect that numbers each input from
+// its own first line. See Shell.NumberEachInputFromOne.
+func (s Shell) parseBase(session int) int {
+	if s.NumberEachInputFromOne {
+		return 1
+	}
+	return session
+}
+
 func (s Shell) pendingLine() int {
 	if n := s.counted().pendingLine; n > 0 {
 		return n
@@ -2014,7 +2031,7 @@ func (s Shell) endOfInput(pending *strings.Builder) ([]*syntax.File, string, err
 	if strings.TrimSpace(text) == "" {
 		return nil, "", nil
 	}
-	p := syntax.NewParserAt(text, s.parseDialect(), s.pendingLine())
+	p := syntax.NewParserAt(text, s.parseDialect(), s.parseBase(s.pendingLine()))
 	// The same alias table the accepted lines were parsed with: a construct
 	// half of which was typed through an alias must not finish differently
 	// for having been finished here.

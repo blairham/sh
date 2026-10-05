@@ -9684,6 +9684,20 @@ func (r *Runner) nestedWords(e *syntax.ParamExpr) (words []string, set, isList b
 		// all. The fields below are the whole of what it reads.
 		return r.nestedSubscript(e)
 	}
+	if span := e.Inner.Spans[0]; span.Kind == syntax.ParamExp && span.Param != nil {
+		if refused, empty := r.undeclaredIndirection(span.Param); refused {
+			// `${(P)nope-x}` on a name nothing declared is a bad
+			// substitution nested as well as not, and refused before its
+			// word runs: measured on zsh 5.9.2, `"${${(P)nope-$(echo RAN
+			// >&2)}}"` says `bad substitution` and nothing else, where
+			// `"${${(P)nope:-dflt}}"` is empty.
+			return []string{""}, false, false
+		} else if empty {
+			// And `${(P)nope?}` with no word comes to nothing, without a
+			// word about it, as it does not nested.
+			return []string{""}, true, false
+		}
+	}
 	if name, isRef := r.nestedParamReference(e.Inner.Spans[0]); isRef {
 		// A `(P)` inner is a *reference* here, as it is to a subscript on
 		// it: the rest of its group runs on the name, and what the nesting

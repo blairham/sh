@@ -264,6 +264,10 @@ func whenceAll(r *interp.Runner, name string, quiet, skipFunctions bool) int {
 		// rather than the first.
 	}
 	paths := r.LookPathAllOncePerDirectory(name)
+	if len(paths) > 0 {
+		// Tracked as plain `whence` tracks it (#6111).
+		r.RememberLookup(name)
+	}
 	for _, path := range paths {
 		if len(lines) == 0 {
 			// The PATH hit standing alone keeps the sentence `-v` gives it,
@@ -311,6 +315,10 @@ func whencePath(r *interp.Runner, name string, verbose, quiet, all bool) int {
 		paths = r.LookPathAllOncePerDirectory(name)
 	} else if path, ok := r.LookPath(name); ok {
 		paths = append(paths, path)
+	}
+	if len(paths) > 0 {
+		// Tracked as plain `whence` tracks it (#6111).
+		r.RememberLookup(name)
 	}
 	if len(paths) == 0 {
 		if verbose && !quiet {

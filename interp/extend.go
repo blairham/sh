@@ -708,6 +708,21 @@ func (r *Runner) LookPathAll(name string) []string {
 	return hits
 }
 
+// RememberLookup puts what a PATH search finds for name into the command
+// table, in the dialect whose lookups remember — see
+// Semantics.ALookupRemembersThePath — for a dialect's own builtin that looks
+// a name up by some other route. Measured 2026-10-05 on ksh93u+: `whence -a`,
+// `whence -p` and `whence -pa` leave the name tracked as plain `whence` does
+// (#6111).
+func (r *Runner) RememberLookup(name string) {
+	if strings.ContainsRune(name, '/') || !r.rememberingLookups() || r.sem().ALookupRemembersThePath != Yes {
+		return
+	}
+	if _, spelled, written, err := r.lookPathSpelled(name); err == nil {
+		r.hashCommandRun(name, spelled, written)
+	}
+}
+
 // LookPathAllOncePerDirectory is LookPathAll with a hit dropped when the
 // directory it is in is one an earlier hit was in — the same directory
 // reached by another PATH entry, however it was spelled.

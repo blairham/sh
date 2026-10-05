@@ -6789,6 +6789,13 @@ echo "st=$?"`,
 		Why: "`hash qq` for a name the table already holds, with a copy that has since appeared earlier on PATH. bash, dash, ksh93 and ash search again and remember the new copy; zsh keeps what it had (#6110)",
 	},
 	{
+		ID: "hash/a-whence-lookup-is-remembered", Category: "commands",
+		Snippet: "mkdir b2 && printf '#!/bin/sh\\n' > b2/qq && chmod +x b2/qq && P=$PATH\n" +
+			"PATH=$PWD/b2:$P; whence qq >/dev/null 2>&1; hash | grep qq | sed \"s|$PWD|D|\"; hash -r\n" +
+			"PATH=$PWD/b2:$P; whence -a qq >/dev/null 2>&1; hash | grep qq | sed \"s|$PWD|D|\"; echo end\n",
+		Why: "zsh remembers what `whence` looks up, as it does for `type` and `command -v`, and `whence -a` remembers nothing; the columns with no `whence` record that they have none (#6111)",
+	},
+	{
 		ID: "exec/a-script-is-started-by-the-spelling-its-shell-joined", Category: "commands",
 		Snippet: "mkdir -p sub/deep && printf '#!/bin/sh\\necho \"0=$0\"\\n' > sub/z0 && printf 'echo \"n0=$0\"\\n' > sub/n0 && chmod +x sub/z0 sub/n0 && cd sub && P=$PATH\n" +
 			"PATH=:$P; z0; z0\n" +

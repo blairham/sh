@@ -173,3 +173,68 @@ func TestTheTwoPartingSentencesHaveTheirOwnSwitches(t *testing.T) {
 		})
 	}
 }
+
+// Semantics.MonitorOffSilencesJobsAtExit: the other half of the axis above —
+// a **prompt** with the monitor off. One reading says nothing as it leaves
+// and hangs nothing up; the other accounts for its jobs exactly as with the
+// monitor on. Both halves of the parting are asked about, the held `exit`
+// and the hangup, because the axis is one gate in front of both.
+func TestTheMonitorOffMaySilenceJobsAtExit(t *testing.T) {
+	for _, tc := range []struct {
+		why     string
+		axis    Answer
+		account bool
+	}{
+		{"the prompt is not enough without the monitor", Yes, false},
+		{"the prompt is enough", No, true},
+		// Read and not asked: an unanswered field keeps what this engine
+		// did before the question was put, which is the prompt's answer.
+		{"unanswered reads as the prompt's answer", Unspecified, true},
+	} {
+		t.Run(tc.why, func(t *testing.T) {
+			f, r := hupJobsAt(t, true, true, false, true,
+				func(s *Semantics, d *Diagnostics) {
+					s.MonitorOffSilencesJobsAtExit = tc.axis
+					s.HangupAtExitNeedsALoginShell = No
+					s.HangupAtExitSkipsStoppedJobs = Yes
+					s.StoppedJobsHoldTheExit = Yes
+					d.RunningJobsAtExit = monitorExitRunning
+					d.JobsHUPedAtExit = monitorExitHUPed + " %[2]d"
+				})
+			r.SetChecksRunningJobsAtExit(true)
+			r.SetChecksStoppedJobsAtExit(true)
+			out := sink(t)
+			r.Stdout, r.Stderr = out, out
+			// Started with the monitor on and turned off afterwards, which is
+			// a row of its own and the one that keeps the job in a process
+			// group of its own, so the hangup reaches the fake rather than a
+			// real pid: measured 2026-10-05 on zsh 5.9.2 through a
+			// pseudo-terminal, `sleep 3 &`, `set +m`, `exit` leaves saying
+			// nothing — the state at the exit decides, not at the start.
+			if got, st, _ := jobRun2(t, r, "/usr/bin/true &\nset +m"); st != 0 {
+				t.Fatalf("set +m: status %d: %s", st, got)
+			}
+			if held := r.HoldsExitForJobs(); held != tc.account {
+				t.Errorf("the exit held = %v, want %v", held, tc.account)
+			}
+			r.Finish(t.Context())
+			b, err := os.ReadFile(out.Name())
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, want := range []string{monitorExitRunning, monitorExitHUPed} {
+				if strings.Contains(string(b), want) != tc.account {
+					t.Errorf("wrote %q; %q present = %v, want %v",
+						b, want, strings.Contains(string(b), want), tc.account)
+				}
+			}
+			want := 0
+			if tc.account {
+				want = 1
+			}
+			if n := hangups(f); n != want {
+				t.Errorf("%d hangups, want %d", n, want)
+			}
+		})
+	}
+}

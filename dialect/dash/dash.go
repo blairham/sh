@@ -445,6 +445,11 @@ func Semantics() interp.Semantics {
 	// about. That one is StoppedJobsHoldTheExit's and is not moved here
 	// (#4542).
 	s.MonitorAloneAccountsForJobsAtExit = interp.No
+	// And with the monitor turned off at a prompt, a stopped job no longer
+	// holds the exit: measured 2026-10-05 through a pseudo-terminal, `set
+	// +m`, `sleep 5 & kill -STOP $!`, `exit` leaves saying nothing, where the
+	// same lines with the monitor on are `You have stopped jobs.` (#6028).
+	s.MonitorOffSilencesJobsAtExit = interp.Yes
 	// dash leaves it off with no terminal too, remarking `can't access tty;
 	// job control turned off` — the same sentence its `set -m` refusal uses,
 	// from the same shell, about two different questions.

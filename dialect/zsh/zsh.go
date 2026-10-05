@@ -2697,6 +2697,11 @@ func Semantics() interp.Semantics {
 	// an interactive session with `unsetopt monitor` writes neither too
 	// (#4542).
 	s.MonitorAloneAccountsForJobsAtExit = interp.Yes
+	// And the prompt is not enough without it: `set +m` at a session, or
+	// `-i` on a pipe where the monitor cannot be turned on, and `exit` with a
+	// running job leaves at once, says nothing, and hangs nothing up — the
+	// job was still running afterwards. Measured 2026-10-05 (#6028).
+	s.MonitorOffSilencesJobsAtExit = interp.Yes
 	// A stopped job holds the exit back: the shell says so and stays,
 	// and the next attempt leaves. Measured through a pseudo-terminal for
 	// `exit` and for ^D alike.

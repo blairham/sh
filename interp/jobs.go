@@ -2400,6 +2400,11 @@ func (r *Runner) HoldsExitForJobs() bool {
 	if !r.JobControl || r.toldOfJobsAtExit {
 		return false
 	}
+	// A prompt the dialect does not account to, which is a prompt with the
+	// monitor off in one of them: `exit` leaves. See accountsForJobsAtExit.
+	if !r.accountsForJobsAtExit() {
+		return false
+	}
 	// A table that is entirely the parent's holds nothing this shell would
 	// abandon, so there is nothing to warn about and nothing to stay for.
 	// Measured 2026-09-25 at a `-fiV +Z` session of zsh 5.9.2 with a running
@@ -2526,8 +2531,16 @@ func (r *Runner) jobsAtExitSentence(name string) string {
 // fixed and does not move with interactivity in either row where the monitor
 // is, so the monitor is the noun. Read and not `ask`ed, for the reason the
 // axis gives.
+//
+// And a prompt is not always enough. With the monitor off one dialect says
+// nothing at all, which is Semantics.MonitorOffSilencesJobsAtExit — the
+// third row of the table above, which this read as "both sentences" until
+// #6028.
 func (r *Runner) accountsForJobsAtExit() bool {
-	return r.JobControl || (r.monitor && r.sem().MonitorAloneAccountsForJobsAtExit == Yes)
+	if r.JobControl {
+		return r.monitor || r.sem().MonitorOffSilencesJobsAtExit != Yes
+	}
+	return r.monitor && r.sem().MonitorAloneAccountsForJobsAtExit == Yes
 }
 
 // tellOfJobsLeftBehind writes the sentence about the jobs a shell with **no

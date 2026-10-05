@@ -191,6 +191,7 @@ ash   LongOptionNameIgnoresHyphens
 ash   LongOptionValueIsANumber
 ash   LongestMatchTakesTheWrittenArm
 ash   MixedTableLiteral
+ash   MonitorOffSilencesJobsAtExit
 ash   NameBeyondASCIIStaysOutOfTheEnvironment
 ash   NamerefArrayRefusal
 ash   NamerefCycleIsRefused

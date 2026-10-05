@@ -112,7 +112,7 @@ func seedStacks(r *Runner) {
 	r.scopes = append(make([]*scope, 0, 4), &scope{
 		saved:                map[string]string{"seed": "v"},
 		existed:              map[string]bool{"seed": true},
-		savedArrays:          map[string]Array{"seed": {0: {Str: "v"}}},
+		savedArrays:          map[string]Array{"seed": ArrayOf(Element{Str: "v"})},
 		arrayExisted:         map[string]bool{"seed": true},
 		removedBefore:        map[string]bool{"seed": true},
 		declaredOnlyBefore:   map[string]bool{"seed": true},
@@ -311,7 +311,7 @@ func seedTables(r *Runner) {
 	r.noticedJobs = map[*Job]bool{{}: true}
 	r.keptSubstBodies = map[substBodyKey]keptSubstBody{{text: "seed"}: {}}
 	r.Vars = map[string]string{"seed": "v"}
-	r.Arrays = map[string]Array{"seed": {0: {Str: "v"}}}
+	r.Arrays = map[string]Array{"seed": ArrayOf(Element{Str: "v"})}
 	r.AssocArrays = map[string]AssocArray{"seed": {"k": {Str: "v"}}}
 	r.Dynamic = map[string]func(*Runner) string{"seed": func(*Runner) string { return "" }}
 	r.DynamicArrays = map[string]func(*Runner) []string{"seed": func(*Runner) []string { return nil }}

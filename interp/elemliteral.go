@@ -205,7 +205,7 @@ func (r *Runner) literalWords(name string, elems []*syntax.ArrayElem) ([]string,
 		// whole-array spelling — see literalElems.
 		return nil, false
 	}
-	built, ok := r.literalInto(name, Array{}, 0, parsed, false)
+	built, ok := r.literalInto(name, NewArray(0), 0, parsed, false)
 	if !ok {
 		return nil, false
 	}

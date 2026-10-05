@@ -2964,7 +2964,7 @@ func (r *Runner) markDeclaredCompound(name string, fresh bool, f declareFlags, h
 		switch p {
 		case ScalarUnderACompoundBecomesTheFirstElement:
 			r.markIndexed(name)
-			r.storeArray(name, Array{0: Scalar(v)})
+			r.storeArray(name, ArrayOf(Scalar(v)))
 		case ScalarUnderACompoundDiscardsIt:
 			r.markIndexed(name)
 		case ScalarUnderACompoundStaysAScalar:
@@ -3240,7 +3240,7 @@ func (r *Runner) arrayBecomesATable(name string) {
 	if !kept {
 		return
 	}
-	for idx, v := range held {
+	for idx, v := range held.All() {
 		r.setAssocElem(name, itoa(idx), v.scalar())
 	}
 }
@@ -6006,7 +6006,7 @@ func (r *Runner) compoundNameHolds(name string) bool {
 	// matters because the array attribute *is* an empty store — see
 	// markIndexed — so `typeset -ia b` would otherwise be a name already
 	// holding a compound value and lose the letter to its first literal.
-	return ok && len(a) > 0
+	return ok && a.Len() > 0
 }
 
 // compoundMeetingAnAttribute is what an attribute a declaration has just

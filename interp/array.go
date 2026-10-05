@@ -35,7 +35,12 @@ func (r *Runner) arrayBase() int {
 // The third shell reads the same store the other way, walking the whole
 // extent and finding an unassigned subscript empty. So the storage is sparse
 // in every dialect and only the *reading* is a question.
-type Array map[int]Element
+//
+// A pointer to the store, so that an Array passed around is the same array —
+// a write through one copy is seen through the others, and nil is the array
+// that does not exist, both as they were while this was a map. What the store
+// is made of is behind [IndexedArray]'s methods (#6099).
+type Array = *IndexedArray
 
 // Element is what one subscript holds.
 //
@@ -51,6 +56,10 @@ type Array map[int]Element
 // that the store has one kind of element rather than two tables that can
 // drift. Every dialect but ksh93 leaves Nested nil and pays a word for it.
 type Element struct {
+	// Uncomparable, as it was while Nested was a map: two elements built the
+	// same way are the same element, and `==` over the pointer Nested now is
+	// would say otherwise. See equal.
+	_ [0]func()
 	// Str is the value where the element holds a string.
 	Str string
 	// Nested is the array the element holds instead, and nil where it holds a
@@ -153,10 +162,10 @@ func (e Element) scalar() string {
 	if e.Nested == nil {
 		return e.Str
 	}
-	if len(e.Nested) == 0 {
+	if e.Nested.Len() == 0 {
 		return "(\n)"
 	}
-	return e.Nested[0].scalar()
+	return e.Nested.Get(0).scalar()
 }
 
 // equal reports whether two elements hold the same value.
@@ -192,9 +201,9 @@ func (a Array) clone() Array {
 	if a == nil {
 		return nil
 	}
-	out := make(Array, len(a))
-	for k, v := range a {
-		out[k] = v.clone()
+	out := NewArray(a.Len())
+	for k, v := range a.All() {
+		out.Set(k, v.clone())
 	}
 	return out
 }
@@ -211,11 +220,11 @@ func (e Element) clone() Element {
 // equal reports whether two arrays hold the same elements at the same
 // subscripts, to any depth.
 func (a Array) equal(b Array) bool {
-	if len(a) != len(b) {
+	if a.Len() != b.Len() {
 		return false
 	}
-	for k, v := range a {
-		w, held := b[k]
+	for k, v := range a.All() {
+		w, held := b.Lookup(k)
 		if !held || !v.equal(w) {
 			return false
 		}
@@ -225,8 +234,8 @@ func (a Array) equal(b Array) bool {
 
 // subscripts returns the assigned subscripts, in order.
 func (a Array) subscripts() []int {
-	out := make([]int, 0, len(a))
-	for k := range a {
+	out := make([]int, 0, a.Len())
+	for k := range a.All() {
 		out = append(out, k)
 	}
 	sort.Ints(out)
@@ -241,7 +250,7 @@ func (a Array) subscripts() []int {
 // of it was measured at a third of what a real startup spent in this file,
 // and every caller of the two below wants a number and not an order.
 func (a Array) bounds() (lo, hi int, any bool) {
-	for k := range a {
+	for k := range a.All() {
 		if !any || k < lo {
 			lo = k
 		}
@@ -278,11 +287,11 @@ func (a Array) extent(base int) (from, to int) {
 // element's value is on the runner for that reason.
 func (r *Runner) denseElems(a Array) ([]string, bool) {
 	lo, hi, any := a.bounds()
-	if any && (lo != 0 || hi != len(a)-1) {
+	if any && (lo != 0 || hi != a.Len()-1) {
 		return nil, false
 	}
-	out := make([]string, len(a))
-	for k, v := range a {
+	out := make([]string, a.Len())
+	for k, v := range a.All() {
 		out[k] = r.elemText(v)
 	}
 	return out, true
@@ -306,9 +315,9 @@ func (a Array) pastTheEnd() int {
 // storeArray, which does not ask.
 func (r *Runner) setArray(name string, elems []string) {
 	name = r.throughNameref(name)
-	a := make(Array, len(elems))
+	a := NewArray(len(elems))
 	for i, v := range elems {
-		a[i] = Scalar(v)
+		a.Set(i, Scalar(v))
 	}
 	a = r.compoundElemsFolded(name, a)
 	if r.unspecified {
@@ -393,7 +402,7 @@ func (r *Runner) storeArray(name string, a Array) {
 	// An array write, so the name is listed as the array it now is. See
 	// Runner.scalarHeldUnderTheArrayLetter.
 	delete(r.scalarHeldUnderTheArrayLetter, name)
-	if len(a) > 0 {
+	if a.Len() > 0 {
 		// And the third state, which only grows: an array that has held an
 		// element and lost every one of them is not an array that never held
 		// any, and one listing tells them apart. Set rather than written on
@@ -423,7 +432,7 @@ func (r *Runner) storeArray(name string, a Array) {
 		// complaint when the fold is an integer attribute that failed. See
 		// Runner.viewIsAlreadyFolded.
 		r.viewIsAlreadyFolded = true
-		r.setVarAs(name, a[lo].scalar(), assignedAsTheCompoundView)
+		r.setVarAs(name, a.Get(lo).scalar(), assignedAsTheCompoundView)
 		r.viewIsAlreadyFolded = false
 	} else {
 		r.setVarAs(name, "", assignedAsTheCompoundView)
@@ -453,9 +462,9 @@ func (r *Runner) storeArray(name string, a Array) {
 // subscripts instead would have left two elements and no empty at all.
 func (r *Runner) uniqueElems(a Array) Array {
 	elems := uniqueStrings(r.readArray(a))
-	out := make(Array, len(elems))
+	out := NewArray(len(elems))
 	for i, e := range elems {
-		out[i] = Scalar(e)
+		out.Set(i, Scalar(e))
 	}
 	return out
 }
@@ -506,7 +515,7 @@ func (r *Runner) markIndexed(name string) {
 	// `c=(a=1); typeset -a c` lists `typeset -a c` with no members left.
 	r.localizeMemberWrite(name)
 	r.compoundVariableRetyped(name)
-	r.Arrays[name] = Array{}
+	r.Arrays[name] = NewArray(0)
 	r.markCompoundForAllexport(name)
 	// Declared and not assigned — see compounddeclaredonly.go.
 	r.compoundDeclaredOnly(name)
@@ -608,7 +617,7 @@ func (r *Runner) setArrayElem(name string, idx int, sub, value string) {
 		// stands rather than taking a value nobody computed.
 		return
 	}
-	a[pos] = stringWritten(a[pos], folded)
+	a.Set(pos, stringWritten(a.Get(pos), folded))
 	r.storeArray(name, a)
 }
 
@@ -661,10 +670,10 @@ func (r *Runner) elementValueFolded(name, value string) (string, bool) {
 // The append spelling arrives here already joined — appendArrayElem reads the
 // element's scalar and hands the result over — so one rule covers both.
 func stringWritten(e Element, value string) Element {
-	if len(e.Nested) == 0 {
+	if e.Nested.Len() == 0 {
 		return Scalar(value)
 	}
-	e.Nested[0] = stringWritten(e.Nested[0], value)
+	e.Nested.Set(0, stringWritten(e.Nested.Get(0), value))
 	return e
 }
 
@@ -700,7 +709,7 @@ func (r *Runner) elementsOfName(name string, idx int) Array {
 		return r.arrayForWrite(name)
 	}
 	a, _ := r.appendedOverAScalar(name)
-	if len(a) == 0 || idx >= 0 {
+	if a.Len() == 0 || idx >= 0 {
 		return a
 	}
 	// A negative subscript counts back from the end, so it is the one
@@ -710,7 +719,7 @@ func (r *Runner) elementsOfName(name string, idx int) Array {
 	// promote and a subscript that counts back over it.
 	if !r.ask(r.sem().NegativeSubscriptCountsOverAPromotedScalar,
 		"a negative subscript counting back over a scalar a write is promoting") {
-		return Array{}
+		return NewArray(0)
 	}
 	return a
 }
@@ -723,11 +732,11 @@ func (r *Runner) elementsOfName(name string, idx int) Array {
 // `a=(p q)` takes `a[-3]`, `a[-4]` and `a[-5]` to the same place. The others
 // refuse it, which is the axis rather than this arithmetic.
 func insertAtTheFront(a Array, e Element) Array {
-	out := make(Array, len(a)+1)
+	out := NewArray(a.Len() + 1)
 	for _, pos := range a.subscripts() {
-		out[pos+1] = a[pos]
+		out.Set(pos+1, a.Get(pos))
 	}
-	out[0] = e
+	out.Set(0, e)
 	return out
 }
 
@@ -768,7 +777,7 @@ func (r *Runner) appendArrayElem(name string, idx int, sub, value string) {
 		// something to join to: `a=abc; a[0]+=x` is `abcx`, and reading the
 		// store directly made it `x` — the promotion happened below, after
 		// the join had already decided there was nothing there (#1570).
-		v, ok := r.appendedValue(name, a[pos].scalar(), value)
+		v, ok := r.appendedValue(name, a.Get(pos).scalar(), value)
 		if !ok {
 			return
 		}
@@ -838,7 +847,7 @@ func (r *Runner) appendScalarToArray(name string, a Array, value string) {
 		}
 		return
 	}
-	a[a.pastTheEnd()] = Scalar(value)
+	a.Set(a.pastTheEnd(), Scalar(value))
 	r.storeArray(name, a)
 }
 
@@ -925,7 +934,7 @@ func (r *Runner) scalarOverCompound(name, value string, form assignForm) bool {
 	// Runner.scalarHeldUnderTheArrayLetter. Read before the store, which
 	// records the element.
 	held := r.scalarHeldUnderTheArrayLetter[name] ||
-		(len(r.Arrays[name]) == 0 && !r.compoundHeldAnElement[name])
+		(r.Arrays[name].Len() == 0 && !r.compoundHeldAnElement[name])
 	// The subscript as written, for the complaint that names one — the base
 	// is never below the first element, so nothing can reach it.
 	r.setArrayElem(name, r.arrayBase(), strconv.Itoa(r.arrayBase()), value)
@@ -1014,17 +1023,17 @@ func (r *Runner) unsetArrayElem(name string, idx int, sub string) int {
 		if !within && idx >= 0 {
 			return r.refuseSubscriptToUnset(name, sub)
 		}
-		if _, held := a[pos]; !held {
+		if _, held := a.Lookup(pos); !held {
 			return 0
 		}
-		a[pos] = Element{}
+		a.Set(pos, Element{})
 		r.storeArray(name, a)
 		return 0
 	}
 	if !within {
 		return r.refuseSubscriptToUnset(name, sub)
 	}
-	delete(a, pos)
+	a.Delete(pos)
 	r.storeArray(name, a)
 	return 0
 }
@@ -1241,7 +1250,7 @@ func (r *Runner) unsetElementSpan(name string, a Array, from, to int) int {
 		return 0
 	}
 	elems := make([]string, n)
-	for pos, v := range a {
+	for pos, v := range a.All() {
 		if pos >= 0 && pos < n {
 			elems[pos] = v.scalar()
 		}
@@ -2142,7 +2151,7 @@ func (r *Runner) unsetWholeArray(name string) (handled bool, code int) {
 	switch r.unsetArraySpan() {
 	case UnsetArraySpanRemovesTheElements:
 		if _, ok := r.Arrays[name]; ok {
-			r.storeArray(name, Array{})
+			r.storeArray(name, NewArray(0))
 			return true, 0
 		}
 		// A name that is no array is not emptied, and the two cases part
@@ -2191,8 +2200,8 @@ func (r *Runner) unsetWholeArray(name string) (handled bool, code int) {
 		// and nothing is what it keeps. An array that is already empty has no
 		// span either, so `a=(); unset a[@]` does not gain an element.
 		if a, ok := r.writableArrayCell(name); ok {
-			if len(a) > 0 {
-				r.storeArray(name, Array{0: {}})
+			if a.Len() > 0 {
+				r.storeArray(name, ArrayOf(Element{}))
 			}
 			return true, 0
 		}
@@ -2234,12 +2243,12 @@ func (r *Runner) unsetWholeArray(name string) (handled bool, code int) {
 // and its own `unset "a[1]"` leaves an empty element in place rather than a
 // gap.
 func (r *Runner) arrayBareName(a Array) (string, bool) {
-	elem, assigned := a[0]
+	elem, assigned := a.Lookup(0)
 	base := r.elemText(elem)
 	// The two readings agree while the base element is the only element there
 	// is — which is `a=(x)` and every scalar-shaped array a script builds —
 	// so the axis is asked only where they part.
-	if assigned && len(a) == 1 {
+	if assigned && a.Len() == 1 {
 		return base, true
 	}
 	return r.bareArrayReading(r.readArray(a), base, assigned)
@@ -2358,21 +2367,21 @@ func (r *Runner) readArray(a Array) []string {
 	if !r.arrayHasGaps(a) {
 		out := make([]string, 0, len(subs))
 		for _, k := range subs {
-			out = append(out, r.elemText(a[k]))
+			out = append(out, r.elemText(a.Get(k)))
 		}
 		return out
 	}
 	if r.ask(r.sem().ArraysAreSparse, "an unassigned subscript being no element at all") {
 		out := make([]string, 0, len(subs))
 		for _, k := range subs {
-			out = append(out, r.elemText(a[k]))
+			out = append(out, r.elemText(a.Get(k)))
 		}
 		return out
 	}
 	from, to := a.extent(0)
 	out := make([]string, 0, to-from+1)
 	for i := from; i <= to; i++ {
-		out = append(out, r.elemText(a[i]))
+		out = append(out, r.elemText(a.Get(i)))
 	}
 	return out
 }
@@ -2394,7 +2403,7 @@ func (r *Runner) arrayKeys(a Array) []int {
 // subscript was never assigned — the only case the two readings differ in.
 func (r *Runner) arrayHasGaps(a Array) bool {
 	from, to := a.extent(0)
-	return to-from+1 != len(a)
+	return to-from+1 != a.Len()
 }
 
 // arraySubscript answers `${a[i]}`, `${a[@]}` and `${a[*]}`.
@@ -3334,7 +3343,7 @@ func (r *Runner) elemAtFor(name string, elems []string, n int, length subscriptL
 		return "", false
 	}
 	if compacted {
-		v, ok := a[pos]
+		v, ok := a.Lookup(pos)
 		return r.elemText(v), ok
 	}
 	if pos >= len(elems) {
@@ -3892,7 +3901,7 @@ func (r *Runner) compoundElemsFolded(name string, a Array) Array {
 	}
 	changed := false
 	for _, sub := range a.subscripts() {
-		if a[sub].Nested != nil {
+		if a.Get(sub).Nested != nil {
 			// A nested array is not a value this name's attribute reaches on
 			// a *write*. Measured 2026-09-14 on ksh93u+, the one column whose
 			// elements nest: `typeset -i a; a[1]=(5+5)` is `typeset -a -i
@@ -3906,7 +3915,7 @@ func (r *Runner) compoundElemsFolded(name string, a Array) Array {
 			// `typeset -i a[1][2]=5+5` is `([2]=10)` (#2491).
 			continue
 		}
-		if r.attributeWouldChange(name, a[sub].scalar()) {
+		if r.attributeWouldChange(name, a.Get(sub).scalar()) {
 			changed = true
 			break
 		}
@@ -3927,9 +3936,9 @@ func (r *Runner) compoundElemsFolded(name string, a Array) Array {
 // arithmetic: a *write* asks CompoundElementsGoThroughTheAttribute, and an
 // attribute arriving over a standing array asks CompoundAttribute.
 func (r *Runner) foldedElems(name string, a Array) Array {
-	folded := Array{}
+	folded := NewArray(0)
 	for _, sub := range a.subscripts() {
-		if a[sub].Nested != nil {
+		if a.Get(sub).Nested != nil {
 			// The fold goes *into* a nested array rather than flattening it.
 			// Measured on the one column whose elements nest: `a[1]=(5+5);
 			// typeset -i a` is `typeset -a -i a=([1]=(10) )` there, the
@@ -3938,17 +3947,17 @@ func (r *Runner) foldedElems(name string, a Array) Array {
 			// or the empty string where it has none — folded a whole array
 			// into one number and lost every other element it held, silently
 			// (#2491).
-			folded[sub] = Element{Nested: r.foldedElems(name, a[sub].Nested)}
+			folded.Set(sub, Element{Nested: r.foldedElems(name, a.Get(sub).Nested)})
 			continue
 		}
-		v, ok := r.attributeFolded(name, a[sub].scalar())
+		v, ok := r.attributeFolded(name, a.Get(sub).scalar())
 		if !ok {
 			// The integer evaluation failed and has already said so, which
 			// is the one case attributeFolded stores nothing for. The array
 			// is left as it stands rather than half rewritten.
 			return a
 		}
-		folded[sub] = Scalar(v)
+		folded.Set(sub, Scalar(v))
 	}
 	return folded
 }
@@ -3967,13 +3976,13 @@ func (r *Runner) arrayForWrite(name string) Array {
 		return a
 	}
 	if produce, produced := r.DynamicArrays[name]; produced {
-		a := make(Array, 0)
+		a := NewArray(0)
 		for i, v := range produce(r) {
-			a[i] = Scalar(v)
+			a.Set(i, Scalar(v))
 		}
 		return a
 	}
-	return Array{}
+	return NewArray(0)
 }
 
 // refusesEmptyParamSubscript is `${a[]}` — brackets written with nothing at
@@ -4148,6 +4157,6 @@ func (r *Runner) unsetEmptiesAnUnwrittenArray(name string) bool {
 	}
 	// Emptied rather than removed: the name is still an array, and
 	// `${#a[@]}` reads 0 rather than the name being gone.
-	r.storeArray(name, Array{})
+	r.storeArray(name, NewArray(0))
 	return true
 }

@@ -181,7 +181,7 @@ func (r *Runner) dotRangeElements(name string, elems []string) ([]int, []string)
 			vals := make([]string, len(keys))
 			for i, k := range keys {
 				subs[i] = k + base
-				vals[i] = a[k].scalar()
+				vals[i] = a.Get(k).scalar()
 			}
 			return subs, vals
 		}

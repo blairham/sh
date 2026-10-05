@@ -377,13 +377,13 @@ func (r *Runner) arrayPairs(name string) (keys, vals []string, assoc, stored boo
 	}
 	if a, ok := r.Arrays[name]; ok && !r.removed[name] {
 		base := r.arrayBase()
-		ks := make([]string, 0, len(a))
-		vs := make([]string, 0, len(a))
+		ks := make([]string, 0, a.Len())
+		vs := make([]string, 0, a.Len())
 		for _, k := range r.arrayKeys(a) {
 			// Positions are stored from zero and subscripts are written from
 			// wherever the dialect counts, the same edge subscriptsOf walks.
 			ks = append(ks, itoa(k+base))
-			vs = append(vs, a[k].scalar())
+			vs = append(vs, a.Get(k).scalar())
 		}
 		return ks, vs, false, true
 	}

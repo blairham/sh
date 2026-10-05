@@ -126,9 +126,9 @@ func (r *Runner) setListedValue(d declaration) string {
 func (r *Runner) setListedArray(d declaration) string {
 	switch r.sem().DeclareListing {
 	case DeclareListingClustered:
-		elems := make([]string, 0, len(d.arr))
+		elems := make([]string, 0, d.arr.Len())
 		for _, i := range d.arr.subscripts() {
-			elems = append(elems, fmt.Sprintf("[%d]=%s", i, r.listedElement(d.arr[i], ListedValueAlone)))
+			elems = append(elems, fmt.Sprintf("[%d]=%s", i, r.listedElement(d.arr.Get(i), ListedValueAlone)))
 		}
 		return "(" + strings.Join(elems, " ") + ")"
 	case DeclareListingExportSpelled:

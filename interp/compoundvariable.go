@@ -177,7 +177,7 @@ func (r *Runner) compoundVariableSubscripted(name string) {
 	if r.Arrays == nil {
 		r.Arrays = map[string]Array{}
 	}
-	r.Arrays[name] = Array{}
+	r.Arrays[name] = NewArray(0)
 }
 
 // compoundMemberPrefix is what a member's name begins with.

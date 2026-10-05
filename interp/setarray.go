@@ -267,17 +267,17 @@ func (r *Runner) setArrayStartsTheNameOver(name string, front bool) bool {
 // do, and its `set +A` over a name that is not already an array re-creates
 // the name and takes the letter off before the values land.
 func (r *Runner) prependedArray(name string, values []string) Array {
-	front := make(Array, len(values))
+	front := NewArray(len(values))
 	for i, v := range values {
-		front[i] = Scalar(v)
+		front.Set(i, Scalar(v))
 	}
 	front = r.compoundElemsFolded(name, front)
-	a := make(Array, len(r.Arrays[name]))
-	for k, v := range r.Arrays[name] {
-		a[k] = v
+	a := NewArray(r.Arrays[name].Len())
+	for k, v := range r.Arrays[name].All() {
+		a.Set(k, v)
 	}
-	for k, v := range front {
-		a[k] = v
+	for k, v := range front.All() {
+		a.Set(k, v)
 	}
 	return a
 }

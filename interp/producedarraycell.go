@@ -53,9 +53,9 @@ func (r *Runner) writableArrayCell(name string) (Array, bool) {
 		return nil, false
 	}
 	elems := produce(r)
-	a := make(Array, len(elems))
+	a := NewArray(len(elems))
 	for i, v := range elems {
-		a[i] = Scalar(v)
+		a.Set(i, Scalar(v))
 	}
 	return a, true
 }

@@ -37414,6 +37414,57 @@
         "TimedOut": false
       }
     },
+    "cd/a-refusal-that-climbs-is-named-where-it-climbs": {
+      "ash": {
+        "Stdout": "done",
+        "Stderr": "\u003cshell\u003e: cd: line 1: can't cd to ../nosuch: No such file or directory~\u003cshell\u003e: cd: line 1: can't cd to ../nosuch/..: No such file or directory~\u003cshell\u003e: cd: line 1: can't cd to nosuch: No such file or directory",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "done",
+        "Stderr": "\u003cshell\u003e: line 2: cd: ../nosuch: No such file or directory~\u003cshell\u003e: line 2: cd: ..//nosuch/..: No such file or directory~\u003cshell\u003e: line 2: cd: ../nosuch/..: No such file or directory~\u003cshell\u003e: line 2: cd: deep/../../nosuch/..: No such file or directory~\u003cshell\u003e: line 2: cd: nosuch: No such file or directory",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "done",
+        "Stderr": "\u003cshell\u003e: line 2: cd: ../nosuch: No such file or directory~\u003cshell\u003e: line 2: cd: ..//nosuch/..: No such file or directory~\u003cshell\u003e: line 2: cd: ../nosuch/..: No such file or directory~\u003cshell\u003e: line 2: cd: deep/../../nosuch/..: No such file or directory~\u003cshell\u003e: line 2: cd: nosuch: No such file or directory",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "done",
+        "Stderr": "\u003cshell\u003e: line 1: cd: ../nosuch: No such file or directory~\u003cshell\u003e: line 1: cd: ..//nosuch/..: No such file or directory~\u003cshell\u003e: line 1: cd: ../nosuch/..: No such file or directory~\u003cshell\u003e: line 1: cd: deep/../../nosuch/..: No such file or directory~\u003cshell\u003e: line 1: cd: nosuch: No such file or directory",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "done",
+        "Stderr": "\u003cshell\u003e: 2: cd: can't cd to ../nosuch~\u003cshell\u003e: 2: cd: can't cd to ../nosuch/..~\u003cshell\u003e: 2: cd: can't cd to nosuch",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "done",
+        "Stderr": "\u003cshell\u003e[2]: cd: \u003ctmp\u003e/d/nosuch: [No such file or directory]~\u003cshell\u003e[2]: cd: \u003ctmp\u003e/d//nosuch/..: [No such file or directory]~\u003cshell\u003e[2]: cd: \u003ctmp\u003e/d/nosuch/..: [No such file or directory]~\u003cshell\u003e[2]: cd: deep/../../nosuch/..: [No such file or directory]~\u003cshell\u003e[2]: cd: nosuch: [No such file or directory]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "done",
+        "Stderr": "\u003cshell\u003e:cd:2: no such file or directory: ../nosuch~\u003cshell\u003e:cd:2: no such file or directory: ..//nosuch/..~\u003cshell\u003e:cd:2: no such file or directory: ../nosuch/..~\u003cshell\u003e:cd:2: no such file or directory: deep/../../nosuch/..~\u003cshell\u003e:cd:2: no such file or directory: nosuch",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "cd/a-symlink-refusing-option-only-one-shell-has": {
       "ash": {
         "Stdout": "real=2~link~real~link=2~link~real~deep=2~link~real~gone=2",

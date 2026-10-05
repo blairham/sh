@@ -78,3 +78,39 @@ func TestAGroupedListingReachesTheTerminal(t *testing.T) {
 	s.typeKeys("\n")
 	s.end()
 }
+
+// A heading that leaves an attribute on does not paint the line drawn under
+// the listing.
+//
+// zsh's own format styles can end that way — `%1F` with no `%f` after it is a
+// heading that is red from there on — and measured on zsh 5.9.2, 2026-10-05,
+// the listing ends by switching every attribute off. Without it the prompt
+// redrawn under the listing came out in the heading's color (#6146).
+func TestAHeadingLeftColoredDoesNotPaintThePrompt(t *testing.T) {
+	red := Group{Name: "g", Heading: "\x1b[31m-- red --"}
+	s := newSessionWith(t, func(sh *Shell) {
+		sh.Runner.Vars["PS1"] = "UPPER\n[\\#]"
+		sh.KeyBindings = func(Keymap) map[string]Binding {
+			return map[string]Binding{"\t": {Widget: WidgetComplete, Candidates: "w"}}
+		}
+		sh.RunCompletion = func(context.Context, string, Completion) []Candidate {
+			return []Candidate{{Word: "-a", Group: red}, {Word: "-b", Group: red}}
+		}
+	})
+	s.typeLine(": -\t\t")
+	waitFor(t, s.screen, "-- red --", "the heading")
+	waitFor(t, s.screen, "[1]: -", "the prompt redrawn under the listing")
+	rows := strings.Split(s.shown().styledText(), "\n")
+	var prompt string
+	for _, row := range rows {
+		if strings.Contains(row, "[1]: -") {
+			prompt = row
+		}
+	}
+	if strings.Contains(prompt, "\x1b") {
+		t.Errorf("the prompt under the listing is drawn as %q, painted by the heading\nscreen:\n%s",
+			prompt, s.shown().styledText())
+	}
+	s.typeKeys("\n")
+	s.end()
+}

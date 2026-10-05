@@ -186,11 +186,13 @@ func compaddBuiltin(r *interp.Runner, ctx context.Context, args []string) int {
 	if !ok {
 		return 1
 	}
-	// Once, because the call's explanation is recorded against the block as
-	// the group is made and a second making would record it twice.
 	group := cs.group(opts)
 	candidates := compaddCandidates(r, opts, rest)
 	offered := cs.add(r, opts, group, candidates)
+	// After the matches and not with the group, because what an explanation
+	// draws depends on them: its `%n` is how many this call added, and an
+	// explanation whose call added none is not drawn at all. See explain.
+	cs.explain(r, opts, group, offered)
 	if opts.hasMessage && offered == 0 {
 		// A message is drawn whether or not the block has matches, so a call
 		// that offered none of its own still leaves the block behind. A
@@ -473,8 +475,7 @@ func display(rows []string, i int) string {
 	return rows[i]
 }
 
-// group is the block this call's matches are drawn in, and it records the
-// call's explanation against that block.
+// group is the block this call's matches are drawn in.
 //
 // The identity of a block is its name and its arrangement, and not its
 // heading. Both halves are measured, on zsh 5.9.2, 2026-09-18:
@@ -493,21 +494,40 @@ func display(rows []string, i int) string {
 // So the heading cannot be part of what identifies a block — a second call
 // with a second explanation would make a second block — and it cannot be
 // settled when the call runs either, since a later call may add to it. It is
-// stamped on at the end instead; see completionState.groupedMatches.
+// recorded by explain and stamped on at the end; see
+// completionState.groupedMatches.
 func (cs *completionState) group(o compaddOptions) repl.Group {
 	key := repl.Group{Name: o.group, Unsorted: o.unsorted, OnePerLine: o.onePerLine}
-	heading := o.heading
-	if o.hasMessage {
-		// Measured: a call carrying both draws the message. See the file
-		// comment's fifth rule.
-		heading = o.message
-	}
-	if heading != "" {
-		cs.groups[key] = append(cs.groups[key], heading)
-	} else if _, seen := cs.groups[key]; !seen {
+	if _, seen := cs.groups[key]; !seen {
 		cs.groups[key] = nil
 	}
 	return key
+}
+
+// explain records a call's explanation against its block, drawn the way the
+// listing will show it. See compexplain.go for the language.
+//
+// Two rules, both measured on zsh 5.9.2, 2026-10-05:
+//
+//   - **A `-X` explanation is drawn only where its own call added a match.**
+//     `compadd -X 'H' -J g nomatch` followed by `compadd -J g alfa` draws
+//     `alfa` with no heading over it: the block is there, and the call that
+//     explained it had nothing to explain.
+//   - **A `-x` message is drawn either way, and wins over `-X`**, measured
+//     earlier — see the file comment's fourth and fifth rules. Its `%n` is -1
+//     whether or not the call added anything.
+func (cs *completionState) explain(r *interp.Runner, o compaddOptions, key repl.Group, offered int) {
+	text, count := o.heading, offered
+	switch {
+	case o.hasMessage:
+		text, count = o.message, -1
+	case offered == 0:
+		return
+	}
+	if text == "" {
+		return
+	}
+	cs.groups[key] = append(cs.groups[key], explanationText(r, text, count))
 }
 
 // groupedMatches is what `compadd` collected with each block's headings

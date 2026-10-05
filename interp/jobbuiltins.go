@@ -800,6 +800,7 @@ func biFg(r *Runner, _ context.Context, args []string) int {
 		return 1
 	}
 	status, stopped := r.waitResult(w)
+	r.countUnsettled(w.Killed, stopped)
 	if w.Killed {
 		// What ended it, for the same two readers `runWatched` tells: the
 		// prompt starts a fresh line after the `^C` the terminal echoed, and

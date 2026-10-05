@@ -7,7 +7,6 @@ import (
 	"context"
 	"fmt"
 	"strconv"
-	"sync"
 
 	"github.com/blairham/sh/interp"
 	"github.com/blairham/sh/repl"
@@ -103,12 +102,10 @@ func logoutBuiltin(r *interp.Runner, ctx context.Context, args []string) int {
 	return r.RunBuiltinAs("logout", "exit", exit, ctx, args)
 }
 
-// ttyFrozen is which runners have frozen the terminal's settings.
-var ttyFrozen sync.Map
-
-// ttyctlBuiltin keeps the one bit `ttyctl` reports. Freezing the settings is
-// a promise about what the editor restores after a command, which this shell's
-// editor keeps by not changing them; the bit is what a script can see.
+// ttyctlBuiltin keeps the bit `ttyctl` reports, on the Runner where the front
+// end reads it. Frozen means a change a command makes to the terminal's
+// settings is undone when the command ends. Unfrozen means it is kept, as
+// zsh keeps it (#6105). See interp.Runner.TerminalFrozen.
 func ttyctlBuiltin(r *interp.Runner, _ context.Context, args []string) int {
 	rest, letters, _, code := r.BuiltinOptions("ttyctl", args, "fu")
 	if code != 0 {
@@ -118,13 +115,13 @@ func ttyctlBuiltin(r *interp.Runner, _ context.Context, args []string) int {
 	for _, c := range letters {
 		switch c {
 		case 'f':
-			ttyFrozen.Store(r, true)
+			r.TerminalFrozen = true
 		case 'u':
-			ttyFrozen.Delete(r)
+			r.TerminalFrozen = false
 		}
 	}
 	if letters == "" {
-		if _, frozen := ttyFrozen.Load(r); frozen {
+		if r.TerminalFrozen {
 			_, _ = fmt.Fprintln(r.Out(), "tty is frozen")
 		} else {
 			_, _ = fmt.Fprintln(r.Out(), "tty is not frozen")

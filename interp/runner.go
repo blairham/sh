@@ -452,6 +452,17 @@ type Runner struct {
 	// every dialect but one.
 	JobEnded func()
 
+	// TerminalFrozen says the terminal's settings are frozen: a change a
+	// command makes to them is undone when it ends, rather than kept for the
+	// next one. zsh's `ttyctl -f` sets it and `ttyctl -u` clears it; the front
+	// end reads it each time it takes the terminal back (#6105).
+	//
+	// A field and not a question to the dialect, because it is a fact a
+	// script moves at the prompt, and only the front end acts on it. A
+	// subshell's copy is its own, which is right: `(ttyctl -f)` freezes
+	// nothing in the shell around it.
+	TerminalFrozen bool
+
 	// TakeInterrupt, when set, reports whether the person at the keyboard has
 	// interrupted the shell since it was last asked, and forgets it.
 	//
@@ -1722,6 +1733,11 @@ type Runner struct {
 	// Cleared at the top of every command, so it can only ever describe the
 	// command the status describes.
 	diedOfSig syscall.Signal
+
+	// signalEnds and stopEnds count the foreground commands a signal ended
+	// and a stop suspended, which are the ones whose terminal settings a
+	// shell may not keep. See Runner.UnsettledEnds.
+	signalEnds, stopEnds int
 
 	// status is the exit status of the last command run.
 	status int
@@ -10842,6 +10858,7 @@ func (r *Runner) exec(ctx context.Context, argv, env []string) error {
 		r.status = r.exitStatus(err)
 		if sig, killed := killedBy(err); killed {
 			r.diedOfSig = sig
+			r.countUnsettled(true, false)
 			r.reportKilled(sig, cmd.Process.Pid)
 		}
 	default:
@@ -11077,6 +11094,7 @@ func (r *Runner) runWatched(ctx context.Context, cmd *exec.Cmd, argv []string, a
 		r.announceSignalDeathsAtAForegroundReap()
 	}
 	r.status = status
+	r.countUnsettled(w.Killed, stopped)
 	if w.Killed {
 		r.diedOfSig = w.Signal
 		// Told the signal directly rather than through an error: this path

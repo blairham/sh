@@ -24,3 +24,5 @@ func clearOutputPostProcessing(*os.File) error { return ErrUnsupported }
 func setEcho(*os.File, bool) error { return ErrUnsupported }
 
 func interruptAsLineEnd(*os.File) (*Mode, byte, error) { return nil, 0, ErrUnsupported }
+
+func turnBackOn(*modeState, bool, bool) {}

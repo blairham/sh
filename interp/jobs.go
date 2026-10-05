@@ -2767,6 +2767,34 @@ func (r *Runner) listJobsHeldAtExit() {
 // work at all.
 func (r *Runner) LastCommandWasInterrupted() bool { return r.diedOfSig == syscall.SIGINT }
 
+// UnsettledEnds counts the foreground commands this shell has seen ended by a
+// signal and suspended by a stop. A front end compares the counts before and
+// after a line to learn whether one of them did.
+//
+// It is the question a shell asks before it keeps the terminal settings a
+// command left behind (#6105). A command that exits keeps them: `stty -ixon`
+// typed at the prompt lasts in zsh 5.9.2, bash 5.3, ksh93 and dash. A command
+// a stop suspended keeps nothing in zsh, bash or ksh93. A command a signal
+// ended keeps nothing in bash or ksh93, which put back what was there before
+// it, and zsh keeps its settings. Measured 2026-10-05 through a pty with
+// `sh -c 'stty -ixon; kill -TERM $$'` and `kill -STOP $$`.
+//
+// Counts rather than flags, so that a command that ends normally later on the
+// same line does not hide the one before it. They are also per Runner, so a
+// subshell's own commands are not counted. That is right: the subshell itself
+// exits, and that is what the shell around it sees.
+func (r *Runner) UnsettledEnds() (signaled, stopped int) { return r.signalEnds, r.stopEnds }
+
+// countUnsettled records one foreground wait for UnsettledEnds.
+func (r *Runner) countUnsettled(killed, stopped bool) {
+	if killed {
+		r.signalEnds++
+	}
+	if stopped {
+		r.stopEnds++
+	}
+}
+
 // setLastJob records a job's pid as `$!`.
 //
 // Only the pid. Which job the markers point at is jobOrder's, and the two are

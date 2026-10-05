@@ -95,6 +95,27 @@ func (s *terminalState) takeRaw(flow bool) error {
 	return nil
 }
 
+// keep makes the settings the terminal has now the ones restore puts back,
+// and writes them, with line buffering and echo turned back on where asked.
+// It is what a session does after a command has had the terminal and exited
+// (#6105). Before this, the settings captured at startup were put back
+// before every command, so `stty -ixon` typed at the prompt lasted only for
+// the command that ran it.
+//
+// It does nothing in raw mode. A capture taken then would save raw mode as
+// the discipline to hand back, which is the failure takeRaw warns about.
+func (s *terminalState) keep(canonical, echo bool) error {
+	if s == nil || s.raw {
+		return nil
+	}
+	mode, err := tty.Kept(s.f, canonical, echo)
+	if err != nil {
+		return err
+	}
+	s.mode = mode
+	return s.mode.Restore()
+}
+
 // isRaw reports whether the line discipline is off right now, which is what
 // the newline translation and every handover ask.
 func (s *terminalState) isRaw() bool { return s != nil && s.raw }

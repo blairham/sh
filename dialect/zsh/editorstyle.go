@@ -91,6 +91,12 @@ func EditorStyle() repl.EditorStyle {
 		// the editor from the next prompt. See repl.EditorStyle.FlowControlOption
 		// and internal/tty's Raw for the measurement (#5943).
 		FlowControlOption: "FLOW_CONTROL",
+		// What zsh keeps of the settings a command leaves: all of them, with
+		// line buffering and echo back on, and even after a signal ended the
+		// command. See repl.EditorStyle.KeptCanonical (#6105).
+		KeptCanonical:        true,
+		KeptEcho:             true,
+		KeepsWhatASignalLeft: true,
 		// And the option the whole editor runs under, which this shell alone
 		// in the panel has: `unsetopt zle` is an interactive shell with no
 		// line editor, and `-o interactive +o zle` — `-fiV +Z` — is how zsh's

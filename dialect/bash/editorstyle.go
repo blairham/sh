@@ -12,6 +12,10 @@ import "github.com/blairham/sh/repl"
 func EditorStyle() repl.EditorStyle {
 	return repl.EditorStyle{
 		Interrupt: "^C",
+		// bash keeps the terminal settings a command leaves, `-echo`
+		// included, with line buffering back on. See
+		// repl.EditorStyle.KeptCanonical (#6105).
+		KeptCanonical: true,
 		// Measured under a pty: a hundred matches is where it stops asking
 		// and starts asking, it counts the matches and not the rows, it does
 		// not echo the key that answered, and it rings the bell at anything

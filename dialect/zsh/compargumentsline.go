@@ -68,9 +68,7 @@ func (a *argumentsState) analyze(r *interp.Runner, cs *completionState) {
 				// only the option the person is still typing.
 				if cursor {
 					a.cursorIsOption = true
-					if name, _, _ := a.lookupOption(word); name == word {
-						a.cursorOption = name
-					}
+					a.cursorOption = a.optionSpelledOut(word)
 					a.cursorOptArg = a.optionArgumentInTheWord(word)
 				}
 				if at := cs.current - 1; !cursor && i < at && at <= i+skip {
@@ -384,6 +382,37 @@ func (a *argumentsState) lookupOption(word string) (string, string, bool) {
 	return "", "", false
 }
 
+// optionSpelledOut is the option the word under the cursor writes out in
+// full, which is the one spent option `-O` may still offer — see offeredBack
+// — or the empty string where the word does not.
+//
+// **The name alone, or the name and its `=`.** An option whose argument
+// follows an `=` is still offered while the cursor is anywhere after that
+// `=`, and that is what makes `_arguments` go on to ask `-L` for the
+// argument. Measured on zsh 5.9.2, 2026-10-05 from inside a `zle -C` widget,
+// asking `-O` with `--color=-[col]:color:`, `--opt=[o]:oo:`, `-f+[file]:f:`
+// and `-x-[dir]:xx:` declared:
+//
+//	cmd --color=<TAB>    equal=(--color:col --opt:o)
+//	cmd --color=a<TAB>   equal=(--color:col --opt:o)
+//	cmd --opt=o<TAB>     equal=(--color:col --opt:o)
+//	cmd -fx<TAB>         odirect=()           — attached with no `=`: spent
+//	cmd -xq<TAB>         direct=()            — and the same
+//
+// This offered neither of the first three back, so `ls --color=<TAB>` never
+// reached the `-L` that describes the colors.
+func (a *argumentsState) optionSpelledOut(word string) string {
+	name, _, attached := a.lookupOption(word)
+	if name == word {
+		return name
+	}
+	if spec := a.optionNamed(name); attached && spec != nil &&
+		(spec.style == optArgEqual || spec.style == optArgEqualDirect) {
+		return name
+	}
+	return ""
+}
+
 // optionNamed is the spec describing one exact option name.
 func (a *argumentsState) optionNamed(name string) *optionSpec {
 	for i := range a.opts {
@@ -555,10 +584,6 @@ func (a *argumentsState) takeOptionQuietly(word string, after []string) int {
 // describeArguments is `-D`: the message, the action and the tag of every
 // argument spec applying at the cursor.
 func (a *argumentsState) describeArguments(r *interp.Runner, cs *completionState, names []string) int {
-	if len(names) < 3 {
-		r.Diagnosef("not enough arguments\n")
-		return 1
-	}
 	if o := a.cursorOptArg; o != nil {
 		// An **option's own** argument, which is a different question from
 		// which normal argument this position is and was answered with
@@ -569,7 +594,13 @@ func (a *argumentsState) describeArguments(r *interp.Runner, cs *completionState
 		r.SetArray(names[0], []string{o.spec.message})
 		r.SetArray(names[1], []string{o.spec.action})
 		r.SetArray(names[2], []string{o.tag()})
+		o.moveOptionIntoIPrefix(cs)
 		return 0
+	}
+	if len(a.here) == 0 {
+		// **Nothing to describe leaves the three names as they were**; see
+		// compargumentsQuery.
+		return 1
 	}
 	descrs, actions, subcs := []string{}, []string{}, []string{}
 	shift := false
@@ -585,7 +616,7 @@ func (a *argumentsState) describeArguments(r *interp.Runner, cs *completionState
 	if shift {
 		a.shiftWords(r, cs)
 	}
-	return boolStatus(len(a.here) > 0)
+	return 0
 }
 
 // shiftWords is what a `*::` rest specification does to `$words` and
@@ -676,10 +707,6 @@ func (a *argumentsState) argumentsBefore(r *interp.Runner, cs *completionState) 
 // offerOptions is `-O`: the options still available here, sorted into the
 // four arrays by where their argument may be written.
 func (a *argumentsState) offerOptions(r *interp.Runner, names []string) int {
-	if len(names) < 4 {
-		r.Diagnosef("not enough arguments\n")
-		return 1
-	}
 	lists := make([][]string, 4)
 	if a.optionsPossible {
 		for _, opt := range a.opts {
@@ -696,9 +723,15 @@ func (a *argumentsState) offerOptions(r *interp.Runner, names []string) int {
 		}
 	}
 	offered := false
+	for _, list := range lists {
+		offered = offered || len(list) > 0
+	}
+	if !offered {
+		// See compargumentsQuery.
+		return 1
+	}
 	for i, name := range names[:4] {
 		r.SetArray(name, lists[i])
-		offered = offered || len(lists[i]) > 0
 	}
 	// **The status is whether anything was offered**, not whether an option
 	// could stand here. The two come apart as soon as everything is spent or
@@ -714,7 +747,40 @@ func (a *argumentsState) offerOptions(r *interp.Runner, names []string) int {
 	// and with `(-)1:first:(a b)` beside them, `cmd a -<TAB>` is 1 for the
 	// same reason from the other direction — the argument shut the options
 	// off.
-	return boolStatus(offered)
+	return 0
+}
+
+// describeOption is `-L`: the first argument of one named option, as `-D`
+// would describe it with the cursor in that argument — message, action, and
+// the `option-NAME-1` tag.
+//
+// `_arguments` asks it when the word under the cursor is an option written
+// with its `=` — measured over `ls --color=<TAB>` on zsh 5.9.2, 2026-10-05,
+// the trace reads `-D`, `-O`, `-M`, `-W` and then
+// `comparguments -L --color descrs actions subcs`. Its answers, from inside
+// a `zle -C` widget against one spec set holding every argument form:
+//
+//	-L -f        0  fname  _files          option-f-1   -f+[file]:fname:_files
+//	-L --color   0  color  (never always)  option--color-1
+//	-L -x        0  xx     (x1)            option-x-1   -x-[dir]:xx:(x1)
+//	-L -m        0  first  (x y)           option-m-1   two arguments: the first
+//	-L -a        1  — no argument; the names keep what they held
+//	-L -zz       1  — no such option
+//	-L --color=  1  — the name must be exact
+//
+// So it is a lookup by exact name and nothing about the line: none of those
+// options was on it. Before this it was refused as an invalid option, which
+// `_arguments` printed over the line.
+func (a *argumentsState) describeOption(r *interp.Runner, names []string) int {
+	spec := a.optionNamed(names[0])
+	if spec == nil || len(spec.optargs) == 0 {
+		return 1
+	}
+	here := optionArgHere{name: names[0], index: 1, spec: spec.optargs[0]}
+	r.SetArray(names[1], []string{here.spec.message})
+	r.SetArray(names[2], []string{here.spec.action})
+	r.SetArray(names[3], []string{here.tag()})
+	return 0
 }
 
 // offeredBack is the one spent option that is offered all the same: the one
@@ -832,10 +898,6 @@ func optionOffer(name, descr string) string {
 // with, which is `_arguments`' own `-M` where it had one and the documented
 // default otherwise.
 func (a *argumentsState) reportMatcher(r *interp.Runner, names []string) int {
-	if len(names) < 1 {
-		r.Diagnosef("not enough arguments\n")
-		return 1
-	}
 	spec := a.matchSpec
 	if spec == "" {
 		spec = defaultArgumentsMatcher
@@ -853,10 +915,6 @@ func (a *argumentsState) reportMatcher(r *interp.Runner, names []string) int {
 // `comparguments:9: not enough arguments` at status 1, and the same call with
 // a third argument is 0. This took two and answered.
 func (a *argumentsState) reportLine(r *interp.Runner, names []string) int {
-	if len(names) < 3 {
-		r.Diagnosef("not enough arguments\n")
-		return 1
-	}
 	r.SetArray(names[0], a.line)
 	r.SetAssoc(names[1], a.optArgs)
 	return 0
@@ -887,12 +945,11 @@ func (a *argumentsState) reportLine(r *interp.Runner, names []string) int {
 // `-e=-` each answer with an empty parameter — so they are left unwritten
 // rather than guessed at.
 func (a *argumentsState) reportStack(r *interp.Runner, cs *completionState, names []string) int {
-	if len(names) < 1 {
-		r.Diagnosef("not enough arguments\n")
+	if !a.stackInProgress {
 		return 1
 	}
 	r.SetVar(names[0], a.singleOption())
-	return boolStatus(a.stackInProgress)
+	return 0
 }
 
 // continuingAStack is that question asked of the word under the cursor: is
@@ -991,7 +1048,7 @@ func (a *argumentsState) cursorWritesAnArgumentLater(word string) bool {
 // completions write, so this answers the first and the later ones are reached
 // as words of their own. See optionArgumentAfterTheWord.
 func (a *argumentsState) optionArgumentInTheWord(word string) *optionArgHere {
-	name, _, attached := a.lookupOption(word)
+	name, value, attached := a.lookupOption(word)
 	if name == "" {
 		return a.optionArgumentInTheStack(word)
 	}
@@ -1005,7 +1062,10 @@ func (a *argumentsState) optionArgumentInTheWord(word string) *optionArgHere {
 		// its arguments.
 		return nil
 	}
-	return &optionArgHere{name: name, index: 1, spec: spec.optargs[0]}
+	return &optionArgHere{
+		name: name, index: 1, spec: spec.optargs[0],
+		inWord: len(word) - len(value),
+	}
 }
 
 // optionArgumentAfterTheWord is the option argument the cursor is standing in
@@ -1076,5 +1136,5 @@ func (a *argumentsState) optionArgumentInTheStack(word string) *optionArgHere {
 	if spec == nil || len(spec.optargs) == 0 || spec.style == optArgSeparate {
 		return nil
 	}
-	return &optionArgHere{name: last, index: 1, spec: spec.optargs[0]}
+	return &optionArgHere{name: last, index: 1, spec: spec.optargs[0], inWord: len(word)}
 }

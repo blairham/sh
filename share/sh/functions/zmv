@@ -1,0 +1,221 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# zmv [ -finqQsvwW ] [ -C | -L | -M | -{p|P} program ] [ -o optstring ]
+#     srcpat dest
+#
+# Renames (or copies, or links) every file matching srcpat to the name dest
+# gives it, where dest is expanded once per file with the parenthesized parts
+# of srcpat as $1, $2, … and the whole name as $f. Nothing is done unless every
+# name is good: an empty one, two files given the same one, or one that is
+# already a file (without -f) stops the whole run.
+#
+# Written from zshcontrib(1) and from what the installed shell answers, never
+# from its function files; docs/spec/functions.md has the measurements.
+# Measured beyond the manual:
+#
+#   * the command is `mv -- old new` (`cp`, `ln`, `ln -s` for -C, -L, -Ls),
+#     the -o words before the `--`; -p puts the program's words before the
+#     `--` and -P leaves the `--` out; -n and -v write that line, the names
+#     quoted only where they need it;
+#   * a name dest leaves unchanged is passed over without a word;
+#   * files deeper in the tree are done first, so a directory's contents are
+#     renamed before the directory is;
+#   * -i writes the line, asks `Execute? ` and takes one key: y or Y runs it;
+#   * the errors are listed under `zmv: error(s) in substitution:` — for two
+#     files given one name, the later one first — and the status is 1.
+
+emulate -L zsh
+setopt extendedglob
+
+local opt OPTARG action force= interactive= noexec= verbose= wild= wildrepl= quals=
+local symbolic= program= dashes=1
+local -a extra
+integer OPTIND
+
+case ${0:t} in
+(*cp) action=cp ;;
+(*ln) action=ln ;;
+(*) action=mv ;;
+esac
+
+while getopts ":finqQsvwWCLMp:P:o:" opt; do
+	case $opt in
+	(f) force=1 ;;
+	(i) interactive=1 ;;
+	(n) noexec=1 ;;
+	(q) quals= ;;
+	(Q) quals=1 ;;
+	(s) symbolic=1 ;;
+	(v) verbose=1 ;;
+	(w) wild=1 ;;
+	(W) wild=1 wildrepl=1 ;;
+	(C) action=cp ;;
+	(L) action=ln ;;
+	(M) action=mv ;;
+	(p) program=$OPTARG dashes=1 ;;
+	(P) program=$OPTARG dashes= ;;
+	(o) extra+=( ${=OPTARG} ) ;;
+	(:)
+		print -u2 -r -- "zmv: option -$OPTARG requires an argument"
+		return 1
+		;;
+	(*)
+		print -u2 -r -- "zmv: unrecognized option: -$OPTARG"
+		return 1
+		;;
+	esac
+done
+shift $(( OPTIND - 1 ))
+
+if (( $# != 2 )); then
+	print -u2 -r -- "Usage: zmv [ -finqQsvwW ] [ -C | -L | -M | -{p|P} program ] [ -o optstring ] srcpat dest
+Each file matching srcpat is renamed to dest, expanded with the parenthesized
+parts of srcpat as \$1, \$2, ... and the whole name as \$f:
+  zmv '(*).lis' '\$1.txt'
+With -W the wildcards themselves stand for those parts, on both sides:
+  zmv -W '*.lis' '*.txt'"
+	return 1
+fi
+
+local pat=$1 dest=$2
+
+# -w and -W: each wildcard of the pattern becomes a part of its own, and with
+# -W each wildcard of dest stands for the next part.
+if [[ -n $wild ]]; then
+	local out= rest=$pat
+	while [[ -n $rest ]]; do
+		case $rest in
+		(\*\*/*) out+='(**/)'; rest=${rest#\*\*/} ;;
+		(\**) out+='(*)'; rest=${rest#\*} ;;
+		(\?*) out+='(?)'; rest=${rest#\?} ;;
+		(\[*\]*)
+			local cls=${(M)rest##\[(\]|)[^\]]#\]}
+			out+="($cls)"; rest=${rest#$cls}
+			;;
+		(*) out+=${rest[1]}; rest=${rest[2,-1]} ;;
+		esac
+	done
+	pat=$out
+	if [[ -n $wildrepl ]]; then
+		integer n=0
+		out= rest=$dest
+		while [[ -n $rest ]]; do
+			case $rest in
+			(\*\*/*) out+="\${$(( ++n ))}"; rest=${rest#\*\*/} ;;
+			(\**|\?*) out+="\${$(( ++n ))}"; rest=${rest[2,-1]} ;;
+			(\[*\]*)
+				local cls=${(M)rest##\[(\]|)[^\]]#\]}
+				out+="\${$(( ++n ))}"; rest=${rest#$cls}
+				;;
+			(*) out+=${rest[1]}; rest=${rest[2,-1]} ;;
+			esac
+		done
+		dest=$out
+	fi
+fi
+
+# The files, and the pattern to take each one apart with: a trailing glob
+# qualifier is only a qualifier under -Q.
+#
+# A `(**/)` part is the recursive glob, zero or more directories, so it is
+# globbed as `**/` and matched as `(*/|)`, a slash-ended run or nothing.
+local rec='(**/)' recglob='**/' recmatch='(*/|)'
+local glob_pat=${pat//"$rec"/$recglob} match_pat=${pat//"$rec"/$recmatch}
+local -a files
+if [[ -n $quals ]]; then
+	setopt bareglobqual
+	files=( ${~glob_pat} )
+	[[ $match_pat == (#b)(*)(\([^\(\)]#\)) ]] && match_pat=$match[1]
+else
+	setopt nobareglobqual
+	files=( ${~glob_pat} )
+fi
+
+# Deepest first, so that what is inside a directory is done before the
+# directory: of two paths, the one that goes on below the first component
+# they differ in comes first, and otherwise the order they were found in.
+local -a sorted
+local f g
+_zmv_before() {
+	local -a a b
+	a=( "${(@s:/:)1}" ) b=( "${(@s:/:)2}" )
+	integer i=1
+	while (( i <= $#a && i <= $#b )) && [[ $a[i] == $b[i] ]]; do
+		(( i++ ))
+	done
+	# One is a directory the other lies under: the one under it first.
+	(( i > $#b )) && return 0
+	(( i > $#a )) && return 1
+	# They part here: one going on below this level and the other not.
+	(( i < $#a && i == $#b )) && return 0
+	return 1
+}
+for f in $files; do
+	integer i=1 placed=0
+	for (( i = 1; i <= $#sorted; i++ )); do
+		if _zmv_before "$f" "$sorted[i]"; then
+			sorted[i,i-1]=( "$f" )
+			placed=1
+			break
+		fi
+	done
+	(( placed )) || sorted+=( "$f" )
+done
+
+local -A from
+local -a order errors
+for f in $sorted; do
+	[[ $f == (#b)${~match_pat} ]] || continue
+	set -- "${match[@]}"
+	g=${(e)dest}
+	if [[ -z $g ]]; then
+		errors+=( "\`$f' expanded to an empty string" )
+		continue
+	fi
+	[[ $f == $g ]] && continue
+	if [[ -n ${from[$g]} ]]; then
+		errors+=( "$f and ${from[$g]} both map to $g" )
+		continue
+	fi
+	# Already a file, unless it is this file under another spelling — a
+	# change of case on a filesystem that ignores case.
+	if [[ -z $force && -f $g && ! $f -ef $g ]]; then
+		errors+=( "file exists: $g" )
+		continue
+	fi
+	from[$g]=$f
+	order+=( "$f" "$g" )
+done
+
+if (( $#errors )); then
+	print -u2 -r -- "zmv: error(s) in substitution:"
+	print -u2 -rl -- $errors
+	return 1
+fi
+
+local -a cmd
+local REPLY
+integer rc=0 k
+for (( k = 1; k < $#order; k += 2 )); do
+	f=$order[k] g=$order[k+1]
+	if [[ -n $program ]]; then
+		cmd=( ${=program} )
+	else
+		cmd=( $action )
+		[[ $action == ln && -n $symbolic ]] && cmd+=( -s )
+	fi
+	cmd+=( $extra )
+	[[ -n $dashes ]] && cmd+=( -- )
+	cmd+=( "$f" "$g" )
+	if [[ -n $noexec || -n $verbose || -n $interactive ]]; then
+		print -r -- "${(j: :)${(@q-)cmd}}"
+	fi
+	[[ -n $noexec ]] && continue
+	if [[ -n $interactive ]]; then
+		read -k 1 "REPLY?Execute? " || continue
+		[[ $REPLY == [yY] ]] || continue
+	fi
+	"${cmd[@]}" || rc=$?
+done
+return rc

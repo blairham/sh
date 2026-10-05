@@ -503,6 +503,10 @@ is quoted only if it is in one of them **and** the shell's own `(q)` would quote
 it: with `url-metas` set to `%?`, a typed `%` is still left bare. The defaults
 are put in place when the file is loaded and do not replace a style already
 set, which is measured: a `url-metas` set before the first keystroke survives.
+The `url-globbers` default is `noglob` and every alias, ordinary or global, whose
+text runs `noglob`, `urlglobber` or `globurl` with something after it, so
+`alias mmv='noglob zmv'` counts and `alias ng=noglob` does not. That is what
+zsh's default answers and it is computed here by a function of this file's own.
 
 `urlglobber cmd args…`, reached as `globurl`, globs the path part of each local
 URL — `ftp://h/p/*.txt` becomes the files under `h/p/`, a host of `localhost`
@@ -604,12 +608,139 @@ and `zle -M` is not implemented (#5942), so the widget form of
 `select-word-match`, the vi text object, is not shipped. It selects a region
 with the mark, and this editor has neither a mark nor a region to select.
 
+### `bracketed-paste-magic`, `backward-extend-paste`, `quote-paste`
+
+Replaces `bracketed-paste`. The paste is read with `zle .bracketed-paste
+PASTED`, each key of it is replayed through `zle .read-command`, and a key bound
+to one of the `active-widgets` runs that widget (`self-*` by default, so a
+`self-insert` replaced by `url-quote-magic` quotes a pasted URL). Every other key
+goes in as itself. The result goes back into the line as a paste: pushed back
+behind the closing marker and read by the editor's own paste, so it is drawn and
+undone the way a paste is. Pastes measured through a pty against zsh 5.9.2:
+
+| setup, typed, pasted | zsh 5.9.2 |
+| --- | --- |
+| `x `, paste `echo a⏎echo b` | both lines in the line, nothing run |
+| with `url-quote-magic`, paste `curl http://x/?a=1&b` | `curl http://x/\?a\=1\&b` |
+| after the paste, one undo | the line as it was before the paste |
+| `active-widgets ''` | the paste goes in literally |
+| the style deleted | still `self-*`: deleting it is not emptying it |
+| `inactive-keys =` | `=` goes in as itself, the rest through the widget |
+| `active-widgets 'self-*' undefined-key` | a key sequence bound to nothing is dropped |
+| a `paste-init` function | sees `PASTED` and the line; what it leaves in `PASTED` is what goes in |
+| a `paste-finish` function | the same, after the widgets |
+| `paste-init backward-extend-paste`, typed `curl http://x`, paste `/?a` | `curl http://x/\?a`: the word on the line is handed to the widgets with the paste |
+| `paste-finish quote-paste`, `quote-style qqq` | the paste goes in quoted with `(qqq)` |
+| `é ü` | `é ü` |
+
+Loading the file sets `active-widgets` to `self-*` if nothing has set it, and
+defines the two helpers.
+
+Two differences, neither one in this file. **The editor drops control
+characters from a paste** (`repl/paste.go` says why: there is no caret notation
+to draw them in), so a pasted `^A` or tab never reaches the widgets. zsh keeps
+them. And an `inactive-keys` entry holding a pattern character — `?`, `*`,
+`[` — has no effect in zsh, where `=` and `&` work. Here they are taken as the
+literal key sequences the manual says they are.
+
+### `zmv`
+
+`zmv [ -finqQsvwW ] [ -C | -L | -M | -{p|P} program ] [ -o optstring ] srcpat
+dest` renames every file matching `srcpat` to `dest`, expanded once per file with
+the parenthesized parts as `$1`, `$2`, … and the name as `$f`. Measured by running
+zsh's own `zmv` in scratch directories and recording what it printed and what the
+directory held afterwards: 44 cases, committed as `dialect/zsh/testdata/zmv.tsv`
+and run against this copy by `dialect/zsh/contrib2_test.go`. Among them:
+
+| case | zsh 5.9.2 |
+| --- | --- |
+| `zmv -n '(*).lis' '$1.txt'` | `mv -- a.lis a.txt`, one line a file, nothing done |
+| `-C`, `-L`, `-Ls` | `cp --`, `ln --` (a hard link), `ln -s --` |
+| `-o '-v -i'` | `mv -v -i -- a.lis a.txt` |
+| `-p echo`, `-P echo` | `echo -- a.lis a.txt`, `echo a.lis a.txt` |
+| a name `dest` leaves unchanged | passed over, status 0 |
+| two files to one name | `zmv: error(s) in substitution:`, then `b.lis and a.lis both map to same.txt`, status 1, nothing done |
+| an existing file | `file exists: b.txt`, unless `-f` |
+| an empty result | `` `a.lis' expanded to an empty string `` |
+| `-w '**/*.lis' '$1$2.txt'`, `-W '*.lis' '*.txt'` | the wildcards become the parts |
+| `(**/)(*)` | recursive, and deepest first: a directory's contents before the directory |
+| a name with a space, under `-n` | `mv -- 'a b.lis' 'a b.txt'`: quoted only where needed |
+| `-i` | the line, `Execute? `, one key; `y` runs it |
+| `A.LIS` to `a.lis` on a filesystem that ignores case | done: the "existing" file is the same file |
+| an unknown option | `zmv: unrecognized option: -z`, status 1 |
+
+Differences: the usage is this file's own words, for the reason given for
+`select-word-style`. The line number in `zmv:N: no matches found` is this file's.
+And the deepest-first order is worked out here, because the `od` glob qualifier
+that would give it is not implemented yet (#5951).
+
+### `zargs`
+
+`zargs [ option … -- ] [ input … ] [ -- command [ arg … ] ]` is xargs with its
+input on the command line. Measured by running zsh's own `zargs`: 37 cases,
+committed as `dialect/zsh/testdata/zargs.tsv` and run against this copy. The
+shape of it:
+
+* the default command is `print -r --`, and its words are not counted by `-n`;
+* `-n N` counts the args with the inputs, and a run that would hold no input
+  is `zargs: argument list too long` and status 1;
+* `-l`/`-L N` counts inputs only; `-l` alone, or followed by something that is
+  not a number, is 1;
+* `-i`/`-I str`/`--replace` put each input where the first `{}` (or `str`) is
+  in each arg, one input a run;
+* `-e` alone makes every word an input; `--eof=` makes an empty word the end;
+* an option this does not know is not an option: it and what follows are
+  inputs;
+* the status is 123 if any run answered 1 to 125, 124 for 255, 125 for a run
+  killed by a signal, 126 or 127 as the run answered; the last three stop the
+  runs after.
+
+Where zsh's own is broken, this one is not, on the `is-at-least` precedent: zsh's
+`--max-args=N` fails on the `=` (`bad math expression`); its `--null` does not
+split where `-0` does; and its `-s` is not monotonic (`-s 14` fits two inputs a
+run and `-s 20` refuses every one, and `-s 3` loops forever printing). Here `-s`
+counts the run's characters, words joined by single spaces. The usage,
+`--version` and the `-p` refusal without a terminal are worded here, and a
+command that is not found is reported at this file's location, where zsh's
+reports it from an `eval`.
+
+### `run-help`
+
+Help for a command word. The file of that name in `$HELPDIR` goes through
+`${PAGER:-more}`, by name. Otherwise each meaning `whence -va` gives is printed and
+followed by the manual that covers it:
+
+| word | zsh 5.9.2 |
+| --- | --- |
+| a help file | `$PAGER $HELPDIR/word` |
+| a program | `ls is /bin/ls`, then `man ls`, with every word given (`man sudo ls`) |
+| an alias | `ll is an alias for ls -l`, then help for `ls` |
+| a function, or not found | the line, then `man word` |
+| a builtin | `echo is a shell builtin`, then `man zshbuiltins` |
+| a reserved word | `typeset is a reserved word`, then `man zshmisc` |
+| more than one meaning | `Press any key for more help or q to quit`, in reverse video, between them; with no terminal, `not interactive and can't open terminal`, and on |
+| no word | `Here is a list of topics for which special help is available:`, a blank line, and the topics in columns two wider than the widest |
+
+A `run-help-<word>` function, where one is defined, is given the rest of the
+words in place of the manual. zsh's own answers that case with `shift count
+must be <= $#` when called with words, so there was no behavior to copy.
+
+Differences that are the shell's: for a word holding a slash, this shell's
+`whence -va` describes the file where zsh's says `not found` (#5956). The topic
+columns are laid out here because `print -c` is not implemented (#5957), and the
+rest of the words are passed with `shift` because `"${@[2,-1]}"` gives one empty
+word when there is nothing to give (#5955).
+
+The default `run-help` alias for `man` stays, as it is in zsh, so a startup file
+switches to this function with `unalias run-help` and `autoload -Uz run-help`.
+This shell ships no help files, so with `HELPDIR` unset every word goes to its
+manual.
+
 ## What is not shipped, and why
 
 #5894 is shipping the contrib functions in batches, most used first, and the
-ones not yet written are listed here until they are. Next: `bracketed-paste-magic`,
-`zmv`, `zargs` and `run-help`, then `promptinit`, `zcalc` and `zed`, then
-`vcs_info`.
+ones not yet written are listed here until they are. Next: `promptinit`, `zcalc`
+and `zed`, then `vcs_info`.
 
 `select-word-match` is left out for good, for the reason given with the word
 styles above: it needs a mark and a region, and this editor has neither.

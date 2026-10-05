@@ -1,0 +1,118 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# bracketed-paste-magic — a replacement for bracketed-paste, installed with
+#
+#   autoload -Uz bracketed-paste-magic
+#   zle -N bracketed-paste bracketed-paste-magic
+#
+# A paste goes into the line as text, as the editor's own paste does, but
+# first each key of it is run through the widget it is bound to when that
+# widget is one of the active-widgets — so a self-insert replaced by
+# url-quote-magic quotes a pasted URL as it would a typed one. Loading it
+# also defines backward-extend-paste and quote-paste, two helpers for the
+# paste-init and paste-finish styles.
+#
+# Written from zshcontrib(1) and from what the installed shell answers, never
+# from its function files; docs/spec/functions.md has the measurements.
+# Measured beyond the manual:
+#
+#   * active-widgets is `self-*` when the file is loaded, and deleting the
+#     style leaves that default in force; only an empty value turns every
+#     widget off;
+#   * a key sequence bound to nothing has its last character inserted,
+#     unless active-widgets names undefined-key, which drops it;
+#   * the paste-init and paste-finish functions see the line as it was and
+#     the paste in PASTED, and what they leave in PASTED is what goes in.
+
+bracketed-paste-magic() {
+	local PASTED REPLY f
+	zle .bracketed-paste PASTED || return
+
+	local -a init finish active inactive
+	zstyle -a :bracketed-paste-magic paste-init init
+	for f in $init; do
+		$f || break
+	done
+
+	if ! zstyle -a :bracketed-paste-magic active-widgets active; then
+		active=( 'self-*' )
+	fi
+	active=( ${active:#} )
+	if (( $#active )) && [[ -n $PASTED ]]; then
+		zstyle -a :bracketed-paste-magic inactive-keys inactive
+		local keymap=$KEYMAP
+		integer start=$UNDO_CHANGE_NO
+		zle .split-undo
+		BUFFER=
+		zle -U - "$PASTED"
+		local pattern runs
+		while [[ -n $PASTED ]] && zle .read-command; do
+			PASTED=${PASTED#"$KEYS"}
+			if (( ${inactive[(Ie)$KEYS]} )); then
+				zle .self-insert
+			elif [[ $REPLY == undefined-key ]]; then
+				(( ${active[(Ie)undefined-key]} )) || zle .self-insert
+			else
+				runs=
+				for pattern in $active; do
+					[[ $REPLY == ${~pattern} ]] && { runs=1; break; }
+				done
+				if [[ -n $runs ]]; then
+					zle $REPLY -w
+				else
+					zle .self-insert
+				fi
+			fi
+		done
+		PASTED=$BUFFER
+		zle -K ${keymap:-main}
+		zle .undo $start
+	fi
+
+	zstyle -a :bracketed-paste-magic paste-finish finish
+	for f in $finish; do
+		$f || break
+	done
+
+	# In as a paste: pushed back behind the closing marker and read by the
+	# editor's own paste, so it is drawn and undone the way a paste is.
+	zle -U - "$PASTED"$'\e[201~'
+	zle .bracketed-paste --
+}
+
+# backward-extend-paste — for paste-init: where the paste lands against a
+# word already on the line, the start of that word moves out of the line and
+# into the front of PASTED, so the active widgets see the whole word.
+backward-extend-paste() {
+	emulate -L zsh
+	setopt extendedglob
+	local word=${(M)LBUFFER%%[^[:space:]]##}
+	[[ -n $word ]] || return 0
+	LBUFFER=${LBUFFER%$word}
+	PASTED=$word$PASTED
+	return 0
+}
+
+# quote-paste — for paste-finish: PASTED quoted by the quote-style style in
+# the context :bracketed-paste-magic:finish, one of q, qq, qqq, qqqq, q- or
+# b, and left alone where the style is none or unset.
+quote-paste() {
+	emulate -L zsh
+	local style
+	zstyle -s :bracketed-paste-magic:finish quote-style style || return 0
+	case $style in
+	(q) PASTED=${(q)PASTED} ;;
+	(qq) PASTED=${(qq)PASTED} ;;
+	(qqq) PASTED=${(qqq)PASTED} ;;
+	(qqqq) PASTED=${(qqqq)PASTED} ;;
+	(q-) PASTED=${(q-)PASTED} ;;
+	(b) PASTED=${(b)PASTED} ;;
+	esac
+	return 0
+}
+
+zstyle -m :bracketed-paste-magic active-widgets '*' ||
+	zstyle :bracketed-paste-magic active-widgets 'self-*'
+
+bracketed-paste-magic "$@"

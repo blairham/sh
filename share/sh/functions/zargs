@@ -1,0 +1,219 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# zargs [ option ... -- ] [ input ... ] [ -- command [ arg ... ] ]
+#
+# xargs with its input on the command line: runs command, with the args
+# first, over the inputs in as many runs as the limits allow. With no command
+# it is `print -r --`.
+#
+# Written from zshcontrib(1) and from what the installed shell answers, never
+# from its function files; docs/spec/functions.md has the measurements.
+# Measured beyond the manual:
+#
+#   * an option this does not know is not an option: it and everything after
+#     it are inputs, so `zargs -q a` prints `-q a`;
+#   * -n counts the args with the inputs, and a run that would hold none of
+#     the inputs is `zargs: argument list too long` and status 1;
+#   * -i replaces the first occurrence of {} (or the string given) in each
+#     arg, one input per run;
+#   * -e with nothing after it makes every word an input; --eof= makes an
+#     empty word the end of them;
+#   * the status is the command's for one run that answered 126 or 127, 123
+#     when any run answered 1 to 125, 124 for 255 and 125 for a run killed by
+#     a signal, and those last three stop the runs that would have followed.
+
+emulate -L zsh
+
+local eof=-- replace= verbose= interactive= norun= nulls= exitbig=
+integer maxargs=0 maxlines=0 maxchars=0 maxprocs=1 haveeof=1
+local opt arg
+
+while (( $# )); do
+	opt=$1
+	case $opt in
+	(--) shift; break ;;
+	(--help)
+		print -r -- "Usage: zargs [ option ... -- ] [ input ... ] [ -- command [ arg ... ] ]
+Runs command, with its args first, over the inputs, as many to a run as
+the options allow; with no command, print -r -- is run.
+  -e[str], --eof[=str]   the word ending the inputs (default --); none at all
+                         with -e alone, an empty word with --eof=
+  -n N, --max-args=N     at most N words after the command, args included
+  -l[N], -L N, --max-lines[=N]   at most N inputs a run (default 1)
+  -s N, --max-chars=N    at most N characters a run
+  -x, --exit             stop where -s cannot be met
+  -i[str], -I str, --replace[=str]   put each input where str (default {})
+                         is in the args, one input a run
+  -P N, --max-procs=N    up to N runs at once
+  -p, --interactive      ask before each run
+  -r, --no-run-if-empty  run nothing when there are no inputs
+  -t, --verbose          write each run on standard error first
+  -0, --null             split each input at NUL bytes
+  --version              say which version this is"
+		return 0
+		;;
+	(--version) print -r -- "zargs (zsh ${ZSH_VERSION})"; return 0 ;;
+	(-e*) eof=${opt#-e}; [[ -z $eof ]] && haveeof=0 ;;
+	(--eof) haveeof=0 ;;
+	(--eof=*) eof=${opt#--eof=} ;;
+	(-n|-s|-P|-I)
+		(( $# >= 2 )) || { print -u2 -r -- "zargs: option $opt needs a value"; return 1; }
+		arg=$2; shift
+		case $opt in
+		(-n) maxargs=$arg ;;
+		(-s) maxchars=$arg ;;
+		(-P) maxprocs=$arg ;;
+		(-I) replace=$arg; maxlines=1; exitbig=1 ;;
+		esac
+		[[ $opt == -n ]] && (( maxargs < 1 )) &&
+			{ print -u2 -r -- "zargs: value for max-args must be >= 1"; return 1; }
+		;;
+	(-n*) maxargs=${opt#-n}; (( maxargs >= 1 )) || { print -u2 -r -- "zargs: value for max-args must be >= 1"; return 1; } ;;
+	(--max-args=*) maxargs=${opt#*=}; (( maxargs >= 1 )) || { print -u2 -r -- "zargs: value for max-args must be >= 1"; return 1; } ;;
+	(-s*) maxchars=${opt#-s} ;;
+	(--max-chars=*) maxchars=${opt#*=} ;;
+	(-P*) maxprocs=${opt#-P} ;;
+	(--max-procs=*) maxprocs=${opt#*=} ;;
+	(-l)
+		# A count of its own only if one follows; -l alone is one.
+		if [[ $2 == <1-> ]]; then
+			maxlines=$2; shift
+		else
+			maxlines=1
+		fi
+		;;
+	(-l*) maxlines=${opt#-l} ;;
+	(-L)
+		(( $# >= 2 )) || { print -u2 -r -- "zargs: option -L needs a value"; return 1; }
+		maxlines=$2; shift
+		;;
+	(-L*) maxlines=${opt#-L} ;;
+	(--max-lines) maxlines=1 ;;
+	(--max-lines=*) maxlines=${opt#*=} ;;
+	(-i) replace='{}'; maxlines=1; exitbig=1 ;;
+	(-i*) replace=${opt#-i}; maxlines=1; exitbig=1 ;;
+	(--replace) replace='{}'; maxlines=1; exitbig=1 ;;
+	(--replace=*) replace=${opt#*=}; maxlines=1; exitbig=1 ;;
+	(-x|--exit) exitbig=1 ;;
+	(-p|--interactive) interactive=1 ;;
+	(-r|--no-run-if-empty) norun=1 ;;
+	(-t|--verbose) verbose=1 ;;
+	(-0|--null) nulls=1 ;;
+	(*) break ;;
+	esac
+	shift
+done
+
+# The inputs, up to the end word, and the command after it.
+local -a inputs command
+while (( $# )); do
+	if (( haveeof )) && [[ $1 == $eof ]]; then
+		shift
+		break
+	fi
+	inputs+=( "$1" )
+	shift
+done
+command=( "$@" )
+integer initial=$(( $# ? $# - 1 : 0 ))
+(( $#command )) || command=( print -r -- )
+if [[ -n $nulls ]]; then
+	local -a split
+	for arg in $inputs; do
+		split+=( ${(0)arg} )
+	done
+	inputs=( $split )
+fi
+
+if (( ! $#inputs )); then
+	[[ -n $norun ]] && return 0
+fi
+
+integer room=0
+if (( maxargs )); then
+	(( room = maxargs - initial ))
+	if (( room < 1 )); then
+		print -u2 -r -- "zargs: argument list too long"
+		return 1
+	fi
+fi
+(( maxlines && (! room || maxlines < room) )) && room=maxlines
+
+# The runs, one after another or several at once, and the status each left.
+integer rc=0 running=0 st
+local -a run
+_zargs_run() {
+	local -a line
+	if [[ -n $replace ]]; then
+		local w
+		for w in $command; do
+			line+=( "${w/"$replace"/$1}" )
+		done
+	else
+		line=( "${command[@]}" "$@" )
+	fi
+	[[ -n $verbose ]] && print -u2 -r -- "${(j: :)line}"
+	if [[ -n $interactive ]]; then
+		local REPLY
+		if ! { : </dev/tty } 2>/dev/null; then
+			print -u2 -r -- "zargs: cannot open the terminal to ask"
+			return 0
+		fi
+		read -q "REPLY?${(j: :)line} ?..." </dev/tty || { print; return 0; }
+		print
+	fi
+	"${line[@]}"
+}
+_zargs_status() {
+	integer s=$1
+	case $s in
+	(0) ;;
+	(126|127) (( rc = s )); return 1 ;;
+	(255) (( rc = 124 )); return 1 ;;
+	(<129->) (( rc = 125 )); return 1 ;;
+	(*) (( rc == 0 )) && rc=123 ;;
+	esac
+	return 0
+}
+
+integer at=1 n
+local -a chunk
+if (( ! $#inputs )); then
+	_zargs_run
+	_zargs_status $?
+	return rc
+fi
+while (( at <= $#inputs )); do
+	chunk=()
+	integer used=0
+	(( maxchars )) && (( used = ${#${(j: :)command}} ))
+	while (( at <= $#inputs )); do
+		(( room && $#chunk >= room )) && break
+		if (( maxchars )); then
+			n=$(( used + 1 + ${#inputs[at]} ))
+			if (( n > maxchars )); then
+				if (( ! $#chunk )); then
+					print -u2 -r -- "zargs: cannot fit single argument within size limit"
+					[[ -n $exitbig ]] && return 1
+					(( at++ ))
+					continue
+				fi
+				break
+			fi
+			used=n
+		fi
+		chunk+=( "$inputs[at]" )
+		(( at++ ))
+	done
+	(( $#chunk )) || continue
+	if (( maxprocs > 1 )); then
+		_zargs_run "${chunk[@]}" &
+		(( ++running >= maxprocs )) && { wait; running=0; }
+	else
+		_zargs_run "${chunk[@]}"
+		_zargs_status $? || return rc
+	fi
+done
+(( running )) && wait
+return rc

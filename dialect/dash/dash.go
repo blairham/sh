@@ -1744,6 +1744,9 @@ func Semantics() interp.Semantics {
 	s.WaitReportsAMissingJob = interp.Yes
 	// Measured 2026-10-01: a finished job stays in the table until reported: `(exit 4) & sleep 0.3; wait %%` is 4. See Semantics.FinishedJobLeavesTheTable.
 	s.FinishedJobLeavesTheTable = interp.No
+	// A job started before `set -m`, under a terminal: dash refuses it: `fg: job (null) not created under job control` at 2 (#5927). See
+	// Semantics.JobStartedWithoutTheMonitorIsRefused.
+	s.JobStartedWithoutTheMonitorIsRefused = interp.Yes
 	// Measured 2026-10-01: `e=; set -x; $e` traces the prefix alone. See Semantics.EmptyCommandTrace.
 	s.EmptyCommandTrace = interp.EmptyCommandTracesThePrefix
 	// Measured 2026-10-01: a builtin's output is held until it returns, so its

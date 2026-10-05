@@ -17047,6 +17047,39 @@ type Semantics struct {
 	// unpinned ash: the same reach, pinned by TestAFinishedJobStaysInTheTable.
 	FinishedJobLeavesTheTable Answer
 
+	// JobStartedWithoutTheMonitorIsRefused makes `fg` and `bg` refuse a job
+	// that was started while the monitor was off, in a shell that has since
+	// turned it on, rather than resuming it. True in bash, ksh93 and dash;
+	// false in zsh.
+	//
+	// The state needs a terminal in zsh and dash, which refuse `set -m`
+	// without one. Measured 2026-10-05 through a pseudo-terminal, `SH -c
+	// 'sleep 1 & set -m; sleep 0.3; fg; echo "rc=$?"'`:
+	//
+	//	bash 5.3.20  fg: job 1 started without job control, rc=1
+	//	ksh93u+      nothing at all, rc=1
+	//	dash 0.5.12  fg: job (null) not created under job control, rc=2
+	//	zsh 5.9.2    [1]  + running    sleep 1, rc=0 — resumed and waited
+	//
+	// and `bg` the same way in the first three, where zsh answers `job
+	// already in background` at 1, as it would for any running job. The
+	// wording of the refusal is Diagnostics.JobStartedWithoutJobControl's;
+	// this says whether there is one (#5927).
+	//
+	// Asked only of a job in that state, which a script without a terminal
+	// cannot make in three of the columns.
+	//
+	// unpinned bash: no corpus row has a terminal; pinned by
+	// TestAJobStartedWithoutJobControlIsNotResumedHere.
+	//
+	// unpinned ksh: the same reach; pinned by its row in the measurement above.
+	//
+	// unpinned dash: the same reach; pinned by its row in the measurement above.
+	//
+	// unpinned zsh: the same reach; pinned by
+	// TestFgResumesAJobStartedBeforeSetM.
+	JobStartedWithoutTheMonitorIsRefused Answer
+
 	// ACommandHoldsAJobSlot is whether a command the shell runs itself holds
 	// a number in its own job table while it runs: the jobs it starts are
 	// numbered past it, and the `+` and `-` can land on it.

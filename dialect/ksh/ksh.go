@@ -1350,6 +1350,9 @@ func Semantics() interp.Semantics {
 	// the silent miss, where the builtin `sleep` reaps nothing and leaves it
 	// there at 4. See Semantics.FinishedJobLeavesTheTable (#5302).
 	s.FinishedJobLeavesTheTable = interp.Yes
+	// A job started before `set -m`, under a terminal: ksh93 refuses it in silence at 1 (#5927). See
+	// Semantics.JobStartedWithoutTheMonitorIsRefused.
+	s.JobStartedWithoutTheMonitorIsRefused = interp.Yes
 	// And it is the one column that keeps nothing once a job is reported:
 	// `wait %1; wait "$p"` is 127 there where it is the job's status in
 	// every other column measured.

@@ -169,6 +169,7 @@ ash   IntegerBaseTenIsNoBase
 ash   IntegerPlusFormTakesAttributesOff
 ash   InteractiveStartupFileWhenLogin
 ash   InvocationBareOListsTheOptions
+ash   JobStartedWithoutTheMonitorIsRefused
 ash   JobsListsWhatChangedSinceTheLastReport
 ash   JobsStateFiltersAccumulate
 ash   KeptTrapListingIncludesExit

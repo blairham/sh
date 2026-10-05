@@ -992,8 +992,48 @@ Differences, both the shell's:
   `history-beginning-search-backward-end` lands on the first match where zsh
   lands on the second;
 * `smart-insert-last-word`, given a numeric argument or arguments, hands
-  them to `insert-last-word`, which ignores them here (#5987). Its other
-  form is the one measured.
+  them to `insert-last-word`. Since #5987 that takes both, but this form of
+  `smart-insert-last-word` has not been measured on its own.
+
+### `copy-earlier-word`, and the `insert-last-word` it is built on
+
+`copy-earlier-word` copies words back off a line, one word earlier each time
+it is pressed again. Straight after `insert-last-word` it works on the history
+line that `insert-last-word` used: each press puts the next earlier word of
+that line in place of the last, and the walk stops on the line's first word.
+Otherwise it works on the line being edited, starting from that line's last
+word. There, a press past the first word takes the copy away. A numeric
+argument N picks the Nth word: a negative N counts from the end, and nought
+is the last word. The `widget` style in `:copy-earlier-word` names the widget
+it calls for the line being edited, with `insert-last-word`'s arguments
+(`0 -1`, then `0 -2`, and so on). Straight after `insert-last-word` the style
+is not asked. All of this was measured through a pseudo-terminal against
+zsh 5.9.2, with history `: one two three` and then `: alpha beta gamma`:
+
+| keys | zsh 5.9.2 |
+| --- | --- |
+| `M-.` `M-,` | `beta` |
+| `M-.` `M-,` `M-,` | `alpha` |
+| `M-.` and `M-,` five times | `:`, and it stays |
+| `M-.` `M-2` `M-,` / `M-.` `M-- M-2` `M-,` | `alpha` / `beta` |
+| `M-.` `M-.` `M-,` | `two` |
+| `p q r ` and `M-,` / twice / four times | `p q r r` / `p q r q` / `p q r ` |
+| `p q r ` `M-2` `M-,` | `p q r q` |
+| `p q r ` `M-,` `M-.` | `p q r gamma`: the walk goes on into the history |
+| `M-.` `x` `M-,` | `gammaxgammax`: the line being edited |
+
+`insert-last-word` itself takes a count and, called from a widget, up to
+three arguments: the offset the walk moves by, the word in array notation,
+and a third saying the offset counts from the line being edited. Line 0 is
+the line being edited, without what the last call put in it. A line that
+lacks the word leaves the line alone, and the call returns 1. `$HISTNO` in a
+widget is the number of the line being edited. The full table of measured
+rows is on `insertLastWordWith` in `repl/lastarg.go`.
+
+Differences, all of them this shell's:
+* `HISTNO` is read-only here. In zsh, assigning it moves the history walk.
+* how the third argument behaves while the history is being walked has not
+  been measured or modeled.
 
 ### `vcs_info_hookadd` and the other helpers are files
 
@@ -1013,7 +1053,6 @@ reason.
 | function | why not |
 | --- | --- |
 | `zed`, `zed-set-file-name`, and its `fned`/`histed` forms | it builds a keymap of its own with `bindkey -N` and selects it with `bindkey -A`. Both were refused until #5969 and work now, but nobody has measured `zed` itself since |
-| `copy-earlier-word` | it walks back through a line's words by calling `insert-last-word` with arguments, which are ignored here (#5987) |
 | `select-word-match`, `narrow-to-region`, `narrow-to-region-invisible`, `select-bracketed`, `select-quoted`, `surround` | they need the mark and the region, or vi text objects, which this editor does not have |
 | `read-from-minibuffer`, `history-pattern-search`, `replace-string`, `replace-string-again`, `replace-argument` | they read their argument with a recursive edit. This editor got `recursive-edit` in #5899, but nobody has measured these functions since |
 | `predict-on`, `incremental-complete-word`, `cycle-completion-positions`, `quote-and-complete-word` | they drive the completion system from a widget |

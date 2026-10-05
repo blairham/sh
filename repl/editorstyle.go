@@ -406,6 +406,14 @@ type EditorStyle struct {
 	// nothing in its place.
 	LastArgumentStaysOnTheOldestLine bool
 
+	// InsertLastWordTakesArguments is zsh's `insert-last-word`: a count picks
+	// the word — a positive one from the end of the line, nought or a negative
+	// one from the start — and a widget calling it may name the history offset,
+	// the word, and whether the offset counts from the current line. See
+	// insertLastWordWith in lastarg.go (#5987). bash's `yank-last-arg` takes
+	// neither here, and is what the field's zero value keeps.
+	InsertLastWordTakesArguments bool
+
 	// ViInsertAtStartOfLineSkipsLeadingBlanks is where `I` puts the cursor in
 	// vi command mode.
 	//

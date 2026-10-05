@@ -75,9 +75,17 @@ func (c prefixCount) n() int {
 // against zsh 5.9.2, `aa bb cc`, `^W`, `ESC 2 ^W` and a yank bring back
 // `aa bb cc` as one kill (#5918). So whatever run of kills was going on
 // before it is still going on after it.
+//
+// The same for a walk of insert-last-word: `M-. M-2 M-.` is the second word
+// from the end of the line before the one the first press used, measured
+// 2026-10-05 against zsh 5.9.2 — `two` with `: one two three` before `: alpha
+// beta gamma` — and not a second copy (#5987).
 func (e *editor) countMore(b byte) {
 	e.count.add(b)
 	e.killing = e.killedBefore
+	if e.lastWordArguments {
+		e.lastArg.walking = e.lastArg.walkingBefore
+	}
 }
 
 // opposites is the keys a negative count turns into another key: the moves
@@ -147,7 +155,11 @@ func (e *editor) spendCountOnEscape() bool {
 	}
 	n := e.count.n()
 	e.count = prefixCount{}
-	e.keyNumeric = &n
+	// The count as it was typed, sign and all, and not the variable the
+	// replay below turns positive: insert-last-word reads it, and `M-- M-1
+	// M-.` is the first word and not the last (#5987).
+	told := n
+	e.keyNumeric = &told
 	negative := n < 0
 	if negative {
 		n = -n

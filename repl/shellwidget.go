@@ -123,6 +123,12 @@ type Line struct {
 	// (#5959). The editor reads it on the way back and nowhere else.
 	Broken bool
 
+	// HistNo is the number of the history line being edited: the next
+	// line's number on a fresh line, and the entry's own while the history
+	// is being walked. zsh's `$HISTNO`, measured 3 at a fresh prompt after
+	// two commands and 1 after Up twice. Zero where nothing numbers it.
+	HistNo int
+
 	// Status is what an action performed from outside the editor ends with,
 	// for the one whose ending a widget can see: the incremental search,
 	// which answers 1 for a search that ended failing and 3 for one that was

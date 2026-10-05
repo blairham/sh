@@ -277,6 +277,14 @@ type editor struct {
 	undoRestoresCursor   bool
 	lastArg              lastArgWalk
 	lastArgStaysOnOldest bool
+	// lastWordArguments is EditorStyle.InsertLastWordTakesArguments, and
+	// actionArgs the arguments a widget's call of an action named — which
+	// only insert-last-word reads. See lastarg.go.
+	lastWordArguments bool
+	actionArgs        []string
+	// historyCount is how many lines the session has entered, which is what
+	// numbers the one being edited — `$HISTNO`. Nil outside a Shell.
+	historyCount func() int
 
 	// What this dialect calls a word, and what its kills do with one. See
 	// EditorStyle, which is where each of these was measured.

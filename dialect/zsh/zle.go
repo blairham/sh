@@ -260,6 +260,9 @@ const (
 	// none, and zleKeymap the keymap `$KEYMAP` names. See widgetCall.
 	zleNumeric = ".zsh.zle.numeric"
 	zleKeymap  = ".zsh.zle.keymap"
+	// zleHistNo is the history line's number `$HISTNO` reads. See
+	// repl.Line.HistNo.
+	zleHistNo = ".zsh.zle.histno"
 	// zleKeys is the key sequence `$KEYS` holds: the keystroke the call is
 	// for, until `read-command` reads another. See readCommand.
 	zleKeys = ".zsh.zle.keys"
@@ -1222,7 +1225,16 @@ func callBuiltinWidget(r *interp.Runner, ctx context.Context, name string, args 
 	// assignment before this call moved none of them — and what the action
 	// does to it moves them. See regionsFollow.
 	regionsAnchor(r, widgetBuffer(r))
-	out, performed := actions.Perform(widget, widgetLine(r))
+	var out repl.Line
+	var performed bool
+	if with, takes := actions.(repl.ArgumentActions); takes && widget == repl.WidgetInsertLastWord && len(args) > 0 {
+		// The one action that reads arguments of its own: the history
+		// offset, the word, and whether the offset counts from the line
+		// being edited (#5987). See repl's insertLastWordWith.
+		out, performed = with.PerformWith(widget, widgetLine(r), args)
+	} else {
+		out, performed = actions.Perform(widget, widgetLine(r))
+	}
 	if !performed {
 		r.Diagnosef("%s: calling a built-in widget is not implemented yet\n", name)
 		return 1
@@ -1572,6 +1584,11 @@ func runWidgetFunction(
 		numeric = strconv.Itoa(*in.Numeric)
 	}
 	r.SetVar(zleNumeric, numeric)
+	histNo := ""
+	if in.HistNo > 0 {
+		histNo = strconv.Itoa(in.HistNo)
+	}
+	r.SetVar(zleHistNo, histNo)
 	// A completion widget looks at the line and does not rewrite it, which is
 	// the completer's presence and not a second flag — see openWidgetParameters.
 	opened := widgetOpening{completion: def.completer != "", scope: r.ScopeDepth() + 1}
@@ -1825,6 +1842,20 @@ func openWidgetParameters(r *interp.Runner, opened widgetOpening) {
 		}
 	})
 	r.MarkInteger("NUMERIC")
+	// The number of the history line being edited. Measured 2026-10-05
+	// against zsh 5.9.2: 3 at a fresh prompt after two commands, 2 and 1
+	// after Up once and twice, and `integer-local-special` (#5987).
+	//
+	// **Read-only here, where zsh's is not**: assigning it there moves the
+	// history walk to that line, which this editor has no route for from a
+	// widget yet. A writer that stored the number and moved nothing would be
+	// the silent no-op this file avoids, so `HISTNO=1` is refused out loud.
+	r.SetDynamic("HISTNO", func(rr *interp.Runner) string {
+		n, _ := rr.GetVar(zleHistNo)
+		return n
+	})
+	r.MarkInteger("HISTNO")
+	r.MarkReadonly("HISTNO")
 	for _, name := range zleQueueParameters {
 		r.SetDynamic(name, func(*interp.Runner) string { return "0" })
 		// `integer-local-readonly-special` in real zsh, measured 2026-09-22
@@ -1892,6 +1923,7 @@ func openWidgetParameters(r *interp.Runner, opened widgetOpening) {
 	r.MarkLocal("KEYS")
 	r.MarkLocal("PREBUFFER")
 	r.MarkLocal("NUMERIC")
+	r.MarkLocal("HISTNO")
 }
 
 // closeWidgetParameters takes them away again, so a script that is not running
@@ -1914,11 +1946,13 @@ func closeWidgetParameters(r *interp.Runner) {
 	r.UnsetDynamic("PREBUFFER")
 	closeUndoParameters(r)
 	r.UnsetDynamic("NUMERIC")
+	r.UnsetDynamic("HISTNO")
 	// The attribute goes with the parameter, so a script between two
 	// keystrokes that assigns one of these names assigns text, as it does
 	// in zsh, where outside a widget they are not specials at all.
 	r.UnmarkInteger("CURSOR")
 	r.UnmarkInteger("NUMERIC")
+	r.UnmarkInteger("HISTNO")
 	for _, name := range zleQueueParameters {
 		r.UnmarkInteger(name)
 	}
@@ -1964,6 +1998,7 @@ var widgetParameterDeclarations = map[string]interp.ProducedDeclaration{
 	"KEYS":              {},
 	"PREBUFFER":         {},
 	"NUMERIC":           {Integer: true, Base: 10},
+	"HISTNO":            {Integer: true, Base: 10},
 	regionHighlightName: {Array: true, ListsItsElements: true},
 }
 

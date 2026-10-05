@@ -555,36 +555,52 @@ func filePath(o compaddOptions, candidate string) string {
 //	dlink@  exe*    fifo|   link@   plain   sub/
 //
 // and with `setopt nolisttypes` none of the marks, the directory's slash
-// included — though a lone directory still inserts with one. The link to a
+// included — though a lone directory still inserts with one, and the column a
+// mark would take is still taken. The link to a
 // directory is drawn as a link and inserted as a directory (`ls dl<TAB>` is
 // `ls dlink/`), so the mark is the link's own and the slash fileSuffix adds is
 // its target's.
 func fileRow(r *interp.Runner, ctx context.Context, o compaddOptions, candidate string) string {
-	if recordedDeviates(r, "listtypes") {
+	mark := fileMark(r, ctx, o, candidate)
+	if mark == "" {
 		return candidate
 	}
+	if recordedDeviates(r, "listtypes") {
+		// The mark is not drawn, but its column is kept: measured 2026-10-05
+		// at 40 columns, `dlink exe fifo link plain sub` under `nolisttypes`
+		// draws `dlink   fifo    plain` in cells of eight, the width it has
+		// with the marks, where `aa bb cc` — files with no mark — draws
+		// `aa  bb  cc` either way. A blank is what the cell holds there, so
+		// that is the row (#6157).
+		return candidate + " "
+	}
+	return candidate + mark
+}
+
+// fileMark is the character LIST_TYPES draws after a `-f` candidate, or none.
+func fileMark(r *interp.Runner, ctx context.Context, o compaddOptions, candidate string) string {
 	info, err := fileLstat(r, ctx, filePath(o, candidate))
 	if err != nil {
-		return candidate
+		return ""
 	}
 	mode := info.Mode()
 	switch {
 	case mode&os.ModeSymlink != 0:
-		return candidate + "@"
+		return "@"
 	case mode.IsDir():
-		return candidate + "/"
+		return "/"
 	case mode&os.ModeNamedPipe != 0:
-		return candidate + "|"
+		return "|"
 	case mode&os.ModeSocket != 0:
-		return candidate + "="
+		return "="
 	case mode&os.ModeCharDevice != 0:
-		return candidate + "%"
+		return "%"
 	case mode&os.ModeDevice != 0:
-		return candidate + "#"
+		return "#"
 	case mode&0o111 != 0:
-		return candidate + "*"
+		return "*"
 	}
-	return candidate
+	return ""
 }
 
 // display is the nth row of a `-d` list, or none where the caller gave no

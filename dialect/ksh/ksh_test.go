@@ -170,6 +170,7 @@ func TestSemantics(t *testing.T) {
 		// it. Measured through a pty — an rc of `return 3` and one of
 		// `false; return 3` both leave `$?` as 3 at the first prompt (#1422).
 		{"StartupFileReturnCarriesItsArgument", s.StartupFileReturnCarriesItsArgument, interp.Yes},
+		{"StartupFileThatRunsNothingLeavesZero", s.StartupFileThatRunsNothingLeavesZero, interp.No},
 		{"LoneDashIsAnOption", s.LoneDashIsAnOption, interp.No},
 		// The only shell in the panel that reports *every* option word `set`
 		// cannot use before it gives up, with one usage block after them all

@@ -166,6 +166,7 @@ func TestSemantics(t *testing.T) {
 		// `(exit 5)` as the last line leaves 5. So the file's status carries
 		// out and the number on the `return` does not (#1422).
 		{"StartupFileReturnCarriesItsArgument", s.StartupFileReturnCarriesItsArgument, interp.No},
+		{"StartupFileThatRunsNothingLeavesZero", s.StartupFileThatRunsNothingLeavesZero, interp.No},
 		{"LoneDashIsAnOption", s.LoneDashIsAnOption, interp.No},
 		// The one shell in the panel that survives a failed expansion: it
 		// gives up the line and runs the next one, where the other three end

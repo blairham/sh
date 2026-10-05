@@ -4085,6 +4085,10 @@ func Semantics() interp.Semantics {
 	// bash leaves 0 and 1. A `return` with no argument means the last
 	// command's status here as everywhere.
 	s.StartupFileReturnCarriesItsArgument = interp.Yes
+	// A startup file that runs no command keeps the status before it: measured,
+	// an empty `$ENV` after a `.profile` of `false` leaves 1 for `ksh -l -i -c`
+	// (#5883).
+	s.StartupFileThatRunsNothingLeavesZero = interp.No
 	s.LoneDashIsAnOption = interp.No
 	s.UnsetFunctionChecksTheName = interp.Yes
 	s.UnsetFunctionReportsMissing = interp.No

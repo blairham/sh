@@ -4696,6 +4696,10 @@ func Semantics() interp.Semantics {
 	// bash leaves 0 and 1. A `return` with no argument means the last
 	// command's status here as everywhere.
 	s.StartupFileReturnCarriesItsArgument = interp.Yes
+	// A startup file that runs no command clears the status before it: measured,
+	// a `.zshrc` or `.zlogin` with nothing in it after a `.zshenv` of `false`
+	// leaves 0, though `$?` read inside such a file is still 1 (#5883).
+	s.StartupFileThatRunsNothingLeavesZero = interp.Yes
 	s.LoneDashIsAnOption = interp.Yes
 	s.UnsetFunctionChecksTheName = interp.No
 	s.UnsetFunctionReportsMissing = interp.Yes

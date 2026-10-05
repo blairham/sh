@@ -153,6 +153,10 @@ func (r *Runner) RunStartupFile(ctx context.Context, path, src string, failed fu
 		// Everything before it has run, and the rest of the file goes. A
 		// shell that had stopped reading never met the line.
 		r.status = failed(err, ran)
+	} else if !ran && r.status != 0 && r.ask(r.sem().StartupFileThatRunsNothingLeavesZero, "the status a startup file with no command in it leaves") {
+		// A file with no command in it, which zsh takes as having left 0 and
+		// every other column takes as having left nothing (#5883).
+		r.status = 0
 	}
 	if r.ctl == controlReturn {
 		// Caught, so the shell goes on to the next startup file and then to

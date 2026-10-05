@@ -2254,6 +2254,9 @@ func Semantics() interp.Semantics {
 	s.LoopControlPlaceIsJudgedBeforeTheCount = interp.No
 	s.ReturnOutsideAFunctionIsRefused = interp.No
 	s.StartupFileReturnCarriesItsArgument = interp.Yes
+	// A startup file that runs no command keeps the status before it: measured,
+	// an empty `$ENV` after a `.profile` of `false` leaves 1 (#5883).
+	s.StartupFileThatRunsNothingLeavesZero = interp.No
 	// `. ` with no operand is refused at 2, where dash does nothing and
 	// reports success. A directory operand is no error in either.
 	s.DotWithNoOperandIsAnError = interp.Yes

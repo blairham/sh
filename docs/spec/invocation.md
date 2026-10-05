@@ -3287,6 +3287,26 @@ It replaced a front end that parsed each startup file whole and stopped the
 shell when that failed — one typo at the bottom of a `~/.zshenv` ran none of
 the file and none of any `zsh -c` on the machine (#5869).
 
+## A startup file with no command in it
+
+**The rule.** In zsh a startup file that runs no command — empty, blank lines,
+or comments only — leaves `$?` as 0. Every other column leaves the status the
+file before it left. A file that is not there clears nothing anywhere.
+
+**Measured** 2026-10-05 with an earlier startup file ending in `false`:
+
+| shell, files, route | empty | comment | `true` |
+|---|---|---|---|
+| zsh 5.9.2, `.zshenv` then `.zshrc`, `-i -c` | 0 | 0 | 0 |
+| zsh 5.9.2, `.zshenv` then `.zlogin`, `-l -i -c` | 0 | 0 | 0 |
+| bash 5.3.20 and 3.2, `.bash_profile` then `$BASH_ENV`, `-l -c` | 1 | 1 | 0 |
+| dash 0.5.12 and ksh93u+, `.profile` then `$ENV`, `-l -i -c` | 1 | | 0 |
+
+zsh does not start the file with a fresh status: `echo inrc=$?` as the
+`.zshrc` prints `inrc=1`. It is the rule `.` has in every column, applied to
+a startup file in zsh alone. `Semantics.StartupFileThatRunsNothingLeavesZero`
+(#5883).
+
 ## The options no shell has: `--policy`, `--audit` and the `--acp` four
 
 **The rule.** The shared front end reads a set of long options that belong

@@ -1081,6 +1081,9 @@ func Semantics() interp.Semantics {
 	s.BareWaitReportsASignalDeath = interp.BareWaitReportsASignalDeathItReaps
 	// Measured 2026-10-01: a finished job stays in the table until something reports it: `(exit 4) & sleep 0.3; wait %%` is 4. See Semantics.FinishedJobLeavesTheTable.
 	s.FinishedJobLeavesTheTable = interp.No
+	// A fatal error in an interactive shell's startup file: bash gives up the line and runs the rest of its `.bashrc` (#6009).
+	// See Semantics.StartupFileErrorWhenInteractive.
+	s.StartupFileErrorWhenInteractive = interp.StartupErrorCostsTheLine
 	// A job started before `set -m`, under a terminal: bash refuses it: `fg: job 1 started without job control` (#5927). See
 	// Semantics.JobStartedWithoutTheMonitorIsRefused.
 	s.JobStartedWithoutTheMonitorIsRefused = interp.Yes

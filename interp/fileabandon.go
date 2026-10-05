@@ -247,6 +247,7 @@ func (r *Runner) GiveUpTheFile() bool {
 		return false
 	}
 	if r.abandon == abandonParamError &&
+		!(r.Interactive && r.sem().StartupFileErrorWhenInteractive == StartupErrorCostsTheFileWhatever) &&
 		r.ask(r.sem().ParamErrorIsAnExitRequest, "`${x?word}` ending the shell rather than the file it is in") {
 		// The one operand a dialect reads as a request to stop rather than
 		// as an error. Measured at this boundary as well as at a `.`: the

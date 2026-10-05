@@ -58,6 +58,7 @@ func (e *editor) accepted(prompt drawnPrompt) string {
 	// The key that ends the line is the next line's last widget, whatever
 	// spelled it. See LastWidget.
 	e.last, e.keyBytes, e.keyBinding = LastWidget{Accepted: true, Known: true}, nil, nil
+	e.preRedrawDue = false
 	e.specialWidget("zle-line-pre-redraw", prompt)
 	e.specialWidget("zle-line-finish", prompt)
 	// The line is finished, so the drawing that ends it asks for no more

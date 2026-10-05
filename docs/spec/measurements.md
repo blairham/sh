@@ -16843,6 +16843,9 @@ y][x][y]`. The row exists because the plausible implementation is a split follow
 | case | dash | bash | bash-as-sh | bash32 | ksh93 | zsh | ash |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `exec/a-command-is-named-as-it-was-written` | `basename: illegal option -- -` | `basename: illegal option -- -` | `basename: illegal option -- -` | `basename: illegal option -- -` | `basename: illegal option -- -` | `basename: illegal option -- -` | `basename: unrecognized option: bad` |
+| `exec/a-script-is-started-by-the-spelling-its-shell-joined` | `0=z0~0=z0~0=./z0~0=./z0~0=.//z0~0=deep/../z0~0=./deep/../z0~0=../sub//z0` | `0=./z0~0=./z0~0=./z0~0=./z0~0=./z0~0=deep/../z0~0=./deep/../z0~0=../sub//z0` | `0=./z0~0=./z0~0=./z0~0=./z0~0=./z0~0=deep/../z0~0=./deep/../z0~0=../sub//z0` | `0=./z0~0=./z0~0=./z0~0=./z0~0=./z0~0=deep/../z0~0=./deep/../z0~0=../sub//z0` | `0=z0~0=z0~0=z0~0=z0~0=<tmp>/sub/./z0~0=<tmp>/sub/deep/../z0~0=./deep/../z0~0=../sub//z0` | `0=z0~0=z0~0=z0~0=z0~0=.//z0~0=deep/../z0~0=./deep/../z0~0=../sub//z0` | `0=z0~0=z0~0=./z0~0=./z0~0=.//z0~0=deep/../z0~0=./deep/../z0~0=../sub//z0` |
+| `exec/a-script-exec-starts-by-the-spelling-its-shell-joined` | `0=./z0~0=deep/../z0~0=./deep/../z0` | `0=/private<tmp>/sub/z0~0=/private<tmp>/sub/deep/../z0~0=/private<tmp>/sub/deep/../z0` | `0=/private<tmp>/sub/z0~0=/private<tmp>/sub/deep/../z0~0=/private<tmp>/sub/deep/../z0` | `0=/private<tmp>/sub/z0~0=/private<tmp>/sub/deep/../z0~0=/private<tmp>/sub/deep/../z0` | `0=z0~0=<tmp>/sub/deep/../z0~0=./deep/../z0` | `0=z0~0=deep/../z0~0=./deep/../z0` | `0=./z0~0=deep/../z0~0=./deep/../z0` |
+| `exec/a-file-run-as-a-script-sees-the-spelling-its-shell-joined` | `n0=.//n0~n0=deep/../n0~n0=./n0` | `n0=./n0~n0=deep/../n0~n0=./n0` | `n0=./n0~n0=deep/../n0~n0=./n0` | `n0=./n0~n0=deep/../n0~n0=./n0` | `n0=n0~n0=n0~n0=n0` | `n0=.//n0~n0=deep/../n0~n0=n0` | `n0=.//n0~n0=deep/../n0~n0=./n0` |
 | `commands/a-dot-and-an-exec-take-a-dotdot-physically` | `dot=2~sourced~dotlink=0~exec=127~ran~path=0` | `dot=1~sourced~dotlink=0~exec=127~ran~path=0` | `dot=1~sourced~dotlink=0~exec=127~ran~path=0` | `dot=1~sourced~dotlink=0~exec=127~ran~path=0` | `dot=1~sourced~dotlink=0~exec=127~ran~path=0` | `dot=127~sourced~dotlink=0~exec=127~ran~path=0` | `dot=2~sourced~dotlink=0~exec=127~ran~path=0` |
 | `subst/a-body-that-runs-in-the-current-shell` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[1][hi]` | `[1][hi]` | **2>** `<shell>: ${ x=1; echo hi;}: bad substitution` *(status 1)* | `[1][hi]` | **2>** `<shell>:1: bad substitution` *(status 1)* | **2>** `<shell>: syntax error: bad substitution` *(status 2)* |
 | `subst/a-paren-opens-a-current-shell-body-too` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | **2>** `<shell>: line 1: A${(echo hi)}B: bad substitution` *(status 1)* | **2>** `<shell>: line 1: A${(echo hi)}B: bad substitution` *(status 127)* | **2>** `<shell>: A${(echo hi)}B: bad substitution` *(status 1)* | `AhiB` | **2>** `<shell>:1: error in flags near position 6 in '${(echo hi)}B"'` *(status 1)* | **2>** `<shell>: syntax error: bad substitution` *(status 2)* |
@@ -16940,6 +16943,29 @@ y][x][y]`. The row exists because the plausible implementation is a split follow
 - `exec/a-command-is-named-as-it-was-written` — a command names itself from `argv[0]`, and what belongs there is the word that was typed rather than the path PATH resolved to. Unanimous, invisible until something fails, and then it is in the output of a program the shell did not write — which is why a whole-machine run sweep had eighteen lines differing by nothing else
   ```sh
   basename --bad 2>&1 | head -1
+  ```
+- `exec/a-script-is-started-by-the-spelling-its-shell-joined` — the kernel hands a `#!` interpreter the path it was given as the script, so `$0` inside it is whatever the shell joined — and every column joins what it was given rather than resolving it: a typed `./deep/../z0` is `./deep/../z0` in all of them, and a PATH hit is the hit as that column writes it back, except that zsh and ksh93 start a hit through `.` or an empty entry by its bare name. The second runs are the hashed route. Ours started everything by the absolute path it looked up (#6090)
+  ```sh
+  mkdir -p sub/deep && printf '#!/bin/sh\necho "0=$0"\n' > sub/z0 && printf 'echo "n0=$0"\n' > sub/n0 && chmod +x sub/z0 sub/n0 && cd sub && P=$PATH
+  PATH=:$P; z0; z0
+  PATH=.:$P; z0; z0
+  PATH=./:$P; z0
+  PATH=deep/..:$P; z0
+  ./deep/../z0; ../sub//z0
+  ```
+- `exec/a-script-exec-starts-by-the-spelling-its-shell-joined` — `exec` starts the same spelling a plain run does in four columns; bash alone puts it under the working directory with a leading `./` dropped, which is the habit its failure diagnostic already shows (#6090)
+  ```sh
+  mkdir -p sub/deep && printf '#!/bin/sh\necho "0=$0"\n' > sub/z0 && printf 'echo "n0=$0"\n' > sub/n0 && chmod +x sub/z0 sub/n0 && cd sub && P=$PATH
+  (PATH=.:$P; exec z0)
+  (PATH=deep/..:$P; exec z0)
+  (exec ./deep/../z0)
+  ```
+- `exec/a-file-run-as-a-script-sees-the-spelling-its-shell-joined` — a file with no `#!` line is run by the shell itself, and the `$0` it is given is the spelling a `#!` script would have received — except in ksh93, which hands over the word as typed (#6090)
+  ```sh
+  mkdir -p sub/deep && printf '#!/bin/sh\necho "0=$0"\n' > sub/z0 && printf 'echo "n0=$0"\n' > sub/n0 && chmod +x sub/z0 sub/n0 && cd sub && P=$PATH
+  PATH=./:$P; n0
+  PATH=deep/..:$P; n0
+  PATH=.:$P; n0
   ```
 - `commands/a-dot-and-an-exec-take-a-dotdot-physically` — the routes that read or run a file rather than probe it. `.` and a command by path are refused through a directory that is not there, and a PATH entry of `link/..` is searched in the link target's parent, where `only` is — ours searched the directory holding the link and found nothing (#6081)
   ```sh

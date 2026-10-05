@@ -6746,6 +6746,32 @@ echo "st=$?"`,
 		Why:     "a command names itself from `argv[0]`, and what belongs there is the word that was typed rather than the path PATH resolved to. Unanimous, invisible until something fails, and then it is in the output of a program the shell did not write — which is why a whole-machine run sweep had eighteen lines differing by nothing else",
 	},
 	{
+		ID: "exec/a-script-is-started-by-the-spelling-its-shell-joined", Category: "commands",
+		Snippet: "mkdir -p sub/deep && printf '#!/bin/sh\\necho \"0=$0\"\\n' > sub/z0 && printf 'echo \"n0=$0\"\\n' > sub/n0 && chmod +x sub/z0 sub/n0 && cd sub && P=$PATH\n" +
+			"PATH=:$P; z0; z0\n" +
+			"PATH=.:$P; z0; z0\n" +
+			"PATH=./:$P; z0\n" +
+			"PATH=deep/..:$P; z0\n" +
+			"./deep/../z0; ../sub//z0\n",
+		Why: "the kernel hands a `#!` interpreter the path it was given as the script, so `$0` inside it is whatever the shell joined — and every column joins what it was given rather than resolving it: a typed `./deep/../z0` is `./deep/../z0` in all of them, and a PATH hit is the hit as that column writes it back, except that zsh and ksh93 start a hit through `.` or an empty entry by its bare name. The second runs are the hashed route. Ours started everything by the absolute path it looked up (#6090)",
+	},
+	{
+		ID: "exec/a-script-exec-starts-by-the-spelling-its-shell-joined", Category: "commands",
+		Snippet: "mkdir -p sub/deep && printf '#!/bin/sh\\necho \"0=$0\"\\n' > sub/z0 && printf 'echo \"n0=$0\"\\n' > sub/n0 && chmod +x sub/z0 sub/n0 && cd sub && P=$PATH\n" +
+			"(PATH=.:$P; exec z0)\n" +
+			"(PATH=deep/..:$P; exec z0)\n" +
+			"(exec ./deep/../z0)\n",
+		Why: "`exec` starts the same spelling a plain run does in four columns; bash alone puts it under the working directory with a leading `./` dropped, which is the habit its failure diagnostic already shows (#6090)",
+	},
+	{
+		ID: "exec/a-file-run-as-a-script-sees-the-spelling-its-shell-joined", Category: "commands",
+		Snippet: "mkdir -p sub/deep && printf '#!/bin/sh\\necho \"0=$0\"\\n' > sub/z0 && printf 'echo \"n0=$0\"\\n' > sub/n0 && chmod +x sub/z0 sub/n0 && cd sub && P=$PATH\n" +
+			"PATH=./:$P; n0\n" +
+			"PATH=deep/..:$P; n0\n" +
+			"PATH=.:$P; n0\n",
+		Why: "a file with no `#!` line is run by the shell itself, and the `$0` it is given is the spelling a `#!` script would have received — except in ksh93, which hands over the word as typed (#6090)",
+	},
+	{
 		ID: "commands/a-dot-and-an-exec-take-a-dotdot-physically", Category: "commands",
 		Snippet: "mkdir -p sub/deep && ln -s sub/deep link && echo 'echo sourced' > f && cp f sub/g\n" +
 			"printf '#!/bin/sh\\necho ran\\n' > tool && chmod +x tool && cp tool sub/only\n" +

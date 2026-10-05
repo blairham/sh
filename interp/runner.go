@@ -3547,6 +3547,10 @@ type Runner struct {
 	// pointer to it — a subshell's jobs are its own, but a note it sends
 	// reaches the shell that is waiting.
 	jobEnded chan struct{}
+	// jobEndedHook is JobEnded as the jobs carry it, so that a hook the front
+	// end wires after a job started still reaches that job. See
+	// jobEndedHook.
+	jobEndedHook *jobEndedHook
 	// lastStmtLine is the line of the last statement this shell started,
 	// background jobs included — see where it is written for why that is not
 	// Runner.line. Read only by the two sentences about abandoned jobs.
@@ -5611,6 +5615,11 @@ func (r *Runner) clone() *Runner {
 	c.plainTail, c.tailInALoop = nil, false
 	c.pendingPipeJob = nil
 	c.traceTo = nil
+	// A box of its own, filled from the hook the copy carries. Sharing the
+	// shell's would let a subshell copied before the front end wired the hook
+	// put its nil back over the front end's the next time it starts a job.
+	// See jobEndedHook.
+	c.jobEndedHook = nil
 	c.inParensBody, c.heldInterruptDeath = false, false
 	// And one boundary further from the shell that was started. The flag
 	// above cannot answer this: it is already true in a subshell of a

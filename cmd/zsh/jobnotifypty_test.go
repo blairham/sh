@@ -94,6 +94,27 @@ func TestNotifyDecidesWhenAFinishedJobIsReported(t *testing.T) {
 	})
 }
 
+// And a job the startup file started is announced the moment it ends too,
+// with nothing typed (#5892).
+//
+// It is the same rule as the row above and a different route to it: the job
+// begins before the session that would announce it exists, so whatever the
+// job was handed when it started cannot have been the session's wake. This
+// shell wrote nothing until a command had run. Measured 2026-10-04 on zsh
+// 5.9.2 (aarch64-apple-darwin25.4.0) through a pseudo-terminal with
+// `sleep 1 &` in a scratch `.zshrc`: `[1]  + done       sleep 1` and a fresh
+// prompt a second after the first, with no key pressed.
+//
+// The typed-job row above is the control: the same wait, the same session
+// shape, and a notice that does arrive.
+func TestAJobTheStartupFileStartedIsReportedTheMomentItEnds(t *testing.T) {
+	_, screen, _ := jobNoticeSessionRC(t, "sleep 0.4 &\n", "zsh", "-i")
+	if err := screen.Await("[1]  + done       sleep 0.4", jobNoticeBudget); err != nil {
+		t.Errorf("no unprompted notice for the startup file's job: %v\n%s", err,
+			smoke.Readable(smoke.LastLines(screen.Text(), 8)))
+	}
+}
+
 // And the notice does not eat the line being typed: it goes on a row of its
 // own and the prompt and the half-typed line are drawn again underneath it.
 //

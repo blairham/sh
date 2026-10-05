@@ -438,10 +438,27 @@ func (a *argumentsState) applicable(position int) []int {
 	// A numbered spec wins over the rest specification at its own position,
 	// which is what `n:…` means: the rest describes "when neither of the
 	// first two forms was provided".
+	//
+	// **Unless it is optional** (`n::…`), which leaves the rest standing
+	// beside it, the numbered one first — and never the next numbered one.
+	// Measured 2026-10-05 against zsh 5.9.2 (#6151): at `cmd <TAB>`,
+	// `1::a *:r` is `argument-1 argument-rest` and `1::a 2:b` is
+	// `argument-1` alone. `_kill` is that first shape, so without the rest
+	// `kill <TAB>` offered signals and no process.
 	for _, i := range out {
-		if !a.args[i].rest {
+		if a.args[i].rest {
+			continue
+		}
+		if !a.args[i].optional {
 			return []int{i}
 		}
+		keep := []int{i}
+		for _, j := range out {
+			if a.args[j].rest {
+				keep = append(keep, j)
+			}
+		}
+		return keep
 	}
 	return out
 }

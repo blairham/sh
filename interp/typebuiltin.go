@@ -575,7 +575,7 @@ func (r *Runner) typeAll(name string, m typeMode) int {
 	// TypeExternal: the engine that calls a plain answer a tracked alias
 	// writes `ls is /bin/ls` here like the others.
 	if !r.reservedBuiltin(name) {
-		for _, path := range r.lookPathAll(name) {
+		for _, path := range r.lookPathAllSpelled(name) {
 			found = true
 			if r.sayKind(m.asked(), name, "file", NamedKindWord(NameFile)) {
 				continue
@@ -657,7 +657,7 @@ func (r *Runner) typeAllPaths(name string, m typeMode) int {
 	_, hashed := r.hashedCommandPath(name)
 	arrow := symlinkArrowFor(m)
 	if !r.reservedBuiltin(name) {
-		for _, path := range r.lookPathAll(name) {
+		for _, path := range r.lookPathAllSpelled(name) {
 			found = true
 			path = r.reportedPath(name, path)
 			if r.unspecified {

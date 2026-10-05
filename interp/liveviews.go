@@ -333,7 +333,8 @@ func (r *Runner) PathEntries() map[string]string { return r.pathEntries(false) }
 func (r *Runner) pathEntries(runnableOnly bool) map[string]string {
 	out := map[string]string{}
 	path, _ := r.getVar("PATH")
-	for _, dir := range r.pathElements(path) {
+	for _, entry := range r.pathElements(path) {
+		dir := entry
 		if dir == "" {
 			dir = "."
 		}
@@ -352,7 +353,9 @@ func (r *Runner) pathEntries(runnableOnly bool) map[string]string {
 			if runnableOnly && r.runnable(full) != nil {
 				continue
 			}
-			out[name] = full
+			// The table's spelling and not the path that runs — see
+			// Runner.spelledPathHit.
+			out[name] = r.spelledPathHit(entry, name)
 		}
 	}
 	return out

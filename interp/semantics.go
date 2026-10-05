@@ -28065,6 +28065,35 @@ type Semantics struct {
 	// [PathCandidateReport] for the rows (#3249).
 	PathCandidateReported PathCandidateReport
 
+	// PathHitSpelled is how a command found on PATH is written back by the
+	// builtins that report one — `command -v`, `type`, `whence`, a `hash`
+	// listing — and what the command hash keeps for it, so that a report made
+	// after the command has run reads the same as one made before.
+	//
+	// Measured 2026-10-05 with `command -v` before and after running the
+	// command, from a directory `<d>` holding an executable `zz`, against
+	// bash 5.3 (/opt/homebrew/bin/bash), zsh 5.9.2 under `-f`, dash, ksh93u+
+	// (/bin/ksh) and BusyBox ash in the pinned alpine image (#6044):
+	//
+	//	PATH          bash        zsh, dash, ash   ksh93
+	//	/usr/../bin   /usr/../bin/ls  (all five)
+	//	/bin/         /bin/ls     /bin//ls         /bin/ls
+	//	<d>/          <d>/zz      <d>//zz          <d>/zz
+	//	.             ./zz        ./zz             <d>/zz
+	//	./            ./zz        .//zz            <d>/./zz
+	//	:/bin         ./zz        zz               <d>/zz
+	//
+	// and each column answers the same after the run as before it, where this
+	// shell kept the cleaned absolute path in the table and so reported
+	// `/bin/ls` for `/usr/../bin` the moment `ls` had run, in every dialect.
+	// Nobody cleans a `..`; what splits the panel is the separator and a
+	// relative entry. See PathHitSpelling for the three readings.
+	//
+	// Read rather than asked: the three agree on every absolute entry that
+	// does not end in a slash, which is nearly every PATH there is, and the
+	// zero value is the reading this shell had before the question was put.
+	PathHitSpelled PathHitSpelling
+
 	// DefaultPathSearchIsRemembered puts what a `command -p` search resolved
 	// into the command hash, so a later bare name runs it.
 	//

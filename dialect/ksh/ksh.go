@@ -3803,6 +3803,10 @@ func Semantics() interp.Semantics {
 	// monitor and is StoppedJobsHoldTheExit's route rather than this axis's
 	// (#4542).
 	s.MonitorAloneAccountsForJobsAtExit = interp.No
+	// How a PATH hit is written back, before the command runs and after:
+	// measured 2026-10-05 with `command -v`, `PATH=.` and an empty entry are `$PWD/zz`, `PATH=./` is `$PWD/./zz`, `PATH=/bin/` is `/bin/ls` (#6044). See
+	// Semantics.PathHitSpelled.
+	s.PathHitSpelled = interp.PathHitFromTheWorkingDirectory
 	// A prompt holds whatever the monitor says: measured 2026-10-05 through
 	// a pseudo-terminal, `set +m`, `sleep 5 & kill -STOP $!`, `exit` is `You
 	// have stopped jobs` and the shell stays, as with the monitor on (#6028).

@@ -10480,7 +10480,7 @@ func (r *Runner) exec(ctx context.Context, argv, env []string) error {
 	}
 	// This runner's PATH, not the process's — see lookpath.go for why that
 	// distinction is the whole bug and not a detail.
-	path, lookErr := r.lookPath(argv[0])
+	path, spelled, _, lookErr := r.lookPathSpelled(argv[0])
 	if lookErr != nil {
 		// A word nothing would run may still be somewhere to go — see
 		// autoCdInstead, which answers false in every shell that has not
@@ -10505,7 +10505,10 @@ func (r *Runner) exec(ctx context.Context, argv, env []string) error {
 		// that is about the hash rather than about the run: what it resolved
 		// was never on the caller's PATH. See Runner.rememberingLookups.
 		if r.rememberingLookups() {
-			r.hashCommandRun(argv[0], path)
+			// The hit as this dialect spells it, which is what every later
+			// report reads back; the run resolves it again on the way in.
+			// See Semantics.PathHitSpelled (#6044).
+			r.hashCommandRun(argv[0], spelled)
 		}
 	}
 	action := r.act(Action{Kind: ActionExec, Path: path, Args: argv})

@@ -2700,6 +2700,10 @@ func Semantics() interp.Semantics {
 	// an interactive session with `unsetopt monitor` writes neither too
 	// (#4542).
 	s.MonitorAloneAccountsForJobsAtExit = interp.Yes
+	// How a PATH hit is written back, before the command runs and after:
+	// measured 2026-10-05 with `command -v`, `PATH=/bin/` is `/bin//ls`, `PATH=./` is `.//zz`, an empty entry is the bare name (#6044). See
+	// Semantics.PathHitSpelled.
+	s.PathHitSpelled = interp.PathHitAsWritten
 	// And the prompt is not enough without it: `set +m` at a session, or
 	// `-i` on a pipe where the monitor cannot be turned on, and `exit` with a
 	// running job leaves at once, says nothing, and hangs nothing up — the

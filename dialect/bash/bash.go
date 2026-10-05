@@ -1557,6 +1557,11 @@ func Semantics() interp.Semantics {
 	// the pair `huponexit` needs at a prompt — so neither noun reaches this
 	// shell without a prompt (#4542).
 	s.MonitorAloneAccountsForJobsAtExit = interp.No
+	// How a PATH hit is written back, before the command runs and after:
+	// measured 2026-10-05 with `command -v`, `PATH=/bin/` is `/bin/ls` and
+	// `PATH=`, `.` and `./` are all `./zz` — one separator, and an empty
+	// entry as `.` (#6044). See Semantics.PathHitSpelled.
+	s.PathHitSpelled = interp.PathHitJoinedOnce
 	// And a prompt is enough without the monitor: measured 2026-10-05
 	// through a pseudo-terminal, `shopt -s checkjobs; set +m`, `sleep 3 &`,
 	// `exit` is `There are running jobs.` and the shell stays, and with

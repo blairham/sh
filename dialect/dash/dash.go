@@ -445,6 +445,10 @@ func Semantics() interp.Semantics {
 	// about. That one is StoppedJobsHoldTheExit's and is not moved here
 	// (#4542).
 	s.MonitorAloneAccountsForJobsAtExit = interp.No
+	// How a PATH hit is written back, before the command runs and after:
+	// measured 2026-10-05 with `command -v`, `PATH=/bin/` is `/bin//ls`, `PATH=./` is `.//zz`, an empty entry is the bare name (#6044). See
+	// Semantics.PathHitSpelled.
+	s.PathHitSpelled = interp.PathHitAsWritten
 	// And with the monitor turned off at a prompt, a stopped job no longer
 	// holds the exit: measured 2026-10-05 through a pseudo-terminal, `set
 	// +m`, `sleep 5 & kill -STOP $!`, `exit` leaves saying nothing, where the

@@ -54,7 +54,7 @@ func TestAnInteractiveBashSpeaksAsAtItsPrompt(t *testing.T) {
 			}
 			_, errs, _ := prompt(t, typed, c.argv...)
 			for _, want := range c.want {
-				if !strings.Contains(errs, strings.ReplaceAll(want, "@", home)) {
+				if !hasLine(errs, strings.ReplaceAll(want, "@", home)) {
 					t.Errorf("stderr %q, want a line %q", errs, want)
 				}
 			}
@@ -76,8 +76,24 @@ func TestAnInteractiveBashrcParseFailureIsPrefixed(t *testing.T) {
 		"bash: " + home + "/.bashrc: line 1: syntax error near unexpected token `)'\n",
 		"bash: " + home + "/.bashrc: line 1: `echo )'\n",
 	} {
-		if !strings.Contains(errs, want) {
+		if !hasLine(errs, want) {
 			t.Errorf("stderr %q, want a line %q", errs, want)
 		}
 	}
+}
+
+// hasLine is whether text holds want as a whole line, prompt and all trimmed
+// from its front: a substring check passes `./weird/mybash: …` for
+// `mybash: …`, which is the very difference these tests are about.
+func hasLine(text, want string) bool {
+	want = strings.TrimSuffix(want, "\n")
+	for _, line := range strings.Split(text, "\n") {
+		if i := strings.LastIndex(line, "$ "); i >= 0 && strings.Contains(line[:i+2], "-5.") {
+			line = line[i+2:]
+		}
+		if line == want {
+			return true
+		}
+	}
+	return false
 }

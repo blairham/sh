@@ -3,6 +3,8 @@
 
 package interp
 
+import "slices"
+
 // What the shell is currently *inside*, as a stack.
 //
 // Not the call stack. [Runner.CallStack] holds the units a `return` and a
@@ -63,6 +65,24 @@ const (
 	// so that it can define the function, which is what a ksh-style load
 	// does before it runs the definition the file left.
 	EvalContextAutoloadedFile
+	// EvalContextStartupFile is a startup file the shell is reading before
+	// its program, and it stands *in place of* the route's bottom rather than
+	// on top of it: the program has not started, so there is no script or
+	// command string to be inside yet. Measured 2026-10-05 on zsh 5.9.2, the
+	// one shell with the parameter, reading it in each of `.zshenv`,
+	// `.zprofile`, `.zshrc` and `.zlogin` under `-l -i -c` and in `.zshenv`
+	// ahead of a script file:
+	//
+	//	at the top of the file        file
+	//	in a function it calls        file shfunc
+	//	in $( … ) in it               file cmdsubst
+	//	in eval in it                 file eval
+	//	in a file it sources          file file
+	//	the program after it          cmdarg, or toplevel
+	//
+	// where this shell said `cmdarg` or `toplevel` in the file's place on
+	// every row (#5885).
+	EvalContextStartupFile
 )
 
 // EvalContextStack is the stack outermost first, with the route's own entry
@@ -74,6 +94,11 @@ const (
 // never said reads as a script, which is what an embedder driving statements
 // directly is doing.
 func (r *Runner) EvalContextStack() []EvalContext {
+	if len(r.evalContexts) > 0 && r.evalContexts[0] == EvalContextStartupFile {
+		// Read before the program, so the file is the bottom and there is no
+		// route's entry under it. See EvalContextStartupFile.
+		return slices.Clone(r.evalContexts)
+	}
 	out := make([]EvalContext, 0, len(r.evalContexts)+1)
 	bottom := EvalContextScript
 	if r.Route == RouteCommandString {

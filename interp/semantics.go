@@ -23480,6 +23480,17 @@ type Semantics struct {
 	//
 	// where the other reading — the one this shell has for zsh — counts by
 	// line: the warning is waived for the line after it, whatever runs there.
+	//
+	// unpinned bash: a held exit needs a prompt, which no corpus route has;
+	// pinned by TestAHeldExitIsWaivedForTheNextCommandOnly.
+	//
+	// unpinned zsh: likewise.
+	//
+	// unpinned ksh: likewise.
+	//
+	// unpinned dash: likewise.
+	//
+	// unpinned ash: likewise.
 	HeldExitWaivedForTheNextCommandOnly Answer
 
 	// HashForgetsOneName is `hash -d name`: one entry out, where `-r` is all

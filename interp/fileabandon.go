@@ -148,6 +148,18 @@ func (r *Runner) ExitRanOutsideAFile() bool {
 	return r.ctl == controlExit && r.exitRanOutsideAFile
 }
 
+// WithholdLeavingWord marks the shell's way out as one that writes no word as
+// the session ends, whatever the dialect's word is. A builtin that ends the
+// shell calls it first: bash's `logout` ends a login shell and writes nothing,
+// where `exit` in the same shell writes `logout` — measured 2026-10-04 on
+// bash 5.3.20 through a pseudo-terminal and on `-l -i -c`. See
+// Diagnostics.LeavingALoginSession.
+func (r *Runner) WithholdLeavingWord() { r.leavingWithheld = true }
+
+// LeavingWordWithheld reports whether WithholdLeavingWord was called, for the
+// front end that writes the word.
+func (r *Runner) LeavingWordWithheld() bool { return r.leavingWithheld }
+
 // ExitRan reports whether the shell is stopping because the `exit` builtin
 // ran, wherever it ran — in a file this shell was reading as much as outside
 // one.

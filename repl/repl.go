@@ -1109,7 +1109,9 @@ func (s Shell) heldForJobsAtExit(state *terminalState) bool {
 // Nothing at all for a dialect with no word for it, which is four of the five
 // and the zero value — so a caller with no dialect pays a compare.
 func (s Shell) leaving() {
-	if s.Leaving == "" {
+	if s.Leaving == "" || (s.Runner != nil && s.Runner.LeavingWordWithheld()) {
+		// The second: a builtin that ends the shell and says nothing, which
+		// is bash's `logout`. See interp.Runner.WithholdLeavingWord.
 		return
 	}
 	s.errf("%s\n", s.Leaving)

@@ -76,3 +76,52 @@ func TestAnInteractiveCommandStringSaysExitOnItsWayOut(t *testing.T) {
 		})
 	}
 }
+
+// **A login shell says `logout` instead**, on every route that says `exit`,
+// and the `logout` builtin says nothing at all (#5871).
+//
+// Measured 2026-10-04 against bash 5.3.20, no startup files: through a
+// pseudo-terminal `exit`, `exit 3` and `^D` write `logout` under `-l` and
+// under an argv[0] of `-bash`, and `logout` writes nothing; with no terminal,
+//
+//	-l -i -c 'exit 3'      logout
+//	-l -i -c 'logout 3'    nothing
+//
+// The prompt's rows here are a session on a pipe, which is the same loop a
+// terminal's session runs and writes the same word; the error stream's last
+// line is read for the reason the rows above read it.
+func TestALoginShellSaysLogoutOnItsWayOut(t *testing.T) {
+	quiet := "bash: no job control in this shell"
+	for _, tc := range []struct {
+		name  string
+		stdin string
+		argv  []string
+		last  string
+		code  int
+	}{
+		{"exit in a login command string", "", []string{"-l", "-i", "-c", "exit 3"}, "logout", 3},
+		{"logout in a login command string", "", []string{"-l", "-i", "-c", "logout 3"}, quiet, 3},
+		{"exit at a login prompt", "exit 3\n", []string{"-l", "-i"}, "logout", 3},
+		{"the input running out at a login prompt", "true\n", []string{"-l", "-i"}, "logout", 0},
+		{"logout at a login prompt", "logout 3\n", []string{"-l", "-i"}, "", 3},
+		{"exit at a prompt that is not a login one", "exit 3\n", []string{"-i"}, "exit", 3},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, errs, code := captureArgs(t, tc.stdin, tc.argv...)
+			lines := strings.Split(strings.TrimSuffix(errs, "\n"), "\n")
+			got := lines[len(lines)-1]
+			if tc.last == "" {
+				if strings.HasSuffix(strings.TrimSuffix(errs, "\n"), "logout") || strings.HasSuffix(strings.TrimSuffix(errs, "\n"), "exit") {
+					t.Errorf("logout said a word on its way out: error stream %q", errs)
+				}
+			} else if got != tc.last && !strings.HasSuffix(got, "$ "+tc.last) {
+				// The word on the last prompt's row is the same word: where
+				// it lands is #4011's question, not this one.
+				t.Errorf("the error stream ended %q, want %q (whole stream %q)", got, tc.last, errs)
+			}
+			if code != tc.code {
+				t.Errorf("status %d, want %d", code, tc.code)
+			}
+		})
+	}
+}

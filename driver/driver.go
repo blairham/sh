@@ -3304,7 +3304,8 @@ func (sh Shell) execute(r *interp.Runner, pr *program, in source) int {
 // Diagnostics.LeavingIsAlsoSaidOnTheseRoutes and Runner.ExitRanOutsideAFile,
 // which carry what was measured for each.
 func (sh Shell) sayLeaving(r *interp.Runner, in source) {
-	if !in.interactive || in.dg.LeavingAPromptSession == "" {
+	word := leavingWord(in.dg, in.loginShell())
+	if !in.interactive || word == "" || r.LeavingWordWithheld() {
 		return
 	}
 	if !in.dg.LeavingIsAlsoSaidOnTheseRoutes.Has(in.programRoute()) {
@@ -3313,7 +3314,18 @@ func (sh Shell) sayLeaving(r *interp.Runner, in source) {
 	if !r.ExitRanOutsideAFile() {
 		return
 	}
-	sh.errf("%s\n", in.dg.LeavingAPromptSession)
+	sh.errf("%s\n", word)
+}
+
+// leavingWord is the word a shell says as an interactive session ends: the
+// login shell's where the dialect has one. One function for the prompt's
+// route and the command string's, so the two cannot disagree. See
+// Diagnostics.LeavingALoginSession.
+func leavingWord(dg interp.Diagnostics, login bool) string {
+	if login && dg.LeavingALoginSession != "" {
+		return dg.LeavingALoginSession
+	}
+	return dg.LeavingAPromptSession
 }
 
 // stdinAfterCommandString is the program the standard-input half reads, which

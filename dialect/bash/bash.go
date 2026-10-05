@@ -4215,6 +4215,9 @@ func Diagnostics() interp.Diagnostics {
 		// and on a pipe with and without a trailing `exit`, the same line
 		// each way. See Diagnostics.LeavingAPromptSession.
 		LeavingAPromptSession: "exit",
+		// And `logout` for a login shell, on the same routes. See
+		// Diagnostics.LeavingALoginSession.
+		LeavingALoginSession: "logout",
 		// And the one route that says the same word with no prompt drawn at
 		// all: `-i -c 'exit 3'` writes it and `-i script.sh` whose script
 		// runs the same `exit` writes nothing, measured on 5.3.20 and

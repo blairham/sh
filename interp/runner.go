@@ -1706,6 +1706,9 @@ type Runner struct {
 	// because by the time anyone asks, every file the shell was reading has
 	// been unwound and the answer would always be "not in a file".
 	exitRanOutsideAFile bool
+
+	// leavingWithheld is WithholdLeavingWord's mark.
+	leavingWithheld bool
 	// exitRan says the controlExit being carried came from the `exit` builtin
 	// at all, wherever it ran. The neighboring question to the one above and
 	// a different one: a login shell reads its logout file for an `exit` in a

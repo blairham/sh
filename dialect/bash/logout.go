@@ -32,6 +32,9 @@ func registerLogout(r *interp.Runner) { r.Register("logout", logoutBuiltin) }
 
 func logoutBuiltin(r *interp.Runner, ctx context.Context, args []string) int {
 	if r.LoginShell && !r.InSubshell() {
+		// And it says nothing on the way out, where `exit` says `logout`.
+		// See interp.Runner.WithholdLeavingWord.
+		r.WithholdLeavingWord()
 		if exit, ok := r.Builtin("exit"); ok {
 			return exit(r, ctx, args)
 		}

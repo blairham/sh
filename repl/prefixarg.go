@@ -147,7 +147,11 @@ func (e *editor) spendCountOnEscape() bool {
 	}
 	n := e.count.n()
 	e.count = prefixCount{}
-	e.keyNumeric = &n
+	// The count as it was typed, sign and all, and not the variable the
+	// replay below turns positive: an action that reads the count itself
+	// is told -1 for `ESC -` (#5960).
+	told := n
+	e.keyNumeric = &told
 	negative := n < 0
 	if negative {
 		n = -n
@@ -172,7 +176,8 @@ func (e *editor) spendCountOnBinding(b Binding) {
 	}
 	n := e.count.n()
 	e.count = prefixCount{}
-	e.keyNumeric = &n
+	told := n
+	e.keyNumeric = &told
 	if b.Function != "" {
 		return
 	}
@@ -216,14 +221,15 @@ func (e *editor) typeCounted(r rune, n int, prompt drawnPrompt) {
 // times as the count says, by putting its bytes back to be read.
 //
 // A keystroke that was more of the count is not replayed, and nor is a
-// widget of the shell's: zsh calls one of those once and tells it the count.
+// widget of the shell's, or an action that reads the count itself: zsh calls
+// one of those once and tells it the count.
 func (e *editor) replayCountedKey() {
 	if e.countRepeat <= 0 {
 		return
 	}
 	k := e.countRepeat
 	e.countRepeat = 0
-	if e.keyBinding != nil && e.keyBinding.Function != "" {
+	if e.keyBinding != nil && (e.keyBinding.Function != "" || e.keyBinding.Widget.takesItsCount()) {
 		return
 	}
 	if len(e.keyBytes) == 0 || !utf8.Valid(e.keyBytes) && e.keyBytes[0] != esc {

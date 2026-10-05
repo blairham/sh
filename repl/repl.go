@@ -456,6 +456,10 @@ type Shell struct {
 	// Asked **before** Completers and before this shell's own completion, and
 	// never instead of either: nothing it returns is merged and nothing it
 	// fails to return costs the word its other answers. See completerFor.
+	//
+	// With one exception: CompletionStopped, the answer of a completion that
+	// stopped on an error, after which nothing else is asked and the line is
+	// left alone (#6068).
 	RunCompletion func(ctx context.Context, name string, c Completion) []Candidate
 
 	// HistoryRecorders are told every line this session records, besides the

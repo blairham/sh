@@ -204,8 +204,14 @@ func RunCompletion(
 	// function bare, so `$WIDGET` was empty, `BUFFER=zz` was an ordinary
 	// assignment, and the function ran on (#5999).
 	in := repl.Line{Buffer: c.Line, Cursor: utf8.RuneCountInString(c.Line[:min(max(c.Point, 0), len(c.Line))])}
-	_, ran := runWidgetFunction(r, withCompletion(ctx, cs), name, in)
+	_, ran, stopped := runWidgetCall(r, withCompletion(ctx, cs), name, in)
 	r.SetExitStatus(status)
+	if stopped {
+		// Stopped on an error: no matches, and not "nothing to say" either,
+		// so the editor completes nothing of its own. See
+		// repl.Shell.RunCompletion (#6068).
+		return repl.CompletionStopped()
+	}
 	if !ran {
 		return nil
 	}

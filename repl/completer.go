@@ -145,7 +145,17 @@ type Candidate struct {
 	// symlinked directory it has not marked — see
 	// EditorStyle.SymlinkedDirectoryMarkedWhenNamedWhole.
 	Open bool
+
+	// stop marks CompletionStopped's answer, and nothing else sets it.
+	stop bool
 }
+
+// CompletionStopped is what a shell's completion answers when its function
+// stopped on an error: no matches, and not "nothing to say" either, so the
+// editor asks no other completer and leaves the line alone (#6068). A
+// constructor rather than an empty list, because an empty list is already
+// the answer of a shell with no opinion — see completerFor.
+func CompletionStopped() []Candidate { return []Candidate{{stop: true}} }
 
 // Group is a block of a listing: candidates whose Group compares equal are
 // drawn together, under one heading, in one arrangement.

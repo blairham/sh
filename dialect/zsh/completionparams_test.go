@@ -4,6 +4,7 @@
 package zsh_test
 
 import (
+	"reflect"
 	"strings"
 	"testing"
 
@@ -24,7 +25,12 @@ func TestACompletionWidgetFromItsKeyHasTheWidgetParameters(t *testing.T) {
 	r, out := zleRunner(t, `cf() { print -r -- "W=$WIDGET t=${(t)BUFFER} B=$BUFFER C=$CURSOR L=$LBUFFER"; BUFFER=zz; ran=widget }
 zle -C cw complete-word cf
 `)
-	zsh.RunCompletion(r, t.Context(), "cw", repl.Completion{Line: "éx", Point: len("éx"), Start: 0, Word: "éx"})
+	answer := zsh.RunCompletion(r, t.Context(), "cw", repl.Completion{Line: "éx", Point: len("éx"), Start: 0, Word: "éx"})
+	// A function that stopped answers that it stopped, so the editor
+	// completes nothing of its own (#6068).
+	if want := repl.CompletionStopped(); !reflect.DeepEqual(answer, want) {
+		t.Errorf("the completion answered %+v, want CompletionStopped", answer)
+	}
 	got := out.String()
 	if want := "W=cw t=scalar-local-readonly-special B=éx C=2 L=éx\n"; !strings.HasPrefix(got, want) {
 		t.Errorf("the function said %q, want it to begin %q", got, want)

@@ -557,9 +557,33 @@ func (e *editor) completerFor(name string) Completer {
 	if name == "" || e.shellComplete == nil {
 		return e.comp
 	}
-	return completers{CompleterFunc(func(c Completion) []Candidate {
-		return e.shellComplete(name, c)
-	}), e.comp}
+	return CompleterFunc(func(c Completion) []Candidate {
+		matches := e.shellComplete(name, c)
+		if len(matches) == 1 && matches[0].stop {
+			// The shell's function stopped on an error, which is no
+			// completion at all: this editor's own is not asked, and the
+			// line is left as it was. Measured 2026-10-05 through a
+			// pseudo-terminal against zsh 5.9.2, `cf() { BUFFER=zz }` behind
+			// `zle -C` on a key prints the refusal and a bell, and `x` stays
+			// `x` where this went on to list every command beginning with
+			// it (#6068).
+			//
+			// And the diagnostic it printed ended its row, so the screen
+			// the last draw described is gone: the next draw starts from
+			// the row the cursor is on, and writes the prompt and the line
+			// there — what zsh draws under the diagnostic (#6062).
+			e.drawn = drawnLine{}
+			e.row = 0
+			return nil
+		}
+		if len(matches) > 0 {
+			return matches
+		}
+		if e.comp == nil {
+			return nil
+		}
+		return e.comp.Complete(c)
+	})
 }
 
 // completeKey is the whole of what a completion key does, including the part

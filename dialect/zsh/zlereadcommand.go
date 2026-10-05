@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/blairham/sh/interp"
 	"github.com/blairham/sh/repl"
@@ -70,8 +71,9 @@ func copyRegionAsKill(r *interp.Runner, _ repl.Actions, args []string) int {
 //	pushed a, ^A, \e[A, \eb    self-insert a / beginning-of-line ^A /
 //	                           up-line-or-history \e[A / backward-word \eb,
 //	                           each at status 0
-//	pushed é                   self-insert twice, one byte of it in $KEYS
-//	                           each time
+//	pushed é                   self-insert once, the whole character in
+//	                           $KEYS, under a UTF-8 LANG; under LANG=C or
+//	                           none, twice, one byte each time (#5949)
 //	pushed ^X q                undefined-key, $KEYS ^Xq, status 0 — the
 //	                           prefix and the byte that went nowhere both
 //	                           read
@@ -103,6 +105,13 @@ func readCommand(r *interp.Runner, a repl.Actions, _ []string) int {
 			return 1
 		}
 		seq = append(seq, b)
+		if len(seq) == 1 {
+			if char, whole := readCharacter(r, a, table, seq); whole {
+				r.SetVar("REPLY", "self-insert")
+				r.SetVar(zleKeys, string(char))
+				return 0
+			}
+		}
 		name, exact := readCommandBinding(table, seq)
 		if exact {
 			matched, matchedLen = name, len(seq)
@@ -128,6 +137,43 @@ func readCommand(r *interp.Runner, a repl.Actions, _ []string) int {
 	r.SetVar("REPLY", matched)
 	r.SetVar(zleKeys, string(seq))
 	return 0
+}
+
+// readCharacter reads the rest of a character the locale spells in more than
+// one byte, where seq holds its first byte and nothing is bound to that byte
+// alone, and reports whether what it read is one whole character — which
+// types itself, as any character does that nothing is bound to.
+//
+// Measured 2026-10-04 against zsh 5.9.2 (#5949): under a UTF-8 LANG a pushed
+// `é` is one key, `$KEYS` holding both bytes; under LANG=C it is two. A
+// widget that loops over read-command and strips each key off a copy of the
+// text never makes progress on half a character, so the difference is a hang
+// and not a detail. The bytes are read only where they are already in hand,
+// as the longer bindings above are; a character cut short is the byte read so
+// far, and the caller goes on with it as before.
+func readCharacter(r *interp.Runner, a repl.Actions, table map[string]string, seq []byte) ([]byte, bool) {
+	if seq[0] < utf8.RuneSelf {
+		return nil, false
+	}
+	if _, bound := table[string(seq)]; bound {
+		return nil, false
+	}
+	char := seq
+	for len(char) < utf8.UTFMax && !utf8.FullRune(char) && a.InputPending() {
+		b, ok := a.ReadKeyByte()
+		if !ok {
+			break
+		}
+		char = append(char, b)
+	}
+	if len(char) > 1 && r.CharacterLength(string(char)) == len(char) {
+		return char, true
+	}
+	if len(char) > 1 {
+		// Not one character after all: the bytes past the first go back.
+		a.PushKeys(string(char[1:]))
+	}
+	return nil, false
 }
 
 // readCommandBinding is the widget seq is bound to, in this keymap's table

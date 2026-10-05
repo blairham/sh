@@ -30,6 +30,20 @@ import "github.com/blairham/sh/syntax"
 // record is unreadable and the axes that govern it are never asked.
 func (r *Runner) SetPipelineStatus(name string) { r.pipeStatusName = name }
 
+// SetPromptStatus is the status a prompt sets for a line that ran nothing: a
+// line abandoned with ^C, or one the parser refused.
+//
+// Where the record is written as well is the dialect's answer — see
+// Semantics.PromptStatusWritesThePipelineRecord. One method for both callers
+// so that the two cannot disagree about it, which they did: the refusal set
+// `$?` and left bash's PIPESTATUS holding the pipeline before it.
+func (r *Runner) SetPromptStatus(status int) {
+	r.status = status
+	if r.pipeStatusName != "" && r.sem().PromptStatusWritesThePipelineRecord {
+		r.recordPipeStatus([]int{status})
+	}
+}
+
 // recordPipeStatus keeps what a pipeline's elements reported.
 //
 // Called before `!` inverts anything, which is measured: after

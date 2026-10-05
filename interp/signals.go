@@ -210,6 +210,27 @@ func (r *Runner) TrapsSignal() func(sig syscall.Signal) bool {
 	}
 }
 
+// IgnoresSignal reports whether the script has ignored sig with `trap ""`.
+//
+// Asked by a prompt about ^C: measured 2026-10-04, bash 5.3.20 and zsh 5.9.2
+// both leave `$?` alone for a ^C at the prompt under `trap "" INT`, where
+// without it they set 130. A trap with a body is not an ignore and is not
+// answered here.
+//
+// For the top-level shell, from the goroutine that owns the Runner — the same
+// shared table TrapsSignal reads, under the same lock.
+func (r *Runner) IgnoresSignal(sig syscall.Signal) bool {
+	name, ok := signalName(sig)
+	if !ok {
+		return false
+	}
+	s := r.sigs()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	body, has := s.traps[name]
+	return has && body == ""
+}
+
 // poke tells a waiter to look again. Never blocks: one outstanding token says
 // everything ten would.
 func (s *signalState) poke() {

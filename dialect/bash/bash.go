@@ -4134,6 +4134,10 @@ func Semantics() interp.Semantics {
 	// reverse-i-search in this shell and the characters of a command name in
 	// the other three. See Semantics.EditorReadsKeysWhereThereIsNoTerminal.
 	s.EditorReadsKeysWhereThereIsNoTerminal = true
+	// And a status the prompt sets for a line that ran nothing — ^C, a
+	// refusal — is PIPESTATUS as well as `$?`, where zsh leaves its record
+	// alone. See Semantics.PromptStatusWritesThePipelineRecord.
+	s.PromptStatusWritesThePipelineRecord = true
 	return s
 }
 

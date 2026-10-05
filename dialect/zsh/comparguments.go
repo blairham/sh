@@ -22,8 +22,10 @@ import (
 //
 //	comparguments -i '' -s : '(-m -n -r -s -v)-a[print all basic information]' …
 //
-// which is `-i`, a match specification, `_arguments`' own switches, a bare
-// `:` separating them from the specs, and the specs. The separator is what
+// which is `-i`, the `auto-description` style, `_arguments`' own switches, a
+// bare `:` separating them from the specs, and the specs. That second word
+// was read here as a match specification for a year, because every trace
+// it was measured over had the style unset; see autoDescription. The separator is what
 // the manual calls out — "all options to _arguments itself may be separated
 // from the spec forms by a single colon" — and the shipped function always
 // writes it, so it is read here as the end of the switches rather than
@@ -146,13 +148,16 @@ func (s optionArgStyle) takesTheNextWord() bool {
 // optionSpec is one `optspec` from the spec list: what may be typed, what it
 // shuts off, and what follows it.
 type optionSpec struct {
-	names   []string // `-+foo` describes both `-foo` and `+foo`
-	descr   string   // the `[…]` explanation, empty where there is none
-	repeat  bool     // a leading `*`: may appear more than once
-	hidden  bool     // a leading `!`: understood on the line, never offered
-	excl    []string // the `(…)` list: what this option shuts off
-	style   optionArgStyle
-	optargs []argumentSpec
+	names []string // `-+foo` describes both `-foo` and `+foo`
+	descr string   // the `[…]` explanation, empty where there is none
+	// described is that there was a `[…]` at all, which an empty one is:
+	// `-j[]` is offered as `-j:` and `-j` as `-j`. See optionOffer.
+	described bool
+	repeat    bool     // a leading `*`: may appear more than once
+	hidden    bool     // a leading `!`: understood on the line, never offered
+	excl      []string // the `(…)` list: what this option shuts off
+	style     optionArgStyle
+	optargs   []argumentSpec
 }
 
 // argumentSpec is one normal-argument description, `n:message:action` and its
@@ -230,7 +235,8 @@ func (a argumentSpec) tag() string {
 // argumentsState is one `comparguments -i` and everything the queries read
 // back out of it.
 type argumentsState struct {
-	matchSpec string
+	matchSpec string // `_arguments`' own -M, empty for the documented default
+	autoDescr string // the `auto-description` style -i was handed
 	stacking  bool   // -s
 	skipDash  bool   // -S: options stop at a `--`
 	ignorePat string // -A: options stop at the first argument not matching
@@ -363,7 +369,7 @@ func compargumentsInit(r *interp.Runner, cs *completionState, st *computilState,
 		r.Diagnosef("not enough arguments\n")
 		return 1
 	}
-	a := &argumentsState{matchSpec: args[0]}
+	a := &argumentsState{autoDescr: args[0]}
 	rest, ok := a.readSwitches(r, args[1:])
 	if !ok {
 		return 1
@@ -453,6 +459,7 @@ func (a *argumentsState) readSpecs(r *interp.Runner, specs []string) bool {
 				return false
 			}
 			opt.excl, opt.repeat, opt.hidden = excl, star, hidden
+			a.autoDescribe(&opt)
 			a.opts = append(a.opts, opt)
 		default:
 			r.Diagnosef("invalid argument: %s\n", spec)
@@ -515,6 +522,7 @@ func parseOptionSpec(body string) (optionSpec, bool) {
 	if strings.HasPrefix(rest, "[") {
 		if end := strings.IndexByte(rest, ']'); end >= 0 {
 			o.descr, rest = rest[1:end], rest[end+1:]
+			o.described = true
 		}
 	}
 	o.optargs = parseOptargs(rest)
@@ -522,6 +530,49 @@ func parseOptionSpec(body string) (optionSpec, bool) {
 		o.style = optArgSeparate
 	}
 	return o, true
+}
+
+// autoDescribe gives an option with no `[…]` of its own the description the
+// `auto-description` style makes out of its argument's message — the style
+// the shipped `_arguments` hands `-i` as its first word.
+//
+// zshcompsys(1) documents the style: "the description for options that are
+// not described by the `_arguments`" … "a `%d` in the value will be replaced
+// by the description" of the option's argument. What it reaches, and what it
+// does not, is measured — on zsh 5.9.2, 2026-10-05, from inside a `zle -C`
+// widget, asking `comparguments -O` with each style below:
+//
+//	style      -v:verbosity level:   -w+:width:     -a[all]   -q   -k:first:…:second:…
+//	''         -v                    -w             -a:all    -q   -k
+//	%d         -v:verbosity level    -w:width       -a:all    -q   -k
+//	X %d Y     -v:X verbosity level Y …             -a:all    -q   -k
+//	plain      -v                    -w             -a:all    -q   -k
+//
+// and from a second spec set under `<%d>`:
+//
+//	-c: x:  -c:< x>      -u::opt msg:  -u:<opt msg>   an optional one counts
+//	-e:     -e           -y: :         -y             a blank message does not
+//	-e:\::  -e:<:>       -j[]:jm:      -j:            the option's own `[]` wins
+//
+// and `%d%d` gives `msg%d`, `x%%d` gives `x%msg`, `%D` gives nothing. So: an
+// option with no brackets and exactly one argument, whose message holds
+// something other than blanks, under a style holding a `%d` — and only the
+// first `%d` is replaced.
+//
+// Until this, the style was read as the matcher `-M` answers with, so with
+// Blair's `zstyle ':completion:*:options' auto-description '%d'` every
+// `compadd` under `_arguments` was handed `-M %d` and `ls --format` was
+// listed with no description.
+func (a *argumentsState) autoDescribe(o *optionSpec) {
+	if o.described || len(o.optargs) != 1 || !strings.Contains(a.autoDescr, "%d") {
+		return
+	}
+	message := o.optargs[0].message
+	if strings.TrimSpace(message) == "" {
+		return
+	}
+	o.descr = strings.Replace(a.autoDescr, "%d", message, 1)
+	o.described = true
 }
 
 // splitOptionModifier takes the trailing character that says where the first

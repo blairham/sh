@@ -17078,6 +17078,36 @@ type Semantics struct {
 	// unpinned ash: the same reach, pinned by TestAFinishedJobStaysInTheTable.
 	FinishedJobLeavesTheTable Answer
 
+	// FinishedJobIsReportedByAJobBuiltin writes the notice a prompt would
+	// have written for a finished job when a job builtin looks at the table —
+	// `jobs`, `fg`, `bg`, `wait` and `disown`, whatever they were asked — and
+	// lets the job go, where the monitor is on, the notice is not written the
+	// moment the job ends, and there is no prompt to write it at.
+	//
+	// zsh alone, measured 2026-10-05 through a pseudo-terminal on 5.9.2
+	// under `-f -c 'set -m; setopt nonotify; sleep 0.1 & /bin/sleep 0.5; …'`
+	// (#6064):
+	//
+	//	fg       [1]  + done  sleep 0.1, then fg: no current job, 1
+	//	jobs %2  [1]  - done  sleep 0.1 before [2]'s own row
+	//	wait $!  [1]  + done  sleep 0.1, 0
+	//	echo, /bin/echo, kill -0 %1   nothing, and the job stays
+	//
+	// ksh93 holds the same two answers above this one and writes nothing:
+	// its `jobs` lists the job as Done and its `fg` misses in silence.
+	//
+	// unpinned zsh: the corpus has no terminal and zsh refuses `set -m`
+	// without one; pinned by TestAJobBuiltinReportsAFinishedJobUnderNonotify.
+	//
+	// unpinned bash: likewise, the monitor needs a terminal.
+	//
+	// unpinned ksh: likewise.
+	//
+	// unpinned dash: likewise.
+	//
+	// unpinned ash: likewise.
+	FinishedJobIsReportedByAJobBuiltin Answer
+
 	// JobStartedWithoutTheMonitorIsRefused makes `fg` and `bg` refuse a job
 	// that was started while the monitor was off, in a shell that has since
 	// turned it on, rather than resuming it. True in bash, ksh93 and dash;
@@ -33699,7 +33729,9 @@ func PosixSemantics() Semantics {
 		// POSIX keeps a finished job's status known until `wait` or `jobs`
 		// has reported it, which is every measured column but one.
 		FinishedJobLeavesTheTable: No,
-		JobCommandIsReprinted:     No,
+		// A notice is a prompt's to write.
+		FinishedJobIsReportedByAJobBuiltin: No,
+		JobCommandIsReprinted:              No,
 		// Nothing reprinted, so nothing run onto a line either.
 		JobCommandIsOneLineOfTheBodyLayout: No,
 		ACommandHoldsAJobSlot:              No,

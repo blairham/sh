@@ -41,6 +41,7 @@ func init() {
 // which has no option to turn it on with. So the shielding branch is reached
 // only by a shell that was never going to signal anything.
 func biDisown(r *Runner, _ context.Context, args []string) int {
+	r.reportFinishedJobsAtAJobBuiltin()
 	// The letters the dialects have — bash's -a, -h, -r — are not
 	// implemented; they ride UnimplementedOptionLetters and are refused by
 	// name.
@@ -151,6 +152,9 @@ func biJobs(r *Runner, _ context.Context, args []string) int {
 	// What `bg` let go of may have ended since the last prompt, and a listing
 	// that did not ask would report it as still running.
 	r.reapJobs()
+	// After the letters, which refuse before anything is reported: measured
+	// on zsh 5.9.2, `jobs -Z` complains and writes no notice (#6064).
+	r.reportFinishedJobsAtAJobBuiltin()
 	// And a finished job the dialect has already let go of is not there to
 	// list: measured 2026-10-01 on ksh93u+, `(exit 4) & /bin/sleep 0.3; jobs`
 	// lists nothing and the `wait %1` after it is the silent miss. See
@@ -948,6 +952,7 @@ func biBg(r *Runner, _ context.Context, args []string) int {
 // afterwards — which put a line of output in a script that had written
 // `fg 2>/dev/null` precisely so there would be none (#2657).
 func (r *Runner) resume(args []string, name string) (*Job, int) {
+	r.reportFinishedJobsAtAJobBuiltin()
 	if len(args) > 0 && len(args[0]) > 1 && args[0][0] == '-' &&
 		r.sem().JobResumeRefusesAnOptionFirst == Yes {
 		// An option word is refused ahead of everything, the job-control

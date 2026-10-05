@@ -23460,6 +23460,28 @@ type Semantics struct {
 	// and BusyBox ash, and zsh 5.9.2 keeps the second's.
 	HashNameSearchesAgain Answer
 
+	// HeldExitWaivedForTheNextCommandOnly lets the `exit` after a held one
+	// leave only when it is the very next command the shell runs: any named
+	// command between them — `true` on the same line, the `eval` or the
+	// function call the second `exit` runs inside — puts the hold back.
+	// What is not a named command in this shell's own process does not
+	// count: an assignment alone, `[[ ]]`, `(( ))`, a function definition, a
+	// subshell, a background job.
+	//
+	// bash, measured 2026-10-05 through a pseudo-terminal on 5.3 `--norc -i`
+	// with `shopt -s checkjobs` and `sleep 31 &`, an `exit` held and then
+	// (#6080):
+	//
+	//	true; exit       held       x=1 / exit       leaves
+	//	eval exit        held       [[ 1 ]] / exit   leaves
+	//	f (calls exit)   held       (exit) / exit    leaves
+	//	: / exit         held       jobs / exit      leaves
+	//	exit             leaves     true & / exit    leaves
+	//
+	// where the other reading — the one this shell has for zsh — counts by
+	// line: the warning is waived for the line after it, whatever runs there.
+	HeldExitWaivedForTheNextCommandOnly Answer
+
 	// HashForgetsOneName is `hash -d name`: one entry out, where `-r` is all
 	// of them. bash alone. zsh has the letter and means something else by it
 	// — its named-directory table — which is why this is a question about
@@ -33860,12 +33882,14 @@ func PosixSemantics() Semantics {
 		HashListsAsCommands:                 No,
 		HashTakesAPathToRemember:            No,
 		// The standard: `hash name` adds the location found by a search.
-		HashNameSearchesAgain:         Yes,
-		HashForgetsOneName:            No,
-		HashDefinesANamedDirectory:    No,
-		HashReportsThePath:            No,
-		HashObeysCommandTracking:      No,
-		HashRefusesWhileTrackingIsOff: No,
+		HashNameSearchesAgain: Yes,
+		// A held exit is waived by the line, which is what this shell did.
+		HeldExitWaivedForTheNextCommandOnly: No,
+		HashForgetsOneName:                  No,
+		HashDefinesANamedDirectory:          No,
+		HashReportsThePath:                  No,
+		HashObeysCommandTracking:            No,
+		HashRefusesWhileTrackingIsOff:       No,
 		// dash is the closest reading of the standard here and it hashes
 		// what it was only asked about; so do zsh and ksh93, and bash
 		// overrides.

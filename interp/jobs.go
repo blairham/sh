@@ -2267,6 +2267,7 @@ func (r *Runner) announceStopped(j *Job) {
 	// an earlier one was — measured, a `jobs` listing followed by a second ^Z
 	// makes bash warn about stopped jobs at the next `exit` all over again.
 	r.toldOfJobsAtExit, r.tellingOfJobsAtExit = false, false
+	r.exitWaived = false
 	if !r.JobControl {
 		return
 	}
@@ -2424,7 +2425,8 @@ func (r *Runner) HoldsExitForJobs() bool { return r.holdsExitForJobs(nil) }
 // sentence when the exit is held: the `exit` builtin's word for leaving, which
 // is written before the shell knows it is staying. See biExit.
 func (r *Runner) holdsExitForJobs(first func()) bool {
-	if !r.JobControl || r.toldOfJobsAtExit {
+	byCommand := r.sem().HeldExitWaivedForTheNextCommandOnly == Yes
+	if !r.JobControl || (!byCommand && r.toldOfJobsAtExit) || (byCommand && r.exitWaived) {
 		return false
 	}
 	// A prompt the dialect does not account to, which is a prompt with the
@@ -2457,6 +2459,7 @@ func (r *Runner) holdsExitForJobs(first func()) bool {
 	// leaves, and the end of input twice leaves without any chunk running
 	// between the two.
 	r.toldOfJobsAtExit, r.tellingOfJobsAtExit = true, true
+	r.exitWaived = true
 	if first != nil {
 		first()
 	}

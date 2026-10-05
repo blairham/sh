@@ -2434,6 +2434,32 @@ func (r *Runner) GetAssoc(name string) (map[string]string, bool) {
 	return out, true
 }
 
+// AssocKeys is the keys of an associative array, stored or produced, in the
+// order `${(k)name}` reads them, and whether the name is one.
+//
+// GetAssoc answers for a *stored* table only, which is right for a caller
+// about to write one back and wrong for one that only reads: a dialect's
+// produced tables — the command hash, the function table — have no stored
+// copy until something writes to them, so GetAssoc says there is no such
+// association and a builtin that takes "the keys of this association" as an
+// argument found none. Measured 2026-10-05, zsh 5.9.2's `compadd -k commands`
+// from inside a completion widget offers every command name; through
+// GetAssoc it offered nothing, and with it every command-position completion
+// the shipped completion system makes.
+func (r *Runner) AssocKeys(name string) ([]string, bool) {
+	if keys, ok := r.producedAssocKeys(name); ok {
+		return keys, true
+	}
+	if r.removed[r.throughNameref(name)] {
+		return nil, false
+	}
+	a, ok := r.assocFor(name)
+	if !ok {
+		return nil, false
+	}
+	return r.assocKeys(name, a), true
+}
+
 // AssocElement is one element of a stored associative array, and whether
 // there is one.
 //

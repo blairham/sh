@@ -480,6 +480,35 @@ file of a Homebrew zsh's library is a link into its Cellar), and each name is
 autoloaded **by its file's path**, so `whence -v _git` names the file and
 `functions _git` lists the stub with its directory.
 
+And it leaves **the state a `_main_complete` reads** (#6210). Putting the
+widgets on zsh's `_main_complete` was not enough: without the parameters
+zsh's compinit creates beside its tables, Tab after a plain `compinit`
+printed `_lastcomp: assignment to invalid subscript range` and `no matches
+found: *:globbed-files` and completed nothing. The names and types are
+measured (`typeset +` before and after `compinit -D`, then `${(t)…}`):
+
+| name | type |
+| --- | --- |
+| `_lastcomp` | `association-hideval`, empty |
+| `compprefuncs`, `comppostfuncs` | `array`, empty |
+| `_comp_dumpfile` | `scalar`: the `-d` file, or `${ZDOTDIR:-$HOME}/.zcompdump` |
+| `_comp_options` | `array-hideval` |
+| `_comp_setup` | `scalar-hideval`, evaluated by `_main_complete` first |
+
+**What the last two hold is this file's own.** They are written from what a
+completion function *sees* in zsh 5.9.2 — a completer of ours printing `set
+-o`, `trap` and `$IFS` — with the prompt's options flipped in groups of
+twenty and bisected where a group stopped zsh's own completion from running.
+Thirty-one options came back to one value whatever the prompt had (among
+them `ksharrays`, `shwordsplit`, `nounset`, `markdirs` and `globsubst` off,
+`extendedglob`, `nullglob` and `rcexpandparam` on, aliases off); the rest
+kept the prompt's, `autocd`, `globdots`, `promptsubst`, `verbose` and the
+history options among them. `shglob` could not be measured: with it set,
+zsh's own completion stops parsing. `IFS` inside is space, tab, carriage
+return, newline and NUL; a `ZERR` trap is gone and a `DEBUG` trap stays; and
+`^C` during a completion draws `Killed by signal in <function> after <n>s`
+under the line.
+
 And one wording: an `-F` function `compgen` cannot find is the shell's
 `command not found`, located at `compgen`'s own line where zsh's names an
 anonymous function's.

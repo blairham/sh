@@ -8,6 +8,9 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/blairham/sh/dialect/zsh"
+	"github.com/blairham/sh/repl"
 )
 
 // compinitFixture is a directory of completion files whose first lines are
@@ -112,5 +115,73 @@ print -r -- $_comps[c2]`)
 		"complete -F f1 c1\ncomplete -o nospace -W q\\ r c2\n0\n_bash_complete -o nospace -W q\\ r\n"
 	if out != want {
 		t.Errorf("got\n%s\nwant\n%s", out, want)
+	}
+}
+
+// TestTheShippedCompinitLeavesWhatMainCompleteReads is #6210: the names zsh's
+// compinit creates beside its tables, with the types measured on zsh 5.9.2
+// (`${(t)…}` after `compinit -D`), and a `_comp_setup` that, evaluated the
+// way `_main_complete` evaluates it, gives a completion function the option
+// state, `IFS` and traps measured inside one in zsh 5.9.2 — options flipped
+// at the prompt come back, the ones zsh leaves alone stay, and nothing leaks
+// out of the function that evaluated it.
+func TestTheShippedCompinitLeavesWhatMainCompleteReads(t *testing.T) {
+	out, _ := runShipped(t, `autoload -Uz compinit; compinit -D -u
+for n in _lastcomp compprefuncs comppostfuncs _comp_options _comp_setup; do
+	print -r -- "$n ${(tP)n}"
+done
+print -r -- "dump=${_comp_dumpfile:t} opts=${#_comp_options}"
+setopt ksharrays shwordsplit nounset markdirs globsubst autocd globdots promptsubst
+unsetopt nullglob extendedglob
+trap 'print zerr' ZERR
+probe() {
+	eval "$_comp_setup"
+	local o
+	for o in ksharrays shwordsplit unset markdirs globsubst extendedglob nullglob rcexpandparam aliases autocd globdots promptsubst; do
+		[[ -o $o ]] && print -rn -- "$o " || print -rn -- "no$o "
+	done 2>/dev/null
+	print
+	print -r -- "IFS=${(q)IFS}"
+	[[ $(trap) == *ZERR* ]] && print zerr || print nozerr
+	(( $+functions[TRAPINT] && $+functions[TRAPQUIT] )) && print traps
+}
+probe
+[[ -o ksharrays && -o globsubst && ! -o nullglob ]] && print restored
+(( $+functions[TRAPINT] )) || print gone`)
+	want := "_lastcomp association-hideval\ncompprefuncs array\ncomppostfuncs array\n" +
+		"_comp_options array-hideval\n_comp_setup scalar-hideval\n" +
+		"dump=.zcompdump opts=31\n" +
+		"noksharrays noshwordsplit unset nomarkdirs noglobsubst extendedglob nullglob " +
+		"rcexpandparam noaliases autocd globdots promptsubst \n" +
+		"IFS=\\ $'\\t'$'\\r'$'\\n'$'\\0'\nnozerr\ntraps\nrestored\ngone\n"
+	if out != want {
+		t.Errorf("got\n%s\nwant\n%s", out, want)
+	}
+}
+
+// TestTabAfterTheShippedCompinitRunsAMainCompleteThatReadsItsState is the
+// same through the editor: a `_main_complete` written here — not zsh's — that
+// evaluates `$_comp_setup`, globs with nothing to match, records into
+// `_lastcomp` and offers a match, reached by Tab after compinit put
+// `complete-word` on it. With main's compinit the glob was `no matches
+// found` and the assignment to `_lastcomp` a subscript error, the two
+// failures zsh's own `_main_complete` hit on every Tab (#6210).
+func TestTabAfterTheShippedCompinitRunsAMainCompleteThatReadsItsState(t *testing.T) {
+	fix := compinitFixture(t)
+	body := "#autoload\neval \"$_comp_setup\"\nlocal -a none; none=( " + fix + "/nomatch*_* )\n" +
+		"_lastcomp[seen]=1\ncompadd -- \"matched${#none}\"\n"
+	if err := os.WriteFile(filepath.Join(fix, "_main_complete"), []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	r := bindkeyRunner(t, "fpath=("+shippedFunctionDir(t)+" "+fix+")\nautoload -Uz compinit; compinit -D -u\n")
+	line := "x mat"
+	got := zsh.RunCompletion(r, t.Context(), "complete-word", repl.Completion{
+		Line: line, Point: len(line), Start: 2, Word: "mat", Dir: r.Dir,
+	})
+	if len(got) != 1 || got[0].Word != "matched0" {
+		t.Errorf("Tab offered %+v, want the one match matched0", got)
+	}
+	if v, _ := r.GetAssoc("_lastcomp"); v["seen"] != "1" {
+		t.Errorf("_lastcomp = %v, want seen=1", v)
 	}
 }

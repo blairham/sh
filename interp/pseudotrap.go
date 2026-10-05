@@ -158,7 +158,7 @@ func (r *Runner) setPseudoTrap(name, body string) {
 // it — see Runner.debugActionDecided — and it is returned rather than left in
 // a field so that the discard stays the default.
 func (r *Runner) runPseudoTrapBody(ctx context.Context, name, body string, sees int) int {
-	st, ctl, raised := r.status, r.ctl, r.pipefailRaised
+	kept, ctl, raised := r.keepStatus(), r.ctl, r.pipefailRaised
 	// The action's commands are not the command it fired at, so what that
 	// command's own dispatch recorded survives them.
 	onPath := r.lastSimpleRanOnPath
@@ -180,7 +180,6 @@ func (r *Runner) runPseudoTrapBody(ctx context.Context, name, body string, sees 
 	// It is also what made a DEBUG trap unusable as an instrument: a trap
 	// that reports where the shell is must not move the state the next line
 	// reads.
-	pipe := r.pipeStatus
 	r.status = sees
 	r.ctl = controlNone
 	outer := r.inCommandTrap
@@ -202,7 +201,8 @@ func (r *Runner) runPseudoTrapBody(ctx context.Context, name, body string, sees 
 		// The pair moves together: a body that changed the control flow is
 		// carrying its own status out, and the pipeline behind that status is
 		// the body's too.
-		r.status, r.ctl, r.pipeStatus = st, ctl, pipe
+		r.putStatusBack(kept)
+		r.ctl = ctl
 	}
 	r.pipefailRaised = raised
 	return acted

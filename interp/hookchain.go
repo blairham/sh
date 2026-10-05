@@ -111,9 +111,16 @@ func (r *Runner) HookChain(name string) []string {
 // this loop does not perform — nothing in the panel stops a hook chain part
 // way through except a hook that exited, which is the check below.
 func (r *Runner) FireChain(items []string, run func(item string)) {
-	status := r.ExitStatus()
+	// The pipeline record with the status, and both put back before every
+	// item as well as after the last. Measured 2026-10-04 through a pty after
+	// `true | false`: with `precmd_functions=(a b)` in zsh 5.9.2, and with
+	// PROMPT_COMMAND an array of the same two in bash 5.3.20, where `a` runs
+	// `false | false | false`, `b` reads `1 0 1` and so does the next typed
+	// line. Each hook sees what the typed command left, not what the hook
+	// before it ran.
+	kept := r.keepStatus()
 	for _, item := range items {
-		r.SetExitStatus(status)
+		r.putStatusBack(kept)
 		run(item)
 		if r.Exited() {
 			// Something unwound past the item. Which of the two it was
@@ -130,7 +137,7 @@ func (r *Runner) FireChain(items []string, run func(item string)) {
 			break
 		}
 	}
-	r.SetExitStatus(status)
+	r.putStatusBack(kept)
 }
 
 // FireHook runs one *function* hook's whole chain: the function of that name,

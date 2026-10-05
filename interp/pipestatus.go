@@ -44,6 +44,27 @@ func (r *Runner) SetPromptStatus(status int) {
 	}
 }
 
+// keptStatus is `$?` and the pipeline record behind it, kept to be put back.
+//
+// The two are one thing and move together. A hook, a trap's action, any
+// commands the shell runs on its own account between the command a person
+// typed and the line they read its answer on, set both — so whatever puts
+// the status back puts the record back with it, or the next `${PIPESTATUS[@]}`
+// reads the hook's pipeline under the command's status. There is one helper
+// so that no caller can keep only half: FireChain kept only the status, and
+// precmd and PROMPT_COMMAND clobbered the record for it (#5889).
+type keptStatus struct {
+	status int
+	pipe   []int
+}
+
+// keepStatus takes the pair as it stands.
+func (r *Runner) keepStatus() keptStatus { return keptStatus{r.status, r.pipeStatus} }
+
+// putStatusBack restores a pair keepStatus took. The record is a slice
+// recordPipeStatus never writes into, so holding its header is holding it.
+func (r *Runner) putStatusBack(k keptStatus) { r.status, r.pipeStatus = k.status, k.pipe }
+
 // recordPipeStatus keeps what a pipeline's elements reported.
 //
 // Called before `!` inverts anything, which is measured: after

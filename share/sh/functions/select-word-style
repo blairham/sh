@@ -1,0 +1,99 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# select-word-style [ style ]
+#
+# Sets the word styles the -match widgets read, in the context `:zle:*`, and
+# the first time it runs puts the eight of them in place of the editor's own:
+# forward-word, backward-word, kill-word, backward-kill-word, transpose-words,
+# capitalize-word, up-case-word and down-case-word. Only the first character
+# of the style counts; an upper-case one turns subword matching on.
+#
+# Written from zshcontrib(1) and from what the installed shell answers, never
+# from its function files; docs/spec/functions.md has the measurements. What
+# each style sets, measured:
+#
+#   b  word-style standard, word-chars '', skip-whitespace-first true
+#   n  word-style standard, word-chars $WORDCHARS, skip-whitespace-first false
+#   s  word-style shell, skip-whitespace-first false
+#   w  word-style space, skip-whitespace-first false
+#   d  word-chars and skip-whitespace-first deleted, word-style left alone
+#
+# Nothing else is deleted, so `bash` then `shell` leaves word-chars ''.
+# Anything else — `q`, an unknown letter, nothing at all — prints the usage
+# on standard error and answers 1. Run as a widget with no argument, it reads
+# one key and takes that as the style.
+
+emulate -L zsh
+
+local w
+for w in forward-word backward-word kill-word backward-kill-word \
+	transpose-words capitalize-word up-case-word down-case-word; do
+	autoload -Uz $w-match
+	zle -N $w $w-match
+done
+
+local detail="(b)ash:       Word characters are alphanumerics only
+(n)ormal:     Word characters are alphanumerics plus \$WORDCHARS
+(s)hell:      Words are command arguments using shell syntax
+(w)hitespace: Words are whitespace-delimited
+(d)efault:    Use default, no special handling (usually same as \`n')
+(q)uit:       Quit without setting a new style"
+
+local style=$1
+if [[ -z $style && -n $WIDGET ]]; then
+	# Asked as a widget: a key is the answer. Return shows what each letter
+	# means and asks again, and a key that is none of them is passed over.
+	# The question is drawn under the line with `zle -M`, where the editor
+	# can draw one.
+	local REPLY prompt="Word styles (hit return for more detail):
+(b)ash (n)ormal (s)hell (w)hitespace (d)efault (q)uit
+(B), (N), (S), (W) as above with subword matching
+? "
+	zle -M -- "$prompt" 2>/dev/null
+	while read -k 1; do
+		case $REPLY in
+		($'\r'|$'\n') zle -M -- "$detail
+? " 2>/dev/null ;;
+		([bnswdBNSWq]) break ;;
+		esac
+	done
+	zle -M -- '' 2>/dev/null
+	style=$REPLY
+fi
+
+local subword=
+[[ $style == [BNSW]* ]] && subword=-subword
+
+case $style in
+([bB]*)
+	zstyle ':zle:*' word-style standard$subword
+	zstyle ':zle:*' word-chars ''
+	zstyle ':zle:*' skip-whitespace-first true
+	;;
+([nN]*)
+	zstyle ':zle:*' word-style standard$subword
+	zstyle ':zle:*' word-chars "$WORDCHARS"
+	zstyle ':zle:*' skip-whitespace-first false
+	;;
+([sS]*)
+	zstyle ':zle:*' word-style shell$subword
+	zstyle ':zle:*' skip-whitespace-first false
+	;;
+([wW]*)
+	zstyle ':zle:*' word-style space$subword
+	zstyle ':zle:*' skip-whitespace-first false
+	;;
+(d*)
+	zstyle -d ':zle:*' word-chars
+	zstyle -d ':zle:*' skip-whitespace-first
+	;;
+(*)
+	print -u2 -r -- "Usage: select-word-style word-style
+where word-style is one of the characters in parentheses:
+$detail
+"
+	return 1
+	;;
+esac
+return 0

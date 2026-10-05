@@ -1,0 +1,41 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# match-word-context — extends $curcontext by the word-context style: pairs of
+# a pattern and a subcontext, the shell word the cursor is on matched against
+# each pattern in turn and the first match's subcontext appended after a colon.
+# The word is matched as it is written, quotes and all. On a word, it is that
+# word; between words it is a single space if the context contains `between`,
+# else the word before the cursor if it contains `back`, else the word after.
+#
+# Written from zshcontrib(1) and from what the installed shell answers, never
+# from its function files; docs/spec/functions.md has the measurements.
+
+emulate -L zsh
+setopt extendedglob
+
+local -a pairs
+zstyle -a $curcontext word-context pairs || return 0
+(( $#pairs )) || return 0
+
+local -a matched_words
+match-words-by-style -w shell
+local word
+if [[ -n $matched_words[2] && -n $matched_words[5] && -z $matched_words[3] && -z $matched_words[4] ]]; then
+	word=$matched_words[2]$matched_words[5]
+elif [[ $curcontext == *between* ]]; then
+	word=' '
+elif [[ $curcontext == *back* ]]; then
+	word=$matched_words[2]
+else
+	word=$matched_words[5]
+fi
+
+integer i
+for (( i = 1; i < $#pairs; i += 2 )); do
+	if [[ $word == ${~pairs[i]} ]]; then
+		curcontext+=:$pairs[i+1]
+		return 0
+	fi
+done
+return 0

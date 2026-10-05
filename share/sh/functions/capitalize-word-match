@@ -1,0 +1,25 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# capitalize-word-match — capitalize-word by the word styles: the blanks at the cursor are passed over
+# and the word after them is changed, the cursor going to its end.
+#
+# Written from zshcontrib(1) and from what the installed shell answers, never
+# from its function files; docs/spec/functions.md has the measurements. The
+# words are the ones match-words-by-style finds for the context
+# `:zle:<widget>`, so the styles select-word-style sets decide them.
+
+emulate -L zsh
+setopt extendedglob
+autoload -Uz match-words-by-style
+
+local curcontext=":zle:$WIDGET"
+local -a matched_words
+integer count=${NUMERIC:-1}
+while (( count-- > 0 )); do
+	match-words-by-style
+	[[ -n $matched_words[4]$matched_words[5] ]] || return 1
+	LBUFFER+=$matched_words[4]${(C)matched_words[5]}
+	RBUFFER=$matched_words[6]$matched_words[7]
+done
+return 0

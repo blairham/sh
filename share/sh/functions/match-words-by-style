@@ -1,0 +1,252 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# match-words-by-style [ -w word-style ] [ -s skip-chars ] [ -c word-class ]
+#                      [ -C word-chars ] [ -r subword-range ]
+#
+# Splits the line around the cursor into seven parts by the word styles in
+# effect for $curcontext (`:zle:<widget>` when the caller set none), and puts
+# them in the caller's matched_words: an array of the seven, or an
+# association with them under their names plus is-word-start.
+#
+#   1 start                the line before the word before the cursor
+#   2 word-before-cursor   that word
+#   3 ws-before-cursor     what is between it and the cursor
+#   4 ws-after-cursor      what is at the cursor before the next word,
+#                          the skip-chars included
+#   5 word-after-cursor    the word at or after the cursor
+#   6 ws-after-word        what follows that word up to the next
+#   7 end                  the rest
+#
+# Written from zshcontrib(1) and from what the installed shell answers, never
+# from its function files; docs/spec/functions.md has the measurements.
+# Measured beyond the manual:
+#
+#   * where there is no word before the cursor, what is before it all goes in
+#     the start, and ws-before-cursor is empty;
+#   * where there is no word after it, what is after it all goes in
+#     ws-after-cursor;
+#   * with subword matching, each side of the cursor is split into subwords
+#     on its own, and where the cursor is inside a subword ws-after-word is
+#     empty, its text going to the end with the rest.
+
+emulate -L zsh
+setopt extendedglob
+
+local wordstyle skip wordclass wordchars subrange context=${curcontext:-:zle:$WIDGET}
+local opt OPTARG
+integer OPTIND
+local -A given
+while getopts "w:s:c:C:r:" opt; do
+	case $opt in
+	(w) given[style]=$OPTARG ;;
+	(s) given[skip]=$OPTARG ;;
+	(c) given[class]=$OPTARG ;;
+	(C) given[chars]=$OPTARG ;;
+	(r) given[range]=$OPTARG ;;
+	(*) return 1 ;;
+	esac
+done
+
+# The word-context style extends the context by what the cursor is on —
+# unless the caller named the style, which is how match-word-context asks for
+# the shell word without being asked again itself.
+if (( ! ${+given[style]} )); then
+	local curcontext=$context
+	autoload -Uz match-word-context
+	match-word-context
+	context=$curcontext
+fi
+
+if (( ${+given[style]} )); then
+	wordstyle=$given[style]
+else
+	zstyle -s $context word-style wordstyle
+fi
+if (( ${+given[skip]} )); then
+	skip=$given[skip]
+else
+	zstyle -s $context skip-chars skip
+fi
+if (( ${+given[class]} )); then
+	wordclass=$given[class]
+else
+	zstyle -s $context word-class wordclass
+fi
+if (( ${+given[chars]} )); then
+	wordchars=$given[chars]
+elif ! zstyle -s $context word-chars wordchars; then
+	wordchars=$WORDCHARS
+fi
+if (( ${+given[range]} )); then
+	subrange=$given[range]
+elif ! zstyle -s $context subword-range subrange; then
+	subrange='[:upper:]'
+fi
+
+integer subword=0
+if [[ $wordstyle == *-subword ]]; then
+	subword=1
+	wordstyle=${wordstyle%-subword}
+fi
+
+local -a parts
+if [[ $wordstyle == shell* ]]; then
+	# Shell words: the line's own tokens, as `${(z)}` reads them, found in
+	# the line in order so that each has a start and an end.
+	local -a toks starts ends
+	local tok
+	integer pos=1 len=$#BUFFER
+	toks=( ${(z)BUFFER} )
+	for tok in "${toks[@]}"; do
+		while (( pos <= len )) && [[ ${BUFFER[pos,pos+$#tok-1]} != $tok ]]; do
+			(( pos++ ))
+		done
+		(( pos > len )) && break
+		starts+=( $pos )
+		ends+=( $(( pos + $#tok - 1 )) )
+		(( pos += $#tok ))
+	done
+	# The token the cursor is inside, the last one before it, and the first
+	# one at or after it, as indexes into starts and ends.
+	integer at=$(( CURSOR + 1 )) i inside=0 prev=0 next=0
+	for (( i = 1; i <= $#starts; i++ )); do
+		if (( starts[i] < at && ends[i] >= at )); then
+			inside=$i
+		elif (( ends[i] < at )); then
+			prev=$i
+		elif (( ! next )); then
+			next=$i
+		fi
+	done
+	local start= before= wsbefore= wsafter= after= wsword= rest=
+	if (( inside )); then
+		start=${BUFFER[1,starts[inside]-1]}
+		before=${BUFFER[starts[inside],at-1]}
+		after=${BUFFER[at,ends[inside]]}
+		next=$(( inside + 1 ))
+		if (( next <= $#starts )); then
+			wsword=${BUFFER[ends[inside]+1,starts[next]-1]}
+			rest=${BUFFER[starts[next],-1]}
+		else
+			wsword=${BUFFER[ends[inside]+1,-1]}
+		fi
+	else
+		if (( prev )); then
+			start=${BUFFER[1,starts[prev]-1]}
+			before=${BUFFER[starts[prev],ends[prev]]}
+			wsbefore=${BUFFER[ends[prev]+1,at-1]}
+		else
+			start=$LBUFFER
+		fi
+		if (( next )); then
+			wsafter=${BUFFER[at,starts[next]-1]}
+			after=${BUFFER[starts[next],ends[next]]}
+			if (( next < $#starts )); then
+				wsword=${BUFFER[ends[next]+1,starts[next+1]-1]}
+				rest=${BUFFER[starts[next+1],-1]}
+			else
+				wsword=${BUFFER[ends[next]+1,-1]}
+			fi
+		else
+			wsafter=$RBUFFER
+		fi
+	fi
+	parts=( "$start" "$before" "$wsbefore" "$wsafter" "$after" "$wsword" "$rest" )
+else
+	# A bracket expression for the word characters: `]` first and `-` last,
+	# where neither means anything, and the rest between.
+	local cls
+	if [[ -n $wordclass ]]; then
+		cls=$wordclass
+	else
+		local others=${${wordchars//\]/}//-/} close= dash=
+		[[ $wordchars == *\]* ]] && close=']'
+		[[ $wordchars == *-* ]] && dash='-'
+		case $wordstyle in
+		(specified|unspecified) cls=$close$others$dash ;;
+		(space|whitespace|blank) cls='[:space:]' ;;
+		(*) cls=$close'[:alnum:]'$others$dash ;;
+		esac
+	fi
+	[[ -z $cls ]] && cls=$'\0'
+	local word="[$cls]" nonword="[^$cls]"
+	case $wordstyle in
+	(unspecified|space|whitespace|blank) word="[^$cls]" nonword="[$cls]" ;;
+	esac
+
+	local left=$LBUFFER right=$RBUFFER
+	local wsbefore=${(M)left%%(${~nonword})#}
+	left=${left%$wsbefore}
+	local before=${(M)left%%(${~word})#}
+	left=${left%$before}
+	if [[ -z $before ]]; then
+		left+=$wsbefore
+		wsbefore=
+	fi
+	local wsafter=
+	if [[ $skip == <1-> ]]; then
+		wsafter=${right[1,skip]}
+		right=${right[skip+1,-1]}
+	fi
+	local more=${(M)right##(${~nonword})#}
+	wsafter+=$more
+	right=${right#$more}
+	local after=${(M)right##(${~word})#}
+	right=${right#$after}
+	local wsword=${(M)right##(${~nonword})#}
+	right=${right#$wsword}
+	parts=( "$left" "$before" "$wsbefore" "$wsafter" "$after" "$wsword" "$right" )
+fi
+
+integer split=0
+if (( subword )); then
+	# A subword starts at a character in the range that follows one that is
+	# not, or that is followed by one that is not: `XMLHttp` is `XML` and
+	# `Http`. Each side of the cursor is split on its own.
+	local up="[$subrange]" w=$parts[2]$parts[5]
+	integer k=$(( $#parts[2] + 1 )) b
+	if [[ -n $parts[2] && -n $parts[5] && -z $parts[3] && -z $parts[4] ]]; then
+		# Inside one word: is the cursor inside one subword of it, too?
+		split=1
+		if [[ $w[k] == $~up ]] && [[ $w[k-1] != $~up || ( k -lt $#w && $w[k+1] != $~up ) ]]; then
+			split=0
+		fi
+	fi
+	local s=$parts[2]
+	for (( b = $#s; b > 1; b-- )); do
+		if [[ $s[b] == $~up ]] && [[ $s[b-1] != $~up || ( b -lt $#s && $s[b+1] != $~up ) ]]; then
+			parts[1]+=${s[1,b-1]}
+			parts[2]=${s[b,-1]}
+			break
+		fi
+	done
+	s=$parts[5]
+	for (( b = 2; b <= $#s; b++ )); do
+		if [[ $s[b] == $~up ]] && [[ $s[b-1] != $~up || ( b -lt $#s && $s[b+1] != $~up ) ]]; then
+			parts[5]=${s[1,b-1]}
+			parts[7]=${s[b,-1]}$parts[6]$parts[7]
+			parts[6]=
+			break
+		fi
+	done
+	if (( split )) && [[ -n $parts[6] ]]; then
+		parts[7]=$parts[6]$parts[7]
+		parts[6]=
+	fi
+fi
+
+if [[ ${(t)matched_words} == association* ]]; then
+	# On the start of a word or subword, or on what is before one.
+	integer isstart=1
+	if [[ -n $parts[2] && -z $parts[3] && -z $parts[4] && -n $parts[5] ]]; then
+		(( subword && ! split )) || isstart=0
+	fi
+	matched_words=(
+		start "$parts[1]" word-before-cursor "$parts[2]" ws-before-cursor "$parts[3]"
+		ws-after-cursor "$parts[4]" word-after-cursor "$parts[5]" ws-after-word "$parts[6]"
+		end "$parts[7]" is-word-start $isstart
+	)
+else
+	matched_words=( "$parts[@]" )
+fi

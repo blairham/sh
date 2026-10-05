@@ -519,12 +519,98 @@ does, and will follow when the flag does.
 zsh's own `url-quote-magic` read through `$fpath`. With this one, the same
 keystrokes give zsh's line.
 
+### `select-word-style` and the `-match` widgets
+
+`select-word-style STYLE` sets three styles in the context `:zle:*` and, the
+first time, puts eight widgets in place of the editor's own: `forward-word`,
+`backward-word`, `kill-word`, `backward-kill-word`, `transpose-words`,
+`capitalize-word`, `up-case-word` and `down-case-word`, each made from its
+`-match` function. What each letter sets, read back with `zstyle -L`:
+
+| style | `word-style` | `word-chars` | `skip-whitespace-first` |
+| --- | --- | --- | --- |
+| `b` | `standard` | `''` | `true` |
+| `n` | `standard` | `$WORDCHARS` | `false` |
+| `s` | `shell` | — | `false` |
+| `w` | `space` | — | `false` |
+| `d` | left alone | deleted | deleted |
+| `B` `N` `S` `W` | the same, with `-subword` | | |
+
+Nothing else is deleted, so `bash` then `shell` leaves `word-chars ''`. Any other
+argument, `q` included, prints the usage on standard error and answers 1. Run as
+a widget with no argument it reads one letter. Return explains each letter and
+asks again, and a key that is not a letter is skipped.
+
+All eight are written over `match-words-by-style`, which splits the line into
+seven parts around the cursor: start, the word before it, what lies between that
+word and the cursor, what lies at the cursor before the next word (the
+`skip-chars` included), that word, what follows it, and the rest. Each widget is
+then a formula over the parts:
+
+| widget | does |
+| --- | --- |
+| `forward-word` | moves past the blanks at the cursor if there are any, else past the word and what follows it; with `skip-whitespace-first`, past the blanks *and* the word |
+| `backward-word` | moves back over what lies between and the word before |
+| `kill-word`, `backward-kill-word` | kill the same text; straight after a kill, the kill joins it (after it for forward, in front for backward) |
+| `transpose-words` | the line becomes start, word after, between, at, word before, and the rest, with the cursor after the word before |
+| the three case widgets | pass the blanks and change the word after them with `(C)`, `(U)` or `(L)` |
+
+The split was learned by calling zsh's own `match-words-by-style` from a widget
+and printing the seven parts: 177 rows over five buffers, the cursor at every
+interesting place, eight styles. The widgets were measured by calling each from a
+widget and recording the line, the cursor, `$CUTBUFFER` and the status: 544 rows
+across `bash`, `normal`, `whitespace` and `B`, plus the line's edges. Both tables
+are committed as `dialect/zsh/testdata/wordstyle-*.tsv`, and
+`dialect/zsh/wordstyle_test.go` runs every row through this shell's copies.
+`cmd/zsh/wordstylepty_test.go` drives the keys through a real session. Measured
+beyond the manual:
+
+* with no word before the cursor, everything before it goes into the start and
+  "between" is empty. With no word after it, everything after goes into "at
+  the cursor";
+* subwords are split on each side of the cursor separately. A subword starts
+  at an upper-case character that follows a non-upper-case one, or that is
+  followed by one, so `XMLHttpReq` is `XML`, `Http`, `Req`. When the cursor is
+  inside a subword, "what follows the word" is empty and that text joins the
+  rest;
+* `down-case-word` answers 0 where there is no word; its two fellows answer 1;
+* `delete-whole-word-match` removes the word the cursor is inside or at the
+  start of, or the one it has just passed at the end of the line, and does
+  nothing on the blanks between two words. Made into `kill-whole-word-match`,
+  what it removes becomes the kill.
+
+**A difference that is deliberate.** In the `shell` style, when the cursor is
+inside a word, zsh puts the character after that word into the word as well:
+from inside `foo-bar` in `foo-bar baz`, `kill-word` kills `ar ` and the line
+becomes `foo-bbaz`; `forward-word` from inside `e\ f;g` stops after the `;`.
+It happens in every inside-a-word row and in none where the cursor is between
+words, and joining two words with a kill is not a behavior anyone could want, so
+it is not reproduced. This shell's `shell` style splits at the word's own end.
+So the `shell` and `S` rows are measured and left out of the committed tables:
+31 of the 96 `shell` rows and 30 of the 96 `S` rows leave a different line, every one for this reason; the rest leave the same line.
+The `default` rows are left out too, because `d` leaves the word style alone and
+so those rows measure whatever style the row before them set.
+
+**Three differences that are the shell's**, filed rather than worked around:
+`zle w` from inside another widget answers 0 whatever `w`'s function returned
+(#5939), so the widgets' own statuses reach a caller only when called directly;
+assigning `NUMERIC` in a widget does nothing (#5941), so a negative count,
+which the widgets hand to their opposite as a positive one, does not arrive;
+and `zle -M` is not implemented (#5942), so the widget form of
+`select-word-style` reads its letter without showing the question.
+
+`select-word-match`, the vi text object, is not shipped. It selects a region
+with the mark, and this editor has neither a mark nor a region to select.
+
 ## What is not shipped, and why
 
 #5894 is shipping the contrib functions in batches, most used first, and the
-ones not yet written are listed here until they are. Next: `select-word-style`
-and the `-match` widgets, then `bracketed-paste-magic`, `zmv`, `zargs` and
-`run-help`, then `promptinit`, `zcalc` and `zed`, then `vcs_info`.
+ones not yet written are listed here until they are. Next: `bracketed-paste-magic`,
+`zmv`, `zargs` and `run-help`, then `promptinit`, `zcalc` and `zed`, then
+`vcs_info`.
+
+`select-word-match` is left out for good, for the reason given with the word
+styles above: it needs a mark and a region, and this editor has neither.
 
 ## Loading, and aliases
 

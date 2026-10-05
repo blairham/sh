@@ -50,6 +50,7 @@ func TestTheShippedArgumentsProtocolOffersTheOptions(t *testing.T) {
 		comparguments -O next direct odirect equal || return
 		local -a names=( ${next%%:*} )
 		compadd -o nosort -J -default- -D next - "${names[@]}"
+		local -a _expl
 		compdescribe -I '' 40 '-- ' _expl -g next
 		local csl; local -a _args _tmpm _tmpd
 		while compdescribe -g csl _args _tmpm _tmpd; do
@@ -736,7 +737,8 @@ func TestCompdescribe(t *testing.T) {
 			"1/alpha",
 		},
 		// The group's own `compadd` options come back for the caller to pass
-		// on, with the listing flag in front of them.
+		// on, with the listing flag in front of them and the explanation
+		// array's contents behind them.
 		{
 			"the group's options",
 			`local -a g=(alpha:one) expl=(-J -default-)
@@ -744,7 +746,41 @@ func TestCompdescribe(t *testing.T) {
 			 local csl; local -a a m d
 			 compdescribe -g csl a m d || return
 			 say "${a[*]}"`,
-			"-l -M r:|=*",
+			"-l -M r:|=* -J -default-",
+		},
+		// The explanation array is what `_description` filled, and every
+		// group is answered with it — the bare half of a split definition
+		// too. Measured on zsh 5.9.2, 2026-10-05 (#6147): the two groups
+		// below are `(-l -Q -J ej -X ex)` and `(-S y -J ej -X ex)`, and
+		// the array is read when the groups are defined, so reassigning it
+		// before `-g` changes nothing.
+		{
+			"every group carries the explanation",
+			`local -a E=(-J ej -X ex) G=(alpha:one beta:two) H=(gamma delta)
+			 compdescribe -I '' 40 '-- ' E -g G -Q -- H -S y || return
+			 E=(-J changed)
+			 local csl; local -a a m d; local out=
+			 while compdescribe -g csl a m d; do out="${out}[${a[*]}]"; done
+			 say "$out"`,
+			"[-l -Q -J ej -X ex][-S y -J ej -X ex]",
+		},
+		// And it has to be an array. Measured: an unset name, a scalar and
+		// an association each fail the definition at 1 with nothing said;
+		// with nothing defined before, the `-g` after it has no parsed
+		// state, and with a definition before, it reads that one.
+		{
+			"an explanation that is not an array",
+			`local -a G=(alpha:one); local Es=x; local -A EA=(k v); local out=
+			 compdescribe -I '' 40 '-- ' unsetname G; out="$out$?"
+			 compdescribe -g c a m d 2>/dev/null; out="$out$?"
+			 compdescribe -I '' 40 '-- ' Es G; out="$out$?"
+			 compdescribe -I '' 40 '-- ' EA G; out="$out$?"
+			 local -a E=(-J x); compdescribe -I '' 40 '-- ' E G -Q; out="$out$?"
+			 compdescribe -I '' 40 '-- ' unsetname G; out="$out$?"
+			 local csl; local -a a m d
+			 compdescribe -g csl a m d; out="$out$?"
+			 say "$out ${a[*]}"`,
+			"1111010 -l -Q -J x",
 		},
 		// One definition whose rows are not all described is **two** groups,
 		// the described half first and carrying the `-l`. Measured through a

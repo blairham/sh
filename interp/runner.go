@@ -13982,7 +13982,7 @@ func (r *Runner) storedValue(name string, folded bool) (string, bool) {
 		// are read off it rather than off the copy.
 		return r.arrayBareName(a)
 	}
-	if produce, ok := r.DynamicArrays[name]; ok {
+	if produce, ok := r.DynamicArrays[name]; ok && !r.removed[name] {
 		// A produced array read without a subscript, which is the same
 		// question the stored one above answers and had no answer here at
 		// all: `$FUNCNAME` was empty where bash reads `g`, `${BASH_SOURCE}`
@@ -14000,14 +14000,15 @@ func (r *Runner) storedValue(name string, folded bool) (string, bool) {
 		//
 		// After the stored table, matching arrayElems — the two have to
 		// agree about which wins, or `$a` and `${a[@]}` would read different
-		// sources for one name. It is deliberately *not* guarded on
-		// r.removed for the same reason: arrayElems does not guard it, and
-		// making the scalar view alone honor an `unset` would let the two
-		// views disagree. What `unset` should do to a produced array is a
-		// question per parameter and per shell — measured, zsh refuses
-		// `unset funcstack` as a read-only variable, bash allows
-		// `unset FUNCNAME` and refuses `unset BASH_SOURCE` — so it belongs
-		// to whichever dialect registers the name, not here.
+		// sources for one name. Guarded on r.removed in both, together, for
+		// the same reason: a name `unset` took away is unset until a write
+		// brings it back (storeArray lifts the mark). Measured: zsh's
+		// `unset argv` and a widget's `unset region_highlight` leave
+		// `${+name}` at 0, and bash's `unset DIRSTACK`, `unset GROUPS` and
+		// `unset FUNCNAME` leave `${name+set}` empty (#5961). Which names
+		// may be unset at all is the dialect's — zsh refuses `unset
+		// funcstack` as a read-only variable, bash refuses `unset
+		// BASH_SOURCE` — and is answered before anything reaches here.
 		return r.producedBareName(produce(r))
 	}
 	if a, ok := r.assocFor(name); ok && !r.removed[name] {

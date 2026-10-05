@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"testing"
 	"time"
@@ -74,7 +75,7 @@ func TestControlCWithTheEditorOffGivesUpTheLine(t *testing.T) {
 		{"TRAPINT returning 0", "TRAPINT() { return 0 }\n", ": typed after\n", "0-0", "0-0"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			control, screen := zleOffChildSession(t, tc.rc)
+			control, screen := childShellSession(t, tc.rc, "-i", "+Z")
 			interruptType(t, control, screen, "true | false")
 			from := len(screen.Text())
 			if _, err := control.WriteString("abc\x03"); err != nil {
@@ -104,29 +105,33 @@ func TestControlCWithTheEditorOffGivesUpTheLine(t *testing.T) {
 	}
 }
 
-// zleOffChildMode is the variable that turns this test binary into the shell
-// TestZleOffChildShell is, and holds the startup directory it is to use in
-// place of the machine's.
-const zleOffChildMode = "SH_TEST_ZLE_OFF_CHILD"
+// childShellMode is the variable that turns this test binary into the shell
+// TestChildShell is, and holds the startup directory it is to use in place of
+// the machine's. childShellArgs holds its operands, one per line.
+const (
+	childShellMode = "SH_TEST_CHILD_SHELL"
+	childShellArgs = "SH_TEST_CHILD_SHELL_ARGS"
+)
 
-// TestZleOffChildShell is **not a test**. It is the shell
-// zleOffChildSession starts: this binary re-entered with the variable above
-// set, so that it can be given a terminal as its controlling one. Run any
-// other way it skips.
-func TestZleOffChildShell(t *testing.T) {
-	dir := os.Getenv(zleOffChildMode)
+// TestChildShell is **not a test**. It is the shell childShellSession
+// starts: this binary re-entered with the variable above set, so that it can
+// be given a terminal as its controlling one. Run any other way it skips.
+func TestChildShell(t *testing.T) {
+	dir := os.Getenv(childShellMode)
 	if dir == "" {
-		t.Skip("the child half of TestControlCWithTheEditorOffGivesUpTheLine")
+		t.Skip("the child half of the tests that start childShellSession")
 	}
 	sh := shell()
 	sh.SystemStartupDirectory = dir
-	os.Exit(driver.MainArgs(sh, []string{"zsh", "-i", "+Z"}))
+	os.Exit(driver.MainArgs(sh, append([]string{"zsh"}, strings.Split(os.Getenv(childShellArgs), "\n")...)))
 }
 
-// zleOffChildSession starts `zsh -i +Z` as a process of its own on a fresh
-// pseudo-terminal, with rc after a prompt the interrupt helpers wait on, and
-// waits for its first prompt.
-func zleOffChildSession(t *testing.T, rc string) (*os.File, *smoke.Screen) {
+// childShellSession starts zsh with args as a process of its own, in a
+// session of its own on a fresh pseudo-terminal, with rc after a prompt the
+// interrupt helpers wait on, and waits for its first prompt. A shell started
+// this way is one the ^C byte is a signal to, which a shell running inside
+// the test binary is not.
+func childShellSession(t *testing.T, rc string, args ...string) (*os.File, *smoke.Screen) {
 	t.Helper()
 	home := t.TempDir()
 	writeHomeFile(t, home, ".zshrc", "PS1=$'JNROW\\n"+jobNoticeMark+"'\n"+rc)
@@ -144,7 +149,7 @@ func zleOffChildSession(t *testing.T, rc string) (*os.File, *smoke.Screen) {
 	if err != nil {
 		t.Fatalf("finding this test binary: %v", err)
 	}
-	cmd := exec.Command(self, "-test.run=^TestZleOffChildShell$")
+	cmd := exec.Command(self, "-test.run=^TestChildShell$")
 	cmd.Dir = home
 	cmd.Env = []string{
 		"HOME=" + home,
@@ -154,7 +159,8 @@ func zleOffChildSession(t *testing.T, rc string) (*os.File, *smoke.Screen) {
 		// The child is a copy of a test binary, and this is what tells its
 		// TestMain the environment was already built — see internal/testenv.
 		"SH_TEST_HOME=" + home,
-		zleOffChildMode + "=" + t.TempDir(),
+		childShellMode + "=" + t.TempDir(),
+		childShellArgs + "=" + strings.Join(args, "\n"),
 	}
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = terminal, terminal, terminal
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true, Setctty: true}

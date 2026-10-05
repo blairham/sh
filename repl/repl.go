@@ -944,6 +944,17 @@ func (s Shell) Run(ctx context.Context) (int, error) {
 // the editor: it may want echo, it may want ^C to interrupt it, and it will
 // print lines that need the terminal translating them.
 func (s Shell) run(ctx context.Context, state *terminalState, typed string, stmts []*syntax.File) bool {
+	// An interrupt still pending when a typed line starts belongs to the line
+	// before it — interrupted drops what is left when that line ends, and
+	// this drops what arrived after: the signal a dying foreground program
+	// shared with the shell reaches the interpreter's flag through two
+	// goroutines, and on a loaded machine that can be after the program has
+	// been reaped and the line is over (#5923). A ^C typed at the prompt is
+	// never one of these: the editor reads it as a byte, and the read without
+	// an editor has the terminal hand it over as one.
+	if s.Runner.TakeInterrupt != nil {
+		s.Runner.TakeInterrupt()
+	}
 	var done bool
 	s.inLineDiscipline(state, func() { done = s.runStmts(ctx, typed, stmts) })
 	return done
@@ -1049,7 +1060,17 @@ func (s Shell) holdTerminal(state *terminalState, raw bool) {
 // only in what the command died of. Asking the first question alone put the
 // prompt on top of the `^C` for every real command from the moment job control
 // started handing the terminal over.
+//
+// And whatever the interpreter was offered and did not take is dropped here,
+// because the line it arrived during is over. With job control off a
+// foreground program runs in the shell's own process group, so a ^C that ends
+// it reaches the shell as well; nothing in the line is left to ask for it,
+// and left pending it ended the *next* line's first command instead — which
+// printed nothing and left 130 (#5923). Measured 2026-10-04 through a pty,
+// `/bin/sleep 5` and ^C with `unsetopt monitor` (zsh 5.9.2) and `set +m`
+// (bash 5.3.20): the next line runs and reads 130.
 func (s Shell) interrupted(sig *interrupts) bool {
+	sig.take()
 	return sig.took() || s.Runner.LastCommandWasInterrupted()
 }
 

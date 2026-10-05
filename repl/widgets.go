@@ -257,7 +257,17 @@ const (
 	// (#5931).
 	WidgetPushLine
 	WidgetPushLineOrEdit
+
+	// The line back to its start from the cursor, and only that: zsh's
+	// `backward-kill-line`, which leaves what is ahead of the cursor where
+	// WidgetKillWholeLine, under a dialect whose `^U` is the whole line,
+	// takes it too. It reads its own count — see backwardKillLine (#5960).
+	WidgetBackwardKillLine
 )
+
+// takesItsCount is whether the action reads the count itself, so that a key
+// pressed with one is performed once and not played again as many times.
+func (w Widget) takesItsCount() bool { return w == WidgetBackwardKillLine }
 
 // IsIncrementalSearch is whether the action is one of the four searches,
 // which read their own keys and end with a status and a `$KEYS` of their own
@@ -397,6 +407,13 @@ func (e *editor) runWidget(b Binding, prompt drawnPrompt) {
 		e.redraw(prompt)
 	case WidgetKillWholeLine:
 		e.killToStart()
+		e.redraw(prompt)
+	case WidgetBackwardKillLine:
+		n := 1
+		if e.keyNumeric != nil {
+			n = *e.keyNumeric
+		}
+		e.backwardKillLine(n)
 		e.redraw(prompt)
 	case WidgetKillWordBefore:
 		e.killTo(e.wordStartBeforeCursor())

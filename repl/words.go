@@ -167,6 +167,51 @@ func (e *editor) killToStart() {
 	e.killTo(0)
 }
 
+// backwardKillLine is zsh's `backward-kill-line` with a count of n, which
+// counts lines and not characters, and kills the lines it counts as one piece.
+//
+// Measured 2026-10-05 against zsh 5.9.2 from a widget calling it with `-n`,
+// on `l1⏎l2⏎l3 x` (⏎ a newline) with the cursor after `l3 `: each step from
+// inside a line goes back to that line's start, and each step from a line's
+// start takes the newline before it, so 1 kills `l3 `, 2 kills `⏎l3 ` and 3
+// kills `l2⏎l3 `. A negative count is the same walk forward to line ends —
+// on `aa bb cc dd ee` with the cursor at 7, -1 kills `c dd ee` and leaves the
+// cursor — and 0, or a cursor already at the end it walks to, kills nothing
+// and leaves the cut buffer alone.
+func (e *editor) backwardKillLine(n int) {
+	if n < 0 {
+		j := e.pos
+		for range -n {
+			if j == len(e.line) {
+				break
+			}
+			if e.line[j] == '\n' {
+				j++
+				continue
+			}
+			for j < len(e.line) && e.line[j] != '\n' {
+				j++
+			}
+		}
+		e.killForwardTo(j)
+		return
+	}
+	i := e.pos
+	for range n {
+		if i == 0 {
+			break
+		}
+		if e.line[i-1] == '\n' {
+			i--
+			continue
+		}
+		for i > 0 && e.line[i-1] != '\n' {
+			i--
+		}
+	}
+	e.killTo(i)
+}
+
 // yank puts the last kill back at the cursor.
 func (e *editor) yank() {
 	n := len(e.killed)

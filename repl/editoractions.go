@@ -269,6 +269,16 @@ func (a editorActions) Perform(w Widget, in Line) (Line, bool) {
 			times, back = -times, a.e.pos
 		}
 	}
+	if w.takesItsCount() {
+		// Told the count rather than played it: the call's own, which is
+		// `$NUMERIC` as the widget left it, and no count at all when it was
+		// unset, whatever the keystroke that ran the widget spent.
+		saved := a.e.keyNumeric
+		a.e.keyNumeric = in.Numeric
+		a.e.runWidget(Binding{Widget: w}, a.e.live(a.prompt))
+		a.e.keyNumeric = saved
+		times = 0
+	}
 	for i := range times {
 		if i > 0 && a.e.killing {
 			// One kill for the whole count, measured: two words killed

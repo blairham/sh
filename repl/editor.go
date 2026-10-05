@@ -807,6 +807,23 @@ func (e *editor) keyLoop(prompt drawnPrompt) (string, error) {
 			// the widget that calls the action by name alike.
 			e.keyBinding = &b
 			e.spendCountOnBinding(b)
+			if _, counted := countedActions[b.Widget]; counted && e.keyNumeric != nil {
+				// An action a count turns the other way when it is negative
+				// is performed here, the way it is from a widget, rather
+				// than played again by its key: replaying the key loses the
+				// sign. Measured 2026-10-05 against zsh 5.9.2 with `^F`
+				// rebound to backward-char, `ESC - ESC 2 ^F` from the start
+				// of `abcdef` moves the cursor to 2 (#6031).
+				w, times := countedAction(b.Widget, e.keyNumeric)
+				e.countRepeat = 0
+				for i := range times {
+					if i > 0 && e.killing {
+						e.killedBefore = true
+					}
+					e.runWidget(Binding{Widget: w}, prompt)
+				}
+				continue
+			}
 			e.runWidget(b, prompt)
 			continue
 		}

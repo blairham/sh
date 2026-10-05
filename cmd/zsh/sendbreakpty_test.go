@@ -4,6 +4,7 @@
 package main
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/blairham/sh/internal/smoke"
@@ -52,9 +53,20 @@ precmd() { print -rn -- "PRE$((1+1))" }
 	// it — for the precmd's mark and then the prompt after it — because keys
 	// typed while the editor starts the next line could be read by the
 	// terminal's line discipline instead.
-	for _, breaker := range []string{"\x07", "\x18w"} {
-		send("\x18cran=line" + breaker)
+	//
+	// The key rings the bell and the widget's call does not, measured: zsh
+	// writes `\a` after `^G` and nothing after `zle send-break`, and gives
+	// the line up without drawing it again either way.
+	for _, row := range []struct {
+		breaker string
+		bell    bool
+	}{{"\x07", true}, {"\x18w", false}} {
+		from := len(screen.Text())
+		send("\x18cran=line" + row.breaker)
 		await("PRE2")
+		if got := strings.Contains(screen.Text()[from:], "\a"); got != row.bell {
+			t.Errorf("after %q the bell rang %v, want %v\n%q", row.breaker, got, row.bell, screen.Text()[from:])
+		}
 		await(widgetMark)
 		send("\x18b")
 		await("CHECK s=1 ran=none END")

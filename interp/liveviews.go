@@ -5,7 +5,6 @@ package interp
 
 import (
 	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/blairham/sh/syntax"
@@ -349,7 +348,7 @@ func (r *Runner) pathEntries(runnableOnly bool) map[string]string {
 			if _, taken := out[name]; taken {
 				continue
 			}
-			full := r.absolute(filepath.Join(dir, name))
+			full := r.pathCandidate(dir, name)
 			if runnableOnly && r.runnable(full) != nil {
 				continue
 			}

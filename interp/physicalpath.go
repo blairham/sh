@@ -147,6 +147,12 @@ func uncleanedJoin(base, operand string) string {
 	if base == "" || filepath.IsAbs(operand) {
 		return operand
 	}
+	if strings.HasSuffix(base, string(filepath.Separator)) {
+		// The root, or a PATH entry written with its slash: one separator
+		// is all a join adds, and a second would be a spelling the path
+		// never had.
+		return base + operand
+	}
 	return base + string(filepath.Separator) + operand
 }
 
@@ -425,7 +431,14 @@ func (r *Runner) canceledComponentRefused(base, operand string, withinOperand bo
 				continue
 			}
 			if withinOperand && len(built) <= fromBase {
+				// A component of base, canceled unseen — and base is one
+				// component shorter for it, so a component the operand puts
+				// back afterwards is the operand's own and is looked at. Not
+				// lowering the mark read `../nosuch/..` as reaching into base
+				// twice, where ksh93 refuses it as it refuses `nosuch/..`
+				// (#6081); the -P walk below keeps the same count.
 				built = built[:len(built)-1]
+				fromBase--
 				continue
 			}
 			canceledPath := vol + lead + strings.Join(built, "/")

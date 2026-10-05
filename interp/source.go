@@ -1516,7 +1516,7 @@ func (r *Runner) resolveDotPath(name string, currentDirectoryFirst bool, search 
 				dir = "."
 			}
 			joined := filepath.Join(dir, name)
-			if candidate := r.atDir(joined); r.readableFile(candidate) {
+			if candidate := r.atDir(uncleanedJoin(dir, name)); r.readableFile(candidate) {
 				return joined, candidate, nil
 			}
 		}
@@ -1544,8 +1544,10 @@ func (r *Runner) resolveDotPath(name string, currentDirectoryFirst bool, search 
 			// one was asked for.
 			dir = "."
 		}
+		// The display is the cleaned join and the file read is not: see
+		// atDir for why a `..` must reach the kernel as written.
 		joined := filepath.Join(dir, name)
-		if candidate := r.atDir(joined); r.readableFile(candidate) {
+		if candidate := r.atDir(uncleanedJoin(dir, name)); r.readableFile(candidate) {
 			return joined, candidate, nil
 		}
 	}
@@ -1751,7 +1753,18 @@ func (r *Runner) atDir(path string) string {
 		// is r.Dir itself wherever the name still leads to the directory in
 		// hand, which is every ordinary case and every symbolic-link case. See
 		// interp/helddirectory.go.
-		return filepath.Join(r.dirNow(), path)
+		//
+		// **Joined without cleaning**, because the kernel is what resolves a
+		// `..` and it does so physically: `a/nosuch/../f` names nothing,
+		// since `a/nosuch` is not a directory to take the parent of, and
+		// `link/..` is the parent of wherever the link leads. filepath.Join
+		// canceled both against the component before them and handed the
+		// operating system a different path from the one written, so every
+		// file test, redirection and `.` answered for the lexical path — `[
+		// -e a/nosuch/../f ]` true where the whole panel says false, and `[
+		// -e f/ ]` true on a plain file (#6081). Only `cd`'s logical
+		// bookkeeping is lexical, and it does not come through here.
+		return uncleanedJoin(r.dirNow(), path)
 	}
 	return path
 }

@@ -688,7 +688,7 @@ func (r *Runner) modifierCommandPath(value string) string {
 		if dir == "" {
 			continue
 		}
-		candidate := r.absolute(filepath.Join(dir, value))
+		candidate := r.pathCandidate(dir, value)
 		if err := r.runnable(candidate); err == nil {
 			return filepath.Join(dir, value)
 		}

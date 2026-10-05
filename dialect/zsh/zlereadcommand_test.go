@@ -20,7 +20,7 @@ import (
 //	\e[A     up-line-or-history   \eb     backward-word
 //	^X q     undefined-key, $KEYS ^Xq — the prefix and the byte after it
 //	^X ^U    undo
-//	é        self-insert twice, a byte in $KEYS each time
+//	é        self-insert twice, a byte in $KEYS each time, with no LANG
 //
 // every one at status 0, and `$LASTWIDGET` reads `.read-command` afterwards.
 // A read with nothing left to read is the failure.
@@ -50,6 +50,36 @@ zle -N w
 		"end=1 last=.read-command\n"
 	if printed != want {
 		t.Errorf("printed\n%s\nwant\n%s", printed, want)
+	}
+}
+
+// Under a UTF-8 locale a character of more than one byte is one key: `$KEYS`
+// holds all of it and it types itself (#5949). Measured 2026-10-04 through a
+// pseudo-terminal against zsh 5.9.2, a pushed `é` read once under
+// LANG=en_US.UTF-8 and twice, a byte at a time, under LANG=C. A widget that
+// strips each key off a copy of the text never gets past half a character,
+// which is how bracketed-paste-magic's loop hung on a paste holding one.
+func TestReadCommandReadsAWholeCharacterInAUTF8Locale(t *testing.T) {
+	for _, tc := range []struct{ lang, want string }{
+		{"en_US.UTF-8", "self-insert é\nself-insert z\nrest=\n"},
+		{"C", "self-insert $'\\303'\nself-insert $'\\251'\nrest=\n"},
+	} {
+		t.Run(tc.lang, func(t *testing.T) {
+			r, out := zleRunner(t, "LANG="+tc.lang+`
+w() {
+  local text=$'\303\251z'
+  zle .read-command; print -r -- "$REPLY ${(q)KEYS}"; text=${text#"$KEYS"}
+  zle .read-command; print -r -- "$REPLY ${(q)KEYS}"; text=${text#"$KEYS"}
+  print -r -- "rest=${text#z}"
+}
+zle -N w
+`)
+			ed := &stubEditor{input: []byte("\xc3\xa9z")}
+			_, _, printed, _ := runWidgetWatching(t, r, out, "w", repl.Line{}, ed)
+			if printed != tc.want {
+				t.Errorf("printed %q, want %q", printed, tc.want)
+			}
+		})
 	}
 }
 

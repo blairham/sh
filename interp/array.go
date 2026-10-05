@@ -321,6 +321,9 @@ func (r *Runner) setArray(name string, elems []string) {
 func (r *Runner) storeArray(name string, a Array) {
 	name = r.namespaceWriteName(name)
 	r.noteHiddenWrite(name)
+	// A produced array `unset` ended is an ordinary name from this write on
+	// — see Runner.endProducerUnsetEnded.
+	r.endProducerUnsetEnded(name)
 	if write, produced := r.dynamicArrayWriters[name]; produced {
 		// A *produced* array, whose elements are not this table's to keep:
 		// the producer answers ahead of anything stored here, so a write left

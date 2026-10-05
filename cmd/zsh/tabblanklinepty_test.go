@@ -81,7 +81,10 @@ func TestTabOnABlankLineAndTheListQuestion(t *testing.T) {
 		})
 	})
 
-	for _, row := range []struct{ name, answer string }{{"declined", "x"}, {"declined by a control key", "\x18"}} {
+	for _, row := range []struct{ name, answer, echo string }{
+		{"declined", "x", "x"},
+		{"declined by a control key", "\x18", "n"},
+	} {
 		t.Run("the question "+row.name, func(t *testing.T) {
 			control, screen := widgetSession(t, "LISTMAX=3")
 			t.Cleanup(func() { _, _ = control.WriteString("\x01\x0b") })
@@ -99,6 +102,26 @@ func TestTabOnABlankLineAndTheListQuestion(t *testing.T) {
 				r, c := g.Cursor()
 				return g.Text(p) == mark+" x" && strings.TrimSpace(g.Text(p+1)) == "" && r == p && c == 5
 			})
+			// Taken off the screen, with the line drawn again where it was
+			// rather than under it: one prompt, no question.
+			g := render(screen)
+			prompts := 0
+			for r := range g.Rows() {
+				if strings.HasPrefix(g.Text(r), "zsh: do you wish") {
+					t.Errorf("the question is still on the screen at row %d", r)
+				}
+				if strings.HasPrefix(g.Text(r), mark) {
+					prompts++
+				}
+			}
+			if prompts != 1 {
+				t.Errorf("%d prompts on the screen, want the one the question was asked under", prompts)
+			}
+			// And the answer is echoed as zsh echoes it: the key, or `n` for
+			// one that cannot be drawn.
+			if !strings.Contains(screen.Text(), "lines)? "+row.echo+"\r") {
+				t.Errorf("the answer was not echoed as %q:\n%q", row.echo, smoke.LastLines(screen.Text(), 3))
+			}
 		})
 	}
 

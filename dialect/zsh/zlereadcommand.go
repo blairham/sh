@@ -54,9 +54,8 @@ func copyRegionAsKill(r *interp.Runner, _ repl.Actions, args []string) int {
 		r.Diagnosef("copy-region-as-kill without a string is not implemented yet\n")
 		return 1
 	}
-	// Through the kill the line carries, which is what `$CUTBUFFER` reads
-	// and what the editor takes back when the call ends. See
-	// repl.Line.CutBuffer.
+	// Into the kill `$CUTBUFFER` reads, which callBuiltinWidget hands to the
+	// editor when this returns. See repl.Actions.CutBuffer.
 	r.SetVar(zleCutBuffer, args[0])
 	return 0
 }

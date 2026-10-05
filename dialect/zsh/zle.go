@@ -213,16 +213,16 @@ import (
 // A `zle` that accepted everything would be worse than the `command not
 // found` it replaces, because a plugin would then believe its widget existed.
 // So the letters this shell has not got are refused with the wording `whence`
-// and `bindkey` use for the same case — `-M is not implemented yet` — which a
+// and `bindkey` use for the same case — `-I is not implemented yet` — which a
 // script can tell apart from a typo, and the spellings of *invoking* that need
 // a seam repl has not got are refused by name too:
 //
-//   - **`zle -M` and `zle reset-prompt`**. Both write somewhere other than the
-//     line — a status line under the prompt, and the prompt itself — and both
-//     belong with the question of who owns the prompt while a widget is
-//     running. `zle -R` has left this list: bare, it is a redraw and repl can
-//     do that; **with a display string it is still refused**, because the
-//     string goes on the status line `-M` would need.
+//   - **`zle -R` with a display string**. Bare, it is a redraw and repl does
+//     that; the string is still refused. `zle -M` and `zle reset-prompt` have
+//     left this list: the message row under the line is repl's
+//     Actions.Message (#5942) and the prompt drawn again is its reset-prompt
+//     (#5940), so the string `-R` would show has somewhere to go now and
+//     only wants measuring.
 //
 // The editor's own actions have all left this list, the two that read a key
 // last: a completion that may stop to ask about a listing (#3043), and the
@@ -398,7 +398,7 @@ func registerZle(r *interp.Runner) {
 // is not built yet says so — the distinction whence.go documents.
 const (
 	zleLetters            = "acfglmrwACDFGIKLMNRTU"
-	zleLettersImplemented = "aACDFKLNRTUlrw"
+	zleLettersImplemented = "aACDFKLMNRTUlrw"
 	// zleOperationLetters are the letters that choose what this builtin
 	// *does*. At most one may be given, and two is a refusal rather than a
 	// preference — see zleBuiltin.
@@ -422,6 +422,7 @@ type zleOpts struct {
 	list      bool // -l
 	watch     bool // -F
 	draw      bool // -R
+	message   bool // -M
 	push      bool // -U
 	keymap    bool // -K
 	all       bool // -a
@@ -511,6 +512,8 @@ func zleBuiltin(r *interp.Runner, ctx context.Context, args []string) int {
 		return watchDescriptor(r, opts, rest)
 	case opts.draw:
 		return redisplay(r, ctx, rest)
+	case opts.message:
+		return showMessage(r, ctx, rest)
 	case opts.push:
 		return pushKeys(r, ctx, rest)
 	case opts.keymap:
@@ -747,6 +750,8 @@ func setZleLetter(opts *zleOpts, letter rune) {
 		opts.watch = true
 	case 'R':
 		opts.draw = true
+	case 'M':
+		opts.message = true
 	case 'U':
 		opts.push = true
 	case 'K':
@@ -1271,6 +1276,35 @@ func redisplay(r *interp.Runner, ctx context.Context, args []string) int {
 		return 1
 	}
 	actions.Redisplay(widgetLine(r))
+	return 0
+}
+
+// showMessage is `zle -M STRING`: the string drawn on a row under the line,
+// where it stays while the line is edited until another `zle -M` replaces it,
+// an empty one takes it away, or the line ends (#5942).
+//
+// Measured 2026-10-04 through a pseudo-terminal against zsh 5.9.2: status 0
+// in a widget, and the message is drawn at once under the line and still
+// there after the keys that follow. The arity comes first, inside a widget
+// or out: `zle -M` alone is `not enough arguments for -M` and `zle -M a b`
+// is `too many arguments for -M`, both at 1, and only then does `zle -M hi`
+// outside a widget say `can only be called from widget function`. `zle -M --
+// -x` shows `-x`.
+func showMessage(r *interp.Runner, ctx context.Context, args []string) int {
+	if len(args) == 0 {
+		r.Diagnosef("not enough arguments for -M\n")
+		return 1
+	}
+	if len(args) > 1 {
+		r.Diagnosef("too many arguments for -M\n")
+		return 1
+	}
+	actions, inside := repl.ActionsFrom(ctx)
+	if !inside {
+		r.Diagnosef("can only be called from widget function\n")
+		return 1
+	}
+	actions.Message(args[0])
 	return 0
 }
 

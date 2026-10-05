@@ -156,6 +156,11 @@ type Actions interface {
 	CutBuffer() string
 	SetCutBuffer(text string)
 
+	// Message draws text on a row under the line, where it stays while the
+	// line is edited until another replaces it, an empty one takes it away,
+	// or the line ends. zsh's `zle -M` (#5942).
+	Message(text string)
+
 	// UndoLimit is the change an undo may not take the line back past, and
 	// SetUndoLimit moves it. zsh's `$UNDO_LIMIT_NO`: 0 is none, and it is
 	// the line's — measured 2026-10-04 against zsh 5.9.2, a limit a widget
@@ -367,6 +372,11 @@ func (a editorActions) ChangeNumber(in Line) int {
 func (a editorActions) CutBuffer() string { return string(a.e.killed) }
 
 func (a editorActions) SetCutBuffer(text string) { a.e.killed = []rune(text) }
+
+func (a editorActions) Message(text string) {
+	a.e.message = text
+	a.e.redraw(a.e.live(a.prompt))
+}
 
 func (a editorActions) UndoLimit() int { return a.e.undoLimit }
 

@@ -110,6 +110,8 @@ type stubEditor struct {
 	calls int
 	// limit is the undo limit UndoLimit answers and SetUndoLimit moves.
 	limit int
+	// messages is every Message, in order.
+	messages []string
 }
 
 func (e *stubEditor) Perform(w repl.Widget, in repl.Line) (repl.Line, bool) {
@@ -158,6 +160,8 @@ func (e *stubEditor) SetCutBuffer(text string) { e.cut = text }
 func (e *stubEditor) WidgetCalled() { e.calls++ }
 
 func (e *stubEditor) UndoLimit() int { return e.limit }
+
+func (e *stubEditor) Message(text string) { e.messages = append(e.messages, text) }
 
 func (e *stubEditor) SetUndoLimit(n int) { e.limit = n }
 
@@ -293,8 +297,10 @@ func TestZleRefusesEachMistakeItsOwnWay(t *testing.T) {
 // `T` and `r` left it together (#4450): the transformation table is built and
 // `-r` is the modifier that removes from it, and the letter that only `-T`
 // reads could not be left refusing while the operation it modifies works.
+//
+// `M` left it with #5942: the message under the line is built.
 func TestALetterThisShellHasNotGotSaysSo(t *testing.T) {
-	for _, letter := range []string{"M", "I", "c", "f", "g", "m", "G"} {
+	for _, letter := range []string{"I", "c", "f", "g", "m", "G"} {
 		out, st := runZsh(t, t.TempDir(), "zle -"+letter+" x y\n")
 		want := "zsh:zle:1: -" + letter + " is not implemented yet\n"
 		if out != want || st != 1 {

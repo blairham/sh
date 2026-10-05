@@ -17,8 +17,9 @@ import (
 // (`HISTNO=1`) and then ^Xs draws `GOT[: one|5|1|integer-local-special]`;
 // after one more command, ^Xb (`HISTNO=9`) from `ab` leaves
 // `GOT[ab|2|4|integer-local-special]`; and a widget calling another sees the
-// same number, `N[4]`. Before the fix the assignment was refused as
-// read-only, and the inner widget's `$HISTNO` was empty.
+// same number, `N[4]`; and `zle up-history` in a widget leaves `U[3]`.
+// Before the fix the assignment was refused as read-only, and `$HISTNO`
+// after `zle up-history` still said 4.
 func TestAssigningHistnoMovesTheWalk(t *testing.T) {
 	control, screen := widgetSession(t, `ha() { HISTNO=1 }; zle -N ha; bindkey '^Xa' ha
 hb() { HISTNO=9 }; zle -N hb; bindkey '^Xb' hb
@@ -26,6 +27,7 @@ show() { BUFFER="GOT[$BUFFER|$CURSOR|$HISTNO|${(t)HISTNO}]" }
 zle -N show; bindkey '^Xs' show
 inner() { LBUFFER="N[$HISTNO]" }; zle -N inner
 outer() { zle inner }; zle -N outer; bindkey '^Xn' outer
+up() { zle up-history; LBUFFER="U[$HISTNO]" }; zle -N up; bindkey '^Xu' up
 c() { BUFFER= }; zle -N c; bindkey '^Xc' c
 `)
 	steps := []struct{ keys, want string }{
@@ -36,6 +38,7 @@ c() { BUFFER= }; zle -N c; bindkey '^Xc' c
 		{"", widgetMark},
 		{"ab\x18b\x18s", "GOT[ab|2|4|integer-local-special]"},
 		{"\x18c\x18n", "N[4]"},
+		{"\x18c\x18u", "U[3]"},
 		{"\x18cprint -r -- F$((1+2))\r", "F3"},
 	}
 	for _, step := range steps {

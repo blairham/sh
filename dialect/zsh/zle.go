@@ -2138,11 +2138,9 @@ func openHistNo(r *interp.Runner, actions repl.Actions, editing bool) {
 func widgetLine(r *interp.Runner) repl.Line {
 	post, _ := r.GetVar(zlePostdisplay)
 	keys, _ := r.GetVar(zleKeys)
-	histNo, _ := r.GetVar(zleHistNo)
-	n, _ := strconv.Atoi(histNo)
 	return repl.Line{
 		Buffer: widgetBuffer(r), Cursor: widgetCursor(r), Postdisplay: post, Keys: keys,
-		Numeric: widgetNumeric(r), HistNo: n,
+		Numeric: widgetNumeric(r),
 	}
 }
 
@@ -2224,7 +2222,7 @@ func parseWidgetOpening(s string) (widgetOpening, bool) {
 var widgetCallState = []string{
 	zleBuffer, zleCursor, zlePostdisplay, zleWidget, zleLastWidget, zleKeymap,
 	zleNumeric, zleAccept, zleActive, zleOpened, zleKeys, zleCutBuffer,
-	zlePrebuffer, zleHistNo,
+	zlePrebuffer,
 }
 
 // callerWidgetState is what was there before a widget call, put back when

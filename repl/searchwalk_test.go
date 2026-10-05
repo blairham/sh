@@ -30,6 +30,8 @@ var zshWalkStyle = HistoryStyle{
 	SearchInvalidPrompt:           "invalid bck-i-search: %s_",
 	SearchForwardInvalidPrompt:    "invalid fwd-i-search: %s_",
 	SearchForwardCursorAtMatchEnd: true,
+	SearchIgnoresCaseUnlessTold:   true,
+	SearchCaretAnchors:            true,
 }
 
 // walking reads one line through an editor holding the history, with the
@@ -216,5 +218,44 @@ func TestEachSearchEndsWithItsStatus(t *testing.T) {
 				t.Errorf("keys %q, want %q", got.Keys, tc.key)
 			}
 		})
+	}
+}
+
+// A query with no upper-case letter ignores case, one with any is read as
+// written, and a leading `^` anchors to the start of the entry — zsh's
+// answers, measured on 2026-10-04 (#5932). The history is built so that the
+// ranked fallback, which has a smart case of its own, would land somewhere
+// else: `r_a_n` scores higher as a subsequence than `xRAN` does, so only the
+// contiguous pass ignoring case reaches `xRAN`.
+func TestALowerCaseQueryIgnoresCaseAndACaretAnchors(t *testing.T) {
+	history := []string{"echo xRAN one", "echo r_a_n two"}
+	for _, tc := range []struct {
+		name, keys, line string
+		pos              int
+	}{
+		{"lower case ignores case", "\x12ran", "echo xRAN one", 6},
+		{"a caret anchors", "\x12^ec", "echo r_a_n two", 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			e, _, _ := walking(t, zshWalkStyle, history, tc.keys+stopHere)
+			if string(e.line) != tc.line || e.pos != tc.pos {
+				t.Errorf("line %q at %d, want %q at %d", string(e.line), e.pos, tc.line, tc.pos)
+			}
+		})
+	}
+	// A caret anywhere else is a letter like any other.
+	_, _, out := walking(t, zshWalkStyle, history, "\x12o ^\r")
+	if !strings.Contains(out, "failing bck-i-search: o ^_") {
+		t.Errorf("drew %q, want a later caret failing", out)
+	}
+	// Any upper-case letter means the case was meant.
+	_, _, out = walking(t, zshWalkStyle, history, "\x12ECHO\r")
+	if !strings.Contains(out, "failing bck-i-search: ECHO_") {
+		t.Errorf("drew %q, want ECHO failing", out)
+	}
+	// And a dialect that says neither reads the caret as a character.
+	_, _, out = walking(t, HistoryStyle{}, history, "\x12^ec\r")
+	if !strings.Contains(out, defaultFailedText("^ec")) {
+		t.Errorf("drew %q, want ^ec failing without the knob", out)
 	}
 }

@@ -270,6 +270,11 @@ type editor struct {
 	// as well, which one dialect's default keymap does. See
 	// EditorStyle.SearchOnControlX.
 	searchOnControlX bool
+	// searchSmartCase and searchCaretAnchors are
+	// HistoryStyle.SearchIgnoresCaseUnlessTold and
+	// HistoryStyle.SearchCaretAnchors.
+	searchSmartCase    bool
+	searchCaretAnchors bool
 	// searchForwardEndsAtMatchEnd is HistoryStyle.SearchForwardCursorAtMatchEnd.
 	searchForwardEndsAtMatchEnd bool
 	// searchNewlineAccepts is one dialect's answer and the zero value is the

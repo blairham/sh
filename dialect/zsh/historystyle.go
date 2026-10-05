@@ -62,7 +62,11 @@ func HistoryStyle() repl.HistoryStyle {
 		// And a forward match leaves the cursor after it. See
 		// repl.HistoryStyle.SearchForwardCursorAtMatchEnd.
 		SearchForwardCursorAtMatchEnd: true,
-		SearchBelowTheLine:            true,
+		// And a lower-case query ignores case, and a leading `^` anchors.
+		// See repl.HistoryStyle.SearchIgnoresCaseUnlessTold (#5932).
+		SearchIgnoresCaseUnlessTold: true,
+		SearchCaretAnchors:          true,
+		SearchBelowTheLine:          true,
 		// And the newline that ends a search accepts the line here, where bash
 		// and ksh93 take it for the search and leave the line to go on being
 		// edited. Measured 2026-09-23 through a pseudo-terminal, one keystroke

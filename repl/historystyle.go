@@ -109,6 +109,14 @@ type HistoryStyle struct {
 	// backward match is at its start in both.
 	SearchForwardCursorAtMatchEnd bool
 
+	// SearchIgnoresCaseUnlessTold matches a query holding no upper-case
+	// letter without regard to case, and one holding any as written; and
+	// SearchCaretAnchors reads a leading `^` as the start of the entry. zsh
+	// does both and bash neither — measured 2026-10-04, the table is on
+	// repl's searchState.prepare (#5932).
+	SearchIgnoresCaseUnlessTold bool
+	SearchCaretAnchors          bool
+
 	// SearchBelowTheLine draws the search on its own row under the command
 	// line, leaving the prompt and the line where they were. zsh does; bash
 	// replaces the prompt instead.

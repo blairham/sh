@@ -182,6 +182,13 @@ func (e *editor) runShellWidget(name string, prompt drawnPrompt) (ran, accept bo
 	// survives the keystrokes after the one that set it and is redrawn with
 	// the line. See Line.Postdisplay.
 	e.postdisplay = out.Postdisplay
+	// A widget that returned non-zero rings, before the line is drawn
+	// again — unless it broke. A broken widget is one giveUp rings for, or
+	// one that asked for a send-break, which rings nothing. See
+	// EditorStyle.RingsWhenAWidgetFails (#6108).
+	if e.ringsOnAFailedWidget && out.Status != 0 && !out.Broken {
+		e.ring()
+	}
 	e.redraw(prompt)
 	return true, out.Accept
 }

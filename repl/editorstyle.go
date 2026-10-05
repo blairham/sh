@@ -267,6 +267,29 @@ type EditorStyle struct {
 	// internal/tty's Raw for the measurement.
 	FlowControlOption string
 
+	// BeepOption names the option that, while it is *unset*, silences every
+	// bell the editor rings — zsh's BEEP. An empty name is a dialect with no
+	// such option, and the editor always rings. Measured 2026-10-05 against
+	// zsh 5.9.2 through a pty: after `unsetopt beep` there is no bell from a
+	// completion that matches nothing, from `^G`, from a failing incremental
+	// search or from a widget that returns non-zero (#6108).
+	BeepOption string
+
+	// RingsWhenAWidgetFails sounds the bell after a shell widget that a key
+	// ran returns non-zero (#6108). Measured 2026-10-05 against zsh 5.9.2
+	// through a pty, with `w() { BODY }; zle -N w; bindkey '^T' w`:
+	//
+	//	return 1, return 2, false       \a
+	//	return 0                        nothing
+	//	zle w2; return 0  (w2 fails)    nothing: only the widget the key ran
+	//	zle w2            (w2 fails)    \a, since w returns w2's status
+	//	zle accept-line; return 1       \a, then the line runs
+	//	zle send-break                  nothing
+	//
+	// The bell comes before the line is drawn again. bash 5.3 rings nothing
+	// for a `bind -x` command that fails.
+	RingsWhenAWidgetFails bool
+
 	// What the session keeps of the terminal settings a command leaves
 	// behind (#6105). Every shell in the panel keeps a change a command made
 	// and exited from: `stty -ixon` typed at the prompt lasts in zsh 5.9.2,

@@ -555,7 +555,7 @@ func (e *editor) confirmList(matches []Candidate, prompt drawnPrompt) bool {
 		default:
 			// Not an answer. The bell, and ask again — which is what waiting
 			// for one of two keys means.
-			e.write("\a")
+			e.write(e.bell())
 		}
 	}
 }

@@ -91,6 +91,11 @@ func EditorStyle() repl.EditorStyle {
 		// the editor from the next prompt. See repl.EditorStyle.FlowControlOption
 		// and internal/tty's Raw for the measurement (#5943).
 		FlowControlOption: "FLOW_CONTROL",
+		// And the bell: a widget that returns non-zero rings it, and
+		// `unsetopt beep` silences every bell the editor rings. See
+		// repl.EditorStyle.BeepOption (#6108).
+		BeepOption:            "BEEP",
+		RingsWhenAWidgetFails: true,
 		// What zsh keeps of the settings a command leaves: all of them, with
 		// line buffering and echo back on, and even after a signal ended the
 		// command. See repl.EditorStyle.KeptCanonical (#6105).

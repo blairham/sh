@@ -90,6 +90,12 @@ type editor struct {
 	// answer and the core's; see
 	// EditorStyle.BellRingsOnAnAmbiguousCompletionThatInserts.
 	bellsOnAPartialCompletion bool
+	// silent is a session whose dialect's bell option is off, where nothing
+	// the editor does rings. See EditorStyle.BeepOption.
+	silent bool
+	// ringsOnAFailedWidget rings after a shell widget a key ran returns
+	// non-zero. See EditorStyle.RingsWhenAWidgetFails.
+	ringsOnAFailedWidget bool
 
 	// listsMatches draws the matches on the keystroke that found them
 	// ambiguous rather than on a second one. False is the answer of a dialect
@@ -1128,7 +1134,7 @@ func (e *editor) giveUp(prompt drawnPrompt) (string, error) {
 	e.broken = false
 	if e.recursive > 0 {
 		// Inside recursive-edit, the error ends that edit and not the line.
-		e.write("\a")
+		e.write(e.bell())
 		e.recursiveBroke = true
 		return "", ErrBroken
 	}
@@ -1138,7 +1144,7 @@ func (e *editor) giveUp(prompt drawnPrompt) (string, error) {
 	// the bell, and the prompt with the line on the row under it. The bell
 	// goes through write, which is what tells the draw after it that the
 	// screen is no longer the one it last drew.
-	e.write("\a")
+	e.write(e.bell())
 	e.redraw(prompt)
 	e.endLine(prompt, "")
 	return "", ErrBroken
@@ -1154,7 +1160,7 @@ func (e *editor) giveUp(prompt drawnPrompt) (string, error) {
 // the shell's to stop, see dialect/zsh's callBuiltinWidget.
 func (e *editor) sendBreak(prompt drawnPrompt, bell bool) (string, error) {
 	if bell {
-		e.write("\a")
+		e.write(e.bell())
 	}
 	if e.recursive > 0 {
 		e.recursiveBroke = true
@@ -1921,7 +1927,16 @@ func (e *editor) newline() string {
 // else** in both shells with a line editor, so a redraw beside it is bytes
 // this editor would be alone in sending.
 func (e *editor) ring() {
-	_, _ = io.WriteString(e.out, bell)
+	_, _ = io.WriteString(e.out, e.bell())
+}
+
+// bell is the bell, or nothing in a session whose bell option is off. A
+// caller that must also invalidate what is drawn writes it through write.
+func (e *editor) bell() string {
+	if e.silent {
+		return ""
+	}
+	return bell
 }
 
 // itoa without importing strconv for one call on the keystroke path.

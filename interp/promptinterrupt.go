@@ -79,8 +79,8 @@ func (r *Runner) InterruptAtThePrompt(ctx context.Context) (keep bool) {
 // line was kept or given up, and bash 5.3.20 reads PIPESTATUS `130`, the
 // record the prompt's own status wrote before the handler ran.
 func (r *Runner) runPromptTrapAction(ctx context.Context, name, body string) (returned bool, status int, resumed bool) {
-	pipe := r.pipeStatus
+	kept := r.keepStatus()
 	returned, status, resumed = r.runTrapAction(ctx, name, body)
-	r.pipeStatus = pipe
+	r.pipeStatus = kept.pipe
 	return returned, status, resumed
 }

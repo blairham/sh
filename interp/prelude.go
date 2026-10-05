@@ -74,11 +74,22 @@ const diagnoseCommand = "diagnose"
 // set from a node, so a prelude of twenty-odd lines left a script whose very
 // first statement raises the one diagnostic that reads it blaming line 22 of
 // text the script never saw.
+//
+// And the status pair is put back as it was before the prelude ran, for the
+// reason `$_` is forgotten: the prelude's commands are not commands the script
+// ran. Its last one left the pipeline record holding `0`, where a shell that
+// has run nothing has an empty record — measured 2026-10-05, `print
+// "[$pipestatus]" $#pipestatus` is `[] 0` in zsh 5.9.2 and `echo
+// ${#PIPESTATUS[@]}` is `0` in bash 5.3.20 and 3.2.57 (#6121).
 func (r *Runner) SourcingPrelude(on bool) {
 	r.sourcingPrelude = on
-	if !on {
-		r.line, r.prevLine, r.enteredLine, r.reachedLine = 0, 0, 0, 0
+	if on {
+		r.beforePrelude = r.keepStatus()
+		return
 	}
+	r.putStatusBack(r.beforePrelude)
+	r.beforePrelude = keptStatus{}
+	r.line, r.prevLine, r.enteredLine, r.reachedLine = 0, 0, 0, 0
 }
 
 // preludeDefined records a function as the dialect's own, and is called for

@@ -299,6 +299,26 @@ type Diagnostics struct {
 	// shell already answers for a script.
 	StartupParseFailureWordedAsAtAPrompt bool
 
+	// StartupFileLocatedAsAFileAtAPrompt locates a run-time diagnostic from a
+	// startup file read by an interactive shell the way the same file is
+	// located under `-c` — by its path and line — instead of the way a line
+	// typed at the prompt is.
+	//
+	// Measured 2026-10-05, a run-time failure on line 3 of the rc file read
+	// by `-i` with the program on a pipe:
+	//
+	//	zsh 5.9.2    .zshrc   .../.zshrc:3: command not found: nosuch2,
+	//	                      .../.zshrc:source:3: no such file or …
+	//	bash 5.3.20  .bashrc  bash: nosuch2: command not found — the
+	//	                      prompt's own shape
+	//	dash 0.5.12  $ENV     dash: 3: nosuch2: not found — the shell and
+	//	                      the line, as everywhere in dash
+	//
+	// zsh alone; this shell used to give zsh the prompt's shape, which lost
+	// the line and, for a builtin, the whole location (#5870). ksh93 names
+	// the file too, and is #5884's.
+	StartupFileLocatedAsAFileAtAPrompt bool
+
 	// StartupParseFailureStatus is what a parse failure in a startup file
 	// leaves in `$?` for whatever runs after it. See StartupParseStatus.
 	StartupParseFailureStatus StartupParseStatus

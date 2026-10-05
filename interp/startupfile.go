@@ -88,6 +88,14 @@ func (r *Runner) RunStartupFile(ctx context.Context, path, src string, failed fu
 	// shell — see Frame.Startup.
 	r.pushFrame(Frame{File: path, Startup: true})
 	defer r.popFrame()
+	// A file, in the dialect that locates one as a file at a prompt too, so
+	// a prompt's wording does not reach the lines in it. The same counter a
+	// sourced file raises — see Runner.promptLocated and
+	// Diagnostics.StartupFileLocatedAsAFileAtAPrompt (#5870).
+	if r.diag().StartupFileLocatedAsAFileAtAPrompt {
+		r.borrowedFiles++
+		defer func() { r.borrowedFiles-- }()
+	}
 	// And what the shell is inside while it reads it, which is the file and
 	// not yet the program: see EvalContextStartupFile.
 	// A logout file read from inside an `exit` is inside the program still,

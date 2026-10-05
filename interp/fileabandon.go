@@ -321,6 +321,30 @@ func (r *Runner) GiveUpTheStartupFile() bool {
 	return true
 }
 
+// GiveUpTheProgramLine is GiveUpTheLine for the program an interactive shell
+// was started with, in the dialects where a fatal error costs it only the
+// line: fromAScript says whether the program is a script rather than a `-c`
+// string. See Semantics.InteractiveProgramErrorWhenInteractive (#6073).
+func (r *Runner) GiveUpTheProgramLine(fromAScript bool) bool {
+	if !r.Interactive || !r.pendingFileError() {
+		return false
+	}
+	switch r.sem().InteractiveProgramErrorWhenInteractive {
+	case InteractiveProgramErrorCostsTheLine:
+	case InteractiveProgramErrorCostsAScriptsLine:
+		if !fromAScript {
+			return false
+		}
+		if r.abandon == abandonParamError &&
+			r.ask(r.sem().ParamErrorIsAnExitRequest, "`${x?word}` ending the shell rather than the line it is in") {
+			return false
+		}
+	default:
+		return false
+	}
+	return r.GiveUpTheLine()
+}
+
 // GiveUpTheLine is the same boundary at an interactive prompt: the unit is the
 // line a person typed, and an error in it costs that line rather than the
 // session.

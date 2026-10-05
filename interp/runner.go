@@ -3464,6 +3464,10 @@ type Runner struct {
 	// which does not wear off from one chunk to the next — see
 	// Runner.tellOfJobsLeftBehind.
 	toldOfJobsWithNoPrompt bool
+	// exitWaived says the last named command this shell ran was a held
+	// `exit` (or a `jobs` listing), in the dialect where only that waives the
+	// next one — see Semantics.HeldExitWaivedForTheNextCommandOnly.
+	exitWaived bool
 	// oldpwdSettled says the inherited OLDPWD has already been read and
 	// judged, which happens once however many chunks a session runs.
 	//
@@ -9647,6 +9651,12 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 	// holds nothing for falls through to the plain name, which is what lets a
 	// function defined outside be called from inside. See
 	// interp/namespace.go.
+	// A named command is running, which puts back the hold a held `exit`
+	// waived, unless it is the `exit` that waiver was for. See
+	// Semantics.HeldExitWaivedForTheNextCommandOnly.
+	if argv[0] != "exit" {
+		r.exitWaived = false
+	}
 	if fn, ok := r.funcs[r.namespaceFuncLookup(argv[0])]; ok && !r.presentedButSwitchedOff(argv[0]) &&
 		!r.specialBuiltinOutranksAFunction(argv[0]) {
 		r.noteANegatedCall(c)

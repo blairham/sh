@@ -2732,6 +2732,9 @@ func Semantics() interp.Semantics {
 	// Semantics.CommandTableHoldsOnlyAbsoluteEntries.
 	// Whether `hash name` searches PATH again for a name already remembered
 	// (#6110). See Semantics.HashNameSearchesAgain.
+	// What waives a held exit for the exit after it (#6080). See
+	// Semantics.HeldExitWaivedForTheNextCommandOnly.
+	s.HeldExitWaivedForTheNextCommandOnly = interp.No
 	s.HashNameSearchesAgain = interp.No
 	s.HashedRelativePathReportedUnderDot = interp.No
 	s.CommandTableHoldsOnlyAbsoluteEntries = interp.Yes

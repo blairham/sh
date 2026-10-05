@@ -168,6 +168,7 @@ func biJobs(r *Runner, _ context.Context, args []string) int {
 	// flag rather than the one `exit` reads: a listing suppresses the warning
 	// for the line after it, and not for a line after that.
 	r.tellingOfJobsAtExit = true
+	r.exitWaived = true
 	// And a listing reads it too. See Runner.settleFrozenMarks.
 	r.settleFrozenMarks()
 	form, code := r.jobsForm(opts)

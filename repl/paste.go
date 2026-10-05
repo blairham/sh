@@ -123,13 +123,13 @@ func (e *editor) readPaste() ([]rune, keyRead) {
 // is pressed, at which point both run; a `\r\n` draws on three, because each of
 // the two is a break of its own rather than one line ending spelled twice.
 //
-// Every other control character is dropped. Real bash keeps them and draws them
-// in caret notation — a pasted tab is `^I` on the screen and a tab in the line —
-// and this editor has no caret notation: it refuses a typed control character
-// for the same reason, that a raw byte in the line is something nobody typed and
-// hands the parser a word it cannot have meant. Drawing them as themselves is
-// worse than dropping them, because a tab moves the cursor to the next tab stop
-// and every column this package counts after it is wrong.
+// Every other control character is kept, and drawn: a tab as the spaces to
+// its stop and the rest as carets — measured 2026-10-05 against bash 5.3 and
+// zsh 5.9.2, a paste of `a\tb\x01c\x1b[31md\x7fe` is `a    b^Ac^[[31md^?e` on
+// the screen in both and the same bytes in the line. This editor dropped
+// them while it had no way to draw one (#5972); see controlglyph.go. An
+// escape is kept with the rest, and cannot drive the terminal, because it is
+// drawn as `^[` and never sent.
 func pastedRunes(raw []byte) []rune {
 	out := make([]rune, 0, len(raw))
 	for i := 0; i < len(raw); {
@@ -138,8 +138,6 @@ func pastedRunes(raw []byte) []rune {
 		switch {
 		case r == '\r' || r == '\n':
 			out = append(out, '\n')
-		case r < 0x20 || r == del:
-			continue
 		case r == utf8.RuneError && size == 1:
 			// A byte that is not part of any character. A terminal can deliver
 			// one when a paste is cut in the middle of a rune by something

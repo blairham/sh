@@ -208,8 +208,12 @@ type editor struct {
 	noTerminal     bool
 	pastedStyle    string
 	pastedStyleEnd string
-	pastedFrom     int
-	pastedTo       int
+	// controlStyle and controlStyleEnd are what a control character's caret
+	// is drawn between. See EditorStyle.ControlCharacterStyle.
+	controlStyle    string
+	controlStyleEnd string
+	pastedFrom      int
+	pastedTo        int
 
 	// killed is what the last kill took off the line, and ^Y puts it back.
 	// Kills that follow one another go into it together, which is what
@@ -827,6 +831,15 @@ func (e *editor) keyLoop(prompt drawnPrompt) (string, error) {
 				}
 				continue
 			}
+			if b.Widget == WidgetSelfInsert {
+				// A key bound to self-insert types itself, whatever it is:
+				// measured 2026-10-05 against zsh 5.9.2, `bindkey '^T'
+				// self-insert` puts `^T` in the line. The character came from
+				// the binding's own keys rather than from the typing path,
+				// which is the only one that set it, so this typed whatever
+				// was typed before it (#5972).
+				e.adoptKeys(string(e.keyBytes))
+			}
 			e.runWidget(b, prompt)
 			continue
 		}
@@ -1409,7 +1422,7 @@ func (e *editor) redraw(prompt drawnPrompt) {
 		b.WriteString(prompt.text)
 		styled := e.styled()
 		shown := e.displayed()
-		b.WriteString(onScreen(styled))
+		b.WriteString(e.spell(styled, prompt.cells, 0))
 		// Cells to come back over, not characters: the cursor moves by
 		// columns, and one `日` to the right of it is two of them. Over the
 		// *displayed* text, so a postdisplay is come back over too — measured,
@@ -1446,7 +1459,7 @@ func (e *editor) redraw(prompt drawnPrompt) {
 	b.WriteString("\x1b[J")
 	b.WriteString(prompt.text)
 	styled := e.styled()
-	b.WriteString(onScreen(styled))
+	b.WriteString(e.spell(styled, prompt.cells, cols))
 
 	// After the line and before the cursor is placed, because it is drawn
 	// from where the line ends and the placement below counts from column
@@ -1611,7 +1624,10 @@ func (e *editor) echoedTail(prompt drawnPrompt) (string, bool) {
 	if !strings.HasPrefix(styled, e.drawn.styled) {
 		return "", false
 	}
-	return onScreen(styled[len(e.drawn.styled):]), true
+	// From where the last draw ended, which with no terminal is the prompt
+	// and everything drawn after it on one unbroken row.
+	_, col := spellFrom(e.drawn.styled, e.drawn.cells, 0, "", "")
+	return e.spell(styled[len(e.drawn.styled):], col, 0), true
 }
 
 // recordDrawn says what is on the screen after a draw that did not go through
@@ -1678,13 +1694,23 @@ func displayWidth(s string) int {
 
 // cells is how many columns the line takes on the screen.
 //
-// Separate from displayWidth because a line carries no escape sequences — the
-// editor never puts a control character in it — so there is nothing to skip,
-// and this runs on every keystroke.
+// Separate from displayWidth because a line carries no escape sequences, so
+// there is nothing to skip, and this runs on every keystroke. A control
+// character in it is drawn the way controlglyph.go says: a caret in two cells,
+// and a tab to the next stop counted from the start of this text — which is
+// the answer for the one question asked of a whole line, how much room it
+// takes on a row it starts.
 func cells(rs []rune) int {
 	n := 0
 	for _, r := range rs {
-		n += runeWidth(r)
+		switch {
+		case r == '\t':
+			n += tabWidth(n, 0)
+		case isControl(r):
+			n += 2
+		default:
+			n += runeWidth(r)
+		}
 	}
 	return n
 }
@@ -1721,6 +1747,25 @@ func place(promptWidth int, line []rune, pos, cols int) (curRow, curCol, endRow,
 			// row below, and a draw spells it `\r\n` for exactly that
 			// reason — see onScreen.
 			row, col = row+1, 0
+			continue
+		}
+		if isControl(r) {
+			// Drawn by controlglyph.go, which is where the measurements
+			// are: a tab runs to its stop and never past the edge, and a
+			// caret is two cells that wrap between them like any two
+			// characters would.
+			if col >= cols {
+				row, col = row+1, 0
+			}
+			if r == '\t' {
+				col += tabWidth(col, cols)
+				continue
+			}
+			col++
+			if col >= cols {
+				row, col = row+1, 0
+			}
+			col++
 			continue
 		}
 		w := runeWidth(r)
@@ -1832,6 +1877,12 @@ func (e *editor) write(s string) {
 		s = transformTermcapSequences(s, e.transformTermcap)
 	}
 	_, _ = io.WriteString(e.out, s)
+}
+
+// spell is the styled line as the terminal has to be given it, from column
+// col of a row cols wide. See controlglyph.go.
+func (e *editor) spell(styled string, col, cols int) string {
+	return spell(styled, col, cols, e.controlStyle, e.controlStyleEnd)
 }
 
 // newline is how this session ends a row it writes itself.

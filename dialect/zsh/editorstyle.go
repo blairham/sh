@@ -50,6 +50,11 @@ func EditorStyle() repl.EditorStyle {
 		PrefixArgument:     true,
 		PastedTextStyle:    "\x1b[7m",
 		PastedTextStyleEnd: "\x1b[27m",
+		// And a control character in the line is a caret in standout, which
+		// is this shell's `zle_highlight` default for `special`. Measured;
+		// see repl.EditorStyle.ControlCharacterStyle (#5972).
+		ControlCharacterStyle:    "\x1b[7m",
+		ControlCharacterStyleEnd: "\x1b[27m",
 		// What this shell calls typing, so a widget put in front of it actually
 		// intercepts a printable key. See repl's EditorStyle.SelfInsertWidget
 		// and #2485.

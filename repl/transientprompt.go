@@ -82,7 +82,7 @@ func (e *editor) trimPrompt(prompt drawnPrompt) drawnPrompt {
 	// replaced is every row the old prompt and the line occupied.
 	b.WriteString("\x1b[J")
 	b.WriteString(text)
-	b.WriteString(onScreen(e.styled()))
+	b.WriteString(e.spell(e.styled(), short.cells, e.cols()))
 
 	// The cursor is at the end of the line now rather than at the editing
 	// position, because the whole line was just written and nothing moved

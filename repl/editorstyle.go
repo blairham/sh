@@ -170,6 +170,19 @@ type EditorStyle struct {
 	PastedTextStyle    string
 	PastedTextStyleEnd string
 
+	// ControlCharacterStyle is written before the caret a control character
+	// in the line is drawn as — `^A`, `^?`, `^[` — and ControlCharacterStyleEnd
+	// after it. Empty draws the caret like any other text, which is bash.
+	//
+	// Measured 2026-10-05 through a pseudo-terminal on a paste of
+	// `a\tb\x01c\x1b[31md\x7fe`: zsh 5.9.2 draws each caret as `\e[7m^A\e[27m`,
+	// standout and its end, which is its `zle_highlight` default for the
+	// `special` context, and bash 5.3 draws the same carets plain. Both draw
+	// the tab as spaces to its stop, so that half is not a dialect's. See
+	// controlglyph.go.
+	ControlCharacterStyle    string
+	ControlCharacterStyleEnd string
+
 	// ListQueryEchoesTheKey writes the key that answered the question back
 	// to the screen. zsh does; bash does not.
 	ListQueryEchoesTheKey bool

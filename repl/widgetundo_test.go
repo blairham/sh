@@ -85,7 +85,9 @@ func TestASelfInsertTypesTheKeysTheActionRead(t *testing.T) {
 		}
 		return in, true
 	}, "\a\n")
-	if want := "aé\nb"; got != want {
+	// The tab is typed too: a control character types itself, drawn as the
+	// spaces to its stop — measured against zsh 5.9.2 (#5972).
+	if want := "aé\n\tb"; got != want {
 		t.Errorf("typed %q, want %q", got, want)
 	}
 }

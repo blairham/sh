@@ -248,7 +248,7 @@ func TestThePasteMarkComesOffOnTheNextKeystroke(t *testing.T) {
 // What of a paste belongs in the line.
 //
 // Line endings become a newline apiece, and every other control character is
-// dropped — see pastedRunes for the measurement behind each. This is the unit
+// kept — see pastedRunes for the measurement behind each. This is the unit
 // that says what happens to the bytes; the tests above say what happens to the
 // line.
 func TestWhatOfAPasteBelongsInTheLine(t *testing.T) {
@@ -256,10 +256,10 @@ func TestWhatOfAPasteBelongsInTheLine(t *testing.T) {
 		{"plain text is itself", "echo hi", "echo hi"},
 		{"a carriage return is a newline", "a\rb", "a\nb"},
 		{"a line feed is a newline", "a\nb", "a\nb"},
-		{"a tab is dropped, having no caret notation to draw it in", "a\tb", "ab"},
-		{"an escape is dropped, so a paste cannot drive the terminal", "a\x1b[31mb", "a[31mb"},
-		{"a control character is dropped", "a\x01b", "ab"},
-		{"a delete is dropped", "a\x7fb", "ab"},
+		{"a tab is kept", "a\tb", "a\tb"},
+		{"an escape is kept, and drawn as a caret rather than sent", "a\x1b[31mb", "a\x1b[31mb"},
+		{"a control character is kept", "a\x01b", "a\x01b"},
+		{"a delete is kept", "a\x7fb", "a\x7fb"},
 		{"characters outside ASCII are kept whole", "echo 日本語", "echo 日本語"},
 		{"a byte that is no character is dropped", "a\xffb", "ab"},
 	} {

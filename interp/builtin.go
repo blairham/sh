@@ -8815,6 +8815,8 @@ func (r *Runner) readonlyScopesItsOperands() bool {
 // modulo 256 because that is all a process can carry — `exit 300` is 44 in
 // every shell measured.
 func biExit(r *Runner, ctx context.Context, args []string) int {
+	// What a logout file will read in `$?`, before anything here moves it.
+	r.exitFoundStatus = r.status
 	// Asked before the operand is read, because the shell is not going
 	// anywhere: `exit 3` with a job the shell is checking for stays, and the
 	// 3 is never used.

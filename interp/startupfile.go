@@ -90,7 +90,13 @@ func (r *Runner) RunStartupFile(ctx context.Context, path, src string, failed fu
 	defer r.popFrame()
 	// And what the shell is inside while it reads it, which is the file and
 	// not yet the program: see EvalContextStartupFile.
-	defer r.enterEvalContext(EvalContextStartupFile)()
+	// A logout file read from inside an `exit` is inside the program still,
+	// so it is an ordinary file on top of the route's word (#5996).
+	within := EvalContextStartupFile
+	if r.logoutByExit {
+		within = EvalContextSourcedFile
+	}
+	defer r.enterEvalContext(within)()
 	if failed == nil {
 		failed = func(err error, _ bool) int {
 			r.errf("%s", r.diag().ParseDiagnostic(path, "", err, src))

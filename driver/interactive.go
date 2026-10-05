@@ -209,6 +209,13 @@ func (sh Shell) session(argv []string, in source) int {
 	// for the same reason the script routes read it there: a session ended
 	// by `exit` — which is what ^D is at a prompt — is a login shell leaving.
 	sh.logoutFile(r, in)
+	if r.Exited() {
+		// An `exit` in the logout file names the status the session leaves
+		// with, at the end of input as much as after an `exit`: measured on
+		// zsh 5.9.2, a `.zlogout` of `exit 5` makes both leave 5 (#5996).
+		// Where the file said nothing, this is the status `exit` named.
+		status = r.ExitStatus()
+	}
 	// The EXIT trap fires when the session ends, the same as at the end of a
 	// script — `trap 'echo bye' EXIT` typed at the prompt has to mean
 	// something.

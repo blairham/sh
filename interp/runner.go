@@ -1697,6 +1697,12 @@ type Runner struct {
 	// cleanup halves it unwinds through, which is what a site that has not
 	// thought about it should get.
 	errexitStopped bool
+
+	// exitFoundStatus is the status the last `exit` found, and logoutByExit
+	// says the logout file being read is read from inside one. See
+	// Runner.ExitFoundStatus and Runner.ReadingLogoutAfterExit.
+	exitFoundStatus int
+	logoutByExit    bool
 	// exitRanOutsideAFile says the controlExit being carried came from
 	// `exit` running somewhere other than in a file this shell was reading,
 	// which is the question a front end asks on its way out — see

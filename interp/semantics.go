@@ -22218,7 +22218,63 @@ type Semantics struct {
 	// shell already had stands.
 	//
 	// Empty — every other dialect — means there is no such file.
+	//
+	// When it is read is LogoutFileReadWhen, which is bash's rule above at
+	// its zero value and not zsh's.
 	LogoutFile string
+
+	// LogoutFileReadWhen is what reaches LogoutFile: the `exit` builtin in a
+	// login shell (bash, the zero value), or the end of an interactive login
+	// shell however it ends (zsh).
+	//
+	// Measured 2026-10-05 on zsh 5.9.2, `env -u FPATH`, a scratch `HOME` and
+	// `ZDOTDIR` holding only `.zlogout` printing `$?` and
+	// `$zsh_eval_context`, standard input a pipe:
+	//
+	//	zsh -l -i, typed exit / exit 3 / logout 4   read: toplevel file
+	//	zsh -l -i, end of input                      read: file
+	//	zsh -l -i -c :                               read: file
+	//	zsh -l -i -c exit, or exit inside a function read: cmdarg file
+	//	zsh -l -i -c 'echo )', or ${unset?boom}      read: file
+	//	zsh -l -i -c 'set -e; false'                 not read
+	//	zsh -l -c exit, zsh -l -c :                  not read: not interactive
+	//	zsh -i, typed exit                           not read: not a login shell
+	//	zsh -f -l -i, or `unsetopt rcs` first        not read — see
+	//	                                             StartupFilesOptionName
+	//
+	// `$?` inside the file is the status the last command left before the
+	// `exit`, as in bash: `false; exit 3` reads 1 there and the shell still
+	// leaves with 3. An `exit 5` in the file is the status the shell leaves
+	// with, by `exit` and by end of input alike (#5996).
+	LogoutFileReadWhen LogoutRule
+
+	// StartupFilesOptionName names the option that says whether this shell
+	// reads its startup files, consulted afresh before each one — so a file
+	// that turns it off stops the files after it, the logout file included.
+	// zsh's `rcs`.
+	//
+	// Measured 2026-10-05 on zsh 5.9.2 through `-l -i -c` with `PATH` at
+	// `/usr/bin:/bin`: `unsetopt RCS` in `~/.zshenv` reads none of
+	// `/etc/zprofile` (no `path_helper` entries), `~/.zprofile`, `/etc/zshrc`
+	// (`SAVEHIST` unset) or `~/.zshrc`, and `unsetopt rcs` typed at the
+	// prompt reads no `~/.zlogout` on the way out. Empty means a shell
+	// with no such option, which reads its files by the invocation alone
+	// (#5905).
+	StartupFilesOptionName string
+
+	// SystemStartupFilesOptionName is StartupFilesOptionName for the files in
+	// the machine's own directory alone: zsh's `globalrcs`, which `-d` turns
+	// off at the invocation. Consulted before each system file but the
+	// unconditional one — the manual's rule, and nothing on this machine can
+	// show that slot read.
+	//
+	// Measured the same way, both directions: `unsetopt GLOBAL_RCS` in
+	// `~/.zshenv` reads neither `/etc/zprofile` nor `/etc/zshrc` and still
+	// reads the person's files, and `setopt GLOBAL_RCS` in the `~/.zshenv`
+	// of a `zsh -d` reads both. Turned off in `~/.zshenv` and back on in
+	// `~/.zprofile`, `/etc/zprofile` is skipped and `/etc/zshrc` read, so it
+	// is asked file by file rather than once (#5905).
+	SystemStartupFilesOptionName string
 
 	// BuiltinSyntaxErrorFatal ends a non-interactive shell when text handed
 	// to a special builtin does not parse — `eval "if"`, or a sourced file
@@ -31264,7 +31320,29 @@ type SystemStartupFiles struct {
 	// point the whole search at a directory it made, which a corpus row invoking
 	// a real shell cannot (#2059).
 	LateLogin string
+
+	// Logout is the system-wide counterpart of LogoutFile, read after it.
+	//
+	// zsh alone names one, `zlogout`, and both the name and the order are the
+	// manual's: there is no `/etc/zlogout` on the machine this was measured
+	// on. When it is read is the person's file's own rule,
+	// Semantics.LogoutFileReadWhen (#5996).
+	Logout string
 }
+
+// LogoutRule is what reaches a login shell's logout file. See
+// Semantics.LogoutFileReadWhen.
+type LogoutRule uint8
+
+const (
+	// LogoutAfterExit reads it when the `exit` builtin ends a login shell,
+	// interactive or not, and not when the program runs out: bash.
+	LogoutAfterExit LogoutRule = iota
+	// LogoutWhenAnInteractiveLoginEnds reads it when an interactive login
+	// shell ends by `exit`, by the end of its input or of its command string,
+	// or over an error, and not when `set -e` ends it: zsh.
+	LogoutWhenAnInteractiveLoginEnds
+)
 
 // StartupFileOptions are the invocation options that change which startup
 // files a shell reads: the escape hatches from a startup file that is wrong.

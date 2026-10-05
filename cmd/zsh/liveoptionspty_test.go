@@ -57,11 +57,14 @@ func TestEditorOptionsSetAtThePromptReachTheEditor(t *testing.T) {
 		t.Fatalf("before any unsetopt, unfinished output should be marked:\n%q", got)
 	}
 
-	run("unsetopt autolist beep promptsp\r")
+	run("unsetopt autolist beep\r")
 	if got := run("ls aa\t"); strings.Contains(got, "\a") || strings.Contains(got, "aa1  aa2") {
 		t.Errorf("after unsetopt autolist beep, the Tab rang or listed:\n%q", got)
 	}
-	if got := run("printf y\r"); strings.Contains(got, "%") {
+	// On the same line as the output, which is what says the prompt reads
+	// the option rather than the next key: measured, `unsetopt promptsp;
+	// printf y` already draws no mark.
+	if got := run("unsetopt promptsp; printf y\r"); strings.Contains(got, "%") {
 		t.Errorf("after unsetopt promptsp, unfinished output was marked:\n%q", got)
 	}
 	// PROMPT_CR is the outer of the pair: with it set the prompt still
@@ -82,8 +85,7 @@ func TestEditorOptionsSetAtThePromptReachTheEditor(t *testing.T) {
 	if got := beforePrompt(run("printf 'Z%s' Q\r"), "ZQ"); !strings.Contains(got, "\r") {
 		t.Fatalf("with promptcr set, a return should come before the prompt: %q", got)
 	}
-	run("unsetopt promptcr\r")
-	if got := beforePrompt(run("printf 'W%s' Q\r"), "WQ"); strings.Contains(got, "\r") {
+	if got := beforePrompt(run("unsetopt promptcr; printf 'W%s' Q\r"), "WQ"); strings.Contains(got, "\r") {
 		t.Errorf("after unsetopt promptcr, a return still came before the prompt: %q", got)
 	}
 }

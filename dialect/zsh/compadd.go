@@ -423,7 +423,7 @@ func (cs *completionState) add(
 			if row == "" && o.files {
 				row = fileRow(r, ctx, o, candidate)
 			}
-			cs.offer(inserted, o, row, group, open, slash)
+			cs.offer(inserted, candidate, o, row, group, open, slash)
 			offered++
 		}
 	}
@@ -483,7 +483,7 @@ func strikeUnmatched(values []string, kept []bool) []string {
 // Duplicates are dropped rather than offered twice, which is what a listing
 // with one entry per name needs and what makes a second Tab fill in from a
 // set rather than from a bag.
-func (cs *completionState) offer(subject string, o compaddOptions, row string, group repl.Group, open, slash bool) {
+func (cs *completionState) offer(subject, candidate string, o compaddOptions, row string, group repl.Group, open, slash bool) {
 	body := cs.iprefix + o.prefix + subject
 	word := cs.c.Escape(body) + o.suffix
 	if o.raw {
@@ -492,12 +492,41 @@ func (cs *completionState) offer(subject string, o compaddOptions, row string, g
 	if slash {
 		word += "/"
 	}
+	if row == "" {
+		if listed := cs.plainRow(candidate, o); listed != word {
+			row = listed
+		}
+	}
 	for _, have := range cs.matches {
 		if have.Word == word {
 			return
 		}
 	}
 	cs.matches = append(cs.matches, repl.Candidate{Word: word, Display: row, Group: group, Open: open})
+}
+
+// plainRow is how a listing draws a candidate that brought no row of its own:
+// the candidate alone, quoted the way it would be inserted, and nothing that
+// is on the line around it (#6187).
+//
+// The word offer builds is the whole replacement, so drawing that instead puts
+// in front of every row whatever `compset` moved into `IPREFIX`, and `-P`'s
+// and `-p`'s prefixes and `-S`'s suffix around it. Measured 2026-10-05
+// through a pseudo-terminal against zsh 5.9.2, a `zle -C` widget listing two
+// matches:
+//
+//	compset -P '*='; compadd always auto    x --c=a    always  auto
+//	compadd -p qq always auto               x qqa      always  auto
+//	compadd -S ss always auto               x a        always  auto
+//	compadd 'a b' 'a d'                     x a\       a\ b  a\ d
+//
+// A row that would be the word itself is left empty, so that the editor
+// draws the word the way it draws every other plain candidate.
+func (cs *completionState) plainRow(candidate string, o compaddOptions) string {
+	if o.raw {
+		return candidate
+	}
+	return cs.c.Escape(candidate)
 }
 
 // fileSuffix is what a lone match is finished with, where it is not the

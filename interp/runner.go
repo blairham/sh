@@ -1717,6 +1717,11 @@ type Runner struct {
 	// names one where the shell's name goes. See Runner.name.
 	startupFileName string
 	logoutByExit    bool
+	// leavingContexts is what the shell was inside as an `exit` or a hangup
+	// stopped it, and leavingCaptured says one did. See
+	// Runner.captureLeavingContexts.
+	leavingContexts []EvalContext
+	leavingCaptured bool
 	// exitRanOutsideAFile says the controlExit being carried came from
 	// `exit` running somewhere other than in a file this shell was reading,
 	// which is the question a front end asks on its way out — see

@@ -5,6 +5,7 @@ package interp
 
 import (
 	"context"
+	"slices"
 
 	"github.com/blairham/sh/syntax"
 )
@@ -105,11 +106,16 @@ func (r *Runner) RunStartupFile(ctx context.Context, path, src string, failed fu
 	// not yet the program: see EvalContextStartupFile.
 	// A logout file read from inside an `exit` is inside the program still,
 	// so it is an ordinary file on top of the route's word (#5996).
-	within := EvalContextStartupFile
 	if r.logoutByExit {
-		within = EvalContextSourcedFile
+		// And on top of what the shell was inside when it stopped, which
+		// zsh reads the file from the middle of — see
+		// Runner.captureLeavingContexts (#6005).
+		saved := r.evalContexts
+		r.evalContexts = append(slices.Clone(r.leavingContexts), EvalContextSourcedFile)
+		defer func() { r.evalContexts = saved }()
+	} else {
+		defer r.enterEvalContext(EvalContextStartupFile)()
 	}
-	defer r.enterEvalContext(within)()
 	if failed == nil {
 		failed = func(err error, _ bool) int {
 			r.errf("%s", r.diag().ParseDiagnostic(path, "", err, src))

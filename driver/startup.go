@@ -415,7 +415,7 @@ func (sh Shell) logoutFile(r *interp.Runner, in source) {
 		// reads 1 in the file and the shell still leaves with 3 (#5996).
 		r.SetExitStatus(r.ExitFoundStatus())
 	}
-	r.ReadingLogoutAfterExit(byExit)
+	r.ReadingLogoutAfterExit(r.LeftFromInside())
 	sh.sourceFile(r, in, sh.startupPath(r, sh.Semantics.LogoutFile))
 	if !r.Exited() && sh.Semantics.SystemStartupFiles.Logout != "" {
 		// The machine's own after the person's, the manual's order.

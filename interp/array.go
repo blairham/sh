@@ -2878,7 +2878,7 @@ func (r *Runner) absentNameSubscriptBeforeTheFirstElement(e *syntax.ParamExpr, w
 // `typeset -A m` with no keys would look absent here and take the unset
 // answer.
 func (r *Runner) subscriptNameIsAbsent(e *syntax.ParamExpr) bool {
-	if _, ok := r.assocFor(e.Name); ok {
+	if ok := r.assocDeclared(e.Name); ok {
 		return false
 	}
 	_, _, ok := r.subscriptTarget(e)

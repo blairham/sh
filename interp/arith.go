@@ -1745,7 +1745,7 @@ func (r *Runner) settlePlaceIndex(p arithPlace) (arithPlace, error) {
 	if !p.subscripted || p.index == nil || p.flags != nil || p.empty {
 		return p, nil
 	}
-	if _, isTable := r.assocFor(p.name); isTable {
+	if isTable := r.assocDeclared(p.name); isTable {
 		return p, nil
 	}
 	n, err := r.arithSubscriptIndex(&syntax.ArithIndex{

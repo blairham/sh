@@ -325,6 +325,7 @@ func (c *Runner) ownTables(r *Runner) {
 	c.tableFrozenByKey = maps.Clone(r.tableFrozenByKey)
 	c.DynamicAssocs = maps.Clone(r.DynamicAssocs)
 	c.dynamicAssocElements = maps.Clone(r.dynamicAssocElements)
+	c.dynamicAssocKeys = maps.Clone(r.dynamicAssocKeys)
 	c.dynamicAssocWriters = maps.Clone(r.dynamicAssocWriters)
 	// And the emptying policy travels with the writer it is expressed
 	// through: a subshell that owned the writer while sharing this would

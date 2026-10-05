@@ -340,7 +340,7 @@ func (r *Runner) lineSubscriptValue(w *syntax.Word) (int, bool) {
 // A table is asked first because subscriptTarget would read one as its values
 // — the letter is nothing to a table, and neither is it to an array.
 func (r *Runner) subscriptTargetIsAString(e *syntax.ParamExpr) bool {
-	if _, isAssoc := r.assocFor(e.Name); isAssoc {
+	if isAssoc := r.assocDeclared(e.Name); isAssoc {
 		return false
 	}
 	_, scalar, held := r.subscriptTarget(e)

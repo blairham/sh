@@ -112,7 +112,7 @@ func (r *Runner) expandedKeyAsWritten(operand string) (key string, again, applie
 		// from one of its own.
 		return "", false, false
 	}
-	if _, keyed := r.assocFor(base); !keyed {
+	if keyed := r.assocDeclared(base); !keyed {
 		return "", false, false
 	}
 	if r.ask(r.sem().SubscriptIsAQuotingContext, "an array subscript being a quoting context") {

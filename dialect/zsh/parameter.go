@@ -116,6 +116,9 @@ func registerParameterModule(r *interp.Runner) {
 	// And the same table read one key at a time, which is what nearly every
 	// read of it is. See zshFunctionValue.
 	r.SetDynamicAssocElement("functions", zshFunctionValue)
+	// And its names alone, which is what a plugin manager snapshotting the
+	// function table around each plugin reads. See zshFunctionNames.
+	r.SetDynamicAssocKeys("functions", zshFunctionNames)
 	r.SetDynamicAssocWriter("functions", writeZshFunction)
 	hideModuleParameter(r, "functions")
 	r.SetDynamicAssoc("options", zshOptionsView)
@@ -547,6 +550,24 @@ func zshFunctionsView(r *interp.Runner) interp.AssocArray {
 		out[name] = interp.Scalar(body)
 	}
 	return out
+}
+
+// zshFunctionNames is `${(k)functions}`: the names zshFunctionsView yields,
+// without rendering a body to yield them.
+//
+// Every listed name is one of the view's keys. The view skips a name only
+// when the shell has no function by it, and the listing is drawn from the
+// same function table — so the two cannot part, and a test holds them to
+// that across a defined function, one waiting to be autoloaded and one the
+// prelude speaks for.
+//
+// The cost it removes was measured on the maintainer's real configuration
+// (powerlevel10k, zi, 31 plugins), 2026-10-05: zi's `.zi-diff-functions`
+// reads `${(qk)functions[@]}` around each plugin it loads, and each read
+// rendered every function body in the shell through the printer — about 8%
+// of the CPU of an interactive start, for six calls.
+func zshFunctionNames(r *interp.Runner) []string {
+	return r.ListedFuncNames()
 }
 
 // zshFunctionValue is `${functions[f]}`: the one key, without rendering the

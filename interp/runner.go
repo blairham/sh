@@ -1042,6 +1042,16 @@ type Runner struct {
 	// whole needs no second entry point. See SetDynamicAssocElement.
 	dynamicAssocElements map[string]func(*Runner, string) (string, bool)
 
+	// dynamicAssocKeys is the *keys-only* reading of a produced association:
+	// the third of the pair above, for the reads that substitute the names
+	// and never look at what they hold. `${(k)functions}` is the case that
+	// earned it — the whole-table producer renders a body per function, and
+	// a plugin manager that snapshots the function names around every plugin
+	// it loads asks for that list dozens of times a startup. Unexported and
+	// optional for the reasons dynamicAssocElements is. See
+	// SetDynamicAssocKeys.
+	dynamicAssocKeys map[string]func(*Runner) []string
+
 	// dynamicArrayWriters is what an assignment to a produced *array* does.
 	// Unexported for the reason dynamicAssocWriters is — nothing reads this
 	// table back — and the same failure is what makes it necessary: the
@@ -11226,7 +11236,7 @@ func (r *Runner) exportedCompound(name string) (string, bool) {
 		"an exported name holding a compound reaching a child at all") {
 		return "", true
 	}
-	if _, table := r.assocFor(name); table &&
+	if table := r.assocDeclared(name); table &&
 		!r.ask(r.sem().ExportedTableReachesAChild, "an exported keyed table reaching a child") {
 		// The one column that hands a child an array's first element hands
 		// it nothing for a table. Measured 2026-10-03 on ksh93u+: `typeset
@@ -14095,7 +14105,7 @@ func (r *Runner) nameIsAnArray(name string) bool {
 	if _, ok := r.DynamicArrays[name]; ok {
 		return true
 	}
-	_, ok := r.assocFor(name)
+	ok := r.assocDeclared(name)
 	return ok
 }
 

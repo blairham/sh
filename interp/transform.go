@@ -214,7 +214,7 @@ func (r *Runner) attributeLetters(name string) string {
 	if _, ok := r.Arrays[name]; ok && !r.removed[name] {
 		b.WriteByte('a')
 	}
-	if _, ok := r.assocFor(name); ok && !r.removed[name] {
+	if ok := r.assocDeclared(name); ok && !r.removed[name] {
 		b.WriteByte('A')
 	}
 	if r.integer[name] {

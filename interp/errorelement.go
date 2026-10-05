@@ -115,7 +115,7 @@ func (r *Runner) subscriptNamesTheBareElement(e *syntax.ParamExpr) bool {
 	if r.expandErr || r.ctl == controlExit {
 		return false
 	}
-	if _, isAssoc := r.assocFor(e.Name); isAssoc {
+	if isAssoc := r.assocDeclared(e.Name); isAssoc {
 		return false
 	}
 	text := r.subscriptAsWritten(e.Subscript())

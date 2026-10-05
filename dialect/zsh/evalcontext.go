@@ -40,6 +40,9 @@ import (
 //	. from -c                         cmdarg:file
 //	eval inside eval                  …:eval:eval
 //	a function inside a sourced file  toplevel:file:shfunc
+//	a startup file, on any route      file — the route's word is not under
+//	                                  it, since the program has not started
+//	                                  (measured 2026-10-05, #5885)
 //
 // # Loading a function is on the stack too, once
 //

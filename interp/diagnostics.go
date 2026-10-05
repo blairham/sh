@@ -8133,6 +8133,17 @@ type Diagnostics struct {
 	// and LeavingIsAlsoSaidOnTheseRoutes is what carries it.
 	LeavingAPromptSession string
 
+	// LeavingALoginSession is LeavingAPromptSession's word for a login shell,
+	// on every route that says that word. Empty is the same word either way.
+	//
+	// Measured 2026-10-04 against bash 5.3.20, no startup files: through a
+	// pseudo-terminal, `exit`, `exit 3`, `exit` with a job running and `^D`
+	// all write `logout` under `-l` and under an argv[0] of `-bash`, and
+	// `exit` without either; `-l -i -c exit` writes `logout` where `-i -c
+	// exit` writes `exit`. The `logout` builtin itself writes nothing on any
+	// of them — see Runner.WithholdLeavingWord.
+	LeavingALoginSession string
+
 	// LeavingIsAlsoSaidOnTheseRoutes names the invocation routes that write
 	// LeavingAPromptSession's word without ever drawing a prompt: an
 	// interactive shell reached by one of them says it as `exit` runs.

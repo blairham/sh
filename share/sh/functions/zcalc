@@ -1,0 +1,283 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# zcalc [ -erf ] [ -#base ] [ expression ... ]
+#
+# A calculator on the shell's arithmetic. Each line is an expression; its
+# result is printed and kept as $N, N the number in the prompt, and as ans.
+# A blank line, `q` or `:q` ends it. -e takes the arguments as the lines and
+# asks for nothing; otherwise the arguments are the first results. -f makes
+# every number floating point, -#base prints in that base, and -r is reverse
+# Polish notation, with the values on the array stack.
+#
+# Written from zshcontrib(1) and from what the installed shell answers, never
+# from its function files; docs/spec/functions.md has the measurements.
+# Measured beyond the manual:
+#
+#   * a result the arithmetic writes with no point in it goes through printf's
+#     %d, so an integer is itself and 1e+100 is the largest integer; one with
+#     nothing after the point (`4.`) is printed as it is, and any other
+#     through %g (`1.41421`);
+#   * :sci N, :fix N and :eng N are printf's %.Ng, %.Nf and %.NE, :raw is the
+#     number as it is stored (through %d too when it has no point), :norm
+#     goes back; each prints ans in
+#     the format it chose. Any other line starting with `:` is refused,
+#     except :local names and :f, :func or :function name body, which hands
+#     its words to zmathfuncdef;
+#   * a line that is one parameter, `$3` or `$name`, prints its value as it
+#     is stored and is not a result;
+#   * the arguments of a run without -e are evaluated, and their values are
+#     the first results;
+#   * a line ending in a backslash, or with more ( than ), is joined to the
+#     next one;
+#   * in RPN mode an operator or a math function takes its operands off the
+#     stack, the deeper one first; `=` duplicates the top, `pop` or `>` drops
+#     it, `>name` pops it into a local, `<name` or `<N` pushes a value, `xy`
+#     or `<>` swaps the top two; and -rN prints the top N of the stack, as
+#     `  N: value`, after each line.
+
+emulate -L zsh
+setopt extendedglob
+
+local _opt _format=norm _digits= _base= _rpn= _rpnshow= _express=
+local -a _pending
+integer _num=0
+
+while [[ $1 == -[erf#]* ]]; do
+	_opt=$1
+	shift
+	case $_opt in
+	(-e) _express=1 ;;
+	(-f) setopt forcefloat ;;
+	(-r) _rpn=1 ;;
+	(-r<->) _rpn=1 _rpnshow=${_opt#-r} ;;
+	(-\#<->) _base=${_opt#-\#} ;;
+	(*) print -u2 -r -- "zcalc: unknown option: $_opt"; return 1 ;;
+	esac
+done
+
+zmodload -i zsh/mathfunc 2>/dev/null
+local ZCALC_ACTIVE=${_rpn:+rpn}
+: ${ZCALC_ACTIVE:=1}
+local ans= _line _in _expr _result PI=3.14159265358979323846 E=2.71828182845904523536
+local -a stack psvar _results
+local -A _locals
+local ZCALCPROMPT=${ZCALCPROMPT-'%1v> '}
+
+local rc=${ZDOTDIR:-$HOME}/.zcalcrc
+if [[ -r $rc ]]; then
+	source $rc || return 1
+fi
+
+# _zcalc_show value — a value in the format in force.
+_zcalc_show() {
+	local value=$1
+	case $_format in
+	(sci) printf "%.${_digits}g\n" $value ;;
+	(fix) printf "%.${_digits}f\n" $value ;;
+	(eng) printf "%.${_digits}E\n" $value ;;
+	(raw)
+		if [[ $value == *[.\#]* ]]; then
+			print -r -- $value
+		else
+			printf "%d\n" $value
+		fi
+		;;
+	(*)
+		if [[ $value == *\#* || $value == (-|)<->. ]]; then
+			print -r -- $value
+		elif [[ $value != *.* ]]; then
+			printf "%d\n" $value
+		else
+			printf "%g\n" $value
+		fi
+		;;
+	esac
+}
+
+# _zcalc_eval expr — the value of an expression, into _result, with the
+# results so far as the positional parameters it can name.
+_zcalc_eval() {
+	local expr=$1
+	set -- "${_results[@]}"
+	if [[ -n $_base && $expr != \[\#* ]]; then
+		expr="[#$_base] $expr"
+	fi
+	# Through eval, so that an expression the arithmetic refuses ends that
+	# line and not the calculator.
+	eval "_result=\$(( $expr ))" || return 1
+}
+
+# The results so far are the positional parameters.
+if [[ -n $_express ]]; then
+	_pending=( "$@" )
+	set --
+else
+	_pending=( "$@" )
+	set --
+	for _line in $_pending; do
+		_zcalc_eval "$_line" || _result=
+		_results[++_num]=$_result
+		ans=$_result
+		print -nr -- "$_num> "
+		_zcalc_show $_result
+	done
+	_pending=()
+fi
+
+# _zcalc_read [ prefix ] — a line from the terminal, into _in, with the prompt
+# after the prefix: `...` on a line that carries on the last. The prompt is
+# expanded here as well as by vared, which does not expand its prompt yet
+# (#5965), and the caller copies _in out as a string, because vared leaves
+# what it edits an array of one element (#5966).
+_zcalc_read() {
+	_in=
+	vared -c -h -p "$1${(%)ZCALCPROMPT}" _in
+}
+
+# _zcalc_stack — the top of the stack, as -rN shows it.
+_zcalc_stack() {
+	integer n=${_rpnshow:-1} i
+	if [[ -z $_rpnshow ]]; then
+		_zcalc_show $stack[1]
+		return
+	fi
+	(( n > $#stack )) && n=$#stack
+	for (( i = n; i >= 1; i-- )); do
+		print -nr -- "  $i: "
+		_zcalc_show $stack[i]
+	done
+}
+
+local _ops='(+|-|\*|/|\*\*|\^|\||&)'
+while :; do
+	if [[ -n $_express ]]; then
+		(( $#_pending )) || break
+		_line=$_pending[1]
+		shift _pending
+	else
+		psvar=( $(( _num + 1 )) )
+		_zcalc_read || break
+		_line="$_in"
+	fi
+	# Joined to the next line while it ends in a backslash or leaves a ( open.
+	while [[ $_line == *\\ ]] || (( ${#_line//[^(]/} > ${#_line//[^)]/} )); do
+		_line=${_line%\\}
+		local _more
+		if [[ -n $_express ]]; then
+			(( $#_pending )) || break 2
+			_more=$_pending[1]
+			shift _pending
+		else
+			_zcalc_read ... || break 2
+			_more="$_in"
+		fi
+		_line+=$_more
+	done
+
+	[[ -z $_line || $_line == (q|:q) ]] && break
+
+	case $_line in
+	(:norm[[:blank:]]#) _format=norm; _zcalc_show $ans; continue ;;
+	(:raw[[:blank:]]#) _format=raw; _zcalc_show $ans; continue ;;
+	(:(sci|fix|eng)[[:blank:]]#<->[[:blank:]]#)
+		_format=${${_line#:}[1,3]}
+		_digits=${${_line//[^0-9]/}}
+		_zcalc_show $ans
+		continue
+		;;
+	(:local([[:blank:]]*|))
+		local -a _names
+		_names=( ${=${_line#:local}} )
+		local $_names
+		continue
+		;;
+	(:(f|func|function)[[:blank:]]##[^[:blank:]]*)
+		local -a _words
+		_words=( ${=${_line#:*[[:blank:]]}} )
+		autoload -Uz zmathfuncdef
+		zmathfuncdef $_words[1] ${_words[2,-1]:+"${_words[2,-1]}"}
+		continue
+		;;
+	(:*)
+		print -r -- "Unrecognised escape"
+		continue
+		;;
+	([[:blank:]]#\$([[:IDENT:]]##|\{[^}]##\})[[:blank:]]#)
+		# One parameter: its value as it is stored, and not a result.
+		set -- "${_results[@]}"
+		eval "print -r -- \"${${_line##[[:blank:]]#}%%[[:blank:]]#}\""
+		continue
+		;;
+	esac
+
+	if [[ -n $_rpn ]]; then
+		case $_line in
+		(${~_ops})
+			if (( $#stack < 2 )); then
+				print -u2 -r -- "$_line: not enough values on stack"
+				continue
+			fi
+			_zcalc_eval "${stack[2]} $_line ${stack[1]}" || continue
+			shift 2 stack
+			stack=( $_result $stack )
+			;;
+		(=)
+			(( $#stack )) || { print -u2 -r -- "=: not enough values on stack"; continue; }
+			stack=( $stack[1] $stack )
+			;;
+		(pop|\>)
+			(( $#stack )) || { print -u2 -r -- "$_line: not enough values on stack"; continue; }
+			_zcalc_show $stack[1]
+			shift stack
+			continue
+			;;
+		(\>[[:IDENT:]]##)
+			(( $#stack )) || { print -u2 -r -- "$_line: not enough values on stack"; continue; }
+			local ${_line#>}=$stack[1]
+			_zcalc_show $stack[1]
+			shift stack
+			continue
+			;;
+		(\<<->)
+			_zcalc_eval "\$${_line#<}" || continue
+			stack=( $_result $stack )
+			;;
+		(\<[[:IDENT:]]##)
+			_zcalc_eval "${_line#<}" || continue
+			stack=( $_result $stack )
+			;;
+		(xy|\<\>)
+			(( $#stack >= 2 )) || { print -u2 -r -- "$_line: not enough values on stack"; continue; }
+			stack[1,2]=( $stack[2] $stack[1] )
+			_zcalc_show $stack[2]
+			continue
+			;;
+		([[:alpha:]][[:alnum:]_]#)
+			if (( ${+functions[$_line]} )) || [[ $_line == (sqrt|sin|cos|tan|asin|acos|atan|exp|log|log10|log2|abs|ceil|floor|int|float|cbrt|sinh|cosh|tanh|gamma|lgamma|expm1|log1p|rint|trunc|erf|erfc|j0|j1|y0|y1|ilogb|logb|signgam) ]]; then
+				(( $#stack )) || { print -u2 -r -- "$_line: not enough values on stack"; continue; }
+				_zcalc_eval "$_line(${stack[1]})" || continue
+				shift stack
+				stack=( $_result $stack )
+			else
+				_zcalc_eval "$_line" || continue
+				stack=( $_result $stack )
+			fi
+			;;
+		(*)
+			_zcalc_eval "$_line" || continue
+			stack=( $_result $stack )
+			;;
+		esac
+		ans=$stack[1]
+		_results[++_num]=$ans
+		_zcalc_stack
+		continue
+	fi
+
+	_zcalc_eval "$_line" || continue
+	ans=$_result
+	_results[++_num]=$ans
+	_zcalc_show $ans
+done
+return 0

@@ -1,0 +1,58 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# zmathfuncdef [ name [ body ] ]
+#
+# Defines a math function from an expression: `zmathfuncdef sq '$1*$1'`, then
+# $(( sq(4) )). The body names its arguments $1, $2, ... and an optional one
+# as ${N:-default}; the shell function behind it is zsh_math_func_<name>.
+# With a name alone the function is removed, and with nothing the math
+# functions defined are listed in a form that defines them again.
+#
+# Written from zshcontrib(1) and from what the installed shell answers, never
+# from its function files; docs/spec/functions.md has the measurements.
+# Measured beyond the manual, how many arguments a body takes:
+#
+#   * the mandatory ones run from $1 for as long as each number is there,
+#     written $N or ${N} — `$3` alone takes none, and `$10` is not `$1`;
+#   * the optional ones carry on from there, for as long as each next number
+#     is written ${N:-...}.
+
+emulate -L zsh
+setopt extendedglob
+
+if (( $# > 2 )); then
+	print -u2 -r -- "zmathfuncdef: takes a name and a body, a name, or nothing"
+	return 1
+fi
+
+if (( $# == 0 )); then
+	local line impl
+	functions -M | while read -r line; do
+		impl=${line##* }
+		(( ${+functions[$impl]} )) && functions -- $impl
+		print -r -- $line
+	done
+	return 0
+fi
+
+local name=$1 impl=zsh_math_func_$1
+
+if (( $# == 1 )); then
+	functions +M -- $name 2>/dev/null
+	unfunction -- $impl
+	return 0
+fi
+
+local body=$2
+integer min=0 max
+while [[ $body == *\$$(( min + 1 ))([^0-9]*|) || $body == *\$\{$(( min + 1 ))\}* ]]; do
+	(( min++ ))
+done
+max=min
+while [[ $body == *\$\{$(( max + 1 )):-* ]]; do
+	(( max++ ))
+done
+
+functions -M -- $name $min $max $impl || return 1
+eval "$impl() { (( $body )) || : }"

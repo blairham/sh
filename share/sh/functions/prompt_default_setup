@@ -1,0 +1,12 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# prompt_default_setup — the `default` prompt theme: the prompts a shell
+# started with no startup files would have. Measured against zsh 5.9.2: PS1
+# `%m%# `, PS2 `%_> `, PS3 `?# `, PS4 `+%N:%i> `, and no right-hand prompts.
+
+PS1='%m%# '
+PS2='%_> '
+PS3='?# '
+PS4='+%N:%i> '
+unset RPS1 RPS2

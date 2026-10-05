@@ -1,0 +1,32 @@
+# promptinit against zsh 5.9.2's own copy: each row is a call and what the run
+# printed, standard error on the same pipe, each newline written `~`, after
+# `autoload -Uz promptinit add-zsh-hook; promptinit`, with the themes
+# TestPromptinitAnswersWhatZshAnswers writes first on $fpath. Measured 2026-10-04
+# with /opt/homebrew/bin/zsh -f, PATH=/usr/bin:/bin, a HOME that does not exist
+# and standard input on the null device. Rows whose text names a
+# line of zsh's function file are left out.
+prompt tiny; print -r -- "$PS1|$RPS1|$prompt_theme|${(k)functions[prompt_tiny_precmd]}"; print -r -- ${precmd_functions}; [[ -o promptsubst ]] && print subst	tiny> |[r]|tiny|prompt_tiny_precmd~prompt_tiny_precmd~subst~
+prompt tiny x; print -r -- "$PS1|$prompt_theme"	tiny-x> |tiny x~
+prompt tiny; prompt zap; print -r -- "$PS1|$RPS1|${precmd_functions}|$prompt_theme"; [[ -o promptbang ]] && print bang; [[ -o promptsubst ]] || print nosubst; [[ -o promptcr ]] || print nocr; [[ -o promptpercent ]] || print nopercent	tiny-cleanup~zap> |[r]||zap~bang~nosubst~nocr~nopercent~
+PS1='orig> '; RPS1=r0; prompt zap; prompt restore; print -r -- "$PS1|$RPS1|$prompt_theme"; [[ -o promptbang ]] || print nobang	orig> |r0|restore~nobang~
+PS1='orig> '; prompt tiny; prompt zap; prompt restore; print -r -- "$PS1|$RPS1|${precmd_functions}|$prompt_theme"	tiny-cleanup~orig> |||restore~
+prompt off; print -r -- "${(q)PS1}|${(q)PS2}|${(q)PS3}|${(q)PS4}|${+RPS1}|$prompt_theme"	%\#\ |\>\ |\?\#\ |+\>\ |0|off~
+prompt default; print -r -- "${(q)PS1}|${(q)PS2}|${(q)PS3}|${(q)PS4}|${+RPS1}|$prompt_theme"	%m%\#\ |%_\>\ |\?\#\ |+%N:%i\>\ |0|default~
+RPS1=x; prompt off; print -r -- "${+RPS1}${+RPROMPT}"	00~
+prompt nosuch >/dev/null; print st=$?; print -r -- "$prompt_theme"	st=0~~
+prompt -c; print st=$?	Current prompt is not a theme.~st=0~
+prompt tiny a b; prompt -c	Current prompt theme with parameters is:~  tiny a b~
+prompt -h tiny; print st=$?	Help for tiny theme:~~tiny: help text~~Type `prompt -p tiny' to preview the theme, `prompt tiny'~to try it out, and `prompt -s tiny' to use it in future sessions.~st=0~
+prompt -h zap; print st=$?	No help available for zap theme.~~Type `prompt -p zap' to preview the theme, `prompt zap'~to try it out, and `prompt -s zap' to use it in future sessions.~st=0~
+prompt -p tiny 2>&1 | cat -v	^[[39m^[[49m~tiny preview ~^[[39m^[[49m~
+print -r -- ${prompt_themes[(r)tiny]} ${prompt_themes[(r)zap]} ${prompt_themes[(r)off]} ${prompt_themes[(r)restore]} ${prompt_themes[(r)default]}	tiny zap off restore default~
+prompt tiny; prompt off; print -r -- "${precmd_functions}"	tiny-cleanup~~
+setopt promptbang; prompt off; [[ -o promptbang ]] && print bang || print nobang	nobang~
+unsetopt promptsubst; prompt tiny; prompt restore; [[ -o promptsubst ]] && print subst || print nosubst	tiny-cleanup~nosubst~
+PS1='o> '; prompt -h loud; print -r -- "after: $PS1|$precmd_functions|${+functions[prompt_loud_help]}"	file body runs prompt_loud_setup~setup runs ~Help for loud theme:~~loud help, PS1=loud> ~~Type `prompt -p loud' to preview the theme, `prompt loud'~to try it out, and `prompt -s loud' to use it in future sessions.~after: o> ||0~
+PS1='o> '; prompt -p loud | cat -v; print -r -- "after: $PS1|$precmd_functions"	^[[39m^[[49m~file body runs prompt_loud_setup~setup runs ~loud theme:~setup runs ~^Mloud> command arg1 arg2 ... argn~^[[39m^[[49m~after: o> |~
+prompt -p zap | cat -v	^[[39m^[[49m~zap theme:~zap> command arg1 arg2 ... argn~^[[39m^[[49m~
+prompt -p zap tiny | cat -v	^[[39m^[[49m~zap theme:~zap> command arg1 arg2 ... argn~^[[39m^[[49m~tiny preview ~^[[39m^[[49m~
+prompt -p nosuch | cat -v	^[[39m^[[49m~Unknown theme: nosuch~^[[39m^[[49m~
+prompt -c	Current prompt is not a theme.~
+prompt -p nosuch zap | cat -v	^[[39m^[[49m~Unknown theme: nosuch~^[[39m^[[49m~zap theme:~zap> command arg1 arg2 ... argn~^[[39m^[[49m~

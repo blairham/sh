@@ -1,0 +1,237 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# promptinit — sets up prompt themes, and defines the prompt command that
+# selects one:
+#
+#   autoload -Uz promptinit
+#   promptinit
+#   prompt off
+#
+# A theme is a function prompt_<name>_setup, found as a file of that name on
+# $fpath; promptinit autoloads every one it finds and lists the names in
+# prompt_themes. This shell ships the three utility themes, off, default and
+# restore, as the files prompt_off_setup, prompt_default_setup and
+# prompt_restore_setup; other themes are files a person or a package puts on
+# $fpath.
+#
+# Written from zshcontrib(1) and from what the installed shell answers, never
+# from its function files; docs/spec/functions.md has the measurements.
+# Measured beyond the manual:
+#
+#   * prompt_themes is a unique array, the themes in $fpath order and, within
+#     one directory, in name order;
+#   * before a theme's setup runs, the last theme's prompt_cleanup commands
+#     are run and its hooks named prompt_<name>_* removed;
+#   * prompt_opts starts as cr, percent and sp; whatever the setup leaves in it
+#     is turned on and the rest of bang, cr, percent, sp and subst off;
+#   * prompt_theme holds the theme and its arguments;
+#   * a theme that is not there is the usage, at status 0.
+
+emulate -L zsh
+setopt extendedglob
+
+typeset -gaU prompt_themes
+prompt_themes=()
+local dir file name
+for dir in $fpath; do
+	for file in $dir/prompt_*_setup(N:t); do
+		name=${${file#prompt_}%_setup}
+		prompt_themes+=( $name )
+		autoload -Uz $file
+	done
+done
+
+# What restore goes back to: the prompt and its options as they were the first
+# time a theme was chosen.
+typeset -gA prompt_restore_state
+typeset -ga prompt_theme prompt_cleanup_commands
+
+prompt_cleanup() {
+	prompt_cleanup_commands+=( "$1" )
+}
+
+# _prompt_show theme ... — what -p shows of each theme, each one followed by a
+# line that puts the colors back, as the first is preceded by one; in a subshell, so the theme chosen stays chosen. The
+# theme's file is loaded by running its setup once, which is how a preview
+# function it defines comes to exist.
+_prompt_show() {
+	local theme
+	print -r -- $'\e[39m\e[49m'
+	for theme; do
+		if (( ! ${prompt_themes[(Ie)$theme]} )); then
+			print -r -- "Unknown theme: $theme"
+		else
+			(
+				local -a prompt_opts
+				prompt_opts=( cr percent sp )
+				prompt_${theme}_setup
+				if (( $+functions[prompt_${theme}_preview] )); then
+					prompt_${theme}_preview
+				else
+					print -r -- "$theme theme:"
+					prompt_${theme}_setup
+					(( ${prompt_opts[(Ie)cr]} )) && print -nr -- $'\r'
+					print -rP -- "${PS1}command arg1 arg2 ... argn"
+				fi
+			)
+		fi
+		print -r -- $'\e[39m\e[49m'
+	done
+}
+
+# _prompt_help theme — what -h says of one theme, its own help function
+# where it has one; loaded the way _prompt_show loads it.
+_prompt_help() {
+	local theme=$1
+	(
+		local -a prompt_opts
+		prompt_${theme}_setup
+		if (( $+functions[prompt_${theme}_help] )); then
+			print -r -- "Help for $theme theme:"
+			print
+			prompt_${theme}_help
+		else
+			print -r -- "No help available for $theme theme."
+		fi
+		print
+		print -r -- "Type \`prompt -p $theme' to preview the theme, \`prompt $theme'"
+		print -r -- "to try it out, and \`prompt -s $theme' to use it in future sessions."
+	)
+}
+
+# Not under emulate -L: the options a theme asks for in prompt_opts have to
+# outlive the call.
+prompt() {
+	local opt usage="Usage: prompt [ -c | -l ] | [ -p | -h ] [ theme ... ] | [ -s ] theme [ arg ... ]
+  -c  the theme in use, and its arguments
+  -l  the themes there are
+  -p  a preview of the themes named, or of every theme
+  -h  help for the theme named, or this
+  -s  choose the theme and say how to keep it
+  a theme on its own chooses it for this session"
+	case $1 in
+	(-c)
+		if (( $#prompt_theme )); then
+			print -r -- "Current prompt theme with parameters is:"
+			print -r -- "  $prompt_theme"
+		else
+			print -r -- "Current prompt is not a theme."
+		fi
+		return 0
+		;;
+	(-l)
+		print -r -- "Currently available prompt themes:"
+		print -r -- "$prompt_themes"
+		return 0
+		;;
+	(-p)
+		shift
+		local -a themes
+		themes=( ${@:-${prompt_themes:#(restore|${prompt_theme[1]})}} )
+		_prompt_show $themes
+		return 0
+		;;
+	(-h)
+		if [[ -n $2 ]] && (( ${prompt_themes[(Ie)$2]} )); then
+			_prompt_help $2
+		else
+			print -r -- $usage
+		fi
+		return 0
+		;;
+	(-s)
+		shift
+		[[ -n $1 ]] || { print -r -- $usage; return 0; }
+		prompt "$@" || return
+		print -r -- "Saving a theme is left to the startup file: put these lines in ~/.zshrc"
+		print
+		print -r -- "  autoload -Uz promptinit"
+		print -r -- "  promptinit"
+		print -r -- "  prompt $*"
+		return 0
+		;;
+	(random)
+		shift
+		local -a pick
+		pick=( ${prompt_themes:#(restore|off|default)} )
+		(( $#pick )) || pick=( off default )
+		prompt ${pick[RANDOM % $#pick + 1]} "$@"
+		return
+		;;
+	('')
+		print -r -- $usage
+		return 0
+		;;
+	(-?*)
+		print -u2 -r -- "prompt: bad option: $1"
+		print -r -- $usage
+		return 0
+		;;
+	esac
+
+	local theme=$1
+	shift
+	if ! (( ${prompt_themes[(Ie)$theme]} )); then
+		print -r -- $usage
+		return 0
+	fi
+
+	# The state before any theme, kept once.
+	if (( ! $#prompt_restore_state )); then
+		local p
+		for p in PS1 PS2 PS3 PS4 RPS1 RPS2; do
+			if (( ${(P)+p} )); then
+				prompt_restore_state[$p]=${(P)p}
+			fi
+		done
+		for p in promptbang promptcr promptpercent promptsp promptsubst; do
+			prompt_restore_state[opt-$p]=$options[$p]
+		done
+		prompt_restore_state[saved]=1
+	fi
+
+	# Undo the last theme.
+	local command
+	for command in $prompt_cleanup_commands; do
+		eval $command
+	done
+	prompt_cleanup_commands=()
+	if (( $#prompt_theme )); then
+		local hook
+		for hook in chpwd precmd preexec periodic zshaddhistory zshexit; do
+			add-zsh-hook -D $hook "prompt_${prompt_theme[1]}_*"
+		done
+	fi
+
+	if [[ $theme == restore ]]; then
+		local p
+		for p in PS1 PS2 PS3 PS4 RPS1 RPS2; do
+			if (( ${+prompt_restore_state[$p]} )); then
+				typeset -g $p=${prompt_restore_state[$p]}
+			else
+				unset $p
+			fi
+		done
+		for p in promptbang promptcr promptpercent promptsp promptsubst; do
+			[[ ${prompt_restore_state[opt-$p]} == on ]] && setopt $p || unsetopt $p
+		done
+		prompt_theme=( restore )
+		return 0
+	fi
+
+	local -a prompt_opts
+	prompt_opts=( cr percent sp )
+	autoload -Uz add-zsh-hook
+	prompt_${theme}_setup "$@"
+	local o
+	for o in bang cr percent sp subst; do
+		if (( ${prompt_opts[(Ie)$o]} )); then
+			setopt prompt$o
+		else
+			unsetopt prompt$o
+		fi
+	done
+	prompt_theme=( $theme "$@" )
+	return 0
+}

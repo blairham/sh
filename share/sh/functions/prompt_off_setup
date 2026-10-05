@@ -1,0 +1,12 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# prompt_off_setup — the `off` prompt theme: every prompt at its plainest.
+# Measured against zsh 5.9.2: PS1 `%# `, PS2 `> `, PS3 `?# `, PS4 `+> `,
+# and no right-hand prompts.
+
+PS1='%# '
+PS2='> '
+PS3='?# '
+PS4='+> '
+unset RPS1 RPS2

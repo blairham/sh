@@ -1,0 +1,98 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# expand-absolute-path — a widget that writes the file name under the cursor
+# as an absolute path, symbolic links resolved, with its leading directory
+# written as a named directory or `~` where one stands for it:
+#
+#   autoload -Uz expand-absolute-path
+#   zle -N expand-absolute-path
+#   bindkey '^X^A' expand-absolute-path
+#
+# Written from zshcontrib(1) and from what the installed shell answers, never
+# from its function files; docs/spec/functions.md has the measurements.
+# Measured beyond the manual:
+#
+#   * a word that names nothing is left as it is — so is a quoted word, a
+#     backslash in one, a parameter and a brace, none of which is expanded;
+#     a pattern is, and the first match is the one written;
+#   * the word is the one the cursor is on, or the one before it when the
+#     cursor is on a blank or at the end; `;`, `|` and the other operators
+#     are words of their own and name nothing;
+#   * the cursor keeps its distance from the end of the word, and one that
+#     was past the word ends up at the end of the new one.
+
+emulate -L zsh
+setopt extendedglob
+
+local buf=$BUFFER c ops='|;&<>()'
+integer i len=${#BUFFER} start=-1 end=-1 cur=$CURSOR
+
+# Each position's word, as the shell would read the line: blanks part words,
+# an operator is a word of its own, and a backslash or a quote keeps the
+# blanks it covers inside one.
+local -a wstart wend
+integer ws=-1 q=0
+local quote=
+for (( i = 0; i < len; i++ )); do
+	c=${buf[i+1]}
+	if [[ -n $quote ]]; then
+		[[ $c == $quote ]] && quote=
+		continue
+	fi
+	if (( q )); then
+		q=0
+		continue
+	fi
+	if [[ $c == [[:blank:]] || $ops == *"$c"* ]]; then
+		if (( ws >= 0 )); then
+			wstart+=($ws) wend+=($i)
+			ws=-1
+		fi
+		[[ $ops == *"$c"* ]] && wstart+=($i) wend+=($(( i + 1 )))
+		continue
+	fi
+	(( ws < 0 )) && ws=i
+	case $c in
+	\\) q=1 ;;
+	\'|\") quote=$c ;;
+	esac
+done
+(( ws >= 0 )) && wstart+=($ws) wend+=($len)
+
+# The word the cursor is on, or the nearest one before it.
+for (( i = ${#wstart}; i >= 1; i-- )); do
+	if (( wstart[i] <= cur && cur < wend[i] )); then
+		start=wstart[i] end=wend[i]
+		break
+	fi
+	if (( wend[i] <= cur )); then
+		[[ ${buf[wend[i]+1,cur]} == [[:blank:]]# ]] && start=wstart[i] end=wend[i]
+		break
+	fi
+done
+(( start < 0 )) && return 1
+
+local word=${buf[start+1,end]} found=
+[[ $ops == *"$word"* ]] && return 1
+if [[ $word == *[*?\[]* ]]; then
+	local -a matches
+	matches=( ${~word}(N) )
+	found=$matches[1]
+elif [[ $word == \~* ]]; then
+	found=${~word}
+else
+	found=$word
+fi
+[[ -n $found && -e $found ]] || return 1
+
+local new=${(D)${found:A}}
+integer newend=$(( start + ${#new} ))
+BUFFER=${buf[1,start]}$new${buf[end+1,-1]}
+if (( cur >= end )); then
+	CURSOR=$newend
+else
+	CURSOR=$(( newend - (end - cur) ))
+	(( CURSOR < start )) && CURSOR=$start
+fi
+return 0

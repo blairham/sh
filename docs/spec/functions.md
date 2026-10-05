@@ -1033,6 +1033,50 @@ Differences, all of them this shell's:
 * how the third argument behaves while the history is being walked has not
   been measured or modeled.
 
+### `expand-absolute-path`
+
+`expand-absolute-path` writes the file name under the cursor as an absolute
+path with symbolic links resolved. If a named directory or `~` stands for the
+leading directory, the path is written with it. The work is the `(D)` flag over
+the `:A` modifier, so the abbreviation follows the same rule `%~` and `print -D`
+use, and a path is quoted the way `(D)` quotes it.
+
+The behavior below was measured through a pseudo-terminal against zsh 5.9.2,
+from `~/sub` in a home holding `f`, `real/r`, `lnk -> real`, `sp ace`, `sub/dd`
+and `sub/ace`, with `nd` a named directory for `~/other`. `▮` marks the cursor,
+written before the character it is on:
+
+| line | becomes |
+| --- | --- |
+| `../f▮` | `~/f▮` |
+| `../lnk/r▮`, `../lnk/../f▮` | `~/real/r▮`, `~/f▮` |
+| `.▮`, `dd▮` | `~/sub▮`, `~/sub/dd▮` |
+| `~nd▮`, `~/f▮`, `..//f▮` | `~nd▮`, `~/f▮`, `~/f▮` |
+| `../s*▮` | `~/sp\ ace▮`: a pattern is expanded and its first match written |
+| `nosuch▮`, `"../f"▮`, `../sp\ ace▮`, `$HOME/f▮`, `../{f,real}▮` | unchanged |
+| `x ../▮f extra` | `x ~/▮f extra` |
+| `x ▮../f` / `x▮ ../f` | `x ▮~/f` / unchanged |
+| `x ../f ▮` | `x ~/f▮ ` |
+| `a ../▮f;b` / `a ../f▮;b` | `a ~/▮f;b` / unchanged |
+| `echo ../▮f\|cat` / `echo ../f▮\|cat` | `echo ~/▮f\|cat` / unchanged |
+
+So:
+
+- A word that names nothing is left as it is. A quote, a backslash, a parameter
+  or a brace in the word is not expanded, so a word containing one names
+  nothing. A pattern is expanded.
+- The word is the one the cursor is on. If the cursor is on a blank or at the
+  end of the line, it is the word before it. `;`, `|` and the other operators
+  are words of their own.
+- The cursor keeps its distance from the end of the word. A cursor that was
+  past the word ends up at the end of the new one.
+
+Two things are not reproduced. `../*(/)`, a pattern with a qualifier, empties
+the whole line in zsh, and this function leaves the line alone. And
+`../nosuch/../f` is left as it is in zsh because the kernel cannot pass
+through a directory that is not there, while here it is expanded, because this
+shell's file tests clean `..` by text (#6081).
+
 ### `vcs_info_hookadd` and the other helpers are files
 
 As in zsh, `vcs_info_hookadd`, `vcs_info_hookdel`, `vcs_info_lastmsg`,
@@ -1055,7 +1099,7 @@ reason.
 | `read-from-minibuffer`, `history-pattern-search`, `replace-string`, `replace-string-again`, `replace-argument` | they read their argument with a recursive edit. This editor got `recursive-edit` in #5899, but nobody has measured these functions since |
 | `predict-on`, `incremental-complete-word`, `cycle-completion-positions`, `quote-and-complete-word` | they drive the completion system from a widget |
 | `transpose-lines`, `move-line-in-buffer` | rarely bound. zsh's `transpose-lines` also corrupts the buffer when it moves a line onto the last one (`aa⏎bb⏎cc⏎dd` with `M-3` from the second line becomes `bb⏎cc⏎dd⏎aadd`), so there is no right answer to measure against |
-| `which-command`, `expand-absolute-path` | rarely bound. The builtin `which-command` widget the first replaces is not implemented either, and the second abbreviates with the `(D)` flag (#5980) |
+| `which-command` | rarely bound, and the builtin `which-command` widget it replaces is not implemented either |
 | `history-beginning-search-menu`, `insert-files`, `insert-composed-char`, `insert-unicode-char`, `define-composed-chars`, `send-invisible`, `vi-pipe`, `zcalc-auto-insert`, `split-shell-arguments`, `modify-current-argument`, `keymap+widget` | rarely bound, and each would need its own round of measurement; left for a later change if a startup file asks for one |
 | `zsh-mime-setup`, `zsh-mime-handler`, `zsh-mime-contexts`, `pick-web-browser` | they install suffix aliases from the system's mailcap and mime.types files, which is another program's configuration |
 | `zkbd`, `zsh-newuser-install`, `compinstall` | interactive setup wizards that write a startup file |

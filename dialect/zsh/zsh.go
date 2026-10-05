@@ -6447,6 +6447,10 @@ func Diagnostics() interp.Diagnostics {
 		// 2026-10-04 over a `.zshenv` whose last command left 0, 1 and 7,
 		// the `-c` command sees 0, 1 and 7 (#5869).
 		StartupParseFailureStatus: interp.StartupParseStatusKept,
+		// And a run-time failure in one is located as in a file even at a
+		// prompt: `.zshrc:3: command not found` under `zsh -i`, as under
+		// `zsh -i -c` (#5870).
+		StartupFileLocatedAsAFileAtAPrompt: true,
 		// The builtin the script wrote rather than a literal `.`, because
 		// this shell has two names for it and says the one it was given.
 		// Measured 2026-09-12 on zsh 5.9.2 with nothing of that name

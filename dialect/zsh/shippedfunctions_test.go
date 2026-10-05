@@ -715,3 +715,26 @@ const aliasLoadWant = `with -U st=0
 ALIAS-REACHED-THE-BODY
 without -U st=0
 `
+
+// Every file in the shipped directory loads: `autoload -Uz +X` reads and
+// parses it without a word on standard error. Driven off the directory rather
+// than a list, so a file added later is checked the day it is added — a
+// syntax error in a function file is otherwise silent until somebody presses
+// the key it is bound to.
+func TestEveryShippedFunctionFileLoads(t *testing.T) {
+	entries, err := os.ReadDir(shippedFunctionDir(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) == 0 {
+		t.Fatal("the shipped directory is empty")
+	}
+	for _, e := range entries {
+		t.Run(e.Name(), func(t *testing.T) {
+			out, st := runShipped(t, "autoload -Uz +X "+e.Name()+" 2>&1; print -r -- st=$?")
+			if out != "st=0\n" || st != 0 {
+				t.Errorf("loading %s: %q (status %d)", e.Name(), out, st)
+			}
+		})
+	}
+}

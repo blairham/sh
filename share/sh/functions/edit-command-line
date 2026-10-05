@@ -1,0 +1,81 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# edit-command-line — a widget, installed with
+#
+#   autoload -Uz edit-command-line
+#   zle -N edit-command-line
+#   bindkey '^X^E' edit-command-line
+#
+# Writes the line to a temporary file, runs an editor on it with the terminal
+# as its input, and puts what the file holds afterwards back in the line.
+#
+# Written from zshcontrib(1) and from what the installed shell answers, never
+# from its function files; docs/spec/functions.md has the table. Measured:
+#
+#   * the editor is the `editor` style in the context `:zle:<widget>`, taken
+#     as a command and its arguments, else $VISUAL, else $EDITOR, else vi —
+#     the variables split into words, so `VISUAL='vim -X'` works;
+#   * the file is ${TMPPREFIX:-/tmp/zsh} plus six random characters plus
+#     `.zsh`, holding the line and a newline, and it is removed afterwards;
+#   * an editor whose name contains `vim` is told where the cursor is with
+#     `-c 'normal! <byte>go' --`, and one whose name contains `emacs` with
+#     `+<line>:<column>`, both counted in bytes from 1; any other editor is
+#     given the file alone;
+#   * what comes back loses every trailing newline, as a command substitution
+#     does, and the cursor stays at the same offset, clamped to the new line;
+#   * the editor's exit status is not consulted: the file is read back
+#     whatever it answered.
+
+emulate -L zsh
+
+local -a editor
+zstyle -a ":zle:$WIDGET" editor editor || editor=( ${=${VISUAL:-${EDITOR:-vi}}} )
+
+local text=$BUFFER file
+integer at=$CURSOR tries
+
+# A name of our own that nothing else holds: noclobber makes the redirection
+# refuse a file that is already there, so a name somebody else took is
+# retried rather than written over.
+local chars=ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789 tail
+for (( tries = 0; tries < 100; tries++ )); do
+	tail=
+	repeat 6 tail+=${chars[RANDOM % $#chars + 1]}
+	file=${TMPPREFIX:-/tmp/zsh}$tail.zsh
+	( setopt noclobber; print -r -- "$text" > $file ) 2>/dev/null && break
+	file=
+done
+if [[ -z $file ]]; then
+	zle -M "edit-command-line: cannot create a temporary file" 2>/dev/null
+	return 1
+fi
+
+# Where the cursor is, in the terms the two editors that can be told take:
+# counted in bytes, from 1.
+local before=${text[1,at]} REPLY
+local lastline=${before##*$'\n'}
+integer lines=${#before//[^$'\n']/}+1
+case ${editor[1]:t} in
+(*vim*)
+	() { local LC_ALL=C; REPLY=$#1 } "$before"
+	editor+=( -c "normal! $(( REPLY + 1 ))go" -- )
+	;;
+(*emacs*)
+	() { local LC_ALL=C; REPLY=$#1 } "$lastline"
+	editor+=( +$lines:$(( REPLY + 1 )) )
+	;;
+esac
+
+# The terminal as the editor's input, which is what makes a full-screen
+# editor usable from a widget. Where there is no terminal to open — a session
+# driven without a controlling one — the shell's own input is the next best.
+if { : </dev/tty } 2>/dev/null; then
+	"${editor[@]}" $file </dev/tty
+else
+	"${editor[@]}" $file
+fi
+BUFFER=$(<$file)
+rm -f -- $file
+CURSOR=$at
+return 0

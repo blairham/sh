@@ -413,11 +413,118 @@ And one wording: an `-F` function `compgen` cannot find is the shell's
 `command not found`, located at `compgen`'s own line where zsh's names an
 anonymous function's.
 
+## The contrib widgets: written from the manual, graded against the binary
+
+#5894 asked for the functions a real `~/.zshrc` reaches that this library did
+not have, most used first. Each is written from `zshcontrib(1)` and from black-box
+runs of zsh 5.9.2 through a pseudo-terminal — typing the keys, reading the line
+back through a widget that writes `$BUFFER` and `$CURSOR` to a file — and never
+from zsh's own function files. Where a widget needed an editor action this shell
+did not have, the action came first, as its own change: the beginning search,
+`up-line`, `down-line` and `copy-region-as-kill` (#5910), and `$CUTBUFFER`
+(#5916).
+
+Every row in the tables below was re-run against this shell's copy through the
+same probe and gave the same line and cursor, unless the row says otherwise.
+`cmd/zsh/contribwidgetspty_test.go` drives the shipped files through a real
+session for the rows that decide each widget's shape.
+
+### `up-line-or-beginning-search`, `down-line-or-beginning-search`
+
+Up (or down) a line inside a line that holds several; from the first (or last)
+line, through history to the nearest entry beginning with what is before the
+cursor. History `: echo apple`, `: ls one`, `: echo banana`, `: echo apple`,
+`: ls two`, `: echo cherry`, typed:
+
+| typed, then | line, cursor |
+| --- | --- |
+| `: ec`, up | `: echo cherry`, 13 |
+| up | `: echo apple`, 12 — the fourth entry |
+| up | `: echo banana`, 13 |
+| up, up | `: echo apple` (the first), then the same again: nothing older |
+| down | `: echo apple` (the fourth) — forward from banana |
+| down, down | `: echo cherry`, then `: ec`, 4: the typed line, cursor where it was |
+| `zzz`, cursor at 1, up | `zzz`, 3 — the cursor goes to the end anyway |
+| `zzz`, cursor at 1, down | `zzz`, 1 — and here it does not |
+| `echo abc⏎def ghi`, cursor 13, up | cursor 4: up a line, the column kept |
+| up again | cursor 8: a search for `echo`, nothing, the end of the line |
+| `: ec⏎q`, cursor 1, up | `: echo cherry`: on the first line it searches |
+
+What is searched for is fixed by the first press of a run — the next press of
+either widget restores the cursor to where that one started before searching
+again — and a move to another line of the buffer is not part of a run. The
+partner differs in one thing, measured rather than mirrored: it moves the cursor
+to the end of the line only when something matched.
+
+### `edit-command-line`
+
+The line goes to a temporary file, an editor is run on it with the terminal as
+its input, and what the file holds afterwards is the line.
+
+| probe | zsh 5.9.2 |
+| --- | --- |
+| the editor | the `editor` style in `:zle:<widget>`, else `$VISUAL`, else `$EDITOR`, else `vi`; the variables split into words |
+| the file | `${TMPPREFIX:-/tmp/zsh}`, six random characters, `.zsh`; the line and a newline; removed afterwards |
+| an editor whose name contains `vim` | `-c 'normal! <N>go' --` before the file, N the cursor's byte offset plus one |
+| one whose name contains `emacs` | `+<line>:<column>`, the column in bytes from 1 |
+| any other — `nano`, `vi`, `mg`, `hx` | the file alone |
+| `Vim`, `EMACS` | the file alone: the match is case-sensitive |
+| what comes back | every trailing newline removed; leading ones kept |
+| the cursor | the same offset, clamped to the new line |
+| the editor exits 1 | the file is read back anyway |
+
+**One difference, and it is the shell's.** At a continuation prompt zsh hands
+the editor `$PREBUFFER` and the line together and puts the whole back as one
+line. This shell has no `$PREBUFFER` (#5931), so only the current line is
+edited.
+
+### `url-quote-magic`, `urlglobber`
+
+Replaces `self-insert`. A character typed into a word that looks like a URL goes
+in behind a backslash when the shell would read it specially. Typed one
+character at a time:
+
+| typed | zsh 5.9.2 |
+| --- | --- |
+| `curl http://x.y/?a=1&b=2` | `curl http://x.y/\?a\=1\&b\=2` |
+| `curl "http://x.y/?a=1`, `curl 'http://x/?a` | unchanged: an open quote |
+| `curl x.y/?a=1`, `curl mailto:x?a`, `curl HTTP://x/?a` | unchanged: no listed scheme, case and all |
+| `curl "http"://x/?` | `\?`: the scheme is read from the word unquoted |
+| `echo $(curl http://x/?`, `a=http://x/?` | unchanged: the word is not a URL |
+| `curl <http://x/?` | `\?`: the redirection is a word of its own |
+| `noglob curl ftp://h/*?;` | `*?\;`: a globbing command and a local scheme, separators only |
+| `noglob curl http://x/*?;` | `\*\?\;`: http is not local |
+| `ls; noglob curl ftp://h/*;` | `\*\;`: the command name is the line's first word |
+| `curl http://x/a\?`, `curl http://x/\\?` | `\?`, `\\\?`: an escaped character is left alone |
+
+With the default styles the characters quoted are `!#&()*;<=>?[]^{|}~`; `"$%'+,-./:@_` and the backquote are not. Two styles decide it per scheme
+— `url-metas` and `url-seps` in `:url-quote-magic:<scheme>` — and a character
+is quoted only if it is in one of them **and** the shell's own `(q)` would quote
+it: with `url-metas` set to `%?`, a typed `%` is still left bare. The defaults
+are put in place when the file is loaded and do not replace a style already
+set, which is measured: a `url-metas` set before the first keystroke survives.
+
+`urlglobber cmd args…`, reached as `globurl`, globs the path part of each local
+URL — `ftp://h/p/*.txt` becomes the files under `h/p/`, a host of `localhost`
+or nothing means the path from `/` — passes other URLs with a listed scheme as
+they are, and globs every other argument as usual. A `file://` URL is globbed
+whole and so matches nothing, which is what zsh does.
+
+**One difference, and it is the shell's.** zsh's `(q)` quotes the history
+character at an interactive prompt and this shell's does not (#5933), so a typed
+`!` stays bare here where zsh writes `\!`. The function asks `(q)`, as zsh's
+does, and will follow when the flag does.
+
+#5879 reported the opposite failure — every character of a URL quoted — with
+zsh's own `url-quote-magic` read through `$fpath`. With this one, the same
+keystrokes give zsh's line.
+
 ## What is not shipped, and why
 
-`vcs_info` is the same answer for the same reason, and it turned up in the
-measurement rather than in the issue: it is a VCS status subsystem with a
-style system under it, not a function. One call in this machine's rc.
+#5894 is shipping the contrib functions in batches, most used first, and the
+ones not yet written are listed here until they are. Next: `select-word-style`
+and the `-match` widgets, then `bracketed-paste-magic`, `zmv`, `zargs` and
+`run-help`, then `promptinit`, `zcalc` and `zed`, then `vcs_info`.
 
 ## Loading, and aliases
 

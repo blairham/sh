@@ -1088,21 +1088,16 @@ func autoloadFileNotFound(r *interp.Runner, name string, forCall bool) int {
 	return 1
 }
 
-// autoloadResolve finds a name's file on `$fpath` and makes its contents the
-// name's body.
+// autoloadResolveIn finds a name's file and makes its contents the name's
+// body.
 //
-// The search is `$fpath` in order and the first *readable* entry wins — not
-// the first that exists, because a directory on `$fpath` that cannot be read
-// is a search that goes on rather than a failure, which is what makes a
-// stale entry harmless.
-func autoloadResolve(r *interp.Runner, name string, keepAliases bool) int {
-	return autoloadResolveIn(r, name, nil, autoloadOpts{keepAliases: keepAliases}, false)
-}
-
-// autoloadResolveIn is that with the directory a `-X` was given, where it was
-// given one: the operand replaces the search rather than joining it, so a
-// name that is not in that one directory is not found however much of
-// `$fpath` would have had it.
+// With no directories the search is `$fpath` in order and the first
+// *readable* entry wins — not the first that exists, because a directory on
+// `$fpath` that cannot be read is a search that goes on rather than a
+// failure, which is what makes a stale entry harmless. With the directory a
+// `-X` was given, or the one an absolute `+X` names, the operand replaces the
+// search rather than joining it, so a name that is not in that one directory
+// is not found however much of `$fpath` would have had it.
 func autoloadResolveIn(r *interp.Runner, name string, dirs []string, opts autoloadOpts, forCall bool) int {
 	keepAliases := opts.keepAliases
 	notFound := func() int {

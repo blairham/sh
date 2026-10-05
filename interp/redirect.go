@@ -1748,7 +1748,7 @@ func (d Diagnostics) openReason(err error, creating bool) string {
 	if errors.As(err, &pe) {
 		err = pe.Err
 	}
-	if errors.Is(err, fs.ErrNotExist) {
+	if errors.Is(err, fs.ErrNotExist) || (d.NotADirectoryIsNotFound && errors.Is(err, syscall.ENOTDIR)) {
 		// dash writes its own text for this one errno, and writes a
 		// *different* one depending on which way the file was being opened:
 		// a read that finds nothing is "No such file", a write that cannot

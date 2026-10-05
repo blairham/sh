@@ -124,7 +124,9 @@ func (r *Runner) lookPathSpelled(name string) (path, spelled, written string, er
 		if !r.searchesTheSlashedName(name) {
 			return "", "", "", &pathError{
 				name: name, resolved: full,
-				missing: errors.Is(err, os.ErrNotExist), err: err,
+				missing: errors.Is(err, os.ErrNotExist) ||
+					(r.diag().NotADirectoryIsNotFound && errors.Is(err, syscall.ENOTDIR)),
+				err: err,
 			}
 		}
 		// Not here, and this shell looks down the path for it — the walk
@@ -553,6 +555,14 @@ func (r *Runner) cannotRun(err error, how naming) int {
 		if abs, absErr := filepath.Abs(pe.resolved); absErr == nil {
 			name = abs
 		}
+		if !fromPath {
+			// A word with a slash in it is put under the directory as the
+			// start was, and not cleaned: measured 2026-10-05 on bash 5.3,
+			// `exec ./sub/./nosuch` names `$PWD/sub/./nosuch` and `exec
+			// ./exe/` names `$PWD/exe/` — only the leading `./` goes (#6092).
+			// See Runner.execRunSpelling.
+			name = r.execRunSpelling(pe.name)
+		}
 	}
 
 	if pe.interpreter != "" && r.diag().BadInterpreter != "" {
@@ -595,6 +605,11 @@ func (r *Runner) cannotRun(err error, how naming) int {
 		}
 		r.diagf("%s\n", Wording(orElse(how.cannotExecute, r.diag().CannotExecute),
 			"%[1]s: %[2]s", r.NamedWord(name), r.diag().reasonText(why)))
+		if errors.Is(pe.err, syscall.ENOTDIR) && r.diag().NotADirectoryExecStatus != 0 {
+			// The kernel's reason, and the status of a path that is not
+			// there. See Diagnostics.NotADirectoryExecStatus.
+			return r.diag().NotADirectoryExecStatus
+		}
 		if pe.onPathDirectory && r.diag().DirectoryOnPathStatus != 0 {
 			// One dialect names the directory it found and then numbers the
 			// failure as if it had found nothing.

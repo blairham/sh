@@ -200,6 +200,17 @@ func (a Array) clone() Array {
 	if a == nil {
 		return nil
 	}
+	if _, contiguous := a.contiguous(); contiguous {
+		// One copy of the slice, and a deeper one only where an element
+		// holds an array of its own — which is ksh93's alone.
+		out := a.shallowClone()
+		for i, v := range out.dense {
+			if v.Nested != nil {
+				out.dense[i] = v.clone()
+			}
+		}
+		return out
+	}
 	out := NewArray(a.Len())
 	for k, v := range a.All() {
 		out.Set(k, v.clone())
@@ -255,6 +266,19 @@ func (a Array) extent(base int) (from, to int) {
 // [Runner.elemText], which needs the store to find them. Every reader of an
 // element's value is on the runner for that reason.
 func (r *Runner) denseElems(a Array) ([]string, bool) {
+	if els, ok := a.contiguous(); ok {
+		out := make([]string, len(els))
+		for i, v := range els {
+			if v.Nested == nil && v.Kind == ElementHoldsItsValue {
+				// The string the element holds, which is what elemText
+				// answers for it, without the call.
+				out[i] = v.Str
+				continue
+			}
+			out[i] = r.elemText(v)
+		}
+		return out, true
+	}
 	lo, hi, any := a.bounds()
 	if any && (lo != 0 || hi != a.Len()-1) {
 		return nil, false
@@ -2468,6 +2492,9 @@ func (r *Runner) readArraySubscript(e *syntax.ParamExpr) ([]string, bool) {
 		// needed is the next question and not this one.
 		return r.assocSubscriptOfTheName(e), true
 	}
+	if r.elementReadIsDeferred(e) {
+		return r.subscriptOver(e, subscriptSource{name: e.Name, deferred: true})
+	}
 	elems, scalar, ok := r.subscriptTarget(e)
 	if !ok {
 		// The name holds nothing, and the subscript is still read: measured
@@ -2508,6 +2535,125 @@ type subscriptSource struct {
 	// ghosts says the empty elements are a nested list's ghosts, which a
 	// search matches as one character. See Runner.nestedEmptiesAreGhosts.
 	ghosts bool
+	// deferred says elems was not read: the source is the stored array
+	// named, and it is read once the subscript has been, at the one element
+	// the subscript names. See Runner.elementReadIsDeferred.
+	deferred bool
+}
+
+// elementReadIsDeferred reports whether `${a[i]}` may leave the array unread
+// until its subscript has been evaluated, and then read one element of it.
+//
+// The ordinary path reads the whole array first and counts through the copy,
+// which made every element read O(n) (#6099), and read the array **before**
+// the subscript ran. That order is the one no reference has: measured
+// 2026-10-05, `a=(x y); echo "${a[a[0]=Q,0]}"` is `0` in bash 5.3.20 and
+// `a=(x y); echo "${a[a[1]=Q,1]}"` is `0` in zsh 5.9.2 — the assignment in
+// the subscript is seen by the read it is the subscript of — where the copy
+// made it `x`.
+//
+// Only the plainest spelling, of a stored array: one subscript, no flags, no
+// range, no `@` or `*`, no reference to follow, no produced record behind
+// the name and no `.get` hook. Everything else reads the whole array as it
+// did, because each of those readings needs the list.
+func (r *Runner) elementReadIsDeferred(e *syntax.ParamExpr) bool {
+	if e.IndexRange != nil || e.HasFlags || e.Name == "@" || e.Name == "*" {
+		return false
+	}
+	if _, stored := r.Arrays[e.Name]; !stored {
+		return false
+	}
+	if _, isRef := r.nameref[e.Name]; isRef {
+		return false
+	}
+	if r.namesTheProducedPipelineStatus(e.Name) || r.wholeArrayIndex(e) {
+		return false
+	}
+	return !r.disciplineIsWatching(e.Name, disciplineGet)
+}
+
+// wholeArrayCount is `${#a[@]}` on a stored array holding positions 0 to n-1,
+// answered from the store: the count the general path reaches by reading the
+// array into a list and taking its length, which made the count O(n) (#6099).
+//
+// Only where the general path could give no other answer: a literal `[@]` or
+// `[*]` with nothing else written, on a name that is a stored array and
+// nothing more — no reference, no table, no produced record — and with no gap,
+// so no reading of the store is a question. A count enters no `.get` hook,
+// measured, so a hook does not matter here.
+func (r *Runner) wholeArrayCount(e *syntax.ParamExpr) (int, bool) {
+	if !e.Length || e.Indirect || e.Inner != nil || e.HasFlags || e.IndexFlags != nil ||
+		e.IndexRange != nil || len(e.Leading) > 0 || !r.wholeArrayIndex(e) {
+		return 0, false
+	}
+	a, stored := r.Arrays[e.Name]
+	if !stored {
+		return 0, false
+	}
+	if _, isRef := r.nameref[e.Name]; isRef || r.assocDeclared(e.Name) ||
+		r.namesTheProducedPipelineStatus(e.Name) {
+		return 0, false
+	}
+	els, contiguous := a.contiguous()
+	if !contiguous {
+		return 0, false
+	}
+	return len(els), true
+}
+
+// lengthCountsTheArray is `${#a}` in the dialect where that counts an array's
+// elements, and it tells the read of the name not to build the join.
+//
+// The count is taken after the name is read, because the read is what answers
+// whether it is set and runs whatever a read runs. But the *value* the read
+// gives is then unused, and in this dialect it is every element joined, so
+// `${#a}` and `$#a` cost O(n) for an O(1) answer (#6099). The read still
+// happens, by the same route; only the join at its end is skipped, and only
+// for the plainest spelling of a name with no reference to follow and no
+// producer standing in front of the store. The returned function undoes it.
+func (r *Runner) lengthCountsTheArray(e *syntax.ParamExpr) func() {
+	if !e.Length || e.Index != nil || e.Inner != nil || e.Indirect || e.HasFlags ||
+		e.Op != syntax.ParamNone || len(e.Leading) > 0 ||
+		r.sem().ArrayLengthWithoutSubscriptIsCount != Yes {
+		return func() {}
+	}
+	if _, stored := r.Arrays[e.Name]; !stored {
+		return func() {}
+	}
+	if _, isRef := r.nameref[e.Name]; isRef {
+		return func() {}
+	}
+	if _, dynamic := r.Dynamic[e.Name]; dynamic {
+		return func() {}
+	}
+	held := r.countOnlyRead
+	r.countOnlyRead = e.Name
+	return func() { r.countOnlyRead = held }
+}
+
+// readDeferred reads the whole of a deferred source, for the one spelling
+// that turns out to need it only after the subscript has been expanded: a
+// range written in the expanded text.
+func (r *Runner) readDeferred(src subscriptSource) subscriptSource {
+	if src.deferred {
+		src.elems, _ = r.arrayElems(src.name)
+		src.deferred = false
+	}
+	return src
+}
+
+// deferredElemAt is elemAtFor for a deferred source: the element subscript n
+// names in the array as it stands now, after the subscript has run.
+//
+// An array holding positions 0 to n-1 is indexed directly, which is what makes
+// the read O(1); any other shape is read whole, as the ordinary path does, and
+// counted through.
+func (r *Runner) deferredElemAt(name string, n int, length subscriptLength) (string, bool) {
+	if els, ok := r.Arrays[name].contiguous(); ok {
+		return r.elemAtCounted(name, len(els), func(pos int) string { return r.elemText(els[pos]) }, n, length)
+	}
+	elems, _ := r.arrayElems(name)
+	return r.elemAtFor(name, elems, n, length)
 }
 
 // subscriptOver answers a subscript against values already in hand.
@@ -2573,6 +2719,7 @@ func (r *Runner) subscriptOver(e *syntax.ParamExpr, src subscriptSource) ([]stri
 		// A grammar whose parser does not separate a written pair, where the
 		// only text there is to split is the expanded one. See
 		// pairsAreSplitWhenWritten, which is the whole of the difference.
+		src = r.readDeferred(src)
 		if r.subscriptIsReadAsItsIndex(e, src) &&
 			r.ask(r.sem().SubscriptCommaIsARange, "`${a[1,3]}` naming a range rather than one subscript") {
 			return nil, r.reportIndexAndRange()
@@ -2643,8 +2790,15 @@ func (r *Runner) subscriptOver(e *syntax.ParamExpr, src subscriptSource) ([]stri
 		// already run the hook for it.
 		return nil, true
 	}
-	v, held := r.elemAtFor(src.name, elems, n,
-		subscriptLength{is: e.Length, written: r.writtenSubscript(e, idx)})
+	var v string
+	var held bool
+	if src.deferred {
+		v, held = r.deferredElemAt(src.name, n,
+			subscriptLength{is: e.Length, written: r.writtenSubscript(e, idx)})
+	} else {
+		v, held = r.elemAtFor(src.name, elems, n,
+			subscriptLength{is: e.Length, written: r.writtenSubscript(e, idx)})
+	}
 	if !r.disciplineIsWatching(src.name, disciplineGet) {
 		// Before forwardSubscriptIndex, which counts a negative subscript
 		// from the array *base* — an axis a runner with no dialect cannot
@@ -3282,17 +3436,24 @@ func (r *Runner) elemAt(name string, elems []string, n int) (string, bool) {
 // that reached past the first element. See subscriptLength, whose zero value
 // is what every route but the parameter expansion's means.
 func (r *Runner) elemAtFor(name string, elems []string, n int, length subscriptLength) (string, bool) {
+	return r.elemAtCounted(name, len(elems), func(pos int) string { return elems[pos] }, n, length)
+}
+
+// elemAtCounted is elemAtFor over a reading of count elements, the one at pos
+// being at(pos): the rule once, for a reading in hand and for one that is
+// indexed in the store without being built.
+func (r *Runner) elemAtCounted(name string, count int, at func(pos int) string, n int, length subscriptLength) (string, bool) {
 	// When the sparse reading compacted a gap out of elems, a position can no
 	// longer be counted there; the store still holds every position. Only a
 	// *stored* array can be behind elems here — a produced one is read before
 	// the table, in the same order arrayElems reads them.
 	a, stored := r.Arrays[name]
-	if _, produced := r.pipelineStatuses(name); produced {
+	if r.namesTheProducedPipelineStatus(name) {
 		stored = false
 	}
-	compacted := stored && len(elems) != a.pastTheEnd()
+	compacted := stored && count != a.pastTheEnd()
 
-	end := len(elems)
+	end := count
 	if compacted {
 		end = a.pastTheEnd()
 	}
@@ -3323,10 +3484,10 @@ func (r *Runner) elemAtFor(name string, elems []string, n int, length subscriptL
 		v, ok := a.Lookup(pos)
 		return r.elemText(v), ok
 	}
-	if pos >= len(elems) {
+	if pos >= count {
 		return "", false
 	}
-	return elems[pos], true
+	return at(pos), true
 }
 
 // subscriptSubject is the subscript a refusal quotes back: the text as it was
@@ -3750,6 +3911,14 @@ func (r *Runner) subscriptIndexAsWritten(written, text string) (int, bool) {
 func (r *Runner) arrayElementCount(name string) (int, bool) {
 	name = r.throughNameref(name)
 	if a, ok := r.Arrays[name]; ok {
+		if els, contiguous := a.contiguous(); contiguous {
+			// Every reading of an array with no gap is all of it, so the
+			// count needs no reading built: what readArray would have
+			// returned is exactly this long, and it asks nothing on the
+			// way for this shape. A third of the arrays a real startup
+			// read were read only to be counted.
+			return len(els), true
+		}
 		return len(r.readArray(a)), true
 	}
 	if produce, ok := r.DynamicArrays[name]; ok {

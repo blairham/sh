@@ -251,6 +251,25 @@ func (a *IndexedArray) All() iter.Seq2[int, Element] {
 	}
 }
 
+// contiguous is the elements, position by position, when the positions held
+// are exactly 0 to Len()-1 — which is nearly every array — and false
+// otherwise. The slice is the store's own: a caller reads it and never
+// writes it.
+//
+// What makes the shape worth asking for is that every reading of it agrees:
+// the sparse and dense readings of an array with no gap are the same list,
+// and position i is the i-th element, so a reader can skip the questions
+// that tell the readings apart and index rather than walk.
+func (a *IndexedArray) contiguous() ([]Element, bool) {
+	switch {
+	case a == nil:
+		return nil, true
+	case a.sparse != nil || a.missing != nil:
+		return nil, false
+	}
+	return a.dense, true
+}
+
 // subscripts returns the assigned subscripts, in order.
 func (a *IndexedArray) subscripts() []int {
 	out := make([]int, 0, a.Len())

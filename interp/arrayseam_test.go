@@ -4,6 +4,7 @@
 package interp_test
 
 import (
+	"slices"
 	"strings"
 	"testing"
 
@@ -51,18 +52,41 @@ printf '[%s]' "${view[@]}"`)
 // produced name began at nothing, so the write landed at the subscript it
 // named and every element the producer would have reported was gone.
 func TestEveryWriteToAProducedArrayStartsFromWhatItHolds(t *testing.T) {
-	for _, tc := range []struct{ name, src, want string }{
-		{"an element assignment", `view[2]=Z; printf '[%s]' "${view[@]}"`, "[a][Z][c]"},
-		{"an append", `view+=(d); printf '[%s]' "${view[@]}"`, "[a][b][c][d]"},
+	for _, tc := range []struct {
+		name, src, want string
+		restores        Answer
+		// heard is what the writer was last told, or nil where the test
+		// does not ask.
+		heard []string
+	}{
+		{name: "an element assignment", src: `view[2]=Z; printf '[%s]' "${view[@]}"`, want: "[a][Z][c]"},
+		{name: "an append", src: `view+=(d); printf '[%s]' "${view[@]}"`, want: "[a][b][c][d]"},
 		// The producer is told no elements, and the name is unset until a
 		// write brings it back: zsh's `unset argv` leaves `${+argv}` and
 		// `$#` at 0, and an append after it starts from nothing and sets
-		// the name again — `argv+=(q)` is `q` (#5961).
-		{"an unset", `unset view; printf '[%s]' "${view+set}" "${#view[@]}"; view+=(q); printf '[%s]' "${view+set}" "${view[@]}"`, "[][0][set][q]"},
+		// the name again — `argv+=(q)` is `q` (#5961). That is the dialect
+		// whose assignment restores an unset producer, so the write reaches
+		// the writer.
+		{
+			name: "an unset", restores: Yes, heard: []string{"q"},
+			src:  `unset view; printf '[%s]' "${view+set}" "${#view[@]}"; view+=(q); printf '[%s]' "${view+set}" "${view[@]}"`,
+			want: "[][0][set][q]",
+		},
+		// And where `unset` ends the producer the same write makes an
+		// ordinary array, which the writer never hears about: bash's
+		// `unset GROUPS; GROUPS+=(q)` is `q` with the groups untouched
+		// (#6039). The two read the same here; the writer is the
+		// difference.
+		{
+			name: "an unset that ends it", restores: No, heard: []string{},
+			src:  `unset view; printf '[%s]' "${view+set}" "${#view[@]}"; view+=(q); printf '[%s]' "${view+set}" "${view[@]}"`,
+			want: "[][0][set][q]",
+		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			var out, errs strings.Builder
 			r := seamRunner(t, &out, &errs)
+			r.Semantics.AssignmentRestoresAnUnsetProducedParameter = tc.restores
 			held := []string{"a", "b", "c"}
 			r.SetDynamicArray("view", func(*Runner) []string {
 				return append([]string(nil), held...)
@@ -72,7 +96,10 @@ func TestEveryWriteToAProducedArrayStartsFromWhatItHolds(t *testing.T) {
 			})
 			runSeam(t, r, tc.src)
 			if out.String() != tc.want {
-				t.Errorf("%s = %q, want %q", tc.src, out.String(), tc.want)
+				t.Errorf("%s = %q, want %q (stderr %q)", tc.src, out.String(), tc.want, errs.String())
+			}
+			if tc.heard != nil && !slices.Equal(held, tc.heard) {
+				t.Errorf("%s: the writer was last told %q, want %q", tc.src, held, tc.heard)
 			}
 		})
 	}

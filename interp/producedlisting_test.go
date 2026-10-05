@@ -272,6 +272,11 @@ func TestAnUnsetProducedParameterLeavesTheBareListing(t *testing.T) {
 // A script that has assigned to the name gets its own value back, and gets it
 // through the tables the walk already collects from rather than through the
 // produced merge — so the name-only reading does not reach it.
+//
+// With none of the producer's letters: the attribute was the producer's, and
+// the producer is gone. Measured 2026-10-05, `unset RANDOM; RANDOM=1+1` lists
+// as `declare -- RANDOM="1+1"` in bash 5.3 and `RANDOM=1+1` in ksh93u+, where
+// this asserted `-i` (#6039).
 func TestAStoredValueWinsOverTheProducedRow(t *testing.T) {
 	set := func(s *Semantics) {
 		s.ProducedParameterListing = ProducedListingNameOnly
@@ -280,7 +285,7 @@ func TestAStoredValueWinsOverTheProducedRow(t *testing.T) {
 	out, _, st := declRunWith(t, "unset X; X=abc; typeset -p", set, Diagnostics{}, nil,
 		producing("X", "5", &ProducedDeclaration{Integer: true}))
 	out = listedRows(out, "X")
-	if want := "declare -i X=\"abc\"\n"; out != want || st != 0 {
+	if want := "declare -- X=\"abc\"\n"; out != want || st != 0 {
 		t.Errorf("got %q at %d, want %q at 0", out, st, want)
 	}
 }

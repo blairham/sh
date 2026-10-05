@@ -13606,21 +13606,7 @@ func (r *Runner) setVarAs(name, value string, form assignForm) {
 	// the cell by hand and would leave the array half holding the old fields.
 	// See interp/tiedunique.go.
 	value = r.tiedUniqueFold(name, value)
-	if _, dynamic := r.Dynamic[name]; dynamic && r.producerEndedByUnset(name) {
-		// The `unset` ended the parameter in this dialect, so what the
-		// assignment makes is an ordinary variable: the producer goes with
-		// the name it was producing for, and the store further down is the
-		// whole of what is left. Deleted from this runner's own tables, of
-		// which a subshell holds a copy — a name unset inside one is still
-		// the parent's produced parameter afterwards.
-		delete(r.Dynamic, name)
-		delete(r.dynamicWriters, name)
-		delete(r.assigned, name)
-		if r.endedProducers == nil {
-			r.endedProducers = map[string]bool{}
-		}
-		r.endedProducers[name] = true
-	}
+	r.endProducerUnsetEnded(name)
 	if _, dynamic := r.Dynamic[name]; dynamic {
 		// Assigning a produced parameter is a message to its producer rather
 		// than a replacement for it.
@@ -13770,6 +13756,52 @@ func (r *Runner) producerEndedByUnset(name string) bool {
 	}
 	return !r.ask(r.sem().AssignmentRestoresAnUnsetProducedParameter,
 		"an assignment restoring a produced parameter `unset` took away")
+}
+
+// endProducerUnsetEnded is what an assignment does to a produced parameter
+// `unset` has ended, in the dialect where `unset` ends one: the producer goes
+// with the name it was producing for, and the store the caller goes on to
+// make is the whole of what is left. Deleted from this runner's own tables,
+// of which a subshell holds a copy — a name unset inside one is still the
+// parent's produced parameter afterwards.
+//
+// **Either shape, and from both stores.** It was the scalar store's alone and
+// for scalar producers alone, so a produced *array* outlived its `unset` in
+// the dialect that ends one. Measured 2026-10-05 on bash 5.3
+// (/opt/homebrew/bin/bash), from /tmp (#6039):
+//
+//	pushd /tmp; unset DIRSTACK; DIRSTACK=(q); echo "${DIRSTACK[*]}"   q
+//	unset GROUPS; GROUPS=(7); echo "${GROUPS[*]}"                     7
+//	unset GROUPS; GROUPS=q; declare -p GROUPS            declare -- GROUPS="q"
+//	unset FUNCNAME; FUNCNAME=q; declare -p FUNCNAME      declare -- FUNCNAME="q"
+//
+// where this shell went on answering the stack, the process's groups and an
+// absent `FUNCNAME`. And the letters the listing was told go too: `unset
+// RANDOM; RANDOM=1+1; declare -p RANDOM` is `declare -- RANDOM="1+1"` there,
+// with no `-i` — the attribute was the producer's, and the value was never
+// evaluated as a number here either, so only the listing was wrong. The
+// dialect that keeps a producer through its `unset` — zsh's `argv` and
+// `region_highlight` (#5961) — answers Semantics.AssignmentRestoresAnUnset-
+// ProducedParameter yes and is untouched.
+func (r *Runner) endProducerUnsetEnded(name string) {
+	_, scalar := r.Dynamic[name]
+	_, array := r.DynamicArrays[name]
+	if !scalar && !array {
+		return
+	}
+	if !r.producerEndedByUnset(name) {
+		return
+	}
+	delete(r.Dynamic, name)
+	delete(r.dynamicWriters, name)
+	delete(r.DynamicArrays, name)
+	delete(r.dynamicArrayWriters, name)
+	delete(r.assigned, name)
+	delete(r.dynamicDeclarations, name)
+	if r.endedProducers == nil {
+		r.endedProducers = map[string]bool{}
+	}
+	r.endedProducers[name] = true
 }
 
 // nameIsBack forgets that `unset` had taken a name away, which is what
@@ -14518,6 +14550,11 @@ func (r *Runner) assign(ctx context.Context, a *syntax.Assign) {
 		// is *refused* has referred to the name too: the freeze it meets is
 		// the freeze the arrival put there. See interp/deferredparam.go.
 		r.referredToParameter(a.Name)
+		// A produced parameter `unset` ended is an ordinary name from this
+		// write on, and it has to be one *before* an element or an append
+		// reads what the name holds — or the write starts from what the
+		// producer would have said. See Runner.endProducerUnsetEnded.
+		r.endProducerUnsetEnded(a.Name)
 	}
 	// The refusal stands in front of all three, and it used to stand in front
 	// of one: setVarAs is where it lived, and only the scalar branch below

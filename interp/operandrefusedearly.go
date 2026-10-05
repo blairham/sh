@@ -59,6 +59,10 @@ func (r *Runner) refuseArrayOperandsEarly(argv []string) bool {
 	indexed, table := declarationLettersAhead(argv)
 	for i := range r.arrayOperands {
 		a := r.arrayOperands[i].assign
+		// What the operand is about to write over is the name as it stands,
+		// and a produced parameter `unset` ended stands as an ordinary one.
+		// See Runner.endProducerUnsetEnded.
+		r.endProducerUnsetEnded(a.Name)
 		var refuse func()
 		switch {
 		case r.readonly[a.Name]:

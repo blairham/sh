@@ -75,4 +75,11 @@ func TestAMadeKeymapSelectedAsMainDrivesTheEditor(t *testing.T) {
 	if zsh.ViEditing(r) {
 		t.Error("a copy of emacs selected as main is vi editing")
 	}
+	// And a copy nobody changed is no change: the editor is handed an empty
+	// override table, as it is for emacs itself (see
+	// TestOnlyTheChangesReachTheEditor) — `^G` included, which is the
+	// editor's own send-break in a keymap that descends from emacs.
+	if got := zsh.KeyBindings(r, repl.KeymapMain); len(got) != 0 {
+		t.Errorf("an unchanged copy of emacs hands the editor %v, want nothing", got)
+	}
 }

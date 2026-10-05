@@ -1421,6 +1421,13 @@ func (r *Runner) flagBase(e *syntax.ParamExpr) (words []string, set, isList bool
 			if r.subscriptYieldsAList(e) {
 				return list, list != nil, true
 			}
+			if len(list) == 0 && r.subscriptBeforeTheFirst {
+				// The place before the first element, which is no value
+				// rather than an empty one: a group that keeps its fields
+				// makes no word of it in quotes. See
+				// Runner.subscriptBeforeTheFirst.
+				return []string{}, false, true
+			}
 			return []string{strings.Join(list, " ")}, list != nil, false
 		}
 	}

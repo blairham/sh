@@ -172,6 +172,10 @@ func (r *Runner) searchSubscript(e *syntax.ParamExpr, search byte, src subscript
 	}
 	if pos := at - r.arrayBase(); pos >= 0 && pos < len(units) {
 		return []string{units[pos]}, true
+	} else if pos < 0 && !src.scalar {
+		// A backward miss names the place before the first element. See
+		// Runner.subscriptBeforeTheFirst.
+		r.subscriptBeforeTheFirst = true
 	}
 	return nil, true
 }

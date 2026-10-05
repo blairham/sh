@@ -454,6 +454,9 @@ func Semantics() interp.Semantics {
 	// and a table that holds only absolute entries: measured 2026-10-05
 	// (#6069). See Semantics.HashedRelativePathReportedUnderDot and
 	// Semantics.CommandTableHoldsOnlyAbsoluteEntries.
+	// Whether `hash name` searches PATH again for a name already remembered
+	// (#6110). See Semantics.HashNameSearchesAgain.
+	s.HashNameSearchesAgain = interp.Yes
 	s.HashedRelativePathReportedUnderDot = interp.No
 	s.CommandTableHoldsOnlyAbsoluteEntries = interp.No
 	s.PathHitFromTheCurrentDirectoryRunsBare = interp.No

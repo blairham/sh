@@ -5,6 +5,7 @@ package interp
 
 import (
 	"context"
+	"slices"
 	"strings"
 )
 
@@ -629,6 +630,20 @@ func (r *Runner) printHashEntry(name string) {
 // it holds, and in the dialect whose table holds only absolute entries a hit
 // only a relative entry has is no hit at all.
 func (r *Runner) hashFound(name string, pathname bool) bool {
+	if old, had := r.cmdHash[name]; had && !pathname &&
+		r.ask(r.sem().HashNameSearchesAgain, "an explicit `hash name` searching PATH again for a remembered name") {
+		// The entry is set aside rather than trusted, so the search below
+		// is PATH's answer; and it is put back if PATH has none, so a miss
+		// leaves the table as it found it. See Semantics.HashNameSearchesAgain.
+		order := slices.Clone(r.cmdHashOrder)
+		r.forgetHashedCommand(name)
+		if r.hashFound(name, pathname) {
+			return true
+		}
+		r.cmdHash[name] = old
+		r.cmdHashOrder = order
+		return false
+	}
 	path, spelled, written, err := r.lookPathSpelled(name)
 	if err != nil {
 		return false

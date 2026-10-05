@@ -47,7 +47,11 @@ func (r *Runner) beginGlobUnit() func() {
 		r.globUnit = outer
 		if unit.missed && !unit.matched && !r.givingUpAlready() {
 			r.diagf("%s\n", Wording(r.diag().CshNullGlobNoMatch, "no match"))
+			// Sets its status as an unmatched pattern does — see
+			// Runner.refuseUnmatchedPattern.
+			restore := r.failureSetsItsStatus()
 			r.failedExpansion()
+			restore()
 		}
 	}
 }

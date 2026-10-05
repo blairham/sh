@@ -31,9 +31,16 @@ func TestAFailedExpansionKeepsAFailingStatus(t *testing.T) {
 		{"true; print $((1/0))", 1},
 		{"(exit 4); x=$((1/0))", 1},
 		{"(exit 4); print ${x?boom}", 1},
+		// A refusal of the glob phase sets it too: an unmatched pattern, a
+		// qualifier that will not read.
+		{"(exit 4); print zz*zz", 1},
+		{"(exit 4); print *(.zzq)", 1},
+		{"(exit 4); print *([1,])", 1},
 		{"f(){ (exit 6); print $((1/0)); }; for i in 1; do f; done", 1},
 	} {
-		t.Setenv("HOME", t.TempDir())
+		home := t.TempDir()
+		t.Setenv("HOME", home)
+		t.Chdir(home)
 		_, errs, code := prompt(t, "", "zsh", "-f", "-c", c.src)
 		if code != c.want {
 			t.Errorf("%q: status %d, want %d (stderr %q)", c.src, code, c.want, errs)

@@ -439,6 +439,21 @@ func (r *Runner) HistoryExpansionRefusal(err error) string {
 // what the size drops. Nil is a dialect that keeps no list.
 func (r *Runner) SetHistorySeed(seed func(*Runner, []string)) { r.histSeed = seed }
 
+// SetHistorySkipsTheFile hands the Runner the dialect's way of saying that an
+// interactive session, its startup files read, does not read its history
+// file at all. Nil reads it, which is every dialect but one.
+//
+// The one is bash, whose answer turns on what the startup files left in the
+// list — a line added with `history -s` that is still there means the file
+// is not read. See dialect/bash's historySkipsTheFile for the measurement.
+func (r *Runner) SetHistorySkipsTheFile(skips func(*Runner) bool) { r.histSkipsFile = skips }
+
+// HistorySkipsTheFile reports whether an interactive session should leave its
+// history file unread. See SetHistorySkipsTheFile.
+func (r *Runner) HistorySkipsTheFile() bool {
+	return r.histSkipsFile != nil && r.histSkipsFile(r)
+}
+
 // SeedHistoryEntries puts a previous session's lines into the list.
 func (r *Runner) SeedHistoryEntries(lines []string) {
 	if r.histSeed == nil || len(lines) == 0 {

@@ -581,6 +581,12 @@ func (s Shell) Run(ctx context.Context) (int, error) {
 	// shells do on every one of their lines (#4177).
 	hist := s.historyFile()
 	earlier := s.recalled(ctx, hist)
+	if s.Runner != nil && s.Runner.HistorySkipsTheFile() {
+		// A dialect whose startup files said not to: the lines read are
+		// dropped before anything sees them (#5920). See
+		// interp.Runner.SetHistorySkipsTheFile.
+		earlier = nil
+	}
 	// And into the dialect's list, once, before either loop: `history`, `fc`
 	// and every `!` reference read that one, and a session whose earlier
 	// lines were only in the front end's answered a `history` with nothing

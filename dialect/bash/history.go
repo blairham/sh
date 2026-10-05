@@ -146,6 +146,7 @@ func registerHistory(r *interp.Runner) {
 	// list, because `history`, `fc` and every `!` reference read this one.
 	// See interp.Runner.SetHistorySeed.
 	r.SetHistorySeed(historySeed)
+	r.SetHistorySkipsTheFile(historySkipsTheFile)
 	r.SetHistoryNumbering(historyFirst)
 	// And the parameter whose assignment truncates the file where it
 	// stands, which is the moment nothing else could reach: see
@@ -1401,4 +1402,24 @@ func shellPath(r *interp.Runner, name string) string {
 		return name
 	}
 	return filepath.Join(r.Dir, name)
+}
+
+// historySkipsTheFile is whether a session leaves its history file unread,
+// which is whether its startup files left a line of their own in the list.
+//
+// Measured 2026-10-04 through a pty on bash 5.3, a HISTFILE holding `echo h1`
+// and `echo h2`, and `history` typed at the first prompt (#5920):
+//
+//	.bashrc                              history lists
+//	history -s 'echo hs'                 echo hs
+//	history -r seed; history -s 'echo hs' echo s1, echo hs
+//	history -s 'echo hs'; history -c     echo h1, echo h2
+//	history -s 'echo hs'; history -d 1   echo h1, echo h2
+//	history -r seed                      echo s1, echo h1, echo h2
+//
+// So it is not whether the list is empty — `-r` leaves it full and the file
+// is read after it — but whether a line the session added is still there,
+// which is the count `-a` writes from and `-c` and `-d` take back.
+func historySkipsTheFile(r *interp.Runner) bool {
+	return historyUnwrittenCount(r) > 0
 }

@@ -3031,6 +3031,10 @@ type Runner struct {
 	// -o posix` and under the `sh` name, and `off` outside both.
 	posixSavedShiftVerbose bool
 
+	// histSkipsFile is the dialect's answer to whether an interactive
+	// session reads its history file at all. See SetHistorySkipsTheFile.
+	histSkipsFile func(*Runner) bool
+
 	// fds are the descriptors beyond the three named streams — what
 	// `exec 6>&1` saves and `>&6` finds again. Values are the io.Reader or
 	// io.Writer the descriptor stood for when it was made, which is what

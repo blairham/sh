@@ -70,9 +70,12 @@ func TestAPathHitIsSpelledTheSameBeforeAndAfterItRuns(t *testing.T) {
 	} {
 		path := strings.NewReplacer("<b>", bin, "<d>", dir).Replace(tc.path)
 		want := strings.NewReplacer("<b>", bin, "<d>", dir).Replace(tc.want)
-		got := spellRun(t, dir, path, "command -v zz; zz >/dev/null; command -v zz", tc.spelling)
-		if got != want+"\n"+want+"\n" {
-			t.Errorf("PATH=%s under %d: got %q, want %q twice", tc.path, tc.spelling, got, want)
+		// Before the run, and in a fresh shell after it: the report must not
+		// be what hashed the name, or the run's own entry is never read.
+		for _, src := range []string{"command -v zz", "zz >/dev/null; command -v zz"} {
+			if got := spellRun(t, dir, path, src, tc.spelling); got != want+"\n" {
+				t.Errorf("PATH=%s under %d, %s: got %q, want %q", tc.path, tc.spelling, src, got, want)
+			}
 		}
 	}
 }
@@ -90,9 +93,10 @@ func TestAnEmptyPathEntryIsSpelledByTheAxis(t *testing.T) {
 		PathHitAsWritten:               "zz",
 		PathHitFromTheWorkingDirectory: dir + "/zz",
 	} {
-		got := spellRun(t, dir, ":/nonexistent", "command -v zz; zz >/dev/null; command -v zz", spelling)
-		if got != want+"\n"+want+"\n" {
-			t.Errorf("under %d: got %q, want %q twice", spelling, got, want)
+		for _, src := range []string{"command -v zz", "zz >/dev/null; command -v zz"} {
+			if got := spellRun(t, dir, ":/nonexistent", src, spelling); got != want+"\n" {
+				t.Errorf("under %d, %s: got %q, want %q", spelling, src, got, want)
+			}
 		}
 	}
 }

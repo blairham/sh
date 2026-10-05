@@ -4219,6 +4219,9 @@ type Runner struct {
 	// interp/source.go for the measurement and for why it is in force
 	// rather than applied per file (#4757).
 	pinnedSourceOffset int
+	// startupDepth is how many startup files are being read. See
+	// Semantics.SourcedFileContinuesTheStartupLineCount.
+	startupDepth int
 
 	// locatedByNameAlone drops the line from the one message it is set
 	// around, for a refusal the dialect locates by the shell's name and

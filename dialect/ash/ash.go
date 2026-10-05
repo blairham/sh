@@ -2202,6 +2202,9 @@ func Semantics() interp.Semantics {
 	s.WaitReportsAMissingJob = interp.Yes
 	// Measured 2026-10-01: a finished job stays in the table until reported: `(exit 4) & sleep 0.3; wait %%` is 4. See Semantics.FinishedJobLeavesTheTable.
 	s.FinishedJobLeavesTheTable = interp.No
+	// A file `.` reads from a startup file is numbered from its own first line, measured in the pinned image (#6013). See
+	// Semantics.SourcedFileContinuesTheStartupLineCount.
+	s.SourcedFileContinuesTheStartupLineCount = interp.No
 	// unanswered JobStartedWithoutTheMonitorIsRefused: BusyBox ash turns the
 	// monitor off and says so where there is no job control to give it, so the
 	// state the axis is about was not reached here; no ash runs under a

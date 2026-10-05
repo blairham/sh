@@ -568,7 +568,20 @@ func (r *Runner) runSourcedText(ctx context.Context, src string, s sourced) int 
 	if !s.eval {
 		r.lineBase = r.pinnedSourceOffset
 	}
-	defer func() { r.lineBase = outerBase }()
+	if !s.eval && r.startupDepth > 0 &&
+		r.ask(r.sem().SourcedFileContinuesTheStartupLineCount, "the lines of a file a startup file sources") {
+		// Numbered on from the `.`'s own line, and the caller's count moved
+		// on by every line this file held and by whatever it moved its own
+		// count by. See Semantics.SourcedFileContinuesTheStartupLineCount.
+		start := r.line - r.lineOrigin
+		r.lineBase = start
+		defer func() {
+			moved := r.lineBase - start
+			r.lineBase = outerBase + moved + strings.Count(src, "\n")
+		}()
+	} else {
+		defer func() { r.lineBase = outerBase }()
+	}
 	if s.eval && !keepsCallersLocation && r.line != 1+r.lineOrigin {
 		// Asked at the disagreement and nowhere else: on the route's *first*
 		// line the two readings are the same offset — nothing — so an `eval`

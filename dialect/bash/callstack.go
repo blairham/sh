@@ -105,43 +105,32 @@ func registerCallStack(r *interp.Runner) {
 		return []string{}
 	})
 
-	// The other two, which are a *record* rather than a view of the stack:
-	// they are kept only while extended debugging is on, and what is in them
-	// is what was in them when each call was entered. See
-	// interp/callarguments.go, and Runner.SetRecordsCallArguments for what
-	// turning the record on does to the frame it is turned on in.
-	//
-	// BASH_ARGC is one count per call, innermost first; BASH_ARGV is every
-	// argument of every call in one list, and it is a **stack** — the
-	// innermost call's last argument is element 0. Measured on bash 5.3.15,
-	// 2026-09-14: `g(){ …; }; f(){ g x y z; }; f a b` under `shopt -s
-	// extdebug` answers `3 2 0` and `z y x b a`, where the trailing `0` is
-	// the top level's own arguments under `-c` with no operands (#2476).
-	r.SetDynamicArray("BASH_ARGC", func(r *interp.Runner) []string {
-		frames := r.CallArguments()
-		out := make([]string, 0, len(frames))
-		for _, args := range frames {
-			out = append(out, strconv.Itoa(len(args)))
-		}
-		return out
-	})
-
-	r.SetDynamicArray("BASH_ARGV", func(r *interp.Runner) []string {
-		// Never nil: the parameter **exists** with no calls recorded, where
-		// FUNCNAME does not, and a listing tells the two apart by exactly
-		// that. Measured 2026-09-18 on bash 5.3.20 at the top level,
-		// `declare -a BASH_ARGV=()` against `declare -a FUNCNAME` with no
-		// `=`. See declarationOf's produced-array branch.
-		if flat := r.CallArgumentsFlat(); flat != nil {
-			return flat
-		}
-		return []string{}
-	})
-
 	// Four of the five refuse `unset`, and FUNCNAME is the one that does not
 	// — see Runner.RefuseUnset for the measurement.
 	for _, name := range []string{"BASH_SOURCE", "BASH_LINENO", "BASH_ARGV", "BASH_ARGC"} {
 		r.RefuseUnset(name)
+	}
+
+	// And the same four take an assignment at status 0 and discard it, the
+	// way BASHPID and GROUPS do (see shellparameters.go): the producer goes
+	// on answering. Measured 2026-10-05 on bash 5.3.20, `env -i`, `-c`:
+	//
+	//	BASH_LINENO=(z); declare -p BASH_LINENO     declare -a BASH_LINENO=()
+	//	BASH_SOURCE=(z), BASH_ARGV=(z)              the same, `=()`
+	//	BASH_ARGC=(z); declare -p BASH_ARGC         ([0]="0")
+	//	f(){ BASH_SOURCE=(z); declare -p …; }; f    the producer's frames
+	//	BASH_ARGV[3]=x, BASH_LINENO+=(z)            0, and nothing stored
+	//	read -a BASH_ARGV <<< "a b"                 nothing stored
+	//
+	// where this stored each write and listed it back (#6053). A writer is
+	// what a produced array a script may assign to needs — see
+	// interp.Runner.SetDynamicArrayWriter — and these four discard.
+	//
+	// One row is recorded and not modeled: after `BASH_ARGC=(z)` at the top
+	// level, a function's `declare -p BASH_ARGC` reads `([0]="0")` where it
+	// reads `()` with no assignment made.
+	for _, name := range []string{"BASH_SOURCE", "BASH_LINENO", "BASH_ARGV", "BASH_ARGC"} {
+		r.SetDynamicArrayWriter(name, func(*interp.Runner, []string) {})
 	}
 
 	// And how the five list back, which a produced parameter has to be told:

@@ -30,15 +30,21 @@ func TestResetPromptDrawsThePromptAgain(t *testing.T) {
 	control, screen, home := jobNoticeSessionRC(t, `w() { print -r -- hi; PS1=$'RW2\nrw> '; zle reset-prompt; print -r -- "rc=$?" > $HOME/rc }
 zle -N w; bindkey '^T' w
 `, "zsh", "-i")
-	// One write, so the keys are read together and none can arrive while the
-	// widget's print has the terminal.
-	if _, err := control.WriteString("ab\x14"); err != nil {
+	// One write, `c` after the widget's key included, so all four keys are
+	// read together: a key that arrives while the widget runs reaches a
+	// terminal in its line discipline, which echoes it where the cursor is.
+	if _, err := control.WriteString("ab\x14c"); err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(func() { _, _ = control.WriteString("\x15") })
+	// The new prompt drawn over the row the print wrote on, and the key
+	// after the widget drawn under it rather than under the old one: the
+	// read carries the prompt it began with, and every redraw after a
+	// reset-prompt has to ask for the one on the screen.
 	drawn := func(g *cellgrid.Grid) bool {
 		row, col := g.Cursor()
-		return g.Rows() >= 3 && g.Text(0) == "JNROW" && g.Text(1) == "RW2" && g.Text(2) == "rw> ab" &&
-			row == 2 && col == len("rw> ab")
+		return g.Rows() >= 3 && g.Text(0) == "JNROW" && g.Text(1) == "RW2" && g.Text(2) == "rw> abc" &&
+			row == 2 && col == len("rw> abc")
 	}
 	for deadline := time.Now().Add(jobNoticeBudget); ; time.Sleep(10 * time.Millisecond) {
 		g := cellgrid.New(100)
@@ -59,24 +65,6 @@ zle -N w; bindkey '^T' w
 	for deadline := time.Now().Add(jobNoticeBudget); rc() != "rc=0"; time.Sleep(10 * time.Millisecond) {
 		if time.Now().After(deadline) {
 			t.Fatalf("zle reset-prompt answered %q, want rc=0", rc())
-		}
-	}
-	// And the next key is drawn under the new prompt, not the old one: the
-	// read carries the prompt it began with, and every redraw after a
-	// reset-prompt has to ask for the one on the screen.
-	if _, err := control.WriteString("c"); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _, _ = control.WriteString("\x15") })
-	for deadline := time.Now().Add(jobNoticeBudget); ; time.Sleep(10 * time.Millisecond) {
-		g := cellgrid.New(100)
-		_, _ = g.Write([]byte(screen.Text()))
-		row, col := g.Cursor()
-		if g.Text(2) == "rw> abc" && row == 2 && col == len("rw> abc") {
-			return
-		}
-		if time.Now().After(deadline) {
-			t.Fatalf("the next key was not drawn under the new prompt; cursor at row %d, column %d:\n%s", row, col, g)
 		}
 	}
 }

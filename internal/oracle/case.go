@@ -6779,6 +6779,15 @@ echo "st=$?"`,
 		Why: "a file with no `#!` line is run by the shell itself, and the `$0` it is given is the spelling a `#!` script would have received — except in ksh93, which hands over the word as typed (#6090)",
 	},
 	{
+		ID: "exec/a-path-through-a-file", Category: "commands",
+		Snippet: "printf '#!/bin/sh\\necho ran\\n' > exe && chmod +x exe && : > f\n" +
+			"./exe/; echo \"run=$?\"\n" +
+			"(exec ./exe/); echo \"exec=$?\"\n" +
+			"(read x < f/); echo \"in=$?\"\n" +
+			"(echo x > f/x); echo \"out=$?\"\n",
+		Why: "a path that goes on through a plain file, which the kernel refuses with ENOTDIR: bash and ksh93 print that at 126, zsh prints it at 127, and dash and ash call it a path that is not there — `not found` at 127 for the command and their own not-there text for both redirections. Before #6089 the slash was cleaned away and every line ran; then every column printed the kernel's reason at 126 (#6092)",
+	},
+	{
 		ID: "commands/a-dot-and-an-exec-take-a-dotdot-physically", Category: "commands",
 		Snippet: "mkdir -p sub/deep && ln -s sub/deep link && echo 'echo sourced' > f && cp f sub/g\n" +
 			"printf '#!/bin/sh\\necho ran\\n' > tool && chmod +x tool && cp tool sub/only\n" +

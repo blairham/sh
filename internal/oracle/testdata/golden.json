@@ -91376,6 +91376,57 @@
         "TimedOut": false
       }
     },
+    "exec/a-path-through-a-file": {
+      "ash": {
+        "Stdout": "run=127~exec=127~in=1~out=1",
+        "Stderr": "\u003cshell\u003e: ./exe/: not found~\u003cshell\u003e: exec: line 2: ./exe/: not found~\u003cshell\u003e: can't open f/: no such file~\u003cshell\u003e: can't create f/x: nonexistent directory",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "run=126~exec=126~in=1~out=1",
+        "Stderr": "\u003cshell\u003e: line 2: ./exe/: Not a directory~\u003cshell\u003e: line 3: /private\u003ctmp\u003e/exe/: Not a directory~\u003cshell\u003e: line 4: f/: Not a directory~\u003cshell\u003e: line 5: f/x: Not a directory",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "run=126~exec=126~in=1~out=1",
+        "Stderr": "\u003cshell\u003e: line 2: ./exe/: Not a directory~\u003cshell\u003e: line 3: /private\u003ctmp\u003e/exe/: Not a directory~\u003cshell\u003e: line 4: f/: Not a directory~\u003cshell\u003e: line 5: f/x: Not a directory",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "run=126~exec=126~in=1~out=1",
+        "Stderr": "\u003cshell\u003e: line 1: ./exe/: Not a directory~\u003cshell\u003e: line 2: /private\u003ctmp\u003e/exe/: Not a directory~\u003cshell\u003e: line 2: exec: /private\u003ctmp\u003e/exe/: cannot execute: Not a directory~\u003cshell\u003e: line 3: f/: Not a directory~\u003cshell\u003e: line 4: f/x: Not a directory",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "run=127~exec=127~in=2~out=2",
+        "Stderr": "\u003cshell\u003e: 2: ./exe/: not found~\u003cshell\u003e: 3: exec: ./exe/: not found~\u003cshell\u003e: 4: cannot open f/: No such file~\u003cshell\u003e: 5: cannot create f/x: Directory nonexistent",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "run=126~exec=126~in=1~out=1",
+        "Stderr": "\u003cshell\u003e: line 2: ./exe/: cannot execute [Not a directory]~\u003cshell\u003e[3]: exec: ./exe/: cannot execute [Not a directory]~\u003cshell\u003e[4]: f/: cannot open [Not a directory]~\u003cshell\u003e[5]: f/x: cannot create [Not a directory]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "run=127~exec=127~in=1~out=1",
+        "Stderr": "\u003cshell\u003e:2: not a directory: ./exe/~\u003cshell\u003e:3: not a directory: ./exe/~\u003cshell\u003e:4: not a directory: f/~\u003cshell\u003e:5: not a directory: f/x",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "exec/a-script-exec-starts-by-the-spelling-its-shell-joined": {
       "ash": {
         "Stdout": "0=./z0~0=deep/../z0~0=./deep/../z0",

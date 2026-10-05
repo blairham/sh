@@ -1,0 +1,40 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# up-line-or-beginning-search — a widget, installed with
+#
+#   autoload -Uz up-line-or-beginning-search
+#   zle -N up-line-or-beginning-search
+#
+# Up a line inside a line that holds several; from the first line, back
+# through history to the nearest entry that begins with what is before the
+# cursor, the cursor left at the end of the line it lands on.
+#
+# Written from zshcontrib(1) and from what the installed shell answers, never
+# from its function files; docs/spec/functions.md has the table. What the
+# measurement settled beyond the manual:
+#
+#   * what is searched for is fixed by the first press of a run: the next
+#     press of this widget or its partner searches from where that one
+#     started rather than from the end of the line it recalled, which is
+#     what keeps a run of presses walking through every match;
+#   * a move to another line of the buffer is not part of such a run, so the
+#     press after one starts searching from where the cursor is;
+#   * the cursor goes to the end of the line whether or not anything matched.
+
+emulate -L zsh
+
+if [[ $LBUFFER == *$'\n'* ]]; then
+	_zle_beginning_search_from=
+	zle .up-line
+	return
+fi
+if [[ $LASTWIDGET == (up|down)-line-or-beginning-search && -n $_zle_beginning_search_from ]]; then
+	CURSOR=$_zle_beginning_search_from
+else
+	typeset -g _zle_beginning_search_from=$CURSOR
+fi
+zle .history-beginning-search-backward
+local rest=${RBUFFER%%$'\n'*}
+(( CURSOR += $#rest ))
+return 0

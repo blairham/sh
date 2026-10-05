@@ -1,0 +1,134 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# url-quote-magic — a replacement for self-insert, installed with
+#
+#   autoload -Uz url-quote-magic
+#   zle -N self-insert url-quote-magic
+#
+# As a URL is typed, a character the shell would treat specially is put in
+# the line behind a backslash, so the URL reaches the command as written.
+# Loading it also defines urlglobber and the alias globurl.
+#
+# Written from zshcontrib(1) and from what the installed shell answers, never
+# from its function files; docs/spec/functions.md has the table. Measured
+# beyond the manual:
+#
+#   * a character is quoted only if it is one the shell's own quoting would
+#     quote — a `%` or a `+` never is, whatever the styles say — and one of
+#     the url-metas or url-seps for the URL's scheme;
+#   * the word is the last of `${(z)LBUFFER}`, and nothing is quoted when the
+#     line ends in a blank, when the word is inside an open quote, or when
+#     the character is already escaped by a backslash before it;
+#   * the scheme is the word, unquoted, up to its first colon, and it has to
+#     be one of url-other-schema or url-local-schema exactly, case and all;
+#   * the command name the url-globbers style is matched against is the first
+#     word of the whole line, not of the command after a `;`;
+#   * the default styles are put in place when the file is loaded, without
+#     replacing a style already set.
+
+url-quote-magic() {
+	setopt localoptions noksharrays extendedglob
+	local key=$KEYS
+	if [[ ${(q)key} != $key && $LBUFFER != (|*[[:blank:]]) ]]; then
+		local -a words
+		words=( ${(z)LBUFFER} )
+		local word=$words[-1]
+		if _url_quote_magic_open "$word"; then
+			local unquoted=${(Q)word} scheme style
+			if [[ $unquoted == *:* ]]; then
+				scheme=${unquoted%%:*}
+				local -a localschema otherschema globbers
+				zstyle -a :urlglobber url-local-schema localschema
+				zstyle -a :urlglobber url-other-schema otherschema
+				zstyle -a :url-quote-magic url-globbers globbers
+				local metas seps
+				zstyle -s ":url-quote-magic:$scheme" url-metas metas
+				zstyle -s ":url-quote-magic:$scheme" url-seps seps
+				local quote=
+				if (( ${localschema[(Ie)$scheme]} && ${globbers[(Ie)$words[1]]} )); then
+					quote=$seps
+				elif (( ${otherschema[(Ie)$scheme]} )); then
+					quote=$metas$seps
+				fi
+				[[ $quote == *"$key"* ]] && LBUFFER+='\'
+			fi
+		fi
+	fi
+	zle .self-insert
+}
+
+# _url_quote_magic_open says whether a backslash typed now would quote the
+# next character: the word ends outside every quote and not on a backslash
+# that already escapes it.
+_url_quote_magic_open() {
+	local word=$1 c state=
+	integer i escaped=0
+	for (( i = 1; i <= $#word; i++ )); do
+		c=$word[i]
+		if (( escaped )); then
+			escaped=0
+			continue
+		fi
+		case $state in
+		("'") [[ $c == "'" ]] && state= ;;
+		('"') case $c in ('\') escaped=1 ;; ('"') state= ;; esac ;;
+		(*)
+			case $c in
+			('\') escaped=1 ;;
+			("'"|'"') state=$c ;;
+			esac
+			;;
+		esac
+	done
+	[[ -z $state ]] && (( ! escaped ))
+}
+
+# urlglobber cmd args... — runs cmd with each argument that is a local URL
+# (url-local-schema, written scheme://host/path) replaced by the files its
+# path names: a host of `localhost` or nothing means the path from `/`, and
+# any other host a directory of that name, so `ftp://h/p/*.txt` globs
+# `h/p/*.txt`. A `file://` URL is globbed whole, which matches nothing — that
+# is what the installed shell does. A URL with any other listed scheme is
+# passed as it is, and every other argument is globbed as usual. Meant to be
+# reached through the alias globurl, which puts noglob in front so the
+# patterns arrive unexpanded.
+urlglobber() {
+	setopt localoptions extendedglob
+	local -a args localschema
+	zstyle -a :urlglobber url-local-schema localschema
+	local -a otherschema
+	zstyle -a :urlglobber url-other-schema otherschema
+	local arg rest
+	args=( $1 )
+	shift
+	for arg; do
+		if [[ $arg == (#b)([^:/]##)://(*) ]] && (( ${localschema[(Ie)$match[1]]} )); then
+			if [[ $match[1] == file ]]; then
+				args+=( $~arg )
+			else
+				rest=${match[2]#localhost}
+				args+=( $~rest )
+			fi
+		elif [[ $arg == (#b)([^:/]##):* ]] && (( ${otherschema[(Ie)$match[1]]} )); then
+			args+=( $arg )
+		else
+			args+=( $~arg )
+		fi
+	done
+	"${args[@]}"
+}
+
+zstyle -m ':url-quote-magic:*' url-metas '*' ||
+	zstyle ':url-quote-magic:*' url-metas '*?[]^(|)~#{}='
+zstyle -m ':url-quote-magic:*' url-seps '*' ||
+	zstyle -e ':url-quote-magic:*' url-seps 'reply=(";&<>${histchars[1]}")'
+zstyle -m :url-quote-magic url-globbers '*' ||
+	zstyle -e :url-quote-magic url-globbers 'reply=( noglob ${(k)galiases[(R)(* |)(noglob|urlglobber|globurl) *]:-} ${(k)aliases[(R)(* |)(noglob|urlglobber|globurl) *]:-} )'
+zstyle -m :urlglobber url-local-schema '*' ||
+	zstyle :urlglobber url-local-schema ftp file
+zstyle -m :urlglobber url-other-schema '*' ||
+	zstyle :urlglobber url-other-schema http https ftp
+alias globurl='noglob urlglobber '
+
+url-quote-magic "$@"

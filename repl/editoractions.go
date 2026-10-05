@@ -234,23 +234,20 @@ func (a editorActions) Perform(w Widget, in Line) (Line, bool) {
 // widget on the line `aa bb cc dd ee` with the cursor at 7 that sets
 // `NUMERIC` and calls the action: a count of 2 moves or deletes two
 // characters or words, -2 does the same in the other direction, and 0 does
-// nothing at all. `beginning-of-line` and `end-of-line` are not repeated —
-// there is only one end to go to — but -2 sends each to the other end and 0
-// leaves the cursor where it was (#5941).
-var countedActions = map[Widget]struct {
-	opposite Widget
-	repeats  bool
-}{
-	WidgetForwardChar:        {WidgetBackwardChar, true},
-	WidgetBackwardChar:       {WidgetForwardChar, true},
-	WidgetForwardWord:        {WidgetBackwardWord, true},
-	WidgetBackwardWord:       {WidgetForwardWord, true},
-	WidgetKillWordAfter:      {WidgetKillWordBefore, true},
-	WidgetKillWordBefore:     {WidgetKillWordAfter, true},
-	WidgetDeleteChar:         {WidgetBackwardDeleteChar, true},
-	WidgetBackwardDeleteChar: {WidgetDeleteChar, true},
-	WidgetBeginningOfLine:    {WidgetEndOfLine, false},
-	WidgetEndOfLine:          {WidgetBeginningOfLine, false},
+// nothing at all. `beginning-of-line` and `end-of-line` go by the same rule —
+// -2 sends each to the other end and 0 leaves the cursor where it was — and
+// going to an end twice is going there once (#5941).
+var countedActions = map[Widget]Widget{
+	WidgetForwardChar:        WidgetBackwardChar,
+	WidgetBackwardChar:       WidgetForwardChar,
+	WidgetForwardWord:        WidgetBackwardWord,
+	WidgetBackwardWord:       WidgetForwardWord,
+	WidgetKillWordAfter:      WidgetKillWordBefore,
+	WidgetKillWordBefore:     WidgetKillWordAfter,
+	WidgetDeleteChar:         WidgetBackwardDeleteChar,
+	WidgetBackwardDeleteChar: WidgetDeleteChar,
+	WidgetBeginningOfLine:    WidgetEndOfLine,
+	WidgetEndOfLine:          WidgetBeginningOfLine,
 }
 
 // countedAction is the action a count makes of w, and how many times to
@@ -258,16 +255,13 @@ var countedActions = map[Widget]struct {
 // w once — what every other action does whatever the count, and what a key
 // pressed with a count already did by its own route (see prefixarg.go).
 func countedAction(w Widget, numeric *int) (Widget, int) {
-	counted, ok := countedActions[w]
+	opposite, ok := countedActions[w]
 	if numeric == nil || !ok {
 		return w, 1
 	}
 	n := *numeric
 	if n < 0 {
-		w, n = counted.opposite, -n
-	}
-	if !counted.repeats {
-		n = min(n, 1)
+		w, n = opposite, -n
 	}
 	return w, n
 }

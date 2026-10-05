@@ -61,16 +61,18 @@ zle -N w
 
 // TestTheCursorIsAnIntegerOnlyInsideAWidget: `CURSOR+=2` adds, because the
 // cursor carries the integer attribute while a widget runs (#5929), and
-// between keystrokes the names are ordinary again — measured 2026-10-04
-// against zsh 5.9.2, `CURSOR=1+1 NUMERIC=2+2 KEYS_QUEUED_COUNT=3+3` at the
-// prompt after a widget has run keeps all three as text. This shell made
-// the queue counter 6, its attribute outliving the call.
+// `NUMERIC` carries it too — `NUMERIC=2; NUMERIC+=3` is 5 and `NUMERIC=x` is
+// 0, measured. Between keystrokes the names are ordinary again: measured
+// 2026-10-04 against zsh 5.9.2, `CURSOR=1+1 NUMERIC=2+2
+// KEYS_QUEUED_COUNT=3+3` at the prompt after a widget has run keeps all three
+// as text. This shell made the queue counter 6, its attribute outliving the
+// call.
 func TestTheCursorIsAnIntegerOnlyInsideAWidget(t *testing.T) {
-	r, out := zleRunner(t, `w() { CURSOR=1; CURSOR+=2; a=$CURSOR; CURSOR=5; CURSOR=CURSOR-1; CURSOR+=x; print -r -- "c=$a e=$CURSOR" }
+	r, out := zleRunner(t, `w() { CURSOR=1; CURSOR+=2; a=$CURSOR; CURSOR=5; CURSOR=CURSOR-1; CURSOR+=x; NUMERIC=2; NUMERIC+=3; b=$NUMERIC; NUMERIC=x; print -r -- "c=$a e=$CURSOR n=$b x=$NUMERIC" }
 zle -N w
 `)
-	if _, _, said := runWidget(t, r, out, "w", repl.Line{Buffer: "abcdefghij"}); said != "c=3 e=4\n" {
-		t.Errorf("the widget said %q, want %q", said, "c=3 e=4\n")
+	if _, _, said := runWidget(t, r, out, "w", repl.Line{Buffer: "abcdefghij"}); said != "c=3 e=4 n=5 x=0\n" {
+		t.Errorf("the widget said %q, want %q", said, "c=3 e=4 n=5 x=0\n")
 	}
 	got, _ := runZshVars(t, r, `CURSOR=1+1 NUMERIC=2+2 KEYS_QUEUED_COUNT=3+3; print -r -- "$CURSOR $NUMERIC $KEYS_QUEUED_COUNT"`)
 	if want := "1+1 2+2 3+3\n"; got != want {

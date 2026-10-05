@@ -140,6 +140,15 @@ type Actions interface {
 	// below the first change, which takes the line back to how it began and
 	// says so. See undo.go.
 	UndoTo(n int, in Line) (Line, bool)
+
+	// Kill puts text where the next yank takes it from, as if it had just
+	// been killed, and leaves the line alone. zsh's `zle copy-region-as-kill
+	// STRING`, which is how a widget that worked out for itself what to
+	// remove — the `*-kill-*-match` family — makes `^Y` bring it back.
+	// Measured against zsh 5.9.2: the line and cursor are untouched, a
+	// following yank inserts the text, and an empty string leaves a yank
+	// inserting nothing.
+	Kill(text string)
 }
 
 // Every action this editor has can be performed from outside it, the two that
@@ -230,6 +239,13 @@ func (a editorActions) InputPending() bool { return a.e.inputPending() }
 func (a editorActions) ChangeNumber(in Line) int {
 	a.e.take(in)
 	return a.e.changeNumber()
+}
+
+func (a editorActions) Kill(text string) {
+	a.e.killed = []rune(text)
+	// A kill of its own rather than a part of the one before it: the next
+	// kill after it starts afresh unless it follows straight on.
+	a.e.killing = true
 }
 
 func (a editorActions) UndoTo(n int, in Line) (Line, bool) {

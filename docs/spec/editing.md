@@ -750,6 +750,34 @@ rather than half-built, which is the rule the tree keeps for a gap:
   read the terminal and redraw, so running one from inside a call is
   re-entering the read loop rather than transforming the line.
 
+### Actions a widget reaches for more than a key does
+
+Five of the editor's actions exist mainly so that a widget function can be
+written on top of them, and they arrived together because the contrib widgets
+a startup file binds most often are made of them (#5910):
+
+- **`history-beginning-search-backward` and `-forward`** walk to the nearest
+  entry that begins with the text *before the cursor*, and leave the cursor
+  where it was. That is the whole of the difference from
+  `up-line-or-search`, which looks for the line's first word and moves the
+  cursor to the end. An entry identical to the line already showing is passed
+  over, the line that was being typed is a candidate at the bottom of the
+  walk, and finding nothing is status 1 with the line untouched.
+- **`up-line` and `down-line`** move one line within a line that holds
+  several, keeping the column where the line they land on is long enough.
+  From the first line `up-line` is status 1 and puts the cursor at 0; from
+  the last, `down-line` is status 1 and leaves it alone — not symmetric, and
+  reproduced as measured. zsh keeps the column a run of them started in;
+  each call here aims for the column it starts from.
+- **`copy-region-as-kill STRING`** puts the string where the next yank takes
+  it from and leaves the line alone, which is how a widget that worked out
+  for itself what to remove makes `^Y` bring it back. Without a string it
+  copies from the mark, and this editor has no mark, so that spelling is
+  refused by name.
+
+Measured 2026-10-04 through a pseudo-terminal against zsh 5.9.2;
+`repl/beginningsearch.go` has the table.
+
 ## Coloring the line as it is typed
 
 Neither shell colors a line on its own. zsh gives a widget a way to ask for

@@ -222,6 +222,17 @@ const (
 	// The last row is why the paste is read by the action and not before it:
 	// what the key does with the text behind it is the widget's to decide.
 	WidgetBracketedPaste
+
+	// The history walk to entries that begin with the text before the
+	// cursor, the cursor left where it was. See beginningsearch.go, which
+	// carries the measurement and why this is not the matching pair above.
+	WidgetHistoryBeginningSearchBackward
+	WidgetHistoryBeginningSearchForward
+
+	// A line up or down inside a line that holds more than one. See
+	// beginningsearch.go.
+	WidgetUpLine
+	WidgetDownLine
 )
 
 // UsesCandidates reports whether an action asks a completer what the word
@@ -420,6 +431,14 @@ func (e *editor) runWidget(b Binding, prompt drawnPrompt) {
 		e.leaveViCommand(e.pos, prompt)
 	case WidgetViAppendMode:
 		e.leaveViCommand(e.pos+1, prompt)
+	case WidgetHistoryBeginningSearchBackward:
+		e.actionStatus = e.beginningSearch(-1, prompt)
+	case WidgetHistoryBeginningSearchForward:
+		e.actionStatus = e.beginningSearch(+1, prompt)
+	case WidgetUpLine:
+		e.actionStatus = e.lineMotion(-1, prompt)
+	case WidgetDownLine:
+		e.actionStatus = e.lineMotion(+1, prompt)
 	case WidgetBracketedPaste:
 		// The same reader escape.go reaches for the same marker, which is the
 		// point: a key bound by name and a key nobody bound are one paste.

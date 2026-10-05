@@ -34,9 +34,27 @@ import (
 // name. Built in, so `zle -la` lists them and `.read-command` reaches them
 // past a redefinition, and with no repl.Widget behind them because the editor
 // has no key that does either.
-var widgetFunctionActions = map[string]func(*interp.Runner, repl.Actions) int{
-	"read-command": readCommand,
-	"split-undo":   splitUndo,
+var widgetFunctionActions = map[string]func(*interp.Runner, repl.Actions, []string) int{
+	"read-command":        readCommand,
+	"split-undo":          splitUndo,
+	"copy-region-as-kill": copyRegionAsKill,
+}
+
+// copyRegionAsKill is `zle copy-region-as-kill STRING`: the string put where
+// the next yank takes it from, and the line left alone. See repl.Actions.Kill
+// for the measurement.
+//
+// Only the spelling with a string. Without one it copies from the mark to the
+// cursor, and this editor has no mark to copy from, so that is refused by
+// name rather than answered with something else. A second operand is
+// ignored, measured: `zle copy-region-as-kill a b` kills `a`.
+func copyRegionAsKill(r *interp.Runner, a repl.Actions, args []string) int {
+	if len(args) == 0 {
+		r.Diagnosef("copy-region-as-kill without a string is not implemented yet\n")
+		return 1
+	}
+	a.Kill(args[0])
+	return 0
 }
 
 // readCommand is `zle read-command`: read one key sequence the way the
@@ -68,7 +86,7 @@ var widgetFunctionActions = map[string]func(*interp.Runner, repl.Actions) int{
 // The command keymap is refused rather than answered: its keys are a second
 // dispatch in this editor and not a table — see repl/vi.go — so a name read
 // out of the table would be wrong for every key nobody bound there.
-func readCommand(r *interp.Runner, a repl.Actions) int {
+func readCommand(r *interp.Runner, a repl.Actions, _ []string) int {
 	if keymap, _ := r.GetVar(zleKeymap); keymap == "vicmd" {
 		r.Diagnosef("read-command in the vicmd keymap is not implemented yet\n")
 		return 1
@@ -141,7 +159,7 @@ func longerBindingThan(table map[string]string, seq string) bool {
 // undo afterwards takes back what follows and stops at this. Measured
 // 2026-10-04 against zsh 5.9.2, status 0 with or without an argument, and
 // `BUFFER=one; zle .split-undo; LBUFFER+=two; zle .undo` leaves `one`.
-func splitUndo(r *interp.Runner, a repl.Actions) int {
+func splitUndo(r *interp.Runner, a repl.Actions, _ []string) int {
 	a.ChangeNumber(widgetLine(r))
 	return 0
 }

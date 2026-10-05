@@ -123,8 +123,19 @@ zstyle -m ':url-quote-magic:*' url-metas '*' ||
 	zstyle ':url-quote-magic:*' url-metas '*?[]^(|)~#{}='
 zstyle -m ':url-quote-magic:*' url-seps '*' ||
 	zstyle -e ':url-quote-magic:*' url-seps 'reply=(";&<>${histchars[1]}")'
+# _url_quote_magic_globbers — the default url-globbers: noglob, and every
+# alias, ordinary or global, whose text runs noglob, urlglobber or globurl
+# with something after it, the way the globurl alias does.
+_url_quote_magic_globbers() {
+	reply=( noglob )
+	local name text
+	for name text in "${(@kv)aliases}" "${(@kv)galiases}"; do
+		[[ $text == (|*[[:space:]])(noglob|urlglobber|globurl)[[:space:]]* ]] && reply+=( $name )
+	done
+}
+
 zstyle -m :url-quote-magic url-globbers '*' ||
-	zstyle -e :url-quote-magic url-globbers 'reply=( noglob ${(k)galiases[(R)(* |)(noglob|urlglobber|globurl) *]:-} ${(k)aliases[(R)(* |)(noglob|urlglobber|globurl) *]:-} )'
+	zstyle -e :url-quote-magic url-globbers _url_quote_magic_globbers
 zstyle -m :urlglobber url-local-schema '*' ||
 	zstyle :urlglobber url-local-schema ftp file
 zstyle -m :urlglobber url-other-schema '*' ||

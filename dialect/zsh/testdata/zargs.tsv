@@ -1,0 +1,42 @@
+# Measured 2026-10-04 against /opt/homebrew/bin/zsh (zsh 5.9.2) with its own zargs:
+# `zsh -fc 'autoload -Uz zargs; COMMAND; print -r -- st=$?'` in /tmp with
+# PATH=/usr/bin:/bin, standard input /dev/null and both streams together;
+# newlines are written ~.
+# command<TAB>output
+zargs a b c	a b c~st=0~
+zargs -- a b c -- echo X	X a b c~st=0~
+zargs -n 2 -- a b c d e -- echo X	X a~X b~X c~X d~X e~st=0~
+zargs -n 1 -- a b c	a~b~c~st=0~
+zargs -l 2 -- a b c d e -- echo	a b~c d~e~st=0~
+zargs -L 2 -- a b c d e -- echo	a b~c d~e~st=0~
+zargs -l -- a b c -- echo	a~b~c~st=0~
+zargs -i -- a b c -- echo pre{}post	preapost~prebpost~precpost~st=0~
+zargs -iZZ -- a b -- echo ZZ:ZZ	a:ZZ~b:ZZ~st=0~
+zargs -r -- -- echo nothing	st=0~
+zargs -- -- echo nothing	nothing~st=0~
+zargs -e.. -- a -- b .. echo	a -- b~st=0~
+zargs -e -- a b -- c -- echo	a b -- c -- echo~st=0~
+zargs -t -- a b -- echo	echo a b~a b~st=0~
+zargs -0 -- $'a\0b' c -- echo	a b c~st=0~
+zargs -- a b -- false	st=123~
+zargs -- a b -- sh -c 'exit 255'	st=124~
+zargs -- a b -- sh -c 'exit 7'	st=123~
+zargs -n 0 -- a -- echo	zargs: value for max-args must be >= 1~st=1~
+zargs -- a b c -- print -r --	a b c~st=0~
+zargs -n 2 -- a b c -- echo x y	zargs: argument list too long~st=1~
+zargs -q a	-q a~st=0~
+zargs a -- echo	a~st=0~
+zargs -- -n 2 -- echo	2st=0~
+zargs -n2 -- a b c -- echo	a b~c~st=0~
+zargs -l1 -- a b -- echo	a~b~st=0~
+zargs --max-lines=2 -- a b c -- echo	a b~c~st=0~
+zargs --replace -- a b -- echo {}	a~b~st=0~
+zargs --replace=Q -- a b -- echo Q	a~b~st=0~
+zargs --no-run-if-empty -- -- echo x	st=0~
+zargs --verbose -- a -- echo	echo a~a~st=0~
+zargs --eof=.. -- a .. echo	a~st=0~
+zargs -t -i -- a b -- echo {}	echo a~a~echo b~b~st=0~
+zargs -n 3 -- a b c d e f g -- echo x	x a b~x c d~x e f~x g~st=0~
+zargs -- a b -- sh -c 'exit 126'	st=126~
+zargs -- a b -- sh -c 'kill -9 $$'	st=125~
+zargs --exit -n 1 -- a -- echo	a~st=0~

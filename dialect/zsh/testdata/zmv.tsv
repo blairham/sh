@@ -1,0 +1,51 @@
+# Measured 2026-10-04 against /opt/homebrew/bin/zsh (zsh 5.9.2) with its own zmv:
+# in a fresh directory holding the files of column 1 (each containing its
+# own name), `zsh -fc 'autoload -Uz zmv; COMMAND; print -r -- st=$?'` with
+# both streams together; newlines are written ~. Column 4 lists what the
+# directory held afterwards: path:contents, path/ for a directory, and
+# path -> target for a symbolic link.
+# files<TAB>command<TAB>output<TAB>listing
+a.lis b.lis c.txt	zmv '(*).lis' '$1.txt'	st=0~	./a.txt:a.lis ./b.txt:b.lis ./c.txt:c.txt
+a.lis b.lis	zmv -n '(*).lis' '$1.txt'	mv -- a.lis a.txt~mv -- b.lis b.txt~st=0~	./a.lis:a.lis ./b.lis:b.lis
+a.lis b.lis	zmv -v '(*).lis' '$1.txt'	mv -- a.lis a.txt~mv -- b.lis b.txt~st=0~	./a.txt:a.lis ./b.txt:b.lis
+a.lis b.lis	zmv -w '*.lis' '$1.txt'	st=0~	./a.txt:a.lis ./b.txt:b.lis
+a.lis b.lis	zmv -W '*.lis' '*.txt'	st=0~	./a.txt:a.lis ./b.txt:b.lis
+a.lis b.lis	zmv -C '(*).lis' '$1.txt'	st=0~	./a.lis:a.lis ./a.txt:a.lis ./b.lis:b.lis ./b.txt:b.lis
+a.lis b.lis	zmv -L '(*).lis' '$1.txt'	st=0~	./a.lis:a.lis ./a.txt:a.lis ./b.lis:b.lis ./b.txt:b.lis
+a.lis b.lis	zmv -Ls '(*).lis' '$1.txt'	st=0~	./a.lis:a.lis ./a.txt -> a.lis ./b.lis:b.lis ./b.txt -> b.lis
+a.lis b.lis	zmv '(*).lis' 'same.txt'	zmv: error(s) in substitution:~b.lis and a.lis both map to same.txt~st=1~	./a.lis:a.lis ./b.lis:b.lis
+a.lis b.txt	zmv '(*).lis' 'b.txt'	zmv: error(s) in substitution:~file exists: b.txt~st=1~	./a.lis:a.lis ./b.txt:b.txt
+a.lis b.txt	zmv -f '(*).lis' 'b.txt'	st=0~	./b.txt:a.lis
+a.lis	zmv '(*).lis' ''	zmv: error(s) in substitution:~`a.lis' expanded to an empty string~st=1~	./a.lis:a.lis
+a.lis	zmv '(*).lis' '$2'	zmv: error(s) in substitution:~`a.lis' expanded to an empty string~st=1~	./a.lis:a.lis
+a.lis b.lis	zmv '(*).lis' '$1.lis'	st=0~	./a.lis:a.lis ./b.lis:b.lis
+a_b c_d	zmv '(*)_(*)' '$2_$1'	st=0~	./b_a:a_b ./d_c:c_d
+a.lis b.lis	zmv '*.lis' '${f:r}.txt'	st=0~	./a.txt:a.lis ./b.txt:b.lis
+a.lis b.lis	zmv -p echo '(*).lis' '$1.txt'	-- a.lis a.txt~-- b.lis b.txt~st=0~	./a.lis:a.lis ./b.lis:b.lis
+a.lis b.lis	zmv -P echo '(*).lis' '$1.txt'	a.lis a.txt~b.lis b.txt~st=0~	./a.lis:a.lis ./b.lis:b.lis
+a.lis	zmv -z '(*).lis' '$1.txt'	zmv: unrecognized option: -z~st=1~	./a.lis:a.lis
+d/a.lis d/e/b.lis	zmv '(**/)(*).lis' '$1$2.txt'	st=0~	./d/ ./d/a.txt:d/a.lis ./d/e/ ./d/e/b.txt:d/e/b.lis
+a.lis b.lis	zmv -M '(*).lis' '$1.txt'	st=0~	./a.txt:a.lis ./b.txt:b.lis
+a\ b.lis	zmv '(* *).lis' '${1// /_}.txt'	st=0~	./a_b.txt:a b.lis
+A.LIS	zmv '(*).LIS' '${(L)1}.lis'	st=0~	./a.lis:A.LIS
+a.lis b.lis	zmv -n '(*).lis' 'dir/$1.txt'	mv -- a.lis dir/a.txt~mv -- b.lis dir/b.txt~st=0~	./a.lis:a.lis ./b.lis:b.lis
+a.lis b.lis	zmv -nC '(*).lis' '$1.txt'	cp -- a.lis a.txt~cp -- b.lis b.txt~st=0~	./a.lis:a.lis ./b.lis:b.lis
+a.lis b.lis	zmv -nL '(*).lis' '$1.txt'	ln -- a.lis a.txt~ln -- b.lis b.txt~st=0~	./a.lis:a.lis ./b.lis:b.lis
+a.lis b.lis	zmv -nLs '(*).lis' '$1.txt'	ln -s -- a.lis a.txt~ln -s -- b.lis b.txt~st=0~	./a.lis:a.lis ./b.lis:b.lis
+a.lis b.lis	zmv -n -o '-v -i' '(*).lis' '$1.txt'	mv -v -i -- a.lis a.txt~mv -v -i -- b.lis b.txt~st=0~	./a.lis:a.lis ./b.lis:b.lis
+a.lis b.lis	zmv -vC '(*).lis' '$1.txt'	cp -- a.lis a.txt~cp -- b.lis b.txt~st=0~	./a.lis:a.lis ./a.txt:a.lis ./b.lis:b.lis ./b.txt:b.lis
+a.lis b.lis	zmv -nf '(*).lis' '$1.txt'	mv -- a.lis a.txt~mv -- b.lis b.txt~st=0~	./a.lis:a.lis ./b.lis:b.lis
+d/a.lis d/e/b.lis	zmv -nw '**/*.lis' '$1$2.txt'	mv -- d/e/b.lis d/e/b.txt~mv -- d/a.lis d/a.txt~st=0~	./d/ ./d/a.lis:d/a.lis ./d/e/ ./d/e/b.lis:d/e/b.lis
+d/a.lis d/e/b.lis	zmv -nW '**/*.lis' '**/*.txt'	mv -- d/e/b.lis d/e/b.txt~mv -- d/a.lis d/a.txt~st=0~	./d/ ./d/a.lis:d/a.lis ./d/e/ ./d/e/b.lis:d/e/b.lis
+a.lis b.lis	zmv -nW '*.l?s' '*.t?t'	mv -- a.lis a.tit~mv -- b.lis b.tit~st=0~	./a.lis:a.lis ./b.lis:b.lis
+a.lis d	zmv -nQ '(*)(.)' '$1.x'	mv -- a.lis a.lis.x~mv -- d d.x~st=0~	./a.lis:a.lis ./d:d
+a.lis	zmv -n '(*).lis' '-$1'	mv -- a.lis -a~st=0~	./a.lis:a.lis
+a.lis b.lis	zmv -n '(*).(lis)' '$2.$1'	mv -- a.lis lis.a~mv -- b.lis lis.b~st=0~	./a.lis:a.lis ./b.lis:b.lis
+a b	zmv -n '(?)' '${(U)1}'	mv -- a A~mv -- b B~st=0~	./a:a ./b:b
+a.lis b.lis	zmv -n -- '(*).lis' '$1.txt'	mv -- a.lis a.txt~mv -- b.lis b.txt~st=0~	./a.lis:a.lis ./b.lis:b.lis
+a.lis b.lis	zmv -nv '(*).lis' '$1.txt'	mv -- a.lis a.txt~mv -- b.lis b.txt~st=0~	./a.lis:a.lis ./b.lis:b.lis
+a\ b.lis	zmv -n '(*).lis' '$1.txt'	mv -- 'a b.lis' 'a b.txt'~st=0~	./a b.lis:a b.lis
+a\ b.lis	zmv -v '(*).lis' '$1 x.txt'	mv -- 'a b.lis' 'a b x.txt'~st=0~	./a b x.txt:a b.lis
+a/1 c/d/e/2 b	zmv -n '(**/)(*)' '$1z$2'	mv -- a/1 a/z1~mv -- c/d/e/2 c/d/e/z2~mv -- c/d/e c/d/ze~mv -- c/d c/zd~mv -- a za~mv -- b zb~mv -- c zc~st=0~	./a/ ./a/1:a/1 ./b:b ./c/ ./c/d/ ./c/d/e/ ./c/d/e/2:c/d/e/2
+x/1 x/y/2 x/3 w	zmv -n '(**/)(*)' '$1z$2'	mv -- x/y/2 x/y/z2~mv -- x/1 x/z1~mv -- x/3 x/z3~mv -- x/y x/zy~mv -- w zw~mv -- x zx~st=0~	./w:w ./x/ ./x/1:x/1 ./x/3:x/3 ./x/y/ ./x/y/2:x/y/2
+a.lis	zmv -n '(*).lis' "\$1'q.txt"	mv -- a.lis a\'q.txt~st=0~	./a.lis:a.lis

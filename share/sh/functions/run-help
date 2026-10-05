@@ -1,0 +1,109 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# run-help [ word ... ]
+#
+# Help for the command word: the file of that name in $HELPDIR through the
+# pager when there is one, and otherwise each thing the word means — alias,
+# function, builtin, reserved word, program — described in whence's words and
+# followed by the manual page that covers it: an alias by help for the command
+# it runs, a builtin by zshbuiltins, a reserved word by zshmisc, anything else
+# by its own page. A function run-help-<word>, where one is defined, is called
+# with the rest of the words instead of the manual. Run with no word it lists
+# the topics $HELPDIR holds. To use it in place of the run-help alias:
+#
+#   unalias run-help
+#   autoload -Uz run-help
+#
+# Written from zshcontrib(1) and from what the installed shell answers, never
+# from its function files; docs/spec/functions.md has the measurements.
+# Measured beyond the manual:
+#
+#   * the help file is handed to $PAGER (more when it is unset) by name;
+#   * between two meanings it asks `Press any key for more help or q to quit`
+#     on the terminal, and with no terminal says so and goes on;
+#   * a program's page is asked for with every word, `man sudo ls`, and a word
+#     that is not found with its last path component;
+#   * the status is 0.
+
+emulate -L zsh
+
+# _run_help_columns word... — the words in columns down the screen, each as
+# wide as the widest word and two more, as many as $COLUMNS holds.
+_run_help_columns() {
+	integer width=0 cols rows r c n
+	local w line
+	for w; do (( $#w > width )) && width=$#w; done
+	(( width += 2 ))
+	(( cols = ${COLUMNS:-80} / width, cols < 1 && (cols = 1) ))
+	(( rows = ($# + cols - 1) / cols ))
+	for (( r = 1; r <= rows; r++ )); do
+		line=
+		for (( c = 0; c < cols; c++ )); do
+			(( n = c * rows + r ))
+			(( n <= $# )) || continue
+			w=${@[n]}
+			(( c + 1 < cols && n + rows <= $# )) && w=${(r:width:)w}
+			line+=$w
+		done
+		print -r -- $line
+	done
+}
+
+local helpdir=${HELPDIR-}
+if (( ! $# )); then
+	if [[ -n $helpdir && -d $helpdir ]]; then
+		print -r -- "Here is a list of topics for which special help is available:"
+		print
+		_run_help_columns $helpdir/*(N:t)
+	fi
+	return 0
+fi
+
+local word=$1
+shift
+if [[ -n $helpdir && -r $helpdir/$word ]]; then
+	${=PAGER:-more} $helpdir/$word
+	return 0
+fi
+
+local -a meanings
+meanings=( "${(@f)$(builtin whence -va -- $word 2>&1)}" )
+integer i
+local line target
+for (( i = 1; i <= $#meanings; i++ )); do
+	line=$meanings[i]
+	if (( i > 1 )); then
+		print -nP -- "%SPress any key for more help or q to quit%s"
+		if ! { : </dev/tty } 2>/dev/null; then
+			print -u2 -r -- "not interactive and can't open terminal"
+		else
+			local REPLY
+			read -k 1 -s </dev/tty
+			print
+			[[ $REPLY == q ]] && return 0
+		fi
+		print
+	fi
+	print -r -- $line
+	case $line in
+	(*" is an alias for "*)
+		target=${${line#* is an alias for }%% *}
+		[[ -n $target && $target != $word ]] && run-help $target
+		;;
+	(*" is a shell builtin")
+		man zshbuiltins
+		;;
+	(*" is a reserved word")
+		man zshmisc
+		;;
+	(*)
+		if (( $+functions[run-help-${word:t}] )); then
+			run-help-${word:t} "$@"
+		else
+			man ${word:t} "$@"
+		fi
+		;;
+	esac
+done
+return 0

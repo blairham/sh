@@ -130,6 +130,15 @@ func (s optionArgStyle) attachesToTheName() bool {
 	return s == optArgDirect || s == optArgOptDirect
 }
 
+// attachesInAStack reports whether this option's first argument may be
+// written straight against its letter inside a stack: every form but the one
+// whose argument is a word of its own, `=` and `=-` included, since a stack is
+// written without separators. See optionArgumentInTheStack and stackSplit for
+// the measurements.
+func (s optionArgStyle) attachesInAStack() bool {
+	return s == optArgDirect || s == optArgOptDirect || s == optArgEqual || s == optArgEqualDirect
+}
+
 // takesTheNextWord reports whether this option's **first** argument may be a
 // word of its own, which is what decides whether the empty word after the
 // option is that argument rather than the first normal one.
@@ -268,12 +277,15 @@ type argumentsState struct {
 	// single-letter options being continued: what `-s` answers, and half of
 	// what decides offeredBack.
 	stackInProgress bool
-	here            []int    // indices into args of the specs applying at the cursor
-	line            []string // the normal arguments, `$line`
-	optArgs         map[string]string
-	optArgValues    map[string]int  // how many values each name has collected
-	spent           map[string]bool // option names already on the line
-	shutOff         map[string]bool // what an option on the line excluded
+	// stackArgs is what the letters of the last stack read took from the
+	// words after it, one entry per word eaten. See takeStack.
+	stackArgs    []optionArgHere
+	here         []int    // indices into args of the specs applying at the cursor
+	line         []string // the normal arguments, `$line`
+	optArgs      map[string]string
+	optArgValues map[string]int  // how many values each name has collected
+	spent        map[string]bool // option names already on the line
+	shutOff      map[string]bool // what an option on the line excluded
 	// shutOffShort is what the option *under the cursor* excluded, which
 	// reaches only the single-letter names. See spend, which carries the
 	// measurement.

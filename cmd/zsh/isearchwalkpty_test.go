@@ -64,3 +64,30 @@ func TestTheFourSearchesOnATerminal(t *testing.T) {
 		})
 	}
 }
+
+// A lower-case query ignores case and a leading `^` anchors, on the terminal
+// (#5932). `xRAN` is reached only by the contiguous pass ignoring case: as a
+// subsequence `r_a_n` outranks it, so the fallback alone would run the other
+// line.
+func TestTheSearchQueryIsReadTheZshWay(t *testing.T) {
+	for _, tc := range []struct {
+		name, keys, want string
+	}{
+		{"a lower-case query ignores case", "\x12ran\r", "xRAN42one"},
+		{"a caret anchors", "\x12^echo r\r", "r_a_n42two"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			control, screen := widgetSession(t)
+			widgetType(t, control, screen, "echo xRAN$((40+2))one")
+			widgetType(t, control, screen, ": echo r_a_n")
+			widgetType(t, control, screen, "echo r_a_n$((40+2))two")
+			if _, err := control.WriteString(tc.keys); err != nil {
+				t.Fatalf("typing %q: %v", tc.keys, err)
+			}
+			if err := screen.Await(tc.want, widgetBudget); err != nil {
+				t.Fatalf("did not see %q: %v\n%s", tc.want, err,
+					smoke.Readable(smoke.LastLines(screen.Text(), 8)))
+			}
+		})
+	}
+}

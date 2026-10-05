@@ -6,6 +6,7 @@ package repl
 import (
 	"fmt"
 	"strings"
+	"unicode"
 	"unicode/utf8"
 )
 
@@ -240,6 +241,64 @@ type searchState struct {
 	// neither a match nor a failure. Measured, zsh 5.9.2 draws `invalid
 	// bck-i-search: tw[_` with the last match still on the line.
 	invalid bool
+
+	// needle is the query as an entry is matched against it: without a
+	// leading `^` where that anchors, and lower-cased where the case is
+	// ignored. anchored and fold say which. See prepare.
+	needle   []rune
+	anchored bool
+	fold     bool
+}
+
+// prepare reads the query the dialect's way before a search with it.
+//
+// zsh reads two things into a query that bash reads literally, measured
+// 2026-10-04 through a pty against zsh 5.9.2 and bash 5.3, over `echo
+// …charlie` and older entries (#5932):
+//
+//	query    zsh 5.9.2                       bash 5.3
+//	ran      `RAN` in charlie                failing
+//	Ran      failing                         failing
+//	rAN      failing                         failing
+//	ECHO     failing                         failing
+//	^ec      charlie, at column 0            failing
+//	^        not failing, the line as it is  failing
+//	e^c      failing — the `^` is a letter   failing
+//
+// So a query with no upper-case letter in it ignores case, and one with any
+// means every letter as written; and a `^` first anchors the match to the
+// start of the entry. Both hold for the pattern searches too: `a*e` lands on
+// `RAN`'s `A`.
+func (s *searchState) prepare() {
+	q := s.query
+	s.anchored = s.e.searchCaretAnchors && len(q) > 0 && q[0] == '^'
+	if s.anchored {
+		q = q[1:]
+	}
+	s.fold = s.e.searchSmartCase && !hasUpper(q)
+	if s.fold {
+		q = foldRunes(q)
+	}
+	s.needle = q
+}
+
+// subject is an entry as the search reads it: lower-cased where the query's
+// case is ignored. Rune for rune, so an offset in it is an offset in the
+// entry.
+func (s *searchState) subject(text string) []rune {
+	runes := []rune(text)
+	if s.fold {
+		return foldRunes(runes)
+	}
+	return runes
+}
+
+func foldRunes(in []rune) []rune {
+	out := make([]rune, len(in))
+	for i, r := range in {
+		out[i] = unicode.ToLower(r)
+	}
+	return out
 }
 
 // typedLine is the line that was being typed before any walk began: the line
@@ -265,12 +324,13 @@ func (s *searchState) text(i int) string {
 // and keeps the screen as it is when there is none.
 func (s *searchState) seek(inclusive bool) {
 	s.invalid = false
-	if s.pattern && s.e.searchMatch != nil && len(s.query) > 0 {
+	s.prepare()
+	if s.pattern && s.e.searchMatch != nil && len(s.needle) > 0 {
 		// Matched against its own text, which walks the matcher through
 		// every character of it: a bracket nothing closes is only noticed
 		// when the scan reaches it, and an entry that misses on its first
 		// character never would.
-		q := string(s.query)
+		q := string(s.needle)
 		if _, ok := s.e.searchMatch(q, q); !ok {
 			s.invalid = true
 			return
@@ -323,26 +383,22 @@ func (s *searchState) find(inclusive bool) (int, int, int) {
 	// Then the entries beyond it, each searched whole: its last match going
 	// back, its first going forward.
 	if s.dir == searchBackward {
-		if !s.pattern {
-			// The contiguous scan and, behind it, the ranked fallback — the
-			// same pair this search has always had. The ranked pass starts
-			// from the entry on the screen when the query merely grew, since
-			// a subsequence match there is still the best one in reach.
-			if i, off := s.e.lastBefore(s.query, s.at-1); i >= 0 {
-				return i, off, len(s.query)
+		for i := s.at - 1; i >= 0; i-- {
+			if off, length, ok := s.within(s.text(i), len([]rune(s.text(i))), true); ok {
+				return i, off, length
 			}
+		}
+		if !s.pattern && !s.anchored {
+			// Behind the contiguous scan, the ranked fallback this search
+			// has always had. It starts from the entry on the screen when
+			// the query merely grew, since a subsequence match there is
+			// still the best one in reach.
 			from := s.at - 1
 			if inclusive {
 				from = s.at
 			}
 			if i, off := s.e.rankBack(s.query, from); i >= 0 {
 				return i, off, len(s.query)
-			}
-			return -1, 0, 0
-		}
-		for i := s.at - 1; i >= 0; i-- {
-			if off, length, ok := s.within(s.text(i), len([]rune(s.text(i))), true); ok {
-				return i, off, length
 			}
 		}
 		return -1, 0, 0
@@ -359,10 +415,21 @@ func (s *searchState) find(inclusive bool) (int, int, int) {
 // direction: the last starting at or before it going back, the first at or
 // after it going forward — strictly so when not inclusive.
 func (s *searchState) within(text string, from int, inclusive bool) (int, int, bool) {
-	if !s.contains(text) {
+	runes := s.subject(text)
+	if !s.contains(string(runes)) {
 		return 0, 0, false
 	}
-	runes := []rune(text)
+	if s.anchored {
+		// Only the start of the entry, which a backward walk reaches from
+		// anywhere and a forward one only from the start itself.
+		if s.dir == searchBackward && (from > 0 || inclusive) ||
+			s.dir == searchForward && from == 0 && inclusive {
+			if length, ok := s.matchAt(runes, 0); ok {
+				return 0, length, true
+			}
+		}
+		return 0, 0, false
+	}
 	if s.dir == searchBackward && s.pattern && s.e.searchMatch != nil {
 		return s.patternBack(runes, from, inclusive)
 	}
@@ -394,10 +461,10 @@ func (s *searchState) within(text string, from int, inclusive bool) (int, int, b
 // its positions so a line that cannot match costs one comparison.
 func (s *searchState) contains(text string) bool {
 	if s.pattern && s.e.searchMatch != nil {
-		matched, _ := s.e.searchMatch("*"+string(s.query)+"*", text)
+		matched, _ := s.e.searchMatch("*"+string(s.needle)+"*", text)
 		return matched
 	}
-	return strings.Contains(text, string(s.query))
+	return strings.Contains(text, string(s.needle))
 }
 
 // matchAt is whether a match starts at rune i, and how many runes it takes:
@@ -409,12 +476,12 @@ func (s *searchState) matchAt(runes []rune, i int) (int, bool) {
 	}
 	rest := runes[i:]
 	if !s.pattern || s.e.searchMatch == nil {
-		if len(rest) < len(s.query) || string(rest[:len(s.query)]) != string(s.query) {
+		if len(rest) < len(s.needle) || string(rest[:len(s.needle)]) != string(s.needle) {
 			return 0, false
 		}
-		return len(s.query), true
+		return len(s.needle), true
 	}
-	q := string(s.query)
+	q := string(s.needle)
 	if matched, _ := s.e.searchMatch(q+"*", string(rest)); !matched {
 		return 0, false
 	}
@@ -439,7 +506,7 @@ func (s *searchState) patternBack(runes []rune, from int, inclusive bool) (int, 
 		last--
 	}
 	last = min(last, len(runes))
-	q := string(s.query)
+	q := string(s.needle)
 	for end := len(runes); end >= 0; end-- {
 		for start := 0; start <= min(last, end); start++ {
 			if matched, _ := s.e.searchMatch(q, string(runes[start:end])); matched {

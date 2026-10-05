@@ -77,3 +77,16 @@ func TestAnExitInsideEvalOrAFunctionOnACommandString(t *testing.T) {
 		})
 	}
 }
+
+// And the same hold in a script: measured 2026-10-05, `set -m⏎sleep 1
+// &⏎eval exit; echo st=$?` as a script under zsh 5.9.2 writes `(eval):1: you
+// have running jobs.` and `st=1`, where this shell located the sentence at
+// the script's own line and left.
+func TestAHeldExitInEvalInAScript(t *testing.T) {
+	screen := monitorExitScript(t, []string{"-f"}, "set -m\n/bin/sleep 1 &\neval exit; print -r -- st=$?\nprint -r -- "+monitorExitFence+"\n")
+	for _, w := range []string{"(eval):1: you have running jobs.", "st=1", monitorExitFence} {
+		if !strings.Contains(screen, w) {
+			t.Errorf("want %q; the screen was\n%s", w, smoke.Readable(smoke.LastLines(screen, 10)))
+		}
+	}
+}

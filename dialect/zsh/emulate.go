@@ -267,7 +267,7 @@ func applyEmulation(r *interp.Runner, mode string, strict bool) {
 	// table's default — and this emulation's default is not always the
 	// table's, which is what the second loop puts back in. The names this
 	// emulation leaves alone stay exactly as they were.
-	names, _ := r.GetArray(zshRecordedStore)
+	names := recordedNames(r)
 	kept := make([]string, 0, len(names))
 	for _, n := range names {
 		if !resetByEmulation(n, strict) {
@@ -306,7 +306,6 @@ func applyEmulation(r *interp.Runner, mode string, strict bool) {
 		}
 	}
 	if len(kept) != len(names) || before != len(kept) {
-		sort.Strings(kept)
 		setRecordedOptions(r, kept)
 	}
 	for _, o := range zshOptions {

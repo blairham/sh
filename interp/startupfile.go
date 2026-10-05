@@ -92,6 +92,11 @@ func (r *Runner) RunStartupFile(ctx context.Context, path, src string, failed fu
 	// a prompt's wording does not reach the lines in it. The same counter a
 	// sourced file raises — see Runner.promptLocated and
 	// Diagnostics.StartupFileLocatedAsAFileAtAPrompt (#5870).
+	if r.diag().StartupFileNamedInPlaceOfTheShell {
+		outer := r.startupFileName
+		r.startupFileName = path
+		defer func() { r.startupFileName = outer }()
+	}
 	if r.diag().StartupFileLocatedAsAFileAtAPrompt {
 		r.borrowedFiles++
 		defer func() { r.borrowedFiles-- }()

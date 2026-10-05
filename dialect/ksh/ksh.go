@@ -4899,6 +4899,11 @@ func Diagnostics() interp.Diagnostics {
 		// two fields for the grid (#5869).
 		StartupParseFailureWordedAsAtAPrompt: true,
 		StartupParseFailureStatus:            interp.StartupParseStatusKeptUnlessInteractive,
+		// And a run-time failure in it is named the same way, by the path
+		// in the shell's place — `/…/env.sh: line 2: nosuchcmd_q: not
+		// found` — at a prompt as much as under `-E` (#5884).
+		StartupFileNamedInPlaceOfTheShell:  true,
+		StartupFileLocatedAsAFileAtAPrompt: true,
 		// And for a here-document body that line is the one the message is
 		// located at rather than the body's own. See
 		// interp/heredocbodyrefusalline.go (#4715).

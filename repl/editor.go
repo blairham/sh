@@ -240,6 +240,9 @@ type editor struct {
 	// widgets.go.
 	typedKey   rune
 	selfInsert string
+	// message is the text a widget's `zle -M` put under the line. See
+	// Actions.Message.
+	message string
 	// undoLimit is the change a key's undo stops at, 0 for none. See
 	// Actions.UndoLimit.
 	undoLimit int
@@ -540,6 +543,7 @@ func (e *editor) readLine(prompt drawnPrompt) (string, error) {
 	// stack belongs to the line rather than to the session.
 	e.changes = nil
 	e.undoLimit = 0
+	e.message = ""
 	e.lastArg = lastArgWalk{}
 	// Every line starts in insert mode, which is measured: Escape leaves
 	// command mode nowhere, and a line accepted from it is followed by a
@@ -1311,6 +1315,17 @@ func (e *editor) moveTo(pos int, prompt drawnPrompt) {
 // behind it. The whole line otherwise, which is what this always used to do
 // and is what every case below falls back to.
 func (e *editor) redraw(prompt drawnPrompt) {
+	if e.message != "" {
+		// The row a widget's `zle -M` put under the line goes back under it
+		// after every draw, which is what keeps it there while the line is
+		// edited. Deferred, so that whichever of the draws below happens,
+		// the line is on the screen first.
+		defer func() {
+			if e.cols() > 0 {
+				e.below(prompt, e.message)
+			}
+		}()
+	}
 	prompt = e.live(prompt)
 	// Once for the key being handled, before the draw it makes — see
 	// preRedrawDue. A key that draws nothing gets its call at the top of
@@ -1510,6 +1525,13 @@ func (e *editor) endLine(prompt drawnPrompt, before string) {
 	prompt = e.trimPrompt(prompt)
 	e.toLastRow(prompt)
 	e.write(before + e.newline())
+	if e.message != "" {
+		// The message row is the row the line's end just moved to, so it
+		// is cleared rather than left for the command's output to land on,
+		// as zsh clears it. The next line starts without one.
+		e.message = ""
+		e.write("\x1b[J")
+	}
 	e.row = 0
 }
 

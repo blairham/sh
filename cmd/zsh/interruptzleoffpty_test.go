@@ -33,12 +33,14 @@ import (
 // shell ran it, and the interrupt it had heard was still waiting for the
 // command after it, which it killed without a word.
 //
-// Under `trap "" INT` the line after the ^C runs and `$?` is left alone. That
+// Under `trap "" INT` the line after the ^C runs, and the ^C itself leaves `$?`
+// alone. That
 // row failed too before the fix, and only from a startup file: the session
 // installs its own handler after the rc has run, and a handler is a sigaction,
 // so it took the ignore away again and the ^C it then heard killed the next
-// command. Measured against the same zsh with `trap "" INT` in `.zshrc`:
-// `$?` reads 1 and pipestatus `0 1`, as before the ^C.
+// command. Measured against the same zsh with `trap "" INT` in `.zshrc`: an
+// empty line after the ^C leaves `$?` 1 and pipestatus `0 1`, as before it,
+// and a command typed after it runs.
 //
 // And a ^D after the ^C ends the read that is being given up, not the
 // session: zsh draws a fresh prompt and `$?` is 130.
@@ -61,9 +63,11 @@ func TestControlCWithTheEditorOffGivesUpTheLine(t *testing.T) {
 		// after the ^C, and then by the line after that.
 		want, then string
 	}{
-		{"no trap", "", "\n", "130-0 1", "0-0"},
+		// A line that would set `$?` to 0, so that running it rather than
+		// giving it up reads differently.
+		{"no trap", "", ": typed after\n", "130-0 1", "0-0"},
 		{"no trap, then ^D", "", "\x04", "130-0 1", "0-0"},
-		{"trap \"\" INT", "trap '' INT\n", "\n", "1-0 1", "0-0"},
+		{"trap \"\" INT", "trap '' INT\n", ": typed after\n", "0-0", "0-0"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			control, screen := zleOffChildSession(t, tc.rc)

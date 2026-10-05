@@ -736,11 +736,86 @@ switches to this function with `unalias run-help` and `autoload -Uz run-help`.
 This shell ships no help files, so with `HELPDIR` unset every word goes to its
 manual.
 
+### `promptinit`, and the `off`, `default` and `restore` themes
+
+`promptinit` finds every `prompt_<name>_setup` file on `$fpath`, autoloads it,
+lists the names in `prompt_themes`, and defines `prompt`. Measured with three
+themes of the test's own first on `$fpath` — 25 rows, committed as
+`dialect/zsh/testdata/promptinit.tsv` and run against this copy by
+`dialect/zsh/contrib3_test.go`. Among them:
+
+| call | zsh 5.9.2 |
+| --- | --- |
+| `prompt tiny x` | the setup run with `x`; `prompt_theme` is `tiny x` |
+| what the setup leaves in `prompt_opts` | turned on, and the rest of `bang cr percent sp subst` off; it starts as `cr percent sp` |
+| `prompt tiny; prompt zap` | tiny's `prompt_cleanup` commands run, and its `prompt_tiny_*` hooks removed |
+| `prompt restore` | the prompts and their options as they were before the first theme |
+| `prompt off` | `%# `, `> `, `?# `, `+> `, and no right-hand prompt |
+| `prompt default` | `%m%# `, `%_> `, `?# `, `+%N:%i> ` |
+| `prompt -c` | `Current prompt theme with parameters is:` and the theme, or `Current prompt is not a theme.` |
+| `prompt -h theme` | the theme's setup run in a subshell, then its `prompt_<name>_help` under `Help for <name> theme:`, or `No help available for <name> theme.`; and how to preview, try and keep it |
+| `prompt -p theme …` | the same subshell; the theme's own `prompt_<name>_preview`, or `<name> theme:` and its `PS1` with `command arg1 arg2 ... argn` after it, a carriage return first when `cr` is in `prompt_opts`; a line putting the colors back before the first and after each |
+| `prompt -p nosuch` | `Unknown theme: nosuch` between those lines |
+| a theme that is not there | the usage, at status 0 |
+
+Differences: the usage, and what `-s` says, are this file's own words, for the
+reason given for `select-word-style`. A bad option is reported as
+`prompt: bad option: -z`, where zsh's names an inner function of its own. This
+shell ships the three utility themes and none of the fifteen decorative
+ones (`adam1`, `bart`, `walters` and the rest): each is a design somebody
+drew, and a theme a person wants is a file they put on `$fpath`, which
+`promptinit` finds the same way. `prompt -p` with no themes previews every
+theme but the current one, as zsh's does; zsh's waits on the terminal between
+its own themes, so that call has no row.
+
+### `zcalc`, `zmathfuncdef`
+
+`zcalc [ -erf ] [ -#base ] [ expression … ]` is a calculator on the shell's
+arithmetic. Measured by running zsh's own `zcalc -e` over 137 calls, committed
+as `dialect/zsh/testdata/zcalc.tsv`, and through a pseudo-terminal for the
+session (`cmd/zsh/zcalcpty_test.go`). The shape of it:
+
+* each line's result is `$N`, N the number in the prompt, and `ans`;
+* a result the arithmetic writes with no point in it is printed through
+  `printf %d` — an integer is itself, and `1e100` is the largest integer —
+  one written `7.` as it is, and the rest through `%g` (`0.333333`);
+* `:sci N`, `:fix N`, `:eng N` are `%.Ng`, `%.Nf`, `%.NE`, the digits
+  required and the blanks around them not; `:raw` is the value as it is
+  stored; `:norm` goes back. Each prints `ans` in the new form;
+* `:local names` declares them local to the calculator, and `:f`, `:func` or
+  `:function name body` hands its words to `zmathfuncdef`; any other line
+  starting with `:` is zsh's one-line refusal;
+* a line that is one parameter — `$3`, `$name`, `${1}` — prints its value as
+  stored and is not a result, so `$N` past the last result prints an empty
+  line;
+* the arguments of a run without `-e` are evaluated, and are the first
+  results, shown as `1> value`;
+* an empty line, `q` or `:q` ends it, and so does an empty argument under
+  `-e`; a line ending in a backslash, or leaving a `(` open, is carried on
+  behind `...` and the prompt;
+* `-r` is reverse Polish, with the operands on `stack`.
+
+`zmathfuncdef name body` makes a math function of an expression. How many
+arguments it takes is read from the body, which the manual says must hold to
+its forms: the mandatory ones run from `$1` for as long as each next number is
+there as `$N` or `${N}` — `$3` alone takes none, and `$10` is not `$1` — and
+the optional ones carry on for as long as each next number is `${N:-…}`. All
+17 measured bodies are in the test. `zmathfuncdef name` removes it.
+
+Differences: the session reads its lines with `vared`, whose prompt is
+expanded here before it is handed over (#5965) and whose result is copied out
+as a string (#5966); neither shows. `zmathfuncdef` with no arguments lists the
+math functions in a form that defines them again, as the manual says; zsh's
+own prints nothing, measured with two defined.
+
 ## What is not shipped, and why
 
 #5894 is shipping the contrib functions in batches, most used first, and the
-ones not yet written are listed here until they are. Next: `promptinit`, `zcalc`
-and `zed`, then `vcs_info`.
+ones not yet written are listed here until they are. Next: `vcs_info`.
+
+`zed` is not shipped yet. It edits a file or a function in the line editor
+under a keymap of its own, built from `main` with `bindkey -N` and selected
+with `bindkey -A`, and this shell refuses both (#5969).
 
 `select-word-match` is left out for good, for the reason given with the word
 styles above: it needs a mark and a region, and this editor has neither.

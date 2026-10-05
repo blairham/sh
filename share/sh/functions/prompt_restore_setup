@@ -1,0 +1,9 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# prompt_restore_setup — the `restore` prompt theme. The prompt command does
+# the restoring itself, putting back the prompts and their options as they
+# were before the first theme was chosen; there is nothing for a setup
+# function to do.
+
+return 0

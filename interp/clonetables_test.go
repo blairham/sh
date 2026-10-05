@@ -91,6 +91,7 @@ func seedStacks(r *Runner) {
 	r.frames = append(make([]Frame, 0, 4), Frame{})
 	r.evalUnits = append(make([]evalUnit, 0, 4), evalUnit{})
 	r.evalContexts = append(make([]EvalContext, 0, 4), EvalContextEval)
+	r.leavingContexts = append(make([]EvalContext, 0, 4), EvalContextEval)
 	r.callArgs = append(make([]callArgs, 0, 4), callArgs{})
 	r.borrowed = append(make([]borrowedText, 0, 4), borrowedText{})
 	r.InheritedFiles = append(make([]*os.File, 0, 4), nil)

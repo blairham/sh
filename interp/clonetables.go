@@ -143,6 +143,7 @@ func (c *Runner) ownTables(r *Runner) {
 	// onto the parent's backing array would write into a stack the parent is
 	// still reading. See interp/evalcontext.go.
 	c.evalContexts = slices.Clone(r.evalContexts)
+	c.leavingContexts = slices.Clone(r.leavingContexts)
 	c.scopeFixed = maps.Clone(r.scopeFixed)
 	c.kindFixed = maps.Clone(r.kindFixed)
 	c.traced = maps.Clone(r.traced)

@@ -2659,6 +2659,24 @@ func (r *Runner) tellOfJobsLeftBehind(atTheExit bool) bool {
 	if r.inSubshell || r.JobControl || r.jobsInherited || r.toldOfJobsAtExit || r.toldOfJobsWithNoPrompt {
 		return false
 	}
+	// A `jobs` listing waives the sentence for the chunk it ran in as well as
+	// for the next one, which is the half toldOfJobsAtExit alone missed: a
+	// prompt reads its next chunk only after the line that listed, and a
+	// shell with no prompt can reach its `exit` in the same chunk. A command
+	// string is one chunk, so a listing anywhere in it waives the sentence.
+	//
+	// Measured 2026-10-05 through a pseudo-terminal on zsh 5.9.2 (#6173):
+	// `zsh -c 'set -m; sleep 1 & jobs >/dev/null; exit 7'` writes only the
+	// hangup warning and leaves with 7, and so do `jobs -l`, `jobs %1`, `jobs
+	// -p`, a `jobs %2` that names nothing, a listing inside a function, in
+	// `eval`, as `builtin jobs`, before any job existed, and with another job
+	// started after it. A listing in `( … )`, in `$( … )`, in the background,
+	// or refused for a bad letter does not count. In a script file the
+	// listing waives an `exit` on its own line or the next one and not one
+	// two lines on, and running off the end counts as part of the last line.
+	if r.tellingOfJobsAtExit {
+		return false
+	}
 	if !r.accountsForJobsAtExit() {
 		return false
 	}

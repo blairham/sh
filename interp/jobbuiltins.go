@@ -169,6 +169,17 @@ func biJobs(r *Runner, _ context.Context, args []string) int {
 	// for the line after it, and not for a line after that.
 	r.tellingOfJobsAtExit = true
 	r.exitWaived = true
+	if !r.JobControl && r.Route == RouteCommandString {
+		// With no prompt, a command string is one chunk however many lines
+		// it has, so the listing waives the sentence for the rest of it and
+		// does not wear off a line later as it does in a script. Measured
+		// 2026-10-05 through a pseudo-terminal on zsh 5.9.2: `set -m`,
+		// `sleep 1 &`, `jobs >/dev/null`, `: x`, `: y`, `exit 7` on six lines
+		// of a `-c` string writes no sentence and leaves with 7, where the
+		// same six lines in a script file write it and leave with 1 (#6173).
+		// See Runner.tellOfJobsLeftBehind.
+		r.toldOfJobsWithNoPrompt = true
+	}
 	// And a listing reads it too. See Runner.settleFrozenMarks.
 	r.settleFrozenMarks()
 	form, code := r.jobsForm(opts)

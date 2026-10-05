@@ -1,0 +1,61 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# smart-insert-last-word — a replacement for insert-last-word that inserts
+# the rightmost interesting word of the last command line:
+#
+#   autoload -Uz smart-insert-last-word
+#   zle -N insert-last-word smart-insert-last-word
+#
+# A word is interesting when it holds a letter, a slash or a backslash, or
+# when it matches the match style in :<widget>. Pressed again, the word goes
+# in place of the one inserted, from the line before. With a numeric
+# argument, or arguments from another widget, it is insert-last-word.
+#
+# Written from zshcontrib(1) and from what the installed shell answers, never
+# from its function files; docs/spec/functions.md has the measurements.
+# Measured beyond the manual:
+#
+#   * a line with no interesting word gives its last word, unless the
+#     auto-previous style is true, when the lines before it are searched;
+#   * words are split as the shell splits them, so a comment is words too;
+#   * pressed after the oldest line, the word inserted stays.
+
+emulate -L zsh
+setopt extendedglob
+
+if (( ${+NUMERIC} || $# )); then
+	zle .insert-last-word -- "$@"
+	return
+fi
+
+local pattern word
+zstyle -s ":$WIDGET" match pattern || pattern='*[[:alpha:]/\\]*'
+local -a numbers words
+integer i
+numbers=( ${(Onk)history} )
+
+if [[ $LASTWIDGET == $WIDGET && -n $_silw_inserted && $LBUFFER == *$_silw_inserted ]]; then
+	i=$(( _silw_line + 1 ))
+	(( i > $#numbers )) && return 0
+	LBUFFER=${LBUFFER%$_silw_inserted}
+else
+	i=1
+	typeset -g _silw_inserted=
+fi
+
+for (( ; i <= $#numbers; i++ )); do
+	words=( ${(z)history[$numbers[i]]} )
+	(( $#words )) || continue
+	word=${words[(R)$~pattern]}
+	if [[ -z $word ]]; then
+		zstyle -t ":$WIDGET" auto-previous && continue
+		word=$words[-1]
+	fi
+	LBUFFER+=$word
+	typeset -g _silw_inserted=$word
+	typeset -gi _silw_line=$i
+	return 0
+done
+[[ -n $_silw_inserted ]] && LBUFFER+=$_silw_inserted
+return 0

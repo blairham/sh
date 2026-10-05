@@ -81,6 +81,12 @@ func TestVcsInfoWhereItIsItsOwn(t *testing.T) {
 		// zsh's copy sets one fewer nvcsformats than max-exports when there
 		// are more of them than that.
 		{"nvcsformats past max-exports", "none", "zstyle ':vcs_info:*' max-exports 3; zstyle ':vcs_info:*' nvcsformats a b c d; vcs_info; " + show, "0=a 1=b 2=c 1\n"},
+		// zsh's own vcs_info_lastmsg, autoloaded before vcs_info has run,
+		// stops on a helper it does not have and then names vcs_info_msg_-1_.
+		{
+			"lastmsg on its own", "clean", "autoload -Uz vcs_info_lastmsg; vcs_info_msg_0_=hello; vcs_info_msg_1_=; vcs_info_lastmsg",
+			"$vcs_info_msg_0_: \"hello\"\n$vcs_info_msg_1_: \"\"\n",
+		},
 		// A max-exports that is not a number of at least 1 is 2, with a
 		// warning on standard output, as in zsh; the warning is worded here.
 		{"max-exports 0", "clean", "zstyle ':vcs_info:*' max-exports 0; zstyle ':vcs_info:*' formats a b c; vcs_info >/dev/null; " + show, "0=a 1=b 2='' 0\n"},

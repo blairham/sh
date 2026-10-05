@@ -1,0 +1,33 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# history-search-end — the widgets history-beginning-search-backward-end and
+# history-beginning-search-forward-end, from one file:
+#
+#   autoload -Uz history-search-end
+#   zle -N history-beginning-search-backward-end history-search-end
+#   zle -N history-beginning-search-forward-end history-search-end
+#   bindkey '\e^P' history-beginning-search-backward-end
+#   bindkey '\e^N' history-beginning-search-forward-end
+#
+# Each runs the search its name ends in and then goes to the end of the line.
+# Pressed again straight after either of them, the cursor first goes back to
+# where the first press found it, so the search is for the same beginning.
+#
+# Written from zshcontrib(1) and from what the installed shell answers, never
+# from its function files; docs/spec/functions.md has the measurements.
+# Measured beyond the manual: a search that finds nothing leaves the cursor
+# where it was before the press.
+
+integer cursor=$CURSOR
+if [[ $LASTWIDGET == history-beginning-search-(backward|forward)-end ]]; then
+	CURSOR=$_history_search_end_cursor
+else
+	typeset -gi _history_search_end_cursor=$CURSOR
+fi
+if zle .${WIDGET%-end}; then
+	zle .end-of-line
+else
+	CURSOR=$cursor
+	return 1
+fi

@@ -1,0 +1,38 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# vcs_info_hookdel [ -a ] hook function ... — takes functions vcs_info_hookadd
+# registered off the hook: the last time each was added, or with -a every
+# time. Running vcs_info autoloads it.
+#
+# Written from zshcontrib(1) and from what the installed shell answers, never
+# from its function files; docs/spec/functions.md has the measurements.
+
+emulate -L zsh
+local all=
+if [[ $1 == -a ]]; then
+	all=1
+	shift
+fi
+if (( $# < 2 )); then
+	print -r -- "vcs_info_hookdel: give [ -a ] a hook and one or more functions"
+	return 1
+fi
+local hook=$1 f
+shift
+local -a funcs
+integer i
+zstyle -a ":vcs_info-static_hooks:$hook" hooks funcs
+for f; do
+	if [[ -n $all ]]; then
+		funcs=( ${funcs:#$f} )
+	elif (( i = ${funcs[(I)$f]} )); then
+		funcs[i]=()
+	fi
+done
+if (( $#funcs )); then
+	zstyle ":vcs_info-static_hooks:$hook" hooks $funcs
+else
+	zstyle -d ":vcs_info-static_hooks:$hook" hooks
+fi
+return 0

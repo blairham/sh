@@ -1,0 +1,29 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# incarg — a widget that adds to the number under the cursor: the numeric
+# argument when there is one, else $incarg when it is set, else 1.
+#
+#   autoload -Uz incarg
+#   zle -N incarg
+#   bindkey '^X+' incarg
+#
+# Written from zshcontrib(1) and from what the installed shell answers, never
+# from its function files; docs/spec/functions.md has the measurements.
+# Measured beyond the manual:
+#
+#   * the cursor has to be on one of the number's digits; on anything else,
+#     a minus sign included, nothing happens;
+#   * the number is its digits alone, so -5 with the cursor on the 5 becomes
+#     -6, and leading zeros go (009 becomes 10);
+#   * the cursor stays where it was.
+
+emulate -L zsh
+setopt extendedglob
+
+[[ $BUFFER[CURSOR+1] == [0-9] ]] || return 1
+local left=${LBUFFER##*[^0-9]} right=${RBUFFER%%[^0-9]*}
+integer cursor=$CURSOR start=$(( CURSOR - $#left ))
+integer value=$(( 10#$left$right + ${NUMERIC:-${incarg:-1}} ))
+BUFFER=${BUFFER[1,start]}$value${BUFFER[start+$#left+$#right+1,-1]}
+CURSOR=$cursor

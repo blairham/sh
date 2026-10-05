@@ -1,0 +1,10 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# vcs_info_setsys — rereads the systems vcs_info knows. There is one, and
+# nothing to reread. Running vcs_info autoloads it.
+#
+# Written from zshcontrib(1) and from what the installed shell answers, never
+# from its function files; docs/spec/functions.md has the measurements.
+
+return 0

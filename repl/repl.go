@@ -786,7 +786,8 @@ func (s Shell) Run(ctx context.Context) (int, error) {
 	// thing the file's contents depend on is what went into this slice.
 	var added, addedAt []string
 	defer func() {
-		if err := s.historyFile().save(ctx, earlier, added, addedAt, s.rewritesHistory()); err != nil {
+		lines, at := s.toWrite(added, addedAt)
+		if err := s.historyFile().save(ctx, earlier, lines, at, s.rewritesHistory()); err != nil {
 			s.errf("%v\n", err)
 		}
 	}()
@@ -1552,6 +1553,35 @@ func (s Shell) promptInfo(continuing bool, cols int) PromptInfo {
 	return info
 }
 
+// toWrite is what the session writes to its history file as it ends: the
+// lines it recorded, or — in the dialect that keeps its own count of what is
+// still unwritten — the newest entries that count covers.
+//
+// The two differ wherever something other than a typed line moved the list.
+// Measured 2026-10-05 on bash 5.3.20, interactive on a pipe, a HISTFILE of
+// `echo h1`, `echo h2`, and the program after the arrow:
+//
+//	.bashrc               typed                      appended
+//	history -s 'echo hs'  echo t1; exit              echo hs, echo t1, exit
+//	history -s 'echo hs'  exit                       echo hs, exit
+//	history -s 'echo hs'  history -c; echo t1; exit  echo t1, exit
+//	history -s 'echo hs'  history -a; echo t1; exit  (-a wrote echo hs and
+//	                                                 history -a) echo t1, exit
+//
+// where this shell appended only what it had recorded, so the first two lost
+// `echo hs`, the third kept the `history -c` the clearing took back, and the
+// fourth wrote `history -a` a second time (#5967). See
+// interp.Runner.SetHistoryUnwritten.
+func (s Shell) toWrite(added, at []string) ([]string, []string) {
+	if s.Runner == nil {
+		return added, at
+	}
+	if lines, times, ok := s.Runner.HistoryUnwritten(); ok {
+		return lines, times
+	}
+	return added, at
+}
+
 // remote reports whether this session arrived over a network.
 //
 // Out of the shell's own variables rather than the process environment, the
@@ -1638,7 +1668,8 @@ func (s Shell) runPlain(
 	recall := &lineList{lines: earlier}
 	var added, addedAt []string
 	defer func() {
-		if err := s.historyFile().save(ctx, earlier, added, addedAt, s.rewritesHistory()); err != nil {
+		lines, at := s.toWrite(added, addedAt)
+		if err := s.historyFile().save(ctx, earlier, lines, at, s.rewritesHistory()); err != nil {
 			s.errf("%v\n", err)
 		}
 	}()

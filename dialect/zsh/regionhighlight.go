@@ -124,11 +124,17 @@ const zleRegionLine = ".zsh.zle.region.line"
 // line since they were last lined up with it, and lines them up with line.
 // cursor is where the editor left the cursor, or -1 where it is not known.
 func regionsFollow(r *interp.Runner, line string, cursor int) {
-	was, _ := r.GetVar(zleRegionLine)
+	was, known := r.GetVar(zleRegionLine)
 	if was == line {
 		return
 	}
 	r.SetVar(zleRegionLine, line)
+	if !known {
+		// Nothing has lined the offsets up with any line yet, so there is no
+		// edit to read: a difference from nothing would be the whole line
+		// inserted in front of them.
+		return
+	}
 	elems, _ := r.GetArray(zleRegion)
 	if len(elems) == 0 {
 		return

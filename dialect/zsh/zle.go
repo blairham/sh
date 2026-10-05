@@ -1343,7 +1343,10 @@ func callWidget(r *interp.Runner, ctx context.Context, name string, args []strin
 		// Back into the held line, so the rest of the handler — and the
 		// editor after it — see what the widget left. `zle` twice in one
 		// handler is ordinary, and the second call reads the first's line.
+		// The offsets were moved by the actions it called and by nothing it
+		// assigned, so they stand against that line now.
 		setWidgetLine(r, out)
+		regionsAnchor(r, out.Buffer)
 		if out.Accept {
 			r.SetVar(zleAccept, "1")
 		}
@@ -1429,7 +1432,20 @@ func runWidgetFunction(
 	// editor, that line is what the editor did, and the offsets follow it;
 	// from another widget's `zle`, it is what that widget assigned, and they
 	// stay. See regionsFollow.
-	if editorRunning(r) {
+	//
+	// A nested call puts the caller's line back when it ends, the way it
+	// puts back the rest of the caller's state: whoever adopts the line the
+	// call hands back lines the offsets up with it, and an editor that runs
+	// a widget part-way through an action and drops its line must not leave
+	// that line behind as the one the offsets were measured against.
+	nested := editorRunning(r)
+	if nested {
+		callerLine, known := r.GetVar(zleRegionLine)
+		defer func() {
+			if known {
+				regionsAnchor(r, callerLine)
+			}
+		}()
 		regionsAnchor(r, in.Buffer)
 	} else {
 		regionsFollow(r, in.Buffer, in.Cursor)
@@ -1487,7 +1503,9 @@ func runWidgetFunction(
 	r.SetExitStatus(status)
 	// What the function left the line as is the editor's from here, and
 	// whatever it assigned moved no offset.
-	regionsAnchor(r, widgetBuffer(r))
+	if !nested {
+		regionsAnchor(r, widgetBuffer(r))
+	}
 	if err != nil {
 		return in, false
 	}

@@ -84,34 +84,45 @@ echo end`
 // still answers `kill -0`, so the script watches /proc for the Z instead, and
 // the hook holds the goroutine off its wait for longer than that takes.
 // Without the waitid peek, `jobs` finds the job still running every time.
-// Linux only, because the peek is: elsewhere the window is the signal's.
+//
+// Linux and macOS, because both have the peek, and the window was measured on
+// both (#5861): macOS has no /proc, so there the script asks `ps` for the Z.
+// The status is read back afterwards, because the peek must leave it for the
+// goroutine's own wait to collect — WNOWAIT is the whole of why asking is safe.
 func TestAProgramThatExitedUnreapedIsNoticedBeforeTheTableIsRead(t *testing.T) {
-	if runtime.GOOS != "linux" {
-		t.Skip("the waitid peek and /proc are Linux's")
+	if runtime.GOOS != "linux" && runtime.GOOS != "darwin" {
+		t.Skip("the waitid peek is Linux's and macOS's")
 	}
-	holdTheWindow(t, &beforeAJobsProgramIsWaitedFor, 2*time.Second)
-	const src = `/bin/sh -c 'exit 3' & p=$!
-/bin/sh -c 'i=0; until grep -q "^[0-9]* ([^)]*) Z" /proc/$1/stat 2>/dev/null || [ $i -ge 1000 ]; do /bin/sleep 0.01; i=$((i+1)); done' poll $p
-jobs
-echo end`
-	f, err := syntax.Parse(src, syntax.Core())
-	if err != nil {
-		t.Fatal(err)
-	}
-	sem := PosixSemantics()
-	sem.JobsListFinishedJobs = Yes
-	sem.JobsShowBackgroundCommand = Yes
-	out := &strings.Builder{}
-	r := newTestRunner(t, &Runner{
-		Semantics: &sem, Diagnostics: &Diagnostics{}, Name: "sh",
-		Stdout: out, Stderr: out, Env: []string{"PATH=/usr/bin:/bin"},
-	})
-	if _, err := r.Run(context.Background(), f); err != nil {
-		t.Fatal(err)
-	}
-	got := out.String()
-	if !strings.Contains(got, "Done") || strings.Contains(got, "Running") || !strings.HasSuffix(got, "end\n") {
-		t.Errorf("got %q, want the job listed as ended at 3", got)
+	poll := `/bin/sh -c 'exit 3' & p=$!
+/bin/sh -c 'i=0; until ` + zombieTest + ` || [ $i -ge 1000 ]; do /bin/sleep 0.01; i=$((i+1)); done' poll $p
+`
+	for _, tc := range []struct{ then, want string }{
+		// The table, read while the program is a zombie nobody has reaped.
+		{"jobs\n", "[1]+  Done                    /bin/sh -c 'exit 3'\n"},
+		// And the status, which the peek must leave for the goroutine's own
+		// wait to collect: a peek that reaped would leave that wait with no
+		// child, and the 3 would be lost.
+		{`wait %1; echo "st=$?"` + "\n", "st=3\n"},
+	} {
+		holdTheWindow(t, &beforeAJobsProgramIsWaitedFor, 2*time.Second)
+		f, err := syntax.Parse(poll+tc.then+"echo end", syntax.Core())
+		if err != nil {
+			t.Fatal(err)
+		}
+		sem := PosixSemantics()
+		sem.JobsListFinishedJobs = Yes
+		sem.JobsShowBackgroundCommand = Yes
+		out := &strings.Builder{}
+		r := newTestRunner(t, &Runner{
+			Semantics: &sem, Diagnostics: &Diagnostics{}, Name: "sh",
+			Stdout: out, Stderr: out, Env: []string{"PATH=/usr/bin:/bin"},
+		})
+		if _, err := r.Run(context.Background(), f); err != nil {
+			t.Fatal(err)
+		}
+		if got, want := out.String(), tc.want+"end\n"; got != want {
+			t.Errorf("then %q: got %q, want %q", tc.then, got, want)
+		}
 	}
 }
 
@@ -179,6 +190,15 @@ echo end`
 		t.Errorf("took %v and wrote %q, want the job listed running at once", took, out.String())
 	}
 }
+
+// zombieTest is a shell test that succeeds once process $1 is a zombie: /proc
+// on Linux, and `ps` where there is none.
+var zombieTest = func() string {
+	if runtime.GOOS == "linux" {
+		return `grep -q "^[0-9]* ([^)]*) Z" /proc/$1/stat 2>/dev/null`
+	}
+	return `/bin/ps -o stat= -p $1 2>/dev/null | grep -q Z`
+}()
 
 // holdTheWindow sets a window hook to hold a job's goroutine for d, until the
 // test ends.

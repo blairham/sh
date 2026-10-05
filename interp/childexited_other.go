@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Blair Hamilton
 // SPDX-License-Identifier: Apache-2.0
 
-//go:build !linux
+//go:build !linux && !darwin
 
 package interp
 

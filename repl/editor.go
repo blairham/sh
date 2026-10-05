@@ -409,6 +409,15 @@ type editor struct {
 	// the prompt by value, so each asks live for the one on the screen.
 	promptNow *drawnPrompt
 
+	// preRedrawDue is whether the key being handled is still owed its call
+	// to the pre-redraw widget. zsh makes that call once per key, before the
+	// key's draw, whether or not the key drew anything: measured 2026-10-04
+	// against zsh 5.9.2, `ab` in one read is two calls (`B=[a]`, then
+	// `B=[ab]`), and a `forward-char` at the end of the line, which moves
+	// nothing, is a call too (#5945). Tying the call to the redraw gave one
+	// call for the pair and none for the motion.
+	preRedrawDue bool
+
 	// answerInterrupt answers a ^C typed during the read, and reports whether
 	// the line is kept. Set by the session for the length of a prompt's read
 	// and nil otherwise, where a ^C gives the line up as it always has. See
@@ -465,6 +474,7 @@ type editor struct {
 func (e *editor) readLine(prompt drawnPrompt) (string, error) {
 	e.line, e.pos = e.line[:0], 0
 	e.promptNow = nil
+	e.preRedrawDue = false
 	// Nothing has been written on the way out of this read yet. Here rather
 	// than where the word is written, so that the answer belongs to the read
 	// being started and not to whichever earlier one last ended in ^D.
@@ -571,6 +581,21 @@ func (e *editor) readLine(prompt drawnPrompt) (string, error) {
 		// The prompt on the screen, which a widget the last key ran may have
 		// replaced. See promptNow.
 		prompt = e.live(prompt)
+		// The pre-redraw call the key just handled is owed and did not get,
+		// because it drew nothing — a motion that could not move — or put
+		// its draw off behind more input. zsh calls it once per key whatever
+		// the key drew. What the widget changed is drawn now, or with the
+		// rest of the input.
+		if e.preRedrawDue && e.countRepeat <= 0 {
+			e.preRedrawDue = false
+			if e.specialWidget("zle-line-pre-redraw", prompt) {
+				if e.inputPending() {
+					e.pendingDraw = true
+				} else {
+					e.redraw(prompt)
+				}
+			}
+		}
 		if e.pendingDraw && !e.inputPending() && e.countRepeat <= 0 {
 			e.redraw(prompt)
 		}
@@ -613,6 +638,9 @@ func (e *editor) readLine(prompt drawnPrompt) (string, error) {
 		// What the keystroke before this one ran, now that it is over, and
 		// the start of this one's record.
 		e.noteLastKey()
+		// A key has begun, and it is owed one pre-redraw call. See
+		// preRedrawDue.
+		e.preRedrawDue = true
 		e.keyBytes, e.keyBinding = append(e.keyBytes[:0], buf[0]), nil
 		// A count typed before this key is spent by it. Some keys spend it
 		// here and are done — see spendCount — and the rest are played as
@@ -1143,7 +1171,13 @@ func (e *editor) moveTo(pos int, prompt drawnPrompt) {
 // and is what every case below falls back to.
 func (e *editor) redraw(prompt drawnPrompt) {
 	prompt = e.live(prompt)
-	e.specialWidget("zle-line-pre-redraw", prompt)
+	// Once for the key being handled, before the draw it makes — see
+	// preRedrawDue. A key that draws nothing gets its call at the top of
+	// the read loop instead.
+	if e.preRedrawDue && !e.inShell {
+		e.preRedrawDue = false
+		e.specialWidget("zle-line-pre-redraw", prompt)
+	}
 	e.pendingDraw = false
 	cols := e.cols()
 	if cols <= 0 {

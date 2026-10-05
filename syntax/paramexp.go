@@ -1286,12 +1286,18 @@ var paramFlagArgs = map[byte]int{
 // is measured, and a letter inside it that this interpreter does not carry
 // is refused by name.
 //
+// `x` is not in it either. No zsh 5.9.2 flag has that letter: `${(x)a}` is
+// `error in flags near position 4` there, and `${(l:3:x:)a}` is position 8,
+// the `x`, because a fill has to follow the width's closing delimiter
+// directly. With `x` in the set, the first was refused by name as
+// unimplemented, and the second blamed the `:` after it (#6114).
+//
 // `=` and `^` are not in it, though they are expansion modifiers outside the
 // group (`${=x}`, `${^x}`): measured 2026-10-04 on zsh 5.9.2, `${(=)x}` and
 // `${(^)x}` are both `error in flags near position 4`, and `${(v=2; echo x)}`
 // is position 5 — the `=` — where reading it as a flag moved the blame on to
 // the `2`.
-const paramFlagChars = "#%@AabcCDefFgiIjklLmMnNoOpPqQrRsStuUvVwWXxzZ0~*BE-+_"
+const paramFlagChars = "#%@AabcCDefFgiIjklLmMnNoOpPqQrRsStuUvVwWXzZ0~*BE-+_"
 
 // scanParamFlags reads the parenthesized group src opens with, filling the
 // flag fields, and returns the text after the closing parenthesis.
@@ -1301,7 +1307,9 @@ const paramFlagChars = "#%@AabcCDefFgiIjklLmMnNoOpPqQrRsStuUvVwWXxzZ0~*BE-+_"
 // because the report belongs to the run and not to the read: a bad flag in
 // a branch never taken is diagnosed nowhere, which is measured. Running out
 // of text before the closing parenthesis is the same failure at the
-// position just past the end, which is also measured: `${(Ux}` errors at 5.
+// position just past the end, which is where the expansion's `}` stands.
+// Measured 2026-10-05 on zsh 5.9.2 (#6114): `${(Q}` errors at 5, `${(Qz}` at
+// 6, `${(j.a.}` at 8 and `${(l:3:}` at 8, each the `}`.
 func (p *Parser) scanParamFlags(e *ParamExpr, src string) string {
 	e.HasFlags = true
 	e.Src = src
@@ -1495,7 +1503,10 @@ func (p *Parser) scanParamFlags(e *ParamExpr, src string) string {
 			i += len(open) + j + len(closing)
 		}
 	}
-	e.FlagsErrPos = len(src) + 2
+	// Past the end: i+3 for an i of len(src), the same count every other
+	// position here uses. This said len(src)+2 and blamed the last flag, one
+	// short of zsh (#6114).
+	e.FlagsErrPos = len(src) + 3
 	return ""
 }
 

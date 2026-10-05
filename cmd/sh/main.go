@@ -206,6 +206,12 @@ func run(argv []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	// it is the install's answer and not the dialect's, and a caller that
 	// picked a dialect to inspect it has not asked to read `/etc`.
 	sh.SystemStartupDirectory = systemStartupDirectory(own.dialect)
+	if own.dialect == "zsh" {
+		// An installed zsh's function library after this installation's own
+		// on the default $fpath (#6128) — the install's answer, so set here
+		// beside the startup directory and for the same reason.
+		sh.SystemFunctionDirectories = zsh.SystemFunctionDirectories
+	}
 	sh = withHighlighting(sh, own)
 	// And a second line for a name that is another preset's builtin, at a
 	// prompt and in this binary alone — see cmd/sh/dialecthint.go.

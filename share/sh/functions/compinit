@@ -36,9 +36,9 @@
 #     `-d` file, and reads it back on the next start; a dump this shell wrote
 #     would be read by the other shell too, and the two must not trade one
 #     another's files.  `-d`, `-D` and `-C` are taken and change nothing else;
-#   * the completion widgets are not rebound to zsh's own `_main_complete`,
-#     which this shell does not ship: Tab keeps this shell's own completion,
-#     and what compinit records is what `compdef` and a plugin read back.
+#   * this shell ships no `_main_complete`: Tab reaches one only where an
+#     installed zsh's library is on $fpath (by default since #6128), and
+#     otherwise keeps this shell's own completion.
 
 emulate -L zsh -o extendedglob
 

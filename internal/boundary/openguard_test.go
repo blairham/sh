@@ -334,6 +334,17 @@ var exempt = map[string]string{
 		"why the roster has a sandboxcheck row of its own.",
 	// dialect/zsh. etcdir.go is not a builtin at all, which is why its
 	// reason is the first one on the list above rather than the second.
+	// fpathlib.go, the same reason as SystemStartupDirectory: the default
+	// $fpath's other installation (#6128).
+	"dialect/zsh.libraryUnder": "stats under the package-manager and system roots the dialect " +
+		"binary names (`/opt/homebrew`, `/usr`, …) to find an installed zsh's function library " +
+		"for the default $fpath (#6128). Fixed roots no script reaches, and it runs while the " +
+		"runner is seeded, before a line is read — what a refusal could protect is nothing.",
+	"dialect/zsh.isDir": "libraryUnder's and installationUnder's existence test, over the same " +
+		"fixed roots and the directories under them.",
+	"dialect/zsh.installationOnPath": "the lookup of `zsh` on the PATH the process was started " +
+		"with — the environment's, not a script's — to name an installation no root covers. " +
+		"Seeding time, like libraryUnder: nothing a script wrote reaches it.",
 	"dialect/zsh.SystemStartupDirectory": "the one stat that says whether this machine keeps " +
 		"zsh's system-wide startup files in `/etc` or in `/etc/zsh`, which is a build-time " +
 		"choice of zsh's and so differs between macOS and Debian (#3987). It is read by this " +

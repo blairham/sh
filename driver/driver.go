@@ -106,6 +106,20 @@ type Shell struct {
 	// five dialect binaries say so in one line each.
 	SystemStartupDirectory string
 
+	// SystemFunctionDirectories is the function library of another
+	// installed copy of the shell this dialect imitates, given the `PATH`
+	// the shell started with: directories appended to the default function
+	// search after this installation's own (#6128). Nil, or nil returned,
+	// appends nothing.
+	//
+	// The same split as SystemStartupDirectory, for the same reason: the
+	// answer is absolute paths into a real machine, so a Shell value reaches
+	// for none of them until the dialect binary says where to look. It is a
+	// function rather than a value because an environment that names the
+	// search replaces the default whole, and then nothing is looked for at
+	// all. See functiondirs.go.
+	SystemFunctionDirectories func(path string) []string
+
 	// PromptStyle is what this dialect does to a prompt parameter's value
 	// before it is drawn. The zero value draws it as it stands, which is
 	// what a shell without a dialect does.

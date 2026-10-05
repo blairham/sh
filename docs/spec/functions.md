@@ -8,8 +8,9 @@ what each one is measured to do, and where the implementation here parts
 company with the shell it was measured against.
 
 The default search is two directories derived from where the binary sits
-(`driver/functiondirs.go`), and until #1968 there was nothing in either of
-them. A real `~/.zshrc` reaches four of these names before it has done
+(`driver/functiondirs.go`), followed since #6128 by an installed zsh's own
+library where there is one (*Another installation's library, last* below),
+and until #1968 there was nothing in either of the two. A real `~/.zshrc` reaches four of these names before it has done
 anything of its own, and every one of them failed at the call with
 `function definition file not found`.
 
@@ -47,7 +48,66 @@ shell registered hooks byte-identically to zsh's and ran none of them.
 **Reading another installation's library stays reachable by hand** and always
 did; `FPATH=/opt/homebrew/share/zsh/5.9.2/functions` is a line in a startup
 file. The decision was only about what the *default* is, and the default is
-now this shell's own.
+this shell's own first — with, since #6128, another installation's after it.
+
+### Another installation's library, last
+
+The maintainer's decision on #6128 (2026-10-05): **when an installed zsh's
+function directory exists, it goes on the default `$fpath` after this
+installation's own two directories.** That is what makes zsh's completion
+system — `_main_complete` and the completers a real `~/.zshrc` configures with
+its zstyles — reachable from a startup file that runs `compinit`. Those files
+are *run*, the way any file a person installs on `$fpath` is run; nothing here
+reads one to write code from it, which is what keeps the clean-room line where
+`CLEANROOM.md` draws it. Every name this installation ships is still found
+first, so the library adds and never replaces.
+
+Its site directories come with it and in front of it, because that is the
+order the installation's own `$fpath` has them in. They hold what *other*
+programs install for zsh — git's `_git`, brew's, docker's — and real zsh lets
+those win over its library's own. Measured 2026-10-05 against the maintainer's
+startup file: with the library and not its site directory, `git <TAB>` drew the
+library's grouped list of 158 subcommands where real zsh draws git's own
+`-- common commands --`.
+
+**Found without starting zsh.** The honest question — `zsh -fc 'print
+$fpath'` — is a fork and an exec on every start. Instead `zsh.SystemFunctionDirectories`
+asks, in order, and stops at the first installation it finds (never a mixture
+of two versions' libraries):
+
+1. the package managers' roots — `/opt/homebrew`, `/usr/local`, `/opt/local`,
+   `/home/linuxbrew/.linuxbrew` — because a zsh somebody installed on purpose
+   is the one they mean when the operating system's is also there;
+2. the first `zsh` on the `PATH` the shell started with, resolved through its
+   links, two directories up from the binary — Nix, a private prefix; second
+   rather than first because a login shell's starting `PATH` is the system's
+   and names Apple's `/bin/zsh` on every Mac;
+3. `/usr`.
+
+Under a prefix the library is `share/zsh/functions`, else the newest
+`share/zsh/<version>/functions`; the site directories are
+`/usr/local/share/zsh/site-functions` and the prefix's `share/zsh/site-functions`,
+`vendor-functions` and `vendor-completions`, each where it exists. The three
+layouts it was written against are real zsh's own default `$fpath`
+(`env -u FPATH zsh -f -c 'print -l $fpath'`):
+
+| installation | its library |
+| --- | --- |
+| Homebrew 5.9.2, macOS | `/opt/homebrew/Cellar/zsh/5.9.2/share/zsh/functions` (also `/opt/homebrew/share/zsh/functions`) |
+| Apple's `/bin/zsh` 5.9 | `/usr/share/zsh/5.9/functions` |
+| Debian sid 5.9.2 | `/usr/share/zsh/functions/Calendar`, `…/Completion`, `…/Completion/Base`, … — every directory under the top one, not the top one |
+
+The flat layouts are recognized by their top directory alone, so the
+1235-entry Homebrew library is never listed; only Debian's tree is walked, and
+it is recognized first by one more `stat` of its `Completion` directory.
+Measured 2026-10-05 on an M-series Mac at load 10–17: **5 µs** a start with
+Homebrew's zsh installed, **35 µs** on the path that walks `PATH` and falls
+through to `/usr`.
+
+**`FPATH` in the environment still replaces the whole default** — the rule
+in `driver/functiondirs.go` — the other installation's library included, and
+then nothing is looked for. A
+machine with no zsh gets the two directories it always had.
 
 ### What this does not reach
 
@@ -405,9 +465,12 @@ Two divergences, both deliberate:
   `-d` file, and reads it back next time; a dump written here would be read
   by the other shell too, and the two must not trade files. `-d`, `-D` and
   `-C` are taken and change nothing else, and `compdump` does nothing at 0.
-* **Tab is not rebound to `_main_complete`**, which this shell does not ship,
-  and `_bash_complete` completes nothing: this shell's own completion stays,
-  and what compinit records is what a startup file and a plugin read back.
+* **This shell ships no `_main_complete`**, and `_bash_complete` completes
+  nothing. Where an installed zsh's library is on the default search (#6128),
+  the scan of it leaves Tab on that library's `_main_complete` — measured
+  2026-10-05, `zle -lL` after `compinit` lists the eight completion widgets
+  on `_main_complete`, as real zsh's does — and where none is, this shell's
+  own completion stays.
 
 And one wording: an `-F` function `compgen` cannot find is the shell's
 `command not found`, located at `compgen`'s own line where zsh's names an

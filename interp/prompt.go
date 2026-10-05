@@ -219,6 +219,21 @@ type PromptStyle struct {
 	// wrote, so there is no code for the shell to know the meaning of.
 	Visual map[rune]PromptVisual
 
+	// RestoreLeavesColors writes back only the attributes a restore finds in
+	// effect, and never a color.
+	//
+	// zsh's prompt and its completion explanations share a language and part
+	// company here. Measured on zsh 5.9.2, 2026-10-05, through a pty with
+	// `compadd -X` against `${(%)…}` over the same text:
+	//
+	//	%F{red}a%bz      prompt \e[31ma\e[0m\e[31mz   explanation \e[31ma\e[0mz
+	//	%U%S%Ba%bc       both write \e[0m\e[7m\e[4m after the a
+	//	%Bx%Uy%u         both write \e[24m\e[1m after the y
+	//
+	// So an explanation keeps track of boldface, standout and underline and
+	// not of the colors. dialect/zsh/compexplain.go is the reader.
+	RestoreLeavesColors bool
+
 	// Colors is the codes that set a color, and which half of the screen each
 	// sets. The code takes an argument in braces — zsh spells the foreground
 	// `%F{red}` — and the sequence itself is the terminal's rather than the
@@ -1582,6 +1597,9 @@ func (w *promptWalk) visualWritten(code rune, seq string) {
 		// `\e[31m \e[1m\e[31m \e[1m\e[31m` — one bold per `%B` and the color
 		// after each, never `\e[1m\e[1m`.
 		if a == v.Attribute {
+			continue
+		}
+		if w.st.RestoreLeavesColors && (a == AttributeForeground || a == AttributeBackground) {
 			continue
 		}
 		w.b.WriteString(w.visual[a])

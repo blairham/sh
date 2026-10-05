@@ -1827,9 +1827,19 @@ func (e *editor) list(matches []Candidate, prompt drawnPrompt) {
 	// Through listingRows rather than straight to columns: a listing is one
 	// block or several, and which rows share an arrangement is the
 	// completer's answer rather than this editor's. See completelist.go.
+	attributes := false
 	for _, row := range listingRows(matches, e.cols()) {
 		e.write(row)
 		e.write(e.newline())
+		attributes = attributes || strings.ContainsRune(row, '\x1b')
+	}
+	if attributes {
+		// A heading may leave an attribute on — a format style ending
+		// `%1F` does — and zsh ends every listing by switching them all
+		// off, so the line redrawn under it is not painted. Only here,
+		// where something could have been left on, so a plain listing's
+		// bytes are what they were.
+		e.write("\x1b[0m")
 	}
 	// The prompt and the line are not written back here: the caller redraws,
 	// and the redraw now knows it is starting from a fresh row.

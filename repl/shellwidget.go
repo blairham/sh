@@ -113,7 +113,10 @@ type Line struct {
 	// for the one whose ending a widget can see: the incremental search,
 	// which answers 1 for a search that ended failing and 3 for one that was
 	// abandoned (see searchEnd.status). Every other action is 0, measured —
-	// see Actions.Perform — and nothing reads this on the way in.
+	// see Actions.Perform — and nothing reads this on the way in. A shell's
+	// widget function hands back what it returned here too, which the
+	// editor does not read: it is for the shell's own `zle` from a
+	// descriptor handler, which answers it.
 	Status int
 }
 

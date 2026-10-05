@@ -1372,7 +1372,7 @@ func callWidget(r *interp.Runner, ctx context.Context, name string, args []strin
 		// runWidgetFunction's own cleanup cleared the flag that openEditorActive
 		// set, and without this a handler's *second* `zle` would be refused.
 		r.SetVar(zleActive, "1")
-		return 0
+		return out.Status
 	}
 	// `$WIDGET` is left alone: measured, a widget invoked from inside another
 	// still reports the *outer* one's name.
@@ -1382,7 +1382,13 @@ func callWidget(r *interp.Runner, ctx context.Context, name string, args []strin
 		r.SetExitStatus(status)
 		return 1
 	}
-	return 0
+	// The call answers what the function returned, on this path and the
+	// handler's above (#5939). Measured against zsh 5.9.2 through a pty:
+	// `w2() { return 3 }` makes `zle w2` 3, `w3() { false }` makes it 1, and
+	// `true` before it does not leak through. A wrapper built from other
+	// widgets tests exactly this — `zle backward-word || …` — and read 0 for
+	// a move that did not happen.
+	return r.ExitStatus()
 }
 
 // insideWidget reports whether this call is happening inside a widget, as
@@ -1522,6 +1528,7 @@ func runWidgetFunction(
 	// next command reads.
 	status := r.ExitStatus()
 	_, err := r.CallFunction(ctx, def.function, args...)
+	returned := r.ExitStatus()
 	r.SetExitStatus(status)
 	// What the function left the line as is the editor's from here, and
 	// whatever it assigned moved no offset.
@@ -1532,6 +1539,9 @@ func runWidgetFunction(
 		return in, false
 	}
 	out := widgetLine(r)
+	// What the function returned, for a `zle w` from a `zle -F` handler,
+	// which answers it (#5939). The editor reads nothing here.
+	out.Status = returned
 	// Read once: the request belongs to this keystroke, and the deferred
 	// restore puts back what was there before the call — nothing, at the
 	// top — so a widget that accepted cannot leave the next one accepting too.

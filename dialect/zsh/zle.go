@@ -1530,9 +1530,19 @@ func RunWidget(r *interp.Runner, ctx context.Context, name string, in repl.Line)
 func runWidgetFunction(
 	r *interp.Runner, ctx context.Context, name string, in repl.Line, args ...string,
 ) (repl.Line, bool) {
+	out, ran, _ := runWidgetCall(r, ctx, name, in, args...)
+	return out, ran
+}
+
+// runWidgetCall is runWidgetFunction, and whether the function stopped on a
+// fatal error — which a completion widget's caller needs, because such a
+// widget keeps its line and so the line cannot say so. See RunCompletion.
+func runWidgetCall(
+	r *interp.Runner, ctx context.Context, name string, in repl.Line, args ...string,
+) (out repl.Line, ran, stopped bool) {
 	def, defined := widgetDefinitionOf(r, name)
 	if !defined || !r.HasFunction(def.function) {
-		return in, false
+		return in, false, false
 	}
 	// `region_highlight` lined up with the line it is handed. From the
 	// editor, that line is what the editor did, and the offsets follow it;
@@ -1644,7 +1654,8 @@ func runWidgetFunction(
 	// variable: BUFFER` and a bell and the line stays, with the next
 	// widget seeing `$?` 0. The error is still taken back, or it would go on
 	// skipping everything after it.
-	broke := !nested && r.GiveUpTheLine() && def.completer == ""
+	stopped = !nested && r.GiveUpTheLine()
+	broke := stopped && def.completer == ""
 	r.SetExitStatus(status)
 	if broke {
 		if returned == 0 {
@@ -1653,7 +1664,7 @@ func runWidgetFunction(
 		r.SetExitStatus(returned)
 		out := widgetLine(r)
 		out.Broken, out.Status = true, returned
-		return out, true
+		return out, true, true
 	}
 	// What the function left the line as is the editor's from here, and
 	// whatever it assigned moved no offset.
@@ -1661,9 +1672,9 @@ func runWidgetFunction(
 		regionsAnchor(r, widgetBuffer(r))
 	}
 	if err != nil {
-		return in, false
+		return in, false, stopped
 	}
-	out := widgetLine(r)
+	out = widgetLine(r)
 	// What the function returned, for a `zle w` from a `zle -F` handler,
 	// which answers it (#5939). The editor reads nothing here.
 	out.Status = returned
@@ -1673,7 +1684,7 @@ func runWidgetFunction(
 	if asked, _ := r.GetVar(zleAccept); asked == "1" {
 		out.Accept = true
 	}
-	return out, true
+	return out, true, stopped
 }
 
 // openWidgetParameters gives the widget its five parameters, produced rather

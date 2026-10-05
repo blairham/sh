@@ -171,6 +171,39 @@ type optionArgHere struct {
 	name  string       // the option, as it is written on the line
 	index int          // 1-based: which of the option's arguments this is
 	spec  argumentSpec // its `:message:action`
+	// inWord is how much of the word under the cursor is the option rather
+	// than its argument, where the argument is written in that same word:
+	// `-f` of `-fx`, `--color=` of `--color=al`, `-af` of `-afx`. Zero is an
+	// argument that is a word of its own. See moveOptionIntoIPrefix.
+	inWord int
+}
+
+// moveOptionIntoIPrefix is what `-D` does to `$PREFIX` and `$IPREFIX` when
+// the argument it describes shares its word with the option: the option's
+// part moves out of the prefix, so what is completed — and matched against
+// the action's words — is the argument alone.
+//
+// Measured on zsh 5.9.2, 2026-10-05 from inside a `zle -C` widget, `-s`
+// given, reading `[IPREFIX|PREFIX]` before and after `comparguments -D`:
+//
+//	--color=-[col]:color:   cmd --color=al   [|--color=al] -> [--color=|al]
+//	--opt=[o]:oo:           cmd --opt=o      [|--opt=o]    -> [--opt=|o]
+//	-o=[oo]:ooo:            cmd -o=v         [|-o=v]       -> [-o=|v]
+//	-f+[file]:fname:        cmd -fx          [|-fx]        -> [-f|x]
+//	-f+[file]:fname:        cmd -f           [|-f]         -> [-f|]
+//	-x-[dir]:xx:            cmd -xq          [|-xq]        -> [-x|q]
+//	-a[all] and -f+         cmd -af          [|-af]        -> [-af|]
+//	-n[n]:nn:               cmd -n v         [|v]          -> [|v]   its own word
+//	*:rest:                 cmd plain        [|plain]      -> [|plain]
+//
+// Without it `ls --color=<TAB>` handed `compadd` the prefix `--color=` to
+// match `always`, `auto` and `never` against, and listed nothing.
+func (o optionArgHere) moveOptionIntoIPrefix(cs *completionState) {
+	if o.inWord <= 0 || o.inWord > len(cs.prefix) {
+		return
+	}
+	cs.iprefix += cs.prefix[:o.inWord]
+	cs.prefix = cs.prefix[o.inWord:]
 }
 
 // tag is what `_tags` is asked for on this argument's behalf, which is the
@@ -264,9 +297,29 @@ func compargumentsBuiltin(r *interp.Runner, ctx context.Context, args []string) 
 	return compargumentsQuery(r, cs, st.arguments, args)
 }
 
-// compargumentsQuery is the six read-back verbs, each of which reports
+// compargumentsQuery is the seven read-back verbs, each of which reports
 // whether there is anything of its kind to complete.
+//
+// **A verb that answers non-zero assigns nothing**, so the names it was
+// handed keep whatever the caller had in them. Measured on zsh 5.9.2,
+// 2026-10-05 from inside a `zle -C` widget, each name set to a marker first:
+//
+//	cmd -a<TAB>     -D  1   descrs, actions, subcs still the markers
+//	cmd a -<TAB>    -O  1   all four still the markers — `(-)1:first:` spent them
+//	cmd --color<TAB> -s 1  the parameter still the marker
+//	cmd <TAB>       -L  1   asked of an option with no argument: the same
+//
+// This emptied every one of them, which a caller that tests the status first
+// never sees and one that reads the names regardless does.
 func compargumentsQuery(r *interp.Runner, cs *completionState, a *argumentsState, args []string) int {
+	want, known := queryArity[args[0]]
+	if !known {
+		r.Diagnosef("invalid option: %s\n", args[0])
+		return 1
+	}
+	if !compArity(r, args[1:], want, want) {
+		return 1
+	}
 	switch args[0] {
 	case "-D":
 		return a.describeArguments(r, cs, args[1:])
@@ -278,11 +331,29 @@ func compargumentsQuery(r *interp.Runner, cs *completionState, a *argumentsState
 		return a.reportLine(r, args[1:])
 	case "-s":
 		return a.reportStack(r, cs, args[1:])
-	case "-a":
-		return boolStatus(len(a.args) > 0)
+	case "-L":
+		return a.describeOption(r, args[1:])
 	}
-	r.Diagnosef("invalid option: %s\n", args[0])
-	return 1
+	return boolStatus(len(a.args) > 0) // -a
+}
+
+// queryArity is how many words each read-back verb takes after itself, and it
+// is exact: fewer is `not enough arguments` and more is `too many arguments`,
+// both at status 1 and with nothing assigned. Measured on zsh 5.9.2,
+// 2026-10-05 from inside a `zle -C` widget, each verb asked with one word
+// fewer and one more than this, beside the count `_arguments` itself passes
+// (see the trace in this file's header):
+//
+//	-D 3   -O 4   -W 3   -M 1   -s 1   -a 0   -L 4
+//
+// This took the extra words and answered, which is a call zsh refuses.
+//
+// One cell is not reproduced: `comparguments -L -f a b` — an option and two
+// names — is not refused by zsh 5.9.2, which instead ends the shell. Its
+// declared minimum is evidently three words while it reads four; here it is
+// `not enough arguments`, which is what the two-word form answers there.
+var queryArity = map[string]int{
+	"-D": 3, "-O": 4, "-W": 3, "-M": 1, "-s": 1, "-a": 0, "-L": 4,
 }
 
 // compargumentsInit parses the specs and analyzes the line, and answers

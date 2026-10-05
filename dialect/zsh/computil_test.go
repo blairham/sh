@@ -1071,11 +1071,13 @@ func TestCompaddStrikesThroughTheArraysItIsGiven(t *testing.T) {
 //
 // Through `compadd -U -Q`, which is how a completion function gets a string
 // out past this editor's own filtering: `-U` turns the matching off and `-Q`
-// stops the quoting, so what comes back is exactly what went in.
+// stops the quoting, so what comes back is exactly what went in — once
+// `$IPREFIX` and `$ISUFFIX` are emptied, since `comparguments -D` moves an
+// attached option into the first and a match is inserted with both around it.
 func reported(t *testing.T, body, line string) string {
 	t.Helper()
 	got := completionFor(t,
-		"say() { compadd -U -Q -- \"$*\" }\n"+widgetOf(body), line)
+		"say() { IPREFIX=; ISUFFIX=; compadd -U -Q -- \"$*\" }\n"+widgetOf(body), line)
 	if len(got) == 0 {
 		return ""
 	}

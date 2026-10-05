@@ -23,6 +23,7 @@ import (
 //	w() { zle w2; return 0 } (w2 fails)  nothing: only the widget the key ran
 //	unsetopt beep; w() { return 1 }      nothing
 //	unsetopt beep; ^G                    nothing
+//	w() { zle send-break; return 1 }     nothing
 //
 // Each step types the key and then a widget that rewrites the line to a
 // marker, so the bytes between the two are exactly what the key wrote.
@@ -31,6 +32,7 @@ func TestAFailingWidgetRingsTheBell(t *testing.T) {
 falsy() { false }; zle -N falsy; bindkey '^Xf' falsy
 ok() { return 0 }; zle -N ok; bindkey '^Xo' ok
 inner() { zle fail; return 0 }; zle -N inner; bindkey '^Xi' inner
+sb() { zle send-break; return 1 }; zle -N sb; bindkey '^Xb' sb
 mark() { BUFFER="MARK$((n+=1))" }; zle -N mark; bindkey '^Xm' mark`
 	for _, tc := range []struct {
 		name, setup, key string
@@ -43,6 +45,7 @@ mark() { BUFFER="MARK$((n+=1))" }; zle -N mark; bindkey '^Xm' mark`
 		{"nobeep widget", "unsetopt beep", "\x14", false},
 		{"nobeep send-break", "unsetopt beep", "\a", false},
 		{"send-break", "", "\a", true},
+		{"send-break from a widget", "", "\x18b", false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			control, screen := widgetSession(t, rc, tc.setup)

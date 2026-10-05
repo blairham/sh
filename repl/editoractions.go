@@ -416,6 +416,33 @@ type ArgumentActions interface {
 	PerformWith(w Widget, in Line, args []string) (Line, bool)
 }
 
+// HistoryActions is the handle's half for a widget moving the history walk
+// to a line by its number — zsh's `HISTNO=n` — asked for with a type
+// assertion like ArgumentActions (#6050).
+type HistoryActions interface {
+	WalkTo(n int, in Line) Line
+}
+
+// WalkTo moves the walk to the history line numbered n, the way Up and Down
+// move it, and hands back the line it lands on. A number no line has moves
+// nothing. Measured 2026-10-05 through a pseudo-terminal against zsh 5.9.2,
+// after `: one` and `: two` and with `ab` typed: `HISTNO=1` reads back
+// `: one` with the cursor at its end and `$HISTNO` 1, Down from there is
+// `: two`, `HISTNO=3` again is `ab` at its end, and 0 or 9 leave the line
+// alone.
+func (a editorActions) WalkTo(n int, in Line) Line {
+	a.e.take(in)
+	if a.e.historyCount != nil {
+		to := n - (a.e.historyCount() + 1 - len(a.e.history))
+		if to >= 0 && to <= len(a.e.history) && to != a.e.browsing {
+			// From where the walk is to there in one step, so the line
+			// being left is kept as a draft the way a walk keeps it.
+			a.e.browse(to-a.e.browsing, a.e.live(a.prompt))
+		}
+	}
+	return a.e.give()
+}
+
 // PerformWith is Perform with the call's arguments.
 func (a editorActions) PerformWith(w Widget, in Line, args []string) (Line, bool) {
 	a.e.actionArgs = args

@@ -69,6 +69,24 @@ type drawnPrompt struct {
 	// string cannot be written.
 	right      string
 	rightCells int
+
+	// rightIndent is how many columns the right prompt keeps clear of the
+	// right-hand edge — zsh's `ZLE_RPROMPT_INDENT`, which is 1 unless a
+	// session says otherwise. Set wherever right is, by setRight; a right
+	// prompt with the zero value here is drawn into the last column, which a
+	// terminal with automatic margins is entitled to wrap.
+	rightIndent int
+}
+
+// setRight measures a rendered right prompt into p.
+//
+// The same treatment the left one has and for the same reason — a right
+// prompt is mostly escapes, and the editor places it by its *cells*. It has
+// no rows of its own: it is drawn on the row being typed on or it is not
+// drawn, so only the last row of what was rendered is kept.
+func (p *drawnPrompt) setRight(rendered string, indent int) {
+	measured := drawPrompt(rendered)
+	p.right, p.rightCells, p.rightIndent = measured.text, measured.cells, indent
 }
 
 // drawPrompt takes the markers out and counts what is left.

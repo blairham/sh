@@ -32,11 +32,12 @@ func TestTheRightPromptIsKeptWhileAColumnStandsBetween(t *testing.T) {
 		if got := c.cols - c.right - 2; got != c.widest {
 			t.Fatalf("the measurement and the formula disagree at %d/%d: %d", c.cols, c.right, got)
 		}
-		if !rightFits(promptCells, c.widest-promptCells, c.right, c.cols) {
+		prompt := drawnPrompt{cells: promptCells, rightCells: c.right, rightIndent: 1}
+		if !rightFits(prompt, c.widest-promptCells, c.cols) {
 			t.Errorf("at %d columns a %d-cell right prompt was dropped beside a line of %d",
 				c.cols, c.right, c.widest)
 		}
-		if rightFits(promptCells, c.widest-promptCells+1, c.right, c.cols) {
+		if rightFits(prompt, c.widest-promptCells+1, c.cols) {
 			t.Errorf("at %d columns a %d-cell right prompt survived a line of %d",
 				c.cols, c.right, c.widest+1)
 		}
@@ -47,10 +48,10 @@ func TestTheRightPromptIsKeptWhileAColumnStandsBetween(t *testing.T) {
 // case — measured at 7 columns, where the threshold is zero and a three-cell
 // prompt already exceeds it.
 func TestATerminalTooNarrowForBothSidesIsTheSameRule(t *testing.T) {
-	if rightFits(3, 0, 5, 7) {
+	if rightFits(drawnPrompt{cells: 3, rightCells: 5, rightIndent: 1}, 0, 7) {
 		t.Error("a 5-cell right prompt was drawn in 7 columns beside a 3-cell prompt")
 	}
-	if rightFits(3, 0, 5, 10) != true {
+	if rightFits(drawnPrompt{cells: 3, rightCells: 5, rightIndent: 1}, 0, 10) != true {
 		t.Error("10 columns is exactly enough and was refused")
 	}
 }
@@ -58,10 +59,10 @@ func TestATerminalTooNarrowForBothSidesIsTheSameRule(t *testing.T) {
 // No right half, and no width to place one in, are both nothing drawn. A
 // width of zero is not a width of eighty.
 func TestNothingIsDrawnWithoutARightHalfOrAWidth(t *testing.T) {
-	if rightFits(3, 0, 0, 80) {
+	if rightFits(drawnPrompt{cells: 3, rightIndent: 1}, 0, 80) {
 		t.Error("an empty right prompt was placed")
 	}
-	if rightFits(3, 0, 5, 0) {
+	if rightFits(drawnPrompt{cells: 3, rightCells: 5, rightIndent: 1}, 0, 0) {
 		t.Error("a right prompt was placed in a terminal of unknown width")
 	}
 }
@@ -70,17 +71,17 @@ func TestNothingIsDrawnWithoutARightHalfOrAWidth(t *testing.T) {
 // it — 40 columns, a five-cell right prompt, columns 35 through 39 of 40, or
 // 34 through 38 counted from zero.
 func TestTheRightPromptSitsWhereZshPutsIt(t *testing.T) {
-	if got := rightPromptAt(5, 40); got != 34 {
+	if got := rightPromptAt(drawnPrompt{rightCells: 5, rightIndent: 1}, 40); got != 34 {
 		t.Errorf("a 5-cell right prompt starts at column %d of 40, want 34", got)
 	}
-	if got := rightPromptAt(5, 40) + 5; got != 39 {
+	if got := rightPromptAt(drawnPrompt{rightCells: 5, rightIndent: 1}, 40) + 5; got != 39 {
 		t.Errorf("it ends at column %d, want 39 — leaving the last column blank", got)
 	}
 
 	// And the bytes: from a three-cell prompt with nothing typed, that is a
 	// forward move of 31 — which is the number zsh wrote.
 	var b strings.Builder
-	prompt := drawnPrompt{cells: 3, right: "RIGHT", rightCells: 5}
+	prompt := drawnPrompt{cells: 3, right: "RIGHT", rightCells: 5, rightIndent: 1}
 	if !writeRightPrompt(&b, prompt, 0, 40) {
 		t.Fatal("it was not drawn")
 	}
@@ -92,7 +93,7 @@ func TestTheRightPromptSitsWhereZshPutsIt(t *testing.T) {
 // It moves with the edge and not with the line: ten characters typed put the
 // cursor ten columns further along, and the forward move is ten shorter.
 func TestItStaysAgainstTheEdgeWhileTheLineGrows(t *testing.T) {
-	prompt := drawnPrompt{cells: 3, right: "RIGHT", rightCells: 5}
+	prompt := drawnPrompt{cells: 3, right: "RIGHT", rightCells: 5, rightIndent: 1}
 	for _, c := range []struct{ typed, forward int }{{0, 31}, {10, 21}, {30, 1}} {
 		var b strings.Builder
 		if !writeRightPrompt(&b, prompt, c.typed, 40) {
@@ -119,7 +120,7 @@ func TestItStaysAgainstTheEdgeWhileTheLineGrows(t *testing.T) {
 // do. The erase runs from the end of the line so the gap goes with it, and the
 // cursor is put back where it was found.
 func TestAnAcceptedLineDoesNotKeepItsRightPrompt(t *testing.T) {
-	prompt := drawnPrompt{cells: 3, right: "RIGHT", rightCells: 5}
+	prompt := drawnPrompt{cells: 3, right: "RIGHT", rightCells: 5, rightIndent: 1}
 
 	var b strings.Builder
 	rightPromptErase(&b, prompt, 10, 40, 8)
@@ -134,5 +135,22 @@ func TestAnAcceptedLineDoesNotKeepItsRightPrompt(t *testing.T) {
 	rightPromptErase(&none, prompt, 31, 40, 8)
 	if none.Len() != 0 {
 		t.Errorf("a row with no right prompt on it was erased: %q", none.String())
+	}
+}
+
+// ZLE_RPROMPT_INDENT moves both the edge the right prompt sits against and
+// the widest line that keeps it. Measured 2026-10-04 against zsh 5.9.2 at 40
+// columns with `PS1=$'up\n> '` and `RPS1=TIME`: the widest line kept is 33
+// at an indent of 0, 32 at 1 and 30 at 3, and `TIME` ends at the last
+// column, one short of it and three short of it.
+func TestTheIndentMovesTheEdgeAndTheThreshold(t *testing.T) {
+	for _, c := range []struct{ indent, widest, end int }{{0, 33, 39}, {1, 32, 38}, {3, 30, 36}} {
+		prompt := drawnPrompt{cells: 2, right: "TIME", rightCells: 4, rightIndent: c.indent}
+		if !rightFits(prompt, c.widest, 40) || rightFits(prompt, c.widest+1, 40) {
+			t.Errorf("at an indent of %d the widest line kept is not %d", c.indent, c.widest)
+		}
+		if got := rightPromptAt(prompt, 40) + 3; got != c.end {
+			t.Errorf("at an indent of %d it ends at column %d, want %d", c.indent, got, c.end)
+		}
 	}
 }

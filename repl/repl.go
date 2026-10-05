@@ -580,12 +580,19 @@ func (s Shell) Run(ctx context.Context) (int, error) {
 	// recorded and being recorded anyway, and it is what the suite's inner
 	// shells do on every one of their lines (#4177).
 	hist := s.historyFile()
-	earlier := s.recalled(ctx, hist)
+	// The file whole, for the dialect's list, and held to HISTSIZE for the
+	// editor's. zsh numbers its events by everything it read, so an entry the
+	// size dropped on the way in still moves the numbers on: with HISTSIZE=3
+	// and a five-line file, `fc -l` lists the newest two as 4 and 5, where
+	// seeding the held three numbered them from 1 (#5921, measured
+	// 2026-10-04 on zsh 5.9.2). bash's seed counts nothing for what its size
+	// drops, so the whole file seeds it to the same list as before.
+	earlier, seed := s.starting(ctx, hist)
 	if s.Runner != nil && s.Runner.HistorySkipsTheFile() {
 		// A dialect whose startup files said not to: the lines read are
 		// dropped before anything sees them (#5920). See
 		// interp.Runner.SetHistorySkipsTheFile.
-		earlier = nil
+		earlier, seed = nil, nil
 	}
 	// And into the dialect's list, once, before either loop: `history`, `fc`
 	// and every `!` reference read that one, and a session whose earlier
@@ -593,7 +600,7 @@ func (s Shell) Run(ctx context.Context) (int, error) {
 	// while the up arrow walked them (#4177). Seeded rather than recorded —
 	// they are already in the file. See interp.Runner.SetHistorySeed.
 	if s.Runner != nil {
-		s.Runner.SeedHistoryEntries(earlier)
+		s.Runner.SeedHistoryEntries(seed)
 		// And that this reader is the one filling that list, which is what
 		// lets a builtin drop the line it is written on. Said here rather
 		// than derived, exactly as the script's front end says it: the
@@ -2564,7 +2571,25 @@ func (s Shell) recorded(own HistoryRecorder, line string) {
 }
 
 // recalled is the list this session can walk: what the front end's sources
-// supply, and then what the history file holds.
+// supply, and then what the history file holds. See starting.
+func (s Shell) recalled(ctx context.Context, hist historyFile) []string {
+	earlier, _ := s.starting(ctx, hist)
+	return earlier
+}
+
+// starting is what a session starts from twice over: the list the editor
+// walks, with the file held to HISTSIZE, and the list the dialect is seeded
+// with, with the file whole. Both put the sources first.
+func (s Shell) starting(ctx context.Context, hist historyFile) (earlier, seed []string) {
+	sourced := s.sourcedLines(ctx)
+	wholeFile := hist.whole(ctx)
+	earlier = append(append([]string(nil), sourced...), hist.within(wholeFile)...)
+	seed = append(append([]string(nil), sourced...), wholeFile...)
+	return earlier, seed
+}
+
+// sourcedLines is what the front end's sources supply, which a session puts
+// ahead of what the history file holds.
 //
 // The file last, so it is the recent end of the walk — the up arrow reaches
 // this machine's own tail before it reaches a tool's longer memory. Each
@@ -2572,9 +2597,9 @@ func (s Shell) recorded(own HistoryRecorder, line string) {
 // before the first prompt, where there is somewhere to put a complaint, and a
 // session that would not start because a history tool has a bug is worse than
 // a session that starts without it.
-func (s Shell) recalled(ctx context.Context, hist historyFile) []string {
+func (s Shell) sourcedLines(ctx context.Context) []string {
 	if len(s.HistorySources) == 0 {
-		return hist.Lines(ctx)
+		return nil
 	}
 	guard := s.guard()
 	var lines []string
@@ -2588,7 +2613,7 @@ func (s Shell) recalled(ctx context.Context, hist historyFile) []string {
 		}
 		lines = append(lines, got...)
 	}
-	return append(lines, hist.Lines(ctx)...)
+	return lines
 }
 
 // historyRules is what this session was told to leave out, read from the

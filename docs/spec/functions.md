@@ -903,8 +903,8 @@ Differences:
   the first, standard output for the usage.
 * `cdr -l` puts `~` back for `$HOME` only. It was written before the `(D)`
   flag, which also puts back a named directory, existed (#5980).
-* With `recent-dirs-pushd`, zsh's `pushd` prints the stack in an interactive
-  shell. This shell's does not yet (#5982).
+* With `recent-dirs-pushd`, `pushd` prints the stack in an interactive
+  shell, as zsh's does (#5982).
 * `cdr -e` edits the list with `vared`. It has no row, because there is no
   terminal to edit at.
 

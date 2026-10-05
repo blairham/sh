@@ -45,8 +45,9 @@ alias which-command=whence
 
 // The directory stack, as shell. The same machinery the bash dialect's
 // prelude carries, with the measured differences kept: this engine's `pushd`
-// and `popd` move in silence — only `dirs` prints, one line, current
-// directory first, $HOME abbreviated to `~`. An empty stack refuses `popd`
+// and `popd` print the stack only in an interactive shell, and not under
+// `pushdsilent` or `-q` (#5982); `dirs` prints one line, current directory
+// first, $HOME abbreviated to `~`. An empty stack refuses `popd`
 // with status 1, and says so through `diagnose`, which is what puts this
 // shell's own location — the builtin's name between the file and the line —
 // in front of a sentence written here (#603, interp/prelude.go).
@@ -216,6 +217,17 @@ __dirs_minus() {
 		esac
 	fi
 }
+__dirs_shown() {
+	# An interactive shell writes the stack after pushd and popd move it,
+	# unless pushdsilent is set or the call said -q; a script writes nothing
+	# (#5982).
+	[[ -o interactive ]] || return 0
+	[[ -o pushdsilent ]] && return 0
+	case $__DIRS_OPTS in
+	*q*) return 0 ;;
+	esac
+	dirs
+}
 pushd() {
 	local __old=$PWD __spec= __DIRS_OPTS= __target= __d __gone=
 	while [ $# -gt 0 ]; do
@@ -228,8 +240,9 @@ pushd() {
 	done
 	if [ -n "$__spec" ]; then
 		__dirs_minus "$__spec"
-		__dirs_rotate "$__spec" ${__DIRS_OPTS:+-$__DIRS_OPTS}
-		return $?
+		__dirs_rotate "$__spec" ${__DIRS_OPTS:+-$__DIRS_OPTS} || return $?
+		__dirs_shown
+		return 0
 	fi
 	if [ $# -eq 0 ] && [[ -o pushdtohome ]]; then
 		# pushdtohome: no operand is the home directory, pushed as one.
@@ -241,12 +254,14 @@ pushd() {
 			# where it was — where bash refuses and stays put.
 			cd ${__DIRS_OPTS:+-$__DIRS_OPTS} "$HOME" || return 1
 			dirstack=("$__old")
+			__dirs_shown
 			return 0
 		fi
 		set -- ${dirstack[@]+"${dirstack[@]}"}
 		cd ${__DIRS_OPTS:+-$__DIRS_OPTS} "$1" || return 1
 		shift
 		dirstack=("$__old" "$@")
+		__dirs_shown
 		return 0
 	fi
 	__target=$1
@@ -265,6 +280,7 @@ pushd() {
 		done
 	fi
 	dirstack=("$__old" "$@")
+	__dirs_shown
 }
 popd() {
 	local __spec= __i __k __len __DIRS_OPTS=
@@ -299,6 +315,7 @@ popd() {
 		cd ${__DIRS_OPTS:+-$__DIRS_OPTS} "$1" || return 1
 		shift
 		dirstack=("$@")
+		__dirs_shown
 		return 0
 	fi
 	# Any other entry is taken out where it stands and the shell does not
@@ -316,6 +333,7 @@ popd() {
 	done
 	shift
 	dirstack=("$@")
+	__dirs_shown
 }
 `
 

@@ -16074,7 +16074,8 @@ is the Go-runtime row driver/rlimit.go documents and is ours.
 
 **The directory stack** stays in the prelude — shell over `cd`, the
 extension seam working as designed — and became a real stack: `pushd`
-pushes and prints the stack (silently, in zsh), a bare `pushd` exchanges
+pushes and prints the stack (in zsh, only in an interactive shell
+without `pushdsilent` or `-q`, #5982), a bare `pushd` exchanges
 the top entry with the current directory, `popd` pops, and `dirs` prints
 everything on one line, current directory first, `$HOME` as `~`, read
 from `$PWD` at print time so a plain `cd` never leaves it stale. Two

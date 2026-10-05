@@ -91,7 +91,7 @@ func (e *editor) spendCount(b byte, prompt drawnPrompt) (bool, byte) {
 	e.count = prefixCount{}
 	e.keyNumeric = &n
 	if b >= 0x20 && b != del {
-		r, err := e.readRune(b)
+		r, err := e.readTypedRune(b)
 		if err != nil {
 			return true, b
 		}

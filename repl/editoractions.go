@@ -193,7 +193,18 @@ type editorActions struct {
 }
 
 func (a editorActions) Perform(w Widget, in Line) (Line, bool) {
+	ownKeys := in.Keys != "" && in.Keys == string(a.e.keyBytes)
 	a.e.take(in)
+	if w == WidgetSelfInsert && ownKeys {
+		// `self-insert` types the last character of the keys it is called
+		// for, and that includes the keystroke's own: measured 2026-10-04
+		// against zsh 5.9.2, a widget on `^Xm` that runs `zle .self-insert`
+		// inserts `m`, and one on `ESC q` inserts `q` (#5926). take adopts
+		// only keys that differ from the keystroke's — a `read-command`'s —
+		// so a sequence's own last character was never what got typed, and
+		// the line got whatever printable key came before it.
+		a.e.adoptKeys(in.Keys)
+	}
 	a.e.actionStatus = 0
 	// Through runWidget and not a copy of it, which is the whole point: a key
 	// bound to `up-line-or-history` and a widget that calls `zle
@@ -205,6 +216,19 @@ func (a editorActions) Perform(w Widget, in Line) (Line, bool) {
 	// `$NUMERIC`, whether typed before the key or assigned by the widget.
 	// See countedAction.
 	w, times := countedAction(w, in.Numeric)
+	back := -1
+	if w == WidgetSelfInsert && in.Numeric != nil {
+		// Typed as many times as the count says, and for a negative count
+		// with the cursor left in front of what was typed — what a count
+		// before a printable key does (see typeCounted). Measured from a
+		// widget: `NUMERIC=3; zle .self-insert` on `^Xn` makes `ab` with the
+		// cursor at 1 into `annnb` at 4, -3 into `annnb` at 1, and 0 types
+		// nothing.
+		times = *in.Numeric
+		if times < 0 {
+			times, back = -times, a.e.pos
+		}
+	}
 	for i := range times {
 		if i > 0 && a.e.killing {
 			// One kill for the whole count, measured: two words killed
@@ -212,6 +236,9 @@ func (a editorActions) Perform(w Widget, in Line) (Line, bool) {
 			a.e.killedBefore = true
 		}
 		a.e.runWidget(Binding{Widget: w}, a.e.live(a.prompt))
+	}
+	if back >= 0 {
+		a.e.pos = back
 	}
 	if w.IsIncrementalSearch() {
 		// The keys the widget is about are now the key that ended the

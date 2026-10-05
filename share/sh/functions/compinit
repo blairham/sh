@@ -61,6 +61,48 @@ done
 typeset -gHA _comps _services _patcomps _postpatcomps _compautos
 autoload -Uz compaudit compdump
 
+# The state a `_main_complete` reads, which zsh's compinit leaves behind and
+# this one did not until #6210 — so Tab after a plain `compinit` printed
+# `_main_complete:412: _lastcomp: assignment to invalid subscript range` and
+# `no matches found: *:globbed-files` and completed nothing.  The names and
+# their types are measured (`typeset +` before and after `compinit -D`, and
+# `${(t)…}`): `_lastcomp` a hidden association, `compprefuncs` and
+# `comppostfuncs` empty arrays, `_comp_dumpfile` the dump's path, and
+# `_comp_options` and `_comp_setup` a hidden array and a hidden scalar, the
+# second evaluated by `_main_complete` before it does anything else.
+#
+# **What the two hold is this file's own**, written from what a completion
+# function sees in zsh 5.9.2 and not from zsh's values: a completer of our
+# own printing `set -o`, `trap` and `$IFS`, with options flipped at the
+# prompt in groups of twenty and bisected (2026-10-05).  Every option below
+# came back to the value given here whatever the prompt had; the rest kept
+# the prompt's (`autocd`, `globdots`, `promptsubst`, `verbose`,
+# `magicequalsubst`, `pipefail` and the history options among them).
+# `shglob` could not be measured — zsh's own completion stops parsing with it
+# set — and is left alone.  Inside, `IFS` is space, tab, carriage return,
+# newline and NUL; a `ZERR` trap is gone and `DEBUG` stays; and `INT` and
+# `QUIT` are `TRAPINT` and `TRAPQUIT`, which put `Killed by signal in <the
+# function> after <n>s` under the line — what zsh draws when ^C interrupts a
+# completion.
+typeset -gHA _lastcomp
+typeset -ga compprefuncs comppostfuncs
+typeset -g _comp_dumpfile=${dumpfile[1]:-${ZDOTDIR:-$HOME}/.zcompdump}
+typeset -gHa _comp_options
+_comp_options=(
+	bareglobqual extendedglob glob multibyte multifuncdef nullglob
+	rcexpandparam unset
+	noallexport noaliases noautonamedirs nocshjunkiequotes nocshnullglob
+	noerrexit noerrreturn noglobassign noglobsubst nohistsubstpattern
+	noignorebraces noignoreclosebraces noksharrays nokshglob nokshtypeset
+	nomarkdirs nooctalzeroes noposixbuiltins noposixidentifiers
+	noshwordsplit notypesettounset nowarncreateglobal noxtrace
+)
+typeset -gH _comp_setup=$'local IFS=$\' \\t\\r\\n\\0\'
+setopt localoptions localtraps localpatterns ${_comp_options[@]}
+trap - ZERR
+TRAPINT() { zle -M "Killed by signal in ${funcstack[2]} after ${SECONDS}s"; zle -R; return 130 }
+TRAPQUIT() { zle -M "Killed by signal in ${funcstack[2]} after ${SECONDS}s"; zle -R; return 131 }'
+
 local -a scan
 scan=( $fpath )
 if (( audit )); then

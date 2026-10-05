@@ -26,7 +26,9 @@ zle -N show; bindkey '^Xs' show
 c() { BUFFER= }; zle -N c; bindkey '^Xc' c
 `)
 	steps := []struct{ keys, want string }{
-		{"x\x14", "cf: read-only variable: BUFFER"},
+		// With the carriage return: the function's output goes out the way a
+		// widget's does, and raw mode alone writes a bare line feed.
+		{"x\x14", "cf: read-only variable: BUFFER\r\n"},
 		{"\x18s", "GOT[W=cw t=scalar-local-readonly-special|x|unset]"},
 		{"\x18cprint -r -- END$((1+1))\r", "END2"},
 	}

@@ -728,6 +728,11 @@ func (s Shell) Run(ctx context.Context) (int, error) {
 	jobSignal, stopNotifying := s.jobNotifying()
 	defer stopNotifying()
 
+	// And the wake a window resize pokes, so the line is drawn at the new
+	// width at once rather than at the next key (#5908).
+	resizeSignal, stopResizing := resizeWaking()
+	defer stopResizing()
+
 	// And the session's own shell functions, reachable as prompt segments for
 	// the length of this session. Here rather than where the theme is built,
 	// because calling a function needs a context and a front end wiring a
@@ -740,6 +745,14 @@ func (s Shell) Run(ctx context.Context) (int, error) {
 	ed := s.newEditor(ctx, state)
 	if signal != nil {
 		ed.wake, ed.woke = signal.fd, signal.drain
+	}
+	if resizeSignal != nil {
+		ed.resizeWake, ed.resizeWoke = resizeSignal.fd, resizeSignal.drain
+		ed.resized = func() {
+			// `$COLUMNS` and `$LINES` follow the window, as they do at a
+			// prompt, before the prompt that may read them is rendered.
+			s.trackWindowSize()
+		}
 	}
 	if jobSignal != nil {
 		ed.jobWake, ed.jobWoke = jobSignal.fd, jobSignal.drain

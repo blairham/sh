@@ -426,7 +426,10 @@ func (e *editor) serveDescriptors(prompt drawnPrompt) drawnPrompt {
 	watching := e.watch != nil && e.descriptorReady != nil
 	waking := e.wake != nil
 	notifying := e.jobWake != nil
-	if !watching && !waking && !notifying {
+	// Only with a terminal to wait on beside it: the resize wake is in every
+	// interactive session, and a wait on it alone would never see a key.
+	resizing := e.resizeWake != nil && e.inFd != nil
+	if !watching && !waking && !notifying && !resizing {
 		return prompt
 	}
 	if e.inputPending() {
@@ -465,6 +468,12 @@ func (e *editor) serveDescriptors(prompt drawnPrompt) drawnPrompt {
 				fds = append(fds, jobs)
 			}
 		}
+		resize := -1
+		if resizing {
+			if resize = e.resizeWake(); resize >= 0 {
+				fds = append(fds, resize)
+			}
+		}
 		if len(fds) == 0 {
 			return prompt
 		}
@@ -497,6 +506,11 @@ func (e *editor) serveDescriptors(prompt drawnPrompt) drawnPrompt {
 				// knows or cares what.
 				e.woke()
 				prompt = e.reprompt(prompt)
+				continue
+			}
+			if fd == resize {
+				e.resizeWoke()
+				prompt = e.resizeRedraw(prompt)
 				continue
 			}
 			if fd == jobs {

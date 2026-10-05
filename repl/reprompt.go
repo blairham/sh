@@ -114,6 +114,27 @@ func (e *editor) drawPromptAgain(old, fresh drawnPrompt) {
 	e.redraw(fresh)
 }
 
+// resizeRedraw draws the prompt and the line again at the window's new width,
+// the moment the window changes.
+//
+// Measured 2026-10-04 against zsh 5.9.2 through a pseudo-terminal, with
+// `PS1=$'up\n> '`, `RPS1=TIME` and `ab` typed, resizing from 40 columns to
+// 50 and then 30: zsh writes `\r\r\e[A…\e[Jup\r\n> ab\e[K\e[41CTIME\e[45D`
+// and then the same with `\e[21C` at once, the whole prompt again from its
+// first row with the right prompt against the new edge. This shell wrote
+// nothing until the next key (#5908).
+func (e *editor) resizeRedraw(prompt drawnPrompt) drawnPrompt {
+	if e.resized != nil {
+		e.resized()
+	}
+	// The same prompt and not a fresh rendering of it: with `setopt
+	// prompt_subst` and `RPS1='c${COLUMNS}'`, the same resize still draws
+	// `c40`, measured — `$COLUMNS` has moved and the prompt is not
+	// expanded again until the next one.
+	e.drawPromptAgain(prompt, prompt)
+	return prompt
+}
+
 // live is the prompt on the screen: the one a reset-prompt or a re-render
 // drew, where one has, and otherwise the one the caller was carrying.
 func (e *editor) live(prompt drawnPrompt) drawnPrompt {

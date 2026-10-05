@@ -11,12 +11,12 @@ import (
 	"github.com/blairham/sh/repl"
 )
 
-// `$CUTBUFFER` inside a widget is the kill the editor handed in, and what the
+// `$CUTBUFFER` inside a widget is the editor's kill, and what the
 // widget assigns is the kill that goes back (#5916). Measured 2026-10-04
 // through a pseudo-terminal against zsh 5.9.2: `${(t)CUTBUFFER}` is
 // `scalar-local-special`, `CUTBUFFER=hello` then `zle yank` inserts `hello`,
 // and the next widget reads `hello` back.
-func TestCutBufferIsTheKillTheLineCarries(t *testing.T) {
+func TestCutBufferIsTheEditorsKill(t *testing.T) {
 	r, out := zleRunner(t, `w() { print -r -- "${(t)CUTBUFFER} [$CUTBUFFER]"; CUTBUFFER=hello }
 zle -N w
 `)

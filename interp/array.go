@@ -200,6 +200,17 @@ func (a Array) clone() Array {
 	if a == nil {
 		return nil
 	}
+	if _, contiguous := a.contiguous(); contiguous {
+		// One copy of the slice, and a deeper one only where an element
+		// holds an array of its own — which is ksh93's alone.
+		out := a.shallowClone()
+		for i, v := range out.dense {
+			if v.Nested != nil {
+				out.dense[i] = v.clone()
+			}
+		}
+		return out
+	}
 	out := NewArray(a.Len())
 	for k, v := range a.All() {
 		out.Set(k, v.clone())
@@ -255,6 +266,19 @@ func (a Array) extent(base int) (from, to int) {
 // [Runner.elemText], which needs the store to find them. Every reader of an
 // element's value is on the runner for that reason.
 func (r *Runner) denseElems(a Array) ([]string, bool) {
+	if els, ok := a.contiguous(); ok {
+		out := make([]string, len(els))
+		for i, v := range els {
+			if v.Nested == nil && v.Kind == ElementHoldsItsValue {
+				// The string the element holds, which is what elemText
+				// answers for it, without the call.
+				out[i] = v.Str
+				continue
+			}
+			out[i] = r.elemText(v)
+		}
+		return out, true
+	}
 	lo, hi, any := a.bounds()
 	if any && (lo != 0 || hi != a.Len()-1) {
 		return nil, false
@@ -3742,6 +3766,14 @@ func (r *Runner) subscriptIndexAsWritten(written, text string) (int, bool) {
 func (r *Runner) arrayElementCount(name string) (int, bool) {
 	name = r.throughNameref(name)
 	if a, ok := r.Arrays[name]; ok {
+		if els, contiguous := a.contiguous(); contiguous {
+			// Every reading of an array with no gap is all of it, so the
+			// count needs no reading built: what readArray would have
+			// returned is exactly this long, and it asks nothing on the
+			// way for this shape. A third of the arrays a real startup
+			// read were read only to be counted.
+			return len(els), true
+		}
 		return len(r.readArray(a)), true
 	}
 	if produce, ok := r.DynamicArrays[name]; ok {

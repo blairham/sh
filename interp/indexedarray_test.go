@@ -262,3 +262,20 @@ func TestAShortGapStaysInTheSlice(t *testing.T) {
 		t.Fatal("a write a million past the end stayed in the slice")
 	}
 }
+
+// A clone reaches a nested array too, in the slice's fast path as in the
+// map's: a write through the copy's nested element must not reach the
+// original's.
+func TestACloneCopiesNestedElementsInBothForms(t *testing.T) {
+	for _, sparse := range []bool{false, true} {
+		a := ArrayOf(Scalar("x"), Element{Nested: ArrayOf(Scalar("p"), Scalar("q"))})
+		if sparse {
+			a.Set(-1, Scalar("neg"))
+		}
+		b := a.clone()
+		b.Get(1).Nested.Set(0, Scalar("Z"))
+		if got := a.Get(1).Nested.Get(0).Str; got != "p" {
+			t.Fatalf("sparse=%v: the original's nested element became %q", sparse, got)
+		}
+	}
+}

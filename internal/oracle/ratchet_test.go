@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -50,5 +51,27 @@ func TestABaselineRoundTrips(t *testing.T) {
 	}
 	if _, err := LoadBaseline(filepath.Join(t.TempDir(), "missing.txt")); !os.IsNotExist(err) {
 		t.Errorf("missing baseline: err = %v, want not-exist", err)
+	}
+}
+
+// TestARegressionCarriesItsAnswers: what the ratchet prints under a regressed
+// case is the run's own want and got for it, so a red run that never
+// reproduces still says what the shell answered (#6118).
+func TestARegressionCarriesItsAnswers(t *testing.T) {
+	rep := &Report{Matches: []Match{
+		{CaseID: "a/ok", OK: true, Want: Result{Stdout: "same"}, Got: Result{Stdout: "same"}},
+		{CaseID: "b/moved", Want: Result{Stdout: "st=0\nrestated"}, Got: Result{Stdout: "st=1", Status: 0}},
+	}}
+	got := rep.Answers("b/moved")
+	for _, want := range []string{"want ", "got  ", "restated", "st=1"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("Answers(b/moved) = %q, missing %q", got, want)
+		}
+	}
+	if strings.Index(got, "restated") > strings.Index(got, "got  ") {
+		t.Errorf("Answers(b/moved) = %q: the recorded answer belongs on the want line", got)
+	}
+	if got := rep.Answers("z/not-graded"); got != "" {
+		t.Errorf("Answers(z/not-graded) = %q, want nothing", got)
 	}
 }

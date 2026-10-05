@@ -319,6 +319,26 @@ type Diagnostics struct {
 	// the file too, and is #5884's.
 	StartupFileLocatedAsAFileAtAPrompt bool
 
+	// StartupFileNamedInPlaceOfTheShell names a run-time diagnostic from a
+	// startup file by the file's path where the shell's own name would go,
+	// as a script is named by its path — while the file runs, and not for a
+	// function it defined being called later.
+	//
+	// ksh93's, measured 2026-10-05 on ksh93u+ with `$ENV` read under `-E -c`
+	// and under `-i` alike:
+	//
+	//	nosuchcmd_q on line 2         /…/env.sh: line 2: nosuchcmd_q: not found
+	//	cd /nonexistent on line 3     /…/env.sh[3]: cd: /nonexistent: [No such …]
+	//	a `.` inside it               /…/env.sh[2]: .: line N: …
+	//	a function it defined,        /…/env.sh: line N: … while the file runs,
+	//	  called                      ksh: line N: … from the program after it
+	//
+	// where a file read by `.` from `-c` is `ksh: .: line 2:` — so this is
+	// about a startup file, not about files. bash and zsh name the file by a
+	// rule of their own (Diagnostics.LocationNamesTheCurrentFile), and dash
+	// and BusyBox ash name the shell (#5884).
+	StartupFileNamedInPlaceOfTheShell bool
+
 	// StartupParseFailureStatus is what a parse failure in a startup file
 	// leaves in `$?` for whatever runs after it. See StartupParseStatus.
 	StartupParseFailureStatus StartupParseStatus

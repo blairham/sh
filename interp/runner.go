@@ -1712,6 +1712,10 @@ type Runner struct {
 	// says the logout file being read is read from inside one. See
 	// Runner.ExitFoundStatus and Runner.ReadingLogoutAfterExit.
 	exitFoundStatus int
+
+	// startupFileName is the startup file being read, in the dialect that
+	// names one where the shell's name goes. See Runner.name.
+	startupFileName string
 	logoutByExit    bool
 	// exitRanOutsideAFile says the controlExit being carried came from
 	// `exit` running somewhere other than in a file this shell was reading,
@@ -6616,6 +6620,11 @@ func (r *Runner) fatalExpansionQuiet() {
 // is why the answer is read from Diagnostics rather than written into
 // Runner.Name, which would change `$0` with it.
 func (r *Runner) name() string {
+	if r.startupFileName != "" {
+		// A startup file standing in for the shell's name while it runs.
+		// See Diagnostics.StartupFileNamedInPlaceOfTheShell.
+		return r.startupFileName
+	}
 	// Only where the shell is what is being named. On the script route Name
 	// is the script's path, and every shell in the panel prints that — the
 	// dialect that shortens its own name shortens only its own. It is the

@@ -2581,6 +2581,15 @@ func (r *Runner) expandAtList(s syntax.Span, sp splitPolicy, head bool) ([]strin
 		}
 		if s.Quoting != syntax.Unquoted {
 			if len(elems) == 0 && e.Op == syntax.ParamNone {
+				if r.subscriptBeforeTheFirst && !r.subscriptIsARange(e) && r.flagKeepsFields(e) {
+					// The one element named is the one before the first,
+					// which in a quoted expansion that keeps its fields is no
+					// field at all. Measured on zsh 5.9.2 under -f with one
+					// parameter: `"${@[0]}"` and `"${@[(R)zz]}"` are no word,
+					// where `"${@[5]}"`, past the other end, is one empty one
+					// (#5992).
+					return nil, true
+				}
 				if !r.wholeArrayIndex(e) && !dotRanged(e) && !r.subscriptIsARange(e) {
 					// A subscript naming *one* element is one field
 					// whatever the element turned out to be, exactly as
@@ -10192,11 +10201,13 @@ type subscriptHold struct {
 	elems []string
 	ok    bool
 	held  bool
+	// before is subscriptBeforeTheFirst as the read left it.
+	before bool
 }
 
 // holdSubscript keeps a subscript's elements for the rest of this span.
 func (r *Runner) holdSubscript(e *syntax.ParamExpr, elems []string, ok bool) {
-	r.subscriptHeld = subscriptHold{node: e, elems: elems, ok: ok, held: true}
+	r.subscriptHeld = subscriptHold{node: e, elems: elems, ok: ok, held: true, before: r.subscriptBeforeTheFirst}
 }
 
 // heldSubscript is what this node's subscript already came to in this span,
@@ -10206,6 +10217,7 @@ func (r *Runner) heldSubscript(e *syntax.ParamExpr) (elems []string, ok, held bo
 		return nil, false, false
 	}
 	h := r.subscriptHeld
+	r.subscriptBeforeTheFirst = h.before
 	return h.elems, h.ok, true
 }
 

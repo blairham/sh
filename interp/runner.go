@@ -2398,6 +2398,15 @@ type Runner struct {
 	// of a span's expansion to the scalar half so the inner runs once. See
 	// nestedHold.
 	nestedHeld nestedHold
+	// subscriptBeforeTheFirst says the subscript read last named the place
+	// before an array's first element — a `[0]` where the first is `[1]`, or a
+	// backward search that found nothing — rather than a place past its end.
+	// Both name no element; only the first is *no field* under a quoted
+	// expansion that keeps its fields, measured on zsh 5.9.2: with `q=(a)`,
+	// `"${(@)q[0]}"` and `"${(@)q[(R)zz]}"` are no word where `"${(@)q[5]}"`
+	// is one empty one (#5992). Reset by every read, and carried by the
+	// subscript hold so a second reader of the same span sees it too.
+	subscriptBeforeTheFirst bool
 	// nestedShape is whether the nested expansion expanded last came to a
 	// list, kept past the hold so the expansion one level out can ask it.
 	// See nestedShapeOf.

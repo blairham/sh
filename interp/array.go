@@ -2412,6 +2412,7 @@ func (r *Runner) arraySubscript(e *syntax.ParamExpr) ([]string, bool) {
 	if elems, ok, held := r.heldSubscript(e); held {
 		return elems, ok
 	}
+	r.subscriptBeforeTheFirst = false
 	elems, ok := r.readArraySubscript(e)
 	r.holdSubscript(e, elems, ok)
 	return elems, ok
@@ -3312,6 +3313,11 @@ func (r *Runner) elemAtFor(name string, elems []string, n int, length subscriptL
 		pos = n - r.arrayBase()
 	}
 	if pos < 0 {
+		if n >= 0 {
+			// Below the base by a subscript that counts up: zsh's `[0]`. See
+			// Runner.subscriptBeforeTheFirst.
+			r.subscriptBeforeTheFirst = true
+		}
 		if n < 0 {
 			// Counting back past the first element, which is the one reach
 			// that is not simply "no element". See

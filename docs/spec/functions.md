@@ -671,8 +671,8 @@ and run against this copy by `dialect/zsh/contrib2_test.go`. Among them:
 
 Differences: the usage is this file's own words, for the reason given for
 `select-word-style`. The line number in `zmv:N: no matches found` is this file's.
-And the deepest-first order is worked out here, because the `od` glob qualifier
-that would give it is not implemented yet (#5951).
+And the deepest-first order is worked out here. The `od` glob qualifier that
+gives it arrived after the function was written (#5951).
 
 ### `zargs`
 

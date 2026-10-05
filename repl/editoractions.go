@@ -23,8 +23,10 @@ import (
 // others. Moving the cursor, killing a word, yanking, undoing and walking
 // history are transformations of the line plus state the editor already owns;
 // there is no read loop to re-enter for any of them, and `Line` in and `Line`
-// out is exactly the shape they have. The two that really do read a key stay
-// refused, which is what performable below is for.
+// out is exactly the shape they have. The two that really do read a key were
+// refused at first, and both refusals turned out wrong — they read through
+// the editor's own buffer while the key loop waits on the call, so there is
+// one reader still. See Perform below.
 //
 // **What made the difference is that the round trip alone is not enough for
 // the commonest thing a real widget does.** A plugin that walks history for a
@@ -73,10 +75,14 @@ type Actions interface {
 	// the editor last saw. Passing it in on every call is also what keeps the
 	// two copies from drifting over a run of them.
 	//
-	// false is an action this editor will not perform from here. There is one
-	// of those and it is the one that is a mode of its own — see performable.
-	// The line comes back untouched with it, so a caller that reports the
-	// refusal and carries on has not lost anything.
+	// What comes back carries the action's status in Line.Status, which is
+	// 0 for every action but the incremental search.
+	//
+	// false is an action this editor will not perform from here, with the
+	// line back untouched so a caller that reports the refusal and carries
+	// on has not lost anything. This editor has none any more — the last
+	// was the search, until #5895 — but the answer stays in the contract
+	// for an editor that has one.
 	Perform(w Widget, in Line) (Line, bool)
 
 	// Redisplay draws the line as it stands now.
@@ -136,34 +142,29 @@ type Actions interface {
 	UndoTo(n int, in Line) (Line, bool)
 }
 
-// performable reports whether an action can be run from outside the editor.
+// Every action this editor has can be performed from outside it, the two that
+// read keys of their own included.
 //
-// Everything this editor does except the one that is a mode of its own: a
-// reverse incremental search has its own read loop and its own drawing, and
-// running it from inside a widget really would be re-entering the read loop
-// mid-keystroke — the thing the file comment above says cannot be done.
+// **There used to be a refusal here, and it was measured wrong twice.** The
+// reasoning both times was that an action which reads a key would be
+// re-entering the read loop mid-keystroke. It is not: such an action reads
+// through the editor's own buffer, and the key loop is waiting on the widget
+// call rather than on the terminal, so there is still exactly one reader.
 //
-// **A completion used to be the second, and the refusal was wrong.** The
-// reasoning was that a completion may stop to ask whether to print a long
-// listing, so it reads a key too. It does, and it reads it the same way the
-// editor reads every other key — through the editor's own buffer, with the
-// key loop waiting on this call rather than on the terminal — so there is no
-// second reader and nothing to re-enter. Measured 2026-09-18 through a
-// pseudo-terminal against zsh 5.9.2, with a widget of one line:
+// A completion went first (#3043). It may stop to ask whether to list, and
+// measured 2026-09-18 against zsh 5.9.2, a widget whose body is `zle
+// complete-word` fills in the common part on one press and lists on the next
+// — Tab's own two-keystroke rule, reached by name.
 //
-//	mywid() { zle complete-word }; zle -N mywid; bindkey '^O' mywid
-//
-// Pressing the key on `cat uniq` filled in `uniq_` and pressing it again
-// listed the three matches — which is Tab's own two-keystroke rule, reached by
-// name from inside a widget. A shell that refuses this has a plugin's
-// fallback to the standard completion print an error instead (#3043), and the
-// refusal cost more than the listing question ever did.
-//
-// A closed list rather than a flag on each action, because the question is
-// asked in exactly one place and a flag would be a field on nothing.
-func performable(w Widget) bool {
-	return w != WidgetSearchHistoryBackward
-}
+// The incremental search went second (#5895), and it was the one that cost
+// most: zsh-autosuggestions wraps every widget, the search included, and its
+// wrapper calls the original by name — so with the refusal, `C-r` printed an
+// error and searched nothing for everyone running it. Measured 2026-10-04
+// against zsh 5.9.2, a wrapper around `zle .history-incremental-search-backward`
+// gets the whole search: its row under the line, its keys, and its ending,
+// with the line it found in `$BUFFER` and the code after the call running
+// before the key that ended the search does. See searchEnd.status for what
+// the call answers.
 
 // editorActions is the handle: the editor, plus the prompt the line in front
 // of it was drawn under.
@@ -177,17 +178,26 @@ type editorActions struct {
 }
 
 func (a editorActions) Perform(w Widget, in Line) (Line, bool) {
-	if !performable(w) {
-		return in, false
-	}
 	a.e.take(in)
+	a.e.actionStatus = 0
 	// Through runWidget and not a copy of it, which is the whole point: a key
 	// bound to `up-line-or-history` and a widget that calls `zle
 	// up-line-or-history` must be the same action, including where the cursor
 	// lands and what the walk leaves behind at each step. A second
 	// implementation here is how the two would come to disagree.
 	a.e.runWidget(Binding{Widget: w}, a.prompt)
-	return a.e.give(), true
+	if w == WidgetSearchHistoryBackward {
+		// The keys the widget is about are now the key that ended the
+		// search: measured 2026-10-04 against zsh 5.9.2, `$KEYS` after the
+		// call is `^M` when Return ended it, `^E` for `C-e`, `^G` for
+		// `C-g`, and empty after `C-c`. The keystroke that ran the widget
+		// is still the one the editor records as the last widget — that is
+		// the binding's, and the binding is unchanged.
+		a.e.keyBytes = append(a.e.keyBytes[:0], a.e.searchKey...)
+	}
+	out := a.e.give()
+	out.Status = a.e.actionStatus
+	return out, true
 }
 
 func (a editorActions) Redisplay(in Line) {

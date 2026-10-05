@@ -108,6 +108,13 @@ type Line struct {
 	// the action says it read instead. zsh's `$KEYS`. A key an action read
 	// for itself is what a self-insert after it types — see editor.take.
 	Keys string
+
+	// Status is what an action performed from outside the editor ends with,
+	// for the one whose ending a widget can see: the incremental search,
+	// which answers 1 for a search that ended failing and 3 for one that was
+	// abandoned (see searchEnd.status). Every other action is 0, measured —
+	// see Actions.Perform — and nothing reads this on the way in.
+	Status int
 }
 
 // runShellWidget runs one of the shell's own actions over the line, draws

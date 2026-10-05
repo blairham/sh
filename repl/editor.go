@@ -262,6 +262,19 @@ type editor struct {
 	// bash and ksh93 and accepts the line in zsh, so an editor built as a bare
 	// literal takes the majority. See HistoryStyle.SearchNewlineAcceptsTheLine.
 	searchNewlineAccepts bool
+	// searchInterruptAborts is the same kind of answer about `C-c`: zsh
+	// takes it for the search and bash for the line. See
+	// HistoryStyle.SearchInterruptAbortsTheSearch.
+	searchInterruptAborts bool
+
+	// actionStatus is the status the action just performed ends with, for
+	// the few whose ending a widget can see. Zeroed before every action an
+	// outside caller asks for; see editorActions.Perform.
+	actionStatus int
+	// searchKey is the key that ended the last reverse search, or nothing
+	// where none did. A widget that ran the search reads it as `$KEYS`
+	// afterwards; see editorActions.Perform.
+	searchKey []byte
 
 	// pushed is input this editor reads before it reads the terminal: the byte
 	// a search mode took and did not want, or characters an action outside the

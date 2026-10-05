@@ -88,6 +88,9 @@ func (r *Runner) RunStartupFile(ctx context.Context, path, src string, failed fu
 	// shell — see Frame.Startup.
 	r.pushFrame(Frame{File: path, Startup: true})
 	defer r.popFrame()
+	// And what the shell is inside while it reads it, which is the file and
+	// not yet the program: see EvalContextStartupFile.
+	defer r.enterEvalContext(EvalContextStartupFile)()
 	if failed == nil {
 		failed = func(err error, _ bool) int {
 			r.errf("%s", r.diag().ParseDiagnostic(path, "", err, src))

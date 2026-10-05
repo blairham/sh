@@ -80,6 +80,6 @@ func (r *Runner) hangUpJobsIfAsked() {
 		// Written plainly, exactly as the held-exit sentence beside it is and
 		// for the same reason: the shell names itself in the wording and
 		// there is no line number for a prompt's diagnostics to carry.
-		r.errf("%s\n", Wording(w, "", r.jobsHungUpName(), sent))
+		r.noticef("%s\n", Wording(w, "", r.jobsHungUpName(), sent))
 	}
 }

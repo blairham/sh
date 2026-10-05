@@ -6437,14 +6437,14 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 	// terminal sits untouched on standard input. Raw rather than through the
 	// diagnostic path, because a prompt carries no location in any shell.
 	if prompt, ok := optArg['p']; ok && inputIsTerminal(in) {
-		r.errf("%s", prompt)
+		r.noticef("%s", prompt)
 	}
 	// The operand's prompt is written on the same terms as the option's, and
 	// measured the same way: `printf 'x\n' | zsh -c 'read "v?p"'` writes
 	// nothing and still reads into v, so the split is unconditional and only
 	// the writing is for a terminal.
 	if prompted && inputIsTerminal(in) {
-		r.errf("%s", operandPrompt)
+		r.noticef("%s", operandPrompt)
 	}
 
 	// The delimiter: a newline unless -d renamed it. The argument's first
@@ -8837,7 +8837,7 @@ func biExit(r *Runner, ctx context.Context, args []string) int {
 	// a file the shell is reading (#6058).
 	if r.holdsExitForJobs(func() {
 		if r.LeavingWord != "" && !r.leavingWithheld && r.sourceDepth == 0 {
-			r.errf("%s\n", r.LeavingWord)
+			r.noticef("%s\n", r.LeavingWord)
 		}
 	}) {
 		// The shell stays, so `logout`'s silence was for this attempt only:

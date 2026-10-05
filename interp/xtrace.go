@@ -1706,7 +1706,7 @@ func (r *Runner) tracef(format string, args ...any) {
 			return
 		}
 	}
-	r.errf(format, args...)
+	r.noticef(format, args...)
 }
 
 // traceWordLayout is how a word is written into a trace line where it is

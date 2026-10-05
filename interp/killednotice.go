@@ -108,7 +108,7 @@ func (r *Runner) killedNotice(sig syscall.Signal, pid int, command string) {
 		// reproduced because this dialect is bash 5.3 and that is what bash
 		// 5.3 does; if it is fixed upstream the drift check is what will
 		// say so.
-		r.errf("%s\n", Wording(dg.KilledCommandNoticeBareForTerminate, "%-27[1]s%[2]s",
+		r.noticef("%s\n", Wording(dg.KilledCommandNoticeBareForTerminate, "%-27[1]s%[2]s",
 			r.signalDescription(sig), command))
 		return
 	}
@@ -116,7 +116,7 @@ func (r *Runner) killedNotice(sig syscall.Signal, pid int, command string) {
 	notice := Wording(dg.KilledCommandNotice, "%5[1]d %-27[2]s%[3]s",
 		pid, r.signalDescription(sig), command)
 	if dg.KilledCommandNoticeUnprefixed {
-		r.errf("%s\n", notice)
+		r.noticef("%s\n", notice)
 		return
 	}
 	r.diagf("%s\n", notice)

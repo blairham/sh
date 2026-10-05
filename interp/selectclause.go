@@ -80,7 +80,7 @@ func (r *Runner) selectClause(ctx context.Context, c *syntax.SelectClause) error
 		show := true
 		for {
 			if show {
-				r.errf("%s", menu)
+				r.noticef("%s", menu)
 				show = false
 			}
 			r.selectPrompt()
@@ -194,7 +194,7 @@ func (r *Runner) selectPrompt() {
 	if !ok {
 		prompt = Wording(r.diag().SelectPrompt, "#? ")
 	}
-	r.errf("%s", prompt)
+	r.noticef("%s", prompt)
 }
 
 // selectEOF ends the loop when the input runs out.
@@ -211,7 +211,7 @@ func (r *Runner) selectPrompt() {
 // than the subject.
 func (r *Runner) selectEOF() error {
 	if r.ask(r.sem().SelectEofEndsPromptLine, "select closing the prompt line when the input ends") {
-		r.errf("\n")
+		r.noticef("\n")
 	}
 	if r.ask(r.sem().SelectEofPrintsNewline, "select printing a newline on output when the input ends") {
 		r.printf("\n")

@@ -535,6 +535,13 @@ type naming struct {
 // builtin. Everything else — a path that is not there, a file that will not
 // run, a directory — reads the same either way, so it is said in one place.
 func (r *Runner) cannotRun(err error, how naming) int {
+	// Everything said below is what zsh's forked child says, after the
+	// fork — `command not found`, a file that will not start — so it is not
+	// a diagnostic the line editor moves out of the way of. See
+	// Runner.BeforeDiagnostic (#6085).
+	outer := r.diagnosingForTheChild
+	r.diagnosingForTheChild = true
+	defer func() { r.diagnosingForTheChild = outer }()
 	var pe *pathError
 	if !errors.As(err, &pe) {
 		// Not a lookup failure — a start that failed for some other reason.

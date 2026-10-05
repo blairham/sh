@@ -243,6 +243,9 @@ type editor struct {
 	// message is the text a widget's `zle -M` put under the line. See
 	// Actions.Message.
 	message string
+	// rowEnded is a diagnostic having taken the line's row while a widget
+	// ran, so the next draw puts the whole prompt back. See diagnosticrow.go.
+	rowEnded bool
 	// undoLimit is the change a key's undo stops at, 0 for none. See
 	// Actions.UndoLimit.
 	undoLimit int
@@ -1371,6 +1374,10 @@ func (e *editor) redraw(prompt drawnPrompt) {
 		}()
 	}
 	prompt = e.live(prompt)
+	// A diagnostic ended the row the line was on, so this draw starts on a
+	// row of its own and has the leading rows to put back. See
+	// diagnosticrow.go.
+	e.redrawAfterAnEndedRow(prompt)
 	// Once for the key being handled, before the draw it makes — see
 	// preRedrawDue. A key that draws nothing gets its call at the top of
 	// the read loop instead.

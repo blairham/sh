@@ -1115,6 +1115,29 @@ type Diagnostics struct {
 	// answer. dash says 127 — the message names the candidate and the
 	// status says not found — where ksh93 and zsh say 126. Zero means 126.
 	DirectoryOnPathStatus int
+
+	// NotADirectoryIsNotFound reads ENOTDIR — a path that goes on through
+	// something that is not a directory, `f/` or `f/x` with `f` a file — as
+	// the path not being there: a command named by it is not found, at 127,
+	// and a redirection's reason is the dialect's own not-there text, read
+	// and write alike. dash and BusyBox ash, measured 2026-10-05 (#6092):
+	//
+	//	                 dash                            ash
+	//	./exe/           ./exe/: not found         127   ./exe/: not found   127
+	//	: < f/           cannot open f/: No such file    can't open f/: no such file
+	//	: > f/x          cannot create f/x: Directory nonexistent
+	//	                                                 can't create f/x: nonexistent directory
+	//
+	// where bash and ksh93 print the kernel's `Not a directory` at 126, and
+	// zsh prints it at 127 — see NotADirectoryExecStatus.
+	NotADirectoryIsNotFound bool
+
+	// NotADirectoryExecStatus is the status a command named by a path the
+	// kernel refused with ENOTDIR reports, where the wording is the
+	// kernel's. zsh says `not a directory: ./exe/` at 127, measured
+	// 2026-10-05 on 5.9.2 (#6092), the status it gives a path that is not
+	// there; bash and ksh93 say 126. Zero means 126.
+	NotADirectoryExecStatus int
 	// CdHomeNotSet is `cd` with no operand and no HOME. One verb: the name.
 	// Only the two dialects that treat it as an error say anything.
 	CdHomeNotSet string

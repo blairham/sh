@@ -3120,6 +3120,10 @@ func Diagnostics() interp.Diagnostics {
 		ExecNotFound:           "%[1]s: not found",
 		DirectoryReason:        "Permission denied",
 		DirectoryOnPathStatus:  127,
+		// A path through a file is a path that is not there, for a command
+		// and a redirection alike (#6092). See
+		// interp.Diagnostics.NotADirectoryIsNotFound.
+		NotADirectoryIsNotFound: true,
 
 		// `.` and the files it reads. The quotes around the name are this
 		// shell's and are not decoration: `. nosuchfile` is `ash: .: line 0:

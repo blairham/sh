@@ -6814,8 +6814,11 @@ func Diagnostics() interp.Diagnostics {
 		ArithErrorNamesTheBuiltin: false,
 		LowercaseReason:           true,
 		DirectoryReason:           "Permission denied",
-		HashNotFound:              "no such command: %[1]s",
-		HashNamedDirNotFound:      "hash: no such directory name: %[1]s",
+		// The kernel's `not a directory`, at the status of a path that is not
+		// there (#6092). See interp.Diagnostics.NotADirectoryExecStatus.
+		NotADirectoryExecStatus: 127,
+		HashNotFound:            "no such command: %[1]s",
+		HashNamedDirNotFound:    "hash: no such directory name: %[1]s",
 		// `rehash` and `unhash` are this shell's own names for the two
 		// halves of the table, and each refuses under its own name.
 		// Measured 2026-09-18 on zsh 5.9.2: `rehash foo` is `too many

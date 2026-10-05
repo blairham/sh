@@ -914,13 +914,15 @@ func TestCompquoteQuotesInPlace(t *testing.T) {
 	}
 }
 
-// TestCompfilesAndCompgroupsAnswerWithoutClaiming is the pair that is
-// registered rather than written, and the assertion is that each one's answer
-// is the *conservative* one — see compfiles.go and compgroups.go.
+// TestCompfilesAndCompgroupsAnswerWithoutClaiming is the statuses of the
+// calls with nothing to work on — see compfiles.go and compgroups.go. The
+// `-r` row was 1 while compfiles narrowed nothing; measured 2026-10-05 against
+// zsh 5.9.2, `-r` over an empty or unset array is 0, which is its rule for
+// one match or none (#6144).
 func TestCompfilesAndCompgroupsAnswerWithoutClaiming(t *testing.T) {
 	for _, c := range []struct{ name, body, want string }{
 		{"compfiles builds no pattern", `compfiles -p t a '' ' ' '' f '*'; say $?`, "0"},
-		{"compfiles removes nothing", `compfiles -r t ''; say $?`, "1"},
+		{"compfiles narrows nothing", `compfiles -r t ''; say $?`, "0"},
 		{"compfiles ignores nothing", `compfiles -i t ''; say $?`, "1"},
 		{"compgroups", `compgroups alpha beta; say $?`, "0"},
 	} {

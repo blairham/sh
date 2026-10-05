@@ -382,10 +382,18 @@ functions, with Tab left where `compinit` put it, `cmd/zsh` beside
 So the names and their order are zsh's, and the rest of an option stack
 is offered. What zsh draws *beside* a name is not: see below.
 
-**One of the eight is smaller than zsh's.** `compfiles` builds no glob
-pattern and prunes nothing: that one is an optimisation `_path_files`
-can do without, and the conservative answers it gives are correct rather
-than approximate.
+**`compfiles` was smaller than zsh's, and that was not an optimisation.**
+It built no glob pattern on the reading that `_path_files` could do
+without one. But the array `_path_files` hands in holds the directory
+already handled — `''` for the working directory — and the pattern is what
+comes back, so an array left alone globbed nothing and every file
+completion through the shipped `_files` was empty (#6144). It now builds
+the pattern zsh 5.9.2 builds, measured from a completion widget calling it
+with chosen arguments: each element glob-quoted, the skipped part, a
+pattern for `$PREFIX` under the match specification (`RE`, `[Rr][Ee]` for
+a case-folding one, nothing for a specification that reaches the start of
+the word), then the file pattern or `*(-/)`; and `-r` narrows by a finished
+first component. `compfiles.go` has the table; `-i` still ignores nothing.
 
 Two others were, until the editor's seam grew somewhere to put a row.
 `compgroups` created groups nothing could order and `compdescribe`

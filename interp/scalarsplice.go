@@ -49,7 +49,9 @@ import "strings"
 // question is not "has this name a value" but "is there a name here", which is
 // exactly the boundary spanReplacesElements already draws from the other side.
 func (r *Runner) subscriptSplicesCharacters(name string) bool {
-	if _, isArray := r.Arrays[name]; isArray {
+	if r.arrayDeclared(name) {
+		// Stored or produced, the pipeline record included — see
+		// Runner.arrayDeclared, which carries the third kind (#6088).
 		return false
 	}
 	if _, produced := r.DynamicArrays[name]; produced {

@@ -238,5 +238,11 @@ func (r *Runner) arrayElemsOfTheName(name string) ([]string, bool) {
 	if produce, produced := r.DynamicArrays[name]; produced {
 		return produce(r), true
 	}
+	// And the pipeline record, the fourth kind, produced by a path of its
+	// own: `true|false; pipestatus[1,2]=(8)` splices on zsh 5.9.2 where this
+	// refused it as a scalar (#6088).
+	if elems, record := r.pipelineStatuses(name); record {
+		return elems, true
+	}
 	return nil, false
 }

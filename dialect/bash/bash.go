@@ -804,6 +804,9 @@ func Semantics() interp.Semantics {
 	// four spellings and on an empty array, which counts as no value.
 	s.TransformLetterCheckedOnlyWhenValued = interp.Yes
 	s.AssignmentUpdatesPipelineStatus = interp.Yes
+	// Every bare assignment counts, so the array literal's question is not
+	// reached; answered the same. See Semantics.ArrayAssignmentUpdatesPipelineStatus.
+	s.ArrayAssignmentUpdatesPipelineStatus = interp.Yes
 	s.TestAndArithmeticUpdatePipelineStatus = interp.Yes
 	// And the record for one of those two is written *after* a `!` in front
 	// of it: `false | true; ! [[ a = a ]]` leaves 1 here and 0 in zsh.

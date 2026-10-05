@@ -677,6 +677,14 @@ func (r *Runner) elementsOfName(name string, idx int) Array {
 		// starts from, and there is no scalar underneath it to promote.
 		return r.arrayForWrite(name)
 	}
+	if _, record := r.pipelineStatuses(name); record {
+		// And so is the pipeline record, where its name takes a write: the
+		// statuses already there are what an element write starts from
+		// (#6088). See Runner.writableArrayCell.
+		if a, writable := r.writableArrayCell(name); writable {
+			return a
+		}
+	}
 	a, _ := r.appendedOverAScalar(name)
 	if a.Len() == 0 || idx >= 0 {
 		return a

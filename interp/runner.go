@@ -13757,6 +13757,16 @@ func (r *Runner) setVarAs(name, value string, form assignForm) {
 	// See interp/tiedunique.go.
 	value = r.tiedUniqueFold(name, value)
 	r.endProducerUnsetEnded(name)
+	if write, ok := r.dynamicArrayWriters[name]; ok {
+		if _, record := r.pipelineStatuses(name); record {
+			// A scalar written to the pipeline record is a record of one,
+			// in the dialect whose name for it takes a write: measured on
+			// zsh 5.9.2, `true|false; pipestatus=5` reads back `5` (#6088).
+			r.nameIsBack(name)
+			write(r, []string{value})
+			return
+		}
+	}
 	if _, dynamic := r.Dynamic[name]; dynamic {
 		// Assigning a produced parameter is a message to its producer rather
 		// than a replacement for it.

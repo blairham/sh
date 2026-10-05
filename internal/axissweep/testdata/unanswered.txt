@@ -51,6 +51,7 @@ ash   ArrayUnderATableDeclaration
 ash   ArrayUnderATableLiteralDeclaration
 ash   ArraysAreSparse
 ash   AssignmentPrefixMakesAFreshCell
+ash   ArrayAssignmentUpdatesPipelineStatus
 ash   AssignmentUpdatesPipelineStatus
 ash   AttributeOverAFrozenNameIsRefused
 ash   AttributeRereadsTheValueItFinds
@@ -409,6 +410,7 @@ dash  ArrayUnderATableDeclaration
 dash  ArrayUnderATableLiteralDeclaration
 dash  ArraysAreSparse
 dash  AssignmentPrefixMakesAFreshCell
+dash  ArrayAssignmentUpdatesPipelineStatus
 dash  AssignmentUpdatesPipelineStatus
 dash  AttributeOverAFrozenNameIsRefused
 dash  AttributeRereadsTheValueItFinds
@@ -727,6 +729,7 @@ dash  FunctionBodyListingWritesItsAttributes
 dash  SubstringCountsBytes
 
 ksh   ArithSubscriptSkippedWhenNameUnset
+ksh   ArrayAssignmentUpdatesPipelineStatus
 ksh   AssignmentUpdatesPipelineStatus
 ksh   AutoCdAnnouncesTheSubstitution
 ksh   BareElementsInATableLiteralAreEachOneValue

@@ -595,9 +595,11 @@ func readBindings(r *interp.Runner, keymap string) map[string]string {
 		}
 	}
 	if keymap == "emacs" {
-		// `^G` is send-break in this keymap alone; viins has list-expand
-		// there, which this shell does not have. See
-		// repl.EditorStyle.SendBreakOnControlG (#5913).
+		// `^G` is send-break in this keymap alone, measured with `bindkey`
+		// on zsh 5.9.2; viins has list-expand there, which this shell does
+		// not have, and bash's `^G` is readline's abort, which keeps the
+		// line. Bound here rather than in the editor's own table for that
+		// reason: the key is this keymap's (#5913).
 		out[sendBreakKey] = widgetNames[repl.WidgetSendBreak]
 	}
 	flat, _ := r.GetArray(bindkeyStore)

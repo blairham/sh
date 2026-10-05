@@ -137,6 +137,14 @@ func registerAutoload(r *interp.Runner) {
 		indent := FunctionLayout().Indent
 		return "{\n" + indent + "# undefined\n" + indent + line + "\n}", true
 	})
+	// Where a stub whose file is already fixed — by `-r`/`-R`, or by an
+	// absolute path as the name — will be read from: the file `type` names
+	// (#6155).
+	r.SetUndefinedFunctionFiles(func(name string) (string, bool) {
+		// The file `${functions_source[name]}` answers for a stub — one
+		// record, so the sentence and the parameter cannot disagree.
+		return autoloadFixedPath(r, name)
+	})
 	// The reading half of the same declaration: `functions -u` and
 	// `typeset -fu` with no operands are the *listing* a bare `autoload`
 	// writes, narrowed by which letters were asked for. See autoloadMarked,

@@ -2617,7 +2617,7 @@ func (r *Runner) accountsForJobsAtExit() bool {
 // answers No — measured at a session and measured again here, where `zsh -fm`
 // writes the sentence with no rows beneath it.
 func (r *Runner) tellOfJobsLeftBehind(atTheExit bool) bool {
-	if r.inSubshell || r.JobControl || r.jobsInherited || r.toldOfJobsAtExit {
+	if r.inSubshell || r.JobControl || r.jobsInherited || r.toldOfJobsAtExit || r.toldOfJobsWithNoPrompt {
 		return false
 	}
 	if !r.accountsForJobsAtExit() {
@@ -2659,6 +2659,12 @@ func (r *Runner) tellOfJobsLeftBehind(atTheExit bool) bool {
 		return false
 	}
 	r.toldOfJobsAtExit = true
+	// And for good, which is the difference from a prompt's: with no person
+	// to have seen it at the next line, the sentence is said once. Measured
+	// 2026-10-05 on zsh 5.9.2, `set -m⏎sleep 1 &⏎eval exit⏎:⏎exit` writes
+	// the sentence for the `eval` and leaves at the `exit` two lines on
+	// without a second one (#6078).
+	r.toldOfJobsWithNoPrompt = true
 	r.errf("%s\n", wording)
 	return true
 }
@@ -2681,6 +2687,18 @@ func (r *Runner) jobsAtExitName(atTheExit bool) string {
 		// name and its line inside one. See
 		// Diagnostics.JobsAtExitOnACommandString.
 		name, line, _ := r.locationNameAndLine(true)
+		if line == 0 {
+			// A one-line function's line, which a location leaves out as
+			// every other diagnostic here does: measured 2026-10-05, `f() {
+			// exit; }; f` is `f: you have running jobs.` (#6078).
+			return name
+		}
+		return name + ":" + strconv.Itoa(line)
+	}
+	if atTheExit && r.diag().JobsAtExitLocatedInAScript && r.Route == RouteScriptFile && r.locationIsInsideEvalText() {
+		// An `exit` in `eval` text is located in the text, as it is on the
+		// `-c` route: `(eval):1: you have running jobs.` (#6078).
+		name, line, _ := r.locationNameAndLine(false)
 		return name + ":" + strconv.Itoa(line)
 	}
 	if !r.diag().JobsAtExitLocatedInAScript || r.Route != RouteScriptFile {
@@ -2706,8 +2724,22 @@ func (r *Runner) jobsHungUpName() string {
 		// The `exit`'s line where an `exit` ran and wrote no sentence, and
 		// line 1 otherwise — at the end of the string, and behind a sentence
 		// an `exit` wrote. See Diagnostics.JobsAtExitOnACommandString.
-		if r.exitRan && !r.toldOfJobsAtExit {
-			return r.name() + ":" + strconv.Itoa(r.lastStmtLine)
+		//
+		// The line is the outermost one: inside a function the call's own
+		// line at the top of the string, however deep, and inside `eval` text
+		// at the top the text's own location. Measured 2026-10-05 through a
+		// pseudo-terminal on zsh 5.9.2 with `setopt nocheckjobs` (#6078):
+		//
+		//	f() {⏎:⏎exit⏎}⏎f on line 8         zsh:8: warning …
+		//	g calling f, g on line 10           zsh:10:
+		//	eval exit at the top                (eval):1:
+		//	f() {⏎eval exit⏎}⏎f on line 7      zsh:7:
+		//
+		// And "wrote no sentence" is this `exit`'s own sentence: one written
+		// by an `exit` held inside `eval` before it moves nothing, so a later
+		// `exit` on line 3 is `zsh:3:`.
+		if r.exitRan && !r.leavingExitTold && r.exitLocation != "" {
+			return r.exitLocation
 		}
 		return r.name() + ":1"
 	}
@@ -2715,10 +2747,25 @@ func (r *Runner) jobsHungUpName() string {
 		return r.name()
 	}
 	line := r.lastStmtLine
-	if !r.exitRan || r.toldOfJobsAtExit {
+	if !r.exitRan || r.leavingExitTold {
 		line++
 	}
 	return r.name() + ":" + strconv.Itoa(line)
+}
+
+// outermostLocation is the name and line of the outermost place the shell is
+// running: the call's line at the top of the string inside any function, and
+// the text's own location inside `eval` text at the top. See jobsHungUpName
+// for the rows.
+func (r *Runner) outermostLocation() string {
+	if len(r.frames) > 0 {
+		return r.name() + ":" + strconv.Itoa(r.frames[0].Line)
+	}
+	if r.locationIsInsideEvalText() {
+		name, line, _ := r.locationNameAndLine(false)
+		return name + ":" + strconv.Itoa(line)
+	}
+	return r.name() + ":" + strconv.Itoa(r.lastStmtLine)
 }
 
 // listJobsHeldAtExit prints the job table under the sentence, where the shell

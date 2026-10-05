@@ -112,6 +112,10 @@ func (r *Runner) stopTheShell() {
 // was being read when the word ran. See Runner.ExitRanOutsideAFile.
 func (r *Runner) stopTheShellForExit() {
 	r.captureLeavingContexts(true)
+	// Where the hangup warning behind this `exit` is located, taken now,
+	// while the frames it is counted from are still on the stack. See
+	// Runner.jobsHungUpName.
+	r.exitLocation = r.outermostLocation()
 	r.exitRan = true
 	r.exitRanOutsideAFile = r.sourceDepth == 0
 	r.stopTheShell()

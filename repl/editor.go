@@ -228,6 +228,9 @@ type editor struct {
 	// widgets.go.
 	typedKey   rune
 	selfInsert string
+	// partialKey is the first part of a character an action handed in a
+	// byte at a time, held until the rest arrives. See adoptKeys.
+	partialKey []byte
 
 	// changes is the line as it was before each change, oldest first, and
 	// `^_` walks back through it. typing and typedBefore say whether this

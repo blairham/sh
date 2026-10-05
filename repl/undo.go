@@ -100,3 +100,46 @@ func (e *editor) cursorAfterUndo(was snapshot) int {
 	}
 	return len(was.line) - suffix
 }
+
+// changeNumber is the number of the change the line is in, counted so that
+// the first change made to a line is 2: measured 2026-10-04 against zsh
+// 5.9.2, `UNDO_CHANGE_NO` read in a widget after typing `xy` is 2, after a
+// `BUFFER=one` 3, and after a further `LBUFFER+=two` 4 — one more than the
+// changes before it, the typing counting once.
+//
+// The value is a token rather than a count anything should read as one: what
+// a script does with it is hand it back to undoTo, which is the only reading
+// that has to agree.
+func (e *editor) changeNumber() int { return len(e.changes) + 1 }
+
+// undoTo takes back every change made since change n, and reports false when
+// n is before the first change — the line then goes back to how it began.
+//
+// Measured 2026-10-04 against zsh 5.9.2 through a pseudo-terminal, a widget
+// on the line `xy`, numbering its own changes as changeNumber does:
+//
+//	a=$UNDO_CHANGE_NO; BUFFER=one; c=$UNDO_CHANGE_NO; LBUFFER+=two
+//	zle .undo $c      0, `one`, cursor 2
+//	zle .undo $a      0, `xy`
+//	zle .undo 0       1, the empty line
+//	zle .undo 99      0, the line as it was
+//
+// A number past the current change does nothing here. zsh keeps what an undo
+// took back and walks forward to such a number, which this stack does not
+// keep — the one difference, and a number only a redo could make reachable.
+//
+// Through undoLine one change at a time, so a numbered undo leaves the cursor
+// where the plain one would.
+func (e *editor) undoTo(n int) bool {
+	keep := n - 1
+	if keep < 0 {
+		for len(e.changes) > 0 {
+			e.undoLine()
+		}
+		return false
+	}
+	for len(e.changes) > keep {
+		e.undoLine()
+	}
+	return true
+}

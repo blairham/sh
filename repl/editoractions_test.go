@@ -26,8 +26,18 @@ func typedReachingBack(
 	t *testing.T, history []string, act func(Line, Actions) (Line, bool), keys string,
 ) (string, string) {
 	t.Helper()
+	return typedReachingBackStyled(t, EditorStyle{}, history, act, keys)
+}
+
+// typedReachingBackStyled is typedReachingBack in an editor of one dialect's
+// style, for an answer the dialects give differently.
+func typedReachingBackStyled(
+	t *testing.T, style EditorStyle, history []string, act func(Line, Actions) (Line, bool), keys string,
+) (string, string) {
+	t.Helper()
 	var out strings.Builder
 	s := Shell{
+		Editor:      style,
 		KeyBindings: func(Keymap) map[string]Binding { return map[string]Binding{"\a": {Function: "w"}} },
 	}
 	e := s.newEditor(t.Context(), nil)
@@ -63,12 +73,14 @@ func TestAnActionCanAskTheEditorToWalkHistory(t *testing.T) {
 			}
 			return in, true
 		}, "\a\n")
+	// Keys is the keystroke the widget was bound to, `^G`, carried on every
+	// line the editor hands out — zsh's `$KEYS`.
 	want := []Line{
-		{Buffer: "echo two", Cursor: 8},
-		{Buffer: "echo one", Cursor: 8},
+		{Buffer: "echo two", Cursor: 8, Keys: "\a"},
+		{Buffer: "echo one", Cursor: 8, Keys: "\a"},
 		// The third step is at the top and the walk stays there. It is not an
 		// error: an action that ran off the end is told the line, not told no.
-		{Buffer: "echo one", Cursor: 8},
+		{Buffer: "echo one", Cursor: 8, Keys: "\a"},
 	}
 	if len(walked) != len(want) {
 		t.Fatalf("walked %+v, want %+v", walked, want)
@@ -101,7 +113,7 @@ func TestAskingForAnActionGetsTheEditorsOwn(t *testing.T) {
 			back, _ = ed.Perform(WidgetNextHistory, in)   // back to the edit
 			return back, true
 		}, "\a\n")
-	if want := (Line{Buffer: "secondXX", Cursor: 8}); back != want {
+	if want := (Line{Buffer: "secondXX", Cursor: 8, Keys: "\a"}); back != want {
 		t.Errorf("walked back to %+v, want %+v — the edit must survive the walk", back, want)
 	}
 }
@@ -138,7 +150,7 @@ func TestTheActionThatReadsAKeyIsDeclined(t *testing.T) {
 	if ok {
 		t.Error("the editor performed a search from inside a widget")
 	}
-	if want := (Line{Buffer: "abc", Cursor: 3, Last: LastWidget{Widget: WidgetSelfInsert, Known: true}}); got != want {
+	if want := (Line{Buffer: "abc", Cursor: 3, Last: LastWidget{Widget: WidgetSelfInsert, Known: true}, Keys: "\a"}); got != want {
 		t.Errorf("the declined call gave back %+v, want the line untouched at %+v", got, want)
 	}
 	// Everything else is offered. A new action added to widgets.go without a

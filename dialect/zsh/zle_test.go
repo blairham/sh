@@ -95,6 +95,14 @@ type stubEditor struct {
 	pushed []string
 	// paste is what Paste hands back.
 	paste string
+	// input is what ReadKeyByte hands out, a byte at a time, after whatever
+	// PushKeys put in front of it.
+	input []byte
+	// changes is the number ChangeNumber answers, and undoneTo every number
+	// UndoTo was asked for.
+	changes      int
+	changesAsked int
+	undoneTo     []int
 }
 
 func (e *stubEditor) Perform(w repl.Widget, in repl.Line) (repl.Line, bool) {
@@ -111,8 +119,35 @@ func (e *stubEditor) Perform(w repl.Widget, in repl.Line) (repl.Line, bool) {
 
 func (e *stubEditor) Redisplay(in repl.Line) { e.drawn = append(e.drawn, in) }
 
-func (e *stubEditor) Paste() string     { return e.paste }
-func (e *stubEditor) PushKeys(s string) { e.pushed = append(e.pushed, s) }
+func (e *stubEditor) Paste() string { return e.paste }
+
+// PushKeys records the push and puts the keys in front of what ReadKeyByte
+// reads next, which is what the real editor does with them.
+func (e *stubEditor) PushKeys(s string) {
+	e.pushed = append(e.pushed, s)
+	e.input = append([]byte(s), e.input...)
+}
+
+func (e *stubEditor) ReadKeyByte() (byte, bool) {
+	if len(e.input) == 0 {
+		return 0, false
+	}
+	b := e.input[0]
+	e.input = e.input[1:]
+	return b, true
+}
+
+func (e *stubEditor) InputPending() bool { return len(e.input) > 0 }
+
+func (e *stubEditor) ChangeNumber(repl.Line) int {
+	e.changesAsked++
+	return e.changes
+}
+
+func (e *stubEditor) UndoTo(n int, in repl.Line) (repl.Line, bool) {
+	e.undoneTo = append(e.undoneTo, n)
+	return in, true
+}
 
 // TestAWidgetIsDefinedAndSaidBack is the honest minimum the issue asked for:
 // an rc file that defines a widget runs to the end, and the widget is there
@@ -236,11 +271,13 @@ func TestZleRefusesEachMistakeItsOwnWay(t *testing.T) {
 // remaining spellings that need a seam repl has not got are named in zle.go's
 // own comment rather than here.
 //
+// `K` left it with #5880, which zsh's paste function needed.
+//
 // `T` and `r` left it together (#4450): the transformation table is built and
 // `-r` is the modifier that removes from it, and the letter that only `-T`
 // reads could not be left refusing while the operation it modifies works.
 func TestALetterThisShellHasNotGotSaysSo(t *testing.T) {
-	for _, letter := range []string{"M", "I", "K", "c", "f", "g", "m", "G"} {
+	for _, letter := range []string{"M", "I", "c", "f", "g", "m", "G"} {
 		out, st := runZsh(t, t.TempDir(), "zle -"+letter+" x y\n")
 		want := "zsh:zle:1: -" + letter + " is not implemented yet\n"
 		if out != want || st != 1 {

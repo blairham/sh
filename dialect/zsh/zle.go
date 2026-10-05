@@ -261,6 +261,9 @@ const (
 	// none, and zleKeymap the keymap `$KEYMAP` names. See widgetCall.
 	zleNumeric = ".zsh.zle.numeric"
 	zleKeymap  = ".zsh.zle.keymap"
+	// zleKeys is the key sequence `$KEYS` holds: the keystroke the call is
+	// for, until `read-command` reads another. See readCommand.
+	zleKeys = ".zsh.zle.keys"
 	// zleAccept is set by `zle accept-line` inside a widget and read once, by
 	// the call that ran the widget. A parameter under a name no script can
 	// spell, the way the rest of this file keeps its state, so a subshell gets
@@ -386,7 +389,7 @@ func registerZle(r *interp.Runner) {
 // is not built yet says so — the distinction whence.go documents.
 const (
 	zleLetters            = "acfglmrwACDFGIKLMNRTU"
-	zleLettersImplemented = "aACDFLNRTUlrw"
+	zleLettersImplemented = "aACDFKLNRTUlrw"
 	// zleOperationLetters are the letters that choose what this builtin
 	// *does*. At most one may be given, and two is a refusal rather than a
 	// preference — see zleBuiltin.
@@ -411,6 +414,7 @@ type zleOpts struct {
 	watch     bool // -F
 	draw      bool // -R
 	push      bool // -U
+	keymap    bool // -K
 	all       bool // -a
 	source    bool // -L
 	widget    bool // -w
@@ -425,8 +429,15 @@ func zleBuiltin(r *interp.Runner, ctx context.Context, args []string) int {
 	// was asked for. The order is measured rather than convenient — see the
 	// three checks below, each of which zsh answers at a different point.
 	var letters []rune
-	for len(rest) > 0 && strings.HasPrefix(rest[0], "-") && rest[0] != "-" {
-		if rest[0] == "--" {
+	for len(rest) > 0 && strings.HasPrefix(rest[0], "-") {
+		if rest[0] == "--" || rest[0] == "-" {
+			// A lone `-` ends the options as `--` does, and is taken off
+			// with them: measured 2026-10-04 against zsh 5.9.2 inside a
+			// widget, `zle -U - abc` pushes `abc` at status 0 and `zle -
+			// .read-command` calls the widget. This shell left the `-` in
+			// place, so the first was `too many arguments for -U` — and
+			// that is the spelling zsh's own paste functions push a paste
+			// back with (#5880).
 			rest = rest[1:]
 			break
 		}
@@ -493,10 +504,18 @@ func zleBuiltin(r *interp.Runner, ctx context.Context, args []string) int {
 		return redisplay(r, ctx, rest)
 	case opts.push:
 		return pushKeys(r, ctx, rest)
+	case opts.keymap:
+		return selectWidgetKeymap(r, ctx, rest)
 	case opts.transform:
 		return transformation(r, opts, rest)
 	case len(rest) == 0:
-		// `zle` with nothing at all: status 1 and not a word, measured.
+		// `zle` with nothing at all is a question and not a word: whether
+		// widgets can be called from here. Measured 2026-10-04 against zsh
+		// 5.9.2, status 1 under `zsh -c` and 0 from inside a widget, and the
+		// same for `zle --` and `zle -`.
+		if editorRunning(r) {
+			return 0
+		}
 		return 1
 	}
 	call, ok := widgetCallOptions(r, rest[1:])
@@ -721,6 +740,8 @@ func setZleLetter(opts *zleOpts, letter rune) {
 		opts.draw = true
 	case 'U':
 		opts.push = true
+	case 'K':
+		opts.keymap = true
 	case 'w':
 		// A modifier and not an operation: measured, `zle -w` alone is the
 		// bare `zle` — status 1 and not a word — and `zle -N -w a f` defines
@@ -969,6 +990,9 @@ func builtinWidgetNames() []string {
 	for name := range bindkeyWidgets {
 		seen[name] = true
 	}
+	for name := range widgetFunctionActions {
+		seen[name] = true
+	}
 	for _, name := range editorControlKeys {
 		if accepts(name) {
 			seen[name] = true
@@ -1036,8 +1060,11 @@ func builtinWidget(name string) bool {
 	if accepts(name) {
 		return true
 	}
-	_, editors := bindkeyWidgets[name]
-	return editors
+	if _, editors := bindkeyWidgets[name]; editors {
+		return true
+	}
+	_, only := widgetFunctionActions[name]
+	return only
 }
 
 // protectedName refuses a dotted name that a built-in widget already answers
@@ -1125,6 +1152,13 @@ func callBuiltinWidget(r *interp.Runner, ctx context.Context, name string, args 
 		r.SetVar(zleAccept, "1")
 		return 0
 	}
+	if action, only := widgetFunctionActions[name]; only {
+		actions, inside := repl.ActionsFrom(ctx)
+		if !inside {
+			return 1
+		}
+		return action(r, actions)
+	}
 	widget, editors := bindkeyWidgets[name]
 	if !editors {
 		return 1
@@ -1140,6 +1174,18 @@ func callBuiltinWidget(r *interp.Runner, ctx context.Context, name string, args 
 	}
 	if widget == repl.WidgetBracketedPaste && len(args) > 0 {
 		r.SetVar(args[0], actions.Paste())
+		return 0
+	}
+	if widget == repl.WidgetUndo && len(args) > 0 {
+		// `zle undo N`: back to change N, the number `UNDO_CHANGE_NO`
+		// gave. Read the way a number is read here, so a word that is not
+		// one is 0 — measured, `zle .undo abc` takes the line back to how
+		// it began at status 1, which is what 0 does. See repl's undoTo.
+		out, reached := actions.UndoTo(leadingInteger(args[0]), widgetLine(r))
+		setWidgetLine(r, out)
+		if !reached {
+			return 1
+		}
 		return 0
 	}
 	out, performed := actions.Perform(widget, widgetLine(r))
@@ -1253,10 +1299,7 @@ func callWidget(r *interp.Runner, ctx context.Context, name string, args []strin
 	}
 	def, defined := widgetDefinitionOf(r, name)
 	if !defined {
-		if accepts(name) {
-			return callBuiltinWidget(r, ctx, name, args)
-		}
-		if _, editors := bindkeyWidgets[name]; editors {
+		if builtinWidget(name) {
 			return callBuiltinWidget(r, ctx, name, args)
 		}
 		// Silence, measured: a widget invoking a name nothing answers to is
@@ -1382,6 +1425,7 @@ func runWidgetFunction(
 		keymap = "vicmd"
 	}
 	r.SetVar(zleKeymap, keymap)
+	r.SetVar(zleKeys, in.Keys)
 	// And the count typed before the key, which is `$NUMERIC` (#5498).
 	numeric := ""
 	if in.Numeric != nil {
@@ -1392,6 +1436,10 @@ func runWidgetFunction(
 	// the completer's presence and not a second flag — see openWidgetParameters.
 	opened := widgetOpening{completion: def.completer != "", scope: r.ScopeDepth() + 1}
 	openWidgetParameters(r, opened)
+	actions, editing := repl.ActionsFrom(ctx)
+	if editing {
+		openUndoChangeNumber(r, actions, opened.scope)
+	}
 	r.SetVar(zleOpened, opened.String())
 	// Deferred rather than called at the end, because a panic in the widget
 	// function is caught *outside* this call — repl runs it behind the same
@@ -1402,6 +1450,11 @@ func runWidgetFunction(
 	defer func() {
 		closeWidgetParameters(r)
 		caller.restore(r)
+		if caller.open && editing {
+			// The caller's own, which closing this call took away with
+			// the rest. The same editor is on both ends of a nested call.
+			openUndoChangeNumber(r, actions, caller.opened.scope)
+		}
 	}()
 	// The status goes in and does not come out, measured: the function sees
 	// what the last command left, and what the function leaves is not what the
@@ -1533,6 +1586,14 @@ func openWidgetParameters(r *interp.Runner, opened widgetOpening) {
 		return name
 	})
 	r.MarkReadonly("KEYMAP")
+	// The keys the call is for, which `read-command` replaces with the ones
+	// it read. `scalar-local-readonly-special` in zsh 5.9.2, measured
+	// 2026-10-04, and `^T` reads `$'\024'` there from a widget on that key.
+	r.SetDynamic("KEYS", func(rr *interp.Runner) string {
+		keys, _ := rr.GetVar(zleKeys)
+		return keys
+	})
+	r.MarkReadonly("KEYS")
 	// The numeric argument, which is there only while there is one.
 	r.SetDynamic("NUMERIC", func(rr *interp.Runner) string {
 		n, _ := rr.GetVar(zleNumeric)
@@ -1605,6 +1666,7 @@ func openWidgetParameters(r *interp.Runner, opened widgetOpening) {
 	// `scalar-local-readonly-special`.
 	r.MarkLocal("LASTWIDGET")
 	r.MarkLocal("KEYMAP")
+	r.MarkLocal("KEYS")
 	r.MarkLocal("NUMERIC")
 }
 
@@ -1623,6 +1685,9 @@ func closeWidgetParameters(r *interp.Runner) {
 	r.UnsetDynamic(postdisplayName)
 	r.UnsetDynamic("LASTWIDGET")
 	r.UnsetDynamic("KEYMAP")
+	r.UnsetDynamic("KEYS")
+	r.UnsetDynamic(undoChangeNumberName)
+	r.UnsetDynamicDeclaration(undoChangeNumberName)
 	r.UnsetDynamic("NUMERIC")
 	// Not added to zleParameters, because that list is also what the
 	// completion branch above marks read-only and what the tests walk as "the
@@ -1662,6 +1727,7 @@ var widgetParameterDeclarations = map[string]interp.ProducedDeclaration{
 	"WIDGET":            {},
 	"LASTWIDGET":        {},
 	"KEYMAP":            {},
+	"KEYS":              {},
 	"NUMERIC":           {Integer: true, Base: 10},
 	regionHighlightName: {Array: true, ListsItsElements: true},
 }
@@ -1731,7 +1797,8 @@ func setWidgetLine(r *interp.Runner, in repl.Line) {
 
 func widgetLine(r *interp.Runner) repl.Line {
 	post, _ := r.GetVar(zlePostdisplay)
-	return repl.Line{Buffer: widgetBuffer(r), Cursor: widgetCursor(r), Postdisplay: post}
+	keys, _ := r.GetVar(zleKeys)
+	return repl.Line{Buffer: widgetBuffer(r), Cursor: widgetCursor(r), Postdisplay: post, Keys: keys}
 }
 
 // editorRunning reports whether the editor is holding a line for something to
@@ -1795,7 +1862,7 @@ func parseWidgetOpening(s string) (widgetOpening, bool) {
 // was a state that could be cleared but not put back.
 var widgetCallState = []string{
 	zleBuffer, zleCursor, zlePostdisplay, zleWidget, zleLastWidget, zleKeymap,
-	zleNumeric, zleAccept, zleActive, zleOpened,
+	zleNumeric, zleAccept, zleActive, zleOpened, zleKeys,
 }
 
 // callerWidgetState is what was there before a widget call, put back when

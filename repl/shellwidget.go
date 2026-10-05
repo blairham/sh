@@ -102,6 +102,12 @@ type Line struct {
 	// keystroke's answer: a widget reads it, sets it, or clears it, and the
 	// editor draws whatever came back (#4217).
 	Postdisplay string
+
+	// Keys are the bytes of the key sequence the action is about: the
+	// keystroke that ran it, on the way out, and on the way back in whatever
+	// the action says it read instead. zsh's `$KEYS`. A key an action read
+	// for itself is what a self-insert after it types — see editor.take.
+	Keys string
 }
 
 // runShellWidget runs one of the shell's own actions over the line, draws

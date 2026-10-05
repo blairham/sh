@@ -39,6 +39,8 @@ func TestADiagnosticFromAWidgetGetsARowOfItsOwn(t *testing.T) {
 		},
 		{"the child's message", "nosuchcmd_zz", "w: command not found: nosuchcmd_zz", false, ""},
 		{"a subshell's", "( cd /nx1 )", "w:cd: no such file or directory: /nx1", false, ""},
+		{"the trace, which is not a diagnostic", "setopt xtrace; :; unsetopt xtrace", "+w:0> :", false, ""},
+		{"a message sent elsewhere", "{ cd /nx1 } 2>/dev/null; print -n AFTER", "AFTER", false, ""},
 		{"a parse error eval reports", "eval 'if'", "(eval):1: parse error near `if'", true, ""},
 	} {
 		t.Run(row.name, func(t *testing.T) {

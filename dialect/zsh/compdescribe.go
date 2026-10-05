@@ -89,8 +89,12 @@ type describeState struct {
 	descriptions bool
 	separator    string
 	expl         string
-	groups       []describeGroup
-	at           int
+	// explanation is what the array named by expl held when the groups were
+	// defined: the options every group is answered with after its own. See
+	// options.
+	explanation []string
+	groups      []describeGroup
+	at          int
 
 	// pending is the bare half of a definition whose described half has
 	// already been answered — see group(), where one definition becomes two
@@ -147,6 +151,16 @@ func compdescribeDefine(r *interp.Runner, st *computilState, descriptions bool, 
 		d.separator = args[2]
 	}
 	d.expl = args[lead-1]
+	// The explanation array is read now and not at `-g`, and it has to be an
+	// array. Measured on zsh 5.9.2, 2026-10-05: an array assigned between
+	// the definition and the `-g` that reads it back changes nothing, and a
+	// name that is unset, a scalar or an association makes the definition
+	// fail at status 1 with nothing said — and leave whatever an earlier
+	// definition parsed in place, so a `-g` after it reads that one.
+	if !r.HoldsAList(d.expl) {
+		return 1
+	}
+	d.explanation, _ = r.GetArray(d.expl)
 	for _, words := range splitOnDoubleDash(args[lead:]) {
 		group, ok := describeGroupOf(r, words)
 		if !ok {
@@ -290,6 +304,17 @@ func splitByDescription(words, displays []string) (described, bare describeRun) 
 // own listing flag, the group's options, and whatever the explanation array
 // holds.
 //
+// The explanation is what `_description` filled — the group's name, its `-X`
+// heading and its match specification — so leaving it off is a listing with
+// no heading and no named block (#6147). Measured on zsh 5.9.2, 2026-10-05,
+// with `E=(-J ej -X ex)`:
+//
+//	compdescribe -I '' 40 '-- ' E -g G -Q -- H -S y
+//	-g → (-l -Q -J ej -X ex), then (-S y -J ej -X ex)
+//
+// so it comes last, and every group is answered with it, the bare half of a
+// split definition included.
+//
 // The `-l` goes only on the half that carries descriptions. Measured — see
 // the file comment: zsh answers `gzip -c` with a `-l` group of described
 // options and a plain group of undescribed ones, and it is the flag rather
@@ -303,6 +328,7 @@ func (d *describeState) options(g describeGroup, described bool) []string {
 		out = append(out, "-l")
 	}
 	out = append(out, g.options...)
+	out = append(out, d.explanation...)
 	return out
 }
 

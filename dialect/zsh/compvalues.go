@@ -179,7 +179,11 @@ func (v *valuesState) offer(r *interp.Runner, names []string) int {
 		if value.hidden || (v.given[value.names[0]] && !value.repeat) {
 			continue
 		}
-		offer := optionOffer(value.names[0], value.descr)
+		// The same rule as `comparguments -O`'s: the brackets decide, so
+		// `aa[]` is offered as `aa:`. Measured on zsh 5.9.2, 2026-10-05 —
+		// `compvalues -i dd 'aa[]' bb 'cc[x]' 'dd[]:m:'` answers `-V` with
+		// `aa: bb cc:x` and `dd:`.
+		offer := optionOffer(value.names[0], value)
 		if len(value.optargs) > 0 {
 			args = append(args, offer)
 		} else {

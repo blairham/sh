@@ -726,7 +726,7 @@ func (a *argumentsState) offerOptions(r *interp.Runner, names []string) int {
 					continue
 				}
 				at := optionListIndex(opt.style)
-				lists[at] = append(lists[at], optionOffer(name, opt.descr))
+				lists[at] = append(lists[at], optionOffer(name, opt))
 			}
 		}
 	}
@@ -895,11 +895,17 @@ func optionListIndex(style optionArgStyle) int {
 // optionOffer is one element of those arrays: `name:description`, or the bare
 // name where the spec gave none. Measured — `gzip`'s `--fast` comes back with
 // no colon.
-func optionOffer(name, descr string) string {
-	if descr == "" {
+//
+// **Whether there is a description is whether there were brackets**, not
+// whether they held anything: measured on zsh 5.9.2, 2026-10-05, `-j[]:jm:`
+// and `-k[]` are offered as `-j:` and `-k:`, and `-l[ ]` as `-l: `. This
+// dropped the colon for the empty pair, which put the option among the
+// undescribed ones `compdescribe` packs together.
+func optionOffer(name string, opt optionSpec) string {
+	if !opt.described {
 		return name
 	}
-	return name + ":" + descr
+	return name + ":" + opt.descr
 }
 
 // reportMatcher is `-M`: the match specification option names are completed

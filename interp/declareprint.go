@@ -416,9 +416,9 @@ func (r *Runner) declarationOf(name string) (declaration, bool) {
 			d.isArr = true
 			return d, true
 		}
-		a := make(Array, len(elems))
+		a := NewArray(len(elems))
 		for i, v := range elems {
-			a[i] = Scalar(v)
+			a.Set(i, Scalar(v))
 		}
 		d.arr, d.isArr = a, true
 		return d, true
@@ -432,9 +432,9 @@ func (r *Runner) declarationOf(name string) (declaration, bool) {
 	// shell had just expanded an element of (#3099).
 	if elems, produced := r.pipelineStatuses(name); produced && attributed &&
 		(!r.listingDrawsNoReading || producedIsAnArray) {
-		a := make(Array, len(elems))
+		a := NewArray(len(elems))
 		for i, v := range elems {
-			a[i] = Scalar(v)
+			a.Set(i, Scalar(v))
 		}
 		d.arr, d.isArr = a, true
 		return d, true
@@ -1121,17 +1121,17 @@ func (r *Runner) clusteredDeclaration(d declaration) string {
 		// The scalar a plain store gave it, written as this form's scalar
 		// branch below writes one. See
 		// Semantics.ScalarHeldUnderTheArrayLetterListsAsAScalar.
-		return head + "=" + r.declareQuoted(d.arr[r.arrayBase()].Str, ListedValueAlone)
+		return head + "=" + r.declareQuoted(d.arr.Get(r.arrayBase()).Str, ListedValueAlone)
 	case d.isArr:
-		if len(d.arr) == 0 && d.declaredOnly {
+		if d.arr.Len() == 0 && d.declaredOnly {
 			// The indexed half of the same distinction, and it moves the
 			// other way: `declare -a q` was listing as `declare -a q=()`
 			// here. See the association above.
 			return head
 		}
-		elems := make([]string, 0, len(d.arr))
+		elems := make([]string, 0, d.arr.Len())
 		for _, i := range d.arr.subscripts() {
-			elems = append(elems, fmt.Sprintf("[%d]=%s", i, r.listedElement(d.arr[i], ListedValueAlone)))
+			elems = append(elems, fmt.Sprintf("[%d]=%s", i, r.listedElement(d.arr.Get(i), ListedValueAlone)))
 		}
 		return head + "=(" + strings.Join(elems, " ") + ")"
 	case d.hasValue:
@@ -1487,9 +1487,9 @@ func (r *Runner) bareAssignmentValue(d declaration, place ListedValuePlace) (str
 		pairs, _ := r.bareAssignmentElements(d)
 		return "(" + strings.Join(pairs, " ") + nestTrailingSpace(d.assoc.lastElement()) + ")", true
 	case d.isArr && r.listsTheScalarItHolds(d):
-		return r.declareQuoted(d.arr[r.arrayBase()].Str, place), true
+		return r.declareQuoted(d.arr.Get(r.arrayBase()).Str, place), true
 	case d.isArr:
-		if len(d.arr) == 0 {
+		if d.arr.Len() == 0 {
 			// An indexed array with nothing in it, which this form answers
 			// from the array's *history* rather than from its emptiness —
 			// the one place the three compound states are told apart.
@@ -1574,9 +1574,9 @@ func (r *Runner) bareAssignmentElements(d declaration) ([]string, bool) {
 			// so does one the letter declared: `typeset -a c=()` is an
 			// empty array in that shell too.
 			if r.arrayHasGaps(d.arr) {
-				elems = append(elems, fmt.Sprintf("[%d]=%s", i, r.listedElement(d.arr[i], ListedValueAlone)))
+				elems = append(elems, fmt.Sprintf("[%d]=%s", i, r.listedElement(d.arr.Get(i), ListedValueAlone)))
 			} else {
-				elems = append(elems, r.listedElement(d.arr[i], ListedValueInAList))
+				elems = append(elems, r.listedElement(d.arr.Get(i), ListedValueInAList))
 			}
 		}
 		return elems, true
@@ -1938,7 +1938,7 @@ func (r *Runner) declaredAndHoldingNothing(d declaration) bool {
 	case d.isAssoc:
 		return len(d.assoc) == 0 && d.declaredOnly
 	case d.isArr:
-		return len(d.arr) == 0 && d.declaredOnly
+		return d.arr.Len() == 0 && d.declaredOnly
 	}
 	return d.unset || !d.hasValue
 }
@@ -1960,10 +1960,10 @@ func (r *Runner) ownNameHoldingNothing(name string) bool {
 // and the dialect writes that as a scalar. See
 // Semantics.ScalarHeldUnderTheArrayLetterListsAsAScalar.
 func (r *Runner) listsTheScalarItHolds(d declaration) bool {
-	if !r.scalarHeldUnderTheArrayLetter[d.name] || len(d.arr) != 1 {
+	if !r.scalarHeldUnderTheArrayLetter[d.name] || d.arr.Len() != 1 {
 		return false
 	}
-	if e, ok := d.arr[r.arrayBase()]; !ok || e.Nested != nil || e.Kind != ElementHoldsItsValue {
+	if e, ok := d.arr.Lookup(r.arrayBase()); !ok || e.Nested != nil || e.Kind != ElementHoldsItsValue {
 		return false
 	}
 	return r.ask(r.sem().ScalarHeldUnderTheArrayLetterListsAsAScalar,

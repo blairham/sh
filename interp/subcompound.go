@@ -497,7 +497,7 @@ func (r *Runner) sweepElementCompounds(name string) {
 // anElementHoldsTheCompound reports whether either of the name's tables still
 // has an element claiming that namespace.
 func (r *Runner) anElementHoldsTheCompound(name, space string) bool {
-	for _, e := range r.Arrays[name] {
+	for _, e := range r.Arrays[name].All() {
 		if e.Kind == ElementHoldsACompound && e.Str == space {
 			return true
 		}

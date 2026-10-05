@@ -85,7 +85,7 @@ func (r *Runner) nestedLiteral(name string, elems []*syntax.ArrayElem) (Element,
 	if !ok {
 		return Element{}, false
 	}
-	built, ok := r.literalInto(name, Array{}, 0, parsed, false)
+	built, ok := r.literalInto(name, NewArray(0), 0, parsed, false)
 	if !ok {
 		return Element{}, false
 	}
@@ -93,7 +93,7 @@ func (r *Runner) nestedLiteral(name string, elems []*syntax.ArrayElem) (Element,
 	// a[1]=()` leaves three elements there, the middle one reading back as a
 	// newline between two parens. A nil Nested would have made it a string.
 	if built == nil {
-		built = Array{}
+		built = NewArray(0)
 	}
 	return Element{Nested: built}, true
 }
@@ -126,7 +126,7 @@ func (r *Runner) storeArrayElement(name string, idx int, subject string, value E
 			"%[1]s[%[2]s]: bad array subscript", name, subject))
 		return
 	}
-	a[pos] = nestedAppended(a[pos], value, appendTo)
+	a.Set(pos, nestedAppended(a.Get(pos), value, appendTo))
 	r.storeArray(name, a)
 }
 
@@ -179,13 +179,13 @@ func nestedAppended(held, value Element, appendTo bool) Element {
 	if !appendTo || held.Nested == nil {
 		return value
 	}
-	out := make(Array, len(held.Nested)+len(value.Nested))
-	for k, v := range held.Nested {
-		out[k] = v
+	out := NewArray(held.Nested.Len() + value.Nested.Len())
+	for k, v := range held.Nested.All() {
+		out.Set(k, v)
 	}
 	next := out.pastTheEnd()
 	for _, k := range value.Nested.subscripts() {
-		out[next] = value.Nested[k]
+		out.Set(next, value.Nested.Get(k))
 		next++
 	}
 	return Element{Nested: out}
@@ -240,9 +240,9 @@ func (r *Runner) nestedListing(a Array) string {
 	elems := make([]string, 0, len(subs))
 	for _, i := range subs {
 		if gaps {
-			elems = append(elems, fmt.Sprintf("[%d]=%s", i, r.listedElement(a[i], ListedValueAlone)))
+			elems = append(elems, fmt.Sprintf("[%d]=%s", i, r.listedElement(a.Get(i), ListedValueAlone)))
 		} else {
-			elems = append(elems, r.listedElement(a[i], ListedValueInAList))
+			elems = append(elems, r.listedElement(a.Get(i), ListedValueInAList))
 		}
 	}
 	return "(" + strings.Join(elems, " ") + nestTrailingSpace(a.lastElement()) + ")"
@@ -275,7 +275,7 @@ func (r *Runner) nestedListing(a Array) string {
 // No axis: only the dialect that nests can produce an element this answers
 // for, so no other column can reach it.
 func nestTrailingSpace(last Element, any bool) string {
-	if any && len(last.Nested) > 0 {
+	if any && last.Nested.Len() > 0 {
 		return " "
 	}
 	return ""
@@ -287,7 +287,7 @@ func (a Array) lastElement() (Element, bool) {
 	if len(subs) == 0 {
 		return Element{}, false
 	}
-	return a[subs[len(subs)-1]], true
+	return a.Get(subs[len(subs)-1]), true
 }
 
 // lastElement is the same for a keyed table, under the last key this

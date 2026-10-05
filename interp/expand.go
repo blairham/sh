@@ -1838,7 +1838,7 @@ func (r *Runner) declaredOnlyCompoundIsUnset(e *syntax.ParamExpr) bool {
 		return len(a) == 0
 	}
 	a, ok := r.Arrays[e.Name]
-	return ok && len(a) == 0
+	return ok && a.Len() == 0
 }
 
 // emptyWholeArrayIsSet resolves Semantics.EmptyArrayIsSet for one colon-less

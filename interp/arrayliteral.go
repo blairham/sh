@@ -491,7 +491,7 @@ func (r *Runner) assignArrayLiteral(name string, elems []*syntax.ArrayElem, appe
 		return
 	}
 
-	a := Array{}
+	a := NewArray(0)
 	next := 0
 	if appendTo {
 		// arrayForWrite rather than the store, so an append to a *produced*
@@ -582,9 +582,9 @@ func (r *Runner) storeRetypedNestedLiteral(name string, a Array) {
 	if r.AssocArrays == nil {
 		r.AssocArrays = map[string]AssocArray{}
 	}
-	table := make(AssocArray, len(a))
+	table := make(AssocArray, a.Len())
 	for _, i := range a.subscripts() {
-		table[strconv.Itoa(i)] = a[i]
+		table[strconv.Itoa(i)] = a.Get(i)
 	}
 	r.AssocArrays[name] = table
 	r.markCompoundForAllexport(name)
@@ -666,13 +666,13 @@ func (r *Runner) appendedOverAScalar(name string) (Array, int) {
 		// so the transition is stated once — see compoundVariableSubscripted
 		// for what the members do and why the call belongs here.
 		r.compoundVariableSubscripted(name)
-		return Array{}, 1
+		return NewArray(0), 1
 	}
 	v, held := r.getVar(name)
 	if !held {
-		return Array{}, 0
+		return NewArray(0), 0
 	}
-	return Array{0: Scalar(v)}, 1
+	return ArrayOf(Scalar(v)), 1
 }
 
 // keyedLiteralOverAScalar is appendedOverAScalar's question asked on the other
@@ -778,7 +778,8 @@ func (r *Runner) literalInto(name string, a Array, next int, parsed []literalEle
 			if !ok {
 				return nil, false
 			}
-			a[next], wrote[next] = value, true
+			a.Set(next, value)
+			wrote[next] = true
 			next++
 			continue
 		}
@@ -787,13 +788,15 @@ func (r *Runner) literalInto(name string, a Array, next int, parsed []literalEle
 			// built, wherever the next position is. Not spliced: that is the
 			// whole of what makes `a=( (1 2) (3 4) )` two elements rather
 			// than four, and `${a[1][0]}` reach the `3`.
-			a[next], wrote[next] = *e.nested, true
+			a.Set(next, *e.nested)
+			wrote[next] = true
 			next++
 			continue
 		}
 		if !e.subscripted {
 			for _, f := range e.fields {
-				a[next], wrote[next] = Scalar(f), true
+				a.Set(next, Scalar(f))
+				wrote[next] = true
 				next++
 			}
 			continue
@@ -822,7 +825,8 @@ func (r *Runner) literalInto(name string, a Array, next int, parsed []literalEle
 			if !ok {
 				return nil, false
 			}
-			a[pos], wrote[pos] = value, true
+			a.Set(pos, value)
+			wrote[pos] = true
 			if pos >= next {
 				next = pos + 1
 			}
@@ -847,7 +851,8 @@ func (r *Runner) literalInto(name string, a Array, next int, parsed []literalEle
 					"%[1]s[%[2]s]: bad array subscript", name, e.sub, ""))
 				return a, false
 			}
-			a[pos], wrote[pos] = nestedAppended(a[pos], *e.nested, e.appendValue), true
+			a.Set(pos, nestedAppended(a.Get(pos), *e.nested, e.appendValue))
+			wrote[pos] = true
 			if pos >= next {
 				next = pos + 1
 			}
@@ -891,13 +896,14 @@ func (r *Runner) literalInto(name string, a Array, next int, parsed []literalEle
 			// not the question KeyedLiteralAppendJoinsTheReplacedValue asks:
 			// see keyedLiteralAppend, where one column reads the replaced
 			// table instead.
-			v, ok := r.appendedValue(name, a[pos].scalar(), value)
+			v, ok := r.appendedValue(name, a.Get(pos).scalar(), value)
 			if !ok {
 				return nil, false
 			}
 			value = v
 		}
-		a[pos], wrote[pos] = Scalar(value), true
+		a.Set(pos, Scalar(value))
+		wrote[pos] = true
 		// A bare element after a subscripted one continues from there rather
 		// than from where the count had reached: `a=(x [3]=y z)` puts z at 4.
 		// Measured in both shells that accept the mixture, and it follows the
@@ -918,16 +924,16 @@ func (r *Runner) literalInto(name string, a Array, next int, parsed []literalEle
 		return a, true
 	}
 	for pos := range wrote {
-		if a[pos].Nested != nil || a[pos].Kind == ElementHoldsACompound {
+		if a.Get(pos).Nested != nil || a.Get(pos).Kind == ElementHoldsACompound {
 			continue
 		}
-		v, ok := r.elementValueFolded(name, a[pos].scalar())
+		v, ok := r.elementValueFolded(name, a.Get(pos).scalar())
 		if !ok {
 			// The evaluation failed and has said so, or the axis went
 			// unanswered. Either way nothing is stored.
 			return nil, false
 		}
-		a[pos] = Scalar(v)
+		a.Set(pos, Scalar(v))
 	}
 	return a, true
 }

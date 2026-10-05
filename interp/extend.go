@@ -505,8 +505,8 @@ func (r *Runner) SetArray(name string, values []string) { r.setArray(name, value
 func (r *Runner) ArrayHolds(name, value string) bool {
 	if n := r.throughNameref(name); n != r.pipeStatusName {
 		if a, ok := r.Arrays[n]; ok {
-			if lo, hi, any := a.bounds(); !any || (lo == 0 && hi == len(a)-1) {
-				for _, elem := range a {
+			if lo, hi, any := a.bounds(); !any || (lo == 0 && hi == a.Len()-1) {
+				for _, elem := range a.All() {
 					if r.elemText(elem) == value {
 						return true
 					}

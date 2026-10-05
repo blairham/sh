@@ -111,7 +111,7 @@ func (r *Runner) namerefArrayContents(name string) bool {
 	if _, assoc := r.AssocArrays[name]; assoc {
 		return true
 	}
-	return len(r.Arrays[name]) > 0
+	return r.Arrays[name].Len() > 0
 }
 
 // namerefArrayRefusal resolves the axis, reporting where no dialect has

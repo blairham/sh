@@ -95,9 +95,9 @@ func (r *Runner) chainWrite(name string, held Element, there bool, place func(El
 			return
 		}
 		outer, outerPlace := inner, place
-		held, there = inner[idx]
+		held, there = inner.Lookup(idx)
 		place = func(e Element) {
-			outer[idx] = e
+			outer.Set(idx, e)
 			outerPlace(Element{Nested: outer})
 		}
 	}
@@ -111,7 +111,7 @@ func (r *Runner) chainWrite(name string, held Element, there bool, place func(El
 	// `a[1][2]+=Q` joins what is under 2 of the nested array exactly as
 	// `a[2]+=Q` joins what is under 2 of an ordinary one.
 	if appendTo {
-		value = inner[idx].scalar() + value
+		value = inner.Get(idx).scalar() + value
 	}
 	// The value goes through the *name's* attributes, which is where an
 	// element assignment's value meets them wherever it is written: measured,
@@ -124,7 +124,7 @@ func (r *Runner) chainWrite(name string, held Element, there bool, place func(El
 	} else {
 		return
 	}
-	inner[idx] = Scalar(value)
+	inner.Set(idx, Scalar(value))
 	place(Element{Nested: inner})
 }
 
@@ -187,9 +187,9 @@ func (r *Runner) chainRootInArray(name string, idx int, subject string) (Element
 			"%[1]s[%[2]s]: bad array subscript", name, subject))
 		return Element{}, false, nil, false
 	}
-	held, there := arr[pos]
+	held, there := arr.Lookup(pos)
 	return held, there, func(e Element) {
-		arr[pos] = e
+		arr.Set(pos, e)
 		r.storeArray(name, arr)
 	}, true
 }
@@ -210,9 +210,11 @@ func nestedForWrite(held Element, there bool, base int) Array {
 		// The element is not there at all, which is a different state from
 		// one holding the empty string: `a[1]=""; a[1][2]=v` keeps the empty
 		// string at the base and `a[1][2]=v` on its own does not.
-		return Array{}
+		return NewArray(0)
 	}
-	return Array{base: Scalar(held.Str)}
+	a := NewArray(1)
+	a.Set(base, Scalar(held.Str))
+	return a
 }
 
 // declareChainedElement is the same walk reached from a declaration's

@@ -228,7 +228,7 @@ func (r *Runner) placeLiteralSubscriptWithoutRunning(name string, sub *syntax.Wo
 	// An empty array, which is what the store holds for a name nothing has
 	// assigned — and, measured, what the reference places against even when
 	// the name was filled before the `set -n`.
-	if _, ok := r.elemPos(Array{}, idx); ok {
+	if _, ok := r.elemPos(NewArray(0), idx); ok {
 		return
 	}
 	wording := r.diag().BadArrayLiteralSubscript

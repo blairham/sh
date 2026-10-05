@@ -109,7 +109,7 @@ func (r *Runner) nestedChainRoot(e *syntax.ParamExpr) (Element, bool) {
 		return Element{}, false
 	}
 	if arr, is := r.Arrays[name]; is {
-		held, there := arr[idx]
+		held, there := arr.Lookup(idx)
 		return held, there
 	}
 	if v, held := r.getVar(name); held {
@@ -141,7 +141,7 @@ func (r *Runner) chainLinkIndex(e *syntax.ParamExpr) (int, bool) {
 // scalar name reaches it.
 func (r *Runner) nestedElementAt(held Element, idx int) (Element, bool) {
 	if held.Nested != nil {
-		el, there := held.Nested[idx]
+		el, there := held.Nested.Lookup(idx)
 		return el, there
 	}
 	// The element's own text at the base and nowhere else, which is the rule
@@ -170,7 +170,7 @@ func (r *Runner) nestedElements(held Element) []string {
 	subs := held.Nested.subscripts()
 	out := make([]string, 0, len(subs))
 	for _, i := range subs {
-		out = append(out, held.Nested[i].scalar())
+		out = append(out, held.Nested.Get(i).scalar())
 	}
 	return out
 }

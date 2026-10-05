@@ -529,7 +529,7 @@ func (e *editor) confirmList(matches []Candidate, prompt drawnPrompt) bool {
 		return true
 	}
 	e.endLine(prompt, "")
-	e.write(fmt.Sprintf(e.listQuery, len(matches), len(listingRows(matches, e.cols()))))
+	e.write(fmt.Sprintf(e.listQuery, len(matches), len(listingRows(matches, e.cols(), e.listLayout()))))
 	for {
 		var buf [1]byte
 		// Through nextByte and not the reader: this editor buffers what the
@@ -749,7 +749,7 @@ func (e *editor) listQueryAsks(matches []Candidate) bool {
 	case n < 0:
 		return true
 	case n == 0:
-		return len(listingRows(matches, e.cols())) > e.rows()
+		return len(listingRows(matches, e.cols(), e.listLayout())) > e.rows()
 	default:
 		return len(matches) >= n
 	}

@@ -166,6 +166,10 @@ func EditorStyle() repl.EditorStyle {
 		// option because `unsetopt autolist` is a person asking for bash's
 		// answer, and measured, it gets it.
 		ListMatchesWithoutASecondKeyOption: "AUTO_LIST",
+		// And how the listing is arranged, which zsh's two options decide.
+		// See repl.EditorStyle.ListPackedOption (#6157).
+		ListPackedOption:    "LIST_PACKED",
+		ListRowsFirstOption: "LIST_ROWS_FIRST",
 		// Measured: a bare Tab in a directory holding a `.hidden` lists
 		// everything except it, and `.` completes it outright because it is
 		// then the only match. Left false rather than written out, so that

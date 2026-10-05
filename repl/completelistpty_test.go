@@ -6,7 +6,10 @@ package repl
 import (
 	"context"
 	"strings"
+	"sync/atomic"
 	"testing"
+
+	"github.com/blairham/sh/interp"
 )
 
 // A grouped, described listing on a real terminal, under a two-row prompt.
@@ -112,5 +115,48 @@ func TestAHeadingLeftColoredDoesNotPaintThePrompt(t *testing.T) {
 			prompt, s.shown().styledText())
 	}
 	s.typeKeys("\n")
+	s.end()
+}
+
+// The arranging options are read when a listing is drawn, not when the
+// session began: a person sets them at the prompt, and the editor outlives
+// every line of a session (#6157). The option name is this test's own.
+func TestAListingFollowsAnOptionSetMidSession(t *testing.T) {
+	var packed atomic.Bool
+	words := []string{"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}
+	for c := 'b'; c <= 'u'; c++ {
+		words = append(words, string(c))
+	}
+	s := newSessionWith(t, func(sh *Shell) {
+		sh.Runner.Vars["PS1"] = "UPPER\n[\\#]"
+		sh.Runner.Dir = t.TempDir()
+		sh.Completers = []Completer{CompleterFunc(func(c Completion) []Candidate {
+			if c.Word == "q" {
+				return Words(words...)
+			}
+			return nil
+		})}
+		sh.Editor.ListPackedOption = "packlisting"
+		sh.Runner.SetOptionNamespace(func(_ *interp.Runner, name string) (bool, bool) {
+			if name != "packlisting" {
+				return false, false
+			}
+			return packed.Load(), true
+		})
+	})
+	s.typeLine(": q")
+	s.typeKeys("\t\tZ")
+	waitFor(t, s.screen, "Z", "the key typed after the listing")
+	if strings.Contains(s.screen.String(), "  c  e  g") {
+		t.Fatalf("the first listing was packed before the option was set\nscreen: %q", s.screen.String())
+	}
+	s.typeKeys("\x15")
+	packed.Store(true)
+	s.typeKeys(": q\t\tY")
+	waitFor(t, s.screen, "Y", "the key typed after the second listing")
+	if !strings.Contains(s.screen.String(), "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa  c  e  g") {
+		t.Errorf("the listing after the option was set is not packed\nscreen: %q", s.screen.String())
+	}
+	s.typeKeys("\x15: done\n")
 	s.end()
 }

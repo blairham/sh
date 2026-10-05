@@ -53,10 +53,43 @@ import (
 // then its rows, arranged the way the block asked for.
 //
 // A width of zero is a terminal that will not say how wide it is; see columns.
-func listingRows(candidates []Candidate, width int) []string {
+//
+// **The blocks share one grid width.** Measured against zsh 5.9.2 on
+// 2026-10-05 through a pseudo-terminal 40 columns wide, a block after `compadd
+// -J a alpha beta gamma zeta` lays its matches out across the 28 columns the
+// first block's grid spans:
+//
+//	alpha  beta   gamma  zeta
+//	d1       d2       d3            three matches, nine columns each
+//	d1     d2     d3     d4         four, seven each
+//	delta         eps               two, fourteen each
+//
+// So every packed block's grid is as wide as the widest of them — its number
+// of columns times its cell, where the number of columns is as many as fit
+// and no more than it has matches — and each block widens its cells to fill
+// that, never narrowing them. Ten matches of `a1` … `a10` fit eight cells of
+// five across 40 columns, so their grid is the whole 40 and three matches in
+// the next block are thirteen apart, although only five of those columns are
+// used. A block drawn one per line takes no part in it: a 34-column `-l` row
+// leaves `d1  d2  d3` as it is (#6157).
+func listingRows(candidates []Candidate, width int, layout listLayout) []string {
+	blocks := listingBlocks(candidates)
+	drawn := make([][]string, len(blocks))
+	shared := 0
+	for i, block := range blocks {
+		drawn[i] = block.rows()
+		if block.group.OnePerLine || len(drawn[i]) == 0 {
+			continue
+		}
+		cell, cols := uniformGrid(drawn[i], width)
+		shared = max(shared, cell*cols)
+	}
+	if width > 0 {
+		shared = min(shared, width)
+	}
 	var out []string
-	for _, block := range listingBlocks(candidates) {
-		rows := block.rows()
+	for i, block := range blocks {
+		rows := drawn[i]
 		if len(rows) == 0 && block.group.Heading == "" {
 			continue
 		}
@@ -67,7 +100,130 @@ func listingRows(candidates []Candidate, width int) []string {
 			out = append(out, rows...)
 			continue
 		}
-		out = append(out, columns(rows, width)...)
+		out = append(out, arrange(rows, width, shared, layout)...)
+	}
+	return out
+}
+
+// listLayout is the two options that change how a block is arranged.
+type listLayout struct {
+	// packed lets each column be as wide as its own longest match, where
+	// that takes fewer rows. See EditorStyle.ListPackedOption.
+	packed bool
+	// rowsFirst fills across each row rather than down each column. See
+	// EditorStyle.ListRowsFirstOption.
+	rowsFirst bool
+}
+
+// uniformGrid is a block's own grid: the cell every column takes — the
+// longest match plus two — and how many columns there are, which is as many
+// cells as fit and no more than there are matches. One column where nothing
+// fits or the width is unknown.
+func uniformGrid(matches []string, width int) (cell, cols int) {
+	widest := 0
+	for _, m := range matches {
+		widest = max(widest, displayWidth(m))
+	}
+	cell = widest + 2
+	cols = 1
+	if width > 0 {
+		cols = max(1, width/cell)
+	}
+	return cell, max(1, min(cols, len(matches)))
+}
+
+// arrange lays one block out, its cells widened to span shared columns.
+//
+// Packed, the columns are each as wide as their own longest match, and that
+// arrangement is used only where it takes fewer rows. Measured on zsh 5.9.2,
+// 40 columns: `aaaaaaaaaaaa b c … j` draws in two rows of a 14-column column
+// and four 3-column ones where unpacked it takes five rows of two; ten matches
+// `a1` … `a10`, which pack into no fewer rows than they take unpacked, draw
+// exactly as unpacked. A packed arrangement fits where every column's width,
+// the last one's included, sums to no more than the screen: `b` … `p` and a
+// 17-column `xxxxxxxxxxxxxxxxx` fill exactly 40 in two rows.
+//
+// Filled across the rows, the matches go `a1 a10 a2 … a7` along the first row
+// of eight and `a8 a9` along the second — measured, with LIST_ROWS_FIRST set.
+// Both options at once is not drawn the way zsh draws it, which packs rows
+// into column widths no simpler rule reproduced; that pair is drawn across
+// the rows and unpacked here.
+func arrange(matches []string, width, shared int, layout listLayout) []string {
+	if len(matches) == 0 {
+		return nil
+	}
+	cell, cols := uniformGrid(matches, width)
+	nrows := (len(matches) + cols - 1) / cols
+	if layout.packed && !layout.rowsFirst && width > 0 {
+		for r := 1; r < nrows; r++ {
+			if widths, ok := packedWidths(matches, r, width); ok {
+				return placeCells(matches, r, widths, false)
+			}
+		}
+	}
+	if spread := shared / cols; spread > cell {
+		cell = spread
+	}
+	used := cols
+	if !layout.rowsFirst {
+		used = (len(matches) + nrows - 1) / nrows
+	}
+	widths := make([]int, used)
+	for i := range widths {
+		widths[i] = cell
+	}
+	return placeCells(matches, nrows, widths, layout.rowsFirst)
+}
+
+// packedWidths is each column's width when the matches are laid down rows to a
+// column, and whether that fits the screen.
+func packedWidths(matches []string, rows, width int) ([]int, bool) {
+	cols := (len(matches) + rows - 1) / rows
+	widths := make([]int, cols)
+	total := 0
+	for c := range cols {
+		for r := range rows {
+			if i := c*rows + r; i < len(matches) {
+				widths[c] = max(widths[c], displayWidth(matches[i])+2)
+			}
+		}
+		total += widths[c]
+		if total > width {
+			return nil, false
+		}
+	}
+	return widths, true
+}
+
+// placeCells writes the rows of one arrangement: nrows of them, a column per width,
+// filled down the columns or across the rows.
+//
+// No padding after the last match on a row: trailing spaces are invisible
+// until something copies them. zsh pads every column but the grid's last, and
+// what reaches the screen is the same.
+func placeCells(matches []string, nrows int, widths []int, rowsFirst bool) []string {
+	at := func(r, c int) int {
+		if rowsFirst {
+			return r*len(widths) + c
+		}
+		return c*nrows + r
+	}
+	out := make([]string, 0, nrows)
+	for r := range nrows {
+		var b strings.Builder
+		for c := range widths {
+			i := at(r, c)
+			if i >= len(matches) {
+				break
+			}
+			b.WriteString(matches[i])
+			if c+1 < len(widths) && at(r, c+1) < len(matches) {
+				for n := displayWidth(matches[i]); n < widths[c]; n++ {
+					b.WriteByte(' ')
+				}
+			}
+		}
+		out = append(out, b.String())
 	}
 	return out
 }

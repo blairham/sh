@@ -103,6 +103,11 @@ type editor struct {
 	// EditorStyle.ListMatchesWithoutASecondKeyOption for the measurement.
 	listsMatches bool
 
+	// layout is how a listing's blocks are arranged, read through the
+	// dialect's options on the keystroke, because a person sets them at the
+	// prompt. Nil is the plain arrangement. See EditorStyle.ListPackedOption.
+	layout func() listLayout
+
 	// menu is the menu completion in flight, where a run of menu keystrokes
 	// is going on. See completemenu.go, which is the whole of it.
 	menu menuWalk
@@ -1828,7 +1833,7 @@ func (e *editor) list(matches []Candidate, prompt drawnPrompt) {
 	// block or several, and which rows share an arrangement is the
 	// completer's answer rather than this editor's. See completelist.go.
 	attributes := false
-	for _, row := range listingRows(matches, e.cols()) {
+	for _, row := range listingRows(matches, e.cols(), e.listLayout()) {
 		e.write(row)
 		e.write(e.newline())
 		attributes = attributes || strings.ContainsRune(row, '\x1b')
@@ -1845,6 +1850,14 @@ func (e *editor) list(matches []Candidate, prompt drawnPrompt) {
 	// and the redraw now knows it is starting from a fresh row.
 }
 
+// listLayout is the arrangement a listing drawn now is in.
+func (e *editor) listLayout() listLayout {
+	if e.layout == nil {
+		return listLayout{}
+	}
+	return e.layout()
+}
+
 // columns arranges the matches into the rows to print.
 //
 // Down each column rather than across each row: sorted matches read in order
@@ -1852,49 +1865,10 @@ func (e *editor) list(matches []Candidate, prompt drawnPrompt) {
 // it this way, and reading across would put `b` beside `a` and `z` below it.
 //
 // A width of zero is a terminal that will not say how wide it is, and one
-// match per row is the only arrangement that cannot be wrong on it.
+// match per row is the only arrangement that cannot be wrong on it. One block
+// on its own, unpacked; see arrange for the rest.
 func columns(matches []string, width int) []string {
-	if len(matches) == 0 {
-		return nil
-	}
-	widest := 0
-	for _, m := range matches {
-		if w := displayWidth(m); w > widest {
-			widest = w
-		}
-	}
-	// Two spaces between columns, which is what both draw.
-	cell := widest + 2
-	perRow := 1
-	if width > 0 {
-		perRow = width / cell
-	}
-	if perRow < 1 {
-		// Wider than the screen: one to a row, and it wraps rather than
-		// being cut.
-		perRow = 1
-	}
-	rows := (len(matches) + perRow - 1) / perRow
-	out := make([]string, 0, rows)
-	for r := range rows {
-		var b strings.Builder
-		for c := range perRow {
-			i := c*rows + r
-			if i >= len(matches) {
-				break
-			}
-			b.WriteString(matches[i])
-			// No padding after the last one on a row: trailing spaces are
-			// invisible until something copies them.
-			if i+rows < len(matches) {
-				for n := displayWidth(matches[i]); n < cell; n++ {
-					b.WriteString(" ")
-				}
-			}
-		}
-		out = append(out, b.String())
-	}
-	return out
+	return arrange(matches, width, 0, listLayout{})
 }
 
 // write puts bytes on the terminal, and is the one place that does.

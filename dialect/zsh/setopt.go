@@ -1403,8 +1403,10 @@ var zshOptions = []zshOption{
 	},
 	recorded("listambiguous", true),
 	recorded("listbeep", true),
-	recorded("listpacked", false),
-	recorded("listrowsfirst", false),
+	// Both read by the line editor when it draws a listing — see
+	// repl.EditorStyle.ListPackedOption — so not `recorded` (#6157).
+	storeBacked("listpacked", false),
+	storeBacked("listrowsfirst", false),
 	recorded("listtypes", true),
 	{
 		// LOCAL_LOOPS: a `break` or `continue` stops at the function it was

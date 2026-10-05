@@ -126,3 +126,34 @@ func TestACompletionInsideSuchAReadDraws(t *testing.T) {
 	waitFor(t, s.ran, "got=[: uniq_]", "the completed line")
 	s.end()
 }
+
+// A request that says its prompt is a prompt value is drawn the way the
+// session draws PS1, and one that does not is drawn as written. zsh's `vared
+// -p` is the first kind (#5965): measured through a pty against zsh 5.9.2,
+// `psvar=(9); vared -p '%1v> ' v` draws `9> `.
+func TestAPromptValueInARequestIsRendered(t *testing.T) {
+	for _, c := range []struct {
+		name   string
+		expand bool
+		want   string
+	}{
+		{"rendered", true, "N2> keep"},
+		{"as written", false, `N\#> keep`},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			var got string
+			s := newSessionWith(t, func(sh *Shell) {
+				sh.Runner.Register("edit", func(r *interp.Runner, _ context.Context, args []string) int {
+					got, _ = r.EditLine(interp.LineEdit{Prompt: `N\#> `, ExpandPrompt: c.expand, Initial: "keep"})
+					_, _ = fmt.Fprintf(r.Stdout, "got=[%s]\n", got)
+					return 0
+				})
+			})
+			s.typeLine("edit\n")
+			waitFor(t, s.screen, c.want, "the request's prompt")
+			s.typeKeys("\n")
+			waitFor(t, s.ran, "got=[keep]", "the line handed back")
+			s.end()
+		})
+	}
+}

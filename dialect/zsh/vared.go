@@ -254,7 +254,12 @@ func varedBuiltin(r *interp.Runner, _ context.Context, args []string) int {
 		return 1
 	}
 	line, end := r.EditLine(interp.LineEdit{
+		// Prompt-expanded as PS1 is, measured 2026-10-05 through a pty
+		// against zsh 5.9.2: with `psvar=(9)`, `vared -p '%1v %% %F{red}r%f> '`
+		// draws `9 % r> `, `$X` is substituted only under `promptsubst`, and
+		// `nopromptpercent` leaves `%~` as written (#5965).
 		Prompt:          prompt,
+		ExpandPrompt:    true,
 		Initial:         varedInitial(r, name),
 		History:         history,
 		EndOnEndOfInput: endOnEndOfInput,
@@ -357,7 +362,11 @@ func varedStore(r *interp.Runner, name, line string, array, assoc bool) {
 		r.SetAssoc(name, varedPairs(r.SplitOnIFS(line)))
 		return
 	}
-	if _, ok := r.GetArray(name); ok || array {
+	// HoldsAList and not GetArray, which answers a scalar as an array of one:
+	// asking it here turned every scalar this edited into an array. Measured
+	// 2026-10-05 through a pty against zsh 5.9.2, `local l=x; vared l` leaves
+	// `${(t)l}` at `scalar-local`, and a global `g=` at `scalar` (#5966).
+	if r.HoldsAList(name) || array {
 		r.SetArray(name, r.SplitOnIFS(line))
 		return
 	}

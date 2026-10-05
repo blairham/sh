@@ -255,6 +255,14 @@ func (s Shell) field(f PromptField, arg string, braced bool) string {
 		// `${(%):-%x}` typed at the prompt and `%x` written *in* the prompt
 		// are the same answer.
 		return s.askRunner(f, arg, braced)
+	case FieldPromptArrayElement:
+		// `%1v` is an element of an array the script holds, so it is the
+		// interpreter's to answer, as it is for `print -P`. This drawer
+		// answered nothing, so `psvar=(9); PS1='%1v> '` drew `> ` where zsh
+		// 5.9.2 draws `9> ` — measured 2026-10-05 through a pty, with
+		// `print -P '%1v'` printing `9` in both (#5965, whose `vared -p
+		// '%1v> '` is zcalc's prompt).
+		return s.askRunner(f, arg, braced)
 	case FieldExitStatus:
 		if s.Runner == nil {
 			return "0"

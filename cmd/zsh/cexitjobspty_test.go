@@ -78,3 +78,24 @@ func TestACommandStringAccountsForItsJobsByItsOwnRule(t *testing.T) {
 		})
 	}
 }
+
+// And the status an `exit` leaves with on this route, which is neither the
+// operand nor the script route's 1: measured 2026-10-05, `zsh -c 'set -m;
+// sleep 1 & exit 7'` writes the sentence and leaves with 0, and with `setopt
+// nocheckjobs` in front leaves with 7 — writing the warning on the `exit`'s
+// own line, ahead of the EXIT trap.
+func TestACommandStringsHeldExitLeavesWithZero(t *testing.T) {
+	_, code := monitorExitCommandStatus(t, "set -m; /bin/sleep 1 & exit 7",
+		"zsh:2: you have running jobs.", "zsh:1: warning: 1 jobs SIGHUPed")
+	if code != 0 {
+		t.Errorf("the held exit left with %d, want 0", code)
+	}
+	screen, code := monitorExitCommandStatus(t, "set -m\n/bin/sleep 1 &\nsetopt nocheckjobs\nexit 7",
+		"zsh:5: warning: 1 jobs SIGHUPed", monitorExitEnd)
+	if code != 7 {
+		t.Errorf("an exit that wrote no sentence left with %d, want 7", code)
+	}
+	if strings.Contains(screen, "running jobs") {
+		t.Errorf("no sentence was asked for:\n%s", smoke.Readable(screen))
+	}
+}

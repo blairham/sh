@@ -67,7 +67,8 @@ func monitorExitScript(t *testing.T, args []string, body string) string {
 	if err := os.WriteFile(path, []byte(monitorExitTrap+body), 0o600); err != nil {
 		t.Fatalf("writing the script: %v", err)
 	}
-	return monitorExitRun(t, home, append(append([]string{"zsh"}, args...), path), monitorExitEnd)
+	screen, _ := monitorExitRun(t, home, append(append([]string{"zsh"}, args...), path), monitorExitEnd)
+	return screen
 }
 
 // monitorExitCommandString is monitorExitScript on the `-c` route: the same
@@ -83,13 +84,21 @@ func monitorExitScript(t *testing.T, args []string, body string) string {
 // text it ends on rather than a screen that has only reached the trap.
 func monitorExitCommandString(t *testing.T, body string, last ...string) string {
 	t.Helper()
+	screen, _ := monitorExitCommandStatus(t, body, last...)
+	return screen
+}
+
+// monitorExitCommandStatus is monitorExitCommandString with the status the
+// shell left with.
+func monitorExitCommandStatus(t *testing.T, body string, last ...string) (string, int) {
+	t.Helper()
 	home := scratchHome(t)
 	return monitorExitRun(t, home, []string{"zsh", "-c", monitorExitTrap + body}, last...)
 }
 
 // monitorExitRun is the run both of those share, so the wait discipline
 // recorded below is in one place.
-func monitorExitRun(t *testing.T, home string, argv []string, last ...string) string {
+func monitorExitRun(t *testing.T, home string, argv []string, last ...string) (string, int) {
 	t.Helper()
 	control, terminal, err := pty.Open()
 	if errors.Is(err, pty.ErrUnsupported) {
@@ -117,8 +126,9 @@ func monitorExitRun(t *testing.T, home string, argv []string, last ...string) st
 		_ = terminal.Close()
 		_ = control.Close()
 	})
+	var code int
 	select {
-	case <-done:
+	case code = <-done:
 	case <-time.After(monitorExitBudget):
 		t.Fatalf("the script did not end; the screen was\n%s", smoke.Readable(screen.Text()))
 	}
@@ -157,7 +167,7 @@ func monitorExitRun(t *testing.T, home string, argv []string, last ...string) st
 				err, smoke.Readable(screen.Text()))
 		}
 	}
-	return screen.Text()
+	return screen.Text(), code
 }
 
 // monitorExitFence is written by the script's own last line, so a row that

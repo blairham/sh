@@ -37108,6 +37108,57 @@
         "TimedOut": false
       }
     },
+    "cd/a-component-put-back-after-reaching-into-the-directory": {
+      "ash": {
+        "Stdout": "st=0~d~st=0~d",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "st=1~sub~st=1~sub",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=1~sub~st=1~sub",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=1~sub~st=1~sub",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=0~d~st=0~d",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=1~sub~st=1~sub",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=1~sub~st=1~sub",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "cd/a-directory-change-hook": {
       "ash": {
         "Stdout": "st=0",
@@ -45721,6 +45772,57 @@
       },
       "zsh": {
         "Stdout": "AFTER",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "commands/a-dot-and-an-exec-take-a-dotdot-physically": {
+      "ash": {
+        "Stdout": "dot=2~sourced~dotlink=0~exec=127~ran~path=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "dot=1~sourced~dotlink=0~exec=127~ran~path=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "dot=1~sourced~dotlink=0~exec=127~ran~path=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "dot=1~sourced~dotlink=0~exec=127~ran~path=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "dot=2~sourced~dotlink=0~exec=127~ran~path=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "dot=1~sourced~dotlink=0~exec=127~ran~path=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "dot=127~sourced~dotlink=0~exec=127~ran~path=0",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,
@@ -183287,6 +183389,57 @@
         "TimedOut": false
       }
     },
+    "redirection/a-redirection-takes-a-dotdot-physically": {
+      "ash": {
+        "Stdout": "in=1~out=1~f~sub",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "in=1~out=1~f~sub",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "in=1~out=1~f~sub",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "in=1~out=1~f~sub",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "in=2~out=2~f~sub",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "in=1~out=1~f~sub",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "in=1~out=1~f~sub",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "redirection/a-script-file-of-its-own-takes-a-number-in-one-shell": {
       "ash": {
         "Stdout": "",
@@ -205857,6 +206010,57 @@
       "zsh": {
         "Stdout": "dec=0~hex=2~name=2~inner=2",
         "Stderr": "\u003cshell\u003e:[:1: integer expression expected: 0x10~\u003cshell\u003e:[:1: integer expression expected: 0x10~\u003cshell\u003e:[:1: integer expression expected: 1+0x10",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "test/a-file-test-takes-a-dotdot-physically": {
+      "ash": {
+        "Stdout": "missing=1~bracket=1~through=0~lexical=1~slash=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "missing=1~bracket=1~through=0~lexical=1~slash=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "missing=1~bracket=1~through=0~lexical=1~slash=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "missing=1~bracket=1~through=0~lexical=1~slash=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "missing=1~bracket=1~through=0~lexical=1~slash=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "missing=1~bracket=1~through=0~lexical=1~slash=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "missing=1~bracket=1~through=0~lexical=1~slash=1",
+        "Stderr": "",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false

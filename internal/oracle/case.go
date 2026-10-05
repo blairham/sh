@@ -3591,6 +3591,13 @@ echo "reached-after st=$?"`,
 		Why:     "and the other side of it, which is what a fix reaching for a directory *listing* would have got wrong: nothing in here can be listed and every shell in the panel enters it. A guard that opened the directory to decide would refuse this one and accept the one above, which is the wrong answer twice",
 	},
 	{
+		ID: "cd/a-component-put-back-after-reaching-into-the-directory", Category: "cd",
+		Snippet: "mkdir -p d/sub && cd d/sub\n" +
+			"cd ../nosuch/.. 2>/dev/null; echo \"st=$?\"; basename \"$PWD\"\n" +
+			"cd nosuch/.. 2>/dev/null; echo \"st=$?\"; basename \"$PWD\"\n",
+		Why: "logical `cd` is the one route where a `..` may be taken out by text, and the panel splits on whether the component it cancels is looked at first. The second line is the control. ksh93 looks only at what the operand put there, and the first line's `nosuch` is the operand's own though a `..` reached into the directory before it — ksh93 refuses both lines, where ours refused only the second (#6081)",
+	},
+	{
 		ID: "cd/an-empty-operand", Category: "cd",
 		Snippet: `cd /; cd ""; echo "st=$?"; pwd`,
 		Why:     "an empty operand is not the same thing as no operand, and it is not nothing either. dash, bash 3.2 and zsh take it as the directory they are already in; bash 5.3 and the same binary called as `sh` say `cd: null directory` and ksh93 `cd: bad directory`, both at 1 and both staying put. That is a fifth branch — neither `cannot change` nor `HOME not set` — and ours read the empty string as *no* operand and went home (#1491)",
@@ -6095,6 +6102,14 @@ echo "st=$?"`,
 		Why:     "`<(cmd)` runs cmd and expands to a path its output can be read from — the last of the core language, and the clearest case of a dialect being a runtime switch: bash 3.2 has it as `bash` and loses it as `sh`. dash has it in neither guise and reports the `(` as unexpected",
 	},
 	{
+		ID: "redirection/a-redirection-takes-a-dotdot-physically", Category: "redirection",
+		Snippet: "mkdir sub && echo hi > f\n" +
+			"{ read x < sub/nosuch/../../f; } 2>/dev/null; echo \"in=$?\"\n" +
+			"{ echo x > sub/nosuch/../../out; } 2>/dev/null; echo \"out=$?\"\n" +
+			"ls\n",
+		Why: "the same `..` on the redirection route, which opens rather than stats: no shell reads `f` through a directory that is not there, and none creates `out` through one. The `ls` is what says whether the write happened (#6081)",
+	},
+	{
 		ID: "procsub/two-of-them-in-one-command", Category: "redirection",
 		Snippet: `diff <(echo a) <(echo a) && echo same`,
 		Why:     "the reason the construct exists: two commands compared as though they were files, with no temporary file named anywhere. Two substitutions in one command also have to keep their own pipes, which is exactly what the first attempt got wrong",
@@ -6729,6 +6744,16 @@ echo "st=$?"`,
 		ID: "exec/a-command-is-named-as-it-was-written", Category: "commands",
 		Snippet: `basename --bad 2>&1 | head -1`,
 		Why:     "a command names itself from `argv[0]`, and what belongs there is the word that was typed rather than the path PATH resolved to. Unanimous, invisible until something fails, and then it is in the output of a program the shell did not write — which is why a whole-machine run sweep had eighteen lines differing by nothing else",
+	},
+	{
+		ID: "commands/a-dot-and-an-exec-take-a-dotdot-physically", Category: "commands",
+		Snippet: "mkdir -p sub/deep && ln -s sub/deep link && echo 'echo sourced' > f && cp f sub/g\n" +
+			"printf '#!/bin/sh\\necho ran\\n' > tool && chmod +x tool && cp tool sub/only\n" +
+			"(. sub/nosuch/../../f) 2>/dev/null; echo \"dot=$?\"\n" +
+			"(. link/../g); echo \"dotlink=$?\"\n" +
+			"sub/nosuch/../../tool 2>/dev/null; echo \"exec=$?\"\n" +
+			"PATH=$PWD/link/..:$PATH; only; echo \"path=$?\"\n",
+		Why: "the routes that read or run a file rather than probe it. `.` and a command by path are refused through a directory that is not there, and a PATH entry of `link/..` is searched in the link target's parent, where `only` is — ours searched the directory holding the link and found nothing (#6081)",
 	},
 	{
 		ID: "name/unset-f-on-a-name-no-function-could-have", Category: "builtins",
@@ -14405,6 +14430,16 @@ printf 'TWO=still-running\n'`,
 		ID: "test/argument-count-decides", Category: "test",
 		Snippet: `test -f; echo "one=$?"; test -n x; echo "two=$?"`,
 		Why:     "POSIX defines `test` by argument count before grammar, which is why `test -f` alone is *true*: one argument is a string, and `-f` is a non-empty one. Two arguments make the same word an operator",
+	},
+	{
+		ID: "test/a-file-test-takes-a-dotdot-physically", Category: "test",
+		Snippet: "mkdir -p sub/deep && ln -s sub/deep link && : > f && : > sub/g\n" +
+			"test -e sub/nosuch/../../f; echo \"missing=$?\"\n" +
+			"[ -f sub/nosuch/../../f ]; echo \"bracket=$?\"\n" +
+			"[ -e link/../g ]; echo \"through=$?\"\n" +
+			"[ -e link/../f ]; echo \"lexical=$?\"\n" +
+			"[ -e f/ ]; echo \"slash=$?\"\n",
+		Why: "a `..` is the kernel's to resolve, and it resolves it physically: `sub/nosuch/..` needs `sub/nosuch` to be a directory that is there, `link/..` is the parent of wherever the link leads, and `f/` asks a file to be a directory. Every line splits a lexical reading from the physical one, and the whole panel takes the physical one — ours cleaned the path first and answered all five the other way (#6081)",
 	},
 	{
 		ID: "test/the-quoting-trap", Category: "test",

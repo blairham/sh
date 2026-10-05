@@ -127,6 +127,27 @@ func TestTheReasonNamesWhatTheComponentIs(t *testing.T) {
 	}
 }
 
+// TestAComponentPutBackAfterReachingIntoTheDirectoryIsLookedAt is the ksh93
+// half of #6081. Under the within-the-operand reading a `..` that reaches
+// past the operand cancels a component of the directory the shell is in
+// unseen — and that directory is one component shorter afterwards, so what
+// the operand puts back is the operand's own. The mark was not lowered, so
+// `../nosuch/..` read its second `..` as reaching into base too and moved;
+// ksh93u+ refuses it, measured 2026-10-05, as it refuses `nosuch/..`.
+func TestAComponentPutBackAfterReachingIntoTheDirectoryIsLookedAt(t *testing.T) {
+	root := canceledTree(t)
+	from := filepath.Join(root, "b")
+	for _, src := range []string{"cd ../nosuch/..", "cd ../b/../nosuch/.."} {
+		if st, dir, _ := cdDotDot(t, from, CdDotDotLooksWithinTheOperand, src); st == 0 || dir != from {
+			t.Errorf("%s = %d in %s, want a refusal staying in %s", src, st, dir, from)
+		}
+	}
+	// The control: the component the operand puts back is there.
+	if st, dir, errs := cdDotDot(t, from, CdDotDotLooksWithinTheOperand, "cd ../real/.."); st != 0 || dir != root {
+		t.Errorf("cd ../real/.. = %d in %s, want 0 in %s — %s", st, dir, root, errs)
+	}
+}
+
 // TestALinkedComponentIsADirectory: the looking follows links, so a `..`
 // behind a symbolic link to a directory cancels — which is what keeps #4590's
 // whole grid unmoved under the looking reading.

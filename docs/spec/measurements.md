@@ -10929,6 +10929,7 @@ grades it and nothing drift-checks it either, for the same reason.
 | `cd/into-a-directory-with-no-execute-bit` | `st=2~/private<tmp>` **2>** `<shell>: 1: cd: can't cd to noexec` | `st=1~/private<tmp>` **2>** `<shell>: line 1: cd: noexec: Permission denied` | `st=1~/private<tmp>` **2>** `<shell>: line 1: cd: noexec: Permission denied` | `st=1~/private<tmp>` **2>** `<shell>: line 0: cd: noexec: Permission denied` | `st=1~<tmp>` **2>** `<shell>: cd: noexec: [Permission denied]` | `st=1~/private<tmp>` **2>** `<shell>:cd:1: permission denied: noexec` | `st=0~<tmp>/noexec` *(status 1)* |
 | `cd/into-a-directory-that-may-be-read-and-not-entered` | `st=2~/private<tmp>` **2>** `<shell>: 1: cd: can't cd to r` | `st=1~/private<tmp>` **2>** `<shell>: line 1: cd: r: Permission denied` | `st=1~/private<tmp>` **2>** `<shell>: line 1: cd: r: Permission denied` | `st=1~/private<tmp>` **2>** `<shell>: line 0: cd: r: Permission denied` | `st=1~<tmp>` **2>** `<shell>: cd: r: [Permission denied]` | `st=1~/private<tmp>` **2>** `<shell>:cd:1: permission denied: r` | `st=0~<tmp>/r` *(status 1)* |
 | `cd/into-a-directory-that-may-be-entered-and-not-read` | `st=0~/private<tmp>/x` | `st=0~/private<tmp>/x` | `st=0~/private<tmp>/x` | `st=0~/private<tmp>/x` | `st=0~<tmp>/x` | `st=0~/private<tmp>/x` | `st=0~<tmp>/x` |
+| `cd/a-component-put-back-after-reaching-into-the-directory` | `st=0~d~st=0~d` | `st=1~sub~st=1~sub` | `st=1~sub~st=1~sub` | `st=1~sub~st=1~sub` | `st=1~sub~st=1~sub` | `st=1~sub~st=1~sub` | `st=0~d~st=0~d` |
 | `cd/an-empty-operand` | `st=0~/` | `st=1~/` **2>** `<shell>: line 1: cd: null directory` | `st=1~/` **2>** `<shell>: line 1: cd: null directory` | `st=0~/` | `st=1~/` **2>** `<shell>: cd: bad directory` | `st=0~/` | `st=0~/` |
 | `cd/an-empty-operand-is-a-move` | `old=/tmp` | `old=MARK` **2>** `<shell>: line 1: cd: null directory` | `old=MARK` **2>** `<shell>: line 1: cd: null directory` | `old=/tmp` | `old=MARK` **2>** `<shell>: cd: bad directory` | `old=/tmp` | `old=/tmp` |
 | `cd/an-empty-home` | `st=0~/` | `st=0~/` | `st=0~/` | `st=0~/` | `st=1~/` **2>** `<shell>: cd: bad directory` | `st=0~/` | `st=0~/` |
@@ -10966,6 +10967,12 @@ grades it and nothing drift-checks it either, for the same reason.
 - `cd/into-a-directory-that-may-be-entered-and-not-read` — and the other side of it, which is what a fix reaching for a directory *listing* would have got wrong: nothing in here can be listed and every shell in the panel enters it. A guard that opened the directory to decide would refuse this one and accept the one above, which is the wrong answer twice
   ```sh
   mkdir x; chmod 111 x; cd x; echo "st=$?"; pwd
+  ```
+- `cd/a-component-put-back-after-reaching-into-the-directory` — logical `cd` is the one route where a `..` may be taken out by text, and the panel splits on whether the component it cancels is looked at first. The second line is the control. ksh93 looks only at what the operand put there, and the first line's `nosuch` is the operand's own though a `..` reached into the directory before it — ksh93 refuses both lines, where ours refused only the second (#6081)
+  ```sh
+  mkdir -p d/sub && cd d/sub
+  cd ../nosuch/.. 2>/dev/null; echo "st=$?"; basename "$PWD"
+  cd nosuch/.. 2>/dev/null; echo "st=$?"; basename "$PWD"
   ```
 - `cd/an-empty-operand` — an empty operand is not the same thing as no operand, and it is not nothing either. dash, bash 3.2 and zsh take it as the directory they are already in; bash 5.3 and the same binary called as `sh` say `cd: null directory` and ksh93 `cd: bad directory`, both at 1 and both staying put. That is a fifth branch — neither `cannot change` nor `HOME not set` — and ours read the empty string as *no* operand and went home (#1491)
   ```sh
@@ -15458,6 +15465,7 @@ y][x][y]`. The row exists because the plausible implementation is a split follow
 | case | dash | bash | bash-as-sh | bash32 | ksh93 | zsh | ash |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `procsub/reads-a-command-as-a-file` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `hi` | `hi` | `hi` | `hi` | `hi` | `hi` |
+| `redirection/a-redirection-takes-a-dotdot-physically` | `in=2~out=2~f~sub` | `in=1~out=1~f~sub` | `in=1~out=1~f~sub` | `in=1~out=1~f~sub` | `in=1~out=1~f~sub` | `in=1~out=1~f~sub` | `in=1~out=1~f~sub` |
 | `procsub/two-of-them-in-one-command` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `same` | `same` | `same` | `same` | `same` | `same` |
 | `procsub/a-background-job-outlives-the-body` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `BC` | `BC` | `BC` | `BC` | `BC` | `BC` |
 | `procsub/a-writing-bodys-output-lands-after-the-command` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `AFTER[PIPE]` | `AFTER[PIPE]` | `AFTER[PIPE]` | `AFTER[PIPE]` | `[PIPE]AFTER` | `AFTER[PIPE]` |
@@ -15692,6 +15700,13 @@ y][x][y]`. The row exists because the plausible implementation is a split follow
 - `procsub/reads-a-command-as-a-file` — `<(cmd)` runs cmd and expands to a path its output can be read from — the last of the core language, and the clearest case of a dialect being a runtime switch: bash 3.2 has it as `bash` and loses it as `sh`. dash has it in neither guise and reports the `(` as unexpected
   ```sh
   cat <(echo hi)
+  ```
+- `redirection/a-redirection-takes-a-dotdot-physically` — the same `..` on the redirection route, which opens rather than stats: no shell reads `f` through a directory that is not there, and none creates `out` through one. The `ls` is what says whether the write happened (#6081)
+  ```sh
+  mkdir sub && echo hi > f
+  { read x < sub/nosuch/../../f; } 2>/dev/null; echo "in=$?"
+  { echo x > sub/nosuch/../../out; } 2>/dev/null; echo "out=$?"
+  ls
   ```
 - `procsub/two-of-them-in-one-command` — the reason the construct exists: two commands compared as though they were files, with no temporary file named anywhere. Two substitutions in one command also have to keep their own pipes, which is exactly what the first attempt got wrong
   ```sh
@@ -16828,6 +16843,7 @@ y][x][y]`. The row exists because the plausible implementation is a split follow
 | case | dash | bash | bash-as-sh | bash32 | ksh93 | zsh | ash |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `exec/a-command-is-named-as-it-was-written` | `basename: illegal option -- -` | `basename: illegal option -- -` | `basename: illegal option -- -` | `basename: illegal option -- -` | `basename: illegal option -- -` | `basename: illegal option -- -` | `basename: unrecognized option: bad` |
+| `commands/a-dot-and-an-exec-take-a-dotdot-physically` | `dot=2~sourced~dotlink=0~exec=127~ran~path=0` | `dot=1~sourced~dotlink=0~exec=127~ran~path=0` | `dot=1~sourced~dotlink=0~exec=127~ran~path=0` | `dot=1~sourced~dotlink=0~exec=127~ran~path=0` | `dot=1~sourced~dotlink=0~exec=127~ran~path=0` | `dot=127~sourced~dotlink=0~exec=127~ran~path=0` | `dot=2~sourced~dotlink=0~exec=127~ran~path=0` |
 | `subst/a-body-that-runs-in-the-current-shell` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[1][hi]` | `[1][hi]` | **2>** `<shell>: ${ x=1; echo hi;}: bad substitution` *(status 1)* | `[1][hi]` | **2>** `<shell>:1: bad substitution` *(status 1)* | **2>** `<shell>: syntax error: bad substitution` *(status 2)* |
 | `subst/a-paren-opens-a-current-shell-body-too` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | **2>** `<shell>: line 1: A${(echo hi)}B: bad substitution` *(status 1)* | **2>** `<shell>: line 1: A${(echo hi)}B: bad substitution` *(status 127)* | **2>** `<shell>: A${(echo hi)}B: bad substitution` *(status 1)* | `AhiB` | **2>** `<shell>:1: error in flags near position 6 in '${(echo hi)}B"'` *(status 1)* | **2>** `<shell>: syntax error: bad substitution` *(status 2)* |
 | `subst/a-paren-body-does-not-share-what-it-assigns` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | **2>** `<shell>: line 1: ${(v=2; echo x)}: bad substitution` *(status 1)* | **2>** `<shell>: line 1: ${(v=2; echo x)}: bad substitution` *(status 127)* | **2>** `<shell>: ${(v=2; echo x)}: bad substitution` *(status 1)* | `x~v=1` | **2>** `<shell>:1: error in flags near position 5 in '${(v=2; echo x)}'` *(status 1)* | **2>** `<shell>: syntax error: bad substitution` *(status 2)* |
@@ -16924,6 +16940,15 @@ y][x][y]`. The row exists because the plausible implementation is a split follow
 - `exec/a-command-is-named-as-it-was-written` — a command names itself from `argv[0]`, and what belongs there is the word that was typed rather than the path PATH resolved to. Unanimous, invisible until something fails, and then it is in the output of a program the shell did not write — which is why a whole-machine run sweep had eighteen lines differing by nothing else
   ```sh
   basename --bad 2>&1 | head -1
+  ```
+- `commands/a-dot-and-an-exec-take-a-dotdot-physically` — the routes that read or run a file rather than probe it. `.` and a command by path are refused through a directory that is not there, and a PATH entry of `link/..` is searched in the link target's parent, where `only` is — ours searched the directory holding the link and found nothing (#6081)
+  ```sh
+  mkdir -p sub/deep && ln -s sub/deep link && echo 'echo sourced' > f && cp f sub/g
+  printf '#!/bin/sh\necho ran\n' > tool && chmod +x tool && cp tool sub/only
+  (. sub/nosuch/../../f) 2>/dev/null; echo "dot=$?"
+  (. link/../g); echo "dotlink=$?"
+  sub/nosuch/../../tool 2>/dev/null; echo "exec=$?"
+  PATH=$PWD/link/..:$PATH; only; echo "path=$?"
   ```
 - `subst/a-body-that-runs-in-the-current-shell` — a third spelling of command substitution, and the only one that does not run in a subshell — so what it assigns survives, which is the whole reason it exists. Two of the panel have it, one of them only since 5.3, and the other two call it a bad substitution. The `x=0` before it and the `[$x]` after are what tell it from `$( … )`, which would leave the nought
   ```sh
@@ -20059,6 +20084,7 @@ y][x][y]`. The row exists because the plausible implementation is a split follow
 | case | dash | bash | bash-as-sh | bash32 | ksh93 | zsh | ash |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `test/argument-count-decides` | `one=0~two=0` | `one=0~two=0` | `one=0~two=0` | `one=0~two=0` | `one=0~two=0` | `one=0~two=0` | `one=0~two=0` |
+| `test/a-file-test-takes-a-dotdot-physically` | `missing=1~bracket=1~through=0~lexical=1~slash=1` | `missing=1~bracket=1~through=0~lexical=1~slash=1` | `missing=1~bracket=1~through=0~lexical=1~slash=1` | `missing=1~bracket=1~through=0~lexical=1~slash=1` | `missing=1~bracket=1~through=0~lexical=1~slash=1` | `missing=1~bracket=1~through=0~lexical=1~slash=1` | `missing=1~bracket=1~through=0~lexical=1~slash=1` |
 | `test/the-quoting-trap` | `unquoted=0~quoted=1` | `unquoted=0~quoted=1` | `unquoted=0~quoted=1` | `unquoted=0~quoted=1` | `unquoted=0~quoted=1` | `unquoted=0~quoted=1` | `unquoted=0~quoted=1` |
 | `test/equals-is-not-a-pattern` | `st=1` | `st=1` | `st=1` | `st=1` | `st=1` | `st=1` | `st=1` |
 | `test/numeric-and-string-compare-differ` | `numeric=0~string=1` | `numeric=0~string=1` | `numeric=0~string=1` | `numeric=0~string=1` | `numeric=0~string=1` | `numeric=0~string=1` | `numeric=0~string=1` |
@@ -20096,6 +20122,15 @@ y][x][y]`. The row exists because the plausible implementation is a split follow
 - `test/argument-count-decides` — POSIX defines `test` by argument count before grammar, which is why `test -f` alone is *true*: one argument is a string, and `-f` is a non-empty one. Two arguments make the same word an operator
   ```sh
   test -f; echo "one=$?"; test -n x; echo "two=$?"
+  ```
+- `test/a-file-test-takes-a-dotdot-physically` — a `..` is the kernel's to resolve, and it resolves it physically: `sub/nosuch/..` needs `sub/nosuch` to be a directory that is there, `link/..` is the parent of wherever the link leads, and `f/` asks a file to be a directory. Every line splits a lexical reading from the physical one, and the whole panel takes the physical one — ours cleaned the path first and answered all five the other way (#6081)
+  ```sh
+  mkdir -p sub/deep && ln -s sub/deep link && : > f && : > sub/g
+  test -e sub/nosuch/../../f; echo "missing=$?"
+  [ -f sub/nosuch/../../f ]; echo "bracket=$?"
+  [ -e link/../g ]; echo "through=$?"
+  [ -e link/../f ]; echo "lexical=$?"
+  [ -e f/ ]; echo "slash=$?"
   ```
 - `test/the-quoting-trap` — the reason `[ ]` needs quotes where `[[ ]]` does not: an unquoted empty expansion is not an empty argument, it is *no* argument, so the count changes and with it the meaning
   ```sh

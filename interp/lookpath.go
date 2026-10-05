@@ -206,7 +206,7 @@ func (r *Runner) lookPathSpelled(name string) (path, spelled, written string, er
 		if dir == "" {
 			dir = "."
 		}
-		candidate := r.absolute(filepath.Join(dir, name))
+		candidate := r.pathCandidate(dir, name)
 		err := r.runnable(candidate)
 		if err == nil {
 			return candidate, joined, written, nil
@@ -335,7 +335,7 @@ func (r *Runner) executableBeforeTheHashedPath(name, hashed string) (string, boo
 		if dir == "" {
 			dir = "."
 		}
-		candidate := r.absolute(filepath.Join(dir, name))
+		candidate := r.pathCandidate(dir, name)
 		if candidate == hashed {
 			return "", false
 		}
@@ -380,11 +380,36 @@ func (r *Runner) pathElements(path string) []string {
 // through the process's PATH and failed with Go's own
 // `exec: "dup": executable file not found in $PATH`. The corpus caught it; the
 // unit tests did not, because they set Dir and never hit the bare form.
+//
+// Not filepath.Abs, which cleans: a `..` is the kernel's to resolve, and
+// cleaning it away runs `../nosuch/../tool` and finds a PATH entry of
+// `link/..` in the wrong directory — see atDir (#6081).
 func (r *Runner) absolute(path string) string {
-	if abs, err := filepath.Abs(r.atDir(path)); err == nil {
-		return abs
+	at := r.atDir(path)
+	if at == "" || filepath.IsAbs(at) {
+		return at
 	}
-	return r.atDir(path)
+	// No directory of its own, which is only a Runner nobody gave one: the
+	// fallback filepath.Abs always was, with the operand put under it as
+	// written rather than through Abs's clean.
+	if wd, err := filepath.Abs("."); err == nil {
+		return uncleanedJoin(wd, at)
+	}
+	return at
+}
+
+// pathCandidate is the file a PATH entry offers for name, as the operating
+// system is to be asked about it: absolute, and joined without canceling a
+// `..` in the entry, so `PATH=link/..` searches the physical parent of
+// wherever the link leads, which is where the whole panel finds it. Every
+// search of PATH for something to run builds its candidate here, so the rule
+// cannot be right in one of them and not another. What a hit is *called* is a
+// separate question — see Runner.spelledPathHit.
+func (r *Runner) pathCandidate(dir, name string) string {
+	if dir == "" {
+		dir = "."
+	}
+	return r.absolute(uncleanedJoin(dir, name))
 }
 
 // runnable reports whether a path is something the operating system would
@@ -588,7 +613,7 @@ func (r *Runner) lookPathHits(name string) []pathHit {
 		if dir == "" {
 			dir = "."
 		}
-		candidate := r.absolute(filepath.Join(dir, name))
+		candidate := r.pathCandidate(dir, name)
 		if r.runnable(candidate) == nil {
 			hits = append(hits, pathHit{path: candidate, written: written, spelled: spelled})
 		}

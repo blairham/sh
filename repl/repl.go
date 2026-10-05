@@ -2857,6 +2857,22 @@ func (s Shell) commentsAreOff() bool {
 // — measured, `setopt nopromptcr` stops the mark being written though the
 // marking option is still set. The return is checked beside this rather than
 // here, because it also stands alone.
+// readEditorOptions writes the editor fields a dialect's options decide from
+// the options as they stand: whether a listing comes on the first Tab
+// (EditorStyle.ListMatchesWithoutASecondKeyOption), whether anything rings
+// (BeepOption), and what is done about output that never ended its line
+// (MarkUnfinishedOutputOption, ReturnBeforeThePromptOption) — the return
+// being the outer of the two, so a person who cleared it gets neither. See
+// freshRow. One place for all four, called when the editor is built and on
+// every key and prompt after, so the session's first answer and its later
+// ones cannot be worked out two ways.
+func (s Shell) readEditorOptions(e *editor) {
+	e.listsMatches = s.dialectOption(s.Editor.ListMatchesWithoutASecondKeyOption)
+	e.silent = s.Editor.BeepOption != "" && !s.dialectOption(s.Editor.BeepOption)
+	e.unfinishedMark = s.markIfAsked()
+	e.returnsFirst = s.dialectOption(s.Editor.ReturnBeforeThePromptOption)
+}
+
 func (s Shell) markIfAsked() string {
 	if !s.dialectOption(s.Editor.MarkUnfinishedOutputOption) {
 		return ""
@@ -2896,7 +2912,7 @@ func (s Shell) editorStream(state *terminalState) io.Writer {
 // answers through carries no context to consult it with. See
 // shellCompleter.ctx.
 func (s Shell) newEditor(ctx context.Context, state *terminalState) *editor {
-	return &editor{
+	ed := &editor{
 		in: s.In, out: s.editorStream(state), comp: s.completer(ctx),
 		// What to collapse the prompt to once the line is accepted, which is
 		// nothing unless the front end said otherwise.
@@ -2925,10 +2941,6 @@ func (s Shell) newEditor(ctx context.Context, state *terminalState) *editor {
 		// dialect keeps that in a parameter. Read on the keystroke for the
 		// same reason the threshold above is.
 		keyWait: s.keySequenceWait(),
-		// Whether the matches are drawn on the keystroke that found them
-		// ambiguous. Read through the option rather than taken as a value,
-		// because it is one a person turns off at the prompt.
-		listsMatches: s.dialectOption(s.Editor.ListMatchesWithoutASecondKeyOption),
 		// And how a listing is arranged, which two options decide. Read on
 		// the keystroke, because a person sets them at the prompt and this
 		// editor outlives every line of the session.
@@ -2941,9 +2953,7 @@ func (s Shell) newEditor(ctx context.Context, state *terminalState) *editor {
 		// And whether an ambiguous completion rings even while it fills a
 		// prefix in, which is one shell's answer and not the other's.
 		bellsOnAPartialCompletion: s.Editor.BellRingsOnAnAmbiguousCompletionThatInserts,
-		// And whether the bell rings at all, which is an option a person
-		// turns off at the prompt, and whether a failing widget rings it.
-		silent:               s.Editor.BeepOption != "" && !s.dialectOption(s.Editor.BeepOption),
+		// And whether a failing widget rings the bell.
 		ringsOnAFailedWidget: s.Editor.RingsWhenAWidgetFails,
 		// Whether to ask the terminal to mark a paste, and how a marked one
 		// is drawn. Two of the four ask and ksh93 does not; see paste.go.
@@ -2964,12 +2974,12 @@ func (s Shell) newEditor(ctx context.Context, state *terminalState) *editor {
 		selfInsert:      s.Editor.SelfInsertWidget,
 		tabOnBlank:      s.Editor.TabOnABlankLineTypesItself,
 		specials:        s.Editor.SpecialWidgets,
-		// What to do about output that never ended its line. Read through the
-		// options rather than taken as values, because both are options a
-		// person turns off — and the return is the outer of the two, so a
-		// dialect whose person cleared it gets neither. See freshRow.
-		unfinishedMark:       s.markIfAsked(),
-		returnsFirst:         s.dialectOption(s.Editor.ReturnBeforeThePromptOption),
+		// Whether the matches are drawn on the keystroke that found them
+		// ambiguous, whether the bell rings at all, and what to do about
+		// output that never ended its line: four fields the dialect's
+		// options decide, read on every key and every prompt because a
+		// person sets each of them at the prompt. See readEditorOptions.
+		liveOptions:          s.readEditorOptions,
 		clearBefore:          s.Editor.ClearBeforeThePrompt,
 		listQueryStrict:      s.Editor.ListQueryAcceptsOnlyYesOrNo,
 		listQueryTakesItsRow: s.Editor.ListQueryAnswerTakesTheQuestionsRow,
@@ -3040,6 +3050,8 @@ func (s Shell) newEditor(ctx context.Context, state *terminalState) *editor {
 		// editor.listQueryAsks.
 		height: func() int { return terminalHeight(s.inFile()) },
 	}
+	s.readEditorOptions(ed)
+	return ed
 }
 
 // listQueryThreshold is the live reading of the parameter that says how many

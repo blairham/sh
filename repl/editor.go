@@ -108,6 +108,12 @@ type editor struct {
 	// prompt. Nil is the plain arrangement. See EditorStyle.ListPackedOption.
 	layout func() listLayout
 
+	// liveOptions writes the fields above that a dialect's options decide —
+	// listsMatches, silent, unfinishedMark and returnsFirst — from the
+	// options as they stand now. Nil leaves the fields as they were set,
+	// which is every editor a test builds. See readLiveOptions.
+	liveOptions func(*editor)
+
 	// menu is the menu completion in flight, where a run of menu keystrokes
 	// is going on. See completemenu.go, which is the whole of it.
 	menu menuWalk
@@ -672,6 +678,7 @@ func (e *editor) readLine(prompt drawnPrompt) (string, error) {
 func (e *editor) keyLoop(prompt drawnPrompt) (string, error) {
 	var buf [1]byte
 	for {
+		e.readLiveOptions()
 		// A send-break an action asked for — `zle send-break` from a widget,
 		// or a key bound to it — ends the read here, the one place every
 		// key's path comes back through.
@@ -1848,6 +1855,23 @@ func (e *editor) list(matches []Candidate, prompt drawnPrompt) {
 	}
 	// The prompt and the line are not written back here: the caller redraws,
 	// and the redraw now knows it is starting from a fresh row.
+}
+
+// readLiveOptions brings the option-decided fields up to the options as they
+// stand, which is what makes `setopt` at the prompt reach the editor (#6167).
+//
+// Read before every key and before the prompt is grounded, because the editor
+// is built once and outlives every line of the session: measured 2026-10-05
+// against zsh 5.9.2 through a pseudo-terminal, `unsetopt autolist beep` typed
+// at the prompt makes the next ambiguous Tab neither ring nor list,
+// `unsetopt promptsp` makes `printf y` end in `y` and a return with no `%`
+// mark, and `unsetopt promptcr` then drops the return too. All four were
+// taken when the session started here, so only a line in the rc file moved
+// them.
+func (e *editor) readLiveOptions() {
+	if e.liveOptions != nil {
+		e.liveOptions(e)
+	}
 }
 
 // listLayout is the arrangement a listing drawn now is in.

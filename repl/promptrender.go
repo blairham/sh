@@ -569,6 +569,7 @@ func (s Shell) openState() string {
 // The other half is groundForPrompt, and both are the return option's: with it
 // off, neither is written.
 func (e *editor) markUnfinished() {
+	e.readLiveOptions()
 	if !e.returnsFirst || e.unfinishedMark == "" {
 		// An empty mark is a session that was not asked to mark, and it pads
 		// nothing either — measured, the marking option off leaves the return
@@ -624,6 +625,7 @@ func (e *editor) markUnfinished() {
 // hook's own half-written line gets erased rather than marked — see the note
 // there.
 func (e *editor) groundForPrompt() {
+	e.readLiveOptions()
 	var b strings.Builder
 	if e.returnsFirst {
 		b.WriteString("\r")

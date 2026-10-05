@@ -436,8 +436,15 @@ type editor struct {
 	// place, and a finished job puts a line of its own above it. One
 	// descriptor with a flag beside it would be the same thing written less
 	// plainly. See jobnotify.go.
-	jobWake    func() int
-	jobWoke    func()
+	jobWake func() int
+	jobWoke func()
+
+	// resizeWake is the descriptor a window resize pokes, resizeWoke takes
+	// the poke back off, and resized is what the session does about the new
+	// size before the line is drawn again. See resizeRedraw.
+	resizeWake func() int
+	resizeWoke func()
+	resized    func()
 	jobNotices func(before func()) bool
 
 	// width is how many columns the terminal has, asked each time it is

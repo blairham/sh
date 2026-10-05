@@ -4311,9 +4311,28 @@ Found in the wild: powerlevel10k's `_p9k_must_init` builds a pattern of
 `$…` references and evaluates it with `${(e)_p9k__param_pat}` to make the
 signature it compares against.
 
+### `(D)` draws a value as a directory
+
+`(D)` writes each value the way `%~` draws the working directory: a path
+under `$HOME` as `~`, a path under a named directory as `~name`, with the
+shortest drawing winning. The result is then quoted as a single `(q)`
+would quote it, with the drawn tilde word left unquoted:
+`v='/Users/x/a b'` gives `~/a\ b`, `/q/it's` gives `/q/it\'s` with nothing
+abbreviated, and a value that is itself `~/q` gives `\~/q`. An empty value
+stays empty, with no `''`.
+
+It is the last of the value's rewrites. Measured on zsh 5.9.2:
+`${(UD)a}` is `/USERS/X/DOC` (after the case flags), `${(qqD)v}` is
+`\'/Users/x/a\ b\'` (after the quoting), `${(DQ)w}` on `/Users/x/a\b` is
+`~/ab` (after the unquoting), and `${(DV)u}` on a path holding a tab is
+`~/a$'\t'b` (before `V`). That last row is also why `V` now runs after
+`Q`: `${(VQ)t}` on `a<TAB>b` is `a\tb`, and with `V` first the `Q` took
+its backslash and left `atb`. The abbreviation is the one `print -D` and
+the prompt use (#5980).
+
 ### What this implementation refuses
 
-Flags zsh has and this slice does not — `(t)`, `(D)`, and the rest of the
+Flags zsh has and this slice does not — `(t)`, and the rest of the
 alphabet, plus `(q+)` (#1530), the signed-numeric sort flag `(-)` — which
 is every `-` that a `q` did not eat, #1531 — and
 `(qqq…)` beyond four — are refused at run time naming the flag, with the

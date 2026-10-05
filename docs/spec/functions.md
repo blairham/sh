@@ -901,8 +901,8 @@ Differences:
   message is this file's own and gives the real count. The usage is this
   file's own too. Both go to the same streams as zsh's: standard error for
   the first, standard output for the usage.
-* `cdr -l` puts `~` back for `$HOME` only. The `(D)` flag that would also
-  put back a named directory is not implemented yet (#5980).
+* `cdr -l` puts `~` back for `$HOME` only. It was written before the `(D)`
+  flag, which also puts back a named directory, existed (#5980).
 * With `recent-dirs-pushd`, zsh's `pushd` prints the stack in an interactive
   shell. This shell's does not yet (#5982).
 * `cdr -e` edits the list with `vared`. It has no row, because there is no

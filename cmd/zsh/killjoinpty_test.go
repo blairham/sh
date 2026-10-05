@@ -28,9 +28,16 @@ import (
 // `bb `, `bb X`, `bb cc`, `bb ` and `aa bb ` — the first, fourth, fifth,
 // sixth and seventh rows wrong. The second and third came out right because
 // the keystroke and the call before happened to agree.
+// The result is drawn into the line rather than printed. A widget that prints
+// hands the terminal back to its line discipline for the length of the call
+// (see repl's runHandler), so a key sent the moment printed output appears can
+// land in cooked mode and be echoed and edited by the kernel instead of read —
+// which is how this test first failed on Linux. What the editor draws, it
+// draws after the widget has returned and the terminal is raw again.
 func TestAKillJoinsByTheCallBeforeIt(t *testing.T) {
-	control, screen := widgetSession(t, `y() { BUFFER=; zle yank; local got=$BUFFER; BUFFER=; print -r -- "YANK<$got>END" }
+	control, screen := widgetSession(t, `y() { BUFFER=; zle yank; BUFFER="YANK<$BUFFER>END" }
 zle -N y; bindkey '^Xy' y
+c() { BUFFER= }; zle -N c; bindkey '^Xc' c
 bindkey '^W' backward-kill-word
 k() { zle backward-kill-word }; zle -N k; bindkey '^Xk' k
 a() { BUFFER='one two'; CURSOR=7; zle backward-kill-word; zle backward-kill-word }; zle -N a; bindkey '^Xa' a
@@ -48,11 +55,15 @@ f() { zle backward-kill-word; CUTBUFFER=Q$CUTBUFFER; zle backward-kill-word }; z
 		{"CUTBUFFER assigned between", "aa bb cc\x18f", "YANK<bb Qcc>END"},
 		{"a count between two kill keys", "aa bb cc\x17\x1b2\x17", "YANK<aa bb cc>END"},
 	} {
-		if _, err := control.WriteString(row.keys + "\x18y"); err != nil {
+		if _, err := control.WriteString("\x18c" + row.keys + "\x18y"); err != nil {
 			t.Fatalf("%s: typing: %v", row.name, err)
 		}
 		if err := screen.Await(row.want, widgetBudget); err != nil {
 			t.Fatalf("%s: the yank is not %s\n%v\n%q", row.name, row.want, err, smoke.LastLines(screen.Text(), 6))
 		}
+	}
+	// An empty line for the session's own `exit`.
+	if _, err := control.WriteString("\x18c"); err != nil {
+		t.Fatalf("clearing: %v", err)
 	}
 }

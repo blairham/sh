@@ -36,8 +36,7 @@ p1() {
   NUMERIC=2; said+=" n=$NUMERIC t=${(t)NUMERIC}"; zle w2
   BUFFER='a b c d'; CURSOR=0; zle forward-word; said+=" fw=$CURSOR"
   unset NUMERIC; zle w2
-  BUFFER=
-  print -r -- "PONE $said ENDONE"
+  BUFFER="PONE $said ENDONE"
 }
 zle -N p1; bindkey '^T' p1
 p2() { unset POSTDISPLAY }
@@ -45,13 +44,17 @@ zle -N p2; bindkey '^Y' p2
 p3() {
   BUFFER='a b c d e'; CURSOR=0; zle forward-word
   local said="t=${(t)POSTDISPLAY} n=${NUMERIC-unset} fw=$CURSOR"
-  BUFFER=
-  print -r -- "PTHREE $said ENDTHREE"
+  BUFFER="PTHREE $said ENDTHREE"
 }
 zle -N p3; bindkey '^O' p3
+c() { BUFFER= }; zle -N c; bindkey '^Xc' c
 `)
 	// Every row is the shell's own output — the keys typed are control keys
-	// and echo nothing — so neither can be satisfied by the terminal.
+	// and echo nothing — so neither can be satisfied by the terminal. Drawn
+	// into the line rather than printed: a widget that prints hands the
+	// terminal back to its line discipline for the length of the call (see
+	// repl's runHandler), so a key sent the moment printed output appears can
+	// be taken by the kernel in cooked mode instead of read.
 	if _, err := control.WriteString("\x14"); err != nil {
 		t.Fatalf("pressing ^T: %v", err)
 	}
@@ -59,12 +62,16 @@ zle -N p3; bindkey '^O' p3
 	if err := screen.Await(one, widgetBudget); err != nil {
 		t.Fatalf("the widget's writes did not land as\n%s\n%v\n%q", one, err, smoke.LastLines(screen.Text(), 6))
 	}
-	if _, err := control.WriteString("\x19\x1b2\x0f"); err != nil {
+	if _, err := control.WriteString("\x18c\x19\x1b2\x0f"); err != nil {
 		t.Fatalf("pressing ^Y, ESC 2 ^O: %v", err)
 	}
 	const three = "PTHREE t=scalar-local-special n=2 fw=4 ENDTHREE"
 	if err := screen.Await(three, widgetBudget); err != nil {
 		t.Fatalf("an earlier widget's unset outlived it, or the typed count went missing\n%s\n%v\n%q", three, err,
 			smoke.LastLines(screen.Text(), 6))
+	}
+	// An empty line for the session's own `exit`.
+	if _, err := control.WriteString("\x18c"); err != nil {
+		t.Fatalf("clearing: %v", err)
 	}
 }

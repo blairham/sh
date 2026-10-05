@@ -146,7 +146,7 @@ func ratchet(rep *oracle.Report, path, against string, write, narrowed bool) int
 	if len(regressed) > 0 {
 		fmt.Printf("\n%d case(s) fail and are not in %s — a regression, or a case added failing:\n", len(regressed), path)
 		for _, id := range regressed {
-			fmt.Printf("  + %s\n", id)
+			fmt.Printf("  + %s\n%s", id, rep.Answers(id))
 		}
 	}
 	if len(fixed) > 0 {

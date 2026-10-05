@@ -33,6 +33,23 @@ func (r *Report) Failing() []string {
 	return out
 }
 
+// Answers is what a graded case expected and what it got, as the two lines
+// -v prints for it, or "" for a case the run did not grade.
+//
+// The ratchet prints these under every case it reports as regressed, because
+// a regression the log names without its answers can only be investigated by
+// reproducing it, and one that does not reproduce is then a name and nothing
+// else. That was #6118: one red run in the ksh ratchet, green on rerun and in
+// thousands of local runs, and no record anywhere of what the shell had said.
+func (r *Report) Answers(id string) string {
+	for _, m := range r.Matches {
+		if m.CaseID == id {
+			return fmt.Sprintf("    want %s\n    got  %s\n", describe(m.Want), describe(m.Got))
+		}
+	}
+	return ""
+}
+
 // Ratchet compares a run's failing cases with a baseline. regressed are
 // failing and not listed; fixed are listed and passing. Only the cases the
 // run graded take part, so a run narrowed with -only checks only its own

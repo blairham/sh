@@ -428,7 +428,11 @@ func (e *editor) take(in Line) {
 }
 
 func (e *editor) give() Line {
-	return Line{Buffer: string(e.line), Cursor: e.pos, Postdisplay: e.postdisplay, Last: e.last, ViCommand: e.viCommand, Numeric: e.keyNumeric, Keys: string(e.keyBytes)}
+	var prebuffer string
+	if e.prebuffer != nil {
+		prebuffer = e.prebuffer()
+	}
+	return Line{Prebuffer: prebuffer, Buffer: string(e.line), Cursor: e.pos, Postdisplay: e.postdisplay, Last: e.last, ViCommand: e.viCommand, Numeric: e.keyNumeric, Keys: string(e.keyBytes)}
 }
 
 // adoptKeys makes keys an action read the ones a self-insert types.

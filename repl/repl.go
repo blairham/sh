@@ -798,6 +798,7 @@ func (s Shell) Run(ctx context.Context) (int, error) {
 	// prompt for a new command or for the rest of an unfinished one.
 	ed.rerender = s.rerender(&pending)
 	ed.promptAgain = s.promptAgain(&pending)
+	ed.prebuffer = func() string { return pending.String() }
 	for {
 		// Whether this read has a line editor at all, asked once per read
 		// because the option that decides it is one a person can type — see
@@ -867,6 +868,12 @@ func (s Shell) Run(ctx context.Context) (int, error) {
 		// out below, because there are five of them.
 		ed.lineStart = lineStart{}
 		switch {
+		case errors.Is(err, ErrEditAgain):
+			// The command so far, taken back to be edited as one line at
+			// the main prompt. See pushLineOrEdit.
+			s.abandon(&pending)
+			ed.lineStart = lineStart{seeded: true, text: ed.editAgainText}
+			continue
 		case errors.Is(err, ErrBroken):
 			// A line given up without running, and anything pending with
 			// it: the status is 1 whatever it was. See ErrBroken.

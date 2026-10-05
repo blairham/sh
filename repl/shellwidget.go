@@ -109,6 +109,11 @@ type Line struct {
 	// for itself is what a self-insert after it types — see editor.take.
 	Keys string
 
+	// Prebuffer is the lines of the command already entered at a
+	// continuation prompt, each with its newline, and empty at the first.
+	// zsh's `$PREBUFFER`. Going out only; nothing reads it on the way in.
+	Prebuffer string
+
 	// Broken is a widget that ended on an error the line cannot survive — a
 	// fatal error in its function, such as an assignment to a read-only
 	// parameter or `${x?word}`. The line is given up the way a typed line
@@ -162,7 +167,7 @@ func (e *editor) runShellWidget(name string, prompt drawnPrompt) (ran, accept bo
 	e.pos = min(max(out.Cursor, 0), len(e.line))
 	// A widget that broke because it asked for send-break is the break and
 	// not an error: the key loop gives the line up for it. See sendBreak.
-	e.broken = out.Broken && !e.breakRequested
+	e.broken = out.Broken && !e.breakRequested && !e.editAgain
 	// A widget of the shell's is not a kill, whatever it called: a kill key
 	// pressed after one starts afresh. See Actions.WidgetCalled.
 	e.killing = false

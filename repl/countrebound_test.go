@@ -58,6 +58,8 @@ func TestACountOnAReboundKeyIsTheBindings(t *testing.T) {
 		{"abcdef\x1b2\x06", "abcdef|4", ""},
 		{"aa bb cc\x01\x1b-\x0b", " bb cc|0", ""},
 		{"aa bb cc\x1b2\x0b", "aa |3", ""},
+		// One kill for the count: the yank brings both words back.
+		{"aa bb cc\x1b2\x0b\x19", "aa bb cc|8", ""},
 		{"aa bb cc\x1b-\x17", "aa bb cc|6", ""},
 	} {
 		line, told := typedRebound(t, table, c.keys)

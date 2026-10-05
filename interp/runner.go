@@ -6139,7 +6139,7 @@ func (r *Runner) locationNameAndLine(functionCounts bool) (name string, line int
 	// lineNow and not line: a `case` subject is expanded before the line
 	// advances in one dialect, and a complaint it makes carries that line.
 	at := r.lineNow()
-	if d.LocationNamesTheEvalText && d.EvalSourceName != "" && r.locationIsInsideEvalText() {
+	if d.LocationNamesTheEvalText && d.EvalSourceName != "" && r.locationIsInsideEvalText() && !r.evalTextAtAPrompt(false) {
 		if r.locationNamesInstead != "" {
 			// The override wins over the text's own name too: measured
 			// 2026-10-02 on zsh 5.9.2, `FUNCNEST=0; fn() { true }; fn` on

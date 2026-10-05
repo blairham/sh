@@ -4087,6 +4087,27 @@ type Diagnostics struct {
 	// speaking, still stands between the name and the line.
 	LocationNamesTheEvalText bool
 
+	// EvalTextAtAPromptSpeaksAsTheLine words a diagnostic from `eval`'s
+	// text at a prompt as one from the line that was typed — the shell's
+	// name, no line — where the eval is not inside a function, and locates
+	// it as a script's eval text is, name and line, where it is.
+	//
+	// zsh's. Measured 2026-10-05 on zsh 5.9.2 (`zsh -f -i`) through a
+	// pseudo-terminal:
+	//
+	//	eval "echo \$((1/0))"                 zsh: division by zero
+	//	eval "echo )"                         zsh: parse error near `)'
+	//	two-line eval, failing on line 2      zsh: division by zero
+	//	h(){ eval "true⏎echo \$((1/0))"; }; h  (eval):2: division by zero
+	//	m(){ eval "cd /nonexist"; }; m        (eval):cd:1: no such file …
+	//	n(){ eval "echo )"; }; n              (eval):1: parse error near `)'
+	//	eval "g(){ echo \$((1/0)); }; g"       g: division by zero
+	//
+	// and under `-c`, or in a file `.` read at the prompt, `(eval):1:` as
+	// ever. This named the text `(eval)` at the prompt with no line, in a
+	// function or not (#6075).
+	EvalTextAtAPromptSpeaksAsTheLine bool
+
 	// SetInvalidOptionName is a long `set -o` name this shell does not have.
 	// Two verbs: the name, and the sign it was asked with — `-` or `+`.
 	//
@@ -12336,7 +12357,17 @@ func (r *Runner) promptLocated() bool {
 	if r.speaksAsAtAPrompt() {
 		return true
 	}
-	return r.AtPrompt && r.borrowedFiles == 0 && !r.inFunctionReadFromAFile()
+	return r.AtPrompt && r.borrowedFiles == 0 && !r.inFunctionReadFromAFile() && !r.evalTextAtAPrompt(true)
+}
+
+// evalTextAtAPrompt reports whether the line being located is in `eval`'s
+// text at a prompt, in the dialect that tells that text apart there, with the
+// eval inside a function or outside one as inFunction says. See
+// Diagnostics.EvalTextAtAPromptSpeaksAsTheLine.
+func (r *Runner) evalTextAtAPrompt(inFunction bool) bool {
+	return r.AtPrompt && r.borrowedFiles == 0 && r.Diagnostics != nil &&
+		r.Diagnostics.EvalTextAtAPromptSpeaksAsTheLine && r.locationIsInsideEvalText() &&
+		(r.inFunc != "") == inFunction
 }
 
 // speaksAsAtAPrompt is the dialect whose interactive shell words everything

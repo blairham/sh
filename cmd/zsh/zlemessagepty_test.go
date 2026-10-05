@@ -75,7 +75,14 @@ q() { BUFFER="DONE$BUFFER" }; zle -N q; bindkey '^Xq' q
 	// A key after the message, and a widget after that to say it is done.
 	send("c\x18q")
 	await("DONEabc")
-	if got := under("DONEabc"); got != "MSG42" {
+	// Polled, because the message goes back under the line *after* the
+	// line is drawn — see editor.redraw — so a single read can land between
+	// the two writes (#6094).
+	got := under("DONEabc")
+	for deadline := time.Now().Add(widgetBudget); got != "MSG42" && time.Now().Before(deadline); got = under("DONEabc") {
+		time.Sleep(5 * time.Millisecond)
+	}
+	if got != "MSG42" {
 		t.Errorf("under the line after more keys: %q, want %q", got, "MSG42")
 	}
 	send("\x18e\x18q")

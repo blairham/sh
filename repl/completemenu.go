@@ -45,7 +45,7 @@ func (e *editor) listChoices(c Completer, prompt drawnPrompt) {
 	}
 	shown := displayCandidates(matches, word)
 	if e.confirmList(shown, prompt) {
-		e.list(shown, prompt)
+		e.returnToTheLine(e.list(shown, prompt), prompt)
 	}
 	e.redraw(prompt)
 }

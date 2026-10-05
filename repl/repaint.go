@@ -183,7 +183,13 @@ func (e *editor) repaint(prompt drawnPrompt, cols int) bool {
 		moveCursor(&b, row, col, endRow, endCol)
 		row, col = endRow, endCol
 		b.WriteString(highlightReset)
-		b.WriteString("\x1b[J")
+		if e.listingBelow {
+			// The tail is on this row; a listing under the line stays. See
+			// returnToTheLine.
+			b.WriteString("\x1b[K")
+		} else {
+			b.WriteString("\x1b[J")
+		}
 	}
 	moveCursor(&b, row, col, curRow, curCol)
 

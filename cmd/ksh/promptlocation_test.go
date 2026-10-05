@@ -23,6 +23,8 @@ func TestAKshPromptNumbersEachInputFromOne(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("ENV", "")
+	// An interactive ksh writes its history, so the file is the test's own.
+	t.Setenv("HISTFILE", filepath.Join(home, ".sh_history"))
 	t.Chdir(home)
 	if err := os.WriteFile(filepath.Join(home, "f"), []byte("(exit 3)\necho ${unset?boom}\n"), 0o600); err != nil {
 		t.Fatal(err)

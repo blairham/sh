@@ -285,7 +285,7 @@ func TestTheShippedFunctionsSitWhereTheSearchLooks(t *testing.T) {
 		"forward-word-match", "is-at-least", "kill-word-match", "match-word-context", "match-words-by-style",
 		"prompt_default_setup", "prompt_off_setup", "prompt_restore_setup", "promptinit", "regexp-replace",
 		"run-help", "select-word-style", "transpose-words-match", "up-case-word-match",
-		"up-line-or-beginning-search", "url-quote-magic", "zargs", "zcalc", "zmathfuncdef", "zmv",
+		"up-line-or-beginning-search", "url-quote-magic", "vcs_info", "zargs", "zcalc", "zmathfuncdef", "zmv",
 	}
 	if strings.Join(names, " ") != strings.Join(want, " ") {
 		t.Errorf("%s holds %v, want %v", shipped, names, want)

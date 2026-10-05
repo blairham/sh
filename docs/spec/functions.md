@@ -808,10 +808,71 @@ as a string (#5966); neither shows. `zmathfuncdef` with no arguments lists the
 math functions in a form that defines them again, as the manual says; zsh's
 own prints nothing, measured with two defined.
 
+### `vcs_info`
+
+`vcs_info [ user-context ]` sets `vcs_info_msg_0_`, `vcs_info_msg_1_`, … from
+the repository the current directory is in, for a prompt to show. It is
+configured with `zstyle` under `:vcs_info:<vcs>:<user-context>:<repo-root-name>`,
+and running it defines `vcs_info_hookadd`, `vcs_info_hookdel`,
+`vcs_info_lastmsg`, `vcs_info_printsys` and `vcs_info_setsys`. To measure it,
+zsh's own `vcs_info` was run in 31 git repositories built in fixed states:
+clean, changed, unborn, detached, bare, a linked worktree, inside `.git`, and
+part-way through a merge, rebases of three kinds, an am, cherry-picks, a
+revert and a bisect. That is 160 rows, committed as
+`dialect/zsh/testdata/vcs_info.tsv` beside `vcs_info-fixtures.sh`, which
+builds the repositories, and `dialect/zsh/vcsinfo_test.go` runs them against
+this copy. git 2.56.0 and Apple git 2.54.0 agreed on every row. The shape of
+it:
+
+| what | zsh 5.9.2 |
+| --- | --- |
+| the defaults | formats ` (%s)-[%b]%u%c-`, actionformats ` (%s)-[%b\|%a]%u%c-`, nvcsformats empty, max-exports 2 |
+| before anything is looked at | every `vcs_info_msg_N_` is unset, and max-exports of them set again, empty |
+| `%b` | the branch; during a rebase, the branch being rebased; detached, the name `git name-rev` gives (`main~1`, `tags/v1`), or the short hash when nothing names it |
+| `%a` | `rebase-i` for a rebase-merge directory holding `interactive` (so `rebase --merge` too) and `rebase-m` otherwise, `rebase` or `am` for a rebase-apply one, `merge`, `cherry`, `cherry-seq`, `bisect`; nothing for a revert |
+| `%i` | the full hash, with `get-revision`; nothing on an unborn branch |
+| `%c`, `%u` | with `check-for-changes`, stagedstr (`S`) for a change in the index and unstagedstr (`U`) for one in the tree; an untracked file is neither; `check-for-staged-changes` gives `%c` alone |
+| `%R`, `%r`, `%S` | the top of the work tree, its last part, and the directory below it (`.` at the top); inside `.git` or a bare repository, the git directory |
+| `%m` | the patch in progress, `%p (%n applied)` by default: the commit and its subject for a merge or a cherry-pick, the done list for a rebase-merge, the patch files for a rebase-apply; nothing otherwise |
+| patch-format | `%p` the newest applied, `%u` and `%c` the unapplied count, `%n` the applied count, `%a` the two together |
+| `enable`, `disable`, `disable-patterns` | as the manual says; a directory they rule out gets nvcsformats |
+| a context's repo-root-name | the repository's last part, for the format styles |
+| `zformat` | does the expanding, so `%10.10b` pads and cuts, `%%` is `%`, and an unknown `%x` stays |
+| hooks | `start-up` (ret 1 ends, 2 is no system), `pre-get-data` (the same), `no-vcs`, `post-backend`, `pre-addon-quilt`, `set-message` once for each message with the message number and format, `gen-applied-string`, `gen-unapplied-string` and `set-patch-format`, with `hook_com` holding what the manual lists, each key with its `_orig`; a change made by `set-message` lasts into the next message |
+| the order | the static functions (`vcs_info_hookadd`) before the ones the hooks style names, not after as the manual says; a function that returns nonzero ends the chain |
+| no system found | the `no-vcs` hook runs, and nvcsformats is looked up, with `-quilt-` as the system |
+| `vcs_info_lastmsg` | `$vcs_info_msg_N_: "…"` for each, prompt escapes expanded unless `use-prompt-escapes` is false |
+
+Differences, each on purpose:
+
+* **git is the one backend.** A directory under Mercurial, Subversion,
+  Bazaar or the rest reads as a directory under no system, and
+  `vcs_info_printsys` lists only `git`, with a header in this file's own
+  words. Quilt is not supported: `use-quilt` does nothing and `%Q` is always
+  empty. The flavors zsh detects inside git (`git-svn`, `git-p4`) are reported
+  as plain `git`.
+* **Where zsh's copy breaks, this one does not**, on the `is-at-least`
+  precedent. `enable NONE` with an nvcsformats set, and a lowercase `none`
+  (which the manual says is allowed), both fail in zsh's copy trying to
+  typeset `vcs_info_msg_-1_`. Here they leave the messages empty. And with
+  more nvcsformats than max-exports, zsh's copy sets one fewer than
+  max-exports. Here it sets max-exports of them.
+* The `max-exports` warning, the usage of `vcs_info_hookadd` and
+  `vcs_info_hookdel`, and the `debug` lines are in this file's own words.
+  They go where zsh's go, which is standard output for all three.
+* nopatch-format, used when a patch system is active with nothing applied
+  yet, defaults to `no patch applied`. No state could be built that shows
+  zsh's default.
+
+Found on the way: a `:#` filter over a nested, quoted command substitution
+subscripts as a scalar (#5978), which the function works around.
+
 ## What is not shipped, and why
 
 #5894 is shipping the contrib functions in batches, most used first, and the
-ones not yet written are listed here until they are. Next: `vcs_info`.
+ones not yet written are listed here until they are. Next: `cdr` and its
+helpers, `catch` and `throw`, `zmathfunc` and `zstyle+`, then the smaller
+widgets.
 
 `zed` is not shipped yet. It edits a file or a function in the line editor
 under a keymap of its own, built from `main` with `bindkey -N` and selected

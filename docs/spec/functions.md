@@ -466,11 +466,19 @@ Two divergences, both deliberate:
   by the other shell too, and the two must not trade files. `-d`, `-D` and
   `-C` are taken and change nothing else, and `compdump` does nothing at 0.
 * **This shell ships no `_main_complete`**, and `_bash_complete` completes
-  nothing. Where an installed zsh's library is on the default search (#6128),
-  the scan of it leaves Tab on that library's `_main_complete` — measured
-  2026-10-05, `zle -lL` after `compinit` lists the eight completion widgets
-  on `_main_complete`, as real zsh's does — and where none is, this shell's
-  own completion stays.
+  nothing. Where the scan finds one — an installed zsh's library is on the
+  default search since #6128 — compinit puts the eight completion widgets
+  on it, as zsh's does (`zle -C complete-word .complete-word _main_complete`
+  and the seven others, measured 2026-10-05 with `zle -lL`, #6184); where
+  none is found, Tab keeps this shell's own completion. An earlier version
+  of this bullet said the scan alone did it; that measurement had run zsh's
+  own compinit, because `FPATH` named only zsh's library.
+
+compinit also matches zsh's in two smaller ways since #6183 and #6155: a
+function file that is a **link** to one registers (`_*(N-.)`, since every
+file of a Homebrew zsh's library is a link into its Cellar), and each name is
+autoloaded **by its file's path**, so `whence -v _git` names the file and
+`functions _git` lists the stub with its directory.
 
 And one wording: an `-F` function `compgen` cannot find is the shell's
 `command not found`, located at `compgen`'s own line where zsh's names an

@@ -746,6 +746,15 @@ func autoloadResolveNow(r *interp.Runner, ctx context.Context, opts autoloadOpts
 	}
 	status := 0
 	for _, name := range names {
+		// An absolute path names its file, as it does for the marking form
+		// (#5392): the function is the base name, read from exactly there.
+		// Measured 2026-10-05 on zsh 5.9.2, `autoload -Uz +X -- $PWD/fns/myh`
+		// is 0 and leaves `myh is a shell function from …/fns/myh`, where
+		// this searched `$fpath` for the whole path and found nothing (#6186).
+		var dirs []string
+		if file, dirOfFile, absolute := autoloadAbsolute(name); absolute {
+			name, dirs = file[len(dirOfFile)+1:], []string{dirOfFile}
+		}
 		if autoloadDefined(r, name) {
 			// A function that is already there is not resolved over, and the
 			// refusal is silent: measured, `myfn() { echo body; }; autoload
@@ -766,7 +775,7 @@ func autoloadResolveNow(r *interp.Runner, ctx context.Context, opts autoloadOpts
 			}
 			continue
 		}
-		if code := autoloadResolve(r, name, opts.keepAliases); code != 0 {
+		if code := autoloadResolveIn(r, name, dirs, autoloadOpts{keepAliases: opts.keepAliases}, false); code != 0 {
 			status = code
 		}
 	}
@@ -1079,21 +1088,16 @@ func autoloadFileNotFound(r *interp.Runner, name string, forCall bool) int {
 	return 1
 }
 
-// autoloadResolve finds a name's file on `$fpath` and makes its contents the
-// name's body.
+// autoloadResolveIn finds a name's file and makes its contents the name's
+// body.
 //
-// The search is `$fpath` in order and the first *readable* entry wins — not
-// the first that exists, because a directory on `$fpath` that cannot be read
-// is a search that goes on rather than a failure, which is what makes a
-// stale entry harmless.
-func autoloadResolve(r *interp.Runner, name string, keepAliases bool) int {
-	return autoloadResolveIn(r, name, nil, autoloadOpts{keepAliases: keepAliases}, false)
-}
-
-// autoloadResolveIn is that with the directory a `-X` was given, where it was
-// given one: the operand replaces the search rather than joining it, so a
-// name that is not in that one directory is not found however much of
-// `$fpath` would have had it.
+// With no directories the search is `$fpath` in order and the first
+// *readable* entry wins — not the first that exists, because a directory on
+// `$fpath` that cannot be read is a search that goes on rather than a
+// failure, which is what makes a stale entry harmless. With the directory a
+// `-X` was given, or the one an absolute `+X` names, the operand replaces the
+// search rather than joining it, so a name that is not in that one directory
+// is not found however much of `$fpath` would have had it.
 func autoloadResolveIn(r *interp.Runner, name string, dirs []string, opts autoloadOpts, forCall bool) int {
 	keepAliases := opts.keepAliases
 	notFound := func() int {

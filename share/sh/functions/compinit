@@ -36,9 +36,10 @@
 #     `-d` file, and reads it back on the next start; a dump this shell wrote
 #     would be read by the other shell too, and the two must not trade one
 #     another's files.  `-d`, `-D` and `-C` are taken and change nothing else;
-#   * this shell ships no `_main_complete`: Tab reaches one only where an
-#     installed zsh's library is on $fpath (by default since #6128), and
-#     otherwise keeps this shell's own completion.
+#   * this shell ships no `_main_complete`: the completion widgets are put
+#     on one only where the scan finds it — an installed zsh's library is
+#     on $fpath by default since #6128 — and otherwise Tab keeps this
+#     shell's own completion.
 
 emulate -L zsh -o extendedglob
 
@@ -155,22 +156,42 @@ compdef() {
 local dir file line name
 local -A seen
 for dir in $scan; do
-	for file in $dir/_*(N.); do
+	# `-.`, a plain file or a link to one: every file of a Homebrew zsh's
+	# library is a link into its Cellar, and zsh registers them (#6183).
+	for file in $dir/_*(N-.); do
 		name=${file:t}
 		[[ $name == *~ ]] && continue
 		(( ${+seen[$name]} )) && continue
 		seen[$name]=1
 		IFS= read -r line < $file || [[ -n $line ]] || continue
+		# By the file's own path, so the stub records where it will be read
+		# from: measured, zsh's compinit leaves `_git is an autoload shell
+		# function from …/site-functions/_git` and lists the stub as
+		# `builtin autoload -XUz …/site-functions` (#6155).
 		case $line in
 		('#compdef '*|'#compdef')
-			compdef -na $name ${=${line#\#compdef}}
+			autoload -Uz -- $file
+			compdef -n $name ${=${line#\#compdef}}
 			;;
 		('#autoload '*|'#autoload')
-			autoload -Uz ${=${line#\#autoload}} -- $name
+			autoload -Uz ${=${line#\#autoload}} -- $file
 			;;
 		esac
 	done
 done
+
+# The completion widgets go to `_main_complete` where the scan found one,
+# which is what zsh's compinit leaves — measured, `zle -lL` afterwards lists
+# these eight on `_main_complete` (#6184).  Where none was found, Tab keeps
+# this shell's own completion.
+if (( ${+seen[_main_complete]} )); then
+	local widget
+	for widget in complete-word delete-char-or-list expand-or-complete \
+		expand-or-complete-prefix list-choices menu-complete \
+		menu-expand-or-complete reverse-menu-complete; do
+		zle -C $widget .$widget _main_complete
+	done
+fi
 
 # Waiting to be read again rather than gone: measured, `whence -w compinit`
 # afterwards is a function whose body is still to be loaded, and a second

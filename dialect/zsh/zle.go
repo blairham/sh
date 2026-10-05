@@ -1774,6 +1774,32 @@ func openWidgetParameters(r *interp.Runner, opened widgetOpening) {
 	r.SetDynamicWriter(cutBufferName, func(rr *interp.Runner, value string) {
 		rr.SetVar(zleCutBuffer, value)
 	})
+	// And `unset` of one of them empties what it stands for, as well as
+	// taking the name away for the rest of the call. Measured 2026-10-05
+	// through a pseudo-terminal against zsh 5.9.2, a widget on `abcd` with
+	// the cursor at 2: `unset LBUFFER` reads `$BUFFER` back as `cd` at 0,
+	// `unset RBUFFER` as `ab` at 2, and `unset BUFFER` as empty at 0, with
+	// `${+…}` 0 each time and the next widget seeing the same line; `unset
+	// POSTDISPLAY` and `unset CUTBUFFER` leave nothing drawn and nothing to
+	// yank. `unset CURSOR` changes nothing, so it has no action here (#6038).
+	// Outside a widget the action empties only stores no read reaches
+	// there, which each call seeds again, so the names stay ordinary.
+	for name, empty := range map[string]func(*interp.Runner){
+		"BUFFER": func(rr *interp.Runner) { rr.SetVar(zleBuffer, "") },
+		"LBUFFER": func(rr *interp.Runner) {
+			runes := []rune(widgetBuffer(rr))
+			rr.SetVar(zleBuffer, string(runes[widgetCursor(rr):]))
+			rr.SetVar(zleCursor, "0")
+		},
+		"RBUFFER": func(rr *interp.Runner) {
+			runes := []rune(widgetBuffer(rr))
+			rr.SetVar(zleBuffer, string(runes[:widgetCursor(rr)]))
+		},
+		postdisplayName: func(rr *interp.Runner) { rr.SetVar(zlePostdisplay, "") },
+		cutBufferName:   func(rr *interp.Runner) { rr.SetVar(zleCutBuffer, "") },
+	} {
+		r.SetUnsetAction(name, empty)
+	}
 	// `region_highlight` is opened here and is not one of the five: the other
 	// parameters are the line, and this one is what the widget wants *done*
 	// with it. It is also the only one backed by a store that outlives the

@@ -133,7 +133,7 @@ func (e *editor) styled() string {
 	line := string(e.displayed())
 	runs := e.styleRuns(line)
 	if len(runs) == 0 {
-		return line
+		return hideControls(line)
 	}
 	sort.SliceStable(runs, func(i, j int) bool { return runs[i].start < runs[j].start })
 
@@ -144,7 +144,7 @@ func (e *editor) styled() string {
 			if r.start < at || r.start > len(line) || r.on == "" {
 				continue
 			}
-			b = append(b, line[at:r.start]...)
+			b = append(b, hideControls(line[at:r.start])...)
 			b = append(b, e.guardedCodes(r.on)...)
 			at = r.start
 			continue
@@ -152,17 +152,22 @@ func (e *editor) styled() string {
 		if r.start < at || r.end <= r.start || r.end > len(line) || r.on == "" {
 			continue
 		}
-		b = append(b, line[at:r.start]...)
+		b = append(b, hideControls(line[at:r.start])...)
 		b = append(b, e.guardedCodes(r.on)...)
-		b = append(b, line[r.start:r.end]...)
+		b = append(b, hideControls(line[r.start:r.end])...)
 		b = append(b, e.guardedCodes(r.off)...)
 		at = r.end
 	}
 	if len(b) == 0 {
 		// Nothing was applied, so nothing was copied.
-		return line
+		return hideControls(line)
 	}
-	return string(append(b, line[at:]...))
+	// Each piece of the line is parked as it is copied rather than the whole
+	// line before the runs are cut, because the runs are byte offsets into
+	// the line as it is — the offsets a highlighter and `region_highlight`
+	// count — and parking a character changes its length. See
+	// controlglyph.go.
+	return string(append(b, hideControls(line[at:])...))
 }
 
 // styleRuns is every run to be drawn differently: what the paste left marked,

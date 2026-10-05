@@ -636,12 +636,11 @@ undone the way a paste is. Pastes measured through a pty against zsh 5.9.2:
 Loading the file sets `active-widgets` to `self-*` if nothing has set it, and
 defines the two helpers.
 
-Two differences, neither one in this file. **The editor drops control
-characters from a paste** (`repl/paste.go` says why: there is no caret notation
-to draw them in), so a pasted `^A` or tab never reaches the widgets. zsh keeps
-them. And an `inactive-keys` entry holding a pattern character — `?`, `*`,
-`[` — has no effect in zsh, where `=` and `&` work. Here they are taken as the
-literal key sequences the manual says they are.
+One difference, not in this file. An `inactive-keys` entry holding a
+pattern character — `?`, `*`, `[` — has no effect in zsh, where `=` and `&`
+work. Here they are taken as the literal key sequences the manual says they
+are. (A pasted `^A` or tab used to be dropped before it reached the widgets;
+since #5972 the editor keeps it, as zsh does.)
 
 ### `zmv`
 

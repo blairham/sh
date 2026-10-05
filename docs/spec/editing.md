@@ -346,14 +346,18 @@ stop:
 	pasted `echo \x01AAA`     drawn `echo ^AAAA`
 	pasted `echo\tAAA`        drawn `echo    AAA`
 
-**This implementation drops them.** Caret notation is a way of drawing a
-character that has no width of its own, and this editor has none — it refuses a
-*typed* control character for the same reason, that a raw byte in the line is
-something nobody typed and hands the parser a word they cannot have meant.
-Writing them as themselves instead would be worse than dropping them: a tab
-moves the cursor to a stop no column count here knows about, and an escape
-hands the terminal instructions somebody pasted. Caret notation in the drawn
-line, which would let them be kept, is on the missing list below.
+**This implementation keeps them and draws them the same way** (#5972). A
+control character is a caret and the character 64 places on in two cells —
+`^?` for delete, `^[` for an escape, which is therefore never sent to the
+terminal — and a tab is spaces to the next multiple of eight on the screen's
+row, prompt included, stopping at the edge. A caret wraps between its two
+cells; a tab never wraps. zsh draws each caret in standout (its
+`zle_highlight` default for `special`) and bash draws it plain, which is
+`repl.EditorStyle.ControlCharacterStyle`. The same drawing serves a control
+character a self-insert types: `bindkey '^T' self-insert` and a widget's `zle
+.self-insert` on `^T` both leave `^T` in the line, as in zsh 5.9.2. See
+`repl/controlglyph.go` for the measurements, which were compared cell by cell
+against zsh under a two-row prompt.
 
 The markers are never typed into the line, whatever the dialect answers. A
 terminal another program left in the mode can send them to a shell that never
@@ -1202,12 +1206,6 @@ was on this list and is not any more — `^R` is `repl/search.go` and
   expects it to follow the text can. Needs the editor to report *what* changed
   and not only the line that resulted, which is a wider seam than the redraw
   has now.
-- **Caret notation in the drawn line.** Measured, both shells draw a control
-  character in the line as `^` and a letter — which is what lets them keep one
-  a paste brought in. Here a pasted control character is dropped instead; see
-  the paste section above for why dropping is the safer of the two until the
-  drawing knows that a character can occupy a different number of cells than
-  it has bytes.
 - **`M-y`** — walk back through earlier kills. This keeps one kill rather
   than a ring, so there is nothing to walk.
 - **Case and other word operators** — `M-u`, `M-l`, `M-c`.

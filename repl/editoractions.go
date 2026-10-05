@@ -519,8 +519,9 @@ func (e *editor) give() Line {
 // one — see pastedRunes — and is the case a paste read a key at a time
 // arrives with: zsh's paste function runs `zle .self-insert` for every pasted
 // key whose own widget it does not run, the newlines among them, so that the
-// paste stays text. Any other control character types nothing, which is what
-// this editor does with one pressed and with one pasted.
+// paste stays text. Any other control character types itself, drawn as a
+// caret: measured 2026-10-05 against zsh 5.9.2, a widget on `^T` running `zle
+// .self-insert` leaves `^T` in the line (#5972). See controlglyph.go.
 func (e *editor) adoptKeys(keys string) {
 	if len(e.partialKey) > 0 || len(keys) == 1 && keys[0] >= utf8.RuneSelf {
 		e.partialKey = append(e.partialKey, keys...)
@@ -535,7 +536,7 @@ func (e *editor) adoptKeys(keys string) {
 		e.typedKey = '\n'
 		return
 	}
-	if r == utf8.RuneError || r < 0x20 || r == del {
+	if r == utf8.RuneError {
 		e.typedKey = 0
 		return
 	}

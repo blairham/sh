@@ -1368,7 +1368,19 @@ func Semantics() interp.Semantics {
 		Login:         "zprofile",
 		Interactive:   "zshrc",
 		LateLogin:     "zlogin",
+		Logout:        "zlogout",
 	}
+	// The logout file, read when an interactive login shell ends however it
+	// ends: measured, `zsh -l -i` reads `~/.zlogout` after a typed `exit`
+	// and at the end of its input, and `zsh -l -c exit` reads nothing — see
+	// the two fields for the grid (#5996).
+	s.LogoutFile = ".zlogout"
+	s.LogoutFileReadWhen = interp.LogoutWhenAnInteractiveLoginEnds
+	// And the two options asked before each file rather than once at the
+	// start: `unsetopt rcs` or `unsetopt globalrcs` in `~/.zshenv` stops the
+	// files after it, and `setopt globalrcs` there undoes a `-d` (#5905).
+	s.StartupFilesOptionName = "rcs"
+	s.SystemStartupFilesOptionName = "globalrcs"
 	// And zsh reads it for a login shell as well as a plain one, where bash
 	// reads only its profile.
 	s.InteractiveStartupFileWhenLogin = interp.Yes

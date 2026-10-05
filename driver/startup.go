@@ -115,8 +115,12 @@ func (sh Shell) startup(r *interp.Runner, in source) int {
 // Empty in three of the four dialects, which is what makes this do nothing at
 // all for them; see Semantics.UnconditionalStartupFile.
 func (sh Shell) unconditionalStartupFile(r *interp.Runner, in source) int {
-	if code := sh.systemStartupFile(r, in, sh.Semantics.SystemStartupFiles.Unconditional); code != 0 {
-		return code
+	// The one system file the option does not reach — see
+	// Semantics.SystemStartupFilesOptionName — so only the invocation asks.
+	if !in.startup.noSystem {
+		if code := sh.sourceFile(r, in, sh.systemStartupPath(sh.Semantics.SystemStartupFiles.Unconditional)); code != 0 {
+			return code
+		}
 	}
 	return sh.sourceFile(r, in, sh.startupPath(r, sh.Semantics.UnconditionalStartupFile))
 }
@@ -138,10 +142,37 @@ func (sh Shell) unconditionalStartupFile(r *interp.Runner, in source) int {
 // at all, and the only question left here is the one option that separates
 // root's files from the person's.
 func (sh Shell) systemStartupFile(r *interp.Runner, in source, name string) int {
-	if in.startup.noSystem {
+	if !sh.readsSystemStartupFiles(r, in) {
 		return 0
 	}
 	return sh.sourceFile(r, in, sh.systemStartupPath(name))
+}
+
+// readsSystemStartupFiles answers whether the next system file is read: by
+// the option the dialect names for it, asked now, where it has one — so a
+// `~/.zshenv` that turns `globalrcs` off, or back on over a `-d`, decides the
+// system files after it (#5905) — and by the invocation where it has none.
+func (sh Shell) readsSystemStartupFiles(r *interp.Runner, in source) bool {
+	if name := sh.Semantics.SystemStartupFilesOptionName; name != "" {
+		if on, known := r.DialectOption(name); known {
+			return on
+		}
+	}
+	return !in.startup.noSystem
+}
+
+// readsStartupFiles answers whether the next startup file is read at all, by
+// the option the dialect names for it, asked now: `unsetopt rcs` in a
+// `~/.zshenv` stops every file after it, the logout file included. A dialect
+// with no such option reads by the invocation, which the caller has already
+// asked (#5905).
+func (sh Shell) readsStartupFiles(r *interp.Runner) bool {
+	if name := sh.Semantics.StartupFilesOptionName; name != "" {
+		if on, known := r.DialectOption(name); known {
+			return on
+		}
+	}
+	return true
 }
 
 // systemStartupPath names one of the system-wide files, or nothing when this
@@ -355,16 +386,41 @@ func (sh Shell) nonInteractiveStartupFile(r *interp.Runner, in source) int {
 // stands unless the file names one of its own by running `exit`, which is the
 // other half of the same measurement.
 func (sh Shell) logoutFile(r *interp.Runner, in source) {
-	if sh.Semantics.LogoutFile == "" || !in.loginShell() || !r.ExitRan() {
+	if sh.Semantics.LogoutFile == "" || !in.loginShell() {
 		return
 	}
-	// The stop `exit` raised is taken back for the length of this one file,
-	// or nothing in it would run at all.
-	if !r.ResumeAfterExit() {
+	byExit := r.ExitRan()
+	switch sh.Semantics.LogoutFileReadWhen {
+	case interp.LogoutWhenAnInteractiveLoginEnds:
+		// However the session ended, but for `set -e`, and only with a
+		// person there — see Semantics.LogoutFileReadWhen.
+		if !in.interactive || r.ErrExitEnded() {
+			return
+		}
+	default:
+		if !byExit {
+			return
+		}
+	}
+	if r.Exited() && !r.ResumeAfterExit() {
+		return
+	}
+	if !sh.readsStartupFiles(r) {
 		return
 	}
 	leaving := r.ExitStatus()
+	if byExit {
+		// What the file sees in `$?` is the status the `exit` found, not the
+		// one it named: measured in bash and zsh alike, `false; exit 3`
+		// reads 1 in the file and the shell still leaves with 3 (#5996).
+		r.SetExitStatus(r.ExitFoundStatus())
+	}
+	r.ReadingLogoutAfterExit(byExit)
 	sh.sourceFile(r, in, sh.startupPath(r, sh.Semantics.LogoutFile))
+	if !r.Exited() && sh.Semantics.SystemStartupFiles.Logout != "" {
+		// The machine's own after the person's, the manual's order.
+		sh.systemStartupFile(r, in, sh.Semantics.SystemStartupFiles.Logout)
+	}
 	if !r.Exited() {
 		// The file said nothing about the status, so the number `exit` named
 		// is still the one the shell leaves with — and not whatever the
@@ -392,7 +448,7 @@ func (sh Shell) sourceFile(r *interp.Runner, in source, path string) int {
 // A file that will not parse costs that file too, which is measured rather
 // than chosen — see sourceText.
 func (sh Shell) sourceFoundFile(r *interp.Runner, in source, path string) (status int, found bool) {
-	if path == "" {
+	if path == "" || !sh.readsStartupFiles(r) {
 		return 0, false
 	}
 	// Through the gate, which is what makes $ENV an access rather than a

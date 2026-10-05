@@ -194,6 +194,22 @@ func (r *Runner) ExitRan() bool { return r.ctl == controlExit && r.exitRan }
 // about it leaves the shell exiting with the number `exit` named, which is
 // measured; one that runs `exit` of its own raises the stop again and names a
 // new number, which is measured too.
+// ErrExitEnded reports whether what is ending the shell is `set -e` firing,
+// which one dialect's logout file is not read over. See
+// Semantics.LogoutFileReadWhen.
+func (r *Runner) ErrExitEnded() bool { return r.ctl == controlExit && r.errexitStopped }
+
+// ExitFoundStatus is the status the last `exit` found when it ran, before it
+// named one of its own — what a logout file reads in `$?` (#5996).
+func (r *Runner) ExitFoundStatus() int { return r.exitFoundStatus }
+
+// ReadingLogoutAfterExit tells the runner the next startup file it reads is a
+// logout file read from inside an `exit`, rather than at the end of the
+// program, which is what `$zsh_eval_context` tells apart: measured on zsh
+// 5.9.2, `.zlogout` reads `toplevel file` after a typed `exit` and `file` at
+// the end of input (#5996). See EvalContextStartupFile.
+func (r *Runner) ReadingLogoutAfterExit(byExit bool) { r.logoutByExit = byExit }
+
 func (r *Runner) ResumeAfterExit() bool {
 	if r.ctl != controlExit {
 		return false

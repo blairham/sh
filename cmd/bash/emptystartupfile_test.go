@@ -42,3 +42,27 @@ func TestAnEmptyBashEnvKeepsTheStatusBeforeIt(t *testing.T) {
 		}
 	}
 }
+
+// `$?` inside `~/.bash_logout` is the status the `exit` found, not the one it
+// named: measured 2026-10-05 on bash 5.3.20, `bash -l -c 'false; exit 3'`
+// over a `.bash_logout` of `echo st=$?` prints `st=1` and leaves 3, and
+// `true; exit 3` prints `st=0`. This shell printed 3 for both (#5996).
+func TestALogoutFileSeesTheStatusTheExitFound(t *testing.T) {
+	for _, c := range []struct{ cmd, want string }{
+		{"false; exit 3", "st=1\n"},
+		{"true; exit 3", "st=0\n"},
+	} {
+		home := scratchHome(t)
+		writeHomeFile(t, home, ".bash_profile", "")
+		writeHomeFile(t, home, ".bash_logout", "echo st=$?\n")
+		var o, e bytes.Buffer
+		sh := scratchShell(t)
+		sh.Stdout, sh.Stderr = &o, &e
+		if code := driver.MainArgs(sh, []string{"bash", "-l", "-c", c.cmd}); code != 3 {
+			t.Errorf("%s: status %d, want 3", c.cmd, code)
+		}
+		if o.String() != c.want {
+			t.Errorf("%s: stdout %q, want %q (stderr %q)", c.cmd, o.String(), c.want, e.String())
+		}
+	}
+}

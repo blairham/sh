@@ -256,13 +256,22 @@ func (s Shell) runElapsed(ctx context.Context) {
 // it runs on a keystroke, and a panic in it must cost a Tab rather than the
 // session. A guarded panic answers with no matches, which this editor reads as
 // "nothing to say about this word" and completes its own way.
-func (s Shell) shellCompletion(ctx context.Context) func(string, Completion) []Candidate {
+//
+// And its output goes out the way a widget's does, through runHandler: a
+// completion widget's function writes too, the diagnostic for the read-only
+// line it was refused among it (#5999), and under raw mode a plain newline is
+// a staircase.
+func (s Shell) shellCompletion(ctx context.Context, state *terminalState) func(string, Completion) []Candidate {
 	if s.RunCompletion == nil {
 		return nil
 	}
 	guard := s.guard()
 	return func(name string, c Completion) (matches []Candidate) {
-		if guard.Do(func() { matches = s.RunCompletion(ctx, name, c) }) {
+		var panicked bool
+		s.runHandler(state, func() {
+			panicked = guard.Do(func() { matches = s.RunCompletion(ctx, name, c) })
+		})
+		if panicked {
 			return nil
 		}
 		return matches

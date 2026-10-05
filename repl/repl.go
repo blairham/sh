@@ -2923,7 +2923,7 @@ func (s Shell) newEditor(ctx context.Context, state *terminalState) *editor {
 		// And how the shell's own completion system is asked, with the same
 		// context closed over for the same reason. Nil where the front end
 		// named none, which is what makes a key's Candidates cost nothing.
-		shellComplete: s.shellCompletion(ctx),
+		shellComplete: s.shellCompletion(ctx, state),
 		// What the shell wants waited on beside the terminal, how it answers
 		// a descriptor that woke, and which descriptor a key arrives on. All
 		// three nil-or-negative in a session with nothing armed, which is

@@ -111,7 +111,8 @@ zle -N w
 
 // select-word-style sets exactly the styles zsh's sets, per letter, and puts
 // the eight widgets in place. Measured 2026-10-04 against zsh 5.9.2, each
-// letter after `zstyle -d ':zle:*'`.
+// letter after `zstyle -d ':zle:*'` — and `default` once more after `bash`,
+// which is the row that shows what it deletes and what it leaves.
 func TestSelectWordStyleSetsWhatZshSets(t *testing.T) {
 	out, st := runShipped(t, wordCharsDefault+`autoload -Uz select-word-style
 for s in bash normal shell whitespace default B N S W specified; do
@@ -119,6 +120,7 @@ for s in bash normal shell whitespace default B N S W specified; do
 done
 select-word-style bash; select-word-style shell; zstyle -L ':zle:*'
 select-word-style q 2>/dev/null; print -r -- q=$?
+zstyle -d ':zle:*'; select-word-style bash; select-word-style default; zstyle -L ':zle:*'
 zle -lL forward-word kill-word down-case-word`)
 	const want = `bash 0: zstyle ':zle:*' skip-whitespace-first true;zstyle ':zle:*' word-chars '';zstyle ':zle:*' word-style standard;
 normal 0: zstyle ':zle:*' skip-whitespace-first false;zstyle ':zle:*' word-chars '*?_-.[]~=/&;!#$%^(){}<>';zstyle ':zle:*' word-style standard;
@@ -134,6 +136,7 @@ zstyle ':zle:*' skip-whitespace-first false
 zstyle ':zle:*' word-chars ''
 zstyle ':zle:*' word-style shell
 q=1
+zstyle ':zle:*' word-style standard
 zle -N forward-word forward-word-match
 zle -N kill-word kill-word-match
 zle -N down-case-word down-case-word-match

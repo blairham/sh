@@ -297,6 +297,10 @@ type editor struct {
 	// only insert-last-word reads. See lastarg.go.
 	lastWordArguments bool
 	actionArgs        []string
+	// performCandidates is the shell completion a widget's call of a
+	// completion action named, for the length of that call. See
+	// CompletionActions.
+	performCandidates string
 	// historyCount is how many lines the session has entered, which is what
 	// numbers the one being edited — `$HISTNO`. Nil outside a Shell.
 	historyCount func() int

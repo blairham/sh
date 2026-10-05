@@ -2564,6 +2564,65 @@ func (r *Runner) elementReadIsDeferred(e *syntax.ParamExpr) bool {
 	return !r.disciplineIsWatching(e.Name, disciplineGet)
 }
 
+// wholeArrayCount is `${#a[@]}` on a stored array holding positions 0 to n-1,
+// answered from the store: the count the general path reaches by reading the
+// array into a list and taking its length, which made the count O(n) (#6099).
+//
+// Only where the general path could give no other answer: a literal `[@]` or
+// `[*]` with nothing else written, on a name that is a stored array and
+// nothing more — no reference, no table, no produced record — and with no gap,
+// so no reading of the store is a question. A count enters no `.get` hook,
+// measured, so a hook does not matter here.
+func (r *Runner) wholeArrayCount(e *syntax.ParamExpr) (int, bool) {
+	if !e.Length || e.Indirect || e.Inner != nil || e.HasFlags || e.IndexFlags != nil ||
+		e.IndexRange != nil || len(e.Leading) > 0 || !r.wholeArrayIndex(e) {
+		return 0, false
+	}
+	a, stored := r.Arrays[e.Name]
+	if !stored {
+		return 0, false
+	}
+	if _, isRef := r.nameref[e.Name]; isRef || r.assocDeclared(e.Name) ||
+		r.namesTheProducedPipelineStatus(e.Name) {
+		return 0, false
+	}
+	els, contiguous := a.contiguous()
+	if !contiguous {
+		return 0, false
+	}
+	return len(els), true
+}
+
+// lengthCountsTheArray is `${#a}` in the dialect where that counts an array's
+// elements, and it tells the read of the name not to build the join.
+//
+// The count is taken after the name is read, because the read is what answers
+// whether it is set and runs whatever a read runs. But the *value* the read
+// gives is then unused, and in this dialect it is every element joined, so
+// `${#a}` and `$#a` cost O(n) for an O(1) answer (#6099). The read still
+// happens, by the same route; only the join at its end is skipped, and only
+// for the plainest spelling of a name with no reference to follow and no
+// producer standing in front of the store. The returned function undoes it.
+func (r *Runner) lengthCountsTheArray(e *syntax.ParamExpr) func() {
+	if !e.Length || e.Index != nil || e.Inner != nil || e.Indirect || e.HasFlags ||
+		e.Op != syntax.ParamNone || len(e.Leading) > 0 ||
+		r.sem().ArrayLengthWithoutSubscriptIsCount != Yes {
+		return func() {}
+	}
+	if _, stored := r.Arrays[e.Name]; !stored {
+		return func() {}
+	}
+	if _, isRef := r.nameref[e.Name]; isRef {
+		return func() {}
+	}
+	if _, dynamic := r.Dynamic[e.Name]; dynamic {
+		return func() {}
+	}
+	held := r.countOnlyRead
+	r.countOnlyRead = e.Name
+	return func() { r.countOnlyRead = held }
+}
+
 // readDeferred reads the whole of a deferred source, for the one spelling
 // that turns out to need it only after the subscript has been expanded: a
 // range written in the expanded text.

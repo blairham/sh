@@ -3915,6 +3915,12 @@ func (r *Runner) expandParam(e *syntax.ParamExpr) string {
 		// paramSource below, which is the one route that expands the inner:
 		// reaching the name path with no name to read measured `${#${a}[1]}`
 		// as 0 rather than as the length of the element.
+		if n, counted := r.wholeArrayCount(e); counted {
+			// The same answer the block below gives, without the list.
+			r.subscriptBeforeTheFirst = false
+			r.checkNounsetCount(e)
+			return itoa(n)
+		}
 		if elems, ok := r.arraySubscript(e); ok {
 			if e.Length { //nolint:nestif // the Length question is answered here on purpose
 				// The count is taken in front of every refusal below, so
@@ -4054,7 +4060,9 @@ func (r *Runner) expandParam(e *syntax.ParamExpr) string {
 		}
 	}
 	if !circular {
+		restore := r.lengthCountsTheArray(e)
 		value, set, subscript = r.paramSource(e)
+		restore()
 	}
 
 	if !set && !e.Indirect {

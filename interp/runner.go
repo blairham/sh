@@ -2420,6 +2420,10 @@ type Runner struct {
 	// is one empty one (#5992). Reset by every read, and carried by the
 	// subscript hold so a second reader of the same span sees it too.
 	subscriptBeforeTheFirst bool
+	// countOnlyRead names the array a counting `${#a}` is reading, for the
+	// one read of the name that needs only to know it is set. Cleared by
+	// that read. See Runner.lengthCountsTheArray.
+	countOnlyRead string
 	// nestedShape is whether the nested expansion expanded last came to a
 	// list, kept past the hold so the expansion one level out can ask it.
 	// See nestedShapeOf.
@@ -14081,6 +14085,16 @@ func (r *Runner) storedValue(name string, folded bool) (string, bool) {
 		// Ahead of Vars, which holds a copy of one element: the array is the
 		// store, and both what a bare name reads and whether it is set at all
 		// are read off it rather than off the copy.
+		if name == r.countOnlyRead {
+			r.countOnlyRead = ""
+			if r.sem().ArrayScalarIsTheWholeArray == Yes {
+				// The value is the join, and it is set however many
+				// elements there are. The count that asked wants only the
+				// second half, so the join is not built. See
+				// lengthCountsTheArray.
+				return "", true
+			}
+		}
 		return r.arrayBareName(a)
 	}
 	if produce, ok := r.DynamicArrays[name]; ok && !r.removed[name] {

@@ -2923,6 +2923,10 @@ func (s Shell) newEditor(ctx context.Context, state *terminalState) *editor {
 		// And whether an ambiguous completion rings even while it fills a
 		// prefix in, which is one shell's answer and not the other's.
 		bellsOnAPartialCompletion: s.Editor.BellRingsOnAnAmbiguousCompletionThatInserts,
+		// And whether the bell rings at all, which is an option a person
+		// turns off at the prompt, and whether a failing widget rings it.
+		silent:               s.Editor.BeepOption != "" && !s.dialectOption(s.Editor.BeepOption),
+		ringsOnAFailedWidget: s.Editor.RingsWhenAWidgetFails,
 		// Whether to ask the terminal to mark a paste, and how a marked one
 		// is drawn. Two of the four ask and ksh93 does not; see paste.go.
 		// And whether there is a terminal to ask at all. Measured 2026-09-22,

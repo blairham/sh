@@ -185,7 +185,7 @@ func (e *editor) incrementalSearch(prompt drawnPrompt, dir searchDir, pattern bo
 				// Nothing left to take away. A backspace here is not a
 				// request to delete from the line — the line is a search
 				// result, not something being typed.
-				e.write(bell)
+				e.write(e.bell())
 				continue
 			}
 			s.query = s.query[:len(s.query)-1]
@@ -340,7 +340,7 @@ func (s *searchState) seek(inclusive bool) {
 	i, off, length := s.find(inclusive)
 	if i < 0 {
 		s.failed = true
-		s.e.write(bell)
+		s.e.write(s.e.bell())
 		return
 	}
 	s.failed = false

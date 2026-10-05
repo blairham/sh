@@ -2071,6 +2071,47 @@ refuses `*(` while parsing, so there is no disagreement to answer: the
 whole language lives behind the `GlobQualifiers` grammar flag, and adding
 to it adds no conditional anywhere.
 
+### `o` and `O` choose the order, and `n` the name comparison
+
+`o` followed by a key letter sorts the matches by that key, and `O`
+sorts them the other way. Measured 2026-10-05 on zsh 5.9.2 under
+`LC_ALL=C`:
+
+    *(on)        by name, which is the order with no `o` at all
+    *(On)        reversed, and `*(^on)` is the same: `^` turns a sort too
+    *(oL)        by size, smallest first; `-oL` sizes what a link points at
+    *(ol)        by link count
+    *(om)        by modification time, youngest first; `a` and `c` are
+                 the access and inode-change times, the same way round
+    *(od)        a subdirectory's entries ahead of the directory's own
+    *(oN)        not sorted at all: the order the directory gave
+    *(oL-on)     a second specifier breaks the ties the first one left
+    *(om[1])     the newest file: the pick counts into the sorted list
+    *(n)         numbers in names compare as numbers, `numericglobsort`
+                 for one pattern; `^n` turns that off for one
+    *(ox)        `unknown sort specifier`, fatal; so is a bare `o`
+
+**`d` is decided where two paths part, not by counting slashes.** Over
+`a/b/x.lis a/y.lis c.lis d/a.lis d/e/b.lis`, `(odon)` gives
+`a/b/x.lis a/y.lis d/e/b.lis d/a.lis c.lis`. `a/y.lis` stays ahead of
+`d/e/b.lis` because the two part at `a` and `d`, both directories, and
+neither is deeper there. A path that runs out comes after the path that
+continues into it, so `a/b/x.lis` is ahead of the directory `a/b`.
+
+**The order of the steps is measured.** In a directory where `a.zz` is
+newest, then `b.aa` and `c.mm`: `*([1]:e)` is `aa`, `*(om:e)` is
+`zz aa mm` and `*(om[1]:e)` is `zz`. So each match becomes its word
+(modifiers included), the words are sorted (the name key reads the
+modified word, the other keys read the file), and the `[n,m]` picks count
+into the sorted list. The picks used to run before the modifiers re-sorted
+the list, so `*([1]:e)` gave `zz`.
+
+**Ties are broken by name.** zsh leaves them in whatever order its own
+sort produced. `*(oL)` over a set of empty files is in neither name order
+nor directory order, so there is no tie order to copy, and name order at
+least gives the same answer on every run. `oe` and `o+`, which sort by
+the output of a piece of code, are refused by name, as `e` is.
+
 ### What is read and not implemented
 
 The type tests `.`, `/`, `@`, `p` and `%`, the nine permission letters,
@@ -2079,7 +2120,8 @@ mode argument, `u`, `g`, `U` and `G` for ownership, `l` and its numeric
 argument for the link count, the three file times `m`, `a` and `c` with
 their unit letter and signed number, the `-` that follows a link before
 testing, the `^` that turns any of them, the `,` that unions them, `N`
-and `D`, and the `:` that opens a modifier list.
+and `D`, the `[n,m]` picks, the `o` and `O` sort specifiers and `n`, and
+the `:` that opens a modifier list.
 
 The three times are one qualifier with three clocks behind it, and they
 were one letter until #3533: `m` reads the modification time, `a` the
@@ -2096,8 +2138,8 @@ signal table already takes.
 
 Everything else in that language — `=` for a socket, the `%b` and `%c`
 spellings that separate the two kinds of device, `e` and `+` for a
-command's verdict, `d` for a device, `o`, `O`, `Y` and `[n,m]` for
-ordering and counting, `L` for a size, and
+command's verdict and `oe` and `o+` for an order taken from one, `d` for
+a device, `Y` for counting, `L` for a size, and
 the `(#q…)` form that needs `extended_glob` — is refused by name with the
 shell's own wording rather than answered wrong. `*(L+1)` here is
 `unknown file attribute: L`, where the shell would list the names above

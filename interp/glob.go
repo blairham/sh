@@ -1274,7 +1274,14 @@ func (r *Runner) glob(field string) ([]string, bool) {
 	// result. Measured, `GLOBSORT=nosort; echo */*` is the top level in the
 	// directory's own order with each level below it in its own.
 	order, ordered := r.globSortOrderOf()
-	unsorted := ordered && order.key == globSortNone
+	unsorted := (ordered && order.key == globSortNone) || quals.unsorted
+	if quals.numeric != globNumericUnsaid {
+		// `n` and `^n` are `numericglobsort` for this one pattern, and the
+		// per-component sorts below read the switch as well as the last one.
+		saved := r.globSortsNumerically
+		r.globSortsNumerically = quals.numeric == globNumericOn
+		defer func() { r.globSortsNumerically = saved }()
+	}
 	if unsorted {
 		// The listing's own order is what is asked for, and the listing is
 		// several calls below here — see Runner.globUnsorted.
@@ -1657,18 +1664,8 @@ func (r *Runner) glob(field string) ([]string, bool) {
 		if len(dirs) == 0 {
 			return missed()
 		}
-		// The `[n,m]` subscripts after the tests and apart from them,
-		// because the two empty a list for different reasons: what the tests
-		// left empty is a pattern that matched nothing, and what a subscript
-		// empties is a selection that came to nothing. Measured — `*([9])`
-		// in a directory with six matches writes no word at status 0, where
-		// `zz*([1])` is the ordinary `no matches found`.
-		if len(quals.picks) > 0 {
-			dirs = pickRanges(dirs, quals.picks)
-			if len(dirs) == 0 {
-				return nil, true
-			}
-		}
+		// The `[n,m]` subscripts are not here: they count into the list in
+		// its final order, so they run after the sort at the end.
 	}
 
 	// And the other reading of the same parameter: the whole word the
@@ -1694,7 +1691,8 @@ func (r *Runner) glob(field string) ([]string, bool) {
 	// was asked for: a size or a time is a question about a file and the
 	// word is not what can be asked it. See Runner.sortMatchesBy.
 	var paths []string
-	if ordered {
+	keepPaths := ordered || len(quals.sorts) > 0
+	if keepPaths {
 		paths = make([]string, 0, len(dirs))
 	}
 	for _, d := range dirs {
@@ -1716,7 +1714,7 @@ func (r *Runner) glob(field string) ([]string, bool) {
 			}
 		}
 		out = append(out, w)
-		if ordered {
+		if keepPaths {
 			paths = append(paths, d)
 		}
 	}
@@ -1732,15 +1730,36 @@ func (r *Runner) glob(field string) ([]string, bool) {
 			out[i] = m
 		}
 	}
-	if ordered {
+	switch {
+	case quals.unsorted:
+		// `oN`: the order the walk read the directories in, untouched.
+	case len(quals.sorts) > 0:
+		r.sortQualified(out, paths, quals.sorts)
+	case ordered:
 		r.sortMatchesBy(out, paths, order)
-	} else {
+	default:
 		r.sortMatches(out)
 	}
 	if len(out) == 0 {
 		// Everything matched was the starting point itself — `**` over an
 		// empty directory — which is no match at all.
 		return missed()
+	}
+	// The `[n,m]` subscripts last, counting into the list in the order it is
+	// written in — after the modifiers and the sort, measured: `*([1]:e)` is
+	// the first of the *extensions* in name order, and `*(om[1])` is the
+	// newest file (see interp/globqualsort.go).
+	//
+	// Apart from the tests, because the two empty a list for different
+	// reasons: what the tests left empty is a pattern that matched nothing,
+	// and what a subscript empties is a selection that came to nothing.
+	// Measured — `*([9])` in a directory with six matches writes no word at
+	// status 0, where `zz*([1])` is the ordinary `no matches found`.
+	if len(quals.picks) > 0 {
+		out = pickRanges(out, quals.picks)
+		if len(out) == 0 {
+			return nil, true
+		}
 	}
 	return out, false
 }

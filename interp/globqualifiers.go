@@ -140,11 +140,70 @@ type globQualifiers struct {
 	// it, and two of them compose (`*([1,3][2])` is the second of the first
 	// three). See globRange, and keepQualified for where they land.
 	ranges []globRange
+	// sorts is the `o` and `O` specifiers, in the order they were written:
+	// the first decides, and each later one breaks the ties the ones before
+	// it left. See globSortSpec.
+	sorts []globSortSpec
+	// unsorted is `oN`: the directory's own order, with no sort at all.
+	unsorted bool
+	// numeric is `n`, and `^n`: whether a run of digits in a name sorts as a
+	// number for this pattern, whatever `numericglobsort` says. Zero leaves
+	// the option to decide; see globNumeric.
+	numeric globNumeric
 	// picks is ranges with the arithmetic done, filled by fieldQualifiers.
 	// The parser has no Runner and a subscript is an *expression* — `*([i])`
 	// and `*([1+1])` both name the second match — so the two halves are
 	// necessarily in different places.
 	picks []globPick
+}
+
+// globNumeric is the `n` qualifier's three states: not written, written, and
+// written behind a `^`.
+type globNumeric uint8
+
+const (
+	globNumericUnsaid globNumeric = iota
+	globNumericOn
+	globNumericOff
+)
+
+// globSortSpec is one `o` or `O` specifier: the key letter, which way it
+// runs, and whether a `-` in front of it said to ask a symbolic link's target.
+//
+// Measured on zsh 5.9.2, 2026-10-05, under `LC_ALL=C`, in a directory where
+// `a2 a9 a10 lnk c.lis big d a b C` is newest first, `big` holds six bytes,
+// `lnk` points at it and `d` is a directory:
+//
+//	*(on)      C a a10 a2 a9 b big c.lis d lnk   by name, the default order
+//	*(On)      lnk d c.lis big b a9 a2 a10 a C   `O` is the reverse
+//	*(^on)     the same as `On`                  and so is a `^` in front
+//	*(om)      a2 a9 a10 lnk c.lis big d a b C   the youngest first
+//	*(om[1])   a2                                and the pick runs after it
+//	*(oL-on)   … lnk big d                       a later spec breaks ties,
+//	                                             and the link is its own size
+//	*(-oL)     … big lnk d                       until `-` follows it
+//	*(nOn)     the numbers reversed as numbers   `n` reaches `on`
+//	*(ox)      unknown sort specifier            at status 1
+//
+// And with `**/*.lis` over `a/b/x.lis a/y.lis c.lis d/a.lis d/e/b.lis`:
+//
+//	(odon)     a/b/x.lis a/y.lis d/e/b.lis d/a.lis c.lis
+//	(Odon)     c.lis a/y.lis a/b/x.lis d/a.lis d/e/b.lis
+//
+// which is the manual's "files in subdirectories appear before those in the
+// current directory at each level of the search", and not a count of
+// slashes: `a/y.lis` is ahead of `d/e/b.lis` because the two part at `a`
+// and `d`, both directories, and `d` makes no claim over `a` there.
+//
+// Ties the specifiers leave are broken by name. The reference leaves them in
+// whatever order its sort happened to produce — `*(oL)` over a set of empty
+// files is in neither name order nor the directory's — so no tie order is
+// that shell's to reproduce, and the name is the one that cannot move between
+// runs.
+type globSortSpec struct {
+	key    byte
+	desc   bool
+	follow bool
 }
 
 // globRange is one `[…]` subscript as written: the expressions either side of
@@ -270,6 +329,34 @@ func parseGlobQualifiers(list string) (globQualifiers, string, bool) {
 			i += end + 1
 			from, to, comma := strings.Cut(text, ",")
 			q.ranges = append(q.ranges, globRange{from: from, to: to, single: !comma})
+		case 'o', 'O':
+			if i >= len(list) {
+				return q, "unknown sort specifier", false
+			}
+			key := list[i]
+			i++
+			switch key {
+			case 'N':
+				q.unsorted = true
+			case 'n', 'L', 'l', 'a', 'm', 'c', 'd':
+				q.sorts = append(q.sorts, globSortSpec{key: key, desc: (c == 'O') != negate, follow: follow})
+			case 'e', '+':
+				// The specifiers that sort by a string of code run per match,
+				// which this engine does not carry — the same refusal the `e`
+				// qualifier makes, said as what it is rather than as the
+				// reference's sentence for a letter it does not know.
+				return q, fmt.Sprintf("the o%c sort specifier is not implemented", key), false
+			default:
+				return q, "unknown sort specifier", false
+			}
+		case 'n':
+			// `numericglobsort` for one pattern, and `^n` is it turned off
+			// for one: measured, `setopt numericglobsort; print *(^n)` is the
+			// plain name order.
+			q.numeric = globNumericOn
+			if negate {
+				q.numeric = globNumericOff
+			}
 		case 'N':
 			q.allowNoMatch = true
 		case 'D':

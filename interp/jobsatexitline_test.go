@@ -70,6 +70,8 @@ func TestWhereTheJobsAtExitLinesAreLocatedInAScript(t *testing.T) {
 			r.lastStmtLine = tc.stmtLine
 			r.exitRan = tc.exitRan
 			r.toldOfJobsAtExit = tc.told
+			// The leaving `exit` wrote it, which is what moves the line (#6078).
+			r.leavingExitTold = tc.told
 			if got := r.jobsAtExitName(tc.exitRan); got != tc.wantSentence {
 				t.Errorf("the sentence is named %q, want %q", got, tc.wantSentence)
 			}

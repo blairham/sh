@@ -8857,6 +8857,17 @@ func biExit(r *Runner, ctx context.Context, args []string) int {
 	// of it the same script leaves with 7.
 	if !r.JobControl && r.tellOfJobsLeftBehind(true) && r.diag().HeldExitInAScriptStatus != 0 {
 		r.status = r.diag().HeldExitInAScriptStatus
+		if r.locationIsInsideEvalText() {
+			// Inside `eval` text the exit is held after all: the sentence is
+			// located in the text, the `eval` returns 1 and the shell goes
+			// on, on the `-c` route and in a script alike. Measured
+			// 2026-10-05 through a pseudo-terminal on zsh 5.9.2, `set -m⏎sleep
+			// 1 &⏎eval exit; echo st=$?` writes `(eval):1: you have running
+			// jobs.` and then `st=1`, the same from inside a function, and a
+			// later `exit` leaves without a second sentence (#6078).
+			return 1
+		}
+		r.leavingExitTold = true
 		if r.Route == RouteCommandString && r.diag().JobsAtExitOnACommandString {
 			// And 0 on the `-c` route, not the script route's 1 and not the
 			// operand: measured 2026-10-05 through a pseudo-terminal, `zsh -c

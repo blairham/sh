@@ -3460,6 +3460,10 @@ type Runner struct {
 	// wrong.
 	toldOfJobsAtExit    bool
 	tellingOfJobsAtExit bool
+	// toldOfJobsWithNoPrompt is the same fact where there is no prompt,
+	// which does not wear off from one chunk to the next — see
+	// Runner.tellOfJobsLeftBehind.
+	toldOfJobsWithNoPrompt bool
 	// oldpwdSettled says the inherited OLDPWD has already been read and
 	// judged, which happens once however many chunks a session runs.
 	//
@@ -3676,6 +3680,14 @@ type Runner struct {
 	// that wrote the jobs-at-exit sentence on a route where that ends the
 	// shell without its EXIT trap. See Diagnostics.JobsAtExitOnACommandString.
 	heldExitSkipsTheExitTrap bool
+	// leavingExitTold says the `exit` the shell is leaving by is the one
+	// that wrote the jobs-at-exit sentence, rather than one before it that
+	// was held. Where the hangup warning is located turns on it — see
+	// Runner.jobsHungUpName (#6078).
+	leavingExitTold bool
+	// exitLocation is where the `exit` the shell is leaving by is located
+	// for the hangup warning, taken when it ran. See Runner.outermostLocation.
+	exitLocation string
 	// caseSubjectPrev is that line while a `case` subject is being expanded,
 	// and zero everywhere else. Runner.lineNow is where it is taken up; it
 	// is held here rather than written into line so that a subject reading

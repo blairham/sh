@@ -53,17 +53,36 @@ func (r *Runner) hangUpJobsIfAsked() {
 	skipStopped := r.sem().HangupAtExitSkipsStoppedJobs == Yes
 	sent := 0
 	for _, j := range r.jobs {
-		if j == nil || j.Finished() {
-			// Only what is still there. A finished job has no process group
-			// to reach, and reaching for one is how a shell ends up signaling
-			// whatever was given the number next.
-			continue
-		}
-		if j.Stopped && skipStopped {
+		if j == nil {
 			continue
 		}
 		if j.startedWithoutMonitor && r.sem().HangupAtExitSkipsJobsStartedWithoutTheMonitor == Yes {
 			// See Semantics.HangupAtExitSkipsJobsStartedWithoutTheMonitor.
+			continue
+		}
+		if j.Finished() && !r.finishedJobCountsAtExit(j) {
+			continue
+		}
+		if j.Finished() {
+			// Counted, and not sent to. A job that finished and was never
+			// reported is still in the table, and zsh counts the table.
+			// Measured 2026-10-05 through a pty, `zsh -f -c` against zsh
+			// 5.9.2 (#6125): `set -m; setopt nonotify; sleep 0.1 & /bin/sleep
+			// 0.5; echo end` ends with `warning: 1 jobs SIGHUPed`, and two
+			// finished jobs beside a running one is `3 jobs`. Once `jobs` has
+			// reported it, it is gone and the warning is too. The table here
+			// holds a finished job only until it is reported, and
+			// finishedJobCountsAtExit leaves out the ones whose report went
+			// to nobody.
+			//
+			// Not signaled: it has no process group left to reach, and
+			// reaching for one is how a shell ends up signaling whatever was
+			// given the number next. Only the one dialect with the sentence
+			// reads the count.
+			sent++
+			continue
+		}
+		if j.Stopped && skipStopped {
 			continue
 		}
 		if r.signalJob(j, syscall.SIGHUP) == nil {
@@ -82,4 +101,28 @@ func (r *Runner) hangUpJobsIfAsked() {
 		// there is no line number for a prompt's diagnostics to carry.
 		r.noticef("%s\n", Wording(w, "", r.jobsHungUpName(), sent))
 	}
+}
+
+// finishedJobCountsAtExit reports whether a finished job still in the table
+// counts toward the hangup warning. It does unless its report has already
+// been made to nobody: with NOTIFY at its default, `zsh -c 'set -m; sleep 0.1
+// & /bin/sleep 0.5; echo end'` writes no warning, and with `setopt nonotify`
+// it writes one. NOTIFY turned back on after the job finished still counts it.
+// Measured 2026-10-05 against zsh 5.9.2 through a pty (#6125). A job not yet
+// noticed is judged under the option as it stands now.
+//
+// Only where a command string ran off its end. Every other way out reports the
+// job instead, `[1]  + done  sleep 0.1`, and counts nothing for it: an
+// explicit `exit` in the string, a script file with or without one, and an
+// interactive `exit`, all measured the same day. That report is not made here
+// yet, so on those routes the job is left out of the count and nothing is
+// said.
+func (r *Runner) finishedJobCountsAtExit(j *Job) bool {
+	if r.Route != RouteCommandString || r.exitRan || !r.diag().JobsAtExitOnACommandString {
+		return false
+	}
+	if r.noticedJobs[j] {
+		return !j.reportedToNobody
+	}
+	return !r.monitor || !r.reportsFinishedJobsToNobody()
 }

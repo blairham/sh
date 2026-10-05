@@ -53,6 +53,26 @@ func TestACommandStringAccountsForItsJobsByItsOwnRule(t *testing.T) {
 			last: []string{"f:2: you have running jobs.", "zsh:1: warning: 1 jobs SIGHUPed"},
 			not:  []string{monitorExitEnd},
 		},
+		// A job that finished and was never reported is still in the
+		// table, and the warning counts it (#6125). With NOTIFY at its
+		// default the report has already gone to nobody, so it is not
+		// counted. Measured 2026-10-05 against zsh 5.9.2 through a pty.
+		{
+			name: "a finished job nothing reported",
+			body: "set -m; setopt nonotify; /bin/sleep 0.1 & /bin/sleep 0.5; print -r -- x",
+			last: []string{monitorExitEnd, "zsh:1: warning: 1 jobs SIGHUPed"},
+		},
+		{
+			name: "two finished and one running",
+			body: "set -m; setopt nonotify; /bin/sleep 0.1 & /bin/sleep 0.1 & /bin/sleep 5 & /bin/sleep 0.5; print -r -- x",
+			last: []string{monitorExitEnd, "zsh:1: warning: 3 jobs SIGHUPed"},
+		},
+		{
+			name: "a finished job reported to nobody",
+			body: "set -m; /bin/sleep 0.1 & /bin/sleep 5 & /bin/sleep 0.5; print -r -- x",
+			last: []string{monitorExitEnd, "zsh:1: warning: 1 jobs SIGHUPed"},
+			not:  []string{"2 jobs"},
+		},
 		{
 			name: "a stopped job at the end",
 			// The sentence is the only thing asserted absent here: it would

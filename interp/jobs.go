@@ -43,6 +43,12 @@ type Job struct {
 	// reference when it was noticed — see Runner.forget.
 	noticedInCommand uint64
 
+	// reportedToNobody says the job was noticed as finished while the
+	// monitor's notice went to nobody, so in the shell being modeled it was
+	// already reported and gone. See Runner.reportsFinishedJobsToNobody and
+	// Runner.finishedJobCountsAtExit (#6125).
+	reportedToNobody bool
+
 	// ident is the number a *script* names this job by: `$!`, `wait <n>`,
 	// `kill <n>`, and the id a `jobs -l` or `jobs -p` listing prints. It is
 	// the process id where the job has one, and a number this shell invented
@@ -3377,8 +3383,13 @@ func (r *Runner) noticeFinishedJobs() {
 			noticed[j] = true
 		}
 	}
+	unheard := r.monitor && r.reportsFinishedJobsToNobody()
 	for _, j := range ended {
 		noticed[j] = true
+		// Decided now, under the option as it stands when the job is
+		// noticed: turning NOTIFY on afterwards reports nothing that was
+		// already left unreported (#6125).
+		j.reportedToNobody = unheard
 		if r.commandSlot != 0 {
 			j.noticedInCommand = r.commandSerial
 		}

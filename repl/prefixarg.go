@@ -106,6 +106,15 @@ func (e *editor) spendCount(b byte, prompt drawnPrompt) (bool, byte) {
 	if !e.count.on || b == esc {
 		return false, b
 	}
+	if e.rebound(b) {
+		// A key somebody rebound is what they bound it to, count and all:
+		// the count is left for the binding to spend (see
+		// spendCountOnBinding), and nothing here turns the key into
+		// another by its byte. Measured 2026-10-05 against zsh 5.9.2, a
+		// widget of the shell's on `^B` is told `NUMERIC=-1` for `ESC -
+		// ^B`, where this played `^F` instead (#6031).
+		return false, b
+	}
 	n := e.count.n()
 	e.count = prefixCount{}
 	e.keyNumeric = &n
@@ -118,6 +127,16 @@ func (e *editor) spendCount(b byte, prompt drawnPrompt) (bool, byte) {
 		return true, b
 	}
 	if o, ok := opposites[b]; ok && n < 0 {
+		if e.rebound(o) {
+			// The opposite key means something else now, so the opposite
+			// *action* is performed rather than the key: measured, `abc
+			// ESC - Backspace` with `^D` rebound deletes forward and leaves
+			// the binding on `^D` alone.
+			for range -n {
+				e.runWidget(Binding{Widget: oppositeActions[b]}, prompt)
+			}
+			return true, b
+		}
 		// And it is the opposite key that is played again, so the record of
 		// what was read says so.
 		b, n = o, -n
@@ -136,6 +155,23 @@ func (e *editor) spendCount(b byte, prompt drawnPrompt) (bool, byte) {
 	}
 	e.countRepeat = n - 1
 	return false, b
+}
+
+// oppositeActions is the action each key in opposites turns into, for when
+// the opposite key has been rebound.
+var oppositeActions = map[byte]Widget{
+	ctrlB: WidgetForwardChar, ctrlF: WidgetBackwardChar,
+	backspace: WidgetDeleteChar, del: WidgetDeleteChar, ctrlD: WidgetBackwardDeleteChar,
+}
+
+// rebound reports whether a key's first byte begins something in the
+// override table, which is what decides that the byte is not the editor's.
+func (e *editor) rebound(b byte) bool {
+	if e.bindings == nil {
+		return false
+	}
+	table := e.bindings(e.keymap())
+	return len(table) > 0 && anyBindingStartsWith(table, string(b))
 }
 
 // repeatable is the control keys a count plays more than once: the moves,

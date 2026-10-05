@@ -466,11 +466,29 @@ Two divergences, both deliberate:
   by the other shell too, and the two must not trade files. `-d`, `-D` and
   `-C` are taken and change nothing else, and `compdump` does nothing at 0.
 * **This shell ships no `_main_complete`**, and `_bash_complete` completes
-  nothing. Where an installed zsh's library is on the default search (#6128),
-  the scan of it leaves Tab on that library's `_main_complete` — measured
-  2026-10-05, `zle -lL` after `compinit` lists the eight completion widgets
-  on `_main_complete`, as real zsh's does — and where none is, this shell's
-  own completion stays.
+  nothing. Where the scan finds one — an installed zsh's library is on the
+  default search since #6128 — `compinit` redefines the eight completion
+  widgets on it (#6184), and where none is found it redefines nothing and
+  this shell's own completion stays. Where zsh's `compinit`, short of
+  completion files, goes looking for more and runs `compinstall`, this one
+  stays quiet.
+
+The widgets, measured 2026-10-05 against zsh 5.9.2 with a fixture
+`_main_complete` ahead of its library:
+
+| probe | zsh |
+| --- | --- |
+| `compinit; zle -lL` | `zle -C w .w _main_complete` for `complete-word`, `delete-char-or-list`, `expand-or-complete`, `expand-or-complete-prefix`, `list-choices`, `menu-complete`, `menu-expand-or-complete`, `reverse-menu-complete`; the same eight after a second run |
+| the same after `zmodload zsh/complist` | `menu-select` as well — this shell makes no `menu-select` widget, so it has nothing to redefine |
+| `zstyle ':completion:*' completer _expand _complete`, Tab on `expand-or-complete` | Tab on `complete-word`, in the main keymap only (`viins` under `bindkey -v`) |
+| the style at `:completion:` or `*` | rebound; the lookup context is `:completion:` exactly |
+| the style at `:completion:*:*:*` or `:completion::complete:*` | not rebound |
+| `_expand_alias`, `_expand:x`, `x_expand` | not rebound: the word must be `_expand` |
+| Tab on `menu-complete`, or `expand-or-complete` on `^[i` | left alone: only Tab, only from `expand-or-complete` |
+
+The first line's measurement in #6159 had run zsh's own `compinit`, because
+`FPATH` named only zsh's library; these rows set `$fpath` so that each shell
+runs its own.
 
 And one wording: an `-F` function `compgen` cannot find is the shell's
 `command not found`, located at `compgen`'s own line where zsh's names an

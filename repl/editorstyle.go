@@ -467,8 +467,32 @@ type EditorStyle struct {
 	//
 	// zsh's \a for `^T` on one character and `^Y` with nothing killed, and
 	// its `^D` at the end listing and Delete being unbound, are its own and
-	// not this; false is its answer and the core's.
+	// not this; false is its answer and the core's. See
+	// BellRingsWhenAnEditFails.
 	BellRingsWhenAnEditHasNothingToActOn bool
+
+	// BellRingsWhenAnEditFails sounds the bell for the few emacs edits that
+	// fail outright, where the zero value lets them do nothing in silence
+	// (#6247). zsh rings for far fewer keys than bash — see the table above —
+	// and these are the ones: measured 2026-10-06 through a pseudo-terminal
+	// against zsh 5.9.2, a two-row prompt, `bindkey -e`, each key alone in a
+	// fresh shell and `\a` looked for in what that key wrote:
+	//
+	//	key                     where                       zsh 5.9.2
+	//	^T                      on a line of one character  \a
+	//	^T                      at the start of `echo ab`   swaps `ec`
+	//	^Y                      nothing killed yet          \a
+	//	Delete                  at the end                  \a
+	//	Delete                  on a character              deletes it
+	//
+	// Delete is undefined-key under `zsh -f`, so the bell there is an unbound
+	// key's; the system startup file macOS ships binds it to delete-char,
+	// which rings at the end of the line the same. Either way the end of the
+	// line rings and the middle deletes, which is what this editor's Delete
+	// does with this set. And `^D` at the end, listing nothing, rings — that
+	// is the listing's, and rings in every dialect, as Tab matching nothing
+	// does.
+	BellRingsWhenAnEditFails bool
 
 	// What the session keeps of the terminal settings a command leaves
 	// behind (#6105). Every shell in the panel keeps a change a command made

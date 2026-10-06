@@ -104,9 +104,9 @@ func TestAReadReachesTheHistoryOnlyWhenAsked(t *testing.T) {
 // **The default is the measured one and it is not the obvious one.** In zsh
 // `^D` during such a read is `delete-char-or-list`, so on an empty line it
 // offers to list every command rather than ending anything; only `-e` makes it
-// end the read. This editor's `^D` is not that action, so without the option
-// the key does nothing here — which is the same "it does not end the read",
-// arrived at from the other side.
+// end the read. The editor here has no ListOnControlD, so without the option
+// the key deletes nothing — the same "it does not end the read". The listing
+// is cmd/zsh's TestControlDOnATypedLineDeletesOrLists.
 func TestEndOfInputEndsAReadOnlyWhenAsked(t *testing.T) {
 	_, _, err := edited(t, nil,
 		interp.LineEdit{Initial: "hi", EndOnEndOfInput: true}, "\x15\x04")

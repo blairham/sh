@@ -23,6 +23,19 @@ type EditorStyle struct {
 	// line — so the zero value ignores the key, as this editor always did.
 	SendBreakOnControlG bool
 
+	// ListOnControlD makes `^D` on a line with something typed the action
+	// that deletes the character under the cursor or, with none under it,
+	// lists the matches for the word before it — zsh's delete-char-or-list.
+	// The zero value deletes and nothing more, which is bash's delete-char.
+	// The empty line is the key's own either way: it ends the session.
+	//
+	// Measured 2026-10-06 through a pseudo-terminal against zsh 5.9.2 and
+	// bash 5.3, a two-row prompt, `^D` after `ls x` in a directory holding
+	// xa, xb and xc: zsh lists `xa  xb  xc` under the line and returns to
+	// it, with or without compinit, and bash rings the bell and lists
+	// nothing. Mid-line both delete and draw the deletion (#6233).
+	ListOnControlD bool
+
 	// Interrupt is what marks a line abandoned with ^C, drawn where the
 	// cursor was before the line ends.
 	//

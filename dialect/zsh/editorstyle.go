@@ -18,6 +18,9 @@ func EditorStyle() repl.EditorStyle {
 		// And `^G` gives the line up. See
 		// repl.EditorStyle.SendBreakOnControlG (#5913).
 		SendBreakOnControlG: true,
+		// And `^D` with something typed is delete-char-or-list. See
+		// repl.EditorStyle.ListOnControlD (#6233).
+		ListOnControlD: true,
 		// Measured under a pty. The threshold is the same hundred, and
 		// everything about the question is different: it names the shell,
 		// counts the rows the matches would take as well as the matches,

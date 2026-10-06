@@ -451,6 +451,14 @@ type editor struct {
 	// the built-in count. See confirmList and EditorStyle.ListQueryThresholdParameter.
 	listThreshold func() (int, bool)
 
+	// listScroll is the prompt a paged listing stops under, and whether
+	// listings are paged. See Shell.ListScrollPrompt and listscroll.go.
+	listScroll func(ListScrollView) (string, bool)
+
+	// listBack is list's word to returnToTheLine that the listing it just
+	// drew ended on its own last row, for the cursor to go back up from.
+	listBack bool
+
 	// keyWait is how long to wait for the rest of a multi-character key
 	// sequence, and whether to wait indefinitely — read fresh on the key for
 	// the reason listThreshold is read fresh on the completion. Nil where the
@@ -1875,6 +1883,16 @@ func place(promptWidth int, line []rune, pos, cols int) (curRow, curCol, endRow,
 // each as wide as the longest match plus two, filled down one column before
 // starting the next, so that reading in sorted order means reading downwards.
 func (e *editor) list(matches []Candidate, prompt drawnPrompt) int {
+	// The rows the line takes, counted before it is ended: the last row of
+	// the prompt and what the line wraps onto. See listPage.
+	lineRows := 1
+	if cols := e.cols(); cols > 0 {
+		_, _, endRow, endCol := place(e.live(prompt).cells, e.displayed(), e.pos, cols)
+		if endCol == cols {
+			endRow++
+		}
+		lineRows = endRow + 1
+	}
 	if e.listHere {
 		// A question answered yes has already taken the line's row away and
 		// cleared its own. See confirmList.
@@ -1886,10 +1904,33 @@ func (e *editor) list(matches []Candidate, prompt drawnPrompt) int {
 	// block or several, and which rows share an arrangement is the
 	// completer's answer rather than this editor's. See completelist.go.
 	attributes := false
-	rows := listingRows(matches, e.cols(), e.listLayout())
-	for _, row := range rows {
+	laid := layOutListing(matches, e.cols(), e.listLayout())
+	rows := laid.rows
+	if page := e.listPage(len(rows), lineRows); page > 0 {
+		// Too tall for the terminal, in a session that pages: see
+		// listscroll.go, which draws it and says how many rows it drew.
+		shown := e.scrollListing(laid, page)
+		for _, row := range rows[:shown] {
+			attributes = attributes || strings.ContainsRune(row, '\x1b')
+		}
+		if attributes {
+			e.write("\x1b[0m")
+		}
+		return shown
+	}
+	// A listing the cursor will go back up over ends on its own last row:
+	// measured on zsh 5.9.2, the row is followed by `\e[A` and no newline,
+	// so a listing that exactly fills the terminal under the line scrolls
+	// nothing — 39 rows under a one-row line on forty, and 38 under a
+	// two-row prompt — where a newline after it pushed the top row off and
+	// the line was then drawn again under the listing (#6153). See
+	// returnToTheLine.
+	back := e.listComesBack(len(rows), lineRows)
+	for i, row := range rows {
 		e.write(row)
-		e.write(e.newline())
+		if !back || i+1 < len(rows) {
+			e.write(e.newline())
+		}
 		attributes = attributes || strings.ContainsRune(row, '\x1b')
 	}
 	if attributes {
@@ -1900,9 +1941,22 @@ func (e *editor) list(matches []Candidate, prompt drawnPrompt) int {
 		// bytes are what they were.
 		e.write("\x1b[0m")
 	}
+	e.listBack = back && len(rows) > 0
 	// The prompt and the line are not written back here: the caller redraws,
-	// and the redraw now knows it is starting from a fresh row.
+	// and the redraw now knows it is starting from a fresh row — or, where
+	// the cursor goes back up to the line, from that row.
 	return len(rows)
+}
+
+// listComesBack reports whether a listing of this many rows, drawn under a
+// line of lineRows rows, is one the cursor goes back up over: where the
+// dialect asks for it, and where the two fit on the terminal together.
+func (e *editor) listComesBack(rows, lineRows int) bool {
+	if e.returnsToTheLine == nil || !e.returnsToTheLine() {
+		return false
+	}
+	cols, height := e.cols(), e.rows()
+	return cols > 0 && height > 0 && rows+lineRows <= height
 }
 
 // returnToTheLine puts the cursor back on the line a listing was drawn under,
@@ -1915,26 +1969,26 @@ func (e *editor) list(matches []Candidate, prompt drawnPrompt) int {
 // (#6129). With the option off, or a listing too tall to come back over, the
 // line is drawn again under the listing as it was before.
 //
-// The rows were written by list, which ended on a fresh row under the last of
-// them; the line's own last row is that many rows and one more up, and from
-// there the draw goes up to where the line starts the way backToTheLine's
-// does.
+// The rows were written by list, which left the cursor on the last of them
+// rather than on a fresh row under it — see listComesBack — so the line's own
+// last row is that many rows up, and from there the draw goes up to where the
+// line starts the way backToTheLine's does. Whether to come back is list's
+// decision, made before it drew, because it decides whether the last row is
+// ended.
 func (e *editor) returnToTheLine(listed int, prompt drawnPrompt) bool {
-	if e.returnsToTheLine == nil || !e.returnsToTheLine() {
+	back := e.listBack
+	e.listBack = false
+	if !back || listed <= 0 {
 		return false
 	}
-	cols, height := e.cols(), e.rows()
-	if cols <= 0 || height <= 0 {
-		return false
-	}
+	cols := e.cols()
 	_, _, endRow, endCol := place(e.live(prompt).cells, e.displayed(), e.pos, cols)
 	if endCol == cols {
 		endRow++
 	}
-	if listed+endRow+1 >= height {
-		return false
-	}
-	e.write("\x1b[" + itoa(listed+1) + "A")
+	// From the listing's last row, which list did not end: as many rows up
+	// as it drew is the line's last row.
+	e.write("\r\x1b[" + itoa(listed) + "A")
 	e.row = endRow
 	e.drawn = drawnLine{}
 	e.listingBelow = true

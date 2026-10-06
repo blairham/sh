@@ -289,6 +289,13 @@ type Shell struct {
 	// comes from and why the ordering is the only safe one.
 	RunCompletion func(*interp.Runner, context.Context, string, repl.Completion) []repl.Candidate
 
+	// ListScrollPrompt is the line a completion listing too tall for the
+	// terminal stops under, a screenful at a time, and whether listings are
+	// paged at all — from the Runner, because what decides it is the
+	// session's parameters and modules. Nil is a dialect that never pages,
+	// which is three of the four. See repl.Shell.ListScrollPrompt.
+	ListScrollPrompt func(*interp.Runner, repl.ListScrollView) (string, bool)
+
 	// RunScheduled runs whatever this dialect had set aside for a time that
 	// has now passed. It is called at every prompt, before the prompt is
 	// drawn. Nil is a dialect with nothing that can be scheduled, which is

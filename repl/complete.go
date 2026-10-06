@@ -567,7 +567,10 @@ const listQueryThreshold = 100
 // redrawn afterwards either way. It is the one place the editor reads a key
 // in the middle of drawing.
 func (e *editor) confirmList(matches []Candidate, prompt drawnPrompt) bool {
-	if e.listQuery == "" || !e.listQueryAsks(matches) {
+	if e.listQuery == "" || !e.listQueryAsks(matches) || e.pagesListings() {
+		// A session that pages a long listing never asks about one first:
+		// measured, zsh with LISTPROMPT set and zsh/complist loaded draws
+		// 520 matches at once where LISTMAX is 100. See listscroll.go.
 		return true
 	}
 	e.endLine(prompt, "")

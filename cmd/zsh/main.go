@@ -62,6 +62,7 @@ func shell() driver.Shell {
 		ViEditing:                 zsh.ViEditing,
 		RunWidget:                 zsh.RunWidget,
 		RunCompletion:             zsh.RunCompletion,
+		ListScrollPrompt:          zsh.ListScrollPrompt,
 		RunScheduled:              zsh.RunScheduled,
 		TransformTermcap:          zsh.TransformTermcap,
 		HighlightLine:             zsh.RegionHighlights,

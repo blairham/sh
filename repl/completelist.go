@@ -73,6 +73,22 @@ import (
 // used. A block drawn one per line takes no part in it: a 34-column `-l` row
 // leaves `d1  d2  d3` as it is (#6157).
 func listingRows(candidates []Candidate, width int, layout listLayout) []string {
+	return layOutListing(candidates, width, layout).rows
+}
+
+// listing is a listing laid out: the rows it draws, and for each row the
+// number of the last match drawn on it, counted from one in the order the
+// listing reads — which is what a paged listing's `%m` reports (see
+// listScroll). A heading row carries the number of the matches before it.
+type listing struct {
+	rows []string
+	last []int
+	// matches is how many matches the listing draws.
+	matches int
+}
+
+// layOutListing is listingRows with the count each row ends on kept beside it.
+func layOutListing(candidates []Candidate, width int, layout listLayout) listing {
 	blocks := listingBlocks(candidates)
 	drawn := make([][]string, len(blocks))
 	shared := 0
@@ -121,20 +137,32 @@ func listingRows(candidates []Candidate, width int, layout listLayout) []string 
 	if width > 0 {
 		shared = min(shared, width)
 	}
-	var out []string
+	var out listing
 	for i, block := range blocks {
 		rows := drawn[i]
 		if len(rows) == 0 && block.group.Heading == "" {
 			continue
 		}
+		before := out.matches
 		if block.group.Heading != "" {
-			out = append(out, strings.Split(block.group.Heading, "\n")...)
+			for _, heading := range strings.Split(block.group.Heading, "\n") {
+				out.rows = append(out.rows, heading)
+				out.last = append(out.last, before)
+			}
 		}
+		out.matches += len(rows)
 		if block.group.OnePerLine {
-			out = append(out, rows...)
+			for n, row := range rows {
+				out.rows = append(out.rows, row)
+				out.last = append(out.last, before+n+1)
+			}
 			continue
 		}
-		out = append(out, arrange(rows, width, shared, block.arrangement(layout))...)
+		drawnRows, last := arrangeCounted(rows, width, shared, block.arrangement(layout))
+		out.rows = append(out.rows, drawnRows...)
+		for _, n := range last {
+			out.last = append(out.last, before+n)
+		}
 	}
 	return out
 }
@@ -183,8 +211,19 @@ func uniformGrid(matches []string, width int) (cell, cols int) {
 // into column widths no simpler rule reproduced; that pair is drawn across
 // the rows and unpacked here.
 func arrange(matches []string, width, shared int, layout listLayout) []string {
+	rows, _ := arrangeCounted(matches, width, shared, layout)
+	return rows
+}
+
+// arrangeCounted is arrange with, for each row, the number of the last match
+// drawn on it — the largest position of any match on the row, counted from
+// one. Down the columns that is the row's last cell: measured on zsh 5.9.2,
+// 781 matches in forty rows of twenty columns report `759/781` after the
+// first 39 rows, the nineteenth column's cell on row 39, where the twentieth
+// column ends on row 21.
+func arrangeCounted(matches []string, width, shared int, layout listLayout) ([]string, []int) {
 	if len(matches) == 0 {
-		return nil
+		return nil, nil
 	}
 	if rows, widths, ok := packedArrangement(matches, width, layout); ok {
 		// Spread across the shared grid like an unpacked block, the room
@@ -268,7 +307,7 @@ func packedWidths(matches []string, rows, width int) ([]int, bool) {
 // No padding after the last match on a row: trailing spaces are invisible
 // until something copies them. zsh pads every column but the grid's last, and
 // what reaches the screen is the same.
-func placeCells(matches []string, nrows int, widths []int, rowsFirst bool) []string {
+func placeCells(matches []string, nrows int, widths []int, rowsFirst bool) ([]string, []int) {
 	at := func(r, c int) int {
 		if rowsFirst {
 			return r*len(widths) + c
@@ -276,13 +315,16 @@ func placeCells(matches []string, nrows int, widths []int, rowsFirst bool) []str
 		return c*nrows + r
 	}
 	out := make([]string, 0, nrows)
+	last := make([]int, 0, nrows)
 	for r := range nrows {
+		upTo := 0
 		var b strings.Builder
 		for c := range widths {
 			i := at(r, c)
 			if i >= len(matches) {
 				break
 			}
+			upTo = max(upTo, i+1)
 			b.WriteString(matches[i])
 			if c+1 < len(widths) && at(r, c+1) < len(matches) {
 				for n := displayWidth(matches[i]); n < widths[c]; n++ {
@@ -291,8 +333,9 @@ func placeCells(matches []string, nrows int, widths []int, rowsFirst bool) []str
 			}
 		}
 		out = append(out, b.String())
+		last = append(last, upTo)
 	}
-	return out
+	return out, last
 }
 
 // block is one group's candidates, in the order they arrived.

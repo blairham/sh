@@ -279,7 +279,36 @@ surfaces stay one decision. `cd <TAB>` therefore lists capitalized names
 first under a UTF-8 locale, where zsh mixes them in. A collation, if one is
 built, is built for both surfaces at once.
 
-Above a hundred matches, both ask before printing. That threshold and
+Above a hundred matches, both ask before printing.
+
+**Or a long listing is paged.** In zsh with `zsh/complist` loaded and
+`LISTPROMPT` set (the completion system's `list-prompt` style leaves it set),
+a listing too tall for the terminal is never asked about (#6153). It is drawn
+a screenful at a time, and each screenful ends with the prompt on the
+terminal's last row. Measured 2026-10-06 against zsh 5.9.2 at 120 by 40,
+with a thousand names that list in fifty rows:
+
+- The first screenful is 39 rows, and `%SAt %l %m %p%s` draws `At 39/50
+  989/1000 Top` in standout.
+- Return, a line feed, `^N` and the down arrow draw one row more (`40/50
+  990/1000 80%`).
+- Tab draws the next screenful, and at the end the line is drawn under the
+  listing.
+- `^G` stops and drops its key, and any other key stops and is read as usual.
+
+`%l`, `%m` and `%p` are the last row drawn over the rows, the last match on
+that row over the matches, and `Top` or the last row as a percentage. Their
+capitals pad to 9, 9 and 6 columns. An empty `LISTPROMPT` draws `At %p: Hit
+TAB for more, or the character to insert` in standout.
+
+A listing that fits under the line's own rows is not paged. Neither is one in
+a session without the module, where the question is asked as before. The
+`listscroll` keymap's own bindings are not read; its defaults are.
+
+**A listing the cursor goes back up over ends on its own last row.** zsh
+writes no newline after it, so a listing that exactly fills the terminal
+under the line scrolls nothing. At 40 rows, that is 39 rows under a one-row
+line, or 38 under a two-row prompt. That threshold and
 the wording of the question are specified with the rest of the editor's
 style; see `EditorStyle.ListQuery`.
 

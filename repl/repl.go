@@ -469,6 +469,15 @@ type Shell struct {
 	// left alone (#6068).
 	RunCompletion func(ctx context.Context, name string, c Completion) []Candidate
 
+	// ListScrollPrompt is the line drawn under each page of a completion
+	// listing too tall for the terminal, for where the listing stands, and
+	// whether listings are paged at all. Paged, a listing is never asked
+	// about first, however many matches it has. Nil, or false, is a session
+	// whose listings are drawn whole — after asking, where there are enough
+	// of them. zsh's is its LISTPROMPT parameter, read while zsh/complist
+	// is loaded; see listscroll.go.
+	ListScrollPrompt func(ListScrollView) (string, bool)
+
 	// HistoryRecorders are told every line this session records, besides the
 	// history file, which is always told too. Nil is a session whose history
 	// is the file and nothing else.
@@ -2950,6 +2959,9 @@ func (s Shell) newEditor(ctx context.Context, state *terminalState) *editor {
 		// keeps one in a parameter. Read on the keystroke rather than taken
 		// here, because a person sets it at the prompt.
 		listThreshold: s.listQueryThreshold(),
+		// And whether a long listing is paged, read on the keystroke for
+		// the same reason: the parameter is a person's to set.
+		listScroll: s.ListScrollPrompt,
 		// And how long a half-typed key sequence is waited on, where this
 		// dialect keeps that in a parameter. Read on the keystroke for the
 		// same reason the threshold above is.

@@ -238,6 +238,8 @@ func compaddBuiltin(r *interp.Runner, ctx context.Context, args []string) int {
 // that is not an option, and at a `-` on its own — which is a candidate.
 func compaddParse(r *interp.Runner, args []string) (compaddOptions, []string, bool) {
 	var o compaddOptions
+	// The letters whose first value stands. See compaddFirstWins.
+	taken := map[byte]bool{}
 	i := 0
 	for ; i < len(args); i++ {
 		word := args[i]
@@ -279,7 +281,10 @@ func compaddParse(r *interp.Runner, args []string) (compaddOptions, []string, bo
 					i++
 					value = args[i]
 				}
-				compaddArgument(&o, letter, value)
+				if first := compaddFirstWins[letter]; first == 0 || !taken[first] {
+					compaddArgument(&o, letter, value)
+					taken[first] = first != 0
+				}
 				j = len(letters)
 			default:
 				r.Diagnosef("bad option: -%c\n", letter)
@@ -288,6 +293,33 @@ func compaddParse(r *interp.Runner, args []string) (compaddOptions, []string, bo
 		}
 	}
 	return o, args[i:], true
+}
+
+// compaddFirstWins is the letters whose value is taken from their first
+// appearance in a call, and a later one is read and dropped (#6156). Each maps
+// to the field it fills, so `-J` and `-V`, which name the same block, share
+// one: whichever comes first names it. Measured 2026-10-06 through a
+// pseudo-terminal against zsh 5.9.2, a `zle -C` widget over `alpha1` and
+// `alpha2`, two Tabs:
+//
+//	compadd -X HA -X HB …                   the heading is HA
+//	compadd -x MA -x MB …                   the message is MA
+//	compadd -J ga -X HA -J gb -X HB …; compadd -J gb -X HC beta
+//	                                        HA over alpha1 alpha2, and HC over
+//	                                        beta: the block is ga, not gb
+//	compadd -V ga … -V gb …                 the same
+//	compadd -J ga -X HA -V gb …             ga
+//	compadd -P pa -P pb -S sa -S sb …       the line is `x paalpha`
+//	compadd -p pa -p pb …                   `x paalpha…`
+//
+// which is what `_ssh` reaches: its call carries the heading `_ssh` asked for
+// and then the one `_hosts` asks for, `-J hosts -X ' -- remote host name --'
+// … -J hosts -X ' -- host --'`, and zsh draws the first. `-O`, `-A`, `-D` and
+// `-M` gather every value they are given, and the letters not named here are
+// not measured.
+var compaddFirstWins = map[byte]byte{
+	'P': 'P', 'S': 'S', 'p': 'p', 's': 's',
+	'J': 'J', 'V': 'J', 'X': 'X', 'x': 'x',
 }
 
 func compaddFlag(o *compaddOptions, letter byte) {

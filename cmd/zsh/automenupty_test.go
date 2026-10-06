@@ -93,6 +93,17 @@ func TestARepeatedTabStartsAMenu(t *testing.T) {
 		press(t, control, screen, "\x05\x7f\x7f\x7f\x7f\x7f\t", "x a", listing)
 	})
 
+	// Where the first Tab fills in what the matches agree on, the second
+	// lists and only the third starts the menu: the repeat waits for the
+	// listing.
+	t.Run("after a fill, the Tab after the listing", func(t *testing.T) {
+		control, screen := widgetSession(t, "mkdir am && : >am/alpha1 && : >am/alpha2 && cd am")
+		t.Cleanup(func() { _, _ = control.WriteString("\x01\x0b") })
+		press(t, control, screen, "x a\t", "x alpha", "")
+		press(t, control, screen, "\t", "x alpha", "alpha1  alpha2")
+		press(t, control, screen, "\t", "x alpha1", "alpha1  alpha2")
+	})
+
 	t.Run("the control, with the option off", func(t *testing.T) {
 		control, screen := widgetSession(t, dir, "unsetopt automenu")
 		t.Cleanup(func() { _, _ = control.WriteString("\x01\x0b") })

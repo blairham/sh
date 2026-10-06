@@ -23,6 +23,15 @@ type EditorStyle struct {
 	// line — so the zero value ignores the key, as this editor always did.
 	SendBreakOnControlG bool
 
+	// WideEmacsKeymap puts the keys zsh's emacs keymap has beyond the
+	// editor's shared table on the emacs keymap: the case keys `M-u`, `M-l`
+	// and `M-c` and transpose-words on `M-t`, measured 2026-10-06 with
+	// `bindkey -M emacs` on zsh 5.9.2. Not in vi editing, whose insert
+	// keymap has none of them. The zero value leaves them doing nothing, as
+	// this editor always did — see repl/defaultkeys.go for why bash's
+	// spellings of the same keys are not simply these (#6241).
+	WideEmacsKeymap bool
+
 	// ListOnControlD makes `^D` on a line with something typed the action
 	// that deletes the character under the cursor or, with none under it,
 	// lists the matches for the word before it — zsh's delete-char-or-list.

@@ -3040,6 +3040,7 @@ func (s Shell) newEditor(ctx context.Context, state *terminalState) *editor {
 		searchForwardInvalid: s.History.SearchForwardInvalidPrompt,
 		searchOnControlX:     s.Editor.SearchOnControlX,
 		sendBreakOnControlG:  s.Editor.SendBreakOnControlG,
+		wideEmacsKeymap:      s.Editor.WideEmacsKeymap,
 		listOnControlD:       s.Editor.ListOnControlD,
 		searchSmartCase:      s.History.SearchIgnoresCaseUnlessTold,
 		searchCaretAnchors:   s.History.SearchCaretAnchors,

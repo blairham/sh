@@ -1191,6 +1191,61 @@ would notice.
   which say whether input is waiting and not how many calls there were.
   zsh-vi-mode is not installed there and was not checked.
 
+## Emacs keys one dialect has and the other does not
+
+zsh's emacs keymap binds keys the editor's shared table does not carry,
+because bash either leaves them alone or puts something else on them.
+`repl.EditorStyle.WideEmacsKeymap` is the field; the keys are on the emacs
+keymap only, never on vi insert (#6241). Measured 2026-10-06 through a
+pseudo-terminal against zsh 5.9.2, `zsh -f`, a two-row prompt, the line and
+cursor read back with a widget calling `zle -M`.
+
+### Changing a word's case
+
+`M-u` up-case-word, `M-l` down-case-word and `M-c` capitalize-word, and the
+same three on the upper-case letters. Each goes over the non-word characters
+after the cursor and then the word after them — a word being the one the
+motion keys use, letters, digits and `WORDCHARS` — changing the case of all
+of it, and leaves the cursor at the end of the word. From the middle of a
+word that is the rest of the word: `M-u` on the `c` of `echo abc def` gives
+`echo abC def`. capitalize-word upper-cases the first *letter* it meets in
+each word and lower-cases every later one: `3ab` becomes `3Ab`, `foo-bar`
+becomes `Foo-bar`, and `aBC` from the `B` becomes `aBc`.
+
+A count is that many words; a negative count does as many words forward and
+leaves the cursor where it was; a count of nought does nothing. At the end of
+the line nothing changes.
+
+### Swapping two words
+
+`M-t` transpose-words. Its word is the one under the cursor, or else the next
+word after it, or else — with only non-word characters ahead — the last word
+before it. That word swaps with the word *n* words before it (a count, one by
+default), what lies between the two staying where it was, and the cursor goes
+to the end of the later of the two:
+
+| line | cursor | keys | result | cursor |
+| --- | --- | --- | --- | --- |
+| `echo abc def` | 7 | `M-t` | `abc echo def` | 8 |
+| `aa bb cc` | 0, 1 | `M-t` | unchanged | unchanged |
+| `aa bb cc` | 2 to 4 | `M-t` | `bb aa cc` | 5 |
+| `aa bb cc` | 5 to 8 | `M-t` | `aa cc bb` | 8 |
+| `aa bb cc dd` | 11 | `ESC 2 M-t` | `aa dd cc bb` | 11 |
+| `aa bb cc dd` | 11 | `ESC 9 M-t` | unchanged | 11 |
+| `aa bb cc dd` | 4 | `ESC 0 M-t` | unchanged | 5 |
+| `aa bb cc dd` | 6 | `ESC - M-t` | `aa cc bb dd` | 6 |
+
+So a count does not move a word *past* the words between: it exchanges the
+two ends. Too few words before is nothing at all, the cursor included; nought
+is the word swapped with itself, which moves only the cursor; and a negative
+count is the same exchange with the cursor left where it was.
+
+Each of the four is one change to undo.
+
+bash binds `M-u`, `M-l`, `M-c` and `M-t` too, to readline's own versions —
+its words are letters and digits, and a negative count works backward — and
+none of that is measured here, so in bash the keys still do nothing.
+
 ## What is still missing
 
 Measured to exist in both shells and not implemented here, so that the gap is
@@ -1226,7 +1281,8 @@ was on this list and is not any more — `^R` is `repl/search.go` and
   has now.
 - **`M-y`** — walk back through earlier kills. This keeps one kill rather
   than a ring, so there is nothing to walk.
-- **Case and other word operators** — `M-u`, `M-l`, `M-c`.
+- **Case and other word operators in bash** — `M-u`, `M-l`, `M-c` and
+  `M-t`. zsh's are built; see the section above.
 - **The rest of vi command mode.** What is built is in the section above; these
   are measured to exist and are not:
   - `.`, which repeats the last change, and `U`, which takes the whole line

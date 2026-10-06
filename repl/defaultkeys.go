@@ -118,6 +118,35 @@ func ControlXSearchBindings() map[string]Widget {
 	return out
 }
 
+// wideEmacsKeys are the keys EditorStyle.WideEmacsKeymap adds to the table,
+// in the emacs keymap only: what one dialect's emacs keymap binds and the
+// other's either leaves alone or binds to something else (#6241).
+//
+// Measured 2026-10-06 with `bindkey -M emacs` on zsh 5.9.2, and the upper-case
+// spellings are bound to the same widgets as the lower. bash 5.3 binds the
+// four of these it has too, but its words and its counts are readline's — a
+// negative count works backward there — and they are not measured here.
+var wideEmacsKeys = map[string]Widget{
+	"\x1bu": WidgetUpCaseWord,
+	"\x1bU": WidgetUpCaseWord,
+	"\x1bl": WidgetDownCaseWord,
+	"\x1bL": WidgetDownCaseWord,
+	"\x1bc": WidgetCapitalizeWord,
+	"\x1bC": WidgetCapitalizeWord,
+	"\x1bt": WidgetTransposeWords,
+	"\x1bT": WidgetTransposeWords,
+}
+
+// WideEmacsBindings is wideEmacsKeys for a dialect's key listing, as a copy
+// for the reason DefaultBindings gives.
+func WideEmacsBindings() map[string]Widget {
+	out := make(map[string]Widget, len(wideEmacsKeys))
+	for seq, w := range wideEmacsKeys {
+		out[seq] = w
+	}
+	return out
+}
+
 // defaultKey is what this editor does with a key nobody rebound: the shared
 // table, and the dialect's own additions to it.
 func (e *editor) defaultKey(seq string) (Widget, bool) {
@@ -125,8 +154,14 @@ func (e *editor) defaultKey(seq string) (Widget, bool) {
 		return w, true
 	}
 	if e.searchOnControlX {
-		w, ok := controlXSearchKeys[seq]
-		return w, ok
+		if w, ok := controlXSearchKeys[seq]; ok {
+			return w, true
+		}
+	}
+	if e.wideEmacsKeymap && !e.viEditing() {
+		if w, ok := wideEmacsKeys[seq]; ok {
+			return w, true
+		}
 	}
 	return WidgetNone, false
 }

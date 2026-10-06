@@ -73,6 +73,14 @@ func (e *editor) escape(prompt drawnPrompt) keyRead {
 		// both shells act on both.
 		e.change(false, func() { e.killTo(e.backwardWord()) })
 		e.redraw(prompt)
+	default:
+		// A key one dialect's emacs keymap has and the shared table does
+		// not — see wideEmacsKeys. Run as the binding it is, so that an
+		// action reading its own count is not played again by its key.
+		if w, ok := e.defaultKey(string([]byte{esc, b})); ok {
+			e.keyBinding = &Binding{Widget: w}
+			e.runWidget(*e.keyBinding, prompt)
+		}
 	}
 	// Anything else is a key this does not act on, and the ESC and the byte
 	// after it are dropped together. Measured: both shells do nothing at all

@@ -118,6 +118,25 @@ type editor struct {
 	// is going on. See completemenu.go, which is the whole of it.
 	menu menuWalk
 
+	// completionNow and completionBefore are what a completion key left
+	// behind — the word still ambiguous, and whether its matches were drawn
+	// — for this keystroke and the one before it, rolled in the key loop
+	// the way lastTab is. They decide whether a completion starts a menu;
+	// see menuReason.
+	completionNow, completionBefore completionLeft
+
+	// quietSecondKey is a session in which a second completion key does not
+	// list the matches either, because the dialect names an option for that
+	// and it is off. autoMenu starts a menu completion on a repeated
+	// completion, menuFirst starts one on the first, and bellsOnAMenu rings
+	// as one starts. See EditorStyle.ListMatchesOnASecondKeyOption,
+	// MenuOnARepeatedCompletionOption, MenuOnTheFirstCompletionOption and
+	// BellRingsWhenAMenuStarts.
+	quietSecondKey bool
+	autoMenu       bool
+	menuFirst      bool
+	bellsOnAMenu   bool
+
 	// shellComplete asks the shell's own completion system what a word could
 	// become, by the name of the action a key's binding named — see
 	// Binding.Candidates. Nil is a session whose front end gave it no such
@@ -786,6 +805,7 @@ func (e *editor) keyLoop(prompt drawnPrompt) (string, error) {
 		// beginning a fresh one. The same shape as the line above and for the
 		// same reason — see completemenu.go.
 		e.menu.before, e.menu.now = e.menu.now, false
+		e.completionBefore, e.completionNow = e.completionNow, completionLeftNothing
 		// Whether the keystroke before this one was a kill, which is what
 		// decides between joining onto what ^Y holds and replacing it.
 		//

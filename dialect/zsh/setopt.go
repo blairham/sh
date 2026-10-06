@@ -403,7 +403,11 @@ var zshOptions = []zshOption{
 	// with the bell and the listing, and with it off the same key writes the
 	// bell alone and the listing waits for a second (#3714).
 	storeBacked("autolist", true),
-	recorded("automenu", true),
+	// AUTO_MENU is read by the line editor on every completion key — see
+	// repl.EditorStyle.MenuOnARepeatedCompletionOption — so it is not
+	// `recorded`: a repeated Tab on an ambiguous word starts a menu
+	// completion with it on and lists again with it off (#6197).
+	storeBacked("automenu", true),
 	recorded("autonamedirs", false),
 	recorded("autoparamkeys", true),
 	recorded("autoparamslash", true),
@@ -511,7 +515,9 @@ var zshOptions = []zshOption{
 	// interp.TrailingGroupIsPartOfThePattern, which the pattern matcher reads
 	// and which is named for the state this one turns *off*.
 	matchBacked("bareglobqual", true, interp.TrailingGroupIsPartOfThePattern, true),
-	recorded("bashautolist", false),
+	// BASH_AUTO_LIST is read by the line editor on every completion key —
+	// see repl.EditorStyle.ListMatchesOnASecondKeyOption (#6197).
+	storeBacked("bashautolist", false),
 	recorded("bashrematch", false),
 	recorded("beep", true),
 	recorded("bgnice", true),
@@ -1531,7 +1537,9 @@ var zshOptions = []zshOption{
 			return 0
 		},
 	},
-	recorded("menucomplete", false),
+	// MENU_COMPLETE is read by the line editor on every completion key —
+	// see repl.EditorStyle.MenuOnTheFirstCompletionOption (#6197).
+	storeBacked("menucomplete", false),
 	// The switch job control really is: the same one `set -m` moves, so the
 	// two spellings are one state read and written through one seam. Granted
 	// in both directions where the shell has a terminal and refused with

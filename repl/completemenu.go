@@ -102,42 +102,121 @@ type menuWalk struct {
 //     became `cat zzsolo `, which is what Tab does with it.
 //   - Nothing is nothing.
 //
-// It draws no listing. The shell being measured drew one on the first press,
-// and that listing is not the menu's: with `unsetopt autolist` the same
-// keystroke inserted `uniq_alpha` and drew nothing, while `list-choices` went
-// on listing. A menu implemented as "complete and also list" would have passed
-// the first probe and been wrong about what the action is.
+// The listing it draws on the first press is the listing option's and not the
+// menu's: with `unsetopt autolist` the same keystroke inserted `uniq_alpha` and
+// drew nothing, while `list-choices` went on listing. See menuStarted.
 func (e *editor) menuComplete(c Completer, builtin bool, step int, prompt drawnPrompt) {
-	if !e.menu.before && builtin && e.tabOnABlankLine(prompt) {
+	if e.stepMenu(step, prompt) {
 		return
 	}
-	if e.menu.before && len(e.menu.words) > 1 {
-		n := len(e.menu.words)
-		e.menu.index = (e.menu.index + step + n) % n
-		e.change(false, func() { e.replaceWord(e.menu.start, e.menu.words[e.menu.index]) })
-		e.menu.now = true
-		e.redraw(prompt)
+	if builtin && e.tabOnABlankLine(prompt) {
 		return
 	}
-	start, word, matches := e.candidates(c)
-	var typed bool
-	e.change(false, func() { typed = e.typesTheKey(matches) })
-	if typed {
-		e.redraw(prompt)
+	var matches []Candidate
+	var did completionOutcome
+	e.change(false, func() { matches, did = e.completeAs(c, e.menuReason(e.completedBefore, MenuAsked), step) })
+	if did == completionStartedAMenu {
+		e.menuStarted(matches, prompt)
 		return
 	}
-	words := insertableWords(matches)
-	switch len(words) {
-	case 0:
-	case 1:
-		e.change(false, func() { e.replaceWord(start, words[0]+loneSuffix(matches, word)) })
-	default:
-		first := 0
-		if step < 0 {
-			first = len(words) - 1
-		}
-		e.menu = menuWalk{now: true, words: words, index: first, start: start}
-		e.change(false, func() { e.replaceWord(start, words[first]) })
+	e.redraw(prompt)
+}
+
+// menuReason is whether a completion key starting now starts a menu, and why,
+// given whether the key before it was a completion and what the key itself
+// asks for.
+//
+// The repeat is zsh's AUTO_MENU, and it is not "the second Tab". Measured
+// 2026-10-06 through a pseudo-terminal against zsh 5.9.2, `x a` typed over
+// `alpha1`, `alpha2` and `zz`, Tab after Tab:
+//
+//	options             Tab 1      Tab 2              Tab 3
+//	(defaults)          `alpha`    the listing        \a `alpha1`
+//	unsetopt autolist   `alpha`    \a `alpha1`        `alpha2`
+//
+// So the menu waits for the listing where there is one to wait for: a repeat
+// whose key would be the first to list the matches lists them, and the key
+// after it starts the menu. Over `always` and `auto`, where the first Tab has
+// nothing to fill in and lists, the second starts it. A completion between
+// them that settled the word, or a key that was not a completion, starts the
+// count again — `x a`, Tab, `^E`, Tab lists twice.
+func (e *editor) menuReason(wasTab bool, asked MenuReason) MenuReason {
+	if e.autoMenu && e.completionBefore != completionLeftNothing &&
+		(e.completionBefore == completionListedIt || !e.listsOn(wasTab)) {
+		return MenuOnARepeat
 	}
+	if asked != MenuNotStarted || e.menuFirst {
+		return MenuAsked
+	}
+	return MenuNotStarted
+}
+
+// completionLeft is what the completion key before this one left behind, which
+// is what decides whether this one starts a menu. See menuReason.
+type completionLeft uint8
+
+const (
+	// completionLeftNothing: the key before was not a completion, or it
+	// settled the word or found nothing.
+	completionLeftNothing completionLeft = iota
+	// completionLeftItAmbiguous: it filled in what the matches agree on, or
+	// had nothing to fill in, and drew no listing.
+	completionLeftItAmbiguous
+	// completionListedIt: it left the word ambiguous and drew the listing.
+	completionListedIt
+)
+
+// startMenu begins a menu completion over words, which replace the word that
+// begins at start: at the match numbered at — see MenuCompletion — or, where
+// at is zero, at the first match going forward and the last going back.
+func (e *editor) startMenu(start int, words []string, at, step int) {
+	n := len(words)
+	first := 0
+	switch {
+	case at > 0:
+		first = (at - 1) % n
+	case at < 0:
+		first = ((at % n) + n) % n
+	case step < 0:
+		first = n - 1
+	}
+	e.menu = menuWalk{now: true, words: words, index: first, start: start}
+	e.replaceWord(start, words[first])
+}
+
+// stepMenu moves a menu completion in flight on by step, wrapping, and reports
+// whether there was one to move.
+func (e *editor) stepMenu(step int, prompt drawnPrompt) bool {
+	if !e.menu.before || len(e.menu.words) < 2 {
+		return false
+	}
+	n := len(e.menu.words)
+	e.menu.index = (e.menu.index + step + n) % n
+	e.change(false, func() { e.replaceWord(e.menu.start, e.menu.words[e.menu.index]) })
+	e.menu.now = true
+	e.redraw(prompt)
+	return true
+}
+
+// menuStarted finishes the keystroke that started a menu completion: the bell,
+// where the dialect rings one, and the listing, where the listing option is on
+// and the matches are not already drawn.
+//
+// Measured 2026-10-06 through a pseudo-terminal against zsh 5.9.2, `x a` over
+// `always` and `auto`: the keystroke that starts a menu writes `\a` and then
+// the first match, whichever route started it — the Tab after a listing, a
+// first Tab under MENU_COMPLETE, a `menu-complete` widget and a
+// `reverse-menu-complete` one — and the keystrokes that walk it write no bell.
+// The listing came with it on a first press (MENU_COMPLETE, and the widgets)
+// and was left as it stood where a Tab had already drawn it. See
+// EditorStyle.BellRingsWhenAMenuStarts.
+func (e *editor) menuStarted(matches []Candidate, prompt drawnPrompt) {
+	if e.bellsOnAMenu {
+		e.ring()
+	}
+	if e.listsMatches && e.completionBefore != completionListedIt && e.confirmList(matches, prompt) {
+		e.returnToTheLine(e.list(matches, prompt), prompt)
+	}
+	e.completionNow = completionListedIt
 	e.redraw(prompt)
 }

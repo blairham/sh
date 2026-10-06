@@ -542,6 +542,34 @@ type EditorStyle struct {
 	// no such option, and the listing waits for a second key.
 	ListMatchesWithoutASecondKeyOption string
 
+	// ListMatchesOnASecondKeyOption names the option under which a second
+	// completion key in a row lists an ambiguous word's matches. Empty is a
+	// dialect whose second key always lists them, which is bash's answer.
+	// Named, it is zsh's BASH_AUTO_LIST: on, the second key lists and the
+	// first does not whatever ListMatchesWithoutASecondKeyOption says; off,
+	// the second key lists nothing either. Measured 2026-10-06 against zsh
+	// 5.9.2 — see editor.listsOn for the table.
+	ListMatchesOnASecondKeyOption string
+
+	// MenuOnARepeatedCompletionOption names the option under which a
+	// completion key pressed again on a word the last one left ambiguous
+	// starts a menu completion — the first match in the line, and each
+	// press after it the next — rather than listing the matches again:
+	// zsh's AUTO_MENU, on by default. MenuOnTheFirstCompletionOption names
+	// the one that starts the menu on the first press: zsh's MENU_COMPLETE.
+	// Empty is a dialect with no such option, whose Tab never starts one.
+	// Measured 2026-10-06 against zsh 5.9.2 (#6197) — see menuReason in
+	// completemenu.go for the table and for why the repeat waits for a
+	// listing.
+	MenuOnARepeatedCompletionOption string
+	MenuOnTheFirstCompletionOption  string
+
+	// BellRingsWhenAMenuStarts sounds the bell on the keystroke that starts
+	// a menu completion, by whatever route, and not on those that walk it.
+	// Measured 2026-10-06: zsh 5.9.2 writes `\a` before the first match on
+	// every route, and bash 5.3's `menu-complete` writes none.
+	BellRingsWhenAMenuStarts bool
+
 	// ListPackedOption names the option that lets each column of a listing
 	// be as wide as its own longest match, where that takes fewer rows, and
 	// ListRowsFirstOption the one that fills a listing across its rows

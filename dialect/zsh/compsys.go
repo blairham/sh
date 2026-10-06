@@ -194,6 +194,7 @@ func RunCompletion(
 		return nil
 	}
 	cs := newCompletionState(c)
+	cs.state["insert"] = insertOnEntry(r, c.Menu)
 	expandCommandAlias(r, cs)
 	openCompletionParameters(r, cs)
 	defer closeCompletionParameters(r)
@@ -242,7 +243,73 @@ func RunCompletion(
 		// repl.CompletionInsertsTheKey.
 		return repl.CompletionInsertsTheKey()
 	}
-	return cs.groupedMatches()
+	return insertAsAsked(cs.state["insert"], cs.groupedMatches())
+}
+
+// insertOnEntry is `compstate[insert]` as a completion function finds it: how
+// the editor means to put an ambiguous answer in the line, in zshcompwid's
+// words for it.
+//
+// Measured 2026-10-06 through a pseudo-terminal against zsh 5.9.2, a `zle -C`
+// function printing the value on entry, over `always` and `auto`:
+//
+//	first Tab                                   automenu-unambiguous
+//	the Tab after it listed                     automenu
+//	first Tab, unsetopt automenu                unambiguous, and again after
+//	first Tab, setopt menucomplete              menu
+//	a menu-complete or reverse-menu-complete    menu
+//	a menu-complete after a Tab listed          automenu
+//
+// and a function is not called at all for the Tabs that walk a menu once it
+// has started.
+func insertOnEntry(r *interp.Runner, menu repl.MenuReason) string {
+	switch menu {
+	case repl.MenuOnARepeat:
+		return "automenu"
+	case repl.MenuAsked:
+		return "menu"
+	}
+	if on, _ := conditionOption(r, "automenu"); on {
+		return "automenu-unambiguous"
+	}
+	return "unambiguous"
+}
+
+// insertAsAsked is the matches with the function's last word on how they go
+// in: `compstate[insert]` as it stands when the function returns.
+//
+// `menu` and `automenu` start a menu completion, at the match a `:N` after
+// either names; `unambiguous` and `automenu-unambiguous` put in what the
+// matches agree on and start none, whatever the key would have done — which
+// is how the completion system's `menu` style reaches the line. Measured
+// 2026-10-06 against zsh 5.9.2 with `compinit` and `x a` over `always` and
+// `auto`, the line after one, two and three Tabs:
+//
+//	zstyle ':completion:*' menu …   1 Tab      2 Tabs     3 Tabs
+//	(not set)                       x a        x always   x auto
+//	yes, true, yes select           x always   x auto     x always
+//	select, select=2                x a        x always   x auto
+//	no                              x a        x a        x a
+//
+// `select` asks for the interactive selection of zsh/complist, which this
+// shell does not have (#5761); the walk is what it comes to here, and the
+// line reads as it does in zsh after each of those Tabs.
+//
+// Anything else — a number, `all`, an empty value — is not drawn here, and
+// the editor answers as it would have.
+func insertAsAsked(insert string, matches []repl.Candidate) []repl.Candidate {
+	if len(matches) == 0 {
+		return matches
+	}
+	mode, number, _ := strings.Cut(insert, ":")
+	switch mode {
+	case "menu", "automenu":
+		at, _ := strconv.Atoi(number)
+		return repl.MenuCompletion(matches, at)
+	case "unambiguous", "automenu-unambiguous":
+		return repl.PrefixCompletion(matches)
+	}
+	return matches
 }
 
 // newCompletionState splits the word the editor asked about the way zsh

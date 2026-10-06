@@ -221,7 +221,8 @@ second Tab, which then lists and is itself silent. Specified with the
 rest of the editor's style, as
 `EditorStyle.ListMatchesWithoutASecondKeyOption` — named for the option
 because it is one a person turns off, and measured: `unsetopt autolist`
-in zsh leaves the same keystroke writing the bell alone.
+in zsh leaves the same keystroke writing the bell alone, and the second
+keystroke lists nothing either (see the menu below).
 
 Row three is where the two shells ask **different questions**, and it is
 a dialect's answer rather than the core's: bash asks whether the *word
@@ -289,7 +290,49 @@ rule could not be mistaken for the action:
 `autolist` turned off the same keystroke inserts `uniq_alpha` and draws
 nothing, while the listing key goes on listing. A menu implemented as
 "complete, and also list" passes the first observation and is not what
-the action is.
+the action is. The listing is `autolist`'s, and it is drawn under that
+option as the menu starts.
+
+**A Tab pressed again can start the menu.** zsh's `AUTO_MENU`, on by
+default, makes a completion key pressed again on a word the last one left
+ambiguous put the first match in the line, and each press after it the
+next, where without it the matches are listed again (#6197). Measured
+2026-10-06 through a pseudo-terminal against zsh 5.9.2, `x a` typed over
+`always` and `auto`:
+
+| options | Tab 1 | Tab 2 | Tab 3 |
+| --- | --- | --- | --- |
+| (defaults) | `\a` and the listing | `\a` `x always` | `x auto` |
+| `unsetopt automenu` | `\a` and the listing | `\a` and the listing again | `\a` and the listing again |
+| `setopt menucomplete` | `\a` `x always` and the listing | `x auto` | `x always` |
+| `unsetopt autolist` | `\a` | `\a` `x always` | `x auto` |
+| `unsetopt autolist automenu` | `\a` | `\a` | `\a` |
+| `setopt bashautolist` | `\a` | the listing | `\a` `x always` |
+
+The menu **waits for the listing** where there is one to wait for: over
+`alpha1`, `alpha2` and `zz`, the first Tab fills in `alpha`, the second
+lists, and only the third starts the menu — unless `autolist` is off,
+when the second does. And with `autolist` off **no key lists**, where
+bash lists on the second: `bashautolist` is the option that gives zsh
+bash's answer, and it takes the first key's listing away when it does.
+The keystroke that starts a menu rings, by every route — the Tab, a
+`menu-complete` and a `reverse-menu-complete` widget — and the ones that
+walk it do not. The editor's style carries all of it:
+`EditorStyle.MenuOnARepeatedCompletionOption`,
+`MenuOnTheFirstCompletionOption`, `ListMatchesOnASecondKeyOption` and
+`BellRingsWhenAMenuStarts`.
+
+A completion function decides for itself through `compstate[insert]`. It
+finds `automenu-unambiguous` on a first Tab, `automenu` on the Tab after a
+listing, `unambiguous` with the option off, and `menu` under
+`menucomplete` or on a `menu-complete` widget; and what it leaves there
+is obeyed — `menu` or `automenu`, with a `:N` for the match to start at,
+starts the menu, and `unambiguous` keeps it from starting. The function is
+not called again for the Tabs that walk a menu once it has started. That
+is how the completion system's `menu` style reaches the line, and
+`menu select` comes to the walk here: the interactive selection it asks
+for is zsh/complist's, which this shell does not have (#5761), and the
+line after each Tab reads as it does in zsh.
 
 **A menu lasts exactly as long as the keystrokes are adjacent.** Anything
 else pressed between two of them ends it, and the next press starts a

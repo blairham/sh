@@ -263,13 +263,23 @@ const (
 	// WidgetKillWholeLine, under a dialect whose `^U` is the whole line,
 	// takes it too. It reads its own count — see backwardKillLine (#5960).
 	WidgetBackwardKillLine
+
+	// A word's case changed from the cursor on, and two words swapped: the
+	// emacs keys `M-u`, `M-l`, `M-c` and `M-t`. Each reads its own count,
+	// because a count is not "do it again" for any of them — see
+	// casewords.go, which has the measurements (#6241).
+	WidgetUpCaseWord
+	WidgetDownCaseWord
+	WidgetCapitalizeWord
+	WidgetTransposeWords
 )
 
 // takesItsCount is whether the action reads the count itself, so that a key
 // pressed with one is performed once and not played again as many times.
 func (w Widget) takesItsCount() bool {
 	switch w {
-	case WidgetBackwardKillLine, WidgetHistoryBeginningSearchBackward, WidgetHistoryBeginningSearchForward:
+	case WidgetBackwardKillLine, WidgetHistoryBeginningSearchBackward, WidgetHistoryBeginningSearchForward,
+		WidgetUpCaseWord, WidgetDownCaseWord, WidgetCapitalizeWord, WidgetTransposeWords:
 		return true
 	}
 	return false
@@ -443,6 +453,18 @@ func (e *editor) runWidget(b Binding, prompt drawnPrompt) {
 		e.redraw(prompt)
 	case WidgetTransposeChars:
 		e.transpose()
+		e.redraw(prompt)
+	case WidgetUpCaseWord:
+		e.change(false, func() { e.caseWords(e.countAsGiven(), upperCase) })
+		e.redraw(prompt)
+	case WidgetDownCaseWord:
+		e.change(false, func() { e.caseWords(e.countAsGiven(), lowerCase) })
+		e.redraw(prompt)
+	case WidgetCapitalizeWord:
+		e.change(false, func() { e.caseWords(e.countAsGiven(), capitalCase) })
+		e.redraw(prompt)
+	case WidgetTransposeWords:
+		e.change(false, func() { e.transposeWords(e.countAsGiven()) })
 		e.redraw(prompt)
 	case WidgetSelfInsert:
 		// The key this keystroke is about — see editor.typedKey, which is

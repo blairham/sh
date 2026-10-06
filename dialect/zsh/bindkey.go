@@ -103,6 +103,12 @@ var bindkeyWidgets = map[string]repl.Widget{
 	"kill-word":             repl.WidgetKillWordAfter,
 	"yank":                  repl.WidgetYank,
 	"transpose-chars":       repl.WidgetTransposeChars,
+	// The case keys and the word swap, on `M-u`, `M-l`, `M-c` and `M-t` in
+	// the emacs keymap. See repl/casewords.go (#6241).
+	"up-case-word":    repl.WidgetUpCaseWord,
+	"down-case-word":  repl.WidgetDownCaseWord,
+	"capitalize-word": repl.WidgetCapitalizeWord,
+	"transpose-words": repl.WidgetTransposeWords,
 	// Typing. Not a key anybody binds — it is what a printable key does when
 	// nothing else claims it — but a name a shell can *redefine*, which is what
 	// a syntax highlighter needs: it wraps every name in `$widgets`, and the one
@@ -229,6 +235,10 @@ var widgetNames = map[repl.Widget]string{
 	repl.WidgetKillWordAfter:                  "kill-word",
 	repl.WidgetYank:                           "yank",
 	repl.WidgetTransposeChars:                 "transpose-chars",
+	repl.WidgetUpCaseWord:                     "up-case-word",
+	repl.WidgetDownCaseWord:                   "down-case-word",
+	repl.WidgetCapitalizeWord:                 "capitalize-word",
+	repl.WidgetTransposeWords:                 "transpose-words",
 	repl.WidgetSelfInsert:                     "self-insert",
 	repl.WidgetPreviousHistory:                "up-line-or-history",
 	repl.WidgetNextHistory:                    "down-line-or-history",
@@ -330,6 +340,20 @@ var endOfInputKeys = map[string]bool{"\x04": true}
 // sendBreakKey is `^G`, send-break in the emacs keymap.
 const sendBreakKey = "\x07"
 
+// emacsBindings is what the emacs keymap has beyond defaultBindings, which
+// viins shares: `^G`, and the keys repl.EditorStyle.WideEmacsKeymap puts on
+// the editor (#5913, #6241). The editor acts on them by itself, so this is
+// the listing's half.
+var emacsBindings = buildEmacsBindings()
+
+func buildEmacsBindings() map[string]string {
+	out := map[string]string{sendBreakKey: widgetNames[repl.WidgetSendBreak]}
+	for seq, w := range repl.WideEmacsBindings() {
+		out[seq] = widgetNames[w]
+	}
+	return out
+}
+
 func buildDefaultBindings() map[string]string {
 	out := map[string]string{}
 	for seq, w := range repl.DefaultBindings() {
@@ -400,11 +424,12 @@ func KeyBindings(r *interp.Runner, km repl.Keymap) map[string]repl.Binding {
 			if standard, isDefault := defaultBindings[seq]; isDefault && standard == widget {
 				continue
 			}
-			// And `^G` at send-break in the emacs keymap, which is the
-			// editor's own there — see repl.EditorStyle.SendBreakOnControlG —
-			// and is listed rather than carried in defaultBindings because
-			// viins shares that table and has no such key.
-			if seq == sendBreakKey && widget == widgetNames[repl.WidgetSendBreak] && keymapBase(r, currentKeymap(r)) == "emacs" {
+			// And the emacs keymap's own keys — `^G` at send-break, and the
+			// case keys — which are the editor's own there — see
+			// repl.EditorStyle.SendBreakOnControlG and WideEmacsKeymap — and
+			// are listed rather than carried in defaultBindings because viins
+			// shares that table and has none of them.
+			if standard, isDefault := emacsBindings[seq]; isDefault && standard == widget && keymapBase(r, currentKeymap(r)) == "emacs" {
 				continue
 			}
 		}
@@ -617,8 +642,10 @@ func readBindings(r *interp.Runner, keymap string) map[string]string {
 		// on zsh 5.9.2; viins has list-expand there, which this shell does
 		// not have. The editor acts on it by itself — see
 		// repl.EditorStyle.SendBreakOnControlG — so this is the listing's
-		// half (#5913).
-		out[sendBreakKey] = widgetNames[repl.WidgetSendBreak]
+		// half (#5913). The same for the case keys and `M-t` (#6241).
+		for seq, w := range emacsBindings {
+			out[seq] = w
+		}
 	}
 	flat, _ := r.GetArray(bindkeyStore)
 	for i := 0; i+3 <= len(flat); i += 3 {

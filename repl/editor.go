@@ -298,6 +298,8 @@ type editor struct {
 	undoLimit int
 	// sendBreakOnControlG is EditorStyle.SendBreakOnControlG.
 	sendBreakOnControlG bool
+	// wideEmacsKeymap is EditorStyle.WideEmacsKeymap.
+	wideEmacsKeymap bool
 	// listOnControlD is EditorStyle.ListOnControlD.
 	listOnControlD bool
 	// breakRequested is a send-break an action asked for, which the key loop

@@ -946,8 +946,8 @@ func (sh Shell) listProgram(in source, r *interp.Runner, src string) int {
 	if err == nil {
 		return 0
 	}
-	sh.sayRemarks(in.dg, in.diagName(), p.Remarks(), 0, true)
-	sh.errf("%s", in.dg.ParseDiagnostic(in.diagName(), in.input, err, src))
+	sh.sayRemarks(in.remarkDiagnostics(r), in.remarkName(r), p.Remarks(), 0, true)
+	sh.errf("%s", in.parseDiagnostic(r, err, src, 0))
 	if in.scriptListing {
 		return sh.Semantics.ScriptListingOption.ParseFailureStatus
 	}
@@ -1256,6 +1256,65 @@ func (s source) diagName() string {
 		return s.dg.SelfName
 	}
 	return s.name
+}
+
+// speaksAsAtAPrompt is the interactive shell of the dialect that words what
+// it says the way it words a line typed at its prompt, on a route other than
+// the prompt's: `-i -c` and `-i script`. See
+// interp.Diagnostics.InteractiveShellSpeaksAsAtAPrompt.
+func (s source) speaksAsAtAPrompt(r *interp.Runner) bool {
+	return s.interactive && s.dg.InteractiveShellSpeaksAsAtAPrompt && r != nil && r.Interactive
+}
+
+// parseDiagnostic is the whole of what a parse failure in the program says.
+// reached is the line the program had got to, or nought; see
+// interp.Diagnostics.ParseDiagnosticAfter.
+//
+// An interactive bash words it two ways, by route, and neither is the
+// non-interactive one. Measured 2026-10-06 on bash 5.3.20, started as
+// `links/foo --norc -i`, with a script `s2.sh` of `true` and `fi`:
+//
+//	-c 'fi'      foo: syntax error near unexpected token `fi'
+//	-c $'echo a\nfor x in 1'
+//	             foo: syntax error: unexpected end of file from `for' command on line 2
+//	-c 'echo $(' foo: unexpected EOF while looking for matching `)'
+//	s2.sh        foo: s2.sh: line 2: syntax error near unexpected token `fi'
+//	             foo: s2.sh: line 2: `fi'
+//
+// So the string is worded as a line typed at the prompt is, with no `-c` and
+// no echo, and the file keeps its location and echo with the shell's name in
+// front of each line, as a startup file does (#6008, #6262).
+func (s source) parseDiagnostic(r *interp.Runner, err error, src string, reached int) string {
+	if !s.speaksAsAtAPrompt(r) {
+		return s.dg.ParseDiagnosticAfter(s.diagName(), s.input, err, src, reached)
+	}
+	name := r.DiagnosticName()
+	if s.file == "" {
+		return s.dg.ForPrompt().ParseDiagnostic(name, "", err, "")
+	}
+	msg := s.dg.ParseDiagnosticAfter(s.diagName(), s.input, err, src, reached)
+	lead := name + ": "
+	return lead + strings.ReplaceAll(strings.TrimSuffix(msg, "\n"), "\n", "\n"+lead) + "\n"
+}
+
+// remarkDiagnostics and remarkName are what a remark about the program is
+// worded and named by. For an interactive bash it is the prompt's on every
+// route — measured 2026-10-06, a here-document the input ended in `-i -c`
+// and in `-i s5.sh` alike is `foo: warning: here-document at line 1
+// delimited by end-of-file (wanted `EOF')`, with no file and no line in
+// front, where the same script without `-i` is `s5.sh: line 2: warning: …`.
+func (s source) remarkDiagnostics(r *interp.Runner) interp.Diagnostics {
+	if s.speaksAsAtAPrompt(r) {
+		return s.dg.ForPrompt()
+	}
+	return s.dg
+}
+
+func (s source) remarkName(r *interp.Runner) string {
+	if s.speaksAsAtAPrompt(r) {
+		return r.DiagnosticName()
+	}
+	return s.diagName()
 }
 
 // about a session.
@@ -3457,7 +3516,7 @@ func (sh Shell) executeLines(
 		} else {
 			echoed = sh.sayVerbose(r.Err(), pr.text(), upTo, echoed, r.Verbose())
 		}
-		shown = sh.sayRemarks(in.dg, in.diagName(), pr.remarks(), shown, !r.NoExec())
+		shown = sh.sayRemarks(in.remarkDiagnostics(r), in.remarkName(r), pr.remarks(), shown, !r.NoExec())
 	}
 	// A builtin can change the grammar for the lines after it — a run-time
 	// option can decide whether a quantified group is a group. The runner
@@ -3539,8 +3598,8 @@ func (sh Shell) executeLines(
 				// failure, which is measured — a here document with neither
 				// its delimiter nor its enclosing `}` produces both, warning
 				// first.
-				sh.sayRemarks(in.dg, in.diagName(), p.Remarks(), 0, true)
-				sh.errf("%s", in.dg.ParseDiagnostic(in.diagName(), in.input, err, pr.text()))
+				sh.sayRemarks(in.remarkDiagnostics(r), in.remarkName(r), p.Remarks(), 0, true)
+				sh.errf("%s", in.parseDiagnostic(r, err, pr.text(), 0))
 				return in.dg.StatusForParseError(err), endingParseFailure
 			}
 		}
@@ -3565,7 +3624,7 @@ func (sh Shell) executeLines(
 				// the same way — measured, an unterminated quote piped in
 				// is one complaint and status 1 in all four.
 				say(verboseUpTo(pr.text(), err))
-				sh.errf("%s", in.dg.ParseDiagnosticAfter(in.diagName(), in.input, err, pr.text(), r.LineReached()))
+				sh.errf("%s", in.parseDiagnostic(r, err, pr.text(), r.LineReached()))
 				return in.dg.StatusForParseErrorAfter(err, r.ExitStatus()), endingParseFailure
 			}
 			// Whatever is left once the last line has been handed out is
@@ -3580,7 +3639,7 @@ func (sh Shell) executeLines(
 			// The line did not parse, so none of it runs — not even the
 			// statements before the failure, which is measured.
 			say(verboseUpTo(pr.text(), err))
-			sh.errf("%s", in.dg.ParseDiagnosticAfter(in.diagName(), in.input, err, pr.text(), r.LineReached()))
+			sh.errf("%s", in.parseDiagnostic(r, err, pr.text(), r.LineReached()))
 			if sh.readOn(r, pr, in, err) {
 				continue
 			}
@@ -3593,7 +3652,7 @@ func (sh Shell) executeLines(
 			// command leaves, and goes on to the next line without running
 			// any of this one.
 			say(verboseUpTo(pr.text(), line.Refused))
-			sh.errf("%s", in.dg.ParseDiagnostic(in.diagName(), in.input, line.Refused, pr.text()))
+			sh.errf("%s", in.parseDiagnostic(r, line.Refused, pr.text(), 0))
 			if r.ErrExit() {
 				// `set -e` makes it the file's after all: measured, bash 5.3
 				// stops at the refused line and exits at the parse-failure

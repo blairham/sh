@@ -27,6 +27,12 @@ func EditorStyle() repl.EditorStyle {
 		// And `^D` with something typed is delete-char-or-list. See
 		// repl.EditorStyle.ListOnControlD (#6233).
 		ListOnControlD: true,
+		// And `^D` on an empty line is refused under `setopt ignoreeof`, nine
+		// times with the tenth giving in. See
+		// repl.EditorStyle.IgnoreEndOfInputOption (#6239).
+		IgnoreEndOfInputOption:          "ignoreeof",
+		EndOfInputRefusals:              9,
+		EndOfInputRefusalStaysOnTheLine: true,
 		// Measured under a pty. The threshold is the same hundred, and
 		// everything about the question is different: it names the shell,
 		// counts the rows the matches would take as well as the matches,

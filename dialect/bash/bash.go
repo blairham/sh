@@ -4282,6 +4282,11 @@ func Diagnostics() interp.Diagnostics {
 		// And `logout` for a login shell, on the same routes. See
 		// Diagnostics.LeavingALoginSession.
 		LeavingALoginSession: "logout",
+		// And what it says instead of leaving, under IGNOREEOF. Measured
+		// 2026-10-06 through a pseudo-terminal. See
+		// Diagnostics.EndOfInputRefused (#6239).
+		EndOfInputRefused:                `Use "exit" to leave the shell.`,
+		EndOfInputRefusedInALoginSession: `Use "logout" to leave the shell.`,
 		// And the one route that says the same word with no prompt drawn at
 		// all: `-i -c 'exit 3'` writes it and `-i script.sh` whose script
 		// runs the same `exit` writes nothing, measured on 5.3.20 and

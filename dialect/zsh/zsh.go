@@ -5389,6 +5389,11 @@ func Semantics() interp.Semantics {
 // Diagnostics is how zsh reports failure.
 func Diagnostics() interp.Diagnostics {
 	return interp.Diagnostics{
+		// What it says instead of leaving under `setopt ignoreeof`, measured
+		// 2026-10-06 through a pseudo-terminal. See
+		// Diagnostics.EndOfInputRefused (#6239).
+		EndOfInputRefused:                "zsh: use 'exit' to exit.",
+		EndOfInputRefusedInALoginSession: "zsh: use 'logout' to logout.",
 		// A numbered tilde whose digits overflow: measured 2026-10-03,
 		// `~99999999999999999999` warns `number truncated after 19 digits:
 		// 99999999999999999999` and goes on. See

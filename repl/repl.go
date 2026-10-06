@@ -18,6 +18,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"strconv"
 	"strings"
@@ -209,6 +210,12 @@ type Shell struct {
 	// `exit` — because the shell that has one writes it for both, and both
 	// loops do it through [Shell.leaving] so they cannot come to differ.
 	Leaving string
+
+	// EndOfInputRefused is what this session says when it refuses ^D on an
+	// empty line, which it does only where the dialect names an ignore-EOF
+	// setting and the setting is on — see EditorStyle.IgnoreEndOfInputOption.
+	// Empty refuses nothing, whatever the setting says.
+	EndOfInputRefused string
 
 	// Style is what this dialect does to a prompt parameter's value before
 	// it is drawn. The zero value draws it as it stands.
@@ -871,6 +878,9 @@ func (s Shell) Run(ctx context.Context) (int, error) {
 		// length of the read only: the same editor serves a command that
 		// asks a person for a line, and that read is not a prompt.
 		ed.answerInterrupt = func() bool { return s.answerInterrupt(ctx, state, editing) }
+		// And a ^D on an empty line is the prompt's to refuse, for the same
+		// length and the same reason.
+		ed.endOfInputRefusals = s.endOfInputRefusals()
 		if editing {
 			line, err = ed.readLine(drawn)
 			// Whether that read wrote the word this session leaves with, which
@@ -888,6 +898,7 @@ func (s Shell) Run(ctx context.Context) (int, error) {
 			wroteLeaving = false
 		}
 		ed.answerInterrupt = nil
+		ed.endOfInputRefusals = nil
 		// A seed belongs to the read it was set for and to no later one: the
 		// next prompt after a verified line is an empty one whichever way
 		// this read ended, ^C included. Cleared here rather than on each way
@@ -905,6 +916,16 @@ func (s Shell) Run(ctx context.Context) (int, error) {
 			// it: the status is 1 whatever it was. See ErrBroken.
 			s.Runner.SetExitStatus(1)
 			s.abandon(&pending)
+			continue
+		case errors.Is(err, ErrEndOfInputRefused):
+			// ^D refused, the way bash refuses it: what was pending is
+			// complained about as the end of input would have complained,
+			// and given up, and the refusal is said on a row of its own
+			// before a fresh prompt. Measured 2026-10-06, bash 5.3.20 under
+			// `set -o ignoreeof`, `for x in 1` then ^D at `> `: the syntax
+			// error, then `Use "exit" to leave the shell.`, then the
+			// prompt (#6239).
+			s.refuseEndOfInput(state, &pending)
 			continue
 		case errors.Is(err, ErrInterrupted):
 			// ^C abandons whatever was half-typed, including the earlier
@@ -988,6 +1009,12 @@ func (s Shell) Run(ctx context.Context) (int, error) {
 			s.errf("%s", s.report(perr))
 			s.refused(perr)
 			continue
+		}
+		// A command ran, which is what starts the count of refused ^D again
+		// in both shells that keep one — and an empty line is not one.
+		// See EditorStyle.IgnoreEndOfInputOption.
+		if len(stmts) > 0 {
+			ed.refusedInARow = 0
 		}
 		b := s.beginBlock(text)
 		done := s.run(ctx, state, text, stmts)
@@ -1193,6 +1220,71 @@ func (s Shell) heldForJobsAtExit(state *terminalState) bool {
 	var held bool
 	s.inLineDiscipline(state, func() { held = s.Runner.HoldsExitForJobs() })
 	return held
+}
+
+// refuseEndOfInput is the session's half of a refused ^D: anything pending is
+// reported the way the end of input reports it and then dropped, and the
+// refusal is written on the error stream. In the terminal's own line
+// discipline, for the reason heldForJobsAtExit is.
+func (s Shell) refuseEndOfInput(state *terminalState, pending *strings.Builder) {
+	s.inLineDiscipline(state, func() {
+		if pending.Len() > 0 {
+			if _, _, perr := s.endOfInput(pending); perr != nil {
+				s.errf("%s", s.report(perr))
+				s.refused(perr)
+			}
+		}
+		s.errf("%s\n", s.EndOfInputRefused)
+	})
+	s.abandon(pending)
+}
+
+// endOfInputRefusals is the live reading of the dialect's ignore-EOF setting:
+// how many ^D on an empty line it refuses, and whether it refuses any. Nil
+// where the session has nothing to say or no setting to read.
+//
+// A closure for the reason listQueryThreshold is one: `IGNOREEOF=3` typed at
+// the prompt takes effect on the next ^D.
+func (s Shell) endOfInputRefusals() func() (int, bool) {
+	if s.EndOfInputRefused == "" || s.Runner == nil {
+		return nil
+	}
+	if name := s.Editor.IgnoreEndOfInputParameter; name != "" {
+		return func() (int, bool) {
+			value, ok := s.Runner.GetVar(name)
+			if !ok {
+				return 0, false
+			}
+			return endOfInputCount(value, s.Editor.EndOfInputRefusals), true
+		}
+	}
+	if name := s.Editor.IgnoreEndOfInputOption; name != "" {
+		return func() (int, bool) {
+			return s.Editor.EndOfInputRefusals, s.dialectOption(name)
+		}
+	}
+	return nil
+}
+
+// endOfInputCount reads an ignore-EOF parameter's value as a count: a value
+// of digits alone is that count, and anything else — empty, signed, padded,
+// with a letter in it — is the dialect's default. Measured; see
+// EditorStyle.IgnoreEndOfInputOption.
+func endOfInputCount(value string, otherwise int) int {
+	if value == "" {
+		return otherwise
+	}
+	for _, c := range value {
+		if c < '0' || c > '9' {
+			return otherwise
+		}
+	}
+	n, err := strconv.Atoi(value)
+	if err != nil {
+		// Digits past what an int holds: more than anybody could press.
+		return math.MaxInt
+	}
+	return n
 }
 
 // leaving writes the dialect's word for the end of a prompt session, on the
@@ -3053,8 +3145,11 @@ func (s Shell) newEditor(ctx context.Context, state *terminalState) *editor {
 		runHelpWord:          s.Editor.RunHelpWord,
 		namedWidgets:         s.NamedWidgets,
 		listOnControlD:       s.Editor.ListOnControlD,
-		searchSmartCase:      s.History.SearchIgnoresCaseUnlessTold,
-		searchCaretAnchors:   s.History.SearchCaretAnchors,
+		// And what a refused ^D says, and where. See refuseEndOfInput.
+		endOfInputRefused:     s.EndOfInputRefused,
+		refusalStaysOnTheLine: s.Editor.EndOfInputRefusalStaysOnTheLine,
+		searchSmartCase:       s.History.SearchIgnoresCaseUnlessTold,
+		searchCaretAnchors:    s.History.SearchCaretAnchors,
 		// And where a forward match leaves the cursor.
 		searchForwardEndsAtMatchEnd: s.History.SearchForwardCursorAtMatchEnd,
 		// Whether the newline that ends a search also accepts the line. One

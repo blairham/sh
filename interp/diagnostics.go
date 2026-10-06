@@ -8368,6 +8368,28 @@ type Diagnostics struct {
 	// of them — see Runner.WithholdLeavingWord.
 	LeavingALoginSession string
 
+	// EndOfInputRefused is what an interactive shell says when it refuses
+	// the end-of-input key at an empty prompt, which it does under the
+	// dialect's ignore-EOF setting (see repl.EditorStyle.IgnoreEndOfInput*).
+	// No verbs. Empty says the dialect never refuses, whatever its options
+	// say, which is three of the five and the base's answer.
+	//
+	// Measured 2026-10-06 through a pseudo-terminal with a two-row prompt:
+	//
+	//	bash 5.3.20  `set -o ignoreeof`  Use "exit" to leave the shell.
+	//	zsh 5.9.2    `setopt ignoreeof`  zsh: use 'exit' to exit.
+	//
+	// The `zsh` in the second is the shell's own and not argv[0]: a symlink
+	// named `myzsh` writes the same line.
+	EndOfInputRefused string
+
+	// EndOfInputRefusedInALoginSession is EndOfInputRefused's line for a
+	// login shell. Empty is the same line either way. Measured the same day:
+	//
+	//	bash -l      Use "logout" to leave the shell.
+	//	zsh -l       zsh: use 'logout' to logout.
+	EndOfInputRefusedInALoginSession string
+
 	// LeavingIsAlsoSaidOnTheseRoutes names the invocation routes that write
 	// LeavingAPromptSession's word without ever drawing a prompt: an
 	// interactive shell reached by one of them says it as `exit` runs.

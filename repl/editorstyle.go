@@ -55,6 +55,51 @@ type EditorStyle struct {
 	// nothing. Mid-line both delete and draw the deletion (#6233).
 	ListOnControlD bool
 
+	// IgnoreEndOfInputOption names the option that makes `^D` on an empty
+	// line at a prompt refuse to end the session, saying
+	// Shell.EndOfInputRefused instead; IgnoreEndOfInputParameter names the
+	// parameter that does the same and says how many times. A dialect names
+	// one or neither, and neither refuses nothing, which is three of the
+	// five.
+	//
+	// Measured 2026-10-06 through a pseudo-terminal against zsh 5.9.2 and
+	// bash 5.3.20, a two-row prompt, `^D` pressed repeatedly at an empty
+	// prompt:
+	//
+	//	zsh   setopt ignoreeof     refuses 9, the 10th says so and exits
+	//	bash  set -o ignoreeof     refuses 10 (the option writes IGNOREEOF=10)
+	//	bash  IGNOREEOF=3          refuses 3, the 4th exits
+	//	bash  IGNOREEOF=03         refuses 3
+	//	bash  IGNOREEOF=0          exits on the first
+	//	bash  IGNOREEOF= / abc     refuses 10
+	//	bash  IGNOREEOF=-1 / +2    refuses 10
+	//	bash  IGNOREEOF=' 2' / 3x  refuses 10
+	//	bash  IGNOREEOF=2 inherited from the environment, option off:
+	//	                           refuses 2
+	//
+	// So in bash it is the parameter and not the option that decides — the
+	// inherited row leaves `set -o` saying `off` and still refuses — and a
+	// value counts only when it is all digits. Both shells count consecutive
+	// refusals: a command run in between starts the count again, and an empty
+	// line or a character typed and erased does not.
+	IgnoreEndOfInputOption    string
+	IgnoreEndOfInputParameter string
+
+	// EndOfInputRefusals is how many `^D` an ignore-EOF setting refuses where
+	// it gives no count of its own: the option, and a parameter whose value
+	// is not a count. See IgnoreEndOfInputOption for the measurements.
+	EndOfInputRefusals int
+
+	// EndOfInputRefusalStaysOnTheLine draws a refusal zsh's way: a bell and
+	// the line under the prompt's last row, with the cursor back on the
+	// prompt and the read going on, and the same line drawn on the `^D` that
+	// finally ends the session. Measured 2026-10-06, zsh 5.9.2 writes
+	// `\r\r\n\a` and the line, then `\r\e[A` and the line redrawn on its own
+	// row. The zero value is bash's: the line is ended, the refusal written
+	// on a row of its own and a fresh prompt drawn under it, `\r\r\nUse
+	// "exit" to leave the shell.\r\n` and the prompt again.
+	EndOfInputRefusalStaysOnTheLine bool
+
 	// Interrupt is what marks a line abandoned with ^C, drawn where the
 	// cursor was before the line ends.
 	//

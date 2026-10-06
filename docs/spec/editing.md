@@ -277,6 +277,36 @@ its `delete-char-or-list`, which lists and rings because `ab` matches nothing;
 field is `BellRingsWhenAnEditHasNothingToActOn`, and false is zsh's answer and
 the core's.
 
+### `^D` on an empty line, when the shell is told to refuse it
+
+Both shells can be told not to let `^D` end the session, and they differ in
+how they say no, in what they count and in what they read to decide. Measured
+2026-10-06 through a pseudo-terminal against zsh 5.9.2 and bash 5.3.20, with a
+two-row prompt (`top`, then `P> `) and `^D` at the empty second row:
+
+| | bash | zsh |
+| --- | --- | --- |
+| what turns it on | the `IGNOREEOF` parameter being set, from an assignment or the environment; `set -o ignoreeof` writes `10` into it | `setopt ignoreeof` |
+| what it writes | `\r\r\nUse "exit" to leave the shell.\r\n`, then a fresh prompt, both rows | `\r\r\n`, a bell, `zsh: use 'exit' to exit.`, `\r\e[A`, then the line redrawn on its own row |
+| in a login shell | `Use "logout" to leave the shell.` | `zsh: use 'logout' to logout.` |
+| how many are refused | the value, where it is all digits (`3` and `03` refuse three); ten for an empty value, a sign, a blank, a letter or a dot | nine; the tenth writes the refusal and then ends the session |
+| at a continuation prompt | the end-of-file syntax error for the construct, then the refusal, then a fresh prompt | a bell and nothing else, with or without the option |
+| what starts the count again | running a command | running a command |
+| what does not | an empty line, a character typed and erased | an empty line, a character typed and erased |
+
+The `zsh` in zsh's line is the shell's own name and not `argv[0]`: a symlink
+named `myzsh` writes the same thing. A second refusal in zsh clears what is
+under the line first (`\r\r\n\e[J`, then the bell), and the refusal stays under
+the line while the next one is typed until that line is accepted, which clears
+it. `IGNOREEOF=0` refuses none, and so ends the session on the first `^D`.
+
+The fields are `repl.EditorStyle.IgnoreEndOfInputOption`,
+`IgnoreEndOfInputParameter`, `EndOfInputRefusals` and
+`EndOfInputRefusalStaysOnTheLine`, and the wording is
+`interp.Diagnostics.EndOfInputRefused`. Without a dialect naming one of the
+two settings, the option is recorded and `^D` ends the session, which is what
+every dialect did before this was measured.
+
 ## What a terminal sends, and what a shell does with it
 
 The same key is not the same bytes twice. Home is `\e[H` on one terminal,

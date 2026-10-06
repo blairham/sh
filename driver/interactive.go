@@ -544,6 +544,9 @@ func (sh Shell) frontEndWith(r *interp.Runner, name string, dg interp.Diagnostic
 		// decides which loop reads at all.
 		// See Semantics.EditorReadsKeysWhereThereIsNoTerminal.
 		EditorWithoutATerminal: sh.Semantics.EditorReadsKeysWhereThereIsNoTerminal,
+		// And what it says instead of leaving, under an ignore-EOF setting.
+		// See Diagnostics.EndOfInputRefused.
+		EndOfInputRefused: endOfInputRefused(dg, r != nil && r.LoginShell),
 		// And what it writes as the session ends, which is one word in one
 		// dialect and nothing at all in the rest.
 		// See Diagnostics.LeavingAPromptSession.

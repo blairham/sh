@@ -3,7 +3,10 @@
 
 package interp
 
-import "strings"
+import (
+	"strings"
+	"unicode/utf8"
+)
 
 // plainPatternShortcut switches the answer below on. It is a variable so a
 // test can drive the same patterns through the matcher and through the
@@ -40,8 +43,10 @@ const plainPatternSpecials = "*?[]\\()|<>^#~!@+"
 // Nothing else the matcher does reaches these shapes: a flag, a group, a
 // bracket, an escape or a numeric range each needs a byte from the set
 // above, and neither the policies nor the refusals in matchPatternChecked
-// fire on a pattern without one. A star matches any bytes at all, valid
-// characters or not, in the matcher as here.
+// fire on a pattern without one. A literal holding a partial character is
+// the one place bytes and characters part, and it is left to the matcher too.
+// A star matches any bytes at all, valid characters or not, in the matcher
+// as here.
 func (r *Runner) plainPatternMatch(pattern, s string, surface patternSurface) (matched, ok bool) {
 	if !plainPatternShortcut {
 		return false, false
@@ -56,6 +61,15 @@ func (r *Runner) plainPatternMatch(pattern, s string, surface patternSurface) (m
 		lit = lit[:len(lit)-1]
 	}
 	if strings.ContainsAny(lit, plainPatternSpecials) {
+		return false, false
+	}
+	// A literal that is not whole characters is left to the matcher, which
+	// is what knows whether the units are characters: there a lone lead
+	// byte is never the start of a character the subject holds, so
+	// `[[ é == $'\xc3'* ]]` is false where a byte comparison says true.
+	// Whole characters line up with the subject's own, since a character's
+	// first byte never occurs inside another one.
+	if !utf8.ValidString(lit) {
 		return false, false
 	}
 	if r.MatchOption(MatchFoldsCase) {

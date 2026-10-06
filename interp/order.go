@@ -79,6 +79,24 @@ import "strings"
 // So the shell sorts by byte, which is right in the C locale, right for one
 // dialect everywhere, and wrong for three outside it — knowingly, in one
 // place, and in a place that says so.
+//
+// **The completion listing is the fourth surface, and it answers the same
+// way on purpose** (#6168). It lives in the line editor rather than here —
+// repl's block.rows, which this package cannot be imported into — so it is
+// recorded rather than shared. zsh orders the two together: measured
+// 2026-10-05 and 2026-10-06 against zsh 5.9.2, a `compadd -J` listing of
+// `README.md readme.md Beta alpha _x b-c bc B a1 a10 a2` draws `_x a1 a10 a2
+// alpha B b-c bc Beta readme.md README.md` under `LANG=en_US.UTF-8` and `B
+// Beta README.md _x a1 a10 a2 alpha b-c bc readme.md` under `LC_ALL=C`, and
+// `print -r -- *` over the same names gives the same two orders. (Over ten
+// of them: this machine's file system is case-insensitive and holds one of
+// the two READMEs.) This shell gives the second order for both, under either
+// locale.
+// Collating the listing alone would sort one kind of word two ways, which is
+// what this file exists to prevent, so the listing keeps byte order with
+// globbing, and the two are one deliberate divergence rather than two. A
+// collation, if one is ever built, is one table for both surfaces, per
+// platform and measured — the maintainer's decision, 2026-10-06.
 func shellOrder(a, b string) int { return strings.Compare(a, b) }
 
 // shellOrderFolded is shellOrder with case put aside, which one flag of a

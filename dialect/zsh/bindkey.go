@@ -499,9 +499,10 @@ func KeyBindings(r *interp.Runner, km repl.Keymap) map[string]repl.Binding {
 // offers — see compsys.go, where the parameters and the two builtins are, and
 // repl.Binding.Candidates, which is how the name reaches the editor. **The
 // order above is unchanged and is what makes that safe**: the function is
-// asked first and this editor's own completion answers whenever the function
-// has nothing to say, so a completion that fails costs a call rather than the
-// key.
+// asked first, and a completion that stops on an error costs a call rather
+// than the key. A function that runs and offers nothing is an answer, though,
+// and since the shipped completion system runs here it is the common one: the
+// key rings and leaves the line, as zsh's does (#6214).
 //
 // It still does not run the rc's *own* completions, and the reason is no
 // longer this file's. `_main_complete` reaches `_git` through `_arguments`,
@@ -534,9 +535,8 @@ func completionBinding(widget, completer string) repl.Binding {
 		// And the widget's own name, so that the candidates its *function*
 		// produces reach the editor too — which is the half this used to
 		// drop. See repl.Binding.Candidates and compsys.go: the editor asks
-		// the function first and completes its own way when the function has
-		// nothing to say, so the key goes on completing whatever happens to
-		// the function.
+		// the function first, and what it offers — nothing included — is
+		// the key's answer.
 		Candidates: widget,
 	}
 }

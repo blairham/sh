@@ -4,6 +4,7 @@
 package zsh_test
 
 import (
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -84,32 +85,36 @@ func TestACompletionWidgetsFunctionSuppliesTheCandidates(t *testing.T) {
 	}
 }
 
-// TestAWidgetThatOffersNothingLeavesTheEditorsOwnCompletionStanding is the
-// rule that makes the change above safe to wire to a real startup file, and it
-// is #2770 arrived at from the other side.
+// TestAWidgetThatOffersNothingAnswersNothing: a completion widget whose
+// function has no match for the word says so, and the editor's own completion
+// is not asked after it (#6214).
 //
-// Nothing here is a fallback the editor arranges: an empty answer *is* how a
-// completer says it has no opinion, and repl's composition rule then asks the
-// next one. So the four shapes below all have to answer with no matches rather
-// than with something the editor would insert.
-func TestAWidgetThatOffersNothingLeavesTheEditorsOwnCompletionStanding(t *testing.T) {
-	for _, c := range []struct{ name, src string }{
+// Measured 2026-10-06 through a pseudo-terminal against zsh 5.9.2, `x a` over
+// `always` and `auto` with Tab on the widget: every completion-widget shape
+// below rings once and leaves `x a` with nothing listed, where this editor
+// used to hand the key to its own completion and list `always  auto`. A plain
+// widget makes no claim about completion and still answers with no opinion.
+func TestAWidgetThatOffersNothingAnswersNothing(t *testing.T) {
+	for _, c := range []struct {
+		name, src string
+		want      []repl.Candidate
+	}{
 		// A function that adds nothing at all.
-		{"adds nothing", widgetOf(":")},
+		{"adds nothing", widgetOf(":"), repl.CompletionOfferedNothing()},
 		// One whose candidates do not match what was typed.
-		{"nothing matches", widgetOf("compadd zzz yyy")},
+		{"nothing matches", widgetOf("compadd zzz yyy"), repl.CompletionOfferedNothing()},
 		// One that fails.
-		{"function fails", widgetOf("return 1; compadd checkout")},
+		{"function fails", widgetOf("return 1; compadd checkout"), repl.CompletionOfferedNothing()},
 		// A widget whose function was never defined — measured, `zle -C w
 		// complete-word nosuchfn` is status 0 in zsh, so this is a live
 		// state and not a typo nobody reaches.
-		{"function undefined", "zle -C probewid .complete-word nosuchfn\n"},
+		{"function undefined", "zle -C probewid .complete-word nosuchfn\n", repl.CompletionOfferedNothing()},
 		// And a plain widget, which makes no claim about completion at all.
-		{"not a completion widget", "_probe() { compadd checkout }\nzle -N probewid _probe\n"},
+		{"not a completion widget", "_probe() { compadd checkout }\nzle -N probewid _probe\n", nil},
 	} {
 		t.Run(c.name, func(t *testing.T) {
-			if got := completionFor(t, c.src, "git che"); len(got) > 0 {
-				t.Errorf("offered %q, want nothing — the editor completes its own way", got)
+			if got := completionCandidatesFor(t, c.src, "git che"); !reflect.DeepEqual(got, c.want) {
+				t.Errorf("answered %#v, want %#v", got, c.want)
 			}
 		})
 	}

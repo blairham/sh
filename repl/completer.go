@@ -198,6 +198,10 @@ type Candidate struct {
 	// it.
 	insertKey bool
 
+	// nothing marks CompletionOfferedNothing's answer, and nothing else sets
+	// it.
+	nothing bool
+
 	// insertion marks MenuCompletion's and PrefixCompletion's answer: a row
 	// that draws nothing and is never inserted, carrying how the rest go in.
 	insertion insertion
@@ -254,6 +258,20 @@ func insertionOf(candidates []Candidate) insertion {
 // `t` — the last character of the key, as a self-insert would type (#6119).
 // Nothing is listed and no bell rings, whatever matches were added.
 func CompletionInsertsTheKey() []Candidate { return []Candidate{{insertKey: true}} }
+
+// CompletionOfferedNothing is what a shell's completion answers when it was
+// asked and has no match for the word: the answer, rather than an absence of
+// one, so the editor asks no other completer and leaves the line alone with
+// the bell — what an empty list cannot say, since an empty list is the answer
+// of a shell with no opinion. See completerFor.
+//
+// Measured 2026-10-06 through a pseudo-terminal against zsh 5.9.2, `x a`
+// over `always` and `auto` with Tab bound to a `zle -C` widget: a function
+// that adds nothing, one whose words do not match, one that returns 1 before
+// adding, and a widget whose function is not defined all ring and leave `x a`
+// with nothing listed; and with `compinit`, `cd ` and Tab in a directory with
+// no subdirectory leaves `cd ` (#6214).
+func CompletionOfferedNothing() []Candidate { return []Candidate{{nothing: true}} }
 
 // CompletionStopped is what a shell's completion answers when its function
 // stopped on an error: no matches, and not "nothing to say" either, so the

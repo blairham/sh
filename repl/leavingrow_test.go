@@ -4,6 +4,7 @@
 package repl
 
 import (
+	"strings"
 	"testing"
 	"time"
 )
@@ -27,16 +28,26 @@ import (
 // write up a line would come apart: the word belongs on the row the *cursor*
 // is on, not on the row the prompt started on.
 func TestTheWordForLeavingLandsOnTheRowTheLastPromptIsOn(t *testing.T) {
-	for _, c := range []struct{ name, ps1, leaving, want string }{
-		{"a prompt on one row", "P> ", "exit", "P> exit"},
+	for _, c := range []struct {
+		name, ps1, leaving, want string
+		paste                    bool
+	}{
+		{"a prompt on one row", "P> ", "exit", "P> exit", false},
 		// A literal newline in the value, which is what a two-row prompt is
 		// once the dialect's escapes have been read — there are none in this
 		// session's Style, so the value is drawn as it stands.
-		{"a prompt whose last row is its second", "top\nP> ", "exit", "top\nP> exit"},
+		{"a prompt whose last row is its second", "top\nP> ", "exit", "top\nP> exit", false},
 		// And four of the five dialects have no word. The row is still ended:
 		// measured the same day, dash and ksh93 end it on ^D and so does
 		// zsh, which has an editor and nothing to say.
-		{"a dialect with no word still ends the row", "P> ", "", "P>"},
+		{"a dialect with no word still ends the row", "P> ", "", "P>", false},
+		// With bracketed paste on, which is bash's default at a terminal,
+		// the row is not the prompt's (#6243). Measured 2026-10-06 with
+		// `TERM=xterm` and the two-row prompt: bash 5.3.20 writes
+		// `\e[?2004l\r\r\nexit\r\n`, and `exit\r\n` once its rc turns the
+		// bracketing off — which is the row above. See editor.takePasteOff.
+		{"with bracketed paste on, the word is on a row of its own", "top\nP> ", "exit", "top\nP>\nexit", true},
+		{"with bracketed paste on and no word, the row is still ended", "top\nP> ", "", "top\nP>", true},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			control, tty := openTerminal(t)
@@ -50,6 +61,7 @@ func TestTheWordForLeavingLandsOnTheRowTheLastPromptIsOn(t *testing.T) {
 			s := Shell{
 				Runner: r, In: tty, Out: screen, Err: screen,
 				Name: "sh", Leaving: c.leaving,
+				Editor: EditorStyle{BracketedPaste: c.paste},
 			}
 			done := make(chan error, 1)
 			go func() { _, err := s.Run(t.Context()); done <- err }()
@@ -70,6 +82,13 @@ func TestTheWordForLeavingLandsOnTheRowTheLastPromptIsOn(t *testing.T) {
 				t.Fatal("the session did not end on ^D")
 			}
 
+			if c.paste && !strings.Contains(screen.String(), "\x1b[?2004l\r"+"\r\n") {
+				// The bytes as well as the screen, for the case with no word:
+				// the row it ends on looks the same either way round.
+				t.Errorf("the bracketing is taken back after the row is "+
+					"ended, where bash and zsh take it back first: %q",
+					screen.String())
+			}
 			if got := shownBy(fixtureCols, screen.String()).text(); got != c.want {
 				t.Errorf("the screen reads %q, want %q: the word a session "+
 					"leaves with goes on the row the last prompt is on, not "+

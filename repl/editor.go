@@ -202,6 +202,10 @@ type editor struct {
 	// Nil is the two fixed sequences in paste.go. See
 	// EditorStyle.BracketedPasteParameter.
 	pasteCodes func() (on, off string)
+	// pasteOff is the sequence that takes the bracketing back at the end of
+	// the read in hand, still to be written; empty once it has been, and for
+	// a read that never asked. See takePasteOff.
+	pasteOff string
 	// last is the widget the keystroke before this one ran, keyBytes the
 	// bytes the keystroke in hand has read so far and keyBinding the binding
 	// that claimed it, if one did. See noteLastKey.
@@ -728,9 +732,16 @@ func (e *editor) readLine(prompt drawnPrompt) (string, error) {
 			on, off = e.pasteCodes()
 		}
 		e.write(on)
-		if off != "" {
-			defer e.write(off)
-		}
+		// Held rather than written by the defer outright, because one way
+		// out writes it earlier than the rest: see takePasteOff.
+		held := e.pasteOff
+		e.pasteOff = off
+		defer func() {
+			if e.pasteOff != "" {
+				e.write(e.pasteOff)
+			}
+			e.pasteOff = held
+		}()
 	}
 	// The leading rows first and once — every redraw after this rewrites only
 	// the last row. See drawnPrompt.
@@ -1352,9 +1363,44 @@ func (e *editor) sendBreak(prompt drawnPrompt, bell bool) (string, error) {
 // too: dash and ksh93 end it on ^D, and so does zsh, which has an editor and
 // no word.
 func (e *editor) stopped(prompt drawnPrompt) (string, error) {
-	e.endLine(prompt, e.leaving)
+	if off := e.takePasteOff(); off != "" {
+		// With the bracketing on, the word goes on a row of its own: the
+		// sequence taking it back is written first, at the end of the
+		// prompt, and the row is ended after it — see takePasteOff.
+		e.endLine(prompt, off)
+		if e.leaving != "" {
+			e.write(e.leaving + e.newline())
+		}
+	} else {
+		e.endLine(prompt, e.leaving)
+	}
 	e.wroteLeaving = e.leaving != ""
 	return "", io.EOF
+}
+
+// takePasteOff is the sequence that takes the bracketing back, for a read
+// that the end-of-input key ended, and empty where the read never asked for
+// it. Taken, so the way out of readLine does not write it a second time.
+//
+// **The end-of-input key writes it before the row is ended, where an
+// accepted line writes it after.** Measured 2026-10-06 through a
+// pseudo-terminal with `TERM=xterm` and `PS1=$'top\nP> '`, at the empty
+// second row:
+//
+//	bash 5.3.20, Return on `true`   true\r\n\e[?2004l\r
+//	bash 5.3.20, ^D                 \e[?2004l\r\r\nexit\r\n
+//	bash 5.3.20, ^D, paste off      exit\r\n
+//	bash 5.3.20, ^D, ignoreeof      \e[?2004l\r\r\nUse "exit" to leave the shell.\r\n
+//	zsh 5.9.2,   ^D                 \e[?2004l\r\r\n
+//
+// So with the bracketing on, the word bash leaves with is on a row of its own
+// under the prompt, and with it off the word is on the prompt's row (#4011,
+// #6243). What decides the row is the setting, not the dialect: zsh ends the
+// row the same way and simply has no word to put after it.
+func (e *editor) takePasteOff() string {
+	off := e.pasteOff
+	e.pasteOff = ""
+	return off
 }
 
 // refuseEndOfInput answers a ^D on an empty line under an ignore-EOF setting,
@@ -1388,7 +1434,7 @@ func (e *editor) refuseEndOfInput(prompt drawnPrompt) (bool, error) {
 	if !refused {
 		return false, nil
 	}
-	e.endLine(prompt, "")
+	e.endLine(prompt, e.takePasteOff())
 	return true, ErrEndOfInputRefused
 }
 

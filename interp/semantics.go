@@ -38497,6 +38497,11 @@ func (r *Runner) matchPatternR(pattern, s string, surface patternSurface) bool {
 // keeps it from being the fatal refusal it is in a script and from
 // publishing what a match matched. See Runner.MatchPatternQuietly.
 func (r *Runner) matchPatternChecked(pattern, s string, surface patternSurface, quiet bool) (matched, wellFormed bool) {
+	// Most patterns a real configuration matches are a string to compare,
+	// and they answer here without the policies below. See plainPatternMatch.
+	if m, ok := r.plainPatternMatch(pattern, s, surface); ok {
+		return m, true
+	}
 	condition := surface == patternInACondition
 	o := patternOpts{
 		// A `case` arm reads a bare `(` behind a pattern group as a group

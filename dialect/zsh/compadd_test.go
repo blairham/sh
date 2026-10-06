@@ -294,3 +294,43 @@ func TestPrefixHoldsTheQuotingThatQuotesSomething(t *testing.T) {
 		})
 	}
 }
+
+// TestCompaddTakesTheFirstOfARepeatedOption: a letter given twice in one
+// `compadd` call keeps its first value, and `-J` and `-V` name one block
+// between them (#6156). This is how `_ssh`'s login names come to be headed
+// `login name`: its call carries `-J users -X ' -- login name --'` and then
+// the `-J users -X ' -- user --'` `_users` adds. Measured 2026-10-06 through
+// a pseudo-terminal against zsh 5.9.2; see compaddFirstWins.
+func TestCompaddTakesTheFirstOfARepeatedOption(t *testing.T) {
+	for _, c := range []struct {
+		body, group, heading, word string
+	}{
+		{`compadd -J ga -X HA -J gb -X HB alpha1`, "ga", "HA", "alpha1"},
+		{`compadd -V ga -X HA -V gb -X HB alpha1`, "ga", "HA", "alpha1"},
+		{`compadd -J ga -X HA -V gb alpha1`, "ga", "HA", "alpha1"},
+		{`compadd -J ga -P pa -P pb -S sa -S sb alpha1`, "ga", "", "paalpha1sa"},
+		// The control: given once, each is what it says.
+		{`compadd -J gb -X HB -P pb alpha1`, "gb", "HB", "pbalpha1"},
+	} {
+		t.Run(c.body, func(t *testing.T) {
+			r := bindkeyRunner(t, widgetOf(c.body))
+			got := zsh.RunCompletion(r, t.Context(), "probewid", repl.Completion{
+				Line: "x a", Point: 3, Start: 2, Word: "a", Dir: r.Dir,
+			})
+			var found *repl.Candidate
+			for i := range got {
+				if got[i].Word != "" {
+					found = &got[i]
+					break
+				}
+			}
+			if found == nil {
+				t.Fatalf("no match offered: %+v", got)
+			}
+			if found.Group.Name != c.group || found.Group.Heading != c.heading || found.Word != c.word {
+				t.Errorf("group %q heading %q word %q, want %q %q %q",
+					found.Group.Name, found.Group.Heading, found.Word, c.group, c.heading, c.word)
+			}
+		})
+	}
+}

@@ -360,18 +360,31 @@ func (s shellCompleter) expandTilde(path string) string {
 	return path
 }
 
-// userHomes reads the accounts a `~name` could name.
+// userHomes reads the accounts a `~name` could name. See AccountHomes.
+func (s shellCompleter) userHomes() map[string]string {
+	path := s.passwd
+	if path == "" {
+		path = AccountFile
+	}
+	return AccountHomes(path)
+}
+
+// AccountFile is the account file AccountHomes reads where nothing names
+// another.
+const AccountFile = "/etc/passwd"
+
+// AccountHomes reads every account in the account file at path, to its home
+// directory.
 //
 // From the account file rather than from the library, because there is no
 // call in the standard library that *enumerates* accounts — only one that
 // looks a single name up, which cannot answer a prefix. A file that is not
 // there yields no names rather than an error: a machine with no account file
 // is one where `~name` completes nothing, not one where Tab is broken.
-func (s shellCompleter) userHomes() map[string]string {
-	path := s.passwd
-	if path == "" {
-		path = "/etc/passwd"
-	}
+//
+// Exported for a dialect whose own table of accounts is the same read — zsh's
+// `$userdirs` (#6156) — so that there is one reader of the file and not two.
+func AccountHomes(path string) map[string]string {
 	f, err := os.Open(path)
 	if err != nil {
 		return nil

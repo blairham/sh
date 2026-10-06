@@ -3,16 +3,20 @@
 
 package zsh
 
-import "github.com/blairham/sh/interp"
+import (
+	"os/user"
 
-// `$userdirs` is the users whose home directory this shell has looked up, to
-// the directory it found.
+	"github.com/blairham/sh/interp"
+	"github.com/blairham/sh/repl"
+)
+
+// `$userdirs` is every account in the password database, to its home
+// directory — in an interactive shell — and nothing in any other.
 //
-// It is empty, and that is a **measurement** rather than a stub, which is the
-// one thing about this name worth arguing. The documented reading is that a
-// `~user` expansion puts the user in the table, so an empty answer looks
-// exactly like a parameter nobody wrote. Measured 2026-09-27 on zsh 5.9.2
-// under `-f` from a script file with `zsh/parameter` loaded:
+// Empty in a script is a **measurement** rather than a stub. The documented
+// reading is that a `~user` expansion puts the user in the table, so an empty
+// answer looks exactly like a parameter nobody wrote. Measured 2026-09-27 on
+// zsh 5.9.2 under `-f` from a script file with `zsh/parameter` loaded:
 //
 //	: ~bhamilton; : ~root; : ~daemon; : ~nobody
 //	${#userdirs}      0
@@ -20,16 +24,28 @@ import "github.com/blairham/sh/interp"
 //	${#nameddirs}     1        ← the control, in the same run
 //
 // All four of those lookups succeed there — `~root` expands to `/var/root` —
-// and the table does not move. The `nameddirs` row is what makes that a
-// reading rather than a dead probe: the *neighboring* table fills in the same
-// shell on the next line, so the view is live and it is `userdirs` that has
-// nothing in it. On this platform the home directory comes from the directory
-// service rather than from the password file zsh fills this table out of.
+// and the table does not move, while the *neighboring* table fills in the
+// same shell on the next line, so the view is live and it is `userdirs` that
+// has nothing in it.
 //
-// So an empty view is the answer here, and the thing that would make it wrong
-// is the reference's own table filling. The test that grades this runs the
-// same four lookups and the same control, so the day one of them lands a row
-// there, the row is missing here and the test says so at this name.
+// **Interactive, the table is full**, and that is what `compadd -k userdirs`
+// — the login names `ssh <Tab>` offers — reads (#6156). Measured 2026-10-06
+// on the same build, `print ${#userdirs}`:
+//
+//	zsh -f -c        0        zsh -c          0      a script on stdin   0
+//	zsh -f -i -c   133        zsh -i -c     133      and in a completion
+//	                                                 function at a prompt 133
+//
+// with standard input `/dev/null` for the two `-i` rows, so it is the shell
+// being interactive and not a terminal. The 133 are the 132 accounts of
+// `/etc/passwd` and the person's own, whose account on this platform is in the
+// directory service rather than in that file; `root` is `/var/root`.
+//
+// This shell reads `/etc/passwd` and adds the account it is running as. That
+// is the whole database where the file is the database, which is Linux
+// without a directory service; on macOS it misses any *other* account the
+// directory service holds, which reading the database there would need the C
+// library for, and the binaries are built without it.
 //
 // The `~user` machinery itself is not what is missing, which is the other
 // reading to rule out: `~root` expands here too, and did before this.
@@ -39,7 +55,7 @@ import "github.com/blairham/sh/interp"
 // finds first, so a name given one has stopped answering for anything from
 // that moment, and the producer is where the answer goes when there is one.
 func registerUserDirs(r *interp.Runner) {
-	r.SetDynamicAssoc("userdirs", func(*interp.Runner) interp.AssocArray { return nil })
+	r.SetDynamicAssoc("userdirs", zshUserDirsView)
 	// Readonly and hidden, measured with the rest of the module:
 	// `${(t)userdirs}` is `association-readonly-hide-hideval-special`, and
 	// the freeze is what registerAbsentParameters was already putting on the
@@ -50,4 +66,21 @@ func registerUserDirs(r *interp.Runner) {
 	// interp.Runner.SetSilentToPrint.
 	r.SetSilentToPrint("userdirs")
 	hideModuleParameter(r, "userdirs")
+}
+
+// zshUserDirsView is `$userdirs` as it stands. See the file comment.
+func zshUserDirsView(r *interp.Runner) interp.AssocArray {
+	if !r.Interactive {
+		return nil
+	}
+	out := interp.AssocArray{}
+	for name, home := range repl.AccountHomes(repl.AccountFile) {
+		out[name] = interp.Scalar(home)
+	}
+	if u, err := user.Current(); err == nil && u.Username != "" && u.HomeDir != "" {
+		if _, ok := out[u.Username]; !ok {
+			out[u.Username] = interp.Scalar(u.HomeDir)
+		}
+	}
+	return out
 }

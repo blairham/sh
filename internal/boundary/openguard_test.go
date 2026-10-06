@@ -143,7 +143,7 @@ var exempt = map[string]string{
 		"terminal's capability table can reach a script through it, and a refusal here would " +
 		"hide `cuu1` from a prompt while telling it nothing — which is the silent " +
 		"substitution #2076 is about.",
-	"repl.userHomes": "the account file, read to answer `~name` completion. A fixed path the " +
+	"repl.AccountHomes": "the account file, read to answer `~name` completion and zsh's `$userdirs` (#6156). A fixed path the " +
 		"front end chose — the person types a prefix, never the path — and the standard " +
 		"library has no call that enumerates accounts. It is the last of the three #951 " +
 		"named and the one #951 did not close: gating this read would hide the prefix " +

@@ -145,6 +145,10 @@ var wideEmacsKeys = map[string]Widget{
 	"\x1bA": WidgetAcceptAndHold,
 	"\x18u": WidgetUndo,
 	"\x16":  WidgetQuotedInsert,
+	"\x1b?": WidgetWhichCommand,
+	"\x1bh": WidgetRunHelp,
+	"\x1bH": WidgetRunHelp,
+	"\x1bx": WidgetExecuteNamedCmd,
 }
 
 // WideEmacsBindings is wideEmacsKeys for a dialect's key listing, as a copy

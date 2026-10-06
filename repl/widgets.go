@@ -283,6 +283,16 @@ const (
 	// The next key put in the line as it is, whatever it would have done:
 	// zsh's `quoted-insert`, on `^V`. See quotedinsert.go (#6241).
 	WidgetQuotedInsert
+
+	// The command the cursor is in, asked about: the line put aside and a
+	// command naming it run in its place — zsh's `which-command` and
+	// `run-help`, on `M-?` and `M-h`. Which command each runs is the
+	// dialect's; see EditorStyle.WhichCommandWord. And a widget run by its
+	// name, typed under the line: `execute-named-cmd`, on `M-x`. See
+	// commandword.go and namedcmd.go (#6241).
+	WidgetWhichCommand
+	WidgetRunHelp
+	WidgetExecuteNamedCmd
 )
 
 // takesItsCount is whether the action reads the count itself, so that a key
@@ -485,6 +495,12 @@ func (e *editor) runWidget(b Binding, prompt drawnPrompt) {
 		e.acceptAndHold()
 	case WidgetQuotedInsert:
 		e.quotedInsert(prompt)
+	case WidgetWhichCommand:
+		e.askAboutTheCommand(e.whichCommandWord, prompt)
+	case WidgetRunHelp:
+		e.askAboutTheCommand(e.runHelpWord, prompt)
+	case WidgetExecuteNamedCmd:
+		e.executeNamedCmd(prompt)
 	case WidgetSelfInsert:
 		// The key this keystroke is about — see editor.typedKey, which is
 		// what makes `zle .self-insert` from inside a wrapper insert the

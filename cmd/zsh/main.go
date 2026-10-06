@@ -60,6 +60,7 @@ func shell() driver.Shell {
 		EditorStyle:               zsh.EditorStyle(),
 		KeyBindings:               zsh.KeyBindings,
 		ViEditing:                 zsh.ViEditing,
+		NamedWidgets:              zsh.NamedWidgets,
 		RunWidget:                 zsh.RunWidget,
 		RunCompletion:             zsh.RunCompletion,
 		ListScrollPrompt:          zsh.ListScrollPrompt,

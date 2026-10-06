@@ -268,6 +268,12 @@ type Shell struct {
 	// not offered beside it.
 	RunWidget func(ctx context.Context, name string, in Line) (Line, bool)
 
+	// NamedWidgets is every widget a name reaches in this session, for
+	// execute-named-cmd: the editor's own under the dialect's names for them,
+	// and the shell's. A function for the reason KeyBindings is one — `zle
+	// -N` is a command a person runs at the prompt. Nil names none.
+	NamedWidgets func() map[string]Binding
+
 	// TransformTermcap is what the editor writes in place of one of the
 	// terminal-control sequences it would write, where the shell has asked to
 	// see them under their termcap names. code is the name — `cd`, `ce`, `le`,
@@ -3043,6 +3049,9 @@ func (s Shell) newEditor(ctx context.Context, state *terminalState) *editor {
 		searchOnControlX:     s.Editor.SearchOnControlX,
 		sendBreakOnControlG:  s.Editor.SendBreakOnControlG,
 		wideEmacsKeymap:      s.Editor.WideEmacsKeymap,
+		whichCommandWord:     s.Editor.WhichCommandWord,
+		runHelpWord:          s.Editor.RunHelpWord,
+		namedWidgets:         s.NamedWidgets,
 		listOnControlD:       s.Editor.ListOnControlD,
 		searchSmartCase:      s.History.SearchIgnoresCaseUnlessTold,
 		searchCaretAnchors:   s.History.SearchCaretAnchors,

@@ -240,6 +240,14 @@ func (sh Shell) keyBindings(r *interp.Runner) func(repl.Keymap) map[string]repl.
 	return func(km repl.Keymap) map[string]repl.Binding { return sh.KeyBindings(r, km) }
 }
 
+// namedWidgets is the same for the widgets a name reaches.
+func (sh Shell) namedWidgets(r *interp.Runner) func() map[string]repl.Binding {
+	if sh.NamedWidgets == nil {
+		return nil
+	}
+	return func() map[string]repl.Binding { return sh.NamedWidgets(r) }
+}
+
 // viEditing is the same for whether this session has a command mode at all.
 func (sh Shell) viEditing(r *interp.Runner) func() bool {
 	if sh.ViEditing == nil {
@@ -575,6 +583,8 @@ func (sh Shell) frontEndWith(r *interp.Runner, name string, dg interp.Diagnostic
 		// this runner, for the reason the bindings are.
 		StartLine: sh.startLine(r),
 		RunWidget: sh.runWidget(r),
+		// And what a widget's name reaches, for execute-named-cmd.
+		NamedWidgets: sh.namedWidgets(r),
 		// And what stands in for the editor's terminal operations, bound to
 		// this runner for the same reason.
 		TransformTermcap: sh.transformTermcap(r),

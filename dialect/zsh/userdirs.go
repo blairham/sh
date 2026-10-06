@@ -4,12 +4,10 @@
 package zsh
 
 import (
-	"bufio"
-	"os"
 	"os/user"
-	"strings"
 
 	"github.com/blairham/sh/interp"
+	"github.com/blairham/sh/repl"
 )
 
 // `$userdirs` is every account in the password database, to its home
@@ -76,9 +74,8 @@ func zshUserDirsView(r *interp.Runner) interp.AssocArray {
 		return nil
 	}
 	out := interp.AssocArray{}
-	if f, err := os.Open(passwordFile); err == nil {
-		readPasswordHomes(f, out)
-		_ = f.Close()
+	for name, home := range repl.AccountHomes(repl.AccountFile) {
+		out[name] = interp.Scalar(home)
 	}
 	if u, err := user.Current(); err == nil && u.Username != "" && u.HomeDir != "" {
 		if _, ok := out[u.Username]; !ok {
@@ -86,28 +83,4 @@ func zshUserDirsView(r *interp.Runner) interp.AssocArray {
 		}
 	}
 	return out
-}
-
-// passwordFile is the password database as a file.
-const passwordFile = "/etc/passwd"
-
-// readPasswordHomes adds each account the file names to out, under its login
-// name, with its home directory: the first and sixth of the seven fields. A
-// comment, a blank line and a line with too few fields are not accounts, and
-// the first entry for a name is the one the database answers with.
-func readPasswordHomes(f *os.File, out interp.AssocArray) {
-	sc := bufio.NewScanner(f)
-	for sc.Scan() {
-		line := sc.Text()
-		if line == "" || line[0] == '#' {
-			continue
-		}
-		fields := strings.Split(line, ":")
-		if len(fields) < 7 || fields[0] == "" {
-			continue
-		}
-		if _, ok := out[fields[0]]; !ok {
-			out[fields[0]] = interp.Scalar(fields[5])
-		}
-	}
 }

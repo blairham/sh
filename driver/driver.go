@@ -269,6 +269,10 @@ type Shell struct {
 	// dialect publishes it under the parameters its own shell names.
 	RunWidget func(*interp.Runner, context.Context, string, repl.Line) (repl.Line, bool)
 
+	// NamedWidgets is every widget a name reaches, read from the Runner for
+	// the reason KeyBindings is. See repl.Shell.NamedWidgets.
+	NamedWidgets func(*interp.Runner) map[string]repl.Binding
+
 	// TransformTermcap is what the line editor writes in place of one of its
 	// terminal operations, named by termcap code with its count, where the
 	// session installed a transformation; false where it did not. From the

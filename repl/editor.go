@@ -302,8 +302,13 @@ type editor struct {
 	undoLimit int
 	// sendBreakOnControlG is EditorStyle.SendBreakOnControlG.
 	sendBreakOnControlG bool
-	// wideEmacsKeymap is EditorStyle.WideEmacsKeymap.
-	wideEmacsKeymap bool
+	// wideEmacsKeymap is EditorStyle.WideEmacsKeymap, and the two words are
+	// EditorStyle.WhichCommandWord and RunHelpWord.
+	wideEmacsKeymap               bool
+	whichCommandWord, runHelpWord string
+	// namedWidgets is Shell.NamedWidgets: every widget a name reaches, for
+	// execute-named-cmd. Nil is a session that names none.
+	namedWidgets func() map[string]Binding
 	// listOnControlD is EditorStyle.ListOnControlD.
 	listOnControlD bool
 	// breakRequested is a send-break an action asked for, which the key loop

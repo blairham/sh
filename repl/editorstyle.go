@@ -33,6 +33,15 @@ type EditorStyle struct {
 	// spellings of the same keys are not simply these (#6241).
 	WideEmacsKeymap bool
 
+	// WhichCommandWord and RunHelpWord are the commands which-command and
+	// run-help put in the line in place of the one they ask about, followed
+	// by its command word: zsh's are `which-command` and `run-help`, which
+	// are aliases a person can change — measured 2026-10-06 against zsh
+	// 5.9.2, unaliasing `which-command` makes `M-?` say `command not found`.
+	// Empty rings and does nothing (#6241).
+	WhichCommandWord string
+	RunHelpWord      string
+
 	// ListOnControlD makes `^D` on a line with something typed the action
 	// that deletes the character under the cursor or, with none under it,
 	// lists the matches for the word before it — zsh's delete-char-or-list.

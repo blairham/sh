@@ -105,13 +105,16 @@ var bindkeyWidgets = map[string]repl.Widget{
 	"transpose-chars":       repl.WidgetTransposeChars,
 	// The case keys and the word swap, on `M-u`, `M-l`, `M-c` and `M-t` in
 	// the emacs keymap. See repl/casewords.go (#6241).
-	"up-case-word":    repl.WidgetUpCaseWord,
-	"down-case-word":  repl.WidgetDownCaseWord,
-	"capitalize-word": repl.WidgetCapitalizeWord,
-	"transpose-words": repl.WidgetTransposeWords,
-	"quote-line":      repl.WidgetQuoteLine,
-	"accept-and-hold": repl.WidgetAcceptAndHold,
-	"quoted-insert":   repl.WidgetQuotedInsert,
+	"up-case-word":      repl.WidgetUpCaseWord,
+	"down-case-word":    repl.WidgetDownCaseWord,
+	"capitalize-word":   repl.WidgetCapitalizeWord,
+	"transpose-words":   repl.WidgetTransposeWords,
+	"quote-line":        repl.WidgetQuoteLine,
+	"accept-and-hold":   repl.WidgetAcceptAndHold,
+	"quoted-insert":     repl.WidgetQuotedInsert,
+	"which-command":     repl.WidgetWhichCommand,
+	"run-help":          repl.WidgetRunHelp,
+	"execute-named-cmd": repl.WidgetExecuteNamedCmd,
 	// Typing. Not a key anybody binds — it is what a printable key does when
 	// nothing else claims it — but a name a shell can *redefine*, which is what
 	// a syntax highlighter needs: it wraps every name in `$widgets`, and the one
@@ -245,6 +248,9 @@ var widgetNames = map[repl.Widget]string{
 	repl.WidgetQuoteLine:                      "quote-line",
 	repl.WidgetAcceptAndHold:                  "accept-and-hold",
 	repl.WidgetQuotedInsert:                   "quoted-insert",
+	repl.WidgetWhichCommand:                   "which-command",
+	repl.WidgetRunHelp:                        "run-help",
+	repl.WidgetExecuteNamedCmd:                "execute-named-cmd",
 	repl.WidgetSelfInsert:                     "self-insert",
 	repl.WidgetPreviousHistory:                "up-line-or-history",
 	repl.WidgetNextHistory:                    "down-line-or-history",

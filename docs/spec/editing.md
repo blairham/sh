@@ -1312,6 +1312,40 @@ and `^V ^C` abandons the line as `^C` does. Nothing is drawn while it waits.
 zsh's vi insert keymap has `vi-quoted-insert` on `^V`, which draws a
 placeholder while it waits; that one is not built.
 
+### Asking about the command, and running a widget by name
+
+`M-?` is which-command and `M-h` (and `M-H`) run-help. Each puts the line aside
+as push-line does, runs `which-command CMD` or `run-help CMD` in its place —
+drawn over the line, recorded in the history — and hands the line back at the
+next prompt with the cursor where it was. Both names are aliases a person can
+change (`whence` and `man` by default); unaliasing `which-command` makes `M-?`
+say `command not found`, so the line run is the literal words.
+
+CMD is the command word of the command the cursor is in: the last word in
+command position that begins at or before the cursor. The command separators
+are the unquoted `;`, `&`, `|`, newline and `(`; `{`, `if`, `then`, `else`,
+`elif`, `while`, `until`, `do`, `!`, `time` and `nocorrect` are passed over, as
+are assignments; `builtin`, `command`, `exec`, `noglob` and `-` are not, and
+are what is asked about. Quotes, a backslash, `$(…)` and backquotes hide a
+separator. A line with no command word — empty, or only assignments — rings
+and stays as it was. Measured over 24 lines, `repl/commandword_test.go` has
+them.
+
+`M-x` is execute-named-cmd: `execute: _` is drawn on the row under the line,
+and what is typed goes there. Return runs the widget the name names — a name
+exactly, or a prefix only one name begins with — with the count the key was
+given, and takes the row away; `$LASTWIDGET` is then that widget. A space is
+typed as `-`. Tab extends the name as far as the names beginning with it agree,
+and where they agree no further, rings and lists them under the row; Return
+does the same for a prefix several names share. A name nothing begins with
+rings and the row stays. Backspace takes back a character, `^U` and `^W`
+everything, and `^G` rings and gives up. The names are the editor's own under
+both spellings (`up-case-word`, `.up-case-word`) and every `zle -N` and `zle
+-C` widget. zsh draws none of the row under `TERM=dumb`; this editor draws it
+the one way whatever the terminal. Not reproduced: Return on an empty name in
+zsh asks whether to list all of them, as a long completion listing does; here
+it lists them.
+
 bash binds `M-u`, `M-l`, `M-c` and `M-t` too, to readline's own versions —
 its words are letters and digits, and a negative count works backward — and
 none of that is measured here, so in bash the keys still do nothing. It has

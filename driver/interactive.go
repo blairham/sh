@@ -278,6 +278,15 @@ func (sh Shell) runCompletion(r *interp.Runner) func(context.Context, string, re
 	}
 }
 
+// listScrollPrompt is ListScrollPrompt bound to this runner, and nil where the
+// dialect has none.
+func (sh Shell) listScrollPrompt(r *interp.Runner) func(repl.ListScrollView) (string, bool) {
+	if sh.ListScrollPrompt == nil {
+		return nil
+	}
+	return func(v repl.ListScrollView) (string, bool) { return sh.ListScrollPrompt(r, v) }
+}
+
 // highlighter is what colors the line, preferring the binary's own answer to
 // the dialect's.
 //
@@ -573,7 +582,11 @@ func (sh Shell) frontEndWith(r *interp.Runner, name string, dg interp.Diagnostic
 		// asks for the candidates. Bound to this runner for the reason the
 		// bindings are: the widget table is this session's.
 		RunCompletion: sh.runCompletion(r),
-		RunScheduled:  sh.runScheduled(r),
+		// And whether a long completion listing is paged, and under what,
+		// bound to this runner because the parameter and the module are
+		// this session's.
+		ListScrollPrompt: sh.listScrollPrompt(r),
+		RunScheduled:     sh.runScheduled(r),
 		// And what it wants waited on beside the terminal while it waits for
 		// a key, and what it does when one of those wakes. Bound to this
 		// runner too, because the table a handler arms is this session's.

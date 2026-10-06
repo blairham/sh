@@ -76,3 +76,39 @@ func TestTheCaseKeysBelongToTheEmacsKeymapThatHasThem(t *testing.T) {
 		t.Errorf("without the field: got %q", got)
 	}
 }
+
+// push-line, quote-line, accept-and-hold and `^X u`, on the keys zsh's emacs
+// keymap has them on (#6241). Each row reads two lines from one editor, so
+// what the first key put aside is what the second read starts from.
+func TestTheLineKeysOfTheWideEmacsKeymap(t *testing.T) {
+	style := EditorStyle{WideEmacsKeymap: true, UndoRestoresTheCursorToWhereItWas: true, UndoTakesBackOneKeystrokeAtATime: true}
+	for _, c := range []struct {
+		name, keys    string
+		first, second string
+	}{
+		{"M-q puts the line aside with its cursor", "echo abc def\x02\x02\x02\x02\x02\x1bqtrue\rX\r", "true", "echo abXc def"},
+		{"M-Q too", "echo abc def\x02\x02\x02\x02\x02\x1bQtrue\rX\r", "true", "echo abXc def"},
+		{"and the line that comes back is undone to nothing", "echo abc\x1bqtrue\r\x1fX\r", "true", "X"},
+		{"M-a runs the line and hands it back", "echo abc def\x02\x02\x02\x02\x02\x1baX\r", "echo abc def", "echo abXc def"},
+		{"M-A too", "echo abc def\x02\x02\x02\x02\x02\x1bAX\r", "echo abc def", "echo abXc def"},
+		{"and undo empties what it handed back", "echo abc\x1ba\x1fX\r", "echo abc", "X"},
+		{"M-' quotes the line", "echo it's x\x02\x02\x1b'X\r\r", "'echo it'\\''s x'X", ""},
+		{"an empty line quotes to two quotes", "\x1b'X\r\r", "''X", ""},
+		{"^X u takes back a keystroke", "echo abc\x18u\x18uX\r\r", "echo aX", ""},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			var out strings.Builder
+			e := Shell{Editor: style}.newEditor(t.Context(), nil)
+			e.in, e.out = typing(c.keys), &out
+			for i, want := range []string{c.first, c.second} {
+				got, err := e.readLine(drawPrompt("$ "))
+				if err != nil {
+					t.Fatalf("read %d: %v", i+1, err)
+				}
+				if got != want {
+					t.Errorf("read %d = %q, want %q", i+1, got, want)
+				}
+			}
+		})
+	}
+}

@@ -18,7 +18,8 @@ func EditorStyle() repl.EditorStyle {
 		// And `^G` gives the line up. See
 		// repl.EditorStyle.SendBreakOnControlG (#5913).
 		SendBreakOnControlG: true,
-		// The case keys and transpose-words. See
+		// The case keys, transpose-words, push-line, quote-line,
+		// accept-and-hold and `^X u`. See
 		// repl.EditorStyle.WideEmacsKeymap (#6241).
 		WideEmacsKeymap: true,
 		// And `^D` with something typed is delete-char-or-list. See

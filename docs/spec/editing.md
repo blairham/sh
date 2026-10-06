@@ -1279,9 +1279,28 @@ count is the same exchange with the cursor left where it was.
 
 Each of the four is one change to undo.
 
+### Putting the line aside, quoting it, running it and keeping it
+
+`M-q` (and `M-Q`) is push-line, `M-'` quote-line, `M-a` (and `M-A`)
+accept-and-hold, and `^X u` a second spelling of undo beside `^X ^U` and `^_`.
+Measured the same way, `echo abc def` with the cursor on the `c`:
+
+- **push-line** empties the line, and the line comes back at the next main
+  prompt **with the cursor where it was** — on the `c`, and at 3 from a widget
+  that sets `CURSOR=3` before calling it. The line that comes back is a change:
+  `^_` on it empties it.
+- **accept-and-hold** is push-line and Return in one: the line runs (`abc
+  def`), and the next prompt holds it with the cursor on the `c`, undoable the
+  same way.
+- **quote-line** makes the whole line one single-quoted word and leaves the
+  cursor at its end: `echo it's x` becomes `'echo it'\''s x'`, an empty line
+  becomes `''`, a backslash is left alone, and a second press quotes the
+  quoted line. One change to undo.
+
 bash binds `M-u`, `M-l`, `M-c` and `M-t` too, to readline's own versions —
 its words are letters and digits, and a negative count works backward — and
-none of that is measured here, so in bash the keys still do nothing.
+none of that is measured here, so in bash the keys still do nothing. It has
+nothing on `M-q`, `M-'`, `M-a` or `^X u`.
 
 ## What is still missing
 

@@ -599,9 +599,17 @@ type editor struct {
 	// bufferStack is the lines push-line put aside, the last on the end;
 	// editAgain and editAgainText are a push-line-or-edit waiting to end the
 	// read. See pushline.go.
-	bufferStack   []string
+	bufferStack   []snapshot
 	editAgain     bool
 	editAgainText string
+	// poppedLine is a read that began from a line taken off bufferStack,
+	// which is a change an undo takes back. See popPushedLine.
+	poppedLine bool
+	// acceptRequested is an action that ends the read as Return would, asked
+	// for from inside the key loop rather than by the key that ends it:
+	// accept-and-hold. Answered at the top of the loop, where every key's
+	// path comes back.
+	acceptRequested bool
 
 	// lineStart is the text this read begins from, where a command handed the
 	// editor one rather than a prompt asking for a fresh line. Zero is every
@@ -649,6 +657,14 @@ func (e *editor) readLine(prompt drawnPrompt) (string, error) {
 	// in both shells however much was edited on the line before it, so the
 	// stack belongs to the line rather than to the session.
 	e.changes = nil
+	if e.poppedLine {
+		// A line taken off the buffer stack is the first change made to
+		// this one, and undo takes it back to the empty line. See
+		// popPushedLine.
+		e.poppedLine = false
+		e.changes = append(e.changes, snapshot{})
+	}
+	e.acceptRequested = false
 	e.undoLimit = 0
 	e.message = ""
 	e.lastArg = lastArgWalk{}
@@ -732,6 +748,10 @@ func (e *editor) keyLoop(prompt drawnPrompt) (string, error) {
 		// key's path comes back through.
 		if e.editAgain {
 			return e.editTheWholeCommand(prompt)
+		}
+		if e.acceptRequested {
+			e.acceptRequested = false
+			return e.accepted(prompt), nil
 		}
 		if e.breakRequested {
 			e.breakRequested = false

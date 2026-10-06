@@ -272,6 +272,13 @@ const (
 	WidgetDownCaseWord
 	WidgetCapitalizeWord
 	WidgetTransposeWords
+
+	// The line quoted whole, and the line run and then handed back: zsh's
+	// `quote-line` and `accept-and-hold`, on `M-'` and `M-a`. See
+	// pushline.go for the second, which goes by way of the buffer stack
+	// push-line keeps (#6241).
+	WidgetQuoteLine
+	WidgetAcceptAndHold
 )
 
 // takesItsCount is whether the action reads the count itself, so that a key
@@ -466,6 +473,11 @@ func (e *editor) runWidget(b Binding, prompt drawnPrompt) {
 	case WidgetTransposeWords:
 		e.change(false, func() { e.transposeWords(e.countAsGiven()) })
 		e.redraw(prompt)
+	case WidgetQuoteLine:
+		e.change(false, e.quoteLine)
+		e.redraw(prompt)
+	case WidgetAcceptAndHold:
+		e.acceptAndHold()
 	case WidgetSelfInsert:
 		// The key this keystroke is about — see editor.typedKey, which is
 		// what makes `zle .self-insert` from inside a wrapper insert the

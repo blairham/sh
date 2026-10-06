@@ -610,6 +610,9 @@ type editor struct {
 	// accept-and-hold. Answered at the top of the loop, where every key's
 	// path comes back.
 	acceptRequested bool
+	// interruptRequested is the same for a ^C an action read for itself,
+	// which abandons the line as the key would have. See quotedInsert.
+	interruptRequested bool
 
 	// lineStart is the text this read begins from, where a command handed the
 	// editor one rather than a prompt asking for a fresh line. Zero is every
@@ -664,7 +667,7 @@ func (e *editor) readLine(prompt drawnPrompt) (string, error) {
 		e.poppedLine = false
 		e.changes = append(e.changes, snapshot{})
 	}
-	e.acceptRequested = false
+	e.acceptRequested, e.interruptRequested = false, false
 	e.undoLimit = 0
 	e.message = ""
 	e.lastArg = lastArgWalk{}
@@ -752,6 +755,13 @@ func (e *editor) keyLoop(prompt drawnPrompt) (string, error) {
 		if e.acceptRequested {
 			e.acceptRequested = false
 			return e.accepted(prompt), nil
+		}
+		if e.interruptRequested {
+			// A ^C an action read as the key after its own — quoted-insert's.
+			e.interruptRequested = false
+			if !e.keepsTheLineOnInterrupt(prompt) {
+				return e.abandon(prompt)
+			}
 		}
 		if e.breakRequested {
 			e.breakRequested = false
@@ -1090,6 +1100,13 @@ func (e *editor) keyLoop(prompt drawnPrompt) (string, error) {
 				}
 			}
 		default:
+			if w, ok := e.defaultKey(string([]byte{c})); ok && c < 0x20 {
+				// A control key one dialect's emacs keymap has and the shared
+				// table does not — `^V`. See wideEmacsKeys.
+				e.keyBinding = &Binding{Widget: w}
+				e.runWidget(*e.keyBinding, prompt)
+				continue
+			}
 			if c < 0x20 {
 				// Any other control character is ignored rather than
 				// inserted: a shell that put a raw byte in the line would

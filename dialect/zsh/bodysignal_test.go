@@ -23,9 +23,20 @@ import (
 //
 // The program writes a marker after a delay, so whether it outlived the
 // body is something the script can see rather than a process to look for.
+//
+// A row where the program runs on waits for the marker rather than for a
+// fixed time (#6230). The program is an orphan by then, started by a fork and
+// an exec of its own, and on a loaded runner it wrote its marker after a
+// fixed 0.9s had already been spent: measured by running the rows under
+// `taskpolicy -b` beside busy loops, every row that lost `survived` found the
+// marker there later, from a fraction of a second to seconds on. A row where
+// the program is ended keeps the fixed wait, because there a late program
+// can only make the row pass, never fail.
 func TestASignalLeftAtItsDefaultEndsABackgroundBody(t *testing.T) {
 	const prog = `/bin/sh -c '/bin/sleep 0.6; : >marker'`
-	const after = `; /bin/sleep 0.9; [[ -e marker ]] && print survived; true`
+	const after = `; for i in {1..400}; do [[ -e marker ]] && break; /bin/sleep 0.05; done` +
+		`; [[ -e marker ]] && print survived; true`
+	const ended = `; /bin/sleep 0.9; [[ -e marker ]] && print survived; true`
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			"the body dies and its program runs on",
@@ -71,19 +82,19 @@ func TestASignalLeftAtItsDefaultEndsABackgroundBody(t *testing.T) {
 		},
 		{
 			"the end of an and-list is a last command",
-			`true && ` + prog + ` & /bin/sleep 0.2; kill -TERM $!; wait $!; print $?` + after,
+			`true && ` + prog + ` & /bin/sleep 0.2; kill -TERM $!; wait $!; print $?` + ended,
 			"143\n",
 		},
 		// The exec'd last command: the fork has become the program, so the
 		// signal is the program's and nothing writes the marker.
 		{
 			"the last command is the program",
-			`{ true; ` + prog + ` } & /bin/sleep 0.2; kill -TERM $!; wait $!; print $?` + after,
+			`{ true; ` + prog + ` } & /bin/sleep 0.2; kill -TERM $!; wait $!; print $?` + ended,
 			"143\n",
 		},
 		{
 			"a pipeline of programs is its processes",
-			prog + ` | /bin/cat & /bin/sleep 0.2; kill -TERM %1; wait; print done` + after,
+			prog + ` | /bin/cat & /bin/sleep 0.2; kill -TERM %1; wait; print done` + ended,
 			"done\n",
 		},
 		// And the two that end nothing: a background job ignores INT, and a
@@ -119,8 +130,13 @@ func TestASignalLeftAtItsDefaultEndsABackgroundBody(t *testing.T) {
 func TestAKilledBodysProgramOutlivesTheShell(t *testing.T) {
 	dir := t.TempDir()
 	runZsh(t, dir, `{ /bin/sh -c '/bin/sleep 0.5; : >marker'; print after } & /bin/sleep 0.2; kill -TERM $!`)
-	time.Sleep(900 * time.Millisecond)
-	if _, err := os.Stat(filepath.Join(dir, "marker")); err != nil {
-		t.Errorf("the program did not outlive the shell: %v", err)
+	// Waited for rather than slept for, as the rows above are (#6230): an
+	// orphan on a loaded runner writes its marker late, not never.
+	var err error
+	for deadline := time.Now().Add(20 * time.Second); time.Now().Before(deadline); time.Sleep(50 * time.Millisecond) {
+		if _, err = os.Stat(filepath.Join(dir, "marker")); err == nil {
+			return
+		}
 	}
+	t.Errorf("the program did not outlive the shell: %v", err)
 }

@@ -6938,14 +6938,37 @@ stops (#6202). Measured 2026-10-06 under `-f -c` with `a=xyz` and
                          →  bad substitution, status 1
     e=   e=a1   e=10   e='x[1]'   e='?'
                          →  read as a reference, as before
-    e=a-b → b    e=a:1 → yz    e='a}' → xyz    e='#-b' → 0
+    e=a+b → b    e=a:1 → yz    e='a}' → xyz    e='#-b' → 0
 
 The text has to open with a reference — a name, a run of digits, or one
 special parameter, with its subscript — and go on with nothing or with a
-character that begins an operator. The last row is zsh reading those
-operators, which this shell does not do yet: such text is not refused, and
-comes to nothing. Not nested, `${(P)e}` with `e=1x` is empty in both
-shells.
+character that begins an operator. Not nested, `${(P)e}` with `e=1x` is
+empty in both shells.
+
+**What follows the reference is read as the operator it spells** (#6227).
+Measured 2026-10-06 under `-f -c` with `a=xyz` and `x=(p q)`, quoted and
+unquoted alike:
+
+    a+b → b      a:1 → yz     a#x → yz     a%z → xy     a/y/Q → xQz
+    a:u → XYZ    a[1]-b → x   x[2]:-z → q  unset-b → b  unset:-q → q
+    a-b  a=b  a?b  a#b  a%b  a/b/c  a-  a#  a:-q  →  xyz
+    unset+b  a:#x*  →  ``
+    a}  →  xyz: the text is read as far as the brace that closes it
+    #-b  →  0: `$#`, where `${#-b}` written directly is a bad substitution
+    unset=q  →  `not an identifier: `, status 1, and nothing is assigned
+    a:  →  unrecognized modifier
+    a[  →  bad math expression: operand expected at `}'
+
+So the reference is the name and the rest is parsed as the operator
+after it, which is why `#-b` is `$#` with a default. An assignment the text asks for
+is refused rather than made. This shell answers `a[` with the `bad
+substitution` it gives `${a[}` written directly, which is the one row
+whose wording differs.
+
+Only for an outer `${…}` with nothing of its own. zsh splices whatever the
+outer goes on with into the same text: `${${(P)e}:-d}` with `e=a/y/Q` is
+`xQ:-dz`, the `:-d` read as part of the replacement, and `${${(P)e}[1]}`
+is `xQ[1]z`. That reading is not taken here.
 
 Everywhere else the subscript reads what the inner **came to**, and the
 one question that adds is whether that result is a *list*, where the

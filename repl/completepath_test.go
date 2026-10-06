@@ -78,6 +78,11 @@ func TestCompletingAFilename(t *testing.T) {
 		{"an unescaped space ends the word", ": file o", ": file onlydir/"},
 		{"an escaped space does not", `: file\ o`, `: file\ one.txt `},
 		{"they agree as far as the space", ": file", `: file\ `},
+		// The typed word is read as the name it spells, so a backslash that
+		// quotes nothing is no obstacle to the fill: measured 2026-10-06,
+		// bash 5.3 and zsh 5.9.2 both fill `\a` over `a b` and `a d` as
+		// `a\ ` (#6224).
+		{"a backslash that quotes nothing", `: \fil`, `: file\ `},
 		{"a quote in a name is escaped", ": quo", `: quo\'te.txt `},
 		{"a dollar in a name is escaped", ": a", `: a\$b.txt `},
 		{"brackets are escaped", ": brack", `: bracket\[1\].txt `},

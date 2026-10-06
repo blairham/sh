@@ -72,11 +72,28 @@ func (e *editor) completeAs(c Completer, menu MenuReason, step int) (matches []C
 	}
 	// Several. Fill in as far as they agree, which is what makes a second Tab
 	// worth pressing rather than a repeat of the first.
-	if common := commonPrefix(words); len(words) > 1 && len(common) > len(word) && keepsWhatWasTyped(word, common) {
+	if common := commonPrefix(words); len(words) > 1 && fillsInMore(word, common) {
 		e.replaceWord(start, common)
 		return displayCandidates(candidates, word), completionFilledInWhatTheyAgreeOn
 	}
 	return displayCandidates(candidates, word), completionHadNothingToInsert
+}
+
+// fillsInMore answers whether the matches' common part, put in place of the
+// typed word, names more than the word did and keeps what was typed.
+//
+// Both are asked of the names the two spell and not of their spellings: the
+// word is shell text and the matches go in quoted, so `\a` and `a\ ` are the
+// names `a` and `a `, and the second is longer and begins with the first.
+// Measured 2026-10-06 through a pseudo-terminal against zsh 5.9.2 and bash
+// 5.3, `x \a` with the matches `a b` and `a d` — from a `compadd` widget in
+// zsh, and as files in both — is filled in as `x a\ `, where this compared
+// the spellings and listed (#6224). And with `ab` and `ac` the common part
+// names `a`, which is no more than `\a` does, so zsh lists and the line is
+// left as typed.
+func fillsInMore(word, common string) bool {
+	typed, agreed := dequote(word), dequote(common)
+	return len(agreed) > len(typed) && keepsWhatWasTyped(typed, agreed)
 }
 
 // keepsWhatWasTyped answers whether filling in common keeps every character

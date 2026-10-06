@@ -353,10 +353,91 @@ func newCompletionState(c repl.Completion) *completionState {
 	if len(word) > 0 && (word[0] == '"' || word[0] == '\'') {
 		cs.qiprefix, word = word[:1], word[1:]
 	}
+	switch cs.qiprefix {
+	case "":
+		word = prefixAsTyped(word)
+	case `"`:
+		word = prefixInDoubleQuotes(word)
+	}
 	cs.prefix = word
 	cs.words, cs.current = completionWords(c)
 	return cs
 }
+
+// prefixAsTyped is `$PREFIX` for a word typed outside any quotes: the word
+// with every backslash that quotes nothing taken off, and the ones that quote
+// something kept (#6224).
+//
+// Measured 2026-10-06 through a pseudo-terminal against zsh 5.9.2, a `zle -C`
+// widget writing `$PREFIX` to a file, typing `x \Ca` for every printable
+// character C that is not a letter or digit, and some that are:
+//
+//	kept      \^ \* \~ \' \" \= \# \[ \] \? \{ \} \( \) \< \> \| \& \; \$ \` \<sp> \\
+//	dropped   \a \b \z \A \0 \9 \- \_ \. \, \/ \: \@ \% \+ \!
+//
+// and a backslash with nothing after it is dropped: `a\` is `a`, `\` alone
+// is empty, and `\\\a` is `\\a`. So what is kept is a backslash before a
+// character the shell would otherwise read as something, which is why `$PREFIX`
+// still has to be unquoted before it is matched — see typedForMatching.
+func prefixAsTyped(word string) string {
+	if !strings.Contains(word, "\\") {
+		return word
+	}
+	var b strings.Builder
+	r := []rune(word)
+	for i := 0; i < len(r); i++ {
+		if r[i] != '\\' {
+			b.WriteRune(r[i])
+			continue
+		}
+		if i+1 == len(r) {
+			break
+		}
+		i++
+		if r[i] == '\\' || strings.ContainsRune(prefixQuotedSpecials, r[i]) {
+			b.WriteByte('\\')
+		}
+		b.WriteRune(r[i])
+	}
+	return b.String()
+}
+
+// prefixInDoubleQuotes is `$PREFIX` for a word typed inside double quotes:
+// a backslash that quotes something there — before `$`, a backquote, `"` or
+// `\` — is kept as it is, and one that quotes nothing is a backslash in the
+// name, which `$PREFIX` spells quoted as `\\` (#6224). Measured 2026-10-06
+// against zsh 5.9.2 as prefixAsTyped is:
+//
+//	typed     "\a     "\*a     "\ a     "a\      "\      "\$a    "\"a    "\\a    "\\\a
+//	$PREFIX   \\a     \\*a     \\ a     a\\      \\      \$a     \"a     \\a     \\\\a
+//
+// Inside single quotes nothing quotes anything and `$PREFIX` is the word as
+// typed: `'\a` is `\a`.
+func prefixInDoubleQuotes(word string) string {
+	if !strings.Contains(word, `\`) {
+		return word
+	}
+	var b strings.Builder
+	r := []rune(word)
+	for i := 0; i < len(r); i++ {
+		if r[i] != '\\' {
+			b.WriteRune(r[i])
+			continue
+		}
+		if i+1 < len(r) && strings.ContainsRune("$`\"\\", r[i+1]) {
+			b.WriteRune('\\')
+			b.WriteRune(r[i+1])
+			i++
+			continue
+		}
+		b.WriteString(`\\`)
+	}
+	return b.String()
+}
+
+// prefixQuotedSpecials are the characters a backslash before them is kept for
+// in `$PREFIX`. See prefixAsTyped for the measurement.
+const prefixQuotedSpecials = "^*~'\"=#[]?{}()<>|&;$` "
 
 // freshCompstate is `$compstate` as a completion widget finds it, from the
 // measurement in the file comment.

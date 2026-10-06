@@ -193,3 +193,28 @@ func TestCompgroupsDecidesTheOrderTheBlocksAreDrawnIn(t *testing.T) {
 		t.Errorf("drew %q, want %q", got, want)
 	}
 }
+
+// A match that is not a file is drawn whole, and the editor's rule of taking
+// the typed directory off a row it makes for itself does not reach it (#6200).
+//
+// Measured 2026-10-06 through a pseudo-terminal against zsh 5.9.2 with `x
+// sub/a` typed and Tab on the widget: `compadd sub/aa sub/ab` lists `sub/aa
+// sub/ab`, and so does `-W sub`; a prefix that `-P` holds back is not drawn,
+// so `-P sub/ aa ab` lists `aa  ab`. An empty row is one the editor trims.
+func TestAMatchThatIsNotAFileIsDrawnWhole(t *testing.T) {
+	for _, c := range []struct{ name, call, want string }{
+		{"a plain match", "compadd sub/aa sub/ab", "sub/aa sub/ab"},
+		{"under -W", "compadd -W sub sub/aa sub/ab", "sub/aa sub/ab"},
+		{"-P's prefix held back", "compadd -P sub/ aa ab", "aa ab"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			var rows []string
+			for _, m := range completionCandidatesFor(t, widgetOf(c.call), "x sub/a") {
+				rows = append(rows, m.Display)
+			}
+			if got := strings.Join(rows, " "); got != c.want {
+				t.Errorf("%s drew %q, want %q", c.call, got, c.want)
+			}
+		})
+	}
+}

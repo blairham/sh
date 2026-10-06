@@ -246,3 +246,51 @@ func TestCompaddMatchesAWordTypedWithQuoting(t *testing.T) {
 		})
 	}
 }
+
+// TestPrefixHoldsTheQuotingThatQuotesSomething: `$PREFIX` keeps a backslash
+// that quotes something and drops one that quotes nothing, and inside double
+// quotes spells a backslash that is part of the name as `\\` (#6224).
+//
+// Measured 2026-10-06 through a pseudo-terminal against zsh 5.9.2, a `zle -C`
+// widget writing `$PREFIX` to a file; the rows are the word typed after `x `.
+// See prefixAsTyped and prefixInDoubleQuotes for the whole measurement.
+func TestPrefixHoldsTheQuotingThatQuotesSomething(t *testing.T) {
+	for _, c := range []struct{ word, want string }{
+		{`\a`, `a`},
+		{`\-a`, `-a`},
+		{`\!a`, `!a`},
+		{`\%a`, `%a`},
+		{`a\`, `a`},
+		{`\`, ``},
+		{`\\\a`, `\\a`},
+		// The ones that quote something stay.
+		{`\*a`, `\*a`},
+		{`\^a`, `\^a`},
+		{`\$a`, `\$a`},
+		{`\ a`, `\ a`},
+		{`\\a`, `\\a`},
+		{`a\ `, `a\ `},
+		// Inside double quotes.
+		{`"\a`, `\\a`},
+		{`"a\`, `a\\`},
+		{`"\$a`, `\$a`},
+		{`"\"a`, `\"a`},
+		{`"\\\a`, `\\\\a`},
+		// Inside single quotes, nothing.
+		{`'\a`, `\a`},
+		// The control: no backslash, no change.
+		{`ab`, `ab`},
+	} {
+		t.Run(c.word, func(t *testing.T) {
+			r := bindkeyRunner(t, widgetOf(`typeset -g seen=$PREFIX`))
+			line := "x " + c.word
+			zsh.RunCompletion(r, t.Context(), "probewid", repl.Completion{
+				Line: line, Point: len(line), Start: 2, Word: c.word, Dir: r.Dir,
+			})
+			got, ok := r.GetVar("seen")
+			if !ok || got != c.want {
+				t.Errorf("$PREFIX for %s is %q (set %v), want %q", c.word, got, ok, c.want)
+			}
+		})
+	}
+}

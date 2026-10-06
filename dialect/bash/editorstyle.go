@@ -70,5 +70,10 @@ func EditorStyle() repl.EditorStyle {
 		// state — see repl's EditorStyle field for the three rows, and note
 		// that bash 3.2.57 answers identically (#3735).
 		BellRingsOnAnAmbiguousCompletionThatInserts: true,
+		// And for a key with nothing to act on: `^F` at the end of the
+		// line, Backspace at its start, Down on the newest line. Measured
+		// 2026-10-06 through a pseudo-terminal; zsh rings for none of the
+		// motions and deletes — see the repl field for the table (#6240).
+		BellRingsWhenAnEditHasNothingToActOn: true,
 	}
 }

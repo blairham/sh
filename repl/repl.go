@@ -3000,6 +3000,8 @@ func (s Shell) newEditor(ctx context.Context, state *terminalState) *editor {
 		bellsOnAMenu: s.Editor.BellRingsWhenAMenuStarts,
 		// And whether a failing widget rings the bell.
 		ringsOnAFailedWidget: s.Editor.RingsWhenAWidgetFails,
+		// And whether a key with nothing to act on rings.
+		ringsOnNothingToActOn: s.Editor.BellRingsWhenAnEditHasNothingToActOn,
 		// Whether to ask the terminal to mark a paste, and how a marked one
 		// is drawn. Two of the four ask and ksh93 does not; see paste.go.
 		// And whether there is a terminal to ask at all. Measured 2026-09-22,

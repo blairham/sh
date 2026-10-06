@@ -303,6 +303,38 @@ type EditorStyle struct {
 	// for a `bind -x` command that fails.
 	RingsWhenAWidgetFails bool
 
+	// BellRingsWhenAnEditHasNothingToActOn sounds the bell for an emacs key
+	// whose edit found nothing to act on (#6240). Measured 2026-10-06 through
+	// a pseudo-terminal with a two-row prompt, each key alone on `echo ab`
+	// after a fresh start, and `\a` looked for in what the key alone wrote:
+	//
+	//	key                          where           bash 5.3.20   zsh 5.9.2
+	//	^D, Delete                   at the end      \a            see below
+	//	^F, Right                    at the end      \a            nothing
+	//	^B, Left                     at the start    \a            nothing
+	//	Backspace, ^H                at the start    \a            nothing
+	//	^W, ^U                       at the start    \a            nothing
+	//	^T                           at the start    \a            nothing
+	//	^T                           on `a`          \a            \a
+	//	^Y                           nothing killed  \a            \a
+	//	Down, ^N                     on the newest   \a            nothing
+	//	                             or no history
+	//	Up, ^P                       on the oldest   \a            nothing
+	//	Up, ^P                       no history      nothing       nothing
+	//	M-f, ^E, ^K, M-d             at the end      nothing       nothing
+	//	M-b, ^A, M-Delete            at the start    nothing       nothing
+	//
+	// So it is the key and not the edit that decides — `^W` and `M-Delete`
+	// both kill nothing at the start and only the first rings — which is why
+	// each key that rings says so where the editor reads it. vi insert mode
+	// rings for none of these in bash. bash 3.2.57 answers the same except
+	// for Up with no history at all, which it rings for.
+	//
+	// zsh's \a for `^T` on one character and `^Y` with nothing killed, and
+	// its `^D` at the end listing and Delete being unbound, are its own and
+	// not this; false is its answer and the core's.
+	BellRingsWhenAnEditHasNothingToActOn bool
+
 	// What the session keeps of the terminal settings a command leaves
 	// behind (#6105). Every shell in the panel keeps a change a command made
 	// and exited from: `stty -ixon` typed at the prompt lasts in zsh 5.9.2,

@@ -96,6 +96,10 @@ type editor struct {
 	// ringsOnAFailedWidget rings after a shell widget a key ran returns
 	// non-zero. See EditorStyle.RingsWhenAWidgetFails.
 	ringsOnAFailedWidget bool
+	// ringsOnNothingToActOn rings for an emacs key whose edit found nothing
+	// to act on. See ringUnless and
+	// EditorStyle.BellRingsWhenAnEditHasNothingToActOn.
+	ringsOnNothingToActOn bool
 
 	// listsMatches draws the matches on the keystroke that found them
 	// ambiguous rather than on a second one. False is the answer of a dialect
@@ -961,7 +965,7 @@ func (e *editor) keyLoop(prompt drawnPrompt) (string, error) {
 				e.deleteCharOrList(e.comp, prompt)
 				continue
 			}
-			e.change(false, e.deleteForward)
+			e.changeOrRing(e.deleteForward)
 			e.redraw(prompt)
 		case '\r', '\n':
 			return e.accepted(prompt), nil
@@ -970,23 +974,23 @@ func (e *editor) keyLoop(prompt drawnPrompt) (string, error) {
 		case ctrlE:
 			e.moveTo(len(e.line), prompt)
 		case ctrlB:
-			e.moveTo(e.pos-1, prompt)
+			e.ringUnless(e.moveTo(e.pos-1, prompt))
 		case ctrlF:
-			e.moveTo(e.pos+1, prompt)
+			e.ringUnless(e.moveTo(e.pos+1, prompt))
 		case ctrlK:
 			e.change(false, func() { e.killForwardTo(len(e.line)) })
 			e.redraw(prompt)
 		case ctrlU:
-			e.change(false, e.killToStart)
+			e.changeOrRing(e.killToStart)
 			e.redraw(prompt)
 		case ctrlW:
-			e.change(false, func() { e.killTo(e.wordStartBeforeCursor()) })
+			e.changeOrRing(func() bool { return e.killTo(e.wordStartBeforeCursor()) })
 			e.redraw(prompt)
 		case ctrlY:
-			e.change(false, e.yank)
+			e.changeOrRing(e.yank)
 			e.redraw(prompt)
 		case ctrlT:
-			e.change(false, e.transpose)
+			e.changeOrRing(e.transpose)
 			e.redraw(prompt)
 		case ctrlG:
 			// send-break in a dialect whose emacs keymap has it on `^G`:
@@ -1008,15 +1012,15 @@ func (e *editor) keyLoop(prompt drawnPrompt) (string, error) {
 			e.operateNext = e.browsing + 2
 			return e.accepted(prompt), nil
 		case ctrlP:
-			e.browse(-1, prompt)
+			e.browseOrRing(-1, prompt)
 		case ctrlN:
-			e.browse(+1, prompt)
+			e.browseOrRing(+1, prompt)
 		case ctrlR:
 			e.incrementalSearch(prompt, searchBackward, false)
 		case ctrlS:
 			e.incrementalSearch(prompt, searchForward, false)
 		case backspace, del:
-			e.change(false, e.deleteBackward)
+			e.changeOrRing(e.deleteBackward)
 			e.redraw(prompt)
 		case tab:
 			e.completeKey(e.comp, true, e.completedBefore, prompt)
@@ -1357,13 +1361,15 @@ func (e *editor) operateAndGetNext() {
 	e.browsing = at
 }
 
-func (e *editor) browse(dir int, prompt drawnPrompt) {
+// browse steps dir entries through the history, and reports whether there
+// was an entry there to step to.
+func (e *editor) browse(dir int, prompt drawnPrompt) bool {
 	if len(e.history) == 0 {
-		return
+		return false
 	}
 	to := e.browsing + dir
 	if to < 0 || to > len(e.history) {
-		return
+		return false
 	}
 	// Copied rather than kept by reference, and no test can tell: every path
 	// out of here reassigns e.line, so the array just stored is never written
@@ -1381,6 +1387,7 @@ func (e *editor) browse(dir int, prompt drawnPrompt) {
 	}
 	e.pos = len(e.line)
 	e.redraw(prompt)
+	return true
 }
 
 // remember adds an accepted line to the history.
@@ -1427,27 +1434,68 @@ func (e *editor) insert(r rune) {
 	e.pos++
 }
 
-func (e *editor) deleteBackward() {
+// deleteBackward, deleteForward and moveTo report whether they found anything
+// to act on: a character behind or under the cursor, a place on the line to
+// go to. One dialect rings when they did not — see ringUnless.
+func (e *editor) deleteBackward() bool {
 	if e.pos == 0 {
-		return
+		return false
 	}
 	e.line = append(e.line[:e.pos-1], e.line[e.pos:]...)
 	e.pos--
+	return true
 }
 
-func (e *editor) deleteForward() {
+func (e *editor) deleteForward() bool {
 	if e.pos >= len(e.line) {
-		return
+		return false
 	}
 	e.line = append(e.line[:e.pos], e.line[e.pos+1:]...)
+	return true
 }
 
-func (e *editor) moveTo(pos int, prompt drawnPrompt) {
+func (e *editor) moveTo(pos int, prompt drawnPrompt) bool {
 	if pos < 0 || pos > len(e.line) {
-		return
+		return false
 	}
 	e.pos = pos
 	e.redraw(prompt)
+	return true
+}
+
+// ringUnless rings the bell for an emacs key whose edit found nothing to act
+// on, in a dialect that says so — EditorStyle.BellRingsWhenAnEditHasNothingToActOn,
+// where the measurement is. acted is what the edit reported.
+//
+// Which keys ask is the caller's, because it is not the edit that decides:
+// bash rings for `^W` at the start of the line and not for `M-Delete` there,
+// though both are a kill of nothing behind the cursor, and rings for `^U` and
+// not for `^K` at the two ends. So each key that rings says so where it is
+// read, and the primitives only report.
+//
+// Not in vi mode, whose insert keys ring for none of this: measured with `set
+// -o vi`, Backspace at the start and `^D` at the end are silent in bash 5.3.20.
+func (e *editor) ringUnless(acted bool) {
+	if acted || !e.ringsOnNothingToActOn || e.viEditing() {
+		return
+	}
+	e.ring()
+}
+
+// changeOrRing is a change made through change by an edit that reports
+// whether it acted, ringing where it did not. See ringUnless.
+func (e *editor) changeOrRing(edit func() bool) {
+	acted := true
+	e.change(false, func() { acted = edit() })
+	e.ringUnless(acted)
+}
+
+// browseOrRing is a key's step through the history, ringing at either end of
+// it. With no history at all only the step forward rings: measured, bash
+// 5.3.20 is silent for Up and `^P` on an empty history and rings for Down and
+// `^N` there, and rings for Up on the oldest entry once there is one.
+func (e *editor) browseOrRing(dir int, prompt drawnPrompt) {
+	e.ringUnless(e.browse(dir, prompt) || (dir < 0 && len(e.history) == 0))
 }
 
 // redraw puts the line back on the screen.

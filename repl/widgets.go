@@ -412,9 +412,9 @@ func (e *editor) runWidget(b Binding, prompt drawnPrompt) {
 	case WidgetEndOfLine:
 		e.moveTo(len(e.line), prompt)
 	case WidgetBackwardChar:
-		e.moveTo(e.pos-1, prompt)
+		e.ringUnless(e.moveTo(e.pos-1, prompt))
 	case WidgetForwardChar:
-		e.moveTo(e.pos+1, prompt)
+		e.ringUnless(e.moveTo(e.pos+1, prompt))
 	case WidgetBackwardWord:
 		e.moveTo(e.backwardWord(), prompt)
 	case WidgetForwardWord:
@@ -423,7 +423,7 @@ func (e *editor) runWidget(b Binding, prompt drawnPrompt) {
 		e.killForwardTo(len(e.line))
 		e.redraw(prompt)
 	case WidgetKillWholeLine:
-		e.killToStart()
+		e.ringUnless(e.killToStart())
 		e.redraw(prompt)
 	case WidgetBackwardKillLine:
 		n := 1
@@ -439,10 +439,10 @@ func (e *editor) runWidget(b Binding, prompt drawnPrompt) {
 		e.killForwardTo(e.endOfWord())
 		e.redraw(prompt)
 	case WidgetYank:
-		e.yank()
+		e.ringUnless(e.yank())
 		e.redraw(prompt)
 	case WidgetTransposeChars:
-		e.transpose()
+		e.ringUnless(e.transpose())
 		e.redraw(prompt)
 	case WidgetSelfInsert:
 		// The key this keystroke is about — see editor.typedKey, which is
@@ -454,9 +454,9 @@ func (e *editor) runWidget(b Binding, prompt drawnPrompt) {
 		}
 		e.redraw(prompt)
 	case WidgetPreviousHistory:
-		e.browse(-1, prompt)
+		e.browseOrRing(-1, prompt)
 	case WidgetNextHistory:
-		e.browse(+1, prompt)
+		e.browseOrRing(+1, prompt)
 	case WidgetPreviousHistoryMatching:
 		e.browseMatching(-1, prompt)
 	case WidgetNextHistoryMatching:
@@ -474,10 +474,10 @@ func (e *editor) runWidget(b Binding, prompt drawnPrompt) {
 	case WidgetClearScreen:
 		e.clearScreen(prompt)
 	case WidgetDeleteChar:
-		e.deleteForward()
+		e.ringUnless(e.deleteForward())
 		e.redraw(prompt)
 	case WidgetBackwardDeleteChar:
-		e.deleteBackward()
+		e.ringUnless(e.deleteBackward())
 		e.redraw(prompt)
 	case WidgetComplete:
 		// Through completeKey, which is the whole of what a completion key

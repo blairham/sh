@@ -62,7 +62,7 @@ func (e *editor) listChoices(c Completer, prompt drawnPrompt) {
 // `^D` is still its own case in the key loop and not a binding to this.
 func (e *editor) deleteCharOrList(c Completer, prompt drawnPrompt) {
 	if e.pos < len(e.line) {
-		e.change(false, e.deleteForward)
+		e.change(false, func() { e.deleteForward() })
 		e.redraw(prompt)
 		return
 	}

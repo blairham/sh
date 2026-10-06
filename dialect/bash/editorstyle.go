@@ -16,6 +16,11 @@ func EditorStyle() repl.EditorStyle {
 		// included, with line buffering back on. See
 		// repl.EditorStyle.KeptCanonical (#6105).
 		KeptCanonical: true,
+		// And `^D` on an empty line is refused while IGNOREEOF is set, as
+		// many times as it says or ten. See
+		// repl.EditorStyle.IgnoreEndOfInputOption (#6239).
+		IgnoreEndOfInputParameter: "IGNOREEOF",
+		EndOfInputRefusals:        10,
 		// Measured under a pty: a hundred matches is where it stops asking
 		// and starts asking, it counts the matches and not the rows, it does
 		// not echo the key that answered, and it rings the bell at anything

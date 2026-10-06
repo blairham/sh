@@ -3359,6 +3359,16 @@ func leavingWord(dg interp.Diagnostics, login bool) string {
 	return dg.LeavingAPromptSession
 }
 
+// endOfInputRefused is what a shell says when it refuses ^D at a prompt: the
+// login shell's line where the dialect has one. See
+// Diagnostics.EndOfInputRefusedInALoginSession.
+func endOfInputRefused(dg interp.Diagnostics, login bool) string {
+	if login && dg.EndOfInputRefusedInALoginSession != "" {
+		return dg.EndOfInputRefusedInALoginSession
+	}
+	return dg.EndOfInputRefused
+}
+
 // stdinAfterCommandString is the program the standard-input half reads, which
 // is the ordinary standard-input route and not a third way of running one.
 //

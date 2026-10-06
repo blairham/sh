@@ -33,6 +33,12 @@ var ErrInterrupted = errors.New("interrupted")
 // leaves `$?` 1 at the next prompt and `echo X` in no history (#5913).
 var ErrBroken = errors.New("broken")
 
+// ErrEndOfInputRefused is a ^D on an empty line that an ignore-EOF setting
+// refused, in a dialect that answers a refusal with a fresh prompt: the line
+// is ended and the session goes on, after it says so. See
+// EditorStyle.IgnoreEndOfInputOption and refuseEndOfInput.
+var ErrEndOfInputRefused = errors.New("end of input refused")
+
 // editor holds the line being typed and the history behind it.
 type editor struct {
 	in  io.Reader
@@ -554,6 +560,26 @@ type editor struct {
 	// Shell.answerInterrupt and keepsTheLineOnInterrupt.
 	answerInterrupt func() bool
 
+	// endOfInputRefusals answers how many ^D on an empty line this session
+	// refuses before it lets one end it, and whether it refuses any. Set by
+	// the session for the length of a prompt's read, and nil otherwise —
+	// a ^D that ends a read a *command* asked for is that read's end of
+	// input and nothing to refuse. See refuseEndOfInput.
+	endOfInputRefusals func() (int, bool)
+
+	// endOfInputRefused is the line a refusal draws, and
+	// refusalStaysOnTheLine says how: see
+	// EditorStyle.EndOfInputRefusalStaysOnTheLine.
+	endOfInputRefused     string
+	refusalStaysOnTheLine bool
+
+	// refusedInARow counts the ^D refused since the session last ran a
+	// command, which is what both shells count — the loop sets it back to
+	// zero when a line runs. Kept on the editor because the editor outlives
+	// every read, and the count has to: an empty line typed between two ^D
+	// does not start it again.
+	refusedInARow int
+
 	// jobWake is a second descriptor of exactly that shape, and it becomes
 	// readable when a background job has *ended*. jobWoke takes the readiness
 	// back off it and jobNotices writes what there is to say, reporting
@@ -971,6 +997,12 @@ func (e *editor) keyLoop(prompt drawnPrompt) (string, error) {
 				}
 				return e.abandon(prompt)
 			case viStopped:
+				if refused, err := e.refuseEndOfInput(prompt); refused {
+					if err != nil {
+						return "", err
+					}
+					continue
+				}
 				return e.stopped(prompt)
 			}
 			continue
@@ -989,6 +1021,15 @@ func (e *editor) keyLoop(prompt drawnPrompt) (string, error) {
 				// falls through to the delete below, which on an empty line
 				// does nothing; see lineStart.endOnEndOfInput for what the
 				// shell being modeled does there instead.
+				//
+				// Unless the session refuses it, which is the ignore-EOF
+				// setting's to say. See refuseEndOfInput (#6239).
+				if refused, err := e.refuseEndOfInput(prompt); refused {
+					if err != nil {
+						return "", err
+					}
+					continue
+				}
 				return e.stopped(prompt)
 			}
 			// With something typed, ^D deletes forwards instead — which is
@@ -1314,6 +1355,62 @@ func (e *editor) stopped(prompt drawnPrompt) (string, error) {
 	e.endLine(prompt, e.leaving)
 	e.wroteLeaving = e.leaving != ""
 	return "", io.EOF
+}
+
+// refuseEndOfInput answers a ^D on an empty line under an ignore-EOF setting,
+// and reports whether it was refused. Refused, err is ErrEndOfInputRefused
+// where the read ends for a fresh prompt and nil where it goes on.
+//
+// Measured 2026-10-06 through a pseudo-terminal with a two-row prompt
+// (`top`, `P> `), `^D` at the empty second row:
+//
+//	zsh 5.9.2   \r\r\n\azsh: use 'exit' to exit.\r\e[A, the line redrawn
+//	bash 5.3.20 \r\r\nUse "exit" to leave the shell.\r\n, a fresh prompt
+//
+// zsh draws the same line on the tenth `^D` and then leaves, and the second
+// and later refusals clear under the line first (`\r\r\n\e[J\a…`), which is
+// the one the line left there last time. See
+// EditorStyle.IgnoreEndOfInputOption for the counts.
+func (e *editor) refuseEndOfInput(prompt drawnPrompt) (bool, error) {
+	if e.endOfInputRefusals == nil || e.endOfInputRefused == "" {
+		return false, nil
+	}
+	limit, on := e.endOfInputRefusals()
+	if !on {
+		return false, nil
+	}
+	e.refusedInARow++
+	refused := e.refusedInARow <= limit
+	if e.refusalStaysOnTheLine {
+		e.refusalUnderTheLine(prompt)
+		return refused, nil
+	}
+	if !refused {
+		return false, nil
+	}
+	e.endLine(prompt, "")
+	return true, ErrEndOfInputRefused
+}
+
+// refusalUnderTheLine draws a refusal zsh's way: a bell and the refusal on
+// the row under the line, and the cursor back where it was.
+func (e *editor) refusalUnderTheLine(prompt drawnPrompt) {
+	text := e.bell() + e.endOfInputRefused
+	if e.cols() <= 0 {
+		// No width, so no row under the line to come back from: the
+		// refusal on rows of its own and the prompt drawn again under it,
+		// whole.
+		e.write(e.newline() + text + e.newline())
+		e.rowEnded = true
+		e.redraw(prompt)
+		return
+	}
+	e.below(e.live(prompt), "\x1b[J"+text)
+	// And it stays there while the line is typed, the way a listing the
+	// cursor came back from does, until the line ends: measured, zsh's
+	// keystrokes after a refusal leave it and the accepted line clears it
+	// (`\r\r\n\e[J`). See returnToTheLine.
+	e.listingBelow = true
 }
 
 // readRune completes a UTF-8 sequence whose first byte has arrived.

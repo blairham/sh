@@ -154,6 +154,11 @@ func TestARepeatedTabStartsAMenu(t *testing.T) {
 		{"a widget that leaves compstate alone", "", []string{"x a", "x always", "x auto"}},
 		{"a widget that asks for the prefix", "compstate[insert]=unambiguous", []string{"x a", "x aZ"}},
 		{"a widget that asks for a menu at the second match", "compstate[insert]=menu:2", []string{"x auto", "x always", "x auto"}},
+		// And what it finds there on entry: `automenu` on the Tab after the
+		// listing, which this function answers by starting at the second
+		// match — measured, zsh puts `auto` in the line where the plain
+		// widget puts `always`.
+		{"a widget that reads what it was handed", "[[ $compstate[insert] == automenu ]] && compstate[insert]=menu:2", []string{"x a", "x auto", "x always"}},
 	} {
 		t.Run(row.name, func(t *testing.T) {
 			control, screen := widgetSession(t, dir,

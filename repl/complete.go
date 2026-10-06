@@ -626,8 +626,19 @@ func (e *editor) confirmList(matches []Candidate, prompt drawnPrompt) bool {
 		case c == 'n' || c == 'N', !e.listQueryStrict:
 			// Anything at all declines where a shell takes the first key it
 			// is given; only `n` does where one waits for an answer.
-			if e.listQueryTakesItsRow {
+			if e.listQueryTakesItsRow && !e.drawsTheLineAgainBelow() {
 				e.backToTheLine(prompt)
+				return false
+			}
+			if e.listQueryTakesItsRow {
+				// Declined where the line is not gone back to: the line is
+				// drawn again under the question, as a fresh prompt is.
+				// Measured 2026-10-06 against zsh 5.9.2 with
+				// ALWAYS_LAST_PROMPT off, `LISTMAX=2` and `n`: `n\r\n`, the
+				// ground and every row of the prompt, where with the option
+				// on the cursor goes back up to the line (#6209).
+				e.write("\r\n")
+				e.rowEnded = true
 				return false
 			}
 			e.write("\r\n")

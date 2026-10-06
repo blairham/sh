@@ -240,6 +240,43 @@ different words. On `echo a+b`, `^W` leaves `echo ` and `M-Delete` leaves
 rather than a use of `WordCharacters`: in zsh both keys agree, and in bash
 they do not.
 
+### A key with nothing to act on
+
+bash rings the bell for an emacs key whose edit finds nothing to act on, and
+zsh does not. Measured 2026-10-06 through a pseudo-terminal with a two-row
+prompt, each key pressed alone on `echo ab` in a fresh shell, and `\a` looked
+for in what that key alone wrote (#6240):
+
+| key | where | bash 5.3.20 | zsh 5.9.2 |
+| --- | --- | --- | --- |
+| `^F`, Right | at the end | `\a` | nothing |
+| `^B`, Left | at the start | `\a` | nothing |
+| Backspace, `^H` | at the start | `\a` | nothing |
+| `^D`, Delete | at the end | `\a` | `\a`, its own (below) |
+| `^W`, `^U` | at the start | `\a` | nothing |
+| `^T` | at the start | `\a` | nothing |
+| `^T` | on `a` alone | `\a` | `\a` |
+| `^Y` | nothing killed yet | `\a` | `\a` |
+| Down, `^N` | on the newest line, history or none | `\a` | nothing |
+| Up, `^P` | on the oldest entry | `\a` | nothing |
+| Up, `^P` | no history at all | nothing | nothing |
+| `M-f`, `^E`, `^K`, `M-d` | at the end | nothing | nothing |
+| `M-b`, `^A`, `M-Delete` | at the start | nothing | nothing |
+
+It is the **key** that decides and not the edit: `^W` and `M-Delete` both kill
+nothing at the start of the line and only `^W` rings, and `^U` rings at the
+start where `^K` is silent at the end. So the editor's primitives report
+whether they acted and each key that rings says so where it is read. vi insert
+mode rings for none of it — with `set -o vi`, Backspace at the start and `^D`
+at the end are silent. bash 3.2.57 gives the same answers but one: it rings
+for Up with no history at all.
+
+zsh's bells in the table are not this rule. `^D` at the end of a typed line is
+its `delete-char-or-list`, which lists and rings because `ab` matches nothing;
+`^T` on one character and `^Y` with nothing killed ring in zsh as well. The
+field is `BellRingsWhenAnEditHasNothingToActOn`, and false is zsh's answer and
+the core's.
+
 ## What a terminal sends, and what a shell does with it
 
 The same key is not the same bytes twice. Home is `\e[H` on one terminal,

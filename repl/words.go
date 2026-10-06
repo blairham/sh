@@ -135,13 +135,14 @@ func (e *editor) kill(text []rune, forward bool) {
 // dialect ever added, for a sequence of keystrokes nobody types. bash's
 // answer, written down here and in docs/spec/editing.md rather than taken
 // quietly.
-func (e *editor) killTo(i int) {
+func (e *editor) killTo(i int) bool {
 	if i < 0 || i >= e.pos {
-		return
+		return false
 	}
 	e.kill(e.line[i:e.pos], false)
 	e.line = append(e.line[:i], e.line[e.pos:]...)
 	e.pos = i
+	return true
 }
 
 // killForwardTo removes what lies between the cursor and j.
@@ -158,13 +159,13 @@ func (e *editor) killForwardTo(j int) {
 // Measured with the cursor at the start of `echo one two`: bash leaves the
 // line alone, because there is nothing before the cursor to kill; zsh empties
 // it. A finger that means one and gets the other loses a whole command.
-func (e *editor) killToStart() {
+func (e *editor) killToStart() bool {
 	if e.wholeLineKill {
 		// The whole line as one backward kill from its end, so that an empty
 		// line is a kill of nothing here as much as it is anywhere else.
 		e.pos = len(e.line)
 	}
-	e.killTo(0)
+	return e.killTo(0)
 }
 
 // backwardKillLine is zsh's `backward-kill-line` with a count of n, which
@@ -213,15 +214,16 @@ func (e *editor) backwardKillLine(n int) {
 }
 
 // yank puts the last kill back at the cursor.
-func (e *editor) yank() {
+func (e *editor) yank() bool {
 	n := len(e.killed)
 	if n == 0 {
-		return
+		return false
 	}
 	e.line = append(e.line, make([]rune, n)...)
 	copy(e.line[e.pos+n:], e.line[e.pos:])
 	copy(e.line[e.pos:], e.killed)
 	e.pos += n
+	return true
 }
 
 // transpose swaps the two characters around the cursor and steps past them —
@@ -231,14 +233,14 @@ func (e *editor) yank() {
 // and the dialects answer that differently: measured on `echo abc` with the
 // cursor at the start, bash leaves the line alone and zsh swaps the first two
 // characters and moves the cursor past them.
-func (e *editor) transpose() {
+func (e *editor) transpose() bool {
 	if len(e.line) < 2 {
-		return
+		return false
 	}
 	switch {
 	case e.pos == 0:
 		if !e.transposeAtStart {
-			return
+			return false
 		}
 		e.line[0], e.line[1] = e.line[1], e.line[0]
 		e.pos = 2
@@ -251,4 +253,5 @@ func (e *editor) transpose() {
 		e.line[e.pos-1], e.line[e.pos] = e.line[e.pos], e.line[e.pos-1]
 		e.pos++
 	}
+	return true
 }

@@ -26,12 +26,16 @@ import (
 // That kept Tab working on a real `~/.zshrc` (#2770) and it left the rc's own
 // completions unrun.
 //
-// This is the second claim, kept. The function runs, what it collects with
-// `compadd` is what the key offers, and **a function that offers nothing
-// leaves the editor completing exactly what it completed before** — see
-// repl.Binding.Candidates, where that ordering is the rule rather than a
-// fallback. So the failure #2770 was filed for cannot come back through here:
-// the worst a broken completion function can do is cost one call.
+// This is the second claim, kept. The function runs, and what it collects
+// with `compadd` is what the key offers. **A function that offers nothing
+// offers nothing**: zsh rings and leaves the line, and so does this
+// (repl.CompletionOfferedNothing, #6214). Until the shipped completion
+// system ran here, such a function handed the key to the editor's own
+// completion instead — the ordering repl.Binding.Candidates still states
+// for an action with no opinion — and that turned `cd ` and Tab in a
+// directory with no subdirectory into `cd a`. The failure #2770 was filed
+// for still cannot come back through here: a function that stops on an
+// error is repl.CompletionStopped, and costs one call.
 //
 // # What a function sees, measured
 //
@@ -183,15 +187,23 @@ func completionFrom(ctx context.Context) (*completionState, bool) {
 // of #2776's user-visible half.
 //
 // name is the widget the key was bound to, carried through
-// repl.Binding.Candidates by bindkey.go. A name that is not a `zle -C` widget,
-// or whose function is not defined, answers nothing — which the editor reads
-// as "no opinion about this word" and completes its own way.
+// repl.Binding.Candidates by bindkey.go. A name that is not a `zle -C` widget
+// answers nothing — which the editor reads as "no opinion about this word"
+// and completes its own way. One whose function is not defined, or whose
+// function offers no match, answers repl.CompletionOfferedNothing, which
+// zsh's answer is too.
 func RunCompletion(
 	r *interp.Runner, ctx context.Context, name string, c repl.Completion,
 ) []repl.Candidate {
 	def, defined := widgetDefinitionOf(r, name)
-	if !defined || def.completer == "" || !r.HasFunction(def.function) {
+	if !defined || def.completer == "" {
 		return nil
+	}
+	if !r.HasFunction(def.function) {
+		// A completion widget whose function is not there completes
+		// nothing, and says so with the bell — measured, the same as one
+		// that adds nothing. See repl.CompletionOfferedNothing.
+		return repl.CompletionOfferedNothing()
 	}
 	cs := newCompletionState(c)
 	entry := insertOnEntry(r, c.Menu)
@@ -230,7 +242,7 @@ func RunCompletion(
 		return repl.CompletionStopped()
 	}
 	if !ran {
-		return nil
+		return repl.CompletionOfferedNothing()
 	}
 	if strings.Contains(cs.state["insert"], "tab") {
 		// The function asked for the key to be typed instead: `tab`
@@ -244,13 +256,25 @@ func RunCompletion(
 		// repl.CompletionInsertsTheKey.
 		return repl.CompletionInsertsTheKey()
 	}
+	matches := cs.groupedMatches()
+	if len(matches) == 0 {
+		// The function ran and offered nothing, which is its answer: zsh
+		// leaves the line and rings, where handing the key to this
+		// editor's own completion put a prefix of whatever files there
+		// were on the line — `cd ` and Tab became `cd a` in a directory
+		// with no subdirectory (#6214). The fallback dates from before the
+		// completion system could run here (#2770); a function that cannot
+		// run is CompletionStopped above, and still costs no more than one
+		// call.
+		return repl.CompletionOfferedNothing()
+	}
 	if insert := cs.state["insert"]; insert != entry {
 		// Left as it was found, the value says what the editor was going
 		// to do anyway, so only a function that changed it has anything
 		// to tell it.
-		return insertAsAsked(insert, cs.groupedMatches())
+		return insertAsAsked(insert, matches)
 	}
-	return cs.groupedMatches()
+	return matches
 }
 
 // insertOnEntry is `compstate[insert]` as a completion function finds it: how

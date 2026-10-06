@@ -4,6 +4,7 @@
 package zsh_test
 
 import (
+	"reflect"
 	"strings"
 	"testing"
 
@@ -119,7 +120,16 @@ func TestAMessageSurvivesAnEmptyBlockAndAnExplanationDoesNot(t *testing.T) {
 		{"an explanation with no matches", "compadd -J g -X 'a heading'", ""},
 	} {
 		t.Run(c.name, func(t *testing.T) {
-			got := drawn(completionCandidatesFor(t, widgetOf(c.call), "git che"))
+			answer := completionCandidatesFor(t, widgetOf(c.call), "git che")
+			if c.want == "" {
+				// Nothing drawn and nothing offered, which is the answer
+				// that says so (#6214).
+				if !reflect.DeepEqual(answer, repl.CompletionOfferedNothing()) {
+					t.Errorf("%s answered %#v, want nothing offered", c.call, answer)
+				}
+				return
+			}
+			got := drawn(answer)
 			if got != c.want {
 				t.Errorf("%s drew %q, want %q", c.call, got, c.want)
 			}

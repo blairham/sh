@@ -401,14 +401,19 @@ calls it by name (`w() { zle mycomp }`), which is how zsh-autosuggestions
 reaches every completion widget it wraps. Measured 2026-10-05 against zsh
 5.9.2: the wrapper's key fills in `x al` to `x alp` and lists on the next
 press, with `$WIDGET` inside the function still the wrapper's (#6142). The function contributes
-candidates with `compadd`; if it has none — because it is not defined,
-because it failed, or because it had nothing to say about this word —
-the answer above stands unchanged, and Tab goes on completing filenames
-and command names exactly as specified. That ordering is the rule and
-not a recovery: a completion function that breaks costs one call, never
-the key. A shell whose Tab broke the moment a startup file was read
-would be worse off than one with no completion system at all, and that
-is what the fallback exists to make impossible.
+candidates with `compadd`, and **if it has none, the key completes
+nothing**: it rings and the line stays as it was. Measured 2026-10-06
+against zsh 5.9.2 over `always` and `auto` with Tab on such a widget,
+`x a` stays `x a` with one bell and nothing listed for a function that
+adds nothing, one whose words do not match, one that returns 1, and a
+widget whose function is not defined; and with `compinit`, `cd ` stays
+`cd ` in a directory with no subdirectory, where this used to hand the
+key to the completion specified here and put `cd a` on the line (#6214).
+A function that **stops on an error** — a refusal it printed — is the
+one case still worth its own word: nothing is offered and nothing else is
+asked, so a completion function that breaks costs one call, never the
+key. That was the fallback's reason for existing (#2770), from before
+the shipped completion system ran here.
 
 So a completion somebody writes by hand runs here. Measured 2026-09-15
 through a pseudo-terminal, with `_c() { compadd checkout cherry

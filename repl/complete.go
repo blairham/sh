@@ -644,6 +644,12 @@ func (e *editor) confirmList(matches []Candidate, prompt drawnPrompt) bool {
 // only acceptable ordering: a real `~/.zshrc` replaced a working Tab with one
 // that diagnosed on every keystroke and completed nothing.
 //
+// Two answers are not "nothing" and are not followed by this editor's own:
+// CompletionStopped, a function that stopped on an error, and
+// CompletionOfferedNothing, one that ran and has no match — which is a
+// completion system's real answer for a word with no completions, and which
+// zsh meets with the bell and the line left as it was (#6214).
+//
 // The name is per keystroke and the chain is not cached, because the two
 // facts it is built from move independently: a key's binding is read fresh on
 // every key, and the session's own completer is built once.
@@ -676,6 +682,12 @@ func (e *editor) completerFor(name string) Completer {
 			// there — what zsh draws under the diagnostic (#6062).
 			e.drawn = drawnLine{}
 			e.row = 0
+			return nil
+		}
+		if len(matches) == 1 && matches[0].nothing {
+			// The shell's completion was asked and has nothing for this
+			// word, which is its answer: this editor's own is not asked
+			// either (#6214). See CompletionOfferedNothing.
 			return nil
 		}
 		if len(matches) > 0 {

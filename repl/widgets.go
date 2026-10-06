@@ -384,10 +384,11 @@ type Binding struct {
 	//
 	// Asked **before** this editor's own completion and never instead of it:
 	// an action that offers nothing leaves the editor completing exactly what
-	// it completes with no such action at all. That ordering is the whole of
-	// why this is safe to wire to a startup file's completion system — the
-	// failure mode a startup file had before it, a Tab that diagnosed and
-	// completed nothing, cannot be reached from here.
+	// it completes with no such action at all — unless it answers that it
+	// has nothing, which is CompletionOfferedNothing. That ordering is the
+	// whole of why this is safe to wire to a startup file's completion
+	// system — the failure mode a startup file had before it, a Tab that
+	// diagnosed and completed nothing, cannot be reached from here.
 	//
 	// A name, for Function's reason: producing the candidates means calling
 	// a function of the shell's, and Shell.RunCompletion is where the dialect

@@ -728,7 +728,8 @@ The completion *context* the completer names is built too. zsh gives such a
 widget `compstate`, `words`, `CURRENT`, `PREFIX` and the `compadd` builtin,
 which is the whole of how candidates are produced, and a widget's function has
 all of them here: what it collects with `compadd` is what the key offers, and
-a function with nothing to say leaves the editor's own completion standing.
+a function that offers nothing leaves the line alone with the bell, as zsh's
+does (#6214).
 `zsh/computil`'s eight builtins are in the table as well, so the completion
 system zsh *ships* runs — `compinit`, `_main_complete`, `_arguments` — as far
 as the rest of the shell lets it. See `completion.md` for what that reaches

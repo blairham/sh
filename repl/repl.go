@@ -3145,6 +3145,12 @@ func (s Shell) newEditor(ctx context.Context, state *terminalState) *editor {
 		runHelpWord:          s.Editor.RunHelpWord,
 		namedWidgets:         s.NamedWidgets,
 		listOnControlD:       s.Editor.ListOnControlD,
+		// And the part of the wide keymap readline has, with readline's
+		// words (#6250).
+		wordKeys:                 s.Editor.WordKeys,
+		quotedInsertInViInsert:   s.Editor.QuotedInsertInViInsert,
+		capitalizeFirstCharacter: s.Editor.CapitalizeTakesTheFirstCharacter,
+		transposeToLineEnd:       s.Editor.TransposeWordsReachesTheLineEnd,
 		// And what a refused ^D says, and where. See refuseEndOfInput.
 		endOfInputRefused:     s.EndOfInputRefused,
 		refusalStaysOnTheLine: s.Editor.EndOfInputRefusalStaysOnTheLine,

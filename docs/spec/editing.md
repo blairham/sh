@@ -1376,10 +1376,38 @@ the one way whatever the terminal. Not reproduced: Return on an empty name in
 zsh asks whether to list all of them, as a long completion listing does; here
 it lists them.
 
-bash binds `M-u`, `M-l`, `M-c` and `M-t` too, to readline's own versions —
-its words are letters and digits, and a negative count works backward — and
-none of that is measured here, so in bash the keys still do nothing. It has
-nothing on `M-q`, `M-'`, `M-a` or `^X u`, and its `^V` is not measured here.
+### The same keys in bash
+
+bash binds `M-u`, `M-l`, `M-c`, `M-t` and `^V` in its emacs keymap, the
+upper-case letters through `do-lowercase-version`, and `^V` in vi insert as
+well; it has nothing on `M-q`, `M-'`, `M-a` or `^X u` (#6250). Measured
+2026-10-06 through a pseudo-terminal against bash 5.3.20 with
+`INPUTRC=/dev/null` and a two-row prompt, the line and cursor read back by
+typing a marker at the cursor and running the line.
+
+A word is letters and digits, as for the motion keys, and the case keys agree
+with zsh's everywhere but one place: capitalize-word raises a word's first
+*character*, whatever it is, so `3AB` becomes `3ab` where zsh gives `3Ab`;
+`a3B` is `A3b` in both.
+
+transpose-words agrees wherever a word follows the cursor. Where none does,
+the later word is the last one **and everything after it to the end of the
+line**, and the cursor goes to the end of the line:
+
+| line | cursor | bash 5.3.20 | cursor | zsh 5.9.2 | cursor |
+| --- | --- | --- | --- | --- | --- |
+| `aa bb␠␠` | 7 | `bb␠␠␠aa` | 7 | `bb aa␠␠` | 5 |
+| `aa bb␠␠` | 5 | `bb␠␠␠aa` | 7 | `bb aa␠␠` | 5 |
+| `aa bb;;` | 7 | `bb;; aa` | 7 | | |
+| `aa bb cc` | 1 | unchanged, `\a` | 1 | unchanged | 1 |
+
+With no word before its own to swap with, it rings. `^V` takes the next key
+as zsh's does, and draws a control character as a plain caret.
+
+`repl.EditorStyle.WordKeys`, `QuotedInsertInViInsert`,
+`CapitalizeTakesTheFirstCharacter` and `TransposeWordsReachesTheLineEnd` are
+the fields. What a count does is readline's own, and a negative count works
+backward there; bash's counts are not built yet (#6248).
 
 ## What is still missing
 
@@ -1416,8 +1444,6 @@ was on this list and is not any more — `^R` is `repl/search.go` and
   has now.
 - **`M-y`** — walk back through earlier kills. This keeps one kill rather
   than a ring, so there is nothing to walk.
-- **Case and other word operators in bash** — `M-u`, `M-l`, `M-c` and
-  `M-t`. zsh's are built; see the section above.
 - **The rest of vi command mode.** What is built is in the section above; these
   are measured to exist and are not:
   - `.`, which repeats the last change, and `U`, which takes the whole line

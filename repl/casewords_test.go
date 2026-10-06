@@ -137,3 +137,113 @@ func TestQuotedInsertTakesTheNextKeyAsItIs(t *testing.T) {
 		t.Errorf("without the field ^V is ignored and ^A moves: got %q", got)
 	}
 }
+
+// The same keys under the readline dialect's fields, against the rows in
+// EditorStyle.CapitalizeTakesTheFirstCharacter and
+// TransposeWordsReachesTheLineEnd (#6250). WordKeys alone puts them on the
+// keys, and none of the rest of the wide keymap comes with it.
+func TestTheWordKeysAsReadlineHasThem(t *testing.T) {
+	style := EditorStyle{
+		WordKeys:                         true,
+		QuotedInsertInViInsert:           true,
+		CapitalizeTakesTheFirstCharacter: true,
+		TransposeWordsReachesTheLineEnd:  true,
+	}
+	at := func(line string, cursor int) string {
+		return line + strings.Repeat("\x02", len([]rune(line))-cursor)
+	}
+	for _, c := range []struct {
+		name, line string
+		cursor     int
+		keys, want string
+	}{
+		{"M-u from the c", "echo abc def", 7, "\x1bu", "echo abCX def"},
+		{"M-l", "ABC DEF", 0, "\x1bl", "abcX DEF"},
+		{"M-L is M-l", "ABC DEF", 1, "\x1bL", "AbcX DEF"},
+		{"a word is letters and digits", "foo-bar", 0, "\x1bu", "FOOX-bar"},
+		{"M-c raises a leading digit, which has no case", "3AB x", 0, "\x1bc", "3abX x"},
+		{"and lowers the rest after a digit", "a3B x", 0, "\x1bc", "A3bX x"},
+		{"M-c from the B", "echo aBC dEF", 6, "\x1bc", "echo aBcX dEF"},
+		{"M-c across punctuation", "x 3ab", 1, "\x1bc", "x 3abX"},
+
+		{"M-t from a blank takes the next word", "aa bb cc", 2, "\x1bt", "bb aaX cc"},
+		{"M-t at the end of a word takes the next", "aa bb cc", 5, "\x1bt", "aa cc bbX"},
+		{"M-t at the end swaps the last two", "aa bb cc", 8, "\x1bt", "aa cc bbX"},
+		{"M-t after the last word takes the blanks along", "aa bb  ", 7, "\x1bt", "bb   aaX"},
+		{"and from the end of the last word", "aa bb  ", 5, "\x1bt", "bb   aaX"},
+		{"and punctuation", "aa bb;;", 7, "\x1bt", "bb;; aaX"},
+		{"the separator stays", "aa, bb", 4, "\x1bt", "bb, aaX"},
+		{"M-t in the first word does nothing", "aa bb cc", 1, "\x1bt", "aXa bb cc"},
+		{"M-t on one word does nothing", "ab", 2, "\x1bt", "abX"},
+
+		{"^V", "ab", 1, "\x16\x01", "a\x01Xb"},
+		{"M-q is not one of them", "ab", 2, "\x1bq", "abX"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			got := typedStyled(t, style, at(c.line, c.cursor)+c.keys+"X\r")
+			if got != c.want {
+				t.Errorf("got %q, want %q", got, c.want)
+			}
+		})
+	}
+}
+
+// `M-t` with no word before its own rings in the dialect whose edits ring
+// when they have nothing to act on — measured on bash 5.3.20, and the rows
+// are in EditorStyle.TransposeWordsReachesTheLineEnd — and a swap does not.
+func TestTransposeWordsWithNothingToSwapRings(t *testing.T) {
+	style := EditorStyle{WordKeys: true, TransposeWordsReachesTheLineEnd: true, BellRingsWhenAnEditHasNothingToActOn: true}
+	for _, c := range []struct {
+		name, keys string
+		rings      bool
+	}{
+		{"in the first word", "aa bb cc\x01\x06\x1bt", true},
+		{"on one word", "ab\x1bt", true},
+		{"on an empty line", "\x1bt", true},
+		{"a swap", "aa bb\x1bt", false},
+		{"M-u at the end, which has nothing to act on", "ab\x1bu", false},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			var out strings.Builder
+			e := Shell{Editor: style}.newEditor(t.Context(), nil)
+			e.in, e.out = typing(c.keys+"\r"), &out
+			if _, err := e.readLine(drawPrompt("$ ")); err != nil {
+				t.Fatal(err)
+			}
+			want := 0
+			if c.rings {
+				want = 1
+			}
+			if got := strings.Count(out.String(), bell); got != want {
+				t.Errorf("rang %d times, want %d", got, want)
+			}
+		})
+	}
+}
+
+// `^V` in vi insert mode is the readline dialect's, and the other's viins
+// has nothing there (#6250).
+func TestQuotedInsertInViInsertIsTheDialectsToGive(t *testing.T) {
+	for _, c := range []struct {
+		name  string
+		style EditorStyle
+		want  string
+	}{
+		{"with the field", EditorStyle{WordKeys: true, QuotedInsertInViInsert: true}, "a\x01b"},
+		// ^V is ignored and ^A is beginning-of-line.
+		{"without it", EditorStyle{WideEmacsKeymap: true}, "ba"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			e := Shell{Editor: c.style}.newEditor(t.Context(), nil)
+			e.vi = func() bool { return true }
+			e.in, e.out = typing("a\x16\x01b\r"), &strings.Builder{}
+			got, err := e.readLine(drawPrompt("$ "))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got != c.want {
+				t.Errorf("got %q, want %q", got, c.want)
+			}
+		})
+	}
+}

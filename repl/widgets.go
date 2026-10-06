@@ -486,7 +486,7 @@ func (e *editor) runWidget(b Binding, prompt drawnPrompt) {
 		e.change(false, func() { e.caseWords(e.countAsGiven(), capitalCase) })
 		e.redraw(prompt)
 	case WidgetTransposeWords:
-		e.change(false, func() { e.transposeWords(e.countAsGiven()) })
+		e.changeOrRing(func() bool { return e.transposeWords(e.countAsGiven()) })
 		e.redraw(prompt)
 	case WidgetQuoteLine:
 		e.change(false, e.quoteLine)

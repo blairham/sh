@@ -118,17 +118,16 @@ func ControlXSearchBindings() map[string]Widget {
 	return out
 }
 
-// wideEmacsKeys are the keys EditorStyle.WideEmacsKeymap adds to the table,
-// in the emacs keymap only: what one dialect's emacs keymap binds and the
-// other's either leaves alone or binds to something else (#6241).
+// wordKeys are the keys EditorStyle.WordKeys adds to the table, in the emacs
+// keymap only: the case keys, transpose-words and quoted-insert, which both
+// dialects' emacs keymaps have (#6241, #6250).
 //
-// Measured 2026-10-06 with `bindkey -M emacs` on zsh 5.9.2, and the upper-case
-// spellings are bound to the same widgets as the lower. bash 5.3 binds the
-// case keys and `M-t` too, but its words and its counts are readline's — a
-// negative count works backward there — and they are not measured here; it
-// has nothing on `M-q`, `M-'`, `M-a` or `^X u`, and its `^V` is not
-// measured here.
-var wideEmacsKeys = map[string]Widget{
+// Measured 2026-10-06 with `bindkey -M emacs` on zsh 5.9.2 and `bind -p` on
+// bash 5.3.20, and the upper-case spellings do the same as the lower in both
+// — bash lists them as do-lowercase-version. What the keys do is not quite
+// the same in the two: see EditorStyle.CapitalizeTakesTheFirstCharacter and
+// TransposeWordsReachesTheLineEnd.
+var wordKeys = map[string]Widget{
 	"\x1bu": WidgetUpCaseWord,
 	"\x1bU": WidgetUpCaseWord,
 	"\x1bl": WidgetDownCaseWord,
@@ -137,25 +136,50 @@ var wideEmacsKeys = map[string]Widget{
 	"\x1bC": WidgetCapitalizeWord,
 	"\x1bt": WidgetTransposeWords,
 	"\x1bT": WidgetTransposeWords,
+	"\x16":  WidgetQuotedInsert,
+}
 
+// quotedInsertKey is `^V`, which one dialect has in vi insert mode too. See
+// EditorStyle.QuotedInsertInViInsert.
+const quotedInsertKey = "\x16"
+
+// wideEmacsKeys are the keys EditorStyle.WideEmacsKeymap adds to the table
+// beyond wordKeys, in the emacs keymap only: what one dialect's emacs keymap
+// binds and the other's either leaves alone or binds to something else
+// (#6241).
+//
+// Measured 2026-10-06 with `bindkey -M emacs` on zsh 5.9.2, and the upper-case
+// spellings are bound to the same widgets as the lower. bash has nothing on
+// `M-q`, `M-'`, `M-a` or `^X u`.
+var wideEmacsKeys = map[string]Widget{
 	"\x1bq": WidgetPushLine,
 	"\x1bQ": WidgetPushLine,
 	"\x1b'": WidgetQuoteLine,
 	"\x1ba": WidgetAcceptAndHold,
 	"\x1bA": WidgetAcceptAndHold,
 	"\x18u": WidgetUndo,
-	"\x16":  WidgetQuotedInsert,
 	"\x1b?": WidgetWhichCommand,
 	"\x1bh": WidgetRunHelp,
 	"\x1bH": WidgetRunHelp,
 	"\x1bx": WidgetExecuteNamedCmd,
 }
 
-// WideEmacsBindings is wideEmacsKeys for a dialect's key listing, as a copy
-// for the reason DefaultBindings gives.
+// WideEmacsBindings is what EditorStyle.WideEmacsKeymap puts on the emacs
+// keymap, wordKeys included, for a dialect's key listing — as a copy for the
+// reason DefaultBindings gives.
 func WideEmacsBindings() map[string]Widget {
-	out := make(map[string]Widget, len(wideEmacsKeys))
+	out := WordBindings()
 	for seq, w := range wideEmacsKeys {
+		out[seq] = w
+	}
+	return out
+}
+
+// WordBindings is wordKeys for a dialect's key listing, as a copy for the
+// reason DefaultBindings gives.
+func WordBindings() map[string]Widget {
+	out := make(map[string]Widget, len(wordKeys))
+	for seq, w := range wordKeys {
 		out[seq] = w
 	}
 	return out
@@ -172,10 +196,19 @@ func (e *editor) defaultKey(seq string) (Widget, bool) {
 			return w, true
 		}
 	}
-	if e.wideEmacsKeymap && !e.viEditing() {
-		if w, ok := wideEmacsKeys[seq]; ok {
-			return w, true
+	if !e.viEditing() {
+		if e.wideEmacsKeymap || e.wordKeys {
+			if w, ok := wordKeys[seq]; ok {
+				return w, true
+			}
 		}
+		if e.wideEmacsKeymap {
+			if w, ok := wideEmacsKeys[seq]; ok {
+				return w, true
+			}
+		}
+	} else if e.quotedInsertInViInsert && seq == quotedInsertKey {
+		return WidgetQuotedInsert, true
 	}
 	return WidgetNone, false
 }

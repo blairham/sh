@@ -29,9 +29,61 @@ type EditorStyle struct {
 	// `M-'`, accept-and-hold on `M-a`, undo on `^X u` and quoted-insert on `^V`, measured 2026-10-06 with
 	// `bindkey -M emacs` on zsh 5.9.2. Not in vi editing, whose insert
 	// keymap has none of them. The zero value leaves them doing nothing, as
-	// this editor always did — see repl/defaultkeys.go for why bash's
-	// spellings of the same keys are not simply these (#6241).
+	// this editor always did. bash has the first five of these and none of
+	// the rest — see WordKeys (#6241, #6250).
 	WideEmacsKeymap bool
+
+	// WordKeys puts the part of that set both shells' emacs keymaps have on
+	// the emacs keymap, and nothing else: the case keys `M-u`, `M-l` and
+	// `M-c`, transpose-words on `M-t`, the upper-case spellings of all four,
+	// and quoted-insert on `^V`. bash 5.3's `bind -p` lists every one of
+	// them and none of the rest (#6250). WideEmacsKeymap implies it.
+	//
+	// What the keys do differs in two places, which are fields of their own:
+	// CapitalizeTakesTheFirstCharacter and TransposeWordsReachesTheLineEnd.
+	WordKeys bool
+
+	// QuotedInsertInViInsert puts quoted-insert on `^V` in vi insert mode
+	// as well. bash's `bind -m vi-insert -p` lists it there, measured
+	// 2026-10-06 on bash 5.3.20; zsh's viins has nothing on `^V` (#6250).
+	QuotedInsertInViInsert bool
+
+	// CapitalizeTakesTheFirstCharacter makes `M-c` raise the first character
+	// of each word whatever it is, and lower the rest, where the zero value
+	// raises the first *letter* and passes over a digit before it.
+	//
+	// Measured 2026-10-06 through a pseudo-terminal against bash 5.3.20 with
+	// `INPUTRC=/dev/null`, the cursor at the start of the line:
+	//
+	//	line     bash 5.3.20   zsh 5.9.2
+	//	3AB x    3ab x         3Ab x
+	//	a3B x    A3b x         A3b x
+	//
+	// Elsewhere the two agree: from the middle of a word the character under
+	// the cursor is the one raised, and from a blank the next word's first.
+	CapitalizeTakesTheFirstCharacter bool
+
+	// TransposeWordsReachesTheLineEnd is what `M-t` swaps when nothing after
+	// the cursor is a word: the last word and everything after it to the end
+	// of the line, where the zero value takes the last word alone. And a
+	// cursor in or before the first word, with no word before it to swap
+	// with, is an edit with nothing to act on and rings under
+	// BellRingsWhenAnEditHasNothingToActOn.
+	//
+	// Measured 2026-10-06 through a pseudo-terminal against bash 5.3.20 with
+	// `INPUTRC=/dev/null`; `␠` is a blank:
+	//
+	//	line       cursor   bash 5.3.20      cursor   zsh 5.9.2   cursor
+	//	aa bb␠␠    7        bb␠␠␠aa          7        bb aa␠␠     5
+	//	aa bb␠␠    5        bb␠␠␠aa          7        bb aa␠␠     5
+	//	aa bb;;    7        bb;; aa          7
+	//	aa bb cc   1        unchanged, \a    1        unchanged   1
+	//	ab         2        unchanged, \a    2
+	//
+	// Everywhere a word follows the cursor the two agree: `aa bb cc` swaps
+	// `aa` and `bb` from 2, 3 and 4 and `bb` and `cc` from 5 to the end, and
+	// `aa, bb` from 4 is `bb, aa` with the separator left where it was.
+	TransposeWordsReachesTheLineEnd bool
 
 	// WhichCommandWord and RunHelpWord are the commands which-command and
 	// run-help put in the line in place of the one they ask about, followed

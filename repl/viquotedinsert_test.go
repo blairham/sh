@@ -11,8 +11,9 @@ import (
 
 // viQuotedEditor is an editor in vi insert mode with a terminal eighty
 // columns wide, so that the placeholder has somewhere to be drawn.
-func viQuotedEditor(style EditorStyle, keys string, out *strings.Builder) *editor {
-	e := Shell{Editor: style}.newEditor(nil, nil)
+func viQuotedEditor(t *testing.T, style EditorStyle, keys string, out *strings.Builder) *editor {
+	t.Helper()
+	e := Shell{Editor: style}.newEditor(t.Context(), nil)
 	e.in, e.out = typing(keys), out
 	e.vi = func() bool { return true }
 	e.width = func() int { return 80 }
@@ -31,7 +32,7 @@ func TestViQuotedInsertTakesTheNextKeyAsItIs(t *testing.T) {
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			var out strings.Builder
-			e := viQuotedEditor(style, c.keys, &out)
+			e := viQuotedEditor(t, style, c.keys, &out)
 			got, err := e.readLine(drawPrompt("$ "))
 			if err != nil {
 				t.Fatal(err)
@@ -45,7 +46,7 @@ func TestViQuotedInsertTakesTheNextKeyAsItIs(t *testing.T) {
 	// The caret is drawn while it waits and is not typed. Nothing else in
 	// this line draws one.
 	var out strings.Builder
-	if got, err := viQuotedEditor(style, "ab\x16x\r", &out).readLine(drawPrompt("$ ")); err != nil || got != "abx" {
+	if got, err := viQuotedEditor(t, style, "ab\x16x\r", &out).readLine(drawPrompt("$ ")); err != nil || got != "abx" {
 		t.Fatalf("got %q, %v", got, err)
 	}
 	if !strings.Contains(out.String(), "^") {
@@ -55,7 +56,7 @@ func TestViQuotedInsertTakesTheNextKeyAsItIs(t *testing.T) {
 	// Without the field the key does nothing, as it always did, and draws
 	// nothing.
 	out.Reset()
-	if got, err := viQuotedEditor(EditorStyle{}, "ab\x16x\r", &out).readLine(drawPrompt("$ ")); err != nil || got != "abx" {
+	if got, err := viQuotedEditor(t, EditorStyle{}, "ab\x16x\r", &out).readLine(drawPrompt("$ ")); err != nil || got != "abx" {
 		t.Errorf("without the field: got %q, %v", got, err)
 	}
 	if strings.Contains(out.String(), "^") {
@@ -64,7 +65,7 @@ func TestViQuotedInsertTakesTheNextKeyAsItIs(t *testing.T) {
 
 	// And emacs editing's quoted-insert is untouched by it: no caret there.
 	out.Reset()
-	e := Shell{Editor: EditorStyle{WideEmacsKeymap: true, ViQuotedInsert: true}}.newEditor(nil, nil)
+	e := Shell{Editor: EditorStyle{WideEmacsKeymap: true, ViQuotedInsert: true}}.newEditor(t.Context(), nil)
 	e.in, e.out, e.width = typing("ab\x16x\r"), &out, func() int { return 80 }
 	if got, err := e.readLine(drawPrompt("$ ")); err != nil || got != "abx" {
 		t.Errorf("emacs: got %q, %v", got, err)
@@ -83,7 +84,7 @@ func TestQuotedInsertInterruptedRings(t *testing.T) {
 	}{{"emacs", false}, {"vi insert", true}} {
 		t.Run(c.name, func(t *testing.T) {
 			var out strings.Builder
-			e := Shell{Editor: EditorStyle{WideEmacsKeymap: true, ViQuotedInsert: true}}.newEditor(nil, nil)
+			e := Shell{Editor: EditorStyle{WideEmacsKeymap: true, ViQuotedInsert: true}}.newEditor(t.Context(), nil)
 			e.in, e.out, e.width = typing("ab\x16\x03"), &out, func() int { return 80 }
 			e.vi = func() bool { return c.vi }
 			if _, err := e.readLine(drawPrompt("$ ")); !errors.Is(err, ErrInterrupted) {

@@ -367,6 +367,27 @@ walk it do not. The editor's style carries all of it:
 `MenuOnTheFirstCompletionOption`, `ListMatchesOnASecondKeyOption` and
 `BellRingsWhenAMenuStarts`.
 
+**Whether that fill counts as a key of the run is `listambiguous`'s
+answer** (#6220). With it on and `autolist` or `bashautolist` on, the fill
+stands aside: it is silent, it lists nothing, and the key after it is the
+first of the run. So under `bashautolist` the Tab after the fill rings,
+the next lists, and the fourth starts the menu. With it off, or with
+neither listing option on, the fill *is* the first key and does what a
+first key does. Measured 2026-10-06 against zsh 5.9.2, over `alpha1`,
+`alpha2` and `zz`:
+
+| options | Tab 1 | Tab 2 | Tab 3 | Tab 4 |
+| --- | --- | --- | --- | --- |
+| (defaults) | `alpha` | `\a` the listing | `\a` `alpha1` | `alpha2` |
+| `unsetopt listambiguous` | `\a` `alpha` and the listing | `\a` `alpha1` | `alpha2` | |
+| `unsetopt autolist` | `\a` `alpha` | `\a` `alpha1` | `alpha2` | |
+| `setopt bashautolist` | `alpha` | `\a` | the listing | `\a` `alpha1` |
+| `setopt bashautolist`, `unsetopt listambiguous` | `\a` `alpha` | the listing | `\a` `alpha1` | |
+
+This is carried as `EditorStyle.FillStandsAsideOption`. A dialect that
+names no such option keeps the fill as the first key, never listed on its
+own key and rung as `BellRingsOnAnAmbiguousCompletionThatInserts` says.
+
 A completion function decides for itself through `compstate[insert]`. It
 finds `automenu-unambiguous` on a first Tab, `automenu` on the Tab after a
 listing, `unambiguous` with the option off, and `menu` under

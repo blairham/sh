@@ -599,6 +599,18 @@ func (cs *completionState) offer(subject, candidate string, o compaddOptions, ro
 	if row == "" {
 		if listed := cs.plainRow(candidate, o); listed != word {
 			row = listed
+		} else if !o.files && strings.Contains(cs.c.Word, "/") {
+			// A match that is not a file is drawn whole, slash and all,
+			// where the editor would take the typed word's directory off
+			// the front of a row it has to make for itself — its own path
+			// completion's rule, which `: sub/` listing `nested.txt` needs.
+			// Measured 2026-10-06 against zsh 5.9.2 with `x sub/a` typed
+			// (#6200): `compadd sub/aa sub/ab` and `compadd -W sub sub/aa
+			// sub/ab` list `sub/aa  sub/ab`, and only `-f` — which brings
+			// its own row — or a prefix `-p`, `-P` or `compset` holds back
+			// lists `aa  ab`. The opening quote stays off, as it does from
+			// every row.
+			row = strings.TrimPrefix(listed, cs.qiprefix)
 		}
 	}
 	for _, have := range cs.matches {

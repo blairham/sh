@@ -164,6 +164,21 @@ var wideEmacsKeys = map[string]Widget{
 	"\x1bx": WidgetExecuteNamedCmd,
 }
 
+// viInsertKeys are the keys EditorStyle.ViQuotedInsert adds to vi insert
+// mode's table: vi-quoted-insert on `^V`, zsh's viins keymap's (#6251).
+var viInsertKeys = map[string]Widget{
+	"\x16": WidgetViQuotedInsert,
+}
+
+// ViInsertBindings is viInsertKeys for a dialect's key listing, as a copy.
+func ViInsertBindings() map[string]Widget {
+	out := make(map[string]Widget, len(viInsertKeys))
+	for seq, w := range viInsertKeys {
+		out[seq] = w
+	}
+	return out
+}
+
 // WideEmacsBindings is what EditorStyle.WideEmacsKeymap puts on the emacs
 // keymap, wordKeys included, for a dialect's key listing — as a copy for the
 // reason DefaultBindings gives.
@@ -209,6 +224,11 @@ func (e *editor) defaultKey(seq string) (Widget, bool) {
 		}
 	} else if e.quotedInsertInViInsert && seq == quotedInsertKey {
 		return WidgetQuotedInsert, true
+	}
+	if e.viQuotedInsertKey && e.viEditing() && !e.viCommand {
+		if w, ok := viInsertKeys[seq]; ok {
+			return w, true
+		}
 	}
 	return WidgetNone, false
 }

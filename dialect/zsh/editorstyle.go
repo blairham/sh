@@ -21,7 +21,10 @@ func EditorStyle() repl.EditorStyle {
 		// The case keys, transpose-words, push-line, quote-line,
 		// accept-and-hold, `^X u` and `^V`. See
 		// repl.EditorStyle.WideEmacsKeymap (#6241).
-		WideEmacsKeymap:  true,
+		WideEmacsKeymap: true,
+		// And `^V` in vi insert mode. See repl.EditorStyle.ViQuotedInsert
+		// (#6251).
+		ViQuotedInsert:   true,
 		WhichCommandWord: "which-command",
 		RunHelpWord:      "run-help",
 		// And `^D` with something typed is delete-char-or-list. See

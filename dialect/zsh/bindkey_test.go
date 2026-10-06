@@ -584,3 +584,25 @@ func TestAListingNamesTheKeymapItWasAskedAbout(t *testing.T) {
 		}
 	}
 }
+
+// `^V` is vi-quoted-insert in viins and quoted-insert in emacs, measured with
+// `bindkey -M` on zsh 5.9.2 (#6251). In vicmd it is nothing. Under `bindkey
+// -v` the key at its default is no change, so the editor is handed nothing
+// and acts on it by itself.
+func TestControlVIsQuotedInsertInEachInsertKeymap(t *testing.T) {
+	out, _ := runZsh(t, t.TempDir(),
+		"bindkey -M viins '^V'\nbindkey -M emacs '^V'\nbindkey -M vicmd '^V'\nbindkey -v\nbindkey '^V'\n")
+	want := "\"^V\" vi-quoted-insert\n\"^V\" quoted-insert\n\"^V\" undefined-key\n\"^V\" vi-quoted-insert\n"
+	if out != want {
+		t.Errorf("output = %q, want %q", out, want)
+	}
+	r := bindkeyRunner(t, "bindkey -v\n")
+	if got := zsh.KeyBindings(r, repl.KeymapMain); len(got) != 0 {
+		t.Errorf("with viins at its defaults the table = %v, want empty", got)
+	}
+	// And bound by name, it is the editor's own widget.
+	r = bindkeyRunner(t, "bindkey -v\nbindkey '^Xq' vi-quoted-insert\n")
+	if b := zsh.KeyBindings(r, repl.KeymapMain)["\x18q"]; b.Widget != repl.WidgetViQuotedInsert {
+		t.Errorf("^Xq = %+v, want vi-quoted-insert", b)
+	}
+}

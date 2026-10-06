@@ -1337,10 +1337,17 @@ Tab puts a tab and does not complete; `^V ESC` takes the one byte, so `^V`
 and an arrow key puts `^[` and types the `[A` after it; a character of more
 than one byte goes in whole. A count is typing's count — three copies for
 `ESC 3`, one with the cursor left before it for `ESC -`, none for `ESC 0` —
-and `^V ^C` abandons the line as `^C` does. Nothing is drawn while it waits.
+and `^V ^C` abandons the line as `^C` does, with a bell that `^C` alone does
+not ring. Nothing is drawn while it waits.
 
-zsh's vi insert keymap has `vi-quoted-insert` on `^V`, which draws a
-placeholder while it waits; that one is not built.
+zsh's vi insert keymap has `vi-quoted-insert` on `^V` (vicmd has nothing
+there), and the one difference is the drawing: while it waits a plain caret is
+put in the row at the cursor, with the cursor on it and the rest of the line
+moved one cell right, and the key that follows takes its place. Measured with
+`bindkey -v` and a two-row prompt, `abc` with the cursor on the `b`: `^V` draws
+`a^bc`, then `x` gives `axbc` and `^A` a `^A` in standout; `^V ESC` puts a
+`^[` there and stays in insert mode; `^V ^C` rings, takes the caret away and
+abandons the line. The caret is never in the line itself.
 
 ### Asking about the command, and running a widget by name
 

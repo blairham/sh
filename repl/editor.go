@@ -323,6 +323,8 @@ type editor struct {
 	quotedInsertInViInsert   bool
 	capitalizeFirstCharacter bool
 	transposeToLineEnd       bool
+	// viQuotedInsertKey is EditorStyle.ViQuotedInsert.
+	viQuotedInsertKey bool
 	// namedWidgets is Shell.NamedWidgets: every widget a name reaches, for
 	// execute-named-cmd. Nil is a session that names none.
 	namedWidgets func() map[string]Binding
@@ -1165,8 +1167,8 @@ func (e *editor) keyLoop(prompt drawnPrompt) (string, error) {
 			}
 		default:
 			if w, ok := e.defaultKey(string([]byte{c})); ok && c < 0x20 {
-				// A control key one dialect's emacs keymap has and the shared
-				// table does not — `^V`. See wideEmacsKeys.
+				// A control key one dialect's keymap has and the shared table
+				// does not — `^V`. See wideEmacsKeys and viInsertKeys.
 				e.keyBinding = &Binding{Widget: w}
 				e.runWidget(*e.keyBinding, prompt)
 				continue

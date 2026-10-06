@@ -85,6 +85,14 @@ type EditorStyle struct {
 	// `aa, bb` from 4 is `bb, aa` with the separator left where it was.
 	TransposeWordsReachesTheLineEnd bool
 
+	// ViQuotedInsert puts vi-quoted-insert on `^V` in vi insert mode: the
+	// next key goes in the line as it is, as quoted-insert's does in emacs
+	// editing, with a `^` drawn at the cursor while it waits. zsh's viins
+	// keymap has it, measured 2026-10-06 with `bindkey -M viins '^V'` on zsh
+	// 5.9.2. The zero value leaves the key doing nothing, as this editor
+	// always did; bash's vi keymap is not measured here (#6251).
+	ViQuotedInsert bool
+
 	// WhichCommandWord and RunHelpWord are the commands which-command and
 	// run-help put in the line in place of the one they ask about, followed
 	// by its command word: zsh's are `which-command` and `run-help`, which

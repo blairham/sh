@@ -171,3 +171,35 @@ func TestCompaddReadsAnOrderOnlyWhenTheWordIsOne(t *testing.T) {
 		})
 	}
 }
+
+// A word that already holds `-P`'s prefix is matched past it, and a word that
+// is only the start of the prefix matches every candidate (#6198).
+//
+// Measured 2026-10-06 through a pseudo-terminal against zsh 5.9.2 with Tab on
+// a widget running `compadd -P pp always auto`: `x ppal` becomes `x
+// ppalways`, `x p` becomes `x ppa`, `x ppa` lists both, and `x pa` and `x
+// ppx` ring with the line unchanged. See pastThePrefix.
+func TestCompaddMatchesPastThePrefixTheWordHolds(t *testing.T) {
+	for _, c := range []struct {
+		typed string
+		want  []string
+	}{
+		{"x ppal", []string{"ppalways"}},
+		{"x ppa", []string{"ppalways", "ppauto"}},
+		{"x pp", []string{"ppalways", "ppauto"}},
+		{"x p", []string{"ppalways", "ppauto"}},
+		// The controls: a word without the prefix is matched whole, which
+		// was right before the fix as well, and a word that leaves the
+		// prefix part-way matches nothing.
+		{"x a", []string{"ppalways", "ppauto"}},
+		{"x pa", nil},
+		{"x ppx", nil},
+	} {
+		t.Run(c.typed, func(t *testing.T) {
+			got := completionFor(t, widgetOf("compadd -P pp always auto"), c.typed)
+			if strings.Join(got, " ") != strings.Join(c.want, " ") {
+				t.Errorf("%s offered %q, want %q", c.typed, got, c.want)
+			}
+		})
+	}
+}

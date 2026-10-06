@@ -414,6 +414,7 @@ func (cs *completionState) add(
 	// names is filled between the two.
 	displays := compaddArray(r, o.display)
 	spec := parseMatchSpec(o.matchSpec)
+	typed := pastThePrefix(cs.prefix, o.prefix)
 	for i, candidate := range candidates {
 		// What is matched is the hidden prefix and suffix around the
 		// candidate; what `-P` and `-S` add is not part of it. Measured —
@@ -426,7 +427,7 @@ func (cs *completionState) add(
 			// into what is inserted. Only into what is inserted: measured,
 			// `-O` under `M:_=` with `f_o` typed stores `foo`, and `f_oo`
 			// is what Tab puts on the line. See compmatch.go.
-			written, ok := spec.matchCandidate(cs.prefix, subject)
+			written, ok := spec.matchCandidate(typed, subject)
 			if !ok {
 				continue
 			}
@@ -462,6 +463,39 @@ func (cs *completionState) add(
 	// offered.
 	cs.state["nmatches"] = strconv.Itoa(len(insertableWords(cs.matches)) + cs.fillers)
 	return offered
+}
+
+// pastThePrefix is the part of the typed word a candidate is matched against
+// where `-P` gave a prefix to insert in front of every match: what follows
+// the prefix, where the word already holds it, and nothing at all where the
+// word is the start of it. A word that is neither is matched whole.
+//
+// Measured 2026-10-06 through a pseudo-terminal against zsh 5.9.2, a `zle
+// -C` widget running `compadd -P pp always auto` with Tab on it (#6198):
+//
+//	typed      the line after Tab        so the word matched is
+//	x a        x ppa                     a
+//	x p        x ppa                     nothing — `p` begins `pp`
+//	x pp       x ppa                     nothing
+//	x ppa      x ppa, and the listing    a
+//	x ppal     x ppalways                al
+//	x ppau     x ppauto                  au
+//	x pa       x pa, the bell            pa, which matches neither
+//	x ppx      x ppx, the bell           x, which matches neither
+//
+// So the prefix is not part of the match, as the file comment says, and a
+// word that already carries it — which is every word after the first Tab put
+// it on the line — is matched past it rather than against it.
+func pastThePrefix(word, prefix string) string {
+	switch {
+	case prefix == "":
+		return word
+	case strings.HasPrefix(word, prefix):
+		return word[len(prefix):]
+	case strings.HasPrefix(prefix, word):
+		return ""
+	}
+	return word
 }
 
 // insertableWords are the candidates that are matches: a listing-only row is

@@ -36,9 +36,10 @@ cross-compiled and run beside it, so both sides share one platform (#5709).
 Every case still short of exact is listed per dialect in
 `internal/oracle/testdata/conformance/`, and CI's conformance ratchet fails a
 change that adds to a list or leaves a fixed case on one. Each listed case has
-a written reason in #5761 — the reference shell crashes or hangs, the panel's
-own builds disagree, a C-library quirk rather than the shell, or a deliberate
-choice — so the rest of the distance is decided, not unfinished.
+a written reason in `docs/spec/by-design.md` — the reference shell crashes or
+hangs, the panel's own builds disagree, a C-library quirk rather than the
+shell, or a deliberate choice — and a test fails a listed case without one, so
+the rest of the distance is decided, not unfinished.
 
 **Exact** is byte-identical stdout, stderr and exit status. **Behavioral**
 lets a diagnostic be worded differently so long as the status and the

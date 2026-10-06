@@ -2172,6 +2172,20 @@ func (r *Runner) expandAtList(s syntax.Span, sp splitPolicy, head bool) ([]strin
 	if !r.namesTheOtherArray(s.Param) || r.refusesAListAsAName(s.Param) || r.refusesANestedNonName(s.Param) {
 		return nil, true
 	}
+	if read, ok := r.nestedOperatorText(s.Param); ok {
+		// The inner's text read as the inside of this `${…}`. See
+		// nestedOperatorText.
+		if read == nil {
+			return nil, true
+		}
+		r.reevalDepth++
+		defer func() { r.reevalDepth-- }()
+		as := s
+		as.Param = read
+		// Not a list shape, and then the scalar path answers it, reading the
+		// text again by the same route.
+		return r.expandAtList(as, sp, head)
+	}
 	if refused, empty := r.undeclaredIndirection(s.Param); refused {
 		return nil, true
 	} else if empty {
@@ -3742,6 +3756,16 @@ func (r *Runner) expandParam(e *syntax.ParamExpr) string {
 	}
 	if !r.namesTheOtherArray(e) || r.refusesAListAsAName(e) || r.refusesANestedNonName(e) {
 		return ""
+	}
+	if read, ok := r.nestedOperatorText(e); ok {
+		// The inner's text read as the inside of this `${…}`. See
+		// nestedOperatorText.
+		if read == nil {
+			return ""
+		}
+		r.reevalDepth++
+		defer func() { r.reevalDepth-- }()
+		return r.expandParam(read)
 	}
 	if refused, empty := r.undeclaredIndirection(e); refused || empty {
 		return ""

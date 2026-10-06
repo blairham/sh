@@ -4,6 +4,7 @@
 package interp
 
 import (
+	"errors"
 	"strings"
 
 	"github.com/blairham/sh/syntax"
@@ -501,8 +502,18 @@ func (r *Runner) refusesANestedNonName(e *syntax.ParamExpr) bool {
 // either nothing or an operator after it. The empty text is nothing at all
 // and is not refused.
 func opensAParameterExpression(text string) bool {
+	end, open, ok := referenceAtHead(text)
+	return ok && (open || end == len(text) || strings.IndexByte("-+=?#%/:}", text[end]) >= 0)
+}
+
+// referenceAtHead is where the reference text opens with ends — a name, a run
+// of digits, or one special parameter, and a subscript after it — and whether
+// it opens with one at all. open says a subscript was left open, which runs
+// to the end of the text: zsh's own answer to that is an arithmetic error
+// rather than a refusal. The empty text is a reference to nothing.
+func referenceAtHead(text string) (end int, open, ok bool) {
 	if text == "" {
-		return true
+		return 0, false, true
 	}
 	i := 0
 	switch c := text[0]; {
@@ -517,7 +528,7 @@ func opensAParameterExpression(text string) bool {
 	case strings.IndexByte("@*#?-$!", c) >= 0:
 		i = 1
 	default:
-		return false
+		return 0, false, false
 	}
 	if i < len(text) && text[i] == '[' {
 		depth := 0
@@ -533,11 +544,147 @@ func opensAParameterExpression(text string) bool {
 			}
 		}
 		if depth > 0 {
-			// Left open: zsh's own refusal is an arithmetic one.
-			return true
+			return len(text), true, true
 		}
 	}
-	return i == len(text) || strings.IndexByte("-+=?#%/:}", text[i]) >= 0
+	return i, false, true
+}
+
+// nestedOperatorText is the expansion a plain `${${(P)e}}` comes to where the
+// text `e` holds goes on past its reference with an operator: zsh reads that
+// text as the inside of the `${…}` around the inner, so `e=a:1` is `${a:1}`
+// (#6227). Measured 2026-10-06 on zsh 5.9.2 under `-f -c`, `a=xyz`, quoted and
+// unquoted alike:
+//
+//	a+b → b    a:1 → yz    a#x → yz    a%z → xy    a/y/Q → xQz    a:u → XYZ
+//	a-b a=b a?b a#b a%b a/b/c a- a# a:-q → xyz     a[1]-b → x
+//	unset-b → b    unset+b → ``    unset:-q → q    a:#x* → ``    #-b → 0
+//	a} → xyz, and what follows the brace is not read
+//	a: → unrecognized modifier    a[ → a bad math expression
+//	unset=q → `not an identifier: `, and nothing is assigned
+//
+// Only for an outer with nothing of its own. zsh puts what the outer goes on
+// with into the same text — `${${(P)e}:-d}` with `e=a/y/Q` is `xQ:-dz`, the
+// `:-d` read as part of the replacement — and that reading is not taken here.
+// The answer is whatever the expansion is, so it is handed back as a node for
+// the caller to expand by its own route, quoted or not.
+func (r *Runner) nestedOperatorText(e *syntax.ParamExpr) (*syntax.ParamExpr, bool) {
+	if e.Op != syntax.ParamNone || e.Index != nil || e.Length || e.Indirect || e.HasFlags ||
+		e.Prefix != 0 || e.Member != "" || len(e.Leading) > 0 || e.SetTest || e.Transform != 0 ||
+		e.QuoteModifier != 0 || e.Inner == nil || len(e.Inner.Spans) != 1 {
+		return nil, false
+	}
+	span := e.Inner.Spans[0]
+	in := span.Param
+	if span.Kind != syntax.ParamExp || in == nil || in.Bad || !in.HasFlags || in.Flags != "P" ||
+		in.Inner != nil || in.Index != nil || in.Op != syntax.ParamNone {
+		return nil, false
+	}
+	words, _, isList := r.namedBase(in.Name, baseFlags(in.Flags))
+	if isList || len(words) != 1 {
+		return nil, false
+	}
+	text := words[0]
+	end, open, ok := referenceAtHead(text)
+	if !ok || end == len(text) && !open {
+		// A reference alone, which the ordinary reading answers; or no
+		// reference at all, which refusesANestedNonName has refused.
+		return nil, false
+	}
+	if r.reevalDepth >= maxReevalDepth {
+		// Text that names its own expansion again. See reevalFlagged.
+		r.diagf("${%s}: nested too deeply\n", e.Src)
+		r.expandErr = true
+		return nil, true
+	}
+	// The name goes in afterwards, so that a reference the grammar reads
+	// another way when it is written — `#-b` is a length there, and zsh
+	// reads it here as `$#` with a default — is still the reference. And
+	// the text is read only as far as the brace that would close it, as
+	// zsh reads it: `a}` is `${a}`.
+	name, rest := text[:end], closedAt(text[end:])
+	if i := strings.IndexByte(name, '['); i >= 0 {
+		name, rest = name[:i], name[i:]+rest
+	}
+	// Read as an argument rather than as a command. See firstParamOf.
+	f, err := syntax.Parse(": ${_"+rest+"}", r.dialect())
+	if err != nil {
+		var pe *syntax.Error
+		if errors.As(err, &pe) && pe.Msg != "" {
+			r.diagf("%s\n", pe.Msg)
+		} else {
+			r.diagf("%s\n", "bad substitution")
+		}
+		r.expandErr = true
+		return nil, true
+	}
+	read := firstParamOf(f)
+	if read == nil || read.Bad {
+		// Text the grammar cannot finish: a subscript left open is the
+		// case. zsh's sentence there is an arithmetic one; this is the
+		// refusal the same text gets written directly, `${a[}`.
+		r.diagf("%s\n", "bad substitution")
+		r.expandErr = true
+		return nil, true
+	}
+	if read.Op == syntax.ParamAssign || read.Op == syntax.ParamAssignAlways {
+		// zsh will not assign through this route, and says so with a name
+		// it has not got: `unset=q` is `not an identifier: `. Where nothing
+		// would be assigned the operator is only a test, and `a=b` with `a`
+		// set is `xyz`.
+		if v, set := r.GetVar(name); read.Op == syntax.ParamAssignAlways ||
+			!set || read.Colon && v == "" {
+			r.diagf("%s\n", "not an identifier: ")
+			r.expandErr = true
+			return nil, true
+		}
+	}
+	read.Name = name
+	read.EnclosedInDoubleQuotes = e.EnclosedInDoubleQuotes
+	read.InsideASubscript = e.InsideASubscript
+	return read, true
+}
+
+// closedAt is text up to the first `}` that is not closing a brace the text
+// opened itself.
+func closedAt(text string) string {
+	depth := 0
+	for i := 0; i < len(text); i++ {
+		switch text[i] {
+		case '\\':
+			i++
+		case '{':
+			depth++
+		case '}':
+			if depth == 0 {
+				return text[:i]
+			}
+			depth--
+		}
+	}
+	return text
+}
+
+// firstParamOf is the parameter expansion a parsed `: ${…}` opens its
+// argument with: the first span of the one word after the `:`. What follows that span —
+// `${a}}` leaves a `}` behind — is not read, as zsh does not read it.
+func firstParamOf(f *syntax.File) *syntax.ParamExpr {
+	if f == nil || len(f.Stmts) != 1 {
+		return nil
+	}
+	p, ok := f.Stmts[0].Expr.(*syntax.Pipeline)
+	if !ok || len(p.Cmds) != 1 {
+		return nil
+	}
+	c, ok := p.Cmds[0].(*syntax.SimpleCmd)
+	if !ok || len(c.Args) != 2 || len(c.Args[1].Spans) == 0 {
+		return nil
+	}
+	span := c.Args[1].Spans[0]
+	if span.Kind != syntax.ParamExp || span.Param == nil {
+		return nil
+	}
+	return span.Param
 }
 
 // nestedShapeMemo is whether one nested expansion came to a list, as

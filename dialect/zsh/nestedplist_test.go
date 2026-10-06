@@ -3,7 +3,10 @@
 
 package zsh_test
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 // TestANestedNameReferenceToAListIsRefused pins that a nesting whose inner
 // is a `(P)` of a name holding more than one element is refused, unquoted
@@ -58,7 +61,7 @@ func TestANestedNameReferenceThatIsNotOneIsRefused(t *testing.T) {
 		// special parameter, digits, the same text not nested, and text
 		// that opens with a reference and goes on with an operator — which
 		// zsh reads as `${a-b}`, and which is not refused here. Its value
-		// is not pinned: this shell does not read the operator yet.
+		// is TestANestedNameReferenceGoesOnWithItsOperator's.
 		{`e=; print -r -- "[${${(P)e}}]"`, "[]\n"},
 		{`e='x[1]'; print -r -- "[${${(P)e}}]"`, "[p]\n"},
 		{`e='?'; print -r -- "[${${(P)e}}]"`, "[0]\n"},
@@ -68,6 +71,59 @@ func TestANestedNameReferenceThatIsNotOneIsRefused(t *testing.T) {
 	} {
 		got, _ := runZsh(t, t.TempDir(), setup+tc.src)
 		if got != tc.want {
+			t.Errorf("%s\n got %q\nwant %q", tc.src, got, tc.want)
+		}
+	}
+}
+
+// TestANestedNameReferenceGoesOnWithItsOperator: the text a nested `(P)`
+// holds is read as the inside of the `${…}` around it, operator and all
+// (#6227). Measured 2026-10-06 on zsh 5.9.2 under `-f -c`, with `a=xyz`, each
+// quoted and unquoted — see interp's nestedOperatorText for the whole table.
+func TestANestedNameReferenceGoesOnWithItsOperator(t *testing.T) {
+	const setup = "a=xyz; x=(p q)\n"
+	for _, tc := range []struct{ text, want string }{
+		{"a+b", "b"},
+		{"a:1", "yz"},
+		{"a#x", "yz"},
+		{"a%z", "xy"},
+		{"a/y/Q", "xQz"},
+		{"a:u", "XYZ"},
+		{"a-b", "xyz"},
+		{"a:-q", "xyz"},
+		{"a=b", "xyz"},
+		{"a/b/c", "xyz"},
+		{"a[1]-b", "x"},
+		{"x[2]:-z", "q"},
+		{"unset-b", "b"},
+		{"unset+b", ""},
+		{"unset:-q", "q"},
+		{"a:#x*", ""},
+		// A reference the grammar would read as something else written
+		// directly: `${#-b}` is refused there, and here it is `$#`.
+		{"#-b", "0"},
+		// Read as far as the brace that closes it.
+		{"a}", "xyz"},
+	} {
+		for _, form := range []string{`print -r -- "[${${(P)e}}]"`, `print -r -- u${${(P)e}}u`} {
+			src := "e='" + tc.text + "'; " + form
+			want := "[" + tc.want + "]\n"
+			if strings.HasPrefix(form, "print -r -- u") {
+				want = "u" + tc.want + "u\n"
+			}
+			if got, _ := runZsh(t, t.TempDir(), setup+src); got != want {
+				t.Errorf("%s\n got %q\nwant %q", src, got, want)
+			}
+		}
+	}
+	// And the ones zsh stops on: an assignment it will not make, and text
+	// the grammar cannot finish. Neither assigns, and the line stops.
+	for _, tc := range []struct{ src, want string }{
+		{`e=unset=q; print -r -- "[${${(P)e}}]"; print after`, "zsh:2: not an identifier: \n"},
+		{`e=a:; print -r -- "[${${(P)e}}]"; print after`, "zsh:2: unrecognized modifier\n"},
+		{`e=unset=q; (print -r -- "[${${(P)e}}]"); print -r -- st=$? ${unset-unset}`, "zsh:2: not an identifier: \nst=1 unset\n"},
+	} {
+		if got, _ := runZsh(t, t.TempDir(), setup+tc.src); got != tc.want {
 			t.Errorf("%s\n got %q\nwant %q", tc.src, got, tc.want)
 		}
 	}

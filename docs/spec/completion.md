@@ -263,6 +263,22 @@ because a listing whose entries can be typed is the more useful of the
 two and because it is the only one that makes a trailing space in a name
 visible.
 
+**A block is sorted by byte, and that is a deliberate divergence from zsh
+outside the C locale** (#6168). zsh sorts a listing by the locale's
+collation, exactly as it sorts a pathname expansion — measured 2026-10-06
+against zsh 5.9.2, a listing of `README.md readme.md Beta alpha _x b-c bc
+B a1 a10 a2` draws `_x a1 a10 a2 alpha B b-c bc Beta readme.md README.md`
+under `LANG=en_US.UTF-8` and `B Beta README.md _x a1 a10 a2 alpha b-c bc
+readme.md` under `LC_ALL=C`, and a glob over the same names gives the same
+two orders (over ten of them, on a case-insensitive file system that holds
+one of the two READMEs). This shell orders a
+pathname expansion by byte in every locale, for the reasons recorded in
+`interp/order.go` — the platforms' collations disagree and no single
+table is right on both — and the listing keeps the same order, so the two
+surfaces stay one decision. `cd <TAB>` therefore lists capitalized names
+first under a UTF-8 locale, where zsh mixes them in. A collation, if one is
+built, is built for both surfaces at once.
+
 Above a hundred matches, both ask before printing. That threshold and
 the wording of the question are specified with the rest of the editor's
 style; see `EditorStyle.ListQuery`.

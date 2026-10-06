@@ -397,3 +397,17 @@ func TestABlockWiderThanTheScreenLendsNoSpan(t *testing.T) {
 		}
 	}
 }
+
+// A block is sorted by byte, as a pathname expansion is (#6168).
+//
+// zsh under a UTF-8 locale collates both surfaces; this shell keeps byte
+// order for both, and the decision is in interp/order.go. The row is the
+// issue's own probe: under byte order the capitalized names come first, which
+// is what a listing collated on its own would change.
+func TestAListingBlockSortsByByte(t *testing.T) {
+	b := block{candidates: Words("README.md", "readme.md", "Beta", "alpha", "_x", "b-c", "bc", "B", "a1", "a10", "a2")}
+	got := strings.Join(b.rows(), " ")
+	if want := "B Beta README.md _x a1 a10 a2 alpha b-c bc readme.md"; got != want {
+		t.Errorf("rows are %q, want byte order %q", got, want)
+	}
+}

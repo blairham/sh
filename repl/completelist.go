@@ -309,6 +309,12 @@ type block struct {
 // also the only reading that is stable: a display string is padded to the
 // widest name in its group, so sorting by it would sort by the padding as
 // soon as two groups were laid out differently.
+//
+// And sorted by **byte**, where zsh under a UTF-8 locale sorts by the
+// locale's collation — deliberately, because this shell orders a pathname
+// expansion by byte too, and zsh orders the two surfaces alike (#6168). The
+// decision and its measurement are in interp/order.go, beside shellOrder: a
+// listing collated on its own would put one kind of word in two orders.
 func (b block) rows() []string {
 	kept := make([]Candidate, 0, len(b.candidates))
 	for _, c := range b.candidates {

@@ -301,6 +301,96 @@ type EditorStyle struct {
 	// for the next keystroke. See prefixarg.go for what zsh does with one.
 	PrefixArgument bool
 
+	// CountPrompt is drawn in place of the prompt's last row while a count
+	// is being typed, with the count, sign and all, as its one operand.
+	// Empty draws nothing, which is zsh's answer. bash's is `(arg: %d) `,
+	// measured 2026-10-06 through a pseudo-terminal against bash 5.3.20 with
+	// a two-row prompt: `ESC 9` rewrites `P> echo ab` as `(arg: 9) echo ab`
+	// with the cursor where it was in the line, `ESC -` as `(arg: -1)`, and
+	// the key that spends the count puts `P> ` back (#6248).
+	CountPrompt string
+
+	// CountReadAsReadline is how the count is typed, where it differs from
+	// the zero value's — zsh's, see prefixarg.go. Measured 2026-10-06
+	// through a pseudo-terminal against bash 5.3.20, the count read back
+	// from how far `^F` or `^B` moved, or how many `z` were typed:
+	//
+	//	keys                bash 5.3.20   zsh 5.9.2
+	//	ESC 1 2 z           12 z          2z — a digit is typing
+	//	ESC 1 ESC 2 z       12 z          12 z
+	//	ESC - 2 ^F          -2            -1, then 2 typed
+	//	ESC - ESC 2 ^F      -12           -2
+	//	ESC - 2 ESC 3 ^F    -23
+	//	ESC 3 ESC - z       ---z          a minus spends nothing
+	//	ESC 1 - ^B          -, then ^B
+	//	ESC - ESC - z       z             (+1)
+	//	ESC - - z           nothing       (-1)
+	//
+	// So once a count has begun a plain digit is more of it; a minus after
+	// a digit is a character typed that many times, ESC or no ESC; a minus
+	// after a minus is absorbed, or with ESC turns the sign back; and an ESC
+	// digit after a lone minus is appended to that minus's one.
+	CountReadAsReadline bool
+
+	// NegativeCountTypesNothing makes a character typed with a negative
+	// count type nothing, where the zero value types it once and leaves the
+	// cursor in front of it. `^V` with a negative count reads that many keys
+	// and puts each in the line once. Measured 2026-10-06 against bash
+	// 5.3.20, `ab` with the cursor after the `a`: `ESC - z` and `ESC - 3 z`
+	// leave `ab`; `ESC - ^V ^A` gives `a^Ab` with the cursor after the `^A`,
+	// and `ESC - 3 ^V` takes the three keys after it as they are.
+	NegativeCountTypesNothing bool
+
+	// CountStopsWhereItCannotAct plays a counted key one press at a time and
+	// stops at the first press with nothing to act on, which rings — under
+	// BellRingsWhenAnEditHasNothingToActOn — only if no press acted at all,
+	// or if the key is one that moves or deletes backward a character at a
+	// time. And a counted `^T` stops at the end of the line, where the zero
+	// value goes on swapping the last two.
+	//
+	// Measured 2026-10-06 through a pseudo-terminal against bash 5.3.20 with
+	// `INPUTRC=/dev/null`, `\a` looked for in what the keys wrote:
+	//
+	//	line       cursor   keys           after                cursor
+	//	echo ab    7        ESC 9 ^B       unchanged, \a        0
+	//	echo ab    1        ESC 3 Left     unchanged, \a        0
+	//	echo ab    2        ESC 3 BS       ho ab, \a            0
+	//	echo ab    1        ESC - 3 ^F     unchanged, \a        0   ← ^B now
+	//	echo ab    0        ESC 9 ^F       unchanged            7
+	//	echo ab    5        ESC 3 Right    unchanged            7
+	//	echo ab    5        ESC 9 ^D       echo                 5
+	//	echo ab    7        ESC 2 ^F       unchanged, \a        7
+	//	echo ab    0        ESC 2 ^W       unchanged, \a        0
+	//	aa bb cc dd 11      ESC 9 ^W       empty                0
+	//	abcd       1        ESC 9 ^T       bcda                 4
+	//	abcd       4        ESC 2 ^T       abdc                 4
+	//
+	// So `^B`, Left, Backspace and `^H` ring when they run out part-way and
+	// the rest do not.
+	CountStopsWhereItCannotAct bool
+
+	// NegativeCaseCountGoesBackward makes the case keys with a negative
+	// count change the words *before* the cursor, from the start of the
+	// count's word back to the cursor, and leave the cursor where it was;
+	// the zero value changes as many words forward. Measured 2026-10-06
+	// against bash 5.3.20 on `aa bb cc`:
+	//
+	//	cursor   keys           after        cursor
+	//	8        ESC - M-u      aa bb CC     8
+	//	7        ESC - M-u      aa bb Cc     7   ← the word's start to here
+	//	6        ESC - M-u      aa BB cc     6
+	//	8        ESC - M-c      aa bb Cc     8
+	//	14       ESC - 3 M-u    on `aa bb cc dd ee`: aa bb CC DD EE
+	NegativeCaseCountGoesBackward bool
+
+	// CountSkips are the actions a count is spent on without being given
+	// to: the key is performed once, as if no count had been typed. For a
+	// dialect whose counts for an action are not built yet, so that a count
+	// does nothing rather than something the dialect does not do — bash's
+	// transpose-words and yank-last-arg, which read the count in ways not
+	// measured here (#6265).
+	CountSkips []Widget
+
 	// PastedTextStyle is written before a run of text that arrived as a
 	// paste, and PastedTextStyleEnd after it. Empty draws the text like any
 	// other, which is what a dialect that does not mark a paste does.

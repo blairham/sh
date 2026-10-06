@@ -558,3 +558,13 @@ func TestTheCommandKeymapIsTheChangesAndNothingElse(t *testing.T) {
 		t.Errorf("command keymap = %v, want only the key that was bound", got)
 	}
 }
+
+// bash reads a count readline's way (#6248): the fields are measured in repl,
+// and this is that the dialect asks for them.
+func TestBashCountsAsReadline(t *testing.T) {
+	s := bash.EditorStyle()
+	if !s.PrefixArgument || s.CountPrompt != "(arg: %d) " || !s.CountReadAsReadline ||
+		!s.NegativeCountTypesNothing || !s.CountStopsWhereItCannotAct || !s.NegativeCaseCountGoesBackward {
+		t.Errorf("bash's EditorStyle: %+v", s)
+	}
+}

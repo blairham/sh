@@ -90,5 +90,18 @@ func EditorStyle() repl.EditorStyle {
 		QuotedInsertInViInsert:           true,
 		CapitalizeTakesTheFirstCharacter: true,
 		TransposeWordsReachesTheLineEnd:  true,
+		// And ESC with a digit or a minus is a count, drawn as `(arg: N)` in
+		// place of the prompt's last row and read and spent readline's way.
+		// Measured 2026-10-06 through a pseudo-terminal; see the repl fields
+		// for the rows (#6248). transpose-words and yank-last-arg read a
+		// count in ways not built yet, so a count does nothing to them
+		// (#6265).
+		PrefixArgument:                true,
+		CountPrompt:                   "(arg: %d) ",
+		CountReadAsReadline:           true,
+		NegativeCountTypesNothing:     true,
+		CountStopsWhereItCannotAct:    true,
+		NegativeCaseCountGoesBackward: true,
+		CountSkips:                    []repl.Widget{repl.WidgetTransposeWords, repl.WidgetInsertLastWord},
 	}
 }

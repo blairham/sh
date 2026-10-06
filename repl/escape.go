@@ -29,6 +29,12 @@ func (e *editor) escape(prompt drawnPrompt) keyRead {
 	if got != keyContinues {
 		return got
 	}
+	if e.minusIsTyped(b) {
+		// A minus after a digit is a character, typed as many times as the
+		// count says. See EditorStyle.CountReadAsReadline.
+		e.spendCount(b, prompt)
+		return keyContinues
+	}
 	if e.prefixArgument && (b >= '0' && b <= '9' || b == '-') {
 		// A count for the next keystroke, which this keystroke spends
 		// nothing of. See prefixarg.go.
@@ -66,6 +72,7 @@ func (e *editor) escape(prompt drawnPrompt) keyRead {
 	case '.', '_':
 		// `M-.` and `M-_`, which are the same key in both shells: the last
 		// argument of the line before. See lastarg.go.
+		e.skipsCount(WidgetInsertLastWord)
 		e.insertLastArg(prompt)
 	case del, backspace:
 		// M-Delete kills the word before the cursor. Both spellings, because

@@ -762,8 +762,9 @@ value that would be a lie:
 - **`$READLINE_MARK`** is bash's position of the mark, and this editor has no
   mark. Any number here would be one invented rather than measured.
 - **`$READLINE_ARGUMENT`** is bash's numeric argument, which bash leaves
-  *unset* when no argument was typed. This editor has no numeric argument at
-  all, so it is always in the state bash produces itself for a plain keypress.
+  *unset* when no argument was typed. It is always in that state here, though
+  bash's editor reads a count now (#6248); a key bound with `-x` is not told
+  one yet.
 - **bash exports all of them**, so an external program bound to a key reads
   them out of its environment. Here they are produced parameters, which is what
   makes them vanish again at the end of the call; a shell function reads them
@@ -1416,8 +1417,39 @@ up (#6251). Nothing is drawn while it waits, in vi insert too.
 
 `repl.EditorStyle.WordKeys`, `QuotedInsertInViInsert`,
 `CapitalizeTakesTheFirstCharacter` and `TransposeWordsReachesTheLineEnd` are
-the fields. What a count does is readline's own, and a negative count works
-backward there; bash's counts are not built yet (#6248).
+the fields.
+
+### A count in bash
+
+`ESC` and a digit or a minus is a count in bash too (#6248), and readline reads,
+draws and spends it its own way. Measured 2026-10-06 through a pseudo-terminal
+against bash 5.3.20 with `INPUTRC=/dev/null` and a two-row prompt:
+
+- **It is drawn.** While it is typed the prompt's last row reads `(arg: N) `,
+  sign and all, with the line after it and the cursor where it was in the line;
+  the key that spends it puts the prompt back.
+- **It is typed differently.** Once begun, a plain digit is more of it (`ESC 1
+  2 z` is twelve `z`); a minus after a digit is a character typed that many
+  times (`ESC 3 ESC - z` is `---z`); a plain minus after a lone minus is
+  absorbed and `ESC -` again turns the sign back; and an `ESC` digit after a
+  lone minus is appended to its one, so `ESC - ESC 2` is -12 where `ESC - 2` is
+  -2.
+- **A negative count types nothing**, and `^V` with one takes that many keys,
+  each once, with the cursor after them.
+- **A counted key stops where it cannot act.** It is played a press at a time,
+  and the first press with nothing to act on ends it, ringing only if no press
+  acted or the key is `^B`, Left, Backspace or `^H`: `ESC 9 ^B` from the end of
+  `echo ab` rings, `ESC 9 ^F` from its start does not, and `ESC 2 ^F` at its
+  end does. A counted `^T` stops at the end of the line.
+- **The case keys go backward for a negative count**, from the start of the
+  count's word back to the cursor, and leave the cursor where it was.
+
+`repl.EditorStyle.CountPrompt`, `CountReadAsReadline`,
+`NegativeCountTypesNothing`, `CountStopsWhereItCannotAct` and
+`NegativeCaseCountGoesBackward` are the fields. transpose-words and
+yank-last-arg read a count in ways not built yet and are performed once as if
+none were typed (`CountSkips`); those, `^K` and `^T` with a negative count are
+#6265.
 
 ## What is still missing
 
@@ -1440,9 +1472,8 @@ was on this list and is not any more — `^R` is `repl/search.go` and
   with zsh's negative arguments counting from the start instead — coherently,
   where bash's are not (`M--` gives `w3` and `M--1` gives nothing). Re-measured
   2026-09-16: `M-3 M-.` against `: w1 w2 w3 w4` is `w3` in bash and `w2` in zsh,
-  exactly as the table says, and `w4` in both of ours — the count is not read at
-  all and the plain last argument is what arrives. So it needs
-  its own field as well as its own mechanism.
+  exactly as the table says. zsh's is built (#5987) and both shells read a
+  count now (#6248); bash's `M-.` takes no count yet and gives `w4` (#6265).
 - **`region_highlight` offsets moving with the line.** Measured: an element
   written as `0 2` reads back as `1 3` once a character is inserted before it,
   so zsh adjusts the stored offsets as the text changes rather than leaving

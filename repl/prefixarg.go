@@ -4,6 +4,8 @@
 package repl
 
 import (
+	"fmt"
+	"slices"
 	"strings"
 	"unicode/utf8"
 )
@@ -69,6 +71,45 @@ func (c prefixCount) n() int {
 	return v
 }
 
+// addAsReadline is add under EditorStyle.CountReadAsReadline, where meta says
+// whether the character came with an ESC. A minus after a digit is not more
+// of the count and never reaches here: see minusIsTyped.
+func (c *prefixCount) addAsReadline(b byte, meta bool) {
+	if !c.on {
+		*c = prefixCount{on: true}
+	}
+	if b == '-' {
+		if meta && c.on && c.negative {
+			// `ESC - ESC -` is one again.
+			c.negative = false
+			return
+		}
+		if !c.digits {
+			c.negative = true
+		}
+		return
+	}
+	d := int(b - '0')
+	switch {
+	case c.digits:
+		c.value = c.value*10 + d
+	case meta && c.negative:
+		// An ESC digit after a lone minus is appended to the minus's one:
+		// `ESC - ESC 2` is -12.
+		c.value = 10 + d
+	default:
+		c.value = d
+	}
+	c.digits = true
+}
+
+// minusIsTyped reports whether a minus is a character to type with the count
+// rather than more of it: under readline's rules, once a digit has been
+// typed. See EditorStyle.CountReadAsReadline.
+func (e *editor) minusIsTyped(b byte) bool {
+	return e.countAsReadline && b == '-' && e.count.on && e.count.digits
+}
+
 // countMore adds a keystroke's digit or minus to the count.
 //
 // The keystroke is not a widget call a kill can see: measured 2026-10-04
@@ -81,7 +122,12 @@ func (c prefixCount) n() int {
 // 2026-10-05 against zsh 5.9.2 — `two` with `: one two three` before `: alpha
 // beta gamma` — and not a second copy (#5987).
 func (e *editor) countMore(b byte) {
-	e.count.add(b)
+	if e.countAsReadline {
+		e.count.addAsReadline(b, true)
+	} else {
+		e.count.add(b)
+	}
+	e.countShown()
 	e.killing = e.killedBefore
 	if e.lastWordArguments {
 		e.lastArg.walking = e.lastArg.walkingBefore
@@ -106,6 +152,14 @@ func (e *editor) spendCount(b byte, prompt drawnPrompt) (bool, byte) {
 	if !e.count.on || b == esc {
 		return false, b
 	}
+	if e.countAsReadline && (b >= '0' && b <= '9' || b == '-' && !e.count.digits) {
+		// Once a count has begun, a plain digit is more of it, and a minus
+		// before any digit is absorbed. See EditorStyle.CountReadAsReadline.
+		e.count.addAsReadline(b, false)
+		e.countShown()
+		return true, b
+	}
+	e.countSpent()
 	if e.rebound(b) {
 		// A key somebody rebound is what they bound it to, count and all:
 		// the count is left for the binding to spend (see
@@ -189,6 +243,7 @@ func (e *editor) spendCountOnEscape() bool {
 	if !e.count.on {
 		return false
 	}
+	e.countSpent()
 	n := e.count.n()
 	e.count = prefixCount{}
 	// The count as it was typed, sign and all, and not the variable the
@@ -218,6 +273,7 @@ func (e *editor) spendCountOnBinding(b Binding) {
 	if !e.count.on {
 		return
 	}
+	e.countSpent()
 	n := e.count.n()
 	e.count = prefixCount{}
 	// The count as it was typed, sign and all, and not the variable the
@@ -244,7 +300,7 @@ var escapeOpposites = map[byte]byte{'b': 'f', 'f': 'b', 'B': 'F', 'F': 'B'}
 // typeCounted types a character as many times as the count says, and for a
 // negative count leaves the cursor in front of what it typed.
 func (e *editor) typeCounted(r rune, n int, prompt drawnPrompt) {
-	if n == 0 {
+	if n == 0 || n < 0 && e.negativeTypesNothing {
 		return
 	}
 	k := n
@@ -272,6 +328,8 @@ func (e *editor) typeCounted(r rune, n int, prompt drawnPrompt) {
 // one of those once and tells it the count.
 func (e *editor) replayCountedKey() {
 	if e.countRepeat <= 0 {
+		// The run, if there was one, is over.
+		e.countRunning, e.countActed = false, false
 		return
 	}
 	k := e.countRepeat
@@ -282,5 +340,75 @@ func (e *editor) replayCountedKey() {
 	if len(e.keyBytes) == 0 || !utf8.Valid(e.keyBytes) && e.keyBytes[0] != esc {
 		return
 	}
+	if e.countStops {
+		// One press at a time, so that a press with nothing to act on can
+		// stop the rest — see ringUnless. And a counted `^T` stops at the end
+		// of the line. See EditorStyle.CountStopsWhereItCannotAct.
+		if string(e.keyBytes) == string([]byte{ctrlT}) && e.pos == len(e.line) {
+			e.countRunning, e.countActed = false, false
+			return
+		}
+		e.countRepeat = k - 1
+		e.pushKeys(string(e.keyBytes))
+		return
+	}
 	e.pushKeys(strings.Repeat(string(e.keyBytes), k))
+}
+
+// countShown draws the count where the dialect draws one, by putting a draw
+// in hand: see EditorStyle.CountPrompt, and promptForCount.
+func (e *editor) countShown() {
+	if e.countPrompt != "" {
+		e.pendingDraw = true
+	}
+}
+
+// countSpent is the count about to be spent by the keystroke in hand. Where
+// it was drawn, the prompt goes back whatever the keystroke draws; and where a
+// counted key stops at the edge, the run begins (see ringUnless).
+func (e *editor) countSpent() {
+	if e.countPrompt != "" {
+		e.pendingDraw = true
+	}
+	if e.countStops {
+		e.countRunning, e.countActed = true, false
+	}
+}
+
+// promptForCount is the prompt with its last row given to the count being
+// typed, where the dialect draws one. See EditorStyle.CountPrompt.
+func (e *editor) promptForCount(prompt drawnPrompt) drawnPrompt {
+	if e.countPrompt == "" || !e.count.on {
+		return prompt
+	}
+	text := fmt.Sprintf(e.countPrompt, e.count.n())
+	prompt.text, prompt.cells = text, displayWidth(text)
+	return prompt
+}
+
+// countRunsOut is a press of a counted key that had nothing to act on, under
+// EditorStyle.CountStopsWhereItCannotAct: the rest of the run is dropped, and
+// it reports whether the bell is owed — when no press acted at all, or when
+// the key goes backward a character at a time.
+func (e *editor) countRunsOut() bool {
+	ring := !e.countActed || ringsWhenACountRunsOut[string(e.keyBytes)]
+	e.countRepeat, e.countRunning, e.countActed = 0, false, false
+	return ring
+}
+
+// ringsWhenACountRunsOut are the keys whose counted run rings when it reaches
+// the start of the line part-way: `^B`, Left, Backspace and `^H`. The rest
+// ring only if they could not act at all.
+var ringsWhenACountRunsOut = map[string]bool{
+	string([]byte{ctrlB}): true, "\x1b[D": true, "\x1bOD": true,
+	string([]byte{del}): true, string([]byte{backspace}): true,
+}
+
+// skipsCount is a count the dialect does not give to an action, spent as if
+// nothing had been typed. See EditorStyle.CountSkips.
+func (e *editor) skipsCount(w Widget) {
+	if slices.Contains(e.countSkips, w) {
+		e.keyNumeric, e.countRepeat = nil, 0
+		e.countRunning = false
+	}
 }

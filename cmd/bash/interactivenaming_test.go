@@ -82,6 +82,54 @@ func TestAnInteractiveBashrcParseFailureIsPrefixed(t *testing.T) {
 	}
 }
 
+// A line typed at the prompt that will not parse is named the same way as the
+// command that fails on the line after it, and so is the warning about a
+// here-document the input ran out inside (#6244). The prompt's parse failures
+// are worded by the front end, not by the Runner, and the front end was handed
+// the name the shell was started as: `./weird/mybash: syntax error …` beside
+// `mybash: nosuch: command not found`.
+//
+// Measured 2026-10-06 on bash 5.3.20 (/opt/homebrew/bin/bash) on a pipe,
+// `env -i` with a scratch HOME, `--norc -i`, started as `./weird/mybash`:
+// every expected line below is that shell's. Started as
+// `/opt/homebrew/bin/bash` it writes `bash:`, and under `exec -a -bash`,
+// `-bash:` — the last component of argv[0], a login's dash kept.
+func TestAnInteractiveBashNamesALineThatWillNotParseAsItNamesTheRest(t *testing.T) {
+	for _, c := range []struct {
+		name, typed, argv0 string
+		want               []string
+	}{
+		{"a token and the end of the input", "fi\nnosuch\nfor x in 1\n", "./weird/mybash", []string{
+			"mybash: syntax error near unexpected token `fi'",
+			"mybash: nosuch: command not found",
+			"mybash: syntax error: unexpected end of file from `for' command on line 3",
+		}},
+		{"a here-document the input ended", "cat <<EOF\nhi\n", "./weird/mybash", []string{
+			"mybash: warning: here-document at line 1 delimited by end-of-file (wanted `EOF')",
+		}},
+		{"started by its whole path", "fi\n", "/opt/homebrew/bin/bash", []string{
+			"bash: syntax error near unexpected token `fi'",
+		}},
+		{"a login", "fi\n", "-bash", []string{
+			"-bash: syntax error near unexpected token `fi'",
+		}},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			home := scratchHome(t)
+			t.Chdir(home)
+			_, errs, _ := prompt(t, c.typed, c.argv0, "--norc", "--noprofile", "-i")
+			for _, want := range c.want {
+				if !hasLine(errs, want) && !hasLine(strings.ReplaceAll(errs, "> ", ""), want) {
+					t.Errorf("stderr %q, want a line %q", errs, want)
+				}
+			}
+			if c.argv0 != "-bash" && strings.Contains(errs, c.argv0+":") {
+				t.Errorf("stderr %q names the shell by the whole of %q", errs, c.argv0)
+			}
+		})
+	}
+}
+
 // hasLine is whether text holds want as a whole line, prompt and all trimmed
 // from its front: a substring check passes `./weird/mybash: …` for
 // `mybash: …`, which is the very difference these tests are about.

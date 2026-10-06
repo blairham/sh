@@ -277,6 +277,18 @@ its `delete-char-or-list`, which lists and rings because `ab` matches nothing;
 field is `BellRingsWhenAnEditHasNothingToActOn`, and false is zsh's answer and
 the core's.
 
+zsh's own rule is narrower: an edit that **fails** rings (#6247). That is
+`^T` with fewer than two characters, `^Y` with nothing killed, and Delete at
+the end of the line — and nothing else in the table, since `^T` at the start
+swaps the first two characters there rather than doing nothing. Delete is
+`undefined-key` under `zsh -f`, so its bell there is an unbound key's; the
+startup file macOS ships binds it to `delete-char`, which rings at the end
+the same, so either way the end rings and the middle deletes. The field is
+`BellRingsWhenAnEditFails`. `^D` at the end listing nothing is the listing's
+bell and not either field's: `list-choices` with no matches rings in every
+dialect, as a Tab that matches nothing does — measured, bash 5.3.20 rings for
+`M-?` and `M-=` on a word nothing matches.
+
 ### `^D` on an empty line, when the shell is told to refuse it
 
 Both shells can be told not to let `^D` end the session, and they differ in

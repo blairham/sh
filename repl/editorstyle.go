@@ -45,7 +45,8 @@ type EditorStyle struct {
 
 	// QuotedInsertInViInsert puts quoted-insert on `^V` in vi insert mode
 	// as well. bash's `bind -m vi-insert -p` lists it there, measured
-	// 2026-10-06 on bash 5.3.20; zsh's viins has nothing on `^V` (#6250).
+	// 2026-10-06 on bash 5.3.20 (#6250). zsh's viins has vi-quoted-insert
+	// there, which draws while it waits — see ViQuotedInsert.
 	QuotedInsertInViInsert bool
 
 	// CapitalizeTakesTheFirstCharacter makes `M-c` raise the first character
@@ -90,8 +91,18 @@ type EditorStyle struct {
 	// editing, with a `^` drawn at the cursor while it waits. zsh's viins
 	// keymap has it, measured 2026-10-06 with `bindkey -M viins '^V'` on zsh
 	// 5.9.2. The zero value leaves the key doing nothing, as this editor
-	// always did; bash's vi keymap is not measured here (#6251).
+	// always did; bash's is QuotedInsertInViInsert, which draws nothing
+	// (#6251).
 	ViQuotedInsert bool
+
+	// QuotedInsertAbandonsOnControlC makes `^C` after quoted-insert's `^V`
+	// give the line up with a bell, where the zero value puts a `^C` in the
+	// line as quoted-insert does any other key. Measured 2026-10-06 through a
+	// pseudo-terminal, `abc` with the cursor on the `c`, in emacs and in vi
+	// insert editing alike: zsh 5.9.2 writes `\a` and abandons the line, where
+	// `^C` alone abandons it silently; bash 5.3.20 with `INPUTRC=/dev/null`
+	// draws `ab^Cc` and goes on reading (#6251).
+	QuotedInsertAbandonsOnControlC bool
 
 	// WhichCommandWord and RunHelpWord are the commands which-command and
 	// run-help put in the line in place of the one they ask about, followed

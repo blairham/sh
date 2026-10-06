@@ -22,7 +22,7 @@ package repl
 //	ESC 3 ^V ^A     three ^As       4
 //	ESC - ^V ^A     one, cursor before it    1
 //	ESC 0 ^V ^A     nothing         1
-//	^V ^C           a bell, and the line abandoned
+//	^V ^C           a bell, and the line abandoned (bash: a ^C typed)
 //
 // Nothing is drawn while it waits for the key. The count is the one typing
 // takes, which is why it goes through typeCounted.
@@ -62,6 +62,12 @@ func (e *editor) insertQuoted(prompt drawnPrompt, placeholder bool) {
 	b, got := e.readByte()
 	switch got {
 	case keyAbandoned:
+		if !e.quotedInsertAbandons {
+			// Typed like any other key. See
+			// EditorStyle.QuotedInsertAbandonsOnControlC.
+			b = ctrlC
+			break
+		}
 		// Measured in both keymaps: `^V ^C` rings where `^C` alone does not.
 		e.ring()
 		if placeholder {

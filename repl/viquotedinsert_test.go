@@ -75,16 +75,20 @@ func TestViQuotedInsertTakesTheNextKeyAsItIs(t *testing.T) {
 	}
 }
 
-// `^V ^C` rings and abandons the line, in both keymaps, where `^C` alone
-// abandons it silently — measured against zsh 5.9.2 through a pty.
-func TestQuotedInsertInterruptedRings(t *testing.T) {
+// `^V ^C` rings and abandons the line in zsh, in both keymaps, where `^C`
+// alone abandons it silently; in bash it is a `^C` typed. Measured against
+// zsh 5.9.2 and bash 5.3.20 through a pty. See
+// EditorStyle.QuotedInsertAbandonsOnControlC.
+func TestQuotedInsertAndControlC(t *testing.T) {
 	for _, c := range []struct {
 		name string
 		vi   bool
 	}{{"emacs", false}, {"vi insert", true}} {
-		t.Run(c.name, func(t *testing.T) {
+		t.Run(c.name+", zsh", func(t *testing.T) {
 			var out strings.Builder
-			e := Shell{Editor: EditorStyle{WideEmacsKeymap: true, ViQuotedInsert: true}}.newEditor(t.Context(), nil)
+			e := Shell{Editor: EditorStyle{
+				WideEmacsKeymap: true, ViQuotedInsert: true, QuotedInsertAbandonsOnControlC: true,
+			}}.newEditor(t.Context(), nil)
 			e.in, e.out, e.width = typing("ab\x16\x03"), &out, func() int { return 80 }
 			e.vi = func() bool { return c.vi }
 			if _, err := e.readLine(drawPrompt("$ ")); !errors.Is(err, ErrInterrupted) {
@@ -92,6 +96,19 @@ func TestQuotedInsertInterruptedRings(t *testing.T) {
 			}
 			if n := strings.Count(out.String(), bell); n != 1 {
 				t.Errorf("rang %d times, want 1:\n%q", n, out.String())
+			}
+		})
+		t.Run(c.name+", bash", func(t *testing.T) {
+			var out strings.Builder
+			e := Shell{Editor: EditorStyle{WordKeys: true, QuotedInsertInViInsert: true}}.newEditor(t.Context(), nil)
+			e.in, e.out, e.width = typing("ab\x16\x03\r"), &out, func() int { return 80 }
+			e.vi = func() bool { return c.vi }
+			got, err := e.readLine(drawPrompt("$ "))
+			if err != nil || got != "ab\x03" {
+				t.Errorf("got %q, %v, want the ^C typed", got, err)
+			}
+			if strings.Contains(out.String(), bell) {
+				t.Errorf("rang:\n%q", out.String())
 			}
 		})
 	}

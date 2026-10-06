@@ -323,8 +323,10 @@ type editor struct {
 	quotedInsertInViInsert   bool
 	capitalizeFirstCharacter bool
 	transposeToLineEnd       bool
-	// viQuotedInsertKey is EditorStyle.ViQuotedInsert.
-	viQuotedInsertKey bool
+	// viQuotedInsertKey and quotedInsertAbandons are EditorStyle.ViQuotedInsert
+	// and QuotedInsertAbandonsOnControlC.
+	viQuotedInsertKey    bool
+	quotedInsertAbandons bool
 	// namedWidgets is Shell.NamedWidgets: every widget a name reaches, for
 	// execute-named-cmd. Nil is a session that names none.
 	namedWidgets func() map[string]Binding

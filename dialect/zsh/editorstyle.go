@@ -24,9 +24,12 @@ func EditorStyle() repl.EditorStyle {
 		WideEmacsKeymap: true,
 		// And `^V` in vi insert mode. See repl.EditorStyle.ViQuotedInsert
 		// (#6251).
-		ViQuotedInsert:   true,
-		WhichCommandWord: "which-command",
-		RunHelpWord:      "run-help",
+		ViQuotedInsert: true,
+		// And `^V ^C` gives the line up with a bell. See
+		// repl.EditorStyle.QuotedInsertAbandonsOnControlC (#6251).
+		QuotedInsertAbandonsOnControlC: true,
+		WhichCommandWord:               "which-command",
+		RunHelpWord:                    "run-help",
 		// And `^D` with something typed is delete-char-or-list. See
 		// repl.EditorStyle.ListOnControlD (#6233).
 		ListOnControlD: true,

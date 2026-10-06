@@ -1409,7 +1409,10 @@ line**, and the cursor goes to the end of the line:
 | `aa bb cc` | 1 | unchanged, `\a` | 1 | unchanged | 1 |
 
 With no word before its own to swap with, it rings. `^V` takes the next key
-as zsh's does, and draws a control character as a plain caret.
+as zsh's does, and draws a control character as a plain caret — `^C`
+included: `^V ^C` on `abc` with the cursor on the `c` draws `ab^Cc` and goes
+on reading, in emacs and vi insert alike, where zsh rings and gives the line
+up (#6251). Nothing is drawn while it waits, in vi insert too.
 
 `repl.EditorStyle.WordKeys`, `QuotedInsertInViInsert`,
 `CapitalizeTakesTheFirstCharacter` and `TransposeWordsReachesTheLineEnd` are

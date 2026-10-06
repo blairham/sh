@@ -474,8 +474,17 @@ func (sh Shell) frontEndWith(r *interp.Runner, name string, dg interp.Diagnostic
 		// for the same failure in a file (#1892). Minus the line echo either
 		// way — the line is still on the screen above the complaint, having
 		// just been typed.
+		//
+		// Named the way the session's run-time failures are, by asking the
+		// Runner, and not by the name the shell was started as: measured
+		// 2026-10-06, bash 5.3.20 started as `/opt/homebrew/bin/bash -i`,
+		// `./links/foo -i` and `exec -a /x/zork … -i` writes `bash:`, `foo:`
+		// and `zork:` for a line that will not parse, and `-bash:` as a
+		// login; zsh writes `zsh:` under any name; dash and ksh93 write the
+		// whole of argv[0] — each exactly what it writes for `cd /nope` on
+		// the next line (#6244).
 		Report: func(err error) string {
-			return dg.ForPrompt().ParseDiagnostic(name, "", err, "")
+			return dg.ForPrompt().ParseDiagnostic(r.DiagnosticName(), "", err, "")
 		},
 		// And it leaves the same status behind that it would as a script,
 		// from the same table: what a shell answers `$?` with after a refused
@@ -511,7 +520,10 @@ func (sh Shell) frontEndWith(r *interp.Runner, name string, dg interp.Diagnostic
 			if msg == "" {
 				return ""
 			}
-			return pdg.Report(name, int(rk.Pos.Line), msg+"\n")
+			// Named as Report above names a failure, and measured the same
+			// way: `cat <<EOF` ended by the input is `foo: warning: …`
+			// from bash started as `./links/foo -i`.
+			return pdg.Report(r.DiagnosticName(), int(rk.Pos.Line), msg+"\n")
 		},
 		// And whether a construct it refused still asks for another line,
 		// which one of the four does — see

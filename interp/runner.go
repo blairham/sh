@@ -6833,6 +6833,15 @@ func (r *Runner) name() string {
 	return r.Name
 }
 
+// DiagnosticName is the name the shell's own diagnostics open with right now:
+// the one a run-time failure is prefixed by, for a front end that words a
+// failure the Runner never saw — a line typed at a prompt that would not
+// parse. Asking here rather than passing the front end's own copy of the name
+// keeps the two from parting: they did, and an interactive bash named itself
+// `bash` for a command that failed and by its whole path for a line that would
+// not parse (#6244).
+func (r *Runner) DiagnosticName() string { return r.name() }
+
 // invokedAs is argv[0] — what the process was executed as, which is a
 // different fact from Runner.name and is what one dialect's applet-backed
 // builtins report under. Falls back to the diagnostic name where nothing

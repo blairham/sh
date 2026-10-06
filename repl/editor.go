@@ -219,6 +219,20 @@ type editor struct {
 	countRepeat int
 	// prefixArgument says ESC and a digit, or ESC and a minus, set a count.
 	prefixArgument bool
+	// countPrompt, countAsReadline, negativeTypesNothing, countStops,
+	// caseBackward and countSkips are EditorStyle.CountPrompt,
+	// CountReadAsReadline, NegativeCountTypesNothing,
+	// CountStopsWhereItCannotAct, NegativeCaseCountGoesBackward and
+	// CountSkips.
+	countPrompt          string
+	countAsReadline      bool
+	negativeTypesNothing bool
+	countStops           bool
+	caseBackward         bool
+	countSkips           []Widget
+	// countRunning is a counted key being played under countStops, and
+	// countActed whether a press of it has acted yet. See ringUnless.
+	countRunning, countActed bool
 	// countKey says the keystroke in hand was more of a count, read while a
 	// binding was being matched, so it spends nothing.
 	countKey bool
@@ -730,6 +744,7 @@ func (e *editor) readLine(prompt drawnPrompt) (string, error) {
 	// waiting to be spent.
 	e.forgetPaste()
 	e.count, e.countRepeat = prefixCount{}, 0
+	e.countRunning, e.countActed = false, false
 	if e.bracketedPaste && !e.noTerminal {
 		// The terminal is asked to mark pasted text for the length of this
 		// read, and the request is taken back on the way out — where the
@@ -861,10 +876,14 @@ func (e *editor) keyLoop(prompt drawnPrompt) (string, error) {
 		// for a key's *first* byte is an idle moment. It costs nothing in a
 		// session with no descriptor armed, which is every session that has
 		// not asked; see watchfd.go.
-		prompt = e.serveDescriptors(prompt)
+		//
 		// The keystroke that spent a count is played again, from the bytes it
-		// was read as, before anything else is read. See prefixarg.go.
+		// was read as, before anything else is read — and before the wait
+		// for a descriptor, which waits for the terminal unless input is
+		// already in hand, and so held the rest of a count's presses back
+		// until the next key arrived (#6248). See prefixarg.go.
 		e.replayCountedKey()
+		prompt = e.serveDescriptors(prompt)
 		n, err := e.nextByte(buf[:])
 		if err != nil {
 			if e.noTerminal && len(e.line) > 0 {
@@ -1673,7 +1692,20 @@ func (e *editor) moveTo(pos int, prompt drawnPrompt) bool {
 //
 // Not in vi mode, whose insert keys ring for none of this: measured with `set
 // -o vi`, Backspace at the start and `^D` at the end are silent in bash 5.3.20.
+//
+// A press of a counted key under EditorStyle.CountStopsWhereItCannotAct
+// reports here too, and a press with nothing to act on ends the run: see
+// countRunsOut for whether it rings.
 func (e *editor) ringUnless(acted bool) {
+	if e.countRunning {
+		if acted {
+			e.countActed = true
+			return
+		}
+		if !e.countRunsOut() {
+			return
+		}
+	}
 	if acted || !e.ringsOnNothingToActOn || e.viEditing() {
 		return
 	}
@@ -1714,7 +1746,7 @@ func (e *editor) redraw(prompt drawnPrompt) {
 			}
 		}()
 	}
-	prompt = e.live(prompt)
+	prompt = e.promptForCount(e.live(prompt))
 	// A diagnostic ended the row the line was on, so this draw starts on a
 	// row of its own and has the leading rows to put back. See
 	// diagnosticrow.go.

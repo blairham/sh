@@ -438,6 +438,7 @@ type Binding struct {
 // text both leave the screen wrong, and the two kinds are told apart by which
 // call is made and not by anything the action reports.
 func (e *editor) runWidget(b Binding, prompt drawnPrompt) {
+	e.skipsCount(b.Widget)
 	switch b.Widget {
 	case WidgetNone:
 		// A key bound to nothing. Doing nothing is the whole of it, and it is

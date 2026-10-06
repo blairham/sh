@@ -78,6 +78,10 @@ func (e *editor) caseWords(n int, to wordCase) {
 	if stay {
 		n = -n
 	}
+	if stay && e.caseBackward {
+		e.caseWordsBackward(n, to)
+		return
+	}
 	i := e.pos
 	for range n {
 		for i < len(e.line) && !e.isWordRune(e.line[i]) {
@@ -106,6 +110,40 @@ func (e *editor) caseWords(n int, to wordCase) {
 	}
 	if !stay {
 		e.pos = i
+	}
+}
+
+// caseWordsBackward changes the case of the n words before the cursor — from
+// the start of the nth word back to the cursor — and leaves the cursor where it
+// was. See EditorStyle.NegativeCaseCountGoesBackward.
+func (e *editor) caseWordsBackward(n int, to wordCase) {
+	from := e.pos
+	for range n {
+		for from > 0 && !e.isWordRune(e.line[from-1]) {
+			from--
+		}
+		for from > 0 && e.isWordRune(e.line[from-1]) {
+			from--
+		}
+	}
+	first := true
+	for i := from; i < e.pos; i++ {
+		r := e.line[i]
+		if !e.isWordRune(r) {
+			first = true
+			continue
+		}
+		switch {
+		case to == upperCase:
+			r = unicode.ToUpper(r)
+		case to == lowerCase:
+			r = unicode.ToLower(r)
+		case first && (e.capitalizeFirstCharacter || unicode.IsLetter(r)):
+			r, first = unicode.ToUpper(r), false
+		default:
+			r = unicode.ToLower(r)
+		}
+		e.line[i] = r
 	}
 }
 

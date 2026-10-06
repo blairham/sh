@@ -27,6 +27,16 @@ package repl
 // Nothing is drawn while it waits for the key. The count is the one typing
 // takes, which is why it goes through typeCounted.
 func (e *editor) quotedInsert(prompt drawnPrompt) {
+	if n := e.countAsGiven(); n < 0 && e.negativeTypesNothing {
+		// A negative count is that many keys, each put in the line once and
+		// the cursor after it. See EditorStyle.NegativeCountTypesNothing.
+		for range -n {
+			if e.insertQuoted(prompt, false); e.interruptRequested {
+				return
+			}
+		}
+		return
+	}
 	e.insertQuoted(prompt, false)
 }
 
@@ -95,6 +105,12 @@ func (e *editor) insertQuoted(prompt drawnPrompt, placeholder bool) {
 	n := e.countAsGiven()
 	if n == 0 && placeholder {
 		e.redraw(prompt)
+	}
+	if n < 0 && e.negativeTypesNothing {
+		// One of the keys a negative count takes. See quotedInsert.
+		e.change(e.typedBefore, func() { e.insert(r) })
+		e.redraw(prompt)
+		return
 	}
 	e.typeCounted(r, n, prompt)
 }

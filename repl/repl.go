@@ -3111,6 +3111,16 @@ func (s Shell) newEditor(ctx context.Context, state *terminalState) *editor {
 		bracketedPaste: s.Editor.BracketedPaste,
 		pasteCodes:     s.bracketedPasteCodes(),
 		prefixArgument: s.Editor.PrefixArgument,
+
+		// And how a count is typed, drawn and spent, where readline's
+		// answers are not zsh's (#6248).
+		countPrompt:          s.Editor.CountPrompt,
+		countAsReadline:      s.Editor.CountReadAsReadline,
+		negativeTypesNothing: s.Editor.NegativeCountTypesNothing,
+		countStops:           s.Editor.CountStopsWhereItCannotAct,
+		caseBackward:         s.Editor.NegativeCaseCountGoesBackward,
+		countSkips:           s.Editor.CountSkips,
+
 		pastedStyle:    s.Editor.PastedTextStyle,
 		pastedStyleEnd: s.Editor.PastedTextStyleEnd,
 		// And a control character's caret. See controlglyph.go.

@@ -288,8 +288,10 @@ type editor struct {
 	message string
 	// tabOnBlank is EditorStyle.TabOnABlankLineTypesItself.
 	tabOnBlank bool
-	// rowEnded is a diagnostic having taken the line's row while a widget
-	// ran, so the next draw puts the whole prompt back. See diagnosticrow.go.
+	// rowEnded is the line's row having been ended under it — by a
+	// diagnostic written while a widget ran, or by a listing the line is
+	// drawn again under — so the next draw puts the whole prompt back. See
+	// diagnosticrow.go, and list.
 	rowEnded bool
 	// undoLimit is the change a key's undo stops at, 0 for none. See
 	// Actions.UndoLimit.
@@ -1945,10 +1947,31 @@ func (e *editor) list(matches []Candidate, prompt drawnPrompt) int {
 		e.write("\x1b[0m")
 	}
 	e.listBack = back && len(rows) > 0
+	if !e.listBack && len(rows) > 0 {
+		// The line is drawn again under the listing, and it is drawn as a
+		// fresh prompt is — the ground and every row of the prompt, not
+		// only the row the line is on. Measured 2026-10-06 through a
+		// pseudo-terminal under `PS1=$'R1\nP> '`, `ls x` Tab over three
+		// matches: zsh 5.9.2 with ALWAYS_LAST_PROMPT off, or under a
+		// listing too tall to come back over, writes `\r\n`, the ground
+		// and `R1\r\nP> ls x`, and bash 5.3 writes `R1\r\nP> ls x` under
+		// its listing. This drew `P> ls x` alone, so the upper row was
+		// left behind above the listing (#6209). See
+		// redrawAfterAnEndedRow, which the next draw goes through.
+		e.rowEnded = true
+	}
 	// The prompt and the line are not written back here: the caller redraws,
 	// and the redraw now knows it is starting from a fresh row — or, where
 	// the cursor goes back up to the line, from that row.
 	return len(rows)
+}
+
+// drawsTheLineAgainBelow reports whether this session draws the line again
+// under what a completion key wrote, rather than going back up to it: where
+// the dialect names an option for going back and it is off. See
+// returnToTheLine.
+func (e *editor) drawsTheLineAgainBelow() bool {
+	return e.returnsToTheLine != nil && !e.returnsToTheLine()
 }
 
 // listComesBack reports whether a listing of this many rows, drawn under a

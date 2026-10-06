@@ -194,7 +194,8 @@ func RunCompletion(
 		return nil
 	}
 	cs := newCompletionState(c)
-	cs.state["insert"] = insertOnEntry(r, c.Menu)
+	entry := insertOnEntry(r, c.Menu)
+	cs.state["insert"] = entry
 	expandCommandAlias(r, cs)
 	openCompletionParameters(r, cs)
 	defer closeCompletionParameters(r)
@@ -243,7 +244,13 @@ func RunCompletion(
 		// repl.CompletionInsertsTheKey.
 		return repl.CompletionInsertsTheKey()
 	}
-	return insertAsAsked(cs.state["insert"], cs.groupedMatches())
+	if insert := cs.state["insert"]; insert != entry {
+		// Left as it was found, the value says what the editor was going
+		// to do anyway, so only a function that changed it has anything
+		// to tell it.
+		return insertAsAsked(insert, cs.groupedMatches())
+	}
+	return cs.groupedMatches()
 }
 
 // insertOnEntry is `compstate[insert]` as a completion function finds it: how

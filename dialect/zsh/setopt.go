@@ -1409,7 +1409,12 @@ var zshOptions = []zshOption{
 			return 0
 		},
 	},
-	recorded("listambiguous", true),
+	// LIST_AMBIGUOUS is read by the line editor on every completion key —
+	// see repl.EditorStyle.FillStandsAsideOption — so it is not `recorded`:
+	// with it off, a Tab that fills in what the matches agree on also rings
+	// and lists them, where with it on the fill is silent and the listing
+	// waits (#6220).
+	storeBacked("listambiguous", true),
 	recorded("listbeep", true),
 	// Both read by the line editor when it draws a listing — see
 	// repl.EditorStyle.ListPackedOption — so not `recorded` (#6157).

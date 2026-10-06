@@ -551,6 +551,19 @@ type EditorStyle struct {
 	// 5.9.2 — see editor.listsOn for the table.
 	ListMatchesOnASecondKeyOption string
 
+	// FillStandsAsideOption names the option under which a completion key
+	// that fills in what an ambiguous word's matches agree on does nothing
+	// else: no bell, no listing, and the key after it counts as the first
+	// in a row rather than the second. zsh's LIST_AMBIGUOUS, which only does
+	// this while AUTO_LIST or BASH_AUTO_LIST is on; with the option off, or
+	// neither of those on, a fill is a first key like any other ambiguous
+	// completion — the bell, and the listing where the first key lists.
+	// Measured 2026-10-06 against zsh 5.9.2 — see fillRule for the
+	// table. Empty is a dialect with no such option, whose fill rings as
+	// BellRingsOnAnAmbiguousCompletionThatInserts says, never lists, and
+	// is the first key of a row.
+	FillStandsAsideOption string
+
 	// MenuOnARepeatedCompletionOption names the option under which a
 	// completion key pressed again on a word the last one left ambiguous
 	// starts a menu completion — the first match in the line, and each

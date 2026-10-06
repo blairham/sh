@@ -107,6 +107,57 @@ func TestARepeatedTabStartsAMenu(t *testing.T) {
 		press(t, control, screen, "\t", "x alpha1", "alpha1  alpha2")
 	})
 
+	// And the fill is a key of the run only where LIST_AMBIGUOUS or a
+	// listing option is off (#6220). Measured 2026-10-06 against zsh 5.9.2,
+	// `x a` over `alpha1`, `alpha2` and `zz`:
+	//
+	//	options                Tab 1                Tab 2        Tab 3        Tab 4
+	//	unsetopt listambiguous \a alpha, listing    \a alpha1
+	//	unsetopt autolist      \a alpha             \a alpha1
+	//	setopt bashautolist    alpha                \a           listing      \a alpha1
+	//
+	// bells waits for the count of bells written since mark to reach want.
+	// A line that does not change cannot be waited on, and a bell can.
+	bells := func(t *testing.T, screen *smoke.Screen, mark, want int, after string) {
+		t.Helper()
+		deadline := time.Now().Add(widgetBudget)
+		for strings.Count(screen.Text(), "\a")-mark != want {
+			if time.Now().After(deadline) {
+				t.Fatalf("after %s, %d bells, want %d", after, strings.Count(screen.Text(), "\a")-mark, want)
+			}
+			time.Sleep(20 * time.Millisecond)
+		}
+	}
+	const fill = "mkdir am && : >am/alpha1 && : >am/alpha2 && : >am/zz && cd am"
+	t.Run("without listambiguous a fill rings and lists", func(t *testing.T) {
+		control, screen := widgetSession(t, fill, "unsetopt listambiguous")
+		t.Cleanup(func() { _, _ = control.WriteString("\x01\x0b") })
+		mark := strings.Count(screen.Text(), "\a")
+		press(t, control, screen, "x a\t", "x alpha", "alpha1  alpha2")
+		bells(t, screen, mark, 1, "the fill")
+		press(t, control, screen, "\t", "x alpha1", "alpha1  alpha2")
+		bells(t, screen, mark, 2, "the Tab that started the menu")
+	})
+	t.Run("without autolist a fill rings and the next Tab starts the menu", func(t *testing.T) {
+		control, screen := widgetSession(t, fill, "unsetopt autolist")
+		t.Cleanup(func() { _, _ = control.WriteString("\x01\x0b") })
+		mark := strings.Count(screen.Text(), "\a")
+		press(t, control, screen, "x a\t", "x alpha", "")
+		bells(t, screen, mark, 1, "the fill")
+		press(t, control, screen, "\t", "x alpha1", "")
+	})
+	t.Run("under bashautolist the run starts after the fill", func(t *testing.T) {
+		control, screen := widgetSession(t, fill, "setopt bashautolist")
+		t.Cleanup(func() { _, _ = control.WriteString("\x01\x0b") })
+		mark := strings.Count(screen.Text(), "\a")
+		press(t, control, screen, "x a\t", "x alpha", "")
+		_, _ = control.WriteString("\t")
+		bells(t, screen, mark, 1, "the Tab after the fill")
+		press(t, control, screen, "\t", "x alpha", "alpha1  alpha2")
+		press(t, control, screen, "\t", "x alpha1", "alpha1  alpha2")
+		bells(t, screen, mark, 2, "the Tab that started the menu")
+	})
+
 	t.Run("the control, with the option off", func(t *testing.T) {
 		control, screen := widgetSession(t, dir, "unsetopt automenu")
 		t.Cleanup(func() { _, _ = control.WriteString("\x01\x0b") })

@@ -36,7 +36,13 @@ import (
 // different questions about it, so neither "the line was written to" nor
 // "there were matches" is enough on its own. See completionOutcome.
 func (e *editor) complete(c Completer) (matches []Candidate, did completionOutcome) {
-	return e.completeAs(c, MenuNotStarted, +1)
+	matches, did = e.completeAs(c, MenuNotStarted, +1)
+	if did == completionFilledInWhatTheyAgreeOn {
+		// A fill is listed only where the key's dialect says so, which is
+		// completeKey's to decide. See fillRule.
+		matches = nil
+	}
+	return matches, did
 }
 
 // completeAs is complete for a key that may start a menu completion: menu is
@@ -68,7 +74,7 @@ func (e *editor) completeAs(c Completer, menu MenuReason, step int) (matches []C
 	// worth pressing rather than a repeat of the first.
 	if common := commonPrefix(words); len(words) > 1 && len(common) > len(word) && keepsWhatWasTyped(word, common) {
 		e.replaceWord(start, common)
-		return nil, completionFilledInWhatTheyAgreeOn
+		return displayCandidates(candidates, word), completionFilledInWhatTheyAgreeOn
 	}
 	return displayCandidates(candidates, word), completionHadNothingToInsert
 }
@@ -733,6 +739,19 @@ func (e *editor) completeKey(c Completer, builtin, wasTab bool, prompt drawnProm
 		e.lastTab = true
 		return
 	}
+	if did == completionFilledInWhatTheyAgreeOn {
+		switch e.fill {
+		case fillStandsAside:
+			// The fill and nothing else, and the key after it is the first
+			// of a row: neither lastTab nor completionNow is left set. See
+			// fillRule.
+			e.redraw(prompt)
+			return
+		case fillFirstOfARow:
+			// Never drawn on the fill's own key. See fillRule.
+			matches = nil
+		}
+	}
 	// Whether the matches are drawn now or left for a second key is the
 	// dialect's answer; see EditorStyle.ListMatchesWithoutASecondKeyOption.
 	listing := len(matches) > 0 && e.listsOn(wasTab)
@@ -775,6 +794,47 @@ func (e *editor) listsOn(wasTab bool) bool {
 	return e.listsMatches || wasTab && !e.quietSecondKey
 }
 
+// fillRule is what a completion key that fills in what an ambiguous word's
+// matches agree on counts as, in the run of completion keys that decides
+// when the matches are listed and when a menu starts.
+//
+// Measured 2026-10-06 through a pseudo-terminal against zsh 5.9.2, `x a`
+// typed over `alpha1`, `alpha2` and `zz`, so that the first Tab fills in
+// `alpha`, Tab after Tab (LA is LIST_AMBIGUOUS, AL AUTO_LIST, BAL
+// BASH_AUTO_LIST):
+//
+//	options                Tab 1                Tab 2            Tab 3        Tab 4
+//	(defaults)             alpha                \a listing       \a alpha1    alpha2
+//	no LA                  \a alpha, listing    \a alpha1        alpha2
+//	no AL                  \a alpha             \a alpha1        alpha2
+//	no AL, no LA           \a alpha             \a alpha1        alpha2
+//	BAL                    alpha                \a               listing      \a alpha1
+//	BAL, no LA             \a alpha             listing          \a alpha1
+//	BAL, no AL             alpha                \a               listing      \a alpha1
+//	BAL, no AL, no LA      \a alpha             listing          \a alpha1
+//	no AUTO_MENU, no LA    \a alpha, listing    \a listing       \a listing
+//
+// and over `always` and `auto`, which agree on nothing to fill in, the same
+// keys one column to the left — `\a` and the listing on Tab 1 by default.
+// So with LA on and a listing option on, the fill stands aside: it is silent
+// and the run starts at the key after it. Otherwise the fill is that run's
+// first key, and rings and lists as one. That is the manual's account in
+// other words: with the option on, a list is drawn automatically only where
+// nothing would be inserted, and under BAL that puts the listing on the
+// third key.
+type fillRule uint8
+
+const (
+	// fillFirstOfARow is a dialect that names no such option: the fill
+	// starts the run and is never listed on its own key, and it rings as
+	// EditorStyle.BellRingsOnAnAmbiguousCompletionThatInserts says.
+	fillFirstOfARow fillRule = iota
+	// fillStandsAside: the fill is silent and the next key is the first.
+	fillStandsAside
+	// fillIsAFirstKey: the fill rings and lists as the first key of a run.
+	fillIsAFirstKey
+)
+
 // ringsFor reports whether this keystroke sounds the bell, given what it did
 // and whether it is drawing the matches.
 //
@@ -796,7 +856,10 @@ func (e *editor) ringsFor(did completionOutcome, listing bool) bool {
 	case completionSettledTheWord:
 		return false
 	case completionFilledInWhatTheyAgreeOn:
-		return e.bellsOnAPartialCompletion
+		if e.fill != fillIsAFirstKey {
+			return e.bellsOnAPartialCompletion
+		}
+		return e.listsMatches || !listing
 	default:
 		return e.listsMatches || !listing
 	}

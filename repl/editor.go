@@ -133,9 +133,12 @@ type editor struct {
 	// MenuOnARepeatedCompletionOption, MenuOnTheFirstCompletionOption and
 	// BellRingsWhenAMenuStarts.
 	quietSecondKey bool
-	autoMenu       bool
-	menuFirst      bool
-	bellsOnAMenu   bool
+	// fill is what a completion key that fills in what the matches agree on
+	// counts as. See fillRule and EditorStyle.FillStandsAsideOption.
+	fill         fillRule
+	autoMenu     bool
+	menuFirst    bool
+	bellsOnAMenu bool
 
 	// shellComplete asks the shell's own completion system what a word could
 	// become, by the name of the action a key's binding named — see

@@ -2888,6 +2888,19 @@ func (s Shell) readEditorOptions(e *editor) {
 			e.quietSecondKey = true
 		}
 	}
+	e.fill = fillFirstOfARow
+	if name := s.Editor.FillStandsAsideOption; name != "" {
+		// Only while some key lists at all: the option is about what lists,
+		// and with nothing listing a fill is a first key like any other.
+		// See fillRule.
+		lists := s.dialectOption(s.Editor.ListMatchesWithoutASecondKeyOption) ||
+			s.Editor.ListMatchesOnASecondKeyOption != "" && s.dialectOption(s.Editor.ListMatchesOnASecondKeyOption)
+		if s.dialectOption(name) && lists {
+			e.fill = fillStandsAside
+		} else {
+			e.fill = fillIsAFirstKey
+		}
+	}
 	e.autoMenu = s.dialectOption(s.Editor.MenuOnARepeatedCompletionOption)
 	e.menuFirst = s.dialectOption(s.Editor.MenuOnTheFirstCompletionOption)
 	e.silent = s.Editor.BeepOption != "" && !s.dialectOption(s.Editor.BeepOption)

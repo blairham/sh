@@ -56,8 +56,12 @@ func TestTheListingWidgetReachesTheTerminal(t *testing.T) {
 	// have left. This is the assertion the whole action turns on: `uniq_` is
 	// the prefix the three matches agree on, so a listing built out of the
 	// completion draws the same rows and leaves a different line.
-	if got := s.row(3); got != "[1]: uniq" {
-		t.Errorf("row 3 is %q, want %q — the listing must not complete the word\nscreen:\n%s",
+	// Under the whole prompt drawn again, its upper row included (#6209).
+	if got := s.row(3); got != "UPPER" {
+		t.Errorf("row 3 is %q, want the prompt's upper row drawn again\nscreen:\n%s", got, s.shown().styledText())
+	}
+	if got := s.row(4); got != "[1]: uniq" {
+		t.Errorf("row 4 is %q, want %q — the listing must not complete the word\nscreen:\n%s",
 			got, "[1]: uniq", s.shown().styledText())
 	}
 

@@ -69,10 +69,16 @@ func TestAGroupedListingReachesTheTerminal(t *testing.T) {
 		}
 	}
 	// And the prompt is drawn again under the listing with the line still on
-	// it, because the line is still being typed. Its last row only: the rows
-	// above a prompt are written once, which is the split drawnPrompt is
-	// about and what keeps a two-row prompt from leaving a ladder behind it.
-	if got := s.row(2 + len(want)); !strings.HasPrefix(got, "[1]: -") {
+	// it, because the line is still being typed — the whole prompt, as a
+	// fresh one is drawn: measured 2026-10-06, bash 5.3 and zsh 5.9.2 both
+	// write every row of a two-row prompt under their listing (#6209). The
+	// rows above a prompt are written once *per draw of a prompt*; a
+	// keystroke's redraw is not one, and that split is what keeps a two-row
+	// prompt from leaving a ladder behind it.
+	if got := s.row(2 + len(want)); got != "UPPER" {
+		t.Errorf("the prompt's upper row was not drawn again under the listing; row is %q", got)
+	}
+	if got := s.row(3 + len(want)); !strings.HasPrefix(got, "[1]: -") {
 		t.Errorf("the line was not redrawn under the listing; row is %q", got)
 	}
 

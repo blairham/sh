@@ -6,6 +6,9 @@ package zsh_test
 import (
 	"strings"
 	"testing"
+
+	"github.com/blairham/sh/dialect/zsh"
+	"github.com/blairham/sh/repl"
 )
 
 // `compadd`, measured through a pseudo-terminal against zsh 5.9.2 on
@@ -199,6 +202,46 @@ func TestCompaddMatchesPastThePrefixTheWordHolds(t *testing.T) {
 			got := completionFor(t, widgetOf("compadd -P pp always auto"), c.typed)
 			if strings.Join(got, " ") != strings.Join(c.want, " ") {
 				t.Errorf("%s offered %q, want %q", c.typed, got, c.want)
+			}
+		})
+	}
+}
+
+// A word typed with quoting is matched as the name it spells: the quoting
+// comes off by the rules of where it was typed before the candidates are
+// compared with it (#6199).
+//
+// Measured 2026-10-06 through a pseudo-terminal against zsh 5.9.2 — see the
+// table at typedForMatching. Each row is the word after `x `, so a blank in it
+// is part of the word.
+func TestCompaddMatchesAWordTypedWithQuoting(t *testing.T) {
+	const body = `compadd 'a b' 'a d' '$aa' '$ab' '\x1' '\x2'`
+	for _, c := range []struct {
+		word string
+		want []string
+	}{
+		{`a\ `, []string{`a\ b`, `a\ d`}},
+		{`a\`, []string{`a\ b`, `a\ d`}},
+		{`\$a`, []string{`\$aa`, `\$ab`}},
+		{`\\x`, []string{`\\x1`, `\\x2`}},
+		{`"\$a`, []string{`"\$aa`, `"\$ab`}},
+		{`"\\x`, []string{`"\\x1`, `"\\x2`}},
+		// A backslash that quotes nothing inside double quotes is itself, so
+		// `"a\ ` begins with three characters no candidate has.
+		{`"a\ `, nil},
+		// And inside single quotes nothing comes off.
+		{`'\$a`, nil},
+		// The control: unquoted, the word was always matched.
+		{`a`, []string{`a\ b`, `a\ d`}},
+	} {
+		t.Run(c.word, func(t *testing.T) {
+			r := bindkeyRunner(t, widgetOf(body))
+			line := "x " + c.word
+			got := completionWords(zsh.RunCompletion(r, t.Context(), "probewid", repl.Completion{
+				Line: line, Point: len(line), Start: 2, Word: c.word, Dir: r.Dir,
+			}))
+			if strings.Join(got, " ") != strings.Join(c.want, " ") {
+				t.Errorf("%s offered %q, want %q", c.word, got, c.want)
 			}
 		})
 	}

@@ -90,7 +90,10 @@ func TestARepeatedTabStartsAMenu(t *testing.T) {
 		}
 		// And a key that is not a completion ends it: the next Tab is a
 		// fresh completion of what is now on the line.
-		press(t, control, screen, "\x05\x7f\x7f\x7f\x7f\x7f\t", "x a", listing)
+		// The Z is what makes the wait discriminate: the line read `x a`
+		// before the Tab as well, and a menu would have made it
+		// `x alwaysZ`.
+		press(t, control, screen, "\x05\x7f\x7f\x7f\x7f\x7f\tZ", "x aZ", listing)
 	})
 
 	// Where the first Tab fills in what the matches agree on, the second
@@ -149,7 +152,7 @@ func TestARepeatedTabStartsAMenu(t *testing.T) {
 		lines        []string
 	}{
 		{"a widget that leaves compstate alone", "", []string{"x a", "x always", "x auto"}},
-		{"a widget that asks for the prefix", "compstate[insert]=unambiguous", []string{"x a", "x a", "x a"}},
+		{"a widget that asks for the prefix", "compstate[insert]=unambiguous", []string{"x a", "x aZ"}},
 		{"a widget that asks for a menu at the second match", "compstate[insert]=menu:2", []string{"x auto", "x always", "x auto"}},
 	} {
 		t.Run(row.name, func(t *testing.T) {
@@ -157,6 +160,13 @@ func TestARepeatedTabStartsAMenu(t *testing.T) {
 				"w() { compadd always auto; "+row.insert+" }; zle -C w complete-word w; bindkey '^I' w")
 			t.Cleanup(func() { _, _ = control.WriteString("\x01\x0b") })
 			press(t, control, screen, "x a\t", row.lines[0], listing)
+			if len(row.lines) == 2 {
+				// A line that does not change cannot be waited on, so
+				// the two Tabs are followed by a character that shows
+				// where they left it.
+				press(t, control, screen, "\t\tZ", row.lines[1], listing)
+				return
+			}
 			press(t, control, screen, "\t", row.lines[1], listing)
 			press(t, control, screen, "\t", row.lines[2], listing)
 		})

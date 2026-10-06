@@ -782,8 +782,6 @@ func (e *editor) ringsFor(did completionOutcome, listing bool) bool {
 		return false
 	case completionFilledInWhatTheyAgreeOn:
 		return e.bellsOnAPartialCompletion
-	case completionStartedAMenu:
-		return e.bellsOnAMenu
 	default:
 		return e.listsMatches || !listing
 	}

@@ -2868,6 +2868,19 @@ func (s Shell) commentsAreOff() bool {
 // ones cannot be worked out two ways.
 func (s Shell) readEditorOptions(e *editor) {
 	e.listsMatches = s.dialectOption(s.Editor.ListMatchesWithoutASecondKeyOption)
+	e.quietSecondKey = false
+	if name := s.Editor.ListMatchesOnASecondKeyOption; name != "" {
+		// The second key's option takes the first key's listing away
+		// where it is on, and leaves no key listing where it is off. See
+		// editor.listsOn for the measurement.
+		if s.dialectOption(name) {
+			e.listsMatches = false
+		} else {
+			e.quietSecondKey = true
+		}
+	}
+	e.autoMenu = s.dialectOption(s.Editor.MenuOnARepeatedCompletionOption)
+	e.menuFirst = s.dialectOption(s.Editor.MenuOnTheFirstCompletionOption)
 	e.silent = s.Editor.BeepOption != "" && !s.dialectOption(s.Editor.BeepOption)
 	e.unfinishedMark = s.markIfAsked()
 	e.returnsFirst = s.dialectOption(s.Editor.ReturnBeforeThePromptOption)
@@ -2958,6 +2971,8 @@ func (s Shell) newEditor(ctx context.Context, state *terminalState) *editor {
 		// And whether an ambiguous completion rings even while it fills a
 		// prefix in, which is one shell's answer and not the other's.
 		bellsOnAPartialCompletion: s.Editor.BellRingsOnAnAmbiguousCompletionThatInserts,
+		// And whether the keystroke that starts a menu completion rings.
+		bellsOnAMenu: s.Editor.BellRingsWhenAMenuStarts,
 		// And whether a failing widget rings the bell.
 		ringsOnAFailedWidget: s.Editor.RingsWhenAWidgetFails,
 		// Whether to ask the terminal to mark a paste, and how a marked one

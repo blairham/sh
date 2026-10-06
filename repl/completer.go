@@ -76,7 +76,41 @@ type Completion struct {
 	// `shell/dir` and for want of it would be resolving against whatever
 	// directory the embedding program happened to be started in.
 	Dir string
+
+	// Menu is what the editor will do with an ambiguous answer to this
+	// request: fill in what the matches agree on, or start a menu
+	// completion, and why. A completer that only lists words can ignore it;
+	// one that decides how its own matches go in — zsh's completion system,
+	// through `compstate[insert]` — reads it as the starting point and
+	// answers with MenuCompletion or PrefixCompletion.
+	Menu MenuReason
 }
+
+// MenuReason is why an ambiguous completion starts a menu, or that it does
+// not.
+//
+// Two reasons rather than a yes or no, because zsh tells its completion
+// functions which one it is and they answer differently: measured 2026-10-06
+// through a pseudo-terminal against zsh 5.9.2, a `zle -C` function printing
+// `$compstate[insert]` on entry reads `automenu-unambiguous` on a first Tab,
+// `automenu` on the Tab after a listing, and `menu` on a first press of a
+// `menu-complete` widget or of Tab under MENU_COMPLETE. A `menu-complete`
+// pressed right after a Tab listed reads `automenu`, so the repeat is the
+// reason that wins.
+type MenuReason uint8
+
+const (
+	// MenuNotStarted: the matches' common prefix goes in, and a listing
+	// or a bell is the answer where there is none.
+	MenuNotStarted MenuReason = iota
+	// MenuOnARepeat: a second completion request in a row, after the first
+	// left the word ambiguous, under the option that makes that a menu —
+	// zsh's AUTO_MENU. See EditorStyle.MenuOnARepeatedCompletionOption.
+	MenuOnARepeat
+	// MenuAsked: the key asked for a menu itself, or the option that starts
+	// one on the first request is on — zsh's MENU_COMPLETE.
+	MenuAsked
+)
 
 // Escape writes a literal name as a whole replacement word for this one.
 //
@@ -163,6 +197,51 @@ type Candidate struct {
 	// insertKey marks CompletionInsertsTheKey's answer, and nothing else sets
 	// it.
 	insertKey bool
+
+	// insertion marks MenuCompletion's and PrefixCompletion's answer: a row
+	// that draws nothing and is never inserted, carrying how the rest go in.
+	insertion insertion
+}
+
+// insertion is a completer's own answer to Completion.Menu. The zero value is
+// no answer, which leaves the editor's.
+type insertion struct {
+	// decided is set on every answer, so that "no menu" can be said.
+	decided bool
+	// menu starts a menu completion, at the match numbered at — counted
+	// from one, and from the end where it is negative — or, where at is
+	// zero, at the first match in the walk's direction.
+	menu bool
+	at   int
+}
+
+// MenuCompletion is a shell completion's answer that its matches start a menu
+// completion, beginning at the match numbered at: from one, from the end where
+// it is negative, and at the first in the key's direction where it is zero.
+// zsh's `compstate[insert]` holding `menu` or `automenu`, with `:N` after it
+// for the number (zshcompwid). One match is still an ordinary completion.
+func MenuCompletion(matches []Candidate, at int) []Candidate {
+	return append([]Candidate{{insertion: insertion{decided: true, menu: true, at: at}}}, matches...)
+}
+
+// PrefixCompletion is a shell completion's answer that its matches are put in
+// the line the ordinary way, as far as they agree, and start no menu whatever
+// the editor would have done: zsh's `compstate[insert]` holding `unambiguous`
+// or `automenu-unambiguous` when the function returns. The completion
+// system's `menu no` style is how a person gets it (zshcompsys).
+func PrefixCompletion(matches []Candidate) []Candidate {
+	return append([]Candidate{{insertion: insertion{decided: true}}}, matches...)
+}
+
+// insertionOf is the answer a completer gave about how its matches go in, or
+// the zero insertion where it gave none.
+func insertionOf(candidates []Candidate) insertion {
+	for _, c := range candidates {
+		if c.insertion.decided {
+			return c.insertion
+		}
+	}
+	return insertion{}
 }
 
 // CompletionInsertsTheKey is what a shell's completion answers when it asked

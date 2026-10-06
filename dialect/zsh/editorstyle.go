@@ -166,6 +166,17 @@ func EditorStyle() repl.EditorStyle {
 		// option because `unsetopt autolist` is a person asking for bash's
 		// answer, and measured, it gets it.
 		ListMatchesWithoutASecondKeyOption: "AUTO_LIST",
+		// And whether a second key lists where the first did not, which in
+		// this shell is an option of its own and off: with AUTO_LIST off no
+		// key lists. See repl.EditorStyle.ListMatchesOnASecondKeyOption.
+		ListMatchesOnASecondKeyOption: "BASH_AUTO_LIST",
+		// And the menu completion a Tab starts: on the press after a
+		// listing by default, on the first press under MENU_COMPLETE, with
+		// the bell as it starts (#6197). See
+		// repl.EditorStyle.MenuOnARepeatedCompletionOption.
+		MenuOnARepeatedCompletionOption: "AUTO_MENU",
+		MenuOnTheFirstCompletionOption:  "MENU_COMPLETE",
+		BellRingsWhenAMenuStarts:        true,
 		// And how the listing is arranged, which zsh's two options decide.
 		// See repl.EditorStyle.ListPackedOption (#6157).
 		ListPackedOption:    "LIST_PACKED",

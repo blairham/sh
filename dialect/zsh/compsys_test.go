@@ -4,6 +4,7 @@
 package zsh_test
 
 import (
+	"slices"
 	"strings"
 	"testing"
 
@@ -191,6 +192,9 @@ func TestCompstateAndTheWordAreWritableByTheFunction(t *testing.T) {
 			`words=${(j:|:)words} CURRENT=$CURRENT"`,
 	), "git che")
 	want := "PREFIX=ch insert=menu words=one|two CURRENT=2"
+	// The `menu` it wrote is also an answer about how the matches go in,
+	// which rides as a row with no word; see repl.MenuCompletion.
+	got = slices.DeleteFunc(got, func(w string) bool { return w == "" })
 	if len(got) != 1 || strings.ReplaceAll(got[0], `\`, "") != want {
 		t.Errorf("read back %q, want %q", got, want)
 	}

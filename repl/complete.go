@@ -36,7 +36,16 @@ import (
 // different questions about it, so neither "the line was written to" nor
 // "there were matches" is enough on its own. See completionOutcome.
 func (e *editor) complete(c Completer) (matches []Candidate, did completionOutcome) {
-	start, word, candidates := e.candidates(c)
+	return e.completeAs(c, MenuNotStarted, +1)
+}
+
+// completeAs is complete for a key that may start a menu completion: menu is
+// whether an ambiguous answer starts one as the editor sees it — a shell
+// completion that says otherwise is the one obeyed — and step is the key's
+// direction. See MenuReason, and startMenu for what starting one does to the
+// line.
+func (e *editor) completeAs(c Completer, menu MenuReason, step int) (matches []Candidate, did completionOutcome) {
+	start, word, candidates, how := e.ask(c, menu)
 	if len(candidates) == 0 {
 		return nil, completionFoundNothing
 	}
@@ -50,6 +59,10 @@ func (e *editor) complete(c Completer) (matches []Candidate, did completionOutco
 	if len(words) == 1 {
 		e.replaceWord(start, words[0]+loneSuffix(candidates, word))
 		return nil, completionSettledTheWord
+	}
+	if how.decided && how.menu || !how.decided && menu != MenuNotStarted {
+		e.startMenu(start, words, how.at, step)
+		return displayCandidates(candidates, word), completionStartedAMenu
 	}
 	// Several. Fill in as far as they agree, which is what makes a second Tab
 	// worth pressing rather than a repeat of the first.
@@ -113,6 +126,9 @@ const (
 	// completionHadNothingToInsert: several matches agreeing on nothing past
 	// what is typed, so the line is as it was and the matches are the answer.
 	completionHadNothingToInsert
+	// completionStartedAMenu: several matches, and the first of them is on
+	// the line as the start of a menu completion. See startMenu.
+	completionStartedAMenu
 )
 
 // candidates is what the word under the cursor could become, and where that
@@ -127,11 +143,32 @@ const (
 // all; the cursor stands in for the start so that a caller which goes on to
 // replace a word has a position rather than a zero.
 func (e *editor) candidates(c Completer) (start int, word string, matches []Candidate) {
+	start, word, matches, _ = e.ask(c, MenuNotStarted)
+	return start, word, matches
+}
+
+// ask is candidates for a key that starts a menu completion, or might: menu is
+// what the editor will do with an ambiguous answer, which the completer is
+// told, and how is what the completer answered about it — taken out of the
+// matches, where it rides as a row that draws nothing. See MenuCompletion.
+func (e *editor) ask(c Completer, menu MenuReason) (start int, word string, matches []Candidate, how insertion) {
 	if c == nil {
-		return e.pos, "", nil
+		return e.pos, "", nil, insertion{}
 	}
 	start = wordStart(e.line, e.pos)
-	return start, string(e.line[start:e.pos]), c.Complete(e.completion(start))
+	asked := e.completion(start)
+	asked.Menu = menu
+	matches = c.Complete(asked)
+	if how = insertionOf(matches); how.decided {
+		kept := matches[:0:0]
+		for _, m := range matches {
+			if !m.insertion.decided {
+				kept = append(kept, m)
+			}
+		}
+		matches = kept
+	}
+	return start, string(e.line[start:e.pos]), matches, how
 }
 
 // insertableWords are the replacement words among the candidates: everything a
@@ -660,27 +697,67 @@ func (e *editor) completerFor(name string) Completer {
 // and dropped the matches on the floor, so it could never list. See the case
 // in editor.go that calls this, and lastTab for why the listing is the second
 // keystroke's and not the first's.
+//
+// A menu completion in flight is stepped rather than asked again: measured
+// 2026-10-06 against zsh 5.9.2, a `zle -C` function logging each call runs
+// for the Tab that lists and the Tab that starts the menu, and not for the
+// two after them that walk it.
 func (e *editor) completeKey(c Completer, builtin, wasTab bool, prompt drawnPrompt) {
+	if e.stepMenu(+1, prompt) {
+		e.lastTab = true
+		return
+	}
 	if builtin && e.tabOnABlankLine(prompt) {
 		return
 	}
 	var matches []Candidate
 	var did completionOutcome
-	e.change(false, func() { matches, did = e.complete(c) })
+	e.change(false, func() { matches, did = e.completeAs(c, e.menuReason(wasTab, MenuNotStarted), +1) })
+	if did == completionStartedAMenu {
+		e.menuStarted(matches, prompt)
+		e.lastTab = true
+		return
+	}
 	// Whether the matches are drawn now or left for a second key is the
 	// dialect's answer; see EditorStyle.ListMatchesWithoutASecondKeyOption.
-	listing := len(matches) > 0 && (wasTab || e.listsMatches)
+	listing := len(matches) > 0 && e.listsOn(wasTab)
 	if e.ringsFor(did, listing) {
 		e.ring()
 	}
+	if did == completionFilledInWhatTheyAgreeOn || did == completionHadNothingToInsert {
+		e.completionNow = completionLeftItAmbiguous
+	}
 	if listing && e.confirmList(matches, prompt) {
 		e.returnToTheLine(e.list(matches, prompt), prompt)
+		e.completionNow = completionListedIt
 	}
 	e.redraw(prompt)
 	// Set after the redraw, and the only key that leaves it set: two
 	// completions in a row are a request to see the matches, and anything
 	// between them is not.
 	e.lastTab = true
+}
+
+// listsOn reports whether a completion key draws an ambiguous word's matches,
+// given whether the key before it was a completion too: on the first key
+// where the dialect's option says so, and otherwise on the second — unless
+// the dialect names an option for that and it is off.
+//
+// Measured 2026-10-06 through a pseudo-terminal against zsh 5.9.2, `x a` over
+// `always` and `auto`, Tab pressed three times under each option set:
+//
+//	options                       Tab 1        Tab 2           Tab 3
+//	(defaults)                    \a listing   \a always       auto
+//	unsetopt autolist             \a           \a always       auto
+//	unsetopt autolist automenu    \a           \a              \a
+//	setopt bashautolist           \a           listing         \a always
+//
+// So zsh with AUTO_LIST off lists on **no** key, where bash lists on the
+// second; and BASH_AUTO_LIST is the option that gives zsh bash's answer, and
+// takes the first key's listing away when it does — the manual's "takes
+// precedence over AUTO_LIST". See EditorStyle.ListMatchesOnASecondKeyOption.
+func (e *editor) listsOn(wasTab bool) bool {
+	return e.listsMatches || wasTab && !e.quietSecondKey
 }
 
 // ringsFor reports whether this keystroke sounds the bell, given what it did

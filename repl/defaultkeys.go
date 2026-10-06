@@ -124,8 +124,9 @@ func ControlXSearchBindings() map[string]Widget {
 //
 // Measured 2026-10-06 with `bindkey -M emacs` on zsh 5.9.2, and the upper-case
 // spellings are bound to the same widgets as the lower. bash 5.3 binds the
-// four of these it has too, but its words and its counts are readline's — a
-// negative count works backward there — and they are not measured here.
+// case keys and `M-t` too, but its words and its counts are readline's — a
+// negative count works backward there — and they are not measured here; it
+// has nothing on `M-q`, `M-'`, `M-a` or `^X u`.
 var wideEmacsKeys = map[string]Widget{
 	"\x1bu": WidgetUpCaseWord,
 	"\x1bU": WidgetUpCaseWord,
@@ -135,6 +136,13 @@ var wideEmacsKeys = map[string]Widget{
 	"\x1bC": WidgetCapitalizeWord,
 	"\x1bt": WidgetTransposeWords,
 	"\x1bT": WidgetTransposeWords,
+
+	"\x1bq": WidgetPushLine,
+	"\x1bQ": WidgetPushLine,
+	"\x1b'": WidgetQuoteLine,
+	"\x1ba": WidgetAcceptAndHold,
+	"\x1bA": WidgetAcceptAndHold,
+	"\x18u": WidgetUndo,
 }
 
 // WideEmacsBindings is wideEmacsKeys for a dialect's key listing, as a copy

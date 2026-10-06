@@ -109,6 +109,8 @@ var bindkeyWidgets = map[string]repl.Widget{
 	"down-case-word":  repl.WidgetDownCaseWord,
 	"capitalize-word": repl.WidgetCapitalizeWord,
 	"transpose-words": repl.WidgetTransposeWords,
+	"quote-line":      repl.WidgetQuoteLine,
+	"accept-and-hold": repl.WidgetAcceptAndHold,
 	// Typing. Not a key anybody binds — it is what a printable key does when
 	// nothing else claims it — but a name a shell can *redefine*, which is what
 	// a syntax highlighter needs: it wraps every name in `$widgets`, and the one
@@ -239,6 +241,8 @@ var widgetNames = map[repl.Widget]string{
 	repl.WidgetDownCaseWord:                   "down-case-word",
 	repl.WidgetCapitalizeWord:                 "capitalize-word",
 	repl.WidgetTransposeWords:                 "transpose-words",
+	repl.WidgetQuoteLine:                      "quote-line",
+	repl.WidgetAcceptAndHold:                  "accept-and-hold",
 	repl.WidgetSelfInsert:                     "self-insert",
 	repl.WidgetPreviousHistory:                "up-line-or-history",
 	repl.WidgetNextHistory:                    "down-line-or-history",
@@ -425,7 +429,7 @@ func KeyBindings(r *interp.Runner, km repl.Keymap) map[string]repl.Binding {
 				continue
 			}
 			// And the emacs keymap's own keys — `^G` at send-break, and the
-			// case keys — which are the editor's own there — see
+			// rest of emacsBindings — which are the editor's own there — see
 			// repl.EditorStyle.SendBreakOnControlG and WideEmacsKeymap — and
 			// are listed rather than carried in defaultBindings because viins
 			// shares that table and has none of them.
@@ -642,7 +646,7 @@ func readBindings(r *interp.Runner, keymap string) map[string]string {
 		// on zsh 5.9.2; viins has list-expand there, which this shell does
 		// not have. The editor acts on it by itself — see
 		// repl.EditorStyle.SendBreakOnControlG — so this is the listing's
-		// half (#5913). The same for the case keys and `M-t` (#6241).
+		// half (#5913). The same for the rest of emacsBindings (#6241).
 		for seq, w := range emacsBindings {
 			out[seq] = w
 		}

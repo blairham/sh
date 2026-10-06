@@ -25,7 +25,8 @@ type EditorStyle struct {
 
 	// WideEmacsKeymap puts the keys zsh's emacs keymap has beyond the
 	// editor's shared table on the emacs keymap: the case keys `M-u`, `M-l`
-	// and `M-c` and transpose-words on `M-t`, measured 2026-10-06 with
+	// and `M-c`, transpose-words on `M-t`, push-line on `M-q`, quote-line on
+	// `M-'`, accept-and-hold on `M-a` and undo on `^X u`, measured 2026-10-06 with
 	// `bindkey -M emacs` on zsh 5.9.2. Not in vi editing, whose insert
 	// keymap has none of them. The zero value leaves them doing nothing, as
 	// this editor always did — see repl/defaultkeys.go for why bash's

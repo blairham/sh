@@ -4,6 +4,7 @@
 package repl
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -409,5 +410,29 @@ func TestAListingBlockSortsByByte(t *testing.T) {
 	got := strings.Join(b.rows(), " ")
 	if want := "B Beta README.md _x a1 a10 a2 alpha b-c bc readme.md"; got != want {
 		t.Errorf("rows are %q, want byte order %q", got, want)
+	}
+}
+
+// Each row of a laid-out listing carries the number of its own last match,
+// which a paged listing's prompt reports (#6153). Measured on zsh 5.9.2: 781
+// names in forty rows of twenty at 120 columns report 759 after 39 rows —
+// the nineteenth column's cell on that row — although the twentieth column,
+// which ends on row 21, holds higher numbers above it.
+func TestAListingRowCarriesItsOwnLastMatch(t *testing.T) {
+	var names []string
+	for _, c := range "abcdefghij" {
+		for i := range 100 {
+			names = append(names, fmt.Sprintf("%c%03d", c, i))
+		}
+	}
+	laid := layOutListing(Words(names[:781]...), 120, listLayout{})
+	if len(laid.rows) != 40 || laid.matches != 781 {
+		t.Fatalf("%d rows of %d matches, want 40 of 781", len(laid.rows), laid.matches)
+	}
+	if got := laid.last[38]; got != 759 {
+		t.Errorf("row 39 ends on match %d, want 759", got)
+	}
+	if got := laid.last[20]; got != 781 {
+		t.Errorf("row 21 ends on match %d, want 781", got)
 	}
 }

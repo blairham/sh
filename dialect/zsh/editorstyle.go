@@ -170,6 +170,11 @@ func EditorStyle() repl.EditorStyle {
 		// this shell is an option of its own and off: with AUTO_LIST off no
 		// key lists. See repl.EditorStyle.ListMatchesOnASecondKeyOption.
 		ListMatchesOnASecondKeyOption: "BASH_AUTO_LIST",
+		// And whether a key that fills in what the matches agree on counts
+		// as one of those keys: not while LIST_AMBIGUOUS and a listing
+		// option are on, and as the first otherwise (#6220). See
+		// repl.EditorStyle.FillStandsAsideOption.
+		FillStandsAsideOption: "LIST_AMBIGUOUS",
 		// And the menu completion a Tab starts: on the press after a
 		// listing by default, on the first press under MENU_COMPLETE, with
 		// the bell as it starts (#6197). See

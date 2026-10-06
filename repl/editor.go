@@ -298,6 +298,8 @@ type editor struct {
 	undoLimit int
 	// sendBreakOnControlG is EditorStyle.SendBreakOnControlG.
 	sendBreakOnControlG bool
+	// listOnControlD is EditorStyle.ListOnControlD.
+	listOnControlD bool
 	// breakRequested is a send-break an action asked for, which the key loop
 	// acts on at its top. See keyLoop.
 	breakRequested bool
@@ -949,8 +951,18 @@ func (e *editor) keyLoop(prompt drawnPrompt) (string, error) {
 				return e.stopped(prompt)
 			}
 			// With something typed, ^D deletes forwards instead — which is
-			// what it means everywhere but on an empty line.
+			// what it means everywhere but on an empty line — and in a
+			// dialect that says so lists where there is nothing under the
+			// cursor to delete. Through the same actions the named widgets
+			// run, which is what draws the result: this case used to make
+			// the change and draw nothing, so the deleted character stayed
+			// on the screen until the next keystroke drew the line (#6233).
+			if e.listOnControlD {
+				e.deleteCharOrList(e.comp, prompt)
+				continue
+			}
 			e.change(false, e.deleteForward)
+			e.redraw(prompt)
 		case '\r', '\n':
 			return e.accepted(prompt), nil
 		case ctrlA:

@@ -52,11 +52,11 @@ type lineStart struct {
 	// **Measured, and the zsh answer is a third thing this editor has not
 	// got.** 2026-09-18 through a pseudo-terminal against zsh 5.9.2:
 	// `vared v` with the line emptied and `^D` pressed offered to list all
-	// 1064 commands, because `^D` there is `delete-char-or-list` and this
-	// editor's `^D` is not. With `-e` the same keystroke ended the read at
-	// status 1 with the variable unchanged. So the option is measured and the
-	// listing is a separate question — see repl.WidgetDeleteCharOrList, which
-	// is the action, and the note beside this editor's `^D`.
+	// 1064 commands, because `^D` there is `delete-char-or-list`. With `-e`
+	// the same keystroke ended the read at status 1 with the variable
+	// unchanged. Without it the key falls through to what it does on a line
+	// with something typed, which in a dialect with EditorStyle.ListOnControlD
+	// is that same listing (#6233) and elsewhere a delete of nothing.
 	endOnEndOfInput bool
 }
 

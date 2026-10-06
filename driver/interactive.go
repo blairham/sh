@@ -551,6 +551,8 @@ func (sh Shell) frontEndWith(r *interp.Runner, name string, dg interp.Diagnostic
 		// reason AskAgainAfterARefusedToken above is.
 		// See Semantics.PromptEchoesTheLineWhereThereIsNoTerminal.
 		EchoTheLineWithoutATerminal: sh.Semantics.PromptEchoesTheLineWhereThereIsNoTerminal,
+		// See Semantics.EndOfInputInAConstructEndsTheSession.
+		EndOfInputInAConstructEndsTheSession: sh.Semantics.EndOfInputInAConstructEndsTheSession,
 		// And whether the same session reads the editing *keys* there, which
 		// is the other half of the same dialect answer and the one that
 		// decides which loop reads at all.

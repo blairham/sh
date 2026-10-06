@@ -49,3 +49,19 @@ func TestTheFrontEndCarriesTheWordForLeavingASession(t *testing.T) {
 		}
 	}
 }
+
+// And whether the end of input inside an unfinished construct ends the
+// session, carried the same way and for the same reason: one shell in the
+// panel says yes, so a dropped answer looks like the majority (#6263).
+func TestTheFrontEndCarriesWhetherTheEndOfInputInAConstructEndsTheSession(t *testing.T) {
+	for _, answer := range []bool{false, true} {
+		sh := Shell{
+			Name:      "testsh",
+			Semantics: interp.Semantics{EndOfInputInAConstructEndsTheSession: answer},
+		}.withDefaults([]string{"testsh"})
+		r := sh.newRunner("testsh", nil, sh.Diagnostics, interp.RouteCommandString)
+		if got := sh.frontEnd(r, "testsh", sh.Diagnostics).EndOfInputInAConstructEndsTheSession; got != answer {
+			t.Errorf("the prompt was told %v, want %v", got, answer)
+		}
+	}
+}

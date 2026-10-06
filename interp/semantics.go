@@ -19913,6 +19913,38 @@ type Semantics struct {
 	// driver/promptecho_test.go carries it to the front end
 	// (TestTheFrontEndCarriesWhetherAPromptEchoesTheLine).
 	PromptEchoesTheLineWhereThereIsNoTerminal bool
+
+	// EndOfInputInAConstructEndsTheSession says that the end of input
+	// arriving inside an unfinished construct at a prompt — ^D at `> `, or
+	// the end of a pipe — ends the session once that construct has been run
+	// or refused, rather than drawing one more prompt.
+	//
+	// bash's, and bash keeps two exceptions inside it. Measured 2026-10-06 on
+	// a pipe under `-i` with `PS1='P> '` (bash `--norc`, zsh `-f`), and the
+	// same through a pseudo-terminal with ^D at `> `:
+	//
+	//	                        cat <<EOF / hi   echo one \       if true; then
+	//	bash 5.3.20             runs, P>, exit   runs, no word   refuses, exit
+	//	zsh 5.9.2               runs, P>         runs, P>        refuses, P>
+	//	dash, ksh93u+           runs, P>         runs, P>        refuses, P>
+	//	busybox ash (alpine)    runs, P>         runs, P>        refuses, P>
+	//
+	// So every other shell goes round once more — at a terminal the session
+	// simply carries on, and on a pipe the prompt meets the end of input again
+	// and that ends it — and bash leaves, except after a here-document the
+	// input ended, which it treats the way the others treat everything. Where
+	// it leaves after running the construct it writes no `exit`; where it
+	// leaves after refusing one, it does (#6263).
+	//
+	// Read by the front end, for the reason
+	// PromptAsksAgainAfterARefusedToken is, and a plain bool for the same
+	// reason.
+	//
+	// unpinned: reached, and the corpus cannot discriminate: no case draws a
+	// prompt. repl/endofinputconstruct_test.go drives a session on a pipe and
+	// pins both answers (TestTheEndOfInputInAConstructGoesRoundOnceMore and
+	// TestTheEndOfInputInAConstructEndsABashSession).
+	EndOfInputInAConstructEndsTheSession bool
 	// PromptStatusWritesThePipelineRecord makes a status the prompt sets for
 	// a line that ran nothing — 130 for a line abandoned with ^C, the parse
 	// failure's status for a refused one — the pipeline-status record too, as

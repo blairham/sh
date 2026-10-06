@@ -135,9 +135,9 @@ func TestTheIgnoreEOFCountReadsDigitsAlone(t *testing.T) {
 }
 
 // TestABashSessionRefusesEndOfInputAndGoesOn drives the whole loop at a
-// terminal: the refusal is on a row of its own under a fresh prompt's
-// predecessor, the session draws the prompt again, and IGNOREEOF=1 lets the
-// second ^D end it.
+// terminal: the refusal is on a row of its own after the ended line, the
+// session draws the prompt again, a command run in between starts the count
+// again, and with IGNOREEOF=1 the second ^D in a row ends it.
 func TestABashSessionRefusesEndOfInputAndGoesOn(t *testing.T) {
 	control, tty := openTerminal(t)
 	screen := &syncBuffer{}
@@ -152,47 +152,81 @@ func TestABashSessionRefusesEndOfInputAndGoesOn(t *testing.T) {
 	done := make(chan error, 1)
 	go func() { _, err := s.Run(t.Context()); done <- err }()
 
-	waitFor(t, screen, "P> ", "the prompt")
-	if _, err := control.WriteString("\x04"); err != nil {
-		t.Fatal(err)
-	}
-	waitFor(t, screen, bashRefusal, "the refusal")
-	select {
-	case err := <-done:
-		t.Fatalf("the session ended on the first ^D (%v); IGNOREEOF=1 refuses one. Wrote %q",
-			err, screen.String())
-	case <-time.After(200 * time.Millisecond):
-	}
-	// And the prompt again under it before the next key, for the reason the
-	// first one had to be on the screen: see the leaving-row test.
-	for deadline := time.Now().Add(20 * time.Second); strings.Count(screen.String(), "P> ") < 2; {
-		if time.Now().After(deadline) {
-			t.Fatalf("no fresh prompt under the refusal. Wrote %q", screen.String())
+	send := func(keys string) {
+		t.Helper()
+		if _, err := control.WriteString(keys); err != nil {
+			t.Fatal(err)
 		}
-		time.Sleep(10 * time.Millisecond)
 	}
-	if _, err := control.WriteString("\x04"); err != nil {
-		t.Fatal(err)
+	// promptAfter waits for a prompt drawn after the last place mark is on
+	// the screen. The prompt has to be there before the next key is sent:
+	// the shell takes the terminal into raw mode to read, and the kernel
+	// drops what is queued but unread across that change (#635).
+	promptAfter := func(mark string) {
+		t.Helper()
+		for deadline := time.Now().Add(20 * time.Second); ; {
+			raw := screen.String()
+			if at := strings.LastIndex(raw, mark); at >= 0 && strings.Contains(raw[at+len(mark):], "P> ") {
+				return
+			}
+			if time.Now().After(deadline) {
+				t.Fatalf("no prompt after %q. Wrote %q", mark, raw)
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
 	}
+	stillRunning := func(what string) {
+		t.Helper()
+		select {
+		case err := <-done:
+			t.Fatalf("the session ended on %s (%v). Wrote %q", what, err, screen.String())
+		case <-time.After(200 * time.Millisecond):
+		}
+	}
+
+	waitFor(t, screen, "P> ", "the prompt")
+	send("\x04")
+	promptAfter(bashRefusal)
+	stillRunning("the first ^D; IGNOREEOF=1 refuses one")
+
+	// A command, which starts the count again: without it the next ^D
+	// would be the second in a row and would end the session.
+	send("echo ran-$((6 * 7))\r")
+	promptAfter("ran-42")
+	send("\x04")
+	waitForCount(t, screen, bashRefusal, 2)
+	promptAfter(bashRefusal)
+	stillRunning("the first ^D after a command; running one starts the count again")
+
+	send("\x04")
 	select {
 	case err := <-done:
 		if err != nil {
 			t.Fatal(err)
 		}
 	case <-time.After(20 * time.Second):
-		t.Fatalf("the second ^D did not end the session. Wrote %q", screen.String())
+		t.Fatalf("the second ^D in a row did not end the session. Wrote %q", screen.String())
 	}
+
 	// On the bytes rather than on a modeled screen: the refusal goes to the
 	// error stream in the terminal's own line discipline, where the kernel
 	// turns its newline into a return and a line feed, and this fixture's
 	// error stream is a buffer with no kernel in front of it.
 	raw := screen.String()
-	at := strings.Index(raw, "P> \r\n"+bashRefusal+"\n")
-	if at < 0 {
-		t.Fatalf("the refusal is not on a row of its own after the ended "+
+	if !strings.Contains(raw, "P> \r\n"+bashRefusal+"\n") {
+		t.Errorf("the refusal is not on a row of its own after the ended "+
 			"line; bash writes `P> `, ends the row, then the refusal. Wrote %q", raw)
 	}
-	if !strings.Contains(raw[at+len("P> \r\n"+bashRefusal):], "top\r\nP> ") {
-		t.Errorf("no fresh prompt after the refusal. Wrote %q", raw)
+}
+
+// waitForCount waits for text to be on the screen n times.
+func waitForCount(t *testing.T, screen *syncBuffer, text string, n int) {
+	t.Helper()
+	for deadline := time.Now().Add(20 * time.Second); strings.Count(screen.String(), text) < n; {
+		if time.Now().After(deadline) {
+			t.Fatalf("%q is on the screen %d times, want %d. Wrote %q",
+				text, strings.Count(screen.String(), text), n, screen.String())
+		}
+		time.Sleep(10 * time.Millisecond)
 	}
 }

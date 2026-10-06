@@ -283,6 +283,9 @@ const (
 	// The next key put in the line as it is, whatever it would have done:
 	// zsh's `quoted-insert`, on `^V`. See quotedinsert.go (#6241).
 	WidgetQuotedInsert
+	// The same in vi insert mode, with a `^` drawn at the cursor while it
+	// waits: zsh's `vi-quoted-insert`, on `^V` there (#6251).
+	WidgetViQuotedInsert
 
 	// The command the cursor is in, asked about: the line put aside and a
 	// command naming it run in its place — zsh's `which-command` and
@@ -301,7 +304,7 @@ func (w Widget) takesItsCount() bool {
 	switch w {
 	case WidgetBackwardKillLine, WidgetHistoryBeginningSearchBackward, WidgetHistoryBeginningSearchForward,
 		WidgetUpCaseWord, WidgetDownCaseWord, WidgetCapitalizeWord, WidgetTransposeWords,
-		WidgetQuotedInsert:
+		WidgetQuotedInsert, WidgetViQuotedInsert:
 		return true
 	}
 	return false
@@ -495,6 +498,8 @@ func (e *editor) runWidget(b Binding, prompt drawnPrompt) {
 		e.acceptAndHold()
 	case WidgetQuotedInsert:
 		e.quotedInsert(prompt)
+	case WidgetViQuotedInsert:
+		e.viQuotedInsert(prompt)
 	case WidgetWhichCommand:
 		e.askAboutTheCommand(e.whichCommandWord, prompt)
 	case WidgetRunHelp:

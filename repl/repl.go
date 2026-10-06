@@ -3141,6 +3141,8 @@ func (s Shell) newEditor(ctx context.Context, state *terminalState) *editor {
 		searchOnControlX:     s.Editor.SearchOnControlX,
 		sendBreakOnControlG:  s.Editor.SendBreakOnControlG,
 		wideEmacsKeymap:      s.Editor.WideEmacsKeymap,
+		viQuotedInsertKey:    s.Editor.ViQuotedInsert,
+		quotedInsertAbandons: s.Editor.QuotedInsertAbandonsOnControlC,
 		whichCommandWord:     s.Editor.WhichCommandWord,
 		runHelpWord:          s.Editor.RunHelpWord,
 		namedWidgets:         s.NamedWidgets,

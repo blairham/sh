@@ -112,6 +112,7 @@ var bindkeyWidgets = map[string]repl.Widget{
 	"quote-line":        repl.WidgetQuoteLine,
 	"accept-and-hold":   repl.WidgetAcceptAndHold,
 	"quoted-insert":     repl.WidgetQuotedInsert,
+	"vi-quoted-insert":  repl.WidgetViQuotedInsert,
 	"which-command":     repl.WidgetWhichCommand,
 	"run-help":          repl.WidgetRunHelp,
 	"execute-named-cmd": repl.WidgetExecuteNamedCmd,
@@ -248,6 +249,7 @@ var widgetNames = map[repl.Widget]string{
 	repl.WidgetQuoteLine:                      "quote-line",
 	repl.WidgetAcceptAndHold:                  "accept-and-hold",
 	repl.WidgetQuotedInsert:                   "quoted-insert",
+	repl.WidgetViQuotedInsert:                 "vi-quoted-insert",
 	repl.WidgetWhichCommand:                   "which-command",
 	repl.WidgetRunHelp:                        "run-help",
 	repl.WidgetExecuteNamedCmd:                "execute-named-cmd",
@@ -358,6 +360,19 @@ const sendBreakKey = "\x07"
 // the listing's half.
 var emacsBindings = buildEmacsBindings()
 
+// viinsBindings is what the viins keymap has beyond defaultBindings:
+// vi-quoted-insert on `^V`, which repl.EditorStyle.ViQuotedInsert puts on the
+// editor (#6251). The listing's half, as emacsBindings is.
+var viinsBindings = buildViinsBindings()
+
+func buildViinsBindings() map[string]string {
+	out := map[string]string{}
+	for seq, w := range repl.ViInsertBindings() {
+		out[seq] = widgetNames[w]
+	}
+	return out
+}
+
 func buildEmacsBindings() map[string]string {
 	out := map[string]string{sendBreakKey: widgetNames[repl.WidgetSendBreak]}
 	for seq, w := range repl.WideEmacsBindings() {
@@ -442,6 +457,10 @@ func KeyBindings(r *interp.Runner, km repl.Keymap) map[string]repl.Binding {
 			// are listed rather than carried in defaultBindings because viins
 			// shares that table and has none of them.
 			if standard, isDefault := emacsBindings[seq]; isDefault && standard == widget && keymapBase(r, currentKeymap(r)) == "emacs" {
+				continue
+			}
+			// And viins's, the same way (#6251).
+			if standard, isDefault := viinsBindings[seq]; isDefault && standard == widget && keymapBase(r, currentKeymap(r)) == "viins" {
 				continue
 			}
 		}
@@ -656,6 +675,12 @@ func readBindings(r *interp.Runner, keymap string) map[string]string {
 		// repl.EditorStyle.SendBreakOnControlG — so this is the listing's
 		// half (#5913). The same for the rest of emacsBindings (#6241).
 		for seq, w := range emacsBindings {
+			out[seq] = w
+		}
+	}
+	if keymap == "viins" {
+		// And `^V` is vi-quoted-insert in this one. See viinsBindings.
+		for seq, w := range viinsBindings {
 			out[seq] = w
 		}
 	}

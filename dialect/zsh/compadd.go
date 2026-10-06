@@ -414,7 +414,7 @@ func (cs *completionState) add(
 	// names is filled between the two.
 	displays := compaddArray(r, o.display)
 	spec := parseMatchSpec(o.matchSpec)
-	typed := pastThePrefix(cs.prefix, o.prefix)
+	typed := cs.typedForMatching(o)
 	for i, candidate := range candidates {
 		// What is matched is the hidden prefix and suffix around the
 		// candidate; what `-P` and `-S` add is not part of it. Measured —
@@ -463,6 +463,55 @@ func (cs *completionState) add(
 	// offered.
 	cs.state["nmatches"] = strconv.Itoa(len(insertableWords(cs.matches)) + cs.fillers)
 	return offered
+}
+
+// typedForMatching is what a candidate is matched against: the typed word past
+// any `-P` prefix it holds, with the quoting it was typed in taken off.
+//
+// The candidates are names and the word is shell text, so `a\ ` has to be
+// read as `a ` before `a b` can begin with it. Measured 2026-10-06 through a
+// pseudo-terminal against zsh 5.9.2, a `zle -C` widget adding `a b`, `a d`,
+// `$aa`, `$ab`, `\x1` and `\x2`, the typed word against what Tab did with it
+// (#6199). `<sp>` is a typed blank:
+//
+//	x a\<sp>     listed  a\ b  a\ d
+//	x a\         the line became `x a\<sp>`: a lone backslash at the end
+//	             quotes nothing, and the two agree on `a `
+//	x \$a        listed  \$aa  \$ab
+//	x \\x        listed  \\x1  \\x2
+//	x "\$a       listed  \$aa  \$ab    inside double quotes `\$` is `$`
+//	x "\\x       listed  \\x1  \\x2   and `\\` is `\`,
+//	x "a\<sp>    nothing               and a backslash before a blank is itself
+//	x '\$a       nothing               inside single quotes nothing comes off
+//
+// The `-P` prefix comes off first, because it went onto the line unquoted —
+// see offer — so the word holds it as written.
+func (cs *completionState) typedForMatching(o compaddOptions) string {
+	typed := pastThePrefix(cs.prefix, o.prefix)
+	switch cs.qiprefix {
+	case "'":
+		return typed
+	case `"`:
+		return unquoteInDoubleQuotes(typed)
+	}
+	return unquoteBackslashes(typed)
+}
+
+// unquoteInDoubleQuotes takes off the backslashes that quote something inside
+// double quotes — before `$`, a backquote, `"` and `\` — and leaves every other
+// backslash as the character it is there.
+func unquoteInDoubleQuotes(s string) string {
+	if !strings.Contains(s, "\\") {
+		return s
+	}
+	var b strings.Builder
+	for i := 0; i < len(s); i++ {
+		if s[i] == '\\' && i+1 < len(s) && strings.IndexByte("$`\"\\", s[i+1]) >= 0 {
+			i++
+		}
+		b.WriteByte(s[i])
+	}
+	return b.String()
 }
 
 // pastThePrefix is the part of the typed word a candidate is matched against

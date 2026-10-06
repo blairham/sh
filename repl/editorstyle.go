@@ -49,6 +49,26 @@ type EditorStyle struct {
 	// there, which draws while it waits — see ViQuotedInsert.
 	QuotedInsertInViInsert bool
 
+	// QuotedInsertInViCommand puts quoted-insert on `^V` in vi command mode:
+	// the next key goes in the line as it is, before the character under the
+	// cursor, as many times as the command's count says, and the cursor stays
+	// on that character, in command mode. bash's `bind -m vi-command -p`
+	// lists it; zsh's vicmd has nothing on `^V` (`bindkey -M vicmd '^V'` is
+	// undefined-key on zsh 5.9.2). Measured 2026-10-06 through a
+	// pseudo-terminal against bash 5.3.20, `set -o vi`, `od -c <<< ab`,
+	// Escape (the cursor on the `b`), then the keys and `i@`:
+	//
+	//	keys           the word
+	//	^V ^A          a ^A @ b
+	//	^V ^A x        a ^A          ← the cursor stayed on the b
+	//	3 ^V ^A        a ^A ^A ^A @ b
+	//	^V z           a z @ b
+	//	^V ESC         a ^[ @ b      ← and still command mode
+	//	^V ^A ^V ^B    a ^A ^B @ b
+	//
+	// (#6259).
+	QuotedInsertInViCommand bool
+
 	// CapitalizeTakesTheFirstCharacter makes `M-c` raise the first character
 	// of each word whatever it is, and lower the rest, where the zero value
 	// raises the first *letter* and passes over a digit before it.

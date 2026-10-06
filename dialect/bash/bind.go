@@ -321,7 +321,9 @@ func keymapDefaults(keymap string) map[string]string {
 	switch keymap {
 	case "emacs":
 		extra = emacsBindings
-	case "vi-insert":
+	case "vi-insert", "vi-command":
+		// `^V` is quoted-insert in both of vi's keymaps — see
+		// repl.EditorStyle.QuotedInsertInViCommand (#6259).
 		extra = viInsertBindings
 	default:
 		return defaultBindings

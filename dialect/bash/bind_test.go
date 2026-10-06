@@ -568,3 +568,15 @@ func TestBashCountsAsReadline(t *testing.T) {
 		t.Errorf("bash's EditorStyle: %+v", s)
 	}
 }
+
+// `^V` is quoted-insert in vi command mode too, in the editor and in the
+// listing (#6259): bash 5.3.20's `bind -m vi-command -p` has the row.
+func TestQuotedInsertIsInTheViCommandKeymap(t *testing.T) {
+	if !bash.EditorStyle().QuotedInsertInViCommand {
+		t.Error("bash's EditorStyle has no ^V in vi command mode")
+	}
+	out, _ := bindRun(t, "bind -m vi-command -p")
+	if want := `"\C-v": quoted-insert` + "\n"; !strings.Contains(out, want) {
+		t.Errorf("vi-command: -p has no row %q", want)
+	}
+}

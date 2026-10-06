@@ -3161,6 +3161,7 @@ func (s Shell) newEditor(ctx context.Context, state *terminalState) *editor {
 		// words (#6250).
 		wordKeys:                 s.Editor.WordKeys,
 		quotedInsertInViInsert:   s.Editor.QuotedInsertInViInsert,
+		quotedInsertInViCommand:  s.Editor.QuotedInsertInViCommand,
 		capitalizeFirstCharacter: s.Editor.CapitalizeTakesTheFirstCharacter,
 		transposeToLineEnd:       s.Editor.TransposeWordsReachesTheLineEnd,
 		// And what a refused ^D says, and where. See refuseEndOfInput.

@@ -476,3 +476,28 @@ func TestCommandModeAbandonsOnInterrupt(t *testing.T) {
 		t.Errorf("mid-command: err = %v, want %v", err, ErrInterrupted)
 	}
 }
+
+// `^V` in command mode, against the rows in
+// EditorStyle.QuotedInsertInViCommand (#6259): the key goes in before the
+// character under the cursor, which the cursor stays on, in command mode.
+func TestQuotedInsertInViCommandMode(t *testing.T) {
+	style := EditorStyle{QuotedInsertInViCommand: true}
+	for _, c := range []struct{ name, keys, want string }{
+		{"a control character", "ab\x1b\x16\x01i@\r", "a\x01@b"},
+		{"the cursor stays on the b", "ab\x1b\x16\x01x\r", "a\x01"},
+		{"a count", "ab\x1b3\x16\x01i@\r", "a\x01\x01\x01@b"},
+		{"a letter", "ab\x1b\x16zi@\r", "az@b"},
+		{"Escape, and still command mode", "ab\x1b\x16\x1bi@\r", "a\x1b@b"},
+		{"twice", "ab\x1b\x16\x01\x16\x02i@\r", "a\x01\x02@b"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			if got := viTyped(t, style, c.keys); got != c.want {
+				t.Errorf("got %q, want %q", got, c.want)
+			}
+		})
+	}
+	// And without the field the key does nothing there, as in zsh's vicmd.
+	if got := viTyped(t, EditorStyle{}, "ab\x1b\x16\x01i@\r"); got != "a@b" {
+		t.Errorf("without the field: got %q", got)
+	}
+}

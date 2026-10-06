@@ -111,6 +111,7 @@ var bindkeyWidgets = map[string]repl.Widget{
 	"transpose-words": repl.WidgetTransposeWords,
 	"quote-line":      repl.WidgetQuoteLine,
 	"accept-and-hold": repl.WidgetAcceptAndHold,
+	"quoted-insert":   repl.WidgetQuotedInsert,
 	// Typing. Not a key anybody binds — it is what a printable key does when
 	// nothing else claims it — but a name a shell can *redefine*, which is what
 	// a syntax highlighter needs: it wraps every name in `$widgets`, and the one
@@ -243,6 +244,7 @@ var widgetNames = map[repl.Widget]string{
 	repl.WidgetTransposeWords:                 "transpose-words",
 	repl.WidgetQuoteLine:                      "quote-line",
 	repl.WidgetAcceptAndHold:                  "accept-and-hold",
+	repl.WidgetQuotedInsert:                   "quoted-insert",
 	repl.WidgetSelfInsert:                     "self-insert",
 	repl.WidgetPreviousHistory:                "up-line-or-history",
 	repl.WidgetNextHistory:                    "down-line-or-history",

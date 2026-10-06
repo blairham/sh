@@ -19,7 +19,7 @@ func EditorStyle() repl.EditorStyle {
 		// repl.EditorStyle.SendBreakOnControlG (#5913).
 		SendBreakOnControlG: true,
 		// The case keys, transpose-words, push-line, quote-line,
-		// accept-and-hold and `^X u`. See
+		// accept-and-hold, `^X u` and `^V`. See
 		// repl.EditorStyle.WideEmacsKeymap (#6241).
 		WideEmacsKeymap: true,
 		// And `^D` with something typed is delete-char-or-list. See

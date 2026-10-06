@@ -279,6 +279,10 @@ const (
 	// push-line keeps (#6241).
 	WidgetQuoteLine
 	WidgetAcceptAndHold
+
+	// The next key put in the line as it is, whatever it would have done:
+	// zsh's `quoted-insert`, on `^V`. See quotedinsert.go (#6241).
+	WidgetQuotedInsert
 )
 
 // takesItsCount is whether the action reads the count itself, so that a key
@@ -286,7 +290,8 @@ const (
 func (w Widget) takesItsCount() bool {
 	switch w {
 	case WidgetBackwardKillLine, WidgetHistoryBeginningSearchBackward, WidgetHistoryBeginningSearchForward,
-		WidgetUpCaseWord, WidgetDownCaseWord, WidgetCapitalizeWord, WidgetTransposeWords:
+		WidgetUpCaseWord, WidgetDownCaseWord, WidgetCapitalizeWord, WidgetTransposeWords,
+		WidgetQuotedInsert:
 		return true
 	}
 	return false
@@ -478,6 +483,8 @@ func (e *editor) runWidget(b Binding, prompt drawnPrompt) {
 		e.redraw(prompt)
 	case WidgetAcceptAndHold:
 		e.acceptAndHold()
+	case WidgetQuotedInsert:
+		e.quotedInsert(prompt)
 	case WidgetSelfInsert:
 		// The key this keystroke is about — see editor.typedKey, which is
 		// what makes `zle .self-insert` from inside a wrapper insert the

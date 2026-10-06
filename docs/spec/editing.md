@@ -1297,10 +1297,25 @@ Measured the same way, `echo abc def` with the cursor on the `c`:
   becomes `''`, a backslash is left alone, and a second press quotes the
   quoted line. One change to undo.
 
+### Taking the next key as it is
+
+`^V` is quoted-insert: the next key goes in the line as the character it is,
+whatever it would have done. Measured the same way, `ab` with the cursor after
+the `a`: `^V ^A` puts a `^A` there, drawn as a caret in standout, and the
+cursor after it; `^V` and Return puts a `^M` and does not run the line; `^V`
+Tab puts a tab and does not complete; `^V ESC` takes the one byte, so `^V`
+and an arrow key puts `^[` and types the `[A` after it; a character of more
+than one byte goes in whole. A count is typing's count — three copies for
+`ESC 3`, one with the cursor left before it for `ESC -`, none for `ESC 0` —
+and `^V ^C` abandons the line as `^C` does. Nothing is drawn while it waits.
+
+zsh's vi insert keymap has `vi-quoted-insert` on `^V`, which draws a
+placeholder while it waits; that one is not built.
+
 bash binds `M-u`, `M-l`, `M-c` and `M-t` too, to readline's own versions —
 its words are letters and digits, and a negative count works backward — and
 none of that is measured here, so in bash the keys still do nothing. It has
-nothing on `M-q`, `M-'`, `M-a` or `^X u`.
+nothing on `M-q`, `M-'`, `M-a` or `^X u`, and its `^V` is not measured here.
 
 ## What is still missing
 

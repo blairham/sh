@@ -112,3 +112,28 @@ func TestTheLineKeysOfTheWideEmacsKeymap(t *testing.T) {
 		})
 	}
 }
+
+// `^V`, against the table in quotedinsert.go.
+func TestQuotedInsertTakesTheNextKeyAsItIs(t *testing.T) {
+	style := EditorStyle{WideEmacsKeymap: true, PrefixArgument: true}
+	for _, c := range []struct{ name, keys, want string }{
+		{"a control character", "ab\x02\x16\x01\r", "a\x01b"},
+		{"Return is not accepted", "ab\x02\x16\r\r", "a\rb"},
+		{"Tab is not completed", "ab\x02\x16\t\r", "a\tb"},
+		{"ESC is one byte, and the rest is typed", "ab\x02\x16\x1b[A\r", "a\x1b[Ab"},
+		{"^V itself", "ab\x02\x16\x16\r", "a\x16b"},
+		{"a character of more than one byte", "ab\x02\x16é\r", "aéb"},
+		{"a count", "ab\x02\x1b3\x16\x01\r", "a\x01\x01\x01b"},
+		{"a negative count leaves the cursor before it", "ab\x02\x1b-\x16\x01X\r", "aX\x01b"},
+		{"a count of nought types nothing", "ab\x02\x1b0\x16\x01\r", "ab"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			if got := typedStyled(t, style, c.keys); got != c.want {
+				t.Errorf("got %q, want %q", got, c.want)
+			}
+		})
+	}
+	if got := typedStyled(t, EditorStyle{}, "ab\x02\x16\x01X\r"); got != "Xab" {
+		t.Errorf("without the field ^V is ignored and ^A moves: got %q", got)
+	}
+}

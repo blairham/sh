@@ -6928,6 +6928,25 @@ A rule excluding them — on the grounds that a number is not a name —
 looks obviously right and is wrong: the number *is* the name, and the
 name is a positional parameter.
 
+**And the name is read as the inside of a `${…}`**, so text no parameter
+expression can open with is a bad substitution, wherever the nesting
+stands — value, subscript, length, a default, an assignment — and the line
+stops (#6202). Measured 2026-10-06 under `-f -c` with `a=xyz` and
+`print -r -- "[${${(P)e}}]"`:
+
+    e=' '  e=1x  e='a b'  e=a.b  e='#a'  e='a[1]x'  e='a^'
+                         →  bad substitution, status 1
+    e=   e=a1   e=10   e='x[1]'   e='?'
+                         →  read as a reference, as before
+    e=a-b → b    e=a:1 → yz    e='a}' → xyz    e='#-b' → 0
+
+The text has to open with a reference — a name, a run of digits, or one
+special parameter, with its subscript — and go on with nothing or with a
+character that begins an operator. The last row is zsh reading those
+operators, which this shell does not do yet: such text is not refused, and
+comes to nothing. Not nested, `${(P)e}` with `e=1x` is empty in both
+shells.
+
 Everywhere else the subscript reads what the inner **came to**, and the
 one question that adds is whether that result is a *list*, where the
 subscript counts elements, or one *string*, where it counts characters.

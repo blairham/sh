@@ -451,6 +451,95 @@ func (r *Runner) refusesAListAsAName(e *syntax.ParamExpr) bool {
 	return true
 }
 
+// refusesANestedNonName refuses a nesting whose inner `(P)` holds text that
+// cannot begin a parameter expression: zsh reads that text as the inside of a
+// `${…}`, and text that is not one is a bad substitution.
+//
+// Measured 2026-10-06 on zsh 5.9.2 under `-f -c`, `print -r --
+// "[${${(P)e}}]"` with `a=xyz` and `e` holding the text on the left (#6202):
+//
+//	refused, bad substitution, and the line stops:
+//	  ` `  `1x`  `1a`  ` a`  `a `  `a b`  `ab cd`  `a.b`  `a,b`  `a;b`
+//	  `a{`  `a^`  `a~`  `#a`  `a[1]x`
+//	read, as the inside of `${…}`:
+//	  `` → ``   `a1` `_a` `10` `@` `*` → ``   `#` `?` `!` → `0`   `a-b` → `b`
+//	  `a+b` → `b`   `a:1` → `yz`   `a=b` `a?b` `a#b` `a%b` `a/b/c` `a-` `a#`
+//	  `a}` → `xyz`   `1-b` → `b`   `#-b` → `0`
+//
+// and the same refusal for `${${(P)e}[1]}`, `${#${(P)e}}`, `${${(P)e}:-d}`,
+// an assignment's value and an unquoted word. Not nested, `${(P)e}` with
+// `e=1x` is empty in both shells.
+//
+// So the text has to open with a reference — a name, a run of digits, or one
+// special parameter, with a subscript after it if one is there — and what
+// follows must be nothing, or one of the characters that begin an operator.
+// The rows on the right whose answer is not empty are a second matter: this
+// shell reads none of those operators yet and answers them with nothing, as
+// it did before. A subscript left open is not refused here either, since zsh
+// answers it with an arithmetic error of its own rather than with this one.
+func (r *Runner) refusesANestedNonName(e *syntax.ParamExpr) bool {
+	if e.Inner == nil || len(e.Inner.Spans) != 1 {
+		return false
+	}
+	span := e.Inner.Spans[0]
+	in := span.Param
+	if span.Kind != syntax.ParamExp || in == nil || in.Bad || !in.HasFlags ||
+		!strings.ContainsRune(in.Flags, 'P') || in.Inner != nil || in.Index != nil {
+		return false
+	}
+	words, _, isList := r.namedBase(in.Name, baseFlags(in.Flags))
+	if isList || len(words) != 1 || opensAParameterExpression(words[0]) {
+		return false
+	}
+	r.diagf("%s\n", "bad substitution")
+	r.expandErr = true
+	return true
+}
+
+// opensAParameterExpression reports whether text can be the inside of a
+// `${…}`, as far as refusesANestedNonName asks: a reference at its head and
+// either nothing or an operator after it. The empty text is nothing at all
+// and is not refused.
+func opensAParameterExpression(text string) bool {
+	if text == "" {
+		return true
+	}
+	i := 0
+	switch c := text[0]; {
+	case c == '_' || isLetter(c):
+		for i < len(text) && (text[i] == '_' || isLetter(text[i]) || isDigit(text[i])) {
+			i++
+		}
+	case isDigit(c):
+		for i < len(text) && isDigit(text[i]) {
+			i++
+		}
+	case strings.IndexByte("@*#?-$!", c) >= 0:
+		i = 1
+	default:
+		return false
+	}
+	if i < len(text) && text[i] == '[' {
+		depth := 0
+		for ; i < len(text); i++ {
+			if text[i] == '[' {
+				depth++
+			} else if text[i] == ']' {
+				depth--
+				if depth == 0 {
+					i++
+					break
+				}
+			}
+		}
+		if depth > 0 {
+			// Left open: zsh's own refusal is an arithmetic one.
+			return true
+		}
+	}
+	return i == len(text) || strings.IndexByte("-+=?#%/:}", text[i]) >= 0
+}
+
 // nestedShapeMemo is whether one nested expansion came to a list, as
 // nestedWords decided it the last time it expanded that node.
 type nestedShapeMemo struct {

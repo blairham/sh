@@ -2169,7 +2169,7 @@ func (r *Runner) expandAtList(s syntax.Span, sp splitPolicy, head bool) ([]strin
 		// shell it claims to be calls it a bad substitution.
 		return nil, false
 	}
-	if !r.namesTheOtherArray(s.Param) || r.refusesAListAsAName(s.Param) {
+	if !r.namesTheOtherArray(s.Param) || r.refusesAListAsAName(s.Param) || r.refusesANestedNonName(s.Param) {
 		return nil, true
 	}
 	if refused, empty := r.undeclaredIndirection(s.Param); refused {
@@ -3740,7 +3740,7 @@ func (r *Runner) expandParam(e *syntax.ParamExpr) string {
 		r.reportBadSubstitution(e)
 		return ""
 	}
-	if !r.namesTheOtherArray(e) || r.refusesAListAsAName(e) {
+	if !r.namesTheOtherArray(e) || r.refusesAListAsAName(e) || r.refusesANestedNonName(e) {
 		return ""
 	}
 	if refused, empty := r.undeclaredIndirection(e); refused || empty {

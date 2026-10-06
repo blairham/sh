@@ -1839,18 +1839,43 @@ func (l *Lexer) enabled(k Kind) bool {
 // Falling back to a shorter match when the longest is disabled is not a
 // convenience: it is what the shells do. Where `&>` does not exist, `&>b` is
 // `&` followed by `>b`, so the text still lexes and means something else.
+//
+// It runs at the start of every token, and most tokens are words, so the
+// first byte answers most calls: no operator begins with a letter. The scan
+// itself reads the spellings from operatorText rather than from the text map,
+// and asks the dialect only about a spelling that is actually there. On a
+// real zsh startup the old order, a map lookup and a dialect question per
+// entry for every word, was about 5% of the shell's own CPU (#5873).
 func (l *Lexer) matchOperator() (Kind, bool) {
 	rest := l.src[l.off:]
-	for _, k := range operators {
-		if !l.enabled(k) {
+	if rest == "" || !operatorStarts[rest[0]] {
+		return 0, false
+	}
+	for i, k := range operators {
+		if !strings.HasPrefix(rest, operatorText[i]) || !l.enabled(k) {
 			continue
 		}
-		if strings.HasPrefix(rest, text[k]) {
-			return k, true
-		}
+		return k, true
 	}
 	return 0, false
 }
+
+// operatorText holds text[k] for each entry of operators, in the same order.
+var operatorText = func() []string {
+	out := make([]string, len(operators))
+	for i, k := range operators {
+		out[i] = text[k]
+	}
+	return out
+}()
+
+// operatorStarts marks every byte that begins some operator's spelling.
+var operatorStarts = func() (starts [256]bool) {
+	for _, k := range operators {
+		starts[text[k][0]] = true
+	}
+	return starts
+}()
 
 // remarkOnOperatorsRunTogether records two operators written with no blank
 // between them, which one shell in the panel remarks on and the rest read

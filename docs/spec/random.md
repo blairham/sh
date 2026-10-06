@@ -13,7 +13,7 @@ rather than stores, the same seed draws the same pair, and `unset RANDOM`
 makes it an ordinary name. Its *sequence* is not reproduced — `RANDOM=42`
 draws `20351 9206` and `RANDOM=4` draws `29829`, which none of the three fits
 below produces and which this file has not fitted — so a seeded ash script
-here is reproducible with numbers of its own (#5761).
+here is reproducible with numbers of its own (`by-design.md`).
 
 That much was already recorded (`semantics.md`, and #2827, which made a seeded
 sequence reproducible here). What this file adds is the **sequence itself**,

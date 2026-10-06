@@ -397,7 +397,7 @@ starts the menu, and `unambiguous` keeps it from starting. The function is
 not called again for the Tabs that walk a menu once it has started. That
 is how the completion system's `menu` style reaches the line, and
 `menu select` comes to the walk here: the interactive selection it asks
-for is zsh/complist's, which this shell does not have (#5761), and the
+for is zsh/complist's, which this shell does not have (`by-design.md`), and the
 line after each Tab reads as it does in zsh.
 
 **A menu lasts exactly as long as the keystrokes are adjacent.** Anything

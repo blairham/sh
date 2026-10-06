@@ -323,7 +323,7 @@ func insertOnEntry(r *interp.Runner, menu repl.MenuReason) string {
 //	no                              x a        x a        x a
 //
 // `select` asks for the interactive selection of zsh/complist, which this
-// shell does not have (#5761); the walk is what it comes to here, and the
+// shell does not have (docs/spec/by-design.md); the walk is what it comes to here, and the
 // line reads as it does in zsh after each of those Tabs.
 //
 // Anything else — a number, `all`, an empty value — is not drawn here, and

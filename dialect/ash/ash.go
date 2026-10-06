@@ -3779,7 +3779,7 @@ func Apply(r *interp.Runner) {
 	// `RANDOM=42` draws 20351 then 9206 there, which none of the generators
 	// in this tree produces, and nothing short of the implementation says
 	// which one it is. A seeded script here is reproducible with numbers of
-	// its own. Recorded on #5761.
+	// its own. Recorded in docs/spec/by-design.md.
 	r.SetDynamic("RANDOM", func(rr *interp.Runner) string { return rr.Randoms() })
 	r.SetDynamicWriter("RANDOM", func(rr *interp.Runner, value string) { rr.SeedRandoms(value) })
 	// Listed by a bare `set`; see ProducedParameterListing above for the rows.

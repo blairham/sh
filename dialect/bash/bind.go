@@ -197,6 +197,14 @@ var bindFunctions = map[string]repl.Widget{
 	// A paste the terminal marked. bash 5.3 lists `"\e[200~":
 	// bracketed-paste-begin`; see repl.WidgetBracketedPaste.
 	"bracketed-paste-begin": repl.WidgetBracketedPaste,
+
+	// The case keys, transpose-words and quoted-insert, which the editor
+	// has in the emacs keymap here — see repl.EditorStyle.WordKeys (#6250).
+	"upcase-word":     repl.WidgetUpCaseWord,
+	"downcase-word":   repl.WidgetDownCaseWord,
+	"capitalize-word": repl.WidgetCapitalizeWord,
+	"transpose-words": repl.WidgetTransposeWords,
+	"quoted-insert":   repl.WidgetQuotedInsert,
 }
 
 // bindFunctionNames is the name a listing prints for each action — the
@@ -229,6 +237,11 @@ var bindFunctionNames = map[repl.Widget]string{
 	repl.WidgetViInsertMode:          "vi-insertion-mode",
 	repl.WidgetViAppendMode:          "vi-append-mode",
 	repl.WidgetBracketedPaste:        "bracketed-paste-begin",
+	repl.WidgetUpCaseWord:            "upcase-word",
+	repl.WidgetDownCaseWord:          "downcase-word",
+	repl.WidgetCapitalizeWord:        "capitalize-word",
+	repl.WidgetTransposeWords:        "transpose-words",
+	repl.WidgetQuotedInsert:          "quoted-insert",
 }
 
 // editorControlKeys are the keys the editor reads that are not actions a key
@@ -276,6 +289,53 @@ func buildDefaultBindings() map[string]string {
 	return out
 }
 
+// emacsBindings and viInsertBindings are what those two keymaps have beyond
+// defaultBindings: the keys repl.EditorStyle.WordKeys and
+// QuotedInsertInViInsert put on the editor, which acts on them by itself, so
+// this is the listing's half (#6250).
+//
+// The upper-case spellings — `M-U` and the rest — are left out. The editor
+// acts on them, and bash 5.3 lists them as `do-lowercase-version`, a function
+// this editor has not got; listing them as `upcase-word` would be a row bash
+// never prints.
+var (
+	emacsBindings    = buildKeymapBindings(repl.WordBindings())
+	viInsertBindings = buildKeymapBindings(map[string]repl.Widget{"\x16": repl.WidgetQuotedInsert})
+)
+
+func buildKeymapBindings(keys map[string]repl.Widget) map[string]string {
+	out := map[string]string{}
+	for seq, w := range keys {
+		if len(seq) == 2 && seq[0] == 0x1b && seq[1] >= 'A' && seq[1] <= 'Z' {
+			continue
+		}
+		out[seq] = bindFunctionNames[w]
+	}
+	return out
+}
+
+// keymapDefaults is one keymap's defaults: defaultBindings, and what the
+// keymap has beyond it.
+func keymapDefaults(keymap string) map[string]string {
+	var extra map[string]string
+	switch keymap {
+	case "emacs":
+		extra = emacsBindings
+	case "vi-insert":
+		extra = viInsertBindings
+	default:
+		return defaultBindings
+	}
+	out := make(map[string]string, len(defaultBindings)+len(extra))
+	for seq, name := range defaultBindings {
+		out[seq] = name
+	}
+	for seq, name := range extra {
+		out[seq] = name
+	}
+	return out
+}
+
 // registerBind installs the builtin.
 func registerBind(r *interp.Runner) {
 	r.Register("bind", bindBuiltin)
@@ -304,6 +364,7 @@ func registerBind(r *interp.Runner) {
 // listing says so plainly by showing the text back — see bindMacro.
 func KeyBindings(r *interp.Runner, km repl.Keymap) map[string]repl.Binding {
 	out := map[string]repl.Binding{}
+	defaults := keymapDefaults(currentKeymap(r))
 	for seq, bound := range keymapBindings(r, km) {
 		if bound.command {
 			// A key `bind -x` put a shell command on. The command text rides
@@ -318,7 +379,7 @@ func KeyBindings(r *interp.Runner, km repl.Keymap) map[string]repl.Binding {
 			// that the table stays the override layer repl/bindings.go
 			// describes. There is nothing to compare against in the command
 			// map — see keymapBindings.
-			if def, standard := defaultBindings[seq]; standard && def == bound.target {
+			if def, standard := defaults[seq]; standard && def == bound.target {
 				continue
 			}
 		}
@@ -376,7 +437,7 @@ func ViEditing(r *interp.Runner) bool {
 // empty, which is what `bind -p` leaves out and what `-q` reports as unbound.
 func readBindings(r *interp.Runner, keymap string) map[string]bindEntry {
 	out := map[string]bindEntry{}
-	for seq, name := range defaultBindings {
+	for seq, name := range keymapDefaults(keymap) {
 		out[seq] = bindEntry{target: name}
 	}
 	flat, _ := r.GetArray(bindStore)
@@ -424,8 +485,9 @@ func changeBinding(r *interp.Runner, keymap, seq string, bound bindEntry) {
 //
 // Neither mode selected leaves the map the shell started in, because there is
 // nothing else to read: readline keeps whichever map was last current, and the
-// three maps here carry the same defaults, so the only observable difference
-// is which map a `-m` binding was recorded against.
+// three maps here carry nearly the same defaults — see keymapDefaults — so the
+// only observable difference is which map a `-m` binding was recorded
+// against, and which of the case keys and `^V` it lists.
 func currentKeymap(r *interp.Runner) string {
 	if r.EditingMode() == interp.EditingModeVi {
 		return "vi-insert"

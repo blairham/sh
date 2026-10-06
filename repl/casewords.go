@@ -91,6 +91,10 @@ func (e *editor) caseWords(n int, to wordCase) {
 				r = unicode.ToUpper(r)
 			case to == lowerCase:
 				r = unicode.ToLower(r)
+			case first && e.capitalizeFirstCharacter:
+				// The first character, whatever it is: `3AB` is `3ab`. See
+				// EditorStyle.CapitalizeTakesTheFirstCharacter.
+				r, first = unicode.ToUpper(r), false
 			case unicode.IsLetter(r) && first:
 				r, first = unicode.ToUpper(r), false
 			case unicode.IsLetter(r):
@@ -105,21 +109,28 @@ func (e *editor) caseWords(n int, to wordCase) {
 	}
 }
 
-// transposeWords swaps the word at the cursor with the one n words before it.
-// See the table above for which word is "at the cursor".
-func (e *editor) transposeWords(n int) {
+// transposeWords swaps the word at the cursor with the one n words before it,
+// and reports whether there was one to swap it with. See the table above for
+// which word is "at the cursor".
+func (e *editor) transposeWords(n int) bool {
 	stay := n < 0
 	if stay {
 		n = -n
 	}
 	start, end, ok := e.wordAtCursor()
 	if !ok {
-		return
+		return false
+	}
+	if e.transposeToLineEnd && end <= e.pos {
+		// Nothing after the cursor is a word, so the word is the last one
+		// and everything after it. See
+		// EditorStyle.TransposeWordsReachesTheLineEnd.
+		end = len(e.line)
 	}
 	if n == 0 {
 		// The word swapped with itself: nothing moves but the cursor.
 		e.pos = end
-		return
+		return true
 	}
 	// The other word, n back from this one.
 	s1, e1 := start, end
@@ -129,7 +140,7 @@ func (e *editor) transposeWords(n int) {
 			i--
 		}
 		if i == 0 {
-			return
+			return false
 		}
 		e1 = i
 		for i > 0 && e.isWordRune(e.line[i-1]) {
@@ -147,6 +158,7 @@ func (e *editor) transposeWords(n int) {
 	if !stay {
 		e.pos = end
 	}
+	return true
 }
 
 // wordAtCursor is where transpose-words's own word lies: the word the cursor

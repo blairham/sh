@@ -80,5 +80,15 @@ func EditorStyle() repl.EditorStyle {
 		// 2026-10-06 through a pseudo-terminal; zsh rings for none of the
 		// motions and deletes — see the repl field for the table (#6240).
 		BellRingsWhenAnEditHasNothingToActOn: true,
+		// The case keys, transpose-words and `^V`, which readline binds in
+		// the emacs keymap, and `^V` in vi insert as well — and where its
+		// words differ from the other dialect's: `M-c` raises a word's
+		// first character even when it is a digit, and `M-t` after the last
+		// word takes the blanks after it along. Measured 2026-10-06 through a
+		// pseudo-terminal; see the repl fields for the rows (#6250).
+		WordKeys:                         true,
+		QuotedInsertInViInsert:           true,
+		CapitalizeTakesTheFirstCharacter: true,
+		TransposeWordsReachesTheLineEnd:  true,
 	}
 }

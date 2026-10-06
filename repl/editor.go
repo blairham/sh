@@ -316,6 +316,13 @@ type editor struct {
 	// EditorStyle.WhichCommandWord and RunHelpWord.
 	wideEmacsKeymap               bool
 	whichCommandWord, runHelpWord string
+	// wordKeys, quotedInsertInViInsert, capitalizeFirstCharacter and
+	// transposeToLineEnd are EditorStyle.WordKeys, QuotedInsertInViInsert,
+	// CapitalizeTakesTheFirstCharacter and TransposeWordsReachesTheLineEnd.
+	wordKeys                 bool
+	quotedInsertInViInsert   bool
+	capitalizeFirstCharacter bool
+	transposeToLineEnd       bool
 	// namedWidgets is Shell.NamedWidgets: every widget a name reaches, for
 	// execute-named-cmd. Nil is a session that names none.
 	namedWidgets func() map[string]Binding

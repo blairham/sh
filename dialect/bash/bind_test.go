@@ -396,7 +396,52 @@ func bindActionNames() map[repl.Widget]bool {
 	for _, w := range repl.DefaultBindings() {
 		out[w] = true
 	}
+	// And the ones the emacs keymap has beyond the shared table — see
+	// repl.EditorStyle.WordKeys.
+	for _, w := range repl.WordBindings() {
+		out[w] = true
+	}
 	return out
+}
+
+// TestTheWordKeysAreListedInTheKeymapsThatHaveThem is the listing's half of
+// #6250: bash 5.3.20's `bind -p`, measured 2026-10-06 under a pseudo-terminal
+// with `INPUTRC=/dev/null`, has the case keys and `M-t` in the emacs keymap
+// alone and `^V` in vi-insert as well.
+func TestTheWordKeysAreListedInTheKeymapsThatHaveThem(t *testing.T) {
+	emacs := []string{
+		`"\eu": upcase-word`,
+		`"\el": downcase-word`,
+		`"\ec": capitalize-word`,
+		`"\et": transpose-words`,
+		`"\C-v": quoted-insert`,
+	}
+	out, _ := bindRun(t, "bind -m emacs -p")
+	for _, row := range emacs {
+		if !strings.Contains(out, row+"\n") {
+			t.Errorf("emacs: -p has no row %q", row)
+		}
+	}
+	out, _ = bindRun(t, "bind -m vi-insert -p")
+	for _, row := range []string{`"\C-v": quoted-insert`, "# upcase-word (not bound)", "# transpose-words (not bound)"} {
+		if !strings.Contains(out, row+"\n") {
+			t.Errorf("vi-insert: -p has no row %q in %q", row, out)
+		}
+	}
+	// And the editor really has them, with readline's words: a listing of
+	// keys that do nothing is the bug this was filed for.
+	if s := bash.EditorStyle(); !s.WordKeys || !s.QuotedInsertInViInsert ||
+		!s.CapitalizeTakesTheFirstCharacter || !s.TransposeWordsReachesTheLineEnd || s.WideEmacsKeymap {
+		t.Errorf("bash's EditorStyle: %+v", s)
+	}
+	// And a default is not an override: the editor reaches it through its
+	// own dispatch, so the table it is handed stays empty.
+	var buf strings.Builder
+	r := preset.Runner(dialecttest.Base{Stdout: &buf, Stderr: &buf})
+	r.Interactive = true
+	if table := bash.KeyBindings(r, repl.KeymapMain); len(table) != 0 {
+		t.Errorf("nothing rebound, and the editor is handed %v", table)
+	}
 }
 
 // TestTheCommandKeymapIsReadWhenTheEditorIsInIt closes the hole #1427 was

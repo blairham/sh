@@ -34,16 +34,15 @@ import (
 func commandWord(line []rune, cursor int) string {
 	found, atCommand := "", true
 	for i := 0; i < len(line) && i <= cursor; {
-		r := line[i]
-		switch {
-		case r == ' ' || r == '\t':
+		switch line[i] {
+		case ' ', '\t':
 			i++
 			continue
-		case r == ';' || r == '&' || r == '|' || r == '\n' || r == '(':
+		case ';', '&', '|', '\n', '(':
 			atCommand = true
 			i++
 			continue
-		case r == ')':
+		case ')':
 			i++
 			continue
 		}

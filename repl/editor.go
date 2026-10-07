@@ -358,6 +358,15 @@ type editor struct {
 	viInsertStart int
 	// viInsertTypes is EditorStyle.ViInsertTypesTheseKeys.
 	viInsertTypes string
+	// readlineViInsert, menuReturns, viUndoReadline and undoRings are
+	// EditorStyle.ReadlineViInsertKeymap, MenuReturnsToTheWord,
+	// ViUndoAsReadline and UndoRingsWithNothingToUndo. viUndoFrozen says
+	// this line has been in command mode, under the third.
+	readlineViInsert bool
+	menuReturns      bool
+	viUndoReadline   bool
+	undoRings        bool
+	viUndoFrozen     bool
 	// viQuotedInsertKey and quotedInsertAbandons are EditorStyle.ViQuotedInsert
 	// and QuotedInsertAbandonsOnControlC.
 	viQuotedInsertKey    bool
@@ -753,7 +762,7 @@ func (e *editor) readLine(prompt drawnPrompt) (string, error) {
 	// Nothing to take back yet. Measured, `^_` at a fresh prompt does nothing
 	// in both shells however much was edited on the line before it, so the
 	// stack belongs to the line rather than to the session.
-	e.changes = nil
+	e.changes, e.viUndoFrozen = nil, false
 	if e.poppedLine {
 		// A line taken off the buffer stack is the first change made to
 		// this one, and undo takes it back to the empty line. See
@@ -1087,6 +1096,13 @@ func (e *editor) keyLoop(prompt drawnPrompt) (string, error) {
 			// A control key vi insert mode types as it is. See
 			// EditorStyle.ViInsertTypesTheseKeys (#6301).
 			e.typeCounted(rune(c), 1, prompt)
+			continue
+		}
+		if handled, accept := e.readlineViInsertKey(buf[0], prompt); handled {
+			// readline's vi insert keymap. See readlineviinsert.go (#6304).
+			if accept {
+				return e.accepted(prompt), nil
+			}
 			continue
 		}
 		if e.zshViInsertKey(buf[0], prompt) {
@@ -1786,6 +1802,16 @@ func (e *editor) changeOrRingFailed(edit func() bool) {
 	acted := true
 	e.change(false, func() { acted = edit() })
 	e.ringUnlessFailed(acted)
+}
+
+// changeOrRingInVi is changeOrRing for a vi insert key that rings, in a
+// dialect whose edits ring, though ringUnless is silent in vi editing.
+func (e *editor) changeOrRingInVi(edit func() bool) {
+	acted := true
+	e.change(false, func() { acted = edit() })
+	if !acted && e.ringsOnNothingToActOn {
+		e.ring()
+	}
 }
 
 // changeOrRing is a change made through change by an edit that reports

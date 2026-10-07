@@ -132,6 +132,49 @@ type EditorStyle struct {
 	// `a b \v Z`, and so on for each (#6301).
 	ViInsertTypesTheseKeys string
 
+	// ReadlineViInsertKeymap gives vi insert mode the keys readline's
+	// vi-insert keymap has beyond the shared table and the typed ones:
+	// menu completion on `^N` and `^P`, vi-unix-word-rubout on `^W`, and
+	// vi-eof-maybe on `^D`. See repl/readlineviinsert.go (#6304).
+	ReadlineViInsertKeymap bool
+
+	// MenuReturnsToTheWord makes a menu completion walk back to the word it
+	// started from after the last match, with the bell, and on to the first
+	// again — and puts each match in the line as a completion would, suffix
+	// and all. The zero value wraps from the last match to the first and
+	// inserts the bare match. Measured 2026-10-06 against bash 5.3.20,
+	// `echo aa` over `aa1`, `aa2`, `aa3`, `bb` and `ddir/`, in vi insert:
+	//
+	//	^N              aa1␠          ^P        aa3␠
+	//	^N ^N ^N ^N     aa, \a        ^N ^P     aa, \a
+	//	^N×5            aa1␠          `d` ^N    ddir/
+	//	`b` ^N ^N       bb aa1␠       `zz` ^N   zz, \a
+	//
+	// with nothing listed and no bell as the walk starts, and a bell for a
+	// word nothing matches (#6304).
+	MenuReturnsToTheWord bool
+
+	// ViUndoAsReadline is how undo walks a line that has been in vi command
+	// mode. Measured 2026-10-06 against bash 5.3.20 with `^_` in vi insert
+	// mode and `u` in command mode (#6304):
+	//
+	//	keys                                   line        bells
+	//	echo R:ab ESC u u                      echo R:ab   2
+	//	echo R:a ESC 0 x a b ^_ ^_             cho R:a     1
+	//	echo R:a ESC a b ESC a c ^_ ^_ ^_      echo R:a    1
+	//	echo R:a ESC a b ESC a c ESC u u       echo R:a    0
+	//
+	// So the first Escape on a line puts what was typed before it out of
+	// undo's reach, and each return to insert mode from command mode leaves
+	// a mark that `^_` stops at once with the bell before going on, and `u`
+	// passes over.
+	ViUndoAsReadline bool
+
+	// UndoRingsWithNothingToUndo rings for an undo with no change left to
+	// take back. Measured 2026-10-06 against bash 5.3.20: `echo R:abc`,
+	// `^_`, `^_` writes one `\a`, in emacs and vi editing alike (#6304).
+	UndoRingsWithNothingToUndo bool
+
 	// QuotedInsertAbandonsOnControlC makes `^C` after quoted-insert's `^V`
 	// give the line up with a bell, where the zero value puts a `^C` in the
 	// line as quoted-insert does any other key. Measured 2026-10-06 through a

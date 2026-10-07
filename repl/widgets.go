@@ -314,6 +314,9 @@ const (
 	// naming both by one widget listed `^W` under the wrong name and bound
 	// `backward-kill-word` to the wrong edit (#6284).
 	WidgetBackwardKillWord
+
+	// readline's `^W` in vi insert mode. See viUnixWordRubout (#6304).
+	WidgetViUnixWordRubout
 )
 
 // takesItsCount is whether the action reads the count itself, so that a key
@@ -490,6 +493,9 @@ func (e *editor) runWidget(b Binding, prompt drawnPrompt) {
 		e.redraw(prompt)
 	case WidgetKillWordAfter:
 		e.killForwardTo(e.endOfWord())
+		e.redraw(prompt)
+	case WidgetViUnixWordRubout:
+		e.changeOrRingInVi(e.viUnixWordRubout)
 		e.redraw(prompt)
 	case WidgetBackwardKillWord:
 		e.change(false, func() { e.killTo(e.backwardWord()) })

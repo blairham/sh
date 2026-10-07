@@ -27,6 +27,9 @@ import "slices"
 type snapshot struct {
 	line []rune
 	pos  int
+	// mark is no change at all: where insert mode was entered from command
+	// mode, under EditorStyle.ViUndoAsReadline. See undo.
+	mark bool
 }
 
 // change runs an editing key and remembers the line it found, so that `^_` can
@@ -65,6 +68,25 @@ func (e *editor) change(continues bool, edit func()) {
 // past the current change stops every undo (#5898).
 func (e *editor) undo() {
 	if e.undoLimit > 0 && len(e.changes)+1 <= e.undoLimit {
+		return
+	}
+	if e.viUndoReadline {
+		// A mark: `^_` in insert mode stops at it once, with the bell, and
+		// `u` in command mode passes over it. See EditorStyle.ViUndoAsReadline.
+		n := len(e.changes)
+		if n > 0 && e.changes[n-1].mark && e.viEditing() && !e.viCommand {
+			e.changes = e.changes[:n-1]
+			e.ring()
+			return
+		}
+		for n > 0 && e.changes[n-1].mark {
+			n--
+		}
+		e.changes = e.changes[:n]
+	}
+	if len(e.changes) == 0 && e.undoRings {
+		// Nothing left to take back. See EditorStyle.UndoRingsWithNothingToUndo.
+		e.ring()
 		return
 	}
 	e.undoLine()

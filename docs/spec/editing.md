@@ -567,6 +567,30 @@ and `^Z` too, which the terminal takes first). Measured 2026-10-06 against bash
 5.3.20, `od -c <<< ab`, the key, `Z`: `^B` gives `a b 002 Z` and `^K` gives
 `a b \v Z` (#6301). `repl.EditorStyle.ViInsertTypesTheseKeys` is the field.
 
+Five more keys differ from emacs editing there (#6304), measured the same way:
+
+- **`^N` and `^P` are menu completion.** `echo aa` over `aa1`, `aa2`, `aa3`:
+  `^N` puts `aa1 ` in the line, as a completion would, suffix and all; each
+  press after it moves on one, and after the last match the walk returns to
+  `aa` itself with the bell before starting again. `^P` goes the other way and
+  starts at the last match. One match completes as Tab does, none rings, and
+  nothing is listed.
+- **`^W` is vi-unix-word-rubout.** A word is letters and digits (`_` is not
+  one); everything else is the other kind. At the end of the line blanks go
+  first and then the run before them; elsewhere the run of the kind before the
+  cursor goes, except that a word before the cursor and something else under it
+  kill nothing. Two in a row are two kills, and it rings at the start.
+- **`^_` is vi-undo.** The line's first Escape puts what was typed before it out
+  of undo's reach, and each return to insert mode leaves a mark that `^_` stops
+  at once with the bell and `u` passes over. An undo with nothing left rings, in
+  emacs editing too.
+- **`^D` is vi-eof-maybe**: end of input on an empty line, and the line accepted,
+  wherever the cursor is, on any other.
+
+`ReadlineViInsertKeymap`, `MenuReturnsToTheWord`, `ViUndoAsReadline` and
+`UndoRingsWithNothingToUndo` are the fields, and `bind -m vi-insert -p` lists the
+keys under readline's names.
+
 The listing is zsh's byte for byte. Runs of one-byte keys bound to one widget
 fold into a range, `"^A"-"^C" self-insert`, written with `-R` in the `-L` form,
 and a sequence of more than one byte never folds. The printable keys and the

@@ -357,7 +357,7 @@ func TestEveryActionThisEditorPerformsHasANameAndAKey(t *testing.T) {
 		if len(fields) == 0 {
 			continue
 		}
-		if strings.Contains(line, "is not bound to any keys") && !viUnbound[fields[0]] {
+		if strings.Contains(line, "is not bound to any keys") && !viUnbound[fields[0]] && !viInsertOnly[fields[0]] {
 			t.Errorf("%q, in a shell where nothing was rebound — "+
 				"either the editor has an action with no key or this dialect has no name for one", line)
 		}
@@ -365,7 +365,7 @@ func TestEveryActionThisEditorPerformsHasANameAndAKey(t *testing.T) {
 		// listing is telling a person to write something that gets ignored.
 		// `accept-line` is the exception on purpose: it is the editor's own
 		// control flow and has no Widget, so there is nothing to bind it to.
-		if name := fields[0]; !offered[name] && name != "accept-line" {
+		if name := fields[0]; !offered[name] && name != "accept-line" && name != "vi-eof-maybe" {
 			t.Errorf("the listing prints %q, which `bind -l` does not offer", name)
 		}
 		named++
@@ -373,7 +373,7 @@ func TestEveryActionThisEditorPerformsHasANameAndAKey(t *testing.T) {
 	// And the count is the actions plus the one control key, so a listing
 	// that quietly stopped printing rows fails here rather than passing the
 	// loop above by having nothing to check.
-	if want := len(bindActionNames()) + 1 + len(viUnbound); named != want {
+	if want := len(bindActionNames()) + 1 + len(viUnbound) + len(viInsertOnly); named != want {
 		t.Errorf("bind -P printed %d rows, want %d", named, want)
 	}
 }
@@ -389,6 +389,18 @@ func TestEveryActionThisEditorPerformsHasANameAndAKey(t *testing.T) {
 // on "\e"`, because Escape is what selects command mode there. This listing
 // does not say so, which is one row of one listing and not a key that fails to
 // work — Escape leaves insert mode here whether or not `bind -P` mentions it.
+// viInsertOnly are the functions readline's vi-insert keymap has on keys the
+// emacs one gives others, so the emacs listing prints them unbound, as bash
+// 5.3.20's does (#6304). vi-eof-maybe is the key loop's `^D` under that
+// keymap's name, with no Widget behind it, as accept-line has none.
+var viInsertOnly = map[string]bool{
+	"menu-complete":          true,
+	"menu-complete-backward": true,
+	"vi-unix-word-rubout":    true,
+	"vi-undo":                true,
+	"vi-eof-maybe":           true,
+}
+
 var viUnbound = map[string]bool{
 	"vi-movement-mode":  true,
 	"vi-insertion-mode": true,
@@ -774,5 +786,42 @@ func TestSelfInsertIsListedOnTheKeysThatTypeThemselves(t *testing.T) {
 	r.Interactive = true
 	if table := bash.KeyBindings(r, repl.KeymapMain); len(table) != 0 {
 		t.Errorf("nothing rebound, and the editor is handed %d keys", len(table))
+	}
+}
+
+// The vi-insert keymap's listing has readline's names on the keys it gives
+// other functions than emacs does, and leaves out the keys that are not keys
+// there — Escape and a letter leaves insert mode, and `^X` types itself —
+// matching bash 5.3.20's `bind -m vi-insert -p` (#6304).
+func TestTheViInsertListingHasReadlinesNames(t *testing.T) {
+	out, _ := bindRun(t, "bind -m vi-insert -p")
+	for _, row := range []string{
+		`"\C-n": menu-complete`,
+		`"\C-p": menu-complete-backward`,
+		`"\C-w": vi-unix-word-rubout`,
+		`"\C-_": vi-undo`,
+		`"\C-d": vi-eof-maybe`,
+	} {
+		if !strings.Contains(out, row+"\n") {
+			t.Errorf("vi-insert: -p has no row %q", row)
+		}
+	}
+	for _, row := range []string{`"\eb":`, `"\e.":`, `"\C-x\C-u":`, `"\C-n": next-history`, `"\C-w": unix-word-rubout`} {
+		if strings.Contains(out, row) {
+			t.Errorf("vi-insert: -p has a row %q", row)
+		}
+	}
+	// And the editor is told nothing for them: they are its own defaults.
+	var buf strings.Builder
+	r := preset.Runner(dialecttest.Base{Stdout: &buf, Stderr: &buf})
+	r.Interactive = true
+	if _, err := r.Run(t.Context(), preset.Parse(t, "set -o vi")); err != nil {
+		t.Fatal(err)
+	}
+	if table := bash.KeyBindings(r, repl.KeymapMain); len(table) != 0 {
+		t.Errorf("nothing rebound in vi mode, and the editor is handed %v", table)
+	}
+	if s := bash.EditorStyle(); !s.ReadlineViInsertKeymap || !s.MenuReturnsToTheWord || !s.ViUndoAsReadline || !s.UndoRingsWithNothingToUndo {
+		t.Errorf("bash's EditorStyle: %+v", s)
 	}
 }

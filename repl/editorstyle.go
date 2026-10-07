@@ -308,6 +308,23 @@ type EditorStyle struct {
 	// with `\r\eC\eC\eC`. See repl/terminalmotion.go (#6324).
 	MotionFromTheDescription bool
 
+	// MovesAsTheScreenIs chooses each move the way zsh's editor does rather
+	// than by the fewest bytes: the single step left while it is shorter than
+	// twice the counted move, a carriage return only to the row's first
+	// column or, with no counted move, when the target is no nearer the
+	// cursor than the row's start; right by writing again what the screen
+	// already holds where there is no counted move — tabs, the prompt, the
+	// line's own characters, and spaces over a prompt on a terminal that
+	// cannot step right; a shorter line's tail covered with spaces; and the
+	// line's first character written again when the second is the first to
+	// change. See repl/rewritemotion.go for the measurements (#6325).
+	MovesAsTheScreenIs bool
+
+	// PadsMotionAtTheTerminalSpeed writes a delay in a movement sequence as
+	// NULs at the terminal's speed, as the prompt's own sequences are (see
+	// PaddedCapability). Without it the delay is taken off, which is bash's.
+	PadsMotionAtTheTerminalSpeed bool
+
 	// Interrupt is what marks a line abandoned with ^C, drawn where the
 	// cursor was before the line ends.
 	//

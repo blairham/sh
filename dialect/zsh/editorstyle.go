@@ -179,6 +179,12 @@ func EditorStyle() repl.EditorStyle {
 		PasteModeAfterThePrompt:               true,
 		PasteModeOffBeforeTheNewline:          true,
 		MarksUnfinishedOutputWithoutTheEditor: true,
+		// And the line editor's own moves are the description's sequences,
+		// chosen the way zle chooses them and padded at the terminal's
+		// speed. See repl.EditorStyle.MovesAsTheScreenIs (#6325).
+		MotionFromTheDescription:     true,
+		MovesAsTheScreenIs:           true,
+		PadsMotionAtTheTerminalSpeed: true,
 		// Measured under a pty against zsh 5.9 started with no startup files,
 		// one keystroke at a time. These are the four places where the same
 		// key does something different from bash, and every one of them is on

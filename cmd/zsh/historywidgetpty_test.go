@@ -131,9 +131,9 @@ func widgetSession(t *testing.T, rc ...string) (*os.File, *smoke.Screen) {
 	sh.Env = []string{
 		"HOME=" + home,
 		"PATH=/usr/bin:/bin",
-		"TERM=dumb",
 		"HISTFILE=" + filepath.Join(home, "hist"),
 	}
+	sh.Env = append(sh.Env, movingTerminal(t)...)
 	screen := smoke.Watch(control)
 	done := make(chan int, 1)
 	go func() { done <- driver.MainArgs(sh, []string{"zsh", "-i"}) }()

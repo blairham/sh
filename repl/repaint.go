@@ -138,6 +138,13 @@ func (e *editor) repaint(prompt drawnPrompt, cols int) bool {
 		return false
 	}
 
+	m := e.moves()
+	if m.asTheScreenIs && resume == 1 && m.left1 != "" && at < len(styled) {
+		// The first character is written again with the second. See
+		// rewritemotion.go.
+		at, resume = 0, 0
+	}
+
 	resRow, resCol := placeAt(prompt.cells, shown, resume, cols)
 	curRow, curCol, endRow, endCol := place(prompt.cells, shown, e.pos, cols)
 	resRow, resCol = pastEdge(resRow, resCol, cols)
@@ -147,10 +154,10 @@ func (e *editor) repaint(prompt drawnPrompt, cols int) bool {
 	// below is from where it actually is. Nothing has been written yet, so
 	// that is where the last draw left it.
 	var b strings.Builder
-	m := e.moves()
+	view := func(row int) *rowView { return e.viewOfRow(prompt, shown, cols, row) }
 	row, col := d.row, d.col
 	if tail := styled[at:]; tail != "" {
-		m.moveCursor(&b, row, col, resRow, resCol)
+		m.moveCursor(&b, row, col, resRow, resCol, view)
 		// The color the tail was written expecting, said again. See
 		// styleInForce: the shared prefix names a cell, not a state, and the
 		// state the terminal is actually in is the one the last whole draw
@@ -186,18 +193,31 @@ func (e *editor) repaint(prompt drawnPrompt, cols int) bool {
 		// attributes on a terminal with background-color erase, and the
 		// cursor may be sitting inside a highlighted run whose style the
 		// shared prefix left in force.
-		m.moveCursor(&b, row, col, endRow, endCol)
+		m.moveCursor(&b, row, col, endRow, endCol, view)
 		row, col = endRow, endCol
-		b.WriteString(m.resetBeforeErase())
-		if e.listingBelow {
+		switch {
+		case m.asTheScreenIs && d.endRow == endRow && !e.listingBelow:
+			// Covered with spaces rather than erased, up to the last of the
+			// old tail that was not a space already. See rewritemotion.go.
+			gone := d.endCol - endCol
+			if m.canMoveRight() {
+				// Not on a terminal that cannot step right, which covers
+				// them too: under dumb, ^U on `echo ` writes five.
+				gone -= trailingBlanks(d.styled, gone)
+			}
+			b.WriteString(strings.Repeat(" ", gone))
+			col = endCol + gone
+		case e.listingBelow:
 			// The tail is on this row; a listing under the line stays. See
 			// returnToTheLine.
+			b.WriteString(m.resetBeforeErase())
 			b.WriteString(m.eraseToRowEnd())
-		} else {
+		default:
+			b.WriteString(m.resetBeforeErase())
 			b.WriteString(m.eraseToScreenEnd())
 		}
 	}
-	m.moveCursor(&b, row, col, curRow, curCol)
+	m.moveCursor(&b, row, col, curRow, curCol, view)
 
 	e.row = curRow
 	if b.Len() > 0 {
@@ -386,7 +406,10 @@ func nextToken(s string, i int) (escape bool, size int) {
 // line it is editing is one `\e[nD` and never a return and a walk back out.
 //
 // Spelled with the terminal's own sequences. See terminalmotion.go.
-func (m *terminalMotion) moveCursor(b *strings.Builder, fromRow, fromCol, toRow, toCol int) {
+//
+// view is what the rows hold, for the moves that write them again; nil
+// where nothing is known.
+func (m *terminalMotion) moveCursor(b *strings.Builder, fromRow, fromCol, toRow, toCol int, view screenView) {
 	if fromRow == toRow && fromCol == toCol {
 		return
 	}
@@ -404,11 +427,19 @@ func (m *terminalMotion) moveCursor(b *strings.Builder, fromRow, fromCol, toRow,
 	}
 	// A vertical move keeps the column, so the horizontal move that follows
 	// starts from the column the cursor was already on.
-	m.writeColumn(b, fromCol, toCol)
+	var row *rowView
+	if view != nil && m.asTheScreenIs {
+		row = view(toRow)
+	}
+	m.writeColumn(b, fromCol, toCol, row)
 }
 
-// writeColumn moves along one row.
-func (m *terminalMotion) writeColumn(b *strings.Builder, fromCol, toCol int) {
+// writeColumn moves along one row, which holds what row says.
+func (m *terminalMotion) writeColumn(b *strings.Builder, fromCol, toCol int, row *rowView) {
+	if m.asTheScreenIs {
+		m.columnAsTheScreenIs(b, fromCol, toCol, row)
+		return
+	}
 	switch {
 	case toCol == fromCol:
 	case toCol > fromCol:

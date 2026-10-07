@@ -857,15 +857,40 @@ func (e *editor) readLine(prompt drawnPrompt) (string, error) {
 	var opening strings.Builder
 	opening.WriteString(prompt.lead)
 	opening.WriteString(prompt.text)
-	if e.moves().writeRightPrompt(&opening, prompt, 0, e.cols()) {
-		// The carriage return writeRightPrompt ends with put the cursor back
-		// at column zero, and the line starts after the prompt.
-		opening.WriteString(e.moves().rightBy(prompt.cells))
-	}
-	// Then what the dialect writes where the line will start: the erase, and
-	// the bracketed-paste request it holds until here. See
+	// Then what the dialect writes where the line will start: the erase,
+	// before the right prompt it would otherwise take off the row — measured
+	// 2026-10-07, zsh 5.9.2 with `RPS1=TIME` under xterm writes `P> \e[K`,
+	// then the move to the edge and `TIME`. See
 	// EditorStyle.EraseAfterThePromptCapability.
 	opening.WriteString(e.eraseAfterPrompt)
+	m := e.moves()
+	var row *rowView
+	if m.asTheScreenIs {
+		// Nothing typed yet: the prompt, and blanks after it.
+		row = &rowView{
+			promptText: prompt.text, promptCells: prompt.cells, promptFixed: prompt.lead != "",
+			cells: make([]string, max(e.cols(), 0)+1),
+		}
+	}
+	if end, ok := m.writeRightPromptOnly(&opening, prompt, 0, e.cols(), row); ok {
+		// And back to where the line starts: from the right prompt's end,
+		// the way every other move is chosen — `\e[31D` in the measurement
+		// above — or, by the fewest bytes, from a carriage return.
+		switch {
+		case m.asTheScreenIs && end < e.cols():
+			m.writeColumn(&opening, end, prompt.cells, nil)
+		case m.asTheScreenIs:
+			// Against the very edge, where the wrap is still pending and
+			// no move left counts from a column the cursor is in: from the
+			// row's start, `TIME\r\e[48C` with `ZLE_RPROMPT_INDENT=0`.
+			opening.WriteString("\r")
+			m.writeColumn(&opening, 0, prompt.cells, row)
+		default:
+			opening.WriteString("\r")
+			opening.WriteString(m.rightBy(prompt.cells))
+		}
+	}
+	// And the bracketed-paste request the dialect holds until here.
 	opening.WriteString(e.pasteOnLater)
 	e.pasteOnLater = ""
 	e.write(opening.String())
@@ -2012,7 +2037,11 @@ func (e *editor) redraw(prompt drawnPrompt) {
 	// taken off whatever was there.
 	shown := e.displayed()
 	lineCells := cells(shown)
-	drewRight := m.writeRightPrompt(&b, prompt, lineCells, cols)
+	var rowNow *rowView
+	if m.asTheScreenIs {
+		rowNow = e.viewOfRow(prompt, shown, cols, 0)
+	}
+	drewRight := m.writeRightPrompt(&b, prompt, lineCells, cols, rowNow)
 
 	curRow, curCol, endRow, endCol := place(prompt.cells, shown, e.pos, cols)
 	if endCol == cols {
@@ -2033,7 +2062,11 @@ func (e *editor) redraw(prompt drawnPrompt) {
 		b.WriteString(m.upBy(endRow - curRow))
 	}
 	b.WriteString("\r")
-	b.WriteString(m.rightBy(curCol))
+	var row *rowView
+	if m.asTheScreenIs {
+		row = e.viewOfRow(prompt, shown, cols, curRow)
+	}
+	m.writeColumn(&b, 0, curCol, row)
 	e.row = curRow
 	e.write(b.String())
 	e.drawn = drawnLine{

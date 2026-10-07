@@ -58,6 +58,7 @@ var sharedStacks = map[string]string{
 	"RlimitOrder":     "the order this kernel numbers its limits in, handed in by the front end at setup and never appended to — a fact about the machine rather than anything a script can move",
 	"substLevelsOut":  "rebuilt with append([]substLevel{}, …) every time a level opens, so a write never lands in an array anyone else holds",
 	"carriedHeredocs": "the running file's own list, replaced wholesale by RunPart and never appended to — a subshell reads the same file's list, which is what it should see",
+	"substEnds":       "the running file's list of ends of input, kept beside carriedHeredocs and shared for the same reason",
 	"flagWordBare":    "a handoff from flaggedWords to expandFlagged within one expansion, assigned whole and cleared by the reader, never appended to",
 	"openRun": "never appended to in place: openRuntime and openRunWith clip before " +
 		"they append, so a subshell sharing the array reads its parent's view and writes " +
@@ -117,6 +118,7 @@ func seedStacks(r *Runner) {
 	r.enclosingProcSubs = append(make([]procSubPipe, 0, 4), procSubPipe{})
 	r.releasedSubstFds = append(make([]int, 0, 4), 63)
 	r.carriedHeredocs = append(make([]syntax.CarriedHeredoc, 0, 4), syntax.CarriedHeredoc{})
+	r.substEnds = append(make([]syntax.SubstitutionEnds, 0, 4), syntax.SubstitutionEnds{})
 	r.scopes = append(make([]*scope, 0, 4), &scope{
 		saved:                map[string]string{"seed": "v"},
 		existed:              map[string]bool{"seed": true},

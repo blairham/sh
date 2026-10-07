@@ -44,12 +44,15 @@ type Lexer struct {
 	// internal/histjoin, where a continuation the reader resolved is one
 	// line of a history entry and one the reader left alone is two.
 	openHeredocExpands bool
-	// inputEnds are offsets in src at which the input ended once already
-	// and the reading went on past them, in the order they happened; and
-	// inputEndsTaken is how many of them a here-document body has ended at.
-	// See Parser.EndsOfInputAt.
-	inputEnds      []int
-	inputEndsTaken int
+	// ends are the places the input ended once already and the reading went
+	// on past them, shared with every lexer that reads a substitution's body
+	// out of this one's text; endsOrigin is where this lexer's src begins in
+	// the text those offsets count in; and endsTaken is which of them a body
+	// read by *this* lexer has ended at, so that two bodies starting at one
+	// place take one each. See Parser.EndsOfInputAt.
+	ends       *endsOfInput
+	endsOrigin int
+	endsTaken  []bool
 	// innerOpen is what a program between parentheses was itself still
 	// inside when the input ran out there — the here-document or quote a
 	// `$(` holds — which openWord cannot say, because the read of that
@@ -664,6 +667,10 @@ type Lexer struct {
 	// carried is what [Lexer.carryHeredocsOut] has taken over, for the
 	// parser to put on the file. See [File.CarriedHeredocs].
 	carried []CarriedHeredoc
+
+	// substEnds is the ends of input inside the substitutions this lexer has
+	// read, for the parser to put on the file. See [File.EndsOfInput].
+	substEnds []SubstitutionEnds
 }
 
 // queueHeredoc registers a redirection whose body is still to be read. The
@@ -884,11 +891,73 @@ func (l *Lexer) adoptOpenConstruct(join *Lexer, split int, word Pos) {
 
 func (l *Lexer) eof() bool { return l.off >= len(l.src) }
 
-// atAnEndOfInput reports whether the cursor has reached the next of the ends
-// of input the caller marked, which only a here-document body asks about.
-// See Parser.EndsOfInputAt.
-func (l *Lexer) atAnEndOfInput() bool {
-	return l.inputEndsTaken < len(l.inputEnds) && l.off >= l.inputEnds[l.inputEndsTaken]
+// endsOfInput is the places a caller says the input ended before the rest of
+// it arrived, as offsets into the text the outermost parser was given, and
+// which of them any read of that text has ended a here-document body at.
+//
+// One value for the outermost lexer and every lexer that reads a body out of
+// its text, because a substitution's body is read by a lexer of its own — and
+// read more than once, by the grammar and again for its remarks — and an end
+// of input inside it is still one of the outermost text's. Each read decides
+// for itself which ends it reaches (endsTaken, on the lexer), so a second read
+// of the same body ends its documents where the first did; ever records that
+// some read did, which is what the caller asks.
+type endsOfInput struct {
+	at   []int
+	ever []bool
+}
+
+// atAnEndOfInput reports whether the cursor stands on an end of input the
+// caller marked that no body this lexer read has ended at yet, and takes it;
+// n is its number, counted from 1 in the order the caller gave them. Only a
+// here-document body asks, at the start of each of its lines, which is where
+// an end of input at a prompt always falls. See Parser.EndsOfInputAt.
+func (l *Lexer) atAnEndOfInput() (n int, ok bool) {
+	if l.ends == nil {
+		return 0, false
+	}
+	if l.endsTaken == nil {
+		l.endsTaken = make([]bool, len(l.ends.at))
+	}
+	here := l.endsOrigin + l.off
+	for i, at := range l.ends.at {
+		if at == here && !l.endsTaken[i] {
+			l.endsTaken[i], l.ends.ever[i] = true, true
+			return i + 1, true
+		}
+	}
+	return 0, false
+}
+
+// lendEnds gives a lexer reading this one's text from offset from the ends of
+// input this one was given. See endsOfInput.
+func (l *Lexer) lendEnds(sub *Lexer, from int) {
+	sub.ends, sub.endsOrigin = l.ends, l.endsOrigin+from
+}
+
+// noteSubstEnds records the ends of input inside the substitution that opened
+// at open, where there are any. See [File.EndsOfInput].
+func (l *Lexer) noteSubstEnds(open Pos, offsets []int) {
+	if len(offsets) > 0 {
+		l.substEnds = append(l.substEnds, SubstitutionEnds{At: open, Offsets: offsets})
+	}
+}
+
+// endsWithin is the ends of input some read ended a body at between two
+// offsets of this lexer's text, as offsets from the first — what a
+// substitution's span carries, so that the read of its body when it runs ends
+// its documents where the read of the line did. See noteSubstEnds.
+func (l *Lexer) endsWithin(from, to int) []int {
+	if l.ends == nil {
+		return nil
+	}
+	var in []int
+	for i, at := range l.ends.at {
+		if at -= l.endsOrigin; l.ends.ever[i] && at >= from && at <= to {
+			in = append(in, at-from)
+		}
+	}
+	return in
 }
 
 func (l *Lexer) peek() byte {
@@ -4594,6 +4663,7 @@ func (l *Lexer) scanParens(kind SpanKind, q Quoting) Span {
 				l.takeHeredocOutside()
 			}
 			l.carryHeredocsOut(kind, open)
+			l.noteSubstEnds(open, l.endsWithin(start, start+len(value)))
 			return Span{Kind: kind, Value: value, Quoting: q, Pos: open, Comments: l.bodyComments(kind)}
 		}
 		switch {
@@ -4814,7 +4884,7 @@ func (l *Lexer) scanParens(kind SpanKind, q Quoting) Span {
 		// text would say the opposite — `EOF` alone is the delimiter, so
 		// there would be nothing to remark on, which is also why the
 		// substitution itself runs and yields `a`.
-		remarks, bodyRanOut := l.takeRemarks(l.src[start:l.off], int(open.Line))
+		remarks, bodyRanOut := l.takeRemarks(l.src[start:l.off], start, int(open.Line))
 		// And whether that read is an answer at all is a dialect question,
 		// which nothing here used to ask. Counting the parentheses finds the
 		// `)` whatever shell this is, so all four dialects accepted a program
@@ -4857,7 +4927,7 @@ func (l *Lexer) scanParens(kind SpanKind, q Quoting) Span {
 		// (#4135).
 		refuse := bodyRanOut && depth == 0
 		if refuse && l.dialect.HeredocEndsAtClosingParen {
-			_, recovered := l.readInsideParens(l.src[start:stop], int(open.Line))
+			_, recovered := l.readInsideParens(l.src[start:stop], start, int(open.Line))
 			refuse = !recovered
 		}
 		if refuse {
@@ -4865,7 +4935,7 @@ func (l *Lexer) scanParens(kind SpanKind, q Quoting) Span {
 			// the substitution's own text, so that is the read the remark
 			// belongs to: bash locates the warning on the last line of the
 			// file and not on the line the parenthesis is on.
-			remarks, _ = l.takeRemarks(l.src[start:], int(open.Line))
+			remarks, _ = l.takeRemarks(l.src[start:], start, int(open.Line))
 		}
 		l.remarks = append(l.remarks, remarks...)
 		if refuse {
@@ -4917,6 +4987,13 @@ func (l *Lexer) scanParens(kind SpanKind, q Quoting) Span {
 		// gets at expansion time, which would locate a parse failure as a
 		// line the shell was running. See Lexer.noteHeredocOutside.
 		l.takeHeredocOutside()
+	}
+	if kind != ArithSubst {
+		// The ends of input in it, for the same reason as on the path above:
+		// the body is read again, and that read must end its documents where
+		// this one did — or a line the read of the line refused becomes a
+		// line of a document's body there (#6309).
+		l.noteSubstEnds(open, l.endsWithin(start, end))
 	}
 	return Span{Kind: kind, Value: value, Quoting: q, Pos: open, Comments: l.bodyComments(kind)}
 }
@@ -5313,6 +5390,9 @@ func (l *Lexer) scanBracket(q Quoting) Span {
 // Only remarks are taken. Whatever else the read found — an error, a tree — is
 // the caller's own business and it has already decided what to do about it.
 //
+// at is where text begins in this lexer's src, which is how the read is told
+// the ends of input that fall inside it — see Parser.EndsOfInputAt.
+//
 // The remarks are returned rather than kept, because whether they are the
 // caller's to keep is now a question: a here-document that ran to the end of
 // this text is a body that would have run straight past the parentheses had
@@ -5320,11 +5400,15 @@ func (l *Lexer) scanBracket(q Quoting) Span {
 // the construct is refused instead of remarked on. See
 // Dialect.HeredocEndsAtClosingParen. The second return says which of those it
 // was.
-func (l *Lexer) takeRemarks(text string, from int) ([]Remark, bool) {
+func (l *Lexer) takeRemarks(text string, at, from int) ([]Remark, bool) {
 	sub := NewParserAt(text, l.dialect, from)
+	l.lendEnds(sub.lex, at)
 	sub.parseList()
 	for _, r := range sub.lex.remarks {
-		if r.Kind == RemarkHeredocAtEOF {
+		// Not a body an end of input marked inside the text ended: that one
+		// ended where the person ended it, inside the parentheses, and ran
+		// past nothing. See Parser.EndsOfInputAt.
+		if r.Kind == RemarkHeredocAtEOF && r.EndOfInput == 0 {
 			return sub.lex.remarks, true
 		}
 	}
@@ -5339,15 +5423,16 @@ func (l *Lexer) takeRemarks(text string, from int) ([]Remark, bool) {
 // line and one that ran past the parenthesis and took it with it, which
 // nothing else can tell apart — both raise the same remark, in the same
 // words, at the same place. See Dialect.HeredocLastLineIsADelimiterPrefix.
-func (l *Lexer) readInsideParens(text string, from int) (ranOut, recovered bool) {
+func (l *Lexer) readInsideParens(text string, at, from int) (ranOut, recovered bool) {
 	lex := NewLexer(text, l.dialect)
 	lex.line = from
 	lex.inProgramParens = true
+	l.lendEnds(lex, at)
 	sub := newParserOn(lex, l.dialect)
 	sub.InsideASubstitution()
 	sub.parseList()
 	for _, r := range sub.lex.remarks {
-		if r.Kind == RemarkHeredocAtEOF {
+		if r.Kind == RemarkHeredocAtEOF && r.EndOfInput == 0 {
 			ranOut = true
 			break
 		}
@@ -5375,6 +5460,7 @@ func (l *Lexer) parseToClose(from int) (int, []Remark, bool, bool) {
 	lex := NewLexer(l.src[from:], l.dialect)
 	lex.line = l.line
 	lex.inProgramParens = true
+	l.lendEnds(lex, from)
 	sub := newParserOn(lex, l.dialect)
 	// Read with the same alias tables the body's own parse will use, because
 	// an alias may hold the very punctuation this read is looking for. `alias
@@ -5873,6 +5959,7 @@ func (l *Lexer) scanSubshellSubstitution(open Pos, start int, q Quoting) (Span, 
 	}
 	value := l.src[start:l.off]
 	l.advance() // the }
+	l.noteSubstEnds(open, l.endsWithin(start, start+len(value)))
 	return Span{Kind: CommandSubst, CurrentShell: true, Value: value, Quoting: q, Pos: open, Comments: l.bodyComments(CommandSubst)}, true
 }
 
@@ -6696,6 +6783,7 @@ func (l *Lexer) bodyRefusalFrom(from, line int) *Error {
 	lex := NewLexer(l.src[from:], l.dialect)
 	lex.line = line
 	lex.inProgramParens = true
+	l.lendEnds(lex, from)
 	sub := newParserOn(lex, l.dialect)
 	l.lendAliases(sub)
 	sub.InsideASubstitution()
@@ -7161,7 +7249,7 @@ func (l *Lexer) readOneHeredoc(r *Redirect, quoted bool) {
 	var lastBody Pos
 	lastBodyLen, tookALine := 0, false
 	for {
-		if l.atAnEndOfInput() {
+		if n, ok := l.atAnEndOfInput(); ok {
 			// An end of input the caller says happened here, before the rest
 			// of the text arrived. It ends this body and nothing else: the
 			// next document queued on the line starts reading after it, and
@@ -7169,13 +7257,12 @@ func (l *Lexer) readOneHeredoc(r *Redirect, quoted bool) {
 			// as the end of the text is, and numbered, so a caller that said
 			// the remark when that end arrived can tell it from the others.
 			// See Parser.EndsOfInputAt (#6287).
-			l.inputEndsTaken++
 			l.remarks = append(l.remarks, Remark{
 				Kind:       RemarkHeredocAtEOF,
 				Pos:        lastLine,
 				At:         namedAt,
 				Token:      delim,
-				EndOfInput: l.inputEndsTaken,
+				EndOfInput: n,
 			})
 			l.markHeredocEnd(lastLine)
 			r.HeredocAtEOF = true

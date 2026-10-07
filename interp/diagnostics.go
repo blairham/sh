@@ -12526,14 +12526,24 @@ func (r *Runner) speaksAsAtAPrompt() bool {
 // the vector rather than the vector, and a shell at a prompt is not in a
 // loop.
 func (r *Runner) diag() *Diagnostics {
-	if r.Diagnostics != nil && !r.promptLocated() {
+	located := r.promptLocated()
+	if r.Diagnostics != nil && !located {
 		return r.Diagnostics
+	}
+	if located && r.promptDiagnostics != nil && r.promptDiagnosticsOf == r.Diagnostics {
+		// The prompt's reading of the same vector, made once. Every
+		// diagnostic question asked while a line typed at a prompt runs —
+		// and a plugin manager's deferred loads run there — copied the whole
+		// vector and rewrote it for the prompt, which was 50MB of a real
+		// start's allocation (#5873). The answer depends on nothing but the
+		// vector, so it is kept until the vector is replaced.
+		return r.promptDiagnostics
 	}
 	d := CoreDiagnostics()
 	if r.Diagnostics != nil {
 		d = *r.Diagnostics
 	}
-	if r.promptLocated() {
+	if located {
 		// A line typed at a prompt is located the prompt's way — see
 		// Runner.AtPrompt and Diagnostics.ForPrompt. Applied here rather
 		// than once by the front end because it must *stop* applying inside
@@ -12561,6 +12571,7 @@ func (r *Runner) diag() *Diagnostics {
 		// is what makes this a question about the body's origin rather than
 		// about being inside a function at all (#2052).
 		d = d.ForPrompt()
+		r.promptDiagnostics, r.promptDiagnosticsOf = &d, r.Diagnostics
 	}
 	return &d
 }

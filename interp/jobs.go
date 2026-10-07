@@ -2990,20 +2990,28 @@ func (r *Runner) addJob(job *Job) {
 // `jobs %2` is asked *before* the new job as well, so a shell that never
 // freed the slot is not counted as one that refilled it.
 func (r *Runner) nextJobNumber() int {
-	high, taken := 0, make(map[int]bool, len(r.jobs)+1)
+	// Asked for every command a shell with a job in its table runs (see
+	// Runner.holdACommandsJobSlot), so it allocates nothing: the table and
+	// the held slots are a handful of numbers, and a membership scan over
+	// them is cheaper than the map it used to build per command (#5873).
+	high := 0
 	for _, j := range r.jobs {
-		taken[j.num] = true
-		if j.num > high {
-			high = j.num
-		}
+		high = max(high, j.num)
 	}
-	for _, n := range append([]int{r.commandSlot}, r.outerSlots...) {
-		if n != 0 {
-			// The running commands', which no job in the table holds and
-			// no job may take. See Semantics.ACommandHoldsAJobSlot.
-			taken[n] = true
-			high = max(high, n)
+	high = max(high, r.commandSlot)
+	for _, n := range r.outerSlots {
+		high = max(high, n)
+	}
+	taken := func(n int) bool {
+		if n == r.commandSlot {
+			return true
 		}
+		for _, j := range r.jobs {
+			if j.num == n {
+				return true
+			}
+		}
+		return slices.Contains(r.outerSlots, n)
 	}
 	// Where this table's numbers begin. One ordinarily; two in a `( … )`
 	// subshell of the dialect that makes one a job of its own, which holds
@@ -3013,7 +3021,7 @@ func (r *Runner) nextJobNumber() int {
 		floor = 2
 	}
 	lowest := floor
-	for taken[lowest] {
+	for taken(lowest) {
 		lowest++
 	}
 	// **The hole test is relative to the floor**, and that is not a detail:

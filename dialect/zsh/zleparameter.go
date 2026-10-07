@@ -4,6 +4,8 @@
 package zsh
 
 import (
+	"strings"
+
 	"github.com/blairham/sh/interp"
 )
 
@@ -93,6 +95,7 @@ import (
 // registerZleParameterModule installs `$widgets` and `$keymaps`.
 func registerZleParameterModule(r *interp.Runner) {
 	r.SetDynamicAssoc("widgets", zshWidgetsView)
+	r.SetDynamicAssocElement("widgets", zshWidgetValue)
 	// Readonly rather than given a writer, which is zsh's own answer and the
 	// pair parameter.go and terminfo.go describe: a produced table with
 	// neither would take an assignment into a stored table, and a stored
@@ -144,6 +147,28 @@ func zshWidgetsView(r *interp.Runner) interp.AssocArray {
 		out[name] = interp.Scalar(zshWidgetSpelling(def))
 	}
 	return out
+}
+
+// zshWidgetValue is `$widgets[name]`: the one entry zshWidgetsView would hold
+// for it, found without building the table.
+//
+// The table is every action the editor has, twice, before the definitions go
+// over it, and a plugin manager reads one entry of it at a time — `${widgets[x]}`
+// was read 542 times on a real startup (#5873), and each read built and
+// sorted the roster. The order is the view's: a definition answers first,
+// since it is written over an action of the same name, and an action answers
+// under its own name and its dotted one.
+func zshWidgetValue(r *interp.Runner, key string) (string, bool) {
+	if def, ok := widgetDefinitionOf(r, key); ok {
+		return zshWidgetSpelling(def), true
+	}
+	if builtinWidget(key) {
+		return zshWidgetBuiltin, true
+	}
+	if rest, dotted := strings.CutPrefix(key, "."); dotted && builtinWidget(rest) {
+		return zshWidgetBuiltin, true
+	}
+	return "", false
 }
 
 // zshWidgetSpelling is what one defined widget reads as: the completion form

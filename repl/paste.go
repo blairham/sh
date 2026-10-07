@@ -178,11 +178,19 @@ func (e *editor) yankMarked() bool {
 	if !e.yank() {
 		return false
 	}
-	if e.yankIsPasted {
+	if e.yankMarks() {
 		e.markPasted(at, e.pos)
 	}
 	return true
 }
+
+// yankMarks is whether a yank made now is drawn as pasted: in a dialect that
+// draws it so, and only when a key ran it rather than a shell widget. Measured
+// 2026-10-06 against zsh 5.9.2: `z() { zle yank }` bound to a key puts the
+// text back plainly, where `^Y` reverses it — and a widget that goes on to
+// rewrite BUFFER would otherwise leave the mark over text the yank never put
+// there.
+func (e *editor) yankMarks() bool { return e.yankIsPasted && !e.inShell }
 
 // yankKey is `^Y` in the key loop.
 func (e *editor) yankKey() {

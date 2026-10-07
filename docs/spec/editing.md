@@ -427,6 +427,18 @@ reverse video comes off on the next keystroke, whatever that keystroke is: the
 line is drawn again plainly. It marks the text as *pasted*, not as anything
 about what the text says.
 
+zsh draws a **yank** the same way: `^Y`, and vi's `p` and `P`, put the text
+back in the paste style until the next key, where bash draws a yank plainly.
+And zsh's paste style is `zle_highlight`'s `paste` context, read when the
+text is marked, so a change made at the prompt applies to the next paste:
+`paste:none` turns the marking off for a yank and a paste alike, and any other
+spec draws in its attributes in a fixed order — bold, standout, underline,
+then the foreground and the background — whatever order the spec gives them,
+with the endings in the same order. `none` clears what came before it in the
+spec. With no `paste` context the style is standout. Measured 2026-10-06
+through a pseudo-terminal against zsh 5.9.2 and bash 5.3.20 (#6271); the
+table is on `dialect/zsh`'s `PastedTextStyle`.
+
 What a paste does with a line ending, measured against bash 5.3.3:
 
 | pasted | drawn | run |

@@ -17,9 +17,10 @@ import (
 // through a pseudo-terminal against zsh 5.9.2, a two-row prompt: `echo ab`,
 // `^W`, `^Y` draws `ab` reversed and the next key draws it plain; after
 // `zle_highlight=(paste:none)` neither a yank nor a bracketed paste is marked.
-// Here a yank was always plain and the paste always reversed.
+// A yank a shell widget makes, `z() { zle yank }` on a key, is plain. Here a
+// yank was always plain and the paste always reversed.
 func TestAYankIsDrawnAsPastedOnATerminal(t *testing.T) {
-	control, screen := widgetSession(t)
+	control, screen := widgetSession(t, "z() { zle yank }; zle -N z; bindkey '^Xz' z")
 	mark := strings.TrimSpace(widgetMark)
 	col := len(widgetMark)
 	send := func(keys string) {
@@ -74,6 +75,14 @@ func TestAYankIsDrawnAsPastedOnATerminal(t *testing.T) {
 	await("the yank reversed", "echo ab", col+7, map[int]bool{a: true, b: true})
 	send("x")
 	await("the yank drawn plainly after a key", "echo abx", col+8, map[int]bool{a: false, b: false})
+
+	fresh()
+	send("echo ab")
+	await("the line typed", "echo ab", col+7, nil)
+	send("\x17")
+	await("the word killed", "echo", col+5, nil)
+	send("\x18z")
+	await("a widget's yank plain", "echo ab", col+7, map[int]bool{a: false, b: false})
 
 	fresh()
 	at := len(screen.Text())

@@ -86,6 +86,9 @@ func EditorStyle() repl.EditorStyle {
 		PrefixArgument:     true,
 		PastedTextStyle:    "\x1b[7m",
 		PastedTextStyleEnd: "\x1b[27m",
+		// And a yank is drawn as a paste is. See
+		// repl.EditorStyle.YankIsDrawnAsPasted (#6271).
+		YankIsDrawnAsPasted: true,
 		// And a control character in the line is a caret in standout, which
 		// is this shell's `zle_highlight` default for `special`. Measured;
 		// see repl.EditorStyle.ControlCharacterStyle (#5972).

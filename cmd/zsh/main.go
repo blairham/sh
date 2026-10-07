@@ -68,6 +68,7 @@ func shell() driver.Shell {
 		TransformTermcap:          zsh.TransformTermcap,
 		HighlightLine:             zsh.RegionHighlights,
 		StartLine:                 zsh.StartLine,
+		PastedTextStyle:           zsh.PastedTextStyle,
 		BeforeStartupFiles:        zsh.BeforeStartupFiles,
 		// What the editor waits on beside the terminal, and what happens when
 		// one of those wakes: `zle -F`.

@@ -511,6 +511,16 @@ type EditorStyle struct {
 	PastedTextStyle    string
 	PastedTextStyleEnd string
 
+	// YankIsDrawnAsPasted draws the text a yank puts back — `^Y`, and vi's
+	// `p` and `P` — in the paste style until the next key, as a paste is.
+	// Measured 2026-10-06 through a pseudo-terminal: zsh 5.9.2 draws `ab`
+	// yanked into `echo ` as `\e[7mab\e[27m` and takes the standout off on
+	// the next key, `p` and `P` the same, and `zle_highlight=(paste:none)`
+	// turns it off for both a yank and a paste; bash 5.3.20 draws a yank
+	// plain and a paste in standout. A yank a shell widget makes — `zle
+	// yank` — is plain in zsh too. The zero value is bash's (#6271).
+	YankIsDrawnAsPasted bool
+
 	// ControlCharacterStyle is written before the caret a control character
 	// in the line is drawn as — `^A`, `^?`, `^[` — and ControlCharacterStyleEnd
 	// after it. Empty draws the caret like any other text, which is bash.

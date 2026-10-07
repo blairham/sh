@@ -2461,6 +2461,9 @@ func Semantics() interp.Semantics {
 	// And an unterminated last line has its prompt drawn again. See
 	// Semantics.PromptAgainForAnUnterminatedLine (#6331).
 	s.PromptAgainForAnUnterminatedLine = interp.SamePromptForAnUnterminatedLine
+	// And a backslash the input ends on is a word, not a continuation. See
+	// Semantics.PromptBackslashTheInputEndsOnIsLiteral (#6337).
+	s.PromptBackslashTheInputEndsOnIsLiteral = true
 	s.StdinOptionNamesTheOperands = interp.No
 	s.LoneDashIsAnOption = interp.No
 	// The same, measured in the pinned digest rather than derived from dash:

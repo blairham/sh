@@ -20102,6 +20102,37 @@ type Semantics struct {
 	// (TestAnUnterminatedLastLineIsPromptedForAsMeasured).
 	PromptAgainForAnUnterminatedLine UnterminatedLinePrompt
 
+	// PromptBackslashTheInputEndsOnIsLiteral reads a backslash that is the
+	// last byte of a prompt's input, with no newline after it, the way the
+	// dialect reads one at the end of a command string, rather than as a
+	// line continuation that the end of the input then finishes.
+	//
+	// Measured 2026-10-07, `echo A \` with no newline, `-i` on a pipe,
+	// `PS1='P> '`, `PS2='Q> '`:
+	//
+	//	                       stdout   standard error
+	//	dash 0.5.12            A \      P> P> \n
+	//	ksh93u+                A \      P> Q> P> \n
+	//	BusyBox ash 1.37.0     A \      P> P> P> \n
+	//	bash 5.3.20, zsh 5.9.2 A
+	//
+	// So in the three the backslash is a word of its own, as it is under
+	// `-c` in each (dialect/endinputbackslash_test.go), and no continuation
+	// prompt is drawn for it; ksh93's `Q>` and ash's second `P>` are
+	// PromptAgainForAnUnterminatedLine. bash is the one whose prompt and
+	// `-c` part: `bash -c 'echo A \'` keeps the backslash and the prompt
+	// drops it (#6337).
+	//
+	// Read by the front end, for the reason PromptAsksAgainAfterARefusedToken
+	// is.
+	//
+	// unpinned: reached, and the corpus cannot discriminate: no case draws a
+	// prompt. repl/lastbackslash_test.go drives a session on a pipe for both
+	// answers (TestABackslashTheInputEndsOnAtAPrompt), and
+	// dialect/readsize_test.go holds the presets to the measurement
+	// (TestABackslashTheInputEndsOnIsLiteralAsMeasured).
+	PromptBackslashTheInputEndsOnIsLiteral bool
+
 	// EndOfInputInAConstructEndsTheSession says that the end of input
 	// arriving inside an unfinished construct at a prompt — ^D at `> `, or
 	// the end of a pipe — ends the session once that construct has been run

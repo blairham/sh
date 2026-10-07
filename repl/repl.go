@@ -237,6 +237,12 @@ type Shell struct {
 	// interp.Semantics.PromptAgainForAnUnterminatedLine.
 	PromptAgainForAnUnterminatedLine interp.UnterminatedLinePrompt
 
+	// BackslashTheInputEndsOnIsLiteral parses a last line that the input
+	// ended on a backslash as the end of the input, with no newline added,
+	// so the dialect's own reading of that backslash applies. See
+	// interp.Semantics.PromptBackslashTheInputEndsOnIsLiteral.
+	BackslashTheInputEndsOnIsLiteral bool
+
 	// EditorWithoutATerminal gives a session whose input is not a terminal a
 	// line editor, so that `C-r`, the arrows and every other binding are read
 	// as keys rather than as characters of the line.
@@ -1957,6 +1963,29 @@ func (s Shell) runPlain(
 			// without one still gave the shell a line, and a line written
 			// back without its ending would put the next thing on it.
 			s.errf("%s\n", strings.TrimSuffix(line, "\n"))
+		}
+		if line != "" && err != nil && s.BackslashTheInputEndsOnIsLiteral &&
+			endsWithContinuation(pending.String()+line) {
+			// The input ended on a backslash. Parsed as the end of the input
+			// and not as a line, so the backslash is read as it is at the end
+			// of a command string rather than continued onto a newline this
+			// loop would otherwise add. See
+			// interp.Semantics.PromptBackslashTheInputEndsOnIsLiteral.
+			pending.WriteString(line)
+			stmts, text, _, perr := s.endOfInputHow(&pending)
+			switch {
+			case perr != nil:
+				s.errf("%s", s.report(perr))
+				s.refused(perr)
+			case len(stmts) > 0:
+				b := s.beginBlock(text)
+				done := s.runStmts(ctx, text, stmts)
+				s.closeBlock(ctx, store, capture, b)
+				if done {
+					return s.status(), nil
+				}
+			}
+			continue
 		}
 		if line == "" && err != nil {
 			// End of input ends the session, exactly as ^D does at a

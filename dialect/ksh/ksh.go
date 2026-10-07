@@ -875,6 +875,9 @@ func Semantics() interp.Semantics {
 	// And an unterminated last line has the continuation prompt drawn. See
 	// Semantics.PromptAgainForAnUnterminatedLine (#6331).
 	s.PromptAgainForAnUnterminatedLine = interp.ContinuationPromptForAnUnterminatedLine
+	// And a backslash the input ends on is a word, not a continuation. See
+	// Semantics.PromptBackslashTheInputEndsOnIsLiteral (#6337).
+	s.PromptBackslashTheInputEndsOnIsLiteral = true
 	// And `-B` is this shell's `braceexpand` too — measured 2026-09-11,
 	// `set +B; echo {a,b}` writes `{a,b}` and `$-` loses the letter (#1856).
 	s.SetBTurnsOffBraceExpansion = interp.Yes

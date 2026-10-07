@@ -148,6 +148,38 @@ func withoutPadding(s string) string {
 	return b.String()
 }
 
+// padded is s with each of its delays written as the NUL bytes that take
+// that long at speed bits per second, which is what an interactive zsh writes
+// on a terminal it set up; at speed 0 the delays are removed, as without one.
+//
+// Measured 2026-10-07 on zsh 5.9.2 through a pseudo-terminal at 9600 bits per
+// second, `TERM=vt100`: `bold` (`\E[1m$<2>`) is written with 2 NULs, `el`
+// (`$<3>`) with 3 and `ed` (`$<50>`) with 53 — a delay of n milliseconds is
+// n × speed ÷ 9000 of them, rounded down, which is a character of nine bits
+// (#6315).
+func padded(s string, speed int) string {
+	if speed <= 0 {
+		return withoutPadding(s)
+	}
+	var b strings.Builder
+	for i := 0; i < len(s); i++ {
+		if s[i] == '$' && i+1 < len(s) && s[i+1] == '<' {
+			if j := strings.IndexByte(s[i:], '>'); j > 0 && paddingSpec(s[i+2:i+j]) {
+				ms := 0.0
+				spec := strings.TrimRight(s[i+2:i+j], "*/")
+				if v, err := strconv.ParseFloat(spec, 64); err == nil {
+					ms = v
+				}
+				b.WriteString(strings.Repeat("\x00", int(ms*float64(speed)/9000)))
+				i += j
+				continue
+			}
+		}
+		b.WriteByte(s[i])
+	}
+	return b.String()
+}
+
 // paddingSpec reports whether the text between `$<` and `>` is a delay: a
 // number, possibly with a fraction, and the `*` and `/` terminfo(5) allows.
 func paddingSpec(s string) bool {

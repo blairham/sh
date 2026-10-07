@@ -906,6 +906,57 @@ type EditorStyle struct {
 	// something the substrate should be choosing. Empty writes nothing.
 	ClearBeforeThePrompt string
 
+	// The same three for a shell that takes them from the terminal's
+	// description rather than writing fixed bytes, each read through
+	// interp.Runner.TerminalCapability at every prompt so that `TERM=` typed
+	// at one moves the next. zsh's.
+	//
+	// UnfinishedOutputMarkPrompt is the mark as a prompt string, drawn by the
+	// prompt's own escapes — `%B%S%#%s%b`, whose attributes are whatever the
+	// terminal has — and UnfinishedOutputMarkParameter names the parameter a
+	// script sets it with. ClearBeforeThePromptCapabilities are the termcap
+	// codes written in place of ClearBeforeThePrompt, each only where the
+	// terminal has it. EraseAfterThePromptCapability is written after the
+	// prompt, where the line will start.
+	//
+	// Measured 2026-10-07 on zsh 5.9.2 through a pseudo-terminal, `PS1='P> '`,
+	// what a fresh prompt writes:
+	//
+	//	xterm  \e[1m\e[7m%\e[27m\e[1m\e[0m … \r \r\r\e[0m\e[27m\e[24m\e[JP> \e[K\e[?2004h
+	//	ansi   \e[1m\e[7m%\e[m\e[1m\e[0m … \r \r\r\e[0m\e[m\e[m\e[JP> \e[K\e[?2004h
+	//	vt100  the same as ansi, each delay written as NUL bytes
+	//	vt52   % … \r \r\r\eJP> \eK\e[?2004h
+	//	dumb   % … \r \r\rP> \e[?2004h, and the same for a name with no
+	//	       description
+	//
+	// So `me`, `se`, `ue` and `cd` before it and `ce` after it, and the mark
+	// in whatever the terminal can draw (#6315).
+	UnfinishedOutputMarkPrompt string
+	// MarkPaddingNeedsTheCapability names the boolean capability without
+	// which the mark is padded one column short of the edge — zsh's is `xn`,
+	// the newline glitch: measured, the padding after `%` in an 80-column
+	// terminal is 79 spaces under xterm and vt100, which have it, and 78
+	// under ansi, cons25, vt52, dumb and a name with no description.
+	MarkPaddingNeedsTheCapability    string
+	UnfinishedOutputMarkParameter    string
+	ClearBeforeThePromptCapabilities []string
+	EraseAfterThePromptCapability    string
+
+	// PasteModeAfterThePrompt asks for bracketed paste after the prompt and
+	// the erase after it rather than before the prompt, and
+	// PasteModeOffBeforeTheNewline takes the request back before the newline
+	// that ends an accepted line rather than after it — both zsh's, in the
+	// table above and in `echo hi` accepted: `\e[?2004l\r\r\n` (#6315).
+	PasteModeAfterThePrompt      bool
+	PasteModeOffBeforeTheNewline bool
+
+	// MarksUnfinishedOutputWithoutTheEditor writes the unfinished-output
+	// mark ahead of a prompt read without the line editor too — then followed
+	// by the prompt alone, with none of the editor's resets. zsh's: measured
+	// 2026-10-07, `unsetopt zle` and `TERM=emacs` draw `%`, the padding,
+	// `\r \r` and `P> ` before every line (#6315).
+	MarksUnfinishedOutputWithoutTheEditor bool
+
 	// ListQueryAcceptsOnlyYesOrNo keeps asking until one of them arrives,
 	// ringing the bell at anything else. bash does. zsh takes the first key
 	// whatever it is and treats everything but `y` as no.

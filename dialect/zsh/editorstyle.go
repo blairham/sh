@@ -166,6 +166,19 @@ func EditorStyle() repl.EditorStyle {
 		// longer one behind it.
 		ClearBeforeThePrompt: "\x1b[0m\x1b[27m\x1b[24m\x1b[J",
 		UnfinishedOutputMark: "\x1b[1m\x1b[7m%\x1b[27m\x1b[1m\x1b[0m",
+		// The four above as xterm writes them, and what is written instead
+		// is read from the terminal's description at every prompt, the mark
+		// through `$PROMPT_EOL_MARK` and the prompt's own attribute escapes.
+		// See repl.EditorStyle.UnfinishedOutputMarkPrompt for the
+		// measurements (#6315).
+		UnfinishedOutputMarkPrompt:            "%B%S%#%s%b",
+		MarkPaddingNeedsTheCapability:         "xn",
+		UnfinishedOutputMarkParameter:         "PROMPT_EOL_MARK",
+		ClearBeforeThePromptCapabilities:      []string{"me", "se", "ue", "cd"},
+		EraseAfterThePromptCapability:         "ce",
+		PasteModeAfterThePrompt:               true,
+		PasteModeOffBeforeTheNewline:          true,
+		MarksUnfinishedOutputWithoutTheEditor: true,
 		// Measured under a pty against zsh 5.9 started with no startup files,
 		// one keystroke at a time. These are the four places where the same
 		// key does something different from bash, and every one of them is on

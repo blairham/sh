@@ -1387,8 +1387,8 @@ it lists them.
 ### The same keys in bash
 
 bash binds `M-u`, `M-l`, `M-c`, `M-t` and `^V` in its emacs keymap, the
-upper-case letters through `do-lowercase-version`, and `^V` in vi insert as
-well; it has nothing on `M-q`, `M-'`, `M-a` or `^X u` (#6250). Measured
+upper-case letters through `do-lowercase-version`, and `^V` in vi insert and
+vi command mode as well; it has nothing on `M-q`, `M-'`, `M-a` or `^X u` (#6250). Measured
 2026-10-06 through a pseudo-terminal against bash 5.3.20 with
 `INPUTRC=/dev/null` and a two-row prompt, the line and cursor read back by
 typing a marker at the cursor and running the line.
@@ -1415,8 +1415,14 @@ included: `^V ^C` on `abc` with the cursor on the `c` draws `ab^Cc` and goes
 on reading, in emacs and vi insert alike, where zsh rings and gives the line
 up (#6251). Nothing is drawn while it waits, in vi insert too.
 
+In vi command mode `^V` puts the next key before the character under the
+cursor, as many times as the command's count says, and the cursor stays on
+that character, in command mode: on `ab` with the cursor on the `b`, `^V ^A`
+then `i@` gives `a^A@b`, and `3 ^V ^A` gives three of them (#6259). zsh's
+vicmd has nothing on `^V`.
+
 `repl.EditorStyle.WordKeys`, `QuotedInsertInViInsert`,
-`CapitalizeTakesTheFirstCharacter` and `TransposeWordsReachesTheLineEnd` are
+`QuotedInsertInViCommand`, `CapitalizeTakesTheFirstCharacter` and `TransposeWordsReachesTheLineEnd` are
 the fields.
 
 ### A count in bash

@@ -81,13 +81,14 @@ func EditorStyle() repl.EditorStyle {
 		// motions and deletes — see the repl field for the table (#6240).
 		BellRingsWhenAnEditHasNothingToActOn: true,
 		// The case keys, transpose-words and `^V`, which readline binds in
-		// the emacs keymap, and `^V` in vi insert as well — and where its
-		// words differ from the other dialect's: `M-c` raises a word's
+		// the emacs keymap, and `^V` in both vi modes as well (#6259) — and
+		// where its words differ from the other dialect's: `M-c` raises a word's
 		// first character even when it is a digit, and `M-t` after the last
 		// word takes the blanks after it along. Measured 2026-10-06 through a
 		// pseudo-terminal; see the repl fields for the rows (#6250).
 		WordKeys:                         true,
 		QuotedInsertInViInsert:           true,
+		QuotedInsertInViCommand:          true,
 		CapitalizeTakesTheFirstCharacter: true,
 		TransposeWordsReachesTheLineEnd:  true,
 		// And ESC with a digit or a minus is a count, drawn as `(arg: N)` in

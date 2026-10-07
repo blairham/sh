@@ -327,6 +327,10 @@ func (e *editor) viAct(count int, key byte, prompt drawnPrompt) viOutcome {
 		return e.viReplace(atLeastOne(count), prompt)
 	case '~':
 		e.viToggleCase(atLeastOne(count), prompt)
+	case quotedInsertKey[0]:
+		if e.quotedInsertInViCommand {
+			e.viCommandQuotedInsert(atLeastOne(count), prompt)
+		}
 	case 'p':
 		e.viPut(e.pos+1, prompt)
 	case 'P':
@@ -841,4 +845,31 @@ func viEndOfWord(line []rune, i int, big bool) int {
 		i++
 	}
 	return i
+}
+
+// viCommandQuotedInsert is `^V` in command mode, where a dialect has it: the next key
+// as it is, count times, before the character under the cursor, which the
+// cursor stays on. See EditorStyle.QuotedInsertInViCommand.
+func (e *editor) viCommandQuotedInsert(count int, prompt drawnPrompt) {
+	b, got := e.readByte()
+	if got == keyAbandoned {
+		e.interruptRequested = true
+		return
+	}
+	if got != keyContinues {
+		return
+	}
+	r := rune(b)
+	if b >= 0x80 {
+		var err error
+		if r, err = e.readTypedRune(b); err != nil {
+			return
+		}
+	}
+	e.change(false, func() {
+		for range count {
+			e.insert(r)
+		}
+	})
+	e.redraw(prompt)
 }

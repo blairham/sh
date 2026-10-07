@@ -330,11 +330,12 @@ type editor struct {
 	// EditorStyle.WhichCommandWord and RunHelpWord.
 	wideEmacsKeymap               bool
 	whichCommandWord, runHelpWord string
-	// wordKeys, quotedInsertInViInsert, capitalizeFirstCharacter and
-	// transposeToLineEnd are EditorStyle.WordKeys, QuotedInsertInViInsert,
-	// CapitalizeTakesTheFirstCharacter and TransposeWordsReachesTheLineEnd.
+	// wordKeys, quotedInsertInViInsert, quotedInsertInViCommand,
+	// capitalizeFirstCharacter and transposeToLineEnd are the EditorStyle
+	// fields of the same names.
 	wordKeys                 bool
 	quotedInsertInViInsert   bool
+	quotedInsertInViCommand  bool
 	capitalizeFirstCharacter bool
 	transposeToLineEnd       bool
 	// viQuotedInsertKey and quotedInsertAbandons are EditorStyle.ViQuotedInsert

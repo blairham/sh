@@ -40,7 +40,7 @@ func EditorStyle() repl.EditorStyle {
 		BracketedPasteSetting: bracketedPasteSetting,
 		// And sets it off on a terminal that cannot take the markers. See
 		// repl.EditorStyle.BracketedPasteOffForTerminals (#6310).
-		BracketedPasteOffForTerminals:        []string{"dumb", "vt52", "emacs"},
+		BracketedPasteOffForTerminals:        []string{"dumb", "vt52", "emacs", "adm3a"},
 		BracketedPasteOffWithoutADescription: true,
 		// And ^D at a continuation prompt leaves the row as it is when
 		// there are no markers to take back. See
@@ -54,6 +54,10 @@ func EditorStyle() repl.EditorStyle {
 		// own sequences. See repl.EditorStyle.MotionFromTheDescription
 		// (#6324).
 		MotionFromTheDescription: true,
+		// And draws a change in place, with the terminal's insert and
+		// delete sequences. See repl.EditorStyle.DrawsChangesInPlace
+		// (#6332).
+		DrawsChangesInPlace: true,
 		// Every field about words is left at its zero value on purpose, and
 		// they are bash's measured answers rather than an absence of one: a
 		// word is letters and digits, `^U` kills only what is before the

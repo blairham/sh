@@ -3687,10 +3687,10 @@ func (s Shell) cannotTakeThePasteMarkers(term string) bool {
 	if !s.Editor.BracketedPasteOffWithoutADescription {
 		return false
 	}
-	return !terminalIsDescribed(func(name string) string {
+	return !terminalIsUsable(TerminalCapabilities(func(name string) string {
 		v, _ := s.Runner.GetVar(name)
 		return v
-	})
+	}))
 }
 
 // bracketedPasteCodes reads the bracketing's two sequences out of the

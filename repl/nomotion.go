@@ -57,6 +57,7 @@ func (s Shell) terminalMotion() *terminalMotion {
 	// A copy, so that what this dialect chooses is not left on the cached
 	// reading of the description.
 	m.asTheScreenIs = s.Editor.MovesAsTheScreenIs
+	m.inPlace = s.Editor.DrawsChangesInPlace
 	if s.Editor.PadsMotionAtTheTerminalSpeed {
 		m.speed = s.Runner.TerminalSpeed
 	}

@@ -173,9 +173,30 @@ func TerminalCapabilities(env func(string) string) []TerminalCapability {
 	return nil
 }
 
-// terminalIsDescribed reports whether the terminfo database has a readable
-// description for the terminal `$TERM` names, which is false for an unset or
-// empty `$TERM` as well as for a name nothing describes.
-func terminalIsDescribed(env func(string) string) bool {
-	return len(TerminalCapabilities(env)) > 0
+// terminalIsUsable reports whether caps describes a terminal at all: not
+// empty, and not a generic description (`gn`) that lacks `clear` or `cup`.
+//
+// Measured 2026-10-07, bash 5.3.20 asks for no paste markers under
+// `unknown` (`am gn cols bel cr cud1 ind`) and `ibm327x` (`gn clear el
+// home`), as under a name with no description, and does ask for them under
+// xterm's description compiled with `gn` added. Bisected from there with
+// compiled descriptions: `gn` with `cr` alone, with `cup` alone and with
+// `clear` alone are off, `gn` with both `clear` and `cup` is on, and without
+// `gn` a description of `am` and `cr` is on (#6332).
+func terminalIsUsable(caps []TerminalCapability) bool {
+	if len(caps) == 0 {
+		return false
+	}
+	var generic, clear, cup bool
+	for _, c := range caps {
+		switch c.Terminfo {
+		case "gn":
+			generic = c.Value == "yes"
+		case "clear":
+			clear = c.Kind == StringCapability
+		case "cup":
+			cup = c.Kind == StringCapability
+		}
+	}
+	return !generic || (clear && cup)
 }

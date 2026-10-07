@@ -47,6 +47,13 @@ type terminalMotion struct {
 	// nothing in color and gets none.
 	resets bool
 
+	// insert and insert1 are `ich` and `ich1`, insertOn and insertOff
+	// `smir` and `rmir`, and delete and delete1 `dch` and `dch1`. See
+	// inplace.go.
+	insert, insert1     string
+	insertOn, insertOff string
+	delete, delete1     string
+
 	// column is `hpa`, a move to a column counted from the row's start.
 	column string
 
@@ -66,6 +73,10 @@ type terminalMotion struct {
 	// asTheScreenIs chooses each move the way rewritemotion.go says rather
 	// than by the fewest bytes. See EditorStyle.MovesAsTheScreenIs.
 	asTheScreenIs bool
+
+	// inPlace draws a change the way inplace.go says. See
+	// EditorStyle.DrawsChangesInPlace.
+	inPlace bool
 }
 
 // ansiMotion is what the editor speaks to a terminal it was not told about —
@@ -127,6 +138,18 @@ func motionOf(caps []TerminalCapability, speed int) terminalMotion {
 			m.tab = c.Value
 		case "hpa":
 			m.column = c.Value
+		case "ich":
+			m.insert = c.Value
+		case "ich1":
+			m.insert1 = c.Value
+		case "smir":
+			m.insertOn = c.Value
+		case "rmir":
+			m.insertOff = c.Value
+		case "dch":
+			m.delete = c.Value
+		case "dch1":
+			m.delete1 = c.Value
 		}
 	}
 	if m.tab == "" {

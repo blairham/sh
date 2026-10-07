@@ -6920,6 +6920,9 @@ func Apply(r *interp.Runner) {
 	registerSetopt(r)
 	registerDebugCommand(r)
 	registerZcompile(r)
+	// The completion dump compinit reads back, reachable only from the
+	// prelude's own function. See compdump.go (#6307).
+	registerCompdump(r)
 	registerCompctl(r)
 	// And the new completion system's own two, which are what a `zle -C`
 	// widget's function is written in. See compsys.go for the context they

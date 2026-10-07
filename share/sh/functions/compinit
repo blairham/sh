@@ -32,10 +32,19 @@
 #
 # Where this differs from zsh, on purpose:
 #
-#   * **no dump is written.**  zsh writes ${ZDOTDIR:-$HOME}/.zcompdump, or the
-#     `-d` file, and reads it back on the next start; a dump this shell wrote
-#     would be read by the other shell too, and the two must not trade one
-#     another's files.  `-d`, `-D` and `-C` are taken and change nothing else;
+#   * **the dump is this shell's own** (#6307).  zsh writes
+#     ${ZDOTDIR:-$HOME}/.zcompdump, or the `-d` file, and reads it back on the
+#     next start; a dump this shell wrote there would be read by the other
+#     shell too, and the two must not trade one another's files.  So what the
+#     scan found is kept under ${XDG_CACHE_HOME:-~/.cache}/sh/, in a format of
+#     this shell's, and read back only when this build, the directories
+#     scanned and the `_name` files in them are as they were when it was
+#     written — a file by its stat, or where that moved by its first line,
+#     which is all the scan reads — see dialect/zsh/compdump.go.  `-d`
+#     still names zsh's file, for `$_comp_dumpfile`, and nothing here reads
+#     or writes it.  `-D` is zsh's "no dump": nothing is read or written.
+#     `-C` skips compaudit, as in zsh, but not the check that the dump is
+#     current, which here costs a stat per file rather than a rescan;
 #   * this shell ships no `_main_complete`: the completion widgets are put
 #     on one only where the scan finds it — an installed zsh's library is
 #     on $fpath by default since #6128 — and otherwise Tab keeps this
@@ -45,11 +54,11 @@ emulate -L zsh -o extendedglob
 
 local opt
 local -a dumpfile
-integer audit=1 ignoreinsecure=0
+integer audit=1 ignoreinsecure=0 usedump=1
 while getopts "d:DiuCw" opt; do
 	case $opt in
 	(d) dumpfile=( $OPTARG ) ;;
-	(D) dumpfile=() ;;
+	(D) dumpfile=() usedump=0 ;;
 	(i) ignoreinsecure=1 ;;
 	(u) audit=0 ;;
 	(C) audit=0 ;;
@@ -208,7 +217,7 @@ compdef() {
 	return 0
 }
 
-local dir file line name word
+local dir file line name word dumpkey
 local -a words options
 local -A seen
 # The first line is split into words the way an unset IFS splits them, so a
@@ -218,51 +227,118 @@ local -A seen
 # <TAB> m2` all register, under `IFS=:` too, while `#compdefx`,
 # `#compdef<VT>v1` and `#compdef<CR>r1` register nothing (#6289).
 local IFS=$' \t\n\0'
-for dir in $scan; do
-	# `-.`, a plain file or a link to one: every file of a Homebrew zsh's
-	# library is a link into its Cellar, and zsh registers them (#6183).
-	for file in $dir/_*(N-.); do
-		name=${file:t}
-		[[ $name == *~ ]] && continue
-		(( ${+seen[$name]} )) && continue
-		seen[$name]=1
-		IFS= read -r line < $file || [[ -n $line ]] || continue
-		# By the file's own path, so the stub records where it will be read
-		# from: measured, zsh's compinit leaves `_git is an autoload shell
-		# function from …/site-functions/_git` and lists the stub as
-		# `builtin autoload -XUz …/site-functions` (#6155).
-		words=( ${=line} )
-		case $words[1] in
-		('#compdef')
-			autoload -Uz -- $file
-			words=( ${words[2,-1]} )
-			# A line that is only command names, which is nearly every line,
-			# is what `compdef -n` does with one: each name that has no
-			# function yet gets this file's. Written here rather than through
-			# the call, which was most of what this scan cost — about 130ms
-			# of a start over an installed zsh's library (#5873). Anything
-			# with an option or a service still goes through compdef.
-			options=( ${(M)words:#(-*|*=*)} )
-			if (( $#options )); then
-				compdef -n $name $words
-			else
-				for word in $words; do
-					(( ${+_comps[$word]} )) || _comps[$word]=$name
-				done
-			fi
-			;;
-		('#autoload')
-			autoload -Uz ${words[2,-1]} -- $file
-			;;
-		esac
+
+# What the scan leaves is kept apart from what the tables held before it, so
+# that it is the same whatever they held and can be written to the dump and
+# read back: the files to autoload (`autoloads`, and `autoloadx` as pairs of
+# an `#autoload` line's own words and the file), the four tables as they are
+# after a scan into empty ones, and whether `_main_complete` was found.
+local -a autoloads autoloadx comps services patcomps postpatcomps mainc
+local -a held_comps held_services held_patcomps held_postpatcomps
+held_comps=( "${(@kv)_comps}" ) held_services=( "${(@kv)_services}" )
+held_patcomps=( "${(@kv)_patcomps}" ) held_postpatcomps=( "${(@kv)_postpatcomps}" )
+_comps=() _services=() _patcomps=() _postpatcomps=()
+
+# The dump, where it still holds: dialect/zsh/compdump.go checks it against
+# this build, the directories about to be scanned, and every `_name` file in
+# them — by its stat, or where that moved by its first line — so a file
+# added, removed or given another first line, or $fpath reordered, means a
+# scan.  The `1` is this file's own format: change it with what the arrays
+# hold.
+integer loaded=0
+if (( usedump )) && __compinit_dump load 1 \
+	autoloads autoloadx comps services patcomps postpatcomps mainc -- $scan 2>/dev/null; then
+	loaded=1
+elif (( usedump )); then
+	# Taken before the scan, so a file that moves while it runs is never
+	# recorded as what the scan read.
+	__compinit_dump key dumpkey 1 $scan 2>/dev/null
+fi
+
+if (( loaded )); then
+	_comps=( "${comps[@]}" ) _services=( "${services[@]}" )
+	_patcomps=( "${patcomps[@]}" ) _postpatcomps=( "${postpatcomps[@]}" )
+else
+	for dir in $scan; do
+		# `-.`, a plain file or a link to one: every file of a Homebrew zsh's
+		# library is a link into its Cellar, and zsh registers them (#6183).
+		for file in $dir/_*(N-.); do
+			name=${file:t}
+			[[ $name == *~ ]] && continue
+			(( ${+seen[$name]} )) && continue
+			seen[$name]=1
+			IFS= read -r line < $file || [[ -n $line ]] || continue
+			words=( ${=line} )
+			case $words[1] in
+			('#compdef')
+				autoloads+=( $file )
+				words=( ${words[2,-1]} )
+				# A line that is only command names, which is nearly every
+				# line, is what `compdef -n` does with one: each name that has
+				# no function yet gets this file's. Written here rather than
+				# through the call, which was most of what this scan cost —
+				# about 130ms of a start over an installed zsh's library
+				# (#5873). Anything with an option or a service still goes
+				# through compdef.
+				options=( ${(M)words:#(-*|*=*)} )
+				if (( $#options )); then
+					compdef -n $name $words
+				else
+					for word in $words; do
+						(( ${+_comps[$word]} )) || _comps[$word]=$name
+					done
+				fi
+				;;
+			('#autoload')
+				if (( $#words > 1 )); then
+					autoloadx+=( "${words[2,-1]}" $file )
+				else
+					autoloads+=( $file )
+				fi
+				;;
+			esac
+		done
 	done
+	comps=( "${(@kv)_comps}" ) services=( "${(@kv)_services}" )
+	patcomps=( "${(@kv)_patcomps}" ) postpatcomps=( "${(@kv)_postpatcomps}" )
+	mainc=( ${+seen[_main_complete]} )
+	if [[ -n $dumpkey ]]; then
+		__compinit_dump save $dumpkey 1 \
+			autoloads autoloadx comps services patcomps postpatcomps mainc -- $scan 2>/dev/null
+	fi
+fi
+
+# By the file's own path, so the stub records where it will be read from:
+# measured, zsh's compinit leaves `_git is an autoload shell function from
+# …/site-functions/_git` and lists the stub as `builtin autoload -XUz
+# …/site-functions` (#6155).  One call for the files whose line has no words
+# of its own, which is every `#compdef` file and nearly every `#autoload`.
+(( $#autoloads )) && autoload -Uz -- $autoloads
+for word file in "${autoloadx[@]}"; do
+	autoload -Uz ${=word} -- $file
 done
+
+# What the tables held before is put back over the scan, which is what a scan
+# with `compdef -n` into them would have left: a name they had keeps its
+# function, and its service, and a name only the scan has gets both of its.
+if (( $#held_comps + $#held_services + $#held_patcomps + $#held_postpatcomps )); then
+	local -A had
+	had=( "${held_comps[@]}" )
+	services=()
+	for word line in "${(@kv)_services}"; do
+		(( ${+had[$word]} )) || services+=( "$word" "$line" )
+	done
+	_services=( "${held_services[@]}" "${services[@]}" )
+	_comps=( "${(@kv)_comps}" "${held_comps[@]}" )
+	_patcomps=( "${(@kv)_patcomps}" "${held_patcomps[@]}" )
+	_postpatcomps=( "${(@kv)_postpatcomps}" "${held_postpatcomps[@]}" )
+fi
 
 # The completion widgets go to `_main_complete` where the scan found one,
 # which is what zsh's compinit leaves — measured, `zle -lL` afterwards lists
 # these eight on `_main_complete` (#6184).  Where none was found, Tab keeps
 # this shell's own completion.
-if (( ${+seen[_main_complete]} )); then
+if (( ${mainc[1]:-0} )); then
 	local widget
 	for widget in complete-word delete-char-or-list expand-or-complete \
 		expand-or-complete-prefix list-choices menu-complete \

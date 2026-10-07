@@ -4,9 +4,13 @@
 # compdump
 #
 # zsh writes the completion system's tables to a dump file that the next
-# compinit reads back instead of scanning $fpath.  This shell writes none:
-# the file would be read by the other shell too, and the two must not trade
-# one another's files.  So this is the name a startup file may call, and it
-# does nothing, at 0.  See compinit, and docs/spec/functions.md.
+# compinit reads back instead of scanning $fpath.  This shell never writes
+# that file: it would be read by the other shell too, and the two must not
+# trade one another's files.  compinit keeps a dump of its own instead, of
+# what its scan found, under ${XDG_CACHE_HOME:-~/.cache}/sh/ (#6307) — which
+# is not this function's to rewrite, since a table a startup file added after
+# compinit is not something a scan found.  So this is the name a startup file
+# may call, and it does nothing, at 0.  See compinit, and
+# docs/spec/functions.md.
 
 return 0

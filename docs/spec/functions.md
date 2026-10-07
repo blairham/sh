@@ -461,10 +461,80 @@ the names**, written from zshcompsys(1) and measured against zsh 5.9.2 under
 
 Two divergences, both deliberate:
 
-* **No dump is written.** zsh writes `${ZDOTDIR:-$HOME}/.zcompdump`, or the
-  `-d` file, and reads it back next time; a dump written here would be read
-  by the other shell too, and the two must not trade files. `-d`, `-D` and
-  `-C` are taken and change nothing else, and `compdump` does nothing at 0.
+* **The dump is this shell's own** (#6307). zsh writes
+  `${ZDOTDIR:-$HOME}/.zcompdump`, or the `-d` file, and reads it back next
+  time; a dump written there would be read by the other shell too, and the
+  two must not trade files. So this shell never reads or writes either, and
+  keeps what its scan found in `$XDG_CACHE_HOME/sh/compdump` — or
+  `~/.cache/sh/compdump` where that is unset or not absolute — in a format of
+  its own. `compdump` still does nothing at 0. The options, decided against
+  zshcompsys(1)'s meaning for each:
+
+  | option | zsh | here |
+  | --- | --- | --- |
+  | `-d file` | the dump's path | names `$_comp_dumpfile` only; our dump does not move and `file` is never touched |
+  | `-D` | no dump file | no dump read or written: a full scan |
+  | `-C` | skip compaudit and the check for new functions | skips compaudit; the check that the dump is current stays, since here it is a stat per file rather than a rescan |
+  | `-u`, `-i` | how insecure directories are treated | the same, and `-i`'s narrower list is what the dump is keyed on |
+  | `-w` | explain why the dump is rewritten | taken, says nothing |
+
+  **The dump is read back only when it still holds.** What the scan reads
+  is, per directory in order, the `_name` files in it that are regular files
+  after links, and the first line of each; a function's body is read only
+  when it is first called, by its path. So the dump records this build
+  (module version, VCS revision, the executable's size and modification
+  time), the format the shipped `compinit` names, the directories as
+  written, and for every `_name` its stat — size, modification time, change
+  time, inode, device — and the SHA-256 of its first line. It is read back
+  when the build, the format and the directories are the same, every
+  directory holds the same names, and every file either has the same stat
+  or, where the stat moved, the same first line. A file added, removed,
+  renamed or given another first line — even in place with its old
+  modification time put back — `$fpath` reordered, a directory dropped or
+  reached through another name, or another build: each makes the start
+  scan, and the scan writes a new dump.
+
+  **The first-line fallback is what makes it work on a real
+  configuration.** oh-my-zsh's kubectl plugin renames a freshly generated
+  `_kubectl` into its cache directory on every start: the same bytes under
+  a new inode and new times, in a directory on `$fpath`. Keyed on the stat
+  alone, the dump was rewritten on every start of this machine's own rc and
+  never read. A file whose stat is unchanged is not opened.
+
+  **The stats are taken before the scan and again at the write**, and the
+  dump is written only when they agree, so a file edited while the scan read
+  it is never recorded as what it read. A file changed in the last two
+  seconds means no dump is written: on a filesystem with one-second times,
+  a file edited twice inside one second could keep the stat its first edit
+  gave it. That start's scan stands and the next start writes the dump.
+
+  **What it holds is the scan's own result, from empty tables**: the files to
+  autoload, an `#autoload` line's own words, the four tables, and whether
+  `_main_complete` was found. Whatever the tables held before `compinit` —
+  a second call, a `compdef` ahead of it — is put back over the result with
+  the meaning `compdef -n` gives a scan into them: a name already there keeps
+  its function and its service. So the result is the same whichever path
+  produced it, and `TestCompinitDumpMatchesTheScanOverTheRealFpath` compares
+  the two line for line over an installed zsh's library (3,047 rows on the
+  machine it was written on).
+
+  **Writes are atomic and reads are checked.** The file is written beside
+  itself under a name of this process's own and renamed over the old one,
+  so a shell starting while another writes reads one whole dump or the
+  other, and twelve shells starting together leave one good file. It ends in
+  a SHA-256 of everything before it; a truncated, damaged or foreign file
+  fails that and the start scans. The read and the write ask the gate
+  (`AllowReadPath`, `AllowModify`), and the stats behind the key ask
+  `AllowList` and `AllowProbe`, so a policy that refuses the cache directory
+  costs a rescan and nothing else.
+
+  Measured 2026-10-07 on this machine's own rc with #5873's instrument (pty
+  120x40, throwaway HOME with a cloned zi tree, no history files,
+  `getrusage(RUSAGE_CHILDREN)`), interleaved pairs against the commit before
+  this change: **-261 ms** median (p25 -341, p75 -214), faster in 30/30; the
+  arms swapped, -220 ms, faster in 20/20; the same binary in both arms, +3 ms,
+  6/12. `compinit` alone over the default `$fpath` plus zi's completions
+  (about 1,250 files) went from about 0.15 s to about 0.015 s.
 * **This shell ships no `_main_complete`**, and `_bash_complete` completes
   nothing. Where the scan finds one — an installed zsh's library is on the
   default search since #6128 — compinit puts the eight completion widgets

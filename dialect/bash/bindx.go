@@ -60,19 +60,19 @@ import (
 // about it here: this editor holds the terminal the same way for the length of
 // the call, so the two agree by construction rather than by arrangement.
 //
-// Two parameters bash has here and this does not, left out rather than filled
+// One parameter bash has here and this does not, left out rather than filled
 // in with a value that would be a lie:
 //
 //   - `READLINE_MARK`, which bash sets to the mark's position. This editor has
 //     no mark, so there is no position to report and any number would be one
 //     invented here. Measured present in bash, at 0, and recorded in
 //     docs/spec/editing.md as a standing difference.
-//   - `READLINE_ARGUMENT`, which bash sets only when a numeric argument was
-//     typed — measured, `M-5` then the key gives `READLINE_ARGUMENT=5` and the
-//     key alone leaves it *unset*, not empty. This editor has no numeric
-//     argument at all (see the "still missing" list in docs/spec/editing.md),
-//     so it is always the second of those two, which is a shape bash produces
-//     itself rather than a difference a script can be surprised by.
+//
+// `READLINE_ARGUMENT` is the count typed before the key, sign and all, and is
+// set only when one was — measured 2026-10-06 against bash 5.3.20, `ESC 3`
+// then the key gives 3, `ESC -` gives -1, `ESC 1 2` gives 12, `ESC 0` gives
+// 0, and the key alone leaves it *unset*, not empty. The command runs once
+// whatever the count (#6296).
 //
 // One difference that is not a naming choice and is worth stating plainly:
 // bash **exports** these parameters, so an external program bound to a key
@@ -96,6 +96,10 @@ const (
 // through. They exist only while one is running; see the file comment.
 var readlineParameters = []string{"READLINE_LINE", "READLINE_POINT"}
 
+// readlineArgument is the count, which a command is given only when one was
+// typed. See the file comment.
+const readlineArgument = "READLINE_ARGUMENT"
+
 // RunWidget runs the shell command a key was bound to, over the line.
 //
 // The dialect's answer to driver.Shell.RunWidget: repl hands out the line,
@@ -112,6 +116,11 @@ func RunWidget(r *interp.Runner, ctx context.Context, command string, in repl.Li
 	}
 	setReadlineLine(r, in)
 	openReadlineParameters(r)
+	if in.Numeric != nil {
+		n := strconv.Itoa(*in.Numeric)
+		r.SetDynamic(readlineArgument, func(*interp.Runner) string { return n })
+		defer r.UnsetDynamic(readlineArgument)
+	}
 	// Deferred rather than called at the end, for the reason the other
 	// dialect's are: a panic in the command is caught *outside* this call —
 	// repl runs it behind the same guard a typed line runs behind — so a

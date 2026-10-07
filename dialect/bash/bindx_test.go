@@ -337,3 +337,40 @@ func TestTheCommandReachesTheEditorOnFunction(t *testing.T) {
 		t.Errorf("^X^R reached the editor as %v, want %v", got, want)
 	}
 }
+
+// READLINE_ARGUMENT is the count, set only when one was typed, and gone again
+// after the call (#6296). Measured against bash 5.3.20 through a
+// pseudo-terminal: `ESC 3` then the key gives 3, `ESC -` gives -1, `ESC 0`
+// gives 0, and the key alone leaves it unset.
+func TestABoundCommandIsToldTheCount(t *testing.T) {
+	n := func(v int) *int { return &v }
+	for _, c := range []struct {
+		name    string
+		numeric *int
+		want    string
+	}{
+		{"no count", nil, "[UNSET]"},
+		{"three", n(3), "[3]"},
+		{"minus one", n(-1), "[-1]"},
+		{"nought", n(0), "[0]"},
+		{"minus twelve", n(-12), "[-12]"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			r, out := bindxRunner(t, `bind -x '"\C-t": printf "[%s]" "${READLINE_ARGUMENT-UNSET}"'`)
+			if _, ok := press(t, r, "\x14", repl.Line{Buffer: "abc", Cursor: 1, Numeric: c.numeric}); !ok {
+				t.Fatal("the command did not run")
+			}
+			if out.String() != c.want {
+				t.Errorf("the command saw %q, want %q", out.String(), c.want)
+			}
+			out.Reset()
+			src := `printf "[%s]" "${READLINE_ARGUMENT-UNSET}"`
+			if _, err := r.Run(t.Context(), preset.Parse(t, src)); err != nil {
+				t.Fatal(err)
+			}
+			if out.String() != "[UNSET]" {
+				t.Errorf("after the call READLINE_ARGUMENT is %q", out.String())
+			}
+		})
+	}
+}

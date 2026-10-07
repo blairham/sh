@@ -869,7 +869,8 @@ func (e *editor) readLine(prompt drawnPrompt) (string, error) {
 		// Nothing typed yet: the prompt, and blanks after it.
 		row = &rowView{
 			promptText: prompt.text, promptCells: prompt.cells, promptFixed: prompt.lead != "",
-			cells: make([]string, max(e.cols(), 0)+1),
+			promptCost: len(prompt.text) + 2*prompt.regions + prompt.counted,
+			cells:      make([]string, max(e.cols(), 0)+1),
 		}
 	}
 	if end, ok := m.writeRightPromptOnly(&opening, prompt, 0, e.cols(), row); ok {

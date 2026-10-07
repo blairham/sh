@@ -6,6 +6,7 @@ package repl
 import (
 	"os"
 	"path"
+	"strconv"
 	"strings"
 	"time"
 
@@ -244,10 +245,22 @@ func (s Shell) field(f PromptField, arg string, braced bool) string {
 	case FieldNonPrintingEnd:
 		return markEnd
 	case FieldCountedColumn:
-		// Nothing drawn, and a column counted — which the walker does, not
-		// this. A prompt writes it to say that bytes hidden between the two
-		// markers above do reach the screen after all.
-		return ""
+		// Nothing drawn, and a column counted — which the walker does for
+		// a script and markCell says to the editor. A prompt writes it to say
+		// that bytes hidden between the two markers above do reach the screen
+		// after all. On a terminal zsh draws no attributes on it draws a `?`
+		// there instead: measured 2026-10-07, zsh 5.9.2 under `TERM=dumb`
+		// draws `x%Gy> ` as `x?y> ` and `x%3Gy> ` as `x???y> `, and under
+		// vt52 as `xy> `, placing the line one column further along either way.
+		glyph := ""
+		if s.Runner != nil && s.Runner.TerminalCapability("up") == "" {
+			glyph = "?"
+		}
+		n := 1
+		if c, err := strconv.Atoi(arg); err == nil && c > 0 {
+			n = c
+		}
+		return strings.Repeat(markCell+glyph+markCell, n)
 	case FieldSourceFile, FieldUnitName:
 		// The file being read, which only the interpreter knows — it is
 		// reading nothing at a prompt, so both come to what the shell calls

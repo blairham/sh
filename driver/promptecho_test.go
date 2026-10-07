@@ -65,3 +65,18 @@ func TestTheFrontEndCarriesWhetherTheEndOfInputInAConstructEndsTheSession(t *tes
 		}
 	}
 }
+
+// And whether the end of input on a continued here-document line ends only
+// that line, carried the same way (#6273).
+func TestTheFrontEndCarriesWhetherTheEndOfInputEndsAContinuedHeredocLine(t *testing.T) {
+	for _, answer := range []bool{false, true} {
+		sh := Shell{
+			Name:      "testsh",
+			Semantics: interp.Semantics{EndOfInputEndsAContinuedHeredocLine: answer},
+		}.withDefaults([]string{"testsh"})
+		r := sh.newRunner("testsh", nil, sh.Diagnostics, interp.RouteCommandString)
+		if got := sh.frontEnd(r, "testsh", sh.Diagnostics).EndOfInputEndsAContinuedHeredocLine; got != answer {
+			t.Errorf("the prompt was told %v, want %v", got, answer)
+		}
+	}
+}

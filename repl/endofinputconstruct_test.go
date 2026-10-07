@@ -10,7 +10,7 @@ import (
 
 // constructAtEndSession runs a session on a pipe holding text, and answers what it
 // wrote to its output and to its diagnostics.
-func constructAtEndSession(t *testing.T, text string, ends bool) (ran, said string) {
+func constructAtEndSession(t *testing.T, text string, ends bool, lineOnly ...bool) (ran, said string) {
 	t.Helper()
 	var out, errs strings.Builder
 	r := newTestRunner(map[string]string{"PS1": "$ ", "PS2": "> "})
@@ -22,6 +22,7 @@ func constructAtEndSession(t *testing.T, text string, ends bool) (ran, said stri
 		Err:                                  &errs,
 		Leaving:                              "exit",
 		EndOfInputInAConstructEndsTheSession: ends,
+		EndOfInputEndsAContinuedHeredocLine:  len(lineOnly) > 0 && lineOnly[0],
 	}
 	if _, err := s.Run(t.Context()); err != nil {
 		t.Fatal(err)
@@ -79,4 +80,31 @@ func TestTheEndOfInputInAConstructEndsABashSession(t *testing.T) {
 			t.Errorf("diagnostics %q, want the refusal and then the word, with no prompt between", said)
 		}
 	})
+}
+
+// In bash the end of input on a here-document body line a backslash-newline
+// continued ends that line only: one more continuation prompt is drawn, and
+// the next end of input ends the body. Measured 2026-10-06, bash 5.3.20 on a
+// pipe under `--norc -i`, `cat <<EOF` then `hi \\`: `> hi \\`, `> `, `> `,
+// then the warning and `hi ` — and at a terminal it takes two ^D. zsh 5.9.2,
+// dash, ksh93u+ and ash draw one `> ` there, as a line outside a body does in
+// bash too (#6273). See interp.Semantics.EndOfInputEndsAContinuedHeredocLine.
+func TestTheEndOfInputOnAContinuedHeredocLine(t *testing.T) {
+	for _, c := range []struct {
+		name, text string
+		lineOnly   bool
+		ran, said  string
+	}{
+		{"bash ends the line and asks again", "cat <<EOF\nhi \\\n", true, "hi \n", "$ > > > $ exit\n"},
+		{"the others end the body", "cat <<EOF\nhi \\\n", false, "hi ", "$ > > $ exit\n"},
+		{"a quoted body has no continuation", "cat <<'EOF'\nhi \\\n", true, "hi \\\n", "$ > > $ exit\n"},
+		{"nor has a line outside a body", "echo one \\\n", true, "one\n", "$ > "},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			ran, said := constructAtEndSession(t, c.text, true, c.lineOnly)
+			if ran != c.ran || said != c.said {
+				t.Errorf("output %q and diagnostics %q, want %q and %q", ran, said, c.ran, c.said)
+			}
+		})
+	}
 }

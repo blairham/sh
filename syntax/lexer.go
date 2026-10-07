@@ -7084,7 +7084,12 @@ func (l *Lexer) readOneHeredoc(r *Redirect, quoted bool) {
 	// of a file with no newline after it: nothing has been consumed past
 	// the operator, and bash names the operator's line.
 	namedLine := start.Line
-	if start.Col == 1 {
+	if start.Col == 1 && !endsInAContinuation(l.src[:start.Offset]) {
+		// Not where the newline crossed was a backslash-newline: that one
+		// ends no line, so the operator's line ran on into this one and this
+		// is the last line given up. Measured 2026-10-06, bash 5.3.20, a file
+		// of `cat <<EOF; echo x \` and its newline: `line 2: warning:
+		// here-document at line 2` (#6273).
 		namedLine--
 	}
 	namedAt := r.OpPos
@@ -7218,6 +7223,19 @@ func (l *Lexer) readOneHeredoc(r *Redirect, quoted bool) {
 			break
 		}
 		lastLine = linePos
+		if end := l.pos(); end.Line > linePos.Line && done != "" &&
+			(!strings.HasSuffix(line, "\n") || (!quoted && endsInAContinuation(line))) {
+			// A line continued to the end of the input ends on the line the
+			// input ran out on, which is the line the one shell that remarks
+			// on it names: `hi \` then the end is `line 3: warning: …` in
+			// bash 5.3.20, measured 2026-10-06 — and `a\` / `b` is line 3
+			// whether or not `b` has a newline after it. A line whose
+			// continuations left nothing on it is not a line, and keeps the
+			// line it began on (#6273).
+			lastLine = Pos{Offset: end.Offset, Line: end.Line, Col: end.Col}
+		} else if end.Line > linePos.Line+1 {
+			lastLine = Pos{Offset: end.Offset, Line: end.Line - 1, Col: 1}
+		}
 		lastBody, lastBodyLen, tookALine = linePos, body.Len(), true
 		body.WriteString(line)
 	}
@@ -7504,6 +7522,12 @@ func startsTheDelimiterThenContinues(text, delim string) bool {
 	}
 	head := strings.TrimRight(text, `\`)
 	return head != "" && strings.HasPrefix(delim, head)
+}
+
+// endsInAContinuation reports whether s ends in a backslash-newline whose
+// backslash is free — one that removes the newline rather than being escaped.
+func endsInAContinuation(s string) bool {
+	return strings.HasSuffix(s, "\\\n") && endsInAnOddBackslashRun(s[:len(s)-1])
 }
 
 // endsInAnOddBackslashRun reports whether the backslashes ending s leave one

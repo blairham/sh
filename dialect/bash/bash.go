@@ -4196,6 +4196,8 @@ func Semantics() interp.Semantics {
 	s.PromptEchoesTheLineWhereThereIsNoTerminal = true
 	// See Semantics.EndOfInputInAConstructEndsTheSession (#6263).
 	s.EndOfInputInAConstructEndsTheSession = true
+	// See Semantics.EndOfInputEndsAContinuedHeredocLine (#6273).
+	s.EndOfInputEndsAContinuedHeredocLine = true
 	// And it reads the editing keys there too: measured, `C-r` on a pipe is a
 	// reverse-i-search in this shell and the characters of a command name in
 	// the other three. See Semantics.EditorReadsKeysWhereThereIsNoTerminal.

@@ -127,6 +127,12 @@ type Shell struct {
 	// interp.Semantics.EndOfInputInAConstructEndsTheSession.
 	EndOfInputInAConstructEndsTheSession bool
 
+	// EndOfInputEndsAContinuedHeredocLine takes the end of input on a line a
+	// backslash-newline continued inside an unquoted here-document's body as
+	// the end of that line only. See [Shell.endsOnlyTheLine] and
+	// interp.Semantics.EndOfInputEndsAContinuedHeredocLine.
+	EndOfInputEndsAContinuedHeredocLine bool
+
 	// CommentsNeedTheOption names the option a `#` typed here has to have on
 	// before it opens a comment. Empty is "nothing has to be on", which is
 	// what a caller without a dialect gets and what three of the four panel
@@ -948,6 +954,9 @@ func (s Shell) Run(ctx context.Context) (int, error) {
 				// stopped job answers it the way it answers `exit`: it says so
 				// and stays. The session goes on rather than returning, so a
 				// second ^D is what actually ends it.
+				continue
+			}
+			if s.endsOnlyTheLine(&pending) {
 				continue
 			}
 			unfinished := strings.TrimSpace(pending.String()) != ""
@@ -1897,6 +1906,9 @@ func (s Shell) runPlain(
 				// read, which ends at once, leaves.
 				continue
 			}
+			if s.endsOnlyTheLine(&pending) {
+				continue
+			}
 			unfinished := strings.TrimSpace(pending.String()) != ""
 			stmts, text, heredoc, perr := s.endOfInputHow(&pending)
 			switch {
@@ -2237,6 +2249,22 @@ func (s Shell) endOfInputHow(pending *strings.Builder) ([]*syntax.File, string, 
 		return nil, "", heredoc, err
 	}
 	return stmts, strings.TrimSuffix(text, "\n"), heredoc, nil
+}
+
+// endsOnlyTheLine reports whether the end of input that has just arrived
+// finishes the here-document body line a backslash-newline continued, rather
+// than the input — and finishes it, so that the read goes on at a fresh
+// continuation prompt. See interp.Semantics.EndOfInputEndsAContinuedHeredocLine
+// (#6273).
+func (s Shell) endsOnlyTheLine(pending *strings.Builder) bool {
+	if !s.EndOfInputEndsAContinuedHeredocLine || !endsWithContinuation(pending.String()) {
+		return false
+	}
+	if at := s.counted().entryAt; at.Open != "<<" || !at.HeredocExpands {
+		return false
+	}
+	pending.WriteString("\n")
+	return true
 }
 
 // afterTheEndOfInput says what becomes of the session once the end of input

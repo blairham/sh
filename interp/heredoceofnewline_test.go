@@ -160,3 +160,41 @@ func onlyRedirect(t *testing.T, f *syntax.File) *syntax.Redirect {
 	}
 	return c.Redirs[0]
 }
+
+// A last line ended by a backslash-newline is ended by nothing in an unquoted
+// body, because expansion removes the pair: it reaches the axis exactly as a
+// line with no newline does (#6273).
+//
+// Measured 2026-10-06 against bash 5.3.20 from script files, `od -c` on the
+// output; dash, ksh93 and zsh write `hi ` for the first two rows, which is
+// the No column.
+func TestAHeredocLineContinuedIntoTheEndIsUnended(t *testing.T) {
+	for _, tc := range []struct {
+		name, src string
+		yes, no   string
+	}{
+		{"one continuation", "cat <<X\nhi \\\n", "hi \n", "hi "},
+		{"two continuations", "cat <<X\nhi \\\n\\\n", "hi \n", "hi "},
+		{"a continuation that left the line empty", "cat <<X\na\n\\\n", "a\n", "a\n"},
+		{"nothing but a continuation", "cat <<X\n\\\n", "", ""},
+		// A backslash with nothing after it is a backslash, and bash keeps
+		// it and supplies no newline — one would make it a continuation.
+		{"a lone backslash at the very end", "cat <<X\nhi \\", "hi \\", "hi \\"},
+		// And quoted, the pair is text, and the line has its newline.
+		{"a quoted body", "cat <<'X'\nhi \\\n", "hi \\\n", "hi \\\n"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			for _, a := range []struct {
+				adds Answer
+				want string
+			}{{Yes, tc.yes}, {No, tc.no}} {
+				sem := permissive()
+				sem.UnterminatedHeredocGainsATrailingNewline = a.adds
+				out, st := run(t, tc.src, withSem(sem))
+				if out != a.want || st != 0 {
+					t.Errorf("answering %v: got %q (status %d), want %q at 0", a.adds, out, st, a.want)
+				}
+			}
+		})
+	}
+}

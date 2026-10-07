@@ -19945,6 +19945,27 @@ type Semantics struct {
 	// pins both answers (TestTheEndOfInputInAConstructGoesRoundOnceMore and
 	// TestTheEndOfInputInAConstructEndsABashSession).
 	EndOfInputInAConstructEndsTheSession bool
+
+	// EndOfInputEndsAContinuedHeredocLine takes the end of input that
+	// arrives on the line a backslash-newline continued, inside an unquoted
+	// here-document's body at a prompt, as the end of **that line** only:
+	// the body line is finished, one more continuation prompt is drawn, and
+	// it is the next end of input that ends the body.
+	//
+	// bash's. Measured 2026-10-06 with `cat <<EOF` and then `hi \`:
+	//
+	//	bash 5.3.20, pipe under -i     > hi \ / > / > / the warning
+	//	bash 5.3.20, ^D at a terminal  the first ^D draws `> ` again, the
+	//	                               second ends the body
+	//	zsh 5.9.2, dash, ksh93u+, ash  > hi \ / > / the body, on the pipe
+	//
+	// A continued line *outside* a here-document is not this: `echo a \`
+	// then ^D runs the line at once in bash too (#6263, #6273).
+	//
+	// unpinned: reached, and the corpus cannot discriminate: no case draws a
+	// prompt. repl/endofinputconstruct_test.go pins both answers
+	// (TestTheEndOfInputOnAContinuedHeredocLine).
+	EndOfInputEndsAContinuedHeredocLine bool
 	// PromptStatusWritesThePipelineRecord makes a status the prompt sets for
 	// a line that ran nothing — 130 for a line abandoned with ^C, the parse
 	// failure's status for a refused one — the pipeline-status record too, as
@@ -24067,6 +24088,23 @@ type Semantics struct {
 	// Asked only where the two answers differ, which is what
 	// syntax.Redirect.HeredocAtEOF marks: an ordinary here-document never
 	// reaches the question.
+	//
+	// **A last line ended by a backslash-newline is ended by nothing**, in an
+	// unquoted body: the pair is removed when the body expands, so the line
+	// runs on into the end of the input. Measured 2026-10-06 from script
+	// files, read back with `od -c`:
+	//
+	//	cat <<EOF / hi \⏎        bash 5.3.20 `hi \n`   dash, ksh93, zsh `hi `
+	//	cat <<EOF / hi \⏎ / \⏎   bash `hi \n`          the others `hi `
+	//	cat <<EOF / \⏎           every shell: nothing at all
+	//	cat <<EOF / a / \⏎       every shell: `a\n`
+	//	cat <<EOF / hi \         bash `hi \` — the backslash, and no newline
+	//
+	// So it reaches this question exactly as `hi` with no newline does, and
+	// a line the continuations left empty is no last line at all. The last
+	// row is the one place bash does not supply the newline: a backslash
+	// with nothing after it stays in the body as a backslash, and a newline
+	// after it would make it a continuation that removes them both (#6273).
 	UnterminatedHeredocGainsATrailingNewline Answer
 
 	// ReadFailureInAFileSubstitutionFailsIt is `$(<file)` where the *read*

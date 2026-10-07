@@ -418,7 +418,7 @@ func actsInViInsert(seq string) bool {
 	if len(seq) > 1 && seq[0] == 0x1b {
 		return seq[1] == '[' || seq[1] == 'O'
 	}
-	return !(len(seq) > 1 && seq[0] == 0x18)
+	return len(seq) <= 1 || seq[0] != 0x18
 }
 
 // registerBind installs the builtin.

@@ -99,7 +99,9 @@ var bindkeyWidgets = map[string]repl.Widget{
 	"kill-whole-line":       repl.WidgetKillWholeLine,
 	"backward-kill-line":    repl.WidgetBackwardKillLine,
 	"backward-kill-word":    repl.WidgetKillWordBefore,
-	"vi-backward-kill-word": repl.WidgetKillWordBefore,
+	"vi-backward-kill-word": repl.WidgetViBackwardKillWord,
+	"vi-kill-line":          repl.WidgetViKillLine,
+	"redisplay":             repl.WidgetRedisplay,
 	"kill-word":             repl.WidgetKillWordAfter,
 	"yank":                  repl.WidgetYank,
 	"transpose-chars":       repl.WidgetTransposeChars,
@@ -140,7 +142,7 @@ var bindkeyWidgets = map[string]repl.Widget{
 	"delete-char":                         repl.WidgetDeleteChar,
 	"vi-delete-char":                      repl.WidgetDeleteChar,
 	"backward-delete-char":                repl.WidgetBackwardDeleteChar,
-	"vi-backward-delete-char":             repl.WidgetBackwardDeleteChar,
+	"vi-backward-delete-char":             repl.WidgetViBackwardDeleteChar,
 	"expand-or-complete":                  repl.WidgetComplete,
 	"complete-word":                       repl.WidgetComplete,
 	// The prefix spelling is this editor's completion *exactly*, and that is
@@ -250,6 +252,10 @@ var widgetNames = map[repl.Widget]string{
 	repl.WidgetAcceptAndHold:                  "accept-and-hold",
 	repl.WidgetQuotedInsert:                   "quoted-insert",
 	repl.WidgetViQuotedInsert:                 "vi-quoted-insert",
+	repl.WidgetViBackwardDeleteChar:           "vi-backward-delete-char",
+	repl.WidgetViKillLine:                     "vi-kill-line",
+	repl.WidgetViBackwardKillWord:             "vi-backward-kill-word",
+	repl.WidgetRedisplay:                      "redisplay",
 	repl.WidgetWhichCommand:                   "which-command",
 	repl.WidgetRunHelp:                        "run-help",
 	repl.WidgetExecuteNamedCmd:                "execute-named-cmd",
@@ -360,18 +366,63 @@ const sendBreakKey = "\x07"
 // the listing's half.
 var emacsBindings = buildEmacsBindings()
 
-// viinsBindings is what the viins keymap has beyond defaultBindings:
-// vi-quoted-insert on `^V`, which repl.EditorStyle.ViQuotedInsert puts on the
-// editor (#6251). The listing's half, as emacsBindings is.
+// viinsBindings is the whole of the viins keymap, which is not the emacs
+// table with ESC changed: measured 2026-10-06 with `zsh -f -c 'bindkey -M
+// viins'` on zsh 5.9.2. The keys repl.EditorStyle.ZshViInsertKeymap and
+// ViQuotedInsert put on the editor, and the ones it shares with emacs editing,
+// under viins's own names (#6251, #6272). `^G` is list-expand, which this
+// editor has not got, so the key is listed and does nothing.
+//
+// The printable keys and the meta range are self-insert there and are left
+// out, as the emacs listing leaves them out. `^C` and `^Z` are listed, as
+// zsh lists them; the terminal answers them before any keymap does.
 var viinsBindings = buildViinsBindings()
 
 func buildViinsBindings() map[string]string {
-	out := map[string]string{}
+	out := map[string]string{
+		"\x03":      "self-insert",
+		"\x1a":      "self-insert",
+		"\a":        "list-expand",
+		"\t":        "expand-or-complete",
+		"\n":        "accept-line",
+		"\f":        "clear-screen",
+		"\r":        "accept-line",
+		"\x1b":      "vi-cmd-mode",
+		"\x1bOA":    "up-line-or-history",
+		"\x1bOB":    "down-line-or-history",
+		"\x1bOC":    "vi-forward-char",
+		"\x1bOD":    "vi-backward-char",
+		"\x1b[A":    "up-line-or-history",
+		"\x1b[B":    "down-line-or-history",
+		"\x1b[C":    "vi-forward-char",
+		"\x1b[D":    "vi-backward-char",
+		"\x1b[200~": "bracketed-paste",
+	}
 	for seq, w := range repl.ViInsertBindings() {
+		out[seq] = widgetNames[w]
+	}
+	for seq, w := range repl.ZshViInsertBindings() {
 		out[seq] = widgetNames[w]
 	}
 	return out
 }
+
+// selfInsertKeys are the keys that type themselves in both of the keymaps the
+// editor is driven from: the printable ones, space to tilde. The meta range
+// does too, and is written by listBindings rather than held here, because a
+// lone byte of 0x80 or above in this table would be a whole key to
+// read-command and split every character of more than one byte. Measured with `bindkey -M emacs` and `-M viins` on zsh 5.9.2, which
+// list them as `" "-"~"` (folded into `"^\\\\"-"~"` in viins, whose control
+// keys below space type themselves too) and `"\M-^@"-"\M-^?"`. Listed, and
+// never handed to the editor: typing is what it does with them already
+// (#6272).
+var selfInsertKeys = func() map[string]bool {
+	out := map[string]bool{}
+	for b := byte(0x20); b < 0x7f; b++ {
+		out[string([]byte{b})] = true
+	}
+	return out
+}()
 
 func buildEmacsBindings() map[string]string {
 	out := map[string]string{sendBreakKey: widgetNames[repl.WidgetSendBreak]}
@@ -457,6 +508,10 @@ func KeyBindings(r *interp.Runner, km repl.Keymap) map[string]repl.Binding {
 			// are listed rather than carried in defaultBindings because viins
 			// shares that table and has none of them.
 			if standard, isDefault := emacsBindings[seq]; isDefault && standard == widget && keymapBase(r, currentKeymap(r)) == "emacs" {
+				continue
+			}
+			// And the keys that type themselves in both (#6272).
+			if base := keymapBase(r, currentKeymap(r)); widget == "self-insert" && selfInsertKeys[seq] && (base == "emacs" || base == "viins") {
 				continue
 			}
 			// And viins's, the same way (#6251).
@@ -659,8 +714,13 @@ func ViEditing(r *interp.Runner) bool {
 func readBindings(r *interp.Runner, keymap string) map[string]string {
 	out := map[string]string{}
 	if keymap == "emacs" || keymap == "viins" {
+		for seq := range selfInsertKeys {
+			out[seq] = "self-insert"
+		}
+	}
+	if keymap == "emacs" {
 		// The defaults are this editor's keys, and only the two keymaps the
-		// editor is driven from have them. Every other keymap starts empty
+		// editor is driven from have them — viins its own, below. Every other keymap starts empty
 		// here: `bindkey -M vicmd '^A'` is `undefined-key` in zsh 5.9.2,
 		// where this answered from the emacs table, and `bindkey -M isearch
 		// -L` lists nothing until something is bound (#5691).
@@ -679,7 +739,7 @@ func readBindings(r *interp.Runner, keymap string) map[string]string {
 		}
 	}
 	if keymap == "viins" {
-		// And `^V` is vi-quoted-insert in this one. See viinsBindings.
+		// Its own table, which is not emacs's. See viinsBindings.
 		for seq, w := range viinsBindings {
 			out[seq] = w
 		}
@@ -969,9 +1029,46 @@ func listBindings(r *interp.Runner, commands bool, named string) {
 		}
 	}
 	sort.Strings(seqs)
-	for _, seq := range seqs {
-		writeBinding(r, seq, table[seq], commands, named)
+	for i := 0; i < len(seqs); i++ {
+		// A run of one-byte keys, each the byte after the last, bound to the
+		// same widget is one line: `"^A"-"^C" self-insert`, and `bindkey -R`
+		// in the form that binds it again. Measured on zsh 5.9.2, `bindkey
+		// -M viins` and a keymap of `a` and `b` at self-insert, `c` at undo:
+		// `"a"-"b" self-insert`, `"c" undo`, and `^Xa` and `^Xb` at the same
+		// widget stay a line each (#6272).
+		j := i
+		for j+1 < len(seqs) && len(seqs[j]) == 1 && len(seqs[j+1]) == 1 &&
+			seqs[j+1][0] == seqs[j][0]+1 && table[seqs[j+1]] == table[seqs[i]] {
+			j++
+		}
+		if j > i {
+			writeBindingRange(r, seqs[i], seqs[j], table[seqs[i]], commands, named)
+			i = j
+			continue
+		}
+		writeBinding(r, seqs[i], table[seqs[i]], commands, named)
 	}
+	if base := keymapBase(r, currentKeymap(r)); base == "emacs" || base == "viins" {
+		// The meta range, last because its bytes sort last. See
+		// selfInsertKeys for why it is not in the table.
+		writeBindingRange(r, "\x80", "\xff", "self-insert", commands, named)
+	}
+}
+
+// writeBindingRange says a run of keys back as listBindings folds it.
+func writeBindingRange(r *interp.Runner, from, to, widget string, commands bool, named string) {
+	prefix := ""
+	if commands {
+		prefix = "bindkey -R "
+		switch named {
+		case "":
+		case "vicmd":
+			prefix += "-a "
+		default:
+			prefix += "-M " + named + " "
+		}
+	}
+	_, _ = fmt.Fprintf(r.Out(), "%s\"%s\"-\"%s\" %s\n", prefix, encodeKeySequence(from), encodeKeySequence(to), widget)
 }
 
 // showBinding answers for one key. A key nobody bound is `undefined-key` and
@@ -1034,6 +1131,12 @@ func decodeKeySequence(s string) string {
 	var out strings.Builder
 	for i := 0; i < len(s); {
 		switch c := s[i]; {
+		case c == '^' && i+2 < len(s) && s[i+1] == '\\' && s[i+2] == '\\':
+			// `^\\` is `^\` with its backslash escaped, which is how the
+			// listing writes the key: measured on zsh 5.9.2, both bind 0x1c
+			// and both list as `"^\\\\"` (#6272).
+			out.WriteByte(caretByte('\\'))
+			i += 3
 		case c == '^' && i+1 < len(s):
 			out.WriteByte(caretByte(s[i+1]))
 			i += 2
@@ -1171,6 +1274,10 @@ func encodeKeySequence(s string) string {
 		switch {
 		case c == 0x7f:
 			notation.WriteString("^?")
+		case c == 0x1c:
+			// The one control key whose caret letter is a backslash, which is
+			// escaped like any other: `^\\`. See decodeKeySequence.
+			notation.WriteString(`^\\`)
 		case c < 0x20:
 			notation.WriteByte('^')
 			notation.WriteByte(c + '@')

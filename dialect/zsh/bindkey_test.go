@@ -200,7 +200,8 @@ func TestTheListingIsSortedByTheBytesTheKeySends(t *testing.T) {
 	}
 	out, _ = runZsh(t, t.TempDir(), "bindkey -L\n")
 	for _, line := range strings.Split(strings.TrimSuffix(out, "\n"), "\n") {
-		if !strings.HasPrefix(line, "bindkey \"") {
+		// A folded run is written with -R, as zsh 5.9.2 writes it (#6272).
+		if !strings.HasPrefix(line, "bindkey \"") && !strings.HasPrefix(line, "bindkey -R \"") {
 			t.Errorf("-L line = %q, want a command", line)
 		}
 	}
@@ -604,5 +605,39 @@ func TestControlVIsQuotedInsertInEachInsertKeymap(t *testing.T) {
 	r = bindkeyRunner(t, "bindkey -v\nbindkey '^Xq' vi-quoted-insert\n")
 	if b := zsh.KeyBindings(r, repl.KeymapMain)["\x18q"]; b.Widget != repl.WidgetViQuotedInsert {
 		t.Errorf("^Xq = %+v, want vi-quoted-insert", b)
+	}
+}
+
+// The whole viins listing, which is not the emacs table: `zsh -f -c 'bindkey
+// -M viins'` on zsh 5.9.2, measured 2026-10-06, byte for byte (#6272). Runs of
+// one-byte keys at one widget fold into a range, and `^\` is written with
+// its backslash escaped.
+func TestTheViinsListingIsZshs(t *testing.T) {
+	want := "\"^A\"-\"^C\" self-insert\n\"^D\" list-choices\n\"^E\"-\"^F\" self-insert\n\"^G\" list-expand\n\"^H\" vi-backward-delete-char\n\"^I\" expand-or-complete\n\"^J\" accept-line\n\"^K\" self-insert\n\"^L\" clear-screen\n\"^M\" accept-line\n\"^N\"-\"^P\" self-insert\n\"^Q\" vi-quoted-insert\n\"^R\" redisplay\n\"^S\"-\"^T\" self-insert\n\"^U\" vi-kill-line\n\"^V\" vi-quoted-insert\n\"^W\" vi-backward-kill-word\n\"^Y\"-\"^Z\" self-insert\n\"^[\" vi-cmd-mode\n\"^[OA\" up-line-or-history\n\"^[OB\" down-line-or-history\n\"^[OC\" vi-forward-char\n\"^[OD\" vi-backward-char\n\"^[[200~\" bracketed-paste\n\"^[[A\" up-line-or-history\n\"^[[B\" down-line-or-history\n\"^[[C\" vi-forward-char\n\"^[[D\" vi-backward-char\n\"^\\\\\\\\\"-\"~\" self-insert\n\"^?\" vi-backward-delete-char\n\"\\M-^@\"-\"\\M-^?\" self-insert\n"
+	if out, _ := runZsh(t, t.TempDir(), "bindkey -M viins\n"); out != want {
+		t.Errorf("listing =\n%s\nwant\n%s", out, want)
+	}
+}
+
+// A run of one-byte keys folds, `-L` writes it with `-R`, and a sequence of
+// more than one byte never folds — measured on zsh 5.9.2 (#6272).
+func TestARunOfKeysIsListedAsARange(t *testing.T) {
+	src := "bindkey -N x; bindkey -M x a self-insert; bindkey -M x b self-insert; bindkey -M x c undo\n" +
+		"bindkey -M x '^Xa' undo; bindkey -M x '^Xb' undo\nbindkey -M x; bindkey -M x -L\n"
+	want := "\"^Xa\" undo\n\"^Xb\" undo\n\"a\"-\"b\" self-insert\n\"c\" undo\n" +
+		"bindkey -M x \"^Xa\" undo\nbindkey -M x \"^Xb\" undo\nbindkey -R -M x \"a\"-\"b\" self-insert\nbindkey -M x \"c\" undo\n"
+	if out, _ := runZsh(t, t.TempDir(), src); out != want {
+		t.Errorf("got\n%s\nwant\n%s", out, want)
+	}
+}
+
+// `^\` lists as `"^\\\\"`, and reading that back binds the same key: zsh
+// 5.9.2 takes `^\` and `^\\` alike (#6272).
+func TestControlBackslashListsAsItReadsBack(t *testing.T) {
+	src := "bindkey -N y; bindkey -M y '^\\' undo; bindkey -M y\n" +
+		"bindkey -N z; bindkey -M z '^\\\\' undo; bindkey -M z\n"
+	want := "\"^\\\\\\\\\" undo\n\"^\\\\\\\\\" undo\n"
+	if out, _ := runZsh(t, t.TempDir(), src); out != want {
+		t.Errorf("got %q, want %q", out, want)
 	}
 }

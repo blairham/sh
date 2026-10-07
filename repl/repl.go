@@ -3217,6 +3217,7 @@ func (s Shell) newEditor(ctx context.Context, state *terminalState) *editor {
 		wideEmacsKeymap:             s.Editor.WideEmacsKeymap,
 		viQuotedInsertKey:           s.Editor.ViQuotedInsert,
 		quotedInsertAbandons:        s.Editor.QuotedInsertAbandonsOnControlC,
+		zshViInsert:                 s.Editor.ZshViInsertKeymap,
 		whichCommandWord:            s.Editor.WhichCommandWord,
 		runHelpWord:                 s.Editor.RunHelpWord,
 		namedWidgets:                s.NamedWidgets,

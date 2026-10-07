@@ -83,3 +83,24 @@ func TestAnUnterminatedLastLineIsPromptedForAsMeasured(t *testing.T) {
 		}
 	}
 }
+
+// dash, ksh93 and BusyBox ash read a backslash a prompt's input ends on as a
+// word; bash and zsh as a continuation the end finishes. Measured 2026-10-07
+// on a pipe (#6337).
+func TestABackslashTheInputEndsOnIsLiteralAsMeasured(t *testing.T) {
+	for _, c := range []struct {
+		name string
+		sem  interp.Semantics
+		want bool
+	}{
+		{"dash", dash.Semantics(), true},
+		{"ash", ash.Semantics(), true},
+		{"ksh", ksh.Semantics(), true},
+		{"bash", bash.Semantics(), false},
+		{"zsh", zsh.Semantics(), false},
+	} {
+		if got := c.sem.PromptBackslashTheInputEndsOnIsLiteral; got != c.want {
+			t.Errorf("%s: %v, want %v", c.name, got, c.want)
+		}
+	}
+}

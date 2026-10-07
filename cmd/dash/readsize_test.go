@@ -64,3 +64,12 @@ func onAPipe(t *testing.T, typed string, argv ...string) string {
 	driver.MainArgs(sh, argv)
 	return o.String()
 }
+
+// A backslash that is the last byte of a prompt's input is a word of its
+// own, as at the end of a command string: dash 0.5.12, `echo A \` with no
+// newline on a pipe, prints `A \` (#6337).
+func TestADashPromptKeepsTheBackslashTheInputEndsOn(t *testing.T) {
+	if out := onAPipe(t, "echo A \\", "dash", "-i"); out != "A \\\n" {
+		t.Errorf("stdout %q, want %q", out, "A \\\n")
+	}
+}

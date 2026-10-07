@@ -668,6 +668,9 @@ func Semantics() interp.Semantics {
 	s.PromptReadSize = interp.ReadSizeCBuffer
 	// See Semantics.PromptEndOfInputEndsTheLine (#6330).
 	s.PromptEndOfInputEndsTheLine = true
+	// And a backslash the input ends on is a word, not a continuation. See
+	// Semantics.PromptBackslashTheInputEndsOnIsLiteral (#6337).
+	s.PromptBackslashTheInputEndsOnIsLiteral = true
 	// `-c` and `-s` together: the command string names the operands here,
 	// so `sh -sc CMD name a` has `$0` of `name` and one parameter. ksh93
 	// and zsh let `-s` name them instead.

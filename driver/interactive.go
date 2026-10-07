@@ -595,6 +595,8 @@ func (sh Shell) frontEndWith(r *interp.Runner, name string, dg interp.Diagnostic
 		EndOfInputEndsTheLine: sh.Semantics.PromptEndOfInputEndsTheLine,
 		// See Semantics.PromptAgainForAnUnterminatedLine.
 		PromptAgainForAnUnterminatedLine: sh.Semantics.PromptAgainForAnUnterminatedLine,
+		// See Semantics.PromptBackslashTheInputEndsOnIsLiteral.
+		BackslashTheInputEndsOnIsLiteral: sh.Semantics.PromptBackslashTheInputEndsOnIsLiteral,
 		// See Semantics.EndOfInputInAConstructEndsTheSession.
 		EndOfInputInAConstructEndsTheSession: sh.Semantics.EndOfInputInAConstructEndsTheSession,
 		// See Semantics.EndOfInputEndsAContinuedHeredocLine.

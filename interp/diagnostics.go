@@ -8374,6 +8374,9 @@ type Diagnostics struct {
 	// way of ending it.
 	//
 	// Empty says nothing, which is four of the five and is the base's answer.
+	// dash, ksh93 and BusyBox ash do end the prompt's line when the *input*
+	// runs out, with a bare newline and no word, and not when `exit` runs;
+	// that is Semantics.PromptEndOfInputEndsTheLine (#6330).
 	//
 	// It is the *prompt session* and not every exit of an interactive shell:
 	// measured the same day, `bash -i script.sh` whose script runs `exit 3`

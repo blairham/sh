@@ -41,3 +41,24 @@ func TestEveryDialectReadsWhatItWasMeasuredToRead(t *testing.T) {
 		}
 	}
 }
+
+// dash, ksh93 and BusyBox ash end the prompt's line at the end of the input;
+// bash says its word instead and zsh says nothing. Measured 2026-10-07 on a
+// pipe (#6330).
+func TestTheEndOfInputEndsTheLineInDashAshAndKsh(t *testing.T) {
+	for _, c := range []struct {
+		name string
+		sem  interp.Semantics
+		want bool
+	}{
+		{"dash", dash.Semantics(), true},
+		{"ash", ash.Semantics(), true},
+		{"ksh", ksh.Semantics(), true},
+		{"bash", bash.Semantics(), false},
+		{"zsh", zsh.Semantics(), false},
+	} {
+		if got := c.sem.PromptEndOfInputEndsTheLine; got != c.want {
+			t.Errorf("%s: %v, want %v", c.name, got, c.want)
+		}
+	}
+}

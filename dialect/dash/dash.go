@@ -666,6 +666,8 @@ func Semantics() interp.Semantics {
 	// an error there throws the rest of away (#6322, #6328). See
 	// Semantics.PromptReadSize.
 	s.PromptReadSize = interp.ReadSizeCBuffer
+	// See Semantics.PromptEndOfInputEndsTheLine (#6330).
+	s.PromptEndOfInputEndsTheLine = true
 	// `-c` and `-s` together: the command string names the operands here,
 	// so `sh -sc CMD name a` has `$0` of `name` and one parameter. ksh93
 	// and zsh let `-s` name them instead.

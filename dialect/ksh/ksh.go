@@ -869,6 +869,9 @@ func Semantics() interp.Semantics {
 	// Measured 2026-09-11 in a session at a real terminal: `set -o` reports
 	// `emacs off` and `vi off` there, with `viraw on` beside them.
 	s.InteractiveSelectsEmacs = interp.No
+	// The end of the input at a prompt without a terminal ends the line the
+	// prompt was drawn on. See Semantics.PromptEndOfInputEndsTheLine (#6330).
+	s.PromptEndOfInputEndsTheLine = true
 	// And `-B` is this shell's `braceexpand` too — measured 2026-09-11,
 	// `set +B; echo {a,b}` writes `{a,b}` and `$-` loses the letter (#1856).
 	s.SetBTurnsOffBraceExpansion = interp.Yes

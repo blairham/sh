@@ -33,6 +33,12 @@ func EditorStyle() repl.EditorStyle {
 		// And `^D` with something typed is delete-char-or-list. See
 		// repl.EditorStyle.ListOnControlD (#6233).
 		ListOnControlD: true,
+		// And at a continuation prompt, an empty line's `^D` too. See
+		// repl.EditorStyle.ControlDAtAContinuationLists (#6242).
+		ControlDAtAContinuationLists: true,
+		// And completion there reads the lines already entered. See
+		// repl.EditorStyle.CompletionReadsTheContinuation (#6242).
+		CompletionReadsTheContinuation: true,
 		// And `^T`, `^Y` and Delete ring when they fail. See
 		// repl.EditorStyle.BellRingsWhenAnEditFails (#6247).
 		BellRingsWhenAnEditFails: true,

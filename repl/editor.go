@@ -348,8 +348,13 @@ type editor struct {
 	// namedWidgets is Shell.NamedWidgets: every widget a name reaches, for
 	// execute-named-cmd. Nil is a session that names none.
 	namedWidgets func() map[string]Binding
-	// listOnControlD is EditorStyle.ListOnControlD.
-	listOnControlD bool
+	// listOnControlD is EditorStyle.ListOnControlD, and
+	// continuationListsOnControlD is ControlDAtAContinuationLists.
+	listOnControlD              bool
+	continuationListsOnControlD bool
+	// completionReadsContinuation is
+	// EditorStyle.CompletionReadsTheContinuation.
+	completionReadsContinuation bool
 	// breakRequested is a send-break an action asked for, which the key loop
 	// acts on at its top. See keyLoop.
 	breakRequested bool
@@ -682,6 +687,14 @@ type editor struct {
 	// editor one rather than a prompt asking for a fresh line. Zero is every
 	// read at a prompt. See lineread.go, which is the whole of it.
 	lineStart lineStart
+}
+
+// atAContinuationListing is whether `^D` on an empty line lists rather than
+// ends input: a continuation prompt — some of the command already entered —
+// in a dialect that says so. See EditorStyle.ControlDAtAContinuationLists.
+func (e *editor) atAContinuationListing() bool {
+	return e.continuationListsOnControlD && e.listOnControlD && !e.lineStart.seeded &&
+		e.prebuffer != nil && e.prebuffer() != ""
 }
 
 // readLine reads one line, drawing it as it is typed.
@@ -1059,6 +1072,13 @@ func (e *editor) keyLoop(prompt drawnPrompt) (string, error) {
 			}
 			return e.abandon(prompt)
 		case ctrlD:
+			if len(e.line) == 0 && e.atAContinuationListing() {
+				// Not end of input in a dialect whose continuation prompt
+				// reads on: the listing the key is everywhere else. See
+				// EditorStyle.ControlDAtAContinuationLists (#6242).
+				e.deleteCharOrList(e.comp, prompt)
+				continue
+			}
 			if len(e.line) == 0 && (!e.lineStart.seeded || e.lineStart.endOnEndOfInput) {
 				// End of input on an empty line, which ends a session and —
 				// only where the command that handed over the line asked for

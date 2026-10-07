@@ -179,6 +179,13 @@ func (e *editor) ask(c Completer, menu MenuReason) (start int, word string, matc
 		return e.pos, "", nil, insertion{}
 	}
 	start = wordStart(e.line, e.pos)
+	if pre, ok := e.continuationAnswers(start); ok {
+		if _, quoted := continuationContext(pre); quoted {
+			// The word began at a quote an earlier line opened, so nothing
+			// matches it. See continuationcontext.go.
+			return start, string(e.line[start:e.pos]), nil, insertion{}
+		}
+	}
 	asked := e.completion(start)
 	asked.Menu = menu
 	matches = c.Complete(asked)
@@ -218,12 +225,16 @@ func insertableWords(candidates []Candidate) []string {
 // that is what a caller wants to slice, and the editor holds runes because a
 // cursor sits between characters.
 func (e *editor) completion(start int) Completion {
+	command := commandPosition(e.line, start)
+	if pre, ok := e.continuationAnswers(start); ok {
+		command, _ = continuationContext(pre)
+	}
 	return Completion{
 		Line:    string(e.line),
 		Point:   len(string(e.line[:e.pos])),
 		Start:   len(string(e.line[:start])),
 		Word:    string(e.line[start:e.pos]),
-		Command: commandPosition(e.line, start),
+		Command: command,
 		Dir:     e.dir(),
 	}
 }

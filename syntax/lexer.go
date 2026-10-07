@@ -5713,6 +5713,26 @@ func (l *Lexer) parseToCloseBrace(from int) (int, []Remark, bool) {
 	return 0, nil, false
 }
 
+// funsubBodyRefusal is the refusal the body of an unclosed `${ … }` makes
+// when it is read as the program it is, from body to the end of the input —
+// nil where it simply runs out. The same read parseToClose gives a `$( … )`
+// body, and the same rule for a read that stops on a reserved word rather
+// than refusing it.
+func (l *Lexer) funsubBodyRefusal(open Pos, body int) *Error {
+	line := int(open.Line) + strings.Count(l.src[open.Offset:body], "\n")
+	sub := NewParserAt(l.src[body:], l.dialect, line)
+	sub.InsideASubstitution()
+	sub.parseList()
+	if sub.err == nil && !sub.at(TokEOF) {
+		sub.failUnexpected("")
+	}
+	e, _ := sub.err.(*Error)
+	if e == nil || e.Kind != ErrUnexpected || sub.lex.incomplete {
+		return nil
+	}
+	return e
+}
+
 // braceCouldBeReserved is the cheap half of that scan: whether a `}` at i
 // stands anywhere a reserved word could, given only the byte in front of it.
 //
@@ -5976,6 +5996,19 @@ func (l *Lexer) scanBraces(q Quoting) Span {
 				// failUnmatched may keep a report an inner construct already
 				// made — and that one is not this construct's form.
 				se.HoldsProgram = true
+				if se.Pos == open && se.BodyRefusal == nil {
+					// And what the body had to say for itself, as `$( … )`
+					// carries it: no brace closed the body, so nothing read
+					// it as a program, and a token the grammar would have
+					// refused there was reported as the end of input.
+					// Measured 2026-10-06 on bash 5.3.20 under `-c`: `echo ${
+					// fi`, `echo ${| fi` and `echo ${ case` are `syntax error
+					// near unexpected token `fi'` (`newline' for `case`)
+					// `while looking for matching `}'` at status 127, as
+					// `echo $(fi` is, and `echo ${ if`, which refuses
+					// nothing, is still the end of input (#6280).
+					se.BodyRefusal = l.funsubBodyRefusal(open, body)
+				}
 			}
 			if se, ok := l.err.(*Error); ok && !brace && se.Pos == open {
 				// What stood where the parameter form stopped, for the two

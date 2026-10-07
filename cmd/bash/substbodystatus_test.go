@@ -31,6 +31,12 @@ func TestASubstitutionBodyRefusalStatusFollowsTheRoute(t *testing.T) {
 		{"echo $(if", 1, 2, 2},
 		{"echo ${", 1, 2, 2},
 		{"echo ${|", 1, 2, 2},
+		// The `${` that holds a program refuses a token as `$(` does
+		// (#6280).
+		{"echo ${ fi", 1, 127, 2},
+		{"echo ${| fi", 1, 127, 2},
+		{"echo ${ case", 1, 127, 2},
+		{"echo ${ if", 1, 2, 2},
 		// The controls: what runs out inside the body, or is not a body.
 		{"echo $((", 2, 2, 2},
 		{"echo ${x", 2, 2, 2},
@@ -73,6 +79,23 @@ func TestARefusedSubstitutionBodyLeavesOneUnderInteractiveC(t *testing.T) {
 			}
 			if _, _, got := prompt(t, "", "bash", "--norc", "-c", src); got != 127 {
 				t.Errorf("-c: status %d, want 127", got)
+			}
+		})
+	}
+}
+
+// And it is worded as one: the token the body refused, and the brace the
+// shell was still looking for, where this wrote the end of input (#6280).
+// Measured 2026-10-06 on bash 5.3.20 under `--norc -c`.
+func TestAnUnclosedFunsubNamesTheTokenItsBodyRefused(t *testing.T) {
+	for _, c := range []struct{ src, want string }{
+		{"echo ${ fi", "bash: -c: line 1: syntax error near unexpected token `fi' while looking for matching `}'\nbash: -c: line 1: `echo ${ fi'\n"},
+		{"echo ${ case", "bash: -c: line 1: syntax error near unexpected token `newline' while looking for matching `}'\nbash: -c: line 1: `echo ${ case'\n"},
+		{"echo ${ if", "bash: -c: line 2: unexpected EOF while looking for matching `}'\n"},
+	} {
+		t.Run(c.src, func(t *testing.T) {
+			if _, errs, _ := prompt(t, "", "bash", "--norc", "-c", c.src); errs != c.want {
+				t.Errorf("stderr %q, want %q", errs, c.want)
 			}
 		})
 	}

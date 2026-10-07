@@ -1338,6 +1338,10 @@ func bodyRefusedAToken(err error) bool {
 	switch se.Token {
 	case "$(", "<(", ">(":
 		return true
+	case "${":
+		// The `${` that holds a program, whose body refuses the same way
+		// (#6280).
+		return se.HoldsProgram
 	}
 	return false
 }

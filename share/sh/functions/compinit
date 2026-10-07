@@ -211,6 +211,13 @@ compdef() {
 local dir file line name word
 local -a words options
 local -A seen
+# The first line is split into words the way an unset IFS splits them, so a
+# tab separates `#compdef` from its names as a space does and leading blanks
+# are dropped; and it is this IFS whatever the caller's is.  Measured on zsh
+# 5.9.2: `#compdef<TAB>t1<TAB>t2`, `<TAB>#compdef l2` and `#compdef<TAB><TAB>m1
+# <TAB> m2` all register, under `IFS=:` too, while `#compdefx`,
+# `#compdef<VT>v1` and `#compdef<CR>r1` register nothing (#6289).
+local IFS=$' \t\n\0'
 for dir in $scan; do
 	# `-.`, a plain file or a link to one: every file of a Homebrew zsh's
 	# library is a link into its Cellar, and zsh registers them (#6183).
@@ -224,10 +231,11 @@ for dir in $scan; do
 		# from: measured, zsh's compinit leaves `_git is an autoload shell
 		# function from …/site-functions/_git` and lists the stub as
 		# `builtin autoload -XUz …/site-functions` (#6155).
-		case $line in
-		('#compdef '*|'#compdef')
+		words=( ${=line} )
+		case $words[1] in
+		('#compdef')
 			autoload -Uz -- $file
-			words=( ${=${line#\#compdef}} )
+			words=( ${words[2,-1]} )
 			# A line that is only command names, which is nearly every line,
 			# is what `compdef -n` does with one: each name that has no
 			# function yet gets this file's. Written here rather than through
@@ -243,8 +251,8 @@ for dir in $scan; do
 				done
 			fi
 			;;
-		('#autoload '*|'#autoload')
-			autoload -Uz ${=${line#\#autoload}} -- $file
+		('#autoload')
+			autoload -Uz ${words[2,-1]} -- $file
 			;;
 		esac
 	done

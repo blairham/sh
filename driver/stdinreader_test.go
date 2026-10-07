@@ -85,7 +85,7 @@ func runSharedReaderShell(t *testing.T, in io.Reader) (out, errs string, code in
 	t.Helper()
 	sh := shell()
 	sh.Semantics = interp.PosixSemantics()
-	sh.Semantics.StdinProgramReadInBlocks = false
+	sh.Semantics.StdinProgramReadSize = interp.ReadSizeLine
 	var o, e bytes.Buffer
 	sh.Stdout, sh.Stderr = &o, &e
 	sh.Stdin = in

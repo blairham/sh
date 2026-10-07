@@ -62,7 +62,7 @@ func TestTheProgramOnStandardInputSharesTheDescriptor(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			sh := shell()
 			sh.Semantics = interp.PosixSemantics()
-			sh.Semantics.StdinProgramReadInBlocks = c.blocks
+			sh.Semantics.StdinProgramReadSize = blockOrLine(c.blocks)
 			sh.Diagnostics = interp.Diagnostics{Location: interp.LocationLineWord}
 			out, errs, code := runStdinProgram(t, sh, program)
 			if out != c.want {
@@ -86,7 +86,7 @@ func TestAReadAtTheEndOfAProgramOnStandardInputFindsNothing(t *testing.T) {
 	for _, blocks := range []bool{false, true} {
 		sh := shell()
 		sh.Semantics = interp.PosixSemantics()
-		sh.Semantics.StdinProgramReadInBlocks = blocks
+		sh.Semantics.StdinProgramReadSize = blockOrLine(blocks)
 		// One line, so that the report is not itself the next line for a
 		// line-at-a-time reader to hand over.
 		out, _, _ := runStdinProgram(t, sh, "read x; echo \"$? [$x]\"\n")
@@ -134,7 +134,7 @@ func TestAProgramOnStandardInputIsStillReadByTheConstruct(t *testing.T) {
 			for _, blocks := range []bool{false, true} {
 				sh := shell()
 				sh.Semantics = interp.PosixSemantics()
-				sh.Semantics.StdinProgramReadInBlocks = blocks
+				sh.Semantics.StdinProgramReadSize = blockOrLine(blocks)
 				out, errs, code := runStdinProgram(t, sh, c.program)
 				if out != c.want || code != 0 {
 					t.Errorf("blocks=%v: output %q status %d, want %q status 0 (stderr %q)",
@@ -217,7 +217,7 @@ func TestExecRepointsTheRestOfAProgramOnStandardInput(t *testing.T) {
 func TestABlockReaderDoesNotRunHalfALine(t *testing.T) {
 	sh := shell()
 	sh.Semantics = interp.PosixSemantics()
-	sh.Semantics.StdinProgramReadInBlocks = true
+	sh.Semantics.StdinProgramReadSize = interp.ReadSizeCBuffer
 	// Long enough that no single read can hold it, so the boundary falls
 	// inside a line rather than tidily between two.
 	program := strings.Repeat("echo pad\n", 2000) + "echo last\n"
@@ -231,4 +231,13 @@ func TestABlockReaderDoesNotRunHalfALine(t *testing.T) {
 	if !strings.HasSuffix(out, "last\n") {
 		t.Errorf("output does not end with the last line: %q", out[max(0, len(out)-40):])
 	}
+}
+
+// blockOrLine is the read size a test of either answer asks for: a block of
+// the C library's buffer, or a line.
+func blockOrLine(blocks bool) interp.ReadSize {
+	if blocks {
+		return interp.ReadSizeCBuffer
+	}
+	return interp.ReadSizeLine
 }

@@ -659,7 +659,13 @@ func Semantics() interp.Semantics {
 	// input in blocks and keeps what it took, so a `read` in the script
 	// finds end of input and the data line is run as a command. The other
 	// three read a line at a time and leave the rest on the descriptor.
-	s.StdinProgramReadInBlocks = true
+	// The block is the C library's buffer: 1024 bytes on macOS and 8192 in
+	// Debian, measured 2026-10-07 (#6329).
+	s.StdinProgramReadSize = interp.ReadSizeCBuffer
+	// A prompt reading a pipe or a file takes the same buffer, which is what
+	// an error there throws the rest of away (#6322, #6328). See
+	// Semantics.PromptReadSize.
+	s.PromptReadSize = interp.ReadSizeCBuffer
 	// `-c` and `-s` together: the command string names the operands here,
 	// so `sh -sc CMD name a` has `$0` of `name` and one parameter. ksh93
 	// and zsh let `-s` name them instead.

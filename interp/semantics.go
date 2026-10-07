@@ -4,6 +4,7 @@
 package interp
 
 import (
+	"runtime"
 	"strings"
 	"sync"
 )
@@ -20013,6 +20014,38 @@ type Semantics struct {
 	// (TestOnlyDashLosesTheRestOfTheReadBlock).
 	PromptErrorDiscardsTheRestOfTheReadBlock bool
 
+	// PromptReadSize is how much a prompt reading something that is not a
+	// terminal takes in one read. What it took and has not yet used is gone
+	// from the descriptor, so a `read` typed at the prompt, or a command it
+	// starts that reads standard input, finds only what is after it.
+	//
+	// Measured 2026-10-07, `read x` / `DATA` / `echo "[$x]"` written to `-i`
+	// in one write, `PS1=` and no startup files:
+	//
+	//	bash 5.3.20, zsh 5.9.2, ksh93u+   [DATA]: the prompt took one line
+	//	dash 0.5.12, BusyBox ash 1.37.0   []: it took a block
+	//
+	// and with `DATA` moved to byte P, `[DATA]` only where P is the block:
+	// 1024 for dash on macOS, the same buffer #6322 found it throwing away
+	// after an error, and 1024 for ash under `-i` on a pipe and on a file,
+	// whose reads strace shows as `read(0, …, 1024)`. So bash, zsh and ksh93
+	// are ReadSizeLine, dash is ReadSizeCBuffer and ash is 1024 (#6328).
+	//
+	// A terminal hands over a line per read whatever is asked for, so this
+	// changes nothing there. Read by the front end, for the reason
+	// PromptAsksAgainAfterARefusedToken is, and by the loop without an
+	// editor only: bash keeps an editor on a pipe
+	// (EditorReadsKeysWhereThereIsNoTerminal), and that editor still reads
+	// ahead of the line, because a byte at a time costs it the burst that
+	// tells an arrow from an Escape.
+	//
+	// unpinned: reached, and the corpus cannot discriminate: no case draws a
+	// prompt. repl/readsize_test.go drives a session on a pipe for each kind
+	// of answer (TestAReadAtAPromptFindsWhatThePromptLeft), and
+	// dialect/readsize_test.go holds each preset to its measurement
+	// (TestEveryDialectReadsWhatItWasMeasuredToRead).
+	PromptReadSize ReadSize
+
 	// EndOfInputInAConstructEndsTheSession says that the end of input
 	// arriving inside an unfinished construct at a prompt — ^D at `> `, or
 	// the end of a pipe — ends the session once that construct has been run
@@ -25659,33 +25692,48 @@ type Semantics struct {
 	// that spell it that way.
 	ReadPromptOperand ReadPromptOperand
 
-	// StdinProgramReadInBlocks takes a program arriving on standard input
-	// as much at a time as the descriptor will give, rather than a line at
-	// a time. Whatever the block swallowed has left the descriptor, so a
-	// `read`, an external command, or anything else the script points at
-	// standard input finds only what had not arrived yet.
+	// StdinProgramReadSize is how much of a program arriving on standard
+	// input the shell takes at a time. Whatever one read swallowed has left
+	// the descriptor, so a `read`, an external command, or anything else the
+	// script points at standard input finds only what had not arrived yet.
 	//
-	// dash and BusyBox ash, measured: `printf 'read x\necho "[$x]"\nDATA\n' | sh`
-	// prints `[]` in both and then runs `DATA` as a command, where bash,
-	// ksh93 and zsh hand the second line to `read` and never parse it. ash
-	// had been recorded with bash's answer and was re-measured 2026-09-21 in
-	// the pinned image, which is where that came from (#3228).
-	// docs/spec/invocation.md has the grid, including the case that shows
-	// what the difference really is — `exec 0< file` mid-program replaces
-	// the *rest of the program* in the three, and only what follows the
-	// block in dash.
+	// dash and BusyBox ash read in blocks, measured: `printf 'read x\necho
+	// "[$x]"\nDATA\n' | sh` prints `[]` in both and then runs `DATA` as a
+	// command, where bash, ksh93 and zsh hand the second line to `read` and
+	// never parse it — ReadSizeLine. ash had been recorded with bash's answer
+	// and was re-measured 2026-09-21 in the pinned image, which is where that
+	// came from (#3228). docs/spec/invocation.md has the grid, including the
+	// case that shows what the difference really is — `exec 0< file`
+	// mid-program replaces the *rest of the program* in the three, and only
+	// what follows the block in dash.
 	//
-	// A bool rather than an Answer, and deliberately: the panel is three to
-	// two, so a common denominator exists, and "refuse to read a piped
-	// script at all" is not an answer any shell could ship. False is
-	// reading by the line, which is what the substrate does.
+	// The block's size is observable too, and was a single bool until #6329.
+	// With `read x`, blank lines, `DATA` at byte P and `echo "[$x]"` in one
+	// write, `[DATA]` comes out only where P is the block, measured
+	// 2026-10-07:
+	//
+	//	dash 0.5.12, macOS             1024
+	//	dash 0.5.12-12, Debian         8192
+	//	BusyBox ash 1.37.0 (alpine)    2047, on a pipe and a file alike
+	//
+	// So dash's is ReadSizeCBuffer and ash's is 2047.
+	//
+	// The common denominator is reading by the line, which is what the
+	// substrate does: the panel is three to two, and "refuse to read a piped
+	// script at all" is not an answer any shell could ship.
 	//
 	// It is the standard-input route's question alone. A script named as an
 	// operand is opened separately from standard input, so nothing is
 	// shared and all five behave the same way; `-c` reads no descriptor at
 	// all. The sibling question for a command string is
-	// Diagnostics.CommandStringParsedWhole.
-	StdinProgramReadInBlocks bool
+	// Diagnostics.CommandStringParsedWhole, and for a prompt reading a pipe
+	// PromptReadSize.
+	//
+	// unpinned: reached, and the corpus cannot discriminate: no case puts
+	// more than a block of program before a read. driver/stdinprogram_test.go
+	// pins line against block, and dialect/readsize_test.go holds each preset
+	// to its measurement (TestEveryDialectReadsWhatItWasMeasuredToRead).
+	StdinProgramReadSize ReadSize
 
 	// StdinOptionNamesTheOperands lets the standard-input option name the
 	// operands of an invocation that also carries a command string — `sh -sc
@@ -25774,7 +25822,7 @@ type Semantics struct {
 	// CMD name a` is `$0` of `name` and `$#` of 1, which is `-c`'s answer.
 	//
 	// A bool rather than an Answer, for the reason
-	// StdinProgramReadInBlocks is one: the panel is three to one, so a
+	// StdinProgramReadSize has a common answer: the panel is three to one, so a
 	// common denominator exists, and refusing an invocation every shell
 	// runs is not an answer any shell could ship. False is the majority
 	// answer and the standard's own — POSIX has no plus spelling of the
@@ -25812,7 +25860,8 @@ type Semantics struct {
 	// "refuse to start" is not an answer any shell could ship.
 	//
 	// False is the zero value and it is the minority answer, which is the
-	// opposite of the way StdinProgramReadInBlocks is named, and on purpose.
+	// opposite of the way StdinProgramReadSize's zero is chosen, and on
+	// purpose.
 	// The majority behavior here is to *read a file out of the invoking
 	// person's home directory*, and a Semantics nobody has filled in belongs
 	// to a library embedder or a test rather than to a shell — neither of
@@ -32617,6 +32666,49 @@ type EmulationOption struct {
 	// the four fields travel together, because a half-filled value reads as
 	// a working option and answers 0 to a command line it rejected.
 	Status int
+}
+
+// ReadSize is how much of a descriptor a shell takes in one read, where the
+// descriptor is shared with what the shell runs: a program arriving on
+// standard input, or a prompt reading something that is not a terminal. What
+// one read takes and the shell has not used yet has left the descriptor, so a
+// `read` or a command reading standard input finds only what is after it.
+//
+// A value above 1 is that many bytes. The two constants are the two answers
+// that are not a number; a one-byte block would be a line read slowly, so 1
+// is free to stand for the platform's buffer.
+type ReadSize int
+
+const (
+	// ReadSizeLine takes exactly one line and nothing past it: bash, zsh and
+	// ksh93, on both routes.
+	ReadSizeLine ReadSize = iota
+	// ReadSizeCBuffer is the C library's buffer size, which is a fact about
+	// the platform rather than the shell: 1024 bytes on macOS and the BSDs and
+	// 8192 on Linux. dash's, on both routes: measured 2026-10-07 with dash
+	// 0.5.12 on macOS and in Debian (#6322, #6329).
+	ReadSizeCBuffer
+)
+
+// Bytes is how many bytes one read asks for on the platform this was built
+// for, and 0 for ReadSizeLine.
+func (n ReadSize) Bytes() int { return n.BytesOn(runtime.GOOS) }
+
+// BytesOn is Bytes on the platform named, as runtime.GOOS names it.
+func (n ReadSize) BytesOn(goos string) int {
+	switch {
+	case n == ReadSizeCBuffer:
+		switch goos {
+		case "darwin", "ios", "freebsd", "netbsd", "openbsd", "dragonfly":
+			return 1024
+		default:
+			return 8192
+		}
+	case n <= ReadSizeLine:
+		return 0
+	default:
+		return int(n)
+	}
 }
 
 // NameOperands is what a builtin takes where it wants a name.

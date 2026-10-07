@@ -640,10 +640,10 @@ func TestDollarSingleIsAbsent(t *testing.T) {
 // see TestAshTakesAProgramOnStandardInputInBlocks. The substrate's own answer
 // is still the line, which is what is asserted here beside it.
 func TestDashTakesAProgramOnStandardInputInBlocks(t *testing.T) {
-	if !dash.Semantics().StdinProgramReadInBlocks {
-		t.Error("StdinProgramReadInBlocks = false, want true")
+	if got := dash.Semantics().StdinProgramReadSize; got != interp.ReadSizeCBuffer {
+		t.Errorf("StdinProgramReadSize = %d, want the C library's buffer", got)
 	}
-	if (interp.Semantics{}).StdinProgramReadInBlocks {
+	if (interp.Semantics{}).StdinProgramReadSize != interp.ReadSizeLine {
 		t.Error("the substrate's own answer is blocks, want the line")
 	}
 }

@@ -1363,12 +1363,28 @@ over one thing only — **how much the shell takes at a time**.
 
 - **A line at a time** — bash 5.3, bash 3.2, bash-as-sh, ksh93, zsh. The line
   after the one being run is still on the descriptor.
-- **In blocks** — dash. What the block took has left the descriptor, so the
-  script finds only what had not arrived yet.
+- **In blocks** — dash, and BusyBox ash (measured onto this side in #3228).
+  What the block took has left the descriptor, so the script finds only what
+  had not arrived yet.
 
-`Semantics.StdinProgramReadInBlocks` is the axis. It is a bool rather than an
-`Answer`: the panel is four to one, so a common denominator exists, and
-"refuse to read a piped script" is not an answer any shell could ship.
+`Semantics.StdinProgramReadSize` is the axis: `ReadSizeLine`, or a block. The
+line is the common denominator, and "refuse to read a piped script" is not an
+answer any shell could ship.
+
+**The block's size is observable**, and the axis was a bool until #6329. The
+program is `read x`, blank lines, `DATA` starting at byte P and `echo "[$x]"`,
+written in one write. `[DATA]` comes out only where P is exactly the block,
+because that is the one place the shell's read stops right before `DATA`.
+Measured 2026-10-07:
+
+| shell | P giving `[DATA]` |
+| --- | --- |
+| dash 0.5.12, macOS | 1024 |
+| dash 0.5.12-12, Debian | 8192 |
+| BusyBox ash 1.37.0, pinned alpine | 2047, on a pipe and a file alike (strace: `read(0, …, 2047)`) |
+
+dash's block is the C library's buffer, which belongs to the platform and not
+to the shell: that is `ReadSizeCBuffer`. ash's is its own 2047.
 
 ### Measured
 
@@ -1803,7 +1819,7 @@ answer any shell could ship. dash, ksh93 and zsh answer true and the POSIX
 preset does too; bash alone answers false.
 
 Its zero value is `false`, which is the *minority* answer — the opposite of
-the way `StdinProgramReadInBlocks` is named, and deliberately. The majority
+the way `StdinProgramReadSize`'s zero is chosen, and deliberately. The majority
 behavior here is to read a file out of the invoking person's home directory,
 and a `Semantics` nobody has filled in belongs to a library embedder or to a
 test rather than to a shell. Neither should touch a home directory because a
@@ -2565,7 +2581,7 @@ rather than a second shell:
 And the half itself is the ordinary standard-input route rather than a
 third way of running a program: it numbers its own lines from 1, reports
 through the standard-input diagnostics, and takes its input in whatever
-size `Semantics.StdinProgramReadInBlocks` says — so a `read` in it finds
+size `Semantics.StdinProgramReadSize` says — so a `read` in it finds
 what a `read` on a plain `sh -s` would, which is nothing, because the
 block already swallowed the line.
 

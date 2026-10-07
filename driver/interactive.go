@@ -589,6 +589,8 @@ func (sh Shell) frontEndWith(r *interp.Runner, name string, dg interp.Diagnostic
 		RefusedLineIsNotCounted: sh.Semantics.PromptRefusedLineIsNotCounted,
 		// See Semantics.PromptErrorDiscardsTheRestOfTheReadBlock.
 		ErrorDiscardsTheRestOfTheReadBlock: sh.Semantics.PromptErrorDiscardsTheRestOfTheReadBlock,
+		// See Semantics.PromptReadSize.
+		ReadSize: sh.Semantics.PromptReadSize.Bytes(),
 		// See Semantics.EndOfInputInAConstructEndsTheSession.
 		EndOfInputInAConstructEndsTheSession: sh.Semantics.EndOfInputInAConstructEndsTheSession,
 		// See Semantics.EndOfInputEndsAContinuedHeredocLine.

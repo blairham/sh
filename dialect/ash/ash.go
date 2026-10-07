@@ -2447,7 +2447,15 @@ func Semantics() interp.Semantics {
 	// then fails to find `DATA` as a command, where bash, ksh93 and zsh hand
 	// the second line to `read` and never parse it. This had been dash's
 	// neighbor holding bash's answer, and nothing exercised it (#3228).
-	s.StdinProgramReadInBlocks = true
+	// And the block is 2047 bytes, not dash's: measured 2026-10-07, `DATA`
+	// at byte 2047 is what the script's `read` finds, and strace shows
+	// `read(0, …, 2047)` on a pipe and a file alike (#6329).
+	s.StdinProgramReadSize = 2047
+	// A prompt reading a pipe takes 1024 at a time: strace shows
+	// `read(0, …, 1024)` under `-i`, and `DATA` at byte 1024 is what a
+	// `read` typed there finds, on a pipe and a file alike. See
+	// Semantics.PromptReadSize (#6328).
+	s.PromptReadSize = 1024
 	s.StdinOptionNamesTheOperands = interp.No
 	s.LoneDashIsAnOption = interp.No
 	// The same, measured in the pinned digest rather than derived from dash:

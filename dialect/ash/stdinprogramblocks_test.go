@@ -27,12 +27,14 @@ import (
 // else. It was found by reading the four-shell prose of #3228 against the
 // shell rather than by a test, which is the campaign's second live defect.
 func TestAshTakesAProgramOnStandardInputInBlocks(t *testing.T) {
-	if !ash.Semantics().StdinProgramReadInBlocks {
-		t.Error("StdinProgramReadInBlocks = false, want true")
+	// And the block is 2047 bytes: measured 2026-10-07, `DATA` at byte 2047
+	// is what the script's `read` finds (#6329).
+	if got := ash.Semantics().StdinProgramReadSize; got != 2047 {
+		t.Errorf("StdinProgramReadSize = %d, want 2047", got)
 	}
 	// And the substrate's own answer is still the line, so this is the
 	// preset saying something rather than inheriting it.
-	if (interp.Semantics{}).StdinProgramReadInBlocks {
+	if (interp.Semantics{}).StdinProgramReadSize != interp.ReadSizeLine {
 		t.Error("the substrate's own answer is blocks, want the line")
 	}
 }

@@ -94,7 +94,7 @@ func TestAProgramReadsTheSameFromAFileAsFromAPipe(t *testing.T) {
 				run := func(in *os.File) (string, string, int) {
 					sh := shell()
 					sh.Semantics = interp.PosixSemantics()
-					sh.Semantics.StdinProgramReadInBlocks = blocks
+					sh.Semantics.StdinProgramReadSize = blockOrLine(blocks)
 					sh.Diagnostics = interp.Diagnostics{Location: interp.LocationLineWord}
 					sh.Stdin = in
 					var o, e bytes.Buffer

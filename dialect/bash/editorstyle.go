@@ -92,6 +92,7 @@ func EditorStyle() repl.EditorStyle {
 		WordKeys:                         true,
 		QuotedInsertInViInsert:           true,
 		QuotedInsertInViCommand:          true,
+		ViInsertTypesTheseKeys:           viInsertTypedKeys,
 		CapitalizeTakesTheFirstCharacter: true,
 		TransposeWordsReachesTheLineEnd:  true,
 		// And ESC with a digit or a minus is a count, drawn as `(arg: N)` in
@@ -111,3 +112,9 @@ func EditorStyle() repl.EditorStyle {
 		TransposeCharsTakesNoNegativeCount: true,
 	}
 }
+
+// viInsertTypedKeys are the control keys bash's vi insert mode puts in the
+// line as they are: readline's vi-insert keymap has self-insert on each.
+// Measured 2026-10-06 against bash 5.3.20 (#6301); see
+// repl.EditorStyle.ViInsertTypesTheseKeys.
+const viInsertTypedKeys = "\x01\x02\x05\x06\x07\x0b\x0c\x0f\x18\x1c\x1d\x1e"

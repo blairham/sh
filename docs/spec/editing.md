@@ -561,6 +561,12 @@ Otherwise it is the mode switch, and the next byte is a command-mode key, so
 `aa`, then Escape, `A` and `b` sent together append rather than being read
 as one unbound key.
 
+bash's vi insert mode is readline's vi-insert keymap, which types `^A ^B ^E ^F
+^G ^K ^L ^O ^X ^\ ^]` and `^^` into the line as they are (it lists `^C`, `^Q`
+and `^Z` too, which the terminal takes first). Measured 2026-10-06 against bash
+5.3.20, `od -c <<< ab`, the key, `Z`: `^B` gives `a b 002 Z` and `^K` gives
+`a b \v Z` (#6301). `repl.EditorStyle.ViInsertTypesTheseKeys` is the field.
+
 The listing is zsh's byte for byte. Runs of one-byte keys bound to one widget
 fold into a range, `"^A"-"^C" self-insert`, written with `-R` in the `-L` form,
 and a sequence of more than one byte never folds. The printable keys and the

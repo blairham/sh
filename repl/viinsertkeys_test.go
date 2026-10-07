@@ -55,3 +55,28 @@ func TestZshViInsertKeymap(t *testing.T) {
 		t.Errorf("without the field ^B is backward-char: got %q", got)
 	}
 }
+
+// The control keys a dialect's vi insert mode types as they are, against
+// bash 5.3.20's rows in EditorStyle.ViInsertTypesTheseKeys (#6301): each goes
+// in the line, and a key not listed keeps its action.
+func TestViInsertTypesTheKeysTheDialectLists(t *testing.T) {
+	style := EditorStyle{ViInsertTypesTheseKeys: "\x01\x02\x05\x06\x07\x0b\x0c\x0f\x18\x1c\x1d\x1e"}
+	for _, c := range []struct{ name, keys, want string }{
+		{"^A", "ab\x01Z\r", "ab\x01Z"},
+		{"^B", "ab\x02Z\r", "ab\x02Z"},
+		{"^K", "ab\x0bZ\r", "ab\x0bZ"},
+		{"^X", "ab\x18Z\r", "ab\x18Z"},
+		{"^^", "ab\x1eZ\r", "ab\x1eZ"},
+		{"^T is not one of them", "ab\x14Z\r", "baZ"},
+		{"and in command mode ^B is not typed", "ab\x1b\x02iZ\r", "aZb"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			if got := viTyped(t, style, c.keys); got != c.want {
+				t.Errorf("got %q, want %q", got, c.want)
+			}
+		})
+	}
+	if got := viTyped(t, EditorStyle{}, "ab\x02Z\r"); got != "aZb" {
+		t.Errorf("without the field ^B moves back: got %q", got)
+	}
+}

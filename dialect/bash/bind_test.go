@@ -728,3 +728,19 @@ func TestBindNamesFiveKeysAndThenAnEllipsis(t *testing.T) {
 		}
 	}
 }
+
+// bash's vi insert mode types the control keys its vi-insert keymap has
+// self-insert on (#6301); the editor's field is what carries them.
+func TestBashViInsertTypesItsSelfInsertControlKeys(t *testing.T) {
+	got := bash.EditorStyle().ViInsertTypesTheseKeys
+	for _, k := range "\x01\x02\x05\x06\x07\x0b\x0c\x0f\x18\x1c\x1d\x1e" {
+		if !strings.ContainsRune(got, k) {
+			t.Errorf("%q is not typed in vi insert mode", k)
+		}
+	}
+	for _, k := range "\x14\x15\x17\x16\x08\x7f\x04\x0d\x09" {
+		if strings.ContainsRune(got, k) {
+			t.Errorf("%q is typed in vi insert mode, where bash gives it an action", k)
+		}
+	}
+}

@@ -467,7 +467,9 @@ func (r *Runner) runPipeline(ctx context.Context, p *syntax.Pipeline, timing *pi
 		// there, because that element really is the shell.
 		releaseAnchor := sub.anchorForkedBody()
 		release := releaseFds[i]
-		releaseFds[i] = func() { release(); releaseAnchor() }
+		// And its hold on the tables it shares with this shell, which the
+		// element is done reading by then. See sharedtable.go.
+		releaseFds[i] = func() { release(); releaseAnchor(); sub.releaseSharedTables() }
 		// A pipeline element is a subshell whose trap listing survives in a
 		// different pair of shells than `( … )` does, so the boundary says
 		// what kind it is.

@@ -60,7 +60,7 @@ type heldPrefix struct{ undo []savedVar }
 func (h *heldPrefix) hold(r *Runner, name, value string) {
 	h.undo = append(h.undo, r.saveVar(name))
 	delete(r.Arrays, name)
-	delete(r.AssocArrays, name)
+	r.dropAssocTable(name)
 	delete(r.removed, name)
 	r.Vars[name] = value
 }

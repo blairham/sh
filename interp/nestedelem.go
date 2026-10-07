@@ -147,11 +147,14 @@ func (r *Runner) storeAssocElement(name, key string, value Element) {
 	a := r.AssocArrays[name]
 	if a == nil {
 		a = AssocArray{}
+		r.ownAssocs()
 		if r.AssocArrays == nil {
 			r.AssocArrays = map[string]AssocArray{}
 		}
 		r.AssocArrays[name] = a
 	}
+	r.ownAssocs()
+	a = r.AssocArrays[name]
 	a[key] = value
 	r.sweepElementCompounds(name)
 	// Written to, so the name leaves the declared-only set — the same note

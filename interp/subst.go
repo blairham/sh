@@ -150,6 +150,11 @@ func (r *Runner) runCommandSubst(ctx context.Context, span syntax.Span) string {
 
 	var out bytes.Buffer
 	sub := r.clone()
+	// Deferred first so that it runs last, once nothing below reads the
+	// clone's tables: a finished substitution gives back its hold on the
+	// tables it shares, so this shell's next write needs no copy. See
+	// sharedtable.go.
+	defer sub.releaseSharedTables()
 	// The body is drawn as inside the substitution. See openruntime.go.
 	sub.openRun = r.openRunWith("$(")
 	// A command substitution is a boundary for a writing body's output where

@@ -89,6 +89,9 @@ func readFileSubstitution(f *syntax.File) (*syntax.Redirect, bool) {
 func (r *Runner) readFileSubst(ctx context.Context, rd *syntax.Redirect, span syntax.Span) string {
 	var out bytes.Buffer
 	sub := r.clone()
+	// The read runs no commands, and its clone is done with the tables it
+	// shares when this returns. See sharedtable.go.
+	defer sub.releaseSharedTables()
 	sub.inheritJobs(jobBoundarySubstitution)
 	// A substitution's body is parentheses too as far as job numbering is
 	// concerned — measured, `$( … )`, a backquoted substitution and

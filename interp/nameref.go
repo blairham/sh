@@ -1363,7 +1363,7 @@ func (r *Runner) namerefTargetSettledHere(target string) (string, bool) {
 // has already decided the reference is going to be made.
 func (r *Runner) namerefEmptiesTheCell(name string, df declareFlags) {
 	delete(r.Arrays, name)
-	delete(r.AssocArrays, name)
+	r.dropAssocTable(name)
 	r.namerefKeepsOnlyThisLinesFolding(name, df)
 	// hideVar rather than a bare delete: a name that came from the
 	// environment is not in Vars to begin with, so deleting nothing would
@@ -2159,6 +2159,11 @@ func (r *Runner) selfNamerefStoreOverACompound(sc *scope, name, value string) bo
 	// tables, because scalarOverCompound reads both to decide which branch
 	// this is.
 	liveArray, hadLiveArray := r.Arrays[name]
+	// Owned before the live table is taken aside, because it is put back
+	// below: taken from a table a subshell still shares, it would go back
+	// into this shell's own copy as the very map the subshell is reading.
+	// See sharedtable.go.
+	r.ownAssocs()
 	liveAssoc, hadLiveAssoc := r.AssocArrays[name]
 	if r.Arrays == nil {
 		r.Arrays = map[string]Array{}
@@ -2167,11 +2172,12 @@ func (r *Runner) selfNamerefStoreOverACompound(sc *scope, name, value string) bo
 		r.AssocArrays = map[string]AssocArray{}
 	}
 	delete(r.Arrays, name)
-	delete(r.AssocArrays, name)
+	r.dropAssocTable(name)
 	if heldArray {
 		r.Arrays[name] = sc.savedArrays[name]
 	}
 	if heldTable {
+		r.ownAssocs()
 		r.AssocArrays[name] = sc.savedAssoc[name]
 	}
 	// The borrowed rule writes through storeArray, which keeps the scalar
@@ -2187,15 +2193,21 @@ func (r *Runner) selfNamerefStoreOverACompound(sc *scope, name, value string) bo
 		sc.arrayExisted[name] = true
 	}
 	if stored, ok := r.AssocArrays[name]; ok && heldTable {
+		if r.assocShare != nil {
+			// The write above may have run a subshell that now shares the
+			// table this came out of, and the scope is going to put it back.
+			stored = stored.clone()
+		}
 		sc.savedAssoc[name] = stored
 		sc.assocExisted[name] = true
 	}
 	delete(r.Arrays, name)
-	delete(r.AssocArrays, name)
+	r.dropAssocTable(name)
 	if hadLiveArray {
 		r.Arrays[name] = liveArray
 	}
 	if hadLiveAssoc {
+		r.ownAssocs()
 		r.AssocArrays[name] = liveAssoc
 	}
 	return took

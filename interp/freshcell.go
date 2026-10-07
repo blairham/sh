@@ -71,7 +71,7 @@ func (r *Runner) dropTheOuterCompound(name string, fresh bool) {
 	_, hadArray := r.Arrays[name]
 	_, hadTable := r.AssocArrays[name]
 	delete(r.Arrays, name)
-	delete(r.AssocArrays, name)
+	r.dropAssocTable(name)
 	if hadArray || hadTable {
 		// And the copy of the first element the compound store leaves in the
 		// scalar table, which belongs to the compound that has just gone. It

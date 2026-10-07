@@ -89,7 +89,7 @@ func (r *Runner) prefixDisplacesAKindOrALetter(name string) bool {
 // stores into is the fresh one, which is why this stands between the two.
 func (r *Runner) emptyPrefixEntry(name string) {
 	delete(r.Arrays, name)
-	delete(r.AssocArrays, name)
+	r.dropAssocTable(name)
 	r.dropNameAttributes(name)
 }
 
@@ -139,6 +139,7 @@ func (r *Runner) prefixEntryTakesTheDisplacedShapeBack(name string) {
 		r.Arrays[name] = u.array.clone()
 	}
 	if u.inTable {
+		r.ownAssocs()
 		if r.AssocArrays == nil {
 			r.AssocArrays = map[string]AssocArray{}
 		}

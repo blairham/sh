@@ -109,6 +109,7 @@ func (r *Runner) definitionFileOffset() int {
 // for a name nobody recorded and a lookup for a name recorded as coming
 // from nowhere answer the same.
 func (r *Runner) recordFunctionOrigin(name string, o funcOrigin) {
+	r.ownFuncOrigins()
 	if o == (funcOrigin{}) {
 		delete(r.funcOrigins, name)
 		return

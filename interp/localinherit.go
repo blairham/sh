@@ -162,6 +162,7 @@ func (r *Runner) restoreTheOuterBinding(name string) bool {
 		had = true
 	}
 	if sc.assocExisted[name] {
+		r.ownAssocs()
 		if r.AssocArrays == nil {
 			r.AssocArrays = map[string]AssocArray{}
 		}

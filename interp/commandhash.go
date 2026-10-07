@@ -187,6 +187,11 @@ func (r *Runner) hashCommandHit(name string) {
 	if !ok {
 		return
 	}
+	if r.countSharedHit(name) {
+		return
+	}
+	r.ownCommandHash()
+	e = r.cmdHash[name]
 	e.hits++
 	r.cmdHash[name] = e
 }
@@ -194,6 +199,7 @@ func (r *Runner) hashCommandHit(name string) {
 // putHashedCommand writes one entry with the hit count given, adding the name
 // to the listing order if it is new.
 func (r *Runner) putHashedCommand(name, path string, hits int) {
+	r.ownCommandHash()
 	if r.cmdHash == nil {
 		r.cmdHash = map[string]hashedCommand{}
 	}
@@ -219,6 +225,8 @@ func (r *Runner) retrackCommand(name, path string) {
 	if !ok || e.path == path {
 		return
 	}
+	r.ownCommandHash()
+	e = r.cmdHash[name]
 	r.cmdHash[name] = hashedCommand{path: path, written: path, hits: e.hits}
 }
 
@@ -243,6 +251,7 @@ func (r *Runner) forgetHashedCommand(name string) bool {
 	if _, ok := r.cmdHash[name]; !ok {
 		return false
 	}
+	r.ownCommandHash()
 	delete(r.cmdHash, name)
 	r.cmdHashOrder = slices.DeleteFunc(r.cmdHashOrder, func(n string) bool { return n == name })
 	return true
@@ -255,8 +264,7 @@ func (r *Runner) forgetHashedCommand(name string) bool {
 // slice is set to nil rather than truncated so a clone cannot share a backing
 // array with the shell it came from.
 func (r *Runner) forgetEveryHashedCommand() {
-	r.cmdHash = nil
-	r.cmdHashOrder = nil
+	r.replaceCommandHash(nil, nil)
 	r.cmdHashFilled = false
 }
 
@@ -484,7 +492,10 @@ func (r *Runner) adoptCommandHash(sub *Runner) {
 	if r.sem().SubshellSharesTheCommandHash != Yes {
 		return
 	}
-	r.cmdHash = sub.cmdHash
-	r.cmdHashOrder = sub.cmdHashOrder
+	// The subshell's hold on the table goes with the table, which is still
+	// shared with this shell when the subshell never wrote it.
+	r.replaceCommandHash(sub.cmdHash, sub.cmdHashOrder)
+	r.cmdHashShare, sub.cmdHashShare = sub.cmdHashShare, nil
+	r.cmdHashHits, sub.cmdHashHits = sub.cmdHashHits, nil
 	r.cmdHashFilled = sub.cmdHashFilled
 }

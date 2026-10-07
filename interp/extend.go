@@ -2389,6 +2389,7 @@ func (r *Runner) SetAssoc(name string, values map[string]string) {
 	for k, v := range values {
 		table[k] = Scalar(v)
 	}
+	r.ownAssocs()
 	r.AssocArrays[name] = table
 }
 

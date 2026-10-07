@@ -81,13 +81,16 @@ func (r *Runner) holdCommandHashAcrossAPrefixedPath() func() {
 	// Copied rather than referred to, for the reason saveVar copies the
 	// compound stores: both are live containers, and holding the ones that
 	// are there holds a view of whatever the command then does to them.
+	// Owned first, so the copy taken aside carries the hits counted beside
+	// a shared table. See countSharedHit.
+	r.ownCommandHash()
 	table, order := maps.Clone(r.cmdHash), slices.Clone(r.cmdHashOrder)
 	return func() {
 		if r.sem().APrefixedPathEmptiesTheCommandHash == Yes {
 			r.forgetEveryHashedCommand()
 			return
 		}
-		r.cmdHash, r.cmdHashOrder = table, order
+		r.replaceCommandHash(table, order)
 	}
 }
 

@@ -213,11 +213,19 @@ type Shell struct {
 	// interp.Semantics.PromptRefusedLineIsNotCounted.
 	RefusedLineIsNotCounted bool
 
-	// ErrorDiscardsTheRestOfTheReadBlock reads input that is not a terminal
-	// a block at a time, and throws away the rest of the block when a line is
-	// refused or given up over an error. See readBlocks and
+	// ErrorDiscardsTheRestOfTheReadBlock throws away the rest of the block a
+	// line was read from when that line is refused or given up over an
+	// error, where ReadSize reads in blocks. See
 	// interp.Semantics.PromptErrorDiscardsTheRestOfTheReadBlock.
 	ErrorDiscardsTheRestOfTheReadBlock bool
+
+	// ReadSize is how many bytes one read of input that is not a terminal
+	// asks for, and zero for exactly one line and nothing past it — which is
+	// what leaves the rest on the descriptor for a `read` typed at the
+	// prompt. Read by the loop without an editor; the editor a dialect keeps
+	// on a pipe still reads ahead of the line (#6334). See
+	// interp.Semantics.PromptReadSize.
+	ReadSize int
 
 	// EditorWithoutATerminal gives a session whose input is not a terminal a
 	// line editor, so that `C-r`, the arrows and every other binding are read
@@ -2015,7 +2023,7 @@ func (s Shell) runPlain(
 			// And the rest of what was read with the line goes with it,
 			// where the dialect reads in blocks. See
 			// interp.Semantics.PromptErrorDiscardsTheRestOfTheReadBlock.
-			discardTheRestOfTheBlock(in)
+			s.discardTheRestOfTheBlock(in)
 			continue
 		}
 		b := s.beginBlock(text)
@@ -2026,7 +2034,7 @@ func (s Shell) runPlain(
 		}
 		if gaveUp {
 			// The same for a line given up as it ran.
-			discardTheRestOfTheBlock(in)
+			s.discardTheRestOfTheBlock(in)
 		}
 	}
 }

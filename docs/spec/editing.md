@@ -1194,7 +1194,21 @@ found, `cd` to nowhere and `trap '' BOGUS` do not, since none of them gives
 the line up.
 
 That is `Semantics.PromptErrorDiscardsTheRestOfTheReadBlock`, dash `true`.
-The size is taken from the platform the shell runs on (#6322).
+
+**The read is visible without an error too.** Whatever the prompt took is
+gone from the descriptor, so a `read` typed at the prompt finds only what
+comes after it. Measured 2026-10-07: `read x` / `DATA` / `echo "[$x]"`,
+written to `-i` in one write:
+
+| shell | prints | one read takes |
+| --- | --- | --- |
+| bash 5.3.20, zsh 5.9.2, ksh93u+ | `[DATA]` | the line |
+| dash 0.5.12 | `[]` | the C library's buffer: 1024 on macOS |
+| BusyBox ash 1.37.0, pinned alpine | `[]` | 1024, on a pipe and a file (strace) |
+
+Moving `DATA` to byte P prints `[DATA]` only when P is exactly the block.
+That is `Semantics.PromptReadSize` (#6328). The size dash throws away after an
+error is the same block, so it comes from the same answer.
 
 ## Text after the line that is not the line — `POSTDISPLAY`
 

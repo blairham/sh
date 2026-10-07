@@ -5,9 +5,10 @@ package repl
 
 import (
 	"io"
-	"runtime"
 	"strings"
 	"testing"
+
+	"github.com/blairham/sh/interp"
 )
 
 // A line at a time, as a terminal hands one over, or as a writer that writes
@@ -33,7 +34,7 @@ func (l *aLineAtATime) Read(p []byte) (int, error) {
 // Linux; bash, zsh, ksh93 and BusyBox ash lose nothing (#6322). See
 // interp.Semantics.PromptErrorDiscardsTheRestOfTheReadBlock.
 func TestAnErrorThrowsAwayTheRestOfTheReadBlock(t *testing.T) {
-	block := readBlockSize(runtime.GOOS)
+	block := interp.ReadSizeCBuffer.Bytes()
 	// `echo Z` starting at byte at, after a refused first line and blank
 	// lines up to it.
 	at := func(at int) string {
@@ -64,6 +65,7 @@ func TestAnErrorThrowsAwayTheRestOfTheReadBlock(t *testing.T) {
 				Out:                                &ran,
 				Err:                                &said,
 				ErrorDiscardsTheRestOfTheReadBlock: c.discard,
+				ReadSize:                           block,
 			}
 			if _, err := s.Run(t.Context()); err != nil {
 				t.Fatal(err)
@@ -91,20 +93,12 @@ func TestAnOrdinarySessionLosesNothingToTheReadBlock(t *testing.T) {
 		Out:                                &ran,
 		Err:                                io.Discard,
 		ErrorDiscardsTheRestOfTheReadBlock: true,
+		ReadSize:                           interp.ReadSizeCBuffer.Bytes(),
 	}
 	if _, err := s.Run(t.Context()); err != nil {
 		t.Fatal(err)
 	}
 	if ran.String() != want.String() {
 		t.Errorf("ran %d bytes, want %d", ran.Len(), want.Len())
-	}
-}
-
-func TestTheReadBlockIsTheCLibrarysBuffer(t *testing.T) {
-	if got := readBlockSize("darwin"); got != 1024 {
-		t.Errorf("darwin: %d, want 1024", got)
-	}
-	if got := readBlockSize("linux"); got != 8192 {
-		t.Errorf("linux: %d, want 8192", got)
 	}
 }

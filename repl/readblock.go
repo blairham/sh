@@ -4,10 +4,11 @@
 package repl
 
 import (
-	"bufio"
 	"bytes"
 	"io"
-	"runtime"
+	"strings"
+
+	"github.com/blairham/sh/internal/lineread"
 )
 
 // lineSource is what the loop without an editor reads its lines from.
@@ -21,37 +22,52 @@ type discarder interface {
 	discardTheRestOfTheBlock()
 }
 
-// plainInput is the reader runPlain takes its lines from: a bufio.Reader,
-// which loses nothing, or for the dialect that answers so, a reader whose
-// unread block an error throws away. See
+// plainInput is the reader runPlain takes its lines from: exactly a line at
+// a time where the dialect takes no more than that, leaving the rest on the
+// descriptor for a `read` typed at the prompt; or a block of the dialect's
+// size, which an error throws the rest of away where the dialect says so. See
+// interp.Semantics.PromptReadSize and
 // interp.Semantics.PromptErrorDiscardsTheRestOfTheReadBlock.
 func (s Shell) plainInput() lineSource {
-	if s.ErrorDiscardsTheRestOfTheReadBlock {
-		return &readBlocks{r: s.In, size: readBlockSize(runtime.GOOS)}
+	if s.ReadSize > 0 {
+		return &readBlocks{r: s.In, size: s.ReadSize}
 	}
-	return bufio.NewReader(s.In)
+	return &exactLines{r: s.In, buf: make([]byte, 4096)}
 }
 
 // discardTheRestOfTheBlock is called where a line was refused or given up,
-// and does something only where the input is read in blocks.
-func discardTheRestOfTheBlock(in lineSource) {
+// and does something only where the input is read in blocks and the dialect
+// throws the rest of one away.
+func (s Shell) discardTheRestOfTheBlock(in lineSource) {
+	if !s.ErrorDiscardsTheRestOfTheReadBlock {
+		return
+	}
 	if d, ok := in.(discarder); ok {
 		d.discardTheRestOfTheBlock()
 	}
 }
 
-// readBlockSize is the size of one read on the platform named, which is the
-// C library's buffer size and not a shell's. Measured 2026-10-07 with dash
-// 0.5.12, whose reads are this size: `echo Z` at byte 1023 of a pipe is lost
-// after a refused first line and at byte 1024 is run on macOS, and on Debian
-// the same edge is at 8192.
-func readBlockSize(goos string) int {
-	switch goos {
-	case "darwin", "ios", "freebsd", "netbsd", "openbsd", "dragonfly":
-		return 1024
-	default:
-		return 8192
+// exactLines is a lineSource that takes nothing past the line it returns,
+// which is lineread.Reader with bufio.Reader's way of saying the input ended.
+type exactLines struct {
+	r   io.Reader
+	buf []byte
+	lr  lineread.Reader
+	// ended is that the last line had no newline, so the next read reports
+	// the end without asking the descriptor again.
+	ended bool
+}
+
+func (l *exactLines) ReadString(byte) (string, error) {
+	if l.ended {
+		return "", io.EOF
 	}
+	line := l.lr.Read(l.r, l.buf)
+	if !strings.HasSuffix(line, "\n") {
+		l.ended = true
+		return line, io.EOF
+	}
+	return line, nil
 }
 
 // readBlocks reads its input one read of size bytes at a time and hands it

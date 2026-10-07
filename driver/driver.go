@@ -2424,7 +2424,7 @@ func (sh Shell) route(args []string, inv invocation) (source, error) {
 		// Not read here. The program is on the same descriptor everything
 		// else the script does reads from, so how much of it the shell takes
 		// is a behavior rather than plumbing, and it is taken as the script
-		// runs — see program and Semantics.StdinProgramReadInBlocks. Reading
+		// runs — see program and Semantics.StdinProgramReadSize. Reading
 		// it all here is what handed `read x` end of input and then ran the
 		// data line as a command.
 		return source{onStdin: true, name: sh.Name, params: args, dg: sh.Diagnostics.ForStdin(), opts: inv.opts}, nil
@@ -3100,7 +3100,7 @@ func (sh Shell) runInput(in source) int {
 		// The program is on the descriptor rather than in hand, so it is read
 		// as it runs. How much at a time is the dialect's answer, and it is
 		// the whole of what this route disagrees about.
-		pr.more = stdinProgram(r, sh.Semantics.StdinProgramReadInBlocks)
+		pr.more = stdinProgram(r, sh.Semantics.StdinProgramReadSize)
 	}
 	// Aliases are expanded when a line is *parsed*, and the table is the
 	// runner's, so the front end is the only place the two can be joined.
@@ -3516,11 +3516,11 @@ func endOfInputRefused(dg interp.Diagnostics, login bool) string {
 //
 // Measured: the half numbers its own lines from 1, reports through the
 // standard-input diagnostics, and takes its input in whatever size this
-// dialect's StdinProgramReadInBlocks says — so a `read` in it finds what a
+// dialect's StdinProgramReadSize says — so a `read` in it finds what a
 // `read` on a plain `sh -s` would.
 func (sh Shell) stdinAfterCommandString(r *interp.Runner) *program {
 	pr := wholeProgram("", r.ParsingDialect(sh.Dialect.On(syntax.RouteOnStandardInput)))
-	pr.more = stdinProgram(r, sh.Semantics.StdinProgramReadInBlocks)
+	pr.more = stdinProgram(r, sh.Semantics.StdinProgramReadSize)
 	if sh.Dialect.ExpandAliasesInProgramText.Has(syntax.RouteOnStandardInput) {
 		pr.aliases = r.ExpandingAlias
 		pr.globalAliases = r.ExpandingGlobalAlias

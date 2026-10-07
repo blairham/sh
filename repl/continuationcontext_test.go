@@ -47,21 +47,21 @@ func TestAContinuationGivesTheWordItsContext(t *testing.T) {
 // (#6242). Here the listing finds nothing — the word is inside a quote an
 // earlier line opened — so zsh's answer is a bell, and the read goes on.
 func TestControlDAtAContinuationListsInZsh(t *testing.T) {
-	read := func(style EditorStyle, keys string) (string, error, int) {
+	read := func(style EditorStyle, keys string) (string, int, error) {
 		var out strings.Builder
 		e := Shell{Editor: style}.newEditor(t.Context(), nil)
 		e.in, e.out = typing(keys), &out
 		e.prebuffer = func() string { return "echo \"a\n" }
 		e.comp = CompleterFunc(func(Completion) []Candidate { return []Candidate{{Word: "zfile"}} })
 		line, err := e.readLine(drawPrompt("dquote> "))
-		return line, err, strings.Count(out.String(), bell)
+		return line, strings.Count(out.String(), bell), err
 	}
 	zsh := EditorStyle{ListOnControlD: true, ControlDAtAContinuationLists: true, CompletionReadsTheContinuation: true}
-	line, err, bells := read(zsh, "\x04b\"\r")
+	line, bells, err := read(zsh, "\x04b\"\r")
 	if err != nil || line != "b\"" || bells != 1 {
 		t.Errorf("zsh: got %q, %v, %d bells; want the read to go on after one bell", line, err, bells)
 	}
-	if _, err, _ := read(EditorStyle{}, "\x04b\"\r"); !errors.Is(err, io.EOF) {
+	if _, _, err := read(EditorStyle{}, "\x04b\"\r"); !errors.Is(err, io.EOF) {
 		t.Errorf("bash: got %v, want end of input", err)
 	}
 	// And at the first prompt it is still end of input in zsh.

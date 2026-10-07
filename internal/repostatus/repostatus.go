@@ -246,17 +246,34 @@ func (c *Cache) changed() {
 }
 
 // refresh re-reads one repository and stores it. Called with the lock held.
+//
+// The witnesses are taken *before* the read, never after. Taken after, a
+// write landing between the two pairs the old answer with the new file's
+// time and size, and every later lookup then calls that stale answer fresh
+// — permanently, where no watch is coming to correct it. The case is not
+// exotic: a head rewritten in place is truncated before it is written, so a
+// read in that gap answers no branch at all, and that is what #6302 caught.
+// Taken before, the same write leaves witnesses older than the file, and the
+// next lookup reads again: one prompt late, which is the promise.
 func (c *Cache) refresh(root, git string) *entry {
-	e := &entry{status: read(root, git)}
+	e := &entry{}
 	if info, err := os.Stat(git); err == nil {
 		e.gitMod = info.ModTime()
 	}
 	if info, err := os.Stat(filepath.Join(git, "HEAD")); err == nil {
 		e.headMod, e.headSz = info.ModTime(), info.Size()
 	}
+	e.status = read(root, git)
+	if afterRead != nil {
+		afterRead()
+	}
 	c.repos[root] = e
 	return e
 }
+
+// afterRead is nil outside tests. A test sets it to land a write between a
+// refresh's read and its storing the answer, which is the race #6302 was.
+var afterRead func()
 
 // fresh reports whether a held answer still matches what is on disk, at two
 // stats.

@@ -84,7 +84,11 @@ func (r *Runner) substFailureRoute(span syntax.Span) string {
 		// no file has only the builtin to be called after.
 		return b.label
 	}
-	if r.Route == RouteCommandString {
+	if r.Route == RouteCommandString && r.borrowedFiles == 0 {
+		// Not inside a file `.` read, which names itself and no route — the
+		// control row above, and measured under `-c` as well: `. ./g2` with
+		// the refused body on g2's line 2 is `./g2: line 2:` in bash 5.3.20,
+		// where this wrote `./g2: -c: line 2:` (#6279).
 		return r.InputName
 	}
 	return ""

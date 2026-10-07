@@ -10128,6 +10128,12 @@ type Diagnostics struct {
 	// function rule locates. See keepBodyLocation.
 	bodyLocation, bodyBuiltinLocation LocationStyle
 	bodyLocationKept                  bool
+	// writtenLocation and writtenBuiltinLocation are what Location and
+	// BuiltinLocation were before LocateCommandStringAsAPrompt moved them,
+	// kept for the refusal that is worded as written. See
+	// Runner.interactiveSubstRefusal.
+	writtenLocation, writtenBuiltinLocation LocationStyle
+	writtenLocationKept                     bool
 
 	// The wordings below replace their unprefixed namesakes for a line typed
 	// at a prompt. Empty — the common answer, and every field for the other
@@ -11324,6 +11330,20 @@ func (d Diagnostics) ForStdin() Diagnostics {
 // routes: with a guard that kept the first call's answer taken out, `-fis`
 // over the same body still wrote `g:cd:1:`, so the guard was removed rather
 // than left untested.
+// LocateCommandStringAsAPrompt moves Location and BuiltinLocation to the
+// prompt's, for an interactive shell's `-c` string — see
+// InteractiveCommandStringIsLocatedAsAPrompt — and keeps what they were, which
+// one refusal still writes (#6279).
+func (d *Diagnostics) LocateCommandStringAsAPrompt() {
+	d.writtenLocation, d.writtenBuiltinLocation, d.writtenLocationKept = d.Location, d.BuiltinLocation, true
+	if d.PromptLocation != LocationNone {
+		d.Location = d.PromptLocation
+	}
+	if d.PromptBuiltinLocation != LocationNone {
+		d.BuiltinLocation = d.PromptBuiltinLocation
+	}
+}
+
 func (d *Diagnostics) keepBodyLocation() {
 	d.bodyLocation, d.bodyBuiltinLocation, d.bodyLocationKept = d.Location, d.BuiltinLocation, true
 }
@@ -12496,6 +12516,11 @@ func CoreDiagnostics() Diagnostics { return Diagnostics{} }
 // handed back untouched, and once to make the adjustment — and two spellings
 // of one question is how the fast path comes to disagree with the slow one.
 func (r *Runner) promptLocated() bool {
+	if r.locatedAsWritten {
+		// A refusal being worded as the text it is in words it, for the
+		// moment it takes. See Runner.interactiveSubstRefusal.
+		return false
+	}
 	if r.speaksAsAtAPrompt() {
 		return true
 	}
@@ -12553,6 +12578,15 @@ func (r *Runner) speaksAsAtAPrompt() bool {
 func (r *Runner) diag() *Diagnostics {
 	located := r.promptLocated()
 	if r.Diagnostics != nil && !located {
+		if r.locatedAsWritten && r.Diagnostics.writtenLocationKept {
+			// The location the command string had before it was located as
+			// a prompt. Copied, for the reason the prompt path below copies;
+			// this is one refusal and not a loop. See
+			// Runner.interactiveSubstRefusal.
+			d := *r.Diagnostics
+			d.Location, d.BuiltinLocation = d.writtenLocation, d.writtenBuiltinLocation
+			return &d
+		}
 		return r.Diagnostics
 	}
 	if located && r.promptDiagnostics != nil && r.promptDiagnosticsOf == r.Diagnostics {

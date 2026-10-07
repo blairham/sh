@@ -2268,12 +2268,7 @@ func (sh Shell) operands(args []string, inv invocation) (source, error) {
 	if in.interactive && !in.prompt && in.invocationRoute() == interp.RouteCommandString &&
 		in.dg.InteractiveCommandStringIsLocatedAsAPrompt {
 		// See Diagnostics.InteractiveCommandStringIsLocatedAsAPrompt.
-		if in.dg.PromptLocation != interp.LocationNone {
-			in.dg.Location = in.dg.PromptLocation
-		}
-		if in.dg.PromptBuiltinLocation != interp.LocationNone {
-			in.dg.BuiltinLocation = in.dg.PromptBuiltinLocation
-		}
+		in.dg.LocateCommandStringAsAPrompt()
 	}
 	// `-s` as written, carried here for the same reason and in the same
 	// place: it survives a route that overrode it, and `sh -s -c cmd` shows

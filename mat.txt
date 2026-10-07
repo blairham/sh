@@ -1,0 +1,44 @@
+## echo $(fi)
+  bash   prompt: echo $(fi)|bash: syntax error near unexpected token `fi' while looking for matching `)'|bash: syntax error|echo st=$?|st=2|exit|
+  bash   -i -c : bash: syntax error near unexpected token `fi' while looking for matching `)'|st=1|
+  bash   -i scr: bash: m.sh: line 1: syntax error near unexpected token `fi' while looking for matching `)'|bash: m.sh: line 1: `echo $(fi)'|st=2|
+  bash   -c    : SH: -c: line 1: syntax error near unexpected token `fi' while looking for matching `)'|SH: -c: line 1: `echo $(fi)'|
+  bash   scr   : m.sh: line 1: syntax error near unexpected token `fi' while looking for matching `)'|m.sh: line 1: `echo $(fi)'|
+  bash   prompt: env: ./bash: No such file or directory|
+  bash   -i -c : env: ./bash: No such file or directory|
+  bash   -i scr: env: ./bash: No such file or directory|
+  bash   -c    : env: SH: No such file or directory|
+  bash   scr   : env: ./bash: No such file or directory|
+## eval "echo \$(fi)"
+  bash   prompt: eval "echo \$(fi)"|bash: syntax error near unexpected token `fi' while looking for matching `)'|echo st=$?|st=1|exit|
+  bash   -i -c : bash: syntax error near unexpected token `fi' while looking for matching `)'|st=1|
+  bash   -i scr: bash: eval: line 1: syntax error near unexpected token `fi' while looking for matching `)'|bash: eval: line 1: `echo $(fi)'|st=1|
+  bash   -c    : SH: eval: line 1: syntax error near unexpected token `fi' while looking for matching `)'|SH: eval: line 1: `echo $(fi)'|
+  bash   scr   : m.sh: eval: line 1: syntax error near unexpected token `fi' while looking for matching `)'|m.sh: eval: line 1: `echo $(fi)'|
+  bash   prompt: env: ./bash: No such file or directory|
+  bash   -i -c : env: ./bash: No such file or directory|
+  bash   -i scr: env: ./bash: No such file or directory|
+  bash   -c    : env: SH: No such file or directory|
+  bash   scr   : env: ./bash: No such file or directory|
+## echo `fi`
+  bash   prompt: echo `fi`|bash: command substitution: line 1: syntax error near unexpected token `fi'|bash: command substitution: line 1: `fi'||echo st=$?|st=0|exit|
+  bash   -i -c : bash: command substitution: line 1: syntax error near unexpected token `fi'|bash: command substitution: line 1: `fi'||st=0|
+  bash   -i scr: bash: command substitution: line 1: syntax error near unexpected token `fi'|bash: command substitution: line 1: `fi'||st=0|
+  bash   -c    : SH: command substitution: line 1: syntax error near unexpected token `fi'|SH: command substitution: line 1: `fi'||st=0|
+  bash   scr   : m.sh: command substitution: line 1: syntax error near unexpected token `fi'|m.sh: command substitution: line 1: `fi'||st=0|
+  bash   prompt: env: ./bash: No such file or directory|
+  bash   -i -c : env: ./bash: No such file or directory|
+  bash   -i scr: env: ./bash: No such file or directory|
+  bash   -c    : env: SH: No such file or directory|
+  bash   scr   : env: ./bash: No such file or directory|
+## . ./g2
+  bash   prompt: . ./g2|bash: ./g2: No such file or directory|echo st=$?|st=1|exit|
+  bash   -i -c : bash: ./g2: No such file or directory|st=1|
+  bash   -i scr: bash: ./g2: No such file or directory|st=1|
+  bash   -c    : SH: line 1: ./g2: No such file or directory|st=1|
+  bash   scr   : m.sh: line 1: ./g2: No such file or directory|st=1|
+  bash   prompt: env: ./bash: No such file or directory|
+  bash   -i -c : env: ./bash: No such file or directory|
+  bash   -i scr: env: ./bash: No such file or directory|
+  bash   -c    : env: SH: No such file or directory|
+  bash   scr   : env: ./bash: No such file or directory|

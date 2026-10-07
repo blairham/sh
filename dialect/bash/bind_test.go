@@ -257,7 +257,9 @@ func TestTheKeymapABindingLandsInIsTheEditingModes(t *testing.T) {
 		`bind -m emacs '"\C-g": undo'` + "\n" +
 		"bind -q clear-screen\nbind -q undo"
 	out, _ := bindRun(t, src)
-	if !strings.Contains(out, `clear-screen can be invoked via "\C-g", "\C-l".`) {
+	// `^L` is not among them: in vi insert mode it types itself, as bash
+	// 5.3.20's answer here — `"\C-g".` and nothing else — says (#6300).
+	if !strings.Contains(out, `clear-screen can be invoked via "\C-g".`) {
 		t.Errorf("in vi mode: out = %q, want the vi-insert binding live", out)
 	}
 	if strings.Contains(out, `undo can be invoked via "\C-g"`) {
@@ -406,6 +408,9 @@ func bindActionNames() map[repl.Widget]bool {
 	for _, w := range repl.WordBindings() {
 		out[w] = true
 	}
+	// And typing, which no default table entry names, on the printable
+	// keys (#6300).
+	out[repl.WidgetSelfInsert] = true
 	return out
 }
 
@@ -742,5 +747,32 @@ func TestBashViInsertTypesItsSelfInsertControlKeys(t *testing.T) {
 		if strings.ContainsRune(got, k) {
 			t.Errorf("%q is typed in vi insert mode, where bash gives it an action", k)
 		}
+	}
+}
+
+// self-insert is a name `bind` takes, and the listing puts it on the keys
+// bash 5.3.20's does (#6300): every printable byte and every byte with the top
+// bit set in emacs, those and fifteen control keys in vi-insert, and none in
+// vi-command.
+func TestSelfInsertIsListedOnTheKeysThatTypeThemselves(t *testing.T) {
+	count := func(keymap string) int {
+		out, _ := bindRun(t, "bind -m "+keymap+" -p")
+		return strings.Count(out, ": self-insert\n")
+	}
+	for keymap, want := range map[string]int{"emacs": 223, "vi-insert": 238, "vi-command": 0} {
+		if got := count(keymap); got != want {
+			t.Errorf("%s: %d keys on self-insert, want %d", keymap, got, want)
+		}
+	}
+	out, _ := bindRun(t, `bind '"\C-xs": self-insert'`+"\nbind -q self-insert")
+	if want := `self-insert can be invoked via "\C-xs", " ", "!", "\"", "#", ...`; !strings.Contains(out, want) {
+		t.Errorf("got %q, want %q", out, want)
+	}
+	// And the defaults are not overrides: the editor types them itself.
+	var buf strings.Builder
+	r := preset.Runner(dialecttest.Base{Stdout: &buf, Stderr: &buf})
+	r.Interactive = true
+	if table := bash.KeyBindings(r, repl.KeymapMain); len(table) != 0 {
+		t.Errorf("nothing rebound, and the editor is handed %d keys", len(table))
 	}
 }

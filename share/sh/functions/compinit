@@ -187,15 +187,29 @@ compdef() {
 			_services[${name%%=*}]=${name#*=}
 			continue
 		fi
-		if (( noreplace )); then
-			eval "(( \${+${table}[\$name]} ))" && continue
-		fi
-		eval "${table}[\$name]=\$fn"
+		# One branch per table rather than an `eval` naming it: this runs for
+		# every name of every `#compdef` line that is not a plain list of
+		# commands, and for every call a plugin makes (#5873).
+		case $table in
+		(_patcomps)
+			(( noreplace && ${+_patcomps[$name]} )) && continue
+			_patcomps[$name]=$fn
+			;;
+		(_postpatcomps)
+			(( noreplace && ${+_postpatcomps[$name]} )) && continue
+			_postpatcomps[$name]=$fn
+			;;
+		(*)
+			(( noreplace && ${+_comps[$name]} )) && continue
+			_comps[$name]=$fn
+			;;
+		esac
 	done
 	return 0
 }
 
-local dir file line name
+local dir file line name word
+local -a words options
 local -A seen
 for dir in $scan; do
 	# `-.`, a plain file or a link to one: every file of a Homebrew zsh's
@@ -213,7 +227,21 @@ for dir in $scan; do
 		case $line in
 		('#compdef '*|'#compdef')
 			autoload -Uz -- $file
-			compdef -n $name ${=${line#\#compdef}}
+			words=( ${=${line#\#compdef}} )
+			# A line that is only command names, which is nearly every line,
+			# is what `compdef -n` does with one: each name that has no
+			# function yet gets this file's. Written here rather than through
+			# the call, which was most of what this scan cost — about 130ms
+			# of a start over an installed zsh's library (#5873). Anything
+			# with an option or a service still goes through compdef.
+			options=( ${(M)words:#(-*|*=*)} )
+			if (( $#options )); then
+				compdef -n $name $words
+			else
+				for word in $words; do
+					(( ${+_comps[$word]} )) || _comps[$word]=$name
+				done
+			fi
 			;;
 		('#autoload '*|'#autoload')
 			autoload -Uz ${=${line#\#autoload}} -- $file

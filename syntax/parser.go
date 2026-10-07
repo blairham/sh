@@ -1066,6 +1066,29 @@ func (p *Parser) OpenQuote() string { return p.lex.OpenInnermost() }
 // a history entry and one it left alone is two.
 func (p *Parser) OpenHeredocExpands() bool { return p.lex.OpenHeredocExpands() }
 
+// EndsOfInputAt tells the parser that the input ended at each of these
+// offsets of its text before the rest of it arrived, in the order given.
+//
+// Only a here-document body reads them. A body that reaches the next one ends
+// there, as it would at the end of the text, with the same remark — numbered
+// in [Remark.EndOfInput] — and the next document queued on the same line
+// starts reading after it. Nothing else stops at one: the text is the program
+// read so far, and an end of input that ended no here-document ended nothing
+// the parser can see.
+//
+// It is how a session reads `cat <<E1 <<E2` in the dialect that takes one end
+// of input at a prompt per document: bash 5.3.20 ends E1 at the first ^D,
+// draws `> ` for E2, and goes on (#6287). The text is still handed over whole,
+// so every line keeps the number it has.
+//
+// Call it before anything is parsed. The first token is read when the parser
+// is made, and no body can be reached before a newline is.
+func (p *Parser) EndsOfInputAt(offsets []int) { p.lex.inputEnds = offsets }
+
+// EndsOfInputTaken is how many of the ends of input given to
+// [Parser.EndsOfInputAt] a here-document body ended at.
+func (p *Parser) EndsOfInputTaken() int { return p.lex.inputEndsTaken }
+
 // Open is one thing the parser is inside.
 type Open struct {
 	// Word is the keyword that opened it: `if`, `for`, `case`, `{`, or a

@@ -410,6 +410,11 @@ type counts struct {
 	// was taken, which is what says whether the newline after it is a
 	// separator or text. The zero value is a line that begins a command.
 	entryAt histjoin.At
+	// ends are the offsets in the pending text at which an end of input
+	// ended a here-document's body and the reading went on, for the dialect
+	// that takes one per document. Emptied with entry, at the same three
+	// moments. See Shell.endsOnlyTheDocument.
+	ends []int
 
 	// tty is the terminal's name once it has been looked for, and looked
 	// says it has been. Kept for the session rather than for the package: a

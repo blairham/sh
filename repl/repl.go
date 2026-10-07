@@ -20,6 +20,7 @@ import (
 	"io"
 	"math"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 	"syscall"
@@ -132,6 +133,13 @@ type Shell struct {
 	// the end of that line only. See [Shell.endsOnlyTheLine] and
 	// interp.Semantics.EndOfInputEndsAContinuedHeredocLine.
 	EndOfInputEndsAContinuedHeredocLine bool
+
+	// EndOfInputEndsOneHeredocBody takes the end of input inside a
+	// here-document's body as the end of that body only, so a second
+	// document queued on the line is read next. See
+	// [Shell.endsOnlyTheDocument] and
+	// interp.Semantics.EndOfInputEndsOneHeredocBody.
+	EndOfInputEndsOneHeredocBody bool
 
 	// CommentsNeedTheOption names the option a `#` typed here has to have on
 	// before it opens a comment. Empty is "nothing has to be on", which is
@@ -963,7 +971,7 @@ func (s Shell) Run(ctx context.Context) (int, error) {
 				// second ^D is what actually ends it.
 				continue
 			}
-			if s.endsOnlyTheLine(&pending) {
+			if s.endsOnlyTheLine(&pending) || s.endsOnlyTheDocument(&pending) {
 				continue
 			}
 			unfinished := strings.TrimSpace(pending.String()) != ""
@@ -1913,7 +1921,7 @@ func (s Shell) runPlain(
 				// read, which ends at once, leaves.
 				continue
 			}
-			if s.endsOnlyTheLine(&pending) {
+			if s.endsOnlyTheLine(&pending) || s.endsOnlyTheDocument(&pending) {
 				continue
 			}
 			unfinished := strings.TrimSpace(pending.String()) != ""
@@ -1955,7 +1963,9 @@ func (s Shell) runPlain(
 		expanded, outcome := s.expanded(line, recall.lines, recall.remember)
 		switch outcome {
 		case dropLine:
-			pending.Reset()
+			// The whole construct, as the other loop gives it up: the text
+			// and what was being kept beside it. See abandon.
+			s.abandon(&pending)
 			continue
 		case verifyLine:
 			seeded = expanded
@@ -2017,6 +2027,10 @@ func (s Shell) accept(pending *strings.Builder, remember func(string), line stri
 	text := pending.String()
 
 	p := syntax.NewParserAt(text, s.parseDialect(), s.parseBase(first))
+	// Where the end of input has already ended a here-document's body, so
+	// that the lines typed since go to the next document rather than back
+	// into that one. See endsOnlyTheDocument.
+	p.EndsOfInputAt(c.ends)
 	// The hook goes on unconditionally, unlike the script path: every shell
 	// in the panel expands aliases at a prompt, and the dialect's answer is
 	// only about a *non-interactive* one. This is the place that knows there
@@ -2065,6 +2079,7 @@ func (s Shell) accept(pending *strings.Builder, remember func(string), line stri
 	// The construct is whole, so nothing is waiting on the next line.
 	c.open = nil
 	c.entryAt = histjoin.At{}
+	c.ends = nil
 	// The lines before Take, which empties the collector: a dialect that keeps
 	// one entry per typed line needs them, and asking afterwards would ask an
 	// empty entry.
@@ -2141,6 +2156,7 @@ func (s Shell) abandon(pending *strings.Builder) {
 	c := s.counted()
 	c.entry = histjoin.Entry{}
 	c.entryAt = histjoin.At{}
+	c.ends = nil
 }
 
 // countLine records that one more line has been read and answers the line
@@ -2226,6 +2242,9 @@ func (s Shell) endOfInput(pending *strings.Builder) ([]*syntax.File, string, err
 // See afterTheEndOfInput.
 func (s Shell) endOfInputHow(pending *strings.Builder) ([]*syntax.File, string, bool, error) {
 	text := pending.String()
+	// The ends of input that have already ended a here-document's body, which
+	// abandon is about to forget and the parse below still needs.
+	ends := s.counted().ends
 	// The collector goes with it. What is read here is read whole rather than
 	// a line at a time, so the entry it would have made is not this one's —
 	// and a session ends here, so nothing is left that could reach it anyway.
@@ -2234,6 +2253,7 @@ func (s Shell) endOfInputHow(pending *strings.Builder) ([]*syntax.File, string, 
 		return nil, "", false, nil
 	}
 	p := syntax.NewParserAt(text, s.parseDialect(), s.parseBase(s.pendingLine()))
+	p.EndsOfInputAt(ends)
 	// The same alias table the accepted lines were parsed with: a construct
 	// half of which was typed through an alias must not finish differently
 	// for having been finished here.
@@ -2250,7 +2270,12 @@ func (s Shell) endOfInputHow(pending *strings.Builder) ([]*syntax.File, string, 
 	s.sayRemarks(p.Remarks())
 	heredoc := false
 	for _, rk := range p.Remarks() {
-		heredoc = heredoc || rk.Kind == syntax.RemarkHeredocAtEOF
+		// Not a body an earlier end of input ended: that one was over before
+		// this end arrived, and what this one met is the rest of the command.
+		// Measured 2026-10-07, bash 5.3.20 at a terminal: `if true; then cat
+		// <<E1`, `a`, ^D, ^D refuses the `if` and leaves with `exit`, as an
+		// `if` with no document in it does (#6287).
+		heredoc = heredoc || rk.Kind == syntax.RemarkHeredocAtEOF && rk.EndOfInput == 0
 	}
 	if err != nil {
 		return nil, "", heredoc, err
@@ -2271,6 +2296,68 @@ func (s Shell) endsOnlyTheLine(pending *strings.Builder) bool {
 		return false
 	}
 	pending.WriteString("\n")
+	return true
+}
+
+// endsOnlyTheDocument reports whether the end of input that has just arrived
+// ends a here-document's body and leaves something else of the command still
+// to be read — a second document queued on the same line, or the rest of a
+// construct the documents sit in — so that the read goes on at a continuation
+// prompt. The warning for the body it ended is written now, which is when the
+// one shell that reads it this way writes it.
+//
+// Asked by parsing the pending text with this end of input marked at its end,
+// beside the ones before it. The text is not changed: a delimiter typed for
+// the first document instead would be a line, and every `at line N` after it
+// would move by one. See interp.Semantics.EndOfInputEndsOneHeredocBody
+// (#6287).
+func (s Shell) endsOnlyTheDocument(pending *strings.Builder) bool {
+	if !s.EndOfInputEndsOneHeredocBody {
+		return false
+	}
+	text := pending.String()
+	if strings.TrimSpace(text) == "" {
+		return false
+	}
+	c := s.counted()
+	ends := append(slices.Clip(c.ends), len(text))
+	p := syntax.NewParserAt(text, s.parseDialect(), s.parseBase(s.pendingLine()))
+	p.EndsOfInputAt(ends)
+	if s.Runner != nil {
+		p.Aliases = s.Runner.ExpandingAlias
+		p.GlobalAliases = s.Runner.ExpandingGlobalAlias
+		p.SuffixAliases = s.Runner.ExpandingSuffixAlias
+	}
+	_, err := collect(p)
+	if p.EndsOfInputTaken() < len(ends) {
+		// No body reached it: the input ended outside any here-document,
+		// which is the end of input every dialect already reads.
+		return false
+	}
+	if s.refusedForGood(err) || !p.Incomplete() {
+		// The body it ended was the last thing the command was waiting on,
+		// so the command is whole and the ordinary end of input runs it.
+		return false
+	}
+	c.ends = ends
+	if s.Remark != nil {
+		for _, rk := range p.Remarks() {
+			if rk.EndOfInput == len(ends) {
+				if line := s.Remark(rk); line != "" {
+					s.errf("%s", line)
+				}
+			}
+		}
+	}
+	// What the next line goes on inside, as accept leaves it after a line
+	// that did not finish the command: the continuation prompt and the
+	// history collector both read it.
+	c.open = p.Open()
+	c.entryAt = histjoin.At{
+		Open:           p.OpenQuote(),
+		HeredocExpands: p.OpenHeredocExpands(),
+		Dialect:        s.parseDialect(),
+	}
 	return true
 }
 
@@ -2311,6 +2398,11 @@ func (s Shell) sayRemarks(rs []syntax.Remark) {
 		return
 	}
 	for _, rk := range rs {
+		if rk.EndOfInput > 0 {
+			// About a here-document an earlier end of input ended, and said
+			// when that end arrived. See endsOnlyTheDocument.
+			continue
+		}
 		if line := s.Remark(rk); line != "" {
 			s.errf("%s", line)
 		}

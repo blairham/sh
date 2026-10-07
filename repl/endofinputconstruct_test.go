@@ -4,8 +4,11 @@
 package repl
 
 import (
+	"fmt"
 	"strings"
 	"testing"
+
+	"github.com/blairham/sh/syntax"
 )
 
 // constructAtEndSession runs a session on a pipe holding text, and answers what it
@@ -107,4 +110,74 @@ func TestTheEndOfInputOnAContinuedHeredocLine(t *testing.T) {
 			}
 		})
 	}
+}
+
+// heredocAtEndSession is constructAtEndSession for bash's reading of an end of
+// input inside a here-document's body, with each warning written as the
+// document's delimiter and the line it names, so where it lands is visible.
+func heredocAtEndSession(t *testing.T, text string, oneBody bool) (ran, said string) {
+	t.Helper()
+	var out, errs strings.Builder
+	r := newTestRunner(map[string]string{"PS1": "$ ", "PS2": "> "})
+	r.Stdout = &out
+	s := Shell{
+		Runner:                               r,
+		In:                                   strings.NewReader(text),
+		Out:                                  &out,
+		Err:                                  &errs,
+		Leaving:                              "exit",
+		EndOfInputInAConstructEndsTheSession: true,
+		EndOfInputEndsAContinuedHeredocLine:  true,
+		EndOfInputEndsOneHeredocBody:         oneBody,
+		Remark: func(rk syntax.Remark) string {
+			if rk.Kind != syntax.RemarkHeredocAtEOF {
+				return ""
+			}
+			return fmt.Sprintf("[%s at %d]\n", rk.Token, rk.At.Line)
+		},
+	}
+	if _, err := s.Run(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	return out.String(), errs.String()
+}
+
+// In bash the end of input inside a here-document's body ends that body only:
+// its warning is written, and a continuation prompt is drawn for whatever the
+// command still needs — the next document on the line, or the rest of the
+// construct the documents are in. Measured 2026-10-07, bash 5.3.20 under
+// `--norc -i` on a pipe, `cat <<E1 <<E2` / `a`: `> a`, `> ` and E1's warning,
+// `> ` and E2's warning, then the prompt. zsh 5.9.2 and dash end every
+// document at the one end of input (#6287). See
+// interp.Semantics.EndOfInputEndsOneHeredocBody.
+func TestTheEndOfInputInAHeredocEndsOnlyThatBody(t *testing.T) {
+	for _, c := range []struct {
+		name, text string
+		oneBody    bool
+		ran, said  string
+	}{
+		{"bash asks again for the second document", "cat <<E1 <<E2\na\n", true, "", "$ > > [E1 at 1]\n> [E2 at 2]\n$ exit\n"},
+		{"the others end both at once", "cat <<E1 <<E2\na\n", false, "", "$ > > [E1 at 1]\n[E2 at 2]\n$ exit\n"},
+		{"a second command's document too", "cat <<E1; cat <<E2\na\n", true, "a\n", "$ > > [E1 at 1]\n> [E2 at 2]\n$ exit\n"},
+		{"one document is unchanged", "cat <<E1\na\n", true, "a\n", "$ > > [E1 at 1]\n$ exit\n"},
+		{"with a line continued into the end", "cat <<E1 <<E2\na \\\n", true, "", "$ > > > [E1 at 1]\n> [E2 at 3]\n$ exit\n"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			ran, said := heredocAtEndSession(t, c.text, c.oneBody)
+			if ran != c.ran || said != c.said {
+				t.Errorf("output %q and diagnostics %q, want %q and %q", ran, said, c.ran, c.said)
+			}
+		})
+	}
+	// And a construct still open once its documents are over is asked for
+	// and then refused, as though no document had been in it — which in bash
+	// ends the session with the word. Measured 2026-10-07 at a terminal:
+	// `if true; then cat <<E1`, `a`, ^D, ^D draws E1's warning, `> `, the
+	// refusal and `exit`.
+	t.Run("a construct the documents are in", func(t *testing.T) {
+		_, said := heredocAtEndSession(t, "if true; then cat <<E1\na\n", true)
+		if !strings.HasPrefix(said, "$ > > [E1 at 1]\n> ") || !strings.HasSuffix(said, "\nexit\n") || strings.Contains(said, "\n$ ") {
+			t.Errorf("diagnostics %q, want the warning, a prompt, the refusal and the word", said)
+		}
+	})
 }

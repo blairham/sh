@@ -80,3 +80,18 @@ func TestTheFrontEndCarriesWhetherTheEndOfInputEndsAContinuedHeredocLine(t *test
 		}
 	}
 }
+
+// And whether the end of input inside a here-document's body ends only that
+// body, carried the same way (#6287).
+func TestTheFrontEndCarriesWhetherTheEndOfInputEndsOneHeredocBody(t *testing.T) {
+	for _, answer := range []bool{false, true} {
+		sh := Shell{
+			Name:      "testsh",
+			Semantics: interp.Semantics{EndOfInputEndsOneHeredocBody: answer},
+		}.withDefaults([]string{"testsh"})
+		r := sh.newRunner("testsh", nil, sh.Diagnostics, interp.RouteCommandString)
+		if got := sh.frontEnd(r, "testsh", sh.Diagnostics).EndOfInputEndsOneHeredocBody; got != answer {
+			t.Errorf("the prompt was told %v, want %v", got, answer)
+		}
+	}
+}

@@ -146,6 +146,30 @@ type EditorStyle struct {
 	// nothing. Mid-line both delete and draw the deletion (#6233).
 	ListOnControlD bool
 
+	// ControlDAtAContinuationLists makes `^D` on an empty line at a
+	// continuation prompt the delete-char-or-list it is everywhere else in
+	// the line — a listing for the empty word, and a bell where nothing
+	// matches — rather than end of input. The zero value ends input there as
+	// at the first prompt, which is bash's: it reports the unfinished command
+	// as a syntax error and the session ends (or refuses, under IGNOREEOF).
+	//
+	// Measured 2026-10-06 through a pseudo-terminal against zsh 5.9.2, a
+	// two-row prompt, in an empty directory: `for x in 1`, Return, then `^D`
+	// at `for> ` writes `\a` and nothing else, and the loop can still be
+	// finished; at `dquote> ` the same; after `if true`, `then`, `^D` at
+	// `then> ` asks whether to list every command. `setopt ignoreeof` changes
+	// none of it — no refusal is written at a continuation prompt (#6242).
+	// Needs ListOnControlD, which is the action it runs.
+	ControlDAtAContinuationLists bool
+
+	// CompletionReadsTheContinuation makes a word at the start of a
+	// continuation line complete in the context the lines already entered
+	// give it — an argument after `for x in 1`, nothing inside a quote an
+	// earlier line opened — where the zero value reads the line alone, as
+	// bash's does. See repl/continuationcontext.go for the measurement
+	// (#6242).
+	CompletionReadsTheContinuation bool
+
 	// IgnoreEndOfInputOption names the option that makes `^D` on an empty
 	// line at a prompt refuse to end the session, saying
 	// Shell.EndOfInputRefused instead; IgnoreEndOfInputParameter names the

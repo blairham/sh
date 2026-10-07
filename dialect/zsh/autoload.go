@@ -1562,13 +1562,14 @@ func autoloadFixPath(r *interp.Runner, name string, strict bool) (int, string) {
 }
 
 // autoloadRecordPath fixes the file a name loads from.
+//
+// One element written, never the table copied out and stored back: a startup
+// that autoloads a directory of functions by absolute path records each of
+// them, and the copy made filling the table quadratic — 115MB of a real
+// start's allocation for about two thousand names (#5873). The same shape
+// SetAssocElement was added for, for the store autoloadMark writes.
 func autoloadRecordPath(r *interp.Runner, name, path string) {
-	paths, _ := r.GetAssoc(autoloadPathStore)
-	if paths == nil {
-		paths = map[string]string{}
-	}
-	paths[name] = path
-	r.SetAssoc(autoloadPathStore, paths)
+	r.SetAssocElement(autoloadPathStore, name, path)
 }
 
 // autoloadAbsolute reads a declared name that is an absolute path: the file
@@ -1615,12 +1616,7 @@ func autoloadForgetPath(r *interp.Runner, name string) {
 
 // autoloadFixedPath is the path a `-r` or `-R` declaration settled on.
 func autoloadFixedPath(r *interp.Runner, name string) (string, bool) {
-	paths, ok := r.GetAssoc(autoloadPathStore)
-	if !ok {
-		return "", false
-	}
-	path, ok := paths[name]
-	return path, ok
+	return r.AssocElement(autoloadPathStore, name)
 }
 
 // autoloadSearch is where a name resolves on `$fpath`, without the caller

@@ -93,6 +93,13 @@ type Runner struct {
 	// Diagnostics is how failure is reported and which status it carries.
 	// Nil means the substrate's own.
 	Diagnostics *Diagnostics
+
+	// promptDiagnostics is Diagnostics as a line typed at a prompt reads
+	// it, made from promptDiagnosticsOf and kept while that is still the
+	// vector. See Runner.diag.
+	promptDiagnostics   *Diagnostics
+	promptDiagnosticsOf *Diagnostics
+
 	// Semantics is where the shells disagree about what identical syntax
 	// means, as distinct from which syntax they accept. Nil means bash's.
 	Semantics *Semantics

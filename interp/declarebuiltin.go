@@ -5358,6 +5358,13 @@ func (r *Runner) integerNumber(text string) (int, bool) {
 	if text == "" {
 		return 0, true
 	}
+	if n, ok := plainDecimal(text); ok && plainDecimalShortcut {
+		// A number and nothing else, which every reader agrees about. It is
+		// most of what an integer name is assigned, and reading it needs no
+		// expression parser — building one per assignment was 30MB of a
+		// real start's allocation (#5873).
+		return n, true
+	}
 	p := syntax.NewParser("", r.dialect())
 	e := p.ParseArithFor(text, syntax.Pos{})
 	if err := p.Err(); err != nil {
@@ -5504,6 +5511,30 @@ func (r *Runner) zeroPaddedInteger(text string) (int, bool) {
 		return 0, false
 	}
 	return n, true
+}
+
+// plainDecimalShortcut switches the reading below on; a variable so a test
+// can put the same text through the expression reader and compare.
+var plainDecimalShortcut = true
+
+// plainDecimal reads text that is an optional minus sign and then decimal
+// digits with no leading zero, short enough that it cannot overflow. That is
+// the shape whose value every arithmetic reader agrees about: no base prefix,
+// no octal question (a leading zero is zeroPaddedInteger's, and ahead of this),
+// no name to look up and no operator to apply. Anything else is false and goes
+// to the expression reader.
+func plainDecimal(text string) (int, bool) {
+	digits := strings.TrimPrefix(text, "-")
+	if digits == "" || len(digits) > 18 || (digits[0] == '0' && len(digits) > 1) {
+		return 0, false
+	}
+	for i := 0; i < len(digits); i++ {
+		if digits[i] < '0' || digits[i] > '9' {
+			return 0, false
+		}
+	}
+	n, err := strconv.Atoi(text)
+	return n, err == nil
 }
 
 // zeroPadded reports whether text is a decimal digit string, optionally
@@ -6898,6 +6929,12 @@ func (r *Runner) declarationNameSplit(w *syntax.Word) (span, off int, appends, o
 	if head.Kind != syntax.Literal || head.Quoting != syntax.Unquoted {
 		return 0, 0, false, false
 	}
+	// The name is taken as slices of the spans rather than a byte at a time:
+	// it is asked of every operand of every declaration, and building it by
+	// concatenation allocated once per character (#5873). Within a span the
+	// name's bytes are one run, since nothing after a `[`, a `+` or an `=` at
+	// the top level can add to it, so run marks where this span's part began
+	// and it is added whole when the run ends.
 	depth, closed, plus, name := 0, false, false, ""
 	for i, s := range w.Spans {
 		if s.Kind != syntax.Literal || s.Quoting != syntax.Unquoted {
@@ -6906,8 +6943,13 @@ func (r *Runner) declarationNameSplit(w *syntax.Word) (span, off int, appends, o
 			}
 			continue
 		}
+		run := -1
 		for j := 0; j < len(s.Value); j++ {
 			c := s.Value[j]
+			if run >= 0 && (depth > 0 || c == '[' || c == ']' || c == '+' || c == '=') {
+				name += s.Value[run:j]
+				run = -1
+			}
 			if depth == 0 && plus && c != '=' {
 				// The `+` is the operator only where the `=` follows it.
 				// `x+y=v` is a name that is not one and `x++=v` is nothing
@@ -6947,9 +6989,14 @@ func (r *Runner) declarationNameSplit(w *syntax.Word) (span, off int, appends, o
 					if closed {
 						return 0, 0, false, false
 					}
-					name += s.Value[j : j+1]
+					if run < 0 {
+						run = j
+					}
 				}
 			}
+		}
+		if run >= 0 {
+			name += s.Value[run:]
 		}
 	}
 	return 0, 0, false, false

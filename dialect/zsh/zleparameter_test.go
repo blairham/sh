@@ -206,3 +206,32 @@ func TestARedefinitionLeavesTheDottedSpellingAlone(t *testing.T) {
 		t.Errorf("output = %q, want %q", got, want)
 	}
 }
+
+// TestOneWidgetReadsWhatTheTableHolds is the contract
+// interp.Runner.SetDynamicAssocElement states, for `$widgets`: reading one
+// entry answers what the whole table holds for it, and is absent exactly
+// where the table has no such key (#5873). The keys are every one the table
+// lists — the editor's actions bare and dotted, a user widget, one written
+// over an action, a completion widget — and some it does not.
+func TestOneWidgetReadsWhatTheTableHolds(t *testing.T) {
+	out := zleParam(t, `f(){ }
+zle -N mywidget
+zle -N backward-char f
+zle -N .mydotted f
+zle -C mycomp complete-word f
+typeset -A copy
+copy=("${(@kv)widgets}")
+n=0 bad=0
+for k in ${(k)copy} nosuch .nosuch .mywidget '' . .. 'backward-char ' user:f; do
+  (( n++ ))
+  if [[ ${widgets[$k]} != ${copy[$k]} || ${+widgets[$k]} != ${+copy[$k]} ]]; then
+    print -r -- "differs: [$k] one=[${widgets[$k]}] table=[${copy[$k]}]"
+    (( bad++ ))
+  fi
+done
+print -r -- "checked $n, keys ${#copy}, differ $bad"`)
+	if !strings.Contains(out, ", differ 0") || strings.Contains(out, "keys 0,") {
+		t.Fatalf("one-entry reads and the table disagree:\n%s", out)
+	}
+	t.Log(strings.TrimSpace(out))
+}

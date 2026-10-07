@@ -232,6 +232,11 @@ type Shell struct {
 	// interp.Semantics.PromptEndOfInputEndsTheLine.
 	EndOfInputEndsTheLine bool
 
+	// PromptAgainForAnUnterminatedLine is the prompt drawn once more before
+	// running a last line the input ended without a newline. See
+	// interp.Semantics.PromptAgainForAnUnterminatedLine.
+	PromptAgainForAnUnterminatedLine interp.UnterminatedLinePrompt
+
 	// EditorWithoutATerminal gives a session whose input is not a terminal a
 	// line editor, so that `C-r`, the arrows and every other binding are read
 	// as keys rather than as characters of the line.
@@ -1938,6 +1943,9 @@ func (s Shell) runPlain(
 		s.errf("%s", drawn.lead+drawn.text)
 
 		line, err := in.ReadString('\n')
+		if line != "" && err != nil {
+			s.promptAgainForAnUnterminatedLine(&pending)
+		}
 		// And the line itself, where the dialect writes one. Only this loop
 		// ever does: the editor's input is a terminal, which echoes a
 		// keystroke on its own. Before anything looks at the line, because
@@ -2049,6 +2057,24 @@ func (s Shell) runPlain(
 			s.discardTheRestOfTheBlock(in)
 		}
 	}
+}
+
+// promptAgainForAnUnterminatedLine draws the prompt the dialect draws once
+// more when the input ends partway through a line. See
+// interp.Semantics.PromptAgainForAnUnterminatedLine.
+func (s Shell) promptAgainForAnUnterminatedLine(pending *strings.Builder) {
+	var continuing bool
+	switch s.PromptAgainForAnUnterminatedLine {
+	case interp.SamePromptForAnUnterminatedLine:
+		continuing = pending.Len() > 0
+	case interp.ContinuationPromptForAnUnterminatedLine:
+		continuing = true
+	default:
+		return
+	}
+	_, cols := s.trackWindowSize()
+	drawn := s.promptHalf(continuing, cols)
+	s.errf("%s", drawn.lead+drawn.text)
 }
 
 // accept adds a typed line to what is pending and says whether it is a command

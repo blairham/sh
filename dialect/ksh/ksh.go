@@ -872,6 +872,9 @@ func Semantics() interp.Semantics {
 	// The end of the input at a prompt without a terminal ends the line the
 	// prompt was drawn on. See Semantics.PromptEndOfInputEndsTheLine (#6330).
 	s.PromptEndOfInputEndsTheLine = true
+	// And an unterminated last line has the continuation prompt drawn. See
+	// Semantics.PromptAgainForAnUnterminatedLine (#6331).
+	s.PromptAgainForAnUnterminatedLine = interp.ContinuationPromptForAnUnterminatedLine
 	// And `-B` is this shell's `braceexpand` too — measured 2026-09-11,
 	// `set +B; echo {a,b}` writes `{a,b}` and `$-` loses the letter (#1856).
 	s.SetBTurnsOffBraceExpansion = interp.Yes

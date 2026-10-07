@@ -20076,6 +20076,33 @@ type Semantics struct {
 	// (TestTheEndOfInputEndsTheLineInDashAshAndKsh).
 	PromptEndOfInputEndsTheLine bool
 
+	// PromptAgainForAnUnterminatedLine is the prompt drawn once more when
+	// the input of a prompt that is not a terminal ends partway through a
+	// line, before that line is run.
+	//
+	// Measured 2026-10-07, `-i` on a pipe, `PS1='P> '`, `PS2='Q> '`, the
+	// input ending without a newline, standard error:
+	//
+	//	                       echo A          if true / then echo A; fi
+	//	dash 0.5.12            P> P> \n        P> Q> P> \n
+	//	BusyBox ash 1.37.0     P> P> P> \n     P> Q> Q> P> \n
+	//	ksh93u+                P> Q> P> \n     P> Q> Q> P> \n
+	//
+	// So ash draws again the prompt the line was read at, and ksh93 draws the
+	// continuation prompt whichever that was. `echo A \` with nothing after
+	// the backslash is the same in both, and with a newline after the last
+	// line none of the three draws anything extra (#6331).
+	//
+	// Read by the front end, for the reason PromptAsksAgainAfterARefusedToken
+	// is.
+	//
+	// unpinned: reached, and the corpus cannot discriminate: no case draws a
+	// prompt. repl/unterminatedline_test.go drives a session on a pipe for
+	// every answer (TestAnUnterminatedLastLineIsPromptedForAgain), and
+	// dialect/readsize_test.go holds the presets to the measurement
+	// (TestAnUnterminatedLastLineIsPromptedForAsMeasured).
+	PromptAgainForAnUnterminatedLine UnterminatedLinePrompt
+
 	// EndOfInputInAConstructEndsTheSession says that the end of input
 	// arriving inside an unfinished construct at a prompt — ^D at `> `, or
 	// the end of a pipe — ends the session once that construct has been run
@@ -32740,6 +32767,21 @@ func (n ReadSize) BytesOn(goos string) int {
 		return int(n)
 	}
 }
+
+// UnterminatedLinePrompt is which prompt, if any, a prompt reading something
+// that is not a terminal draws once more when its input ends partway through a
+// line. See Semantics.PromptAgainForAnUnterminatedLine.
+type UnterminatedLinePrompt int
+
+const (
+	// NoPromptForAnUnterminatedLine draws nothing more: the line is run.
+	NoPromptForAnUnterminatedLine UnterminatedLinePrompt = iota
+	// SamePromptForAnUnterminatedLine draws again the prompt the line was
+	// read at.
+	SamePromptForAnUnterminatedLine
+	// ContinuationPromptForAnUnterminatedLine draws the continuation prompt.
+	ContinuationPromptForAnUnterminatedLine
+)
 
 // NameOperands is what a builtin takes where it wants a name.
 type NameOperands int

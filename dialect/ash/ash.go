@@ -2458,6 +2458,9 @@ func Semantics() interp.Semantics {
 	s.PromptReadSize = 1024
 	// See Semantics.PromptEndOfInputEndsTheLine (#6330).
 	s.PromptEndOfInputEndsTheLine = true
+	// And an unterminated last line has its prompt drawn again. See
+	// Semantics.PromptAgainForAnUnterminatedLine (#6331).
+	s.PromptAgainForAnUnterminatedLine = interp.SamePromptForAnUnterminatedLine
 	s.StdinOptionNamesTheOperands = interp.No
 	s.LoneDashIsAnOption = interp.No
 	// The same, measured in the pinned digest rather than derived from dash:

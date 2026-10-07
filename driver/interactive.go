@@ -593,6 +593,8 @@ func (sh Shell) frontEndWith(r *interp.Runner, name string, dg interp.Diagnostic
 		ReadSize: sh.Semantics.PromptReadSize.Bytes(),
 		// See Semantics.PromptEndOfInputEndsTheLine.
 		EndOfInputEndsTheLine: sh.Semantics.PromptEndOfInputEndsTheLine,
+		// See Semantics.PromptAgainForAnUnterminatedLine.
+		PromptAgainForAnUnterminatedLine: sh.Semantics.PromptAgainForAnUnterminatedLine,
 		// See Semantics.EndOfInputInAConstructEndsTheSession.
 		EndOfInputInAConstructEndsTheSession: sh.Semantics.EndOfInputInAConstructEndsTheSession,
 		// See Semantics.EndOfInputEndsAContinuedHeredocLine.

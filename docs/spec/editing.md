@@ -1223,6 +1223,15 @@ nothing. bash writes its `exit` word, which is
 
 That is `Semantics.PromptEndOfInputEndsTheLine` (#6330).
 
+**An input that ends partway through its last line gets one more prompt** in
+two of them, drawn before that line runs. Measured 2026-10-07 with
+`PS1='P> '` and `PS2='Q> '`: on `echo A` with no newline, dash draws
+`P> P> \n`, ash `P> P> P> \n` and ksh93 `P> Q> P> \n`. Inside a construct,
+for example `if true` / `then echo A; fi`, both ash and ksh93 draw `Q>` again.
+So ash repeats the prompt the line was read at, and ksh93 always draws the
+continuation prompt. That is `Semantics.PromptAgainForAnUnterminatedLine`
+(#6331).
+
 ## Text after the line that is not the line — `POSTDISPLAY`
 
 An inline suggestion is not text in the buffer. zsh gives a widget a second

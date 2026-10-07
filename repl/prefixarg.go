@@ -5,7 +5,6 @@ package repl
 
 import (
 	"fmt"
-	"slices"
 	"strings"
 	"unicode/utf8"
 )
@@ -129,7 +128,7 @@ func (e *editor) countMore(b byte) {
 	}
 	e.countShown()
 	e.killing = e.killedBefore
-	if e.lastWordArguments {
+	if e.lastWordArguments || e.yankCount {
 		e.lastArg.walking = e.lastArg.walkingBefore
 	}
 }
@@ -178,6 +177,25 @@ func (e *editor) spendCount(b byte, prompt drawnPrompt) (bool, byte) {
 			return true, b
 		}
 		e.typeCounted(r, n, prompt)
+		return true, b
+	}
+	if b == ctrlK && e.killLineSign {
+		// Back to the start of the line for a negative count, as `^U` does,
+		// and to the end once for any other. See
+		// EditorStyle.KillLineReadsOnlyTheSign.
+		w := WidgetKillLine
+		if n < 0 {
+			w = WidgetKillWholeLine
+		}
+		e.runWidget(Binding{Widget: w}, prompt)
+		return true, b
+	}
+	if b == ctrlT && n <= 0 && e.transposeNoNegative {
+		// Nothing, except at the end of the line. See
+		// EditorStyle.TransposeCharsTakesNoNegativeCount.
+		if e.pos == len(e.line) {
+			e.runWidget(Binding{Widget: WidgetTransposeChars}, prompt)
+		}
 		return true, b
 	}
 	if o, ok := opposites[b]; ok && n < 0 {
@@ -402,13 +420,4 @@ func (e *editor) countRunsOut() bool {
 var ringsWhenACountRunsOut = map[string]bool{
 	string([]byte{ctrlB}): true, "\x1b[D": true, "\x1bOD": true,
 	string([]byte{del}): true, string([]byte{backspace}): true,
-}
-
-// skipsCount is a count the dialect does not give to an action, spent as if
-// nothing had been typed. See EditorStyle.CountSkips.
-func (e *editor) skipsCount(w Widget) {
-	if slices.Contains(e.countSkips, w) {
-		e.keyNumeric, e.countRepeat = nil, 0
-		e.countRunning = false
-	}
 }

@@ -1461,37 +1461,34 @@ against bash 5.3.20 with `INPUTRC=/dev/null` and a two-row prompt:
   end does. A counted `^T` stops at the end of the line.
 - **The case keys go backward for a negative count**, from the start of the
   count's word back to the cursor, and leave the cursor where it was.
+- **`M-t` swaps further apart.** The pair a count of one swaps is found first,
+  and each further unit moves the later word on a word, or where there is none
+  after it the earlier word back one: on `aa bb cc dd ee`, `ESC 2 M-t` from the
+  `b`s gives `cc bb aa dd ee` and from the end `aa bb ee dd cc`. Nought does
+  nothing and a negative count rings (#6265).
+- **`M-.` picks a word.** The first press's count is the word, from the start
+  of the line (0 the command word) or, negative, back from the last (-1 the
+  word before it); the walk keeps it, and a later press's count only says which
+  way to walk. A line without the word puts nothing in and rings (#6265).
+- **`^K` reads only the sign**: negative kills back to the start as `^U` does,
+  anything else to the end once. **`^T` takes no count of nought or less**,
+  except at the end of the line, where it swaps the last two (#6265).
 
 `repl.EditorStyle.CountPrompt`, `CountReadAsReadline`,
-`NegativeCountTypesNothing`, `CountStopsWhereItCannotAct` and
-`NegativeCaseCountGoesBackward` are the fields. transpose-words and
-yank-last-arg read a count in ways not built yet and are performed once as if
-none were typed (`CountSkips`); those, `^K` and `^T` with a negative count are
-#6265.
+`NegativeCountTypesNothing`, `CountStopsWhereItCannotAct`,
+`NegativeCaseCountGoesBackward`, `TransposeWordsCountAsReadline`,
+`YankLastArgCountAsReadline`, `KillLineReadsOnlyTheSign` and
+`TransposeCharsTakesNoNegativeCount` are the fields, and each one's comment
+holds its rows.
 
 ## What is still missing
 
 Measured to exist in both shells and not implemented here, so that the gap is
 written down rather than looked like an oversight. Incremental history search
 was on this list and is not any more — `^R` is `repl/search.go` and
-`docs/spec/history.md`.
+`docs/spec/history.md` — and so was a numeric argument, which both shells read
+now (see prefixarg.go for zsh's and *A count in bash* above).
 
-- **A numeric argument** — `M-3 M-.`. This is a mechanism rather than a key: in
-  both shells the count belongs to every command, so building it for one key
-  would be half of it. The two also count in **opposite directions**, measured
-  with `: w1 w2 w3 w4` as the previous line:
-
-  | | `M-0` | `M-1` | `M-2` | `M-3` | `M-4` | `M-5` | `M--` |
-  | --- | --- | --- | --- | --- | --- | --- | --- |
-  | bash 5.3.15 | `:` | `w1` | `w2` | `w3` | `w4` | nothing | `w3` |
-  | zsh 5.9.2 | `:` | `w4` | `w3` | `w2` | `w1` | `:` | `w1` |
-
-  bash counts words from the start of the line and zsh counts them from the end,
-  with zsh's negative arguments counting from the start instead — coherently,
-  where bash's are not (`M--` gives `w3` and `M--1` gives nothing). Re-measured
-  2026-09-16: `M-3 M-.` against `: w1 w2 w3 w4` is `w3` in bash and `w2` in zsh,
-  exactly as the table says. zsh's is built (#5987) and both shells read a
-  count now (#6248); bash's `M-.` takes no count yet and gives `w4` (#6265).
 - **`region_highlight` offsets moving with the line.** Measured: an element
   written as `0 2` reads back as `1 3` once a character is inserted before it,
   so zsh adjusts the stored offsets as the text changes rather than leaving

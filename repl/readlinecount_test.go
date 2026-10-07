@@ -18,7 +18,10 @@ var readlineCounts = EditorStyle{
 	NegativeCountTypesNothing:            true,
 	CountStopsWhereItCannotAct:           true,
 	NegativeCaseCountGoesBackward:        true,
-	CountSkips:                           []Widget{WidgetTransposeWords, WidgetInsertLastWord},
+	TransposeWordsCountAsReadline:        true,
+	YankLastArgCountAsReadline:           true,
+	KillLineReadsOnlyTheSign:             true,
+	TransposeCharsTakesNoNegativeCount:   true,
 	BellRingsWhenAnEditHasNothingToActOn: true,
 	WordKeys:                             true,
 	CapitalizeTakesTheFirstCharacter:     true,
@@ -90,8 +93,35 @@ func TestACountAsReadlineReadsAndSpendsIt(t *testing.T) {
 		{"aa bb cc", 0, "\x1b2\x1bu", "AA BB@ cc", false},
 		{"aa bb cc", 0, "\x1b9\x1bu", "AA BB CC@", false},
 
-		// And a count does nothing to the two actions it skips.
-		{"aa bb cc dd", 11, "\x1b2\x1bt", "aa bb dd cc@", false},
+		// transpose-words with a count (#6265).
+		{"aa bb cc dd ee", 0, "\x1b2\x1bt", "bb aa@ cc dd ee", false},
+		{"aa bb cc dd ee", 0, "\x1b3\x1bt", "cc bb aa@ dd ee", false},
+		{"aa bb cc dd ee", 3, "\x1b2\x1bt", "cc bb aa@ dd ee", false},
+		{"aa bb cc dd ee", 3, "\x1b3\x1bt", "dd bb cc aa@ ee", false},
+		{"aa bb cc dd ee", 6, "\x1b2\x1bt", "aa dd cc bb@ ee", false},
+		{"aa bb cc dd ee", 6, "\x1b3\x1bt", "aa ee cc dd bb@", false},
+		{"aa bb cc dd ee", 9, "\x1b2\x1bt", "aa bb ee dd cc@", false},
+		{"aa bb cc dd ee", 9, "\x1b3\x1bt", "aa ee cc dd bb@", false},
+		{"aa bb cc dd ee", 14, "\x1b2\x1bt", "aa bb ee dd cc@", false},
+		{"aa bb cc dd", 11, "\x1b9\x1bt", "dd bb cc aa@", false},
+		{"aa bb cc dd ee", 4, "\x1b0\x1bt", "aa b@b cc dd ee", false},
+		{"aa bb cc dd ee", 6, "\x1b-\x1bt", "aa bb @cc dd ee", true},
+		{"aa bb cc dd ee", 14, "\x1b-2\x1bt", "aa bb cc dd ee@", true},
+
+		// kill-line reads only the count's sign.
+		{"aa bb cc dd", 5, "\x1b-\x0b", "@ cc dd", false},
+		{"aa bb cc dd", 5, "\x1b-3\x0b", "@ cc dd", false},
+		{"aa bb cc dd", 5, "\x1b0\x0b", "aa bb@", false},
+		{"aa bb cc dd", 5, "\x1b3\x0b", "aa bb@", false},
+		{"aa bb cc dd", 0, "\x1b-\x0b", "@aa bb cc dd", true},
+
+		// transpose-chars takes no count of nought or less, but at the end.
+		{"abcd", 3, "\x1b-\x14", "abc@d", false},
+		{"abcd", 1, "\x1b-\x14", "a@bcd", false},
+		{"abcd", 2, "\x1b0\x14", "ab@cd", false},
+		{"abcd", 4, "\x1b-\x14", "abdc@", false},
+		{"abcdef", 5, "\x1b-3\x14", "abcde@f", false},
+		{"abcd", 0, "\x1b2\x14", "@abcd", true},
 	} {
 		t.Run(c.line+" "+strings.ReplaceAll(c.keys, "\x1b", "ESC"), func(t *testing.T) {
 			setup := at(c.line, c.cursor)
@@ -175,19 +205,45 @@ func waitForRow(t *testing.T, s *session, want string) {
 	}
 }
 
-// yank-last-arg is one of the actions a count skips: `ESC 3 M-.` is the last
-// word, as `M-.` is, where playing the key three times would walk three lines
-// back (#6265 holds what bash does with the count).
-func TestACountSkipsYankLastArg(t *testing.T) {
-	var out strings.Builder
-	e := Shell{Editor: readlineCounts}.newEditor(t.Context(), nil)
-	e.remember(": w1 w2 w3 w4")
-	e.in, e.out = typing("\x1b3\x1b.\r"), &out
-	got, err := e.readLine(drawPrompt("$ "))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got != "w4" {
-		t.Errorf("got %q, want %q", got, "w4")
+// yank-last-arg with a count (#6265), with `: x1 x2 x3` and then
+// `: w1 w2 w3 w4` behind the prompt. See
+// EditorStyle.YankLastArgCountAsReadline for the rows.
+func TestYankLastArgReadsACountAsReadline(t *testing.T) {
+	for _, c := range []struct {
+		keys, want string
+		rings      bool
+	}{
+		{"\x1b0\x1b.", ":", false},
+		{"\x1b2\x1b.", "w2", false},
+		{"\x1b4\x1b.", "w4", false},
+		{"\x1b5\x1b.", "", true},
+		{"\x1b-\x1b.", "w3", false},
+		{"\x1b-2\x1b.", "w2", false},
+		{"\x1b-4\x1b.", ":", false},
+		{"\x1b-5\x1b.", "", true},
+		{"\x1b1\x1b.\x1b.", "x1", false},
+		{"\x1b-\x1b.\x1b.", "x2", false},
+		{"\x1b.\x1b2\x1b.", "x3", false},
+		{"\x1b.\x1b.\x1b-\x1b.", "w4", false},
+		{"\x1b4\x1b.\x1b.", "", true},
+		{"\x1b2\x1b_", "w2", false},
+	} {
+		t.Run(strings.ReplaceAll(c.keys, "\x1b", "ESC"), func(t *testing.T) {
+			var out strings.Builder
+			e := Shell{Editor: readlineCounts}.newEditor(t.Context(), nil)
+			e.remember(": x1 x2 x3")
+			e.remember(": w1 w2 w3 w4")
+			e.in, e.out = typing(c.keys+"\r"), &out
+			got, err := e.readLine(drawPrompt("$ "))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got != c.want {
+				t.Errorf("got %q, want %q", got, c.want)
+			}
+			if rang := strings.Count(out.String(), bell) > 0; rang != c.rings {
+				t.Errorf("rang %v, want %v", rang, c.rings)
+			}
+		})
 	}
 }

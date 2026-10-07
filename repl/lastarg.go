@@ -34,12 +34,21 @@ type lastArgWalk struct {
 	// line as 1. at and length are where in the line the text it inserted
 	// sits, so the next press can take that text out again.
 	back, at, length int
+
+	// pick is the word the walk's first press asked for by its count, and
+	// picked whether it asked; see EditorStyle.YankLastArgCountAsReadline.
+	pick   int
+	picked bool
 }
 
 // insertLastArg is `M-.`.
 func (e *editor) insertLastArg(prompt drawnPrompt) {
 	if e.lastWordArguments {
 		e.actionStatus = e.insertLastWordWith(e.actionArgs, e.keyNumeric, prompt)
+		return
+	}
+	if e.yankCount {
+		e.yankLastArgAsReadline(prompt)
 		return
 	}
 	back := 1
@@ -267,4 +276,58 @@ func lineWords(line string) []string {
 		words = append(words, string(rs[start:i]))
 	}
 	return words
+}
+
+// yankLastArgAsReadline is `M-.` under EditorStyle.YankLastArgCountAsReadline,
+// where the rows are: the first press's count picks the word and the walk
+// keeps it, a later press's count says only which way to walk.
+func (e *editor) yankLastArgAsReadline(prompt drawnPrompt) {
+	// The key reads its count itself and is not played again by it.
+	e.countRepeat = 0
+	back := 1
+	if e.lastArg.walkingBefore {
+		step := 1
+		if e.keyNumeric != nil && *e.keyNumeric < 0 {
+			step = -1
+		}
+		back = e.lastArg.back + step
+	} else {
+		e.lastArg.picked = e.keyNumeric != nil
+		if e.lastArg.picked {
+			e.lastArg.pick = *e.keyNumeric
+		}
+		if len(e.history) == 0 {
+			// Nothing behind the prompt at all, and the walk does not start.
+			return
+		}
+	}
+	word, found := "", false
+	if back >= 1 && back <= len(e.history) {
+		words := lineWords(e.history[len(e.history)-back])
+		i := len(words) - 1
+		if e.lastArg.picked {
+			i = e.lastArg.pick
+			if i < 0 {
+				i += len(words) - 1
+			}
+		}
+		if i >= 0 && i < len(words) {
+			word, found = words[i], true
+		}
+	}
+	e.change(e.lastArg.walkingBefore, func() {
+		at := e.pos
+		if e.lastArg.walkingBefore {
+			at = e.lastArg.at
+			e.line = append(e.line[:at], e.line[at+e.lastArg.length:]...)
+			e.pos = at
+		}
+		for _, r := range word {
+			e.insert(r)
+		}
+		e.lastArg.back, e.lastArg.at, e.lastArg.length = back, at, len([]rune(word))
+	})
+	e.lastArg.walking = true
+	e.ringUnless(found)
+	e.redraw(prompt)
 }

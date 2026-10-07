@@ -223,16 +223,21 @@ type editor struct {
 	// prefixArgument says ESC and a digit, or ESC and a minus, set a count.
 	prefixArgument bool
 	// countPrompt, countAsReadline, negativeTypesNothing, countStops,
-	// caseBackward and countSkips are EditorStyle.CountPrompt,
-	// CountReadAsReadline, NegativeCountTypesNothing,
-	// CountStopsWhereItCannotAct, NegativeCaseCountGoesBackward and
-	// CountSkips.
+	// caseBackward, transposeWordsCount, yankCount, killLineSign and
+	// transposeNoNegative are EditorStyle.CountPrompt, CountReadAsReadline,
+	// NegativeCountTypesNothing, CountStopsWhereItCannotAct,
+	// NegativeCaseCountGoesBackward, TransposeWordsCountAsReadline,
+	// YankLastArgCountAsReadline, KillLineReadsOnlyTheSign and
+	// TransposeCharsTakesNoNegativeCount.
 	countPrompt          string
 	countAsReadline      bool
 	negativeTypesNothing bool
 	countStops           bool
 	caseBackward         bool
-	countSkips           []Widget
+	transposeWordsCount  bool
+	yankCount            bool
+	killLineSign         bool
+	transposeNoNegative  bool
 	// countRunning is a counted key being played under countStops, and
 	// countActed whether a press of it has acted yet. See ringUnless.
 	countRunning, countActed bool

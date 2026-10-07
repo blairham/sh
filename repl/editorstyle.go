@@ -403,13 +403,56 @@ type EditorStyle struct {
 	//	14       ESC - 3 M-u    on `aa bb cc dd ee`: aa bb CC DD EE
 	NegativeCaseCountGoesBackward bool
 
-	// CountSkips are the actions a count is spent on without being given
-	// to: the key is performed once, as if no count had been typed. For a
-	// dialect whose counts for an action are not built yet, so that a count
-	// does nothing rather than something the dialect does not do — bash's
-	// transpose-words and yank-last-arg, which read the count in ways not
-	// measured here (#6265).
-	CountSkips []Widget
+	// TransposeWordsCountAsReadline is what a count does to `M-t`, where the
+	// zero value's is zsh's (see repl/casewords.go). The pair a count of one
+	// swaps is found first; then each further unit of the count moves the
+	// later word on a word, and where there is no word after it moves the
+	// earlier word back one instead. Nought does nothing, a negative count
+	// does nothing and rings, and the cursor goes to the end of the later
+	// word. Measured 2026-10-06 through a pseudo-terminal against bash 5.3.20
+	// on `aa bb cc dd ee` (#6265):
+	//
+	//	cursor   ESC 2 M-t          ESC 3 M-t
+	//	0, 1     bb aa cc dd ee     cc bb aa dd ee
+	//	2 … 4    cc bb aa dd ee     dd bb cc aa ee
+	//	5, 6     aa dd cc bb ee     aa ee cc dd bb
+	//	9 … 14   aa bb ee dd cc     aa ee cc dd bb
+	//
+	// and `ESC 9 M-t` at the end of `aa bb cc dd` swaps `aa` and `dd`.
+	TransposeWordsCountAsReadline bool
+
+	// YankLastArgCountAsReadline is what a count does to `M-.`, which in the
+	// zero value's dialect without InsertLastWordTakesArguments it does not
+	// read at all. The first press's count picks the word, from the start
+	// of the line — 0 the command word — or, negative, back from the last:
+	// -1 is the word before the last. The pick holds for the presses that
+	// walk back from it, a later press's count only saying which way to
+	// walk, and a line without that word puts nothing in and rings. Measured
+	// 2026-10-06 against bash 5.3.20, `: w1 w2 w3 w4` the line before and
+	// `: x1 x2 x3` the one before that (#6265):
+	//
+	//	ESC 0 M-.  :          ESC 4 M-.  w4         ESC 5 M-.  nothing, \a
+	//	ESC - M-.  w3         ESC -4 M-. :          ESC -5 M-. nothing, \a
+	//	ESC 1 M-. M-.  x1     M-. ESC 2 M-.  x3     M-. M-. ESC - M-.  w4
+	//	ESC 4 M-. M-.  nothing, \a
+	YankLastArgCountAsReadline bool
+
+	// KillLineReadsOnlyTheSign makes `^K` read only its count's sign: with
+	// a negative count it kills from the start of the line to the cursor, as
+	// `^U` does, and with any other — nought included — it kills to the end
+	// once. The zero value plays `^K` as many times as the count says. Measured 2026-10-06 against
+	// bash 5.3.20, `aa bb cc dd` with the cursor at 5: `ESC - ^K` and
+	// `ESC -3 ^K` leave ` cc dd`, `ESC 3 ^K` and `ESC 0 ^K` leave `aa bb`,
+	// and `ESC - ^K` at the start rings (#6265).
+	KillLineReadsOnlyTheSign bool
+
+	// TransposeCharsTakesNoNegativeCount makes `^T` with a count of nought
+	// or less do nothing, except at the end of the line, where it swaps the
+	// last two as it does with no count. Measured 2026-10-06 against bash
+	// 5.3.20 on `abcd`: `ESC - ^T` with the cursor at 1, 2 or 3 and `ESC 0
+	// ^T` at 2 leave it as it was, cursor and all, with no bell, and `ESC -
+	// ^T` at the end gives `abdc` (#6265).
+	TransposeCharsTakesNoNegativeCount bool
 
 	// PastedTextStyle is written before a run of text that arrived as a
 	// paste, and PastedTextStyleEnd after it. Empty draws the text like any

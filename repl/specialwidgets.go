@@ -70,7 +70,13 @@ func (e *editor) accepted(prompt drawnPrompt) string {
 	// The line is finished, so the drawing that ends it asks for no more
 	// pre-redraws: measured, nothing is called after the finish.
 	e.inShell = true
-	e.endLine(prompt, "")
+	before := ""
+	if e.pasteOffFirst {
+		// The bracketed-paste request taken back before the newline rather
+		// than after it. See EditorStyle.PasteModeOffBeforeTheNewline.
+		before = e.takePasteOff()
+	}
+	e.endLine(prompt, before)
 	e.inShell = false
 	return string(e.line)
 }

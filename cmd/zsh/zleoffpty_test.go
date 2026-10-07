@@ -76,7 +76,10 @@ func TestTheLineEditorIsOffWhenTheOptionIs(t *testing.T) {
 			for _, seq := range []struct{ name, text string }{
 				{"the bracketed-paste request", "\x1b[?2004h"},
 				{"the bracketed-paste release", "\x1b[?2004l"},
-				{"the ground under the prompt", "\x1b[0m\x1b[27m\x1b[24m\x1b[J"},
+				// Not the ground under the prompt: on this harness's
+				// `TERM=dumb` there is none, the terminal having no
+				// attributes to reset and no erase — measured, zsh 5.9.2
+				// writes `\r` and the prompt (#6315).
 			} {
 				if got := strings.Contains(drawn, seq.text); got != tc.drawing {
 					t.Errorf("%s written = %v, want %v\nraw bytes: %q",

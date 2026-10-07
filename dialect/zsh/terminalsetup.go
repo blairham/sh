@@ -136,6 +136,9 @@ func terminalAssigned(r *interp.Runner, term string) {
 	s := loadTerminalSetup(r)
 	s.setUpFor(term)
 	storeTerminalSetup(r, s)
+	// And a terminal called `emacs` takes the line editor away. See
+	// editorOffInsideEmacs.
+	editorOffInsideEmacs(r, term)
 }
 
 // loadTerminalSetup reads the store. Three flags and the `$TERM` they were

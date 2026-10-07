@@ -3,7 +3,11 @@
 
 package zsh
 
-import "github.com/blairham/sh/interp"
+import (
+	"context"
+
+	"github.com/blairham/sh/interp"
+)
 
 // When the line editor's module loads, which is when its parameter
 // `zle_bracketed_paste` comes into being (#5497).
@@ -53,6 +57,12 @@ func bootLineEditor(r *interp.Runner) {
 // file read yet: where an interactive shell on a terminal with the editor's
 // option on has loaded the editor's module. See driver.Shell.BeforeStartupFiles.
 func BeforeStartupFiles(r *interp.Runner) {
+	// A terminal called `emacs` has no line editor, decided before the
+	// startup files as an assignment to `$TERM` decides it after them. See
+	// editorOffInsideEmacs.
+	if term, _ := r.GetVar("TERM"); r.Interactive {
+		editorOffInsideEmacs(r, term)
+	}
 	if r.Interactive && r.Terminal && editorOptionOn(r) {
 		bootLineEditor(r)
 		r.SetVar(zleEditorStarted, "1")
@@ -84,3 +94,31 @@ func lineEditorBooted(r *interp.Runner) bool {
 // unbootLineEditor is `zmodload -u zsh/zle`: the next use loads it again, and
 // makes its parameter again with it.
 func unbootLineEditor(r *interp.Runner) { r.SetVar(zleBooted, "") }
+
+// editorOffInsideEmacs turns the `zle` option off in an interactive shell
+// whose terminal is called `emacs`, which is what zsh does whenever `$TERM`
+// takes that value: at startup, and at every assignment after it. Turning
+// `$TERM` back does not turn the option back on, and `setopt zle` does.
+//
+// Measured 2026-10-07 on zsh 5.9.2 through a pseudo-terminal, `[[ -o zle ]]`
+// after each:
+//
+//	TERM=emacs at startup                    off
+//	TERM=emacs-foo, or EMACS=t / INSIDE_EMACS
+//	  on TERM=dumb or with TERM unset        on — the name alone
+//	TERM=emacs typed at an xterm prompt      off
+//	TERM=emacs in .zshrc                     off
+//	TERM=emacs true, f() { local TERM=emacs; } off — any assignment
+//	TERM=emacs at startup, then TERM=xterm   off
+//	TERM=emacs at startup, then setopt zle   on, and the editor draws
+//
+// So the session reads its lines with the terminal's own echo, and writes
+// none of the editor's sequences (#6315).
+func editorOffInsideEmacs(r *interp.Runner, term string) {
+	if term != "emacs" {
+		return
+	}
+	if unset, ok := r.Builtin("unsetopt"); ok {
+		unset(r, context.Background(), []string{"zle"})
+	}
+}

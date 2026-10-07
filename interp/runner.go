@@ -1032,6 +1032,13 @@ type Runner struct {
 	// every script that had one (#1720).
 	Terminal bool
 
+	// TerminalSpeed is the output speed in bits per second of the terminal an
+	// interactive shell set up at startup, or 0 where it set none up. A
+	// dialect that pads a description's `$<n>` delays reads it — see
+	// dialect/zsh's padded. The front end's to set, for the reason Terminal
+	// is.
+	TerminalSpeed int
+
 	// LoginShell says this shell was started as a login shell — a dashed
 	// `argv[0]`, which is what `login` and a terminal emulator's "run as a
 	// login shell" does, or an explicit `-l` / `--login`.

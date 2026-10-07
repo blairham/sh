@@ -517,6 +517,18 @@ type editor struct {
 	unfinishedMark string
 	returnsFirst   bool
 	clearBefore    string
+	// eraseAfterPrompt is written after the prompt, where the line starts,
+	// and pasteAfterPrompt and pasteOffFirst move the bracketed-paste
+	// requests. See EditorStyle.EraseAfterThePromptCapability and
+	// EditorStyle.PasteModeAfterThePrompt.
+	eraseAfterPrompt string
+	pasteAfterPrompt bool
+	pasteOffFirst    bool
+	// pasteOnLater is the bracketed-paste request held for after the prompt.
+	pasteOnLater string
+	// markShortOfTheEdge pads the unfinished-output mark one column short of
+	// the edge. See EditorStyle.MarkPaddingNeedsTheCapability.
+	markShortOfTheEdge bool
 
 	// What to ask before printing a large listing, and how to read the
 	// answer. See EditorStyle.
@@ -807,7 +819,12 @@ func (e *editor) readLine(prompt drawnPrompt) (string, error) {
 		if e.pasteCodes != nil {
 			on, off = e.pasteCodes()
 		}
-		e.write(on)
+		if e.pasteAfterPrompt {
+			// Written after the prompt instead. See pasteOnAfterPrompt.
+			e.pasteOnLater = on
+		} else {
+			e.write(on)
+		}
 		// Held rather than written by the defer outright, because one way
 		// out writes it earlier than the rest: see takePasteOff.
 		held := e.pasteOff
@@ -831,6 +848,12 @@ func (e *editor) readLine(prompt drawnPrompt) (string, error) {
 		opening.WriteString(itoa(prompt.cells))
 		opening.WriteString("C")
 	}
+	// Then what the dialect writes where the line will start: the erase, and
+	// the bracketed-paste request it holds until here. See
+	// EditorStyle.EraseAfterThePromptCapability.
+	opening.WriteString(e.eraseAfterPrompt)
+	opening.WriteString(e.pasteOnLater)
+	e.pasteOnLater = ""
 	e.write(opening.String())
 	e.promptDrawn(prompt)
 	if e.noTerminal {

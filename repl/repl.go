@@ -882,7 +882,9 @@ func (s Shell) Run(ctx context.Context) (int, error) {
 			// done before the prompt hooks rather than after them — measured;
 			// see markUnfinished. A continuation prompt marks nothing: the
 			// newline the terminal echoed already ended the row.
-			if editing {
+			if editing || s.Editor.MarksUnfinishedOutputWithoutTheEditor {
+				// And with no editor too, in the shell that marks then. See
+				// EditorStyle.MarksUnfinishedOutputWithoutTheEditor.
 				ed.markUnfinished()
 			}
 			// And the word this session leaves with is this read's to write,
@@ -3227,11 +3229,48 @@ func (s Shell) readEditorOptions(e *editor) {
 	e.silent = s.Editor.BeepOption != "" && !s.dialectOption(s.Editor.BeepOption)
 	e.unfinishedMark = s.markIfAsked()
 	e.returnsFirst = s.dialectOption(s.Editor.ReturnBeforeThePromptOption)
+	if caps := s.Editor.ClearBeforeThePromptCapabilities; caps != nil {
+		// Read from the terminal's description, at every prompt. See
+		// EditorStyle.ClearBeforeThePromptCapabilities.
+		var b strings.Builder
+		for _, code := range caps {
+			b.WriteString(s.terminalCapability(code))
+		}
+		e.clearBefore = b.String()
+	}
+	if code := s.Editor.EraseAfterThePromptCapability; code != "" {
+		e.eraseAfterPrompt = s.terminalCapability(code)
+	}
+	if code := s.Editor.MarkPaddingNeedsTheCapability; code != "" {
+		// A boolean reads `yes` where the description has it.
+		e.markShortOfTheEdge = s.terminalCapability(code) != "yes"
+	}
+}
+
+// terminalCapability is what the terminal's description holds under a
+// termcap code, through the dialect's reader. See
+// interp.Runner.TerminalCapability.
+func (s Shell) terminalCapability(code string) string {
+	if s.Runner == nil {
+		return ""
+	}
+	return s.Runner.TerminalCapability(code)
 }
 
 func (s Shell) markIfAsked() string {
 	if !s.dialectOption(s.Editor.MarkUnfinishedOutputOption) {
 		return ""
+	}
+	if mark := s.Editor.UnfinishedOutputMarkPrompt; mark != "" {
+		// A prompt string, from the parameter a script sets it with where it
+		// has, and drawn by the prompt's own escapes. See
+		// EditorStyle.UnfinishedOutputMarkPrompt.
+		if name := s.Editor.UnfinishedOutputMarkParameter; name != "" && s.Runner != nil {
+			if v, ok := s.Runner.GetVar(name); ok {
+				mark = v
+			}
+		}
+		return s.render(mark)
 	}
 	return s.Editor.UnfinishedOutputMark
 }
@@ -3359,6 +3398,8 @@ func (s Shell) newEditor(ctx context.Context, state *terminalState) *editor {
 		tabOnBlank:           s.Editor.TabOnABlankLineTypesItself,
 		specials:             s.Editor.SpecialWidgets,
 		clearBefore:          s.Editor.ClearBeforeThePrompt,
+		pasteAfterPrompt:     s.Editor.PasteModeAfterThePrompt,
+		pasteOffFirst:        s.Editor.PasteModeOffBeforeTheNewline,
 		listQueryStrict:      s.Editor.ListQueryAcceptsOnlyYesOrNo,
 		listQueryTakesItsRow: s.Editor.ListQueryAnswerTakesTheQuestionsRow,
 		// What this dialect calls a word, and what its kills do with one.

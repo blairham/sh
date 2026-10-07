@@ -617,9 +617,15 @@ func (e *editor) markUnfinished() {
 		// test for every mark.
 		return
 	}
+	pad := e.cols() - width
+	if e.markShortOfTheEdge {
+		// A terminal without the capability the dialect names is padded a
+		// column short. See EditorStyle.MarkPaddingNeedsTheCapability.
+		pad--
+	}
 	var b strings.Builder
 	b.WriteString(e.unfinishedMark)
-	b.WriteString(strings.Repeat(" ", e.cols()-width))
+	b.WriteString(strings.Repeat(" ", pad))
 	b.WriteString("\r")
 	b.WriteString(strings.Repeat(" ", width))
 	b.WriteString("\r")

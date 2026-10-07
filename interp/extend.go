@@ -1812,6 +1812,17 @@ func (r *Runner) SetTerminalCapabilityReader(read func(r *Runner, termcap string
 	r.terminalCapability = read
 }
 
+// TerminalCapability is the string the terminal's description holds under a
+// termcap code, ready to write, or empty where it holds none or no dialect
+// installed a reader. The read a prompt's `%{…}` attribute codes make, for a
+// front end writing the same terminal's sequences around a prompt.
+func (r *Runner) TerminalCapability(termcap string) string {
+	if r.terminalCapability == nil {
+		return ""
+	}
+	return r.terminalCapability(r, termcap)
+}
+
 // SetOptionNamespace installs the names `[[ -o name ]]` reads, for a dialect
 // whose option namespace is wider than the `set -o` names it declares.
 //

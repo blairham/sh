@@ -302,7 +302,7 @@ func registerTerminfoModules(r *interp.Runner) {
 	// the termcap names: see PromptStyle's SequenceCapabilities and
 	// promptCapability.
 	r.SetTerminalCapabilityReader(func(r *interp.Runner, code string) string {
-		return promptCapability(tables.promptTable(r), code)
+		return promptCapability(tables.promptTable(r), code, r.TerminalSpeed)
 	})
 	registerCapabilityParameter(r, "terminfo", "cols", "lines",
 		tables.listedTable, tables.readTable)
@@ -489,7 +489,7 @@ func sameReset(a, b string) bool {
 // takes it off — measured, vt100's `$termcap[md]` is `\E[1m$<2>` and `%B`
 // under that TERM writes `\E[1m`. Empty where the description has no such
 // capability, which is what every code writes with no description at all.
-func promptCapability(table interp.AssocArray, code string) string {
+func promptCapability(table interp.AssocArray, code string, speed int) string {
 	if _, up := table["up"]; !up {
 		// A terminal the cursor cannot move up on is one zsh draws no
 		// attribute on at all: measured, a description holding `bold`,
@@ -503,7 +503,9 @@ func promptCapability(table interp.AssocArray, code string) string {
 	if !ok {
 		return ""
 	}
-	return withoutPadding(v.Str)
+	// Padded at the speed of the terminal an interactive shell set up, and
+	// not at all otherwise. See padded.
+	return padded(v.Str, speed)
 }
 
 // screenSizeFor is the two size capabilities: the terminal's own size, the

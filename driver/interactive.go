@@ -10,6 +10,7 @@ import (
 	"os"
 
 	"github.com/blairham/sh/internal/panicguard"
+	"github.com/blairham/sh/internal/tty"
 	"github.com/blairham/sh/interp"
 	"github.com/blairham/sh/repl"
 	"github.com/blairham/sh/syntax"
@@ -73,6 +74,9 @@ func (sh Shell) session(argv []string, in source) int {
 	// answer different questions, and ksh93 is alone in turning the monitor
 	// on for `-i script.sh`.
 	r.Interactive = true
+	// And the speed of the terminal it set up, which a dialect padding its
+	// terminal's delays reads. See interp.Runner.TerminalSpeed.
+	r.TerminalSpeed = tty.OutputSpeed(sh.stdinFile())
 	// And the text it runs was typed at a prompt, which is what locates every
 	// run-time diagnostic in the session: no shell in the panel writes a line
 	// number for one, and every line typed at a prompt is line 1 anyway. Set

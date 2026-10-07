@@ -100,6 +100,11 @@ type drawnLine struct {
 	// because that is the cell the next character goes in either way.
 	row, col       int
 	endRow, endCol int
+
+	// plain says this was drawn for a terminal that cannot move the cursor
+	// right, and styled holds the line with no escape sequence in it. See
+	// nomotion.go.
+	plain bool
 }
 
 // repaint redraws only the part of the line that changed, and reports whether
@@ -110,7 +115,7 @@ type drawnLine struct {
 // whole line back, which is always correct and is what this used to be.
 func (e *editor) repaint(prompt drawnPrompt, cols int) bool {
 	d := e.drawn
-	if !d.valid || d.cols != cols || d.cells != prompt.cells || d.prompt != prompt.text {
+	if !d.valid || d.plain || d.cols != cols || d.cells != prompt.cells || d.prompt != prompt.text {
 		return false
 	}
 	shown := e.displayed()
@@ -233,6 +238,7 @@ func (e *editor) promptDrawn(prompt drawnPrompt) {
 	}
 	e.drawn = drawnLine{
 		valid:  true,
+		plain:  e.noMotion,
 		prompt: prompt.text,
 		cells:  prompt.cells,
 		cols:   cols,

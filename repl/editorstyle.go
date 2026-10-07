@@ -288,6 +288,16 @@ type EditorStyle struct {
 	// takes them back ends the row, which is unchanged (#6310).
 	EndOfInputWithNoWordStaysOnTheRow bool
 
+	// DrawsWithoutCursorMotion draws the line without moving the cursor right
+	// on a terminal that cannot — `TERM=dumb`, or a name with no terminfo
+	// description, or one whose description has neither `cuf1` nor `cuf`:
+	// backspaces to go left, the line written again from a carriage return to
+	// go right, spaces to erase, and no escape sequence at all. Without it the
+	// editor writes ANSI cursor movement whatever the terminal is.
+	//
+	// bash's; see repl/nomotion.go for the measurements (#6314).
+	DrawsWithoutCursorMotion bool
+
 	// Interrupt is what marks a line abandoned with ^C, drawn where the
 	// cursor was before the line ends.
 	//

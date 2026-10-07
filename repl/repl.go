@@ -900,6 +900,8 @@ func (s Shell) Run(ctx context.Context) (int, error) {
 		// After the prompt hooks, which may assign `$TERM`, and before the
 		// read, which is what asks whether to bracket a paste.
 		s.takeUpTheTerminal()
+		// And whether it can move the cursor at all. See nomotion.go.
+		ed.noMotion = s.cannotMoveTheCursor()
 		if s.Runner.Exited() {
 			// A prompt hook called `exit`. Measured, zsh's session ends
 			// there and draws no prompt, so this one does not read a line.

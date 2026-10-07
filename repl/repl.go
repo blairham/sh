@@ -222,8 +222,8 @@ type Shell struct {
 	// ReadSize is how many bytes one read of input that is not a terminal
 	// asks for, and zero for exactly one line and nothing past it — which is
 	// what leaves the rest on the descriptor for a `read` typed at the
-	// prompt. Read by the loop without an editor; the editor a dialect keeps
-	// on a pipe still reads ahead of the line (#6334). See
+	// prompt. The editor a dialect keeps on a pipe answers it too, a byte at
+	// a time (#6334). See
 	// interp.Semantics.PromptReadSize.
 	ReadSize int
 
@@ -3439,7 +3439,11 @@ func (s Shell) newEditor(ctx context.Context, state *terminalState) *editor {
 		// `\e[?2004l` around a line, where the same shell at a terminal writes
 		// both: a paste is something a terminal does, so the offer is the
 		// terminal's to receive.
-		noTerminal:     state == nil,
+		noTerminal: state == nil,
+		// And, on a descriptor that is not a terminal, taking nothing past
+		// the line where the dialect takes nothing past it. See
+		// Shell.ReadSize.
+		oneByte:        state == nil && s.ReadSize == 0 && s.inFile() != nil,
 		bracketedPaste: s.Editor.BracketedPaste,
 		pasteCodes:     s.bracketedPasteCodes(),
 		prefixArgument: s.Editor.PrefixArgument,

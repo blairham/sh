@@ -20033,11 +20033,10 @@ type Semantics struct {
 	//
 	// A terminal hands over a line per read whatever is asked for, so this
 	// changes nothing there. Read by the front end, for the reason
-	// PromptAsksAgainAfterARefusedToken is, and by the loop without an
-	// editor only: bash keeps an editor on a pipe
-	// (EditorReadsKeysWhereThereIsNoTerminal), and that editor still reads
-	// ahead of the line, because a byte at a time costs it the burst that
-	// tells an arrow from an Escape (#6334).
+	// PromptAsksAgainAfterARefusedToken is. It reaches the editor bash keeps
+	// on a pipe (EditorReadsKeysWhereThereIsNoTerminal) too: that editor
+	// reads a byte at a time there and asks the descriptor whether more is
+	// waiting, which is what still tells an arrow from an Escape (#6334).
 	//
 	// unpinned: reached, and the corpus cannot discriminate: no case draws a
 	// prompt. repl/readsize_test.go drives a session on a pipe for each kind

@@ -9,6 +9,8 @@ import (
 	"strings"
 	"time"
 	"unicode/utf8"
+
+	"github.com/blairham/sh/internal/fdset"
 )
 
 // Reading a line the way a shell does.
@@ -502,7 +504,18 @@ type editor struct {
 	// bytes back to the terminal — 88KB for a 405-byte line against bash's
 	// 410, measured (#1742). Buffering is what lets inputPending answer,
 	// which is what lets the drawing wait until the input runs out.
-	held    [4096]byte
+	held [4096]byte
+
+	// oneByte reads a byte at a time and asks the descriptor, rather than
+	// held, whether more input is there. It is set for a session whose
+	// input is a pipe or a file, where the dialect takes nothing past the
+	// line: what comes after the line stays on the descriptor for a `read`
+	// typed at the prompt. Measured 2026-10-07, bash 5.3.20 `-i` on a pipe
+	// hands `read x` the next line (#6334). The paste cost described above
+	// is still avoided, because inputPending asks the descriptor and a
+	// paste is input that is already there. See
+	// interp.Semantics.PromptReadSize.
+	oneByte bool
 	heldLen int
 	heldPos int
 
@@ -1368,7 +1381,7 @@ func (e *editor) nextByte(buf []byte) (int, error) {
 		return 1, nil
 	}
 	if e.heldPos == e.heldLen {
-		n, err := e.in.Read(e.held[:])
+		n, err := e.in.Read(e.readInto())
 		if n <= 0 {
 			return n, err
 		}
@@ -1395,7 +1408,33 @@ func (e *editor) nextByte(buf []byte) (int, error) {
 // Two other places have to ask it, and both are the same mistake in different
 // clothing — reading past this buffer to the descriptor underneath. See
 // serveDescriptors in watchfd.go, and the reads in search.go and complete.go.
-func (e *editor) inputPending() bool { return len(e.pushed) > 0 || e.heldPos < e.heldLen }
+func (e *editor) inputPending() bool {
+	if len(e.pushed) > 0 || e.heldPos < e.heldLen {
+		return true
+	}
+	return e.oneByte && e.descriptorHasInput()
+}
+
+// descriptorHasInput asks the descriptor underneath whether a byte can be read
+// without waiting, which is what held answers when the editor reads ahead.
+// Nothing is read: a byte taken here could be the first one after the line,
+// which belongs to whatever reads the descriptor next.
+func (e *editor) descriptorHasInput() bool {
+	if e.inFd == nil {
+		return false
+	}
+	fd := e.inFd()
+	return fd >= 0 && fdset.ReadableNow(fd)
+}
+
+// readInto is where the next read of input goes: all of held, or its first
+// byte where the editor takes nothing past what it uses.
+func (e *editor) readInto() []byte {
+	if e.oneByte {
+		return e.held[:1]
+	}
+	return e.held[:]
+}
 
 // keepsTheLineOnInterrupt asks whether a ^C keeps the line rather than giving
 // it up, which only a trap can make it do: zsh keeps the line under one, and

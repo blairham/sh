@@ -64,7 +64,8 @@ func (b optionBits) on(i int) bool { return b[i/64]&(1<<uint(i%64)) != 0 }
 // recorded names share, and one bit for each of the rest.
 //
 // Nothing here is a live pointer into the runner's option state. The vector
-// is swapped copy-on-write — see swapAxes and setAxis — so holding it as it
+// is taken with interp.Runner.KeepSemantics, after which the runner copies it
+// before its next change — see swapAxes and setAxis — so holding it as it
 // stands is holding what it *was*, and it does not have to be copied to be
 // saved. setAxis declining to swap at all when an axis is already where it is
 // being put does not weaken that: what it skips is making a copy nobody would
@@ -151,7 +152,7 @@ func init() {
 // recorded, because the loop that reads them is the same loop and skipping
 // them would only buy a branch.
 func saveOptionState(r *interp.Runner) optionState {
-	s := optionState{sem: r.Semantics, dialect: r.Dialect, options: r.DialectOptions}
+	s := optionState{sem: r.KeepSemantics(), dialect: r.Dialect, options: r.DialectOptions}
 	for _, i := range liveOptions {
 		if zshOptions[i].get(r) {
 			s.on.set(i)
@@ -163,7 +164,7 @@ func saveOptionState(r *interp.Runner) optionState {
 
 // restore puts the whole table back.
 func (s optionState) restore(r *interp.Runner) {
-	r.Semantics = s.sem
+	r.RestoreSemantics(s.sem)
 	r.Dialect = s.dialect
 	// The recorded names and the mode together, which the old code put
 	// back as two writes at either end of the loop below. Nothing in the

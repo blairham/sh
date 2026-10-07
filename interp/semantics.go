@@ -34884,6 +34884,7 @@ func (r *Runner) swapSemantics(change func(*Semantics)) {
 	s := *r.sem()
 	change(&s)
 	r.Semantics = &s
+	r.semOwned = nil
 }
 
 // BackgroundJobInputPolicy is what a job started with `&` reads for standard

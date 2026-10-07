@@ -65,6 +65,9 @@ func (c *Runner) ownTables(r *Runner) {
 	// The associative arrays are shared until one side writes, with the
 	// command hash and the function origins below: see sharedtable.go.
 	c.shareTables(r)
+	// And the semantics vector, which the two now both point at, so neither
+	// may write it in place. See semanticsowned.go.
+	r.semOwned, c.semOwned, c.semSpare = nil, nil, nil
 	c.Params = append([]string(nil), r.Params...)
 
 	// What the shell knows about a name besides its value. Each is written

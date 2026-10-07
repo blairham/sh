@@ -20046,6 +20046,36 @@ type Semantics struct {
 	// (TestEveryDialectReadsWhatItWasMeasuredToRead).
 	PromptReadSize ReadSize
 
+	// PromptEndOfInputEndsTheLine writes a newline to the error stream when a
+	// prompt reading something that is not a terminal meets the end of its
+	// input, after the prompt it had drawn — the line a terminal's ^D would
+	// have ended.
+	//
+	// Measured 2026-10-07 on standard error, `-i` on a pipe, no startup
+	// files:
+	//
+	//	                         echo A        (nothing)   exit     exit, no newline
+	//	dash 0.5.12              P> P> \n      P> \n       P>       P>
+	//	ksh93u+                  P> P> \n      P> \n       P>       P> >
+	//	BusyBox ash 1.37.0       P> P> \n      P> \n       P>
+	//	zsh 5.9.2                no newline
+	//	bash 5.3.20              `exit` instead: Diagnostics.LeavingAPromptSession
+	//
+	// So it belongs to the end of the input and not to leaving: `exit`
+	// writes none, and with `PS1=` dash still writes the bare newline. A
+	// refused construct the input ended inside is the same — `if true`
+	// alone gives dash's refusal, its next prompt and the newline (#6330).
+	//
+	// Read by the front end, for the reason PromptAsksAgainAfterARefusedToken
+	// is, and a plain bool for the same reason.
+	//
+	// unpinned: reached, and the corpus cannot discriminate: no case draws a
+	// prompt. repl/endofinputnewline_test.go drives a session on a pipe and
+	// pins both answers (TestTheEndOfInputEndsThePromptsLine), and
+	// dialect/readsize_test.go holds the presets to the measurement
+	// (TestTheEndOfInputEndsTheLineInDashAshAndKsh).
+	PromptEndOfInputEndsTheLine bool
+
 	// EndOfInputInAConstructEndsTheSession says that the end of input
 	// arriving inside an unfinished construct at a prompt — ^D at `> `, or
 	// the end of a pipe — ends the session once that construct has been run

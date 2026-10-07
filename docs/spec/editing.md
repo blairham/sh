@@ -1210,6 +1210,19 @@ Moving `DATA` to byte P prints `[DATA]` only when P is exactly the block.
 That is `Semantics.PromptReadSize` (#6328). The size dash throws away after an
 error is the same block, so it comes from the same answer.
 
+## The end of the input ends the prompt's line — three dialects
+
+When a prompt reading a pipe reaches the end of its input, dash 0.5.12,
+ksh93u+ and BusyBox ash 1.37.0 write a newline after the last prompt. This is
+the line a `^D` at a terminal would have ended. Measured 2026-10-07: `echo A`
+gives `P> P> \n` on standard error and empty input gives `P> \n`. With
+`PS1=` dash still writes the bare newline. An `exit` writes nothing, so the
+newline belongs to the end of the input and not to leaving. zsh 5.9.2 writes
+nothing. bash writes its `exit` word, which is
+`Diagnostics.LeavingAPromptSession`.
+
+That is `Semantics.PromptEndOfInputEndsTheLine` (#6330).
+
 ## Text after the line that is not the line — `POSTDISPLAY`
 
 An inline suggestion is not text in the buffer. zsh gives a widget a second

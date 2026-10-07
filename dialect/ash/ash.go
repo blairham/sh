@@ -2456,6 +2456,8 @@ func Semantics() interp.Semantics {
 	// `read` typed there finds, on a pipe and a file alike. See
 	// Semantics.PromptReadSize (#6328).
 	s.PromptReadSize = 1024
+	// See Semantics.PromptEndOfInputEndsTheLine (#6330).
+	s.PromptEndOfInputEndsTheLine = true
 	s.StdinOptionNamesTheOperands = interp.No
 	s.LoneDashIsAnOption = interp.No
 	// The same, measured in the pinned digest rather than derived from dash:

@@ -227,6 +227,11 @@ type Shell struct {
 	// interp.Semantics.PromptReadSize.
 	ReadSize int
 
+	// EndOfInputEndsTheLine writes a newline after the last prompt when the
+	// input that is not a terminal runs out. See
+	// interp.Semantics.PromptEndOfInputEndsTheLine.
+	EndOfInputEndsTheLine bool
+
 	// EditorWithoutATerminal gives a session whose input is not a terminal a
 	// line editor, so that `C-r`, the arrows and every other binding are read
 	// as keys rather than as characters of the line.
@@ -1977,6 +1982,12 @@ func (s Shell) runPlain(
 					continue
 				}
 				withheld = !word
+			}
+			if s.EndOfInputEndsTheLine && !s.Runner.Exited() {
+				// The line the last prompt was drawn on, ended. Not after an
+				// `exit` the input ended on, which writes nothing. See
+				// interp.Semantics.PromptEndOfInputEndsTheLine.
+				s.errf("\n")
 			}
 			return s.status(), nil
 		}

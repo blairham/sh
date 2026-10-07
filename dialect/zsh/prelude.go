@@ -17,7 +17,7 @@ func Prelude() string {
 	return identity + nullCommands + startupAliases +
 		"WORDCHARS='" + wordCharacters + "'\n" +
 		historyCharactersParameter + "='" + historyCharacters + "'\n" +
-		functions
+		functions + compdumpPrelude
 }
 
 // startupAliases are the two aliases this shell has before it reads anything.

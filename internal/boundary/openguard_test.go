@@ -332,6 +332,20 @@ var exempt = map[string]string{
 	"dialect/zsh.mapfileNames": "the listing behind `${(k)mapfile}`, after AllowList on the " +
 		"shell's own directory. It is the route with no path in it to hang a check on, which is " +
 		"why the roster has a sandboxcheck row of its own.",
+	// dialect/zsh. compdump.go is the completion dump compinit reads back
+	// (#6307), and every path it touches is asked about first.
+	"dialect/zsh.compdumpReadDir": "the listing of a directory compinit is about to scan, " +
+		"after AllowList on it — the same directory compinit's own glob lists next.",
+	"dialect/zsh.compdumpStat": "the stat of each `_name` file in that directory, checked " +
+		"against the dump, after AllowProbe on the file; a refusal is recorded as a refusal.",
+	"dialect/zsh.compdumpReadHead": "the first line of a completion file whose stat moved since " +
+		"the dump was written, after AllowReadPath on it — the line compinit's own scan reads.",
+	"dialect/zsh.compdumpReadFile": "the dump itself, under $XDG_CACHE_HOME/sh or " +
+		"~/.cache/sh, after AllowReadPath on its path.",
+	"dialect/zsh.compdumpWriteFile": "the dump's replacement — its directory, a temporary " +
+		"beside it and the rename over it — after AllowModify on the dump's path.",
+	"dialect/zsh.compdumpExecutableStat": "the size and time of this binary, for the dump's " +
+		"build identity: a path the process holds and no script names.",
 	// dialect/zsh. etcdir.go is not a builtin at all, which is why its
 	// reason is the first one on the list above rather than the second.
 	// fpathlib.go, the same reason as SystemStartupDirectory: the default

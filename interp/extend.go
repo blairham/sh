@@ -142,6 +142,10 @@ func (r *Runner) lookupBuiltin(name string) (Builtin, bool) {
 		// that no real shell does. See promptengine.go.
 		return fn, true
 	}
+	if fn, ok := r.preludeCommand(name); ok {
+		// A dialect's member of the same family. See preludecommand.go.
+		return fn, true
+	}
 	fn, ok := builtins[name]
 	return fn, ok
 }

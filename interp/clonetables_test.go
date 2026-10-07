@@ -26,6 +26,7 @@ var sharedTables = map[string]string{
 	"shellOwnWhileSet":    "the names a dialect owns while they hold a value, marked at setup by MarkShellOwnParameterWhileSet and never written again",
 	"equalsTildeBuiltins": "the builtins a dialect says read an argument's `=` as an assignment's, marked at setup by MarkBuiltinWhoseEqualsOpensATildeContext and never written again",
 	"localKeepsOuter":     "the names a dialect says keep their outer value in a valueless local, marked at setup by MarkLocalKeepsTheOuterValue and never written again",
+	"preludeCommands":     "the commands a dialect gave its prelude, registered by RegisterPreludeCommand at setup and never written again — a script cannot add, replace or remove one",
 	"noticedJobs":         "never written, only replaced whole by noticeFinishedJobs — so a subshell that shares its parent's set and then notices a job gets a set of its own, and neither runner ever sees the other's notices",
 	// Copied on write rather than at the clone. The test for these is
 	// TestASubshellWriteToASharedTableStaysInTheSubshell, which writes each
@@ -372,6 +373,7 @@ func seedTables(r *Runner) {
 	r.assigned = map[string]string{"seed": "v"}
 	r.completions = map[string]completionSpec{"seed": {options: []string{"nospace"}, words: []string{"-F", "f"}}}
 	r.custom = map[string]Builtin{"seed": func(*Runner, context.Context, []string) int { return 0 }}
+	r.preludeCommands = map[string]Builtin{"seed": func(*Runner, context.Context, []string) int { return 0 }}
 	r.declaredEmpty = map[string]bool{"seed": true}
 	r.declaredOnlyCompound = map[string]bool{"seed": true}
 	r.compoundHeldAnElement = map[string]bool{"seed": true}

@@ -446,7 +446,11 @@ defined against the reference's 2079, 43 aliases against 45, the same 18
 directories on `$fpath`, `zi` loaded, and the same seven `precmd` hooks
 registered. The completion *tables* load identically: `_comps` holds 2020
 entries in both, `_comps[git]` is `_git` in both, and both read the same
-`.zcompdump`.
+`.zcompdump`. That was zsh's own `compinit`, found on `$fpath`; the one this
+shell ships has since taken its place and **never reads or writes
+`.zcompdump`**. It keeps a cache of its own instead, at
+`${XDG_CACHE_HOME:-~/.cache}/sh/compdump`, which it rebuilds whenever a
+completion file or `$fpath` changes and which is safe to delete (#6307).
 
 **Completion still does not work, and the rc is the reason.** Under `-f`,
 with no startup file, this shell's own completer answers Tab and completes

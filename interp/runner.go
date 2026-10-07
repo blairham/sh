@@ -1881,6 +1881,10 @@ type Runner struct {
 	// library. A front end fills it in; nothing here does. See
 	// promptengine.go, and Runner.ReplaceProcess for the shape.
 	promptEngine Builtin
+	// preludeCommands are the commands a dialect gave its own prelude and
+	// nobody else. Written while the dialect is applied and read-only after,
+	// so a subshell shares the map. See preludecommand.go.
+	preludeCommands map[string]Builtin
 	// speakerLine is where the script called that function — a builtin has
 	// no lines of its own, so the location names the call rather than the
 	// body.

@@ -182,6 +182,25 @@ func TestTheEscapeQuestionWaitsForTheRestOfTheSequence(t *testing.T) {
 		}
 	})
 
+	t.Run("a byte that begins no sequence arrives inside the wait, so the Escape is the mode switch", func(t *testing.T) {
+		// `0` after an ESC is command mode's `0`, not the rest of a key: both
+		// reference shells leave insert for it (#6283). The byte is read to
+		// be looked at and left in hand for the command to take.
+		r, w := newPipe(t)
+		e := editorOver(r, func() (time.Duration, bool) { return 3 * time.Second, false })
+		e.in = r
+		go func() {
+			time.Sleep(50 * time.Millisecond)
+			_, _ = w.Write([]byte("0"))
+		}()
+		if !e.escapeIsTheModeSwitch() {
+			t.Errorf("an Escape followed by 0 began a sequence")
+		}
+		if !e.inputPending() || e.peekByte() != '0' {
+			t.Errorf("the 0 was not left in hand for the command")
+		}
+	})
+
 	t.Run("a dialect that names no parameter waits no time at all", func(t *testing.T) {
 		// The zero value, and the row that says nothing inherits a wait: the
 		// byte below arrives long after this has already answered.
@@ -231,6 +250,16 @@ func TestTheEscapeQuestionWaitsForTheRestOfTheSequence(t *testing.T) {
 		}
 		if elapsed := time.Since(start); elapsed > time.Second {
 			t.Errorf("a descriptor nothing could be asked about was waited on for %v", elapsed)
+		}
+	})
+
+	t.Run("a byte in hand that begins no sequence is the mode switch", func(t *testing.T) {
+		r, _ := newPipe(t)
+		e := editorOver(r, func() (time.Duration, bool) { return 3 * time.Second, false })
+		e.held[0] = 'b'
+		e.heldLen = 1
+		if !e.escapeIsTheModeSwitch() {
+			t.Errorf("an Escape with a b in hand began a sequence")
 		}
 	})
 

@@ -131,9 +131,18 @@ func (e *editor) viEditing() bool { return e.vi != nil && e.vi() }
 // rather than waiting to see which was meant. That is a second place a wait
 // belongs and it is not measured here, so it is not claimed; this is the
 // Escape, which is the one #1427 and vi.go named.
+//
+// **And a byte that is there is looked at, not only counted** (#6283). Both
+// reference shells read the ESC as the mode switch whenever what follows it
+// begins no sequence the keymap knows — measured 2026-10-06 through a
+// pseudo-terminal, `echo abc`, ESC, `0iX` and Return in one write is `Xecho
+// abc` in bash 5.3.20 and zsh 5.9.2 alike, and ESC `b` in one write is a mode
+// switch and a word back, not `M-b`. So the byte after the ESC decides it:
+// `[` and `O` begin the keys a terminal sends, and a binding of the keymap's
+// may begin with any other; anything else is a command for command mode.
 func (e *editor) escapeIsTheModeSwitch() bool {
 	if e.inputPending() {
-		return false
+		return !e.escapeContinues(e.peekByte())
 	}
 	if e.inFd == nil {
 		return true
@@ -149,12 +158,12 @@ func (e *editor) escapeIsTheModeSwitch() bool {
 		// way out is the same one the reference has: a key — ^C included —
 		// makes the descriptor readable and ends the wait.
 		ready, _, _, err := fdset.Ready([]int{fd}, nil, nil, nil)
-		return err != nil || len(ready) == 0
+		return err != nil || len(ready) == 0 || !e.escapeContinuesWithTheNextByte()
 	}
 	if wait <= 0 {
 		// No wait was asked for, so the question is the one this asked
 		// before there was a wait: is a byte there now.
-		return !fdset.ReadableNow(fd)
+		return !fdset.ReadableNow(fd) || !e.escapeContinuesWithTheNextByte()
 	}
 	ready, asked := fdset.ReadableWithin(fd, wait)
 	if !asked {
@@ -164,7 +173,50 @@ func (e *editor) escapeIsTheModeSwitch() bool {
 		// recoverable by pressing `i` and a swallowed Escape is not.
 		return true
 	}
-	return !ready
+	return !ready || !e.escapeContinuesWithTheNextByte()
+}
+
+// escapeContinues reports whether b, after an ESC in vi insert mode, begins a
+// sequence rather than a command: a terminal's own keys, or a binding.
+func (e *editor) escapeContinues(b byte) bool {
+	if b == '[' || b == 'O' {
+		return true
+	}
+	if e.bindings == nil {
+		return false
+	}
+	return anyBindingStartsWith(e.bindings(e.keymap()), string([]byte{esc, b}))
+}
+
+// escapeContinuesWithTheNextByte is escapeContinues for a byte the terminal
+// has and this editor has not yet read, which it reads into hand to look at —
+// the descriptor said it is there, so the read does not wait.
+func (e *editor) escapeContinuesWithTheNextByte() bool {
+	if !e.inputPending() {
+		if e.in == nil {
+			// Nothing to read it with, so it is not looked at: the answer
+			// it had before there was a look.
+			return true
+		}
+		n, err := e.in.Read(e.held[:])
+		if n <= 0 {
+			// Nothing came after all. The read's error, if any, is met
+			// again by the next read, which is where it belongs.
+			_ = err
+			return false
+		}
+		e.heldPos, e.heldLen = 0, n
+	}
+	return e.escapeContinues(e.peekByte())
+}
+
+// peekByte is the next byte in hand, without taking it; only asked where
+// inputPending says there is one.
+func (e *editor) peekByte() byte {
+	if len(e.pushed) > 0 {
+		return e.pushed[0]
+	}
+	return e.held[e.heldPos]
 }
 
 // keySequenceWait is how long this editor waits for the rest of a key

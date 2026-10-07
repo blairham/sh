@@ -521,6 +521,43 @@ and defaults it to half a second; zsh calls it `KEYTIMEOUT` and defaults it to
 four tenths. See the command-mode section below for what this implementation
 asks instead, and why it is not a number.
 
+## zsh's vi insert keymap
+
+zsh's `viins` keymap is not its emacs keymap with Escape changed. Measured
+2026-10-06 with `zsh -f -c 'bindkey -M viins'` on zsh 5.9.2, and each key
+through a pseudo-terminal with a two-row prompt and `bindkey -v` (#6272):
+
+| key | viins | so |
+| --- | --- | --- |
+| `^A` `^B` `^E` `^F` `^K` `^N` `^O` `^P` `^S` `^T` `^Y`, `^\` to `^_` | `self-insert` | `ab ^B ^T` runs `ab^B^T` |
+| `^D` | `list-choices` | lists, and deletes nothing; an empty line is still end of input |
+| `^H`, `^?` | `vi-backward-delete-char` | stops where this stretch of insert mode began, and rings there |
+| `^U` | `vi-kill-line` | kills back to where insert mode began; then nothing, silently |
+| `^W` | `vi-backward-kill-word` | vi's word, stopping at the same place, silently |
+| `^Q` | `vi-quoted-insert` | as `^V` |
+| `^R` | `redisplay` | the whole prompt drawn again |
+| `^X` | nothing | a bell |
+| `^G` | `list-expand` | not built here; does nothing |
+
+The stretch of insert mode begins at the start of a fresh line, and wherever
+a command-mode key enters insert mode after that: `aa`, Escape, `A`, `b`, then
+Backspace twice deletes the `b` and rings.
+
+An Escape with more bytes behind it is read as a sequence only while the bytes
+begin one viins has — the arrows, `^[O` and `^[[`, and the bracketed paste.
+Otherwise it is the mode switch, and the next byte is a command-mode key, so
+`aa`, then Escape, `A` and `b` sent together append rather than being read
+as one unbound key.
+
+The listing is zsh's byte for byte. Runs of one-byte keys bound to one widget
+fold into a range, `"^A"-"^C" self-insert`, written with `-R` in the `-L` form,
+and a sequence of more than one byte never folds. The printable keys and the
+meta range are listed as self-insert in both editing keymaps. `^\` is written
+`"^\\\\"`, and both `^\` and `^\\` read back as that key.
+
+bash's vi insert keymap is readline's and is not this. It keeps the shared
+table.
+
 ## vi command mode
 
 The second state the editor can be in, where a letter is a motion rather than a

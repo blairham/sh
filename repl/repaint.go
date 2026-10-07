@@ -120,6 +120,8 @@ func (e *editor) repaint(prompt drawnPrompt, cols int) bool {
 	}
 	if m := e.moves(); m.inPlace && e.repaintInPlace(m, prompt, cols) {
 		return true
+	} else if m.asTheScreenIs && e.repaintAsTheScreenIs(m, prompt, cols) {
+		return true
 	}
 	shown := e.displayed()
 	if rightFits(prompt, cells(shown), cols) != d.right {
@@ -142,9 +144,10 @@ func (e *editor) repaint(prompt drawnPrompt, cols int) bool {
 	}
 
 	m := e.moves()
-	if m.asTheScreenIs && resume == 1 && m.left1 != "" && at < len(styled) {
-		// The first character is written again with the second. See
-		// rewritemotion.go.
+	if m.asTheScreenIs && resume == 1 && m.left1 != "" && at < len(styled) && len(shown) > 0 && shown[0] >= ' ' && runeWidth(shown[0]) == 1 {
+		// The first character is written again with the second — the
+		// second *column*: measured, a `z` typed after a tab, whose cells
+		// the tab fills, is written alone. See rewritemotion.go.
 		at, resume = 0, 0
 	}
 

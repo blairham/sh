@@ -386,3 +386,37 @@ func TestTheBracketingIsReadOutOfItsParameter(t *testing.T) {
 		})
 	}
 }
+
+// A setting that turns the bracketing off while it holds `off` and leaves it
+// on otherwise, unset included — readline's enable-bracketed-paste, as
+// `bind 'set'` keeps it (#6264). See EditorStyle.BracketedPasteSetting.
+func TestTheBracketingFollowsItsSetting(t *testing.T) {
+	style := pasting
+	style.BracketedPasteSetting = "rl"
+	for _, c := range []struct {
+		name  string
+		value string
+		set   bool
+		asked bool
+	}{
+		{"unset", "", false, true},
+		{"on", "on", true, true},
+		{"off", "off", true, false},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			r := &interp.Runner{}
+			if c.set {
+				r.SetVar("rl", c.value)
+			}
+			var out strings.Builder
+			e := Shell{Editor: style, Runner: r}.newEditor(t.Context(), &terminalState{})
+			e.in, e.out = typing("echo hi\r"), &out
+			if _, err := e.readLine(drawPrompt("$ ")); err != nil {
+				t.Fatal(err)
+			}
+			if asked := strings.Contains(out.String(), pasteModeOn); asked != c.asked {
+				t.Errorf("asked for the bracketing: %v, want %v: %q", asked, c.asked, out.String())
+			}
+		})
+	}
+}

@@ -35,6 +35,9 @@ func EditorStyle() repl.EditorStyle {
 		BracketedPaste:     true,
 		PastedTextStyle:    "\x1b[7m",
 		PastedTextStyleEnd: "\x1b[27m",
+		// And `bind 'set enable-bracketed-paste off'` turns it off. See
+		// repl.EditorStyle.BracketedPasteSetting (#6264).
+		BracketedPasteSetting: bracketedPasteSetting,
 		// Every field about words is left at its zero value on purpose, and
 		// they are bash's measured answers rather than an absence of one: a
 		// word is letters and digits, `^U` kills only what is before the

@@ -306,6 +306,15 @@ type EditorStyle struct {
 	// worst of the three things to do with it.
 	BracketedPaste bool
 
+	// BracketedPasteSetting names a variable that stops the bracketing from
+	// the next prompt on while it holds `off`, and leaves BracketedPaste's
+	// answer alone otherwise — unset included. bash's is readline's
+	// `enable-bracketed-paste`, which `bind 'set enable-bracketed-paste
+	// off'` sets: measured 2026-10-06 through a pseudo-terminal against bash
+	// 5.3.20, the next prompt is written without `\e[?2004h`, and `on` asks
+	// again (#6264).
+	BracketedPasteSetting string
+
 	// BracketedPasteParameter names the array the two sequences are read
 	// from, at the start of every line, where the dialect keeps them in one.
 	// Empty is the two fixed sequences in paste.go.

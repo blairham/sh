@@ -53,12 +53,14 @@ for k v in ${(kv)_postpatcomps}; do d+=("P $k=$v"); done
 print -r -- ${(j:;:)${(o)d}}`
 	out, st := runShipped(t, `fpath=(`+dir+` $fpath); autoload -Uz compinit; compinit -D -u
 local -a d
+local -a words
 local file line k v
 `+dump+`
 _comps=() _services=() _patcomps=() _postpatcomps=()
 for file in `+dir+`/_*(N-.); do
   IFS= read -r line < $file
-  [[ $line == '#compdef '* || $line == '#compdef' ]] && compdef -n ${file:t} ${=${line#\#compdef}}
+  words=( ${=line} )
+  [[ $words[1] == '#compdef' ]] && compdef -n ${file:t} ${words[2,-1]}
 done
 `+dump)
 	lines := strings.Split(strings.TrimSuffix(out, "\n"), "\n")
@@ -68,7 +70,7 @@ done
 	if lines[0] != lines[1] {
 		t.Errorf("compinit and compdef -n disagree\ncompinit: %s\ncompdef:  %s", lines[0], lines[1])
 	}
-	for _, want := range []string{"c alpha=_a1", "c gamma=_a1", "c zeta=_late", "c e-f=_dash", "c [x]=_quote", "c 'q1'=_quote", "p 'pat*'=_pat", "P 'post*'=_post", "s svc=service", "p 'mid*'=_mid"} {
+	for _, want := range []string{"c alpha=_a1", "c gamma=_a1", "c zeta=_late", "c e-f=_dash", "c [x]=_quote", "c 'q1'=_quote", "p 'pat*'=_pat", "P 'post*'=_post", "s svc=service", "p 'mid*'=_mid", "c t1=_tab", "c t2=_tab"} {
 		if !strings.Contains(";"+lines[0]+";", ";"+want+";") {
 			t.Errorf("%q is not in the tables, so the rows are not reaching what they test:\n%s", want, lines[0])
 		}

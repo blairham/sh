@@ -223,7 +223,7 @@ type Shell struct {
 	// asks for, and zero for exactly one line and nothing past it — which is
 	// what leaves the rest on the descriptor for a `read` typed at the
 	// prompt. Read by the loop without an editor; the editor a dialect keeps
-	// on a pipe still reads ahead of the line. See
+	// on a pipe still reads ahead of the line (#6334). See
 	// interp.Semantics.PromptReadSize.
 	ReadSize int
 

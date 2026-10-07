@@ -356,6 +356,8 @@ type editor struct {
 	// insert mode after that. See viinsertkeys.go.
 	zshViInsert   bool
 	viInsertStart int
+	// viInsertTypes is EditorStyle.ViInsertTypesTheseKeys.
+	viInsertTypes string
 	// viQuotedInsertKey and quotedInsertAbandons are EditorStyle.ViQuotedInsert
 	// and QuotedInsertAbandonsOnControlC.
 	viQuotedInsertKey    bool
@@ -1079,6 +1081,12 @@ func (e *editor) keyLoop(prompt drawnPrompt) (string, error) {
 				}
 				return e.stopped(prompt)
 			}
+			continue
+		}
+		if c := buf[0]; c < 0x20 && strings.IndexByte(e.viInsertTypes, c) >= 0 && e.viEditing() && !e.viCommand {
+			// A control key vi insert mode types as it is. See
+			// EditorStyle.ViInsertTypesTheseKeys (#6301).
+			e.typeCounted(rune(c), 1, prompt)
 			continue
 		}
 		if e.zshViInsertKey(buf[0], prompt) {

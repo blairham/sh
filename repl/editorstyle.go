@@ -122,6 +122,16 @@ type EditorStyle struct {
 	// always used. See repl/viinsertkeys.go for the measurement (#6272).
 	ZshViInsertKeymap bool
 
+	// ViInsertTypesTheseKeys are control keys vi insert mode puts in the line
+	// as the characters they are, where the zero value gives them the shared
+	// table's action. bash's vi-insert keymap lists `self-insert` on ^A ^B
+	// ^E ^F ^G ^K ^L ^O ^X ^\ ^] and ^^ — and on ^C ^Q ^Z, which the
+	// terminal takes first. Measured 2026-10-06 through a pseudo-terminal
+	// against bash 5.3.20, `set -o vi`, `od -c <<< ab`, the key, `Z` and
+	// Return: `^B` gives `a b 002 Z` where this gave `a Z b`, `^K` gives
+	// `a b \v Z`, and so on for each (#6301).
+	ViInsertTypesTheseKeys string
+
 	// QuotedInsertAbandonsOnControlC makes `^C` after quoted-insert's `^V`
 	// give the line up with a bell, where the zero value puts a `^C` in the
 	// line as quoted-insert does any other key. Measured 2026-10-06 through a

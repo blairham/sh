@@ -62,3 +62,24 @@ func TestTheEndOfInputEndsTheLineInDashAshAndKsh(t *testing.T) {
 		}
 	}
 }
+
+// ash draws again the prompt an unterminated last line was read at, ksh93
+// draws the continuation prompt, and the others draw nothing. Measured
+// 2026-10-07 on a pipe (#6331).
+func TestAnUnterminatedLastLineIsPromptedForAsMeasured(t *testing.T) {
+	for _, c := range []struct {
+		name string
+		sem  interp.Semantics
+		want interp.UnterminatedLinePrompt
+	}{
+		{"ash", ash.Semantics(), interp.SamePromptForAnUnterminatedLine},
+		{"ksh", ksh.Semantics(), interp.ContinuationPromptForAnUnterminatedLine},
+		{"dash", dash.Semantics(), interp.NoPromptForAnUnterminatedLine},
+		{"bash", bash.Semantics(), interp.NoPromptForAnUnterminatedLine},
+		{"zsh", zsh.Semantics(), interp.NoPromptForAnUnterminatedLine},
+	} {
+		if got := c.sem.PromptAgainForAnUnterminatedLine; got != c.want {
+			t.Errorf("%s: %d, want %d", c.name, got, c.want)
+		}
+	}
+}

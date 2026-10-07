@@ -66,10 +66,10 @@ var defaultKeys = map[string]Widget{
 	"\x1bD":    WidgetKillWordAfter,
 	"\x1b.":    WidgetInsertLastWord,
 	"\x1b_":    WidgetInsertLastWord,
-	"\x1b\x7f": WidgetKillWordBefore,
+	"\x1b\x7f": WidgetBackwardKillWord,
 	// `M-^H` alongside `M-Delete`, which is the entry the one hand-written
 	// copy of this table was missing.
-	"\x1b\x08": WidgetKillWordBefore,
+	"\x1b\x08": WidgetBackwardKillWord,
 
 	// The keys a terminal sends as a control sequence, in both the forms a
 	// terminal sends them in — `\e[` when the keypad is in its normal mode

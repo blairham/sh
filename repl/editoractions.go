@@ -344,6 +344,7 @@ var countedActions = map[Widget]Widget{
 	WidgetBackwardWord:       WidgetForwardWord,
 	WidgetKillWordAfter:      WidgetKillWordBefore,
 	WidgetKillWordBefore:     WidgetKillWordAfter,
+	WidgetBackwardKillWord:   WidgetKillWordAfter,
 	WidgetDeleteChar:         WidgetBackwardDeleteChar,
 	WidgetBackwardDeleteChar: WidgetDeleteChar,
 	WidgetBeginningOfLine:    WidgetEndOfLine,

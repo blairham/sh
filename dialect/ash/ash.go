@@ -2483,6 +2483,11 @@ func Semantics() interp.Semantics {
 	// A line the prompt refused is not counted. See
 	// Semantics.PromptRefusedLineIsNotCounted (#6319).
 	s.PromptRefusedLineIsNotCounted = true
+	// Unlike dash, an error at the prompt loses nothing that was already
+	// read: measured 2026-10-07 in the pinned image, 33003 bytes in one write
+	// after `fi` all run. See
+	// Semantics.PromptErrorDiscardsTheRestOfTheReadBlock (#6322).
+	s.PromptErrorDiscardsTheRestOfTheReadBlock = false
 
 	// ---- axes this dialect did not answer, swept for and measured ----
 	//

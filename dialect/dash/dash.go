@@ -367,6 +367,9 @@ func Semantics() interp.Semantics {
 	// A line the prompt refused is not counted. See
 	// Semantics.PromptRefusedLineIsNotCounted (#6319).
 	s.PromptRefusedLineIsNotCounted = true
+	// And an error there throws away the rest of the block the line was read
+	// from. See Semantics.PromptErrorDiscardsTheRestOfTheReadBlock (#6322).
+	s.PromptErrorDiscardsTheRestOfTheReadBlock = true
 	// This shell has no braces to expand and no `-B` either, so the letter
 	// is refused as the invalid option it is rather than asked about.
 	s.SetBTurnsOffBraceExpansion = interp.No

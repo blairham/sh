@@ -13,7 +13,6 @@
 package repl
 
 import (
-	"bufio"
 	"context"
 	"errors"
 	"fmt"
@@ -213,6 +212,12 @@ type Shell struct {
 	// count of lines read. See [Shell.take] and
 	// interp.Semantics.PromptRefusedLineIsNotCounted.
 	RefusedLineIsNotCounted bool
+
+	// ErrorDiscardsTheRestOfTheReadBlock reads input that is not a terminal
+	// a block at a time, and throws away the rest of the block when a line is
+	// refused or given up over an error. See readBlocks and
+	// interp.Semantics.PromptErrorDiscardsTheRestOfTheReadBlock.
+	ErrorDiscardsTheRestOfTheReadBlock bool
 
 	// EditorWithoutATerminal gives a session whose input is not a terminal a
 	// line editor, so that `C-r`, the arrows and every other binding are read
@@ -1372,6 +1377,14 @@ func (s Shell) leaving() {
 // command's own output is. interp goes on panicking, which is correct for a
 // library; see internal/panicguard.
 func (s Shell) runStmts(ctx context.Context, typed string, stmts []*syntax.File) (done bool) {
+	done, _ = s.runStmtsGivingUp(ctx, typed, stmts)
+	return done
+}
+
+// runStmtsGivingUp is runStmts, saying as well whether the line was given up
+// over an error, which the loop without an editor needs to know: see
+// interp.Semantics.PromptErrorDiscardsTheRestOfTheReadBlock.
+func (s Shell) runStmtsGivingUp(ctx context.Context, typed string, stmts []*syntax.File) (done, gaveUp bool) {
 	// The command hook fires here: after the line was read and before any of
 	// it runs, which is what it is for, and inside run's restore so that what
 	// it prints reaches a terminal in its own line discipline. Nothing fires
@@ -1382,17 +1395,17 @@ func (s Shell) runStmts(ctx context.Context, typed string, stmts []*syntax.File)
 		s.fireBeforeCommand(ctx, typed, stmts)
 		s.settled()
 		if s.Runner.Exited() {
-			return true
+			return true, false
 		}
 	}
-	if s.guard().Do(func() { done = s.runEach(ctx, stmts) }) {
+	if s.guard().Do(func() { done, gaveUp = s.runEach(ctx, stmts) }) {
 		// The line never finished, so it has no status of its own and must
 		// not keep the one before it: `$?` says it failed, and the `&&` on
 		// the next line reads it the way it reads any other failure.
 		s.Runner.SetExitStatus(panicguard.Status)
-		return false
+		return false, false
 	}
-	return done
+	return done, gaveUp
 }
 
 // guard is what a typed line is run behind.
@@ -1430,26 +1443,28 @@ func (s Shell) guard() panicguard.Guard {
 // and `eval 'exit 7'` all end the session in every shell measured, and so does
 // errexit firing — `set -e` then `false` is a session gone in all four —
 // which is exactly what these calls do not catch.
-func (s Shell) runEach(ctx context.Context, stmts []*syntax.File) bool {
+//
+// gaveUp says the line ended at such an error.
+func (s Shell) runEach(ctx context.Context, stmts []*syntax.File) (done, gaveUp bool) {
 	for _, st := range stmts {
 		if err := s.Runner.RunPart(ctx, st); err != nil {
 			// Refused rather than silently skipped, the same way the script
 			// driver does it.
 			s.errf("%v\n", err)
-			return false
+			return false, false
 		}
 		if s.Runner.GiveUpTheLine() {
 			// An error the line gave up over. The status it left behind is
 			// the line's status, exactly as a command's own failure would
 			// be, and the statements after it in the same line are not run:
 			// what a person typed is the unit, and the unit is over.
-			return false
+			return false, true
 		}
 		if s.Runner.Exited() {
-			return true
+			return true, false
 		}
 	}
-	return false
+	return false, false
 }
 
 // beforeReading is everything that happens between one line and the next: what
@@ -1894,7 +1909,7 @@ func (s Shell) runPlain(
 		}
 	}()
 	record := s.recording(recall, &added, &addedAt)
-	in := bufio.NewReader(s.In)
+	in := s.plainInput()
 	var pending strings.Builder
 	var seeded string
 	for {
@@ -1997,13 +2012,21 @@ func (s Shell) runPlain(
 		if perr != nil {
 			s.errf("%s", s.report(perr))
 			s.refused(perr)
+			// And the rest of what was read with the line goes with it,
+			// where the dialect reads in blocks. See
+			// interp.Semantics.PromptErrorDiscardsTheRestOfTheReadBlock.
+			discardTheRestOfTheBlock(in)
 			continue
 		}
 		b := s.beginBlock(text)
-		done := s.runStmts(ctx, text, stmts)
+		done, gaveUp := s.runStmtsGivingUp(ctx, text, stmts)
 		s.closeBlock(ctx, store, capture, b)
 		if done {
 			return s.status(), nil
+		}
+		if gaveUp {
+			// The same for a line given up as it ran.
+			discardTheRestOfTheBlock(in)
 		}
 	}
 }

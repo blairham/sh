@@ -198,7 +198,7 @@ func (e *editor) escapeContinuesWithTheNextByte() bool {
 			// it had before there was a look.
 			return true
 		}
-		n, err := e.in.Read(e.held[:])
+		n, err := e.in.Read(e.readInto())
 		if n <= 0 {
 			// Nothing came after all. The read's error, if any, is met
 			// again by the next read, which is where it belongs.
@@ -215,6 +215,17 @@ func (e *editor) escapeContinuesWithTheNextByte() bool {
 func (e *editor) peekByte() byte {
 	if len(e.pushed) > 0 {
 		return e.pushed[0]
+	}
+	if e.heldPos == e.heldLen {
+		// A byte the descriptor has and held does not, which is what
+		// inputPending reports where the editor reads a byte at a time. It is
+		// there, so the read does not wait; at the end of input nothing comes
+		// and nothing is in hand.
+		n, _ := e.in.Read(e.readInto())
+		if n <= 0 {
+			return 0
+		}
+		e.heldPos, e.heldLen = 0, n
 	}
 	return e.held[e.heldPos]
 }

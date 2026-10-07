@@ -28,7 +28,9 @@ import (
 // and leaves 130 — see interp.Runner.InterruptInATerminalRead.
 func TestTheEditingModesTurnTheEditorOff(t *testing.T) {
 	t.Run("no editor is drawn, and the modes bring it back", func(t *testing.T) {
-		control, screen := interruptSession(t, "set +o emacs +o vi\n")
+		// On a terminal that takes the paste markers, so that the editor
+		// coming back is visible as them. See describedTerminal.
+		control, screen := interruptSessionWith(t, "set +o emacs +o vi\n", describedTerminal(t)...)
 		from := len(screen.Text())
 		interruptAnswer(t, control, screen, "true", nil)
 		if strings.Contains(screen.Text()[from:], "\x1b[?2004h") {

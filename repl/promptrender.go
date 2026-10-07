@@ -416,6 +416,12 @@ type counts struct {
 	// moments. See Shell.endsOnlyTheDocument.
 	ends []int
 
+	// term is the `$TERM` the line editor last took up, and termSet whether
+	// it was set; termTaken says it has taken one up at all. See
+	// Shell.takeUpTheTerminal.
+	term               string
+	termSet, termTaken bool
+
 	// tty is the terminal's name once it has been looked for, and looked
 	// says it has been. Kept for the session rather than for the package: a
 	// prompt is drawn on every keystroke and the search reads a directory,

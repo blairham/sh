@@ -38,6 +38,14 @@ func EditorStyle() repl.EditorStyle {
 		// And `bind 'set enable-bracketed-paste off'` turns it off. See
 		// repl.EditorStyle.BracketedPasteSetting (#6264).
 		BracketedPasteSetting: bracketedPasteSetting,
+		// And sets it off on a terminal that cannot take the markers. See
+		// repl.EditorStyle.BracketedPasteOffForTerminals (#6310).
+		BracketedPasteOffForTerminals:        []string{"dumb", "vt52", "emacs"},
+		BracketedPasteOffWithoutADescription: true,
+		// And ^D at a continuation prompt leaves the row as it is when
+		// there are no markers to take back. See
+		// repl.EditorStyle.EndOfInputWithNoWordStaysOnTheRow (#6310).
+		EndOfInputWithNoWordStaysOnTheRow: true,
 		// Every field about words is left at its zero value on purpose, and
 		// they are bash's measured answers rather than an absence of one: a
 		// word is letters and digits, `^U` kills only what is before the

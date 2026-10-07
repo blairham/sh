@@ -8,7 +8,9 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -118,6 +120,14 @@ var (
 // first pseudo-terminal test this package has.
 func interruptSession(t *testing.T, rc string) (*os.File, *smoke.Screen) {
 	t.Helper()
+	return interruptSessionWith(t, rc)
+}
+
+// interruptSessionWith is interruptSession with variables added to the
+// session's environment, a later one replacing an earlier one of the same
+// name — `TERM` included, which is `dumb` otherwise.
+func interruptSessionWith(t *testing.T, rc string, env ...string) (*os.File, *smoke.Screen) {
+	t.Helper()
 	home := t.TempDir()
 	control, terminal, err := pty.Open()
 	if errors.Is(err, pty.ErrUnsupported) {
@@ -142,6 +152,11 @@ func interruptSession(t *testing.T, rc string) (*os.File, *smoke.Screen) {
 		"PATH=/usr/bin:/bin",
 		"TERM=dumb",
 		"HISTFILE=" + filepath.Join(home, "hist"),
+	}
+	for _, kv := range env {
+		name, _, _ := strings.Cut(kv, "=")
+		sh.Env = slices.DeleteFunc(sh.Env, func(have string) bool { return strings.HasPrefix(have, name+"=") })
+		sh.Env = append(sh.Env, kv)
 	}
 	screen := smoke.Watch(control)
 	done := make(chan int, 1)

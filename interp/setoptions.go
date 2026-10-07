@@ -208,6 +208,29 @@ func (r *Runner) EditingMode() EditingMode {
 	return EditingModeNone
 }
 
+// TurnEditingOffInsideEmacs selects neither editing mode in an interactive
+// shell whose environment says it is running inside Emacs, in the dialect
+// that does that. See Semantics.InsideEmacsTurnsEditingOff for the rule and
+// the measurements.
+//
+// The front end calls it once, after the invocation's own options and before
+// the startup files: `-o vi` given to the invocation is undone by it, and
+// `set -o vi` in a startup file is not. What it reads is therefore the
+// environment the shell was started with, as the parameters hold it then.
+func (r *Runner) TurnEditingOffInsideEmacs() {
+	if !r.Interactive || !r.sem().InsideEmacsTurnsEditingOff {
+		return
+	}
+	term, termSet := r.getVar("TERM")
+	emacs, _ := r.getVar("EMACS")
+	_, insideEmacs := r.getVar("INSIDE_EMACS")
+	if term != "emacs" && ((termSet && term != "dumb") || (emacs != "t" && !insideEmacs)) {
+		return
+	}
+	r.editingMode = EditingModeNone
+	r.emacsSwitch, r.viSwitch = false, false
+}
+
 // setEditingMode is the write half of the two option names.
 //
 // Turning a mode on selects it; turning one off leaves neither selected,

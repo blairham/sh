@@ -3222,6 +3222,10 @@ func (sh Shell) runInput(in source) int {
 	// `sh -i script.sh` read a person's run-commands file: measured, `bash -i
 	// -c cmd` reads `~/.bashrc`, and one shell reads a file on *every*
 	// invocation whether or not there is anyone to prompt.
+	// Inside Emacs the dialect that would select an editing mode selects
+	// none, decided from the environment after the invocation's options and
+	// before the files. See interp.Runner.TurnEditingOffInsideEmacs.
+	r.TurnEditingOffInsideEmacs()
 	if code := sh.startup(r, loginShellOption(sh, r, in)); code != 0 {
 		return code
 	}

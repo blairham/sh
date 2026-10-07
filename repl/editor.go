@@ -636,6 +636,8 @@ type editor struct {
 	// EditorStyle.EndOfInputRefusalStaysOnTheLine.
 	endOfInputRefused     string
 	refusalStaysOnTheLine bool
+	// noWordStaysOnTheRow is EditorStyle.EndOfInputWithNoWordStaysOnTheRow.
+	noWordStaysOnTheRow bool
 
 	// refusedInARow counts the ^D refused since the session last ran a
 	// command, which is what both shells count — the loop sets it back to
@@ -1473,7 +1475,7 @@ func (e *editor) stopped(prompt drawnPrompt) (string, error) {
 		if e.leaving != "" {
 			e.write(e.leaving + e.newline())
 		}
-	} else {
+	} else if e.leaving != "" || !e.noWordStaysOnTheRow {
 		e.endLine(prompt, e.leaving)
 	}
 	e.wroteLeaving = e.leaving != ""

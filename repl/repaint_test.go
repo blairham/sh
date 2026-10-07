@@ -347,7 +347,7 @@ func TestTheCursorIsMovedInTheFewestBytes(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			var b strings.Builder
-			moveCursor(&b, tc.fromRow, tc.fromCol, tc.toRow, tc.toCol)
+			ansiMotion.moveCursor(&b, tc.fromRow, tc.fromCol, tc.toRow, tc.toCol)
 			if got := b.String(); got != tc.want {
 				t.Errorf("moved with %q, want %q", got, tc.want)
 			}

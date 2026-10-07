@@ -422,11 +422,12 @@ type counts struct {
 	term               string
 	termSet, termTaken bool
 
-	// motionKey is the terminal noMotion was asked about, and motionAsked
-	// says it has been. See Shell.cannotMoveTheCursor.
+	// motionKey is the terminal motion was read for, and motionAsked says
+	// it has been; motion is nil where it has no description. See
+	// Shell.describedMotion.
 	motionKey   string
 	motionAsked bool
-	noMotion    bool
+	motion      *terminalMotion
 
 	// tty is the terminal's name once it has been looked for, and looked
 	// says it has been. Kept for the session rather than for the package: a

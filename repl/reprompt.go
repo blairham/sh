@@ -93,16 +93,15 @@ func (e *editor) drawPromptAgain(old, fresh drawnPrompt) {
 		return
 	}
 	var b strings.Builder
+	m := e.moves()
 	b.WriteString("\r")
 	if up := e.row + leadRows(old.lead); up > 0 {
-		b.WriteString("\x1b[")
-		b.WriteString(itoa(up))
-		b.WriteString("A")
+		b.WriteString(m.upBy(up))
 	}
 	// To the end of the screen rather than the end of the row: what is being
 	// replaced is every row the old prompt and the line occupied, and a
 	// prompt that has just lost a row would otherwise leave it behind.
-	b.WriteString("\x1b[J")
+	b.WriteString(m.eraseToScreenEnd())
 	b.WriteString(fresh.lead)
 	e.write(b.String())
 

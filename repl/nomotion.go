@@ -34,10 +34,36 @@ import "strings"
 
 // cannotMoveTheCursor reports whether the terminal `$TERM` names has no way
 // to move the cursor right: no description at all, or one without `cuf1` and
-// `cuf`. Cached for the `$TERM` it was asked about, since it reads a file.
+// `cuf`. See terminalMotion, which is where the description is read.
 func (s Shell) cannotMoveTheCursor() bool {
 	if !s.Editor.DrawsWithoutCursorMotion || s.Runner == nil {
 		return false
+	}
+	m := s.describedMotion()
+	return m == nil || !m.canMoveRight()
+}
+
+// terminalMotion is the motion the editor draws with on this read: the
+// terminal's own sequences where the dialect takes them from its
+// description, and nil — ANSI — otherwise. See terminalmotion.go.
+func (s Shell) terminalMotion() *terminalMotion {
+	if !s.Editor.MotionFromTheDescription {
+		return nil
+	}
+	if m := s.describedMotion(); m != nil {
+		return m
+	}
+	// No description at all: a terminal nothing is known about, which can
+	// move only the way every terminal can. See stepLeft.
+	return &terminalMotion{}
+}
+
+// describedMotion is the motion the description `$TERM` names holds, or nil
+// where there is no description. Cached for the terminal it was asked about,
+// since it reads a file.
+func (s Shell) describedMotion() *terminalMotion {
+	if s.Runner == nil {
+		return nil
 	}
 	env := func(name string) string {
 		v, _ := s.Runner.GetVar(name)
@@ -46,17 +72,15 @@ func (s Shell) cannotMoveTheCursor() bool {
 	key := env("TERM") + "\x00" + env("TERMINFO") + "\x00" + env("TERMINFO_DIRS")
 	c := s.counted()
 	if c.motionAsked && c.motionKey == key {
-		return c.noMotion
+		return c.motion
 	}
-	no := true
-	for _, cap := range TerminalCapabilities(env) {
-		if cap.Terminfo == "cuf1" || cap.Terminfo == "cuf" {
-			no = false
-			break
-		}
+	var m *terminalMotion
+	if caps := TerminalCapabilities(env); len(caps) > 0 {
+		d := motionOf(caps, 0)
+		m = &d
 	}
-	c.motionAsked, c.motionKey, c.noMotion = true, key, no
-	return no
+	c.motionAsked, c.motionKey, c.motion = true, key, m
+	return m
 }
 
 // redrawWithoutMotion is redraw for a terminal that cannot move the cursor

@@ -147,9 +147,10 @@ func (e *editor) repaint(prompt drawnPrompt, cols int) bool {
 	// below is from where it actually is. Nothing has been written yet, so
 	// that is where the last draw left it.
 	var b strings.Builder
+	m := e.moves()
 	row, col := d.row, d.col
 	if tail := styled[at:]; tail != "" {
-		moveCursor(&b, row, col, resRow, resCol)
+		m.moveCursor(&b, row, col, resRow, resCol)
 		// The color the tail was written expecting, said again. See
 		// styleInForce: the shared prefix names a cell, not a state, and the
 		// state the terminal is actually in is the one the last whole draw
@@ -185,18 +186,18 @@ func (e *editor) repaint(prompt drawnPrompt, cols int) bool {
 		// attributes on a terminal with background-color erase, and the
 		// cursor may be sitting inside a highlighted run whose style the
 		// shared prefix left in force.
-		moveCursor(&b, row, col, endRow, endCol)
+		m.moveCursor(&b, row, col, endRow, endCol)
 		row, col = endRow, endCol
-		b.WriteString(highlightReset)
+		b.WriteString(m.resetBeforeErase())
 		if e.listingBelow {
 			// The tail is on this row; a listing under the line stays. See
 			// returnToTheLine.
-			b.WriteString("\x1b[K")
+			b.WriteString(m.eraseToRowEnd())
 		} else {
-			b.WriteString("\x1b[J")
+			b.WriteString(m.eraseToScreenEnd())
 		}
 	}
-	moveCursor(&b, row, col, curRow, curCol)
+	m.moveCursor(&b, row, col, curRow, curCol)
 
 	e.row = curRow
 	if b.Len() > 0 {
@@ -383,59 +384,65 @@ func nextToken(s string, i int) (escape bool, size int) {
 // relative move and a carriage return is shorter — which is not a
 // micro-optimization but the common case: the cursor walking left through a
 // line it is editing is one `\e[nD` and never a return and a walk back out.
-func moveCursor(b *strings.Builder, fromRow, fromCol, toRow, toCol int) {
+//
+// Spelled with the terminal's own sequences. See terminalmotion.go.
+func (m *terminalMotion) moveCursor(b *strings.Builder, fromRow, fromCol, toRow, toCol int) {
 	if fromRow == toRow && fromCol == toCol {
 		return
 	}
-	if toRow != fromRow {
-		b.WriteString("\x1b[")
-		if toRow < fromRow {
-			b.WriteString(itoa(fromRow - toRow))
-			b.WriteString("A")
-		} else {
-			b.WriteString(itoa(toRow - fromRow))
-			b.WriteString("B")
+	if toRow < fromRow {
+		b.WriteString(m.upBy(fromRow - toRow))
+	} else if toRow > fromRow {
+		down := m.downBy(toRow - fromRow)
+		b.WriteString(down)
+		if strings.HasSuffix(down, "\n") {
+			// A line feed is the terminal's way down where it has no other,
+			// and the terminal is told to return the carriage with it, so
+			// the column it leaves is the first.
+			fromCol = 0
 		}
-		// A vertical move keeps the column, so the horizontal move that
-		// follows starts from the column the cursor was already on.
 	}
-	writeColumn(b, fromCol, toCol)
+	// A vertical move keeps the column, so the horizontal move that follows
+	// starts from the column the cursor was already on.
+	m.writeColumn(b, fromCol, toCol)
 }
 
 // writeColumn moves along one row.
-func writeColumn(b *strings.Builder, fromCol, toCol int) {
+func (m *terminalMotion) writeColumn(b *strings.Builder, fromCol, toCol int) {
 	switch {
 	case toCol == fromCol:
 	case toCol > fromCol:
-		b.WriteString("\x1b[")
-		b.WriteString(itoa(toCol - fromCol))
-		b.WriteString("C")
+		b.WriteString(m.rightBy(toCol - fromCol))
 	default:
 		// Three ways to go left, and the shortest of them wins. A backspace
 		// is one byte and moves one column, so a short walk back — which is
 		// what a cursor key and a delete are — beats the four bytes of the
 		// sequence that says the same thing. It is what zsh emits for the
-		// same move.
+		// same move. A terminal with no counted sequence has the other two,
+		// and one that cannot move right at all has only the steps back.
 		steps := fromCol - toCol
-		back := len("\x1b[") + len(itoa(steps)) + 1
-		ret := 1
+		single := strings.Repeat(m.stepLeft(), steps)
+		counted := m.counted(m.left, steps)
+		ret, canReturn := "\r", true
 		if toCol > 0 {
-			ret = 1 + len("\x1b[") + len(itoa(toCol)) + 1
+			right := m.rightBy(toCol)
+			ret, canReturn = "\r"+right, right != ""
+		}
+		const never = int(^uint(0) >> 1)
+		back, retCost := never, never
+		if counted != "" {
+			back = len(counted)
+		}
+		if canReturn {
+			retCost = len(ret)
 		}
 		switch {
-		case steps < back && steps <= ret:
-			b.WriteString(strings.Repeat("\b", steps))
-		case ret <= back:
-			b.WriteString("\r")
-			if toCol > 0 {
-				b.WriteString("\x1b[")
-				b.WriteString(itoa(toCol))
-				b.WriteString("C")
-			}
+		case len(single) < back && len(single) <= retCost:
+			b.WriteString(single)
+		case retCost <= back:
+			b.WriteString(ret)
 		default:
-			b.WriteString("\x1b[")
-			b.WriteString(itoa(steps))
-			b.WriteString("D")
+			b.WriteString(counted)
 		}
 	}
 }

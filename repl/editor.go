@@ -284,7 +284,10 @@ type editor struct {
 	// noMotion says the terminal cannot move the cursor right, so the line
 	// is drawn the way nomotion.go says. Asked again for every read, because
 	// `$TERM` is a parameter a person can assign.
-	noMotion       bool
+	noMotion bool
+	// motion is the terminal's own sequences for moving and erasing, read
+	// for every read like noMotion; nil is ANSI. See terminalmotion.go.
+	motion         *terminalMotion
 	pastedStyle    string
 	pastedStyleEnd string
 	// controlStyle and controlStyleEnd are what a control character's caret
@@ -841,12 +844,10 @@ func (e *editor) readLine(prompt drawnPrompt) (string, error) {
 	var opening strings.Builder
 	opening.WriteString(prompt.lead)
 	opening.WriteString(prompt.text)
-	if writeRightPrompt(&opening, prompt, 0, e.cols()) {
+	if e.moves().writeRightPrompt(&opening, prompt, 0, e.cols()) {
 		// The carriage return writeRightPrompt ends with put the cursor back
 		// at column zero, and the line starts after the prompt.
-		opening.WriteString("\x1b[")
-		opening.WriteString(itoa(prompt.cells))
-		opening.WriteString("C")
+		opening.WriteString(e.moves().rightBy(prompt.cells))
 	}
 	// Then what the dialect writes where the line will start: the erase, and
 	// the bracketed-paste request it holds until here. See
@@ -1582,7 +1583,7 @@ func (e *editor) refusalUnderTheLine(prompt drawnPrompt) {
 		e.redraw(prompt)
 		return
 	}
-	e.below(e.live(prompt), "\x1b[J"+text)
+	e.below(e.live(prompt), e.moves().eraseToScreenEnd()+text)
 	// And it stays there while the line is typed, the way a listing the
 	// cursor came back from does, until the line ends: measured, zsh's
 	// keystrokes after a refusal leave it and the accepted line clears it
@@ -1942,11 +1943,10 @@ func (e *editor) redraw(prompt drawnPrompt) {
 	// is on and not to the start of the line, so getting back to the prompt
 	// means going up as far as the last draw came down.
 	var b strings.Builder
+	m := e.moves()
 	b.WriteString("\r")
 	if e.row > 0 {
-		b.WriteString("\x1b[")
-		b.WriteString(itoa(e.row))
-		b.WriteString("A")
+		b.WriteString(m.upBy(e.row))
 	}
 	// Erase to the end of the *screen* rather than the end of the row: what
 	// is being replaced may be several rows of it, and clearing only the
@@ -1955,15 +1955,15 @@ func (e *editor) redraw(prompt drawnPrompt) {
 	// screen until the line ends; there the line's own rows are cleared as
 	// they are written over. See returnToTheLine.
 	if e.listingBelow {
-		b.WriteString("\x1b[K")
+		b.WriteString(m.eraseToRowEnd())
 	} else {
-		b.WriteString("\x1b[J")
+		b.WriteString(m.eraseToScreenEnd())
 	}
 	b.WriteString(prompt.text)
 	styled := e.styled()
 	b.WriteString(e.spell(styled, prompt.cells, cols))
 	if e.listingBelow {
-		b.WriteString("\x1b[K")
+		b.WriteString(m.eraseToRowEnd())
 	}
 
 	// After the line and before the cursor is placed, because it is drawn
@@ -1973,7 +1973,7 @@ func (e *editor) redraw(prompt drawnPrompt) {
 	// taken off whatever was there.
 	shown := e.displayed()
 	lineCells := cells(shown)
-	drewRight := writeRightPrompt(&b, prompt, lineCells, cols)
+	drewRight := m.writeRightPrompt(&b, prompt, lineCells, cols)
 
 	curRow, curCol, endRow, endCol := place(prompt.cells, shown, e.pos, cols)
 	if endCol == cols {
@@ -1991,16 +1991,10 @@ func (e *editor) redraw(prompt drawnPrompt) {
 		curRow, curCol = curRow+1, 0
 	}
 	if endRow > curRow {
-		b.WriteString("\x1b[")
-		b.WriteString(itoa(endRow - curRow))
-		b.WriteString("A")
+		b.WriteString(m.upBy(endRow - curRow))
 	}
 	b.WriteString("\r")
-	if curCol > 0 {
-		b.WriteString("\x1b[")
-		b.WriteString(itoa(curCol))
-		b.WriteString("C")
-	}
+	b.WriteString(m.rightBy(curCol))
 	e.row = curRow
 	e.write(b.String())
 	e.drawn = drawnLine{
@@ -2049,7 +2043,7 @@ func (e *editor) toLastRow(prompt drawnPrompt) {
 		endRow++
 	}
 	if endRow > e.row {
-		e.write("\x1b[" + itoa(endRow-e.row) + "B")
+		e.write(e.moves().downBy(endRow - e.row))
 	}
 }
 
@@ -2082,7 +2076,7 @@ func (e *editor) endLine(prompt drawnPrompt, before string) {
 		shown := e.displayed()
 		_, curCol, _, _ := place(prompt.cells, shown, e.pos, cols)
 		var erase strings.Builder
-		rightPromptErase(&erase, prompt, cells(shown), cols, curCol)
+		e.moves().rightPromptErase(&erase, prompt, cells(shown), cols, curCol)
 		if erase.Len() > 0 {
 			e.write(erase.String())
 		}
@@ -2099,7 +2093,7 @@ func (e *editor) endLine(prompt drawnPrompt, before string) {
 		// measured, zsh ends a line under one with `\r\r\n\e[J`.
 		e.listingBelow = false
 		if e.message == "" {
-			e.write("\x1b[J")
+			e.write(e.moves().eraseToScreenEnd())
 		}
 	}
 	if e.message != "" {
@@ -2107,7 +2101,7 @@ func (e *editor) endLine(prompt drawnPrompt, before string) {
 		// is cleared rather than left for the command's output to land on,
 		// as zsh clears it. The next line starts without one.
 		e.message = ""
-		e.write("\x1b[J")
+		e.write(e.moves().eraseToScreenEnd())
 	}
 	e.row = 0
 }
@@ -2439,7 +2433,7 @@ func (e *editor) returnToTheLine(listed int, prompt drawnPrompt) bool {
 	}
 	// From the listing's last row, which list did not end: as many rows up
 	// as it drew is the line's last row.
-	e.write("\r\x1b[" + itoa(listed) + "A")
+	e.write("\r" + e.moves().upBy(listed))
 	e.row = endRow
 	e.drawn = drawnLine{}
 	e.listingBelow = true

@@ -124,13 +124,12 @@ func (e *editor) redisplay(prompt drawnPrompt) {
 		return
 	}
 	var b strings.Builder
+	m := e.moves()
 	b.WriteString("\r")
 	if up := e.row + leadRows(prompt.lead); up > 0 {
-		b.WriteString("\x1b[")
-		b.WriteString(itoa(up))
-		b.WriteString("A")
+		b.WriteString(m.upBy(up))
 	}
-	b.WriteString("\x1b[J")
+	b.WriteString(m.eraseToScreenEnd())
 	b.WriteString(prompt.lead)
 	e.write(b.String())
 	e.row = 0

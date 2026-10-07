@@ -50,6 +50,10 @@ func EditorStyle() repl.EditorStyle {
 		// backspaces and carriage returns. See
 		// repl.EditorStyle.DrawsWithoutCursorMotion (#6314).
 		DrawsWithoutCursorMotion: true,
+		// And on one that can, it moves and erases with the description's
+		// own sequences. See repl.EditorStyle.MotionFromTheDescription
+		// (#6324).
+		MotionFromTheDescription: true,
 		// Every field about words is left at its zero value on purpose, and
 		// they are bash's measured answers rather than an absence of one: a
 		// word is letters and digits, `^U` kills only what is before the

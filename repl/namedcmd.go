@@ -169,6 +169,7 @@ func (e *editor) belowAll(prompt drawnPrompt, rows []string) {
 	down := end - e.row + 1
 	col := (prompt.cells + e.pos) % cols
 	var b strings.Builder
+	m := e.moves()
 	for range down {
 		b.WriteString("\r\n")
 	}
@@ -176,16 +177,11 @@ func (e *editor) belowAll(prompt drawnPrompt, rows []string) {
 		if i > 0 {
 			b.WriteString("\r\n")
 		}
-		b.WriteString("\x1b[K")
+		b.WriteString(m.eraseToRowEnd())
 		b.WriteString(row)
 	}
-	b.WriteString("\r\x1b[")
-	b.WriteString(itoa(down + len(rows) - 1))
-	b.WriteString("A")
-	if col > 0 {
-		b.WriteString("\x1b[")
-		b.WriteString(itoa(col))
-		b.WriteString("C")
-	}
+	b.WriteString("\r")
+	b.WriteString(m.upBy(down + len(rows) - 1))
+	b.WriteString(m.rightBy(col))
 	e.write(b.String())
 }

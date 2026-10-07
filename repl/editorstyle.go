@@ -298,6 +298,16 @@ type EditorStyle struct {
 	// bash's; see repl/nomotion.go for the measurements (#6314).
 	DrawsWithoutCursorMotion bool
 
+	// MotionFromTheDescription moves the cursor and erases with the
+	// sequences of the terminal `$TERM` names — `cub1`, `cub`, `cuf1`,
+	// `cuf`, `cuu1`, `cuu`, `cud1`, `cud`, `el` and `ed` — read again
+	// whenever `$TERM` changes. Without it the editor speaks ANSI to every
+	// terminal. On xterm and every emulator whose description spells those
+	// the ANSI way nothing changes; on vt52, whose `cuf1` is `\eC` and which
+	// has no counted moves, bash 5.3.20 moves to the start of `echo abc`
+	// with `\r\eC\eC\eC`. See repl/terminalmotion.go (#6324).
+	MotionFromTheDescription bool
+
 	// Interrupt is what marks a line abandoned with ^C, drawn where the
 	// cursor was before the line ends.
 	//

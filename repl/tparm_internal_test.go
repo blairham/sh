@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Blair Hamilton
 // SPDX-License-Identifier: Apache-2.0
 
-package zsh
+package repl
 
 import "testing"
 
@@ -43,7 +43,7 @@ func TestTparmComputesTheMeasuredSequences(t *testing.T) {
 		{"variables", "%p1%Pa%ga%ga%+%d", []int{6}, "12"},
 		{"a skipped branch holding a conditional of its own", "%?%p1%t%?%p2%tA%eB%;%eC%;", []int{0, 1}, "C"},
 	} {
-		if got := tparm(c.cap, c.params); got != c.want {
+		if got := ParameterizedString(c.cap, c.params); got != c.want {
 			t.Errorf("%s: got %q, want %q", c.name, got, c.want)
 		}
 	}
@@ -60,8 +60,8 @@ func TestWithoutPadding(t *testing.T) {
 		"a$<>b":          "a$<>b",
 		"cost $5 and $<": "cost $5 and $<",
 	} {
-		if got := withoutPadding(in); got != want {
-			t.Errorf("withoutPadding(%q) = %q, want %q", in, got, want)
+		if got := WithoutPadding(in); got != want {
+			t.Errorf("WithoutPadding(%q) = %q, want %q", in, got, want)
 		}
 	}
 }

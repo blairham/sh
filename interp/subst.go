@@ -1134,11 +1134,22 @@ func (r *Runner) readSubstBody(span syntax.Span) (*syntax.File, int, int, bool) 
 		// looking for the closing parenthesis — see Runner.substBodyExpecting.
 		// Around this write alone, because the refusal one dialect locates by
 		// name is followed by a message that still carries a line.
+		shape, lead, restore := r.interactiveSubstRefusal(span)
 		byName := r.substFailureLocatedByNameAlone(failure)
-		r.errf("%s", r.diagLineNamed(construct, "%s%s\n",
-			r.diag().ParseFailure(failure), r.substBodyExpecting(span, failure)))
+		sentence := r.diag().ParseFailure(failure) + r.substBodyExpecting(span, failure)
+		switch shape {
+		case substRefusalBare, substRefusalBareAtThePrompt:
+			r.errf("%s: %s\n", r.name(), sentence)
+			if shape == substRefusalBareAtThePrompt {
+				r.errf("%s: syntax error\n", r.name())
+			}
+		default:
+			r.errf("%s%s", lead, r.diagLineNamed(construct, "%s\n", sentence))
+		}
 		byName()
-		if echo, at := r.substFailureEcho(span, src, raw, failure, failureBase); echo != "" {
+		if shape == substRefusalBare || shape == substRefusalBareAtThePrompt {
+			// No line quoted back. See interactiveSubstRefusal.
+		} else if echo, at := r.substFailureEcho(span, src, raw, failure, failureBase); echo != "" {
 			if at > 0 {
 				r.line = at
 			}
@@ -1153,9 +1164,10 @@ func (r *Runner) readSubstBody(span syntax.Span) (*syntax.File, int, int, bool) 
 				if line == "" {
 					continue
 				}
-				r.errf("%s", r.diagLineNamed(construct, "%s", line))
+				r.errf("%s%s", lead, r.diagLineNamed(construct, "%s", line))
 			}
 		}
+		restore()
 		putBack()
 		if span.Backquoted && !r.ask(r.sem().SubstitutionParseErrorIsFatal, "a substitution body that does not parse ending the shell") {
 			// The word expands to nothing and the statement goes on, which

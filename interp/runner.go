@@ -5648,6 +5648,13 @@ type Runner struct {
 	// Not r.indirection, which counts every kind of re-read including `eval`
 	// and a command substitution.
 	borrowedFiles int
+	// locatedAsWritten turns the prompt's location off for the length of
+	// one refusal, which the interactive dialect words as the text it is in
+	// does rather than as the prompt does. See Runner.interactiveSubstRefusal.
+	locatedAsWritten bool
+	// namedAsWritten does the same for the shell's name, where the refusal
+	// is in a file and the file's name is what the location starts with.
+	namedAsWritten bool
 	// evalTextFloor is one more than the number of frames that stood when
 	// the innermost `eval` began reading its text, and zero where no `eval`
 	// is reading any. It is what tells a line the *evaluated text* holds
@@ -6287,7 +6294,7 @@ func (r *Runner) locationNameAndLine(functionCounts bool) (name string, line int
 		// would be written. See Runner.dotFailureNamesItsOperand.
 		return r.dotFailureFile, at, false
 	}
-	if d.LocationNamesTheCurrentFile && !r.speaksAsAtAPrompt() {
+	if d.LocationNamesTheCurrentFile && (!r.speaksAsAtAPrompt() || r.namedAsWritten) {
 		// locationFile rather than currentFile: a message located at the call
 		// it came from is one frame further out than the shell is. At the top
 		// level of a script the current file is the script, and under `-c` or
@@ -6804,7 +6811,7 @@ func (r *Runner) fatalExpansionQuiet() {
 // is why the answer is read from Diagnostics rather than written into
 // Runner.Name, which would change `$0` with it.
 func (r *Runner) name() string {
-	if r.speaksAsAtAPrompt() {
+	if r.speaksAsAtAPrompt() && !r.namedAsWritten {
 		// The last component of the name the shell was started as, a
 		// login's dash kept. See Diagnostics.InteractiveShellSpeaksAsAtAPrompt.
 		if n := r.Invocation; n != "" {

@@ -289,6 +289,29 @@ bell and not either field's: `list-choices` with no matches rings in every
 dialect, as a Tab that matches nothing does — measured, bash 5.3.20 rings for
 `M-?` and `M-=` on a word nothing matches.
 
+### `^D` on an empty continuation line
+
+At a continuation prompt an empty line's `^D` is not end of input in zsh: it
+is the `delete-char-or-list` the key is everywhere else, listing for the empty
+word and ringing where nothing matches, and the command can still be finished.
+`setopt ignoreeof` changes none of it — no refusal is written there. bash
+reports the unfinished command as a syntax error and the session ends
+(`unexpected end of file from 'for' command`). Measured 2026-10-06 through a
+pseudo-terminal against zsh 5.9.2 and bash 5.3.20, a two-row prompt (#6242).
+
+What the listing lists is decided by the lines already entered, so completion
+at the start of a continuation line reads them in zsh. In a directory holding
+one file, `zfile`:
+
+| entered | `^D` at the continuation prompt |
+| --- | --- |
+| `for x in 1`, `for x`, `case x in`, `repeat 2` | `zfile` — an argument |
+| `echo a \` | `zfile` — the line goes on |
+| `ls \|`, `echo a &&`, `{`, `f() {`, `echo $(`, `if true`, `while true` | every command |
+| `echo "a`, `echo 'a` | `\a` — the word starts at the quote, so nothing matches |
+
+Tab with `zf` typed agrees row for row. bash's completion reads the line alone.
+
 ### `^D` on an empty line, when the shell is told to refuse it
 
 Both shells can be told not to let `^D` end the session, and they differ in

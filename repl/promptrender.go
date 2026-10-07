@@ -610,7 +610,10 @@ func (e *editor) markUnfinished() {
 	//
 	// So it is `cols` less the mark, in both places, and the one-column
 	// default is the case where that happens to read as `cols-1`.
-	width := displayWidth(e.unfinishedMark)
+	// Measured the way a prompt is, markers and all: the mark is a prompt
+	// string, and its attribute codes are bracketed as not drawn (#6342).
+	mark := drawPrompt(e.unfinishedMark)
+	width := mark.cells
 	if e.cols() <= width {
 		// Without a width there is no way to fill the row, so no way to make
 		// the terminal wrap, and the mark would be painted over by the prompt
@@ -625,7 +628,7 @@ func (e *editor) markUnfinished() {
 		pad--
 	}
 	var b strings.Builder
-	b.WriteString(e.unfinishedMark)
+	b.WriteString(mark.lead + mark.text)
 	b.WriteString(strings.Repeat(" ", pad))
 	b.WriteString("\r")
 	b.WriteString(strings.Repeat(" ", width))

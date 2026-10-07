@@ -3180,7 +3180,10 @@ func (s Shell) newEditor(ctx context.Context, state *terminalState) *editor {
 		negativeTypesNothing: s.Editor.NegativeCountTypesNothing,
 		countStops:           s.Editor.CountStopsWhereItCannotAct,
 		caseBackward:         s.Editor.NegativeCaseCountGoesBackward,
-		countSkips:           s.Editor.CountSkips,
+		transposeWordsCount:  s.Editor.TransposeWordsCountAsReadline,
+		yankCount:            s.Editor.YankLastArgCountAsReadline,
+		killLineSign:         s.Editor.KillLineReadsOnlyTheSign,
+		transposeNoNegative:  s.Editor.TransposeCharsTakesNoNegativeCount,
 
 		pastedStyle:    s.Editor.PastedTextStyle,
 		pastedStyleEnd: s.Editor.PastedTextStyleEnd,

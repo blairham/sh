@@ -72,7 +72,6 @@ func (e *editor) escape(prompt drawnPrompt) keyRead {
 	case '.', '_':
 		// `M-.` and `M-_`, which are the same key in both shells: the last
 		// argument of the line before. See lastarg.go.
-		e.skipsCount(WidgetInsertLastWord)
 		e.insertLastArg(prompt)
 	case del, backspace:
 		// M-Delete kills the word before the cursor. Both spellings, because

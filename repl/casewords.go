@@ -151,6 +151,9 @@ func (e *editor) caseWordsBackward(n int, to wordCase) {
 // and reports whether there was one to swap it with. See the table above for
 // which word is "at the cursor".
 func (e *editor) transposeWords(n int) bool {
+	if e.transposeWordsCount {
+		return e.transposeWordsAsReadline(n)
+	}
 	stay := n < 0
 	if stay {
 		n = -n
@@ -230,4 +233,76 @@ func (e *editor) wordAtCursor() (start, end int, ok bool) {
 		end++
 	}
 	return start, end, true
+}
+
+// transposeWordsAsReadline is transposeWords under
+// EditorStyle.TransposeWordsCountAsReadline, where the rows are.
+func (e *editor) transposeWordsAsReadline(n int) bool {
+	if n <= 0 {
+		// Nought does nothing; a negative count does nothing and rings.
+		return n == 0
+	}
+	start, end, ok := e.wordAtCursor()
+	if !ok {
+		return false
+	}
+	if e.transposeToLineEnd && end <= e.pos {
+		end = len(e.line)
+	}
+	s1, e1 := e.wordBefore(start)
+	if s1 < 0 {
+		s1, e1 = start, end
+	}
+	for range n - 1 {
+		if s, en, ok := e.wordAfter(end); ok {
+			start, end = s, en
+			continue
+		}
+		if s, en := e.wordBefore(s1); s >= 0 {
+			s1, e1 = s, en
+		}
+	}
+	if s1 == start {
+		return false
+	}
+	swapped := make([]rune, 0, len(e.line))
+	swapped = append(swapped, e.line[:s1]...)
+	swapped = append(swapped, e.line[start:end]...)
+	swapped = append(swapped, e.line[e1:start]...)
+	swapped = append(swapped, e.line[s1:e1]...)
+	swapped = append(swapped, e.line[end:]...)
+	e.line = swapped
+	e.pos = end
+	return true
+}
+
+// wordBefore is where the last word ending at or before i lies, and -1 where
+// there is none.
+func (e *editor) wordBefore(i int) (start, end int) {
+	for i > 0 && !e.isWordRune(e.line[i-1]) {
+		i--
+	}
+	if i == 0 {
+		return -1, -1
+	}
+	end = i
+	for i > 0 && e.isWordRune(e.line[i-1]) {
+		i--
+	}
+	return i, end
+}
+
+// wordAfter is where the first word starting at or after i lies.
+func (e *editor) wordAfter(i int) (start, end int, ok bool) {
+	for i < len(e.line) && !e.isWordRune(e.line[i]) {
+		i++
+	}
+	if i == len(e.line) {
+		return 0, 0, false
+	}
+	start = i
+	for i < len(e.line) && e.isWordRune(e.line[i]) {
+		i++
+	}
+	return start, i, true
 }

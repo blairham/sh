@@ -95,6 +95,14 @@ func EditorStyle() repl.EditorStyle {
 		ViInsertTypesTheseKeys:           viInsertTypedKeys,
 		CapitalizeTakesTheFirstCharacter: true,
 		TransposeWordsReachesTheLineEnd:  true,
+		// And the rest of readline's vi-insert keymap: menu completion on
+		// `^N` and `^P`, vi-unix-word-rubout, vi-undo and vi-eof-maybe.
+		// Measured 2026-10-06 through a pseudo-terminal; see the repl
+		// fields (#6304).
+		ReadlineViInsertKeymap:     true,
+		MenuReturnsToTheWord:       true,
+		ViUndoAsReadline:           true,
+		UndoRingsWithNothingToUndo: true,
 		// And ESC with a digit or a minus is a count, drawn as `(arg: N)` in
 		// place of the prompt's last row and read and spent readline's way.
 		// Measured 2026-10-06 through a pseudo-terminal; see the repl fields

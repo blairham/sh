@@ -239,6 +239,11 @@ func (e *editor) keySequenceWait() (time.Duration, bool) {
 // there is nowhere to step back to and it stays.
 func (e *editor) enterViCommand(prompt drawnPrompt) {
 	e.viCommand = true
+	if e.viUndoReadline && !e.viUndoFrozen {
+		// What was typed before the line's first Escape is out of undo's
+		// reach. See EditorStyle.ViUndoAsReadline.
+		e.changes, e.viUndoFrozen = nil, true
+	}
 	if e.pos > 0 {
 		e.pos--
 	}
@@ -248,6 +253,9 @@ func (e *editor) enterViCommand(prompt drawnPrompt) {
 // leaveViCommand enters insert mode with the cursor at `at`.
 func (e *editor) leaveViCommand(at int, prompt drawnPrompt) {
 	e.viCommand = false
+	if e.viUndoReadline {
+		e.changes = append(e.changes, snapshot{line: slices.Clone(e.line), pos: e.pos, mark: true})
+	}
 	e.pos = min(max(at, 0), len(e.line))
 	e.viInsertStart = e.pos
 	e.redraw(prompt)

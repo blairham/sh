@@ -89,6 +89,10 @@ type menuWalk struct {
 	words []string
 	index int
 	start int
+	// home is where in words the word the walk began from is, which
+	// landing on rings; 0 where the walk does not return to it. See
+	// EditorStyle.MenuReturnsToTheWord.
+	home int
 }
 
 // menuComplete puts the next match in the line, in the given direction.
@@ -119,6 +123,11 @@ func (e *editor) menuComplete(c Completer, builtin bool, step int, prompt drawnP
 	if did == completionStartedAMenu {
 		e.menuStarted(matches, prompt)
 		return
+	}
+	if did == completionFoundNothing && e.menuReturns {
+		// Nothing to walk: the bell, as readline's menu-complete rings for
+		// `zz` matching nothing. See EditorStyle.MenuReturnsToTheWord.
+		e.ring()
 	}
 	e.redraw(prompt)
 }
@@ -180,6 +189,10 @@ func (e *editor) startMenu(start int, words []string, at, step int) {
 		first = ((at % n) + n) % n
 	case step < 0:
 		first = n - 1
+		if e.menuReturns {
+			// The last match, and not the word itself after it.
+			first = n - 2
+		}
 	}
 	e.menu = menuWalk{now: true, words: words, index: first, start: start}
 	e.replaceWord(start, words[first])
@@ -195,6 +208,11 @@ func (e *editor) stepMenu(step int, prompt drawnPrompt) bool {
 	e.menu.index = (e.menu.index + step + n) % n
 	e.change(false, func() { e.replaceWord(e.menu.start, e.menu.words[e.menu.index]) })
 	e.menu.now = true
+	if e.menu.home > 0 && e.menu.index == e.menu.home {
+		// Back at the word the walk began from. See
+		// EditorStyle.MenuReturnsToTheWord.
+		e.ring()
+	}
 	e.redraw(prompt)
 	return true
 }

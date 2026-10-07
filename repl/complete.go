@@ -67,6 +67,17 @@ func (e *editor) completeAs(c Completer, menu MenuReason, step int) (matches []C
 		return nil, completionSettledTheWord
 	}
 	if how.decided && how.menu || !how.decided && menu != MenuNotStarted {
+		if e.menuReturns {
+			// Each match as a completion would put it, and the word itself
+			// last. See EditorStyle.MenuReturnsToTheWord.
+			walk := make([]string, 0, len(words)+1)
+			for _, w := range words {
+				walk = append(walk, w+completionSuffix(word, w))
+			}
+			e.startMenu(start, append(walk, word), how.at, step)
+			e.menu.home = len(walk)
+			return displayCandidates(candidates, word), completionStartedAMenu
+		}
 		e.startMenu(start, words, how.at, step)
 		return displayCandidates(candidates, word), completionStartedAMenu
 	}

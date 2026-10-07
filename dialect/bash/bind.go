@@ -169,6 +169,10 @@ var bindFunctions = map[string]repl.Widget{
 	"backward-kill-line": repl.WidgetKillWholeLine,
 	"backward-kill-word": repl.WidgetBackwardKillWord,
 	"unix-word-rubout":   repl.WidgetKillWordBefore,
+	// readline's vi-insert keys (#6304).
+	"menu-complete":          repl.WidgetMenuComplete,
+	"menu-complete-backward": repl.WidgetMenuCompleteBackward,
+	"vi-unix-word-rubout":    repl.WidgetViUnixWordRubout,
 	// Typing the key that was pressed (#6300).
 	"self-insert":            repl.WidgetSelfInsert,
 	"kill-word":              repl.WidgetKillWordAfter,
@@ -227,6 +231,9 @@ var bindFunctionNames = map[repl.Widget]string{
 	repl.WidgetKillWordBefore:        "unix-word-rubout",
 	repl.WidgetBackwardKillWord:      "backward-kill-word",
 	repl.WidgetSelfInsert:            "self-insert",
+	repl.WidgetMenuComplete:          "menu-complete",
+	repl.WidgetMenuCompleteBackward:  "menu-complete-backward",
+	repl.WidgetViUnixWordRubout:      "vi-unix-word-rubout",
 	repl.WidgetKillWordAfter:         "kill-word",
 	repl.WidgetYank:                  "yank",
 	repl.WidgetTransposeChars:        "transpose-chars",
@@ -374,12 +381,44 @@ func keymapDefaults(keymap string) map[string]string {
 	}
 	out := make(map[string]string, len(defaultBindings)+len(extra))
 	for seq, name := range defaultBindings {
+		if keymap == "vi-insert" && !actsInViInsert(seq) {
+			continue
+		}
 		out[seq] = name
 	}
 	for seq, name := range extra {
 		out[seq] = name
 	}
+	if keymap == "vi-insert" {
+		for seq, name := range viInsertNames {
+			out[seq] = name
+		}
+	}
 	return out
+}
+
+// viInsertNames are the keys readline's vi-insert keymap gives other
+// functions than the emacs one, as bash 5.3.20's `bind -m vi-insert -p` lists
+// them — see repl.EditorStyle.ReadlineViInsertKeymap and ViUndoAsReadline,
+// which are the editor's half (#6304).
+var viInsertNames = map[string]string{
+	"\x0e": "menu-complete",
+	"\x10": "menu-complete-backward",
+	"\x17": "vi-unix-word-rubout",
+	"\x1f": "vi-undo",
+	"\x04": "vi-eof-maybe",
+}
+
+// actsInViInsert reports whether a key of the shared table does anything in
+// vi insert mode, where Escape followed by anything but `[` or `O` leaves
+// insert mode rather than beginning a key, and `^X` types itself — so `M-b`,
+// `M-.` and `^X^U` are not keys there, and bash 5.3.20 lists none of them in
+// vi-insert (#6304).
+func actsInViInsert(seq string) bool {
+	if len(seq) > 1 && seq[0] == 0x1b {
+		return seq[1] == '[' || seq[1] == 'O'
+	}
+	return len(seq) <= 1 || seq[0] != 0x18
 }
 
 // registerBind installs the builtin.
@@ -1154,7 +1193,11 @@ func sortedFunctionNames() []string {
 	for _, name := range bindFunctionNames {
 		names = append(names, name)
 	}
-	names = append(names, "accept-line")
+	// And the names the listing prints that are not one widget's: accept-line,
+	// the editor's own control flow, and the vi-insert keymap's vi-undo and
+	// vi-eof-maybe, which are undo and the key loop's `^D` under the names
+	// that keymap gives them (#6304).
+	names = append(names, "accept-line", "vi-undo", "vi-eof-maybe")
 	sort.Strings(names)
 	return names
 }

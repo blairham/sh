@@ -62,9 +62,13 @@ zle -N arm; bindkey '^Xf' arm
 		t.Fatal(err)
 	}
 	await("the handler's widget did not run", func() bool { return strings.Contains(log(), "inner LW=") })
-	// And drawn: the line the handler's widget left is on the screen.
+	// And drawn: the line the handler's widget left is on the screen. Read
+	// off the screen rather than the bytes, which redraw the first column
+	// with the second (#6325).
 	await("the handler's change was not drawn", func() bool {
-		return strings.Contains(smoke.Readable(screen.Text()), jobNoticeMark+"ei")
+		g := grid(screen)
+		p := promptRow(g)
+		return p >= 0 && strings.TrimRight(g.Text(p), " ") == jobNoticeMark+"ei"
 	})
 	// A quiet moment, so that a pre-redraw the handler's redraw asked for has
 	// had time to arrive: the bug wrote it within milliseconds.

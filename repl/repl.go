@@ -1561,7 +1561,7 @@ func (s Shell) promptHalf(continuing bool, cols int) drawnPrompt {
 // Unlike the theme, a continuation line has one: measured, `RPS2` is drawn
 // beside `dquote> ` and nothing is drawn there when only `RPS1` is set.
 func (s Shell) parameterRight(drawn *drawnPrompt, continuing bool) {
-	if s.Runner == nil {
+	if s.Runner == nil || !s.rightPromptReachable() {
 		return
 	}
 	names := s.Style.RightPrompt
@@ -1615,7 +1615,7 @@ func (s Shell) themedPrompt(continuing bool, cols int) (drawnPrompt, bool) {
 	// consulted. One drawPrompt all the same: the markers still have to come
 	// out and the width still has to be counted.
 	drawn := drawPrompt(themed)
-	if right != "" {
+	if right != "" && s.rightPromptReachable() {
 		// Measured the way the left one is; see setRight.
 		drawn.setRight(right, s.rightIndent())
 	}

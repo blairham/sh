@@ -36,8 +36,8 @@ func TestXtermsDescriptionMovesAsANSIDid(t *testing.T) {
 			for fromCol := 0; fromCol < 120; fromCol += 7 {
 				for toCol := 0; toCol < 120; toCol += 5 {
 					var want, got strings.Builder
-					ansiMotion.moveCursor(&want, fromRow, fromCol, toRow, toCol)
-					xterm.moveCursor(&got, fromRow, fromCol, toRow, toCol)
+					ansiMotion.moveCursor(&want, fromRow, fromCol, toRow, toCol, nil)
+					xterm.moveCursor(&got, fromRow, fromCol, toRow, toCol, nil)
 					if got.String() != want.String() {
 						t.Fatalf("(%d,%d) to (%d,%d): xterm moved with %q, ANSI with %q",
 							fromRow, fromCol, toRow, toCol, got.String(), want.String())
@@ -80,7 +80,7 @@ func TestATerminalWithOnlySingleStepsMovesWithThem(t *testing.T) {
 		{"down a row", 0, 5, 1, 5, "\x1bB"},
 	} {
 		var b strings.Builder
-		vt52.moveCursor(&b, c.fromRow, c.fromCol, c.toRow, c.toCol)
+		vt52.moveCursor(&b, c.fromRow, c.fromCol, c.toRow, c.toCol, nil)
 		if b.String() != c.want {
 			t.Errorf("%s: moved with %q, want %q", c.name, b.String(), c.want)
 		}

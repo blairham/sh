@@ -82,7 +82,7 @@ func TestTheRightPromptSitsWhereZshPutsIt(t *testing.T) {
 	// forward move of 31 — which is the number zsh wrote.
 	var b strings.Builder
 	prompt := drawnPrompt{cells: 3, right: "RIGHT", rightCells: 5, rightIndent: 1}
-	if !ansiMotion.writeRightPrompt(&b, prompt, 0, 40) {
+	if !ansiMotion.writeRightPrompt(&b, prompt, 0, 40, nil) {
 		t.Fatal("it was not drawn")
 	}
 	if got, want := b.String(), "\x1b[31CRIGHT\r"; got != want {
@@ -96,7 +96,7 @@ func TestItStaysAgainstTheEdgeWhileTheLineGrows(t *testing.T) {
 	prompt := drawnPrompt{cells: 3, right: "RIGHT", rightCells: 5, rightIndent: 1}
 	for _, c := range []struct{ typed, forward int }{{0, 31}, {10, 21}, {30, 1}} {
 		var b strings.Builder
-		if !ansiMotion.writeRightPrompt(&b, prompt, c.typed, 40) {
+		if !ansiMotion.writeRightPrompt(&b, prompt, c.typed, 40, nil) {
 			t.Fatalf("it was not drawn beside a line of %d", c.typed)
 		}
 		want := "\x1b[" + itoa(c.forward) + "CRIGHT\r"
@@ -108,7 +108,7 @@ func TestItStaysAgainstTheEdgeWhileTheLineGrows(t *testing.T) {
 	// all — which is what takes it off the screen, because the whole-line
 	// draw has already erased to the end of the screen.
 	var b strings.Builder
-	if ansiMotion.writeRightPrompt(&b, prompt, 31, 40) {
+	if ansiMotion.writeRightPrompt(&b, prompt, 31, 40, nil) {
 		t.Errorf("it was drawn with no column between: %q", b.String())
 	}
 	if b.Len() != 0 {

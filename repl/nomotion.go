@@ -47,15 +47,32 @@ func (s Shell) cannotMoveTheCursor() bool {
 // terminal's own sequences where the dialect takes them from its
 // description, and nil — ANSI — otherwise. See terminalmotion.go.
 func (s Shell) terminalMotion() *terminalMotion {
-	if !s.Editor.MotionFromTheDescription {
+	if !s.Editor.MotionFromTheDescription || s.Runner == nil {
 		return nil
 	}
-	if m := s.describedMotion(); m != nil {
-		return m
+	m := terminalMotion{undescribed: true}
+	if described := s.describedMotion(); described != nil {
+		m = *described
 	}
-	// No description at all: a terminal nothing is known about, which can
-	// move only the way every terminal can. See stepLeft.
-	return &terminalMotion{}
+	// A copy, so that what this dialect chooses is not left on the cached
+	// reading of the description.
+	m.asTheScreenIs = s.Editor.MovesAsTheScreenIs
+	if s.Editor.PadsMotionAtTheTerminalSpeed {
+		m.speed = s.Runner.TerminalSpeed
+	}
+	return &m
+}
+
+// rightPromptReachable reports whether a right prompt can be put on the row:
+// not, where the moves are chosen as the screen is and the terminal cannot
+// step right. Measured 2026-10-07, zsh 5.9.2 with `RPS1=TIME` draws it under
+// xterm and vt52 and draws nothing under `dumb` (#6325).
+func (s Shell) rightPromptReachable() bool {
+	if !s.Editor.MovesAsTheScreenIs {
+		return true
+	}
+	m := s.terminalMotion()
+	return m == nil || m.canMoveRight()
 }
 
 // describedMotion is the motion the description `$TERM` names holds, or nil

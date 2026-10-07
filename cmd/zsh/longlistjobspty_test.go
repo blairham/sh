@@ -106,6 +106,13 @@ func jobNoticeSessionArgs(t *testing.T, argv ...string) (*os.File, *smoke.Screen
 // is the session's working directory.
 func jobNoticeSessionRC(t *testing.T, rc string, argv ...string) (*os.File, *smoke.Screen, string) {
 	t.Helper()
+	return jobNoticeSessionOn(t, movingTerminal(t), rc, argv...)
+}
+
+// jobNoticeSessionOn is jobNoticeSessionRC on the terminal term describes:
+// the `TERM` and `TERMINFO` entries of the environment.
+func jobNoticeSessionOn(t *testing.T, term []string, rc string, argv ...string) (*os.File, *smoke.Screen, string) {
+	t.Helper()
 	home := scratchHome(t)
 	control, terminal, err := pty.Open()
 	if errors.Is(err, pty.ErrUnsupported) {
@@ -125,9 +132,9 @@ func jobNoticeSessionRC(t *testing.T, rc string, argv ...string) (*os.File, *smo
 	sh.Env = []string{
 		"HOME=" + home,
 		"PATH=/usr/bin:/bin",
-		"TERM=dumb",
 		"HISTFILE=" + filepath.Join(home, "hist"),
 	}
+	sh.Env = append(sh.Env, term...)
 	screen := smoke.Watch(control)
 	done := make(chan int, 1)
 	go func() { done <- driver.MainArgs(sh, argv) }()

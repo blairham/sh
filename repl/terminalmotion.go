@@ -47,9 +47,25 @@ type terminalMotion struct {
 	// nothing in color and gets none.
 	resets bool
 
+	// column is `hpa`, a move to a column counted from the row's start.
+	column string
+
+	// tab is `ht`, and tabWidth the distance between the stops it moves to:
+	// `it`, or 8 where the description has `ht` and does not say.
+	tab      string
+	tabWidth int
+
 	// speed is the terminal's output speed, for writing a delay as NULs; 0
 	// takes delays out. See PaddedCapability.
 	speed int
+
+	// undescribed says the database has no description of the terminal at
+	// all. See stepLeft.
+	undescribed bool
+
+	// asTheScreenIs chooses each move the way rewritemotion.go says rather
+	// than by the fewest bytes. See EditorStyle.MovesAsTheScreenIs.
+	asTheScreenIs bool
 }
 
 // ansiMotion is what the editor speaks to a terminal it was not told about —
@@ -70,7 +86,16 @@ var ansiMotion = terminalMotion{
 func motionOf(caps []TerminalCapability, speed int) terminalMotion {
 	m := terminalMotion{speed: speed}
 	for _, c := range caps {
-		if c.Kind != StringCapability || c.Extended {
+		if c.Extended {
+			continue
+		}
+		if c.Kind == NumericCapability && c.Terminfo == "it" {
+			if n, ok := atoiStrict(c.Value); ok && n > 0 {
+				m.tabWidth = n
+			}
+			continue
+		}
+		if c.Kind != StringCapability {
 			continue
 		}
 		switch c.Terminfo {
@@ -98,7 +123,16 @@ func motionOf(caps []TerminalCapability, speed int) terminalMotion {
 			m.clear = c.Value
 		case "sgr0":
 			m.resets = true
+		case "ht":
+			m.tab = c.Value
+		case "hpa":
+			m.column = c.Value
 		}
+	}
+	if m.tab == "" {
+		m.tabWidth = 0
+	} else if m.tabWidth == 0 {
+		m.tabWidth = 8
 	}
 	return m
 }
@@ -126,8 +160,14 @@ func (m *terminalMotion) repeated(seq string, n int) string {
 }
 
 // stepLeft is one column left: `cub1`, or a backspace where the description
-// has none, which is what both shells write on `dumb`.
+// has none, which is what both shells write on `dumb`. A terminal with no
+// description at all is not stepped left on where the moves are chosen as
+// the screen is: measured 2026-10-07, zsh 5.9.2 under a `$TERM` the database
+// has no entry for writes nothing for ^B (#6325).
 func (m *terminalMotion) stepLeft() string {
+	if m.undescribed && m.asTheScreenIs {
+		return ""
+	}
 	if m.left1 == "" {
 		return "\b"
 	}
@@ -200,3 +240,7 @@ func (e *editor) moves() *terminalMotion {
 	}
 	return e.motion
 }
+
+// screenView answers what a row of the screen holds, for a move that writes
+// it again rather than stepping over it; nil where nothing is known.
+type screenView func(row int) *rowView

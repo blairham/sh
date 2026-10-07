@@ -72,6 +72,23 @@ type File struct {
 	// resident memory to carry a list that is empty on all but a handful.
 	// See TestTheTwoShapesATreeIsMadeOfStayWithinTheirBudget.
 	CarriedHeredocs []CarriedHeredoc
+
+	// EndsOfInput are the substitutions on this file's lines in whose body
+	// the input ended inside a here-document before the rest of it arrived —
+	// at a prompt, in the dialect that ends one body per end of input. The
+	// body is read again when it runs, and this is how that read ends its
+	// documents where the read of the line did. See [Parser.EndsOfInputAt]
+	// (#6309). A list beside the tree for the reason CarriedHeredocs is one.
+	EndsOfInput []SubstitutionEnds
+}
+
+// SubstitutionEnds is where the input ended inside one substitution's body.
+type SubstitutionEnds struct {
+	// At is where the substitution opened, which is what matches this to its
+	// span when the body is read again. See [CarriedHeredoc.At].
+	At Pos
+	// Offsets are into the span's Value, in the order the ends happened.
+	Offsets []int
 }
 
 // CarriedHeredoc is one substitution's carried here-document operators.

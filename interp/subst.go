@@ -1039,6 +1039,19 @@ func (r *Runner) readSubstBody(span syntax.Span) (*syntax.File, int, int, bool) 
 	// leaves bash's right. See
 	// `alias/nested-text-expands-where-the-command-string-did-not`.
 	p := r.ParseWithAliases(src, r.bodyDialect(span))
+	// Where the input ended inside a here-document in the body as it was
+	// typed, so that this read ends those documents where the read of the
+	// line did and goes on with the rest of the body after them. Their
+	// offsets are into Value, which is the source whenever there are any:
+	// only the dialect that reads one body per end of input marks them, and
+	// it carries no here-document out of a body. See
+	// syntax.File.EndsOfInput (#6309).
+	for _, e := range r.substEnds {
+		if e.At == span.Pos && src == span.Value {
+			p.EndsOfInputAt(e.Offsets)
+			break
+		}
+	}
 	// The text is a substitution's body, so the end of it is the construct's
 	// closing delimiter rather than the end of a program, which one lenient
 	// closing context can tell apart. Told to both spellings, unlike the

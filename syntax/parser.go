@@ -23,6 +23,9 @@ type Parser struct {
 	anonBodyOpen Pos
 	lex          *Lexer
 	dialect      Dialect
+	// firstLine is the number NewParserAt was given for the text's first
+	// line, kept so EndsOfInputAt can start the read again from it.
+	firstLine int
 
 	tok Token
 
@@ -461,7 +464,9 @@ func NewParserAt(src string, d Dialect, first int) *Parser {
 		// and a line set afterwards would leave that one token behind.
 		lex.line = first
 	}
-	return newParserOn(lex, d)
+	p := newParserOn(lex, d)
+	p.firstLine = first
+	return p
 }
 
 // newParserOn wraps a lexer the caller has already set up.
@@ -1081,13 +1086,49 @@ func (p *Parser) OpenHeredocExpands() bool { return p.lex.OpenHeredocExpands() }
 // draws `> ` for E2, and goes on (#6287). The text is still handed over whole,
 // so every line keeps the number it has.
 //
-// Call it before anything is parsed. The first token is read when the parser
-// is made, and no body can be reached before a newline is.
-func (p *Parser) EndsOfInputAt(offsets []int) { p.lex.inputEnds = offsets }
+// Call it before anything is parsed, on a parser made by [NewParser] or
+// [NewParserAt]: the text is read again from its start.
+//
+// A here-document in the body of a command or process substitution is read
+// the same way, and the file carries the ends that fell inside each one
+// ([File.EndsOfInput]) so that the body is read alike when it runs (#6309).
+func (p *Parser) EndsOfInputAt(offsets []int) {
+	if len(offsets) == 0 {
+		return
+	}
+	// The first token has already been read, and it can hold a body: a
+	// command line that begins `v=$(cat <<E1` reads the substitution, and the
+	// document in it, as its first word. So the read starts again on a lexer
+	// that knows the ends, which is cheap because nothing has been parsed.
+	lex := NewLexer(p.lex.src, p.dialect)
+	if p.firstLine > 0 {
+		lex.line = p.firstLine
+	}
+	lex.ends = &endsOfInput{at: offsets, ever: make([]bool, len(offsets))}
+	// A parser of its own rather than this one rewound, so that nothing the
+	// first read left behind — an error, a refusal held for it — survives;
+	// what a caller may already have set on it is carried across.
+	fresh := newParserOn(lex, p.dialect)
+	fresh.firstLine = p.firstLine
+	fresh.Aliases, fresh.GlobalAliases, fresh.SuffixAliases = p.Aliases, p.GlobalAliases, p.SuffixAliases
+	*p = *fresh
+	lex.parser = p
+}
 
 // EndsOfInputTaken is how many of the ends of input given to
 // [Parser.EndsOfInputAt] a here-document body ended at.
-func (p *Parser) EndsOfInputTaken() int { return p.lex.inputEndsTaken }
+func (p *Parser) EndsOfInputTaken() int {
+	if p.lex.ends == nil {
+		return 0
+	}
+	n := 0
+	for _, took := range p.lex.ends.ever {
+		if took {
+			n++
+		}
+	}
+	return n
+}
 
 // Open is one thing the parser is inside.
 type Open struct {
@@ -1436,6 +1477,7 @@ func (p *Parser) Parse() *File {
 		f.Stmts = append(f.Stmts, line.Stmts...)
 		f.Substitutions = append(f.Substitutions, line.Substitutions...)
 		f.CarriedHeredocs = append(f.CarriedHeredocs, line.CarriedHeredocs...)
+		f.EndsOfInput = append(f.EndsOfInput, line.EndsOfInput...)
 	}
 	f.Last = p.tok.Pos
 	if p.err == nil && f.Refused != nil {
@@ -1546,6 +1588,7 @@ func (p *Parser) NextLine() (*File, bool) {
 	}
 	f.Substitutions, p.lineSubsts = p.lineSubsts, nil
 	f.CarriedHeredocs, p.lex.carried = p.lex.carried, nil
+	f.EndsOfInput, p.lex.substEnds = p.lex.substEnds, nil
 	if settled := p.lex.settledBodyRefusal; settled != nil {
 		refusesTheLine := p.lex.settledRefusesTheLine
 		p.lex.settledBodyRefusal, p.lex.settledRefusesTheLine = nil, false

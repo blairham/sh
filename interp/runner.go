@@ -4485,6 +4485,10 @@ type Runner struct {
 	// Empty in every dialect but the two that read a body that way; see
 	// syntax.File.CarriedHeredocs and Runner.substSource (#3711).
 	carriedHeredocs []syntax.CarriedHeredoc
+	// substEnds is the file being run's list of ends of input inside its
+	// substitutions, set and put back beside carriedHeredocs and for the same
+	// reason. See syntax.File.EndsOfInput and Runner.readSubstBody (#6309).
+	substEnds []syntax.SubstitutionEnds
 
 	// running is the command the shell is running, for a dialect with a
 	// parameter naming it — see RunningCommand.
@@ -7002,9 +7006,9 @@ func (r *Runner) RunPart(ctx context.Context, f *syntax.File) error {
 	// that holds it — the positions are per file and would otherwise
 	// collide. See Runner.substSource and syntax.File.CarriedHeredocs
 	// (#3711).
-	outerCarried := r.carriedHeredocs
-	r.carriedHeredocs = f.CarriedHeredocs
-	defer func() { r.carriedHeredocs = outerCarried }()
+	outerCarried, outerEnds := r.carriedHeredocs, r.substEnds
+	r.carriedHeredocs, r.substEnds = f.CarriedHeredocs, f.EndsOfInput
+	defer func() { r.carriedHeredocs, r.substEnds = outerCarried, outerEnds }()
 	for i, st := range f.Stmts {
 		if abandoned != 0 && r.lineOf(st.Pos()) <= abandoned {
 			// The rest of the line the last statement gave up on goes with

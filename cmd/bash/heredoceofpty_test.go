@@ -59,3 +59,36 @@ func TestControlDEndsOneHeredocBodyAtATime(t *testing.T) {
 	// echo of the line typed cannot answer for it.
 	typeAndAwait("echo st''ill\n", "still")
 }
+
+// The same inside a command substitution that is still open: ^D ends the
+// document, and what is typed after it is the rest of the substitution's
+// program, which runs with it. Measured 2026-10-07 through a pseudo-terminal
+// against bash 5.3.20: `v=$(cat <<E1`, `a`, ^D, `echo still`, `)` draws E1's
+// warning, `> ` for each line after it, and leaves `a` and `still` in v.
+// Here the ^D refused the substitution and the lines after it ran on their
+// own (#6309).
+func TestControlDEndsAHeredocInsideAnOpenSubstitution(t *testing.T) {
+	control, screen := interruptSession(t, "")
+	typeAndAwait := func(keys, mark string) {
+		t.Helper()
+		if _, err := control.WriteString(keys); err != nil {
+			t.Fatalf("typing %q: %v", keys, err)
+		}
+		if err := screen.Await(mark, interruptBudget); err != nil {
+			t.Fatalf("after %q: %v", keys, err)
+		}
+	}
+	typeAndAwait("v=$(cat <<E1\n", interruptPS2)
+	typeAndAwait("a\n", interruptPS2)
+	typeAndAwait("\x04", "here-document at line 1 delimited by end-of-file (wanted `E1')")
+	from := len(screen.Text())
+	if err := screen.Await(interruptPS2, interruptBudget); err != nil {
+		t.Fatalf("no continuation prompt for the rest of the substitution: %v", err)
+	}
+	typeAndAwait("echo still\n", interruptPS2)
+	typeAndAwait(")\n", interruptMark)
+	if drawn := screen.Text()[from:]; strings.Contains(drawn, "unexpected") {
+		t.Fatalf("the substitution was refused:\n%s", smoke.Readable(drawn))
+	}
+	typeAndAwait(`printf 'r-%s.' $v`+"\n", "r-a.r-still.")
+}

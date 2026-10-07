@@ -158,17 +158,19 @@ var bindPrefixKeymaps = map[string]bool{"emacs-meta": true, "emacs-ctlx": true}
 // the whole line including that, and is bound to no key in bash 5.3. Naming it
 // here would be offering a name that does something else.
 var bindFunctions = map[string]repl.Widget{
-	"beginning-of-line":      repl.WidgetBeginningOfLine,
-	"end-of-line":            repl.WidgetEndOfLine,
-	"backward-char":          repl.WidgetBackwardChar,
-	"forward-char":           repl.WidgetForwardChar,
-	"backward-word":          repl.WidgetBackwardWord,
-	"forward-word":           repl.WidgetForwardWord,
-	"kill-line":              repl.WidgetKillLine,
-	"unix-line-discard":      repl.WidgetKillWholeLine,
-	"backward-kill-line":     repl.WidgetKillWholeLine,
-	"backward-kill-word":     repl.WidgetBackwardKillWord,
-	"unix-word-rubout":       repl.WidgetKillWordBefore,
+	"beginning-of-line":  repl.WidgetBeginningOfLine,
+	"end-of-line":        repl.WidgetEndOfLine,
+	"backward-char":      repl.WidgetBackwardChar,
+	"forward-char":       repl.WidgetForwardChar,
+	"backward-word":      repl.WidgetBackwardWord,
+	"forward-word":       repl.WidgetForwardWord,
+	"kill-line":          repl.WidgetKillLine,
+	"unix-line-discard":  repl.WidgetKillWholeLine,
+	"backward-kill-line": repl.WidgetKillWholeLine,
+	"backward-kill-word": repl.WidgetBackwardKillWord,
+	"unix-word-rubout":   repl.WidgetKillWordBefore,
+	// Typing the key that was pressed (#6300).
+	"self-insert":            repl.WidgetSelfInsert,
 	"kill-word":              repl.WidgetKillWordAfter,
 	"yank":                   repl.WidgetYank,
 	"transpose-chars":        repl.WidgetTransposeChars,
@@ -224,6 +226,7 @@ var bindFunctionNames = map[repl.Widget]string{
 	repl.WidgetKillWholeLine:         "unix-line-discard",
 	repl.WidgetKillWordBefore:        "unix-word-rubout",
 	repl.WidgetBackwardKillWord:      "backward-kill-word",
+	repl.WidgetSelfInsert:            "self-insert",
 	repl.WidgetKillWordAfter:         "kill-word",
 	repl.WidgetYank:                  "yank",
 	repl.WidgetTransposeChars:        "transpose-chars",
@@ -310,9 +313,30 @@ func buildDefaultBindings() map[string]string {
 // this editor has not got; listing them as `upcase-word` would be a row bash
 // never prints.
 var (
-	emacsBindings    = buildKeymapBindings(repl.WordBindings())
+	emacsBindings    = withTyping(buildKeymapBindings(repl.WordBindings()), "")
 	viInsertBindings = buildKeymapBindings(map[string]repl.Widget{"\x16": repl.WidgetQuotedInsert})
+	// vi insert mode types the control keys EditorStyle lists as well, and
+	// bash lists `^C`, `^Q` and `^Z` there too, which the terminal takes
+	// before any editor sees them.
+	viInsertTypingBindings = withTyping(buildKeymapBindings(map[string]repl.Widget{"\x16": repl.WidgetQuotedInsert}), viInsertTypedKeys+"\x03\x11\x1a")
 )
+
+// withTyping adds the keys that type themselves to a keymap's listing:
+// self-insert on every printable byte and every byte with the top bit set —
+// 223 rows, as bash 5.3.20's `bind -p` lists them — and on the control keys
+// named, which only vi insert mode has (#6300).
+func withTyping(keys map[string]string, controls string) map[string]string {
+	for b := 0x20; b <= 0xff; b++ {
+		if b == 0x7f {
+			continue
+		}
+		keys[string([]byte{byte(b)})] = "self-insert"
+	}
+	for i := 0; i < len(controls); i++ {
+		keys[controls[i:i+1]] = "self-insert"
+	}
+	return keys
+}
 
 func buildKeymapBindings(keys map[string]repl.Widget) map[string]string {
 	out := map[string]string{}
@@ -338,9 +362,12 @@ func keymapDefaults(keymap string) map[string]string {
 	switch keymap {
 	case "emacs":
 		extra = emacsBindings
-	case "vi-insert", "vi-command":
+	case "vi-insert":
+		extra = viInsertTypingBindings
+	case "vi-command":
 		// `^V` is quoted-insert in both of vi's keymaps — see
-		// repl.EditorStyle.QuotedInsertInViCommand (#6259).
+		// repl.EditorStyle.QuotedInsertInViCommand (#6259) — and nothing types
+		// itself in command mode.
 		extra = viInsertBindings
 	default:
 		return defaultBindings

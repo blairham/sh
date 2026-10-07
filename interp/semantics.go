@@ -19970,6 +19970,49 @@ type Semantics struct {
 	// (TestADashPromptDoesNotCountARefusedLine).
 	PromptRefusedLineIsNotCounted bool
 
+	// PromptErrorDiscardsTheRestOfTheReadBlock says that a prompt reading
+	// something other than a terminal reads it a block at a time, and that a
+	// line given up over an error throws away whatever is left of the block
+	// that line was read from. Reading goes on from the next block.
+	//
+	// Measured 2026-10-07, `-i` with `PS1=` and the input written to the
+	// shell in one write, `fi` and then `echo` lines:
+	//
+	//	dash 0.5.12 (macOS)          the rest of a 1024-byte block is gone
+	//	dash 0.5.12-12 (Debian)      the same, with an 8192-byte block
+	//	BusyBox ash 1.37.0 (alpine)  every line read and run
+	//	bash 5.3.20, zsh 5.9.2,      every line read and run
+	//	ksh93u+
+	//
+	// The block is a read of that size from the start of the input, not a
+	// line: with `fi` and blank lines putting `echo Z` at byte 1020, dash
+	// runs `Z` as a command, and at byte 1024 it echoes. The same lines
+	// written one at a time, a third of a second apart, are all run, because
+	// each read then returns one line; that is also why a terminal, which
+	// hands over a line per read, loses nothing. A regular file is read the
+	// same way as a pipe and loses the same bytes.
+	//
+	// It is every error that gives the line up and not only a refused parse:
+	// `${x?boom}`, `r=2` on a readonly `r`, `set -o bogus`, `shift 5`,
+	// `: < /nonexist`, `. /nonexist`, `$((1/0))` and `eval fi` all lose the
+	// next line. A command that is not found, `cd` to nowhere and `trap ''
+	// BOGUS` do not, since none of them gives the line up.
+	//
+	// Read by the front end, for the reason PromptAsksAgainAfterARefusedToken
+	// is, and a plain bool for the same reason. The block's size is not the
+	// dialect's: it is the C library's buffer size, 1024 on macOS and the
+	// BSDs and 8192 on Linux, and the front end takes it from the platform
+	// (#6322).
+	//
+	// unpinned: reached, and the corpus cannot discriminate: no case draws a
+	// prompt. repl/readblock_test.go drives a session on a pipe and pins both
+	// answers (TestAnErrorThrowsAwayTheRestOfTheReadBlock), and
+	// cmd/dash/readblock_test.go carries the dialect's answer through the
+	// binary (TestADashPromptLosesTheRestOfTheBlockAfterAnError), and
+	// dialect/readblock_test.go holds every preset to its measurement
+	// (TestOnlyDashLosesTheRestOfTheReadBlock).
+	PromptErrorDiscardsTheRestOfTheReadBlock bool
+
 	// EndOfInputInAConstructEndsTheSession says that the end of input
 	// arriving inside an unfinished construct at a prompt — ^D at `> `, or
 	// the end of a pipe — ends the session once that construct has been run

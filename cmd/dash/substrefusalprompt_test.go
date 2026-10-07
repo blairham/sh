@@ -11,9 +11,10 @@ import (
 // The same refusal at a dash prompt, which names what it expected where the
 // word ended the body's read, and counts no refused line: `$LINENO` and the
 // next refusal are numbered as the refused line was. Measured 2026-10-07 on
-// dash 0.5.12 through a pseudo-terminal (#6319).
+// dash 0.5.12 through a pseudo-terminal (#6319), so a line per read: see
+// TestADashPromptDoesNotCountARefusedLine.
 func TestADashPromptRefusesASubstitutionBodyAtTheToken(t *testing.T) {
-	_, errs, _ := prompt(t, "true\necho $(\nfi\n)\n", "dash", "-i")
+	_, errs, _ := promptALineAtATime(t, "true\necho $(\nfi\n)\n", "dash", "-i")
 	for _, want := range []string{
 		"dash: 3: Syntax error: \"fi\" unexpected (expecting \")\")\n",
 		"dash: 3: Syntax error: \")\" unexpected\n",
@@ -24,8 +25,11 @@ func TestADashPromptRefusesASubstitutionBodyAtTheToken(t *testing.T) {
 	}
 }
 
+// A line per read, as through the pseudo-terminal it was measured on: on a
+// pipe written in one write, everything after the first refusal is thrown
+// away with the rest of the block (TestADashPromptLosesTheRestOfTheBlockAfterAnError).
 func TestADashPromptDoesNotCountARefusedLine(t *testing.T) {
-	out, errs, _ := prompt(t, "fi\nfi\necho $LINENO\nif true\nfi fi\necho $LINENO\n", "dash", "-i")
+	out, errs, _ := promptALineAtATime(t, "fi\nfi\necho $LINENO\nif true\nfi fi\necho $LINENO\n", "dash", "-i")
 	if strings.Count(errs, "dash: 1: Syntax error: \"fi\" unexpected\n") != 2 {
 		t.Errorf("stderr %q, want both refusals at line 1", errs)
 	}

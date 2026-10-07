@@ -1161,6 +1161,41 @@ backspaces where this editor addresses the cursor. Recorded rather than fixed �
 a transcript nobody compares byte for byte is not worth a rendering rewrite,
 and the rows that *are* compared are in the nine above (#4249).
 
+## What an error throws away without a terminal — one dialect
+
+A prompt reading a pipe or a file reads it in some unit, and the unit is
+invisible until an error: one shell throws away what is left of the read that
+brought the refused line in.
+
+Measured 2026-10-07, `-i`, `PS1=` and no startup files, the input written to
+the shell in **one** write, a first line that is refused or given up and then
+`echo` lines:
+
+| shell | after the error |
+| --- | --- |
+| dash 0.5.12, macOS | the rest of a **1024**-byte read is gone, reading resumes at byte 1024 |
+| dash 0.5.12-12, Debian | the same at **8192** |
+| BusyBox ash 1.37.0, pinned alpine | every line runs, 33003 bytes included |
+| bash 5.3.20, zsh 5.9.2, ksh93u+ | every line runs |
+
+The unit is a read and not a line. With `fi`, blank lines and `echo Z` placed
+so that it starts at byte 1020, dash on macOS runs `Z` as a command — the four
+bytes `echo` went with the block — and at byte 1023 it runs `cho Z`; at 1024
+it echoes `Z`. The size is the C library's buffer, so it follows the
+platform and not the shell. Written a line at a time a third of a second
+apart, the same lines all run, because each read returns one line; a terminal
+hands over a line per read for the same reason, so it never loses anything.
+A regular file under `-i` loses the same bytes as a pipe.
+
+Every error that gives the line up does it, not only a refused parse:
+`${x?boom}`, assigning a readonly name, `set -o bogus`, `shift 5`,
+`: < /nonexist`, `. /nonexist`, `$((1/0))` and `eval fi`. A command not
+found, `cd` to nowhere and `trap '' BOGUS` do not, since none of them gives
+the line up.
+
+That is `Semantics.PromptErrorDiscardsTheRestOfTheReadBlock`, dash `true`.
+The size is taken from the platform the shell runs on (#6322).
+
 ## Text after the line that is not the line — `POSTDISPLAY`
 
 An inline suggestion is not text in the buffer. zsh gives a widget a second

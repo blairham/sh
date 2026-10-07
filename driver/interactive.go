@@ -587,6 +587,8 @@ func (sh Shell) frontEndWith(r *interp.Runner, name string, dg interp.Diagnostic
 		EchoTheLineWithoutATerminal: sh.Semantics.PromptEchoesTheLineWhereThereIsNoTerminal,
 		// See Semantics.PromptRefusedLineIsNotCounted.
 		RefusedLineIsNotCounted: sh.Semantics.PromptRefusedLineIsNotCounted,
+		// See Semantics.PromptErrorDiscardsTheRestOfTheReadBlock.
+		ErrorDiscardsTheRestOfTheReadBlock: sh.Semantics.PromptErrorDiscardsTheRestOfTheReadBlock,
 		// See Semantics.EndOfInputInAConstructEndsTheSession.
 		EndOfInputInAConstructEndsTheSession: sh.Semantics.EndOfInputInAConstructEndsTheSession,
 		// See Semantics.EndOfInputEndsAContinuedHeredocLine.

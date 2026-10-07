@@ -280,7 +280,11 @@ type editor struct {
 	// rather than turning a new one on, and a default that made a terminal
 	// look like a pipe would change what is drawn for every caller that has
 	// not heard of it.
-	noTerminal     bool
+	noTerminal bool
+	// noMotion says the terminal cannot move the cursor right, so the line
+	// is drawn the way nomotion.go says. Asked again for every read, because
+	// `$TERM` is a parameter a person can assign.
+	noMotion       bool
 	pastedStyle    string
 	pastedStyleEnd string
 	// controlStyle and controlStyleEnd are what a control character's caret
@@ -1902,6 +1906,10 @@ func (e *editor) redraw(prompt drawnPrompt) {
 		return
 	}
 
+	if e.noMotion {
+		e.redrawWithoutMotion(prompt, cols)
+		return
+	}
 	if e.repaint(prompt, cols) {
 		return
 	}

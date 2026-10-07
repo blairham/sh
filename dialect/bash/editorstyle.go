@@ -46,6 +46,10 @@ func EditorStyle() repl.EditorStyle {
 		// there are no markers to take back. See
 		// repl.EditorStyle.EndOfInputWithNoWordStaysOnTheRow (#6310).
 		EndOfInputWithNoWordStaysOnTheRow: true,
+		// And on a terminal that cannot move the cursor right it draws with
+		// backspaces and carriage returns. See
+		// repl.EditorStyle.DrawsWithoutCursorMotion (#6314).
+		DrawsWithoutCursorMotion: true,
 		// Every field about words is left at its zero value on purpose, and
 		// they are bash's measured answers rather than an absence of one: a
 		// word is letters and digits, `^U` kills only what is before the

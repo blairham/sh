@@ -8759,6 +8759,38 @@ type Semantics struct {
 	// TestTheModeABindingBuiltinReadsFollowsIt) (#2058).
 	InteractiveSelectsEmacs Answer
 
+	// InsideEmacsTurnsEditingOff starts an interactive shell with neither
+	// editing mode selected when the environment it was started in says it is
+	// running inside Emacs, so the session reads lines without an editor of
+	// its own. Read once, from the environment as the shell was given it —
+	// after the invocation's options and before the startup files. See
+	// Runner.TurnEditingOffInsideEmacs.
+	//
+	// bash's. Measured 2026-10-07 on bash 5.3.20, `set -o` under `--norc -i`
+	// both through a pseudo-terminal and from `-i -c` with no terminal:
+	//
+	//	TERM=emacs                        emacs off, vi off
+	//	TERM=dumb EMACS=t                 off
+	//	EMACS=t, TERM unset               off
+	//	TERM=dumb INSIDE_EMACS=x          off, and INSIDE_EMACS= (empty) too
+	//	INSIDE_EMACS=x, TERM unset        off
+	//	TERM=dumb EMACS=T, EMACS=yes      on: EMACS must be exactly `t`
+	//	TERM= (empty) EMACS=t             on: TERM must be unset, not empty
+	//	TERM=xterm EMACS=t, vt100, vt52   on
+	//	TERM=nosuchterm INSIDE_EMACS=x    on
+	//	TERM=emacs with -o vi or -o emacs off: the invocation's choice is undone
+	//	TERM=emacs, `set -o vi` in .bashrc   vi on: the files come after
+	//	TERM=xterm, `TERM=emacs` in .bashrc  on: the environment decides
+	//
+	// No other shell in the panel selects a mode on its own (see
+	// InteractiveSelectsEmacs), so there is nothing for it to turn off.
+	//
+	// unpinned: reached, and the corpus cannot discriminate. Every row runs
+	// with `TERM=dumb` and neither EMACS nor INSIDE_EMACS, which this reads
+	// as not inside Emacs. interp/insideemacs_test.go pins the rule
+	// (TestInsideEmacsTurnsTheEditingModeOff).
+	InsideEmacsTurnsEditingOff bool
+
 	// SetFTurnsOffGlobbing makes `set -f` the short spelling of `set -o
 	// noglob`. True in bash — all three builds — dash, ksh93 and BusyBox
 	// ash. zsh alone spells that option the long way only: there `-f` is

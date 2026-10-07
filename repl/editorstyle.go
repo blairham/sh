@@ -232,6 +232,19 @@ type EditorStyle struct {
 	// "exit" to leave the shell.\r\n` and the prompt again.
 	EndOfInputRefusalStaysOnTheLine bool
 
+	// EndOfInputWithNoWordStaysOnTheRow leaves the row alone when ^D ends a
+	// read that has no word to leave with — a continuation prompt — and no
+	// paste markers to take back, so what is said next is written straight
+	// after the prompt. Without it the row is ended, which is what dash,
+	// ksh93 and zsh do.
+	//
+	// bash's. Measured 2026-10-07 through a pseudo-terminal on bash 5.3.20
+	// under `TERM=dumb`, where no markers are asked for: `for x in 1` then ^D
+	// draws `> bash: syntax error: …` on one row, and `cat <<E1` / `a` / ^D
+	// draws `> bash: warning: …`. Where the markers are on, the sequence that
+	// takes them back ends the row, which is unchanged (#6310).
+	EndOfInputWithNoWordStaysOnTheRow bool
+
 	// Interrupt is what marks a line abandoned with ^C, drawn where the
 	// cursor was before the line ends.
 	//
@@ -355,6 +368,41 @@ type EditorStyle struct {
 	// 5.3.20, the next prompt is written without `\e[?2004h`, and `on` asks
 	// again (#6264).
 	BracketedPasteSetting string
+
+	// BracketedPasteOffForTerminals names the terminals for which the
+	// BracketedPasteSetting variable is set `off` whenever the line editor
+	// takes up a terminal: the first time it reads a line, and again each
+	// time `$TERM` has changed since. And BracketedPasteOffWithoutADescription
+	// does the same for a `$TERM` — unset and empty included — that the
+	// terminfo database has no entry for. Neither turns the setting back on:
+	// a terminal that can take the markers leaves it as it was.
+	//
+	// bash's, through readline. Measured 2026-10-07 through a pseudo-terminal
+	// on bash 5.3.20, `--norc -i`, the bytes around a line at the first
+	// prompt:
+	//
+	//	TERM=dumb, vt52, emacs        no `\e[?2004h`
+	//	TERM unset, empty, nosuchterm no `\e[?2004h`: no description
+	//	TERM=DUMB, dumb-emacs-ansi    the same, and for the same reason
+	//	xterm, vt100, ansi, cons25,   `\e[?2004h`
+	//	  and every one of 45 entries
+	//	  chosen to differ in am, cup,
+	//	  cuu1, el, smso and hc
+	//
+	// The three names are names and not capabilities: an entry compiled from
+	// xterm's description under the name `vt52`, `dumb` or `emacs` is off, and
+	// vt52's own description compiled as `zz0` is on, as are `dumbx`, `xdumb`
+	// and `VT52`. And it happens each time the terminal is taken up rather
+	// than once: `TERM=dumb` typed at an xterm prompt turns the next prompt's
+	// markers off, `TERM=xterm` typed at a dumb one does not turn them on, and
+	// `bind 'set enable-bracketed-paste on'` does. A `TERM=xterm` in the
+	// startup file of a session started under `dumb` does turn them on,
+	// because no line has been read yet — and the same file's `bind 'set
+	// enable-bracketed-paste on'` wins over a dumb `$TERM`, because the
+	// setting is then already decided and this leaves a decided setting alone
+	// the first time it looks (#6310).
+	BracketedPasteOffForTerminals        []string
+	BracketedPasteOffWithoutADescription bool
 
 	// BracketedPasteParameter names the array the two sequences are read
 	// from, at the start of every line, where the dialect keeps them in one.

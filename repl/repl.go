@@ -892,6 +892,9 @@ func (s Shell) Run(ctx context.Context) (int, error) {
 			ed.leaving = ""
 		}
 		drawn := s.beforeReading(ctx, state, &pending)
+		// After the prompt hooks, which may assign `$TERM`, and before the
+		// read, which is what asks whether to bracket a paste.
+		s.takeUpTheTerminal()
 		if s.Runner.Exited() {
 			// A prompt hook called `exit`. Measured, zsh's session ends
 			// there and draws no prompt, so this one does not read a line.
@@ -3364,6 +3367,7 @@ func (s Shell) newEditor(ctx context.Context, state *terminalState) *editor {
 		// And what a refused ^D says, and where. See refuseEndOfInput.
 		endOfInputRefused:     s.EndOfInputRefused,
 		refusalStaysOnTheLine: s.Editor.EndOfInputRefusalStaysOnTheLine,
+		noWordStaysOnTheRow:   s.Editor.EndOfInputWithNoWordStaysOnTheRow,
 		searchSmartCase:       s.History.SearchIgnoresCaseUnlessTold,
 		searchCaretAnchors:    s.History.SearchCaretAnchors,
 		// And where a forward match leaves the cursor.
@@ -3467,6 +3471,48 @@ func (s *Shell) listQueryThreshold() func() (int, bool) {
 // Nil where the dialect names no such parameter, which is every dialect but
 // one, and **a nil wait waits no time at all** — the behavior every dialect
 // that ignores this already had, so nothing inherits a new default.
+// takeUpTheTerminal is the line editor noticing which terminal it is on: the
+// first time it reads a line, and each time `$TERM` has changed since. A
+// terminal that cannot take a paste's markers turns the dialect's setting for
+// them off. See EditorStyle.BracketedPasteOffForTerminals.
+func (s Shell) takeUpTheTerminal() {
+	setting := s.Editor.BracketedPasteSetting
+	if setting == "" || s.Runner == nil ||
+		(len(s.Editor.BracketedPasteOffForTerminals) == 0 && !s.Editor.BracketedPasteOffWithoutADescription) {
+		return
+	}
+	c := s.counted()
+	term, set := s.Runner.GetVar("TERM")
+	first := !c.termTaken
+	if !first && term == c.term && set == c.termSet {
+		return
+	}
+	c.term, c.termSet, c.termTaken = term, set, true
+	if _, decided := s.Runner.GetVar(setting); first && decided {
+		// Decided before any line was read — a `bind` in a startup file,
+		// which takes the terminal up itself and then sets the variable.
+		return
+	}
+	if s.cannotTakeThePasteMarkers(term) {
+		s.Runner.SetVar(setting, "off")
+	}
+}
+
+// cannotTakeThePasteMarkers is the dialect's list of terminal names, and a
+// name with no description where the dialect counts that too.
+func (s Shell) cannotTakeThePasteMarkers(term string) bool {
+	if slices.Contains(s.Editor.BracketedPasteOffForTerminals, term) {
+		return true
+	}
+	if !s.Editor.BracketedPasteOffWithoutADescription {
+		return false
+	}
+	return !terminalIsDescribed(func(name string) string {
+		v, _ := s.Runner.GetVar(name)
+		return v
+	})
+}
+
 // bracketedPasteCodes reads the bracketing's two sequences out of the
 // parameter the dialect keeps them in, or is nil where it keeps none. See
 // EditorStyle.BracketedPasteParameter for the rule and the measurement.

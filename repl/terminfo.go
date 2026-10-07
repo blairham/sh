@@ -172,3 +172,10 @@ func TerminalCapabilities(env func(string) string) []TerminalCapability {
 	}
 	return nil
 }
+
+// terminalIsDescribed reports whether the terminfo database has a readable
+// description for the terminal `$TERM` names, which is false for an unset or
+// empty `$TERM` as well as for a name nothing describes.
+func terminalIsDescribed(env func(string) string) bool {
+	return len(TerminalCapabilities(env)) > 0
+}

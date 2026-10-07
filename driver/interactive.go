@@ -188,6 +188,10 @@ func (sh Shell) session(argv []string, in source) int {
 	// may define an alias and use it, and before the mode below, which the
 	// base must not overwrite.
 	r.SetAliasExpansionBase(true)
+	// Inside Emacs the dialect that would select an editing mode selects
+	// none, decided from the environment after the invocation's options and
+	// before the files. See interp.Runner.TurnEditingOffInsideEmacs.
+	r.TurnEditingOffInsideEmacs()
 	// The login option folded back in, in the same place and for the same
 	// reason as on the script routes — see loginShellOption.
 	if code := sh.startup(r, loginShellOption(sh, r, in)); code != 0 {

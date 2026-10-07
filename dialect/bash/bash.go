@@ -622,6 +622,9 @@ func Semantics() interp.Semantics {
 	// `argv[0]` of `sh` as well: `set -o` reports `emacs off` in a script and
 	// `emacs on` under `-i`, with or without a terminal.
 	s.InteractiveSelectsEmacs = interp.Yes
+	// And starts with neither selected inside Emacs. See
+	// Semantics.InsideEmacsTurnsEditingOff (#6310).
+	s.InsideEmacsTurnsEditingOff = true
 	// A `#` typed at this shell's prompt opens a comment only while
 	// `interactive_comments` is on, and this shell has it on with nothing
 	// said. Measured 2026-09-23 on bash 5.3.15, `printf … | bash --norc

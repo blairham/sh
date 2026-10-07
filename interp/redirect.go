@@ -1714,7 +1714,7 @@ func (r *Runner) heredocText(rd *syntax.Redirect) string {
 	// it, and an empty body has no last line — supplying one there wrote a
 	// bare newline nobody asked for, at status 0, which is this burndown's
 	// own shape (#2298).
-	if rd.HeredocAtEOF && body != "" && !strings.HasSuffix(body, "\n") {
+	if rd.HeredocAtEOF && heredocLastLineIsUnended(body, rd.Heredoc.Spans[0].Quoting == syntax.Unquoted) {
 		if r.ask(r.sem().UnterminatedHeredocGainsATrailingNewline,
 			"a newline on an unterminated here-document's last line") {
 			body += "\n"
@@ -3196,4 +3196,36 @@ func finishRenameOnSuccess(temp, target string, succeeded bool) {
 	if err := os.Rename(temp, target); err != nil {
 		_ = os.Remove(temp)
 	}
+}
+
+// heredocLastLineIsUnended reports whether a body that ran to the end of the
+// input has a last line with no newline after it — the shape
+// Semantics.UnterminatedHeredocGainsATrailingNewline is asked about.
+//
+// In an unquoted body a backslash-newline at the end ends nothing, because
+// expansion removes the pair: the line before it runs on to the end of the
+// input, and it is unended exactly when what is left has text and no newline
+// of its own. A line the continuations left empty is no line, and a body
+// ending in a lone backslash is not asked either — the newline would turn
+// that backslash into a continuation and take both away (#6273).
+func heredocLastLineIsUnended(body string, unquoted bool) bool {
+	if unquoted {
+		for strings.HasSuffix(body, "\\\n") && oddBackslashRunAtTheEnd(body[:len(body)-1]) {
+			body = body[:len(body)-2]
+		}
+		if oddBackslashRunAtTheEnd(body) {
+			return false
+		}
+	}
+	return body != "" && !strings.HasSuffix(body, "\n")
+}
+
+// oddBackslashRunAtTheEnd reports whether the backslashes ending s leave one
+// free to escape whatever follows: `\\` ends in an escaped backslash.
+func oddBackslashRunAtTheEnd(s string) bool {
+	n := 0
+	for n < len(s) && s[len(s)-1-n] == '\\' {
+		n++
+	}
+	return n%2 == 1
 }

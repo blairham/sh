@@ -120,6 +120,13 @@ type Shell struct {
 	// merely not finished.
 	AskAgainAfterARefusedToken bool
 
+	// EndOfInputInAConstructEndsTheSession leaves the session once the end
+	// of input has finished a construct, rather than going round for one
+	// more prompt. The zero value goes round, which is what every shell in
+	// the panel but one does. See [Shell.afterTheEndOfInput] and
+	// interp.Semantics.EndOfInputInAConstructEndsTheSession.
+	EndOfInputInAConstructEndsTheSession bool
+
 	// CommentsNeedTheOption names the option a `#` typed here has to have on
 	// before it opens a comment. Empty is "nothing has to be on", which is
 	// what a caller without a dialect gets and what three of the four panel
@@ -733,9 +740,9 @@ func (s Shell) Run(ctx context.Context) (int, error) {
 	// This is still the one site the word is decided at — the editor is
 	// handed the same string — and every other way a session ends comes
 	// through here.
-	var wroteLeaving bool
+	var wroteLeaving, withheld bool
 	defer func() {
-		if !wroteLeaving {
+		if !wroteLeaving && !withheld {
 			s.leaving()
 		}
 	}()
@@ -943,7 +950,8 @@ func (s Shell) Run(ctx context.Context) (int, error) {
 				// second ^D is what actually ends it.
 				continue
 			}
-			stmts, text, perr := s.endOfInput(&pending)
+			unfinished := strings.TrimSpace(pending.String()) != ""
+			stmts, text, heredoc, perr := s.endOfInputHow(&pending)
 			switch {
 			case perr != nil:
 				s.errf("%s", s.report(perr))
@@ -952,6 +960,13 @@ func (s Shell) Run(ctx context.Context) (int, error) {
 				b := s.beginBlock(text)
 				s.run(ctx, state, text, stmts)
 				s.closeBlock(ctx, store, capture, b)
+			}
+			if unfinished && !s.Runner.Exited() {
+				ends, word := s.afterTheEndOfInput(perr != nil, heredoc)
+				if !ends {
+					continue
+				}
+				withheld = !word
 			}
 			return s.status(), nil
 		case err != nil:
@@ -1821,7 +1836,12 @@ func (s Shell) runPlain(
 	ctx context.Context, store *blocks.Store, capture *outputCapture,
 	hist historyFile, earlier []string,
 ) (int, error) {
-	defer s.leaving()
+	withheld := false
+	defer func() {
+		if !withheld {
+			s.leaving()
+		}
+	}()
 	// This loop keeps a history too, and until #4007 it kept none at all.
 	// The list and the file are the editor's in the other loop, so an
 	// editor-less session recalled nothing, recorded nothing and wrote
@@ -1877,7 +1897,8 @@ func (s Shell) runPlain(
 				// read, which ends at once, leaves.
 				continue
 			}
-			stmts, text, perr := s.endOfInput(&pending)
+			unfinished := strings.TrimSpace(pending.String()) != ""
+			stmts, text, heredoc, perr := s.endOfInputHow(&pending)
 			switch {
 			case perr != nil:
 				s.errf("%s", s.report(perr))
@@ -1886,6 +1907,14 @@ func (s Shell) runPlain(
 				b := s.beginBlock(text)
 				s.runStmts(ctx, text, stmts)
 				s.closeBlock(ctx, store, capture, b)
+			}
+			// The same decision as the editor's loop, from the same call.
+			if unfinished && !s.Runner.Exited() {
+				ends, word := s.afterTheEndOfInput(perr != nil, heredoc)
+				if !ends {
+					continue
+				}
+				withheld = !word
 			}
 			return s.status(), nil
 		}
@@ -2169,13 +2198,21 @@ func (s Shell) pendingLine() int {
 // the other three prompt again — and that is deliberately not answered here:
 // this loop was already leaving at end of input, so it keeps doing so.
 func (s Shell) endOfInput(pending *strings.Builder) ([]*syntax.File, string, error) {
+	stmts, text, _, err := s.endOfInputHow(pending)
+	return stmts, text, err
+}
+
+// endOfInputHow is endOfInput, and says as well whether a here-document was
+// what the input ran out inside — which is the one thing bash goes on past.
+// See afterTheEndOfInput.
+func (s Shell) endOfInputHow(pending *strings.Builder) ([]*syntax.File, string, bool, error) {
 	text := pending.String()
 	// The collector goes with it. What is read here is read whole rather than
 	// a line at a time, so the entry it would have made is not this one's —
 	// and a session ends here, so nothing is left that could reach it anyway.
 	s.abandon(pending)
 	if strings.TrimSpace(text) == "" {
-		return nil, "", nil
+		return nil, "", false, nil
 	}
 	p := syntax.NewParserAt(text, s.parseDialect(), s.parseBase(s.pendingLine()))
 	// The same alias table the accepted lines were parsed with: a construct
@@ -2192,10 +2229,33 @@ func (s Shell) endOfInput(pending *strings.Builder) ([]*syntax.File, string, err
 	// document with neither its delimiter nor its enclosing `}` produces both,
 	// the warning first.
 	s.sayRemarks(p.Remarks())
-	if err != nil {
-		return nil, "", err
+	heredoc := false
+	for _, rk := range p.Remarks() {
+		heredoc = heredoc || rk.Kind == syntax.RemarkHeredocAtEOF
 	}
-	return stmts, strings.TrimSuffix(text, "\n"), nil
+	if err != nil {
+		return nil, "", heredoc, err
+	}
+	return stmts, strings.TrimSuffix(text, "\n"), heredoc, nil
+}
+
+// afterTheEndOfInput says what becomes of the session once the end of input
+// has met a construct that was still being typed and that construct has been
+// run or refused: whether the session ends, and if it does, whether it says
+// the word it leaves with.
+//
+// Every shell in the panel but bash goes round for one more prompt — at a
+// terminal the session carries on, and on a pipe that prompt meets the end of
+// input again, which ends it the ordinary way. bash ends the session, without
+// its word when the construct ran and with it when it was refused, and goes
+// round only when a here-document was what the input ran out inside. See
+// interp.Semantics.EndOfInputInAConstructEndsTheSession for the measurements
+// (#6263).
+func (s Shell) afterTheEndOfInput(refused, heredoc bool) (ends, word bool) {
+	if !s.EndOfInputInAConstructEndsTheSession || heredoc {
+		return false, false
+	}
+	return true, refused
 }
 
 // sayRemarks writes what the parser had to say about input it accepted anyway.

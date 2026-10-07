@@ -1297,6 +1297,81 @@ func (s source) parseDiagnostic(r *interp.Runner, err error, src string, reached
 	return lead + strings.ReplaceAll(strings.TrimSuffix(msg, "\n"), "\n", "\n"+lead) + "\n"
 }
 
+// parseStatus is the status a parse failure in the program ends it with,
+// where status is the dialect's ordinary answer for it.
+//
+// It differs in one place: an interactive shell running a `-c` string, for
+// a refusal raised while reading a substitution's body — one the input ran
+// out inside, or one that would not parse. See
+// interp.Diagnostics.SubstitutionParseFailureStatusFromAnInteractiveCommandString
+// for the rows (#6267).
+//
+// And one more for the same string run without a terminal: a body the input
+// ran out inside that had already refused a token — `echo $(case`, `echo
+// $(echo a; fi`, `echo <(fi` — is the refused body #4697 measured, and costs
+// what a body that closed and would not parse costs there, 127 in bash
+// (measured 2026-10-06; `echo $(if`, which refused nothing, is 2, and the
+// same text from a file or standard input is 2).
+func (s source) parseStatus(r *interp.Runner, err error, src string, status int) int {
+	if s.file != "" || s.onStdin || r == nil {
+		return status
+	}
+	if !s.interactive || !r.Interactive {
+		if n := s.dg.SubstitutionParseFailureStatusFromCommandString; n != 0 && bodyRefusedAToken(err) {
+			return n
+		}
+		return status
+	}
+	if n := s.dg.SubstitutionParseFailureStatusFromAnInteractiveCommandString; n != 0 && refusedInASubstitutionBody(err, src) {
+		return n
+	}
+	return status
+}
+
+// bodyRefusedAToken is whether err is a program-holding substitution the
+// input ran out inside whose body had already refused a token.
+func bodyRefusedAToken(err error) bool {
+	var se *syntax.Error
+	if !errors.As(err, &se) || se.BodyRefusal == nil || se.BodyRefusal.Kind != syntax.ErrUnexpected {
+		return false
+	}
+	switch se.Token {
+	case "$(", "<(", ">(":
+		return true
+	}
+	return false
+}
+
+// refusedInASubstitutionBody is whether err was raised reading the body of a
+// substitution that holds a program: `$(`, `<(`, `>(`, and the `${` that
+// opens one — a blank, a newline or a `|` after the brace, or nothing at all.
+// What ran out *inside* such a body — a quote, a nested `$((` — is that
+// thing's refusal and not the body's, and is answered by the opener the
+// error names.
+func refusedInASubstitutionBody(err error, src string) bool {
+	var se *syntax.Error
+	if !errors.As(err, &se) {
+		return false
+	}
+	switch se.Token {
+	case "$(", "<(", ">(":
+		return true
+	case "${":
+		at := int(se.Pos.Offset) + len("${")
+		if at < 0 || at > len(src) || !strings.HasPrefix(src[int(se.Pos.Offset):], "${") {
+			return false
+		}
+		if at == len(src) {
+			return true
+		}
+		switch src[at] {
+		case ' ', '\t', '\n', '|':
+			return true
+		}
+	}
+	return false
+}
+
 // remarkDiagnostics and remarkName are what a remark about the program is
 // worded and named by. For an interactive bash it is the prompt's on every
 // route — measured 2026-10-06, a here-document the input ended in `-i -c`
@@ -3600,7 +3675,7 @@ func (sh Shell) executeLines(
 				// first.
 				sh.sayRemarks(in.remarkDiagnostics(r), in.remarkName(r), p.Remarks(), 0, true)
 				sh.errf("%s", in.parseDiagnostic(r, err, pr.text(), 0))
-				return in.dg.StatusForParseError(err), endingParseFailure
+				return in.parseStatus(r, err, pr.text(), in.dg.StatusForParseError(err)), endingParseFailure
 			}
 		}
 		handed = true
@@ -3625,7 +3700,7 @@ func (sh Shell) executeLines(
 				// is one complaint and status 1 in all four.
 				say(verboseUpTo(pr.text(), err))
 				sh.errf("%s", in.parseDiagnostic(r, err, pr.text(), r.LineReached()))
-				return in.dg.StatusForParseErrorAfter(err, r.ExitStatus()), endingParseFailure
+				return in.parseStatus(r, err, pr.text(), in.dg.StatusForParseErrorAfter(err, r.ExitStatus())), endingParseFailure
 			}
 			// Whatever is left once the last line has been handed out is
 			// still input the shell read, and `set -v` writes back what it
@@ -3643,7 +3718,7 @@ func (sh Shell) executeLines(
 			if sh.readOn(r, pr, in, err) {
 				continue
 			}
-			return in.dg.StatusForParseErrorAfter(err, r.ExitStatus()), endingParseFailure
+			return in.parseStatus(r, err, pr.text(), in.dg.StatusForParseErrorAfter(err, r.ExitStatus())), endingParseFailure
 		}
 		if line.Refused != nil {
 			// A construct inside the line did not read, and only the line

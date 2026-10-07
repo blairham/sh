@@ -4011,6 +4011,31 @@ type Diagnostics struct {
 	// unmoved.
 	SubstitutionParseFailureStatusFromCommandString int
 
+	// SubstitutionParseFailureStatusFromAnInteractiveCommandString is the
+	// status a refusal raised while reading a substitution's **body** leaves
+	// when the shell is interactive and its program is a `-c` string — in
+	// place of SubstitutionParseFailureStatusFromCommandString above, and in
+	// place of the syntax status for a body the input ran out inside. Zero
+	// leaves both alone.
+	//
+	// bash alone, and 1 there. Measured 2026-10-06 against
+	// /opt/homebrew/bin/bash 5.3.20, `env -i PATH=/usr/bin:/bin`, `--norc`:
+	//
+	//	                         -c     -i -c   -i script
+	//	echo $(                  2      1       2
+	//	echo $(case              2      1       2
+	//	echo ${x:-$(             2      1       2
+	//	echo <(  and  >(         2      1       2
+	//	echo ${  and  ${|        2      1       2
+	//	echo $(fi), then $?      127    1       2
+	//	eval "echo \$(fi)"       127    1       2
+	//	echo ${ fi; }            127    1       2
+	//
+	// and the controls that say the 1 is the *body's*: `echo $((`, `echo
+	// ${x`, `echo "a`, `echo \``, and `echo $(echo 'a` — a quote that ran
+	// out inside the body — are 2 under `-i -c` as everywhere else (#6267).
+	SubstitutionParseFailureStatusFromAnInteractiveCommandString int
+
 	// ParamErrorMessage is what `${x?word}` says. Two verbs: the parameter
 	// and the word. The shape is unanimous — `x: word` — and only the
 	// default word below is not.

@@ -200,6 +200,12 @@ func (r *Runner) holdScriptStop() func() {
 // not stopped, whose number is the one it leaves behind and is 1 on the same
 // route.
 func (r *Runner) substParseFailureStatusEndingTheScript(offTheScriptsLine bool) int {
+	if n := r.diag().SubstitutionParseFailureStatusFromAnInteractiveCommandString; n != 0 &&
+		r.Interactive && r.Route == RouteCommandString {
+		// The interactive shell's own number for it. See
+		// Diagnostics.SubstitutionParseFailureStatusFromAnInteractiveCommandString.
+		return n
+	}
 	if n := r.diag().SubstitutionParseFailureStatusFromCommandString; n != 0 &&
 		r.Route == RouteCommandString {
 		return n

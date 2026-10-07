@@ -5559,7 +5559,17 @@ func (l *Lexer) parseToClose(from int) (int, []Remark, bool, bool) {
 			// refused on its own and is untouched — which is the check that
 			// this adds a refusal only where there was none, rather than
 			// replacing one.
-			sub.failUnexpected("")
+			//
+			// And what the read was looking for is the closer, which the
+			// dialects that say what they expected name: measured 2026-10-07,
+			// `v=$(esac` is `"esac" unexpected (expecting ")")` in dash 0.5.12
+			// and `unexpected "esac" (expecting ")")` in BusyBox ash, where a
+			// read that refused on its own — `v=$(echo a; ;)` — names nothing
+			// (#6319).
+			sub.failUnexpected(")")
+			if se, ok := sub.err.(*Error); ok {
+				se.StoppedTheRead = true
+			}
 		}
 		// And what this read had to say, and how far it got, for the same
 		// caller and the same moment. See Lexer.lastBodyRefusal and

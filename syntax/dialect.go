@@ -3214,6 +3214,25 @@ type Dialect struct {
 	// the construct is unclosed all the same and the answer does not change.
 	HeredocEndsAtClosingParen bool
 
+	// BackquoteBodyEndsAtAStopWord ends the body of a backquoted
+	// substitution, quietly, at a word or operator that ends a list with
+	// nothing to close — `fi`, `esac`, `done`, `then`, `}`, `)`, `;;` — and
+	// drops what follows it. Without it the word is refused, as it is in a
+	// `$( )` body in every dialect.
+	//
+	// Measured 2026-10-07 under `-c`:
+	//
+	//	                            dash 0.5.12, ash   bash, zsh, ksh93
+	//	echo `echo a; fi; echo b`   a                  refused at `fi`
+	//	echo `fi echo b`            (empty line)       refused
+	//	echo `done`x                x                  refused
+	//	echo `echo a; ;`            refused at `;`     refused at `;`
+	//	echo $(echo a; fi)          refused            refused
+	//
+	// So the `;` that cannot stand there is refused all the same: only what
+	// would end a list ends the body (#6319).
+	BackquoteBodyEndsAtAStopWord bool
+
 	// HeredocBodyMustBeInsideTheSubstitution refuses a here-document opened
 	// inside a `$( )` or `${ ; }` whose body is not inside it too — which is
 	// what a one-line substitution leaves, the text ending before the body

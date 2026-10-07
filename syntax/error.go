@@ -344,6 +344,12 @@ type Error struct {
 	Innermost string
 	// Expected is the word that would have closed it — `fi`, `done`, `esac`.
 	Expected string
+	// StoppedTheRead says this refusal is a word that ended the read of a
+	// substitution's body — `fi`, `esac`, `done` with nothing to close —
+	// rather than one the grammar refused where it stood: what the read was
+	// looking for is the closer. See interp.Runner.substParseErrorAtItsCloser
+	// (#6319).
+	StoppedTheRead bool
 	// ExpectedIsAClass says Expected names a *class* of token rather than
 	// one spelling: a word of any spelling, where `fi` is one word and no
 	// other.

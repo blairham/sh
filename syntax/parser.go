@@ -1547,7 +1547,27 @@ func (p *Parser) NextLine() (*File, bool) {
 				// the script. `function f { ...; }` in a dialect without the
 				// keyword is the case that found it: the `}` ended parsing,
 				// and the commands after it never ran.
-				p.failUnexpected("")
+				if p.substitutionBody && !p.lex.inProgramParens && p.atListEnd() &&
+					p.dialect.BackquoteBodyEndsAtAStopWord {
+					// The body ends here, and what follows it is dropped. See
+					// Dialect.BackquoteBodyEndsAtAStopWord.
+					for !p.at(TokEOF) && p.err == nil {
+						p.next()
+					}
+					break
+				}
+				if p.substitutionBody && p.lex.inProgramParens && p.atListEnd() {
+					// A `$( )` body read on its own, and the word ended the
+					// read rather than being refused where it stood: what was
+					// being looked for is the closer, as the read of the
+					// line says. See Lexer.parseToClose (#6319).
+					p.failUnexpected(")")
+					if se, ok := p.err.(*Error); ok {
+						se.StoppedTheRead = true
+					}
+				} else {
+					p.failUnexpected("")
+				}
 			}
 			break
 		}

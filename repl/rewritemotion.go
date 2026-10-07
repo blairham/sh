@@ -66,6 +66,16 @@ type rowView struct {
 	promptText  string
 	promptCells int
 
+	// promptCost is what writing the prompt again is weighed at: its bytes,
+	// two for each region of it said not to be drawn, and one for each
+	// counted column. Measured 2026-10-07, zsh 5.9.2 under vt52 moves to the
+	// end of `%{ab%G%}> ` with three `\eC` and to the end of `%{ab%G%}jn> `
+	// by writing `abjn> ` again — six bytes weighed at nine against ten —
+	// where `ab> ` weighed at seven is more than six; and under wy50 the
+	// end of `x%3Gy> ` is seven `^L`, `xy> ` weighed at seven being a tie,
+	// and a tie is the steps.
+	promptCost int
+
 	// promptFixed says the prompt has rows above this one, promptLead is
 	// them as written and leadRows how many there are. Such a prompt is not
 	// written again to move inside it, or across it from part way along —
@@ -97,6 +107,7 @@ func (e *editor) viewOfRow(prompt drawnPrompt, line []rune, cols, row int) *rowV
 	v := &rowView{cells: make([]string, cols+1)}
 	if row == 0 {
 		v.promptText, v.promptCells, v.promptFixed = prompt.text, prompt.cells, prompt.lead != ""
+		v.promptCost = len(prompt.text) + 2*prompt.regions + prompt.counted
 		v.promptLead, v.leadRows = prompt.lead, leadRows(prompt.lead)
 	}
 	for i, r := range line {
@@ -145,7 +156,7 @@ func (m *terminalMotion) rewriteRight(b *strings.Builder, v *rowView, col, to in
 			switch {
 			case step == "":
 				b.WriteString(strings.Repeat(" ", n))
-			case col == 0 && to == pw && !v.promptFixed && len(v.promptText) < n*len(step):
+			case col == 0 && to == pw && !v.promptFixed && v.promptCost < n*len(step):
 				b.WriteString(v.promptText)
 			default:
 				b.WriteString(strings.Repeat(step, n))
@@ -157,6 +168,9 @@ func (m *terminalMotion) rewriteRight(b *strings.Builder, v *rowView, col, to in
 		// part of it still ahead and the return that a cursor inside it
 		// needs — and then written whole, from the row's start.
 		again := promptBytesFrom(v.promptText, col)
+		if col == 0 {
+			again = v.promptCost
+		}
 		if col > 0 {
 			again++
 		}

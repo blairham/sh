@@ -91,3 +91,41 @@ func TestAChangeIsDrawnCellByCell(t *testing.T) {
 		})
 	}
 }
+
+// Room is opened with `ich1` even where writing the cells is fewer bytes.
+// Measured 2026-10-07, zsh 5.9.2 under tvi912 with this test's prompt: `abc`,
+// ^A, then `X` is `\EQX\t\EW` and three backspaces, nine bytes where `Xabc`
+// and three backspaces is seven.
+func TestRoomIsOpenedWhateverItCosts(t *testing.T) {
+	const (
+		dch1 = 21
+		ich1 = 52
+		ht   = 134
+	)
+	db := terminfofixture.Database(t, terminfofixture.Description{
+		Name: "diffterm", Nums: []int{terminfofixture.Absent, 8}, StrCount: ht + 1,
+		Strs: map[int]string{
+			capClear: "\x1a", capEl: "\x1bT", capCud1: "\n", capCub1: "\b", capCuf1: "\f", capCuu1: "\v",
+			dch1: "\x1bW", ich1: "\x1bQ", ht: "\t",
+		},
+	})
+	control, screen, _ := jobNoticeSessionOn(t, []string{"TERM=diffterm", "TERMINFO=" + db}, "", "zsh", "-i")
+	t.Cleanup(func() { _, _ = control.WriteString("\x15") })
+	for _, k := range []struct{ send, want string }{
+		{"a", "a"},
+		{"b", "\bab"},
+		{"c", "c"},
+		{"\x01", "\b\b\b"},
+		{"X", "\x1bQX\t\x1bW\b\b\b"},
+	} {
+		at := len(screen.Text())
+		if _, err := control.WriteString(k.send); err != nil {
+			t.Fatal(err)
+		}
+		for deadline := time.Now().Add(jobNoticeBudget); screen.Text()[at:] != k.want; time.Sleep(5 * time.Millisecond) {
+			if time.Now().After(deadline) {
+				t.Fatalf("after %q: drew %q, want %q", k.send, screen.Text()[at:], k.want)
+			}
+		}
+	}
+}

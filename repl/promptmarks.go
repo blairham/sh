@@ -24,6 +24,14 @@ const (
 	markEnd   = "\x02"
 )
 
+// markCell brackets what fills exactly one column whatever its bytes are:
+// zsh's `%G`, and a magic-cookie terminal's standout sequence, which the
+// terminal stores as a cell of its own. The bytes between two of them are
+// written and the pair is counted as one cell, inside the non-printing
+// markers or out of them. ETX, beside the two above, for the same reason
+// they are what they are.
+const markCell = "\x03"
+
 // drawnPrompt is a rendered prompt as the editor uses it: the bytes to write,
 // and how many cells they take on the screen.
 //
@@ -76,6 +84,10 @@ type drawnPrompt struct {
 	// prompt with the zero value here is drawn into the last column, which a
 	// terminal with automatic margins is entitled to wrap.
 	rightIndent int
+
+	// regions is how many non-printing regions the last row was written
+	// with, and counted how many counted columns. See rowView.promptCost.
+	regions, counted int
 }
 
 // setRight measures a rendered right prompt into p.
@@ -105,7 +117,7 @@ func (p *drawnPrompt) setRight(rendered string, indent int) {
 // to the terminal instead, measured, which is a control character on the
 // screen for a prompt that said nothing about one.
 func drawPrompt(rendered string) drawnPrompt {
-	if !strings.ContainsAny(rendered, markStart+markEnd) {
+	if !strings.ContainsAny(rendered, markStart+markEnd+markCell) {
 		// The common case by a long way, and it copies nothing.
 		return splitRows(rendered)
 	}
@@ -115,6 +127,14 @@ func drawPrompt(rendered string) drawnPrompt {
 	// character has its high bit set, so nothing here can split a rune.
 	for i := 0; i < len(rendered); i++ {
 		switch c := rendered[i]; c {
+		case markCell[0]:
+			end := strings.IndexByte(rendered[i+1:], markCell[0])
+			if end < 0 {
+				end = len(rendered) - i - 1
+			}
+			text.WriteString(rendered[i+1 : i+1+end])
+			shown.WriteByte(' ')
+			i += end + 1
 		case markStart[0]:
 			hidden = true
 		case markEnd[0]:
@@ -132,6 +152,8 @@ func drawPrompt(rendered string) drawnPrompt {
 	// string can be measured from the other.
 	p := splitRows(text.String())
 	p.cells = displayWidth(lastRow(shown.String()))
+	p.regions = strings.Count(lastRow(rendered), markStart)
+	p.counted = strings.Count(lastRow(rendered), markCell) / 2
 	return p
 }
 

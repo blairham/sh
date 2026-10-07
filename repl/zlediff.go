@@ -43,10 +43,12 @@ import "strings"
 //     and no `ich1`, writes the cells): k of it and the characters, the move
 //     to the new end, and there `dch1` k times or `el`, whichever is shorter
 //     — tvi912 writes `\EW` for one and `\ET` for three.
-//   - Whichever is fewest bytes, counting the move back to the cursor and a
+//   - Room opened in front of three characters or more is drawn whatever it
+//     costs; in front of fewer the cells are written. Otherwise whichever is fewest
+//     bytes, counting the move back to the cursor and a
 //     delay as the text of the delay (wy50's `dch1` is `\EW$<1>`: one
 //     character is closed with it, three are written), is what is drawn; at
-//     a tie, room is closed or opened.
+//     a tie, room is closed.
 //   - A row left with nothing on it at all is erased with `el`: ^U with an
 //     empty prompt is `\r\e[K`.
 //
@@ -246,7 +248,10 @@ func (e *editor) repaintAsTheScreenIs(m *terminalMotion, prompt drawnPrompt, col
 			del.WriteString(strings.Repeat(" ", k))
 			ways = append(ways, way{del.String(), pc + len(cur) + k, extra})
 		}
-		if at >= 0 && k < 0 && m.insert1 != "" {
+		if at >= 0 && k < 0 && m.insert1 != "" && len(old)-at >= 3 {
+			// Only in front of three characters or more: measured under
+			// tvi912, `X` typed at the start of `ab` writes `Xab`, and at
+			// the start of `abc` opens room.
 			n := -k
 			drop := m.repeated(m.delete1, n)
 			if el := m.eraseToRowEnd(); el != "" && (drop == "" || len(el) < len(drop)) {
@@ -270,7 +275,10 @@ func (e *editor) repaintAsTheScreenIs(m *terminalMotion, prompt drawnPrompt, col
 				ins.WriteString(string(cur[from : from+n]))
 				m.columnAsTheScreenIs(&ins, c+n, pc+len(cur), row)
 				ins.WriteString(drop)
-				ways = append(ways, way{ins.String(), pc + len(cur), 0})
+				// Opening room is not weighed against writing the cells:
+				// measured, `X` typed at the start of `abc` under tvi912 is
+				// `\EQXabc\EW`, eight bytes where `Xabc` is four.
+				ways = append(ways[:0], way{ins.String(), pc + len(cur), 0})
 			}
 		}
 

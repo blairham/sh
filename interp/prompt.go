@@ -1456,6 +1456,9 @@ func (w *promptWalk) walk(runes []rune) {
 			if seq, known := w.field(FieldTerminalCapability, name, false); known {
 				if seq != "" {
 					w.unmeasured(seq)
+					if v, ok := w.st.Visual[code]; ok && v.Attribute == AttributeStandout {
+						w.cookie()
+					}
 					w.visualWritten(code, seq)
 				}
 				continue
@@ -1603,6 +1606,34 @@ func (w *promptWalk) visualWritten(code rune, seq string) {
 			continue
 		}
 		w.unmeasured(w.visual[a])
+		if a == AttributeStandout && w.visual[a] != "" {
+			w.cookie()
+		}
+	}
+}
+
+// cookie counts the columns a standout sequence takes on a terminal with the
+// magic-cookie glitch, whose description says how many in `xmc` (termcap
+// `sg`): the sequence is stored in the screen as cells of its own.
+//
+// Measured 2026-10-07, zsh 5.9.2 under `TERM=tvi912`, whose `xmc#1`: the
+// mark `%S>%s` is padded to 76 columns where `>` is padded to 78, and
+// `%S%U>%u%s` — which writes standout, underline, `>`, the underline's end,
+// standout again and its end — to 75. Underline takes none, and a standout
+// inside `%{ %}` takes none, being said not to be drawn.
+func (w *promptWalk) cookie() {
+	if w.hidden > 0 {
+		return
+	}
+	v, _ := w.field(FieldTerminalCapability, "sg", false)
+	n, err := strconv.Atoi(strings.TrimSpace(v))
+	if err != nil {
+		return
+	}
+	for range n {
+		col, _ := w.field(FieldCountedColumn, "", false)
+		w.b.WriteString(col)
+		w.cell(' ')
 	}
 }
 

@@ -79,9 +79,11 @@ func (e compdumpEnv) run(t *testing.T, dirs []string, opts string) string {
 	}
 	// Nothing but table rows: a diagnostic in the output is a run that went
 	// wrong somewhere the comparison would not otherwise say.
+	// A $fpath with no completion files in it leaves no rows, which `print
+	// -l` writes as one empty line.
 	for _, line := range strings.Split(strings.TrimSuffix(out, "\n"), "\n") {
-		if out == "" {
-			break // a $fpath with no completion files in it leaves no rows
+		if out == "\n" {
+			break
 		}
 		if len(line) < 2 || !strings.Contains("csPpf", line[:1]) || line[1] != ' ' {
 			t.Fatalf("compinit %s printed %q:\n%s", opts, line, out)

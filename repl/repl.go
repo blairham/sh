@@ -3340,6 +3340,15 @@ func (s *Shell) listQueryThreshold() func() (int, bool) {
 // parameter the dialect keeps them in, or is nil where it keeps none. See
 // EditorStyle.BracketedPasteParameter for the rule and the measurement.
 func (s *Shell) bracketedPasteCodes() func() (on, off string) {
+	if setting := s.Editor.BracketedPasteSetting; setting != "" && s.Runner != nil {
+		// See EditorStyle.BracketedPasteSetting.
+		return func() (on, off string) {
+			if v, _ := s.Runner.GetVar(setting); v == "off" {
+				return "", ""
+			}
+			return pasteModeOn, pasteModeOff
+		}
+	}
 	name := s.Editor.BracketedPasteParameter
 	if name == "" || s.Runner == nil {
 		return nil

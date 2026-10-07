@@ -61,10 +61,12 @@ import (
 //     key does. The same rule `bindkey` follows on the other side, and the
 //     same rule `compgen` follows: an answer that cannot be generated is
 //     refused rather than invented.
-//   - **`-v`, `-V` and `-f`** — readline's variables and reading an inputrc —
-//     are refused as not implemented. There is no readline here to hold a
-//     variable, so printing `bind-tty-special-chars is set to `on'` would be
-//     reporting a setting nothing reads.
+//   - **`-v`, `-V` and `-f`** — listing readline's variables and reading an
+//     inputrc — are refused as not implemented. A variable *set* through
+//     `bind 'set NAME VALUE'` is taken, as bash takes it, and two of them
+//     are acted on; see bindset.go. The rest are kept and read by nothing,
+//     so printing `bind-tty-special-chars is set to `on'` would be reporting
+//     a setting nothing reads.
 //   - **`-m emacs-meta` and `-m emacs-ctlx`** are refused as not implemented
 //     rather than as invalid, because bash really has them: they are
 //     readline's *prefix* keymaps, and this editor reads a key sequence whole
@@ -587,6 +589,10 @@ func bindOperand(r *interp.Runner, keymap, word string, command bool) int {
 	if command {
 		return bindCommand(r, keymap, word)
 	}
+	if name, value, ok := readlineSetLine(word); ok {
+		// An inputrc `set` line, not a binding. See bindset.go.
+		return bindSet(r, name, value)
+	}
 	return bindOne(r, keymap, word)
 }
 
@@ -607,6 +613,17 @@ func bindOperand(r *interp.Runner, keymap, word string, command bool) int {
 // *function* name, which is checked and dropped when unknown, and both halves
 // are measured.
 func bindCommand(r *interp.Runner, keymap, word string) int {
+	if strings.HasPrefix(word, "\"") {
+		// Measured against bash 5.3.20: a quote nothing closes, and a closed
+		// one with nothing at all after it, are complaints of their own.
+		if end := closingQuote(word); end < 0 {
+			r.Diagnosef("bind: no closing `\"' in %s\n", word)
+			return 1
+		} else if end == len(word)-1 {
+			r.Diagnosef("bind: %s: missing separator\n", word)
+			return 1
+		}
+	}
 	spelled, command, ok := splitBinding(word)
 	if !ok || !strings.HasPrefix(spelled, "\"") {
 		r.Diagnosef("bind: %s: first non-whitespace character is not `\"'\n", word)
@@ -843,12 +860,14 @@ func bindUnbindFunction(r *interp.Runner, keymap, name string) int {
 // bindOne makes one binding, in either of the two forms the file comment
 // measures.
 func bindOne(r *interp.Runner, keymap, word string) int {
-	spelled, target, ok := splitBinding(word)
-	if !ok {
-		// Neither form. bash's complaint names the whole word and says which
-		// character it wanted, measured with `bind -x`'s shape.
-		r.Diagnosef("bind: %s: first non-whitespace character is not `\"'\n", word)
-		return 1
+	spelled, target, complaint := readBindingLine(word)
+	if complaint != "" {
+		_, _ = fmt.Fprintf(r.Err(), "readline: %s\n", complaint)
+		return 0
+	}
+	if spelled == "" {
+		// A blank line, a comment or a directive.
+		return 0
 	}
 	seq, ok := decodeBindTarget(spelled)
 	if !ok {
@@ -868,6 +887,64 @@ func bindOne(r *interp.Runner, keymap, word string) int {
 	}
 	changeBinding(r, keymap, seq, bindEntry{target: target})
 	return 0
+}
+
+// readBindingLine takes a plain `bind` operand apart the way readline reads a
+// line of an inputrc, which is what it is: a key and what it does, with
+// either a colon or blanks between them (#6264). Nothing about it is refused
+// — `bind` answers 0 whatever the line says — and a line readline cannot
+// read is a complaint of readline's, returned without its `readline: `.
+//
+// Measured 2026-10-06 against bash 5.3.20 under `-c`:
+//
+//	"\C-x" beginning-of-line   binds ^X: a blank ends the key as a colon does
+//	Control-t   end-of-line    binds ^T
+//	  "\C-xb":   kill-line      binds: blanks before the line are nothing
+//	"\"": self-insert          binds `"`: a backslash quotes in the sequence
+//	"\C-x" : kill-line         binds nothing — the function is `: kill-line`
+//	(empty), #comment, $if x   nothing, and nothing said
+//	foo, ab, Control-x         readline: foo: no key sequence terminator
+//	"\C-x", "\C-x"x            readline: "\C-x"x: no key sequence terminator
+//	"\C-x, "                   readline: "\C-x: no closing `"' in key binding
+//	:foo                       readline: `:foo': invalid key binding: missing key sequence
+//
+// An empty spelled with no complaint is a line that binds nothing.
+func readBindingLine(word string) (spelled, target, complaint string) {
+	line := strings.TrimLeft(word, " \t")
+	if line == "" || line[0] == '#' || line[0] == '$' {
+		return "", "", ""
+	}
+	var end int
+	if line[0] == '"' {
+		end = closingQuote(line)
+		if end < 0 {
+			return "", "", line + ": no closing `\"' in key binding"
+		}
+		end++
+	} else {
+		end = strings.IndexAny(line, ": \t")
+		if end == 0 {
+			return "", "", "`" + line + "': invalid key binding: missing key sequence"
+		}
+	}
+	if end < 0 || end == len(line) || !strings.ContainsRune(": \t", rune(line[end])) {
+		return "", "", line + ": no key sequence terminator"
+	}
+	return line[:end], strings.TrimSpace(line[end+1:]), ""
+}
+
+// closingQuote is where the quote that opens line is closed, with a backslash
+// quoting the character after it; -1 for nowhere.
+func closingQuote(line string) int {
+	for i := 1; i < len(line); i++ {
+		switch line[i] {
+		case '\\':
+			i++
+		case '"':
+			return i
+		}
+	}
+	return -1
 }
 
 // splitBinding takes a `keyseq:function` word apart.

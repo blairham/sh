@@ -580,3 +580,88 @@ func TestQuotedInsertIsInTheViCommandKeymap(t *testing.T) {
 		t.Errorf("vi-command: -p has no row %q", want)
 	}
 }
+
+// An inputrc `set` line given to `bind`, against the rows in bindset.go,
+// measured against bash 5.3.20 (#6264): never a refusal, a diagnostic for a
+// name or a value readline has not got, and two variables acted on.
+func TestBindSetsAReadlineVariable(t *testing.T) {
+	for _, c := range []struct{ src, want string }{
+		{"bind 'set completion-ignore-case on'; echo st=$?", "st=0\n"},
+		{"bind 'set NoSuch on'; echo st=$?", "readline: NoSuch: unknown variable name\nst=0\n"},
+		{"bind 'set'; echo st=$?", "readline: : unknown variable name\nst=0\n"},
+		{"bind 'set Editing-Mode foo'; echo st=$?", "readline: Editing-Mode: could not set value to `foo'\nst=0\n"},
+		{"bind 'set editing-mode'", "readline: editing-mode: could not set value to `'\n"},
+		{"bind 'set bell-style loud'", "readline: bell-style: could not set value to `loud'\n"},
+		{"bind 'set keymap nosuch'", "readline: keymap: could not set value to `nosuch'\n"},
+		{"bind 'set Bell-Style none'; bind '  set\tbell-style\tvisible'; bind 'set keymap Vi-Insert'", ""},
+		{"bind 'set isearch-terminators x'; bind 'set active-region-start-color y'", ""},
+		{"bind 'settle on'; echo st=$?", "st=0\n"},
+	} {
+		t.Run(c.src, func(t *testing.T) {
+			if got, _ := bindRun(t, c.src); got != c.want {
+				t.Errorf("got %q, want %q", got, c.want)
+			}
+		})
+	}
+}
+
+// The two it acts on: editing-mode is the editing mode, as `set -o` reports
+// it, and enable-bracketed-paste is the setting the line editor reads.
+func TestBindSetActsOnTheEditingModeAndTheBracketing(t *testing.T) {
+	var buf strings.Builder
+	r := preset.Runner(dialecttest.Base{Stdout: &buf, Stderr: &buf})
+	r.Interactive = true
+	run := func(src string) {
+		t.Helper()
+		if _, err := r.Run(t.Context(), preset.Parse(t, src)); err != nil {
+			t.Fatalf("run %q: %v", src, err)
+		}
+	}
+	run("bind 'set editing-mode vi'")
+	if !bash.ViEditing(r) {
+		t.Errorf("editing-mode vi left the editing mode emacs")
+	}
+	run("bind 'set Editing-Mode EMACS'")
+	if bash.ViEditing(r) {
+		t.Errorf("editing-mode emacs left the editing mode vi")
+	}
+	setting := bash.EditorStyle().BracketedPasteSetting
+	if setting == "" {
+		t.Fatal("bash's EditorStyle names no bracketing setting")
+	}
+	for _, c := range []struct{ value, want string }{{"off", "off"}, {"On", "on"}, {"0", "off"}, {"", "on"}, {"1", "on"}} {
+		run("bind 'set enable-bracketed-paste " + c.value + "'")
+		if got, _ := r.GetVar(setting); got != c.want {
+			t.Errorf("enable-bracketed-paste %q: the setting holds %q, want %q", c.value, got, c.want)
+		}
+	}
+}
+
+// A plain operand is a line of an inputrc, read as readline reads one, against
+// the rows in readBindingLine (#6264): never refused, and a line readline
+// cannot read is a complaint of readline's.
+func TestBindReadsAnOperandAsAnInputrcLine(t *testing.T) {
+	for _, c := range []struct{ src, want string }{
+		{`bind '"\C-x" beginning-of-line'; bind -q beginning-of-line`, `\C-x`},
+		{`bind 'Control-t   end-of-line'; bind -q end-of-line`, `\C-t`},
+		{`bind '  "\C-xb":   kill-line  '; bind -q kill-line`, `\C-xb`},
+		{`bind '"\C-xa"	"macro text"'; bind -s`, `"\C-xa": "macro text"`},
+		{`bind '"\"": beginning-of-line'; bind -q beginning-of-line 2>&1`, `, "\"".`},
+		{`bind 'foo'; echo st=$?`, "readline: foo: no key sequence terminator\nst=0\n"},
+		{`bind '"\C-x"'; echo st=$?`, "readline: \"\\C-x\": no key sequence terminator\nst=0\n"},
+		{`bind '"\C-x"x'`, "readline: \"\\C-x\"x: no key sequence terminator\n"},
+		{`bind '   "\C-x'; echo st=$?`, "readline: \"\\C-x: no closing `\"' in key binding\nst=0\n"},
+		{`bind ':foo'`, "readline: `:foo': invalid key binding: missing key sequence\n"},
+		{`bind ''; bind '#comment'; bind '$if mode=emacs'; bind 'foo bar'; echo st=$?`, "st=0\n"},
+		{`bind -x '"\C-t'; echo st=$?`, "bash: bind: no closing `\"' in \"\\C-t\nst=1\n"},
+		{`bind -x '"\C-y"'; echo st=$?`, "bash: bind: \"\\C-y\": missing separator\nst=1\n"},
+		{`bind -x '"\C-t"   '; echo st=$?`, "bash: bind: \"\\C-t\"   : first non-whitespace character is not `\"'\nst=1\n"},
+	} {
+		t.Run(c.src, func(t *testing.T) {
+			got, _ := bindRun(t, c.src)
+			if !strings.Contains(got, c.want) || strings.Contains(c.want, "\n") && got != c.want {
+				t.Errorf("got %q, want %q", got, c.want)
+			}
+		})
+	}
+}

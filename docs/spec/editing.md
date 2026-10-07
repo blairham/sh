@@ -827,16 +827,15 @@ the current shell, so what it changes stays changed; its status goes in and
 does not come out, so `$?` at the next prompt is what the last *command* left
 and not what the key returned; and all of its parameters are gone again by the
 next prompt, which `${READLINE_LINE-UNSET}` is what tests for.
+`$READLINE_ARGUMENT` is the count typed before the key, sign and all, and is
+set only when one was: `ESC 3` gives 3, `ESC -` gives -1, the key alone leaves
+it unset (#6296). The command runs once whatever the count.
 
-Three standing differences from bash, recorded rather than filled in with a
+Two standing differences from bash, recorded rather than filled in with a
 value that would be a lie:
 
 - **`$READLINE_MARK`** is bash's position of the mark, and this editor has no
   mark. Any number here would be one invented rather than measured.
-- **`$READLINE_ARGUMENT`** is bash's numeric argument, which bash leaves
-  *unset* when no argument was typed. It is always in that state here, though
-  bash's editor reads a count now (#6248); a key bound with `-x` is not told
-  one yet.
 - **bash exports all of them**, so an external program bound to a key reads
   them out of its environment. Here they are produced parameters, which is what
   makes them vanish again at the end of the call; a shell function reads them

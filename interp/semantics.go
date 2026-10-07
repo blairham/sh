@@ -19966,6 +19966,40 @@ type Semantics struct {
 	// prompt. repl/endofinputconstruct_test.go pins both answers
 	// (TestTheEndOfInputOnAContinuedHeredocLine).
 	EndOfInputEndsAContinuedHeredocLine bool
+
+	// EndOfInputEndsOneHeredocBody takes the end of input that arrives
+	// inside a here-document's body at a prompt as the end of **that body**
+	// only. A second document queued on the same line is read next, at a
+	// continuation prompt of its own, and what the command still needs after
+	// its documents — the `fi` of an `if` — is asked for in the ordinary way.
+	// The warning for each document is written when its end of input
+	// arrives, not with the others once the command is whole.
+	//
+	// bash's. Measured 2026-10-07 through a pseudo-terminal, `PS1='P> '`, no
+	// startup files:
+	//
+	//	cat <<E1 <<E2 / a / ^D / ^D / echo still
+	//	  bash 5.3.20  > a, > E1's warning, > E2's warning, P>, still
+	//	cat <<E1 <<E2 / a / ^D / b / E2
+	//	  bash 5.3.20  E1's warning, then E2's body is `b` and cat prints it
+	//	if true; then cat <<E1 <<E2 / a / ^D / b / ^D
+	//	  bash 5.3.20  both warnings, then `> ` for the rest of the `if`
+	//
+	// and on a pipe under `-i`, `cat <<E1 <<E2` / `a`, bash draws `> ` once
+	// more between the two warnings. zsh 5.9.2 and dash write both warnings
+	// (or neither) at the one end of input, as before; ksh93u+ spins on that
+	// pipe and gives no row.
+	//
+	// The `at line N` each warning names is unchanged by any of this: the
+	// text is parsed whole, with the ends of input marked in it, so E2's
+	// body begins where E1's ended and is numbered from there.
+	//
+	// unpinned: reached, and the corpus cannot discriminate: no case draws a
+	// prompt. repl/endofinputconstruct_test.go pins both answers on a pipe
+	// (TestTheEndOfInputInAHeredocEndsOnlyThatBody), and
+	// cmd/bash/heredoceofpty_test.go presses ^D at a real prompt
+	// (TestControlDEndsOneHeredocBodyAtATime).
+	EndOfInputEndsOneHeredocBody bool
 	// PromptStatusWritesThePipelineRecord makes a status the prompt sets for
 	// a line that ran nothing — 130 for a line abandoned with ^C, the parse
 	// failure's status for a refused one — the pipeline-status record too, as

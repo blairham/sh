@@ -48,6 +48,16 @@ type Remark struct {
 	// sentence, and neither can be derived from the other — the pair is
 	// exactly what the remark is about.
 	Next string
+	// EndOfInput is, for a [RemarkHeredocAtEOF] about a body that ended at
+	// one of the ends of input given to [Parser.EndsOfInputAt], which of
+	// them it was, counted from 1. Zero for every other remark, including a
+	// body the end of the text itself ended.
+	//
+	// A session that marks an end of input says the warning when that end
+	// arrives, which is before the command is whole; the same text parsed
+	// again later raises the same remark, and this is how that parse knows it
+	// has already been said.
+	EndOfInput int
 }
 
 // RemarkKind is which remark this is.

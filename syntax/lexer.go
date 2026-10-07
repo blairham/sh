@@ -44,6 +44,12 @@ type Lexer struct {
 	// internal/histjoin, where a continuation the reader resolved is one
 	// line of a history entry and one the reader left alone is two.
 	openHeredocExpands bool
+	// inputEnds are offsets in src at which the input ended once already
+	// and the reading went on past them, in the order they happened; and
+	// inputEndsTaken is how many of them a here-document body has ended at.
+	// See Parser.EndsOfInputAt.
+	inputEnds      []int
+	inputEndsTaken int
 	// innerOpen is what a program between parentheses was itself still
 	// inside when the input ran out there — the here-document or quote a
 	// `$(` holds — which openWord cannot say, because the read of that
@@ -877,6 +883,13 @@ func (l *Lexer) adoptOpenConstruct(join *Lexer, split int, word Pos) {
 }
 
 func (l *Lexer) eof() bool { return l.off >= len(l.src) }
+
+// atAnEndOfInput reports whether the cursor has reached the next of the ends
+// of input the caller marked, which only a here-document body asks about.
+// See Parser.EndsOfInputAt.
+func (l *Lexer) atAnEndOfInput() bool {
+	return l.inputEndsTaken < len(l.inputEnds) && l.off >= l.inputEnds[l.inputEndsTaken]
+}
 
 func (l *Lexer) peek() byte {
 	if l.eof() {
@@ -7148,6 +7161,26 @@ func (l *Lexer) readOneHeredoc(r *Redirect, quoted bool) {
 	var lastBody Pos
 	lastBodyLen, tookALine := 0, false
 	for {
+		if l.atAnEndOfInput() {
+			// An end of input the caller says happened here, before the rest
+			// of the text arrived. It ends this body and nothing else: the
+			// next document queued on the line starts reading after it, and
+			// the input is not incomplete on its account. Remarked on exactly
+			// as the end of the text is, and numbered, so a caller that said
+			// the remark when that end arrived can tell it from the others.
+			// See Parser.EndsOfInputAt (#6287).
+			l.inputEndsTaken++
+			l.remarks = append(l.remarks, Remark{
+				Kind:       RemarkHeredocAtEOF,
+				Pos:        lastLine,
+				At:         namedAt,
+				Token:      delim,
+				EndOfInput: l.inputEndsTaken,
+			})
+			l.markHeredocEnd(lastLine)
+			r.HeredocAtEOF = true
+			break
+		}
 		if l.eof() {
 			if tookALine && l.heredocPrefixEndsTheParens(lastBody, delim, strip) {
 				// The text inside the parentheses ran out and the last line

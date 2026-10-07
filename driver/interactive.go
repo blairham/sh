@@ -567,6 +567,8 @@ func (sh Shell) frontEndWith(r *interp.Runner, name string, dg interp.Diagnostic
 		EndOfInputInAConstructEndsTheSession: sh.Semantics.EndOfInputInAConstructEndsTheSession,
 		// See Semantics.EndOfInputEndsAContinuedHeredocLine.
 		EndOfInputEndsAContinuedHeredocLine: sh.Semantics.EndOfInputEndsAContinuedHeredocLine,
+		// See Semantics.EndOfInputEndsOneHeredocBody.
+		EndOfInputEndsOneHeredocBody: sh.Semantics.EndOfInputEndsOneHeredocBody,
 		// And whether the same session reads the editing *keys* there, which
 		// is the other half of the same dialect answer and the one that
 		// decides which loop reads at all.

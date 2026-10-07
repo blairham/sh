@@ -501,3 +501,29 @@ func TestQuotedInsertInViCommandMode(t *testing.T) {
 		t.Errorf("without the field: got %q", got)
 	}
 }
+
+// An Escape that arrives in one read with the keys after it leaves insert mode
+// unless those keys begin a sequence (#6283). Measured 2026-10-06 through a
+// pseudo-terminal, each row's bytes in one write: bash 5.3.20 and zsh 5.9.2
+// both give these lines. A strings.Reader hands the editor every byte in one
+// read, which is the burst; typing hands them over one at a time, which is
+// not.
+func TestAnEscapeInABurstLeavesInsertMode(t *testing.T) {
+	for _, c := range []struct{ name, keys, want string }{
+		{"ESC 0 is the start of the line", "echo abc\x1b0iX\r", "Xecho abc"},
+		{"ESC b is a word back", "echo abc\x1bbiX\r", "echo Xabc"},
+		{"ESC [ D is still the left arrow", "abc\x1b[DX\r", "abXc"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			e := Shell{ViEditing: func() bool { return true }}.newEditor(t.Context(), nil)
+			e.in, e.out = strings.NewReader(c.keys), &strings.Builder{}
+			got, err := e.readLine(drawPrompt("$ "))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got != c.want {
+				t.Errorf("got %q, want %q", got, c.want)
+			}
+		})
+	}
+}

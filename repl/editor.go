@@ -289,6 +289,10 @@ type editor struct {
 	controlStyleEnd string
 	pastedFrom      int
 	pastedTo        int
+	// pastedStyleNow is Shell.PastedTextStyle, asked when a run is marked;
+	// yankIsPasted is EditorStyle.YankIsDrawnAsPasted. See markPasted.
+	pastedStyleNow func() (on, off string)
+	yankIsPasted   bool
 
 	// killed is what the last kill took off the line, and ^Y puts it back.
 	// Kills that follow one another go into it together, which is what
@@ -1147,7 +1151,7 @@ func (e *editor) keyLoop(prompt drawnPrompt) (string, error) {
 			e.changeOrRing(func() bool { return e.killTo(e.wordStartBeforeCursor()) })
 			e.redraw(prompt)
 		case ctrlY:
-			e.changeOrRingFailed(e.yank)
+			e.yankKey()
 			e.redraw(prompt)
 		case ctrlT:
 			e.changeOrRingFailed(e.transpose)

@@ -393,6 +393,13 @@ type Shell struct {
 	// an instant.
 	StartLine func()
 
+	// PastedTextStyle is what text a paste put in the line is drawn between,
+	// asked fresh each time a paste or a yank marks some: zsh reads it out of
+	// `zle_highlight`'s `paste` context, which a person changes at the
+	// prompt. Nil is EditorStyle.PastedTextStyle and PastedTextStyleEnd,
+	// which is every dialect but one (#6271).
+	PastedTextStyle func() (on, off string)
+
 	// Highlighter colors the line as it is typed. Nil draws it plainly, which
 	// is what every shell in the panel does and what a front end that has not
 	// said gets.
@@ -3215,6 +3222,8 @@ func (s Shell) newEditor(ctx context.Context, state *terminalState) *editor {
 
 		pastedStyle:    s.Editor.PastedTextStyle,
 		pastedStyleEnd: s.Editor.PastedTextStyleEnd,
+		pastedStyleNow: s.PastedTextStyle,
+		yankIsPasted:   s.Editor.YankIsDrawnAsPasted,
 		// And a control character's caret. See controlglyph.go.
 		controlStyle:         s.Editor.ControlCharacterStyle,
 		controlStyleEnd:      s.Editor.ControlCharacterStyleEnd,

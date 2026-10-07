@@ -334,6 +334,18 @@ func (sh Shell) startLine(r *interp.Runner) func() {
 	return func() { sh.StartLine(r) }
 }
 
+// pastedTextStyle binds the dialect's paste style to this runner, and is nil
+// for a dialect with a fixed one.
+func (sh Shell) pastedTextStyle(r *interp.Runner) func() (on, off string) {
+	if sh.PastedTextStyle == nil {
+		return nil
+	}
+	// Not through BetweenCommands: it reads a parameter and runs nothing,
+	// and a yank a widget makes is asked from inside a command — the same
+	// reason highlighter calls straight through.
+	return func() (on, off string) { return sh.PastedTextStyle(r) }
+}
+
 func (sh Shell) runScheduled(r *interp.Runner) func(context.Context) {
 	if sh.RunScheduled == nil {
 		return nil
@@ -600,8 +612,9 @@ func (sh Shell) frontEndWith(r *interp.Runner, name string, dg interp.Diagnostic
 		// And how a key bound to one of the dialect's own actions runs, and
 		// what it had set aside for a time that has passed. Both bound to
 		// this runner, for the reason the bindings are.
-		StartLine: sh.startLine(r),
-		RunWidget: sh.runWidget(r),
+		StartLine:       sh.startLine(r),
+		PastedTextStyle: sh.pastedTextStyle(r),
+		RunWidget:       sh.runWidget(r),
 		// And what a widget's name reaches, for execute-named-cmd.
 		NamedWidgets: sh.namedWidgets(r),
 		// And what stands in for the editor's terminal operations, bound to

@@ -172,6 +172,11 @@ type Shell struct {
 	// with nothing to clear.
 	StartLine func(*interp.Runner)
 
+	// PastedTextStyle is what a paste or a yank is drawn between, asked each
+	// time one is marked, for a dialect that keeps it in a parameter — zsh's
+	// `zle_highlight`. Nil is repl.EditorStyle.PastedTextStyle's fixed pair.
+	PastedTextStyle func(*interp.Runner) (on, off string)
+
 	// BeforeStartupFiles is called once the invocation's options are applied
 	// and before the first startup file is read, for what a dialect's shell
 	// has done by then — zsh's line editor has loaded its module, and the

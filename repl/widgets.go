@@ -484,7 +484,7 @@ func (e *editor) runWidget(b Binding, prompt drawnPrompt) {
 		e.killForwardTo(e.endOfWord())
 		e.redraw(prompt)
 	case WidgetYank:
-		e.ringUnlessFailed(e.yank())
+		e.ringUnlessFailed(e.yankMarked())
 		e.redraw(prompt)
 	case WidgetTransposeChars:
 		e.ringUnlessFailed(e.transpose())

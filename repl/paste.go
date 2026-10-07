@@ -74,7 +74,7 @@ func (e *editor) insertPaste(prompt drawnPrompt) keyRead {
 		e.change(false, func() { e.insertAll(text) })
 		// The run this put in the line, so that the draw below can mark it as
 		// pasted. See styled.
-		e.pastedFrom, e.pastedTo = at, at+len(text)
+		e.markPasted(at, at+len(text))
 		// Drawn now rather than when the input runs out, which is the rest of
 		// #2775: the text landed in the line and nothing appeared until the
 		// next keystroke forced a redraw. A paste is one draw whatever else is
@@ -158,6 +158,35 @@ func (e *editor) insertAll(rs []rune) {
 	copy(e.line[e.pos+len(rs):], e.line[e.pos:])
 	copy(e.line[e.pos:], rs)
 	e.pos += len(rs)
+}
+
+// markPasted marks the run from..to as pasted, to be drawn in the paste style
+// until the next key. The style is asked for now where the session has a
+// live one — zsh's `zle_highlight` — so a change made at the prompt is what
+// the next paste is drawn in.
+func (e *editor) markPasted(from, to int) {
+	if e.pastedStyleNow != nil {
+		e.pastedStyle, e.pastedStyleEnd = e.pastedStyleNow()
+	}
+	e.pastedFrom, e.pastedTo = from, to
+}
+
+// yankMarked is yank, and the text it put back marked as pasted in a dialect
+// that draws it so. See EditorStyle.YankIsDrawnAsPasted.
+func (e *editor) yankMarked() bool {
+	at := e.pos
+	if !e.yank() {
+		return false
+	}
+	if e.yankIsPasted {
+		e.markPasted(at, e.pos)
+	}
+	return true
+}
+
+// yankKey is `^Y` in the key loop.
+func (e *editor) yankKey() {
+	e.changeOrRingFailed(e.yankMarked)
 }
 
 // forgetPaste stops marking the run the last paste put in the line.

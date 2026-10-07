@@ -751,6 +751,10 @@ func (e *editor) viPut(at int, prompt drawnPrompt) {
 		e.line = line
 		e.pos = at + len(e.killed) - 1
 	})
+	if e.yankIsPasted {
+		// Drawn as pasted, as a yank is. See EditorStyle.YankIsDrawnAsPasted.
+		e.markPasted(at, at+len(e.killed))
+	}
 	e.viClamp()
 	e.redraw(prompt)
 }

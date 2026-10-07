@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Blair Hamilton
 // SPDX-License-Identifier: Apache-2.0
 
-package zsh
+package repl
 
 import (
 	"strings"
@@ -26,8 +26,8 @@ func TestADelayIsWrittenAsNULsAtTheTerminalsSpeed(t *testing.T) {
 		{"\x1b[J$<50>", 0, "\x1b[J"},
 		{"$<x>", 9600, "$<x>"},
 	} {
-		if got := padded(c.in, c.speed); got != c.want {
-			t.Errorf("padded(%q, %d) = %q, want %q", c.in, c.speed, got, c.want)
+		if got := PaddedCapability(c.in, c.speed); got != c.want {
+			t.Errorf("PaddedCapability(%q, %d) = %q, want %q", c.in, c.speed, got, c.want)
 		}
 	}
 }

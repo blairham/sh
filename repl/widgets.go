@@ -651,7 +651,7 @@ func (e *editor) runWidget(b Binding, prompt drawnPrompt) {
 // — the clear, then exactly what goes before every prompt (see
 // EditorStyle.ClearBeforeThePrompt), then the prompt and the line.
 func (e *editor) clearScreen(prompt drawnPrompt) {
-	e.write(clearScreenSequence + e.clearBefore)
+	e.write(e.moves().clearScreen() + e.clearBefore)
 	e.row = 0
 	e.redraw(prompt)
 }

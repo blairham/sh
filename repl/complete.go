@@ -656,7 +656,7 @@ func (e *editor) confirmList(matches []Candidate, prompt drawnPrompt) bool {
 			if e.listQueryTakesItsRow {
 				// The listing goes where the question was. See
 				// EditorStyle.ListQueryAnswerTakesTheQuestionsRow.
-				e.write("\r\x1b[J")
+				e.write("\r" + e.moves().eraseToScreenEnd())
 				e.listHere = true
 				return true
 			}
@@ -1021,7 +1021,8 @@ func (e *editor) tabOnABlankLine(prompt drawnPrompt) bool {
 // drew a fresh prompt under the question and left the question on the screen
 // (#6119). See EditorStyle.ListQueryAnswerTakesTheQuestionsRow.
 func (e *editor) backToTheLine(prompt drawnPrompt) {
-	e.write("\r\x1b[J\x1b[A")
+	m := e.moves()
+	e.write("\r" + m.eraseToScreenEnd() + m.upBy(1))
 	cols := e.cols()
 	if cols <= 0 {
 		e.row = 0

@@ -98,7 +98,7 @@ func (e *editor) scrollListing(laid listing, page int) int {
 		key, ok := e.listScrollKey()
 		// The prompt's row is taken back whatever the key does: the next
 		// row of the listing goes there, or the line does.
-		e.write("\r\x1b[K")
+		e.write("\r" + e.moves().eraseToRowEnd())
 		if !ok {
 			break
 		}

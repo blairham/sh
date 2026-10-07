@@ -72,15 +72,14 @@ func (e *editor) trimPrompt(prompt drawnPrompt) drawnPrompt {
 	short := drawnPrompt{text: text, cells: displayWidth(text)}
 
 	var b strings.Builder
+	m := e.moves()
 	b.WriteString("\r")
 	if up := e.row + leadRows(prompt.lead); up > 0 {
-		b.WriteString("\x1b[")
-		b.WriteString(itoa(up))
-		b.WriteString("A")
+		b.WriteString(m.upBy(up))
 	}
 	// To the end of the screen, not the end of the row: what is being
 	// replaced is every row the old prompt and the line occupied.
-	b.WriteString("\x1b[J")
+	b.WriteString(m.eraseToScreenEnd())
 	b.WriteString(text)
 	b.WriteString(e.spell(e.styled(), short.cells, e.cols()))
 

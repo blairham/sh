@@ -440,8 +440,8 @@ func termcapExitAttributes(sgr0, sgr, rmacs string) string {
 	if sgr == "" || rmacs == "" {
 		return sgr0
 	}
-	off := withoutPadding(withoutCharset(tparm(sgr, make([]int, 9)), rmacs))
-	plain := withoutPadding(withoutCharset(sgr0, rmacs))
+	off := repl.WithoutPadding(withoutCharset(repl.ParameterizedString(sgr, make([]int, 9)), rmacs))
+	plain := repl.WithoutPadding(withoutCharset(sgr0, rmacs))
 	if sameReset(off, plain) {
 		return off
 	}
@@ -504,8 +504,8 @@ func promptCapability(table interp.AssocArray, code string, speed int) string {
 		return ""
 	}
 	// Padded at the speed of the terminal an interactive shell set up, and
-	// not at all otherwise. See padded.
-	return padded(v.Str, speed)
+	// not at all otherwise. See repl.PaddedCapability.
+	return repl.PaddedCapability(v.Str, speed)
 }
 
 // screenSizeFor is the two size capabilities: the terminal's own size, the

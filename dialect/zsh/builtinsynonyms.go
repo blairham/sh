@@ -168,9 +168,9 @@ func registerEchotc(r *interp.Runner, tables *capabilityTables) {
 					n, _ := strconv.Atoi(a)
 					params = append(params, n)
 				}
-				value = tparm(value, params)
+				value = repl.ParameterizedString(value, params)
 			}
-			_, _ = fmt.Fprint(rr.Out(), withoutPadding(value))
+			_, _ = fmt.Fprint(rr.Out(), repl.WithoutPadding(value))
 		default:
 			_, _ = fmt.Fprintln(rr.Out(), value)
 		}

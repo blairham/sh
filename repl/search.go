@@ -675,22 +675,18 @@ func (e *editor) below(prompt drawnPrompt, text string) {
 	col := (prompt.cells + e.pos) % cols
 
 	var b strings.Builder
+	m := e.moves()
 	for range down {
 		// A newline rather than a cursor-down, so the row exists: moving down
 		// past the bottom of the screen does nothing, and the text would land
 		// on the line instead of under it.
 		b.WriteString("\r\n")
 	}
-	b.WriteString("\x1b[K")
+	b.WriteString(m.eraseToRowEnd())
 	b.WriteString(text)
-	b.WriteString("\r\x1b[")
-	b.WriteString(itoa(down))
-	b.WriteString("A")
-	if col > 0 {
-		b.WriteString("\x1b[")
-		b.WriteString(itoa(col))
-		b.WriteString("C")
-	}
+	b.WriteString("\r")
+	b.WriteString(m.upBy(down))
+	b.WriteString(m.rightBy(col))
 	e.write(b.String())
 }
 

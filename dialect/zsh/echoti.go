@@ -7,7 +7,6 @@ import (
 	"context"
 	"fmt"
 	"strconv"
-	"strings"
 
 	"github.com/blairham/sh/interp"
 	"github.com/blairham/sh/repl"
@@ -117,81 +116,14 @@ func echotiBuiltin(r *interp.Runner, tables *capabilityTables, args []string) in
 			n, _ := strconv.Atoi(a)
 			params = append(params, n)
 		}
-		_, _ = fmt.Fprint(r.Out(), withoutPadding(tparm(value.Str, params)))
+		_, _ = fmt.Fprint(r.Out(), repl.WithoutPadding(repl.ParameterizedString(value.Str, params)))
 		return 0
 	}
 	if kinds[name] == repl.StringCapability {
 		// Bytes for the terminal, less the padding a terminal never reads.
-		_, _ = fmt.Fprint(r.Out(), withoutPadding(value.Str))
+		_, _ = fmt.Fprint(r.Out(), repl.WithoutPadding(value.Str))
 		return 0
 	}
 	_, _ = fmt.Fprintln(r.Out(), value.Str)
 	return 0
-}
-
-// withoutPadding takes out terminfo's padding specifications, `$<n>` with an
-// optional `*` or `/` after the number, which are a delay for whatever writes
-// the string and not bytes for the terminal. Measured on zsh 5.9.2 under
-// TERM=vt100, whose `cup` is `\e[%i%p1%d;%p2%dH$<5>`: `echoti cup 3 4` is
-// `\e[4;5H` and a bare `echoti cup` is the language without the `$<5>` (#5150).
-func withoutPadding(s string) string {
-	var b strings.Builder
-	for i := 0; i < len(s); i++ {
-		if s[i] == '$' && i+1 < len(s) && s[i+1] == '<' {
-			if j := strings.IndexByte(s[i:], '>'); j > 0 && paddingSpec(s[i+2:i+j]) {
-				i += j
-				continue
-			}
-		}
-		b.WriteByte(s[i])
-	}
-	return b.String()
-}
-
-// padded is s with each of its delays written as the NUL bytes that take
-// that long at speed bits per second, which is what an interactive zsh writes
-// on a terminal it set up; at speed 0 the delays are removed, as without one.
-//
-// Measured 2026-10-07 on zsh 5.9.2 through a pseudo-terminal at 9600 bits per
-// second, `TERM=vt100`: `bold` (`\E[1m$<2>`) is written with 2 NULs, `el`
-// (`$<3>`) with 3 and `ed` (`$<50>`) with 53 — a delay of n milliseconds is
-// n × speed ÷ 9000 of them, rounded down, which is a character of nine bits
-// (#6315).
-func padded(s string, speed int) string {
-	if speed <= 0 {
-		return withoutPadding(s)
-	}
-	var b strings.Builder
-	for i := 0; i < len(s); i++ {
-		if s[i] == '$' && i+1 < len(s) && s[i+1] == '<' {
-			if j := strings.IndexByte(s[i:], '>'); j > 0 && paddingSpec(s[i+2:i+j]) {
-				ms := 0.0
-				spec := strings.TrimRight(s[i+2:i+j], "*/")
-				if v, err := strconv.ParseFloat(spec, 64); err == nil {
-					ms = v
-				}
-				b.WriteString(strings.Repeat("\x00", int(ms*float64(speed)/9000)))
-				i += j
-				continue
-			}
-		}
-		b.WriteByte(s[i])
-	}
-	return b.String()
-}
-
-// paddingSpec reports whether the text between `$<` and `>` is a delay: a
-// number, possibly with a fraction, and the `*` and `/` terminfo(5) allows.
-func paddingSpec(s string) bool {
-	digits := false
-	for i := 0; i < len(s); i++ {
-		switch c := s[i]; {
-		case c >= '0' && c <= '9':
-			digits = true
-		case c == '.' || c == '*' || c == '/':
-		default:
-			return false
-		}
-	}
-	return digits
 }

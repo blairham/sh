@@ -88,16 +88,12 @@ func rightPromptAt(prompt drawnPrompt, cols int) int {
 // the whole-line draw clears to the end of the screen before it writes the
 // prompt, so a right prompt that no longer fits is gone by the time this
 // declines to write one.
-func writeRightPrompt(b *strings.Builder, prompt drawnPrompt, lineCells, cols int) bool {
+func (m *terminalMotion) writeRightPrompt(b *strings.Builder, prompt drawnPrompt, lineCells, cols int) bool {
 	if !rightFits(prompt, lineCells, cols) {
 		return false
 	}
 	forward := rightPromptAt(prompt, cols) - (prompt.cells + lineCells)
-	if forward > 0 {
-		b.WriteString("\x1b[")
-		b.WriteString(itoa(forward))
-		b.WriteString("C")
-	}
+	b.WriteString(m.rightBy(forward))
 	b.WriteString(prompt.right)
 	b.WriteString("\r")
 	return true
@@ -115,24 +111,16 @@ func writeRightPrompt(b *strings.Builder, prompt drawnPrompt, lineCells, cols in
 // From the end of the *line* rather than from the right prompt's own column,
 // because a single erase-to-end-of-row takes the gap and the prompt together
 // and there is nothing between them to keep.
-func rightPromptErase(b *strings.Builder, prompt drawnPrompt, lineCells, cols, curCol int) {
+func (m *terminalMotion) rightPromptErase(b *strings.Builder, prompt drawnPrompt, lineCells, cols, curCol int) {
 	if !rightFits(prompt, lineCells, cols) {
 		return
 	}
 	b.WriteString("\r")
-	if end := prompt.cells + lineCells; end > 0 {
-		b.WriteString("\x1b[")
-		b.WriteString(itoa(end))
-		b.WriteString("C")
-	}
-	b.WriteString("\x1b[K")
+	b.WriteString(m.rightBy(prompt.cells + lineCells))
+	b.WriteString(m.eraseToRowEnd())
 	// Back where the caller had it. An erase that moved the cursor would
 	// leave whatever writes next — the unfinished mark, the newline — in the
 	// wrong column, which is the failure this sits one line away from.
 	b.WriteString("\r")
-	if curCol > 0 {
-		b.WriteString("\x1b[")
-		b.WriteString(itoa(curCol))
-		b.WriteString("C")
-	}
+	b.WriteString(m.rightBy(curCol))
 }

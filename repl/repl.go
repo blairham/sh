@@ -917,6 +917,7 @@ func (s Shell) Run(ctx context.Context) (int, error) {
 		s.takeUpTheTerminal()
 		// And whether it can move the cursor at all. See nomotion.go.
 		ed.noMotion = s.cannotMoveTheCursor()
+		ed.motion = s.terminalMotion()
 		if s.Runner.Exited() {
 			// A prompt hook called `exit`. Measured, zsh's session ends
 			// there and draws no prompt, so this one does not read a line.

@@ -228,6 +228,11 @@ func TestBindPrintsSequencesInReadlineNotation(t *testing.T) {
 		{"NUL", `\C-@`, `"\C-@"`},
 		{"the high half", `\M-z`, `"\372"`},
 		{"a backslash", `\\`, `"\\"`},
+		// The four after ESC, which have no letter (#6284).
+		{"0x1c", `\x1c`, `"\C-\\"`},
+		{"0x1d", `\C-]`, `"\C-]"`},
+		{"0x1e", `\C-^`, `"\C-^"`},
+		{"0x1f", `\C-_`, `"\C-_"`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			out, _ := bindRun(t, `bind '"`+tc.bound+`": clear-screen'`+"\nbind -q clear-screen")
@@ -663,5 +668,63 @@ func TestBindReadsAnOperandAsAnInputrcLine(t *testing.T) {
 				t.Errorf("got %q, want %q", got, c.want)
 			}
 		})
+	}
+}
+
+// `bind -p`'s rows against bash 5.3.20's (#6284): `^W` is unix-word-rubout and
+// `M-Delete` backward-kill-word, `^_` is spelled `\C-_`, and `M-B`, `M-D` and
+// `M-F` are not listed under the lower-case letters' functions.
+func TestBindListsTheKeysUnderBashsNames(t *testing.T) {
+	out, _ := bindRun(t, "bind -p")
+	for _, row := range []string{
+		`"\C-w": unix-word-rubout`,
+		`"\e\C-?": backward-kill-word`,
+		`"\e\C-h": backward-kill-word`,
+		`"\C-_": undo`,
+	} {
+		if !strings.Contains(out, row+"\n") {
+			t.Errorf("-p has no row %q", row)
+		}
+	}
+	for _, row := range []string{`"\C-w": backward-kill-word`, `"\eB":`, `"\eD":`, `"\eF":`} {
+		if strings.Contains(out, row) {
+			t.Errorf("-p has a row %q", row)
+		}
+	}
+	// And the two names bind two different edits.
+	var buf strings.Builder
+	r := preset.Runner(dialecttest.Base{Stdout: &buf, Stderr: &buf})
+	r.Interactive = true
+	src := `bind '"\C-xa": unix-word-rubout'` + "\n" + `bind '"\C-xb": backward-kill-word'`
+	if _, err := r.Run(t.Context(), preset.Parse(t, src)); err != nil {
+		t.Fatal(err)
+	}
+	table := bash.KeyBindings(r, repl.KeymapMain)
+	if got := table["\x18a"].Widget; got != repl.WidgetKillWordBefore {
+		t.Errorf("unix-word-rubout bound %v", got)
+	}
+	if got := table["\x18b"].Widget; got != repl.WidgetBackwardKillWord {
+		t.Errorf("backward-kill-word bound %v", got)
+	}
+}
+
+// A sentence of `-q` or `-P` names five keys at most and then `...`, with no
+// full stop, measured against bash 5.3.20 (#6284).
+func TestBindNamesFiveKeysAndThenAnEllipsis(t *testing.T) {
+	src := "bind -q kill-line\n"
+	for _, k := range "abcd" {
+		src += `bind '"\C-x` + string(k) + `": kill-line'` + "\n"
+	}
+	src += "bind -q kill-line\n" + `bind '"\C-xe": kill-line'` + "\nbind -q kill-line\nbind -P"
+	out, _ := bindRun(t, src)
+	for _, want := range []string{
+		"kill-line can be invoked via \"\\C-k\".\n",
+		"kill-line can be invoked via \"\\C-k\", \"\\C-xa\", \"\\C-xb\", \"\\C-xc\", \"\\C-xd\".\n",
+		"kill-line can be invoked via \"\\C-k\", \"\\C-xa\", \"\\C-xb\", \"\\C-xc\", \"\\C-xd\", ...\n",
+		"kill-line can be found on \"\\C-k\", \"\\C-xa\", \"\\C-xb\", \"\\C-xc\", \"\\C-xd\", ...\n",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("no line %q in %q", want, out)
+		}
 	}
 }

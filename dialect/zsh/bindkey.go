@@ -241,6 +241,7 @@ var widgetNames = map[repl.Widget]string{
 	repl.WidgetKillWholeLine:                  "kill-whole-line",
 	repl.WidgetBackwardKillLine:               "backward-kill-line",
 	repl.WidgetKillWordBefore:                 "backward-kill-word",
+	repl.WidgetBackwardKillWord:               "backward-kill-word",
 	repl.WidgetKillWordAfter:                  "kill-word",
 	repl.WidgetYank:                           "yank",
 	repl.WidgetTransposeChars:                 "transpose-chars",

@@ -167,7 +167,8 @@ var bindFunctions = map[string]repl.Widget{
 	"kill-line":              repl.WidgetKillLine,
 	"unix-line-discard":      repl.WidgetKillWholeLine,
 	"backward-kill-line":     repl.WidgetKillWholeLine,
-	"backward-kill-word":     repl.WidgetKillWordBefore,
+	"backward-kill-word":     repl.WidgetBackwardKillWord,
+	"unix-word-rubout":       repl.WidgetKillWordBefore,
 	"kill-word":              repl.WidgetKillWordAfter,
 	"yank":                   repl.WidgetYank,
 	"transpose-chars":        repl.WidgetTransposeChars,
@@ -221,7 +222,8 @@ var bindFunctionNames = map[repl.Widget]string{
 	repl.WidgetForwardWord:           "forward-word",
 	repl.WidgetKillLine:              "kill-line",
 	repl.WidgetKillWholeLine:         "unix-line-discard",
-	repl.WidgetKillWordBefore:        "backward-kill-word",
+	repl.WidgetKillWordBefore:        "unix-word-rubout",
+	repl.WidgetBackwardKillWord:      "backward-kill-word",
 	repl.WidgetKillWordAfter:         "kill-word",
 	repl.WidgetYank:                  "yank",
 	repl.WidgetTransposeChars:        "transpose-chars",
@@ -281,6 +283,13 @@ var defaultBindings = buildDefaultBindings()
 func buildDefaultBindings() map[string]string {
 	out := map[string]string{}
 	for seq, w := range repl.DefaultBindings() {
+		if upperCaseMetaLetter(seq) {
+			// `M-B`, `M-D` and `M-F`, which bash lists as
+			// do-lowercase-version — a function this editor has not got —
+			// and acts on as the lower-case letters, as this editor does
+			// (#6284). The same rule as buildKeymapBindings.
+			continue
+		}
 		if name := bindFunctionNames[w]; name != "" {
 			out[seq] = name
 		}
@@ -308,12 +317,18 @@ var (
 func buildKeymapBindings(keys map[string]repl.Widget) map[string]string {
 	out := map[string]string{}
 	for seq, w := range keys {
-		if len(seq) == 2 && seq[0] == 0x1b && seq[1] >= 'A' && seq[1] <= 'Z' {
+		if upperCaseMetaLetter(seq) {
 			continue
 		}
 		out[seq] = bindFunctionNames[w]
 	}
 	return out
+}
+
+// upperCaseMetaLetter is ESC and a capital letter, which bash's `bind -p`
+// lists as do-lowercase-version.
+func upperCaseMetaLetter(seq string) bool {
+	return len(seq) == 2 && seq[0] == 0x1b && seq[1] >= 'A' && seq[1] <= 'Z'
 }
 
 // keymapDefaults is one keymap's defaults: defaultBindings, and what the
@@ -772,7 +787,7 @@ func bindListBindings(r *interp.Runner, keymap string, describe bool) {
 		case len(seqs) == 0:
 			_, _ = fmt.Fprintf(r.Out(), "# %s (not bound)\n", name)
 		case describe:
-			_, _ = fmt.Fprintf(r.Out(), "%s can be found on %s.\n", name, quotedSequences(seqs))
+			_, _ = fmt.Fprintf(r.Out(), "%s can be found on %s\n", name, quotedSequences(seqs))
 		default:
 			for _, seq := range seqs {
 				_, _ = fmt.Fprintf(r.Out(), "\"%s\": %s\n", encodeBindSequence(seq), name)
@@ -840,7 +855,7 @@ func bindQuery(r *interp.Runner, keymap, name string) int {
 		_, _ = fmt.Fprintf(r.Out(), "%s is not bound to any keys.\n", name)
 		return 1
 	}
-	_, _ = fmt.Fprintf(r.Out(), "%s can be invoked via %s.\n", name, quotedSequences(seqs))
+	_, _ = fmt.Fprintf(r.Out(), "%s can be invoked via %s\n", name, quotedSequences(seqs))
 	return 0
 }
 
@@ -1118,13 +1133,25 @@ func sortedFunctionNames() []string {
 }
 
 // quotedSequences is the comma-separated list `-P` and `-q` print.
+//
+// Five at most, and then `...`: measured against bash 5.3.20, a sixth key
+// bound to kill-line makes both `-q` and `-P` end `"\C-xd", ...` with no
+// full stop (#6284). The full stop is this function's to write for that
+// reason.
 func quotedSequences(seqs []string) string {
 	quoted := make([]string, 0, len(seqs))
-	for _, seq := range seqs {
+	for i, seq := range seqs {
+		if i == maxListedSequences {
+			// And the `...` takes the place of the full stop.
+			return strings.Join(append(quoted, "..."), ", ")
+		}
 		quoted = append(quoted, "\""+encodeBindSequence(seq)+"\"")
 	}
-	return strings.Join(quoted, ", ")
+	return strings.Join(quoted, ", ") + "."
 }
+
+// maxListedSequences is how many keys a sentence of `-q` or `-P` names.
+const maxListedSequences = 5
 
 // decodeBindSequence reads the escape notation a whole key sequence is written
 // in, which is readline's and not the caret notation the other shell also
@@ -1254,9 +1281,18 @@ func encodeBindSequence(s string) string {
 			// clearing the bits of `@` gives it, and that is how bash prints
 			// it back — measured, `\C-@`.
 			out.WriteString(`\C-@`)
-		case c < 0x20:
+		case c < 0x1b:
 			out.WriteString(`\C-`)
 			out.WriteByte(c + 'a' - 1)
+		case c < 0x20:
+			// The four after ESC have no letter: `\C-\\`, `\C-]`, `\C-^` and
+			// `\C-_`, measured against bash 5.3.20, where adding a letter's
+			// offset to 0x1f printed `\C-` and a DEL (#6284).
+			out.WriteString(`\C-`)
+			if c+'@' == '\\' {
+				out.WriteByte('\\')
+			}
+			out.WriteByte(c + '@')
 		case c >= 0x80:
 			_, _ = fmt.Fprintf(&out, `\%03o`, c)
 		case c == '"' || c == '\\':

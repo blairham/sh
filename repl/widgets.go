@@ -306,6 +306,14 @@ const (
 	WidgetWhichCommand
 	WidgetRunHelp
 	WidgetExecuteNamedCmd
+
+	// The word before the cursor killed, a word being the motion keys' —
+	// `M-Delete`. Not WidgetKillWordBefore, which is `^W` and in one dialect
+	// kills back to a blank instead: bash's `^W` is readline's
+	// `unix-word-rubout` and its `M-Delete` is `backward-kill-word`, and
+	// naming both by one widget listed `^W` under the wrong name and bound
+	// `backward-kill-word` to the wrong edit (#6284).
+	WidgetBackwardKillWord
 )
 
 // takesItsCount is whether the action reads the count itself, so that a key
@@ -482,6 +490,9 @@ func (e *editor) runWidget(b Binding, prompt drawnPrompt) {
 		e.redraw(prompt)
 	case WidgetKillWordAfter:
 		e.killForwardTo(e.endOfWord())
+		e.redraw(prompt)
+	case WidgetBackwardKillWord:
+		e.change(false, func() { e.killTo(e.backwardWord()) })
 		e.redraw(prompt)
 	case WidgetYank:
 		e.ringUnlessFailed(e.yank())

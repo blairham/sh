@@ -106,6 +106,9 @@ type editor struct {
 	// to act on. See ringUnless and
 	// EditorStyle.BellRingsWhenAnEditHasNothingToActOn.
 	ringsOnNothingToActOn bool
+	// ringsOnAFailedEdit rings for the edits that fail outright. See
+	// ringUnlessFailed and EditorStyle.BellRingsWhenAnEditFails.
+	ringsOnAFailedEdit bool
 
 	// listsMatches draws the matches on the keystroke that found them
 	// ambiguous rather than on a second one. False is the answer of a dialect
@@ -1107,10 +1110,10 @@ func (e *editor) keyLoop(prompt drawnPrompt) (string, error) {
 			e.changeOrRing(func() bool { return e.killTo(e.wordStartBeforeCursor()) })
 			e.redraw(prompt)
 		case ctrlY:
-			e.changeOrRing(e.yank)
+			e.changeOrRingFailed(e.yank)
 			e.redraw(prompt)
 		case ctrlT:
-			e.changeOrRing(e.transpose)
+			e.changeOrRingFailed(e.transpose)
 			e.redraw(prompt)
 		case ctrlG:
 			// send-break in a dialect whose emacs keymap has it on `^G`:
@@ -1711,6 +1714,26 @@ func (e *editor) ringUnless(acted bool) {
 		return
 	}
 	e.ring()
+}
+
+// ringUnlessFailed is ringUnless for the edits that fail outright when they
+// find nothing to act on — transpose-chars with fewer than two characters,
+// yank with nothing killed, delete-char at the end — which ring in a dialect
+// whose bell is for a failure rather than for a key with nothing to do. See
+// EditorStyle.BellRingsWhenAnEditFails. Not in vi mode, as ringUnless.
+func (e *editor) ringUnlessFailed(acted bool) {
+	if !acted && e.ringsOnAFailedEdit && !e.viEditing() {
+		e.ring()
+		return
+	}
+	e.ringUnless(acted)
+}
+
+// changeOrRingFailed is changeOrRing through ringUnlessFailed.
+func (e *editor) changeOrRingFailed(edit func() bool) {
+	acted := true
+	e.change(false, func() { acted = edit() })
+	e.ringUnlessFailed(acted)
 }
 
 // changeOrRing is a change made through change by an edit that reports

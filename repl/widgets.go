@@ -475,10 +475,10 @@ func (e *editor) runWidget(b Binding, prompt drawnPrompt) {
 		e.killForwardTo(e.endOfWord())
 		e.redraw(prompt)
 	case WidgetYank:
-		e.ringUnless(e.yank())
+		e.ringUnlessFailed(e.yank())
 		e.redraw(prompt)
 	case WidgetTransposeChars:
-		e.ringUnless(e.transpose())
+		e.ringUnlessFailed(e.transpose())
 		e.redraw(prompt)
 	case WidgetUpCaseWord:
 		e.change(false, func() { e.caseWords(e.countAsGiven(), upperCase) })
@@ -537,7 +537,7 @@ func (e *editor) runWidget(b Binding, prompt drawnPrompt) {
 	case WidgetClearScreen:
 		e.clearScreen(prompt)
 	case WidgetDeleteChar:
-		e.ringUnless(e.deleteForward())
+		e.ringUnlessFailed(e.deleteForward())
 		e.redraw(prompt)
 	case WidgetBackwardDeleteChar:
 		e.ringUnless(e.deleteBackward())

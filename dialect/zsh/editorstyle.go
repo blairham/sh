@@ -33,6 +33,9 @@ func EditorStyle() repl.EditorStyle {
 		// And `^D` with something typed is delete-char-or-list. See
 		// repl.EditorStyle.ListOnControlD (#6233).
 		ListOnControlD: true,
+		// And `^T`, `^Y` and Delete ring when they fail. See
+		// repl.EditorStyle.BellRingsWhenAnEditFails (#6247).
+		BellRingsWhenAnEditFails: true,
 		// And `^D` on an empty line is refused under `setopt ignoreeof`, nine
 		// times with the tenth giving in. See
 		// repl.EditorStyle.IgnoreEndOfInputOption (#6239).

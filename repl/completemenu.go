@@ -36,10 +36,11 @@ package repl
 func (e *editor) listChoices(c Completer, prompt drawnPrompt) {
 	_, word, matches := e.candidates(c)
 	if len(matches) == 0 {
-		// Nothing to draw. The shell being measured rings the bell here; this
-		// editor rings it nowhere — a Tab that matches nothing is silent too
-		// — and ringing it for this one action alone would be a difference
-		// between two keys rather than a bell.
+		// Nothing to draw, and a bell, as for a Tab that matches nothing.
+		// Measured 2026-10-06 through a pseudo-terminal: zsh 5.9.2 writes
+		// `\a` for `^D` at the end of `echo ab`, and bash 5.3.20 for `M-?`
+		// and `M-=` on a word nothing matches (#6247).
+		e.ring()
 		e.redraw(prompt)
 		return
 	}

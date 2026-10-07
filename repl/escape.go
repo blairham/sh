@@ -152,7 +152,7 @@ func (e *editor) controlSequence(prompt drawnPrompt) keyRead {
 		case 4, 8:
 			e.moveTo(len(e.line), prompt)
 		case 3:
-			e.changeOrRing(e.deleteForward)
+			e.changeOrRingFailed(e.deleteForward)
 			e.redraw(prompt)
 		case pasteBegins:
 			// Not a key at all: a terminal that was asked to bracket pastes

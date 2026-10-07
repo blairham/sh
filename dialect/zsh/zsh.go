@@ -991,6 +991,8 @@ func Semantics() interp.Semantics {
 	// interp.Semantics.IndirectionIsTheSubscriptFlag, where the twenty rows
 	// are.
 	s.IndirectionIsTheSubscriptFlag = interp.Yes
+	// See Semantics.UnterminatedHeredocLoneBackslash (#6286).
+	s.UnterminatedHeredocLoneBackslash = interp.LoneBackslashSpaced
 
 	s.EmptyInterpreterLineIsNotAScript = interp.Yes
 	// And a line naming a word with no slash in it is looked up on PATH:

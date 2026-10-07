@@ -113,7 +113,6 @@ func (e *editor) repaintAsTheScreenIs(m *terminalMotion, prompt drawnPrompt, col
 	}
 	if changed {
 		m.columnAsTheScreenIs(&b, col, pc+p, row)
-		col = pc + p
 
 		// What is left of the old line past the new end, up to its last
 		// cell that is not blank already — on a terminal that can step

@@ -1729,6 +1729,16 @@ func (r *Runner) heredocText(rd *syntax.Redirect) string {
 	if rd.Heredoc.Spans[0].Quoting != syntax.Unquoted {
 		return body
 	}
+	if rd.HeredocAtEOF && oddBackslashRunAtTheEnd(body) {
+		// A backslash with nothing after it. See
+		// Semantics.UnterminatedHeredocLoneBackslash.
+		switch r.sem().UnterminatedHeredocLoneBackslash {
+		case LoneBackslashDropped:
+			body = body[:len(body)-1]
+		case LoneBackslashSpaced:
+			body += " "
+		}
+	}
 	// The lexer kept the body raw, so its expansions have to be found now.
 	// Passing it through as one literal span looks equivalent and silently
 	// expands nothing, which is the mistake this comment exists to prevent.

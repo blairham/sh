@@ -741,6 +741,8 @@ func Semantics() interp.Semantics {
 	// found` at 127, where bash and zsh run `fg` on it. See
 	// interp.Semantics.JobSpecCommandWord.
 	s.JobSpecCommandWord = interp.JobSpecCommandWordIsNotOne
+	// See Semantics.UnterminatedHeredocLoneBackslash (#6286).
+	s.UnterminatedHeredocLoneBackslash = interp.LoneBackslashDropped
 
 	s.WritingSubstitutionIsWaitedForAtTheCommand = interp.No
 	// `<>` onto a process substitution this command made: `<> <(…)` opens the path and is refused, as in bash; `<> >(…)` does not parse (#5514).

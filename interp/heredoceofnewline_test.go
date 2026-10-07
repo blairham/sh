@@ -198,3 +198,33 @@ func TestAHeredocLineContinuedIntoTheEndIsUnended(t *testing.T) {
 		})
 	}
 }
+
+// A backslash that is the very last byte of an unquoted body the input ended
+// has nothing to escape, and the panel does three different things with it
+// (#6286). See Semantics.UnterminatedHeredocLoneBackslash for the
+// measurements.
+func TestALoneBackslashEndingAnUnterminatedHeredoc(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		answer LoneBackslashAtTheEnd
+		src    string
+		want   string
+	}{
+		{"kept, as bash, dash and ash keep it", LoneBackslashKept, "cat <<X\nhi\\", "hi\\"},
+		{"dropped, as ksh93 drops it", LoneBackslashDropped, "cat <<X\nhi\\", "hi"},
+		{"a space after it, as zsh writes", LoneBackslashSpaced, "cat <<X\nhi\\", "hi\\ "},
+		{"only the free one: an escaped pair before it reads as ever", LoneBackslashDropped, "cat <<X\na\\\\\\", "a\\"},
+		{"an escaped pair alone is not one", LoneBackslashDropped, "cat <<X\na\\\\", "a\\"},
+		{"a quoted body keeps it", LoneBackslashDropped, "cat <<'X'\nhi\\", "hi\\"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			sem := permissive()
+			sem.UnterminatedHeredocGainsATrailingNewline = No
+			sem.UnterminatedHeredocLoneBackslash = tc.answer
+			out, st := run(t, tc.src, withSem(sem))
+			if out != tc.want || st != 0 {
+				t.Errorf("got %q (status %d), want %q at 0", out, st, tc.want)
+			}
+		})
+	}
+}

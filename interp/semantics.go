@@ -24107,6 +24107,27 @@ type Semantics struct {
 	// after it would make it a continuation that removes them both (#6273).
 	UnterminatedHeredocGainsATrailingNewline Answer
 
+	// UnterminatedHeredocLoneBackslash is what becomes of a backslash that is
+	// the very last byte of an unquoted here-document body the input ended —
+	// one with nothing after it to escape, not even a newline.
+	//
+	// Measured 2026-10-06 from script files, read back as bytes:
+	//
+	//	                         cat <<EOF / hi\    cat <<EOF / a\\\
+	//	bash 5.3.20, dash, ash   hi\                a\\
+	//	ksh93u+                  hi                 a\
+	//	zsh 5.9.2                hi\ (a space)      a\\ (a space)
+	//
+	// so the escaped pair in front of it reads as usual and only the free
+	// backslash is in question. A quoted body keeps it in every shell, and so
+	// does a body that is not at the end of the input (#6286).
+	//
+	// unpinned: reached, and the corpus cannot discriminate: its harness
+	// trims what a command writes, and a script that ends inside a body is
+	// not a case it holds. interp/heredoceofnewline_test.go pins the three
+	// answers (TestALoneBackslashEndingAnUnterminatedHeredoc).
+	UnterminatedHeredocLoneBackslash LoneBackslashAtTheEnd
+
 	// ReadFailureInAFileSubstitutionFailsIt is `$(<file)` where the *read*
 	// fails after the open worked — a directory is the shape that reaches it.
 	//
@@ -39979,4 +40000,17 @@ const (
 	// StartupErrorCostsTheLine gives up the line and goes on with the rest
 	// of the file, as at a prompt: bash and ksh93.
 	StartupErrorCostsTheLine
+)
+
+// LoneBackslashAtTheEnd is an answer to
+// Semantics.UnterminatedHeredocLoneBackslash.
+type LoneBackslashAtTheEnd uint8
+
+const (
+	// LoneBackslashKept leaves the backslash as written.
+	LoneBackslashKept LoneBackslashAtTheEnd = iota
+	// LoneBackslashDropped takes it away.
+	LoneBackslashDropped
+	// LoneBackslashSpaced writes a space after it.
+	LoneBackslashSpaced
 )

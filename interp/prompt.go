@@ -1455,7 +1455,7 @@ func (w *promptWalk) walk(runes []rune) {
 			// `\e[31m` and `a`.
 			if seq, known := w.field(FieldTerminalCapability, name, false); known {
 				if seq != "" {
-					w.b.WriteString(seq)
+					w.unmeasured(seq)
 					w.visualWritten(code, seq)
 				}
 				continue
@@ -1602,8 +1602,38 @@ func (w *promptWalk) visualWritten(code rune, seq string) {
 		if w.st.RestoreLeavesColors && (a == AttributeForeground || a == AttributeBackground) {
 			continue
 		}
-		w.b.WriteString(w.visual[a])
+		w.unmeasured(w.visual[a])
 	}
+}
+
+// unmeasured writes bytes the terminal reads rather than draws, bracketed by
+// the non-printing markers where a drawer puts them.
+//
+// A sequence out of the terminal's description is not always one a reader of
+// the prompt can recognize as a sequence: hp2621's bold is `\E&dB` and its
+// reset `\E&d@`, which are not CSI and have no length anybody can read off
+// them, so a measurer that skips an escape and the byte after it counted
+// `dB` as two columns. Measured 2026-10-07, zsh 5.9.2 under `TERM=hp2621`
+// with `PS1='%B>%b '` puts the line at column 2, where this shell put it at
+// 4, and pads its `%B%S%#%s%b` mark to 78 columns where this shell padded
+// 72 (#6342). The markers say so instead of leaving it to be guessed: the
+// drawer answers them with bytes it takes back out, and print -P with
+// nothing, so what reaches the terminal is unchanged.
+func (w *promptWalk) unmeasured(seq string) {
+	if seq == "" {
+		return
+	}
+	if w.hidden > 0 {
+		// Inside `%{ %}` already, where a second start would end the
+		// region at its own end.
+		w.b.WriteString(seq)
+		return
+	}
+	open, _ := w.field(FieldNonPrintingStart, "", false)
+	shut, _ := w.field(FieldNonPrintingEnd, "", false)
+	w.b.WriteString(open)
+	w.b.WriteString(seq)
+	w.b.WriteString(shut)
 }
 
 // draw writes text the terminal shows, and counts what it costs.

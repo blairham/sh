@@ -250,7 +250,7 @@ func (t *Theme) harvest(r *interp.Runner, ctx context.Context, path, prefix stri
 func childOf(r *interp.Runner) *interp.Runner {
 	child := &interp.Runner{
 		Dialect:     r.Dialect,
-		Semantics:   r.Semantics,
+		Semantics:   r.KeepSemantics(),
 		Diagnostics: r.Diagnostics,
 		Dir:         r.Dir,
 		Name:        r.Name,

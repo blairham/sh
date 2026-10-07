@@ -3079,15 +3079,15 @@ func setRecordedOptions(r *interp.Runner, names []string) {
 //
 // The copy is a real cost and not a notional one: [interp.Semantics] is 976
 // axes and 3296 bytes — counted off the struct on 2026-09-25, where the two
-// numbers here had stood at 962 and 3280 through a dozen axes — and because
-// the fresh copy is what the runner keeps,
-// it is a heap allocation every time. A caller that knows the axis is
-// already where it is being asked to go should not call this at all — see
-// setAxis, which is the guarded form and is what the option table uses.
+// numbers here had stood at 962 and 3280 through a dozen axes. So the copy is
+// the runner's own and is reused: the first change after anybody took the
+// vector copies it, later ones write that copy in place, and one a function's
+// return let go of is filled again rather than a new one allocated — see
+// interp.Runner.EditSemantics. A caller that knows the axis is already where
+// it is being asked to go should not call this at all — see setAxis, which is
+// the guarded form and is what the option table uses.
 func swapAxes(r *interp.Runner, change func(*interp.Semantics)) {
-	s := *r.Semantics
-	change(&s)
-	r.Semantics = &s
+	change(r.EditSemantics())
 }
 
 // setAxis is swapAxes for the shape nearly every option has: one axis, moved
@@ -3112,9 +3112,7 @@ func setAxis[T comparable](r *interp.Runner, of func(*interp.Semantics) *T, v T)
 	if *of(r.Semantics) == v {
 		return
 	}
-	s := *r.Semantics
-	*of(&s) = v
-	r.Semantics = &s
+	*of(r.EditSemantics()) = v
 }
 
 func answer(on bool) interp.Answer {

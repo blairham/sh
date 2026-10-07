@@ -502,7 +502,7 @@ func (r *Runner) runImageAsScript(ctx context.Context, name, path string, argv, 
 		// name a diagnostic gives the shell, and the route letters.
 		Route:       RouteScriptFile,
 		Dialect:     r.Dialect,
-		Semantics:   r.Semantics,
+		Semantics:   r.KeepSemantics(),
 		Diagnostics: r.Diagnostics,
 		AxisRemedy:  r.AxisRemedy,
 		Name:        name,

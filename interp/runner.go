@@ -102,7 +102,16 @@ type Runner struct {
 
 	// Semantics is where the shells disagree about what identical syntax
 	// means, as distinct from which syntax they accept. Nil means bash's.
+	//
+	// A vector the runner made for itself with EditSemantics is written in
+	// place by the next option change, so a caller that holds on to the
+	// pointer — to put it back later, or to hand it to another runner — takes
+	// it with KeepSemantics. See semanticsowned.go.
 	Semantics *Semantics
+	// semOwned is the vector EditSemantics made that nothing else has been
+	// handed, and semSpare one it may fill instead of allocating. See
+	// semanticsowned.go.
+	semOwned, semSpare *Semantics
 	// DialectOptions is the part of a dialect's option namespace that only
 	// the dialect reads, held by value so that a copy of it is a snapshot.
 	// See DialectOptions.

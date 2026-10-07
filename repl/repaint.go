@@ -118,6 +118,9 @@ func (e *editor) repaint(prompt drawnPrompt, cols int) bool {
 	if !d.valid || d.plain || d.cols != cols || d.cells != prompt.cells || d.prompt != prompt.text {
 		return false
 	}
+	if m := e.moves(); m.inPlace && e.repaintInPlace(m, prompt, cols) {
+		return true
+	}
 	shown := e.displayed()
 	if rightFits(prompt, cells(shown), cols) != d.right {
 		// The line has just grown into the right prompt, or shrunk back off
@@ -436,6 +439,10 @@ func (m *terminalMotion) moveCursor(b *strings.Builder, fromRow, fromCol, toRow,
 
 // writeColumn moves along one row, which holds what row says.
 func (m *terminalMotion) writeColumn(b *strings.Builder, fromCol, toCol int, row *rowView) {
+	if m.inPlace {
+		m.columnAsReadline(b, fromCol, toCol)
+		return
+	}
 	if m.asTheScreenIs {
 		m.columnAsTheScreenIs(b, fromCol, toCol, row)
 		return

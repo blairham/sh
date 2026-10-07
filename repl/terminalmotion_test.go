@@ -107,3 +107,33 @@ func TestAMovesDelayFollowsTheSpeed(t *testing.T) {
 		t.Errorf("at 9600: %q", got)
 	}
 }
+
+// A generic description is not a terminal unless it can clear and address the
+// cursor: measured 2026-10-07, bash 5.3.20 asks for no paste markers under
+// `unknown` and `ibm327x`, and does under `gn` with both `clear` and `cup`
+// (#6332). No description at all is not one either.
+func TestAGenericDescriptionIsNotATerminal(t *testing.T) {
+	flag := func(name string) TerminalCapability {
+		return TerminalCapability{Terminfo: name, Value: "yes", Kind: BooleanCapability}
+	}
+	str := func(name string) TerminalCapability {
+		return TerminalCapability{Terminfo: name, Value: "x", Kind: StringCapability}
+	}
+	for _, c := range []struct {
+		name string
+		caps []TerminalCapability
+		want bool
+	}{
+		{"nothing", nil, false},
+		{"unknown: am gn cr", []TerminalCapability{flag("am"), flag("gn"), str("cr")}, false},
+		{"gn and clear", []TerminalCapability{flag("gn"), str("clear")}, false},
+		{"gn and cup", []TerminalCapability{flag("gn"), str("cup")}, false},
+		{"gn, clear and cup", []TerminalCapability{flag("gn"), str("clear"), str("cup")}, true},
+		{"am and cr, not generic", []TerminalCapability{flag("am"), str("cr")}, true},
+		{"gn stored as no", []TerminalCapability{{Terminfo: "gn", Value: "no", Kind: BooleanCapability}, str("cr")}, true},
+	} {
+		if got := terminalIsUsable(c.caps); got != c.want {
+			t.Errorf("%s: usable %v, want %v", c.name, got, c.want)
+		}
+	}
+}

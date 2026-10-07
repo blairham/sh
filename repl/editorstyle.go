@@ -320,6 +320,15 @@ type EditorStyle struct {
 	// change. See repl/rewritemotion.go for the measurements (#6325).
 	MovesAsTheScreenIs bool
 
+	// DrawsChangesInPlace draws a change to the line the way bash's editor
+	// does: the common prefix and suffix of the old line and the new left
+	// alone, room opened or closed in front of the suffix with the
+	// terminal's `ich`/`ich1`/insert mode and `dch`/`dch1`, a shorter line
+	// erased with `el` and no reset, the cursor moved right with `cuf1`
+	// repeated and left with `cub1`, or from the row's start where that is
+	// nearer. See repl/inplace.go for the measurements (#6332).
+	DrawsChangesInPlace bool
+
 	// PadsMotionAtTheTerminalSpeed writes a delay in a movement sequence as
 	// NULs at the terminal's speed, as the prompt's own sequences are (see
 	// PaddedCapability). Without it the delay is taken off, which is bash's.
@@ -461,7 +470,7 @@ type EditorStyle struct {
 	// on bash 5.3.20, `--norc -i`, the bytes around a line at the first
 	// prompt:
 	//
-	//	TERM=dumb, vt52, emacs        no `\e[?2004h`
+	//	TERM=dumb, vt52, emacs, adm3a no `\e[?2004h`
 	//	TERM unset, empty, nosuchterm no `\e[?2004h`: no description
 	//	TERM=DUMB, dumb-emacs-ansi    the same, and for the same reason
 	//	xterm, vt100, ansi, cons25,   `\e[?2004h`
@@ -469,7 +478,11 @@ type EditorStyle struct {
 	//	  chosen to differ in am, cup,
 	//	  cuu1, el, smso and hc
 	//
-	// The three names are names and not capabilities: an entry compiled from
+	// A sweep of all 1,667 names in the machine's database found `adm3a`
+	// the only other one, and `unknown` and `ibm327x`, which are not names
+	// but generic descriptions — see terminalIsUsable (#6332).
+	//
+	// The names are names and not capabilities: an entry compiled from
 	// xterm's description under the name `vt52`, `dumb` or `emacs` is off, and
 	// vt52's own description compiled as `zz0` is on, as are `dumbx`, `xdumb`
 	// and `VT52`. And it happens each time the terminal is taken up rather

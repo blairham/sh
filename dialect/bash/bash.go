@@ -4459,6 +4459,11 @@ func Diagnostics() interp.Diagnostics {
 		// interp.Diagnostics.SubstitutionParseFailureStatusFromCommandString
 		// for the rows and the four controls (#4697).
 		SubstitutionParseFailureStatusFromCommandString: 127,
+		// And 1 for the same refusal, or a body the input ran out inside,
+		// when the shell is interactive. See
+		// interp.Diagnostics.SubstitutionParseFailureStatusFromAnInteractiveCommandString
+		// (#6267).
+		SubstitutionParseFailureStatusFromAnInteractiveCommandString: 1,
 		// A here-document body that failed is reported where the reader had
 		// got to, for a compound spelled with a reserved word. See
 		// interp/heredoccommandend.go (#4690, #4712).

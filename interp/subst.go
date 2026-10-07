@@ -782,6 +782,14 @@ func (r *Runner) substParseErrorAtItsCloser(span syntax.Span, src string, err er
 	p := r.ParseWithAliases(src+")", r.bodyDialect(span))
 	p.Parse()
 	if closed := p.Err(); closed != nil {
+		// A word that ended the body's read is refused at the same place
+		// either way, and the read that knew it was a body knows what it was
+		// looking for: the closer, which the shells that say what they
+		// expected name. See syntax.Error.StoppedTheRead (#6319).
+		var was, now *syntax.Error
+		if errors.As(err, &was) && was.StoppedTheRead && errors.As(closed, &now) && now.Pos == was.Pos {
+			return err
+		}
 		return closed
 	}
 	return err

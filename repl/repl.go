@@ -209,6 +209,11 @@ type Shell struct {
 	// it: see interp.Semantics.PromptEchoesTheLineWhereThereIsNoTerminal.
 	EchoTheLineWithoutATerminal bool
 
+	// RefusedLineIsNotCounted leaves a line this prompt refused out of the
+	// count of lines read. See [Shell.take] and
+	// interp.Semantics.PromptRefusedLineIsNotCounted.
+	RefusedLineIsNotCounted bool
+
 	// EditorWithoutATerminal gives a session whose input is not a terminal a
 	// line editor, so that `C-r`, the arrows and every other binding are read
 	// as keys rather than as characters of the line.
@@ -2742,11 +2747,32 @@ func (s Shell) answerInterrupt(ctx context.Context, state *terminalState, editin
 // dialect gets — refuses at once, which is the majority answer and the one
 // that does not eat a typed command (#1893).
 func (s Shell) refusedForGood(err error) bool {
+	var se *syntax.Error
+	if !errors.As(err, &se) {
+		return false
+	}
+	// And a substitution still open whose body has already refused a token.
+	// No line typed after it can take the token back, so the line is refused
+	// where it stands rather than when the `)` arrives. Measured 2026-10-07
+	// through a pseudo-terminal, `echo $(` / `fi` / `)` / `echo after`:
+	//
+	//	bash 5.3.20     refuses at `fi`, then refuses `)` as a line of its own
+	//	dash, ash       the same
+	//	zsh 5.9.2       the same at `fi`, `esac` and `| x`
+	//	ksh93u+         reads the `)` first, as this did everywhere
+	//
+	// zsh included, though it is the shell that asks again after a refused
+	// token at the top of a line: inside a substitution it does not, and the
+	// shapes it goes on reading there — `if; then`, `echo a &&;`, `echo a; ;`
+	// — are ones its grammar takes, so nothing is refused to begin with
+	// (#6319).
+	if body := se.BodyRefusal; body != nil {
+		return body.Kind == syntax.ErrUnexpected
+	}
 	if s.AskAgainAfterARefusedToken {
 		return false
 	}
-	var se *syntax.Error
-	return errors.As(err, &se) && se.Kind == syntax.ErrUnexpected
+	return se.Kind == syntax.ErrUnexpected
 }
 
 func (s Shell) report(err error) string {
@@ -2810,6 +2836,11 @@ func (s Shell) take(pending *strings.Builder, remember func(string), line string
 		return nil, "", nil, false
 	}
 	s.counted().accepted(blank, perr == nil)
+	if perr != nil && s.RefusedLineIsNotCounted {
+		// The line that was refused is given back, so the next one is
+		// numbered as it was. See interp.Semantics.PromptRefusedLineIsNotCounted.
+		s.counted().line--
+	}
 	return stmts, text, perr, true
 }
 

@@ -18,6 +18,9 @@ func Dialect() syntax.Dialect {
 	d.HeredocBodyBraceIsReadWithTheLine = true
 	// A NUL byte in the program's text is not there. See the flag.
 	d.SourceDropsNulBytes = true
+	// A backquoted body ends at a word that ends a list. See the flag
+	// (#6319).
+	d.BackquoteBodyEndsAtAStopWord = true
 	// dash expands aliases in a script, with no option to turn on, and by
 	// every route: `-c`, a file and standard input all expand.
 	// A here-document body line that joined *before* any text of it was
@@ -361,6 +364,9 @@ func Semantics() interp.Semantics {
 	// Neither editing mode is ever selected on its own here — measured
 	// 2026-09-11, `set -o` reports both off in a script and under `-i`.
 	s.InteractiveSelectsEmacs = interp.No
+	// A line the prompt refused is not counted. See
+	// Semantics.PromptRefusedLineIsNotCounted (#6319).
+	s.PromptRefusedLineIsNotCounted = true
 	// This shell has no braces to expand and no `-B` either, so the letter
 	// is refused as the invalid option it is rather than asked about.
 	s.SetBTurnsOffBraceExpansion = interp.No

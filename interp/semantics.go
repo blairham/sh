@@ -19946,6 +19946,30 @@ type Semantics struct {
 	// (TestTheFrontEndCarriesWhetherAPromptEchoesTheLine).
 	PromptEchoesTheLineWhereThereIsNoTerminal bool
 
+	// PromptRefusedLineIsNotCounted leaves a line the prompt refused out of
+	// the count of lines read, so that the next line is numbered as the
+	// refused one was — in a diagnostic's prefix and in `$LINENO` alike.
+	//
+	// Measured 2026-10-07 at a prompt, `fi`, `fi`, `echo $LINENO`:
+	//
+	//	dash 0.5.12            both refusals at line 1, then 1
+	//	BusyBox ash (alpine)   the same, through a terminal in the container;
+	//	                       and `true` / `echo $(` / `fi` / `)` refuses
+	//	                       `fi` and `)` and leaves `$LINENO` 4 after
+	//	bash 5.3.20, zsh 5.9.2 3, every line counted
+	//	ksh93u+                1 throughout, which is its own numbering of a
+	//	                       prompt's lines and not this
+	//
+	// The line a construct was opened on before the refusal stays counted:
+	// dash numbers `if true` / `fi fi` / `echo $LINENO` as 2. Read without
+	// asking, for the reason the prompt answers beside it are (#6319).
+	//
+	// unpinned: reached, and the corpus cannot discriminate: no case draws a
+	// prompt. cmd/dash/substrefusalprompt_test.go drives a session on a pipe
+	// and pins the dialect that leaves the line out
+	// (TestADashPromptDoesNotCountARefusedLine).
+	PromptRefusedLineIsNotCounted bool
+
 	// EndOfInputInAConstructEndsTheSession says that the end of input
 	// arriving inside an unfinished construct at a prompt — ^D at `> `, or
 	// the end of a pipe — ends the session once that construct has been run

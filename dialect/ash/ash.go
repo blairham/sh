@@ -55,6 +55,9 @@ func Dialect() syntax.Dialect {
 	// error`. A reader that stopped at the byte would give all five one
 	// answer. See syntax.Dialect.ArithColonIsAToken (#5723).
 	d.ArithColonIsAToken = true
+	// A backquoted body ends at a word that ends a list. See the flag
+	// (#6319).
+	d.BackquoteBodyEndsAtAStopWord = true
 	// Nine constructs beyond POSIX, each run and watched rather than read
 	// about. `echo $'a\tb'` writes a tab; `[[ a = a ]]` succeeds where dash
 	// answers `[[: not found`; `cat <(echo hi)` writes hi; `function f {
@@ -2477,6 +2480,9 @@ func Semantics() interp.Semantics {
 	s.ReadJudgesEveryNameBeforeReading = interp.Yes
 	s.BadNameDeclaresTheOperandsAfterIt = interp.No
 	s.InteractiveSelectsEmacs = interp.No
+	// A line the prompt refused is not counted. See
+	// Semantics.PromptRefusedLineIsNotCounted (#6319).
+	s.PromptRefusedLineIsNotCounted = true
 
 	// ---- axes this dialect did not answer, swept for and measured ----
 	//
@@ -3027,13 +3033,21 @@ func Diagnostics() interp.Diagnostics {
 		SyntaxRedirectUnexpected:         "syntax error: unexpected redirection",
 		SyntaxExpecting:                  ` (expecting "%[1]s")`,
 		SyntaxExpectingClass:             " (expecting %[1]s)",
-		SyntaxError:                      "syntax error: %[1]s",
-		SyntaxErrorStatus:                2,
-		ForName:                          "syntax error: bad for loop variable",
-		Unterminated:                     `syntax error: unexpected end of file (expecting "%[4]s")`,
-		UnterminatedExpectingAClass:      "syntax error: unexpected end of file (expecting %[4]s)",
-		UnterminatedNoConstruct:          "syntax error: unexpected end of file",
-		UnmatchedQuote:                   "syntax error: unterminated quoted string",
+		// A body this shell refused replaces the end-of-file sentence for a
+		// substitution left open, as in dash and bash. Measured 2026-10-07 in
+		// the pinned alpine image, BusyBox ash under `-c`: `v=$(esac`,
+		// `v=$(fi` and `v=$(echo a; ;` answer `unexpected "esac" (expecting
+		// ")")`, `unexpected "fi" (expecting ")")` and `unexpected ";"`,
+		// while `v=$(echo hi` is `unexpected end of file (expecting ")")`
+		// (#6319). See UnterminatedSubstitutionIsItsBodysRefusal.
+		UnterminatedSubstitutionIsItsBodysRefusal: true,
+		SyntaxError:                 "syntax error: %[1]s",
+		SyntaxErrorStatus:           2,
+		ForName:                     "syntax error: bad for loop variable",
+		Unterminated:                `syntax error: unexpected end of file (expecting "%[4]s")`,
+		UnterminatedExpectingAClass: "syntax error: unexpected end of file (expecting %[4]s)",
+		UnterminatedNoConstruct:     "syntax error: unexpected end of file",
+		UnmatchedQuote:              "syntax error: unterminated quoted string",
 		// Its own sentence, where an unterminated quote of either kind is
 		// `unterminated quoted string`. Measured 2026-09-27 on BusyBox
 		// 1.37.0 in the pinned image: ``echo `abc`` is `syntax error: EOF

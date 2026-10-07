@@ -5,6 +5,7 @@ package driver
 
 import (
 	"context"
+	"errors"
 	"io"
 	"os"
 
@@ -500,7 +501,20 @@ func (sh Shell) frontEndWith(r *interp.Runner, name string, dg interp.Diagnostic
 		// whole of argv[0] — each exactly what it writes for `cd /nope` on
 		// the next line (#6244).
 		Report: func(err error) string {
-			return dg.ForPrompt().ParseDiagnostic(r.DiagnosticName(), "", err, "")
+			said := dg.ForPrompt().ParseDiagnostic(r.DiagnosticName(), "", err, "")
+			// A substitution still open whose body refused a token, which
+			// the prompt now refuses as the token is read: the one shell
+			// that words its interactive refusals as the prompt's follows the
+			// sentence with a bare one, exactly as it does when the body is
+			// refused as the line runs. Measured 2026-10-07, bash 5.3.20,
+			// `echo $(` / `fi`: `syntax error near unexpected token `fi'
+			// while looking for matching `)'` and then `bash: syntax error`
+			// (#6319). See interp.Runner.interactiveSubstRefusal.
+			var se *syntax.Error
+			if dg.InteractiveShellSpeaksAsAtAPrompt && errors.As(err, &se) && se.BodyRefusal != nil {
+				said += r.DiagnosticName() + ": syntax error\n"
+			}
+			return said
 		},
 		// And it leaves the same status behind that it would as a script,
 		// from the same table: what a shell answers `$?` with after a refused
@@ -567,6 +581,8 @@ func (sh Shell) frontEndWith(r *interp.Runner, name string, dg interp.Diagnostic
 		// reason AskAgainAfterARefusedToken above is.
 		// See Semantics.PromptEchoesTheLineWhereThereIsNoTerminal.
 		EchoTheLineWithoutATerminal: sh.Semantics.PromptEchoesTheLineWhereThereIsNoTerminal,
+		// See Semantics.PromptRefusedLineIsNotCounted.
+		RefusedLineIsNotCounted: sh.Semantics.PromptRefusedLineIsNotCounted,
 		// See Semantics.EndOfInputInAConstructEndsTheSession.
 		EndOfInputInAConstructEndsTheSession: sh.Semantics.EndOfInputInAConstructEndsTheSession,
 		// See Semantics.EndOfInputEndsAContinuedHeredocLine.

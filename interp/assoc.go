@@ -181,6 +181,7 @@ func (r *Runner) markAssoc(name string) {
 	// there, with the compound's members gone. See compoundVariableRetyped.
 	r.localizeMemberWrite(name)
 	r.compoundVariableRetyped(name)
+	r.ownAssocs()
 	r.AssocArrays[name] = AssocArray{}
 	r.markCompoundForAllexport(name)
 	// Declared and not assigned, which is the state one listing writes
@@ -240,6 +241,7 @@ func (r *Runner) setAssocElemAs(name, key, value string, kind ElementKind) {
 		// an indexed one does in storeArray. See compoundVariableRetyped.
 		r.localizeMemberWrite(name)
 		r.compoundVariableRetyped(name)
+		r.ownAssocs()
 		r.AssocArrays[name] = a
 	}
 	r.markCompoundForAllexport(name)
@@ -260,6 +262,11 @@ func (r *Runner) setAssocElemAs(name, key, value string, kind ElementKind) {
 			return
 		}
 	}
+	// Owned only now, and the table read again: the attribute's fold above
+	// can run arithmetic, and a table taken before it may have been shared
+	// with a subshell since. See sharedtable.go.
+	r.ownAssocs()
+	a = r.AssocArrays[name]
 	a[key] = Element{Str: value, Kind: kind}
 	// Written to, so the name leaves the declared-only set — see
 	// compounddeclaredonly.go.
@@ -330,7 +337,10 @@ func (r *Runner) unsetAssocElem(name, key string) {
 		write(r, key, "", false)
 		return
 	}
-	delete(r.AssocArrays[name], key)
+	if _, held := r.AssocArrays[name][key]; held {
+		r.ownAssocs()
+		delete(r.AssocArrays[name], key)
+	}
 }
 
 // assocSubscript answers `${m[k]}`, `${m[@]}` and `${m[*]}` for a declared
@@ -968,6 +978,7 @@ func (r *Runner) assignAssocElems(name string, parsed []literalElem, appendTo, r
 			r.emptyProducedAssoc(name)
 		}
 	default:
+		r.ownAssocs()
 		if r.AssocArrays == nil {
 			r.AssocArrays = map[string]AssocArray{}
 		}

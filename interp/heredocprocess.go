@@ -101,7 +101,8 @@ func (r *Runner) saveExpansionTables() expansionTables {
 
 // restoreExpansionTables puts the copy back.
 func (r *Runner) restoreExpansionTables(t expansionTables) {
-	r.Vars, r.Arrays, r.AssocArrays = t.vars, t.arrays, t.assoc
+	r.Vars, r.Arrays = t.vars, t.arrays
+	r.replaceAssocs(t.assoc)
 	r.exported, r.removed, r.declaredEmpty, r.assigned = t.exported, t.removed, t.declaredEmpty, t.assigned
 }
 

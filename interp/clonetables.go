@@ -62,10 +62,9 @@ func (c *Runner) ownTables(r *Runner) {
 	for k, v := range r.Arrays {
 		c.Arrays[k] = v.clone()
 	}
-	c.AssocArrays = make(map[string]AssocArray, len(r.AssocArrays))
-	for k, v := range r.AssocArrays {
-		c.AssocArrays[k] = v.clone()
-	}
+	// The associative arrays are shared until one side writes, with the
+	// command hash and the function origins below: see sharedtable.go.
+	c.shareTables(r)
 	c.Params = append([]string(nil), r.Params...)
 
 	// What the shell knows about a name besides its value. Each is written
@@ -255,7 +254,6 @@ func (c *Runner) ownTables(r *Runner) {
 	// subshell cannot shorten the parent's.
 	c.mathFuncs = maps.Clone(r.mathFuncs)
 	c.mathOrder = append([]string(nil), r.mathOrder...)
-	c.funcOrigins = maps.Clone(r.funcOrigins)
 	c.exportedFuncs = maps.Clone(r.exportedFuncs)
 	// And the freeze, for the same reason: a subshell that froze a function
 	// has not frozen the parent's, and one the parent froze is frozen in
@@ -287,12 +285,15 @@ func (c *Runner) ownTables(r *Runner) {
 	// And the command hash, which is the same kind of table under a third
 	// name: what PATH last resolved a name to. A subshell owns its entries —
 	// measured, `(ls >/dev/null); hash` leaves the parent's table empty in
-	// bash, zsh and dash — and the order slice is copied outright so a
-	// forgetting inside one cannot shorten the parent's listing.
-	c.cmdHash = maps.Clone(r.cmdHash)
-	c.cmdHashOrder = append([]string(nil), r.cmdHashOrder...)
+	// bash, zsh and dash — and the order slice goes with it so a forgetting
+	// inside one cannot shorten the parent's listing. Both are copied on the
+	// subshell's first write rather than here, as the function origins are:
+	// see shareTables in sharedtable.go.
 	// And the named directories beside it, for the same reason: `hash -d`
 	// inside a subshell is that subshell's, exactly as `hash` is.
+	// The hits counted beside the shared table are the parent's and go with
+	// it, and the clone counts its own on top. See countSharedHit.
+	c.cmdHashHits = maps.Clone(r.cmdHashHits)
 	c.namedDirs = maps.Clone(r.namedDirs)
 	c.disabledBuiltins = maps.Clone(r.disabledBuiltins)
 	c.reservedOff = maps.Clone(r.reservedOff)

@@ -137,6 +137,9 @@ func (r *Runner) subshell(ctx context.Context, c *syntax.Subshell) error {
 	// Semantics.RedirectTargetOnASubshellExpandsInTheSubshell (#4695).
 	return r.withRedirsOwnedBy(ctx, c.Redirs, redirOwnerASubshell, func() error {
 		sub := r.clone()
+		// Given back once the body, its EXIT trap and everything below have
+		// finished with the clone's tables. See sharedtable.go.
+		defer sub.releaseSharedTables()
 		// How far a `break` inside the parentheses can reach is the
 		// subshell's question, asked at the `break` — see
 		// Runner.loopControlFloor. Recorded here and not in clone() because
@@ -1641,9 +1644,10 @@ func (r *Runner) restoreShadowedName(sc *scope, name string) {
 	}
 	if old, ok := sc.savedAssoc[name]; ok {
 		if sc.assocExisted[name] {
+			r.ownAssocs()
 			r.AssocArrays[name] = old
 		} else {
-			delete(r.AssocArrays, name)
+			r.dropAssocTable(name)
 		}
 		delete(sc.savedAssoc, name)
 		delete(sc.assocExisted, name)

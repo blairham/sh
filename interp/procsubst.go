@@ -460,7 +460,9 @@ func (r *Runner) substRunner(span syntax.Span) (*Runner, func()) {
 	// streamseal.go.
 	r.Stderr, r.Stdout = r.lockedStderr(), r.lockedStdout()
 	sub.Stderr = bodyWriter(r.Stderr)
-	return sub, releaseFds
+	// And the body's hold on the tables it shares with this shell, given
+	// back by the same hand once the body has run. See sharedtable.go.
+	return sub, func() { releaseFds(); sub.releaseSharedTables() }
 }
 
 // substStdin is the stream a substitution's body reads, guarded.

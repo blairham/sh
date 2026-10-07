@@ -920,7 +920,7 @@ func (r *Runner) scalarOverCompound(name, value string, form assignForm) bool {
 	}
 	if r.scalarStoreReplacesACompound() {
 		delete(r.Arrays, name)
-		delete(r.AssocArrays, name)
+		r.dropAssocTable(name)
 		return false
 	}
 	if r.unspecified {

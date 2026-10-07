@@ -2569,6 +2569,7 @@ func (r *Runner) removeFunction(name string) {
 // would otherwise undo their own work on the way past.
 func (r *Runner) removeFunctionQuietly(name string) {
 	delete(r.funcs, name)
+	r.ownFuncOrigins()
 	delete(r.funcOrigins, name)
 	delete(r.exportedFuncs, name)
 	r.forgetFunctionTrace(name)
@@ -3651,7 +3652,7 @@ func (r *Runner) unsetOneName(name string) {
 		r.UnsetDynamic(name)
 	}
 	delete(r.Arrays, name)
-	delete(r.AssocArrays, name)
+	r.dropAssocTable(name)
 	// A compound an element of either table held goes with the table, for the
 	// reason the parent's own members go with it below: they are names of
 	// their own and nothing else would take them. Measured,

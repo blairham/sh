@@ -56,7 +56,7 @@ func (r *Runner) kindLetterReplacesWhatTheNameWas(name string, f declareFlags) {
 			return
 		}
 		delete(r.Arrays, target)
-		delete(r.AssocArrays, target)
+		r.dropAssocTable(target)
 		// And the value the container held goes with it rather than becoming
 		// the scalar the name now is: measured, `typeset -a q=(1 2); typeset
 		// -i q` is `typeset -i q=0` and not `q=1`. The scalar view a stored

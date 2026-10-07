@@ -696,6 +696,10 @@ type Runner struct {
 	// table because they are recorded at one moment and a route that wrote
 	// half of one would be a route with no origin at all.
 	funcOrigins map[string]funcOrigin
+	// funcOriginsShare, cmdHashShare and assocShare count the runners
+	// holding those tables while a clone and its parent share them. See
+	// sharedtable.go.
+	funcOriginsShare, cmdHashShare, assocShare *tableShare
 	// exportedFuncs are the functions written into a command's environment,
 	// and funcExportPrefix/Suffix are what the entry is called. Only one
 	// dialect carries functions that way, so the naming comes from it.
@@ -1650,6 +1654,10 @@ type Runner struct {
 	// subshells explain and which no field here claims yet.
 	cmdHash      map[string]hashedCommand
 	cmdHashOrder []string
+	// cmdHashHits is the lookups counted on a command hash still shared with
+	// another runner, kept here rather than written into it. See
+	// countSharedHit.
+	cmdHashHits map[string]int
 	// cmdHashFilled says the table has been filled from PATH since it was
 	// last emptied. See Runner.FillCommandHashFromPath.
 	cmdHashFilled bool
@@ -12709,12 +12717,13 @@ func (r *Runner) restoreVar(u savedVar) {
 		delete(r.Arrays, u.name)
 	}
 	if u.inTable {
+		r.ownAssocs()
 		if r.AssocArrays == nil {
 			r.AssocArrays = map[string]AssocArray{}
 		}
 		r.AssocArrays[u.name] = u.table
 	} else {
-		delete(r.AssocArrays, u.name)
+		r.dropAssocTable(u.name)
 	}
 	if u.removed {
 		if r.removed == nil {

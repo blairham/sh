@@ -149,8 +149,12 @@ func (r *Runner) moveParameter(to, from string) int {
 	}
 	switch {
 	case r.AssocArrays[from] != nil:
-		table := r.AssocArrays[from]
+		// A copy, since the source is taken away below anyway: kept as it
+		// is, the table could be one a subshell started by the unset now
+		// shares. See sharedtable.go.
+		table := r.AssocArrays[from].clone()
 		r.unsetName(to)
+		r.ownAssocs()
 		if r.AssocArrays == nil {
 			r.AssocArrays = map[string]AssocArray{}
 		}

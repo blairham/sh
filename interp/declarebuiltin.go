@@ -2839,7 +2839,7 @@ func (r *Runner) arrayAttributeRemoved(name string, f declareFlags) bool {
 			delete(r.Arrays, name)
 		}
 		if table {
-			delete(r.AssocArrays, name)
+			r.dropAssocTable(name)
 		}
 		r.setVar(name, "")
 	}
@@ -3117,7 +3117,7 @@ func (r *Runner) compoundKindChangedByALiteral(name string, f declareFlags) bool
 // part them: neither converting column keeps anything.
 func (r *Runner) compoundKindEmptied(name string, toTable bool) {
 	delete(r.Arrays, name)
-	delete(r.AssocArrays, name)
+	r.dropAssocTable(name)
 	if toTable {
 		r.markAssoc(name)
 		return
@@ -3218,7 +3218,7 @@ func (r *Runner) changeCompoundKind(name string, p CompoundKindChangePolicy,
 // values over to an indexed array, there being no order to carry them in —
 // so the table goes and an empty array takes its place.
 func (r *Runner) tableBecomesAnArray(name string) {
-	delete(r.AssocArrays, name)
+	r.dropAssocTable(name)
 	r.markIndexed(name)
 }
 
@@ -6099,6 +6099,15 @@ func (r *Runner) foldAssocElems(name string, a AssocArray) {
 			// stands rather than half rewritten.
 			return
 		}
+		// The stored table is owned before each write and read again,
+		// because the fold runs arithmetic and a subshell cloned during it
+		// would share the table taken before the loop. See sharedtable.go.
+		if r.assocShare != nil {
+			r.ownAssocs()
+			if stored, ok := r.AssocArrays[r.throughNameref(name)]; ok {
+				a = stored
+			}
+		}
 		a[k] = Scalar(folded)
 	}
 }
@@ -6118,7 +6127,7 @@ func (r *Runner) foldAssocElems(name string, a AssocArray) {
 // what stands in their way.
 func (r *Runner) compoundBecomesAScalar(name string) {
 	delete(r.Arrays, name)
-	delete(r.AssocArrays, name)
+	r.dropAssocTable(name)
 	delete(r.Vars, name)
 }
 

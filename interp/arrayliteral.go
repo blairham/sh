@@ -586,6 +586,7 @@ func (r *Runner) storeRetypedNestedLiteral(name string, a Array) {
 	for _, i := range a.subscripts() {
 		table[strconv.Itoa(i)] = a.Get(i)
 	}
+	r.ownAssocs()
 	r.AssocArrays[name] = table
 	r.markCompoundForAllexport(name)
 	r.sweepElementCompounds(name)

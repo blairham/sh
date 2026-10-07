@@ -27,6 +27,12 @@ var sharedTables = map[string]string{
 	"equalsTildeBuiltins": "the builtins a dialect says read an argument's `=` as an assignment's, marked at setup by MarkBuiltinWhoseEqualsOpensATildeContext and never written again",
 	"localKeepsOuter":     "the names a dialect says keep their outer value in a valueless local, marked at setup by MarkLocalKeepsTheOuterValue and never written again",
 	"noticedJobs":         "never written, only replaced whole by noticeFinishedJobs — so a subshell that shares its parent's set and then notices a job gets a set of its own, and neither runner ever sees the other's notices",
+	// Copied on write rather than at the clone. The test for these is
+	// TestASubshellWriteToASharedTableStaysInTheSubshell, which writes each
+	// one from either side and on two goroutines at once.
+	"AssocArrays": "copy-on-write: shared until either side writes, which copies it first — see sharedtable.go",
+	"funcOrigins": "copy-on-write: shared until either side writes, which copies it first — see sharedtable.go",
+	"cmdHash":     "copy-on-write: shared until either side writes, which copies it first — see sharedtable.go",
 }
 
 // sharedStacks names every slice a clone is allowed to share with its parent,
@@ -41,6 +47,7 @@ var sharedTables = map[string]string{
 // #1416: a stack has to be pushed and popped once before the array exists,
 // and popping keeps the capacity.
 var sharedStacks = map[string]string{
+	"cmdHashOrder":    "copy-on-write with cmdHash, the table it lists: copied with it on either side's first write — see sharedtable.go",
 	"Env":             "the environment the shell was started with, never appended to after setup",
 	"InheritedFiles":  "the files the embedder handed in, never appended to at all",
 	"ProcessAnchor":   "the placeholder command the front end handed in, never appended to at all",
@@ -360,6 +367,7 @@ func seedTables(r *Runner) {
 	r.markedAliases = map[string]bool{"seed": true}
 	r.unreportedAliases = map[string]bool{"seed": true}
 	r.cmdHash = map[string]hashedCommand{"seed": {path: "/bin/seed", hits: 1}}
+	r.cmdHashHits = map[string]int{"seed": 1}
 	r.namedDirs = map[string]string{"seed": "/seed"}
 	r.assigned = map[string]string{"seed": "v"}
 	r.completions = map[string]completionSpec{"seed": {options: []string{"nospace"}, words: []string{"-F", "f"}}}

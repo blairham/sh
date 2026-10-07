@@ -177,9 +177,13 @@ func (r *Runner) installBinding(name string, b staticBinding) {
 	}
 	if b.hasAssoc {
 		if b.assocExists {
-			r.AssocArrays[name] = b.assoc
+			// A copy, because the binding keeps the table it came from: put
+			// back as it is, one map would be both the scope's and a live
+			// table a subshell may come to share. See sharedtable.go.
+			r.ownAssocs()
+			r.AssocArrays[name] = b.assoc.clone()
 		} else {
-			delete(r.AssocArrays, name)
+			r.dropAssocTable(name)
 		}
 	}
 	if b.hasCompound {

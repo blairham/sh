@@ -112,7 +112,7 @@ func (r *Runner) shadowCompoundNamespace(sc *scope, name string) {
 		r.shadow(m)
 		delete(r.Vars, m)
 		delete(r.Arrays, m)
-		delete(r.AssocArrays, m)
+		r.dropAssocTable(m)
 		delete(r.removed, m)
 	}
 }
@@ -218,7 +218,7 @@ func (r *Runner) restoreCompoundNamespace(sc *scope, name string) {
 			}
 			delete(r.Vars, m)
 			delete(r.Arrays, m)
-			delete(r.AssocArrays, m)
+			r.dropAssocTable(m)
 			delete(r.compoundVariable, m)
 			delete(r.removed, m)
 		}

@@ -18,7 +18,7 @@ func (r *Runner) ForgetParameter(name string) {
 	delete(r.withdrawnParams, name)
 	delete(r.Vars, name)
 	delete(r.Arrays, name)
-	delete(r.AssocArrays, name)
+	r.dropAssocTable(name)
 	for _, m := range []map[string]bool{
 		r.exported, r.readonly, r.integer, r.shellOwn, r.notShellOwn, r.scopeFixed,
 		r.deferredParams, r.removed, r.removedShellOwn, r.unsetRefused,

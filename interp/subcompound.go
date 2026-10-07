@@ -279,6 +279,7 @@ func (r *Runner) assignTableCompoundBase(ctx context.Context, a *syntax.Assign) 
 	// not the old key beside the new one, measured. The namespace of any
 	// compound the old elements held is taken with it by the sweep the store
 	// below makes.
+	r.ownAssocs()
 	if r.AssocArrays == nil {
 		r.AssocArrays = map[string]AssocArray{}
 	}

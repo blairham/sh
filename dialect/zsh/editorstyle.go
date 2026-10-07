@@ -28,8 +28,11 @@ func EditorStyle() repl.EditorStyle {
 		// And `^V ^C` gives the line up with a bell. See
 		// repl.EditorStyle.QuotedInsertAbandonsOnControlC (#6251).
 		QuotedInsertAbandonsOnControlC: true,
-		WhichCommandWord:               "which-command",
-		RunHelpWord:                    "run-help",
+		// And the rest of zsh's viins keymap. See
+		// repl.EditorStyle.ZshViInsertKeymap (#6272).
+		ZshViInsertKeymap: true,
+		WhichCommandWord:  "which-command",
+		RunHelpWord:       "run-help",
 		// And `^D` with something typed is delete-char-or-list. See
 		// repl.EditorStyle.ListOnControlD (#6233).
 		ListOnControlD: true,

@@ -249,6 +249,7 @@ func (e *editor) enterViCommand(prompt drawnPrompt) {
 func (e *editor) leaveViCommand(at int, prompt drawnPrompt) {
 	e.viCommand = false
 	e.pos = min(max(at, 0), len(e.line))
+	e.viInsertStart = e.pos
 	e.redraw(prompt)
 }
 

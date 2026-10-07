@@ -115,6 +115,13 @@ type EditorStyle struct {
 	// (#6251).
 	ViQuotedInsert bool
 
+	// ZshViInsertKeymap gives vi insert mode zsh's viins keymap, which is not
+	// its emacs one: most control keys type themselves, `^D` lists, and
+	// Backspace, `^U` and `^W` stop where the stretch of insert mode began.
+	// The zero value is the shared table, which bash's vi insert mode has
+	// always used. See repl/viinsertkeys.go for the measurement (#6272).
+	ZshViInsertKeymap bool
+
 	// QuotedInsertAbandonsOnControlC makes `^C` after quoted-insert's `^V`
 	// give the line up with a bell, where the zero value puts a `^C` in the
 	// line as quoted-insert does any other key. Measured 2026-10-06 through a

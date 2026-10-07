@@ -346,6 +346,12 @@ type editor struct {
 	quotedInsertInViCommand  bool
 	capitalizeFirstCharacter bool
 	transposeToLineEnd       bool
+	// zshViInsert is EditorStyle.ZshViInsertKeymap, and viInsertStart is
+	// where the stretch of vi insert mode the cursor is in began: the start
+	// of the line on a fresh one, and wherever a command-mode key entered
+	// insert mode after that. See viinsertkeys.go.
+	zshViInsert   bool
+	viInsertStart int
 	// viQuotedInsertKey and quotedInsertAbandons are EditorStyle.ViQuotedInsert
 	// and QuotedInsertAbandonsOnControlC.
 	viQuotedInsertKey    bool
@@ -757,6 +763,7 @@ func (e *editor) readLine(prompt drawnPrompt) (string, error) {
 	// command mode nowhere, and a line accepted from it is followed by a
 	// prompt that takes typing.
 	e.viCommand = false
+	e.viInsertStart = 0
 	e.find = viFind{}
 	// The ground the prompt goes on. The row output stopped part-way along
 	// was marked before the prompt hooks ran; this is the return and the
@@ -1070,6 +1077,11 @@ func (e *editor) keyLoop(prompt drawnPrompt) (string, error) {
 			}
 			continue
 		}
+		if e.zshViInsertKey(buf[0], prompt) {
+			// zsh's vi insert keymap, which is not its emacs one. See
+			// viinsertkeys.go (#6272).
+			continue
+		}
 		switch c := buf[0]; c {
 		case ctrlC:
 			if e.keepsTheLineOnInterrupt(prompt) {
@@ -1180,6 +1192,9 @@ func (e *editor) keyLoop(prompt drawnPrompt) (string, error) {
 				// escapeIsTheModeSwitch for how the two are told apart and
 				// what it costs.
 				e.enterViCommand(prompt)
+				continue
+			}
+			if e.zshViEscape(prompt) {
 				continue
 			}
 			if e.escape(prompt) == keyAbandoned {

@@ -287,6 +287,16 @@ const (
 	// waits: zsh's `vi-quoted-insert`, on `^V` there (#6251).
 	WidgetViQuotedInsert
 
+	// vi insert mode's own deletions, which stop where the stretch of insert
+	// mode began, and the whole prompt drawn again: zsh's
+	// `vi-backward-delete-char`, `vi-kill-line`, `vi-backward-kill-word` and
+	// `redisplay`, on Backspace, `^U`, `^W` and `^R` in its viins keymap. See
+	// viinsertkeys.go (#6272).
+	WidgetViBackwardDeleteChar
+	WidgetViKillLine
+	WidgetViBackwardKillWord
+	WidgetRedisplay
+
 	// The command the cursor is in, asked about: the line put aside and a
 	// command naming it run in its place — zsh's `which-command` and
 	// `run-help`, on `M-?` and `M-h`. Which command each runs is the
@@ -500,6 +510,23 @@ func (e *editor) runWidget(b Binding, prompt drawnPrompt) {
 		e.quotedInsert(prompt)
 	case WidgetViQuotedInsert:
 		e.viQuotedInsert(prompt)
+	case WidgetViBackwardDeleteChar:
+		// Rings where this stretch of insert mode began, measured, in vi
+		// editing too — unlike the emacs keys' bells. See viinsertkeys.go.
+		acted := true
+		e.change(false, func() { acted = e.viBackwardDeleteChar() })
+		if !acted {
+			e.ring()
+		}
+		e.redraw(prompt)
+	case WidgetViKillLine:
+		e.change(false, e.viKillLine)
+		e.redraw(prompt)
+	case WidgetViBackwardKillWord:
+		e.change(false, e.viBackwardKillWord)
+		e.redraw(prompt)
+	case WidgetRedisplay:
+		e.redisplay(prompt)
 	case WidgetWhichCommand:
 		e.askAboutTheCommand(e.whichCommandWord, prompt)
 	case WidgetRunHelp:

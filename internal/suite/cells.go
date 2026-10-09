@@ -215,13 +215,15 @@ func StaleLedgerEntries(cells []Cell) []string {
 		if col.Contained() {
 			stale = append(stale, fmt.Sprintf(
 				"%s%s — the column is gated now, so its cells are closable and this entry is holding work out of the open count",
-				u.Column, areaSuffix(u.Area)))
+				u.Column, areaSuffix(u.Area),
+			))
 			continue
 		}
 		if u.Issue == 0 || len(u.Measured) < 40 {
 			stale = append(stale, fmt.Sprintf(
 				"%s%s — ledgered without the measurement that says it cannot be closed",
-				u.Column, areaSuffix(u.Area)))
+				u.Column, areaSuffix(u.Area),
+			))
 		}
 	}
 	// A cell the ledger claims and the space does not hold is the same
@@ -305,7 +307,8 @@ func (r Roll) Report() string {
 		b.WriteString("\n  closed by measurement rather than by a file\n")
 		for _, u := range UnclosableByConstruction {
 			fmt.Fprintf(&b, "    %s\n", fold(
-				fmt.Sprintf("%s%s (#%d) — %s", u.Column, areaSuffix(u.Area), u.Issue, u.Measured), "      "))
+				fmt.Sprintf("%s%s (#%d) — %s", u.Column, areaSuffix(u.Area), u.Issue, u.Measured), "      ",
+			))
 		}
 	}
 	if len(UnclaimedByShape) > 0 {

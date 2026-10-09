@@ -125,7 +125,7 @@ func compctlBuiltin(r *interp.Runner, ctx context.Context, args []string) int {
 // compctlParse reads the flags and the names. The two results that are not
 // obvious: special is the name of the one entry `-C`, `-D` or `-T` chose, and
 // names is empty for a line that named none.
-func compctlParse(r *interp.Runner, args []string) (simple string, valued []string, names []string, special string, code int) {
+func compctlParse(r *interp.Runner, args []string) (simple string, valued, names []string, special string, code int) {
 	i := 0
 	for ; i < len(args); i++ {
 		word := args[i]

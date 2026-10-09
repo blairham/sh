@@ -21,7 +21,7 @@ import (
 
 // kinds parses src with all three tables and renders what the parser made of
 // it, so a test can say what the expansion came to.
-func kinds(t *testing.T, src string, global, suffix syntax.Aliases, plain syntax.Aliases) string {
+func kinds(t *testing.T, src string, global, suffix, plain syntax.Aliases) string {
 	t.Helper()
 	p := syntax.NewParser(src, syntax.Core())
 	p.Aliases = plain

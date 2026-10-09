@@ -2334,7 +2334,7 @@ func (r *Runner) modifiedElements(words []string, e *syntax.ParamExpr) ([]string
 // elements they apply to once any offset and length have taken their part.
 func (r *Runner) rangeModifiers(
 	words []string, e *syntax.ParamExpr,
-) (segs []string, sliced []string, ok bool) {
+) (segs, sliced []string, ok bool) {
 	reads := func() bool {
 		return r.ask(r.sem().SubstringRangeReadsModifiers,
 			"a substring range beginning with a letter being a modifier list")
@@ -2346,7 +2346,8 @@ func (r *Runner) rangeModifiers(
 		}
 		return r.modifierSegments(
 			modifierSource(e.ArgText, e.Arg),
-			modifierSource(e.Arg2Text, e.Arg2), e.Arg2 != nil), words, true
+			modifierSource(e.Arg2Text, e.Arg2), e.Arg2 != nil,
+		), words, true
 	case e.Arg2 != nil && rangeReadsAsAModifier(e.Arg2, e.Arg2Text):
 		if !reads() {
 			return nil, nil, false

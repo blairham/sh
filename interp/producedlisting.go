@@ -266,7 +266,8 @@ func (r *Runner) producedListing() ProducedListing {
 	p := r.sem().ProducedParameterListing
 	if p == ProducedListingUnspecified {
 		r.diagf("%s\n", r.unanswered(
-			"what a listing with no operands writes for a produced parameter"))
+			"what a listing with no operands writes for a produced parameter",
+		))
 		r.status = 2
 		r.unspecified = true
 	}

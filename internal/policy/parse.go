@@ -102,7 +102,8 @@ func Parse(r io.Reader) (*Policy, error) {
 		if !seenVersion {
 			if word != "version" {
 				return nil, lineErr(n, errors.New(
-					`a policy starts with "version 1"; a file this parser cannot vouch for is refused rather than half-read`))
+					`a policy starts with "version 1"; a file this parser cannot vouch for is refused rather than half-read`,
+				))
 			}
 			if rest != fmt.Sprint(version) {
 				return nil, lineErr(n, fmt.Errorf("unknown policy version %q, want %d", rest, version))
@@ -175,7 +176,8 @@ func (p *Policy) checkExecGrants() error {
 		}
 		return lineErr(p.lines[i], fmt.Errorf(
 			"`allow exec %s` does not gate the child process: it runs with the shell's own access, and %s. Write `allow exec-unconfined %s` to say so",
-			r.Pattern, p.whatIsRescinded(), r.Pattern))
+			r.Pattern, p.whatIsRescinded(), r.Pattern,
+		))
 	}
 	return nil
 }
@@ -245,7 +247,8 @@ func (p *Policy) defaultDirective(rest string) error {
 		// count to gather and nothing a later line could add.
 		return errors.New(
 			"`default allow exec` does not gate the child process: a process this policy starts runs with the shell's own access. " +
-				"Write `default allow exec-unconfined` to say so")
+				"Write `default allow exec-unconfined` to say so",
+		)
 	}
 	for _, sl := range s.slots() {
 		if p.setSlot[sl] {
@@ -359,10 +362,12 @@ func selectorOf(name string) (Selector, error) {
 		// and never gated — interp/seams.go gives the reason at length — so a
 		// rule about it would never be consulted.
 		return 0, errors.New(
-			"inherit is recorded and never gated: a descriptor the shell was handed is already in the process's table")
+			"inherit is recorded and never gated: a descriptor the shell was handed is already in the process's table",
+		)
 	}
 	return 0, fmt.Errorf(
-		"unknown selector %q, want exec, exec-unconfined, read, write, open, stat, list, path or signal", name)
+		"unknown selector %q, want exec, exec-unconfined, read, write, open, stat, list, path or signal", name,
+	)
 }
 
 // cut splits the first whitespace-delimited word off a line and returns the

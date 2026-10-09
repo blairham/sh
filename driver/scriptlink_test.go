@@ -49,7 +49,8 @@ func TestAScriptOperandThroughALinkIsCheckedOnWhatItReached(t *testing.T) {
 	// author thinks matches nothing, and matching nothing reads exactly like
 	// a rule being obeyed.
 	p, err := policy.Parse(strings.NewReader(fmt.Sprintf(
-		"version 1\ndefault allow\ndeny read %s/**\n", hidden)))
+		"version 1\ndefault allow\ndeny read %s/**\n", hidden,
+	)))
 	if err != nil {
 		t.Fatalf("policy: %v", err)
 	}

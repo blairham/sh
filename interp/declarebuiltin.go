@@ -1064,7 +1064,8 @@ func (r *Runner) refuseAFunctionLineLetter(name string, f declareFlags, rest []s
 		return 0
 	}
 	c, missing := f.letterMissingOnAFunctionLine(
-		r.diag().UnimplementedOptionLettersOnAFunctionLine[name])
+		r.diag().UnimplementedOptionLettersOnAFunctionLine[name],
+	)
 	if !missing {
 		return 0
 	}

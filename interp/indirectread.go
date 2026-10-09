@@ -188,7 +188,7 @@ func (r *Runner) indirectAimedAtAList(e *syntax.ParamExpr) (*syntax.ParamExpr, b
 // The target's node is never written to. It is held for the rest of the span
 // (see Runner.indirectTargetNode), so a mutation here would reach the next
 // reader of the same text.
-func aimedWithTheOperator(e *syntax.ParamExpr, node *syntax.ParamExpr) *syntax.ParamExpr {
+func aimedWithTheOperator(e, node *syntax.ParamExpr) *syntax.ParamExpr {
 	aimed := *e
 	aimed.Indirect = false
 	aimed.Name = node.Name

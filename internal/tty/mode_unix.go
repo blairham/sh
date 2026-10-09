@@ -135,7 +135,7 @@ func clearOutputPostProcessing(f *os.File) error {
 	return ioctl(fd, tcSets, &t)
 }
 
-func ioctl(fd uintptr, req uintptr, t *syscall.Termios) error {
+func ioctl(fd, req uintptr, t *syscall.Termios) error {
 	_, _, errno := syscall.Syscall6(syscall.SYS_IOCTL, fd, req,
 		uintptr(unsafe.Pointer(t)), 0, 0, 0)
 	if errno != 0 {

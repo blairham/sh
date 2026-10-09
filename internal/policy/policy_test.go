@@ -427,7 +427,8 @@ func TestARuleUnderAPlatformAliasCoversBothNames(t *testing.T) {
 	for _, written := range []string{"/tmp/secrets/**", "/private/tmp/secrets/**"} {
 		t.Run(written, func(t *testing.T) {
 			p, err := policy.Parse(strings.NewReader(
-				"version 1\ndefault allow\ndeny path " + written + "\n"))
+				"version 1\ndefault allow\ndeny path " + written + "\n",
+			))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -459,7 +460,8 @@ func TestANormalizedRuleSaysWhatItTurnedInto(t *testing.T) {
 		t.Skip("no platform aliases here")
 	}
 	p, err := policy.Parse(strings.NewReader(
-		"version 1\ndefault allow\ndeny path /tmp/**\ndeny path /srv/**\ndeny signal\n"))
+		"version 1\ndefault allow\ndeny path /tmp/**\ndeny path /srv/**\ndeny signal\n",
+	))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -479,7 +481,8 @@ func TestANormalizedRuleSaysWhatItTurnedInto(t *testing.T) {
 // rather than a line every run carries.
 func TestAPolicyWithNoAliasNormalizesNothing(t *testing.T) {
 	p, err := policy.Parse(strings.NewReader(
-		"version 1\ndefault allow\ndeny path /srv/build/**\ndeny signal\n"))
+		"version 1\ndefault allow\ndeny path /srv/build/**\ndeny signal\n",
+	))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -498,7 +501,8 @@ func TestAnAllowedExecUnderAnAliasIsAlsoFindable(t *testing.T) {
 		t.Skip("no platform aliases here")
 	}
 	p, err := policy.Parse(strings.NewReader(
-		"version 1\ndefault deny\nallow exec-unconfined /tmp/bin/**\n"))
+		"version 1\ndefault deny\nallow exec-unconfined /tmp/bin/**\n",
+	))
 	if err != nil {
 		t.Fatal(err)
 	}

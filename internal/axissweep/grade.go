@@ -196,12 +196,14 @@ func Grade(cases []oracle.Case, golden *oracle.Run) (*GradeResult, error) {
 		f, ok := byPath[p.Field]
 		if !ok {
 			out.Faults = append(out.Faults, fmt.Sprintf(
-				"%s: no such axis in interp.Semantics — a probe for a renamed or deleted axis reads nothing", p.Field))
+				"%s: no such axis in interp.Semantics — a probe for a renamed or deleted axis reads nothing", p.Field,
+			))
 			continue
 		}
 		if probed[p.Field] {
 			out.Faults = append(out.Faults, fmt.Sprintf(
-				"%s: two probes read the same axis; one of them is unread", p.Field))
+				"%s: two probes read the same axis; one of them is unread", p.Field,
+			))
 			continue
 		}
 		probed[p.Field] = true
@@ -209,11 +211,13 @@ func Grade(cases []oracle.Case, golden *oracle.Run) (*GradeResult, error) {
 		for _, id := range p.Cases {
 			if !inCorpus[id] {
 				out.Faults = append(out.Faults, fmt.Sprintf(
-					"%s: no corpus row named %q — the probe reads nothing", p.Field, id))
+					"%s: no corpus row named %q — the probe reads nothing", p.Field, id,
+				))
 				bad = true
 			} else if _, ok := golden.Results[id]; !ok {
 				out.Faults = append(out.Faults, fmt.Sprintf(
-					"%s: the golden record has no entry for %q; re-measure with `make oracle`", p.Field, id))
+					"%s: the golden record has no entry for %q; re-measure with `make oracle`", p.Field, id,
+				))
 				bad = true
 			}
 		}

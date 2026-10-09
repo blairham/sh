@@ -968,12 +968,14 @@ func Probes() []Probe {
 			Read: func(cells map[string]oracle.Result) (string, string) {
 				if v, why := boundedAtTheCommandWord(
 					cells["cmd/posixbuiltins-does-not-bound-a-fatal-error-raised-inside"],
-					"[bare-in]", "[cmd-alive]", "[cmd="); v != "" {
+					"[bare-in]", "[cmd-alive]", "[cmd=",
+				); v != "" {
 					return v, why
 				}
 				v, why := boundedAtTheCommandWord(
 					cells["cmd/command-bounds-any-fatal-error-raised-inside"],
-					"[bp-alive]", "[cp-alive]", "[cp=")
+					"[bp-alive]", "[cp-alive]", "[cp=",
+				)
 				if v == "" && why == "" {
 					why = "neither row put an error this shell calls fatal in front of a `command` that reached a builtin"
 				}

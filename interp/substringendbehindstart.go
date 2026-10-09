@@ -43,7 +43,8 @@ func (r *Runner) substringEndBehindTheStart(lenWord *syntax.Word, end, start int
 		return false
 	default:
 		r.diagf("%s\n", r.unanswered(
-			"a substring length whose end falls behind the offset"))
+			"a substring length whose end falls behind the offset",
+		))
 		r.status, r.unspecified = 2, true
 		return false
 	}

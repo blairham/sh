@@ -398,12 +398,14 @@ func commandCoverage(self string, asked, announced int) string {
 			self+": the agent reported %d command(s) this turn and asked this shell to run none.\n"+
 				self+": a command an agent runs in its own process passes no gate — nor do the\n"+
 				self+": files that command reads and writes. The policy covered what it asked for.\n",
-			announced)
+			announced,
+		)
 	}
 	return fmt.Sprintf(
 		self+": the agent reported %d command(s) this turn and asked this shell to run %d.\n"+
 			self+": a command an agent runs in its own process passes no gate — nor do the\n"+
-			self+": files that command reads and writes.\n", announced, asked)
+			self+": files that command reads and writes.\n", announced, asked,
+	)
 }
 
 // fixedAnswer settles every permission request the same way.

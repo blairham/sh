@@ -241,7 +241,8 @@ func loadFromFPath(r *interp.Runner, name string) bool {
 		// that put the definition in the wrong file learns which file it
 		// read.
 		r.DiagnoseAsTheShellf(
-			"function, built-in or type definition for %s not found in %s\n", name, path)
+			"function, built-in or type definition for %s not found in %s\n", name, path,
+		)
 		// And this one **ends the script** at 126, which is the difference
 		// between the two failures: a file that is not there is a command
 		// that could not be found, and a file that is there and defines the

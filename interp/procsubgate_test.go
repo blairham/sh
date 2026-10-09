@@ -46,7 +46,8 @@ import (
 func containing(t *testing.T, scratch string) *policy.Policy {
 	t.Helper()
 	p, err := policy.Parse(strings.NewReader(fmt.Sprintf(
-		"version 1\ndefault allow\ndefault deny write\nallow write %s/**\n", scratch)))
+		"version 1\ndefault allow\ndefault deny write\nallow write %s/**\n", scratch,
+	)))
 	if err != nil {
 		t.Fatalf("policy: %v", err)
 	}
@@ -128,7 +129,8 @@ func TestAProcessSubstitutionRunsUnderAPolicyThatConfinesReads(t *testing.T) {
 			// what a "read only what I name" policy comes to here.
 			tmp := t.TempDir()
 			p, err := policy.Parse(strings.NewReader(fmt.Sprintf(
-				"version 1\ndefault allow\ndeny read %s/**\n", tmp)))
+				"version 1\ndefault allow\ndeny read %s/**\n", tmp,
+			)))
 			if err != nil {
 				t.Fatalf("policy: %v", err)
 			}
@@ -286,7 +288,8 @@ func TestWhatRunsInsideASubstitutionIsStillGated(t *testing.T) {
 			t.Fatal(err)
 		}
 		p, err := policy.Parse(strings.NewReader(fmt.Sprintf(
-			"version 1\ndefault allow\ndeny read %s/**\n", dir)))
+			"version 1\ndefault allow\ndeny read %s/**\n", dir,
+		)))
 		if err != nil {
 			t.Fatalf("policy: %v", err)
 		}

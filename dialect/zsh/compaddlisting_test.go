@@ -146,7 +146,8 @@ func TestAMessageSurvivesAnEmptyBlockAndAnExplanationDoesNot(t *testing.T) {
 func TestTwoCallsNamingOneBlockShareItAndBothAreHeard(t *testing.T) {
 	got := drawn(completionCandidatesFor(t, widgetOf(
 		"compadd -J gx -X 'first heading' -- checkout\n"+
-			"compadd -J gx -X 'second heading' -- cherry\n"), "git che"))
+			"compadd -J gx -X 'second heading' -- cherry\n",
+	), "git che"))
 	want := "checkout@|first heading\nsecond heading cherry@|first heading\nsecond heading"
 	if got != want {
 		t.Errorf("drew %q, want %q", got, want)
@@ -160,7 +161,8 @@ func TestTwoCallsNamingOneBlockShareItAndBothAreHeard(t *testing.T) {
 // draws the heading once over `alpha  beta`.
 func TestTwoUnnamedCallsShareOneBlock(t *testing.T) {
 	got := drawn(completionCandidatesFor(t, widgetOf(
-		"compadd -X 'unnamed heading' -- checkout\ncompadd -- cherry\n"), "git che"))
+		"compadd -X 'unnamed heading' -- checkout\ncompadd -- cherry\n",
+	), "git che"))
 	want := "checkout@|unnamed heading cherry@|unnamed heading"
 	if got != want {
 		t.Errorf("drew %q, want %q", got, want)
@@ -178,7 +180,8 @@ func TestCompgroupsDecidesTheOrderTheBlocksAreDrawnIn(t *testing.T) {
 	src := widgetOf(
 		"compgroups second first\n" +
 			"compadd -J first  -X FIRST  -- checkout\n" +
-			"compadd -J second -X SECOND -- cherry\n")
+			"compadd -J second -X SECOND -- cherry\n",
+	)
 	got := drawn(completionCandidatesFor(t, src, "git che"))
 	if want := "cherry@|SECOND checkout@|FIRST"; got != want {
 		t.Errorf("drew %q, want %q — the declaration and not the order of the calls", got, want)
@@ -187,7 +190,8 @@ func TestCompgroupsDecidesTheOrderTheBlocksAreDrawnIn(t *testing.T) {
 	// row above is the declaration doing something.
 	src = widgetOf(
 		"compadd -J first  -X FIRST  -- checkout\n" +
-			"compadd -J second -X SECOND -- cherry\n")
+			"compadd -J second -X SECOND -- cherry\n",
+	)
 	got = drawn(completionCandidatesFor(t, src, "git che"))
 	if want := "checkout@|FIRST cherry@|SECOND"; got != want {
 		t.Errorf("drew %q, want %q", got, want)

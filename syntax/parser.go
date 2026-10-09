@@ -4368,7 +4368,8 @@ func (p *Parser) parseAssign(h assignHead) *Assign {
 		// A `<(` between brackets the script wrote is the arithmetic `<` and
 		// a grouping, not a substitution. See ProcSubstInSubscriptAsText.
 		a.Index = ProcSubstInSubscriptAsText(
-			p.newWord(h.index, h.index[0].Pos, p.tok.End), true)
+			p.newWord(h.index, h.index[0].Pos, p.tok.End), true,
+		)
 		a.IndexFlags = p.assignIndexFlags(h.index)
 		a.IndexText = p.textBetween(h.from, h.to)
 		if p.dialect.ArraySubscriptFlags {
@@ -4408,7 +4409,8 @@ func (p *Parser) parseAssign(h assignHead) *Assign {
 		}
 		a.Leading = append(a.Leading, LeadingIndex{
 			Index: ProcSubstInSubscriptAsText(
-				p.newWord(link.spans, link.spans[0].Pos, p.tok.End), true),
+				p.newWord(link.spans, link.spans[0].Pos, p.tok.End), true,
+			),
 			Flags: p.assignIndexFlags(link.spans),
 			Text:  p.textBetween(link.from, link.to),
 		})

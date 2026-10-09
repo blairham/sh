@@ -44,7 +44,7 @@ func canceledTree(t *testing.T) string {
 
 // cdDotDot runs one `cd` in that tree under one reading of the axis and hands
 // back the status and where the shell ended up.
-func cdDotDot(t *testing.T, root string, p CdDotDotCancellationPolicy, src string) (status int, dir string, errs string) {
+func cdDotDot(t *testing.T, root string, p CdDotDotCancellationPolicy, src string) (status int, dir, errs string) {
 	t.Helper()
 	sem := PosixSemantics()
 	sem.CdCancelsADotDot = p

@@ -423,7 +423,8 @@ var fourShellPhraseBudget = map[string]int{
 // So the number is read with what it counts. A panel noun or an elided one
 // counts; a blocklisted noun does not.
 var fourShellPanel = regexp.MustCompile(
-	`\bthe other three\b|\bthree of the four\b|\b(?:all |the )four (?:columns|shells|dialects|of them)\b`)
+	`\bthe other three\b|\bthree of the four\b|\b(?:all |the )four (?:columns|shells|dialects|of them)\b`,
+)
 
 // fourShellNotAPanel is what the number turned out to be counting instead.
 //
@@ -432,7 +433,8 @@ var fourShellPanel = regexp.MustCompile(
 var fourShellNotAPanel = regexp.MustCompile(
 	`\b(?:the other three|four) (?:flags|rules|combinations|lines|rows|answers|` +
 		`constructs|spellings|letters|words|characters)\b|` +
-		`\bwritten over four lines\b|\bthe other three would\b`)
+		`\bwritten over four lines\b|\bthe other three would\b`,
+)
 
 // fourShellSubset is a panel phrase that names *which* four, which is a
 // counted subset of the seven rather than a claim that the panel is four.
@@ -443,7 +445,8 @@ var fourShellNotAPanel = regexp.MustCompile(
 // These are the sentences this audit wants written, not the ones it wants
 // found.
 var fourShellSubset = regexp.MustCompile(
-	`\b(?:columns|shells|dialects|of them) (?:that|without|with|which|having|holding)\b`)
+	`\b(?:columns|shells|dialects|of them) (?:that|without|with|which|having|holding)\b`,
+)
 
 func TestNoNewFourShellPanelInAnAxisDoc(t *testing.T) {
 	for _, path := range slices.Sorted(maps.Keys(fourShellPhraseBudget)) {

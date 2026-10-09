@@ -129,7 +129,8 @@ func CheckBaseNames(s Suite, ours, reference string) (warning string, err error)
 				"names cannot be made equal.\n  Lines where either shell names itself by "+
 				"base name are compared literally and will differ. Treat every figure "+
 				"below as a ceiling, not a measurement.",
-			refBase, s.Dialect), nil
+			refBase, s.Dialect,
+		), nil
 	}
 	// Short, and the paragraph that explains it belongs to the caller — the
 	// same division ErrDigest next door keeps.

@@ -68,7 +68,8 @@ func (s *session) blockFor(ctx context.Context, line string) (blocks.Record, str
 		if time.Now().After(deadline) {
 			return blocks.Record{}, "", fmt.Errorf(
 				"the store holds no record of %s after %s; it has %d record(s)",
-				quote(line), budget, len(records))
+				quote(line), budget, len(records),
+			)
 		}
 		select {
 		case <-ctx.Done():
@@ -96,7 +97,8 @@ func (s *session) noBlockFor(ctx context.Context, line string) error {
 	for _, r := range store.Load(ctx, blocksRead) {
 		if r.Command == line {
 			return fmt.Errorf(
-				"the store kept a record of %s, which the session was told to forget", quote(line))
+				"the store kept a record of %s, which the session was told to forget", quote(line),
+			)
 		}
 	}
 	return nil

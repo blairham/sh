@@ -38256,7 +38256,8 @@ func (r *Runner) cdDestinationIsNotThere() CdDestinationNotTherePolicy {
 	p := r.sem().CdDestinationIsNotThere
 	if p == CdDestinationNotThereUnspecified {
 		r.diagf("%s\n", r.unanswered(
-			"`cd` to a path that is not there from a directory that has been renamed"))
+			"`cd` to a path that is not there from a directory that has been renamed",
+		))
 		r.status = 2
 		r.unspecified = true
 	}
@@ -38302,7 +38303,8 @@ func (r *Runner) readTrailingEscapedSeparator() ReadTrailingEscapedSeparatorPoli
 	p := r.sem().ReadTrailingEscapedSeparator
 	if p == ReadTrailingEscapedSeparatorUnspecified {
 		r.diagf("%s\n", r.unanswered(
-			"an escaped IFS whitespace character closing a `read` value"))
+			"an escaped IFS whitespace character closing a `read` value",
+		))
 		r.status = 2
 		r.unspecified = true
 	}
@@ -38350,7 +38352,8 @@ func (r *Runner) emptyListReach() EmptyListReach {
 	p := r.sem().EmptyListTakesTheWord
 	if p == EmptyListReachUnspecified {
 		r.diagf("%s\n", r.unanswered(
-			"what a quoted list expansion that produced no fields takes with it"))
+			"what a quoted list expansion that produced no fields takes with it",
+		))
 		r.status = 2
 		r.unspecified = true
 	}
@@ -38398,7 +38401,8 @@ func (r *Runner) tildeColonReach() TildeColonReach {
 	p := r.sem().TildeColonEndsAnOrdinaryWordsPrefix
 	if p == TildeColonReachUnspecified {
 		r.diagf("%s\n", r.unanswered(
-			"a colon closing a tilde prefix in an ordinary word"))
+			"a colon closing a tilde prefix in an ordinary word",
+		))
 		r.status = 2
 		r.unspecified = true
 	}
@@ -38444,7 +38448,8 @@ func (r *Runner) braceRangeFailure() BraceRangeFailurePolicy {
 	p := r.sem().BraceRangeThatCannotBeCounted
 	if p == BraceRangeFailureUnspecified {
 		r.diagf("%s\n", r.unanswered(
-			"what a brace range that cannot be counted leaves behind"))
+			"what a brace range that cannot be counted leaves behind",
+		))
 		r.status = 2
 		r.unspecified = true
 	}
@@ -38493,7 +38498,8 @@ func (r *Runner) valueBackslashInAPattern() ValueBackslashPolicy {
 	p := r.sem().ValueBackslashInAPattern
 	if p == ValueBackslashUnspecified {
 		r.diagf("%s\n", r.unanswered(
-			"what a value's backslash does to the metacharacter behind it"))
+			"what a value's backslash does to the metacharacter behind it",
+		))
 		r.status = 2
 		r.unspecified = true
 	}

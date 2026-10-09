@@ -59,7 +59,8 @@ func (r *Runner) subscriptBeforeTheFirstElement(name string, n, end int, length 
 		r.failedSubscript("%s\n", sentence)
 	default:
 		r.diagf("%s\n", r.unanswered(
-			"a negative subscript counting back past the first element"))
+			"a negative subscript counting back past the first element",
+		))
 		r.status, r.unspecified = 2, true
 	}
 }

@@ -26,7 +26,8 @@ func rosterWith(t *testing.T, defined map[string]string) *prompttheme.Roster {
 	r.Compile("dir", prompttheme.SegmentFunc(
 		func(*prompttheme.Settings, *prompttheme.Context) (prompttheme.Rendered, bool) {
 			return prompttheme.Rendered{Content: "BUILT-IN"}, true
-		}))
+		},
+	))
 	s := session{text: defined}
 	r.Consult(prompttheme.Functions("a session function", s.has, s.call))
 	return r

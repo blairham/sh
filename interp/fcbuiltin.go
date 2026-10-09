@@ -254,7 +254,7 @@ type fcHistory struct {
 	loose bool
 }
 
-func (r *Runner) fcHistory(entries []string, rest []string) fcHistory {
+func (r *Runner) fcHistory(entries, rest []string) fcHistory {
 	h := fcHistory{entries: entries, first: r.HistoryFirst()}
 	h.cur = h.first + len(entries)
 	if r.HistoryHasOwnLine() {

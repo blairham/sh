@@ -3,12 +3,15 @@ name: CI
 # One workflow holds everything that gates a merge, so there is one file to
 # read. The jobs every Go repository here shares -- Pre-commit, Detect changed
 # files, Build and test, Fuzz -- are blairham/.github's go-ci.yml, called below
-# as `ci`; their checks report as `CI / <job>`. Everything after it is sh's
-# own: the whole-tree Lint, the guards, the dialect sweep, the conformance
-# ratchet, the release render and the two report-only jobs. Those gate their
-# *steps* on `needs.ci.outputs.code`, never the job: a required check that
-# never runs reports as pending forever, which would make a docs-only pull
-# request unmergeable.
+# as `ci`; their checks report as `CI / <job>`. Everything else is sh's own:
+# the whole-tree Lint, the guards, the dialect sweep, the conformance ratchet,
+# the release render and the two report-only jobs. Those depend on `changes`
+# (blairham/.github's go-changes.yml, the same change detection go-ci uses),
+# not on `ci`, so they start as soon as the change is classified and run
+# beside the tests rather than after them -- the critical path is the longest
+# job, not a sum. They gate their *steps* on its outputs, never the job: a
+# required check that never runs reports as pending forever, which would make
+# a docs-only pull request unmergeable.
 on:
   pull_request:
     # `synchronize` is every push to a branch with an open pull request, which
@@ -103,13 +106,25 @@ jobs:
   # meant to hold, so a route that got out is a regression by definition.
   ci:
     name: CI
-    uses: blairham/.github/.github/workflows/go-ci.yml@99060d62d0693570a360127ab698307d276630da # v0.0.0
+    uses: blairham/.github/.github/workflows/go-ci.yml@9711060ad4860f35860bcbf90d90f103617082d2 # v0.0.1
     with:
       os: '["ubuntu-latest","macos-latest"]'
       golangci-lint-hook: false
       test-command: >-
         if [ "$RUNNER_OS" = Linux ]; then go test -race ./...; else go test -skip='^TestNoDialectCombinationPanics$' ./...; fi
         && make sandbox
+
+  # Change detection alone, for the jobs below. `code` is go-ci's own answer
+  # (anything but prose, and everything outside a pull request). `packaging`
+  # is the release config, the workflow that runs it, this file -- where the
+  # rendering job itself is written, so a change to the job exercises the job
+  # -- and the container recipe, which the same GoReleaser run builds.
+  changes:
+    name: Changes
+    uses: blairham/.github/.github/workflows/go-changes.yml@9711060ad4860f35860bcbf90d90f103617082d2 # v0.0.1
+    with:
+      filters: >-
+        {"packaging": ["^\\.goreleaser\\.yaml$", "^\\.github/workflows/(release|ci)\\.yml$", "^images/scratch/"]}
 
   # golangci-lint, in a job of its own, because it does not belong at `git
   # commit` time: it type-checks the whole module and cost ~3GB and 300% CPU
@@ -146,19 +161,19 @@ jobs:
   # the expensive steps are skipped when nothing but prose changed.
   lint:
     name: Lint
-    needs: ci
+    needs: changes
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        if: needs.ci.outputs.code == 'true'
+        if: needs.changes.outputs.code == 'true'
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        if: needs.ci.outputs.code == 'true'
+        if: needs.changes.outputs.code == 'true'
         with:
           go-version-file: go.mod
           check-latest: true
           cache: true
       - name: Is the whole tree clean?
-        if: needs.ci.outputs.code == 'true'
+        if: needs.changes.outputs.code == 'true'
         run: go tool golangci-lint run
 
   # Has the corpus lost a case, or our own suite a file? Two guards that
@@ -173,21 +188,21 @@ jobs:
   # disagree.
   guards:
     name: Corpus and suite guards
-    needs: ci
+    needs: changes
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        if: needs.ci.outputs.code == 'true'
+        if: needs.changes.outputs.code == 'true'
         with:
           fetch-depth: 0 # the guards compare against a commit
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        if: needs.ci.outputs.code == 'true'
+        if: needs.changes.outputs.code == 'true'
         with:
           go-version-file: go.mod
           check-latest: true
           cache: true
       - name: Has the corpus lost a case?
-        if: needs.ci.outputs.code == 'true'
+        if: needs.changes.outputs.code == 'true'
         env:
           # A pull request is checked out as the merge of head into base, so
           # base is contained in HEAD and every case that was on main has to
@@ -203,7 +218,7 @@ jobs:
       # and folding them would mean one instrument reporting about two
       # unrelated trees.
       - name: Has our own suite lost a file?
-        if: needs.ci.outputs.code == 'true'
+        if: needs.changes.outputs.code == 'true'
         env:
           BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
         run: go run ./internal/cmd/suiteguard -base "$BASE"
@@ -246,7 +261,7 @@ jobs:
   # this job's duration the least predictable thing in the workflow.
   sweep:
     name: Dialect sweep
-    needs: ci
+    needs: changes
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -254,15 +269,15 @@ jobs:
         shard: ['0/2', '1/2']
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        if: needs.ci.outputs.code == 'true'
+        if: needs.changes.outputs.code == 'true'
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        if: needs.ci.outputs.code == 'true'
+        if: needs.changes.outputs.code == 'true'
         with:
           go-version-file: go.mod
           check-latest: true
           cache: true
       - name: Can any dialect combination crash the parser?
-        if: needs.ci.outputs.code == 'true'
+        if: needs.changes.outputs.code == 'true'
         env:
           SH_DIALECTCOMBO_SHARD: ${{ matrix.shard }}
         run: go test ./syntax -run TestNoDialectCombinationPanics
@@ -279,7 +294,7 @@ jobs:
   # container the ash column was recorded in.
   conformance:
     name: Conformance ratchet (${{ matrix.dialects }})
-    needs: ci
+    needs: changes
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -291,20 +306,20 @@ jobs:
             dialects: ash
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        if: needs.ci.outputs.code == 'true'
+        if: needs.changes.outputs.code == 'true'
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        if: needs.ci.outputs.code == 'true'
+        if: needs.changes.outputs.code == 'true'
         with:
           go-version-file: go.mod
           check-latest: true
           cache: true
       - name: Did any case move against its baseline?
-        if: needs.ci.outputs.code == 'true'
+        if: needs.changes.outputs.code == 'true'
         run: make conformance-ratchet DIALECTS="${{ matrix.dialects }}"
 
   packaging:
     name: Render a release
-    needs: ci
+    needs: changes
     runs-on: ubuntu-latest
     # Not report-only. `.goreleaser.yaml` is otherwise exercised for the first
     # time by the release workflow, which runs on a `v*` tag -- so a mistake in
@@ -313,52 +328,22 @@ jobs:
     # that would have: 188,381 characters of release body against GitHub's
     # 125,000 limit, measured at v0.0.0. Nothing before the tag could have said
     # so. This is what says so.
+    #
+    # It renders on every push to main too, not only when the packaging files
+    # moved: go-changes answers every filter `true` outside a pull request.
+    # That is a few runner minutes beside the tests, never on the critical
+    # path, and it is not a required check.
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: fromJSON(needs.changes.outputs.matches).packaging == 'true'
         with:
           # GoReleaser reads the tag history to build a changelog, and the
           # `changelog:` gate is `eq .PreviousTag ""` -- so a shallow checkout
           # would render the one case the config special-cases and never the
           # ordinary one.
           fetch-depth: 0
-      # Packaging is gated on the packaging files alone, and deliberately does
-      # **not** take the "a merge runs everything" branch go-ci's change
-      # detection takes. That reasoning is about code an earlier merge may have
-      # broken; the release config has no such drift -- it either renders or it
-      # does not, and a merge that did not touch it cannot change the answer.
-      # Forcing it on would put the cross-build matrix on every merge, on a
-      # repository that merges all day.
-      - id: pkg
-        name: Did the packaging change?
-        env:
-          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
-        run: |
-          packaging=false
-          if ! git cat-file -e "$BASE" 2>/dev/null; then
-            # No usable base commit -- a force push, or a `workflow_dispatch`,
-            # which has no before-commit at all. An empty diff is
-            # indistinguishable from "nothing relevant changed", so render. This
-            # is also the hand-operated route in: a dispatch against a branch is
-            # how a change to this job gets exercised before it lands.
-            echo "base commit $BASE is not present -- rendering"
-            packaging=true
-          else
-            while IFS= read -r f; do
-              case "$f" in
-                # The release config, the workflow that runs it, and this file,
-                # which is where the rendering job itself is written.
-                .goreleaser.yaml|.github/workflows/release.yml|.github/workflows/ci.yml) packaging=true ;;
-                # The container recipe is rendered by the same GoReleaser run --
-                # `dockers_v2` builds it -- so a change to it is a packaging
-                # change, and the smoke test below is the only thing that runs it.
-                images/scratch/*) packaging=true ;;
-              esac
-            done <<<"$(git diff --name-only "$BASE"...HEAD)"
-          fi
-          echo "packaging=$packaging" >> "$GITHUB_OUTPUT"
-          echo "packaging files $([ "$packaging" = true ] && echo 'changed — rendering a release' || echo 'untouched — skipping the render')"
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        if: steps.pkg.outputs.packaging == 'true'
+        if: fromJSON(needs.changes.outputs.matches).packaging == 'true'
         with:
           go-version-file: go.mod
           check-latest: true
@@ -370,7 +355,7 @@ jobs:
       # the tap even if both guards were wrong. The formula is still written --
       # to `dist/homebrew/Formula/` -- which is what the next step reads.
       - name: Render a release, and publish none of it
-        if: steps.pkg.outputs.packaging == 'true'
+        if: fromJSON(needs.changes.outputs.matches).packaging == 'true'
         uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7.2.3
         with:
           distribution: goreleaser
@@ -395,10 +380,10 @@ jobs:
       # recipe's builder stage is pinned to `$BUILDPLATFORM` -- but *running* the
       # arm64 shell on this runner does.
       - uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
-        if: steps.pkg.outputs.packaging == 'true'
+        if: fromJSON(needs.changes.outputs.matches).packaging == 'true'
 
       - name: Does the formula install every binary the build produced?
-        if: steps.pkg.outputs.packaging == 'true'
+        if: fromJSON(needs.changes.outputs.matches).packaging == 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -477,7 +462,7 @@ jobs:
       # check above derives its own: a list written here is a claim about a
       # roster it cannot see, and says nothing when a seventh image is added.
       - name: Does every image carry the shell it is named for?
-        if: steps.pkg.outputs.packaging == 'true'
+        if: fromJSON(needs.changes.outputs.matches).packaging == 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -541,7 +526,7 @@ jobs:
 
   oracle:
     name: Oracle (report only)
-    needs: ci
+    needs: changes
     # Report-only, so it cannot fail, so a pull request gains nothing by
     # waiting for it -- and it is not a required check, which is what makes
     # skipping it here safe rather than a check that hangs pending forever.
@@ -554,18 +539,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        if: needs.ci.outputs.code == 'true'
+        if: needs.changes.outputs.code == 'true'
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        if: needs.ci.outputs.code == 'true'
+        if: needs.changes.outputs.code == 'true'
         with:
           go-version-file: go.mod
           check-latest: true
           cache: true
       - name: Install as much of the panel as this runner can host
-        if: needs.ci.outputs.code == 'true'
+        if: needs.changes.outputs.code == 'true'
         run: sudo apt-get update -qq && sudo apt-get install -y -qq dash ksh zsh
       - name: Report drift without failing on it
-        if: needs.ci.outputs.code == 'true'
+        if: needs.changes.outputs.code == 'true'
         # Report-only, and now for a measured reason rather than an assumed
         # one. The golden record is generated on one machine and a runner does
         # not have the same builds of the same shells: on this runner, against
@@ -589,7 +574,7 @@ jobs:
 
   perfgate:
     name: Performance gate (report only)
-    needs: ci
+    needs: changes
     # Report-only, so it cannot fail, so a pull request gains nothing by
     # waiting for it -- and it is not a required check, which is what makes
     # skipping it here safe rather than a check that hangs pending forever.
@@ -608,18 +593,18 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        if: needs.ci.outputs.code == 'true'
+        if: needs.changes.outputs.code == 'true'
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        if: needs.ci.outputs.code == 'true'
+        if: needs.changes.outputs.code == 'true'
         with:
           go-version-file: go.mod
           check-latest: true
           cache: true
       - name: Install the shells the dialects are graded against
-        if: needs.ci.outputs.code == 'true'
+        if: needs.changes.outputs.code == 'true'
         run: sudo apt-get update -qq && sudo apt-get install -y -qq dash ksh zsh
       - name: How does each dialect compare with the shell it claims to be?
-        if: needs.ci.outputs.code == 'true'
+        if: needs.changes.outputs.code == 'true'
         # #2257: this existed as `make perfgate` and was in no workflow at all,
         # so the promise #1403 encodes -- "no dialect can be slower than the
         # original" -- was checked only when somebody remembered to type it.

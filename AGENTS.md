@@ -664,7 +664,11 @@ a finding lands, fix it rather than narrowing the run again.
 
 Only once pre-commit passes is it worth asking the expensive question.
 `CI / Detect changed files` gates build and test on Linux and macOS (the
-race detector on the Linux leg) and every job of sh's own.
+race detector on the Linux leg), and `Changes / Detect changed files` — the
+same classification, from go-changes.yml — gates every job of sh's own, so
+those start beside the tests rather than after them. It is required too: a
+failed `needs` skips the jobs behind it, and a skipped required check reads
+as passed.
 
 The hook environments are cached, and that is not an optimisation to skip.
 pre-commit builds an environment for a hook even when `SKIP` tells it not
@@ -750,6 +754,7 @@ states none survives every review there is.
     CI / Detect changed files
     CI / Build and test (ubuntu-latest)
     CI / Build and test (macos-latest)
+    Changes / Detect changed files
     Lint
     Corpus and suite guards
     Dialect sweep (0/2)

@@ -204,17 +204,17 @@ linters:
 
     errcheck:
       check-type-assertions: true
-      check-blank: true
+      check-blank: false # off here: overrides/sh.yml
 
     govet:
       enable:
         - atomicalign
-        - fieldalignment
         - nilness
         - reflectvaluecompare
-        - shadow
         - timeformat
         - unusedwrite
+        # fieldalignment: pending (staged adoption) here — overrides/sh.yml
+        # shadow: pending (staged adoption) here — overrides/sh.yml
 
     goconst:
       min-len: 3

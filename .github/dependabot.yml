@@ -1,21 +1,18 @@
 # https://docs.github.com/code-security/dependabot/dependabot-version-updates/configuration-options-for-the-dependabot.yml-file
+#
+# Rendered from blairham/.github baseline/dependabot.yml.tmpl by `make sync`.
+# Groups are derived from go.mod: a group appears when the module requires
+# something it covers. The docker ecosystem appears when there is a Dockerfile.
 version: 2
 updates:
-  # The only modules here are golang.org/x/text and the `tool` block
-  # (golangci-lint, gofumpt) — one group, one PR a month.
   - package-ecosystem: gomod
     directory: /
     schedule:
       interval: monthly
     open-pull-requests-limit: 10
-    groups:
-      gomod:
-        patterns: ["*"]
-  # Bumps the SHA pins and their `# vX.Y.Z` comments together.
+  # Bumps the SHA pins and their `# vX.Y.Z` comments together, including the
+  # pin on blairham/.github's reusable workflows.
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: monthly
-  # No `docker` ecosystem, deliberately. The reference images under images/
-  # pin the exact upstream shell versions the oracle grades against, and a
-  # bump there moves the record, not a dependency.

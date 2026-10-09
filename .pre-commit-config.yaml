@@ -1,83 +1,79 @@
-# Pre-commit configuration for sh
+# Pre-commit configuration for sh.
 # Install: pre-commit install
 # Run:     pre-commit run --all-files
 # Update:  pre-commit autoupdate
+#
+# Rendered from blairham/.github baseline/pre-commit-config.yaml.tmpl by
+# `make sync`. Edit the baseline (or, with a reason, the override file
+# overrides/sh.yml), not this file: the weekly drift check
+# reports any difference. No `repo: local` hooks, ever — upstream hooks with
+# an alias and args instead.
 
 repos:
-# General hygiene
-- repo: https://github.com/pre-commit/pre-commit-hooks
-  rev: v6.0.0
-  hooks:
-  # These two rewrite in place, so they are the hooks that can still change a
-  # file between the check you ran and the commit object that lands (#1267).
-  # The generated record is held out of both: it has to stay byte-for-byte
-  # what `make oracle` wrote, and a hook tidying it desyncs it from the corpus
-  # that generated it.
-  - id: trailing-whitespace
-    exclude: ^(internal/oracle/testdata/golden\.json|docs/spec/measurements\.md)$
-  - id: end-of-file-fixer
-    exclude: ^(internal/oracle/testdata/golden\.json|docs/spec/measurements\.md)$
-  - id: check-yaml
-  - id: check-added-large-files
-  - id: detect-private-key
+  # General hygiene
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      # The two fixers rewrite in place, so generated files stay out of them.
+      - id: trailing-whitespace
+        exclude: ^(dist/|internal/oracle/testdata/golden\.json$|docs/spec/measurements\.md$)
+      - id: end-of-file-fixer
+        exclude: ^(dist/|internal/oracle/testdata/golden\.json$|docs/spec/measurements\.md$)
+      - id: check-yaml
+        args: ['--allow-multiple-documents']
+      - id: check-added-large-files
+        args: ['--maxkb=500']
+      - id: detect-private-key
 
-# Go housekeeping
-- repo: https://github.com/TekWizely/pre-commit-golang
-  rev: v1.0.0-rc.4
-  hooks:
-  - id: go-mod-tidy-repo
+  # Go housekeeping.
+  - repo: https://github.com/TekWizely/pre-commit-golang
+    rev: v1.0.0-rc.4
+    hooks:
+      - id: go-mod-tidy-repo
 
-  # gofumpt, run as `go tool` so the version is go.mod's pin. `-l -d` reports
-  # rather than rewrites, for the #1267 reason above. Not `golangci-lint fmt`:
-  # that also runs goimports, which resolves imports by scanning the module
-  # cache and measured ~10s per 130 files here -- about 200s over the tree, on
-  # every Go commit, since the hook formats the whole repository. gofumpt alone
-  # is 1s. Import grouping is still enforced, by the formatters block the Lint
-  # job applies.
-  - id: my-cmd-repo
-    alias: gofumpt
-    name: gofumpt
-    args: [--hook:error-on-output, go, tool, gofumpt, -l, -d, .]
+      # gofumpt alone, run as `go tool` so the version is go.mod's pin, and
+      # reporting rather than rewriting. See overrides/sh.yml for why
+      # this replaces `golangci-lint-fmt` here.
+      - id: my-cmd-repo
+        alias: gofumpt
+        name: gofumpt
+        args: [--hook:error-on-output, go, tool, gofumpt, -l, -d, .]
 
-  # golangci-lint does NOT run here. It runs in CI only, as the `Lint` job,
-  # which grades the whole tree and is the required check -- and the only one
-  # that ever examines `main` (#1302, #1640).
-  #
-  # The hook that used to sit here ran `go tool golangci-lint run
-  # --new-from-rev HEAD` on every commit. `--new-from-rev` filters *output*
-  # only: golangci type-checks the whole module either way, so it bought signal
-  # rather than seconds, and the cost was real. golangci-lint defaults its
-  # concurrency to NumCPU and takes gigabytes of RSS per run; with several
-  # agents committing in parallel worktrees it drove this machine to load 13+
-  # and made a single commit take ~6 minutes. Removed at the maintainer's
-  # instruction: lint in CI, not on commit.
+  # go.mod and .tool-versions must pin the same Go. check-conflict-markers
+  # replaces upstream's check-merge-conflict, which misses diff3 base markers.
+  - repo: https://github.com/blairham/pre-commit-hooks
+    rev: v0.4.0
+    hooks:
+      # Every .go file carries the two-line SPDX header; a file without one
+      # has no stated license once it is copied out of the repo.
+      - id: check-license-headers
+        args: [--license, Apache-2.0]
+      - id: check-go-version-sync
+      - id: check-conflict-markers
+      # Known-vulnerable dependencies fail the commit, not the release.
+      - id: go-vulncheck
 
-# US English over prose, which is where most of this repository is.
-# .golangci.yml sets locale: US, but golangci-lint reaches Go files and
-# nothing else, so docs/ was outside the rule AGENTS.md cites it for (#541).
-- repo: https://github.com/golangci/misspell
-  rev: v0.8.0
-  hooks:
-  - id: misspell
-    args: [-locale, US, -i, "colour,cancelled", -error]
-    files: \.(md|ya?ml|go)$
-    exclude: ^docs/spec/measurements\.md$
+  # US English over prose: golangci-lint's misspell reaches Go files and
+  # nothing else. Reports, never rewrites — unlike a formatter it can reach
+  # inside a string literal. `importas` is a linter's name, not a typo.
+  - repo: https://github.com/golangci/misspell
+    rev: v0.8.0
+    hooks:
+      - id: misspell
+        args: [-locale, US, -i, "importas,colour,cancelled", -error]
+        files: \.(md|ya?ml)$
+        exclude: ^(dist/|internal/oracle/testdata/golden\.json$|docs/spec/measurements\.md$)
 
-# Secret scanning
-- repo: https://github.com/gitleaks/gitleaks
-  rev: v8.30.1
-  hooks:
-  - id: gitleaks
+  # Secret scanning; the rules and any allowlist are in .gitleaks.toml.
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.30.1
+    hooks:
+      - id: gitleaks
+        exclude: ^dist/
 
-# check-conflict-markers, not upstream's check-merge-conflict: upstream knows
-# only git's three default markers, so the `|||||||` a diff3 merge writes goes
-# unreported, and without --assume-in-merge it does not scan outside a merge
-# at all. A diff3 base marker lived in the spec for weeks and was found by eye.
-- repo: https://github.com/blairham/pre-commit-hooks
-  rev: v0.4.0
-  hooks:
-  - id: check-license-headers
-    args: [--license, Apache-2.0]
-  - id: check-go-version-sync
-  - id: check-conflict-markers
-  - id: go-vulncheck
+  # YAML style (sequence indentation etc.; config in .yamllint.yml)
+  - repo: https://github.com/adrienverge/yamllint
+    rev: v1.38.0
+    hooks:
+      - id: yamllint
+        args: ['-c', '.yamllint.yml']

@@ -1,8 +1,14 @@
 name: CI
 
 # One workflow holds everything that gates a merge, so there is one file to
-# read and one check to require. Splitting pre-commit or tests into their own
-# workflow bought nothing and cost a second place to keep in sync.
+# read. The jobs every Go repository here shares -- Pre-commit, Detect changed
+# files, Build and test, Fuzz -- are blairham/.github's go-ci.yml, called below
+# as `ci`; their checks report as `CI / <job>`. Everything after it is sh's
+# own: the whole-tree Lint, the guards, the dialect sweep, the conformance
+# ratchet, the release render and the two report-only jobs. Those gate their
+# *steps* on `needs.ci.outputs.code`, never the job: a required check that
+# never runs reports as pending forever, which would make a docs-only pull
+# request unmergeable.
 on:
   pull_request:
     # `synchronize` is every push to a branch with an open pull request, which
@@ -25,7 +31,7 @@ on:
   # 07:00 UTC, which is before the working day here and well clear of the
   # merge traffic that would otherwise be competing for runners.
   schedule:
-  - cron: '0 7 * * *'
+    - cron: '0 7 * * *'
   # On demand, on any ref. The report-only jobs below are skipped on a pull
   # request, so **the job that would exercise a change to one of them does not
   # run on the pull request that makes it** -- which is the whole reason
@@ -60,28 +66,50 @@ concurrency:
   group: ci-${{ github.ref }}-${{ github.event_name == 'push' && github.sha || github.event_name == 'workflow_dispatch' && github.run_id || 'pr' }}
   cancel-in-progress: true
 
+
 jobs:
-  # Runs for every commit that reaches GitHub — every push to a pull request,
-  # draft or not, and every push to main. It is the only job that looks at
-  # *every* file rather than at Go: trailing whitespace, license headers,
-  # secrets, the toolchain pin. None of that is worth detecting changes for,
-  # and a secret committed to a draft is committed.
-  pre-commit:
-    name: Pre-commit
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-    - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-      with:
-        go-version-file: go.mod
-        check-latest: true
-        cache: true # go-mod-tidy-repo resolves the whole graph; an uncached run is slow and flaky # setup-go's manifest lags fresh Go patch releases; resolve via go.dev
-    - name: Run pre-commit hooks
-      # golangci-lint is among these hooks again, scoped with
-      # --new-from-rev HEAD so a developer is shown what the commit
-      # introduces. The Lint job below is the unscoped, whole-tree run and
-      # is the required check -- see its comment for why it is not scoped.
-      uses: blairham/go-pre-commit@b3deb289b038678e3b5af79e1442f71fc0f8a28c # v4.6.16
+  # Pre-commit (diff-scoped: only what this change touches), Detect changed
+  # files, Build and test on both platforms, and Fuzz on main and the nightly
+  # schedule. golangci-lint is not among the hooks here -- it is the `Lint`
+  # job below, over the whole tree (overrides/sh.yml in blairham/.github).
+  #
+  # The tests: the race detector on the Linux leg only, not both.
+  #
+  # macOS was the long pole and `-race` was why: 326s of its 516s against
+  # 252s of Ubuntu's 434s, for an answer that is a property of the Go memory
+  # model rather than of the platform. macOS still runs every test in the
+  # module, uninstrumented -- the failures we have actually had here were
+  # platform behavior (a timing-sensitive pty read, a signal delivered
+  # differently), and every one of them is still exercised.
+  #
+  # The uninstrumented leg skips the dialect-combination sweep, and that is
+  # not a coverage decision: `Dialect sweep` below is two jobs that run exactly
+  # that test over exactly that corpus, sharded in halves. Measured on run
+  # 35320633395, the whole of `syntax` was 237.5s on the macOS leg and 0.75s
+  # of that is the rest of the package. The Linux leg keeps it, because under
+  # -race it is the *other* property -- whether concurrent parses share state
+  # -- over a window of the corpus rather than the sweep.
+  #
+  # TestTheSweepIsProvedWhereThisLegStopsPayingForIt is what keeps the skip
+  # honest: it reads this file, and fails if the shards that answer for the
+  # whole of it stop covering the whole of it.
+  #
+  # Then the boundary, tried from outside the process against the binaries
+  # just built, on **both** platforms: what the gate is asked is portable, but
+  # what the kernel does underneath it is not -- the resolving walk uses
+  # O_SEARCH on Darwin and O_PATH|O_DIRECTORY on Linux, the two disagree about
+  # which errno an O_NOFOLLOW on a link gives, and the link budget is 32
+  # against 40. It gates, where the other report targets do not: a boundary is
+  # meant to hold, so a route that got out is a regression by definition.
+  ci:
+    name: CI
+    uses: blairham/.github/.github/workflows/go-ci.yml@99060d62d0693570a360127ab698307d276630da # v0.0.0
+    with:
+      os: '["ubuntu-latest","macos-latest"]'
+      golangci-lint-hook: false
+      test-command: >-
+        if [ "$RUNNER_OS" = Linux ]; then go test -race ./...; else go test -skip='^TestNoDialectCombinationPanics$' ./...; fi
+        && make sandbox
 
   # golangci-lint, in a job of its own, because it does not belong at `git
   # commit` time: it type-checks the whole module and cost ~3GB and 300% CPU
@@ -118,221 +146,67 @@ jobs:
   # the expensive steps are skipped when nothing but prose changed.
   lint:
     name: Lint
-    needs: changes
+    needs: ci
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      if: needs.changes.outputs.code == 'true'
-    - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-      if: needs.changes.outputs.code == 'true'
-      with:
-        go-version-file: go.mod
-        check-latest: true
-        cache: true
-    - name: Is the whole tree clean?
-      if: needs.changes.outputs.code == 'true'
-      run: go tool golangci-lint run
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: needs.ci.outputs.code == 'true'
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        if: needs.ci.outputs.code == 'true'
+        with:
+          go-version-file: go.mod
+          check-latest: true
+          cache: true
+      - name: Is the whole tree clean?
+        if: needs.ci.outputs.code == 'true'
+        run: go tool golangci-lint run
 
-  # Gating happens inside the jobs, never with a workflow-level `paths:`
-  # filter: a required check that never runs reports as *pending forever*
-  # rather than as passed, which makes a docs-only pull request unmergeable.
-  # Anything unrecognized counts as code, so when this is wrong it is wrong in
-  # the direction of running the tests.
-  # This used to wait on pre-commit, on the reasoning that the expensive
-  # question is not worth asking until the cheap universal checks have passed.
-  # That reasoning is about runner minutes, and it was paid for in wall clock
-  # on every run: `changes` is 23s of `git diff --name-only` and pre-commit is
-  # 47s, and chaining them put 70s in front of the 516s job that is the whole
-  # critical path. Measured on main, the three stages summed to 586s against a
-  # 585s average — the chain *was* the overhead, all of it.
+  # Has the corpus lost a case, or our own suite a file? Two guards that
+  # compare this tree against a base commit, so they need the history that
+  # commit is in -- which go-ci's shallow Build and test checkout does not
+  # have. They were steps of `Build and test (ubuntu-latest)` for the reason a
+  # step is cheaper than a job; as a job of their own they are a required check
+  # under this name.
   #
-  # Unchained, the two run together and `test` starts when the diff is known,
-  # at 23s rather than 70s. What that gives up is that a branch failing
-  # pre-commit now also spends a runner on change detection, which is 23s of
-  # ubuntu against 47s saved on every run that passes — and nearly all of them
-  # pass.
-  changes:
-    name: Detect changed files
+  # Only on Linux: the answer is a property of the commit, not of the
+  # platform, so asking twice would only make it possible for the two to
+  # disagree.
+  guards:
+    name: Corpus and suite guards
+    needs: ci
     runs-on: ubuntu-latest
-    outputs:
-      code: ${{ steps.filter.outputs.code }}
-      packaging: ${{ steps.filter.outputs.packaging }}
     steps:
-    # Gated per step, not on the job. A required check that never runs is
-    # reported as pending forever, and a matrix job skipped by `if:` never
-    # expands at all — so the job always runs and reports, and only the
-    # expensive steps are skipped.
-    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      with:
-        fetch-depth: 0 # the diff needs the base commit, not just HEAD
-    - id: filter
-      name: Is any of this code?
-      env:
-        # A pull request diffs against its base; a push to main diffs against
-        # what main was before it. Either can be missing — a force push, a
-        # first commit — and the fallback below covers that.
-        BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
-      run: |
-        code=false
-        # Packaging is gated on the packaging files alone, and deliberately
-        # does **not** take the "a merge runs everything" branch below. That
-        # reasoning is about code an earlier merge may have broken; the
-        # release config has no such drift — it either renders or it does
-        # not, and a merge that did not touch it cannot change the answer.
-        # Forcing it on would put the cross-build matrix on every merge, on a
-        # repository that merges all day.
-        packaging=false
-        if [ "$GITHUB_EVENT_NAME" != pull_request ]; then
-          # A merge runs everything. Not because the merge itself changed
-          # code — it may be pure prose — but because this is the first time
-          # this tree is tested *as main*, and the thing it is protecting
-          # against is an earlier merge that broke something nobody has run
-          # since. Narrowing that by diff would defeat the point of it.
-          echo "push to $GITHUB_REF_NAME — running everything"
-          code=true
-        fi
-        # The base check is its own branch rather than an `elif`, because
-        # `packaging` is still undecided after the merge case above and the
-        # diff is the only thing that can decide it.
-        if ! git cat-file -e "$BASE" 2>/dev/null; then
-          # No usable base commit — a force push, a shallow fetch that did not
-          # reach it, or a `workflow_dispatch`, which has no before-commit at
-          # all. `git diff` would fail here and print nothing, and an empty
-          # diff is indistinguishable from "nothing relevant changed", so this
-          # would silently skip everything. The safe answer is to run it.
-          #
-          # For packaging this is also the hand-operated route in: the report
-          # of a dispatch against a branch is how a change to this job gets
-          # exercised before it lands, per `workflow_dispatch` above.
-          echo "base commit $BASE is not present — running everything"
-          code=true
-          packaging=true
-        else
-          while IFS= read -r f; do
-            [ -n "$f" ] || continue
-            case "$f" in
-              docs/*|*.md|LICENSE|LICENSE.*|*.png|*.jpg|*.gif|*.svg) ;; # prose
-              *) code=true ;;
-            esac
-            # The release config, the workflow that runs it, and this file —
-            # which is where the rendering job itself is written, so a change
-            # to the job exercises the job.
-            case "$f" in
-              .goreleaser.yaml|.github/workflows/release.yml|.github/workflows/ci.yml) packaging=true ;;
-              # The container recipe is rendered by the same GoReleaser run --
-              # `dockers_v2` builds it -- so a change to it is a packaging
-              # change, and the smoke test below is the only thing that runs it.
-              images/scratch/*) packaging=true ;;
-            esac
-          done <<<"$(git diff --name-only "$BASE"...HEAD)"
-        fi
-        echo "code=$code" >> "$GITHUB_OUTPUT"
-        echo "packaging=$packaging" >> "$GITHUB_OUTPUT"
-        echo "changed files are $([ "$code" = true ] && echo 'code — full run' || echo 'prose only — skipping the code jobs')"
-        echo "packaging files $([ "$packaging" = true ] && echo 'changed — rendering a release' || echo 'untouched — skipping the render')"
-
-  test:
-    name: Build and test
-    needs: changes
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, macos-latest]
-    steps:
-    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      if: needs.changes.outputs.code == 'true'
-      with:
-        # The corpus guard compares against a commit, so it needs the
-        # history that commit is in. Nothing else in this job does.
-        fetch-depth: 0
-    - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-      if: needs.changes.outputs.code == 'true'
-      with:
-        go-version-file: go.mod
-        check-latest: true
-        cache: true
-    - run: go build ./...
-      if: needs.changes.outputs.code == 'true'
-    # The race detector on one leg, not both.
-    #
-    # macOS was the long pole and `-race` was why: 326s of its 516s against
-    # 252s of Ubuntu's 434s, for an answer that is a property of the Go memory
-    # model rather than of the platform. Running it twice bought a second
-    # opinion on the same question while the required check everybody waits on
-    # was pinned to the slower of the two runners.
-    #
-    # macOS still runs every test in the module, uninstrumented. That is the
-    # half that matters for this leg: the failures we have actually had here
-    # were platform behavior — a timing-sensitive pty read, a signal
-    # delivered differently — and every one of them is still exercised. What
-    # moves to Ubuntu alone is the detector, which had no platform-specific
-    # finding to its name.
-    #
-    # The uninstrumented leg skips the dialect-combination sweep, and that is
-    # not a coverage decision: `Dialect sweep` is two jobs that run exactly
-    # that test over exactly that corpus, sharded in halves, and they run
-    # beside this one rather than behind it. Measured on run 35320633395, the
-    # whole of `syntax` was 237.5s on the macOS leg and 0.75s of that is the
-    # rest of the package — so this leg was paying 236s on the critical path
-    # for an answer two other jobs had already finished producing. The Linux
-    # leg keeps it, because under -race it is the *other* property — whether
-    # concurrent parses share state -- over a window of the corpus rather than
-    # the sweep, and that costs 43s rather than 237s.
-    #
-    # TestTheSweepIsProvedWhereThisLegStopsPayingForIt is what keeps the skip
-    # honest: it reads this file, and fails if the shards that answer for the
-    # whole of it stop covering the whole of it.
-    - name: Run the tests, with the race detector on the Linux leg
-      if: needs.changes.outputs.code == 'true'
-      run: go test ${{ matrix.os == 'ubuntu-latest' && '-race' || '-skip=^TestNoDialectCombinationPanics$' }} ./...
-    # Deliberately a step of an already-required job rather than a job of its
-    # own. A new job would have to be added to branch protection to gate
-    # anything, and until every open branch carried this workflow the new
-    # required check would never run on them — reporting as pending forever
-    # rather than as passed, which is the trap `changes` exists to avoid.
-    #
-    # Only on Linux: the answer is a property of the commit, not of the
-    # platform, so asking twice would only make it possible for the two to
-    # disagree.
-    - name: Has the corpus lost a case?
-      if: needs.changes.outputs.code == 'true' && matrix.os == 'ubuntu-latest'
-      env:
-        # A pull request is checked out as the merge of head into base, so
-        # base is contained in HEAD and every case that was on main has to
-        # still be here. That grades the tree that would land, which is
-        # exactly where a merge drops a case. A push to main compares against
-        # what main was. Either can be absent, and the guard falls back to a
-        # merge base rather than skipping.
-        BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
-      run: go run ./internal/cmd/corpusguard -base "$BASE"
-    # The same question about share/suite, and for the same reason it is a
-    # step rather than a job. It is separate from the corpus guard because
-    # the two compare different things — a set of case IDs inside one Go file
-    # against a set of paths plus a per-file line floor — and folding them
-    # would mean one instrument reporting about two unrelated trees.
-    - name: Has our own suite lost a file?
-      if: needs.changes.outputs.code == 'true' && matrix.os == 'ubuntu-latest'
-      env:
-        BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
-      run: go run ./internal/cmd/suiteguard -base "$BASE"
-    # The boundary, tried from outside the process against the binary this
-    # job just built. A step of the same already-required job for the reason
-    # given above, and unlike the corpus guard it runs on **both** platforms:
-    # what the gate is asked is portable, but what the kernel does underneath
-    # it is not — the resolving walk uses O_SEARCH on Darwin and
-    # O_PATH|O_DIRECTORY on Linux, the two disagree about which errno an
-    # O_NOFOLLOW on a link gives, and the link budget is 32 against 40. A
-    # sweep on one of them says nothing about the other.
-    #
-    # It gates, where the other report targets do not. A conformance number
-    # is meant to be low and climbing, so failing on it would mean failing on
-    # unfinished work; a boundary is meant to hold, so a route that got out
-    # is a regression by definition. The sweep is 1.8s and launches the shell
-    # a few hundred times, which is cheap enough to ask on every commit.
-    - name: Does anything get out of the sandbox?
-      if: needs.changes.outputs.code == 'true'
-      run: make sandbox
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: needs.ci.outputs.code == 'true'
+        with:
+          fetch-depth: 0 # the guards compare against a commit
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        if: needs.ci.outputs.code == 'true'
+        with:
+          go-version-file: go.mod
+          check-latest: true
+          cache: true
+      - name: Has the corpus lost a case?
+        if: needs.ci.outputs.code == 'true'
+        env:
+          # A pull request is checked out as the merge of head into base, so
+          # base is contained in HEAD and every case that was on main has to
+          # still be here. That grades the tree that would land, which is
+          # exactly where a merge drops a case. A push to main compares against
+          # what main was. Either can be absent, and the guard falls back to a
+          # merge base rather than skipping.
+          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: go run ./internal/cmd/corpusguard -base "$BASE"
+      # The same question about share/suite. It is separate from the corpus
+      # guard because the two compare different things -- a set of case IDs
+      # inside one Go file against a set of paths plus a per-file line floor --
+      # and folding them would mean one instrument reporting about two
+      # unrelated trees.
+      - name: Has our own suite lost a file?
+        if: needs.ci.outputs.code == 'true'
+        env:
+          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: go run ./internal/cmd/suiteguard -base "$BASE"
 
   # The dialect-combination sweep: a job of its own, so it runs beside the
   # tests rather than after them.
@@ -372,26 +246,26 @@ jobs:
   # this job's duration the least predictable thing in the workflow.
   sweep:
     name: Dialect sweep
-    needs: changes
+    needs: ci
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
         shard: ['0/2', '1/2']
     steps:
-    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      if: needs.changes.outputs.code == 'true'
-    - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-      if: needs.changes.outputs.code == 'true'
-      with:
-        go-version-file: go.mod
-        check-latest: true
-        cache: true
-    - name: Can any dialect combination crash the parser?
-      if: needs.changes.outputs.code == 'true'
-      env:
-        SH_DIALECTCOMBO_SHARD: ${{ matrix.shard }}
-      run: go test ./syntax -run TestNoDialectCombinationPanics
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: needs.ci.outputs.code == 'true'
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        if: needs.ci.outputs.code == 'true'
+        with:
+          go-version-file: go.mod
+          check-latest: true
+          cache: true
+      - name: Can any dialect combination crash the parser?
+        if: needs.ci.outputs.code == 'true'
+        env:
+          SH_DIALECTCOMBO_SHARD: ${{ matrix.shard }}
+        run: go test ./syntax -run TestNoDialectCombinationPanics
 
   # Each dialect binary graded against the golden record, per case, against
   # a committed list of the cases it does not yet match exactly (#5710). No
@@ -405,32 +279,32 @@ jobs:
   # container the ash column was recorded in.
   conformance:
     name: Conformance ratchet (${{ matrix.dialects }})
-    needs: changes
+    needs: ci
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         include:
-        - os: macos-latest
-          dialects: bash zsh dash ksh
-        - os: ubuntu-latest
-          dialects: ash
+          - os: macos-latest
+            dialects: bash zsh dash ksh
+          - os: ubuntu-latest
+            dialects: ash
     steps:
-    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      if: needs.changes.outputs.code == 'true'
-    - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-      if: needs.changes.outputs.code == 'true'
-      with:
-        go-version-file: go.mod
-        check-latest: true
-        cache: true
-    - name: Did any case move against its baseline?
-      if: needs.changes.outputs.code == 'true'
-      run: make conformance-ratchet DIALECTS="${{ matrix.dialects }}"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: needs.ci.outputs.code == 'true'
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        if: needs.ci.outputs.code == 'true'
+        with:
+          go-version-file: go.mod
+          check-latest: true
+          cache: true
+      - name: Did any case move against its baseline?
+        if: needs.ci.outputs.code == 'true'
+        run: make conformance-ratchet DIALECTS="${{ matrix.dialects }}"
 
   packaging:
     name: Render a release
-    needs: changes
+    needs: ci
     runs-on: ubuntu-latest
     # Not report-only. `.goreleaser.yaml` is otherwise exercised for the first
     # time by the release workflow, which runs on a `v*` tag -- so a mistake in
@@ -440,199 +314,234 @@ jobs:
     # 125,000 limit, measured at v0.0.0. Nothing before the tag could have said
     # so. This is what says so.
     steps:
-    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      if: needs.changes.outputs.packaging == 'true'
-      with:
-        # GoReleaser reads the tag history to build a changelog, and the
-        # `changelog:` gate is `eq .PreviousTag ""` -- so a shallow checkout
-        # would render the one case the config special-cases and never the
-        # ordinary one.
-        fetch-depth: 0
-    - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-      if: needs.changes.outputs.packaging == 'true'
-      with:
-        go-version-file: go.mod
-        check-latest: true
-        cache: true
-    # `--snapshot` stands in for a tag and disables publishing on its own;
-    # `--skip=publish` says it a second time, because the tap token is the one
-    # thing in this config that writes to another repository. No secrets are
-    # passed to this step, deliberately: the render must not be able to reach
-    # the tap even if both guards were wrong. The formula is still written --
-    # to `dist/homebrew/Formula/` -- which is what the next step reads.
-    - name: Render a release, and publish none of it
-      if: needs.changes.outputs.packaging == 'true'
-      uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7.2.3
-      with:
-        distribution: goreleaser
-        version: "~> v2"
-        # `sign` too: a snapshot still runs `signs`, and cosign's keyless
-        # identity is the OIDC token this job deliberately does not have.
-        args: release --snapshot --clean --skip=publish,sign
-    # Rendering proves the config parses and every target builds. It does not
-    # prove the formula installs what the archive carries: the install list is
-    # an explicit `libexec.install "sh", "bash", …` and `libexec.install`
-    # silently skips a name it was not given, which is how `ash` was dropped
-    # from a release once already. A formula quietly missing a shell renders
-    # exactly like a correct one.
-    #
-    # So this compares the two rosters the render itself produced -- the
-    # binaries in `artifacts.json` against the names in the generated formula
-    # -- rather than either against a list written here. A hardcoded list is a
-    # claim about a roster it cannot see, and goes stale the next time someone
-    # adds a binary; derived, the check gets stronger when one is added.
-    # The render builds a linux/arm64 image as well as a linux/amd64 one, and
-    # the smoke test below runs both. Assembling them needs no emulation -- the
-    # recipe's builder stage is pinned to `$BUILDPLATFORM` -- but *running* the
-    # arm64 shell on this runner does.
-    - uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
-      if: needs.changes.outputs.packaging == 'true'
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # GoReleaser reads the tag history to build a changelog, and the
+          # `changelog:` gate is `eq .PreviousTag ""` -- so a shallow checkout
+          # would render the one case the config special-cases and never the
+          # ordinary one.
+          fetch-depth: 0
+      # Packaging is gated on the packaging files alone, and deliberately does
+      # **not** take the "a merge runs everything" branch go-ci's change
+      # detection takes. That reasoning is about code an earlier merge may have
+      # broken; the release config has no such drift -- it either renders or it
+      # does not, and a merge that did not touch it cannot change the answer.
+      # Forcing it on would put the cross-build matrix on every merge, on a
+      # repository that merges all day.
+      - id: pkg
+        name: Did the packaging change?
+        env:
+          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          packaging=false
+          if ! git cat-file -e "$BASE" 2>/dev/null; then
+            # No usable base commit -- a force push, or a `workflow_dispatch`,
+            # which has no before-commit at all. An empty diff is
+            # indistinguishable from "nothing relevant changed", so render. This
+            # is also the hand-operated route in: a dispatch against a branch is
+            # how a change to this job gets exercised before it lands.
+            echo "base commit $BASE is not present -- rendering"
+            packaging=true
+          else
+            while IFS= read -r f; do
+              case "$f" in
+                # The release config, the workflow that runs it, and this file,
+                # which is where the rendering job itself is written.
+                .goreleaser.yaml|.github/workflows/release.yml|.github/workflows/ci.yml) packaging=true ;;
+                # The container recipe is rendered by the same GoReleaser run --
+                # `dockers_v2` builds it -- so a change to it is a packaging
+                # change, and the smoke test below is the only thing that runs it.
+                images/scratch/*) packaging=true ;;
+              esac
+            done <<<"$(git diff --name-only "$BASE"...HEAD)"
+          fi
+          echo "packaging=$packaging" >> "$GITHUB_OUTPUT"
+          echo "packaging files $([ "$packaging" = true ] && echo 'changed — rendering a release' || echo 'untouched — skipping the render')"
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        if: steps.pkg.outputs.packaging == 'true'
+        with:
+          go-version-file: go.mod
+          check-latest: true
+          cache: true
+      # `--snapshot` stands in for a tag and disables publishing on its own;
+      # `--skip=publish` says it a second time, because the tap token is the one
+      # thing in this config that writes to another repository. No secrets are
+      # passed to this step, deliberately: the render must not be able to reach
+      # the tap even if both guards were wrong. The formula is still written --
+      # to `dist/homebrew/Formula/` -- which is what the next step reads.
+      - name: Render a release, and publish none of it
+        if: steps.pkg.outputs.packaging == 'true'
+        uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7.2.3
+        with:
+          distribution: goreleaser
+          version: "~> v2"
+          # `sign` too: a snapshot still runs `signs`, and cosign's keyless
+          # identity is the OIDC token this job deliberately does not have.
+          args: release --snapshot --clean --skip=publish,sign
+      # Rendering proves the config parses and every target builds. It does not
+      # prove the formula installs what the archive carries: the install list is
+      # an explicit `libexec.install "sh", "bash", …` and `libexec.install`
+      # silently skips a name it was not given, which is how `ash` was dropped
+      # from a release once already. A formula quietly missing a shell renders
+      # exactly like a correct one.
+      #
+      # So this compares the two rosters the render itself produced -- the
+      # binaries in `artifacts.json` against the names in the generated formula
+      # -- rather than either against a list written here. A hardcoded list is a
+      # claim about a roster it cannot see, and goes stale the next time someone
+      # adds a binary; derived, the check gets stronger when one is added.
+      # The render builds a linux/arm64 image as well as a linux/amd64 one, and
+      # the smoke test below runs both. Assembling them needs no emulation -- the
+      # recipe's builder stage is pinned to `$BUILDPLATFORM` -- but *running* the
+      # arm64 shell on this runner does.
+      - uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
+        if: steps.pkg.outputs.packaging == 'true'
 
-    - name: Does the formula install every binary the build produced?
-      if: needs.changes.outputs.packaging == 'true'
-      shell: bash
-      run: |
-        set -euo pipefail
+      - name: Does the formula install every binary the build produced?
+        if: steps.pkg.outputs.packaging == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
 
-        formula=$(find dist/homebrew -name '*.rb' -print -quit 2>/dev/null || true)
-        # Every check below is written to fail loudly when its input is
-        # missing, because the failure this job exists to catch and a job that
-        # silently measured nothing look identical in a green tick.
-        if [ -z "$formula" ]; then
-          echo "::error::no formula under dist/homebrew -- the brew pipe did not run, so this job proved nothing"
-          exit 1
-        fi
-        echo "reading $formula"
+          formula=$(find dist/homebrew -name '*.rb' -print -quit 2>/dev/null || true)
+          # Every check below is written to fail loudly when its input is
+          # missing, because the failure this job exists to catch and a job that
+          # silently measured nothing look identical in a green tick.
+          if [ -z "$formula" ]; then
+            echo "::error::no formula under dist/homebrew -- the brew pipe did not run, so this job proved nothing"
+            exit 1
+          fi
+          echo "reading $formula"
 
-        # A scratch directory, so the job leaves nothing in the checkout.
-        work=$(mktemp -d)
-        built="$work/built.txt"
-        installed="$work/installed.txt"
+          # A scratch directory, so the job leaves nothing in the checkout.
+          work=$(mktemp -d)
+          built="$work/built.txt"
+          installed="$work/installed.txt"
 
-        # `.extra.ID` is the build id, `.name` the binary it produces; the
-        # same name appears once per platform, hence the dedupe.
-        jq -r '.[] | select(.type == "Binary") | .name' dist/artifacts.json | sort -u > "$built"
-        # **Both destinations, not just libexec.** The keg has two on purpose:
-        # the shells go to `libexec`, which is off PATH, because a `bash` ahead
-        # of `/bin` would answer for every shebang on the machine; `shfmt` goes
-        # to `bin`, because nothing resolves a formatter implicitly and one
-        # behind `opt_libexec` is a formatter nothing calls. A check that read
-        # only `libexec.install` would report the formatter as missing on a
-        # keg that installs it correctly -- which is a false alarm, and the
-        # failure mode that trains people to ignore the job.
-        #
-        # Both quoting styles too, since the formula is generated and this
-        # should not depend on which one GoReleaser emits.
-        sed -n -E 's/.*(libexec|bin)\.install (.*)/\2/p' "$formula" \
-          | tr ',' '\n' \
-          | sed -n -e 's/.*"\([^"]*\)".*/\1/p' -e "s/.*'\([^']*\)'.*/\1/p" \
-          | sort -u > "$installed"
+          # `.extra.ID` is the build id, `.name` the binary it produces; the
+          # same name appears once per platform, hence the dedupe.
+          jq -r '.[] | select(.type == "Binary") | .name' dist/artifacts.json | sort -u > "$built"
+          # **Both destinations, not just libexec.** The keg has two on purpose:
+          # the shells go to `libexec`, which is off PATH, because a `bash` ahead
+          # of `/bin` would answer for every shebang on the machine; `shfmt` goes
+          # to `bin`, because nothing resolves a formatter implicitly and one
+          # behind `opt_libexec` is a formatter nothing calls. A check that read
+          # only `libexec.install` would report the formatter as missing on a
+          # keg that installs it correctly -- which is a false alarm, and the
+          # failure mode that trains people to ignore the job.
+          #
+          # Both quoting styles too, since the formula is generated and this
+          # should not depend on which one GoReleaser emits.
+          sed -n -E 's/.*(libexec|bin)\.install (.*)/\2/p' "$formula" \
+            | tr ',' '\n' \
+            | sed -n -e 's/.*"\([^"]*\)".*/\1/p' -e "s/.*'\([^']*\)'.*/\1/p" \
+            | sort -u > "$installed"
 
-        if [ ! -s "$built" ]; then
-          echo "::error::artifacts.json lists no binaries at all -- the render produced nothing to install"
-          exit 1
-        fi
-        if [ ! -s "$installed" ]; then
-          echo "::error::the rendered formula has no libexec.install list -- nothing would be installed"
-          exit 1
-        fi
-
-        echo "built:     $(tr '\n' ' ' < "$built")"
-        echo "installed: $(tr '\n' ' ' < "$installed")"
-
-        status=0
-        # Built but not installed: the keg comes out missing a binary the
-        # archive carries and the caveats name. This is the `ash` failure.
-        if missing=$(comm -23 "$built" "$installed") && [ -n "$missing" ]; then
-          echo "::error::the archive carries these, and the formula does not install them: $(echo $missing)"
-          status=1
-        fi
-        # Installed but not built: `libexec.install` raises on a name that is
-        # not in the archive, so this fails at `brew install` time instead.
-        if extra=$(comm -13 "$built" "$installed") && [ -n "$extra" ]; then
-          echo "::error::the formula installs these, and the archive does not carry them: $(echo $extra)"
-          status=1
-        fi
-        if [ "$status" -eq 0 ]; then
-          echo "the formula installs all $(wc -l < "$built" | tr -d ' ') binaries the build produced"
-        fi
-        exit "$status"
-
-    # The six container images, run. The render proves they build; this proves
-    # each one carries the shell it is named for, which is a different claim:
-    # `dockers_v2` pairs a `--target` with an `ids` filter, and a pair that
-    # disagreed would produce an image whose `ENTRYPOINT` names a binary that
-    # is not in it. That is a runtime failure, so only running it finds it.
-    #
-    # The roster comes from `artifacts.json` for the same reason the formula
-    # check above derives its own: a list written here is a claim about a
-    # roster it cannot see, and says nothing when a seventh image is added.
-    - name: Does every image carry the shell it is named for?
-      if: needs.changes.outputs.packaging == 'true'
-      shell: bash
-      run: |
-        set -euo pipefail
-
-        # One row per distinct image, not per tag: `latest` and the version
-        # point at the same digest, and running it twice proves it twice.
-        mapfile -t images < <(
-          jq -r '.[] | select(.type == "Docker Image") | [.extra.Digest, .name] | @tsv' \
-            dist/artifacts.json | sort -u -k1,1 | cut -f2
-        )
-        if [ "${#images[@]}" -eq 0 ]; then
-          echo "::error::the render produced no container images -- this job proved nothing"
-          exit 1
-        fi
-        echo "smoking ${#images[@]} images"
-
-        # **Standard error is kept out of the comparison, not folded into it.**
-        # Half of these images are for the architecture this runner is not, and
-        # `docker run` writes a line about that to stderr before the container
-        # starts -- so a `2>&1` here compares the warning and fails every
-        # foreign-architecture row while the shell inside answered correctly.
-        # Measured: it did exactly that. The stream is still read, and printed
-        # when a row fails, because a row that fails for a real reason says why
-        # on it.
-        err=$(mktemp)
-        status=0
-        for img in "${images[@]}"; do
-          # ghcr.io/…/scratch/bash:0.0.21-next-amd64 -> bash
-          name=${img%:*}; name=${name##*/}
-
-          # Through the image's own ENTRYPOINT, which is the thing under test.
-          # `$0` is the path it was started as, so it fails loudly when the
-          # entrypoint and the binary disagree; `~root` reads /etc/passwd, and
-          # /tmp has to be there, writable and sticky, because a bare scratch
-          # has no /tmp at all.
-          want="/bin/$name /root /root sticky"
-          got=$(docker run --rm "$img" -c '
-            printf "%s %s %s" "$0" "$HOME" "$(cd ~root && pwd)"
-            if [ -w /tmp ] && [ -k /tmp ]; then printf " sticky"; else printf " NO-TMP"; fi
-          ' 2>"$err") || true
-          if [ "$got" != "$want" ]; then
-            echo "::error::$img answered [$got], wanted [$want]"
-            sed 's/^/    /' "$err"
-            status=1
-            continue
+          if [ ! -s "$built" ]; then
+            echo "::error::artifacts.json lists no binaries at all -- the render produced nothing to install"
+            exit 1
+          fi
+          if [ ! -s "$installed" ]; then
+            echo "::error::the rendered formula has no libexec.install list -- nothing would be installed"
+            exit 1
           fi
 
-          # The second name. Every one of these images has a /bin/sh, so a
-          # derived image's `RUN` resolves and `docker exec … sh` works.
-          got=$(docker run --rm --entrypoint /bin/sh "$img" -c 'echo $0' 2>"$err") || true
-          if [ "$got" != /bin/sh ]; then
-            echo "::error::$img has no working /bin/sh -- it answered [$got]"
-            sed 's/^/    /' "$err"
-            status=1
-            continue
-          fi
+          echo "built:     $(tr '\n' ' ' < "$built")"
+          echo "installed: $(tr '\n' ' ' < "$installed")"
 
-          echo "  $img: ok"
-        done
-        exit "$status"
+          status=0
+          # Built but not installed: the keg comes out missing a binary the
+          # archive carries and the caveats name. This is the `ash` failure.
+          if missing=$(comm -23 "$built" "$installed") && [ -n "$missing" ]; then
+            echo "::error::the archive carries these, and the formula does not install them: $(echo $missing)"
+            status=1
+          fi
+          # Installed but not built: `libexec.install` raises on a name that is
+          # not in the archive, so this fails at `brew install` time instead.
+          if extra=$(comm -13 "$built" "$installed") && [ -n "$extra" ]; then
+            echo "::error::the formula installs these, and the archive does not carry them: $(echo $extra)"
+            status=1
+          fi
+          if [ "$status" -eq 0 ]; then
+            echo "the formula installs all $(wc -l < "$built" | tr -d ' ') binaries the build produced"
+          fi
+          exit "$status"
+
+      # The six container images, run. The render proves they build; this proves
+      # each one carries the shell it is named for, which is a different claim:
+      # `dockers_v2` pairs a `--target` with an `ids` filter, and a pair that
+      # disagreed would produce an image whose `ENTRYPOINT` names a binary that
+      # is not in it. That is a runtime failure, so only running it finds it.
+      #
+      # The roster comes from `artifacts.json` for the same reason the formula
+      # check above derives its own: a list written here is a claim about a
+      # roster it cannot see, and says nothing when a seventh image is added.
+      - name: Does every image carry the shell it is named for?
+        if: steps.pkg.outputs.packaging == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # One row per distinct image, not per tag: `latest` and the version
+          # point at the same digest, and running it twice proves it twice.
+          mapfile -t images < <(
+            jq -r '.[] | select(.type == "Docker Image") | [.extra.Digest, .name] | @tsv' \
+              dist/artifacts.json | sort -u -k1,1 | cut -f2
+          )
+          if [ "${#images[@]}" -eq 0 ]; then
+            echo "::error::the render produced no container images -- this job proved nothing"
+            exit 1
+          fi
+          echo "smoking ${#images[@]} images"
+
+          # **Standard error is kept out of the comparison, not folded into it.**
+          # Half of these images are for the architecture this runner is not, and
+          # `docker run` writes a line about that to stderr before the container
+          # starts -- so a `2>&1` here compares the warning and fails every
+          # foreign-architecture row while the shell inside answered correctly.
+          # Measured: it did exactly that. The stream is still read, and printed
+          # when a row fails, because a row that fails for a real reason says why
+          # on it.
+          err=$(mktemp)
+          status=0
+          for img in "${images[@]}"; do
+            # ghcr.io/…/scratch/bash:0.0.21-next-amd64 -> bash
+            name=${img%:*}; name=${name##*/}
+
+            # Through the image's own ENTRYPOINT, which is the thing under test.
+            # `$0` is the path it was started as, so it fails loudly when the
+            # entrypoint and the binary disagree; `~root` reads /etc/passwd, and
+            # /tmp has to be there, writable and sticky, because a bare scratch
+            # has no /tmp at all.
+            want="/bin/$name /root /root sticky"
+            got=$(docker run --rm "$img" -c '
+              printf "%s %s %s" "$0" "$HOME" "$(cd ~root && pwd)"
+              if [ -w /tmp ] && [ -k /tmp ]; then printf " sticky"; else printf " NO-TMP"; fi
+            ' 2>"$err") || true
+            if [ "$got" != "$want" ]; then
+              echo "::error::$img answered [$got], wanted [$want]"
+              sed 's/^/    /' "$err"
+              status=1
+              continue
+            fi
+
+            # The second name. Every one of these images has a /bin/sh, so a
+            # derived image's `RUN` resolves and `docker exec … sh` works.
+            got=$(docker run --rm --entrypoint /bin/sh "$img" -c 'echo $0' 2>"$err") || true
+            if [ "$got" != /bin/sh ]; then
+              echo "::error::$img has no working /bin/sh -- it answered [$got]"
+              sed 's/^/    /' "$err"
+              status=1
+              continue
+            fi
+
+            echo "  $img: ok"
+          done
+          exit "$status"
 
   oracle:
     name: Oracle (report only)
-    needs: changes
+    needs: ci
     # Report-only, so it cannot fail, so a pull request gains nothing by
     # waiting for it -- and it is not a required check, which is what makes
     # skipping it here safe rather than a check that hangs pending forever.
@@ -644,43 +553,43 @@ jobs:
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      if: needs.changes.outputs.code == 'true'
-    - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-      if: needs.changes.outputs.code == 'true'
-      with:
-        go-version-file: go.mod
-        check-latest: true
-        cache: true
-    - name: Install as much of the panel as this runner can host
-      if: needs.changes.outputs.code == 'true'
-      run: sudo apt-get update -qq && sudo apt-get install -y -qq dash ksh zsh
-    - name: Report drift without failing on it
-      if: needs.changes.outputs.code == 'true'
-      # Report-only, and now for a measured reason rather than an assumed
-      # one. The golden record is generated on one machine and a runner does
-      # not have the same builds of the same shells: on this runner, against
-      # a record made on macOS, **380 of 1122 cases differ** and bash 3.2 is
-      # not installable at all. Making this blocking would fail every build,
-      # which is the flakiness a gate must not have, and a check that is red
-      # for a legitimate reason is one people learn to ignore.
-      #
-      # The half that *can* block does, and it blocks somewhere else. Whether
-      # the corpus, the golden record and the rendered measurements agree
-      # with each other needs no shells and has the same answer on every
-      # machine, so it is a test — TestTheCommittedRecordAndDocumentAgree —
-      # and runs in the required Build and test job. That is what catches a
-      # case added, removed or renamed without regenerating, and prose edited
-      # after the regeneration.
-      #
-      # What is left here is the one question only a panel can answer, and
-      # only a panel that matches the record can answer it: `make check`
-      # locally.
-      run: go run ./internal/cmd/oracle -check || true
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: needs.ci.outputs.code == 'true'
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        if: needs.ci.outputs.code == 'true'
+        with:
+          go-version-file: go.mod
+          check-latest: true
+          cache: true
+      - name: Install as much of the panel as this runner can host
+        if: needs.ci.outputs.code == 'true'
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq dash ksh zsh
+      - name: Report drift without failing on it
+        if: needs.ci.outputs.code == 'true'
+        # Report-only, and now for a measured reason rather than an assumed
+        # one. The golden record is generated on one machine and a runner does
+        # not have the same builds of the same shells: on this runner, against
+        # a record made on macOS, **380 of 1122 cases differ** and bash 3.2 is
+        # not installable at all. Making this blocking would fail every build,
+        # which is the flakiness a gate must not have, and a check that is red
+        # for a legitimate reason is one people learn to ignore.
+        #
+        # The half that *can* block does, and it blocks somewhere else. Whether
+        # the corpus, the golden record and the rendered measurements agree
+        # with each other needs no shells and has the same answer on every
+        # machine, so it is a test — TestTheCommittedRecordAndDocumentAgree —
+        # and runs in the required Build and test job. That is what catches a
+        # case added, removed or renamed without regenerating, and prose edited
+        # after the regeneration.
+        #
+        # What is left here is the one question only a panel can answer, and
+        # only a panel that matches the record can answer it: `make check`
+        # locally.
+        run: go run ./internal/cmd/oracle -check || true
 
   perfgate:
     name: Performance gate (report only)
-    needs: changes
+    needs: ci
     # Report-only, so it cannot fail, so a pull request gains nothing by
     # waiting for it -- and it is not a required check, which is what makes
     # skipping it here safe rather than a check that hangs pending forever.
@@ -698,55 +607,55 @@ jobs:
     # this is the outer bound on a build that never gets that far.
     timeout-minutes: 20
     steps:
-    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      if: needs.changes.outputs.code == 'true'
-    - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-      if: needs.changes.outputs.code == 'true'
-      with:
-        go-version-file: go.mod
-        check-latest: true
-        cache: true
-    - name: Install the shells the dialects are graded against
-      if: needs.changes.outputs.code == 'true'
-      run: sudo apt-get update -qq && sudo apt-get install -y -qq dash ksh zsh
-    - name: How does each dialect compare with the shell it claims to be?
-      if: needs.changes.outputs.code == 'true'
-      # #2257: this existed as `make perfgate` and was in no workflow at all,
-      # so the promise #1403 encodes -- "no dialect can be slower than the
-      # original" -- was checked only when somebody remembered to type it.
-      # That is the shape a stale fact survives in, and it is why "perfgate is
-      # failing" circulated for a week as hearsay. It runs here now, on every
-      # change that touches code, and it costs about half a minute.
-      #
-      # Report-only, and for a reason that is measured rather than assumed.
-      # Three of the four dialects are slower than their originals today and
-      # have been since #1403 was closed on 2026-09-08 -- on this runner's
-      # ancestors and on the maintainer's machine alike -- so a blocking job
-      # would be red on arrival and stay red, which is how a check becomes one
-      # people learn to ignore.
-      #
-      # #2813 changed which rows the bar counts: the workload gates and the
-      # bare case is reported. That is what makes report-only a stage rather
-      # than a permanent excuse -- the bare column was unwinnable on Linux (an
-      # empty Go binary costs more CPU to start than /bin/dash costs to do its
-      # whole job), so no amount of work would have turned this job green. The
-      # workload column is interpreter throughput and is ours: bash 1.53x, zsh
-      # 2.20x on this runner. Those are the numbers that have to come under
-      # 1.00x before this line loses its `|| true`.
-      #
-      # It is deliberately NOT wired as a blocking regression gate yet. The
-      # honest form of that is an expectation of which comparisons pass, and
-      # every figure this repository has is from one macOS machine; writing a
-      # runner's expectations from a machine that is not the runner is the
-      # trap this file already documents for the oracle job below. This job is
-      # what produces the runner measurements that table would be written
-      # from.
-      #
-      # The half that can block already does, and blocks elsewhere. Whether
-      # the gate can bite -- that a slower dialect is caught, that a refusing
-      # one is not scored as a pass, that a tie is not a win, that the
-      # workload answer is the panel's own -- needs no measurement and has the
-      # same answer on every machine, so those are ordinary tests in the
-      # required Build and test job. What cannot rot unnoticed here is the
-      # machinery; what is reported here is the number.
-      run: make perfgate || true
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: needs.ci.outputs.code == 'true'
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        if: needs.ci.outputs.code == 'true'
+        with:
+          go-version-file: go.mod
+          check-latest: true
+          cache: true
+      - name: Install the shells the dialects are graded against
+        if: needs.ci.outputs.code == 'true'
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq dash ksh zsh
+      - name: How does each dialect compare with the shell it claims to be?
+        if: needs.ci.outputs.code == 'true'
+        # #2257: this existed as `make perfgate` and was in no workflow at all,
+        # so the promise #1403 encodes -- "no dialect can be slower than the
+        # original" -- was checked only when somebody remembered to type it.
+        # That is the shape a stale fact survives in, and it is why "perfgate is
+        # failing" circulated for a week as hearsay. It runs here now, on every
+        # change that touches code, and it costs about half a minute.
+        #
+        # Report-only, and for a reason that is measured rather than assumed.
+        # Three of the four dialects are slower than their originals today and
+        # have been since #1403 was closed on 2026-09-08 -- on this runner's
+        # ancestors and on the maintainer's machine alike -- so a blocking job
+        # would be red on arrival and stay red, which is how a check becomes one
+        # people learn to ignore.
+        #
+        # #2813 changed which rows the bar counts: the workload gates and the
+        # bare case is reported. That is what makes report-only a stage rather
+        # than a permanent excuse -- the bare column was unwinnable on Linux (an
+        # empty Go binary costs more CPU to start than /bin/dash costs to do its
+        # whole job), so no amount of work would have turned this job green. The
+        # workload column is interpreter throughput and is ours: bash 1.53x, zsh
+        # 2.20x on this runner. Those are the numbers that have to come under
+        # 1.00x before this line loses its `|| true`.
+        #
+        # It is deliberately NOT wired as a blocking regression gate yet. The
+        # honest form of that is an expectation of which comparisons pass, and
+        # every figure this repository has is from one macOS machine; writing a
+        # runner's expectations from a machine that is not the runner is the
+        # trap this file already documents for the oracle job below. This job is
+        # what produces the runner measurements that table would be written
+        # from.
+        #
+        # The half that can block already does, and blocks elsewhere. Whether
+        # the gate can bite -- that a slower dialect is caught, that a refusing
+        # one is not scored as a pass, that a tie is not a win, that the
+        # workload answer is the panel's own -- needs no measurement and has the
+        # same answer on every machine, so those are ordinary tests in the
+        # required Build and test job. What cannot rot unnoticed here is the
+        # machinery; what is reported here is the number.
+        run: make perfgate || true

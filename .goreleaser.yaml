@@ -12,115 +12,115 @@ version: 2
 project_name: sh
 
 builds:
-# Named binaries, plain. The name collision with the shells they model is the
-# point — a shebang and `chsh` both name a shell by path, and `login` starts
-# one as `-bash` — and the answer to the hazard is *where* they are installed,
-# never a renaming that would break both. The Makefile's install target and the
-# formula below agree on that: off PATH, named by their full path.
-- id: sh
-  binary: sh
-  main: ./cmd/sh
-  env:
-  - CGO_ENABLED=0
-  goos: [linux, darwin]
-  goarch: [amd64, arm64]
-  ldflags:
-  - -s -w
-  # Every binary has a `version` to stamp, and this comment used to say the
-  # opposite: "only this binary ... the dialect binaries tell a client nothing".
-  # That was true while `-acp` lived on cmd/sh alone. Since #2585 every shipped
-  # binary serves the protocol, so every one of them tells a client what it is,
-  # and one left unstamped would announce 0.0.0-dev out of a tagged release.
-  - -X main.version={{.Version}}
+  # Named binaries, plain. The name collision with the shells they model is the
+  # point — a shebang and `chsh` both name a shell by path, and `login` starts
+  # one as `-bash` — and the answer to the hazard is *where* they are installed,
+  # never a renaming that would break both. The Makefile's install target and the
+  # formula below agree on that: off PATH, named by their full path.
+  - id: sh
+    binary: sh
+    main: ./cmd/sh
+    env:
+      - CGO_ENABLED=0
+    goos: [linux, darwin]
+    goarch: [amd64, arm64]
+    ldflags:
+      - -s -w
+      # Every binary has a `version` to stamp, and this comment used to say the
+      # opposite: "only this binary ... the dialect binaries tell a client nothing".
+      # That was true while `-acp` lived on cmd/sh alone. Since #2585 every shipped
+      # binary serves the protocol, so every one of them tells a client what it is,
+      # and one left unstamped would announce 0.0.0-dev out of a tagged release.
+      - -X main.version={{.Version}}
 
-- id: bash
-  binary: bash
-  main: ./cmd/bash
-  env: [CGO_ENABLED=0]
-  goos: [linux, darwin]
-  goarch: [amd64, arm64]
-  ldflags:
-  - -s -w
-  - -X main.version={{.Version}}
+  - id: bash
+    binary: bash
+    main: ./cmd/bash
+    env: [CGO_ENABLED=0]
+    goos: [linux, darwin]
+    goarch: [amd64, arm64]
+    ldflags:
+      - -s -w
+      - -X main.version={{.Version}}
 
-- id: zsh
-  binary: zsh
-  main: ./cmd/zsh
-  env: [CGO_ENABLED=0]
-  goos: [linux, darwin]
-  goarch: [amd64, arm64]
-  ldflags:
-  - -s -w
-  - -X main.version={{.Version}}
+  - id: zsh
+    binary: zsh
+    main: ./cmd/zsh
+    env: [CGO_ENABLED=0]
+    goos: [linux, darwin]
+    goarch: [amd64, arm64]
+    ldflags:
+      - -s -w
+      - -X main.version={{.Version}}
 
-- id: ksh
-  binary: ksh
-  main: ./cmd/ksh
-  env: [CGO_ENABLED=0]
-  goos: [linux, darwin]
-  goarch: [amd64, arm64]
-  ldflags:
-  - -s -w
-  - -X main.version={{.Version}}
+  - id: ksh
+    binary: ksh
+    main: ./cmd/ksh
+    env: [CGO_ENABLED=0]
+    goos: [linux, darwin]
+    goarch: [amd64, arm64]
+    ldflags:
+      - -s -w
+      - -X main.version={{.Version}}
 
-- id: dash
-  binary: dash
-  main: ./cmd/dash
-  env: [CGO_ENABLED=0]
-  goos: [linux, darwin]
-  goarch: [amd64, arm64]
-  ldflags:
-  - -s -w
-  - -X main.version={{.Version}}
+  - id: dash
+    binary: dash
+    main: ./cmd/dash
+    env: [CGO_ENABLED=0]
+    goos: [linux, darwin]
+    goarch: [amd64, arm64]
+    ldflags:
+      - -s -w
+      - -X main.version={{.Version}}
 
-- id: ash
-  binary: ash
-  main: ./cmd/ash
-  env: [CGO_ENABLED=0]
-  goos: [linux, darwin]
-  goarch: [amd64, arm64]
-  ldflags:
-  - -s -w
-  - -X main.version={{.Version}}
+  - id: ash
+    binary: ash
+    main: ./cmd/ash
+    env: [CGO_ENABLED=0]
+    goos: [linux, darwin]
+    goarch: [amd64, arm64]
+    ldflags:
+      - -s -w
+      - -X main.version={{.Version}}
 
-- id: shfmt
-  binary: shfmt
-  main: ./cmd/shfmt
-  env: [CGO_ENABLED=0]
-  goos: [linux, darwin]
-  goarch: [amd64, arm64]
-  ldflags:
-  - -s -w
-  # Stamped like the six above, though this one serves no protocol. A tool a
-  # person runs by hand is asked what it is by a person, so it grew a
-  # `-version` flag in the same change that started shipping it; an unstamped
-  # binary would answer `0.0.0-dev` out of a tagged release, which is the
-  # failure the note on `cmd/sh` above describes.
-  - -X main.version={{.Version}}
+  - id: shfmt
+    binary: shfmt
+    main: ./cmd/shfmt
+    env: [CGO_ENABLED=0]
+    goos: [linux, darwin]
+    goarch: [amd64, arm64]
+    ldflags:
+      - -s -w
+      # Stamped like the six above, though this one serves no protocol. A tool a
+      # person runs by hand is asked what it is by a person, so it grew a
+      # `-version` flag in the same change that started shipping it; an unstamped
+      # binary would answer `0.0.0-dev` out of a tagged release, which is the
+      # failure the note on `cmd/sh` above describes.
+      - -X main.version={{.Version}}
 
 # No windows target. Every route into this program is a POSIX one — process
 # groups, a controlling terminal, signals, `syscall.Exec` — and shipping a
 # binary that cannot start is worse than shipping none.
 
 archives:
-- id: default
-  formats: [tar.gz]
-  # Matches `uname` for OS and architecture, as the other repositories here do,
-  # so a downloader's own shell can build the name.
-  name_template: >-
-    {{ .ProjectName }}_ {{- title .Os }}_ {{- if eq .Arch "amd64" }}x86_64 {{- else }}{{ .Arch }}{{ end }}
-  files:
-  - LICENSE
-  - NOTICE
-  - README.md
-  - docs/install.md
-  # The autoloadable functions one dialect ships. They are data rather than
-  # code, so they are the same file on every platform, and they have to be in
-  # the archive at the path the shell will look for them under: the search is
-  # derived from where the binary sits, and `share/sh/functions` is the second
-  # of the two directories it names. A release without them is a shell whose
-  # `$fpath` points at nothing.
-  - share/sh/functions/*
+  - id: default
+    formats: [tar.gz]
+    # Matches `uname` for OS and architecture, as the other repositories here do,
+    # so a downloader's own shell can build the name.
+    name_template: >-
+      {{ .ProjectName }}_ {{- title .Os }}_ {{- if eq .Arch "amd64" }}x86_64 {{- else }}{{ .Arch }}{{ end }}
+    files:
+      - LICENSE
+      - NOTICE
+      - README.md
+      - docs/install.md
+      # The autoloadable functions one dialect ships. They are data rather than
+      # code, so they are the same file on every platform, and they have to be in
+      # the archive at the path the shell will look for them under: the search is
+      # derived from where the binary sits, and `share/sh/functions` is the second
+      # of the two directories it names. A release without them is a shell whose
+      # `$fpath` points at nothing.
+      - share/sh/functions/*
 
 # Container images: one `FROM scratch` image per shell, so that an image which
 # deliberately has no userland can still have a shell in it — run directly, or
@@ -154,109 +154,109 @@ archives:
 # `ids` disagree fails the build rather than publishing an image whose
 # entrypoint does not exist.
 dockers_v2:
-- id: image-sh
-  ids: [sh]
-  images: ['ghcr.io/blairham/sh/scratch/sh']
-  dockerfile: images/scratch/Dockerfile
-  platforms: [linux/amd64, linux/arm64]
-  sbom: false
-  flags: ['--target=sh']
-  # `latest` moves only on a real release. `prerelease: auto` below makes a tag
-  # with a suffix a prerelease, and one of those must not become what a bare
-  # `docker run ghcr.io/blairham/sh/scratch/bash` pulls.
-  tags: &imagetags
-  - '{{ .Version }}'
-  - '{{ if not .Prerelease }}latest{{ end }}'
-  labels: &imagelabels
-    org.opencontainers.image.title: sh
-    org.opencontainers.image.description: A POSIX shell in a scratch image — the binary and nothing else
-    org.opencontainers.image.url: https://github.com/blairham/sh
-    org.opencontainers.image.source: https://github.com/blairham/sh
-    org.opencontainers.image.licenses: Apache-2.0
-    org.opencontainers.image.version: '{{ .Version }}'
-    org.opencontainers.image.revision: '{{ .FullCommit }}'
-    org.opencontainers.image.created: '{{ .Date }}'
+  - id: image-sh
+    ids: [sh]
+    images: ['ghcr.io/blairham/sh/scratch/sh']
+    dockerfile: images/scratch/Dockerfile
+    platforms: [linux/amd64, linux/arm64]
+    sbom: false
+    flags: ['--target=sh']
+    # `latest` moves only on a real release. `prerelease: auto` below makes a tag
+    # with a suffix a prerelease, and one of those must not become what a bare
+    # `docker run ghcr.io/blairham/sh/scratch/bash` pulls.
+    tags: &imagetags
+      - '{{ .Version }}'
+      - '{{ if not .Prerelease }}latest{{ end }}'
+    labels: &imagelabels
+      org.opencontainers.image.title: sh
+      org.opencontainers.image.description: A POSIX shell in a scratch image — the binary and nothing else
+      org.opencontainers.image.url: https://github.com/blairham/sh
+      org.opencontainers.image.source: https://github.com/blairham/sh
+      org.opencontainers.image.licenses: Apache-2.0
+      org.opencontainers.image.version: '{{ .Version }}'
+      org.opencontainers.image.revision: '{{ .FullCommit }}'
+      org.opencontainers.image.created: '{{ .Date }}'
 
-- id: image-bash
-  ids: [bash]
-  images: ['ghcr.io/blairham/sh/scratch/bash']
-  dockerfile: images/scratch/Dockerfile
-  platforms: [linux/amd64, linux/arm64]
-  sbom: false
-  flags: ['--target=bash']
-  tags: *imagetags
-  labels:
-    <<: *imagelabels
-    org.opencontainers.image.title: bash
-    org.opencontainers.image.description: A bash dialect in a scratch image — the binary and nothing else
+  - id: image-bash
+    ids: [bash]
+    images: ['ghcr.io/blairham/sh/scratch/bash']
+    dockerfile: images/scratch/Dockerfile
+    platforms: [linux/amd64, linux/arm64]
+    sbom: false
+    flags: ['--target=bash']
+    tags: *imagetags
+    labels:
+      <<: *imagelabels
+      org.opencontainers.image.title: bash
+      org.opencontainers.image.description: A bash dialect in a scratch image — the binary and nothing else
 
-- id: image-zsh
-  ids: [zsh]
-  images: ['ghcr.io/blairham/sh/scratch/zsh']
-  dockerfile: images/scratch/Dockerfile
-  platforms: [linux/amd64, linux/arm64]
-  sbom: false
-  flags: ['--target=zsh']
-  tags: *imagetags
-  labels:
-    <<: *imagelabels
-    org.opencontainers.image.title: zsh
-    org.opencontainers.image.description: A zsh dialect in a scratch image — the binary and nothing else
+  - id: image-zsh
+    ids: [zsh]
+    images: ['ghcr.io/blairham/sh/scratch/zsh']
+    dockerfile: images/scratch/Dockerfile
+    platforms: [linux/amd64, linux/arm64]
+    sbom: false
+    flags: ['--target=zsh']
+    tags: *imagetags
+    labels:
+      <<: *imagelabels
+      org.opencontainers.image.title: zsh
+      org.opencontainers.image.description: A zsh dialect in a scratch image — the binary and nothing else
 
-- id: image-ksh
-  ids: [ksh]
-  images: ['ghcr.io/blairham/sh/scratch/ksh']
-  dockerfile: images/scratch/Dockerfile
-  platforms: [linux/amd64, linux/arm64]
-  sbom: false
-  flags: ['--target=ksh']
-  tags: *imagetags
-  labels:
-    <<: *imagelabels
-    org.opencontainers.image.title: ksh
-    org.opencontainers.image.description: A ksh dialect in a scratch image — the binary and nothing else
+  - id: image-ksh
+    ids: [ksh]
+    images: ['ghcr.io/blairham/sh/scratch/ksh']
+    dockerfile: images/scratch/Dockerfile
+    platforms: [linux/amd64, linux/arm64]
+    sbom: false
+    flags: ['--target=ksh']
+    tags: *imagetags
+    labels:
+      <<: *imagelabels
+      org.opencontainers.image.title: ksh
+      org.opencontainers.image.description: A ksh dialect in a scratch image — the binary and nothing else
 
-- id: image-dash
-  ids: [dash]
-  images: ['ghcr.io/blairham/sh/scratch/dash']
-  dockerfile: images/scratch/Dockerfile
-  platforms: [linux/amd64, linux/arm64]
-  sbom: false
-  flags: ['--target=dash']
-  tags: *imagetags
-  labels:
-    <<: *imagelabels
-    org.opencontainers.image.title: dash
-    org.opencontainers.image.description: A dash dialect in a scratch image — the binary and nothing else
+  - id: image-dash
+    ids: [dash]
+    images: ['ghcr.io/blairham/sh/scratch/dash']
+    dockerfile: images/scratch/Dockerfile
+    platforms: [linux/amd64, linux/arm64]
+    sbom: false
+    flags: ['--target=dash']
+    tags: *imagetags
+    labels:
+      <<: *imagelabels
+      org.opencontainers.image.title: dash
+      org.opencontainers.image.description: A dash dialect in a scratch image — the binary and nothing else
 
-- id: image-ash
-  ids: [ash]
-  images: ['ghcr.io/blairham/sh/scratch/ash']
-  dockerfile: images/scratch/Dockerfile
-  platforms: [linux/amd64, linux/arm64]
-  sbom: false
-  flags: ['--target=ash']
-  tags: *imagetags
-  labels:
-    <<: *imagelabels
-    org.opencontainers.image.title: ash
-    org.opencontainers.image.description: A BusyBox ash dialect in a scratch image — the binary and nothing else
+  - id: image-ash
+    ids: [ash]
+    images: ['ghcr.io/blairham/sh/scratch/ash']
+    dockerfile: images/scratch/Dockerfile
+    platforms: [linux/amd64, linux/arm64]
+    sbom: false
+    flags: ['--target=ash']
+    tags: *imagetags
+    labels:
+      <<: *imagelabels
+      org.opencontainers.image.title: ash
+      org.opencontainers.image.description: A BusyBox ash dialect in a scratch image — the binary and nothing else
 
 # macOS signing and notarization, matching the other repositories in this tree.
 # Gated on isEnvSet, so a release still succeeds unsigned while the secrets are
 # absent — which is the case here until they are added to this repository.
 notarize:
   macos:
-  - enabled: '{{ isEnvSet "MACOS_SIGN_P12" }}'
-    ids: [sh, bash, zsh, ksh, dash, ash, shfmt]
-    sign:
-      certificate: "{{.Env.MACOS_SIGN_P12}}"
-      password: "{{.Env.MACOS_SIGN_PASSWORD}}"
-    notarize:
-      issuer_id: "{{.Env.MACOS_NOTARY_ISSUER_ID}}"
-      key_id: "{{.Env.MACOS_NOTARY_KEY_ID}}"
-      key: "{{.Env.MACOS_NOTARY_KEY}}"
-      wait: true
+    - enabled: '{{ isEnvSet "MACOS_SIGN_P12" }}'
+      ids: [sh, bash, zsh, ksh, dash, ash, shfmt]
+      sign:
+        certificate: "{{.Env.MACOS_SIGN_P12}}"
+        password: "{{.Env.MACOS_SIGN_PASSWORD}}"
+      notarize:
+        issuer_id: "{{.Env.MACOS_NOTARY_ISSUER_ID}}"
+        key_id: "{{.Env.MACOS_NOTARY_KEY_ID}}"
+        key: "{{.Env.MACOS_NOTARY_KEY}}"
+        wait: true
 
 checksum:
   name_template: 'checksums.txt'
@@ -268,23 +268,23 @@ checksum:
 # render does NOT skip this on its own, so CI's packaging job passes
 # `--skip=sign` -- it has no OIDC token to sign with.
 signs:
-- cmd: cosign
-  signature: "${artifact}.sigstore.json"
-  args:
-  - sign-blob
-  - "--bundle=${signature}"
-  - "${artifact}"
-  - "--yes"
-  artifacts: checksum
+  - cmd: cosign
+    signature: "${artifact}.sigstore.json"
+    args:
+      - sign-blob
+      - "--bundle=${signature}"
+      - "${artifact}"
+      - "--yes"
+    artifacts: checksum
 
 # Each of the six published images, by digest. The default `artifacts` is the
 # images dockers_v2 built; cosign attaches the signature beside each in ghcr.io.
 docker_signs:
-- cmd: cosign
-  args:
-  - sign
-  - "${artifact}@${digest}"
-  - "--yes"
+  - cmd: cosign
+    args:
+      - sign
+      - "${artifact}@${digest}"
+      - "--yes"
 
 snapshot:
   version_template: "{{ incpatch .Version }}-next"
@@ -308,32 +308,32 @@ changelog:
   # number, which is the link worth having.
   format: '{{ .Message }}'
   groups:
-  # **Grouped by the subsystem each subject already names.** This tree does not
-  # write conventional commits, and the `feat:`/`fix:` groups that used to be
-  # here matched **zero of 1224** subjects — so every entry fell through to
-  # "Other" and the two groups were decoration that read as curation. These
-  # prefixes are the ones actually in use; run
-  # `git log --format='%s' | sed -E 's/[:,].*//' | sort | uniq -c | sort -rn`
-  # before changing them.
-  - title: Dialects
-    regexp: '^(bash|zsh|ksh|dash|ash|dialect)[,:]'
-    order: 0
-  - title: The interactive shell
-    regexp: '^(repl|zle|blocks)[,:]'
-    order: 1
-  - title: The language and the interpreter
-    regexp: '^(interp|syntax|expansion|pattern|arrays|declarations|traps|printer|diagnostics|driver)[,:]'
-    order: 2
-  - title: Other
-    order: 999
+    # **Grouped by the subsystem each subject already names.** This tree does not
+    # write conventional commits, and the `feat:`/`fix:` groups that used to be
+    # here matched **zero of 1224** subjects — so every entry fell through to
+    # "Other" and the two groups were decoration that read as curation. These
+    # prefixes are the ones actually in use; run
+    # `git log --format='%s' | sed -E 's/[:,].*//' | sort | uniq -c | sort -rn`
+    # before changing them.
+    - title: Dialects
+      regexp: '^(bash|zsh|ksh|dash|ash|dialect)[,:]'
+      order: 0
+    - title: The interactive shell
+      regexp: '^(repl|zle|blocks)[,:]'
+      order: 1
+    - title: The language and the interpreter
+      regexp: '^(interp|syntax|expansion|pattern|arrays|declarations|traps|printer|diagnostics|driver)[,:]'
+      order: 2
+    - title: Other
+      order: 999
   filters:
     exclude:
-    # These are live, unlike the groups that used to sit above: 19 `docs:`,
-    # 3 `test:` and 2 `chore:` on this tree. Checked rather than assumed —
-    # the groups were not.
-    - '^docs:'
-    - '^test:'
-    - '^chore:'
+      # These are live, unlike the groups that used to sit above: 19 `docs:`,
+      # 3 `test:` and 2 `chore:` on this tree. Checked rather than assumed —
+      # the groups were not.
+      - '^docs:'
+      - '^test:'
+      - '^chore:'
 
 # A formula, like everything else in blairham/homebrew-tap — the tap has only
 # Formula/. GoReleaser marks `brews` deprecated in favor of `homebrew_casks`,
@@ -353,105 +353,105 @@ changelog:
 # `bin.install "shfmt"` below. The rule is about names resolved *implicitly*,
 # and nothing resolves a formatter that way.
 brews:
-- name: sh
-  repository:
-    owner: blairham
-    name: homebrew-tap
-    token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
-  directory: Formula
-  homepage: https://github.com/blairham/sh
-  description: A shell parser, interpreter and formatter in Go, with bash, zsh, ksh, dash and ash dialects
-  license: Apache-2.0
-  # See the note on `bin.install "shfmt"` below. Declared rather than left to
-  # Homebrew's symlink failure, so the error names the other formula.
-  conflicts: [shfmt]
-  install: |
-    # Every shell in the archive, `ash` included. An explicit list is what
-    # dropped it once already: the archive carries all six, and
-    # `libexec.install` silently skips the name it was not given, so the keg
-    # came out missing a shell the caveats below promise by name.
-    libexec.install "sh", "bash", "zsh", "ksh", "dash", "ash"
-    # **`shfmt` goes into `bin`, and it is the one binary here that should.**
-    # The rule above is about names that are *resolved implicitly*: a `bash`
-    # ahead of `/bin` on PATH answers for every shebang, every `system()` and
-    # every `chsh` on the machine. Nothing resolves a formatter that way — it
-    # is only ever called by name, on purpose, by an editor, a pre-commit hook
-    # or a Makefile, and every one of those is a caller that cannot be handed
-    # a keg-internal path. A formatter behind `opt_libexec` is a formatter
-    # nothing calls.
-    #
-    # The real hazard is the other formula: homebrew-core ships mvdan.cc/sh's
-    # `shfmt`, which wants the same `bin/shfmt`. `conflicts:` below declares
-    # that, so Homebrew refuses with a sentence naming both formulas instead
-    # of the bare "Could not symlink bin/shfmt" that silence produces.
-    bin.install "shfmt"
-    # Not into libexec beside the binaries. The function search is
-    # `<prefix>/share/sh/site-functions` then `<prefix>/share/sh/functions`,
-    # and the prefix a binary in the keg's libexec derives is the keg — so
-    # this is the directory the shell will actually look in, and
-    # `share/sh/site-functions` is left for whatever a person installs later.
-    (share/"sh").install "share/sh/functions"
-  caveats: |
-    The binaries are named bash, zsh, ksh, dash, ash and sh, so they are NOT linked
-    into #{HOMEBREW_PREFIX}/bin — that would shadow the system shells for
-    everything on this machine. They live here instead:
+  - name: sh
+    repository:
+      owner: blairham
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
+    directory: Formula
+    homepage: https://github.com/blairham/sh
+    description: A shell parser, interpreter and formatter in Go, with bash, zsh, ksh, dash and ash dialects
+    license: Apache-2.0
+    # See the note on `bin.install "shfmt"` below. Declared rather than left to
+    # Homebrew's symlink failure, so the error names the other formula.
+    conflicts: [shfmt]
+    install: |
+      # Every shell in the archive, `ash` included. An explicit list is what
+      # dropped it once already: the archive carries all six, and
+      # `libexec.install` silently skips the name it was not given, so the keg
+      # came out missing a shell the caveats below promise by name.
+      libexec.install "sh", "bash", "zsh", "ksh", "dash", "ash"
+      # **`shfmt` goes into `bin`, and it is the one binary here that should.**
+      # The rule above is about names that are *resolved implicitly*: a `bash`
+      # ahead of `/bin` on PATH answers for every shebang, every `system()` and
+      # every `chsh` on the machine. Nothing resolves a formatter that way — it
+      # is only ever called by name, on purpose, by an editor, a pre-commit hook
+      # or a Makefile, and every one of those is a caller that cannot be handed
+      # a keg-internal path. A formatter behind `opt_libexec` is a formatter
+      # nothing calls.
+      #
+      # The real hazard is the other formula: homebrew-core ships mvdan.cc/sh's
+      # `shfmt`, which wants the same `bin/shfmt`. `conflicts:` below declares
+      # that, so Homebrew refuses with a sentence naming both formulas instead
+      # of the bare "Could not symlink bin/shfmt" that silence produces.
+      bin.install "shfmt"
+      # Not into libexec beside the binaries. The function search is
+      # `<prefix>/share/sh/site-functions` then `<prefix>/share/sh/functions`,
+      # and the prefix a binary in the keg's libexec derives is the keg — so
+      # this is the directory the shell will actually look in, and
+      # `share/sh/site-functions` is left for whatever a person installs later.
+      (share/"sh").install "share/sh/functions"
+    caveats: |
+      The binaries are named bash, zsh, ksh, dash, ash and sh, so they are NOT linked
+      into #{HOMEBREW_PREFIX}/bin — that would shadow the system shells for
+      everything on this machine. They live here instead:
 
-      #{opt_libexec}
+        #{opt_libexec}
 
-    Run one by its full path:
+      Run one by its full path:
 
-      #{opt_libexec}/bash -i
+        #{opt_libexec}/bash -i
 
-    The formatter is the exception and IS on your PATH as `shfmt`, because an
-    editor or a pre-commit hook can only call it by name:
+      The formatter is the exception and IS on your PATH as `shfmt`, because an
+      editor or a pre-commit hook can only call it by name:
 
-      shfmt -w script.sh
+        shfmt -w script.sh
 
-    homebrew-core ships a different `shfmt` (mvdan.cc/sh). Only one of the two
-    can own that name, so this formula declares the conflict rather than
-    failing at the symlink.
+      homebrew-core ships a different `shfmt` (mvdan.cc/sh). Only one of the two
+      can own that name, so this formula declares the conflict rather than
+      failing at the symlink.
 
-    A session reads what a real shell of the same name reads, in the same order:
-    the profile, the run-commands file, and the machine's own file in front of
-    each. To use one as your login shell, add its full path to /etc/shells and
-    then chsh to it — read this first, and keep the terminal you ran chsh in
-    open until a new window works:
+      A session reads what a real shell of the same name reads, in the same order:
+      the profile, the run-commands file, and the machine's own file in front of
+      each. To use one as your login shell, add its full path to /etc/shells and
+      then chsh to it — read this first, and keep the terminal you ran chsh in
+      open until a new window works:
 
-      https://github.com/blairham/sh/blob/main/docs/install.md
-  test: |
-    # One row per shipped binary. The list in `install:` above is explicit, so
-    # a new dialect is installed only if somebody remembers to add it — these
-    # rows are what turns forgetting into a failed release instead of a keg
-    # that is quietly missing a shell.
-    %w[sh bash zsh ksh dash ash].each do |shell|
-      assert_equal "hi", shell_output("#{libexec}/#{shell} -c 'echo hi'").chomp
-    end
-    # The formatter is a seventh binary rather than a seventh shell, so it is
-    # not in the list above and needs its own row — and a `-c` probe would not
-    # have caught it, since `shfmt` does not take one. Laying out a script it
-    # has to reparse is the cheapest end-to-end check that the parser, the
-    # dialect style and the printer all made it into the keg.
-    assert_equal "if true; then\n  echo hi\nfi",
-      pipe_output("#{bin}/shfmt -dialect bash", "if true;then\necho hi\nfi\n", 0).chomp
-    assert_match version.to_s, shell_output("#{bin}/shfmt -version")
+        https://github.com/blairham/sh/blob/main/docs/install.md
+    test: |
+      # One row per shipped binary. The list in `install:` above is explicit, so
+      # a new dialect is installed only if somebody remembers to add it — these
+      # rows are what turns forgetting into a failed release instead of a keg
+      # that is quietly missing a shell.
+      %w[sh bash zsh ksh dash ash].each do |shell|
+        assert_equal "hi", shell_output("#{libexec}/#{shell} -c 'echo hi'").chomp
+      end
+      # The formatter is a seventh binary rather than a seventh shell, so it is
+      # not in the list above and needs its own row — and a `-c` probe would not
+      # have caught it, since `shfmt` does not take one. Laying out a script it
+      # has to reparse is the cheapest end-to-end check that the parser, the
+      # dialect style and the printer all made it into the keg.
+      assert_equal "if true; then\n  echo hi\nfi",
+        pipe_output("#{bin}/shfmt -dialect bash", "if true;then\necho hi\nfi\n", 0).chomp
+      assert_match version.to_s, shell_output("#{bin}/shfmt -version")
 
-    # The shipped functions are reachable from the default search, which is
-    # the half a missing `files:` entry above would break silently: the shell
-    # still starts, and every `autoload` in a real startup file fails at the
-    # call instead.
-    #
-    # **`env -u FPATH` is what makes this row discriminating**, and without it
-    # the row was decoration. An `FPATH` in the environment *replaces* the
-    # default search rather than adding to it (driver/functiondirs.go), so on
-    # any machine whose own zsh exported one — a CI runner with oh-my-zsh, a
-    # maintainer's laptop — `is-at-least` was loading out of
-    # /usr/share/zsh/5.9/functions and the row passed against a keg that
-    # shipped no functions at all. Unset, `$fpath` is exactly the keg's two
-    # directories, and deleting the shipped copy fails the row.
-    assert_equal "5.9", shell_output(
-      "/usr/bin/env -u FPATH #{libexec}/zsh -f -c " \
-      "'autoload -Uz is-at-least; is-at-least 5.0 5.9 && echo 5.9'"
-    ).chomp
+      # The shipped functions are reachable from the default search, which is
+      # the half a missing `files:` entry above would break silently: the shell
+      # still starts, and every `autoload` in a real startup file fails at the
+      # call instead.
+      #
+      # **`env -u FPATH` is what makes this row discriminating**, and without it
+      # the row was decoration. An `FPATH` in the environment *replaces* the
+      # default search rather than adding to it (driver/functiondirs.go), so on
+      # any machine whose own zsh exported one — a CI runner with oh-my-zsh, a
+      # maintainer's laptop — `is-at-least` was loading out of
+      # /usr/share/zsh/5.9/functions and the row passed against a keg that
+      # shipped no functions at all. Unset, `$fpath` is exactly the keg's two
+      # directories, and deleting the shipped copy fails the row.
+      assert_equal "5.9", shell_output(
+        "/usr/bin/env -u FPATH #{libexec}/zsh -f -c " \
+        "'autoload -Uz is-at-least; is-at-least 5.0 5.9 && echo 5.9'"
+      ).chomp
 
 release:
   draft: false

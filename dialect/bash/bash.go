@@ -5499,7 +5499,7 @@ func Apply(r *interp.Runner) {
 	// runs inside the Runner — but it is about state a Runner owns and two
 	// Runners could disagree about. A uid is neither: nothing a script does
 	// changes it, two shells in one program genuinely have the same one, and
-	// $UID has no other source. Same class as $$, which .golangci.yml has
+	// $UID has no other source. Same class as $$, which AGENTS.md's forbidigo note has
 	// blessed since it was written.
 	r.SetSpecial("UID", strconv.Itoa(os.Getuid()))
 	r.SetSpecial("EUID", strconv.Itoa(os.Geteuid()))

@@ -71,8 +71,8 @@ build:
 # cores, two `syntax.test` processes alone at 242% and 176%, and everything
 # else on the machine waiting.
 #
-# Four is the same bound `.golangci.yml` uses and for the same reason: it
-# keeps the realistic worst case near the core count instead of far past it.
+# `.golangci.yml` bounds golangci-lint the same way (`run.concurrency`) and for
+# the same reason: it keeps the realistic worst case near the core count instead of far past it.
 # One run in isolation is a little slower; several together are faster,
 # because the machine stops thrashing. It also makes the timing-sensitive
 # tests here -- pty sessions, job control, the descriptor loop -- less
@@ -103,9 +103,9 @@ vet:
 	go vet ./...
 
 # There is deliberately no `lint` target. golangci-lint runs in CI's `Lint`
-# job and nowhere else — it is not a pre-commit hook here, see
-# .pre-commit-config.yaml for the measurement that took it out, and AGENTS.md
-# for the rule. A hand-started run is a second copy of work that is already
+# job and nowhere else — it is not a pre-commit hook here, see overrides/sh.yml
+# in blairham/.github for the measurement that took it out, and AGENTS.md for
+# the rule. A hand-started run is a second copy of work that is already
 # happening, and several of them at once is what starves this machine.
 
 tidy:

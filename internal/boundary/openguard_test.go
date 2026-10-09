@@ -62,7 +62,7 @@ import (
 //
 // The near neighbors of each verb are here on purpose. A guard that knows
 // os.Remove and not os.RemoveAll, or os.Mkdir and not os.MkdirAll, is one
-// rename away from quiet — and the .golangci.yml entry above forbidigo says
+// rename away from quiet — and AGENTS.md's forbidigo note says
 // why in its own words, having been widened once after os.MkdirTemp("") did
 // what os.TempDir had just been forbidden for.
 //

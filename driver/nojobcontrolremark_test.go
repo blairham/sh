@@ -36,7 +36,7 @@ func remarking() interp.Diagnostics {
 // read, which is the trap #793 fell into from the other direction.
 func noTerminalScript(
 	t *testing.T, dg interp.Diagnostics, sem interp.Semantics, argv ...string,
-) (errs string, script string) {
+) (errs, script string) {
 	t.Helper()
 	dir := t.TempDir()
 	path := filepath.Join(dir, "probe.sh")
@@ -217,7 +217,8 @@ func TestTheShellNamesTheProcessGroupItCouldNotSet(t *testing.T) {
 	// here would be a second place for it to be wrong; what this route owns
 	// is that the line is written, is first, and names a group at all.
 	want := regexp.MustCompile(
-		`^testsh: cannot set terminal process group \(-?\d+\): Inappropriate ioctl for device$`)
+		`^testsh: cannot set terminal process group \(-?\d+\): Inappropriate ioctl for device$`,
+	)
 	if !want.MatchString(lines[0]) {
 		t.Errorf("the first line was %q, want %v", lines[0], want)
 	}

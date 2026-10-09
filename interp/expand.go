@@ -2433,7 +2433,8 @@ func (r *Runner) expandAtList(s syntax.Span, sp splitPolicy, head bool) ([]strin
 				}
 				elems = r.substringOfTheJoinedList(e, elems, s.Quoting != syntax.Unquoted)
 			} else if out, isMods := r.modifiedElements(
-				modifierSubjects(elems, e, s.Quoting != syntax.Unquoted, r), e); isMods {
+				modifierSubjects(elems, e, s.Quoting != syntax.Unquoted, r), e,
+			); isMods {
 				// A range whose segment is a modifier list applies to each
 				// element rather than slicing the list — see
 				// Runner.modifiedElements for the measurement.
@@ -6825,7 +6826,8 @@ func (r *Runner) substringRange(value string, e *syntax.ParamExpr) string {
 			return substring(value, r.numOf(e.Arg, e, e.Arg2), e, r)
 		}
 		out, ok := r.applyModifiers(value, r.modifierSegments(
-			modifierSource(e.ArgText, e.Arg), modifierSource(e.Arg2Text, e.Arg2), e.Arg2 != nil), e)
+			modifierSource(e.ArgText, e.Arg), modifierSource(e.Arg2Text, e.Arg2), e.Arg2 != nil,
+		), e)
 		if !ok {
 			return ""
 		}
@@ -7299,7 +7301,7 @@ func (r *Runner) ifsSpace(ifs string) string {
 // non-whitespace separator delimits — so two adjacent ones produce an empty
 // field. A trailing separator is absorbed and a leading one is not, which is
 // the asymmetry a symmetric implementation gets wrong.
-func splitFields(s string, ifs, space string, ifsSet bool, chars func() (string, bool)) []string {
+func splitFields(s, ifs, space string, ifsSet bool, chars func() (string, bool)) []string {
 	return splitFieldsLiteral(s, nil, ifs, space, ifsSet, chars)
 }
 

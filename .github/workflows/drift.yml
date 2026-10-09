@@ -15,9 +15,9 @@ name: Drift
 # red run costs no one a merge; it is a message that the world moved.
 on:
   schedule:
-  # Weekly, at a minute nobody else picked. Scheduled runs cluster on the hour
-  # and get delayed for it.
-  - cron: '37 6 * * 1'
+    # Weekly, at a minute nobody else picked. Scheduled runs cluster on the hour
+    # and get delayed for it.
+    - cron: '37 6 * * 1'
   workflow_dispatch:
 
 permissions:
@@ -32,20 +32,20 @@ jobs:
     name: Panel drift
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-    - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-      with:
-        go-version-file: go.mod
-        check-latest: true
-        cache: true
-    - name: Install as much of the panel as this runner can host
-      run: sudo apt-get update -qq && sudo apt-get install -y -qq dash ksh zsh
-    - name: Fail if the panel no longer behaves as recorded
-      # No `|| true` here, unlike the pull-request job. Nothing waits on this
-      # run, so failing is free and is the only way anyone finds out.
-      #
-      # One invocation, not one to report and one to fail: the oracle runs the
-      # whole corpus against every shell it can find, and doing that twice to
-      # see the output *and* get the exit status is exactly the duplication
-      # this pipeline has been shedding all day. The output is in the log.
-      run: go run ./internal/cmd/oracle -check
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          check-latest: true
+          cache: true
+      - name: Install as much of the panel as this runner can host
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq dash ksh zsh
+      - name: Fail if the panel no longer behaves as recorded
+        # No `|| true` here, unlike the pull-request job. Nothing waits on this
+        # run, so failing is free and is the only way anyone finds out.
+        #
+        # One invocation, not one to report and one to fail: the oracle runs the
+        # whole corpus against every shell it can find, and doing that twice to
+        # see the output *and* get the exit status is exactly the duplication
+        # this pipeline has been shedding all day. The output is in the log.
+        run: go run ./internal/cmd/oracle -check

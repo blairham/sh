@@ -474,7 +474,8 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 				// Not an open that failed: the duplication's own refusal,
 				// with the word where a number usually stands.
 				r.diagf("%v\n", r.errBadFd(-1, Wording(
-					r.diag().CoprocessDuplicationTargetName, "%[1]s", name), fd))
+					r.diag().CoprocessDuplicationTargetName, "%[1]s", name,
+				), fd))
 				r.status = r.redirectFailureStatus()
 				r.redirErr = true
 				return closers, nil

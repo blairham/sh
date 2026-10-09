@@ -508,7 +508,7 @@ func TestTheProducedAnswerReachesTheBareListingsToo(t *testing.T) {
 
 // rowsFor is listedRows for the listings whose rows have no command word in
 // front of them, where a name can be the first thing on the line.
-func rowsFor(out string, name string) string {
+func rowsFor(out, name string) string {
 	var kept []string
 	for _, line := range strings.Split(out, "\n") {
 		if strings.HasPrefix(line, name+"=") || strings.HasSuffix(line, " "+name) ||

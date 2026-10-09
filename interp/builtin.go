@@ -1286,7 +1286,7 @@ func (r *Runner) unknownSetOption(args []string, names, report bool) (preceded, 
 	for i := 0; i < len(args); i++ {
 		a := args[i]
 		if a == "--" || len(a) < 2 || (a[0] != '-' && a[0] != '+') {
-			return
+			return preceded, found
 		}
 		if w := r.sem().SetLongOptionWord; w != LongOptionWordIsOptionLetters &&
 			strings.HasPrefix(a, "--") {
@@ -1315,7 +1315,7 @@ func (r *Runner) unknownSetOption(args []string, names, report bool) (preceded, 
 				keep := refuseName(nm, true)
 				r.longSetOptionSpelling = false
 				if !keep {
-					return
+					return preceded, found
 				}
 			}
 			seen = true
@@ -1333,7 +1333,7 @@ func (r *Runner) unknownSetOption(args []string, names, report bool) (preceded, 
 				// report the missing dialect, and a name refused here would
 				// be a refusal that pass might never have made.
 				if names && !r.hasSetOptionName(after) && !refuseName(after, sign) {
-					return
+					return preceded, found
 				}
 			case after == "" && i+1 < len(args) &&
 				(!setODeclinedWord(args[i+1]) || r.sem().SetODeclinesADashWord != Yes):
@@ -1345,7 +1345,7 @@ func (r *Runner) unknownSetOption(args []string, names, report bool) (preceded, 
 				// refuses a dialect for an unanswered axis.
 				i++
 				if names && !r.hasSetOptionName(args[i]) && !refuseName(args[i], sign) {
-					return
+					return preceded, found
 				}
 			}
 		} else if idx := strings.IndexByte(letters, 'A'); idx >= 0 && r.setArrayLetter() {
@@ -1360,7 +1360,7 @@ func (r *Runner) unknownSetOption(args []string, names, report bool) (preceded, 
 		for _, opt := range letters {
 			if !r.hasSetLetter(opt) {
 				if !refuseLetter(opt, sign) {
-					return
+					return preceded, found
 				}
 				continue
 			}
@@ -1374,10 +1374,10 @@ func (r *Runner) unknownSetOption(args []string, names, report bool) (preceded, 
 			seen = true
 		}
 		if stop {
-			return
+			return preceded, found
 		}
 	}
-	return
+	return preceded, found
 }
 
 // hasSetOptionName reports whether a `set -o` name is one this dialect has at

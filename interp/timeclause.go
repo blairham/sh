@@ -216,7 +216,7 @@ func (r *Runner) timeClause(ctx context.Context, tc *syntax.TimeClause) error {
 
 // reportTime writes the report in the dialect's layout — or in the POSIX one,
 // which `-p` selects identically in both shells that read the flag.
-func (r *Runner) reportTime(d Diagnostics, posix bool, elapsed time.Duration, user, sys time.Duration, timing *pipelineTiming) {
+func (r *Runner) reportTime(d Diagnostics, posix bool, elapsed, user, sys time.Duration, timing *pipelineTiming) {
 	var b strings.Builder
 	if format, ok := r.timeFormat(); ok && !posix && d.TimeFormatVerbs == TimeFormatVerbsElapsedWithUnits {
 		// The other vocabulary, and a **line per pipeline element** rather

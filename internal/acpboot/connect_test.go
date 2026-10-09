@@ -576,7 +576,8 @@ func TestASessionRefusedForAuthenticationSaysExactlyWhy(t *testing.T) {
 func TestAnExecInTheAgentsLineDoesNotReplaceTheShell(t *testing.T) {
 	var out bytes.Buffer
 	code := Interpreter(driver.Shell{Name: "sh"})(
-		t.Context(), acp.TerminalCommand{Line: "exec echo replaced"}, &out)
+		t.Context(), acp.TerminalCommand{Line: "exec echo replaced"}, &out,
+	)
 	if code != 0 {
 		t.Errorf("status = %d, want the exec'd command to have run", code)
 	}
@@ -608,7 +609,8 @@ func TestAnAgentsLineIsRunAsAShell(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			var out bytes.Buffer
 			status := Interpreter(driver.Shell{Name: "sh"})(
-				t.Context(), acp.TerminalCommand{Line: c.line}, &out)
+				t.Context(), acp.TerminalCommand{Line: c.line}, &out,
+			)
 			if got := out.String(); got != c.want {
 				t.Errorf("%s\n  wrote %q\n  want  %q", c.line, got, c.want)
 			}
@@ -625,7 +627,8 @@ func TestAnAgentsLineRunsWhereItAsked(t *testing.T) {
 	dir := t.TempDir()
 	var out bytes.Buffer
 	if status := Interpreter(driver.Shell{Name: "sh"})(
-		t.Context(), acp.TerminalCommand{Line: "pwd -P", Dir: dir}, &out); status != 0 {
+		t.Context(), acp.TerminalCommand{Line: "pwd -P", Dir: dir}, &out,
+	); status != 0 {
 		t.Fatalf("pwd -P: status = %d, output = %q", status, out.String())
 	}
 	// Resolved on both sides, because a temporary directory here is reached
@@ -646,7 +649,8 @@ func TestAnAgentsLineTakesTheEnvironmentItWasGiven(t *testing.T) {
 	var out bytes.Buffer
 	env := append(os.Environ(), "FROM_THE_AGENT=yes")
 	if status := Interpreter(driver.Shell{Name: "sh"})(
-		t.Context(), acp.TerminalCommand{Line: `echo "[$FROM_THE_AGENT]"`, Env: env}, &out); status != 0 {
+		t.Context(), acp.TerminalCommand{Line: `echo "[$FROM_THE_AGENT]"`, Env: env}, &out,
+	); status != 0 {
 		t.Fatalf("status = %d, output = %q", status, out.String())
 	}
 	if got := strings.TrimSpace(out.String()); got != "[yes]" {

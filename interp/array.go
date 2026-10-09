@@ -1743,7 +1743,8 @@ func (r *Runner) storeOperandWholeArraySubscript(base, sub, value string) (statu
 			return 1, true, true
 		}
 		r.diagf("%s\n", r.unanswered(
-			"the whole-array subscript on a builtin's operand over a table"))
+			"the whole-array subscript on a builtin's operand over a table",
+		))
 		r.status, r.unspecified = 2, true
 		return 2, true, true
 	}
@@ -1772,7 +1773,8 @@ func (r *Runner) storeOperandWholeArraySubscript(base, sub, value string) (statu
 		return 0, false, false
 	}
 	r.diagf("%s\n", r.unanswered(
-		"the whole-array subscript on a builtin's output operand"))
+		"the whole-array subscript on a builtin's output operand",
+	))
 	r.status, r.unspecified = 2, true
 	return 2, true, true
 }
@@ -1899,7 +1901,8 @@ func (r *Runner) storeThroughOperand(name, value string) (status int, refused bo
 			r.sem().BadSubscriptToAnOutputOperand,
 			"how much a store through a builtin's operand gives up for an unevaluable subscript",
 			Wording(r.diag().StoreOperandBadSubscript, "%[2]s",
-				builtin, r.subscriptFailure(sub, err)))), true
+				builtin, r.subscriptFailure(sub, err)),
+		)), true
 	}
 	r.setArrayElem(base, idx, sub, value)
 	return 0, false

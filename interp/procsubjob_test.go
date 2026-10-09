@@ -160,7 +160,8 @@ func TestABackgroundJobKeepsTheReadingEndOfASubstitutionOpen(t *testing.T) {
 
 	src := strings.NewReplacer("%[1]s", done, "%[2]s", release, "%[3]s", got).Replace(
 		"printf 'hi\\n' > >({ while [ ! -e %[2]s ]; do sleep 0.02; done; read -r v\n" +
-			"printf 'got:%s' \"$v\" > %[3]s; } &\n" + bodyDone + ")")
+			"printf 'got:%s' \"$v\" > %[3]s; } &\n" + bodyDone + ")",
+	)
 
 	stop := releaseAfter(t, done, release)
 	defer stop()

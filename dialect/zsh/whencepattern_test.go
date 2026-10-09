@@ -76,21 +76,25 @@ func TestWhencePatternAnswersFromEveryTable(t *testing.T) {
 		{"every table", `whence -m 'qq*'`, lines(
 			"ls", "x", "qqa", "qqbaz",
 			p2+"/qqab", p2+"/qqbar", p2+"/qqbaz",
-			p1+"/qqdir", p1+"/qqfoo", p1+"/qqlink", p1+"/qqnoexec"), 0},
+			p1+"/qqdir", p1+"/qqfoo", p1+"/qqlink", p1+"/qqnoexec",
+		), 0},
 		// `-a` turns the command rows into a search: both `qqbar`s.
 		{"-a searches", `whence -am 'qqba?'`, lines(
-			"ls", "qqbaz", p2+"/qqbar", p1+"/qqbar", p2+"/qqbaz"), 0},
+			"ls", "qqbaz", p2+"/qqbar", p1+"/qqbar", p2+"/qqbaz",
+		), 0},
 		// `-p` keeps the command rows and nothing else.
 		{"-p is the command table", `whence -pm 'qq*'`, lines(
 			p2+"/qqab", p2+"/qqbar", p2+"/qqbaz",
-			p1+"/qqdir", p1+"/qqfoo", p1+"/qqlink", p1+"/qqnoexec"), 0},
+			p1+"/qqdir", p1+"/qqfoo", p1+"/qqlink", p1+"/qqnoexec",
+		), 0},
 		// Reserved words ahead of functions.
 		{"reserved words", `whence -m 'fo*'`, lines("for", "foreach", "fo"), 0},
 		// The shapes reach every row.
 		{"-w", `whence -wm 'qq[gf]*'`, lines("qqg: global alias", "qqfoo: command"), 0},
 		{"type is whence -v", `type -m 'qqba?'`, lines(
 			"qqbar is an alias for ls", "qqbaz is a shell function from zsh",
-			"qqbar is "+p2+"/qqbar", "qqbaz is "+p2+"/qqbaz"), 0},
+			"qqbar is "+p2+"/qqbar", "qqbaz is "+p2+"/qqbaz",
+		), 0},
 		{"type -f writes the body", `type -fm qqa`, "qqa () {\n\t:\n}\n", 0},
 		// A pattern matching twice is answered twice.
 		{"twice", `whence -m 'qqf*' 'qqfo*'`, lines(p1+"/qqfoo", p1+"/qqfoo"), 0},

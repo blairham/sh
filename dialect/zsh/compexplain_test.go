@@ -88,7 +88,8 @@ func TestAnExplanationRestoresNoColor(t *testing.T) {
 // then `compadd -J g alfa` draws `alfa` with no heading over it.
 func TestAnExplanationWhoseCallAddedNothingIsNotDrawn(t *testing.T) {
 	got := drawn(completionCandidatesFor(t, widgetOf(
-		"compadd -J g -X 'unheard' -- zzz\ncompadd -J g -X 'heard' -- checkout\n"), "git che"))
+		"compadd -J g -X 'unheard' -- zzz\ncompadd -J g -X 'heard' -- checkout\n",
+	), "git che"))
 	if want := "checkout@|heard"; got != want {
 		t.Errorf("drew %q, want %q", got, want)
 	}

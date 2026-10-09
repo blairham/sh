@@ -25,7 +25,7 @@ import (
 func sortDir(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
-	write := func(name string, size int, year int) {
+	write := func(name string, size, year int) {
 		p := filepath.Join(dir, name)
 		if err := os.WriteFile(p, []byte(strings.Repeat("z", size)), 0o600); err != nil {
 			t.Fatal(err)

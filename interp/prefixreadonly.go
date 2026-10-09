@@ -234,7 +234,8 @@ func (r *Runner) refusePrefixesEarly(assigns []*syntax.Assign, argv []string) bo
 		}
 	default:
 		r.diagf("%s\n", r.unanswered(
-			"a frozen name in a prefix checked before the command's values and redirections"))
+			"a frozen name in a prefix checked before the command's values and redirections",
+		))
 		r.status, r.unspecified = 2, true
 		return false
 	}

@@ -154,7 +154,8 @@ func NewTheme(get func(name string) (string, bool)) *Theme {
 	t.roster.Compile("prompt_char", prompttheme.SegmentFunc(
 		func(settings *prompttheme.Settings, ctx *prompttheme.Context) (prompttheme.Rendered, bool) {
 			return prompttheme.PromptChar(t.Char).Render(settings, ctx)
-		}))
+		},
+	))
 	// The interpreter's strftime, which is the same one `printf '%(fmt)T'`
 	// and zsh's `strftime` builtin write through. One reader of a format
 	// language, for the reason that one is exported: two would drift the

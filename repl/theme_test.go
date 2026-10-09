@@ -236,7 +236,8 @@ func TestTheContextCarriesTheFactsASegmentIsAllowedToKnow(t *testing.T) {
 		func(_ *prompttheme.Settings, ctx *prompttheme.Context) (prompttheme.Rendered, bool) {
 			seen = ctx
 			return prompttheme.Rendered{Content: "x"}, true
-		}))
+		},
+	))
 
 	theme.DrawPrompt(PromptInfo{
 		Dir: "/src/sh", PrevDir: "/src", Status: 3, Jobs: 2,

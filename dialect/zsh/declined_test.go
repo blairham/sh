@@ -43,7 +43,8 @@ func declinedModuleFaults(ledger map[string]declined, features map[string][]stri
 				"%s is in zmodloadFeatures and is also recorded as declined: "+
 					"a module that loads has no decision left to record, so "+
 					"take the ledger entry out and say so on #%d",
-				module, entry.issue))
+				module, entry.issue,
+			))
 		}
 	}
 	return faults
@@ -74,7 +75,8 @@ func declinedBuiltinFaults(ledger map[string]declined, features map[string][]str
 			faults = append(faults, fmt.Sprintf(
 				"no module in zmodloadFeatures names b:%s, so the ledger is "+
 					"recording a decision about a builtin this shell has no "+
-					"record of zsh having — see #%d", name, entry.issue))
+					"record of zsh having — see #%d", name, entry.issue,
+			))
 		}
 	}
 	return faults
@@ -245,7 +247,8 @@ func TestTheDeclinedLedgerChecksCanFire(t *testing.T) {
 	// And the control on the other side, so that the four rows above are
 	// not simply a checker that reports everything.
 	if faults := declinedBuiltinFaults(
-		map[string]declined{"zregexparse": sound}, features); len(faults) != 0 {
+		map[string]declined{"zregexparse": sound}, features,
+	); len(faults) != 0 {
 		t.Errorf("a sound entry reported %q, want nothing", faults)
 	}
 }

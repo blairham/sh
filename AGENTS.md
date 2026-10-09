@@ -233,6 +233,40 @@ The tell is the same every time: if a package under `interp/` reaches for
 `os.Getenv`, `os.Getwd`, or anything in `os/exec` that consults them, it is
 about to borrow state the Runner already owns.
 
+**forbidigo enforces the rule, and its list says where the line is.** The
+forbidden calls — `os.Getwd`, `os.Chdir`, the environment readers and writers,
+`syscall.Exec`, `exec.LookPath`, the three standard streams, and `os.TempDir`
+with the two calls that consult it — are configured in `overrides/sh.yml` in
+blairham/.github and rendered into `.golangci.yml`. A guard is only as wide as
+its list: `os.Getwd` once sat in the glob path of every shipped binary with
+nothing to say so, and then `os.MkdirTemp("")` did the same thing in the
+process-substitution path, because the empty first argument is `os.TempDir`,
+which is `os.Getenv("TMPDIR")`, and no pattern named it.
+
+It applies to `interp/`, `dialect/` **and** `repl/`, and only there. A dialect
+is library code too: an embedder links it and `Apply` runs inside the Runner.
+`repl/` was decided to be library on evidence (#532): it imports no dialect
+package, its Shell is configured from outside it by `driver/`, and
+`repl.TerminalCapabilities` already takes an `env` function rather than reading
+the process's environment. `driver/`, the binaries and every test are where
+these calls belong, and are excluded.
+
+The streams are the sharpest case, because they are the one piece of process
+state a library *writes*: a nil Stdout used to fall back to `os.Stdout`, so an
+embedder who wired two of the three had a script's output in the host's
+terminal. Nil now means empty for all three, and there is no `nolint` for any
+of these under the library packages, because there is nothing left to bless.
+
+**Reading the process's *identity* is not on the list and is not meant to
+be.** A pid, uid, euid, gid or egid is per-process but not state anyone can
+fight over: two Runners in one program genuinely share them, nothing a script
+does changes them, and `$$`, `$UID`, `$EUID` and zsh's `$GID` and `$EGID` need
+them (#4476). *Changing* one is a different question and is not permitted under
+the library packages: zsh assigns a real gid when a privileged shell writes to
+`$EGID`, which is a setgid call and process-wide state. That belongs behind a
+hook in `driver/`, as `ReplaceProcess` does, and until there is one this shell
+sets the parameters and does not take an assignment to them as an instruction.
+
 ## One driver, four dialects
 
 **Nothing outside `driver/` implements how a shell is invoked.** Reading
@@ -359,9 +393,33 @@ Releases after `v0.0.22` are signed and attested in the same run: keyless
 cosign over `checksums.txt` and each of the six images by digest (`signs`
 and `docker_signs` in `.goreleaser.yaml`), and SLSA build provenance from
 `actions/attest-build-provenance`, uploaded to the release as
-`sh.intoto.jsonl` because Scorecard reads the asset, not the attestation
+`sh-<tag>.intoto.jsonl` because Scorecard reads the asset, not the attestation
 store. The commands that verify all three are in `SECURITY.md`; keep them
 working when the workflow or an artifact name changes.
+
+### The shared baseline
+
+CI and release run on [blairham/.github](https://github.com/blairham/.github)'s
+reusable workflows, the same ones every public Go repository here calls:
+`ci.yml` calls `go-ci.yml` (`CI / Pre-commit`, `CI / Detect changed files`,
+`CI / Build and test (<os>)`, `CI / Fuzz`), and `release.yml` calls
+`go-release.yml`, so release signatures and provenance carry **that**
+workflow's identity — `SECURITY.md` has the commands. Both are pinned by the
+commit of a blairham/.github tag, with the tag in a comment, which is what
+dependabot bumps. Everything after the `ci` call in `ci.yml` is sh's own.
+
+`.golangci.yml`, `.pre-commit-config.yaml`, `.yamllint.yml`, `.gitleaks.toml`,
+`.editorconfig`, `.github/dependabot.yml`, `.github/CODEOWNERS`, `scorecard.yml`
+and `codeql.yml` are **rendered** from that repository's `baseline/` by `make
+sync REPO=sh`. Do not edit them here: a weekly drift check reports any
+difference. Where sh must differ — golangci-lint as a CI job rather than a
+hook, gofumpt by `go tool`, forbidigo, the gosec rules a shell trips by design,
+the throttled concurrency and timeout, generated release notes rather than a
+`CHANGELOG.md` — the departure is an entry with its reason in that repository's
+`overrides/sh.yml`, and changing one is a decision for the maintainer, not a
+tidy-up. The baseline linters and formatters sh does not run yet are listed
+there as pending and adopted one per pull request, each once the whole tree is
+clean under it.
 
 ### Repository and supply chain
 
@@ -546,7 +604,8 @@ cannot.
 
 **Local, on every commit.** The hooks in `.pre-commit-config.yaml`:
 hygiene, secrets, license headers, `go mod tidy`, the toolchain-pin
-invariant, the conflict-marker scan, misspell over prose, and gofumpt. It
+invariant, the conflict-marker scan, misspell over prose, yamllint, and
+gofumpt. It
 is the only feedback that arrives before the code leaves the machine.
 
 **golangci-lint is not among them any more.** It ran here until 2026-09-26
@@ -604,9 +663,12 @@ affordable only while the tree is clean. Keeping it clean is the point: if
 a finding lands, fix it rather than narrowing the run again.
 
 Only once pre-commit passes is it worth asking the expensive question.
-`Detect changed files` gates build and test with `-race` on Linux and
-macOS. Those stand down for a **draft**: push freely, and marking it ready
-starts them.
+`CI / Detect changed files` gates build and test on Linux and macOS (the
+race detector on the Linux leg), and `Changes / Detect changed files` — the
+same classification, from go-changes.yml — gates every job of sh's own, so
+those start beside the tests rather than after them. It is required too: a
+failed `needs` skips the jobs behind it, and a skipped required check reads
+as passed.
 
 The hook environments are cached, and that is not an optimisation to skip.
 pre-commit builds an environment for a hook even when `SKIP` tells it not
@@ -686,12 +748,18 @@ sha256:…, reference GNU bash 5.3.15` would have made it visible in seconds.
 A close that states a figure can be proved wrong by one command. A close that
 states none survives every review there is.
 
-`main` is protected, and these four must pass before a merge:
+`main` is protected, and these must pass before a merge:
 
-    Build and test (ubuntu-latest)
-    Build and test (macos-latest)
-    Pre-commit
+    CI / Pre-commit
+    CI / Detect changed files
+    CI / Build and test (ubuntu-latest)
+    CI / Build and test (macos-latest)
+    Changes / Detect changed files
     Lint
+    Corpus and suite guards
+    Dialect sweep (0/2)
+    Dialect sweep (1/2)
+    Analyze
 
 **A branch does not have to be up to date with `main` first.**
 `required_status_checks.strict` is **`false`** — read off the API on
@@ -2316,8 +2384,8 @@ numbers. Neither is a gate on the counts — those are meant to move — but a
 stale ledger entry exits nonzero, and the staleness test runs in `make check`.
 
 `make suite-guard` fails when **our own suite** has lost a file, or shortened
-one. It runs in `make check` and as a step of the same required
-`Build and test (ubuntu-latest)` job, against the same merge base.
+one. It runs in `make check` and in the same required
+`Corpus and suite guards` job, against the same merge base.
 
 It exists because the thing it guards against already happened. #2356 landed
 `share/suite` — 862 lines, ten files, four native dialect columns — and #2363,
@@ -2359,8 +2427,8 @@ reports the tier the columns claim and the tree does not have; truncating
 lines becoming 16. The unmutated tree passes.
 
 `make corpus-guard` fails when the corpus has *lost* a case. It runs in
-`make check` and as a step of the required `Build and test (ubuntu-latest)`
-job, comparing the case IDs in the tree against the case IDs at the merge
+`make check` and in the required `Corpus and suite guards` job,
+comparing the case IDs in the tree against the case IDs at the merge
 base with `main`.
 
 It exists because the corpus is a **set** written down as a Go slice

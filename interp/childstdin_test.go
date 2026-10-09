@@ -47,7 +47,7 @@ func (c *tally) Read(p []byte) (int, error) {
 
 // childStdinRun runs src with a shell input that counts its readers and a
 // caller-supplied stream for the children.
-func childStdinRun(t *testing.T, src string, in io.Reader, child io.Reader, set func(*Semantics)) (string, string, int) {
+func childStdinRun(t *testing.T, src string, in, child io.Reader, set func(*Semantics)) (string, string, int) {
 	t.Helper()
 	f, err := syntax.Parse(src, syntax.Core())
 	if err != nil {

@@ -50,7 +50,8 @@ func TestASeededRandomAnswersTheMeasuredSequence(t *testing.T) {
 	} {
 		t.Run(fmt.Sprint(c.seed), func(t *testing.T) {
 			out, _ := runKsh(t, dir, fmt.Sprintf(
-				`RANDOM=%d; echo "$RANDOM $RANDOM $RANDOM $RANDOM"`, c.seed))
+				`RANDOM=%d; echo "$RANDOM $RANDOM $RANDOM $RANDOM"`, c.seed,
+			))
 			want := fmt.Sprintf("%d %d %d %d", c.want[0], c.want[1], c.want[2], c.want[3])
 			if got := strings.TrimSpace(out); got != want {
 				t.Errorf("RANDOM=%d drew %q, want %q", c.seed, got, want)

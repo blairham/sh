@@ -53,7 +53,8 @@ func TestABlockIndexThatIsALinkIsCheckedOnWhatItReached(t *testing.T) {
 	}
 
 	p, err := policy.Parse(strings.NewReader(fmt.Sprintf(
-		"version 1\ndefault allow\ndeny write %s/**\n", hidden)))
+		"version 1\ndefault allow\ndeny write %s/**\n", hidden,
+	)))
 	if err != nil {
 		t.Fatalf("policy: %v", err)
 	}

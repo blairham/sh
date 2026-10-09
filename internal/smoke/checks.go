@@ -644,7 +644,8 @@ func checks() []check {
 				}
 				if r.Status != 0 {
 					return Fail, fmt.Sprintf(
-						"recorded status %d for a line that succeeded", r.Status)
+						"recorded status %d for a line that succeeded", r.Status,
+					)
 				}
 				// The body as well as the record, because a store that kept
 				// the line and lost what it printed is half a feature, and the
@@ -911,7 +912,8 @@ func checks() []check {
 				if listed != s.dialect.ListsJobsAtExit {
 					return Fail, fmt.Sprintf(
 						"the job table under the warning: listed=%v, want %v: %s",
-						listed, s.dialect.ListsJobsAtExit, quote(Readable(after)))
+						listed, s.dialect.ListsJobsAtExit, quote(Readable(after)),
+					)
 				}
 				// Put down before the next row, and with a command rather
 				// than a second `exit` — which is the thing that would work.

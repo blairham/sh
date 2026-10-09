@@ -100,7 +100,7 @@ func shellSplitActive(e *syntax.ParamExpr) bool {
 // it two — and `v=""; set -- "${(Z+n+)v}"` is still one parameter, the
 // unquoted spelling none, the empty field being dropped at the edge rather
 // than never made. See splitShellWordsAll.
-func (r *Runner) splitShellWords(w string, opts string) []string {
+func (r *Runner) splitShellWords(w, opts string) []string {
 	return syntax.ShellWords(w, r.dialect(), syntax.ShellSplit{
 		Comments:       shellSplitComments(opts),
 		NewlineIsBlank: strings.ContainsRune(opts, 'n'),

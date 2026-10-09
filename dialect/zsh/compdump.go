@@ -526,7 +526,7 @@ func compdumpWriteFile(path string, data []byte) error {
 		return err
 	}
 	// A name of this process's own, opened exclusively, rather than
-	// os.CreateTemp, which the library may not call (.golangci.yml): two
+	// os.CreateTemp, which the library may not call (forbidigo; AGENTS.md): two
 	// shells starting at once each write their own file and rename it.
 	tmp := fmt.Sprintf("%s.%d.%d.tmp", path, os.Getpid(), time.Now().UnixNano())
 	f, err := os.OpenFile(tmp, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)

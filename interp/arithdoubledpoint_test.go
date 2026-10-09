@@ -42,7 +42,7 @@ func doubledPointGrammar(d *syntax.Dialect) {
 // same literal in the same spelling, one operand along, draws the ordinary
 // sentence.
 func TestADoubledPointInTheLeadingNumeralHasItsOwnSentence(t *testing.T) {
-	run := func(t *testing.T, expr string, wording string) string {
+	run := func(t *testing.T, expr, wording string) string {
 		t.Helper()
 		d := doubledPointDiags()
 		d.ArithDoubledPointInTheNumeral = wording

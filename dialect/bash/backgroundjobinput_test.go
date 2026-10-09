@@ -47,7 +47,7 @@ func TestABackgroundJobsInputSubstitutionIsOnlyTheShellsOwn(t *testing.T) {
 	if err := os.WriteFile(names, []byte("ab\ncd\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	run := func(t *testing.T, src string, stdin string) string {
+	run := func(t *testing.T, src, stdin string) string {
 		t.Helper()
 		var buf strings.Builder
 		b := dialecttest.Base{

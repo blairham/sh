@@ -36,7 +36,8 @@ import (
 func deniedUnder(t *testing.T, dir string) *policy.Policy {
 	t.Helper()
 	p, err := policy.Parse(strings.NewReader(fmt.Sprintf(
-		"version 1\ndefault allow\ndeny read %s/**\ndeny write %s/**\n", dir, dir)))
+		"version 1\ndefault allow\ndeny read %s/**\ndeny write %s/**\n", dir, dir,
+	)))
 	if err != nil {
 		t.Fatalf("policy: %v", err)
 	}

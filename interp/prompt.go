@@ -2161,7 +2161,7 @@ func (r *Runner) promptField(f PromptField, arg string, braced bool) (string, bo
 	case FieldCwdCountedFull:
 		return countedComponents(r.promptCwd(st), arg, 1), true
 	case FieldPrivilege:
-		// A read of the process's identity, which is the class .golangci.yml
+		// A read of the process's identity, which is the class AGENTS.md's forbidigo note
 		// blesses beside `$$` and `$UID`: nothing a script does changes it,
 		// and two Runners in one program genuinely share it.
 		if os.Geteuid() == 0 {
@@ -2294,7 +2294,7 @@ func (r *Runner) promptQuantity(c PromptCondition, n int) (int, bool) {
 		}
 		return live, true
 	case ConditionEffectiveUser:
-		// A read of the process's identity, which is the class .golangci.yml
+		// A read of the process's identity, which is the class AGENTS.md's forbidigo note
 		// blesses beside `$$` and `$UID`: nothing a script does changes it,
 		// and two Runners in one program genuinely share it.
 		return os.Geteuid(), true

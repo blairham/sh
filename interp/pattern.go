@@ -2649,7 +2649,7 @@ func matchesAnyArm(arms []string, armAt []int, s string, at int, o patternOpts) 
 
 // matchBracket consumes a bracket expression from p and reports whether c is
 // in it, returning what is left of the pattern.
-func matchBracket(p string, c string, o *patternOpts) (rest string, ok bool) {
+func matchBracket(p, c string, o *patternOpts) (rest string, ok bool) {
 	i := 1
 	negate := false
 	// `!` is the portable negation, everywhere. `^` is an extension dash
@@ -3170,7 +3170,7 @@ func posixClassName(name string) bool {
 	return false
 }
 
-func inClass(name string, unit string, extra patternClasses) bool {
+func inClass(name, unit string, extra patternClasses) bool {
 	if extra.wideAlphaOnly && len(unit) > 1 && posixClassName(name) {
 		return name == "alpha" && inWideAlphaAlone(ordOf(unit))
 	}
@@ -3333,7 +3333,7 @@ func isIFSWhitespace(c byte, space string) bool {
 // inPosixClass answers the POSIX character classes, over bytes, in the C
 // locale the corpus is measured under. All twelve are here and unanimous
 // across the panel.
-func inPosixClass(name string, unit string) bool {
+func inPosixClass(name, unit string) bool {
 	if len(unit) > 1 {
 		return inWideClass(name, ordOf(unit))
 	}

@@ -252,7 +252,8 @@ func newEngine(t *testing.T, settings *prompttheme.Store) *prompttheme.Engine {
 	roster.Compile("absent", prompttheme.SegmentFunc(
 		func(*prompttheme.Settings, *prompttheme.Context) (prompttheme.Rendered, bool) {
 			return prompttheme.Rendered{}, false
-		}))
+		},
+	))
 	roster.Compile("literal", said("100%F{red} ${X}"))
 	roster.Compile("prompt_char", prompttheme.PromptChar("$"))
 

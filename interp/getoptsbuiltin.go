@@ -205,7 +205,7 @@ func (r *Runner) getoptsOptionSign(word string) (byte, bool) {
 // column writes into the name: the sign is how the one dialect with both
 // spellings says which it read, and it would be noise where there is only
 // one.
-func getoptsLetter(sign byte, c byte) string {
+func getoptsLetter(sign, c byte) string {
 	if sign == '+' {
 		return "+" + string(c)
 	}

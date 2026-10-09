@@ -34,7 +34,7 @@ case $- in *m*) m=on;; esac
 
 // runInteractiveScript runs `-i script` with the streams the test gives it and
 // the axis answered, returning what the script wrote.
-func runInteractiveScript(t *testing.T, needsTerminal interp.Answer, in *os.File, out, errs *os.File) string {
+func runInteractiveScript(t *testing.T, needsTerminal interp.Answer, in, out, errs *os.File) string {
 	t.Helper()
 	dir := t.TempDir()
 	collected := filepath.Join(dir, "answer")

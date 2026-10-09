@@ -1040,7 +1040,7 @@ func tracePatternLiteralsEscaped(pat string) string {
 	const marked = " #$()*<>?[\\]^|~"
 	var b strings.Builder
 	openRange := false
-	write := func(c byte, quoted bool, first bool) {
+	write := func(c byte, quoted, first bool) {
 		switch {
 		case c == '\t':
 			b.WriteString(`$'\t'`)

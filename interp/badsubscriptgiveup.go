@@ -183,7 +183,8 @@ func (r *Runner) valuelessSubscriptedOperand(base string, subs []string, f decla
 		return "", letters, true
 	}
 	r.diagf("%s\n", r.unanswered(
-		"what a declaration does with a subscripted operand that carries no value"))
+		"what a declaration does with a subscripted operand that carries no value",
+	))
 	r.status, r.unspecified = 2, true
 	return "", letters, true
 }
@@ -412,7 +413,8 @@ func (r *Runner) storeOperandEmptySubscript(base, operand, sub, builtin string) 
 			"how much a store through a builtin's operand gives up for an unevaluable subscript",
 			Wording(r.diag().StoreOperandBadSubscript, "%[2]s", builtin,
 				Wording(r.diag().ArithEmptySubscriptTarget,
-					"not an identifier: %[1]s[]", base)))), true
+					"not an identifier: %[1]s[]", base)),
+		)), true
 	}
 	r.diagf("%s\n", r.unanswered("a subscript written with nothing in it"))
 	r.status, r.unspecified = 2, true

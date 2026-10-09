@@ -588,7 +588,7 @@ func fileOwner(info fs.FileInfo, kind byte) (uint64, bool) {
 // Process identity rather than process state: nothing a script does changes
 // either, two Runners in one program genuinely share them, and $UID and $EUID
 // are already read this way in the dialects. See the forbidigo note in
-// .golangci.yml, which draws that line explicitly.
+// AGENTS.md, which draws that line explicitly.
 func osGeteuid() int { return os.Geteuid() }
 
 func osGetegid() int { return os.Getegid() }

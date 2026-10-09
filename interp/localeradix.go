@@ -190,8 +190,9 @@ var radixCache sync.Map // string -> string, "" meaning the host has no data
 func hostRadixChar(root, locale string) (string, bool) {
 	key := root + "\x00" + locale
 	if cached, ok := radixCache.Load(key); ok {
-		radix := cached.(string)
-		return radix, radix != ""
+		if radix, isString := cached.(string); isString {
+			return radix, radix != ""
+		}
 	}
 	radix, ok := readHostRadixChar(root, locale)
 	if !ok {

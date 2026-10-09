@@ -44,7 +44,9 @@ func placeModules(ctx context.Context, s Suite, run, reference string) error {
 
 func moduleDir(ctx context.Context, reference, query string) (string, error) {
 	if v, ok := moduleDirs.Load(reference); ok {
-		return v.(string), nil
+		if dir, isString := v.(string); isString {
+			return dir, nil
+		}
 	}
 	out, err := exec.CommandContext(ctx, reference, "-fc", query).Output()
 	if err != nil {

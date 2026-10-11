@@ -22,10 +22,10 @@ import (
 //
 // The allocation is what #6359 is about. `{1..200000}` peaked at 80 MB at
 // GOGC=100, about 350 bytes a six-character word, because every element was
-// built as a span in a word, and
-// then expanded through the whole field pipeline — all before the first was
-// used. That was 2,100 bytes allocated a word; the list itself, measured in
-// the body once the rest is garbage, was always about 30.
+// built as a span in a word and then expanded through the whole field
+// pipeline, all before the first was used. That was 530 bytes allocated a
+// word, and the words were held until the last was built; the list itself,
+// measured in the body once the rest is garbage, was always about 30.
 func braceWordCost(tb testing.TB, n int) (live, allocated float64) {
 	tb.Helper()
 	sem, diag, dl := zsh.Semantics(), zsh.Diagnostics(), zsh.Dialect()
@@ -65,10 +65,10 @@ func braceWordCost(tb testing.TB, n int) (live, allocated float64) {
 // A word a range made in plain text is built as the string it is and
 // nothing else: the element, the list that holds it and the loop's copy of
 // that list come to about 110 bytes a word. The bound leaves room above that
-// and is far below the 2,100 the word-and-span road cost.
+// and is far below the 530 the word-and-span road cost.
 func TestABraceRangeIsBuiltAsStrings(t *testing.T) {
-	if _, allocated := braceWordCost(t, 100000); allocated > 400 {
-		t.Errorf("for i in {1..100000}: %.0f bytes allocated per word; want at most 400", allocated)
+	if _, allocated := braceWordCost(t, 100000); allocated > 250 {
+		t.Errorf("for i in {1..100000}: %.0f bytes allocated per word; want at most 250", allocated)
 	}
 }
 

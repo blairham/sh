@@ -67,8 +67,8 @@ func braceWordCost(tb testing.TB, n int) (live, allocated float64) {
 // that list come to about 110 bytes a word. The bound leaves room above that
 // and is far below the 3,400 the word-and-span road cost.
 func TestABraceRangeIsBuiltAsStrings(t *testing.T) {
-	if _, allocated := braceWordCost(t, 100000); allocated > 400 {
-		t.Errorf("for i in {1..100000}: %.0f bytes allocated per word; want at most 400", allocated)
+	if _, allocated := braceWordCost(t, 100000); allocated > 250 {
+		t.Errorf("for i in {1..100000}: %.0f bytes allocated per word; want at most 250", allocated)
 	}
 }
 

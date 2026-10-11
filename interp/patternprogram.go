@@ -1209,7 +1209,12 @@ func (c *programCache) entry(pattern string, rd *patternReading) *programEntry {
 		}
 		f, _ = m.LoadOrStore(pattern, &programFamily{})
 	}
-	fam := f.(*programFamily)
+	fam, isFamily := f.(*programFamily)
+	if !isFamily {
+		// Nothing else is ever stored, so this is unreachable; an entry of
+		// its own is a correct answer that merely is not shared.
+		return &programEntry{reading: *rd}
+	}
 	if list := fam.entries.Load(); list != nil {
 		for _, e := range *list {
 			if e.reading == *rd {

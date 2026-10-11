@@ -116,7 +116,7 @@ func (r *Runner) anonFunc(ctx context.Context, c *syntax.AnonFunc) error {
 		if len(args) > 0 {
 			r.lastArg = args[len(args)-1]
 		}
-		defer r.underscoreAcrossAFunctionCall(beforeArg, beforeSet)()
+		defer r.underscoreAcrossAFunctionCall(beforeArg, beforeSet).undo()
 		decl := &syntax.FuncDecl{
 			Name: name, Keyword: c.Keyword, Body: c.Body, Start: c.Start,
 		}

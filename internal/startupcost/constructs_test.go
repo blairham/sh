@@ -101,14 +101,16 @@ func BenchmarkConstructInProcess(b *testing.B) {
 // down, and the old figures are beside them — every one of those fails here.
 var constructAllocBounds = map[string]struct{ objects, bytes float64 }{
 	// `[ $i -lt N ]`: 27.5 objects an iteration before #6353.
-	"test": {14, 400},
+	"test": {7, 250},
 	// `[[ $i -lt N ]]`: 27.5 objects and 5.4 KB an iteration before, most
 	// of it a parser built to read each operand.
-	"dbracket": {8, 200},
+	"dbracket": {6, 120},
 	// `: $i`: 19.5 objects an iteration before.
-	"builtin": {11, 250},
+	"builtin": {7, 170},
 	// `x=$i`: 13.5 objects an iteration before.
-	"assign": {7, 150},
+	"assign": {5, 100},
+	// `f` with `f() { :; }`: 21.5 objects an iteration before.
+	"function": {12, 750},
 }
 
 // TestConstructAllocations holds the rows that #6353 brought down to what they

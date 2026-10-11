@@ -49,12 +49,7 @@ func (r *Runner) expandWordEscaped(w *syntax.Word) []string {
 		return nil
 	}
 	if lit, ok := r.plainLiteralWord(w); ok {
-		// Nothing in the word for any stage to act on. What the full road
-		// leaves behind it is left here too: the word's edges are none, and
-		// a brace name armed for it is spent. See interp/plainword.go.
-		r.braceName = false
-		r.lastWordEdges = wordEdges{}
-		return []string{lit}
+		return r.plainLiteralFields([]string{lit})
 	}
 	// Brace expansion comes first and can turn one word into several, so it
 	// wraps the rest rather than being a stage inside it. One word back can
@@ -3352,6 +3347,13 @@ func (r *Runner) expansionResult(v string, unquoted bool, glob, split Answer, ax
 // copy is what would have kept #1222 alive for `${a[@]}` after the first was
 // fixed.
 func (r *Runner) escapeResult(v string, glob Answer) string {
+	if v != "[" && plainField(v) {
+		// Nothing in it for any of the marks below to mark: no backslash, no
+		// pattern character, no group syntax, no mark of ours. A lone `[` is
+		// the one plain field a brace-stopped glob still marks. See
+		// interp/plainword.go.
+		return v
+	}
 	// The list path reaches here without passing expansionResult, so a
 	// `:s` replacement's deferred expansions are run here too. See
 	// pendingMark.

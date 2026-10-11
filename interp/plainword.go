@@ -67,3 +67,12 @@ func (r *Runner) plainLiteralWord(w *syntax.Word) (string, bool) {
 	}
 	return s.Value, true
 }
+
+// plainLiteralFields is the expansion of a word plainLiteralWord accepted,
+// given the one field it came to. What the full road leaves behind it is left
+// here too: the word's edges are none, and a brace name armed for it is spent.
+func (r *Runner) plainLiteralFields(field []string) []string {
+	r.braceName = false
+	r.lastWordEdges = wordEdges{}
+	return field
+}

@@ -6645,7 +6645,13 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 		}
 		in = strings.NewReader(text)
 	}
-	next := directByteSource(in)
+	// Blocks put back on a regular file, a byte per call on anything else —
+	// see lineByteSource. The give-back runs as soon as the segment is read,
+	// ahead of the assignment, so that nothing an assignment can run reads
+	// the stream before its offset is right; the deferred call is for the
+	// paths that return before then.
+	next, giveBack := lineByteSource(in)
+	defer giveBack()
 	switch {
 	case timed && timeout == 0:
 		// A timeout of zero is a question about the stream rather than a
@@ -6714,6 +6720,7 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 	}
 	text, lits, end := readSegment(next, raw, delim, wideDelim, count, exact,
 		r.countsTheLocalesCharacters, r.readCharacterWidth)
+	giveBack()
 	if r.unspecified {
 		return 2
 	}
@@ -7714,8 +7721,10 @@ func (r *Runner) readLine(raw bool) (line string, atEOF bool) {
 	r.settleBackgroundJobBeforeABlockingRead(in)
 	// No count, so nothing asks what a character is: readSegment puts the
 	// locale question only where a count has to land between characters.
-	text, _, end := readSegment(directByteSource(in), raw, '\n', "", -1, false,
+	next, giveBack := lineByteSource(in)
+	text, _, end := readSegment(next, raw, '\n', "", -1, false,
 		r.countsTheLocalesCharacters, r.readCharacterWidth)
+	giveBack()
 	return text, end == endEOF
 }
 

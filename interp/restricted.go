@@ -362,7 +362,7 @@ func (r *Runner) declarationMakesABinding(name string, f declareFlags, local boo
 	if sc == nil {
 		return false
 	}
-	if _, own := sc.saved[name]; own {
+	if sc.shadowsValue(name) {
 		return false
 	}
 	if !local && !sc.keyword && r.ask(r.sem().TypesetLocalNeedsKeywordFunction,

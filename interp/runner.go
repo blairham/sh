@@ -11699,7 +11699,11 @@ func (r *Runner) zeroValuedTypeExports() []string {
 func (r *Runner) hiddenExports(yield func(name, value string) bool) {
 	var seen map[string]bool
 	for i := len(r.scopes) - 1; i >= 0; i-- {
-		for name, value := range r.scopes[i].exportedShadow {
+		for _, rec := range r.scopes[i].records {
+			if !rec.holds(recExportedShadow) {
+				continue
+			}
+			name, value := rec.name, rec.exportedShadow
 			if seen[name] {
 				continue
 			}
@@ -11879,160 +11883,31 @@ func (r *Runner) inheritedValue(name string) (string, bool) {
 
 // scope records the variables a function made local, and what they were.
 type scope struct {
-	saved   map[string]string
-	existed map[string]bool
+	// records is what the declarations in this scope displaced, one record
+	// per name in the order the names were first shadowed, and recordIndex
+	// finds one by name once there are too many to compare along the list.
+	// See scoperecords.go.
+	records     []*shadowRecord
+	recordIndex map[string]*shadowRecord
+	// made is every kind of record this scope has ever written, for the
+	// writers that touch a record only in a scope that already keeps that
+	// kind. See scope.madeRecord.
+	made recordKind
+	// spares is the pushing runner's free list, which a new record is taken
+	// from. Nil on a clone's copy of a scope, which allocates its own: the
+	// list belongs to the runner that pushed the scope, and a subshell running
+	// beside it must not take from it. See scopespares.go.
+	spares *scopeSpares
 	// badNamesForTheReturn are the operands of a `local` this call took
 	// without a word, in the dialect that refuses them only when the call
 	// returns. See Semantics.LocalBadNameWithAValueIsRefusedAtTheReturn.
 	badNamesForTheReturn []string
-	// savedArrays is the same for arrays, which are a second table: shadowing
-	// only Vars left `f() { local a; a=(x y); }` setting a *global* array,
-	// because nothing had saved the array of that name to put back.
-	savedArrays  map[string]Array
-	arrayExisted map[string]bool
-	// removedBefore is whether `unset` had already hidden the name when it
-	// was shadowed, so a hiding `local` can be undone without resurrecting
-	// an environment value the script had taken away — or forgetting one it
-	// had not.
-	removedBefore map[string]bool
-	// declaredOnlyBefore is whether the name's compound value had come from a
-	// declaration alone when it was shadowed, so a `local -A m` that empties
-	// nothing does not leave the caller's table reading as though a
-	// declaration had just made it. Saved beside the two compound tables and
-	// put back with them. See compounddeclaredonly.go.
-	declaredOnlyBefore map[string]bool
-	// heldAnElementBefore is the same save for the third state: whether the
-	// name's indexed array had ever held an element when it was shadowed, so
-	// a local array that is emptied inside a call does not leave the
-	// caller's name reading as one that has lost its elements. See
-	// Runner.compoundHeldAnElement.
-	heldAnElementBefore map[string]bool
-	// scalarHeldBefore is the same save for
-	// Runner.scalarHeldUnderTheArrayLetter.
-	scalarHeldBefore map[string]bool
-	// memberNamespaces are the names whose **member** namespace this scope
-	// shadowed — every name under `c.` displaced along with `c` itself. It
-	// is read on the write path as well as on the exit: a member the body
-	// creates has nothing saved for it, and this is what says the name
-	// belongs to the call. See compoundlocal.go.
-	memberNamespaces map[string]bool
-	// compoundMarkBefore is whether a shadowed name was a compound variable
-	// when the declaration displaced it. Saved beside the three value tables
-	// because the mark *is* the name's kind — a name holding the fourth kind
-	// holds nothing in any of them — so restoring the three alone left the
-	// caller's `c` reading as a compound with no members, or as an ordinary
-	// name that had been one. Absent means this scope never shadowed the
-	// name and **false** that it shadowed one that was not a compound, which
-	// is what takes back a mark the call itself added. See compoundlocal.go.
-	compoundMarkBefore map[string]bool
 	// namespaceOwned is every **member** name this scope holds a copy of, and
 	// it is kept apart from the records above because it must outlive them:
 	// the restore deletes what it puts back, and the namespace sweep asks
 	// this question about names it may already have restored. See
 	// compoundlocal.go.
 	namespaceOwned map[string]bool
-	// savedAssoc shadows the associative table the same way, attribute and
-	// all: what comes back on exit is whether the name was associative as
-	// much as what it held.
-	savedAssoc   map[string]AssocArray
-	assocExisted map[string]bool
-	// savedReadonly is whether a shadowed name was frozen when the
-	// declaration displaced it. Taking the attribute off is a change to the
-	// runner's record and has to be put back like the value — otherwise the
-	// outer name comes back assignable, which is a frozen name quietly
-	// thawed by a function call.
-	//
-	// Written for *every* name a declaration shadows and not only for the
-	// ones that arrived frozen, because the entry has two jobs and the
-	// second one needs the false. A `false` here says the shell had nothing
-	// frozen under this name when the call took it, so anything frozen by
-	// the time the call returns was frozen *by the call* and goes away with
-	// it: `f() { local -r y=1; }; f; y=2` leaves y writable in bash, ksh93
-	// and zsh alike, and recording only the true left the caller's y frozen
-	// for the rest of the script.
-	//
-	// So absent and false do not mean the same thing here, though they do in
-	// r.readonly: absent means this scope never shadowed the name at all.
-	savedReadonly map[string]bool
-	// savedHideInScope is the hide-in-scope attribute a shadowed name
-	// carried when the declaration displaced it, saved for the same two
-	// reasons savedReadonly is: the outer name gets its own attribute back,
-	// and one this call added goes away with the call. Absent and false do
-	// not mean the same thing here either — absent means this scope never
-	// shadowed the name. See hideinscope.go.
-	savedHideInScope map[string]bool
-	// hiddenShadow is whether the shadow this scope took over a name is a
-	// *hidden* one — an ordinary parameter that merely happens to be spelled
-	// like one of the shell's own, rather than a second view of it. Written
-	// for every name the scope shadows, because absent and false are
-	// different questions here too: absent means this scope never shadowed
-	// the name, and the innermost scope that did is the one that answers.
-	//
-	// Separate from savedHideInScope, which is a *value* being kept for the
-	// return, because the two disagree the moment either `-h` or `+h` is
-	// written on the declaration — and separate from r.hideInScope, which
-	// after the shadow describes the fresh binding and no longer the outer
-	// one that governed it. See hideinscope.go.
-	hiddenShadow map[string]bool
-	// tieMirrorOnly are the names this scope saved **only** because the other
-	// half of one of the shell's own ties was declared: `local PATH` displaces
-	// `path` with it, because the tie is a property of the name and a local of
-	// one half has to be a local of the pair.
-	//
-	// The entry exists so the *word* can tell that shadow from a declaration
-	// of the name itself. They are the same displacement and they describe
-	// differently — measured, `f(){ typeset PATH; print ${(t)path} }` is
-	// `array-tied-special` in the reference, with no `local` in it, where
-	// `f(){ typeset path; … }` is `array-local-tied-special`. The fact was
-	// already written down in tielocal.go's own table and nothing had asked
-	// the word about it (#4875).
-	//
-	// Cleared by [Runner.shadow] whenever the name is declared directly,
-	// outside its freshness check and for the reason `privateShadowTaken` is
-	// outside it: a second declaration naming this name is a declaration of
-	// it, whatever displaced the cell first.
-	tieMirrorOnly map[string]bool
-	// suspendedProducers is what a hidden shadow took out of the produced
-	// tables, so that the name reads and writes as an ordinary parameter for
-	// as long as the shadow stands and is the shell's own again on return.
-	// See hideinscope.go.
-	suspendedProducers map[string]suspendedProducer
-	// savedAttrs is every other attribute a shadowed name carried — integer
-	// and its base, float and its precision, the two case letters, unique
-	// and hidden. Saved and taken off at the shadow and put back on return,
-	// for the two reasons savedReadonly is: a local is a fresh binding that
-	// inherits none of them, and one this call added goes away with the
-	// call. Absent means this scope never shadowed the name; a zero value
-	// means it shadowed one that carried nothing. See localattributes.go.
-	savedAttrs map[string]nameAttributes
-	// savedAssigned is what a *produced* parameter was last assigned when the
-	// declaration displaced it, and assignedSpoken is whether it had been
-	// assigned at all — the same tri-state savedExported keeps, and for the
-	// same reason: "nothing was ever assigned" is a state, and a single map
-	// could not tell it from "assigned the empty string".
-	//
-	// A produced parameter's assignment does not live in Vars, so shadowing
-	// Vars alone shadowed nothing. `f() { local -i SECONDS=1024; }; f` left
-	// SECONDS reading 1024 for the rest of the session, where zsh 5.9.2 has
-	// it counting from the call again — and powerlevel10k measures its prompt
-	// inside exactly that shape, `local -i COLUMNS=1024`, so the width it
-	// forced for the measurement escaped into the session and every prompt
-	// afterwards was drawn 1024 columns wide (#2107).
-	savedAssigned  map[string]string
-	assignedSpoken map[string]bool
-	// savedExported and exportedSpoken are the export attribute a shadowed
-	// name had, for the dialects where a local does not inherit it. Taking
-	// the attribute off is a change to the runner's record and has to be put
-	// back like the value, and the record is a tri-state — so what was there
-	// is two maps rather than one: whether it had been spoken about at all,
-	// and what it said.
-	savedExported  map[string]bool
-	exportedSpoken map[string]bool
-	// exportedShadow is what an exported name held when this scope's
-	// declaration took it out of view — the value a child is told for a
-	// local that inherited the attribute and was left with none of its own.
-	// See hiddenExports.
-	exportedShadow map[string]string
 	// keyword records that the function was defined with the `function` word
 	// rather than with parentheses. ksh93 gives only those functions a local
 	// scope, so `typeset` needs to know which kind it is standing in.

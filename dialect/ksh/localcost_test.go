@@ -66,11 +66,18 @@ posix() { :; }
 // the names to put back (#6361). The tables are kept for the next call now —
 // see interp/scopespares.go — so a declaration costs the writes it does.
 //
+// Then 24 after it, on main at ee80b4336, and 11 now (#6373): an operand
+// with a value copied its word twice over to expand a name that was a plain
+// identifier, the list of operands that were names grew an append at a time,
+// and the unwind made a list of the names to put back. A scope also keeps one
+// record per name now rather than a table per kind of record — see
+// interp/scoperecords.go — which is time rather than allocations.
+//
 // Allocations rather than time, so the row is deterministic. The bound has
 // room above what a call costs now and is well below what it cost before.
 func TestTypesetCostsFewAllocations(t *testing.T) {
-	if got := localCostAllocs(t, localCostDefs, "declaring", "plain"); got > 50 {
-		t.Errorf("three declarations allocate %v times a call more than plain assignments; want at most 50", got)
+	if got := localCostAllocs(t, localCostDefs, "declaring", "plain"); got > 16 {
+		t.Errorf("three declarations allocate %v times a call more than plain assignments; want at most 16", got)
 	}
 }
 

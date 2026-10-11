@@ -418,23 +418,13 @@ func (r *Runner) compgenVariableNames() []string {
 	}
 	for _, sc := range r.scopes {
 		// The value a declaration displaced, which is still the shell's and
-		// is what the measurement above says is listed. Through the
-		// `existed` maps rather than the saved ones, because a scope records
-		// a shadow of a name that held nothing at all and that name is not a
-		// candidate either.
-		for name, existed := range sc.existed {
-			if existed {
-				seen[name] = true
-			}
-		}
-		for name, existed := range sc.arrayExisted {
-			if existed {
-				seen[name] = true
-			}
-		}
-		for name, existed := range sc.assocExisted {
-			if existed {
-				seen[name] = true
+		// is what the measurement above says is listed. Through whether each
+		// value existed rather than whether it was saved, because a scope
+		// records a shadow of a name that held nothing at all and that name
+		// is not a candidate either.
+		for _, rec := range sc.records {
+			if rec.has&rec.bits&(recValue|recArray|recAssoc) != 0 {
+				seen[rec.name] = true
 			}
 		}
 	}

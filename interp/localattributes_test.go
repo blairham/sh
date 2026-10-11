@@ -182,7 +182,7 @@ second`
 
 // A name the *call* typed and that nothing outside it ever named: the
 // attribute goes away with the call rather than being left behind on a name
-// the caller then meets for the first time. This is the half savedReadonly's
+// the caller then meets for the first time. This is the half recSavedReadonly's
 // `false` entry exists for, asked of the rest of the letters.
 func TestAnAttributeOnANameTheCallerNeverHadGoesAwayWithTheCall(t *testing.T) {
 	src := `f() { typeset -i fresh=1; }

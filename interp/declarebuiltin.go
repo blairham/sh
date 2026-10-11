@@ -3376,8 +3376,7 @@ func (r *Runner) localCell(name string) bool {
 	if len(r.scopes) == 0 {
 		return false
 	}
-	_, saved := r.scopes[len(r.scopes)-1].saved[name]
-	return saved
+	return r.scopes[len(r.scopes)-1].shadowsValue(name)
 }
 
 // localDescribesTheBinding reports whether *some* live scope has taken the
@@ -3433,11 +3432,11 @@ func (r *Runner) localDescribesTheBinding(name string) bool {
 			i = j
 			continue
 		}
-		if _, saved := sc.saved[name]; saved {
-			if sc.tieMirrorOnly[name] {
+		if sc.shadowsValue(name) {
+			if sc.flag(flagTieMirrorOnly, name) {
 				// The partner's displacement, which is not a declaration of
 				// this name — see the last paragraph above, and
-				// scope.tieMirrorOnly for what writes the entry.
+				// flagTieMirrorOnly for what writes the entry.
 				continue
 			}
 			return true
@@ -4489,7 +4488,7 @@ func (r *Runner) caseLetterReplacesTheNumeric(name string) {
 // with none, both shells that spell the letter write the global.
 func (r *Runner) setGlobalVar(name, value string) {
 	for _, sc := range r.scopes {
-		if _, saved := sc.saved[name]; !saved {
+		if !sc.shadowsValue(name) {
 			continue
 		}
 		if _, _, under := r.shellsOwnCellUnderACallPrefix(name); under {
@@ -4511,10 +4510,9 @@ func (r *Runner) setGlobalVar(name, value string) {
 			// assignment would have written.
 			break
 		}
-		sc.saved[name] = value
-		sc.existed[name] = true
-		if sc.removedBefore != nil {
-			sc.removedBefore[name] = false
+		sc.saveValue(name, value, true)
+		if sc.madeRecord(recRemovedBefore) {
+			sc.putRecord(recRemovedBefore, name, false)
 		}
 		return
 	}
@@ -6390,7 +6388,7 @@ func (r *Runner) localExportAttribute(name string, explicit bool) {
 		return
 	}
 	sc := r.scopes[len(r.scopes)-1]
-	if _, shadowed := sc.saved[name]; !shadowed {
+	if !sc.shadowsValue(name) {
 		// No scope was taken — a declaration at the top level, or one this
 		// dialect gives no scope to — so there is no local to export.
 		return
@@ -6406,14 +6404,9 @@ func (r *Runner) localExportAttribute(name string, explicit bool) {
 	if r.unspecified {
 		return
 	}
-	if sc.exportedSpoken == nil {
-		sc.exportedSpoken = map[string]bool{}
-		sc.savedExported = map[string]bool{}
-	}
-	if _, seen := sc.exportedSpoken[name]; !seen {
+	if !sc.holds(recExported, name) {
 		on, spoken := r.exported[name]
-		sc.exportedSpoken[name] = spoken
-		sc.savedExported[name] = on
+		sc.saveExport(name, on, spoken)
 	}
 	if r.exported == nil {
 		r.exported = map[string]bool{}
@@ -6462,7 +6455,7 @@ func (r *Runner) shadowedExport(name string, exported bool) {
 		return
 	}
 	sc := r.scopes[len(r.scopes)-1]
-	if _, shadowed := sc.saved[name]; !shadowed {
+	if !sc.shadowsValue(name) {
 		// No scope was taken — a declaration at the top level, or one this
 		// dialect gives no scope to — so nothing is standing in front of
 		// anything.
@@ -6477,10 +6470,7 @@ func (r *Runner) shadowedExport(name string, exported bool) {
 			return
 		}
 	}
-	if sc.exportedShadow == nil {
-		sc.exportedShadow = map[string]string{}
-	}
-	sc.exportedShadow[name] = value
+	sc.saveExportedShadow(name, value)
 }
 
 // hideVar takes a name out of view entirely — the tables and the environment
@@ -6518,7 +6508,7 @@ func (r *Runner) declarationShadowRefused(name string) bool {
 		return false
 	}
 	if sc := r.scopes[len(r.scopes)-1]; sc != nil {
-		if _, own := sc.saved[name]; own {
+		if sc.shadowsValue(name) {
 			// The running scope already made this cell, so there is nothing
 			// left to shadow: this is a second declaration of the function's
 			// own local, and it is no more a shadow than the same line at the
@@ -6646,10 +6636,11 @@ func (r *Runner) shadow(name string) (fresh, redeclared bool) {
 	// this call's own rather than a tie partner's. Outside the freshness
 	// check below for the reason the private mark above is: the mirror may
 	// have displaced the cell already, and a later `typeset path` on its own
-	// line is still a local declaration of `path`. See scope.tieMirrorOnly.
-	overAMirror := sc.tieMirrorOnly[name]
-	delete(sc.tieMirrorOnly, name)
-	if _, seen := sc.saved[name]; !seen {
+	// line is still a local declaration of `path`. See flagTieMirrorOnly.
+	rec := sc.recordFor(name)
+	overAMirror := rec.holds(flagTieMirrorOnly)
+	rec.has &^= flagTieMirrorOnly
+	if !rec.holds(recValue) {
 		fresh = true
 		// A live assignment prefix is holding this name, so the value the
 		// cell below displaces is the prefix's and the declaration is taking
@@ -6658,12 +6649,9 @@ func (r *Runner) shadow(name string) (fresh, redeclared bool) {
 		// outer one. See Runner.prefixEntryShadowed.
 		fromPrefix, tookThePrefixEntry := r.prefixEntryShadowed(name)
 		old, existed := r.Vars[name]
-		sc.saved[name] = old
-		sc.existed[name] = existed
-		if sc.removedBefore == nil {
-			sc.removedBefore = r.spareBools()
-		}
-		sc.removedBefore[name] = r.removed[name]
+		rec.put(recValue, existed)
+		rec.value = old
+		rec.put(recRemovedBefore, r.removed[name])
 		// The frozen attribute is displaced with the value, in the dialect
 		// that lets a declaration shadow one — the caller checked the axis
 		// before getting here. Saved so the outer name is frozen again on
@@ -6672,13 +6660,10 @@ func (r *Runner) shadow(name string) (fresh, redeclared bool) {
 		//
 		// Recorded whether or not there was a freeze, because the same entry
 		// is what takes back a freeze this *call* adds — see
-		// scope.savedReadonly. The delete below is unconditional for the
-		// same reason there is no `if` around it: a name with nothing
-		// recorded is a delete of a key that is not there.
-		if sc.savedReadonly == nil {
-			sc.savedReadonly = r.spareBools()
-		}
-		sc.savedReadonly[name] = r.readonly[name]
+		// recSavedReadonly. The delete below is unconditional for the same
+		// reason there is no `if` around it: a name with nothing recorded is
+		// a delete of a key that is not there.
+		rec.put(recSavedReadonly, r.readonly[name])
 		if !r.freezeSurvivesAShadow(name) {
 			delete(r.readonly, name)
 		}
@@ -6686,11 +6671,8 @@ func (r *Runner) shadow(name string) (fresh, redeclared bool) {
 		// same two jobs: the outer name gets back what it carried, and an
 		// attribute this call added or removed goes away with the call.
 		// Recorded whether or not there was one, so absent means this scope
-		// never shadowed the name — see scope.savedHideInScope.
-		if sc.savedHideInScope == nil {
-			sc.savedHideInScope = r.spareBools()
-		}
-		sc.savedHideInScope[name] = r.hideInScope[name]
+		// never shadowed the name — see recSavedHideInScope.
+		rec.put(recSavedHideInScope, r.hideInScope[name])
 		// And whether *this* shadow is a hidden one, which is a different
 		// question from the attribute being saved above: what governs the
 		// shadow is what the binding it displaced carried, and the fresh
@@ -6699,11 +6681,8 @@ func (r *Runner) shadow(name string) (fresh, redeclared bool) {
 		// inside a function is `scalar-local`, with no `hide` in the word.
 		// So the answer is recorded here and the attribute comes off with
 		// every other one; shadowIsHidden is what reads it back.
-		if sc.hiddenShadow == nil {
-			sc.hiddenShadow = r.spareBools()
-		}
 		hidden := r.shadowIsHidden(name)
-		sc.hiddenShadow[name] = hidden
+		rec.put(recHiddenShadow, hidden)
 		delete(r.hideInScope, name)
 		if hidden {
 			// And the producer, which is what makes the shadow an ordinary
@@ -6718,10 +6697,8 @@ func (r *Runner) shadow(name string) (fresh, redeclared bool) {
 		// and carries nothing the outer name carried. Recorded whether or
 		// not there were any, so the entry can put back "none" as well as
 		// take back one this call added — see localattributes.go.
-		if sc.savedAttrs == nil {
-			sc.savedAttrs = r.spareAttrs()
-		}
-		sc.savedAttrs[name] = r.captureAttributes(name)
+		rec.has |= recAttrs
+		rec.attrs = r.captureAttributes(name)
 		r.dropNameAttributes(name)
 		// And the export attribute, which is an attribute like every other
 		// one above and was the one this list did not have. Not taken off
@@ -6746,25 +6723,21 @@ func (r *Runner) shadow(name string) (fresh, redeclared bool) {
 		// The dialect that reads `-x` as `-g` never arrives here — the
 		// letter takes no shadow there, which is what the letter means — so
 		// this is inert for it and its own answer is unchanged.
-		if sc.exportedSpoken == nil {
-			sc.exportedSpoken = r.spareBools()
-			sc.savedExported = r.spareBools()
-		}
-		if _, seen := sc.exportedSpoken[name]; !seen {
+		if !rec.holds(recExported) {
 			on, spoken := r.exported[name]
-			sc.exportedSpoken[name] = spoken
-			sc.savedExported[name] = on
+			rec.put(recExported, spoken)
+			rec.exportedOn = on
 		}
 		// And what a produced parameter was last assigned, which is a store
 		// of its own: a declaration that shadowed Vars alone left the message
 		// to the producer standing, so the local's value went on being read
-		// after the call had returned. See scope.savedAssigned.
-		if sc.assignedSpoken == nil {
-			sc.savedAssigned = r.spareStrings()
-			sc.assignedSpoken = r.spareBools()
-		}
-		sc.savedAssigned[name], sc.assignedSpoken[name] = r.assigned[name]
+		// after the call had returned. See recAssigned.
+		assigned, spoken := r.assigned[name]
+		rec.put(recAssigned, spoken)
+		rec.assigned = assigned
 		delete(r.assigned, name)
+		sc.made |= recValue | recRemovedBefore | recSavedReadonly | recSavedHideInScope |
+			recHiddenShadow | recAttrs | recExported | recAssigned
 		if tookThePrefixEntry {
 			// The cell is the prefix's now, so what this scope gives back on
 			// return is what the *prefix* would have given back and not the
@@ -6795,49 +6768,38 @@ func (r *Runner) shadow(name string) (fresh, redeclared bool) {
 	// both. Saving only the scalar left `f() { local a; a=(x y); }` writing a
 	// global array: `local` shadowed nothing an array assignment then wrote
 	// to, and the value outlived the function.
-	if _, seen := sc.arrayExisted[name]; !seen {
+	if !rec.holds(recArray) {
 		old, existed := r.Arrays[name]
-		if sc.savedArrays == nil {
-			sc.savedArrays = r.spareArrays()
-			sc.arrayExisted = r.spareBools()
-		}
 		// Copied rather than kept: an Array is a map, so saving the value
 		// would save a reference to the very table the function is about to
 		// write into, and putting it back would put back the changes.
 		if existed {
 			old = old.clone()
 		}
-		sc.savedArrays[name] = old
-		sc.arrayExisted[name] = existed
+		rec.put(recArray, existed)
+		rec.array = old
 	}
 	// And a third table for the associative kind, for the same reason as the
 	// second — and here the *attribute* is what is being shadowed as much as
 	// the value: `typeset -A m` in a function must not leave the caller's
 	// `m` reading its subscripts as strings.
-	if _, seen := sc.assocExisted[name]; !seen {
+	if !rec.holds(recAssoc) {
 		old, existed := r.AssocArrays[name]
-		if sc.savedAssoc == nil {
-			sc.savedAssoc = r.spareAssocs()
-			sc.assocExisted = r.spareBools()
-		}
 		if existed {
 			old = old.clone()
 		}
-		sc.savedAssoc[name] = old
-		sc.assocExisted[name] = existed
+		rec.put(recAssoc, existed)
+		rec.assoc = old
 	}
 	// And how the shadowed table came to be, which travels with the two
 	// above: a local declaration marks the name declared-only, and the
-	// caller's own table must not inherit that when the call unwinds. Keyed
-	// off assocExisted, which the block above has just filled in for this
-	// name, so the record is taken exactly once per name per scope.
-	if _, seen := sc.declaredOnlyBefore[name]; !seen {
-		if sc.declaredOnlyBefore == nil {
-			sc.declaredOnlyBefore = r.spareBools()
-		}
-		sc.declaredOnlyBefore[name] = r.declaredOnlyCompound[name]
-		setBool(&sc.heldAnElementBefore, name, r.compoundHeldAnElement[name])
-		setBool(&sc.scalarHeldBefore, name, r.scalarHeldUnderTheArrayLetter[name])
+	// caller's own table must not inherit that when the call unwinds. Taken
+	// once per name per scope.
+	if !rec.holds(recDeclaredOnlyBefore) {
+		rec.put(recDeclaredOnlyBefore, r.declaredOnlyCompound[name])
+		rec.setFlag(flagHeldAnElementBefore, r.compoundHeldAnElement[name])
+		rec.setFlag(flagScalarHeldBefore, r.scalarHeldUnderTheArrayLetter[name])
+		sc.made |= recArray | recAssoc | recDeclaredOnlyBefore
 		// And the local starts with no record of having held an element.
 		// Measured 2026-10-03 on ksh93u+, `typeset -a x; x[0]=p; unset
 		// 'x[0]'; function f { typeset -a x; typeset -p x; }; f` lists
@@ -7031,16 +6993,29 @@ func (r *Runner) expandAssignArg(w *syntax.Word) string {
 		// Never, from either caller: both asked one of those two questions.
 		return r.expandAssignValue(w)
 	}
+	value := *w
+	// Made at its full length in one allocation: the literal from the `=` on,
+	// then the spans after it.
+	value.Spans = make([]syntax.Span, 1+len(w.Spans)-(i+1))
+	value.Spans[0] = syntax.Span{
+		Kind: syntax.Literal, Value: w.Spans[i].Value[j+1:],
+		Quoting: w.Spans[i].Quoting, Pos: w.Spans[i].Pos,
+	}
+	copy(value.Spans[1:], w.Spans[i+1:])
+	if head := w.Spans[0].Value[:j]; i == 0 && w.Spans[0].Quoting == syntax.Unquoted && isPlainName(head) {
+		// A bare name, which is nearly every operand there is: a literal
+		// identifier expands to itself, so the copy of the word the
+		// expansion below would be handed is two allocations an operand
+		// for nothing. Pinned by the declaration's allocation bound in each
+		// dialect's localcost_test.go rather than by any output, which is
+		// why it was once removed as a branch no mutation could kill.
+		return head + "=" + r.expandAssignValue(&value)
+	}
 	name := *w
 	name.Spans = append(append([]syntax.Span{}, w.Spans[:i]...), syntax.Span{
 		Kind: syntax.Literal, Value: w.Spans[i].Value[:j],
 		Quoting: w.Spans[i].Quoting, Pos: w.Spans[i].Pos,
 	})
-	value := *w
-	value.Spans = append([]syntax.Span{{
-		Kind: syntax.Literal, Value: w.Spans[i].Value[j+1:],
-		Quoting: w.Spans[i].Quoting, Pos: w.Spans[i].Pos,
-	}}, w.Spans[i+1:]...)
 	return r.expandAssignName(&name) + "=" + r.expandAssignValue(&value)
 }
 

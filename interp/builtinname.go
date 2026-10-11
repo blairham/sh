@@ -350,7 +350,7 @@ func (r *Runner) builtinNames(builtin string, args []string, explicitVariable bo
 		// brackets are read as a subscript only once the base is a name.
 		if base, _, subscripted := r.operandSubscripts(builtin, name); subscripted && isPlainName(base) {
 			if r.takesASubscript(builtin) {
-				rest = append(rest, a)
+				rest = keepOperand(rest, a, len(args)-i)
 				continue
 			}
 			if r.unspecified {
@@ -372,7 +372,7 @@ func (r *Runner) builtinNames(builtin string, args []string, explicitVariable bo
 			}
 			continue
 		} else if r.isBuiltinName(builtin, name, takes) {
-			rest = append(rest, a)
+			rest = keepOperand(rest, a, len(args)-i)
 			continue
 		}
 		if r.unspecified {
@@ -390,6 +390,17 @@ func (r *Runner) builtinNames(builtin string, args []string, explicitVariable bo
 		}
 	}
 	return rest, status, false
+}
+
+// keepOperand appends an operand builtinNames passes on, making the list the
+// first time with room for every operand still to come — the common case is
+// that all of them are names, and growing the list one append at a time was
+// most of what a declaration line allocated past its own records.
+func keepOperand(rest []string, a string, left int) []string {
+	if rest == nil {
+		rest = make([]string, 0, left)
+	}
+	return append(rest, a)
 }
 
 // badLocalNameWaitsForTheReturn takes a `local` operand whose name is bad and

@@ -106,17 +106,17 @@ func (r *Runner) SetParameterWithdrawn(name string, withdrawn bool) {
 	// listed as `array-hideval`.
 	frozen, hidden := r.readonly[name], r.hidden[name]
 	for _, sc := range r.scopes {
-		if was, ok := sc.savedReadonly[name]; ok {
+		if was, ok := sc.boolRecord(recSavedReadonly, name); ok {
 			frozen = was
-			sc.savedReadonly[name] = false
+			sc.putRecord(recSavedReadonly, name, false)
 			break
 		}
 	}
 	for _, sc := range r.scopes {
-		if was, ok := sc.savedAttrs[name]; ok {
+		if was, ok := sc.savedAttributes(name); ok {
 			hidden = was.hidden
 			was.hidden = false
-			sc.savedAttrs[name] = was
+			sc.saveAttributes(name, was)
 			break
 		}
 	}

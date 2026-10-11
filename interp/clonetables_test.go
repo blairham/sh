@@ -119,34 +119,25 @@ func seedStacks(r *Runner) {
 	r.releasedSubstFds = append(make([]int, 0, 4), 63)
 	r.carriedHeredocs = append(make([]syntax.CarriedHeredoc, 0, 4), syntax.CarriedHeredoc{})
 	r.substEnds = append(make([]syntax.SubstitutionEnds, 0, 4), syntax.SubstitutionEnds{})
+	seed := &shadowRecord{
+		name: "seed",
+		has: restoredRecords | recExportedShadow | flagHeldAnElementBefore |
+			flagScalarHeldBefore | flagTieMirrorOnly,
+		bits:           recValue | recArray | recAssoc,
+		value:          "v",
+		array:          ArrayOf(Element{Str: "v"}),
+		assoc:          AssocArray{"k": {Str: "v"}},
+		producer:       &suspendedProducer{},
+		exportedShadow: "v",
+	}
 	r.scopes = append(make([]*scope, 0, 4), &scope{
-		saved:                map[string]string{"seed": "v"},
-		existed:              map[string]bool{"seed": true},
-		savedArrays:          map[string]Array{"seed": ArrayOf(Element{Str: "v"})},
-		arrayExisted:         map[string]bool{"seed": true},
-		removedBefore:        map[string]bool{"seed": true},
-		declaredOnlyBefore:   map[string]bool{"seed": true},
-		memberNamespaces:     map[string]bool{"seed": true},
-		compoundMarkBefore:   map[string]bool{"seed": true},
+		records:              append(make([]*shadowRecord, 0, 4), seed),
+		recordIndex:          map[string]*shadowRecord{"seed": seed},
 		namespaceOwned:       map[string]bool{"seed": true},
-		heldAnElementBefore:  map[string]bool{"seed": true},
-		scalarHeldBefore:     map[string]bool{"seed": true},
-		savedAssoc:           map[string]AssocArray{"seed": {"k": {Str: "v"}}},
-		assocExisted:         map[string]bool{"seed": true},
-		savedReadonly:        map[string]bool{"seed": true},
-		savedHideInScope:     map[string]bool{"seed": true},
-		hiddenShadow:         map[string]bool{"seed": true},
-		tieMirrorOnly:        map[string]bool{"seed": true},
+		spares:               &r.spares,
 		private:              map[string]bool{"seed": true},
 		privateSealed:        map[string]sealedName{"seed": {}},
 		privateShielded:      append(make([]string, 0, 4), "seed"),
-		suspendedProducers:   map[string]suspendedProducer{"seed": {}},
-		savedAttrs:           map[string]nameAttributes{"seed": {}},
-		savedAssigned:        map[string]string{"seed": "v"},
-		assignedSpoken:       map[string]bool{"seed": true},
-		savedExported:        map[string]bool{"seed": true},
-		exportedSpoken:       map[string]bool{"seed": true},
-		exportedShadow:       map[string]string{"seed": "v"},
 		savedTraps:           map[string]savedTrapState{"seed": {}},
 		savedOptions:         append(make([]bool, 0, 4), true),
 		sealed:               map[string]sealedName{"seed": {}},
@@ -258,8 +249,8 @@ func TestACloneOwnsEveryStack(t *testing.T) {
 // same pointers still hands two shells one `*scope` to write.
 //
 // This is the crash of #1783 stated as an invariant rather than as a race:
-// `shadow` writes `sc.saved[name]` on whatever sits at the top of the stack,
-// so if that scope is the parent's scope, two goroutines write one map.
+// `shadow` writes a name's record on whatever sits at the top of the stack,
+// so if that scope is the parent's scope, two goroutines write one record.
 func TestACloneOwnsEveryScopeTable(t *testing.T) {
 	parent := newTestRunner(t, &Runner{})
 	seedStacks(parent)
@@ -302,6 +293,33 @@ func TestACloneOwnsEveryScopeTable(t *testing.T) {
 				"cloneScopes must copy it: `local` writes the innermost scope, and a "+
 				"pipeline runs its elements on goroutines.", f.Name)
 		}
+	}
+
+	// The records are pointers, so a copied list of the same pointers is one
+	// record with two shells writing it — and each record holds two tables of
+	// its own under the name.
+	if len(cs.records) != len(ps.records) {
+		t.Fatalf("the clone's scope holds %d records and its parent's %d", len(cs.records), len(ps.records))
+	}
+	for i, prec := range ps.records {
+		crec := cs.records[i]
+		if prec == crec {
+			t.Errorf("the record of %q is one record shared by a subshell and its parent", prec.name)
+			continue
+		}
+		if crec.array == prec.array || reflect.ValueOf(crec.assoc).UnsafePointer() == reflect.ValueOf(prec.assoc).UnsafePointer() {
+			t.Errorf("the record of %q shares a saved table with its parent's", prec.name)
+		}
+		if crec.producer == prec.producer {
+			t.Errorf("the record of %q shares its suspended producer with its parent's", prec.name)
+		}
+		if cs.recordIndex[prec.name] != crec {
+			t.Errorf("the clone's index of %q points at a record that is not in its list", prec.name)
+		}
+	}
+	if cs.spares != nil {
+		t.Errorf("the clone's scope takes records from its parent's free list, which the " +
+			"parent writes on its own goroutine")
 	}
 }
 

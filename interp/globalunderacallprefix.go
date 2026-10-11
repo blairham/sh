@@ -158,7 +158,7 @@ func (r *Runner) shellsOwnCellUnderACallPrefix(name string) (frame, at int, ok b
 		return 0, 0, false
 	}
 	for i, sc := range r.scopes {
-		if _, saved := sc.saved[name]; !saved {
+		if !sc.shadowsValue(name) {
 			continue
 		}
 		if r.callPrefixes[outer].scopeDepth > i {

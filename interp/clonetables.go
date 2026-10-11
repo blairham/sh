@@ -567,10 +567,11 @@ func (c *Runner) ownTables(r *Runner) {
 //
 // Every scope is copied and not only the slice, because a scope's tables are
 // inside the scope rather than on the Runner: a fresh backing array alone
-// would still hand two shells one `*scope`, and `shadow` writes
-// `sc.saved[name]` on whatever it finds at the top of the stack. That is the
-// `fatal error: concurrent map writes` of #1783 — the runtime's own detector,
-// which is not a Go panic, so panicguard cannot catch it.
+// would still hand two shells one `*scope`, and `shadow` writes the record of
+// a name on whatever it finds at the top of the stack. That was the `fatal
+// error: concurrent map writes` of #1783 when the records were maps — the
+// runtime's own detector, which is not a Go panic, so panicguard cannot catch
+// it — and is a data race on one record now.
 //
 // owner is copied verbatim rather than repointed at the clone. It records
 // which runner *pushed* the scope, and ownScope reads it to stop a `( … )`
@@ -598,28 +599,13 @@ func cloneScopes(scopes []*scope) []*scope {
 	}
 	for i, sc := range scopes {
 		c := *sc
-		c.saved = maps.Clone(sc.saved)
-		c.existed = maps.Clone(sc.existed)
-		c.arrayExisted = maps.Clone(sc.arrayExisted)
-		c.removedBefore = maps.Clone(sc.removedBefore)
-		c.memberNamespaces = maps.Clone(sc.memberNamespaces)
-		c.compoundMarkBefore = maps.Clone(sc.compoundMarkBefore)
+		// Every record, and every container a record holds — see
+		// scope.cloneRecords. The free list stays the parent's alone: a
+		// subshell that took records from it would be taking them from a
+		// list its parent is writing on another goroutine.
+		c.cloneRecords()
+		c.spares = nil
 		c.namespaceOwned = maps.Clone(sc.namespaceOwned)
-		c.declaredOnlyBefore = maps.Clone(sc.declaredOnlyBefore)
-		c.heldAnElementBefore = maps.Clone(sc.heldAnElementBefore)
-		c.scalarHeldBefore = maps.Clone(sc.scalarHeldBefore)
-		c.assocExisted = maps.Clone(sc.assocExisted)
-		c.savedReadonly = maps.Clone(sc.savedReadonly)
-		c.savedHideInScope = maps.Clone(sc.savedHideInScope)
-		c.hiddenShadow = maps.Clone(sc.hiddenShadow)
-		c.tieMirrorOnly = maps.Clone(sc.tieMirrorOnly)
-		c.suspendedProducers = maps.Clone(sc.suspendedProducers)
-		c.savedAttrs = maps.Clone(sc.savedAttrs)
-		c.savedAssigned = maps.Clone(sc.savedAssigned)
-		c.assignedSpoken = maps.Clone(sc.assignedSpoken)
-		c.savedExported = maps.Clone(sc.savedExported)
-		c.exportedSpoken = maps.Clone(sc.exportedSpoken)
-		c.exportedShadow = maps.Clone(sc.exportedShadow)
 		c.savedTraps = maps.Clone(sc.savedTraps)
 		c.savedOptions = slices.Clone(sc.savedOptions)
 		c.sealed = cloneSealed(sc.sealed, at, out)
@@ -634,21 +620,6 @@ func cloneScopes(scopes []*scope) []*scope {
 		c.private = maps.Clone(sc.private)
 		c.privateSealed = cloneSealed(sc.privateSealed, at, out)
 		c.privateShielded = slices.Clone(sc.privateShielded)
-		// The two that hold a container per name, on the same terms as Arrays
-		// and AssocArrays above: cloning the outer map alone would give the
-		// clone its own name table pointing at the parent's elements.
-		if sc.savedArrays != nil {
-			c.savedArrays = make(map[string]Array, len(sc.savedArrays))
-			for k, v := range sc.savedArrays {
-				c.savedArrays[k] = v.clone()
-			}
-		}
-		if sc.savedAssoc != nil {
-			c.savedAssoc = make(map[string]AssocArray, len(sc.savedAssoc))
-			for k, v := range sc.savedAssoc {
-				c.savedAssoc[k] = v.clone()
-			}
-		}
 		// The return hooks are appended to in place too, by AtFunctionReturn
 		// and by getopts. The closures themselves are shared, and they capture
 		// the runner that registered them, so one registered by the parent

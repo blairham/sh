@@ -5,6 +5,7 @@ package interp
 
 import (
 	"context"
+	"io"
 	"strings"
 )
 
@@ -169,11 +170,12 @@ func biMapfile(r *Runner, ctx context.Context, name string, args []string) int {
 		return 1
 	}
 
-	// The read, a byte at a time so nothing past the cap is consumed:
-	// measured, `mapfile -n 1` leaves the rest of the stream for whoever
-	// reads next. End of input with no trailing delimiter still yields the
-	// element, and is not a failure — unlike `read`, a mapfile that reaches
-	// the end read everything it was asked for.
+	// The read, consuming nothing past the cap: measured, `mapfile -n 1`
+	// leaves the rest of the stream for whoever reads next, on a pipe as on a
+	// file — see mapfileByteSource for what that costs on each. End of input
+	// with no trailing delimiter still yields the element, and is not a
+	// failure — unlike `read`, a mapfile that reaches the end read everything
+	// it was asked for.
 	//
 	// The third stream a builtin waits on, and so the third place a
 	// background job's pid has to settle before it does — see
@@ -189,7 +191,8 @@ func biMapfile(r *Runner, ctx context.Context, name string, args []string) int {
 		r.setArray(target, nil)
 	}
 	r.settleBackgroundJobBeforeABlockingRead(in)
-	next := directByteSource(in)
+	next, giveBack := mapfileByteSource(in, count > 0 || hasCallback)
+	defer giveBack()
 	var b strings.Builder
 	seen, kept := 0, 0
 	keep := func(elem string) {
@@ -200,6 +203,10 @@ func biMapfile(r *Runner, ctx context.Context, name string, args []string) int {
 		// the element itself. -O moves the subscript with it, and -s does not
 		// — a skipped line is never an element and never counts here.
 		if hasCallback && kept%quantum == 0 {
+			// The callback is shell code and may read the same stream, so
+			// it is handed the offset this element ends at, not the end of
+			// the block it arrived in.
+			giveBack()
 			r.runMapfileCallback(ctx, callback, at, elem)
 		}
 		r.setArrayElem(target, at, itoa(at), elem)
@@ -267,4 +274,23 @@ func (r *Runner) runMapfileCallback(ctx context.Context, callback string, at int
 		syntaxStatus: r.diag().SyntaxStatus(),
 	})
 	r.status = status
+}
+
+// mapfileByteSource is the source mapfile reads through. On a regular file it
+// is the line readers' — blocks, with what was not taken put back. On any
+// other stream it reads blocks too where nothing can see the difference: a
+// mapfile with no count reads to the end of its input, so taking it in blocks
+// leaves exactly what a byte at a time would, which is nothing. A count, or a
+// callback that may itself read the stream, makes the stopping point
+// observable, and there the byte at a time stays.
+func mapfileByteSource(in io.Reader, stopsEarly bool) (next func() (byte, int), giveBack func()) {
+	if f, ok := rewindableFile(in); ok {
+		s := &blockSource{in: f, file: f, size: blockReadMost}
+		return s.next, s.giveBack
+	}
+	if !stopsEarly {
+		s := &blockSource{in: in, size: blockReadMost}
+		return s.next, func() {}
+	}
+	return directByteSource(in), func() {}
 }

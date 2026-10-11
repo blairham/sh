@@ -3,7 +3,10 @@
 
 package zsh
 
-import "strings"
+import (
+	"strings"
+	"sync"
+)
 
 // Which options an emulation puts back, which it leaves where it found them,
 // and which it never touches at all. Three lists rather than one, because the
@@ -106,7 +109,7 @@ import "strings"
 // emulationDefault is what one option is set to when the shell emulates this
 // mode: the mode's own default where they differ, and the table's otherwise.
 func emulationDefault(o zshOption, mode string) bool {
-	d, ok := emulationDefaults[o.base]
+	d, ok := emulationDefaults()[o.base]
 	if !ok {
 		return o.def
 	}
@@ -134,7 +137,7 @@ func emulationDefault(o zshOption, mode string) bool {
 // TestNoRecordedOverNameHasAnEmulationDefault keeps it that way rather than
 // this sentence doing it.
 func emulationDeviates(o zshOption, mode string) (dev, known bool) {
-	if _, ok := emulationDefaults[o.base]; !ok {
+	if _, ok := emulationDefaults()[o.base]; !ok {
 		return false, false
 	}
 	return emulationDefault(o, mode) != o.def, true
@@ -143,67 +146,73 @@ func emulationDeviates(o zshOption, mode string) (dev, known bool) {
 // emulationDefaults are the 59 canonical names whose default differs from
 // zsh's in at least one emulation, with each emulation's own value. See the
 // measurement above.
-var emulationDefaults = map[string]struct{ sh, ksh, csh bool }{
-	"aliasfuncdef":        {sh: true, ksh: true, csh: false},
-	"appendcreate":        {sh: true, ksh: true, csh: false},
-	"badpattern":          {sh: false, ksh: false, csh: true},
-	"banghist":            {sh: false, ksh: false, csh: true},
-	"bareglobqual":        {sh: false, ksh: false, csh: false},
-	"bgnice":              {sh: false, ksh: false, csh: true},
-	"bsdecho":             {sh: true, ksh: false, csh: false},
-	"checkjobs":           {sh: false, ksh: false, csh: false},
-	"checkrunningjobs":    {sh: false, ksh: false, csh: false},
-	"cprecedences":        {sh: true, ksh: true, csh: true},
-	"cshjunkiehistory":    {sh: false, ksh: false, csh: true},
-	"cshjunkieloops":      {sh: false, ksh: false, csh: true},
-	"cshjunkiequotes":     {sh: false, ksh: false, csh: true},
-	"cshnullcmd":          {sh: false, ksh: false, csh: true},
-	"cshnullglob":         {sh: false, ksh: false, csh: true},
-	"equals":              {sh: false, ksh: false, csh: false},
-	"evallineno":          {sh: false, ksh: false, csh: false},
-	"extendedhistory":     {sh: false, ksh: false, csh: true},
-	"functionargzero":     {sh: false, ksh: false, csh: true},
-	"globalexport":        {sh: false, ksh: false, csh: false},
-	"globassign":          {sh: false, ksh: false, csh: true},
-	"globsubst":           {sh: true, ksh: true, csh: true},
-	"hup":                 {sh: false, ksh: false, csh: false},
-	"ignorebraces":        {sh: true, ksh: false, csh: false},
-	"interactivecomments": {sh: true, ksh: true, csh: false},
-	"ksharrays":           {sh: true, ksh: true, csh: false},
-	"kshautoload":         {sh: true, ksh: true, csh: false},
-	"kshglob":             {sh: false, ksh: true, csh: false},
-	"kshoptionprint":      {sh: false, ksh: true, csh: false},
-	"localoptions":        {sh: false, ksh: true, csh: false},
-	"localtraps":          {sh: false, ksh: true, csh: false},
-	"multifuncdef":        {sh: false, ksh: false, csh: false},
-	"multios":             {sh: false, ksh: false, csh: false},
-	"nomatch":             {sh: false, ksh: false, csh: true},
-	"notify":              {sh: false, ksh: false, csh: false},
-	"octalzeroes":         {sh: true, ksh: false, csh: false},
-	"pathscript":          {sh: true, ksh: true, csh: false},
-	"posixaliases":        {sh: true, ksh: true, csh: false},
-	"posixbuiltins":       {sh: true, ksh: true, csh: false},
-	"posixcd":             {sh: true, ksh: true, csh: false},
-	"posixidentifiers":    {sh: true, ksh: true, csh: false},
-	"posixjobs":           {sh: true, ksh: true, csh: false},
-	"posixstrings":        {sh: true, ksh: true, csh: false},
-	"posixtraps":          {sh: true, ksh: true, csh: false},
-	"promptbang":          {sh: false, ksh: true, csh: false},
-	"promptpercent":       {sh: false, ksh: false, csh: true},
-	"promptsubst":         {sh: true, ksh: true, csh: false},
-	"rmstarsilent":        {sh: true, ksh: true, csh: false},
-	"sharehistory":        {sh: false, ksh: true, csh: false},
-	"shfileexpansion":     {sh: true, ksh: true, csh: false},
-	"shglob":              {sh: true, ksh: true, csh: false},
-	"shnullcmd":           {sh: true, ksh: true, csh: false},
-	"shoptionletters":     {sh: true, ksh: true, csh: false},
-	"shortloops":          {sh: false, ksh: false, csh: true},
-	"shwordsplit":         {sh: true, ksh: true, csh: false},
-	"singlelinezle":       {sh: false, ksh: true, csh: false},
-	"typesetsilent":       {sh: true, ksh: true, csh: false},
-	"typesettounset":      {sh: true, ksh: true, csh: false},
-	"unset":               {sh: true, ksh: true, csh: false},
-}
+//
+// Built on first use, as emulationClasses and emulationPlans are: only an
+// emulation reads them, and a script that never emulates was building all
+// three at every start (#6360).
+var emulationDefaults = sync.OnceValue(func() map[string]struct{ sh, ksh, csh bool } {
+	return map[string]struct{ sh, ksh, csh bool }{
+		"aliasfuncdef":        {sh: true, ksh: true, csh: false},
+		"appendcreate":        {sh: true, ksh: true, csh: false},
+		"badpattern":          {sh: false, ksh: false, csh: true},
+		"banghist":            {sh: false, ksh: false, csh: true},
+		"bareglobqual":        {sh: false, ksh: false, csh: false},
+		"bgnice":              {sh: false, ksh: false, csh: true},
+		"bsdecho":             {sh: true, ksh: false, csh: false},
+		"checkjobs":           {sh: false, ksh: false, csh: false},
+		"checkrunningjobs":    {sh: false, ksh: false, csh: false},
+		"cprecedences":        {sh: true, ksh: true, csh: true},
+		"cshjunkiehistory":    {sh: false, ksh: false, csh: true},
+		"cshjunkieloops":      {sh: false, ksh: false, csh: true},
+		"cshjunkiequotes":     {sh: false, ksh: false, csh: true},
+		"cshnullcmd":          {sh: false, ksh: false, csh: true},
+		"cshnullglob":         {sh: false, ksh: false, csh: true},
+		"equals":              {sh: false, ksh: false, csh: false},
+		"evallineno":          {sh: false, ksh: false, csh: false},
+		"extendedhistory":     {sh: false, ksh: false, csh: true},
+		"functionargzero":     {sh: false, ksh: false, csh: true},
+		"globalexport":        {sh: false, ksh: false, csh: false},
+		"globassign":          {sh: false, ksh: false, csh: true},
+		"globsubst":           {sh: true, ksh: true, csh: true},
+		"hup":                 {sh: false, ksh: false, csh: false},
+		"ignorebraces":        {sh: true, ksh: false, csh: false},
+		"interactivecomments": {sh: true, ksh: true, csh: false},
+		"ksharrays":           {sh: true, ksh: true, csh: false},
+		"kshautoload":         {sh: true, ksh: true, csh: false},
+		"kshglob":             {sh: false, ksh: true, csh: false},
+		"kshoptionprint":      {sh: false, ksh: true, csh: false},
+		"localoptions":        {sh: false, ksh: true, csh: false},
+		"localtraps":          {sh: false, ksh: true, csh: false},
+		"multifuncdef":        {sh: false, ksh: false, csh: false},
+		"multios":             {sh: false, ksh: false, csh: false},
+		"nomatch":             {sh: false, ksh: false, csh: true},
+		"notify":              {sh: false, ksh: false, csh: false},
+		"octalzeroes":         {sh: true, ksh: false, csh: false},
+		"pathscript":          {sh: true, ksh: true, csh: false},
+		"posixaliases":        {sh: true, ksh: true, csh: false},
+		"posixbuiltins":       {sh: true, ksh: true, csh: false},
+		"posixcd":             {sh: true, ksh: true, csh: false},
+		"posixidentifiers":    {sh: true, ksh: true, csh: false},
+		"posixjobs":           {sh: true, ksh: true, csh: false},
+		"posixstrings":        {sh: true, ksh: true, csh: false},
+		"posixtraps":          {sh: true, ksh: true, csh: false},
+		"promptbang":          {sh: false, ksh: true, csh: false},
+		"promptpercent":       {sh: false, ksh: false, csh: true},
+		"promptsubst":         {sh: true, ksh: true, csh: false},
+		"rmstarsilent":        {sh: true, ksh: true, csh: false},
+		"sharehistory":        {sh: false, ksh: true, csh: false},
+		"shfileexpansion":     {sh: true, ksh: true, csh: false},
+		"shglob":              {sh: true, ksh: true, csh: false},
+		"shnullcmd":           {sh: true, ksh: true, csh: false},
+		"shoptionletters":     {sh: true, ksh: true, csh: false},
+		"shortloops":          {sh: false, ksh: false, csh: true},
+		"shwordsplit":         {sh: true, ksh: true, csh: false},
+		"singlelinezle":       {sh: false, ksh: true, csh: false},
+		"typesetsilent":       {sh: true, ksh: true, csh: false},
+		"typesettounset":      {sh: true, ksh: true, csh: false},
+		"unset":               {sh: true, ksh: true, csh: false},
+	}
+})
 
 // emulationClass is what one option does when the shell emulates.
 type emulationClass uint8
@@ -272,7 +281,7 @@ const emulationNeverReset = `
 // paired against the option table rather than trusted, because a partition
 // only half of which is written down is the shape that has drifted here
 // before.
-var emulationClasses = func() map[string]emulationClass {
+var emulationClasses = sync.OnceValue(func() map[string]emulationClass {
 	m := make(map[string]emulationClass, len(zshOptions))
 	for _, name := range strings.Fields(emulationAlwaysReset) {
 		m[name] = emulationAlways
@@ -284,12 +293,12 @@ var emulationClasses = func() map[string]emulationClass {
 		m[name] = emulationKeeps
 	}
 	return m
-}()
+})
 
 // resetByEmulation reports whether one canonical name goes back to a default
 // when the shell emulates. strict is the `-R` form.
 func resetByEmulation(base string, strict bool) bool {
-	switch emulationClasses[base] {
+	switch emulationClasses()[base] {
 	case emulationAlways:
 		return true
 	case emulationStrictOnly:

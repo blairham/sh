@@ -909,7 +909,7 @@ func aliasWidget(r *interp.Runner, args []string) int {
 		writeWidget(r, args[1], def)
 		return 0
 	}
-	if _, editors := bindkeyWidgets[args[0]]; editors {
+	if _, editors := bindkeyWidgets()[args[0]]; editors {
 		r.Diagnosef("-A of a built-in widget is not implemented yet\n")
 		return 1
 	}
@@ -1009,7 +1009,7 @@ func listedWidgets(defined map[string]widgetDefinition, all bool) []string {
 // every plugin wraps.
 func builtinWidgetNames() []string {
 	seen := map[string]bool{}
-	for name := range bindkeyWidgets {
+	for name := range bindkeyWidgets() {
 		seen[name] = true
 	}
 	for name := range widgetFunctionActions {
@@ -1082,7 +1082,7 @@ func builtinWidget(name string) bool {
 	if accepts(name) {
 		return true
 	}
-	if _, editors := bindkeyWidgets[name]; editors {
+	if _, editors := bindkeyWidgets()[name]; editors {
 		return true
 	}
 	_, only := widgetFunctionActions[name]
@@ -1194,7 +1194,7 @@ func callEditorWidget(r *interp.Runner, ctx context.Context, name, candidates st
 		defer handBackCutBuffer(r, actions)
 		return action(r, actions, args)
 	}
-	widget, editors := bindkeyWidgets[name]
+	widget, editors := bindkeyWidgets()[name]
 	if !editors {
 		return 1
 	}
@@ -2537,7 +2537,7 @@ func lastWidgetName(last repl.LastWidget) string {
 	case last.Accepted:
 		return "accept-line"
 	default:
-		return widgetNames[last.Widget]
+		return widgetNames()[last.Widget]
 	}
 }
 

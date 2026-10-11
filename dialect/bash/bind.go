@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"sync"
 
 	"github.com/blairham/sh/interp"
 	"github.com/blairham/sh/repl"
@@ -288,7 +289,7 @@ var editorControlKeys = map[string]string{
 // Not bash's whole keymap, and not one table per keymap. All three keymaps
 // start from this, because what differs between readline's emacs and vi maps
 // is a command mode this editor has not got; see the file comment.
-var defaultBindings = buildDefaultBindings()
+var defaultBindings = sync.OnceValue(buildDefaultBindings)
 
 func buildDefaultBindings() map[string]string {
 	out := map[string]string{}
@@ -319,13 +320,24 @@ func buildDefaultBindings() map[string]string {
 // acts on them, and bash 5.3 lists them as `do-lowercase-version`, a function
 // this editor has not got; listing them as `upcase-word` would be a row bash
 // never prints.
+//
+// These three and defaultBindings above are built on first use rather than at
+// package initialization: only `bind` and the line editor read them, and a `-c`
+// script that does neither was paying for the 223-row typing tables on every
+// start (#6360).
 var (
-	emacsBindings    = withTyping(buildKeymapBindings(repl.WordBindings()), "")
-	viInsertBindings = buildKeymapBindings(map[string]repl.Widget{"\x16": repl.WidgetQuotedInsert})
+	emacsBindings = sync.OnceValue(func() map[string]string {
+		return withTyping(buildKeymapBindings(repl.WordBindings()), "")
+	})
+	viInsertBindings = sync.OnceValue(func() map[string]string {
+		return buildKeymapBindings(map[string]repl.Widget{"\x16": repl.WidgetQuotedInsert})
+	})
 	// vi insert mode types the control keys EditorStyle lists as well, and
 	// bash lists `^C`, `^Q` and `^Z` there too, which the terminal takes
 	// before any editor sees them.
-	viInsertTypingBindings = withTyping(buildKeymapBindings(map[string]repl.Widget{"\x16": repl.WidgetQuotedInsert}), viInsertTypedKeys+"\x03\x11\x1a")
+	viInsertTypingBindings = sync.OnceValue(func() map[string]string {
+		return withTyping(buildKeymapBindings(map[string]repl.Widget{"\x16": repl.WidgetQuotedInsert}), viInsertTypedKeys+"\x03\x11\x1a")
+	})
 )
 
 // withTyping adds the keys that type themselves to a keymap's listing:
@@ -368,19 +380,20 @@ func keymapDefaults(keymap string) map[string]string {
 	var extra map[string]string
 	switch keymap {
 	case "emacs":
-		extra = emacsBindings
+		extra = emacsBindings()
 	case "vi-insert":
-		extra = viInsertTypingBindings
+		extra = viInsertTypingBindings()
 	case "vi-command":
 		// `^V` is quoted-insert in both of vi's keymaps — see
 		// repl.EditorStyle.QuotedInsertInViCommand (#6259) — and nothing types
 		// itself in command mode.
-		extra = viInsertBindings
+		extra = viInsertBindings()
 	default:
-		return defaultBindings
+		return defaultBindings()
 	}
-	out := make(map[string]string, len(defaultBindings)+len(extra))
-	for seq, name := range defaultBindings {
+	defaults := defaultBindings()
+	out := make(map[string]string, len(defaults)+len(extra))
+	for seq, name := range defaults {
 		if keymap == "vi-insert" && !actsInViInsert(seq) {
 			continue
 		}

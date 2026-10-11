@@ -6,6 +6,7 @@ package interp
 import (
 	"context"
 	"strings"
+	"sync"
 )
 
 // `compgen` writes the completions a word would have.
@@ -106,25 +107,32 @@ var compgenActionLetters = map[byte]string{
 // The lowercase run names actions; the rest take an argument and shape or
 // generate a word list some other way. None of the second group is read here,
 // so none of them reaches the point where the argument would be consumed.
-var compgenLetters = map[byte]bool{
-	'a': true, 'b': true, 'c': true, 'd': true, 'e': true, 'f': true,
-	'g': true, 'j': true, 'k': true, 's': true, 'u': true, 'v': true,
-	'o': true, 'V': true, 'G': true, 'W': true, 'F': true, 'C': true,
-	'X': true, 'P': true, 'S': true,
-}
+//
+// Both tables here are built the first time `compgen` runs rather than at
+// package initialization, which every binary pays (#6360).
+var compgenLetters = sync.OnceValue(func() map[byte]bool {
+	return map[byte]bool{
+		'a': true, 'b': true, 'c': true, 'd': true, 'e': true, 'f': true,
+		'g': true, 'j': true, 'k': true, 's': true, 'u': true, 'v': true,
+		'o': true, 'V': true, 'G': true, 'W': true, 'F': true, 'C': true,
+		'X': true, 'P': true, 'S': true,
+	}
+})
 
 // compgenKnownActions are every action bash has, so that one it has and this
 // shell cannot generate is refused as unimplemented rather than reported as a
 // name that does not exist. The difference matters to a script: the first is
 // a shell that is missing something, the second is a typo.
-var compgenKnownActions = map[string]bool{
-	"alias": true, "arrayvar": true, "binding": true, "builtin": true,
-	"command": true, "directory": true, "disabled": true, "enabled": true,
-	"export": true, "file": true, "function": true, "group": true,
-	"helptopic": true, "hostname": true, "job": true, "keyword": true,
-	"running": true, "service": true, "setopt": true, "shopt": true,
-	"signal": true, "stopped": true, "user": true, "variable": true,
-}
+var compgenKnownActions = sync.OnceValue(func() map[string]bool {
+	return map[string]bool{
+		"alias": true, "arrayvar": true, "binding": true, "builtin": true,
+		"command": true, "directory": true, "disabled": true, "enabled": true,
+		"export": true, "file": true, "function": true, "group": true,
+		"helptopic": true, "hostname": true, "job": true, "keyword": true,
+		"running": true, "service": true, "setopt": true, "shopt": true,
+		"signal": true, "stopped": true, "user": true, "variable": true,
+	}
+})
 
 // compgenGenerating are the three `-o` names that produce words rather than
 // shape a list somebody else produced. #2412's row read `-o` as an *option
@@ -188,7 +196,7 @@ func biCompgen(r *Runner, _ context.Context, args []string) int {
 						return 2
 					}
 					if letter == 'A' {
-						if !compgenKnownActions[arg] {
+						if !compgenKnownActions()[arg] {
 							// A name bash has no action for, which is the
 							// script's typo rather than this shell's gap.
 							r.diagf("compgen: %s: invalid action name\n", arg)
@@ -230,7 +238,7 @@ func biCompgen(r *Runner, _ context.Context, args []string) int {
 				}
 				name, ok := compgenActionLetters[a[j]]
 				if !ok {
-					if compgenLetters[a[j]] {
+					if compgenLetters()[a[j]] {
 						// bash has the letter and we do not generate it, so
 						// it contributes nothing and the rest of the cluster
 						// answers — the same door the long spelling goes

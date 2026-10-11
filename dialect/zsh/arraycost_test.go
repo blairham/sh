@@ -21,12 +21,14 @@ import (
 //
 // Every row walked the array before #6099: the store was a map searched for
 // its end on every append, a read built the whole list to index it, and a
-// count built the list, or the join, to measure it.
+// count built the list, or the join, to measure it. The element read inside
+// an expression still built the list after that, and so did the length of one
+// element on an array with a gap (#6358); those are the last two rows.
 func TestArrayOperationsDoNotGrowWithTheArray(t *testing.T) {
 	if testing.Short() {
 		t.Skip("times loops over large arrays")
 	}
-	for _, op := range []string{`y=${a[5]}`, `y=$#a`, `y=${#a[@]}`, `a+=(z)`} {
+	for _, op := range []string{`y=${a[5]}`, `y=$#a`, `y=${#a[@]}`, `a+=(z)`, `y=$(( a[5] ))`, `y=${#a[5]}`} {
 		t.Run(op, func(t *testing.T) {
 			cost := func(size int) float64 {
 				best := 0.0

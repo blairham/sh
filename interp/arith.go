@@ -479,12 +479,28 @@ func (r *Runner) arithElement(x *syntax.ArithIndex) (arithNum, error) {
 	// A negative subscript counts back from the end here too — `$((a[-1]))`
 	// is the last element in all three shells with arrays — which elemAt
 	// answers the same way for `${a[-1]}`, so the two spellings cannot drift.
-	elems, _ := r.arrayElems(x.Name)
-	v, ok := r.elemAt(x.Name, elems, idx.asInt())
+	v, ok := r.arithStoredElemAt(x.Name, idx.asInt())
 	if !ok {
 		return intNum(0), nil
 	}
 	return r.arithElemValue(arithIndexWritten(x), v)
+}
+
+// arithStoredElemAt is the element subscript n names in the array name, for
+// an expression: elemAt over arrayElems, with the store indexed directly
+// where nothing stands in front of it, so `$(( a[i] ))` in a loop is not
+// quadratic (#6358). A reference to follow and the produced pipeline record
+// are read the long way, as they were; neither is a stored array this name
+// holds.
+func (r *Runner) arithStoredElemAt(name string, n int) (string, bool) {
+	if a, stored := r.Arrays[name]; stored && r.throughNameref(name) == name &&
+		!r.namesTheProducedPipelineStatus(name) {
+		if v, ok, indexed := r.storedElemAt(name, a, n, subscriptLength{}); indexed {
+			return v, ok
+		}
+	}
+	elems, _ := r.arrayElems(name)
+	return r.elemAt(name, elems, n)
 }
 
 // stored reports a name whose association is a stored table rather than one

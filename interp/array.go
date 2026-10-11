@@ -2677,15 +2677,51 @@ func (r *Runner) sourceElemAt(src subscriptSource, n int, length subscriptLength
 // deferredElemAt is elemAtFor for a deferred source: the element subscript n
 // names in the array as it stands now, after the subscript has run.
 //
-// An array holding positions 0 to n-1 is indexed directly, which is what makes
-// the read O(1); any other shape is read whole, as the ordinary path does, and
-// counted through.
+// The store is indexed directly (see storedElemAt); only an array that has
+// moved into the map is read whole, as the ordinary path does, and counted
+// through.
 func (r *Runner) deferredElemAt(name string, n int, length subscriptLength) (string, bool) {
-	if els, ok := r.Arrays[name].contiguous(); ok {
-		return r.elemAtCounted(name, len(els), func(pos int) string { return r.elemText(els[pos]) }, n, length)
+	if v, ok, indexed := r.storedElemAt(name, r.Arrays[name], n, length); indexed {
+		return v, ok
 	}
 	elems, _ := r.arrayElems(name)
 	return r.elemAtFor(name, elems, n, length)
+}
+
+// storedElemAt is elemAtFor on the stored array a, answered without reading
+// the array into a list: the reading readArray would build is worked out from
+// the store's shape, and only the one element subscript n names is taken.
+//
+// Every element read used to build the whole list first, so a loop reading
+// each element once was quadratic (#6358). The array holding positions 0 to
+// n-1 was already indexed (#6117); this covers the other slice-backed shape
+// too, an array with a position missing — which is every array in the dialect
+// whose `a=()` leaves position 0 empty and whose append starts at 1.
+//
+// The list readArray builds is one of three, and each is answered here by the
+// same count elemAtCounted reads it by:
+//   - no gap: positions 0 to n-1, so the count is the length and position pos
+//     is the store's;
+//   - a gap, read sparsely: the assigned elements only, which elemAtCounted
+//     already looks up in the store by position since the count falls short
+//     of the end;
+//   - a gap, read densely: every position to the highest, a missing one empty,
+//     so the count is the end and position pos is again the store's.
+//
+// The dialect is asked whether a gap is read sparsely exactly where readArray
+// asks it, so an unanswered axis is reported as it was. indexed is false for
+// an array that has moved into the map, whose bounds are themselves a walk,
+// and the caller reads it whole.
+func (r *Runner) storedElemAt(name string, a Array, n int, length subscriptLength) (v string, ok, indexed bool) {
+	if a != nil && a.sparse != nil {
+		return "", false, false
+	}
+	count, end := a.Len(), a.pastTheEnd()
+	if count != end && !r.ask(r.sem().ArraysAreSparse, "an unassigned subscript being no element at all") {
+		count = end
+	}
+	v, ok = r.elemAtCounted(name, count, func(pos int) string { return r.elemText(a.Get(pos)) }, n, length)
+	return v, ok, true
 }
 
 // subscriptOver answers a subscript against values already in hand.

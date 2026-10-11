@@ -720,7 +720,10 @@ func (p *Parser) at(k Kind) bool { return p.tok.Kind == k }
 // atWord reports whether the current token is the given reserved word, written
 // unquoted. Quoting removes the reservation: `"if"` is a command name.
 func (p *Parser) atWord(s string) bool {
-	return p.tok.Kind == TokWord && !p.tok.IsQuoted() && p.tok.literalIs(s) &&
+	// The spelling first: it fails on the first byte for nearly every word
+	// and question, where whether the word is quoted takes a walk over all
+	// of its spans to answer.
+	return p.tok.Kind == TokWord && p.tok.literalIs(s) && !p.tok.IsQuoted() &&
 		!p.dialect.ReservedWordsOff[s]
 }
 

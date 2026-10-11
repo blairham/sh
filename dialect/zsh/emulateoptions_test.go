@@ -101,7 +101,7 @@ func TestTheNineNobodyResetsAreTheShellsOwnState(t *testing.T) {
 // emulation resets is a value nothing can ever read, which is dead data that
 // looks exactly like a working entry.
 func TestEveryEmulationDefaultNamesAnOptionInAResetList(t *testing.T) {
-	for name := range emulationDefaults {
+	for name := range emulationDefaults() {
 		if _, _, ok := exactOptionName(name); !ok {
 			t.Errorf("%s has an emulation default and is not in the option table", name)
 		}
@@ -113,11 +113,11 @@ func TestEveryEmulationDefaultNamesAnOptionInAResetList(t *testing.T) {
 	// under `emulate -R` in each of the four modes: 62 differ from zsh's
 	// default somewhere, three of those are compat spellings that resolve to
 	// a canonical entry, and 49 of the remaining 59 are in the bare-reset 81.
-	if got, want := len(emulationDefaults), 59; got != want {
+	if got, want := len(emulationDefaults()), 59; got != want {
 		t.Errorf("%d names have an emulation default, want %d", got, want)
 	}
 	bare := 0
-	for name := range emulationDefaults {
+	for name := range emulationDefaults() {
 		if resetByEmulation(name, false) {
 			bare++
 		}
@@ -140,7 +140,7 @@ func TestEveryEmulationDefaultNamesAnOptionInAResetList(t *testing.T) {
 func TestNoRecordedOverNameHasAnEmulationDefault(t *testing.T) {
 	r := optionStateRunner(t)
 	for _, o := range zshOptions {
-		if _, ok := emulationDefaults[o.base]; !ok {
+		if _, ok := emulationDefaults()[o.base]; !ok {
 			continue
 		}
 		if got := o.get(r); got != o.def {

@@ -3,7 +3,11 @@
 
 package zsh
 
-import "github.com/blairham/sh/interp"
+import (
+	"sync"
+
+	"github.com/blairham/sh/interp"
+)
 
 // An emulation's effect on the option table, compiled.
 //
@@ -60,15 +64,17 @@ type planned struct {
 }
 
 // emulationPlans is every plan for the four modes this shell knows, both
-// forms, filled in by init below — which runs after the table is complete.
-var emulationPlans map[string]*[2]emulationPlan
-
-func init() {
-	emulationPlans = make(map[string]*[2]emulationPlan, len(emulations))
+// forms. Compiled the first time anything asks for a plan rather than at
+// package initialization: it is the largest table the package builds, and a
+// shell that never emulates — every `-c` script that does not say `emulate` —
+// was compiling all eight on every start (#6360).
+var emulationPlans = sync.OnceValue(func() map[string]*[2]emulationPlan {
+	plans := make(map[string]*[2]emulationPlan, len(emulations))
 	for mode := range emulations {
-		emulationPlans[mode] = &[2]emulationPlan{compilePlan(mode, false), compilePlan(mode, true)}
+		plans[mode] = &[2]emulationPlan{compilePlan(mode, false), compilePlan(mode, true)}
 	}
-}
+	return plans
+})
 
 // planFor is the plan for one mode and form. A mode outside the four is
 // compiled on the spot, so the answer for it is still the walk's — the
@@ -79,7 +85,7 @@ func planFor(mode string, strict bool) *emulationPlan {
 	if strict {
 		form = 1
 	}
-	if p, ok := emulationPlans[mode]; ok {
+	if p, ok := emulationPlans()[mode]; ok {
 		return &p[form]
 	}
 	p := compilePlan(mode, strict)

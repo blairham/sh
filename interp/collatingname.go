@@ -3,6 +3,8 @@
 
 package interp
 
+import "sync"
+
 // collatingElementNames is the roster a `[.name.]` or a `[=name=]` is looked
 // up in where the dialect reads a body of more than one character as a name —
 // see [ACollatingElementMayBeNamed].
@@ -34,60 +36,66 @@ package interp
 // Written out rather than generated, unlike the Unicode tables this package
 // builds: the roster is 95 lines of measurement and no standard states it, so
 // there is nothing to generate it from and the sweep above is the source.
-var collatingElementNames = map[string]string{
-	"SOH": "\x01", "STX": "\x02", "ETX": "\x03", "EOT": "\x04",
-	"ENQ": "\x05", "ACK": "\x06", "alert": "\a",
-	"BS": "\b", "backspace": "\b",
-	"HT": "\t", "tab": "\t",
-	"LF": "\n", "newline": "\n",
-	"VT": "\v", "vertical-tab": "\v",
-	"FF": "\f", "form-feed": "\f",
-	"CR": "\r", "carriage-return": "\r",
-	"SO": "\x0e", "SI": "\x0f", "DLE": "\x10",
-	"DC1": "\x11", "DC2": "\x12", "DC3": "\x13", "DC4": "\x14",
-	"NAK": "\x15", "SYN": "\x16", "ETB": "\x17", "CAN": "\x18",
-	"EM": "\x19", "SUB": "\x1a", "ESC": "\x1b",
-	"IS4": "\x1c", "FS": "\x1c",
-	"IS3": "\x1d", "GS": "\x1d",
-	"IS2": "\x1e", "RS": "\x1e",
-	"IS1": "\x1f", "US": "\x1f",
-	"space":             " ",
-	"exclamation-mark":  "!",
-	"quotation-mark":    `"`,
-	"number-sign":       "#",
-	"dollar-sign":       "$",
-	"percent-sign":      "%",
-	"ampersand":         "&",
-	"apostrophe":        "'",
-	"left-parenthesis":  "(",
-	"right-parenthesis": ")",
-	"asterisk":          "*",
-	"plus-sign":         "+",
-	"comma":             ",",
-	"hyphen":            "-", "hyphen-minus": "-", "minus": "-", "dash": "-",
-	"period": ".", "full-stop": ".",
-	"slash": "/", "solidus": "/",
-	"zero": "0", "one": "1", "two": "2", "three": "3", "four": "4",
-	"five": "5", "six": "6", "seven": "7", "eight": "8", "nine": "9",
-	"colon":               ":",
-	"semicolon":           ";",
-	"less-than-sign":      "<",
-	"equals-sign":         "=",
-	"greater-than-sign":   ">",
-	"question-mark":       "?",
-	"commercial-at":       "@",
-	"left-square-bracket": "[",
-	"backslash":           `\`, "reverse-solidus": `\`,
-	"right-square-bracket": "]",
-	"circumflex":           "^", "circumflex-accent": "^",
-	"underscore":   "_",
-	"grave-accent": "`",
-	"left-brace":   "{", "left-curly-bracket": "{",
-	"vertical-line": "|",
-	"right-brace":   "}", "right-curly-bracket": "}",
-	"tilde": "~",
-	"DEL":   "\x7f",
-}
+//
+// Built on first use: only a bracket expression naming an element reads it,
+// and every binary links this package, so a script that never writes one was
+// building 94 entries at every start (#6360).
+var collatingElementNames = sync.OnceValue(func() map[string]string {
+	return map[string]string{
+		"SOH": "\x01", "STX": "\x02", "ETX": "\x03", "EOT": "\x04",
+		"ENQ": "\x05", "ACK": "\x06", "alert": "\a",
+		"BS": "\b", "backspace": "\b",
+		"HT": "\t", "tab": "\t",
+		"LF": "\n", "newline": "\n",
+		"VT": "\v", "vertical-tab": "\v",
+		"FF": "\f", "form-feed": "\f",
+		"CR": "\r", "carriage-return": "\r",
+		"SO": "\x0e", "SI": "\x0f", "DLE": "\x10",
+		"DC1": "\x11", "DC2": "\x12", "DC3": "\x13", "DC4": "\x14",
+		"NAK": "\x15", "SYN": "\x16", "ETB": "\x17", "CAN": "\x18",
+		"EM": "\x19", "SUB": "\x1a", "ESC": "\x1b",
+		"IS4": "\x1c", "FS": "\x1c",
+		"IS3": "\x1d", "GS": "\x1d",
+		"IS2": "\x1e", "RS": "\x1e",
+		"IS1": "\x1f", "US": "\x1f",
+		"space":             " ",
+		"exclamation-mark":  "!",
+		"quotation-mark":    `"`,
+		"number-sign":       "#",
+		"dollar-sign":       "$",
+		"percent-sign":      "%",
+		"ampersand":         "&",
+		"apostrophe":        "'",
+		"left-parenthesis":  "(",
+		"right-parenthesis": ")",
+		"asterisk":          "*",
+		"plus-sign":         "+",
+		"comma":             ",",
+		"hyphen":            "-", "hyphen-minus": "-", "minus": "-", "dash": "-",
+		"period": ".", "full-stop": ".",
+		"slash": "/", "solidus": "/",
+		"zero": "0", "one": "1", "two": "2", "three": "3", "four": "4",
+		"five": "5", "six": "6", "seven": "7", "eight": "8", "nine": "9",
+		"colon":               ":",
+		"semicolon":           ";",
+		"less-than-sign":      "<",
+		"equals-sign":         "=",
+		"greater-than-sign":   ">",
+		"question-mark":       "?",
+		"commercial-at":       "@",
+		"left-square-bracket": "[",
+		"backslash":           `\`, "reverse-solidus": `\`,
+		"right-square-bracket": "]",
+		"circumflex":           "^", "circumflex-accent": "^",
+		"underscore":   "_",
+		"grave-accent": "`",
+		"left-brace":   "{", "left-curly-bracket": "{",
+		"vertical-line": "|",
+		"right-brace":   "}", "right-curly-bracket": "}",
+		"tilde": "~",
+		"DEL":   "\x7f",
+	}
+})
 
 // collatingElementNamed is the character a name stands for, and whether the
 // roster holds the name at all.
@@ -100,6 +108,6 @@ func collatingElementNamed(body string) (string, bool) {
 	if len(body) < 2 {
 		return "", false
 	}
-	c, ok := collatingElementNames[body]
+	c, ok := collatingElementNames()[body]
 	return c, ok
 }

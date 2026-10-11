@@ -16,7 +16,7 @@ import (
 // The dialect's answer to driver.Shell.NamedWidgets.
 func NamedWidgets(r *interp.Runner) map[string]repl.Binding {
 	out := map[string]repl.Binding{}
-	for name, w := range bindkeyWidgets {
+	for name, w := range bindkeyWidgets() {
 		if name == undefinedKey {
 			continue
 		}

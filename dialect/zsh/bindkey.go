@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/blairham/sh/interp"
 	"github.com/blairham/sh/repl"
@@ -81,128 +82,135 @@ var keymapNames = []string{".safe", "command", "emacs", "isearch", "main", "vicm
 // shell with an editor calls four of these something else — `previous-history`
 // where this one says `up-line-or-history` — which is the reason the mapping
 // is here rather than there.
-var bindkeyWidgets = map[string]repl.Widget{
-	"beginning-of-line":     repl.WidgetBeginningOfLine,
-	"vi-beginning-of-line":  repl.WidgetBeginningOfLine,
-	"end-of-line":           repl.WidgetEndOfLine,
-	"vi-end-of-line":        repl.WidgetEndOfLine,
-	"backward-char":         repl.WidgetBackwardChar,
-	"vi-backward-char":      repl.WidgetBackwardChar,
-	"forward-char":          repl.WidgetForwardChar,
-	"vi-forward-char":       repl.WidgetForwardChar,
-	"backward-word":         repl.WidgetBackwardWord,
-	"vi-backward-word":      repl.WidgetBackwardWord,
-	"forward-word":          repl.WidgetForwardWord,
-	"vi-forward-word":       repl.WidgetForwardWord,
-	"kill-line":             repl.WidgetKillLine,
-	"vi-kill-eol":           repl.WidgetKillLine,
-	"kill-whole-line":       repl.WidgetKillWholeLine,
-	"backward-kill-line":    repl.WidgetBackwardKillLine,
-	"backward-kill-word":    repl.WidgetKillWordBefore,
-	"vi-backward-kill-word": repl.WidgetViBackwardKillWord,
-	"vi-kill-line":          repl.WidgetViKillLine,
-	"redisplay":             repl.WidgetRedisplay,
-	"kill-word":             repl.WidgetKillWordAfter,
-	"yank":                  repl.WidgetYank,
-	"transpose-chars":       repl.WidgetTransposeChars,
-	// The case keys and the word swap, on `M-u`, `M-l`, `M-c` and `M-t` in
-	// the emacs keymap. See repl/casewords.go (#6241).
-	"up-case-word":      repl.WidgetUpCaseWord,
-	"down-case-word":    repl.WidgetDownCaseWord,
-	"capitalize-word":   repl.WidgetCapitalizeWord,
-	"transpose-words":   repl.WidgetTransposeWords,
-	"quote-line":        repl.WidgetQuoteLine,
-	"accept-and-hold":   repl.WidgetAcceptAndHold,
-	"quoted-insert":     repl.WidgetQuotedInsert,
-	"vi-quoted-insert":  repl.WidgetViQuotedInsert,
-	"which-command":     repl.WidgetWhichCommand,
-	"run-help":          repl.WidgetRunHelp,
-	"execute-named-cmd": repl.WidgetExecuteNamedCmd,
-	// Typing. Not a key anybody binds — it is what a printable key does when
-	// nothing else claims it — but a name a shell can *redefine*, which is what
-	// a syntax highlighter needs: it wraps every name in `$widgets`, and the one
-	// that matters most is the one that runs when a person types (#2485).
-	// Without it, `${+widgets[self-insert]}` read 0 here and 1 in the shell
-	// being imitated, and a highlighter loaded and never saw a keystroke.
-	"self-insert":          repl.WidgetSelfInsert,
-	"up-line-or-history":   repl.WidgetPreviousHistory,
-	"up-history":           repl.WidgetPreviousHistory,
-	"down-line-or-history": repl.WidgetNextHistory,
-	"down-history":         repl.WidgetNextHistory,
-	// The searching pair, which walks only to entries beginning with the
-	// line's first word. **macOS's `/etc/zshrc` binds the arrows to these**,
-	// by `$terminfo[kcuu1]` and its fellows, so on that machine they are not
-	// an advanced spelling a person opts into — they are what Up and Down do
-	// in a shell with no user rc at all. Missing from this table, they were a
-	// key bound to nothing (#2435).
-	"up-line-or-search":                   repl.WidgetPreviousHistoryMatching,
-	"down-line-or-search":                 repl.WidgetNextHistoryMatching,
-	"history-incremental-search-backward": repl.WidgetSearchHistoryBackward,
-	"clear-screen":                        repl.WidgetClearScreen,
-	"delete-char":                         repl.WidgetDeleteChar,
-	"vi-delete-char":                      repl.WidgetDeleteChar,
-	"backward-delete-char":                repl.WidgetBackwardDeleteChar,
-	"vi-backward-delete-char":             repl.WidgetViBackwardDeleteChar,
-	"expand-or-complete":                  repl.WidgetComplete,
-	"complete-word":                       repl.WidgetComplete,
-	// The prefix spelling is this editor's completion *exactly*, and that is
-	// the one row of this table that is more accurate than the two above it.
-	// This editor completes the text before the cursor and replaces only that
-	// — repl's Completion says where the word starts and where the cursor is,
-	// and nothing about where the word ends. Measured 2026-09-18 through a
-	// pseudo-terminal against zsh 5.9.2, cursor placed after `uniq` in
-	// `cat uniqXYZ`: `expand-or-complete-prefix` inserted the `_` the three
-	// matches agree on and left `XYZ` alone, where `complete-word` rang the
-	// bell, having found nothing that matches `uniqXYZ` whole.
-	"expand-or-complete-prefix": repl.WidgetComplete,
-	// The listing on its own key, and the menu. See repl/widgets.go, where
-	// the measurements are, and repl/completemenu.go, which is the whole of
-	// what they do. All six of the builtin completion widgets #3043 named
-	// answer something now, so `zle -C` has no completer left that resolves
-	// to nothing.
-	"list-choices":            repl.WidgetListChoices,
-	"delete-char-or-list":     repl.WidgetDeleteCharOrList,
-	"menu-complete":           repl.WidgetMenuComplete,
-	"menu-expand-or-complete": repl.WidgetMenuComplete,
-	"reverse-menu-complete":   repl.WidgetMenuCompleteBackward,
-	"undo":                    repl.WidgetUndo,
-	"vi-undo-change":          repl.WidgetUndo,
-	"insert-last-word":        repl.WidgetInsertLastWord,
+//
+// It and every keymap table below are built the first time something asks
+// for them rather than at package initialization: only `bindkey`, `zle` and
+// the line editor read them, and a script that touches none of the three was
+// building all of them on every start (#6360).
+var bindkeyWidgets = sync.OnceValue(func() map[string]repl.Widget {
+	return map[string]repl.Widget{
+		"beginning-of-line":     repl.WidgetBeginningOfLine,
+		"vi-beginning-of-line":  repl.WidgetBeginningOfLine,
+		"end-of-line":           repl.WidgetEndOfLine,
+		"vi-end-of-line":        repl.WidgetEndOfLine,
+		"backward-char":         repl.WidgetBackwardChar,
+		"vi-backward-char":      repl.WidgetBackwardChar,
+		"forward-char":          repl.WidgetForwardChar,
+		"vi-forward-char":       repl.WidgetForwardChar,
+		"backward-word":         repl.WidgetBackwardWord,
+		"vi-backward-word":      repl.WidgetBackwardWord,
+		"forward-word":          repl.WidgetForwardWord,
+		"vi-forward-word":       repl.WidgetForwardWord,
+		"kill-line":             repl.WidgetKillLine,
+		"vi-kill-eol":           repl.WidgetKillLine,
+		"kill-whole-line":       repl.WidgetKillWholeLine,
+		"backward-kill-line":    repl.WidgetBackwardKillLine,
+		"backward-kill-word":    repl.WidgetKillWordBefore,
+		"vi-backward-kill-word": repl.WidgetViBackwardKillWord,
+		"vi-kill-line":          repl.WidgetViKillLine,
+		"redisplay":             repl.WidgetRedisplay,
+		"kill-word":             repl.WidgetKillWordAfter,
+		"yank":                  repl.WidgetYank,
+		"transpose-chars":       repl.WidgetTransposeChars,
+		// The case keys and the word swap, on `M-u`, `M-l`, `M-c` and `M-t` in
+		// the emacs keymap. See repl/casewords.go (#6241).
+		"up-case-word":      repl.WidgetUpCaseWord,
+		"down-case-word":    repl.WidgetDownCaseWord,
+		"capitalize-word":   repl.WidgetCapitalizeWord,
+		"transpose-words":   repl.WidgetTransposeWords,
+		"quote-line":        repl.WidgetQuoteLine,
+		"accept-and-hold":   repl.WidgetAcceptAndHold,
+		"quoted-insert":     repl.WidgetQuotedInsert,
+		"vi-quoted-insert":  repl.WidgetViQuotedInsert,
+		"which-command":     repl.WidgetWhichCommand,
+		"run-help":          repl.WidgetRunHelp,
+		"execute-named-cmd": repl.WidgetExecuteNamedCmd,
+		// Typing. Not a key anybody binds — it is what a printable key does when
+		// nothing else claims it — but a name a shell can *redefine*, which is what
+		// a syntax highlighter needs: it wraps every name in `$widgets`, and the one
+		// that matters most is the one that runs when a person types (#2485).
+		// Without it, `${+widgets[self-insert]}` read 0 here and 1 in the shell
+		// being imitated, and a highlighter loaded and never saw a keystroke.
+		"self-insert":          repl.WidgetSelfInsert,
+		"up-line-or-history":   repl.WidgetPreviousHistory,
+		"up-history":           repl.WidgetPreviousHistory,
+		"down-line-or-history": repl.WidgetNextHistory,
+		"down-history":         repl.WidgetNextHistory,
+		// The searching pair, which walks only to entries beginning with the
+		// line's first word. **macOS's `/etc/zshrc` binds the arrows to these**,
+		// by `$terminfo[kcuu1]` and its fellows, so on that machine they are not
+		// an advanced spelling a person opts into — they are what Up and Down do
+		// in a shell with no user rc at all. Missing from this table, they were a
+		// key bound to nothing (#2435).
+		"up-line-or-search":                   repl.WidgetPreviousHistoryMatching,
+		"down-line-or-search":                 repl.WidgetNextHistoryMatching,
+		"history-incremental-search-backward": repl.WidgetSearchHistoryBackward,
+		"clear-screen":                        repl.WidgetClearScreen,
+		"delete-char":                         repl.WidgetDeleteChar,
+		"vi-delete-char":                      repl.WidgetDeleteChar,
+		"backward-delete-char":                repl.WidgetBackwardDeleteChar,
+		"vi-backward-delete-char":             repl.WidgetViBackwardDeleteChar,
+		"expand-or-complete":                  repl.WidgetComplete,
+		"complete-word":                       repl.WidgetComplete,
+		// The prefix spelling is this editor's completion *exactly*, and that is
+		// the one row of this table that is more accurate than the two above it.
+		// This editor completes the text before the cursor and replaces only that
+		// — repl's Completion says where the word starts and where the cursor is,
+		// and nothing about where the word ends. Measured 2026-09-18 through a
+		// pseudo-terminal against zsh 5.9.2, cursor placed after `uniq` in
+		// `cat uniqXYZ`: `expand-or-complete-prefix` inserted the `_` the three
+		// matches agree on and left `XYZ` alone, where `complete-word` rang the
+		// bell, having found nothing that matches `uniqXYZ` whole.
+		"expand-or-complete-prefix": repl.WidgetComplete,
+		// The listing on its own key, and the menu. See repl/widgets.go, where
+		// the measurements are, and repl/completemenu.go, which is the whole of
+		// what they do. All six of the builtin completion widgets #3043 named
+		// answer something now, so `zle -C` has no completer left that resolves
+		// to nothing.
+		"list-choices":            repl.WidgetListChoices,
+		"delete-char-or-list":     repl.WidgetDeleteCharOrList,
+		"menu-complete":           repl.WidgetMenuComplete,
+		"menu-expand-or-complete": repl.WidgetMenuComplete,
+		"reverse-menu-complete":   repl.WidgetMenuCompleteBackward,
+		"undo":                    repl.WidgetUndo,
+		"vi-undo-change":          repl.WidgetUndo,
+		"insert-last-word":        repl.WidgetInsertLastWord,
 
-	// The three that move between insert and command mode, which are the only
-	// vi-only actions repl names — see repl/widgets.go, which carries the
-	// decision and why the motions are not among them. This shell's names.
-	"vi-cmd-mode":   repl.WidgetViCommandMode,
-	"vi-insert":     repl.WidgetViInsertMode,
-	"vi-insert-bol": repl.WidgetViInsertMode,
-	"vi-add-next":   repl.WidgetViAppendMode,
-	// A paste the terminal marked, on `^[[200~` in the standard keymap. See
-	// repl.WidgetBracketedPaste, and callBuiltinWidget for the spelling that
-	// stores the paste rather than inserting it.
-	"bracketed-paste": repl.WidgetBracketedPaste,
-	// What `up-line-or-beginning-search` and its partner are made of — see
-	// repl/beginningsearch.go for the measurement (#5910).
-	"history-beginning-search-backward": repl.WidgetHistoryBeginningSearchBackward,
-	"history-beginning-search-forward":  repl.WidgetHistoryBeginningSearchForward,
-	"up-line":                           repl.WidgetUpLine,
-	"down-line":                         repl.WidgetDownLine,
-	// The prompt drawn again, which a widget that changed what it shows asks
-	// for (#5940).
-	"reset-prompt":      repl.WidgetResetPrompt,
-	"send-break":        repl.WidgetSendBreak,
-	"recursive-edit":    repl.WidgetRecursiveEdit,
-	"push-line":         repl.WidgetPushLine,
-	"push-line-or-edit": repl.WidgetPushLineOrEdit,
-	// The key that means "this key does nothing", which is what `-r` leaves
-	// behind and what `bindkey` prints for a key nobody bound.
-	undefinedKey: repl.WidgetNone,
+		// The three that move between insert and command mode, which are the only
+		// vi-only actions repl names — see repl/widgets.go, which carries the
+		// decision and why the motions are not among them. This shell's names.
+		"vi-cmd-mode":   repl.WidgetViCommandMode,
+		"vi-insert":     repl.WidgetViInsertMode,
+		"vi-insert-bol": repl.WidgetViInsertMode,
+		"vi-add-next":   repl.WidgetViAppendMode,
+		// A paste the terminal marked, on `^[[200~` in the standard keymap. See
+		// repl.WidgetBracketedPaste, and callBuiltinWidget for the spelling that
+		// stores the paste rather than inserting it.
+		"bracketed-paste": repl.WidgetBracketedPaste,
+		// What `up-line-or-beginning-search` and its partner are made of — see
+		// repl/beginningsearch.go for the measurement (#5910).
+		"history-beginning-search-backward": repl.WidgetHistoryBeginningSearchBackward,
+		"history-beginning-search-forward":  repl.WidgetHistoryBeginningSearchForward,
+		"up-line":                           repl.WidgetUpLine,
+		"down-line":                         repl.WidgetDownLine,
+		// The prompt drawn again, which a widget that changed what it shows asks
+		// for (#5940).
+		"reset-prompt":      repl.WidgetResetPrompt,
+		"send-break":        repl.WidgetSendBreak,
+		"recursive-edit":    repl.WidgetRecursiveEdit,
+		"push-line":         repl.WidgetPushLine,
+		"push-line-or-edit": repl.WidgetPushLineOrEdit,
+		// The key that means "this key does nothing", which is what `-r` leaves
+		// behind and what `bindkey` prints for a key nobody bound.
+		undefinedKey: repl.WidgetNone,
 
-	// The other three incremental searches. One mechanism with
-	// history-incremental-search-backward; see repl's search.go (#5904).
-	"history-incremental-search-forward":          repl.WidgetSearchHistoryForward,
-	"history-incremental-pattern-search-backward": repl.WidgetPatternSearchHistoryBackward,
-	"history-incremental-pattern-search-forward":  repl.WidgetPatternSearchHistoryForward,
-}
+		// The other three incremental searches. One mechanism with
+		// history-incremental-search-backward; see repl's search.go (#5904).
+		"history-incremental-search-forward":          repl.WidgetSearchHistoryForward,
+		"history-incremental-pattern-search-backward": repl.WidgetPatternSearchHistoryBackward,
+		"history-incremental-pattern-search-forward":  repl.WidgetPatternSearchHistoryForward,
+	}
+})
 
 // undefinedKey is what this shell calls a key with nothing on it.
 const undefinedKey = "undefined-key"
@@ -223,77 +231,79 @@ const undefinedKey = "undefined-key"
 // maps share. The command mode is a second dispatch rather than a second table
 // of the same shape — see repl/vi.go — so `vicmd` carries what somebody bound
 // into it and nothing else, which is also what KeyBindings reports for it.
-var defaultBindings = buildDefaultBindings()
+var defaultBindings = sync.OnceValue(buildDefaultBindings)
 
 // widgetNames is this shell's canonical name for each action, which is the
 // one a listing prints. The reverse of bindkeyWidgets, which cannot be
 // inverted automatically because it is many names to one action on purpose:
 // `vi-beginning-of-line` reaches the same place and is not what `bindkey`
 // says back.
-var widgetNames = map[repl.Widget]string{
-	repl.WidgetBeginningOfLine:                "beginning-of-line",
-	repl.WidgetEndOfLine:                      "end-of-line",
-	repl.WidgetBackwardChar:                   "backward-char",
-	repl.WidgetForwardChar:                    "forward-char",
-	repl.WidgetBackwardWord:                   "backward-word",
-	repl.WidgetForwardWord:                    "forward-word",
-	repl.WidgetKillLine:                       "kill-line",
-	repl.WidgetKillWholeLine:                  "kill-whole-line",
-	repl.WidgetBackwardKillLine:               "backward-kill-line",
-	repl.WidgetKillWordBefore:                 "backward-kill-word",
-	repl.WidgetBackwardKillWord:               "backward-kill-word",
-	repl.WidgetKillWordAfter:                  "kill-word",
-	repl.WidgetYank:                           "yank",
-	repl.WidgetTransposeChars:                 "transpose-chars",
-	repl.WidgetUpCaseWord:                     "up-case-word",
-	repl.WidgetDownCaseWord:                   "down-case-word",
-	repl.WidgetCapitalizeWord:                 "capitalize-word",
-	repl.WidgetTransposeWords:                 "transpose-words",
-	repl.WidgetQuoteLine:                      "quote-line",
-	repl.WidgetAcceptAndHold:                  "accept-and-hold",
-	repl.WidgetQuotedInsert:                   "quoted-insert",
-	repl.WidgetViQuotedInsert:                 "vi-quoted-insert",
-	repl.WidgetViBackwardDeleteChar:           "vi-backward-delete-char",
-	repl.WidgetViKillLine:                     "vi-kill-line",
-	repl.WidgetViBackwardKillWord:             "vi-backward-kill-word",
-	repl.WidgetRedisplay:                      "redisplay",
-	repl.WidgetWhichCommand:                   "which-command",
-	repl.WidgetRunHelp:                        "run-help",
-	repl.WidgetExecuteNamedCmd:                "execute-named-cmd",
-	repl.WidgetSelfInsert:                     "self-insert",
-	repl.WidgetPreviousHistory:                "up-line-or-history",
-	repl.WidgetNextHistory:                    "down-line-or-history",
-	repl.WidgetPreviousHistoryMatching:        "up-line-or-search",
-	repl.WidgetNextHistoryMatching:            "down-line-or-search",
-	repl.WidgetSearchHistoryBackward:          "history-incremental-search-backward",
-	repl.WidgetClearScreen:                    "clear-screen",
-	repl.WidgetDeleteChar:                     "delete-char",
-	repl.WidgetBackwardDeleteChar:             "backward-delete-char",
-	repl.WidgetComplete:                       "expand-or-complete",
-	repl.WidgetListChoices:                    "list-choices",
-	repl.WidgetDeleteCharOrList:               "delete-char-or-list",
-	repl.WidgetMenuComplete:                   "menu-complete",
-	repl.WidgetMenuCompleteBackward:           "reverse-menu-complete",
-	repl.WidgetUndo:                           "undo",
-	repl.WidgetInsertLastWord:                 "insert-last-word",
-	repl.WidgetViCommandMode:                  "vi-cmd-mode",
-	repl.WidgetViInsertMode:                   "vi-insert",
-	repl.WidgetViAppendMode:                   "vi-add-next",
-	repl.WidgetBracketedPaste:                 "bracketed-paste",
-	repl.WidgetHistoryBeginningSearchBackward: "history-beginning-search-backward",
-	repl.WidgetHistoryBeginningSearchForward:  "history-beginning-search-forward",
-	repl.WidgetUpLine:                         "up-line",
-	repl.WidgetDownLine:                       "down-line",
+var widgetNames = sync.OnceValue(func() map[repl.Widget]string {
+	return map[repl.Widget]string{
+		repl.WidgetBeginningOfLine:                "beginning-of-line",
+		repl.WidgetEndOfLine:                      "end-of-line",
+		repl.WidgetBackwardChar:                   "backward-char",
+		repl.WidgetForwardChar:                    "forward-char",
+		repl.WidgetBackwardWord:                   "backward-word",
+		repl.WidgetForwardWord:                    "forward-word",
+		repl.WidgetKillLine:                       "kill-line",
+		repl.WidgetKillWholeLine:                  "kill-whole-line",
+		repl.WidgetBackwardKillLine:               "backward-kill-line",
+		repl.WidgetKillWordBefore:                 "backward-kill-word",
+		repl.WidgetBackwardKillWord:               "backward-kill-word",
+		repl.WidgetKillWordAfter:                  "kill-word",
+		repl.WidgetYank:                           "yank",
+		repl.WidgetTransposeChars:                 "transpose-chars",
+		repl.WidgetUpCaseWord:                     "up-case-word",
+		repl.WidgetDownCaseWord:                   "down-case-word",
+		repl.WidgetCapitalizeWord:                 "capitalize-word",
+		repl.WidgetTransposeWords:                 "transpose-words",
+		repl.WidgetQuoteLine:                      "quote-line",
+		repl.WidgetAcceptAndHold:                  "accept-and-hold",
+		repl.WidgetQuotedInsert:                   "quoted-insert",
+		repl.WidgetViQuotedInsert:                 "vi-quoted-insert",
+		repl.WidgetViBackwardDeleteChar:           "vi-backward-delete-char",
+		repl.WidgetViKillLine:                     "vi-kill-line",
+		repl.WidgetViBackwardKillWord:             "vi-backward-kill-word",
+		repl.WidgetRedisplay:                      "redisplay",
+		repl.WidgetWhichCommand:                   "which-command",
+		repl.WidgetRunHelp:                        "run-help",
+		repl.WidgetExecuteNamedCmd:                "execute-named-cmd",
+		repl.WidgetSelfInsert:                     "self-insert",
+		repl.WidgetPreviousHistory:                "up-line-or-history",
+		repl.WidgetNextHistory:                    "down-line-or-history",
+		repl.WidgetPreviousHistoryMatching:        "up-line-or-search",
+		repl.WidgetNextHistoryMatching:            "down-line-or-search",
+		repl.WidgetSearchHistoryBackward:          "history-incremental-search-backward",
+		repl.WidgetClearScreen:                    "clear-screen",
+		repl.WidgetDeleteChar:                     "delete-char",
+		repl.WidgetBackwardDeleteChar:             "backward-delete-char",
+		repl.WidgetComplete:                       "expand-or-complete",
+		repl.WidgetListChoices:                    "list-choices",
+		repl.WidgetDeleteCharOrList:               "delete-char-or-list",
+		repl.WidgetMenuComplete:                   "menu-complete",
+		repl.WidgetMenuCompleteBackward:           "reverse-menu-complete",
+		repl.WidgetUndo:                           "undo",
+		repl.WidgetInsertLastWord:                 "insert-last-word",
+		repl.WidgetViCommandMode:                  "vi-cmd-mode",
+		repl.WidgetViInsertMode:                   "vi-insert",
+		repl.WidgetViAppendMode:                   "vi-add-next",
+		repl.WidgetBracketedPaste:                 "bracketed-paste",
+		repl.WidgetHistoryBeginningSearchBackward: "history-beginning-search-backward",
+		repl.WidgetHistoryBeginningSearchForward:  "history-beginning-search-forward",
+		repl.WidgetUpLine:                         "up-line",
+		repl.WidgetDownLine:                       "down-line",
 
-	repl.WidgetSearchHistoryForward:         "history-incremental-search-forward",
-	repl.WidgetPatternSearchHistoryBackward: "history-incremental-pattern-search-backward",
-	repl.WidgetPatternSearchHistoryForward:  "history-incremental-pattern-search-forward",
-	repl.WidgetResetPrompt:                  "reset-prompt",
-	repl.WidgetSendBreak:                    "send-break",
-	repl.WidgetRecursiveEdit:                "recursive-edit",
-	repl.WidgetPushLine:                     "push-line",
-	repl.WidgetPushLineOrEdit:               "push-line-or-edit",
-}
+		repl.WidgetSearchHistoryForward:         "history-incremental-search-forward",
+		repl.WidgetPatternSearchHistoryBackward: "history-incremental-pattern-search-backward",
+		repl.WidgetPatternSearchHistoryForward:  "history-incremental-pattern-search-forward",
+		repl.WidgetResetPrompt:                  "reset-prompt",
+		repl.WidgetSendBreak:                    "send-break",
+		repl.WidgetRecursiveEdit:                "recursive-edit",
+		repl.WidgetPushLine:                     "push-line",
+		repl.WidgetPushLineOrEdit:               "push-line-or-edit",
+	}
+})
 
 // editorControlKeys are the keys the editor reads that are not actions a key
 // can be bound to — accepting a line, and the `^D` that is end-of-input on an
@@ -365,7 +375,7 @@ const sendBreakKey = "\x07"
 // viins shares: `^G`, and the keys repl.EditorStyle.WideEmacsKeymap puts on
 // the editor (#5913, #6241). The editor acts on them by itself, so this is
 // the listing's half.
-var emacsBindings = buildEmacsBindings()
+var emacsBindings = sync.OnceValue(buildEmacsBindings)
 
 // viinsBindings is the whole of the viins keymap, which is not the emacs
 // table with ESC changed: measured 2026-10-06 with `zsh -f -c 'bindkey -M
@@ -377,7 +387,7 @@ var emacsBindings = buildEmacsBindings()
 // The printable keys and the meta range are self-insert there and are left
 // out, as the emacs listing leaves them out. `^C` and `^Z` are listed, as
 // zsh lists them; the terminal answers them before any keymap does.
-var viinsBindings = buildViinsBindings()
+var viinsBindings = sync.OnceValue(buildViinsBindings)
 
 func buildViinsBindings() map[string]string {
 	out := map[string]string{
@@ -400,10 +410,10 @@ func buildViinsBindings() map[string]string {
 		"\x1b[200~": "bracketed-paste",
 	}
 	for seq, w := range repl.ViInsertBindings() {
-		out[seq] = widgetNames[w]
+		out[seq] = widgetNames()[w]
 	}
 	for seq, w := range repl.ZshViInsertBindings() {
-		out[seq] = widgetNames[w]
+		out[seq] = widgetNames()[w]
 	}
 	return out
 }
@@ -417,18 +427,18 @@ func buildViinsBindings() map[string]string {
 // keys below space type themselves too) and `"\M-^@"-"\M-^?"`. Listed, and
 // never handed to the editor: typing is what it does with them already
 // (#6272).
-var selfInsertKeys = func() map[string]bool {
+var selfInsertKeys = sync.OnceValue(func() map[string]bool {
 	out := map[string]bool{}
 	for b := byte(0x20); b < 0x7f; b++ {
 		out[string([]byte{b})] = true
 	}
 	return out
-}()
+})
 
 func buildEmacsBindings() map[string]string {
-	out := map[string]string{sendBreakKey: widgetNames[repl.WidgetSendBreak]}
+	out := map[string]string{sendBreakKey: widgetNames()[repl.WidgetSendBreak]}
 	for seq, w := range repl.WideEmacsBindings() {
-		out[seq] = widgetNames[w]
+		out[seq] = widgetNames()[w]
 	}
 	return out
 }
@@ -436,7 +446,7 @@ func buildEmacsBindings() map[string]string {
 func buildDefaultBindings() map[string]string {
 	out := map[string]string{}
 	for seq, w := range repl.DefaultBindings() {
-		if name := widgetNames[w]; name != "" {
+		if name := widgetNames()[w]; name != "" {
 			out[seq] = name
 		}
 	}
@@ -448,7 +458,7 @@ func buildDefaultBindings() map[string]string {
 	// See repl.EditorStyle.SearchOnControlX, which is what makes the editor
 	// act on them (#5904).
 	for seq, w := range repl.ControlXSearchBindings() {
-		out[seq] = widgetNames[w]
+		out[seq] = widgetNames()[w]
 	}
 	return out
 }
@@ -500,7 +510,7 @@ func KeyBindings(r *interp.Runner, km repl.Keymap) map[string]repl.Binding {
 			// shipped completions silent on an rc that redefines a standard
 			// widget without rebinding a key, which is the ordinary shape
 			// rather than an exotic one (#3039).
-			if standard, isDefault := defaultBindings[seq]; isDefault && standard == widget {
+			if standard, isDefault := defaultBindings()[seq]; isDefault && standard == widget {
 				continue
 			}
 			// And the emacs keymap's own keys — `^G` at send-break, and the
@@ -508,15 +518,15 @@ func KeyBindings(r *interp.Runner, km repl.Keymap) map[string]repl.Binding {
 			// repl.EditorStyle.SendBreakOnControlG and WideEmacsKeymap — and
 			// are listed rather than carried in defaultBindings because viins
 			// shares that table and has none of them.
-			if standard, isDefault := emacsBindings[seq]; isDefault && standard == widget && keymapBase(r, currentKeymap(r)) == "emacs" {
+			if standard, isDefault := emacsBindings()[seq]; isDefault && standard == widget && keymapBase(r, currentKeymap(r)) == "emacs" {
 				continue
 			}
 			// And the keys that type themselves in both (#6272).
-			if base := keymapBase(r, currentKeymap(r)); widget == "self-insert" && selfInsertKeys[seq] && (base == "emacs" || base == "viins") {
+			if base := keymapBase(r, currentKeymap(r)); widget == "self-insert" && selfInsertKeys()[seq] && (base == "emacs" || base == "viins") {
 				continue
 			}
 			// And viins's, the same way (#6251).
-			if standard, isDefault := viinsBindings[seq]; isDefault && standard == widget && keymapBase(r, currentKeymap(r)) == "viins" {
+			if standard, isDefault := viinsBindings()[seq]; isDefault && standard == widget && keymapBase(r, currentKeymap(r)) == "viins" {
 				continue
 			}
 		}
@@ -533,7 +543,7 @@ func KeyBindings(r *interp.Runner, km repl.Keymap) map[string]repl.Binding {
 			out[seq] = repl.Binding{Function: widget}
 			continue
 		}
-		out[seq] = repl.Binding{Widget: bindkeyWidgets[widget]}
+		out[seq] = repl.Binding{Widget: bindkeyWidgets()[widget]}
 	}
 	return out
 }
@@ -630,7 +640,7 @@ func KeyBindings(r *interp.Runner, km repl.Keymap) map[string]repl.Binding {
 // one the widget reaches first. Registering the module would have moved the
 // diagnostic, not removed it.
 func completionBinding(widget, completer string) repl.Binding {
-	editorAction := bindkeyWidgets[strings.TrimPrefix(completer, ".")]
+	editorAction := bindkeyWidgets()[strings.TrimPrefix(completer, ".")]
 	if !editorAction.UsesCandidates() {
 		// A completer this editor has not got. The key does nothing, and
 		// naming a source of candidates for a completion that will not happen
@@ -715,7 +725,7 @@ func ViEditing(r *interp.Runner) bool {
 func readBindings(r *interp.Runner, keymap string) map[string]string {
 	out := map[string]string{}
 	if keymap == "emacs" || keymap == "viins" {
-		for seq := range selfInsertKeys {
+		for seq := range selfInsertKeys() {
 			out[seq] = "self-insert"
 		}
 	}
@@ -725,7 +735,7 @@ func readBindings(r *interp.Runner, keymap string) map[string]string {
 		// here: `bindkey -M vicmd '^A'` is `undefined-key` in zsh 5.9.2,
 		// where this answered from the emacs table, and `bindkey -M isearch
 		// -L` lists nothing until something is bound (#5691).
-		for seq, w := range defaultBindings {
+		for seq, w := range defaultBindings() {
 			out[seq] = w
 		}
 	}
@@ -735,13 +745,13 @@ func readBindings(r *interp.Runner, keymap string) map[string]string {
 		// not have. The editor acts on it by itself — see
 		// repl.EditorStyle.SendBreakOnControlG — so this is the listing's
 		// half (#5913). The same for the rest of emacsBindings (#6241).
-		for seq, w := range emacsBindings {
+		for seq, w := range emacsBindings() {
 			out[seq] = w
 		}
 	}
 	if keymap == "viins" {
 		// Its own table, which is not emacs's. See viinsBindings.
-		for seq, w := range viinsBindings {
+		for seq, w := range viinsBindings() {
 			out[seq] = w
 		}
 	}

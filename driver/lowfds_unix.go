@@ -8,6 +8,7 @@ package driver
 import (
 	"os"
 	"os/signal"
+	"runtime"
 	"syscall"
 )
 
@@ -271,9 +272,7 @@ func releaseDescriptors(held []int) {
 //     descriptors, opened the first time anything asks os/signal for anything
 //     and never closed. That is #799 exactly: a shell with a trap has one, and
 //     `exec 3>f` writes over it. Linux opens nothing here — its notes are
-//     futexes — and the call is made anyway, both because a future runtime
-//     may change that and because the platforms in between cannot be measured
-//     from here.
+//     futexes — and Linux alone skips the call; see primeSignalDelivery.
 //
 // SIGWINCH is the signal asked for because it is the one whose default action
 // is to be ignored: the disposition is put back immediately, and a signal
@@ -285,7 +284,31 @@ func openRuntimeDescriptors() {
 		_ = r.Close()
 		_ = w.Close()
 	}
+	if !primeSignalDelivery {
+		return
+	}
 	ch := make(chan os.Signal, 1)
 	signal.Notify(ch, syscall.SIGWINCH)
 	signal.Stop(ch)
 }
+
+// primeSignalDelivery is whether openRuntimeDescriptors asks os/signal for
+// anything, which is false on Linux only.
+//
+// The call is there for darwin's pipe and buys nothing where there is no pipe,
+// and it is not free: the first Notify starts the runtime's signal-handling
+// thread, and Stop then waits for its delivery goroutine to be scheduled, all
+// before main. Measured on Linux in the golang:1.26.9 image, paired over 300
+// spawns of `zsh -c :`, dropping it took 0.76 ms of 5.1 ms of CPU, faster in
+// 265 of 300 (#6360). A shell that traps a signal later pays for the thread
+// then, and one that does not never does.
+//
+// It used to be made on Linux anyway, in case a future runtime opened
+// something there. That case is still covered, by a test rather than by the
+// call: TestAReplacementFindsItsFileOnEveryDescriptorAScriptCanName traps a
+// signal before parking on every number a script can name, and runs on Linux
+// in CI — so a runtime that began opening a pipe for signals would land it
+// on a low number and fail there, exactly as darwin's does with this call
+// removed. Every other platform keeps the call, because none of them is
+// measured here.
+const primeSignalDelivery = runtime.GOOS != "linux"

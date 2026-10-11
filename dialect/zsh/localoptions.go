@@ -131,6 +131,11 @@ func setLocalPatterns(r *interp.Runner, on bool) {
 var liveOptions, restoredOptions []int
 
 func init() {
+	// Sized for the whole table up front: most names are live, and growing
+	// two slices by doubling from nothing was allocation after allocation at
+	// every start for a list whose upper bound is known (#6360).
+	liveOptions = make([]int, 0, len(zshOptions))
+	restoredOptions = make([]int, 0, len(zshOptions))
 	for i := range zshOptions {
 		o := &zshOptions[i]
 		if o.set == nil || o.recorded {

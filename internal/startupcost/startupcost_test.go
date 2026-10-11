@@ -77,6 +77,10 @@ func buildTheShells() {
 		"our-zsh":  "./cmd/zsh",
 		"our-ksh":  "./cmd/ksh",
 		"our-dash": "./cmd/dash",
+		// Not measured against a reference, so not in Ours: built for
+		// TestTheDialectsBuildTheirTablesOnFirstUse, which wants every
+		// dialect's init in one binary.
+		"our-sh": "./cmd/sh",
 	} {
 		cmd := exec.Command("go", "build", "-o", filepath.Join(buildDir, bin), pkg)
 		cmd.Dir = "../.."
@@ -106,7 +110,7 @@ func ours(tb testing.TB) []startupcost.Subject {
 	return subjects
 }
 
-// buildDirFor is where the four binaries were built, for a caller that wants
+// buildDirFor is where the binaries were built, for a caller that wants
 // the directory rather than the two subjects the benchmarks measure.
 //
 // Shares buildOnce with ours, so a run that does both builds once.

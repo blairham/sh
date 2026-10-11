@@ -6,6 +6,7 @@
 package driver_test
 
 import (
+	"math"
 	"runtime/debug"
 	"testing"
 
@@ -30,6 +31,11 @@ func TestTheCollectorIsStoppedWhileTheTableIsPlaced(t *testing.T) {
 	const mine = 137
 	was := debug.SetGCPercent(mine)
 	t.Cleanup(func() { debug.SetGCPercent(was) })
+	// And a ceiling of its own, for the same reason: a shell binary runs with
+	// one, and a percent of -1 does not stop a collection the limit starts.
+	const myLimit = 211 << 20
+	wasLimit := debug.SetMemoryLimit(myLimit)
+	t.Cleanup(func() { debug.SetMemoryLimit(wasLimit) })
 
 	// Read on both sides of the placement. Nothing has been overwritten — the
 	// table handed over is empty — so asking is safe here, which it would not
@@ -40,8 +46,10 @@ func TestTheCollectorIsStoppedWhileTheTableIsPlaced(t *testing.T) {
 	// and not the first, and the descriptors would already have been
 	// overwritten while a collection could still start.
 	seen := map[string]int{}
+	limits := map[string]int64{}
 	driver.AtPlacementForTest(func(where string) {
 		seen[where] = debug.SetGCPercent(-1)
+		limits[where] = debug.SetMemoryLimit(-1)
 	})
 	t.Cleanup(func() { driver.AtPlacementForTest(nil) })
 
@@ -59,8 +67,14 @@ func TestTheCollectorIsStoppedWhileTheTableIsPlaced(t *testing.T) {
 		if got != -1 {
 			t.Errorf("%s the table was placed the collector was at %d, want it stopped (-1)", where, got)
 		}
+		if limit := limits[where]; limit != math.MaxInt64 {
+			t.Errorf("%s the table was placed the memory limit was %d, want it lifted", where, limit)
+		}
 	}
 	if back := debug.SetGCPercent(mine); back != mine {
 		t.Errorf("after a failed exec the collector is at %d, want the %d it was at before", back, mine)
+	}
+	if back := debug.SetMemoryLimit(-1); back != myLimit {
+		t.Errorf("after a failed exec the memory limit is %d, want the %d it was at before", back, int64(myLimit))
 	}
 }

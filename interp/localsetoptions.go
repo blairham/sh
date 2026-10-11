@@ -71,19 +71,14 @@ func (r *Runner) saveTheOptionTable(sc *scope) {
 	if !r.keywordCallScopesOptions(sc) {
 		return
 	}
-	names := r.listedOptionNames()
-	saved := make(map[string]bool, len(names))
-	for _, name := range names {
-		if r.immovableName(name) || r.inertOptions[name] {
-			continue
+	roster := r.optionRosterNow()
+	states := make([]bool, len(roster.names))
+	for i, o := range roster.opts {
+		if roster.saves[i] {
+			states[i] = o.state(r)
 		}
-		o, ok := r.lookupSetOption(name)
-		if !ok {
-			continue
-		}
-		saved[name] = o.state(r)
 	}
-	sc.savedOptions = saved
+	sc.savedOptionRoster, sc.savedOptions = roster, states
 }
 
 // restoreTheOptionTable puts it back as the call unwinds.
@@ -106,22 +101,87 @@ func (r *Runner) saveTheOptionTable(sc *scope) {
 // system for a terminal — so asking each of them for the state it already
 // holds would put that work on the way out of every `function` call in the
 // shell.
+//
+// Against the roster the save was taken over, which is the listing as it
+// stood when the call was entered: the names, their order and what each
+// resolves to are all part of what was saved.
 func (r *Runner) restoreTheOptionTable(sc *scope) {
-	if sc.savedOptions == nil {
+	roster := sc.savedOptionRoster
+	if roster == nil {
 		return
 	}
-	for _, name := range r.listedOptionNames() {
-		want, saved := sc.savedOptions[name]
-		if !saved {
+	for i, name := range roster.names {
+		if !roster.saves[i] {
 			continue
 		}
-		o, ok := r.lookupSetOption(name)
-		if !ok || o.state(r) == want {
+		o, want := roster.opts[i], sc.savedOptions[i]
+		if o.state(r) == want {
 			continue
 		}
 		r.putOptionBack(name, o, want)
 	}
-	sc.savedOptions = nil
+	sc.savedOptionRoster, sc.savedOptions = nil, nil
+}
+
+// optionSaveRoster is the `set -o` listing resolved once: every name in listing
+// order, the entry each resolves to, and whether a call's save takes it.
+//
+// Built because the save runs on every `function`-word call in the shell
+// that scopes options, and building it there — listing the names, sorting
+// them, resolving each through lookupSetOption, which makes three closures
+// for every negated spelling — was a third of what such a call cost (#6361).
+// What it resolves is fixed once the dialect has declared its names, so it is
+// cached on the runner and dropped by everything that can change it: the four
+// Add…SetOptions declarations, and the two answers from the vectors that it
+// reads, which are part of its key. Never written after it is built, so a
+// clone may share it.
+type optionSaveRoster struct {
+	names []string
+	opts  []setOption
+	saves []bool
+	// The answers it was built under, compared on every use: the listing
+	// order is the diagnostics vector's, and the negative spelling of being
+	// interactive is the semantics vector's, and either vector can be
+	// swapped under a runner.
+	order                       []string
+	nonInteractive, interactive string
+}
+
+// optionRosterNow is the roster for the runner as it stands, built if the
+// cached one is missing or was built under other answers.
+func (r *Runner) optionRosterNow() *optionSaveRoster {
+	order := r.diag().OptionListingOrder
+	s := r.sem()
+	if c := r.saveRoster; c != nil && sameSlice(c.order, order) &&
+		c.nonInteractive == s.NonInteractiveOptionName && c.interactive == s.InteractiveOptionName {
+		return c
+	}
+	names := r.listedOptionNames()
+	c := &optionSaveRoster{
+		names: names, opts: make([]setOption, len(names)), saves: make([]bool, len(names)),
+		order: order, nonInteractive: s.NonInteractiveOptionName, interactive: s.InteractiveOptionName,
+	}
+	for i, name := range names {
+		if r.immovableName(name) || r.inertOptions[name] {
+			continue
+		}
+		o, ok := r.lookupSetOption(name)
+		if !ok {
+			continue
+		}
+		c.opts[i], c.saves[i] = o, true
+	}
+	r.saveRoster = c
+	return c
+}
+
+// sameSlice reports whether two slices are the same slice — one backing
+// array at one length — which is what says a vector's list was not replaced.
+func sameSlice(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	return len(a) == 0 || &a[0] == &b[0]
 }
 
 // putOptionBack writes one option's saved state without going through the

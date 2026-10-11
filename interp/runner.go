@@ -3545,6 +3545,9 @@ type Runner struct {
 	// scopes is the stack `local` unwinds. Shell scoping is dynamic, so
 	// there is one set of variables and this records what to put back.
 	scopes []*scope
+	// spares is the closed scopes' record tables, kept for the next scope to
+	// write into. Never shared with a clone — see scopespares.go.
+	spares scopeSpares
 	// memberNamesInUse is whether this shell has ever held a name with a
 	// member separator in it, or a compound variable to hold one. It gates
 	// the namespace half of a shadow, which is dead weight in the four
@@ -3867,6 +3870,10 @@ type Runner struct {
 	// AddInertSetOptions; `privileged` in ksh93 is the one. Not the same as
 	// immovableOptions, which refuse the request out loud.
 	inertOptions map[string]bool
+	// saveRoster is the `set -o` listing resolved, cached for the option
+	// save a `function`-word call takes. Dropped by every declaration above;
+	// see localsetoptions.go.
+	saveRoster *optionSaveRoster
 	// defaultOnOptions are the `set -o` rows this shell's compiled default
 	// has on, which is what `set --default` puts back and is not the same
 	// thing as the state the shell starts in. Declared through
@@ -12115,7 +12122,11 @@ type scope struct {
 	// caller moved, which a per-modification save would also get right, and
 	// it can be left holding a name the caller never touched, which that
 	// save would not. See localsetoptions.go.
-	savedOptions map[string]bool
+	//
+	// Held as a state per name of the roster the save was taken over, rather
+	// than as a table keyed by name: see optionSaveRoster.
+	savedOptions      []bool
+	savedOptionRoster *optionSaveRoster
 
 	// onReturn is what runs when this call unwinds, in reverse order of
 	// registration.

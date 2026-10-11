@@ -1567,6 +1567,7 @@ func (r *Runner) setNamedOptionSpelled(name, spelled string, on bool) bool {
 // builtins: which names a shell has is the same kind of question, and one
 // Answer per name would be ninety of them saying nothing but "yes" or "no".
 func (r *Runner) AddSetOptions(names ...string) {
+	r.saveRoster = nil // the resolved listing moves; see optionSaveRoster
 	if r.extraOptions == nil {
 		r.extraOptions = make(map[string]bool, len(names))
 	}

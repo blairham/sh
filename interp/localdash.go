@@ -3,6 +3,8 @@
 
 package interp
 
+import "slices"
+
 // `local -` is the operand that is not a name: it asks that the shell's
 // option table be put back the way it was when the function returns.
 //
@@ -123,16 +125,18 @@ func (s shellOptions) restore(r *Runner) {
 // beside names — measured, `f() { local - x=2; }` declares `x` and saves the
 // options both — so it is removed from the list rather than ending it.
 func localDashOperands(args []string) ([]string, bool) {
-	found := false
+	// The list as it came when there is nothing to take out, which is nearly
+	// every `local` there is: a copy per declaration bought nothing.
+	if !slices.Contains(args, "-") {
+		return args, false
+	}
 	kept := make([]string, 0, len(args))
 	for _, a := range args {
-		if a == "-" {
-			found = true
-			continue
+		if a != "-" {
+			kept = append(kept, a)
 		}
-		kept = append(kept, a)
 	}
-	return kept, found
+	return kept, true
 }
 
 // saveOptionsForThisCall arranges for the option table to be put back when

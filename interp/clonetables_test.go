@@ -148,7 +148,7 @@ func seedStacks(r *Runner) {
 		exportedSpoken:       map[string]bool{"seed": true},
 		exportedShadow:       map[string]string{"seed": "v"},
 		savedTraps:           map[string]savedTrapState{"seed": {}},
-		savedOptions:         map[string]bool{"seed": true},
+		savedOptions:         append(make([]bool, 0, 4), true),
 		sealed:               map[string]sealedName{"seed": {}},
 		onReturn:             append(make([]func(), 0, 4), func() {}),
 		badNamesForTheReturn: append(make([]string, 0, 4), "1x"),

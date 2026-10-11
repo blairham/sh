@@ -1447,7 +1447,7 @@ func (r *Runner) funcDecl(c *syntax.FuncDecl) error {
 // takes none of them, so the one unwind serves both without asking which it
 // is unwinding.
 func (r *Runner) pushScope(keyword bool) *scope {
-	sc := &scope{saved: map[string]string{}, existed: map[string]bool{}, keyword: keyword, owner: r}
+	sc := &scope{saved: r.spareStrings(), existed: r.spareBools(), keyword: keyword, owner: r}
 	r.scopes = append(r.scopes, sc)
 	return sc
 }
@@ -1529,60 +1529,70 @@ func (r *Runner) popScope(sc *scope) {
 	// action that reads the name back has to see what the caller sees, and
 	// the enclosing declarations above are the final word on that.
 	r.speakRestoredAssignments(beforeRestore, shadowed)
+	// And the scope's record tables go back for the next call to write into,
+	// last of all because everything above reads them. See scopespares.go.
+	r.releaseScopeTables(sc)
 }
 
 // shadowedNames is every name this scope has a record of, taken before any of
 // them is put back: restoreShadowedName deletes the records as it goes, so the
 // list has to be settled first.
 func (sc *scope) shadowedNames() []string {
-	names := map[string]bool{}
-	for name := range sc.saved {
-		names[name] = true
+	// Every shadowed name has a value record, so that table's size is the
+	// list's nearly always.
+	s := nameSet{list: make([]string, 0, len(sc.saved))}
+	gatherNames(&s, sc.saved)
+	gatherNames(&s, sc.savedArrays)
+	gatherNames(&s, sc.savedAssoc)
+	gatherNames(&s, sc.declaredOnlyBefore)
+	gatherNames(&s, sc.savedReadonly)
+	gatherNames(&s, sc.savedHideInScope)
+	gatherNames(&s, sc.hiddenShadow)
+	gatherNames(&s, sc.suspendedProducers)
+	gatherNames(&s, sc.savedAttrs)
+	gatherNames(&s, sc.assignedSpoken)
+	gatherNames(&s, sc.exportedSpoken)
+	gatherNames(&s, sc.removedBefore)
+	gatherNames(&s, sc.memberNamespaces)
+	gatherNames(&s, sc.compoundMarkBefore)
+	return s.list
+}
+
+// nameSet is a list of names without repeats, for shadowedNames.
+//
+// Deduplicated by scanning the list rather than through a set: every name a
+// declaration shadows is in several of the scope's tables, so a set cost a map
+// per function return to hold what is nearly always a handful of names. Past
+// that handful the scan would be quadratic, so a long list switches to a set.
+type nameSet struct {
+	list []string
+	seen map[string]bool
+}
+
+func gatherNames[V any](s *nameSet, table map[string]V) {
+	for name := range table {
+		s.add(name)
 	}
-	for name := range sc.savedArrays {
-		names[name] = true
+}
+
+func (s *nameSet) add(name string) {
+	if s.seen != nil {
+		if !s.seen[name] {
+			s.seen[name] = true
+			s.list = append(s.list, name)
+		}
+		return
 	}
-	for name := range sc.savedAssoc {
-		names[name] = true
+	if slices.Contains(s.list, name) {
+		return
 	}
-	for name := range sc.declaredOnlyBefore {
-		names[name] = true
+	s.list = append(s.list, name)
+	if len(s.list) > 16 {
+		s.seen = make(map[string]bool, len(s.list))
+		for _, have := range s.list {
+			s.seen[have] = true
+		}
 	}
-	for name := range sc.savedReadonly {
-		names[name] = true
-	}
-	for name := range sc.savedHideInScope {
-		names[name] = true
-	}
-	for name := range sc.hiddenShadow {
-		names[name] = true
-	}
-	for name := range sc.suspendedProducers {
-		names[name] = true
-	}
-	for name := range sc.savedAttrs {
-		names[name] = true
-	}
-	for name := range sc.assignedSpoken {
-		names[name] = true
-	}
-	for name := range sc.exportedSpoken {
-		names[name] = true
-	}
-	for name := range sc.removedBefore {
-		names[name] = true
-	}
-	for name := range sc.memberNamespaces {
-		names[name] = true
-	}
-	for name := range sc.compoundMarkBefore {
-		names[name] = true
-	}
-	list := make([]string, 0, len(names))
-	for name := range names {
-		list = append(list, name)
-	}
-	return list
 }
 
 // shadows reports whether a declaration in this scope has taken a copy of the

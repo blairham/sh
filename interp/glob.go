@@ -150,15 +150,59 @@ func (r *Runner) globEscape(s string) string {
 }
 
 // globEscapeIn is globEscape over a named set.
+//
+// A value with nothing in the set comes back as itself, and one with marks is
+// written in runs between them into a builder sized once. Every quoted
+// expansion passes through here, so this is the copy `s="$s$x"` makes of the
+// whole of `$s` on every append: written a byte at a time into a builder that
+// grew by doubling, it was four bytes allocated per byte of value and three
+// quarters of what a 2,000-append loop allocated (#6357).
 func globEscapeIn(s, marked string) string {
-	var b strings.Builder
-	for i := 0; i < len(s); i++ {
-		if strings.IndexByte(marked, s[i]) >= 0 {
-			b.WriteByte('\\')
-		}
-		b.WriteByte(s[i])
+	i := indexMarked(s, marked)
+	if i < 0 {
+		return s
 	}
+	var b strings.Builder
+	b.Grow(len(s) + 8)
+	for i >= 0 {
+		b.WriteString(s[:i])
+		b.WriteByte('\\')
+		b.WriteByte(s[i])
+		s = s[i+1:]
+		i = indexMarked(s, marked)
+	}
+	b.WriteString(s)
 	return b.String()
+}
+
+// indexMarked is strings.IndexAny over an ASCII set, eight bytes a step.
+//
+// After the copy above was gone this scan was the largest cost left in an
+// append — a third of the CPU of `s="$s$i,"` — because the library's version
+// tests one byte per branch. A table looked up eight times and or-ed together
+// is a branch per word instead, and measures about twice as fast over a long
+// value. A short one is not worth the table.
+func indexMarked(s, marked string) int {
+	if len(s) < 64 {
+		return strings.IndexAny(s, marked)
+	}
+	var tab [256]uint8
+	for i := 0; i < len(marked); i++ {
+		tab[marked[i]] = 1
+	}
+	i := 0
+	for ; i+8 <= len(s); i += 8 {
+		w := s[i : i+8]
+		if tab[w[0]]|tab[w[1]]|tab[w[2]]|tab[w[3]]|tab[w[4]]|tab[w[5]]|tab[w[6]]|tab[w[7]] != 0 {
+			break
+		}
+	}
+	for ; i < len(s); i++ {
+		if tab[s[i]] != 0 {
+			return i
+		}
+	}
+	return -1
 }
 
 // escapeValueBackslashes puts an expansion result into the escaped form
@@ -185,8 +229,16 @@ func globEscapeIn(s, marked string) string {
 //
 // A backslash at the end of a value has nothing behind it and is an ordinary
 // marked backslash: all three readings agree about it.
+//
+// A value holding neither byte is its own escaped form and is returned as it
+// is: writing it out a byte at a time was four bytes allocated per byte of an
+// unquoted `$s` on every `s=$s$x` (#6357).
 func escapeValueBackslashes(s string) string {
+	if strings.IndexByte(s, '\\') < 0 && strings.IndexByte(s, valueBackslashMark) < 0 {
+		return s
+	}
 	var b strings.Builder
+	b.Grow(len(s) + 8)
 	for i := 0; i < len(s); i++ {
 		if s[i] == valueBackslashMark {
 			// A NUL that is *data*, marked so that a bare mark can only be one

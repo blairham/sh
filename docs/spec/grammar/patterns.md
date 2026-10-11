@@ -4305,6 +4305,7 @@ about the load.
 | before #1396 | 8 s | — |
 | after #1396, before #1398 | 5.2 ms | 159,540 |
 | after #1398 | 0.66 ms | 43,269 |
+| after #6356 | 0.076 ms | 2,195 |
 | real zsh 5.9.2 | 0.0124 ms | — |
 
 `make startup`'s rich-rc case is the same work seen from the outside —
@@ -4367,6 +4368,40 @@ remaining gap; zsh cannot be doing more than a few thousand steps in
 
 Both want their own design note and their own differential run against the
 panel, which is why they are not in the change that wrote this section.
+
+**The first multiplier is gone, and the matcher still decides every
+match (#6356).** The spans are no longer enumerated blind: before the walk
+at each position, one forward pass over the subject works out which ends a
+match from there could reach — the pattern read into an automaton, its
+states advanced together, so no unit is read twice — and the walk asks the
+matcher only about those, longest first exactly as before. That keeps the
+hazard above out of the picture rather than resolving it: nothing the pass
+says is taken as a match, so the exploration order, the early exit and what
+a `(#b)` reports are all the matcher's as they were. The pass may only
+*remove* spans, and its one property is that it never removes a span the
+matcher would accept. The theme's substitution makes 9 match attempts where
+it made 285, and the written-arm reading — which asked the same blind
+question once per resolved variant — goes through the same pass.
+
+It reads a subset of the language with the matcher's own readers, in the
+order the matcher asks them: literals, `?`, `*`, bracket expressions without
+a sub-expression, groups and their arms, the `#` and `##` closures, the
+`@ * + ?` quantified groups, and the reporting flags. Anything else — a
+negation, an exclusion, a range, a count, an anchor, any flag or option
+that changes how a byte compares — refuses it, and the walk is exactly what
+it was. `TestTheReachSetHoldsEveryEndTheMatcherAccepts` compares the pass
+against an enumeration of every span of every subject in its corpus, under
+five readings, and requires the two to agree exactly where the pass answers.
+
+A plain-string pattern is cheaper again for a reason of its own: the
+characters every match must begin with were already known to the trims, and
+the substitution now jumps to their next occurrence rather than asking the
+matcher at every unit in between — `${s//o/0}` over 1.6 KB is 9 ns per
+character where it was 70.
+
+What remains is the second multiplier: about 240 matcher steps for each of
+the nine matches, which is the backtracking search itself and is 6x real
+zsh's whole substitution.
 
 ## Collating elements and equivalence classes
 

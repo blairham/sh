@@ -106,6 +106,15 @@ type armSearch struct {
 	// the report it gets, so the plan only has to be the right *shape* for
 	// the pattern being matched rather than for the one the script wrote.
 	where []*matchWhere
+	// reach is each unbounded variant's end analysis, nil for a variant it
+	// does not read, and ends is that analysis bound to the subject last
+	// asked about. A substitution asks at every position a match was found
+	// at, and without it each question was every span from the length
+	// reading's edge down, per variant — two thirds of #1398's substitution
+	// once the length reading itself stopped enumerating (#6356). See
+	// interp/substreach.go.
+	reach []*reachSet
+	ends  []*reachEnds
 }
 
 // armBound is what one resolved variant requires of a piece, so that a
@@ -144,14 +153,21 @@ func newArmSearch(pattern string, o patternOpts) (armSearch, bool) {
 	}
 	bounds := make([]armBound, len(variants))
 	where := make([]*matchWhere, len(variants))
+	reach := make([]*reachSet, len(variants))
 	for i, v := range variants {
 		var b armBound
 		b.least, b.most, b.bounded = patternSpanBytes(v, o)
 		b.head, b.tail, b.edges = patternEdgeLiterals(v, o)
 		bounds[i] = b
 		where[i] = &matchWhere{plan: planCapturesFor(v, o)}
+		if !b.bounded {
+			reach[i], _ = newReachSet(v, o)
+		}
 	}
-	return armSearch{variants: variants, bounds: bounds, where: where}, true
+	return armSearch{
+		variants: variants, bounds: bounds, where: where,
+		reach: reach, ends: make([]*reachEnds, len(variants)),
+	}, true
 }
 
 // endAt is where the match beginning at start stops when the arms are
@@ -195,9 +211,23 @@ func (s armSearch) endAt(value string, o patternOpts, start, limit int) (int, bo
 		if b.bounded {
 			last = min(last, sort.SearchInts(stops, start+b.most+1)-1)
 		}
+		var e *reachEnds
+		if r := s.reach[n]; r != nil {
+			e = s.ends[n]
+			if e == nil || e.value != value {
+				e = newReachEnds(r, value, stops)
+				s.ends[n] = e
+			}
+			if !e.from(start) {
+				continue
+			}
+		}
 		for k := last; k >= from; k-- {
 			if b.bounded && stops[k]-start < b.least {
 				break
+			}
+			if e != nil && !e.may(stops[k]) {
+				continue
 			}
 			piece := value[start:stops[k]]
 			if !edgeLiteralsFit(piece, b.head, b.tail, b.edges) {

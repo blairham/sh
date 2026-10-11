@@ -4,6 +4,7 @@
 package interp
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/blairham/sh/syntax"
@@ -65,6 +66,14 @@ func BenchmarkReplaceExtendedGlob(b *testing.B) {
 	if len(got) != 9 {
 		b.Fatalf("result %q is %d bytes, want the 9 real zsh gives", got, len(got))
 	}
+	reportPerChar(b, benchSubject)
+}
+
+// reportPerChar adds what one substitution cost per character of its subject,
+// which is the constant #6356 is about and the number that should move.
+func reportPerChar(b *testing.B, subject string) {
+	b.Helper()
+	b.ReportMetric(float64(b.Elapsed().Nanoseconds())/float64(b.N)/float64(len(subject)), "ns/char")
 }
 
 // BenchmarkReplaceExtendedGlobWithTheWrittenArmReading is the same
@@ -96,6 +105,7 @@ func BenchmarkReplaceExtendedGlobWithTheWrittenArmReading(b *testing.B) {
 	if len(got) != 9 {
 		b.Fatalf("result %q is %d bytes, want the 9 real zsh gives", got, len(got))
 	}
+	reportPerChar(b, benchSubject)
 }
 
 // BenchmarkOrdinaryGlobMatch is the other half of the measurement, and the
@@ -117,5 +127,61 @@ func BenchmarkOrdinaryGlobMatch(b *testing.B) {
 	}
 	if matched == 0 {
 		b.Fatal("nothing matched, so this timed a refusal rather than a match")
+	}
+}
+
+// literalSubject is the sweep's subst_replace string repeated to 1584 bytes,
+// long enough that the per-character constant swamps the fixed cost of a
+// substitution.
+var literalSubject = strings.Repeat("the_quick_brown_fox_jumps_over_the_lazy_dog_", 36)
+
+// BenchmarkReplaceLiteralPerChar is `${s//o/0}` over a long subject, the
+// shape #6356 measured at 4x bash, reported per character scanned.
+func BenchmarkReplaceLiteralPerChar(b *testing.B) {
+	e := &syntax.ParamExpr{All: true}
+	with := func(matchReport, string) string { return "0" }
+	var got string
+	for b.Loop() {
+		o := benchOpts(b, "o", literalSubject)
+		got = replace(literalSubject, "o", e, o, armOrder{}, benchDeclined, with)
+	}
+	if want := strings.ReplaceAll(literalSubject, "o", "0"); got != want {
+		b.Fatalf("result %q, want %q", got, want)
+	}
+	reportPerChar(b, literalSubject)
+}
+
+// The two substitutions above, counted in matcher questions rather than
+// timed, so that losing what made them cheap fails a test instead of moving a
+// number nobody is watching. matchWhere.asked is the matcher's own count of
+// the steps it took, and it runs on for as long as the pattern and the
+// subject stay the same — which is the whole of one substitution.
+//
+// Before #6356 the literal asked once at every unit of the subject, 1584
+// questions for 144 replacements, and the theme's pattern asked 44,079: every
+// span from the end of the message down, at each of the nine positions a
+// match starts at.
+func TestASubstitutionAsksTheMatcherOnlyWhereAMatchCouldBe(t *testing.T) {
+	e := &syntax.ParamExpr{All: true}
+	o := benchOpts(t, "o", literalSubject)
+	got := replace(literalSubject, "o", e, o, armOrder{}, benchDeclined,
+		func(matchReport, string) string { return "0" })
+	if want := strings.ReplaceAll(literalSubject, "o", "0"); got != want {
+		t.Fatalf("the literal substitution gave %q, want %q", got, want)
+	}
+	if n, most := o.where.asked, strings.Count(literalSubject, "o"); n > most {
+		t.Errorf("the literal substitution asked the matcher %d questions for %d occurrences", n, most)
+	}
+
+	o = benchOpts(t, benchPattern, benchSubject)
+	got = replace(benchSubject, benchPattern, e, o, armOrder{}, benchDeclined,
+		func(matchReport, string) string { return "X" })
+	if got != "XXXXXXXXX" {
+		t.Fatalf("the theme's substitution gave %q, want the nine X real zsh gives", got)
+	}
+	// About 2,200 on the change that set this, and a margin for the
+	// matcher's own search to move inside without this failing.
+	if n := o.where.asked; n > 5000 {
+		t.Errorf("the theme's substitution asked the matcher %d questions for nine matches", n)
 	}
 }

@@ -6672,12 +6672,61 @@ func replace(value, pattern string, e *syntax.ParamExpr, o patternOpts, arm armO
 		}
 	}
 
+	// The characters every match begins with, so that the scan can jump to
+	// the next place they occur rather than asking the matcher at each unit
+	// in between. A position the head does not begin at is one no span
+	// starting there can match, and the walk below writes such a position
+	// through unchanged — so a jump over a run of them writes the run
+	// through and is the same string. Never an empty match either: a
+	// pattern that requires bytes cannot match none, which is what leaves
+	// the empty-match rules below untouched by the jump. See
+	// interp/patternspan.go for why the head may ask too little and never
+	// too much, and #6356 for what asking at every unit cost.
+	head, _, edges := patternEdgeLiterals(pattern, o)
+	jump := edges && head != ""
+
 	var b strings.Builder
 	// Where the match before this one ended, so that an empty match sitting
 	// on it can be recognized. -1 until something has matched.
 	lastEnd := -1
+	// The two bounds below as cursors into stops. Both targets only move
+	// forward as the position does, so a cursor that walks finds the same
+	// index a binary search from scratch would, and for the whole scan
+	// rather than once per position — which was a third of a literal
+	// substitution's time on a 1.6KB subject (#6356).
+	topAt, bottomAt := 0, 0
+	// And for a pattern with no upper bound, the ends a match from each
+	// position could reach, so that the span walk asks the matcher only
+	// about those. See interp/substreach.go: the set may hold an end the
+	// matcher refuses and never lacks one it accepts, and the matcher's
+	// answer is still the one taken.
+	var reach *reachEnds
+	if !bounded {
+		if r, ok := newReachSet(pattern, o); ok {
+			reach = newReachEnds(r, value, stops)
+		}
+	}
 	for k := 0; k < len(stops); {
 		i := stops[k]
+		if jump {
+			next := strings.Index(value[i:], head)
+			if next < 0 {
+				b.WriteString(value[i:])
+				return b.String()
+			}
+			if next > 0 {
+				// The first unit boundary at or past the occurrence. One that
+				// lands inside a character is matched from the boundary after
+				// it, which asks the matcher a question it may answer no to
+				// and so can change nothing.
+				j := k
+				for stops[j] < i+next {
+					j++
+				}
+				b.WriteString(value[i:stops[j]])
+				k, i = j, stops[j]
+			}
+		}
 		// The match at this position the operator asked for, so `*` behaves
 		// as it does everywhere else rather than matching empty and looping.
 		end := -1
@@ -6687,26 +6736,38 @@ func replace(value, pattern string, e *syntax.ParamExpr, o patternOpts, arm armO
 		// characters that is one span instead of one per remaining unit,
 		// which is the whole of #1398.
 		top := len(stops) - 1
-		if bounded {
-			top = sort.SearchInts(stops, i+hi+1) - 1
-		}
 		bottom := k
 		if bounded {
-			bottom = max(k, sort.SearchInts(stops, i+lo))
+			// sort.SearchInts(stops, i+hi+1) - 1 and sort.SearchInts(stops,
+			// i+lo), walked.
+			for topAt < len(stops) && stops[topAt] < i+hi+1 {
+				topAt++
+			}
+			top = topAt - 1
+			for bottomAt < len(stops) && stops[bottomAt] < i+lo {
+				bottomAt++
+			}
+			bottom = max(k, bottomAt)
 		}
 		mFirst, mFinal, mStep := top, bottom, -1
 		if shortest {
 			mFirst, mFinal, mStep = bottom, top, 1
+		}
+		if reach != nil && !reach.from(i) {
+			// Nothing starting here can match, so no span is asked.
+			bottom, top = 1, 0
 		}
 		for m := mFirst; bottom <= top; m += mStep {
 			// Every span tried is a piece of value and is matched as one,
 			// so a `(#s)` matches only the span starting at 0 and a `(#e)`
 			// only the one ending at the last unit. Measured:
 			// `x=XbXcX; ${x//(#s)X/-}` is `-bXcX`, not `-b-c-`.
-			ok, got := matchPatternIn(pattern, value[i:stops[m]], value, i, o)
-			if ok {
-				end, rep = stops[m], got
-				break
+			if reach == nil || reach.may(stops[m]) {
+				ok, got := matchPatternIn(pattern, value[i:stops[m]], value, i, o)
+				if ok {
+					end, rep = stops[m], got
+					break
+				}
 			}
 			if m == mFinal {
 				break

@@ -67,9 +67,38 @@ func BenchmarkParseBig(b *testing.B) {
 // test that is not parallel finishes before any parallel one starts.
 func TestParseBytesPerLine(t *testing.T) {
 	const bound = 3100
+	bytes, _ := parseCostPerLine(t)
+	t.Logf("%d bytes per line", bytes)
+	if bytes > bound {
+		t.Errorf("a parse allocates %d bytes per line of bigScript, want at most %d", bytes, bound)
+	}
+}
+
+// How many allocations a parse may make per line of bigScript, with room to
+// spare above what it does. Every reserved-word question the parser asked of
+// a word of several spans — `n=$((n+1))` is one — used to join the spans into
+// a fresh string first, once per question, and so did the check of a
+// command's first word against the declaration utilities. That came to about
+// 9.7 of the script's 47.9 allocations a line; comparing in place brought it
+// to about 38.3 (#6381). The bound sits under the old figure.
+//
+// Not parallel, for the reason TestParseBytesPerLine gives.
+func TestParseAllocsPerLine(t *testing.T) {
+	const bound = 42
+	_, allocs := parseCostPerLine(t)
+	t.Logf("%.2f allocations per line", allocs)
+	if allocs > bound {
+		t.Errorf("a parse makes %.2f allocations per line of bigScript, want at most %d", allocs, bound)
+	}
+}
+
+// parseCostPerLine parses bigScript three times and returns the fewest bytes
+// and allocations any one parse made per line.
+func parseCostPerLine(t *testing.T) (bytes uint64, allocs float64) {
+	t.Helper()
 	src := bigScript(300)
 	lines := uint64(strings.Count(src, "\n"))
-	best := uint64(1 << 62)
+	bytes, allocs = uint64(1<<62), 1<<62
 	for range 3 {
 		var m0, m1 runtime.MemStats
 		runtime.ReadMemStats(&m0)
@@ -77,10 +106,8 @@ func TestParseBytesPerLine(t *testing.T) {
 			t.Fatal(err)
 		}
 		runtime.ReadMemStats(&m1)
-		best = min(best, (m1.TotalAlloc-m0.TotalAlloc)/lines)
+		bytes = min(bytes, (m1.TotalAlloc-m0.TotalAlloc)/lines)
+		allocs = min(allocs, float64(m1.Mallocs-m0.Mallocs)/float64(lines))
 	}
-	t.Logf("%d bytes per line", best)
-	if best > bound {
-		t.Errorf("a parse allocates %d bytes per line of bigScript, want at most %d", best, bound)
-	}
+	return bytes, allocs
 }

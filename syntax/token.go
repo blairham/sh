@@ -3,6 +3,8 @@
 
 package syntax
 
+import "strings"
+
 // Kind classifies a token.
 //
 // Operators get a kind each rather than a shared kind with the text attached.
@@ -499,9 +501,30 @@ func (t Token) Literal() string {
 	if len(t.Spans) == 1 {
 		return t.Spans[0].Value
 	}
-	var b []byte
+	return string(t.appendLiteral(nil))
+}
+
+// appendLiteral appends what Literal returns to b, for a caller that only
+// wants to look the word up: `m[string(b)]` over a buffer of its own does not
+// allocate, where Literal does for every word of more than one span.
+func (t Token) appendLiteral(b []byte) []byte {
 	for _, s := range t.Spans {
 		b = append(b, s.Value...)
 	}
-	return string(b)
+	return b
+}
+
+// literalIs reports whether Literal would return s, without building it.
+//
+// The parser asks this of nearly every word it reads, once for each reserved
+// word the position could hold, and a word of several spans — `n=$((n+1))` —
+// used to be joined afresh for each question (#6381).
+func (t Token) literalIs(s string) bool {
+	for _, sp := range t.Spans {
+		if !strings.HasPrefix(s, sp.Value) {
+			return false
+		}
+		s = s[len(sp.Value):]
+	}
+	return s == ""
 }

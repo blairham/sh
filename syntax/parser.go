@@ -720,7 +720,10 @@ func (p *Parser) at(k Kind) bool { return p.tok.Kind == k }
 // atWord reports whether the current token is the given reserved word, written
 // unquoted. Quoting removes the reservation: `"if"` is a command name.
 func (p *Parser) atWord(s string) bool {
-	return p.tok.Kind == TokWord && !p.tok.IsQuoted() && p.tok.Literal() == s &&
+	// The spelling first: it fails on the first byte for nearly every word
+	// and question, where whether the word is quoted takes a walk over all
+	// of its spans to answer.
+	return p.tok.Kind == TokWord && p.tok.literalIs(s) && !p.tok.IsQuoted() &&
 		!p.dialect.ReservedWordsOff[s]
 }
 
@@ -775,14 +778,16 @@ func (p *Parser) atReservedPrecommand() bool {
 	if p.tok.Kind != TokWord || p.tok.IsQuoted() {
 		return false
 	}
-	return p.dialect.ReservedPrecommands[p.tok.Literal()]
+	var buf [32]byte
+	return p.dialect.ReservedPrecommands[string(p.tok.appendLiteral(buf[:0]))]
 }
 
 func (p *Parser) atStopWord() bool {
 	if p.tok.Kind != TokWord || p.tok.IsQuoted() {
 		return false
 	}
-	return p.wordStopsACommand(p.tok.Literal())
+	var buf [32]byte
+	return p.wordStopsACommand(string(p.tok.appendLiteral(buf[:0])))
 }
 
 // wordStopsACommand is atStopWord's question asked of text rather than of the
@@ -5057,7 +5062,10 @@ func (p *Parser) declarationWordWritten(spans []Span) bool {
 	if len(p.dialect.DeclarationUtilities) == 0 {
 		return false
 	}
-	var b strings.Builder
+	// Joined in a buffer of its own and looked up from it, which does not
+	// allocate: this is asked of every command's first word (#6381).
+	var buf [32]byte
+	b := buf[:0]
 	for _, s := range spans {
 		// An expansion anywhere in the word takes the reading away under
 		// both readings: `cmd=typeset; $cmd a=(x y)` is refused in bash and
@@ -5069,9 +5077,9 @@ func (p *Parser) declarationWordWritten(spans []Span) bool {
 			s.Quoting != Unquoted {
 			return false
 		}
-		b.WriteString(s.Value)
+		b = append(b, s.Value...)
 	}
-	return p.dialect.DeclarationUtilities[b.String()]
+	return p.dialect.DeclarationUtilities[string(b)]
 }
 
 // looksLikeFuncDef reports whether the current word begins `name()`.

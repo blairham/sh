@@ -23,6 +23,9 @@ type Parser struct {
 	anonBodyOpen Pos
 	lex          *Lexer
 	dialect      Dialect
+	// operand is the grammar an expansion's operand is read under, made on
+	// first use. See operandDialect.
+	operand *Dialect
 	// firstLine is the number NewParserAt was given for the text's first
 	// line, kept so EndsOfInputAt can start the read again from it.
 	firstLine int
@@ -458,13 +461,16 @@ func NewParser(src string, d Dialect) *Parser { return NewParserAt(src, d, 1) }
 //
 // first is the number to give src's first line, so 1 is NewParser.
 func NewParserAt(src string, d Dialect, first int) *Parser {
-	lex := NewLexer(src, d)
+	// The parser first, so the lexer can share its dialect rather than be
+	// given a copy of its own.
+	p := &Parser{dialect: d}
+	lex := newLexer(src, &p.dialect)
 	if first > 0 {
 		// Before the first token is read: the lookahead carries a position,
 		// and a line set afterwards would leave that one token behind.
 		lex.line = first
 	}
-	p := newParserOn(lex, d)
+	p.start(lex)
 	p.firstLine = first
 	return p
 }
@@ -477,10 +483,18 @@ func NewParserAt(src string, d Dialect, first int) *Parser {
 // to say it before that, or the very first token is lexed under the wrong
 // settings and never recorded.
 func newParserOn(lex *Lexer, d Dialect) *Parser {
-	p := &Parser{lex: lex, dialect: d}
+	p := &Parser{dialect: d}
+	p.start(lex)
+	return p
+}
+
+// start hands lex to p and reads the first token. The lexer reads the
+// parser's dialect from here on, so the two cannot disagree.
+func (p *Parser) start(lex *Lexer) {
+	p.lex = lex
+	lex.dialect = &p.dialect
 	lex.parser = p
 	p.next()
-	return p
 }
 
 // EndsWithContinuation reports whether text ends with a backslash joining it to
@@ -524,8 +538,11 @@ func (p *Parser) Err() error { return p.err }
 // the old dialect; every construct a runtime toggle governs sits deeper in a
 // line than its first token, which is what makes the boundary safe.
 func (p *Parser) SetDialect(d Dialect) {
+	// The one write to a parser's dialect, made between lines: the lexers
+	// that share it are the parser's own, and the grammar is theirs too.
 	p.dialect = d
-	p.lex.dialect = d
+	p.lex.dialect = &p.dialect
+	p.operand = nil
 }
 
 // InsideProgramParentheses tells this parser that the text it is about to read

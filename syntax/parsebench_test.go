@@ -57,14 +57,16 @@ func BenchmarkParseBig(b *testing.B) {
 // to allocate and clear — and a pattern operand two, one of them only to ask
 // whether a quote in it was left open. That put this script at about 4,360
 // bytes a line; dropping the second brought it to about 3,600 and the first to
-// about 3,130 (3,240 under the race detector) (#6354). The bound sits under the
-// middle figure, so either copy coming back fails here rather than in a
-// benchmark nobody reads.
+// about 3,130 (3,240 under the race detector) (#6354). An operand's lexer
+// then still carried a copy of the whole dialect; sharing it brought the
+// script to about 2,940 (3,050 under the race detector) (#6381). The bound
+// sits under the figure before each of those, so any of the copies coming back
+// fails here rather than in a benchmark nobody reads.
 //
 // Not parallel: it reads the process's allocation counters, and a top-level
 // test that is not parallel finishes before any parallel one starts.
 func TestParseBytesPerLine(t *testing.T) {
-	const bound = 3450
+	const bound = 3100
 	src := bigScript(300)
 	lines := uint64(strings.Count(src, "\n"))
 	best := uint64(1 << 62)
@@ -77,6 +79,7 @@ func TestParseBytesPerLine(t *testing.T) {
 		runtime.ReadMemStats(&m1)
 		best = min(best, (m1.TotalAlloc-m0.TotalAlloc)/lines)
 	}
+	t.Logf("%d bytes per line", best)
 	if best > bound {
 		t.Errorf("a parse allocates %d bytes per line of bigScript, want at most %d", best, bound)
 	}

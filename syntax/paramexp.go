@@ -2136,7 +2136,7 @@ func (p *Parser) unterminatedQuote(text string) int {
 	if !strings.ContainsAny(text, `'"`) {
 		return -1
 	}
-	l := NewLexer(text, p.operandDialect())
+	l := newLexer(text, p.operandDialect())
 	for !l.eof() {
 		switch c := l.peek(); c {
 		case '\\':
@@ -2460,7 +2460,7 @@ func (p *Parser) wordFrom(text string, at Pos, q Quoting) *Word {
 		return p.newWord(placeLinesIn([]Span{{Kind: Literal, Value: text, Quoting: Unquoted, Pos: at1}}, at), at, at)
 	}
 
-	sub := NewLexer(text, p.operandDialect())
+	sub := newLexer(text, p.operandDialect())
 	// An operand is not a command, so no arithmetic command begins in one.
 	// See Lexer.inOperand: the `((` reading is also a *lossy* one, so an
 	// operand that reached it came back with its parentheses missing
@@ -2556,7 +2556,7 @@ func plainOperand(text string) bool {
 // is outside this text: running out of input is the end of the operand rather
 // than an unterminated quote.
 func (p *Parser) quotedWordFrom(text string, at Pos) *Word {
-	sub := NewLexer(text, p.operandDialect())
+	sub := newLexer(text, p.operandDialect())
 	// Whether the quoting around this operand is a pair of quotes somebody
 	// wrote or a body's mark. See Parser.inRawBody.
 	sub.inRawBody = p.inRawBody
@@ -2593,7 +2593,7 @@ func (p *Parser) quotedWordFrom(text string, at Pos) *Word {
 // this operand.
 func (p *Parser) singleQuotedRunsIn(text string) [][2]int {
 	var runs [][2]int
-	l := NewLexer(text, p.operandDialect())
+	l := newLexer(text, p.operandDialect())
 	for !l.eof() {
 		switch c := l.peek(); c {
 		case '\\':
@@ -2655,13 +2655,20 @@ func firstRune(s string) string {
 // measured, and the three that say no have process substitution everywhere
 // else — so the answer belongs to the position and is applied by handing the
 // operand's lexer a grammar that has been told.
-func (p *Parser) operandDialect() Dialect {
-	if p.dialect.ProcessSubstitutionInParamOperand {
-		return p.dialect
+//
+// The grammar is made once a parser and shared by every operand's lexer,
+// which never writes to it: a copy each was most of what an operand's lexer
+// cost (#6381). Parser.SetDialect forgets it.
+func (p *Parser) operandDialect() *Dialect {
+	if p.dialect.ProcessSubstitutionInParamOperand || !p.dialect.ProcessSubstitution {
+		return &p.dialect
 	}
-	d := p.dialect
-	d.ProcessSubstitution = false
-	return d
+	if p.operand == nil {
+		d := p.dialect
+		d.ProcessSubstitution = false
+		p.operand = &d
+	}
+	return p.operand
 }
 
 // scanNestedExpansion peels one substitution off the front of s, for the
@@ -2724,7 +2731,7 @@ func (p *Parser) scanNestedExpansion(s string, at Pos, q Quoting) (inner *Word, 
 	// for the same reason, because the only quote stripped above is a `"`.
 	// The single-quoted spelling is refused by that strip and by nothing
 	// else, which is where to look if `${(@f)'$(cmd)'}` ever starts parsing.
-	sub := NewLexer(s, p.dialect)
+	sub := newLexer(s, &p.dialect)
 	// Where the substitution ended: the next span's start, or the whole of
 	// what was read when it was the only one. A span records where it began
 	// and not where it stopped, and the neighbor's position is the same fact

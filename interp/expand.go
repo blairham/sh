@@ -102,6 +102,11 @@ func (r *Runner) expandWordEscaped(w *syntax.Word) []string {
 		return r.expandFieldsThenBraces(w)
 	}
 	if hasBrace {
+		// A range in plain text comes to its strings and nothing more, and
+		// is never built as words at all. See braceRangeStrings (#6359).
+		if fields, ok := r.braceRangeStrings(w); ok {
+			return fields
+		}
 		if words := r.braceExpand(w); !r.noBraceExpand &&
 			(len(words) > 1 || len(words) == 1 && words[0] != w) &&
 			r.ask(r.sem().BraceExpansion, "brace expansion") {

@@ -555,7 +555,7 @@ func (p *Parser) spliceAlias(name, value string) {
 	if strings.IndexByte(value, '#') >= 0 && valueOpensAComment(value, p.dialect) {
 		p.spendCommentedTail()
 	}
-	sub := NewLexer(value, p.dialect)
+	sub := newLexer(value, &p.dialect)
 	// The body's own newlines, where the dialect counts them: a token on the
 	// body's second line is reported one line below the alias word, and
 	// everything read after this expansion moves down by as many lines as the
@@ -744,7 +744,7 @@ func (p *Parser) aliasHeredocBodies(value string) (bodies []*Redirect, from, too
 	head := len(value) + len(seam)
 	text := value + seam + after
 	begin := -1
-	probe := NewLexer(text, p.dialect)
+	probe := newLexer(text, &p.dialect)
 	var op Kind
 	for {
 		probe.inHeredocDelimiter = op != 0
@@ -935,7 +935,7 @@ func (p *Parser) carryOpenWord(last *Token, tail string) {
 		// the same backslash meeting anything else, which is not split.
 		return
 	}
-	join := NewLexer(tail+rest, p.dialect)
+	join := newLexer(tail+rest, &p.dialect)
 	t := join.Next()
 	if !join.Incomplete() && int(t.End.Offset) <= len(tail) {
 		// The joined reading finished without taking any of the input, so

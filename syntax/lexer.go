@@ -19,8 +19,13 @@ import (
 //   - Incomplete input is distinguishable from invalid input, because a half
 //     typed line is the normal case at a prompt and is not an error yet.
 type Lexer struct {
-	src     string
-	dialect Dialect
+	src string
+	// dialect is shared, never written through: a lexer is made for every
+	// operand an expansion carries, and a copy of the whole grammar in each
+	// was half of what one cost (#6381). Whoever replaces a dialect replaces
+	// the pointer — see Parser.SetDialect — so no lexer sees another's
+	// grammar change under it.
+	dialect *Dialect
 
 	off  int
 	line int
@@ -700,6 +705,13 @@ func (l *Lexer) queueHeredoc(r *Redirect, quoted bool) {
 
 // NewLexer returns a Lexer over src.
 func NewLexer(src string, d Dialect) *Lexer {
+	return newLexer(src, &d)
+}
+
+// newLexer is NewLexer over a dialect somebody already holds, for the lexers
+// this package makes for itself: they share it rather than copy it. d is
+// never written through, here or by anything the lexer hands it to.
+func newLexer(src string, d *Dialect) *Lexer {
 	if d.SourceDropsNulBytes && strings.IndexByte(src, 0) >= 0 {
 		// Gone before anything reads the text. See Dialect.SourceDropsNulBytes.
 		src = strings.ReplaceAll(src, "\x00", "")
@@ -1427,7 +1439,7 @@ func (l *Lexer) atAssignValue() bool {
 		}
 		head = head[:i]
 	}
-	return isNameInDialect(head, &l.dialect)
+	return isNameInDialect(head, l.dialect)
 }
 
 // arrayLiteralCouldStandHere reports whether an array literal may be written
@@ -2145,7 +2157,7 @@ func (l *Lexer) subscriptHasMatchingClose() bool {
 	if l.subscriptCloses != 0 {
 		return l.subscriptCloses > 0
 	}
-	probe := NewLexer(l.src[l.wordStart.Offset:], l.dialect)
+	probe := newLexer(l.src[l.wordStart.Offset:], l.dialect)
 	probe.assumeSubscriptCloses = true
 	// The probe is the same scanner over the same bytes, so it has to stand
 	// where this one stands: an element's bracket opens a subscript only
@@ -2371,7 +2383,7 @@ func (l *Lexer) leadingParenBelongsToTheWord() bool {
 //	                               fails on the same bytes, so the reading
 //	                               it would have chosen never runs
 func (l *Lexer) caseArmParenOpensAGroup() bool {
-	probe := NewLexer(l.src[l.off:], l.dialect)
+	probe := newLexer(l.src[l.off:], l.dialect)
 	// An argument is exactly the position a pattern list stands in once the
 	// arm's paren is out of the way, which is also what the parser sets for
 	// the patterns it reads after taking one.
@@ -3001,7 +3013,7 @@ func (l *Lexer) inAssignmentValue() bool {
 		}
 		head = head[:i]
 	}
-	return isNameInDialect(head, &l.dialect)
+	return isNameInDialect(head, l.dialect)
 }
 
 // endOfInputBackslashSpan is what an unquoted backslash the input ends
@@ -5401,7 +5413,7 @@ func (l *Lexer) scanBracket(q Quoting) Span {
 // Dialect.HeredocEndsAtClosingParen. The second return says which of those it
 // was.
 func (l *Lexer) takeRemarks(text string, at, from int) ([]Remark, bool) {
-	sub := NewParserAt(text, l.dialect, from)
+	sub := NewParserAt(text, *l.dialect, from)
 	l.lendEnds(sub.lex, at)
 	sub.parseList()
 	for _, r := range sub.lex.remarks {
@@ -5424,11 +5436,11 @@ func (l *Lexer) takeRemarks(text string, at, from int) ([]Remark, bool) {
 // nothing else can tell apart — both raise the same remark, in the same
 // words, at the same place. See Dialect.HeredocLastLineIsADelimiterPrefix.
 func (l *Lexer) readInsideParens(text string, at, from int) (ranOut, recovered bool) {
-	lex := NewLexer(text, l.dialect)
+	lex := newLexer(text, l.dialect)
 	lex.line = from
 	lex.inProgramParens = true
 	l.lendEnds(lex, at)
-	sub := newParserOn(lex, l.dialect)
+	sub := newParserOn(lex, *l.dialect)
 	sub.InsideASubstitution()
 	sub.parseList()
 	for _, r := range sub.lex.remarks {
@@ -5457,11 +5469,11 @@ func (l *Lexer) readInsideParens(text string, at, from int) (ranOut, recovered b
 // there; stepping over a parenthesis that is not there ate the word's first
 // character and left the rest of it as text (#4150).
 func (l *Lexer) parseToClose(from int) (int, []Remark, bool, bool) {
-	lex := NewLexer(l.src[from:], l.dialect)
+	lex := newLexer(l.src[from:], l.dialect)
 	lex.line = l.line
 	lex.inProgramParens = true
 	l.lendEnds(lex, from)
-	sub := newParserOn(lex, l.dialect)
+	sub := newParserOn(lex, *l.dialect)
 	// Read with the same alias tables the body's own parse will use, because
 	// an alias may hold the very punctuation this read is looking for. `alias
 	// switch=case` makes `echo $( switch x in x) echo ok;; esac )` a case
@@ -5791,7 +5803,7 @@ func (l *Lexer) parseToCloseBrace(from int) (int, []Remark, bool) {
 		if l.src[i] != '}' || !braceCouldBeReserved(l.src, from, i) {
 			continue
 		}
-		sub := NewParserAt(l.src[from:i+1], l.dialect, l.line)
+		sub := NewParserAt(l.src[from:i+1], *l.dialect, l.line)
 		sub.parseList()
 		if sub.err == nil && sub.atWord("}") {
 			l.noteHeredocOutside(sub)
@@ -5829,7 +5841,7 @@ func (l *Lexer) parseToCloseBrace(from int) (int, []Remark, bool) {
 // than refusing it.
 func (l *Lexer) funsubBodyRefusal(open Pos, body int) *Error {
 	line := int(open.Line) + strings.Count(l.src[open.Offset:body], "\n")
-	sub := NewParserAt(l.src[body:], l.dialect, line)
+	sub := NewParserAt(l.src[body:], *l.dialect, line)
 	sub.InsideASubstitution()
 	sub.parseList()
 	if sub.err == nil && !sub.at(TokEOF) {
@@ -6790,11 +6802,11 @@ func (l *Lexer) skipSubstitution() bool {
 // refusal [Lexer.parseToClose] keeps, for the scanners that step over a body
 // rather than parse it.
 func (l *Lexer) bodyRefusalFrom(from, line int) *Error {
-	lex := NewLexer(l.src[from:], l.dialect)
+	lex := newLexer(l.src[from:], l.dialect)
 	lex.line = line
 	lex.inProgramParens = true
 	l.lendEnds(lex, from)
-	sub := newParserOn(lex, l.dialect)
+	sub := newParserOn(lex, *l.dialect)
 	l.lendAliases(sub)
 	sub.InsideASubstitution()
 	sub.parseList()
@@ -7167,7 +7179,7 @@ func (l *Lexer) peekIsFuncParens() bool {
 // nothing here depends on it, and a mutant that sets inArgument survives for
 // that reason rather than for want of a row.
 func (l *Lexer) peekIsFuncNameListThenParens() bool {
-	probe := NewLexer(l.src[l.off:], l.dialect)
+	probe := newLexer(l.src[l.off:], l.dialect)
 	for {
 		t := probe.Next()
 		if probe.Err() != nil {
@@ -7419,7 +7431,7 @@ func (l *Lexer) readOneHeredoc(r *Redirect, quoted bool) {
 		// Read now for the one refusal these dialects make here rather than
 		// when the body is expanded, located where the reader stands — past
 		// the delimiter. See [Dialect.HeredocBodyBraceIsReadWithTheLine].
-		if _, err := HeredocSpans(body.String(), l.dialect); err != nil {
+		if _, err := HeredocSpans(body.String(), *l.dialect); err != nil {
 			if se, ok := err.(*Error); ok && se.Token == "${" && se.BraceParamFormUnclosed {
 				// Located where the input runs out: the body's `${` reads on
 				// past the delimiter to the end looking for its `}`, and the
@@ -8108,7 +8120,7 @@ func (l *Lexer) bareSubscript(name string, q Quoting) (Span, bool) {
 		}
 		c := l.src[i]
 		if i >= subEnd && (c == '`' || (c == '$' && i+1 < len(l.src) && l.src[i+1] == '(')) {
-			sub := NewLexer(l.src[i:], l.dialect)
+			sub := newLexer(l.src[i:], l.dialect)
 			if sub.skipSubstitution() && sub.Err() == nil {
 				subEnd = i + sub.off
 				sawSub = true
@@ -8245,7 +8257,7 @@ func (l *Lexer) keptBareSubscript(q Quoting, sawSub bool) (Span, bool) {
 	if !sawSub || q != Unquoted {
 		return Span{}, false
 	}
-	at := bareSubscriptClose(l.src[l.off:], l.dialect, l.isWordEnd)
+	at := bareSubscriptClose(l.src[l.off:], *l.dialect, l.isWordEnd)
 	if at < 0 {
 		return Span{}, false
 	}

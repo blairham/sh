@@ -1011,7 +1011,15 @@ type escapeReading struct {
 // made parameters. See escapeReading, and expandExpansionFlagEscapes for the
 // measurement behind each.
 func expandEscapes(s string, how escapeReading) (text string, truncated, refused bool) {
+	if strings.IndexByte(s, '\\') < 0 && (!how.caret || strings.IndexByte(s, '^') < 0) {
+		// Nothing for any reading to act on: the loop below would copy the
+		// text a byte at a time into a builder of its own. `print -l -- $a`
+		// asks this of every element, so the copy was a tenth of printing a
+		// 50,000-element list (#6362).
+		return s, false, false
+	}
 	var b strings.Builder
+	b.Grow(len(s))
 	// The `\M-` and `\C-` prefixes read so far with no target yet. They are
 	// what makes this one loop rather than a reader and a second reader for
 	// the target: the target is *any* escape this reading has, so the way to

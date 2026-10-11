@@ -45,6 +45,13 @@ func listReaderRunner(tb testing.TB, prog string) (*interp.Runner, func()) {
 // deterministic.
 func bytesPerElement(t *testing.T, prog, base string) float64 {
 	t.Helper()
+	if raceDetector {
+		// Measured on the Linux race leg: 121, 102 and 217 bytes an element
+		// for rows that measure 103, 84 and 176 without the detector. The
+		// bounds are for the build that ships; the leg without -race holds
+		// them.
+		t.Skip("allocation counts under -race include the detector's own")
+	}
 	measure := func(p string) float64 {
 		_, run := listReaderRunner(t, p)
 		run()
@@ -69,15 +76,19 @@ func bytesPerElement(t *testing.T, prog, base string) float64 {
 //
 // The two came to about 150 bytes an element: these rows measured 284, 293
 // and 337 before, and 137, 146 and 190 once the store was sized up front and
-// the map kept only for a name that folds. The bound sits between.
+// the map kept only for a name that folds (#6368). The fields the expansion
+// hands over were then built into slices that regrew a doubling at a time:
+// 129, 138 and 182 before those were sized from the list, with other work
+// landed in between, and 84, 92 and 136 after. Each bound sits between the
+// last two.
 func TestAnArrayLiteralPaysOnlyForItsElements(t *testing.T) {
 	for _, row := range []struct {
 		prog, base string
 		most       float64
 	}{
-		{`x=("${y[@]}")`, `x=()`, 230},
-		{`x=("${(@kv)h}")`, `x=()`, 230},
-		{`x=(${(s:,:)${(j:,:)y}})`, `x=(); : ${(j:,:)y}`, 230},
+		{`x=("${y[@]}")`, `x=()`, 120},
+		{`x=("${(@kv)h}")`, `x=()`, 130},
+		{`x=(${(s:,:)${(j:,:)y}})`, `x=(); : ${(j:,:)y}`, 170},
 	} {
 		got := bytesPerElement(t, row.prog, row.base)
 		t.Logf("%s: %.0f bytes per element", row.prog, got)
@@ -89,6 +100,30 @@ func TestAnArrayLiteralPaysOnlyForItsElements(t *testing.T) {
 			// below that is not measuring the literal at all, and would pass
 			// whatever the literal did.
 			t.Errorf("%s: %.0f bytes per element — less than the store's own element, so the row is not measuring the literal", row.prog, got)
+		}
+	}
+}
+
+// An unquoted list reached the command line through slices regrown per
+// element, and `print` copied every argument through a builder looking for
+// escapes it did not hold. `print -l -- $a` over 50,000 elements was 2.5x zsh
+// 5.9.2 (#6362).
+//
+// Measured 203, 176 and 198 bytes an element before, and 103, 84 and 152
+// after; the bounds sit between.
+func TestAListReaderPaysOnlyForItsElements(t *testing.T) {
+	for _, row := range []struct {
+		prog, base string
+		most       float64
+	}{
+		{`print -l -- $y`, `print -l --`, 150},
+		{`x=($y)`, `x=()`, 130},
+		{`for k v in "${(@kv)h}"; do :; done`, `for k v in; do :; done`, 175},
+	} {
+		got := bytesPerElement(t, row.prog, row.base)
+		t.Logf("%s: %.0f bytes per element", row.prog, got)
+		if got > row.most {
+			t.Errorf("%s: %.0f bytes per element; want at most %.0f", row.prog, got, row.most)
 		}
 	}
 }

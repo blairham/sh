@@ -491,7 +491,7 @@ func (r *Runner) assignArrayLiteral(name string, elems []*syntax.ArrayElem, appe
 		return
 	}
 
-	a := NewArray(0)
+	a := NewArray(literalLen(parsed))
 	next := 0
 	if appendTo {
 		// arrayForWrite rather than the store, so an append to a *produced*
@@ -520,6 +520,25 @@ func (r *Runner) assignArrayLiteral(name string, elems []*syntax.ArrayElem, appe
 		return
 	}
 	r.storeArray(name, built)
+}
+
+// literalLen is how many positions the bare elements of a literal fill, which
+// is the room an array built from it wants up front: a literal built from a
+// long expansion otherwise grows its store a doubling at a time (#6362). A
+// subscripted element is not counted, since where it lands is not known
+// until its subscript is read; the count is a capacity, never a length.
+func literalLen(parsed []literalElem) int {
+	n := 0
+	for _, e := range parsed {
+		switch {
+		case e.subscripted:
+		case e.members != nil || e.nested != nil:
+			n++
+		default:
+			n += len(e.fields)
+		}
+	}
+	return n
 }
 
 // nestingRetypesTheLiteral reports whether a literal holding an element that
@@ -768,7 +787,21 @@ func (r *Runner) literalInto(name string, a Array, next int, parsed []literalEle
 	// `typeset -a -i a=([1]=(5+5) )` on ksh93u+, unevaluated, where the same
 	// attribute *arriving* over it folds to `([1]=(10) )`. The splice hands
 	// its words back to a store that asks for itself.
-	wrote := map[int]bool{}
+	// Recorded only where a fold could change something: on a name with no
+	// folding attribute the loop at the end leaves every value as it found
+	// it, and a map entry per element was most of what a long literal
+	// allocated — `x=("${(@kv)h}")` over 30,000 pairs spent a sixth of its
+	// time growing this map and nothing ever read it (#6362).
+	folds = folds && r.foldsElements(name)
+	var wrote map[int]bool
+	if folds {
+		wrote = map[int]bool{}
+	}
+	mark := func(pos int) {
+		if folds {
+			wrote[pos] = true
+		}
+	}
 	for _, e := range parsed {
 		if e.members != nil && !e.subscripted {
 			// A compound variable's body standing where an element goes, at
@@ -780,7 +813,7 @@ func (r *Runner) literalInto(name string, a Array, next int, parsed []literalEle
 				return nil, false
 			}
 			a.Set(next, value)
-			wrote[next] = true
+			mark(next)
 			next++
 			continue
 		}
@@ -790,14 +823,14 @@ func (r *Runner) literalInto(name string, a Array, next int, parsed []literalEle
 			// whole of what makes `a=( (1 2) (3 4) )` two elements rather
 			// than four, and `${a[1][0]}` reach the `3`.
 			a.Set(next, *e.nested)
-			wrote[next] = true
+			mark(next)
 			next++
 			continue
 		}
 		if !e.subscripted {
 			for _, f := range e.fields {
 				a.Set(next, Scalar(f))
-				wrote[next] = true
+				mark(next)
 				next++
 			}
 			continue
@@ -827,7 +860,7 @@ func (r *Runner) literalInto(name string, a Array, next int, parsed []literalEle
 				return nil, false
 			}
 			a.Set(pos, value)
-			wrote[pos] = true
+			mark(pos)
 			if pos >= next {
 				next = pos + 1
 			}
@@ -853,7 +886,7 @@ func (r *Runner) literalInto(name string, a Array, next int, parsed []literalEle
 				return a, false
 			}
 			a.Set(pos, nestedAppended(a.Get(pos), *e.nested, e.appendValue))
-			wrote[pos] = true
+			mark(pos)
 			if pos >= next {
 				next = pos + 1
 			}
@@ -904,7 +937,7 @@ func (r *Runner) literalInto(name string, a Array, next int, parsed []literalEle
 			value = v
 		}
 		a.Set(pos, Scalar(value))
-		wrote[pos] = true
+		mark(pos)
 		// A bare element after a subscripted one continues from there rather
 		// than from where the count had reached: `a=(x [3]=y z)` puts z at 4.
 		// Measured in both shells that accept the mixture, and it follows the

@@ -28,6 +28,7 @@ package interp
 // read-only after that and a subshell shares it rather than copying it, the
 // way it shares the prompt engine.
 func (r *Runner) RegisterPreludeCommand(name string, fn Builtin) {
+	r.builtinTablesChanged()
 	if r.preludeCommands == nil {
 		r.preludeCommands = map[string]Builtin{}
 	}

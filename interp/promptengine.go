@@ -52,7 +52,10 @@ const promptEngineCommand = "promptengine"
 // A runner with none installed does not answer the name at all, so the
 // prelude function reports a command that was not found rather than a shell
 // that silently did nothing. A front end that wires the function wires this.
-func (r *Runner) SetPromptEngine(fn Builtin) { r.promptEngine = fn }
+func (r *Runner) SetPromptEngine(fn Builtin) {
+	r.builtinTablesChanged()
+	r.promptEngine = fn
+}
 
 // HasPromptEngine reports whether one is installed, for a front end composing
 // a prelude: the function is worth defining only where there is something

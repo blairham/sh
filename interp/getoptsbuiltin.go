@@ -1174,6 +1174,20 @@ func (r *Runner) emptyOrUnsetOptarg(empty bool) bool {
 // shadowed — and it is why the restore asks whether the name is still there
 // instead of putting the value back unconditionally.
 func (r *Runner) localizeGetoptsCursor(sc *scope) {
+	// A call the dialect has already answered "shared" for is handed nothing
+	// and has nothing put back: every route below ends at the shared answer
+	// without touching the cursor, on the way in and on the return. Settled
+	// from the vector rather than by registering the restore and letting it
+	// find that out, which read OPTIND four times and allocated a closure on
+	// every call of every function (#6353, #6373).
+	switch r.sem().GetoptsFunctionPosition {
+	case GetoptsFunctionPositionIsShared:
+		return
+	case GetoptsFunctionPositionIsLocalToAKeywordFunction:
+		if !sc.keyword {
+			return
+		}
+	}
 	if _, set := r.getVar("OPTIND"); !set {
 		return
 	}

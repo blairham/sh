@@ -100,17 +100,20 @@ func BenchmarkConstructInProcess(b *testing.B) {
 // cannot. Each is a little above what the row measured when #6353 brought it
 // down, and the old figures are beside them — every one of those fails here.
 var constructAllocBounds = map[string]struct{ objects, bytes float64 }{
-	// `[ $i -lt N ]`: 27.5 objects an iteration before #6353.
-	"test": {7, 250},
+	// `[ $i -lt N ]`: 27.5 objects an iteration before #6353, and 5.5
+	// before an unquoted `$i` stopped taking the full expansion road.
+	"test": {4.5, 180},
 	// `[[ $i -lt N ]]`: 27.5 objects and 5.4 KB an iteration before, most
 	// of it a parser built to read each operand.
 	"dbracket": {6, 120},
-	// `: $i`: 19.5 objects an iteration before.
-	"builtin": {7, 170},
-	// `x=$i`: 13.5 objects an iteration before.
-	"assign": {5, 100},
-	// `f` with `f() { :; }`: 21.5 objects an iteration before.
-	"function": {12, 750},
+	// `: $i`: 19.5 objects an iteration before, then 5.5.
+	"builtin": {4.5, 120},
+	// `x=$i`: 13.5 objects an iteration before, then 3.5.
+	"assign": {3, 80},
+	// `f` with `f() { :; }`: 21.5 objects an iteration before, then 8.5
+	// while every call registered a closure to put back a getopts cursor
+	// the dialect shares.
+	"function": {7, 550},
 }
 
 // TestConstructAllocations holds the rows that #6353 brought down to what they

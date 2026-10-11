@@ -51,6 +51,9 @@ func (r *Runner) expandWordEscaped(w *syntax.Word) []string {
 	if lit, ok := r.plainLiteralWord(w); ok {
 		return r.plainLiteralFields([]string{lit})
 	}
+	if v, ok := r.plainParamWord(w); ok {
+		return r.plainLiteralFields([]string{v})
+	}
 	// Brace expansion comes first and can turn one word into several, so it
 	// wraps the rest rather than being a stage inside it. One word back can
 	// still be an expansion — `{1..1}` is `1`, and a range whose honored

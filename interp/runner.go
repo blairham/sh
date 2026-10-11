@@ -1929,6 +1929,11 @@ type Runner struct {
 	// apart from custom so that switching one on again gets back whatever
 	// was registered rather than the core's.
 	disabledBuiltins map[string]bool
+	// builtinTablesGen counts writes to the tables lookupBuiltin reads, and
+	// builtinMemo is its last answer, valid while the count is unchanged. A
+	// clone copies both along with the tables they describe. See builtinMemo.
+	builtinTablesGen uint64
+	builtinMemo      builtinMemo
 	// shellStdin is the standard input the shell had before this command's
 	// redirections were applied, where that differs from Stdin. Nil is the
 	// common case and means the two are the same stream.
@@ -8508,21 +8513,23 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 	// refusal is still the frame's first, and by captured index rather than
 	// by reading the top of the stack at exit, because a call made from here
 	// pushes and pops frames of its own in between.
-	if fi := len(r.frames) - 1; fi >= 0 {
-		defer func() {
-			if fi < len(r.frames) {
-				r.frames[fi].ran = true
-			}
-		}()
-	}
+	//
 	// The first token's word, for the one message that asks where in the
 	// command a substitution stands. Put back rather than cleared: a command
 	// substitution's body runs in a runner of its own, but a function called
 	// from here runs in this one and its commands must not leave their
 	// answer behind for the caller's next word.
+	//
+	// One deferred call for the two, which are independent of each other.
+	fi := len(r.frames) - 1
 	savedFirstWord := r.commandFirstWord
+	defer func() {
+		r.commandFirstWord = savedFirstWord
+		if fi >= 0 && fi < len(r.frames) {
+			r.frames[fi].ran = true
+		}
+	}()
 	r.commandFirstWord = firstTokenWord(c)
-	defer func() { r.commandFirstWord = savedFirstWord }()
 	if !fired {
 		r.runDebugTrap(ctx)
 		if r.debugTrapStopped() {
@@ -8810,6 +8817,10 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 				// field is copied into argv below.
 				r.plainScratch[0] = lit
 				fields = r.plainLiteralFields(r.plainScratch[:])
+			} else if v, plain := r.plainParamWord(w); plain {
+				// The same, for an unquoted `$name` of a plain scalar.
+				r.plainScratch[0] = v
+				fields = r.plainLiteralFields(r.plainScratch[:])
 			} else {
 				fields = r.expandWordEscaped(w)
 			}
@@ -8996,18 +9007,29 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 		}
 		argv, modifiersOnly = nil, true
 	}
+	// What this command says about its own operands, put back when it is
+	// over: a builtin can run a builtin, and the inner command's answers must
+	// not be the outer one's. Saved together and restored by one deferred
+	// call rather than one each, because a defer is a cost every command
+	// pays and the six are independent fields restored in any order (#6353).
 	savedDash := r.dashPrecommand
-	r.dashPrecommand = dash
-	defer func() { r.dashPrecommand = savedDash }()
 	savedOperands := r.declarationOperands
-	r.declarationOperands = operandAt
-	defer func() { r.declarationOperands = savedOperands }()
 	savedLexed := r.lexedSubscriptOperands
-	r.lexedSubscriptOperands = lexedAt
-	defer func() { r.lexedSubscriptOperands = savedLexed }()
 	savedSourceClosed := r.sourceClosedSubscriptOperands
+	savedArrayOperands := r.arrayOperands
+	savedRejoined := r.operandWasRejoined
+	defer func() {
+		r.dashPrecommand = savedDash
+		r.declarationOperands = savedOperands
+		r.lexedSubscriptOperands = savedLexed
+		r.sourceClosedSubscriptOperands = savedSourceClosed
+		r.arrayOperands = savedArrayOperands
+		r.operandWasRejoined = savedRejoined
+	}()
+	r.dashPrecommand = dash
+	r.declarationOperands = operandAt
+	r.lexedSubscriptOperands = lexedAt
 	r.sourceClosedSubscriptOperands = sourceClosedAt
-	defer func() { r.sourceClosedSubscriptOperands = savedSourceClosed }()
 	if len(promoted) > 0 {
 		// The command as though the assignments had been written in front of
 		// it. A copy rather than a write through the pointer: the tree is the
@@ -9024,15 +9046,10 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 	// utility has made the name local. Splitting it that way is what lets
 	// `local` do the one thing only it can do, which is decide the scope the
 	// assignment then lands in.
-	savedArrayOperands := r.arrayOperands
 	r.arrayOperands = nil
-	defer func() { r.arrayOperands = savedArrayOperands }()
-	// Saved and restored beside them, and for the same reason: a builtin can
-	// run a builtin, and the inner command's answer must not be the outer
-	// one's. See interp/rejoinedoperand.go.
-	savedRejoined := r.operandWasRejoined
+	// Saved and restored beside them, and for the same reason. See
+	// interp/rejoinedoperand.go.
 	r.operandWasRejoined = false
-	defer func() { r.operandWasRejoined = savedRejoined }()
 	rejoins := len(argv) > 0 && r.rejoinsArrayOperand(argv[0])
 	// The operands go back **where they were written** rather than onto the
 	// end, because the list is read by position in two places that look
@@ -9470,15 +9487,17 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 		r.redirectForBuiltin, r.redirForCommandWord = "", ""
 		return nil
 	}
+	// A prefix's trace line that stopped short is written if the command
+	// stopped the shell, and then the prefix's trace state is dropped — in
+	// that order, which was two defers' order and is one deferred call now.
+	// See interp/xtraceprefixasitgoes.go.
 	defer func() {
+		r.writeHeldPrefixTrace()
 		r.prefixTraceAssigns, r.prefixTraceValues = nil, nil
 		r.prefixTracedEarly = nil
 		r.prefixTraceJoins, r.prefixGlobMatches = nil, nil
 		r.prefixSpeaker = prefixValueSpeakerNone
 	}()
-	// A prefix's trace line that stopped short is written if the command
-	// stopped the shell. See interp/xtraceprefixasitgoes.go.
-	defer r.writeHeldPrefixTrace()
 	asItGoes := tracesPrefix && !prefixFollows && r.tracesPrefixAsItGoes()
 	// Whether the prefix traced after the redirections failed to expand,
 	// written by the late trace line below. A pointer made only on the route

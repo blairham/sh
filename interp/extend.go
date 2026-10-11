@@ -66,6 +66,7 @@ type Builtin func(r *Runner, ctx context.Context, args []string) int
 // the prelude defines speaks for the shell, so its refusals carry the location
 // and the name a builtin's carry, and `diagnose` writes one. See prelude.go.
 func (r *Runner) Register(name string, fn Builtin) {
+	r.builtinTablesChanged()
 	if r.custom == nil {
 		r.custom = map[string]Builtin{}
 	}
@@ -78,6 +79,7 @@ func (r *Runner) Register(name string, fn Builtin) {
 // is how that is said — the same reasoning as the parser refusing a construct
 // the dialect lacks rather than accepting it and meaning something else.
 func (r *Runner) Unregister(name string) {
+	r.builtinTablesChanged()
 	if r.custom == nil {
 		r.custom = map[string]Builtin{}
 	}
@@ -101,6 +103,50 @@ func (r *Runner) Builtin(name string) (Builtin, bool) { return r.lookupBuiltin(n
 // lookupBuiltin resolves a name, letting a registration win over the built-in
 // table so a dialect can replace as well as add.
 func (r *Runner) lookupBuiltin(name string) (Builtin, bool) {
+	m := &r.builtinMemo
+	if m.valid && m.gen == r.builtinTablesGen && m.name == name &&
+		m.speaker == r.speaker && m.reserved == r.reservedCommand {
+		return m.fn, m.ok
+	}
+	fn, ok := r.resolveBuiltin(name)
+	if name != "[[" {
+		// Not `[[`, whose answer is the dialect's grammar rather than a
+		// table's, and which is never the word a command line repeats.
+		*m = builtinMemo{
+			name: name, speaker: r.speaker, reserved: r.reservedCommand,
+			gen: r.builtinTablesGen, fn: fn, ok: ok, valid: true,
+		}
+	}
+	return fn, ok
+}
+
+// builtinMemo is lookupBuiltin's last answer and everything it was an answer
+// for.
+//
+// One simple command asks about its own name four times — whether the
+// redirections belong to a builtin, whether a here-document is expanded in
+// this shell, whether a failed duplication is fatal, and which builtin to run
+// — and a loop asks about the same name every iteration. Each ask walked six
+// tables and ended in the core's, the largest map the runner reads (#6353).
+//
+// The answer depends on the tables a name can be in, which every writer bumps
+// builtinTablesGen for, and on two words of the runner's own: the speaker,
+// which opens the prelude's seams, and the reserved command, which `enable -n`
+// does not hide. Each is part of the key, so a change to any of them is a
+// miss rather than a stale answer.
+type builtinMemo struct {
+	name, speaker, reserved string
+	gen                     uint64
+	fn                      Builtin
+	ok, valid               bool
+}
+
+// builtinTablesChanged is called by every writer of a table lookupBuiltin
+// reads, so that its memo never answers from before the write.
+func (r *Runner) builtinTablesChanged() { r.builtinTablesGen++ }
+
+// resolveBuiltin is lookupBuiltin without the memo.
+func (r *Runner) resolveBuiltin(name string) (Builtin, bool) {
 	if r.withdrawnBuiltins[name] {
 		// A module selection has taken the name out of the table: it is not
 		// a builtin at all until the selection puts it back, which is a
@@ -600,6 +646,7 @@ func (r *Runner) BuiltinNames() []string {
 // that never had `let` removes it, and a script that switched `cd` off can
 // switch it back.
 func (r *Runner) SetBuiltinEnabled(name string, enabled bool) {
+	r.builtinTablesChanged()
 	if enabled {
 		delete(r.disabledBuiltins, name)
 		return

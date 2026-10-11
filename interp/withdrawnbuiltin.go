@@ -36,6 +36,7 @@ package interp
 // SetBuiltinWithdrawn takes a name out of the builtin table, or puts it back.
 // The builtin itself is kept either way.
 func (r *Runner) SetBuiltinWithdrawn(name string, withdrawn bool) {
+	r.builtinTablesChanged()
 	if !withdrawn {
 		delete(r.withdrawnBuiltins, name)
 		return

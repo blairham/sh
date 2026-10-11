@@ -97,10 +97,7 @@ func isMemberParent(name string) bool {
 // typeset -C c; print "${c.z}"; }` writes an empty line there, so the body
 // does not see the caller's members through its own declaration.
 func (r *Runner) shadowCompoundNamespace(sc *scope, name string) {
-	if sc.memberNamespaces == nil {
-		sc.memberNamespaces = map[string]bool{}
-	}
-	sc.memberNamespaces[name] = true
+	sc.setFlag(flagMemberNamespace, name, true)
 	sc.rememberCompoundMark(name, r.compoundVariable[name])
 	delete(r.compoundVariable, name)
 	for _, m := range r.liveNamesUnder(name) {
@@ -184,7 +181,7 @@ func (r *Runner) localizeMemberWrite(name string) {
 			continue
 		}
 		parent := name[:i]
-		if !sc.memberNamespaces[parent] && !r.claimNamespaceHere(parent) {
+		if !sc.flag(flagMemberNamespace, parent) && !r.claimNamespaceHere(parent) {
 			continue
 		}
 		r.ownNameInNamespace(sc, name)
@@ -203,11 +200,11 @@ func (r *Runner) localizeMemberWrite(name string) {
 // ordinary loop — this is only the sweep for what the call created and the
 // mark, which no other record carries.
 func (r *Runner) restoreCompoundNamespace(sc *scope, name string) {
-	if sc.memberNamespaces[name] {
+	if sc.flag(flagMemberNamespace, name) {
 		for _, m := range r.liveNamesUnder(name) {
 			if sc.namespaceOwned[m] {
 				// The scope has a copy of this one and the list will put it
-				// back. Asked of namespaceOwned rather than of sc.saved,
+				// back. Asked of namespaceOwned rather than of the records,
 				// because restoreShadowedName deletes its records as it goes
 				// and the list is in no order: a member restored before its
 				// parent had already lost its entry there, and the sweep
@@ -222,9 +219,9 @@ func (r *Runner) restoreCompoundNamespace(sc *scope, name string) {
 			delete(r.compoundVariable, m)
 			delete(r.removed, m)
 		}
-		delete(sc.memberNamespaces, name)
+		sc.setFlag(flagMemberNamespace, name, false)
 	}
-	if was, ok := sc.compoundMarkBefore[name]; ok {
+	if was, ok := sc.boolRecord(recCompoundMarkBefore, name); ok {
 		if was {
 			if r.compoundVariable == nil {
 				r.compoundVariable = map[string]bool{}
@@ -233,7 +230,7 @@ func (r *Runner) restoreCompoundNamespace(sc *scope, name string) {
 		} else {
 			delete(r.compoundVariable, name)
 		}
-		delete(sc.compoundMarkBefore, name)
+		sc.dropRecord(recCompoundMarkBefore, name)
 	}
 }
 
@@ -269,7 +266,7 @@ func (r *Runner) claimNamespaceHere(parent string) bool {
 		return false
 	}
 	sc := r.scopes[len(r.scopes)-1]
-	if sc.memberNamespaces[parent] {
+	if sc.flag(flagMemberNamespace, parent) {
 		return true
 	}
 	if !sc.shadows(parent) {
@@ -284,17 +281,14 @@ func (r *Runner) claimNamespaceHere(parent string) bool {
 //
 // Written directly rather than through setBool, which deletes on false: absent
 // and false are different answers here, exactly as they are for
-// scope.savedReadonly. Absent means this scope never shadowed the name;
+// recSavedReadonly. Absent means this scope never shadowed the name;
 // **false** means it shadowed one that was not a compound, and is what takes
 // back a mark the *call* added — `function f { typeset c=(a=1); }; f` must
 // leave the caller with no `c` at all, and a record that collapsed the two
 // left it holding `typeset -C c=()`.
 func (sc *scope) rememberCompoundMark(name string, was bool) {
-	if _, seen := sc.compoundMarkBefore[name]; seen {
+	if sc.holds(recCompoundMarkBefore, name) {
 		return
 	}
-	if sc.compoundMarkBefore == nil {
-		sc.compoundMarkBefore = map[string]bool{}
-	}
-	sc.compoundMarkBefore[name] = was
+	sc.putRecord(recCompoundMarkBefore, name, was)
 }

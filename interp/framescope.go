@@ -162,10 +162,10 @@ func (r *Runner) divertingCell(name string) *frameCell {
 		if _, held := sc.sealed[name]; held {
 			return &frameCell{sc: sc, name: name, sealed: true}
 		}
-		if _, saved := sc.saved[name]; !saved {
+		if !sc.shadowsValue(name) {
 			continue
 		}
-		if sc.arrayExisted[name] || sc.assocExisted[name] {
+		if sc.recordBit(recArray|recAssoc, name) {
 			// The name held an array or a keyed table when it was displaced,
 			// and this only moves the scalar view. Left alone rather than
 			// answered from the scalar copy, which would report one element
@@ -195,16 +195,17 @@ func (r *Runner) valueInSelectedFrame(name string) (value string, set, diverted 
 		}
 		return held.value, true, true
 	}
-	if cell.sc.removedBefore[name] {
+	if cell.sc.recordBit(recRemovedBefore, name) {
 		// `unset` had already taken the name away in that frame, and the
 		// save is what it held before that — putting it back here would
 		// resurrect a value the frame had got rid of.
 		return "", false, true
 	}
-	if !cell.sc.existed[name] {
+	v, existed, _ := cell.sc.savedValue(name)
+	if !existed {
 		return "", false, true
 	}
-	return cell.sc.saved[name], true, true
+	return v, true, true
 }
 
 // storeIntoSelectedFrame writes a scalar into the selected frame, and reports
@@ -225,12 +226,11 @@ func (r *Runner) storeIntoSelectedFrame(name, value string) bool {
 		cell.sc.sealed[name] = sn
 		return true
 	}
-	cell.sc.saved[name] = value
-	cell.sc.existed[name] = true
-	if cell.sc.removedBefore != nil {
+	cell.sc.saveValue(name, value, true)
+	if cell.sc.madeRecord(recRemovedBefore) {
 		// The name is there again in that frame, so the unwind must not
 		// take it away as one `unset` had already removed.
-		cell.sc.removedBefore[name] = false
+		cell.sc.putRecord(recRemovedBefore, name, false)
 	}
 	return true
 }

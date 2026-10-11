@@ -360,17 +360,14 @@ func (r *Runner) noteTheHideLetter(f declareFlags) {
 // `typeset -h ARGC; ARGC=5` at the top level is `read-only variable: ARGC` in
 // the same shell and `${(t)ARGC}` is still `integer-readonly-hide-special`,
 // so the letter alone thaws nothing and suspends nothing. The scope has
-// already recorded what to put back — see shadow, which writes savedReadonly
+// already recorded what to put back — see shadow, which writes recSavedReadonly
 // before this runs.
 func (r *Runner) shadowStartsHiding(name string) {
 	if !r.localInTheInnermostScope(name) {
 		return
 	}
 	sc := r.scopes[len(r.scopes)-1]
-	if sc.hiddenShadow == nil {
-		sc.hiddenShadow = map[string]bool{}
-	}
-	sc.hiddenShadow[name] = true
+	sc.putRecord(recHiddenShadow, name, true)
 	delete(r.readonly, name)
 	r.suspendProducer(sc, name)
 }
@@ -398,15 +395,12 @@ func (r *Runner) shadowStopsHiding(name string) {
 		return
 	}
 	sc := r.scopes[len(r.scopes)-1]
-	if sc.hiddenShadow == nil {
-		sc.hiddenShadow = map[string]bool{}
-	}
-	sc.hiddenShadow[name] = false
+	sc.putRecord(recHiddenShadow, name, false)
 	r.resumeProducer(sc, name)
 	// And the freeze the shadow displaced, on the terms freezeSurvivesAShadow
 	// states: a produced parameter's survives its shadow and a script's does
 	// not, so only the first comes back here.
-	if sc.savedReadonly[name] && r.DynamicParameter(name) {
+	if sc.recordBit(recSavedReadonly, name) && r.DynamicParameter(name) {
 		if r.readonly == nil {
 			r.readonly = map[string]bool{}
 		}
@@ -433,7 +427,7 @@ func (r *Runner) shadowStopsHiding(name string) {
 // changes at the top level.
 func (r *Runner) shadowIsHidden(name string) bool {
 	for i := len(r.scopes) - 1; i >= 0; i-- {
-		if hidden, ok := r.scopes[i].hiddenShadow[name]; ok {
+		if hidden, ok := r.scopes[i].boolRecord(recHiddenShadow, name); ok {
 			return hidden
 		}
 	}
@@ -557,7 +551,7 @@ func (r *Runner) tieHalfShadowedInItsScope(t tie, name string) bool {
 		return false
 	}
 	for _, sc := range r.scopes[t.depth:] {
-		if _, saved := sc.saved[name]; saved {
+		if sc.shadowsValue(name) {
 			return true
 		}
 	}
@@ -622,7 +616,7 @@ type suspendedProducer struct {
 // them: `typeset -h v=1` is an ordinary scalar with a letter on it, and the
 // letter is visible there only through a tie.
 func (r *Runner) suspendProducer(sc *scope, name string) {
-	if _, already := sc.suspendedProducers[name]; already {
+	if sc.holds(recProducer, name) {
 		return
 	}
 	own := r.shellOwn[name]
@@ -649,10 +643,7 @@ func (r *Runner) suspendProducer(sc *scope, name string) {
 	delete(r.dynamicArrayWriters, name)
 	delete(r.dynamicAssocWriters, name)
 	delete(r.dynamicDeclarations, name)
-	if sc.suspendedProducers == nil {
-		sc.suspendedProducers = map[string]suspendedProducer{}
-	}
-	sc.suspendedProducers[name] = p
+	sc.saveSuspendedProducer(name, p)
 }
 
 // resumeProducer puts a suspended name back into every table it came out of.
@@ -661,7 +652,7 @@ func (r *Runner) suspendProducer(sc *scope, name string) {
 // function read out of a map that has no such key is a *typed* nil, and
 // registering one is a producer nothing can call.
 func (r *Runner) resumeProducer(sc *scope, name string) {
-	p, ok := sc.suspendedProducers[name]
+	p, ok := sc.suspendedProducerOf(name)
 	if !ok {
 		return
 	}
@@ -692,7 +683,7 @@ func (r *Runner) resumeProducer(sc *scope, name string) {
 	if p.shellOwn {
 		r.MarkShellOwnParameter(name)
 	}
-	delete(sc.suspendedProducers, name)
+	sc.dropRecord(recProducer, name)
 }
 
 // MarkHideInScope gives a name the hide-in-scope attribute from outside the

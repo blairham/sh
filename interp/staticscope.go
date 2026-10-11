@@ -127,33 +127,22 @@ func (r *Runner) captureBinding(name string) staticBinding {
 // table whether that scope saved anything at all.
 func bindingFromScope(sc *scope, name string) staticBinding {
 	var b staticBinding
-	b.value, b.hasValue = sc.saved[name]
-	if b.hasValue {
-		b.valueExists = sc.existed[name]
+	rec := sc.record(name)
+	if rec == nil {
+		return b
 	}
-	b.array, b.hasArray = sc.savedArrays[name]
-	if b.hasArray {
-		b.arrayExists = sc.arrayExisted[name]
-	}
-	b.assoc, b.hasAssoc = sc.savedAssoc[name]
-	if b.hasAssoc {
-		b.assocExists = sc.assocExisted[name]
-	}
-	b.removed, b.hasRemoved = sc.removedBefore[name]
-	b.readonly, b.hasReadonly = sc.savedReadonly[name]
-	b.hideInScope, b.hasHide = sc.savedHideInScope[name]
-	b.attrs, b.hasAttrs = sc.savedAttrs[name]
-	b.assignedTo, b.hasAssigned = sc.savedAssigned[name]
-	if b.hasAssigned {
-		b.assignedSaid = sc.assignedSpoken[name]
-	}
-	b.exported, b.hasExported = sc.savedExported[name]
-	if b.hasExported {
-		b.exportedSaid = sc.exportedSpoken[name]
-	}
-	b.declaredOnly, b.hasCompound = sc.declaredOnlyBefore[name]
-	b.heldAnElement = sc.heldAnElementBefore[name]
-	b.scalarHeld = sc.scalarHeldBefore[name]
+	b.value, b.hasValue, b.valueExists = rec.value, rec.holds(recValue), rec.bit(recValue)
+	b.array, b.hasArray, b.arrayExists = rec.array, rec.holds(recArray), rec.bit(recArray)
+	b.assoc, b.hasAssoc, b.assocExists = rec.assoc, rec.holds(recAssoc), rec.bit(recAssoc)
+	b.removed, b.hasRemoved = rec.bit(recRemovedBefore), rec.holds(recRemovedBefore)
+	b.readonly, b.hasReadonly = rec.bit(recSavedReadonly), rec.holds(recSavedReadonly)
+	b.hideInScope, b.hasHide = rec.bit(recSavedHideInScope), rec.holds(recSavedHideInScope)
+	b.attrs, b.hasAttrs = rec.attrs, rec.holds(recAttrs)
+	b.assignedTo, b.hasAssigned, b.assignedSaid = rec.assigned, rec.holds(recAssigned), rec.bit(recAssigned)
+	b.exported, b.hasExported, b.exportedSaid = rec.exportedOn, rec.holds(recExported), rec.bit(recExported)
+	b.declaredOnly, b.hasCompound = rec.bit(recDeclaredOnlyBefore), rec.holds(recDeclaredOnlyBefore)
+	b.heldAnElement = rec.holds(flagHeldAnElementBefore)
+	b.scalarHeld = rec.holds(flagScalarHeldBefore)
 	return b
 }
 
@@ -235,36 +224,45 @@ func (r *Runner) installBinding(name string, b staticBinding) {
 // claim to have shadowed something it never did, and its return would then
 // undo a name it was never asked about.
 func writeBindingToScope(sc *scope, name string, b staticBinding) {
-	if _, ok := sc.saved[name]; ok {
-		sc.saved[name], sc.existed[name] = b.value, b.valueExists
+	rec := sc.record(name)
+	if rec == nil {
+		return
 	}
-	if _, ok := sc.savedArrays[name]; ok {
-		sc.savedArrays[name], sc.arrayExisted[name] = b.array, b.arrayExists
+	if rec.holds(recValue) {
+		rec.put(recValue, b.valueExists)
+		rec.value = b.value
 	}
-	if _, ok := sc.savedAssoc[name]; ok {
-		sc.savedAssoc[name], sc.assocExisted[name] = b.assoc, b.assocExists
+	if rec.holds(recArray) {
+		rec.put(recArray, b.arrayExists)
+		rec.array = b.array
 	}
-	if _, ok := sc.removedBefore[name]; ok {
-		sc.removedBefore[name] = b.removed
+	if rec.holds(recAssoc) {
+		rec.put(recAssoc, b.assocExists)
+		rec.assoc = b.assoc
 	}
-	if _, ok := sc.savedReadonly[name]; ok {
-		sc.savedReadonly[name] = b.readonly
+	if rec.holds(recRemovedBefore) {
+		rec.put(recRemovedBefore, b.removed)
 	}
-	if _, ok := sc.savedHideInScope[name]; ok {
-		sc.savedHideInScope[name] = b.hideInScope
+	if rec.holds(recSavedReadonly) {
+		rec.put(recSavedReadonly, b.readonly)
 	}
-	if _, ok := sc.savedAttrs[name]; ok {
-		sc.savedAttrs[name] = b.attrs
+	if rec.holds(recSavedHideInScope) {
+		rec.put(recSavedHideInScope, b.hideInScope)
 	}
-	if _, ok := sc.savedAssigned[name]; ok {
-		sc.savedAssigned[name], sc.assignedSpoken[name] = b.assignedTo, b.assignedSaid
+	if rec.holds(recAttrs) {
+		rec.attrs = b.attrs
 	}
-	if _, ok := sc.savedExported[name]; ok {
-		sc.savedExported[name], sc.exportedSpoken[name] = b.exported, b.exportedSaid
+	if rec.holds(recAssigned) {
+		rec.put(recAssigned, b.assignedSaid)
+		rec.assigned = b.assignedTo
 	}
-	if _, ok := sc.declaredOnlyBefore[name]; ok {
-		sc.declaredOnlyBefore[name] = b.declaredOnly
-		setBool(&sc.heldAnElementBefore, name, b.heldAnElement)
+	if rec.holds(recExported) {
+		rec.put(recExported, b.exportedSaid)
+		rec.exportedOn = b.exported
+	}
+	if rec.holds(recDeclaredOnlyBefore) {
+		rec.put(recDeclaredOnlyBefore, b.declaredOnly)
+		rec.setFlag(flagHeldAnElementBefore, b.heldAnElement)
 	}
 }
 
@@ -333,7 +331,11 @@ func (r *Runner) unsealCallerLocals(sc *scope) {
 func (r *Runner) callerShadowHolders() map[string]*scope {
 	var holders map[string]*scope
 	for i := len(r.scopes) - 2; i >= 0; i-- {
-		for name := range r.scopes[i].saved {
+		for _, rec := range r.scopes[i].records {
+			if !rec.holds(recValue) {
+				continue
+			}
+			name := rec.name
 			if _, taken := holders[name]; taken {
 				continue
 			}

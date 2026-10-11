@@ -47,7 +47,7 @@ package interp
 
 // nameAttributes is everything the attribute tables say about one name.
 //
-// A struct rather than a map per table for the reason scope.savedReadonly
+// A struct rather than a map per table for the reason recSavedReadonly
 // gives: absent and false are different answers, and the scope needs to say
 // "the name had no base" as distinctly as "the name had base 10".
 type nameAttributes struct {

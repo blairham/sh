@@ -126,7 +126,7 @@ func (r *Runner) restoreTheOuterBinding(name string) bool {
 	}
 	sc := r.scopes[len(r.scopes)-1]
 	had := false
-	value, held := sc.saved[name], sc.existed[name]
+	value, held, _ := sc.savedValue(name)
 	// A name the enclosing scope held as a **reference** hands over the name
 	// it pointed at, as text, and not the reference. Measured 2026-09-17:
 	// over a caller's `declare -n nr=v`, `local nr` is `declare -- nr="v"`.
@@ -137,7 +137,7 @@ func (r *Runner) restoreTheOuterBinding(name string) bool {
 	// Read as the scalar rather than beside it, because a reference's text
 	// is not in the scalar table: the name reads as removed there, so a
 	// branch of its own would have had to take that record back as well.
-	if saved, ok := sc.savedAttrs[name]; ok && saved.isNameref && !held {
+	if saved, ok := sc.savedAttributes(name); ok && saved.isNameref && !held {
 		value, held = saved.nameref, true
 	}
 	// The scalar, and its removed-by-`unset` bit with it: a name the script
@@ -147,36 +147,36 @@ func (r *Runner) restoreTheOuterBinding(name string) bool {
 		r.Vars[name] = value
 		setBool(&r.removed, name, false)
 		had = true
-	} else if sc.removedBefore != nil {
-		setBool(&r.removed, name, sc.removedBefore[name])
+	} else if sc.madeRecord(recRemovedBefore) {
+		setBool(&r.removed, name, sc.recordBit(recRemovedBefore, name))
 	}
 	// The two compound tables, which freshcell.go has just emptied. Copied
 	// back, because the scope's copy has to stay the scope's: it is what the
 	// caller's name gets on return, and a table handed over by reference
 	// would be the one this call then writes into.
-	if sc.arrayExisted[name] {
+	if a, existed, _ := sc.savedArray(name); existed {
 		if r.Arrays == nil {
 			r.Arrays = map[string]Array{}
 		}
-		r.Arrays[name] = sc.savedArrays[name].clone()
+		r.Arrays[name] = a.clone()
 		had = true
 	}
-	if sc.assocExisted[name] {
+	if m, existed, _ := sc.savedAssocTable(name); existed {
 		r.ownAssocs()
 		if r.AssocArrays == nil {
 			r.AssocArrays = map[string]AssocArray{}
 		}
-		r.AssocArrays[name] = sc.savedAssoc[name].clone()
+		r.AssocArrays[name] = m.clone()
 		had = true
 	}
-	if sc.declaredOnlyBefore != nil {
-		setBool(&r.declaredOnlyCompound, name, sc.declaredOnlyBefore[name])
-		setBool(&r.compoundHeldAnElement, name, sc.heldAnElementBefore[name])
+	if sc.madeRecord(recDeclaredOnlyBefore) {
+		setBool(&r.declaredOnlyCompound, name, sc.recordBit(recDeclaredOnlyBefore, name))
+		setBool(&r.compoundHeldAnElement, name, sc.flag(flagHeldAnElementBefore, name))
 	}
 	// And the attributes, added to the ones this declaration's own letters
 	// have already written rather than replacing them — which is measured:
 	// `local -a n` over an `-i n=5` carries both letters.
-	if saved, ok := sc.savedAttrs[name]; ok && r.inheritAttributes(name, saved) {
+	if saved, ok := sc.savedAttributes(name); ok && r.inheritAttributes(name, saved) {
 		had = true
 	}
 	// The export attribute is *not* restored here, and that is measured
@@ -289,8 +289,7 @@ func (r *Runner) outerBindingWasFrozen(name string) bool {
 	if len(r.scopes) == 0 {
 		return false
 	}
-	was, ok := r.scopes[len(r.scopes)-1].savedReadonly[name]
-	return ok && was
+	return r.scopes[len(r.scopes)-1].recordBit(recSavedReadonly, name)
 }
 
 // localInAnEnclosingScope reports whether a function calling this one made
@@ -315,7 +314,7 @@ func (r *Runner) restoreTheOuterFreeze(name string) {
 	if len(r.scopes) == 0 {
 		return
 	}
-	if was, ok := r.scopes[len(r.scopes)-1].savedReadonly[name]; ok && was {
+	if r.scopes[len(r.scopes)-1].recordBit(recSavedReadonly, name) {
 		r.markReadonly(name)
 	}
 }

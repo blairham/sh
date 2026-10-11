@@ -1447,7 +1447,7 @@ func (r *Runner) funcDecl(c *syntax.FuncDecl) error {
 // takes none of them, so the one unwind serves both without asking which it
 // is unwinding.
 func (r *Runner) pushScope(keyword bool) *scope {
-	sc := &scope{saved: r.spareStrings(), existed: r.spareBools(), keyword: keyword, owner: r}
+	sc := &scope{keyword: keyword, owner: r, spares: &r.spares}
 	r.scopes = append(r.scopes, sc)
 	return sc
 }
@@ -1463,7 +1463,13 @@ func (r *Runner) popScope(sc *scope) {
 	// shadow, and this unwind is exactly the shape a second copy goes stale
 	// in: it grew from two tables to thirteen an assignment at a time, and
 	// every one of those additions would have had to be made twice.
-	shadowed := sc.shadowedNames()
+	//
+	// Into a list the runner keeps for this, taken off it for the length of
+	// the unwind so that a return the unwind itself runs — an assignment's
+	// action is shell code — makes a list of its own rather than writing over
+	// this one.
+	shadowed := sc.shadowedNames(r.spares.names)
+	r.spares.names = nil
 	// And what those names resolve to *before* the unwind, for the ones
 	// whose assignment does something: the restore moves a value with
 	// nothing being written, and that is a message the store cannot send.
@@ -1529,87 +1535,24 @@ func (r *Runner) popScope(sc *scope) {
 	// action that reads the name back has to see what the caller sees, and
 	// the enclosing declarations above are the final word on that.
 	r.speakRestoredAssignments(beforeRestore, shadowed)
-	// And the scope's record tables go back for the next call to write into,
-	// last of all because everything above reads them. See scopespares.go.
+	// And the scope's records go back for the next call to write into, last
+	// of all because everything above reads them, and the list of names with
+	// them. See scopespares.go.
 	r.releaseScopeTables(sc)
-}
-
-// shadowedNames is every name this scope has a record of, taken before any of
-// them is put back: restoreShadowedName deletes the records as it goes, so the
-// list has to be settled first.
-func (sc *scope) shadowedNames() []string {
-	// Every shadowed name has a value record, so that table's size is the
-	// list's nearly always.
-	s := nameSet{list: make([]string, 0, len(sc.saved))}
-	gatherNames(&s, sc.saved)
-	gatherNames(&s, sc.savedArrays)
-	gatherNames(&s, sc.savedAssoc)
-	gatherNames(&s, sc.declaredOnlyBefore)
-	gatherNames(&s, sc.savedReadonly)
-	gatherNames(&s, sc.savedHideInScope)
-	gatherNames(&s, sc.hiddenShadow)
-	gatherNames(&s, sc.suspendedProducers)
-	gatherNames(&s, sc.savedAttrs)
-	gatherNames(&s, sc.assignedSpoken)
-	gatherNames(&s, sc.exportedSpoken)
-	gatherNames(&s, sc.removedBefore)
-	gatherNames(&s, sc.memberNamespaces)
-	gatherNames(&s, sc.compoundMarkBefore)
-	return s.list
-}
-
-// nameSet is a list of names without repeats, for shadowedNames.
-//
-// Deduplicated by scanning the list rather than through a set: every name a
-// declaration shadows is in several of the scope's tables, so a set cost a map
-// per function return to hold what is nearly always a handful of names. Past
-// that handful the scan would be quadratic, so a long list switches to a set.
-type nameSet struct {
-	list []string
-	seen map[string]bool
-}
-
-func gatherNames[V any](s *nameSet, table map[string]V) {
-	for name := range table {
-		s.add(name)
-	}
-}
-
-func (s *nameSet) add(name string) {
-	if s.seen != nil {
-		if !s.seen[name] {
-			s.seen[name] = true
-			s.list = append(s.list, name)
-		}
-		return
-	}
-	if slices.Contains(s.list, name) {
-		return
-	}
-	s.list = append(s.list, name)
-	if len(s.list) > 16 {
-		s.seen = make(map[string]bool, len(s.list))
-		for _, have := range s.list {
-			s.seen[have] = true
-		}
+	if cap(shadowed) > 0 && cap(shadowed) <= maxScopeSpares {
+		clear(shadowed)
+		r.spares.names = shadowed[:0]
 	}
 }
 
 // shadows reports whether a declaration in this scope has taken a copy of the
 // name — the question "is this name local *here*", asked of one scope.
 //
-// The three value tables and not the attribute records, because a shadow is
+// The three value records and not the attribute records, because a shadow is
 // what those three hold: an attribute is saved beside a value and never on its
 // own. See Runner.shadow, which writes all of them together.
 func (sc *scope) shadows(name string) bool {
-	if _, ok := sc.saved[name]; ok {
-		return true
-	}
-	if _, ok := sc.savedArrays[name]; ok {
-		return true
-	}
-	_, ok := sc.savedAssoc[name]
-	return ok
+	return sc.holds(recValue|recArray|recAssoc, name)
 }
 
 // restoreShadowedName puts one name back the way the scope found it and
@@ -1622,9 +1565,13 @@ func (sc *scope) shadows(name string) bool {
 // place: the value first, then the tables, then the attributes the shadow
 // displaced, then the records about how the value came to be.
 func (r *Runner) restoreShadowedName(sc *scope, name string) {
-	if old, ok := sc.saved[name]; ok {
-		if sc.existed[name] {
-			r.Vars[name] = old
+	rec := sc.record(name)
+	if rec == nil {
+		return
+	}
+	if rec.holds(recValue) {
+		if rec.bit(recValue) {
+			r.Vars[name] = rec.value
 		} else {
 			delete(r.Vars, name)
 		}
@@ -1640,27 +1587,24 @@ func (r *Runner) restoreShadowedName(sc *scope, name string) {
 		// `local` of it last exactly as long as the call. See
 		// interp/ignorednames.go.
 		r.ignoredNamesRestored(name)
-		delete(sc.saved, name)
-		delete(sc.existed, name)
+		rec.drop(recValue)
 	}
-	if old, ok := sc.savedArrays[name]; ok {
-		if sc.arrayExisted[name] {
-			r.Arrays[name] = old
+	if rec.holds(recArray) {
+		if rec.bit(recArray) {
+			r.Arrays[name] = rec.array
 		} else {
 			delete(r.Arrays, name)
 		}
-		delete(sc.savedArrays, name)
-		delete(sc.arrayExisted, name)
+		rec.drop(recArray)
 	}
-	if old, ok := sc.savedAssoc[name]; ok {
-		if sc.assocExisted[name] {
+	if rec.holds(recAssoc) {
+		if rec.bit(recAssoc) {
 			r.ownAssocs()
-			r.AssocArrays[name] = old
+			r.AssocArrays[name] = rec.assoc
 		} else {
 			r.dropAssocTable(name)
 		}
-		delete(sc.savedAssoc, name)
-		delete(sc.assocExisted, name)
+		rec.drop(recAssoc)
 	}
 	// And the member namespace, before the records below: what the call left
 	// under the prefix goes, and the compound mark the caller's name carried
@@ -1672,27 +1616,26 @@ func (r *Runner) restoreShadowedName(sc *scope, name string) {
 	// And how the caller's compound value had come to be, which is restored
 	// with the tables rather than left as the local declaration set it. See
 	// compounddeclaredonly.go.
-	if was, ok := sc.declaredOnlyBefore[name]; ok {
-		if was {
+	if rec.holds(recDeclaredOnlyBefore) {
+		if rec.bit(recDeclaredOnlyBefore) {
 			r.compoundDeclaredOnly(name)
 		} else {
 			r.compoundWasAssigned(name)
 		}
-		delete(sc.declaredOnlyBefore, name)
+		rec.drop(recDeclaredOnlyBefore)
 		// And the third state with it, for the reason the note above gives:
 		// a local array emptied inside the call must not leave the caller's
 		// name reading as one that has lost its elements.
-		setBool(&r.compoundHeldAnElement, name, sc.heldAnElementBefore[name])
-		delete(sc.heldAnElementBefore, name)
-		setBool(&r.scalarHeldUnderTheArrayLetter, name, sc.scalarHeldBefore[name])
-		delete(sc.scalarHeldBefore, name)
+		setBool(&r.compoundHeldAnElement, name, rec.holds(flagHeldAnElementBefore))
+		setBool(&r.scalarHeldUnderTheArrayLetter, name, rec.holds(flagScalarHeldBefore))
+		rec.has &^= flagHeldAnElementBefore | flagScalarHeldBefore
 	}
 	// And the frozen attribute, which goes both ways: a name the declaration
 	// shadowed is frozen again, so a function cannot thaw one for good, and
 	// a name the declaration *froze* is writable again, because the
 	// attribute a `local -r` adds is the call's and lasts as long as it.
-	if was, ok := sc.savedReadonly[name]; ok {
-		if was {
+	if rec.holds(recSavedReadonly) {
+		if rec.bit(recSavedReadonly) {
 			if r.readonly == nil {
 				r.readonly = map[string]bool{}
 			}
@@ -1700,14 +1643,14 @@ func (r *Runner) restoreShadowedName(sc *scope, name string) {
 		} else {
 			delete(r.readonly, name)
 		}
-		delete(sc.savedReadonly, name)
+		rec.drop(recSavedReadonly)
 	}
 	// And the hide-in-scope attribute, which goes both ways for the reason
 	// the frozen one does: a name the declaration shadowed carries again
 	// whatever it carried, and one this call hid — or un-hid with `+h` — is
 	// back to the outer answer. See hideinscope.go.
-	if was, ok := sc.savedHideInScope[name]; ok {
-		if was {
+	if rec.holds(recSavedHideInScope) {
+		if rec.bit(recSavedHideInScope) {
 			if r.hideInScope == nil {
 				r.hideInScope = map[string]bool{}
 			}
@@ -1715,60 +1658,58 @@ func (r *Runner) restoreShadowedName(sc *scope, name string) {
 		} else {
 			delete(r.hideInScope, name)
 		}
-		delete(sc.savedHideInScope, name)
+		rec.drop(recSavedHideInScope)
 	}
 	// And the record of whether the shadow itself was a hidden one, which
 	// nothing puts back — it describes a binding that is going away — but
 	// which has to stop answering for the name the moment it does. See
 	// Runner.shadowIsHidden, which reads the innermost scope that shadowed.
-	delete(sc.hiddenShadow, name)
+	rec.drop(recHiddenShadow)
 	// And the producer a hidden shadow suspended, which is the half of the
 	// letter that makes the local an ordinary parameter: the name is the
 	// shell's own again the moment the call returns. See hideinscope.go.
 	r.resumeProducer(sc, name)
 	// And every other attribute the declaration displaced, which goes both
 	// ways for the reason the frozen one does — see localattributes.go.
-	if was, ok := sc.savedAttrs[name]; ok {
-		r.restoreAttributes(name, was)
-		delete(sc.savedAttrs, name)
+	if rec.holds(recAttrs) {
+		r.restoreAttributes(name, rec.attrs)
+		rec.drop(recAttrs)
 	}
 	// And what a produced parameter was last assigned, which goes both ways
 	// for the reason the frozen attribute does: the outer name answers from
 	// whatever message it had left for its producer, and one this call left
-	// goes away with the call. See scope.savedAssigned.
-	if spoken, ok := sc.assignedSpoken[name]; ok {
-		if spoken {
+	// goes away with the call. See recAssigned.
+	if rec.holds(recAssigned) {
+		if rec.bit(recAssigned) {
 			if r.assigned == nil {
 				r.assigned = map[string]string{}
 			}
-			r.assigned[name] = sc.savedAssigned[name]
+			r.assigned[name] = rec.assigned
 		} else {
 			delete(r.assigned, name)
 		}
-		delete(sc.assignedSpoken, name)
-		delete(sc.savedAssigned, name)
+		rec.drop(recAssigned)
 	}
 	// And the export attribute, where the dialect took it off for the local:
 	// the outer name goes back to whatever the shell had recorded about it,
 	// including having recorded nothing.
-	if spoken, ok := sc.exportedSpoken[name]; ok {
-		if spoken {
-			r.exported[name] = sc.savedExported[name]
+	if rec.holds(recExported) {
+		if rec.bit(recExported) {
+			r.exported[name] = rec.exportedOn
 		} else {
 			delete(r.exported, name)
 		}
-		delete(sc.exportedSpoken, name)
-		delete(sc.savedExported, name)
+		rec.drop(recExported)
 	}
 	// And whether `unset` had hidden the name, which a hiding `local` set
 	// for the function's duration: put back what was true at the shadow.
-	if was, ok := sc.removedBefore[name]; ok {
-		if was {
+	if rec.holds(recRemovedBefore) {
+		if rec.bit(recRemovedBefore) {
 			r.removed[name] = true
 		} else {
 			delete(r.removed, name)
 		}
-		delete(sc.removedBefore, name)
+		rec.drop(recRemovedBefore)
 	}
 }
 

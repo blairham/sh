@@ -414,15 +414,10 @@ func (r *Runner) innermostLocalNames() map[string]bool {
 	if len(r.scopes) == 0 {
 		return names
 	}
-	sc := r.scopes[len(r.scopes)-1]
-	for name := range sc.saved {
-		names[name] = true
-	}
-	for name := range sc.savedArrays {
-		names[name] = true
-	}
-	for name := range sc.savedAssoc {
-		names[name] = true
+	for _, rec := range r.scopes[len(r.scopes)-1].records {
+		if rec.holds(recValue | recArray | recAssoc) {
+			names[rec.name] = true
+		}
 	}
 	return names
 }
@@ -455,19 +450,11 @@ func (r *Runner) bareLocalListing() int {
 			// localDashListingRow.
 			r.printf("%s\n", row)
 		}
-		names := map[string]bool{}
-		for name := range sc.saved {
-			names[name] = true
-		}
-		for name := range sc.savedArrays {
-			names[name] = true
-		}
-		for name := range sc.savedAssoc {
-			names[name] = true
-		}
-		sorted := make([]string, 0, len(names))
-		for name := range names {
-			sorted = append(sorted, name)
+		sorted := make([]string, 0, len(sc.records))
+		for _, rec := range sc.records {
+			if rec.holds(recValue | recArray | recAssoc) {
+				sorted = append(sorted, rec.name)
+			}
 		}
 		sort.Strings(sorted)
 		for _, name := range sorted {

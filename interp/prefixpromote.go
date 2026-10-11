@@ -168,14 +168,12 @@ func (r *Runner) prefixEntryShadowed(name string) (savedVar, bool) {
 // name existed, whether `unset` had hidden it, and the export attribute. Every
 // other entry the shadow recorded is the outer name's own and is left alone.
 func (r *Runner) scopeTakesOverThePrefixEntry(sc *scope, name string, u savedVar) {
-	sc.saved[name] = u.value
-	sc.existed[name] = u.present
-	if sc.removedBefore != nil {
-		sc.removedBefore[name] = u.removed
+	sc.saveValue(name, u.value, u.present)
+	if sc.madeRecord(recRemovedBefore) {
+		sc.putRecord(recRemovedBefore, name, u.removed)
 	}
-	if sc.exportedSpoken != nil {
-		sc.exportedSpoken[name] = u.exportSpoken
-		sc.savedExported[name] = u.exported
+	if sc.madeRecord(recExported) {
+		sc.saveExport(name, u.exported, u.exportSpoken)
 	}
 }
 
@@ -339,7 +337,7 @@ func (r *Runner) callPrefixesLetTheNameGo(name string) {
 // that is unfalsifiable today and wrong tomorrow is not a simplification.
 func (r *Runner) aLocalInsideThisFrameHoldsTheName(f *callPrefixFrame, name string) bool {
 	for i := f.scopeDepth; i < len(r.scopes); i++ {
-		if _, saved := r.scopes[i].saved[name]; saved {
+		if r.scopes[i].shadowsValue(name) {
 			return true
 		}
 	}

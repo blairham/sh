@@ -174,7 +174,7 @@ type liftedShadow struct {
 // name the same cell.
 func (r *Runner) outermostScopeHolding(name string) *scope {
 	for _, sc := range r.scopes {
-		if _, saved := sc.saved[name]; saved {
+		if sc.shadowsValue(name) {
 			return sc
 		}
 	}

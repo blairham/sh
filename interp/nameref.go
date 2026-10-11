@@ -589,8 +589,7 @@ func (r *Runner) referenceIsThisCallsOwn(name string) bool {
 	if len(r.scopes) == 0 {
 		return false
 	}
-	_, saved := r.scopes[len(r.scopes)-1].saved[name]
-	return saved
+	return r.scopes[len(r.scopes)-1].shadowsValue(name)
 }
 
 // refuseNamerefAim reports a value that cannot aim a reference, and is the
@@ -1601,11 +1600,11 @@ func (r *Runner) selfNameref(name string) bool {
 // apart.
 func (r *Runner) selfNamerefValue(name string) (string, bool) {
 	for _, sc := range r.scopes {
-		v, saved := sc.saved[name]
+		v, existed, saved := sc.savedValue(name)
 		if !saved {
 			continue
 		}
-		if sc.removedBefore[name] || !sc.existed[name] {
+		if sc.recordBit(recRemovedBefore, name) || !existed {
 			return "", false
 		}
 		return v, true
@@ -1659,16 +1658,15 @@ func (r *Runner) appendedOldValue(name string) string {
 // depth it says when the write does land.
 func (r *Runner) selfNamerefStore(name, value string) bool {
 	for _, sc := range r.scopes {
-		if _, saved := sc.saved[name]; !saved {
+		if !sc.shadowsValue(name) {
 			continue
 		}
 		if r.selfNamerefStoreOverACompound(sc, name, value) {
 			return true
 		}
-		sc.saved[name] = value
-		sc.existed[name] = true
-		if sc.removedBefore != nil {
-			sc.removedBefore[name] = false
+		sc.saveValue(name, value, true)
+		if sc.madeRecord(recRemovedBefore) {
+			sc.putRecord(recRemovedBefore, name, false)
 		}
 		return true
 	}
@@ -2139,18 +2137,12 @@ func (r *Runner) namerefGivesUpForAContainer(name string) {
 func (r *Runner) selfNamerefStoreOverACompound(sc *scope, name, value string) bool {
 	// **Held, not merely saved.** A scope records an entry for every name it
 	// shadows, so the presence of a key here says the name was displaced and
-	// nothing about what it held; the two `existed` maps are the half that
+	// nothing about what it held; the two existed bits are the half that
 	// says the caller's cell really carried a compound. Gating on the key
 	// alone sent a caller holding an ordinary scalar down this path and into
 	// an empty array's nil map.
-	heldArray := false
-	if sc.arrayExisted[name] {
-		_, heldArray = sc.savedArrays[name]
-	}
-	heldTable := false
-	if sc.assocExisted[name] {
-		_, heldTable = sc.savedAssoc[name]
-	}
+	savedArray, heldArray, _ := sc.savedArray(name)
+	savedTable, heldTable, _ := sc.savedAssocTable(name)
 	if !heldArray && !heldTable {
 		return false
 	}
@@ -2174,11 +2166,11 @@ func (r *Runner) selfNamerefStoreOverACompound(sc *scope, name, value string) bo
 	delete(r.Arrays, name)
 	r.dropAssocTable(name)
 	if heldArray {
-		r.Arrays[name] = sc.savedArrays[name]
+		r.Arrays[name] = savedArray
 	}
 	if heldTable {
 		r.ownAssocs()
-		r.AssocArrays[name] = sc.savedAssoc[name]
+		r.AssocArrays[name] = savedTable
 	}
 	// The borrowed rule writes through storeArray, which keeps the scalar
 	// copy in step by calling setVarAs — and setVarAs would divert straight
@@ -2189,8 +2181,7 @@ func (r *Runner) selfNamerefStoreOverACompound(sc *scope, name, value string) bo
 	took := r.scalarOverCompound(name, value, assignedAnyhow)
 	r.storingSelfNameref = was
 	if stored, ok := r.Arrays[name]; ok && heldArray {
-		sc.savedArrays[name] = stored
-		sc.arrayExisted[name] = true
+		sc.saveArray(name, stored, true)
 	}
 	if stored, ok := r.AssocArrays[name]; ok && heldTable {
 		if r.assocShare != nil {
@@ -2198,8 +2189,7 @@ func (r *Runner) selfNamerefStoreOverACompound(sc *scope, name, value string) bo
 			// table this came out of, and the scope is going to put it back.
 			stored = stored.clone()
 		}
-		sc.savedAssoc[name] = stored
-		sc.assocExisted[name] = true
+		sc.saveAssocTable(name, stored, true)
 	}
 	delete(r.Arrays, name)
 	r.dropAssocTable(name)

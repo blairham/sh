@@ -83,7 +83,7 @@ func (r *Runner) shadowTiedHalf(name string) {
 		other = t.scalar
 	}
 	sc := r.scopes[len(r.scopes)-1]
-	if _, seen := sc.saved[other]; seen {
+	if sc.shadowsValue(other) {
 		return
 	}
 	r.shadow(other)
@@ -92,11 +92,8 @@ func (r *Runner) shadowTiedHalf(name string) {
 	// function exists for — and what a type query *says* about the two is
 	// not: the half a declaration named is `local` and the half dragged
 	// along with it is not. After the shadow, because shadow clears this
-	// mark for the name it is given. See scope.tieMirrorOnly (#4875).
-	if sc.tieMirrorOnly == nil {
-		sc.tieMirrorOnly = map[string]bool{}
-	}
-	sc.tieMirrorOnly[other] = true
+	// mark for the name it is given. See flagTieMirrorOnly (#4875).
+	sc.setFlag(flagTieMirrorOnly, other, true)
 }
 
 // tieDetached reports whether a tie is out of effect right now, which is the
@@ -128,10 +125,10 @@ func (r *Runner) tieShadowedInItsScope(t tie) bool {
 		return false
 	}
 	for _, sc := range r.scopes[t.depth:] {
-		if _, saved := sc.saved[t.scalar]; saved {
+		if sc.shadowsValue(t.scalar) {
 			return true
 		}
-		if _, saved := sc.saved[t.array]; saved {
+		if sc.shadowsValue(t.array) {
 			return true
 		}
 	}

@@ -3347,10 +3347,13 @@ func (r *Runner) expansionResult(v string, unquoted bool, glob, split Answer, ax
 // copy is what would have kept #1222 alive for `${a[@]}` after the first was
 // fixed.
 func (r *Runner) escapeResult(v string, glob Answer) string {
-	if v != "[" && plainField(v) {
+	if plainField(v) && !strings.ContainsAny(v, "[]") {
 		// Nothing in it for any of the marks below to mark: no backslash, no
-		// pattern character, no group syntax, no mark of ours. A lone `[` is
-		// the one plain field a brace-stopped glob still marks. See
+		// pattern character, no group syntax, no mark of ours. The brackets
+		// are kept out although plainField admits them as written text: a
+		// `]` a value supplies is marked so that it closes nothing the
+		// source opened (`k="]"; echo nos[a$k` is a bad pattern in zsh), and
+		// a lone `[` is the one a brace-stopped glob still marks. See
 		// interp/plainword.go.
 		return v
 	}

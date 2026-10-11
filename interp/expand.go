@@ -801,7 +801,14 @@ func (b *wordFields) lay(parts []string, nulls []bool, kind segKind) {
 		return
 	}
 	// The first field closed everything that was open, since a new one
-	// started after it.
+	// started after it. Room for all of them at once: a quoted array of
+	// 60,000 elements otherwise regrows both slices a doubling at a time,
+	// which was a quarter of what `x=("${(@kv)h}")` allocated (#6362).
+	b.all = slices.Grow(b.all, len(parts)-1)
+	b.keep = slices.Grow(b.keep, len(parts)-1)
+	if b.tracked {
+		b.segs = slices.Grow(b.segs, len(parts)-1)
+	}
 	for i, p := range parts[1:] {
 		b.all = append(b.all, p)
 		b.keep = append(b.keep, !nullFieldAt(nulls, i+1))
@@ -3005,6 +3012,12 @@ func (r *Runner) splitEachElement(elems []string, sp splitPolicy, glob Answer) (
 	split := sp.answer(r.sem().SplitParamExpansion)
 	var out []string
 	var marks listMarks
+	if len(elems) > 0 {
+		// At least a field per element, so room for that up front (#6362).
+		// Not for an empty list, whose answer is nil rather than empty.
+		out = make([]string, 0, len(elems))
+		marks.nulls = make([]bool, 0, len(elems))
+	}
 	keep := func(fields ...string) {
 		out = append(out, fields...)
 		for range fields {

@@ -45,6 +45,12 @@ func (r *Runner) resolveTildesThrough(s string, escaped bool) string {
 // resolveTildesThroughWith is resolveTildesThrough with the escape a
 // directory takes in the escaped form named.
 func (r *Runner) resolveTildesThroughWith(s string, escaped bool, escape func(string) string) string {
+	if !holdsAPrivateMark(s) {
+		// All four marks are spelled in the private-use block, so a string
+		// with none of that block's lead byte holds none of them and the
+		// four scans below are skipped (#6362).
+		return s
+	}
 	if !strings.Contains(s, tildeThroughMark) && !strings.Contains(s, tildeThroughColonMark) &&
 		!strings.Contains(s, tildeThroughWrittenMark) {
 		return strings.ReplaceAll(s, tildeThroughEndMark, "")
@@ -151,4 +157,11 @@ func (r *Runner) resolveFieldsTildesThrough(fields []string) []string {
 // Runner.patternTilde.
 func (r *Runner) resolvePatternTildesThrough(s string) string {
 	return r.resolveTildesThroughWith(s, true, escapePatternMeta)
+}
+
+// holdsAPrivateMark reports whether s holds the lead byte of the private-use
+// characters the tilde marks are spelled with. False means none of them is
+// there; true means only that one might be.
+func holdsAPrivateMark(s string) bool {
+	return strings.IndexByte(s, tildeThroughMark[0]) >= 0
 }

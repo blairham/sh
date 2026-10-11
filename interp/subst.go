@@ -660,13 +660,47 @@ func (r *Runner) dialect() syntax.Dialect {
 	// codeset so that a `LC_ALL=` on one line is in force for the next, the
 	// same reason ArithPrecedence above is applied here rather than kept
 	// beside the dialect. See syntax.Dialect.CharacterWidth (#4235).
-	d.CharacterWidth = r.CharacterWidth
+	b := r.boundReaders()
+	d.CharacterWidth = b.characterWidth
 	// And which characters past ASCII a name may hold, which is the same
 	// kind of answer: the locale's, and the dialect's own option. See
 	// syntax.Dialect.NameTakesALetterPastASCII.
-	d.NameTakesALetterPastASCII = r.NameTakesALetterPastASCII
-	d.CharacterLength = r.CharacterLength
+	d.NameTakesALetterPastASCII = b.nameTakesALetterPastASCII
+	d.CharacterLength = b.characterLength
 	return d
+}
+
+// boundMethods is the runner's own answers as the function values a dialect
+// carries, bound once rather than on every call to dialect.
+//
+// A method value is a closure over its receiver, so `d.CharacterWidth =
+// r.CharacterWidth` allocated one, and dialect bound four of them on every
+// call — and it is called for every expansion a command line holds, through
+// the readers that ask it a single axis (#6353).
+//
+// owner is the runner they were bound to. A subshell is a copy of the runner
+// by value, so the copy finds the parent's bindings in its own field, and
+// handing those on would answer a child's question with the parent's state.
+// The owner check is what makes the copy bind its own.
+type boundMethods struct {
+	owner                     *Runner
+	ansiCValue                func(string) string
+	characterWidth            func(byte, byte) int
+	nameTakesALetterPastASCII func(rune) bool
+	characterLength           func(string) int
+}
+
+func (r *Runner) boundReaders() *boundMethods {
+	if r.bound.owner != r {
+		r.bound = boundMethods{
+			owner:                     r,
+			ansiCValue:                r.AnsiCValue,
+			characterWidth:            r.CharacterWidth,
+			nameTakesALetterPastASCII: r.NameTakesALetterPastASCII,
+			characterLength:           r.CharacterLength,
+		}
+	}
+	return &r.bound
 }
 
 // ArithPrecedence is the order the binary arithmetic operators bind in for

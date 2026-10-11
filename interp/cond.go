@@ -1064,6 +1064,14 @@ func (r *Runner) conditionOperand(text string) (value int, failure string) {
 	// conditionLeadingNumeral records: here the zeros go in front of an `0x`
 	// prefix as well, so `[[ 0x10 -eq 16 ]]` is false in that shell (#1627).
 	text = r.conditionLeadingNumeral(text)
+	if v, ok := plainDecimal(text); ok && !r.arithForcesFloat {
+		// A plain decimal numeral reads as itself in every dialect, and it is
+		// nearly every operand a loop compares: building a parser to read
+		// `10000` was the bulk of what a `[[ $i -lt N ]]` cost (#6353). What
+		// evaluating it would have left behind is left behind here too.
+		r.lastArith = intNum(v)
+		return v, ""
+	}
 	p := syntax.NewParser("", r.dialect())
 	// An operand arrives already expanded — the doc above measures that with
 	// `x=7; v='$x'`, which no column reads as 7 — so it is read as the

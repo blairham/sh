@@ -95,8 +95,26 @@ func (r *Runner) recordPipeStatus(statuses []int) {
 	// one backing array — so two subshells in the same pipeline, running at
 	// once, each recorded their own status over the other's. The race
 	// detector found it; the reuse was saving one allocation per pipeline.
+	//
+	// A record of one ordinary status is shared rather than built: every
+	// command a script runs writes one, so building it was an allocation per
+	// command (#6353), and a shared record is safe for the reason a fresh one
+	// was needed above — nothing writes into the record once it is made.
+	if len(statuses) == 1 && statuses[0] >= 0 && statuses[0] < len(singleStatusRecords) {
+		r.pipeStatus = singleStatusRecords[statuses[0]][:]
+		return
+	}
 	r.pipeStatus = append([]int(nil), statuses...)
 }
+
+// singleStatusRecords is the record of a pipeline of one, for every status a
+// command can exit with. Read only: see recordPipeStatus.
+var singleStatusRecords = func() (t [256][1]int) {
+	for i := range t {
+		t[i][0] = i
+	}
+	return t
+}()
 
 // recordSingleStatus is recordPipeStatus for a pipeline of one.
 //

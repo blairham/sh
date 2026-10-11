@@ -48,6 +48,14 @@ func (r *Runner) expandWordEscaped(w *syntax.Word) []string {
 	if w == nil {
 		return nil
 	}
+	if lit, ok := r.plainLiteralWord(w); ok {
+		// Nothing in the word for any stage to act on. What the full road
+		// leaves behind it is left here too: the word's edges are none, and
+		// a brace name armed for it is spent. See interp/plainword.go.
+		r.braceName = false
+		r.lastWordEdges = wordEdges{}
+		return []string{lit}
+	}
 	// Brace expansion comes first and can turn one word into several, so it
 	// wraps the rest rather than being a stage inside it. One word back can
 	// still be an expansion — `{1..1}` is `1`, and a range whose honored
@@ -298,7 +306,7 @@ func (r *Runner) expandWordFieldsTracked(w *syntax.Word, track bool) ([]string, 
 		if !atList {
 			text, split = r.expandSpan(s, policy, head)
 		}
-		release()
+		release.undo()
 		if atList {
 			if len(parts) == 0 && s.Quoting != syntax.Unquoted {
 				// A quoted `$@` — or a quoted `${a[@]}` — that produced no
@@ -1034,6 +1042,14 @@ func (r *Runner) globFields(fields []string) []string {
 			out = append(out, r.equalsHeadField(f[len(equalsMark):])...)
 			continue
 		}
+		if plainField(f) {
+			// Nothing in it a pattern is made of, so it is its own match.
+			// See interp/plainword.go.
+			if out != nil {
+				out = append(out, f)
+			}
+			continue
+		}
 		matches, dropped := r.glob(f)
 		switch {
 		case len(matches) > 0:
@@ -1175,7 +1191,7 @@ func (r *Runner) wordTextUnsplit(w *syntax.Word, mark func(syntax.Span, string) 
 		} else {
 			text, _ = r.expandSpan(s, splitNever, head)
 		}
-		release()
+		release.undo()
 		if !keepMarks {
 			text = globUnescape(text)
 		}
@@ -1274,11 +1290,11 @@ func (r *Runner) expandRedirectTargetViews(w *syntax.Word) (fields, words []stri
 			// however the splitting axis is answered, which is the half of
 			// this reading that is not the text view.
 			r.addSpan(&u, s, parts, marks, false)
-			release()
+			release.undo()
 			continue
 		}
 		text, split := r.expandSpan(s, splitAlways, head)
-		release()
+		release.undo()
 		b.WriteString(text)
 		// And never splits, whatever the span asked for — except a command
 		// substitution, which is split in the shell that reads the words
@@ -3143,7 +3159,7 @@ func (r *Runner) expandSpan(s syntax.Span, sp splitPolicy, head bool) (text stri
 	// those are readers of one expansion's brackets. See subscriptSubstHold
 	// (#3240) — arming twice for one word is a no-op, so the list half
 	// falling through to this one keeps the hold it opened.
-	defer r.armSubscriptSubsts(s)()
+	defer r.armSubscriptSubsts(s).undo()
 	unquoted := s.Quoting == syntax.Unquoted
 	switch s.Kind {
 	case syntax.Literal:
@@ -3468,11 +3484,12 @@ func (r *Runner) markGroupSyntaxFromTheValue(esc string) string {
 	if r.sem().GlobExpansionResults != Yes {
 		return esc
 	}
-	d := r.dialect()
-	if !d.ExtendedPattern && !d.PatternAlternation && !r.MatchOption(ExtendedPatternOperators) {
+	// The value is looked at first: it is one scan of bytes nearly every
+	// value has none of, and it is asked of every unquoted expansion.
+	if !hasLiveByteOf(esc, groupSyntax) {
 		return esc
 	}
-	if !hasLiveByteOf(esc, groupSyntax) {
+	if !r.lang().ExtendedPattern && !r.lang().PatternAlternation && !r.MatchOption(ExtendedPatternOperators) {
 		return esc
 	}
 	if r.braceGroupSyntaxIsFreed() {
@@ -9707,7 +9724,7 @@ func (r *Runner) nestedWords(e *syntax.ParamExpr) (words []string, set, isList b
 	// than around either: `${${a[$(f)]}}` ran `f` four times where zsh 5.9.2,
 	// the one grammar with the construct, runs it once. See
 	// subscriptSubstHold (#3240).
-	defer r.armSubscriptSubsts(e.Inner.Spans[0])()
+	defer r.armSubscriptSubsts(e.Inner.Spans[0]).undo()
 	if e.Index != nil {
 		// `${${v}[2]}` subscripts what the inner came to, which is a second
 		// question on top of this one and is answered in interp/nestedsub.go

@@ -76,19 +76,23 @@ type subscriptSubstVal struct {
 	val string
 }
 
-// armSubscriptSubsts arms the hold for one subscript word and returns the
-// call that gives the previous one back.
+// armSubscriptSubsts arms the hold for one subscript word and returns what
+// gives the previous one back.
 //
 // The previous hold is restored rather than cleared, because a substitution
 // in a subscript can hold an expansion with a subscript of its own, and the
 // outer brackets are still mid-read when the inner ones finish.
-func (r *Runner) armSubscriptSubsts(s syntax.Span) func() {
+//
+// A value with a method rather than a closure: every unquoted `$x` a command
+// line holds arms one, and the closure that captured the previous hold was an
+// allocation per expansion (#6353).
+func (r *Runner) armSubscriptSubsts(s syntax.Span) subscriptRelease {
 	if s.Kind != syntax.ParamExp || s.Param == nil {
 		// Not an expansion, so nothing here reads a subscript. The enclosing
 		// hold is left where it is: the spans of a subscript word are
 		// themselves expanded by a word loop, and a reset there would empty
 		// the hold the brackets were opened with.
-		return func() {}
+		return subscriptRelease{}
 	}
 	sub := s.Param.Subscript()
 	if r.subscriptSubsts.armed && r.subscriptSubsts.word == sub && sub != nil {
@@ -96,11 +100,24 @@ func (r *Runner) armSubscriptSubsts(s syntax.Span) func() {
 		// list half of an expansion arms and then falls through to the
 		// scalar half, which arms again; re-installing there would empty the
 		// hold between two readers of one expansion, which is the bug.
-		return func() {}
+		return subscriptRelease{}
 	}
 	prev := r.subscriptSubsts
 	r.subscriptSubsts = subscriptSubstHold{armed: true, word: sub}
-	return func() { r.subscriptSubsts = prev }
+	return subscriptRelease{r: r, prev: prev}
+}
+
+// subscriptRelease puts back the hold armSubscriptSubsts replaced. The zero
+// value replaced nothing and puts nothing back.
+type subscriptRelease struct {
+	r    *Runner
+	prev subscriptSubstHold
+}
+
+func (h subscriptRelease) undo() {
+	if h.r != nil {
+		h.r.subscriptSubsts = h.prev
+	}
 }
 
 // armedForSubscript reports whether the hold speaks for these brackets: the

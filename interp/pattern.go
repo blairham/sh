@@ -217,7 +217,7 @@ func (r *Runner) patternOf(w *syntax.Word) string {
 		// measured, against the panel's one. See subscriptSubstHold (#3240).
 		release := r.armSubscriptSubsts(s)
 		text, live := r.patternSpan(s)
-		release()
+		release.undo()
 		if live {
 			if s.Kind != syntax.Literal {
 				fromValue = append(fromValue, [2]int{b.Len(), b.Len() + len(text)})
@@ -3624,8 +3624,7 @@ func (r *Runner) bracketEscapeIsOnlyAMember(pattern string) bool {
 // there and two ordinary characters in a `case`. Answering it globally made
 // `p="(b)"; case b in $p` match, which that shell does not.
 func (r *Runner) readsQuantifiedGroups(condition bool) bool {
-	d := r.dialect()
-	return d.ExtendedPattern || (condition && d.ExtendedPatternInCondition)
+	return r.lang().ExtendedPattern || (condition && r.lang().ExtendedPatternInCondition)
 }
 
 // patternClasses resolves the dialect's extra character-class roster, and the

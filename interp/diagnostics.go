@@ -12513,6 +12513,10 @@ func PosixDiagnostics() Diagnostics { return Diagnostics{SyntaxErrorStatus: 2} }
 // nothing: a status is not a claim about another shell.
 func CoreDiagnostics() Diagnostics { return Diagnostics{} }
 
+// coreDiagnostics is the core's vector, for a runner that has none. Read only:
+// see diag.
+var coreDiagnostics = CoreDiagnostics()
+
 // promptLocated reports whether a message belongs to a line the person typed
 // rather than to a line of a file. One expression rather than two, because
 // diag asks it twice — once to decide whether the runner's own vector can be
@@ -12600,6 +12604,16 @@ func (r *Runner) diag() *Diagnostics {
 		// start's allocation (#5873). The answer depends on nothing but the
 		// vector, so it is kept until the vector is replaced.
 		return r.promptDiagnostics
+	}
+	if r.Diagnostics == nil && !located {
+		// A runner with no vector of its own reads the core's, and the core's
+		// is one value: building a copy per question cost a 2,000-iteration
+		// `[ $i -lt N ]` loop 166 MB on a bare runner, where it now costs
+		// under one — and a bare runner is every test and every embedder
+		// that sets none (#6353). Shared for the reason the runner's
+		// own vector is handed out above — nothing writes through what this
+		// returns; TestNothingWritesThroughTheDiagnostics keeps that true.
+		return &coreDiagnostics
 	}
 	d := CoreDiagnostics()
 	if r.Diagnostics != nil {

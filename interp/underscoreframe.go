@@ -37,7 +37,7 @@ import "github.com/blairham/sh/syntax"
 // underscoreAcrossAFunctionCall holds `$_` to the call rather than to the body.
 //
 // It is given what `$_` held *before* the call's own last argument was
-// recorded, and gives back the closure that puts the call's value in place
+// recorded, and gives back what puts the call's value in place
 // once the body has returned.
 //
 // The restore is unconditional because the panel is unanimous about it. What
@@ -45,7 +45,10 @@ import "github.com/blairham/sh/syntax"
 // the parameter at all: a shell that keeps no `$_` has nothing to decide, and
 // asking there would report an unanswered axis on every function call in a
 // script that never reads the name.
-func (r *Runner) underscoreAcrossAFunctionCall(beforeArg string, beforeSet bool) func() {
+//
+// A value with a method rather than a closure, because every function call
+// made one and the closure was an allocation per call (#6353).
+func (r *Runner) underscoreAcrossAFunctionCall(beforeArg string, beforeSet bool) underscoreRestore {
 	callArg, callSet := r.lastArg, r.lastArgSet
 	if r.sem().UnderscoreTracksTheLastArgument == Yes &&
 		!r.ask(r.sem().UnderscoreMovesBeforeAFunctionBody,
@@ -55,12 +58,25 @@ func (r *Runner) underscoreAcrossAFunctionCall(beforeArg string, beforeSet bool)
 		// and not `two`.
 		r.lastArg, r.lastArgSet = beforeArg, beforeSet
 	}
-	return func() {
-		// And the caller reads the call's, whatever the body left behind.
-		// Unanimous, and the whole of #3134's first defect: without this the
-		// body's last command leaked out through `$_`.
-		r.lastArg, r.lastArgSet = callArg, callSet
+	return underscoreRestore{r: r, arg: callArg, set: callSet}
+}
+
+// underscoreRestore puts the call's `$_` back once the body has returned. The
+// zero value holds nothing and puts nothing back.
+type underscoreRestore struct {
+	r   *Runner
+	arg string
+	set bool
+}
+
+func (u underscoreRestore) undo() {
+	if u.r == nil {
+		return
 	}
+	// And the caller reads the call's, whatever the body left behind.
+	// Unanimous, and the whole of #3134's first defect: without this the
+	// body's last command leaked out through `$_`.
+	u.r.lastArg, u.r.lastArgSet = u.arg, u.set
 }
 
 // The narrowed record needs no such bracket. It is not written until the
@@ -261,15 +277,15 @@ func (r *Runner) underscoreWrittenValue() (string, bool) {
 // it *reads* never wrote inside the text in the first place — so a bracket
 // there would hold a record that never moved, and asking would report an
 // unanswered axis on every `eval` in a script that never reads the name.
-func (r *Runner) underscoreAcrossABuiltinsOwnCommands(argv []string, beforeArg string, beforeSet bool) func() {
+func (r *Runner) underscoreAcrossABuiltinsOwnCommands(argv []string, beforeArg string, beforeSet bool) underscoreRestore {
 	if !builtinRunsTheScriptsOwnCommands(argv) ||
 		r.sem().UnderscoreTracksTheLastArgument != Yes ||
 		r.sem().UnderscoreMovesOnlyBetweenInputCommands == Yes {
-		return func() {}
+		return underscoreRestore{}
 	}
 	if !r.ask(r.sem().UnderscoreHoldsTheCallAcrossEvalAndSource,
 		"`$_` holding the call's own last argument across `eval` and `.`") {
-		return func() {}
+		return underscoreRestore{}
 	}
 	return r.underscoreAcrossAFunctionCall(beforeArg, beforeSet)
 }

@@ -5155,6 +5155,10 @@ type Runner struct {
 	// bound is this runner's methods as function values, made once. See
 	// boundMethods.
 	bound boundMethods
+	// plainScratch holds a plain word's one field between its expansion and
+	// argv, so that a command line of plain words builds no slice per word.
+	// See simple, which is the only reader.
+	plainScratch [1]string
 	// beforePrelude is the status pair as it stood when a prelude began,
 	// put back when it ends. See SourcingPrelude.
 	beforePrelude keptStatus
@@ -8798,7 +8802,17 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 		// halves rather than before the word is read.
 		fields, kept := r.builtinDeclarationOperand(c, argv, i, w)
 		if !kept {
-			fields = r.expandWordEscaped(w)
+			if lit, plain := r.plainLiteralWord(w); plain {
+				// expandWordEscaped's own answer for a plain word, held in
+				// the runner's one-field scratch rather than in a slice of
+				// its own. Safe because nothing between here and the end of
+				// this iteration expands anything or keeps the slice: the
+				// field is copied into argv below.
+				r.plainScratch[0] = lit
+				fields = r.plainLiteralFields(r.plainScratch[:])
+			} else {
+				fields = r.expandWordEscaped(w)
+			}
 		}
 		// Put down before the next word rather than at the end of the
 		// command: only the word this armed it for stands in that position.
@@ -9510,10 +9524,14 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 		// Semantics.TraceLineFollowsTheRedirections.
 		failed := new(bool)
 		failedLate = failed
+		// The walk as it stands, which is what the line is written against:
+		// it runs before anything below takes the walk again, and capturing
+		// the variable itself kept it on the heap for every command.
+		lateWalk := walk
 		lateTrace = append(lateTrace, func() {
 			if asItGoes {
-				r.tracePrefixAsItGoes(c, argv, walk)
-				*failed = r.prefixWalkFailed(walk)
+				r.tracePrefixAsItGoes(c, argv, lateWalk)
+				*failed = r.prefixWalkFailed(lateWalk)
 				return
 			}
 			r.expandPrefixTraceValues(c.Assigns)
@@ -9984,7 +10002,7 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 		// `$_` belongs to the *call* and not to the body: whatever the last
 		// command inside it was handed, the caller reads what the call was.
 		// Unanimous across bash, ksh93 and zsh, and #3134's first defect.
-		defer r.underscoreAcrossAFunctionCall(beforeLastArg, beforeLastArgSet)()
+		defer r.underscoreAcrossAFunctionCall(beforeLastArg, beforeLastArgSet).undo()
 		err := r.callFunc(ctx, fn, argv[1:])
 		// Not for the call a trap makes to its `TRAP…` function: measured,
 		// `TRAPUSR1(){ false }` reports nothing when the signal arrives,
@@ -10005,7 +10023,7 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 		// script's own commands — `eval` and `.` — exactly as it belongs to
 		// a function call. See Runner.underscoreAcrossABuiltinsOwnCommands,
 		// which reuses that bracket and is inert for every other builtin.
-		defer r.underscoreAcrossABuiltinsOwnCommands(argv, beforeLastArg, beforeLastArgSet)()
+		defer r.underscoreAcrossABuiltinsOwnCommands(argv, beforeLastArg, beforeLastArgSet).undo()
 		// An assignment prefixed to a builtin is visible to the builtin
 		// while it runs — `IFS=: read x y` splits on the colon — and is
 		// taken back afterward. The exception is a *special* builtin,

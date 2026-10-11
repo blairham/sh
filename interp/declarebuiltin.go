@@ -2408,7 +2408,13 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) (endSt
 		if slot == IntegerParameter {
 			df.integer, df.base, df.baseNamed = true, 10, true
 		}
-		held := r.holdTheDeclaration(name)
+		// What the name carried before the letters land, which only a
+		// reference's refused aim puts back — so held only where the line
+		// writes the letter, which nothing below turns on (#6373).
+		var held declarationHeld
+		if df.nameref {
+			held = r.holdTheDeclaration(name)
+		}
 		if hasValue && !appends && !df.global && !df.compoundVar {
 			// Before this line's letters land and before the value is
 			// stored, so the letters it writes are the ones it keeps and the

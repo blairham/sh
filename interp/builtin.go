@@ -8089,7 +8089,13 @@ func biLocal(r *Runner, _ context.Context, args []string) (endStatus int) {
 		if slot == IntegerParameter {
 			f.integer, f.base, f.baseNamed = true, 10, true
 		}
-		held := r.holdTheDeclaration(name)
+		// What the name carried before the letters land, which only a
+		// reference's refused aim puts back — so held only where the line
+		// writes the letter (#6373).
+		var held declarationHeld
+		if f.nameref {
+			held = r.holdTheDeclaration(name)
+		}
 		r.applyAttributes(name, f)
 		// Over a binding this line made only — see biDeclare's call.
 		if !redeclared {

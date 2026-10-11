@@ -68,6 +68,7 @@ func biEnable(r *Runner, _ context.Context, args []string) int {
 			status = 1
 			continue
 		}
+		r.builtinTablesChanged()
 		if off {
 			if r.disabledBuiltins == nil {
 				r.disabledBuiltins = map[string]bool{}

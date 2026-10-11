@@ -3,7 +3,11 @@
 
 package interp
 
-import "github.com/blairham/sh/syntax"
+import (
+	"strings"
+
+	"github.com/blairham/sh/syntax"
+)
 
 // A word that is nothing but plain text, and a field that is.
 //
@@ -75,4 +79,123 @@ func (r *Runner) plainLiteralFields(field []string) []string {
 	r.braceName = false
 	r.lastWordEdges = wordEdges{}
 	return field
+}
+
+// plainParamWord is the word's one field, where the word is a single unquoted
+// `$name` (or `${name}`) of an ordinary scalar whose value is plain text with
+// no separator of IFS's in it.
+//
+// The front of the issue after the plain literal: an unquoted `$i` was more
+// than half of what `: $i` cost, nearly none of it reading the variable (#6353).
+// The road it took asks some forty questions of the word and the runner —
+// tildes, `=cmd`, braces, list-shaped parameters, references, flags, held
+// sources, the field builder, the glob stage — and for a scalar holding a
+// number every one of them answers "nothing to do".
+//
+// Which of those questions could have a different answer is settled before the
+// variable is read, so a word this declines is handed to the full road having
+// read nothing: the name is a written identifier with nothing else in the
+// expansion, and it is not a reference, a produced parameter, an array of any
+// kind, a parameter waiting to arrive, or a name a discipline watches. After
+// the read, a value that is unset, empty, holds a byte that is not plain text
+// or holds one of IFS's bytes is also handed back — reading an ordinary scalar
+// twice changes nothing — and the full road answers it from the start.
+func (r *Runner) plainParamWord(w *syntax.Word) (string, bool) {
+	v, ok := r.plainParamValue(w)
+	if !ok {
+		return "", false
+	}
+	if ifs, _ := r.ifs(); containsAnyOf(v, ifs) {
+		return "", false
+	}
+	return v, true
+}
+
+// plainParamShortcut switches plainParamValue on. A variable so a test can
+// run the same script with the full road answering every word and require the
+// same output — see TestAPlainParameterWordAnswersAsTheFullRoadDoes.
+var plainParamShortcut = true
+
+// plainParamValue is plainParamWord without the question about IFS, which is
+// the whole of it where the word is not split: an assignment's value.
+func (r *Runner) plainParamValue(w *syntax.Word) (string, bool) {
+	if !plainParamShortcut || w == nil || len(w.Spans) != 1 || r.splitWordLiterals.on || r.shFileExpansion || r.ctl == controlExit ||
+		r.disciplined != nil {
+		return "", false
+	}
+	s := &w.Spans[0]
+	if s.Kind != syntax.ParamExp || s.Quoting != syntax.Unquoted || !bareNameOnly(s.Param) {
+		return "", false
+	}
+	name := s.Param.Name
+	if !r.ordinaryScalarName(name) {
+		return "", false
+	}
+	v, set := r.getVar(name)
+	if !set || !plainField(v) || strings.ContainsAny(v, "[]") {
+		return "", false
+	}
+	return v, true
+}
+
+// bareNameOnly reports whether a parameter expansion is a name and nothing
+// else: no subscript, operator, flag, modifier, nesting or indirection, and a
+// name that is an identifier rather than a special or positional parameter.
+func bareNameOnly(e *syntax.ParamExpr) bool {
+	if e == nil || e.Index != nil || e.BareIndexText != nil || e.BareIndexUnclosed ||
+		e.Length || e.Indirect || e.Prefix != 0 || e.Member != "" || e.Inner != nil ||
+		e.Op != syntax.ParamNone || e.Arg != nil || e.Arg2 != nil || e.OperandUnreadable != nil ||
+		e.RawTail != "" || e.Transform != 0 || e.HasFlags || e.QuoteModifier != 0 ||
+		e.IndexFlags != nil || e.IndexRange != nil || e.IndexDots != nil || len(e.Leading) > 0 ||
+		e.TildeFlags != 0 || e.SplitFlags != 0 || e.RcExpandFlags != 0 || e.SetTest ||
+		e.Bad || e.BadTransform || e.RefusedAtExpansion != nil || e.InsideASubscript {
+		return false
+	}
+	return identifierName(e.Name)
+}
+
+// identifierName reports whether name is a shell identifier: a letter or an
+// underscore, then letters, digits and underscores.
+func identifierName(name string) bool {
+	if name == "" {
+		return false
+	}
+	for i := 0; i < len(name); i++ {
+		c := name[i]
+		switch {
+		case 'a' <= c && c <= 'z', 'A' <= c && c <= 'Z', c == '_':
+		case '0' <= c && c <= '9' && i > 0:
+		default:
+			return false
+		}
+	}
+	return true
+}
+
+// ordinaryScalarName reports whether reading name is nothing but reading the
+// variable store: the name is not a reference, a produced parameter, a
+// parameter that has not yet arrived, or any kind of array, each of which the
+// full road answers differently from a read of the store or reads with a side
+// effect that must not happen twice.
+func (r *Runner) ordinaryScalarName(name string) bool {
+	if name == r.pipeStatusName || r.deferredParams[name] {
+		return false
+	}
+	if _, ok := r.nameref[name]; ok {
+		return false
+	}
+	if _, ok := r.Dynamic[name]; ok {
+		return false
+	}
+	if _, ok := r.Arrays[name]; ok {
+		return false
+	}
+	if _, ok := r.DynamicArrays[name]; ok {
+		return false
+	}
+	if _, ok := r.AssocArrays[name]; ok {
+		return false
+	}
+	_, ok := r.DynamicAssocs[name]
+	return !ok
 }

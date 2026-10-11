@@ -76,6 +76,11 @@ func (r *Runner) scalarAssignValue(a *syntax.Assign) (string, []string, bool) {
 // Runner.expandAssignValue exactly as it did before, marks removed a span at
 // a time. Only the shell that asked for the reading takes the marked road.
 func (r *Runner) expandScalarAssignValue(w *syntax.Word) (string, []string, bool) {
+	if v, ok := r.plainParamValue(w); ok {
+		// `x=$i` of a plain scalar: nothing for the tilde passes, the
+		// escapes or the match to do (#6353). See plainParamWord.
+		return v, nil, false
+	}
 	if w == nil || !r.scalarAssignmentGlobs() {
 		return r.expandAssignValue(w), nil, false
 	}

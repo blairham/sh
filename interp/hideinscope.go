@@ -3,6 +3,8 @@
 
 package interp
 
+import "strings"
+
 // The hide-in-scope attribute: `typeset -h` and `typeset +h`.
 //
 // A shell that ties `PATH` to `path` — see tiedscalar.go — has to answer what
@@ -158,49 +160,17 @@ func (r *Runner) dropHideInScope(name string) {
 	r.shadowStopsHiding(name)
 }
 
-// The kind a hidden name held when a line started, for every name carrying
-// the attribute. That is often none of them and the map is then nil, but one
-// dialect registers some forty of its own parameters with the attribute, so a
-// bare assignment — far the commonest line — asks watchHiddenKinds instead.
-//
-// The names come from r.hideInScope and not from shadowIsHidden, and that is
-// the whole of what keeps this about the binding in front of the line: a
-// shadow deletes the entry and records the answer in the scope instead, so a
-// deeper function's declaration of the same name finds nothing here to
-// forget. Measured 2026-09-27 on zsh 5.9.2, and the rows are the reason:
-//
-//	f(){ typeset -h v; g }; g(){ typeset -a v }   f's `v` is still hidden
-//	typeset -h v; f(){ typeset -a v }             the global is still hidden
-//
-// A line that writes `-h` itself is exempt and answers nil, for the reason
-// kindLetterReplacesWhatTheNameWas gives for its own rule: what a kind change
-// forgets is what the name was carrying *before* the line, never what the
-// line writes. `f(){ typeset -h v; typeset -h v=(a b) }` is
-// `array-local-hide` in the reference, and so is the `-h -a` spelling.
-func (r *Runner) hiddenNameKinds() map[string]ParameterKind {
-	if r.hideLetterWritten || len(r.hideInScope) == 0 {
-		return nil
-	}
-	kinds := make(map[string]ParameterKind, len(r.hideInScope))
-	for name, hidden := range r.hideInScope {
-		if hidden {
-			kinds[name] = r.parameterKind(name)
-		}
-	}
-	return kinds
-}
-
-// watchHiddenKinds is hiddenNameKinds for a bare assignment, which can retype
-// a name only by storing to it: it records the kind a hidden name held when
-// the assignment started, at the moment the first store to that name is
+// watchHiddenKinds is watchDeclarationKinds for a bare assignment, which can
+// retype a name only by storing to it: it records the kind a hidden name held
+// when the assignment started, at the moment the first store to that name is
 // announced, and endHiddenWatch, handed what this returns, forgets the
 // attribute of every name whose kind the assignment changed. It reports
 // false, and watches nothing, where nothing is hidden or where the line writes
 // the letter itself.
 //
-// The same answer hiddenNameKinds gives, from the names the line actually
-// wrote rather than from every name carrying the attribute — and that
-// difference is the whole of why it exists. The rule was written for a shell
+// The same answer taking the kind of every hidden name gives, from the names
+// the line actually wrote rather than from every name carrying the attribute
+// — and that difference is the whole of why it exists. The rule was written for a shell
 // where the attribute is rare, and one dialect registers some forty of its own
 // parameters with it before a script runs, so every assignment in a session
 // of it took the kind of all forty twice: about four microseconds an
@@ -216,7 +186,7 @@ func (r *Runner) hiddenNameKinds() map[string]ParameterKind {
 // the value is expanded first. A value can write other names — `${v::=x}`, an
 // arithmetic `y = 1` — and those arrive through the same stores. A
 // declaration is not covered, because its letters retype a name without
-// storing to it (`typeset -i v`); it keeps hiddenNameKinds.
+// storing to it (`typeset -i v`); it has watchDeclarationKinds.
 //
 // Nested, the inner watch hands the outer one what it saw: a name the outer
 // had not seen yet was unwritten until the inner started, so the kind the
@@ -233,6 +203,79 @@ func (r *Runner) watchHiddenKinds(target string) (hiddenWatch, bool) {
 		// last thing the line does, and the value's expansion comes first.
 		resolved, _, _ := r.namerefWalk(target)
 		r.noteHiddenWrite(resolved)
+	}
+	return w, true
+}
+
+// watchDeclarationKinds starts the watch a declaration line's kind changes are
+// read from, for the rule kindChangeForgetsTheHide states: the kind a hidden
+// name held when the line started, for every name the line can retype.
+//
+// The names come from r.hideInScope and not from shadowIsHidden, and that is
+// the whole of what keeps this about the binding in front of the line: a
+// shadow deletes the entry and records the answer in the scope instead, so a
+// deeper function's declaration of the same name finds nothing here to
+// forget. Measured 2026-09-27 on zsh 5.9.2, and the rows are the reason:
+//
+//	f(){ typeset -h v; g }; g(){ typeset -a v }   f's `v` is still hidden
+//	typeset -h v; f(){ typeset -a v }             the global is still hidden
+//
+// A line that writes `-h` itself is exempt and watches nothing, for the reason
+// kindLetterReplacesWhatTheNameWas gives for its own rule: what a kind change
+// forgets is what the name was carrying *before* the line, never what the
+// line writes. `f(){ typeset -h v; typeset -h v=(a b) }` is
+// `array-local-hide` in the reference, and so is the `-h -a` spelling.
+//
+// The names a declaration can retype without storing to them are its
+// operands, so those are what the watch is seeded with, and the stores the
+// line makes are noted as they are for a bare assignment. This used to take
+// the kind of every hidden name instead, and one dialect registers some forty
+// of its own parameters with the attribute, so every `local` and `typeset`
+// line in it asked for eighty kinds to find out about the one or two names it
+// declared — about a sixth of what a declaration cost there (#6373). A name
+// the line neither names nor stores to keeps the kind it had, so leaving it
+// out changes no answer.
+//
+// Both halves of an operand's tie are noted as well, because the reference
+// can move the other half's kind: measured 2026-10-11 on zsh 5.9.2,
+// `typeset -T FOO foo; typeset -i FOO` unties the pair and leaves `foo`
+// unset, so a declaration of one half is a declaration that retypes the
+// other. This shell keeps the tie there today (#6387), and a special half
+// refuses the letter outright (`can't change type of a special parameter`)
+// in both, so the partner is noted for the day the untie lands rather than
+// for anything it changes now.
+//
+// A line whose operands are not names — a pattern, a function, a tie being
+// made — falls back to every hidden name, which is the old answer and costs
+// what it did; and so does any line while
+// a reference stands anywhere, since a letter on a reference retypes the
+// name it is aimed at rather than the operand. No dialect has both the
+// attribute and references today, so that branch keeps the old answer
+// rather than guessing at an unmeasured one.
+func (r *Runner) watchDeclarationKinds(args []string, f declareFlags) (hiddenWatch, bool) {
+	if r.hideLetterWritten || len(r.hideInScope) == 0 {
+		return hiddenWatch{}, false
+	}
+	w, _ := r.watchHiddenKinds("")
+	if f.matching || f.matchNames || f.mapping || f.function || f.funcNames || f.tie || len(r.nameref) > 0 {
+		for name, hidden := range r.hideInScope {
+			if hidden {
+				r.noteHiddenWrite(name)
+			}
+		}
+		return w, true
+	}
+	for _, a := range args {
+		name, _, _ := strings.Cut(a, "=")
+		name = strings.TrimSuffix(name, "+")
+		if base, _, ok := strings.Cut(name, "["); ok {
+			name = base
+		}
+		r.noteHiddenWrite(name)
+		if t, ok := r.tieOf(name); ok {
+			r.noteHiddenWrite(t.scalar)
+			r.noteHiddenWrite(t.array)
+		}
 	}
 	return w, true
 }
@@ -321,7 +364,7 @@ func (r *Runner) kindChangeForgetsTheHide(was map[string]ParameterKind) {
 }
 
 // noteTheHideLetter records that the declaration being run writes `-h`, which
-// is the exemption hiddenNameKinds reads.
+// is the exemption watchDeclarationKinds and watchHiddenKinds read.
 //
 // A mark on the runner rather than an argument, because a declaration's array
 // value is stored by [Runner.assignOperands] *after* the builtin has returned:

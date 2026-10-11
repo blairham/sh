@@ -71,11 +71,17 @@ declaring() { local a=$1 b=$2 c; c=$a$b; }
 // record per name now rather than a table per kind of record — see
 // interp/scoperecords.go — which is time rather than allocations.
 //
+// And 14 after that: each line took the kind of every parameter carrying the
+// hide attribute, about forty of this dialect's own, into a table built for
+// the purpose, to learn whether the line had changed one. It watches the
+// names it declares and the names it stores to instead (see
+// Runner.watchDeclarationKinds).
+//
 // Allocations rather than time, so the row is deterministic. The bound has
 // room above what a call costs now and is well below what it cost before.
 func TestLocalCostsFewAllocations(t *testing.T) {
-	if got := localCostAllocs(t, localCostDefs, "declaring", "plain"); got > 24 {
-		t.Errorf("three declarations allocate %v times a call more than plain assignments; want at most 24", got)
+	if got := localCostAllocs(t, localCostDefs, "declaring", "plain"); got > 16 {
+		t.Errorf("three declarations allocate %v times a call more than plain assignments; want at most 16", got)
 	}
 }
 

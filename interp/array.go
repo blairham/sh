@@ -629,9 +629,7 @@ func (r *Runner) setArrayElem(name string, idx int, sub, value string) {
 // bool says is "the value below may be stored": false where the evaluation
 // failed and has already reported, and where the axis went unanswered.
 func (r *Runner) elementValueFolded(name, value string) (string, bool) {
-	_, width := r.fieldWidth[name]
-	if !r.integer[name] && !r.lowered[name] && !r.uppered[name] &&
-		!r.capitalized[name] && !width {
+	if !r.foldsElements(name) {
 		return value, true
 	}
 	if !r.attributeWouldChange(name, value) {
@@ -642,6 +640,16 @@ func (r *Runner) elementValueFolded(name, value string) (string, bool) {
 		return value, !r.unspecified
 	}
 	return r.attributeFolded(name, value)
+}
+
+// foldsElements is the first of elementValueFolded's three questions on its
+// own: whether name carries any attribute that could rewrite a value written
+// to one of its elements. Where it does not, no fold can change anything, and
+// a caller placing many elements may skip asking per element (#6362).
+func (r *Runner) foldsElements(name string) bool {
+	_, width := r.fieldWidth[name]
+	return r.integer[name] || r.lowered[name] || r.uppered[name] ||
+		r.capitalized[name] || width
 }
 
 // stringWritten is what a *string* write leaves in an element, which is not

@@ -4080,6 +4080,12 @@ func (r *Runner) expandArithText(text string, origin arithTextOrigin) string {
 // range protects a narrower set. A span that is not protected is scanned for
 // brackets like any other text, so its `]` still closes a subscript.
 func (r *Runner) markedSubscriptWord(w *syntax.Word, protects func(syntax.Span) bool) string {
+	if v, ok := r.plainParamValue(w); ok {
+		// `[[ $i -lt N ]]`'s operand: a plain scalar's value holds no
+		// bracket to track and no byte to mark, so every route below hands
+		// it back as it is. See plainParamWord (#6353).
+		return v
+	}
 	var scan syntax.ArithBracketScan
 	advance := func(text string) {
 		for i := 0; i < len(text); i++ {

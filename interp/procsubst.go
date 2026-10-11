@@ -69,7 +69,7 @@ func (r *Runner) procSub(ctx context.Context, span syntax.Span) (string, bool) {
 	// whatever the enclosing word had. Pushed before the clone, so the shell
 	// that runs the body carries the level it was entered at. See substLevel
 	// (#3355).
-	defer r.atFreshSubstLevel(span)()
+	defer r.atFreshSubstLevel(span).undo()
 	f, ok := r.substBody(span)
 	if !ok {
 		return "", false

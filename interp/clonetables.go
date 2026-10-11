@@ -145,6 +145,9 @@ func (c *Runner) ownTables(r *Runner) {
 	// onto the parent's backing array would write into a stack the parent is
 	// still reading. See interp/evalcontext.go.
 	c.evalContexts = slices.Clone(r.evalContexts)
+	// Pushed in place and truncated on the way out — see substLevelUndo — so
+	// a subshell that shared the array would write into the parent's slots.
+	c.substLevelsOut = slices.Clone(r.substLevelsOut)
 	c.leavingContexts = slices.Clone(r.leavingContexts)
 	c.scopeFixed = maps.Clone(r.scopeFixed)
 	c.kindFixed = maps.Clone(r.kindFixed)

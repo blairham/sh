@@ -507,21 +507,42 @@ func (r *Runner) inBraceOperand(q syntax.Quoting) func() {
 // That is also why the substitution's *own* quoting is folded into the level
 // being left behind: the `"` of that row is around the outer `$( )`, so it is
 // on this span and not in anything the outer level had recorded.
-func (r *Runner) atFreshSubstLevel(span syntax.Span) func() {
-	saved, savedOuter := r.substLevel, r.substLevelsOut
-	savedFragment := r.substFragmentLine
-	door := r.outerLevel(saved, span)
+func (r *Runner) atFreshSubstLevel(span syntax.Span) substLevelUndo {
+	undo := substLevelUndo{r: r, level: r.substLevel, outer: len(r.substLevelsOut), fragment: r.substFragmentLine}
+	door := r.outerLevel(undo.level, span)
 	door.entry.body = true
-	r.substLevelsOut = append(append([]substLevel{}, r.substLevelsOut...), door)
+	r.substLevelsOut = append(r.substLevelsOut, door)
 	r.substLevel = substLevel{}
 	// And the body's lines are its own from here: whatever re-lexed text
 	// this substitution was written in, the body is parsed separately and
 	// placed by Runner.lineBase. See Runner.substFragmentLine.
 	r.substFragmentLine = 0
-	return func() {
-		r.substLevel, r.substLevelsOut = saved, savedOuter
-		r.substFragmentLine = savedFragment
-	}
+	return undo
+}
+
+// substLevelUndo puts back the level a nested text was entered from: the
+// level itself, the stack of levels outside it, and the fragment line.
+//
+// A value with a method rather than a closure, and the stack pushed in place
+// rather than rebuilt: an arithmetic expansion opens a level every time it
+// runs, so `x=$((i+1))` paid for a copy of the whole stack and a closure
+// holding two levels on every evaluation (#6353). Truncating the stack back
+// to its length is the same undo the rebuilt copy gave, because the stack is
+// only ever pushed and popped in this order, and a subshell takes a copy of
+// its own — see ownTables.
+type substLevelUndo struct {
+	r        *Runner
+	level    substLevel
+	outer    int
+	fragment int
+}
+
+func (u substLevelUndo) undo() {
+	r := u.r
+	r.substLevel = u.level
+	clear(r.substLevelsOut[u.outer:])
+	r.substLevelsOut = r.substLevelsOut[:u.outer]
+	r.substFragmentLine = u.fragment
 }
 
 // outerLevel is the level a nested text is entered from, with the entering
@@ -542,19 +563,15 @@ func (r *Runner) outerLevel(at substLevel, span syntax.Span) substLevel {
 
 // inArithText opens the level of an arithmetic expansion's re-lexed text, and
 // returns the undo. See substLevel.arith.
-func (r *Runner) inArithText(span syntax.Span) func() {
-	saved, savedOuter := r.substLevel, r.substLevelsOut
-	savedFragment := r.substFragmentLine
-	r.substLevelsOut = append(append([]substLevel{}, r.substLevelsOut...), r.outerLevel(saved, span))
+func (r *Runner) inArithText(span syntax.Span) substLevelUndo {
+	undo := substLevelUndo{r: r, level: r.substLevel, outer: len(r.substLevelsOut), fragment: r.substFragmentLine}
+	r.substLevelsOut = append(r.substLevelsOut, r.outerLevel(undo.level, span))
 	r.substLevel = substLevel{arith: true}
 	// The text is lexed again here, so what it yields is numbered from the
 	// expansion's own line rather than from the file's, and how far in that
 	// line is has to travel with it. See Runner.substFragmentLine (#3810).
 	r.substFragmentLine += int(span.Pos.Line) - 1
-	return func() {
-		r.substLevel, r.substLevelsOut = saved, savedOuter
-		r.substFragmentLine = savedFragment
-	}
+	return undo
 }
 
 // inArithCommandText opens the re-lexed text of an arithmetic *command* —

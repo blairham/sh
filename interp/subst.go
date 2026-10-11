@@ -108,7 +108,7 @@ func (r *Runner) runCommandSubst(ctx context.Context, span syntax.Span) string {
 	// inside its body, and a refusal in there belongs to the inner level.
 	// See substLevel — this is what keeps `echo "$(echo $(for))"` from
 	// claiming the outer quote for the inner body (#3355).
-	defer r.atFreshSubstLevel(span)()
+	defer r.atFreshSubstLevel(span).undo()
 
 	if v, answered := r.arithmeticBodySubstitution(f, span); answered {
 		// A body that is nothing but `(( … ))` is read as the arithmetic

@@ -5145,6 +5145,9 @@ type Runner struct {
 	// when a dialect has named it, because nothing else can read it.
 	pipeStatus     []int
 	pipeStatusName string
+	// bound is this runner's methods as function values, made once. See
+	// boundMethods.
+	bound boundMethods
 	// beforePrelude is the status pair as it stood when a prelude began,
 	// put back when it ends. See SourcingPrelude.
 	beforePrelude keptStatus
@@ -8569,7 +8572,9 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 		r.failedExpansion()
 		return nil
 	}
-	var argv []string
+	// Sized for one field a word, which is what nearly every command line
+	// is; growing it from nothing was an allocation per word (#2508, #6353).
+	argv := make([]string, 0, len(c.Args))
 	// The leading words are scanned for the dialect's precommand modifiers
 	// before any word is matched against the filesystem, which is the only
 	// order `noglob` can be honored in: what it switches off is the stage
@@ -8614,7 +8619,10 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 	// How much of argv had been built when each of the command's words was
 	// reached, which is what puts an array-literal operand back at the index
 	// it was written at. See interp/operandwrittenorder.go.
-	argvBefore := make([]int, 0, len(c.Args))
+	// On this frame for a command of up to eight words, which is nearly all
+	// of them; it is read once below and never kept.
+	var argvBefore0 [8]int
+	argvBefore := argvBefore0[:0]
 	var lexedAt, sourceClosedAt []string
 	endGlobUnit := r.beginGlobUnit()
 	// A failed expansion in a declaration's words leaves `$?` alone, in the
@@ -9451,7 +9459,12 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 	// stopped the shell. See interp/xtraceprefixasitgoes.go.
 	defer r.writeHeldPrefixTrace()
 	asItGoes := tracesPrefix && !prefixFollows && r.tracesPrefixAsItGoes()
-	failedLate := false
+	// Whether the prefix traced after the redirections failed to expand,
+	// written by the late trace line below. A pointer made only on the route
+	// that sets it: a local the closure captured lived on the heap, which
+	// cost every command an allocation for a route almost none of them take
+	// (#6353).
+	var failedLate *bool
 	tracedHere := false
 	// What this command knew before any prefix value was expanded, so that a
 	// failure the walk *causes* can be told from one that was already on the
@@ -9488,10 +9501,12 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 	} else if tracesPrefix && !prefixFollows && traceLater && !early {
 		// After the redirections, with the prefix expanded there too. See
 		// Semantics.TraceLineFollowsTheRedirections.
+		failed := new(bool)
+		failedLate = failed
 		lateTrace = append(lateTrace, func() {
 			if asItGoes {
 				r.tracePrefixAsItGoes(c, argv, walk)
-				failedLate = r.prefixWalkFailed(walk)
+				*failed = r.prefixWalkFailed(walk)
 				return
 			}
 			r.expandPrefixTraceValues(c.Assigns)
@@ -9538,7 +9553,15 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 	if !r.commandRunsInThisShell(argv) {
 		owner = redirOwnerTheCommand
 	}
-	traceDest := r.traceDestination()
+	// Where the trace goes is read before the redirections are applied,
+	// because they may move it — and only when a line is waiting to be
+	// written there. Reading it costs a variable lookup in the dialect that
+	// names a descriptor for it, and a command with no late trace line is
+	// nearly every command (#6353).
+	var traceDest io.Writer
+	if len(lateTrace) > 0 {
+		traceDest = r.traceDestination()
+	}
 	closers, err := r.applyRedirs(ctx, c.Redirs, false, owner)
 	r.redirectForBuiltin, r.redirForCommandWord = "", ""
 	// Read here rather than in the defer: a builtin that runs a program of its
@@ -9651,7 +9674,7 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 
 	// The prefix traced after the redirections would not expand. See the
 	// same check ahead of them.
-	if failedLate && r.givesUpForAFailedPrefix(walk, r.prefixCommandOf(argv)) {
+	if failedLate != nil && *failedLate && r.givesUpForAFailedPrefix(walk, r.prefixCommandOf(argv)) {
 		return nil
 	}
 

@@ -1263,7 +1263,7 @@ func (r *Runner) ParseWithAliases(src string, d syntax.Dialect) *syntax.Parser {
 // missed on the route ksh reads a command string by.
 func (r *Runner) ParsingDialect(d syntax.Dialect) syntax.Dialect {
 	if d.DollarSingleQuote {
-		d.HeredocDelimiterValue = r.AnsiCValue
+		d.HeredocDelimiterValue = r.boundReaders().ansiCValue
 	}
 	return d
 }

@@ -223,14 +223,14 @@ func (r *Runner) resolveBraceBody(w *syntax.Word, body []syntax.Span) ([]syntax.
 		var text string
 		if atList {
 			if len(parts) != 1 {
-				release()
+				release.undo()
 				return nil, produced, braceBodyNotAGroupHere
 			}
 			text = r.joinUnsplitEscaped(s.Param, parts)
 		} else {
 			text, _ = r.expandSpan(s, splitNever, false)
 		}
-		release()
+		release.undo()
 		// The marks come off a span at a time, exactly as the unsplit word
 		// loop takes them off: what goes back into the body is the text a
 		// script would see, and the inert spans it lands in are what keep a

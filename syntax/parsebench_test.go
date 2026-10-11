@@ -80,11 +80,14 @@ func TestParseBytesPerLine(t *testing.T) {
 // a fresh string first, once per question, and so did the check of a
 // command's first word against the declaration utilities. That came to about
 // 9.7 of the script's 47.9 allocations a line; comparing in place brought it
-// to about 38.3 (#6381). The bound sits under the old figure.
+// to about 38.1. A run of literal text was then still copied out of the
+// source through a growing buffer, two allocations a run where a substring
+// of the source is none; taking the substring brought it to about 33.6
+// (#6381). The bound sits under the figure before each of those.
 //
 // Not parallel, for the reason TestParseBytesPerLine gives.
 func TestParseAllocsPerLine(t *testing.T) {
-	const bound = 42
+	const bound = 36
 	_, allocs := parseCostPerLine(t)
 	t.Logf("%.2f allocations per line", allocs)
 	if allocs > bound {

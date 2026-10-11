@@ -3096,6 +3096,72 @@ func (l *Lexer) pidBraceSpan(armed bool, c byte) (Span, bool) {
 	}, true
 }
 
+// litRun is the text of a run of literal characters in a word, as scanWord
+// collects it outside quotes and scanDoubleEscaping inside double quotes.
+//
+// Nearly always that text is a stretch of the source, unbroken, and then the
+// run is only an offset and a length, and its value a substring of the source:
+// no buffer to grow byte by byte and no copy to take at the end, which were
+// two allocations a run and about six a line of #6354's script (#6381). Only
+// a run that skips something — a backslash-newline joining two lines, for
+// one — is copied out, from the point it skips.
+type litRun struct {
+	src     string
+	from, n int
+	spilled bool
+	buf     []byte
+}
+
+// add appends src[start:end], the bytes the lexer has just consumed.
+func (r *litRun) add(start, end int) {
+	switch {
+	case r.spilled:
+		r.buf = append(r.buf, r.src[start:end]...)
+	case r.n == 0:
+		r.from, r.n = start, end-start
+	case start == r.from+r.n:
+		r.n += end - start
+	default:
+		r.buf = append(append(r.buf[:0], r.src[r.from:r.from+r.n]...), r.src[start:end]...)
+		r.spilled = true
+	}
+}
+
+// take consumes one byte and adds it to the run.
+func (r *litRun) take(l *Lexer) {
+	at := l.off
+	l.advance()
+	r.add(at, l.off)
+}
+
+// takeGroup consumes a pattern group and adds its text to the run.
+func (r *litRun) takeGroup(l *Lexer) {
+	at := l.off
+	l.scanPatternGroup()
+	r.add(at, l.off)
+}
+
+// Len is the run's length in bytes.
+func (r *litRun) Len() int {
+	if r.spilled {
+		return len(r.buf)
+	}
+	return r.n
+}
+
+// String is the run's text.
+func (r *litRun) String() string {
+	if r.spilled {
+		return string(r.buf)
+	}
+	return r.src[r.from : r.from+r.n]
+}
+
+// Reset empties the run, keeping its buffer.
+func (r *litRun) Reset() {
+	r.n, r.spilled, r.buf = 0, false, r.buf[:0]
+}
+
 // scanWord reads a word as a sequence of spans, one per run of uniform
 // quoting. The spans are the point: a"b c"d is one word of three spans, and
 // only the unquoted ones are subject to splitting and globbing later.
@@ -3107,7 +3173,7 @@ func (l *Lexer) scanWord(start Pos) Token {
 	defer func() { l.wordStart = Pos{} }()
 
 	var spans []Span
-	var lit strings.Builder
+	lit := litRun{src: l.src}
 	litPos := start
 
 	flush := func() {
@@ -3150,7 +3216,7 @@ func (l *Lexer) scanWord(start Pos) Token {
 	pidArmed := false
 
 	if l.openBraceIsAWordOfItsOwn() {
-		lit.WriteByte(l.advance())
+		lit.take(l)
 		flush()
 		return Token{
 			Kind: TokWord, Pos: start, End: l.pos(),
@@ -3172,7 +3238,7 @@ func (l *Lexer) scanWord(start Pos) Token {
 				litPos = l.pos()
 			}
 			for range width {
-				lit.WriteByte(l.advance())
+				lit.take(l)
 			}
 			continue
 		}
@@ -3221,7 +3287,7 @@ func (l *Lexer) scanWord(start Pos) Token {
 			if lit.Len() == 0 {
 				litPos = l.pos()
 			}
-			lit.WriteString(l.scanPatternGroup())
+			lit.takeGroup(l)
 
 		case c == '<' && l.startsNumericRange():
 			// Taken whole, because the `>` that ends it would otherwise end
@@ -3232,7 +3298,7 @@ func (l *Lexer) scanWord(start Pos) Token {
 			}
 			width, _ := l.numericRangeAt(0)
 			for range width {
-				lit.WriteByte(l.advance())
+				lit.take(l)
 			}
 
 		case c == '(' && l.opensSubscriptFlags():
@@ -3247,7 +3313,7 @@ func (l *Lexer) scanWord(start Pos) Token {
 			// only by accident where the dialect also had bare pattern
 			// groups, which is a different flag answering a question that is
 			// not its.
-			lit.WriteString(l.scanPatternGroup())
+			lit.takeGroup(l)
 
 		case c == '(' && l.afterTildeGroup:
 			// The rest of the word after a `~(…)` group: a `(` there is the
@@ -3257,7 +3323,7 @@ func (l *Lexer) scanWord(start Pos) Token {
 			if lit.Len() == 0 {
 				litPos = l.pos()
 			}
-			lit.WriteString(l.scanPatternGroup())
+			lit.takeGroup(l)
 
 		case c == '(' && l.opensTildeGroup():
 			// A `(` straight after a `~` belongs to the word in the one
@@ -3267,7 +3333,7 @@ func (l *Lexer) scanWord(start Pos) Token {
 			// value, and it has to survive the lexer there too because the
 			// shell keeps it as literal text. See
 			// [Dialect.TildeGroup] for the rows.
-			lit.WriteString(l.scanPatternGroup())
+			lit.takeGroup(l)
 			// And from here to the end of the word the flavor's own text
 			// begins, where the shell's operators are ordinary characters.
 			// Set after the group rather than at the `~`, because it is the
@@ -3383,7 +3449,7 @@ func (l *Lexer) scanWord(start Pos) Token {
 					l.subscriptDepth--
 				}
 			}
-			lit.WriteByte(l.advance())
+			lit.take(l)
 		}
 		if l.err != nil {
 			break
@@ -3944,7 +4010,7 @@ func (l *Lexer) scanNestedDoubleInOperand() []Span {
 // run agree here, which is what says the substitution starts over.
 func (l *Lexer) scanDoubleEscaping(open Pos, closing bool, escapes escapeSet) []Span {
 	var out []Span
-	var b strings.Builder
+	b := litRun{src: l.src}
 	litPos := l.pos()
 	flush := func() {
 		if b.Len() > 0 {
@@ -3975,7 +4041,7 @@ func (l *Lexer) scanDoubleEscaping(open Pos, closing bool, escapes escapeSet) []
 				litPos = l.pos()
 			}
 			for range width {
-				b.WriteByte(l.advance())
+				b.take(l)
 			}
 			continue
 		}
@@ -4091,7 +4157,7 @@ func (l *Lexer) scanDoubleEscaping(open Pos, closing bool, escapes escapeSet) []
 			if b.Len() == 0 {
 				litPos = l.pos()
 			}
-			b.WriteByte(l.advance())
+			b.take(l)
 		case c == '\n' && closing && !l.inRawBody && l.dialect.QuotedNewlineIsUnmatched:
 			l.failUnmatched(open, "\"", "\"", "unterminated double quote")
 			flush()
@@ -4114,12 +4180,12 @@ func (l *Lexer) scanDoubleEscaping(open Pos, closing bool, escapes escapeSet) []
 			if b.Len() == 0 {
 				litPos = l.pos()
 			}
-			b.WriteByte(l.advance())
+			b.take(l)
 		default:
 			if b.Len() == 0 {
 				litPos = l.pos()
 			}
-			b.WriteByte(l.advance())
+			b.take(l)
 		}
 	}
 }

@@ -766,7 +766,7 @@ func RunScript(sh Shell, src, path string) int {
 // ending, and the notices stay owed rather than being written to nobody. The
 // question is the front end's because *when* a notice is written is, which is
 // the rule Runner.FinishedJobNotices is built on.
-func (sh Shell) reportFinishedJobs(r *interp.Runner) {
+func (sh *Shell) reportFinishedJobs(r *interp.Runner) {
 	if sh.Semantics.FinishedJobNoticeNeedsAPrompt == interp.Yes {
 		return
 	}
@@ -1256,7 +1256,7 @@ func (s source) loginShell() bool { return s.login || s.startup.login }
 // one. `$0` is s.name either way — the dialect that shortens its diagnostic
 // still reports the whole path there, which is why this is a separate answer
 // and not a change to the name.
-func (s source) diagName() string {
+func (s *source) diagName() string {
 	if s.file == "" && s.dg.SelfName != "" {
 		return s.dg.SelfName
 	}
@@ -1267,7 +1267,7 @@ func (s source) diagName() string {
 // it says the way it words a line typed at its prompt, on a route other than
 // the prompt's: `-i -c` and `-i script`. See
 // interp.Diagnostics.InteractiveShellSpeaksAsAtAPrompt.
-func (s source) speaksAsAtAPrompt(r *interp.Runner) bool {
+func (s *source) speaksAsAtAPrompt(r *interp.Runner) bool {
 	return s.interactive && s.dg.InteractiveShellSpeaksAsAtAPrompt && r != nil && r.Interactive
 }
 
@@ -1387,14 +1387,14 @@ func refusedInASubstitutionBody(err error, src string) bool {
 // and in `-i s5.sh` alike is `foo: warning: here-document at line 1
 // delimited by end-of-file (wanted `EOF')`, with no file and no line in
 // front, where the same script without `-i` is `s5.sh: line 2: warning: …`.
-func (s source) remarkDiagnostics(r *interp.Runner) interp.Diagnostics {
+func (s *source) remarkDiagnostics(r *interp.Runner) interp.Diagnostics {
 	if s.speaksAsAtAPrompt(r) {
 		return s.dg.ForPrompt()
 	}
 	return s.dg
 }
 
-func (s source) remarkName(r *interp.Runner) string {
+func (s *source) remarkName(r *interp.Runner) string {
 	if s.speaksAsAtAPrompt(r) {
 		return r.DiagnosticName()
 	}
@@ -1402,7 +1402,7 @@ func (s source) remarkName(r *interp.Runner) string {
 }
 
 // about a session.
-func (s source) invocationRoute() interp.Route {
+func (s *source) invocationRoute() interp.Route {
 	switch {
 	case s.onStdin:
 		return interp.RouteStandardInput
@@ -1428,7 +1428,7 @@ func (s source) invocationEmulation() string {
 	return s.emulation
 }
 
-func (s source) programRoute() syntax.ProgramRoutes {
+func (s *source) programRoute() syntax.ProgramRoutes {
 	switch {
 	case s.onStdin:
 		return syntax.RouteOnStandardInput
@@ -3599,7 +3599,12 @@ func (sh Shell) executeLines(
 		} else {
 			echoed = sh.sayVerbose(r.Err(), pr.text(), upTo, echoed, r.Verbose())
 		}
-		shown = sh.sayRemarks(in.remarkDiagnostics(r), in.remarkName(r), pr.remarks(), shown, !r.NoExec())
+		// Only when there is a remark it has not said. The diagnostics go by
+		// value and are kilobytes, and this runs once a line: copying them to
+		// say nothing was a measurable share of reading a long script (#6354).
+		if rs := pr.remarks(); len(rs) != shown {
+			shown = sh.sayRemarks(in.remarkDiagnostics(r), in.remarkName(r), rs, shown, !r.NoExec())
+		}
 	}
 	// A builtin can change the grammar for the lines after it — a run-time
 	// option can decide whether a quantified group is a group. The runner
@@ -3893,7 +3898,7 @@ type verbosePos struct {
 // redirection come out on the *old* descriptor: the echo happens when the
 // line is read and the `exec` has not run yet. A per-command redirect never
 // captures it at all, for the same reason and without needing a rule.
-func (sh Shell) sayVerbose(w io.Writer, src string, upTo int, at verbosePos, echo bool) verbosePos {
+func (sh *Shell) sayVerbose(w io.Writer, src string, upTo int, at verbosePos, echo bool) verbosePos {
 	if upTo <= at.line {
 		return at
 	}
@@ -4081,7 +4086,7 @@ func (sh Shell) nameTheInvocation(r *interp.Runner) {
 // The count is carried because a parser produces these as it reads, and the
 // loop asks after every line: without it the first remark would be repeated
 // for every line after the one that raised it.
-func (sh Shell) sayRemarks(dg interp.Diagnostics, name string, rs []syntax.Remark, shown int, running bool) int {
+func (sh *Shell) sayRemarks(dg interp.Diagnostics, name string, rs []syntax.Remark, shown int, running bool) int {
 	for _, rk := range rs[min(shown, len(rs)):] {
 		if running && interp.RemarkOnlyWhenNotRunning(rk.Kind) {
 			// A remark the shell keeps to itself once it is going to run the

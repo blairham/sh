@@ -2130,6 +2130,12 @@ func (p *Parser) patternWordFrom(text string, at Pos) *Word {
 // has four quote characters and no unbalanced one, and a counter reading them
 // as text pairs the wrong two.
 func (p *Parser) unterminatedQuote(text string) int {
+	// Only a quote character can be the answer, so text without one has
+	// none, and is spared a lexer: every pattern operand comes through here,
+	// and a lexer is a kilobyte to allocate and clear (#6354).
+	if !strings.ContainsAny(text, `'"`) {
+		return -1
+	}
 	l := NewLexer(text, p.operandDialect())
 	for !l.eof() {
 		switch c := l.peek(); c {
@@ -2446,6 +2452,14 @@ func (p *Parser) wordFrom(text string, at Pos, q Quoting) *Word {
 	p.quotedInTheScriptsRead = nil
 	defer func() { p.quotedInTheScriptsRead = outerQuoted }()
 
+	if plainOperandShortcut && plainOperand(text) {
+		// What the lexer below makes of it, without the lexer: one word of
+		// one literal span, at the operand's own first byte. See
+		// plainOperand.
+		at1 := Pos{Offset: 0, Line: 1, Col: 1}
+		return p.newWord(placeLinesIn([]Span{{Kind: Literal, Value: text, Quoting: Unquoted, Pos: at1}}, at), at, at)
+	}
+
 	sub := NewLexer(text, p.operandDialect())
 	// An operand is not a command, so no arithmetic command begins in one.
 	// See Lexer.inOperand: the `((` reading is also a *lossy* one, so an
@@ -2486,6 +2500,36 @@ func (p *Parser) wordFrom(text string, at Pos, q Quoting) *Word {
 		w.Spans = append(w.Spans, Span{Kind: Literal, Value: t.Text, Pos: at})
 	}
 	return w
+}
+
+// plainOperandShortcut is off only in the test that holds the shortcut to the
+// lexer's answer, which reads every operand both ways.
+var plainOperandShortcut = true
+
+// plainOperand reports whether an unquoted operand's text is made only of
+// characters no dialect's lexer gives a meaning to in a word, so that reading
+// it is a formality: one word, one literal span.
+//
+// It is the commonest operand there is — the `value` of `${a#value}`, the
+// `default` of `${x:-default}` — and lexing it cost a fresh [Lexer] each time,
+// which is a kilobyte to allocate and clear for a handful of letters. That
+// was a third of everything a parse allocated over a script of expansions
+// (#6354). The set is deliberately narrow: no blank, quote, backslash, `$`,
+// backquote, glob, brace, bracket, parenthesis, tilde, `#`, `=`, `!`, `^`,
+// `%`, `@`, `<`, `>`, `|`, `&` or `;`, so nothing in it can open a construct
+// or end a word in any dialect. TestPlainOperandsReadAsTheLexerReadsThem
+// holds the shortcut to the lexer's answer in every dialect.
+func plainOperand(text string) bool {
+	for i := 0; i < len(text); i++ {
+		c := text[i]
+		switch {
+		case 'a' <= c && c <= 'z', 'A' <= c && c <= 'Z', '0' <= c && c <= '9':
+		case c == '_', c == '.', c == '-', c == '/', c == ',', c == ':', c == '+':
+		default:
+			return false
+		}
+	}
+	return true
 }
 
 // quotedWordFrom is wordFrom for an operand that stands inside double quotes.

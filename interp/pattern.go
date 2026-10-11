@@ -1492,13 +1492,17 @@ func matchPatternIn(pattern, piece, subject string, base int, o patternOpts) (bo
 		w.ready, w.pattern, w.subject = true, pattern, subject
 		w.asked, w.deadWide = 0, nil
 		w.dead.reset()
+		w.resetCompiledDeadEnds()
 		w.packable = len(pattern) < packBase && len(subject) < packBase
 		if newPattern {
+			w.forgetProgram()
 			// Only when the *pattern* moved. Pathname expansion matches one
 			// pattern against every name in a directory, so the subject
 			// changes far more often than the pattern does, and none of
-			// what prepare works out is about the subject.
-			w.prepare(pattern, o.emptyBracket)
+			// what prepare works out is about the subject. And not until the
+			// walk is about to run, since a compiled pattern never reads the
+			// tables — see ensurePrepared.
+			w.unprepare()
 		}
 	}
 	// And the memo is dropped again when the **base** moves under a pattern
@@ -1516,10 +1520,23 @@ func matchPatternIn(pattern, piece, subject string, base int, o patternOpts) (bo
 		if patternHasZeroWidthEscape(pattern) {
 			w.asked, w.deadWide = 0, nil
 			w.dead.reset()
+			w.resetCompiledDeadEnds()
 		}
 		w.base = base
 	}
-	if !matchTopLevel(pattern, piece, base, o) {
+	// The compiled program where there is one for this pattern under this
+	// reading, and the walk over the text where there is not. See
+	// interp/patternprogram.go for why the two answer the same.
+	var ok bool
+	if prog := w.program(pattern, &o); prog != nil {
+		ok = prog.match(w, piece, base, &o)
+	} else {
+		w.ensurePrepared(pattern, o.emptyBracket)
+		before := w.asked
+		ok = matchTopLevel(pattern, piece, base, o)
+		w.spend(w.asked - before)
+	}
+	if !ok {
 		return false, matchReport{}
 	}
 	span := capSpan{begin: base, end: base + len(piece), set: true}

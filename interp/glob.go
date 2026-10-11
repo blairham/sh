@@ -2152,6 +2152,7 @@ func (r *Runner) matchIn(dir, pattern string, o patternOpts, seeHidden bool, ign
 	// full of them earns one diagnostic from the core rather than one each.
 	o.chars = r.patternMatchCountsCharacters(pattern, entryNames(entries)...)
 
+	o.holdWhere()
 	var out []string
 	for _, name := range r.globListingNames(entries, patternBeginsWithPeriod(pattern, o.group, o.quantified, o.emptyBracket)) {
 		// Only a *leading* period is special, and only in pathname

@@ -6661,7 +6661,7 @@ func (r *Runner) shadow(name string) (fresh, redeclared bool) {
 		sc.saved[name] = old
 		sc.existed[name] = existed
 		if sc.removedBefore == nil {
-			sc.removedBefore = map[string]bool{}
+			sc.removedBefore = r.spareBools()
 		}
 		sc.removedBefore[name] = r.removed[name]
 		// The frozen attribute is displaced with the value, in the dialect
@@ -6676,7 +6676,7 @@ func (r *Runner) shadow(name string) (fresh, redeclared bool) {
 		// same reason there is no `if` around it: a name with nothing
 		// recorded is a delete of a key that is not there.
 		if sc.savedReadonly == nil {
-			sc.savedReadonly = map[string]bool{}
+			sc.savedReadonly = r.spareBools()
 		}
 		sc.savedReadonly[name] = r.readonly[name]
 		if !r.freezeSurvivesAShadow(name) {
@@ -6688,7 +6688,7 @@ func (r *Runner) shadow(name string) (fresh, redeclared bool) {
 		// Recorded whether or not there was one, so absent means this scope
 		// never shadowed the name — see scope.savedHideInScope.
 		if sc.savedHideInScope == nil {
-			sc.savedHideInScope = map[string]bool{}
+			sc.savedHideInScope = r.spareBools()
 		}
 		sc.savedHideInScope[name] = r.hideInScope[name]
 		// And whether *this* shadow is a hidden one, which is a different
@@ -6700,7 +6700,7 @@ func (r *Runner) shadow(name string) (fresh, redeclared bool) {
 		// So the answer is recorded here and the attribute comes off with
 		// every other one; shadowIsHidden is what reads it back.
 		if sc.hiddenShadow == nil {
-			sc.hiddenShadow = map[string]bool{}
+			sc.hiddenShadow = r.spareBools()
 		}
 		hidden := r.shadowIsHidden(name)
 		sc.hiddenShadow[name] = hidden
@@ -6719,7 +6719,7 @@ func (r *Runner) shadow(name string) (fresh, redeclared bool) {
 		// not there were any, so the entry can put back "none" as well as
 		// take back one this call added — see localattributes.go.
 		if sc.savedAttrs == nil {
-			sc.savedAttrs = map[string]nameAttributes{}
+			sc.savedAttrs = r.spareAttrs()
 		}
 		sc.savedAttrs[name] = r.captureAttributes(name)
 		r.dropNameAttributes(name)
@@ -6747,8 +6747,8 @@ func (r *Runner) shadow(name string) (fresh, redeclared bool) {
 		// letter takes no shadow there, which is what the letter means — so
 		// this is inert for it and its own answer is unchanged.
 		if sc.exportedSpoken == nil {
-			sc.exportedSpoken = map[string]bool{}
-			sc.savedExported = map[string]bool{}
+			sc.exportedSpoken = r.spareBools()
+			sc.savedExported = r.spareBools()
 		}
 		if _, seen := sc.exportedSpoken[name]; !seen {
 			on, spoken := r.exported[name]
@@ -6760,8 +6760,8 @@ func (r *Runner) shadow(name string) (fresh, redeclared bool) {
 		// to the producer standing, so the local's value went on being read
 		// after the call had returned. See scope.savedAssigned.
 		if sc.assignedSpoken == nil {
-			sc.savedAssigned = map[string]string{}
-			sc.assignedSpoken = map[string]bool{}
+			sc.savedAssigned = r.spareStrings()
+			sc.assignedSpoken = r.spareBools()
 		}
 		sc.savedAssigned[name], sc.assignedSpoken[name] = r.assigned[name]
 		delete(r.assigned, name)
@@ -6798,8 +6798,8 @@ func (r *Runner) shadow(name string) (fresh, redeclared bool) {
 	if _, seen := sc.arrayExisted[name]; !seen {
 		old, existed := r.Arrays[name]
 		if sc.savedArrays == nil {
-			sc.savedArrays = map[string]Array{}
-			sc.arrayExisted = map[string]bool{}
+			sc.savedArrays = r.spareArrays()
+			sc.arrayExisted = r.spareBools()
 		}
 		// Copied rather than kept: an Array is a map, so saving the value
 		// would save a reference to the very table the function is about to
@@ -6817,8 +6817,8 @@ func (r *Runner) shadow(name string) (fresh, redeclared bool) {
 	if _, seen := sc.assocExisted[name]; !seen {
 		old, existed := r.AssocArrays[name]
 		if sc.savedAssoc == nil {
-			sc.savedAssoc = map[string]AssocArray{}
-			sc.assocExisted = map[string]bool{}
+			sc.savedAssoc = r.spareAssocs()
+			sc.assocExisted = r.spareBools()
 		}
 		if existed {
 			old = old.clone()
@@ -6833,7 +6833,7 @@ func (r *Runner) shadow(name string) (fresh, redeclared bool) {
 	// name, so the record is taken exactly once per name per scope.
 	if _, seen := sc.declaredOnlyBefore[name]; !seen {
 		if sc.declaredOnlyBefore == nil {
-			sc.declaredOnlyBefore = map[string]bool{}
+			sc.declaredOnlyBefore = r.spareBools()
 		}
 		sc.declaredOnlyBefore[name] = r.declaredOnlyCompound[name]
 		setBool(&sc.heldAnElementBefore, name, r.compoundHeldAnElement[name])

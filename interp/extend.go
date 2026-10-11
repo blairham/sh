@@ -1944,6 +1944,7 @@ type ListedOption struct {
 // the state it stands for is one the substrate already has, and this says how
 // this shell spells it.
 func (r *Runner) AddNegatedSetOptions(pairs map[string]string) {
+	r.saveRoster = nil // the resolved listing moves; see optionSaveRoster
 	if r.negatedOptions == nil {
 		r.negatedOptions = make(map[string]string, len(pairs))
 	}
@@ -1973,6 +1974,7 @@ func (r *Runner) AddNegatedSetOptions(pairs map[string]string) {
 // The read is untouched: a row still has to say which state the shell is in,
 // and all three of those rows move with the invocation.
 func (r *Runner) AddImmovableSetOptions(names ...string) {
+	r.saveRoster = nil // the resolved listing moves; see optionSaveRoster
 	if r.immovableOptions == nil {
 		r.immovableOptions = make(map[string]bool, len(names))
 	}
@@ -1999,6 +2001,7 @@ func (r *Runner) AddImmovableSetOptions(names ...string) {
 // only one of them moves, which is what makes this a declaration rather than
 // an entry beside `privileged` in setoptions.go (#3128).
 func (r *Runner) AddInertSetOptions(names ...string) {
+	r.saveRoster = nil // the resolved listing moves; see optionSaveRoster
 	if r.inertOptions == nil {
 		r.inertOptions = make(map[string]bool, len(names))
 	}

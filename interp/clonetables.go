@@ -502,6 +502,9 @@ func (c *Runner) ownTables(r *Runner) {
 	// so is each frame's own pair of slices.
 	c.callPrefixes = cloneCallPrefixes(r.callPrefixes)
 	c.scopes = cloneScopes(r.scopes)
+	// And none of the parent's spare tables: a copied list would hand both
+	// shells the same table to write. See scopespares.go.
+	c.spares = scopeSpares{}
 	// Appended to in place as well, so each needs an array of its own. Their
 	// *elements* stay shared on purpose: a `*Job` is one job to whoever holds
 	// it, and copying the pointer is what keeps a subshell looking at the
@@ -618,7 +621,7 @@ func cloneScopes(scopes []*scope) []*scope {
 		c.exportedSpoken = maps.Clone(sc.exportedSpoken)
 		c.exportedShadow = maps.Clone(sc.exportedShadow)
 		c.savedTraps = maps.Clone(sc.savedTraps)
-		c.savedOptions = maps.Clone(sc.savedOptions)
+		c.savedOptions = slices.Clone(sc.savedOptions)
 		c.sealed = cloneSealed(sc.sealed, at, out)
 		// The private half of the same three, on exactly the same terms:
 		// `private` is a `local` whose name a deeper frame reads past, so a

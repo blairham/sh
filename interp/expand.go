@@ -2255,6 +2255,7 @@ func (r *Runner) expandAtList(s syntax.Span, sp splitPolicy, head bool) ([]strin
 	// rewrite in particular, which would otherwise turn `${+a}` into
 	// `${+a[@]}` and answer with one field per element.
 	if setTestAnswers(e) {
+		defer r.askWhetherSet(e)()
 		_, set, _ := r.paramSource(e)
 		return []string{setTestResult(set)}, true
 	}
@@ -3861,6 +3862,7 @@ func (r *Runner) expandParam(e *syntax.ParamExpr) string {
 	// whether a name is set without tripping `set -u` is the whole of what
 	// the construct is for.
 	if setTestAnswers(e) {
+		defer r.askWhetherSet(e)()
 		_, set, _ := r.paramSource(e)
 		return setTestResult(set)
 	}

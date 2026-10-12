@@ -258,6 +258,9 @@ func registerParameterModule(r *interp.Runner) {
 	hideModuleParameter(r, "dis_reswords")
 	r.SetDynamicAssoc("parameters", zshParametersView)
 	r.SetDynamicAssocElement("parameters", zshParameterValue)
+	// Building the table changes nothing, so `${+parameters}` need not —
+	// F-Sy-H asks it for every word of the line at every keystroke (#6363).
+	r.SetDynamicAssocSetWithoutBuilding("parameters")
 	// Readonly and hidden together, the pair `builtins` needs and for the same
 	// two reasons: zsh answers `parameters[x]=y` with `read-only variable:
 	// parameters`, and a produced table with neither would take the assignment

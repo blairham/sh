@@ -1473,6 +1473,21 @@ func (r *Runner) SetDynamicAssocEmptiedByReplacement(name string) {
 	r.dynamicAssocEmptied[name] = true
 }
 
+// SetDynamicAssocSetWithoutBuilding says that `${+name}` may answer for this
+// produced association without running its producer.
+//
+// Only for a producer whose building does nothing a script can see, which is
+// a fact about the producer and so the registering dialect's to state. It is
+// not true of every table: measured on zsh 5.9.2 under `-f`, `: ${+commands}`
+// fills the command hash — `hash | wc -l` is 0 before it and 2111 after —
+// while `: ${+parameters}` leaves nothing behind.
+func (r *Runner) SetDynamicAssocSetWithoutBuilding(name string) {
+	if r.dynamicAssocSetUnbuilt == nil {
+		r.dynamicAssocSetUnbuilt = map[string]bool{}
+	}
+	r.dynamicAssocSetUnbuilt[name] = true
+}
+
 // emptyProducedAssoc removes every key the view currently lists, through the
 // producer's own writer.
 //
@@ -1658,11 +1673,20 @@ func (r *Runner) assocElemCurrent(name, key string) string {
 // gets its own value back. A produced one has no stored table until something
 // writes to it, so in practice the second clause is the answer.
 func (r *Runner) assocFor(name string) (AssocArray, bool) {
+	asked := r.askingWhetherSet != "" && r.askingWhetherSet == name
 	name = r.throughNameref(name)
 	if a, ok := r.assocsLookup(name); ok {
 		return a, true
 	}
 	if produce, ok := r.assocProducersLookup(name); ok {
+		if asked && r.dynamicAssocSetUnbuilt[name] {
+			// `${+parameters}` asks whether the name is set, and a produced
+			// table is set whatever it holds — see below. Building it to
+			// answer was the whole cost: a table of every parameter, about
+			// 1.5 ms with three thousand of them, and F-Sy-H asks it for
+			// every word of the line at every keystroke (#6363).
+			return nil, true
+		}
 		// A producer with nothing to say still has a table: an empty
 		// association and an absent one are different things, and the name
 		// exists either way. A nil map needs no normalizing to say so — every

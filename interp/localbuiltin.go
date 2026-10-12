@@ -327,8 +327,8 @@ func (r *Runner) listStandingDeclaration(name string) {
 //
 //   - the name **holds** something. `unset u; typeset u` prints nothing,
 //     which is the control that says this is not "one operand means list".
-func (r *Runner) valuelessDeclarationLists(name string, f declareFlags, redeclared bool) bool {
-	if !declarationCarriesNoLetters(f) || !redeclared || !r.declaredNameHolds(name) {
+func (r *Runner) valuelessDeclarationLists(name string, noLetters, redeclared bool) bool {
+	if !noLetters || !redeclared || !r.declaredNameHolds(name) {
 		return false
 	}
 	if r.freezing[name] {
@@ -362,6 +362,19 @@ func declarationCarriesNoLetters(f declareFlags) bool {
 	letters := f
 	letters.remove, letters.plusAlone, letters.minusAlone = false, false, false
 	return letters == (declareFlags{}) || f.onlyAConflictedWidth()
+}
+
+// lettersAsked is what a valueless operand asks of its line's letters: whether
+// the line wrote none (declarationCarriesNoLetters) and whether, matching aside,
+// it wrote any (what declareEmpty is told). Each is a comparison of the whole
+// flag struct, sixty-odd fields, so `local` answers them once for the line and
+// again only for an operand that changed its own copy of the letters (#6373).
+type lettersAsked struct {
+	none, any bool
+}
+
+func askLetters(f declareFlags) lettersAsked {
+	return lettersAsked{none: declarationCarriesNoLetters(f), any: withoutMatching(f) != (declareFlags{})}
 }
 
 // innermostLocalNames is the set of names the running function made local,

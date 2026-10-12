@@ -1147,7 +1147,7 @@ func (r *Runner) tracePrefix() string {
 	if v, ok := r.getVar("PS4"); ok {
 		return r.tracePrefixDepth(r.renderTracePrefix(v))
 	}
-	if r.removed["PS4"] && r.ask(r.sem().UnsetPS4TracesNoPrefix, "an unset PS4 tracing with no prefix") {
+	if r.attrHas("PS4", attrRemoved) && r.ask(r.sem().UnsetPS4TracesNoPrefix, "an unset PS4 tracing with no prefix") {
 		// The default was a value, and the script took it away. Only where
 		// the script did: a runner nothing seeded never had one to take,
 		// and draws the dialect's prefix. See Semantics.UnsetPS4TracesNoPrefix.

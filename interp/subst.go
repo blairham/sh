@@ -539,12 +539,9 @@ func (r *Runner) boundCurrentShellBody() {
 // here and not two.
 func (r *Runner) localizeReply() func() {
 	held, inVars := r.varsLookup("REPLY")
-	wasRemoved := r.removed["REPLY"]
+	wasRemoved := r.attrHas("REPLY", attrRemoved)
 	r.varsDel("REPLY")
-	if r.removed == nil {
-		r.removed = map[string]bool{}
-	}
-	r.removed["REPLY"] = true
+	r.attrSet("REPLY", attrRemoved)
 	return func() {
 		if inVars {
 			r.varsPut("REPLY", held)
@@ -552,9 +549,9 @@ func (r *Runner) localizeReply() func() {
 			r.varsDel("REPLY")
 		}
 		if wasRemoved {
-			r.removed["REPLY"] = true
+			r.attrSet("REPLY", attrRemoved)
 		} else {
-			delete(r.removed, "REPLY")
+			r.attrClear("REPLY", attrRemoved)
 		}
 	}
 }

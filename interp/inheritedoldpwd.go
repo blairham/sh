@@ -88,7 +88,7 @@ func (r *Runner) settleInheritedOldpwd() {
 		return
 	}
 	r.oldpwdSettled = true
-	if _, ok := r.varsLookup("OLDPWD"); ok || r.removed["OLDPWD"] {
+	if _, ok := r.varsLookup("OLDPWD"); ok || r.attrHas("OLDPWD", attrRemoved) {
 		// A caller set one, or a `cd` already has. Either is a value of this
 		// shell's own and the environment has nothing to say about it.
 		return
@@ -96,10 +96,7 @@ func (r *Runner) settleInheritedOldpwd() {
 	switch r.sem().InheritedOldpwd {
 	case InheritedOldpwdIgnored:
 		r.setVarQuietly("OLDPWD", r.workDir())
-		if r.exported == nil {
-			r.exported = map[string]bool{}
-		}
-		r.exported["OLDPWD"] = true
+		r.exportedPut("OLDPWD", true)
 	case InheritedOldpwdTakenIfADirectory:
 		v, ok := r.inheritedValue("OLDPWD")
 		if !ok {

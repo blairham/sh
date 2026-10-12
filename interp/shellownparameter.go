@@ -112,5 +112,5 @@ func (r *Runner) MarkParameterNotTheShellsOwn(name string) {
 // until something brings it back, and a listing or a type query that still
 // called it special would be describing a record rather than a parameter.
 func (r *Runner) shellOwnParameter(name string) bool {
-	return !r.removed[name] && r.shellOwn[name]
+	return !r.attrHas(name, attrRemoved) && r.shellOwn[name]
 }

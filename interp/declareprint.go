@@ -527,7 +527,7 @@ func (r *Runner) declarableNames() []string {
 	for name := range r.assocsRange() {
 		hold(name)
 	}
-	for name, on := range r.exported {
+	for name, on := range r.exportedRange() {
 		if on {
 			hold(name)
 		}
@@ -664,7 +664,7 @@ func (r *Runner) declarableNames() []string {
 			delete(seen, name)
 			continue
 		}
-		if !r.removed[name] {
+		if !r.attrHas(name, attrRemoved) {
 			continue
 		}
 		if r.removedShellOwnIsStillAName(name) {

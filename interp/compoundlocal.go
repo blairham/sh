@@ -110,7 +110,7 @@ func (r *Runner) shadowCompoundNamespace(sc *scope, name string) {
 		r.varsDel(m)
 		r.arraysDel(m)
 		r.dropAssocTable(m)
-		delete(r.removed, m)
+		r.attrClear(m, attrRemoved)
 	}
 }
 
@@ -141,7 +141,7 @@ func (r *Runner) liveNamesUnder(name string) []string {
 	for k := range r.compoundVariable {
 		add(k)
 	}
-	for k := range r.removed {
+	for k := range r.attrNames(attrRemoved) {
 		add(k)
 	}
 	out := make([]string, 0, len(seen))
@@ -217,7 +217,7 @@ func (r *Runner) restoreCompoundNamespace(sc *scope, name string) {
 			r.arraysDel(m)
 			r.dropAssocTable(m)
 			delete(r.compoundVariable, m)
-			delete(r.removed, m)
+			r.attrClear(m, attrRemoved)
 		}
 		sc.setFlag(flagMemberNamespace, name, false)
 	}

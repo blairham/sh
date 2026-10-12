@@ -2880,7 +2880,7 @@ func (r *Runner) parameterNames() []string {
 	// everything, the same standing this codebase gives an escaped ordinary
 	// character. It is the *rule* that is being written down.
 	add := func(name string) {
-		if seen[name] || r.removed[name] || r.engineOwns(name) {
+		if seen[name] || r.attrHas(name, attrRemoved) || r.engineOwns(name) {
 			return
 		}
 		seen[name] = true
@@ -3564,10 +3564,7 @@ func (r *Runner) unsetOneName(name string) {
 	// IMPORTED=second` handed the child a name the script had unset. The
 	// removal record used to stand in for this, and stopped once an
 	// assignment began lifting it. See isExported and nameIsBack.
-	if r.exported == nil {
-		r.exported = map[string]bool{}
-	}
-	r.exported[name] = false
+	r.exportedPut(name, false)
 	if r.DeferredParameter(name) && !r.localInTheInnermostScope(name) {
 		// Not where a local stands in front of it, which is the local's to
 		// lose: measured 2026-10-02 on zsh 5.9.2, `f() { typeset -h +g
@@ -3696,15 +3693,12 @@ func (r *Runner) unsetOneName(name string) {
 	// Recorded as well as deleted: a name that came from the environment is
 	// not in Vars to begin with, and deleting nothing left it visible to
 	// every lookup — `unset PATH` did not clear PATH.
-	if r.removed == nil {
-		r.removed = map[string]bool{}
-	}
-	r.removed[name] = true
+	r.attrSet(name, attrRemoved)
 	if keep && wasExported {
 		// The letter stays on a name that is gone. The environment has no
 		// entry for it until a value comes back, and the assignment that
 		// brings one back finds the name already exported.
-		r.exported[name] = true
+		r.exportedPut(name, true)
 	}
 }
 
@@ -3841,9 +3835,6 @@ func biExport(r *Runner, _ context.Context, args []string) (endStatus int) {
 			r.refusedLineDeclaresItsLiterals(written, letters, false)
 		}
 		return code
-	}
-	if r.exported == nil {
-		r.exported = map[string]bool{}
 	}
 	if strings.ContainsRune(opts, 'f') {
 		if len(args) == 0 {
@@ -7939,6 +7930,9 @@ func biLocal(r *Runner, _ context.Context, args []string) (endStatus int) {
 		return status
 	}
 	defer func(was bool) { r.declarationEvaluatesItsValue = was }(r.declarationEvaluatesItsValue)
+	// What a valueless operand asks of the letters, answered once for the
+	// line: see lettersAsked. An operand that changes its copy asks again.
+	lineAsked := askLetters(f)
 	for _, a := range args {
 		// The line's letters, copied per operand: what one operand adds to
 		// them is its own. A fresh local of one of the shell's own integer
@@ -7947,7 +7941,7 @@ func biLocal(r *Runner, _ context.Context, args []string) (endStatus int) {
 		// an integer, so `getopts ab o` stored 0 for every letter, where zsh
 		// 5.9.2 leaves `o` a plain scalar (getopts/a-function-with-its-own-
 		// optind). A subscripted operand's array letter is the same shape.
-		f := f
+		f, asked := f, lineAsked
 		name, value, hasValue, appends := declarationOperand(a)
 		// See declareNames: this line's numeric letter evaluates the value.
 		r.declarationEvaluatesItsValue = hasValue && (f.integer || f.float)
@@ -8034,6 +8028,7 @@ func biLocal(r *Runner, _ context.Context, args []string) (endStatus int) {
 				return r.status
 			}
 			name, f = n, letters
+			asked = askLetters(f)
 		}
 		// Before the attributes, for the reason biTypeset gives: `-x` here
 		// must not answer for the name this declaration shadows.
@@ -8098,6 +8093,7 @@ func biLocal(r *Runner, _ context.Context, args []string) (endStatus int) {
 		}
 		if slot == IntegerParameter {
 			f.integer, f.base, f.baseNamed = true, 10, true
+			asked = askLetters(f)
 		}
 		// What the name carried before the letters land, which only a
 		// reference's refused aim puts back — so held only where the line
@@ -8263,7 +8259,7 @@ func biLocal(r *Runner, _ context.Context, args []string) (endStatus int) {
 				return r.status
 			}
 		default:
-			if r.deferredNameListsAsAnOperand(name, declarationCarriesNoLetters(f), redeclared) {
+			if r.deferredNameListsAsAnOperand(name, asked.none, redeclared) {
 				// And the deferred name's bare row under this word too,
 				// which is not a copy of the branch in biDeclare but the
 				// same question asked in the loop this builtin keeps of its
@@ -8274,7 +8270,7 @@ func biLocal(r *Runner, _ context.Context, args []string) (endStatus int) {
 				r.printf("%s\n", name)
 				continue
 			}
-			if r.valuelessDeclarationLists(name, f, redeclared) {
+			if r.valuelessDeclarationLists(name, asked.none, redeclared) {
 				// The same listing under the other word, on a name this
 				// scope has already made local: `f(){ local s=1; local s; }`
 				// writes `s=1` in the shell that lists. See
@@ -8293,7 +8289,7 @@ func biLocal(r *Runner, _ context.Context, args []string) (endStatus int) {
 			// business, and nothing could exercise it either way.
 			if !r.declarationCarriesAnArrayLiteral(name) {
 				r.declareEmpty(name, fresh, f.export || f.readonly,
-					withoutMatching(f) != (declareFlags{}),
+					asked.any,
 					f.leavesAnAttribute(),
 					f.inherit || r.LocalInheritsTheOuterValue(), false)
 			}
@@ -9162,7 +9158,7 @@ func (r *Runner) badStatusArg(builtin, arg string) int {
 // over a value nothing on this path would have looked at.
 func (r *Runner) nameIsSet(name string) bool {
 	name = r.throughNameref(name)
-	if !r.removed[name] && (r.arrayDeclared(name) || r.assocDeclared(name)) {
+	if !r.attrHas(name, attrRemoved) && (r.arrayDeclared(name) || r.assocDeclared(name)) {
 		return true
 	}
 	_, ok := r.getVar(name)

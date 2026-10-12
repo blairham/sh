@@ -68,8 +68,6 @@ type Runner struct {
 	Params []string
 	// Name is `$0`.
 	Name string
-	// exported names go into a command's environment; the rest do not.
-	exported map[string]bool
 	// Dir is the working directory. Empty means relative: paths stay as
 	// written and the operating system resolves each use against wherever
 	// the process happens to be, and `pwd` and $PWD report `.`. The Runner
@@ -1504,36 +1502,6 @@ type Runner struct {
 	// question is which path inside `getopts` reached the freeze and nothing
 	// in the value being written says so.
 	optRanOut bool
-
-	// removed are names `unset` took away that came from the environment
-	// rather than from Vars.
-	//
-	// Nothing clears an entry, and nothing needs to: a later assignment puts
-	// the name in Vars, which every lookup reads first, and exports append
-	// after the environment is filtered. A `delete` here looked right and no
-	// test could tell whether it was there.
-	//
-	// Deleting from Vars cannot hide those: the environment is a second
-	// source and getVar reads both, so `unset PATH` left PATH exactly where
-	// it was and every lookup still found it. A name here is gone until
-	// something assigns it again.
-	removed map[string]bool
-
-	// declaredEmpty are names a *declaration* gave a value to, in the
-	// dialect that considers a name declared without one to be set. The
-	// shell reads such a name as empty and no child is told about it, which
-	// is a distinction only a real child can see: `local -x FOO` and `local
-	// -x FOO=` list identically in the shell that makes them differ, and
-	// hand a command nothing and an empty entry respectively.
-	//
-	// Cleared by an assignment, and by a scope that shadowed the name going
-	// away — the second measured rather than tidy: a function that declares
-	// a local of that name leaves the caller's an *empty* export where it
-	// had been told to no child at all, in the one shell that reads a
-	// declaration this way. `unset` needs no third place and deliberately
-	// has none: it takes the name out of Vars, and both roads back in go
-	// through one of those two.
-	declaredEmpty map[string]bool
 
 	// unitRanACommand says whether a command has completed in this execution
 	// unit — the shell, or the subshell, command substitution, function
@@ -9987,9 +9955,6 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 			// column is what that premise is false in.
 			answer := r.sem().PrefixToAFunctionIsExported
 			if on := r.ask(answer, "an assignment before a function being exported for the call"); on || answer == No {
-				if r.exported == nil {
-					r.exported = map[string]bool{}
-				}
 				// Recorded as `false` rather than deleted, because deleting
 				// it only makes the name unspoken and an unspoken name the
 				// shell was born with is still exported. See isExported.
@@ -10000,7 +9965,7 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 				// foo=bar ff` lists `declare -n foo="target"` and `declare
 				// -x target="bar"` in bash 5.3.20. See
 				// interp/namerefprefix.go.
-				r.exported[held] = on
+				r.exportedPut(held, on)
 			}
 		}
 		// The names this call's prefix is holding, for a valueless
@@ -10233,10 +10198,7 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 				// value: savedVar records the export tri-state precisely so
 				// a name that was never exported goes back to unspoken
 				// rather than to a recorded `false`.
-				if r.exported == nil {
-					r.exported = map[string]bool{}
-				}
-				r.exported[landsOn] = true
+				r.exportedPut(landsOn, true)
 			} else if on, moves := r.prefixExportAtABuiltin(); moves {
 				// Every other builtin, where the panel does split and the
 				// attribute moves in both directions: bash hands the builtin
@@ -10244,10 +10206,7 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 				// as an ordinary assignment and takes the attribute off a
 				// name that had it, and the rest leave it exactly as it was.
 				// See Semantics.PrefixExportAtABuiltin.
-				if r.exported == nil {
-					r.exported = map[string]bool{}
-				}
-				r.exported[landsOn] = on
+				r.exportedPut(landsOn, on)
 			}
 		}
 		// The names this command's prefix is holding, for the declaration
@@ -11381,12 +11340,12 @@ func (r *Runner) environ() []string {
 			// only an explicit `export` makes the shell's own value
 			// supersede it, which is the one case that falls through here
 			// to be written by the pass over Runner.Vars below.
-			if on, spoken := r.exported[k]; !spoken || !on {
+			if on, spoken := r.exportedLookup(k); !spoken || !on {
 				out = append(out, kv)
 			}
 			continue
 		}
-		if r.removed[k] {
+		if r.attrHas(k, attrRemoved) {
 			// A name the shell unset does not reach a command either: the
 			// child would otherwise see what the parent cannot.
 			continue
@@ -11494,7 +11453,7 @@ func (r *Runner) environ() []string {
 			}
 			continue
 		}
-		if r.declaredEmpty[k] {
+		if r.attrHas(k, attrDeclaredEmpty) {
 			// Declared rather than assigned, so the name has no value of
 			// its own and an exported name with no value reaches no child
 			// in any shell measured — including the one whose declaration
@@ -11620,7 +11579,7 @@ func (r *Runner) inheritedEntry(name string) bool {
 func (r *Runner) exportedProducedParameters(done map[string]bool) []string {
 	var out []string
 	for name := range r.producersRange() {
-		if done[name] || r.removed[name] || !r.isExported(name) {
+		if done[name] || r.attrHas(name, attrRemoved) || !r.isExported(name) {
 			continue
 		}
 		if r.inheritedEntry(name) {
@@ -11726,7 +11685,7 @@ func (r *Runner) compoundValues(name string) ([]string, bool) {
 // the type makes of nothing.
 func (r *Runner) zeroValuedTypeExports() []string {
 	var names []string
-	for name, on := range r.exported {
+	for name, on := range r.exportedRange() {
 		if !on || r.declaredNameHolds(name) {
 			continue
 		}
@@ -11805,7 +11764,7 @@ func (r *Runner) hiddenExports(yield func(name, value string) bool) {
 					// other way round.
 					continue
 				}
-			} else if !r.removed[name] {
+			} else if !r.attrHas(name, attrRemoved) {
 				// No value of its own and still visible — the dialect's
 				// valueless declaration left the outer value showing — so
 				// the loops above have it.
@@ -11867,10 +11826,10 @@ func (r *Runner) hiddenExports(yield func(name, value string) bool) {
 // one this shell has never heard of, and assigning to it afterwards makes an
 // ordinary shell variable. All four shells agree.
 func (r *Runner) isExported(name string) bool {
-	if on, spoken := r.exported[name]; spoken {
+	if on, spoken := r.exportedLookup(name); spoken {
 		return on
 	}
-	if r.removed[name] {
+	if r.attrHas(name, attrRemoved) {
 		return false
 	}
 	if r.envNotAdopted[name] {
@@ -11897,7 +11856,7 @@ func (r *Runner) isExported(name string) bool {
 func (r *Runner) inheritedEnv(yield func(name, value string) bool) {
 	for _, kv := range r.Env {
 		k, v, ok := strings.Cut(kv, "=")
-		if !ok || r.removed[k] {
+		if !ok || r.attrHas(k, attrRemoved) {
 			continue
 		}
 		if !yield(k, v) {
@@ -11941,7 +11900,7 @@ func (r *Runner) bornWith(name string) (string, bool) {
 // inheritedValue is the value a name was born with, if the shell was handed
 // one and `unset` has not taken it away.
 func (r *Runner) inheritedValue(name string) (string, bool) {
-	if r.removed[name] {
+	if r.attrHas(name, attrRemoved) {
 		return "", false
 	}
 	return r.bornWith(name)
@@ -12653,10 +12612,10 @@ func (r *Runner) saveVarAlone(name string) savedVar {
 	old, present := r.varsLookup(name)
 	a, inArray := r.arraysLookup(name)
 	m, inTable := r.assocsLookup(name)
-	exported, exportSpoken := r.exported[name]
+	exported, exportSpoken := r.exportedLookup(name)
 	assigned, assignedSpoken := r.assigned[name]
 	return savedVar{
-		name: name, value: old, present: present, removed: r.removed[name],
+		name: name, value: old, present: present, removed: r.attrHas(name, attrRemoved),
 		frozen: r.attrHas(name, attrReadonly), attrs: r.captureAttributes(name),
 		array: a.clone(), inArray: inArray,
 		table: m.clone(), inTable: inTable,
@@ -12737,20 +12696,14 @@ func (r *Runner) restoreVar(u savedVar) {
 		r.dropAssocTable(u.name)
 	}
 	if u.removed {
-		if r.removed == nil {
-			r.removed = map[string]bool{}
-		}
-		r.removed[u.name] = true
+		r.attrSet(u.name, attrRemoved)
 	} else {
-		delete(r.removed, u.name)
+		r.attrClear(u.name, attrRemoved)
 	}
 	if u.exportSpoken {
-		if r.exported == nil {
-			r.exported = map[string]bool{}
-		}
-		r.exported[u.name] = u.exported
+		r.exportedPut(u.name, u.exported)
 	} else {
-		delete(r.exported, u.name)
+		r.exportedDel(u.name)
 	}
 	if u.frozen {
 		r.attrSet(u.name, attrReadonly)
@@ -12860,7 +12813,7 @@ func (r *Runner) prefixScopedToTheCall(fn *syntax.FuncDecl, assigns []*syntax.As
 // saved for it, so that putting it back would change nothing.
 func (r *Runner) matchesSavedVar(u savedVar) bool {
 	value, present := r.varsLookup(u.name)
-	if present != u.present || value != u.value || r.removed[u.name] != u.removed {
+	if present != u.present || value != u.value || r.attrHas(u.name, attrRemoved) != u.removed {
 		return false
 	}
 	// The *effective* attribute rather than the recorded tri-state: a name
@@ -13866,7 +13819,7 @@ func (r *Runner) setVarAs(name, value string, form assignForm) {
 			r.assigned = map[string]string{}
 		}
 		r.assigned[name] = value
-		delete(r.removed, name)
+		r.attrClear(name, attrRemoved)
 		if name == "_" {
 			// A *write* to `$_`, which is a value a script may read back in
 			// the dialects that do not stamp the name before every command.
@@ -13910,7 +13863,7 @@ func (r *Runner) setVarAs(name, value string, form assignForm) {
 	// An assignment gives the name a value of its own, whatever a
 	// declaration had left there. declareEmpty records the flag *after*
 	// calling here, which is what lets one function do both.
-	delete(r.declaredEmpty, name)
+	r.attrClear(name, attrDeclaredEmpty)
 	r.nameIsBack(name)
 	if r.storeIntoSelectedFrame(name, value) {
 		// The write belongs to a frame this shell is not standing in, so it
@@ -13979,10 +13932,7 @@ func (r *Runner) markCompoundForAllexport(name string) {
 
 // markExportedByAllexport is the mark itself.
 func (r *Runner) markExportedByAllexport(name string) {
-	if r.exported == nil {
-		r.exported = map[string]bool{}
-	}
-	r.exported[name] = true
+	r.exportedPut(name, true)
 }
 
 // producerEndedByUnset reports whether `unset` has ended a produced parameter,
@@ -14003,7 +13953,7 @@ func (r *Runner) markExportedByAllexport(name string) {
 // r.removed directly (see getoptsbuiltin.go) and are no dialect's produced
 // parameters, so nothing here sees them.
 func (r *Runner) producerEndedByUnset(name string) bool {
-	if !r.removed[name] {
+	if !r.attrHas(name, attrRemoved) {
 		return false
 	}
 	return !r.ask(r.sem().AssignmentRestoresAnUnsetProducedParameter,
@@ -14080,7 +14030,7 @@ func (r *Runner) endProducerUnsetEnded(name string) {
 // the mark by that route, and a call beside it was a line no mutation could
 // kill.
 func (r *Runner) nameIsBack(name string) {
-	delete(r.removed, name)
+	r.attrClear(name, attrRemoved)
 }
 
 // ensurePWD gives `$PWD` a value before the first command runs.
@@ -14258,7 +14208,7 @@ func (r *Runner) storedValue(name string, folded bool) (string, bool) {
 		// the generator and the next read is still a new number. What was
 		// assigned is kept where the producer can see it — SECONDS counts
 		// from it — rather than shadowing the producer entirely.
-		if !r.removed[name] {
+		if !r.attrHas(name, attrRemoved) {
 			v := f(r)
 			// This is the *expansion* of the parameter, so it is the reading
 			// one dialect's listing writes back. Recorded here rather than
@@ -14284,7 +14234,7 @@ func (r *Runner) storedValue(name string, folded bool) (string, bool) {
 		// gets here: for that one the tables already are the frame's view.
 		return v, set
 	}
-	if a, ok := r.arraysLookup(name); ok && !r.removed[name] {
+	if a, ok := r.arraysLookup(name); ok && !r.attrHas(name, attrRemoved) {
 		// Ahead of Vars, which holds a copy of one element: the array is the
 		// store, and both what a bare name reads and whether it is set at all
 		// are read off it rather than off the copy.
@@ -14300,7 +14250,7 @@ func (r *Runner) storedValue(name string, folded bool) (string, bool) {
 		}
 		return r.arrayBareName(a)
 	}
-	if produce, ok := r.arrayProducersLookup(name); ok && !r.removed[name] {
+	if produce, ok := r.arrayProducersLookup(name); ok && !r.attrHas(name, attrRemoved) {
 		// A produced array read without a subscript, which is the same
 		// question the stored one above answers and had no answer here at
 		// all: `$FUNCNAME` was empty where bash reads `g`, `${BASH_SOURCE}`
@@ -14329,7 +14279,7 @@ func (r *Runner) storedValue(name string, folded bool) (string, bool) {
 		// BASH_SOURCE` — and is answered before anything reaches here.
 		return r.producedBareName(produce(r))
 	}
-	if a, ok := r.assocFor(name); ok && !r.removed[name] {
+	if a, ok := r.assocFor(name); ok && !r.attrHas(name, attrRemoved) {
 		// The associative table answers alone rather than falling through:
 		// Vars may hold a scalar the name had before it was declared, and no
 		// shell reads that back once the attribute is on.
@@ -14346,7 +14296,7 @@ func (r *Runner) storedValue(name string, folded bool) (string, bool) {
 		}
 		return r.readAttributeFolded(name, v), true
 	}
-	if r.removed[name] {
+	if r.attrHas(name, attrRemoved) {
 		// `unset` took it away, and neither the environment nor a dynamic
 		// parameter is allowed to put it back.
 		return "", false
@@ -14590,7 +14540,7 @@ func (r *Runner) clearTypeAttributes(name string) {
 // attribute says. What moves is what a listing reports (#4676).
 func (r *Runner) clearAttributesAReCreationDrops(name string) {
 	r.clearTypeAttributes(name)
-	delete(r.exported, name)
+	r.exportedDel(name)
 }
 
 // assignAll performs a bare assignment list, tracing it as it goes.

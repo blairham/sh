@@ -20,13 +20,13 @@ func (r *Runner) ForgetParameter(name string) {
 	r.arraysDel(name)
 	r.dropAssocTable(name)
 	for _, m := range []map[string]bool{
-		r.exported, r.shellOwn, r.notShellOwn, r.scopeFixed,
-		r.deferredParams, r.removed, r.removedShellOwn, r.unsetRefused,
+		r.shellOwn, r.notShellOwn, r.scopeFixed,
+		r.deferredParams, r.removedShellOwn, r.unsetRefused,
 		r.endedProducers, r.dynamicAssocEmptied, r.dynamicAssocSetUnbuilt, r.readonlyByDeclaration,
 	} {
 		delete(m, name)
 	}
-	r.setAttrs(name, attrReadonly|attrInteger, 0)
+	r.setAttrs(name, attrReadonly|attrInteger|attrRemoved|attrExportSpoken|attrExportOn, 0)
 	delete(r.kindFixed, name)
 	delete(r.absentParams, name)
 	delete(r.dynamicDeclarations, name)

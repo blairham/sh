@@ -950,7 +950,7 @@ func (r *Runner) arithNameIsSet(name string) bool {
 	if r.assocDeclared(name) {
 		return true
 	}
-	if _, ok := r.arraysLookup(name); ok && !r.removed[name] {
+	if _, ok := r.arraysLookup(name); ok && !r.attrHas(name, attrRemoved) {
 		return true
 	}
 	_, ok := r.getVar(name)

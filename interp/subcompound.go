@@ -231,7 +231,7 @@ func (r *Runner) startElementCompound(name string, at elementAddress) {
 	}
 	space := elementNamespace(name, at.sub)
 	r.compoundVariables()[space] = true
-	delete(r.removed, space)
+	r.attrClear(space, attrRemoved)
 	r.storeElementCompound(name, at, space)
 }
 
@@ -571,7 +571,7 @@ func (r *Runner) listsBesideItsElement(name string) bool {
 		return false
 	}
 	space := elementNamespace(base, sub)
-	if !r.compoundVariable[space] || r.removed[space] {
+	if !r.compoundVariable[space] || r.attrHas(space, attrRemoved) {
 		return false
 	}
 	return strings.Count(member, memberSep) == 1

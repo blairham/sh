@@ -1582,7 +1582,7 @@ func (r *Runner) restoreShadowedName(sc *scope, name string) {
 		// export once a function has declared a local of it, where before
 		// the declaration it was told to no child at all. Putting the
 		// record back instead kept it silent, which no shell does.
-		delete(r.declaredEmpty, name)
+		r.attrClear(name, attrDeclaredEmpty)
 		// And the parameter that takes names out of a pathname expansion
 		// follows the value the restore put back, which is what makes a
 		// `local` of it last exactly as long as the call. See
@@ -1690,9 +1690,9 @@ func (r *Runner) restoreShadowedName(sc *scope, name string) {
 	// including having recorded nothing.
 	if rec.holds(recExported) {
 		if rec.bit(recExported) {
-			r.exported[name] = rec.exportedOn
+			r.exportedPut(name, rec.exportedOn)
 		} else {
-			delete(r.exported, name)
+			r.exportedDel(name)
 		}
 		rec.drop(recExported)
 	}
@@ -1700,9 +1700,9 @@ func (r *Runner) restoreShadowedName(sc *scope, name string) {
 	// for the function's duration: put back what was true at the shadow.
 	if rec.holds(recRemovedBefore) {
 		if rec.bit(recRemovedBefore) {
-			r.removed[name] = true
+			r.attrSet(name, attrRemoved)
 		} else {
-			delete(r.removed, name)
+			r.attrClear(name, attrRemoved)
 		}
 		rec.drop(recRemovedBefore)
 	}

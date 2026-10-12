@@ -135,7 +135,7 @@ func (r *Runner) settleShellLevel() {
 	if policy == ShellLevelUnspecified || policy == ShellLevelNotCounted {
 		return
 	}
-	if _, ok := r.varsLookup(ShellLevelName); ok || r.removed[ShellLevelName] {
+	if _, ok := r.varsLookup(ShellLevelName); ok || r.attrHas(ShellLevelName, attrRemoved) {
 		// A caller set one, or a script already has. Either is this shell's
 		// own answer and the environment has nothing to add to it.
 		return
@@ -160,13 +160,10 @@ func (r *Runner) settleShellLevel() {
 		}
 	}
 	r.setVarQuietly(ShellLevelName, strconv.Itoa(level))
-	if r.exported == nil {
-		r.exported = map[string]bool{}
-	}
 	// The half that is not about this shell at all. Without it the count is a
 	// number this shell can print and no child is ever told, which is the
 	// state every shell started underneath it reads as depth one.
-	r.exported[ShellLevelName] = true
+	r.exportedPut(ShellLevelName, true)
 }
 
 // ShellLevelReading is how an inherited `$SHLVL` is read before it is

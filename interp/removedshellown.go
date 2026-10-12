@@ -100,7 +100,7 @@ package interp
 // that had just forgotten — which is the shape of every probe this cluster's
 // issues were filed from, in code instead of in shell.
 func (r *Runner) removedShellOwnIsStillAName(name string) bool {
-	return r.removed[name] && r.removedShellOwn[name] &&
+	return r.attrHas(name, attrRemoved) && r.removedShellOwn[name] &&
 		r.ask(r.sem().RemovedShellOwnParameterIsStillAName,
 			"what a listing does with a parameter of the shell's own that an `unset` removed")
 }

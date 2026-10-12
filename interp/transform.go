@@ -211,10 +211,10 @@ func doubleQuotedForInput(v string) string {
 // with none, and a parameter that is not a name at all, answer empty.
 func (r *Runner) attributeLetters(name string) string {
 	var b strings.Builder
-	if _, ok := r.arraysLookup(name); ok && !r.removed[name] {
+	if _, ok := r.arraysLookup(name); ok && !r.attrHas(name, attrRemoved) {
 		b.WriteByte('a')
 	}
-	if ok := r.assocDeclared(name); ok && !r.removed[name] {
+	if ok := r.assocDeclared(name); ok && !r.attrHas(name, attrRemoved) {
 		b.WriteByte('A')
 	}
 	if r.attrHas(name, attrInteger) {
@@ -223,7 +223,7 @@ func (r *Runner) attributeLetters(name string) string {
 	if r.attrHas(name, attrReadonly) {
 		b.WriteByte('r')
 	}
-	if r.exported[name] {
+	if r.exportedAt(name) {
 		b.WriteByte('x')
 	}
 	return b.String()
@@ -367,7 +367,7 @@ func (r *Runner) keysAndValues(e *syntax.ParamExpr, elems []string) []string {
 // implementation keeps everywhere: subscript order for an indexed array, the
 // keys sorted for an associative one — the shells promise no order there.
 func (r *Runner) arrayPairs(name string) (keys, vals []string, assoc, stored bool) {
-	if a, ok := r.assocFor(name); ok && !r.removed[name] {
+	if a, ok := r.assocFor(name); ok && !r.attrHas(name, attrRemoved) {
 		ks := a.keys()
 		vs := make([]string, len(ks))
 		for i, k := range ks {
@@ -375,7 +375,7 @@ func (r *Runner) arrayPairs(name string) (keys, vals []string, assoc, stored boo
 		}
 		return ks, vs, true, true
 	}
-	if a, ok := r.arraysLookup(name); ok && !r.removed[name] {
+	if a, ok := r.arraysLookup(name); ok && !r.attrHas(name, attrRemoved) {
 		base := r.arrayBase()
 		ks := make([]string, 0, a.Len())
 		vs := make([]string, 0, a.Len())

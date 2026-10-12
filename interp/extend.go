@@ -2540,7 +2540,7 @@ func (r *Runner) SetList(name string, values []string) bool {
 // through deciding what to write.
 func (r *Runner) GetAssoc(name string) (map[string]string, bool) {
 	a, ok := r.assocsLookup(name)
-	if !ok || r.removed[name] {
+	if !ok || r.attrHas(name, attrRemoved) {
 		return nil, false
 	}
 	out := make(map[string]string, len(a))
@@ -2566,7 +2566,7 @@ func (r *Runner) AssocKeys(name string) ([]string, bool) {
 	if keys, ok := r.producedAssocKeys(name); ok {
 		return keys, true
 	}
-	if r.removed[r.throughNameref(name)] {
+	if r.attrHas(r.throughNameref(name), attrRemoved) {
 		return nil, false
 	}
 	a, ok := r.assocFor(name)
@@ -2585,7 +2585,7 @@ func (r *Runner) AssocKeys(name string) ([]string, bool) {
 // real startup that was a third of what the shell spent reading its rc file.
 func (r *Runner) AssocElement(name, key string) (string, bool) {
 	a, ok := r.assocsLookup(name)
-	if !ok || r.removed[name] {
+	if !ok || r.attrHas(name, attrRemoved) {
 		return "", false
 	}
 	v, ok := a[key]

@@ -9720,7 +9720,7 @@ func (r *Runner) namesWithPrefix(prefix string) []string {
 		out = append(out, name)
 	}
 	add := func(name string) {
-		if r.removed[name] {
+		if r.attrHas(name, attrRemoved) {
 			return
 		}
 		listed(name)
@@ -9750,7 +9750,7 @@ func (r *Runner) namesWithPrefix(prefix string) []string {
 	// declared-only — so a shell that has written to what it declared never
 	// reaches the axis at all.
 	compound := func(name string) {
-		if r.attrHas(name, attrDeclaredOnlyCompound) && !seen[name] && !r.removed[name] &&
+		if r.attrHas(name, attrDeclaredOnlyCompound) && !seen[name] && !r.attrHas(name, attrRemoved) &&
 			strings.HasPrefix(name, prefix) &&
 			!r.ask(r.sem().PrefixListingNamesADeclaredOnlyCompound,
 				"a prefix listing naming a compound a declaration brought into being and nothing has written to") {

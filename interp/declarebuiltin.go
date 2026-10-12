@@ -2666,7 +2666,8 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) (endSt
 				return r.status
 			}
 		default:
-			if r.deferredNameListsAsAnOperand(name, declarationCarriesNoLetters(f), redeclared) {
+			noLetters := declarationCarriesNoLetters(f)
+			if r.deferredNameListsAsAnOperand(name, noLetters, redeclared) {
 				// A parameter waiting on its first reference, named as the
 				// operand of a line that carries no letters: the bare name
 				// is written and nothing else happens to it. Ahead of the
@@ -2682,7 +2683,7 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) (endSt
 				r.printf("%s\n", name)
 				continue
 			}
-			if r.valuelessDeclarationLists(name, f, redeclared) {
+			if r.valuelessDeclarationLists(name, noLetters, redeclared) {
 				// Said back and nothing more: the value is unchanged, which
 				// is why this does not return — the branch below still runs
 				// and still decides nothing here.
@@ -3544,7 +3545,7 @@ func (r *Runner) refuseInconsistentType(name string) bool {
 // table right now — not merely carrying the attribute, and not a name a
 // declaration has hidden.
 func (r *Runner) compoundCell(name string) bool {
-	if r.removed[name] {
+	if r.attrHas(name, attrRemoved) {
 		return false
 	}
 	if _, ok := r.arraysLookup(name); ok {
@@ -5444,7 +5445,7 @@ func (r *Runner) declaredNameWithoutValueIsEmpty(standardWord bool) bool {
 // child was told nothing about it here — a `make`-style wrapper that exports
 // its variables up front handed them all over as absent.
 func (r *Runner) declarationOwnsTheStandingEmpty(name string) {
-	delete(r.declaredEmpty, name)
+	r.attrClear(name, attrDeclaredEmpty)
 }
 
 // zeroPaddedInteger answers a value written as a digit string with a leading
@@ -5637,7 +5638,7 @@ func (r *Runner) declareEmpty(name string, fresh, keepsTheEnvironmentEntry, name
 	// stops there — and this is true whichever of them the line takes. Not
 	// for a fresh cell: the record is keyed by name, so a local shadowing an
 	// outer declared-empty name is the first declaration of *its* cell.
-	owned := namesAnAttribute && !fresh && r.declaredEmpty[name]
+	owned := namesAnAttribute && !fresh && r.attrHas(name, attrDeclaredEmpty)
 	if owned {
 		r.declarationOwnsTheStandingEmpty(name)
 	}
@@ -5707,10 +5708,7 @@ func (r *Runner) declareEmpty(name string, fresh, keepsTheEnvironmentEntry, name
 		// Set by a declaration and not by an assignment, which the shell's
 		// own reads cannot tell apart and a child can: see
 		// Runner.declaredEmpty.
-		if r.declaredEmpty == nil {
-			r.declaredEmpty = map[string]bool{}
-		}
-		r.declaredEmpty[name] = true
+		r.attrSet(name, attrDeclaredEmpty)
 		return
 	}
 	if r.unspecified {
@@ -5840,10 +5838,7 @@ func (r *Runner) declarationAssignmentResets(name string, fresh, namesExport, va
 		return
 	}
 	if exported {
-		if r.exported == nil {
-			r.exported = map[string]bool{}
-		}
-		r.exported[name] = false
+		r.exportedPut(name, false)
 	}
 	if valued {
 		r.attrClear(name, attrInteger)
@@ -5985,14 +5980,8 @@ func (r *Runner) declarationStartsAnInheritedNameOver(name string, keepsTheEnvir
 	// mark goes with it, so the inherited value is not read back by the
 	// fallback either — and a later assignment lifts the mark without putting
 	// the export back, which is what the shell that discards does.
-	if r.exported == nil {
-		r.exported = map[string]bool{}
-	}
-	r.exported[name] = false
-	if r.removed == nil {
-		r.removed = map[string]bool{}
-	}
-	r.removed[name] = true
+	r.exportedPut(name, false)
+	r.attrSet(name, attrRemoved)
 	return true
 }
 
@@ -6327,7 +6316,7 @@ func (r *Runner) attributeWouldChange(name, value string) bool {
 // a scalar, either array, or a value it was born with in the environment.
 // A name `unset` took away holds nothing, however many attributes survive it.
 func (r *Runner) declaredNameHolds(name string) bool {
-	if r.removed[name] {
+	if r.attrHas(name, attrRemoved) {
 		return false
 	}
 	if _, ok := r.assocsLookup(name); ok {
@@ -6390,13 +6379,10 @@ func (r *Runner) localExportAttribute(name string, explicit bool) {
 		return
 	}
 	if !sc.holds(recExported, name) {
-		on, spoken := r.exported[name]
+		on, spoken := r.exportedLookup(name)
 		sc.saveExport(name, on, spoken)
 	}
-	if r.exported == nil {
-		r.exported = map[string]bool{}
-	}
-	r.exported[name] = false
+	r.exportedPut(name, false)
 }
 
 // shadowedExport remembers what an exported name held when a declaration took
@@ -6463,10 +6449,7 @@ func (r *Runner) shadowedExport(name string, exported bool) {
 // is what brings the outer value back.
 func (r *Runner) hideVar(name string) {
 	r.varsDel(name)
-	if r.removed == nil {
-		r.removed = map[string]bool{}
-	}
-	r.removed[name] = true
+	r.attrSet(name, attrRemoved)
 }
 
 // declarationShadowRefused reports whether a declaration of a frozen name is
@@ -6636,7 +6619,7 @@ func (r *Runner) shadow(name string) (fresh, redeclared bool) {
 		old, existed := r.varsLookup(name)
 		rec.put(recValue, existed)
 		rec.value = old
-		rec.put(recRemovedBefore, r.removed[name])
+		rec.put(recRemovedBefore, r.attrHas(name, attrRemoved))
 		// The frozen attribute is displaced with the value, in the dialect
 		// that lets a declaration shadow one — the caller checked the axis
 		// before getting here. Saved so the outer name is frozen again on
@@ -6709,7 +6692,7 @@ func (r *Runner) shadow(name string) (fresh, redeclared bool) {
 		// letter takes no shadow there, which is what the letter means — so
 		// this is inert for it and its own answer is unchanged.
 		if !rec.holds(recExported) {
-			on, spoken := r.exported[name]
+			on, spoken := r.exportedLookup(name)
 			rec.put(recExported, spoken)
 			rec.exportedOn = on
 		}

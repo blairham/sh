@@ -896,7 +896,7 @@ func (r *Runner) scalarOverCompound(name, value string, form assignForm) bool {
 	}
 	has := r.slotsOf(name)
 	isArray, isTable := has&slotArray != 0, has&slotAssoc != 0
-	if produced := has&slotAssocProducer != 0; produced && !r.removed[name] {
+	if produced := has&slotAssocProducer != 0; produced && !r.attrHas(name, attrRemoved) {
 		// A **produced** table — one a module or the shell itself answers
 		// for, rather than one a script stored — and it is not the stored
 		// table's row with a different subject: see
@@ -2359,7 +2359,7 @@ func (r *Runner) arrayElems(name string) ([]string, bool) {
 	// Produced rather than stored, and asked after the stored table so that
 	// a script assigning to the name gets its own value back — the same
 	// order the scalar ones follow.
-	if produce, ok := r.arrayProducersLookup(name); ok && !r.removed[name] {
+	if produce, ok := r.arrayProducersLookup(name); ok && !r.attrHas(name, attrRemoved) {
 		return produce(r), true
 	}
 	if v, ok := r.getVar(name); ok {

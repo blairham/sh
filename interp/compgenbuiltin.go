@@ -370,7 +370,7 @@ func (r *Runner) compgenNotImplemented(name string, said map[string]bool) {
 func (r *Runner) compgenVariableNames() []string {
 	seen := map[string]bool{}
 	hold := func(name string) {
-		if !r.removed[name] {
+		if !r.attrHas(name, attrRemoved) {
 			seen[name] = true
 		}
 	}

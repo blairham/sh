@@ -61,7 +61,7 @@ func (h *heldPrefix) hold(r *Runner, name, value string) {
 	h.undo = append(h.undo, r.saveVar(name))
 	r.arraysDel(name)
 	r.dropAssocTable(name)
-	delete(r.removed, name)
+	r.attrClear(name, attrRemoved)
 	r.varsPut(name, value)
 }
 

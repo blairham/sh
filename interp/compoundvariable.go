@@ -57,7 +57,7 @@ func (r *Runner) compoundVariables() map[string]bool {
 // because the members under it are still there and `unset` still has to take
 // them. See compoundVariableSubscripted.
 func (r *Runner) isCompoundVariable(name string) bool {
-	if !r.compoundVariable[name] || r.removed[name] {
+	if !r.compoundVariable[name] || r.attrHas(name, attrRemoved) {
 		return false
 	}
 	if _, ok := r.varsLookup(name); ok {
@@ -96,7 +96,7 @@ func (r *Runner) markCompoundVariable(name string) {
 	r.attrClear(name, attrDeclaredOnlyCompound)
 	r.attrClear(name, attrHeldAnElement)
 	r.attrClear(name, attrScalarUnderTheArrayLetter)
-	delete(r.removed, name)
+	r.attrClear(name, attrRemoved)
 }
 
 // compoundVariableRetyped takes the compound mark off a name that is being
@@ -190,7 +190,7 @@ func (r *Runner) compoundDescendants(name string) []string {
 	prefix := compoundMemberPrefix(name)
 	seen := map[string]bool{}
 	add := func(k string) {
-		if strings.HasPrefix(k, prefix) && len(k) > len(prefix) && !r.removed[k] {
+		if strings.HasPrefix(k, prefix) && len(k) > len(prefix) && !r.attrHas(k, attrRemoved) {
 			seen[k] = true
 		}
 	}
@@ -435,7 +435,7 @@ func (r *Runner) assignCompoundMember(ctx context.Context, prefix string, m *syn
 // was never one.
 func (r *Runner) memberOfACompoundVariable(name string) bool {
 	for i := strings.Index(name, memberSep); i >= 0; {
-		if r.compoundVariable[name[:i]] && !r.removed[name[:i]] {
+		if r.compoundVariable[name[:i]] && !r.attrHas(name[:i], attrRemoved) {
 			return true
 		}
 		next := strings.Index(name[i+1:], memberSep)
@@ -589,7 +589,7 @@ func (r *Runner) compoundTreeInto(b *strings.Builder, name string, depth int) {
 // — the two kinds an empty compound body adds nothing to. See
 // assignCompoundVariable.
 func (r *Runner) nameHoldsAContainer(name string) bool {
-	if r.removed[name] {
+	if r.attrHas(name, attrRemoved) {
 		return false
 	}
 	if _, ok := r.arraysLookup(name); ok {

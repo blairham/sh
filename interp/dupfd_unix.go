@@ -32,6 +32,14 @@ import (
 // See Runner.privateFdFloor and raiseShellEnd, which is the same rule about
 // the other half of the same pipe.
 //
+// The copy is asked for in privateCopyFloor's band first and at floor only
+// when the band is full, which is what keeps the first pipeline in a run from
+// growing the kernel's descriptor table (#6402). A copy in the band can sit on
+// a number the dialect publishes, so the caller registers it — see
+// privateCopies, which is how a published answer steps *onto* it rather than
+// over it. The number is answered beside the file for that reason: reading it
+// back through Fd would put the stream into blocking mode.
+//
 // A floor the kernel refuses falls back to the plain duplicate rather than
 // failing. Under a low `ulimit -n` the floor is past the limit, and a failure
 // here would put back the *sharing* this function exists to end (#2116) over
@@ -46,10 +54,10 @@ import (
 // newProcSubPipe. The fork lock is held across the pair so that no other
 // goroutine's fork can happen between the duplicate existing and the flag
 // being set.
-func dupFile(f *os.File, floor int) (*os.File, error) {
+func dupFile(f *os.File, floor int) (*os.File, int, error) {
 	conn, err := f.SyscallConn()
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	var dup int
 	var duperr error
@@ -60,6 +68,23 @@ func dupFile(f *os.File, floor int) (*os.File, error) {
 			// F_DUPFD_CLOEXEC carries the flag itself, so there is no pair to
 			// hold the fork lock across on this road — it is held anyway,
 			// because the fallback below has one.
+			//
+			// The band first, and the floor only where the band is full. See
+			// privateCopyFloor: a copy at or above the kernel's first table
+			// makes the kernel grow the table, and on Linux that waits out an
+			// RCU grace period (#6402).
+			if floor > privateCopyFloor {
+				if got, ferr := fcntlInt(int(fd), syscall.F_DUPFD_CLOEXEC, privateCopyFloor); ferr == nil {
+					if got < kernelFirstTable {
+						dup = got
+						return
+					}
+					// Past the first table already, so the table has grown
+					// and the band is full: the copy goes where it went
+					// before there was a band.
+					_ = syscall.Close(got)
+				}
+			}
 			if got, ferr := fcntlInt(int(fd), syscall.F_DUPFD_CLOEXEC, floor); ferr == nil {
 				dup = got
 				return
@@ -71,14 +96,14 @@ func dupFile(f *os.File, floor int) (*os.File, error) {
 		}
 		syscall.CloseOnExec(dup)
 	}); err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	if duperr != nil {
-		return nil, duperr
+		return nil, 0, duperr
 	}
 	// The name travels with the duplicate, because the name is what the file
 	// was opened by and a copy of a descriptor is a copy of that. One reader
 	// depends on it: holdsDescriptorOnto asks whether any descriptor still
 	// points at a substitution's pipe before the path is taken away.
-	return os.NewFile(uintptr(dup), f.Name()), nil
+	return os.NewFile(uintptr(dup), f.Name()), dup, nil
 }

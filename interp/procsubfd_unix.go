@@ -491,6 +491,19 @@ func parkDescriptor(f *os.File, dir string, want []int, view substFdView) (*os.F
 			// the wrong number, so it is closed rather than kept: keeping it
 			// would leak one descriptor per wish that missed.
 			_ = syscall.Close(got)
+			if isPrivateCopy(n) {
+				// Taken by a body's private copy of the table, which a fork
+				// would not hold — so the number is free in the shell this
+				// one imitates, and it is published the way a released one
+				// is, with the descriptor parked out of the way. See
+				// privateCopies (#6402).
+				got, err := fcntlInt(int(fd), syscall.F_DUPFD_CLOEXEC, floor)
+				if err != nil {
+					continue
+				}
+				parked, published = got, n
+				return
+			}
 		}
 		// The wish list is exhausted, so the number will be the lowest free
 		// one — which is what every shell in the panel answers from a table

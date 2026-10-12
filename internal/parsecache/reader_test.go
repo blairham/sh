@@ -46,9 +46,12 @@ func (c *memCache) Create(name string, _ int) (io.Writer, func(bool)) {
 	}
 }
 
-// shell is a shell's alias tables, answering as interp's runner does.
+// shell is a shell's alias tables, answering as interp's runner does —
+// fingerprints kept until a table changes, as the runner keeps them.
 type shell struct {
 	tables [3]map[string]string
+	sums   [3]uint64
+	summed [3]bool
 }
 
 func (s *shell) Alias(k parsecache.AliasKind, name string) (string, bool) {
@@ -57,12 +60,16 @@ func (s *shell) Alias(k parsecache.AliasKind, name string) (string, bool) {
 }
 
 func (s *shell) AliasTable(k parsecache.AliasKind) uint64 {
+	if s.summed[k] {
+		return s.sums[k]
+	}
 	h := fnv.New64a()
 	names := slices.Sorted(maps.Keys(s.tables[k]))
 	for _, n := range names {
 		fmt.Fprintf(h, "%d:%s=%d:%s;", len(n), n, len(s.tables[k][n]), s.tables[k][n])
 	}
-	return h.Sum64()
+	s.sums[k], s.summed[k] = h.Sum64(), true
+	return s.sums[k]
 }
 
 func (s *shell) AliasSnapshot(k parsecache.AliasKind) func(string) (string, bool) {
@@ -78,6 +85,7 @@ func (s *shell) set(k parsecache.AliasKind, name, value string) {
 		s.tables[k] = map[string]string{}
 	}
 	s.tables[k][name] = value
+	s.summed[k] = false
 }
 
 // reader is what a shell reads a file through: a parser, or the cache's

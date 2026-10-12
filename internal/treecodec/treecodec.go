@@ -853,9 +853,12 @@ type Decoder struct {
 	off  int
 	kept []unsafe.Pointer
 	// slab is, per plan id, the block the tree's nodes or slice elements of
-	// that type are being taken from.
-	slab []slab
-	err  error
+	// that type are being taken from. It outlives one tree: a block reserved
+	// for a whole entry serves every tree read from it, and reserve is what
+	// trees still to come said they would take.
+	slab    []slab
+	reserve []int
+	err     error
 }
 
 type slab struct {
@@ -868,7 +871,11 @@ type slab struct {
 // same text, byte for byte: the trees' strings are slices of it.
 func NewDecoder(data []byte, src string) *Decoder {
 	c := shared()
-	return &Decoder{c: c, data: data, src: src, err: c.err, slab: make([]slab, len(c.byID))}
+	n := len(c.byID)
+	return &Decoder{
+		c: c, data: data, src: src, err: c.err,
+		slab: make([]slab, n), reserve: make([]int, n),
+	}
 }
 
 // Reset points the decoder at new data from the same source, keeping what
@@ -911,27 +918,59 @@ func (d *Decoder) root(p *plan, at unsafe.Pointer) (err error) {
 		}
 	}()
 	d.kept = d.kept[:0]
-	clear(d.slab)
 	for n := d.uvarint(); n > 0; n-- {
 		id, k := d.uvarint(), d.uvarint()
 		p := d.c.byID[id]
-		var t reflect.Type
-		switch p.op {
-		case opPointer:
-			t = p.elem.t
-		case opSlice:
-			t = p.elem.t
-		default:
+		if p.op != opPointer && p.op != opSlice {
 			panic("an allocation of a type that is not allocated")
 		}
 		if k > uint64(len(d.data)) {
 			panic("more nodes than bytes")
 		}
-		block := reflect.MakeSlice(reflect.SliceOf(t), int(k), int(k))
-		d.slab[id] = slab{base: block.UnsafePointer(), end: uintptr(k) * t.Size()}
+		size := p.elem.size
+		if s := &d.slab[id]; s.end-s.next < uintptr(k)*size {
+			// A block for this tree, or for every tree still to come from
+			// the same entry when the caller said how many that is: one
+			// allocation per type per file rather than per line.
+			n := max(int(k), d.reserve[id])
+			d.reserve[id] = max(0, d.reserve[id]-n)
+			block := reflect.MakeSlice(reflect.SliceOf(p.elem.t), n, n)
+			*s = slab{base: block.UnsafePointer(), end: uintptr(n) * size}
+		}
 	}
 	d.read(p, at)
 	return nil
+}
+
+// Need is how many values of one type a tree's decoding allocates.
+type Need struct{ id, n int }
+
+// Needs reads what a tree written by Encoder will allocate, without reading
+// the tree.
+func Needs(data []byte) (out []Need, err error) {
+	defer func() {
+		if recover() != nil {
+			out, err = nil, ErrCorrupt
+		}
+	}()
+	d := Decoder{data: data}
+	for n := d.uvarint(); n > 0; n-- {
+		id, k := d.uvarint(), d.uvarint()
+		out = append(out, Need{int(id), int(k)})
+	}
+	return out, nil
+}
+
+// Reserve tells the decoder that trees still to come will need these values
+// as well, so that the first of them to need a type allocates for all of
+// them. A file read a line at a time is hundreds of small trees; without it,
+// each line was an allocation per type it held.
+func (d *Decoder) Reserve(needs []Need) {
+	for _, nd := range needs {
+		if nd.id >= 0 && nd.id < len(d.reserve) && nd.n > 0 {
+			d.reserve[nd.id] += nd.n
+		}
+	}
 }
 
 // take hands out n consecutive values of the type plan id allocates.
@@ -939,7 +978,7 @@ func (d *Decoder) take(id int, size uintptr, n int) unsafe.Pointer {
 	s := &d.slab[id]
 	want := size * uintptr(n)
 	if s.next+want > s.end {
-		panic("a tree larger than its own header")
+		panic("a tree larger than the blocks its header asked for")
 	}
 	at := unsafe.Add(s.base, s.next)
 	s.next += want

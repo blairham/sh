@@ -139,8 +139,8 @@ type Reader struct {
 	old    *parseEntry
 	served int
 	// sets is the dialect handed in before each served read that had one,
-	// kept for the walk a fallback makes.
-	sets []syntax.Dialect
+	// by the read's number, kept for the walk a fallback makes.
+	sets map[int]syntax.Dialect
 
 	// The live parser, once there is one, and the questions the read in
 	// progress is asking it.
@@ -214,6 +214,22 @@ func (c *Reader) begin(mode byte) {
 		return
 	}
 	c.old = e
+	// Every tree the entry holds, counted up front, so that the decoder
+	// takes each type's nodes for the whole file out of one block.
+	dec := c.decoder(nil)
+	for i := range e.raw {
+		ch, err := e.chunk(i)
+		if err != nil {
+			break
+		}
+		for _, part := range [][]byte{ch.remarks, ch.tree} {
+			if len(part) > 0 {
+				if needs, err := treecodec.Needs(part); err == nil {
+					dec.Reserve(needs)
+				}
+			}
+		}
+	}
 }
 
 // textSum is the SHA-256 of the text, worked out the first time it is
@@ -336,9 +352,10 @@ func (c *Reader) replay(i int, set bool) (*syntax.File, bool) {
 	}
 	c.rem = append(c.rem, made...)
 	if set {
-		c.sets = append(c.sets, c.cur)
-	} else {
-		c.sets = append(c.sets, syntax.Dialect{})
+		if c.sets == nil {
+			c.sets = map[int]syntax.Dialect{}
+		}
+		c.sets[c.served] = c.cur
 	}
 	c.servedRaw = append(c.servedRaw, ch.withLen)
 	c.served++

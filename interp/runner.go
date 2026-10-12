@@ -5784,6 +5784,12 @@ type Runner struct {
 	// counters of their own would hand two different actions the same id, and
 	// an id that is not unique is worse than none, because it looks joinable.
 	actionIDs *atomic.Uint64
+	// trimWhere is the matchWhere a parameter trim matches through, kept
+	// here rather than allocated per trim, and trimWhereBusy says one is in
+	// use — see Runner.borrowTrimWhere. A value rather than a pointer, so a
+	// clone has its own.
+	trimWhere     matchWhere
+	trimWhereBusy bool
 }
 
 // maxDepth bounds nested function calls: the substrate's own ceiling, which

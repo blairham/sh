@@ -3,6 +3,8 @@
 
 package interp
 
+import "unicode/utf8"
+
 // Where a match starting at one position of a substitution could end.
 //
 // `${v//pat/rep}` wants the longest match at each position, and finds it by
@@ -69,6 +71,54 @@ type reachNode struct {
 	text     string
 	after    int
 	out, alt int
+	// bytes is the bracket's answer for every one-byte unit, worked out
+	// when the automaton is built by asking matchBracket itself, or nil
+	// where that could not be done without the answer changing — see
+	// reachBracketBytes.
+	bytes *[256]reachByteAnswer
+}
+
+// reachByteAnswer is what reachSet.ends concludes about one byte at a
+// bracket node: matchBracket's verdict, and whether it read the bracket where
+// the analysis did.
+type reachByteAnswer uint8
+
+const (
+	reachByteMiss reachByteAnswer = iota
+	reachByteHit
+	reachByteUnsure
+)
+
+// reachBracketBytes asks matchBracket about every single byte ahead of time,
+// the way the program compiler does for its brackets, so that the pass does
+// not re-read the bracket's text for every unit of the subject — which was
+// half of its time on #1398's substitution (#6380).
+//
+// matchBracket's two side-effecting fields record rather than act, and a
+// bracket that would reach either is answered at run time instead, where its
+// effect lands on the match that reached it.
+func reachBracketBytes(text string, after int, o patternOpts) *[256]reachByteAnswer {
+	var bad, asked bool
+	o.bad = &bad
+	bracket := o.bracket
+	o.askBracketAfterSub = func() BracketPolicy {
+		asked = true
+		return bracket
+	}
+	var t [256]reachByteAnswer
+	for b := range 256 {
+		rest, ok := matchBracket(text, byteStrings[b], &o)
+		switch {
+		case len(rest) != after:
+			t[b] = reachByteUnsure
+		case ok:
+			t[b] = reachByteHit
+		}
+	}
+	if bad || asked {
+		return nil
+	}
+	return &t
 }
 
 // reachFrag is a piece of the automaton with its entry and the slots still
@@ -85,6 +135,9 @@ type reachSet struct {
 	nodes []reachNode
 	start int
 	o     patternOpts
+	// a is the automaton nodes and start came from, nil for one built
+	// without it.
+	a *reachAutomaton
 	// The simulation's scratch, reused from one position to the next.
 	cur     []int
 	stamp   []int
@@ -99,14 +152,128 @@ type reachSet struct {
 
 // newReachSet reads pattern for the analysis, or reports that it cannot.
 func newReachSet(pattern string, o patternOpts) (*reachSet, bool) {
-	if reachDisabled || o.tilde || o.tildeFold || o.fold || o.litFold != caseExact ||
-		o.period || o.classEscapes || o.matchSkipsToAnyBracket || o.bracketMember {
+	a := reachAutomatonOf(pattern, o)
+	if a == nil {
 		return nil, false
+	}
+	return newReachSetOn(a, o), true
+}
+
+// reachRefused reports whether o compares bytes in a way the analysis does
+// not read, or carries state it does not, so that no pattern under it is read.
+func reachRefused(o *patternOpts) bool {
+	return reachDisabled || o.tilde || o.tildeFold || o.fold || o.litFold != caseExact ||
+		o.period || o.classEscapes || o.matchSkipsToAnyBracket || o.bracketMember
+}
+
+// reachAutomatonOf is pattern's automaton under o, or nil where the analysis
+// refuses either of them.
+func reachAutomatonOf(pattern string, o patternOpts) *reachAutomaton {
+	if reachRefused(&o) {
+		return nil
 	}
 	// The prepared tables are keyed on positions in the pattern the matcher
 	// was handed, and the readers below are asked about the same text — but
 	// a scan from scratch is what cannot be wrong about it.
 	o.where = nil
+	return reachAutomatonFor(pattern, &o)
+}
+
+// newReachSetOn binds an automaton to the scratch one simulation writes. The
+// automaton is shared and only ever read; what a simulation writes is this
+// set's own. o is the caller's, state and all, because the simulation asks
+// matchBracket about the subject and that is where a refused bracket is
+// recorded.
+func newReachSetOn(a *reachAutomaton, o patternOpts) *reachSet {
+	o.where = nil
+	r := &reachSet{nodes: a.nodes, start: a.start, o: o, a: a}
+	r.stamp = make([]int, len(r.nodes))
+	for i := range r.slotGen {
+		r.slotGen[i] = make([]int, len(r.nodes))
+	}
+	return r
+}
+
+// reachAutomaton is a pattern's automaton on its own, without the scratch a
+// simulation of it writes: a fact about the pattern under one reading, so it
+// is built once per pattern and reading and shared by every substitution
+// that asks — see programEntry, which holds it. A refused pattern is
+// recorded as an automaton with no nodes, so that the refusal is not
+// re-derived either.
+type reachAutomaton struct {
+	nodes []reachNode
+	start int
+	// first holds every ASCII byte a match could begin with, and empty says
+	// a match could consume nothing — see reachSet.mayBegin.
+	first [utf8.RuneSelf]bool
+	empty bool
+}
+
+// readFirst works out first and empty from the states the start reaches
+// without consuming.
+func (a *reachAutomaton) readFirst() {
+	seen := make([]bool, len(a.nodes))
+	var walk func(s int)
+	walk = func(s int) {
+		if s < 0 || seen[s] {
+			return
+		}
+		seen[s] = true
+		n := &a.nodes[s]
+		switch n.kind {
+		case reachSplit:
+			walk(n.out)
+			walk(n.alt)
+		case reachAccept:
+			a.empty = true
+		case reachByte:
+			if n.b < utf8.RuneSelf {
+				a.first[n.b] = true
+			}
+		case reachBracket:
+			for b := range a.first {
+				if n.bytes == nil || n.bytes[b] != reachByteMiss {
+					a.first[b] = true
+				}
+			}
+		default:
+			for b := range a.first {
+				a.first[b] = true
+			}
+		}
+	}
+	walk(a.start)
+}
+
+// reachAutomatonFor is pattern's automaton under o, or nil where the
+// analysis refuses it. o has already passed newReachSet's refusals.
+//
+// Built from o with the match state cleared, because nothing the
+// construction reads is state — it splits and bounds the pattern text and
+// never matches a byte — and a shared automaton must not be built from one
+// caller's state. TestTheCachedFactsAnswerWhatAFreshReadingAnswers holds the
+// cached automaton to a freshly built one under every reading.
+func reachAutomatonFor(pattern string, o *patternOpts) *reachAutomaton {
+	var a *reachAutomaton
+	if !patternFactsCached {
+		a = buildReachAutomaton(pattern, stateless(*o))
+	} else {
+		rd := readingOf(o)
+		e := programs.entry(pattern, &rd)
+		if a = e.reach.Load(); a == nil {
+			a = buildReachAutomaton(pattern, stateless(*o))
+			e.reach.Store(a)
+		}
+	}
+	if a.nodes == nil {
+		return nil
+	}
+	return a
+}
+
+// buildReachAutomaton reads pattern into an automaton, or into one with no
+// nodes where the analysis cannot read it.
+func buildReachAutomaton(pattern string, o patternOpts) *reachAutomaton {
 	r := &reachSet{o: o}
 	var f reachFrag
 	var ok bool
@@ -117,15 +284,17 @@ func newReachSet(pattern string, o patternOpts) (*reachSet, bool) {
 		f, ok = r.branch(pattern, 0, o)
 	}
 	if !ok {
-		return nil, false
+		return &reachAutomaton{}
 	}
 	r.patch(f, r.add(reachNode{kind: reachAccept}))
-	r.start = f.start
-	r.stamp = make([]int, len(r.nodes))
-	for i := range r.slotGen {
-		r.slotGen[i] = make([]int, len(r.nodes))
+	for i := range r.nodes {
+		if n := &r.nodes[i]; n.kind == reachBracket {
+			n.bytes = reachBracketBytes(n.text, n.after, o)
+		}
 	}
-	return r, true
+	a := &reachAutomaton{nodes: r.nodes, start: f.start}
+	a.readFirst()
+	return a
 }
 
 func (r *reachSet) add(n reachNode) int {
@@ -383,7 +552,14 @@ func (r *reachSet) ends(value string, i int, stop, end []bool, marked []int) ([]
 					return marked, false
 				}
 				w := r.o.unitWidth(value[x:])
-				if n.kind == reachBracket {
+				if n.kind == reachBracket && w == 1 && n.bytes != nil {
+					switch n.bytes[value[x]] {
+					case reachByteUnsure:
+						return marked, false
+					case reachByteMiss:
+						continue
+					}
+				} else if n.kind == reachBracket {
 					rest, ok := matchBracket(n.text, value[x:x+w], &r.o)
 					if len(rest) != n.after {
 						return marked, false
@@ -408,6 +584,9 @@ type reachEnds struct {
 	end    []bool
 	marked []int
 	sure   bool
+	// at is the position last asked about, once asked is set.
+	asked bool
+	at    int
 }
 
 // newReachEnds binds r to value, whose unit boundaries are stops.
@@ -425,11 +604,48 @@ func newReachEnds(r *reachSet, value string, stops []int) *reachEnds {
 // from works out the ends of a match beginning at i, and reports whether
 // there could be any at all.
 func (e *reachEnds) from(i int) bool {
+	// A position the automaton cannot take its first step from has no ends,
+	// and saying so is a table lookup where the pass is a simulation — which
+	// a substitution with no literal to jump to ran at every unit of the
+	// subject (#6380).
+	if !e.r.mayBegin(e.value, i) {
+		for _, x := range e.marked {
+			e.end[x] = false
+		}
+		e.marked, e.sure = e.marked[:0], true
+		e.asked, e.at = true, i
+		return false
+	}
+	// Asked again about the position just asked about, which the arm search
+	// does — once to count the variants that could begin there and once to
+	// walk them — and the answer is already in hand.
+	if e.asked && e.at == i {
+		return !e.sure || len(e.marked) > 0
+	}
+	e.asked, e.at = true, i
 	for _, x := range e.marked {
 		e.end[x] = false
 	}
 	e.marked, e.sure = e.r.ends(e.value, i, e.stop, e.end, e.marked[:0])
 	return !e.sure || len(e.marked) > 0
+}
+
+// mayBegin reports whether a match could begin at offset i of value: the
+// pattern can match nothing, or its first step can consume the byte there.
+// A byte past ASCII, which may begin a character the steps compare whole, is
+// always admitted, and so is anything the automaton was built without.
+func (r *reachSet) mayBegin(value string, i int) bool {
+	return r.a.mayBegin(value, i)
+}
+
+// mayBegin is reachSet.mayBegin, asked of the automaton before any scratch
+// has been made for it.
+func (a *reachAutomaton) mayBegin(value string, i int) bool {
+	if a == nil || a.empty || i >= len(value) {
+		return true
+	}
+	c := value[i]
+	return c >= utf8.RuneSelf || a.first[c]
 }
 
 // may is whether the span from the last position asked to j could be one the

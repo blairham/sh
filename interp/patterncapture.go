@@ -6,6 +6,7 @@ package interp
 import (
 	"strconv"
 	"strings"
+	"unicode/utf8"
 )
 
 // The half of the position-aware flag family that has to *report* a position
@@ -682,6 +683,18 @@ func (m matchReport) bounds(sp capSpan, base int) (int, int) {
 	return charIndex(m.subject, sp.begin) + base, charIndex(m.subject, sp.end) + base - 1
 }
 
+// boundsIn is bounds for a subject already known to be ASCII or not, so that
+// a report with many groups reads the subject once rather than once per bound.
+func (m matchReport) boundsIn(sp capSpan, base int, ascii bool) (int, int) {
+	if !ascii {
+		return m.bounds(sp, base)
+	}
+	if !sp.set {
+		return -1, -1
+	}
+	return sp.begin + base, sp.end + base - 1
+}
+
 // charIndex is how many characters of s lie before byte offset n.
 //
 // Characters rather than bytes because that is what a script is told:
@@ -694,8 +707,16 @@ func charIndex(s string, n int) int {
 	if n > len(s) {
 		n = len(s)
 	}
-	count := 0
-	for i := 0; i < n; count++ {
+	// An ASCII byte is one character, so a run of them counts itself and
+	// the walk below starts where the first byte that is not one stands.
+	// Asked for every bound of every replacement, which made it a tenth of
+	// a reporting substitution over a prompt (#6380).
+	i := 0
+	for i < n && s[i] < utf8.RuneSelf {
+		i++
+	}
+	count := i
+	for ; i < n; count++ {
 		i += characterWidth(s[i:], "")
 	}
 	return count
@@ -731,12 +752,13 @@ func (r *Runner) publishMatch(m matchReport) {
 	// reported positions with it — measured, `(#m)` on `abc` reports
 	// `MBEGIN=1 MEND=3` and `MBEGIN=0 MEND=2` under `ksharrays`.
 	base := r.arrayBase()
+	ascii := isASCII(m.subject)
 	if len(m.groups) > 0 {
 		texts := make([]string, len(m.groups))
 		begins := make([]string, len(m.groups))
 		ends := make([]string, len(m.groups))
 		for i, sp := range m.groups {
-			b, e := m.bounds(sp, base)
+			b, e := m.boundsIn(sp, base, ascii)
 			texts[i] = m.text(sp)
 			begins[i] = strconv.Itoa(b)
 			ends[i] = strconv.Itoa(e)
@@ -746,7 +768,7 @@ func (r *Runner) publishMatch(m matchReport) {
 		r.setArray("mend", ends)
 	}
 	if m.wantsAll {
-		b, e := m.bounds(m.whole, base)
+		b, e := m.boundsIn(m.whole, base, ascii)
 		r.setVar("MATCH", m.text(m.whole))
 		r.setVar("MBEGIN", strconv.Itoa(b))
 		r.setVar("MEND", strconv.Itoa(e))

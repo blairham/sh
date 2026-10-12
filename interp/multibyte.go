@@ -338,7 +338,9 @@ func (r *Runner) patternCountsCharacters(texts ...string) bool {
 // Only a shell that decodes, in a locale that has an encoding, with a pattern
 // that poses the question, reaches Semantics.UndecodablePatternComparesBytes.
 func (r *Runner) patternMatchCountsCharacters(pattern string, subjects ...string) bool {
-	if !r.patternCountsCharacters(append([]string{pattern}, subjects...)...) {
+	// On the stack for the one or two texts nearly every caller has.
+	var texts [3]string
+	if !r.patternCountsCharacters(append(append(texts[:0], pattern), subjects...)...) {
 		return false
 	}
 	if utf8.ValidString(pattern) {

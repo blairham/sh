@@ -147,13 +147,14 @@ func (p Preset) Runner(b Base) *interp.Runner {
 		Stdout: b.Stdout, Stderr: b.Stderr,
 		Semantics: &sem, Diagnostics: &diag,
 		Dialect: &d,
-		Name:    name, Dir: b.Dir, Vars: b.Vars, Env: b.Env,
+		Name:    name, Dir: b.Dir, Env: b.Env,
 		LocaleDatabase: b.LocaleDatabase,
 		Interactive:    b.Interactive,
 		Terminal:       b.Terminal,
 		LoginShell:     b.LoginShell,
 		Route:          b.Route,
 	}
+	r.SeedVars(b.Vars)
 	if b.Rlimits != nil {
 		b.Rlimits.apply(r)
 	}

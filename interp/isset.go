@@ -168,7 +168,7 @@ func (r *Runner) wholeArraySubscriptIsSet(base, sub string, e *syntax.ParamExpr,
 			return r.emptyWholeArrayIsSet(e, set)
 		}
 	case ConditionWholeArraySubscriptNamesAnElement:
-		if _, isArray := r.Arrays[base]; !isArray && !isTable {
+		if _, isArray := r.arraysLookup(base); !isArray && !isTable {
 			// No elements to name, so the subscript names the parameter by
 			// default and its own set-ness stands.
 			return set
@@ -491,7 +491,7 @@ func literalWord(s string) *syntax.Word {
 // are set either way, because those names do have elements. So the rule is
 // keyed on **what the name holds**, not on what the subscript looks like.
 func (r *Runner) scalarHasNoElements(name string) bool {
-	if _, isArray := r.Arrays[name]; isArray {
+	if _, isArray := r.arraysLookup(name); isArray {
 		return false
 	}
 	if isTable := r.assocDeclared(name); isTable {

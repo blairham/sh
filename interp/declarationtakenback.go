@@ -78,10 +78,10 @@ type declarationHeld struct {
 // the attributes reached.
 func (r *Runner) holdTheDeclaration(name string) declarationHeld {
 	h := declarationHeld{attrs: r.captureAttributes(name), hidden: r.hideInScope[name]}
-	h.value, h.valueSet = r.Vars[name]
+	h.value, h.valueSet = r.varsLookup(name)
 	h.exported, h.exportSpoken = r.exported[name]
-	_, array := r.Arrays[name]
-	_, assoc := r.AssocArrays[name]
+	_, array := r.arraysLookup(name)
+	_, assoc := r.assocsLookup(name)
 	// The export record counts as a name being here only when it records an
 	// export. It is a **tri-state**, and its third state is written by
 	// `unset` — the entry is set to false rather than deleted, so that a
@@ -109,12 +109,9 @@ func (r *Runner) holdTheDeclaration(name string) declarationHeld {
 func (r *Runner) takeTheDeclarationBack(name string, h declarationHeld, fresh bool) {
 	r.restoreAttributes(name, h.attrs)
 	if h.valueSet {
-		if r.Vars == nil {
-			r.Vars = map[string]string{}
-		}
-		r.Vars[name] = h.value
+		r.varsPut(name, h.value)
 	} else {
-		delete(r.Vars, name)
+		r.varsDel(name)
 	}
 	if h.exportSpoken {
 		if r.exported == nil {

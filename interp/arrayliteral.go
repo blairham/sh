@@ -598,15 +598,12 @@ func elementIsAValueOfItsOwn(e literalElem) bool {
 // elements, under their positions written out as keys.
 func (r *Runner) storeRetypedNestedLiteral(name string, a Array) {
 	r.markAssoc(name)
-	if r.AssocArrays == nil {
-		r.AssocArrays = map[string]AssocArray{}
-	}
 	table := make(AssocArray, a.Len())
 	for _, i := range a.subscripts() {
 		table[strconv.Itoa(i)] = a.Get(i)
 	}
 	r.ownAssocs()
-	r.AssocArrays[name] = table
+	r.assocsPut(name, table)
 	r.markCompoundForAllexport(name)
 	r.sweepElementCompounds(name)
 	// Written to, so the name leaves the declared-only set and its scalar
@@ -1036,10 +1033,10 @@ func isDecimalSubscript(s string) bool {
 // array at all. A produced array counts as one — its elements are what an
 // append goes after, exactly as a stored array's are.
 func (r *Runner) arrayToAppendTo(name string) (Array, bool) {
-	if a, stored := r.Arrays[name]; stored {
+	if a, stored := r.arraysLookup(name); stored {
 		return a, true
 	}
-	if _, produced := r.DynamicArrays[name]; produced {
+	if _, produced := r.arrayProducersLookup(name); produced {
 		return r.arrayForWrite(name), true
 	}
 	return nil, false

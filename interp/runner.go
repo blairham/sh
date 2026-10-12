@@ -11305,7 +11305,7 @@ func (r *Runner) runWatched(ctx context.Context, cmd *exec.Cmd, argv []string, a
 // genuinely empty: nothing reaches a command but what the shell exported.
 func (r *Runner) environ() []string {
 	base := r.Env
-	out := make([]string, 0, len(base)+len(r.Vars))
+	out := make([]string, 0, len(base)+r.varsLen())
 	// What a `private -x` name puts there while its declaring call is on the
 	// stack. The entry belongs to the declaring frame and supersedes both an
 	// inherited one and an outer binding of the same spelling, so the two
@@ -11372,7 +11372,7 @@ func (r *Runner) environ() []string {
 			// sees it at all.
 			continue
 		}
-		if _, own := r.Vars[k]; own {
+		if _, own := r.varsLookup(k); own {
 			// Assigned since it was inherited, and the assignment supersedes
 			// what came in rather than joining it below.
 			//
@@ -11441,7 +11441,7 @@ func (r *Runner) environ() []string {
 	// The functions this shell was told to carry, written as source because
 	// there is nothing but a string to carry them in.
 	out = append(out, r.functionEnviron()...)
-	for k, v := range r.Vars {
+	for k, v := range r.varsRange() {
 		if _, held := private[k]; held {
 			continue
 		}
@@ -11564,11 +11564,11 @@ func endEachEntryAtItsFirstNUL(env []string) []string {
 // a produced name into Vars in the dialects where assigning to one is kept,
 // and the walk over that map is where such a name belongs.
 func (r *Runner) producedScalar(name string) (string, bool) {
-	produce, ok := r.Dynamic[name]
+	produce, ok := r.producersLookup(name)
 	if !ok {
 		return "", false
 	}
-	if _, own := r.Vars[name]; own {
+	if _, own := r.varsLookup(name); own {
 		return "", false
 	}
 	if !r.dynamicParameterIsThere(name) {
@@ -11594,7 +11594,7 @@ func (r *Runner) inheritedEntry(name string) bool {
 // scalars earn, for the names that reached neither of environ's two walks.
 func (r *Runner) exportedProducedParameters(done map[string]bool) []string {
 	var out []string
-	for name := range r.Dynamic {
+	for name := range r.producersRange() {
 		if done[name] || r.removed[name] || !r.isExported(name) {
 			continue
 		}
@@ -11623,8 +11623,8 @@ func (r *Runner) exportedProducedParameters(done map[string]bool) []string {
 // walk over that map cannot see one.
 func (r *Runner) exportedTables() []string {
 	var out []string
-	for k := range r.AssocArrays {
-		if _, own := r.Vars[k]; own || !r.isExported(k) {
+	for k := range r.assocsRange() {
+		if _, own := r.varsLookup(k); own || !r.isExported(k) {
 			continue
 		}
 		if entry, _ := r.exportedCompound(k); entry != "" {
@@ -11677,10 +11677,10 @@ func (r *Runner) compoundValues(name string) ([]string, bool) {
 	// The *stored* array and not arrayElems, which reads a scalar back as
 	// the array of one it otherwise is — every exported name would have
 	// looked like a compound and reached no child at all.
-	if a, ok := r.Arrays[name]; ok {
+	if a, ok := r.arraysLookup(name); ok {
 		return r.readArray(a), true
 	}
-	if produce, ok := r.DynamicArrays[name]; ok {
+	if produce, ok := r.arrayProducersLookup(name); ok {
 		return produce(r), true
 	}
 	return nil, false
@@ -11752,7 +11752,7 @@ func (r *Runner) hiddenExports(yield func(name, value string) bool) {
 				seen = map[string]bool{}
 			}
 			seen[name] = true
-			if _, own := r.Vars[name]; own {
+			if _, own := r.varsLookup(name); own {
 				// Assigned since, so the local has a value of its own — but
 				// it reaches a child only if the local carries the export
 				// attribute, and `+x` on the declaration takes it off. So
@@ -11804,7 +11804,7 @@ func (r *Runner) hiddenExports(yield func(name, value string) bool) {
 				// as `foo=zz` in both (#4050).
 				continue
 			}
-			if _, own := r.Vars[name]; !own &&
+			if _, own := r.varsLookup(name); !own &&
 				!r.ask(r.sem().AHiddenExportStillReachesAChild,
 					"an exported name a valueless local hid still reaching a child") {
 				// Hidden from the child as well as from the script, in the
@@ -12625,9 +12625,9 @@ func (r *Runner) saveVar(name string) savedVar {
 
 // saveVarAlone is saveVar for one cell, with no tie followed.
 func (r *Runner) saveVarAlone(name string) savedVar {
-	old, present := r.Vars[name]
-	a, inArray := r.Arrays[name]
-	m, inTable := r.AssocArrays[name]
+	old, present := r.varsLookup(name)
+	a, inArray := r.arraysLookup(name)
+	m, inTable := r.assocsLookup(name)
 	exported, exportSpoken := r.exported[name]
 	assigned, assignedSpoken := r.assigned[name]
 	return savedVar{
@@ -12655,7 +12655,7 @@ func (r *Runner) producedValueToPutBack(name string) *string {
 	if _, hasWriter := r.dynamicWriters[name]; !hasWriter {
 		return nil
 	}
-	produce, ok := r.Dynamic[name]
+	produce, ok := r.producersLookup(name)
 	if !ok {
 		return nil
 	}
@@ -12696,24 +12696,18 @@ func (r *Runner) restoreVar(u savedVar) {
 		r.restoreVar(*u.partner)
 	}
 	if u.present {
-		r.Vars[u.name] = u.value
+		r.varsPut(u.name, u.value)
 	} else {
-		delete(r.Vars, u.name)
+		r.varsDel(u.name)
 	}
 	if u.inArray {
-		if r.Arrays == nil {
-			r.Arrays = map[string]Array{}
-		}
-		r.Arrays[u.name] = u.array
+		r.arraysPut(u.name, u.array)
 	} else {
-		delete(r.Arrays, u.name)
+		r.arraysDel(u.name)
 	}
 	if u.inTable {
 		r.ownAssocs()
-		if r.AssocArrays == nil {
-			r.AssocArrays = map[string]AssocArray{}
-		}
-		r.AssocArrays[u.name] = u.table
+		r.assocsPut(u.name, u.table)
 	} else {
 		r.dropAssocTable(u.name)
 	}
@@ -12843,7 +12837,7 @@ func (r *Runner) prefixScopedToTheCall(fn *syntax.FuncDecl, assigns []*syntax.As
 // matchesSavedVar reports whether a name is in exactly the state that was
 // saved for it, so that putting it back would change nothing.
 func (r *Runner) matchesSavedVar(u savedVar) bool {
-	value, present := r.Vars[u.name]
+	value, present := r.varsLookup(u.name)
 	if present != u.present || value != u.value || r.removed[u.name] != u.removed {
 		return false
 	}
@@ -12864,11 +12858,11 @@ func (r *Runner) matchesSavedVar(u savedVar) bool {
 	if assigned, spoken := r.assigned[u.name]; spoken != u.assignedSpoken || assigned != u.assigned {
 		return false
 	}
-	a, inArray := r.Arrays[u.name]
+	a, inArray := r.arraysLookup(u.name)
 	if inArray != u.inArray || !a.equal(u.array) {
 		return false
 	}
-	m, inTable := r.AssocArrays[u.name]
+	m, inTable := r.assocsLookup(u.name)
 	return inTable == u.inTable && m.equal(u.table)
 }
 
@@ -13809,9 +13803,6 @@ func (r *Runner) setVarAs(name, value string, form assignForm) {
 	// replaces the whole tree. See compoundVariableRetyped for the five
 	// stores this is one of, and why it is five rather than one.
 	r.compoundVariableRetyped(name)
-	if r.Vars == nil {
-		r.Vars = map[string]string{}
-	}
 	if !r.viewIsAlreadyFolded {
 		// The compound view of an array that *has* elements is written from
 		// text this name's attributes have already folded — see storeArray,
@@ -13846,7 +13837,7 @@ func (r *Runner) setVarAs(name, value string, form assignForm) {
 			return
 		}
 	}
-	if _, dynamic := r.Dynamic[name]; dynamic {
+	if _, dynamic := r.producersLookup(name); dynamic {
 		// Assigning a produced parameter is a message to its producer rather
 		// than a replacement for it.
 		if r.assigned == nil {
@@ -13920,7 +13911,7 @@ func (r *Runner) setVarAs(name, value string, form assignForm) {
 			return
 		}
 	}
-	r.Vars[name] = value
+	r.varsPut(name, value)
 	// And the other half of a tie, if this name is one. After the store, so
 	// that the mirror's own read of this name sees the new value.
 	r.mirrorScalarToArray(name, value)
@@ -14023,17 +14014,17 @@ func (r *Runner) producerEndedByUnset(name string) bool {
 // `region_highlight` (#5961) — answers Semantics.AssignmentRestoresAnUnset-
 // ProducedParameter yes and is untouched.
 func (r *Runner) endProducerUnsetEnded(name string) {
-	_, scalar := r.Dynamic[name]
-	_, array := r.DynamicArrays[name]
+	_, scalar := r.producersLookup(name)
+	_, array := r.arrayProducersLookup(name)
 	if !scalar && !array {
 		return
 	}
 	if !r.producerEndedByUnset(name) {
 		return
 	}
-	delete(r.Dynamic, name)
+	r.producersDel(name)
 	delete(r.dynamicWriters, name)
-	delete(r.DynamicArrays, name)
+	r.arrayProducersDel(name)
 	delete(r.dynamicArrayWriters, name)
 	delete(r.assigned, name)
 	delete(r.dynamicDeclarations, name)
@@ -14090,7 +14081,7 @@ func (r *Runner) nameIsBack(name string) {
 // prelude first and then the script — and because `cd` may already have moved,
 // and because a caller may have set it deliberately.
 func (r *Runner) ensurePWD() {
-	if _, ok := r.Vars["PWD"]; ok {
+	if _, ok := r.varsLookup("PWD"); ok {
 		return
 	}
 	// The name is exported however it is settled, which is a fact about the
@@ -14179,7 +14170,7 @@ func (r *Runner) varValue(name string, folded bool) (string, bool) {
 // element and says so — where the same probe on a scalar and on a keyed table
 // both enter with the subscript empty.
 func (r *Runner) bareReadSubscript(name string) string {
-	if _, ok := r.Arrays[name]; !ok {
+	if _, ok := r.arraysLookup(name); !ok {
 		return ""
 	}
 	if !r.disciplineIsWatching(name, disciplineGet) {
@@ -14229,7 +14220,7 @@ func (r *Runner) storedValue(name string, folded bool) (string, bool) {
 	if elems, ok := r.pipelineStatuses(name); ok {
 		return r.arrayScalar(elems), true
 	}
-	if f, ok := r.Dynamic[name]; ok && r.dynamicParameterIsThere(name) {
+	if f, ok := r.producersLookup(name); ok && r.dynamicParameterIsThere(name) {
 		// Ahead of the stored table, because a parameter that produces its
 		// value cannot be overwritten by assigning to it: `RANDOM=5` seeds
 		// the generator and the next read is still a new number. What was
@@ -14261,7 +14252,7 @@ func (r *Runner) storedValue(name string, folded bool) (string, bool) {
 		// gets here: for that one the tables already are the frame's view.
 		return v, set
 	}
-	if a, ok := r.Arrays[name]; ok && !r.removed[name] {
+	if a, ok := r.arraysLookup(name); ok && !r.removed[name] {
 		// Ahead of Vars, which holds a copy of one element: the array is the
 		// store, and both what a bare name reads and whether it is set at all
 		// are read off it rather than off the copy.
@@ -14277,7 +14268,7 @@ func (r *Runner) storedValue(name string, folded bool) (string, bool) {
 		}
 		return r.arrayBareName(a)
 	}
-	if produce, ok := r.DynamicArrays[name]; ok && !r.removed[name] {
+	if produce, ok := r.arrayProducersLookup(name); ok && !r.removed[name] {
 		// A produced array read without a subscript, which is the same
 		// question the stored one above answers and had no answer here at
 		// all: `$FUNCNAME` was empty where bash reads `g`, `${BASH_SOURCE}`
@@ -14312,7 +14303,7 @@ func (r *Runner) storedValue(name string, folded bool) (string, bool) {
 		// shell reads that back once the attribute is on.
 		return r.assocScalar(name, a)
 	}
-	if v, ok := r.Vars[name]; ok {
+	if v, ok := r.varsLookup(name); ok {
 		// Folded here rather than when it was stored, in the shell that
 		// keeps what was assigned — see caseFoldsOnRead. This is the one
 		// place a stored scalar becomes a value, so `$v`, `${#v}`,
@@ -14460,10 +14451,10 @@ func (r *Runner) arrayLiteralStartsTheNameOver(a *syntax.Assign) bool {
 // questions are membership and length of one table, and a second map of
 // letters beside it would be a copy that could drift.
 func (r *Runner) nameIsAnArray(name string) bool {
-	if _, ok := r.Arrays[name]; ok {
+	if _, ok := r.arraysLookup(name); ok {
 		return true
 	}
-	if _, ok := r.DynamicArrays[name]; ok {
+	if _, ok := r.arrayProducersLookup(name); ok {
 		return true
 	}
 	ok := r.assocDeclared(name)
@@ -15220,14 +15211,14 @@ func (r *Runner) assign(ctx context.Context, a *syntax.Assign) {
 			if r.unspecified {
 				return
 			}
-			v, ok := r.appendedValue(a.Name, r.AssocArrays[a.Name]["0"].scalar(), value)
+			v, ok := r.appendedValue(a.Name, r.assocsAt(a.Name)["0"].scalar(), value)
 			if !ok {
 				return
 			}
 			r.setAssocElem(a.Name, "0", v)
 			return
 		}
-		if old, ok := r.Arrays[a.Name]; ok && a.Append {
+		if old, ok := r.arraysLookup(a.Name); ok && a.Append {
 			// `a+=x` over a name holding an *array* joins the array. The
 			// lines below are the string append, and taking them would leave
 			// a plain scalar where the script built an array — see

@@ -1867,10 +1867,10 @@ func (r *Runner) declaredOnlyCompoundIsUnset(e *syntax.ParamExpr) bool {
 	if e.Index != nil && !wholeArraySubscript(r.subscriptText(e.Subscript())) {
 		return false
 	}
-	if a, ok := r.AssocArrays[e.Name]; ok {
+	if a, ok := r.assocsLookup(e.Name); ok {
 		return len(a) == 0
 	}
-	a, ok := r.Arrays[e.Name]
+	a, ok := r.arraysLookup(e.Name)
 	return ok && a.Len() == 0
 }
 
@@ -5422,7 +5422,7 @@ func (r *Runner) subscriptsOf(name string, n int) []string {
 		// implementation keeps everywhere.
 		return r.assocKeys(name, a)
 	}
-	if a, ok := r.Arrays[name]; ok {
+	if a, ok := r.arraysLookup(name); ok {
 		keys := r.arrayKeys(a)
 		base := r.arrayBase()
 		out := make([]string, 0, len(keys))
@@ -9704,7 +9704,7 @@ func (r *Runner) namesWithPrefix(prefix string) []string {
 		}
 		listed(name)
 	}
-	for name := range r.Vars {
+	for name := range r.varsRange() {
 		add(name)
 	}
 	// The compound tables, which are not a second view of Vars: an array has
@@ -9737,23 +9737,23 @@ func (r *Runner) namesWithPrefix(prefix string) []string {
 		}
 		add(name)
 	}
-	for name := range r.Arrays {
+	for name := range r.arraysRange() {
 		compound(name)
 	}
-	for name := range r.AssocArrays {
+	for name := range r.assocsRange() {
 		compound(name)
 	}
-	for name := range r.Dynamic {
+	for name := range r.producersRange() {
 		add(name)
 	}
 	// And the produced compounds, for the reason r.Dynamic is here: a name
 	// whose value is made up on each read is still a name this shell answers
 	// for, so a listing that skipped it would disagree with the lookup
 	// standing next to it.
-	for name := range r.DynamicArrays {
+	for name := range r.arrayProducersRange() {
 		add(name)
 	}
-	for name := range r.DynamicAssocs {
+	for name := range r.assocProducersRange() {
 		add(name)
 	}
 	for k := range r.inheritedEnv {

@@ -464,13 +464,13 @@ func (r *Runner) DiagnoseAsf(name, format string, args ...any) {
 // that name happens to hold something: a script's own `options=(a b)` must
 // not make this shell look as though it had zsh's `$options`.
 func (r *Runner) DynamicParameter(name string) bool {
-	if _, ok := r.Dynamic[name]; ok {
+	if _, ok := r.producersLookup(name); ok {
 		return true
 	}
-	if _, ok := r.DynamicArrays[name]; ok {
+	if _, ok := r.arrayProducersLookup(name); ok {
 		return true
 	}
-	if _, ok := r.DynamicAssocs[name]; ok {
+	if _, ok := r.assocProducersLookup(name); ok {
 		return true
 	}
 	// And the fourth table, which is a field rather than a map because the
@@ -555,7 +555,7 @@ func (r *Runner) SetArray(name string, values []string) { r.setArray(name, value
 // question would leave that axis looking unreached.
 func (r *Runner) ArrayHolds(name, value string) bool {
 	if n := r.throughNameref(name); n != r.pipeStatusName {
-		if a, ok := r.Arrays[n]; ok {
+		if a, ok := r.arraysLookup(n); ok {
 			if lo, hi, any := a.bounds(); !any || (lo == 0 && hi == a.Len()-1) {
 				for _, elem := range a.All() {
 					if r.elemText(elem) == value {
@@ -2455,7 +2455,7 @@ func (r *Runner) SetAssoc(name string, values map[string]string) {
 		table[k] = Scalar(v)
 	}
 	r.ownAssocs()
-	r.AssocArrays[name] = table
+	r.assocsPut(name, table)
 }
 
 // SetList stores a builtin's list result under a name the way a list
@@ -2469,7 +2469,7 @@ func (r *Runner) SetAssoc(name string, values map[string]string) {
 // `bad set of key/value pairs for associative array`, measured 2026-10-02 on
 // 5.9.2.
 func (r *Runner) SetList(name string, values []string) bool {
-	if _, isTable := r.AssocArrays[name]; !isTable {
+	if _, isTable := r.assocsLookup(name); !isTable {
 		r.setArray(name, values)
 		return true
 	}
@@ -2498,7 +2498,7 @@ func (r *Runner) SetList(name string, values []string) bool {
 // adds to it and writes it back cannot change the shell's state halfway
 // through deciding what to write.
 func (r *Runner) GetAssoc(name string) (map[string]string, bool) {
-	a, ok := r.AssocArrays[name]
+	a, ok := r.assocsLookup(name)
 	if !ok || r.removed[name] {
 		return nil, false
 	}
@@ -2543,7 +2543,7 @@ func (r *Runner) AssocKeys(name string) ([]string, bool) {
 // in one paid a copy of the whole set to ask about a single name, and on a
 // real startup that was a third of what the shell spent reading its rc file.
 func (r *Runner) AssocElement(name, key string) (string, bool) {
-	a, ok := r.AssocArrays[name]
+	a, ok := r.assocsLookup(name)
 	if !ok || r.removed[name] {
 		return "", false
 	}

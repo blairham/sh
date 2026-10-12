@@ -165,7 +165,7 @@ func biMapfile(r *Runner, ctx context.Context, name string, args []string) int {
 		r.diagf("%s: `%s': not a valid identifier\n", name, target)
 		return 1
 	}
-	if _, ok := r.AssocArrays[target]; ok {
+	if _, ok := r.assocsLookup(target); ok {
 		r.diagf("%s: %s: not an indexed array\n", name, target)
 		return 1
 	}
@@ -234,7 +234,7 @@ func biMapfile(r *Runner, ctx context.Context, name string, args []string) int {
 		}
 	}
 
-	if _, ok := r.Arrays[target]; !ok {
+	if _, ok := r.arraysLookup(target); !ok {
 		// Nothing arrived and nothing was there: the name still becomes an
 		// empty array, exactly as the replacing form leaves it.
 		r.setArray(target, nil)

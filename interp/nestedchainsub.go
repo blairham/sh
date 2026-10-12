@@ -108,7 +108,7 @@ func (r *Runner) nestedChainRoot(e *syntax.ParamExpr) (Element, bool) {
 	if !ok {
 		return Element{}, false
 	}
-	if arr, is := r.Arrays[name]; is {
+	if arr, is := r.arraysLookup(name); is {
 		held, there := arr.Lookup(idx)
 		return held, there
 	}

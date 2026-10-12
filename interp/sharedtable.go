@@ -103,7 +103,8 @@ func (r *Runner) releaseSharedTables() {
 	leaveShare(&r.funcOriginsShare)
 	leaveShare(&r.cmdHashShare)
 	leaveShare(&r.assocShare)
-	r.funcOrigins, r.cmdHash, r.cmdHashOrder, r.cmdHashHits, r.AssocArrays = nil, nil, nil, nil, nil
+	r.funcOrigins, r.cmdHash, r.cmdHashOrder, r.cmdHashHits = nil, nil, nil, nil
+	r.replaceAssocs(nil)
 }
 
 // ownFuncOrigins makes the function-origin table this runner's to write.
@@ -166,33 +167,16 @@ func (r *Runner) replaceCommandHash(m map[string]hashedCommand, order []string) 
 	r.cmdHash, r.cmdHashOrder, r.cmdHashHits = m, order, nil
 }
 
-// ownAssocs makes the associative arrays this runner's to write: the table of
-// names and every table under a name, since a write to an element is a write
-// into the inner map.
-func (r *Runner) ownAssocs() {
-	if mustCopyShared(&r.assocShare) {
-		m := cloneAssocTables(r.AssocArrays)
-		leaveShare(&r.assocShare)
-		r.AssocArrays = m
-	}
-}
-
 // dropAssocTable takes a name out of the associative arrays. A name that is
 // not there is no write at all, and is not a reason to copy: assignments
 // clear the name from every table on the way past, so most of these find
 // nothing to take.
 func (r *Runner) dropAssocTable(name string) {
-	if _, ok := r.AssocArrays[name]; !ok {
+	if _, ok := r.assocsLookup(name); !ok {
 		return
 	}
 	r.ownAssocs()
-	delete(r.AssocArrays, name)
-}
-
-// replaceAssocs puts tables this runner made in place of the ones it held.
-func (r *Runner) replaceAssocs(m map[string]AssocArray) {
-	leaveShare(&r.assocShare)
-	r.AssocArrays = m
+	r.assocsDel(name)
 }
 
 // cloneAssocTables is a deep copy of the associative arrays, keeping a nil

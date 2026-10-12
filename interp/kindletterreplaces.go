@@ -55,7 +55,7 @@ func (r *Runner) kindLetterReplacesWhatTheNameWas(name string, f declareFlags) {
 		if !r.arrayDeclared(target) && !r.assocDeclared(target) {
 			return
 		}
-		delete(r.Arrays, target)
+		r.arraysDel(target)
 		r.dropAssocTable(target)
 		// And the value the container held goes with it rather than becoming
 		// the scalar the name now is: measured, `typeset -a q=(1 2); typeset

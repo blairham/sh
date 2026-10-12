@@ -98,8 +98,8 @@ func (s NamerefArrayRefusal) String() string {
 // -n r=w` over a reference already aimed would otherwise ask about the
 // *target's* container instead of the name's.
 func (r *Runner) namerefArrayAttribute(name string) bool {
-	_, indexed := r.Arrays[name]
-	_, assoc := r.AssocArrays[name]
+	_, indexed := r.arraysLookup(name)
+	_, assoc := r.assocsLookup(name)
 	return indexed || assoc
 }
 
@@ -108,10 +108,10 @@ func (r *Runner) namerefArrayAttribute(name string) bool {
 // listing writes `typeset -A m=()` for it — where the indexed one is only an
 // attribute until an element lands.
 func (r *Runner) namerefArrayContents(name string) bool {
-	if _, assoc := r.AssocArrays[name]; assoc {
+	if _, assoc := r.assocsLookup(name); assoc {
 		return true
 	}
-	return r.Arrays[name].Len() > 0
+	return r.arraysAt(name).Len() > 0
 }
 
 // namerefArrayRefusal resolves the axis, reporting where no dialect has

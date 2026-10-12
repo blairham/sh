@@ -88,7 +88,7 @@ func (r *Runner) settleInheritedOldpwd() {
 		return
 	}
 	r.oldpwdSettled = true
-	if _, ok := r.Vars["OLDPWD"]; ok || r.removed["OLDPWD"] {
+	if _, ok := r.varsLookup("OLDPWD"); ok || r.removed["OLDPWD"] {
 		// A caller set one, or a `cd` already has. Either is a value of this
 		// shell's own and the environment has nothing to say about it.
 		return

@@ -54,7 +54,7 @@ func (r *Runner) subscriptSplicesCharacters(name string) bool {
 		// Runner.arrayDeclared, which carries the third kind (#6088).
 		return false
 	}
-	if _, produced := r.DynamicArrays[name]; produced {
+	if _, produced := r.arrayProducersLookup(name); produced {
 		// A *produced* array is an array, and it has nothing in the store to
 		// say so. Without this the getVar below finds the scalar view of one
 		// — the elements joined — and a subscript on the left spliced a

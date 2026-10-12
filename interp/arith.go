@@ -493,7 +493,7 @@ func (r *Runner) arithElement(x *syntax.ArithIndex) (arithNum, error) {
 // are read the long way, as they were; neither is a stored array this name
 // holds.
 func (r *Runner) arithStoredElemAt(name string, n int) (string, bool) {
-	if a, stored := r.Arrays[name]; stored && r.throughNameref(name) == name &&
+	if a, stored := r.arraysLookup(name); stored && r.throughNameref(name) == name &&
 		!r.namesTheProducedPipelineStatus(name) {
 		if v, ok, indexed := r.storedElemAt(name, a, n, subscriptLength{}); indexed {
 			return v, ok
@@ -506,7 +506,7 @@ func (r *Runner) arithStoredElemAt(name string, n int) (string, bool) {
 // stored reports a name whose association is a stored table rather than one
 // a producer answers for, which is the only kind a read can add a key to.
 func (r *Runner) stored(name string) bool {
-	_, ok := r.AssocArrays[r.throughNameref(name)]
+	_, ok := r.assocsLookup(r.throughNameref(name))
 	return ok
 }
 
@@ -950,7 +950,7 @@ func (r *Runner) arithNameIsSet(name string) bool {
 	if r.assocDeclared(name) {
 		return true
 	}
-	if _, ok := r.Arrays[name]; ok && !r.removed[name] {
+	if _, ok := r.arraysLookup(name); ok && !r.removed[name] {
 		return true
 	}
 	_, ok := r.getVar(name)
@@ -1154,8 +1154,8 @@ func (r *Runner) arithAssignmentReplacesAnArray(name string) bool {
 	if r.sem().ArithmeticAssignmentDeclaresANumber != Yes {
 		return false
 	}
-	_, indexed := r.Arrays[name]
-	_, table := r.AssocArrays[name]
+	_, indexed := r.arraysLookup(name)
+	_, table := r.assocsLookup(name)
 	return indexed || table
 }
 
@@ -1173,10 +1173,10 @@ func (r *Runner) arithModifiesAnArray(name, text string) bool {
 		// A frozen name goes the ordinary way, which is where its refusal is.
 		return false
 	}
-	if _, table := r.AssocArrays[name]; table {
+	if _, table := r.assocsLookup(name); table {
 		return true
 	}
-	if _, indexed := r.Arrays[name]; indexed {
+	if _, indexed := r.arraysLookup(name); indexed {
 		r.setArray(name, []string{text})
 		return true
 	}

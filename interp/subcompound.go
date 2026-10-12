@@ -280,10 +280,7 @@ func (r *Runner) assignTableCompoundBase(ctx context.Context, a *syntax.Assign) 
 	// compound the old elements held is taken with it by the sweep the store
 	// below makes.
 	r.ownAssocs()
-	if r.AssocArrays == nil {
-		r.AssocArrays = map[string]AssocArray{}
-	}
-	r.AssocArrays[a.Name] = AssocArray{}
+	r.assocsPut(a.Name, AssocArray{})
 	space := elementNamespace(a.Name, baseKey)
 	if !r.fillElementCompound(ctx, space, a) {
 		return
@@ -498,12 +495,12 @@ func (r *Runner) sweepElementCompounds(name string) {
 // anElementHoldsTheCompound reports whether either of the name's tables still
 // has an element claiming that namespace.
 func (r *Runner) anElementHoldsTheCompound(name, space string) bool {
-	for _, e := range r.Arrays[name].All() {
+	for _, e := range r.arraysAt(name).All() {
 		if e.Kind == ElementHoldsACompound && e.Str == space {
 			return true
 		}
 	}
-	for _, e := range r.AssocArrays[name] {
+	for _, e := range r.assocsAt(name) {
 		if e.Kind == ElementHoldsACompound && e.Str == space {
 			return true
 		}

@@ -68,9 +68,9 @@ func (r *Runner) dropTheOuterCompound(name string, fresh bool) {
 	// left and a name is one kind at a time: `local m` over a caller's table
 	// reads back as an ordinary empty scalar in the shell that sets a
 	// declared name empty, exactly as it does over a caller's array.
-	_, hadArray := r.Arrays[name]
-	_, hadTable := r.AssocArrays[name]
-	delete(r.Arrays, name)
+	_, hadArray := r.arraysLookup(name)
+	_, hadTable := r.assocsLookup(name)
+	r.arraysDel(name)
 	r.dropAssocTable(name)
 	if hadArray || hadTable {
 		// And the copy of the first element the compound store leaves in the
@@ -85,6 +85,6 @@ func (r *Runner) dropTheOuterCompound(name string, fresh bool) {
 		// Only where there was a compound. A fresh cell over a plain scalar
 		// is the declaration's own to write, and taking the value out from
 		// under it here would answer a question this is not asking.
-		delete(r.Vars, name)
+		r.varsDel(name)
 	}
 }

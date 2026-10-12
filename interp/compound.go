@@ -1572,9 +1572,9 @@ func (r *Runner) restoreShadowedName(sc *scope, name string) {
 	}
 	if rec.holds(recValue) {
 		if rec.bit(recValue) {
-			r.Vars[name] = rec.value
+			r.varsPut(name, rec.value)
 		} else {
-			delete(r.Vars, name)
+			r.varsDel(name)
 		}
 		// And the name stops being one a *declaration* gave its value to,
 		// which is measured rather than tidiness: the shell that reads a
@@ -1592,16 +1592,16 @@ func (r *Runner) restoreShadowedName(sc *scope, name string) {
 	}
 	if rec.holds(recArray) {
 		if rec.bit(recArray) {
-			r.Arrays[name] = rec.array
+			r.arraysPut(name, rec.array)
 		} else {
-			delete(r.Arrays, name)
+			r.arraysDel(name)
 		}
 		rec.drop(recArray)
 	}
 	if rec.holds(recAssoc) {
 		if rec.bit(recAssoc) {
 			r.ownAssocs()
-			r.AssocArrays[name] = rec.assoc
+			r.assocsPut(name, rec.assoc)
 		} else {
 			r.dropAssocTable(name)
 		}

@@ -47,10 +47,7 @@ func (c *Runner) ownTables(r *Runner) {
 	// The variable stores. Vars and exported are made rather than cloned
 	// because a nil one is not safe to write and these two are written
 	// without a lazy allocation in front of them.
-	c.Vars = make(map[string]string, len(r.Vars))
-	for k, v := range r.Vars {
-		c.Vars[k] = v
-	}
+	c.ownVarTables(r)
 	c.exported = make(map[string]bool, len(r.exported))
 	for k, v := range r.exported {
 		c.exported[k] = v
@@ -58,10 +55,6 @@ func (c *Runner) ownTables(r *Runner) {
 	// The two that hold a container per name, so the element has to be
 	// copied too: cloning the outer map alone would give the subshell its
 	// own name table pointing at the parent's elements.
-	c.Arrays = make(map[string]Array, len(r.Arrays))
-	for k, v := range r.Arrays {
-		c.Arrays[k] = v.clone()
-	}
 	// The associative arrays are shared until one side writes, with the
 	// command hash and the function origins below: see sharedtable.go.
 	c.shareTables(r)
@@ -320,8 +313,7 @@ func (c *Runner) ownTables(r *Runner) {
 	// `LINENO` are installed into it on the way past. That write is on the
 	// same goroutine question as every table above, and a substitution
 	// looking up a variable is enough to make it.
-	c.Dynamic = maps.Clone(r.Dynamic)
-	c.DynamicArrays = maps.Clone(r.DynamicArrays)
+	c.ownProducerTables(r)
 	// And the names among them `unset` may not take away, which a dialect
 	// registers beside the producer.
 	c.unsetRefused = maps.Clone(r.unsetRefused)
@@ -331,7 +323,6 @@ func (c *Runner) ownTables(r *Runner) {
 	// producer's own reason: a subshell that registered a table of its own
 	// under a name the parent had frozen would otherwise refuse writes to it.
 	c.tableFrozenByKey = maps.Clone(r.tableFrozenByKey)
-	c.DynamicAssocs = maps.Clone(r.DynamicAssocs)
 	c.dynamicAssocElements = maps.Clone(r.dynamicAssocElements)
 	c.dynamicAssocKeys = maps.Clone(r.dynamicAssocKeys)
 	c.dynamicAssocWriters = maps.Clone(r.dynamicAssocWriters)

@@ -636,19 +636,19 @@ func (r *Runner) widthUnwound(name string) {
 	if !ok || r.caseFoldsOnRead() {
 		return
 	}
-	v, ok := r.Vars[name]
+	v, ok := r.varsLookup(name)
 	if !ok {
 		return
 	}
 	if w.letter == 'L' {
-		r.Vars[name] = strings.TrimRight(v, " \t")
+		r.varsPut(name, strings.TrimRight(v, " \t"))
 		return
 	}
 	v = strings.TrimLeft(v, " \t")
 	if w.zeroFilling() {
 		v = strings.TrimLeft(v, "0")
 	}
-	r.Vars[name] = v
+	r.varsPut(name, v)
 }
 
 // widthZerosUnwound is the narrower half, for the declaration that takes the
@@ -959,7 +959,7 @@ func (r *Runner) widthLettersTakenOffRiding(name, letters string) {
 		delete(r.fieldWidth, name)
 		return
 	}
-	if v := r.Vars[name]; relearn && v != "" && v[0] >= '0' && v[0] <= '9' {
+	if v := r.varsAt(name); relearn && v != "" && v[0] >= '0' && v[0] <= '9' {
 		w.width = len(v)
 	}
 	r.fieldWidth[name] = w

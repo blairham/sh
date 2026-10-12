@@ -384,7 +384,7 @@ func (r *Runner) compgenVariableNames() []string {
 			hold(name)
 		}
 	}
-	for name := range r.Vars {
+	for name := range r.varsRange() {
 		hold(name)
 	}
 	compound := func(name string) {
@@ -401,10 +401,10 @@ func (r *Runner) compgenVariableNames() []string {
 			hold(name)
 		}
 	}
-	for name := range r.Arrays {
+	for name := range r.arraysRange() {
 		compound(name)
 	}
-	for name := range r.AssocArrays {
+	for name := range r.assocsRange() {
 		compound(name)
 	}
 	for name := range r.dynamicDeclarations {

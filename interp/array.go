@@ -338,9 +338,6 @@ func (r *Runner) storeArray(name string, a Array) {
 		write(r, r.readArray(a))
 		return
 	}
-	if r.Arrays == nil {
-		r.Arrays = map[string]Array{}
-	}
 	if r.arraysAreAView {
 		// This shell has written to the name, so it is no longer only looking
 		// at what it inherited — which is what one column's element unset
@@ -381,7 +378,7 @@ func (r *Runner) storeArray(name string, a Array) {
 	// indexed side takes now. See elementValueFolded, which every element
 	// write goes through, and compoundElemsFolded, which is what a store
 	// replacing the whole name asks.
-	r.Arrays[name] = a
+	r.arraysPut(name, a)
 	r.markCompoundForAllexport(name)
 	// And the members of a compound no element holds any more, which is the
 	// same one chokepoint reached from the other side: an element write
@@ -501,14 +498,11 @@ func (r *Runner) markIndexed(name string) {
 	if r.arrayDeclared(name) || r.assocDeclared(name) {
 		return
 	}
-	if r.Arrays == nil {
-		r.Arrays = map[string]Array{}
-	}
 	// The letter retypes a compound variable as surely as a literal does:
 	// `c=(a=1); typeset -a c` lists `typeset -a c` with no members left.
 	r.localizeMemberWrite(name)
 	r.compoundVariableRetyped(name)
-	r.Arrays[name] = NewArray(0)
+	r.arraysPut(name, NewArray(0))
 	r.markCompoundForAllexport(name)
 	// Declared and not assigned — see compounddeclaredonly.go.
 	r.compoundDeclaredOnly(name)
@@ -701,10 +695,10 @@ func stringWritten(e Element, value string) Element {
 // in ksh93, which resolves the subscript against the elements the name has
 // and finds none. Hence the axis, asked at that one shape.
 func (r *Runner) elementsOfName(name string, idx int) Array {
-	if _, stored := r.Arrays[name]; stored {
+	if _, stored := r.arraysLookup(name); stored {
 		return r.arrayForWrite(name)
 	}
-	if _, produced := r.DynamicArrays[name]; produced {
+	if _, produced := r.arrayProducersLookup(name); produced {
 		// A produced array is an array: its elements are what the write
 		// starts from, and there is no scalar underneath it to promote.
 		return r.arrayForWrite(name)
@@ -899,9 +893,9 @@ func (r *Runner) scalarOverCompound(name, value string, form assignForm) bool {
 	if form == assignedAsTheCompoundView {
 		return false
 	}
-	_, isArray := r.Arrays[name]
-	_, isTable := r.AssocArrays[name]
-	if _, produced := r.DynamicAssocs[name]; produced && !r.removed[name] {
+	_, isArray := r.arraysLookup(name)
+	_, isTable := r.assocsLookup(name)
+	if _, produced := r.assocProducersLookup(name); produced && !r.removed[name] {
 		// A **produced** table — one a module or the shell itself answers
 		// for, rather than one a script stored — and it is not the stored
 		// table's row with a different subject: see
@@ -927,7 +921,7 @@ func (r *Runner) scalarOverCompound(name, value string, form assignForm) bool {
 		return true
 	}
 	if r.scalarStoreReplacesACompound() {
-		delete(r.Arrays, name)
+		r.arraysDel(name)
 		r.dropAssocTable(name)
 		return false
 	}
@@ -943,7 +937,7 @@ func (r *Runner) scalarOverCompound(name, value string, form assignForm) bool {
 	// Runner.scalarHeldUnderTheArrayLetter. Read before the store, which
 	// records the element.
 	held := r.scalarHeldUnderTheArrayLetter[name] ||
-		(r.Arrays[name].Len() == 0 && !r.compoundHeldAnElement[name])
+		(r.arraysAt(name).Len() == 0 && !r.compoundHeldAnElement[name])
 	// The subscript as written, for the complaint that names one — the base
 	// is never below the first element, so nothing can reach it.
 	r.setArrayElem(name, r.arrayBase(), strconv.Itoa(r.arrayBase()), value)
@@ -991,7 +985,7 @@ func (r *Runner) unsetArrayElem(name string, idx int, sub string) int {
 	blanks := r.unsetBlanksInPlace()
 	a, isArray := r.writableArrayCell(name)
 	if !isArray {
-		if _, produced := r.DynamicArrays[name]; produced {
+		if _, produced := r.arrayProducersLookup(name); produced {
 			// A **produced** array with no writer: there is nowhere to put
 			// the removal, so the producer answers ahead of anything here
 			// and a change left in the store would be accepted and then read
@@ -1555,7 +1549,7 @@ func (r *Runner) assignWholeArraySubscript(a *syntax.Assign) {
 		}
 		value := r.assignValue(a)
 		if a.Append {
-			v, joined := r.appendedValue(a.Name, r.AssocArrays[a.Name][key].scalar(), value)
+			v, joined := r.appendedValue(a.Name, r.assocsAt(a.Name)[key].scalar(), value)
 			if !joined {
 				return
 			}
@@ -2172,7 +2166,7 @@ func (r *Runner) scalarUnsetReadsAsCharacters(string, string) bool {
 func (r *Runner) unsetWholeArray(name string) (handled bool, code int) {
 	switch r.unsetArraySpan() {
 	case UnsetArraySpanRemovesTheElements:
-		if _, ok := r.Arrays[name]; ok {
+		if _, ok := r.arraysLookup(name); ok {
 			r.storeArray(name, NewArray(0))
 			return true, 0
 		}
@@ -2205,7 +2199,7 @@ func (r *Runner) unsetWholeArray(name string) (handled bool, code int) {
 		// and the compound members with it exactly as the plain spelling
 		// does. A second removal here would be a second place for the plain
 		// one's rules to go missing.
-		if _, ok := r.Arrays[name]; ok {
+		if _, ok := r.arraysLookup(name); ok {
 			return true, r.unsetName(name)
 		}
 		if _, held := r.getVar(name); held {
@@ -2358,13 +2352,13 @@ func (r *Runner) arrayElems(name string) ([]string, bool) {
 	if elems, ok := r.pipelineStatuses(name); ok {
 		return elems, true
 	}
-	if a, ok := r.Arrays[name]; ok {
+	if a, ok := r.arraysLookup(name); ok {
 		return r.readArray(a), true
 	}
 	// Produced rather than stored, and asked after the stored table so that
 	// a script assigning to the name gets its own value back — the same
 	// order the scalar ones follow.
-	if produce, ok := r.DynamicArrays[name]; ok && !r.removed[name] {
+	if produce, ok := r.arrayProducersLookup(name); ok && !r.removed[name] {
 		return produce(r), true
 	}
 	if v, ok := r.getVar(name); ok {
@@ -2589,7 +2583,7 @@ func (r *Runner) elementReadIsDeferred(e *syntax.ParamExpr) bool {
 	if e.IndexRange != nil && (e.IndexRange.Lo.Flags != nil || e.IndexRange.Hi.Flags != nil) {
 		return false
 	}
-	if _, stored := r.Arrays[e.Name]; !stored {
+	if _, stored := r.arraysLookup(e.Name); !stored {
 		return false
 	}
 	if _, isRef := r.nameref[e.Name]; isRef {
@@ -2615,7 +2609,7 @@ func (r *Runner) wholeArrayCount(e *syntax.ParamExpr) (int, bool) {
 		e.IndexRange != nil || len(e.Leading) > 0 || !r.wholeArrayIndex(e) {
 		return 0, false
 	}
-	a, stored := r.Arrays[e.Name]
+	a, stored := r.arraysLookup(e.Name)
 	if !stored {
 		return 0, false
 	}
@@ -2646,13 +2640,13 @@ func (r *Runner) lengthCountsTheArray(e *syntax.ParamExpr) func() {
 		r.sem().ArrayLengthWithoutSubscriptIsCount != Yes {
 		return func() {}
 	}
-	if _, stored := r.Arrays[e.Name]; !stored {
+	if _, stored := r.arraysLookup(e.Name); !stored {
 		return func() {}
 	}
 	if _, isRef := r.nameref[e.Name]; isRef {
 		return func() {}
 	}
-	if _, dynamic := r.Dynamic[e.Name]; dynamic {
+	if _, dynamic := r.producersLookup(e.Name); dynamic {
 		return func() {}
 	}
 	held := r.countOnlyRead
@@ -2689,7 +2683,7 @@ func (r *Runner) sourceElemAt(src subscriptSource, n int, length subscriptLength
 // moved into the map is read whole, as the ordinary path does, and counted
 // through.
 func (r *Runner) deferredElemAt(name string, n int, length subscriptLength) (string, bool) {
-	if v, ok, indexed := r.storedElemAt(name, r.Arrays[name], n, length); indexed {
+	if v, ok, indexed := r.storedElemAt(name, r.arraysAt(name), n, length); indexed {
 		return v, ok
 	}
 	elems, _ := r.arrayElems(name)
@@ -2900,7 +2894,7 @@ func (r *Runner) subscriptOver(e *syntax.ParamExpr, src subscriptSource) ([]stri
 // line up with its values, where counting is at least the right length.
 func (r *Runner) elementSubscripts(name string, n int) []string {
 	out := make([]string, n)
-	if a, ok := r.Arrays[name]; ok {
+	if a, ok := r.arraysLookup(name); ok {
 		if keys := r.arrayKeys(a); len(keys) == n {
 			for i, k := range keys {
 				out[i] = itoa(k)
@@ -2967,7 +2961,7 @@ func (r *Runner) subscriptTarget(e *syntax.ParamExpr) (elems []string, scalar, o
 		// round trip rather than one taken away, which is #1622.
 		return append([]string(nil), r.params()...), false, true
 	}
-	if _, isArray := r.Arrays[e.Name]; isArray {
+	if _, isArray := r.arraysLookup(e.Name); isArray {
 		elems, ok = r.arrayElems(e.Name)
 		return elems, false, ok
 	}
@@ -2975,7 +2969,7 @@ func (r *Runner) subscriptTarget(e *syntax.ParamExpr) (elems []string, scalar, o
 		elems, ok = r.arrayElems(e.Name)
 		return elems, false, ok
 	}
-	if _, dynamic := r.DynamicArrays[e.Name]; dynamic {
+	if _, dynamic := r.arrayProducersLookup(e.Name); dynamic {
 		elems, ok = r.arrayElems(e.Name)
 		return elems, false, ok
 	}
@@ -3564,7 +3558,7 @@ func (r *Runner) elemAtCounted(name string, count int, at func(pos int) string, 
 	// longer be counted there; the store still holds every position. Only a
 	// *stored* array can be behind elems here — a produced one is read before
 	// the table, in the same order arrayElems reads them.
-	a, stored := r.Arrays[name]
+	a, stored := r.arraysLookup(name)
 	if r.namesTheProducedPipelineStatus(name) {
 		stored = false
 	}
@@ -4035,7 +4029,7 @@ func (r *Runner) arrayElementCount(name string) (int, bool) {
 	if r.namesTheProducedPipelineStatus(name) {
 		return len(r.pipeStatus), true
 	}
-	if a, ok := r.Arrays[name]; ok {
+	if a, ok := r.arraysLookup(name); ok {
 		if els, contiguous := a.contiguous(); contiguous {
 			// Every reading of an array with no gap is all of it, so the
 			// count needs no reading built: what readArray would have
@@ -4046,7 +4040,7 @@ func (r *Runner) arrayElementCount(name string) (int, bool) {
 		}
 		return len(r.readArray(a)), true
 	}
-	if produce, ok := r.DynamicArrays[name]; ok {
+	if produce, ok := r.arrayProducersLookup(name); ok {
 		// The second half of #1600. This is what decides whether a bare name
 		// is an array at all, so without it a produced one was not: `${#a}`
 		// counted nothing, and the rewrite that turns a bare name into
@@ -4243,10 +4237,10 @@ func (r *Runner) foldedElems(name string, a Array) Array {
 // than aliased, because the producer's slice may be the runner's own storage
 // and an element assignment writes in place.
 func (r *Runner) arrayForWrite(name string) Array {
-	if a, stored := r.Arrays[name]; stored {
+	if a, stored := r.arraysLookup(name); stored {
 		return a
 	}
-	if produce, produced := r.DynamicArrays[name]; produced {
+	if produce, produced := r.arrayProducersLookup(name); produced {
 		a := NewArray(0)
 		for i, v := range produce(r) {
 			a.Set(i, Scalar(v))

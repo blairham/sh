@@ -2846,7 +2846,7 @@ func (r *Runner) arrayAttributeRemoved(name string, f declareFlags) bool {
 			return true
 		}
 		if array {
-			delete(r.Arrays, name)
+			r.arraysDel(name)
 		}
 		if table {
 			r.dropAssocTable(name)
@@ -3126,7 +3126,7 @@ func (r *Runner) compoundKindChangedByALiteral(name string, f declareFlags) bool
 // arrayBecomesATable, because the literal form has no elements question to
 // part them: neither converting column keeps anything.
 func (r *Runner) compoundKindEmptied(name string, toTable bool) {
-	delete(r.Arrays, name)
+	r.arraysDel(name)
 	r.dropAssocTable(name)
 	if toTable {
 		r.markAssoc(name)
@@ -3244,8 +3244,8 @@ func (r *Runner) tableBecomesAnArray(name string) {
 // sparse array keeps its gaps as the keys it had.
 func (r *Runner) arrayBecomesATable(name string) {
 	kept := r.sem().ArrayUnderATableDeclaration == CompoundKindChangeKeepsTheElements
-	held := r.Arrays[name]
-	delete(r.Arrays, name)
+	held := r.arraysAt(name)
+	r.arraysDel(name)
 	r.markAssoc(name)
 	if !kept {
 		return
@@ -3258,7 +3258,7 @@ func (r *Runner) arrayBecomesATable(name string) {
 // arrayDeclared reports whether the name is holding an indexed array, which
 // is the question assocDeclared asks about the other kind.
 func (r *Runner) arrayDeclared(name string) bool {
-	if _, produced := r.DynamicArrays[name]; produced {
+	if _, produced := r.arrayProducersLookup(name); produced {
 		return true
 	}
 	// And the pipeline record, which is produced by a path of its own: a
@@ -3269,7 +3269,7 @@ func (r *Runner) arrayDeclared(name string) bool {
 	if _, produced := r.pipelineStatuses(name); produced {
 		return true
 	}
-	_, ok := r.Arrays[name]
+	_, ok := r.arraysLookup(name)
 	return ok
 }
 
@@ -3325,13 +3325,13 @@ func (r *Runner) typeLetterTakesTheCompoundLetter(f declareFlags) bool {
 // function declares nothing local at all, so the two shells with an answer of
 // their own reach the same place by their own route.
 func (r *Runner) declaredCompoundOverAScalar(name string, f declareFlags, p ScalarUnderACompoundPolicy, what string) (string, ScalarUnderACompoundPolicy) {
-	if _, ok := r.Arrays[name]; ok {
+	if _, ok := r.arraysLookup(name); ok {
 		return "", ScalarUnderACompoundDiscardsIt
 	}
 	if r.assocDeclared(name) {
 		return "", ScalarUnderACompoundDiscardsIt
 	}
-	if _, produced := r.DynamicArrays[name]; produced {
+	if _, produced := r.arrayProducersLookup(name); produced {
 		return "", ScalarUnderACompoundDiscardsIt
 	}
 	if r.isCompoundVariable(name) {
@@ -3547,10 +3547,10 @@ func (r *Runner) compoundCell(name string) bool {
 	if r.removed[name] {
 		return false
 	}
-	if _, ok := r.Arrays[name]; ok {
+	if _, ok := r.arraysLookup(name); ok {
 		return true
 	}
-	_, ok := r.AssocArrays[name]
+	_, ok := r.assocsLookup(name)
 	return ok
 }
 
@@ -3956,7 +3956,7 @@ func (r *Runner) applyAttributes(name string, f declareFlags) {
 			// by `typeset -U b` reads back `1 2`. A declaration that also
 			// assigns has already stored its value by the time this runs,
 			// so this one line covers both spellings.
-			if a, ok := r.Arrays[name]; ok {
+			if a, ok := r.arraysLookup(name); ok {
 				r.storeArray(name, a)
 			}
 			// And the scalar half of a tie, whose value is the fields a
@@ -5970,7 +5970,7 @@ func (r *Runner) declarationStartsAnInheritedNameOver(name string, keepsTheEnvir
 		// and `-r` all read the value back and still reach a child.
 		return false
 	}
-	if _, own := r.Vars[name]; own {
+	if _, own := r.varsLookup(name); own {
 		// The script has assigned it, so the value is this shell's rather
 		// than the one it was started with — and every shell re-reads or
 		// waits over that, including the one that discards. `D=$D; typeset
@@ -6037,7 +6037,7 @@ func (r *Runner) compoundNameHolds(name string) bool {
 	if ok := r.assocDeclared(name); ok {
 		return true
 	}
-	a, ok := r.Arrays[name]
+	a, ok := r.arraysLookup(name)
 	// An array with nothing in it is not a value to start over from, and that
 	// is measured rather than an artifact of how the store is kept: `typeset
 	// -ia b=(); b=(5+5 6+6)` folds to `10 12` and keeps the letter in bash
@@ -6082,7 +6082,7 @@ func (r *Runner) compoundMeetingAnAttribute(name string) (startedOver bool) {
 		// *write*, and this is not one. Both fields answer yes in the one
 		// dialect that folds here, so routing through it would pass every
 		// test and make one field answer for two.
-		r.Arrays[name] = r.foldedElems(name, r.Arrays[name])
+		r.arraysPut(name, r.foldedElems(name, r.arraysAt(name)))
 	case CompoundAttributeReplacesItWithAScalar:
 		if !r.integer[name] {
 			// A case letter changes no kind, so there is nothing to replace
@@ -6112,7 +6112,7 @@ func (r *Runner) foldAssocElems(name string, a AssocArray) {
 		// would share the table taken before the loop. See sharedtable.go.
 		if r.assocShare != nil {
 			r.ownAssocs()
-			if stored, ok := r.AssocArrays[r.throughNameref(name)]; ok {
+			if stored, ok := r.assocsLookup(r.throughNameref(name)); ok {
 				a = stored
 			}
 		}
@@ -6134,9 +6134,9 @@ func (r *Runner) foldAssocElems(name string, a AssocArray) {
 // The caller returns straight into those branches, so this only has to clear
 // what stands in their way.
 func (r *Runner) compoundBecomesAScalar(name string) {
-	delete(r.Arrays, name)
+	r.arraysDel(name)
 	r.dropAssocTable(name)
-	delete(r.Vars, name)
+	r.varsDel(name)
 }
 
 // rereadStandingValue applies an attribute a declaration has just added to the
@@ -6196,7 +6196,7 @@ func (r *Runner) rereadStandingValue(name string) (startedOver bool) {
 	// something writes it. Found by a mutant: dropping the `ok` guard changed
 	// nothing any test could see, which is what said the guard was standing
 	// in front of a case nothing reached.
-	v, ok := r.Vars[name]
+	v, ok := r.varsLookup(name)
 	if !ok {
 		if v, ok = r.inheritedValue(name); !ok {
 			// An exported name with no value anywhere. A compound value has
@@ -6237,7 +6237,7 @@ func (r *Runner) rereadStandingValue(name string) (startedOver bool) {
 			!r.ask(r.sem().FloatLetterChangeRereadsTheRendering,
 				"a change of float letter re-reading the rendering") {
 			if text, ok := r.floatFormatted(name, rec.value); ok {
-				r.Vars[name] = text
+				r.varsPut(name, text)
 				r.rememberStoredFloat(name, text, rec.value)
 			}
 			return false
@@ -6255,7 +6255,7 @@ func (r *Runner) rereadStandingValue(name string) (startedOver bool) {
 		r.forgetStoredFloat(name)
 	}
 	if folded, ok := r.attributeFolded(name, v); ok {
-		r.Vars[name] = folded
+		r.varsPut(name, folded)
 	}
 	return false
 }
@@ -6354,13 +6354,13 @@ func (r *Runner) declaredNameHolds(name string) bool {
 	if r.removed[name] {
 		return false
 	}
-	if _, ok := r.AssocArrays[name]; ok {
+	if _, ok := r.assocsLookup(name); ok {
 		return true
 	}
-	if _, ok := r.Arrays[name]; ok {
+	if _, ok := r.arraysLookup(name); ok {
 		return true
 	}
-	if _, ok := r.Vars[name]; ok {
+	if _, ok := r.varsLookup(name); ok {
 		return true
 	}
 	if r.DynamicParameter(name) {
@@ -6470,7 +6470,7 @@ func (r *Runner) shadowedExport(name string, exported bool) {
 		// anything.
 		return
 	}
-	value, ok := r.Vars[name]
+	value, ok := r.varsLookup(name)
 	if !ok {
 		if value, ok = r.inheritedValue(name); !ok {
 			// Exported with no value anywhere — `export FOO` and nothing
@@ -6486,7 +6486,7 @@ func (r *Runner) shadowedExport(name string, exported bool) {
 // fallback alike — so `${name-UNSET}` fires its default. The caller's shadow
 // is what brings the outer value back.
 func (r *Runner) hideVar(name string) {
-	delete(r.Vars, name)
+	r.varsDel(name)
 	if r.removed == nil {
 		r.removed = map[string]bool{}
 	}
@@ -6657,7 +6657,7 @@ func (r *Runner) shadow(name string) (fresh, redeclared bool) {
 		// the declaration's own attributes reach the new cell rather than the
 		// outer one. See Runner.prefixEntryShadowed.
 		fromPrefix, tookThePrefixEntry := r.prefixEntryShadowed(name)
-		old, existed := r.Vars[name]
+		old, existed := r.varsLookup(name)
 		rec.put(recValue, existed)
 		rec.value = old
 		rec.put(recRemovedBefore, r.removed[name])
@@ -6778,7 +6778,7 @@ func (r *Runner) shadow(name string) (fresh, redeclared bool) {
 	// global array: `local` shadowed nothing an array assignment then wrote
 	// to, and the value outlived the function.
 	if !rec.holds(recArray) {
-		old, existed := r.Arrays[name]
+		old, existed := r.arraysLookup(name)
 		// Copied rather than kept: an Array is a map, so saving the value
 		// would save a reference to the very table the function is about to
 		// write into, and putting it back would put back the changes.
@@ -6793,7 +6793,7 @@ func (r *Runner) shadow(name string) (fresh, redeclared bool) {
 	// the value: `typeset -A m` in a function must not leave the caller's
 	// `m` reading its subscripts as strings.
 	if !rec.holds(recAssoc) {
-		old, existed := r.AssocArrays[name]
+		old, existed := r.assocsLookup(name)
 		if existed {
 			old = old.clone()
 		}

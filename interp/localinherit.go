@@ -144,7 +144,7 @@ func (r *Runner) restoreTheOuterBinding(name string) bool {
 	// had taken away is inherited as taken away rather than as present and
 	// empty, which is what the scope recorded for the return.
 	if held {
-		r.Vars[name] = value
+		r.varsPut(name, value)
 		setBool(&r.removed, name, false)
 		had = true
 	} else if sc.madeRecord(recRemovedBefore) {
@@ -155,18 +155,12 @@ func (r *Runner) restoreTheOuterBinding(name string) bool {
 	// caller's name gets on return, and a table handed over by reference
 	// would be the one this call then writes into.
 	if a, existed, _ := sc.savedArray(name); existed {
-		if r.Arrays == nil {
-			r.Arrays = map[string]Array{}
-		}
-		r.Arrays[name] = a.clone()
+		r.arraysPut(name, a.clone())
 		had = true
 	}
 	if m, existed, _ := sc.savedAssocTable(name); existed {
 		r.ownAssocs()
-		if r.AssocArrays == nil {
-			r.AssocArrays = map[string]AssocArray{}
-		}
-		r.AssocArrays[name] = m.clone()
+		r.assocsPut(name, m.clone())
 		had = true
 	}
 	if sc.madeRecord(recDeclaredOnlyBefore) {

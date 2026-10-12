@@ -272,8 +272,8 @@ func (r *Runner) prependedArray(name string, values []string) Array {
 		front.Set(i, Scalar(v))
 	}
 	front = r.compoundElemsFolded(name, front)
-	a := NewArray(r.Arrays[name].Len())
-	for k, v := range r.Arrays[name].All() {
+	a := NewArray(r.arraysAt(name).Len())
+	for k, v := range r.arraysAt(name).All() {
 		a.Set(k, v)
 	}
 	for k, v := range front.All() {

@@ -71,14 +71,14 @@ func declarationOperand(operand string) (name, value string, hasValue, appends b
 func (r *Runner) appendOverCompound(name, value string) bool {
 	if r.assocDeclared(name) {
 		// `m+=x` over a declared table joins the element whose key is `0`.
-		v, ok := r.appendedValue(name, r.AssocArrays[name]["0"].scalar(), value)
+		v, ok := r.appendedValue(name, r.assocsAt(name)["0"].scalar(), value)
 		if !ok {
 			return true
 		}
 		r.setAssocElem(name, "0", v)
 		return true
 	}
-	if old, ok := r.Arrays[name]; ok {
+	if old, ok := r.arraysLookup(name); ok {
 		// Where the value joins an array is an axis, asked inside.
 		r.appendScalarToArray(name, old, value)
 		return true

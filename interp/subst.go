@@ -538,21 +538,18 @@ func (r *Runner) boundCurrentShellBody() {
 // landed. So the note is corrected rather than carried: there was one gap
 // here and not two.
 func (r *Runner) localizeReply() func() {
-	held, inVars := r.Vars["REPLY"]
+	held, inVars := r.varsLookup("REPLY")
 	wasRemoved := r.removed["REPLY"]
-	delete(r.Vars, "REPLY")
+	r.varsDel("REPLY")
 	if r.removed == nil {
 		r.removed = map[string]bool{}
 	}
 	r.removed["REPLY"] = true
 	return func() {
 		if inVars {
-			if r.Vars == nil {
-				r.Vars = map[string]string{}
-			}
-			r.Vars["REPLY"] = held
+			r.varsPut("REPLY", held)
 		} else {
-			delete(r.Vars, "REPLY")
+			r.varsDel("REPLY")
 		}
 		if wasRemoved {
 			r.removed["REPLY"] = true

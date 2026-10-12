@@ -470,9 +470,7 @@ func (r *Runner) SetMatchOption(o MatchOption, on bool) {
 		// Asked of the dialect in place first, so a request for the state
 		// it is already in copies nothing. See Runner.lang.
 		if r.lang().ExtendedPattern != on {
-			d := r.dialect()
-			d.ExtendedPattern = on
-			r.Dialect = &d
+			r.moveDialect(moveExtendedPattern, on)
 		}
 		return
 	}

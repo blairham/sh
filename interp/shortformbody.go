@@ -82,9 +82,7 @@ func (r *Runner) SetShortRepeatBody(on bool) {
 	if r.lang().ShortRepeatBody == on {
 		return
 	}
-	d := r.dialect()
-	d.ShortRepeatBody = on
-	r.Dialect = &d
+	r.moveDialect(moveShortRepeatBody, on)
 }
 
 // ShortRepeatBody reports it.
@@ -96,9 +94,7 @@ func (r *Runner) SetShortFormBodyIsOneCommandOrNone(on bool) {
 	if r.lang().ShortFormBody == on {
 		return
 	}
-	d := r.dialect()
-	d.ShortFormBody = on
-	r.Dialect = &d
+	r.moveDialect(moveShortFormBody, on)
 }
 
 // FunctionKeywordBodyIsOneCommandOrNone reports whether the `function`
@@ -127,10 +123,7 @@ func (r *Runner) SetFunctionKeywordBodyIsOneCommandOrNone(on bool) {
 	if r.lang().FunctionKeywordBodyIsOptional == on && r.lang().FunctionKeywordBodyMustBeBraceGroup == !on {
 		return
 	}
-	d := r.dialect()
-	d.FunctionKeywordBodyIsOptional = on
-	d.FunctionKeywordBodyMustBeBraceGroup = !on
-	r.Dialect = &d
+	r.moveDialect(moveFunctionKeywordBody, on)
 }
 
 // LoopBodyEndsInEnd reports whether a loop's body that is neither `do … done`
@@ -147,9 +140,7 @@ func (r *Runner) SetLoopBodyEndsInEnd(on bool) {
 	if r.lang().LoopBodyEndsInEnd == on {
 		return
 	}
-	d := r.dialect()
-	d.LoopBodyEndsInEnd = on
-	r.Dialect = &d
+	r.moveDialect(moveLoopBodyEndsInEnd, on)
 }
 
 // QuotedNewlineIsUnmatched reports the grammar flag of that name, which one
@@ -165,7 +156,5 @@ func (r *Runner) SetQuotedNewlineIsUnmatched(on bool) {
 	if r.lang().QuotedNewlineIsUnmatched == on {
 		return
 	}
-	d := r.dialect()
-	d.QuotedNewlineIsUnmatched = on
-	r.Dialect = &d
+	r.moveDialect(moveQuotedNewlineIsUnmatched, on)
 }

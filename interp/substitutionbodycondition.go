@@ -34,7 +34,5 @@ func (r *Runner) SetSubstitutionBodyRefusesAnUnfinishedCondition(on bool) {
 	if r.lang().SubstitutionBodyRefusesAnUnfinishedCondition == on {
 		return
 	}
-	d := r.dialect()
-	d.SubstitutionBodyRefusesAnUnfinishedCondition = on
-	r.Dialect = &d
+	r.moveDialect(moveSubstitutionBodyCondition, on)
 }

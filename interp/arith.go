@@ -3952,9 +3952,18 @@ func (r *Runner) expandArithText(text string, origin arithTextOrigin) string {
 	asked, protect := false, false
 	// Read before anything is expanded, because an expansion an apostrophe
 	// stops must not be performed at all. See Runner.stoppedArithSpans.
-	spans, read := r.arithSpans(text)
+	spans, nodes, read := r.arithSpans(text)
 	if !read {
 		return text
+	}
+	// The spans are the text's and not this evaluation's: the next
+	// evaluation of the same text is handed the same parameter nodes. What
+	// an expansion holds about a node is keyed on the node, so a hold this
+	// evaluation leaves on one of them is let go when it ends — a hold left
+	// behind would answer the next evaluation with this one's value. See
+	// interp/arithspancache.go.
+	if nodes != nil {
+		defer r.forgetHoldsOn(nodes)
 	}
 	// Arithmetic text is read as a double-quoted string is. See
 	// readingQuotedText.

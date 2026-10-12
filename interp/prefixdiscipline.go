@@ -102,6 +102,7 @@ func (r *Runner) prefixChildForTheDisciplines(assigns []*syntax.Assign) *Runner 
 		return nil
 	}
 	child := *r
+	child.dialectMoves = nil
 	child.ownTables(r)
 	return &child
 }

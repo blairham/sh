@@ -454,7 +454,8 @@ completion file or `$fpath` changes and which is safe to delete (#6307).
 
 **It keeps the files it sources parsed, too.** Beside the dump,
 `${XDG_CACHE_HOME:-~/.cache}/sh/parse` holds the parsed form of the startup
-files and of every file `.` or `source` reads that is 4 KB or more, so the
+files, of every file `.` or `source` reads, and of the function files
+`autoload` loads, where the file is 4 KB or more, so the
 next start reads the tree back instead of parsing the text again (#6424).
 The format is this shell's own; nothing else reads it. An entry is used only
 when the text is byte for byte the one it was made from and the shell reads

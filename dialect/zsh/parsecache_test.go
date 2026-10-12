@@ -189,3 +189,80 @@ func TestTheSwitchCanBeThrownFromAScript(t *testing.T) {
 		t.Fatalf("printed %q, served %d, recorded %d", off.out, off.served, off.recorded)
 	}
 }
+
+// TestAnAutoloadedFileIsCachedUnobservably is the same claim for function
+// files `autoload` reads, which are parsed four ways each — to see whether a
+// substitution swallows its closer, whether the file is one lone definition,
+// whether it parses at all, and as the body — and every one of those
+// readings goes through the cache. The rows are a plain body, a file that is
+// one definition of its own name, a body using an alias defined before it was
+// loaded (read with the tables, and with -U without them), a body that will
+// not parse, and the listing and the line numbers a body reports.
+func TestAnAutoloadedFileIsCachedUnobservably(t *testing.T) {
+	files := map[string]string{
+		"plain":    "echo plain $LINENO ${funcfiletrace[1]##*/}\nprint -r -- ${(j:,:)@}\n",
+		"lone":     "lone() {\n  echo lone body $LINENO\n}\n",
+		"aliased":  "greet from-a-file\n",
+		"refused":  "echo before\nif then\n",
+		"subst":    "v=$(echo inner $LINENO)\necho $v\n",
+		"listed":   "local x=1\nfor i in a b; do echo $i$x; done\n",
+		"withargs": "echo args $# $1\n",
+	}
+	cases := []struct{ name, main string }{
+		{"a plain body", "autoload -Uz plain; plain a b; whence -v plain | sed 's#/.*/##'"},
+		{"one lone definition", "autoload -Uz lone; lone; functions lone"},
+		{"an alias read with the tables", "alias greet='echo hi:'; autoload -z aliased; aliased"},
+		{"an alias not read under -U", "alias greet='echo hi:'; autoload -Uz aliased; aliased; echo st=$?"},
+		{"a body that will not parse", "autoload -Uz refused; refused; echo st=$?"},
+		{"a substitution", "autoload -Uz subst; subst"},
+		{"the listing", "autoload -Uz listed; autoload +X listed; functions listed; listed"},
+		{"arguments", "autoload -Uz withargs; withargs one two"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			dir, cache, fns := t.TempDir(), t.TempDir(), t.TempDir()
+			for name, body := range files {
+				if err := os.WriteFile(filepath.Join(fns, name), []byte(worthCaching+body), 0o600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			argv := []string{"zsh", "-f", "-c", "fpath=(" + fns + " $fpath); " + c.main}
+			off := runWithCache(t, cache, dir, false, nil, argv...)
+			cold := runWithCache(t, cache, dir, true, nil, argv...)
+			warm := runWithCache(t, cache, dir, true, nil, argv...)
+			if off.out == "" && off.errs == "" {
+				t.Fatal("the case wrote nothing")
+			}
+			for name, got := range map[string]cacheRun{"cold": cold, "warm": warm} {
+				if got.out != off.out || got.errs != off.errs || got.code != off.code {
+					t.Errorf("%s: out %q errs %q code %d\nwant out %q errs %q code %d",
+						name, got.out, got.errs, got.code, off.out, off.errs, off.code)
+				}
+			}
+			if c.name != "a body that will not parse" && warm.served == 0 {
+				t.Errorf("the warm run served nothing (cold recorded %d)", cold.recorded)
+			}
+		})
+	}
+}
+
+// TestAnAutoloadedAliasChangeIsSeen loads a function file whose body expands
+// an alias, then changes what the alias says between two starts: the second
+// start's body says the new thing.
+func TestAnAutoloadedAliasChangeIsSeen(t *testing.T) {
+	dir, cache, fns := t.TempDir(), t.TempDir(), t.TempDir()
+	if err := os.WriteFile(filepath.Join(fns, "aliased"), []byte(worthCaching+"greet there\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	run := func(value string) cacheRun {
+		return runWithCache(t, cache, dir, true, nil, "zsh", "-f", "-c",
+			"fpath=("+fns+" $fpath); alias greet='"+value+"'; autoload -z aliased; aliased")
+	}
+	run("echo one:")
+	if got := run("echo one:"); got.out != "one: there\n" || got.served == 0 {
+		t.Fatalf("the control printed %q from %d served reads", got.out, got.served)
+	}
+	if got := run("echo two:"); got.out != "two: there\n" {
+		t.Fatalf("the body read with the old alias: %q", got.out)
+	}
+}

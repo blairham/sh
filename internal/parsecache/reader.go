@@ -76,7 +76,8 @@ const MinText = 4096
 
 // NewReader is the reader for the text src of the file at path, read in
 // dialect d — the dialect a syntax.Parser for it would be built with — with
-// sh answering the parser's questions. path names the entry and nothing more:
+// sh answering the parser's questions. A nil sh is a parser with no alias
+// tables at all, as a parse that expands none is built. path names the entry and nothing more:
 // what an entry is checked against is the text.
 func NewReader(cache Cache, path, src string, d syntax.Dialect, sh Shell) *Reader {
 	return &Reader{sh: sh, cache: cache, path: path, src: src, d0: d, cur: d}
@@ -202,7 +203,11 @@ func (c *Reader) begin(mode byte) {
 	b = append(b, entryVersion, mode)
 	b = binary.LittleEndian.AppendUint64(b, fp)
 	for k := range aliasKinds {
-		b = binary.LittleEndian.AppendUint64(b, c.sh.AliasTable(k))
+		var sum uint64
+		if c.sh != nil {
+			sum = c.sh.AliasTable(k)
+		}
+		b = binary.LittleEndian.AppendUint64(b, sum)
 	}
 	_, _ = h.Write(b)
 	_, _ = h.Write([]byte(c.path))
@@ -394,6 +399,9 @@ func (c *Reader) goLive(set bool) {
 		c.plain = true
 		c.p = syntax.NewParser(c.src, c.d0)
 		sh := c.sh
+		if sh == nil {
+			break
+		}
 		c.p.Aliases = func(name string) (string, bool) { return sh.Alias(AliasPlain, name) }
 		c.p.GlobalAliases = func(name string) (string, bool) { return sh.Alias(AliasGlobal, name) }
 		c.p.SuffixAliases = func(name string) (string, bool) { return sh.Alias(AliasSuffix, name) }
@@ -456,6 +464,9 @@ func (c *Reader) chunkSet(i int) bool {
 }
 
 func (c *Reader) installAliases() {
+	if c.sh == nil {
+		return
+	}
 	c.p.Aliases = func(name string) (string, bool) { return c.alias(AliasPlain, name) }
 	c.p.GlobalAliases = func(name string) (string, bool) { return c.alias(AliasGlobal, name) }
 	c.p.SuffixAliases = func(name string) (string, bool) { return c.alias(AliasSuffix, name) }

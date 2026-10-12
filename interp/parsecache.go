@@ -4,6 +4,7 @@
 package interp
 
 import (
+	"fmt"
 	"io"
 	"maps"
 	"path/filepath"
@@ -70,8 +71,61 @@ func (r *Runner) fileReader(path, src string, d syntax.Dialect) (p textReader, d
 	if !filepath.IsAbs(path) {
 		path = filepath.Join(r.dirNow(), path)
 	}
-	c := parsecache.NewReader(r.ParseCache, path, src, r.ParsingDialect(d), parseAsker{r})
+	c := parsecache.NewReader(r.ParseCache, path, src, r.ParsingDialect(d), parseAsker{r: r})
 	return c, c.Finish
+}
+
+// ParseAliases is which alias tables a whole parse of a file's text asks.
+type ParseAliases uint8
+
+const (
+	// ParseNoAliases asks none, as a parser built with no alias hooks.
+	ParseNoAliases ParseAliases = iota
+	// ParseExpandingAliases asks the tables under the shell's own switch,
+	// as [Runner.ParseWithAliases] does.
+	ParseExpandingAliases
+	// ParseTableAliases asks the tables whatever the switch says, as a
+	// function file read for autoload without -U is: see
+	// [Runner.DefineFunctionExpandingAliases].
+	ParseTableAliases
+)
+
+// ParseFileText parses text whole in dialect d — what syntax.NewParser(text,
+// d) with the given alias hooks and Parse would give, error and all — from
+// the parse cache where the runner keeps one (#6424).
+//
+// file is the file the text came from and purpose what is being done with
+// it; together they name the entry, so two different readings of one file —
+// a function file parsed to check it and parsed again inside a definition —
+// each keep their own. An empty file parses without the cache, and so does
+// a text too short to be worth one.
+func (r *Runner) ParseFileText(file, purpose, text string, d syntax.Dialect, aliases ParseAliases) (*syntax.File, error) {
+	if r.ParseCache == nil || file == "" || len(text) < parsecache.MinText ||
+		strings.HasPrefix(file, "/dev/") || strings.HasPrefix(file, "/proc/") || r.parseCacheOff() {
+		p := syntax.NewParser(text, d)
+		switch aliases {
+		case ParseExpandingAliases:
+			r.ExpandAliasesIn(p)
+		case ParseTableAliases:
+			p.Aliases, p.GlobalAliases, p.SuffixAliases = r.LookupAlias, r.LookupGlobalAlias, r.LookupSuffixAlias
+		}
+		f := p.Parse()
+		return f, p.Err()
+	}
+	if !filepath.IsAbs(file) {
+		file = filepath.Join(r.dirNow(), file)
+	}
+	var sh parsecache.Shell
+	switch aliases {
+	case ParseExpandingAliases:
+		sh = parseAsker{r: r}
+	case ParseTableAliases:
+		sh = parseAsker{r: r, tables: true}
+	}
+	c := parsecache.NewReader(r.ParseCache, fmt.Sprintf("%s\x00%s\x00%d", file, purpose, aliases), text, d, sh)
+	defer c.Finish()
+	f := c.Parse()
+	return f, c.Err()
 }
 
 // parseCacheOff is the per-run switch: SH_NO_PARSE_CACHE set to anything but
@@ -85,10 +139,25 @@ func (r *Runner) parseCacheOff() bool {
 
 // parseAsker is the runner answering a parse-cache reader's questions, on
 // behalf of the parser it stands in for.
-type parseAsker struct{ r *Runner }
+//
+// tables is the route that asks the tables whatever the switch says, which
+// is how autoload reads a function file it was not told to read with -U.
+type parseAsker struct {
+	r      *Runner
+	tables bool
+}
 
 // Alias is the answer the parser's own alias field would have given.
 func (a parseAsker) Alias(kind parsecache.AliasKind, name string) (string, bool) {
+	if a.tables {
+		switch kind {
+		case parsecache.AliasGlobal:
+			return a.r.LookupGlobalAlias(name)
+		case parsecache.AliasSuffix:
+			return a.r.LookupSuffixAlias(name)
+		}
+		return a.r.LookupAlias(name)
+	}
 	switch kind {
 	case parsecache.AliasGlobal:
 		return a.r.ExpandingGlobalAlias(name)
@@ -108,7 +177,7 @@ func (a parseAsker) Alias(kind parsecache.AliasKind, name string) (string, bool)
 // reads a thousand lines between two `alias` commands works it out once.
 func (a parseAsker) AliasTable(kind parsecache.AliasKind) uint64 {
 	r := a.r
-	if !r.aliasExpansion {
+	if !r.aliasExpansion && !a.tables {
 		return aliasSumOff
 	}
 	m := &r.aliasSums[kind]
@@ -140,7 +209,7 @@ func (a parseAsker) AliasTable(kind parsecache.AliasKind) uint64 {
 // back where it stood several lines ago.
 func (a parseAsker) AliasSnapshot(kind parsecache.AliasKind) func(name string) (string, bool) {
 	r := a.r
-	if !r.aliasExpansion {
+	if !r.aliasExpansion && !a.tables {
 		return func(string) (string, bool) { return "", false }
 	}
 	switch kind {

@@ -1077,6 +1077,19 @@ func (r *Runner) DefineFunctionExpandingAliases(name, body string) bool {
 	return r.defineFromText(name, body, r.LookupAlias)
 }
 
+// DefineFunctionFromFile is DefineFunction, or with expandAliases
+// DefineFunctionExpandingAliases, for a body read out of file: the parse is
+// read from the parse cache where the runner keeps one, as `.` reads a file
+// (#6424). The function's file is not recorded here; a caller that wants it
+// says so with [Runner.SetFunctionFile], as before.
+func (r *Runner) DefineFunctionFromFile(name, body, file string, expandAliases bool) bool {
+	var aliases syntax.Aliases
+	if expandAliases {
+		aliases = r.LookupAlias
+	}
+	return r.defineFromTextIn(name, body, aliases, file)
+}
+
 // defineFromText is the whole of both of these and of
 // [Runner.DefineFunctionFromText] beside them.
 //
@@ -1089,7 +1102,23 @@ func (r *Runner) DefineFunctionExpandingAliases(name, body string) bool {
 //
 // aliases is the parser's hook, and nil expands nothing.
 func (r *Runner) defineFromText(name, body string, aliases syntax.Aliases) bool {
-	p := syntax.NewParser(definitionWrapper(name)+body+"\n}\n", r.dialect())
+	return r.defineFromTextIn(name, body, aliases, "")
+}
+
+// defineFromTextIn is defineFromText for a body read out of file, which is
+// what lets the parse come from the parse cache; "" is no file.
+func (r *Runner) defineFromTextIn(name, body string, aliases syntax.Aliases, file string) bool {
+	text := definitionWrapper(name) + body + "\n}\n"
+	if file != "" {
+		mode := ParseNoAliases
+		if aliases != nil {
+			// The tables, as below: plain, global and suffix together.
+			mode = ParseTableAliases
+		}
+		f, err := r.ParseFileText(file, "function "+name, text, r.dialect(), mode)
+		return r.defineParsed(name, f, err)
+	}
+	p := syntax.NewParser(text, r.dialect())
 	if aliases != nil {
 		// All three kinds together, because the file is read by the same
 		// rules a script is: measured, a function file read by `autoload`
@@ -1106,7 +1135,12 @@ func (r *Runner) defineFromText(name, body string, aliases syntax.Aliases) bool 
 	}
 	p.Aliases = aliases
 	f := p.Parse()
-	if p.Err() != nil || len(f.Stmts) != 1 {
+	return r.defineParsed(name, f, p.Err())
+}
+
+// defineParsed is the rest of defineFromText, once the text is a tree.
+func (r *Runner) defineParsed(name string, f *syntax.File, err error) bool {
+	if err != nil || len(f.Stmts) != 1 {
 		return false
 	}
 	pipe, ok := f.Stmts[0].Expr.(*syntax.Pipeline)

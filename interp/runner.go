@@ -743,6 +743,9 @@ type Runner struct {
 	// functionLayout and exportedFunctionLayout are how this shell arranges
 	// a function it has to say back — see SetFunctionLayout.
 	functionLayout syntax.Layout
+	// bodyTexts are function bodies functionBodyText has printed under
+	// functionLayout, by declaration. See bodytext.go.
+	bodyTexts map[*syntax.FuncDecl]string
 	// scriptListingLayout is how this shell writes a whole script back when
 	// the invocation asked for the program rather than a run of it — see
 	// SetScriptListingLayout and Semantics.ScriptListingOption.
@@ -5880,6 +5883,8 @@ func (r *Runner) clone() *Runner {
 	// The kept dialect moves are this runner's: a map shared with a clone
 	// would be written from two goroutines. See dialectmove.go.
 	c.dialectMoves = nil
+	// And the printed bodies, for the same reason. See bodytext.go.
+	c.bodyTexts = nil
 	// A clone is a fork until the one construct that knows otherwise says so,
 	// and nothing a fork runs is the shell's last. See unforkedtail.go.
 	c.tailCmd, c.unforkedSelf, c.slotOneIsTheBody = nil, false, false

@@ -413,6 +413,7 @@ func seedTables(r *Runner) {
 	r.noticedJobs = map[*Job]bool{{}: true}
 	r.keptSubstBodies = map[substBodyKey]keptSubstBody{{text: "seed"}: {}}
 	r.dialectMoves = map[dialectMoveKey]*syntax.Dialect{{}: nil}
+	r.bodyTexts = map[*syntax.FuncDecl]string{{}: "seed"}
 	r.SeedVars(map[string]string{"seed": "v"})
 	r.arraysPut("seed", ArrayOf(Element{Str: "v"}))
 	r.assocsPut("seed", AssocArray{"k": {Str: "v"}})

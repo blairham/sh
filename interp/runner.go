@@ -14806,6 +14806,13 @@ func (r *Runner) assignValue(a *syntax.Assign) string {
 // assign performs one assignment, which is three different things wearing the
 // same syntax: a scalar, a whole array, or one element of one.
 func (r *Runner) assign(ctx context.Context, a *syntax.Assign) {
+	// Most assignments store a value and nothing else; see
+	// interp/plainstore.go, which answers every question below for them
+	// before anything is expanded.
+	if r.storesAPlainScalar(a) {
+		r.storePlainScalar(a)
+		return
+	}
 	// A bare assignment retypes a name as readily as a declaration word
 	// does — `v=(p q)` over a scalar — and the hide attribute goes with the
 	// kind either way. No letters here, so nothing is ever exempt. See

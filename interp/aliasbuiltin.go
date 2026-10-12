@@ -636,6 +636,7 @@ func (r *Runner) aliasOptionLetters() string {
 
 // defineAlias writes one entry of whichever table the kind names.
 func (r *Runner) defineAlias(name, value string, kind AliasKind) {
+	r.aliasGen++
 	if kind == AliasSuffixKind {
 		if r.suffixAliases == nil {
 			r.suffixAliases = map[string]string{}
@@ -915,6 +916,7 @@ func biUnalias(r *Runner, _ context.Context, args []string) int {
 		}
 		// One namespace each: `unalias -a` leaves the suffix aliases
 		// standing and `unalias -s -a` leaves the others, measured.
+		r.aliasGen++
 		if kind == AliasSuffixKind {
 			r.suffixAliases = nil
 		} else {
@@ -982,6 +984,7 @@ func (r *Runner) unaliasByPattern(patterns []string, kind AliasKind) int {
 // removeAlias takes one name out of whichever table the kind names, and
 // reports whether it was there.
 func (r *Runner) removeAlias(name string, kind AliasKind) bool {
+	r.aliasGen++
 	if kind == AliasSuffixKind {
 		if _, ok := r.suffixAliases[name]; !ok {
 			return false

@@ -354,6 +354,17 @@ type Runner struct {
 	// report is written before whatever was waiting carries on.
 	GuardConcurrent func(work func(), errs io.Writer)
 
+	// ParseCache keeps the trees of the files this shell sources and the
+	// startup files it reads, between one run and the next. Nil — the
+	// default — parses every file every time; see ParseCache.
+	ParseCache ParseCache
+
+	// aliasGen counts changes to the alias tables, and aliasSums holds a
+	// fingerprint of each table as of one count: what the parse cache keys
+	// a read's alias answers on. See parseAsker.AliasTable.
+	aliasGen  uint64
+	aliasSums [3]aliasSum
+
 	// SetUmask sets this process's file-creation mask and returns the one it
 	// replaced. Nil — the default — means this shell has no umask to offer
 	// and the builtin is refused.

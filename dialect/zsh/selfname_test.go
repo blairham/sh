@@ -104,6 +104,7 @@ func zshShell() driver.Shell {
 		Semantics:   zsh.Semantics(),
 		Diagnostics: zsh.Diagnostics(),
 		Prelude:     zsh.Prelude(),
+		PreludeTree: zsh.PreludeTree(),
 		Register:    zsh.Apply,
 		PromptStyle: zsh.PromptStyle(),
 		EditorStyle: zsh.EditorStyle(),

@@ -69,6 +69,17 @@ type Shell struct {
 	// commands for the rest of the run.
 	Prelude string
 
+	// PreludeTree is Prelude already parsed, or nil to parse it at start.
+	//
+	// It must be exactly what syntax.Parse(Prelude, Dialect) returns, and it
+	// is shared by every runner this front end sources it on, so nothing may
+	// write to it. A dialect that ships one builds it in at compile time —
+	// see internal/preludegen — because the text is a constant of the binary
+	// and parsing the same six kilobytes on every start was about a quarter
+	// of what the start cost above an empty Go program's (#6397). The
+	// dialect's TestPreludeTree is the proof that the two are one tree.
+	PreludeTree *syntax.File
+
 	// CommandStringParameter is the parameter a `-c` program's own text is
 	// stored in before it runs, where the shell keeps one: zsh's
 	// `ZSH_EXECUTION_STRING`. An ordinary scalar — measured on zsh 5.9.2, a
@@ -4047,7 +4058,10 @@ func (sh Shell) source(r *interp.Runner, name string) int {
 	// interp.Runner.SourcingPrelude.
 	r.SourcingPrelude(true)
 	defer r.SourcingPrelude(false)
-	f, err := syntax.Parse(sh.Prelude, sh.Dialect)
+	f, err := sh.PreludeTree, error(nil)
+	if f == nil {
+		f, err = syntax.Parse(sh.Prelude, sh.Dialect)
+	}
 	if err == nil {
 		err = r.RunPart(context.Background(), f)
 		// The prelude is the dialect's plumbing and not a command the

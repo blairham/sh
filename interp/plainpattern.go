@@ -56,11 +56,16 @@ func (r *Runner) plainPatternMatch(pattern, s string, surface patternSurface) (m
 	if lead {
 		lit = lit[1:]
 	}
-	trail := strings.HasSuffix(lit, "*")
+	trail := strings.HasSuffix(lit, "*") && !escapedAtEnd(lit[:len(lit)-1])
 	if trail {
 		lit = lit[:len(lit)-1]
 	}
-	if strings.ContainsAny(lit, plainPatternSpecials) {
+	if strings.IndexByte(lit, '\\') >= 0 {
+		var ok bool
+		if lit, ok = unescapePlainPattern(lit, r.sem().PatternEscapeReaches); !ok {
+			return false, false
+		}
+	} else if strings.ContainsAny(lit, plainPatternSpecials) {
 		return false, false
 	}
 	// A literal that is not whole characters is left to the matcher, which
@@ -87,4 +92,62 @@ func (r *Runner) plainPatternMatch(pattern, s string, surface patternSurface) (m
 		return strings.HasPrefix(s, lit), true
 	}
 	return s == lit, true
+}
+
+// escapedAtEnd reports whether the byte after text would be escaped: whether
+// text ends in an odd run of backslashes. A trailing `\*` is a literal star,
+// not the star the shortcut reads as "anything after".
+//
+// Parity is the whole of the rule, because every dialect's escape reaches a
+// backslash — the empty set and zsh's set both hold one — so `\\*` is an
+// escaped backslash and then a live star.
+func escapedAtEnd(text string) bool {
+	n := 0
+	for n < len(text) && text[len(text)-1-n] == '\\' {
+		n++
+	}
+	return n%2 == 1
+}
+
+// unescapePlainPattern is the literal a pattern of escapes and ordinary
+// characters stands for, and false for any other pattern.
+//
+// This is the shape a quoted operand reaches the matcher in. `[[ $x ==
+// "$y" ]]`, `case $w in '(')`, and every quoted metacharacter come to the
+// matcher with a backslash in front of each metacharacter, so a value like
+// `builtin autoload -XU` arrives as `builtin autoload \-XU`. Measured on
+// F-Sy-H's highlighter (#6423), 82 of the 155 patterns per call that reached
+// the full matcher were these, every one of them a string to compare.
+//
+// The reading is the matcher's own escape step, which compares the escaped
+// byte with one byte of the subject: where reaches holds the character, or
+// is empty and so holds every character, the backslash is spent and the
+// character is literal. Where it does not, the backslash is a character of
+// its own and the next one is read on its own turn — zsh's `bet\a` is five
+// characters. An escaped byte past ASCII is left to the matcher, which is
+// what decides whether the escape took a byte or a character, and so is a
+// backslash with nothing after it. An unescaped special refuses as before.
+func unescapePlainPattern(lit, reaches string) (string, bool) {
+	var b strings.Builder
+	b.Grow(len(lit))
+	for i := 0; i < len(lit); i++ {
+		c := lit[i]
+		if c != '\\' {
+			if strings.IndexByte(plainPatternSpecials, c) >= 0 {
+				return "", false
+			}
+			b.WriteByte(c)
+			continue
+		}
+		if i+1 == len(lit) || lit[i+1] >= utf8.RuneSelf {
+			return "", false
+		}
+		if reaches != "" && strings.IndexByte(reaches, lit[i+1]) < 0 {
+			b.WriteByte('\\')
+			continue
+		}
+		b.WriteByte(lit[i+1])
+		i++
+	}
+	return b.String(), true
 }

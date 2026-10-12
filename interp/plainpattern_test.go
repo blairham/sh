@@ -92,3 +92,87 @@ func TestPlainPatternsAnswerAsTheMatcherDoes(t *testing.T) {
 		}
 	}
 }
+
+// TestEscapedPatternsAnswerAsTheMatcherDoes is the same comparison for the
+// patterns a quoted operand turns into, where every metacharacter arrives
+// with a backslash in front of it, and for values whose backslashes reach the
+// matcher raw (#6423). A run with zsh's escape set is added, where a
+// backslash before a character outside it stands for itself.
+func TestEscapedPatternsAnswerAsTheMatcherDoes(t *testing.T) {
+	// A leading `=` is a value: it is assigned to p and the operand is $p,
+	// so its backslashes are the matcher's to read.
+	patterns := []string{
+		`"(x)"`, `"-p"`, `"a*"`, `"a*"'*'`, `'*'"[a]"`, `"a|b"'*'`, `"\\"`, `x"\\"'*'`,
+		`"*"'*'`, `"a\\"'*'`, `"<1-2>"`, `"#x"`, `"^a"`, `"~a"`, `"!a"`, `"@(a)"`, `"x?"`,
+		`"é("`, `"*"`, `'*'"*"`, `'*'"\\"`,
+		`=bet\a`, `=a\`, `=a\\b`, `=a\*`, `=a\*'*'`, `=\é`, `=x\-y`, `=\(x\)`, `=a\\*`, `=a\b*`,
+		`=\+`, `=x\{y`,
+	}
+	subjects := []string{
+		"(x)", "-p", "a*", "a*b", "x[a]", "[a]", "a|bc", `\`, `x\y`, "**", "a\\b", "<1-2>",
+		"#x", "^a", "~a", "!a", "@(a)", "x?", "é(", "beta", `bet\a`, "a", "ab", "x-y", `x\-y`,
+		"+", `\+`, "x{y", `x\{y`, "",
+	}
+	runs := append(plainPatternRuns[:len(plainPatternRuns):len(plainPatternRuns)], plainPatternRun{
+		name: "zsh's escapes", setup: func(r *Runner) {
+			sem := permissive()
+			sem.PatternEscapeReaches = "-=!*?[]()|^~#<>\\"
+			r.Semantics = &sem
+		},
+	})
+	for _, c := range runs {
+		if c.extra != nil {
+			// The extended grammar's own patterns are the other test's;
+			// here it refuses the quoted groups for want of a dialect.
+			continue
+		}
+		var b strings.Builder
+		if c.records {
+			b.WriteString("[[ SEED =~ SEED ]]\n")
+		}
+		for _, p := range patterns {
+			pat := p
+			if v, ok := strings.CutPrefix(p, "="); ok {
+				head, tail, star := strings.Cut(v, "'*'")
+				fmt.Fprintf(&b, "p='%s'\n", head)
+				pat = "$p"
+				if star {
+					pat += "*" + tail
+				}
+			}
+			for i, s := range subjects {
+				fmt.Fprintf(&b, "s='%s'\n", s)
+				fmt.Fprintf(&b, "if [[ $s == %s ]]; then printf 'c%d1 '; else printf 'c%d0 '; fi\n", pat, i, i)
+				if c.records {
+					b.WriteString(`printf '<%s> ' "${M[*]}"` + "\n")
+				}
+				fmt.Fprintf(&b, "case $s in %s) printf 'k%d1 ';; *) printf 'k%d0 ';; esac\n", pat, i, i)
+			}
+			b.WriteString("printf '\\n'\n")
+		}
+		src := b.String()
+		run := func(on bool) string {
+			was := SetPlainPatternShortcutForTest(on)
+			defer SetPlainPatternShortcutForTest(was)
+			out, st := runGrammar(t, src, c.enable, c.setup)
+			return fmt.Sprintf("%s|%d", out, st)
+		}
+		want, got := run(false), run(true)
+		if got != want {
+			gl, wl := strings.Split(got, "\n"), strings.Split(want, "\n")
+			for i := range min(len(gl), len(wl)) {
+				if gl[i] != wl[i] {
+					t.Errorf("%s: the shortcut changed the answers for %s\nwith:    %q\nwithout: %q", c.name, patterns[min(i, len(patterns)-1)], gl[i], wl[i])
+				}
+			}
+			if len(gl) != len(wl) {
+				t.Errorf("%s: %d lines with the shortcut, %d without", c.name, len(gl), len(wl))
+			}
+		}
+		// The rows ran, and both readings were exercised: some escaped
+		// pattern matched and some did not.
+		if !strings.Contains(want, "c01 ") || !strings.Contains(want, "c00 ") {
+			t.Errorf("%s: the rows did not run: %q", c.name, want)
+		}
+	}
+}

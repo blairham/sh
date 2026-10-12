@@ -982,7 +982,7 @@ func (r *Runner) assignAssocElems(name string, parsed []literalElem, appendTo, r
 	var pairs, pairWords []string
 	for _, e := range parsed {
 		if e.subscripted {
-			if e.sub == "" && !r.tableLiteralKeyIsThere(name, e.written, true) {
+			if e.sub == "" && !r.tableLiteralKeyIsThere(name, e.writtenText(), true) {
 				// An empty key written with a head, in the reading that refuses
 				// one. It costs the rest of the literal and leaves what is
 				// already stored standing. See Semantics.EmptyKeyInATableLiteral.
@@ -1030,13 +1030,14 @@ func (r *Runner) assignAssocElems(name string, parsed []literalElem, appendTo, r
 			return
 		}
 		pairs = append(pairs, e.fields...)
+		written := e.writtenText()
 		for range e.fields {
 			// The element's own text beside each field it made, so a refusal
 			// about the *key* can name the word the source wrote. One field per
 			// element is the shape the refusing column has — see
 			// BareElementsInATableLiteralAreEachOneValue — and where an element
 			// made several the field is the nearest thing to a word there is.
-			pairWords = append(pairWords, e.written)
+			pairWords = append(pairWords, written)
 		}
 	}
 	for i := 0; i < len(pairs); i += 2 {
@@ -1280,7 +1281,7 @@ func (r *Runner) tableLiteralKeyIsThere(name, written string, head bool) bool {
 func (r *Runner) refuseBareTableLiteralElement(name string, e literalElem) {
 	wording, fallback := r.diag().BareElementInASubscriptedTableLiteral,
 		"%[1]s: %[2]s: must use subscript when assigning associative array"
-	verb := e.written
+	verb := e.writtenText()
 	if e.operand {
 		// A declaration's operand, which the shell expanded before the builtin
 		// saw it — and the column that refuses names the value rather than the

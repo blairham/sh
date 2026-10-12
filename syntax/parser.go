@@ -3972,6 +3972,10 @@ func isNameIn(s string, dot bool) bool {
 func (p *Parser) parseSimple() Command {
 	c := &SimpleCmd{Start: p.tok.Pos}
 	seenArg := false
+	// How much of c.Args is known to be a name list, so each word is asked
+	// that once and not again for every word after it. See
+	// Parser.argsStillFuncNames.
+	var names funcNameList
 	// Whether an unquoted `[[` word has been read and its `]]` has not, in a
 	// dialect whose `[[` is a command. See Dialect.DoubleBracketIsACommand.
 	inDoubleBracket := false
@@ -4173,7 +4177,7 @@ func (p *Parser) parseSimple() Command {
 			// shell that has the list, where the same word after `typeset -a`
 			// is the array and the `()` after *it* is a parse error.
 			if len(c.Assigns) == 0 && seenArg && p.dialect.FunctionMultipleNames &&
-				p.argsCanBeFuncNames(c.Args) &&
+				p.argsStillFuncNames(&names, c.Args) &&
 				p.canBeFuncName(p.tok.Spans, p.tok.Literal()) &&
 				p.peekIsFuncParens() {
 				return p.parseFuncPosixNames(c)
@@ -5687,6 +5691,38 @@ func (p *Parser) argsCanBeFuncNames(args []*Word) bool {
 		}
 	}
 	return true
+}
+
+// funcNameList is what argsStillFuncNames has learned about the words of one
+// command so far: how many of them it has read, and whether every one of
+// those could be a definition's name.
+type funcNameList struct {
+	read  int
+	names bool
+}
+
+// argsStillFuncNames is argsCanBeFuncNames for a list that only grows: the
+// words already answered for are not read again, so asking after every word
+// of a command is linear in its length rather than quadratic.
+//
+// It is asked at every argument in a dialect that takes a name list, because
+// nothing about the first word announces one. A completion dump's `autoload
+// -Uz` line names every function the dump knows — about 1,500 on a real
+// configuration — and read that way it was a million questions and about
+// 25 ms of every interactive start (#6363). A word that cannot be a name
+// stays in the list, so once the answer is no it is no for the rest of the
+// command.
+func (p *Parser) argsStillFuncNames(l *funcNameList, args []*Word) bool {
+	if len(args) == 0 {
+		return false
+	}
+	if l.read == 0 {
+		l.names = true
+	}
+	for ; l.names && l.read < len(args); l.read++ {
+		l.names = p.wordCanBeFuncName(args[l.read])
+	}
+	return l.names
 }
 
 // failRedirectAt records a redirection operator the grammar did not want,

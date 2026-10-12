@@ -29,7 +29,7 @@ import (
 //	xLookup(name)   the value and whether the name is there
 //	xPut(name, v)   store, making the table on first use
 //	xDel(name)      take the name out; a name that is not there is no-op
-//	xLen()          how many names
+//	xLen()          how many names (only where something asks)
 //	xRange()        every name and value, in the map's own order
 //
 // A write that may meet a table shared with a clone still asks for it first —
@@ -77,8 +77,6 @@ func (r *Runner) arraysPut(name string, a Array) {
 
 func (r *Runner) arraysDel(name string) { delete(r.Arrays, name) }
 
-func (r *Runner) arraysLen() int { return len(r.Arrays) }
-
 func (r *Runner) arraysRange() iter.Seq2[string, Array] { return maps.All(r.Arrays) }
 
 // assocs is AssocArrays, the associative arrays. The table is shared with a
@@ -101,8 +99,6 @@ func (r *Runner) assocsPut(name string, a AssocArray) {
 
 func (r *Runner) assocsDel(name string) { delete(r.AssocArrays, name) }
 
-func (r *Runner) assocsLen() int { return len(r.AssocArrays) }
-
 func (r *Runner) assocsRange() iter.Seq2[string, AssocArray] { return maps.All(r.AssocArrays) }
 
 // producers is Dynamic, the scalars produced when they are read.
@@ -122,8 +118,6 @@ func (r *Runner) producersPut(name string, f func(*Runner) string) {
 }
 
 func (r *Runner) producersDel(name string) { delete(r.Dynamic, name) }
-
-func (r *Runner) producersLen() int { return len(r.Dynamic) }
 
 func (r *Runner) producersRange() iter.Seq2[string, func(*Runner) string] {
 	return maps.All(r.Dynamic)
@@ -149,8 +143,6 @@ func (r *Runner) arrayProducersPut(name string, f func(*Runner) []string) {
 
 func (r *Runner) arrayProducersDel(name string) { delete(r.DynamicArrays, name) }
 
-func (r *Runner) arrayProducersLen() int { return len(r.DynamicArrays) }
-
 func (r *Runner) arrayProducersRange() iter.Seq2[string, func(*Runner) []string] {
 	return maps.All(r.DynamicArrays)
 }
@@ -174,8 +166,6 @@ func (r *Runner) assocProducersPut(name string, f func(*Runner) AssocArray) {
 }
 
 func (r *Runner) assocProducersDel(name string) { delete(r.DynamicAssocs, name) }
-
-func (r *Runner) assocProducersLen() int { return len(r.DynamicAssocs) }
 
 func (r *Runner) assocProducersRange() iter.Seq2[string, func(*Runner) AssocArray] {
 	return maps.All(r.DynamicAssocs)

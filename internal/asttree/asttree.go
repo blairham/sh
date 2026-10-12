@@ -84,8 +84,6 @@ type emitter struct {
 	seen   map[uintptr]bool
 }
 
-var posType = reflect.TypeFor[syntax.Pos]()
-
 // value writes v as a Go expression. typed is false where the element type
 // may be elided — an element of a slice literal of the same type.
 func (e *emitter) value(b *bytes.Buffer, v reflect.Value, typed bool) error {
@@ -113,8 +111,8 @@ func (e *emitter) value(b *bytes.Buffer, v reflect.Value, typed bool) error {
 		}
 		return e.value(b, v.Elem(), true)
 	case reflect.Struct:
-		if v.Type() == posType {
-			return e.pos(b, v.Interface().(syntax.Pos))
+		if p, ok := v.Interface().(syntax.Pos); ok {
+			return e.pos(b, p)
 		}
 		if typed {
 			b.WriteString(v.Type().String())

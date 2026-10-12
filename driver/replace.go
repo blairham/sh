@@ -4,6 +4,7 @@
 package driver
 
 import (
+	"math"
 	"os"
 	"runtime"
 	"runtime/debug"
@@ -158,11 +159,19 @@ func replaceProcess(dir, path string, argv, env []string, files []*os.File) erro
 			defer func() { _ = os.Chdir(was) }()
 		}
 	}
+	// The ceiling goes first. A percent of -1 stops the collector only while
+	// no memory limit is near: a heap at the limit starts a collection with
+	// the percent off, so prepareExec's allocations could begin one that is
+	// still marking when the table is placed. Lifting the limit before the
+	// percent is stopped means SetGCPercent's wait for a running mark is the
+	// last word, and nothing can start another.
+	prevLimit := debug.SetMemoryLimit(math.MaxInt64)
 	prev := debug.SetGCPercent(-1)
 	// Before the table is touched, because this is the part that allocates.
 	ready, err := prepareExec(path, argv, env)
 	if err != nil {
 		debug.SetGCPercent(prev)
+		debug.SetMemoryLimit(prevLimit)
 		return err
 	}
 	reachedPlacement("before")
@@ -172,6 +181,7 @@ func replaceProcess(dir, path string, argv, env []string, files []*os.File) erro
 	// Reached only when the exec failed. The process is a shell again, so it
 	// collects again, and gets back whatever the exec had already spent.
 	debug.SetGCPercent(prev)
+	debug.SetMemoryLimit(prevLimit)
 	ready.undo()
 	// And here for the sake of the files rather than the error: nothing refers
 	// to the slice after placeFiles, so without this the collector may close a

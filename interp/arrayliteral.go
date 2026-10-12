@@ -65,7 +65,20 @@ type literalElem struct {
 	// array`, naming the two characters the script holds rather than the value
 	// they came to. Empty for an element with no word of its own — a nested
 	// literal standing alone — which is the one shape no refusal here reaches.
-	written string
+	//
+	// Kept as the word and printed when a refusal asks, through
+	// writtenText: only a keyed literal ever reads it, and printing every
+	// element of every literal for it was a measurable share of F-Sy-H's
+	// highlighter, which builds its reply a literal at a time (#6423).
+	written *syntax.Word
+}
+
+// writtenText is the element as the source wrote it. See literalElem.written.
+func (e literalElem) writtenText() string {
+	if e.written == nil {
+		return ""
+	}
+	return syntax.PrintWord(e.written)
 }
 
 // literalElems expands an array literal's elements once, and reports whether
@@ -182,7 +195,7 @@ func (r *Runner) literalElems(elems []*syntax.ArrayElem, readsSubscripts, bareIs
 			continue
 		}
 		w := el.Word
-		written := syntax.PrintWord(w)
+		written := w
 		// Asked before the element is read rather than after it, so that an
 		// element the shape has made a word is expanded once and not twice.
 		// A discarded reading is not free: `i=0; a=(p [$((i++))]=v)` is two

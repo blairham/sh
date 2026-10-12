@@ -40,6 +40,7 @@ import (
 
 	"github.com/blairham/sh/internal/event"
 	"github.com/blairham/sh/internal/panicguard"
+	"github.com/blairham/sh/internal/parsecache"
 	"github.com/blairham/sh/interp"
 	"github.com/blairham/sh/repl"
 	"github.com/blairham/sh/syntax"
@@ -587,6 +588,9 @@ func Main(sh Shell) int {
 // argv includes argv[0]. An argv with nothing in it is treated as bare, since
 // a shell that cannot name itself still has to produce diagnostics.
 func MainArgs(sh Shell, argv []string) int {
+	// The parse cache writes its entries beside the shell rather than in
+	// its way; they land before the process ends. See parseCache.
+	defer parsecache.Wait()
 	sh = sh.withDefaults(argv)
 	if heldProcessGroup(argv) {
 		// Not a shell at all this time: a placeholder leading a process group
@@ -843,6 +847,29 @@ func (sh Shell) runnerEnv() []string {
 		kept = append(kept, entry)
 	}
 	return kept
+}
+
+// parseCache is where this shell keeps the trees of the files it sources
+// between runs (#6424), or nil for none.
+//
+// None under a policy: the cache is a file this shell writes on its own
+// account, and a shell told where it may write does not decide to write
+// somewhere else. None when SH_NO_PARSE_CACHE is set to anything but empty
+// or 0, and none where the cache's parent directory does not already exist —
+// see parsecache.Dir.
+func (sh Shell) parseCache() interp.ParseCache {
+	if sh.Gate != nil {
+		return nil
+	}
+	env := sh.env()
+	if v, ok := lookupEnv(env, "SH_NO_PARSE_CACHE"); ok && v != "" && v != "0" {
+		return nil
+	}
+	dir, ok := parsecache.Dir(func(name string) (string, bool) { return lookupEnv(env, name) })
+	if !ok {
+		return nil
+	}
+	return parsecache.Open(dir, parsecache.BuildIdentity(), parsecache.DefaultLimit)
 }
 
 // lookupEnv reads one variable out of an environment, last assignment
@@ -2787,6 +2814,9 @@ func (sh Shell) newRunnerAs(name string, params []string, dg interp.Diagnostics,
 		// crash. An embedder that has told this front end to keep the
 		// process is exactly the caller who most wants it.
 		GuardConcurrent: sh.guardConcurrent(),
+		// And the parse cache, which is this binary deciding to keep files
+		// between runs. See parseCache.
+		ParseCache: sh.parseCache(),
 	}
 	// The prompt-escape table, so the interpreter answers `${(%)…}` and
 	// `print -P` from the *same* table the prompt drawer is handed below.

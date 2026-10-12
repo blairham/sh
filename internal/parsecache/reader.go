@@ -1,0 +1,996 @@
+// SPDX-FileCopyrightText: 2026 Blair Hamilton
+// SPDX-License-Identifier: Apache-2.0
+
+package parsecache
+
+import (
+	"bytes"
+	"crypto/sha256"
+	"encoding/binary"
+	"encoding/hex"
+	"errors"
+	"unsafe"
+
+	"github.com/blairham/sh/internal/treecodec"
+	"github.com/blairham/sh/syntax"
+)
+
+// Cache is where a Reader finds and keeps its entries: a Store, or anything
+// with the same two methods. interp.ParseCache is the same interface, and is
+// what a runner hands in.
+type Cache interface {
+	// Load returns what was last stored under name, or nil.
+	Load(name string) []byte
+	// Store keeps data under name, replacing whatever was there. It may
+	// decline without saying so.
+	Store(name string, data []byte)
+}
+
+// AliasKind is which of the three alias tables a parser asks.
+type AliasKind byte
+
+// The three tables, in syntax.Parser's field order.
+const (
+	AliasPlain AliasKind = iota
+	AliasGlobal
+	AliasSuffix
+	aliasKinds
+)
+
+// Shell is the running shell, answering the alias questions a parser asks
+// exactly as the parser's own alias fields would.
+//
+// A read is not recorded with each word it asked about — a start asks about
+// a hundred thousand of them — but with a fingerprint of the table that
+// answered: equal tables give every word the same answer.
+type Shell interface {
+	// Alias is the answer to one question.
+	Alias(kind AliasKind, name string) (string, bool)
+	// AliasTable is a fingerprint of everything an answer of kind depends
+	// on now.
+	AliasTable(kind AliasKind) uint64
+	// AliasSnapshot answers kind's questions from the table as it is now,
+	// whatever happens to it afterwards.
+	AliasSnapshot(kind AliasKind) func(name string) (string, bool)
+}
+
+// MinText is the shortest text worth caching. Below it the entry costs more
+// than the parse it saves: a read of the entry is a file opened and read
+// whatever its size, about 40 µs on this machine, against roughly 17 µs a
+// kilobyte saved by decoding rather than parsing — and writing one costs a
+// file created and renamed, about 200 µs.
+const MinText = 4096
+
+// NewReader is the reader for the text src of the file at path, read in
+// dialect d — the dialect a syntax.Parser for it would be built with — with
+// sh answering the parser's questions. path names the entry and nothing more:
+// what an entry is checked against is the text.
+func NewReader(cache Cache, path, src string, d syntax.Dialect, sh Shell) *Reader {
+	return &Reader{sh: sh, cache: cache, path: path, src: src, d0: d, cur: d}
+}
+
+// The modes an entry is written in, which are two different sequences of
+// reads of the same text and are cached apart.
+const (
+	readWhole = 1
+	readLines = 2
+)
+
+// Reader answers a file's reads from the cache while what the cache
+// recorded still holds, and from a parser — which it records — once it does
+// not. It has the methods of syntax.Parser that a shell reading a file uses.
+//
+// # What an entry records, and why it is enough
+//
+// A parser is a function of its text, of the grammar it reads in, and of the
+// answers it gets to the questions it asks the shell while it reads: whether
+// a word is an alias and what it expands to, and, for a byte past ASCII, how
+// the locale reads it. Nothing else reaches it. So an entry holds, for each
+// read the shell made — each line, or the whole text — the questions that
+// read asked and the answers it got, the remarks it made, and the tree it
+// returned; and before a stored tree is handed out, every one of its
+// questions is asked again of the shell as it stands now. Same answers, same
+// tree. The grammar is checked the same way: by a fingerprint of the dialect
+// at the first read, and again each time the shell replaced it.
+//
+// # When an answer has moved
+//
+// The text has been run up to that line already, so the reader cannot start
+// over. It builds a parser and walks it through the lines already handed
+// out, feeding it the answers those lines recorded — which are the answers a
+// parser reading alongside would have been given, since each was checked
+// before its tree was used — and then reads on live, recording as it goes,
+// and the entry is written again with the new lines.
+//
+// A text that ran out partway (a `return` in the middle of a file) leaves an
+// entry that ends there; a later run that reads further reads on live and
+// extends it. A text with a parse failure, or a tree the codec will not
+// carry, is marked as such and parsed every time.
+type Reader struct {
+	sh    Shell
+	cache Cache
+	path  string
+	src   string
+	d0    syntax.Dialect
+
+	started bool
+	mode    byte
+	name    string
+	sum     [32]byte
+
+	// cur is the dialect the next read is in, with the shell's own function
+	// answers; set says SetDialect was called since the last read.
+	cur syntax.Dialect
+	set bool
+
+	// The stored entry and how far into it the reads have got.
+	old    *parseEntry
+	served int
+	// sets is the dialect handed in before each served read that had one,
+	// kept for the walk a fallback makes.
+	sets []syntax.Dialect
+
+	// The live parser, once there is one, and the questions the read in
+	// progress is asking it.
+	p   *syntax.Parser
+	rec *readDeps
+	// replaying, during the walk, is the recorded answers of the read the
+	// parser is being walked through.
+	replaying *readDeps
+	remarks   int
+	// rem is the remarks the served reads made, in order: what a parser
+	// that had read them would hold.
+	rem []syntax.Remark
+	enc *treecodec.Encoder
+	// snaps holds the alias tables as they stood when served reads were
+	// checked, by fingerprint, for the walk a fallback makes.
+	snaps map[snapKey]func(string) (string, bool)
+
+	// What the next entry is made of.
+	chunks   [][]byte
+	dirty    bool
+	stopped  bool // a read the entry cannot hold: record no more
+	failed   bool // and that read was a failure: mark the text as one
+	finished bool // the whole-text read or the last line has been handed out
+}
+
+// begin loads the entry for this text in mode, on the first read.
+func (c *Reader) begin(mode byte) {
+	c.started, c.mode = true, mode
+	c.sum = sha256.Sum256(unsafe.Slice(unsafe.StringData(c.src), len(c.src)))
+	fp, ok := treecodec.DialectFingerprint(&c.d0)
+	if !ok {
+		c.stopped = true
+		return
+	}
+	// Named by the state the text is read from as well as by the text's
+	// path, so that one file read twice from two different states — a theme
+	// file sourced before the aliases are defined and again after — keeps an
+	// entry for each rather than one entry rewritten twice a start.
+	h := sha256.New()
+	var b []byte
+	b = append(b, entryVersion, mode)
+	b = binary.LittleEndian.AppendUint64(b, fp)
+	for k := range aliasKinds {
+		b = binary.LittleEndian.AppendUint64(b, c.sh.AliasTable(k))
+	}
+	h.Write(b)
+	h.Write([]byte(c.path))
+	c.name = hex.EncodeToString(h.Sum(nil)[:20])
+	e, err := decodeEntry(c.cache.Load(c.name))
+	if err != nil || e.mode != mode || e.sum != c.sum || e.dialect != fp {
+		return
+	}
+	if e.failed {
+		// Parsed every time, and not recorded: the entry already says
+		// everything there is to say about this text.
+		c.stopped = true
+		return
+	}
+	c.old = e
+}
+
+// SetDialect is the shell replacing its grammar between two reads.
+func (c *Reader) SetDialect(d syntax.Dialect) {
+	c.cur, c.set = d, true
+	if c.p != nil {
+		c.p.SetDialect(c.wrap(d))
+	}
+}
+
+// Parse reads the whole text at once.
+func (c *Reader) Parse() *syntax.File {
+	if !c.started {
+		c.begin(readWhole)
+	}
+	set := c.set
+	c.set = false
+	if c.p == nil && c.old != nil && len(c.old.raw) == 1 {
+		if f, ok := c.replay(0, set); ok {
+			c.finished = true
+			return f
+		}
+	}
+	c.goLive(set)
+	f := c.p.Parse()
+	c.finished = true
+	c.recordRead(f, true, set)
+	return f
+}
+
+// NextLine reads the next logical line.
+func (c *Reader) NextLine() (*syntax.File, bool) {
+	if !c.started {
+		c.begin(readLines)
+	}
+	if c.mode == readWhole && c.finished {
+		// After a whole-text read there is nothing left to read, and a
+		// parser asked again says so; it is not a read of its own.
+		if c.p != nil {
+			return c.p.NextLine()
+		}
+		return nil, false
+	}
+	set := c.set
+	c.set = false
+	if c.p == nil && c.old != nil && c.served < len(c.old.raw) {
+		if f, ok := c.replay(c.served, set); ok {
+			if f == nil {
+				c.finished = true
+				return nil, false
+			}
+			return f, true
+		}
+	}
+	c.goLive(set)
+	f, ok := c.p.NextLine()
+	if !ok {
+		c.finished = true
+	}
+	c.recordRead(f, ok, set)
+	return f, ok
+}
+
+// Err is the parser's, and nil while nothing has been parsed: a stored read
+// is only ever one that parsed.
+func (c *Reader) Err() error {
+	if c.p == nil {
+		return nil
+	}
+	return c.p.Err()
+}
+
+// Remarks is the parser's, or while the reads are served from the entry, the
+// remarks those reads recorded — the same list a parser would hold.
+func (c *Reader) Remarks() []syntax.Remark {
+	if c.p == nil {
+		return c.rem
+	}
+	return c.p.Remarks()
+}
+
+// replay hands out the stored read i if every question it asked is answered
+// the same way now. A nil tree with ok is the end of the text.
+func (c *Reader) replay(i int, set bool) (*syntax.File, bool) {
+	ch, err := c.old.chunk(i)
+	if err != nil || ch.set != set {
+		return nil, false
+	}
+	if set {
+		fp, ok := treecodec.DialectFingerprint(&c.cur)
+		if !ok || fp != ch.dialect {
+			return nil, false
+		}
+	}
+	if !c.holds(ch.deps, true) {
+		return nil, false
+	}
+	var made []syntax.Remark
+	if len(ch.remarks) > 0 {
+		made, err = treecodec.NewDecoder(ch.remarks, c.src).Remarks()
+		if err != nil {
+			return nil, false
+		}
+	}
+	var f *syntax.File
+	if !ch.end {
+		f, err = treecodec.NewDecoder(ch.tree, c.src).File()
+		if err != nil {
+			return nil, false
+		}
+	}
+	c.rem = append(c.rem, made...)
+	if set {
+		c.sets = append(c.sets, c.cur)
+	} else {
+		c.sets = append(c.sets, syntax.Dialect{})
+	}
+	c.chunks = append(c.chunks, ch.raw)
+	c.served++
+	return f, true
+}
+
+// goLive builds the parser, if there is none yet, and walks it through the
+// reads already handed out from the entry.
+//
+// set says the shell replaced the dialect before this read. A parser that
+// was already live was told at the time; one built now is told here, which
+// is the same single call a parser reading all along would have had.
+func (c *Reader) goLive(set bool) {
+	if c.p != nil {
+		return
+	}
+	if c.served > 0 {
+		c.walkTo(c.served)
+	} else {
+		// Built under the first read's record: the parser reads its first
+		// token as it is built, and that can ask the locale a question.
+		c.rec = &readDeps{}
+		c.p = syntax.NewParser(c.src, c.wrap(c.d0))
+		c.installAliases()
+	}
+	if set {
+		c.p.SetDialect(c.wrap(c.cur))
+	}
+	c.remarks = len(c.p.Remarks())
+}
+
+// walkTo builds the parser and has it read the first n lines again, given
+// the answers those lines recorded, so that it stands where a parser that
+// had read them all along would stand.
+//
+// Each of those lines' answers was checked against the shell before its tree
+// was handed out, so the answers fed here are the ones a parser reading
+// alongside would have been given at the same moments.
+func (c *Reader) walkTo(n int) {
+	deps := make([]readDeps, n)
+	for i := range n {
+		ch, err := c.old.chunk(i)
+		if err == nil {
+			deps[i], err = c.decodeDeps(ch.deps)
+		}
+		if err != nil {
+			// Not reachable: the same bytes were read once already, to check
+			// them. If it ever were, the parser below would stand in the wrong
+			// place, so the only safe thing is to say so loudly.
+			panic("parse cache: an entry changed while it was being read")
+		}
+	}
+	c.rec = nil
+	c.replaying = &deps[0]
+	c.p = syntax.NewParser(c.src, c.wrap(c.d0))
+	c.installAliases()
+	for i := range n {
+		c.replaying = &deps[i]
+		if c.chunkSet(i) {
+			c.p.SetDialect(c.wrap(c.sets[i]))
+		}
+		c.p.NextLine()
+	}
+	c.replaying = nil
+	c.rec = &readDeps{}
+}
+
+// chunkSet is whether served read i had the dialect replaced before it.
+func (c *Reader) chunkSet(i int) bool {
+	return len(c.chunks[i]) > 0 && c.chunks[i][0]&1 != 0
+}
+
+func (c *Reader) installAliases() {
+	c.p.Aliases = func(name string) (string, bool) { return c.alias(AliasPlain, name) }
+	c.p.GlobalAliases = func(name string) (string, bool) { return c.alias(AliasGlobal, name) }
+	c.p.SuffixAliases = func(name string) (string, bool) { return c.alias(AliasSuffix, name) }
+}
+
+// recordRead keeps what a live read returned, for the next entry. It runs
+// before the caller runs any of the tree, so what is kept is the tree as the
+// parser made it.
+func (c *Reader) recordRead(f *syntax.File, ok, set bool) {
+	rec := c.rec
+	c.rec = &readDeps{}
+	all := c.p.Remarks()
+	made := all[min(c.remarks, len(all)):]
+	c.remarks = len(all)
+	if c.stopped {
+		return
+	}
+	if c.p.Err() != nil || (ok && f.Refused != nil) {
+		c.stopped, c.failed, c.dirty = true, true, true
+		return
+	}
+	var fp uint64
+	if set {
+		var fok bool
+		if fp, fok = treecodec.DialectFingerprint(&c.cur); !fok {
+			c.stopped = true
+			return
+		}
+	}
+	if c.enc == nil {
+		c.enc = treecodec.NewEncoder(c.src)
+	}
+	var b []byte
+	b = appendChunkHead(b, set, !ok, fp)
+	b = c.appendDeps(b, rec)
+	c.enc.Reset()
+	if len(made) > 0 {
+		if err := c.enc.Remarks(made); err != nil {
+			c.stopped = true
+			return
+		}
+	}
+	b = binary.AppendUvarint(b, uint64(len(c.enc.Bytes())))
+	b = append(b, c.enc.Bytes()...)
+	if ok {
+		c.enc.Reset()
+		if err := c.enc.File(f); err != nil {
+			c.stopped, c.failed, c.dirty = true, true, true
+			return
+		}
+		b = append(b, c.enc.Bytes()...)
+	}
+	c.chunks = append(c.chunks, b)
+	c.dirty = true
+}
+
+// Finish writes the entry, where this run learned something the stored one
+// did not hold. It is called once, after the last read.
+func (c *Reader) Finish() {
+	if !c.started || !c.dirty {
+		return
+	}
+	fp, ok := treecodec.DialectFingerprint(&c.d0)
+	if !ok {
+		return
+	}
+	e := parseEntry{mode: c.mode, sum: c.sum, dialect: fp, failed: c.failed}
+	if !c.failed {
+		e.raw = c.chunks
+	}
+	c.cache.Store(c.name, e.encode())
+}
+
+// alias asks the shell and notes which table answered, or — while a parser
+// is being walked through lines already handed out — answers from the table
+// as it stood when that line was checked.
+func (c *Reader) alias(kind AliasKind, name string) (string, bool) {
+	if d := c.replaying; d != nil && d.asked[kind] {
+		if f, ok := c.snaps[snapKey{kind, d.table[kind]}]; ok {
+			return f(name)
+		}
+	}
+	if d := c.rec; d != nil && !d.asked[kind] {
+		d.asked[kind] = true
+		d.table[kind] = c.sh.AliasTable(kind)
+	}
+	return c.sh.Alias(kind, name)
+}
+
+type snapKey struct {
+	kind AliasKind
+	sum  uint64
+}
+
+// wrap is d with each function answer it carries routed through this reader,
+// so that every question is recorded or answered from a record. A nil answer
+// stays nil: the reader takes nil as an answer of its own, and the dialect's
+// fingerprint holds which are nil.
+func (c *Reader) wrap(d syntax.Dialect) syntax.Dialect {
+	if d.CharacterWidth != nil {
+		d.CharacterWidth = c.characterWidth
+	}
+	if d.NameTakesALetterPastASCII != nil {
+		d.NameTakesALetterPastASCII = c.nameLetter
+	}
+	if d.CharacterLength != nil {
+		d.CharacterLength = c.characterLength
+	}
+	if d.HeredocDelimiterValue != nil {
+		d.HeredocDelimiterValue = c.heredocValue
+	}
+	return d
+}
+
+func (c *Reader) characterWidth(b, next byte) int {
+	k := [2]byte{b, next}
+	if c.replaying != nil {
+		if n, ok := c.replaying.width[k]; ok {
+			return n
+		}
+	}
+	n := c.cur.CharacterWidth(b, next)
+	if c.rec != nil {
+		if c.rec.width == nil {
+			c.rec.width = map[[2]byte]int{}
+		}
+		c.rec.width[k] = n
+	}
+	return n
+}
+
+func (c *Reader) nameLetter(ch rune) bool {
+	if c.replaying != nil {
+		if v, ok := c.replaying.letter[ch]; ok {
+			return v
+		}
+	}
+	v := c.cur.NameTakesALetterPastASCII(ch)
+	if c.rec != nil {
+		if c.rec.letter == nil {
+			c.rec.letter = map[rune]bool{}
+		}
+		c.rec.letter[ch] = v
+	}
+	return v
+}
+
+func (c *Reader) characterLength(s string) int {
+	if c.replaying != nil {
+		if n, ok := c.replaying.length[s]; ok {
+			return n
+		}
+	}
+	n := c.cur.CharacterLength(s)
+	if c.rec != nil {
+		if c.rec.length == nil {
+			c.rec.length = map[string]int{}
+		}
+		c.rec.length[s] = n
+	}
+	return n
+}
+
+func (c *Reader) heredocValue(s string) string {
+	if c.replaying != nil {
+		if v, ok := c.replaying.heredoc[s]; ok {
+			return v
+		}
+	}
+	v := c.cur.HeredocDelimiterValue(s)
+	if c.rec != nil {
+		if c.rec.heredoc == nil {
+			c.rec.heredoc = map[string]string{}
+		}
+		c.rec.heredoc[s] = v
+	}
+	return v
+}
+
+// readDeps is every question one read asked the shell, with its answer.
+type readDeps struct {
+	// asked and table are, per alias table, whether the read asked it
+	// anything and the table's fingerprint when it did.
+	asked   [aliasKinds]bool
+	table   [aliasKinds]uint64
+	width   map[[2]byte]int
+	letter  map[rune]bool
+	length  map[string]int
+	heredoc map[string]string
+}
+
+// The questions are written as: a byte saying which alias tables were asked
+// and each one's fingerprint, then each kind of locale question as a count
+// and its entries. A string the parser asked about is nearly always a slice
+// of the text, and is written as where it is in the text rather than spelled
+// out, which keeps entries small and lets the check read it back without
+// making a string.
+func (c *Reader) appendDeps(b []byte, d *readDeps) []byte {
+	var flags byte
+	for k := range aliasKinds {
+		if d.asked[k] {
+			flags |= 1 << k
+		}
+	}
+	b = append(b, flags)
+	for k := range aliasKinds {
+		if d.asked[k] {
+			b = binary.LittleEndian.AppendUint64(b, d.table[k])
+		}
+	}
+	b = binary.AppendUvarint(b, uint64(len(d.width)))
+	for k, n := range d.width {
+		b = append(b, k[0], k[1])
+		b = binary.AppendUvarint(b, uint64(n))
+	}
+	b = binary.AppendUvarint(b, uint64(len(d.letter)))
+	for ch, v := range d.letter {
+		b = binary.AppendUvarint(b, uint64(ch))
+		b = appendBool(b, v)
+	}
+	b = binary.AppendUvarint(b, uint64(len(d.length)))
+	for s, n := range d.length {
+		b = c.appendText(b, s)
+		b = binary.AppendUvarint(b, uint64(n))
+	}
+	b = binary.AppendUvarint(b, uint64(len(d.heredoc)))
+	for s, v := range d.heredoc {
+		b = c.appendText(b, s)
+		b = appendString(b, v)
+	}
+	return b
+}
+
+// appendText writes s as an offset into the text where it is a slice of it,
+// and spelled out where it is not.
+func (c *Reader) appendText(b []byte, s string) []byte {
+	if len(s) > 0 && len(c.src) > 0 {
+		lo := uintptr(unsafe.Pointer(unsafe.StringData(c.src)))
+		at := uintptr(unsafe.Pointer(unsafe.StringData(s)))
+		if at >= lo && at+uintptr(len(s)) <= lo+uintptr(len(c.src)) {
+			b = append(b, 0)
+			b = binary.AppendUvarint(b, uint64(len(s)))
+			return binary.AppendUvarint(b, uint64(at-lo))
+		}
+	}
+	b = append(b, 1)
+	return appendString(b, s)
+}
+
+func appendBool(b []byte, v bool) []byte {
+	if v {
+		return append(b, 1)
+	}
+	return append(b, 0)
+}
+
+// holds asks every question in a read's record again, of the shell as it
+// stands for this read, straight off the bytes. keep says to hold on to the
+// alias tables that answered, for a walk that may come later.
+func (c *Reader) holds(deps []byte, keep bool) (ok bool) {
+	defer func() {
+		if recover() != nil {
+			ok = false
+		}
+	}()
+	r := entryReader{b: deps, src: c.src}
+	flags := r.byte()
+	for k := range aliasKinds {
+		if flags&(1<<k) == 0 {
+			continue
+		}
+		sum := r.uint64()
+		if c.sh.AliasTable(k) != sum {
+			return false
+		}
+		if keep {
+			if _, ok := c.snaps[snapKey{k, sum}]; !ok {
+				if c.snaps == nil {
+					c.snaps = map[snapKey]func(string) (string, bool){}
+				}
+				c.snaps[snapKey{k, sum}] = c.sh.AliasSnapshot(k)
+			}
+		}
+	}
+	if n := r.uvarint(); n > 0 {
+		if c.cur.CharacterWidth == nil {
+			return false
+		}
+		for ; n > 0; n-- {
+			b0, b1 := r.byte(), r.byte()
+			if c.cur.CharacterWidth(b0, b1) != int(r.uvarint()) {
+				return false
+			}
+		}
+	}
+	if n := r.uvarint(); n > 0 {
+		if c.cur.NameTakesALetterPastASCII == nil {
+			return false
+		}
+		for ; n > 0; n-- {
+			ch := rune(r.uvarint())
+			if c.cur.NameTakesALetterPastASCII(ch) != (r.byte() == 1) {
+				return false
+			}
+		}
+	}
+	if n := r.uvarint(); n > 0 {
+		if c.cur.CharacterLength == nil {
+			return false
+		}
+		for ; n > 0; n-- {
+			s := r.text()
+			if c.cur.CharacterLength(s) != int(r.uvarint()) {
+				return false
+			}
+		}
+	}
+	if n := r.uvarint(); n > 0 {
+		if c.cur.HeredocDelimiterValue == nil {
+			return false
+		}
+		for ; n > 0; n-- {
+			s := r.text()
+			if !r.sameString(c.cur.HeredocDelimiterValue(s)) {
+				return false
+			}
+		}
+	}
+	return r.off == len(r.b)
+}
+
+// decodeDeps is a read's record as maps, for the walk.
+func (c *Reader) decodeDeps(deps []byte) (d readDeps, err error) {
+	defer func() {
+		if recover() != nil {
+			d, err = readDeps{}, errEntry
+		}
+	}()
+	r := entryReader{b: deps, src: c.src}
+	flags := r.byte()
+	for k := range aliasKinds {
+		if flags&(1<<k) != 0 {
+			d.asked[k] = true
+			d.table[k] = r.uint64()
+		}
+	}
+	if n := r.uvarint(); n > 0 {
+		d.width = make(map[[2]byte]int, n)
+		for ; n > 0; n-- {
+			b0, b1 := r.byte(), r.byte()
+			d.width[[2]byte{b0, b1}] = int(r.uvarint())
+		}
+	}
+	if n := r.uvarint(); n > 0 {
+		d.letter = make(map[rune]bool, n)
+		for ; n > 0; n-- {
+			ch := rune(r.uvarint())
+			d.letter[ch] = r.byte() == 1
+		}
+	}
+	if n := r.uvarint(); n > 0 {
+		d.length = make(map[string]int, n)
+		for ; n > 0; n-- {
+			s := r.text()
+			d.length[s] = int(r.uvarint())
+		}
+	}
+	if n := r.uvarint(); n > 0 {
+		d.heredoc = make(map[string]string, n)
+		for ; n > 0; n-- {
+			s := r.text()
+			d.heredoc[s] = r.string()
+		}
+	}
+	return d, nil
+}
+
+// The entry, as this package lays it out. The store wraps it in a frame of
+// its own — a checksum and the build that wrote it — and hands back only
+// what it framed.
+//
+//	magic, version, codec layout, mode
+//	the text's SHA-256 and the dialect's fingerprint at the first read
+//	flags: failed
+//	the reads: a count, then each as a length and its bytes
+//
+// A read is its flags (the dialect was replaced before it; it found the end
+// of the text), the replacement dialect's fingerprint where there was one,
+// its questions as a length and their bytes, its remarks as a length and
+// theirs, and its tree.
+const (
+	entryMagic   = "SHPC"
+	entryVersion = 1
+)
+
+type parseEntry struct {
+	mode    byte
+	sum     [32]byte
+	dialect uint64
+	failed  bool
+	raw     [][]byte
+}
+
+type chunk struct {
+	set     bool
+	end     bool
+	dialect uint64
+	deps    []byte
+	remarks []byte
+	tree    []byte
+	raw     []byte
+}
+
+var errEntry = errors.New("parse cache: not an entry")
+
+func (e *parseEntry) encode() []byte {
+	layout, _ := treecodec.Layout()
+	n := 64
+	for _, r := range e.raw {
+		n += len(r) + binary.MaxVarintLen64
+	}
+	b := make([]byte, 0, n)
+	b = append(b, entryMagic...)
+	b = append(b, entryVersion)
+	b = binary.LittleEndian.AppendUint64(b, layout)
+	b = append(b, e.mode)
+	b = append(b, e.sum[:]...)
+	b = binary.LittleEndian.AppendUint64(b, e.dialect)
+	b = appendBool(b, e.failed)
+	b = binary.AppendUvarint(b, uint64(len(e.raw)))
+	for _, r := range e.raw {
+		b = binary.AppendUvarint(b, uint64(len(r)))
+		b = append(b, r...)
+	}
+	return b
+}
+
+func decodeEntry(b []byte) (*parseEntry, error) {
+	layout, err := treecodec.Layout()
+	if err != nil {
+		return nil, err
+	}
+	const head = len(entryMagic) + 1 + 8 + 1 + 32 + 8 + 1
+	if len(b) < head || !bytes.Equal(b[:4], []byte(entryMagic)) || b[4] != entryVersion ||
+		binary.LittleEndian.Uint64(b[5:]) != layout {
+		return nil, errEntry
+	}
+	e := &parseEntry{mode: b[13]}
+	copy(e.sum[:], b[14:46])
+	e.dialect = binary.LittleEndian.Uint64(b[46:])
+	e.failed = b[54] == 1
+	b = b[head:]
+	n, k := binary.Uvarint(b)
+	if k <= 0 || n > uint64(len(b)) {
+		return nil, errEntry
+	}
+	b = b[k:]
+	e.raw = make([][]byte, 0, n)
+	for range n {
+		l, k := binary.Uvarint(b)
+		if k <= 0 || l > uint64(len(b)-k) {
+			return nil, errEntry
+		}
+		e.raw = append(e.raw, b[k:k+int(l)])
+		b = b[k+int(l):]
+	}
+	if len(b) != 0 {
+		return nil, errEntry
+	}
+	return e, nil
+}
+
+func appendChunkHead(b []byte, set, end bool, fp uint64) []byte {
+	var flags byte
+	if set {
+		flags |= 1
+	}
+	if end {
+		flags |= 2
+	}
+	b = append(b, flags)
+	if set {
+		b = binary.LittleEndian.AppendUint64(b, fp)
+	}
+	return b
+}
+
+// chunk splits read i into its parts; nothing in it is decoded yet.
+func (e *parseEntry) chunk(i int) (ch chunk, err error) {
+	defer func() {
+		if recover() != nil {
+			ch, err = chunk{}, errEntry
+		}
+	}()
+	b := e.raw[i]
+	ch.raw = b
+	flags := b[0]
+	b = b[1:]
+	ch.set, ch.end = flags&1 != 0, flags&2 != 0
+	if ch.set {
+		ch.dialect = binary.LittleEndian.Uint64(b)
+		b = b[8:]
+	}
+	r := entryReader{b: b}
+	r.skipDeps()
+	ch.deps = b[:r.off]
+	n := int(r.uvarint())
+	ch.remarks = r.b[r.off : r.off+n]
+	r.off += n
+	ch.tree = r.b[r.off:]
+	if ch.end && len(ch.tree) != 0 {
+		return chunk{}, errEntry
+	}
+	return ch, nil
+}
+
+func appendString(b []byte, s string) []byte {
+	b = binary.AppendUvarint(b, uint64(len(s)))
+	return append(b, s...)
+}
+
+// entryReader reads the fields an entry was written with, and panics past the
+// end — which its callers turn into a damaged entry.
+type entryReader struct {
+	b   []byte
+	off int
+	src string
+}
+
+func (r *entryReader) uvarint() uint64 {
+	x, n := binary.Uvarint(r.b[r.off:])
+	if n <= 0 {
+		panic(errEntry)
+	}
+	r.off += n
+	return x
+}
+
+func (r *entryReader) uint64() uint64 {
+	x := binary.LittleEndian.Uint64(r.b[r.off:])
+	r.off += 8
+	return x
+}
+
+func (r *entryReader) byte() byte {
+	c := r.b[r.off]
+	r.off++
+	return c
+}
+
+func (r *entryReader) string() string {
+	n := int(r.uvarint())
+	s := string(r.b[r.off : r.off+n])
+	r.off += n
+	return s
+}
+
+// sameString reports whether the next string written is s, without making
+// one.
+func (r *entryReader) sameString(s string) bool {
+	n := int(r.uvarint())
+	b := r.b[r.off : r.off+n]
+	r.off += n
+	return string(b) == s
+}
+
+// text reads what appendText wrote: a slice of the text, which costs nothing,
+// or the bytes spelled out.
+func (r *entryReader) text() string {
+	switch r.byte() {
+	case 0:
+		n := int(r.uvarint())
+		at := int(r.uvarint())
+		return r.src[at : at+n]
+	case 1:
+		return r.string()
+	}
+	panic(errEntry)
+}
+
+// skipDeps steps over a read's questions without asking any of them.
+func (r *entryReader) skipDeps() {
+	flags := r.byte()
+	for k := range aliasKinds {
+		if flags&(1<<k) != 0 {
+			r.uint64()
+		}
+	}
+	skipText := func() {
+		if r.byte() == 0 {
+			r.uvarint()
+			r.uvarint()
+			return
+		}
+		r.off += int(r.uvarint())
+	}
+	for n := r.uvarint(); n > 0; n-- {
+		r.byte()
+		r.byte()
+		r.uvarint()
+	}
+	for n := r.uvarint(); n > 0; n-- {
+		r.uvarint()
+		r.byte()
+	}
+	for n := r.uvarint(); n > 0; n-- {
+		skipText()
+		r.uvarint()
+	}
+	for n := r.uvarint(); n > 0; n-- {
+		skipText()
+		r.off += int(r.uvarint())
+	}
+	if r.off > len(r.b) {
+		panic(errEntry)
+	}
+}

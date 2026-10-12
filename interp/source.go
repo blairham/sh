@@ -45,6 +45,11 @@ type sourced struct {
 	// label names the text in a diagnostic: "eval", or the path of the file.
 	label string
 
+	// file is the path the text was read from, for the parse cache, and
+	// empty for text that is not a file's — `eval`'s, a variable's, an
+	// editor's. See Runner.fileReader.
+	file string
+
 	// named, when set, is what a diagnostic calls this text whatever the
 	// dialect's own word for eval's text or for a sourced file would be. It
 	// is the name of the *variable* the text came out of: measured, bash
@@ -231,7 +236,7 @@ func hasALaterLine(src string) bool {
 // already use — `driver/program.go` reads a script incrementally, which is why
 // the *script* route has always run what it had. The gap this closes is that
 // borrowed text did not go through the same reader.
-func nextBorrowedLine(p *syntax.Parser, whole **syntax.File) (*syntax.File, bool) {
+func nextBorrowedLine(p textReader, whole **syntax.File) (*syntax.File, bool) {
 	if *whole != nil {
 		f := *whole
 		*whole = nil
@@ -718,7 +723,10 @@ func (r *Runner) runSourcedText(ctx context.Context, src string, s sourced) int 
 	// shell reads: `alias t=echo` before an `eval "t hi"` or a `. f.sh` that
 	// uses `t` prints `hi` in every shell of the panel that expands aliases
 	// at all, and printed `command not found` here (#2096).
-	p := r.ParseWithAliases(src, d)
+	// Through the parse cache where the text is a file's: see fileReader,
+	// which answers exactly as the parser would or hands back the parser.
+	p, doneReading := r.fileReader(s.file, src, d)
+	defer doneReading()
 	var whole *syntax.File
 	// Read a line at a time where the dialect reads as it runs, rather than
 	// only after a whole-text parse has failed.
@@ -1268,7 +1276,7 @@ func biDot(r *Runner, ctx context.Context, args []string) int {
 		return r.dotFailed(args[0], err)
 	}
 	if b, ok := r.dotReadsItsOwnInput(path); ok {
-		return r.runDotText(ctx, args, display, b)
+		return r.runDotText(ctx, args, display, "", b)
 	}
 	// The read is an open to the gate, exactly as the same syscall behind a
 	// `<` redirect is: `.` pulls a file into the interpreter and then runs
@@ -1301,7 +1309,13 @@ func biDot(r *Runner, ctx context.Context, args []string) int {
 	}
 	r.emit(ctx, Event{Kind: EventAccess, Action: action})
 
-	return r.runDotText(ctx, args, display, b)
+	cached := path
+	if r.ownPipe(path) {
+		// A pipe this shell made: its text is a command's output, and never
+		// the same file twice.
+		cached = ""
+	}
+	return r.runDotText(ctx, args, display, cached, b)
 }
 
 // dotDirectoryOperand answers a read that failed because the operand names a
@@ -1797,7 +1811,9 @@ func (r *Runner) readableFile(path string) bool {
 // runDotText runs what a `.` read, however it read it: the operands after the
 // file become its positional parameters, it runs in a frame of its own, and
 // the RETURN trap fires as it finishes.
-func (r *Runner) runDotText(ctx context.Context, args []string, display string, b []byte) int {
+//
+// path is the file the text was read from, for the parse cache, or empty.
+func (r *Runner) runDotText(ctx context.Context, args []string, display, path string, b []byte) int {
 	// A sourced file numbers its lines from one whatever route the shell
 	// itself was started by. The command string's origin of zero is the
 	// route's, and it reaches `eval`'s borrowed text but not a file: measured
@@ -1888,6 +1904,7 @@ func (r *Runner) runDotText(ctx context.Context, args []string, display string, 
 	dotLine := r.line
 	st := r.runSourced(ctx, string(b), sourced{
 		label:        display,
+		file:         path,
 		syntaxStatus: r.diag().sourcedSyntaxStatus(),
 		fatalStatus:  r.diag().SourcedFatalStatus,
 		catchReturn:  true,

@@ -138,7 +138,8 @@ func (r *Runner) RunStartupFile(ctx context.Context, path, src string, failed fu
 	// earlier lines as much as by a file before it: `alias a='echo hit'` and
 	// then `a` in a `~/.zshenv` prints `hit` in zsh and bash alike.
 	route := syntax.RouteFromScriptFile
-	p := r.ParseWithAliases(src, r.dialect().On(route))
+	p, doneReading := r.fileReader(path, src, r.dialect().On(route))
+	defer doneReading()
 	// And the grammar a line sets is the one the next line is read in — the
 	// rule the front end's own reader and `.`'s keep, for the same reason: a
 	// `setopt` or a `shopt -s extglob` in a startup file is there for what

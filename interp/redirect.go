@@ -33,21 +33,6 @@ import (
 // bodies are all here; what the shell cannot express is refused rather than
 // ignored.
 func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compound bool, owner redirOwner) ([]io.Closer, error) {
-	// Whose process these redirections are for, saved and put back rather
-	// than cleared, so a command reached from inside a here-document body
-	// cannot leave its own answer behind for the next redirection in this
-	// list.
-	//
-	// Defensive rather than load-bearing today, and that is measured: a
-	// mutant that clears the field instead of restoring it survives the
-	// whole of interp/ and dialect/, because every route from a body to
-	// another command — a command substitution, a process substitution —
-	// goes through clone(), which copies this field by value and cannot
-	// write back. Restoring costs one word and is what keeps that true of a
-	// site that one day does not clone.
-	outerOwn := r.redirOwner
-	r.redirOwner = owner
-	defer func() { r.redirOwner = outerOwn }()
 	r.redirErr = false
 	// Beside redirErr because it is the same flag's number: a failure with a
 	// status of its own is only ever this command's.
@@ -76,6 +61,34 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 	if len(rs) == 0 {
 		return nil, nil
 	}
+	return r.applyRedirList(ctx, rs, compound, owner)
+}
+
+// applyRedirList is applyRedirs for a list with something in it.
+//
+// A function of its own so that the list's deferred calls are paid only by a
+// command that has a list. A function holding a deferred call that the
+// compiler cannot inline — and this one has too many ways out for that — runs
+// the runtime's deferred-call machinery at every return, including one taken
+// before anything was deferred, so while this was one function every command
+// in the shell paid it on the way past an empty list: about 5% of an
+// arithmetic loop's time, measured in a Linux profile (#6423).
+func (r *Runner) applyRedirList(ctx context.Context, rs []*syntax.Redirect, compound bool, owner redirOwner) ([]io.Closer, error) {
+	// Whose process these redirections are for, saved and put back rather
+	// than cleared, so a command reached from inside a here-document body
+	// cannot leave its own answer behind for the next redirection in this
+	// list.
+	//
+	// Defensive rather than load-bearing today, and that is measured: a
+	// mutant that clears the field instead of restoring it survives the
+	// whole of interp/ and dialect/, because every route from a body to
+	// another command — a command substitution, a process substitution —
+	// goes through clone(), which copies this field by value and cannot
+	// write back. Restoring costs one word and is what keeps that true of a
+	// site that one day does not clone.
+	outerOwn := r.redirOwner
+	r.redirOwner = owner
+	defer func() { r.redirOwner = outerOwn }()
 	var closers []io.Closer
 	// What this command has already aimed each stream at, so a second
 	// redirection of the same one can be combined with the first where the

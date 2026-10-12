@@ -8276,6 +8276,59 @@ func (r *Runner) command(ctx context.Context, c syntax.Command) error {
 	if r.debugTrapRunsBehindTheCommand() {
 		defer r.debugAfterScope(ctx)()
 	}
+	// What else a command puts back on its way out is put back by a function
+	// of its own, entered only by the kinds that have something to put back.
+	// This door is every command in the shell, and a function whose deferred
+	// calls the compiler cannot inline — one with as many ways out as the
+	// body below — runs the runtime's deferred-call machinery at every
+	// return whether or not anything was deferred: the two above, inlined,
+	// cost nothing like it. Measured at about 8% of a loop of `[[ ]]` and
+	// `(( ))` in a Linux profile while every command paid it (#6423).
+	//
+	// Where the shell has got to: once a loop is done the shell is back where
+	// it was before it — measured on ksh93u+, `:` on line 2 and then a loop
+	// on lines 3-5 locates a later failure at line 2 — and a subshell never
+	// moved it, its parentheses included. Except that the arithmetic form's
+	// header counts as run: the same `:` and an arithmetic loop on lines 3-5
+	// is line 3.
+	switch c.(type) {
+	case *syntax.LoopClause, *syntax.ForClause, *syntax.SelectClause, *syntax.Subshell:
+		return r.commandPuttingTheLineBack(ctx, c)
+	case *syntax.ForArithClause:
+		return r.commandLeavingItsHeaderLine(ctx, c)
+	}
+	return r.commandAt(ctx, c)
+}
+
+// commandPuttingTheLineBack runs a loop or a subshell and puts back the line
+// the shell had reached before it. See Runner.command.
+//
+// Read at the entry rather than beside the line record below, which is where
+// it was read while this was one function: nothing between the two writes the
+// field, and the one route that returns before the record — `set -n` — leaves
+// it as it found it, so putting it back there is putting back what is there.
+func (r *Runner) commandPuttingTheLineBack(ctx context.Context, c syntax.Command) error {
+	reachedBefore := r.reachedLine
+	defer func() { r.reachedLine = reachedBefore }()
+	return r.commandAt(ctx, c)
+}
+
+// commandLeavingItsHeaderLine runs an arithmetic `for` and leaves the shell
+// at the line of its header. See Runner.command.
+//
+// Not under `set -n`, which records no line for the command and so had no
+// line to leave it at.
+func (r *Runner) commandLeavingItsHeaderLine(ctx context.Context, c syntax.Command) error {
+	if r.noexec {
+		return r.commandAt(ctx, c)
+	}
+	at := r.commandLine(c)
+	defer func() { r.reachedLine = at }()
+	return r.commandAt(ctx, c)
+}
+
+// commandAt is the rest of Runner.command, and defers nothing.
+func (r *Runner) commandAt(ctx context.Context, c syntax.Command) error {
 	// Whatever ended the last command is not what ends this one. Cleared
 	// here rather than beside each assignment to status, because this is the
 	// one door every command goes through.
@@ -8314,21 +8367,8 @@ func (r *Runner) command(ctx context.Context, c syntax.Command) error {
 		// crashing. Our own parser never produces one, so no test can see
 		// the difference; an embedder building a tree by hand can, and this
 		// package is a library.
-		reachedBefore := r.reachedLine
 		r.prevLine, r.line = r.line, r.commandLine(c)
 		r.reachedLine = r.line
-		switch c.(type) {
-		case *syntax.LoopClause, *syntax.ForClause, *syntax.SelectClause, *syntax.Subshell:
-			// Once a loop is done the shell is back where it was before
-			// it — measured on ksh93u+, `:` on line 2 and then a loop on
-			// lines 3-5 locates a later failure at line 2 — and a subshell
-			// never moved it, its parentheses included.
-			defer func() { r.reachedLine = reachedBefore }()
-		case *syntax.ForArithClause:
-			// Except that the arithmetic form's header counts as run: the
-			// same `:` and an arithmetic loop on lines 3-5 is line 3.
-			defer func(at int) { r.reachedLine = at }(r.line)
-		}
 		switch c.(type) {
 		case *syntax.Group, *syntax.Subshell, *syntax.NamespaceClause:
 			// A grouping's head is not a statement, so it does not advance
@@ -8421,11 +8461,23 @@ func (r *Runner) command(ctx context.Context, c syntax.Command) error {
 		}
 	}
 	if holdsAJobSlot(c) && c != r.bodyHoldsNoSlot {
-		_, brace := c.(*syntax.Group)
-		if release := r.holdACommandsJobSlot(!brace); release != nil {
-			defer release()
-		}
+		return r.dispatchHoldingAJobSlot(ctx, c, fired)
 	}
+	return r.dispatch(ctx, c, fired)
+}
+
+// dispatchHoldingAJobSlot runs a command that holds a job slot while it runs.
+// A function of its own for the reason Runner.command gives.
+func (r *Runner) dispatchHoldingAJobSlot(ctx context.Context, c syntax.Command, fired bool) error {
+	_, brace := c.(*syntax.Group)
+	if release := r.holdACommandsJobSlot(!brace); release != nil {
+		defer release()
+	}
+	return r.dispatch(ctx, c, fired)
+}
+
+// dispatch runs a command once Runner.command has recorded it.
+func (r *Runner) dispatch(ctx context.Context, c syntax.Command, fired bool) error {
 	switch x := c.(type) {
 	case *syntax.SimpleCmd:
 		// A simple command is the one kind that can *run* the failure it
@@ -8450,7 +8502,7 @@ func (r *Runner) command(ctx context.Context, c syntax.Command) error {
 		return err
 	case *syntax.Group:
 		if x != r.openRunBody {
-			defer r.openRuntime("{")()
+			return r.underRuntime(ctx, "{", x)
 		}
 		r.openRunBody = nil
 		return r.group(ctx, x)
@@ -8467,32 +8519,50 @@ func (r *Runner) command(ctx context.Context, c syntax.Command) error {
 		if x.Until {
 			key = "until"
 		}
-		defer r.openRuntime(key)()
-		return r.loop(ctx, x)
+		return r.underRuntime(ctx, key, x)
 	case *syntax.ForClause:
-		defer r.openRuntime("for")()
-		return r.forClause(ctx, x)
+		return r.underRuntime(ctx, "for", x)
 	case *syntax.ForArithClause:
 		return r.forArithClause(ctx, x)
 	case *syntax.CaseClause:
-		defer r.openRuntime("case")()
-		return r.caseClause(ctx, x)
+		return r.underRuntime(ctx, "case", x)
 	case *syntax.FuncDecl:
 		return r.funcDecl(x)
 	case *syntax.TestClause:
 		return r.testClause(ctx, x)
 	case *syntax.SelectClause:
-		defer r.openRuntime("select")()
-		return r.selectClause(ctx, x)
+		return r.underRuntime(ctx, "select", x)
 	case *syntax.RepeatClause:
-		defer r.openRuntime("repeat")()
-		return r.repeatClause(ctx, x)
+		return r.underRuntime(ctx, "repeat", x)
 	case *syntax.AnonFunc:
 		return r.anonFunc(ctx, x)
 	case *syntax.ArithCmdClause:
 		return r.arithCmd(ctx, x)
 	case *syntax.CoprocClause:
 		return r.coprocClause(ctx, x)
+	}
+	return r.unsupported(fmt.Sprintf("%T", c))
+}
+
+// underRuntime runs a compound command with the dialect's run-time record of
+// it open — see Runner.openRuntime — and closes it on the way out. A function
+// of its own for the reason Runner.command gives.
+func (r *Runner) underRuntime(ctx context.Context, key string, c syntax.Command) error {
+	defer r.openRuntime(key)()
+	switch x := c.(type) {
+	case *syntax.Group:
+		r.openRunBody = nil
+		return r.group(ctx, x)
+	case *syntax.LoopClause:
+		return r.loop(ctx, x)
+	case *syntax.ForClause:
+		return r.forClause(ctx, x)
+	case *syntax.CaseClause:
+		return r.caseClause(ctx, x)
+	case *syntax.SelectClause:
+		return r.selectClause(ctx, x)
+	case *syntax.RepeatClause:
+		return r.repeatClause(ctx, x)
 	}
 	return r.unsupported(fmt.Sprintf("%T", c))
 }

@@ -116,7 +116,7 @@ func (r *Runner) procSub(ctx context.Context, span syntax.Span) (string, bool) {
 	// The end this shell keeps is counted rather than closed on the body's
 	// return, and the count starts at one for the body itself. What else can
 	// join it, and why the body is not always the last, is in substEnd.
-	keep := &substEnd{held: 1, anchor: newProcAnchor(r.ProcessAnchor), done: make(chan struct{})}
+	keep := &substEnd{held: 1, anchor: newProcAnchor(r.ProcessAnchor, r.anchorSpares), done: make(chan struct{})}
 	sub.pipeEnd = keep
 	// And the same field every other forked body answers from. The anchor
 	// lives on the count rather than on the runner because *this* body's
@@ -1307,6 +1307,10 @@ func (r *Runner) CleanUp() {
 	// table stopped naming when each was let go of and which nothing but a
 	// finalizer was closing. See closeCoprocEnds (#4499).
 	r.closeCoprocEnds()
+	// And the placeholder kept for the next body that asks which process it
+	// is, which nothing else would end before the program does. See
+	// procanchorspare.go.
+	r.anchorSpares.stop()
 }
 
 // cleanUpAtEnd is CleanUp for the two places a shell stops being one.

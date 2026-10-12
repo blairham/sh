@@ -152,6 +152,9 @@ func (r *Runner) storeAssocElement(name, key string, value Element) {
 	}
 	r.ownAssocs()
 	a = r.assocsAt(name)
+	if _, had := a[key]; !had {
+		r.assocKeySetChanged(name)
+	}
 	a[key] = value
 	r.sweepElementCompounds(name)
 	// Written to, so the name leaves the declared-only set — the same note

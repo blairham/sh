@@ -97,6 +97,16 @@ func (r *Runner) warnAboutTheScope(name string, kind scopeWarningKind) {
 	if r.writingADeclarationsOperand || r.inFunc == "" {
 		return
 	}
+	if r.engineOwns(name) {
+		// The engine's own state, written on the script's behalf by
+		// something the script did — `print -P %B` setting the terminal up,
+		// `fc -p` pushing a history, `rand48()` advancing its seed. No
+		// script made the assignment, so neither sentence is about one.
+		// Measured 2026-10-12 on zsh 5.9.2 under warn_create_global and
+		// warn_nested_var: each of those inside a function is silent, while
+		// `x=1` beside them still draws its sentence (#6422).
+		return
+	}
 	if r.storingATakenBackPrefix {
 		// A prefix the command's end takes back is not an assignment that
 		// landed anywhere. See Runner.storePrefixQuietlyIfTakenBack.

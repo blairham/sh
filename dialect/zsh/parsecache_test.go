@@ -170,3 +170,22 @@ func TestAnEditedFileIsReadAsEdited(t *testing.T) {
 		t.Fatalf("the touched file printed %q from %d served reads", again.out, again.served)
 	}
 }
+
+// TestTheSwitchCanBeThrownFromAScript is SH_NO_PARSE_CACHE set by a line of
+// script rather than by the environment the shell started in: from that line
+// on, nothing is read from the cache or recorded into it.
+func TestTheSwitchCanBeThrownFromAScript(t *testing.T) {
+	dir, cache := t.TempDir(), t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "lib"), []byte(worthCaching+"echo lib\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	argv := []string{"zsh", "-f", "-c", ". ./lib"}
+	runWithCache(t, cache, dir, true, nil, argv...)
+	if got := runWithCache(t, cache, dir, true, nil, argv...); got.served == 0 {
+		t.Fatal("the control was not served: the row below proves nothing")
+	}
+	off := runWithCache(t, cache, dir, true, nil, "zsh", "-f", "-c", "SH_NO_PARSE_CACHE=1; . ./lib")
+	if off.out != "lib\n" || off.served != 0 || off.recorded != 0 {
+		t.Fatalf("printed %q, served %d, recorded %d", off.out, off.served, off.recorded)
+	}
+}

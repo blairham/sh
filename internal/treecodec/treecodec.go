@@ -207,7 +207,6 @@ var sharedFields = map[string][]string{
 type codec struct {
 	plans   map[reflect.Type]*plan
 	byID    []*plan
-	tags    map[reflect.Type]int
 	types   []*plan // the registry's types' plans, by tag
 	file    *plan
 	remarks *plan
@@ -220,11 +219,10 @@ var shared = sync.OnceValue(build)
 var errType = reflect.TypeFor[error]()
 
 func build() *codec {
-	c := &codec{plans: map[reflect.Type]*plan{}, tags: map[reflect.Type]int{}}
+	c := &codec{plans: map[reflect.Type]*plan{}}
 	h := fnv.New64a()
-	for i, x := range registry {
+	for _, x := range registry {
 		t := reflect.TypeOf(x)
-		c.tags[t] = i
 		c.types = append(c.types, c.planFor(t, h))
 	}
 	c.file = c.planFor(reflect.TypeFor[*syntax.File](), h)

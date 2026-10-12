@@ -452,6 +452,19 @@ shell ships has since taken its place and **never reads or writes
 `${XDG_CACHE_HOME:-~/.cache}/sh/compdump`, which it rebuilds whenever a
 completion file or `$fpath` changes and which is safe to delete (#6307).
 
+**It keeps the files it sources parsed, too.** Beside the dump,
+`${XDG_CACHE_HOME:-~/.cache}/sh/parse` holds the parsed form of the startup
+files and of every file `.` or `source` reads that is 4 KB or more, so the
+next start reads the tree back instead of parsing the text again (#6424).
+The format is this shell's own; nothing else reads it. An entry is used only
+when the text is byte for byte the one it was made from and the shell reads
+it in the same grammar, with the same aliases, as it did then, so an edited
+file is simply parsed again. The directory is private to you (0700), held
+under 32 MB, safe to delete at any time, and never created where
+`~/.cache` itself does not exist. `SH_NO_PARSE_CACHE=1` turns it off. The
+first start after a change records only part of what it reads, so the cache
+fills over a few starts rather than slowing one of them.
+
 **Completion still does not work, and the rc is the reason.** Under `-f`,
 with no startup file, this shell's own completer answers Tab and completes
 a filename. A real rc runs `compinit`, which binds zsh's `_main_complete`

@@ -167,7 +167,6 @@ type Reader struct {
 	servedRaw [][]byte
 	w         io.Writer
 	done      func(keep bool)
-	wrote     int
 	scratch   []byte
 	rbuf      []byte
 
@@ -197,8 +196,8 @@ func (c *Reader) begin(mode byte) {
 	for k := range aliasKinds {
 		b = binary.LittleEndian.AppendUint64(b, c.sh.AliasTable(k))
 	}
-	h.Write(b)
-	h.Write([]byte(c.path))
+	_, _ = h.Write(b)
+	_, _ = h.Write([]byte(c.path))
 	c.name = hex.EncodeToString(h.Sum(nil)[:20])
 	data := c.cache.Load(c.name)
 	if data == nil {

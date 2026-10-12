@@ -170,6 +170,6 @@ func (r *Runner) unsetKeepsTheAttributes(name string) (keep, exported bool) {
 func (r *Runner) carriesATypeLetter(name string) bool {
 	_, width := r.fieldWidth[name]
 	_, prec := r.floatPrecision[name]
-	return r.integer[name] || r.lowered[name] || r.uppered[name] || r.unique[name] ||
-		r.hidden[name] || r.traced[name] || width || prec
+	return r.attrHas(name, attrInteger) || r.attrHas(name, attrLower) || r.attrHas(name, attrUpper) || r.attrHas(name, attrUnique) ||
+		r.attrHas(name, attrHidden) || r.attrHas(name, attrTraced) || width || prec
 }

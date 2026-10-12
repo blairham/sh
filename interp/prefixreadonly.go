@@ -150,7 +150,7 @@ func (r *Runner) frozenPrefixNames(assigns []*syntax.Assign) []string {
 		if _, ok := positionalAssignIndex(a.Name); ok {
 			continue
 		}
-		if r.readonly[a.Name] {
+		if r.attrHas(a.Name, attrReadonly) {
 			frozen = append(frozen, a.Name)
 		}
 	}

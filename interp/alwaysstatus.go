@@ -76,14 +76,11 @@ const alwaysBlockAbsent = -1
 // what makes an assignment of `1+1` two rather than the text.
 func (r *Runner) SetAlwaysBlockStatus(errName, interruptName string) {
 	r.alwaysErrName, r.alwaysInterruptName = errName, interruptName
-	if r.integer == nil {
-		r.integer = map[string]bool{}
-	}
 	if r.integerBase == nil {
 		r.integerBase = map[string]int{}
 	}
 	for _, name := range []string{errName, interruptName} {
-		r.integer[name] = true
+		r.attrSet(name, attrInteger)
 		// Base ten written down, which is what separates a special integer
 		// from one a script declared — `typeset -p TRY_BLOCK_ERROR` is
 		// `typeset -i10 TRY_BLOCK_ERROR=-1`. The same rule ProvideWindowSize

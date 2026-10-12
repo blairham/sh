@@ -397,7 +397,7 @@ func (r *Runner) compgenVariableNames() []string {
 		// compounddeclaredonly.go already keeps, so it is read here rather
 		// than counted again from the elements, which cannot tell an emptied
 		// array from one nothing ever filled.
-		if !r.declaredOnlyCompound[name] {
+		if !r.attrHas(name, attrDeclaredOnlyCompound) {
 			hold(name)
 		}
 	}

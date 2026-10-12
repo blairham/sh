@@ -72,12 +72,6 @@ func (c *Runner) ownTables(r *Runner) {
 	//	assigned       the assignment a `${x=…}` and friends recorded
 	//	absentParams   a name a nounset check has already spoken about
 	//	declaredEmpty  declared with no value, which is not the same as unset
-	//	declaredOnlyCompound
-	//	               an array or table a declaration made and nothing has
-	//	               written to, which is not the same as an emptied one
-	//	declaredBare   the scalar of that: a name a declaration made with no
-	//	               letters and no value, which the listing writes and
-	//	               nothing else can see
 	//	compoundVariable
 	//	               ksh93's fourth kind: the name is a compound variable,
 	//	               so what a bare `$c` reads and what `typeset -p` writes
@@ -92,12 +86,6 @@ func (c *Runner) ownTables(r *Runner) {
 	c.readonlyByDeclaration = maps.Clone(r.readonlyByDeclaration)
 	c.removedShellOwn = maps.Clone(r.removedShellOwn)
 	c.declaredEmpty = maps.Clone(r.declaredEmpty)
-	c.declaredOnlyCompound = maps.Clone(r.declaredOnlyCompound)
-	c.compoundHeldAnElement = maps.Clone(r.compoundHeldAnElement)
-	c.scalarHeldUnderTheArrayLetter = maps.Clone(r.scalarHeldUnderTheArrayLetter)
-	c.declaredBare = maps.Clone(r.declaredBare)
-	c.declaredHoldingNothing = maps.Clone(r.declaredHoldingNothing)
-	c.unsetLeftItDeclared = maps.Clone(r.unsetLeftItDeclared)
 	c.compoundVariable = maps.Clone(r.compoundVariable)
 	// The namespaces a `namespace NAME { … }` block has declared. A subshell
 	// that opens one must not leave it behind: measured, `( namespace ns {
@@ -108,7 +96,10 @@ func (c *Runner) ownTables(r *Runner) {
 	// The attribute tables `declare` and `typeset` write. A subshell's
 	// attribute must not outlive it: measured, `x=1; (readonly x); x=2`
 	// assigns 2 in bash, ksh93 and zsh, and `n=5; (typeset -i n); n=1+1`
-	// leaves the three characters everywhere.
+	// leaves the three characters everywhere. The boolean ones — readonly,
+	// integer, the case letters and the rest of cellAttrs — live in the
+	// name's cell and are copied with the slab (#6373); these are the ones
+	// that carry a value.
 	// The `set -o` names this shell remembers and does not act on. A
 	// subshell's `set -o markdirs` must not reach the parent, exactly as an
 	// implemented option's would not: the states behind those are plain
@@ -116,20 +107,13 @@ func (c *Runner) ownTables(r *Runner) {
 	// be cloned to get the same answer.
 	c.recordedOptions = maps.Clone(r.recordedOptions)
 
-	c.readonly = maps.Clone(r.readonly)
-	c.integer = maps.Clone(r.integer)
 	c.integerBase = maps.Clone(r.integerBase)
 	c.floatPrecision = maps.Clone(r.floatPrecision)
-	c.floatExponent = maps.Clone(r.floatExponent)
 	c.floatExact = maps.Clone(r.floatExact)
 	c.fieldWidth = maps.Clone(r.fieldWidth)
-	c.lowered = maps.Clone(r.lowered)
 	c.caseListing = maps.Clone(r.caseListing)
-	c.uppered = maps.Clone(r.uppered)
 	c.capitalized = maps.Clone(r.capitalized)
-	c.hidden = maps.Clone(r.hidden)
 	c.localMarked = maps.Clone(r.localMarked)
-	c.unique = maps.Clone(r.unique)
 	c.shellOwn = maps.Clone(r.shellOwn)
 	c.notShellOwn = maps.Clone(r.notShellOwn)
 	c.envNotAdopted = maps.Clone(r.envNotAdopted)
@@ -144,9 +128,7 @@ func (c *Runner) ownTables(r *Runner) {
 	c.leavingContexts = slices.Clone(r.leavingContexts)
 	c.scopeFixed = maps.Clone(r.scopeFixed)
 	c.kindFixed = maps.Clone(r.kindFixed)
-	c.traced = maps.Clone(r.traced)
 	c.nameref = maps.Clone(r.nameref)
-	c.hideInScope = maps.Clone(r.hideInScope)
 	// The names a caller's `private` declared over nothing, which a frame may
 	// see the shape of and may not write. Copied like every other refusal
 	// table: a subshell is a frame's clone and the seal that put an entry

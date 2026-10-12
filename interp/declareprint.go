@@ -237,25 +237,25 @@ type declaration struct {
 func (r *Runner) declarationOf(name string) (declaration, bool) {
 	d := declaration{
 		name:    name,
-		integer: r.integer[name],
+		integer: r.attrHas(name, attrInteger),
 		// A name restricted mode froze is readonly to the machinery and not to
 		// the listing, in the dialect that does not call the mode's freeze a
 		// readonly: measured, `readonly -p` in a restricted ksh93 lists none
 		// of them where bash lists `declare -r ENV`. See
 		// Semantics.RestrictedFreezeIsAReadonly and Runner.restrictedFreeze.
-		readonly:    r.readonly[name] && !r.restrictedFreeze(name),
+		readonly:    r.attrHas(name, attrReadonly) && !r.restrictedFreeze(name),
 		exported:    r.isExported(name),
-		lower:       r.lowered[name],
-		upper:       r.uppered[name],
+		lower:       r.attrHas(name, attrLower),
+		upper:       r.attrHas(name, attrUpper),
 		capital:     r.capitalized[name],
-		hidden:      r.hidden[name],
-		unique:      r.unique[name],
-		traced:      r.traced[name],
+		hidden:      r.attrHas(name, attrHidden),
+		unique:      r.attrHas(name, attrUnique),
+		traced:      r.attrHas(name, attrTraced),
 		base:        r.integerBase[name],
 		inAFunction: len(r.scopes) > 0,
 		localHere:   r.localInTheInnermostScope(name),
 
-		declaredOnly: r.declaredOnlyCompound[name],
+		declaredOnly: r.attrHas(name, attrDeclaredOnlyCompound),
 	}
 	if lower, upper, recorded := r.caseListingOf(name); recorded {
 		// The listing letters, where the dialect keeps them apart from the
@@ -266,7 +266,7 @@ func (r *Runner) declarationOf(name string) (declaration, bool) {
 	d.nameref, d.isNameref = r.nameref[name]
 	d.compoundVar = r.isCompoundVariable(name)
 	_, d.float = r.floatPrecision[name]
-	d.floatExponent = r.floatExponent[name]
+	d.floatExponent = r.attrHas(name, attrFloatExponent)
 	d.precision = r.floatPrecision[name]
 	d.width, d.hasWidth = r.fieldWidth[name]
 	d.tied, d.hasTie = r.tieOf(name)
@@ -532,7 +532,7 @@ func (r *Runner) declarableNames() []string {
 			hold(name)
 		}
 	}
-	for name := range r.readonly {
+	for name := range r.attrNames(attrReadonly) {
 		if r.restrictedFreeze(name) {
 			// A name restricted mode froze, in the dialect that does not call
 			// that readonly: measured, `readonly -p` in a restricted ksh93
@@ -544,7 +544,7 @@ func (r *Runner) declarableNames() []string {
 		}
 		hold(name)
 	}
-	for name := range r.integer {
+	for name := range r.attrNames(attrInteger) {
 		hold(name)
 	}
 	for name := range r.floatPrecision {
@@ -553,22 +553,22 @@ func (r *Runner) declarableNames() []string {
 	for name := range r.fieldWidth {
 		hold(name)
 	}
-	for name := range r.lowered {
+	for name := range r.attrNames(attrLower) {
 		hold(name)
 	}
-	for name := range r.uppered {
+	for name := range r.attrNames(attrUpper) {
 		hold(name)
 	}
-	for name := range r.hidden {
+	for name := range r.attrNames(attrHidden) {
 		hold(name)
 	}
-	for name := range r.unique {
+	for name := range r.attrNames(attrUnique) {
 		hold(name)
 	}
-	for name := range r.traced {
+	for name := range r.attrNames(attrTraced) {
 		hold(name)
 	}
-	for name := range r.declaredBare {
+	for name := range r.attrNames(attrDeclaredBare) {
 		// A name with no value and no attribute is in none of the tables
 		// above, so the bare listing reaches it only from here.
 		//
@@ -584,7 +584,7 @@ func (r *Runner) declarableNames() []string {
 			hold(name)
 		}
 	}
-	for name := range r.unsetLeftItDeclared {
+	for name := range r.attrNames(attrUnsetLeftItDeclared) {
 		// The same record reached the other way, and in the walk for the
 		// same reason: measured 2026-09-21 on bash 5.3.20, a whole-table
 		// `declare -p` inside `f() { local v; unset v; … }` writes the row
@@ -1518,7 +1518,7 @@ func (r *Runner) bareAssignmentValue(d declaration, place ListedValuePlace) (str
 			// `typeset -A m; m[k]=1; unset 'm[k]'` is `typeset -A m=()`.
 			//
 			// This wrote `=()` for every one of these (#3407).
-			if !r.compoundHeldAnElement[d.name] {
+			if !r.attrHas(d.name, attrHeldAnElement) {
 				return "", false
 			}
 			return fmt.Sprintf("([%d]=)", r.arrayBase()), true
@@ -1956,11 +1956,11 @@ func (r *Runner) ownNameHoldingNothing(name string) bool {
 
 // listsTheScalarItHolds reports whether an indexed array is listed as the
 // scalar a whole-name store gave it: the name is marked in
-// Runner.scalarHeldUnderTheArrayLetter, it holds exactly its first element,
+// attrScalarUnderTheArrayLetter, it holds exactly its first element,
 // and the dialect writes that as a scalar. See
 // Semantics.ScalarHeldUnderTheArrayLetterListsAsAScalar.
 func (r *Runner) listsTheScalarItHolds(d declaration) bool {
-	if !r.scalarHeldUnderTheArrayLetter[d.name] || d.arr.Len() != 1 {
+	if !r.attrHas(d.name, attrScalarUnderTheArrayLetter) || d.arr.Len() != 1 {
 		return false
 	}
 	if e, ok := d.arr.Lookup(r.arrayBase()); !ok || e.Nested != nil || e.Kind != ElementHoldsItsValue {

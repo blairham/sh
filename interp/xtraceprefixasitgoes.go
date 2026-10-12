@@ -89,7 +89,7 @@ func (r *Runner) tracePrefixAsItGoes(c *syntax.SimpleCmd, argv []string, walk pr
 		target := traceAssignTarget(a, nil)
 		// What a substitution in the value inherits. See prefixLineForAChild.
 		line.pending = so() + target
-		frozen := r.readonly[a.Name]
+		frozen := r.attrHas(a.Name, attrReadonly)
 		var word string
 		if frozen {
 			value := r.prefixExpansion(a)

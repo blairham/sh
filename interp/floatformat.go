@@ -143,18 +143,15 @@ func (r *Runner) floatIsNamedRatherThanWritten(v float64) (string, bool) {
 // for the reason fieldWidth keeps its letter: the precision is a number a
 // script may write as zero, and which letter wrote it is a separate fact that
 // a shadowed binding has to carry and put back.
-func (r *Runner) floatIsExponent(name string) bool { return r.floatExponent[name] }
+func (r *Runner) floatIsExponent(name string) bool { return r.attrHas(name, attrFloatExponent) }
 
 // markFloatExponent records the letter, and clearFloatExponent takes it off.
 func (r *Runner) markFloatExponent(name string, on bool) {
 	if !on {
-		delete(r.floatExponent, name)
+		r.attrClear(name, attrFloatExponent)
 		return
 	}
-	if r.floatExponent == nil {
-		r.floatExponent = map[string]bool{}
-	}
-	r.floatExponent[name] = true
+	r.attrSet(name, attrFloatExponent)
 }
 
 // NumericTypeLetterPrecedencePolicy is how a declaration carrying more than

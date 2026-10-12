@@ -38,7 +38,7 @@ package interp
 // nothing in takes the name out of the declared-only set — which is right,
 // because bash writes `declare -a q=()` there — and never puts an element in
 // it. So the two sets draw different lines and neither is the other's
-// complement. Runner.compoundHeldAnElement is the second record, and
+// complement. attrHeldAnElement is the second record, and
 // Runner.bareAssignmentValue is the listing that reads it (#3407).
 //
 // zsh 5.9.2 writes `typeset -A m=( )` and `typeset -a q=(  )` for every one
@@ -63,10 +63,7 @@ package interp
 // compoundDeclaredOnly notes that the name has just been given an empty
 // compound table by a declaration, with nothing written to it.
 func (r *Runner) compoundDeclaredOnly(name string) {
-	if r.declaredOnlyCompound == nil {
-		r.declaredOnlyCompound = map[string]bool{}
-	}
-	r.declaredOnlyCompound[name] = true
+	r.attrSet(name, attrDeclaredOnlyCompound)
 }
 
 // compoundWasAssigned records that something has written to the name's
@@ -74,7 +71,7 @@ func (r *Runner) compoundDeclaredOnly(name string) {
 // store reaches one of the three callers: storeArray for the indexed kind,
 // setAssocElem and assignAssocElems for the keyed one.
 func (r *Runner) compoundWasAssigned(name string) {
-	delete(r.declaredOnlyCompound, name)
+	r.attrClear(name, attrDeclaredOnlyCompound)
 }
 
 // markCompoundForAnElementDeclaration is markDeclaredCompound for the

@@ -78,10 +78,7 @@ type optionList struct {
 func (r *Runner) SetOptionList(name string, value func(*Runner) string, inherit func(*Runner, string)) {
 	r.optionLists = append(r.optionLists, optionList{name: name, value: value, inherit: inherit})
 	r.SetDynamic(name, value)
-	if r.readonly == nil {
-		r.readonly = map[string]bool{}
-	}
-	r.readonly[name] = true
+	r.attrSet(name, attrReadonly)
 }
 
 // producedOptionList answers with the live value of a bound option variable,

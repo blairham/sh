@@ -1861,7 +1861,7 @@ func (r *Runner) conditionalFires(e *syntax.ParamExpr, value string, set bool) b
 // `ksharrays` beside it had made the two agree (#5157). See
 // Semantics.DeclaredNameWithoutValueIsEmpty.
 func (r *Runner) declaredOnlyCompoundIsUnset(e *syntax.ParamExpr) bool {
-	if r.sem().DeclaredNameWithoutValueIsEmpty != No || !r.declaredOnlyCompound[e.Name] {
+	if r.sem().DeclaredNameWithoutValueIsEmpty != No || !r.attrHas(e.Name, attrDeclaredOnlyCompound) {
 		return false
 	}
 	if e.Index != nil && !wholeArraySubscript(r.subscriptText(e.Subscript())) {
@@ -9750,7 +9750,7 @@ func (r *Runner) namesWithPrefix(prefix string) []string {
 	// declared-only — so a shell that has written to what it declared never
 	// reaches the axis at all.
 	compound := func(name string) {
-		if r.declaredOnlyCompound[name] && !seen[name] && !r.removed[name] &&
+		if r.attrHas(name, attrDeclaredOnlyCompound) && !seen[name] && !r.removed[name] &&
 			strings.HasPrefix(name, prefix) &&
 			!r.ask(r.sem().PrefixListingNamesADeclaredOnlyCompound,
 				"a prefix listing naming a compound a declaration brought into being and nothing has written to") {

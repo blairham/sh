@@ -504,7 +504,7 @@ func (r *Runner) namerefAssignmentTarget(name, value string, form assignForm) (t
 	// what left the declaration spelling of the same write going through: the
 	// listing then read `declare -nr f="v"` where the reference had refused
 	// to be aimed (#4178).
-	if r.readonly[name] {
+	if r.attrHas(name, attrReadonly) {
 		r.refuseReadonly(name, form)
 		return "", false
 	}
@@ -1384,13 +1384,13 @@ func (r *Runner) namerefEmptiesTheCell(name string, df declareFlags) {
 // paths through the declaration share it.
 func (r *Runner) namerefKeepsOnlyThisLinesFolding(name string, df declareFlags) {
 	if !df.integer {
-		delete(r.integer, name)
+		r.attrClear(name, attrInteger)
 	}
 	if !df.lower {
-		delete(r.lowered, name)
+		r.attrClear(name, attrLower)
 	}
 	if !df.upper {
-		delete(r.uppered, name)
+		r.attrClear(name, attrUpper)
 	}
 }
 

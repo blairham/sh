@@ -869,9 +869,9 @@ func (r *Runner) UnsetDynamic(name string) {
 	delete(r.dynamicAssocSetUnbuilt, name)
 	delete(r.dynamicAssocKeys, name)
 	delete(r.assigned, name)
-	delete(r.readonly, name)
-	delete(r.hidden, name)
-	delete(r.hideInScope, name)
+	r.attrClear(name, attrReadonly)
+	r.attrClear(name, attrHidden)
+	r.attrClear(name, attrHideInScope)
 	delete(r.localMarked, name)
 	// The removal `unset` records, and the note that an assignment after it
 	// ended the producer, which the comment above always promised and this

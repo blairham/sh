@@ -40,10 +40,7 @@ func (r *Runner) SetIntegerParameter(name string, base int) {
 // tree keeps finding the shape where a second helper omits the fix the first
 // one carries.
 func (r *Runner) markIntegerParameter(name string, base int) {
-	if r.integer == nil {
-		r.integer = map[string]bool{}
-	}
-	r.integer[name] = true
+	r.attrSet(name, attrInteger)
 	if base == 0 {
 		return
 	}

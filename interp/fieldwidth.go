@@ -147,7 +147,7 @@ func (r *Runner) widthPadded(name, value string) string {
 		return value
 	}
 	_, float := r.floatPrecision[name]
-	if w.zeroFilling() && (r.integer[name] || float) && len(value) < w.width &&
+	if w.zeroFilling() && (r.attrHas(name, attrInteger) || float) && len(value) < w.width &&
 		r.sem().ZeroFillGoesAfterAnIntegersSign == Yes {
 		// A float the same way: `typeset -F 3 -Z 10 f=-3.14159` is
 		// `-00003.142`, measured the same day.

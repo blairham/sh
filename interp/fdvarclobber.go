@@ -56,7 +56,7 @@ package interp
 // before the shape holds would refuse on every `{var}` redirection, which is
 // the "ask only at the disagreement" rule broken in the other direction.
 func (r *Runner) fdVarWouldBeClobbered(ref string) (fd int, clobbered bool) {
-	if ref == "" || !r.noclobber || r.readonly[ref] {
+	if ref == "" || !r.noclobber || r.attrHas(ref, attrReadonly) {
 		return 0, false
 	}
 	v, set := r.fdVarValue(ref)

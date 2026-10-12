@@ -81,10 +81,7 @@ func (r *Runner) printfCount(name string, present bool) (int, bool) {
 		// is the one whose reading is "a new name", and an element of an
 		// array the script wrote is not a new name.
 		if isPlainName(name) {
-			if r.integer == nil {
-				r.integer = map[string]bool{}
-			}
-			r.integer[name] = true
+			r.attrSet(name, attrInteger)
 		}
 	}
 	return 0, false

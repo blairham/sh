@@ -2628,8 +2628,8 @@ func (r *Runner) badSubscriptToUnset(sub string, err error) int {
 // the shell that stops carries FatalErrorStatusIsOne's, as every fatal error
 // does, so there is no status of this error's own.
 func (r *Runner) unsetReadonly(name string) int {
-	refused := r.unsetRefused[name] && !r.readonly[name]
-	if !r.readonly[name] && !refused {
+	refused := r.unsetRefused[name] && !r.attrHas(name, attrReadonly)
+	if !r.attrHas(name, attrReadonly) && !refused {
 		return 0
 	}
 	if r.DeferredParameter(name) {
@@ -2960,7 +2960,7 @@ func biUnset(r *Runner, _ context.Context, args []string) int {
 				rest = append(rest, name)
 				continue
 			}
-			if r.readonly[name] {
+			if r.attrHas(name, attrReadonly) {
 				// A **frozen reference**, which `declare -rn r=v` makes and
 				// which this branch used to take away in silence. The freeze
 				// is the reference's own — measured 2026-09-16 on bash
@@ -3514,7 +3514,7 @@ func (r *Runner) unsetName(name string) int {
 	// Read before the removal, which is what clears the record: it says
 	// whether an earlier `unset` in this call had already left the name
 	// declared, and the placeholder's one letter turns on it.
-	again := r.unsetLeftItDeclared[name]
+	again := r.attrHas(name, attrUnsetLeftItDeclared)
 	// A half of a **wordless** pair keeps the shell's-own mark across its own
 	// removal, which is what a later write to it needs: measured, `watch=(a
 	// b); unset WATCH; WATCH=x:y` leaves `${(t)WATCH}` at `scalar-special`
@@ -3665,11 +3665,11 @@ func (r *Runner) unsetOneName(name string) {
 	// `declare -A m=([a]=b); unset m; declare -A m` lists `declare -A m`, the
 	// declared-only shape, and not the emptied one. See
 	// compounddeclaredonly.go.
-	delete(r.declaredOnlyCompound, name)
-	delete(r.compoundHeldAnElement, name)
+	r.attrClear(name, attrDeclaredOnlyCompound)
+	r.attrClear(name, attrHeldAnElement)
 	// Not read once the name is gone (see Runner.listsTheScalarItHolds), but
 	// the record goes with it rather than lingering in the table.
-	delete(r.scalarHeldUnderTheArrayLetter, name)
+	r.attrClear(name, attrScalarUnderTheArrayLetter)
 	// A compound's members are names of their own, so taking the parent away
 	// has to take them with it: `c=(a=1); unset c; ${c.a}` is empty in the
 	// shell, and leaving the member behind read back the value the shell had
@@ -8210,7 +8210,7 @@ func biLocal(r *Runner, _ context.Context, args []string) (endStatus int) {
 			// the rows are.
 			adopts := !fresh || r.prefixEntryIsInThisCell(name)
 			if code := r.declareNameref(word, name, value, f, hasValue,
-				appends, r.readonly[name] && !f.readonlyOff, adopts, held,
+				appends, r.attrHas(name, attrReadonly) && !f.readonlyOff, adopts, held,
 				fresh); code != 0 {
 				status = code
 				if r.ctl == controlExit {

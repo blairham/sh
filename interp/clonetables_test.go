@@ -338,6 +338,10 @@ func TestACloneOwnsEveryCell(t *testing.T) {
 	parent.producersPut("all", func(*Runner) string { return "p" })
 	parent.arrayProducersPut("all", func(*Runner) []string { return nil })
 	parent.assocProducersPut("all", func(*Runner) AssocArray { return nil })
+	// And the attributes, which live in the cell beside the slots (#6373):
+	// one on a name holding a value, and one on a name holding nothing else.
+	parent.attrSet("all", attrReadonly|attrInteger)
+	parent.attrSet("attronly", attrLower)
 
 	child := parent.clone()
 	if len(child.cellSlab) != len(parent.cellSlab) {
@@ -348,16 +352,23 @@ func TestACloneOwnsEveryCell(t *testing.T) {
 	}
 	for i := range parent.cellSlab {
 		pc, cc := &parent.cellSlab[i], &child.cellSlab[i]
-		if cc.name != pc.name || cc.has != pc.has {
-			t.Errorf("cell %d is %q holding %b in the clone and %q holding %b in its parent", i, cc.name, cc.has, pc.name, pc.has)
+		if cc.name != pc.name || cc.has != pc.has || cc.attrs != pc.attrs {
+			t.Errorf("cell %d is %q holding %b/%b in the clone and %q holding %b/%b in its parent",
+				i, cc.name, cc.has, cc.attrs, pc.name, pc.has, pc.attrs)
 		}
 		if pc.array != nil && cc.array == pc.array {
 			t.Errorf("the indexed array of %q is shared by a subshell and its parent", pc.name)
 		}
 	}
-	if child.cellCount != parent.cellCount || child.liveCells != parent.liveCells {
-		t.Errorf("the clone counts %v slots in %d cells and its parent %v in %d",
-			child.cellCount, child.liveCells, parent.cellCount, parent.liveCells)
+	if child.cellCount != parent.cellCount || child.liveCells != parent.liveCells || child.attrCount != parent.attrCount {
+		t.Errorf("the clone counts %v slots and %v attributes in %d cells and its parent %v and %v in %d",
+			child.cellCount, child.attrCount, child.liveCells, parent.cellCount, parent.attrCount, parent.liveCells)
+	}
+	// An attribute the subshell gives or takes stays in the subshell.
+	child.attrClear("all", attrReadonly)
+	child.attrSet("attronly", attrUpper)
+	if !parent.attrHas("all", attrReadonly) || parent.attrHas("attronly", attrUpper) {
+		t.Error("an attribute the subshell wrote reached its parent's cell")
 	}
 
 	// The index is shared, and the first name either side adds copies it.
@@ -394,6 +405,40 @@ func TestASparseStoreIsCompacted(t *testing.T) {
 	}
 	if r.varsLen() != 1 {
 		t.Errorf("%d scalars counted after compacting, want 1", r.varsLen())
+	}
+}
+
+// TestACellHoldingOnlyAnAttributeIsKept: a name the shell knows only by an
+// attribute — `readonly x` with x unset — is a live cell, so compacting the
+// slab must keep it and the counts must say so (#6373).
+func TestACellHoldingOnlyAnAttributeIsKept(t *testing.T) {
+	r := newTestRunner(t, &Runner{})
+	r.attrSet("frozen", attrReadonly)
+	for i := range 2000 {
+		r.varsPut("tmp"+strconv.Itoa(i), "x")
+	}
+	for i := range 2000 {
+		r.varsDel("tmp" + strconv.Itoa(i))
+	}
+	if len(r.cellSlab) > 600 {
+		t.Errorf("the slab holds %d cells for %d live names", len(r.cellSlab), r.liveCells)
+	}
+	if !r.attrHas("frozen", attrReadonly) {
+		t.Error("compacting lost a name holding only an attribute")
+	}
+	if r.attrLen(attrReadonly) != 1 || r.liveCells != 1 {
+		t.Errorf("%d readonly names in %d live cells after compacting, want 1 in 1", r.attrLen(attrReadonly), r.liveCells)
+	}
+	r.attrClear("frozen", attrReadonly)
+	if r.attrLen(attrReadonly) != 0 || r.liveCells != 0 {
+		t.Errorf("%d readonly names in %d live cells after the last attribute went, want 0 in 0", r.attrLen(attrReadonly), r.liveCells)
+	}
+	var names []string
+	for n := range r.attrNames(attrReadonly) {
+		names = append(names, n)
+	}
+	if len(names) != 0 {
+		t.Errorf("attrNames lists %v after the attribute went", names)
 	}
 }
 
@@ -471,12 +516,6 @@ func seedTables(r *Runner) {
 	r.custom = map[string]Builtin{"seed": func(*Runner, context.Context, []string) int { return 0 }}
 	r.preludeCommands = map[string]Builtin{"seed": func(*Runner, context.Context, []string) int { return 0 }}
 	r.declaredEmpty = map[string]bool{"seed": true}
-	r.declaredOnlyCompound = map[string]bool{"seed": true}
-	r.compoundHeldAnElement = map[string]bool{"seed": true}
-	r.scalarHeldUnderTheArrayLetter = map[string]bool{"seed": true}
-	r.declaredBare = map[string]bool{"seed": true}
-	r.declaredHoldingNothing = map[string]bool{"seed": true}
-	r.unsetLeftItDeclared = map[string]bool{"seed": true}
 	r.compoundVariable = map[string]bool{"seed": true}
 	r.namespaces = map[string]bool{"seed": true}
 	r.declaring = map[string]bool{"seed": true}
@@ -516,16 +555,12 @@ func seedTables(r *Runner) {
 	r.disciplined = map[string]bool{"seed": true}
 	r.disciplineRunning = map[string]bool{"seed": true}
 	r.trapFuncs = map[string]string{"seed": "v"}
-	r.hidden = map[string]bool{"seed": true}
-	r.hideInScope = map[string]bool{"seed": true}
 	r.privateShield = map[string]int{"seed": 1}
 	r.inheritedIgnored = map[string]bool{"seed": true}
-	r.integer = map[string]bool{"seed": true}
 	r.localMarked = map[string]bool{"seed": true}
 	r.integerBase = map[string]int{"seed": 16}
 	r.floatPrecision = map[string]int{"seed": 3}
 	r.fieldWidth = map[string]fieldWidth{"seed": {letter: 76, width: 3}}
-	r.lowered = map[string]bool{"seed": true}
 	r.caseListing = map[string]byte{"seed": 'l'}
 	r.mathFuncs = map[string]mathFunc{"seed": {}}
 	r.precommands = map[string]PrecommandModifier{"seed": PrecommandNoGlob}
@@ -533,11 +568,9 @@ func seedTables(r *Runner) {
 	r.optionLetterNames = map[rune]string{'Z': "seed"}
 	r.dialectCompgen = map[string]func(*Runner, string) []string{"seed": nil}
 	r.preludeFuncs = map[string]*syntax.FuncDecl{"seed": nil}
-	r.readonly = map[string]bool{"seed": true}
 	r.removed = map[string]bool{"seed": true}
 	r.tied = map[string]tie{"seed": {}}
 	r.traps = map[string]string{"seed": "v"}
-	r.unique = map[string]bool{"seed": true}
 	r.shellOwn = map[string]bool{"seed": true}
 	r.notShellOwn = map[string]bool{"seed": true}
 	r.shellOwnWhileSet = map[string]bool{"seed": true}
@@ -546,11 +579,8 @@ func seedTables(r *Runner) {
 	r.envNotAdopted = map[string]bool{"seed": true}
 	r.scopeFixed = map[string]bool{"seed": true}
 	r.kindFixed = map[string]parameterKinds{"seed": kindBit(ArrayParameter)}
-	r.traced = map[string]bool{"seed": true}
 	r.nameref = map[string]string{"seed": "target"}
-	r.floatExponent = map[string]bool{"seed": true}
 	r.floatExact = map[string]storedFloat{"seed": {text: "1.500", value: 1.5}}
-	r.uppered = map[string]bool{"seed": true}
 	r.capitalized = map[string]bool{"seed": true}
 	r.subshellWroteArrays = map[string]bool{"seed": true}
 }

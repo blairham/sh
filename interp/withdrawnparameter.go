@@ -104,7 +104,7 @@ func (r *Runner) SetParameterWithdrawn(name string, withdrawn bool) {
 	// attributes a declaration displaces, and goes the same way: without
 	// it the name came back from the call as an ordinary array that still
 	// listed as `array-hideval`.
-	frozen, hidden := r.readonly[name], r.hidden[name]
+	frozen, hidden := r.attrHas(name, attrReadonly), r.attrHas(name, attrHidden)
 	for _, sc := range r.scopes {
 		if was, ok := sc.boolRecord(recSavedReadonly, name); ok {
 			frozen = was
@@ -142,8 +142,8 @@ func (r *Runner) SetParameterWithdrawn(name string, withdrawn bool) {
 	delete(r.dynamicAssocWriters, name)
 	delete(r.absentParams, name)
 	delete(r.absentElements, name)
-	delete(r.readonly, name)
-	delete(r.hidden, name)
+	r.attrClear(name, attrReadonly)
+	r.attrClear(name, attrHidden)
 	if r.withdrawnParams == nil {
 		r.withdrawnParams = map[string]withdrawnParameter{}
 	}

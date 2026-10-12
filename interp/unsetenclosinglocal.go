@@ -304,7 +304,7 @@ func (r *Runner) unsetLeavesARunningScopesLocalDeclared(name string, again bool)
 		// and is not this one.
 		return
 	}
-	setBool(&r.unsetLeftItDeclared, name, true)
+	r.attrSet(name, attrUnsetLeftItDeclared)
 	if !again && r.theRunningCallsPrefixHolds(name) {
 		// The one shape where the placeholder carries a letter. See
 		// theRunningCallsPrefixHolds for the rows.

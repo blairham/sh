@@ -184,7 +184,7 @@ func (r *Runner) spliceCharacterSpan(name string, from, to int, value string, jo
 // unsubscripted `n+=9` is ordinary arithmetic and is not this.
 func (r *Runner) numericSlice(name, value string, join bool) bool {
 	_, isFloat := r.floatPrecision[name]
-	if !isFloat && !r.integer[name] {
+	if !isFloat && !r.attrHas(name, attrInteger) {
 		return false
 	}
 	if join {

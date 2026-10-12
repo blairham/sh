@@ -134,7 +134,7 @@ type declareFlags struct {
 	unique          bool
 	// traced is the `t` letter: an attribute the name carries, that every
 	// listing writes back, and that nothing else in this engine reads. See
-	// Runner.traced.
+	// attrTraced.
 	traced bool
 	// inherit is the `I` letter: this declaration's fresh binding takes the
 	// value and the attributes of the name at the enclosing scope rather
@@ -2558,7 +2558,7 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) (endSt
 			// Carried *into* declareNameref rather than tested here, because
 			// its order against the other two refusals is measured and the
 			// bad target goes first. See there.
-			frozen := r.readonly[name] && !df.readonlyOff
+			frozen := r.attrHas(name, attrReadonly) && !df.readonlyOff
 			// **A value an assignment prefix put here is this call's own**,
 			// so a valueless `-n` adopts it — the fresh binding the
 			// declaration just took is not empty, it holds what the prefix
@@ -3510,7 +3510,7 @@ func (r *Runner) inconsistentTypeRefused(name string, fresh bool, f declareFlags
 //
 // The letter on this line and not the attribute the name is carrying, which is
 // what the measurement says: `typeset -i z; typeset z=(1 2)` is taken in the
-// shell that refuses, so a check against r.integer would refuse a line that
+// shell that refuses, so a check against attrInteger would refuse a line that
 // shell writes an array for.
 //
 // One gate for `typeset`, `local`, `readonly` and `export` alike, because the
@@ -3627,20 +3627,17 @@ func (r *Runner) applyAttributes(name string, f declareFlags) {
 	// What the name was before this line's numeric letters land, which the
 	// case letters below ask. See caseLettersKeptApart.
 	_, floatBefore := r.floatPrecision[name]
-	numericBefore := r.integer[name] || floatBefore
+	numericBefore := r.attrHas(name, attrInteger) || floatBefore
 	if f.integer {
-		if r.integer == nil {
-			r.integer = map[string]bool{}
-		}
 		if f.integerComesOff(r) && !f.integerForced {
-			delete(r.integer, name)
+			r.attrClear(name, attrInteger)
 			// The base goes with the attribute — measured, `typeset +i j`
 			// leaves the text the name is holding alone and a *later* `j=3`
 			// is plain, so what the plus form takes off is the rendering of
 			// what comes next and not what is already there.
 			delete(r.integerBase, name)
 		} else {
-			r.integer[name] = true
+			r.attrSet(name, attrInteger)
 			// See the float branch below: the later declaration speaks, and
 			// `typeset -F 3 x=1.5; typeset -i x` reads `1`.
 			delete(r.floatPrecision, name)
@@ -3814,7 +3811,7 @@ func (r *Runner) applyAttributes(name string, f declareFlags) {
 			// *declaration* speaks: measured, `typeset -i x=5; typeset -F 3
 			// x` reads `5.000` and the reverse reads `1`. Within one word it
 			// is the earlier letter, which the parse settled.
-			delete(r.integer, name)
+			r.attrClear(name, attrInteger)
 			delete(r.integerBase, name)
 			// The precision applies to what the name already holds and not
 			// only to what is written next — `v=1.5; typeset -F 3 v` is
@@ -3883,17 +3880,14 @@ func (r *Runner) applyAttributes(name string, f declareFlags) {
 		return
 	}
 	if f.lower && !canceled {
-		if r.lowered == nil {
-			r.lowered = map[string]bool{}
-		}
 		if f.letterOff('l') {
-			delete(r.lowered, name)
+			r.attrClear(name, attrLower)
 		} else {
-			r.lowered[name] = true
+			r.attrSet(name, attrLower)
 			delete(r.capitalized, name)
 			// The case attributes cannot both stand: the later one
 			// speaks, which is what both shells measured do.
-			delete(r.uppered, name)
+			r.attrClear(name, attrUpper)
 			if !numeric {
 				r.caseLetterReplacesTheNumeric(name)
 			}
@@ -3908,14 +3902,11 @@ func (r *Runner) applyAttributes(name string, f declareFlags) {
 		upperRecords = !r.upperLetterRecordsNothing()
 	}
 	if upperRecords {
-		if r.uppered == nil {
-			r.uppered = map[string]bool{}
-		}
 		if f.letterOff('u') {
-			delete(r.uppered, name)
+			r.attrClear(name, attrUpper)
 		} else {
-			r.uppered[name] = true
-			delete(r.lowered, name)
+			r.attrSet(name, attrUpper)
+			r.attrClear(name, attrLower)
 			delete(r.capitalized, name)
 			if !numeric {
 				r.caseLetterReplacesTheNumeric(name)
@@ -3932,25 +3923,22 @@ func (r *Runner) applyAttributes(name string, f declareFlags) {
 			r.capitalized[name] = true
 			// The three case attributes cannot stand together: the later one
 			// speaks, the same rule the other two already follow.
-			delete(r.lowered, name)
-			delete(r.uppered, name)
+			r.attrClear(name, attrLower)
+			r.attrClear(name, attrUpper)
 			if !numeric {
 				r.caseLetterReplacesTheNumeric(name)
 			}
 		}
 	}
 	if f.unique {
-		if r.unique == nil {
-			r.unique = map[string]bool{}
-		}
 		if f.letterOff('U') {
 			// `+U` drops the attribute and leaves the elements that are
 			// there alone: measured, `typeset -U c=(1 2 3 2)` is `1 2 3`,
 			// and `typeset +U c; c+=(1)` is `1 2 3 1` — the duplicate the
 			// append brought stands.
-			delete(r.unique, name)
+			r.attrClear(name, attrUnique)
 		} else {
-			r.unique[name] = true
+			r.attrSet(name, attrUnique)
 			// The attribute applies to what the name already holds, not
 			// only to what is written next: measured, `b=(1 1 2)` followed
 			// by `typeset -U b` reads back `1 2`. A declaration that also
@@ -3968,30 +3956,24 @@ func (r *Runner) applyAttributes(name string, f declareFlags) {
 		}
 	}
 	if f.traced {
-		if r.traced == nil {
-			r.traced = map[string]bool{}
-		}
 		if f.letterOff('t') {
 			// `+t` takes the letter off and leaves everything else standing:
 			// measured on all three shells with the attribute, `typeset -t
 			// T=1` then `typeset +t T` lists the plain form with the value
 			// still there.
-			delete(r.traced, name)
+			r.attrClear(name, attrTraced)
 		} else {
-			r.traced[name] = true
+			r.attrSet(name, attrTraced)
 		}
 	}
 	if f.hidden {
-		if r.hidden == nil {
-			r.hidden = map[string]bool{}
-		}
 		if f.letterOff('H') {
 			// `+H` takes the value back out of hiding and leaves everything
 			// else alone: measured, `typeset -iH n=5` lists as `typeset -i n`
 			// and `typeset +H n` lists as `typeset -i n=5`.
-			delete(r.hidden, name)
+			r.attrClear(name, attrHidden)
 		} else {
-			r.hidden[name] = true
+			r.attrSet(name, attrHidden)
 		}
 	}
 }
@@ -4142,7 +4124,7 @@ func (f declareFlags) namesAKeyedCell() bool {
 // there, and `readonly c; typeset -C c=(a=1)` is **taken**, which is the rule
 // #3915 records. Refusing here would take that one back.
 func (r *Runner) attributeOverFrozenRefused(name string, f declareFlags, assigns bool) bool {
-	if !r.readonly[name] {
+	if !r.attrHas(name, attrReadonly) {
 		return false
 	}
 	if f.namesAValueShapingAttribute() || f.nameref {
@@ -4208,14 +4190,14 @@ func (r *Runner) attributeOverFrozenRefused(name string, f declareFlags, assigns
 }
 
 func (r *Runner) numericTypeLetterRetypesFrozen(name string, f declareFlags) bool {
-	if !r.readonly[name] {
+	if !r.attrHas(name, attrReadonly) {
 		return false
 	}
 	if !f.namesANumericType(r) {
 		return false
 	}
 	switch {
-	case f.integer && r.integer[name]:
+	case f.integer && r.attrHas(name, attrInteger):
 		// Already an integer, so nothing is being retyped and the ordinary
 		// refusal stands.
 		return false
@@ -4242,7 +4224,7 @@ const (
 
 // caseLettersKeptApart is a line writing `l` or `u`, in the dialect that keeps
 // the case letters' **listing** and their **fold** as two pieces of state. The
-// fold stays in Runner.lowered and Runner.uppered, where every store reads it;
+// fold stays in attrLower and attrUpper, where every store reads it;
 // the listing is Runner.caseListing. See Semantics.CaseListingAndFoldAreSeparate,
 // where the rows are (#5671).
 //
@@ -4254,14 +4236,14 @@ func (r *Runner) caseLettersKeptApart(name string, f declareFlags, numericLine, 
 	if rec == 0 {
 		// A name that took its fold some other way lists by it.
 		switch {
-		case r.lowered[name]:
+		case r.attrHas(name, attrLower):
 			rec = caseListsLower
-		case r.uppered[name]:
+		case r.attrHas(name, attrUpper):
 			rec = caseListsUpper
 		}
 	}
 	bits := rec &^ caseListingRecorded
-	foldBefore := r.lowered[name] || r.uppered[name]
+	foldBefore := r.attrHas(name, attrLower) || r.attrHas(name, attrUpper)
 	letters := byte(0)
 	if f.lower {
 		letters |= caseListsLower
@@ -4276,8 +4258,8 @@ func (r *Runner) caseLettersKeptApart(name string, f declareFlags, numericLine, 
 		// still lists `-l` and folds nothing.
 		r.setCaseListing(name, (bits&^letters)|caseListingRecorded)
 		if !numeric {
-			delete(r.lowered, name)
-			delete(r.uppered, name)
+			r.attrClear(name, attrLower)
+			r.attrClear(name, attrUpper)
 		}
 		return
 	}
@@ -4300,11 +4282,11 @@ func (r *Runner) caseLettersKeptApart(name string, f declareFlags, numericLine, 
 		later = caseListsLower
 	}
 	if later == caseListsLower {
-		setBool(&r.lowered, name, true)
-		delete(r.uppered, name)
+		r.attrSet(name, attrLower)
+		r.attrClear(name, attrUpper)
 	} else {
-		setBool(&r.uppered, name, true)
-		delete(r.lowered, name)
+		r.attrSet(name, attrUpper)
+		r.attrClear(name, attrLower)
 	}
 	delete(r.capitalized, name)
 	r.caseLetterReplacesTheNumeric(name)
@@ -4399,8 +4381,8 @@ func (r *Runner) caseLettersCancel(name string, f declareFlags) bool {
 		"two case letters written on one declaration") {
 		return false
 	}
-	delete(r.lowered, name)
-	delete(r.uppered, name)
+	r.attrClear(name, attrLower)
+	r.attrClear(name, attrUpper)
 	delete(r.capitalized, name)
 	return true
 }
@@ -4451,15 +4433,15 @@ func (r *Runner) numericLetterReplacesTheCase(name string) {
 	// `typeset -i s=3` (#5671). A line writing a case letter beside the
 	// number lists it again after this.
 	delete(r.caseListing, name)
-	if !r.lowered[name] && !r.uppered[name] && !r.capitalized[name] {
+	if !r.attrHas(name, attrLower) && !r.attrHas(name, attrUpper) && !r.capitalized[name] {
 		return
 	}
 	if !r.ask(r.sem().NumericAttributeReplacesTheCaseAttribute,
 		"a numeric letter taking a case attribute off the name") {
 		return
 	}
-	delete(r.lowered, name)
-	delete(r.uppered, name)
+	r.attrClear(name, attrLower)
+	r.attrClear(name, attrUpper)
 }
 
 // caseLetterReplacesTheNumeric is the other direction, and its own axis
@@ -4475,14 +4457,14 @@ func (r *Runner) caseLetterReplacesTheNumeric(name string) {
 	// — `typeset -F 0 x` — so the presence of the key is the question and not
 	// the number under it, the same distinction precisionNamed draws.
 	_, float := r.floatPrecision[name]
-	if !r.integer[name] && !float {
+	if !r.attrHas(name, attrInteger) && !float {
 		return
 	}
 	if !r.ask(r.sem().CaseAttributeReplacesTheNumericAttribute,
 		"a case letter taking the integer or float attribute off the name") {
 		return
 	}
-	delete(r.integer, name)
+	r.attrClear(name, attrInteger)
 	delete(r.integerBase, name)
 	delete(r.floatPrecision, name)
 }
@@ -5161,10 +5143,7 @@ func (r *Runner) markReadonly(name string) {
 // it has (#4874).
 func (r *Runner) freezeWithoutDeferring(name string) {
 	r.keepThePrefixEntry(name)
-	if r.readonly == nil {
-		r.readonly = map[string]bool{}
-	}
-	r.readonly[name] = true
+	r.attrSet(name, attrReadonly)
 }
 
 // removeReadonly answers a plus form that asked for the readonly attribute
@@ -5188,12 +5167,12 @@ func (r *Runner) freezeWithoutDeferring(name string) {
 // the whole of what the shell that grants this does: `typeset -r x=1;
 // typeset +r x=5` leaves 5 there.
 func (r *Runner) removeReadonly(name string, hasValue bool) int {
-	if !r.readonly[name] {
+	if !r.attrHas(name, attrReadonly) {
 		return 0
 	}
 	if r.ask(r.sem().ReadonlyAttributeCanBeRemoved,
 		"the readonly attribute being taken off a name") {
-		delete(r.readonly, name)
+		r.attrClear(name, attrReadonly)
 		return 0
 	}
 	if r.unspecified || hasValue {
@@ -5210,10 +5189,7 @@ func (r *Runner) removeReadonly(name string, hasValue bool) int {
 // and a list says so: the same name twice freezes once either way.
 func (r *Runner) applyDeferredFreeze() {
 	for _, name := range r.freezeAfter {
-		if r.readonly == nil {
-			r.readonly = map[string]bool{}
-		}
-		r.readonly[name] = true
+		r.attrSet(name, attrReadonly)
 	}
 	r.freezeAfter = nil
 }
@@ -5705,7 +5681,7 @@ func (r *Runner) declareEmpty(name string, fresh, keepsTheEnvironmentEntry, name
 		// zsh options, `typeset -r R; ${(t)R}` is `scalar-readonly`, and with
 		// POSIX_BUILTINS alone it is empty (#5439).
 		if r.sem().DeclaredNameWithoutValueIsEmpty == No {
-			setBool(&r.declaredHoldingNothing, name, true)
+			r.attrSet(name, attrDeclaredHoldingNothing)
 		}
 		return
 	}
@@ -5780,8 +5756,8 @@ func (r *Runner) declareEmpty(name string, fresh, keepsTheEnvironmentEntry, name
 		r.recordBareDeclaration(name)
 	}
 	// Whatever letters it carries, the name is one the shell has, which is
-	// what a description reads. See Runner.declaredHoldingNothing.
-	setBool(&r.declaredHoldingNothing, name, true)
+	// what a description reads. See attrDeclaredHoldingNothing.
+	r.attrSet(name, attrDeclaredHoldingNothing)
 	// Whether the *outer* value still shows through is a third disagreement,
 	// and it only arises where a shadow was actually taken: `declare u` at
 	// the top level leaves the global alone in every shell measured.
@@ -5870,19 +5846,19 @@ func (r *Runner) declarationAssignmentResets(name string, fresh, namesExport, va
 		r.exported[name] = false
 	}
 	if valued {
-		delete(r.integer, name)
+		r.attrClear(name, attrInteger)
 		delete(r.integerBase, name)
 		delete(r.floatPrecision, name)
-		delete(r.floatExponent, name)
+		r.attrClear(name, attrFloatExponent)
 		delete(r.floatExact, name)
 		delete(r.fieldWidth, name)
-		delete(r.traced, name)
-		delete(r.hidden, name)
+		r.attrClear(name, attrTraced)
+		r.attrClear(name, attrHidden)
 		// Beside a numeric letter, `-l` and `-u` are long and unsigned
 		// rather than case letters (see caseLetterStands), and they go with
 		// the number.
-		delete(r.lowered, name)
-		delete(r.uppered, name)
+		r.attrClear(name, attrLower)
+		r.attrClear(name, attrUpper)
 	}
 }
 
@@ -5892,13 +5868,13 @@ func (r *Runner) declarationAssignmentResets(name string, fresh, namesExport, va
 // `typeset -Fl s=1; typeset s=7` reset there like any other name, and so
 // does `-iu` (#5663).
 func (r *Runner) caseLetterStands(name string) bool {
-	if r.integer[name] {
+	if r.attrHas(name, attrInteger) {
 		return false
 	}
 	if _, float := r.floatPrecision[name]; float {
 		return false
 	}
-	return r.lowered[name] || r.uppered[name]
+	return r.attrHas(name, attrLower) || r.attrHas(name, attrUpper)
 }
 
 // plusLetterComesOffAfterTheValue reports whether a line whose letters are
@@ -5933,8 +5909,8 @@ func (r *Runner) carriesAValueAttribute(name string) bool {
 	_, base := r.integerBase[name]
 	_, float := r.floatPrecision[name]
 	_, width := r.fieldWidth[name]
-	return r.integer[name] || base || float || width || r.floatExponent[name] ||
-		r.traced[name] || r.hidden[name]
+	return r.attrHas(name, attrInteger) || base || float || width || r.attrHas(name, attrFloatExponent) ||
+		r.attrHas(name, attrTraced) || r.attrHas(name, attrHidden)
 }
 
 // declarationStartsAnInheritedNameOver reports whether this declaration takes
@@ -6028,7 +6004,7 @@ func (r *Runner) declarationStartsAnInheritedNameOver(name string, keepsTheEnvir
 // where applyAttributes has just put them, and because `integer n` — the
 // spelling that carries the type in the word — never sets a letter at all.
 func (r *Runner) declaresAType(name string) bool {
-	return r.integer[name] || r.lowered[name] || r.uppered[name] || r.capitalized[name]
+	return r.attrHas(name, attrInteger) || r.attrHas(name, attrLower) || r.attrHas(name, attrUpper) || r.capitalized[name]
 }
 
 // compoundNameHolds reports whether the name is holding an array or a keyed
@@ -6084,7 +6060,7 @@ func (r *Runner) compoundMeetingAnAttribute(name string) (startedOver bool) {
 		// test and make one field answer for two.
 		r.arraysPut(name, r.foldedElems(name, r.arraysAt(name)))
 	case CompoundAttributeReplacesItWithAScalar:
-		if !r.integer[name] {
+		if !r.attrHas(name, attrInteger) {
 			// A case letter changes no kind, so there is nothing to replace
 			// the compound with. Measured in the one dialect that answers
 			// this way: the array keeps its length and its elements.
@@ -6311,7 +6287,7 @@ func (r *Runner) attributeWouldChange(name, value string) bool {
 			return true
 		}
 	}
-	if r.integer[name] {
+	if r.attrHas(name, attrInteger) {
 		n, err := strconv.Atoi(value)
 		if err != nil || itoa(n) != value {
 			return true
@@ -6337,9 +6313,9 @@ func (r *Runner) attributeWouldChange(name, value string) bool {
 		return false
 	}
 	switch {
-	case r.lowered[name]:
+	case r.attrHas(name, attrLower):
 		return strings.ToLower(value) != value
-	case r.uppered[name]:
+	case r.attrHas(name, attrUpper):
 		return strings.ToUpper(value) != value
 	case r.capitalized[name]:
 		return r.capitalCase(value) != value
@@ -6510,7 +6486,7 @@ func (r *Runner) hideVar(name string) {
 // name in silence, the message lost the builtin's name, and the failure
 // abandoned the rest of the function where bash runs it (#1159).
 func (r *Runner) declarationShadowRefused(name string) bool {
-	if len(r.scopes) == 0 || !r.readonly[name] {
+	if len(r.scopes) == 0 || !r.attrHas(name, attrReadonly) {
 		// Not a declaration into a scope, or nothing frozen to shadow.
 		// Assigning to a frozen name at top level is the ordinary refusal
 		// and is not this question.
@@ -6672,16 +6648,16 @@ func (r *Runner) shadow(name string) (fresh, redeclared bool) {
 		// recSavedReadonly. The delete below is unconditional for the same
 		// reason there is no `if` around it: a name with nothing recorded is
 		// a delete of a key that is not there.
-		rec.put(recSavedReadonly, r.readonly[name])
+		rec.put(recSavedReadonly, r.attrHas(name, attrReadonly))
 		if !r.freezeSurvivesAShadow(name) {
-			delete(r.readonly, name)
+			r.attrClear(name, attrReadonly)
 		}
 		// And the hide-in-scope attribute, for the same reason and with the
 		// same two jobs: the outer name gets back what it carried, and an
 		// attribute this call added or removed goes away with the call.
 		// Recorded whether or not there was one, so absent means this scope
 		// never shadowed the name — see recSavedHideInScope.
-		rec.put(recSavedHideInScope, r.hideInScope[name])
+		rec.put(recSavedHideInScope, r.attrHas(name, attrHideInScope))
 		// And whether *this* shadow is a hidden one, which is a different
 		// question from the attribute being saved above: what governs the
 		// shadow is what the binding it displaced carried, and the fresh
@@ -6692,7 +6668,7 @@ func (r *Runner) shadow(name string) (fresh, redeclared bool) {
 		// every other one; shadowIsHidden is what reads it back.
 		hidden := r.shadowIsHidden(name)
 		rec.put(recHiddenShadow, hidden)
-		delete(r.hideInScope, name)
+		r.attrClear(name, attrHideInScope)
 		if hidden {
 			// And the producer, which is what makes the shadow an ordinary
 			// parameter rather than a second view of the shell's own: the
@@ -6805,9 +6781,9 @@ func (r *Runner) shadow(name string) (fresh, redeclared bool) {
 	// caller's own table must not inherit that when the call unwinds. Taken
 	// once per name per scope.
 	if !rec.holds(recDeclaredOnlyBefore) {
-		rec.put(recDeclaredOnlyBefore, r.declaredOnlyCompound[name])
-		rec.setFlag(flagHeldAnElementBefore, r.compoundHeldAnElement[name])
-		rec.setFlag(flagScalarHeldBefore, r.scalarHeldUnderTheArrayLetter[name])
+		rec.put(recDeclaredOnlyBefore, r.attrHas(name, attrDeclaredOnlyCompound))
+		rec.setFlag(flagHeldAnElementBefore, r.attrHas(name, attrHeldAnElement))
+		rec.setFlag(flagScalarHeldBefore, r.attrHas(name, attrScalarUnderTheArrayLetter))
 		sc.made |= recArray | recAssoc | recDeclaredOnlyBefore
 		// And the local starts with no record of having held an element.
 		// Measured 2026-10-03 on ksh93u+, `typeset -a x; x[0]=p; unset
@@ -6818,7 +6794,7 @@ func (r *Runner) shadow(name string) (fresh, redeclared bool) {
 		// Runner.restoreTheOuterBinding. The caller's
 		// scalarHeldUnderTheArrayLetter needs no clearing: the local's first
 		// write either sets it or clears it, and nothing reads it before.
-		delete(r.compoundHeldAnElement, name)
+		r.attrClear(name, attrHeldAnElement)
 	}
 	// And the other half of a tie the shell made for itself, which is one
 	// value under two names and so cannot have one of them saved alone. See

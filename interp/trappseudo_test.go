@@ -53,8 +53,8 @@ func pseudoRun(t *testing.T, dir, src string, sem Semantics) (string, int) {
 	var buf bytes.Buffer
 	r := newTestRunner(t, &Runner{
 		Stdout: &buf, Stderr: &buf, Semantics: &sem,
-		Dir: dir, Name: "testsh", Vars: map[string]string{"PATH": dir},
-	})
+		Dir: dir, Name: "testsh",
+	}).SeedVars(map[string]string{"PATH": dir})
 	st, rerr := r.Run(context.Background(), f)
 	if rerr != nil {
 		return buf.String() + "unsupported: " + rerr.Error(), -1

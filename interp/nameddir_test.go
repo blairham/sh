@@ -24,7 +24,7 @@ func TestAUserDatabaseIsTheRunnersToCarry(t *testing.T) {
 			dir, ok := homes[name]
 			return dir, ok
 		}
-		r.Vars = map[string]string{"HOME": "/homes/mine"}
+		r.SeedVars(map[string]string{"HOME": "/homes/mine"})
 	}
 	for _, tc := range []struct{ name, src, want string }{
 		{"a user the database has", `printf "[%s]" ~alder`, "[/homes/alder]"},
@@ -50,7 +50,7 @@ func TestAUserDatabaseIsTheRunnersToCarry(t *testing.T) {
 	// And with no hook at all the word is left alone, which is the library
 	// default and is what this package did unconditionally before.
 	out, _ := run(t, `printf "[%s]" ~alder`, func(r *Runner) {
-		r.Vars = map[string]string{"HOME": "/homes/mine"}
+		r.SeedVars(map[string]string{"HOME": "/homes/mine"})
 	})
 	if out != "[~alder]" {
 		t.Errorf("with no hook = %q, want the word as written", out)
@@ -73,7 +73,7 @@ func TestANamedDirectoryWinsOverAUser(t *testing.T) {
 			return "", false
 		}
 		r.Semantics.HashDefinesANamedDirectory = Yes
-		r.Vars = map[string]string{"HOME": "/homes/mine"}
+		r.SeedVars(map[string]string{"HOME": "/homes/mine"})
 	}
 	out, _ := run(t, `hash -d alder=/elsewhere; printf "[%s]" ~alder`, with)
 	if out != "[/elsewhere]" {

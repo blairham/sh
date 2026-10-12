@@ -21,7 +21,7 @@ func equalsContextSem(narrow, wide Answer) func(*Runner) {
 		sem.AnAssignmentShapedArgumentIsATildeContextOutsidePosixMode = narrow
 		sem.TheFirstUnquotedEqualsInAWordOpensATildeContext = wide
 		r.Semantics = &sem
-		r.Vars = map[string]string{"HOME": "/h"}
+		r.SeedVars(map[string]string{"HOME": "/h"})
 	}
 }
 

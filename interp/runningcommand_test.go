@@ -47,8 +47,8 @@ func runningRun(t *testing.T, src string, set func(*Semantics)) string {
 	dg := Diagnostics{}
 	r := newTestRunner(t, &Runner{
 		Stdout: &out, Stderr: &errs, Semantics: &sem, Diagnostics: &dg,
-		Dir: dir, Name: "testsh", Vars: map[string]string{"PATH": dir},
-	})
+		Dir: dir, Name: "testsh",
+	}).SeedVars(map[string]string{"PATH": dir})
 	r.SetDynamic(runningName, func(rr *Runner) string {
 		rc := rr.RunningCommand()
 		if rc.Cmd == nil {

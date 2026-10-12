@@ -70,7 +70,7 @@ func TestHistcharsIsReadFromTheParameter(t *testing.T) {
 	if got := r.HistoryChars().String(); got != "!^#" {
 		t.Errorf("default histchars = %q, want !^#", got)
 	}
-	r.Vars = map[string]string{"histchars": ",%@"}
+	r.SeedVars(map[string]string{"histchars": ",%@"})
 	if got := r.HistoryChars().String(); got != ",%@" {
 		t.Errorf("histchars = %q, want ,%%@", got)
 	}

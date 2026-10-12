@@ -40,8 +40,8 @@ func prefixFailRunOrder(t *testing.T, src string, fatality PrefixRefusalFatality
 	dir := t.TempDir()
 	r := newTestRunner(t, &Runner{
 		Stdout: &out, Stderr: &out, Semantics: &sem, Diagnostics: &dg,
-		Dir: dir, Name: "sh", Vars: map[string]string{"PATH": dir},
-	})
+		Dir: dir, Name: "sh",
+	}).SeedVars(map[string]string{"PATH": dir})
 	f, err := syntax.Parse(src, syntax.Core())
 	if err != nil {
 		t.Fatalf("parse %q: %v", src, err)
@@ -284,8 +284,8 @@ func TestAFailureBeforeThePrefixIsNotThePrefixs(t *testing.T) {
 		r := newTestRunner(t, &Runner{
 			Stdout: &out, Stderr: &out, Semantics: &sem,
 			Diagnostics: &Diagnostics{ArithOperandExpected: "bad math"},
-			Dir:         dir, Name: "sh", Vars: map[string]string{"PATH": dir},
-		})
+			Dir:         dir, Name: "sh",
+		}).SeedVars(map[string]string{"PATH": dir})
 		f, err := syntax.Parse(src, syntax.Core())
 		if err != nil {
 			t.Fatalf("parse %q: %v", src, err)
@@ -348,8 +348,8 @@ func TestAFrozenPrefixIsADifferentFailureFromOneThatWouldNotExpand(t *testing.T)
 				ArithOperandExpected: "bad math",
 				ReadonlyVariable:     "%s: readonly variable",
 			},
-			Dir: dir, Name: "sh", Vars: map[string]string{"PATH": dir},
-		})
+			Dir: dir, Name: "sh",
+		}).SeedVars(map[string]string{"PATH": dir})
 		f, err := syntax.Parse(src, syntax.Core())
 		if err != nil {
 			t.Fatalf("parse %q: %v", src, err)

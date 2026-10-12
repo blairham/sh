@@ -37,16 +37,16 @@ func TestExecHandsItsStandardOutputToTheReplacement(t *testing.T) {
 	}
 	sem, diag := zsh.Semantics(), zsh.Diagnostics()
 	var handed []*os.File
-	r := &interp.Runner{
+	r := (&interp.Runner{
 		Stdout: out, Stderr: os.Stderr, Semantics: &sem, Diagnostics: &diag,
 		Dir: dir, Name: "zsh", Route: interp.RouteScriptFile,
-		Vars:    map[string]string{"PATH": "/usr/bin:/bin"},
+
 		Dialect: presetDialect(),
 		ReplaceProcess: func(_, _ string, _, _ []string, files []*os.File) error {
 			handed = files
 			return os.ErrPermission
 		},
-	}
+	}).SeedVars(map[string]string{"PATH": "/usr/bin:/bin"})
 	zsh.Apply(r)
 	_, _ = r.Run(context.Background(), f)
 	if len(handed) < 2 || handed[1] != out {

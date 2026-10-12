@@ -30,8 +30,8 @@ func prefixRun(t *testing.T, dir, src string, dg Diagnostics) string {
 	sem := permissive()
 	r := newTestRunner(t, &Runner{
 		Stdout: &out, Stderr: &errs, Semantics: &sem, Diagnostics: &dg,
-		Dir: dir, Name: "testsh", Vars: map[string]string{"PATH": dir},
-	})
+		Dir: dir, Name: "testsh",
+	}).SeedVars(map[string]string{"PATH": dir})
 	if _, rerr := r.Run(context.Background(), f); rerr != nil {
 		t.Fatalf("run %q: %v", src, rerr)
 	}
@@ -183,8 +183,8 @@ func TestAFunctionCalledByABuiltinIsNotTheBuiltinsDiagnostic(t *testing.T) {
 	dir := t.TempDir()
 	r := newTestRunner(t, &Runner{
 		Stdout: &out, Stderr: &errs, Semantics: &sem, Diagnostics: &dg,
-		Dir: dir, Name: "testsh", Vars: map[string]string{"PATH": dir},
-	})
+		Dir: dir, Name: "testsh",
+	}).SeedVars(map[string]string{"PATH": dir})
 	r.Register("caller-bi", func(r *Runner, ctx context.Context, args []string) int {
 		if _, err := r.CallFunction(ctx, "target"); err != nil {
 			t.Errorf("CallFunction: %v", err)

@@ -223,11 +223,11 @@ func runZshSplit(t *testing.T, dir, src string) (out string, status int, errs st
 	}
 	var o, e bytes.Buffer
 	sem, diag := zsh.Semantics(), zsh.Diagnostics()
-	r := &interp.Runner{
+	r := (&interp.Runner{
 		Stdout: &o, Stderr: &e, Semantics: &sem, Diagnostics: &diag,
-		Dir: dir, Name: "zsh", Vars: map[string]string{"PATH": dir},
+		Dir: dir, Name: "zsh",
 		Dialect: presetDialect(),
-	}
+	}).SeedVars(map[string]string{"PATH": dir})
 	zsh.Apply(r)
 	st, rerr := r.Run(context.Background(), f)
 	if rerr != nil {

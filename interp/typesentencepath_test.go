@@ -53,9 +53,9 @@ func sentencePathRun(t *testing.T, sentence, report TraceQuoting, src string) st
 	r := newTestRunner(t, &Runner{
 		Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &dg,
 		Dir: dir, Name: "testsh",
-		Vars: map[string]string{"PATH": path},
-		Env:  []string{"PATH=" + path},
-	})
+
+		Env: []string{"PATH=" + path},
+	}).SeedVars(map[string]string{"PATH": path})
 	if _, rerr := r.Run(context.Background(), f); rerr != nil {
 		return buf.String() + "unsupported: " + rerr.Error()
 	}

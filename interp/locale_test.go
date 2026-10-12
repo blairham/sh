@@ -28,7 +28,7 @@ import (
 func localeRunner(t *testing.T, vars map[string]string) *Runner {
 	t.Helper()
 	d := syntax.Core()
-	return newTestRunner(t, &Runner{Dialect: &d, Vars: vars})
+	return newTestRunner(t, &Runner{Dialect: &d}).SeedVars(vars)
 }
 
 // TestALocaleCategoryIsReadUnderLcAllAndOverLang.
@@ -145,7 +145,7 @@ func lengthUnder(t *testing.T, d syntax.Dialect, vars map[string]string) string 
 	var out bytes.Buffer
 	s := PosixSemantics()
 	s.MultibyteEncodingIsHonored = Yes
-	r := newTestRunner(t, &Runner{Stdout: &out, Stderr: &out, Dialect: &d, Semantics: &s, Vars: vars})
+	r := newTestRunner(t, &Runner{Stdout: &out, Stderr: &out, Dialect: &d, Semantics: &s}).SeedVars(vars)
 	if _, err := r.Run(context.Background(), f); err != nil {
 		t.Fatal(err)
 	}

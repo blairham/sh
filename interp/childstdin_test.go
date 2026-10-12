@@ -207,7 +207,7 @@ func TestAnExecRedirectionReachesAChildUnchanged(t *testing.T) {
 		r.Dir = dir
 		r.Stdin = strings.NewReader("THE SHELL'S OWN\n")
 		r.ChildStdin = strings.NewReader("THE FRONT END'S QUESTION\n")
-		r.Vars = map[string]string{"PATH": "/usr/bin:/bin"}
+		r.SeedVars(map[string]string{"PATH": "/usr/bin:/bin"})
 	})
 	if !strings.Contains(out, "FROMFILE") {
 		t.Errorf("= %q status %d, want the child reading the file the script execed", out, st)

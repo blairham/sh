@@ -131,7 +131,7 @@ func TestAnEmptyAssociationAnswersSetOnTheSameAxis(t *testing.T) {
 			} {
 				out, _ := runGrammar(t, src, nil, func(r *Runner) {
 					setWholeArrayAxis(r, tc.whole)
-					r.AssocArrays = map[string]AssocArray{"h": {}}
+					r.StoreAssoc("h", AssocArray{})
 					r.SetDynamicAssoc("d", func(*Runner) AssocArray { return nil })
 				})
 				if got := strings.TrimSpace(out); got != tc.want {

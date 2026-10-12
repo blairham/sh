@@ -246,7 +246,7 @@ func sourceRunOnPath(t *testing.T, dir, path, src string, sem Semantics, dg Diag
 		Semantics: &sem, Diagnostics: &dg,
 		Dir: dir, Name: "testsh",
 	})
-	r.Vars = map[string]string{"PATH": path}
+	r.SeedVars(map[string]string{"PATH": path})
 	st, rerr := r.Run(context.Background(), f)
 	if rerr != nil {
 		return buf.String() + "unsupported: " + rerr.Error(), -1

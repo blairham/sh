@@ -307,14 +307,11 @@ func (c *Runner) ownTables(r *Runner) {
 	// withdrawnmathfunc.go.
 	c.withdrawnMathFuncs = maps.Clone(r.withdrawnMathFuncs)
 
-	// The extension points. An embedder registers these before a run and a
-	// dialect's Apply is the usual caller, so nothing a *script* does writes
-	// one — but the shell itself does: Dynamic is built lazily, and `_` and
-	// `LINENO` are installed into it on the way past. That write is on the
-	// same goroutine question as every table above, and a substitution
-	// looking up a variable is enough to make it.
-	c.ownProducerTables(r)
-	// And the names among them `unset` may not take away, which a dialect
+	// The extension points. An embedder registers the producers before a run
+	// and a dialect's Apply is the usual caller, so nothing a *script* does
+	// writes one — but the shell itself does: `_` and `LINENO` are installed
+	// on the way past. The producers are slots of the clone's own cells, made
+	// above; the tables beside them are owned here. And the names among them `unset` may not take away, which a dialect
 	// registers beside the producer.
 	c.unsetRefused = maps.Clone(r.unsetRefused)
 	// And the names whose *elements* are frozen while the parameter is not,

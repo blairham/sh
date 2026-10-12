@@ -171,8 +171,7 @@ func TestCdWithNoOperandNamesHomeRatherThanCrashing(t *testing.T) {
 	r := newTestRunner(t, &Runner{
 		Semantics: &sem, Diagnostics: &Diagnostics{}, Name: "sh",
 		Stdout: out, Stderr: errOut,
-		Vars: map[string]string{"HOME": gone},
-	})
+	}).SeedVars(map[string]string{"HOME": gone})
 	f, err := syntax.Parse("cd\n", syntax.Core())
 	if err != nil {
 		t.Fatal(err)

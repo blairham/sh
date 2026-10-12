@@ -277,14 +277,13 @@ func TestTheListingSkipsItsOwnLineOnlyWhenItIsInTheList(t *testing.T) {
 			var out bytes.Buffer
 			sem, diag, d := zsh.Semantics(), zsh.Diagnostics(), zsh.Dialect()
 			dir := t.TempDir()
-			r := &interp.Runner{
+			r := (&interp.Runner{
 				Stdout: &out, Stderr: &out,
 				Semantics: &sem, Diagnostics: &diag, Name: "zsh",
 				// See the guard in internal/dialecttest: a nil Dialect is
 				// the core.
 				Dialect: &d, Dir: dir,
-				Vars: map[string]string{"PATH": dir, "SAVEHIST": "20"},
-			}
+			}).SeedVars(map[string]string{"PATH": dir, "SAVEHIST": "20"})
 			zsh.Apply(r)
 			// The state the reader would have left: it fills the list, and
 			// this line either reached it or was kept out.

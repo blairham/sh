@@ -59,7 +59,7 @@ func nestedRunSwitch(t *testing.T, dir, src string, byLine Answer, on bool) (str
 		Semantics: &sem, Diagnostics: &Diagnostics{},
 		Dir: dir, Name: "testsh",
 	})
-	r.Vars = map[string]string{"PATH": dir}
+	r.SeedVars(map[string]string{"PATH": dir})
 	r.SetAliasExpansion(on)
 	st, rerr := r.Run(context.Background(), f)
 	if rerr != nil {

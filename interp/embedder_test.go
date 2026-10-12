@@ -60,9 +60,8 @@ func TestVariablesAndArraysHandedIn(t *testing.T) {
 	sem := PosixSemantics()
 	r := newTestRunner(t, &Runner{
 		Semantics: &sem, Stdout: &out, Stderr: &strings.Builder{},
-		Vars:   map[string]string{"PRESET": "value", "PATH": "/bin:/usr/bin"},
-		Arrays: map[string]Array{"LIST": ArrayOf(Element{Str: "a"}, Element{Str: "b"})},
-	})
+	}).SeedVars(map[string]string{"PRESET": "value", "PATH": "/bin:/usr/bin"})
+	r.StoreArray("LIST", ArrayOf(Element{Str: "a"}, Element{Str: "b"}))
 	embed(t, r, `echo [$PRESET]; PRESET=changed; echo [$PRESET]; unset PRESET; echo [$PRESET]`+
 		"\n"+`echo [${LIST[0]}][${LIST[1]}]`)
 	if got := out.String(); got != "[value]\n[changed]\n[]\n[a][b]\n" {
@@ -82,10 +81,8 @@ func TestAProducedParameter(t *testing.T) {
 	n := 0
 	r := newTestRunner(t, &Runner{
 		Semantics: &sem, Stdout: &out, Stderr: &strings.Builder{},
-		Dynamic: map[string]func(*Runner) string{
-			"COUNTER": func(*Runner) string { n++; return string(rune('0' + n)) },
-		},
 	})
+	r.SetDynamic("COUNTER", func(*Runner) string { n++; return string(rune('0' + n)) })
 	embed(t, r, "echo [$COUNTER][$COUNTER]; COUNTER=fixed; echo [$COUNTER]; unset COUNTER; echo [$COUNTER]")
 	if got := out.String(); got != "[1][2]\n[3]\n[]\n" {
 		t.Errorf("out = %q, want fresh each read, unshadowed by assignment, and gone once unset", got)

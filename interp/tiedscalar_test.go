@@ -250,8 +250,7 @@ func TestTheTieSeamSeedsDefaultsAndConfersNoExport(t *testing.T) {
 	r := newTestRunner(t, &Runner{
 		Stdout: &out, Stderr: &errs, Semantics: &sem, Diagnostics: &dg,
 		Dir: t.TempDir(), Name: "testsh",
-		Vars: map[string]string{"STANDING": "one:two:three"},
-	})
+	}).SeedVars(map[string]string{"STANDING": "one:two:three"})
 	// An empty separator is the default one, which is what a caller that
 	// does not care should be able to write.
 	r.Tie("STANDING", "standing", "")

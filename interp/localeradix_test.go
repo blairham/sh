@@ -157,12 +157,11 @@ func radixRunIn(t *testing.T, policy interp.RadixPolicy, locale, src string) (ou
 	sem.NumberRadix = policy
 	// testrunner:bare — the subject is the locale database, which is a field
 	// this test sets to a fixture of its own, and the runs write nothing.
-	r := &interp.Runner{
+	r := (&interp.Runner{
 		Stdout: &o, Stderr: &e,
 		Semantics:      &sem,
 		LocaleDatabase: radixFixture(t),
-		Vars:           map[string]string{"LC_ALL": locale},
-	}
+	}).SeedVars(map[string]string{"LC_ALL": locale})
 	f, err := syntax.Parse(src, syntax.Core())
 	if err != nil {
 		t.Fatalf("parse %q: %v", src, err)

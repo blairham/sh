@@ -130,6 +130,6 @@ func tildeRun(t *testing.T, src string, set func(*Semantics)) (string, int) {
 		sem := CoreSemantics()
 		set(&sem)
 		r.Semantics = &sem
-		r.Vars = map[string]string{"HOME": "/h"}
+		r.SeedVars(map[string]string{"HOME": "/h"})
 	})
 }

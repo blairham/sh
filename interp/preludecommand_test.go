@@ -34,8 +34,8 @@ command -v secretcmd || echo none
 	dir := t.TempDir()
 	r := newTestRunner(t, &Runner{
 		Stdout: &out, Stderr: &errs, Semantics: &sem, Diagnostics: &dg,
-		Dir: dir, Name: "testsh", Vars: map[string]string{"PATH": dir},
-	})
+		Dir: dir, Name: "testsh",
+	}).SeedVars(map[string]string{"PATH": dir})
 	r.RegisterPreludeCommand("secretcmd", func(r *Runner, _ context.Context, args []string) int {
 		_, _ = r.Stdout.Write([]byte("ran"))
 		for _, a := range args {

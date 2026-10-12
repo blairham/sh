@@ -24,7 +24,7 @@ func newTestRunner(vars map[string]string) *interp.Runner {
 	// environment — so the externals these tests reach (sleep, cat) get a
 	// PATH handed in, from the two directories every supported platform
 	// keeps the basics in.
-	r := &interp.Runner{Semantics: &sem, Vars: vars, Env: []string{"PATH=/usr/bin:/bin"}}
+	r := (&interp.Runner{Semantics: &sem, Env: []string{"PATH=/usr/bin:/bin"}}).SeedVars(vars)
 	// Told who is typing and where, which is what a shell binary does at
 	// startup — dialect/bash and dialect/zsh both call SetPromptUserFunc with
 	// interp.LoginName. The drawer does not read these names out of the

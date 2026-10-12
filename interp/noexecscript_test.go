@@ -39,7 +39,7 @@ func imageRun(t *testing.T, dir, src string, sem Semantics, dg Diagnostics) (str
 		Semantics: &sem, Diagnostics: &dg,
 		Dir: dir, Name: "testsh",
 	})
-	r.Vars = map[string]string{"PATH": dir}
+	r.SeedVars(map[string]string{"PATH": dir})
 	st, rerr := r.Run(context.Background(), f)
 	if rerr != nil {
 		return buf.String() + "unsupported: " + rerr.Error(), -1
@@ -118,7 +118,7 @@ func TestAFileWithBinaryContentIsNotRunAsAScript(t *testing.T) {
 		Semantics: &sem, Diagnostics: &Diagnostics{},
 		Dir: dir, Name: "testsh",
 	})
-	r.Vars = map[string]string{"PATH": dir}
+	r.SeedVars(map[string]string{"PATH": dir})
 	f, err := syntax.Parse(`./bin.img; echo "st=$?"`, syntax.Core())
 	if err != nil {
 		t.Fatal(err)
@@ -164,7 +164,7 @@ func TestWhetherBinaryContentStopsTheFallbackIsAnAxis(t *testing.T) {
 				Semantics: &sem, Diagnostics: &Diagnostics{},
 				Dir: dir, Name: "testsh",
 			})
-			r.Vars = map[string]string{"PATH": dir}
+			r.SeedVars(map[string]string{"PATH": dir})
 			f, err := syntax.Parse(`./b.img; echo "st=$?"`, syntax.Core())
 			if err != nil {
 				t.Fatal(err)
@@ -192,7 +192,7 @@ func TestOnlyTheFirstLineDecidesWhetherAFileIsBinary(t *testing.T) {
 		Semantics: &sem, Diagnostics: &Diagnostics{},
 		Dir: dir, Name: "testsh",
 	})
-	r.Vars = map[string]string{"PATH": dir}
+	r.SeedVars(map[string]string{"PATH": dir})
 	f, err := syntax.Parse(`./later.img`, syntax.Core())
 	if err != nil {
 		t.Fatal(err)
@@ -289,7 +289,7 @@ func TestExecOnAFileWithBinaryContentStillFails(t *testing.T) {
 		Semantics: &sem, Diagnostics: &Diagnostics{},
 		Dir: dir, Name: "testsh",
 	})
-	r.Vars = map[string]string{"PATH": dir}
+	r.SeedVars(map[string]string{"PATH": dir})
 	f, err := syntax.Parse(`exec ./b.img; echo NOT-REACHED`, syntax.Core())
 	if err != nil {
 		t.Fatal(err)
@@ -322,7 +322,7 @@ func TestADescriptorParkedByExecReachesAFileRunAsAScript(t *testing.T) {
 			Semantics: &sem, Diagnostics: &Diagnostics{},
 			Dir: dir, Name: "testsh",
 		})
-		r.Vars = map[string]string{"PATH": dir}
+		r.SeedVars(map[string]string{"PATH": dir})
 		writeImage(t, dir, "t.scr", []byte("echo via3 >&3\n"), 0o755)
 		f, err := syntax.Parse(`exec 3>out3; ./t.scr; echo "st=$?"`, syntax.Core())
 		if err != nil {
@@ -363,7 +363,7 @@ func TestAUmaskTheScriptSetsDoesNotOutliveIt(t *testing.T) {
 			return old, nil
 		},
 	})
-	r.Vars = map[string]string{"PATH": dir}
+	r.SeedVars(map[string]string{"PATH": dir})
 	f, err := syntax.Parse(`./u.scr; echo "st=$?"`, syntax.Core())
 	if err != nil {
 		t.Fatal(err)
@@ -398,7 +398,7 @@ func TestAUmaskTheScriptSetsReachesTheProcessWhileItRuns(t *testing.T) {
 			return old, nil
 		},
 	})
-	r.Vars = map[string]string{"PATH": dir}
+	r.SeedVars(map[string]string{"PATH": dir})
 	f, err := syntax.Parse(`./u.scr`, syntax.Core())
 	if err != nil {
 		t.Fatal(err)
@@ -438,7 +438,7 @@ func TestTheFreshShellIsSetUpTheWayTheFrontEndSetsOneUp(t *testing.T) {
 		Dir: dir, Name: "testsh", SetUp: setUp,
 	})
 	setUp(r)
-	r.Vars = map[string]string{"PATH": dir}
+	r.SeedVars(map[string]string{"PATH": dir})
 	f, err := syntax.Parse(`./outer.scr; echo "st=$?"`, syntax.Core())
 	if err != nil {
 		t.Fatal(err)
@@ -516,7 +516,7 @@ func interpreterRun(t *testing.T, dir, bin, src string, sem Semantics, dg Diagno
 		Semantics: &sem, Diagnostics: &dg,
 		Dir: dir, Name: "testsh",
 	})
-	r.Vars = map[string]string{"PATH": dir + string(os.PathListSeparator) + bin}
+	r.SeedVars(map[string]string{"PATH": dir + string(os.PathListSeparator) + bin})
 	st, rerr := r.Run(context.Background(), f)
 	if rerr != nil {
 		return buf.String() + "unsupported: " + rerr.Error(), -1

@@ -176,7 +176,7 @@ func TestTypeWillNotNameAReservedBuiltinOnPath(t *testing.T) {
 		sem := CoreSemantics()
 		dg := Diagnostics{TypeNotFound: "type: %[1]s: not found"}
 		r.Semantics, r.Diagnostics = &sem, &dg
-		r.Vars = map[string]string{"PATH": dir}
+		r.SeedVars(map[string]string{"PATH": dir})
 		// hash is a builtin now, so the reserved path is reached the way a
 		// dialect reaches it: with the builtin removed.
 		r.Unregister("hash")

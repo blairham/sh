@@ -27,7 +27,7 @@ func TestACommandCanAskForTheEditor(t *testing.T) {
 	var got string
 	var end interp.LineEditEnd
 	s := newSessionWith(t, func(sh *Shell) {
-		sh.Runner.Vars["PS1"] = "UPPER\n[\\#]"
+		sh.Runner.StoreScalar("PS1", "UPPER\n[\\#]")
 		sh.Runner.Register("edit", func(r *interp.Runner, _ context.Context, args []string) int {
 			got, end = r.EditLine(interp.LineEdit{Prompt: "P ", Initial: "world"})
 			_, _ = fmt.Fprintf(r.Stdout, "got=[%s]\n", got)
@@ -100,7 +100,7 @@ func TestACommandIsToldTheEditWasAbandoned(t *testing.T) {
 // a completion that inserted without drawing would leave the same line behind.
 func TestACompletionInsideSuchAReadDraws(t *testing.T) {
 	s := newSessionWith(t, func(sh *Shell) {
-		sh.Runner.Vars["PS1"] = "UPPER\n[\\#]"
+		sh.Runner.StoreScalar("PS1", "UPPER\n[\\#]")
 		sh.Completers = []Completer{CompleterFunc(func(c Completion) []Candidate {
 			var got []string
 			for _, m := range []string{"uniq_alpha", "uniq_beta"} {

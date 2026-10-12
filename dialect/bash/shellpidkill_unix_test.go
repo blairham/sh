@@ -104,11 +104,11 @@ func runBashAnchored(t *testing.T, src string) string {
 	dir := t.TempDir()
 	var out, errs bytes.Buffer
 	sem, diag := bash.Semantics(), bash.Diagnostics()
-	r := &interp.Runner{
+	r := (&interp.Runner{
 		Stdout: &out, Stderr: &errs, Semantics: &sem, Diagnostics: &diag,
-		Dir: dir, Name: "bash", Vars: map[string]string{"PATH": dir},
+		Dir: dir, Name: "bash",
 		Dialect: presetDialect(), ProcessAnchor: []string{anchor},
-	}
+	}).SeedVars(map[string]string{"PATH": dir})
 	bash.Apply(r)
 	if _, rerr := r.Run(context.Background(), f); rerr != nil {
 		t.Fatalf("run %q: %v", src, rerr)

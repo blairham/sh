@@ -67,7 +67,7 @@ func TestAColonClosesATildePrefixInAnAssignmentsValue(t *testing.T) {
 			out, st := run(t, tc.src+"\n", func(r *Runner) {
 				sem := CoreSemantics()
 				r.Semantics = &sem
-				r.Vars = map[string]string{"HOME": "/h"}
+				r.SeedVars(map[string]string{"HOME": "/h"})
 			})
 			if st != 0 {
 				t.Fatalf("status = %d; out = %q", st, out)
@@ -117,7 +117,7 @@ func TestAQuoteOrAnExpansionInsideATildePrefixStopsIt(t *testing.T) {
 			out, st := run(t, tc.src+"\n", func(r *Runner) {
 				sem := CoreSemantics()
 				r.Semantics = &sem
-				r.Vars = map[string]string{"HOME": "/h"}
+				r.SeedVars(map[string]string{"HOME": "/h"})
 			})
 			if st != 0 {
 				t.Fatalf("status = %d; out = %q", st, out)
@@ -146,7 +146,7 @@ func TestAnArgumentShapedLikeAnAssignmentKeepsItsTilde(t *testing.T) {
 			out, st := run(t, tc.src+"\n", func(r *Runner) {
 				sem := CoreSemantics()
 				r.Semantics = &sem
-				r.Vars = map[string]string{"HOME": "/h"}
+				r.SeedVars(map[string]string{"HOME": "/h"})
 			})
 			if st != 0 {
 				t.Fatalf("status = %d; out = %q", st, out)

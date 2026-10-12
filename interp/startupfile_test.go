@@ -182,8 +182,7 @@ func TestAStartupFileIsNamedByTheDiagnosticsItRaises(t *testing.T) {
 	dg := Diagnostics{Location: LocationTightLine, LocationNamesTheCurrentFile: true}
 	r := newTestRunner(t, &Runner{
 		Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &dg, Name: "testsh",
-		Vars: map[string]string{"PATH": ""},
-	})
+	}).SeedVars(map[string]string{"PATH": ""})
 	// The name the shell was started for, which is what the location used to
 	// answer with and what a passing test has to be able to tell apart.
 	r.SetScriptFile("/tmp/main.sh")

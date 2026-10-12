@@ -78,6 +78,6 @@ func newHoldsRunner(t *testing.T) *interp.Runner {
 	var out strings.Builder
 	return newTestRunner(t, &interp.Runner{
 		Semantics: &sem, Dialect: &d,
-		Vars: map[string]string{}, Stdout: &out, Stderr: &out,
-	})
+		Stdout: &out, Stderr: &out,
+	}).SeedVars(map[string]string{})
 }

@@ -42,8 +42,7 @@ func dotFailureRun(t *testing.T, dir, src string, names bool) string {
 	r := newTestRunner(t, &Runner{
 		Stdout: &out, Stderr: &errs, Semantics: &sem, Diagnostics: &dg,
 		Dir: dir, Name: "s.sh", Route: RouteScriptFile,
-		Vars: map[string]string{"PATH": dir},
-	})
+	}).SeedVars(map[string]string{"PATH": dir})
 	r.SetScriptFile("s.sh")
 	if _, rerr := r.Run(context.Background(), f); rerr != nil {
 		t.Fatalf("run %q: %v", src, rerr)
@@ -135,8 +134,7 @@ func TestAFailedDotLeavesDollarZeroAlone(t *testing.T) {
 	r := newTestRunner(t, &Runner{
 		Stdout: &out, Stderr: &errs, Semantics: &sem, Diagnostics: &dg,
 		Dir: dir, Name: "s.sh", Route: RouteScriptFile,
-		Vars: map[string]string{"PATH": dir},
-	})
+	}).SeedVars(map[string]string{"PATH": dir})
 	r.SetScriptFile("s.sh")
 	if _, rerr := r.Run(context.Background(), f); rerr != nil {
 		t.Fatal(rerr)

@@ -151,10 +151,10 @@ func TestPosixAliasesMovesTheGrammarFlag(t *testing.T) {
 	d := zsh.Dialect()
 	sem, diag := zsh.Semantics(), zsh.Diagnostics()
 	dir := t.TempDir()
-	r := &interp.Runner{
+	r := (&interp.Runner{
 		Semantics: &sem, Diagnostics: &diag, Name: "zsh",
-		Dialect: &d, Dir: dir, Vars: map[string]string{"PATH": dir},
-	}
+		Dialect: &d, Dir: dir,
+	}).SeedVars(map[string]string{"PATH": dir})
 	zsh.Apply(r)
 	if !r.Dialect.AliasesExpandReservedWords {
 		t.Fatal("this dialect starts with reserved-word aliases off; the rows below assume on")

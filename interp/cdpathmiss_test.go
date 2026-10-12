@@ -102,8 +102,7 @@ func TestACdpathSearchThatMisses(t *testing.T) {
 			r := newTestRunner(t, &Runner{
 				Semantics: &sem, Diagnostics: &Diagnostics{}, Name: "sh", Dir: dir,
 				Stdout: &strings.Builder{}, Stderr: errOut,
-				Vars: map[string]string{"CDPATH": tc.cdpath},
-			})
+			}).SeedVars(map[string]string{"CDPATH": tc.cdpath})
 			f, err := syntax.Parse("cd "+tc.operand+"\n", syntax.Core())
 			if err != nil {
 				t.Fatal(err)

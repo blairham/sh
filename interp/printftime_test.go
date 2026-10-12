@@ -34,7 +34,7 @@ func printfTime(t *testing.T, src string, has Answer, adjust func(*Runner)) (str
 	return run(t, src, func(r *Runner) {
 		sem := timeSemantics(has)
 		r.Semantics = &sem
-		r.Vars = map[string]string{"TZ": "UTC"}
+		r.SeedVars(map[string]string{"TZ": "UTC"})
 		if adjust != nil {
 			adjust(r)
 		}
@@ -97,7 +97,7 @@ func TestPrintfTimeConversion(t *testing.T) {
 			sem.PrintfReportsBadNumber = Yes
 			sem.PrintfNumberOperand = PrintfNumberLeadingNumber
 			r.Semantics = &sem
-			r.Vars = map[string]string{"TZ": "UTC"}
+			r.SeedVars(map[string]string{"TZ": "UTC"})
 		})
 		if !strings.Contains(out, "invalid number") || !strings.Contains(out, "1970") || st == 0 {
 			t.Errorf("out = %q status %d, want the complaint and the epoch zero", out, st)
@@ -120,7 +120,7 @@ func TestPrintfTimeNowAndShellStart(t *testing.T) {
 			out, st := printfTime(t, tc.src, Yes, func(r *Runner) {
 				sem := timeSemantics(Yes)
 				r.Semantics = &sem
-				r.Vars = map[string]string{"TZ": "UTC"}
+				r.SeedVars(map[string]string{"TZ": "UTC"})
 				r.Clock = func() time.Time { return fixed }
 			})
 			if st != 0 || out != "2019-03-04\n" {
@@ -153,7 +153,7 @@ func TestPrintfTimeReadsTheRunnersZone(t *testing.T) {
 			out, _ := printfTime(t, `printf '%(%H:%M %Z)T\n' 1000000000`, Yes, func(r *Runner) {
 				sem := timeSemantics(Yes)
 				r.Semantics = &sem
-				r.Vars = map[string]string{"TZ": tc.tz}
+				r.SeedVars(map[string]string{"TZ": tc.tz})
 			})
 			if out != tc.want {
 				t.Errorf("TZ=%q gave %q, want %q", tc.tz, out, tc.want)
@@ -166,7 +166,7 @@ func TestPrintfTimeReadsTheRunnersZone(t *testing.T) {
 		out, _ := printfTime(t, `TZ=UTC; printf '%(%H:%M %Z)T\n' 1000000000`, Yes, func(r *Runner) {
 			sem := timeSemantics(Yes)
 			r.Semantics = &sem
-			r.Vars = map[string]string{"TZ": "America/New_York"}
+			r.SeedVars(map[string]string{"TZ": "America/New_York"})
 		})
 		if out != "01:46 UTC\n" {
 			t.Errorf("out = %q, want the assignment to have decided", out)

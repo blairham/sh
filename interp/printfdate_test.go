@@ -28,7 +28,7 @@ func dateRun(t *testing.T, src string) (string, int) {
 		sem.PrintfTimeConversion = Yes
 		sem.PrintfTimeOperandIsADateString = Yes
 		r.Semantics = &sem
-		r.Vars = map[string]string{"TZ": "UTC"}
+		r.SeedVars(map[string]string{"TZ": "UTC"})
 		r.Clock = func() time.Time { return pinned }
 	})
 }

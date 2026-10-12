@@ -26,11 +26,11 @@ func runZshSplitOnRoute(t *testing.T, route interp.Route, src string) (out strin
 	var o, e bytes.Buffer
 	sem, diag := zsh.Semantics(), zsh.Diagnostics()
 	dir := t.TempDir()
-	r := &interp.Runner{
+	r := (&interp.Runner{
 		Stdout: &o, Stderr: &e, Semantics: &sem, Diagnostics: &diag,
-		Dir: dir, Name: "zsh", Vars: map[string]string{"PATH": dir},
+		Dir: dir, Name: "zsh",
 		Dialect: presetDialect(), Route: route,
-	}
+	}).SeedVars(map[string]string{"PATH": dir})
 	zsh.Apply(r)
 	st, rerr := r.Run(context.Background(), f)
 	if rerr != nil {

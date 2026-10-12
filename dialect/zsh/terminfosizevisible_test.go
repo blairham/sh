@@ -63,12 +63,12 @@ func runZshUTF8Locale(t *testing.T, locale, src string) (string, int) {
 	var o bytes.Buffer
 	sem, diag := zsh.Semantics(), zsh.Diagnostics()
 	dir := t.TempDir()
-	r := &interp.Runner{
+	r := (&interp.Runner{
 		Stdout: &o, Stderr: &o, Semantics: &sem, Diagnostics: &diag,
 		Dir: dir, Name: "zsh", Route: interp.RouteScriptFile,
-		Vars:    map[string]string{"PATH": dir, "LC_ALL": locale},
+
 		Dialect: presetDialect(),
-	}
+	}).SeedVars(map[string]string{"PATH": dir, "LC_ALL": locale})
 	zsh.Apply(r)
 	st, rerr := r.Run(context.Background(), f)
 	if rerr != nil {

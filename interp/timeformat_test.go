@@ -34,7 +34,7 @@ func timeFormatDiag() Diagnostics {
 func formatted(t *testing.T, format string) string {
 	t.Helper()
 	_, errs, st := timeRun(t, `time true`, syntax.Core(), timeSem(), timeFormatDiag(),
-		func(r *Runner) { r.Vars = map[string]string{"TIMEFORMAT": format} })
+		func(r *Runner) { r.SeedVars(map[string]string{"TIMEFORMAT": format}) })
 	if st != 0 {
 		t.Errorf("status = %d, want the pipeline's 0", st)
 	}
@@ -104,7 +104,7 @@ func TestAnUnknownDirectiveRefusesTheWholeReport(t *testing.T) {
 // only thing that makes the variable live.
 func TestAFormatIsNotReadWhereTheDialectHasNoVariable(t *testing.T) {
 	_, errs, _ := timeRun(t, `time true`, syntax.Core(), timeSem(), Diagnostics{},
-		func(r *Runner) { r.Vars = map[string]string{"TIMEFORMAT": "[%R]"} })
+		func(r *Runner) { r.SeedVars(map[string]string{"TIMEFORMAT": "[%R]"}) })
 	if !defaultReport.MatchString(errs) {
 		t.Errorf("stderr = %q, want the default block and not the format", errs)
 	}
@@ -116,7 +116,7 @@ func TestThePosixFlagIsAskedBeforeTheFormat(t *testing.T) {
 	d := syntax.Core()
 	d.TimePosixFlag = true
 	_, errs, _ := timeRun(t, `time -p true`, d, timeSem(), timeFormatDiag(),
-		func(r *Runner) { r.Vars = map[string]string{"TIMEFORMAT": "[%R]"} })
+		func(r *Runner) { r.SeedVars(map[string]string{"TIMEFORMAT": "[%R]"}) })
 	posix := regexp.MustCompile(`^real \d+\.\d{2}\nuser \d+\.\d{2}\nsys \d+\.\d{2}\n$`)
 	if !posix.MatchString(errs) {
 		t.Errorf("stderr = %q, want the POSIX three lines", errs)

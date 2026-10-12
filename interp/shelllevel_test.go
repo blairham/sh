@@ -120,9 +120,9 @@ func TestAnAssignedShellLevelIsNotOverwritten(t *testing.T) {
 	sem.ShellLevel = ShellLevelCounted
 	r := newTestRunner(t, &Runner{
 		Semantics: &sem, Diagnostics: &Diagnostics{}, Name: "sh",
-		Env: []string{"SHLVL=2"}, Vars: map[string]string{"SHLVL": "40"},
+		Env:    []string{"SHLVL=2"},
 		Stdout: out, Stderr: out,
-	})
+	}).SeedVars(map[string]string{"SHLVL": "40"})
 	runCd(t, r, `echo "[$SHLVL]"`)
 	if got := strings.TrimSpace(out.String()); got != "[40]" {
 		t.Errorf("SHLVL read back as %s, want the caller's [40]", got)

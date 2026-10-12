@@ -154,8 +154,7 @@ func borrowedRunWith(t *testing.T, inc, src string, echoes bool, tune func(*Sema
 	r := newTestRunner(t, &Runner{
 		Semantics: &sem, Diagnostics: &dg, Name: "sh",
 		Stdout: &bytes.Buffer{}, Stderr: &buf, Dir: dir,
-		Vars: map[string]string{"PATH": ""},
-	})
+	}).SeedVars(map[string]string{"PATH": ""})
 	if _, err := r.Run(context.Background(), f); err != nil {
 		t.Fatal(err)
 	}

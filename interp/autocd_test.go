@@ -67,8 +67,7 @@ func TestABareDirectoryNameMayBeReadAsACd(t *testing.T) {
 				// substituted fails the way a missing command fails rather
 				// than resolving to the directory sitting in the working
 				// directory — the two are told apart by what the shell says.
-				Vars: map[string]string{"PATH": t.TempDir()},
-			})
+			}).SeedVars(map[string]string{"PATH": t.TempDir()})
 			r.SetAutoCd(c.on)
 			f, err := syntax.Parse(c.operand+"\n", syntax.Core())
 			if err != nil {
@@ -114,8 +113,7 @@ func TestADirectoryDoesNotShadowACommand(t *testing.T) {
 	r := newTestRunner(t, &Runner{
 		Semantics: &sem, Diagnostics: &Diagnostics{}, Name: "sh", Dir: dir,
 		Stdout: out, Stderr: errOut, Interactive: true,
-		Vars: map[string]string{"PATH": t.TempDir()},
-	})
+	}).SeedVars(map[string]string{"PATH": t.TempDir()})
 	r.SetAutoCd(true)
 	f, err := syntax.Parse("echo hi\n", syntax.Core())
 	if err != nil {

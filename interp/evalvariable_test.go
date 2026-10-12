@@ -17,7 +17,7 @@ import (
 func TestTextFromAVariableRunsInTheCallingShell(t *testing.T) {
 	var out strings.Builder
 	sem := interp.PosixSemantics()
-	r := newTestRunner(t, &interp.Runner{Semantics: &sem, Vars: map[string]string{}, Stdout: &out, Stderr: &out})
+	r := newTestRunner(t, &interp.Runner{Semantics: &sem, Stdout: &out, Stderr: &out}).SeedVars(map[string]string{})
 
 	if st := r.EvalVariable(t.Context(), "PROMPT_COMMAND", `echo ran; x=7`); st != 0 {
 		t.Errorf("the text reported %d, want 0", st)
@@ -39,7 +39,7 @@ func TestTextFromAVariableRunsInTheCallingShell(t *testing.T) {
 func TestTextFromAVariableIsShownTheCallersStatus(t *testing.T) {
 	var out strings.Builder
 	sem := interp.PosixSemantics()
-	r := newTestRunner(t, &interp.Runner{Semantics: &sem, Vars: map[string]string{}, Stdout: &out, Stderr: &out})
+	r := newTestRunner(t, &interp.Runner{Semantics: &sem, Stdout: &out, Stderr: &out}).SeedVars(map[string]string{})
 	r.SetExitStatus(5)
 
 	r.EvalVariable(t.Context(), "PROMPT_COMMAND", `echo "st=$?"`)
@@ -58,7 +58,7 @@ func TestTextThatWillNotParseIsNamedByItsVariable(t *testing.T) {
 	var out strings.Builder
 	sem := interp.PosixSemantics()
 	sem.BuiltinSyntaxErrorFatal = interp.No
-	r := newTestRunner(t, &interp.Runner{Semantics: &sem, Vars: map[string]string{}, Stdout: &out, Stderr: &out})
+	r := newTestRunner(t, &interp.Runner{Semantics: &sem, Stdout: &out, Stderr: &out}).SeedVars(map[string]string{})
 
 	r.EvalVariable(t.Context(), "PROMPT_COMMAND", `if`)
 
@@ -75,7 +75,7 @@ func TestTextThatWillNotParseIsNamedByItsVariable(t *testing.T) {
 // and is a different question from the one above.
 func TestTextFromAVariableWithNothingInItReportsSuccess(t *testing.T) {
 	sem := interp.PosixSemantics()
-	r := newTestRunner(t, &interp.Runner{Semantics: &sem, Vars: map[string]string{}})
+	r := newTestRunner(t, &interp.Runner{Semantics: &sem}).SeedVars(map[string]string{})
 	r.SetExitStatus(5)
 
 	if st := r.EvalVariable(t.Context(), "PROMPT_COMMAND", "   \n"); st != 0 {
@@ -99,8 +99,8 @@ func TestAVariablesNameBeatsTheDialectsWordForEval(t *testing.T) {
 	d.EvalSourceName = "(eval)"
 	r := newTestRunner(t, &interp.Runner{
 		Semantics: &sem, Diagnostics: &d,
-		Vars: map[string]string{}, Stdout: &out, Stderr: &out,
-	})
+		Stdout: &out, Stderr: &out,
+	}).SeedVars(map[string]string{})
 
 	r.EvalVariable(t.Context(), "PROMPT_COMMAND", `if`)
 

@@ -121,8 +121,8 @@ func declaredElementRunWith(t *testing.T, src string, sem Semantics, route Route
 			Location:          LocationColonLine,
 			BadArraySubscript: "%[1]s[%[2]s]: bad array subscript",
 		},
-		Dir: dir, Name: "testsh", Vars: map[string]string{"PATH": dir},
-	})
+		Dir: dir, Name: "testsh",
+	}).SeedVars(map[string]string{"PATH": dir})
 	st, rerr := r.Run(context.Background(), f)
 	if rerr != nil {
 		t.Fatalf("run %q: %v", src, rerr)

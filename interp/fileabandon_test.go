@@ -281,7 +281,7 @@ func runAndGiveUp(t *testing.T, dir, text string, sem Semantics, dg Diagnostics)
 		Semantics: &sem, Diagnostics: &dg,
 		Dir: dir, Name: "testsh",
 	})
-	r.Vars = map[string]string{"PATH": dir}
+	r.SeedVars(map[string]string{"PATH": dir})
 	if err := r.RunPart(context.Background(), f); err != nil {
 		t.Fatalf("run: %v", err)
 	}
@@ -356,7 +356,7 @@ func runAndGiveUpTheLine(t *testing.T, dir, text string, sem Semantics, dg Diagn
 		Semantics: &sem, Diagnostics: &dg,
 		Dir: dir, Name: "testsh",
 	})
-	r.Vars = map[string]string{"PATH": dir}
+	r.SeedVars(map[string]string{"PATH": dir})
 	if err := r.RunPart(context.Background(), f); err != nil {
 		t.Fatalf("run: %v", err)
 	}
@@ -447,7 +447,7 @@ func TestACaughtLineDoesNotMakeALaterExitSurvivable(t *testing.T) {
 		Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &dg,
 		Dir: dir, Name: "testsh",
 	})
-	r.Vars = map[string]string{"PATH": dir}
+	r.SeedVars(map[string]string{"PATH": dir})
 	if err := r.RunPart(context.Background(), f); err != nil {
 		t.Fatal(err)
 	}

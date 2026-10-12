@@ -45,8 +45,8 @@ func headingRun(t *testing.T, src string, abandons Answer) (string, string, int)
 	r := newTestRunner(t, &Runner{
 		Stdout: &out, Stderr: &errs, Semantics: &sem,
 		Diagnostics: &Diagnostics{Location: LocationLineWord},
-		Dir:         dir, Name: "testsh", Vars: map[string]string{"PATH": dir},
-	})
+		Dir:         dir, Name: "testsh",
+	}).SeedVars(map[string]string{"PATH": dir})
 	st, rerr := r.Run(context.Background(), f)
 	if rerr != nil {
 		t.Fatalf("run %q: %v", src, rerr)
@@ -238,8 +238,8 @@ func TestCaseSubjectKeepsThePreviousLine(t *testing.T) {
 		r := newTestRunner(t, &Runner{
 			Stdout: &out, Stderr: &errs, Semantics: &sem,
 			Diagnostics: &Diagnostics{Location: LocationLineWord},
-			Dir:         dir, Name: "testsh", Vars: map[string]string{"PATH": dir},
-		})
+			Dir:         dir, Name: "testsh",
+		}).SeedVars(map[string]string{"PATH": dir})
 		if _, rerr := r.Run(context.Background(), f); rerr != nil {
 			t.Fatalf("run %q: %v", src, rerr)
 		}

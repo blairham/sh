@@ -1123,7 +1123,7 @@ func (r *Runner) tableRefusesAScalarStore(name string) bool {
 // the same thing. That is why the producer decides here and the option only
 // picks the wording: [Runner.tableRefusesAScalarStore] is the stored table's
 // question and a produced one never reached it, because it is in
-// [Runner.DynamicAssocs] and not in [Runner.AssocArrays].
+// a cell's produced-table slot and not in its stored one (varstore.go).
 //
 // The wording is chosen by asking the stored table's own axis rather than by
 // reading an option, because that axis **is** where the option lands on this

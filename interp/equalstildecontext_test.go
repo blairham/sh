@@ -78,7 +78,7 @@ func TestTheFirstUnquotedEqualsOpensATildeContext(t *testing.T) {
 					sem := CoreSemantics()
 					sem.TheFirstUnquotedEqualsInAWordOpensATildeContext = w.answer
 					r.Semantics = &sem
-					r.Vars = map[string]string{"HOME": "/h"}
+					r.SeedVars(map[string]string{"HOME": "/h"})
 				})
 				if got := strings.TrimSpace(out); got != w.want {
 					t.Errorf("%s under %s = %q, want %q", tc.src, w.label, got, w.want)
@@ -108,7 +108,7 @@ func TestTheWideEqualsAnswerLeavesAnAssignmentStatementWhereItWas(t *testing.T) 
 					sem := CoreSemantics()
 					sem.TheFirstUnquotedEqualsInAWordOpensATildeContext = a.answer
 					r.Semantics = &sem
-					r.Vars = map[string]string{"HOME": "/h"}
+					r.SeedVars(map[string]string{"HOME": "/h"})
 				})
 				if st != 0 {
 					t.Fatalf("status = %d; out = %q", st, out)
@@ -147,7 +147,7 @@ func TestTheWideEqualsAxisIsAskedOnlyWhereATildeCouldMove(t *testing.T) {
 				sem := CoreSemantics()
 				sem.TheFirstUnquotedEqualsInAWordOpensATildeContext = Answer(0)
 				r.Semantics = &sem
-				r.Vars = map[string]string{"HOME": "/h"}
+				r.SeedVars(map[string]string{"HOME": "/h"})
 			})
 			asked := strings.Contains(out, "every word with an unquoted `=` in it being a tilde context")
 			if asked != tc.asks {

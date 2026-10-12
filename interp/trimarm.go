@@ -61,14 +61,24 @@ import (
 // is not a parameter trim passes.
 type armOrder struct {
 	answer Answer
-	ask    func() bool
+	// ask is the question, or nil where r is to be asked it.
+	ask func() bool
+	r   *Runner
 }
 
 // reaches is whether asking is worth the preparation: a dialect that reads
 // the longest match has already answered, and the zero value is what a caller
 // that is not a parameter trim or substitution passes.
 func (a armOrder) reaches() bool {
-	return a.answer != No && a.ask != nil
+	return a.answer != No && (a.ask != nil || a.r != nil)
+}
+
+// asked puts the question.
+func (a armOrder) asked() bool {
+	if a.ask != nil {
+		return a.ask()
+	}
+	return a.r.askArmOrder()
 }
 
 // armVariantLimit is how many resolved patterns the search will consider.
@@ -106,15 +116,29 @@ type armSearch struct {
 	// the report it gets, so the plan only has to be the right *shape* for
 	// the pattern being matched rather than for the one the script wrote.
 	where []*matchWhere
-	// reach is each unbounded variant's end analysis, nil for a variant it
-	// does not read, and ends is that analysis bound to the subject last
-	// asked about. A substitution asks at every position a match was found
+	// reach is each unbounded variant's end analysis, made from autos the
+	// first time it is asked for and nil for a variant it does not read,
+	// and ends is that analysis bound to the subject last asked about. A substitution asks at every position a match was found
 	// at, and without it each question was every span from the length
 	// reading's edge down, per variant — two thirds of #1398's substitution
 	// once the length reading itself stopped enumerating (#6356). See
 	// interp/substreach.go.
 	reach []*reachSet
 	ends  []*reachEnds
+	// autos are the variants' automata, from which reach is made on first
+	// use, and o the options it is made under.
+	autos []*reachAutomaton
+	o     patternOpts
+	// stops is the unit boundaries of the subject last asked about, which a
+	// substitution asks about at every match it finds.
+	stops *subjectStops
+}
+
+// subjectStops is unitStops of one subject, kept for the next question about
+// the same one.
+type subjectStops struct {
+	value string
+	stops []int
 }
 
 // armBound is what one resolved variant requires of a piece, so that a
@@ -147,27 +171,120 @@ func newArmSearch(pattern string, o patternOpts) (armSearch, bool) {
 	if !strings.ContainsRune(pattern, '|') {
 		return armSearch{}, false
 	}
-	variants, ok := armVariants(pattern, o)
-	if !ok || len(variants) < 2 {
+	t := armTemplateFor(pattern, &o)
+	if t == nil {
 		return armSearch{}, false
 	}
-	bounds := make([]armBound, len(variants))
-	where := make([]*matchWhere, len(variants))
-	reach := make([]*reachSet, len(variants))
+	where := make([]*matchWhere, len(t.variants))
+	for i := range t.variants {
+		where[i] = &matchWhere{plan: t.plans[i]}
+	}
+	autos := t.autos
+	if reachRefused(&o) {
+		// The template's automata were read without the match state, and
+		// this match carries state the analysis does not read.
+		autos = nil
+	}
+	o.where = nil
+	return armSearch{
+		variants: t.variants, bounds: t.bounds, where: where,
+		autos: autos, o: o,
+		reach: make([]*reachSet, len(t.variants)),
+		ends:  make([]*reachEnds, len(t.variants)),
+		stops: &subjectStops{},
+	}, true
+}
+
+// readPatternBounds is both of interp/patternspan.go's analyses of p.
+func readPatternBounds(p string, o patternOpts) armBound {
+	var b armBound
+	b.least, b.most, b.bounded = patternSpanBytes(p, o)
+	b.head, b.tail, b.edges = patternEdgeLiterals(p, o)
+	return b
+}
+
+// patternBoundsOf is readPatternBounds kept per pattern and reading: a trim
+// or a substitution a loop runs reads the same pattern every time round, and
+// for a short one like `*/` these two scans were a sixth of the trim (#6353).
+func patternBoundsOf(p string, o *patternOpts) armBound {
+	if !patternFactsCached || spanBoundDisabled {
+		return readPatternBounds(p, stateless(*o))
+	}
+	rd := readingOf(o)
+	e := programs.entry(p, &rd)
+	b := e.bounds.Load()
+	if b == nil {
+		v := readPatternBounds(p, stateless(*o))
+		b = &v
+		e.bounds.Store(b)
+	}
+	return *b
+}
+
+// armTemplate is the part of an armSearch that is a fact about the pattern
+// under one reading — the variants, what each requires of a piece, and each
+// one's capture plan — kept per pattern and reading so that a substitution a
+// loop runs builds it once (#6380). The memos and the end analyses bound to
+// a subject are what a search writes, and those are made per search.
+//
+// A pattern with no reading to resolve is recorded as a template with no
+// variants.
+type armTemplate struct {
+	variants []string
+	bounds   []armBound
+	plans    []capturePlan
+	// autos is each unbounded variant's end analysis, nil for a variant it
+	// does not read.
+	autos []*reachAutomaton
+}
+
+// armTemplateFor is pattern's template under o, or nil where there is no
+// written-arm reading to have.
+func armTemplateFor(pattern string, o *patternOpts) *armTemplate {
+	// The two switches a test turns to compare readings change what the
+	// template holds, so a template built under either is not kept.
+	if !patternFactsCached || spanBoundDisabled || reachDisabled {
+		return nonEmptyTemplate(buildArmTemplate(pattern, stateless(*o)))
+	}
+	rd := readingOf(o)
+	e := programs.entry(pattern, &rd)
+	t := e.arms.Load()
+	if t == nil {
+		t = buildArmTemplate(pattern, stateless(*o))
+		e.arms.Store(t)
+	}
+	return nonEmptyTemplate(t)
+}
+
+func nonEmptyTemplate(t *armTemplate) *armTemplate {
+	if len(t.variants) == 0 {
+		return nil
+	}
+	return t
+}
+
+// buildArmTemplate resolves pattern's alternations and reads each variant.
+// Nothing here reads match state: the analyses split and bound pattern text,
+// and the plan numbers its groups.
+func buildArmTemplate(pattern string, o patternOpts) *armTemplate {
+	variants, ok := armVariants(pattern, o)
+	if !ok || len(variants) < 2 {
+		return &armTemplate{}
+	}
+	t := &armTemplate{
+		variants: variants,
+		bounds:   make([]armBound, len(variants)),
+		plans:    make([]capturePlan, len(variants)),
+		autos:    make([]*reachAutomaton, len(variants)),
+	}
 	for i, v := range variants {
-		var b armBound
-		b.least, b.most, b.bounded = patternSpanBytes(v, o)
-		b.head, b.tail, b.edges = patternEdgeLiterals(v, o)
-		bounds[i] = b
-		where[i] = &matchWhere{plan: planCapturesFor(v, o)}
-		if !b.bounded {
-			reach[i], _ = newReachSet(v, o)
+		t.bounds[i] = readPatternBounds(v, o)
+		t.plans[i] = planCapturesFor(v, o)
+		if !t.bounds[i].bounded {
+			t.autos[i] = reachAutomatonOf(v, o)
 		}
 	}
-	return armSearch{
-		variants: variants, bounds: bounds, where: where,
-		reach: reach, ends: make([]*reachEnds, len(variants)),
-	}, true
+	return t
 }
 
 // endAt is where the match beginning at start stops when the arms are
@@ -201,9 +318,24 @@ func (s armSearch) endAt(value string, o patternOpts, start, limit int) (int, bo
 	// The same candidate order a longest match uses, because the arm decides
 	// *which* match and not how much of it: within one resolved pattern the
 	// longest piece still wins.
-	stops := unitStops(value, o)
+	if s.stops.stops == nil || s.stops.value != value {
+		s.stops.value, s.stops.stops = value, unitStops(value, o)
+	}
+	stops := s.stops.stops
 	from := sort.SearchInts(stops, start)
 	top := sort.SearchInts(stops, limit+1) - 1
+	// Where only one variant could begin here at all, the search is
+	// already decided. The variants between them match every piece the
+	// pattern matches — an alternation resolved each way it can be is the
+	// alternation — so the length reading's own match at limit is a match of
+	// some variant, and the end analysis has ruled out every variant but
+	// one. That one matches at limit, nothing before it matches here, and
+	// nothing past limit is a match of the pattern: the walk below would
+	// return limit after asking the matcher, which on #1398's substitution
+	// was a second full match at every match found (#6380).
+	if s.onlyOneCanBegin(value, stops, start) {
+		return limit, true
+	}
 	for n, v := range s.variants {
 		b := s.bounds[n]
 		o.where = s.where[n]
@@ -211,16 +343,9 @@ func (s armSearch) endAt(value string, o patternOpts, start, limit int) (int, bo
 		if b.bounded {
 			last = min(last, sort.SearchInts(stops, start+b.most+1)-1)
 		}
-		var e *reachEnds
-		if r := s.reach[n]; r != nil {
-			e = s.ends[n]
-			if e == nil || e.value != value {
-				e = newReachEnds(r, value, stops)
-				s.ends[n] = e
-			}
-			if !e.from(start) {
-				continue
-			}
+		e := s.endsFor(n, value, stops)
+		if e != nil && !e.from(start) {
+			continue
 		}
 		for k := last; k >= from; k-- {
 			if b.bounded && stops[k]-start < b.least {
@@ -243,6 +368,52 @@ func (s armSearch) endAt(value string, o patternOpts, start, limit int) (int, bo
 	// asking, since it asks only about a match it found.
 	return 0, false
 }
+
+// endsFor is variant n's end analysis bound to value, or nil for a variant
+// the analysis does not read.
+func (s armSearch) endsFor(n int, value string, stops []int) *reachEnds {
+	r := s.reach[n]
+	if r == nil {
+		// Made the first time the variant is asked about, which under the
+		// shortcut below is often never.
+		if s.autos == nil || s.autos[n] == nil {
+			return nil
+		}
+		r = newReachSetOn(s.autos[n], s.o)
+		s.reach[n] = r
+	}
+	e := s.ends[n]
+	if e == nil || e.value != value {
+		e = newReachEnds(r, value, stops)
+		s.ends[n] = e
+	}
+	return e
+}
+
+// onlyOneCanBegin reports whether the end analysis rules out every variant
+// but one at start. A variant it does not read is never ruled out.
+func (s armSearch) onlyOneCanBegin(value string, stops []int, start int) bool {
+	if armShortcutDisabled {
+		return false
+	}
+	open := 0
+	for n := range s.variants {
+		if s.autos != nil && s.autos[n] != nil && !s.autos[n].mayBegin(value, start) {
+			continue
+		}
+		if e := s.endsFor(n, value, stops); e == nil || e.from(start) {
+			open++
+			if open > 1 {
+				return false
+			}
+		}
+	}
+	return open == 1
+}
+
+// armShortcutDisabled turns onlyOneCanBegin off, so that a test can run the
+// search both ways and compare. Nothing outside a test writes it.
+var armShortcutDisabled bool
 
 // armVariants is the pattern with its alternations resolved to one arm each,
 // ordered so that a written arm comes before a later one.

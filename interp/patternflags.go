@@ -783,10 +783,29 @@ func (r *Runner) extendedPatternOpts(o patternOpts, pattern string, badStatus in
 		return o
 	}
 	o.extended = true
+	// A pattern the scan found nothing wrong with is one it will find
+	// nothing wrong with under the same reading next time, and its plan is
+	// the same plan: both are readings of the text. Kept per pattern and
+	// reading, as the program is, because a loop asks again every time
+	// round (#6380). A pattern with something wrong in it is not kept — it
+	// is refused once and the script goes no further.
+	var e *programEntry
+	if patternFactsCached {
+		rd := readingOf(&o)
+		e = programs.entry(pattern, &rd)
+		if plan := e.plan.Load(); plan != nil {
+			o.where = &matchWhere{plan: *plan}
+			return o
+		}
+	}
 	f, found := scanExtendedPattern(pattern, o)
 	switch {
 	case !found:
-		o.where = &matchWhere{plan: planCapturesFor(pattern, o)}
+		plan := planCapturesFor(pattern, o)
+		if e != nil {
+			e.plan.Store(&plan)
+		}
+		o.where = &matchWhere{plan: plan}
 		return o
 	case f.bad:
 		r.fatalPattern(pattern, badStatus)

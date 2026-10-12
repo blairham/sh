@@ -6025,8 +6025,12 @@ func (r *Runner) trimWith(value, pattern string, e *syntax.ParamExpr) string {
 	// rule, and is measured at patternOpts.tildeGlobRead.
 	o.tildeGlobRead = e.Op == syntax.ParamTrimSuffix
 	o.nth = r.matchIndexFlag(e)
-	out, m := trim(value, pattern, e.Op, r.recordingPatternOpts(o, pattern),
-		r.armOrder(), searchingFlag(e))
+	o = r.recordingPatternOpts(o, pattern)
+	if o.where == nil && !r.trimWhereBusy {
+		o.where = r.borrowTrimWhere()
+		defer func() { r.trimWhereBusy = false }()
+	}
+	out, m := trim(value, pattern, e.Op, o, r.armOrder(), searchingFlag(e))
 	if r.metABadExpansionPattern(bad, pattern) {
 		return value
 	}
@@ -6035,18 +6039,31 @@ func (r *Runner) trimWith(value, pattern string, e *syntax.ParamExpr) string {
 	return out
 }
 
+// borrowTrimWhere hands a trim the Runner's own matchWhere, emptied, which
+// is what holdWhere would otherwise allocate on every `${x#pat}` a loop runs
+// (#6353). Nothing outlives the trim that holds a reference to it — a report
+// carries spans and the subject, never the matchWhere — so it is handed back
+// when the trim returns, and a trim reached while one is running allocates
+// as before.
+func (r *Runner) borrowTrimWhere() *matchWhere {
+	r.trimWhereBusy = true
+	r.trimWhere = matchWhere{}
+	return &r.trimWhere
+}
+
 // armOrder is the axis a longest prefix trim asks when the arms of an
 // alternation take different lengths — see interp/trimarm.go — with the
 // question left in a closure so that it is asked only at the disagreement.
 func (r *Runner) armOrder() armOrder {
-	return armOrder{
-		answer: r.sem().LongestMatchTakesTheWrittenArm,
-		ask: func() bool {
-			return r.ask(r.sem().LongestMatchTakesTheWrittenArm,
-				"`${x##pat}` and `${x//pat/rep}`, where the arms of an "+
-					"alternation take different lengths")
-		},
-	}
+	return armOrder{answer: r.sem().LongestMatchTakesTheWrittenArm, r: r}
+}
+
+// askArmOrder is the question armOrder puts at the disagreement. A method
+// rather than a closure built per expansion, which allocated on every trim.
+func (r *Runner) askArmOrder() bool {
+	return r.ask(r.sem().LongestMatchTakesTheWrittenArm,
+		"`${x##pat}` and `${x//pat/rep}`, where the arms of an "+
+			"alternation take different lengths")
 }
 
 // replaceWith substitutes a matching span, expanding the replacement text
@@ -6125,10 +6142,27 @@ func (r *Runner) replaceWithReading(value, pattern string, e *syntax.ParamExpr, 
 				return with(matched)
 			})
 	} else {
+		// A replacement that expands nothing cannot read what a match
+		// published, and nothing else runs between one match and the next,
+		// so only the last match's report is ever seen — and it is published
+		// when the walk is done rather than once per match, each of which
+		// rewrote three arrays (#6380). A replacement that expands anything
+		// at all still gets each match's report before it is read, which is
+		// what `${x//(#b)(?)/$match[1]$mbegin[1]}` shows: `a1b2c3` on `abc`.
+		inert := replacementIsInert(repl)
+		var last matchReport
+		held := false
 		out = replace(value, pattern, e, o, r.armOrder(), r.emptyMatchDeclined, func(m matchReport, matched string) string {
-			r.publishMatch(m)
+			if inert {
+				last, held = m, true
+			} else {
+				r.publishMatch(m)
+			}
 			return r.replacementFor(repl)(matched)
 		})
+		if held {
+			r.publishMatch(last)
+		}
 	}
 	// Asked after the walk because only the matcher reads a bracket a
 	// `[:name:]` left open — see metABadExpansionPattern. The value stands
@@ -6137,6 +6171,26 @@ func (r *Runner) replaceWithReading(value, pattern string, e *syntax.ParamExpr, 
 		return value
 	}
 	return out
+}
+
+// replacementIsInert reports whether expanding w could not run anything or
+// read any parameter: every span is literal text, and an unquoted one holds
+// only characters that stand for themselves. A `~` or an `=` is left out
+// because either can reach a lookup a script may have hooked, and a
+// character nobody has thought about lands on the side that publishes.
+func replacementIsInert(w *syntax.Word) bool {
+	if w == nil {
+		return true
+	}
+	for _, s := range w.Spans {
+		if s.Kind != syntax.Literal {
+			return false
+		}
+		if s.Quoting == syntax.Unquoted && !inertText(s.Value) {
+			return false
+		}
+	}
+	return true
 }
 
 // readAnchor decides whether the `#` or `%` the parser took off the front of
@@ -6433,7 +6487,7 @@ func armEnd(value, pattern string, o patternOpts, arms armSearch, arm armOrder,
 	if !decided || j == end {
 		return end, m
 	}
-	if !arm.ask() {
+	if !arm.asked() {
 		return end, m
 	}
 	// The edge is the written arm's and the report is the whole pattern's:
@@ -6497,8 +6551,9 @@ func spanByLength(value, pattern string, op syntax.ParamOp, o patternOpts,
 	// match whatever the subject holds is skipped rather than handed to the
 	// matcher. See interp/patternspan.go for why both are allowed to ask too
 	// little and never too much.
-	head, tail, edges := patternEdgeLiterals(pattern, o)
-	least, most, bounded := patternSpanBytes(pattern, o)
+	pb := patternBoundsOf(pattern, &o)
+	head, tail, edges := pb.head, pb.tail, pb.edges
+	least, most, bounded := pb.least, pb.most, pb.bounded
 
 	first, final, step := 0, last, 1
 	switch {
@@ -6647,7 +6702,8 @@ func replace(value, pattern string, e *syntax.ParamExpr, o patternOpts, arm armO
 	// these bounds is one the pattern cannot fill however the subject reads —
 	// so the question is skipped rather than asked. See patternspan.go for
 	// why the bound is allowed to be too wide and never too narrow.
-	lo, hi, bounded := patternSpanBytes(pattern, o)
+	pb := patternBoundsOf(pattern, &o)
+	lo, hi, bounded := pb.least, pb.most, pb.bounded
 
 	shortest := searchingFlag(e)
 
@@ -6719,7 +6775,7 @@ func replace(value, pattern string, e *syntax.ParamExpr, o patternOpts, arm armO
 	// the empty-match rules below untouched by the jump. See
 	// interp/patternspan.go for why the head may ask too little and never
 	// too much, and #6356 for what asking at every unit cost.
-	head, _, edges := patternEdgeLiterals(pattern, o)
+	head, edges := pb.head, pb.edges
 	jump := edges && head != ""
 
 	var b strings.Builder
@@ -6902,6 +6958,12 @@ func endOfValueDeclined(value, pattern string, o patternOpts, declined func() Em
 // of value, and the end of it. One byte apart where a unit is a byte, and one
 // character apart where a unit is a character.
 func unitStops(value string, o patternOpts) []int {
+	// Where every unit is a byte the stops are 0 to len(value), and for a
+	// value of ordinary length that is a slice of one table every caller
+	// shares — the callers only read it — rather than one built per trim.
+	if len(value) < len(byteStops) && (!o.chars || isASCII(value)) {
+		return byteStops[: len(value)+1 : len(value)+1]
+	}
 	stops := make([]int, 0, len(value)+1)
 	for i := 0; ; i += o.unitWidth(value[i:]) {
 		stops = append(stops, i)
@@ -6910,6 +6972,15 @@ func unitStops(value string, o patternOpts) []int {
 		}
 	}
 }
+
+// byteStops is 0, 1, 2 and on: unitStops for a value whose units are bytes.
+// Read only.
+var byteStops = func() (t [512]int) {
+	for i := range t {
+		t[i] = i
+	}
+	return t
+}()
 
 // substringRange is `${x:…}`, which is a substring in three of the panel and
 // is *either* a substring or a modifier list in the fourth.

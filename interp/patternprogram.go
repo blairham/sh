@@ -1186,7 +1186,22 @@ type programEntry struct {
 	prog     atomic.Pointer[patternProgram]
 	spent    atomic.Int64
 	declined atomic.Bool
+	// The other facts a substitution works out about the pattern before it
+	// looks at a subject, kept here for the same reason the program is: a
+	// loop resolves the same pattern afresh every time round, and each of
+	// these is a reading of the pattern text under this reading and nothing
+	// else (#6380). Each is built on first use and never changed after.
+	reach atomic.Pointer[reachAutomaton]
+	arms  atomic.Pointer[armTemplate]
+	// plan is the capture plan of a pattern the extended scan accepted.
+	plan atomic.Pointer[capturePlan]
+	// bounds is what the pattern requires of a piece: interp/patternspan.go.
+	bounds atomic.Pointer[armBound]
 }
+
+// patternFactsCached keeps the facts above between expansions. A var so that
+// a test can build every one of them afresh and compare.
+var patternFactsCached = true
 
 // programCacheSize is how many patterns the cache holds before it empties.
 const programCacheSize = 512

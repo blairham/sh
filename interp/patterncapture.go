@@ -145,6 +145,18 @@ type matchWhere struct {
 	// position of every trial.
 	noTilde bool
 	noParen bool
+	// noBareTilde is noTilde for a pattern whose every `~` is escaped — the
+	// shape a quoted value takes, which writes a backslash in front of each
+	// of its operator characters. No piece of such a pattern can split on a
+	// `~` either, because a piece starts where an item does and never
+	// between a backslash and what it escapes, so the pairing read over the
+	// whole is the pairing in every piece.
+	//
+	// It is what made `[[ $sig == "$sig2" ]]` cost 5 ms on a 3 KB value
+	// holding one `~` (#6363): the matcher reads a pattern a piece at a
+	// time, asked splitExclusion of what was left at every piece, and each
+	// of those scans walked to the end — quadratic in the value's length.
+	noBareTilde bool
 	// parenEnd and brackEnd are, for each byte of the pattern that opens a
 	// group or a bracket expression, where it closes — worked out once for
 	// the whole pattern instead of by a scan from every position.
@@ -790,12 +802,13 @@ func (w *matchWhere) prepare(pattern string, emptyCompiles bool) {
 		// the scan it replaces, so leaving them empty is the matcher as it
 		// was. A test drives the same patterns both ways and requires the
 		// same answers — see TestPreparingThePatternChangesNoAnswer.
-		w.noTilde, w.noParen = false, false
+		w.noTilde, w.noParen, w.noBareTilde = false, false, false
 		w.parenEnd, w.brackEnd, w.reachLen = nil, nil, nil
 		clear(w.arms)
 		return
 	}
 	w.noTilde = strings.IndexByte(pattern, '~') < 0
+	w.noBareTilde = w.noTilde || !hasBareTilde(pattern)
 	w.noParen = strings.IndexByte(pattern, '(') < 0
 	w.parenEnd = grow32(w.parenEnd, len(pattern))
 	w.brackEnd = grow32(w.brackEnd, len(pattern))
@@ -805,9 +818,21 @@ func (w *matchWhere) prepare(pattern string, emptyCompiles bool) {
 	for i := range w.reachLen {
 		w.reachLen[i] = -1
 	}
-	for i := range len(pattern) {
+	for i := 0; i < len(pattern); i++ {
 		w.parenEnd[i], w.brackEnd[i] = -1, -1
 		switch pattern[i] {
+		case '\\':
+			// An escaped opener opens nothing, and asking where it closes
+			// is a scan to the end of the pattern when nothing does: a
+			// quoted value writes a backslash in front of every `(` and `[`
+			// it holds, which made this table quadratic in the value
+			// (#6363). Its entry stays -1, which every lookup reads as
+			// "scan", so leaving it out can only cost a scan, never change
+			// an answer.
+			if i+1 < len(pattern) {
+				i++
+				w.parenEnd[i], w.brackEnd[i] = -1, -1
+			}
 		case '(':
 			if end, ok := closingParen(pattern[i:], emptyCompiles); ok {
 				w.parenEnd[i] = int32(i + end)
@@ -818,6 +843,21 @@ func (w *matchWhere) prepare(pattern string, emptyCompiles bool) {
 			}
 		}
 	}
+}
+
+// hasBareTilde reports whether pattern holds a `~` that no backslash in front
+// of it escapes, pairing backslashes from the left as every scan of a pattern
+// does.
+func hasBareTilde(pattern string) bool {
+	for i := 0; i < len(pattern); i++ {
+		switch pattern[i] {
+		case '\\':
+			i++
+		case '~':
+			return true
+		}
+	}
+	return false
 }
 
 // holdWhere gives options that have no matchWhere one of their own, for a
@@ -837,7 +877,7 @@ func (o *patternOpts) holdWhere() {
 // table is one every lookup falls back to its scan for.
 func (w *matchWhere) unprepare() {
 	w.prepared = false
-	w.noTilde, w.noParen = false, false
+	w.noTilde, w.noParen, w.noBareTilde = false, false, false
 	w.parenEnd, w.brackEnd = w.parenEnd[:0], w.brackEnd[:0]
 	w.reachAt, w.reachLen = w.reachAt[:0], w.reachLen[:0]
 	clear(w.arms)

@@ -197,8 +197,8 @@ func selectRun(t *testing.T, src, replies string, heads DebugTrapHeads) string {
 	r := newTestRunner(t, &Runner{
 		Stdin: strings.NewReader(replies), Stdout: &out, Stderr: &errs,
 		Semantics: &sem, Diagnostics: &dg,
-		Dir: dir, Name: "testsh", Vars: map[string]string{"PATH": dir},
-	})
+		Dir: dir, Name: "testsh",
+	}).SeedVars(map[string]string{"PATH": dir})
 	if _, rerr := r.Run(context.Background(), f); rerr != nil {
 		t.Fatalf("run %q: %v", src, rerr)
 	}

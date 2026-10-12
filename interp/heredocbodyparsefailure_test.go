@@ -54,8 +54,8 @@ func parseFailRun(t *testing.T, src string, c parseFailSemantics, tweak ...func(
 	dir := t.TempDir()
 	r := newTestRunner(t, &Runner{
 		Stdout: &out, Stderr: &out, Semantics: &sem, Diagnostics: &dg,
-		Dir: dir, Name: "sh", Vars: map[string]string{"PATH": dir},
-	})
+		Dir: dir, Name: "sh",
+	}).SeedVars(map[string]string{"PATH": dir})
 	f, err := syntax.Parse(src, syntax.Core())
 	if err != nil {
 		t.Fatalf("parse %q: %v", src, err)
@@ -366,8 +366,8 @@ func TestAnUnansweredParseFailureReadingRunsNothing(t *testing.T) {
 	r := newTestRunner(t, &Runner{
 		Stdout: &out, Stderr: &out, Semantics: &sem,
 		Diagnostics: &Diagnostics{SyntaxErrorStatus: 5},
-		Dir:         dir, Name: "sh", Vars: map[string]string{"PATH": dir},
-	})
+		Dir:         dir, Name: "sh",
+	}).SeedVars(map[string]string{"PATH": dir})
 	f, err := syntax.Parse("echo RAN <<END\n$(echo hi; for)\nEND\necho \"after st=$?\"\n", syntax.Core())
 	if err != nil {
 		t.Fatal(err)

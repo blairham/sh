@@ -77,16 +77,10 @@ func plainParamRunner(t *testing.T, sem Semantics, out *strings.Builder) *Runner
 	dg := PosixDiagnostics()
 	r := newTestRunner(t, &Runner{Stdout: out, Stderr: out, Semantics: &sem, Diagnostics: &dg, Name: "testsh"})
 	count := 0
-	r.Dynamic = map[string]func(*Runner) string{
-		"COUNT":  func(*Runner) string { count++; return strings.Repeat("1", count) },
-		"SPACED": func(*Runner) string { count++; return "s " + strings.Repeat("1", count) },
-	}
-	r.DynamicArrays = map[string]func(*Runner) []string{
-		"LIST": func(*Runner) []string { return []string{"l1", "l2"} },
-	}
-	r.DynamicAssocs = map[string]func(*Runner) AssocArray{
-		"TABLE": func(*Runner) AssocArray { return AssocArray{"0": {Str: "t"}} },
-	}
+	r.SetDynamic("COUNT", func(*Runner) string { count++; return strings.Repeat("1", count) })
+	r.SetDynamic("SPACED", func(*Runner) string { count++; return "s " + strings.Repeat("1", count) })
+	r.SetDynamicArray("LIST", func(*Runner) []string { return []string{"l1", "l2"} })
+	r.SetDynamicAssoc("TABLE", func(*Runner) AssocArray { return AssocArray{"0": {Str: "t"}} })
 	return r
 }
 

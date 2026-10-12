@@ -137,7 +137,7 @@ func TestTheCodesetIsSpelledSeveralWays(t *testing.T) {
 // ends: folding it into U+FFFD gives the right *length* with a value nothing
 // put there, and refusing it gives neither.
 func TestAnUndecodableByteIsOneCharacterOfItsOwn(t *testing.T) {
-	setVar := func(r *Runner) { r.Vars = map[string]string{"s": "a\x80b"} }
+	setVar := func(r *Runner) { r.SeedVars(map[string]string{"s": "a\x80b"}) }
 	withVar := func(t *testing.T, src string) (string, int) {
 		t.Helper()
 		return run(t, src, func(r *Runner) {
@@ -166,7 +166,7 @@ func TestAnUndecodableByteIsOneCharacterOfItsOwn(t *testing.T) {
 		sem.MultibyteEncodingIsHonored = Yes
 		r.Semantics = &sem
 		r.Env = append(append([]string(nil), r.Env...), "LC_ALL=C.UTF-8")
-		r.Vars = map[string]string{"s": "a\xc3"}
+		r.SeedVars(map[string]string{"s": "a\xc3"})
 	})
 	if out != "[2]" || st != 0 {
 		t.Errorf("a truncated lead byte: got %q (status %d), want %q at 0", out, st, "[2]")

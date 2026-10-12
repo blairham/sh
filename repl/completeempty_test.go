@@ -65,7 +65,7 @@ func TestTheEmptyWordAnswerFollowsTheRunner(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "runnable"), nil, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	r := &interp.Runner{Dir: dir, Vars: map[string]string{"PATH": dir}}
+	r := (&interp.Runner{Dir: dir}).SeedVars(map[string]string{"PATH": dir})
 	c := runnerCompleter{r: r}
 	empty := Completion{Command: true}
 	if got := c.Complete(empty); len(got) == 0 {

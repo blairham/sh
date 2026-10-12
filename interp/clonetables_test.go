@@ -7,6 +7,7 @@ import (
 	"context"
 	"os"
 	"reflect"
+	"strconv"
 	"testing"
 
 	"github.com/blairham/sh/syntax"
@@ -31,7 +32,7 @@ var sharedTables = map[string]string{
 	// Copied on write rather than at the clone. The test for these is
 	// TestASubshellWriteToASharedTableStaysInTheSubshell, which writes each
 	// one from either side and on two goroutines at once.
-	"AssocArrays": "copy-on-write: shared until either side writes, which copies it first — see sharedtable.go",
+	"cellIndex":   "copy-on-write: the variable store's index of names, shared until either side adds a name, which copies it first — see varstore.go",
 	"funcOrigins": "copy-on-write: shared until either side writes, which copies it first — see sharedtable.go",
 	"cmdHash":     "copy-on-write: shared until either side writes, which copies it first — see sharedtable.go",
 }
@@ -92,6 +93,7 @@ func seedStacks(r *Runner) {
 	r.restrictedFreezes = append(make([]string, 0, 4), "SEEDNAME")
 	r.restrictedFreezesExact = append(make([]string, 0, 4), "SEEDNAME")
 	r.Params = append(make([]string, 0, 4), "seed")
+	r.cellSlab = append(make([]varCell, 0, 4), varCell{name: "seed"})
 	r.listNulls = append(make([]bool, 0, 4), false)
 	r.procSubs = append(make([]procSubPipe, 0, 4), procSubPipe{})
 	r.heldProcSubs = append(make([]procSubPipe, 0, 4), procSubPipe{})
@@ -322,6 +324,78 @@ func TestACloneOwnsEveryScopeTable(t *testing.T) {
 	}
 }
 
+// TestACloneOwnsEveryCell is TestACloneOwnsEveryTable for the variable store,
+// whose cells sit in a slab the clone must copy and whose index it may share:
+// a clone holding its parent's slab would be one cell per name with two shells
+// writing it, and no map-level check can see that. Every slot is seeded,
+// because a slot a cell never held cannot show whether it was copied.
+func TestACloneOwnsEveryCell(t *testing.T) {
+	parent := newTestRunner(t, &Runner{})
+	parent.varsPut("all", "v")
+	parent.arraysPut("all", ArrayOf(Element{Str: "x"}))
+	parent.assocsPut("all", AssocArray{"k": Scalar("v")})
+	parent.producersPut("all", func(*Runner) string { return "p" })
+	parent.arrayProducersPut("all", func(*Runner) []string { return nil })
+	parent.assocProducersPut("all", func(*Runner) AssocArray { return nil })
+
+	child := parent.clone()
+	if len(child.cellSlab) != len(parent.cellSlab) {
+		t.Fatalf("the clone's slab holds %d cells and its parent's %d", len(child.cellSlab), len(parent.cellSlab))
+	}
+	if &child.cellSlab[0] == &parent.cellSlab[0] {
+		t.Fatal("the clone's slab is its parent's: every cell is one cell with two shells writing it")
+	}
+	for i := range parent.cellSlab {
+		pc, cc := &parent.cellSlab[i], &child.cellSlab[i]
+		if cc.name != pc.name || cc.has != pc.has {
+			t.Errorf("cell %d is %q holding %b in the clone and %q holding %b in its parent", i, cc.name, cc.has, pc.name, pc.has)
+		}
+		if pc.array != nil && cc.array == pc.array {
+			t.Errorf("the indexed array of %q is shared by a subshell and its parent", pc.name)
+		}
+	}
+	if child.cellCount != parent.cellCount || child.liveCells != parent.liveCells {
+		t.Errorf("the clone counts %v slots in %d cells and its parent %v in %d",
+			child.cellCount, child.liveCells, parent.cellCount, parent.liveCells)
+	}
+
+	// The index is shared, and the first name either side adds copies it.
+	child.varsPut("childonly", "c")
+	if _, ok := parent.cellIndex["childonly"]; ok {
+		t.Error("a name the subshell made reached its parent's index")
+	}
+	parent.varsPut("parentonly", "p")
+	if _, ok := child.cellIndex["parentonly"]; ok {
+		t.Error("a name the parent made reached the subshell's index")
+	}
+	if got := child.varsAt("all"); got != "v" {
+		t.Errorf("the subshell reads %q for a name both had, want v", got)
+	}
+}
+
+// TestASparseStoreIsCompacted: a script that makes names by the thousand and
+// unsets them must not carry an empty cell for each one into every subshell
+// it starts.
+func TestASparseStoreIsCompacted(t *testing.T) {
+	r := newTestRunner(t, &Runner{})
+	r.varsPut("keep", "k")
+	for i := range 2000 {
+		r.varsPut("tmp"+strconv.Itoa(i), "x")
+	}
+	for i := range 2000 {
+		r.varsDel("tmp" + strconv.Itoa(i))
+	}
+	if len(r.cellSlab) > 600 {
+		t.Errorf("the slab holds %d cells for %d live names", len(r.cellSlab), r.liveCells)
+	}
+	if got, ok := r.varsLookup("keep"); !ok || got != "k" {
+		t.Errorf("compacting lost a live name: %q, %v", got, ok)
+	}
+	if r.varsLen() != 1 {
+		t.Errorf("%d scalars counted after compacting, want 1", r.varsLen())
+	}
+}
+
 // seedTables gives every map on a Runner an entry.
 //
 // Seeding is what makes the check able to see anything at all, and it is the
@@ -337,12 +411,12 @@ func TestACloneOwnsEveryScopeTable(t *testing.T) {
 func seedTables(r *Runner) {
 	r.noticedJobs = map[*Job]bool{{}: true}
 	r.keptSubstBodies = map[substBodyKey]keptSubstBody{{text: "seed"}: {}}
-	r.Vars = map[string]string{"seed": "v"}
-	r.Arrays = map[string]Array{"seed": ArrayOf(Element{Str: "v"})}
-	r.AssocArrays = map[string]AssocArray{"seed": {"k": {Str: "v"}}}
-	r.Dynamic = map[string]func(*Runner) string{"seed": func(*Runner) string { return "" }}
-	r.DynamicArrays = map[string]func(*Runner) []string{"seed": func(*Runner) []string { return nil }}
-	r.DynamicAssocs = map[string]func(*Runner) AssocArray{"seed": func(*Runner) AssocArray { return nil }}
+	r.SeedVars(map[string]string{"seed": "v"})
+	r.arraysPut("seed", ArrayOf(Element{Str: "v"}))
+	r.assocsPut("seed", AssocArray{"k": {Str: "v"}})
+	r.producersPut("seed", func(*Runner) string { return "" })
+	r.arrayProducersPut("seed", func(*Runner) []string { return nil })
+	r.assocProducersPut("seed", func(*Runner) AssocArray { return nil })
 	r.dynamicAssocElements = map[string]func(*Runner, string) (string, bool){
 		"seed": func(*Runner, string) (string, bool) { return "", false },
 	}

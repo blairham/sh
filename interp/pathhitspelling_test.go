@@ -28,9 +28,9 @@ func spellRun(t *testing.T, dir, path, src string, spelling PathHitSpelling) str
 	r := newTestRunner(t, &Runner{
 		Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &dg,
 		Dir: dir, Name: "testsh",
-		Vars: map[string]string{"PATH": path},
-		Env:  []string{"PATH=" + path},
-	})
+
+		Env: []string{"PATH=" + path},
+	}).SeedVars(map[string]string{"PATH": path})
 	if _, err := r.Run(context.Background(), f); err != nil {
 		t.Fatalf("run %q: %v", src, err)
 	}

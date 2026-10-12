@@ -185,7 +185,7 @@ func TestATildeExpandsWhereNothingIsSplit(t *testing.T) {
 	out, _ := run(t, `[[ -f ~/tf ]] && echo yes || echo no`, func(r *Runner) {
 		sem := CoreSemantics()
 		r.Semantics, r.Dir = &sem, dir
-		r.Vars = map[string]string{"HOME": dir}
+		r.SeedVars(map[string]string{"HOME": dir})
 	})
 	if strings.TrimSpace(out) != "yes" {
 		t.Errorf("out = %q, want the tilde expanded", out)
@@ -204,7 +204,7 @@ func TestATildeExpandsInARedirectionTarget(t *testing.T) {
 		// and which is now asked separately (#3207).
 		sem.RedirectTargetTakesPathnameExpansion = Yes
 		r.Semantics, r.Dir = &sem, dir
-		r.Vars = map[string]string{"HOME": dir}
+		r.SeedVars(map[string]string{"HOME": dir})
 	}); st != 0 {
 		t.Fatalf("status %d", st)
 	}

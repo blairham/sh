@@ -48,8 +48,7 @@ func TestCdpathSearchesAndMayAnnounce(t *testing.T) {
 			r := newTestRunner(t, &Runner{
 				Semantics: &sem, Diagnostics: &Diagnostics{}, Name: "sh", Dir: dir,
 				Stdout: out, Stderr: errOut,
-				Vars: map[string]string{"CDPATH": c.cdpath},
-			})
+			}).SeedVars(map[string]string{"CDPATH": c.cdpath})
 			f, err := syntax.Parse("cd "+c.operand+"\n", syntax.Core())
 			if err != nil {
 				t.Fatal(err)

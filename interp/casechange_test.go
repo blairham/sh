@@ -99,7 +99,7 @@ func TestCaseConversionConsultsTheLocale(t *testing.T) {
 			for k, v := range tc.vars {
 				vars[k] = v
 			}
-			r := newTestRunner(t, &Runner{Stdout: &buf, Stderr: &buf, Semantics: &sem, Vars: vars, Env: []string{}})
+			r := newTestRunner(t, &Runner{Stdout: &buf, Stderr: &buf, Semantics: &sem, Env: []string{}}).SeedVars(vars)
 			if _, rerr := r.Run(context.Background(), f); rerr != nil {
 				t.Fatal(rerr)
 			}
@@ -140,8 +140,8 @@ func TestAnUnsetLocaleCasesByTheAxis(t *testing.T) {
 			sem.UnsetLocaleIsUnicodeAware = tc.answer
 			r := newTestRunner(t, &Runner{
 				Stdout: &buf, Stderr: &buf, Semantics: &sem,
-				Vars: map[string]string{}, Env: []string{},
-			})
+				Env: []string{},
+			}).SeedVars(map[string]string{})
 			if _, rerr := r.Run(context.Background(), f); rerr != nil {
 				t.Fatal(rerr)
 			}
@@ -169,8 +169,8 @@ func TestAnASCIIValueNeverAsksTheUnsetLocaleAxis(t *testing.T) {
 	sem.UnsetLocaleIsUnicodeAware = Unspecified
 	r := newTestRunner(t, &Runner{
 		Stdout: &buf, Stderr: &buf, Semantics: &sem,
-		Vars: map[string]string{}, Env: []string{},
-	})
+		Env: []string{},
+	}).SeedVars(map[string]string{})
 	if _, rerr := r.Run(context.Background(), f); rerr != nil {
 		t.Fatal(rerr)
 	}
@@ -253,8 +253,8 @@ func TestEverySiteThatChangesCaseAsksTheSameLocale(t *testing.T) {
 				}
 				r := newTestRunner(t, &Runner{
 					Stdout: &buf, Stderr: &buf, Semantics: &sem,
-					Vars: vars, Env: []string{},
-				})
+					Env: []string{},
+				}).SeedVars(vars)
 				if site.before != nil {
 					site.before(r)
 				}
@@ -295,8 +295,8 @@ func TestLowerCaseNarrowsAtEverySiteToo(t *testing.T) {
 			sem.DeclareOptions = "aAilprux"
 			r := newTestRunner(t, &Runner{
 				Stdout: &buf, Stderr: &buf, Semantics: &sem,
-				Vars: map[string]string{"LC_ALL": "C"}, Env: []string{},
-			})
+				Env: []string{},
+			}).SeedVars(map[string]string{"LC_ALL": "C"})
 			if _, rerr := r.Run(context.Background(), f); rerr != nil {
 				t.Fatal(rerr)
 			}
@@ -409,8 +409,8 @@ func TestEverySiteThatFoldsAMatchAsksTheSameLocale(t *testing.T) {
 				}
 				r := newTestRunner(t, &Runner{
 					Stdout: &buf, Stderr: &buf, Semantics: &sem,
-					Vars: vars, Env: []string{},
-				})
+					Env: []string{},
+				}).SeedVars(vars)
 				r.SetMatchOption(site.option, true)
 				if site.before != nil {
 					site.before(t, r)
@@ -446,8 +446,8 @@ func TestNoSiteFoldsAMatchWithTheOptionOff(t *testing.T) {
 		sem := permissive()
 		r := newTestRunner(t, &Runner{
 			Stdout: &buf, Stderr: &buf, Semantics: &sem,
-			Vars: map[string]string{"LC_ALL": "en_US.UTF-8"}, Env: []string{},
-		})
+			Env: []string{},
+		}).SeedVars(map[string]string{"LC_ALL": "en_US.UTF-8"})
 		if _, rerr := r.Run(context.Background(), f); rerr != nil {
 			t.Fatal(rerr)
 		}
@@ -477,8 +477,8 @@ func TestTheNarrowedRegexFoldStillCapturesTheSubjectsOwnText(t *testing.T) {
 	sem.RegexMatchOmitsGroupsThatDidNotMatch = No
 	r := newTestRunner(t, &Runner{
 		Stdout: &buf, Stderr: &buf, Semantics: &sem,
-		Vars: map[string]string{"LC_ALL": "C"}, Env: []string{},
-	})
+		Env: []string{},
+	}).SeedVars(map[string]string{"LC_ALL": "C"})
 	r.SetMatchOption(RegexFoldsCase, true)
 	r.SetRegexMatch("BASH_REMATCH")
 	if _, rerr := r.Run(context.Background(), f); rerr != nil {
@@ -522,8 +522,8 @@ func TestAWideFoldIsTheLowerCaseMapAndNotASwap(t *testing.T) {
 			sem := permissive()
 			r := newTestRunner(t, &Runner{
 				Stdout: &buf, Stderr: &buf, Semantics: &sem,
-				Vars: map[string]string{"LC_ALL": "en_US.UTF-8"}, Env: []string{},
-			})
+				Env: []string{},
+			}).SeedVars(map[string]string{"LC_ALL": "en_US.UTF-8"})
 			r.SetMatchOption(MatchFoldsCase, true)
 			if _, rerr := r.Run(context.Background(), f); rerr != nil {
 				t.Fatal(rerr)
@@ -564,8 +564,8 @@ func TestANarrowedRegexFoldDoesNotCollideWithAPrivateUseSubject(t *testing.T) {
 			sem := permissive()
 			r := newTestRunner(t, &Runner{
 				Stdout: &buf, Stderr: &buf, Semantics: &sem,
-				Vars: map[string]string{"LC_ALL": "C"}, Env: []string{},
-			})
+				Env: []string{},
+			}).SeedVars(map[string]string{"LC_ALL": "C"})
 			r.SetMatchOption(RegexFoldsCase, true)
 			if _, rerr := r.Run(context.Background(), f); rerr != nil {
 				t.Fatal(rerr)

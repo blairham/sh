@@ -52,12 +52,12 @@ func rmStarRun(t *testing.T, dir, src, answer string) string {
 		t.Fatal(err)
 	}
 	sem, diag := zsh.Semantics(), zsh.Diagnostics()
-	r := &interp.Runner{
+	r := (&interp.Runner{
 		Stdin: term, Stdout: term, Stderr: term, Semantics: &sem, Diagnostics: &diag,
 		Dir: dir, Name: "zsh", Route: interp.RouteStandardInput, Interactive: true,
-		Vars:    map[string]string{"PATH": "/usr/bin:/bin"},
+
 		Dialect: presetDialect(),
-	}
+	}).SeedVars(map[string]string{"PATH": "/usr/bin:/bin"})
 	zsh.Apply(r)
 	ran := make(chan struct{})
 	go func() {

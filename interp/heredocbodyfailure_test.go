@@ -51,8 +51,8 @@ func heredocFailRun(t *testing.T, src string, c heredocFailSemantics, tweak ...f
 	dir := t.TempDir()
 	r := newTestRunner(t, &Runner{
 		Stdout: &out, Stderr: &out, Semantics: &sem, Diagnostics: &dg,
-		Dir: dir, Name: "sh", Vars: map[string]string{"PATH": dir},
-	})
+		Dir: dir, Name: "sh",
+	}).SeedVars(map[string]string{"PATH": dir})
 	f, err := syntax.Parse(src, syntax.Core())
 	if err != nil {
 		t.Fatalf("parse %q: %v", src, err)
@@ -445,8 +445,8 @@ func TestAnUnansweredHeredocBodyFailureRunsNothing(t *testing.T) {
 	dir := t.TempDir()
 	r := newTestRunner(t, &Runner{
 		Stdout: &out, Stderr: &out, Semantics: &sem, Diagnostics: &dg,
-		Dir: dir, Name: "sh", Vars: map[string]string{"PATH": dir},
-	})
+		Dir: dir, Name: "sh",
+	}).SeedVars(map[string]string{"PATH": dir})
 	f, err := syntax.Parse("echo RAN <<END\n$(( } ))\nEND\necho \"after st=$?\"\n", syntax.Core())
 	if err != nil {
 		t.Fatal(err)

@@ -46,9 +46,9 @@ func reportRun(t *testing.T, answer Answer, src string) (string, int) {
 	r := newTestRunner(t, &Runner{
 		Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &dg,
 		Dir: dir, Name: "testsh",
-		Vars: map[string]string{"PATH": "/usr/bin:/bin"},
-		Env:  []string{"PATH=/usr/bin:/bin"},
-	})
+
+		Env: []string{"PATH=/usr/bin:/bin"},
+	}).SeedVars(map[string]string{"PATH": "/usr/bin:/bin"})
 	st, rerr := r.Run(context.Background(), f)
 	if rerr != nil {
 		return buf.String() + "unsupported: " + rerr.Error(), -1

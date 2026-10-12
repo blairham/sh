@@ -188,10 +188,7 @@ func runAbsentWithVar(t *testing.T, src, name, value string) (out, errs string, 
 	}
 	r.Semantics = &sem
 	r.SetAbsentParameter("nothere", "parameter not implemented yet")
-	if r.Vars == nil {
-		r.Vars = map[string]string{}
-	}
-	r.Vars[name] = value
+	r.StoreScalar(name, value)
 	f, err := syntax.Parse(src, syntax.Core())
 	if err != nil {
 		t.Fatalf("parse %q: %v", src, err)

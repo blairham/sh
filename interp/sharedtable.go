@@ -102,9 +102,8 @@ func (c *Runner) shareTables(r *Runner) {
 func (r *Runner) releaseSharedTables() {
 	leaveShare(&r.funcOriginsShare)
 	leaveShare(&r.cmdHashShare)
-	leaveShare(&r.assocShare)
 	r.funcOrigins, r.cmdHash, r.cmdHashOrder, r.cmdHashHits = nil, nil, nil, nil
-	r.replaceAssocs(nil)
+	r.releaseVarTables()
 }
 
 // ownFuncOrigins makes the function-origin table this runner's to write.
@@ -177,17 +176,4 @@ func (r *Runner) dropAssocTable(name string) {
 	}
 	r.ownAssocs()
 	r.assocsDel(name)
-}
-
-// cloneAssocTables is a deep copy of the associative arrays, keeping a nil
-// table nil.
-func cloneAssocTables(in map[string]AssocArray) map[string]AssocArray {
-	if in == nil {
-		return nil
-	}
-	out := make(map[string]AssocArray, len(in))
-	for k, v := range in {
-		out[k] = v.clone()
-	}
-	return out
 }

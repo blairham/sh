@@ -24,7 +24,7 @@ func noHome(t *testing.T, policy TildeWithNoHomePolicy, src string) (out string,
 		sem := CoreSemantics()
 		sem.TildeWithNoHome = policy
 		r.Semantics = &sem
-		r.Vars = map[string]string{"PATH": "/usr/bin:/bin"}
+		r.SeedVars(map[string]string{"PATH": "/usr/bin:/bin"})
 		r.UserHomeDir = func(name string) (string, bool) {
 			asked = append(asked, name)
 			if name == "" {
@@ -113,7 +113,7 @@ func TestTheDatabaseAnswerNeedsAHookAndSaysSoBySayingNothing(t *testing.T) {
 		sem := CoreSemantics()
 		sem.TildeWithNoHome = TildeWithNoHomeReadsThePasswordEntry
 		r.Semantics = &sem
-		r.Vars = map[string]string{"PATH": "/usr/bin:/bin"}
+		r.SeedVars(map[string]string{"PATH": "/usr/bin:/bin"})
 	})
 	if out != "<~/x>\n" || st != 0 {
 		t.Errorf("= %q status %d, want %q at 0", out, st, "<~/x>\n")

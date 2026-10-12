@@ -20,11 +20,11 @@ func functionNamesRunner(t *testing.T) (*interp.Runner, *strings.Builder, func(s
 	sem, diag, dl := Semantics(), Diagnostics(), Dialect()
 	var out strings.Builder
 	dir := t.TempDir()
-	r := &interp.Runner{
+	r := (&interp.Runner{
 		Stdout: &out, Stderr: &out,
 		Semantics: &sem, Diagnostics: &diag, Dialect: &dl,
-		Dir: dir, Name: "zsh", Vars: map[string]string{"PATH": dir},
-	}
+		Dir: dir, Name: "zsh",
+	}).SeedVars(map[string]string{"PATH": dir})
 	Apply(r)
 	run := func(src string) {
 		t.Helper()
@@ -77,14 +77,14 @@ func TestTheFunctionNamesAreTheViewsKeys(t *testing.T) {
 func TestReadingTheFunctionNamesRendersNoBody(t *testing.T) {
 	r, out, run := functionNamesRunner(t)
 	whole := 0
-	view := r.DynamicAssocs["functions"]
+	view := r.AssocProducer("functions")
 	if view == nil {
 		t.Fatal("no whole-table producer registered for functions")
 	}
-	r.DynamicAssocs["functions"] = func(r *interp.Runner) interp.AssocArray {
+	r.SetDynamicAssoc("functions", func(r *interp.Runner) interp.AssocArray {
 		whole++
 		return view(r)
-	}
+	})
 	run("b(){ :; }\na(){ echo x; }\n" +
 		`print -r -- "[${(k)functions}]"` + "\n" +
 		`print -r -- "[${(j: :)${(qk)functions[@]}}]"` + "\n" +

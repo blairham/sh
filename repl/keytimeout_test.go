@@ -79,7 +79,7 @@ func TestHowLongTheEditorWaitsForTheRestOfAKeySequence(t *testing.T) {
 			s := &Shell{Editor: EditorStyle{KeySequenceWaitParameter: "KEYTIMEOUT"}}
 			s.Runner = &interp.Runner{}
 			if tc.set {
-				s.Runner.Vars = map[string]string{"KEYTIMEOUT": tc.value}
+				s.Runner.SeedVars(map[string]string{"KEYTIMEOUT": tc.value})
 			}
 			read := s.keySequenceWait()
 			if read == nil {
@@ -104,7 +104,7 @@ func TestHowLongTheEditorWaitsForTheRestOfAKeySequence(t *testing.T) {
 // have to measure. A field holding a duration could not have done that.
 func TestADialectThatNamesNoKeySequenceWaitWaitsNoTime(t *testing.T) {
 	s := &Shell{}
-	s.Runner = &interp.Runner{Vars: map[string]string{"KEYTIMEOUT": "200"}}
+	s.Runner = (&interp.Runner{}).SeedVars(map[string]string{"KEYTIMEOUT": "200"})
 	if read := s.keySequenceWait(); read != nil {
 		t.Errorf("a dialect naming no parameter was given a reader anyway")
 	}

@@ -387,7 +387,7 @@ func TestTheSessionTakesItsDefaultFileFromTheDialect(t *testing.T) {
 	t.Parallel()
 	home := t.TempDir()
 	shellWith := func(style HistoryStyle) Shell {
-		r := &interp.Runner{Vars: map[string]string{"HOME": home}}
+		r := (&interp.Runner{}).SeedVars(map[string]string{"HOME": home})
 		return Shell{Runner: r, History: style}
 	}
 	if got := shellWith(HistoryStyle{DefaultFile: ".bash_history"}).historyFile().path; got != filepath.Join(home, ".bash_history") {

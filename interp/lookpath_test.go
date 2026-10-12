@@ -54,11 +54,11 @@ func lookRun(t *testing.T, dir, path, src string) (string, int) {
 	r := newTestRunner(t, &Runner{
 		Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &dg,
 		Dir: dir, Name: "testsh",
-		Vars: map[string]string{"PATH": path},
+
 		// An empty Env is not nil: nil means "the process's own", and this
 		// whole file is about not borrowing that.
 		Env: []string{"PATH=" + path},
-	})
+	}).SeedVars(map[string]string{"PATH": path})
 	st, rerr := r.Run(context.Background(), f)
 	if rerr != nil {
 		return buf.String() + "unsupported: " + rerr.Error(), -1
@@ -320,9 +320,9 @@ func TestADirectoryAsTheOnlyMatchIsAnAxis(t *testing.T) {
 			r := newTestRunner(t, &Runner{
 				Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &dg,
 				Dir: dir, Name: "testsh",
-				Vars: map[string]string{"PATH": a},
-				Env:  []string{"PATH=" + a},
-			})
+
+				Env: []string{"PATH=" + a},
+			}).SeedVars(map[string]string{"PATH": a})
 			st, rerr := r.Run(context.Background(), f)
 			if rerr != nil {
 				t.Fatal(rerr)
@@ -361,9 +361,9 @@ func TestAnEmptyPathIsAnAxis(t *testing.T) {
 			r := newTestRunner(t, &Runner{
 				Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &dg,
 				Dir: dir, Name: "testsh",
-				Vars: map[string]string{"PATH": ""},
-				Env:  []string{"PATH="},
-			})
+
+				Env: []string{"PATH="},
+			}).SeedVars(map[string]string{"PATH": ""})
 			if _, err := r.Run(context.Background(), f); err != nil {
 				t.Fatal(err)
 			}

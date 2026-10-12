@@ -65,7 +65,7 @@ func TestABareTildeReadsTheCurrentHomeBeforeAndAfterAChild(t *testing.T) {
 	out, st := run(t, "echo ~\nHOME=/h\necho ~\n/usr/bin/true\necho ~\n", func(r *Runner) {
 		sem := CoreSemantics()
 		r.Semantics, r.Dir = &sem, dir
-		r.Vars = map[string]string{"HOME": dir, "PATH": "/usr/bin:/bin"}
+		r.SeedVars(map[string]string{"HOME": dir, "PATH": "/usr/bin:/bin"})
 	})
 	if st != 0 {
 		t.Fatalf("status = %d, want 0; out = %q", st, out)
@@ -135,7 +135,7 @@ func TestEveryTildeRoadReadsTheOneCurrentHome(t *testing.T) {
 				// tilde as written — which fails the test for the wrong
 				// reason and would pass a mutation that froze correctly.
 				r.Env = []string{"HOME=" + first, "PATH=/usr/bin:/bin"}
-				r.Vars = map[string]string{"HOME": first, "PATH": "/usr/bin:/bin"}
+				r.SeedVars(map[string]string{"HOME": first, "PATH": "/usr/bin:/bin"})
 			})
 			if st != 0 {
 				t.Fatalf("status = %d, want 0; out = %q", st, out)

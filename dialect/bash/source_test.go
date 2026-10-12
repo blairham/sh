@@ -208,13 +208,13 @@ func TestDotFindsAFileInTheCurrentDirectory(t *testing.T) {
 	}
 	var buf bytes.Buffer
 	sem, diag := bash.Semantics(), bash.Diagnostics()
-	r := &interp.Runner{
+	r := (&interp.Runner{
 		Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &diag,
 		Dir: dir, Name: "bash",
 		// PATH deliberately cannot reach it, so only the fallback can.
-		Vars:    map[string]string{"PATH": t.TempDir()},
+
 		Dialect: presetDialect(),
-	}
+	}).SeedVars(map[string]string{"PATH": t.TempDir()})
 	bash.Apply(r)
 	if _, err := r.Run(context.Background(), f); err != nil {
 		t.Fatal(err)

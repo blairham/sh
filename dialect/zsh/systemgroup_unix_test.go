@@ -187,11 +187,11 @@ func runZshAnchored(t *testing.T, src string) string {
 	dir := t.TempDir()
 	var out, errs bytes.Buffer
 	sem, diag := zsh.Semantics(), zsh.Diagnostics()
-	r := &interp.Runner{
+	r := (&interp.Runner{
 		Stdout: &out, Stderr: &errs, Semantics: &sem, Diagnostics: &diag,
-		Dir: dir, Name: "zsh", Vars: map[string]string{"PATH": dir},
+		Dir: dir, Name: "zsh",
 		Dialect: presetDialect(), ProcessAnchor: []string{anchor},
-	}
+	}).SeedVars(map[string]string{"PATH": dir})
 	zsh.Apply(r)
 	if _, rerr := r.Run(context.Background(), f); rerr != nil {
 		t.Fatalf("run %q: %v", src, rerr)

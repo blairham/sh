@@ -128,8 +128,7 @@ func TestCdWithAnEmptyOperand(t *testing.T) {
 				Stdout: out, Stderr: errs,
 				// A home that is somewhere else, so that going there is
 				// visible rather than indistinguishable from staying.
-				Vars: map[string]string{"HOME": "/", "PATH": ""},
-			})
+			}).SeedVars(map[string]string{"HOME": "/", "PATH": ""})
 			runCd(t, r, "cd \"\"; echo \"st=$?\"\npwd\n")
 			st, where := cdResult(t, out.String())
 			if where != dir {
@@ -157,8 +156,7 @@ func TestAnEmptyOperandIsAMoveToWhereTheShellAlreadyIs(t *testing.T) {
 	r := newTestRunner(t, &Runner{
 		Semantics: &sem, Diagnostics: &Diagnostics{}, Name: "sh", Dir: dir,
 		Stdout: out, Stderr: &strings.Builder{},
-		Vars: map[string]string{"OLDPWD": "MARK", "PATH": ""},
-	})
+	}).SeedVars(map[string]string{"OLDPWD": "MARK", "PATH": ""})
 	runCd(t, r, "cd \"\"\necho \"old=$OLDPWD\"\n")
 	if got := strings.TrimSpace(out.String()); got != "old="+dir {
 		t.Errorf("left %q, want the previous directory recorded as %q", got, dir)
@@ -192,8 +190,7 @@ func TestCdWithAnEmptyHome(t *testing.T) {
 			r := newTestRunner(t, &Runner{
 				Semantics: &sem, Diagnostics: &Diagnostics{}, Name: "sh", Dir: dir,
 				Stdout: out, Stderr: errs,
-				Vars: map[string]string{"HOME": "", "PATH": ""},
-			})
+			}).SeedVars(map[string]string{"HOME": "", "PATH": ""})
 			runCd(t, r, "cd; echo \"st=$?\"\npwd\n")
 			st, where := cdResult(t, out.String())
 			if where != dir {
@@ -226,8 +223,7 @@ func TestCdWithNoHomeAtAllIsStillTheOtherQuestion(t *testing.T) {
 	r := newTestRunner(t, &Runner{
 		Semantics: &sem, Diagnostics: &Diagnostics{}, Name: "sh", Dir: dir,
 		Stdout: &strings.Builder{}, Stderr: errs,
-		Vars: map[string]string{"PATH": ""},
-	})
+	}).SeedVars(map[string]string{"PATH": ""})
 	runCd(t, r, "cd\n")
 	if !strings.Contains(errs.String(), "HOME not set") {
 		t.Errorf("said %q, want an absent HOME reported as one", errs)
@@ -289,8 +285,7 @@ func TestCdWithTwoOperands(t *testing.T) {
 				// rewrite that replaced the *last* occurrence would land
 				// somewhere this can tell apart.
 				Stdout: out, Stderr: errs,
-				Vars: map[string]string{"PATH": ""},
-			})
+			}).SeedVars(map[string]string{"PATH": ""})
 			runCd(t, r, "cd alpha beta; echo \"st=$?\"\npwd\n")
 
 			st, where := cdResult(t, out.String())
@@ -319,8 +314,8 @@ func TestARewriteOfSomethingNotInTheCurrentDirectory(t *testing.T) {
 	dg := Diagnostics{CdBadSubstitution: "cd: string not in pwd: %[1]s"}
 	r := newTestRunner(t, &Runner{
 		Semantics: &sem, Diagnostics: &dg, Name: "sh", Dir: dir,
-		Stdout: out, Stderr: errs, Vars: map[string]string{"PATH": ""},
-	})
+		Stdout: out, Stderr: errs,
+	}).SeedVars(map[string]string{"PATH": ""})
 	runCd(t, r, "cd nowhere_zz beta; echo \"st=$?\"\npwd\n")
 	st, where := cdResult(t, out.String())
 	if want := "cd: string not in pwd: nowhere_zz"; !strings.Contains(errs.String(), want) {
@@ -352,8 +347,7 @@ func TestARewriteMayAnnounceWhereItWent(t *testing.T) {
 			Semantics: &sem, Diagnostics: &Diagnostics{}, Name: "sh",
 			Dir:    filepath.Join(dir, "alpha"),
 			Stdout: out, Stderr: &strings.Builder{},
-			Vars: map[string]string{"PATH": ""},
-		})
+		}).SeedVars(map[string]string{"PATH": ""})
 		runCd(t, r, "cd alpha beta\n")
 		said := strings.TrimSpace(out.String())
 		if want := filepath.Join(dir, "beta"); (said == want) != (prints == Yes) {
@@ -396,8 +390,7 @@ func TestARewriteTakesExactlyTwoOperands(t *testing.T) {
 			r := newTestRunner(t, &Runner{
 				Semantics: &sem, Diagnostics: &dg, Name: "sh", Dir: dir,
 				Stdout: &strings.Builder{}, Stderr: errs,
-				Vars: map[string]string{"PATH": ""},
-			})
+			}).SeedVars(map[string]string{"PATH": ""})
 			runCd(t, r, "cd a b c\n")
 			if got := errs.String(); !strings.Contains(got, c.want) || strings.Contains(got, c.unset) {
 				t.Errorf("said %q, want %q in it and %q not", got, c.want, c.unset)
@@ -428,8 +421,7 @@ func TestCdOperandAxesRefuseWhenUnanswered(t *testing.T) {
 			r := newTestRunner(t, &Runner{
 				Semantics: &sem, Diagnostics: &Diagnostics{}, Name: "sh", Dir: dir,
 				Stdout: &strings.Builder{}, Stderr: errs,
-				Vars: map[string]string{"HOME": "", "PATH": ""},
-			})
+			}).SeedVars(map[string]string{"HOME": "", "PATH": ""})
 			runCd(t, r, c.src)
 			if got := errs.String(); !strings.Contains(got, c.want) || !strings.Contains(got, "disagree") {
 				t.Errorf("said %q, want the axis named", got)

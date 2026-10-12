@@ -144,7 +144,7 @@ func TestTheMailboxesASessionWatches(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			s := Shell{Mail: MailStyle{File: "MAIL", Path: "MAILPATH"}}
-			s.Runner = &interp.Runner{Vars: map[string]string{"MAIL": tc.file, "MAILPATH": tc.path}}
+			s.Runner = (&interp.Runner{}).SeedVars(map[string]string{"MAIL": tc.file, "MAILPATH": tc.path})
 			got := s.mailboxes()
 			if len(got) != len(tc.want) {
 				t.Fatalf("mailboxes = %+v, want %+v", got, tc.want)
@@ -178,7 +178,7 @@ func TestTheMailCheckInterval(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			s := Shell{Mail: MailStyle{Interval: "MAILCHECK"}}
-			s.Runner = &interp.Runner{Vars: map[string]string{"MAILCHECK": tc.value}}
+			s.Runner = (&interp.Runner{}).SeedVars(map[string]string{"MAILCHECK": tc.value})
 			got, ok := s.mailInterval()
 			if got != tc.want || ok != tc.ok {
 				t.Errorf("mailInterval(%q) = %v,%v want %v,%v", tc.value, got, ok, tc.want, tc.ok)

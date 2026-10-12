@@ -183,8 +183,8 @@ working example rather than as prose.
 directory, not the environment, and not the process image. A Runner is
 embedded in other programs, and two of them in one program must not fight
 over one cwd — which is why the core's `cd` sets `r.Dir` and never calls
-`os.Chdir`, and why `$PWD` is read from `r.Vars` rather than from the
-environment.
+`os.Chdir`, and why `$PWD` is read from the Runner's own variables rather
+than from the environment.
 
 **A descriptor is not process state, and that is how a renamed directory is
 followed.** The kernel holds a real shell's working directory as a reference to
@@ -227,7 +227,7 @@ worked example: `os/exec`'s `LookPath` reads the *process's* `PATH` and resolves
 relative entries against the *process's* directory, and a Runner holds both
 itself. Delegating to it produced a shell where `PATH=/tmp/mine; mycmd` found
 nothing and `PATH=; anything` still found everything on the developer's machine.
-`interp/lookpath.go` does the search against `r.Vars` and `r.Dir` instead.
+`interp/lookpath.go` does the search against the Runner's own `PATH` and `r.Dir` instead.
 
 The tell is the same every time: if a package under `interp/` reaches for
 `os.Getenv`, `os.Getwd`, or anything in `os/exec` that consults them, it is

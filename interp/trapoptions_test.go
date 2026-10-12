@@ -40,8 +40,8 @@ func trapRun(t *testing.T, src string, set func(*Semantics), dg Diagnostics) (st
 	dir := t.TempDir()
 	r := newTestRunner(t, &Runner{
 		Stdout: &out, Stderr: &errs, Semantics: &sem, Diagnostics: &dg,
-		Dir: dir, Name: "testsh", Vars: map[string]string{"PATH": dir},
-	})
+		Dir: dir, Name: "testsh",
+	}).SeedVars(map[string]string{"PATH": dir})
 	st, rerr := r.Run(context.Background(), f)
 	if rerr != nil {
 		t.Fatalf("run %q: %v", src, rerr)

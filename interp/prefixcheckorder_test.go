@@ -37,8 +37,7 @@ func prefixOrderRun(t *testing.T, src string, first FrozenPrefixCheckOrder) (std
 			NotFound:         "%[1]s: command not found",
 		},
 		Dir: t.TempDir(), Name: "testsh",
-		Vars: map[string]string{"PATH": "/bin:/usr/bin"},
-	})
+	}).SeedVars(map[string]string{"PATH": "/bin:/usr/bin"})
 	st, rerr := r.Run(context.Background(), f)
 	if rerr != nil {
 		t.Fatalf("run %q: %v", src, rerr)
@@ -166,8 +165,7 @@ func TestThePrefixOrderAxisIsAskedOnlyOverAFrozenName(t *testing.T) {
 					NotFound:         "%[1]s: command not found",
 				},
 				Dir: t.TempDir(), Name: "testsh",
-				Vars: map[string]string{"PATH": "/bin:/usr/bin"},
-			})
+			}).SeedVars(map[string]string{"PATH": "/bin:/usr/bin"})
 			if _, rerr := r.Run(context.Background(), f); rerr != nil {
 				t.Fatalf("run: %v", rerr)
 			}

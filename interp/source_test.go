@@ -44,7 +44,7 @@ func sourceRunWith(t *testing.T, dir, src string, sem Semantics, dg Diagnostics,
 	})
 	// PATH is set explicitly rather than inherited: a `.` that found something
 	// on the developer's PATH would pass here and fail on a runner.
-	r.Vars = map[string]string{"PATH": dir}
+	r.SeedVars(map[string]string{"PATH": dir})
 	if setup != nil {
 		setup(r)
 	}
@@ -440,8 +440,8 @@ func TestDotSearchesPathBeforeTheCurrentDirectory(t *testing.T) {
 	dg := Diagnostics{}
 	r := newTestRunner(t, &Runner{
 		Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &dg,
-		Dir: cwd, Name: "testsh", Vars: map[string]string{"PATH": pathDir},
-	})
+		Dir: cwd, Name: "testsh",
+	}).SeedVars(map[string]string{"PATH": pathDir})
 	if _, err := r.Run(context.Background(), f); err != nil {
 		t.Fatal(err)
 	}
@@ -478,8 +478,7 @@ func TestDotFallsBackToTheCurrentDirectoryOnlyWhenAsked(t *testing.T) {
 				Dir: cwd, Name: "testsh",
 				// PATH deliberately points somewhere without the file, so the
 				// fallback is the only thing that could find it.
-				Vars: map[string]string{"PATH": empty},
-			})
+			}).SeedVars(map[string]string{"PATH": empty})
 			if _, err := r.Run(context.Background(), f); err != nil {
 				t.Fatal(err)
 			}
@@ -704,8 +703,8 @@ func TestBuiltinLookupIsWhatMakesASynonymTheSameFunction(t *testing.T) {
 	dg := Diagnostics{}
 	r2 := newTestRunner(t, &Runner{
 		Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &dg,
-		Dir: dir, Name: "testsh", Vars: map[string]string{"PATH": dir},
-	})
+		Dir: dir, Name: "testsh",
+	}).SeedVars(map[string]string{"PATH": dir})
 	if got := again(r2, context.Background(), []string{p}); got != 0 {
 		t.Fatalf("status %d, output %q", got, buf.String())
 	}
@@ -749,8 +748,8 @@ func TestPWDIsSetBeforeTheFirstCommand(t *testing.T) {
 	dg := Diagnostics{}
 	r := newTestRunner(t, &Runner{
 		Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &dg,
-		Dir: dir, Name: "testsh", Vars: map[string]string{},
-	})
+		Dir: dir, Name: "testsh",
+	}).SeedVars(map[string]string{})
 	if _, err := r.Run(context.Background(), f); err != nil {
 		t.Fatal(err)
 	}
@@ -772,8 +771,7 @@ func TestPWDAlreadySetIsLeftAlone(t *testing.T) {
 	r := newTestRunner(t, &Runner{
 		Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &dg,
 		Dir: t.TempDir(), Name: "testsh",
-		Vars: map[string]string{"PWD": "/chosen/by/the/caller"},
-	})
+	}).SeedVars(map[string]string{"PWD": "/chosen/by/the/caller"})
 	if _, err := r.Run(context.Background(), f); err != nil {
 		t.Fatal(err)
 	}
@@ -864,8 +862,8 @@ func TestDotSearchPathOptionAndSwitch(t *testing.T) {
 	// and one in the directory is still read.
 	// The shell runs in `elsewhere` and only `home` is on PATH, so a bare
 	// `here.sh` is reachable by the search and by nothing else.
-	onPath := func(r *Runner) { r.Vars["PATH"] = home }
-	off := func(r *Runner) { r.Vars["PATH"] = home; r.SetSearchesPathForSource(false) }
+	onPath := func(r *Runner) { r.StoreScalar("PATH", home) }
+	off := func(r *Runner) { r.StoreScalar("PATH", home); r.SetSearchesPathForSource(false) }
 	out, st = sourceRunWith(t, elsewhere, `. viapath.sh`, sem(nil), Diagnostics{}, onPath)
 	if st != 0 || !strings.Contains(out, "reached") {
 		t.Errorf("with the search on, PATH holds it: %q status %d", out, st)

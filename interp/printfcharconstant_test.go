@@ -28,7 +28,7 @@ func charConst(t *testing.T, src string, vars map[string]string) (string, int) {
 	sem.PrintfIntegerCharConstantAfterBlanks = No
 	return run(t, src, func(r *Runner) {
 		r.Semantics = &sem
-		r.Vars = vars
+		r.SeedVars(vars)
 	})
 }
 

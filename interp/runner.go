@@ -35,19 +35,21 @@ import (
 // so, never silently skipped — a shell that quietly does nothing is worse than
 // one that says it cannot.
 type Runner struct {
-	// Vars holds shell variables. A nil map is initialized on first use.
-	Vars map[string]string
-	// Arrays holds indexed array variables, which are a different kind of
-	// thing from Vars rather than a formatting of one: an element can hold a
-	// space without becoming two.
-	Arrays map[string]Array
-	// AssocArrays holds associative arrays — string keys, set apart from
-	// Arrays because the two kinds read a subscript differently: an indexed
-	// array evaluates it and an associative one takes it as written. A name
-	// in this table *is* the `declare -A` attribute; declaring puts an empty
-	// one here, which is how an assignment later knows which reading the
-	// subscript gets.
-	AssocArrays map[string]AssocArray
+	// cellSlab and cellIndex are the variable store: one record per name,
+	// holding whichever of a stored scalar, an indexed array, an associative
+	// array and the three kinds of producer the name has, and the position of
+	// each name's record. The index is shared with a clone until one side
+	// adds a name (cellIndexShare). See interp/varstore.go, which is the only
+	// file that touches any of these.
+	cellSlab       []varCell
+	cellIndex      map[string]int32
+	cellIndexShare *tableShare
+	// cellCount is how many names hold each slot and liveCells how many hold
+	// any, so a count is not a walk; cellsRanging is how many walks of the
+	// slab are running, during which it is not compacted.
+	cellCount    [cellSlotCount]int
+	liveCells    int
+	cellsRanging int
 	// Params holds the positional parameters, $1 first. `$0` is not one of
 	// them and is kept separate, because `shift` moves these and never
 	// touches that.
@@ -1112,25 +1114,6 @@ type Runner struct {
 	// parameter tables, keyed by name, so the name reads as an ordinary unset
 	// one until the selection puts it back. See withdrawnparameter.go.
 	withdrawnParams map[string]withdrawnParameter
-
-	// Dynamic holds parameters whose value is produced when they are read,
-	// rather than stored: `LINENO` is wherever execution has reached, and
-	// `RANDOM` is a different number every time. A dialect fills in the ones
-	// it has through SetDynamic.
-	Dynamic map[string]func(*Runner) string
-
-	// DynamicArrays is the same for arrays, and the call stack is why it
-	// exists: `BASH_SOURCE` and its relatives cannot be stored and stay
-	// right. A dialect fills in the names it has through SetDynamicArray.
-	DynamicArrays map[string]func(*Runner) []string
-
-	// DynamicAssocs is the same again for *keyed* tables, and it is the one
-	// of the three that could not be faked with either of the others: a
-	// parameter that answers "which functions exist, and what is each one's
-	// body" is a name-to-value map read at the moment it is asked, and an
-	// indexed array of pairs is not the same thing to `${m[key]}`. A dialect
-	// fills in the names it has through SetDynamicAssoc.
-	DynamicAssocs map[string]func(*Runner) AssocArray
 
 	// dynamicAssocElements is the *one-key* reading of a produced
 	// association, where DynamicAssocs is the whole-table one. Both are

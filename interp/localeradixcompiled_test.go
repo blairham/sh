@@ -135,12 +135,11 @@ func TestTheRadixIsReadFromACompiledCategory(t *testing.T) {
 			// testrunner:bare — the subject is the locale database, which
 			// this test points at a fixture of its own, and the run writes
 			// nothing.
-			r := &interp.Runner{
+			r := (&interp.Runner{
 				Stdout: &out, Stderr: &errs,
 				Semantics:      &sem,
 				LocaleDatabase: root,
-				Vars:           map[string]string{"LC_ALL": c.locale},
-			}
+			}).SeedVars(map[string]string{"LC_ALL": c.locale})
 			f, err := syntax.Parse(`printf '%.2f' 1.5`, syntax.Core())
 			if err != nil {
 				t.Fatal(err)

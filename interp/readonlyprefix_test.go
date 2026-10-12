@@ -58,8 +58,7 @@ func readonlyPrefixRun(t *testing.T, src string) (stdout, stderr string, status 
 			NotFound:         "%[1]s: command not found",
 		},
 		Dir: dir, Name: "testsh",
-		Vars: map[string]string{"PATH": "/bin:/usr/bin"},
-	})
+	}).SeedVars(map[string]string{"PATH": "/bin:/usr/bin"})
 	st, rerr := r.Run(context.Background(), f)
 	if rerr != nil {
 		t.Fatalf("run %q: %v\nstderr: %s", src, rerr, errs.String())
@@ -227,8 +226,7 @@ func TestAPrefixIsNeverRefusedAsADeclaration(t *testing.T) {
 			ReadonlyRefusalNamesBuiltin:   map[string]bool{"eval": true},
 		},
 		Dir: dir, Name: "testsh",
-		Vars: map[string]string{"PATH": "/bin:/usr/bin"},
-	})
+	}).SeedVars(map[string]string{"PATH": "/bin:/usr/bin"})
 	if _, rerr := r.Run(context.Background(), f); rerr != nil {
 		t.Fatalf("run: %v\nstderr: %s", rerr, errs.String())
 	}

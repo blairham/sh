@@ -54,16 +54,16 @@ func TestTheLastCommandOfACommandStringReplacesTheShell(t *testing.T) {
 		sem, diag := zsh.Semantics(), zsh.Diagnostics()
 		dir := t.TempDir()
 		var replaced, inDir string
-		r := &interp.Runner{
+		r := (&interp.Runner{
 			Stdin: tailDevNull(t), Stdout: os.Stdout, Stderr: os.Stderr, Semantics: &sem, Diagnostics: &diag,
 			Dir: dir, Name: "zsh", Route: interp.RouteCommandString,
-			Vars:    map[string]string{"PATH": "/usr/bin:/bin"},
+
 			Dialect: presetDialect(),
 			ReplaceProcess: func(d, path string, _, _ []string, _ []*os.File) error {
 				replaced, inDir = path, d
 				return errors.New("recorded rather than replaced")
 			},
-		}
+		}).SeedVars(map[string]string{"PATH": "/usr/bin:/bin"})
 		zsh.Apply(r)
 		r.LastPart = true
 		_, _ = r.Run(context.Background(), f)
@@ -89,10 +89,10 @@ func TestTheReplacementStartsWhereTheShellIs(t *testing.T) {
 	}
 	sem, diag := zsh.Semantics(), zsh.Diagnostics()
 	var inDir, level string
-	r := &interp.Runner{
+	r := (&interp.Runner{
 		Stdin: tailDevNull(t), Stdout: os.Stdout, Stderr: os.Stderr, Semantics: &sem, Diagnostics: &diag,
 		Dir: t.TempDir(), Name: "zsh", Route: interp.RouteCommandString,
-		Vars:    map[string]string{"PATH": "/usr/bin:/bin"},
+
 		Dialect: presetDialect(),
 		ReplaceProcess: func(d, _ string, _, env []string, _ []*os.File) error {
 			inDir = d
@@ -103,7 +103,7 @@ func TestTheReplacementStartsWhereTheShellIs(t *testing.T) {
 			}
 			return errors.New("recorded rather than replaced")
 		},
-	}
+	}).SeedVars(map[string]string{"PATH": "/usr/bin:/bin"})
 	zsh.Apply(r)
 	r.LastPart = true
 	_, _ = r.Run(context.Background(), f)
@@ -135,16 +135,16 @@ func TestAScriptWithNoInterpreterLineIsNotReplacedInto(t *testing.T) {
 	}
 	defer func() { _ = out.Close() }()
 	replaced := false
-	r := &interp.Runner{
+	r := (&interp.Runner{
 		Stdin: tailDevNull(t), Stdout: out, Stderr: out, Semantics: &sem, Diagnostics: &diag,
 		Dir: dir, Name: "zsh", Route: interp.RouteCommandString,
-		Vars:    map[string]string{"PATH": "/usr/bin:/bin"},
+
 		Dialect: presetDialect(),
 		ReplaceProcess: func(_, _ string, _, _ []string, _ []*os.File) error {
 			replaced = true
 			return errors.New("recorded rather than replaced")
 		},
-	}
+	}).SeedVars(map[string]string{"PATH": "/usr/bin:/bin"})
 	zsh.Apply(r)
 	r.LastPart = true
 	_, _ = r.Run(context.Background(), f)
@@ -168,16 +168,16 @@ func TestAShellWritingToABufferForksItsLastCommand(t *testing.T) {
 	sem, diag := zsh.Semantics(), zsh.Diagnostics()
 	var out strings.Builder
 	replaced := false
-	r := &interp.Runner{
+	r := (&interp.Runner{
 		Stdin: tailDevNull(t), Stdout: &out, Stderr: os.Stderr, Semantics: &sem, Diagnostics: &diag,
 		Dir: t.TempDir(), Name: "zsh", Route: interp.RouteCommandString,
-		Vars:    map[string]string{"PATH": "/usr/bin:/bin"},
+
 		Dialect: presetDialect(),
 		ReplaceProcess: func(_, _ string, _, _ []string, _ []*os.File) error {
 			replaced = true
 			return errors.New("recorded rather than replaced")
 		},
-	}
+	}).SeedVars(map[string]string{"PATH": "/usr/bin:/bin"})
 	zsh.Apply(r)
 	r.LastPart = true
 	_, _ = r.Run(context.Background(), f)

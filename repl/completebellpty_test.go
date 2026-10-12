@@ -36,7 +36,7 @@ const listMatchesOption = "listmatches"
 func bellSession(t *testing.T, listsOnTheSameKey bool) *session {
 	t.Helper()
 	return newSessionWith(t, func(s *Shell) {
-		s.Runner.Vars["PS1"] = "UPPER\n[\\#]"
+		s.Runner.StoreScalar("PS1", "UPPER\n[\\#]")
 		// A directory of its own and an empty one, so that the shell's own
 		// file completion cannot answer a word this test means to go
 		// unanswered. See completers: the first answer wins.
@@ -178,7 +178,7 @@ func TestAnAmbiguousCompletionThatFillsAPrefixInIsSilentAtRest(t *testing.T) {
 // axis moved, and the bell comes **before** the text it fills in.
 func TestAnAmbiguousCompletionThatFillsAPrefixInRingsWhereTheAxisSaysSo(t *testing.T) {
 	se := newSessionWith(t, func(s *Shell) {
-		s.Runner.Vars["PS1"] = "UPPER\n[\\#]"
+		s.Runner.StoreScalar("PS1", "UPPER\n[\\#]")
 		s.Runner.Dir = t.TempDir()
 		s.Completers = []Completer{CompleterFunc(func(c Completion) []Candidate {
 			switch c.Word {

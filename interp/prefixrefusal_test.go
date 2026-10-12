@@ -54,8 +54,7 @@ func prefixCostRun(t *testing.T, c prefixCost, src string) (stdout, stderr strin
 			NotFound:         "%[1]s: command not found",
 		},
 		Dir: t.TempDir(), Name: "testsh",
-		Vars: map[string]string{"PATH": "/bin:/usr/bin"},
-	})
+	}).SeedVars(map[string]string{"PATH": "/bin:/usr/bin"})
 	st, rerr := r.Run(context.Background(), f)
 	if rerr != nil {
 		t.Fatalf("run %q: %v\nstderr: %s", src, rerr, errs.String())

@@ -45,16 +45,16 @@ func TestTheLastCommandOfACommandStringReplacesTheShell(t *testing.T) {
 		sem, diag := bash.Semantics(), bash.Diagnostics()
 		dir := t.TempDir()
 		var replaced, inDir string
-		r := &interp.Runner{
+		r := (&interp.Runner{
 			Stdin: tailDevNull(t), Stdout: os.Stdout, Stderr: os.Stderr, Semantics: &sem, Diagnostics: &diag,
 			Dir: dir, Name: "bash", Route: interp.RouteCommandString,
-			Vars:    map[string]string{"PATH": "/usr/bin:/bin"},
+
 			Dialect: presetDialect(),
 			ReplaceProcess: func(d, path string, _, _ []string, _ []*os.File) error {
 				replaced, inDir = path, d
 				return errors.New("recorded rather than replaced")
 			},
-		}
+		}).SeedVars(map[string]string{"PATH": "/usr/bin:/bin"})
 		bash.Apply(r)
 		r.LastPart = true
 		_, _ = r.Run(context.Background(), f)

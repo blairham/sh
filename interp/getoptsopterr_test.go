@@ -158,7 +158,7 @@ func TestGetoptsOptErrValueReading(t *testing.T) {
 			// read.
 			out, _ := run(t, "set -- -z\ngetopts \"a\" o", func(r *Runner) {
 				r.Semantics, r.Diagnostics = &sem, opterrDiag()
-				r.Vars = map[string]string{"OPTERR": tc.value}
+				r.SeedVars(map[string]string{"OPTERR": tc.value})
 			})
 			if got := out == ""; got != tc.quiet {
 				t.Errorf("OPTERR=%q: got %q, want silenced = %v", tc.value, out, tc.quiet)

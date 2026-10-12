@@ -49,8 +49,8 @@ func targetFailRun(t *testing.T, src string, c targetFailSemantics) (string, int
 	dir := t.TempDir()
 	r := newTestRunner(t, &Runner{
 		Stdout: &out, Stderr: &out, Semantics: &sem, Diagnostics: &dg,
-		Dir: dir, Name: "sh", Vars: map[string]string{"PATH": dir},
-	})
+		Dir: dir, Name: "sh",
+	}).SeedVars(map[string]string{"PATH": dir})
 	f, err := syntax.Parse(src, syntax.Core())
 	if err != nil {
 		t.Fatalf("parse %q: %v", src, err)
@@ -240,8 +240,8 @@ func TestTheTargetAxisIsNotAskedForACommandOfItsOwn(t *testing.T) {
 			dir := t.TempDir()
 			r := newTestRunner(t, &Runner{
 				Stdout: &out, Stderr: &out, Semantics: &sem, Diagnostics: &dg,
-				Dir: dir, Name: "sh", Vars: map[string]string{"PATH": dir},
-			})
+				Dir: dir, Name: "sh",
+			}).SeedVars(map[string]string{"PATH": dir})
 			f, err := syntax.Parse("/bin/echo RAN < $(( } ))\necho after\n", syntax.Core())
 			if err != nil {
 				t.Fatalf("parse: %v", err)

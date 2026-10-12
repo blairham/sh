@@ -313,11 +313,11 @@ func TestUnderABlockStoreAHandlerKeepsBothTheStreamAndRawMode(t *testing.T) {
 		// HISTFILE with it: an empty HISTFILE turns the store off, so a
 		// session that records nothing would get no conduit either.
 		cfg.Runner.Stdout, cfg.Runner.Stderr = tty, tty
-		cfg.Runner.Vars["HISTFILE"] = dir + "/history"
-		cfg.Runner.Vars[blocks.DirVar] = dir
+		cfg.Runner.StoreScalar("HISTFILE", dir+"/history")
+		cfg.Runner.StoreScalar(blocks.DirVar, dir)
 		// And the output half by name: a store alone records commands, and it
 		// is the capture that puts a conduit in front of the streams.
-		cfg.Runner.Vars[blocks.OutputVar] = blocks.CaptureTerminalValue
+		cfg.Runner.StoreScalar(blocks.OutputVar, blocks.CaptureTerminalValue)
 		runner = cfg.Runner
 		cfg.WatchedDescriptors = p.watched
 		cfg.DescriptorReady = p.ready

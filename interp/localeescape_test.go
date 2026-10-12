@@ -43,7 +43,7 @@ func echoingUnicodeUnset(p OutsideLocaleEscapePolicy, locale string, unset Answe
 		sem.UnsetLocaleIsUnicodeAware = unset
 		r.Semantics = &sem
 		if locale != "" {
-			r.Vars = map[string]string{"LC_ALL": locale}
+			r.SeedVars(map[string]string{"LC_ALL": locale})
 		}
 	}
 }
@@ -204,7 +204,7 @@ func TestADollarSingleEscapeOutsideTheLocaleIsRefusedAtTheWord(t *testing.T) {
 			sem.UnicodeEscapeOutsideTheLocale = p
 			sem.DollarSingleUnicodeEscapes = Yes
 			r.Semantics = &sem
-			r.Vars = map[string]string{"LC_ALL": "C"}
+			r.SeedVars(map[string]string{"LC_ALL": "C"})
 		}
 	}
 	t.Run("refused", func(t *testing.T) {
@@ -233,7 +233,7 @@ func TestADollarSingleEscapeOutsideTheLocaleIsRefusedAtTheWord(t *testing.T) {
 			sem.UnicodeEscapeOutsideTheLocale = OutsideLocaleEscapeUnspecified
 			sem.DollarSingleUnicodeEscapes = Yes
 			r.Semantics = &sem
-			r.Vars = map[string]string{"LC_ALL": "en_US.UTF-8"}
+			r.SeedVars(map[string]string{"LC_ALL": "en_US.UTF-8"})
 		})
 		if want := "a\u00e9Z"; out != want || st != 0 {
 			t.Errorf("got %q status %d, want %q status 0", out, st, want)
@@ -252,7 +252,7 @@ func TestADollarSingleEscapeOutsideTheLocaleIsRefusedAtTheWord(t *testing.T) {
 				// the wrong reason and the row would pass for none.
 				sem.DollarSingleUnicodeEscapes = Yes
 				r.Semantics = &sem
-				r.Vars = map[string]string{"LC_ALL": "C"}
+				r.SeedVars(map[string]string{"LC_ALL": "C"})
 			})
 		if out != "aAZ" || st != 0 {
 			t.Errorf("got %q status %d, want %q status 0", out, st, "aAZ")
@@ -276,7 +276,7 @@ func TestAPrintfEscapeOutsideTheLocaleEndsTheBuiltin(t *testing.T) {
 			sem.PrintfBUnicodeEscape = PrintfUnicodeEscapeCodePoint
 			sem.UnicodeEscapeOutsideTheLocale = p
 			r.Semantics = &sem
-			r.Vars = map[string]string{"LC_ALL": "C"}
+			r.SeedVars(map[string]string{"LC_ALL": "C"})
 		}
 	}
 	for _, tc := range []struct{ name, src string }{
@@ -318,7 +318,7 @@ func TestAnEscapeInALocalesCharsetIsTheCharsetsBytes(t *testing.T) {
 			// #3270 — BusyBox ash has no `\u` there.
 			sem.DollarSingleUnicodeEscapes = Yes
 			r.Semantics = &sem
-			r.Vars = map[string]string{"LC_ALL": locale}
+			r.SeedVars(map[string]string{"LC_ALL": locale})
 		}
 	}
 	for _, tc := range []struct {

@@ -276,7 +276,7 @@ func TestCommandsOnPathFollowsTheLookupsOwnRules(t *testing.T) {
 		_, _ = out.WriteString("notexec=absent")
 		return 0
 	})
-	r.Vars = map[string]string{"PATH": first + ":" + second}
+	r.SeedVars(map[string]string{"PATH": first + ":" + second})
 	runSeam(t, r, "report\n")
 	want := "both=" + filepath.Join(first, "both") + " notexec=absent"
 	if out.String() != want {

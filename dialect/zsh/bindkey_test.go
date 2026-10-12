@@ -280,11 +280,11 @@ func bindkeyRunner(t *testing.T, src string) *interp.Runner {
 	dir := t.TempDir()
 	var out strings.Builder
 	sem, diag := zsh.Semantics(), zsh.Diagnostics()
-	r := &interp.Runner{
+	r := (&interp.Runner{
 		Stdout: &out, Stderr: &out, Semantics: &sem, Diagnostics: &diag,
-		Dir: dir, Name: "zsh", Vars: map[string]string{"PATH": dir},
+		Dir: dir, Name: "zsh",
 		Dialect: presetDialect(),
-	}
+	}).SeedVars(map[string]string{"PATH": dir})
 	zsh.Apply(r)
 	if _, err := r.Run(t.Context(), f); err != nil {
 		t.Fatalf("run %q: %v", src, err)

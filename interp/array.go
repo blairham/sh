@@ -51,9 +51,10 @@ type Array = *IndexedArray
 // string, and the element's own scalar reading is not the flattening either:
 // see Element.scalar.
 //
-// Exported because Runner.Arrays is, and a field rather than a bare string so
-// that the store has one kind of element rather than two tables that can
-// drift. Every dialect but ksh93 leaves Nested nil and pays a word for it.
+// Exported because an embedder stores arrays (Runner.StoreArray), and a field
+// rather than a bare string so that the store has one kind of element rather
+// than two tables that can drift. Every dialect but ksh93 leaves Nested nil
+// and pays a word for it.
 type Element struct {
 	// Uncomparable, as it was while Nested was a map: two elements built the
 	// same way are the same element, and `==` over the pointer Nested now is
@@ -133,8 +134,8 @@ const (
 // six columns.
 //
 // Exported because a dialect builds produced tables of them, an embedder hands
-// whole arrays in, and Runner.Arrays is exported itself — a caller that can
-// name the map can name what goes in it.
+// whole arrays in through Runner.StoreArray — a caller that can store an array
+// can name what goes in it.
 func Scalar(v string) Element { return Element{Str: v} }
 
 // scalar is what the element reads as where one string is wanted — `${a[1]}`,

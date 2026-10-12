@@ -6,266 +6,606 @@ package interp
 import (
 	"iter"
 	"maps"
+	"slices"
 )
 
-// The variable store's own surface: every read and write of the six tables a
-// name's value can live in goes through a method in this file.
+// The variable store: one cell per name, and the only file that touches it.
 //
-// The tables are Vars, Arrays, AssocArrays, Dynamic, DynamicArrays and
-// DynamicAssocs. A name can be in several of them at once — an array keeps a
-// copy of one element in Vars, a produced parameter keeps what was assigned to
-// it beside the producer — so the read path in Runner.storedValue asks about a
-// dozen of them, in a fixed order, for one scalar. Answering that in one
-// lookup needs one record per name that owns its invariants, and a record
-// cannot own anything while ~400 sites write the maps directly (#6353). This
-// file is the first step toward that record: the representation is unchanged
-// and every method is the map operation it replaces, so routing a site
-// through it changes nothing a script can see. What it buys is that the next
-// step changes this file rather than every caller.
+// A name can be several things at once. An indexed array keeps a copy of one
+// element as a scalar, a produced parameter keeps what was assigned to it
+// beside the producer, and a name declared an associative array can still
+// hold the scalar it had before. So the store is not one table per kind but
+// one record per name with a slot per kind, and a presence bit per slot:
 //
-// Each table has the same six verbs, named after the table:
+//	scalar          what `$name` stores                     (was Vars)
+//	array           an indexed array                        (was Arrays)
+//	assoc           an associative array; present is the    (was AssocArrays)
+//	                `declare -A` attribute
+//	producer        a scalar produced when it is read       (was Dynamic)
+//	arrayProducer   an array produced when it is read       (was DynamicArrays)
+//	assocProducer   a keyed table produced when it is read  (was DynamicAssocs)
+//
+// Those were six exported maps on Runner until #6353, written directly in ~400
+// places. A read of one scalar asked about a dozen of them in a fixed order
+// (Runner.storedValue), and nothing could answer that in one lookup, because
+// no record owned the name: a delete from one table and an insert into
+// another leave every length the same, so no index over them could be kept
+// sound. The cell is that record. The first step routed every site through
+// the methods below with the maps unchanged; this is the second, which
+// changes only this file.
+//
+// Each slot has the same six verbs, named after the table it replaced:
 //
 //	xAt(name)       the value, or the zero value where there is none
-//	xLookup(name)   the value and whether the name is there
-//	xPut(name, v)   store, making the table on first use
-//	xDel(name)      take the name out; a name that is not there is no-op
-//	xLen()          how many names (only where something asks)
-//	xRange()        every name and value, in the map's own order
+//	xLookup(name)   the value and whether the slot is present
+//	xPut(name, v)   store, making the cell on first use
+//	xDel(name)      take the slot away; a slot that is not there is a no-op
+//	xLen()          how many names hold the slot (only where something asks)
+//	xRange()        every name holding the slot and its value
 //
-// A write that may meet a table shared with a clone still asks for it first —
-// ownAssocs for the associative arrays — exactly as it did before the
-// methods: this file routes the write, it does not decide whether it is
-// allowed. See sharedtable.go.
+// **The cells live in a slab, and a name is an index into it.** cellIndex maps
+// a name to its position in cellSlab, so a read is one map lookup and a
+// write to a name the shell already has is one lookup and a store into the
+// slab. A cell whose last slot is taken away stays where it is, empty, because
+// names come back — a function's `local` takes one away and puts it back on
+// every call — and the index then has nothing to learn. Empty cells are
+// compacted away once they outnumber the live ones.
+//
+// **The layout is what makes a subshell cheap.** A clone copies the slab —
+// one allocation and a copy, where a table of names would be rebuilt key by
+// key — and *shares the index* until one side adds a name, through the same
+// tableShare the other copy-on-write tables use (sharedtable.go). Positions
+// mean the same thing in both slabs until then, and after it each side has an
+// index of its own. Measured on a `$(echo a)` loop, rebuilding a map of cells
+// per clone cost 10% of the loop where this costs nothing measurable.
+//
+// What a subshell owns is otherwise unchanged by the cells. It gets its own
+// copy of every indexed array, as it had its own Arrays; an associative
+// array's *contents* are still shared until one side writes, so a write into
+// an element still asks ownAssocs first. See TestACloneOwnsEveryCell and the
+// store's rows of TestASubshellWriteToASharedTableStaysInTheSubshell.
 
-// vars is Vars, the scalar table.
+// varCell is everything the store holds about one name.
+type varCell struct {
+	name          string
+	scalar        string
+	array         Array
+	assoc         AssocArray
+	producer      func(*Runner) string
+	arrayProducer func(*Runner) []string
+	assocProducer func(*Runner) AssocArray
+	// has says which slots are present. A slot's value is its zero value
+	// whenever it is absent.
+	has cellSlots
+}
 
-func (r *Runner) varsAt(name string) string { return r.Vars[name] }
+// cellSlots is a set of a cell's slots.
+type cellSlots uint8
+
+const (
+	slotScalar cellSlots = 1 << iota
+	slotArray
+	slotAssoc
+	slotProducer
+	slotArrayProducer
+	slotAssocProducer
+)
+
+// cellSlotCount is how many slots a cell has, which is the length of
+// Runner.cellCount.
+const cellSlotCount = 6
+
+// slotIndex is a slot's position in Runner.cellCount.
+func slotIndex(s cellSlots) int {
+	switch s {
+	case slotScalar:
+		return 0
+	case slotArray:
+		return 1
+	case slotAssoc:
+		return 2
+	case slotProducer:
+		return 3
+	case slotArrayProducer:
+		return 4
+	default:
+		return 5
+	}
+}
+
+// clearSlot zeroes s's value in c.
+func (c *varCell) clearSlot(s cellSlots) {
+	switch s {
+	case slotScalar:
+		c.scalar = ""
+	case slotArray:
+		c.array = nil
+	case slotAssoc:
+		c.assoc = nil
+	case slotProducer:
+		c.producer = nil
+	case slotArrayProducer:
+		c.arrayProducer = nil
+	default:
+		c.assocProducer = nil
+	}
+}
+
+// cell is name's cell, or nil. The pointer is into the slab, so it is good
+// until the next cell is made.
+func (r *Runner) cell(name string) *varCell {
+	if i, ok := r.cellIndex[name]; ok {
+		return &r.cellSlab[i]
+	}
+	return nil
+}
+
+// cellFor is the cell a write lands in, made if the name has none.
+func (r *Runner) cellFor(name string) *varCell {
+	if i, ok := r.cellIndex[name]; ok {
+		return &r.cellSlab[i]
+	}
+	r.ownCellIndex()
+	r.cellSlab = append(r.cellSlab, varCell{name: name})
+	i := len(r.cellSlab) - 1
+	r.cellIndex[name] = int32(i)
+	return &r.cellSlab[i]
+}
+
+// ownCellIndex makes the index this runner's to write: a copy, where a clone
+// still holds it.
+func (r *Runner) ownCellIndex() {
+	if mustCopyShared(&r.cellIndexShare) {
+		m := maps.Clone(r.cellIndex)
+		leaveShare(&r.cellIndexShare)
+		r.cellIndex = m
+	}
+	if r.cellIndex == nil {
+		r.cellIndex = map[string]int32{}
+	}
+}
+
+// markSlot records that c now holds s, counting it if it did not.
+func (r *Runner) markSlot(c *varCell, s cellSlots) {
+	if c.has&s != 0 {
+		return
+	}
+	if c.has == 0 {
+		r.liveCells++
+	}
+	c.has |= s
+	r.cellCount[slotIndex(s)]++
+}
+
+// slotCell is the cell holding s under name, or nil.
+func (r *Runner) slotCell(name string, s cellSlots) *varCell {
+	if c := r.cell(name); c != nil && c.has&s != 0 {
+		return c
+	}
+	return nil
+}
+
+// dropSlot takes s away from name's cell, value and all.
+func (r *Runner) dropSlot(name string, s cellSlots) {
+	c := r.slotCell(name, s)
+	if c == nil {
+		return
+	}
+	c.has &^= s
+	c.clearSlot(s)
+	r.cellCount[slotIndex(s)]--
+	if c.has == 0 {
+		r.liveCells--
+		r.compactCellsIfSparse()
+	}
+}
+
+// compactCellsIfSparse rebuilds the slab without its empty cells once they
+// outnumber the live ones, so that a script that makes and unsets names by
+// the thousand does not carry every one of them into each subshell. Never
+// while a range over the slab is running, which would see the positions
+// move under it.
+func (r *Runner) compactCellsIfSparse() {
+	dead := len(r.cellSlab) - r.liveCells
+	if dead < 256 || dead <= r.liveCells || r.cellsRanging > 0 {
+		return
+	}
+	slab := make([]varCell, 0, r.liveCells)
+	index := make(map[string]int32, r.liveCells)
+	for i := range r.cellSlab {
+		if c := &r.cellSlab[i]; c.has != 0 {
+			index[c.name] = int32(len(slab))
+			slab = append(slab, *c)
+		}
+	}
+	leaveShare(&r.cellIndexShare)
+	r.cellSlab, r.cellIndex = slab, index
+}
+
+// slotRange is every cell holding s, in the order the names were made. A
+// write during the range is allowed; a cell made during it may or may not be
+// visited, as a map's own range allows.
+func (r *Runner) slotRange(s cellSlots) iter.Seq[*varCell] {
+	return func(yield func(*varCell) bool) {
+		if r.cellCount[slotIndex(s)] == 0 {
+			return
+		}
+		r.cellsRanging++
+		defer func() { r.cellsRanging-- }()
+		for i := 0; i < len(r.cellSlab); i++ {
+			if c := &r.cellSlab[i]; c.has&s != 0 && !yield(c) {
+				return
+			}
+		}
+	}
+}
+
+// vars is the stored scalar.
+
+func (r *Runner) varsAt(name string) string {
+	if c := r.cell(name); c != nil {
+		return c.scalar
+	}
+	return ""
+}
 
 func (r *Runner) varsLookup(name string) (string, bool) {
-	v, ok := r.Vars[name]
-	return v, ok
+	if c := r.cell(name); c != nil && c.has&slotScalar != 0 {
+		return c.scalar, true
+	}
+	return "", false
 }
 
 func (r *Runner) varsPut(name, value string) {
-	if r.Vars == nil {
-		r.Vars = map[string]string{}
-	}
-	r.Vars[name] = value
+	c := r.cellFor(name)
+	r.markSlot(c, slotScalar)
+	c.scalar = value
 }
 
-func (r *Runner) varsDel(name string) { delete(r.Vars, name) }
+func (r *Runner) varsDel(name string) { r.dropSlot(name, slotScalar) }
 
-func (r *Runner) varsLen() int { return len(r.Vars) }
+func (r *Runner) varsLen() int { return r.cellCount[slotIndex(slotScalar)] }
 
-func (r *Runner) varsRange() iter.Seq2[string, string] { return maps.All(r.Vars) }
+func (r *Runner) varsRange() iter.Seq2[string, string] {
+	return func(yield func(string, string) bool) {
+		for c := range r.slotRange(slotScalar) {
+			if !yield(c.name, c.scalar) {
+				return
+			}
+		}
+	}
+}
 
-// arrays is Arrays, the indexed arrays.
+// arrays is the indexed array.
 
-func (r *Runner) arraysAt(name string) Array { return r.Arrays[name] }
+func (r *Runner) arraysAt(name string) Array {
+	if c := r.cell(name); c != nil {
+		return c.array
+	}
+	return nil
+}
 
 func (r *Runner) arraysLookup(name string) (Array, bool) {
-	a, ok := r.Arrays[name]
-	return a, ok
+	if c := r.cell(name); c != nil && c.has&slotArray != 0 {
+		return c.array, true
+	}
+	return nil, false
 }
 
 func (r *Runner) arraysPut(name string, a Array) {
-	if r.Arrays == nil {
-		r.Arrays = map[string]Array{}
-	}
-	r.Arrays[name] = a
+	c := r.cellFor(name)
+	r.markSlot(c, slotArray)
+	c.array = a
 }
 
-func (r *Runner) arraysDel(name string) { delete(r.Arrays, name) }
+func (r *Runner) arraysDel(name string) { r.dropSlot(name, slotArray) }
 
-func (r *Runner) arraysRange() iter.Seq2[string, Array] { return maps.All(r.Arrays) }
+func (r *Runner) arraysLen() int { return r.cellCount[slotIndex(slotArray)] }
 
-// assocs is AssocArrays, the associative arrays. The table is shared with a
-// clone until one side writes: a write calls ownAssocs first. See
-// sharedtable.go.
+func (r *Runner) arraysRange() iter.Seq2[string, Array] {
+	return func(yield func(string, Array) bool) {
+		for c := range r.slotRange(slotArray) {
+			if !yield(c.name, c.array) {
+				return
+			}
+		}
+	}
+}
 
-func (r *Runner) assocsAt(name string) AssocArray { return r.AssocArrays[name] }
+// assocs is the associative array. Its contents are shared with a clone until
+// one side writes: a write into one calls ownAssocs first. See sharedtable.go.
+
+func (r *Runner) assocsAt(name string) AssocArray {
+	if c := r.cell(name); c != nil {
+		return c.assoc
+	}
+	return nil
+}
 
 func (r *Runner) assocsLookup(name string) (AssocArray, bool) {
-	a, ok := r.AssocArrays[name]
-	return a, ok
+	if c := r.cell(name); c != nil && c.has&slotAssoc != 0 {
+		return c.assoc, true
+	}
+	return nil, false
 }
 
 func (r *Runner) assocsPut(name string, a AssocArray) {
-	if r.AssocArrays == nil {
-		r.AssocArrays = map[string]AssocArray{}
-	}
-	r.AssocArrays[name] = a
+	c := r.cellFor(name)
+	r.markSlot(c, slotAssoc)
+	c.assoc = a
 }
 
-func (r *Runner) assocsDel(name string) { delete(r.AssocArrays, name) }
+func (r *Runner) assocsDel(name string) { r.dropSlot(name, slotAssoc) }
 
-func (r *Runner) assocsRange() iter.Seq2[string, AssocArray] { return maps.All(r.AssocArrays) }
+func (r *Runner) assocsLen() int { return r.cellCount[slotIndex(slotAssoc)] }
 
-// producers is Dynamic, the scalars produced when they are read.
+func (r *Runner) assocsRange() iter.Seq2[string, AssocArray] {
+	return func(yield func(string, AssocArray) bool) {
+		for c := range r.slotRange(slotAssoc) {
+			if !yield(c.name, c.assoc) {
+				return
+			}
+		}
+	}
+}
 
-func (r *Runner) producersAt(name string) func(*Runner) string { return r.Dynamic[name] }
+// producers is the scalar produced when it is read: `LINENO` is wherever
+// execution has reached, and `RANDOM` is a different number every time. A
+// dialect fills in the ones it has through SetDynamic.
+
+func (r *Runner) producersAt(name string) func(*Runner) string {
+	if c := r.cell(name); c != nil {
+		return c.producer
+	}
+	return nil
+}
 
 func (r *Runner) producersLookup(name string) (func(*Runner) string, bool) {
-	f, ok := r.Dynamic[name]
-	return f, ok
+	if c := r.cell(name); c != nil && c.has&slotProducer != 0 {
+		return c.producer, true
+	}
+	return nil, false
 }
 
 func (r *Runner) producersPut(name string, f func(*Runner) string) {
-	if r.Dynamic == nil {
-		r.Dynamic = map[string]func(*Runner) string{}
-	}
-	r.Dynamic[name] = f
+	c := r.cellFor(name)
+	r.markSlot(c, slotProducer)
+	c.producer = f
 }
 
-func (r *Runner) producersDel(name string) { delete(r.Dynamic, name) }
+func (r *Runner) producersDel(name string) { r.dropSlot(name, slotProducer) }
 
 func (r *Runner) producersRange() iter.Seq2[string, func(*Runner) string] {
-	return maps.All(r.Dynamic)
+	return func(yield func(string, func(*Runner) string) bool) {
+		for c := range r.slotRange(slotProducer) {
+			if !yield(c.name, c.producer) {
+				return
+			}
+		}
+	}
 }
 
-// arrayProducers is DynamicArrays.
+// arrayProducers is the array produced when it is read, and the call stack is
+// why it exists: `BASH_SOURCE` and its relatives cannot be stored and stay
+// right. A dialect fills in the names it has through SetDynamicArray.
 
 func (r *Runner) arrayProducersAt(name string) func(*Runner) []string {
-	return r.DynamicArrays[name]
+	if c := r.cell(name); c != nil {
+		return c.arrayProducer
+	}
+	return nil
 }
 
 func (r *Runner) arrayProducersLookup(name string) (func(*Runner) []string, bool) {
-	f, ok := r.DynamicArrays[name]
-	return f, ok
+	if c := r.cell(name); c != nil && c.has&slotArrayProducer != 0 {
+		return c.arrayProducer, true
+	}
+	return nil, false
 }
 
 func (r *Runner) arrayProducersPut(name string, f func(*Runner) []string) {
-	if r.DynamicArrays == nil {
-		r.DynamicArrays = map[string]func(*Runner) []string{}
-	}
-	r.DynamicArrays[name] = f
+	c := r.cellFor(name)
+	r.markSlot(c, slotArrayProducer)
+	c.arrayProducer = f
 }
 
-func (r *Runner) arrayProducersDel(name string) { delete(r.DynamicArrays, name) }
+func (r *Runner) arrayProducersDel(name string) { r.dropSlot(name, slotArrayProducer) }
 
 func (r *Runner) arrayProducersRange() iter.Seq2[string, func(*Runner) []string] {
-	return maps.All(r.DynamicArrays)
+	return func(yield func(string, func(*Runner) []string) bool) {
+		for c := range r.slotRange(slotArrayProducer) {
+			if !yield(c.name, c.arrayProducer) {
+				return
+			}
+		}
+	}
 }
 
-// assocProducers is DynamicAssocs.
+// assocProducers is the keyed table produced when it is read: a parameter that
+// answers "which functions exist, and what is each one's body" is a
+// name-to-value map read at the moment it is asked. A dialect fills in the
+// names it has through SetDynamicAssoc.
 
 func (r *Runner) assocProducersAt(name string) func(*Runner) AssocArray {
-	return r.DynamicAssocs[name]
+	if c := r.cell(name); c != nil {
+		return c.assocProducer
+	}
+	return nil
 }
 
 func (r *Runner) assocProducersLookup(name string) (func(*Runner) AssocArray, bool) {
-	f, ok := r.DynamicAssocs[name]
-	return f, ok
+	if c := r.cell(name); c != nil && c.has&slotAssocProducer != 0 {
+		return c.assocProducer, true
+	}
+	return nil, false
 }
 
 func (r *Runner) assocProducersPut(name string, f func(*Runner) AssocArray) {
-	if r.DynamicAssocs == nil {
-		r.DynamicAssocs = map[string]func(*Runner) AssocArray{}
-	}
-	r.DynamicAssocs[name] = f
+	c := r.cellFor(name)
+	r.markSlot(c, slotAssocProducer)
+	c.assocProducer = f
 }
 
-func (r *Runner) assocProducersDel(name string) { delete(r.DynamicAssocs, name) }
+func (r *Runner) assocProducersDel(name string) { r.dropSlot(name, slotAssocProducer) }
 
 func (r *Runner) assocProducersRange() iter.Seq2[string, func(*Runner) AssocArray] {
-	return maps.All(r.DynamicAssocs)
+	return func(yield func(string, func(*Runner) AssocArray) bool) {
+		for c := range r.slotRange(slotAssocProducer) {
+			if !yield(c.name, c.assocProducer) {
+				return
+			}
+		}
+	}
 }
 
-// ownVarTables is clone's half for the variable tables: the clone starts from
-// `c := *r`, which shares every map, and these are made its own here. Vars is
-// made rather than cloned because a nil one used to be unsafe to write; the
-// arrays copy their elements too, so the subshell does not write the parent's
-// array through its own name table. The associative arrays are shared until
-// one side writes — see shareTables.
+// ownVarTables is clone's half for the store: the clone starts from `c :=
+// *r`, which shares the parent's slab and index. It gets a slab of its own —
+// a copy, with every indexed array in it copied too, so the subshell does not
+// write the parent's array through its own cell — and shares the index until
+// either side adds a name. An associative array's contents are shared until
+// one side writes: see shareTables and ownAssocs.
 func (c *Runner) ownVarTables(r *Runner) {
-	c.Vars = make(map[string]string, len(r.Vars))
-	for k, v := range r.Vars {
-		c.Vars[k] = v
+	c.cellSlab = slices.Clone(r.cellSlab)
+	for i := range c.cellSlab {
+		if a := c.cellSlab[i].array; a != nil {
+			c.cellSlab[i].array = a.clone()
+		}
 	}
-	c.Arrays = make(map[string]Array, len(r.Arrays))
-	for k, v := range r.Arrays {
-		c.Arrays[k] = v.clone()
-	}
+	c.cellIndexShare = shareTable(&r.cellIndexShare)
+	c.cellsRanging = 0
 }
 
-// ownProducerTables makes the three producer tables the clone's own. Dynamic
-// is built lazily — `_` and `LINENO` are installed into it on the way past —
-// so the shell itself writes it, on whatever goroutine a substitution runs.
-func (c *Runner) ownProducerTables(r *Runner) {
-	c.Dynamic = maps.Clone(r.Dynamic)
-	c.DynamicArrays = maps.Clone(r.DynamicArrays)
-	c.DynamicAssocs = maps.Clone(r.DynamicAssocs)
+// releaseVarTables gives up a finished clone's hold on the store's index and
+// lets go of the store, so that the parent adds its next name in place and a
+// write the clone made by mistake afterwards lands in a store of its own.
+func (r *Runner) releaseVarTables() {
+	leaveShare(&r.cellIndexShare)
+	leaveShare(&r.assocShare)
+	r.cellIndex, r.cellSlab = nil, nil
+	r.cellCount, r.liveCells = [cellSlotCount]int{}, 0
 }
 
-// ownAssocs makes the associative arrays this runner's to write: the table of
-// names and every table under a name, since a write to an element is a write
-// into the inner map.
+// ownAssocs makes the associative arrays this runner's to write: every table
+// under a name, since a write to an element is a write into the inner map.
 func (r *Runner) ownAssocs() {
 	if mustCopyShared(&r.assocShare) {
-		m := cloneAssocTables(r.AssocArrays)
+		for c := range r.slotRange(slotAssoc) {
+			c.assoc = c.assoc.clone()
+		}
 		leaveShare(&r.assocShare)
-		r.AssocArrays = m
 	}
 }
 
-// replaceAssocs puts tables this runner made in place of the ones it held.
-func (r *Runner) replaceAssocs(m map[string]AssocArray) {
-	leaveShare(&r.assocShare)
-	r.AssocArrays = m
-}
-
-// varTables is a copy of the three stored tables, for a caller that has to
-// put them back or ask whether anything wrote them. See saveExpansionTables.
+// varTables is a copy of the three stored slots — scalar, indexed and
+// associative — for a caller that has to put them back or ask whether anything
+// wrote them. The producers are not in it: see saveExpansionTables.
 type varTables struct {
 	vars   map[string]string
 	arrays map[string]Array
 	assoc  map[string]AssocArray
 }
 
-// saveVarTables takes the copy, one level deeper for the two array tables,
+// saveVarTables takes the copy, one level deeper for the two array slots,
 // whose values are containers.
 func (r *Runner) saveVarTables() varTables {
-	return varTables{
-		vars:   maps.Clone(r.Vars),
-		arrays: cloneArrays(r.Arrays),
-		assoc:  cloneAssoc(r.AssocArrays),
+	t := varTables{
+		vars:   make(map[string]string, r.varsLen()),
+		arrays: make(map[string]Array, r.arraysLen()),
+		assoc:  make(map[string]AssocArray, r.assocsLen()),
+	}
+	for i := range r.cellSlab {
+		c := &r.cellSlab[i]
+		if c.has&slotScalar != 0 {
+			t.vars[c.name] = c.scalar
+		}
+		if c.has&slotArray != 0 {
+			t.arrays[c.name] = c.array.clone()
+		}
+		if c.has&slotAssoc != 0 {
+			t.assoc[c.name] = c.assoc.clone()
+		}
+	}
+	return t
+}
+
+// restoreVarTables puts the copy back, leaving the producers as they are. The
+// tables put back are the copy's own, so nothing the parent holds is shared.
+func (r *Runner) restoreVarTables(t varTables) {
+	leaveShare(&r.assocShare)
+	for _, s := range []cellSlots{slotScalar, slotArray, slotAssoc} {
+		for c := range r.slotRange(s) {
+			c.has &^= s
+			c.clearSlot(s)
+			if c.has == 0 {
+				r.liveCells--
+			}
+		}
+		r.cellCount[slotIndex(s)] = 0
+	}
+	for name, v := range t.vars {
+		r.varsPut(name, v)
+	}
+	for name, a := range t.arrays {
+		r.arraysPut(name, a)
+	}
+	for name, a := range t.assoc {
+		r.assocsPut(name, a)
 	}
 }
 
-// restoreVarTables puts the copy back.
-func (r *Runner) restoreVarTables(t varTables) {
-	r.Vars, r.Arrays = t.vars, t.arrays
-	r.replaceAssocs(t.assoc)
-}
-
-// varTablesWroteSince reports whether any of the three has changed since the
-// copy was taken.
+// varTablesWroteSince reports whether any of the three stored slots has
+// changed since the copy was taken.
 func (r *Runner) varTablesWroteSince(t varTables) bool {
-	return !maps.Equal(t.vars, r.Vars) ||
-		!arraysEqual(t.arrays, r.Arrays) ||
-		!assocEqual(t.assoc, r.AssocArrays)
+	if r.varsLen() != len(t.vars) || r.arraysLen() != len(t.arrays) || r.assocsLen() != len(t.assoc) {
+		return true
+	}
+	for i := range r.cellSlab {
+		c := &r.cellSlab[i]
+		if c.has&slotScalar != 0 {
+			if v, ok := t.vars[c.name]; !ok || v != c.scalar {
+				return true
+			}
+		}
+		if c.has&slotArray != 0 {
+			if a, ok := t.arrays[c.name]; !ok || !c.array.equal(a) {
+				return true
+			}
+		}
+		if c.has&slotAssoc != 0 {
+			if a, ok := t.assoc[c.name]; !ok || !c.assoc.equal(a) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
-// The store as an embedder reaches it. Each of these is the raw table
-// operation, with none of an assignment's semantics — no attribute, no
-// export, no producer consulted — which is what a caller writing into the
-// tables directly used to get.
+// The store as an embedder reaches it. Each of these is the raw operation on
+// the store, with none of an assignment's semantics — no attribute, no export,
+// no producer consulted.
 
-// SeedVars stores each scalar as given, which is what a Vars field in a
-// Runner literal does. The map is copied, not kept.
-func (r *Runner) SeedVars(vars map[string]string) {
+// SeedVars stores each scalar as given and returns r, so that a Runner literal
+// can be seeded where it is written: `(&interp.Runner{…}).SeedVars(m)` is what
+// a literal's Vars field was before the store was unexported. The map is
+// copied, not kept.
+func (r *Runner) SeedVars(vars map[string]string) *Runner {
 	for name, value := range vars {
 		r.varsPut(name, value)
 	}
+	return r
 }
 
-// StoredScalars is every name the scalar table holds and its stored value, in
-// no particular order. A produced parameter, an array and an associative
-// array are not in it; an indexed array may keep a copy of one element here.
+// StoredScalar is the scalar the store holds under name, without a read's
+// fold, producer or reference: what Vars[name] was.
+func (r *Runner) StoredScalar(name string) (string, bool) { return r.varsLookup(name) }
+
+// StoredScalars is every name holding a stored scalar and its value, in no
+// particular order. A produced parameter, an array and an associative array
+// are not in it; an indexed array may keep a copy of one element here.
 func (r *Runner) StoredScalars() iter.Seq2[string, string] { return r.varsRange() }
 
-// StoredArrayNames is every name the indexed-array table holds, in no
-// particular order.
+// StoredArrayNames is every name holding an indexed array, in no particular
+// order.
 func (r *Runner) StoredArrayNames() iter.Seq[string] {
 	return func(yield func(string) bool) {
 		for name := range r.arraysRange() {
@@ -276,12 +616,15 @@ func (r *Runner) StoredArrayNames() iter.Seq[string] {
 	}
 }
 
-// DropStoredArray takes a name out of the indexed-array table and nothing
-// else: not an unset, which would also mark the name and its attributes.
+// DropStoredScalar takes the stored scalar away from name and nothing else:
+// not an unset, which would also mark the name and its attributes.
+func (r *Runner) DropStoredScalar(name string) { r.varsDel(name) }
+
+// DropStoredArray takes the indexed array away from name and nothing else.
 func (r *Runner) DropStoredArray(name string) { r.arraysDel(name) }
 
-// CopyVariablesFrom gives r a copy of src's scalars and indexed arrays, so that
-// what r assigns stays in r.
+// CopyVariablesFrom gives r a copy of src's scalars and indexed arrays, so
+// that what r assigns stays in r.
 func (r *Runner) CopyVariablesFrom(src *Runner) {
 	for name, value := range src.varsRange() {
 		r.varsPut(name, value)
@@ -289,4 +632,25 @@ func (r *Runner) CopyVariablesFrom(src *Runner) {
 	for name, a := range src.arraysRange() {
 		r.arraysPut(name, a.clone())
 	}
+}
+
+// StoreScalar stores value as name's scalar and nothing else: what an
+// assignment to Vars[name] was.
+func (r *Runner) StoreScalar(name, value string) { r.varsPut(name, value) }
+
+// StoreArray stores a as name's indexed array and nothing else: what an
+// assignment to Arrays[name] was. The array is kept, not copied.
+func (r *Runner) StoreArray(name string, a Array) { r.arraysPut(name, a) }
+
+// StoreAssoc stores a as name's associative array and nothing else: what an
+// assignment to AssocArrays[name] was. The table is kept, not copied.
+func (r *Runner) StoreAssoc(name string, a AssocArray) {
+	r.ownAssocs()
+	r.assocsPut(name, a)
+}
+
+// AssocProducer is the whole-table producer registered for name with
+// SetDynamicAssoc, or nil.
+func (r *Runner) AssocProducer(name string) func(*Runner) AssocArray {
+	return r.assocProducersAt(name)
 }

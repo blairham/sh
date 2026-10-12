@@ -16,10 +16,10 @@ import (
 // it would have to parse and expand, which is the whole of this package.
 func TestExpandASetting(t *testing.T) {
 	sem := permissive()
-	r := newTestRunner(t, &Runner{Semantics: &sem, Vars: map[string]string{
+	r := newTestRunner(t, &Runner{Semantics: &sem}).SeedVars(map[string]string{
 		"HOME": "/home/someone",
 		"NAME": "rc",
-	}})
+	})
 	for _, c := range []struct{ in, want string }{
 		{"$HOME/.shrc", "/home/someone/.shrc"},
 		{"${HOME}/.shrc", "/home/someone/.shrc"},
@@ -51,7 +51,7 @@ func TestATildeAfterAColonInAnAssignment(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			out, _ := run(t, tc.src, func(r *Runner) {
-				r.Vars = map[string]string{"HOME": "/home/who"}
+				r.SeedVars(map[string]string{"HOME": "/home/who"})
 			})
 			if strings.TrimSpace(out) != tc.want {
 				t.Errorf("got %q, want %q", strings.TrimSpace(out), tc.want)
@@ -68,7 +68,7 @@ func TestTildePlusAndMinusAreAnAxis(t *testing.T) {
 			sem := CoreSemantics()
 			sem.TildePlusMinusExpands = answer
 			r.Semantics = &sem
-			r.Vars = map[string]string{"PWD": "/here", "OLDPWD": "/before", "HOME": "/h"}
+			r.SeedVars(map[string]string{"PWD": "/here", "OLDPWD": "/before", "HOME": "/h"})
 		}
 	}
 	out, _ := run(t, `echo ~+ ~-/x`, set(Yes))

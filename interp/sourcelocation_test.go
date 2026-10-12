@@ -127,8 +127,7 @@ func sourceLocRun(t *testing.T, inc, src string, dg Diagnostics) string {
 		Stdout: &bytes.Buffer{}, Stderr: &buf, Dir: dir,
 		// PATH deliberately empty of the directory: `.` reads `./inc.sh` as
 		// a path, and nothing else here should be findable.
-		Vars: map[string]string{"PATH": ""},
-	})
+	}).SeedVars(map[string]string{"PATH": ""})
 	if _, err := r.Run(context.Background(), f); err != nil {
 		t.Fatal(err)
 	}

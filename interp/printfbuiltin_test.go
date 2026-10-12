@@ -387,7 +387,7 @@ func TestPrintfUnicodeEscapeEncodesWhatUnicodeLaterRefused(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			out, st := run(t, tc.src, func(r *Runner) {
 				r.Semantics = &sem
-				r.Vars = map[string]string{"LC_ALL": "en_US.UTF-8"}
+				r.SeedVars(map[string]string{"LC_ALL": "en_US.UTF-8"})
 			})
 			if out != tc.want || st != 0 {
 				t.Errorf("got %q status %d, want %q and 0", out, st, tc.want)

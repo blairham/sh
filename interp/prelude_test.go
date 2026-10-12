@@ -43,8 +43,8 @@ func preludeRun(t *testing.T, dir, prelude, src string, dg Diagnostics) string {
 	sem := permissive()
 	r := newTestRunner(t, &Runner{
 		Stdout: &out, Stderr: &errs, Semantics: &sem, Diagnostics: &dg,
-		Dir: dir, Name: "testsh", Vars: map[string]string{"PATH": dir},
-	})
+		Dir: dir, Name: "testsh",
+	}).SeedVars(map[string]string{"PATH": dir})
 	r.SourcingPrelude(true)
 	if _, rerr := r.Run(context.Background(), pre); rerr != nil {
 		t.Fatalf("run prelude: %v", rerr)

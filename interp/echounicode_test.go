@@ -38,7 +38,7 @@ func TestEchoExpandsUnicodeEscapes(t *testing.T) {
 			// dialect's (#2020).
 			out, _ := run(t, tc.src, func(r *Runner) {
 				r.Semantics = &sem
-				r.Vars = map[string]string{"LC_ALL": "en_US.UTF-8"}
+				r.SeedVars(map[string]string{"LC_ALL": "en_US.UTF-8"})
 			})
 			if out != tc.want {
 				t.Errorf("%s = %q, want %q", tc.src, out, tc.want)
@@ -86,7 +86,7 @@ func TestEchoUnicodeEscapesUseTheWholeEncoding(t *testing.T) {
 			sem.EchoOptions = "n"
 			out, _ := run(t, tc.src, func(r *Runner) {
 				r.Semantics = &sem
-				r.Vars = map[string]string{"LC_ALL": "en_US.UTF-8"}
+				r.SeedVars(map[string]string{"LC_ALL": "en_US.UTF-8"})
 			})
 			if out != string(tc.want) {
 				t.Errorf("%s = % x, want % x", tc.src, out, tc.want)

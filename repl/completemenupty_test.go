@@ -27,7 +27,7 @@ import (
 // action that is not WidgetComplete.
 func TestTheListingWidgetReachesTheTerminal(t *testing.T) {
 	s := newSessionWith(t, func(sh *Shell) {
-		sh.Runner.Vars["PS1"] = "UPPER\n[\\#]"
+		sh.Runner.StoreScalar("PS1", "UPPER\n[\\#]")
 		sh.KeyBindings = func(Keymap) map[string]Binding {
 			return map[string]Binding{"\a": {Widget: WidgetListChoices, Candidates: "w"}}
 		}
@@ -73,7 +73,7 @@ func TestTheListingWidgetReachesTheTerminal(t *testing.T) {
 // listing while it does.
 func TestMenuCompletionReachesTheTerminal(t *testing.T) {
 	s := newSessionWith(t, func(sh *Shell) {
-		sh.Runner.Vars["PS1"] = "UPPER\n[\\#]"
+		sh.Runner.StoreScalar("PS1", "UPPER\n[\\#]")
 		sh.KeyBindings = func(Keymap) map[string]Binding {
 			return map[string]Binding{"\a": {Widget: WidgetMenuComplete}}
 		}

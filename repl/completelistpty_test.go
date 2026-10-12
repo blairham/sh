@@ -31,7 +31,7 @@ func TestAGroupedListingReachesTheTerminal(t *testing.T) {
 	described := Group{Name: "opts", Heading: "options", OnePerLine: true}
 	bare := Group{Name: "levels"}
 	s := newSessionWith(t, func(sh *Shell) {
-		sh.Runner.Vars["PS1"] = "UPPER\n[\\#]"
+		sh.Runner.StoreScalar("PS1", "UPPER\n[\\#]")
 		sh.KeyBindings = func(Keymap) map[string]Binding {
 			return map[string]Binding{"\t": {Widget: WidgetComplete, Candidates: "w"}}
 		}
@@ -98,7 +98,7 @@ func TestAGroupedListingReachesTheTerminal(t *testing.T) {
 func TestAHeadingLeftColoredDoesNotPaintThePrompt(t *testing.T) {
 	red := Group{Name: "g", Heading: "\x1b[31m-- red --"}
 	s := newSessionWith(t, func(sh *Shell) {
-		sh.Runner.Vars["PS1"] = "UPPER\n[\\#]"
+		sh.Runner.StoreScalar("PS1", "UPPER\n[\\#]")
 		sh.KeyBindings = func(Keymap) map[string]Binding {
 			return map[string]Binding{"\t": {Widget: WidgetComplete, Candidates: "w"}}
 		}
@@ -134,7 +134,7 @@ func TestAListingFollowsAnOptionSetMidSession(t *testing.T) {
 		words = append(words, string(c))
 	}
 	s := newSessionWith(t, func(sh *Shell) {
-		sh.Runner.Vars["PS1"] = "UPPER\n[\\#]"
+		sh.Runner.StoreScalar("PS1", "UPPER\n[\\#]")
 		sh.Runner.Dir = t.TempDir()
 		sh.Completers = []Completer{CompleterFunc(func(c Completion) []Candidate {
 			if c.Word == "q" {

@@ -124,7 +124,7 @@ func TestWhatARenderingDrewStopsAtTheFirstSubstitution(t *testing.T) {
 		Name: "testsh",
 	})
 	r.SetPromptStyle(abandonPromptStyle(true))
-	r.Vars = map[string]string{"V": "MID"}
+	r.SeedVars(map[string]string{"V": "MID"})
 	drawn, _, ok := RenderPromptValue(r.PromptStyleValue(), r, `PRE-${V}-$((1/0))-POST`, abandonPromptField, nil)
 	if !ok {
 		t.Fatal("the escape table refused, which is not what this test is about")

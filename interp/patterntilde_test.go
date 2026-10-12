@@ -29,7 +29,7 @@ import (
 // shell does not draw (#2181, #2178).
 func TestATildeAtTheFrontOfAPatternIsExpanded(t *testing.T) {
 	home := func(r *Runner) {
-		r.Vars = map[string]string{"HOME": "/h", "PWD": "/here", "OLDPWD": "/before"}
+		r.SeedVars(map[string]string{"HOME": "/h", "PWD": "/here", "OLDPWD": "/before"})
 	}
 	for _, tc := range []struct {
 		name, src, want string
@@ -90,7 +90,7 @@ func TestATildeAtTheFrontOfAPatternIsExpanded(t *testing.T) {
 // question rather than this one. docs/spec/grammar/patterns.md records the
 // three answers.
 func TestTheDirectoryATildeNamesIsMatchedAsText(t *testing.T) {
-	home := func(r *Runner) { r.Vars = map[string]string{"HOME": `/h/a*b`} }
+	home := func(r *Runner) { r.SeedVars(map[string]string{"HOME": `/h/a*b`}) }
 	for _, tc := range []struct {
 		name, src, want string
 	}{

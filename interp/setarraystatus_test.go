@@ -130,8 +130,8 @@ func setArrayStatusRunFatality(t *testing.T, src string, answer Answer, route Ro
 			SetInvalidOptionNameStatus:   1,
 			SetInvalidOptionLetterStatus: 1,
 		},
-		Dir: dir, Name: "testsh", Vars: map[string]string{"PATH": dir},
-	})
+		Dir: dir, Name: "testsh",
+	}).SeedVars(map[string]string{"PATH": dir})
 	st, rerr := r.Run(context.Background(), f)
 	if rerr != nil {
 		t.Fatalf("run %q: %v", src, rerr)

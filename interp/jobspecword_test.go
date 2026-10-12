@@ -34,8 +34,8 @@ func TestAPercentWordWithNoAnswerRefusesByNameAndNothingElseDoes(t *testing.T) {
 		sem := PosixSemantics()
 		r := newTestRunner(t, &Runner{
 			Stdout: &out, Stderr: &out, Semantics: &sem,
-			Dir: dir, Name: "sh", Vars: map[string]string{"PATH": dir},
-		})
+			Dir: dir, Name: "sh",
+		}).SeedVars(map[string]string{"PATH": dir})
 		f, err := syntax.Parse(src, syntax.Core())
 		if err != nil {
 			t.Fatalf("parse %q: %v", src, err)

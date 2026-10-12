@@ -29,7 +29,7 @@ func sharedTableRows() []sharedTableRow {
 			write: func(r *Runner, tag string) {
 				r.setAssocElem("tbl", "k", tag)
 			},
-			read: func(r *Runner) string { return r.AssocArrays["tbl"]["k"].scalar() },
+			read: func(r *Runner) string { return r.assocsAt("tbl")["k"].scalar() },
 		},
 		{
 			name: "an associative array's element, unset",
@@ -38,7 +38,7 @@ func sharedTableRows() []sharedTableRow {
 				r.unsetAssocElem("tbl", "gone")
 				r.setAssocElem("tbl", "gone-"+tag, tag)
 			},
-			read: func(r *Runner) string { return fmt.Sprint(r.AssocArrays["tbl"].keys()) },
+			read: func(r *Runner) string { return fmt.Sprint(r.assocsAt("tbl").keys()) },
 		},
 		{
 			name: "the table of associative arrays",
@@ -49,17 +49,45 @@ func sharedTableRows() []sharedTableRow {
 			},
 			read: func(r *Runner) string {
 				var names []string
-				for name := range r.AssocArrays {
+				for name := range r.assocsRange() {
 					names = append(names, name)
 				}
-				return fmt.Sprint(len(names), r.AssocArrays["old"] != nil)
+				return fmt.Sprint(len(names), r.assocsAt("old") != nil)
 			},
 		},
 		{
 			name:  "a new associative array",
 			seed:  func(r *Runner) { r.setAssocElem("tbl", "k", "v") },
 			write: func(r *Runner, tag string) { r.markAssoc("new-" + tag) },
-			read:  func(r *Runner) string { return fmt.Sprint(len(r.AssocArrays)) },
+			read:  func(r *Runner) string { return fmt.Sprint(r.assocsLen()) },
+		},
+		// The store's own slots, which a clone owns by copying rather than
+		// shares: the rows hold it to the same isolation the shared tables
+		// get, including the concurrent one. See varstore.go.
+		{
+			name: "a stored scalar",
+			seed: func(r *Runner) { r.varsPut("v", "parent") },
+			write: func(r *Runner, tag string) {
+				r.varsPut("v", tag)
+				r.varsPut("n-"+tag, tag)
+			},
+			read: func(r *Runner) string { return fmt.Sprint(r.varsAt("v"), r.varsLen()) },
+		},
+		{
+			name: "an indexed array's element",
+			seed: func(r *Runner) { r.arraysPut("a", ArrayOf(Element{Str: "parent"})) },
+			write: func(r *Runner, tag string) {
+				r.arraysAt("a").Set(0, Element{Str: tag})
+			},
+			read: func(r *Runner) string { return r.arraysAt("a").Get(0).Str },
+		},
+		{
+			name: "a produced parameter",
+			seed: func(r *Runner) { r.producersPut("p", func(*Runner) string { return "parent" }) },
+			write: func(r *Runner, tag string) {
+				r.producersPut("p", func(*Runner) string { return tag })
+			},
+			read: func(r *Runner) string { return r.producersAt("p")(r) },
 		},
 		{
 			name: "a function's origin",
@@ -184,7 +212,7 @@ func TestAFinishedSubshellLeavesItsParentTheTable(t *testing.T) {
 	parent.setAssocElem("tbl", "k", "v")
 	parent.recordFunctionOrigin("f", funcOrigin{file: "x"})
 	parent.putHashedCommand("ls", "/bin/ls", 0)
-	assocs, origins, hash := parent.AssocArrays, parent.funcOrigins, parent.cmdHash
+	assocs, origins, hash := parent.assocsAt("tbl"), parent.funcOrigins, parent.cmdHash
 
 	child := parent.clone()
 	child.releaseSharedTables()
@@ -192,7 +220,7 @@ func TestAFinishedSubshellLeavesItsParentTheTable(t *testing.T) {
 	parent.recordFunctionOrigin("f", funcOrigin{file: "y"})
 	parent.putHashedCommand("ls", "/usr/bin/ls", 0)
 
-	if fmt.Sprintf("%p", parent.AssocArrays) != fmt.Sprintf("%p", assocs) {
+	if fmt.Sprintf("%p", parent.assocsAt("tbl")) != fmt.Sprintf("%p", assocs) {
 		t.Error("the parent copied its associative arrays after the subshell had given them back")
 	}
 	if fmt.Sprintf("%p", parent.funcOrigins) != fmt.Sprintf("%p", origins) {
@@ -205,10 +233,10 @@ func TestAFinishedSubshellLeavesItsParentTheTable(t *testing.T) {
 	// And the control: while a clone still holds them, the same writes copy.
 	held := parent.clone()
 	parent.setAssocElem("tbl", "k", "z")
-	if fmt.Sprintf("%p", parent.AssocArrays) == fmt.Sprintf("%p", held.AssocArrays) {
+	if fmt.Sprintf("%p", parent.assocsAt("tbl")) == fmt.Sprintf("%p", held.assocsAt("tbl")) {
 		t.Error("the parent wrote in place into associative arrays a subshell still holds")
 	}
-	if got := held.AssocArrays["tbl"]["k"].scalar(); got != "w" {
+	if got := held.assocsAt("tbl")["k"].scalar(); got != "w" {
 		t.Errorf("the held subshell reads %q, want the value at the clone, w", got)
 	}
 }
@@ -261,10 +289,10 @@ func TestATableMovedWhileSharedIsNotTheSubshells(t *testing.T) {
 	}
 	parent.setAssocElem("dst", "k", "after")
 
-	if got := parent.AssocArrays["dst"]["k"].scalar(); got != "after" {
+	if got := parent.assocsAt("dst")["k"].scalar(); got != "after" {
 		t.Fatalf("the moved table reads %q, want after", got)
 	}
-	if got := child.AssocArrays["src"]["k"].scalar(); got != "before" {
+	if got := child.assocsAt("src")["k"].scalar(); got != "before" {
 		t.Errorf("a write to the moved table reached the subshell: src[k] is %q, want before", got)
 	}
 }

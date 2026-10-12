@@ -150,7 +150,7 @@ func newTestShell(t *testing.T, vars map[string]string) (Shell, *interp.Runner) 
 	// a test giving only one of them the preset was asking a shell with no
 	// profile to read one.
 	sh := Shell{Semantics: sem, Stdout: &strings.Builder{}, Stderr: &strings.Builder{}}
-	r := &interp.Runner{Semantics: &sem, Vars: vars, Stdout: sh.Stdout, Stderr: sh.Stderr}
+	r := (&interp.Runner{Semantics: &sem, Stdout: sh.Stdout, Stderr: sh.Stderr}).SeedVars(vars)
 	return sh, r
 }
 
@@ -168,7 +168,7 @@ func write(t *testing.T, path, body string) {
 func TestHomeFileNeedsAHome(t *testing.T) {
 	sem := interp.PosixSemantics()
 	sh := Shell{Semantics: sem}
-	r := &interp.Runner{Semantics: &sem, Vars: map[string]string{"HOME": "/home/someone"}}
+	r := (&interp.Runner{Semantics: &sem}).SeedVars(map[string]string{"HOME": "/home/someone"})
 	if got := sh.startupPath(r, ".profile"); got != "/home/someone/.profile" {
 		t.Errorf("got %q", got)
 	}
@@ -182,7 +182,7 @@ func TestHomeFileNeedsAHome(t *testing.T) {
 	// And a name of nothing is nothing, however good the directory: the
 	// dialects that have no file for a slot leave the name empty, and a
 	// path built from one would be the home directory itself.
-	r = &interp.Runner{Semantics: &sem, Vars: map[string]string{"HOME": "/home/someone"}}
+	r = (&interp.Runner{Semantics: &sem}).SeedVars(map[string]string{"HOME": "/home/someone"})
 	if got := sh.startupPath(r, ""); got != "" {
 		t.Errorf("an unnamed file gave %q, want nothing", got)
 	}
@@ -195,25 +195,25 @@ func TestTheStartupDirectoryVariableRedirects(t *testing.T) {
 	sem.StartupDirectoryVariable = "ZDOTDIR"
 	sh := Shell{Semantics: sem}
 	vars := map[string]string{"HOME": "/home/someone", "ZDOTDIR": "/elsewhere"}
-	r := &interp.Runner{Semantics: &sem, Vars: vars}
+	r := (&interp.Runner{Semantics: &sem}).SeedVars(vars)
 	if got := sh.startupPath(r, ".rc"); got != "/elsewhere/.rc" {
 		t.Errorf("got %q, want the named directory", got)
 	}
 	// Set to nothing is not the same as unset, which is measured: a shell
 	// whose directory variable is the empty string reads none of its files
 	// rather than falling back to the home directory.
-	vars["ZDOTDIR"] = ""
+	r.StoreScalar("ZDOTDIR", "")
 	if got := sh.startupPath(r, ".rc"); got != "" {
 		t.Errorf("an empty directory gave %q, want nothing", got)
 	}
 	// Unset, and the home directory answers again.
-	delete(vars, "ZDOTDIR")
+	r.DropStoredScalar("ZDOTDIR")
 	if got := sh.startupPath(r, ".rc"); got != "/home/someone/.rc" {
 		t.Errorf("got %q, want the home directory", got)
 	}
 	// A dialect that names no variable never looks for one, however set it
 	// happens to be — this is the three shells that have no ZDOTDIR.
-	vars["ZDOTDIR"] = "/elsewhere"
+	r.StoreScalar("ZDOTDIR", "/elsewhere")
 	plain := Shell{Semantics: interp.PosixSemantics()}
 	if got := plain.startupPath(r, ".rc"); got != "/home/someone/.rc" {
 		t.Errorf("got %q, want the home directory for a dialect with no such variable", got)
@@ -311,10 +311,9 @@ func TestAReturnInAStartupFileIsObeyed(t *testing.T) {
 	sem.StartupFileReturnCarriesItsArgument = interp.Yes
 	out := &strings.Builder{}
 	sh := Shell{Semantics: sem, Stdout: out, Stderr: out}
-	r := &interp.Runner{
+	r := (&interp.Runner{
 		Semantics: &sem, Stdout: out, Stderr: out,
-		Vars: map[string]string{"HOME": home, "ENV": filepath.Join(home, "rc.sh")},
-	}
+	}).SeedVars(map[string]string{"HOME": home, "ENV": filepath.Join(home, "rc.sh")})
 	if code := sh.startup(r, source{interactive: true}); code != 0 {
 		t.Fatalf("startup reported %d", code)
 	}

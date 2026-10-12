@@ -92,7 +92,7 @@ func TestTheGlobNumericSwitchIsNotTheNumericSortKey(t *testing.T) {
 		s := *r.Semantics
 		s.SortOrderVariable = "GLOBSORT"
 		r.Semantics = &s
-		r.Vars = map[string]string{"GLOBSORT": "numeric"}
+		r.SeedVars(map[string]string{"GLOBSORT": "numeric"})
 	})
 	if want := "[f1][f10][f2]"; key != want {
 		t.Errorf("the sort key gave %q, want %q — both whole names must be numbers", key, want)

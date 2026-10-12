@@ -251,7 +251,7 @@ func splitExclusion(p string, o *patternOpts) (left string, rights []string, ok 
 	if !o.extended {
 		return "", nil, false
 	}
-	if w := o.where; w != nil && w.ready && w.noTilde {
+	if w := o.where; w != nil && w.ready && (w.noTilde || w.noBareTilde) {
 		// The whole pattern has no `~` in it, so this piece of it has none
 		// either and the scan below would walk every byte to learn that.
 		// See matchWhere.noTilde: this is the prescan #1398 found doing the

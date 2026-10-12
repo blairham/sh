@@ -264,7 +264,9 @@ func (r *Runner) namedCondition(x *syntax.CondUnknown) (ok, answered bool, err e
 	if r.condOperandDidNotExpand() {
 		return false, true, errCondOperandFailed
 	}
-	r.traceConditionPrimary(r.traceCondOperand(left), x.Op, r.traceCondOperand(text))
+	if r.condTrace != nil {
+		r.traceConditionPrimary(r.traceCondOperand(left), x.Op, r.traceCondOperand(text))
+	}
 	pat := text
 	if x.Words[0].IsQuoted() && r.regexQuotingIsLiteral() {
 		pat = literal
@@ -339,7 +341,9 @@ func (r *Runner) evalCondUnary(x *syntax.CondUnary) (bool, error) {
 	if r.condOperandDidNotExpand() {
 		return false, errCondOperandFailed
 	}
-	r.traceConditionPrimary(x.Op, r.traceCondOperand(s))
+	if r.condTrace != nil {
+		r.traceConditionPrimary(x.Op, r.traceCondOperand(s))
+	}
 	switch x.Op {
 	case "-n":
 		return s != "", nil
@@ -520,7 +524,10 @@ func (r *Runner) evalCondBinary(x *syntax.CondBinary) (bool, error) {
 		// the match is about to apply: bash traces `[[ ab =~ ab ]]` for
 		// `[[ ab =~ "a"b ]]`, so the line says what the words came to rather
 		// than how the matcher was told to read them.
-		if r.diag().TraceConditionAsKsh93 {
+		if r.condTrace == nil {
+			// Not tracing, so nothing below would be written: the operands
+			// are not rendered for a line nobody prints.
+		} else if r.diag().TraceConditionAsKsh93 {
 			// One dialect traces the match as the pattern it is to that
 			// shell: `==` and an extended-regex group. See the field.
 			r.traceConditionPrimary(r.traceCondOperand(left), "==", "~(E)"+traced)
@@ -561,7 +568,10 @@ func (r *Runner) evalCondBinary(x *syntax.CondBinary) (bool, error) {
 		// costs nothing, since re-expanding the word to print it would run a
 		// substitution in it twice (#1915). ksh93 quotes the unexpanded value
 		// instead and is recorded rather than modeled.
-		if r.diag().TraceConditionAsKsh93 {
+		if r.condTrace == nil {
+			// Not tracing: quoting both operands for a line nobody prints
+			// was most of what a long comparison cost (#6363).
+		} else if r.diag().TraceConditionAsKsh93 {
 			r.traceConditionPrimary(r.traceCondOperand(left), ksh93TraceOperator(x.Op), r.ksh93TracePattern(x.Y, pat))
 		} else {
 			r.traceConditionPrimary(r.traceCondOperand(left), x.Op, r.tracePattern(pat))
@@ -583,7 +593,9 @@ func (r *Runner) evalCondBinary(x *syntax.CondBinary) (bool, error) {
 		return false, errCondOperandFailed
 	}
 	right := syntax.UnmarkArithValue(rightMarked)
-	r.traceConditionPrimary(r.traceCondOperand(left), x.Op, r.traceCondOperand(right))
+	if r.condTrace != nil {
+		r.traceConditionPrimary(r.traceCondOperand(left), x.Op, r.traceCondOperand(right))
+	}
 
 	switch x.Op {
 	case "-eq", "-ne", "-lt", "-le", "-gt", "-ge":

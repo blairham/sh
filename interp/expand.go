@@ -1888,7 +1888,22 @@ func (r *Runner) declaredOnlyCompoundIsUnset(e *syntax.ParamExpr) bool {
 //     it fires on the empty value whichever way the set-ness is answered,
 //     and `${a[@]:-D}` is `D` in all four columns.
 func (r *Runner) emptyWholeArrayIsSet(e *syntax.ParamExpr, set bool) bool {
-	if !set || e.Index == nil || !wholeArraySubscript(r.subscriptText(e.Subscript())) {
+	if !set || e.Index == nil {
+		return set
+	}
+	// The source this test is about has usually read the subscript already,
+	// and what it came to settles the question without the word: a subscript
+	// that named something, or that named nothing an array could hold, is not
+	// an array with no elements however it is spelled. Asked first because
+	// spelling it means expanding the subscript's word a second time, and
+	// expanding a word starts a span — which lets go of what this one held,
+	// so the expansion went on to read its subscript a third time. That was
+	// a third of `${A[$k]-}`, which a plugin writes wherever it reads a table
+	// it does not know the keys of (#6423).
+	if elems, ok, held := r.heldSubscript(e); held && (!ok || len(elems) > 0) {
+		return set
+	}
+	if !wholeArraySubscript(r.subscriptText(e.Subscript())) {
 		return set
 	}
 	elems, ok := r.arraySubscript(e)

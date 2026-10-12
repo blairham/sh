@@ -130,10 +130,18 @@ func TestAnEntryComesBackWholeOrNotAtAll(t *testing.T) {
 			t.Fatalf("an entry cut to %d bytes came back", n)
 		}
 	}
-	write(good)
-	if got := store(t, dir, "build-2").Load("e"); got != nil {
+	// Another build's entry, under the name this build would read: the
+	// name is made from the build as well, so this is the frame's own check.
+	other := filepath.Join(t.TempDir(), "parse")
+	put(t, store(t, other, "build-2"), "e", []byte("x"))
+	theirs := entryFiles(t, other)[0]
+	if err := os.WriteFile(theirs, good, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if got := store(t, other, "build-2").Load("e"); got != nil {
 		t.Fatal("another build's entry came back")
 	}
+	write(good)
 	if !bytes.Equal(load(), data) {
 		t.Fatal("the entry put back did not come back")
 	}

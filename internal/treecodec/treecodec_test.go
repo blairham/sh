@@ -4,6 +4,7 @@
 package treecodec_test
 
 import (
+	"encoding/binary"
 	"errors"
 	"go/ast"
 	"go/parser"
@@ -11,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"slices"
 	"sort"
 	"strings"
@@ -367,5 +369,44 @@ func TestADialectsFingerprintSeesEveryAnswer(t *testing.T) {
 	}
 	if moved < 300 {
 		t.Fatalf("moved only %d settings", moved)
+	}
+}
+
+// TestADamagedCountAllocatesNothing gives the decoder a tree whose count of
+// nodes has been changed to millions. The count says how much to allocate
+// before anything is read, so a decoder that believed it would allocate
+// gigabytes on the strength of one bad byte; it must refuse, having
+// allocated nothing to speak of.
+func TestADamagedCountAllocatesNothing(t *testing.T) {
+	src := "echo hello world\n"
+	f, err := syntax.Parse(src, zsh.Dialect())
+	if err != nil {
+		t.Fatal(err)
+	}
+	enc := treecodec.NewEncoder(src)
+	if err := enc.File(f); err != nil {
+		t.Fatal(err)
+	}
+	good := enc.Bytes()
+	// The head is a count of types and then each type's id and count.
+	types, n := binary.Uvarint(good)
+	id, m := binary.Uvarint(good[n:])
+	_, k := binary.Uvarint(good[n+m:])
+	if types == 0 || n <= 0 || m <= 0 || k <= 0 {
+		t.Fatal("the encoding has no head to damage")
+	}
+	bad := binary.AppendUvarint(nil, types)
+	bad = binary.AppendUvarint(bad, id)
+	bad = binary.AppendUvarint(bad, 4<<20)
+	bad = append(bad, good[n+m+k:]...)
+	var before, after runtime.MemStats
+	runtime.ReadMemStats(&before)
+	_, err = treecodec.NewDecoder(bad, src).File()
+	runtime.ReadMemStats(&after)
+	if err == nil {
+		t.Fatal("a count of millions in a tree of three words was believed")
+	}
+	if grew := after.TotalAlloc - before.TotalAlloc; grew > 1<<20 {
+		t.Fatalf("refusing it allocated %d bytes", grew)
 	}
 }

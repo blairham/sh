@@ -408,6 +408,33 @@ func TestALineDefinesWhatTheNextReads(t *testing.T) {
 	}
 }
 
+// TestAWalkUsesTheAnswersItWasGiven parts from the recorded run after an
+// alias that opens a quote has been read, so the reader has to put a parser
+// back after that line before reading on. It must be put back with the alias
+// as it was when the line was read: asked now, the alias no longer opens the
+// quote, the parser stops a line short, and every line after reads wrong.
+func TestAWalkUsesTheAnswersItWasGiven(t *testing.T) {
+	src := padded("echo zero\nq\nrest'\necho three\necho four\n")
+	open := func(s *shell) { s.set(parsecache.AliasPlain, "q", "echo '") }
+	recorded := schedule{aliasBefore: map[int]func(*shell){1: open}}
+	parted := schedule{aliasBefore: map[int]func(*shell){1: open, 2: func(s *shell) {
+		s.set(parsecache.AliasPlain, "q", "echo plain")
+	}}}
+	mem := newMem()
+	cached(mem, "/t/w", src, zsh.Dialect(), fresh(false), recorded)
+	got, served := cached(mem, "/t/w", src, zsh.Dialect(), fresh(false), parted)
+	want := parsed(src, zsh.Dialect(), fresh(false), parted)
+	if !reflect.DeepEqual(got, want) {
+		t.Fatal("the reads after the walk differ from a parser's")
+	}
+	if served != 2 {
+		t.Fatalf("%d reads were served, want the 2 before the alias changed", served)
+	}
+	if want.Err != "" || len(want.Reads) != 4 {
+		t.Fatalf("the text did not read as four lines (%d, %q): the case tests nothing", len(want.Reads), want.Err)
+	}
+}
+
 // TestAReplacedGrammarIsSeen replaces the dialect between reads, as `setopt`
 // does: recorded and replayed alike it is served, and replaced differently
 // it is read again — each time as a parser would have read it.
@@ -422,7 +449,10 @@ func TestAReplacedGrammarIsSeen(t *testing.T) {
 	if _, served := cached(mem, "/t/g", src, zsh.Dialect(), fresh(false), at1); served != 4 {
 		t.Fatalf("the same run was served %d reads of 4", served)
 	}
-	for name, sch := range map[string]schedule{"later": at2, "never": {}} {
+	third := zsh.Dialect()
+	third.ExtendedPattern = !third.ExtendedPattern
+	other1 := schedule{setBefore: map[int]syntax.Dialect{1: third}}
+	for name, sch := range map[string]schedule{"later": at2, "never": {}, "another grammar at the same line": other1} {
 		got, served := cached(mem, "/t/g", src, zsh.Dialect(), fresh(false), sch)
 		want := parsed(src, zsh.Dialect(), fresh(false), sch)
 		if !reflect.DeepEqual(got, want) {

@@ -132,7 +132,10 @@ func TestAStartupFileIsCachedUnobservably(t *testing.T) {
 
 // TestAnEditedFileIsReadAsEdited edits a sourced file in place between two
 // starts, keeping its length and putting its time back, which is the edit a
-// cache keyed on the file's stat would miss.
+// cache keyed on the file's stat would miss. The edit moves a word's
+// boundary rather than only its letters: a tree that kept its places and read
+// its words out of the new text would print the new letters from the old
+// command, and look right.
 func TestAnEditedFileIsReadAsEdited(t *testing.T) {
 	dir, cache := t.TempDir(), t.TempDir()
 	path := filepath.Join(dir, "lib")
@@ -147,14 +150,15 @@ func TestAnEditedFileIsReadAsEdited(t *testing.T) {
 	if got := runWithCache(t, cache, dir, true, nil, argv...); got.out != "one\n" {
 		t.Fatalf("got %q", got.out)
 	}
-	if err := os.WriteFile(path, []byte(worthCaching+"echo two\n"), 0o600); err != nil {
+	if err := os.WriteFile(path, []byte(worthCaching+"echo ;on\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.Chtimes(path, fi.ModTime(), fi.ModTime()); err != nil {
 		t.Fatal(err)
 	}
-	if got := runWithCache(t, cache, dir, true, nil, argv...); got.out != "two\n" {
-		t.Fatalf("the edited file printed %q", got.out)
+	got := runWithCache(t, cache, dir, true, nil, argv...)
+	if got.out != "\n" || !strings.Contains(got.errs, "command not found: on") {
+		t.Fatalf("the edited file printed %q and said %q", got.out, got.errs)
 	}
 	// Touching it changes nothing about what it says, and the entry stands:
 	// what is checked is the text, and the text is the same.
@@ -162,7 +166,7 @@ func TestAnEditedFileIsReadAsEdited(t *testing.T) {
 	if err := os.Chtimes(path, later, later); err != nil {
 		t.Fatal(err)
 	}
-	if got := runWithCache(t, cache, dir, true, nil, argv...); got.out != "two\n" || got.served == 0 {
-		t.Fatalf("the touched file printed %q from %d served reads", got.out, got.served)
+	if again := runWithCache(t, cache, dir, true, nil, argv...); again.out != got.out || again.served == 0 {
+		t.Fatalf("the touched file printed %q from %d served reads", again.out, again.served)
 	}
 }

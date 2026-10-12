@@ -37,6 +37,7 @@ type AssocArray map[string]Element
 // finding: a helper beside a helper, one of them missing what the other
 // carries.
 func (a AssocArray) keys() []string {
+	assocKeySorts.Add(1)
 	out := make([]string, 0, len(a))
 	for k := range a {
 		out = append(out, k)
@@ -58,8 +59,8 @@ func (a AssocArray) keys() []string {
 // that unsets the parameter and stores an ordinary table under the same
 // spelling gets the ordinary answer back.
 func (r *Runner) assocKeys(name string, a AssocArray) []string {
-	keys := a.keys()
 	name = r.throughNameref(name)
+	keys := r.storedAssocKeys(name, a)
 	if _, produced := r.assocProducersLookup(name); !produced {
 		return keys
 	}
@@ -256,6 +257,9 @@ func (r *Runner) setAssocElemAs(name, key, value string, kind ElementKind) {
 	// with a subshell since. See sharedtable.go.
 	r.ownAssocs()
 	a = r.assocsAt(name)
+	if _, had := a[key]; !had {
+		r.assocKeySetChanged(name)
+	}
 	a[key] = Element{Str: value, Kind: kind}
 	// Written to, so the name leaves the declared-only set — see
 	// compounddeclaredonly.go.
@@ -329,6 +333,7 @@ func (r *Runner) unsetAssocElem(name, key string) {
 	if _, held := r.assocsAt(name)[key]; held {
 		r.ownAssocs()
 		delete(r.assocsAt(name), key)
+		r.assocKeySetChanged(name)
 	}
 }
 

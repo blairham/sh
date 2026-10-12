@@ -7,6 +7,7 @@ import (
 	"context"
 	"os"
 	"reflect"
+	"slices"
 	"strconv"
 	"testing"
 
@@ -649,5 +650,44 @@ func TestTheStoresOneLookupReadDeclinesWhatTheChainAnswers(t *testing.T) {
 	r.pipeStatusName = "plain"
 	if _, ok := r.storedScalarOnly("plain"); ok {
 		t.Error("the produced pipeline status was answered from the store")
+	}
+}
+
+// TestAnUnchangedTableIsListedWithoutSortingAgain is #6384's acceptance: the
+// second listing of a table nothing has written costs a copy, not a sort, and
+// a key added or removed in place is seen by the next listing.
+func TestAnUnchangedTableIsListedWithoutSortingAgain(t *testing.T) {
+	r := newTestRunner(t, &Runner{})
+	for i := range 3000 {
+		r.setAssocElem("h", "k"+strconv.Itoa(i), "v")
+	}
+	before := assocKeySorts.Load()
+	first := r.assocKeys("h", r.assocsAt("h"))
+	second := r.assocKeys("h", r.assocsAt("h"))
+	if sorts := assocKeySorts.Load() - before; sorts != 1 {
+		t.Errorf("two listings of an unchanged table sorted %d times, want 1", sorts)
+	}
+	if !slices.Equal(first, second) || !slices.IsSorted(first) || len(first) != 3000 {
+		t.Fatalf("the listings differ or are not in order: %d and %d keys", len(first), len(second))
+	}
+	first[0] = "scribbled"
+	if got := r.assocKeys("h", r.assocsAt("h")); got[0] == "scribbled" {
+		t.Error("a caller's write into its list reached the next listing")
+	}
+
+	r.setAssocElem("h", "a-new-key", "v")
+	if got := r.assocKeys("h", r.assocsAt("h")); len(got) != 3001 || got[0] != "a-new-key" {
+		t.Errorf("a key added in place is missing from the next listing: %d keys, first %q", len(got), got[0])
+	}
+	r.unsetAssocElem("h", "a-new-key")
+	if got := r.assocKeys("h", r.assocsAt("h")); len(got) != 3000 || got[0] == "a-new-key" {
+		t.Errorf("a key removed in place is still listed: %d keys, first %q", len(got), got[0])
+	}
+	// Overwriting a key keeps the set, and the listing with it.
+	before = assocKeySorts.Load()
+	r.setAssocElem("h", "k1", "w")
+	r.assocKeys("h", r.assocsAt("h"))
+	if sorts := assocKeySorts.Load() - before; sorts != 0 {
+		t.Errorf("rewriting an existing key cost %d sorts, want none", sorts)
 	}
 }

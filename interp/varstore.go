@@ -6,8 +6,10 @@ package interp
 import (
 	"iter"
 	"maps"
+	"reflect"
 	"slices"
 	"strings"
+	"sync/atomic"
 )
 
 // The variable store: one cell per name, and the only file that touches it.
@@ -75,6 +77,9 @@ type varCell struct {
 	producer      func(*Runner) string
 	arrayProducer func(*Runner) []string
 	assocProducer func(*Runner) AssocArray
+	// assocKeys is the stored table's keys in the order a read lists them,
+	// kept until the set of keys changes: see storedAssocKeys.
+	assocKeys []string
 	// has says which slots are present. A slot's value is its zero value
 	// whenever it is absent.
 	has cellSlots
@@ -122,7 +127,7 @@ func (c *varCell) clearSlot(s cellSlots) {
 	case slotArray:
 		c.array = nil
 	case slotAssoc:
-		c.assoc = nil
+		c.assoc, c.assocKeys = nil, nil
 	case slotProducer:
 		c.producer = nil
 	case slotArrayProducer:
@@ -333,7 +338,7 @@ func (r *Runner) assocsLookup(name string) (AssocArray, bool) {
 func (r *Runner) assocsPut(name string, a AssocArray) {
 	c := r.cellFor(name)
 	r.markSlot(c, slotAssoc)
-	c.assoc = a
+	c.assoc, c.assocKeys = a, nil
 }
 
 func (r *Runner) assocsDel(name string) { r.dropSlot(name, slotAssoc) }
@@ -654,6 +659,48 @@ func (r *Runner) StoreAssoc(name string, a AssocArray) {
 // SetDynamicAssoc, or nil.
 func (r *Runner) AssocProducer(name string) func(*Runner) AssocArray {
 	return r.assocProducersAt(name)
+}
+
+// storedAssocKeys is a's keys in sorted order, kept with the cell when a is
+// the table stored under name, so that listing an unchanged table is a copy
+// rather than a sort (#6384). Sorted is every dialect's order here — measured
+// 2026-10-11, ksh93u+ lists a table's keys in byte order and bash 5.3 and zsh
+// 5.9.2 each in an order of their own hash table's making, which is not ours to
+// imitate (#3304) — so the cache changes when the order is computed, never
+// what it is.
+//
+// The keys are dropped whenever the set of them can have changed: a table
+// stored or taken away (assocsPut, clearSlot) and a key added or removed in
+// place (assocKeySetChanged, at the three writers that do that). A count that
+// no longer matches is the backstop for a write that reached the table any
+// other way. The caller gets a copy, so nothing it does to the list reaches
+// the next reader.
+func (r *Runner) storedAssocKeys(name string, a AssocArray) []string {
+	c := r.cell(name)
+	if c == nil || c.has&slotAssoc == 0 || len(a) == 0 || !sameAssoc(c.assoc, a) {
+		return a.keys()
+	}
+	if c.assocKeys == nil || len(c.assocKeys) != len(a) {
+		c.assocKeys = a.keys()
+	}
+	return slices.Clone(c.assocKeys)
+}
+
+// assocKeySorts counts the key lists AssocArray.keys has built, so a test can
+// say how many sorts a sequence of reads cost.
+var assocKeySorts atomic.Int64
+
+// assocKeySetChanged drops the listing order kept for name's stored table,
+// after a key was added to it or removed from it in place.
+func (r *Runner) assocKeySetChanged(name string) {
+	if c := r.cell(name); c != nil {
+		c.assocKeys = nil
+	}
+}
+
+// sameAssoc reports whether two tables are one map rather than two equal ones.
+func sameAssoc(a, b AssocArray) bool {
+	return reflect.ValueOf(a).UnsafePointer() == reflect.ValueOf(b).UnsafePointer()
 }
 
 // storedScalarShortcut switches storedScalarOnly's answer on, so a test can run

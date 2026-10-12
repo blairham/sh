@@ -290,6 +290,11 @@ func autoloadBuiltin(r *interp.Runner, ctx context.Context, args []string) int {
 // autoloadFromDeclaration, which is the seam interp reaches it by.
 func autoloadMark(r *interp.Runner, names []string, opts autoloadOpts) int {
 	status := 0
+	// One batch per stub text, because a line of names nearly always gives
+	// every one of them the same stub, and reading that stub once per name
+	// was most of what a completion dump's `autoload -Uz` line cost. See
+	// interp.FunctionBatch.
+	var batches map[string]*interp.FunctionBatch
 	for _, name := range names {
 		// An absolute path names its file: the function is the file's
 		// base name, loaded from exactly there. See autoloadAbsolute.
@@ -343,7 +348,16 @@ func autoloadMark(r *interp.Runner, names []string, opts autoloadOpts) int {
 		} else {
 			autoloadForgetPath(r, name)
 		}
-		if !r.DefineFunction(name, autoloadStub(opts, dir)) {
+		stub := autoloadStub(opts, dir)
+		batch := batches[stub]
+		if batch == nil {
+			if batches == nil {
+				batches = map[string]*interp.FunctionBatch{}
+			}
+			batch = r.FunctionBatch(stub)
+			batches[stub] = batch
+		}
+		if !batch.Define(name) {
 			// The stub is this file's own text, so a name it cannot be
 			// written around is a name that is not a name.
 			r.Diagnosef("not valid in this context: %s\n", name)

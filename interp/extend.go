@@ -2657,6 +2657,27 @@ func (r *Runner) AllowOpen(ctx context.Context, path string, write bool) (Action
 	return action, r.allowed(ctx, action)
 }
 
+// PathToOpen is the path a dialect's builtin opens, in this process, for a
+// name the script handed it — the same name in every case but one.
+//
+// A process substitution's path is published for the *commands*, which get
+// their table built at that number, and in a few shapes the number is not
+// where this process holds the pipe: inside another substitution's body, and
+// wherever the number was held by a private copy that no fork would hold (see
+// privateCopies). There an open of `/dev/fd/N` done by this process reaches
+// whatever this process holds at N instead — another pipe, or a copy of
+// `/dev/null`. A redirection and `.` already go through this mapping; a
+// builtin that does its own open, as `sysopen` and `zsystem flock` do, has to
+// ask for it. Measured in the zsh dialect with thirty descriptors open and a
+// live substitution body: `sysopen -r -u fd <(echo hi)` opened a body's copy
+// of `/dev/null` and read nothing (#6406).
+//
+// The gate is asked about the name the script used, and only the open itself
+// takes this path, which is the order a redirection keeps.
+func (r *Runner) PathToOpen(path string) string {
+	return r.substOpenPath(path)
+}
+
 // VerifyOpened is the other half: it confirms that the descriptor a builtin
 // has just opened is the object the gate allowed, and records the access.
 //

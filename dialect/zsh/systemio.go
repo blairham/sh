@@ -179,7 +179,7 @@ func sysopenBuiltin(r *interp.Runner, ctx context.Context, args []string) int {
 		// it could not open.
 		return 1
 	}
-	f, err := sysOpenFile(path, flags, perm)
+	f, err := sysOpenFile(r.PathToOpen(path), flags, perm)
 	if err != nil {
 		r.Diagnosef("can't open file %s: %s\n", rest[0], sysErrnoText(r, err))
 		return 1

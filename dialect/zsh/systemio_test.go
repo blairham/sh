@@ -693,3 +693,29 @@ func runZshSplitWithSystem(t *testing.T, dir, src string) (string, int, string) 
 	t.Helper()
 	return runZshSplit(t, dir, "zmodload zsh/system; "+src)
 }
+
+// **`sysopen` on a substitution's path opens that substitution's pipe**, even
+// where the number it was published at is held in this process by something
+// else.
+//
+// A substitution body runs beside the shell with its own copy of every
+// descriptor in the table, and those copies are kept off the published numbers
+// by registration rather than by height: a wish that reaches one publishes the
+// number and parks the pipe elsewhere, because a fork would not hold the copy.
+// The commands get the pipe at that number; *this* process does not, so its
+// own open has to be mapped to where the pipe really is — which a redirection
+// did and `sysopen` did not. Thirty descriptors open and one live body is
+// enough: the body's copies sit just above the crowd, the next substitution's
+// wish reaches one, and `sysopen` read a copy of /dev/null (#6406).
+func TestSysopenOnASubstitutionOpensItsPipe(t *testing.T) {
+	dir := t.TempDir()
+	systemDeadline(t, "sysopen on a substitution in a crowded table", func() {
+		out, st := runZshWithZselect(t, dir, `q=0; while (( q < 40 )); do exec {q}</dev/null; done
+exec {a}< <(zselect -t 100)
+f() { sysopen -r -u fd $1; read -u $fd x; print -r -- "x=$x"; }
+f <(print hi)`)
+		if out != "x=hi\n" || st != 0 {
+			t.Errorf("got %q (status %d), want %q", out, st, "x=hi\n")
+		}
+	})
+}

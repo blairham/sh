@@ -7,6 +7,7 @@ import (
 	"iter"
 	"maps"
 	"slices"
+	"strings"
 )
 
 // The variable store: one cell per name, and the only file that touches it.
@@ -653,4 +654,52 @@ func (r *Runner) StoreAssoc(name string, a AssocArray) {
 // SetDynamicAssoc, or nil.
 func (r *Runner) AssocProducer(name string) func(*Runner) AssocArray {
 	return r.assocProducersAt(name)
+}
+
+// storedScalarShortcut switches storedScalarOnly's answer on, so a test can run
+// a script with the whole chain answering every read and require the same
+// output — see TestAPlainParameterWordAnswersAsTheFullRoadDoes.
+var storedScalarShortcut = true
+
+// slotsOf is which slots name's cell holds, none where it has no cell. A
+// caller asking about several kinds of one name asks once.
+func (r *Runner) slotsOf(name string) cellSlots {
+	if c := r.cell(name); c != nil {
+		return c.has
+	}
+	return 0
+}
+
+// cellHolds reports whether name's cell holds any of the slots in s.
+func (r *Runner) cellHolds(name string, s cellSlots) bool {
+	c := r.cell(name)
+	return c != nil && c.has&s != 0
+}
+
+// storedScalarOnly is name's stored scalar where that is the whole of what a
+// read of the name answers before its attribute fold: the cell holds a stored
+// scalar and nothing else, and nothing Runner.storedValue asks ahead of the
+// store can answer instead — no namespace block or member path, no reference,
+// no selected frame, and not the produced pipeline status. Every check is a
+// comparison or a lookup in a table that is empty in nearly every shell, so an
+// ordinary variable is read with one lookup in the index (#6353).
+//
+// The chain it short-cuts asks, in order: the namespace and compound-member
+// renames (a dot in the name, or a namespace block running), the reference
+// walk, the pipeline status, a producer, a compound (which has no stored
+// scalar), the selected frame, the two array slots, the two table slots and
+// then the scalar. Each of those is excluded here by the cell's slots or by
+// the guard beside it, so the two answers cannot differ.
+func (r *Runner) storedScalarOnly(name string) (string, bool) {
+	c := r.cell(name)
+	if c == nil || c.has != slotScalar {
+		return "", false
+	}
+	if r.namespace != "" || r.frameSelected || name == r.pipeStatusName || strings.IndexByte(name, '.') >= 0 {
+		return "", false
+	}
+	if _, ok := r.nameref[name]; ok {
+		return "", false
+	}
+	return c.scalar, true
 }

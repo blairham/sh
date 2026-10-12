@@ -95,8 +95,12 @@ func TestAPlainParameterWordAnswersAsTheFullRoadDoes(t *testing.T) {
 	for name, sem := range plainParamVectors() {
 		t.Run(name, func(t *testing.T) {
 			run := func(on bool) (string, int) {
+				// Both shortcuts at once: the full road is the chain with
+				// neither the plain word nor the store's one-lookup read.
 				was := SetPlainParamShortcutForTest(on)
 				defer SetPlainParamShortcutForTest(was)
+				wasStored := SetStoredScalarShortcutForTest(on)
+				defer SetStoredScalarShortcutForTest(wasStored)
 				var out strings.Builder
 				r := plainParamRunner(t, sem, &out)
 				st, err := r.Run(context.Background(), f)

@@ -150,12 +150,7 @@ func (a AssocArray) equal(b AssocArray) bool {
 // `functions[f]=…` and `unset "functions[f]"` each asking whether the name
 // was keyed and building nineteen hundred function bodies to find out.
 func (r *Runner) assocDeclared(name string) bool {
-	name = r.throughNameref(name)
-	if _, stored := r.assocsLookup(name); stored {
-		return true
-	}
-	_, produced := r.assocProducersLookup(name)
-	return produced
+	return r.slotsOf(r.throughNameref(name))&(slotAssoc|slotAssocProducer) != 0
 }
 
 // markAssoc gives a name the associative attribute, which is what

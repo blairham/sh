@@ -623,3 +623,31 @@ func TestACloneKeepsAnEmptyTableItsOwn(t *testing.T) {
 		t.Error("a subshell's `unset` reached the parent through an empty table it was handed")
 	}
 }
+
+// TestTheStoresOneLookupReadDeclinesWhatTheChainAnswers names, state by
+// state, which reads the one-lookup path answers and which it leaves to the
+// chain, so the comparison in TestAPlainParameterWordAnswersAsTheFullRoadDoes
+// is known to cover both halves.
+func TestTheStoresOneLookupReadDeclinesWhatTheChainAnswers(t *testing.T) {
+	r := newTestRunner(t, &Runner{})
+	r.varsPut("plain", "v")
+	if v, ok := r.storedScalarOnly("plain"); !ok || v != "v" {
+		t.Fatalf("an ordinary scalar was not answered: %q, %v", v, ok)
+	}
+	r.varsPut("both", "e0")
+	r.arraysPut("both", ArrayOf(Element{Str: "e0"}))
+	r.varsPut("made", "x")
+	r.producersPut("made", func(*Runner) string { return "p" })
+	r.varsPut("ref", "x")
+	r.nameref = map[string]string{"ref": "plain"}
+	r.varsPut("c.m", "x")
+	for _, name := range []string{"both", "made", "ref", "c.m", "absent"} {
+		if _, ok := r.storedScalarOnly(name); ok {
+			t.Errorf("%q was answered from the store where the chain answers it", name)
+		}
+	}
+	r.pipeStatusName = "plain"
+	if _, ok := r.storedScalarOnly("plain"); ok {
+		t.Error("the produced pipeline status was answered from the store")
+	}
+}

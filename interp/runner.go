@@ -8548,6 +8548,30 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 		}
 	}()
 	r.commandFirstWord = firstTokenWord(c)
+	// What this command says about its own operands, put back when it is
+	// over: a builtin can run a builtin, and the inner command's answers must
+	// not be the outer one's. Saved together and restored by one deferred
+	// call rather than one each, because a defer is a cost every command
+	// pays and the six are independent fields restored in any order (#6353).
+	savedDash := r.dashPrecommand
+	savedOperands := r.declarationOperands
+	savedLexed := r.lexedSubscriptOperands
+	savedSourceClosed := r.sourceClosedSubscriptOperands
+	savedArrayOperands := r.arrayOperands
+	savedRejoined := r.operandWasRejoined
+	defer func() {
+		r.dashPrecommand = savedDash
+		r.declarationOperands = savedOperands
+		r.lexedSubscriptOperands = savedLexed
+		r.sourceClosedSubscriptOperands = savedSourceClosed
+		r.arrayOperands = savedArrayOperands
+		r.operandWasRejoined = savedRejoined
+	}()
+	return r.simpleCommand(ctx, c, fired)
+}
+
+// simpleCommand is the rest of Runner.simple.
+func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired bool) error {
 	if !fired {
 		r.runDebugTrap(ctx)
 		if r.debugTrapStopped() {
@@ -9025,25 +9049,7 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 		}
 		argv, modifiersOnly = nil, true
 	}
-	// What this command says about its own operands, put back when it is
-	// over: a builtin can run a builtin, and the inner command's answers must
-	// not be the outer one's. Saved together and restored by one deferred
-	// call rather than one each, because a defer is a cost every command
-	// pays and the six are independent fields restored in any order (#6353).
-	savedDash := r.dashPrecommand
-	savedOperands := r.declarationOperands
-	savedLexed := r.lexedSubscriptOperands
-	savedSourceClosed := r.sourceClosedSubscriptOperands
-	savedArrayOperands := r.arrayOperands
-	savedRejoined := r.operandWasRejoined
-	defer func() {
-		r.dashPrecommand = savedDash
-		r.declarationOperands = savedOperands
-		r.lexedSubscriptOperands = savedLexed
-		r.sourceClosedSubscriptOperands = savedSourceClosed
-		r.arrayOperands = savedArrayOperands
-		r.operandWasRejoined = savedRejoined
-	}()
+	// Put back by Runner.simple when the command is over.
 	r.dashPrecommand = dash
 	r.declarationOperands = operandAt
 	r.lexedSubscriptOperands = lexedAt

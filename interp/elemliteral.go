@@ -232,10 +232,10 @@ func (r *Runner) literalWords(name string, elems []*syntax.ArrayElem) ([]string,
 // distinguishable from an array holding no elements: a producer reporting
 // nothing is still a producer, and `true` is the honest answer for it.
 func (r *Runner) arrayElemsOfTheName(name string) ([]string, bool) {
-	if a, stored := r.Arrays[name]; stored {
+	if a, stored := r.arraysLookup(name); stored {
 		return r.readArray(a), true
 	}
-	if produce, produced := r.DynamicArrays[name]; produced {
+	if produce, produced := r.arrayProducersLookup(name); produced {
 		return produce(r), true
 	}
 	// And the pipeline record, the fourth kind, produced by a path of its

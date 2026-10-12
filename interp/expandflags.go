@@ -1532,11 +1532,11 @@ func (r *Runner) namedBase(name, flags string) (words []string, set, isList bool
 	if elems, pok := r.pipelineStatuses(name); pok {
 		return elems, true, true
 	}
-	if _, aok := r.Arrays[name]; aok {
+	if _, aok := r.arraysLookup(name); aok {
 		elems, _ := r.arrayElems(name)
 		return elems, true, true
 	}
-	if produce, dok := r.DynamicArrays[name]; dok {
+	if produce, dok := r.arrayProducersLookup(name); dok {
 		return produce(r), true, true
 	}
 	if v, sok := r.specialParam(&syntax.ParamExpr{Name: name}); sok {

@@ -754,7 +754,7 @@ func (r *Runner) learnIntegerBase(name, text string) {
 // refusal. `typeset -r16 …` is not a spelling any shell has, and a base named
 // over a frozen name re-renders in both that do — measured.
 func (r *Runner) rerenderInTheNewBase(name string) {
-	held, ok := r.Vars[name]
+	held, ok := r.varsLookup(name)
 	if !ok {
 		return
 	}
@@ -774,5 +774,5 @@ func (r *Runner) rerenderInTheNewBase(name string) {
 	} else if strings.HasPrefix(held, "-") {
 		v = -v
 	}
-	r.Vars[name] = r.integerRendered(name, v)
+	r.varsPut(name, r.integerRendered(name, v))
 }

@@ -174,7 +174,7 @@ func dotRangePick(e *syntax.ParamExpr, subs []int, vals []string, first, hi, lim
 // counted from the base.
 func (r *Runner) dotRangeElements(name string, elems []string) ([]int, []string) {
 	base := r.arrayBase()
-	if a, stored := r.Arrays[name]; stored {
+	if a, stored := r.arraysLookup(name); stored {
 		if _, produced := r.pipelineStatuses(name); !produced {
 			keys := r.arrayKeys(a)
 			subs := make([]int, len(keys))

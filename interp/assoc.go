@@ -60,7 +60,7 @@ func (a AssocArray) keys() []string {
 func (r *Runner) assocKeys(name string, a AssocArray) []string {
 	keys := a.keys()
 	name = r.throughNameref(name)
-	if _, produced := r.DynamicAssocs[name]; !produced {
+	if _, produced := r.assocProducersLookup(name); !produced {
 		return keys
 	}
 	order, ok := r.dynamicAssocKeyOrder[name]
@@ -151,10 +151,10 @@ func (a AssocArray) equal(b AssocArray) bool {
 // was keyed and building nineteen hundred function bodies to find out.
 func (r *Runner) assocDeclared(name string) bool {
 	name = r.throughNameref(name)
-	if _, stored := r.AssocArrays[name]; stored {
+	if _, stored := r.assocsLookup(name); stored {
 		return true
 	}
-	_, produced := r.DynamicAssocs[name]
+	_, produced := r.assocProducersLookup(name)
 	return produced
 }
 
@@ -163,7 +163,7 @@ func (r *Runner) assocDeclared(name string) bool {
 func (r *Runner) markAssoc(name string) {
 	name = r.namespaceWriteName(name)
 	r.noteHiddenWrite(name)
-	if _, produced := r.DynamicAssocs[name]; produced {
+	if _, produced := r.assocProducersLookup(name); produced {
 		// A produced association already has the attribute — assocDeclared
 		// answers from this very table — and giving it a stored table would put an empty one
 		// in front of the producer, which is the shadowing setAssocElem
@@ -171,10 +171,7 @@ func (r *Runner) markAssoc(name string) {
 		// that reaches here.
 		return
 	}
-	if r.AssocArrays == nil {
-		r.AssocArrays = map[string]AssocArray{}
-	}
-	if _, ok := r.AssocArrays[name]; ok {
+	if _, ok := r.assocsLookup(name); ok {
 		return
 	}
 	// As for the indexed letter: `c=(a=1); typeset -A c` is `typeset -A c=()`
@@ -182,7 +179,7 @@ func (r *Runner) markAssoc(name string) {
 	r.localizeMemberWrite(name)
 	r.compoundVariableRetyped(name)
 	r.ownAssocs()
-	r.AssocArrays[name] = AssocArray{}
+	r.assocsPut(name, AssocArray{})
 	r.markCompoundForAllexport(name)
 	// Declared and not assigned, which is the state one listing writes
 	// without the `=()` — see compounddeclaredonly.go.
@@ -191,7 +188,7 @@ func (r *Runner) markAssoc(name string) {
 	// the attribute let `-A` take over a name that held an indexed array
 	// (the third refuses); what none of them does is keep both readings
 	// alive at once.
-	delete(r.Arrays, name)
+	r.arraysDel(name)
 }
 
 // setAssocElem assigns one element. The key is any string, the empty one
@@ -231,18 +228,15 @@ func (r *Runner) setAssocElemAs(name, key, value string, kind ElementKind) {
 		write(r, key, value, true)
 		return
 	}
-	a := r.AssocArrays[name]
+	a := r.assocsAt(name)
 	if a == nil {
 		a = AssocArray{}
-		if r.AssocArrays == nil {
-			r.AssocArrays = map[string]AssocArray{}
-		}
 		// A keyed write over a compound variable replaces it, the same way
 		// an indexed one does in storeArray. See compoundVariableRetyped.
 		r.localizeMemberWrite(name)
 		r.compoundVariableRetyped(name)
 		r.ownAssocs()
-		r.AssocArrays[name] = a
+		r.assocsPut(name, a)
 	}
 	r.markCompoundForAllexport(name)
 	// What the name's attributes make of the value, the same fold an array's
@@ -266,7 +260,7 @@ func (r *Runner) setAssocElemAs(name, key, value string, kind ElementKind) {
 	// can run arithmetic, and a table taken before it may have been shared
 	// with a subshell since. See sharedtable.go.
 	r.ownAssocs()
-	a = r.AssocArrays[name]
+	a = r.assocsAt(name)
 	a[key] = Element{Str: value, Kind: kind}
 	// Written to, so the name leaves the declared-only set — see
 	// compounddeclaredonly.go.
@@ -311,7 +305,7 @@ func (r *Runner) declareAssocKey(name, key string) {
 	// is, and a key this declined on its behalf would be a write it never
 	// heard about.
 	target := r.throughNameref(r.namespaceWriteName(name))
-	if _, held := r.AssocArrays[target][key]; held {
+	if _, held := r.assocsAt(target)[key]; held {
 		// Already holding something, so the declaration says nothing this
 		// table has not already been told.
 		return
@@ -337,9 +331,9 @@ func (r *Runner) unsetAssocElem(name, key string) {
 		write(r, key, "", false)
 		return
 	}
-	if _, held := r.AssocArrays[name][key]; held {
+	if _, held := r.assocsAt(name)[key]; held {
 		r.ownAssocs()
-		delete(r.AssocArrays[name], key)
+		delete(r.assocsAt(name), key)
 	}
 }
 
@@ -914,7 +908,7 @@ func (r *Runner) tableBecomesAnIndexArray(name string, appendTo bool) bool {
 	if appendTo || r.tableLetterHere[name] {
 		return false
 	}
-	return len(r.AssocArrays[name]) > 0
+	return len(r.assocsAt(name)) > 0
 }
 
 // assignAssocElems places an already-expanded literal into the keyed table.
@@ -938,7 +932,7 @@ func (r *Runner) assignAssocElems(name string, parsed []literalElem, appendTo, r
 		// phrased quietly. See Runner.MarkProducedTableFrozenByKey.
 		return
 	}
-	_, produced := r.DynamicAssocs[name]
+	_, produced := r.assocProducersLookup(name)
 	if produced && !appendTo {
 		if _, writable := r.dynamicAssocWriters[name]; !writable {
 			// A produced association with no writer has nowhere for the
@@ -979,10 +973,7 @@ func (r *Runner) assignAssocElems(name string, parsed []literalElem, appendTo, r
 		}
 	default:
 		r.ownAssocs()
-		if r.AssocArrays == nil {
-			r.AssocArrays = map[string]AssocArray{}
-		}
-		r.AssocArrays[name] = AssocArray{}
+		r.assocsPut(name, AssocArray{})
 	}
 	// An element without a `[k]=` head is half of a pair: `m=(a 1 b 2)` is
 	// two elements in the two shells that take the form at all — the third
@@ -1428,10 +1419,7 @@ func (r *Runner) assocElem(w *syntax.Word) (key, value string, appendValue, ok b
 // read, mutate, read again in one shell gives three different answers where a
 // snapshot gives one.
 func (r *Runner) SetDynamicAssoc(name string, value func(*Runner) AssocArray) {
-	if r.DynamicAssocs == nil {
-		r.DynamicAssocs = map[string]func(*Runner) AssocArray{}
-	}
-	r.DynamicAssocs[name] = value
+	r.assocProducersPut(name, value)
 }
 
 // SetDynamicAssocWriter says what happens when a script assigns to one element
@@ -1501,7 +1489,7 @@ func (r *Runner) emptyProducedAssoc(name string) {
 	if !ok {
 		return
 	}
-	produce, ok := r.DynamicAssocs[name]
+	produce, ok := r.assocProducersLookup(name)
 	if !ok {
 		return
 	}
@@ -1601,10 +1589,10 @@ func (r *Runner) SetDynamicAssocKeys(name string, keys func(r *Runner) []string)
 // assocFor produces.
 func (r *Runner) producedAssocKeys(name string) ([]string, bool) {
 	resolved := r.throughNameref(name)
-	if _, stored := r.AssocArrays[resolved]; stored {
+	if _, stored := r.assocsLookup(resolved); stored {
 		return nil, false
 	}
-	if _, produced := r.DynamicAssocs[resolved]; !produced {
+	if _, produced := r.assocProducersLookup(resolved); !produced {
 		return nil, false
 	}
 	keysOf, ok := r.dynamicAssocKeys[resolved]
@@ -1627,7 +1615,7 @@ func (r *Runner) producedAssocKeys(name string) ([]string, bool) {
 // out of that table, and a keyed producer that answered anyway would make the
 // write invisible to `${m[k]}` while `${(k)m}` still showed it.
 func (r *Runner) assocElementProducer(name string) (func(*Runner, string) (string, bool), bool) {
-	if _, stored := r.AssocArrays[name]; stored {
+	if _, stored := r.assocsLookup(name); stored {
 		return nil, false
 	}
 	produce, ok := r.dynamicAssocElements[name]
@@ -1650,14 +1638,14 @@ func (r *Runner) assocElementProducer(name string) (func(*Runner, string) (strin
 // reason SetDynamicAssocElement gives — building every function body to read
 // one is what that seam exists to avoid, and an append is a read.
 func (r *Runner) assocElemCurrent(name, key string) string {
-	if a, stored := r.AssocArrays[name]; stored {
+	if a, stored := r.assocsLookup(name); stored {
 		return r.elemText(a[key])
 	}
 	if produce, ok := r.dynamicAssocElements[name]; ok {
 		v, _ := produce(r, key)
 		return v
 	}
-	if produce, ok := r.DynamicAssocs[name]; ok {
+	if produce, ok := r.assocProducersLookup(name); ok {
 		return r.elemText(produce(r)[key])
 	}
 	return ""
@@ -1671,10 +1659,10 @@ func (r *Runner) assocElemCurrent(name, key string) string {
 // writes to it, so in practice the second clause is the answer.
 func (r *Runner) assocFor(name string) (AssocArray, bool) {
 	name = r.throughNameref(name)
-	if a, ok := r.AssocArrays[name]; ok {
+	if a, ok := r.assocsLookup(name); ok {
 		return a, true
 	}
-	if produce, ok := r.DynamicAssocs[name]; ok {
+	if produce, ok := r.assocProducersLookup(name); ok {
 		// A producer with nothing to say still has a table: an empty
 		// association and an absent one are different things, and the name
 		// exists either way. A nil map needs no normalizing to say so — every

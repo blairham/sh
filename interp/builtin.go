@@ -2886,10 +2886,10 @@ func (r *Runner) parameterNames() []string {
 		seen[name] = true
 		out = append(out, name)
 	}
-	for name := range r.Vars {
+	for name := range r.varsRange() {
 		add(name)
 	}
-	for name := range r.Dynamic {
+	for name := range r.producersRange() {
 		add(name)
 	}
 	for name := range r.inheritedEnv {
@@ -3557,7 +3557,7 @@ func (r *Runner) unsetOneName(name string) {
 	// Before the removal, because what is recorded is that there *was* a
 	// value here — see interp/shellhome.go.
 	r.noteHomeIsGoing(name)
-	delete(r.Vars, name)
+	r.varsDel(name)
 	// Recorded off rather than deleted, which the tri-state is there for:
 	// deleting the record puts the question back to the environment, and the
 	// environment still names an inherited name — so `unset IMPORTED;
@@ -3617,7 +3617,7 @@ func (r *Runner) unsetOneName(name string) {
 		// on answering every read with what it was never told to drop.
 		write(r, nil)
 	}
-	if _, produced := r.DynamicAssocs[name]; produced {
+	if _, produced := r.assocProducersLookup(name); produced {
 		// An `unset` of a produced **table** takes the producer away with
 		// the parameter, so the name is an ordinary one afterwards and
 		// nothing answers for it.
@@ -3651,7 +3651,7 @@ func (r *Runner) unsetOneName(name string) {
 		// reading of itself and the view behind it disagreed (#4764).
 		r.UnsetDynamic(name)
 	}
-	delete(r.Arrays, name)
+	r.arraysDel(name)
 	r.dropAssocTable(name)
 	// A compound an element of either table held goes with the table, for the
 	// reason the parent's own members go with it below: they are names of

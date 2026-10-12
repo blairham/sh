@@ -177,10 +177,10 @@ func evaluatedStyle(r *interp.Runner, ctx context.Context, e styleEntry) []strin
 		return nil
 	}
 	before, had := r.GetArray("reply")
-	delete(r.Arrays, "reply")
+	r.DropStoredArray("reply")
 	_ = eval(r, ctx, []string{strings.Join(e.values, " ")})
 	out, _ := r.GetArray("reply")
-	delete(r.Arrays, "reply")
+	r.DropStoredArray("reply")
 	if had {
 		r.SetArray("reply", before)
 	}

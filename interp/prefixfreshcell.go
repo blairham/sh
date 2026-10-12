@@ -69,10 +69,10 @@ func (r *Runner) prefixEntryIsFresh(name string) bool {
 // letter and so aims it: ksh93u+ 2012 answers the same line `typeset -n
 // foo=bar`. See interp/namerefprefix.go (#4110).
 func (r *Runner) prefixDisplacesAKindOrALetter(name string) bool {
-	if _, inArray := r.Arrays[name]; inArray {
+	if _, inArray := r.arraysLookup(name); inArray {
 		return true
 	}
-	if _, inTable := r.AssocArrays[name]; inTable {
+	if _, inTable := r.assocsLookup(name); inTable {
 		return true
 	}
 	return r.captureAttributes(name) != nameAttributes{}
@@ -88,7 +88,7 @@ func (r *Runner) prefixDisplacesAKindOrALetter(name string) bool {
 // with the part joined on. So the join reads the old binding and the cell it
 // stores into is the fresh one, which is why this stands between the two.
 func (r *Runner) emptyPrefixEntry(name string) {
-	delete(r.Arrays, name)
+	r.arraysDel(name)
 	r.dropAssocTable(name)
 	r.dropNameAttributes(name)
 }
@@ -133,17 +133,11 @@ func (r *Runner) prefixEntryTakesTheDisplacedShapeBack(name string) {
 	u.freshened = false
 	value, _ := r.getVar(name)
 	if u.inArray {
-		if r.Arrays == nil {
-			r.Arrays = map[string]Array{}
-		}
-		r.Arrays[name] = u.array.clone()
+		r.arraysPut(name, u.array.clone())
 	}
 	if u.inTable {
 		r.ownAssocs()
-		if r.AssocArrays == nil {
-			r.AssocArrays = map[string]AssocArray{}
-		}
-		r.AssocArrays[name] = u.table.clone()
+		r.assocsPut(name, u.table.clone())
 	}
 	r.restoreAttributes(name, u.attrs)
 	r.setVar(name, value)

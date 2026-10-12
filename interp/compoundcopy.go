@@ -123,10 +123,10 @@ func (r *Runner) snapshotOneName(name string) (heldValue, bool) {
 	switch {
 	case r.isCompoundVariable(name):
 		h.compound = true
-	case r.AssocArrays[name] != nil && !r.removed[name]:
-		h.assoc, h.isAssoc = maps.Clone(r.AssocArrays[name]), true
-	case r.Arrays[name] != nil && !r.removed[name]:
-		h.arr, h.isArr = r.Arrays[name].shallowClone(), true
+	case r.assocsAt(name) != nil && !r.removed[name]:
+		h.assoc, h.isAssoc = maps.Clone(r.assocsAt(name)), true
+	case r.arraysAt(name) != nil && !r.removed[name]:
+		h.arr, h.isArr = r.arraysAt(name).shallowClone(), true
 	default:
 		// getVar rather than Vars, so that a name read out of the inherited
 		// environment is a source too — the same reading appendedOverAScalar

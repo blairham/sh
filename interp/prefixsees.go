@@ -59,10 +59,10 @@ type heldPrefix struct{ undo []savedVar }
 // twice for one assignment.
 func (h *heldPrefix) hold(r *Runner, name, value string) {
 	h.undo = append(h.undo, r.saveVar(name))
-	delete(r.Arrays, name)
+	r.arraysDel(name)
 	r.dropAssocTable(name)
 	delete(r.removed, name)
-	r.Vars[name] = value
+	r.varsPut(name, value)
 }
 
 // release puts every held cell back, most recent first.

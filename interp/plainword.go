@@ -184,18 +184,18 @@ func (r *Runner) ordinaryScalarName(name string) bool {
 	if _, ok := r.nameref[name]; ok {
 		return false
 	}
-	if _, ok := r.Dynamic[name]; ok {
+	if _, ok := r.producersLookup(name); ok {
 		return false
 	}
-	if _, ok := r.Arrays[name]; ok {
+	if _, ok := r.arraysLookup(name); ok {
 		return false
 	}
-	if _, ok := r.DynamicArrays[name]; ok {
+	if _, ok := r.arrayProducersLookup(name); ok {
 		return false
 	}
-	if _, ok := r.AssocArrays[name]; ok {
+	if _, ok := r.assocsLookup(name); ok {
 		return false
 	}
-	_, ok := r.DynamicAssocs[name]
+	_, ok := r.assocProducersLookup(name)
 	return !ok
 }

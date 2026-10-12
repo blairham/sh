@@ -572,7 +572,7 @@ func (r *Runner) namerefAssignmentTarget(name, value string, form assignForm) (t
 			// applied before the store, and a refusal that takes the name
 			// away has to take what the same line gave it.
 			r.unsetNameref(name)
-			delete(r.Vars, name)
+			r.varsDel(name)
 			r.restoreAttributes(name, nameAttributes{})
 		}
 		return "", false
@@ -1297,7 +1297,7 @@ func (r *Runner) namerefTargetSettledHere(target string) (string, bool) {
 	if idx < 0 {
 		// Counted forwards from the end the array has *now*, which is the
 		// whole of what settling it here means for a negative.
-		if pos, in := r.elemPos(r.Arrays[base], idx); in {
+		if pos, in := r.elemPos(r.arraysAt(base), idx); in {
 			idx = pos + r.arrayBase()
 		}
 	}
@@ -1361,7 +1361,7 @@ func (r *Runner) namerefTargetSettledHere(target string) (string, bool) {
 // leaves `r` holding OUTER in both shells — so every caller is on a path that
 // has already decided the reference is going to be made.
 func (r *Runner) namerefEmptiesTheCell(name string, df declareFlags) {
-	delete(r.Arrays, name)
+	r.arraysDel(name)
 	r.dropAssocTable(name)
 	r.namerefKeepsOnlyThisLinesFolding(name, df)
 	// hideVar rather than a bare delete: a name that came from the
@@ -1905,7 +1905,7 @@ func (r *Runner) exportedNamerefs() []string {
 		if target == "" || !r.isExported(k) {
 			continue
 		}
-		if _, own := r.Vars[k]; own {
+		if _, own := r.varsLookup(k); own {
 			continue
 		}
 		out = append(out, k+"="+target)
@@ -2150,27 +2150,21 @@ func (r *Runner) selfNamerefStoreOverACompound(sc *scope, name, value string) bo
 	// that shadowed it, and has to be exactly as it was afterwards. Both
 	// tables, because scalarOverCompound reads both to decide which branch
 	// this is.
-	liveArray, hadLiveArray := r.Arrays[name]
+	liveArray, hadLiveArray := r.arraysLookup(name)
 	// Owned before the live table is taken aside, because it is put back
 	// below: taken from a table a subshell still shares, it would go back
 	// into this shell's own copy as the very map the subshell is reading.
 	// See sharedtable.go.
 	r.ownAssocs()
-	liveAssoc, hadLiveAssoc := r.AssocArrays[name]
-	if r.Arrays == nil {
-		r.Arrays = map[string]Array{}
-	}
-	if r.AssocArrays == nil {
-		r.AssocArrays = map[string]AssocArray{}
-	}
-	delete(r.Arrays, name)
+	liveAssoc, hadLiveAssoc := r.assocsLookup(name)
+	r.arraysDel(name)
 	r.dropAssocTable(name)
 	if heldArray {
-		r.Arrays[name] = savedArray
+		r.arraysPut(name, savedArray)
 	}
 	if heldTable {
 		r.ownAssocs()
-		r.AssocArrays[name] = savedTable
+		r.assocsPut(name, savedTable)
 	}
 	// The borrowed rule writes through storeArray, which keeps the scalar
 	// copy in step by calling setVarAs — and setVarAs would divert straight
@@ -2180,10 +2174,10 @@ func (r *Runner) selfNamerefStoreOverACompound(sc *scope, name, value string) bo
 	r.storingSelfNameref = name
 	took := r.scalarOverCompound(name, value, assignedAnyhow)
 	r.storingSelfNameref = was
-	if stored, ok := r.Arrays[name]; ok && heldArray {
+	if stored, ok := r.arraysLookup(name); ok && heldArray {
 		sc.saveArray(name, stored, true)
 	}
-	if stored, ok := r.AssocArrays[name]; ok && heldTable {
+	if stored, ok := r.assocsLookup(name); ok && heldTable {
 		if r.assocShare != nil {
 			// The write above may have run a subshell that now shares the
 			// table this came out of, and the scope is going to put it back.
@@ -2191,14 +2185,14 @@ func (r *Runner) selfNamerefStoreOverACompound(sc *scope, name, value string) bo
 		}
 		sc.saveAssocTable(name, stored, true)
 	}
-	delete(r.Arrays, name)
+	r.arraysDel(name)
 	r.dropAssocTable(name)
 	if hadLiveArray {
-		r.Arrays[name] = liveArray
+		r.arraysPut(name, liveArray)
 	}
 	if hadLiveAssoc {
 		r.ownAssocs()
-		r.AssocArrays[name] = liveAssoc
+		r.assocsPut(name, liveAssoc)
 	}
 	return took
 }

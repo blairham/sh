@@ -243,7 +243,7 @@ func (r *Runner) declareElement(base string, leading []string, sub, value string
 // the key as it was.
 func (r *Runner) setDeclaredAssocElem(base, key, value string, appends bool) {
 	if appends {
-		v, ok := r.appendedValue(base, r.AssocArrays[base][key].scalar(), value)
+		v, ok := r.appendedValue(base, r.assocsAt(base)[key].scalar(), value)
 		if !ok {
 			return
 		}

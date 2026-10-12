@@ -60,13 +60,13 @@ func (r *Runner) isCompoundVariable(name string) bool {
 	if !r.compoundVariable[name] || r.removed[name] {
 		return false
 	}
-	if _, ok := r.Vars[name]; ok {
+	if _, ok := r.varsLookup(name); ok {
 		return false
 	}
-	if _, ok := r.Arrays[name]; ok {
+	if _, ok := r.arraysLookup(name); ok {
 		return false
 	}
-	if _, ok := r.AssocArrays[name]; ok {
+	if _, ok := r.assocsLookup(name); ok {
 		return false
 	}
 	return true
@@ -90,8 +90,8 @@ func (r *Runner) markCompoundVariable(name string) {
 	r.claimNamespaceHere(name)
 	r.localizeMemberWrite(name)
 	r.compoundVariables()[name] = true
-	delete(r.Vars, name)
-	delete(r.Arrays, name)
+	r.varsDel(name)
+	r.arraysDel(name)
 	r.dropAssocTable(name)
 	delete(r.declaredOnlyCompound, name)
 	delete(r.compoundHeldAnElement, name)
@@ -174,10 +174,7 @@ func (r *Runner) compoundVariableSubscripted(name string) {
 	if !r.isCompoundVariable(name) {
 		return
 	}
-	if r.Arrays == nil {
-		r.Arrays = map[string]Array{}
-	}
-	r.Arrays[name] = NewArray(0)
+	r.arraysPut(name, NewArray(0))
 }
 
 // compoundMemberPrefix is what a member's name begins with.
@@ -197,13 +194,13 @@ func (r *Runner) compoundDescendants(name string) []string {
 			seen[k] = true
 		}
 	}
-	for k := range r.Vars {
+	for k := range r.varsRange() {
 		add(k)
 	}
-	for k := range r.Arrays {
+	for k := range r.arraysRange() {
 		add(k)
 	}
-	for k := range r.AssocArrays {
+	for k := range r.assocsRange() {
 		add(k)
 	}
 	for k := range r.compoundVariable {
@@ -522,13 +519,13 @@ func (r *Runner) nameHoldsACompound(name string) bool {
 	if r.isCompoundVariable(name) {
 		return true
 	}
-	if _, ok := r.Vars[name]; ok {
+	if _, ok := r.varsLookup(name); ok {
 		return false
 	}
-	if _, ok := r.Arrays[name]; ok {
+	if _, ok := r.arraysLookup(name); ok {
 		return false
 	}
-	if _, ok := r.AssocArrays[name]; ok {
+	if _, ok := r.assocsLookup(name); ok {
 		return false
 	}
 	return len(r.compoundDescendants(name)) > 0
@@ -595,9 +592,9 @@ func (r *Runner) nameHoldsAContainer(name string) bool {
 	if r.removed[name] {
 		return false
 	}
-	if _, ok := r.Arrays[name]; ok {
+	if _, ok := r.arraysLookup(name); ok {
 		return true
 	}
-	_, ok := r.AssocArrays[name]
+	_, ok := r.assocsLookup(name)
 	return ok
 }

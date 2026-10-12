@@ -44,13 +44,10 @@ import (
 // Semantics.AssignmentRestoresAnUnsetProducedParameter) was produced again by
 // the next line of the same script.
 func (r *Runner) ensureSpecials() {
-	if r.Dynamic == nil {
-		r.Dynamic = map[string]func(*Runner) string{}
-	}
-	if _, ok := r.Vars["IFS"]; !ok && !r.removed["IFS"] {
+	if _, ok := r.varsLookup("IFS"); !ok && !r.removed["IFS"] {
 		r.setVarQuietly("IFS", " \t\n")
 	}
-	if _, ok := r.Dynamic["_"]; !ok && !r.endedProducers["_"] &&
+	if _, ok := r.producersLookup("_"); !ok && !r.endedProducers["_"] &&
 		r.sem().UnderscoreIsAParameterAtAll != No {
 		// Registered once, not every time: RunPart comes back through here
 		// while a process substitution's goroutine may be reading the shared
@@ -70,7 +67,7 @@ func (r *Runner) ensureSpecials() {
 		// way every inherited variable is, which is what their references do
 		// with it — `_` is an ordinary name there, assignable, and the value
 		// stays.
-		r.Dynamic["_"] = func(r *Runner) string {
+		r.producersPut("_", func(r *Runner) string {
 			// The tracked argument in the dialects that move `$_`. Which
 			// record is read is a second question with a second answer —
 			// one column moves it only between the commands the shell reads
@@ -89,12 +86,12 @@ func (r *Runner) ensureSpecials() {
 				}
 			}
 			return r.underscoreAtStartup()
-		}
+		})
 	}
-	if _, ok := r.Vars["PPID"]; !ok && !r.removed["PPID"] {
+	if _, ok := r.varsLookup("PPID"); !ok && !r.removed["PPID"] {
 		r.setVarQuietly("PPID", strconv.Itoa(os.Getppid()))
 	}
-	if _, ok := r.Vars["OPTIND"]; !ok && !r.removed["OPTIND"] {
+	if _, ok := r.varsLookup("OPTIND"); !ok && !r.removed["OPTIND"] {
 		// The index the next `getopts` will read, which is 1 before the
 		// builtin has ever run — unanimous across the panel, so it is a
 		// starting value here rather than an axis. Writing it here and not
@@ -115,8 +112,8 @@ func (r *Runner) ensureSpecials() {
 	// handed rather than by what it is: the depth. Beside OLDPWD because it
 	// is settled once per session for the same reason — see settleShellLevel.
 	r.settleShellLevel()
-	if _, ok := r.Dynamic["LINENO"]; !ok && !r.endedProducers["LINENO"] {
-		r.Dynamic["LINENO"] = func(r *Runner) string {
+	if _, ok := r.producersLookup("LINENO"); !ok && !r.endedProducers["LINENO"] {
+		r.producersPut("LINENO", func(r *Runner) string {
 			// One dialect numbers lines inside a function from the line the
 			// function was written on; the rest count from the file, which
 			// r.line already is. Asked only inside a function.
@@ -177,10 +174,10 @@ func (r *Runner) ensureSpecials() {
 				return strconv.Itoa(at - origin)
 			}
 			return strconv.Itoa(at)
-		}
+		})
 	}
-	if _, ok := r.Dynamic["-"]; !ok && !r.endedProducers["-"] {
-		r.Dynamic["-"] = (*Runner).optionLetters
+	if _, ok := r.producersLookup("-"); !ok && !r.endedProducers["-"] {
+		r.producersPut("-", (*Runner).optionLetters)
 	}
 }
 
@@ -576,10 +573,7 @@ func (r *Runner) underscoreAtStartup() string {
 // OPTIND bookkeeping, because none of that applies to the shell setting up
 // its own parameters before a script has run.
 func (r *Runner) setVarQuietly(name, value string) {
-	if r.Vars == nil {
-		r.Vars = map[string]string{}
-	}
-	r.Vars[name] = value
+	r.varsPut(name, value)
 }
 
 // SetDynamicArray registers an *array* whose elements are produced when they
@@ -591,9 +585,6 @@ func (r *Runner) setVarQuietly(name, value string) {
 // first `source` — which is the worst shape a bug can have, because the
 // script that reads it is usually the one working out where it lives.
 func (r *Runner) SetDynamicArray(name string, value func(*Runner) []string) {
-	if r.DynamicArrays == nil {
-		r.DynamicArrays = map[string]func(*Runner) []string{}
-	}
 	// **Cloned here, so that a read cannot be a write.** A producer answers
 	// with the elements the name holds *now*, and the shortest way to write
 	// one is to hand back the storage those elements already live in —
@@ -617,7 +608,7 @@ func (r *Runner) SetDynamicArray(name string, value func(*Runner) []string) {
 	// that forgot to copy would be a bug nothing local to it could show, and
 	// a producer that forgot would be a bug in a file that has never heard
 	// of expansion.
-	r.DynamicArrays[name] = func(rr *Runner) []string { return slices.Clone(value(rr)) }
+	r.arrayProducersPut(name, func(rr *Runner) []string { return slices.Clone(value(rr)) })
 }
 
 // SetDynamic registers a parameter whose value is produced when it is read.
@@ -627,10 +618,7 @@ func (r *Runner) SetDynamicArray(name string, value func(*Runner) []string) {
 // neither can be a stored string. A dialect calls this from Apply, the same
 // place it registers a builtin.
 func (r *Runner) SetDynamic(name string, value func(*Runner) string) {
-	if r.Dynamic == nil {
-		r.Dynamic = map[string]func(*Runner) string{}
-	}
-	r.Dynamic[name] = value
+	r.producersPut(name, value)
 }
 
 // SetDynamicPresence says when a produced parameter is *there* at all.
@@ -816,8 +804,8 @@ func (r *Runner) RefuseUnset(name string) {
 // alone for good rather than deferring it. Dropping the registration is
 // exactly that state, which is why this is a drop and not a suppression.
 func (r *Runner) DropProducedParameter(name string) {
-	delete(r.Dynamic, name)
-	delete(r.DynamicArrays, name)
+	r.producersDel(name)
+	r.arrayProducersDel(name)
 }
 
 func (r *Runner) SetDynamicArrayWriter(name string, write func(r *Runner, values []string)) {
@@ -870,11 +858,11 @@ func (r *Runner) SetDynamicArrayWriter(name string, write func(r *Runner, values
 // and in one that has not, where this engine answered `scalar-hide` the
 // moment the table was given the letters it is described with (#4812).
 func (r *Runner) UnsetDynamic(name string) {
-	delete(r.Dynamic, name)
+	r.producersDel(name)
 	delete(r.dynamicWriters, name)
-	delete(r.DynamicArrays, name)
+	r.arrayProducersDel(name)
 	delete(r.dynamicArrayWriters, name)
-	delete(r.DynamicAssocs, name)
+	r.assocProducersDel(name)
 	delete(r.dynamicAssocElements, name)
 	delete(r.dynamicAssocWriters, name)
 	delete(r.dynamicAssocEmptied, name)
@@ -897,7 +885,7 @@ func (r *Runner) UnsetDynamic(name string) {
 // SetSpecial gives a parameter a fixed value unless a script has already set
 // one, which is how a dialect supplies something like UID.
 func (r *Runner) SetSpecial(name, value string) {
-	if _, ok := r.Vars[name]; ok || r.removed[name] {
+	if _, ok := r.varsLookup(name); ok || r.removed[name] {
 		return
 	}
 	r.setVarQuietly(name, value)

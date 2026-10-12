@@ -161,13 +161,13 @@ func (r *Runner) namespaceHoldsTheName(name string) bool {
 	if r.removed[name] {
 		return false
 	}
-	if _, ok := r.Vars[name]; ok {
+	if _, ok := r.varsLookup(name); ok {
 		return true
 	}
-	if _, ok := r.Arrays[name]; ok {
+	if _, ok := r.arraysLookup(name); ok {
 		return true
 	}
-	if _, ok := r.AssocArrays[name]; ok {
+	if _, ok := r.assocsLookup(name); ok {
 		return true
 	}
 	return r.compoundVariable[name]
@@ -363,7 +363,7 @@ func (r *Runner) namespaceKeys(prefix string) []string {
 		return nil
 	}
 	var out []string
-	for name := range r.Vars {
+	for name := range r.varsRange() {
 		if isNamespaceName(name) && !r.removed[name] {
 			out = append(out, prefix+name)
 		}

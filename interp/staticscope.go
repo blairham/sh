@@ -100,15 +100,15 @@ func (r *Runner) captureBinding(name string) staticBinding {
 		hasReadonly: true, hasHide: true, hasAttrs: true, hasAssigned: true,
 		hasExported: true, hasCompound: true,
 	}
-	b.value, b.valueExists = r.Vars[name]
-	if a, ok := r.Arrays[name]; ok {
+	b.value, b.valueExists = r.varsLookup(name)
+	if a, ok := r.arraysLookup(name); ok {
 		// Cloned for the reason shadow clones one: an Array is a map, so
 		// keeping the value would keep a reference to the table the callee
 		// is about to write into and putting it back would put the writes
 		// back with it.
 		b.array, b.arrayExists = a.clone(), true
 	}
-	if m, ok := r.AssocArrays[name]; ok {
+	if m, ok := r.assocsLookup(name); ok {
 		b.assoc, b.assocExists = m.clone(), true
 	}
 	b.removed = r.removed[name]
@@ -151,17 +151,17 @@ func bindingFromScope(sc *scope, name string) staticBinding {
 func (r *Runner) installBinding(name string, b staticBinding) {
 	if b.hasValue {
 		if b.valueExists {
-			r.Vars[name] = b.value
+			r.varsPut(name, b.value)
 		} else {
-			delete(r.Vars, name)
+			r.varsDel(name)
 		}
 		r.ignoredNamesRestored(name)
 	}
 	if b.hasArray {
 		if b.arrayExists {
-			r.Arrays[name] = b.array
+			r.arraysPut(name, b.array)
 		} else {
-			delete(r.Arrays, name)
+			r.arraysDel(name)
 		}
 	}
 	if b.hasAssoc {
@@ -170,7 +170,7 @@ func (r *Runner) installBinding(name string, b staticBinding) {
 			// back as it is, one map would be both the scope's and a live
 			// table a subshell may come to share. See sharedtable.go.
 			r.ownAssocs()
-			r.AssocArrays[name] = b.assoc.clone()
+			r.assocsPut(name, b.assoc.clone())
 		} else {
 			r.dropAssocTable(name)
 		}

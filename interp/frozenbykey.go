@@ -99,7 +99,7 @@ func (r *Runner) frozenByKeyAndStillProduced(name string) bool {
 	if !r.tableFrozenByKey[name] {
 		return false
 	}
-	_, produced := r.DynamicAssocs[name]
+	_, produced := r.assocProducersLookup(name)
 	return produced
 }
 

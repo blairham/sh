@@ -346,11 +346,11 @@ func (r *Runner) declarationOf(name string) (declaration, bool) {
 		// recorded outlives the value, and it is the store that carries it.
 		// Both facts go out together: `unset` on the declaration and the
 		// kind beside it. See declaration.unset.
-		if _, ok := r.AssocArrays[name]; ok {
+		if _, ok := r.assocsLookup(name); ok {
 			d.isAssoc, d.unset = true, true
 			return d, true
 		}
-		if _, ok := r.Arrays[name]; ok {
+		if _, ok := r.arraysLookup(name); ok {
 			d.isArr, d.unset = true, true
 			return d, true
 		}
@@ -376,7 +376,7 @@ func (r *Runner) declarationOf(name string) (declaration, bool) {
 		d.assoc, d.isAssoc = a, true
 		return d, true
 	}
-	if a, ok := r.Arrays[name]; ok {
+	if a, ok := r.arraysLookup(name); ok {
 		d.arr, d.isArr = a, true
 		return d, true
 	}
@@ -394,7 +394,7 @@ func (r *Runner) declarationOf(name string) (declaration, bool) {
 	// declarableNames walks, so a listing reaches one only through an
 	// attribute — and a produced array with no attributes must stay
 	// undeclared, which is the answer `$funcstack` gives and had before this.
-	if produce, ok := r.DynamicArrays[name]; ok && attributed &&
+	if produce, ok := r.arrayProducersLookup(name); ok && attributed &&
 		(!r.listingDrawsNoReading || producedIsAnArray) {
 		elems := produce(r)
 		if elems == nil {
@@ -439,7 +439,7 @@ func (r *Runner) declarationOf(name string) (declaration, bool) {
 		d.arr, d.isArr = a, true
 		return d, true
 	}
-	if v, ok := r.Vars[name]; ok {
+	if v, ok := r.varsLookup(name); ok {
 		d.value, d.hasValue = r.listedFloatText(name, d.float, v), true
 		return d, true
 	}
@@ -471,11 +471,11 @@ func (r *Runner) declarationOf(name string) (declaration, bool) {
 	// (#2510, #2552, #2728), after which `SECONDS` and `RANDOM` are
 	// attributed like any other name and reach this branch through the guard
 	// rather than around it.
-	if produce, ok := r.Dynamic[name]; ok && attributed && !r.listingDrawsNoReading {
+	if produce, ok := r.producersLookup(name); ok && attributed && !r.listingDrawsNoReading {
 		d.value, d.hasValue = produce(r), true
 		return d, true
 	}
-	if _, ok := r.Dynamic[name]; ok && attributed {
+	if _, ok := r.producersLookup(name); ok && attributed {
 		// The listing has said it will not write a drawn reading, so the
 		// producer is not asked — see listedDeclarationOf, and note that a
 		// producer is not always free to ask: bash's generator advances on
@@ -518,13 +518,13 @@ func (r *Runner) declarableNames() []string {
 			seen[name] = true
 		}
 	}
-	for name := range r.Vars {
+	for name := range r.varsRange() {
 		hold(name)
 	}
-	for name := range r.Arrays {
+	for name := range r.arraysRange() {
 		hold(name)
 	}
-	for name := range r.AssocArrays {
+	for name := range r.assocsRange() {
 		hold(name)
 	}
 	for name, on := range r.exported {

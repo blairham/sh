@@ -718,7 +718,7 @@ func (r *Runner) declareTie(builtin string, args []string, f declareFlags) int {
 	// them — reach the elements on the way back in.
 	if retied {
 		var elems []string
-		if a, ok := r.Arrays[array]; ok {
+		if a, ok := r.arraysLookup(array); ok {
 			elems = r.readArray(a)
 		}
 		r.setVar(scalar, strings.Join(elems, sep))

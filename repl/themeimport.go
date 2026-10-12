@@ -6,7 +6,6 @@ package repl
 import (
 	"context"
 	"fmt"
-	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -220,12 +219,12 @@ func (t *Theme) harvest(r *interp.Runner, ctx context.Context, path, prefix stri
 		Scalars: map[string]string{},
 		Arrays:  map[string][]string{},
 	}
-	for name, value := range child.Vars {
+	for name, value := range child.StoredScalars() {
 		if strings.HasPrefix(name, prefix) {
 			params.Scalars[name] = value
 		}
 	}
-	for name := range child.Arrays {
+	for name := range child.StoredArrayNames() {
 		if !strings.HasPrefix(name, prefix) {
 			continue
 		}
@@ -255,15 +254,10 @@ func childOf(r *interp.Runner) *interp.Runner {
 		Dir:         r.Dir,
 		Name:        r.Name,
 		Env:         slices.Clone(r.Env),
-		Vars:        maps.Clone(r.Vars),
 		Stdout:      nopWriter{},
 		Stderr:      nopWriter{},
 	}
-	if child.Vars == nil {
-		child.Vars = map[string]string{}
-	}
-	child.Arrays = map[string]interp.Array{}
-	maps.Copy(child.Arrays, r.Arrays)
+	child.CopyVariablesFrom(r)
 	return child
 }
 

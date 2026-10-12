@@ -503,7 +503,7 @@ func (r *Runner) indirectSourceText(e *syntax.ParamExpr, words []string, set boo
 		// measured 2026-10-02 on zsh 5.9.2, with `typeset -u n=abc`,
 		// `${(P)n}` is `$abc` and not `$ABC`, and with `typeset -R5 n=abc`
 		// it is `$abc` too, the blanks never having been stored (#5142).
-		if v, ok := r.Vars[r.throughNameref(e.Name)]; ok && !r.nameIsAnArray(e.Name) {
+		if v, ok := r.varsLookup(r.throughNameref(e.Name)); ok && !r.nameIsAnArray(e.Name) {
 			return v, true
 		}
 	}

@@ -74,9 +74,7 @@ import (
 // the child too, so the gap is a gap; it is recorded here rather than
 // pretended away.
 type expansionTables struct {
-	vars          map[string]string
-	arrays        map[string]Array
-	assoc         map[string]AssocArray
+	vars          varTables
 	exported      map[string]bool
 	removed       map[string]bool
 	declaredEmpty map[string]bool
@@ -89,9 +87,7 @@ type expansionTables struct {
 // assignment writes.
 func (r *Runner) saveExpansionTables() expansionTables {
 	return expansionTables{
-		vars:          maps.Clone(r.Vars),
-		arrays:        cloneArrays(r.Arrays),
-		assoc:         cloneAssoc(r.AssocArrays),
+		vars:          r.saveVarTables(),
 		exported:      maps.Clone(r.exported),
 		removed:       maps.Clone(r.removed),
 		declaredEmpty: maps.Clone(r.declaredEmpty),
@@ -101,8 +97,7 @@ func (r *Runner) saveExpansionTables() expansionTables {
 
 // restoreExpansionTables puts the copy back.
 func (r *Runner) restoreExpansionTables(t expansionTables) {
-	r.Vars, r.Arrays = t.vars, t.arrays
-	r.replaceAssocs(t.assoc)
+	r.restoreVarTables(t.vars)
 	r.exported, r.removed, r.declaredEmpty, r.assigned = t.exported, t.removed, t.declaredEmpty, t.assigned
 }
 
@@ -113,9 +108,7 @@ func (r *Runner) restoreExpansionTables(t expansionTables) {
 // case and every shell agrees about it, so a shell whose dialect has not
 // answered must still be able to run one.
 func (r *Runner) wroteSince(t expansionTables) bool {
-	return !maps.Equal(t.vars, r.Vars) ||
-		!arraysEqual(t.arrays, r.Arrays) ||
-		!assocEqual(t.assoc, r.AssocArrays) ||
+	return r.varTablesWroteSince(t.vars) ||
 		!maps.Equal(t.exported, r.exported) ||
 		!maps.Equal(t.removed, r.removed) ||
 		!maps.Equal(t.declaredEmpty, r.declaredEmpty) ||

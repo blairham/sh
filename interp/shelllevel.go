@@ -135,7 +135,7 @@ func (r *Runner) settleShellLevel() {
 	if policy == ShellLevelUnspecified || policy == ShellLevelNotCounted {
 		return
 	}
-	if _, ok := r.Vars[ShellLevelName]; ok || r.removed[ShellLevelName] {
+	if _, ok := r.varsLookup(ShellLevelName); ok || r.removed[ShellLevelName] {
 		// A caller set one, or a script already has. Either is this shell's
 		// own answer and the environment has nothing to add to it.
 		return

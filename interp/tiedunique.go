@@ -114,7 +114,7 @@ func (r *Runner) tiedUniqueFold(name, value string) string {
 // re-read rather than refused. The mirror is called by hand for the same
 // reason — it is the only part of a store this needs.
 func (r *Runner) uniquifyTiedScalar(name string) {
-	v, ok := r.Vars[name]
+	v, ok := r.varsLookup(name)
 	if !ok {
 		// A name still living in the inherited environment, which is where
 		// an exported tie's scalar is until something writes it.
@@ -126,9 +126,6 @@ func (r *Runner) uniquifyTiedScalar(name string) {
 	if folded == v {
 		return
 	}
-	if r.Vars == nil {
-		r.Vars = map[string]string{}
-	}
-	r.Vars[name] = folded
+	r.varsPut(name, folded)
 	r.mirrorScalarToArray(name, folded)
 }

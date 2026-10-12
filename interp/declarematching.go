@@ -501,19 +501,19 @@ func (r *Runner) matchedOperands(operands []string, local bool) []string {
 // A stored value wins, the same order every read follows: a script that has
 // assigned to the name is declaring its own parameter and not the view.
 func (r *Runner) producedParameter(name string) bool {
-	if _, ok := r.Vars[name]; ok {
+	if _, ok := r.varsLookup(name); ok {
 		return false
 	}
-	if _, ok := r.Arrays[name]; ok {
+	if _, ok := r.arraysLookup(name); ok {
 		return false
 	}
-	if _, ok := r.AssocArrays[name]; ok {
+	if _, ok := r.assocsLookup(name); ok {
 		return false
 	}
-	if _, ok := r.DynamicArrays[name]; ok {
+	if _, ok := r.arrayProducersLookup(name); ok {
 		return true
 	}
-	_, ok := r.DynamicAssocs[name]
+	_, ok := r.assocProducersLookup(name)
 	return ok
 }
 

@@ -170,7 +170,7 @@ func (r *Runner) runDiscipline(variable, event, subscript, value string, valueGi
 	// `$#` inside one is 0 however the shell was called — which callFunc
 	// gives it by being handed none.
 	err := callDisciplineBody(r, fn)
-	got, assigned := r.Vars[disciplineValueParam]
+	got, assigned := r.varsLookup(disciplineValueParam)
 	restore()
 	if event == disciplineSet || event == disciplineAppend {
 		// What the hook returned, for the assignment command to report. Kept
@@ -201,28 +201,25 @@ func (r *Runner) enterDisciplineParams(variable, subscript, value string, valueG
 	names := [...]string{disciplineNameParam, disciplineSubscriptParam, disciplineValueParam}
 	var was [len(names)]saved
 	for i, n := range names {
-		v, ok := r.Vars[n]
+		v, ok := r.varsLookup(n)
 		was[i] = saved{v, ok}
 	}
-	if r.Vars == nil {
-		r.Vars = map[string]string{}
-	}
-	r.Vars[disciplineNameParam] = variable
-	r.Vars[disciplineSubscriptParam] = subscript
+	r.varsPut(disciplineNameParam, variable)
+	r.varsPut(disciplineSubscriptParam, subscript)
 	if valueGiven {
-		r.Vars[disciplineValueParam] = value
+		r.varsPut(disciplineValueParam, value)
 	} else {
 		// Absent rather than empty, which is the whole of how a `.get` that
 		// assigned is told from one that did not.
-		delete(r.Vars, disciplineValueParam)
+		r.varsDel(disciplineValueParam)
 	}
 	return func() {
 		for i, n := range names {
 			if was[i].set {
-				r.Vars[n] = was[i].value
+				r.varsPut(n, was[i].value)
 				continue
 			}
-			delete(r.Vars, n)
+			r.varsDel(n)
 		}
 	}
 }

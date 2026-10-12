@@ -211,7 +211,7 @@ func doubleQuotedForInput(v string) string {
 // with none, and a parameter that is not a name at all, answer empty.
 func (r *Runner) attributeLetters(name string) string {
 	var b strings.Builder
-	if _, ok := r.Arrays[name]; ok && !r.removed[name] {
+	if _, ok := r.arraysLookup(name); ok && !r.removed[name] {
 		b.WriteByte('a')
 	}
 	if ok := r.assocDeclared(name); ok && !r.removed[name] {
@@ -375,7 +375,7 @@ func (r *Runner) arrayPairs(name string) (keys, vals []string, assoc, stored boo
 		}
 		return ks, vs, true, true
 	}
-	if a, ok := r.Arrays[name]; ok && !r.removed[name] {
+	if a, ok := r.arraysLookup(name); ok && !r.removed[name] {
 		base := r.arrayBase()
 		ks := make([]string, 0, a.Len())
 		vs := make([]string, 0, a.Len())

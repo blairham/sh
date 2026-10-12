@@ -107,8 +107,8 @@ func (r *Runner) shadowCompoundNamespace(sc *scope, name string) {
 		// than the one that reached it. A nested compound's own members are
 		// therefore shadowed by the call this one makes for it.
 		r.shadow(m)
-		delete(r.Vars, m)
-		delete(r.Arrays, m)
+		r.varsDel(m)
+		r.arraysDel(m)
 		r.dropAssocTable(m)
 		delete(r.removed, m)
 	}
@@ -129,13 +129,13 @@ func (r *Runner) liveNamesUnder(name string) []string {
 			seen[k] = true
 		}
 	}
-	for k := range r.Vars {
+	for k := range r.varsRange() {
 		add(k)
 	}
-	for k := range r.Arrays {
+	for k := range r.arraysRange() {
 		add(k)
 	}
-	for k := range r.AssocArrays {
+	for k := range r.assocsRange() {
 		add(k)
 	}
 	for k := range r.compoundVariable {
@@ -213,8 +213,8 @@ func (r *Runner) restoreCompoundNamespace(sc *scope, name string) {
 				// members passed while rows with one failed.
 				continue
 			}
-			delete(r.Vars, m)
-			delete(r.Arrays, m)
+			r.varsDel(m)
+			r.arraysDel(m)
 			r.dropAssocTable(m)
 			delete(r.compoundVariable, m)
 			delete(r.removed, m)

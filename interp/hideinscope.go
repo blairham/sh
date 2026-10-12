@@ -668,9 +668,9 @@ func (r *Runner) suspendProducer(sc *scope, name string) {
 	}
 	p := suspendedProducer{
 		shellOwn:    own,
-		scalar:      r.Dynamic[name],
-		array:       r.DynamicArrays[name],
-		assoc:       r.DynamicAssocs[name],
+		scalar:      r.producersAt(name),
+		array:       r.arrayProducersAt(name),
+		assoc:       r.assocProducersAt(name),
 		element:     r.dynamicAssocElements[name],
 		writeScalar: r.dynamicWriters[name],
 		writeArray:  r.dynamicArrayWriters[name],
@@ -678,9 +678,9 @@ func (r *Runner) suspendProducer(sc *scope, name string) {
 	}
 	p.declaration, p.declared = r.dynamicDeclarations[name]
 	delete(r.shellOwn, name)
-	delete(r.Dynamic, name)
-	delete(r.DynamicArrays, name)
-	delete(r.DynamicAssocs, name)
+	r.producersDel(name)
+	r.arrayProducersDel(name)
+	r.assocProducersDel(name)
 	delete(r.dynamicAssocElements, name)
 	delete(r.dynamicWriters, name)
 	delete(r.dynamicArrayWriters, name)
@@ -700,13 +700,13 @@ func (r *Runner) resumeProducer(sc *scope, name string) {
 		return
 	}
 	if p.scalar != nil {
-		putBack(&r.Dynamic, name, p.scalar)
+		r.producersPut(name, p.scalar)
 	}
 	if p.array != nil {
-		putBack(&r.DynamicArrays, name, p.array)
+		r.arrayProducersPut(name, p.array)
 	}
 	if p.assoc != nil {
-		putBack(&r.DynamicAssocs, name, p.assoc)
+		r.assocProducersPut(name, p.assoc)
 	}
 	if p.element != nil {
 		putBack(&r.dynamicAssocElements, name, p.element)

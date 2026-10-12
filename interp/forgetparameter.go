@@ -16,8 +16,8 @@ package interp
 func (r *Runner) ForgetParameter(name string) {
 	r.SetParameterWithdrawn(name, true)
 	delete(r.withdrawnParams, name)
-	delete(r.Vars, name)
-	delete(r.Arrays, name)
+	r.varsDel(name)
+	r.arraysDel(name)
 	r.dropAssocTable(name)
 	for _, m := range []map[string]bool{
 		r.exported, r.readonly, r.integer, r.shellOwn, r.notShellOwn, r.scopeFixed,

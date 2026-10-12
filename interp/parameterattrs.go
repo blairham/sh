@@ -245,16 +245,16 @@ func (r *Runner) ParameterAttributes(name string) (ParameterAttributes, bool) {
 // answers is itself a produced association, so describing it asked it to
 // describe itself and the shell hung rather than failing.
 func (r *Runner) parameterKind(name string) ParameterKind {
-	if _, ok := r.AssocArrays[name]; ok {
+	if _, ok := r.assocsLookup(name); ok {
 		return AssocParameter
 	}
-	if _, ok := r.DynamicAssocs[name]; ok {
+	if _, ok := r.assocProducersLookup(name); ok {
 		return AssocParameter
 	}
-	if _, ok := r.Arrays[name]; ok {
+	if _, ok := r.arraysLookup(name); ok {
 		return ArrayParameter
 	}
-	if _, ok := r.DynamicArrays[name]; ok {
+	if _, ok := r.arrayProducersLookup(name); ok {
 		return ArrayParameter
 	}
 	// The pipeline status is an array in both shells that name it, and it
@@ -301,13 +301,13 @@ func (r *Runner) parameterKind(name string) ParameterKind {
 // tables can hold a name that was never assigned — but a value, a container
 // or the inherited environment is.
 func (r *Runner) parameterExists(name string) bool {
-	if _, ok := r.Vars[name]; ok {
+	if _, ok := r.varsLookup(name); ok {
 		return true
 	}
-	if _, ok := r.Arrays[name]; ok {
+	if _, ok := r.arraysLookup(name); ok {
 		return true
 	}
-	if _, ok := r.AssocArrays[name]; ok {
+	if _, ok := r.assocsLookup(name); ok {
 		return true
 	}
 	if _, ok := r.inheritedValue(name); ok {
@@ -339,25 +339,25 @@ func (r *Runner) ParameterIsNamed(name string) bool {
 	if name == "" || r.removedForDescription(name) || r.engineOwns(name) {
 		return false
 	}
-	if _, ok := r.Vars[name]; ok {
+	if _, ok := r.varsLookup(name); ok {
 		return true
 	}
-	if _, ok := r.Arrays[name]; ok {
+	if _, ok := r.arraysLookup(name); ok {
 		return true
 	}
-	if _, ok := r.AssocArrays[name]; ok {
+	if _, ok := r.assocsLookup(name); ok {
 		return true
 	}
 	if _, ok := r.inheritedValue(name); ok {
 		return true
 	}
-	if _, ok := r.Dynamic[name]; ok {
+	if _, ok := r.producersLookup(name); ok {
 		return true
 	}
-	if _, ok := r.DynamicArrays[name]; ok {
+	if _, ok := r.arrayProducersLookup(name); ok {
 		return true
 	}
-	if _, ok := r.DynamicAssocs[name]; ok {
+	if _, ok := r.assocProducersLookup(name); ok {
 		return true
 	}
 	return r.namesTheProducedPipelineStatus(name)
@@ -374,25 +374,25 @@ func (r *Runner) ParameterNames() []string {
 		seen[name] = true
 		out = append(out, name)
 	}
-	for name := range r.Vars {
+	for name := range r.varsRange() {
 		add(name)
 	}
-	for name := range r.Arrays {
+	for name := range r.arraysRange() {
 		add(name)
 	}
-	for name := range r.AssocArrays {
+	for name := range r.assocsRange() {
 		add(name)
 	}
 	for name := range r.inheritedEnv {
 		add(name)
 	}
-	for name := range r.Dynamic {
+	for name := range r.producersRange() {
 		add(name)
 	}
-	for name := range r.DynamicArrays {
+	for name := range r.arrayProducersRange() {
 		add(name)
 	}
-	for name := range r.DynamicAssocs {
+	for name := range r.assocProducersRange() {
 		add(name)
 	}
 	// And the fourth, which is one name and is the dialect's rather than a

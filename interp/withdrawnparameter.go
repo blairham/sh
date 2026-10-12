@@ -121,9 +121,9 @@ func (r *Runner) SetParameterWithdrawn(name string, withdrawn bool) {
 		}
 	}
 	w := withdrawnParameter{
-		scalar:      r.Dynamic[name],
-		array:       r.DynamicArrays[name],
-		assoc:       r.DynamicAssocs[name],
+		scalar:      r.producersAt(name),
+		array:       r.arrayProducersAt(name),
+		assoc:       r.assocProducersAt(name),
 		element:     r.dynamicAssocElements[name],
 		writeScalar: r.dynamicWriters[name],
 		writeArray:  r.dynamicArrayWriters[name],
@@ -133,9 +133,9 @@ func (r *Runner) SetParameterWithdrawn(name string, withdrawn bool) {
 	}
 	w.absent, w.wasAbsent = r.absentParams[name]
 	w.elemsReason, w.hadElems = r.absentElements[name]
-	delete(r.Dynamic, name)
-	delete(r.DynamicArrays, name)
-	delete(r.DynamicAssocs, name)
+	r.producersDel(name)
+	r.arrayProducersDel(name)
+	r.assocProducersDel(name)
 	delete(r.dynamicAssocElements, name)
 	delete(r.dynamicWriters, name)
 	delete(r.dynamicArrayWriters, name)
@@ -154,13 +154,13 @@ func (r *Runner) SetParameterWithdrawn(name string, withdrawn bool) {
 func (r *Runner) restoreParameter(name string) {
 	w := r.withdrawnParams[name]
 	if w.scalar != nil {
-		putBack(&r.Dynamic, name, w.scalar)
+		r.producersPut(name, w.scalar)
 	}
 	if w.array != nil {
-		putBack(&r.DynamicArrays, name, w.array)
+		r.arrayProducersPut(name, w.array)
 	}
 	if w.assoc != nil {
-		putBack(&r.DynamicAssocs, name, w.assoc)
+		r.assocProducersPut(name, w.assoc)
 	}
 	if w.element != nil {
 		putBack(&r.dynamicAssocElements, name, w.element)

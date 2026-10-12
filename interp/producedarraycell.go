@@ -42,10 +42,10 @@ package interp
 // write to the name goes through, rather than through a second door of this
 // function's own.
 func (r *Runner) writableArrayCell(name string) (Array, bool) {
-	if a, stored := r.Arrays[name]; stored {
+	if a, stored := r.arraysLookup(name); stored {
 		return a, true
 	}
-	produce, produced := r.DynamicArrays[name]
+	produce, produced := r.arrayProducersLookup(name)
 	if !produced {
 		// The pipeline record is produced by a path of its own, and is a
 		// cell to write in where the dialect gave its name a writer: an

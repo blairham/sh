@@ -39,6 +39,16 @@ var endSetCases = []struct{ pattern, subject string }{
 	{`a\`, `a\b`},
 	{"(a|b", "a(a|b"},
 	{"a(#s)b", "ab"},
+	{"(#s)a#", "aab"},
+	{"a#(#e)", "baa"},
+	{"((#s)[[:space:]]##|[[:space:]]##(#e))", "  a  b \tc  "},
+	{"((#s) ##| ##(#e))", "  a  b  c  "},
+	{"((#s)x|y(#e))#", "xyxy"},
+	{"(#b)*$\\(([^\\)]#)(\\)|(#e))", "a $(b) c $(d"},
+	{"(a|(#s))b", "abbab"},
+	{"*(#s)ab", "abab"},
+	{"(#e)", "ab"},
+	{"(#s)", "ab"},
 	{"(#i)a#", "aAa"},
 	{"a~b*", "ab ac"},
 	{"^a#", "aab"},
@@ -46,6 +56,12 @@ var endSetCases = []struct{ pattern, subject string }{
 	{"(#c2)a", "aaa"},
 	{"a(#c1,2)", "aaa"},
 	{"[[:alpha:]]#", "ab1"},
+	{"[^[:space:][:digit:]]##", "ab 12c d"},
+	{"[[:upper:]x]#y", "AxBy y"},
+	{"[[.a.]]#", "aab"},
+	{"[[=a=]b]#", "aab"},
+	{"[[:alp]x]", "[:x]"},
+	{"[[:bogus:]]a", "aa"},
 	{"é#", "ééa"},
 	{"?é", "aéé"},
 	{"[éa]#b", "éab"},
@@ -140,12 +156,18 @@ func TestTheReachSetHoldsEveryEndTheMatcherAccepts(t *testing.T) {
 // does not reason about must be ones it refuses rather than guesses at.
 func TestTheReachSetReadsWhatItClaimsAndRefusesTheRest(t *testing.T) {
 	o := spanOptsForTest()
-	for _, p := range []string{benchPattern, "a*b", "(a|ab)c", "[^}]##", "+(a)b", "?(a)b", "*(ab)", "(#b)(a|ab)*", "x#"} {
+	for _, p := range []string{
+		benchPattern, "a*b", "(a|ab)c", "[^}]##", "+(a)b", "?(a)b", "*(ab)", "(#b)(a|ab)*", "x#",
+		"(#s)a", "a(#e)", "((#s) ##| ##(#e))", "[[:alpha:]]", "((#s)[[:space:]]##|[[:space:]]##(#e))",
+	} {
 		if _, ok := newReachSet(p, o); !ok {
 			t.Errorf("pattern %q is refused, and it is one the analysis is for", p)
 		}
 	}
-	for _, p := range []string{"!(a)b", "a~b", "^a", "<1-3>", "(#i)a", "(#s)a", "a(#e)", "(#c2)a", "a(#c1,2)", "[[:alpha:]]", `a\`, "[ab"} {
+	for _, p := range []string{
+		"!(a)b", "a~b", "^a", "<1-3>", "(#i)a", "(#c2)a", "a(#c1,2)", `a\`, "[ab",
+		"[[.a.]]", "[[=a=]]", "[[:alp]", "[a[b]",
+	} {
 		if _, ok := newReachSet(p, o); ok {
 			t.Errorf("pattern %q is read, and it is a construct the analysis has no reading of", p)
 		}

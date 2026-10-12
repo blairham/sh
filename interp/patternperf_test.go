@@ -185,3 +185,29 @@ func TestASubstitutionAsksTheMatcherOnlyWhereAMatchCouldBe(t *testing.T) {
 		t.Errorf("the theme's substitution asked the matcher %d questions for nine matches", n)
 	}
 }
+
+// trimSubject is a line of words with the white space a trim is written for
+// at both ends, and runs of it inside that the trim must leave alone.
+var trimSubject = "  \t" + strings.Repeat("git  commit -m fix ", 100) + " \t "
+
+// The trim F-Sy-H runs over every line it reads and every region it paints:
+// `${x//((#s)[[:space:]]##|[[:space:]]##(#e))}`. Before #6423 the analysis
+// that rules spans out refused both the anchors and the class, so the
+// substitution asked the matcher about every span from every position of the
+// value: 6,030,131 questions on this 1.9KB line, half a second where zsh
+// 5.9.2 takes 0.3 ms.
+func TestATrimSubstitutionAsksTheMatcherOnlyAtTheEnds(t *testing.T) {
+	const pattern = "((#s)[[:space:]]##|[[:space:]]##(#e))"
+	e := &syntax.ParamExpr{All: true}
+	o := benchOpts(t, pattern, trimSubject)
+	got := replace(trimSubject, pattern, e, o, armOrder{}, benchDeclined,
+		func(matchReport, string) string { return "" })
+	if want := strings.TrimSpace(trimSubject); got != want {
+		t.Fatalf("the trim gave %q, want %q", got, want)
+	}
+	// Only the two runs at the ends can match: 25 on the change that set
+	// this, and a margin for the matcher's own steps to move inside.
+	if n := o.where.asked; n > 200 {
+		t.Errorf("the trim asked the matcher %d questions over %d bytes", n, len(trimSubject))
+	}
+}

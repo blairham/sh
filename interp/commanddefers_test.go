@@ -41,6 +41,7 @@ func TestEveryCommandsDoorDefersOnlyWhatTheCompilerInlines(t *testing.T) {
 		"commandLeavingItsHeaderLine": true,
 		"dispatchHoldingAJobSlot":     true,
 		"underRuntime":                true,
+		"simple":                      true,
 	}
 	seen := map[string]bool{}
 	fset := token.NewFileSet()

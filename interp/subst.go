@@ -380,7 +380,10 @@ func (r *Runner) currentShellSubst(ctx context.Context, f *syntax.File, base int
 	if r.ask(r.sem().CurrentShellSubstitutionBodyIsAScope,
 		"a `${ … ;}` body being a variable scope of its own") {
 		sc := r.pushScope(false)
-		closeScope = func() { r.popScope(sc) }
+		closeScope = func() {
+			r.popScope(sc)
+			r.spares.releaseScope(sc)
+		}
 	}
 	// The body was parsed on its own, so its lines count from one; the script
 	// it was written in did not. **The offset readSubstBody worked out**, which

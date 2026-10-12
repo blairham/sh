@@ -27,6 +27,34 @@ type scopeSpares struct {
 	// names is the list a return gathers the names to put back into. See
 	// Runner.popScope, which takes it for the length of one unwind.
 	names []string
+	// scopes are closed scopes themselves, emptied: a function call opens
+	// one, so keeping them makes a call that declares nothing allocate
+	// nothing for its scope. Released by whoever pushed the scope, once it
+	// has read the last thing it needs off it — callFuncInPlace reads the
+	// trap record after the unwind.
+	scopes []*scope
+}
+
+// takeScope is an empty scope, a kept one where there is one.
+func (s *scopeSpares) takeScope() *scope {
+	if n := len(s.scopes); n > 0 {
+		sc := s.scopes[n-1]
+		s.scopes[n-1] = nil
+		s.scopes = s.scopes[:n-1]
+		return sc
+	}
+	return &scope{}
+}
+
+// releaseScope empties a closed scope and keeps it for the next call, with
+// the room its return hooks had: nearly every call registers one.
+func (s *scopeSpares) releaseScope(sc *scope) {
+	hooks := sc.onReturn
+	clear(hooks)
+	*sc = scope{onReturn: hooks[:0]}
+	if len(s.scopes) < maxScopeSpares {
+		s.scopes = append(s.scopes, sc)
+	}
 }
 
 // maxScopeSpares bounds each list. A call stack deeper than this holds more

@@ -184,18 +184,7 @@ func (r *Runner) ordinaryScalarName(name string) bool {
 	if _, ok := r.nameref[name]; ok {
 		return false
 	}
-	if _, ok := r.producersLookup(name); ok {
-		return false
-	}
-	if _, ok := r.arraysLookup(name); ok {
-		return false
-	}
-	if _, ok := r.arrayProducersLookup(name); ok {
-		return false
-	}
-	if _, ok := r.assocsLookup(name); ok {
-		return false
-	}
-	_, ok := r.assocProducersLookup(name)
-	return !ok
+	// No array, table or producer of any kind: the cell's slots other than
+	// the stored scalar are all empty, which is one lookup where it was six.
+	return !r.cellHolds(name, slotArray|slotAssoc|slotProducer|slotArrayProducer|slotAssocProducer)
 }

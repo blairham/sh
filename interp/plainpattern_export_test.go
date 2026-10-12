@@ -19,6 +19,13 @@ func SetPlainParamShortcutForTest(on bool) (was bool) {
 	return was
 }
 
+// SetStoredScalarShortcutForTest turns the store's one-lookup read on or off
+// and reports what it was.
+func SetStoredScalarShortcutForTest(on bool) (was bool) {
+	was, storedScalarShortcut = storedScalarShortcut, on
+	return was
+}
+
 // PlainParamWordForTest is plainParamWord, for a test that has to show the
 // shortcut is reached at all under a dialect's own runner.
 func PlainParamWordForTest(r *Runner, w *syntax.Word) (string, bool) {

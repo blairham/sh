@@ -13997,8 +13997,8 @@ func (r *Runner) producerEndedByUnset(name string) bool {
 // `region_highlight` (#5961) — answers Semantics.AssignmentRestoresAnUnset-
 // ProducedParameter yes and is untouched.
 func (r *Runner) endProducerUnsetEnded(name string) {
-	_, scalar := r.producersLookup(name)
-	_, array := r.arrayProducersLookup(name)
+	has := r.slotsOf(name)
+	scalar, array := has&slotProducer != 0, has&slotArrayProducer != 0
 	if !scalar && !array {
 		return
 	}
@@ -14168,6 +14168,16 @@ func (r *Runner) bareReadSubscript(name string) string {
 // storedValue is varValue with the discipline hooks left off: what the
 // tables, the producers and the environment say the name holds.
 func (r *Runner) storedValue(name string, folded bool) (string, bool) {
+	if v, ok := r.storedScalarOnly(name); ok && storedScalarShortcut {
+		// The name's cell holds a stored scalar and nothing else, and nothing
+		// in front of the store answers for it — which is every read of an
+		// ordinary variable. One lookup, where the chain below asks about a
+		// dozen tables in turn to arrive at the same cell (#6353).
+		if !folded {
+			return v, true
+		}
+		return r.readAttributeFolded(name, v), true
+	}
 	// Which name a bare word means, where a `namespace NAME { … }` body is
 	// running or where the name is one of a namespace's members. Ahead of the
 	// reference walk below, because this decides which *cell* the written name

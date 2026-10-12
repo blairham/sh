@@ -894,9 +894,9 @@ func (r *Runner) scalarOverCompound(name, value string, form assignForm) bool {
 	if form == assignedAsTheCompoundView {
 		return false
 	}
-	_, isArray := r.arraysLookup(name)
-	_, isTable := r.assocsLookup(name)
-	if _, produced := r.assocProducersLookup(name); produced && !r.removed[name] {
+	has := r.slotsOf(name)
+	isArray, isTable := has&slotArray != 0, has&slotAssoc != 0
+	if produced := has&slotAssocProducer != 0; produced && !r.removed[name] {
 		// A **produced** table — one a module or the shell itself answers
 		// for, rather than one a script stored — and it is not the stored
 		// table's row with a different subject: see

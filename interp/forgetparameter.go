@@ -22,7 +22,7 @@ func (r *Runner) ForgetParameter(name string) {
 	for _, m := range []map[string]bool{
 		r.exported, r.readonly, r.integer, r.shellOwn, r.notShellOwn, r.scopeFixed,
 		r.deferredParams, r.removed, r.removedShellOwn, r.unsetRefused,
-		r.endedProducers, r.dynamicAssocEmptied, r.readonlyByDeclaration,
+		r.endedProducers, r.dynamicAssocEmptied, r.dynamicAssocSetUnbuilt, r.readonlyByDeclaration,
 	} {
 		delete(m, name)
 	}

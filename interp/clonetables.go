@@ -327,6 +327,7 @@ func (c *Runner) ownTables(r *Runner) {
 	// through: a subshell that owned the writer while sharing this would
 	// decide by the parent's table which of its own writes clear first.
 	c.dynamicAssocEmptied = maps.Clone(r.dynamicAssocEmptied)
+	c.dynamicAssocSetUnbuilt = maps.Clone(r.dynamicAssocSetUnbuilt)
 	// And the key order, which travels with the producer for the same reason
 	// again: a subshell that registered a table of its own while sharing this
 	// would read its own keys in whatever order the parent had stated for a

@@ -1156,6 +1156,11 @@ type Runner struct {
 	// See SetDynamicAssocEmptiedByReplacement.
 	dynamicAssocEmptied map[string]bool
 
+	// dynamicAssocSetUnbuilt names the produced associations whose `${+name}`
+	// is answered without running the producer, because building the table
+	// has no effect a script can see. See SetDynamicAssocSetWithoutBuilding.
+	dynamicAssocSetUnbuilt map[string]bool
+
 	// dynamicAssocKeyOrder is the order a produced association's keys are
 	// read in, where sorted is what every other table answers. See
 	// SetDynamicAssocKeyOrder.
@@ -5599,6 +5604,10 @@ type Runner struct {
 	// restored by the closure that set it rather than cleared, because a
 	// set-ness test can be written inside one — `${x+${y+S}}`.
 	askingTheStoreOnly bool
+	// askingWhetherSet is the name `${+name}` is reading whole, so a
+	// produced table of that name answers that it exists without being
+	// built. Empty when no such read is under way. See Runner.assocFor.
+	askingWhetherSet string
 	// The frame a script has pointed the shell's location parameters at, the
 	// depth it did so from, and a name written over the top of it. See
 	// interp/callstack.go, where all four are documented together.

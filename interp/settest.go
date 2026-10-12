@@ -44,3 +44,19 @@ func setTestResult(set bool) string {
 	}
 	return "0"
 }
+
+// askWhetherSet marks the read `${+name}` is about to make as a question
+// about the name alone, where it is one: a whole name, with no subscript, no
+// expansion standing in for the name and no indirection, so nothing the read
+// does looks inside a value. A subscript is a question about one element,
+// which a produced table answers by its own element reader or by its
+// contents, so that read is left as it was. The returned function puts the
+// mark back as it found it.
+func (r *Runner) askWhetherSet(e *syntax.ParamExpr) func() {
+	was := r.askingWhetherSet
+	r.askingWhetherSet = ""
+	if e.Index == nil && e.Inner == nil && !e.Indirect {
+		r.askingWhetherSet = e.Name
+	}
+	return func() { r.askingWhetherSet = was }
+}

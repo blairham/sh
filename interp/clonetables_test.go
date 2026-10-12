@@ -432,6 +432,7 @@ func seedTables(r *Runner) {
 		"seed": func(*Runner, string, string, bool) {},
 	}
 	r.dynamicAssocEmptied = map[string]bool{"seed": true}
+	r.dynamicAssocSetUnbuilt = map[string]bool{"seed": true}
 	r.dynamicAssocKeyOrder = map[string]func([]string) []string{
 		"seed": func(keys []string) []string { return keys },
 	}

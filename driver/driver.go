@@ -562,7 +562,7 @@ const usageStatus = 2
 func Main(sh Shell) int {
 	// The collector's threshold, which only a binary may set — see
 	// collector.go for the measurement and for why MainArgs does not.
-	tuneCollector()
+	TuneCollector()
 	return MainArgs(sh, os.Args)
 }
 

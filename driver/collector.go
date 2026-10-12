@@ -95,6 +95,19 @@ import (
 // what the tests run, in their own process, and a front end that retuned the
 // test binary's collector on every call would be doing the thing this comment
 // says not to do.
+//
+// It is exported for the one binary whose main is not [Main]. `cmd/sh` reads
+// flags of its own before it hands the rest to [MainArgs], and calling only
+// MainArgs left it at the runtime's defaults — GOGC=100 and no ceiling —
+// while every dialect binary ran at 1600 with one, until #6393. Measured
+// 2026-10-11, the #6352 sweep's rows through `sh -c`, twenty interleaved
+// pairs each against the binary before the change, load 3-4: 20000 appends
+// went 441 to 301ms (faster 20/20, 339 collections to 17), 20000 evals 112
+// to 97ms (20/20), and the arithmetic, printf and echo loops 1-3% faster,
+// for 18MB of RSS becoming 60-130MB — the dialect binaries' figures.
+// So a main that does not go through Main calls [TuneCollector] itself, as
+// the first thing it does, and its tests keep calling the function main
+// calls next, which tunes nothing.
 const startupGCPercent = 1600
 
 // # The ceiling beside the percent
@@ -167,8 +180,12 @@ const startupGCPercent = 1600
 // runtime caps the collector's share of the CPU rather than letting it spin.
 const runawayHeapLimit = 384 << 20
 
-// tuneCollector raises the collector's threshold for a shell binary and puts
+// TuneCollector raises the collector's threshold for a shell binary and puts
 // a ceiling beside it, unless the environment has already named them.
+//
+// It changes process-wide state, so only a binary's main may call it, and
+// [Main] already does: it is exported for a main that reads its own flags and
+// then calls [MainArgs], which deliberately does not.
 //
 // An explicit GOGC is left alone because the runtime has already applied it
 // and the person who set it knows more about their machine than this constant
@@ -180,7 +197,7 @@ const runawayHeapLimit = 384 << 20
 // percent: a person who chose their own, `off` most of all, has taken the
 // collector's policy into their own hands, and a ceiling they did not ask for
 // would turn `off` into "collect at 384MiB".
-func tuneCollector() {
+func TuneCollector() {
 	if _, named := os.LookupEnv("GOGC"); named {
 		return
 	}

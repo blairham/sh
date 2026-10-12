@@ -80,10 +80,13 @@ import "os"
 // ending when the outer one returns.
 func (c *Runner) ownDescriptors() func() {
 	var dups []*os.File
-	// Above the region this dialect publishes — see Runner.privateFdFloor.
-	// These copies are the shell's own and no script can name them, so the
-	// only thing their numbers can do is crowd out a number that *is*
-	// published.
+	var nums []int
+	// Inside the kernel's first table where there is room, and above the
+	// region this dialect publishes where there is not — see dupFile,
+	// privateCopyFloor and Runner.privateFdFloor. These copies are the
+	// shell's own and no script can name them, so the only thing their
+	// numbers could do is crowd out a number that *is* published, and
+	// registering them is what stops that.
 	floor := c.privateFdFloor()
 	// take is the copy itself, written once because the input and the table
 	// entries are the same question about two places a descriptor is kept.
@@ -97,11 +100,13 @@ func (c *Runner) ownDescriptors() func() {
 		if !ok {
 			return nil, false
 		}
-		d, err := dupFile(f, floor)
+		d, n, err := dupFile(f, floor)
 		if err != nil {
 			return nil, false
 		}
+		holdPrivateCopy(n)
 		dups = append(dups, d)
+		nums = append(nums, n)
 		return d, true
 	}
 	if d, ok := take(c.Stdin); ok {
@@ -116,7 +121,8 @@ func (c *Runner) ownDescriptors() func() {
 		return func() {}
 	}
 	return func() {
-		for _, d := range dups {
+		for i, d := range dups {
+			releasePrivateCopy(nums[i])
 			_ = d.Close()
 		}
 	}

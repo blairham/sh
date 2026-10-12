@@ -82,3 +82,8 @@ const (
 // as some other name's member, the gate that turns on the namespace walk every
 // local declaration otherwise skips. See compoundlocal.go.
 func (r *Runner) MemberNamesInUseForTest() bool { return r.memberNamesInUse }
+
+// PrivateCopyFloorForTest is where a concurrent body's private copies of the
+// table are asked for first, so a test can crowd the numbers below it and
+// make a substitution's wish reach a copy. See privateCopyFloor.
+const PrivateCopyFloorForTest = privateCopyFloor

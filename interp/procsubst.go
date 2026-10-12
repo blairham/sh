@@ -1680,6 +1680,10 @@ func shellEndFloor(want []int) int {
 // can do is crowd out one that *is* named. Asked through the wish list rather
 // than from a constant of its own, so that there is one answer to "what could
 // this dialect publish" and not two that can drift apart.
+//
+// It is where a copy goes only once privateCopyFloor's band inside the
+// kernel's first table is full. The floor is 64 or more in every dialect, and
+// taking it grew the table on the first pipeline of every run (#6402).
 func (r *Runner) privateFdFloor() int {
 	return shellEndFloor(r.substEndCandidates())
 }

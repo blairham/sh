@@ -44,6 +44,9 @@ type Runner struct {
 	cellSlab       []varCell
 	cellIndex      map[string]int32
 	cellIndexShare *tableShare
+	// specialNames says which names may have an entry in one of the tables
+	// the shell registers names in for a store to consult. See specialnames.go.
+	specialNames nameFilter
 	// cellCount is how many names hold each slot and liveCells how many hold
 	// any, so a count is not a walk; cellsRanging is how many walks of the
 	// slab are running, during which it is not compacted.

@@ -105,6 +105,8 @@ func (r *Runner) tieNames(t tie) {
 	}
 	r.tied[t.scalar] = t
 	r.tied[t.array] = t
+	r.specialNames.add(t.scalar)
+	r.specialNames.add(t.array)
 }
 
 // untie forgets a tie, from either half — which is what `unset` of a

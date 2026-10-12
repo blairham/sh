@@ -675,6 +675,7 @@ func (r *Runner) SetDynamicWriter(name string, write func(r *Runner, value strin
 		r.dynamicWriters = map[string]func(*Runner, string){}
 	}
 	r.dynamicWriters[name] = write
+	r.specialNames.add(name)
 }
 
 // SetAssignmentAction says what else happens when a script assigns to an
@@ -704,6 +705,7 @@ func (r *Runner) SetAssignmentAction(name string, act func(r *Runner, value stri
 		r.assignmentActions = map[string]func(*Runner, string){}
 	}
 	r.assignmentActions[name] = act
+	r.specialNames.add(name)
 }
 
 // SetAssignmentGuard says an assignment to name can be refused by what it
@@ -724,6 +726,7 @@ func (r *Runner) SetAssignmentGuard(name string, guard func(r *Runner, value str
 		r.assignmentGuards = map[string]func(*Runner, string) (string, bool){}
 	}
 	r.assignmentGuards[name] = guard
+	r.specialNames.add(name)
 }
 
 // SetUnsetAction says what else happens when `unset` takes an **ordinary**
@@ -813,6 +816,7 @@ func (r *Runner) SetDynamicArrayWriter(name string, write func(r *Runner, values
 		r.dynamicArrayWriters = map[string]func(*Runner, []string){}
 	}
 	r.dynamicArrayWriters[name] = write
+	r.specialNames.add(name)
 }
 
 // UnsetDynamic takes a produced parameter away again, writer and all.

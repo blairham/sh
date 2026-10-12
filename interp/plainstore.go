@@ -73,26 +73,34 @@ func (r *Runner) storesAPlainScalar(a *syntax.Assign) bool {
 	if c := r.cell(name); c != nil && (c.has&^slotScalar != 0 || c.attrs != 0) {
 		return false
 	}
-	if r.deferredParams[name] || r.disciplined[name] || r.compoundVariable[name] || r.capitalized[name] {
+	if r.disciplined[name] || r.compoundVariable[name] || r.capitalized[name] {
 		return false
 	}
-	if _, ok := r.kindFixed[name]; ok {
-		return false
-	}
-	if _, ok := r.assignmentGuards[name]; ok {
-		return false
-	}
-	if _, ok := r.assignmentActions[name]; ok {
-		return false
-	}
-	if _, ok := r.dynamicWriters[name]; ok {
-		return false
-	}
-	if _, ok := r.dynamicArrayWriters[name]; ok {
-		return false
-	}
-	if _, ok := r.tied[name]; ok {
-		return false
+	// The tables the shell registers its own names in. One test of a filter
+	// answers for all seven where the name was never registered, which is
+	// nearly every name a script writes.
+	if r.specialNames.mayHold(name) {
+		if r.deferredParams[name] {
+			return false
+		}
+		if _, ok := r.kindFixed[name]; ok {
+			return false
+		}
+		if _, ok := r.assignmentGuards[name]; ok {
+			return false
+		}
+		if _, ok := r.assignmentActions[name]; ok {
+			return false
+		}
+		if _, ok := r.dynamicWriters[name]; ok {
+			return false
+		}
+		if _, ok := r.dynamicArrayWriters[name]; ok {
+			return false
+		}
+		if _, ok := r.tied[name]; ok {
+			return false
+		}
 	}
 	if _, ok := r.floatPrecision[name]; ok {
 		return false

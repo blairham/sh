@@ -82,6 +82,7 @@ func (r *Runner) SetDeferredParameter(name string) {
 		r.deferredParams = map[string]bool{}
 	}
 	r.deferredParams[name] = true
+	r.specialNames.add(name)
 }
 
 // DeferredParameter reports whether a name is registered and still waiting

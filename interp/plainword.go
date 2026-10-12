@@ -178,7 +178,9 @@ func identifierName(name string) bool {
 // full road answers differently from a read of the store or reads with a side
 // effect that must not happen twice.
 func (r *Runner) ordinaryScalarName(name string) bool {
-	if name == r.pipeStatusName || r.deferredParams[name] {
+	// The filter answers for the deferred table, so a name never registered
+	// is not looked up in it; see specialnames.go.
+	if name == r.pipeStatusName || (r.specialNames.mayHold(name) && r.deferredParams[name]) {
 		return false
 	}
 	if _, ok := r.nameref[name]; ok {

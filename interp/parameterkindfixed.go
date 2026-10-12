@@ -94,6 +94,7 @@ func (r *Runner) MarkParameterKindFixed(name string, kinds ...ParameterKind) {
 		set |= kindBit(k)
 	}
 	r.kindFixed[name] = set
+	r.specialNames.add(name)
 }
 
 // kindLetterWritten is the kind this declaration's letters ask for, the sign

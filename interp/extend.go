@@ -1157,6 +1157,14 @@ func (r *Runner) defineParsed(name string, f *syntax.File, err error) bool {
 		// reaches it.
 		return false
 	}
+	r.defineDecl(name, decl)
+	return true
+}
+
+// defineDecl stores a declaration this seam built and does the bookkeeping
+// every definition through it gets. See defineParsed, and FunctionBatch,
+// which reaches it with a declaration it did not parse.
+func (r *Runner) defineDecl(name string, decl *syntax.FuncDecl) {
 	if r.funcs == nil {
 		r.funcs = map[string]*syntax.FuncDecl{}
 	}
@@ -1200,7 +1208,6 @@ func (r *Runner) defineParsed(name string, f *syntax.File, err error) bool {
 	if !r.redefinesTheRunningBody(name) {
 		r.bindTrapFunction(name, displaced)
 	}
-	return true
 }
 
 // definitionWrapper is the declaration the seam above puts in front of a body

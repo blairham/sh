@@ -307,8 +307,8 @@ func TestARealPluginTree(t *testing.T) {
 	}
 	n := 0
 	err := filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
-		if err != nil || d.IsDir() || !(strings.HasSuffix(path, ".zsh") || strings.HasSuffix(path, ".sh") ||
-			strings.HasSuffix(path, ".zsh-theme")) {
+		if err != nil || d.IsDir() || (!strings.HasSuffix(path, ".zsh") && !strings.HasSuffix(path, ".sh") &&
+			!strings.HasSuffix(path, ".zsh-theme")) {
 			return nil //nolint:nilerr // an unreadable entry is skipped; the walk goes on
 		}
 		b, err := os.ReadFile(path)

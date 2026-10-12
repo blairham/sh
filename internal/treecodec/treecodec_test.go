@@ -236,26 +236,31 @@ func sharedPaths(f *syntax.File) [][2]string {
 // uncacheable, which is safe and slow; this says so the day it happens.
 func TestTheRegistryNamesEveryNode(t *testing.T) {
 	fset := token.NewFileSet()
-	pkgs, err := parser.ParseDir(fset, filepath.Join("..", "..", "syntax"), func(fi os.FileInfo) bool {
-		return !strings.HasSuffix(fi.Name(), "_test.go")
-	}, 0)
+	paths, err := filepath.Glob(filepath.Join("..", "..", "syntax", "*.go"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	markers := map[string]bool{"exprNode": true, "commandNode": true, "condNode": true, "arithNode": true}
 	var want []string
-	for _, pkg := range pkgs {
-		for _, file := range pkg.Files {
-			for _, decl := range file.Decls {
-				fn, ok := decl.(*ast.FuncDecl)
-				if !ok || fn.Recv == nil || !markers[fn.Name.Name] {
-					continue
-				}
-				star, ok := fn.Recv.List[0].Type.(*ast.StarExpr)
-				if !ok {
-					continue
-				}
-				want = append(want, "*syntax."+star.X.(*ast.Ident).Name)
+	for _, path := range paths {
+		if strings.HasSuffix(path, "_test.go") {
+			continue
+		}
+		file, err := parser.ParseFile(fset, path, nil, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, decl := range file.Decls {
+			fn, ok := decl.(*ast.FuncDecl)
+			if !ok || fn.Recv == nil || !markers[fn.Name.Name] {
+				continue
+			}
+			star, ok := fn.Recv.List[0].Type.(*ast.StarExpr)
+			if !ok {
+				continue
+			}
+			if id, ok := star.X.(*ast.Ident); ok {
+				want = append(want, "*syntax."+id.Name)
 			}
 		}
 	}

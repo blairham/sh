@@ -585,7 +585,10 @@ func (c *Reader) recBufs() {
 	if c.enc != nil {
 		return
 	}
-	k := kits.Get().(*kit)
+	k, ok := kits.Get().(*kit)
+	if !ok {
+		k = &kit{enc: treecodec.NewEncoder("")}
+	}
 	c.kit, c.enc, c.scratch, c.rbuf = k, k.enc, k.scratch, k.rbuf
 	c.enc.SetSource(c.src)
 }

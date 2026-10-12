@@ -312,7 +312,11 @@ func (s *Store) Create(name string) (io.Writer, func(keep bool)) {
 	if err != nil {
 		return nil, nil
 	}
-	w := &entryWriter{f: f, buf: writers.Get().(*bufio.Writer)}
+	buf, ok := writers.Get().(*bufio.Writer)
+	if !ok {
+		buf = bufio.NewWriterSize(nil, 64<<10)
+	}
+	w := &entryWriter{f: f, buf: buf}
 	w.buf.Reset(f)
 	head := s.head()
 	w.sum = crc32.Update(0, castagnoli, head)

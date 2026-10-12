@@ -1,39 +1,46 @@
 // SPDX-FileCopyrightText: 2026 Blair Hamilton
 // SPDX-License-Identifier: Apache-2.0
 
-// Package parsecache is where the shell keeps the parse cache on disk: a
-// directory of files under `$XDG_CACHE_HOME/sh/parse`, or `~/.cache/sh/parse`
-// (#6424). It sits beside the completion dump from #6317 and keeps its rules:
-// the format is this shell's own, it is written only by this shell, and
-// nothing another shell keeps is read or written.
+// Package parsecache keeps the trees of the files a shell sources from one
+// run of it to the next (#6424): a Reader that answers a file's reads from
+// the cache while what the cache recorded still holds, and a Store that keeps
+// the entries on disk, under `$XDG_CACHE_HOME/sh/parse` or
+// `~/.cache/sh/parse`. It sits beside the completion dump from #6317 and
+// keeps its rules: the format is this shell's own, it is written only by
+// this shell, and nothing another shell keeps is read or written.
 //
-// The store knows nothing about trees. It keeps opaque entries by name and
-// guarantees three things about them: that an entry comes back exactly as it
-// was stored or not at all, that it was stored by this very build of the
-// shell, and that no reader ever sees half of one. Whether an entry may be
-// used is decided by interp, which checks it against the text and the shell
-// on every read; see interp.ParseCache.
+// Whether an entry may be used is the Reader's to decide, on every read,
+// against the text and the running shell; see Reader. The Store knows
+// nothing about trees. It keeps opaque entries by name and guarantees three
+// things about them: that an entry comes back exactly as it was stored or not
+// at all, that it was stored by this very build of the shell, and that no
+// reader ever sees half of one.
 //
 //   - Each entry is a file of its own, named by a hash of the build and the
 //     entry's name, so two builds never read each other's and one file is one
 //     entry.
-//   - A file is the entry framed by a magic, the build that wrote it, its
-//     length and a CRC-32C over all of it. A file that is short, damaged, or
-//     another build's is not handed back, and the next write replaces it.
-//   - A write goes to a file of this process's own, opened exclusively, and is
-//     renamed over the entry. Two shells writing one entry at once each rename
-//     a whole file, and the last rename wins.
+//   - A file is the entry framed by a magic and the build that wrote it in
+//     front, and its length and a CRC-32C over all of it behind. A file that
+//     is short, damaged, or another build's is not handed back, and the next
+//     write replaces it.
+//   - An entry is written as it is made into a file of this process's own,
+//     opened exclusively, and renamed over the entry once it is whole. Two
+//     shells writing one entry at once each rename a whole file, and the
+//     last rename wins.
 //   - The directory is made 0700 and every file 0600.
 //   - The directory is held under a size bound. Once per process, before its
 //     first write, the oldest entries are removed until the rest fit in three
 //     quarters of it. An entry that is read is touched now and then, so the
 //     oldest are the ones nobody reads.
+//   - A process records no more than the cache has saved it, beyond a small
+//     allowance; see DefaultBudget.
 //   - The cache's parent directory is never created: a home with no `~/.cache`
 //     gets no cache. That keeps a scratch home — a test's, a container's —
 //     exactly as the shell found it.
 package parsecache
 
 import (
+	"bufio"
 	"bytes"
 	"crypto/sha256"
 	"encoding/binary"
@@ -49,11 +56,32 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
 // DefaultLimit is the size the directory is held under.
 const DefaultLimit = 32 << 20
+
+// DefaultBudget is how much text a process may record into the cache before
+// the cache has saved it anything, as bytes of source.
+//
+// Recording a text costs its encoding on top of its parse — about a quarter
+// of a parse, measured — and the start that pays it is a start somebody is
+// waiting for. Unbounded, the first start after a change recorded the whole
+// of a real configuration's 1.2 MB and was about 10 ms slower to a usable
+// line than a shell with no cache. So a process starts with this much, and
+// every text it reads out of the cache rather than parsing earns it twice
+// that text's size more (see Credit): reading a kilobyte back saves two to
+// three times what recording one costs. A start therefore never spends on
+// the cache more than the cache saved it, beyond this, and a configuration
+// fills in a handful of starts — each recording more than the last, because
+// each reads more back.
+const DefaultBudget = 64 << 10
+
+// Credit is a text of size bytes read out of the cache rather than parsed,
+// which pays for recording twice as much. See DefaultBudget.
+func (s *Store) Credit(size int) { s.budget.Add(2 * int64(size)) }
 
 // Dir is where the cache lives for an environment: `$XDG_CACHE_HOME/sh/parse`,
 // or `$HOME/.cache/sh/parse` where XDG_CACHE_HOME is unset or not absolute —
@@ -108,15 +136,18 @@ type Store struct {
 	prepare sync.Once
 	ready   bool
 
-	mu      sync.Mutex
-	queue   []job
-	running bool
+	budget atomic.Int64
+
+	listed sync.Once
+	held   map[string]bool
 }
 
 // Open is the store in dir for the build named build. Nothing is touched on
 // disk until the first Load or Store.
-func Open(dir, build string, limit int64) *Store {
-	return &Store{dir: dir, build: build, limit: limit}
+func Open(dir, build string, limit, budget int64) *Store {
+	s := &Store{dir: dir, build: build, limit: limit}
+	s.budget.Store(budget)
+	return s
 }
 
 const (
@@ -138,9 +169,32 @@ func (s *Store) path(name string) string {
 	return filepath.Join(s.dir, hex.EncodeToString(h[:20]))
 }
 
+// mayHold reports whether the directory held a file of this name when the
+// process first looked, which it does once: a start reads a score of files,
+// and on the first start after a change most of them are not there — a
+// listing is one call where a failed open each was twenty. A file written
+// since is only ever this process's own, and its own readers do not look for
+// it again.
+func (s *Store) mayHold(file string) bool {
+	s.listed.Do(func() {
+		entries, err := os.ReadDir(s.dir)
+		if err != nil {
+			return
+		}
+		s.held = make(map[string]bool, len(entries))
+		for _, e := range entries {
+			s.held[e.Name()] = true
+		}
+	})
+	return s.held[file]
+}
+
 // Load is the entry stored under name, or nil.
 func (s *Store) Load(name string) []byte {
 	path := s.path(name)
+	if !s.mayHold(filepath.Base(path)) {
+		return nil
+	}
 	f, err := os.Open(path)
 	if err != nil {
 		return nil
@@ -165,109 +219,120 @@ func (s *Store) Load(name string) []byte {
 	return payload
 }
 
-func (s *Store) frame(payload []byte) []byte {
-	b := make([]byte, 0, len(magic)+1+len(s.build)+len(payload)+24)
+// head is the frame in front of an entry. The frame's tail — the entry's
+// length and a checksum over everything before it — follows the entry, so
+// that an entry can be written as it is made.
+func (s *Store) head() []byte {
+	b := make([]byte, 0, len(magic)+1+len(s.build)+binary.MaxVarintLen64)
 	b = append(b, magic...)
 	b = append(b, version)
 	b = binary.AppendUvarint(b, uint64(len(s.build)))
-	b = append(b, s.build...)
-	b = binary.AppendUvarint(b, uint64(len(payload)))
-	b = append(b, payload...)
-	return binary.LittleEndian.AppendUint32(b, crc32.Checksum(b, castagnoli))
+	return append(b, s.build...)
 }
 
 func (s *Store) unframe(b []byte) ([]byte, bool) {
-	if len(b) < len(magic)+1+4 {
+	const tail = 8 + 4
+	if len(b) < len(magic)+1+tail {
 		return nil, false
 	}
 	body, sum := b[:len(b)-4], binary.LittleEndian.Uint32(b[len(b)-4:])
 	if crc32.Checksum(body, castagnoli) != sum {
 		return nil, false
 	}
+	n := binary.LittleEndian.Uint64(body[len(body)-8:])
+	body = body[:len(body)-8]
 	if !bytes.HasPrefix(body, []byte(magic)) || body[len(magic)] != version {
 		return nil, false
 	}
 	body = body[len(magic)+1:]
-	n, k := binary.Uvarint(body)
-	if k <= 0 || n > uint64(len(body)-k) || string(body[k:k+int(n)]) != s.build {
+	k, w := binary.Uvarint(body)
+	if w <= 0 || k > uint64(len(body)-w) || string(body[w:w+int(k)]) != s.build {
 		return nil, false
 	}
-	body = body[k+int(n):]
-	n, k = binary.Uvarint(body)
-	if k <= 0 || n != uint64(len(body)-k) {
+	body = body[w+int(k):]
+	if n != uint64(len(body)) {
 		return nil, false
 	}
-	return body[k:], true
+	return body, true
 }
 
-// Store keeps data under name. A failure is silent: the cache is an
-// optimization, and a shell that cannot write one parses next time.
-//
-// The write happens on a goroutine of the store's own, in the order the
-// entries were stored, so the shell reading its startup files does not wait
-// on the disk. Wait is how a process that is about to end lets them land.
-func (s *Store) Store(name string, data []byte) {
-	pending.Add(1)
-	s.mu.Lock()
-	s.queue = append(s.queue, job{name, data})
-	start := !s.running
-	s.running = true
-	s.mu.Unlock()
-	if start {
-		go s.drain()
+// Create starts an entry under name, written as it is made into a file of
+// this process's own beside the entry and renamed over it by done(true).
+// Two shells writing one entry at once each write a whole file and rename
+// it, and the last rename wins; a reader never sees half of one. A failure
+// anywhere is silent: the cache is an optimization, and a shell that cannot
+// write one parses next time.
+func (s *Store) Create(name string, size int) (io.Writer, func(keep bool)) {
+	// What is left of this process's allowance, which a text may overdraw
+	// once but not start on when it is spent. See DefaultBudget.
+	if left := s.budget.Add(-int64(size)); left+int64(size) <= 0 {
+		return nil, nil
 	}
-}
-
-// Wait returns once every entry stored so far, by any store in the process,
-// has been written or given up on.
-func Wait() { pending.Wait() }
-
-var pending sync.WaitGroup
-
-type job struct {
-	name string
-	data []byte
-}
-
-func (s *Store) drain() {
-	for {
-		s.mu.Lock()
-		if len(s.queue) == 0 {
-			s.running = false
-			s.mu.Unlock()
-			return
-		}
-		j := s.queue[0]
-		s.queue = s.queue[1:]
-		s.mu.Unlock()
-		s.write(j.name, j.data)
-		pending.Done()
-	}
-}
-
-func (s *Store) write(name string, data []byte) {
 	s.prepare.Do(s.setUp)
 	if !s.ready {
-		return
+		return nil, nil
 	}
 	path := s.path(name)
-	// A name of this process's own, opened exclusively: two shells writing
-	// the same entry each write a whole file of their own and rename it.
-	tmp := fmt.Sprintf("%s.%d.%d.tmp", path, os.Getpid(), time.Now().UnixNano())
+	// The process, a count within it — a shell's subshells write from one
+	// process at once — and the time, so a name a dead process left is not
+	// one this process will pick.
+	tmp := fmt.Sprintf("%s.%d.%d.%d.tmp", path, os.Getpid(), tmpSeq.Add(1), time.Now().UnixNano())
 	f, err := os.OpenFile(tmp, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
 	if err != nil {
+		return nil, nil
+	}
+	w := &entryWriter{f: f, buf: writers.Get().(*bufio.Writer)}
+	w.buf.Reset(f)
+	head := s.head()
+	w.sum = crc32.Update(0, castagnoli, head)
+	_, w.err = w.buf.Write(head)
+	return w, func(keep bool) { w.finish(keep, tmp, path) }
+}
+
+var tmpSeq atomic.Int64
+
+// writers are the buffers entries are written through, kept between entries
+// so that a start writing twenty of them does not allocate twenty.
+var writers = sync.Pool{New: func() any { return bufio.NewWriterSize(nil, 64<<10) }}
+
+// entryWriter is one entry on its way to disk.
+type entryWriter struct {
+	f   *os.File
+	buf *bufio.Writer
+	sum uint32
+	n   uint64
+	err error
+}
+
+func (w *entryWriter) Write(p []byte) (int, error) {
+	if w.err != nil {
+		return 0, w.err
+	}
+	w.sum = crc32.Update(w.sum, castagnoli, p)
+	w.n += uint64(len(p))
+	n, err := w.buf.Write(p)
+	w.err = err
+	return n, err
+}
+
+func (w *entryWriter) finish(keep bool, tmp, path string) {
+	if keep && w.err == nil {
+		tail := binary.LittleEndian.AppendUint64(nil, w.n)
+		w.sum = crc32.Update(w.sum, castagnoli, tail)
+		tail = binary.LittleEndian.AppendUint32(tail, w.sum)
+		if _, err := w.buf.Write(tail); err == nil {
+			w.err = w.buf.Flush()
+		} else {
+			w.err = err
+		}
+	}
+	w.buf.Reset(nil)
+	writers.Put(w.buf)
+	err := w.f.Close()
+	if keep && w.err == nil && err == nil && os.Rename(tmp, path) == nil {
 		return
 	}
-	_, werr := f.Write(s.frame(data))
-	if cerr := f.Close(); werr == nil {
-		werr = cerr
-	}
-	if werr == nil {
-		werr = os.Rename(tmp, path)
-	}
-	if werr != nil {
-		_ = os.Remove(tmp)
-	}
+	_ = os.Remove(tmp)
 }
 
 // setUp makes the directory and holds it under the limit, once per process

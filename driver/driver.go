@@ -588,9 +588,6 @@ func Main(sh Shell) int {
 // argv includes argv[0]. An argv with nothing in it is treated as bare, since
 // a shell that cannot name itself still has to produce diagnostics.
 func MainArgs(sh Shell, argv []string) int {
-	// The parse cache writes its entries beside the shell rather than in
-	// its way; they land before the process ends. See parseCache.
-	defer parsecache.Wait()
 	sh = sh.withDefaults(argv)
 	if heldProcessGroup(argv) {
 		// Not a shell at all this time: a placeholder leading a process group
@@ -869,7 +866,7 @@ func (sh Shell) parseCache() interp.ParseCache {
 	if !ok {
 		return nil
 	}
-	return parsecache.Open(dir, parsecache.BuildIdentity(), parsecache.DefaultLimit)
+	return parsecache.Open(dir, parsecache.BuildIdentity(), parsecache.DefaultLimit, parsecache.DefaultBudget)
 }
 
 // lookupEnv reads one variable out of an environment, last assignment

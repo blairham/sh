@@ -61,6 +61,7 @@ import (
 	"hash/fnv"
 	"math/bits"
 	"reflect"
+	"slices"
 	"strings"
 	"sync"
 	"unsafe"
@@ -170,6 +171,9 @@ type plan struct {
 	// that are not leaves, which are all the counting passes visit.
 	leaf  bool
 	inner []field
+
+	// maskBytes is how many bytes a struct's mask of present fields takes.
+	maskBytes int
 }
 
 // field is one step of a struct: where the field sits from the start of the
@@ -178,6 +182,26 @@ type field struct {
 	name   string
 	offset uintptr
 	plan   *plan
+	// shared is a field whose pointer the parser may also have put in
+	// another field of the same tree; see sharedFields.
+	shared bool
+}
+
+// sharedFields are the places in a statement where the parser puts a node it
+// has put somewhere else in the same tree as well. A pointer read out of one
+// of them is written once and referred back to after, so the tree read back
+// shares it as the parsed one did; every other pointer in a statement is
+// reached once, and is written without being looked up anywhere.
+//
+// Found by walking every tree the repository's texts make, in every grammar,
+// and TestOnlyTheListedFieldsShare does that walk on every run: a field that
+// starts sharing fails it, naming the field to add here. A name that is no
+// longer a field fails the plan, and with it the cache.
+var sharedFields = map[string][]string{
+	// zsh's subscript flags: the argument of an (r) or (i) flag is the
+	// same word as the text of the end it searches for.
+	"syntax.SubscriptFlags": {"Arg"},
+	"syntax.SubscriptEnd":   {"Text"},
 }
 
 type codec struct {
@@ -210,6 +234,21 @@ func build() *codec {
 			c.interfaceWords(p)
 		}
 	}
+	for typ, names := range sharedFields {
+		for _, name := range names {
+			found := false
+			for _, p := range c.byID {
+				for _, f := range p.fields {
+					if p.t.String() == typ && f.name == name && f.shared && f.plan.op == opPointer {
+						found = true
+					}
+				}
+			}
+			if !found {
+				c.fail("a shared field %s.%s that is not a pointer field of the tree", typ, name)
+			}
+		}
+	}
 	for _, p := range c.byID {
 		p.leaf = c.isLeaf(p, map[*plan]bool{})
 	}
@@ -219,6 +258,7 @@ func build() *codec {
 				p.inner = append(p.inner, f)
 			}
 		}
+		p.maskBytes = (len(p.fields) + 7) / 8
 	}
 	c.layout = h.Sum64()
 	return c
@@ -306,7 +346,10 @@ func (c *codec) structFields(p *plan, t reflect.Type, base uintptr, h hasher) {
 			c.fail("the unexported field %s.%s", t, f.Name)
 			continue
 		}
-		p.fields = append(p.fields, field{name: f.Name, offset: base + f.Offset, plan: c.planFor(f.Type, h)})
+		p.fields = append(p.fields, field{
+			name: f.Name, offset: base + f.Offset, plan: c.planFor(f.Type, h),
+			shared: slices.Contains(sharedFields[t.String()], f.Name),
+		})
 	}
 }
 
@@ -386,13 +429,13 @@ type Encoder struct {
 	err    error
 
 	// side is every pointer the tree's side lists hold — File's fields
-	// other than Stmts — with the id it was written under, once it was.
-	// Sharing is confined to those lists: a span copied into Substitutions
-	// carries the same operand pointers as the word it came out of, and a
-	// CarriedHeredoc holds the very operators its command holds. The
-	// statements themselves share nothing, which
-	// TestTheStatementsShareNothing holds the parser to, so a pointer that is
-	// not in this set is reached once and needs no bookkeeping.
+	// other than Stmts — and every pointer read out of one of the
+	// sharedFields, with the id it was written under once it was. Sharing is
+	// confined to those: a span copied into Substitutions carries the same
+	// operand pointers as the word it came out of, a CarriedHeredoc holds the
+	// very operators its command holds, and the listed fields are the rest.
+	// TestOnlyTheListedFieldsShare holds the parser to it, so a pointer
+	// that is not in this set is reached once and needs no bookkeeping.
 	side map[ptrKey]int
 	tree []byte
 	// sideTypes is which plans the side set holds pointers of, so that a
@@ -411,12 +454,20 @@ type ptrKey struct {
 // NewEncoder starts an encoding of trees parsed from src.
 func NewEncoder(src string) *Encoder {
 	c := shared()
-	e := &Encoder{c: c, src: src, err: c.err}
+	e := &Encoder{c: c, err: c.err}
+	e.SetSource(src)
+	return e
+}
+
+// SetSource readies the encoder for trees parsed from another text, keeping
+// its buffers — so that one encoder can serve file after file.
+func (e *Encoder) SetSource(src string) {
+	e.src, e.lo, e.hi = src, 0, 0
+	e.buf = e.buf[:0]
 	if len(src) > 0 {
 		e.lo = uintptr(unsafe.Pointer(unsafe.StringData(src)))
 		e.hi = e.lo + uintptr(len(src))
 	}
-	return e
 }
 
 // Bytes is everything encoded since the encoder was made or last reset. It
@@ -430,20 +481,37 @@ func (e *Encoder) Reset() { e.buf = e.buf[:0] }
 // Err is the first refusal, or nil.
 func (e *Encoder) Err() error { return e.err }
 
-// File appends one tree.
+// File appends one tree to the encoder's own buffer.
 func (e *Encoder) File(f *syntax.File) error {
-	return e.root(e.c.file, unsafe.Pointer(&f))
+	var err error
+	e.buf, err = e.AppendFile(e.buf, f)
+	return err
 }
 
-// Remarks appends a list of the parser's remarks, which are kept beside a
-// tree and walked the same way, so a field added to a remark is carried too.
+// Remarks appends a list of the parser's remarks to the encoder's own
+// buffer. They are kept beside a tree and walked the same way, so a field
+// added to a remark is carried too.
 func (e *Encoder) Remarks(rs []syntax.Remark) error {
-	return e.root(e.c.remarks, unsafe.Pointer(&rs))
+	var err error
+	e.buf, err = e.AppendRemarks(e.buf, rs)
+	return err
 }
 
-func (e *Encoder) root(p *plan, at unsafe.Pointer) error {
+// AppendFile appends one tree to dst, for a caller building a larger buffer
+// of its own, and returns dst unchanged with the refusal when the tree cannot
+// be carried.
+func (e *Encoder) AppendFile(dst []byte, f *syntax.File) ([]byte, error) {
+	return e.root(dst, e.c.file, unsafe.Pointer(&f))
+}
+
+// AppendRemarks is AppendFile for a list of remarks.
+func (e *Encoder) AppendRemarks(dst []byte, rs []syntax.Remark) ([]byte, error) {
+	return e.root(dst, e.c.remarks, unsafe.Pointer(&rs))
+}
+
+func (e *Encoder) root(dst []byte, p *plan, at unsafe.Pointer) ([]byte, error) {
 	if e.err != nil {
-		return e.err
+		return dst, e.err
 	}
 	if e.counts == nil {
 		e.counts = make([]int, len(e.c.byID))
@@ -460,8 +528,10 @@ func (e *Encoder) root(p *plan, at unsafe.Pointer) error {
 	e.buf = e.tree[:0]
 	e.write(p, at)
 	e.tree, e.buf = e.buf, held
-	if e.err != nil {
-		return e.err
+	if err := e.err; err != nil {
+		// A refusal belongs to this tree and not to the encoder.
+		e.err = nil
+		return dst, err
 	}
 	n := 0
 	for _, k := range e.counts {
@@ -471,15 +541,14 @@ func (e *Encoder) root(p *plan, at unsafe.Pointer) error {
 	}
 	// What to allocate, ahead of the tree, so the decoder can take the
 	// whole tree's nodes of one type out of one block.
-	e.buf = binary.AppendUvarint(e.buf, uint64(n))
+	dst = binary.AppendUvarint(dst, uint64(n))
 	for id, k := range e.counts {
 		if k > 0 {
-			e.buf = binary.AppendUvarint(e.buf, uint64(id))
-			e.buf = binary.AppendUvarint(e.buf, uint64(k))
+			dst = binary.AppendUvarint(dst, uint64(id))
+			dst = binary.AppendUvarint(dst, uint64(k))
 		}
 	}
-	e.buf = append(e.buf, e.tree...)
-	return nil
+	return append(dst, e.tree...), nil
 }
 
 // sideLists collects the pointers File's side lists hold. Each is written
@@ -563,6 +632,21 @@ const (
 // bytes — an empty string with a pointer — is merely written out, which the
 // reader turns back into the same zero value.
 func isZero(at unsafe.Pointer, size uintptr) bool {
+	// The sizes a tree's fields come in, answered without a loop.
+	switch size {
+	case 1:
+		return *(*uint8)(at) == 0
+	case 4:
+		return *(*uint32)(at) == 0
+	case 8:
+		return *(*uint64)(at) == 0
+	case 12:
+		return *(*uint64)(at) == 0 && *(*uint32)(unsafe.Add(at, 8)) == 0
+	case 16:
+		return *(*uint64)(at)|*(*uint64)(unsafe.Add(at, 8)) == 0
+	case 24:
+		return *(*uint64)(at)|*(*uint64)(unsafe.Add(at, 8))|*(*uint64)(unsafe.Add(at, 16)) == 0
+	}
 	for size >= 8 {
 		if *(*uint64)(at) != 0 {
 			return false
@@ -578,6 +662,23 @@ func isZero(at unsafe.Pointer, size uintptr) bool {
 		size--
 	}
 	return true
+}
+
+// uvarint and varint are binary's, with the one-byte case — nearly every
+// number in a tree — taken without a call.
+func uvarint(b []byte, x uint64) []byte {
+	if x < 0x80 {
+		return append(b, byte(x))
+	}
+	return binary.AppendUvarint(b, x)
+}
+
+func varint(b []byte, x int64) []byte {
+	ux := uint64(x) << 1
+	if x < 0 {
+		ux = ^ux
+	}
+	return uvarint(b, ux)
 }
 
 func (e *Encoder) write(p *plan, at unsafe.Pointer) {
@@ -602,7 +703,7 @@ func (e *Encoder) write(p *plan, at unsafe.Pointer) {
 		case 8:
 			x = *(*int64)(at)
 		}
-		e.buf = binary.AppendVarint(e.buf, x)
+		e.buf = varint(e.buf, x)
 	case opUint:
 		var x uint64
 		switch p.size {
@@ -615,7 +716,7 @@ func (e *Encoder) write(p *plan, at unsafe.Pointer) {
 		case 8:
 			x = *(*uint64)(at)
 		}
-		e.buf = binary.AppendUvarint(e.buf, x)
+		e.buf = uvarint(e.buf, x)
 	case opString:
 		s := *(*string)(at)
 		if len(s) == 0 {
@@ -625,42 +726,47 @@ func (e *Encoder) write(p *plan, at unsafe.Pointer) {
 		ptr := uintptr(unsafe.Pointer(unsafe.StringData(s)))
 		if ptr >= e.lo && ptr+uintptr(len(s)) <= e.hi {
 			e.buf = append(e.buf, strInSource)
-			e.buf = binary.AppendUvarint(e.buf, uint64(len(s)))
-			e.buf = binary.AppendUvarint(e.buf, uint64(ptr-e.lo))
+			e.buf = uvarint(e.buf, uint64(len(s)))
+			e.buf = uvarint(e.buf, uint64(ptr-e.lo))
 			return
 		}
 		e.buf = append(e.buf, strInline)
-		e.buf = binary.AppendUvarint(e.buf, uint64(len(s)))
+		e.buf = uvarint(e.buf, uint64(len(s)))
 		e.buf = append(e.buf, s...)
 	case opStruct:
-		// Which fields are not their zero value, sixty-four to a word, and
-		// then those fields alone: most of a node's fields are zero — a
-		// parameter expansion has fifty-two of them — and a field that is
-		// not written is a field the reader does not touch, since the
-		// memory it reads into is already zero. A true bool is its bit and
-		// nothing more.
-		for lo := 0; lo < len(p.fields); lo += 64 {
-			hi := min(lo+64, len(p.fields))
-			var mask uint64
-			for i := lo; i < hi; i++ {
-				f := &p.fields[i]
-				if !isZero(unsafe.Add(at, f.offset), f.plan.size) {
-					mask |= 1 << (i - lo)
-				}
+		// Which fields are not their zero value, a bit each in as many
+		// bytes as the struct needs, and then those fields alone: most of a
+		// node's fields are zero — a parameter expansion has fifty-two of
+		// them — and a field that is not written is a field the reader does
+		// not touch, since the memory it reads into is already zero. A true
+		// bool is its bit and nothing more.
+		//
+		// The mask's bytes are put down first and filled in as the fields
+		// are written, so the fields are looked at once rather than once to
+		// make the mask and again to write it.
+		mask := len(e.buf)
+		for range p.maskBytes {
+			e.buf = append(e.buf, 0)
+		}
+		for i := range p.fields {
+			f := &p.fields[i]
+			fa := unsafe.Add(at, f.offset)
+			if isZero(fa, f.plan.size) {
+				continue
 			}
-			e.buf = binary.AppendUvarint(e.buf, mask)
-			for m := mask; m != 0; m &= m - 1 {
-				f := &p.fields[lo+bits.TrailingZeros64(m)]
-				if f.plan.op != opBool {
-					e.write(f.plan, unsafe.Add(at, f.offset))
-				}
+			e.buf[mask+i>>3] |= 1 << (i & 7)
+			switch {
+			case f.shared:
+				e.writeShared(f.plan, fa)
+			case f.plan.op != opBool:
+				e.write(f.plan, fa)
 			}
 		}
 	case opPos:
 		pos := (*syntax.Pos)(at)
-		e.buf = binary.AppendVarint(e.buf, int64(pos.Offset))
-		e.buf = binary.AppendVarint(e.buf, int64(pos.Line))
-		e.buf = binary.AppendVarint(e.buf, int64(pos.Col))
+		e.buf = varint(e.buf, int64(pos.Offset))
+		e.buf = varint(e.buf, int64(pos.Line))
+		e.buf = varint(e.buf, int64(pos.Col))
 	case opPointer:
 		ptr := *(*unsafe.Pointer)(at)
 		if ptr == nil {
@@ -671,7 +777,7 @@ func (e *Encoder) write(p *plan, at unsafe.Pointer) {
 			k := ptrKey{uintptr(ptr), p.id}
 			if id, ok := e.side[k]; ok {
 				if id > 0 {
-					e.buf = binary.AppendUvarint(e.buf, uint64(tagRef+id-1))
+					e.buf = uvarint(e.buf, uint64(tagRef+id-1))
 					return
 				}
 				e.next++
@@ -691,7 +797,7 @@ func (e *Encoder) write(p *plan, at unsafe.Pointer) {
 			e.buf = append(e.buf, 0)
 			return
 		}
-		e.buf = binary.AppendUvarint(e.buf, uint64(h.len)+1)
+		e.buf = uvarint(e.buf, uint64(h.len)+1)
 		e.counts[p.id] += h.len
 		for i := range uintptr(h.len) {
 			e.write(p.elem, unsafe.Add(h.data, i*p.elem.size))
@@ -707,7 +813,7 @@ func (e *Encoder) write(p *plan, at unsafe.Pointer) {
 			e.err = fmt.Errorf("%w: an interface holds a type that is not in the registry", ErrUncacheable)
 			return
 		}
-		e.buf = binary.AppendUvarint(e.buf, uint64(tag)+1)
+		e.buf = uvarint(e.buf, uint64(tag)+1)
 		e.write(e.c.types[tag], unsafe.Pointer(&words[1]))
 	case opMustBeNil:
 		if *(*unsafe.Pointer)(at) != nil {
@@ -716,6 +822,29 @@ func (e *Encoder) write(p *plan, at unsafe.Pointer) {
 		}
 		e.buf = append(e.buf, 0)
 	}
+}
+
+// writeShared writes a pointer out of one of the sharedFields: the first
+// time as one to remember, and after that as a reference back to it.
+func (e *Encoder) writeShared(p *plan, at unsafe.Pointer) {
+	ptr := *(*unsafe.Pointer)(at)
+	k := ptrKey{uintptr(ptr), p.id}
+	if id, ok := e.side[k]; ok && id > 0 {
+		e.buf = uvarint(e.buf, uint64(tagRef+id-1))
+		return
+	}
+	if e.side == nil {
+		e.side = map[ptrKey]int{}
+	}
+	if e.sideTypes == nil {
+		e.sideTypes = make([]bool, len(e.c.byID))
+	}
+	e.sideTypes[p.id] = true
+	e.next++
+	e.side[k] = e.next
+	e.counts[p.id]++
+	e.buf = append(e.buf, tagNewKept)
+	e.write(p.elem, ptr)
 }
 
 // Decoder reads trees back in the order they were written.
@@ -742,6 +871,13 @@ type slab struct {
 func NewDecoder(data []byte, src string) *Decoder {
 	c := shared()
 	return &Decoder{c: c, data: data, src: src, err: c.err, slab: make([]slab, len(c.byID))}
+}
+
+// Reset points the decoder at new data from the same source, keeping what
+// it had allocated for itself: a file read a line at a time is hundreds of
+// small trees, and a decoder each would be hundreds of the same tables.
+func (d *Decoder) Reset(data []byte) {
+	d.data, d.off, d.err = data, 0, d.c.err
 }
 
 // Offset is how far into the data the decoder has read.
@@ -891,9 +1027,11 @@ func (d *Decoder) read(p *plan, at unsafe.Pointer) {
 			panic("bad string tag")
 		}
 	case opStruct:
-		for lo := 0; lo < len(p.fields); lo += 64 {
-			for mask := d.uvarint(); mask != 0; mask &= mask - 1 {
-				f := &p.fields[lo+bits.TrailingZeros64(mask)]
+		masks := d.data[d.off : d.off+p.maskBytes]
+		d.off += p.maskBytes
+		for j, m := range masks {
+			for ; m != 0; m &= m - 1 {
+				f := &p.fields[j<<3+bits.TrailingZeros8(m)]
 				if f.plan.op == opBool {
 					*(*bool)(unsafe.Add(at, f.offset)) = true
 					continue

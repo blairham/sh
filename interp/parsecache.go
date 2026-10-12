@@ -4,6 +4,7 @@
 package interp
 
 import (
+	"io"
 	"maps"
 	"path/filepath"
 	"strings"
@@ -26,16 +27,19 @@ import (
 // front end's to make. driver fills it in.
 //
 // What a store holds is opaque to it. Everything that decides whether a
-// stored tree may be used is checked here, on every read — the text it was
-// parsed from, by its hash; the grammar it was read in; each alias and each
-// locale question the parser asked — so a store that hands back the wrong
-// bytes costs a parse and never a wrong tree.
+// stored tree may be used is checked on every read by the reader that stands
+// in for the parser (internal/parsecache) — the text it was parsed from, by
+// its hash; the grammar it was read in; the alias tables and each locale
+// question the parser asked — so a store that hands back stale bytes costs a
+// parse and never a wrong tree.
 type ParseCache interface {
-	// Load returns what was last stored under name, or nil.
+	// Load returns exactly what was last stored under name, or nil.
 	Load(name string) []byte
-	// Store keeps data under name, replacing whatever was there. It may
-	// decline without saying so.
-	Store(name string, data []byte)
+	// Create starts a new entry under name, written as it is made, for a
+	// text of size bytes. done(true) puts it in place of whatever was there
+	// and done(false) throws it away; a nil w is a cache that will not take
+	// one now.
+	Create(name string, size int) (w io.Writer, done func(keep bool))
 }
 
 // textReader is what reads a file a line at a time, or whole: a
@@ -105,7 +109,6 @@ func (a parseAsker) Alias(kind parsecache.AliasKind, name string) (string, bool)
 // reads a thousand lines between two `alias` commands works it out once.
 func (a parseAsker) AliasTable(kind parsecache.AliasKind) uint64 {
 	r := a.r
-
 	if !r.aliasExpansion {
 		return aliasSumOff
 	}

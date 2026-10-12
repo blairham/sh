@@ -9,6 +9,9 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"errors"
+	"io"
+	"sync"
+	"sync/atomic"
 	"unsafe"
 
 	"github.com/blairham/sh/internal/treecodec"
@@ -19,11 +22,13 @@ import (
 // with the same two methods. interp.ParseCache is the same interface, and is
 // what a runner hands in.
 type Cache interface {
-	// Load returns what was last stored under name, or nil.
+	// Load returns exactly what was last stored under name, or nil.
 	Load(name string) []byte
-	// Store keeps data under name, replacing whatever was there. It may
-	// decline without saying so.
-	Store(name string, data []byte)
+	// Create starts a new entry under name, to be written as it is made, for
+	// a text of size bytes. done(true) puts it in place of whatever was
+	// there, and done(false) throws it away; a nil w is a cache that will
+	// not take one now.
+	Create(name string, size int) (w io.Writer, done func(keep bool))
 }
 
 // AliasKind is which of the three alias tables a parser asks.
@@ -68,6 +73,12 @@ const MinText = 4096
 func NewReader(cache Cache, path, src string, d syntax.Dialect, sh Shell) *Reader {
 	return &Reader{sh: sh, cache: cache, path: path, src: src, d0: d, cur: d}
 }
+
+// Served and Recorded count, for this process, the reads a Reader answered
+// from the cache and the reads it recorded into it. They exist for the tests
+// and instruments that have to tell a tree the cache handed out from one the
+// parser made — which no output can, by design.
+var Served, Recorded atomic.Int64
 
 // The modes an entry is written in, which are two different sequences of
 // reads of the same text and are cached apart.
@@ -117,6 +128,7 @@ type Reader struct {
 	mode    byte
 	name    string
 	sum     [32]byte
+	summed  bool
 
 	// cur is the dialect the next read is in, with the shell's own function
 	// answers; set says SetDialect was called since the last read.
@@ -141,23 +153,34 @@ type Reader struct {
 	// rem is the remarks the served reads made, in order: what a parser
 	// that had read them would hold.
 	rem []syntax.Remark
+	kit *kit
 	enc *treecodec.Encoder
+	dec *treecodec.Decoder
 	// snaps holds the alias tables as they stood when served reads were
 	// checked, by fingerprint, for the walk a fallback makes.
 	snaps map[snapKey]func(string) (string, bool)
 
-	// What the next entry is made of.
-	chunks   [][]byte
+	// servedRaw holds the stored reads handed out, as the entry's bytes; w
+	// is the next entry, written out a read at a time once a read goes live,
+	// and done what puts it in place. scratch is where one read is put
+	// together on its way out.
+	servedRaw [][]byte
+	w         io.Writer
+	done      func(keep bool)
+	wrote     int
+	scratch   []byte
+	rbuf      []byte
+
 	dirty    bool
 	stopped  bool // a read the entry cannot hold: record no more
 	failed   bool // and that read was a failure: mark the text as one
 	finished bool // the whole-text read or the last line has been handed out
+	plain    bool // the parser asks the shell directly: nothing is being kept
 }
 
 // begin loads the entry for this text in mode, on the first read.
 func (c *Reader) begin(mode byte) {
 	c.started, c.mode = true, mode
-	c.sum = sha256.Sum256(unsafe.Slice(unsafe.StringData(c.src), len(c.src)))
 	fp, ok := treecodec.DialectFingerprint(&c.d0)
 	if !ok {
 		c.stopped = true
@@ -177,8 +200,12 @@ func (c *Reader) begin(mode byte) {
 	h.Write(b)
 	h.Write([]byte(c.path))
 	c.name = hex.EncodeToString(h.Sum(nil)[:20])
-	e, err := decodeEntry(c.cache.Load(c.name))
-	if err != nil || e.mode != mode || e.sum != c.sum || e.dialect != fp {
+	data := c.cache.Load(c.name)
+	if data == nil {
+		return
+	}
+	e, err := decodeEntry(data)
+	if err != nil || e.mode != mode || e.dialect != fp || e.sum != c.textSum() {
 		return
 	}
 	if e.failed {
@@ -188,6 +215,15 @@ func (c *Reader) begin(mode byte) {
 		return
 	}
 	c.old = e
+}
+
+// textSum is the SHA-256 of the text, worked out the first time it is
+// wanted: a text with no entry and nothing to record never needs it.
+func (c *Reader) textSum() [32]byte {
+	if !c.summed {
+		c.sum, c.summed = sha256.Sum256(unsafe.Slice(unsafe.StringData(c.src), len(c.src))), true
+	}
+	return c.sum
 }
 
 // SetDialect is the shell replacing its grammar between two reads.
@@ -287,14 +323,14 @@ func (c *Reader) replay(i int, set bool) (*syntax.File, bool) {
 	}
 	var made []syntax.Remark
 	if len(ch.remarks) > 0 {
-		made, err = treecodec.NewDecoder(ch.remarks, c.src).Remarks()
+		made, err = c.decoder(ch.remarks).Remarks()
 		if err != nil {
 			return nil, false
 		}
 	}
 	var f *syntax.File
 	if !ch.end {
-		f, err = treecodec.NewDecoder(ch.tree, c.src).File()
+		f, err = c.decoder(ch.tree).File()
 		if err != nil {
 			return nil, false
 		}
@@ -305,8 +341,9 @@ func (c *Reader) replay(i int, set bool) (*syntax.File, bool) {
 	} else {
 		c.sets = append(c.sets, syntax.Dialect{})
 	}
-	c.chunks = append(c.chunks, ch.raw)
+	c.servedRaw = append(c.servedRaw, ch.withLen)
 	c.served++
+	Served.Add(1)
 	return f, true
 }
 
@@ -320,9 +357,22 @@ func (c *Reader) goLive(set bool) {
 	if c.p != nil {
 		return
 	}
-	if c.served > 0 {
+	if !c.stopped {
+		c.startEntry()
+	}
+	switch {
+	case c.served > 0:
 		c.walkTo(c.served)
-	} else {
+	case c.stopped:
+		// Nothing of this text will be kept, so the parser is the one the
+		// caller would have built, asking the shell directly.
+		c.plain = true
+		c.p = syntax.NewParser(c.src, c.d0)
+		sh := c.sh
+		c.p.Aliases = func(name string) (string, bool) { return sh.Alias(AliasPlain, name) }
+		c.p.GlobalAliases = func(name string) (string, bool) { return sh.Alias(AliasGlobal, name) }
+		c.p.SuffixAliases = func(name string) (string, bool) { return sh.Alias(AliasSuffix, name) }
+	default:
 		// Built under the first read's record: the parser reads its first
 		// token as it is built, and that can ask the locale a question.
 		c.rec = &readDeps{}
@@ -332,7 +382,11 @@ func (c *Reader) goLive(set bool) {
 	if set {
 		c.p.SetDialect(c.wrap(c.cur))
 	}
-	c.remarks = len(c.p.Remarks())
+	// The remarks already handed out: those the served reads recorded,
+	// which the walk has just made again. A parser built fresh has made none
+	// that anybody has seen — its first token, read as it was built, may
+	// have made one, and that one belongs to the first read.
+	c.remarks = len(c.rem)
 }
 
 // walkTo builds the parser and has it read the first n lines again, given
@@ -373,7 +427,7 @@ func (c *Reader) walkTo(n int) {
 
 // chunkSet is whether served read i had the dialect replaced before it.
 func (c *Reader) chunkSet(i int) bool {
-	return len(c.chunks[i]) > 0 && c.chunks[i][0]&1 != 0
+	return len(c.servedRaw[i]) > 4 && c.servedRaw[i][4]&1 != 0
 }
 
 func (c *Reader) installAliases() {
@@ -386,68 +440,171 @@ func (c *Reader) installAliases() {
 // before the caller runs any of the tree, so what is kept is the tree as the
 // parser made it.
 func (c *Reader) recordRead(f *syntax.File, ok, set bool) {
+	if c.stopped {
+		c.rec = nil
+		return
+	}
 	rec := c.rec
 	c.rec = &readDeps{}
 	all := c.p.Remarks()
 	made := all[min(c.remarks, len(all)):]
 	c.remarks = len(all)
-	if c.stopped {
-		return
-	}
 	if c.p.Err() != nil || (ok && f.Refused != nil) {
-		c.stopped, c.failed, c.dirty = true, true, true
+		c.abandon(true)
 		return
 	}
 	var fp uint64
 	if set {
 		var fok bool
 		if fp, fok = treecodec.DialectFingerprint(&c.cur); !fok {
-			c.stopped = true
+			c.abandon(false)
 			return
 		}
 	}
-	if c.enc == nil {
-		c.enc = treecodec.NewEncoder(c.src)
+	if c.w == nil {
+		return
 	}
-	var b []byte
+	c.recBufs()
+	b := append(c.scratch[:0], 0, 0, 0, 0)
 	b = appendChunkHead(b, set, !ok, fp)
 	b = c.appendDeps(b, rec)
-	c.enc.Reset()
+	c.rbuf = c.rbuf[:0]
+	var err error
 	if len(made) > 0 {
-		if err := c.enc.Remarks(made); err != nil {
-			c.stopped = true
+		if c.rbuf, err = c.enc.AppendRemarks(c.rbuf, made); err != nil {
+			c.abandon(false)
 			return
 		}
 	}
-	b = binary.AppendUvarint(b, uint64(len(c.enc.Bytes())))
-	b = append(b, c.enc.Bytes()...)
+	b = binary.AppendUvarint(b, uint64(len(c.rbuf)))
+	b = append(b, c.rbuf...)
 	if ok {
-		c.enc.Reset()
-		if err := c.enc.File(f); err != nil {
-			c.stopped, c.failed, c.dirty = true, true, true
+		if b, err = c.enc.AppendFile(b, f); err != nil {
+			c.scratch = b
+			c.abandon(true)
 			return
 		}
-		b = append(b, c.enc.Bytes()...)
 	}
-	c.chunks = append(c.chunks, b)
+	binary.LittleEndian.PutUint32(b, uint32(len(b)-4))
+	c.scratch = b
+	c.write(b)
 	c.dirty = true
+	Recorded.Add(1)
 }
+
+// startEntry begins the next entry: its head, and then the reads already
+// served, as the stored entry's own bytes.
+//
+// It is written out as it is made rather than held, because a start that
+// fills the cache is a start that also parses everything, and every byte it
+// holds on the way to the disk is allocation it pays on top. Measured on the
+// real configuration: an interactive session there allocates within a few
+// megabytes of its second collection, and a cache that kept its entries in
+// memory until the end tipped a cold start into it — about 60 ms of CPU for
+// a collection, against a few milliseconds of encoding.
+func (c *Reader) startEntry() {
+	c.w, c.done = c.cache.Create(c.name, len(c.src))
+	if c.w == nil {
+		c.stopped = true
+		return
+	}
+	fp, _ := treecodec.DialectFingerprint(&c.d0)
+	e := parseEntry{mode: c.mode, sum: c.textSum(), dialect: fp}
+	c.recBufs()
+	c.write(e.appendHead(c.scratch[:0]))
+	for _, raw := range c.servedRaw {
+		c.write(raw)
+	}
+}
+
+func (c *Reader) write(b []byte) {
+	if c.w == nil {
+		return
+	}
+	if _, err := c.w.Write(b); err != nil {
+		c.done(false)
+		c.w, c.done, c.stopped = nil, nil, true
+	}
+}
+
+// abandon gives up the entry being written. failed marks the text as one
+// whose reads are not kept at all, which is a small entry of its own.
+func (c *Reader) abandon(failed bool) {
+	if c.w != nil {
+		c.done(false)
+		c.w, c.done = nil, nil
+	}
+	c.stopped = true
+	if failed {
+		c.failed, c.dirty = true, true
+	}
+}
+
+// decoder is the reader's one decoder, pointed at data.
+func (c *Reader) decoder(data []byte) *treecodec.Decoder {
+	if c.dec == nil {
+		c.dec = treecodec.NewDecoder(data, c.src)
+	} else {
+		c.dec.Reset(data)
+	}
+	return c.dec
+}
+
+// recBufs takes the encoder and the buffers a recording read writes through.
+func (c *Reader) recBufs() {
+	if c.enc != nil {
+		return
+	}
+	k := kits.Get().(*kit)
+	c.kit, c.enc, c.scratch, c.rbuf = k, k.enc, k.scratch, k.rbuf
+	c.enc.SetSource(c.src)
+}
+
+// kit is what recording reads write through, kept between files: its
+// buffers grow to the largest line written, and a fresh kit per file grew
+// them again every time.
+type kit struct {
+	enc           *treecodec.Encoder
+	scratch, rbuf []byte
+}
+
+var kits = sync.Pool{New: func() any { return &kit{enc: treecodec.NewEncoder("")} }}
 
 // Finish writes the entry, where this run learned something the stored one
 // did not hold. It is called once, after the last read.
 func (c *Reader) Finish() {
-	if !c.started || !c.dirty {
+	if c.p == nil && c.served > 0 {
+		// Every read was served: the parse this text would have cost was not
+		// paid, and that pays for recording more.
+		if cr, ok := c.cache.(interface{ Credit(size int) }); ok {
+			cr.Credit(len(c.src))
+		}
+	}
+	if c.enc != nil {
+		c.enc.SetSource("")
+		c.kit.scratch, c.kit.rbuf = c.scratch[:0], c.rbuf[:0]
+		kits.Put(c.kit)
+		c.kit, c.enc, c.scratch, c.rbuf = nil, nil, nil, nil
+	}
+	if !c.started {
 		return
 	}
-	fp, ok := treecodec.DialectFingerprint(&c.d0)
-	if !ok {
+	if c.failed {
+		// A text that does not parse, or a tree the codec will not carry:
+		// an entry that says so and holds no reads, so the next start does
+		// not record it again.
+		fp, ok := treecodec.DialectFingerprint(&c.d0)
+		if w, done := c.cache.Create(c.name, 0); ok && w != nil {
+			e := parseEntry{mode: c.mode, sum: c.textSum(), dialect: fp, failed: true}
+			_, err := w.Write(e.appendHead(nil))
+			done(err == nil)
+		}
 		return
 	}
-	e := parseEntry{mode: c.mode, sum: c.sum, dialect: fp, failed: c.failed}
-	if !c.failed {
-		e.raw = c.chunks
+	if c.w != nil {
+		c.done(c.dirty)
+		c.w, c.done = nil, nil
 	}
-	c.cache.Store(c.name, e.encode())
 }
 
 // alias asks the shell and notes which table answered, or — while a parser
@@ -476,6 +633,9 @@ type snapKey struct {
 // stays nil: the reader takes nil as an answer of its own, and the dialect's
 // fingerprint holds which are nil.
 func (c *Reader) wrap(d syntax.Dialect) syntax.Dialect {
+	if c.plain {
+		return d
+	}
 	if d.CharacterWidth != nil {
 		d.CharacterWidth = c.characterWidth
 	}
@@ -761,7 +921,7 @@ func (c *Reader) decodeDeps(deps []byte) (d readDeps, err error) {
 //	magic, version, codec layout, mode
 //	the text's SHA-256 and the dialect's fingerprint at the first read
 //	flags: failed
-//	the reads: a count, then each as a length and its bytes
+//	the reads, to the end: each as a four-byte length and its bytes
 //
 // A read is its flags (the dialect was replaced before it; it found the end
 // of the text), the replacement dialect's fingerprint where there was one,
@@ -787,31 +947,24 @@ type chunk struct {
 	deps    []byte
 	remarks []byte
 	tree    []byte
-	raw     []byte
+	withLen []byte // the read as stored, its length in front
 }
 
 var errEntry = errors.New("parse cache: not an entry")
 
-func (e *parseEntry) encode() []byte {
+// entryHead is the fixed part of an entry, ahead of its reads.
+const entryHead = len(entryMagic) + 1 + 8 + 1 + 32 + 8 + 1
+
+// appendHead appends the fixed part of an entry.
+func (e *parseEntry) appendHead(b []byte) []byte {
 	layout, _ := treecodec.Layout()
-	n := 64
-	for _, r := range e.raw {
-		n += len(r) + binary.MaxVarintLen64
-	}
-	b := make([]byte, 0, n)
 	b = append(b, entryMagic...)
 	b = append(b, entryVersion)
 	b = binary.LittleEndian.AppendUint64(b, layout)
 	b = append(b, e.mode)
 	b = append(b, e.sum[:]...)
 	b = binary.LittleEndian.AppendUint64(b, e.dialect)
-	b = appendBool(b, e.failed)
-	b = binary.AppendUvarint(b, uint64(len(e.raw)))
-	for _, r := range e.raw {
-		b = binary.AppendUvarint(b, uint64(len(r)))
-		b = append(b, r...)
-	}
-	return b
+	return appendBool(b, e.failed)
 }
 
 func decodeEntry(b []byte) (*parseEntry, error) {
@@ -819,8 +972,7 @@ func decodeEntry(b []byte) (*parseEntry, error) {
 	if err != nil {
 		return nil, err
 	}
-	const head = len(entryMagic) + 1 + 8 + 1 + 32 + 8 + 1
-	if len(b) < head || !bytes.Equal(b[:4], []byte(entryMagic)) || b[4] != entryVersion ||
+	if len(b) < entryHead || !bytes.Equal(b[:4], []byte(entryMagic)) || b[4] != entryVersion ||
 		binary.LittleEndian.Uint64(b[5:]) != layout {
 		return nil, errEntry
 	}
@@ -828,20 +980,21 @@ func decodeEntry(b []byte) (*parseEntry, error) {
 	copy(e.sum[:], b[14:46])
 	e.dialect = binary.LittleEndian.Uint64(b[46:])
 	e.failed = b[54] == 1
-	b = b[head:]
-	n, k := binary.Uvarint(b)
-	if k <= 0 || n > uint64(len(b)) {
+	b = b[entryHead:]
+	if e.failed && len(b) != 0 {
 		return nil, errEntry
 	}
-	b = b[k:]
-	e.raw = make([][]byte, 0, n)
-	for range n {
-		l, k := binary.Uvarint(b)
-		if k <= 0 || l > uint64(len(b)-k) {
+	e.raw = make([][]byte, 0, 64)
+	for len(b) > 0 {
+		if len(b) < 4 {
 			return nil, errEntry
 		}
-		e.raw = append(e.raw, b[k:k+int(l)])
-		b = b[k+int(l):]
+		l := binary.LittleEndian.Uint32(b)
+		if uint64(l) > uint64(len(b)-4) {
+			return nil, errEntry
+		}
+		e.raw = append(e.raw, b[:4+l])
+		b = b[4+l:]
 	}
 	if len(b) != 0 {
 		return nil, errEntry
@@ -872,7 +1025,8 @@ func (e *parseEntry) chunk(i int) (ch chunk, err error) {
 		}
 	}()
 	b := e.raw[i]
-	ch.raw = b
+	ch.withLen = b
+	b = b[4:]
 	flags := b[0]
 	b = b[1:]
 	ch.set, ch.end = flags&1 != 0, flags&2 != 0

@@ -93,6 +93,9 @@ import (
 // for that case, so no caller has to.
 type procAnchor struct {
 	argv []string
+	// spares is the shell's kept placeholder, which the first read takes
+	// rather than starting one of its own. See procanchorspare.go.
+	spares *anchorSpares
 	// outer is the anchor of the body this one is nested in, and is what
 	// `existing` falls back to. A body that never asks which process it is
 	// has no group of its own, and a command it starts must then join the
@@ -115,18 +118,21 @@ type procAnchor struct {
 	// a signal aimed at the group by the script itself is the script's
 	// business and reaps through the same wait.
 	stdin *os.File
-	// gone records that the anchor has been waited for, so that a child is
-	// never asked to join a group whose leader has already exited and which
-	// may hold nothing at all.
-	gone bool
+	// exited is closed once the anchor has been waited for, so that a child
+	// is never asked to join a group whose leader has already exited and
+	// which may hold nothing at all. A channel rather than a flag this anchor
+	// sets, because the goroutine that waits was started with the
+	// placeholder, which may be older than the anchor: see
+	// procanchorspare.go.
+	exited chan struct{}
 }
 
 // newProcAnchor makes the anchor for one substitution body, unstarted.
-func newProcAnchor(argv []string) *procAnchor {
+func newProcAnchor(argv []string, spares *anchorSpares) *procAnchor {
 	if len(argv) == 0 {
 		return nil
 	}
-	return &procAnchor{argv: argv}
+	return &procAnchor{argv: argv, spares: spares}
 }
 
 // group is the body's process group, started if this is the first read.
@@ -140,7 +146,7 @@ func (a *procAnchor) group() (int, bool) {
 		return a.pgid, a.pgid > 0
 	}
 	a.tried = true
-	cmd, stdin, err := startProcAnchor(a.argv)
+	h, err := a.spares.take(a.argv)
 	if err != nil {
 		// Nothing to report: the parameter that asked answers as it did
 		// before there was an anchor at all, which is the behavior every
@@ -148,16 +154,7 @@ func (a *procAnchor) group() (int, bool) {
 		// of a prompt for something the script never asked this shell to do.
 		return 0, false
 	}
-	a.pgid, a.stdin = cmd.Process.Pid, stdin
-	// Waited for on a goroutine, because nothing else will: this child is not
-	// a job, is not `$!`, and is not a command any script named. The wait is
-	// also what tells the exec path the group has gone.
-	go func() {
-		_ = cmd.Wait()
-		a.mu.Lock()
-		a.gone = true
-		a.mu.Unlock()
-	}()
+	a.pgid, a.stdin, a.exited = h.pgid, h.stdin, h.exited
 	return a.pgid, true
 }
 
@@ -169,7 +166,7 @@ func (a *procAnchor) existing() (int, bool) {
 		return 0, false
 	}
 	a.mu.Lock()
-	pgid, gone := a.pgid, a.gone
+	pgid, gone := a.pgid, a.exited != nil && closedChan(a.exited)
 	a.mu.Unlock()
 	if pgid <= 0 || gone {
 		return a.outer.existing()
@@ -253,7 +250,7 @@ func (c *Runner) anchorForkedBody() func() {
 	// The process itself is always given, anchor or not: what it answers —
 	// whose locks these are — needs no placeholder child. See Process.
 	exit := c.forkProcess()
-	a := newProcAnchor(c.ProcessAnchor)
+	a := newProcAnchor(c.ProcessAnchor, c.anchorSpares)
 	if a == nil {
 		// No placeholder to lead a group with, so there is nothing to
 		// overwrite and nothing to release. The inherited field is nil for
@@ -266,5 +263,15 @@ func (c *Runner) anchorForkedBody() func() {
 	return func() {
 		a.stop()
 		exit()
+	}
+}
+
+// closedChan reports that ch has been closed, without waiting.
+func closedChan(ch chan struct{}) bool {
+	select {
+	case <-ch:
+		return true
+	default:
+		return false
 	}
 }

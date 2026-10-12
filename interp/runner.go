@@ -3435,6 +3435,10 @@ type Runner struct {
 	// shared down the clone chain the way the kernel's process ids are shared
 	// by every process: see Runner.reachInventedJob.
 	inventedJobs *inventedJobRegistry
+	// anchorSpares is the placeholder kept started for the next body that
+	// asks which process it is, shared down the clone chain so that every
+	// body takes from and refills the one. See procanchorspare.go.
+	anchorSpares *anchorSpares
 	// tildeWarnTail is the rest of the word a tilde prefix stands in front
 	// of, for the one warning that quotes it. See warnTruncatedTildeNumber.
 	tildeWarnTail string
@@ -5836,6 +5840,11 @@ func (r *Runner) clone() *Runner {
 	}
 	if r.scriptStop == nil {
 		r.scriptStop = &scriptStop{}
+	}
+	// And the kept placeholder, before the copy for the same reason: a body
+	// that made its own box would start a spare no other body could take.
+	if r.anchorSpares == nil && len(r.ProcessAnchor) > 0 {
+		r.anchorSpares = &anchorSpares{}
 	}
 	// And the stream locks, for the third time the same reason: the field's own
 	// comment says they are "shared with every subshell", and they were made

@@ -5536,12 +5536,13 @@ type Runner struct {
 	// `typeset -h v=(a b)` is stored by Runner.assignOperands, which runs
 	// after the builtin has returned and has no letters of its own to read.
 	// Kept the way Runner.privateDeclarationRan is, and for the same reason.
-	// See Runner.hiddenNameKinds.
+	// See Runner.watchDeclarationKinds.
 	hideLetterWritten bool
-	// hideWatching says a bare assignment is being run, and hideKindsWatched
-	// is the kind each hidden name it has written held when it started —
-	// only the names it has written, since every store announces the name it
-	// writes. See Runner.watchHiddenKinds.
+	// hideWatching says a bare assignment or a declaration is being run, and
+	// hideKindsWatched is the kind each hidden name it has written or named
+	// held when it started — only those names, since every store announces
+	// the name it writes and a declaration names what it retypes. See
+	// Runner.watchHiddenKinds and Runner.watchDeclarationKinds.
 	hideWatching     bool
 	hideKindsWatched map[string]ParameterKind
 	// tied holds the ties `typeset -T` made — see tiedscalar.go — under
@@ -10326,7 +10327,7 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 		// terms and for the same reason: `typeset -h v=(a b)` retypes the
 		// name from the operand store below, which runs after the builtin has
 		// returned and cannot ask it what letters it read. See
-		// Runner.hiddenNameKinds, where a line writing the letter is what
+		// Runner.watchDeclarationKinds, where a line writing the letter is what
 		// exempts it from the rule that a kind change forgets the attribute.
 		outerHideRan := r.hideLetterWritten
 		r.hideLetterWritten = false

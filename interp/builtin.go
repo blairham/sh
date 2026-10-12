@@ -7782,7 +7782,9 @@ func biLocal(r *Runner, _ context.Context, args []string) (endStatus int) {
 	// Runner.kindChangeForgetsTheHide. After the letters are parsed, because
 	// whether this line writes `-h` is what exempts it.
 	r.noteTheHideLetter(f)
-	defer r.kindChangeForgetsTheHide(r.hiddenNameKinds())
+	if w, on := r.watchDeclarationKinds(args, f); on {
+		defer r.endHiddenWatch(w)
+	}
 	if f.private && !r.declaringPrivate {
 		// `local -P` is the `private` word spelled as a letter, and the two
 		// are the same request rather than two that resemble each other —
@@ -8087,7 +8089,13 @@ func biLocal(r *Runner, _ context.Context, args []string) (endStatus int) {
 		if slot == IntegerParameter {
 			f.integer, f.base, f.baseNamed = true, 10, true
 		}
-		held := r.holdTheDeclaration(name)
+		// What the name carried before the letters land, which only a
+		// reference's refused aim puts back — so held only where the line
+		// writes the letter (#6373).
+		var held declarationHeld
+		if f.nameref {
+			held = r.holdTheDeclaration(name)
+		}
 		r.applyAttributes(name, f)
 		// Over a binding this line made only — see biDeclare's call.
 		if !redeclared {

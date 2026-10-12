@@ -1429,11 +1429,14 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) (endSt
 	}()
 	// The hide attribute a name was already carrying does not survive this
 	// line changing the name's kind — see kindChangeForgetsTheHide, and
-	// hiddenNameKinds for why a line writing the letter is exempt. Deferred
-	// so that the two dozen refusals below, each of which leaves the kind
-	// where it was, do not have to say so one at a time.
+	// watchDeclarationKinds for which names a line can retype and why a line
+	// writing the letter is exempt. Deferred so that the two dozen refusals
+	// below, each of which leaves the kind where it was, do not have to say
+	// so one at a time.
 	r.noteTheHideLetter(f)
-	defer r.kindChangeForgetsTheHide(r.hiddenNameKinds())
+	if w, on := r.watchDeclarationKinds(args, f); on {
+		defer r.endHiddenWatch(w)
+	}
 	if f.function || f.funcNames {
 		// A marking letter written under a plus, in the one shell that
 		// refuses it. Ahead of everything because it is a refusal of the
@@ -2405,7 +2408,13 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) (endSt
 		if slot == IntegerParameter {
 			df.integer, df.base, df.baseNamed = true, 10, true
 		}
-		held := r.holdTheDeclaration(name)
+		// What the name carried before the letters land, which only a
+		// reference's refused aim puts back — so held only where the line
+		// writes the letter, which nothing below turns on (#6373).
+		var held declarationHeld
+		if df.nameref {
+			held = r.holdTheDeclaration(name)
+		}
 		if hasValue && !appends && !df.global && !df.compoundVar {
 			// Before this line's letters land and before the value is
 			// stored, so the letters it writes are the ones it keeps and the

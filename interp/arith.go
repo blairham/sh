@@ -2822,6 +2822,16 @@ func (r *Runner) parseArithStored(s string) (arithNum, error) {
 // expression named, which decides the sign of the zero an overflow comes to
 // where an overflow comes to zero at all.
 func (r *Runner) readArithNum(s, tail string, written bool) (arithNum, error) {
+	if n, ok := plainDecimal(s); ok && plainDecimalShortcut {
+		// A decimal numeral with no sign but `-`, no leading zero, no
+		// separator and no more digits than a machine word holds — which is
+		// what a counter's stored value nearly always is — is read the same
+		// way by every route below: no base, no radix prefix, no octal, no
+		// float shape, no digit separator to drop. Read directly, since the
+		// routes ask several string scans each before reaching ParseInt, on
+		// every read of every variable an expression names (#6353).
+		return r.carriedInADouble(float64(n), n), nil
+	}
 	s = strings.TrimSpace(s)
 	if r.lang().ArithDigitSeparator {
 		// The separator is removed and then the ordinary rules apply to what
@@ -4080,6 +4090,12 @@ func (r *Runner) expandArithText(text string, origin arithTextOrigin) string {
 // range protects a narrower set. A span that is not protected is scanned for
 // brackets like any other text, so its `]` still closes a subscript.
 func (r *Runner) markedSubscriptWord(w *syntax.Word, protects func(syntax.Span) bool) string {
+	if v, ok := r.plainParamValue(w); ok {
+		// `[[ $i -lt N ]]`'s operand: a plain scalar's value holds no
+		// bracket to track and no byte to mark, so every route below hands
+		// it back as it is. See plainParamWord (#6353).
+		return v
+	}
 	var scan syntax.ArithBracketScan
 	advance := func(text string) {
 		for i := 0; i < len(text); i++ {

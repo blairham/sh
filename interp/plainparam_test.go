@@ -23,7 +23,7 @@ import (
 // part of the output both runs must agree on and the script carries on.
 const plainParamScript = `p() { printf '[%s]' "$@"; echo; }
 i=5; p $i ${i}; x=$i; p "$x"
-i=10; IFS=1; p $i; x=$i; p "$x"
+i=10; IFS=1; p $i; x=$i; p "$x"; [[ $i == 10 ]] && echo d10
 IFS=; i=105; p $i
 unset IFS; i=a.b_c-d+e,f:g/h; p $i
 i='a b'; p $i; x=$i; p "$x"
@@ -46,7 +46,9 @@ f() { local i=3; p $i; x=$i; p "$x"; }; f
 command eval 'typeset -u up=abc'; p $up; x=$up; p "$x"
 command eval 'typeset -i n=3+4'; p $n
 set -f; i='/dev/nul?'; p $i; set +f
-i=9; [ $i -lt 10 ] && echo lt
+i=9; [ $i -lt 10 ] && echo lt; [[ $i -lt 10 ]] && echo dlt; [[ $i == 9 ]] && echo deq
+i='/dev/nul?'; [[ $i == /dev/null ]] && echo dpat; [[ /dev/null == $i ]] && echo dglob
+i=1; command eval 'a=(x y z)'; p ${a[$i]}; s=abcdef; p ${s:$i:2}; command eval 'p $(( a[$i] ))'
 (set -u; p $nosuch); echo "<$?>"
 `
 
@@ -117,7 +119,7 @@ func TestAPlainParameterWordAnswersAsTheFullRoadDoes(t *testing.T) {
 			}
 			// The rows the comparison leans on, so a script that stopped
 			// early or a vector that refused the arrays compares nothing.
-			for _, row := range []string{"[5][5]\n", "[][0]\n", "[1][11]\n", "[ABC]\n", "lt\n", "parameter not set"} {
+			for _, row := range []string{"[5][5]\n", "[][0]\n", "d10\n", "[1][11]\n", "[ABC]\n", "dlt\n", "deq\n", "[bc]\n", "parameter not set"} {
 				if !strings.Contains(full, row) {
 					t.Errorf("the script did not reach %q:\n%s", row, full)
 				}

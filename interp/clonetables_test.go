@@ -56,7 +56,6 @@ var sharedStacks = map[string]string{
 	"pipeStatus":      "rebuilt with append([]int(nil), …) on every pipeline, so a write never lands in an array anyone else holds",
 	"optionLists":     "the option namespaces a dialect bound in Apply, appended to at setup and never again",
 	"RlimitOrder":     "the order this kernel numbers its limits in, handed in by the front end at setup and never appended to — a fact about the machine rather than anything a script can move",
-	"substLevelsOut":  "rebuilt with append([]substLevel{}, …) every time a level opens, so a write never lands in an array anyone else holds",
 	"carriedHeredocs": "the running file's own list, replaced wholesale by RunPart and never appended to — a subshell reads the same file's list, which is what it should see",
 	"substEnds":       "the running file's list of ends of input, kept beside carriedHeredocs and shared for the same reason",
 	"flagWordBare":    "a handoff from flaggedWords to expandFlagged within one expansion, assigned whole and cleared by the reader, never appended to",

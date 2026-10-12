@@ -1152,6 +1152,13 @@ func (r *Runner) wordTextGlobMarked(w *syntax.Word) string {
 // marks survive it; colonTildes says the word is an assignment's value, where
 // a colon begins a tilde segment of its own.
 func (r *Runner) wordTextUnsplit(w *syntax.Word, mark func(syntax.Span, string) string, keepMarks, colonTildes bool) string {
+	if mark == nil {
+		// A plain scalar's value is its own text here, escaped or not: it
+		// holds nothing to escape, no tilde and no NUL. See plainParamWord.
+		if v, ok := r.plainParamValue(w); ok {
+			return v
+		}
+	}
 	w = spansCopiedForTildes(r.wordForRun(w))
 	// A prefix running through a quote or an expansion is marked and read at
 	// the end. See tildeThroughMark.
@@ -3304,7 +3311,7 @@ func (r *Runner) arithSpanValue(s syntax.Span) (string, bool) {
 	// The expression's text is re-lexed, so what it holds is at a level of
 	// its own — and one with no sentence of its own, which is the whole of
 	// what substLevel.arith says (#3355).
-	defer r.inArithText(s)()
+	defer r.inArithText(s).undo()
 	tree, text, perr := r.arithTreeOver(s.Arith, s.Value, arithTextWritten)
 	if perr != nil {
 		// A failure to *read* the expression, which can only happen once
@@ -3349,8 +3356,14 @@ func (r *Runner) expansionResult(v string, unquoted bool, glob, split Answer, ax
 	// Asked against the *actual* separators, not a guess at them: with
 	// IFS=: a value holding no space still splits, and hardcoding whitespace
 	// here silently stopped it.
-	if ifs, _ := r.ifs(); containsAnyOf(v, ifs) {
-		doSplit = r.ask(split, axis)
+	//
+	// And not read at all where the answer is already no — an assignment's
+	// value, a `[[ ]]` operand — since asking No is false whatever IFS holds,
+	// and the read is a full variable lookup on every such expansion (#6353).
+	if split != No {
+		if ifs, _ := r.ifs(); containsAnyOf(v, ifs) {
+			doSplit = r.ask(split, axis)
+		}
 	}
 	return r.escapeResult(v, glob), doSplit
 }

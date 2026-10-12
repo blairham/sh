@@ -74,7 +74,7 @@ func (r *Runner) cachedArithSpans(text string) ([]syntax.Span, []*syntax.ParamEx
 	}
 	k := arithSpanKey{text: text, d: r.Dialect, prec: r.arithPrecedence, moved: r.arithPrecedenceMoved}
 	if v, ok := arithSpanCache.Load(k); ok {
-		e := v.(*arithSpanEntry)
+		e, _ := v.(*arithSpanEntry)
 		out := make([]syntax.Span, len(e.spans))
 		copy(out, e.spans)
 		return out, e.nodes, true
@@ -89,17 +89,14 @@ func (r *Runner) cachedArithSpans(text string) ([]syntax.Span, []*syntax.ParamEx
 	e := &arithSpanEntry{spans: make([]syntax.Span, len(spans))}
 	copy(e.spans, spans)
 	collectParamExprs(reflect.ValueOf(e.spans), &e.nodes, map[uintptr]bool{})
-	if v, loaded := arithSpanCache.LoadOrStore(k, e); loaded {
+	if _, loaded := arithSpanCache.LoadOrStore(k, e); loaded {
 		// Another runner kept the text first; its nodes are the ones that
 		// will be handed out, and these are this read's alone.
-		_ = v
 		return spans, nil, true
 	}
 	arithSpanCacheSize.Add(1)
 	return spans, e.nodes, true
 }
-
-var paramExprType = reflect.TypeFor[*syntax.ParamExpr]()
 
 // collectParamExprs appends every *syntax.ParamExpr reachable from v. It runs
 // once per kept text, so it can afford to be general rather than know the
@@ -111,8 +108,8 @@ func collectParamExprs(v reflect.Value, out *[]*syntax.ParamExpr, seen map[uintp
 			return
 		}
 		seen[v.Pointer()] = true
-		if v.Type() == paramExprType {
-			*out = append(*out, v.Interface().(*syntax.ParamExpr))
+		if p, ok := v.Interface().(*syntax.ParamExpr); ok {
+			*out = append(*out, p)
 		}
 		collectParamExprs(v.Elem(), out, seen)
 	case reflect.Interface:

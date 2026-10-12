@@ -17,6 +17,7 @@ import (
 // work is done on (#1984, #1987). internal/testenv is the guard; its own
 // package comment is the argument for its shape.
 func TestMain(m *testing.M) {
+	collectorProbe()
 	if testenv.Assembled() {
 		// A copy of this binary re-executed as a helper by a test above. Its
 		// environment was assembled by the parent and then aimed by the test

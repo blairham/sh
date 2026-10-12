@@ -137,8 +137,18 @@ import (
 
 const exitFailure = 2
 
+// exit is os.Exit, named so that a test can read what main left the process's
+// collector at before the process ends. See collector_test.go.
+var exit = os.Exit
+
 func main() {
-	os.Exit(run(os.Args, os.Stdin, os.Stdout, os.Stderr))
+	// The collector tuning every dialect binary gets from driver.Main. This
+	// binary reads its own flags and then calls driver.MainArgs, which tunes
+	// nothing so that a test calling it is not retuned — and so, until #6393,
+	// this one shell ran at GOGC=100 with no ceiling. Here and not in run, for
+	// the same reason: the tests call run.
+	driver.TuneCollector()
+	exit(run(os.Args, os.Stdin, os.Stdout, os.Stderr))
 }
 
 // run is the whole of main, with the process's streams passed in rather than

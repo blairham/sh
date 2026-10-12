@@ -49,7 +49,7 @@ func TestAShellBinaryRaisesTheCollectorsThreshold(t *testing.T) {
 	unnamed(t, "GOGC")
 	unnamed(t, "GOMEMLIMIT")
 
-	tuneCollector()
+	TuneCollector()
 	got := debug.SetGCPercent(startupGCPercent)
 	if got != startupGCPercent {
 		t.Errorf("threshold is %d, want %d", got, startupGCPercent)
@@ -69,7 +69,7 @@ func TestAnExplicitGOGCIsNotOverridden(t *testing.T) {
 			was := debug.SetGCPercent(startupGCPercent)
 			debug.SetGCPercent(was)
 
-			tuneCollector()
+			TuneCollector()
 			if got := debug.SetGCPercent(was); got != was {
 				t.Errorf("GOGC=%s: threshold moved to %d, want %d left alone", named, got, was)
 			}
@@ -88,7 +88,7 @@ func TestAShellBinaryPutsACeilingBesideThePercent(t *testing.T) {
 	unnamed(t, "GOMEMLIMIT")
 	debug.SetMemoryLimit(math.MaxInt64)
 
-	tuneCollector()
+	TuneCollector()
 	if got := debug.SetMemoryLimit(-1); got != runawayHeapLimit {
 		t.Errorf("memory limit is %d, want %d", got, int64(runawayHeapLimit))
 	}
@@ -110,7 +110,7 @@ func TestAnExplicitGOMEMLIMITIsNotOverridden(t *testing.T) {
 			const mine = 123 << 20
 			debug.SetMemoryLimit(mine)
 
-			tuneCollector()
+			TuneCollector()
 			if got := debug.SetMemoryLimit(-1); got != mine {
 				t.Errorf("GOMEMLIMIT=%s: limit moved to %d, want %d left alone", named, got, int64(mine))
 			}
@@ -133,7 +133,7 @@ func TestAnExplicitGOGCLeavesTheCeilingUnset(t *testing.T) {
 			t.Setenv("GOGC", named)
 			debug.SetMemoryLimit(math.MaxInt64)
 
-			tuneCollector()
+			TuneCollector()
 			if got := debug.SetMemoryLimit(-1); got != math.MaxInt64 {
 				t.Errorf("GOGC=%s: limit set to %d, want none", named, got)
 			}

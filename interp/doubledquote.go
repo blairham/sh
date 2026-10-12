@@ -55,7 +55,5 @@ func (r *Runner) SetDoubledQuoteInSingleQuotes(on bool) {
 	if r.lang().DoubledQuoteInSingleQuotesIsALiteralQuote == on {
 		return
 	}
-	d := r.dialect()
-	d.DoubledQuoteInSingleQuotesIsALiteralQuote = on
-	r.Dialect = &d
+	r.moveDialect(moveDoubledQuote, on)
 }

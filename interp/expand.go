@@ -8181,8 +8181,12 @@ func (r *Runner) rawSpans(text string) ([]syntax.Span, bool) {
 // read by different rules in one place: a backslash inside brackets keeps
 // both of its bytes, because the subscript it is in will be read a second
 // time. See syntax.ArithTextSpans for the rows that measure it.
-func (r *Runner) arithSpans(text string) ([]syntax.Span, bool) {
-	return r.rawSpansRead(text, syntax.ArithTextSpans)
+//
+// Read once per text and grammar: see interp/arithspancache.go. The nodes
+// are every parameter expansion in the spans where they are the cache's and
+// will be handed out again, and nil where they are this read's alone.
+func (r *Runner) arithSpans(text string) ([]syntax.Span, []*syntax.ParamExpr, bool) {
+	return r.cachedArithSpans(text)
 }
 
 func (r *Runner) rawSpansRead(text string, read func(string, syntax.Dialect) ([]syntax.Span, error)) ([]syntax.Span, bool) {

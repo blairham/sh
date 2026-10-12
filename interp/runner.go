@@ -1748,6 +1748,11 @@ type Runner struct {
 	// long as the function exists. See arithPrecedenceOptionInCharge.
 	arithReadInAnotherOrder bool
 
+	// dialectMoves is the dialect pointers moveDialect made, by what they
+	// were made from, so that the same move from the same dialect is the same
+	// pointer. Not shared with a clone — see dialectmove.go.
+	dialectMoves map[dialectMoveKey]*syntax.Dialect
+
 	// killedBy is the signal this shell sent itself and had no handler for,
 	// with the number kept beside it so the death does not have to look the
 	// name up again.
@@ -5861,6 +5866,9 @@ func (r *Runner) clone() *Runner {
 	r.streamLocks()
 	c := *r
 	c.inSubshell = true
+	// The kept dialect moves are this runner's: a map shared with a clone
+	// would be written from two goroutines. See dialectmove.go.
+	c.dialectMoves = nil
 	// A clone is a fork until the one construct that knows otherwise says so,
 	// and nothing a fork runs is the shell's last. See unforkedtail.go.
 	c.tailCmd, c.unforkedSelf, c.slotOneIsTheBody = nil, false, false

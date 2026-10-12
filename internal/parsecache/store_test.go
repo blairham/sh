@@ -65,7 +65,7 @@ func store(t *testing.T, dir, build string) *parsecache.Store {
 
 func put(t *testing.T, s *parsecache.Store, name string, data []byte) {
 	t.Helper()
-	w, done := s.Create(name, len(data))
+	w, done := s.Create(name)
 	if w == nil {
 		t.Fatal("the store would not take an entry")
 	}
@@ -197,7 +197,7 @@ func TestConcurrentWritersLeaveWholeEntries(t *testing.T) {
 			s := parsecache.Open(dir, "b", parsecache.DefaultLimit, 1<<30)
 			for r := range rounds {
 				data := payload(w, r)
-				wr, done := s.Create(fmt.Sprintf("e%d", r%names), len(data))
+				wr, done := s.Create(fmt.Sprintf("e%d", r%names))
 				if wr == nil {
 					errs <- fmt.Errorf("writer %d: no entry", w)
 					return
@@ -250,7 +250,7 @@ func TestADroppedEntryIsNotPutInPlace(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "parse")
 	s := store(t, dir, "b")
 	put(t, s, "e", []byte("the old one"))
-	w, done := s.Create("e", 10)
+	w, done := s.Create("e")
 	if _, err := w.Write([]byte("half of a new")); err != nil {
 		t.Fatal(err)
 	}
@@ -312,24 +312,36 @@ func TestTheDirectoryIsBounded(t *testing.T) {
 	}
 }
 
-// TestRecordingIsBudgeted spends a process's allowance and finds the store
-// will take no more, then earns more by reading.
+// TestRecordingIsBudgeted spends a process's allowance. On the first start a
+// text that fits is taken and one that does not is put off; a later start may
+// overdraw for one, once, and then nothing more until reading from the cache
+// earns more.
 func TestRecordingIsBudgeted(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "parse")
-	s := parsecache.Open(dir, "b", parsecache.DefaultLimit, 1000)
-	w, done := s.Create("a", 1500) // overdraws, once
-	if w == nil {
-		t.Fatal("the first text was refused")
+	first := parsecache.Open(dir, "b", parsecache.DefaultLimit, 1000)
+	if !first.Spend(600) {
+		t.Fatal("a text that fits was refused")
 	}
-	done(true)
-	if w, _ := s.Create("b", 10); w != nil {
-		t.Fatal("a spent allowance took another text")
+	if first.Spend(600) {
+		t.Fatal("a text that does not fit was taken on the first start")
 	}
-	s.Credit(1000)
-	if w, done := s.Create("b", 10); w == nil {
+	if first.Spend(5000) {
+		t.Fatal("a text bigger than the allowance was taken on the first start")
+	}
+	later := parsecache.Open(dir, "b", parsecache.DefaultLimit, 1000)
+	if !later.Spend(5000) {
+		t.Fatal("a later start could not overdraw for a text bigger than its allowance")
+	}
+	if later.Spend(1) {
+		t.Fatal("a spent allowance was overdrawn again")
+	}
+	later.Credit(2500) // pays off the overdraft and leaves 1000
+	if !later.Spend(100) {
 		t.Fatal("a text read from the cache did not pay for recording another")
-	} else {
-		done(false)
+	}
+	// Another build has not been here.
+	if parsecache.Open(dir, "c", parsecache.DefaultLimit, 1000).Spend(5000) {
+		t.Fatal("another build overdrew on this build's mark")
 	}
 }
 

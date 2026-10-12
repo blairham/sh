@@ -36,7 +36,7 @@ func newMem() *memCache { return &memCache{m: map[string][]byte{}} }
 
 func (c *memCache) Load(name string) []byte { return c.m[name] }
 
-func (c *memCache) Create(name string, _ int) (io.Writer, func(bool)) {
+func (c *memCache) Create(name string) (io.Writer, func(bool)) {
 	c.creates++
 	var b bytes.Buffer
 	return &b, func(keep bool) {

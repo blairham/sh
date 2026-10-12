@@ -73,11 +73,46 @@ const DefaultLimit = 32 << 20
 // line than a shell with no cache. So a process starts with this much, and
 // every text it reads out of the cache rather than parsing earns it twice
 // that text's size more (see Credit): reading a kilobyte back saves two to
-// three times what recording one costs. A start therefore never spends on
-// the cache more than the cache saved it, beyond this, and a configuration
-// fills in a handful of starts — each recording more than the last, because
-// each reads more back.
+// three times what recording one costs.
+//
+// A text that does not fit what is left is put off to a later start, which
+// has more to spend for every text it reads back. A text bigger than the
+// whole allowance could never fit, so once a start has put something off, a
+// later one may overdraw for it. So the first start after a change records
+// only what fits in the allowance, and each start after it records more than
+// the last.
 const DefaultBudget = 64 << 10
+
+// Spend asks to record a text of size bytes out of what is left of this
+// process's allowance. One that does not fit is put off — unless an earlier
+// start of this build has been here before, and anything at all is left:
+// then it may overdraw, which is how a text bigger than the whole allowance
+// is recorded at all. The first start to put a text off leaves a mark saying
+// a start has been here. See DefaultBudget.
+func (s *Store) Spend(size int) bool {
+	overdraw := s.mayHold(s.markFile())
+	for {
+		left := s.budget.Load()
+		if int64(size) > left && (!overdraw || left <= 0) {
+			if !overdraw {
+				s.marked.Do(s.mark)
+			}
+			return false
+		}
+		if s.budget.CompareAndSwap(left, left-int64(size)) {
+			return true
+		}
+	}
+}
+
+// markFile is the name of the mark a start leaves when it puts a text off.
+func (s *Store) markFile() string { return filepath.Base(s.path("\x00a start has put a text off")) }
+
+func (s *Store) mark() {
+	if w, done := s.Create("\x00a start has put a text off"); w != nil {
+		done(true)
+	}
+}
 
 // Credit is a text of size bytes read out of the cache rather than parsed,
 // which pays for recording twice as much. See DefaultBudget.
@@ -137,6 +172,7 @@ type Store struct {
 	ready   bool
 
 	budget atomic.Int64
+	marked sync.Once
 
 	listed sync.Once
 	held   map[string]bool
@@ -262,12 +298,7 @@ func (s *Store) unframe(b []byte) ([]byte, bool) {
 // it, and the last rename wins; a reader never sees half of one. A failure
 // anywhere is silent: the cache is an optimization, and a shell that cannot
 // write one parses next time.
-func (s *Store) Create(name string, size int) (io.Writer, func(keep bool)) {
-	// What is left of this process's allowance, which a text may overdraw
-	// once but not start on when it is spent. See DefaultBudget.
-	if left := s.budget.Add(-int64(size)); left+int64(size) <= 0 {
-		return nil, nil
-	}
+func (s *Store) Create(name string) (io.Writer, func(keep bool)) {
 	s.prepare.Do(s.setUp)
 	if !s.ready {
 		return nil, nil

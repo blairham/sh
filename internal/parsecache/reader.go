@@ -24,11 +24,19 @@ import (
 type Cache interface {
 	// Load returns exactly what was last stored under name, or nil.
 	Load(name string) []byte
-	// Create starts a new entry under name, to be written as it is made, for
-	// a text of size bytes. done(true) puts it in place of whatever was
-	// there, and done(false) throws it away; a nil w is a cache that will
-	// not take one now.
-	Create(name string, size int) (w io.Writer, done func(keep bool))
+	// Create starts a new entry under name, to be written as it is made.
+	// done(true) puts it in place of whatever was there, and done(false)
+	// throws it away; a nil w is a cache that will not take one now.
+	Create(name string) (w io.Writer, done func(keep bool))
+}
+
+// Budget is a cache that limits how much a process records; a Store is one.
+// See DefaultBudget.
+type Budget interface {
+	// Spend asks to record a text of size bytes.
+	Spend(size int) bool
+	// Credit is a text of size bytes read out of the cache.
+	Credit(size int)
 }
 
 // AliasKind is which of the three alias tables a parser asks.
@@ -207,7 +215,8 @@ func (c *Reader) begin(mode byte) {
 	if err != nil || e.mode != mode || e.dialect != fp || e.sum != c.textSum() {
 		return
 	}
-	if e.failed {
+	switch {
+	case e.flags&entryFailed != 0:
 		// Parsed every time, and not recorded: the entry already says
 		// everything there is to say about this text.
 		c.stopped = true
@@ -519,7 +528,12 @@ func (c *Reader) recordRead(f *syntax.File, ok, set bool) {
 // memory until the end tipped a cold start into it — about 60 ms of CPU for
 // a collection, against a few milliseconds of encoding.
 func (c *Reader) startEntry() {
-	c.w, c.done = c.cache.Create(c.name, len(c.src))
+	if b, ok := c.cache.(Budget); ok && !b.Spend(len(c.src)) {
+		// Put off to a later start; see DefaultBudget.
+		c.stopped = true
+		return
+	}
+	c.w, c.done = c.cache.Create(c.name)
 	if c.w == nil {
 		c.stopped = true
 		return
@@ -592,8 +606,8 @@ func (c *Reader) Finish() {
 	if c.p == nil && c.served > 0 {
 		// Every read was served: the parse this text would have cost was not
 		// paid, and that pays for recording more.
-		if cr, ok := c.cache.(interface{ Credit(size int) }); ok {
-			cr.Credit(len(c.src))
+		if b, ok := c.cache.(Budget); ok {
+			b.Credit(len(c.src))
 		}
 	}
 	if c.enc != nil {
@@ -609,17 +623,25 @@ func (c *Reader) Finish() {
 		// A text that does not parse, or a tree the codec will not carry:
 		// an entry that says so and holds no reads, so the next start does
 		// not record it again.
-		fp, ok := treecodec.DialectFingerprint(&c.d0)
-		if w, done := c.cache.Create(c.name, 0); ok && w != nil {
-			e := parseEntry{mode: c.mode, sum: c.textSum(), dialect: fp, failed: true}
-			_, err := w.Write(e.appendHead(nil))
-			done(err == nil)
-		}
+		c.mark(entryFailed)
 		return
 	}
 	if c.w != nil {
 		c.done(c.dirty)
 		c.w, c.done = nil, nil
+	}
+}
+
+// mark writes an entry holding no reads and saying why.
+func (c *Reader) mark(flags byte) {
+	fp, ok := treecodec.DialectFingerprint(&c.d0)
+	if !ok {
+		return
+	}
+	if w, done := c.cache.Create(c.name); w != nil {
+		e := parseEntry{mode: c.mode, sum: c.textSum(), dialect: fp, flags: flags}
+		_, err := w.Write(e.appendHead(nil))
+		done(err == nil)
 	}
 }
 
@@ -952,9 +974,14 @@ type parseEntry struct {
 	mode    byte
 	sum     [32]byte
 	dialect uint64
-	failed  bool
+	flags   byte
 	raw     [][]byte
 }
+
+// The flags of an entry that holds no reads.
+const (
+	entryFailed = 1 << 0 // the text does not parse, or holds a tree the codec refuses
+)
 
 type chunk struct {
 	set     bool
@@ -980,7 +1007,7 @@ func (e *parseEntry) appendHead(b []byte) []byte {
 	b = append(b, e.mode)
 	b = append(b, e.sum[:]...)
 	b = binary.LittleEndian.AppendUint64(b, e.dialect)
-	return appendBool(b, e.failed)
+	return append(b, e.flags)
 }
 
 func decodeEntry(b []byte) (*parseEntry, error) {
@@ -995,9 +1022,9 @@ func decodeEntry(b []byte) (*parseEntry, error) {
 	e := &parseEntry{mode: b[13]}
 	copy(e.sum[:], b[14:46])
 	e.dialect = binary.LittleEndian.Uint64(b[46:])
-	e.failed = b[54] == 1
+	e.flags = b[54]
 	b = b[entryHead:]
-	if e.failed && len(b) != 0 {
+	if e.flags != 0 && len(b) != 0 {
 		return nil, errEntry
 	}
 	e.raw = make([][]byte, 0, 64)

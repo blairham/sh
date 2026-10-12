@@ -35,11 +35,10 @@ import (
 type ParseCache interface {
 	// Load returns exactly what was last stored under name, or nil.
 	Load(name string) []byte
-	// Create starts a new entry under name, written as it is made, for a
-	// text of size bytes. done(true) puts it in place of whatever was there
-	// and done(false) throws it away; a nil w is a cache that will not take
-	// one now.
-	Create(name string, size int) (w io.Writer, done func(keep bool))
+	// Create starts a new entry under name, written as it is made.
+	// done(true) puts it in place of whatever was there and done(false)
+	// throws it away; a nil w is a cache that will not take one now.
+	Create(name string) (w io.Writer, done func(keep bool))
 }
 
 // textReader is what reads a file a line at a time, or whole: a

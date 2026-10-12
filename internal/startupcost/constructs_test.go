@@ -112,8 +112,9 @@ var constructAllocBounds = map[string]struct{ objects, bytes float64 }{
 	"assign": {3, 80},
 	// `f` with `f() { :; }`: 21.5 objects an iteration before, then 8.5
 	// while every call registered a closure to put back a getopts cursor
-	// the dialect shares.
-	"function": {7, 550},
+	// the dialect shares, then 5.4 objects and 319 bytes while every call
+	// allocated its scope (#6373).
+	"function": {5, 150},
 }
 
 // TestConstructAllocations holds the rows that #6353 brought down to what they

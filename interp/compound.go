@@ -1447,7 +1447,8 @@ func (r *Runner) funcDecl(c *syntax.FuncDecl) error {
 // takes none of them, so the one unwind serves both without asking which it
 // is unwinding.
 func (r *Runner) pushScope(keyword bool) *scope {
-	sc := &scope{keyword: keyword, owner: r, spares: &r.spares}
+	sc := r.spares.takeScope()
+	sc.keyword, sc.owner, sc.spares = keyword, r, &r.spares
 	r.scopes = append(r.scopes, sc)
 	return sc
 }
@@ -2227,12 +2228,16 @@ func (r *Runner) callFuncInPlace(ctx context.Context, fn *syntax.FuncDecl, name 
 
 	r.depth--
 	r.popScope(sc)
+	// The last thing read off the scope, so it goes back for the next call
+	// once that is read. See scopespares.go.
+	tableTaken := sc.trapTableWasTaken
+	r.spares.releaseScope(sc)
 	// zsh runs an EXIT trap set *inside* a function when the function
 	// returns, and then forgets it; the other three keep it for the end of
 	// the script. Only a trap this call installed counts, which is what the
 	// depth records — an inherited one is the caller's business.
 	var exitTrapReturned bool
-	if sc.trapTableWasTaken {
+	if tableTaken {
 		// The call had a table of its own, so anything standing under EXIT
 		// now is this call's: it fires here, and the caller's comes back
 		// whether or not there was one to fire.

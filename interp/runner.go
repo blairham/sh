@@ -1741,6 +1741,12 @@ type Runner struct {
 	// every other option here.
 	arithPrecedence      syntax.ArithPrecedencePolicy
 	arithPrecedenceMoved bool
+	// arithReadInAnotherOrder is whether this runner has built a dialect
+	// for a parse while the order stood away from the dialect's own, so that
+	// some tree it holds may have been read that way. It is never cleared:
+	// a function body read under `c_precedences` keeps that reading for as
+	// long as the function exists. See arithPrecedenceOptionInCharge.
+	arithReadInAnotherOrder bool
 
 	// killedBy is the signal this shell sent itself and had no handler for,
 	// with the number kept beside it so the death does not have to look the

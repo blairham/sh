@@ -652,6 +652,9 @@ func (r *Runner) dialect() syntax.Dialect {
 		// dialect rather than kept beside it, so the one parser this
 		// runner builds nested input with is told once.
 		d.ArithPrecedence = r.arithPrecedence
+		if r.arithPrecedence != r.nativeArithPrecedence() {
+			r.arithReadInAnotherOrder = true
+		}
 	}
 	// Where a character ends, which the grammar has to know before it can say
 	// which bytes are metacharacters and cannot work out for itself: the
@@ -714,6 +717,13 @@ func (r *Runner) ArithPrecedence() syntax.ArithPrecedencePolicy {
 	if r.arithPrecedenceMoved {
 		return r.arithPrecedence
 	}
+	return r.nativeArithPrecedence()
+}
+
+// nativeArithPrecedence is the order this runner's dialect reads arithmetic
+// in before any option has moved it, which is the order a front end reads a
+// program's own text in.
+func (r *Runner) nativeArithPrecedence() syntax.ArithPrecedencePolicy {
 	if r.Dialect != nil {
 		return r.Dialect.ArithPrecedence
 	}
@@ -725,10 +735,11 @@ func (r *Runner) ArithPrecedence() syntax.ArithPrecedencePolicy {
 // and it is the reason the order cannot live on syntax.Dialect alone.
 //
 // Asking for the order the dialect already parses with still counts as
-// having moved it, and that is deliberate rather than an oversight: what the
-// flag records is that an option is now in charge, so turning it back off
-// puts the dialect's own answer back rather than leaving the last request
-// standing.
+// having moved it: what the flag records is that an option is now in charge,
+// so turning it back off puts the dialect's own answer back rather than
+// leaving the last request standing. Whether an expression has to be read
+// again is a separate question, answered by the order itself — see
+// arithPrecedenceOptionInCharge.
 func (r *Runner) SetArithPrecedence(p syntax.ArithPrecedencePolicy) {
 	r.arithPrecedence, r.arithPrecedenceMoved = p, true
 }

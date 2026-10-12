@@ -78,6 +78,39 @@ f`,
 			"5\n8\n",
 		},
 		{
+			// A body read while the option was on keeps that reading, so
+			// turning the option off must still read it again: measured on
+			// zsh 5.9.2, 8 1 under the option and 5 0 after it.
+			"a function body read while the option was on",
+			`setopt c_precedences
+eval 'g() { printf "%s %s\n" "$(( 1 << 2 + 1 ))" "$(( 1 < 2 & 1 ))"; }'
+g
+unsetopt c_precedences
+g`,
+			"8 1\n5 0\n",
+		},
+		{
+			// And the same through a function that put the option on under
+			// emulate -L and defined another while it was: 5 once the
+			// option is back off, 8 with it on, measured on zsh 5.9.2.
+			"a body read under a function's own option",
+			`f() { emulate -L zsh; setopt c_precedences; eval 'h() { printf "%s\n" "$(( 1 << 2 + 1 ))"; }'; }
+f
+h
+setopt c_precedences
+h`,
+			"5\n8\n",
+		},
+		{
+			// emulate -L writes every option on the way in and out, and a
+			// written option is not a moved order.
+			"emulate -L leaves the native order in force",
+			`f() { emulate -L zsh; printf '%s\n' "$(( 1 << 2 + 1 ))"; }
+f
+printf '%s\n' "$(( 1 << 2 + 1 ))"`,
+			"5\n5\n",
+		},
+		{
 			"and the listings say which order is in force",
 			`[[ -o c_precedences ]]; printf 'off %s\n' "$?"
 setopt c_precedences

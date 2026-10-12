@@ -158,7 +158,7 @@ func isNamespaceName(s string) bool {
 // The tables directly, and never through a reader: this is what decides which
 // name a read *is*, so asking a reader would be circular.
 func (r *Runner) namespaceHoldsTheName(name string) bool {
-	if r.removed[name] {
+	if r.attrHas(name, attrRemoved) {
 		return false
 	}
 	if _, ok := r.varsLookup(name); ok {
@@ -364,7 +364,7 @@ func (r *Runner) namespaceKeys(prefix string) []string {
 	}
 	var out []string
 	for name := range r.varsRange() {
-		if isNamespaceName(name) && !r.removed[name] {
+		if isNamespaceName(name) && !r.attrHas(name, attrRemoved) {
 			out = append(out, prefix+name)
 		}
 	}

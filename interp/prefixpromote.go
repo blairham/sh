@@ -190,10 +190,7 @@ func (r *Runner) prefixEntryIsInThisCell(name string) bool {
 // in bash, so a plus form that takes the attribute away leaves the shell's own
 // value exactly where it was.
 func (r *Runner) declarationExports(name string, on bool) {
-	if r.exported == nil {
-		r.exported = map[string]bool{}
-	}
-	r.exported[name] = on
+	r.exportedPut(name, on)
 	if on {
 		r.keepThePrefixEntry(name)
 	}

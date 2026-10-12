@@ -1124,10 +1124,7 @@ func (r *Runner) emptyOrUnsetOptarg(empty bool) bool {
 		return false
 	}
 	r.varsDel("OPTARG")
-	if r.removed == nil {
-		r.removed = map[string]bool{}
-	}
-	r.removed["OPTARG"] = true
+	r.attrSet("OPTARG", attrRemoved)
 	return true
 }
 
@@ -1192,7 +1189,7 @@ func (r *Runner) localizeGetoptsCursor(sc *scope) {
 		return
 	}
 	held, inVars := r.varsLookup("OPTIND")
-	wasRemoved := r.removed["OPTIND"]
+	wasRemoved := r.attrHas("OPTIND", attrRemoved)
 	char, assigned := r.optChar, r.optindAssigned
 	// The caller's place in words, which is what a call with a cursor of its
 	// own hands back — and which is *not* OPTIND once a call has already made
@@ -1298,12 +1295,9 @@ func (r *Runner) localizeGetoptsCursor(sc *scope) {
 			r.varsDel("OPTIND")
 		}
 		if wasRemoved {
-			if r.removed == nil {
-				r.removed = map[string]bool{}
-			}
-			r.removed["OPTIND"] = true
+			r.attrSet("OPTIND", attrRemoved)
 		} else {
-			delete(r.removed, "OPTIND")
+			r.attrClear("OPTIND", attrRemoved)
 		}
 	})
 }

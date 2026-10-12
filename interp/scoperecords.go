@@ -268,7 +268,7 @@ func (sc *scope) record(name string) *shadowRecord {
 		return sc.recordIndex[name]
 	}
 	for _, rec := range sc.records {
-		if rec.name == name {
+		if sameName(rec.name, name) {
 			return rec
 		}
 	}

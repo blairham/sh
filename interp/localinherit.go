@@ -145,10 +145,10 @@ func (r *Runner) restoreTheOuterBinding(name string) bool {
 	// empty, which is what the scope recorded for the return.
 	if held {
 		r.varsPut(name, value)
-		setBool(&r.removed, name, false)
+		r.attrClear(name, attrRemoved)
 		had = true
 	} else if sc.madeRecord(recRemovedBefore) {
-		setBool(&r.removed, name, sc.recordBit(recRemovedBefore, name))
+		r.attrPut(name, attrRemoved, sc.recordBit(recRemovedBefore, name))
 	}
 	// The two compound tables, which freshcell.go has just emptied. Copied
 	// back, because the scope's copy has to stay the scope's: it is what the

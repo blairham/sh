@@ -74,12 +74,17 @@ import (
 // the child too, so the gap is a gap; it is recorded here rather than
 // pretended away.
 type expansionTables struct {
-	vars          varTables
-	exported      map[string]bool
-	removed       map[string]bool
-	declaredEmpty map[string]bool
-	assigned      map[string]string
+	vars varTables
+	// flags is the export, unset and declared-empty records, which live in
+	// each name's cell — see expansionFlags.
+	flags    map[string]cellAttrs
+	assigned map[string]string
 }
+
+// expansionFlags are the attributes an expansion can write: an assignment
+// records the export it spoke, `${x=…}` the name it brought back from unset,
+// and a declaration-shaped write the empty it declared.
+const expansionFlags = attrExportSpoken | attrExportOn | attrRemoved | attrDeclaredEmpty
 
 // saveExpansionTables takes the copy. Every map is cloned one level deep, and
 // the two array tables a second level, because their values are maps too —
@@ -87,18 +92,17 @@ type expansionTables struct {
 // assignment writes.
 func (r *Runner) saveExpansionTables() expansionTables {
 	return expansionTables{
-		vars:          r.saveVarTables(),
-		exported:      maps.Clone(r.exported),
-		removed:       maps.Clone(r.removed),
-		declaredEmpty: maps.Clone(r.declaredEmpty),
-		assigned:      maps.Clone(r.assigned),
+		vars:     r.saveVarTables(),
+		flags:    r.saveAttrs(expansionFlags),
+		assigned: maps.Clone(r.assigned),
 	}
 }
 
 // restoreExpansionTables puts the copy back.
 func (r *Runner) restoreExpansionTables(t expansionTables) {
 	r.restoreVarTables(t.vars)
-	r.exported, r.removed, r.declaredEmpty, r.assigned = t.exported, t.removed, t.declaredEmpty, t.assigned
+	r.restoreAttrs(expansionFlags, t.flags)
+	r.assigned = t.assigned
 }
 
 // wroteSince reports whether anything in the tables has changed.
@@ -109,9 +113,7 @@ func (r *Runner) restoreExpansionTables(t expansionTables) {
 // answered must still be able to run one.
 func (r *Runner) wroteSince(t expansionTables) bool {
 	return r.varTablesWroteSince(t.vars) ||
-		!maps.Equal(t.exported, r.exported) ||
-		!maps.Equal(t.removed, r.removed) ||
-		!maps.Equal(t.declaredEmpty, r.declaredEmpty) ||
+		r.attrsWroteSince(expansionFlags, t.flags) ||
 		!maps.Equal(t.assigned, r.assigned)
 }
 

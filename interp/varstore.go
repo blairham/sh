@@ -157,7 +157,7 @@ func (c *varCell) clearSlot(s cellSlots) {
 // on the end, and a clone's slab has the same positions as its parent's. Both
 // of those places forget it.
 func (r *Runner) cell(name string) *varCell {
-	if r.lastCell != 0 && name == r.lastCellName {
+	if r.lastCell != 0 && sameName(name, r.lastCellName) {
 		return &r.cellSlab[r.lastCell-1]
 	}
 	r.cellProbes++
@@ -166,6 +166,14 @@ func (r *Runner) cell(name string) *varCell {
 		return &r.cellSlab[i]
 	}
 	return nil
+}
+
+// sameName reports whether two names are one, asking the length and the first
+// byte before the comparison: the names a function declares are as often as
+// not one letter each, and a scan over a handful of them compares names of
+// the same length that differ, each a call into the runtime (#6373).
+func sameName(a, b string) bool {
+	return len(a) == len(b) && (len(a) == 0 || a[0] == b[0]) && a == b
 }
 
 // cellFor is the cell a write lands in, made if the name has none.
@@ -847,6 +855,24 @@ func (r *Runner) storedScalarOnly(name string) (string, bool) {
 //	                 when a whole-name scalar store landed on it; one listing
 //	                 writes it as that scalar until an array write touches it.
 //	                 See Semantics.ScalarHeldUnderTheArrayLetterListsAsAScalar.
+//	attrRemoved      `unset` took the name away. It came from the environment
+//	                 rather than from the store, so deleting the stored value
+//	                 cannot hide it: the environment is a second source and a
+//	                 read consults both. Nothing clears the record and nothing
+//	                 needs to — a later assignment puts the name in the store,
+//	                 which every read asks first.
+//	attrDeclaredEmpty
+//	                 a declaration gave the name its value, in the dialect that
+//	                 reads a name declared without one as set: the shell reads
+//	                 it as empty and no child is told about it. Cleared by an
+//	                 assignment, and by a scope that shadowed the name going
+//	                 away.
+//	attrExportSpoken, attrExportOn
+//	                 the export attribute, which has three states rather than
+//	                 two: spoken and on goes into a command's environment,
+//	                 spoken and off was taken out of it (`export -n`, `declare
+//	                 +x`), and unspoken is a name nothing has said either about.
+//	                 See exportedLookup.
 type cellAttrs uint32
 
 const (
@@ -865,11 +891,15 @@ const (
 	attrDeclaredOnlyCompound
 	attrHeldAnElement
 	attrScalarUnderTheArrayLetter
+	attrRemoved
+	attrDeclaredEmpty
+	attrExportSpoken
+	attrExportOn
 )
 
 // cellAttrCount is how many attributes a cell has, which is the length of
 // Runner.attrCount.
-const cellAttrCount = 15
+const cellAttrCount = 19
 
 // attrIndex is an attribute's position in Runner.attrCount.
 func attrIndex(a cellAttrs) int { return bits.TrailingZeros32(uint32(a)) }
@@ -984,4 +1014,99 @@ func (r *Runner) attrNames(a cellAttrs) iter.Seq[string] {
 			}
 		}
 	}
+}
+
+// exported is the export attribute: see attrExportSpoken. The verbs are the
+// ones the map they replaced had, so that `on, spoken := r.exportedLookup(n)`
+// reads as `on, spoken := r.exported[n]` did.
+
+// exportedAt reports whether name goes into a command's environment.
+func (r *Runner) exportedAt(name string) bool { return r.attrHas(name, attrExportOn) }
+
+// exportedLookup is the attribute and whether anything has spoken about it.
+func (r *Runner) exportedLookup(name string) (on, spoken bool) {
+	at := r.attrsOf(name)
+	return at&attrExportOn != 0, at&attrExportSpoken != 0
+}
+
+// exportedPut records name as exported or as taken out of the environment.
+func (r *Runner) exportedPut(name string, on bool) {
+	to := attrExportSpoken
+	if on {
+		to |= attrExportOn
+	}
+	r.setAttrs(name, attrExportSpoken|attrExportOn, to)
+}
+
+// exportedDel forgets anything said about name's export.
+func (r *Runner) exportedDel(name string) { r.setAttrs(name, attrExportSpoken|attrExportOn, 0) }
+
+// exportedLen is how many names something has said the export of.
+func (r *Runner) exportedLen() int { return r.attrLen(attrExportSpoken) }
+
+// exportedRange is every name something has said the export of, and whether
+// it is exported.
+func (r *Runner) exportedRange() iter.Seq2[string, bool] {
+	return func(yield func(string, bool) bool) {
+		if r.attrCount[attrIndex(attrExportSpoken)] == 0 {
+			return
+		}
+		r.cellsRanging++
+		defer func() { r.cellsRanging-- }()
+		for i := 0; i < len(r.cellSlab); i++ {
+			c := &r.cellSlab[i]
+			if c.attrs&attrExportSpoken != 0 && !yield(c.name, c.attrs&attrExportOn != 0) {
+				return
+			}
+		}
+	}
+}
+
+// saveAttrs is a copy of the attributes in mask, for a caller that has to put
+// them back or ask whether anything wrote them — see expansionTables.
+func (r *Runner) saveAttrs(mask cellAttrs) map[string]cellAttrs {
+	m := map[string]cellAttrs{}
+	if r.attrTotal == 0 {
+		return m
+	}
+	for i := range r.cellSlab {
+		if c := &r.cellSlab[i]; c.attrs&mask != 0 {
+			m[c.name] = c.attrs & mask
+		}
+	}
+	return m
+}
+
+// restoreAttrs puts back the attributes in mask as saveAttrs copied them,
+// taking them off every name the copy does not hold.
+func (r *Runner) restoreAttrs(mask cellAttrs, saved map[string]cellAttrs) {
+	r.cellsRanging++
+	for i := 0; i < len(r.cellSlab); i++ {
+		if c := &r.cellSlab[i]; c.attrs&mask != 0 {
+			if _, ok := saved[c.name]; !ok {
+				r.setAttrs(c.name, mask, 0)
+			}
+		}
+	}
+	r.cellsRanging--
+	for name, at := range saved {
+		r.setAttrs(name, mask, at)
+	}
+}
+
+// attrsWroteSince reports whether the attributes in mask differ from what
+// saveAttrs copied.
+func (r *Runner) attrsWroteSince(mask cellAttrs, saved map[string]cellAttrs) bool {
+	n := 0
+	for i := range r.cellSlab {
+		c := &r.cellSlab[i]
+		if c.attrs&mask == 0 {
+			continue
+		}
+		n++
+		if saved[c.name] != c.attrs&mask {
+			return true
+		}
+	}
+	return n != len(saved)
 }

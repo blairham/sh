@@ -431,10 +431,7 @@ func (r *Runner) UnmarkInteger(name string) { r.attrClear(name, attrInteger) }
 // sees, and [Runner.SetDynamicDeclaration] would only have changed how the
 // name describes itself.
 func (r *Runner) MarkExported(name string) {
-	if r.exported == nil {
-		r.exported = map[string]bool{}
-	}
-	r.exported[name] = true
+	r.exportedPut(name, true)
 }
 
 // MarkHidden keeps a name's *value* out of the listings, which is what

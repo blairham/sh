@@ -136,13 +136,10 @@ func (r *Runner) settleStartupPwd() bool {
 // makes an ordinary variable. That leaves the bash answer in every column,
 // which is what was there before this, so no row moves backwards on it.
 func (r *Runner) exportStartupPwd() {
-	if r.removed["PWD"] {
+	if r.attrHas("PWD", attrRemoved) {
 		return
 	}
-	if r.exported == nil {
-		r.exported = map[string]bool{}
-	}
-	r.exported["PWD"] = true
+	r.exportedPut("PWD", true)
 }
 
 // namesWorkingDirectory reports whether an absolute path is another spelling

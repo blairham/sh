@@ -173,7 +173,7 @@ func (r *Runner) spliceTargetIsAnArray(a *syntax.Assign) bool {
 	if _, isArray := r.arrayElemsOfTheName(name); isArray {
 		return true
 	}
-	if a.Operand && r.declaredEmpty[name] {
+	if a.Operand && r.attrHas(name, attrDeclaredEmpty) {
 		// A declaration's own operand — `typeset a[2]=(p q)`. The utility
 		// reaches the name first and is handed it bare, so a name that had
 		// nothing is holding the declaration's empty string by the time the

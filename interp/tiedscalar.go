@@ -944,7 +944,7 @@ func (r *Runner) refuseUntie(builtin string) int {
 // a gate that asked "is the other half removed" without asking which kind of
 // tie this is left `${+path}` at 0.
 func (r *Runner) pairHalfWasRemoved(t tie, name string) bool {
-	return t.wordless && r.removed[name] && !r.nameIsSet(name)
+	return t.wordless && r.attrHas(name, attrRemoved) && !r.nameIsSet(name)
 }
 
 // pairHalfKeepsItsMark reports whether this name is a half of a wordless pair

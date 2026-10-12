@@ -44,7 +44,7 @@ import (
 // Semantics.AssignmentRestoresAnUnsetProducedParameter) was produced again by
 // the next line of the same script.
 func (r *Runner) ensureSpecials() {
-	if _, ok := r.varsLookup("IFS"); !ok && !r.removed["IFS"] {
+	if _, ok := r.varsLookup("IFS"); !ok && !r.attrHas("IFS", attrRemoved) {
 		r.setVarQuietly("IFS", " \t\n")
 	}
 	if _, ok := r.producersLookup("_"); !ok && !r.endedProducers["_"] &&
@@ -88,10 +88,10 @@ func (r *Runner) ensureSpecials() {
 			return r.underscoreAtStartup()
 		})
 	}
-	if _, ok := r.varsLookup("PPID"); !ok && !r.removed["PPID"] {
+	if _, ok := r.varsLookup("PPID"); !ok && !r.attrHas("PPID", attrRemoved) {
 		r.setVarQuietly("PPID", strconv.Itoa(os.Getppid()))
 	}
-	if _, ok := r.varsLookup("OPTIND"); !ok && !r.removed["OPTIND"] {
+	if _, ok := r.varsLookup("OPTIND"); !ok && !r.attrHas("OPTIND", attrRemoved) {
 		// The index the next `getopts` will read, which is 1 before the
 		// builtin has ever run — unanimous across the panel, so it is a
 		// starting value here rather than an axis. Writing it here and not
@@ -879,14 +879,14 @@ func (r *Runner) UnsetDynamic(name string) {
 	// the rest of the session, so every later widget found it gone where zsh
 	// 5.9.2 gives each call its parameters afresh (#5917). The two callers in
 	// unset itself record the removal after calling this, so they keep it.
-	delete(r.removed, name)
+	r.attrClear(name, attrRemoved)
 	delete(r.endedProducers, name)
 }
 
 // SetSpecial gives a parameter a fixed value unless a script has already set
 // one, which is how a dialect supplies something like UID.
 func (r *Runner) SetSpecial(name, value string) {
-	if _, ok := r.varsLookup(name); ok || r.removed[name] {
+	if _, ok := r.varsLookup(name); ok || r.attrHas(name, attrRemoved) {
 		return
 	}
 	r.setVarQuietly(name, value)

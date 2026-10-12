@@ -93,7 +93,7 @@ func (r *Runner) SetDeferredParameter(name string) {
 // `${+funcstack}` is 0 there and a function that reads `$funcstack` sees
 // nothing, where a deferred name would have arrived on that read.
 func (r *Runner) DeferredParameter(name string) bool {
-	return r.deferredParams[name] && !r.removed[name]
+	return r.deferredParams[name] && !r.attrHas(name, attrRemoved)
 }
 
 // ReferToParameter brings a deferred parameter in from outside the expansion

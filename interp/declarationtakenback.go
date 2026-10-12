@@ -79,7 +79,7 @@ type declarationHeld struct {
 func (r *Runner) holdTheDeclaration(name string) declarationHeld {
 	h := declarationHeld{attrs: r.captureAttributes(name), hidden: r.attrHas(name, attrHideInScope)}
 	h.value, h.valueSet = r.varsLookup(name)
-	h.exported, h.exportSpoken = r.exported[name]
+	h.exported, h.exportSpoken = r.exportedLookup(name)
 	_, array := r.arraysLookup(name)
 	_, assoc := r.assocsLookup(name)
 	// The export record counts as a name being here only when it records an
@@ -114,12 +114,9 @@ func (r *Runner) takeTheDeclarationBack(name string, h declarationHeld, fresh bo
 		r.varsDel(name)
 	}
 	if h.exportSpoken {
-		if r.exported == nil {
-			r.exported = map[string]bool{}
-		}
-		r.exported[name] = h.exported
+		r.exportedPut(name, h.exported)
 	} else {
-		delete(r.exported, name)
+		r.exportedDel(name)
 	}
 	r.attrPut(name, attrHideInScope, h.hidden)
 	if fresh && len(r.scopes) > 0 {

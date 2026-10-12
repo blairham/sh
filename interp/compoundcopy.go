@@ -123,9 +123,9 @@ func (r *Runner) snapshotOneName(name string) (heldValue, bool) {
 	switch {
 	case r.isCompoundVariable(name):
 		h.compound = true
-	case r.assocsAt(name) != nil && !r.removed[name]:
+	case r.assocsAt(name) != nil && !r.attrHas(name, attrRemoved):
 		h.assoc, h.isAssoc = maps.Clone(r.assocsAt(name)), true
-	case r.arraysAt(name) != nil && !r.removed[name]:
+	case r.arraysAt(name) != nil && !r.attrHas(name, attrRemoved):
 		h.arr, h.isArr = r.arraysAt(name).shallowClone(), true
 	default:
 		// getVar rather than Vars, so that a name read out of the inherited

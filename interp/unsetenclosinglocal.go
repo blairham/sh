@@ -308,7 +308,7 @@ func (r *Runner) unsetLeavesARunningScopesLocalDeclared(name string, again bool)
 	if !again && r.theRunningCallsPrefixHolds(name) {
 		// The one shape where the placeholder carries a letter. See
 		// theRunningCallsPrefixHolds for the rows.
-		r.exported[name] = true
+		r.exportedPut(name, true)
 	}
 }
 

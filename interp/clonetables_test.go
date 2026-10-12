@@ -515,7 +515,6 @@ func seedTables(r *Runner) {
 	r.completions = map[string]completionSpec{"seed": {options: []string{"nospace"}, words: []string{"-F", "f"}}}
 	r.custom = map[string]Builtin{"seed": func(*Runner, context.Context, []string) int { return 0 }}
 	r.preludeCommands = map[string]Builtin{"seed": func(*Runner, context.Context, []string) int { return 0 }}
-	r.declaredEmpty = map[string]bool{"seed": true}
 	r.compoundVariable = map[string]bool{"seed": true}
 	r.namespaces = map[string]bool{"seed": true}
 	r.declaring = map[string]bool{"seed": true}
@@ -526,7 +525,6 @@ func seedTables(r *Runner) {
 	r.withdrawnMathFuncs = map[string]bool{"seed": true}
 	r.execFds = map[int]bool{7: true}
 	r.cloexecFds = map[int]bool{8: true}
-	r.exported = map[string]bool{"seed": true}
 	r.exportedFuncs = map[string]bool{"seed": true}
 	r.withdrawnFuncs = map[string]withdrawnFunction{"seed": {}}
 	r.readonlyFuncs = map[string]bool{"seed": true}
@@ -568,7 +566,6 @@ func seedTables(r *Runner) {
 	r.optionLetterNames = map[rune]string{'Z': "seed"}
 	r.dialectCompgen = map[string]func(*Runner, string) []string{"seed": nil}
 	r.preludeFuncs = map[string]*syntax.FuncDecl{"seed": nil}
-	r.removed = map[string]bool{"seed": true}
 	r.tied = map[string]tie{"seed": {}}
 	r.traps = map[string]string{"seed": "v"}
 	r.shellOwn = map[string]bool{"seed": true}
@@ -649,10 +646,10 @@ func TestACloneOwnsEveryTable(t *testing.T) {
 // rather than all of them, because it is a property of maps.Clone.
 func TestACloneKeepsAnEmptyTableItsOwn(t *testing.T) {
 	parent := newTestRunner(t, &Runner{})
-	parent.removed = map[string]bool{}
+	parent.removedShellOwn = map[string]bool{}
 	child := parent.clone()
-	child.removed["zq"] = true
-	if parent.removed["zq"] {
+	child.removedShellOwn["zq"] = true
+	if parent.removedShellOwn["zq"] {
 		t.Error("a subshell's `unset` reached the parent through an empty table it was handed")
 	}
 }

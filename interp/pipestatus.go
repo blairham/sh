@@ -400,7 +400,7 @@ func (r *Runner) namesTheProducedPipelineStatus(name string) bool {
 	if name == "" || name != r.pipeStatusName {
 		return false
 	}
-	if r.removed[name] &&
+	if r.attrHas(name, attrRemoved) &&
 		r.ask(r.sem().UnsetEndsTheProducedPipelineStatus, "`unset` ending the produced pipeline status") {
 		return false
 	}
@@ -424,5 +424,5 @@ func (r *Runner) namesTheProducedPipelineStatus(name string) bool {
 // throughout, which is what said the gap was in the description rather than
 // in the producer.
 func (r *Runner) removedForDescription(name string) bool {
-	return r.removed[name] && !r.namesTheProducedPipelineStatus(name)
+	return r.attrHas(name, attrRemoved) && !r.namesTheProducedPipelineStatus(name)
 }

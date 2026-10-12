@@ -44,14 +44,9 @@ import (
 // clone's own `unset` builds the map the parent's field never pointed at and
 // nothing races. The test seeds every table for that reason.
 func (c *Runner) ownTables(r *Runner) {
-	// The variable stores. Vars and exported are made rather than cloned
-	// because a nil one is not safe to write and these two are written
-	// without a lazy allocation in front of them.
+	// The variable store, whose cells carry each name's attributes as well
+	// — export among them — so the copy of the slab is the copy of those.
 	c.ownVarTables(r)
-	c.exported = make(map[string]bool, len(r.exported))
-	for k, v := range r.exported {
-		c.exported[k] = v
-	}
 	// The two that hold a container per name, so the element has to be
 	// copied too: cloning the outer map alone would give the subshell its
 	// own name table pointing at the parent's elements.
@@ -76,7 +71,6 @@ func (c *Runner) ownTables(r *Runner) {
 	//	               ksh93's fourth kind: the name is a compound variable,
 	//	               so what a bare `$c` reads and what `typeset -p` writes
 	//	               come from the members stored under it
-	c.removed = maps.Clone(r.removed)
 	// A subshell reads its own lines' substitutions and keeps their trees
 	// itself. See keptsubstbody.go.
 	c.keptSubstBodies = maps.Clone(r.keptSubstBodies)
@@ -85,7 +79,6 @@ func (c *Runner) ownTables(r *Runner) {
 	c.deferredParams = maps.Clone(r.deferredParams)
 	c.readonlyByDeclaration = maps.Clone(r.readonlyByDeclaration)
 	c.removedShellOwn = maps.Clone(r.removedShellOwn)
-	c.declaredEmpty = maps.Clone(r.declaredEmpty)
 	c.compoundVariable = maps.Clone(r.compoundVariable)
 	// The namespaces a `namespace NAME { … }` block has declared. A subshell
 	// that opens one must not leave it behind: measured, `( namespace ns {

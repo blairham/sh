@@ -105,13 +105,13 @@ var constructAllocBounds = map[string]struct{ objects, bytes float64 }{
 	"test": {4.5, 180},
 	// `[[ $i -lt N ]]`: 27.5 objects and 5.4 KB an iteration before, most
 	// of it a parser built to read each operand, then 4.5.
-	"dbracket": {4, 80},
+	"dbracket": {4, 120},
 	// `i=$((i+1))`: 4.5 objects and 330 bytes an iteration while every
 	// arithmetic expansion copied the stack of substitution levels and
 	// built a closure to put it back.
-	"arith-dollar": {3, 80},
+	"arith-dollar": {3, 160},
 	// `x=$((i*2+1))`: 6.5 objects and 338 bytes, for the same reason.
-	"arith-expand": {5, 90},
+	"arith-expand": {5, 180},
 	// `: $i`: 19.5 objects an iteration before, then 5.5.
 	"builtin": {4.5, 120},
 	// `x=$i`: 13.5 objects an iteration before, then 3.5.

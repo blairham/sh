@@ -115,52 +115,6 @@ func (r *Runner) wroteSince(t expansionTables) bool {
 		!maps.Equal(t.assigned, r.assigned)
 }
 
-func cloneArrays(in map[string]Array) map[string]Array {
-	if in == nil {
-		return nil
-	}
-	out := make(map[string]Array, len(in))
-	for k, v := range in {
-		out[k] = v.clone()
-	}
-	return out
-}
-
-func cloneAssoc(in map[string]AssocArray) map[string]AssocArray {
-	if in == nil {
-		return nil
-	}
-	out := make(map[string]AssocArray, len(in))
-	for k, v := range in {
-		out[k] = v.clone()
-	}
-	return out
-}
-
-func arraysEqual(a, b map[string]Array) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for k, v := range a {
-		if w, ok := b[k]; !ok || !v.equal(w) {
-			return false
-		}
-	}
-	return true
-}
-
-func assocEqual(a, b map[string]AssocArray) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for k, v := range a {
-		if w, ok := b[k]; !ok || !v.equal(w) {
-			return false
-		}
-	}
-	return true
-}
-
 // bodyExpandedElsewhere asks whichever axis owns this redirection whether the
 // here-document body was expanded somewhere other than this shell.
 //

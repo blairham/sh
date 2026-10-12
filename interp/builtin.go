@@ -6683,6 +6683,16 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 		if r.unspecified {
 			return 2
 		}
+		// A regular file never makes a reader wait, so no deadline can pass
+		// while one is read and the block source above is already the
+		// answer. Handing it to the timed machinery instead read it a byte
+		// per system call, each byte a round trip to a goroutine: about
+		// 20 µs a line, against nothing for the same `read` without `-t`.
+		// F-Sy-H reads its theme files with `read -r -t 1`, three of them
+		// at every interactive start (#6363).
+		if _, regular := rewindableFile(in); regular {
+			break
+		}
 		// `read -k` on the terminal waits for the bytes rather than parking a
 		// read on them, because the stream it would park on is the line
 		// editor's own input and an abandoned read there swallows the next

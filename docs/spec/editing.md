@@ -1274,10 +1274,31 @@ spellings `internal/cellgrid` exists to resolve — and the same difference `TER
 decides at a terminal, since readline and zsh both reduce to backspaces where
 this editor addresses the cursor.
 
+**A postdisplay is not an edit to the line.** `region_highlight`'s offsets
+follow the editor's edits (#5874), and a suggestion appearing after the line
+moves none of them. Measured 2026-10-12 against zsh 5.9.2 in tmux 3.8, a
+`self-insert` wrapper setting `POSTDISPLAY="cho hello"` and
+`region_highlight=("0 1 fg=red" "1 10 fg=8")`, typing `e`:
+
+| asked | drawn |
+| --- | --- |
+| both elements | `ESC[31m e ESC[39m ESC[90m cho hello ESC[39m`, cursor after the `e` |
+| `"1 10 fg=8"` alone | `e`, then `cho hello` gray |
+| `"0 1 fg=red"` alone | a red `e`, then `cho hello` plain |
+| the widget on `e` only, then `x` typed | `ex` red, `cho hello` gray: the insert at 1 moved both ends at 1 |
+
+So what the offsets are lined up with is `$BUFFER`, never what is drawn, and
+the highlighter is told where the line ends in the displayed text
+(`repl.BufferHighlighter`) for exactly this (#6412).
+
 **`PREDISPLAY` is still absent**, and it is the other half of the same pair in
 that shell. Nothing on this machine writes it: an element of
 `region_highlight` carrying the `P` flag is dropped rather than drawn at the
-wrong place, which is the rule above and is unchanged (#4217).
+wrong place, which is the rule above and is unchanged (#4217). Measured the
+same day with `PREDISPLAY="pre:"` added to the widget above, zsh draws `pre:`
+before the line and colors the line exactly as in the first row — an element
+without `P` counts from the buffer's start — and `P0 4 fg=blue` colors the
+`pre:`. Here the line is colored the same, and `pre:` is not drawn.
 
 ## Work put aside until a time
 

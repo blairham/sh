@@ -40,7 +40,7 @@ func TestRegionHighlightDrawsTheMeasuredTransitions(t *testing.T) {
 		r.SetArray(zleRegion, row.Regions)
 		var b strings.Builder
 		at := 0
-		for _, h := range RegionHighlights(r, line) {
+		for _, h := range RegionHighlights(r, line, len(line)) {
 			if !h.Point {
 				t.Fatalf("%q: a run where a point was expected: %+v", row.Regions, h)
 			}
@@ -94,7 +94,7 @@ func TestZleHighlightCodesWriteTheColors(t *testing.T) {
 		const line = "abcdefgh"
 		var b strings.Builder
 		at := 0
-		for _, h := range RegionHighlights(r, line) {
+		for _, h := range RegionHighlights(r, line, len(line)) {
 			b.WriteString(line[at:h.Start])
 			b.WriteString(h.Style)
 			at = h.Start

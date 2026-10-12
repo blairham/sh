@@ -175,7 +175,11 @@ type Shell struct {
 	// only the moment a session is built knows which one. A binary that sets
 	// both gets Highlighter, since that one is the binary's own answer and
 	// this one is the dialect's default.
-	HighlightLine func(*interp.Runner, string) []repl.Highlight
+	//
+	// The string is what is displayed — the line and then any postdisplay —
+	// and the int is the line's length in bytes within it, which is
+	// repl.BufferHighlighter's buffer.
+	HighlightLine func(*interp.Runner, string, int) []repl.Highlight
 
 	// StartLine is what this dialect clears when a new line begins — the
 	// other half of HighlightLine, since `region_highlight` is kept for the

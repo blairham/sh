@@ -28,9 +28,16 @@ func esc(s string) string { return strings.ReplaceAll(s, "\x1b", "ESC") }
 // where it asks, which is what the editor draws.
 func drawRegions(t *testing.T, r *interp.Runner, line string) string {
 	t.Helper()
+	return drawDisplayed(t, r, line, len(line))
+}
+
+// drawDisplayed is drawRegions for a line with buffer bytes of it the buffer
+// and the rest a postdisplay.
+func drawDisplayed(t *testing.T, r *interp.Runner, line string, buffer int) string {
+	t.Helper()
 	var b strings.Builder
 	at := 0
-	for _, h := range zsh.RegionHighlights(r, line) {
+	for _, h := range zsh.RegionHighlights(r, line, buffer) {
 		if !h.Point || h.Start < at || h.Start > len(line) {
 			t.Fatalf("not a point in order on the line: %+v", h)
 		}
@@ -115,7 +122,7 @@ func TestAnElementThisShellCannotDrawIsDropped(t *testing.T) {
 			if _, ok, _ := runWidget(t, r, out, "paint", repl.Line{Buffer: "abcdef"}); !ok {
 				t.Fatal("the widget did not run")
 			}
-			if runs := zsh.RegionHighlights(r, "abcdef"); len(runs) != 0 {
+			if runs := zsh.RegionHighlights(r, "abcdef", 6); len(runs) != 0 {
 				t.Errorf("got %+v, want nothing drawn", runs)
 			}
 		})
@@ -155,7 +162,7 @@ func TestWhatASpecPaints(t *testing.T) {
 			if _, ok, _ := runWidget(t, r, out, "paint", repl.Line{Buffer: "abcdef"}); !ok {
 				t.Fatal("the widget did not run")
 			}
-			runs := zsh.RegionHighlights(r, "abcdef")
+			runs := zsh.RegionHighlights(r, "abcdef", 6)
 			if len(runs) != 2 || runs[0].Start != 0 || runs[1].Start != 3 {
 				t.Fatalf("got %+v, want an opening at 0 and an ending at 3", runs)
 			}
@@ -163,6 +170,29 @@ func TestWhatASpecPaints(t *testing.T) {
 				t.Errorf("got %s, want %s", esc(runs[0].Style), esc(c.want))
 			}
 		})
+	}
+}
+
+// TestASuggestionIsNotAnEdit is #6412: the offsets follow what the editor
+// does to the buffer, and a postdisplay drawn after it is not that. The first
+// draw is the bytes zsh 5.9.2 wrote to a pseudo-terminal for this widget,
+// measured 2026-10-12; cmd/zsh/regionpostdisplaypty_test.go drives the same
+// cases through a terminal.
+func TestASuggestionIsNotAnEdit(t *testing.T) {
+	r, out := zleRunner(t, `
+		suggest() { POSTDISPLAY="cho hello"; region_highlight=("0 1 fg=red" "1 10 fg=8"); }
+		zle -N suggest
+	`)
+	if _, ok, _ := runWidget(t, r, out, "suggest", repl.Line{Buffer: "e", Cursor: 1}); !ok {
+		t.Fatal("the widget did not run")
+	}
+	if got, want := drawDisplayed(t, r, "echo hello", 1), "\x1b[31me\x1b[39m\x1b[90mcho hello\x1b[39m"; got != want {
+		t.Fatalf("with the suggestion drawn: %s, want %s", esc(got), esc(want))
+	}
+	// Then the editor's own `x`, which is an edit, and the suggestion still
+	// after it: the insert at 1 moves both ends at 1.
+	if got, want := drawDisplayed(t, r, "excho hello", 2), "\x1b[31mex\x1b[39m\x1b[90mcho hello\x1b[39m"; got != want {
+		t.Fatalf("after a typed x: %s, want %s", esc(got), esc(want))
 	}
 }
 
@@ -190,7 +220,7 @@ func TestItLivesAsLongAsTheLineDoes(t *testing.T) {
 		t.Fatalf("across two widgets on one line: drawn %s, want %s", esc(got), esc(want))
 	}
 	zsh.ResetRegionHighlight(r)
-	if runs := zsh.RegionHighlights(r, "abcdef"); len(runs) != 0 {
+	if runs := zsh.RegionHighlights(r, "abcdef", 6); len(runs) != 0 {
 		t.Errorf("after the line ended: got %+v, want nothing", runs)
 	}
 }

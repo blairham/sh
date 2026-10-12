@@ -203,6 +203,19 @@ type matchWhere struct {
 	// not an optimisation of it.
 	pattern string
 	subject string
+	// entry is the pattern's place in the process-wide program cache, and
+	// prog the program this matchWhere is running from it. cdead and
+	// cdeadWide are the program's own memo of dead ends. See
+	// interp/patternprogram.go.
+	entry     *programEntry
+	prog      *patternProgram
+	cdead     deadSet
+	cdeadWide map[[3]uint64]struct{}
+	// prepared says prepare has run for the pattern now set. It is put off
+	// until the walk is about to read the tables, since a pattern the program
+	// runs never reads them; until then they are empty, which every lookup
+	// reads as "not known" and answers by the scan it stands for.
+	prepared bool
 	// ready also says whether the prepared tables above are about the
 	// pattern now being matched. Everything that reads one asks it first,
 	// because a caller may build options and scan a pattern with them before
@@ -747,9 +760,8 @@ func (r *Runner) publishMatch(m matchReport) {
 // This is #1398's shape: the matcher re-derived the pattern's structure at
 // every step, and half the samples on a prompt theme's substitution were
 // scans rediscovering the same answers. Reading them once is the cheap half
-// of "read the pattern once"; what it does not do is remove the re-derivation
-// of *which* construct stands at a position, which wants a compiled form and
-// a design note of its own.
+// of "read the pattern once"; the other half, which construct stands at a
+// position, is the program in interp/patternprogram.go (#6380).
 func (w *matchWhere) prepare(pattern string, emptyCompiles bool) {
 	if !patternPrepares {
 		// Every table below is consulted through a lookup that falls back to
@@ -783,6 +795,37 @@ func (w *matchWhere) prepare(pattern string, emptyCompiles bool) {
 				w.brackEnd[i] = int32(end)
 			}
 		}
+	}
+}
+
+// holdWhere gives options that have no matchWhere one of their own, for a
+// caller about to ask the matcher about one pattern many times — every
+// position of a substitution, every name in a directory. Without it each
+// question builds a matchWhere and prepares the pattern again, and nothing
+// learned about the pattern — its tables, its memo, its program — outlives
+// the one question. Options that already hold one keep it.
+func (o *patternOpts) holdWhere() {
+	if o.where == nil {
+		o.where = &matchWhere{}
+	}
+}
+
+// unprepare empties the tables for a pattern prepare has not been run on yet,
+// so that nothing left from the last pattern is read as this one's. An empty
+// table is one every lookup falls back to its scan for.
+func (w *matchWhere) unprepare() {
+	w.prepared = false
+	w.noTilde, w.noParen = false, false
+	w.parenEnd, w.brackEnd = w.parenEnd[:0], w.brackEnd[:0]
+	w.reachAt, w.reachLen = w.reachAt[:0], w.reachLen[:0]
+	clear(w.arms)
+}
+
+// ensurePrepared runs prepare for the pattern now set, once.
+func (w *matchWhere) ensurePrepared(pattern string, emptyCompiles bool) {
+	if !w.prepared {
+		w.prepare(pattern, emptyCompiles)
+		w.prepared = true
 	}
 }
 

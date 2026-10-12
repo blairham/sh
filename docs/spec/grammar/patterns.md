@@ -4306,6 +4306,7 @@ about the load.
 | after #1396, before #1398 | 5.2 ms | 159,540 |
 | after #1398 | 0.66 ms | 43,269 |
 | after #6356 | 0.076 ms | 2,195 |
+| after #6380's program | 0.018 ms | 535 |
 | real zsh 5.9.2 | 0.0124 ms | — |
 
 `make startup`'s rich-rc case is the same work seen from the outside —
@@ -4402,6 +4403,51 @@ character where it was 70.
 What remains is the second multiplier: about 240 matcher steps for each of
 the nine matches, which is the backtracking search itself and is 6x real
 zsh's whole substitution.
+
+**The second multiplier is the program (#6380), and the matcher still decides
+every match the way it did.** A pattern that has cost the walk enough steps
+is read once into a program — a list of steps per piece of the pattern, each
+naming the construct that stands there, its arms, its closure bounds, and a
+bracket expression answered for every byte ahead of time — and the program
+is what runs. The compiler is the walk with the subject taken out: it asks
+the same readers in the same order and writes down what they said, and the
+executor then does what the walk would have done with each answer, the same
+splits in the same order with the same captures marked and unwound. So the
+hazard above does not arise; nothing about which match is found is decided
+anywhere new. A piece the compiler does not model — a `~(…)` group, a class
+escape, a bracket whose reading asks the dialect a question or depends on
+the character it matched — is handed back to the walk where it stands.
+
+Three things it knows that the text did not say, and each one only ever
+removes an attempt that would have failed without acting on anything: an
+empty piece matches only the empty span; a piece that is one step can fill
+only the one span that step consumes; and a piece's reach is read off its
+compiled steps — a bracket expression is one unit however many bytes it is
+written in — where nothing in the attempts it rules out could have asked a
+question or marked the pattern bad.
+
+Programs are kept for the process by pattern text and by every option that
+can change how the pattern reads, with what the pattern has cost the walk so
+far, so a substitution a loop runs two hundred times compiles once and a
+`case` arm too cheap to compile on one pass is compiled once its passes add
+up. `patternCompiles` and `compileThreshold` switch it, and
+`TestTheProgramAnswersWhatTheWalkAnswers` compares the two over every span
+of every subject in the matcher's corpora under twenty-two readings —
+whether it matched, every `(#b)` and `(#m)` span, the bad-pattern verdict,
+and how often the dialect was asked about an unterminated bracket — with
+generated patterns beside them.
+
+| per substitution, interleaved | before | after |
+| --- | --- | --- |
+| `BenchmarkReplaceExtendedGlob` | 73 µs | 18 µs |
+| the same, written-arm reading | 144 µs | 38 µs |
+| `BenchmarkOrdinaryGlobMatch` (`*.go`, six names) | 1.09 µs | 0.33 µs |
+| `BenchmarkReplaceLiteralPerChar` (1.6 KB) | 14.1 µs | 13.5 µs |
+
+What is left of #1398's repro is no longer mostly the matcher: the
+substitution's own setup per expansion — the options, the reach pass, the
+written-arm search, and writing `$match`, `$mbegin` and `$mend` for every
+replacement — and a process start that costs most of real zsh's whole run.
 
 ## Collating elements and equivalence classes
 

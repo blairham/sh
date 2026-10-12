@@ -5972,6 +5972,7 @@ func (r *Runner) changeCaseWith(value, pattern string, e *syntax.ParamExpr) stri
 		e.Op == syntax.ParamToggleFirst
 
 	o := r.patternOpts(pattern, value)
+	o.holdWhere()
 	var b strings.Builder
 	for i, c := range value {
 		if (pattern == "" || matchPattern(pattern, string(c), o)) &&
@@ -6469,6 +6470,7 @@ func writtenArmReaches(op syntax.ParamOp, search bool) bool {
 func spanByLength(value, pattern string, op syntax.ParamOp, o patternOpts,
 	search bool,
 ) (int, int, matchReport, bool) {
+	o.holdWhere()
 	prefix := trimsPrefix(op)
 	// `~(g)` asks for the same thing the doubled spelling does, at the one
 	// trim where the request has anywhere to go — see tildeGreedyTrim, which
@@ -6620,6 +6622,7 @@ func spanByLength(value, pattern string, op syntax.ParamOp, o patternOpts,
 func replace(value, pattern string, e *syntax.ParamExpr, o patternOpts, arm armOrder,
 	declined func() EmptyMatchDeclinedPolicy, with func(matchReport, string) string,
 ) string {
+	o.holdWhere()
 	// Every position a match may start or end at, in order, and there is one
 	// more of them than there are units. They are unit boundaries rather than
 	// byte offsets, so a pattern is never handed half of a character —

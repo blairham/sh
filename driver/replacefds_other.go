@@ -16,3 +16,6 @@ import "os"
 // unsupported on Windows and close-on-exec is a POSIX property. A table this
 // platform cannot give a child is not one it can give a replacement either.
 func placeFiles([]*os.File) {}
+
+// heldByTheRuntime has nothing to report where nothing is placed.
+func heldByTheRuntime(int) bool { return false }

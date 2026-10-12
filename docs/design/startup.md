@@ -459,3 +459,8 @@ work and it is not in this note.
 takes its own from above it. That is the price of a documented crash
 class, not an oversight; cutting it means lowering the ceiling, which is
 a semantic decision and not a performance one.
+
+*Since #6396:* on Linux the ceiling was lowered to 56, because holding
+to 99 grew the kernel's descriptor table under an RCU grace period at
+every start — 0.3 ms of CPU and 8–13 ms of wall, far more than the
+syscalls themselves. macOS keeps 99.

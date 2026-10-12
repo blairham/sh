@@ -61,8 +61,8 @@ import (
 // runtime is made to open everything it opens lazily — which then lands above
 // them — and they are given straight back. The hold is over before main runs
 // and costs nothing afterwards: what is left behind is the runtime's
-// descriptors sitting at 100 and up, where nothing a script writes can reach
-// them.
+// descriptors sitting just above the ceiling, where nothing a script writes
+// by accident reaches them.
 //
 // This is #731's option 2, and it answers #799 in the same move, which is why
 // it is one change. Every other direction addressed one platform's structure
@@ -83,8 +83,11 @@ import (
 // program that imports driver, embedders included. #731 recorded that option 2
 // "does not help an embedder"; done here rather than in a main it does.
 
-// lowDescriptorCeiling is 99 because that is where a hand-written descriptor
-// number stops, measured three ways:
+// lowDescriptorCeiling is the highest number the runtime is kept off, and it
+// is a per-platform constant: 99 everywhere but Linux, where it is 56. See
+// lowfds_linux.go and lowfds_unixother.go for each number's reasons.
+//
+// 99 is where a hand-written descriptor number stops, measured three ways:
 //
 //   - The panel can only *name* single digits. `exec 20>/dev/null` is a
 //     redirection in bash alone; dash, ksh93 and zsh all read the number as a
@@ -98,16 +101,22 @@ import (
 //     allocated number cannot collide with the runtime by construction —
 //     the kernel hands out a number precisely because nothing holds it.
 //
-// The cost is the hold itself, which is one fcntl per free number and is paid
-// once: measured at 50µs on darwin and 37µs on Linux against a 3ms shell
-// startup. A ceiling of 255 would cost twice that and buy nothing any
-// measurement here can see.
+// Linux gives up 57 to 99 of that headroom, because there the hold itself is
+// what costs: holding past 63 grows the descriptor table, and a multithreaded
+// process waits for the kernel to do that (#6396). 56 keeps every number the
+// panel can name and every number `{v}` allocates.
+//
+// The cost is otherwise the hold itself, which is one fcntl per free number
+// and is paid once: measured at 50µs on darwin against a 3ms shell startup. A
+// ceiling of 255 would cost twice that and buy nothing any measurement here
+// can see.
 //
 // What is left over is written down rather than claimed away: a bash script
-// that names a descriptor above the ceiling by hand can still land on one of
-// the runtime's, and nothing in this package can move a number the runtime
-// holds. docs/design.md records the limit beside the process model.
-const lowDescriptorCeiling = 99
+// that names one of the runtime's numbers by hand — just above the ceiling —
+// still meets it, and nothing in this package can move a number the runtime
+// holds. heldByTheRuntime is what keeps that from killing the shell, and
+// Runner.UnplaceableDescriptor is what makes it say so. docs/design.md records
+// the limit beside the process model.
 
 func init() { keepTheRuntimeOffTheLowDescriptors() }
 

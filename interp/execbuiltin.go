@@ -214,7 +214,14 @@ func (r *Runner) replaceSelfWith(ctx context.Context, argv []string, flags execF
 		// Semantics.ShellLevelExec — the fallback below is a child and keeps
 		// the count, which is measured and not an omission.
 		name, env := r.namedByTheEnvironment(argv[0], r.replacementEnviron(flags))
-		err := r.ReplaceProcess(dir, run, r.execArgv(argv, flags, name), env, r.replacementFiles())
+		files := r.replacementFiles()
+		// A number the replacement cannot be given is said out loud, in the
+		// sentence bash uses for a number it cannot hold, and the exec goes
+		// ahead without it. See Runner.UnplaceableDescriptor.
+		for _, fd := range r.unplaceableIn(files) {
+			r.diagf("%v\n", r.errBadFd(fd, "", fd))
+		}
+		err := r.ReplaceProcess(dir, run, r.execArgv(argv, flags, name), env, files)
 		releaseMask()
 		// Only reached if the replacement failed, which is the one case where
 		// there is still a shell to report it.

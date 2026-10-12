@@ -23,8 +23,8 @@ import (
 //
 // storesAPlainScalar settles every one of those questions before anything is
 // expanded, and storePlainScalar then does what the full road does when each
-// of them answers no: the scope lint, if it is on, the two bookkeeping
-// deletes, the store, and allexport. Anything it is not sure of goes to the
+// of them answers no: the scope lint, if it is on, the store, and
+// allexport. Anything it is not sure of goes to the
 // full road having read nothing, the same arrangement plainParamValue has.
 //
 // The conditions are the full road's own, read from its code rather than
@@ -126,7 +126,7 @@ func (r *Runner) valueOnlyReads(w *syntax.Word) bool {
 
 // storePlainScalar is the full road for an assignment storesAPlainScalar
 // accepted, with every question answered: what is left is the lint, the store
-// and its bookkeeping.
+// and allexport.
 func (r *Runner) storePlainScalar(a *syntax.Assign) {
 	value, ok := r.plainParamValue(a.Value)
 	if !ok {
@@ -135,8 +135,9 @@ func (r *Runner) storePlainScalar(a *syntax.Assign) {
 	if !r.scopeWarningsAreOff() {
 		r.warnAboutTheScope(a.Name, scopeWarningScalar)
 	}
-	delete(r.declaredEmpty, a.Name)
-	r.nameIsBack(a.Name)
+	// The full road clears the declared-empty and unset marks here; both are
+	// attributes in the cell now (#6442), and a name storesAPlainScalar
+	// accepted carries none.
 	r.varsPut(a.Name, value)
 	r.markForAllexport(a.Name)
 }

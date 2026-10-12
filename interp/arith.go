@@ -3881,12 +3881,27 @@ func unmarkArithFailure(err error) error {
 // it runs, which is the same thing that already happens to one with a `$` in
 // it — see [Runner.expandArithText] — and this is the second reason for it.
 //
-// It is the *option being in charge* rather than the order differing, so a
-// `setopt c_precedences` in a shell whose dialect already binds C's way still
-// re-reads. Comparing the two orders instead would make the cost depend on
-// which dialect a script happens to run under, and the answer is the same
-// either way; nothing outside the one shell with the option ever asks.
-func (r *Runner) arithPrecedenceOptionInCharge() bool { return r.arithPrecedenceMoved }
+// A tree is read again where the order now in force is not the dialect's own,
+// which is the order a front end read the program in, or where this runner
+// has parsed anything while the order stood away from its own — a function
+// body read under the option keeps that reading after the option is turned
+// off, and zsh 5.9.2 answers in the order in force when it runs: `setopt
+// c_precedences; eval 'g() { print $(( 1 << 2 + 1 )); }'; unsetopt
+// c_precedences; g` prints 5.
+//
+// It was the option *being in charge* once, so anything that so much as
+// wrote the option re-read every expression for the rest of the session —
+// and `emulate -L zsh`, which writes every option, is the first line of
+// nearly every function a plugin defines. F-Sy-H's highlighter read 140 of
+// its 182 arithmetic expressions per keystroke again for that reason alone,
+// each one a fresh parser and a fresh parse of text that had no expansion
+// in it (#6423).
+func (r *Runner) arithPrecedenceOptionInCharge() bool {
+	if !r.arithPrecedenceMoved {
+		return false
+	}
+	return r.arithReadInAnotherOrder || r.arithPrecedence != r.nativeArithPrecedence()
+}
 
 // expandArithText substitutes into an arithmetic expression before it is read.
 //

@@ -115,6 +115,41 @@ func TestAHighlighterIsAskedAboutTheLine(t *testing.T) {
 	}
 }
 
+// bufferAsker is a BufferHighlighter that records what it was asked.
+type bufferAsker struct {
+	displayed []string
+	buffer    []int
+}
+
+func (b *bufferAsker) Highlight(string) []Highlight { panic("asked without the line's end") }
+
+func (b *bufferAsker) HighlightBuffer(displayed string, buffer int) []Highlight {
+	b.displayed = append(b.displayed, displayed)
+	b.buffer = append(b.buffer, buffer)
+	return nil
+}
+
+// A highlighter that asks where the line ends is told, in bytes, so that a
+// postdisplay after it is not read as part of it (#6412).
+func TestABufferHighlighterIsToldWhereTheLineEnds(t *testing.T) {
+	for _, c := range []struct {
+		line, post string
+		want       int
+	}{
+		{"e", "cho hello", 1},
+		{"echo 日本", "語", len("echo 日本")},
+		{"echo", "", 4},
+	} {
+		asker := &bufferAsker{}
+		e := &editor{line: []rune(c.line), postdisplay: c.post, highlighter: asker}
+		e.styled()
+		if len(asker.buffer) != 1 || asker.displayed[0] != c.line+c.post || asker.buffer[0] != c.want {
+			t.Errorf("%q then %q: asked %q with %v, want %q with %d",
+				c.line, c.post, asker.displayed, asker.buffer, c.line+c.post, c.want)
+		}
+	}
+}
+
 // What UnclosedQuote colors: the word an open quotation has swallowed, from
 // where the word begins to the end of the line.
 func TestUnclosedQuoteColorsWhatTheQuotationSwallowed(t *testing.T) {

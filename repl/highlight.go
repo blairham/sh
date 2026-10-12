@@ -3,7 +3,10 @@
 
 package repl
 
-import "sort"
+import (
+	"sort"
+	"unicode/utf8"
+)
 
 // Coloring the line as it is typed.
 //
@@ -94,6 +97,25 @@ type HighlighterFunc func(string) []Highlight
 
 // Highlight calls f.
 func (f HighlighterFunc) Highlight(line string) []Highlight { return f(line) }
+
+// BufferHighlighter is a Highlighter that is also told where the line ends
+// inside the text it is handed.
+//
+// The text is what is **displayed** — the line and then any postdisplay, see
+// styled — and for most highlighters that is all there is to know: a run is
+// where it is. One that keeps state about the line between keystrokes is
+// different, because a postdisplay is not an edit. zsh's `region_highlight`
+// moves its offsets when the editor edits the line (#5874), and told only the
+// displayed text it read a suggestion appearing after the cursor as an insert
+// there and moved every offset past it off the text it was set for (#6412).
+//
+// buffer is the byte length of the line within displayed: displayed[:buffer]
+// is the line, and anything after it is drawn after the line without being
+// part of it. The editor calls this in place of Highlight when it is there.
+type BufferHighlighter interface {
+	Highlighter
+	HighlightBuffer(displayed string, buffer int) []Highlight
+}
 
 // highlightReset ends a run: SGR with no parameters, which is every attribute
 // back to the terminal's default.
@@ -197,7 +219,13 @@ func (e *editor) styleRuns(line string) []styleRun {
 	if e.highlighter == nil {
 		return runs
 	}
-	for _, r := range e.highlighter.Highlight(line) {
+	var asked []Highlight
+	if bh, ok := e.highlighter.(BufferHighlighter); ok {
+		asked = bh.HighlightBuffer(line, runesBytes(e.line))
+	} else {
+		asked = e.highlighter.Highlight(line)
+	}
+	for _, r := range asked {
 		if r.Point {
 			runs = append(runs, styleRun{start: r.Start, end: r.Start, on: r.Style, point: true})
 			continue
@@ -205,6 +233,22 @@ func (e *editor) styleRuns(line string) []styleRun {
 		runs = append(runs, styleRun{start: r.Start, end: r.End, on: r.Style, off: highlightReset})
 	}
 	return runs
+}
+
+// runesBytes is len(string(rs)) without building the string: the length of
+// the line in bytes, as the displayed text spells it, on the path every
+// keystroke takes. A rune that is not one is written as U+FFFD, three bytes,
+// which is what the conversion writes for it.
+func runesBytes(rs []rune) int {
+	n := 0
+	for _, r := range rs {
+		if l := utf8.RuneLen(r); l > 0 {
+			n += l
+		} else {
+			n += utf8.RuneLen(utf8.RuneError)
+		}
+	}
+	return n
 }
 
 // UnclosedQuote colors the part of a line that is inside a quotation which has

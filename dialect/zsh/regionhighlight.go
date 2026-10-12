@@ -218,7 +218,12 @@ func lineEdit(was, now []rune, cursor int) (at, removed, inserted int) {
 // The answer is points rather than runs — repl.Highlight.Point — because
 // where one region ends inside another, what goes out depends on both. See
 // regionTransition for the rule.
-func RegionHighlights(r *interp.Runner, line string) []repl.Highlight {
+//
+// line is what is displayed, the buffer and then any `POSTDISPLAY`, and buffer
+// is the buffer's length in bytes within it. The offsets count the two as one
+// text — that is how a highlighter colors a suggestion — but only the buffer
+// is followed: a suggestion is not an edit (#6412). See regionsFollow.
+func RegionHighlights(r *interp.Runner, line string, buffer int) []repl.Highlight {
 	elems, _ := r.GetArray(zleRegion)
 	if len(elems) == 0 {
 		return nil
@@ -228,8 +233,20 @@ func RegionHighlights(r *interp.Runner, line string) []repl.Highlight {
 	// them. Not inside a widget, where the line is drawn by `zle -R` after an
 	// assignment, which moves nothing, or by an action part-way through,
 	// which the `zle` that called it follows once it returns.
+	//
+	// Only the buffer, and never what is drawn after it. The baseline every
+	// other caller lines the offsets up with is `$BUFFER`, so handed the
+	// displayed text this read a suggestion as an insert at the end of the
+	// line and moved every offset at or past it by the suggestion's length:
+	// typing `e` with `cho hello` suggested put `0 1 fg=red` over `echo hello`
+	// and `1 10 fg=8` off the end, where zsh 5.9.2 draws a red `e` and a gray
+	// suggestion (#6412). zsh also has a `PREDISPLAY`, drawn before the
+	// buffer, and measured on 5.9.2 an element without `P` still counts from
+	// the buffer's start with one set; this shell draws none, so there is no
+	// prefix to leave out here.
 	if !editorRunning(r) {
-		regionsFollow(r, line, -1)
+		buffer = min(max(buffer, 0), len(line))
+		regionsFollow(r, line[:buffer], -1)
 		elems, _ = r.GetArray(zleRegion)
 	}
 	// The rune offsets of every byte boundary, built once: an element is

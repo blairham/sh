@@ -98,8 +98,11 @@ func TestPreludeTreeIsUnobservable(t *testing.T) {
 		}
 	}
 
-	lower, err := syntax.Parse("\n"+bash.Prelude(), bash.Dialect())
-	if err != nil {
+	// Numbered from line 2 rather than pasted under a newline, which is the
+	// same tree one line down without making the text a snippet.
+	lp := syntax.NewParserAt(bash.Prelude(), bash.Dialect(), 2)
+	lower := lp.Parse()
+	if err := lp.Err(); err != nil {
 		t.Fatal(err)
 	}
 	seen := false

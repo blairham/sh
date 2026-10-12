@@ -18,7 +18,7 @@ import (
 func TestEveryAliasChangeMovesTheTablesFingerprint(t *testing.T) {
 	r := newTestRunner(t, &Runner{})
 	r.aliasExpansion = true
-	ask := parseAsker{r}
+	ask := parseAsker{r: r}
 	sums := func() [3]uint64 {
 		return [3]uint64{
 			ask.AliasTable(parsecache.AliasPlain),

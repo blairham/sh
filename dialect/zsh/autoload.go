@@ -1140,7 +1140,10 @@ func autoloadResolveIn(r *interp.Runner, name string, dirs []string, opts autolo
 // file's recurring defect is a second route that omits what the first one
 // carries (#1993).
 func autoloadDefineFile(r *interp.Runner, name, path, body string, keepAliases bool) int {
-	if autoloadSubstitutionSwallowsTheCloser(body) {
+	// Each reading of the text below goes through the parse cache, by the
+	// file it came from: a start loads a score of these files and read each
+	// of them four times (#6424).
+	if autoloadSubstitutionSwallowsTheCloser(r, path, body) {
 		// A `$( … )` whose body leaves zsh's lexer reading a word where the
 		// closing parenthesis stands: the parenthesis is taken as that word,
 		// the substitution never closes, and the *file* does not parse. See
@@ -1148,10 +1151,10 @@ func autoloadDefineFile(r *interp.Runner, name, path, body string, keepAliases b
 		r.DiagnoseAsTheShellf("%s: bad function definition\n", name)
 		return 1
 	}
-	if inner, lone := autoloadLoneDefinition(name, body); lone {
+	if inner, lone := autoloadLoneDefinition(r, path, name, body); lone {
 		body = inner
 	}
-	if autoloadBodyRefused(r, name, body) {
+	if autoloadBodyRefusedIn(r, path, name, body) {
 		return 1
 	}
 	if !zshDefineFromText(r, name, body, path, keepAliases) {
@@ -1164,7 +1167,7 @@ func autoloadDefineFile(r *interp.Runner, name, path, body string, keepAliases b
 	return 0
 }
 
-// autoloadBodyRefused reads a function file's text as the shell reads it now
+// autoloadBodyRefusedIn reads a function file's text as the shell reads it now
 // and, where it will not parse, says so as the parser does, located at the
 // function's name and the file's own line. Measured 2026-10-02 on zsh 5.9.2
 // under `-f` (#5148):
@@ -1177,14 +1180,15 @@ func autoloadDefineFile(r *interp.Runner, name, path, body string, keepAliases b
 // and under `setopt ignorebraces` a file of `{ echo OK }` is `ff:3: parse
 // error near `\n'`, which is why the grammar asked is the runner's and not
 // the dialect's.
-func autoloadBodyRefused(r *interp.Runner, name, body string) bool {
+//
+// path is the file the body was read out of, which lets the parse come from
+// the parse cache.
+func autoloadBodyRefusedIn(r *interp.Runner, path, name, body string) bool {
 	d := Dialect()
 	if r.Dialect != nil {
 		d = *r.Dialect
 	}
-	p := syntax.NewParser(body, r.ParsingDialect(d))
-	p.Parse()
-	err := p.Err()
+	_, err := r.ParseFileText(path, "body", body, r.ParsingDialect(d), interp.ParseNoAliases)
 	if err == nil {
 		return false
 	}
@@ -1263,14 +1267,14 @@ func autoloadBodyRefused(r *interp.Runner, name, body string) bool {
 // this parser refuses, so they come through here as a refused file where zsh
 // runs the function. Both are narrower gaps than the one this closes and
 // neither is made worse by it.
-func autoloadSubstitutionSwallowsTheCloser(text string) bool {
+func autoloadSubstitutionSwallowsTheCloser(r *interp.Runner, path, text string) bool {
 	d := Dialect()
 	// The bodies come from the parser rather than from a walk of the tree:
 	// asking for them with the line is what syntax.File.Substitutions is, and
 	// the older spelling is left out of the list by the same setting, which
 	// is the exemption the panel above measured.
 	d.SubstitutionBodyRead = syntax.NewerSubstitutionBodyReadWithItsLine
-	f, err := syntax.Parse(text, d)
+	f, err := r.ParseFileText(path, "substitutions", text, d, interp.ParseNoAliases)
 	if err != nil {
 		// A file that does not parse at all is already refused by the
 		// definition route this stands in front of, and refusing it here
@@ -1363,10 +1367,14 @@ func autoloadBodyRunsPastItsCloser(err error) bool {
 // definition itself put it.
 func zshDefineFromText(r *interp.Runner, name, body, file string, keepAliases bool) bool {
 	defined := false
-	if keepAliases || recordedDeviates(r, "aliases") {
-		defined = r.DefineFunction(name, body)
-	} else {
+	expand := !keepAliases && !recordedDeviates(r, "aliases")
+	switch {
+	case file != "":
+		defined = r.DefineFunctionFromFile(name, body, file, expand)
+	case expand:
 		defined = r.DefineFunctionExpandingAliases(name, body)
+	default:
+		defined = r.DefineFunction(name, body)
 	}
 	if defined && file != "" {
 		r.SetFunctionFile(name, file)
@@ -1415,8 +1423,8 @@ func zshDefineFromText(r *interp.Runner, name, body, file string, keepAliases bo
 // Both routes into a function file ask: the search along `$fpath` and the one
 // directory an `-X` was handed. A file read one way and not the other would
 // be the same bug reachable by the other road.
-func autoloadLoneDefinition(name, body string) (inner string, lone bool) {
-	f, err := syntax.Parse(body, Dialect())
+func autoloadLoneDefinition(r *interp.Runner, path, name, body string) (inner string, lone bool) {
+	f, err := r.ParseFileText(path, "definition", body, Dialect(), interp.ParseNoAliases)
 	if err != nil || len(f.Stmts) != 1 {
 		return "", false
 	}

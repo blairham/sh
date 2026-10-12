@@ -87,6 +87,10 @@ type procSubEnds struct {
 	child *os.File
 	fd    int
 	path  string
+	// shellCopy is shell's descriptor number where it is registered as a
+	// private copy, and -1 where it is not. Whoever closes shell releases it
+	// first — see raiseShellEnd and substEnd.letGo.
+	shellCopy int
 	// real names child's actual descriptor where that is not fd. Empty when
 	// the two agree, which is every substitution outside another one's body.
 	real string
@@ -191,12 +195,15 @@ func newProcSubPipe(childWrites bool, dir string, want []int, view substFdView) 
 	// The shell's own end is moved out of the way first — see raiseShellEnd.
 	// Before the park, because the number it gives up is one of the numbers
 	// the park is about to ask for.
-	shell = raiseShellEnd(shell, want)
+	shell, shellCopy := raiseShellEnd(shell, want)
 	parked, pub, fellBack, err := parkDescriptor(child, dir, want, view)
 	// The original is closed either way: on success the parked duplicate is
 	// the one the path names, and on failure there is nothing to hand over.
 	_ = child.Close()
 	if err != nil {
+		if shellCopy >= 0 {
+			releasePrivateCopy(shellCopy)
+		}
 		_ = shell.Close()
 		return procSubEnds{}, err
 	}
@@ -217,15 +224,18 @@ func newProcSubPipe(childWrites bool, dir string, want []int, view substFdView) 
 		}
 		pub = int(parked.Fd())
 	}
-	ends := procSubEnds{shell: shell, child: parked, fd: pub, path: dir + "/" + strconv.Itoa(pub)}
+	ends := procSubEnds{
+		shell: shell, shellCopy: shellCopy,
+		child: parked, fd: pub, path: dir + "/" + strconv.Itoa(pub),
+	}
 	if raw := int(parked.Fd()); raw != pub {
 		ends.real = dir + "/" + strconv.Itoa(raw)
 	}
 	return ends, nil
 }
 
-// raiseShellEnd moves this shell's end of the pipe above every number the
-// dialect could publish, and closes the original.
+// raiseShellEnd moves this shell's end of the pipe out of the region the
+// dialect publishes from, and closes the original.
 //
 // **The shell's half of the plumbing is not supposed to be in the answer.**
 // `os.Pipe` takes the two lowest free numbers, so before this the shell's own
@@ -240,22 +250,56 @@ func newProcSubPipe(childWrites bool, dir string, want []int, view substFdView) 
 // a shell that keeps its own descriptors high leaves the low ones for the
 // numbers it publishes.
 //
+// # Inside the kernel's first table, and registered
+//
+// Out of the way does not have to mean *above*. The floor is 64 or more in
+// every dialect, because the wish list offers sixty-four numbers, so the end
+// used to land at 64 (bash), 67 (ksh) or 75 (zsh) — and the first
+// substitution in a run grew the kernel's descriptor table, which on Linux
+// waits out an RCU grace period: `cat <(echo x)` left FDSize at 128 where
+// `echo x | cat` leaves 64 (#6406). So the end is asked for in
+// privateCopyFloor's band first, exactly as a body's private copies are (see
+// dupFile), and goes to the floor only where the band is full.
+//
+// A band number can be one the dialect publishes, and that is why the end is
+// registered as a private copy, which it is in every way that matters: in a
+// real shell this end belongs to the body, which is a fork, so the number is
+// free in the parent's table. parkDescriptor publishes a number held by one
+// and parks its own descriptor elsewhere, so the band decides how often that
+// path runs and never what a script sees. The number registered is answered
+// beside the file, and -1 where nothing was; whoever closes the end releases
+// it first — see substEnd.letGo.
+//
 // A best effort, and the failure is not one. Under a low `ulimit -n` the floor
 // is past the limit and the duplicate is refused, which leaves the end where
 // `os.Pipe` put it — the arrangement every release before this one shipped.
 // A substitution that refused to run because its *private* descriptor could
 // not be tidied would be a construct lost to a cosmetic.
-func raiseShellEnd(f *os.File, want []int) *os.File {
+func raiseShellEnd(f *os.File, want []int) (*os.File, int) {
 	floor := shellEndFloor(want)
 	if floor == 0 {
-		return f
+		return f, -1
 	}
 	conn, err := f.SyscallConn()
 	if err != nil {
-		return f
+		return f, -1
 	}
 	moved := -1
 	if cerr := conn.Control(func(fd uintptr) {
+		if floor > privateCopyFloor {
+			if got, err := fcntlInt(int(fd), syscall.F_DUPFD_CLOEXEC, privateCopyFloor); err == nil {
+				if got < kernelFirstTable {
+					// Registered before anything else can look: the park
+					// that follows is the first reader.
+					holdPrivateCopy(got)
+					moved = got
+					return
+				}
+				// The band is full, so the table has grown already and the
+				// end goes where it went before there was a band.
+				_ = syscall.Close(got)
+			}
+		}
 		// **Any answer at or above the floor will do**, which is the
 		// difference from parkDescriptor and the reason these are two walks
 		// rather than one. A published number has to be the number the
@@ -266,10 +310,11 @@ func raiseShellEnd(f *os.File, want []int) *os.File {
 		// neighbor, so the wish was refused and the end stayed low, and
 		// ksh93's `3 4 5` read `3 4 6`.
 		if got, err := fcntlInt(int(fd), syscall.F_DUPFD_CLOEXEC, floor); err == nil {
+			holdPrivateCopy(got)
 			moved = got
 		}
 	}); cerr != nil || moved < 0 {
-		return f
+		return f, -1
 	}
 	// And the blocking mode is put back, for parkDescriptor's reason applied
 	// to the other end of the same pipe. Go opens a pipe non-blocking and
@@ -281,12 +326,13 @@ func raiseShellEnd(f *os.File, want []int) *os.File {
 	// non-blocking pipe meets EAGAIN on an empty one: measured, `cat` in
 	// `>(cat)` answered `stdin: Resource temporarily unavailable`.
 	if err := syscall.SetNonblock(moved, false); err != nil {
+		releasePrivateCopy(moved)
 		_ = syscall.Close(moved)
-		return f
+		return f, -1
 	}
 	raised := os.NewFile(uintptr(moved), f.Name())
 	_ = f.Close()
-	return raised
+	return raised, moved
 }
 
 // reparkPreferred asks the wish list again, once, now that this pipe's own
@@ -453,6 +499,16 @@ func parkDescriptor(f *os.File, dir string, want []int, view substFdView) (*os.F
 	// reparkPreferred and reparkLowest.
 	fellBack := false
 	if cerr := conn.Control(func(fd uintptr) {
+		// Whether a wish has already been passed over because the original
+		// being duplicated is sitting on it. That number comes free the
+		// moment the original is closed, and reparkPreferred takes it then,
+		// so it is a better answer than any wish after it — including one
+		// held by a private copy, which would otherwise be published here
+		// with the descriptor parked out of reparkPreferred's reach. Measured
+		// in the ksh dialect with thirty-five live substitutions: the
+		// twenty-eighth published 32 over its own free 31 whenever a
+		// substitution's shell end sat on 32, and the next took 31 (#6406).
+		passedOwn := false
 		for _, n := range want {
 			if view.isTaken(n) {
 				// Published already by a substitution of this same body,
@@ -473,6 +529,9 @@ func parkDescriptor(f *os.File, dir string, want []int, view substFdView) (*os.F
 				parked, published = got, n
 				return
 			}
+			if n == int(fd) {
+				passedOwn = true
+			}
 			got, err := fcntlInt(int(fd), syscall.F_DUPFD_CLOEXEC, n)
 			if err != nil {
 				// A wish the kernel refuses is a wish that missed, not the
@@ -491,7 +550,7 @@ func parkDescriptor(f *os.File, dir string, want []int, view substFdView) (*os.F
 			// the wrong number, so it is closed rather than kept: keeping it
 			// would leak one descriptor per wish that missed.
 			_ = syscall.Close(got)
-			if isPrivateCopy(n) {
+			if !passedOwn && isPrivateCopy(n) {
 				// Taken by a body's private copy of the table, which a fork
 				// would not hold — so the number is free in the shell this
 				// one imitates, and it is published the way a released one

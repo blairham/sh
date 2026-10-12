@@ -350,7 +350,7 @@ func zsystemLock(r *interp.Runner, ctx context.Context, opts zsystemFlockOpts, n
 	if !ok {
 		return 1
 	}
-	f, err := systemLockOpen(path, verb)
+	f, err := systemLockOpen(r.PathToOpen(path), verb)
 	if err != nil {
 		// No `flock:` on this one, measured: the sentence names the file and
 		// what it was to be opened for, which is already more than the

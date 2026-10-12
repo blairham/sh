@@ -77,3 +77,55 @@ func TestASubstitutionStepsOntoAPrivateCopyRatherThanOverIt(t *testing.T) {
 			"body's private copy of its input, which a fork would not hold", got, want)
 	}
 }
+
+// A substitution whose own pipe sits on the number it wishes for gets that
+// number, even where the next number is held by a private copy.
+//
+// The original the park duplicates is closed only afterwards, so a wish for
+// the number it is sitting on misses, and reparkPreferred takes the number
+// once it is free. A wish further down the list that missed because a
+// private copy held it used to be published there and then — with the
+// descriptor parked above the floor, where reparkPreferred never looks — so
+// the substitution stepped over its own free number. Since a substitution's
+// shell end became a private copy (#6406), the previous substitution's end is
+// exactly such a copy: thirty-five live substitutions in the ksh dialect read
+// `… 30 32 31 33 …`.
+//
+// Built the same way here: every free number below the band's predecessor is
+// crowded out, so the first substitution publishes that number and its shell
+// end — held open by a body reading a pipe nobody writes to until the command
+// ends — sits in the band just above the next one's own pipe.
+func TestASubstitutionDoesNotStepOverItsOwnFreeNumber(t *testing.T) {
+	if measuredInAQuietDescriptorTable(t) {
+		return
+	}
+	var crowd []int
+	defer func() {
+		for _, fd := range crowd {
+			_ = syscall.Close(fd)
+		}
+	}()
+	for {
+		fd, _, errno := syscall.Syscall(syscall.SYS_FCNTL, uintptr(syscall.Stdin),
+			uintptr(syscall.F_DUPFD_CLOEXEC), uintptr(3))
+		if errno != 0 {
+			t.Fatalf("crowding the table: %v", errno)
+		}
+		if int(fd) >= PrivateCopyFloorForTest-1 {
+			_ = syscall.Close(int(fd))
+			break
+		}
+		crowd = append(crowd, int(fd))
+	}
+	want := lowestFreeFds(t, 2)
+	if want[0] != PrivateCopyFloorForTest-1 || want[1] != PrivateCopyFloorForTest {
+		t.Fatalf("the lowest free numbers are %v, want %d and %d — the table was not "+
+			"crowded the way this case needs", want, PrivateCopyFloorForTest-1, PrivateCopyFloorForTest)
+	}
+	got := substNumbers(t, runSubstPlacement(t, SubstitutionEndsAtTheLowestFreeNumber,
+		AllocateDescriptorsFromTen, nil, "echo >(read x) <(true)", nil))
+	if !sameFds(got, want) {
+		t.Errorf("got %v, want %v — the second substitution stepped over the number "+
+			"its own pipe was sitting on", got, want)
+	}
+}

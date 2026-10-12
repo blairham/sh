@@ -50,6 +50,10 @@ const privateCopyFloor = 32
 // shell this one imitates, and it gets it — published, with its descriptor
 // parked elsewhere, the way substFdView's released numbers are.
 //
+// The shell's own end of a substitution pipe is one too (#6406). In a real
+// shell that end belongs to the substitution's body, which is a fork, so the
+// parent's table does not hold it either. See raiseShellEnd.
+//
 // Process-wide rather than per Runner for that reason: the kernel's table is
 // one table, and a sibling's copy is in the way exactly as much as one's own.
 // A slice and a lock, because it holds one entry per live copy — a handful —

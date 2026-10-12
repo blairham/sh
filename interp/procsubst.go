@@ -151,7 +151,7 @@ func (r *Runner) procSub(ctx context.Context, span syntax.Span) (string, bool) {
 		// `<(cmd)` writes the body's output into the pipe.
 		sub.Stdout = ends.shell
 	}
-	keep.opened(ends.shell)
+	keep.opened(ends.shell, ends.shellCopy)
 
 	// The body forked before this one is released here, which is the first of
 	// the two points the measured order asks for. Before the signal for *this*
@@ -1383,6 +1383,10 @@ type substEnd struct {
 	mu   sync.Mutex
 	held int
 	file *os.File
+	// copyFd is file's number where it is registered as a private copy, and
+	// -1 where it is not: released before the close, so a number the kernel
+	// may hand out again is never taken for one. See raiseShellEnd.
+	copyFd int
 	// anchor is the process group this body leads, if it ever asked for one.
 	// It is here rather than beside it because the group's lifetime is the
 	// same lifetime this count already reconstructs — see procanchor.go.
@@ -1403,10 +1407,10 @@ type substEnd struct {
 // wait that may end in nobody having opened the other side at all. A count
 // that never learns a descriptor closes nothing, which is the right answer
 // for that case.
-func (e *substEnd) opened(f *os.File) {
+func (e *substEnd) opened(f *os.File, copyFd int) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	e.file = f
+	e.file, e.copyFd = f, copyFd
 }
 
 // keep adds a shell to the count.
@@ -1426,7 +1430,7 @@ func (e *substEnd) letGo() {
 	e.mu.Lock()
 	e.held--
 	last := e.held == 0
-	f, a, done := e.file, e.anchor, e.done
+	f, n, a, done := e.file, e.copyFd, e.anchor, e.done
 	e.mu.Unlock()
 	if !last {
 		return
@@ -1447,6 +1451,9 @@ func (e *substEnd) letGo() {
 	}()
 	if f == nil {
 		return
+	}
+	if n >= 0 {
+		releasePrivateCopy(n)
 	}
 	_ = f.Close()
 }

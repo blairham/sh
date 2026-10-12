@@ -1041,9 +1041,6 @@ func (r *Runner) exportedPut(name string, on bool) {
 // exportedDel forgets anything said about name's export.
 func (r *Runner) exportedDel(name string) { r.setAttrs(name, attrExportSpoken|attrExportOn, 0) }
 
-// exportedLen is how many names something has said the export of.
-func (r *Runner) exportedLen() int { return r.attrLen(attrExportSpoken) }
-
 // exportedRange is every name something has said the export of, and whether
 // it is exported.
 func (r *Runner) exportedRange() iter.Seq2[string, bool] {

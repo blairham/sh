@@ -398,6 +398,7 @@ func bashShell(out, errs *bytes.Buffer) driver.Shell {
 		Semantics:   bash.Semantics(),
 		Diagnostics: bash.Diagnostics(),
 		Prelude:     bash.Prelude(),
+		PreludeTree: bash.PreludeTree(),
 		Register:    bash.Apply,
 		Stdout:      out,
 		Stderr:      errs,

@@ -386,4 +386,10 @@ func helpVersionLine() string {
 
 // machine is the triple bash puts last in BASH_VERSINFO. Ours is the build's,
 // which is the honest answer to "what was this compiled for".
-func machine() string { return runtime.GOARCH + "-" + runtime.GOOS }
+func machine() string { return machineName }
+
+// machineName is that triple as a constant, which is what lets the parsed
+// prelude in preludetree.go be one literal for every target: the word and
+// every position after it are spelled from this rather than from the machine
+// the generator ran on (#6397).
+const machineName = runtime.GOARCH + "-" + runtime.GOOS

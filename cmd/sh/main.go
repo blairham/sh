@@ -587,12 +587,14 @@ func pickDialect(name string) (driver.Shell, error) {
 			Dialect: bash.Dialect(), Semantics: bash.Semantics(),
 			Diagnostics: bash.Diagnostics(), Register: bash.Apply,
 			Prelude: bash.Prelude(), PromptStyle: bash.PromptStyle(),
+			PreludeTree: bash.PreludeTree(),
 		}, nil
 	case "zsh":
 		return driver.Shell{
 			Dialect: zsh.Dialect(), Semantics: zsh.Semantics(),
 			Diagnostics: zsh.Diagnostics(), Register: zsh.Apply,
 			Prelude: zsh.Prelude(), PromptStyle: zsh.PromptStyle(),
+			PreludeTree: zsh.PreludeTree(),
 		}, nil
 	case "ksh":
 		return driver.Shell{

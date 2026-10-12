@@ -544,7 +544,7 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 					// measured. So this is the attribute refusing an
 					// operation rather than an assignment being refused, and
 					// it cannot be folded into the store's check above.
-					if r.readonly[fdVar] &&
+					if r.attrHas(fdVar, attrReadonly) &&
 						r.ask(r.sem().ReadonlyFdVariableRefusesAClose,
 							"a frozen name refusing the close of the descriptor it holds") {
 						if w := r.diag().FdVariableReadonlyClose; w != "" {
@@ -2667,7 +2667,7 @@ func (r *Runner) setFdVar(ref, value string) bool {
 	// write the store's — so the check has to come *before* the store speaks
 	// rather than after, and the sentence replaces rather than follows. See
 	// Diagnostics.FdVariableReadonlyOpen for the three columns' wordings.
-	if w := r.diag().FdVariableReadonlyOpen; w != "" && r.readonly[ref] {
+	if w := r.diag().FdVariableReadonlyOpen; w != "" && r.attrHas(ref, attrReadonly) {
 		r.diagf("%s\n", fmt.Sprintf(w, ref))
 		// The status and the failure mark are the store's on the path below,
 		// and leaving here without them made the refusal quieter than it

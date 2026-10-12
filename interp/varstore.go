@@ -6,6 +6,7 @@ package interp
 import (
 	"iter"
 	"maps"
+	"math/bits"
 	"reflect"
 	"slices"
 	"strings"
@@ -83,7 +84,14 @@ type varCell struct {
 	// has says which slots are present. A slot's value is its zero value
 	// whenever it is absent.
 	has cellSlots
+	// attrs is the name's boolean attributes — see cellAttrs. A cell holding
+	// attributes and no slot is still a cell: `readonly x` with x unset is a
+	// name the shell knows about.
+	attrs cellAttrs
 }
+
+// live reports whether the cell holds anything: a slot or an attribute.
+func (c *varCell) live() bool { return c.has != 0 || c.attrs != 0 }
 
 // cellSlots is a set of a cell's slots.
 type cellSlots uint8
@@ -139,8 +147,22 @@ func (c *varCell) clearSlot(s cellSlots) {
 
 // cell is name's cell, or nil. The pointer is into the slab, so it is good
 // until the next cell is made.
+//
+// The last name found is remembered with its position, and asked first. A
+// declaration asks about one name a dozen times in a row — its value, its
+// arrays, its attributes, on the way in and again on the way out — and each
+// was a hash of the name and a probe of the index (#6373). The position is
+// sound for as long as the index says the same thing, which is until the slab
+// is compacted or let go: a name is never moved otherwise, a name added goes
+// on the end, and a clone's slab has the same positions as its parent's. Both
+// of those places forget it.
 func (r *Runner) cell(name string) *varCell {
+	if r.lastCell != 0 && name == r.lastCellName {
+		return &r.cellSlab[r.lastCell-1]
+	}
+	r.cellProbes++
 	if i, ok := r.cellIndex[name]; ok {
+		r.lastCellName, r.lastCell = name, i+1
 		return &r.cellSlab[i]
 	}
 	return nil
@@ -148,13 +170,14 @@ func (r *Runner) cell(name string) *varCell {
 
 // cellFor is the cell a write lands in, made if the name has none.
 func (r *Runner) cellFor(name string) *varCell {
-	if i, ok := r.cellIndex[name]; ok {
-		return &r.cellSlab[i]
+	if c := r.cell(name); c != nil {
+		return c
 	}
 	r.ownCellIndex()
 	r.cellSlab = append(r.cellSlab, varCell{name: name})
-	i := len(r.cellSlab) - 1
-	r.cellIndex[name] = int32(i)
+	i := int32(len(r.cellSlab) - 1)
+	r.cellIndex[name] = i
+	r.lastCellName, r.lastCell = name, i+1
 	return &r.cellSlab[i]
 }
 
@@ -176,7 +199,7 @@ func (r *Runner) markSlot(c *varCell, s cellSlots) {
 	if c.has&s != 0 {
 		return
 	}
-	if c.has == 0 {
+	if !c.live() {
 		r.liveCells++
 	}
 	c.has |= s
@@ -200,7 +223,7 @@ func (r *Runner) dropSlot(name string, s cellSlots) {
 	c.has &^= s
 	c.clearSlot(s)
 	r.cellCount[slotIndex(s)]--
-	if c.has == 0 {
+	if !c.live() {
 		r.liveCells--
 		r.compactCellsIfSparse()
 	}
@@ -219,13 +242,14 @@ func (r *Runner) compactCellsIfSparse() {
 	slab := make([]varCell, 0, r.liveCells)
 	index := make(map[string]int32, r.liveCells)
 	for i := range r.cellSlab {
-		if c := &r.cellSlab[i]; c.has != 0 {
+		if c := &r.cellSlab[i]; c.live() {
 			index[c.name] = int32(len(slab))
 			slab = append(slab, *c)
 		}
 	}
 	leaveShare(&r.cellIndexShare)
 	r.cellSlab, r.cellIndex = slab, index
+	r.lastCellName, r.lastCell = "", 0
 }
 
 // slotRange is every cell holding s, in the order the names were made. A
@@ -488,7 +512,9 @@ func (r *Runner) releaseVarTables() {
 	leaveShare(&r.cellIndexShare)
 	leaveShare(&r.assocShare)
 	r.cellIndex, r.cellSlab = nil, nil
+	r.lastCellName, r.lastCell = "", 0
 	r.cellCount, r.liveCells = [cellSlotCount]int{}, 0
+	r.attrCount, r.attrTotal = [cellAttrCount]int{}, 0
 }
 
 // ownAssocs makes the associative arrays this runner's to write: every table
@@ -542,7 +568,7 @@ func (r *Runner) restoreVarTables(t varTables) {
 		for c := range r.slotRange(s) {
 			c.has &^= s
 			c.clearSlot(s)
-			if c.has == 0 {
+			if !c.live() {
 				r.liveCells--
 			}
 		}
@@ -749,4 +775,213 @@ func (r *Runner) storedScalarOnly(name string) (string, bool) {
 		return "", false
 	}
 	return c.scalar, true
+}
+
+// cellAttrs is a set of the boolean attributes a name carries, kept in its
+// cell beside its value (#6373).
+//
+// Each was a table of its own on Runner, keyed by name, until then. A
+// declaration inside a function displaces every attribute of the name it
+// shadows and the return puts every one back, so one `local a` was a lookup
+// and a delete in each table on the way in and a write or a delete in each on
+// the way out — about forty map operations a name, which was the largest
+// single share of what `local` cost. In the cell the whole set is one word: the
+// shadow reads it with the name's one lookup and the return writes it back the
+// same way. A subshell copies it with the slab, where each table was a clone
+// of its own.
+//
+// What each attribute means is unchanged and documented here, where it lives:
+//
+//	attrInteger      the name evaluates what is assigned to it: with the
+//	                 attribute, `n=5+2` stores 7 rather than the four
+//	                 characters. A property of the name and not of the
+//	                 assignment, which is why it is recorded per name.
+//	attrFloatExponent
+//	                 the float attribute came from the `E` letter rather
+//	                 than from `F` — a format and not a width. See
+//	                 interp/floatformat.go.
+//	attrLower, attrUpper
+//	                 the case attributes — `declare -l` and `-u` — which fold
+//	                 what is assigned to the name, the same shape the integer
+//	                 attribute has.
+//	attrUnique       only the first occurrence of each element is kept —
+//	                 `typeset -U`. Consulted by every write rather than by the
+//	                 declaration that set it, which is what makes
+//	                 `path=( new "${path[@]}" )` drop the copy of `new` that
+//	                 was already there. See Semantics.DeclareOptions for who
+//	                 may set it.
+//	attrHidden       the value is kept out of every listing that would write
+//	                 one — `typeset -H`. It changes nothing about a read. See
+//	                 Semantics.DeclareOptions for who may set it.
+//	attrTraced       the trace attribute — `typeset -t`. Read by the DEBUG
+//	                 trap and by nothing else; it changes no value.
+//	attrDeclaredBare a declaration brought the name into being with no
+//	                 letters, no value and nothing in it — declared and unset
+//	                 at once. See baredeclaration.go.
+//	attrDeclaredHoldingNothing
+//	                 a declaration brought the name into being holding
+//	                 nothing, under the reading where a valueless declaration
+//	                 leaves the name unset — with letters or without. See
+//	                 Runner.ParameterAttributes (#5439).
+//	attrUnsetLeftItDeclared
+//	                 an `unset` emptied the binding while the scope that
+//	                 declared it was running — the state a bare declaration
+//	                 leaves, reached the other way. See
+//	                 interp/unsetenclosinglocal.go.
+//	attrReadonly     the name refuses assignment.
+//	attrHideInScope  the hide-in-scope attribute — `typeset -h`, and `+h` to
+//	                 take it off. It decides only where a scope has displaced
+//	                 the name. See hideinscope.go.
+//	attrDeclaredOnlyCompound
+//	                 the name's array or table came from a declaration's
+//	                 letters alone, with nothing yet written to it. See
+//	                 compounddeclaredonly.go.
+//	attrHeldAnElement
+//	                 the name's indexed array has had an element in it at some
+//	                 point and may have none now — a third state beside the one
+//	                 above, since `typeset -a b=()` ends the declared-only state
+//	                 without putting an element in. See
+//	                 Runner.bareAssignmentValue.
+//	attrScalarUnderTheArrayLetter
+//	                 the name's indexed array held no element, and never had,
+//	                 when a whole-name scalar store landed on it; one listing
+//	                 writes it as that scalar until an array write touches it.
+//	                 See Semantics.ScalarHeldUnderTheArrayLetterListsAsAScalar.
+type cellAttrs uint32
+
+const (
+	attrInteger cellAttrs = 1 << iota
+	attrFloatExponent
+	attrLower
+	attrUpper
+	attrUnique
+	attrHidden
+	attrTraced
+	attrDeclaredBare
+	attrDeclaredHoldingNothing
+	attrUnsetLeftItDeclared
+	attrReadonly
+	attrHideInScope
+	attrDeclaredOnlyCompound
+	attrHeldAnElement
+	attrScalarUnderTheArrayLetter
+)
+
+// cellAttrCount is how many attributes a cell has, which is the length of
+// Runner.attrCount.
+const cellAttrCount = 15
+
+// attrIndex is an attribute's position in Runner.attrCount.
+func attrIndex(a cellAttrs) int { return bits.TrailingZeros32(uint32(a)) }
+
+// attrHas reports whether name carries a.
+//
+// An attribute no name carries is answered without the lookup, which is what
+// an empty table used to answer for free: most of these are carried by no
+// name at all in most shells, and every assignment asks about several.
+func (r *Runner) attrHas(name string, a cellAttrs) bool {
+	if r.attrCount[attrIndex(a)] == 0 {
+		return false
+	}
+	c := r.cell(name)
+	return c != nil && c.attrs&a != 0
+}
+
+// attrsOf is every attribute name carries, for a caller asking about several
+// of one name.
+func (r *Runner) attrsOf(name string) cellAttrs {
+	if r.attrTotal == 0 {
+		return 0
+	}
+	if c := r.cell(name); c != nil {
+		return c.attrs
+	}
+	return 0
+}
+
+// attrSet gives name a, making the cell if the name has none.
+func (r *Runner) attrSet(name string, a cellAttrs) {
+	if c := r.cell(name); c != nil && c.attrs&a == a {
+		return
+	}
+	r.setAttrs(name, a, a)
+}
+
+// attrClear takes a off name; a name without it is a no-op.
+func (r *Runner) attrClear(name string, a cellAttrs) {
+	if r.attrCount[attrIndex(a)] == 0 {
+		return
+	}
+	if c := r.cell(name); c != nil && c.attrs&a != 0 {
+		r.setAttrs(name, a, 0)
+	}
+}
+
+// attrPut gives name a or takes it off.
+func (r *Runner) attrPut(name string, a cellAttrs, on bool) {
+	if on {
+		r.attrSet(name, a)
+	} else {
+		r.attrClear(name, a)
+	}
+}
+
+// setAttrs makes the attributes in mask exactly those of to that are in it,
+// leaving the rest of name's alone — the one write a shadow's return needs to
+// put a whole set back. A cell is made only where something is being set.
+func (r *Runner) setAttrs(name string, mask, to cellAttrs) {
+	to &= mask
+	if to == 0 && r.attrTotal == 0 {
+		return
+	}
+	c := r.cell(name)
+	if c == nil {
+		if to == 0 {
+			return
+		}
+		c = r.cellFor(name)
+	}
+	was := c.live()
+	changed := (c.attrs ^ to) & mask
+	if changed == 0 {
+		return
+	}
+	for m := changed; m != 0; m &= m - 1 {
+		bit := m & -m
+		if to&bit != 0 {
+			r.attrCount[attrIndex(bit)]++
+			r.attrTotal++
+		} else {
+			r.attrCount[attrIndex(bit)]--
+			r.attrTotal--
+		}
+	}
+	c.attrs = c.attrs&^mask | to
+	switch now := c.live(); {
+	case now && !was:
+		r.liveCells++
+	case !now && was:
+		r.liveCells--
+		r.compactCellsIfSparse()
+	}
+}
+
+// attrLen is how many names carry a.
+func (r *Runner) attrLen(a cellAttrs) int { return r.attrCount[attrIndex(a)] }
+
+// attrNames is every name carrying a, in the order the names were made. A
+// write during the range is allowed, as slotRange allows one.
+func (r *Runner) attrNames(a cellAttrs) iter.Seq[string] {
+	return func(yield func(string) bool) {
+		if r.attrCount[attrIndex(a)] == 0 {
+			return
+		}
+		r.cellsRanging++
+		defer func() { r.cellsRanging-- }()
+		for i := 0; i < len(r.cellSlab); i++ {
+			if c := &r.cellSlab[i]; c.attrs&a != 0 && !yield(c.name) {
+				return
+			}
+		}
+	}
 }

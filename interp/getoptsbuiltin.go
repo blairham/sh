@@ -567,13 +567,13 @@ func (r *Runner) getoptsWrite(name, value string) bool {
 	if !r.getoptsMayWrite(name) {
 		return false
 	}
-	if r.readonly[name] {
+	if r.attrHas(name, attrReadonly) {
 		// Written *through* the freeze rather than around it: the freeze is
 		// lifted for the one store, so that everything else a scalar store
 		// does — a reference aimed at another name, a `.set` discipline, a
 		// compound the scalar replaces — still happens.
-		delete(r.readonly, name)
-		defer func() { r.readonly[name] = true }()
+		r.attrClear(name, attrReadonly)
+		defer func() { r.attrSet(name, attrReadonly) }()
 	}
 	if r.getoptsRefusedName != "" && name == r.getoptsRefusedName {
 		// This is the operand the refusal is about, and this dialect ran the
@@ -605,7 +605,7 @@ func (r *Runner) getoptsWrite(name, value string) bool {
 // o` writes `OPTARG: readonly variable` in bash 5.3.20 and leaves `PRE`
 // standing, where the same line over an unfrozen name leaves OPTARG unset.
 func (r *Runner) getoptsMayWrite(name string) bool {
-	if !r.readonly[name] {
+	if !r.attrHas(name, attrReadonly) {
 		return true
 	}
 	if (name == "OPTARG" || name == "OPTIND") &&
@@ -835,7 +835,7 @@ func (r *Runner) getoptsBad(name string, sign, c byte, silent bool, why getoptsC
 	// rather than an axis, because the two are the same rule seen twice — a
 	// refusal that ends the script is written before the complaint it would
 	// otherwise have followed, and there is nothing after it to follow.
-	if r.readonly[name] && r.sem().ReadonlyRefusalInABuiltinIsFatal == Yes {
+	if r.attrHas(name, attrReadonly) && r.sem().ReadonlyRefusalInABuiltinIsFatal == Yes {
 		return r.getoptsSetName(name, "?", 0)
 	}
 	if !r.getoptsComplaintSilenced() {
@@ -1054,9 +1054,9 @@ func (r *Runner) clearOptarg() bool {
 // through the ordinary refusal even in bash, which reports it and leaves the
 // value standing.
 func (r *Runner) clearOptargPossiblyForReal(empty bool) bool {
-	if !empty && r.readonly["OPTARG"] && r.ask(r.sem().GetoptsClearingOptargIsARealUnset,
+	if !empty && r.attrHas("OPTARG", attrReadonly) && r.ask(r.sem().GetoptsClearingOptargIsARealUnset,
 		"`getopts` clearing OPTARG by removing the name rather than by writing over it") {
-		delete(r.readonly, "OPTARG")
+		r.attrClear("OPTARG", attrReadonly)
 	}
 	return r.emptyOrUnsetOptarg(empty)
 }

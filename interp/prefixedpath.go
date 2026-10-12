@@ -109,7 +109,7 @@ func (r *Runner) holdCommandHashAcrossAPrefixedPath() func() {
 // table this has to take aside first.
 func (r *Runner) aPrefixSuppliesThePath(assigns []*syntax.Assign) bool {
 	for _, a := range assigns {
-		if a.Name != "PATH" || a.Operand || r.readonly[a.Name] {
+		if a.Name != "PATH" || a.Operand || r.attrHas(a.Name, attrReadonly) {
 			continue
 		}
 		if _, positional := positionalAssignIndex(a.Name); positional {

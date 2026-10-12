@@ -47,7 +47,7 @@ package interp
 //
 // `unset` of a local the running scope declared arrives at the same state
 // from the other side — the binding stands, its value and its letters are
-// gone — so it is the same listing, and Runner.unsetLeftItDeclared is where
+// gone — so it is the same listing, and attrUnsetLeftItDeclared is where
 // that route's record lives. A second bool rather than a second write of the
 // one above, because two readers have to tell them apart: the `unset` that
 // falls through to the *function* table counts a declaration as a parameter
@@ -70,7 +70,7 @@ package interp
 // attribute letters and no value, in a dialect where that leaves the name
 // unset rather than empty.
 func (r *Runner) recordBareDeclaration(name string) {
-	setBool(&r.declaredBare, name, true)
+	r.attrSet(name, attrDeclaredBare)
 }
 
 // bareDeclarationListed reports whether the listing has such a record to write
@@ -94,11 +94,11 @@ func (r *Runner) recordBareDeclaration(name string) {
 // they describe is the same state, so a listing that writes it once has
 // written it.
 func (r *Runner) bareDeclarationListed(name string) bool {
-	if r.declaredBare[name] && r.ask(r.sem().ValuelessDeclarationRecordsTheName,
+	if r.attrHas(name, attrDeclaredBare) && r.ask(r.sem().ValuelessDeclarationRecordsTheName,
 		"what a listing does with a name declared with neither a value nor an attribute") {
 		return true
 	}
-	return r.unsetLeftItDeclared[name] &&
+	return r.attrHas(name, attrUnsetLeftItDeclared) &&
 		r.ask(r.sem().UnsetOfALocalRecordsTheName,
 			"what a listing does with a local whose value an `unset` took")
 }
@@ -112,7 +112,7 @@ func (r *Runner) bareDeclarationListed(name string) bool {
 // — the `-p` that has to tell a name it still has from one it has never heard
 // of — cannot come to disagree with the first about which names are in it.
 func (r *Runner) hasAValuelessRecord(name string) bool {
-	return r.declaredBare[name] || r.unsetLeftItDeclared[name]
+	return r.attrHas(name, attrDeclaredBare) || r.attrHas(name, attrUnsetLeftItDeclared)
 }
 
 // valuelessRecordIsStillAName is the question a `-p` asks about such a record

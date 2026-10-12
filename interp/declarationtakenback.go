@@ -77,7 +77,7 @@ type declarationHeld struct {
 // where the operand went through a reference: what has to go back is the cell
 // the attributes reached.
 func (r *Runner) holdTheDeclaration(name string) declarationHeld {
-	h := declarationHeld{attrs: r.captureAttributes(name), hidden: r.hideInScope[name]}
+	h := declarationHeld{attrs: r.captureAttributes(name), hidden: r.attrHas(name, attrHideInScope)}
 	h.value, h.valueSet = r.varsLookup(name)
 	h.exported, h.exportSpoken = r.exported[name]
 	_, array := r.arraysLookup(name)
@@ -121,7 +121,7 @@ func (r *Runner) takeTheDeclarationBack(name string, h declarationHeld, fresh bo
 	} else {
 		delete(r.exported, name)
 	}
-	setBool(&r.hideInScope, name, h.hidden)
+	r.attrPut(name, attrHideInScope, h.hidden)
 	if fresh && len(r.scopes) > 0 {
 		r.restoreShadowedName(r.scopes[len(r.scopes)-1], name)
 	}

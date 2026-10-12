@@ -364,7 +364,7 @@ func (r *Runner) storeArray(name string, a Array) {
 	// S=p:q:p` leaves `s` holding three elements, because the letter belongs
 	// to the name a script wrote and not to the pair. See
 	// interp/tiedunique.go, which is the scalar side of the same guard.
-	if r.unique[name] && !r.mirroring {
+	if r.attrHas(name, attrUnique) && !r.mirroring {
 		a = r.uniqueElems(a)
 	}
 	// What the name's other attributes make of an element is **not** asked
@@ -391,15 +391,15 @@ func (r *Runner) storeArray(name string, a Array) {
 	// is what this note relies on — see compounddeclaredonly.go.
 	r.compoundWasAssigned(name)
 	// An array write, so the name is listed as the array it now is. See
-	// Runner.scalarHeldUnderTheArrayLetter.
-	delete(r.scalarHeldUnderTheArrayLetter, name)
+	// attrScalarUnderTheArrayLetter.
+	r.attrClear(name, attrScalarUnderTheArrayLetter)
 	if a.Len() > 0 {
 		// And the third state, which only grows: an array that has held an
 		// element and lost every one of them is not an array that never held
 		// any, and one listing tells them apart. Set rather than written on
 		// every store, because the emptying write comes through here too and
 		// would clear exactly what it is supposed to record.
-		setBool(&r.compoundHeldAnElement, name, true)
+		r.attrSet(name, attrHeldAnElement)
 	}
 	// A plain `$a` has to keep working. The first element is stored rather
 	// than the scalar view, because *which* view it is depends on a dialect
@@ -643,7 +643,7 @@ func (r *Runner) elementValueFolded(name, value string) (string, bool) {
 // a caller placing many elements may skip asking per element (#6362).
 func (r *Runner) foldsElements(name string) bool {
 	_, width := r.fieldWidth[name]
-	return r.integer[name] || r.lowered[name] || r.uppered[name] ||
+	return r.attrHas(name, attrInteger) || r.attrHas(name, attrLower) || r.attrHas(name, attrUpper) ||
 		r.capitalized[name] || width
 }
 
@@ -841,13 +841,13 @@ func (r *Runner) appendScalarToArray(name string, a Array, value string) {
 	}
 	if !addsAnElement {
 		// The value joins the first element and the name is the same scalar
-		// held, longer: see Runner.scalarHeldUnderTheArrayLetter.
-		held := r.scalarHeldUnderTheArrayLetter[name]
+		// held, longer: see attrScalarUnderTheArrayLetter.
+		held := r.attrHas(name, attrScalarUnderTheArrayLetter)
 		// The subscript as written, for the complaint that names one — the
 		// base is never below the first element, so nothing can reach it.
 		r.appendArrayElem(name, r.arrayBase(), strconv.Itoa(r.arrayBase()), value)
 		if held {
-			setBool(&r.scalarHeldUnderTheArrayLetter, name, true)
+			r.attrSet(name, attrScalarUnderTheArrayLetter)
 		}
 		return
 	}
@@ -935,15 +935,15 @@ func (r *Runner) scalarOverCompound(name, value string, form assignForm) bool {
 	}
 	// An array that has never held an element, or that is already holding
 	// a scalar this way, keeps holding one: see
-	// Runner.scalarHeldUnderTheArrayLetter. Read before the store, which
+	// attrScalarUnderTheArrayLetter. Read before the store, which
 	// records the element.
-	held := r.scalarHeldUnderTheArrayLetter[name] ||
-		(r.arraysAt(name).Len() == 0 && !r.compoundHeldAnElement[name])
+	held := r.attrHas(name, attrScalarUnderTheArrayLetter) ||
+		(r.arraysAt(name).Len() == 0 && !r.attrHas(name, attrHeldAnElement))
 	// The subscript as written, for the complaint that names one — the base
 	// is never below the first element, so nothing can reach it.
 	r.setArrayElem(name, r.arrayBase(), strconv.Itoa(r.arrayBase()), value)
 	if held {
-		setBool(&r.scalarHeldUnderTheArrayLetter, name, true)
+		r.attrSet(name, attrScalarUnderTheArrayLetter)
 	}
 	return true
 }
@@ -4162,7 +4162,7 @@ func (r *Runner) compoundElemsFolded(name string, a Array) Array {
 	// — measured, `typeset -a n; typeset -L 3 n; n=(abcd efgh)` is `(abc
 	// efg)` on ksh93u+ (#2859).
 	_, width := r.fieldWidth[name]
-	if !r.integer[name] && !r.lowered[name] && !r.uppered[name] && !width {
+	if !r.attrHas(name, attrInteger) && !r.attrHas(name, attrLower) && !r.attrHas(name, attrUpper) && !width {
 		return a
 	}
 	changed := false

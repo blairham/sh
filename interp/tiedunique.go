@@ -83,7 +83,7 @@ func uniqueStrings(in []string) []string {
 // that are a mirror rather than a script's, which is why it is the guard here
 // and in storeArray.
 func (r *Runner) tiedUniqueFold(name, value string) string {
-	if r.mirroring || !r.unique[name] {
+	if r.mirroring || !r.attrHas(name, attrUnique) {
 		return value
 	}
 	t, ok := r.tied[name]

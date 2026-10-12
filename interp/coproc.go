@@ -183,7 +183,7 @@ func (r *Runner) coprocEndClosedByName(fdVar string, fd int) {
 // the row above — so it is the first frozen name that speaks, not a fixed one.
 func (r *Runner) coprocNamesAreFrozen(name string) bool {
 	for _, n := range []string{name, name + "_PID"} {
-		if r.readonly[n] {
+		if r.attrHas(n, attrReadonly) {
 			r.refuseReadonly(n, assignedByDeclaration)
 			return true
 		}
@@ -597,7 +597,7 @@ func (r *Runner) forgetCoprocNames() {
 	// frozen array is kept and complained about. Asking the readonly question
 	// for the companion left `A_PID` and `C_PID` standing here, which is a
 	// name the reference shell has none of.
-	if r.readonly[r.coproc.name] {
+	if r.attrHas(r.coproc.name, attrReadonly) {
 		// The refusal the reap's own take-back writes, and it is **spoken as
 		// the shell**: `unsetName` is the raw removal and the readonly
 		// question belongs to the builtin around it, but no builtin is
@@ -621,7 +621,7 @@ func (r *Runner) forgetCoprocNames() {
 	pid := r.coproc.name + "_PID"
 	r.unsetOneName(pid)
 	r.restoreAttributes(pid, nameAttributes{})
-	delete(r.readonly, pid)
+	r.attrClear(pid, attrReadonly)
 }
 
 // coprocEnds is the pair of descriptors a running coprocess is reached by,

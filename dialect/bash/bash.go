@@ -3952,7 +3952,7 @@ func Semantics() interp.Semantics {
 	// in #3434: it is the per-declaration spelling of `localvar_inherit`,
 	// and interp/localinherit.go is the whole of it. `-t` joined them in
 	// #3101: it is the **trace attribute**, which this shell records and
-	// lists back and nothing else here reads — see Runner.traced.
+	// lists back and nothing else here reads — see attrTraced.
 	s.DeclareOptions = "aAcfFgiIlnprtux"
 	// unanswered FloatFormatLetterE: this shell has no `-E` on a declaration
 	// to give a rendering to. Measured 2026-09-15 on 5.3.15 and 3.2.57

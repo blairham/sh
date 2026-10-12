@@ -110,7 +110,7 @@ func (r *Runner) namerefMemberPath(target string) (string, bool) {
 // tables — its value is the members under it, and markCompoundVariable took
 // whatever else the name held.
 func (r *Runner) namerefMemberParentIsThere(base string) bool {
-	if r.isCompoundVariable(base) || r.declaredNameHolds(base) || r.declaredBare[base] {
+	if r.isCompoundVariable(base) || r.declaredNameHolds(base) || r.attrHas(base, attrDeclaredBare) {
 		return true
 	}
 	_, set := r.getVar(base)

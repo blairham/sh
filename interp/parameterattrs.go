@@ -137,7 +137,7 @@ type ParameterAttributes struct {
 // `${+parameters[nosuch]}` be 0 without the dialect keeping a second list of
 // what exists.
 func (r *Runner) ParameterAttributes(name string) (ParameterAttributes, bool) {
-	if name == "" || (r.removedForDescription(name) && !r.declaredBare[name] && !r.declaredHoldingNothing[name]) {
+	if name == "" || (r.removedForDescription(name) && !r.attrHas(name, attrDeclaredBare) && !r.attrHas(name, attrDeclaredHoldingNothing)) {
 		// Removed, unless what removed it was a declaration hiding an outer
 		// value behind a binding of its own that holds nothing — which is a
 		// name the shell has, and is described below (#5157).
@@ -162,12 +162,12 @@ func (r *Runner) ParameterAttributes(name string) (ParameterAttributes, bool) {
 		// neither entry: reading it directly reported `$PATH` as an ordinary
 		// scalar, where the shell being described calls it exported.
 		Exported:  r.isExported(name),
-		Readonly:  r.readonly[name],
-		Lower:     r.lowered[name],
-		Upper:     r.uppered[name],
-		Unique:    r.unique[name],
-		Traced:    r.traced[name],
-		HideValue: r.hidden[name],
+		Readonly:  r.attrHas(name, attrReadonly),
+		Lower:     r.attrHas(name, attrLower),
+		Upper:     r.attrHas(name, attrUpper),
+		Unique:    r.attrHas(name, attrUnique),
+		Traced:    r.attrHas(name, attrTraced),
+		HideValue: r.attrHas(name, attrHidden),
 		// A **private** binding carries both of the last two words without
 		// either having been written on the declaration, and that is
 		// measured rather than reasoned from. zsh 5.9.2, 2026-09-27, inside
@@ -193,7 +193,7 @@ func (r *Runner) ParameterAttributes(name string) (ParameterAttributes, bool) {
 		// binding that needs none of it, and marking the name shell-own would
 		// put it in tables the shell walks. What the word reports is a
 		// description, and a description is what this function is.
-		Hidden: r.hideInScope[name] || r.privateHere(name),
+		Hidden: r.attrHas(name, attrHideInScope) || r.privateHere(name),
 		// The three shapes, less the names a dialect has said outright are
 		// not its own — see Runner.MarkParameterNotTheShellsOwn, which is
 		// the statement that overrides the shape rather than a fourth source
@@ -231,7 +231,7 @@ func (r *Runner) ParameterAttributes(name string) (ParameterAttributes, bool) {
 	// both. An `unset` of the local is not that state — `local v; unset v`
 	// leaves `${(t)v}` empty — and neither is a POSIX_BUILTINS `readonly RO`,
 	// which leaves no record at all (#5157).
-	if !r.parameterIsProvided(name) && !r.parameterExists(name) && !r.declaredBare[name] && !r.declaredHoldingNothing[name] {
+	if !r.parameterIsProvided(name) && !r.parameterExists(name) && !r.attrHas(name, attrDeclaredBare) && !r.attrHas(name, attrDeclaredHoldingNothing) {
 		return ParameterAttributes{}, false
 	}
 	return a, true
@@ -266,7 +266,7 @@ func (r *Runner) parameterKind(name string) ParameterKind {
 	if _, ok := r.floatPrecision[name]; ok {
 		return FloatParameter
 	}
-	if r.integer[name] {
+	if r.attrHas(name, attrInteger) {
 		return IntegerParameter
 	}
 	// A produced parameter is in none of the tables above — that is what

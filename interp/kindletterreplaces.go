@@ -71,7 +71,7 @@ func (r *Runner) kindLetterReplacesWhatTheNameWas(name string, f declareFlags) {
 	// other is a *conversion* with two measured answers of its own, which is
 	// Semantics.TableUnderAnArrayDeclaration and its neighbor, and taking the
 	// old table away here would decide that question by deletion.
-	delete(r.integer, name)
+	r.attrClear(name, attrInteger)
 	delete(r.integerBase, name)
 	delete(r.floatPrecision, name)
 	r.markFloatExponent(name, false)
@@ -90,7 +90,7 @@ func (r *Runner) nameAlreadyHasAnotherKind(name string, arriving ParameterKind) 
 	switch arriving {
 	case ArrayParameter, AssocParameter:
 		_, float := r.floatPrecision[name]
-		return r.integer[name] || float
+		return r.attrHas(name, attrInteger) || float
 	default:
 		return r.arrayDeclared(name) || r.assocDeclared(name)
 	}

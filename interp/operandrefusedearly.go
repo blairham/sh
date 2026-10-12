@@ -65,7 +65,7 @@ func (r *Runner) refuseArrayOperandsEarly(argv []string) bool {
 		r.endProducerUnsetEnded(a.Name)
 		var refuse func()
 		switch {
-		case r.readonly[a.Name]:
+		case r.attrHas(a.Name, attrReadonly):
 			refuse = func() {
 				r.refuseWithTheReadonlySentence(a.Name, assignedAlone, r.sem().ReadonlyReassignmentFatal)
 			}
@@ -159,7 +159,7 @@ func (r *Runner) refuseFrozenOperandValuesEarly(argv []string) bool {
 			// already answers both.
 			return false
 		}
-		if r.readonly[a.assign.Name] {
+		if r.attrHas(a.assign.Name, attrReadonly) {
 			frozen = a.assign.Name
 			break
 		}
@@ -176,7 +176,7 @@ func (r *Runner) refuseFrozenOperandValuesEarly(argv []string) bool {
 				continue
 			}
 			name := strings.TrimSuffix(w[:eq], "+")
-			if isPlainName(name) && r.readonly[name] {
+			if isPlainName(name) && r.attrHas(name, attrReadonly) {
 				frozen = name
 				break
 			}

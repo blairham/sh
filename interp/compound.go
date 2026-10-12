@@ -1627,8 +1627,8 @@ func (r *Runner) restoreShadowedName(sc *scope, name string) {
 		// And the third state with it, for the reason the note above gives:
 		// a local array emptied inside the call must not leave the caller's
 		// name reading as one that has lost its elements.
-		setBool(&r.compoundHeldAnElement, name, rec.holds(flagHeldAnElementBefore))
-		setBool(&r.scalarHeldUnderTheArrayLetter, name, rec.holds(flagScalarHeldBefore))
+		r.attrPut(name, attrHeldAnElement, rec.holds(flagHeldAnElementBefore))
+		r.attrPut(name, attrScalarUnderTheArrayLetter, rec.holds(flagScalarHeldBefore))
 		rec.has &^= flagHeldAnElementBefore | flagScalarHeldBefore
 	}
 	// And the frozen attribute, which goes both ways: a name the declaration
@@ -1637,12 +1637,9 @@ func (r *Runner) restoreShadowedName(sc *scope, name string) {
 	// attribute a `local -r` adds is the call's and lasts as long as it.
 	if rec.holds(recSavedReadonly) {
 		if rec.bit(recSavedReadonly) {
-			if r.readonly == nil {
-				r.readonly = map[string]bool{}
-			}
-			r.readonly[name] = true
+			r.attrSet(name, attrReadonly)
 		} else {
-			delete(r.readonly, name)
+			r.attrClear(name, attrReadonly)
 		}
 		rec.drop(recSavedReadonly)
 	}
@@ -1652,12 +1649,9 @@ func (r *Runner) restoreShadowedName(sc *scope, name string) {
 	// back to the outer answer. See hideinscope.go.
 	if rec.holds(recSavedHideInScope) {
 		if rec.bit(recSavedHideInScope) {
-			if r.hideInScope == nil {
-				r.hideInScope = map[string]bool{}
-			}
-			r.hideInScope[name] = true
+			r.attrSet(name, attrHideInScope)
 		} else {
-			delete(r.hideInScope, name)
+			r.attrClear(name, attrHideInScope)
 		}
 		rec.drop(recSavedHideInScope)
 	}

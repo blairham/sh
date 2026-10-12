@@ -85,7 +85,7 @@ func (r *Runner) refuseFrozenTableElement(name, key string) bool {
 // takes the name out of r.DynamicAssocs — and the name inside that scope is an
 // ordinary association a script declared, so there is nothing of the shell's
 // left to freeze. That is the same lifting the readonly path gets from
-// `shadowStartsHiding`'s `delete(r.readonly, name)`, reached through the
+// `shadowStartsHiding`'s `r.attrClear(name, attrReadonly)`, reached through the
 // producer rather than through a second saved map, so `+h` putting the
 // producer back puts the freeze back with it and neither can drift from the
 // other.

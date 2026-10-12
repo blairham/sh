@@ -164,8 +164,8 @@ func (r *Runner) restoreTheOuterBinding(name string) bool {
 		had = true
 	}
 	if sc.madeRecord(recDeclaredOnlyBefore) {
-		setBool(&r.declaredOnlyCompound, name, sc.recordBit(recDeclaredOnlyBefore, name))
-		setBool(&r.compoundHeldAnElement, name, sc.flag(flagHeldAnElementBefore, name))
+		r.attrPut(name, attrDeclaredOnlyCompound, sc.recordBit(recDeclaredOnlyBefore, name))
+		r.attrPut(name, attrHeldAnElement, sc.flag(flagHeldAnElementBefore, name))
 	}
 	// And the attributes, added to the ones this declaration's own letters
 	// have already written rather than replacing them — which is measured:
@@ -195,18 +195,18 @@ func (r *Runner) restoreTheOuterBinding(name string) bool {
 func (r *Runner) inheritAttributes(name string, a nameAttributes) bool {
 	had := false
 	for _, at := range []struct {
-		table *map[string]bool
-		on    bool
+		attr cellAttrs
+		on   bool
 	}{
-		{&r.integer, a.integer},
-		{&r.lowered, a.lower},
-		{&r.uppered, a.upper},
-		{&r.unique, a.unique},
-		{&r.traced, a.traced},
-		{&r.hidden, a.hidden},
+		{attrInteger, a.integer},
+		{attrLower, a.lower},
+		{attrUpper, a.upper},
+		{attrUnique, a.unique},
+		{attrTraced, a.traced},
+		{attrHidden, a.hidden},
 	} {
 		if at.on {
-			setBool(at.table, name, true)
+			r.attrSet(name, at.attr)
 			had = true
 		}
 	}
@@ -216,7 +216,7 @@ func (r *Runner) inheritAttributes(name string, a nameAttributes) bool {
 	}
 	if a.isFloat {
 		setInt(&r.floatPrecision, name, a.precision, true)
-		setBool(&r.floatExponent, name, a.floatExponent)
+		r.attrPut(name, attrFloatExponent, a.floatExponent)
 		if a.hasFloatExact {
 			// The number behind the rendering comes with the letter, for the
 			// reason the letter itself does: a name that inherits `-E3`

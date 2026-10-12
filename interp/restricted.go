@@ -117,7 +117,7 @@ func (r *Runner) leaveRestricted() {
 		// script asking to unfreeze a name, it is the mode giving back what
 		// the mode took, and the shell that allows it is not the shell that
 		// allows the attribute to be removed.
-		delete(r.readonly, name)
+		r.attrClear(name, attrReadonly)
 	}
 	r.restrictedFrozen = nil
 }

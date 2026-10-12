@@ -453,7 +453,7 @@ func (r *Runner) reportEmptyAssocKeyRead(e *syntax.ParamExpr, key string) bool {
 // Unlike the read's report this abandons the word: status 1, nothing
 // expanded, and the shell ends. See Semantics.EmptyAssociativeKeyRefusesTheLength.
 func (r *Runner) refusesTheLengthOfAnEmptyAssocKey(e *syntax.ParamExpr) bool {
-	if r.declaredOnlyCompound[e.Name] {
+	if r.attrHas(e.Name, attrDeclaredOnlyCompound) {
 		return false
 	}
 	if !r.ask(r.sem().EmptyAssociativeKeyRefusesTheLength,

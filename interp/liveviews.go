@@ -409,15 +409,12 @@ func (r *Runner) SetSilentToPrint(name string) {
 // letter on one of these names really does change what an assignment to it
 // means, which is the difference between this and ProducedDeclaration.
 func (r *Runner) MarkInteger(name string) {
-	if r.integer == nil {
-		r.integer = map[string]bool{}
-	}
-	r.integer[name] = true
+	r.attrSet(name, attrInteger)
 }
 
 // UnmarkInteger takes the integer attribute back off a name, which is what
 // `typeset +i` does, for a dialect that put it there.
-func (r *Runner) UnmarkInteger(name string) { delete(r.integer, name) }
+func (r *Runner) UnmarkInteger(name string) { r.attrClear(name, attrInteger) }
 
 // MarkExported puts the export attribute on a name, which is what `export`
 // does — so the name reaches a child's environment and a listing writes it
@@ -451,10 +448,7 @@ func (r *Runner) MarkExported(name string) {
 // readonly `builtins` appears in `typeset -r` as a bare name with no `=` and
 // no value, and in a plain `typeset` not at all.
 func (r *Runner) MarkHidden(name string) {
-	if r.hidden == nil {
-		r.hidden = map[string]bool{}
-	}
-	r.hidden[name] = true
+	r.attrSet(name, attrHidden)
 }
 
 // MarkLocal says that a produced parameter belongs to the *call* that

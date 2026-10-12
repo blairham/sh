@@ -1169,7 +1169,7 @@ func (r *Runner) arithAssignmentReplacesAnArray(name string) bool {
 // h++ ))` an association with nothing stored, where `(( a = 3 ))` is
 // `integer 3`. bash reads and writes element 0 for both and is not this.
 func (r *Runner) arithModifiesAnArray(name, text string) bool {
-	if r.sem().ArithmeticAssignmentDeclaresANumber != Yes || r.readonly[name] {
+	if r.sem().ArithmeticAssignmentDeclaresANumber != Yes || r.attrHas(name, attrReadonly) {
 		// A frozen name goes the ordinary way, which is where its refusal is.
 		return false
 	}
@@ -1195,10 +1195,7 @@ func (r *Runner) arithModifiesAnArray(name, text string) bool {
 // z = y ))` is a plain `typeset -i z=31`, the prefix having arrived through a
 // value rather than been written here.
 func (r *Runner) declareIntegerFromArithmetic(name string, from syntax.ArithExpr) {
-	if r.integer == nil {
-		r.integer = map[string]bool{}
-	}
-	r.integer[name] = true
+	r.attrSet(name, attrInteger)
 	// The expression's own output specifier first, which is a base the script
 	// wrote as squarely as a literal is: `(( i = [#16] 255 ))` on an unset
 	// name is `typeset -i16 i=255`. It is not a base a name that *already*
@@ -1884,7 +1881,7 @@ type numericAttribute struct {
 // numericAttributeOf reads the numeric type a name carries right now.
 func (r *Runner) numericAttributeOf(name string) numericAttribute {
 	_, isFloat := r.floatPrecision[name]
-	return numericAttribute{isFloat: isFloat, isInteger: r.integer[name]}
+	return numericAttribute{isFloat: isFloat, isInteger: r.attrHas(name, attrInteger)}
 }
 
 // converts is the number this numeric type makes of a value written into it by

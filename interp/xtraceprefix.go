@@ -232,7 +232,7 @@ func (r *Runner) expandPrefixTraceValues(assigns []*syntax.Assign) {
 			// Runner.tracesItsPrefix.
 			continue
 		}
-		if r.readonly[a.Name] {
+		if r.attrHas(a.Name, attrReadonly) {
 			// A frozen name is refused, and no column in the panel writes a
 			// trace line for a prefix that did not happen. Measured
 			// 2026-09-16 with `readonly x=1; set -x; x=2 /usr/bin/env true`:
@@ -408,7 +408,7 @@ func (r *Runner) prefixEntryHasATraceableValue(a *syntax.Assign) bool {
 	if _, ok := positionalAssignIndex(a.Name); ok && a.IsArray {
 		return false
 	}
-	return !r.readonly[a.Name] && !r.subscriptedPrefixDropped(a)
+	return !r.attrHas(a.Name, attrReadonly) && !r.subscriptedPrefixDropped(a)
 }
 
 // tracesEachPrefixEntryOnItsOwnLine reports whether this dialect writes one

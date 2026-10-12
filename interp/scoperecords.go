@@ -97,7 +97,7 @@ const (
 	// for the rest of the script.
 	//
 	// So absent and false do not mean the same thing here, though they do in
-	// r.readonly: absent means this scope never shadowed the name at all.
+	// attrReadonly: absent means this scope never shadowed the name at all.
 	recSavedReadonly
 	// recSavedHideInScope is the hide-in-scope attribute a shadowed name
 	// carried when the declaration displaced it, saved for the same two
@@ -115,7 +115,7 @@ const (
 	//
 	// Separate from recSavedHideInScope, which is a *value* being kept for
 	// the return, because the two disagree the moment either `-h` or `+h` is
-	// written on the declaration — and separate from r.hideInScope, which
+	// written on the declaration — and separate from attrHideInScope, which
 	// after the shadow describes the fresh binding and no longer the outer
 	// one that governed it. See hideinscope.go.
 	recHiddenShadow
@@ -165,10 +165,10 @@ const (
 	// flagHeldAnElementBefore is whether the name's indexed array had ever
 	// held an element when it was shadowed, so a local array that is emptied
 	// inside a call does not leave the caller's name reading as one that has
-	// lost its elements. See Runner.compoundHeldAnElement.
+	// lost its elements. See attrHeldAnElement.
 	flagHeldAnElementBefore
 	// flagScalarHeldBefore is the same save for
-	// Runner.scalarHeldUnderTheArrayLetter.
+	// attrScalarUnderTheArrayLetter.
 	flagScalarHeldBefore
 	// flagMemberNamespace says this scope shadowed the name's **member**
 	// namespace — every name under `c.` displaced along with `c` itself. It

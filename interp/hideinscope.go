@@ -132,14 +132,11 @@ func (r *Runner) setHideInScope(name string, f declareFlags) {
 		return
 	}
 	if !f.hide {
-		delete(r.hideInScope, name)
+		r.attrClear(name, attrHideInScope)
 		r.shadowStopsHiding(name)
 		return
 	}
-	if r.hideInScope == nil {
-		r.hideInScope = map[string]bool{}
-	}
-	r.hideInScope[name] = true
+	r.attrSet(name, attrHideInScope)
 	r.shadowStartsHiding(name)
 }
 
@@ -153,10 +150,10 @@ func (r *Runner) setHideInScope(name string, f declareFlags) {
 // every attribute either half was carrying — and the seam is shared so that
 // the shadow's record is corrected the one way rather than two.
 func (r *Runner) dropHideInScope(name string) {
-	if _, hidden := r.hideInScope[name]; !hidden {
+	if hidden := r.attrHas(name, attrHideInScope); !hidden {
 		return
 	}
-	delete(r.hideInScope, name)
+	r.attrClear(name, attrHideInScope)
 	r.shadowStopsHiding(name)
 }
 
@@ -192,7 +189,7 @@ func (r *Runner) dropHideInScope(name string) {
 // had not seen yet was unwritten until the inner started, so the kind the
 // inner recorded is the kind it held when the outer did.
 func (r *Runner) watchHiddenKinds(target string) (hiddenWatch, bool) {
-	if r.hideLetterWritten || len(r.hideInScope) == 0 {
+	if r.hideLetterWritten || r.attrLen(attrHideInScope) == 0 {
 		return hiddenWatch{}, false
 	}
 	w := hiddenWatch{outer: r.hideKindsWatched, outerOn: r.hideWatching}
@@ -211,7 +208,7 @@ func (r *Runner) watchHiddenKinds(target string) (hiddenWatch, bool) {
 // read from, for the rule kindChangeForgetsTheHide states: the kind a hidden
 // name held when the line started, for every name the line can retype.
 //
-// The names come from r.hideInScope and not from shadowIsHidden, and that is
+// The names come from attrHideInScope and not from shadowIsHidden, and that is
 // the whole of what keeps this about the binding in front of the line: a
 // shadow deletes the entry and records the answer in the scope instead, so a
 // deeper function's declaration of the same name finds nothing here to
@@ -253,15 +250,13 @@ func (r *Runner) watchHiddenKinds(target string) (hiddenWatch, bool) {
 // attribute and references today, so that branch keeps the old answer
 // rather than guessing at an unmeasured one.
 func (r *Runner) watchDeclarationKinds(args []string, f declareFlags) (hiddenWatch, bool) {
-	if r.hideLetterWritten || len(r.hideInScope) == 0 {
+	if r.hideLetterWritten || r.attrLen(attrHideInScope) == 0 {
 		return hiddenWatch{}, false
 	}
 	w, _ := r.watchHiddenKinds("")
 	if f.matching || f.matchNames || f.mapping || f.function || f.funcNames || f.tie || len(r.nameref) > 0 {
-		for name, hidden := range r.hideInScope {
-			if hidden {
-				r.noteHiddenWrite(name)
-			}
+		for name := range r.attrNames(attrHideInScope) {
+			r.noteHiddenWrite(name)
 		}
 		return w, true
 	}
@@ -310,7 +305,7 @@ func (r *Runner) endHiddenWatch(w hiddenWatch) {
 // noteHiddenWrite is the store's half of watchHiddenKinds: the kind a hidden
 // name holds just before the first store to it in the watched line.
 func (r *Runner) noteHiddenWrite(name string) {
-	if !r.hideWatching || !r.hideInScope[name] {
+	if !r.hideWatching || !r.attrHas(name, attrHideInScope) {
 		return
 	}
 	if _, seen := r.hideKindsWatched[name]; seen {
@@ -358,7 +353,7 @@ func (r *Runner) noteHiddenWrite(name string) {
 func (r *Runner) kindChangeForgetsTheHide(was map[string]ParameterKind) {
 	for name, kind := range was {
 		if r.parameterKind(name) != kind {
-			delete(r.hideInScope, name)
+			r.attrClear(name, attrHideInScope)
 		}
 	}
 }
@@ -411,7 +406,7 @@ func (r *Runner) shadowStartsHiding(name string) {
 	}
 	sc := r.scopes[len(r.scopes)-1]
 	sc.putRecord(recHiddenShadow, name, true)
-	delete(r.readonly, name)
+	r.attrClear(name, attrReadonly)
 	r.suspendProducer(sc, name)
 }
 
@@ -444,10 +439,7 @@ func (r *Runner) shadowStopsHiding(name string) {
 	// states: a produced parameter's survives its shadow and a script's does
 	// not, so only the first comes back here.
 	if sc.recordBit(recSavedReadonly, name) && r.DynamicParameter(name) {
-		if r.readonly == nil {
-			r.readonly = map[string]bool{}
-		}
-		r.readonly[name] = true
+		r.attrSet(name, attrReadonly)
 	}
 }
 
@@ -455,7 +447,7 @@ func (r *Runner) shadowStopsHiding(name string) {
 // hidden shadow, which is the question every consumer of the letter actually
 // asks.
 //
-// Not `r.hideInScope[name]`, and the difference is the whole of why this
+// Not `r.attrHas(name, attrHideInScope)`, and the difference is the whole of why this
 // exists: the attribute describes a *binding*, and the shadow's binding is a
 // fresh one that carries the letter only if the declaration wrote it.
 // Measured on zsh 5.9.2 — `typeset -h v=1` is `scalar-hide` and a plain
@@ -474,7 +466,7 @@ func (r *Runner) shadowIsHidden(name string) bool {
 			return hidden
 		}
 	}
-	return r.hideInScope[name]
+	return r.attrHas(name, attrHideInScope)
 }
 
 // tieDescribesTheBinding reports whether the tie a name carries is the
@@ -748,10 +740,7 @@ func (r *Runner) resumeProducer(sc *scope, name string) {
 // setting the map and stopping, because a second helper that does nearly the
 // same thing is where the next fix lands in only one of them.
 func (r *Runner) MarkHideInScope(name string) {
-	if r.hideInScope == nil {
-		r.hideInScope = map[string]bool{}
-	}
-	r.hideInScope[name] = true
+	r.attrSet(name, attrHideInScope)
 	r.shadowStartsHiding(name)
 }
 
@@ -814,11 +803,11 @@ func (r *Runner) MarkHideInScope(name string) {
 // function is the same case for the same reason, since `-g` is the other way
 // to take no shadow (#2734).
 func (r *Runner) freezeSurvivesAShadow(name string) bool {
-	if !r.readonly[name] || !r.DynamicParameter(name) {
+	if !r.attrHas(name, attrReadonly) || !r.DynamicParameter(name) {
 		return false
 	}
 	if !r.localInTheInnermostScope(name) {
 		return true
 	}
-	return !r.hideInScope[name]
+	return !r.attrHas(name, attrHideInScope)
 }

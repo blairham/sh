@@ -217,10 +217,10 @@ func (r *Runner) attributeLetters(name string) string {
 	if ok := r.assocDeclared(name); ok && !r.removed[name] {
 		b.WriteByte('A')
 	}
-	if r.integer[name] {
+	if r.attrHas(name, attrInteger) {
 		b.WriteByte('i')
 	}
-	if r.readonly[name] {
+	if r.attrHas(name, attrReadonly) {
 		b.WriteByte('r')
 	}
 	if r.exported[name] {

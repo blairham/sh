@@ -112,14 +112,14 @@ func (r *Runner) captureBinding(name string) staticBinding {
 		b.assoc, b.assocExists = m.clone(), true
 	}
 	b.removed = r.removed[name]
-	b.readonly = r.readonly[name]
-	b.hideInScope = r.hideInScope[name]
+	b.readonly = r.attrHas(name, attrReadonly)
+	b.hideInScope = r.attrHas(name, attrHideInScope)
 	b.attrs = r.captureAttributes(name)
 	b.assignedTo, b.assignedSaid = r.assigned[name]
 	b.exported, b.exportedSaid = r.exported[name]
-	b.declaredOnly = r.declaredOnlyCompound[name]
-	b.heldAnElement = r.compoundHeldAnElement[name]
-	b.scalarHeld = r.scalarHeldUnderTheArrayLetter[name]
+	b.declaredOnly = r.attrHas(name, attrDeclaredOnlyCompound)
+	b.heldAnElement = r.attrHas(name, attrHeldAnElement)
+	b.scalarHeld = r.attrHas(name, attrScalarUnderTheArrayLetter)
 	return b
 }
 
@@ -181,17 +181,17 @@ func (r *Runner) installBinding(name string, b staticBinding) {
 		} else {
 			r.compoundWasAssigned(name)
 		}
-		setBool(&r.compoundHeldAnElement, name, b.heldAnElement)
-		setBool(&r.scalarHeldUnderTheArrayLetter, name, b.scalarHeld)
+		r.attrPut(name, attrHeldAnElement, b.heldAnElement)
+		r.attrPut(name, attrScalarUnderTheArrayLetter, b.scalarHeld)
 	}
 	if b.hasRemoved {
 		setBool(&r.removed, name, b.removed)
 	}
 	if b.hasReadonly {
-		setBool(&r.readonly, name, b.readonly)
+		r.attrPut(name, attrReadonly, b.readonly)
 	}
 	if b.hasHide {
-		setBool(&r.hideInScope, name, b.hideInScope)
+		r.attrPut(name, attrHideInScope, b.hideInScope)
 	}
 	if b.hasAttrs {
 		r.restoreAttributes(name, b.attrs)

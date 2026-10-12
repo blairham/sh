@@ -86,7 +86,7 @@ func (r *Runner) prefixHoldableName(a *syntax.Assign) (string, bool) {
 	if _, ok := positionalAssignIndex(a.Name); ok {
 		return "", false
 	}
-	if r.readonly[a.Name] {
+	if r.attrHas(a.Name, attrReadonly) {
 		// Refused, so nothing was assigned and there is nothing for the next
 		// entry to see: the name keeps what the shell holds.
 		return "", false

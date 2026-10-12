@@ -50,6 +50,18 @@ type Runner struct {
 	cellCount    [cellSlotCount]int
 	liveCells    int
 	cellsRanging int
+	// attrCount is how many names carry each boolean attribute — see
+	// cellAttrs — and attrTotal the sum, so an attribute nobody carries is
+	// answered without a lookup.
+	attrCount [cellAttrCount]int
+	attrTotal int
+	// lastCellName is the name Runner.cell found last and lastCell its
+	// position in the slab plus one; zero is none.
+	lastCellName string
+	lastCell     int32
+	// cellProbes counts the lookups Runner.cell made in the index, so a test
+	// can say how many a construct costs.
+	cellProbes int
 	// Params holds the positional parameters, $1 first. `$0` is not one of
 	// them and is kept separate, because `shift` moves these and never
 	// touches that.
@@ -1408,7 +1420,7 @@ type Runner struct {
 	// readonlyByDeclaration are the deferred names a **script** froze, as
 	// against the ones this shell registered frozen.
 	//
-	// Every module table is registered readonly, so r.readonly cannot tell
+	// Every module table is registered readonly, so attrReadonly cannot tell
 	// the two apart, and one listing needs them apart: a bare `typeset`
 	// writes `undefined funcstack` for a name nothing has touched and
 	// `undefined readonly funcstack` after a `readonly funcstack` that left
@@ -1520,12 +1532,6 @@ type Runner struct {
 	// through one of those two.
 	declaredEmpty map[string]bool
 
-	// declaredOnlyCompound are names whose array or table came from a
-	// declaration's letters alone, with nothing yet written to them. See
-	// compounddeclaredonly.go for the measurement and for why the set kept is
-	// this one rather than its complement.
-	declaredOnlyCompound map[string]bool
-
 	// unitRanACommand says whether a command has completed in this execution
 	// unit — the shell, or the subshell, command substitution, function
 	// call, `eval` or sourced file that started one. It is what an
@@ -1534,16 +1540,6 @@ type Runner struct {
 	// for the two controls that say a brace group starts no unit.
 	unitRanACommand bool
 
-	// compoundHeldAnElement are names whose *indexed* array has had an
-	// element in it at some point and may have none now.
-	//
-	// A third state beside declaredOnlyCompound and not a reading of it: an
-	// assignment that puts nothing in — `typeset -a b=()` — takes the name
-	// out of the declared-only set without ever putting an element in it, so
-	// the two sets draw different lines and one listing asks each. See
-	// interp/compounddeclaredonly.go for both, and
-	// Runner.bareAssignmentValue for the listing that reads this one.
-	compoundHeldAnElement map[string]bool
 	// caseListing is the case letters a name's **listing** writes, as bits
 	// (caseListsLower, caseListsUpper, and caseListingRecorded to say a
 	// record is there at all), in the dialect where the listing and the fold
@@ -1557,29 +1553,6 @@ type Runner struct {
 	caseFoldHeld          string
 	caseFoldMayBeHeld     bool
 	caseFoldOperandValued bool
-	// scalarHeldUnderTheArrayLetter are names whose indexed array held no
-	// element, and had never held one, when a whole-name scalar store landed
-	// on it. The name is still an array of one, but one listing writes it as
-	// the scalar it was given until an array write touches it. Every array
-	// write clears it in storeArray, and a scalar append keeps it. See
-	// Semantics.ScalarHeldUnderTheArrayLetterListsAsAScalar.
-	scalarHeldUnderTheArrayLetter map[string]bool
-
-	// declaredBare are names a declaration brought into being with no
-	// letters, no value and nothing in them — declared and unset at once.
-	// See baredeclaration.go for the measurement, and for why the record is
-	// carried by nameAttributes rather than saved and restored again here.
-	declaredBare map[string]bool
-	// declaredHoldingNothing are names a declaration brought into being
-	// holding nothing, under the reading where a valueless declaration leaves
-	// the name unset — with letters or without. One dialect still describes
-	// such a name. See Runner.ParameterAttributes (#5439).
-	declaredHoldingNothing map[string]bool
-	// unsetLeftItDeclared are names whose binding an `unset` emptied while
-	// the scope that declared them was running — the same state a bare
-	// declaration leaves and the same listing, reached the other way. See
-	// interp/unsetenclosinglocal.go.
-	unsetLeftItDeclared map[string]bool
 
 	// compoundVariable is the set of names that are ksh93 compound
 	// variables — `c=(a=1 b=2)` and `typeset -C c`, the fourth kind of thing
@@ -5221,8 +5194,6 @@ type Runner struct {
 	// namespace, the core's included. A dialect may have a second table the
 	// core knows nothing about; see Runner.SetOptionList.
 	optionLists []optionList
-	// readonly names refuse assignment.
-	readonly map[string]bool
 	// unsetRefused names refuse `unset` and nothing else — see
 	// Runner.RefuseUnset.
 	unsetRefused map[string]bool
@@ -5387,10 +5358,6 @@ type Runner struct {
 	// instead, in setGlobalVar, and needs no record because the declaration
 	// itself does that write.
 	globalLetterHere map[string]bool
-	// integer names evaluate what is assigned to them: with the attribute,
-	// `n=5+2` stores 7 rather than the four characters. It is a property of
-	// the name and not of the assignment, which is why it is recorded here.
-	integer map[string]bool
 	// integerBase is the base an integer name renders in — `typeset -i16 h`
 	// makes 255 read back as `16#ff`. A property of the name like the
 	// attribute itself, and consulted by every store afterwards rather than
@@ -5406,10 +5373,6 @@ type Runner struct {
 	// default both shells with the attribute print, rather than no places at
 	// all. Measured 2026-09-07: `typeset -F x=1.5` is `1.5000000000`.
 	floatPrecision map[string]int
-	// floatExponent names the float parameters whose attribute came from the
-	// `E` letter rather than from `F` — a **format** and not a width. See
-	// interp/floatformat.go, where the two renderings are.
-	floatExponent map[string]bool
 	// floatExact is the number behind the rendering, for the float names
 	// that have one. The rendering is what is stored — `${#f}` counts its
 	// characters and a child is told it — and the letters decide only how it
@@ -5433,24 +5396,11 @@ type Runner struct {
 	// floatPrecision; see fieldwidth.go, which holds the measurements and
 	// the rule.
 	fieldWidth map[string]fieldWidth
-	// lowered and uppered are the case attributes — `declare -l` and `-u` —
-	// which fold what is assigned to the name, the same shape integer has:
-	// a property of the name that changes what a later assignment means.
-	lowered map[string]bool
-	uppered map[string]bool
 	// capitalized is the third of them — `declare -c`, which one dialect has
 	// and does not advertise: its own usage line omits the letter. It is the
 	// same shape as the other two and belongs to the same family rather than
 	// beside it, which is what caseLettersCancel says out loud.
 	capitalized map[string]bool
-	// hidden names keep their value out of every listing that would write
-	// one — `typeset -H`. It is a property of the name like the others, but
-	// the only one that changes nothing about a read: `$h` and `${h[k]}`
-	// answer what they always did, and only a listing is any the wiser. One
-	// shell in the panel spells the letter with this meaning; another spells
-	// the same letter for a different attribute that does *not* hide, which
-	// is why the dialect decides who may set it — see Semantics.DeclareOptions.
-	hidden map[string]bool
 	// localMarked names a parameter a *call* opened, which the shell reports
 	// as local without there being a function scope holding it. It is what
 	// localCell cannot see: a produced parameter is registered and taken away
@@ -5458,14 +5408,6 @@ type Runner struct {
 	// a scope, so the fact the shell states about it has to be stated too.
 	// See Runner.MarkLocal.
 	localMarked map[string]bool
-	// unique names keep only the first occurrence of each element —
-	// `typeset -U`. A property of the name like the others, consulted by
-	// every write rather than by the one declaration that set it, which is
-	// what makes `path=( new "${path[@]}" )` drop the copy of `new` that
-	// was already there. One shell in the panel spells the letter: bash
-	// refuses it and ksh93 does not have it, so the dialect decides who may
-	// set it — see Semantics.DeclareOptions.
-	unique map[string]bool
 	// shellOwn names the parameters the shell provides itself, for the ones
 	// that hold an ordinary stored value and so look like a script's. See
 	// interp/shellownparameter.go, and ParameterAttributes.Provided, which
@@ -5525,17 +5467,6 @@ type Runner struct {
 	// interp/parameterkindfixed.go, which is a different table from the one
 	// above and says why.
 	kindFixed map[string]parameterKinds
-	// traced names the parameters carrying the trace attribute — `typeset
-	// -t`. Every shell on the panel but the two without the builtin records
-	// it and lists it back, and none of them lets it change what a *value*
-	// is: what a traced name does is read by the DEBUG trap and by nothing
-	// else, so a table beside the others is the whole of it here. A property
-	// of the name like `unique` and `hidden`, which is why it travels through
-	// nameAttributes and a shadowed binding gets the outer one back.
-	//
-	// The dialect decides who may write the letter at all —
-	// see Semantics.DeclareOptions.
-	traced map[string]bool
 	// nameref names the parameters that are **references to another
 	// parameter**: the entry is the name — or the name and subscript — that
 	// every read, write and `unset` through this one really lands on. See
@@ -5551,13 +5482,6 @@ type Runner struct {
 	// on came from a name reference's target rather than from the script's
 	// own operand. See refuseSubscriptOnAScalar, where the two part.
 	unsetElementThroughAReference bool
-	// hideInScope names the parameters carrying the hide-in-scope attribute
-	// — `typeset -h`, and `typeset +h` to take it off. It is what makes a
-	// local declaration of a name that is half of a tie an ordinary
-	// parameter rather than the special one, and unlike every other
-	// attribute here it decides nothing on its own: it decides only where a
-	// scope has displaced the name. See hideinscope.go.
-	hideInScope map[string]bool
 	// hideLetterWritten says the declaration being run wrote the `-h` letter
 	// itself, which exempts every name it touches from the rule that a kind
 	// change forgets the attribute — the line is writing the attribute, not
@@ -9796,7 +9720,7 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 		kind := r.prefixCommandOf(argv)
 		for i := range c.Assigns {
 			one := c.Assigns[i : i+1]
-			if a := one[0]; r.readonly[a.Name] && !a.Operand && !r.prefixRefusalApplies(kind) {
+			if a := one[0]; r.attrHas(a.Name, attrReadonly) && !a.Operand && !r.prefixRefusalApplies(kind) {
 				// A frozen name the dialect does not refuse here is a
 				// prefix like any other, and is written: measured
 				// 2026-10-02, `readonly r; set -x; a=1 r=2 true` writes
@@ -9925,7 +9849,7 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 			if r.prefixAssignsPositional(ctx, a) {
 				continue
 			}
-			if refused && r.readonly[a.Name] {
+			if refused && r.attrHas(a.Name, attrReadonly) {
 				// The frozen name keeps what it holds, the same way the
 				// builtin route leaves it: the body runs with the shell's
 				// value, which is what every column shows for `readonly v=1;
@@ -10150,7 +10074,7 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 				// gap. See Runner.prefixAssignsPositional.
 				continue
 			}
-			if refused && r.readonly[a.Name] {
+			if refused && r.attrHas(a.Name, attrReadonly) {
 				// Reported above, or deliberately not reported where the
 				// dialect says a regular builtin's prefix is no refusal at
 				// all. Either way the name keeps its value: the builtin runs
@@ -10585,7 +10509,7 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 			_ = r.prefixValue(a)
 			continue
 		}
-		if frozenValueSpent && r.readonly[a.Name] {
+		if frozenValueSpent && r.attrHas(a.Name, attrReadonly) {
 			// Refused without its value ever being evaluated, so
 			// `x=$((1/0)) cmd` says nothing about the division in the column
 			// that answers so — or already evaluated by the early check,
@@ -10632,7 +10556,7 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 		// about `x` there and about the expansion and the file everywhere
 		// else. Ours is on the everywhere-else side on both, and staying
 		// there is what keeps this change to the half the panel agrees on.
-		if r.readonly[a.Name] {
+		if r.attrHas(a.Name, attrReadonly) {
 			// Refused, so nothing is appended: the assignment did not happen,
 			// and the child is handed this shell's own environment for the
 			// name. The two are only distinguishable with the name exported,
@@ -11731,7 +11655,7 @@ func (r *Runner) zeroValuedTypeExports() []string {
 		if !on || r.declaredNameHolds(name) {
 			continue
 		}
-		if _, float := r.floatPrecision[name]; !float && !r.integer[name] {
+		if _, float := r.floatPrecision[name]; !float && !r.attrHas(name, attrInteger) {
 			continue
 		}
 		if !r.ask(r.sem().NumericTypeWithNoValueReachesAChildAsZero,
@@ -12658,7 +12582,7 @@ func (r *Runner) saveVarAlone(name string) savedVar {
 	assigned, assignedSpoken := r.assigned[name]
 	return savedVar{
 		name: name, value: old, present: present, removed: r.removed[name],
-		frozen: r.readonly[name], attrs: r.captureAttributes(name),
+		frozen: r.attrHas(name, attrReadonly), attrs: r.captureAttributes(name),
 		array: a.clone(), inArray: inArray,
 		table: m.clone(), inTable: inTable,
 		exported: exported, exportSpoken: exportSpoken,
@@ -12754,12 +12678,9 @@ func (r *Runner) restoreVar(u savedVar) {
 		delete(r.exported, u.name)
 	}
 	if u.frozen {
-		if r.readonly == nil {
-			r.readonly = map[string]bool{}
-		}
-		r.readonly[u.name] = true
+		r.attrSet(u.name, attrReadonly)
 	} else {
-		delete(r.readonly, u.name)
+		r.attrClear(u.name, attrReadonly)
 	}
 	r.restoreAttributes(u.name, u.attrs)
 	if u.assignedSpoken {
@@ -13027,7 +12948,7 @@ func (r *Runner) attributeFolded(name, value string) (string, bool) {
 		// place a float name's text is made — so the record cannot describe
 		// a rendering that was never stored. See interp/floatformat.go.
 		r.rememberStoredFloat(name, value, v)
-	} else if r.integer[name] {
+	} else if r.attrHas(name, attrInteger) {
 		// The name was declared integer, so what is assigned to it is an
 		// expression rather than text.
 		//
@@ -13094,9 +13015,9 @@ func (r *Runner) caseFolded(name, value string) string {
 		return value
 	}
 	switch {
-	case r.lowered[name]:
+	case r.attrHas(name, attrLower):
 		return r.caseChanged(value, unicode.ToLower)
-	case r.uppered[name]:
+	case r.attrHas(name, attrUpper):
 		return r.caseChanged(value, unicode.ToUpper)
 	case r.capitalized[name]:
 		return r.capitalCase(value)
@@ -13181,7 +13102,7 @@ func (r *Runner) readAttributeFolded(name, value string) string {
 // one read that takes it without the other: what a child is told. See the
 // environment loop, where the measurement is.
 func (r *Runner) readCaseFolded(name, value string) string {
-	if !r.lowered[name] && !r.uppered[name] && !r.capitalized[name] {
+	if !r.attrHas(name, attrLower) && !r.attrHas(name, attrUpper) && !r.capitalized[name] {
 		return value
 	}
 	if !r.caseFoldsOnRead() {
@@ -13257,7 +13178,7 @@ func (r *Runner) appendedValue(name, old, add string) (string, bool) {
 		// rounds, because the fold would then read the rounded characters
 		// back.
 		return floatWrittenInFull(lhs + rhs), true
-	case r.integer[name]:
+	case r.attrHas(name, attrInteger):
 		r.learnIntegerBase(name, add)
 		if r.unspecified {
 			return "", false
@@ -13473,7 +13394,7 @@ func (r *Runner) refuseReadonly(name string, form assignForm) bool {
 		// interp/privatescope.go.
 		return true
 	}
-	if !r.readonly[name] {
+	if !r.attrHas(name, attrReadonly) {
 		return false
 	}
 	if name == r.retypingFrozen {
@@ -13559,7 +13480,7 @@ func (r *Runner) refuseReadonly(name string, form assignForm) bool {
 // applies.
 //
 // Taken out of refuseReadonly for the one caller that reaches this without
-// consulting r.readonly at all: a produced table whose **elements** are frozen
+// consulting attrReadonly at all: a produced table whose **elements** are frozen
 // refuses with this sentence under the key's name rather than the parameter's,
 // and every other thing about the refusal — the wording, the status, the line
 // it gives up — is this one. See Runner.MarkProducedTableFrozenByKey.
@@ -14531,7 +14452,7 @@ func (r *Runner) nameCarriesAnAttributeAReCreationDrops(name string) bool {
 // nameCarriesATypeAttribute is the *type* half of that list, which the routes
 // that clear without asking the re-creation question use on its own.
 func (r *Runner) nameCarriesATypeAttribute(name string) bool {
-	if r.integer[name] || r.lowered[name] || r.uppered[name] || r.capitalized[name] {
+	if r.attrHas(name, attrInteger) || r.attrHas(name, attrLower) || r.attrHas(name, attrUpper) || r.capitalized[name] {
 		return true
 	}
 	if _, ok := r.floatPrecision[name]; ok {
@@ -14543,9 +14464,9 @@ func (r *Runner) nameCarriesATypeAttribute(name string) bool {
 
 func (r *Runner) clearTypeAttributes(name string) {
 	delete(r.caseListing, name)
-	delete(r.integer, name)
-	delete(r.lowered, name)
-	delete(r.uppered, name)
+	r.attrClear(name, attrInteger)
+	r.attrClear(name, attrLower)
+	r.attrClear(name, attrUpper)
 	delete(r.capitalized, name)
 	delete(r.floatPrecision, name)
 	delete(r.fieldWidth, name)
@@ -15385,7 +15306,7 @@ func (r *Runner) signalDeathStatus(sig syscall.Signal) int {
 // does not exist on a declaration operand, and `typeset -g q+=(b)` is `not
 // valid in this context: q+` in the shell this is for.
 func (r *Runner) frozenScalarRetyped(a *syntax.Assign) bool {
-	if !r.readonly[a.Name] || !a.Operand || !a.IsArray || a.Index != nil || a.Append {
+	if !r.attrHas(a.Name, attrReadonly) || !a.Operand || !a.IsArray || a.Index != nil || a.Append {
 		return false
 	}
 	if r.nameIsAnArray(a.Name) {

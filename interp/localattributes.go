@@ -116,29 +116,63 @@ type nameAttributes struct {
 	unsetLeftItDeclared bool
 }
 
-// captureAttributes reads what the tables hold for a name, so a scope can put
-// it back.
-func (r *Runner) captureAttributes(name string) nameAttributes {
-	a := nameAttributes{
-		integer: r.integer[name],
-		lower:   r.lowered[name],
-		upper:   r.uppered[name],
-		unique:  r.unique[name],
-		hidden:  r.hidden[name],
-		traced:  r.traced[name],
+// nameAttrBits are the attributes in a cell that nameAttributes carries.
+// The rest of a cell's attributes — readonly, hide-in-scope and the
+// compound records — are saved by the scope one by one, each with a reason
+// of its own.
+const nameAttrBits = attrInteger | attrLower | attrUpper | attrUnique | attrHidden |
+	attrTraced | attrDeclaredBare | attrDeclaredHoldingNothing | attrUnsetLeftItDeclared |
+	attrFloatExponent
 
-		declaredBare:           r.declaredBare[name],
-		declaredHoldingNothing: r.declaredHoldingNothing[name],
-		unsetLeftItDeclared:    r.unsetLeftItDeclared[name],
+// captureAttributes reads what the tables hold for a name, so a scope can put
+// it back. The flags are one read of the name's cell.
+func (r *Runner) captureAttributes(name string) nameAttributes {
+	at := r.attrsOf(name)
+	a := nameAttributes{
+		integer: at&attrInteger != 0,
+		lower:   at&attrLower != 0,
+		upper:   at&attrUpper != 0,
+		unique:  at&attrUnique != 0,
+		hidden:  at&attrHidden != 0,
+		traced:  at&attrTraced != 0,
+
+		declaredBare:           at&attrDeclaredBare != 0,
+		declaredHoldingNothing: at&attrDeclaredHoldingNothing != 0,
+		unsetLeftItDeclared:    at&attrUnsetLeftItDeclared != 0,
+		floatExponent:          at&attrFloatExponent != 0,
 	}
 	a.caseListing = r.caseListing[name]
 	a.base, a.baseSet = r.integerBase[name]
 	a.precision, a.isFloat = r.floatPrecision[name]
-	a.floatExponent = r.floatExponent[name]
 	a.floatExact, a.hasFloatExact = r.floatExact[name]
 	a.width, a.hasWidth = r.fieldWidth[name]
 	a.nameref, a.isNameref = r.nameref[name]
 	return a
+}
+
+// flags is the cell attributes a holds, as captureAttributes read them.
+func (a nameAttributes) flags() cellAttrs {
+	var at cellAttrs
+	for _, f := range [...]struct {
+		on  bool
+		bit cellAttrs
+	}{
+		{a.integer, attrInteger},
+		{a.lower, attrLower},
+		{a.upper, attrUpper},
+		{a.unique, attrUnique},
+		{a.hidden, attrHidden},
+		{a.traced, attrTraced},
+		{a.declaredBare, attrDeclaredBare},
+		{a.declaredHoldingNothing, attrDeclaredHoldingNothing},
+		{a.unsetLeftItDeclared, attrUnsetLeftItDeclared},
+		{a.floatExponent, attrFloatExponent},
+	} {
+		if f.on {
+			at |= f.bit
+		}
+	}
+	return at
 }
 
 // dropNameAttributes takes every attribute in this file off a name, which is
@@ -155,22 +189,13 @@ func (r *Runner) captureAttributes(name string) nameAttributes {
 // with no scope to put anything back, taking the attributes off would be a
 // declaration quietly undoing an earlier one.
 func (r *Runner) dropNameAttributes(name string) {
-	delete(r.integer, name)
+	r.setAttrs(name, nameAttrBits, 0)
 	delete(r.integerBase, name)
 	delete(r.floatPrecision, name)
-	delete(r.floatExponent, name)
 	delete(r.floatExact, name)
 	delete(r.fieldWidth, name)
-	delete(r.lowered, name)
-	delete(r.uppered, name)
 	delete(r.caseListing, name)
-	delete(r.unique, name)
-	delete(r.hidden, name)
-	delete(r.traced, name)
 	delete(r.nameref, name)
-	delete(r.declaredBare, name)
-	delete(r.declaredHoldingNothing, name)
-	delete(r.unsetLeftItDeclared, name)
 }
 
 // restoreAttributes puts back what captureAttributes read.
@@ -179,19 +204,12 @@ func (r *Runner) dropNameAttributes(name string) {
 // shadowed carries again whatever it carried, and one the *call* added — a
 // `local -i n` — carries nothing once the call is over.
 func (r *Runner) restoreAttributes(name string, a nameAttributes) {
-	setBool(&r.integer, name, a.integer)
-	setBool(&r.lowered, name, a.lower)
-	setBool(&r.uppered, name, a.upper)
+	// The flags first, as one write: the float record below reads the
+	// exponent letter back.
+	r.setAttrs(name, nameAttrBits, a.flags())
 	r.setCaseListing(name, a.caseListing)
-	setBool(&r.unique, name, a.unique)
-	setBool(&r.hidden, name, a.hidden)
-	setBool(&r.traced, name, a.traced)
-	setBool(&r.declaredBare, name, a.declaredBare)
-	setBool(&r.declaredHoldingNothing, name, a.declaredHoldingNothing)
-	setBool(&r.unsetLeftItDeclared, name, a.unsetLeftItDeclared)
 	setInt(&r.integerBase, name, a.base, a.baseSet)
 	setInt(&r.floatPrecision, name, a.precision, a.isFloat)
-	setBool(&r.floatExponent, name, a.floatExponent)
 	if !a.hasFloatExact {
 		delete(r.floatExact, name)
 	} else {

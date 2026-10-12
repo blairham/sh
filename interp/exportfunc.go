@@ -29,6 +29,7 @@ import (
 // one, which keeps whatever line structure the source had.
 func (r *Runner) SetFunctionLayout(shown, exported syntax.Layout) {
 	r.functionLayout, r.exportedFunctionLayout = shown, exported
+	r.bodyTexts = nil
 }
 
 // SetFunctionExport says how a function is written into the environment: the

@@ -37,5 +37,6 @@ func (r *Runner) FunctionBodyIndentOption(name string, args []string) (rest []st
 	// knows where the levels are.
 	saved := r.functionLayout.Indent
 	r.functionLayout.Indent = strings.Repeat(" ", indent)
-	return rest, func() { r.functionLayout.Indent = saved }, 0
+	r.bodyTexts = nil
+	return rest, func() { r.functionLayout.Indent, r.bodyTexts = saved, nil }, 0
 }

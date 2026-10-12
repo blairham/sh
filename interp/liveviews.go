@@ -142,6 +142,16 @@ func (r *Runner) FunctionBodyText(name string) (string, bool) {
 // functionBodyText is FunctionBodyText for a declaration in hand, which the
 // switched-off table needs too.
 func (r *Runner) functionBodyText(fn *syntax.FuncDecl) string {
+	if text, ok := r.bodyTexts[fn]; ok {
+		return text
+	}
+	text := r.printFunctionBodyText(fn)
+	r.keepBodyText(fn, text)
+	return text
+}
+
+// printFunctionBodyText is functionBodyText without the kept copy.
+func (r *Runner) printFunctionBodyText(fn *syntax.FuncDecl) string {
 	// The printed body is `{`, the statements, `}` — one line each, in the
 	// dialect's own layout. Dropping the first and last lines is the whole
 	// of the difference, and it is done on the print rather than on the

@@ -59,6 +59,9 @@ const (
 	reachSplit
 	// reachAccept is the end of the pattern.
 	reachAccept
+	// reachAnchor consumes nothing and goes to out only where anchor holds:
+	// a `(#s)` at the start of the subject, a `(#e)` at its end.
+	reachAnchor
 )
 
 type reachNode struct {
@@ -71,6 +74,8 @@ type reachNode struct {
 	text     string
 	after    int
 	out, alt int
+	// anchor is which position a reachAnchor node admits.
+	anchor patternAnchor
 	// bytes is the bracket's answer for every one-byte unit, worked out
 	// when the automaton is built by asking matchBracket itself, or nil
 	// where that could not be done without the answer changing — see
@@ -224,6 +229,10 @@ func (a *reachAutomaton) readFirst() {
 		case reachSplit:
 			walk(n.out)
 			walk(n.alt)
+		case reachAnchor:
+			// Read as though it held, which can only admit more: first is
+			// asked before the position is known.
+			walk(n.out)
 		case reachAccept:
 			a.empty = true
 		case reachByte:
@@ -396,8 +405,19 @@ func (r *reachSet) branch(p string, pp int, o patternOpts) (reachFrag, bool) {
 				return reachFrag{}, false
 			}
 			if body, rest, ok := splitPatternFlags(p, o.emptyBracket); ok {
-				if anchorPatternFlag(body) != anchorNone {
-					return reachFrag{}, false
+				// An anchor is a test of the position rather than of a byte,
+				// and the matcher's test is the one this asks: offsets here
+				// are offsets into the whole subject, as the matcher's are,
+				// so `(#s)` holds at 0 and `(#e)` at its length. A trim
+				// pattern of the shape `((#s)[[:space:]]##|[[:space:]]##(#e))`
+				// was refused for it, and a global substitution then asked
+				// the matcher about every span from every position — a
+				// cubic walk that took half a second over a 2KB value
+				// (#6423).
+				if a := anchorPatternFlag(body); a != anchorNone {
+					f = r.concat(f, r.unit(reachNode{kind: reachAnchor, anchor: a}))
+					pp, p = pp+len(p)-len(rest), rest
+					continue
 				}
 				next, unknown := applyPatternFlags(body, o)
 				if unknown != 0 || next.litFold != caseExact {
@@ -471,7 +491,7 @@ func (r *reachSet) branch(p string, pp int, o patternOpts) (reachFrag, bool) {
 			f = r.concat(f, r.unit(reachNode{kind: reachUnit}))
 			p, pp = p[1:], pp+1
 		case '[':
-			end, ok := bracketSpanEnd(p, 0, o.emptyBracket)
+			end, ok := reachBracketEnd(p, o.emptyBracket)
 			if !ok {
 				return reachFrag{}, false
 			}
@@ -503,6 +523,38 @@ func (r *reachSet) branch(p string, pp int, o patternOpts) (reachFrag, bool) {
 	return f, true
 }
 
+// reachBracketEnd is the closing `]` of the bracket expression opening p, for
+// this analysis: [bracketEnd]'s answer, where every `[` inside is the start of
+// a complete `[:name:]`.
+//
+// [bracketSpanEnd] refuses every `[` inside, because a `[.x.]`, a `[=x=]` or
+// an unclosed `[:name` can end somewhere bracketEnd does not know of. A
+// complete class is the one sub-expression bracketEnd steps over itself, so
+// the two scans agree about where it ends — and a bracket node still checks
+// that, by asking matchBracket how much of the text it left (after). The
+// classes are what a trim is written in, `[[:space:]]##` most of all, and a
+// substitution over a pattern the analysis refuses asks the matcher about
+// every span from every position (#6423).
+func reachBracketEnd(p string, emptyCompiles bool) (int, bool) {
+	end, ok := bracketEnd(p, 0, emptyCompiles)
+	if !ok {
+		return 0, false
+	}
+	for j := 1; j < end; j++ {
+		switch p[j] {
+		case '\\':
+			j++
+		case '[':
+			k, ok := classEnd(p, j)
+			if !ok || k >= end {
+				return 0, false
+			}
+			j = k
+		}
+	}
+	return end, true
+}
+
 // ends marks in end every offset j for which value[i:j] could be one the
 // pattern fills, and reports false where it could not say — a unit read
 // somewhere that is not a unit boundary, or a bracket matchBracket read
@@ -529,7 +581,7 @@ func (r *reachSet) ends(value string, i int, stop, end []bool, marked []int) ([]
 		r.gen++
 		r.cur = r.cur[:0]
 		for _, s := range r.slots[slot] {
-			r.closure(s)
+			r.closure(s, x, len(value))
 		}
 		r.slots[slot] = r.slots[slot][:0]
 		for _, s := range r.cur {
@@ -669,15 +721,24 @@ func (r *reachSet) push(x, s int) int {
 }
 
 // closure adds s and everything reachable from it without consuming.
-func (r *reachSet) closure(s int) {
+//
+// x is the offset the closure is taken at and total the subject's length,
+// which is what an anchor on the way is tested against.
+func (r *reachSet) closure(s, x, total int) {
 	if s < 0 || r.stamp[s] == r.gen {
 		return
 	}
 	r.stamp[s] = r.gen
 	n := &r.nodes[s]
 	if n.kind == reachSplit {
-		r.closure(n.out)
-		r.closure(n.alt)
+		r.closure(n.out, x, total)
+		r.closure(n.alt, x, total)
+		return
+	}
+	if n.kind == reachAnchor {
+		if n.anchor == anchorStart && x == 0 || n.anchor == anchorEnd && x == total {
+			r.closure(n.out, x, total)
+		}
 		return
 	}
 	r.cur = append(r.cur, s)

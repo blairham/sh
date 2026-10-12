@@ -16,13 +16,15 @@ import (
 	"time"
 
 	"github.com/blairham/sh/driver"
+	"github.com/blairham/sh/interp"
 )
 
 // lowFdScript names the script for the half of a test that has to *be* the
 // shell, and lowFdStall is how long that shell holds the window open.
 const (
-	lowFdScript = "SH_TEST_LOW_FD_SCRIPT"
-	lowFdStall  = "SH_TEST_LOW_FD_STALL"
+	lowFdScript  = "SH_TEST_LOW_FD_SCRIPT"
+	lowFdStall   = "SH_TEST_LOW_FD_STALL"
+	lowFdCommand = "SH_TEST_LOW_FD_COMMAND"
 )
 
 // windowStall is long enough for `sysmon` to poll inside the window.
@@ -51,6 +53,14 @@ const windowStall = 20 * time.Millisecond
 // **A stall in the window**, because the Linux half of this is a race against
 // another thread. See windowStall.
 func beTheLowFdShell() {
+	if src := os.Getenv(lowFdCommand); src != "" {
+		// A command string rather than a script, because that is where a
+		// shell becomes its last command instead of forking it.
+		sh := shell()
+		sh.Dialect.MultiDigitFdNumber = true
+		sh.Semantics.TailExec = interp.TailExecWhereverLast
+		os.Exit(driver.MainArgs(sh, []string{"testsh", "-c", src}))
+	}
 	path := os.Getenv(lowFdScript)
 	if path == "" {
 		return
@@ -129,7 +139,8 @@ func runAsShellParkingOn(t *testing.T, name string, fd int) (out string, placed 
 // where it was about to become the command.
 //
 // The numbers are the ones a script can reach. 3 through 9 is what the whole
-// panel can name; 99 is the ceiling, and bash can name every number up to it.
+// panel can name; the ceiling is the highest number bash can name and be sure
+// of, and it is per platform — see replacementProbes.
 // Before lowfds_unix.go the runtime sat at 3 and 4 on darwin and at 5 and 6 on
 // Linux — inside this list, by construction rather than by luck, because
 // opening the script is what leaves those numbers free for it.
@@ -142,7 +153,7 @@ func TestAReplacementFindsItsFileOnEveryDescriptorAScriptCanName(t *testing.T) {
 	// single-digit rule the panel measurement found from the other side. So
 	// above 9 the assertion is that the shell reached the exec at all, which
 	// is the half this is about.
-	for _, fd := range []int{3, 4, 5, 6, 7, 8, 9, 10, 63, 99} {
+	for _, fd := range replacementProbes {
 		t.Run(strconv.Itoa(fd), func(t *testing.T) {
 			out, placed := runAsShellParkingOn(t,
 				"TestAReplacementFindsItsFileOnEveryDescriptorAScriptCanName", fd)
@@ -208,19 +219,79 @@ func TestTheRuntimeHoldsNoDescriptorAScriptCanName(t *testing.T) {
 				" — parking there kills the shell", fd)
 		}
 	}
-	if driver.LowDescriptorCeilingForTest() < nameableCeiling {
-		t.Errorf("the shell keeps the runtime off descriptors up to %d, want at least %d",
-			driver.LowDescriptorCeilingForTest(), nameableCeiling)
+	if got := driver.LowDescriptorCeilingForTest(); got != nameableCeiling {
+		t.Errorf("the shell keeps the runtime off descriptors up to %d, want exactly %d"+
+			" — lower takes numbers from scripts, and on Linux higher grows the"+
+			" descriptor table at every start", got, nameableCeiling)
 	}
 }
 
-// nameableCeiling is the highest descriptor this test insists the runtime
-// stays above.
+// nameableCeiling and replacementProbes are per platform: see
+// lowfds_linux_test.go and lowfds_unixother_test.go.
+
+// A number the runtime holds is *said*, by an explicit `exec cmd`, rather than
+// left for the command to find missing; and a last command the shell would
+// have become rather than forked is forked instead, so the command keeps it.
 //
-// Written out rather than read from the package, and that is the whole point
-// of it being here: a test that took the ceiling from the code it is checking
-// would follow the ceiling down. Lowering it to 9 — which is all the panel can
-// name, and a defensible-looking number — would leave the runtime on 10, 11
-// and 12, which is where bash's own `exec {v}>f` allocates from, and every
-// assertion in this file would still pass. This one would not.
-const nameableCeiling = 99
+// What bash says for a descriptor it cannot hold is `N: Bad file descriptor`
+// (measured on 5.3 under `ulimit -n 40`, `exec 59>/dev/null`), so that is the
+// sentence. The replacement here never names the number, so the sentence can
+// only have come from the shell.
+//
+// The tail half carries its own positive control: the same command string
+// with a number the runtime does not hold has to be *replaced* — the command
+// writes the shell's own process ID — or the fork this asserts would prove
+// nothing about the decision.
+func TestARuntimeDescriptorIsSaidAtAnExecAndKeptAtATail(t *testing.T) {
+	beTheLowFdShell()
+	held := driver.RuntimeDescriptorsForTest()
+	if len(held) == 0 {
+		t.Fatal("no runtime descriptors were recorded, so there is nothing to name")
+	}
+	run := func(t *testing.T, src string) string {
+		t.Helper()
+		cmd := exec.Command(os.Args[0], "-test.run=TestARuntimeDescriptorIsSaidAtAnExecAndKeptAtATail")
+		cmd.Env = append(os.Environ(), lowFdCommand+"="+src)
+		b, err := cmd.CombinedOutput()
+		var exit *exec.ExitError
+		if err != nil && !errors.As(err, &exit) {
+			t.Fatalf("the shell half could not be started: %v\n%s", err, b)
+		}
+		return string(b)
+	}
+	for _, fd := range held {
+		n := strconv.Itoa(fd)
+		t.Run("exec/"+n, func(t *testing.T) {
+			out := run(t, "exec "+n+">"+filepath.Join(t.TempDir(), "parked")+"; exec /bin/sh -c 'echo ran'")
+			if !strings.Contains(out, "ran") {
+				t.Fatalf("the replacement never ran:\n%s", out)
+			}
+			if !strings.Contains(out, n+": Bad file descriptor") {
+				t.Errorf("the replacement started without descriptor %d and nothing said so:\n%s", fd, out)
+			}
+		})
+		t.Run("tail/"+n, func(t *testing.T) {
+			parked := filepath.Join(t.TempDir(), "parked")
+			out := run(t, "echo $$; exec "+n+">"+parked+"; /bin/sh -c 'echo $$ >/dev/fd/"+n+"'")
+			got, _ := os.ReadFile(parked)
+			if strings.TrimSpace(string(got)) == "" {
+				t.Fatalf("the last command did not get descriptor %d:\n%s", fd, out)
+			}
+			if strings.TrimSpace(string(got)) == strings.TrimSpace(out) {
+				t.Errorf("the shell became its last command and so could not hand it %d", fd)
+			}
+			if strings.Contains(out, "Bad file descriptor") {
+				t.Errorf("a descriptor that was kept was reported lost:\n%s", out)
+			}
+		})
+	}
+	t.Run("tail/control", func(t *testing.T) {
+		parked := filepath.Join(t.TempDir(), "parked")
+		out := run(t, "echo $$; exec 9>"+parked+"; /bin/sh -c 'echo $$ >&9'")
+		got, _ := os.ReadFile(parked)
+		if strings.TrimSpace(string(got)) != strings.TrimSpace(out) || strings.TrimSpace(out) == "" {
+			t.Fatalf("the control was not replaced — shell %q, command %q — so the fork"+
+				" above is not evidence of anything", strings.TrimSpace(out), strings.TrimSpace(string(got)))
+		}
+	})
+}

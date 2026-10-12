@@ -267,13 +267,24 @@ the script leaves the low numbers briefly free, so the poller lands on
 numbers, both chosen by accident, colliding by construction.
 
 So the shell takes those numbers first. Before anything else runs,
-`driver` holds every descriptor from 3 to 99, makes the runtime open
-everything it opens lazily — the poller, and on macOS the signal pipe
-— and hands the range straight back. The runtime ends up above 99,
-where nothing a script names can reach it, and the hold is over before
-`main`: measured at 50µs on macOS and 37µs on Linux, an order of
-magnitude below the run-to-run spread of the startup measurement in
+`driver` holds every descriptor from 3 to a ceiling — 99 on macOS, 56
+on Linux — makes the runtime open everything it opens lazily — the
+poller, and on macOS the signal pipe — and hands the range straight
+back. The runtime ends up just above the ceiling, where nothing a
+script names by accident reaches it, and the hold is over before
+`main`: measured at 50µs on macOS, an order of magnitude below the
+run-to-run spread of the startup measurement in
 [design/startup.md](design/startup.md).
+
+Linux's ceiling is lower because there the hold was not 50µs. The
+kernel starts a process with a 64-entry descriptor table, and growing
+it while the table is shared between threads — every Go process's is
+— waits for an RCU grace period. Holding to 99 took descriptor 64 at
+every start: 8–13 ms of wall time in that one call, and 0.3 ms of CPU
+from the runtime's idle threads waking through it. With the ceiling at
+56 the hold and the runtime's two descriptors end at 60, and a start
+went from 2.31 to 1.95 ms of CPU and from 12.0 to 1.7 ms of wall
+(#6396).
 
 The window between placing a descriptor and the `execve` is still
 there. It cannot be closed — `execve` on a multithreaded process kills
@@ -282,16 +293,22 @@ against a table that has already changed. What is fixed is that there
 is no longer anything in the window to hit.
 
 **The limit, recorded rather than claimed away.** The ceiling is 99
-because that is where a hand-written descriptor number stops. Only bash
+because that is where a hand-written descriptor number stops, and 56 on
+Linux because that is as high as it goes without growing the table;
+both keep every number the panel can name and every number `{v}`
+allocates. Only bash
 can *name* a descriptor above 9 at all — dash, ksh93 and zsh read `exec
 20>f` as a command called `20` — the automatic form `exec {v}>f`
 allocates a number the kernel has just said is free and so cannot
 collide by construction, and 424 shell scripts shipped on a developer
 machine name nothing above 5. A bash script that names a descriptor
-just above the ceiling by hand does still meet the runtime's own. It no
-longer dies of it: the shell knows those numbers and leaves them alone,
-so the command runs with that one descriptor missing, which is what
-every other unplaceable number already costs it.
+just above the ceiling by hand does still meet the runtime's own — two
+numbers, 59 and 60 in the Linux image the ceiling was measured in. It
+no longer dies of it: the shell knows those numbers and leaves them
+alone. An explicit `exec cmd` says so first, in the sentence bash uses
+for a number it cannot hold (`59: Bad file descriptor`), and the command
+runs with that one descriptor missing; a last command the shell would
+otherwise have become is forked instead, and keeps it.
 
 ## The import policy: the surface is empty, and a test says so
 

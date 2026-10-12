@@ -5618,6 +5618,28 @@ embedded in another program may not touch it. So `interp` decides which
 descriptors are the script's to hand out and hands that slice to
 `Runner.ReplaceProcess`.
 
+**Two numbers the binary cannot place.** The Go runtime holds descriptors
+of its own — the poller's epoll and eventfd on Linux, a kqueue and a signal
+pipe on macOS — and writing a script's file over one of them is a fatal
+error in the runtime rather than a reportable one. The binary keeps them
+just above a ceiling it holds at startup: 56 on Linux and 99 elsewhere
+(Linux's is lower because holding past 63 grows the kernel's descriptor
+table, which waits out a grace period at every start; #6396). In the
+golang:1.26.9 image they are 59 and 60. Only bash can name a number that
+high, and every other number above the ceiling is placed as usual.
+
+bash itself has no such numbers. What it says for a number it cannot hold
+is measured on 5.3 under `ulimit -n 40`, `exec 59>/dev/null`:
+`bash: line 1: 59: Bad file descriptor`, status 1. So that sentence is what
+an explicit `exec cmd` writes, through the dialect's wording for a
+descriptor nothing is open at, before replacing the shell without the
+number — the command still runs, as it does with every other number that
+could not be placed. A last command the shell would have become rather than
+forked (see `Semantics.TailExec`) is forked instead, which no script can
+tell apart and which hands it the descriptor. `interp` asks the question
+through `Runner.UnplaceableDescriptor`, which the binary answers and an
+embedder leaves nil.
+
 ### The named streams cross in the same slice
 
 They are the half with no second route. A descriptor above 2 is placed

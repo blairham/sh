@@ -263,6 +263,21 @@ type Runner struct {
 	// The hook moves the process there just before the execve.
 	ReplaceProcess func(dir, path string, argv, env []string, files []*os.File) error
 
+	// UnplaceableDescriptor reports a descriptor number ReplaceProcess cannot
+	// hand the replacement, and nil — the default — means every number can
+	// be.
+	//
+	// A process that is a shell written in Go shares its descriptor table with
+	// the runtime, and the runtime's own descriptors cannot be written over:
+	// the poller finding a script's file on its number is a fatal error. So
+	// the hook leaves those numbers alone, and this is how the script hears
+	// about it. bash says `59: Bad file descriptor` for a number it cannot
+	// hold, and that sentence is what an explicit `exec cmd` writes before
+	// replacing the shell without the descriptor. A last command the shell
+	// would have become rather than forked is forked instead, which is a
+	// choice the script cannot see and keeps the descriptor.
+	UnplaceableDescriptor func(fd int) bool
+
 	// DieBySignal ends this process with the signal a script sent it and had
 	// no handler for, and nil — the default — stops the script with 128 plus
 	// the number instead.

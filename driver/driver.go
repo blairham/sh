@@ -2855,6 +2855,9 @@ func (sh Shell) newRunnerAs(name string, params []string, dg interp.Diagnostics,
 		// embedded in some other program must not replace that program — so
 		// the decision is made here, in the binary, where it is visible.
 		r.ReplaceProcess = replaceProcess
+		// And which numbers it cannot place, so that a script naming one hears
+		// about it rather than finding it missing. See lowfds_unix.go.
+		r.UnplaceableDescriptor = heldByTheRuntime
 		// And for the same reason it may really die: a script that signals
 		// the shell fatally ends the process rather than the script.
 		r.DieBySignal = dieBySignal

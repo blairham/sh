@@ -174,6 +174,13 @@ func (r *Runner) becomeTheProgram(ctx context.Context, path, run string, argv, e
 	if !kernelStartsIt(path) {
 		return false
 	}
+	// A descriptor the script parked on a number the replacement cannot be
+	// given is kept by forking instead: becoming the program here is this
+	// shell's choice and not the script's, so the script is owed the command
+	// it would have had from a child. See Runner.UnplaceableDescriptor.
+	if r.UnplaceableDescriptor != nil && len(r.unplaceableIn(r.replacementFiles())) > 0 {
+		return false
+	}
 	_ = ctx
 	dir := r.dirNow()
 	if r.unforkedSelf {
@@ -215,4 +222,21 @@ func kernelStartsIt(path string) bool {
 		}
 	}
 	return false
+}
+
+// unplaceableIn lists the descriptors in a replacement's table that are open
+// and that Runner.UnplaceableDescriptor says cannot be placed — the numbers
+// the replacement would start without. Nil where there is no such hook, which
+// is every Runner but a shell's.
+func (r *Runner) unplaceableIn(files []*os.File) []int {
+	if r.UnplaceableDescriptor == nil {
+		return nil
+	}
+	var lost []int
+	for fd, f := range files {
+		if f != nil && r.UnplaceableDescriptor(fd) {
+			lost = append(lost, fd)
+		}
+	}
+	return lost
 }

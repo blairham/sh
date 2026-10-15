@@ -345,3 +345,54 @@ func TestAnEnvironmentSearchPathLooksForNoOtherLibrary(t *testing.T) {
 		t.Errorf("search path = %q, want the environment's alone", out)
 	}
 }
+
+// TestTheLibraryIsLookedForOnlyWhenTheSearchPathIsTouched is #6482: finding
+// another installation's library walks a directory tree, so a start that never
+// touches the search path must not pay for it — and one that touches it, by
+// either half of the tie and by any route, must see the same value it always
+// did, with the PATH the shell started with rather than the one the script
+// set before it asked.
+func TestTheLibraryIsLookedForOnlyWhenTheSearchPathIsTouched(t *testing.T) {
+	t.Setenv("PATH", "/the/path")
+	for _, tc := range []struct {
+		name   string
+		script string
+		walks  int
+		want   string
+	}{
+		{"never touched", `echo ok`, 0, "ok\n"},
+		{"a subshell that does not touch it", `(echo ok); echo $(echo ok)`, 0, "ok\nok\n"},
+		{"the scalar", `echo "${SH_TEST_SEARCH##*:}"`, 1, "/other/functions\n"},
+		{"the array", `echo "${#sh_test_search[@]}"`, 1, "3\n"},
+		{"after PATH moved", `PATH=/elsewhere; echo "${#sh_test_search[@]}"`, 1, "3\n"},
+		{"an append", `sh_test_search+=(/mine); echo "${#sh_test_search[@]}"`, 1, "4\n"},
+		{"an unset", `unset SH_TEST_SEARCH; echo "${SH_TEST_SEARCH-gone}"`, 1, "gone\n"},
+		{"a local first", `f() { local SH_TEST_SEARCH=/l; echo "$SH_TEST_SEARCH"; }; f; echo "${#sh_test_search[@]}"`, 1, "/l\n3\n"},
+		{"inside a subshell first", `(echo "${#sh_test_search[@]}"); echo "${#sh_test_search[@]}"`, 1, "3\n3\n"},
+		{"a listing", `export SH_TEST_SEARCH; export -p >/dev/null; echo ok`, 1, "ok\n"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var asked []string
+			sh := searchShell()
+			sh.SystemFunctionDirectories = func(path string) []string {
+				asked = append(asked, path)
+				return []string{"/other/functions"}
+			}
+			out, errs, code := runArgs(t, sh, "testsh", "-c", tc.script)
+			if code != 0 {
+				t.Fatalf("status %d, stderr %q", code, errs)
+			}
+			if out != tc.want {
+				t.Errorf("output = %q, want %q", out, tc.want)
+			}
+			if len(asked) != tc.walks {
+				t.Errorf("looked for the library %d times (with %q), want %d", len(asked), asked, tc.walks)
+			}
+			for _, p := range asked {
+				if p != "/the/path" {
+					t.Errorf("asked with PATH %q, want the one the shell started with", p)
+				}
+			}
+		})
+	}
+}

@@ -88,6 +88,10 @@ type varCell struct {
 	// attributes and no slot is still a cell: `readonly x` with x unset is a
 	// name the shell knows about.
 	attrs cellAttrs
+	// firstUse says the name has a value a front end asked to be laid down
+	// the first time anything touches it, and it has not been yet. See
+	// interp/firstuse.go.
+	firstUse bool
 }
 
 // live reports whether the cell holds anything: a slot or an attribute.
@@ -162,6 +166,12 @@ func (r *Runner) cell(name string) *varCell {
 	}
 	r.cellProbes++
 	if i, ok := r.cellIndex[name]; ok {
+		if r.cellSlab[i].firstUse {
+			// Laid down now, and looked up again: storing the value can
+			// add a name, which moves the slab under the pointer.
+			r.settleFirstUse(name)
+			return r.cell(name)
+		}
 		r.lastCellName, r.lastCell = name, i+1
 		return &r.cellSlab[i]
 	}
@@ -265,6 +275,7 @@ func (r *Runner) compactCellsIfSparse() {
 // visited, as a map's own range allows.
 func (r *Runner) slotRange(s cellSlots) iter.Seq[*varCell] {
 	return func(yield func(*varCell) bool) {
+		r.settleEveryFirstUse()
 		if r.cellCount[slotIndex(s)] == 0 {
 			return
 		}
@@ -548,6 +559,7 @@ type varTables struct {
 // saveVarTables takes the copy, one level deeper for the two array slots,
 // whose values are containers.
 func (r *Runner) saveVarTables() varTables {
+	r.settleEveryFirstUse()
 	t := varTables{
 		vars:   make(map[string]string, r.varsLen()),
 		arrays: make(map[string]Array, r.arraysLen()),

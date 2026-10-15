@@ -6538,6 +6538,7 @@ func trimSpan(value, pattern string, op syntax.ParamOp, o patternOpts, arm armOr
 	if !prepared {
 		return lo, hi, m, ok
 	}
+	defer arms.release()
 	hi, m = armEnd(value, pattern, o, arms, arm, lo, hi, m)
 	return lo, hi, m, true
 }
@@ -6790,6 +6791,9 @@ func replace(value, pattern string, e *syntax.ParamExpr, o patternOpts, arm armO
 	takesTheArm := !shortest && e.Anchor != '%' && arm.reaches()
 	if takesTheArm {
 		arms, takesTheArm = newArmSearch(pattern, o)
+		if takesTheArm {
+			defer arms.release()
+		}
 	}
 
 	switch e.Anchor {
@@ -6871,6 +6875,7 @@ func replace(value, pattern string, e *syntax.ParamExpr, o patternOpts, arm armO
 	var reach *reachEnds
 	if !bounded {
 		if r, ok := newReachSet(pattern, o); ok {
+			defer r.release()
 			reach = newReachEnds(r, value, stops)
 		}
 	}

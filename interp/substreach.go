@@ -3,7 +3,10 @@
 
 package interp
 
-import "unicode/utf8"
+import (
+	"sync/atomic"
+	"unicode/utf8"
+)
 
 // Where a match starting at one position of a substitution could end.
 //
@@ -153,6 +156,9 @@ type reachSet struct {
 	// mark is base plus the offset plus one, and base moves past every
 	// offset a call could have written.
 	base int
+	// endBuf is the end table newReachEnds binds to a subject, kept with
+	// the set so that a set reused for the next expansion brings it along.
+	endBuf []bool
 }
 
 // newReachSet reads pattern for the analysis, or reports that it cannot.
@@ -189,14 +195,37 @@ func reachAutomatonOf(pattern string, o patternOpts) *reachAutomaton {
 // set's own. o is the caller's, state and all, because the simulation asks
 // matchBracket about the subject and that is where a refused bracket is
 // recorded.
+//
+// The scratch is the automaton's spare where one was handed back, and made
+// afresh where none was. Nothing in it has to be cleared to be reused: the
+// stamps and the queue marks are generations, and both only move forward,
+// so a mark another use left behind can never be read as this one's. What a
+// substitution allocated was mostly this scratch, made at every expansion of
+// the same pattern (#6380).
 func newReachSetOn(a *reachAutomaton, o patternOpts) *reachSet {
 	o.where = nil
+	if r := a.spare.Swap(nil); r != nil {
+		r.o = o
+		return r
+	}
 	r := &reachSet{nodes: a.nodes, start: a.start, o: o, a: a}
 	r.stamp = make([]int, len(r.nodes))
 	for i := range r.slotGen {
 		r.slotGen[i] = make([]int, len(r.nodes))
 	}
 	return r
+}
+
+// release hands r's scratch back to its automaton for the next expansion
+// to use. r must not be used after it: the next caller of newReachSetOn on
+// the same automaton may be another goroutine's substitution. A nil set, or
+// one made without an automaton, is let go.
+func (r *reachSet) release() {
+	if r == nil || r.a == nil {
+		return
+	}
+	r.o = patternOpts{}
+	r.a.spare.Store(r)
 }
 
 // reachAutomaton is a pattern's automaton on its own, without the scratch a
@@ -212,6 +241,11 @@ type reachAutomaton struct {
 	// a match could consume nothing — see reachSet.mayBegin.
 	first [utf8.RuneSelf]bool
 	empty bool
+	// spare is a simulation's scratch handed back after use — see
+	// newReachSetOn and reachSet.release. One rather than a pool, because a
+	// pattern is expanded by one substitution at a time far more often than
+	// by two, and a second taker simply makes its own.
+	spare atomic.Pointer[reachSet]
 }
 
 // readFirst works out first and empty from the states the start reaches
@@ -643,7 +677,18 @@ type reachEnds struct {
 
 // newReachEnds binds r to value, whose unit boundaries are stops.
 func newReachEnds(r *reachSet, value string, stops []int) *reachEnds {
-	e := &reachEnds{r: r, value: value, end: make([]bool, len(value)+1)}
+	// The end table is the set's own where it is long enough, cleared: a
+	// reachEnds is bound to its set, and a set is used by one substitution
+	// at a time.
+	end := r.endBuf
+	if cap(end) < len(value)+1 {
+		end = make([]bool, len(value)+1)
+		r.endBuf = end
+	} else {
+		end = end[:len(value)+1]
+		clear(end)
+	}
+	e := &reachEnds{r: r, value: value, end: end}
 	if len(stops) != len(value)+1 {
 		e.stop = make([]bool, len(value)+1)
 		for _, x := range stops {

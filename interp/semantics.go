@@ -39022,7 +39022,7 @@ func (r *Runner) matchPatternChecked(pattern, s string, surface patternSurface, 
 	// script on `case '[a' in [[:alpha:]])` and this shell answered the
 	// next arm. Writing to it costs nothing where no pattern is refused.
 	o.bad = &bad
-	if hasUnterminatedBracket(pattern, r.emptyBracketCompiles()) {
+	if scannedOnce(pattern, scanOpenBracket, r.emptyBracketCompiles(), hasUnterminatedBracket) {
 		o.bracket = r.bracketPolicy()
 	}
 	// A group nothing closes is the same refusal arriving by the other of

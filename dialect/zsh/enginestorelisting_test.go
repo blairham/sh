@@ -136,3 +136,35 @@ func TestAnEngineStoreIsStillNoNameToRead(t *testing.T) {
 		t.Errorf("wrote %q, want nothing", out.String())
 	}
 }
+
+// TestAnEngineStoreNamedByAnOperandIsNoSuchVariable is the route the walks
+// above leave open: a listing handed the name. The whole-table walks never
+// collect a `.zsh.` name, so `typeset -p .zsh.zstyle` went straight to the
+// store and wrote it.
+//
+// Measured 2026-10-15 on `/opt/homebrew/bin/zsh` 5.9.2 under `env -i
+// PATH=/usr/bin:/bin`, `-f`, after `zstyle :a b c`: every form below is `no
+// such variable: .zsh.zstyle` at status 1, and an ordinary name beside it is
+// still written — which is the control that says the listing ran (#6427).
+func TestAnEngineStoreNamedByAnOperandIsNoSuchVariable(t *testing.T) {
+	for _, form := range []string{
+		"typeset -p", "typeset +p", "declare -p", "export -p", "readonly -p",
+		"f() { local -p \"$@\"; }; f",
+	} {
+		t.Run(form, func(t *testing.T) {
+			src := "zstyle :a b c\ntypeset -g dotless=v\n" + form + " .zsh.zstyle dotless\nprint \"rc=$?\"\n"
+			script := zshScriptFileAt(t, src)
+			var out, errs bytes.Buffer
+			driver.MainArgs(zshWriting(&out, &errs), []string{"zsh", "-f", script})
+			if strings.Contains(out.String(), ".zsh.") {
+				t.Errorf("wrote the engine's store: %q", out.String())
+			}
+			if !strings.Contains(errs.String(), "no such variable: .zsh.zstyle") {
+				t.Errorf("said %q, want `no such variable: .zsh.zstyle`", errs.String())
+			}
+			if !strings.Contains(out.String(), "dotless=v") || !strings.HasSuffix(out.String(), "rc=1\n") {
+				t.Errorf("wrote %q, want the ordinary name's row and rc=1", out.String())
+			}
+		})
+	}
+}

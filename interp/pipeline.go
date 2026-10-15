@@ -476,6 +476,18 @@ func (r *Runner) runPipeline(ctx context.Context, p *syntax.Pipeline, timing *pi
 	if inCurrent && n > 1 {
 		fgJob = r.pipelineJob(p)
 	}
+	// The reading end of every pipe, as the shell being imitated numbers it:
+	// held from here to the end of the pipeline, in the order the pipes are
+	// made. See heldnumbers.go — `true | true | echo <(true)` is 13 in zsh
+	// 5.9.2, both ends still held while the last element's words expand.
+	var reads []int
+	heldBefore := r.heldNumbers
+	if n > 1 && r.countsOwnDescriptors() {
+		for range n - 1 {
+			reads = append(reads, r.holdNumber(true, -1))
+		}
+		defer func() { r.heldNumbers, r.entering = heldBefore, elementEntry{} }()
+	}
 	subs := make([]*Runner, last)
 	releaseFds := make([]func(), last)
 	// A backgrounded pipeline is one job made of several processes, and the
@@ -489,6 +501,9 @@ func (r *Runner) runPipeline(ctx context.Context, p *syntax.Pipeline, timing *pi
 	}
 	for i := 0; i < last; i++ {
 		sub := r.clone()
+		if reads != nil {
+			sub.enterAsAnElement(heldBefore, reads, i, p.Cmds[i])
+		}
 		if commandIsParenthesized(p.Cmds[i]) {
 			// A stage is a fork and a `( … )` standing as one is that fork,
 			// so the parentheses' own clone is not a second boundary — the
@@ -770,6 +785,11 @@ func (r *Runner) runPipeline(ctx context.Context, p *syntax.Pipeline, timing *pi
 			// and not a copy: the pipeline has already fired for it, so the
 			// dispatch must not fire again.
 			r.elementFired = fired
+			if reads != nil {
+				// The shell itself, entered as the last element: its own
+				// first list installs the last pipe. See elementEntry.
+				r.entering = elementEntry{pending: true, input: reads[i-1]}
+			}
 			start := time.Now()
 			serialBefore := r.stmtSerial
 			popOpen := r.openRuntime("|")

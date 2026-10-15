@@ -119,6 +119,7 @@ func seedStacks(r *Runner) {
 	r.procSubJobs = append(make([]*Job, 0, 4), nil)
 	r.enclosingProcSubs = append(make([]procSubPipe, 0, 4), procSubPipe{})
 	r.releasedSubstFds = append(make([]int, 0, 4), 63)
+	r.heldNumbers = append(make([]heldNumber, 0, 4), heldNumber{fd: 11, keptByAFork: true})
 	r.carriedHeredocs = append(make([]syntax.CarriedHeredoc, 0, 4), syntax.CarriedHeredoc{})
 	r.substEnds = append(make([]syntax.SubstitutionEnds, 0, 4), syntax.SubstitutionEnds{})
 	seed := &shadowRecord{

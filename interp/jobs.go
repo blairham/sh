@@ -844,6 +844,11 @@ func (r *Runner) background(ctx context.Context, st *syntax.Stmt) error {
 	// parentheses there are the fork itself and their arrays are its own
 	// copy. See Runner.unsetEmptiesAnUnwrittenArray.
 	sub.forkedForABackgroundJob = true
+	if r.countsOwnDescriptors() {
+		// A fork, so the job's own redirection list saves nothing. See
+		// elementEntry: `{ echo <(true); } </dev/null & wait` is 11.
+		sub.entering = elementEntry{pending: true, forked: true}
+	}
 	// A background job outlives the shell that started it, so where that
 	// shell is the body of a process substitution the job keeps the
 	// substitution's end of the pipe open — the copy of the descriptor a

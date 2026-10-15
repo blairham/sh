@@ -653,6 +653,16 @@ type Runner struct {
 	// process there is, so the number has to be released by bookkeeping. See
 	// substFdView, which is what this becomes at the park.
 	releasedSubstFds []int
+	// heldNumbers are the descriptor numbers the shell being imitated holds
+	// for its own plumbing at this point and this one does not: saved copies
+	// of the streams a redirection list replaced, and a pipeline's reading
+	// ends. Empty outside the dialect that counts them. See heldnumbers.go
+	// and Semantics.OwnDescriptors.
+	heldNumbers []heldNumber
+	// entering is what the next redirection list this runner applies owes
+	// for the runner having been entered as a pipeline element or a
+	// background job. See elementEntry.
+	entering elementEntry
 	// heldProcSubs are the ones removeProcSubs could not finish with, because
 	// one of this shell's *own* descriptors was still open on the pipe —
 	// `exec > >(cmd)` is the shape. They keep until the shell itself ends,
@@ -5869,6 +5879,10 @@ func (r *Runner) clone() *Runner {
 	// copy of them would be: `f() { cat "$1" | cat; }; f <(echo x)` is `x` in
 	// bash 5.3.20. Handed on, never closed — see enclosingProcSubs.
 	c.enclosingProcSubs = append(slices.Clone(r.enclosingProcSubs), r.procSubs...)
+	// A clone is a fork, and a fork keeps the pipes' reading ends and drops
+	// every saved copy. See keptByAFork.
+	c.heldNumbers = keptByAFork(r.heldNumbers)
+	c.entering = elementEntry{}
 	// And the same for the ones the shell is still holding a descriptor onto.
 	// They belong to whichever shell opened them: a subshell must not close
 	// its parent's pipe on the way out, nor wait for a body the parent is
@@ -9674,6 +9688,15 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 			// puts the saved streams back, and the rest hold files the script
 			// still needs open.
 			r.keepRedirs = false
+			// Except the numbers a save would have held, which belong to a
+			// command that is never put back: `exec` saves nothing, and a
+			// list that reached it some other way — `command exec` — must
+			// not keep a number for good. See redirHolds.
+			for _, c := range closers {
+				if h, ok := c.(*redirHolds); ok {
+					_ = h.Close()
+				}
+			}
 			// And outliving the command is what makes them `exec`'s, which
 			// one dialect needs to know: the descriptors it opened this way
 			// are the ones it keeps to itself when it runs anything.

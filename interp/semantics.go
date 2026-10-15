@@ -15267,6 +15267,75 @@ type Semantics struct {
 	// been wrong in this tree before.
 	SubstitutionEndPlacement SubstEndPlacement
 
+	// OwnDescriptors is whether the descriptors a shell holds for its own
+	// plumbing take numbers a script can see — the `/dev/fd/N` of a process
+	// substitution and the number `exec {v}<f` hands back.
+	//
+	// A real shell keeps two kinds of descriptor of its own that this one has
+	// no use for, because nothing here is a process of its own: a **saved
+	// copy** of each stream a redirection list replaces in the current shell,
+	// so the stream can be put back when the command ends, and the **reading
+	// end** of each pipe a pipeline makes. Each sits on a number from the
+	// allocation base up, so a dialect that publishes from there steps over
+	// them. Measured 2026-10-15 against zsh 5.9.2 run as `zsh -fc` (#6473),
+	// deterministic over repeated runs:
+	//
+	//	echo <(true) <(true) <(true)                       11 12 13
+	//	{ echo <(true) <(true) <(true); } </dev/null       12 13 14
+	//	{ echo <(true) <(true); } </dev/null 2>/dev/null   13 14
+	//	{ echo <(true) <(true); } 3</dev/null              11 12   3 was not open
+	//	exec 3</dev/null; { … } 3</dev/null                12 13
+	//	{ echo <(true) <(true); } 2>/dev/null 2>/dev/null  12 13   one per stream
+	//	f() { echo <(true) <(true); }; f </dev/null        12 13
+	//	{ echo <(true) <(true); } </dev/null | cat         11 12   a fork saves nothing
+	//	exec 2>/dev/null; echo <(true) <(true)             11 12   nor does exec
+	//	echo x | echo <(true)                              12
+	//	true | true | echo <(true)                         13
+	//	echo x | { echo <(true) <(true) <(true); }         11 13 14
+	//	{ echo <(true) <(true) <(true); } 2>&1             11 13 14
+	//
+	// So the rule, as one sentence with one noun: **a stream the current
+	// shell replaces is saved on the lowest free number for as long as the
+	// command lasts**, once per stream and only where the stream was open.
+	// The last two rows are the same rule seen through the *source*: a
+	// duplication's source, and the pipe a pipeline's last element reads, is
+	// itself on the lowest free number while the save is taken, and is let go
+	// of after — so the save lands one above it and the source's number comes
+	// free again. The pipe rows are the other kind: the shell holds every
+	// pipe's reading end until the pipeline ends, an element sees the ones up
+	// to its own input, and a `( … )` element sees none of them. A fork keeps
+	// those and drops every saved copy — `{ ( echo <(true) ); } </dev/null` is
+	// 11. A substitution a redirection reads from is a source like the others:
+	// `{ echo <(true) <(true); } < <(true)` is `11 13`.
+	//
+	// **There is no unanswered value.** A save happens whether or not anything
+	// is counted after it, so a refusal would refuse every redirected group in
+	// the language. The zero value is the answer this shell gave everywhere
+	// before the axis existed.
+	//
+	// unpinned bash: bash 5.3.20 saves too, but by a different rule this
+	// shell does not yet hold — one save per *redirection* rather than per
+	// stream, `{ … } 2>/dev/null 2>/dev/null` holding 10 and 11, and no
+	// copy of a duplication's source — and its substitutions are published
+	// from 63 down, so only `exec {v}` inside a redirected command can see
+	// it. Filed as #6502 rather than half-modeled.
+	//
+	// unpinned ksh: ksh93u+ answers 10 for `{ exec {v}</dev/null; echo $v; }
+	// </dev/null`, so no saved copy is in the way there, and its
+	// substitutions are published below the base anyway. It does hold one
+	// number while a pipeline's last element runs, which is neither of the
+	// two kinds here — #6503.
+	//
+	// unpinned dash: no `{v}` redirection and no process substitution, so no
+	// number this could move is ever printed.
+	//
+	// unpinned ash: BusyBox ash has no `{v}` redirection and publishes its
+	// substitutions from 64 up, above anything a save could take.
+	//
+	// unpinned sh: bash as `sh`, which has the `{v}` redirection and the
+	// substitution and is bash's column for this: see the bash note.
+	OwnDescriptors OwnDescriptorNumbers
+
 	// ReapedCoprocessEnds is what becomes of those near ends when the
 	// coprocess itself has been reaped, which is a separate question from how
 	// a script reached them and is answered three ways by the three shells
@@ -38156,6 +38225,32 @@ func (p CoprocEndPlacement) String() string {
 		return "at the top of the table"
 	}
 	return "where any descriptor goes"
+}
+
+// OwnDescriptorNumbers is whether the descriptors a shell holds for its own
+// plumbing take numbers a script can see. See Semantics.OwnDescriptors, which
+// is the only reader and holds the measurements.
+type OwnDescriptorNumbers uint8
+
+const (
+	// OwnDescriptorsTakeNoNumber counts nothing the shell holds for itself:
+	// a published number steps over only what the script opened.
+	//
+	// ksh93 (AJM 93u+ 2012-08-01), and the zero value because it is what this
+	// shell did in every dialect before the axis existed.
+	OwnDescriptorsTakeNoNumber OwnDescriptorNumbers = iota
+
+	// SavedStreamsAndPipeReadEndsTakeNumbers counts a saved copy of each
+	// stream the current shell replaces, and the reading end of each pipe a
+	// pipeline makes, as zsh 5.9.2 holds them.
+	SavedStreamsAndPipeReadEndsTakeNumbers
+)
+
+func (o OwnDescriptorNumbers) String() string {
+	if o == SavedStreamsAndPipeReadEndsTakeNumbers {
+		return "saved streams and pipe reading ends take numbers"
+	}
+	return "take no number"
 }
 
 // SubstEndPlacement is where in the descriptor table a shell parks the end of

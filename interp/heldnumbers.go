@@ -172,7 +172,7 @@ func (r *Runner) beginRedirHolds(owner redirOwner) *redirHolds {
 		consuming: inThisShell,
 		// A `( … )` is a fork, `exec`'s list is never put back, and a command
 		// that becomes a process of its own puts nothing back in this one.
-		saving: inThisShell && !(entry.pending && entry.forked),
+		saving: inThisShell && (!entry.pending || !entry.forked),
 	}
 	if entry.pending && entry.input != 0 {
 		// The pipe is the list's first redirection: standard input is saved

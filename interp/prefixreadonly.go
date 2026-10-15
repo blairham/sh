@@ -368,6 +368,39 @@ func (r *Runner) prefixRefusalCost(p prefixCommand) (fatal, skip, giveUpTheLine 
 	return false, true, false, "a refused assignment prefix costing the command it stood in front of"
 }
 
+// prefixRefusalEndsTheWalk reports whether a walk over a prefix in front of
+// this command stops at the first refused entry: the entries behind it are
+// never expanded, because the command they were for is given up there.
+//
+// It is the cost read as a question about the walk, and nothing else: a shell
+// that skips the command (or ends) at the refusal stops expanding at it, and
+// a shell that carries on goes on expanding. Measured 2026-10-15 from `-c`
+// under `env -i PATH=/usr/bin:/bin`, `readonly r=1` on the line before:
+//
+//	r=2 B=$(echo s >&2) /bin/echo ran
+//
+//	dash 0.5.12   the refusal, the script ends; no `s`
+//	ksh93u+       the refusal, rc=1; no `s`
+//	zsh 5.9.2     the refusal, rc=1; no `s`
+//	bash 5.3.20   the refusal, `s`, `ran`, rc=0
+//
+// The builtin and function routes already stopped there, through
+// expandThePrefixUpToTheFrozenName; the external route expanded every value
+// on its way to the child's environment and only then reached
+// refusePrefixes, so the substitution behind the refused entry ran (#6511).
+//
+// Asked only once a frozen entry has been reached, so an ordinary prefix
+// asks nothing. Never true where the early check has already reported: that
+// check gives the command up itself, so a command it let through is one that
+// carries on.
+func (r *Runner) prefixRefusalEndsTheWalk(p prefixCommand) bool {
+	if r.prefixCheckedFirst || !r.prefixRefusalApplies(p) {
+		return false
+	}
+	_, skip, _, unanswered := r.prefixRefusalCost(p)
+	return skip && unanswered == ""
+}
+
 // prefixFatalityForTheCommand reads Semantics.PrefixRefusalFatality against
 // the command the prefix stood in front of: whether a prefix that **did not
 // take** ends the shell, and whether the axis was answered at all.

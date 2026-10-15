@@ -389,6 +389,33 @@ func (r *Runner) fixedSlotTakesNoArrayValue(name string) bool {
 	return fixed && !allowed.has(ArrayParameter) && !allowed.has(AssocParameter)
 }
 
+// fixedSlotRefusesATable reports whether a whole association stored into name
+// by a builtin is refused for landing on a slot of a fixed kind that is not
+// one, having said so and ended the script. The sentence is the one a `-A`
+// letter over the same slot writes — SpecialParameterKind — located as the
+// store and not as the builtin, as reportAnArrayValueToAFixedSlot's is. See
+// Runner.RefusesAWholeArrayStore for the rows.
+//
+// A script's tie is left out: a table over either half unties the pair rather
+// than being refused, which is the letter's rule and is asked as the letter's
+// (kindLetterUntiesAScriptTie).
+func (r *Runner) fixedSlotRefusesATable(name string) bool {
+	allowed, fixed := r.fixedSlotKinds(name)
+	if !fixed || allowed.has(AssocParameter) {
+		return false
+	}
+	if _, tied := r.scriptTieSlotKinds(name); tied {
+		return false
+	}
+	outer := r.inBuiltin
+	r.inBuiltin = ""
+	r.diagf("%s\n", Wording(r.diag().SpecialParameterKind,
+		"%s: can't change type of a special parameter", name))
+	r.inBuiltin = outer
+	r.fatalQuiet()
+	return true
+}
+
 // reportAnArrayValueToAFixedSlot writes the store's sentence and nothing
 // else; what the refusal costs is the caller's.
 func (r *Runner) reportAnArrayValueToAFixedSlot(name string) {

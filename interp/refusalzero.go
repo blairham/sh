@@ -140,11 +140,41 @@ func (r *Runner) arrayStoreRefusalStatus(status int) int {
 //
 // SetAssoc consults no freeze at all, which is how `zparseopts -A` over a
 // readonly name was taken silently (#6513).
+//
+// **An association over a slot of a fixed kind** is the third check, and it
+// comes first: the shell's own parameters and a call's private refuse a whole
+// table with the kind sentence a `-A` letter gets, ahead of the freeze.
+// Measured 2026-10-15 on zsh 5.9.2, `-f`, `env -i PATH=/usr/bin:/bin`, `-c`
+// then a script file (#6554):
+//
+//	zparseopts -A HOME a           HOME: can't change type of a special
+//	                               parameter                    0   1
+//	zparseopts -A path a           the same, for path, fpath, IFS, RANDOM,
+//	                               SECONDS, argv, status and PATH
+//	readonly HOME; zparseopts -A HOME a      the kind sentence, not the freeze's
+//	f(){ private v=1; zparseopts -A v a; }   f: v: the kind sentence
+//	f(){ private -r v=1; zparseopts -A v a; }  the same
+//	f(){ local HOME; zparseopts -A HOME a; }   the same
+//
+// and the controls take the table: `options` and `commands`, which are
+// associations already; `ZSH_NAME`; `f(){ private -A v; … }`; `f(){ local -h
+// HOME; … }`, a hidden shadow that is an ordinary name. A script's tie is
+// taken too, and is **untied**, the partner going as an `unset` takes it —
+// `typeset -T FOO=a:b foo; zparseopts -A FOO a` leaves FOO an association and
+// foo gone, and with `typeset -r foo` standing the store is `read-only
+// variable: foo` instead. That is what a `-A` letter does to the same tie, so
+// it is asked through the letter's own rule rather than a copy of it.
 func (r *Runner) RefusesAWholeArrayStore(name string, table bool) (status int, refused bool) {
+	if table && r.fixedSlotRefusesATable(name) {
+		return r.arrayStoreRefusalStatus(r.status), true
+	}
 	if r.refuseReadonly(name, assignedByDeclaration) {
 		return r.arrayStoreRefusalStatus(1), true
 	}
 	if !table && r.fixedSlotRefusesAnArrayValue(name) {
+		return r.arrayStoreRefusalStatus(r.status), true
+	}
+	if table && r.kindLetterUntiesAScriptTie(name, declareFlags{letters: "A", letterSigns: "-"}) {
 		return r.arrayStoreRefusalStatus(r.status), true
 	}
 	return 0, false

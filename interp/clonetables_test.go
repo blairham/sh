@@ -25,6 +25,7 @@ var sharedTables = map[string]string{
 	"optionLetterNames":   "the dialect's `set` option letters, handed in whole by Apply and never written to afterwards — the same terms optionLists is on, one field kind along",
 	"dialectCompgen":      "the `compgen -A` actions a dialect registered with SetCompgenAction, written at setup and never again — a script can ask compgen for one but has no way to add, replace or remove one",
 	"onParameterArrival":  "what a dialect wants run when a deferred name is first referred to, registered by SetParameterArrival at setup and never again — a script can trigger one but has no way to add, replace or remove one",
+	"firstUseSeeds":       "the values a front end asked to be laid down on first use, replaced whole by SetVarOnFirstUse at setup and never written in place — settling one clears a flag in the runner's own cell and leaves the map alone",
 	"shellOwnWhileSet":    "the names a dialect owns while they hold a value, marked at setup by MarkShellOwnParameterWhileSet and never written again",
 	"equalsTildeBuiltins": "the builtins a dialect says read an argument's `=` as an assignment's, marked at setup by MarkBuiltinWhoseEqualsOpensATildeContext and never written again",
 	"localKeepsOuter":     "the names a dialect says keep their outer value in a valueless local, marked at setup by MarkLocalKeepsTheOuterValue and never written again",
@@ -456,6 +457,7 @@ func TestACellHoldingOnlyAnAttributeIsKept(t *testing.T) {
 // whether it belongs in ownTables or in sharedTables.
 func seedTables(r *Runner) {
 	r.noticedJobs = map[*Job]bool{{}: true}
+	r.firstUseSeeds = map[string]*firstUseSeed{"x": {}}
 	r.keptSubstBodies = map[substBodyKey]keptSubstBody{{text: "seed"}: {}}
 	r.dialectMoves = map[dialectMoveKey]*syntax.Dialect{{}: nil}
 	r.bodyTexts = map[*syntax.FuncDecl]string{{}: "seed"}

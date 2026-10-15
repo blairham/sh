@@ -58,6 +58,11 @@ type Runner struct {
 	// answered without a lookup.
 	attrCount [cellAttrCount]int
 	attrTotal int
+	// firstUseSeeds and firstUsePending are the values a front end asked to
+	// be stored the first time anything touches a name, and how many cells
+	// are still waiting for theirs. See interp/firstuse.go.
+	firstUseSeeds   map[string]*firstUseSeed
+	firstUsePending int
 	// lastCellName is the name Runner.cell found last and lastCell its
 	// position in the slab plus one; zero is none.
 	lastCellName string

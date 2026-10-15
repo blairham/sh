@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"github.com/blairham/sh/interp"
 )
@@ -136,22 +137,46 @@ func (sh Shell) seedFunctionSearch(r *interp.Runner) {
 		// replaces it.
 		return
 	}
+	// Laid down the first time anything touches the name rather than now
+	// (#6482). Finding another installation's library walks a directory
+	// tree — 1.5 ms of a 4.5 ms `zsh -c :` on Debian's layout on the CI
+	// runner, 0.46 ms once #6495 made the walk cheap — and most starts never
+	// read the parameter. What a script sees is unchanged: see
+	// interp.Runner.SetVarOnFirstUse.
+	//
+	// PATH is read now, from the environment the process was started with,
+	// because that is what the default was always derived from; a script
+	// that changes PATH before it first reads the parameter must not move it.
+	path := environmentValue(r.Env, "PATH")
+	// Once per seeding, not once per runner: every runner a script clones
+	// carries the waiting value and may settle it on its own, and the
+	// answer is about the process — where its binary is and what is
+	// installed — not about any one runner.
+	r.SetVarOnFirstUse(name, sync.OnceValues(func() (string, bool) {
+		return sh.functionSearchDefault(path)
+	}))
+}
+
+// functionSearchDefault is the default function search path, joined, or
+// false where there is nothing to say.
+func (sh Shell) functionSearchDefault(path string) (string, bool) {
 	exe, err := os.Executable()
 	if err != nil {
-		// Nothing to derive from. The default is the empty one this shell had
-		// before there was a default at all, which still refuses by name.
-		return
+		// Nothing to derive from. The default is the empty one this shell
+		// had before there was a default at all, which still refuses by
+		// name.
+		return "", false
 	}
 	dirs := functionSearchDirs(installPrefix(exe))
 	if sh.SystemFunctionDirectories != nil {
 		// Last, so that every name this installation ships is found here
 		// first: the other library is what is reachable *beyond* it.
-		dirs = append(dirs, sh.SystemFunctionDirectories(environmentValue(r.Env, "PATH"))...)
+		dirs = append(dirs, sh.SystemFunctionDirectories(path)...)
 	}
 	if len(dirs) == 0 {
-		return
+		return "", false
 	}
-	r.SetVar(name, strings.Join(dirs, ":"))
+	return strings.Join(dirs, ":"), true
 }
 
 // environmentValue is what an environment list says a name holds, or "".

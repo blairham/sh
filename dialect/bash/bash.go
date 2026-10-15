@@ -5280,7 +5280,11 @@ func Diagnostics() interp.Diagnostics {
 		// is `s: readonly variable` and then this. No other column was asked:
 		// zsh refuses `typeset -n` and ksh93 has no nameref of this spelling.
 		CannotAssignFdToVariable: "%[1]s: cannot assign fd to variable",
-		TrapPrintsSignalPrefix:   "SIG",
+		// `true {v}>&3` with 3 closed says this unlocated line before the
+		// usual `3: Bad file descriptor`, measured 2026-10-15 on 5.3.20
+		// (#6572); a numbered `4>&3` says only the second.
+		FdVariableDuplicationFailed: "redirection error: cannot duplicate fd: %[1]s",
+		TrapPrintsSignalPrefix:      "SIG",
 		// One wording for all three, and the operand quoted back exactly as
 		// given: `export 1x=v` says `1x=v', not `1x'.
 		BuiltinBadName: map[string]string{

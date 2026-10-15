@@ -128,6 +128,10 @@ func aimSpeakerRunWith(t *testing.T, dg Diagnostics, src string) (string, int) {
 	// the redirection adds can see the line behind it. What that refusal ends
 	// is its own axis and not this one.
 	sem.ReadonlyReassignmentFatal = No
+	// And it is found out at the store, after the open, so the store's own
+	// sentence is the one that speaks. See
+	// Semantics.FdVariableReadonlyRefusedFirst.
+	sem.FdVariableReadonlyRefusedFirst = No
 	return runGrammar(t, src, func(d *syntax.Dialect) {
 		d.FdVariableRedirections = true
 	}, func(r *Runner) { r.Semantics = &sem; r.Diagnostics = &dg })

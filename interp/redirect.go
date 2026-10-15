@@ -706,6 +706,17 @@ func (r *Runner) applyRedirList(ctx context.Context, rs []*syntax.Redirect, comp
 				saveFds()
 			}
 			if err := r.dupFd(fd, name, r.dupTargetText(rd, moveFrom), rd.Op != syntax.TokLessAmp, opened); err != nil {
+				// One dialect says first that the descriptor it picked for
+				// the name could not be made a copy of the source. Only for a
+				// source that is a number: a word that is not one is the
+				// ambiguous redirect, which no copy was tried for. See
+				// Diagnostics.FdVariableDuplicationFailed.
+				if _, numeric := atoi(name); numeric && fdVar != "" {
+					if w := r.diag().FdVariableDuplicationFailed; w != "" {
+						r.errf("%s%s\n", r.diag().prefixWithoutLine(r.name(), ""),
+							fmt.Sprintf(w, r.diag().reasonText(reason(syscall.EBADF))))
+					}
+				}
 				r.diagf("%v\n", err)
 				// A duplication that fails is a redirection that failed, and
 				// carries the same number as one whose file would not open.

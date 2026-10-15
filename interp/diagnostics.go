@@ -2303,6 +2303,26 @@ type Diagnostics struct {
 	// cannot take one out. Empty leaves the refusal silent.
 	FdVariableReadonlyClose string
 
+	// FdVariableDuplicationFailed is the line one shell writes *before* the
+	// usual one when a `{name}` redirection duplicates a descriptor that is
+	// not open (#6572). %[1]s is the reason, worded as the dialect words
+	// reasons. Measured 2026-10-15 on bash 5.3.20, `-c`, 3 closed:
+	//
+	//	true {v}>&3     redirection error: cannot duplicate fd: Bad file descriptor
+	//	                line 1: 3: Bad file descriptor
+	//	true 4>&3       line 1: 3: Bad file descriptor       (one line)
+	//
+	// So the line belongs to the shell picking a descriptor for the name, not
+	// to every duplication: it comes for `{v}<&3`, for a move `{v}<&3-`, on
+	// `exec`, on a function and on a program, and for a number past every
+	// limit. It carries the shell's name and no line number — `s.sh:
+	// redirection error: …` from a script file — and goes where the shell's
+	// standard error stands at that point, so `true 2>/dev/null {v}>&3` hides
+	// it and `true {v}>&3 2>/dev/null` does not. A word that is not a number
+	// is the ambiguous redirect and does not write it. zsh and ksh93 write
+	// the one line. Empty writes nothing.
+	FdVariableDuplicationFailed string
+
 	// FdVariableWouldBeClobbered is the refusal `set -C` raises when a
 	// `{name}` redirection would overwrite a name already holding a descriptor
 	// this shell has open. Two verbs: %[1]s is the name and %[2]d the

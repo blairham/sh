@@ -351,6 +351,9 @@ func (r *Runner) applyRedirList(ctx context.Context, rs []*syntax.Redirect, comp
 			r.redirErr = true
 			return closers, nil
 		}
+		if fdVar != "" {
+			fdVar = r.fdVarStoredName(fdVar)
+		}
 		// `<#` and `>#` move where a descriptor next reads or writes. No
 		// file is opened, closed or duplicated, so this is settled before
 		// anything below goes looking for one — and before the gate, which

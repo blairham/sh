@@ -24534,6 +24534,13 @@ type Semantics struct {
 	// program's own process, so there it costs the command alone. `always`
 	// blocks still run (`{ … } always { echo always }` prints `always`).
 	//
+	// The dialect that fails the redirection first also refuses there a
+	// name it cannot store into — a dotted name with no parent (`a.b: no
+	// parent`) and a subscript the arithmetic refuses (`$i: arithmetic
+	// syntax error`, the `$` reaching it as written) — and takes `{a[}` as
+	// `a` and `{é}` as a name where the locale has the letter (#6591). See
+	// Runner.fdVarNameFailsFirst.
+	//
 	// Asked only where a `{word}` is not a name — bash and the core never
 	// lex one, so they never ask.
 	FdVariableBadName FdVariableBadNamePolicy

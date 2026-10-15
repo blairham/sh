@@ -2303,6 +2303,14 @@ type Diagnostics struct {
 	// cannot take one out. Empty leaves the refusal silent.
 	FdVariableReadonlyClose string
 
+	// FdVariableNoParent is the refusal of a `{name}` redirection whose name
+	// is a dotted one with no parent, in the one grammar that has dotted
+	// names: `echo {a.b}</dev/null` with `a` unset is `a.b: no parent` at 1
+	// in ksh93u+, before the open (#6591). %[1]s is the word as written.
+	// Empty asks nothing, which is every other dialect. See
+	// Runner.fdVarNameFailsFirst.
+	FdVariableNoParent string
+
 	// FdVariableDuplicationFailed is the line one shell writes *before* the
 	// usual one when a `{name}` redirection duplicates a descriptor that is
 	// not open (#6572). %[1]s is the reason, worded as the dialect words

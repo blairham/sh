@@ -241,6 +241,13 @@ type Parser struct {
 	// is and where the rows that make it the **outermost** construct are.
 	refusedWaitingForAThen bool
 
+	// braceWordAt is where the token behind a compound closed by a reserved
+	// word begins, in a dialect that reads a bare `{` as a word of its own.
+	// The lexer split that brace off because it stood where a command may
+	// begin, and nothing here does: so if the grammar refuses it, what is
+	// named is the word the brace begins. See [Parser.wholeBraceWord].
+	braceWordAt Pos
+
 	// funcBody says the command about to be parsed is a function's body, so
 	// that a brace group standing as one is recorded as the function rather
 	// than as a group. They are the same syntax and not the same thing to
@@ -1341,6 +1348,7 @@ func (p *Parser) failUnexpectedAt(tok Token, expected string, plain bool) {
 		// than the line after it.
 		tok = Token{Kind: TokNewline, Pos: tok.Pos, End: tok.End, Text: "\n"}
 	}
+	tok = p.wholeBraceWord(tok)
 	literal, text := tokenLiteral(tok), tokenText(tok)
 	source := tokenSource(tok)
 	if p.emptyParensStartAt(tok) {
@@ -1362,6 +1370,7 @@ func (p *Parser) failUnexpectedAt(tok Token, expected string, plain bool) {
 		TokenSource: source, TokenHoldsExpansion: tokenHoldsAnExpansion(tok),
 		Class: tokenClass(tok, plain), Expected: expected,
 		Redirect:    tok.Kind.IsRedirect(),
+		FdVariable:  tok.Kind == TokIONumber && strings.HasPrefix(tok.Text, "{"),
 		AliasSource: p.aliasSource,
 		Msg:         text + " unexpected",
 	}
@@ -2902,7 +2911,7 @@ func (p *Parser) withRedirs(c Command) Command {
 		return c
 	}
 	for p.tok.Kind.IsRedirect() || p.at(TokIONumber) {
-		if p.fdVariableRefusedAfter(c) {
+		if p.fdVariableRefusedAfter(c) || p.arithCommandRefusesARedirection(c) {
 			break
 		}
 		r := p.parseRedirect()
@@ -2911,7 +2920,59 @@ func (p *Parser) withRedirs(c Command) Command {
 		}
 		h.addRedir(r)
 	}
+	if p.dialect.OpenBraceNeedsNoBlank && closedByAReservedWord(c) {
+		p.braceWordAt = p.tok.Pos
+	}
 	return c
+}
+
+// wholeBraceWord is the token a refusal names when it lands on the bare `{`
+// standing behind a compound closed by a reserved word, and tok itself
+// everywhere else.
+//
+// Behind `fi`, `done` or `end` the dialect that reads a bare `{` as a word of
+// its own is not at a command's beginning, so it reads the brace and what
+// follows it as one word — `{foo}`, `{a,b}`, `{foo` — where behind `}`, `)`,
+// `esac`, `]]` and `))` it splits the brace off, exactly as the lexer did.
+// Measured 2026-10-15 on zsh 5.9.2 `-fc '<program>; echo ok'`, and the same
+// with `emulate sh` or `emulate ksh` on the line before (#6539):
+//
+//	if :; then :; fi {foo}               parse error near `{foo}'
+//	if :; then :; fi {foo                parse error near `{foo'
+//	if :; then :; fi >/dev/null {foo}    parse error near `{foo}'
+//	for i in a; { :; } {foo}             parse error near `{foo}'
+//	foreach i (a) :; end {foo}           parse error near `{foo}'
+//	if :; then :; fi { echo x; }         parse error near `{'
+//	{ :; } {foo}  /  (( 1 )) {foo}       parse error near `{'
+//
+// The same key as [Parser.fdVariableRefusedAfter], which names the `{v}` of a
+// refused redirection by the compound's kind; this is the plain word in the
+// same place. Read again in an argument's position rather than rebuilt from
+// the characters, so the word ends wherever an argument's would.
+func (p *Parser) wholeBraceWord(tok Token) Token {
+	if tok.Kind != TokWord || tok.Text != "{" || !tok.endedByRule ||
+		!p.braceWordAt.IsValid() || tok.Pos != p.braceWordAt {
+		return tok
+	}
+	off := int(tok.Pos.Offset)
+	if off < 0 || off >= len(p.lex.src) || p.lex.src[off] != '{' {
+		// Not the input's own text — a global alias's body was spliced in.
+		return tok
+	}
+	probe := newLexer(p.lex.src[off:], &p.dialect)
+	probe.inArgument = true
+	word := probe.Next()
+	if word.Kind != TokWord || probe.Err() != nil {
+		return tok
+	}
+	text := word.Text
+	end := tok.Pos
+	end.Offset += int32(len(text))
+	end.Col += int32(len(text))
+	return Token{
+		Kind: TokWord, Pos: tok.Pos, End: end, Text: text,
+		Spans: []Span{{Kind: Literal, Value: text, Quoting: Unquoted, Pos: tok.Pos}},
+	}
 }
 
 // fdVariableRefusedAfter refuses a `{name}` redirection behind a compound
@@ -2939,6 +3000,28 @@ func (p *Parser) fdVariableRefusedAfter(c Command) bool {
 		Kind: TokWord, Pos: p.tok.Pos, End: end, Text: text,
 		Spans: []Span{{Kind: Literal, Value: text, Quoting: Unquoted, Pos: p.tok.Pos}},
 	}, "", false)
+	return true
+}
+
+// arithCommandRefusesARedirection refuses a redirection behind `(( … ))`, in
+// the dialect whose arithmetic command takes none, and reports whether it did.
+// See [Dialect.ArithCommandTakesNoRedirection].
+//
+// The operator is what is named when a number stands in front of it — the
+// number is passed over — while a `{name}` there is named itself, which the
+// dialect writes by a byte of its own; see
+// interp.Diagnostics.SyntaxUnexpectedFdVariable.
+func (p *Parser) arithCommandRefusesARedirection(c Command) bool {
+	if !p.dialect.ArithCommandTakesNoRedirection {
+		return false
+	}
+	if _, ok := c.(*ArithCmdClause); !ok {
+		return false
+	}
+	if p.at(TokIONumber) && !strings.HasPrefix(p.tok.Text, "{") {
+		p.next()
+	}
+	p.failUnexpected("")
 	return true
 }
 

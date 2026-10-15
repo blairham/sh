@@ -2217,7 +2217,9 @@ func (r *Runner) printfQuote(spec, arg string) (string, int, bool) {
 		// they agree everywhere.
 		return printfByteField(spec, quoteWithBackslashes(arg, false, r.historyQuoting().plain)), 0, false
 	case PrintfQuoteSingle:
-		return printfByteField(spec, kshSingleQuote(arg)), 0, false
+		// The listing's own spelling: ksh93's `%q`, trace and `typeset -p`
+		// are one function there. See TraceQuoting's QuoteAsListed (#6582).
+		return printfByteField(spec, r.wordAsListed(arg)), 0, false
 	case PrintfQuoteAbsent:
 		// A conversion the shell does not have stops the output where it is,
 		// as any other unknown one does — and is named as any other is, the

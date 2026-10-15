@@ -90,7 +90,7 @@ func (r *Runner) tracePrefixAsItGoes(c *syntax.SimpleCmd, argv []string, walk pr
 		if r.subscriptedPrefixDropped(a) {
 			continue
 		}
-		target := traceAssignTarget(a, nil)
+		target := traceAssignTarget(a, nil, nil)
 		// What a substitution in the value inherits. See prefixLineForAChild.
 		line.pending = so() + target
 		frozen := r.attrHas(a.Name, attrReadonly)

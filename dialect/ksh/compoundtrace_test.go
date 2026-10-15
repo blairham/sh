@@ -186,7 +186,11 @@ print "after=[${c.z}][${c.a}]"
 	const want = "+ c.z=9\n" +
 		"+ f\n" +
 		"in=[1][]\n" +
-		"+ print 'after=[9][]'\n" +
+		// `after=` is a name and its `=`, so it stands bare in front of the
+		// quotes — measured 2026-10-15 on ksh93u+ 2012-08-01 with this
+		// script, and the line this test carried before #6582 was this
+		// shell's own spelling rather than that one's.
+		"+ print after='[9][]'\n" +
 		"after=[9][]\n"
 	if out, st := kshOut(t, src); out != want || st != 0 {
 		t.Errorf("%s\n got %q at %d\nwant %q at 0", src, out, st, want)

@@ -212,16 +212,15 @@ func TestPlusSignedCommandStringNaming(t *testing.T) {
 
 func TestDiagnosticAnswersTheInterpTestsRelyOn(t *testing.T) {
 	d := ksh.Diagnostics()
-	if got, want := d.TraceQuoting, interp.QuoteDollar; got != want {
+	// The listing's own spelling, which this shell's trace, `%q` and
+	// `whence` all are (#6582).
+	if got, want := d.TraceQuoting, interp.QuoteAsListed; got != want {
 		t.Errorf("TraceQuoting = %v, want %v", got, want)
 	}
-	// The character sets are the whole of #2141: which words the quoting
-	// above is applied to, measured over 36 words on 2026-09-12.
-	if got, want := d.TraceMetacharacters.Anywhere, "*?[]{}~#"; got != want {
-		t.Errorf("TraceMetacharacters.Anywhere = %q, want %q", got, want)
-	}
-	if got, want := d.TraceMetacharacters.Leading, "="; got != want {
-		t.Errorf("TraceMetacharacters.Leading = %q, want %q", got, want)
+	// And no character sets of its own: which words need quoting is the
+	// listing's answer, so a set here would be read by nothing.
+	if got := d.TraceMetacharacters; got != (interp.TraceMetacharacters{}) {
+		t.Errorf("TraceMetacharacters = %+v, want none", got)
 	}
 	if got, want := d.TraceBareBracket, interp.TraceBracketPairBare; got != want {
 		t.Errorf("TraceBareBracket = %v, want %v", got, want)
@@ -238,7 +237,7 @@ func TestDiagnosticAnswersTheInterpTestsRelyOn(t *testing.T) {
 	if got, want := d.TraceCondition, interp.TraceCondPrimary; got != want {
 		t.Errorf("TraceCondition = %v, want %v", got, want)
 	}
-	if got, want := d.TraceConditionQuoting, interp.QuoteDollar; got != want {
+	if got, want := d.TraceConditionQuoting, interp.QuoteAsListed; got != want {
 		t.Errorf("TraceConditionQuoting = %v, want %v", got, want)
 	}
 	// The text between the parentheses and nothing added, at both sites.

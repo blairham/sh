@@ -185,7 +185,20 @@ func (r *Runner) listedAssignmentHead(v string, place ListedValuePlace) (head, t
 		return "", "", false
 	}
 	eq := strings.IndexByte(v, '=')
-	if eq <= 0 || !listedNameLike(v[:eq]) {
+	if eq <= 0 || strings.TrimSpace(v[:eq]) != v[:eq] || !listedNameLike(v[:eq]) {
+		// A blank on either side of the name is not a name: measured
+		// 2026-10-15 on ksh93u+ 2012-08-01, ` a=b` lists as `' a=b'` and
+		// `a =b` as `'a =b'`. listedNameLike trims for the `#` rule's sake,
+		// where a blank forces the quotes anyway; here the trimmed name split
+		// the value and wrote `v= a=b`, which does not read back.
+		return "", "", false
+	}
+	if r.listingReadsBytesHere(v[:eq]) {
+		// A character above ASCII is a name character only where the
+		// locale has characters at all. Under `LC_ALL=C` the same name is
+		// bytes, and bytes are no name: measured 2026-10-15 on ksh93u+
+		// 2012-08-01, `é=a b` lists as `$'\xc3\xa9=a b'` there, where this
+		// split it and wrote the head's bytes raw — `é=$'a b'`.
 		return "", "", false
 	}
 	sep := "="
@@ -219,6 +232,19 @@ func (r *Runner) listedAssignmentHead(v string, place ListedValuePlace) (head, t
 		sep = `\=`
 	}
 	return v[:eq] + sep, v[eq+1:], true
+}
+
+// wordAsListed is a word written back the way this dialect lists a value:
+// the whole of TraceQuoting's QuoteAsListed and of PrintfQuoteSingle, so a
+// trace, a `%q` and a name report reach the listing's rules rather than
+// copies of them. Alone and not in a list, because each of those writes one
+// word where a bare `name=` re-reads as nothing but itself.
+//
+// The style is fixed rather than read off one of the listing builtins'
+// answers, because it is the shape of the one dialect that asks and not a
+// question of its own: ksh93 lists an alias, a trap and a value the same way.
+func (r *Runner) wordAsListed(s string) string {
+	return r.quoteListedValue(ListingQuoteWhenNeededDollar, "a word written back", s, ListedValueAlone)
 }
 
 // quoteListedValueBody is the style's own answer, with no assignment head

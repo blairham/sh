@@ -179,7 +179,7 @@ func (r *Runner) patternOf(w *syntax.Word) string {
 	// through wordTextUnsplit; this is the same promise for the pattern ones,
 	// which `case` and `[[ ]]` share.
 	defer r.inWord(w)()
-	var b strings.Builder
+	var b spanText
 	// Where a value's text landed in the pattern, which is the only thing
 	// that separates a live `|` from a written one. See markWrittenBars.
 	var fromValue [][2]int
@@ -198,7 +198,7 @@ func (r *Runner) patternOf(w *syntax.Word) string {
 	for i, s := range spans {
 		r.expandingSpan = i
 		if tildeKeepsBackslash(flavor, s) {
-			b.WriteByte('\\')
+			b.addByte('\\')
 			b.WriteString(s.Value)
 			continue
 		}
@@ -206,7 +206,7 @@ func (r *Runner) patternOf(w *syntax.Word) string {
 			// The backslash is the glob's own here, so the pair reaches the
 			// matcher as it was written rather than as the letter quote
 			// removal would otherwise take.
-			b.WriteByte('\\')
+			b.addByte('\\')
 			b.WriteString(s.Value)
 			continue
 		}
@@ -528,7 +528,7 @@ const tildeExtendedEscapes = "dDsSwWbBAzafnrtv"
 // The spans come back rewritten rather than the word being edited: patternOf
 // is handed the syntax tree, and a `case` inside a loop reads the same arm on
 // every pass.
-func (r *Runner) patternTilde(w *syntax.Word, b *strings.Builder) []syntax.Span {
+func (r *Runner) patternTilde(w *syntax.Word, b *spanText) []syntax.Span {
 	if len(w.Spans) == 0 {
 		return w.Spans
 	}
@@ -3582,7 +3582,7 @@ func (r *Runner) patternOpts(pattern string, subjects ...string) patternOpts {
 		// open is not — measured with a prefix trim, `${w#[[:alpha:]}` on
 		// `[a` is empty in bash and `[a` in ksh93 and dash, where
 		// `${w#[}` takes the `[` in bash and in ksh93 alike.
-		askBracketAfterSub: r.bracketAfterSubPolicy,
+		askBracketAfterSub: r.bracketAfterSubAsker(),
 		// And whether a bracket the member reading cannot close is read as
 		// an empty set rather than left open. Resolved here rather than
 		// inside the matcher because it is the same answer the scan that

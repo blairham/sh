@@ -121,6 +121,11 @@ var constructAllocBounds = map[string]struct{ objects, bytes float64 }{
 	// the dialect shares, then 5.4 objects and 319 bytes while every call
 	// allocated its scope (#6373).
 	"function": {5, 150},
+	// `x=${s#*/}`: 6.3 objects and 88 bytes an iteration while every trim
+	// bound a method value, let its refusal flag escape and copied a
+	// one-span word through a strings.Builder twice, then 2.3 objects — 48
+	// bytes on macOS and 72 on the Linux runner.
+	"trim": {3, 80},
 }
 
 // TestConstructAllocations holds the rows that #6353 brought down to what they

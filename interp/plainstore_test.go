@@ -37,6 +37,14 @@ f() { local l; l=in; p "$l"; g=global; local d; d=v; p "$d"; }; f; p "$l" "$g"
 OPTIND=3; p "$OPTIND"; PATH=$PATH; IFS=:; v=a:b; p $v; unset IFS
 HOME=/h; t=~; p "$t"; e=a=b; p "$e"; q='a b'; p "$q"; z=$'t\tt'; p "$z"
 (set -u; w=$nosuch2; echo "w=$w"); echo "<$?>"
+tr=tq/zv; x=${tr#*/}; p "$x"; x=${tr%%/*}; p "$x"; x=${tr##*[/]}; p "$x"; x=${tr%"/zv"}; p "$x"
+command eval 'ro=${tr#t}'; echo "<$?>"; p "$ro"
+command eval 'typeset -i n2; e2=1+2; n2=${e2#0}'; p "$n2"
+command eval 'typeset -u up2; up2=${tr#t}'; p "$up2"
+command eval 'typeset -n ref2=tr2'; command eval 'ref2=${tr#t}'; p "$tr2"
+command eval 'a2=(1 2 3)'; a2=${tr#t}; p "$a2" "${a2[1]}"
+command eval 'arr=(x/1 y/2)'; x=${arr#*/}; p "$x"; x=${COUNT#1}; p "$x"; x=${tr#~}; p "$x"
+(set -u; w=${nosuch3#a}; echo "w=$w"); echo "<$?>"
 `
 
 // TestAPlainScalarStoreAnswersAsTheFullRoadDoes runs plainStoreScript with
@@ -68,7 +76,7 @@ func TestAPlainScalarStoreAnswersAsTheFullRoadDoes(t *testing.T) {
 			}
 			// The rows the comparison leans on, so a script that stopped
 			// early compares nothing.
-			for _, row := range []string{"[abc]\n", "[7]\n", "[ABC]\n", "[abc]\n", "ex=exported\n", "[in]\n", "[back]\n", "[3]\n", "[/h]\n", "[a=b]\n", "[a b]\n"} {
+			for _, row := range []string{"[abc]\n", "[7]\n", "[ABC]\n", "[abc]\n", "ex=exported\n", "[in]\n", "[back]\n", "[3]\n", "[/h]\n", "[a=b]\n", "[a b]\n", "[zv]\n", "[tq]\n", "[Q/ZV]\n"} {
 				if !strings.Contains(full, row) {
 					t.Errorf("the script did not reach %q:\n%s", row, full)
 				}
@@ -103,22 +111,31 @@ func TestThePlainScalarStoreIsReached(t *testing.T) {
 	}
 	run("plain=1; y=abc; readonly ro=1; typeset -i n; a=(1 2)")
 	for src, want := range map[string]bool{
-		"plain=":     true,
-		"plain=2":    true,
-		"fresh=x":    true,
-		"plain=$y":   true,
-		"plain='q'":  true,
-		"plain=a=b":  false,
-		"plain=~":    false,
-		"plain=$(:)": false,
-		"plain=a$y":  false,
-		"plain+=x":   false,
-		"ro=2":       false,
-		"n=3":        false,
-		"a=x":        false,
-		"COUNT=1":    false,
-		"PATH=x":     false,
-		"OPTIND=1":   false,
+		"plain=":           true,
+		"plain=2":          true,
+		"fresh=x":          true,
+		"plain=$y":         true,
+		"plain=${y#a}":     true,
+		"plain=${y%%*c}":   true,
+		"plain=${y#'a'}":   true,
+		"plain=\"${y#a}\"": false,
+		"plain=${y#~}":     false,
+		"plain=${y#$y}":    false,
+		"plain=${y:-a}":    false,
+		"plain=${a#1}":     false,
+		"plain=${y[1]#a}":  false,
+		"plain='q'":        true,
+		"plain=a=b":        false,
+		"plain=~":          false,
+		"plain=$(:)":       false,
+		"plain=a$y":        false,
+		"plain+=x":         false,
+		"ro=2":             false,
+		"n=3":              false,
+		"a=x":              false,
+		"COUNT=1":          false,
+		"PATH=x":           false,
+		"OPTIND=1":         false,
 	} {
 		if got := StoresAPlainScalarForTest(r, assign(src)); got != want {
 			t.Errorf("%s: the plain store answers %v, want %v", src, got, want)

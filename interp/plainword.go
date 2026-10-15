@@ -119,8 +119,7 @@ var plainParamShortcut = true
 // plainParamValue is plainParamWord without the question about IFS, which is
 // the whole of it where the word is not split: an assignment's value.
 func (r *Runner) plainParamValue(w *syntax.Word) (string, bool) {
-	if !plainParamShortcut || w == nil || len(w.Spans) != 1 || r.splitWordLiterals.on || r.shFileExpansion || r.ctl == controlExit ||
-		r.disciplined != nil {
+	if !plainParamShortcut || w == nil || len(w.Spans) != 1 || !r.readsAreOnlyReads() {
 		return "", false
 	}
 	s := &w.Spans[0]
@@ -138,13 +137,30 @@ func (r *Runner) plainParamValue(w *syntax.Word) (string, bool) {
 	return v, true
 }
 
+// readsAreOnlyReads reports whether reading an ordinary scalar's text is
+// all a read does in the state the runner is in: no literal is being split
+// by an operand, `shfileexpansion` is not reordering the passes, the shell is
+// not on its way out, and no discipline is defined that a read could run.
+// plainParamValue and plainTrimOf share it, so the two shortcuts cannot come
+// to disagree about when a read is only a read.
+func (r *Runner) readsAreOnlyReads() bool {
+	return !r.splitWordLiterals.on && !r.shFileExpansion && r.ctl != controlExit && r.disciplined == nil
+}
+
 // bareNameOnly reports whether a parameter expansion is a name and nothing
 // else: no subscript, operator, flag, modifier, nesting or indirection, and a
 // name that is an identifier rather than a special or positional parameter.
 func bareNameOnly(e *syntax.ParamExpr) bool {
-	if e == nil || e.Index != nil || e.BareIndexText != nil || e.BareIndexUnclosed ||
+	return e != nil && e.Op == syntax.ParamNone && e.Arg == nil && bareApartFromTheOperator(e)
+}
+
+// bareApartFromTheOperator is bareNameOnly's list with the operator and its
+// operand left out, so the one other shape that admits an operator — a trim,
+// see plainTrimOf — is decided by the same list rather than a copy of it.
+func bareApartFromTheOperator(e *syntax.ParamExpr) bool {
+	if e.Index != nil || e.BareIndexText != nil || e.BareIndexUnclosed ||
 		e.Length || e.Indirect || e.Prefix != 0 || e.Member != "" || e.Inner != nil ||
-		e.Op != syntax.ParamNone || e.Arg != nil || e.Arg2 != nil || e.OperandUnreadable != nil ||
+		e.Arg2 != nil || e.OperandUnreadable != nil ||
 		e.RawTail != "" || e.Transform != 0 || e.HasFlags || e.QuoteModifier != 0 ||
 		e.IndexFlags != nil || e.IndexRange != nil || e.IndexDots != nil || len(e.Leading) > 0 ||
 		e.TildeFlags != 0 || e.SplitFlags != 0 || e.RcExpandFlags != 0 || e.SetTest ||

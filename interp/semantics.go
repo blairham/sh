@@ -37144,6 +37144,16 @@ func (r *Runner) bracketAfterSubPolicy() BracketPolicy {
 	return p
 }
 
+// bracketAfterSubAsker is bracketAfterSubPolicy as a func value, bound once
+// per Runner rather than once per pattern. See Runner.askBracketAfterSub.
+func (r *Runner) bracketAfterSubAsker() func() BracketPolicy {
+	if r.askOwner != r {
+		r.askBracketAfterSub = r.bracketAfterSubPolicy
+		r.askOwner = r
+	}
+	return r.askBracketAfterSub
+}
+
 // UnsetArraySpanPolicy is what `unset` does to the span of elements a
 // subscript names — `a[@]` and `a[*]`, which every shell measured treats
 // identically, and `a[3]`, which names a span of one.
@@ -38988,7 +38998,7 @@ func (r *Runner) matchPatternChecked(pattern, s string, surface patternSurface, 
 		// sub-expression left open is something only the matcher's own scan
 		// can spot, and asking up front would either put the axis to a
 		// pattern that never poses it or need a second scan to decide.
-		askBracketAfterSub: r.bracketAfterSubPolicy,
+		askBracketAfterSub: r.bracketAfterSubAsker(),
 		emptyBracket:       r.emptyBracketCompiles(),
 	}
 	// The locale narrows the fold, and only a fold there is asks: the helper

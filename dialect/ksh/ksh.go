@@ -729,6 +729,10 @@ func Dialect() syntax.Dialect {
 	// Measured — this shell closes the descriptor the element holds, as bash
 	// does and zsh does not.
 	d.FdVariableSubscript = true
+	// And any brace word there, refused at run time when it is not a name:
+	// `echo {a-b}</dev/null` is `a-b: invalid variable name` (#6522). See
+	// syntax.Dialect.FdVariableAnyBraceWord.
+	d.FdVariableAnyBraceWord = true
 	return d
 }
 
@@ -4604,6 +4608,11 @@ func Semantics() interp.Semantics {
 	// 2026-10-15 (#6521). See
 	// interp.Semantics.FdVariableReachesTheProgramsEnvironment.
 	s.FdVariableReachesTheProgramsEnvironment = interp.Yes
+	// And a brace word that is not a name is refused before anything else
+	// about the redirection: `echo {a-b}</nonexist` is `a-b: invalid
+	// variable name` at 1, not the open's failure, measured 2026-10-15
+	// (#6522). See interp.Semantics.FdVariableBadName.
+	s.FdVariableBadName = interp.FdVariableBadNameFailsTheRedirection
 	// `exec 3<<X` puts the body in a temporary file here, so `/dev/fd/3` is
 	// a regular file and the descriptor is seekable: `head -1 <&3` reads a
 	// block and seeks back, and the `cat <&3` after it still gets the rest of

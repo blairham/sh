@@ -8475,6 +8475,24 @@ type Dialect struct {
 	// the arithmetic, so no answer here is everyone's.
 	FdVariableSubscript bool
 
+	// FdVariableAnyBraceWord takes *any* brace word directly before a
+	// redirection operator as a descriptor variable, name or not, and leaves
+	// it to the runtime to refuse one that is not a name (#6522).
+	//
+	// ksh93 alone. Measured 2026-10-15, `echo {W}</dev/null; echo "st=$?"`
+	// on ksh93u+ 2012-08-01, for W among `1`, `01`, `1a`, `a-b`, `a*`, `$x`,
+	// `a/b`, `-`, `@`, `?`, `a=b`, `a:b`, `a+`, `x"y"`, `'a'`, `a\b`,
+	// `a..b`, `1..2`: every one is `ksh: W: invalid variable name` at 1, with
+	// W written exactly as it stands between the braces — the `$`, the
+	// quotes and the backslash unexpanded — and the command not run. bash
+	// and zsh read the same text as an ordinary word (zsh's `{1a}` is the
+	// one exception, and FdVariablePositional's).
+	//
+	// What it does not take: a word with a comma, which is brace expansion
+	// there as everywhere (`{a,b}</dev/null` echoes `a b`), an empty `{}`,
+	// and anything a blank or an operator would end.
+	FdVariableAnyBraceWord bool
+
 	// CloseQuotesAtEOF is the set of routes on which an unterminated `'`,
 	// `"` or backquote ends at the end of input as if the closing mark were
 	// there, instead of the parse being refused: `echo "abc` prints abc.

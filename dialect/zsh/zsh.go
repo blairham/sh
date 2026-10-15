@@ -5362,6 +5362,11 @@ func Semantics() interp.Semantics {
 	// 2026-10-15 (#6521). See
 	// interp.Semantics.FdVariableReachesTheProgramsEnvironment.
 	s.FdVariableReachesTheProgramsEnvironment = interp.Yes
+	// And a digit-led word that is not all digits is refused at the store,
+	// fatally: `echo {1a}</dev/null; echo st=$?` writes `not an identifier:
+	// 1a` and ends the shell at 1, measured 2026-10-15 (#6522). See
+	// interp.Semantics.FdVariableBadName.
+	s.FdVariableBadName = interp.FdVariableBadNameIsAFatalStoreError
 	// unanswered FdVariableOnASubshellIsTheSubshells: a `{name}` behind
 	// parentheses never parses here — `( : ) {v}</dev/null` is ``parse error
 	// near `{'`` in zsh 5.9.2 under every emulation, measured 2026-10-15
@@ -6413,6 +6418,8 @@ func Diagnostics() interp.Diagnostics {
 		// /dev/null` on Linux, measured 2026-10-15 (#6523). The lowercase is
 		// LowercaseReason's, applied where the line is written.
 		FdVariableReadonlyReadOpen: errnoText(0),
+		// `{1a}>f`, which this grammar lexes and the store refuses (#6522).
+		FdVariableBadName:          "not an identifier: %[1]s",
 		FdVariableWouldBeClobbered: "can't clobber parameter %[1]s containing file descriptor %[2]d",
 		// `mkdir dir; v=$(<dir)` — the read after a successful open, which
 		// this shell alone words. The name is the word as it expanded, not

@@ -344,6 +344,13 @@ func (r *Runner) applyRedirList(ctx context.Context, rs []*syntax.Redirect, comp
 				fd = n
 			}
 		}
+		// A brace word that is not a name, in the one grammar that takes
+		// any: refused here, ahead of every form of the redirection, in
+		// the dialect that refuses it first. See fdvarbadname.go.
+		if fdVar != "" && r.fdVarBadNameFailsTheRedirection(fdVar) {
+			r.redirErr = true
+			return closers, nil
+		}
 		// `<#` and `>#` move where a descriptor next reads or writes. No
 		// file is opened, closed or duplicated, so this is settled before
 		// anything below goes looking for one — and before the gate, which
@@ -2707,6 +2714,11 @@ func (r *Runner) fdVarValue(ref string) (string, bool) {
 // one dialect that adds a line after a frozen name's refusal adds it only
 // there. See Diagnostics.FdVariableReadonlyReadOpen.
 func (r *Runner) setFdVar(ref, value, readTarget string) bool {
+	// A name nobody could have, in the dialect that refuses it at the
+	// store rather than first. See fdvarbadname.go.
+	if r.fdVarBadNameRefusedAtTheStore(ref) {
+		return false
+	}
 	if n, ok := positionalFdVar(ref); ok {
 		// A positional parameter receives the number, which is how a
 		// function that was handed a descriptor hands back the one the

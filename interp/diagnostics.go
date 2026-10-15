@@ -2272,6 +2272,18 @@ type Diagnostics struct {
 	// target. Empty writes nothing, which is every other shell.
 	FdVariableReadonlyReadOpen string
 
+	// FdVariableBadName is the refusal of a `{word}` redirection whose word
+	// is not a name. One verb: the word as it stands between the braces,
+	// unexpanded (#6522).
+	//
+	//	ksh93u+     a-b: invalid variable name
+	//	zsh 5.9.2   not an identifier: 1a
+	//
+	// What the refusal costs is Semantics.FdVariableBadName's. Empty is the
+	// substrate's own wording, `%[1]s: invalid variable name`; bash and the
+	// core never lex such a word, so they never write it.
+	FdVariableBadName string
+
 	// FdVariableReadonlyClose is the same refusal on the other side: `exec
 	// {name}>&-` closing the descriptor a frozen name holds. One verb: the
 	// name.

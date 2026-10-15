@@ -121,9 +121,12 @@ func runFdVarIn(t *testing.T, d syntax.Dialect, dir string, tweak func(*Semantic
 		tweak(&sem)
 	}
 	out := &strings.Builder{}
+	// The grammar goes to the runner as well as to the parser, as a front
+	// end hands it: what the runtime makes of a `{word}` the grammar took —
+	// a positional, say — is read from it. See Runner.fdVarNameIsAName.
 	r := newTestRunner(t, &Runner{
 		Semantics: &sem, Diagnostics: &Diagnostics{}, Name: "sh", Dir: dir,
-		Stdout: out, Stderr: &strings.Builder{},
+		Stdout: out, Stderr: &strings.Builder{}, Dialect: &d,
 	}).SeedVars(map[string]string{"PATH": lookBinPath(t)})
 	if _, err := r.Run(context.Background(), f); err != nil {
 		t.Fatal(err)

@@ -3369,6 +3369,10 @@ type Runner struct {
 	// failedExpansionStatus, for an `always` half to read: the error still
 	// ends the construct with the fatal status. See tryClause.
 	fatalSetNoStatus bool
+	// inABareAssignment says the assignments being stored are a command of
+	// their own, with no command word behind them. See
+	// Runner.paramErrorInABareAssignment.
+	inABareAssignment bool
 	// liveMarksAtHead says that expansion opens its word. See headTokenMark.
 	liveMarksAtHead bool
 	// expandingRawText says the expansion running is part of a text read as
@@ -5879,6 +5883,10 @@ func (r *Runner) clone() *Runner {
 	r.streamLocks()
 	c := *r
 	c.inSubshell = true
+	// A copy is running its own commands and not the parent's assignment,
+	// whatever the parent was doing when it made the copy: `x=$(echo
+	// ${q?b})` fails a command's word. See Runner.paramErrorInABareAssignment.
+	c.inABareAssignment = false
 	// The kept dialect moves are this runner's: a map shared with a clone
 	// would be written from two goroutines. See dialectmove.go.
 	c.dialectMoves = nil
@@ -6875,6 +6883,32 @@ func (r *Runner) fatalParamError(format string, args ...any) {
 	}
 	r.fatalExpansion(format, args...)
 	r.abandon, r.errexitStopped = abandonParamError, false
+	r.paramErrorInABareAssignment()
+}
+
+// paramErrorInABareAssignment gives `${x?word}` the status the dialect has
+// for it in a bare assignment at a prompt, where there is one.
+//
+// zsh alone, and only interactively: measured 2026-10-15 on zsh 5.9.2 run
+// `-f -i` through a terminal and from standard input, `x=${q?b}` leaves 5,
+// whatever `$?` held before it (`true` or `(exit 7)` in front), and so do
+// `x=${q:?}`, `a[1]=${q?b}`, `x+=${q?b}`, `y=2 x=${q?b}`, `x=$((${q?b}))`, the
+// same inside a function, an `if`, `&&`, a `case` arm, `{ … } always { … }`
+// (whose half reads 5), a subshell, and an `eval`. Where it is not 5:
+// `x=$((1/0))` and `set -u; x=$nope` are 1, so it is this failure and not any
+// failed value; `x=${q?b} true` and `a=(${q?b})` are 1, so it is the bare
+// scalar store and not any assignment; `x=$((1/0)) y=${q?b}` is 1, so it is
+// the failure that stopped the list; a declaration's `export x=${q?b}` keeps
+// `$?`; and inside a loop it is 1, the rule a loop already puts on a
+// failure's status (see Runner.callExpr's words rule). bash 5.3.20 and
+// ksh93u+ leave 1 in every row, and every route that is not interactive
+// ends the shell at 1 (#6580).
+func (r *Runner) paramErrorInABareAssignment() {
+	n := r.diag().ParamErrorInABareAssignmentStatusAtAPrompt
+	if n == 0 || !r.Interactive || !r.inABareAssignment || r.loopDepth != 0 {
+		return
+	}
+	r.status = n
 }
 
 // fatalExpansionQuiet is the same for a failure that has already reported
@@ -12551,6 +12585,20 @@ func (r *Runner) failedSubscript(format string, args ...any) {
 func (r *Runner) setFatalStatus() {
 	// A declaration's words and a `case`'s, in the dialect where a failed
 	// expansion there leaves `$?` alone. See Runner.failedExpansionStatus.
+	if r.Interactive && r.loopDepth != 0 &&
+		(r.failedExpansionStatus == failedExpansionKeepsTheStatus ||
+			r.failedExpansionStatus == failedExpansionLeavesZero) {
+		// Not at a prompt inside a loop, however far in, where the failure
+		// sets the fatal status whatever `$?` held — the rule
+		// Runner.callExpr's words already follow. Measured 2026-10-15 on
+		// zsh 5.9.2 run `-f -i`: `(exit 7); for i in 1; do export
+		// x=$((1/0)); done` leaves 1, and so do `true` in front, a `case`
+		// pattern, and a function doing it called from the body. From a
+		// file the same loop keeps 7 at the failure, which an `always` half
+		// reads (#6580).
+		r.status = r.fatalStatus()
+		return
+	}
 	switch r.failedExpansionStatus {
 	case failedExpansionKeepsTheStatus:
 		if r.status == 0 && r.fatalExitTurnsZeroToFailure() {
@@ -12599,6 +12647,16 @@ func (r *Runner) setFatalStatus() {
 // subshell ends on the status it left. The corpus row is
 // case/an-unset-subject-under-u-keeps-its-status, read from a file.
 func (r *Runner) fatalExitTurnsZeroToFailure() bool {
+	// Not an interactive shell, which does not end at all: the error costs
+	// the line and the next one runs with `$?` as the failure left it.
+	// Measured 2026-10-15 on zsh 5.9.2 run `-f -i` through a terminal and
+	// from standard input: `true` then `export x=$((1/0))` then `echo $?`
+	// writes 0, as do `local` in a function and a `case` pattern, and
+	// `zsh -f -i script` carries on past the line at 0 too. It was 1 here
+	// (#6580).
+	if r.Interactive {
+		return false
+	}
 	return !r.inSubshell && (r.Route == RouteScriptFile || r.Route == RouteStandardInput)
 }
 
@@ -15956,7 +16014,10 @@ func (r *Runner) storeTheAssignmentsAlone(ctx context.Context, c *syntax.SimpleC
 	// that a hook fired by the *previous* command cannot decide this
 	// one's status.
 	r.disciplineStatusSet = false
+	bareBefore := r.inABareAssignment
+	r.inABareAssignment = true
 	r.assignAll(ctx, c.Assigns)
+	r.inABareAssignment = bareBefore
 	if r.ctl == controlExit || r.ctl == controlAbandon {
 		// A readonly reassignment is fatal in three of the four shells
 		// and abandons the statement in the fourth. Zeroing the status

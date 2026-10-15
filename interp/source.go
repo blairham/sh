@@ -362,6 +362,28 @@ func (r *Runner) reportBorrowedParseFailure(err error, s sourced, src string) {
 		r.errf("%s", d.Report(r.name(), line, d.ParseFailure(err)+"\n"))
 		return
 	}
+	source := s.sourceName(*d)
+	if s.eval && !r.EvalTextHasALocationOfItsOwn() {
+		// Text that is not a place of its own is refused under the caller's
+		// name — the script, the sourced file, the function or the shell —
+		// where a run-time failure inside it is located too. **Only the name
+		// moves**: the line stays the one inside the text, where a run-time
+		// failure would carry the caller's. Measured 2026-10-15 on zsh 5.9.2
+		// (`-f`), `unsetopt evallineno` on line 2 and the `eval` on line 4:
+		//
+		//	-c, eval 'echo )'                 zsh:1: parse error near `)'
+		//	-c, eval $'echo a\necho )'        zsh:2: …
+		//	-c, eval 'nosuchcmd' (control)    zsh:4: command not found
+		//	script file ./s.zsh               ./s.zsh:2: …
+		//	a file `.` read, path given       <that path>:1: …
+		//	inside f() { eval 'echo )'; }     f:1: …
+		//	standard input                    zsh: … (no line)
+		//	`setopt evallineno` (control)     (eval):1: …
+		//
+		// `emulate sh`, `ksh` and `csh` each turn the option off, which is
+		// how this was found (#6540). See Runner.EvalTextHasALocationOfItsOwn.
+		source, _, _ = r.locationNameAndLine(true)
+	}
 	if d.BorrowedTextRendersTheCallStack {
 		// The chain, and then the innermost text's name with no location
 		// after it: the message this shell writes already carries `at line
@@ -383,10 +405,10 @@ func (r *Runner) reportBorrowedParseFailure(err error, s sourced, src string) {
 			if bodyLine < 0 {
 				bodyLine = line
 			}
-			r.errf("%s%s\n", lead, d.SourceReport(s.naming(*d), r.name(), s.sourceName(*d),
+			r.errf("%s%s\n", lead, d.SourceReport(s.naming(*d), r.name(), source,
 				bodyLine+r.lineBase+r.lineOrigin, d.ParseFailure(body)))
 		}
-		r.errf("%s%s\n", lead, d.SourceReport(s.naming(*d), r.name(), s.sourceName(*d),
+		r.errf("%s%s\n", lead, d.SourceReport(s.naming(*d), r.name(), source,
 			line, d.ParseFailure(err)))
 	}
 	// And the offending line quoted back, for the dialect that writes
@@ -398,7 +420,7 @@ func (r *Runner) reportBorrowedParseFailure(err error, s sourced, src string) {
 		// the quote. The same number for both is right only where the text
 		// numbers itself from one, and wrong in exactly the dialects the line
 		// above shifts (#3194).
-		if echo := d.SourceEcho(s.naming(*d), r.name(), s.sourceName(*d), line, own, err, src); echo != "" {
+		if echo := d.SourceEcho(s.naming(*d), r.name(), source, line, own, err, src); echo != "" {
 			r.errf("%s%s", lead, echo)
 		}
 	}

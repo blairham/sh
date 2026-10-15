@@ -216,6 +216,17 @@ func (r *Runner) expandPrefixTraceValues(assigns []*syntax.Assign) {
 	// routes expand as they store.
 	var held heldPrefix
 	defer held.release(r)
+	r.expandPrefixTraceValuesHolding(assigns, &held)
+}
+
+// expandPrefixTraceValuesHolding is expandPrefixTraceValues for a caller that
+// walks the prefix an entry at a time and so owns what is held: the two
+// columns that write a trace word as each value expands called the pass once
+// per entry, and each call put its entry back before the next one expanded.
+// Measured 2026-10-15 from `-c` under `env -i PATH=/usr/bin:/bin`, `set -x;
+// x=1 y=$x true` writes `y=1` in ksh93u+ and zsh 5.9.2, where this shell
+// wrote `y=”` and handed the command an empty `y` (#6547).
+func (r *Runner) expandPrefixTraceValuesHolding(assigns []*syntax.Assign, held *heldPrefix) {
 	for _, a := range assigns {
 		if a.Operand {
 			continue
@@ -258,9 +269,7 @@ func (r *Runner) expandPrefixTraceValues(assigns []*syntax.Assign) {
 		// lookup reads them as a pair, and an assignment recorded before its
 		// value would be found with nothing beside it.
 		joined := r.recordPrefixTraceValue(a, r.prefixExpansion(a))
-		if name, ok := r.prefixHoldableName(a); ok {
-			held.hold(r, name, joined)
-		}
+		r.holdPrefixEntry(held, a, joined)
 	}
 }
 
@@ -311,22 +320,31 @@ func (r *Runner) prefixTraceWords(assigns []*syntax.Assign, d Diagnostics) []str
 		if !ok {
 			continue
 		}
+		orig := a
+		if _, isArray := r.prefixArrayLiteral(a); !isArray && a.IsArray && a.Index == nil && len(a.Members) == 0 {
+			// An array literal read as its text is a scalar, and is written
+			// as one: measured 2026-10-15 on bash 5.3.20, `set -x; x=(a
+			// $(echo b)) true` is `+ x='(a b)'` (#6547).
+			plain := *a
+			plain.IsArray, plain.Elems = false, nil
+			a = &plain
+		}
 		if a.Append && d.TracePrefixAppendIsTheJoinedValue {
 			// One column writes an appending prefix as the assignment it
 			// came to rather than as the assignment it was — see the field.
 			// The joined value as it was recorded, never joined again: by
 			// the time the ordered walk writes this line the name already
 			// holds the join (#4431).
-			joined, ok := r.prefixTraceJoin(a)
+			joined, ok := r.prefixTraceJoin(orig)
 			if !ok {
-				joined = r.prefixJoined(a, value)
+				joined = r.prefixJoined(orig, value)
 			}
 			plain := *a
 			plain.Append = false
-			words = append(words, r.traceAssign(&plain, joined, r.prefixGlobTraced(a), d))
+			words = append(words, r.traceAssign(&plain, joined, r.prefixGlobTraced(orig), d))
 			continue
 		}
-		words = append(words, r.traceAssign(a, value, r.prefixGlobTraced(a), d))
+		words = append(words, r.traceAssign(a, value, r.prefixGlobTraced(orig), d))
 	}
 	return words
 }

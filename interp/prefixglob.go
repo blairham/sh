@@ -62,9 +62,18 @@ import "github.com/blairham/sh/syntax"
 // reasons for: a prefix is one, two or three assignments, so the scan is
 // shorter than hashing a pointer, and a map on the Runner is a *table* every
 // clone then has to own.
+//
+// An array literal written as a prefix is held here too, in the dialects that
+// read it as an array: elems is what its elements expanded to and literal says
+// which of the two this entry is. One record rather than two, because both are
+// "this prefix is a value the text alone does not say", both are dropped at
+// the end of the command, and both are an array no child's environment can
+// carry (#6547).
 type prefixGlobMatch struct {
-	assign *syntax.Assign
-	fields []string
+	assign  *syntax.Assign
+	fields  []string
+	elems   []literalElem
+	literal bool
 }
 
 // prefixAssignValue is a prefix assignment's own value, expanded once.
@@ -81,8 +90,7 @@ func (r *Runner) prefixAssignValue(a *syntax.Assign) string {
 	// interp/prefixfailurelocation.go.
 	defer r.speakForAPrefixValue()()
 	if a.IsArray && a.Index == nil && len(a.Members) == 0 {
-		r.expandPrefixArrayLiteral(a)
-		return ""
+		return r.expandPrefixArrayLiteral(a)
 	}
 	value, fields, globbed := r.expandScalarAssignValue(a.Value)
 	if globbed {
@@ -100,17 +108,34 @@ func (r *Runner) prefixAssignValue(a *syntax.Assign) string {
 // is not the same answer as "this prefix never globbed".
 func (r *Runner) prefixGlobFields(a *syntax.Assign) ([]string, bool) {
 	for _, m := range r.prefixGlobMatches {
-		if m.assign == a {
+		if m.assign == a && !m.literal {
 			return m.fields, true
 		}
 	}
 	return nil, false
 }
 
-// prefixGlobbedToAnArray reports whether this prefix's value matched more
-// than one name, which is what makes the entry an array — and an array is
-// what no child's environment can carry.
-func (r *Runner) prefixGlobbedToAnArray(a *syntax.Assign) bool {
+// prefixArrayLiteral is what this prefix's array literal expanded to, in the
+// dialects that read one as an array, and whether it was read that way.
+func (r *Runner) prefixArrayLiteral(a *syntax.Assign) ([]literalElem, bool) {
+	for _, m := range r.prefixGlobMatches {
+		if m.assign == a && m.literal {
+			return m.elems, true
+		}
+	}
+	return nil, false
+}
+
+// prefixStoresAnArray reports whether this prefix puts an **array** under its
+// name: a value that matched more than one name, or an array literal read as
+// the array it spells. An array is what no child's environment can carry, and
+// what no export attribute goes on — measured 2026-10-15 on zsh 5.9.2,
+// `export b=old; f(){ typeset -p b; }; b=(x y) f` lists `typeset -g -a b=( x
+// y )`, the attribute gone, where `b=z f` lists it exported (#6547).
+func (r *Runner) prefixStoresAnArray(a *syntax.Assign) bool {
+	if _, ok := r.prefixArrayLiteral(a); ok {
+		return true
+	}
 	fields, ok := r.prefixGlobFields(a)
 	return ok && len(fields) > 1
 }
@@ -154,6 +179,12 @@ func (r *Runner) storeGlobbedPrefix(a *syntax.Assign, fields []string) {
 // rendering the statement form reaches, and reached the same way. See
 // Runner.traceAssign.
 func (r *Runner) prefixGlobTraced(a *syntax.Assign) *expandedAssign {
+	if elems, ok := r.prefixArrayLiteral(a); ok {
+		// What the elements came to, for the columns whose trace writes
+		// that: `set -x; x=(a $(echo b)) true` is `x=( a b )` in zsh 5.9.2
+		// and ksh93u+, measured 2026-10-15 (#6547).
+		return &expandedAssign{assign: a, elems: elems, elemsSet: true}
+	}
 	fields, ok := r.prefixGlobFields(a)
 	if !ok {
 		return nil
@@ -195,8 +226,8 @@ func withoutPrefixArrayNames(env, names []string) []string {
 	return kept
 }
 
-// expandPrefixArrayLiteral expands an array literal written as a prefix, for
-// what its elements do, and keeps nothing it built.
+// expandPrefixArrayLiteral expands an array literal written as a prefix and
+// hands back the scalar the routes carry for it.
 //
 // **The elements are expanded in every shell that reads the literal there**,
 // refused name or not. Measured 2026-10-15 from `-c` and from a script file
@@ -208,17 +239,54 @@ func withoutPrefixArrayNames(env, names []string) []string {
 //	HOME=($(echo s >&2)) true                      zsh: `s`, then the array sentence
 //
 // The value read for a literal was its scalar text, which a literal does not
-// have, so no substitution inside the parentheses ever ran — the refused
-// rows lost the substitution the scalar spelling of the same row keeps
-// (#6512). Whether the elements are expanded at all for a refused name is
-// still Semantics.FrozenPrefixIsCheckedBeforeItsValue's to say: every route
-// that skips a frozen name's value skips it before reaching here.
+// have, so no substitution inside the parentheses ever ran (#6512). Whether
+// the elements are expanded at all for a refused name is still
+// Semantics.FrozenPrefixIsCheckedBeforeItsValue's to say: every route that
+// skips a frozen name's value skips it before reaching here.
 //
-// Through literalElems, which is how every literal's elements are read, so
-// splitting, globbing and a failed expansion are the statement form's own.
-// The scalar this hands back is the empty one the routes already handed on:
-// storing an array prefix as an array is a different defect, and this is
-// only the half that expands.
-func (r *Runner) expandPrefixArrayLiteral(a *syntax.Assign) {
-	_, _ = r.literalElems(a.Elems, r.literalShapeReadsSubscripts(a.Elems), false)
+// **What the prefix stores** is Semantics.PrefixArrayLiteralIsAnArray's. An
+// array is expanded through literalElems, which is how every literal's
+// elements are read, and held for the store and the trace — the scalar handed
+// back is never stored. The text is a word of its own, made of the elements'
+// spans with a space between each and the parentheses around them, expanded
+// as an assignment's value is: nothing in it is split or globbed, and a
+// tilde or a brace at the front of an element is not at the front of the word
+// (#6547).
+func (r *Runner) expandPrefixArrayLiteral(a *syntax.Assign) string {
+	if !r.ask(r.sem().PrefixArrayLiteralIsAnArray,
+		"an array literal written as an assignment prefix being an array") {
+		if r.unspecified {
+			return ""
+		}
+		return r.expandAssignValue(prefixArrayLiteralText(a))
+	}
+	elems, ok := r.literalElems(a.Elems, r.literalShapeReadsSubscripts(a.Elems), false)
+	if !ok {
+		return ""
+	}
+	r.prefixGlobMatches = append(r.prefixGlobMatches,
+		prefixGlobMatch{assign: a, elems: elems, literal: true})
+	return ""
+}
+
+// prefixArrayLiteralText is the word an array literal is read as where it is
+// read as its text: `(`, each element's spans with a space between them, and
+// `)`. The three added spans are quoted so that nothing in them is read: the
+// parenthesis at the front is what keeps an element's tilde from being the
+// start of the value.
+func prefixArrayLiteralText(a *syntax.Assign) *syntax.Word {
+	quoted := func(text string) syntax.Span {
+		return syntax.Span{Kind: syntax.Literal, Quoting: syntax.SingleQuoted, Value: text, Pos: a.Pos()}
+	}
+	spans := []syntax.Span{quoted("(")}
+	for i, el := range a.Elems {
+		if i > 0 {
+			spans = append(spans, quoted(" "))
+		}
+		if el.Word != nil {
+			spans = append(spans, el.Word.Spans...)
+		}
+	}
+	spans = append(spans, quoted(")"))
+	return &syntax.Word{Spans: spans, Start: a.Pos(), Stop: a.End()}
 }

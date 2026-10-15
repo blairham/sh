@@ -233,9 +233,7 @@ func (r *Runner) walkThePrefixBeforeTheRedirections(assigns []*syntax.Assign, wa
 			// ran on to `after` (#5546).
 			break
 		}
-		if name, ok := r.prefixHoldableName(a); ok {
-			held.hold(r, name, joined)
-		}
+		r.holdPrefixEntry(&held, a, joined)
 		if !traceEach {
 			continue
 		}

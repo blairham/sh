@@ -9795,6 +9795,9 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 		// a=1` and the complaint, and no `+ b=` (#5546).
 		walk := r.beginPrefixWalk(c.Assigns)
 		kind := r.prefixCommandOf(argv)
+		// Held across the entries, so each value sees the ones in front of
+		// it. See expandPrefixTraceValuesHolding.
+		var held heldPrefix
 		for i := range c.Assigns {
 			one := c.Assigns[i : i+1]
 			if a := one[0]; r.attrHas(a.Name, attrReadonly) && !a.Operand && !r.prefixRefusalApplies(kind) {
@@ -9804,12 +9807,13 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 				// `+ true`, `+ a=1` and `+ r=2` on ksh93u+ (#5546).
 				r.recordPrefixTraceValue(a, r.prefixExpansion(a))
 			}
-			r.expandPrefixTraceValues(one)
+			r.expandPrefixTraceValuesHolding(one, &held)
 			if r.prefixWalkFailed(walk) {
 				break
 			}
 			r.tracePrefixAfterTheCommand(one)
 		}
+		held.release(r)
 		if r.givesUpForAFailedPrefix(walk, r.prefixCommandOf(argv)) {
 			return nil
 		}
@@ -9989,8 +9993,12 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 				// the axis below says about a prefix the shell owns: the
 				// prefix is the call's environment, and every child the body
 				// starts is handed it. See
-				// Semantics.PrefixToAKeywordFunctionIsScopedToTheCall.
-				r.exportedPut(held, true)
+				// Semantics.PrefixToAKeywordFunctionIsScopedToTheCall. Except
+				// an array, which no export attribute goes on: measured
+				// 2026-10-15 on ksh93u+, `function f { typeset -p x;
+				// printenv x; }; x=(a b) f` lists `typeset -a x=(a b)` and
+				// the child finds no `x` (#6547).
+				r.exportedPut(held, !r.prefixStoresAnArray(a))
 				continue
 			}
 			// The export attribute for the duration, which the two readings
@@ -10006,7 +10014,12 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 			// that one that was reaches every child either way; the ksh93
 			// column is what that premise is false in.
 			answer := r.sem().PrefixToAFunctionIsExported
-			if on := r.ask(answer, "an assignment before a function being exported for the call"); on || answer == No {
+			if r.prefixStoresAnArray(a) {
+				// An array, which takes no export attribute and drops one
+				// the name had, whichever way the axis reads the prefix. See
+				// Runner.prefixStoresAnArray.
+				r.exportedPut(held, false)
+			} else if on := r.ask(answer, "an assignment before a function being exported for the call"); on || answer == No {
 				// Recorded as `false` rather than deleted, because deleting
 				// it only makes the name unspoken and an unspoken name the
 				// shell was born with is still exported. See isExported.
@@ -10247,7 +10260,12 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 			// external is the child's store. See interp/prefixdiscipline.go.
 			r.storePrefixQuietlyIfTakenBack(ctx, a, landsOn, kind.kind != prefixBeforeRegularBuiltin, fresh, takenBack)
 			held = append(held, landsOn)
-			if kind.throughCommand {
+			if r.prefixStoresAnArray(a) {
+				// An array takes no export attribute, through `command` or
+				// otherwise, and drops one the name had. See
+				// Runner.prefixStoresAnArray.
+				r.exportedPut(landsOn, false)
+			} else if kind.throughCommand {
 				// `command` is a precommand word rather than a command, so
 				// the prefix in front of it belongs to whatever it goes on
 				// to run — and when that is an external, belonging to it
@@ -10653,13 +10671,16 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 			// command up. See Runner.prefixRefusalEndsTheWalk (#6511).
 			break
 		}
-		if r.prefixGlobbedToAnArray(a) {
+		if r.prefixStoresAnArray(a) {
 			// The value was read as a pattern and matched more than one
-			// name, so the entry is an **array** — and no child's
-			// environment can carry one. Recorded rather than merely
-			// skipped, because the name has to be taken out of what the
-			// child is given: see withoutPrefixArrayNames.
+			// name, or was an array literal read as the array, so the entry
+			// is an **array** — and no child's environment can carry one.
+			// Recorded rather than merely skipped, because the name has to
+			// be taken out of what the child is given: see
+			// withoutPrefixArrayNames. Held as the array for the entries
+			// behind it all the same — see Runner.holdPrefixEntry.
 			prefixArrays = append(prefixArrays, r.prefixEntryName(a.Name))
+			r.holdPrefixEntry(&held, a, value)
 			continue
 		}
 		if prefixIsSubscripted(a) {

@@ -1320,6 +1320,36 @@ type Semantics struct {
 	// asked.
 	PrefixToAKeywordFunctionIsScopedToTheCall Answer
 
+	// PrefixArrayLiteralIsAnArray reads an array literal written as an
+	// assignment prefix — `x=(a b) cmd` — as the array it spells, for the
+	// length of the command. No reads it as a **scalar**: the elements are
+	// expanded as an assignment's value would be, joined with a space, and
+	// the parentheses kept around them.
+	//
+	// Measured 2026-10-15 from `-c` under `env -i PATH=/usr/bin:/bin`, with
+	// `f(){ typeset -p x; }` defined first:
+	//
+	//	                                 bash 5.3.20            ksh93u+                zsh 5.9.2
+	//	x=(a b) f                        declare -x x="(a b)"   typeset -a x=(a b)     typeset -g -a x=( a b )
+	//	x=(a b) printenv x               (a b)                  status 1, no x         status 1, no x
+	//	export x=old; x=(a b) printenv x (a b)                  status 1               status 1
+	//	set -x; x=(a $(echo b)) true     + x='(a b)'            + x=( a b )            x=( a b )
+	//	x=($(echo s >&2) b) f            s, x="( b)"            s, x=(b)               s, x=( b )
+	//
+	// So an array reaches no child's environment, and shadows what the shell
+	// was exporting under the name, exactly as a prefix that globbed to more
+	// than one name does. The text reading does not glob, brace-expand or
+	// tilde-expand an element (`x=(*.txt ~ {a,b})` is `(*.txt ~ {a,b})`),
+	// keeps a subscript as written with its expansions made (`i=5;
+	// x=([$i]=a)` is `([5]=a)`), and an append joins it (`x=old; x+=(a b)`
+	// is `old(a b)`).
+	//
+	// Asked only where an array literal is written as a prefix, so an
+	// ordinary prefix asks nothing.
+	//
+	// unanswered dash, ash: neither parses an array literal at all.
+	PrefixArrayLiteralIsAnArray Answer
+
 	// AssignmentPrefixMakesAFreshCell gives an assignment prefix an entry of
 	// its own — a plain scalar, holding nothing until the prefix stores into
 	// it — rather than a write over the binding the name already had. So the

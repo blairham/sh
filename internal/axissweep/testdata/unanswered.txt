@@ -219,6 +219,7 @@ ash   OneCommandStopsACommandString
 ash   OperandSubscriptQuoting
 ash   OperatorAfterTheSubscriptListingIsBad
 ash   PatternMatchWritesTheMatchRecord
+ash   PrefixArrayLiteralIsAnArray
 ash   PrefixInAWholeTableListing
 ash   PrefixListingNamesADeclaredOnlyCompound
 ash   PrefixRefusalCostsTheCommand
@@ -607,6 +608,7 @@ dash  OperandSubscriptQuoting
 dash  OperatorAfterTheSubscriptListingIsBad
 dash  PatternMatchWritesTheMatchRecord
 dash  PipefailSubstitutesTheBareSignal
+dash  PrefixArrayLiteralIsAnArray
 dash  PrefixInAWholeTableListing
 dash  PrefixListingNamesADeclaredOnlyCompound
 dash  PrefixRefusalCostsTheCommand

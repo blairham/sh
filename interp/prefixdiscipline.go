@@ -188,6 +188,22 @@ func (r *Runner) prefixStore(ctx context.Context, a *syntax.Assign, landsOn stri
 		r.withPreparedValue(ctx, &expandedAssign{assign: a, value: value})
 		return
 	}
+	if elems, ok := r.prefixArrayLiteral(a); ok {
+		// An array literal read as the array it spells, stored as the
+		// statement form stores one — the append, a subscripted element and
+		// a dialect's compound reading with it — from the elements already
+		// expanded, so a substitution in one runs once. See
+		// Semantics.PrefixArrayLiteralIsAnArray.
+		if !stores {
+			defer r.suppressDiscipline(a.Name, disciplineSet)()
+			defer r.suppressDiscipline(a.Name, disciplineAppend)()
+		}
+		if fresh {
+			r.emptyPrefixEntry(landsOn)
+		}
+		r.withPreparedValue(ctx, &expandedAssign{assign: a, elems: elems, elemsSet: true})
+		return
+	}
 	if fields, ok := r.prefixGlobFields(a); ok {
 		// The value was read as a pattern and matched — the one shell that
 		// asks for that, and only where the value was a pattern at all. The

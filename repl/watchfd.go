@@ -594,6 +594,7 @@ func (e *editor) serveDescriptor(fd int, prompt drawnPrompt) {
 	// its synchronous path — a keystroke's own widget, which comes back
 	// through runShellWidget — was right (#4413).
 	e.postdisplay = out.Postdisplay
+	e.predisplay = out.Predisplay
 	// Drawn with no pre-redraw widget, and the handler's own redraw asks for
 	// none either: measured 2026-10-04 against zsh 5.9.2, a handler whose
 	// `zle inner` appends to the line is followed by no pre-redraw at all —

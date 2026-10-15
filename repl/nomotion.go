@@ -112,7 +112,7 @@ func (e *editor) redrawWithoutMotion(prompt drawnPrompt, cols int) {
 		b.WriteString("\r")
 		b.WriteString(prompt.text)
 		b.WriteString(e.spell(hideControls(string(line)), prompt.cells, 0))
-		e.backTo(&b, prompt, line, prompt.cells+cells(line), e.pos)
+		e.backTo(&b, prompt, line, prompt.cells+cells(line), e.displayPos())
 		e.finishWithoutMotion(&b, prompt, line, cols)
 		return
 	}
@@ -131,7 +131,7 @@ func (e *editor) redrawWithoutMotion(prompt drawnPrompt, cols int) {
 			col += gone
 		}
 	}
-	e.goTo(&b, prompt, line, col, e.pos)
+	e.goTo(&b, prompt, line, col, e.displayPos())
 	e.finishWithoutMotion(&b, prompt, line, cols)
 }
 
@@ -182,7 +182,7 @@ func (e *editor) finishWithoutMotion(b *strings.Builder, prompt drawnPrompt, lin
 		prompt: prompt.text,
 		cells:  prompt.cells,
 		cols:   cols,
-		col:    prompt.cells + cells(line[:e.pos]),
+		col:    prompt.cells + cells(line[:e.displayPos()]),
 		endCol: end,
 	}
 }

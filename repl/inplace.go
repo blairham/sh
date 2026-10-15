@@ -171,7 +171,7 @@ func (e *editor) repaintInPlace(m *terminalMotion, prompt drawnPrompt, cols int)
 			}
 		}
 	}
-	to := prompt.cells + e.pos
+	to := prompt.cells + e.displayPos()
 	m.columnAsReadline(&b, col, to)
 
 	e.row = 0

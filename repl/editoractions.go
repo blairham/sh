@@ -532,6 +532,7 @@ func (e *editor) take(in Line) {
 	e.line = line
 	e.pos = min(max(in.Cursor, 0), len(e.line))
 	e.postdisplay = in.Postdisplay
+	e.predisplay = in.Predisplay
 	if in.Keys != "" && in.Keys != string(e.keyBytes) {
 		e.adoptKeys(in.Keys)
 	}
@@ -542,7 +543,7 @@ func (e *editor) give() Line {
 	if e.prebuffer != nil {
 		prebuffer = e.prebuffer()
 	}
-	return Line{Prebuffer: prebuffer, Buffer: string(e.line), Cursor: e.pos, Postdisplay: e.postdisplay, Last: e.last, ViCommand: e.viCommand, Numeric: e.keyNumeric, Keys: string(e.keyBytes), HistNo: e.histNo()}
+	return Line{Prebuffer: prebuffer, Buffer: string(e.line), Cursor: e.pos, Postdisplay: e.postdisplay, Predisplay: e.predisplay, Last: e.last, ViCommand: e.viCommand, Numeric: e.keyNumeric, Keys: string(e.keyBytes), HistNo: e.histNo()}
 }
 
 // adoptKeys makes keys an action read the ones a self-insert types.

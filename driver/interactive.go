@@ -321,23 +321,24 @@ func (sh Shell) highlighter(r *interp.Runner) repl.Highlighter {
 }
 
 // dialectHighlighter is HighlightLine bound to a runner. It is a
-// repl.BufferHighlighter, so the dialect is told where the line ends in what
-// is drawn: `region_highlight` follows the editor's edits to the line, and a
-// postdisplay after it is not one (#6412).
+// repl.BufferHighlighter, so the dialect is told where the line starts and
+// ends in what is drawn: `region_highlight` follows the editor's edits to the
+// line, and a postdisplay after it is not one (#6412); and its offsets count
+// from the line's start, past a predisplay before it (#6414).
 type dialectHighlighter struct {
 	r    *interp.Runner
-	line func(*interp.Runner, string, int) []repl.Highlight
+	line func(*interp.Runner, string, int, int) []repl.Highlight
 }
 
 // Highlight is a displayed text that is all line.
 func (h dialectHighlighter) Highlight(line string) []repl.Highlight {
-	return h.line(h.r, line, len(line))
+	return h.line(h.r, line, 0, len(line))
 }
 
-// HighlightBuffer hands the dialect the displayed text and the line's length
+// HighlightBuffer hands the dialect the displayed text and where the line is
 // in it.
-func (h dialectHighlighter) HighlightBuffer(displayed string, buffer int) []repl.Highlight {
-	return h.line(h.r, displayed, buffer)
+func (h dialectHighlighter) HighlightBuffer(displayed string, start, end int) []repl.Highlight {
+	return h.line(h.r, displayed, start, end)
 }
 
 // transformTermcap binds the dialect's termcap transformation to this runner,

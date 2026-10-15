@@ -282,6 +282,9 @@ const (
 	// what is on the screen and takes back what the widget left, so nothing
 	// here has to know when a line ended. See repl.Line.Postdisplay (#4217).
 	zlePostdisplay = ".zsh.zle.postdisplay"
+	// zlePredisplay is the same carrier for the text drawn before the line.
+	// See repl.Line.Predisplay (#6414).
+	zlePredisplay = ".zsh.zle.predisplay"
 	// zleCutBuffer is the kill `$CUTBUFFER` reads and writes for the length
 	// of a call: fetched from the editor when the call opens and handed back
 	// when it ends, and around every action the widget asks the editor for.
@@ -304,6 +307,14 @@ const (
 // opened, marked local and closed again, and three spellings of one string is
 // how one of them comes to be missed.
 const postdisplayName = "POSTDISPLAY"
+
+// predisplayName is what a widget reads the text drawn before the line under:
+// POSTDISPLAY's other half, opened, marked local and closed beside it at
+// every one of its sites. Measured 2026-10-15 against zsh 5.9.2 in a widget:
+// `${(t)PREDISPLAY}` is `scalar-local-special`, `typeset -p` writes `typeset
+// PREDISPLAY=pre:`, `unset PREDISPLAY` leaves nothing drawn and `${+…}` 0,
+// and outside a widget the name is unset (#6414).
+const predisplayName = "PREDISPLAY"
 
 // cutBufferName is the text of the last kill, as a widget reads and writes it.
 // Opened, marked local and closed beside POSTDISPLAY and for the same reason:
@@ -1816,6 +1827,15 @@ func openWidgetParameters(r *interp.Runner, opened widgetOpening) {
 	r.SetDynamicWriter(postdisplayName, func(rr *interp.Runner, value string) {
 		rr.SetVar(zlePostdisplay, value)
 	})
+	// And `PREDISPLAY`, the text drawn before the line, for the same reasons
+	// and with the same word. See predisplayName.
+	r.SetDynamic(predisplayName, func(rr *interp.Runner) string {
+		text, _ := rr.GetVar(zlePredisplay)
+		return text
+	})
+	r.SetDynamicWriter(predisplayName, func(rr *interp.Runner, value string) {
+		rr.SetVar(zlePredisplay, value)
+	})
 	// `CUTBUFFER`, the last kill, measured `scalar-local-special` the same
 	// way and writable the same way: what a widget assigns is what the next
 	// yank inserts. See repl.Actions.CutBuffer (#5916).
@@ -1848,6 +1868,7 @@ func openWidgetParameters(r *interp.Runner, opened widgetOpening) {
 			rr.SetVar(zleBuffer, string(runes[:widgetCursor(rr)]))
 		},
 		postdisplayName: func(rr *interp.Runner) { rr.SetVar(zlePostdisplay, "") },
+		predisplayName:  func(rr *interp.Runner) { rr.SetVar(zlePredisplay, "") },
 		cutBufferName:   func(rr *interp.Runner) { rr.SetVar(zleCutBuffer, "") },
 	} {
 		r.SetUnsetAction(name, empty)
@@ -1988,6 +2009,7 @@ func openWidgetParameters(r *interp.Runner, opened widgetOpening) {
 	// completion widget offering a suggestion is not something the measurement
 	// forbids.
 	r.MarkLocal(postdisplayName)
+	r.MarkLocal(predisplayName)
 	r.MarkLocal(cutBufferName)
 	// And the widget before this one, which is the call's own for the same
 	// reason: measured, `${(t)LASTWIDGET}` in a widget is
@@ -2013,6 +2035,7 @@ func closeWidgetParameters(r *interp.Runner) {
 	// closed beside it for the same reason: what a script finds between two
 	// keystrokes is nothing at all.
 	r.UnsetDynamic(postdisplayName)
+	r.UnsetDynamic(predisplayName)
 	r.UnsetDynamic(cutBufferName)
 	r.UnsetDynamic("LASTWIDGET")
 	r.UnsetDynamic("KEYMAP")
@@ -2065,6 +2088,7 @@ var widgetParameterDeclarations = map[string]interp.ProducedDeclaration{
 	"LBUFFER":           {},
 	"RBUFFER":           {},
 	postdisplayName:     {},
+	predisplayName:      {},
 	cutBufferName:       {},
 	"WIDGET":            {},
 	"LASTWIDGET":        {},
@@ -2150,6 +2174,7 @@ func setWidgetLine(r *interp.Runner, in repl.Line) {
 	// what a plugin's wrapper does: it saves the suggestion, clears it while a
 	// new one is fetched, and puts one of the two back.
 	r.SetVar(zlePostdisplay, in.Postdisplay)
+	r.SetVar(zlePredisplay, in.Predisplay)
 	// And the line's number, which an action that walks the history moves:
 	// measured 2026-10-05 against zsh 5.9.2, `zle up-history` in a widget
 	// after two commands leaves `$HISTNO` 2 (#6050).
@@ -2185,9 +2210,10 @@ func openHistNo(r *interp.Runner, actions repl.Actions, editing bool) {
 
 func widgetLine(r *interp.Runner) repl.Line {
 	post, _ := r.GetVar(zlePostdisplay)
+	pre, _ := r.GetVar(zlePredisplay)
 	keys, _ := r.GetVar(zleKeys)
 	return repl.Line{
-		Buffer: widgetBuffer(r), Cursor: widgetCursor(r), Postdisplay: post, Keys: keys,
+		Buffer: widgetBuffer(r), Cursor: widgetCursor(r), Postdisplay: post, Predisplay: pre, Keys: keys,
 		Numeric: widgetNumeric(r),
 	}
 }
@@ -2268,9 +2294,9 @@ func parseWidgetOpening(s string) (widgetOpening, bool) {
 // save and the restore must agree name for name, and the bug this exists for
 // was a state that could be cleared but not put back.
 var widgetCallState = []string{
-	zleBuffer, zleCursor, zlePostdisplay, zleWidget, zleLastWidget, zleKeymap,
-	zleNumeric, zleAccept, zleActive, zleOpened, zleKeys, zleCutBuffer,
-	zlePrebuffer,
+	zleBuffer, zleCursor, zlePostdisplay, zlePredisplay, zleWidget,
+	zleLastWidget, zleKeymap, zleNumeric, zleAccept, zleActive, zleOpened,
+	zleKeys, zleCutBuffer, zlePrebuffer,
 }
 
 // callerWidgetState is what was there before a widget call, put back when

@@ -31,12 +31,15 @@ import (
 //
 // With `PREDISPLAY="pre:"` set as well zsh draws `pre:` before the line and
 // colors the line exactly as in the first row: an element without `P` counts
-// from the buffer's start. And with the widget bound to `e` alone, `e` and
-// then `x` typed — the `x` the editor's own insert — the offsets follow that
-// insert and not the suggestion: `ESC[31m ex ESC[90m cho hello ESC[39m`.
+// from the buffer's start. One with `P` counts from the predisplay's, so
+// `"P0 4 fg=blue" "P4 5 fg=red" "1 10 fg=8"` draws `pre:` blue, the `e` red
+// and the suggestion gray (#6414, measured 2026-10-15 the same way). And with
+// the widget bound to `e` alone, `e` and then `x` typed — the `x` the editor's
+// own insert — the offsets follow that insert and not the suggestion:
+// `ESC[31m ex ESC[90m cho hello ESC[39m`.
 //
-// Read here per cell off a terminal model, from where `echo hello` starts, so
-// the rows hold whether or not a prefix is drawn before it.
+// Read here per cell off a terminal model, from where the text starts — the
+// predisplay's cells included where there is one.
 func TestASuggestionMovesNoRegionHighlight(t *testing.T) {
 	const regions = `region_highlight=("0 1 fg=red" "1 10 fg=8")`
 	widget := func(body string) string {
@@ -68,8 +71,14 @@ func TestASuggestionMovesNoRegionHighlight(t *testing.T) {
 		{
 			"with a predisplay",
 			widget(`PREDISPLAY="pre:"; POSTDISPLAY="cho hello"; `+regions) + "\nzle -N self-insert _ins",
-			"e", "echo hello",
-			[]string{"1", "8", "8", "8", "8", "8", "8", "8", "8", "8"},
+			"e", "pre:echo hello",
+			[]string{"default", "default", "default", "default", "1", "8", "8", "8", "8", "8", "8", "8", "8", "8"},
+		},
+		{
+			"P elements count from the predisplay",
+			widget(`PREDISPLAY="pre:"; POSTDISPLAY="cho hello"; region_highlight=("P0 4 fg=blue" "P4 5 fg=red" "1 10 fg=8")`) + "\nzle -N self-insert _ins",
+			"e", "pre:echo hello",
+			[]string{"4", "4", "4", "4", "1", "8", "8", "8", "8", "8", "8", "8", "8", "8"},
 		},
 		{
 			"an editor insert after the suggestion",

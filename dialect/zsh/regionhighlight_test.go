@@ -28,16 +28,16 @@ func esc(s string) string { return strings.ReplaceAll(s, "\x1b", "ESC") }
 // where it asks, which is what the editor draws.
 func drawRegions(t *testing.T, r *interp.Runner, line string) string {
 	t.Helper()
-	return drawDisplayed(t, r, line, len(line))
+	return drawDisplayed(t, r, line, 0, len(line))
 }
 
-// drawDisplayed is drawRegions for a line with buffer bytes of it the buffer
-// and the rest a postdisplay.
-func drawDisplayed(t *testing.T, r *interp.Runner, line string, buffer int) string {
+// drawDisplayed is drawRegions for a line whose bytes start to end are the
+// buffer, with a predisplay before them and a postdisplay after.
+func drawDisplayed(t *testing.T, r *interp.Runner, line string, start, end int) string {
 	t.Helper()
 	var b strings.Builder
 	at := 0
-	for _, h := range zsh.RegionHighlights(r, line, buffer) {
+	for _, h := range zsh.RegionHighlights(r, line, start, end) {
 		if !h.Point || h.Start < at || h.Start > len(line) {
 			t.Fatalf("not a point in order on the line: %+v", h)
 		}
@@ -122,7 +122,7 @@ func TestAnElementThisShellCannotDrawIsDropped(t *testing.T) {
 			if _, ok, _ := runWidget(t, r, out, "paint", repl.Line{Buffer: "abcdef"}); !ok {
 				t.Fatal("the widget did not run")
 			}
-			if runs := zsh.RegionHighlights(r, "abcdef", 6); len(runs) != 0 {
+			if runs := zsh.RegionHighlights(r, "abcdef", 0, 6); len(runs) != 0 {
 				t.Errorf("got %+v, want nothing drawn", runs)
 			}
 		})
@@ -162,7 +162,7 @@ func TestWhatASpecPaints(t *testing.T) {
 			if _, ok, _ := runWidget(t, r, out, "paint", repl.Line{Buffer: "abcdef"}); !ok {
 				t.Fatal("the widget did not run")
 			}
-			runs := zsh.RegionHighlights(r, "abcdef", 6)
+			runs := zsh.RegionHighlights(r, "abcdef", 0, 6)
 			if len(runs) != 2 || runs[0].Start != 0 || runs[1].Start != 3 {
 				t.Fatalf("got %+v, want an opening at 0 and an ending at 3", runs)
 			}
@@ -186,13 +186,68 @@ func TestASuggestionIsNotAnEdit(t *testing.T) {
 	if _, ok, _ := runWidget(t, r, out, "suggest", repl.Line{Buffer: "e", Cursor: 1}); !ok {
 		t.Fatal("the widget did not run")
 	}
-	if got, want := drawDisplayed(t, r, "echo hello", 1), "\x1b[31me\x1b[39m\x1b[90mcho hello\x1b[39m"; got != want {
+	if got, want := drawDisplayed(t, r, "echo hello", 0, 1), "\x1b[31me\x1b[39m\x1b[90mcho hello\x1b[39m"; got != want {
 		t.Fatalf("with the suggestion drawn: %s, want %s", esc(got), esc(want))
 	}
 	// Then the editor's own `x`, which is an edit, and the suggestion still
 	// after it: the insert at 1 moves both ends at 1.
-	if got, want := drawDisplayed(t, r, "excho hello", 2), "\x1b[31mex\x1b[39m\x1b[90mcho hello\x1b[39m"; got != want {
+	if got, want := drawDisplayed(t, r, "excho hello", 0, 2), "\x1b[31mex\x1b[39m\x1b[90mcho hello\x1b[39m"; got != want {
 		t.Fatalf("after a typed x: %s, want %s", esc(got), esc(want))
+	}
+}
+
+// TestAPredisplayIsCountedPastAndPCountsFromIt is #6414: an element counts
+// from the buffer's start, which a predisplay moves, and one flagged `P` counts
+// from the predisplay's own. The draws are the bytes zsh 5.9.2 wrote for this
+// widget with PREDISPLAY="pre:" and `e` typed, measured 2026-10-15 through
+// tmux's pipe-pane; repl/predisplaypty_test.go drives the geometry.
+func TestAPredisplayIsCountedPastAndPCountsFromIt(t *testing.T) {
+	for _, c := range []struct {
+		name, regions, want string
+	}{
+		{
+			"an element without P counts from the buffer",
+			`"0 1 fg=red" "1 10 fg=8"`,
+			"pre:\x1b[31me\x1b[39m\x1b[90mcho hello\x1b[39m",
+		},
+		{
+			"an element with P counts from the predisplay",
+			`"P0 4 fg=blue" "P4 5 fg=red" "1 10 fg=8"`,
+			"\x1b[34mpre:\x1b[39m\x1b[31me\x1b[39m\x1b[90mcho hello\x1b[39m",
+		},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			r, out := zleRunner(t, `
+				pre() { PREDISPLAY="pre:"; POSTDISPLAY="cho hello"; region_highlight=(`+c.regions+`); }
+				zle -N pre
+			`)
+			line, ok, _ := runWidget(t, r, out, "pre", repl.Line{Buffer: "e", Cursor: 1})
+			if !ok {
+				t.Fatal("the widget did not run")
+			}
+			if line.Predisplay != "pre:" {
+				t.Fatalf("the editor was handed predisplay %q, want %q", line.Predisplay, "pre:")
+			}
+			if got := drawDisplayed(t, r, "pre:echo hello", 4, 5); got != c.want {
+				t.Errorf("drawn %s, want %s", esc(got), esc(c.want))
+			}
+		})
+	}
+}
+
+// With no predisplay the two counts are one, so a `P` element is drawn where
+// it says rather than dropped: measured on zsh 5.9.2, `P0 1 fg=red` with no
+// PREDISPLAY colors the `e` typed.
+func TestAPElementWithNoPredisplayCountsFromTheBuffer(t *testing.T) {
+	r, out := zleRunner(t, `
+		paint() { region_highlight=("P0 1 fg=red"); }
+		zle -N paint
+	`)
+	if _, ok, _ := runWidget(t, r, out, "paint", repl.Line{Buffer: "e", Cursor: 1}); !ok {
+		t.Fatal("the widget did not run")
+	}
+	if got, want := drawRegions(t, r, "e"), "\x1b[31me\x1b[39m"; got != want {
+		t.Errorf("drawn %s, want %s", esc(got), esc(want))
 	}
 }
 
@@ -220,7 +275,7 @@ func TestItLivesAsLongAsTheLineDoes(t *testing.T) {
 		t.Fatalf("across two widgets on one line: drawn %s, want %s", esc(got), esc(want))
 	}
 	zsh.ResetRegionHighlight(r)
-	if runs := zsh.RegionHighlights(r, "abcdef", 6); len(runs) != 0 {
+	if runs := zsh.RegionHighlights(r, "abcdef", 0, 6); len(runs) != 0 {
 		t.Errorf("after the line ended: got %+v, want nothing", runs)
 	}
 }

@@ -395,6 +395,7 @@ func clearHeldLine(r *interp.Runner) {
 	r.SetVar(zleBuffer, "")
 	r.SetVar(zleCursor, "")
 	r.SetVar(zlePostdisplay, "")
+	r.SetVar(zlePredisplay, "")
 	r.SetVar(zleAccept, "")
 	r.SetVar(zleHeldLast, "")
 }

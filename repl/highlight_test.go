@@ -117,36 +117,60 @@ func TestAHighlighterIsAskedAboutTheLine(t *testing.T) {
 
 // bufferAsker is a BufferHighlighter that records what it was asked.
 type bufferAsker struct {
-	displayed []string
-	buffer    []int
+	displayed  []string
+	start, end []int
 }
 
 func (b *bufferAsker) Highlight(string) []Highlight { panic("asked without the line's end") }
 
-func (b *bufferAsker) HighlightBuffer(displayed string, buffer int) []Highlight {
+func (b *bufferAsker) HighlightBuffer(displayed string, start, end int) []Highlight {
 	b.displayed = append(b.displayed, displayed)
-	b.buffer = append(b.buffer, buffer)
+	b.start = append(b.start, start)
+	b.end = append(b.end, end)
 	return nil
 }
 
-// A highlighter that asks where the line ends is told, in bytes, so that a
-// postdisplay after it is not read as part of it (#6412).
-func TestABufferHighlighterIsToldWhereTheLineEnds(t *testing.T) {
+// A highlighter that asks where the line is is told, in bytes, so that a
+// postdisplay after it is not read as part of it (#6412) and a predisplay
+// before it is not either (#6414).
+func TestABufferHighlighterIsToldWhereTheLineIs(t *testing.T) {
 	for _, c := range []struct {
-		line, post string
-		want       int
+		pre, line, post string
+		start, end      int
 	}{
-		{"e", "cho hello", 1},
-		{"echo 日本", "語", len("echo 日本")},
-		{"echo", "", 4},
+		{"", "e", "cho hello", 0, 1},
+		{"", "echo 日本", "語", 0, len("echo 日本")},
+		{"", "echo", "", 0, 4},
+		{"pre:", "e", "cho hello", 4, 5},
+		{"前:", "echo 日本", "", len("前:"), len("前:echo 日本")},
 	} {
 		asker := &bufferAsker{}
-		e := &editor{line: []rune(c.line), postdisplay: c.post, highlighter: asker}
+		e := &editor{line: []rune(c.line), predisplay: c.pre, postdisplay: c.post, highlighter: asker}
 		e.styled()
-		if len(asker.buffer) != 1 || asker.displayed[0] != c.line+c.post || asker.buffer[0] != c.want {
-			t.Errorf("%q then %q: asked %q with %v, want %q with %d",
-				c.line, c.post, asker.displayed, asker.buffer, c.line+c.post, c.want)
+		want := c.pre + c.line + c.post
+		if len(asker.end) != 1 || asker.displayed[0] != want || asker.start[0] != c.start || asker.end[0] != c.end {
+			t.Errorf("%q, %q then %q: asked %q with %v..%v, want %q with %d..%d",
+				c.pre, c.line, c.post, asker.displayed, asker.start, asker.end, want, c.start, c.end)
 		}
+	}
+}
+
+// A highlighter that knows only one text is handed the line and what follows
+// it and never the predisplay, and its runs land on the line where it put
+// them: a quote drawn before the line is not one the line left open (#6414).
+func TestAPlainHighlighterIsNotHandedThePredisplay(t *testing.T) {
+	e := &editor{line: []rune(`echo "x`), predisplay: `"pre"`, highlighter: UnclosedQuote{Style: "\x1b[31m"}}
+	if got, want := e.styled(), "\"pre\"echo \x1b[31m\"x\x1b[0m"; got != want {
+		t.Errorf("drew %q, want %q", got, want)
+	}
+}
+
+// A paste is marked on the line, so with a predisplay before it the mark
+// moves with the line (#6414).
+func TestAPasteIsMarkedOnTheLineAfterAPredisplay(t *testing.T) {
+	e := &editor{line: []rune("abcd"), predisplay: "pre:", pastedFrom: 1, pastedTo: 3, pastedStyle: "<", pastedStyleEnd: ">"}
+	if got, want := e.styled(), "pre:a<bc>d"; got != want {
+		t.Errorf("drew %q, want %q", got, want)
 	}
 }
 

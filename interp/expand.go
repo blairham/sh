@@ -1248,14 +1248,15 @@ func (t *spanText) WriteString(s string) {
 	t.n++
 }
 
-// WriteByte adds one byte, which is never the only text a caller keeps
-// as-is, so it is joined the ordinary way.
-func (t *spanText) WriteByte(c byte) error {
+// addByte adds one byte, which is never the only text a caller keeps
+// as-is, so it is joined the ordinary way. Not named WriteByte, because that
+// name promises io.ByteWriter's error, and this cannot fail.
+func (t *spanText) addByte(c byte) {
 	if t.n == 1 {
 		t.b.WriteString(t.only)
 	}
 	t.n = max(t.n, 1) + 1
-	return t.b.WriteByte(c)
+	_ = t.b.WriteByte(c)
 }
 
 func (t *spanText) String() string {

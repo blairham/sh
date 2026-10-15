@@ -33,7 +33,7 @@ func TestSpanTextJoinsAsABuilderDoes(t *testing.T) {
 		for _, w := range seq {
 			if w.byte {
 				want.WriteByte(w.b)
-				_ = got.WriteByte(w.b)
+				got.addByte(w.b)
 			} else {
 				want.WriteString(w.s)
 				got.WriteString(w.s)

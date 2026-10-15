@@ -198,7 +198,7 @@ func (r *Runner) patternOf(w *syntax.Word) string {
 	for i, s := range spans {
 		r.expandingSpan = i
 		if tildeKeepsBackslash(flavor, s) {
-			b.WriteByte('\\')
+			b.addByte('\\')
 			b.WriteString(s.Value)
 			continue
 		}
@@ -206,7 +206,7 @@ func (r *Runner) patternOf(w *syntax.Word) string {
 			// The backslash is the glob's own here, so the pair reaches the
 			// matcher as it was written rather than as the letter quote
 			// removal would otherwise take.
-			b.WriteByte('\\')
+			b.addByte('\\')
 			b.WriteString(s.Value)
 			continue
 		}

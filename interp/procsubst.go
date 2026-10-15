@@ -1008,6 +1008,16 @@ func (r *Runner) takeProcSubs() []procSubPipe {
 // end closes, the script is now the one holding that end, and a shell waiting
 // for its own descriptor to be closed is a shell that has stopped.
 func (r *Runner) removeProcSubs(pipes []procSubPipe) {
+	// Every end is closed before any body is waited for, in two loops rather
+	// than one — endHeldProcSubs' rule, and missing here for the reason a
+	// second copy of a rule usually is. A body started after the command's
+	// first redirection was applied is handed that redirection's descriptor,
+	// so in `: 3> >(cat) 4> >(cat)` the second `cat` holds the first pipe's
+	// writing end as its own 3. Waiting for the first body before closing the
+	// second placeholder waits for a reader whose last writer is a process
+	// that is itself waiting for this loop: zsh 5.9.2 answers at once, and
+	// this shell never returned (#6501).
+	var waits []procSubPipe
 	for _, p := range pipes {
 		// The backstop. A command that never reached its own trace line — an
 		// expansion that failed, a prefix that refused — has a body still
@@ -1034,6 +1044,9 @@ func (r *Runner) removeProcSubs(pipes []procSubPipe) {
 			r.heldProcSubs = append(r.heldProcSubs, p)
 			continue
 		}
+		waits = append(waits, p)
+	}
+	for _, p := range waits {
 		if p.body != nil {
 			// After the placeholder above, which is what delivers the
 			// end-of-file the body is reading until: waiting first would be

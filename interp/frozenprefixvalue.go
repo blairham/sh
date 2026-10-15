@@ -59,7 +59,13 @@ import "github.com/blairham/sh/syntax"
 // Asked only where there **is** a frozen name, so an ordinary prefix walks
 // nothing here and a dialect with no answer refuses only the line the question
 // is about.
-func (r *Runner) expandThePrefixUpToTheFrozenName(assigns []*syntax.Assign) bool {
+//
+// refuseEach is nil on every route but one. Where it is set, the walk does not
+// end at the first frozen entry: it refuses each one through refuseEach where
+// it reaches it and carries on expanding what is behind it, which is the walk
+// of a shell that names every frozen entry and still runs the command. See
+// Runner.refusePrefixesEarly for the measurement (#6546).
+func (r *Runner) expandThePrefixUpToTheFrozenName(assigns []*syntax.Assign, refuseEach func(name string)) bool {
 	if len(r.frozenPrefixNames(assigns)) == 0 {
 		return false
 	}
@@ -90,7 +96,11 @@ func (r *Runner) expandThePrefixUpToTheFrozenName(assigns []*syntax.Assign) bool
 		if frozen && !evaluatesTheValue {
 			// The name is refused without its value being looked at, which
 			// is where this walk ends: the caller writes the refusal next.
-			return false
+			if refuseEach == nil {
+				return false
+			}
+			refuseEach(a.Name)
+			continue
 		}
 		if !frozen && !r.prefixEntryHasATraceableValue(a) {
 			// A subscripted word the dialect refuses, whose value is never
@@ -128,7 +138,10 @@ func (r *Runner) expandThePrefixUpToTheFrozenName(assigns []*syntax.Assign) bool
 		if frozen {
 			// Its value expanded and nothing behind it does: the refusal is
 			// the caller's next act.
-			return false
+			if refuseEach == nil {
+				return false
+			}
+			refuseEach(a.Name)
 		}
 	}
 	return false

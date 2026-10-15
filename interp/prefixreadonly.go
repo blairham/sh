@@ -293,15 +293,50 @@ func (r *Runner) refusePrefixesEarly(assigns []*syntax.Assign, argv []string) bo
 	// the refusal here gave it bash's answer. The marker is taken in front of
 	// the expansion for the reason every other one is. See
 	// interp/frozenprefixvalue.go.
+	//
+	// **Each frozen entry is refused where the walk reaches it**, in the
+	// shell that names them all and carries on: the values between two of
+	// them expand between the two sentences. Measured 2026-10-15 from `-c`
+	// and from a script file under `env -i PATH=/usr/bin:/bin`, `readonly
+	// r=1 z=1` on the line before:
+	//
+	//	r=2 B=$(echo s >&2) z=3 /bin/echo ran
+	//
+	//	bash 5.3.20, bash 3.2   r's refusal, s, z's refusal, ran
+	//
+	// and the same before `true`, before a function and before `export`;
+	// `A=$(echo a >&2)` written in front of `r` comes out first. This wrote
+	// every refusal ahead of every value, because it named the frozen entries
+	// in one pass once the walk had stopped at the first (#6546). A shell that
+	// gives the command up at the first refusal names only that one, so its
+	// walk still stops there.
+	p := r.prefixCommandOf(argv)
+	var refuseEach func(string)
+	if r.prefixRefusalNamesEveryEntry(p) {
+		refuseEach = r.reportPrefixRefusal
+	}
 	walk := r.beginPrefixWalk(assigns)
-	if r.expandThePrefixUpToTheFrozenName(assigns) {
+	if r.expandThePrefixUpToTheFrozenName(assigns, refuseEach) {
 		// The expansion's sentence is the whole of what the script is told,
 		// and the command is over: the refusal is never written.
-		r.givesUpForAFailedPrefix(walk, r.prefixCommandOf(argv))
+		r.givesUpForAFailedPrefix(walk, p)
 		return true
 	}
-	_, stop := r.refusePrefixesNow(assigns, r.prefixCommandOf(argv), true)
+	_, stop := r.refusePrefixesNow(assigns, p, refuseEach == nil)
 	return stop
+}
+
+// prefixRefusalNamesEveryEntry reports whether a refusal in front of this
+// command names every frozen entry in the prefix rather than the first: the
+// refusal applies, and the command still runs after it. The count follows
+// from the cost — see Runner.refusePrefixesNow — so this reads the same
+// answers and asks nothing of its own.
+func (r *Runner) prefixRefusalNamesEveryEntry(p prefixCommand) bool {
+	if !r.prefixRefusalApplies(p) {
+		return false
+	}
+	_, skip, _, unanswered := r.prefixRefusalCost(p)
+	return !skip && unanswered == ""
 }
 
 // prefixRefusalApplies reports whether a prefix to a frozen name is refused at

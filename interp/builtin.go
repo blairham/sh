@@ -8192,6 +8192,7 @@ func biLocal(r *Runner, _ context.Context, args []string) (endStatus int) {
 		if f.nameref {
 			held = r.holdTheDeclaration(name)
 		}
+		r.noteALetterMakingAFrozenScalarAContainer(name, f)
 		r.applyAttributes(name, f)
 		// Over a binding this line made only — see biDeclare's call.
 		if !redeclared {

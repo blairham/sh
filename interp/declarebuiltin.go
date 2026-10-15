@@ -2463,6 +2463,7 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) (endSt
 		// because what it clears is what the name was carrying *before* this
 		// line's letters land — see interp/kindletterreplaces.go.
 		r.kindLetterReplacesWhatTheNameWas(name, df)
+		r.noteALetterMakingAFrozenScalarAContainer(name, df)
 		r.applyAttributes(name, df)
 		if hasValue && !fresh && r.compoundNameHolds(name) && r.declaresAType(name) {
 			// An attribute **arriving** over a standing array or table reaches
@@ -4030,6 +4031,26 @@ func (f declareFlags) namesANumericType(r *Runner) bool {
 		return !f.lettersOff("EF")
 	}
 	return false
+}
+
+// noteALetterMakingAFrozenScalarAContainer records, just before this line's
+// letters land, that an `-a` or `-A` letter is about to make a frozen scalar
+// a container on an operand whose value is an array literal — so that the
+// literal, stored after the builtin by assignOperands, is not refused for the
+// container its own letter made. See Runner.frozenScalarRetyped (#6514).
+//
+// Called by every declaration route that applies letters, `typeset` and
+// `local` alike, so that one of them does not keep the refusal the other
+// lost.
+func (r *Runner) noteALetterMakingAFrozenScalarAContainer(name string, f declareFlags) {
+	if !f.array && !f.assoc || !r.literalOperands[name] ||
+		!r.attrHas(name, attrReadonly) || r.nameIsAnArray(name) {
+		return
+	}
+	if r.containerByThisLinesLetter == nil {
+		r.containerByThisLinesLetter = map[string]bool{}
+	}
+	r.containerByThisLinesLetter[name] = true
 }
 
 // numericTypeLetterRetypesFrozen reports whether this operand is the second

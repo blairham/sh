@@ -107,6 +107,17 @@ func (r *Runner) warnAboutTheScope(name string, kind scopeWarningKind) {
 		// `x=1` beside them still draws its sentence (#6422).
 		return
 	}
+	if r.scopeLintPassesOverTheShellsOwn(name) {
+		return
+	}
+	if r.mirroring {
+		// The other half of a tie, written because the script wrote this
+		// one: one assignment, and one sentence for it. Measured 2026-10-15
+		// on zsh 5.9.2, `typeset -T FOO foo; f() { foo=(c) }` under
+		// warn_nested_var names `array parameter foo` alone, where this
+		// shell also wrote the scalar `FOO` the mirror set.
+		return
+	}
 	if r.storingATakenBackPrefix {
 		// A prefix the command's end takes back is not an assignment that
 		// landed anywhere. See Runner.storePrefixQuietlyIfTakenBack.
@@ -201,4 +212,41 @@ func (r *Runner) storePrefixQuietlyIfTakenBack(ctx context.Context, a *syntax.As
 		defer func() { r.storingATakenBackPrefix = outer }()
 	}
 	r.prefixStore(ctx, a, landsOn, stores, fresh)
+}
+
+// scopeLintPassesOverTheShellsOwn reports whether an assignment is to one of
+// the shell's own parameters, which neither lint reports.
+//
+// The lint is about a `local` a script forgot, and a script does not declare
+// `$HOME` or `$PS1` before writing them. Measured 2026-10-15 on zsh 5.9.2
+// under `env -i PATH=/usr/bin:/bin TERM=xterm`, `-f`, each assignment inside
+// a function with both lints on:
+//
+//	HOME HISTSIZE PS1 TERM IFS RANDOM SECONDS COLUMNS SHLVL USERNAME
+//	NULLCMD WORDCHARS histchars SAVEHIST PROMPT prompt OPTIND
+//	PATH path fpath psvar                         nothing
+//	LANG LC_ALL LC_CTYPE TERMINFO, all unset      nothing
+//	LOGNAME MAILCHECK TTY KEYTIMEOUT ZSH_NAME
+//	ZSH_SCRIPT EDITOR TMPDIR HISTFILE REPLY       the sentence
+//
+// The key is the word `special` — [ParameterAttributes.Provided] — and the
+// pairs that hold the kind fixed say so: `HOME` (scalar-export-special) is
+// silent and `LOGNAME` (scalar-export) is not, `HISTSIZE` (integer-special)
+// beside `MAILCHECK` (integer), `PS1` (scalar-special) beside `TTY`
+// (scalar). It is the *name's* place among the shell's own and not its
+// present value: the unset `LANG` family is silent, and so is `HOME` or
+// `RANDOM` after a top-level `unset` — those are the two sources beside the
+// word, the marks that outlive a missing value.
+//
+// A `local -h` in a calling function is the control in the other direction:
+// it makes the binding an ordinary parameter, and `g` writing `HOME` under
+// it draws `set in enclosing scope` in the reference, where a plain `local
+// HOME` in the same place is silent (#6425). It is asked separately because
+// the marks above are per name and outlive any binding: under `local -h
+// LANG` in the caller, `LANG=x` draws the sentence in the reference too.
+func (r *Runner) scopeLintPassesOverTheShellsOwn(name string) bool {
+	if r.notShellOwn[name] || r.shadowIsHidden(name) {
+		return false
+	}
+	return r.parameterIsProvided(name) || r.shellOwnWhileSet[name] || r.removedShellOwn[name]
 }

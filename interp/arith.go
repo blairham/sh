@@ -2629,6 +2629,12 @@ func (r *Runner) arithRecursionExceeded(blamed string) (arithNum, error, bool) {
 // a different sentence from the identical scalar. One operand rule, asked
 // once — the storage it came out of is not what decides how it reads.
 func (r *Runner) arithNumOfStored(value string) (arithNum, error) {
+	if n, ok := plainDecimal(value); ok && plainDecimalShortcut {
+		// The counter's own value, nearly always: readArithNum's shortcut,
+		// taken before the passes below, each of which leaves a numeral with
+		// no space and no leading zero as it found it.
+		return r.carriedInADouble(float64(n), n), nil
+	}
 	if strings.TrimSpace(value) == "" {
 		return intNum(0), nil
 	}

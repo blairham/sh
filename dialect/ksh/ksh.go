@@ -4998,12 +4998,27 @@ func Diagnostics() interp.Diagnostics {
 		// 2026-09-13; interp/arithforpart.go holds it (#2420).
 		ArithForPartText: interp.ArithForPartTextLosesOneEnd,
 		ScriptLocation:   interp.LocationLineWord,
-		// At a prompt this shell names no line at all — see
-		// withPromptWordings, where the sentences it writes there are
-		// measured. The location is already name-only for line 1 under `-c`;
-		// this says so for every line, since a construct typed over three
-		// lines is still `ksh: syntax error: …` there.
-		PromptLocation:        interp.LocationNameOnly,
+		// At a prompt a run-time failure is located the way `-c` locates
+		// one — `line N:` past the first line and nothing on it — with N
+		// counted from the first line of the input typed, since
+		// Semantics.PromptNumbersEachInputFromOne restarts the count for
+		// each. So a one-line command names no line, which is what every
+		// earlier measurement here typed, and the third line of a typed `if`
+		// or of a function's definition is `ksh: line 3: …` (#6581).
+		// Measured 2026-10-15 on ksh93u+ 2012-08-01 under `-i`, and the
+		// pair that fixes the noun is two top-level commands with no
+		// function in sight:
+		//
+		//	nosuch_a; :                       ksh: nosuch_a: not found
+		//	if true; then / : / nosuch / fi   ksh: line 3: nosuch: not found
+		//	f(){ / : / : $((1/0)) / }; f      ksh: line 3: 1/0: divide by zero
+		//	f(){ nosuch; }; f                 ksh: nosuch: not found
+		//
+		// A parse failure is the other answer and is not this field's: its
+		// sentence carries the line, so at a prompt the sentence is replaced
+		// and the location cleared — see withPromptWordings, and
+		// Diagnostics.ParseFailureNamesItsOwnLine.
+		PromptLocation:        interp.LocationLineWordAfterFirst,
 		BuiltinLocation:       interp.LocationBracketLineAfterFirst,
 		ScriptBuiltinLocation: interp.LocationBracketLine,
 		// And a value in an assignment prefix that will not expand is the

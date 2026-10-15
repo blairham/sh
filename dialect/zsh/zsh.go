@@ -1556,8 +1556,9 @@ func Semantics() interp.Semantics {
 	s.AllexportMarksGetoptsOwnParameters = interp.No
 	// And where OPTARG or OPTIND is already exported, a child goes on being
 	// handed the value it had before `getopts` wrote it: `export OPTIND=1;
-	// getopts x: o -x6` hands a child `OPTIND=1`. Measured 2026-10-15; see
-	// the axis.
+	// getopts x: o -x6` hands a child `OPTIND=1` — and so does a function
+	// call's reset and restore of it: `export OPTIND=3; f() { printenv
+	// OPTIND; }; f` hands the child `3`. Measured 2026-10-15; see the axis.
 	s.GetoptsLeavesTheEnvironmentCopyOfItsOwnParameters = interp.Yes
 	// And the opposite answer for the other errno, which is the half of the
 	// pair this shell reverses. A builtin writing into a pipe nobody is

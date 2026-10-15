@@ -85,3 +85,51 @@ func TestAGetoptsOverUnexportedParametersAsksNothing(t *testing.T) {
 		t.Errorf("out=%q st=%d, want the values, o refreshed and no refusal", out, st)
 	}
 }
+
+// The other stores the axis covers: the save, reset and restore of OPTIND a
+// function call makes where the cursor is the call's own (#6497). Each row
+// reads the child's copy and `$OPTIND` side by side, so a hold that also
+// froze the parameter, or a reset that skipped the parameter, fails as surely
+// as a refreshed copy does. The last two rows are the stores around a call
+// that refresh under either answer — taking a prefix back, and a `local`'s
+// restore — and they fail if the hold outlives them.
+func TestAFunctionCallsOptindStoresLeaveTheEnvironmentCopy(t *testing.T) {
+	const child = "env | grep -E '^OPTIND=' || echo none; echo $OPTIND"
+	for _, tc := range []struct{ name, src, held, refreshed string }{
+		{"the reset on the way in", `export OPTIND=3; f() { ` + child + `; }; f`, "OPTIND=3\n1\n", "OPTIND=1\n1\n"},
+		{"the restore on the way out", `export OPTIND=3; f() { OPTIND=7; }; f; ` + child, "OPTIND=7\n3\n", "OPTIND=3\n3\n"},
+		{"a prefix's copy", `f() { ` + child + `; }; OPTIND=4 f`, "OPTIND=4\n1\n", "OPTIND=1\n1\n"},
+		{"taking the prefix back refreshes", `export OPTIND=1; getopts x: o -x6; f() { :; }; OPTIND=4 f; ` + child, "OPTIND=2\n2\n", "OPTIND=2\n2\n"},
+		{"a local's restore refreshes", `export OPTIND=1; g() { local OPTIND=5; }; f() { OPTIND=9; g; ` + child + `; }; f`, "OPTIND=1\n9\n", "OPTIND=9\n9\n"},
+	} {
+		for _, answer := range []Answer{Yes, No} {
+			t.Run(tc.name+"/"+answer.String(), func(t *testing.T) {
+				sem := permissive()
+				sem.GetoptsLeavesTheEnvironmentCopyOfItsOwnParameters = answer
+				sem.GetoptsFunctionPosition = GetoptsFunctionPositionIsLocal
+				sem.GetoptsAssignmentRestartsWord = Yes
+				out, _ := run(t, tc.src, withSem(sem))
+				want := tc.refreshed
+				if answer == Yes {
+					want = tc.held
+				}
+				if out != want {
+					t.Errorf("got %q, want %q", out, want)
+				}
+			})
+		}
+	}
+}
+
+// A call over an OPTIND nothing exported is handed its cursor and given the
+// caller's back without the axis being asked: under CoreSemantics, which
+// answers it neither way, the call writes no refusal.
+func TestAFunctionCallOverAnUnexportedOptindAsksNothing(t *testing.T) {
+	sem := CoreSemantics()
+	sem.GetoptsFunctionPosition = GetoptsFunctionPositionIsLocal
+	sem.GetoptsAssignmentRestartsWord = Yes
+	out, st := run(t, `OPTIND=3; f() { echo $OPTIND; OPTIND=7; }; f; echo $OPTIND`, withSem(sem))
+	if st != 0 || out != "1\n3\n" {
+		t.Errorf("out=%q st=%d, want the cursor reset and put back, and no refusal", out, st)
+	}
+}

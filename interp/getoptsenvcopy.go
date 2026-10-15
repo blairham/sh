@@ -23,11 +23,31 @@ import "strings"
 // already — a hold is itself the earlier answer. A script that never exports
 // OPTARG or OPTIND reaches no question.
 func (r *Runner) getoptsFillOwnParameter(name, value string) {
+	r.storeOwnParameter(name, value, func() {
+		r.fillOperandValue(name, value, r.markGetoptsOwnForAllexport)
+	})
+}
+
+// storeOwnParameter runs store, which puts value into OPTARG or OPTIND as one
+// of the shell's own writes rather than the script's, and holds the
+// environment copy the store would otherwise refresh in the dialect that
+// leaves it — the one mechanism every such write goes through, so that a
+// second route cannot drop the hold (#6497).
+//
+// `getopts` is one such write. The other is the save, reset and restore a
+// function call makes of OPTIND where the cursor is local to the call
+// (Runner.localizeGetoptsCursor): measured 2026-10-15 on zsh 5.9.2,
+// `export OPTIND=3; f() { printenv OPTIND; }; f` hands the child `3` while
+// `$OPTIND` reads 1, and `export OPTIND=3; f() { OPTIND=7; }; f` hands a
+// child `7` after the return has put `$OPTIND` back at 3. ksh93u+, whose
+// `function`-form calls make the same save and restore, refreshes the copy
+// both ways, as it does for `getopts`, so it is one axis and not two.
+func (r *Runner) storeOwnParameter(name, value string, store func()) {
 	held, holding := r.envCopyHeld[name]
 	if !holding {
 		held, holding = r.envCopyGetoptsLeaves(name, value)
 	}
-	r.fillOperandValue(name, value, r.markGetoptsOwnForAllexport)
+	store()
 	if holding && r.isExported(name) {
 		if r.envCopyHeld == nil {
 			r.envCopyHeld = map[string]heldEnvCopy{}
@@ -46,8 +66,8 @@ type heldEnvCopy struct {
 	present bool
 }
 
-// envCopyGetoptsLeaves is the environment copy a `getopts` store of value into
-// name would leave behind, and whether it leaves one: asked of the axis only
+// envCopyGetoptsLeaves is the environment copy a store of value into name by
+// `getopts` or a function call's save and restore would leave behind, and whether it leaves one: asked of the axis only
 // once the store is known to be one the two readings part on.
 func (r *Runner) envCopyGetoptsLeaves(name, value string) (heldEnvCopy, bool) {
 	if !r.isExported(name) {

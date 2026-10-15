@@ -71,3 +71,28 @@ func TestGetoptsHeldCopyGoesWithTheExport(t *testing.T) {
 		t.Errorf("got %q, want %q", out, want)
 	}
 }
+
+// **A function call's save and restore of an exported OPTIND** — the same
+// axis from the call's side (#6497). Measured 2026-10-15 as a script file
+// under `env -i PATH=/usr/bin:/bin`: zsh 5.9.2 resets `$OPTIND` to 1 on the
+// way in and puts 3 back on the way out while a child goes on being handed
+// the copy each store found, 3 and then the body's 7; ksh93u+, which makes the
+// same save and restore for a `function`-form call, refreshes the copy both
+// times, as it does for `getopts`; bash 5.3.20 saves nothing, so the call is
+// the control.
+func TestAFunctionCallsOptindStoresAndTheEnvironmentCopy(t *testing.T) {
+	src := "PATH=/usr/bin:/bin\nexport OPTIND=3\nfunction f { env | grep -E '^OPTIND='; echo $OPTIND; OPTIND=7; }\nf\nenv | grep -E '^OPTIND='\necho $OPTIND\n"
+	for name, want := range map[string]string{
+		"zsh":  "OPTIND=3\n1\nOPTIND=7\n3\n",
+		"ksh":  "OPTIND=1\n1\nOPTIND=3\n3\n",
+		"bash": "OPTIND=3\n3\nOPTIND=7\n7\n",
+	} {
+		out, _, err := presets[name].Combined(t, dialecttest.Base{Dir: t.TempDir()}, src)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if out != want {
+			t.Errorf("%s: got %q, want %q", name, out, want)
+		}
+	}
+}

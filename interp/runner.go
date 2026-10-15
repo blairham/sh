@@ -12876,6 +12876,16 @@ func (r *Runner) takeBackFunctionPrefix(undo []savedVar, scoped bool) {
 			// Runner.prefixScopedToTheCall.
 			continue
 		}
+		// Taking the prefix back is a store that refreshes the environment
+		// copy, even of a name the call left holding one: zsh 5.9.2 hands a
+		// child `OPTIND=2` after `export OPTIND=1; getopts x: o -x6; f() {
+		// :; }; OPTIND=4 f`, where the call's own save and restore of OPTIND
+		// held the prefix's 4 (#6497). Here and not in restoreVar, which
+		// also takes back the prefix of an external command — a prefix the
+		// shell's own parameter never saw, so `export OPTARG=pre; getopts
+		// x: o -x6; OPTARG=4 printenv OPTARG` leaves a child after it handed
+		// `pre`. See Runner.storeOwnParameter.
+		r.releaseEnvCopy(undo[i].name)
 		r.restoreVars(undo[i : i+1])
 	}
 }

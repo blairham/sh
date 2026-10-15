@@ -59,6 +59,12 @@ func (r *Runner) envCopyGetoptsLeaves(name, value string) (heldEnvCopy, bool) {
 			_, was.value, _ = strings.Cut(entry, "=")
 			was.present = true
 		}
+	} else if inherited, ok := r.inheritedValue(name); ok {
+		// Never assigned since it arrived, so the entry a child is handed is
+		// the one that came in, as environ's walk of the environment hands it
+		// over: `OPTARG=pre` in the environment and `getopts x: o -x6` hands
+		// a child `OPTARG=pre` in zsh 5.9.2, measured 2026-10-15.
+		was = heldEnvCopy{value: inherited, present: true}
 	}
 	if was.present && was.value == value {
 		return heldEnvCopy{}, false

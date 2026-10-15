@@ -143,7 +143,14 @@ func (r *Runner) storePlainScalar(ctx context.Context, a *syntax.Assign) {
 	value, ok := r.plainParamValue(a.Value)
 	if !ok {
 		reread := r.arithValuesReread
-		value = r.expandAssignValue(a.Value)
+		if w := a.Value; plainArithShortcut && w != nil && len(w.Spans) == 1 && w.Spans[0].Kind == syntax.ArithSubst {
+			// storesAPlainScalar took it through plainArithOf, which is the
+			// one road it admits an arithmetic expansion by, so it is not
+			// asked again.
+			value = r.readPlainArith(w)
+		} else {
+			value = r.expandAssignValue(a.Value)
+		}
 		if r.arithValuesReread != reread || r.expandErr || r.ctl != controlNone || r.unspecified {
 			// The expansion did something besides read — see plainArithOf —
 			// so the questions this road answered before it may have other
@@ -240,8 +247,16 @@ func (r *Runner) plainTrimOf(s *syntax.Span) bool {
 func (r *Runner) plainArithOf(s *syntax.Span) bool {
 	if s.Kind != syntax.ArithSubst || s.Arith == nil || !r.readsAreOnlyReads() ||
 		(s.Quoting != syntax.Unquoted && s.Quoting != syntax.DoubleQuoted) ||
-		strings.ContainsAny(s.Value, "$`") || r.arithPrecedenceOptionInCharge() {
+		r.arithPrecedenceOptionInCharge() {
 		return false
+	}
+	// A byte at a time rather than strings.ContainsAny, which on amd64 is a
+	// vector search set up afresh for each of its two characters over a text
+	// a few bytes long.
+	for i := 0; i < len(s.Value); i++ {
+		if c := s.Value[i]; c == '$' || c == '`' {
+			return false
+		}
 	}
 	return r.arithOnlyReads(s.Arith)
 }
@@ -283,10 +298,15 @@ func (r *Runner) plainArithValue(w *syntax.Word) (string, bool) {
 	if !plainArithShortcut || w == nil || len(w.Spans) != 1 || !r.plainArithOf(&w.Spans[0]) {
 		return "", false
 	}
+	return r.readPlainArith(w), true
+}
+
+// readPlainArith is plainArithValue's read, for a word already admitted.
+func (r *Runner) readPlainArith(w *syntax.Word) string {
 	defer r.inWord(w)()
 	v, ok := r.subscriptArith(w, w.Spans[0])
 	if !ok {
-		return "", true
+		return ""
 	}
-	return v, true
+	return v
 }

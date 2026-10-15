@@ -25104,6 +25104,21 @@ type Semantics struct {
 	// `OPTIND=1`), and a bare `export OPTIND` does not refresh it, where
 	// taking the export off and putting it back does. See
 	// Runner.getoptsFillOwnParameter (#6475).
+	//
+	// The save, reset and restore of OPTIND a function call makes where the
+	// cursor is the call's own (GetoptsFunctionPosition) are the shell's own
+	// stores as well, and split the same way (#6497). Measured 2026-10-15 as
+	// above: `export OPTIND=3; f() { printenv OPTIND; echo $OPTIND; }; f`
+	// prints `3 1` in zsh, the copy kept across the reset; `export OPTIND=3;
+	// f() { OPTIND=7; }; f; printenv OPTIND` prints `7` with `$OPTIND` back
+	// at 3; and `f() { printenv OPTIND; }; OPTIND=4 f` hands the child the
+	// prefix's `4`. ksh93u+, the other shell that makes this save and restore
+	// (for a `function`-form call), refreshes the copy both ways, `1` and
+	// `3` — the answer it gives `getopts` — so the two are one axis. Taking a
+	// prefix back after the call, and the restore of a `local OPTIND`,
+	// refresh the copy in zsh too: `export OPTIND=1; getopts x: o -x6; f() {
+	// :; }; OPTIND=4 f; printenv OPTIND` prints `2`. See
+	// Runner.storeOwnParameter.
 	GetoptsLeavesTheEnvironmentCopyOfItsOwnParameters Answer
 	// KillJoinsANumberToTheNameOption takes a *number* written onto `-s` —
 	// `kill -s9` — as the same thing as `kill -s 9`, where the rule

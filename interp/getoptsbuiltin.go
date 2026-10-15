@@ -1237,7 +1237,12 @@ func (r *Runner) localizeGetoptsCursor(sc *scope) {
 			// rather than the script assigning one: setVar would record an
 			// assignment the script never made, and the axis that reads that
 			// record drops the position inside a word on the strength of it.
-			r.setVarQuietly("OPTIND", "1")
+			//
+			// And through storeOwnParameter, because it is the shell's write
+			// and zsh leaves an exported OPTIND's environment copy where it
+			// was: `export OPTIND=3; f() { printenv OPTIND; }; f` hands the
+			// child `3` (#6497).
+			r.storeOwnParameter("OPTIND", "1", func() { r.setVarQuietly("OPTIND", "1") })
 			r.optChar, r.optindAssigned = 1, false
 		case GetoptsFunctionPositionIsTheCallsOwn:
 			// The scan starts over and the parameter is left exactly as the
@@ -1314,16 +1319,26 @@ func (r *Runner) localizeGetoptsCursor(sc *scope) {
 		if !still {
 			return
 		}
-		if inVars {
-			r.varsPut("OPTIND", held)
-		} else {
-			r.varsDel("OPTIND")
+		// The shell's write as the entry's was, so an exported OPTIND's
+		// environment copy stays at whatever the body left it in the dialect
+		// that leaves it: `export OPTIND=3; f() { OPTIND=7; }; f` hands a
+		// child `7` in zsh 5.9.2 with `$OPTIND` back at 3 (#6497).
+		restored := held
+		if !inVars {
+			restored, _ = r.bornWith("OPTIND")
 		}
-		if wasRemoved {
-			r.attrSet("OPTIND", attrRemoved)
-		} else {
-			r.attrClear("OPTIND", attrRemoved)
-		}
+		r.storeOwnParameter("OPTIND", restored, func() {
+			if inVars {
+				r.varsPut("OPTIND", held)
+			} else {
+				r.varsDel("OPTIND")
+			}
+			if wasRemoved {
+				r.attrSet("OPTIND", attrRemoved)
+			} else {
+				r.attrClear("OPTIND", attrRemoved)
+			}
+		})
 	})
 }
 

@@ -4516,6 +4516,10 @@ func Semantics() interp.Semantics {
 	// No `-v` here — `printf -v x %s Q` is `printf: -v: unknown option` at
 	// 2 — so the store is never reached through that builtin.
 	s.StoreRefusalThroughPrintfLeavesZero = interp.No
+	// And a refused `set -A` store leaves 1 from `-c` here — `typeset -r
+	// v=1; set -A v x` is `set: v: is read only` at 1, measured 2026-10-15 —
+	// while a refused `read -A` is not fatal at all (#6486).
+	s.ArrayStoreRefusalThroughSetOrReadLeavesZero = interp.No
 	// And the option parse carries on past the name here: `set -A ff -x -y`
 	// takes `-x` as xtrace and refuses `-y`, and `set -A dd -- 1 2` stores
 	// two elements because the `--` still ends the options. So the values are

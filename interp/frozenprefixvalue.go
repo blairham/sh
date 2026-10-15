@@ -86,7 +86,7 @@ func (r *Runner) expandThePrefixUpToTheFrozenName(assigns []*syntax.Assign) bool
 			// is about either — and the routes expand it for themselves.
 			continue
 		}
-		frozen := r.attrHas(a.Name, attrReadonly)
+		frozen := r.prefixEntryIsFrozen(a)
 		if frozen && !evaluatesTheValue {
 			// The name is refused without its value being looked at, which
 			// is where this walk ends: the caller writes the refusal next.

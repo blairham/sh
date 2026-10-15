@@ -287,6 +287,8 @@ func TestSemantics(t *testing.T) {
 		// program came from an argument and 1 from a script file. Measured
 		// on every neighboring refusal too, all of which leave 1 (#1172).
 		{"SetArrayBadNameLeavesZero", s.SetArrayBadNameLeavesZero, interp.Yes},
+		// And a good name whose whole-array store is refused (#6486).
+		{"ArrayStoreRefusalThroughSetOrReadLeavesZero", s.ArrayStoreRefusalThroughSetOrReadLeavesZero, interp.Yes},
 		// And here, which is what leaves bash alone on the other answer
 		// (#1171).
 		{"FailedExpansionAbandonsTheLine", s.FailedExpansionAbandonsTheLine, interp.No},

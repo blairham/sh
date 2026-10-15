@@ -150,11 +150,58 @@ func (r *Runner) frozenPrefixNames(assigns []*syntax.Assign) []string {
 		if _, ok := positionalAssignIndex(a.Name); ok {
 			continue
 		}
-		if r.attrHas(a.Name, attrReadonly) {
+		if r.prefixEntryIsFrozen(a) {
 			frozen = append(frozen, a.Name)
 		}
 	}
 	return frozen
+}
+
+// prefixEntryIsFrozen reports whether a prefix entry is one the name may not
+// take: a readonly name, or an array value over a slot of a fixed kind that
+// is not a container (interp/privatekindfixed.go).
+//
+// **The second is the first's refusal in every respect but the sentence.**
+// Measured 2026-10-15 on zsh 5.9.2, `-f` from a script file and from `-c`
+// under `env -i PATH=/usr/bin:/bin` — the one shell with both an array
+// prefix and fixed slots — over HOME, IFS, SECONDS, a script's scalar tie
+// half and a `private` scalar alike:
+//
+//	HOME=(x) true; echo rc=$?          the sentence, the shell ends at 1
+//	f(){ echo in; }; HOME=(x) f        the same, `in` never written
+//	HOME=(x) builtin echo ran          the same
+//	HOME=(x) /bin/echo ran; echo rc=$? the sentence, `ran` never written,
+//	                                   rc=1 and the script carries on
+//	HOME=(x) command /bin/echo ran     the same
+//	HOME=(x) nosuchcmd; echo rc=$?     the same — rc=1, not 127
+//	HOME=(x) B=$(echo s >&2) /bin/echo `s` never written
+//	B=$(echo s >&2) HOME=(x) /bin/echo `s`, then the sentence
+//	HOME=($(echo s >&2)) /bin/echo     `s`, then the sentence
+//	readonly r; r=2 HOME=(x) true      `read-only variable: r` alone
+//	readonly r; HOME=(x) r=2 true      the array sentence alone
+//
+// which is a frozen name's cost by the command, its place in the walk, its
+// own value expanded first, and one complaint where the command is given up
+// — so the entry is counted here and every consumer of this walk reads it.
+// The controls take the literal in both shells: `x=s; x=(a) true` (an
+// ordinary name), `path=(a b) true` (a container), `foo=(x) /bin/echo` over a
+// tie's array half, and `private -a v; v=(x) true` (#6485).
+func (r *Runner) prefixEntryIsFrozen(a *syntax.Assign) bool {
+	if r.attrHas(a.Name, attrReadonly) {
+		return true
+	}
+	return a.IsArray && a.Index == nil && len(a.Members) == 0 &&
+		r.fixedSlotTakesNoArrayValue(a.Name)
+}
+
+// reportPrefixRefusal writes the sentence for one frozen prefix entry: the
+// readonly one, or the store's array sentence for a fixed slot.
+func (r *Runner) reportPrefixRefusal(name string) {
+	if r.attrHas(name, attrReadonly) {
+		r.reportReadonlyRefusal(name, assignedAnyhow, false)
+		return
+	}
+	r.reportAnArrayValueToAFixedSlot(name)
 }
 
 // FrozenPrefixCheckOrder is when a frozen name in an assignment prefix is
@@ -405,7 +452,7 @@ func (r *Runner) refusePrefixesNow(assigns []*syntax.Assign, p prefixCommand, re
 			named = frozen[:1]
 		}
 		for _, name := range named {
-			r.reportReadonlyRefusal(name, assignedAnyhow, false)
+			r.reportPrefixRefusal(name)
 		}
 	}
 	switch {

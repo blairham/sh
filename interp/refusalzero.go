@@ -104,3 +104,17 @@ func (r *Runner) storeRefusalStatus(builtin string, status int) int {
 	return r.refusalLeavesZero(r.sem().StoreRefusalThroughPrintfLeavesZero,
 		"a refused store through `printf -v` leaving 0 behind", status)
 }
+
+// arrayStoreRefusalStatus is what a refused whole-array store through `set
+// -A`, `set +A` or `read -A` leaves behind, given what the give-up itself
+// left. See Semantics.ArrayStoreRefusalThroughSetOrReadLeavesZero for the
+// rows, and the two sites for which refusals reach it: the freeze and the
+// fixed slot's kind, which answer alike.
+//
+// One door for the three spellings, through the same refusalLeavesZero the
+// bad name and the declaration's store go through, so the raisers are the
+// ones measured for those rather than a copy (#6486).
+func (r *Runner) arrayStoreRefusalStatus(status int) int {
+	return r.refusalLeavesZero(r.sem().ArrayStoreRefusalThroughSetOrReadLeavesZero,
+		"a refused whole-array store through `set -A` or `read -A` leaving 0 behind", status)
+}

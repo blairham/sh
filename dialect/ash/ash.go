@@ -2853,6 +2853,9 @@ func Semantics() interp.Semantics {
 	// unanswered StoreRefusalThroughPrintfLeavesZero: this shell's
 	// `printf` has no `-v`, so no store is reached through it.
 	//
+	// unanswered ArrayStoreRefusalThroughSetOrReadLeavesZero: no arrays, so
+	// neither `set -A` nor `read -A` exists to store a whole one (#6486).
+	//
 	// unanswered StoreRefusalOfADeclaredElementLeavesZero:
 	// no declaration utility and no array literal here either, so neither
 	// route reaches a store that could refuse an element. Measured

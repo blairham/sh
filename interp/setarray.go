@@ -75,14 +75,17 @@ func (r *Runner) setArrayOperands(name string, front bool, values []string) int 
 	// call *is* guarded, so a check made afterwards would print its complaint
 	// with the array already written. See refuseReadonly.
 	if r.refuseReadonly(name, assignedByDeclaration) {
-		return 1
+		// Fatal in the dialects with the letter, and the number it leaves is
+		// the store refusal's rather than the bad name's — see
+		// Runner.arrayStoreRefusalStatus (#6486).
+		return r.arrayStoreRefusalStatus(1)
 	}
 	if r.fixedSlotRefusesAnArrayValue(name) {
 		// A slot that is not a container keeps its kind against this store as
 		// it does against `name=(…)`: a script's scalar tie half, a private
 		// scalar, one of the shell's own scalars. See
 		// interp/privatekindfixed.go.
-		return r.status
+		return r.arrayStoreRefusalStatus(r.status)
 	}
 	if front && len(values) == 0 {
 		// Nothing to put at the front, which is a store that may not happen

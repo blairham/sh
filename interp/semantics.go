@@ -31316,6 +31316,59 @@ type Semantics struct {
 	// dash and BusyBox ash, whose `printf` has no `-v`.
 	StoreRefusalThroughPrintfLeavesZero Answer
 
+	// ArrayStoreRefusalThroughSetOrReadLeavesZero makes a refused
+	// **whole-array store** through `set -A`, `set +A` or `read -A` leave
+	// **0** behind, where the same refusal through `read`'s scalar store and
+	// through a bare `name=( … )` leaves 1.
+	//
+	// The same shape as SetArrayBadNameLeavesZero (#1172), one step further
+	// in: there the *name* was refused, here the name is good and the store
+	// refuses what it was handed. Measured 2026-10-15 on zsh 5.9.2, `env -i
+	// PATH=/usr/bin:/bin`, `-f`, output discarded so the number is the
+	// shell's own (#6486):
+	//
+	//	                                        -c   file
+	//	typeset -r v=1; set -A v x               0     1
+	//	typeset -r v=1; set +A v x               0     1
+	//	typeset -r v=1; set -A v                 0     1
+	//	typeset -ra a=(1); set -A a x            0     1
+	//	typeset -r v=1; read -A v <<< x          0     1
+	//	typeset -ra a=(1); read -A a <<< x       0     1
+	//	set -A HOME x, set +A HOME x, set -A HOME   0  1
+	//	false; set -A HOME x                     0     1
+	//	read -A HOME <<< x                       0     1
+	//	typeset -T FOO=a:b foo; set -A FOO x     0     1
+	//	f(){ private v; set -A v x }; f          0     1
+	//	f(){ private v=1; g }; g(){ set -A v x }; f   0  1
+	//
+	// and the controls, every one of them 1 by both routes:
+	//
+	//	typeset -r v=1; read v <<< x       the scalar store, same builtin
+	//	typeset -r v=1; v=(x)              the bare literal
+	//	HOME=(x)                           the same, over a fixed slot
+	//	: ${(A)HOME::=x}                   the assignment flag
+	//	typeset -r v=1; typeset v=2        a declaration
+	//
+	// The stderr is byte-identical on both routes and nothing after the
+	// refusal runs, so it is fatal either way and only the status moves.
+	// The file column is Runner.refusalZeroIsRaisedBackToOne, and so are the
+	// other two raisers, measured over this refusal too: `( set -A HOME x;
+	// echo x ); echo next=$?` is `next=0` in a file as well as under `-c`,
+	// `set -A HOME x && echo yes` is 1 by both routes, `set -A HOME x || echo
+	// no` is 0 under `-c`, and `for i in 1; do set -A HOME x; done` is 1.
+	//
+	// Not every refused store through a builtin's operand: `print -v` and
+	// `zparseopts -a` over a readonly name leave 0 there as well, and are
+	// not asked here — this field is the two builtins whose whole-array
+	// store the measurement covered.
+	//
+	// True in zsh. False in ksh93, whose `set -A` refusal is fatal and leaves
+	// 1 from `-c` (`typeset -r v=1; set -A v x` — `set: v: is read only`, exit
+	// 1) and whose `read -A` refusal is not fatal at all, and in bash, whose
+	// `read -a` refusal is not fatal either. Unreachable in dash and BusyBox
+	// ash, which have no arrays.
+	ArrayStoreRefusalThroughSetOrReadLeavesZero Answer
+
 	// ExportThroughASubscriptedOperandRecordsTheLetter puts the export
 	// attribute on the **array** when `export` is given an operand that names
 	// one of its elements.

@@ -6940,7 +6940,9 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 				// because there is no write to refuse.
 			case !r.readMayWrite(array):
 				if r.ctl == controlExit {
-					return r.status
+					// The whole-array store's number, not the scalar's — see
+					// Runner.arrayStoreRefusalStatus (#6486).
+					return r.arrayStoreRefusalStatus(r.status)
 				}
 				if r.readRefusalEndsTheBuiltin() {
 					return r.readFrozenStatus(len(args[:fill]), !defaulted)
@@ -6949,7 +6951,7 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 			case r.fixedSlotRefusesAnArrayValue(array):
 				// A slot that is not a container refuses the whole array, as
 				// `set -A` does. See interp/privatekindfixed.go.
-				return r.status
+				return r.arrayStoreRefusalStatus(r.status)
 			default:
 				r.setArray(array, elems)
 			}
@@ -7006,7 +7008,9 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 			// assigns none of them, and asks nothing about the freeze.
 		case !r.readMayWrite(array):
 			if r.ctl == controlExit {
-				return r.status
+				// The whole-array store's number, not the scalar's — see
+				// Runner.arrayStoreRefusalStatus (#6486).
+				return r.arrayStoreRefusalStatus(r.status)
 			}
 			if r.readRefusalEndsTheBuiltin() {
 				return r.readFrozenStatus(len(args[:fill]), !defaulted)
@@ -7015,7 +7019,7 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 		case r.fixedSlotRefusesAnArrayValue(array):
 			// A slot that is not a container refuses the whole array, as
 			// `set -A` does. See interp/privatekindfixed.go.
-			return r.status
+			return r.arrayStoreRefusalStatus(r.status)
 		default:
 			r.setArray(array, fields)
 		}

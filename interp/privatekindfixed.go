@@ -349,7 +349,9 @@ func (r *Runner) fixedSlotRefusesABareArrayLiteral(a *syntax.Assign) bool {
 // slot that is not a container is refused, having said so and ended the
 // script. It is the store's refusal, and every road that writes a whole array
 // by a name asks it: the bare literal above, `set -A`, `read -A` and the
-// `(A)` assignment flag. Measured 2026-10-15 on zsh 5.9.2, over a script's
+// `(A)` assignment flag. An assignment prefix asks the question half alone,
+// because its cost is not always the script — see
+// fixedSlotTakesNoArrayValue (#6485). Measured 2026-10-15 on zsh 5.9.2, over a script's
 // tie, a `private` and `HOME` alike:
 //
 //	set -A HOME x y            HOME: attempt to assign array value to non-array
@@ -360,14 +362,34 @@ func (r *Runner) fixedSlotRefusesABareArrayLiteral(a *syntax.Assign) bool {
 // The sentence is the store's and names no builtin, so the word in front is
 // taken out of the location as fixedContainerKeepsItsKind does.
 func (r *Runner) fixedSlotRefusesAnArrayValue(name string) bool {
-	allowed, fixed := r.fixedSlotKinds(name)
-	if !fixed || allowed.has(ArrayParameter) || allowed.has(AssocParameter) {
+	if !r.fixedSlotTakesNoArrayValue(name) {
 		return false
 	}
+	r.reportAnArrayValueToAFixedSlot(name)
+	r.fatalQuiet()
+	return true
+}
+
+// fixedSlotTakesNoArrayValue is the question fixedSlotRefusesAnArrayValue
+// acts on, asked without acting: whether name is a slot of a fixed kind that
+// is not a container.
+//
+// Asked on its own by the one road whose refusal is **not** always fatal: an
+// array value as a command's assignment prefix. That refusal costs what a
+// prefix to a frozen name costs, which the command it stands in front of
+// decides, so the prefix walk names the entry and the cost is
+// Runner.refusePrefixesNow's. See Runner.prefixEntryIsFrozen.
+func (r *Runner) fixedSlotTakesNoArrayValue(name string) bool {
+	allowed, fixed := r.fixedSlotKinds(name)
+	return fixed && !allowed.has(ArrayParameter) && !allowed.has(AssocParameter)
+}
+
+// reportAnArrayValueToAFixedSlot writes the store's sentence and nothing
+// else; what the refusal costs is the caller's.
+func (r *Runner) reportAnArrayValueToAFixedSlot(name string) {
 	outer := r.inBuiltin
 	r.inBuiltin = ""
-	r.fatal("%s\n", Wording(r.diag().ArrayValueToNonArray,
+	r.diagf("%s\n", Wording(r.diag().ArrayValueToNonArray,
 		"%[1]s: attempt to assign array value to non-array", name))
 	r.inBuiltin = outer
-	return true
 }

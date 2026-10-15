@@ -10,8 +10,9 @@ import (
 )
 
 // TestAPlainDecimalNumeralReadsAsTheArithmeticReaderReadsIt reads stored and
-// written numerals through readArithNum with the plain-decimal reading on and
-// off, under the answers that change how a numeral is read — octal, digit
+// written numerals through readArithNum, and stored ones through
+// arithNumOfStored as an expression's name does, with the plain-decimal
+// reading on and off, under the answers that change how a numeral is read — octal, digit
 // separators, floats — and requires the same number, the same error and the
 // same diagnostics (#6353).
 func TestAPlainDecimalNumeralReadsAsTheArithmeticReaderReadsIt(t *testing.T) {
@@ -29,7 +30,8 @@ func TestAPlainDecimalNumeralReadsAsTheArithmeticReaderReadsIt(t *testing.T) {
 		{"decimal", func(r *Runner) { r.Semantics.ArithLeadingZeroIsOctal = No }},
 	}
 	for _, c := range configs {
-		for _, written := range []bool{false, true} {
+		for _, route := range []string{"stored", "written", "a name's value"} {
+			written := route == "written"
 			read := func(text string, shortcut bool) string {
 				sem := PosixSemantics()
 				sem.ArithInvalidOctalDigitIsError = Yes
@@ -39,12 +41,15 @@ func TestAPlainDecimalNumeralReadsAsTheArithmeticReaderReadsIt(t *testing.T) {
 				plainDecimalShortcut = shortcut
 				defer func() { plainDecimalShortcut = true }()
 				n, err := r.readArithNum(text, "", written)
+				if route == "a name's value" {
+					n, err = r.arithNumOfStored(text)
+				}
 				return fmt.Sprintf("%#v %v %q", n, err, errs.String())
 			}
 			for _, text := range texts {
 				want, got := read(text, false), read(text, true)
 				if got != want {
-					t.Errorf("%s, written %v, %q: shortcut %s, reader %s", c.name, written, text, got, want)
+					t.Errorf("%s, %s, %q: shortcut %s, reader %s", c.name, route, text, got, want)
 				}
 			}
 		}

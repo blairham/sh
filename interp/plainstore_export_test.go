@@ -17,3 +17,21 @@ func SetPlainScalarStoreShortcutForTest(on bool) (was bool) {
 func StoresAPlainScalarForTest(r *Runner, a *syntax.Assign) bool {
 	return r.storesAPlainScalar(a)
 }
+
+// SetAssignmentsAloneShortcutForTest switches assignmentsAloneCommand on or
+// off and returns what it was, so a test can run the same script both ways.
+func SetAssignmentsAloneShortcutForTest(on bool) (was bool) {
+	was, assignmentsAloneShortcut = assignmentsAloneShortcut, on
+	return was
+}
+
+// SetPlainArithShortcutForTest switches plainArithValue on or off and returns
+// what it was, so a test can run the same script both ways.
+func SetPlainArithShortcutForTest(on bool) (was bool) {
+	was, plainArithShortcut = plainArithShortcut, on
+	return was
+}
+
+// PlainStoreHandedOnForTest is how many assignments the plain store handed to
+// the full road after expanding their value.
+func PlainStoreHandedOnForTest(r *Runner) int { return r.plainStoreHandedOn }

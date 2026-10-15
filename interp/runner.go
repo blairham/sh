@@ -64,9 +64,12 @@ type Runner struct {
 	firstUseSeeds   map[string]*firstUseSeed
 	firstUsePending int
 	// lastCellName is the name Runner.cell found last and lastCell its
-	// position in the slab plus one; zero is none.
+	// position in the slab plus one; zero is none. prevCellName and prevCell
+	// are the one found before it.
 	lastCellName string
 	lastCell     int32
+	prevCellName string
+	prevCell     int32
 	// cellProbes counts the lookups Runner.cell made in the index, so a test
 	// can say how many a construct costs.
 	cellProbes int
@@ -5608,6 +5611,17 @@ type Runner struct {
 	// asks whether a name was reached through a value or written in the
 	// expression itself.
 	arithValueDepth int
+	// arithValuesReread counts every stored value read again as an
+	// expression, which is the one way an arithmetic expansion whose own
+	// text only reads can end up writing: `x='i=7'; i=$((x))`. The plain
+	// store (plainstore.go) admits `name=$((expr))` on the strength of the
+	// text, and hands the value to the full road when this moved while the
+	// value was expanded.
+	arithValuesReread uint64
+	// plainStoreHandedOn counts the assignments storePlainScalar handed to
+	// the full road after expanding them, so a test can say the hand-off is
+	// made.
+	plainStoreHandedOn int
 	// arithSubscriptDepth counts how many array subscripts are being
 	// evaluated around the expression now being read, so that a name inside
 	// the brackets can be answered differently from the same name outside
@@ -8612,29 +8626,17 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 		r.arrayOperands = savedArrayOperands
 		r.operandWasRejoined = savedRejoined
 	}()
+	if assignmentsAlone(c) {
+		return r.assignmentsAloneCommand(ctx, c, fired)
+	}
 	return r.simpleCommand(ctx, c, fired)
 }
 
 // simpleCommand is the rest of Runner.simple.
 func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired bool) error {
-	if !fired {
-		r.runDebugTrap(ctx)
-		if r.debugTrapStopped() {
-			return nil
-		}
+	if !r.startSimpleCommand(ctx, fired) {
+		return nil
 	}
-	r.unspecified, r.expandErr, r.badSubscript, r.assignFailed = false, false, false, false
-	r.badRange = false
-	r.lettersRefusedTheOperand = false
-	r.arithNounsetNamedTheParameter = false
-	// Here rather than beside the assignments, which is where it used to be
-	// cleared and is the whole of #4589. A command that runs nothing reports
-	// what its *last* command substitution reported, and the substitutions in
-	// its words run before the ones in its assignments — so a clear placed
-	// after the words had already expanded threw away every substitution but
-	// an assignment's, and `$(exit 3)` on a line of its own reported 0.
-	// See the len(argv) == 0 block below for the rule and its measurement.
-	r.substRan = false
 	// Whatever this command's process substitutions opened is closed when the
 	// command is done, whether it turned out to be a builtin, a function or
 	// something on PATH.
@@ -8769,8 +8771,20 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 		r.failedExpansionStatus = wordsRule
 	}
 	failedUnder, declaredYet := statusBefore, false
+	// How many written words open the command as modifiers, so that the word
+	// at i names the command when i is no more than this. See
+	// leadingModifierWords.
+	namedAfter := r.leadingModifierWords(c.Args)
 	for i, w := range c.Args {
 		argvBefore = append(argvBefore, len(argv))
+		// Whether the word is written `name=…` or `name+=…`, read once: the
+		// three questions below each used to scan the word for itself.
+		// Never asked of the first word, which names the command.
+		var assignShaped, appendShaped bool
+		if i > 0 {
+			_, _, appends, shaped := r.declarationNameSplit(w)
+			assignShaped, appendShaped = shaped && !appends, shaped && appends
+		}
 		if keepsTheStatus && r.expandErr {
 			// The word that failed was read under the rule set for it, and
 			// its failure is reported below, after the loop.
@@ -8781,7 +8795,7 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 			// `local -a $((1/0))` leave 1, and `local x=1 $((1/0))` leaves 0.
 			r.failedExpansionStatus = wordsRule
 			if i > 0 && len(argv) > 0 && (declaredYet ||
-				(r.assignShaped(w) || r.appendOperandShaped(w)) && r.declarationCommand(c, argv)) {
+				(assignShaped || appendShaped) && r.declarationCommand(c, argv)) {
 				declaredYet = true
 				r.failedExpansionStatus = failedExpansionKeepsTheStatus
 			}
@@ -8812,7 +8826,7 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 		// word to be a declaration: with argv empty there is no utility yet,
 		// so the word is an ordinary promotion and the axis below is never
 		// reached.
-		if i > 0 && r.assignShaped(w) {
+		if assignShaped {
 			declaring := len(argv) > 0 && r.declarationCommand(c, argv)
 			// `set -k` takes the word before the declaration route can,
 			// where the dialect says it reaches that far. bash's does and
@@ -8858,7 +8872,7 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 			}
 		}
 		// An appending operand, `typeset x+=v`. A second reading beside
-		// assignShaped rather than a loosening of it — see
+		// assignNameSplit rather than a loosening of it — see
 		// interp.appendNameSplit for why the two cannot be one — and gated
 		// on the grammar flag that gives a dialect the operator at all,
 		// because the panel splits exactly there.
@@ -8883,7 +8897,7 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 		// separate question — zsh and ksh93 refuse it, bash appends — and
 		// that is Semantics.DeclarationTakesAnAppendOperand, which was
 		// answering about a word that had already been split (#3772).
-		appendOperand := i > 0 && len(argv) > 0 && r.appendOperandShaped(w) &&
+		appendOperand := appendShaped && len(argv) > 0 &&
 			r.declarationCommand(c, argv)
 		if appendOperand && r.lang().AppendAssign {
 			if r.unspecified {
@@ -8905,7 +8919,7 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 		// than by what the words in front of it came to. See
 		// interp/equalscontextposition.go.
 		restorePosition := func() {}
-		if r.namesTheCommand(c.Args, i) {
+		if i <= namedAfter {
 			restorePosition = r.outsideTheEqualsContextWord()
 		} else if r.equalsOpensATildeContextFor(c, argv, i) {
 			restorePosition = r.equalsTildeContextWord()
@@ -9263,166 +9277,7 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 		r.traceEmptyCommand()
 	}
 	if len(argv) == 0 {
-		// Assignments with no command name persist, which is the difference
-		// between `x=1` and `x=1 cmd`.
-		//
-		// The status cannot be decided until they have run. `x=1` succeeds
-		// and `x=$(false)` reports what the substitution reported, which
-		// once made zeroing *first* look right — but `$?` on a right-hand
-		// side names the command before the assignment, so zeroing first
-		// meant `E=$?` read 0. That is the most common idiom in shell and it
-		// was silently returning success; /usr/sbin/apachectl exiting 0
-		// where it should exit 1 is what surfaced it.
-		//
-		// So: run them with the previous status still in place, and decide
-		// afterwards from whether a substitution reported anything.
-		//
-		// **And the words count too, not only the assignments** — the same
-		// rule reached from the other side, and #4589. A command whose words
-		// all expanded away has run nothing either, and it reports the status
-		// of the last command substitution it performed, wherever in the
-		// command that substitution stood. Runner.substRan is cleared at the
-		// top of this function for that reason: by the time control gets
-		// here the words have already expanded, and a clear on this line
-		// discarded every substitution but an assignment's.
-		//
-		// The noun is **the last substitution the command ran**, not the
-		// last one it was written with, and those two part company in the
-		// ordinary way: the words expand before the assignments do. Measured
-		// 2026-09-26 from a script file across the whole panel — bash 5.3.20,
-		// bash 3.2.57, ksh93u+ 2012-08-01, dash 0.5.12, zsh 5.9.2 and
-		// BusyBox ash 1.37.0 — which agree on every row:
-		//
-		//	false; $(exit 3)                 3  the one substitution
-		//	false; $(exit 3) $(exit 0)       0  the last one, and it is zero
-		//	false; $(exit 0) $(exit 3)       3  the last one, and it is not
-		//	false; $(exit 3)$(exit 4)        4  one word, still the last one
-		//	false; $(exit 3) $(echo)         0  it decides having said nothing
-		//	false; e=; $e                    0  no substitution, so success
-		//	false; e=; $(exit 3) $e          3  an empty word does not reset it
-		//	false; X=$(exit 2) $(exit 3)     2  the assignment expands last
-		//	false; X=$(exit 0) $(exit 3)     0  …so its zero wins over the word
-		//	false; X=$(exit 2) Y=$(exit 4)   4  and the last assignment wins
-		//	set -e; $(exit 3); echo after    3, and `after` is not printed
-		//
-		// Written as `false;` above so that a 0 cannot be the previous
-		// command's status left in place, which is the only way to tell this
-		// rule from doing nothing at all: our answer used to be 0 either way
-		// and the two zero rows looked correct for that reason alone.
-		//
-		// The one row the panel splits on has a **redirection** in it, and
-		// that is a different question with a home of its own: `$(exit 3)
-		// >f` runs zsh's null command and reports what *that* did, where the
-		// five columns with no such hook report the substitution's 3. See
-		// Runner.nullCommand, which takes the command off this path before
-		// it ever gets here.
-		// Which of the two goes first — these assignments' own right-hand
-		// sides or the redirection words — is the disagreement
-		// interp/prefixredirorder.go records, asked here for the command
-		// that has no word at all. Asked only where both are written, so a
-		// bare `>f` and a bare `x=1` ask nothing and no dialect has to have
-		// an answer for them.
-		redirsFirst := false
-		if len(c.Redirs) > 0 && aPrefixIsWritten(c.Assigns) {
-			first, answered := r.assignmentsExpandedBeforeTheRedirections()
-			if !answered {
-				return nil
-			}
-			redirsFirst = !first
-		}
-		if redirsFirst {
-			put, stop, err := r.openTheBareRedirections(ctx, c, argv)
-			// Held open **across the assignments**, which is the other half
-			// of opening them first: measured 2026-09-26, `Y=$(echo A >&2)
-			// 2> $(echo B >&2; echo /dev/null)` writes `B` alone in dash
-			// 0.5.12, zsh 5.9.2 and BusyBox ash 1.37.0, because the `A` goes
-			// to the file the command has already opened. bash and ksh93
-			// write both, having expanded the right-hand side first.
-			defer put()
-			if err != nil {
-				return err
-			}
-			if stop {
-				// The open failed, and in these columns nothing behind it
-				// runs: `X=$(echo A >&2; echo v) > /nope/dir/x` writes no
-				// `A` and leaves `X` unset.
-				return nil
-			}
-		}
-		// And whether a `.set` or `.append` discipline ran, whose status the
-		// assignment answers with — see the block below and
-		// Runner.disciplineStatus. Cleared here rather than by the store, so
-		// that a hook fired by the *previous* command cannot decide this
-		// one's status.
-		r.disciplineStatusSet = false
-		r.assignAll(ctx, c.Assigns)
-		if r.ctl == controlExit || r.ctl == controlAbandon {
-			// A readonly reassignment is fatal in three of the four shells
-			// and abandons the statement in the fourth. Zeroing the status
-			// here is what made it look survivable: the script stopped, and
-			// then reported success for having done so.
-			return nil
-		}
-		if r.expandErr {
-			// A right-hand side that could not be expanded is the same
-			// failure a command's arguments suffer, reached one block later:
-			// the check above this switch runs *before* the assignments do,
-			// so nothing had yet failed when it looked. Without this,
-			// `x=$(( } ))` reported the arithmetic out loud and left 0 — so
-			// `x=$((…)) || handle` never fired and `set -e` never tripped.
-			//
-			// The same door a command's failure goes through, which is what
-			// keeps the two axes it asks from being answered twice: the
-			// status is 1 or 2 by dialect, and bash alone gives up the line
-			// and carries on at the next. Measured: `x=$(( } )); echo after`
-			// prints no `after` anywhere in the panel, and on two lines bash
-			// prints it where dash and zsh stop (#1191).
-			r.failedExpansion()
-			return nil
-		}
-		if r.disciplineStatusSet {
-			// A discipline ran for one of these assignments, and what it
-			// returned is what the command reports. Ahead of the
-			// substitution's own status rather than beside it: measured on
-			// ksh93u+ 2012-08-01, 2026-09-16, `function s.set { return 5; };
-			// s=$(false)` is 5 and the same hook returning 0 is 0, so the
-			// hook is the answer and not merely a way of failing.
-			//
-			// The *last* hook to run wins — `a=1 b=2` with a hook on each
-			// reports b's and `b=1 a=2` reports a's — which is what
-			// recording rather than combining gives.
-			//
-			// Only the bare assignment reads this. `typeset s=1`, `read s`
-			// and `for s in one` fire the very same hook and all report 0
-			// there, and each of them reaches its status through a builtin
-			// or a clause rather than through here.
-			r.status = r.disciplineStatus
-		} else if !r.substRan && !r.assignFailed && !r.unspecified {
-			// Nothing in them reported, so the assignment itself does, and
-			// an assignment that happens cannot fail. One that was *refused*
-			// did fail, which is what assignFailed carries: the dialect that
-			// reports a readonly reassignment and carries on leaves 1 in
-			// `$?`, and zeroing here said the refusal had not happened.
-			//
-			// After the fatal check above, not before: an assignment that
-			// stopped the script has a status of its own and this would
-			// report success for it. An assignment *refused* for want of a
-			// dialect is the same case reached the other way — the check
-			// above this block runs before the assignments do, so without
-			// the guard here a refused subscript reported success.
-			r.status = 0
-		}
-		if !redirsFirst {
-			put, _, err := r.openTheBareRedirections(ctx, c, argv)
-			put()
-			if err != nil {
-				return err
-			}
-		}
-		// No zeroing here: the status was decided above from what the
-		// right-hand sides did. Zeroing here is what once made
-		// `set -e; x=$(false)` carry on.
-		return nil
+		return r.storeTheAssignmentsAlone(ctx, c, argv)
 	}
 
 	// Whether this command's assignment prefix is traced, and where. Read
@@ -14943,7 +14798,7 @@ func (r *Runner) assign(ctx context.Context, a *syntax.Assign) {
 	// interp/plainstore.go, which answers every question below for them
 	// before anything is expanded.
 	if r.storesAPlainScalar(a) {
-		r.storePlainScalar(a)
+		r.storePlainScalar(ctx, a)
 		return
 	}
 	// A bare assignment retypes a name as readily as a declaration word
@@ -15711,4 +15566,242 @@ func (r *Runner) chunkReaderLine(f *syntax.File) int {
 		line++
 	}
 	return line + r.lineOrigin
+}
+
+// startSimpleCommand is what every simple command does before anything about
+// it is expanded: the DEBUG trap, and the per-command answers cleared. It
+// reports whether the command is to run at all.
+func (r *Runner) startSimpleCommand(ctx context.Context, fired bool) bool {
+	if !fired {
+		r.runDebugTrap(ctx)
+		if r.debugTrapStopped() {
+			return false
+		}
+	}
+	r.unspecified, r.expandErr, r.badSubscript, r.assignFailed = false, false, false, false
+	r.badRange = false
+	r.lettersRefusedTheOperand = false
+	r.arithNounsetNamedTheParameter = false
+	// Here rather than beside the assignments, which is where it used to be
+	// cleared and is the whole of #4589. A command that runs nothing reports
+	// what its *last* command substitution reported, and the substitutions in
+	// its words run before the ones in its assignments — so a clear placed
+	// after the words had already expanded threw away every substitution but
+	// an assignment's, and `$(exit 3)` on a line of its own reported 0.
+	// See storeTheAssignmentsAlone for the rule and its measurement.
+	r.substRan = false
+	return true
+}
+
+// storeTheAssignmentsAlone is a simple command that came to no words: its
+// assignments are made in this shell and outlive it, and its redirections
+// are opened and closed around them.
+func (r *Runner) storeTheAssignmentsAlone(ctx context.Context, c *syntax.SimpleCmd, argv []string) error {
+	// Assignments with no command name persist, which is the difference
+	// between `x=1` and `x=1 cmd`.
+	//
+	// The status cannot be decided until they have run. `x=1` succeeds
+	// and `x=$(false)` reports what the substitution reported, which
+	// once made zeroing *first* look right — but `$?` on a right-hand
+	// side names the command before the assignment, so zeroing first
+	// meant `E=$?` read 0. That is the most common idiom in shell and it
+	// was silently returning success; /usr/sbin/apachectl exiting 0
+	// where it should exit 1 is what surfaced it.
+	//
+	// So: run them with the previous status still in place, and decide
+	// afterwards from whether a substitution reported anything.
+	//
+	// **And the words count too, not only the assignments** — the same
+	// rule reached from the other side, and #4589. A command whose words
+	// all expanded away has run nothing either, and it reports the status
+	// of the last command substitution it performed, wherever in the
+	// command that substitution stood. Runner.substRan is cleared in
+	// startSimpleCommand for that reason: by the time control gets
+	// here the words have already expanded, and a clear on this line
+	// discarded every substitution but an assignment's.
+	//
+	// The noun is **the last substitution the command ran**, not the
+	// last one it was written with, and those two part company in the
+	// ordinary way: the words expand before the assignments do. Measured
+	// 2026-09-26 from a script file across the whole panel — bash 5.3.20,
+	// bash 3.2.57, ksh93u+ 2012-08-01, dash 0.5.12, zsh 5.9.2 and
+	// BusyBox ash 1.37.0 — which agree on every row:
+	//
+	//	false; $(exit 3)                 3  the one substitution
+	//	false; $(exit 3) $(exit 0)       0  the last one, and it is zero
+	//	false; $(exit 0) $(exit 3)       3  the last one, and it is not
+	//	false; $(exit 3)$(exit 4)        4  one word, still the last one
+	//	false; $(exit 3) $(echo)         0  it decides having said nothing
+	//	false; e=; $e                    0  no substitution, so success
+	//	false; e=; $(exit 3) $e          3  an empty word does not reset it
+	//	false; X=$(exit 2) $(exit 3)     2  the assignment expands last
+	//	false; X=$(exit 0) $(exit 3)     0  …so its zero wins over the word
+	//	false; X=$(exit 2) Y=$(exit 4)   4  and the last assignment wins
+	//	set -e; $(exit 3); echo after    3, and `after` is not printed
+	//
+	// Written as `false;` above so that a 0 cannot be the previous
+	// command's status left in place, which is the only way to tell this
+	// rule from doing nothing at all: our answer used to be 0 either way
+	// and the two zero rows looked correct for that reason alone.
+	//
+	// The one row the panel splits on has a **redirection** in it, and
+	// that is a different question with a home of its own: `$(exit 3)
+	// >f` runs zsh's null command and reports what *that* did, where the
+	// five columns with no such hook report the substitution's 3. See
+	// Runner.nullCommand, which takes the command off this path before
+	// it ever gets here.
+	// Which of the two goes first — these assignments' own right-hand
+	// sides or the redirection words — is the disagreement
+	// interp/prefixredirorder.go records, asked here for the command
+	// that has no word at all. Asked only where both are written, so a
+	// bare `>f` and a bare `x=1` ask nothing and no dialect has to have
+	// an answer for them.
+	redirsFirst := false
+	if len(c.Redirs) > 0 && aPrefixIsWritten(c.Assigns) {
+		first, answered := r.assignmentsExpandedBeforeTheRedirections()
+		if !answered {
+			return nil
+		}
+		redirsFirst = !first
+	}
+	if redirsFirst {
+		put, stop, err := r.openTheBareRedirections(ctx, c, argv)
+		// Held open **across the assignments**, which is the other half
+		// of opening them first: measured 2026-09-26, `Y=$(echo A >&2)
+		// 2> $(echo B >&2; echo /dev/null)` writes `B` alone in dash
+		// 0.5.12, zsh 5.9.2 and BusyBox ash 1.37.0, because the `A` goes
+		// to the file the command has already opened. bash and ksh93
+		// write both, having expanded the right-hand side first.
+		defer put()
+		if err != nil {
+			return err
+		}
+		if stop {
+			// The open failed, and in these columns nothing behind it
+			// runs: `X=$(echo A >&2; echo v) > /nope/dir/x` writes no
+			// `A` and leaves `X` unset.
+			return nil
+		}
+	}
+	// And whether a `.set` or `.append` discipline ran, whose status the
+	// assignment answers with — see the block below and
+	// Runner.disciplineStatus. Cleared here rather than by the store, so
+	// that a hook fired by the *previous* command cannot decide this
+	// one's status.
+	r.disciplineStatusSet = false
+	r.assignAll(ctx, c.Assigns)
+	if r.ctl == controlExit || r.ctl == controlAbandon {
+		// A readonly reassignment is fatal in three of the four shells
+		// and abandons the statement in the fourth. Zeroing the status
+		// here is what made it look survivable: the script stopped, and
+		// then reported success for having done so.
+		return nil
+	}
+	if r.expandErr {
+		// A right-hand side that could not be expanded is the same
+		// failure a command's arguments suffer, reached one block later:
+		// the check above this switch runs *before* the assignments do,
+		// so nothing had yet failed when it looked. Without this,
+		// `x=$(( } ))` reported the arithmetic out loud and left 0 — so
+		// `x=$((…)) || handle` never fired and `set -e` never tripped.
+		//
+		// The same door a command's failure goes through, which is what
+		// keeps the two axes it asks from being answered twice: the
+		// status is 1 or 2 by dialect, and bash alone gives up the line
+		// and carries on at the next. Measured: `x=$(( } )); echo after`
+		// prints no `after` anywhere in the panel, and on two lines bash
+		// prints it where dash and zsh stop (#1191).
+		r.failedExpansion()
+		return nil
+	}
+	if r.disciplineStatusSet {
+		// A discipline ran for one of these assignments, and what it
+		// returned is what the command reports. Ahead of the
+		// substitution's own status rather than beside it: measured on
+		// ksh93u+ 2012-08-01, 2026-09-16, `function s.set { return 5; };
+		// s=$(false)` is 5 and the same hook returning 0 is 0, so the
+		// hook is the answer and not merely a way of failing.
+		//
+		// The *last* hook to run wins — `a=1 b=2` with a hook on each
+		// reports b's and `b=1 a=2` reports a's — which is what
+		// recording rather than combining gives.
+		//
+		// Only the bare assignment reads this. `typeset s=1`, `read s`
+		// and `for s in one` fire the very same hook and all report 0
+		// there, and each of them reaches its status through a builtin
+		// or a clause rather than through here.
+		r.status = r.disciplineStatus
+	} else if !r.substRan && !r.assignFailed && !r.unspecified {
+		// Nothing in them reported, so the assignment itself does, and
+		// an assignment that happens cannot fail. One that was *refused*
+		// did fail, which is what assignFailed carries: the dialect that
+		// reports a readonly reassignment and carries on leaves 1 in
+		// `$?`, and zeroing here said the refusal had not happened.
+		//
+		// After the fatal check above, not before: an assignment that
+		// stopped the script has a status of its own and this would
+		// report success for it. An assignment *refused* for want of a
+		// dialect is the same case reached the other way — the check
+		// above this block runs before the assignments do, so without
+		// the guard here a refused subscript reported success.
+		r.status = 0
+	}
+	if !redirsFirst {
+		put, _, err := r.openTheBareRedirections(ctx, c, argv)
+		put()
+		if err != nil {
+			return err
+		}
+	}
+	// No zeroing here: the status was decided above from what the
+	// right-hand sides did. Zeroing here is what once made
+	// `set -e; x=$(false)` carry on.
+	return nil
+}
+
+// assignmentsAloneShortcut switches assignmentsAloneCommand on. A variable
+// so a test can run the same script with simpleCommand answering every
+// command.
+var assignmentsAloneShortcut = true
+
+// assignmentsAlone reports whether c is written as assignments and nothing
+// else — `i=$((i + 1))` — which is two of every three commands in a counting
+// loop and the shape assignmentsAloneCommand takes.
+func assignmentsAlone(c *syntax.SimpleCmd) bool {
+	if !assignmentsAloneShortcut || len(c.Args) != 0 || len(c.Redirs) != 0 || len(c.Precommands) != 0 || len(c.Assigns) == 0 {
+		return false
+	}
+	for _, a := range c.Assigns {
+		if a.Operand {
+			return false
+		}
+	}
+	return true
+}
+
+// assignmentsAloneCommand is simpleCommand for a command assignmentsAlone
+// accepted: with no word to expand, no redirection and no modifier, what
+// simpleCommand does comes down to this, and its frame — several kilobytes,
+// set up for the words' loop — is not set up at all (#6496). Each line is
+// the one simpleCommand reaches for such a command, in its order; the word
+// pass in between makes no change when there are no words.
+//
+// TestACommandOfAssignmentsAloneAnswersAsSimpleCommandDoes runs the same
+// scripts with this on and off, and
+// TestTheAssignmentsAloneRoadIsTheOneItWasCheckedAgainst fails when the
+// calls simpleCommand makes change, which is the moment to read this again.
+func (r *Runner) assignmentsAloneCommand(ctx context.Context, c *syntax.SimpleCmd, fired bool) error {
+	if !r.startSimpleCommand(ctx, fired) {
+		return nil
+	}
+	defer r.scopeProcSubs()()
+	r.dashPrecommand = false
+	r.declarationOperands, r.lexedSubscriptOperands, r.sourceClosedSubscriptOperands = nil, nil, nil
+	r.arrayOperands, r.operandWasRejoined = nil, false
+	if r.ctl == controlExit || r.ctl == controlAbandon {
+		return nil
+	}
+	r.noteInputLevelArgument(nil)
+	r.lastArg, r.lastArgSet = "", true
+	return r.storeTheAssignmentsAlone(ctx, c, nil)
 }

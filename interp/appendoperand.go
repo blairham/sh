@@ -129,25 +129,12 @@ func (r *Runner) declarationAppend(name, value string, global, fresh bool) bool 
 	return true
 }
 
-// appendOperandShaped reports whether a word is a declaration utility's
-// **appending** operand, `name+=value`, as written.
-//
-// Its own test beside assignShaped rather than a loosening of it: that
-// reading requires a plain name in front of the `=` and `x+` is not one, and
-// assignNameSplit is shared with keywordPromotable, where taking `x+` as a
-// name would make `set -k`'s `x+=1 cmd` a prefix assignment *named* `x+`
-// rather than an append — which nothing has measured.
-func (r *Runner) appendOperandShaped(w *syntax.Word) bool {
-	_, _, ok := r.appendNameSplit(w)
-	return ok
-}
-
 // appendNameSplit finds the `=` of a declaration operand's `name+=`, and
 // answers where it is in the same shape assignNameSplit does: the span it
 // lives in and its offset within that span.
 //
 // The appending half of declarationNameSplit, and its own predicate beside
-// assignShaped rather than a loosening of it: assignNameSplit is shared with
+// assignNameSplit rather than a loosening of it: assignNameSplit is shared with
 // keywordPromotable, where taking `x+` as a name would make `set -k`'s
 // `x+=1 cmd` a prefix assignment *named* `x+` rather than an append, which
 // nothing has measured.

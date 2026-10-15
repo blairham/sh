@@ -57,26 +57,36 @@ func (r *Runner) SetCommandWordModifier(name string) {
 	r.commandWordModifiers[name] = true
 }
 
-// namesTheCommand reports whether the word at i is the one naming the
-// command: the first written word, or one behind a run of modifier words.
+// leadingModifierWords counts the written words in front of the one naming
+// the command: the run of modifier words the command opens with. The word at
+// i names the command exactly when i is no more than that count — the first
+// written word, or one behind a run of modifiers.
 //
 // Written words, read as literals, because that is what the reference
 // decides on — see the pair in this file's comment. A word that is not a
 // plain literal stops the scan, since nothing before it can be read.
-func (r *Runner) namesTheCommand(args []*syntax.Word, i int) bool {
-	for j := range i {
-		name := literalName(args[j])
+//
+// A count rather than a question about one word, so that simpleCommand asks
+// it once a command instead of once a word: asked per word it was two map
+// lookups for every word of every command (#6496). The tables it reads are
+// the dialect's, filled before anything runs.
+func (r *Runner) leadingModifierWords(args []*syntax.Word) int {
+	if len(r.precommands) == 0 && len(r.commandWordModifiers) == 0 {
+		return 0
+	}
+	for j, w := range args {
+		name := literalName(w)
 		if name == "" {
-			return false
+			return j
 		}
 		if _, ok := r.precommands[name]; ok {
 			continue
 		}
 		if !r.commandWordModifiers[name] {
-			return false
+			return j
 		}
 	}
-	return true
+	return len(args)
 }
 
 // outsideTheEqualsContextWord arms the flag for one word and hands back the

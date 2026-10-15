@@ -6848,8 +6848,8 @@ func (r *Runner) declares(name string) bool {
 	return declarationUtilities[name] || r.declaring[name]
 }
 
-// assignShaped reports whether a word begins with a literal `name=` — where
-// the name may carry a subscript.
+// assignNameSplit finds the `=` that ends a declaration operand's name and
+// answers where it is: the span it lives in and its offset within that span.
 //
 // The name has to be literal: `$x=1` is not an assignment in any shell, and
 // neither is `"a"=1`. Only what the word says before any expansion counts.
@@ -6860,13 +6860,6 @@ func (r *Runner) declares(name string) bool {
 // the operand is an assignment there as much as `n=3` is. Reading only span
 // zero could not see it — `a[$i]=v` reaches this as three spans, and the `=`
 // that ends the name is in the last of them.
-func (r *Runner) assignShaped(w *syntax.Word) bool {
-	_, _, ok := r.assignNameSplit(w)
-	return ok
-}
-
-// assignNameSplit finds the `=` that ends a declaration operand's name and
-// answers where it is: the span it lives in and its offset within that span.
 //
 // The plain half of declarationNameSplit, which is where the walk and the
 // rules it enforces are written down. An **appending** operand is the other

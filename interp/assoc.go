@@ -1376,7 +1376,7 @@ func (r *Runner) keyedLiteralAppend(name, key, add string, replaced map[string]s
 // assocElem reads one `[key]=value` or `[key]+=value` element of a literal.
 //
 // The shape is decided on the word as written, before any expansion — the
-// same rule assignShaped applies — because expanding first would hand `[k]=v`
+// same rule assignNameSplit applies — because expanding first would hand `[k]=v`
 // to the pattern matcher, where it is a character class. The key is the
 // literal text between the brackets; the value expands as an assignment's,
 // which is what keeps `[k]=$x` whole and `[k]=*` a star.

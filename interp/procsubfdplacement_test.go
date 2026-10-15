@@ -305,6 +305,43 @@ func TestSeveralSubstitutionEndsTakeConsecutiveNumbers(t *testing.T) {
 		"in the answer", got, attempts, want)
 }
 
+// A substitution inside a pipeline element takes the numbers that were free
+// before the pipeline started, because the pipeline's own pipe is not in the
+// table a fork would number it from.
+//
+// In a real shell the element is a process holding only its own end of the
+// pipe, on 0. Here the elements are goroutines, and before #6409 `os.Pipe`
+// left both ends at the two lowest free numbers for as long as the elements
+// ran — the element's read end for its whole life and the upstream element's
+// write end until that element finished, which is a race. Measured in ksh with
+// three substitutions: `6 7 5` mostly and `6 7 8` sometimes on darwin, `6 7 8`
+// or `6 5 7` on Linux, where ksh93 answers what it answers without the
+// pipeline. The read end alone is enough to move the first number, so this
+// fails on every run without the raise in runPipeline; the retry is for
+// TestSeveralSubstitutionEndsTakeConsecutiveNumbers's reason.
+func TestASubstitutionInsideAPipelineElementTakesTheFreeNumbers(t *testing.T) {
+	if measuredInAQuietDescriptorTable(t) {
+		return
+	}
+	const attempts = 3
+	var got, want []int
+	for i := range attempts {
+		want = lowestFreeFds(t, 3)
+		got = substNumbers(t, runSubstPlacement(t, SubstitutionEndsAtTheLowestFreeNumber,
+			AllocateDescriptorsFromTen, nil, "echo x | { echo <(true) <(true) <(true); }", nil))
+		if len(got) != 3 {
+			t.Fatalf("got %v, want three numbers", got)
+		}
+		if sameFds(got, want) {
+			return
+		}
+		t.Logf("attempt %d: got %v, wanted %v", i+1, got, want)
+	}
+	t.Errorf("got %v over %d attempts, want %v — the numbers that were free before the "+
+		"pipeline; the pipeline's own pipe ends are being counted in the answer",
+		got, attempts, want)
+}
+
 // lowestFreeFds is the n numbers the kernel would hand out next, asked for
 // and given straight back.
 //

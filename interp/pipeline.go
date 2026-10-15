@@ -323,16 +323,64 @@ func (r *Runner) runPipeline(ctx context.Context, p *syntax.Pipeline, timing *pi
 	n := len(p.Cmds)
 	readers := make([]*os.File, n)
 	writers := make([]*os.File, n)
+	// The number each end is registered under as a private copy, or -1. See
+	// raiseShellEnd, and closeEnd, which is the only way an end is closed.
+	readerCopies := make([]int, n)
+	writerCopies := make([]int, n)
+	for i := range n {
+		readerCopies[i], writerCopies[i] = -1, -1
+	}
+	// closeEnd closes one end, releasing its registration first — the order
+	// releasePrivateCopy asks for — and only once, so that a number the
+	// kernel has since handed to somebody else is never released on their
+	// behalf.
+	closeEnd := func(f *os.File, copyFd *int) {
+		if f == nil {
+			return
+		}
+		if *copyFd >= 0 {
+			releasePrivateCopy(*copyFd)
+			*copyFd = -1
+		}
+		_ = f.Close()
+	}
 
 	// Element i reads from readers[i] and writes to writers[i]; the ends the
 	// shell itself uses are left nil and fall back to the runner's streams.
+	//
+	// **Both ends are moved out of the region the dialect publishes from**,
+	// and registered as private copies, because they are plumbing no fork
+	// would hold. In a real shell each element is a process of its own that
+	// holds only its own end, on 0 or 1. Here the elements are goroutines in
+	// one process, so every end sits in this process's table while they run —
+	// and `os.Pipe` takes the two lowest free numbers, which are the ones an
+	// upward-counting dialect publishes next. A substitution inside an element
+	// stepped over them, and over the upstream element's write end only until
+	// that element finished: `echo x | { echo <(true) <(true) <(true); }`
+	// answered `6 7 5`, `6 5 7` or `6 7 8` by which goroutine won, where ksh93
+	// answers what it answers without the pipeline (#6409). It is the move
+	// raiseShellEnd makes for a substitution's own end, so it is that function
+	// — one walk, one band, one registration.
+	//
+	// The blocking mode it puts back is the mode these ends end up in anyway:
+	// os/exec puts a pipe Go made into blocking mode the first time an
+	// external command is handed it, and that is the description's mode, not
+	// the file's.
+	var want []int
+	if n > 1 {
+		want = r.substEndCandidates()
+	}
 	for i := 0; i < n-1; i++ {
 		pr, pw, err := os.Pipe()
 		if err != nil {
+			for j := range i {
+				closeEnd(writers[j], &writerCopies[j])
+				closeEnd(readers[j+1], &readerCopies[j+1])
+			}
 			return err
 		}
-		writers[i] = pw
-		readers[i+1] = pr
+		writers[i], writerCopies[i] = raiseShellEnd(pw, want)
+		readers[i+1], readerCopies[i+1] = raiseShellEnd(pr, want)
 	}
 
 	// The streams the shell itself supplied are shared by every element that
@@ -356,12 +404,8 @@ func (r *Runner) runPipeline(ctx context.Context, p *syntax.Pipeline, timing *pi
 		// No dialect answered, so the pipeline does not run at all. Running
 		// it and reporting afterwards would pick a side and say it had not.
 		for i := range readers {
-			if readers[i] != nil {
-				_ = readers[i].Close()
-			}
-			if writers[i] != nil {
-				_ = writers[i].Close()
-			}
+			closeEnd(readers[i], &readerCopies[i])
+			closeEnd(writers[i], &writerCopies[i])
 		}
 		r.status = 2
 		return nil
@@ -386,12 +430,8 @@ func (r *Runner) runPipeline(ctx context.Context, p *syntax.Pipeline, timing *pi
 		// copies to have each of them decline is not the same shape as one
 		// that never started.
 		for i := range readers {
-			if readers[i] != nil {
-				_ = readers[i].Close()
-			}
-			if writers[i] != nil {
-				_ = writers[i].Close()
-			}
+			closeEnd(readers[i], &readerCopies[i])
+			closeEnd(writers[i], &writerCopies[i])
 		}
 		return nil
 	}
@@ -639,12 +679,8 @@ func (r *Runner) runPipeline(ctx context.Context, p *syntax.Pipeline, timing *pi
 			// classic way to get this wrong — and however this element
 			// ended, because the element downstream is reading and the shell
 			// is waiting for both.
-			if writers[i] != nil {
-				_ = writers[i].Close()
-			}
-			if readers[i] != nil {
-				_ = readers[i].Close()
-			}
+			closeEnd(writers[i], &writerCopies[i])
+			closeEnd(readers[i], &readerCopies[i])
 			// And this element's copies of the table, which nothing after
 			// the element is entitled to.
 			releaseFds[i]()
@@ -687,9 +723,7 @@ func (r *Runner) runPipeline(ctx context.Context, p *syntax.Pipeline, timing *pi
 				// record left behind would outlive the pipeline and tell
 				// every later substitution to read a pipe that is closed.
 				r.shellStdin = savedShellIn
-				if readers[i] != nil {
-					_ = readers[i].Close()
-				}
+				closeEnd(readers[i], &readerCopies[i])
 			}()
 			if readers[i] != nil {
 				r.shellStdin = r.stdin()

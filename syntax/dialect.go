@@ -8338,6 +8338,42 @@ type Dialect struct {
 	// ordinary word.
 	FdVariableRedirections bool
 
+	// FdVariableRefusedAfterACompound refuses a `{name}` redirection written
+	// after a compound command: `{ :; } {v}</dev/null` and `if :; then :; fi
+	// {v}</dev/null` are parse errors, where a numbered redirection in the
+	// same place — `{ :; } 3</dev/null` — is read.
+	//
+	// zsh alone. Measured 2026-10-15 with `-c`, zsh 5.9.2 under `-f`, bash
+	// 5.3.20 and ksh93u+ 2012-08-01 (which allocate, 10 in both):
+	//
+	//	{ :; } {v}</dev/null                parse error near `{'
+	//	( : ) / case … esac / [[ ]] / (( ))  parse error near `{'
+	//	f() { :; } / function f { :; }      parse error near `{'
+	//	{ :; } always { :; } {v}</dev/null  parse error near `{'
+	//	if :; then :; fi {v}</dev/null      parse error near `{v}'
+	//	while / until / for / select …done  parse error near `{v}'
+	//	for i (1) { : } / repeat 1 { : }    parse error near `{v}'
+	//	foreach i (1) : ; end {v}</dev/null parse error near `{v}'
+	//	{ :; } >/dev/null {v}</dev/null     parse error near `{'
+	//	for i (1) : {v}</dev/null           runs — a simple command's own
+	//
+	// A parse error and not a refusal at run time: under `-c` nothing on the
+	// line runs, from a script file the lines before it do and the script
+	// ends at 1, and every `emulate` mode refuses it too.
+	//
+	// **The token named is the compound's kind**, not the token in front of
+	// the braces — a redirection in between moves neither, and `for i (1) {
+	// : }` ends in a brace and still names the whole word. A compound that
+	// closes with a reserved word leaves `{v}` one word; every other kind
+	// leaves the brace a word of its own, wherever the dialect reads a bare
+	// `{` that way — under `emulate sh` there is no such brace and both name
+	// `{v}`. See [Dialect.OpenBraceNeedsNoBlank].
+	//
+	// Stored as the refusal so that the zero value is the reading bash and
+	// ksh93 share, which is also the one a dialect without the parent
+	// feature never reaches.
+	FdVariableRefusedAfterACompound bool
+
 	// FdVariablePositional lets the name inside those braces begin with a
 	// digit, which is how a *positional parameter* names a descriptor:
 	// `exec {1}>&-` closes the one whose number is in `$1`.

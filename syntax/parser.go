@@ -2902,6 +2902,9 @@ func (p *Parser) withRedirs(c Command) Command {
 		return c
 	}
 	for p.tok.Kind.IsRedirect() || p.at(TokIONumber) {
+		if p.fdVariableRefusedAfter(c) {
+			break
+		}
 		r := p.parseRedirect()
 		if r == nil {
 			break
@@ -2909,6 +2912,45 @@ func (p *Parser) withRedirs(c Command) Command {
 		h.addRedir(r)
 	}
 	return c
+}
+
+// fdVariableRefusedAfter refuses a `{name}` redirection behind a compound
+// command, in the dialect that has the construct and not there, and reports
+// whether it did. See [Dialect.FdVariableRefusedAfterACompound].
+//
+// The token named is decided by the compound's kind: one closed by a reserved
+// word leaves the braces and the name one word, and every other kind leaves a
+// bare `{` that the dialect reads as a word of its own. So the refusal names
+// a token the lexer never produced here — it read `{v}` as the descriptor
+// name, which is the reading being refused — and builds it from the text.
+func (p *Parser) fdVariableRefusedAfter(c Command) bool {
+	if !p.dialect.FdVariableRefusedAfterACompound || !p.at(TokIONumber) ||
+		!strings.HasPrefix(p.tok.Text, "{") {
+		return false
+	}
+	text := p.tok.Text
+	if p.dialect.OpenBraceNeedsNoBlank && !closedByAReservedWord(c) {
+		text = "{"
+	}
+	end := p.tok.Pos
+	end.Offset += int32(len(text))
+	end.Col += int32(len(text))
+	p.failUnexpectedAt(Token{
+		Kind: TokWord, Pos: p.tok.Pos, End: end, Text: text,
+		Spans: []Span{{Kind: Literal, Value: text, Quoting: Unquoted, Pos: p.tok.Pos}},
+	}, "", false)
+	return true
+}
+
+// closedByAReservedWord reports whether a compound command is one whose
+// grammar ends in a reserved word — `fi`, `done`, `end` — however this one
+// happened to be spelled: a `for` with a brace body is still a `for`.
+func closedByAReservedWord(c Command) bool {
+	switch c.(type) {
+	case *IfClause, *LoopClause, *ForClause, *ForArithClause, *RepeatClause, *SelectClause:
+		return true
+	}
+	return false
 }
 
 func (r *redirs) addRedir(x *Redirect) { r.Redirs = append(r.Redirs, x) }

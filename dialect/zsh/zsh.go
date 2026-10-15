@@ -1275,10 +1275,14 @@ func Semantics() interp.Semantics {
 	// the command name stays a positional and that is zsh's answer rather
 	// than a gap. See Semantics.KeywordAssignments.
 	s.KeywordAssignments = interp.No
-	// unanswered ExportContainerLetterNeedsAValue: `export` takes no container
-	// letter here, which Semantics.ExportOptions is the statement of — it is
-	// empty in this dialect, so `export -A` is a bad option and the question has
-	// no line to be about. Measured 2026-09-23.
+	// The container letter `export` takes here is the indexed one alone — `-A`
+	// is `bad option: -A` — and it takes effect without a value: `export -a b`
+	// is an empty exported array, `typeset -ax b=(  )`, and over a standing
+	// scalar it converts it to the same. Measured 2026-10-15 on zsh 5.9.2
+	// (#6452), which corrects the 2026-09-23 note here that said `export`
+	// took no container letter at all. See
+	// interp.Semantics.ExportContainerLetterNeedsAValue.
+	s.ExportContainerLetterNeedsAValue = interp.No
 	// Restricted mode, `setopt restricted` or `set -r`. Measured 2026-10-02
 	// on zsh 5.9.2 under `-f`, from `-c` and from script files (#5155):
 	// `set +r` and `unsetopt restricted` are refused, so the mode is never

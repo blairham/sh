@@ -131,7 +131,7 @@ func (r *Runner) declareMatchingKept(name string, patterns []string, f declareFl
 		// which is the stance `typeset -p` already takes without the `m`:
 		// the shell being modeled uses such a letter to *filter* the full
 		// listing, and that filter is not built. See declareNames.
-		return r.declarePrint(r.matchedNames(patterns))
+		return r.declarePrintMatches(r.matchedNames(patterns))
 	case withoutMatching(f) == declareFlags{} && !anyAssignment(patterns):
 		// Nothing but the letter itself and nothing to assign, so this is
 		// the listing it names. An assignment takes it out of this branch
@@ -188,9 +188,26 @@ func (r *Runner) declareMatchingKept(name string, patterns []string, f declareFl
 		if code := r.declareNames(name, operands, f); code != 0 {
 			return code
 		}
-		return r.declarePrint(r.matchedNames(patternHalves(patterns)))
+		return r.declarePrintMatches(r.matchedNames(patternHalves(patterns)))
 	}
 	return r.declareNames(name, operands, f)
+}
+
+// declarePrintMatches is the `-p` form of the names a pattern picked out, and
+// writes nothing when it picked out none.
+//
+// It owns that because declarePrint reads an empty list as "no names were
+// written", which is the whole table: `typeset -p -m 'zzq*'` wrote every
+// parameter there was, where zsh 5.9.2 writes nothing at 0 — measured
+// 2026-10-15 under `env -i PATH=/usr/bin:/bin` and `-f`, alike for a pattern
+// no name matches and for `'.zsh.*'`, whose matches a listing never shows
+// (#6449). A pattern that matched nothing named no parameter, which is not
+// the same as naming none.
+func (r *Runner) declarePrintMatches(names []string) int {
+	if len(names) == 0 {
+		return 0
+	}
+	return r.declarePrint(names)
 }
 
 // patternHalves is each operand with any `=value` cut away, so that the names

@@ -94,6 +94,12 @@ type heldListing struct {
 	// command set it, carried for the same reason as builtin below: the
 	// command has put the flag back before the held rows are written.
 	withoutValues bool
+	// localsOwn is Runner.listingIsALocalsOwn carried the same way: a `local
+	// -p` held for its operands is still narrowed to the running call's own
+	// names when it is written. Measured 2026-10-15 on bash 5.3.20, `g=1;
+	// f(){ local -p y=(1 2) g; }; f` writes the row for `y` and then `local:
+	// g: not found` at 1.
+	localsOwn bool
 	// names is what the listing will walk, in the order the operands were
 	// written — the whole operand word in the column that reads one as a
 	// name, and the assigned variable's own name in the column that performs
@@ -347,7 +353,7 @@ func (r *Runner) holdTheListing(names []string) {
 	}
 	r.heldListing = heldListing{
 		names: names, builtin: r.inBuiltin, held: true,
-		withoutValues: r.listingWithoutValues,
+		withoutValues: r.listingWithoutValues, localsOwn: r.listingIsALocalsOwn,
 	}
 }
 
@@ -363,9 +369,11 @@ func (r *Runner) listingHeldForItsOperands() (int, bool) {
 	if !held.held {
 		return 0, false
 	}
-	outer, outerWithout := r.inBuiltin, r.listingWithoutValues
-	r.inBuiltin, r.listingWithoutValues = held.builtin, held.withoutValues
-	defer func() { r.inBuiltin, r.listingWithoutValues = outer, outerWithout }()
+	outer, outerWithout, outerOwn := r.inBuiltin, r.listingWithoutValues, r.listingIsALocalsOwn
+	r.inBuiltin, r.listingWithoutValues, r.listingIsALocalsOwn = held.builtin, held.withoutValues, held.localsOwn
+	defer func() {
+		r.inBuiltin, r.listingWithoutValues, r.listingIsALocalsOwn = outer, outerWithout, outerOwn
+	}()
 	return r.declarePrint(held.names), true
 }
 

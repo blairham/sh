@@ -7839,16 +7839,36 @@ func biLocal(r *Runner, _ context.Context, args []string) (endStatus int) {
 			return code
 		}
 	}
-	if len(r.scopes) > 0 && (len(args) == 0 || f.print) {
+	if len(args) == 0 || f.print {
 		// Bare `local` is a listing, and the shells do not agree what of —
 		// see BareLocalListingForm. `local -p` is the same listing spelled
 		// as a letter, except when operands narrow it to named declarations.
 		//
+		// At the top level too, in the dialect that lets the word run there
+		// at all: zsh 5.9.2's top-level `local -p` lists exactly as `typeset
+		// -p` does — the named row, `no such variable` at 1 for a missing
+		// name, the whole table with no operand — and a bare `local` and
+		// `local +` write what `typeset` and `typeset +` write. Measured
+		// 2026-10-15 under `env -i PATH=/usr/bin:/bin` and `-f`. This gated
+		// on a running function, so every one of those wrote nothing at 0
+		// (#6450).
+		//
 		// Narrowed to the running call's own names in the dialect that reads
 		// the word that way — the *listing* is `declare -p`'s, and which
 		// names are in it is this word's. See Runner.localListingSkipsAName.
+		// There is no running call at the top level, so nothing to narrow to.
+		//
+		// The operands are the listing's to perform first, through the same
+		// helper `typeset -p` reaches: `f(){ local -p y=(1 2); }` declares
+		// and lists `y` in bash 5.3.20, and `x=5; local -p x=7` lists `x=5`
+		// in zsh 5.9.2, where this word refused both as names not found.
 		if len(args) > 0 {
-			defer r.localListingIsTheRunningCallsOwn()()
+			if len(r.scopes) > 0 {
+				defer r.localListingIsTheRunningCallsOwn()()
+			}
+			if code, took := r.declarePrintPerformsItsOperands(word, args, f); took {
+				return code
+			}
 			return r.declarePrint(args)
 		}
 		if f.remove && !f.print {
@@ -7861,6 +7881,16 @@ func biLocal(r *Runner, _ context.Context, args []string) (endStatus int) {
 			if code, answered := r.declarationListing(f); answered {
 				return code
 			}
+		}
+		if f.print && r.sem().BareLocalListing == BareLocalListsEveryParameter {
+			// Where the bare word lists every parameter, the letter picks
+			// `-p`'s form for it as it does for `typeset`: measured
+			// 2026-10-15 on zsh 5.9.2, `local -p` writes exactly what
+			// `typeset -p` writes — 75 rows to the bare word's 131 — inside a
+			// function and at the top level alike. This wrote the bare form
+			// for both. The form that lists the call's locals writes them in
+			// `-p`'s shape already, with or without the letter (#6450).
+			return r.declarePrint(nil)
 		}
 		return r.bareLocalListing()
 	}

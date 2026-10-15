@@ -14598,7 +14598,48 @@ type Semantics struct {
 	// Asked only inside a function, where the two answers differ. At the top
 	// level there is no scope to take and every shell freezes the name it
 	// names.
+	//
+	// The ksh93 row above reads only where the *value* went. Its freeze went
+	// somewhere else, which is ReadonlyFreezeStaysWithTheCall.
 	ReadonlyDeclaresALocal Answer
+
+	// ReadonlyFreezeStaysWithTheCall parts `readonly name=value` inside a
+	// function into its two halves, where the shell that answers no to
+	// ReadonlyDeclaresALocal still keeps the freeze for the call.
+	//
+	// Yes: the value is an ordinary assignment to the name as the function
+	// sees it, and the freeze lands on a fresh local of the name — declared
+	// as the dialect's `typeset` declares one, holding nothing — which goes
+	// away when the call returns. So the caller gets the value and keeps a
+	// writable name, and the function itself reads its own empty local. No:
+	// the freeze is on the name the value went to, and outlives the call.
+	//
+	// Measured 2026-10-15 under `env -i PATH=/usr/bin:/bin`, `-c`, against
+	// ksh93u+ 2012-08-01 and bash 5.3.20, each varying one thing (dash has
+	// no `function` word, and freezes the shell's name from `f()`):
+	//
+	//	function f { readonly x; }; f; x=1; echo "x=$x"
+	//	                      ksh93  x=1        bash  x: readonly variable
+	//	x=0; function f { readonly x=5; echo "in=${x-u}"; }; f; echo "out=$x"; x=1
+	//	                      ksh93  in=u out=5, then x=1 is taken
+	//	function f { typeset x=3; readonly x=5; echo "in=$x"; x=4; }; f
+	//	                      ksh93  in=5, then `x: is read only` — a name
+	//	                             already local to the call is frozen there
+	//	readonly x=0; function f { readonly x=1; }; f
+	//	                      ksh93  `x: is read only` — the value half is an
+	//	                             assignment to the caller's frozen name
+	//	f() { readonly x; }; f; x=1
+	//	                      ksh93  `x: is read only` — no `function` word,
+	//	                             no scope, so the freeze is the shell's
+	//
+	// `export` is not split this way: `function f { export x=5; }` leaves
+	// `x` exported and holding 5 after the call.
+	//
+	// The scope is the one `typeset` takes, so TypesetLocalNeedsKeywordFunction
+	// is what decides whether there is one. Asked only inside a function and
+	// only where ReadonlyDeclaresALocal answered no, which is the only place
+	// the two answers differ.
+	ReadonlyFreezeStaysWithTheCall Answer
 
 	// DeclareListing is the shape of what `declare -p` and `typeset -p`
 	// write back. Three engines rather than two answers — see
@@ -33751,6 +33792,10 @@ func PosixSemantics() Semantics {
 		// ReadonlyDeclaresALocal for the measurement, including the ksh93
 		// row that keeps this apart from TypesetLocalNeedsKeywordFunction.
 		ReadonlyDeclaresALocal: No,
+		// And the freeze stays with the name it froze: XCU has no scope for
+		// it to be taken back into, which is also what every column but
+		// ksh93 does. See Semantics.ReadonlyFreezeStaysWithTheCall.
+		ReadonlyFreezeStaysWithTheCall: No,
 		// XCU has no local scope at all, so it has nothing to say about who
 		// can see one. The preset follows every panel member but ksh93, and
 		// follows the reading a shell without scopes already behaves as: a

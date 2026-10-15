@@ -183,6 +183,7 @@ func (r *Runner) SetPrecommand(name string, m PrecommandModifier) {
 		r.precommands = map[string]PrecommandModifier{}
 	}
 	r.precommands[name] = m
+	r.modifierMemoSet = false
 }
 
 // precommand reads a modifier off one expanded field.

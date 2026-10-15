@@ -4,8 +4,6 @@
 package interp
 
 import (
-	"strings"
-
 	"github.com/blairham/sh/syntax"
 )
 
@@ -148,7 +146,7 @@ func (r *Runner) plainParamValue(w *syntax.Word) (string, bool) {
 			return "", false
 		}
 	}
-	if !plainField(v) || strings.ContainsAny(v, "[]") {
+	if !plainField(v) || hasByte(v, '[') || hasByte(v, ']') {
 		return "", false
 	}
 	return v, true

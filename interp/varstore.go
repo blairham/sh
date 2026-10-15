@@ -811,7 +811,7 @@ func (r *Runner) storedScalarOnly(name string) (string, bool) {
 	if c == nil || c.has != slotScalar {
 		return "", false
 	}
-	if r.namespace != "" || r.frameSelected || name == r.pipeStatusName || strings.IndexByte(name, '.') >= 0 {
+	if r.namespace != "" || r.frameSelected || name == r.pipeStatusName || hasByte(name, '.') {
 		return "", false
 	}
 	if _, ok := r.nameref[name]; ok {
@@ -1149,4 +1149,19 @@ func (r *Runner) attrsWroteSince(mask cellAttrs, saved map[string]cellAttrs) boo
 		}
 	}
 	return n != len(saved)
+}
+
+// hasByte reports whether s holds c. A loop for the short texts a name or a
+// value nearly always is, where strings.IndexByte's vector search on amd64
+// costs more to set up than the comparisons it saves (#6496).
+func hasByte(s string, c byte) bool {
+	if len(s) > 16 {
+		return strings.IndexByte(s, c) >= 0
+	}
+	for i := 0; i < len(s); i++ {
+		if s[i] == c {
+			return true
+		}
+	}
+	return false
 }

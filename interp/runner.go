@@ -5174,7 +5174,17 @@ type Runner struct {
 	// opens a tilde context, and equalsTildeContext is armed for one such
 	// argument. See interp/equalstildebuiltins.go.
 	equalsTildeBuiltins map[string]bool
-	equalsTildeContext  bool
+	// equalsTildeMemoName and equalsTildeMemo are the table's answer for
+	// the name it was last asked about; see equalsOpensATildeContextFor.
+	equalsTildeMemoName string
+	equalsTildeMemo     bool
+	equalsTildeMemoSet  bool
+	// modifierMemoName and modifierMemo are whether the word last asked
+	// about is a modifier; see modifierWord.
+	modifierMemoName   string
+	modifierMemo       bool
+	modifierMemoSet    bool
+	equalsTildeContext bool
 	// pipeStatus is what the last pipeline's elements reported, and
 	// pipeStatusName is what the dialect calls it. The record is only kept
 	// when a dialect has named it, because nothing else can read it.
@@ -10025,7 +10035,14 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 		// the builtin still runs, and whether the script ends here. Ahead of
 		// the loop below because a refusal that costs the command must not
 		// have applied the names in front of it first.
-		kind := r.prefixCommandOf(argv)
+		// Asked only where there is a prefix: every use below is of an
+		// assignment in it, or of a prefix walk, which with nothing written
+		// cannot have failed. Asked for every builtin it was three or four
+		// map lookups a command (#6496).
+		var kind prefixCommand
+		if len(c.Assigns) > 0 {
+			kind = r.prefixCommandOf(argv)
+		}
 		// Taken here rather than below the refusal, because the frozen
 		// names' values are expanded between the two and a marker behind
 		// them would read a value that would not expand as something already

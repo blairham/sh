@@ -2649,6 +2649,14 @@ func (r *Runner) unsetReadonly(name string) int {
 		// by name.
 		return 0
 	}
+	return r.refuseUnsetOfAFrozenName(name, refused)
+}
+
+// refuseUnsetOfAFrozenName is unsetReadonly's refusal once the freeze has been
+// found, for the one caller that finds it somewhere other than on the live
+// name: a global binding beneath a running call's local, whose freeze is in
+// the scope's saved records. See Runner.removeTheBindingBeneathALocal.
+func (r *Runner) refuseUnsetOfAFrozenName(name string, refused bool) int {
 	// The builtin has been named in the sentence by three of the four
 	// dialects, so it must not be named in the *location* by the one that
 	// puts every other builtin's name there: zsh writes `zsh:1: read-only
@@ -3895,6 +3903,17 @@ func biExport(r *Runner, _ context.Context, args []string) (endStatus int) {
 			// it is one function so the two cannot come to disagree about
 			// which values are exportable.
 			return r.status
+		}
+		if r.kindLetterUntiesAScriptTie(name, declareFlags{export: true}) {
+			// An array literal over a script tie's scalar half takes the pair
+			// apart here as under `typeset` — see
+			// Runner.kindLetterUntiesAScriptTie. Refused only where the
+			// partner is frozen.
+			if r.unspecified || r.ctl == controlExit {
+				return r.status
+			}
+			status = 1
+			continue
 		}
 		if r.fixedSlotRefusesThisOperand(name, declareFlags{export: true}) {
 			// An array literal over a name this call declared **private**
@@ -6927,6 +6946,10 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 					return r.readFrozenStatus(len(args[:fill]), !defaulted)
 				}
 				refused = true
+			case r.fixedSlotRefusesAnArrayValue(array):
+				// A slot that is not a container refuses the whole array, as
+				// `set -A` does. See interp/privatekindfixed.go.
+				return r.status
 			default:
 				r.setArray(array, elems)
 			}
@@ -6989,6 +7012,10 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 				return r.readFrozenStatus(len(args[:fill]), !defaulted)
 			}
 			refused = true
+		case r.fixedSlotRefusesAnArrayValue(array):
+			// A slot that is not a container refuses the whole array, as
+			// `set -A` does. See interp/privatekindfixed.go.
+			return r.status
 		default:
 			r.setArray(array, fields)
 		}

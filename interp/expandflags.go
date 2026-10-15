@@ -961,6 +961,11 @@ func (r *Runner) assignThroughFlags(e *syntax.ParamExpr, indirect *indirectTarge
 		if !r.assignableTarget(e.Op, e.Name) {
 			return nil, false, false
 		}
+		if r.fixedSlotRefusesAnArrayValue(e.Name) {
+			// The store's refusal, as `set -A` meets it. See
+			// interp/privatekindfixed.go.
+			return nil, false, false
+		}
 		r.setArray(e.Name, elems)
 		// The group's `=` has split the operand already, element by element
 		// as it expanded, so what is substituted is not split a second time:

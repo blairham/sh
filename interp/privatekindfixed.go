@@ -96,6 +96,9 @@ func (r *Runner) fixedSlotKinds(name string) (parameterKinds, bool) {
 	if allowed, private := r.privateSlotKindsOnly(name); private {
 		return allowed, true
 	}
+	if allowed, tied := r.scriptTieSlotKinds(name); tied {
+		return allowed, true
+	}
 	if r.localInTheInnermostScope(name) && r.shadowIsHidden(name) {
 		// A hidden shadow makes an ordinary parameter that merely happens to
 		// be spelled like the shell's, so there is no slot left to keep a
@@ -111,6 +114,43 @@ func (r *Runner) fixedSlotKinds(name string) (parameterKinds, bool) {
 	}
 	allowed, fixed := r.kindFixed[name]
 	return allowed, fixed
+}
+
+// scriptTieSlotKinds is the third source: a half of a tie a **script** made
+// with `typeset -T`, which holds its kind against a value exactly as the
+// shell's own pairs do. The scalar half takes a scalar and the array half an
+// array. Measured 2026-10-15 on zsh 5.9.2 under `env -i PATH=/usr/bin:/bin`,
+// `-f` from a script file, after `typeset -T FOO=a:b foo` (#6468):
+//
+//	FOO=(x)              FOO: attempt to assign array value to non-array,
+//	                     and the script ends
+//	FOO+=(x), FOO=()     the same
+//	set -A FOO x y       the same, with no `set:` in it
+//	read -A FOO          the same
+//	: ${(A)FOO::=x y}    the same
+//	foo=plain            foo `array-tied` holding one element, FOO `plain`
+//	f(){ local foo; FOO=(x) }   refused — the half written is still the tie's
+//	f(){ local FOO; FOO=(x) }   array-local: a local in front is an ordinary
+//	                            name, which is tieDescribesTheBinding's no
+//	x=s; x=(a)           array — the control, an untied scalar converts
+//
+// A **declaration** carrying the literal is not refused but unties, as a kind
+// letter does — `typeset FOO=(x)` leaves FOO an array and foo gone — and that
+// is Runner.kindLetterUntiesAScriptTie's, so fixedSlotRefusesThisOperand
+// leaves a script's tie to it.
+//
+// The shell's own pairs are kindFixed's and are left to it: their sets are
+// measured per name and a `-h` local detaches them where a plain one does
+// not. A joined pair with no word on it is the shell's too.
+func (r *Runner) scriptTieSlotKinds(name string) (parameterKinds, bool) {
+	t, tied := r.tieOf(name)
+	if !tied || t.special || t.wordless || !r.tieDescribesTheBinding(name) {
+		return 0, false
+	}
+	if name == t.array {
+		return kindBit(ArrayParameter), true
+	}
+	return kindBit(ScalarParameter), true
 }
 
 // privateSlotKindsOnly is the private half of fixedSlotKinds, for the one
@@ -140,6 +180,12 @@ func (r *Runner) privateSlotKindsOnly(name string) (parameterKinds, bool) {
 func (r *Runner) fixedSlotRefusesThisOperand(name string, f declareFlags) bool {
 	allowed, fixed := r.fixedSlotKinds(name)
 	if !fixed {
+		return false
+	}
+	if _, tied := r.scriptTieSlotKinds(name); tied {
+		// A declaration's literal over a script's tie unties the pair rather
+		// than being refused — see scriptTieSlotKinds — and a kind letter on
+		// one is not a private's letter either.
 		return false
 	}
 	if r.literalOperands[name] &&
@@ -296,11 +342,32 @@ func (r *Runner) fixedSlotRefusesABareArrayLiteral(a *syntax.Assign) bool {
 	if r.declaringPrivate || r.privateDeclarationRan {
 		return false
 	}
-	allowed, fixed := r.fixedSlotKinds(a.Name)
+	return r.fixedSlotRefusesAnArrayValue(a.Name)
+}
+
+// fixedSlotRefusesAnArrayValue reports whether an array value written over a
+// slot that is not a container is refused, having said so and ended the
+// script. It is the store's refusal, and every road that writes a whole array
+// by a name asks it: the bare literal above, `set -A`, `read -A` and the
+// `(A)` assignment flag. Measured 2026-10-15 on zsh 5.9.2, over a script's
+// tie, a `private` and `HOME` alike:
+//
+//	set -A HOME x y            HOME: attempt to assign array value to non-array
+//	read -A HOME <<< x         the same
+//	: ${(A)HOME::=x}           the same
+//	f(){ private v; set -A v x }   f: v: attempt to assign …
+//
+// The sentence is the store's and names no builtin, so the word in front is
+// taken out of the location as fixedContainerKeepsItsKind does.
+func (r *Runner) fixedSlotRefusesAnArrayValue(name string) bool {
+	allowed, fixed := r.fixedSlotKinds(name)
 	if !fixed || allowed.has(ArrayParameter) || allowed.has(AssocParameter) {
 		return false
 	}
+	outer := r.inBuiltin
+	r.inBuiltin = ""
 	r.fatal("%s\n", Wording(r.diag().ArrayValueToNonArray,
-		"%[1]s: attempt to assign array value to non-array", a.Name))
+		"%[1]s: attempt to assign array value to non-array", name))
+	r.inBuiltin = outer
 	return true
 }

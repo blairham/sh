@@ -77,6 +77,13 @@ func (r *Runner) setArrayOperands(name string, front bool, values []string) int 
 	if r.refuseReadonly(name, assignedByDeclaration) {
 		return 1
 	}
+	if r.fixedSlotRefusesAnArrayValue(name) {
+		// A slot that is not a container keeps its kind against this store as
+		// it does against `name=(…)`: a script's scalar tie half, a private
+		// scalar, one of the shell's own scalars. See
+		// interp/privatekindfixed.go.
+		return r.status
+	}
 	if front && len(values) == 0 {
 		// Nothing to put at the front, which is a store that may not happen
 		// at all — see emptyPrependStores, where the two columns part. Ahead

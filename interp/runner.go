@@ -12248,6 +12248,14 @@ func (r *Runner) fatalPosixSpecialUsageQuiet() {
 }
 
 func (r *Runner) fatal(format string, args ...any) {
+	if r.progGlob.words != nil &&
+		r.holdForTheProgram(strings.TrimSuffix(fmt.Sprintf(format, args...), "\n")) {
+		// Raised by the pathname stage of a program's word — a qualifier
+		// that will not read, or a subscript in one that will not evaluate —
+		// and the program's failure rather than the script's, as an
+		// unmatched pattern is. See interp/programglobrefusal.go.
+		return
+	}
 	r.diagf(format, args...)
 	r.fatalQuiet()
 }

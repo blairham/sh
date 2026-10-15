@@ -50,3 +50,27 @@ func TestAWritableNameStillClosesHere(t *testing.T) {
 		t.Errorf("said %q, want nothing about readonly", out)
 	}
 }
+
+// TestAFrozenNameIsRefusedBeforeTheTarget — the Yes side of
+// interp.Semantics.FdVariableReadonlyRefusedFirst: the name is looked at
+// before the target is opened or duplicated, so a target that would not open
+// is never reported, and a move's source is not closed (#6571). ksh93u+
+// 2012-08-01 `-c`, measured 2026-10-15.
+func TestAFrozenNameIsRefusedBeforeTheTarget(t *testing.T) {
+	const refusal = "ksh: v: is read only\n"
+	for _, c := range []struct{ name, src, want string }{
+		{"a write that would not open", `readonly v=1; true {v}>/nodir/f; echo "st=$?"`, refusal + "st=1\n"},
+		{"a read that would not open", `readonly v=1; true {v}</nonexist; echo "st=$?"`, refusal + "st=1\n"},
+		{"a read-write", `readonly v=1; true {v}<>/nodir/f; echo "st=$?"`, refusal + "st=1\n"},
+		{"a closed descriptor", `readonly v=1; true {v}>&3; echo "st=$?"`, refusal + "st=1\n"},
+		{"a move leaves its source open", `readonly v=1; exec 9</dev/null; true {v}<&9-; echo "st=$?"; true <&9; echo "st=$?"`, refusal + "st=1\nst=0\n"},
+		{"ahead of noclobber", `exec {v}>/dev/null; readonly v; set -C; true {v}>/dev/null; echo "st=$?"`, refusal + "st=1\n"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			out, _ := runKsh(t, t.TempDir(), c.src)
+			if out != c.want {
+				t.Errorf("got %q, want %q", out, c.want)
+			}
+		})
+	}
+}

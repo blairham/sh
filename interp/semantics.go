@@ -24841,6 +24841,38 @@ type Semantics struct {
 	// two columns that have both it and an opinion disagree.
 	ReadonlyFdVariableRefusesAClose Answer
 
+	// FdVariableReadonlyRefusedFirst refuses a `{name}` redirection aimed at
+	// a frozen name before its target is opened or duplicated, rather than
+	// opening first and refusing the number when it will not store (#6571).
+	//
+	// The order decides which complaint a bad target gets. Measured
+	// 2026-10-15 with `-c`, bash 5.3.20, zsh 5.9.2 under `-f`, ksh93u+
+	// 2012-08-01, each program starting `readonly v=1;`:
+	//
+	//	                       bash 5.3.20               zsh 5.9.2                       ksh93u+
+	//	true {v}>/nodir/f      /nodir/f: No such file …  can't allocate file descriptor  v: is read only
+	//	                                                 to readonly parameter v
+	//	true {v}>&3 (closed)   cannot duplicate fd …,    can't allocate …                v: is read only
+	//	                       3: Bad file descriptor
+	//	true {v}</nonexist     /nonexist: No such …      can't allocate …, then          v: is read only
+	//	                                                 undefined error: 0: /nonexist
+	//	true {v}</dev/null     v: readonly variable,     can't allocate …, then          v: is read only
+	//	                       v: cannot assign fd …     undefined error: 0: /dev/null
+	//
+	// Every row is status 1. The target is still *expanded* first in all
+	// three (`{v}<$(echo X >&2; echo f)` writes X before the refusal), and
+	// zsh's second line on a read names the expansion it never opened. The
+	// name is checked ahead of `set -C`'s protection of it, and ahead of the
+	// close half of a move: ksh93's `{v}<&9-` refuses and leaves 9 open.
+	//
+	// A close (`{v}>&-`) is not this question — it stores nothing — and is
+	// ReadonlyFdVariableRefusesAClose. A here-document or here-string opens
+	// nothing that could fail, so there the order cannot be seen.
+	//
+	// **Asked only where the name is frozen**, which is the rare case. bash
+	// 3.2 and dash have no `{name}` redirection to ask.
+	FdVariableReadonlyRefusedFirst Answer
+
 	// NoclobberProtectsAnFdVariable refuses a `{name}` redirection under
 	// `set -C` when the name already holds a descriptor this shell has open.
 	//

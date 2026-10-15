@@ -43,3 +43,23 @@ func TestTheOpeningHalfIsStillRefusedInTwoSentences(t *testing.T) {
 		t.Errorf("said %q, want %q", errs, want)
 	}
 }
+
+// TestAFrozenNameIsFoundOutAfterTheOpen — the No side of
+// interp.Semantics.FdVariableReadonlyRefusedFirst: the target is opened (or
+// duplicated) before the name is looked at, so a target that will not open
+// is what gets reported and the name is never mentioned. zsh and ksh93u+
+// name the frozen parameter instead (#6571). Measured 2026-10-15 on bash
+// 5.3.20, `-c`.
+func TestAFrozenNameIsFoundOutAfterTheOpen(t *testing.T) {
+	for _, c := range []struct{ name, src, errs string }{
+		{"a write", "readonly v=1; true {v}>/nodir/f; echo \"st=$?\"\n", "bash: line 1: /nodir/f: No such file or directory\n"},
+		{"a read", "readonly v=1; true {v}</nonexist; echo \"st=$?\"\n", "bash: line 1: /nonexist: No such file or directory\n"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			out, errs := runBashSplit(t, c.src)
+			if out != "st=1\n" || errs != c.errs {
+				t.Errorf("out %q err %q, want st=1 and %q", out, errs, c.errs)
+			}
+		})
+	}
+}

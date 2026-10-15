@@ -683,6 +683,13 @@ func (r *Runner) applyRedirList(ctx context.Context, rs []*syntax.Redirect, comp
 				// first and closes after, so the name gets the next one up.
 				fd = r.nextFreeFd(moveFrom)
 			}
+			// A frozen name, in the dialects that look at it before the
+			// duplication — and before the close half of a move. See
+			// Runner.fdVarFrozenRefusedFirst.
+			if r.fdVarFrozenRefusedFirst(fdVar, "") {
+				r.redirErr = true
+				return closers, nil
+			}
 			persists := fdVar != "" && r.fdVarOutlivesItsCommand()
 			if r.unspecified {
 				r.redirErr = true
@@ -699,6 +706,17 @@ func (r *Runner) applyRedirList(ctx context.Context, rs []*syntax.Redirect, comp
 				saveFds()
 			}
 			if err := r.dupFd(fd, name, r.dupTargetText(rd, moveFrom), rd.Op != syntax.TokLessAmp, opened); err != nil {
+				// One dialect says first that the descriptor it picked for
+				// the name could not be made a copy of the source. Only for a
+				// source that is a number: a word that is not one is the
+				// ambiguous redirect, which no copy was tried for. See
+				// Diagnostics.FdVariableDuplicationFailed.
+				if _, numeric := atoi(name); numeric && fdVar != "" {
+					if w := r.diag().FdVariableDuplicationFailed; w != "" {
+						r.errf("%s%s\n", r.diag().prefixWithoutLine(r.name(), ""),
+							fmt.Sprintf(w, r.diag().reasonText(reason(syscall.EBADF))))
+					}
+				}
 				r.diagf("%v\n", err)
 				// A duplication that fails is a redirection that failed, and
 				// carries the same number as one whose file would not open.
@@ -854,6 +872,18 @@ func (r *Runner) applyRedirList(ctx context.Context, rs []*syntax.Redirect, comp
 		// rather than once per name: it is a question about the operator.
 		persists := false
 		if fdVar != "" {
+			// A frozen name, in the dialects that look at it before the open
+			// and before `set -C` looks at it. The read's target is named to
+			// it as it is to the store below. See
+			// Runner.fdVarFrozenRefusedFirst.
+			readTarget := ""
+			if flags&os.O_WRONLY == 0 && len(names) > 0 {
+				readTarget = names[0]
+			}
+			if r.fdVarFrozenRefusedFirst(fdVar, readTarget) {
+				r.redirErr = true
+				return closers, nil
+			}
 			// `set -C` protects the *name* in one shell, and it is checked
 			// here — before any file is opened — because the reference
 			// creates nothing when it refuses. See

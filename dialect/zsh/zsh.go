@@ -5345,6 +5345,11 @@ func Semantics() interp.Semantics {
 	// using readonly variable`. See
 	// interp.Semantics.ReadonlyFdVariableRefusesAClose.
 	s.ReadonlyFdVariableRefusesAClose = interp.Yes
+	// And a frozen name is refused before the target is opened: `readonly
+	// v=1; true {v}>/nodir/f` is `can't allocate file descriptor to readonly
+	// parameter v` and not the open's failure, measured 2026-10-15 (#6571).
+	// See interp.Semantics.FdVariableReadonlyRefusedFirst.
+	s.FdVariableReadonlyRefusedFirst = interp.Yes
 	// And `set -C` protects a name that already holds an open descriptor, so
 	// `exec {m}>f1; exec {m}>f2` is refused rather than reallocating. The
 	// name is what is protected and not the file — the same file twice is

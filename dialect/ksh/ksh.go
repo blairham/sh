@@ -4636,6 +4636,11 @@ func Semantics() interp.Semantics {
 	// interp.Diagnostics.FdVariableReadonlyClose, set below, and
 	// interp.Semantics.ReadonlyFdVariableRefusesAClose.
 	s.ReadonlyFdVariableRefusesAClose = interp.Yes
+	// And a frozen name is refused before the target is opened: `readonly
+	// v=1; true {v}>/nodir/f` is `v: is read only` and not the open's
+	// failure, measured 2026-10-15 on ksh93u+ (#6571). See
+	// interp.Semantics.FdVariableReadonlyRefusedFirst.
+	s.FdVariableReadonlyRefusedFirst = interp.Yes
 	// And `set -C` does not protect the name: `exec {m}>f1; exec {m}>f2`
 	// allocates a second descriptor and overwrites it in silence, measured
 	// 2026-09-29. See interp.Semantics.NoclobberProtectsAnFdVariable.

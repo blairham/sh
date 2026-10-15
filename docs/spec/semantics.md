@@ -26419,6 +26419,20 @@ an identifier: 1a` as an error that ends the shell — a subshell, or just the
 command where the command is a program. Measured 2026-10-15 (#6522). bash
 reads all of these as ordinary words.
 
+**`FdVariableReadonlyRefusedFirst`** — bash no · dash — · ksh93 yes · zsh yes
+
+Whether a `{name}` redirection aimed at a frozen name is refused before its
+target is opened or duplicated. zsh and ksh93 look at the name first, so
+`readonly v=1; true {v}>/nodir/f` is `can't allocate file descriptor to
+readonly parameter v` and `v: is read only` respectively, and the open's
+failure is never reported; bash opens first and reports `/nodir/f: No such
+file or directory`, refusing the name only when a target that did open hands
+it a number. The target is still expanded first in all three, zsh's
+second line on a read names that expansion although it was never opened, and
+the name is checked ahead of `set -C`'s protection of it and of the close half
+of a move. Status 1 throughout. Asked only where the name is frozen. Measured
+2026-10-15 (#6571).
+
 **`ReadonlyFdVariableRefusesAClose`** — bash no · dash — · ksh93 yes · zsh yes
 
 Refuses `exec {name}>&-` when the name holding the descriptor is frozen.

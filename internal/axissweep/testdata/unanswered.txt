@@ -149,6 +149,7 @@ ash   FailingPipelineWhoseLastElementRanHere
 ash   FdVariableBadName
 ash   FdVariableOnASubshellIsTheSubshells
 ash   FdVariableReachesTheProgramsEnvironment
+ash   FdVariableReadonlyRefusedFirst
 ash   FloatFormatLetterE
 ash   FloatLetterChangeRereadsTheRendering
 ash   ForNameWhenTheLoopRuns
@@ -538,6 +539,7 @@ dash  FailingPipelineWhoseLastElementRanHere
 dash  FdVariableBadName
 dash  FdVariableOnASubshellIsTheSubshells
 dash  FdVariableReachesTheProgramsEnvironment
+dash  FdVariableReadonlyRefusedFirst
 dash  FloatFormatLetterE
 dash  FloatLetterChangeRereadsTheRendering
 dash  ForNameWhenTheLoopRuns

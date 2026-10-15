@@ -66,8 +66,14 @@ func (r *Runner) assignChainedElement(a *syntax.Assign) {
 	for _, link := range a.Leading[1:] {
 		rest = append(rest, r.joinWord(link.Index))
 	}
-	r.chainWrite(a.Name, held, there, place, rest, r.joinWord(a.Index),
-		r.assignValue(a), a.Append)
+	last := r.joinWord(a.Index)
+	value := r.assignValue(a)
+	if r.assignmentGaveUp() {
+		// A value that would not expand stores nothing — see the indexed
+		// store in Runner.assign (#6579).
+		return
+	}
+	r.chainWrite(a.Name, held, there, place, rest, last, value, a.Append)
 }
 
 // chainWrite walks the subscripts after the first and writes the value under

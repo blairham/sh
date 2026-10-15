@@ -57,6 +57,11 @@ func (r *Runner) assignFlaggedSpan(a *syntax.Assign) {
 		return
 	}
 	value := r.assignValue(a)
+	if r.assignmentGaveUp() {
+		// A value that would not expand stores nothing — see the indexed
+		// store in Runner.assign (#6579).
+		return
+	}
 	if a.Append {
 		r.appendArrayElem(a.Name, to, a.IndexText, value)
 		return

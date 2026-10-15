@@ -1358,6 +1358,11 @@ func (r *Runner) assignAssocElement(a *syntax.Assign) {
 		return
 	}
 	value := r.elementValue(a, globbed)
+	if r.assignmentGaveUp() {
+		// A value that would not expand stores nothing — see the indexed
+		// store in Runner.assign (#6579).
+		return
+	}
 	if a.Append {
 		// `m[k]+=v` joins the element it names, the same operation the
 		// indexed form performs on a subscript — an unset key leaves

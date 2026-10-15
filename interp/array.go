@@ -1532,6 +1532,11 @@ func (r *Runner) assignWholeArraySubscript(a *syntax.Assign) {
 	switch policy {
 	case WholeArraySubscriptNamesEveryElement:
 		value := r.assignValue(a)
+		if r.assignmentGaveUp() {
+			// A value that would not expand stores nothing — see the
+			// indexed store in Runner.assign (#6579).
+			return
+		}
 		if a.Append {
 			// `a[@]+=Z` adds one element at the end rather than joining
 			// every element: measured, `x=(p q); x[@]+=Z` is `p q Z`.
@@ -1549,6 +1554,11 @@ func (r *Runner) assignWholeArraySubscript(a *syntax.Assign) {
 			return
 		}
 		value := r.assignValue(a)
+		if r.assignmentGaveUp() {
+			// A value that would not expand stores nothing — see the
+			// indexed store in Runner.assign (#6579).
+			return
+		}
 		if a.Append {
 			v, joined := r.appendedValue(a.Name, r.assocsAt(a.Name)[key].scalar(), value)
 			if !joined {

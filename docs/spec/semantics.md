@@ -18456,8 +18456,10 @@ disagreeing would be a row to add rather than a value to flip (#3517).
 ### A valueless operand's subscript is read twice where it is read at all
 
 The column that *reads* a valueless subscripted declaration operand's
-brackets reads them on two passes, so a side effect inside them fires twice.
-Measured 2026-09-17, ksh93u+, a script file:
+brackets reads them on two passes, so a side effect inside them fires twice —
+**when the first pass found the first element**. Past it they are read once:
+`i=1; typeset 'c[i++]'` leaves `i` at 2 (measured 2026-10-15). Measured
+2026-09-17, ksh93u+, a script file:
 
     c=(1 2 3); i=0; typeset 'c[i++]'      i is 2
     c=(1 2 3); i=0; readonly 'c[i++]'     i is 2
@@ -18477,6 +18479,31 @@ declared element that exists without holding a value, counted by `${#a[@]}`
 but absent from `${!a[@]}` and from an indexed array's listing while a
 table's prints it as `[k]=`. That wants a third state for an element and is
 left open.
+
+What the index *decides* is a separate thing, and it can be modeled (#6490).
+Element 0 is the name itself, so brackets naming it declare no array. Any
+other element makes the name an indexed array, and if that array holds
+nothing it is the array that *has held* an element: the state an emptied
+array is in, with the same listing (`([0]=)`), the same count (0) and the same
+`${x[0]-U}` (U). A later `x=q` lists as `(q)` in that state, not as the scalar
+a never-held array lists. Measured 2026-10-15 on ksh93u+, `-c`, under `env -i
+PATH=/usr/bin:/bin`. The three words agree on every row:
+
+| over | `typeset x[0]` | `readonly x[1]` | `export x[1]` |
+|---|---|---|---|
+| nothing | no listing | `typeset -r -a x=([0]=)` | `typeset -x -a x=([0]=)` |
+| `typeset x` | no listing | `typeset -r -a x=([0]=)` | `typeset -x -a x=([0]=)` |
+| `typeset -a x` | `typeset -a x` | `typeset -r -a x=([0]=)` | `typeset -x -a x=([0]=)` |
+
+The local that `readonly` freezes inside a `function`-defined function (see
+`ReadonlyFreezeStaysWithTheCall`) reads its brackets the same way, against the
+fresh local. `x=(a b); function f { readonly x[1]; typeset -p x; }` lists
+`typeset -r -a x=([0]=)`, and `m[j]` over a caller's table reads `j` as
+arithmetic, so it is element 0 and the local is the scalar `typeset -r m`.
+
+A **scalar** under brackets past the first (`x=s; typeset x[1]`) lists
+`typeset -a x=(s )` with a count of 2. That is the declared element above,
+and it is left open with it.
 
 ## A subscript before the first element
 

@@ -78,6 +78,14 @@ func (r *Runner) badSubscriptToADeclaration(sub string, err error) {
 	// the builtin's own location, through keptBuiltinLocation. `typeset` lost
 	// both where `unset` and `read` kept them (#3496).
 	builtin := r.declarationSpeaker
+	if builtin == "" {
+		// A valueless operand's brackets, which are read with the builtin
+		// still running rather than through declareElement's hand-off: the
+		// speaker is the builtin itself. Measured 2026-10-15 on ksh93u+,
+		// `readonly 'x[a b]'` is `readonly: a b: arithmetic syntax error`,
+		// where this wrote an empty name in its place (#6490).
+		builtin = r.inBuiltin
+	}
 	outer := r.inBuiltin
 	r.inBuiltin = r.keptBuiltinLocation(builtin)
 	defer func() { r.inBuiltin = outer }()
@@ -121,7 +129,8 @@ func (r *Runner) valuelessSubscriptedOperand(base string, subs []string, f decla
 	// refused it as `cannot convert associative to indexed array` at 1 — and
 	// ended the script for it in the ksh column.
 	letters = f
-	letters.array = letters.array || (!letters.assoc && !r.assocDeclared(base))
+	indexed := !letters.assoc && !r.assocDeclared(base)
+	letters.array = letters.array || indexed
 	switch r.sem().ValuelessSubscriptedOperand {
 	case ValuelessSubscriptedOperandDeclaresTheName:
 		// Even the column that reads no subscript refuses an **empty** one,
@@ -155,23 +164,40 @@ func (r *Runner) valuelessSubscriptedOperand(base string, subs []string, f decla
 			r.declareAssocKey(base, sub)
 			return "", letters, true
 		}
-		if _, err := r.subscriptValue(sub); err != nil {
+		at, err := r.subscriptValue(sub)
+		if err != nil {
 			r.badSubscriptToADeclaration(sub, err)
 			return "", letters, true
 		}
-		// **Twice**, and that is measured rather than a slip. The column
-		// that reads a valueless operand's subscript reads it on two passes,
-		// so a side effect in the brackets fires twice: measured 2026-09-17,
+		if at != 0 {
+			// An element past the first makes the name an indexed array, and
+			// one that has held an element if it is left holding none — see
+			// declareFlags.emptiedArray. The brackets are read once here.
+			// Measured 2026-10-15 on ksh93u+ 2012-08-01: `i=1; typeset
+			// 'c[i++]'` leaves `i` at 2 and `c` listed `([0]=)`.
+			letters.emptiedArray = indexed
+			return base, letters, false
+		}
+		// The first element is the name itself, so the brackets declare no
+		// array: measured 2026-10-15 on ksh93u+, `readonly x[0]` lists
+		// `typeset -r x`, `export x[0]` lists `typeset -x x`, and `typeset
+		// x[0]` lists nothing at all, as a bare `typeset x` does. A letter
+		// that was written still stands.
+		letters.array = f.array
+		// **Twice**, and that is measured rather than a slip — but only
+		// here, where the first pass found the first element. The column
+		// that reads a valueless operand's subscript reads it again then, so
+		// a side effect in the brackets fires twice: measured 2026-09-17,
 		// ksh93u+, `c=(1 2 3); i=0; typeset 'c[i++]'` leaves `i` at 2, and
-		// so do the `readonly` and `export` spellings. It is this operand
-		// shape alone — the same brackets with a value are read once
+		// so do the `readonly` and `export` spellings, where `i=1` in front
+		// of the same line leaves 2 (measured 2026-10-15). It is this
+		// operand shape alone — the same brackets with a value are read once
 		// (`typeset 'c[i++]'=v` leaves 1), and so are `unset 'c[i++]'` and
 		// the expansion `${c[i++]}`.
 		//
 		// The second pass is discarded, which is the whole of it: the value
 		// was already found and a failure was already answered above, so
-		// nothing but the side effect can come of it. See #3511, whose other
-		// three rows are about what this column *records* and are not here.
+		// nothing but the side effect can come of it. See #3511.
 		_, _ = r.subscriptValue(sub)
 		return base, letters, false
 	case ValuelessSubscriptedOperandWritesTheElement:

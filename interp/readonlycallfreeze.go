@@ -69,13 +69,32 @@ func (r *Runner) readonlyFreezesACallLocal(name, value string, hasValue, appends
 		}
 	}
 	fresh, _ := r.shadowTypeset(base)
-	// The local is a scalar whatever the caller's name was: measured, `x=(a
-	// b); function f { readonly x; typeset -p x; }` lists `typeset -r x`,
-	// and the caller's array is back whole after the call.
+	// The local is a scalar whatever the caller's name was, unless the
+	// operand's brackets say otherwise below: measured, `x=(a b); function f
+	// { readonly x; typeset -p x; }` lists `typeset -r x`, and the caller's
+	// array is back whole after the call.
 	r.dropTheOuterCompound(base, fresh)
 	r.declareEmpty(base, fresh, true, true, true, r.LocalInheritsTheOuterValue(), true)
 	if r.unspecified || r.ctl == controlExit {
 		return true
+	}
+	if subscripted && !hasValue {
+		// The brackets of a valueless operand are read as every declaration
+		// reads them, against the local now standing: an element past the
+		// first makes it an array that has held one. Measured 2026-10-15 on
+		// ksh93u+, `x=(a b); function f { readonly x[1]; typeset -p x; }`
+		// lists `typeset -r -a x=([0]=)` and `x[0]` the scalar `typeset -r
+		// x`, a table's key included — `m[k]` reads `k` as arithmetic on the
+		// fresh local and lists `typeset -r m` — and `x[a b]` is the
+		// arithmetic refusal (#6490).
+		_, letters, done := r.valuelessSubscriptedOperand(base, subs, declareFlags{}, false)
+		if done || r.unspecified {
+			return true
+		}
+		if letters.array && !r.markDeclaredCompound(base, false,
+			declareFlags{array: true, emptiedArray: letters.emptiedArray}, false) {
+			return true
+		}
 	}
 	r.markReadonly(base)
 	return true

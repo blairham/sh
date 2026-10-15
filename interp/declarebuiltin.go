@@ -86,6 +86,12 @@ type declareFlags struct {
 	export             bool
 	assoc              bool
 	array              bool
+	// emptiedArray is the array letter as a valueless subscripted operand
+	// gives it in the column that reads the brackets, where they named an
+	// element past the first: the array declared is the kind that has held
+	// an element, if it is left holding none (attrHeldAnElement). Set by
+	// valuelessSubscriptedOperand and read by markDeclaredCompound (#6490).
+	emptiedArray bool
 	// compoundVar is `-C`, ksh93's compound-variable letter: a fourth kind
 	// beside the scalar and the two arrays. Its own field rather than a
 	// third value of a container enum because it is not a container — the
@@ -2999,6 +3005,18 @@ func (r *Runner) markDeclaredCompound(name string, fresh bool, f declareFlags, h
 			// is the scalar it was. Not the same as promoting it, even where
 			// a scalar answers `${b[0]}` and `${#b[@]}` as an array of one
 			// would — a bare `typeset -a` afterwards does not list the name.
+		}
+		if f.emptiedArray && r.arrayDeclared(name) && r.arraysAt(name).Len() == 0 {
+			// The brackets of a valueless operand named an element past the
+			// first, and the array is left holding none: it is the array
+			// that has held one. Measured 2026-10-15 on ksh93u+ 2012-08-01,
+			// `typeset x[1]`, `readonly x[1]` and `export x[1]` over a name
+			// with no value, or over a declared-only array, each list
+			// `x=([0]=)` with `${#x[@]}` 0 and `${x[0]-U}` U — which is this
+			// state's listing, count and read — and `x=q` after it lists
+			// `(q)` rather than the scalar a never-held array lists. See
+			// valuelessSubscriptedOperand.
+			r.attrSet(name, attrHeldAnElement)
 		}
 	}
 	if f.assoc {

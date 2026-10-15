@@ -3893,6 +3893,8 @@ func biExport(r *Runner, _ context.Context, args []string) (endStatus int) {
 	}
 	for _, a := range args {
 		name, value, hasValue, appends := declarationOperand(a)
+		// See the same variable in biReadonly.
+		var bracketed declareFlags
 		if r.exportRefusesACompound(name, declareFlags{
 			export: true,
 			remove: strings.ContainsRune(opts, 'n'),
@@ -3950,7 +3952,7 @@ func biExport(r *Runner, _ context.Context, args []string) (endStatus int) {
 			// letter lands on the *array* or nowhere, and which of those it
 			// is comes from the one call below, so a dialect cannot record
 			// it by two routes and answer them differently (#3510).
-			n, _, done := r.valuelessSubscriptedOperand(base, subs, declareFlags{}, false)
+			n, letters, done := r.valuelessSubscriptedOperand(base, subs, declareFlags{}, false)
 			if done {
 				if r.unspecified || r.operandGaveUpTheBuiltin() {
 					return r.status
@@ -3965,6 +3967,11 @@ func biExport(r *Runner, _ context.Context, args []string) (endStatus int) {
 				return r.status
 			}
 			name = n
+			if letters.array {
+				// `export x[1]` lists `typeset -x -a x=([0]=)` on ksh93u+,
+				// measured 2026-10-15 (#6490). See biReadonly.
+				bracketed = declareFlags{array: true, emptiedArray: letters.emptiedArray}
+			}
 		}
 		if r.restrictedDeclarationRefused(name, declareFlags{export: true, global: true}, hasValue, false) {
 			// A name restricted mode froze, which one dialect will not have
@@ -4061,6 +4068,13 @@ func biExport(r *Runner, _ context.Context, args []string) (endStatus int) {
 			// altogether — see declareFlags.onlyTakesAttributesAway, which
 			// is the same reading for the `+x` spelling one builtin along
 			// (#4163).
+			if bracketed.array && !r.markDeclaredCompound(name, false, bracketed, false) {
+				if r.unspecified || r.ctl == controlExit {
+					return r.status
+				}
+				r.assignFailed = true
+				continue
+			}
 			r.declareEmpty(name, false, true, true,
 				!strings.ContainsRune(opts, 'n'), false, true)
 			if r.unspecified || r.ctl == controlExit {
@@ -8570,6 +8584,10 @@ func biReadonly(r *Runner, ctx context.Context, args []string) int {
 	defer func(was bool) { r.rereadingAQuotedLiteral = was }(r.rereadingAQuotedLiteral)
 	for _, a := range args {
 		name, value, hasValue, appends := declarationOperand(a)
+		// The array letter a valueless operand's brackets gave the name,
+		// which this word has no letter to write — see
+		// valuelessSubscriptedOperand.
+		var bracketed declareFlags
 		// A **member path** whose base is a reference is a member of the name
 		// the reference points at, and the whole operand is about that cell.
 		// Here rather than beside attributeFollowsTheReference below, which
@@ -8624,7 +8642,7 @@ func biReadonly(r *Runner, ctx context.Context, args []string) int {
 				}
 				continue
 			}
-			n, _, done := r.valuelessSubscriptedOperand(base, subs, declareFlags{readonly: true}, false)
+			n, letters, done := r.valuelessSubscriptedOperand(base, subs, declareFlags{readonly: true}, false)
 			if done {
 				if r.unspecified || r.operandGaveUpTheBuiltin() {
 					return r.status
@@ -8641,6 +8659,13 @@ func biReadonly(r *Runner, ctx context.Context, args []string) int {
 			// froze a variable literally named `a[1]` and left `a` writable,
 			// where ksh93 leaves `typeset -r -a a` (#3501, #1380).
 			name = n
+			if letters.array && !f.array && !f.assoc {
+				// The brackets named an element past the first, which makes
+				// the name an array under this word as under `typeset`:
+				// measured 2026-10-15 on ksh93u+, `readonly x[1]` lists
+				// `typeset -r -a x=([0]=)` (#6490).
+				bracketed = declareFlags{readonly: f.readonly, array: true, emptiedArray: letters.emptiedArray}
+			}
 		}
 		if r.fixedSlotRefusesThisOperand(name, f) {
 			// An array literal over a name this call declared **private**
@@ -8714,7 +8739,17 @@ func biReadonly(r *Runner, ctx context.Context, args []string) int {
 		// scalar here and `readonly -a q="(1 2)"` below could not see an
 		// array to read its text again for.
 
-		if (f.array || f.assoc) && (hasValue || r.literalOperands[name] || r.readonlyRecordsTheCompound()) {
+		if bracketed.array {
+			// Not the letter ReadonlyRecordsTheCompoundAttribute is about:
+			// nothing was written, the brackets said it.
+			if !r.markDeclaredCompound(name, fresh, bracketed, hasValue) {
+				if r.unspecified || r.ctl == controlExit {
+					return r.status
+				}
+				r.assignFailed = true
+				continue
+			}
+		} else if (f.array || f.assoc) && (hasValue || r.literalOperands[name] || r.readonlyRecordsTheCompound()) {
 			// Ahead of the assignment, the order every other declaration
 			// loop keeps: the letters say what the name is and the value
 			// then lands in it.

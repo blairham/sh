@@ -84,6 +84,13 @@ func buildTheShells() {
 	} {
 		cmd := exec.Command("go", "build", "-o", filepath.Join(buildDir, bin), pkg)
 		cmd.Dir = "../.."
+		// Built the way a release is (.goreleaser.yaml sets CGO_ENABLED=0
+		// for every binary), because that is the program somebody runs.
+		// Left to the default, a Linux machine with a C compiler links
+		// os/user through cgo, so the binary is dynamically linked and
+		// starts the C runtime first: measured on the ubuntu runner, 0.6 ms
+		// of every spawn that no shipped binary pays (#6459).
+		cmd.Env = append(os.Environ(), "CGO_ENABLED=0")
 		if out, err := cmd.CombinedOutput(); err != nil {
 			buildErr, buildLog = err, string(out)
 			return

@@ -357,6 +357,11 @@ var exempt = map[string]string{
 		"runner is seeded, before a line is read — what a refusal could protect is nothing.",
 	"dialect/zsh.isDir": "libraryUnder's and installationUnder's existence test, over the same " +
 		"fixed roots and the directories under them.",
+	"dialect/zsh.appendSubdirs": "libraryDirs' walk of the installed library libraryUnder " +
+		"found under those fixed roots, listing its directories for the default $fpath (#6459). " +
+		"Seeding time, like libraryUnder: nothing a script wrote reaches it.",
+	"dialect/zsh.hasNoSubdirs": "the walk's link-count read, which spares it listing a leaf of " +
+		"that same library (#6459). Same roots, same seeding time.",
 	"dialect/zsh.installationOnPath": "the lookup of `zsh` on the PATH the process was started " +
 		"with — the environment's, not a script's — to name an installation no root covers. " +
 		"Seeding time, like libraryUnder: nothing a script wrote reaches it.",

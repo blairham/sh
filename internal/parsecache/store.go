@@ -198,7 +198,13 @@ const (
 	staleTemp = time.Hour
 )
 
-var castagnoli = crc32.MakeTable(crc32.Castagnoli)
+// castagnoli is the CRC-32C table, made on first use rather than at package
+// init (#6459). On amd64 making it also builds the SSE4.2 combination tables,
+// which measured 0.18 ms of every process start on the CI runner — the
+// largest package init in the binary — while a `-c` run that never touches
+// the cache never needs it. arm64 builds it in microseconds, which is how it
+// went unnoticed on the machines this was developed on.
+var castagnoli = sync.OnceValue(func() *crc32.Table { return crc32.MakeTable(crc32.Castagnoli) })
 
 func (s *Store) path(name string) string {
 	h := sha256.Sum256([]byte(s.build + "\x00" + name))
@@ -272,7 +278,7 @@ func (s *Store) unframe(b []byte) ([]byte, bool) {
 		return nil, false
 	}
 	body, sum := b[:len(b)-4], binary.LittleEndian.Uint32(b[len(b)-4:])
-	if crc32.Checksum(body, castagnoli) != sum {
+	if crc32.Checksum(body, castagnoli()) != sum {
 		return nil, false
 	}
 	n := binary.LittleEndian.Uint64(body[len(body)-8:])
@@ -319,7 +325,7 @@ func (s *Store) Create(name string) (io.Writer, func(keep bool)) {
 	w := &entryWriter{f: f, buf: buf}
 	w.buf.Reset(f)
 	head := s.head()
-	w.sum = crc32.Update(0, castagnoli, head)
+	w.sum = crc32.Update(0, castagnoli(), head)
 	_, w.err = w.buf.Write(head)
 	return w, func(keep bool) { w.finish(keep, tmp, path) }
 }
@@ -343,7 +349,7 @@ func (w *entryWriter) Write(p []byte) (int, error) {
 	if w.err != nil {
 		return 0, w.err
 	}
-	w.sum = crc32.Update(w.sum, castagnoli, p)
+	w.sum = crc32.Update(w.sum, castagnoli(), p)
 	w.n += uint64(len(p))
 	n, err := w.buf.Write(p)
 	w.err = err
@@ -353,7 +359,7 @@ func (w *entryWriter) Write(p []byte) (int, error) {
 func (w *entryWriter) finish(keep bool, tmp, path string) {
 	if keep && w.err == nil {
 		tail := binary.LittleEndian.AppendUint64(nil, w.n)
-		w.sum = crc32.Update(w.sum, castagnoli, tail)
+		w.sum = crc32.Update(w.sum, castagnoli(), tail)
 		tail = binary.LittleEndian.AppendUint32(tail, w.sum)
 		if _, err := w.buf.Write(tail); err == nil {
 			w.err = w.buf.Flush()

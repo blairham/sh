@@ -3186,6 +3186,11 @@ func Semantics() interp.Semantics {
 	// 2012-08-01.
 	s.GetoptsUnsetsOptargAtEndOfOptions = interp.Yes
 	s.GetoptsClearingOptargIsARealUnset = interp.No
+	// OPTARG is written after the name operand on every path, so an operand
+	// spelled OPTARG ends holding the builtin's own store: `getopts x:
+	// OPTARG -x6` leaves `6`, and the end of the options leaves it unset.
+	// Measured 2026-10-15 on ksh93u+ 2012-08-01; see the axis.
+	s.GetoptsOptargOrder = interp.GetoptsOptargAfterTheName
 	s.GetoptsOwnParametersIgnoreAFreeze = interp.Yes
 	// Unreachable while the answer above is yes — answered so that nothing
 	// reports an axis this shell cannot be asked.
@@ -6138,6 +6143,14 @@ func Apply(r *interp.Runner) {
 	// such name and freezes `HISTFILE`, which this shell does not — measured
 	// one assignment at a time, since `readonly -p` here lists nothing (#4205).
 	r.FreezeInRestrictedMode("FPATH")
+	// OPTIND carries the integer attribute from the start, as bash's does:
+	// measured 2026-10-15 on ksh93u+ 2012-08-01, `typeset -p OPTIND` is
+	// `typeset -i OPTIND=1`, `OPTIND=2+3` reads back 5, `read OPTIND` over
+	// `x` and `getopts x OPTIND -x` both leave 0, and `getopts x OPTIND` at
+	// the end of the options is `?: arithmetic syntax error`. `unset OPTIND`
+	// takes the attribute with the name, so `OPTIND=x` after it is `x`
+	// (#6498).
+	r.MarkInteger("OPTIND")
 	// The `set -o` names beyond the ones every shell has. Measured 2026-09-15
 	// against ksh93u+ 2012-08-01 by diffing the whole listing: 32 rows there
 	// against 20 here, and five of the twenty spelled the other way round

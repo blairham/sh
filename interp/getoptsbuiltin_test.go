@@ -271,6 +271,11 @@ func getoptsFrozenSem() Semantics {
 	s.ReadonlyRefusalInABuiltinIsFatal = No
 	s.ReadonlyReassignmentFatal = No
 	s.FatalErrorStatusIsOne = Yes
+	// A refused name over an OPTARG the scan changed is where the order of
+	// the two stores shows, so it is asked there; these suites are about the
+	// refusal and take the order most columns have. The suite about the
+	// order is getoptsoptargorder_test.go (#6498).
+	s.GetoptsOptargOrder = GetoptsOptargBeforeTheName
 	return s
 }
 

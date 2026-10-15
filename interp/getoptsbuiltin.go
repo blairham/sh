@@ -127,6 +127,15 @@ func biGetopts(r *Runner, _ context.Context, args []string) int {
 // 1bad foo` leave OPTIND at 1 in bash while `getopts x 1bad -x` moves it to
 // 2. A fixed increment would have got that pair wrong.
 func (r *Runner) getoptsScan(optstring, name string, given []string) int {
+	r.optargLast = nil
+	r.optargBefore = getoptsOptargSnapshot{}
+	switch r.sem().GetoptsOptargOrder {
+	case GetoptsOptargAfterTheName, GetoptsOptargOrderUnspecified:
+		// Read and not asked: nothing has disagreed yet, and a call whose
+		// name is written never looks at this. See getoptsOptargUnwritten.
+		v, present := r.varsLookup("OPTARG")
+		r.optargBefore = getoptsOptargSnapshot{value: v, present: present, removed: r.attrHas("OPTARG", attrRemoved), taken: true}
+	}
 	// The operands to scan are the ones given, or the shell's own parameters
 	// when none are — which is what every use of it in a script relies on.
 	words := given
@@ -564,7 +573,7 @@ const getoptsRefusedStatus = 2
 // refusing at all. What the refusal *costs* splits three ways, and the two
 // axes below are that split.
 func (r *Runner) getoptsWrite(name, value string, own bool) bool {
-	if !r.getoptsMayWrite(name) {
+	if !r.getoptsMayWrite(name, own) {
 		return false
 	}
 	if r.attrHas(name, attrReadonly) {
@@ -606,6 +615,9 @@ func (r *Runner) getoptsWrite(name, value string, own bool) bool {
 	// (#6475).
 	if own {
 		r.getoptsFillOwnParameter(name, value)
+		if name == "OPTARG" {
+			r.optargLast = &getoptsOptargStore{value: value, set: true}
+		}
 		return true
 	}
 	r.fillOperandValue(name, value, r.markAFilledNameForAllexport)
@@ -617,8 +629,17 @@ func (r *Runner) getoptsWrite(name, value string, own bool) bool {
 // is spelled.
 func (r *Runner) getoptsWriteOwn(name, value string) bool { return r.getoptsWrite(name, value, true) }
 
+// getoptsWriteName's store is also where an operand spelled OPTARG has the
+// builtin's own OPTARG store made again after it, in the dialects that write
+// OPTARG last — here rather than at each path's call, so that no path writing
+// the name can leave it out. See getoptsOptargAfterTheName.
 func (r *Runner) getoptsWriteName(name, value string) bool {
-	return r.getoptsWrite(name, value, false)
+	if !r.getoptsWrite(name, value, false) {
+		r.getoptsOptargUnwritten()
+		return false
+	}
+	r.getoptsOptargAfterTheName(name)
+	return true
 }
 
 // getoptsMayWrite reports whether a freeze lets `getopts` touch one of the
@@ -629,11 +650,18 @@ func (r *Runner) getoptsWriteName(name, value string) bool {
 // measured 2026-09-16, `set -- -b; OPTARG=PRE; readonly OPTARG; getopts a:b
 // o` writes `OPTARG: readonly variable` in bash 5.3.20 and leaves `PRE`
 // standing, where the same line over an unfrozen name leaves OPTARG unset.
-func (r *Runner) getoptsMayWrite(name string) bool {
+//
+// own says the write is one of the builtin's own two parameters rather than
+// its name operand, and it is the route and not the spelling that decides
+// whether the freeze is the builtin's to ignore: measured 2026-10-15 on
+// ksh93u+ 2012-08-01, which writes its own OPTARG through a freeze,
+// `readonly OPTARG; getopts x: OPTARG -x6` still reports `OPTARG: is read
+// only` and returns 2, as `readonly o; getopts x: o -x6` does (#6498).
+func (r *Runner) getoptsMayWrite(name string, own bool) bool {
 	if !r.attrHas(name, attrReadonly) {
 		return true
 	}
-	if (name == "OPTARG" || name == "OPTIND") &&
+	if own && (name == "OPTARG" || name == "OPTIND") &&
 		r.ask(r.sem().GetoptsOwnParametersIgnoreAFreeze,
 			"`getopts` writing OPTARG and OPTIND through a freeze") {
 		return true
@@ -695,6 +723,100 @@ func (r *Runner) getoptsSetName(name, value string, ok int) int {
 		return ok
 	}
 	return getoptsRefusedStatus
+}
+
+// getoptsOptargSnapshot is OPTARG as a `getopts` call found it: taken says a
+// snapshot was made at all.
+type getoptsOptargSnapshot struct {
+	value                   string
+	present, removed, taken bool
+}
+
+// getoptsOptargUnwritten puts OPTARG back as the call found it, where a freeze
+// refused the name operand and the dialect writes OPTARG only after the name —
+// so a refusal ends the builtin before its OPTARG store is reached. Measured
+// 2026-10-15 on ksh93u+ 2012-08-01: `OPTARG=pre; readonly o; getopts x: o
+// -x6` reports `o: is read only`, returns 2 and leaves `pre`, where bash
+// 5.3.20, dash 0.5.12 and BusyBox ash 1.37.0 leave `6` (bash writes OPTARG
+// after the name only on a reported fault, and its refusal does not end the
+// builtin, so the store is still reached). Asked only here, where the call
+// has a refused name *and* has changed OPTARG, which is where the answers
+// part (#6498).
+func (r *Runner) getoptsOptargUnwritten() {
+	before := r.optargBefore
+	if !before.taken {
+		return
+	}
+	r.optargBefore = getoptsOptargSnapshot{}
+	v, present := r.varsLookup("OPTARG")
+	if present == before.present && v == before.value && r.attrHas("OPTARG", attrRemoved) == before.removed {
+		return
+	}
+	switch r.sem().GetoptsOptargOrder {
+	case GetoptsOptargAfterTheName:
+	case GetoptsOptargOrderUnspecified:
+		r.diagf("%s\n", r.unanswered(getoptsOptargOrderAxis))
+		r.unspecified = true
+		return
+	default:
+		return
+	}
+	if before.present {
+		r.varsPut("OPTARG", before.value)
+	} else {
+		r.varsDel("OPTARG")
+	}
+	if before.removed {
+		r.attrSet("OPTARG", attrRemoved)
+	} else {
+		r.attrClear("OPTARG", attrRemoved)
+	}
+}
+
+// getoptsOptargOrderAxis names the axis in a diagnostic, in one place because
+// two call sites ask it.
+const getoptsOptargOrderAxis = "which of `getopts`'s writes lands last, OPTARG's or the name operand's"
+
+// getoptsOptargStore is one store `getopts` made to OPTARG as its own
+// parameter: a value, or (set false) taking the name away.
+type getoptsOptargStore struct {
+	value string
+	set   bool
+}
+
+// getoptsOptargAfterTheName makes this call's own OPTARG store again after
+// the name operand, in the dialects that write OPTARG last, where the operand
+// is itself spelled OPTARG. Everywhere else the two stores land on different
+// names and their order cannot be seen, so nothing is asked (#6498).
+//
+// Made *again*, not put off: every store keeps its own place among the
+// builtin's other writes, so a freeze on OPTARG and the cursor's write are met
+// in the order they always were, and only the parameter's final value moves.
+// It is the same store the scan made, through the same route.
+func (r *Runner) getoptsOptargAfterTheName(name string) {
+	last := r.optargLast
+	if name != "OPTARG" || last == nil {
+		return
+	}
+	r.optargLast = nil
+	switch r.sem().GetoptsOptargOrder {
+	case GetoptsOptargAfterTheName:
+	case GetoptsOptargAfterTheNameOnAnError:
+		if !r.optOnAnError {
+			return
+		}
+	case GetoptsOptargOrderUnspecified:
+		r.diagf("%s\n", r.unanswered(getoptsOptargOrderAxis))
+		r.unspecified = true
+		return
+	default:
+		return
+	}
+	if last.set {
+		r.getoptsWriteOwn("OPTARG", last.value)
+		return
+	}
+	r.emptyOrUnsetOptarg(false)
 }
 
 // getoptsRefusalEndsTheBuiltin is the axis a refused **OPTARG or OPTIND**
@@ -835,6 +957,10 @@ func (r *Runner) getoptsEnd(name string, ind int) int {
 // past the word when the refusal ended the run.
 func (r *Runner) getoptsBad(name string, sign, c byte, silent bool, why getoptsComplaint, advanceOptind func() bool) int {
 	letter := getoptsLetter(sign, c)
+	// Every name this path writes is the one a reported fault writes, which
+	// is what one dialect orders OPTARG by. See optOnAnError.
+	r.optOnAnError = true
+	defer func() { r.optOnAnError = false }()
 	if silent {
 		if !r.getoptsWriteOwn("OPTARG", letter) && r.getoptsRefusalEndsTheBuiltin() {
 			return getoptsRefusedStatus
@@ -1145,11 +1271,12 @@ func (r *Runner) emptyOrUnsetOptarg(empty bool) bool {
 	if empty {
 		return r.getoptsWriteOwn("OPTARG", "")
 	}
-	if !r.getoptsMayWrite("OPTARG") {
+	if !r.getoptsMayWrite("OPTARG", true) {
 		return false
 	}
 	r.varsDel("OPTARG")
 	r.attrSet("OPTARG", attrRemoved)
+	r.optargLast = &getoptsOptargStore{}
 	return true
 }
 

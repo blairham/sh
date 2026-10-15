@@ -58,10 +58,19 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 	// and leaving the field alone there makes it an *enclosing* command's
 	// answer. See Runner.stderrBeforeRedirs.
 	r.stderrBeforeRedirs = r.Stderr
-	if len(rs) == 0 {
-		return nil, nil
+	// What the shell being imitated holds while this list is in force — the
+	// saved copies, and the pipe an element was entered with. Above the
+	// length check, because an element's pipe is installed by a list with
+	// nothing written in it. Nil in every dialect that counts none of it.
+	var holds *redirHolds
+	if r.entering.pending || r.countsOwnDescriptors() {
+		holds = r.beginRedirHolds(owner)
 	}
-	return r.applyRedirList(ctx, rs, compound, owner)
+	if len(rs) == 0 {
+		return holds.closers(nil), nil
+	}
+	closers, err := r.applyRedirList(ctx, rs, compound, owner, holds)
+	return holds.closers(closers), err
 }
 
 // applyRedirList is applyRedirs for a list with something in it.
@@ -73,7 +82,7 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 // before anything was deferred, so while this was one function every command
 // in the shell paid it on the way past an empty list: about 5% of an
 // arithmetic loop's time, measured in a Linux profile (#6423).
-func (r *Runner) applyRedirList(ctx context.Context, rs []*syntax.Redirect, compound bool, owner redirOwner) ([]io.Closer, error) {
+func (r *Runner) applyRedirList(ctx context.Context, rs []*syntax.Redirect, compound bool, owner redirOwner, holds *redirHolds) ([]io.Closer, error) {
 	// Whose process these redirections are for, saved and put back rather
 	// than cleared, so a command reached from inside a here-document body
 	// cannot leave its own answer behind for the next redirection in this
@@ -364,6 +373,9 @@ func (r *Runner) applyRedirList(ctx context.Context, rs []*syntax.Redirect, comp
 			if rd.N != nil {
 				hfd = fd
 			}
+			if fdVar == "" {
+				holds.save(hfd, false, -1)
+			}
 			// And `{v}<<X` picks a descriptor the same way `{v}<file` does,
 			// with the same axis deciding whether it outlives the command.
 			persists := false
@@ -535,6 +547,11 @@ func (r *Runner) applyRedirList(ctx context.Context, rs []*syntax.Redirect, comp
 			}
 			if rd.N == nil && op == syntax.TokLessAmp {
 				fd = 0
+			}
+			if fdVar == "" {
+				// A close replaces the stream as much as a duplication does,
+				// and copies nothing while it does it.
+				holds.save(fd, name != "-", -1)
 			}
 			// One dialect will not take a duplication target wider than a
 			// single digit, and refuses before it looks at what is open.
@@ -804,6 +821,9 @@ func (r *Runner) applyRedirList(ctx context.Context, rs []*syntax.Redirect, comp
 		}
 		if rd.N == nil && (flags == os.O_RDONLY || op == syntax.TokLessGreat) {
 			fd = 0
+		}
+		if fdVar == "" && holds != nil {
+			holds.saveForAnOpen(fd, name)
 		}
 		// Whether a descriptor the shell picks outlives the command is the
 		// axis ksh93 answers alone, and it is asked once for the redirection
@@ -2273,9 +2293,17 @@ func (r *Runner) nextFreeFd(freeing int) int {
 	if freeing >= 0 && r.sem().FdMove != FdMoveRelocates {
 		freeing = -1
 	}
+	return r.lowestFreeNumber(freeing)
+}
+
+// lowestFreeNumber is nextFreeFd's walk with freeing taken as given: the first
+// number from the dialect's base up that nothing holds — not the script's
+// table, not the shell's own plumbing (see holdsNumber), and not a live
+// substitution's published number — or freeing, whichever comes first.
+func (r *Runner) lowestFreeNumber(freeing int) int {
 	fd := r.firstAllocatedDescriptor()
 	for {
-		if _, held := r.fds[fd]; !held || fd == freeing {
+		if fd == freeing || (!r.holdsNumber(fd) && !r.substitutionPublishedAt(fd)) {
 			return fd
 		}
 		fd++

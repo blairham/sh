@@ -335,6 +335,10 @@ func (r *Runner) substRunner(span syntax.Span) (*Runner, func()) {
 	// and the descriptor is still open in the one table there is, so the
 	// release is recorded. See Runner.releasedSubstFds (#4119).
 	sub.releasedSubstFds = r.bodyReleasedFds()
+	// And none of the numbers the shell holds for its own plumbing: the fork
+	// into a substitution's body closes them all, the pipes' reading ends
+	// with the saved copies. See heldnumbers.go.
+	sub.heldNumbers = nil
 	sub.inheritJobs(jobBoundarySubstitution)
 	// A substitution's body is parentheses too as far as job numbering is
 	// concerned — measured, `$( … )`, a backquoted substitution and
@@ -838,6 +842,12 @@ type procSubPipe struct {
 	// a `<(cmd)`'s body writing into a pipe nobody reads any more. Nil for
 	// `=(cmd)`, which has no pipe. See newProcSubPipe.
 	hold *os.File
+	// consumed is the number hold sits on where a redirection has taken the
+	// pipe over and the number has been given back — registered as a private
+	// copy, so the next substitution may publish it — and zero where neither
+	// happened. Released before hold is closed. See
+	// Runner.releaseConsumedSubstitution.
+	consumed int
 	// body answers when a `>(cmd)`'s body has finished writing. Nil for the
 	// other two forms, which have nothing to wait for: `<(cmd)`'s body
 	// writes into the pipe, so the command that named the path has already
@@ -1004,6 +1014,12 @@ func (r *Runner) removeProcSubs(pipes []procSubPipe) {
 		// held, and a held body never ends. Nothing is waited for that was
 		// already let go, so the ordinary path costs nothing here.
 		p.began.letGoAndAwait()
+		if p.consumed != 0 {
+			// Before the close, which is the order releasePrivateCopy asks
+			// for: the number must not be one the kernel has handed to
+			// somebody else by the time it is released.
+			releasePrivateCopy(p.consumed)
+		}
 		if p.hold != nil {
 			_ = p.hold.Close()
 		}
@@ -1629,7 +1645,7 @@ func (r *Runner) procSubJob() *Job {
 // for one entry. Which of the two survived would depend on map iteration
 // order, which is the bug firstProcSubFd was originally set to 10 to avoid.
 func (r *Runner) substEndCandidates() []int {
-	free := func(fd int) bool { _, held := r.fds[fd]; return !held }
+	free := func(fd int) bool { return !r.holdsNumber(fd) }
 	up := func(from int, out []int) []int {
 		for fd := from; fd < from+substEndSearch && len(out) < substEndSearch; fd++ {
 			if free(fd) {

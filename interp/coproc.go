@@ -382,7 +382,7 @@ func (r *Runner) coprocEndNumbers() (read, write int) {
 	}
 	read = r.nextFreeFd(-1)
 	for write = read + 1; ; write++ {
-		if _, held := r.fds[write]; !held {
+		if !r.holdsNumber(write) {
 			return read, write
 		}
 	}
@@ -431,7 +431,7 @@ func (r *Runner) highestFreeFds(from, n int) ([]int, bool) {
 	base := r.firstAllocatedDescriptor()
 	out := make([]int, 0, n)
 	for fd := from; fd >= base && len(out) < n; fd-- {
-		if _, held := r.fds[fd]; !held {
+		if !r.holdsNumber(fd) {
 			out = append(out, fd)
 		}
 	}

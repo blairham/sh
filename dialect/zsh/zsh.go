@@ -5281,6 +5281,11 @@ func Semantics() interp.Semantics {
 	// /dev/fd/12 /dev/fd/13`, and an `exec {a}</dev/null` first moves the
 	// substitution to 12.
 	s.SubstitutionEndPlacement = interp.SubstitutionEndsWhereAnyDescriptorGoes
+	// And what the shell holds for itself is on those numbers too: a saved
+	// copy of each stream a redirection list replaces here, and the reading
+	// end of each pipe. Measured 2026-10-15, `{ echo <(true) <(true); }
+	// </dev/null` is `12 13` and `echo x | echo <(true)` is 12 (#6473).
+	s.OwnDescriptors = interp.SavedStreamsAndPipeReadEndsTakeNumbers
 	// And nothing is taken back when the coprocess ends: both ends stay open
 	// and stay reachable by their letters. Measured 2026-09-12 — a `print -p`
 	// after the coprocess has gone writes into a pipe with no reader and the

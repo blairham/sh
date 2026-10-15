@@ -11,16 +11,13 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/blairham/sh/dialect/bash"
-	"github.com/blairham/sh/dialect/ksh"
-	"github.com/blairham/sh/dialect/zsh"
-	"github.com/blairham/sh/internal/dialecttest"
 	. "github.com/blairham/sh/interp"
+	"github.com/blairham/sh/syntax"
 )
 
 // assignmentsAloneScript runs commands made of assignments alone through
 // everything simpleCommand answers for one: the status a substitution leaves,
-// `$_`, a function's locals, an array, `set -x`, the DEBUG and ERR traps,
+// `$_`, a function's locals, `set -x`, the DEBUG and ERR traps,
 // `set -e`, a readonly name, a value that will not expand, and a loop. A
 // refusal is made inside a subshell, so it is part of the output both runs
 // must agree on and the script carries on.
@@ -31,7 +28,6 @@ false; X=$(exit 2) Y=$(exit 4); p "$?" "$X$Y"
 echo a b >/dev/null; x=1; p "$_"
 i=0; i=$((i + 1)); j=$((i * 5)); p "$i" "$j"
 f() { local v; v=$1; w=$((v + 1)); p "$v" "$w"; }; f 4; p "$w"
-a=(1 2 3); p "${a[@]}"
 set -x; tx=1 ty=$((tx + 1)); set +x
 trap 'echo dbg' DEBUG; dx=1; trap - DEBUG
 trap 'echo err' ERR; ex=$(false); trap - ERR
@@ -41,40 +37,85 @@ trap 'echo err' ERR; ex=$(false); trap - ERR
 (nx=$((1 / 0)); echo after); p "$?"
 x=1 && p and; x=$(false) || p or
 cnt=0; while [ $cnt -lt 3 ]; do cnt=$((cnt + 1)); done; p "$cnt"
+p end
+`
+
+// assignmentsAloneVectors are the readings the script is run under: the
+// substrate's own, one where `$_` moves only between the lines the shell
+// reads — the reading where a command run in this shell from inside an
+// assignment's value must not count as the line's command — and one with the
+// grammar for arrays and process substitution.
+func assignmentsAloneVectors() map[string]struct {
+	script string
+	rows   []string
+	enable func(*syntax.Dialect)
+	setup  func(*Runner)
+} {
+	with := func(set func(*Semantics)) func(*Runner) {
+		return func(r *Runner) {
+			sem := *r.Semantics
+			sem.UnderscoreTracksTheLastArgument = Yes
+			sem.UnderscoreIsAParameterAtAll = Yes
+			sem.TrapHasDebugCondition, sem.TrapHasErrCondition = Yes, Yes
+			sem.DebugTrapRunsBeforeTheCommand, sem.ErrTrapRunsInSubshells = Yes, Yes
+			if set != nil {
+				set(&sem)
+			}
+			r.Semantics = &sem
+		}
+	}
+	return map[string]struct {
+		script string
+		rows   []string
+		enable func(*syntax.Dialect)
+		setup  func(*Runner)
+	}{
+		"standard": {
+			assignmentsAloneScript,
+			[]string{"<0>\n<3>\n<4><>\n<>\n<1><5>\n", "<4><5>\n<5>\n", "dbg\n", "err\n", "<and>\n<or>\n<3>\n", "<end>\n"},
+			nil, with(nil),
+		},
+		"arrays and substitutions": {
+			assignmentsAloneGrammar,
+			[]string{"<1><2><3>\n", "<end>\n"},
+			func(d *syntax.Dialect) { d.ArrayLiteral, d.ProcessSubstitution = true, true },
+			with(nil),
+		},
+		"input-level underscore": {
+			assignmentsAloneInputLevel,
+			[]string{"[two]\n"},
+			func(d *syntax.Dialect) { d.CurrentShellSubstitution = true },
+			with(func(s *Semantics) { s.UnderscoreMovesOnlyBetweenInputCommands = Yes }),
+		},
+	}
+}
+
+// assignmentsAloneGrammar is the rows that need more grammar than the
+// substrate's: an array assigned alone, and a process substitution in an
+// assignment's value, which is closed with the command it belongs to.
+const assignmentsAloneGrammar = `p() { printf '<%s>' "$@"; echo; }
+a=(1 2 3); p "${a[@]}"
 x=<(echo ps) && p "$(cat "$x" 2>/dev/null || echo closed)"
 p end
 `
 
-// assignmentsAloneKsh is the one dialect whose `$_` moves only between the
-// lines the shell reads, where a command run in this shell from inside an
-// assignment's value must not count as the line's command.
-const assignmentsAloneKsh = `echo one two
+// assignmentsAloneInputLevel is the one reading of `$_` where only the lines
+// the shell reads move it.
+const assignmentsAloneInputLevel = `echo one two
 x=${ echo a b; }
 echo "[$_]"
 `
 
-// TestACommandOfAssignmentsAloneAnswersAsSimpleCommandDoes runs
-// assignmentsAloneScript with assignmentsAloneCommand on and off, and requires
-// the same output and status (#6496).
+// TestACommandOfAssignmentsAloneAnswersAsSimpleCommandDoes runs each of
+// assignmentsAloneVectors with assignmentsAloneCommand on and off, and
+// requires the same output and status (#6496).
 func TestACommandOfAssignmentsAloneAnswersAsSimpleCommandDoes(t *testing.T) {
-	for _, p := range []dialecttest.Preset{
-		{Name: "bash", Dialect: bash.Dialect, Semantics: bash.Semantics, Diagnostics: bash.Diagnostics, Apply: bash.Apply},
-		{Name: "zsh", Dialect: zsh.Dialect, Semantics: zsh.Semantics, Diagnostics: zsh.Diagnostics, Apply: zsh.Apply},
-		{Name: "ksh", Dialect: ksh.Dialect, Semantics: ksh.Semantics, Diagnostics: ksh.Diagnostics, Apply: ksh.Apply},
-	} {
-		t.Run(p.Name, func(t *testing.T) {
-			script := assignmentsAloneScript
-			if p.Name == "ksh" {
-				script = assignmentsAloneKsh
-			}
+	for name, v := range assignmentsAloneVectors() {
+		t.Run(name, func(t *testing.T) {
 			run := func(on bool) (string, int) {
 				was := SetAssignmentsAloneShortcutForTest(on)
 				defer SetAssignmentsAloneShortcutForTest(was)
-				out, st, err := p.Combined(t, dialecttest.Base{Dir: t.TempDir()}, script)
-				if err != nil {
-					t.Fatalf("shortcut %v: %v", on, err)
-				}
-				return out, st
+				return runGrammar(t, v.script, v.enable, v.setup)
 			}
 			full, fullStatus := run(false)
 			short, shortStatus := run(true)
@@ -83,11 +124,7 @@ func TestACommandOfAssignmentsAloneAnswersAsSimpleCommandDoes(t *testing.T) {
 			}
 			// The rows the comparison leans on, so a script that stopped
 			// early compares nothing.
-			rows := []string{"<0>\n<3>\n<4><>\n", "<1><5>\n", "<4><5>\n<5>\n", "<1><2><3>\n", "dbg\n", "err\n", "<and>\n<or>\n<3>\n", "<end>\n"}
-			if p.Name == "ksh" {
-				rows = []string{"[two]\n"}
-			}
-			for _, row := range rows {
+			for _, row := range v.rows {
 				if !strings.Contains(full, row) {
 					t.Errorf("the script did not reach %q:\n%s", row, full)
 				}

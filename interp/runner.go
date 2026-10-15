@@ -5604,6 +5604,13 @@ type Runner struct {
 	// asks whether a name was reached through a value or written in the
 	// expression itself.
 	arithValueDepth int
+	// arithValuesReread counts every stored value read again as an
+	// expression, which is the one way an arithmetic expansion whose own
+	// text only reads can end up writing: `x='i=7'; i=$((x))`. The plain
+	// store (plainstore.go) admits `name=$((expr))` on the strength of the
+	// text, and hands the value to the full road when this moved while the
+	// value was expanded.
+	arithValuesReread uint64
 	// arithSubscriptDepth counts how many array subscripts are being
 	// evaluated around the expression now being read, so that a name inside
 	// the brackets can be answered differently from the same name outside
@@ -14910,7 +14917,7 @@ func (r *Runner) assign(ctx context.Context, a *syntax.Assign) {
 	// interp/plainstore.go, which answers every question below for them
 	// before anything is expanded.
 	if r.storesAPlainScalar(a) {
-		r.storePlainScalar(a)
+		r.storePlainScalar(ctx, a)
 		return
 	}
 	// A bare assignment retypes a name as readily as a declaration word

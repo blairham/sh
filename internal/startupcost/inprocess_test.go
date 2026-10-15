@@ -13,9 +13,12 @@ package startupcost_test
 
 import (
 	"io"
+	"strings"
 	"testing"
 
+	"github.com/blairham/sh/dialect/bash"
 	"github.com/blairham/sh/dialect/dash"
+	"github.com/blairham/sh/dialect/zsh"
 	"github.com/blairham/sh/driver"
 )
 
@@ -74,3 +77,68 @@ func BenchmarkGateBare(b *testing.B) {
 		}
 	}
 }
+
+// The two dialects #6496 is about, built the way their binaries build them
+// (less the protocol servers, which a `-c` run never reaches). The dash
+// benchmarks above stay as they are so their history stays comparable.
+func gateBashShell() driver.Shell {
+	return driver.Shell{
+		Name:                   "bash",
+		SystemStartupDirectory: "/etc",
+		Dialect:                bash.Dialect(),
+		Semantics:              bash.Semantics(),
+		Diagnostics:            bash.Diagnostics(),
+		Prelude:                bash.Prelude(),
+		PreludeTree:            bash.PreludeTree(),
+		Register:               bash.Apply,
+		PromptStyle:            bash.PromptStyle(),
+		EditorStyle:            bash.EditorStyle(),
+		HistoryStyle:           bash.HistoryStyle(),
+		HookStyle:              bash.HookStyle(),
+		Stdout:                 io.Discard,
+		Stderr:                 io.Discard,
+	}
+}
+
+func gateZshShell() driver.Shell {
+	return driver.Shell{
+		Name:                   "zsh",
+		SystemStartupDirectory: zsh.SystemStartupDirectory("/etc"),
+		Dialect:                zsh.Dialect(),
+		Semantics:              zsh.Semantics(),
+		Diagnostics:            zsh.Diagnostics(),
+		Prelude:                zsh.Prelude(),
+		PreludeTree:            zsh.PreludeTree(),
+		CommandStringParameter: "ZSH_EXECUTION_STRING",
+		Register:               zsh.Apply,
+		PromptStyle:            zsh.PromptStyle(),
+		EditorStyle:            zsh.EditorStyle(),
+		HistoryStyle:           zsh.HistoryStyle(),
+		HookStyle:              zsh.HookStyle(),
+		MailStyle:              zsh.MailStyle(),
+		Stdout:                 io.Discard,
+		Stderr:                 io.Discard,
+	}
+}
+
+func benchProgram(b *testing.B, sh driver.Shell, program string) {
+	b.Helper()
+	b.ReportAllocs()
+	for b.Loop() {
+		if status := driver.RunCommand(sh, program, nil); status != 0 {
+			b.Fatalf("the program exited %d", status)
+		}
+	}
+}
+
+func BenchmarkGateWorkloadBash(b *testing.B) { benchProgram(b, gateBashShell(), inProcessWorkload) }
+func BenchmarkGateBareBash(b *testing.B)     { benchProgram(b, gateBashShell(), ":") }
+func BenchmarkGateWorkloadZsh(b *testing.B)  { benchProgram(b, gateZshShell(), inProcessWorkload) }
+func BenchmarkGateBareZsh(b *testing.B)      { benchProgram(b, gateZshShell(), ":") }
+
+// The workload's loop ten times over, so that what a profile of it shows is
+// interpretation rather than the start each run also pays.
+var inProcessLoop = strings.Replace(inProcessWorkload, "2000", "20000", 1)
+
+func BenchmarkGateLoopBash(b *testing.B) { benchProgram(b, gateBashShell(), inProcessLoop) }
+func BenchmarkGateLoopZsh(b *testing.B)  { benchProgram(b, gateZshShell(), inProcessLoop) }

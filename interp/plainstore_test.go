@@ -22,6 +22,13 @@ import (
 // Shapes the vector refuses are run through `command eval`, so a refusal is
 // part of the output both runs must agree on and the script carries on.
 const plainStoreScript = `p() { printf '[%s]' "$@"; echo; }
+i=0; i=$((i + 1)); i=$((i * 7)); p "$i"; qa="$((i - 4))"; p "$qa"; ne=$((-i < 0 ? i : 0)); p "$ne"
+xr='i=9'; i=$((xr)); p "$i"; jr='k=5'; k=1; k=$((jr + 10)); p "$k"; ch=jr; ch=$((ch)); p "$ch" "$k"
+(dz=4; dz=$((1 / 0)); echo "dz=$dz"); echo "<$?>"
+command eval 'readonly roa=1'; command eval 'roa=$((roa + 1))'; echo "<$?>"; p "$roa"
+command eval 'typeset -i ni; ni=$((2 * 3))'; p "$ni"; command eval 'typeset -u ua; ua=$((10))'; p "$ua"
+command eval 'ar=(4 5)'; (av=$((ar + 1)); p "$av"); ca=$((COUNT + 0)); p "$ca"; un=$((nosuch5 + 2)); p "$un"
+(set -u; uv=$((nosuch4 + 1)); echo "uv=$uv"); echo "<$?>"
 x=; p "$x"; x=0; p "$x"; y=abc; x=$y; p "$x"; x=$nosuch; p "$x"
 command eval 'readonly ro=1'; command eval 'ro=2'; echo "<$?>"; p "$ro"
 command eval 'typeset -i n; n=3+4'; p "$n"
@@ -76,7 +83,7 @@ func TestAPlainScalarStoreAnswersAsTheFullRoadDoes(t *testing.T) {
 			}
 			// The rows the comparison leans on, so a script that stopped
 			// early compares nothing.
-			for _, row := range []string{"[abc]\n", "[7]\n", "[ABC]\n", "[abc]\n", "ex=exported\n", "[in]\n", "[back]\n", "[3]\n", "[/h]\n", "[a=b]\n", "[a b]\n", "[zv]\n", "[tq]\n", "[Q/ZV]\n"} {
+			for _, row := range []string{"[7]\n[3]\n[7]\n", "[9]\n", "[15]\n", "[2]\n", "[abc]\n", "[7]\n", "[ABC]\n", "[abc]\n", "ex=exported\n", "[in]\n", "[back]\n", "[3]\n", "[/h]\n", "[a=b]\n", "[a b]\n", "[zv]\n", "[tq]\n", "[Q/ZV]\n"} {
 				if !strings.Contains(full, row) {
 					t.Errorf("the script did not reach %q:\n%s", row, full)
 				}
@@ -111,31 +118,42 @@ func TestThePlainScalarStoreIsReached(t *testing.T) {
 	}
 	run("plain=1; y=abc; readonly ro=1; typeset -i n; a=(1 2)")
 	for src, want := range map[string]bool{
-		"plain=":           true,
-		"plain=2":          true,
-		"fresh=x":          true,
-		"plain=$y":         true,
-		"plain=${y#a}":     true,
-		"plain=${y%%*c}":   true,
-		"plain=${y#'a'}":   true,
-		"plain=\"${y#a}\"": false,
-		"plain=${y#~}":     false,
-		"plain=${y#$y}":    false,
-		"plain=${y:-a}":    false,
-		"plain=${a#1}":     false,
-		"plain=${y[1]#a}":  false,
-		"plain='q'":        true,
-		"plain=a=b":        false,
-		"plain=~":          false,
-		"plain=$(:)":       false,
-		"plain=a$y":        false,
-		"plain+=x":         false,
-		"ro=2":             false,
-		"n=3":              false,
-		"a=x":              false,
-		"COUNT=1":          false,
-		"PATH=x":           false,
-		"OPTIND=1":         false,
+		"plain=":                    true,
+		"plain=2":                   true,
+		"fresh=x":                   true,
+		"plain=$y":                  true,
+		"plain=${y#a}":              true,
+		"plain=${y%%*c}":            true,
+		"plain=${y#'a'}":            true,
+		"plain=\"${y#a}\"":          false,
+		"plain=${y#~}":              false,
+		"plain=${y#$y}":             false,
+		"plain=${y:-a}":             false,
+		"plain=${a#1}":              false,
+		"plain=${y[1]#a}":           false,
+		"plain='q'":                 true,
+		"plain=$((plain + 1))":      true,
+		"plain=\"$((plain * 2))\"":  true,
+		"plain=$((plain ? 1 : -y))": true,
+		"plain=$((plain++))":        false,
+		"plain=$((plain = 2))":      false,
+		"plain=$((plain += 2))":     false,
+		"plain=$((a + 1))":          false,
+		"plain=$((COUNT))":          false,
+		"plain=$(($y + 1))":         false,
+		"plain=$((a[0]))":           false,
+		"n=$((1))":                  false,
+		"plain=a=b":                 false,
+		"plain=~":                   false,
+		"plain=$(:)":                false,
+		"plain=a$y":                 false,
+		"plain+=x":                  false,
+		"ro=2":                      false,
+		"n=3":                       false,
+		"a=x":                       false,
+		"COUNT=1":                   false,
+		"PATH=x":                    false,
+		"OPTIND=1":                  false,
 	} {
 		if got := StoresAPlainScalarForTest(r, assign(src)); got != want {
 			t.Errorf("%s: the plain store answers %v, want %v", src, got, want)

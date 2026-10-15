@@ -2656,6 +2656,7 @@ func (r *Runner) arithNumOfStored(value string) (arithNum, error) {
 // ordinary character, which is why `q=5; v='$q'` is a syntax error and not 5
 // in all three shells that re-read at all.
 func (r *Runner) arithValueAsExpression(value string) (arithNum, error) {
+	r.arithValuesReread++
 	text := strings.TrimSpace(value)
 	p := syntax.NewParser("", r.dialect())
 	// A stored value has been through its expansions already, so a `$` in it

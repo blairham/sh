@@ -4,6 +4,7 @@
 package interp
 
 import (
+	"context"
 	"strings"
 
 	"github.com/blairham/sh/syntax"
@@ -123,7 +124,7 @@ func (r *Runner) valueOnlyReads(w *syntax.Word) bool {
 		s := &w.Spans[i]
 		if s.Kind != syntax.Literal || strings.ContainsAny(s.Value, "~=") {
 			if len(w.Spans) == 1 {
-				if r.plainTrimOf(s) {
+				if r.plainTrimOf(s) || r.plainArithOf(s) {
 					return true
 				}
 				_, ok := r.plainParamValue(w)
@@ -138,10 +139,20 @@ func (r *Runner) valueOnlyReads(w *syntax.Word) bool {
 // storePlainScalar is the full road for an assignment storesAPlainScalar
 // accepted, with every question answered: what is left is the lint, the store
 // and allexport.
-func (r *Runner) storePlainScalar(a *syntax.Assign) {
+func (r *Runner) storePlainScalar(ctx context.Context, a *syntax.Assign) {
 	value, ok := r.plainParamValue(a.Value)
 	if !ok {
+		reread := r.arithValuesReread
 		value = r.expandAssignValue(a.Value)
+		if r.arithValuesReread != reread || r.expandErr || r.ctl != controlNone || r.unspecified {
+			// The expansion did something besides read — see plainArithOf —
+			// so the questions this road answered before it may have other
+			// answers now. The full road asks them again of the value already
+			// expanded, the arrangement a traced assignment uses, so nothing
+			// is expanded twice.
+			r.withPreparedValue(ctx, &expandedAssign{assign: a, value: value})
+			return
+		}
 	}
 	if !r.scopeWarningsAreOff() {
 		r.warnAboutTheScope(a.Name, scopeWarningScalar)
@@ -205,4 +216,49 @@ func (r *Runner) plainTrimOf(s *syntax.Span) bool {
 		}
 	}
 	return true
+}
+
+// plainArithOf reports whether a value's one span is an arithmetic expansion
+// whose written text can only read: numbers, names, and operators that do not
+// assign — `$((i + 1))`, `"$((n * 2))"`. That is the counter in a loop, and
+// it was the commonest assignment the full road answered: the CI gate's
+// workload is about two thirds `x=$((x + 1))` (#6496).
+//
+// As with plainTrimOf, the value is still expanded by the full road's
+// expansion, so nothing here decides what the expression answers. What the
+// text cannot show is a name whose *value* is read again as an expression —
+// `x='i=7'; i=$((x))` assigns `i` from inside the expansion, and in zsh 5.9.2
+// leaves it `typeset -i`. That is settled after the fact rather than before:
+// storePlainScalar hands the value to the full road when any value was read
+// again as an expression while it was expanded (arithValuesReread), or when
+// the expansion failed.
+//
+// Every name is asked to be one plainParamValue could read, which keeps out a
+// produced parameter (`$((SECONDS))`), a reference, an array and a parameter
+// that arrives on first use, each of which reads with an effect of its own.
+func (r *Runner) plainArithOf(s *syntax.Span) bool {
+	if s.Kind != syntax.ArithSubst || s.Arith == nil || !r.readsAreOnlyReads() ||
+		(s.Quoting != syntax.Unquoted && s.Quoting != syntax.DoubleQuoted) ||
+		strings.ContainsAny(s.Value, "$`") || r.arithPrecedenceOptionInCharge() {
+		return false
+	}
+	return r.arithOnlyReads(s.Arith)
+}
+
+// arithOnlyReads reports whether evaluating the parsed expression e can do
+// nothing but read ordinary scalars and compute; see plainArithOf.
+func (r *Runner) arithOnlyReads(e syntax.ArithExpr) bool {
+	switch x := e.(type) {
+	case *syntax.ArithNum:
+		return true
+	case *syntax.ArithVar:
+		return !x.Special && identifierName(x.Name) && r.ordinaryScalarName(x.Name)
+	case *syntax.ArithUnary:
+		return x.Op != "++" && x.Op != "--" && r.arithOnlyReads(x.X)
+	case *syntax.ArithBinary:
+		return r.arithOnlyReads(x.X) && r.arithOnlyReads(x.Y)
+	case *syntax.ArithCond:
+		return r.arithOnlyReads(x.Cond) && r.arithOnlyReads(x.Then) && r.arithOnlyReads(x.Else)
+	}
+	return false
 }

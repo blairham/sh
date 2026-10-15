@@ -25169,6 +25169,13 @@ type Semantics struct {
 	// :; }; OPTIND=4 f; printenv OPTIND` prints `2`. See
 	// Runner.storeOwnParameter.
 	GetoptsLeavesTheEnvironmentCopyOfItsOwnParameters Answer
+
+	// GetoptsOptargOrder is which of `getopts`'s writes lands last, the
+	// name operand's or the builtin's own store to OPTARG. Two things show
+	// it — an operand itself spelled OPTARG, and a freeze that refuses the
+	// operand — and the axis is asked only there. See
+	// GetoptsOptargOrderPolicy for the three answers and the measurements.
+	GetoptsOptargOrder GetoptsOptargOrderPolicy
 	// KillJoinsANumberToTheNameOption takes a *number* written onto `-s` —
 	// `kill -s9` — as the same thing as `kill -s 9`, where the rule
 	// KillReadsASignalJoinedToItsOption describes joins only a name to `-s`.
@@ -34987,6 +34994,9 @@ func PosixSemantics() Semantics {
 		// And a child is handed what getopts wrote into an exported OPTARG
 		// or OPTIND, as it is for any other store; zsh overrides.
 		GetoptsLeavesTheEnvironmentCopyOfItsOwnParameters: No,
+		// And over a name operand spelled OPTARG, the operand's store lands
+		// last, as the standard lists them; bash and ksh93 override.
+		GetoptsOptargOrder: GetoptsOptargBeforeTheName,
 		// And so nothing joined to it that is a number either; dash and
 		// ksh93 override.
 		KillJoinsANumberToTheNameOption: No,
@@ -38050,6 +38060,69 @@ const (
 	// puts the caller's back over it.
 	GetoptsFunctionPositionIsLocalToAKeywordFunction
 )
+
+// GetoptsOptargOrderPolicy is the order `getopts` writes its name operand and
+// OPTARG in, which a script sees only when the operand is spelled OPTARG and
+// the two stores land on one parameter (#6498).
+//
+// Measured 2026-10-15 under `-c`, each snippet followed by `echo "[$?]
+// [${OPTARG-unset}] [$OPTIND]"`; bash 3.2.57 and bash 5.3.20 called as `sh`
+// answer as bash 5.3.20 does:
+//
+//	                          bash 5.3.20   ksh93u+       dash, ash
+//	getopts x: OPTARG -x6     [x]           [6]           [x]
+//	getopts x OPTARG -x       [x]           [unset]       [x]
+//	getopts x OPTARG          [?]           [unset]       [?]
+//	getopts :x OPTARG -y      [y]           [y]           [?]
+//	getopts x OPTARG -y       [unset]       [unset]       [?]
+//	getopts :x: OPTARG -x     [x]           [x]           [:]
+//	getopts x: OPTARG -x      [unset]       [unset]       [?]
+//
+// Every column takes OPTIND to 2 (1 at the end of the options), so the
+// cursor is not part of the question. Each entry is what that column's own
+// OPTARG store leaves when it comes last, and the operand's letter when the
+// operand does. zsh 5.9.2 answers the first three as dash does and dies of a
+// trap signal on the four error rows, so nothing about its error paths can be
+// measured.
+//
+// A freeze shows the same order over any operand, because a refused name
+// ends ksh93's builtin before its OPTARG store: `OPTARG=pre; readonly o;
+// getopts x: o -x6` leaves `pre` in ksh93u+ and `6` in bash, dash and ash,
+// each at status 2. bash's refusal does not end its builtin, so its fault
+// paths still reach their OPTARG store after a refused name.
+type GetoptsOptargOrderPolicy uint8
+
+const (
+	// GetoptsOptargOrderUnspecified is no answer, and is reported where an
+	// operand spelled OPTARG would show it.
+	GetoptsOptargOrderUnspecified GetoptsOptargOrderPolicy = iota
+	// GetoptsOptargBeforeTheName stores OPTARG first and the name operand
+	// last on every path, so an operand spelled OPTARG ends holding the
+	// letter, `?` or `:`: dash, BusyBox ash, and zsh where it can be
+	// measured.
+	GetoptsOptargBeforeTheName
+	// GetoptsOptargAfterTheNameOnAnError stores OPTARG last on the two
+	// paths that report a fault — a letter the string does not have, and a
+	// missing argument — and first everywhere else: bash, where `getopts :x
+	// OPTARG -y` ends with OPTARG `y` and `getopts x: OPTARG -x6` with `x`.
+	GetoptsOptargAfterTheNameOnAnError
+	// GetoptsOptargAfterTheName stores OPTARG last on every path: ksh93,
+	// where `getopts x: OPTARG -x6` ends with OPTARG `6` and the end of the
+	// options leaves it unset.
+	GetoptsOptargAfterTheName
+)
+
+func (p GetoptsOptargOrderPolicy) String() string {
+	switch p {
+	case GetoptsOptargBeforeTheName:
+		return "OPTARG before the name"
+	case GetoptsOptargAfterTheNameOnAnError:
+		return "OPTARG after the name on a reported fault"
+	case GetoptsOptargAfterTheName:
+		return "OPTARG after the name"
+	}
+	return "unspecified"
+}
 
 func (p GetoptsFunctionPositionPolicy) String() string {
 	switch p {

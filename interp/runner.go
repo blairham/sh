@@ -1527,6 +1527,24 @@ type Runner struct {
 	// question is which path inside `getopts` reached the freeze and nothing
 	// in the value being written says so.
 	optRanOut bool
+	// optOnAnError records that the `getopts` write in flight is the name
+	// operand on a path that reports a bad option or a missing argument —
+	// set around those writes for the reason optRanOut is: which path wrote
+	// the name is what GetoptsOptargOrder is answered by, and nothing in the
+	// value being written says so.
+	optOnAnError bool
+	// optargLast is the store this `getopts` call made to OPTARG as its own
+	// parameter — a value, or the unset — kept so that the dialects that
+	// write OPTARG *after* the name operand can make it again over an operand
+	// spelled OPTARG. See Runner.getoptsOptargAfterTheName. Reset at the top
+	// of every scan, so it never carries one call's store into the next.
+	optargLast *getoptsOptargStore
+	// optargBefore is OPTARG as this `getopts` call found it, taken only in
+	// the dialects that write OPTARG after the name operand (and in a vector
+	// that has not said), so that a name the freeze refuses can leave OPTARG
+	// unwritten, as the builtin there never reaches its OPTARG store. See
+	// Runner.getoptsOptargUnwritten.
+	optargBefore getoptsOptargSnapshot
 
 	// unitRanACommand says whether a command has completed in this execution
 	// unit — the shell, or the subshell, command substitution, function

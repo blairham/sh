@@ -2913,6 +2913,11 @@ func Semantics() interp.Semantics {
 	// it nor survives it. bash alone; measured 2026-09-16 on 5.3.20, on
 	// 3.2.57 and under the name `sh`.
 	s.GetoptsClearingOptargIsARealUnset = interp.Yes
+	// And over a name operand spelled OPTARG, a reported fault writes OPTARG
+	// after the name where every other path writes it before: `getopts :x
+	// OPTARG -y` leaves `y` and `getopts x: OPTARG -x6` leaves `x`. Measured
+	// 2026-10-15 on 5.3.20, on 3.2.57 and under the name `sh`; see the axis.
+	s.GetoptsOptargOrder = interp.GetoptsOptargAfterTheNameOnAnError
 	s.GetoptsOwnParametersIgnoreAFreeze = interp.No
 	s.GetoptsRefusedWriteEndsTheBuiltin = interp.No
 	// A freeze on the **name** is reported and the script runs on, wherever

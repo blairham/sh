@@ -62,6 +62,9 @@ func TestTheShellsOwnDescriptorsAreInItsNumbers(t *testing.T) {
 		{`true | true | { ( echo <(true) <(true) ); }`, []int{1, 2}},
 		{`true | true | ( echo <(true) <(true) )`, []int{0, 1}},
 		{`{ echo <(true) <(true); } </dev/null & wait`, []int{0, 1}},
+		// And a substitution's body holds none of it: zsh 5.9.2 answers
+		// `true | true | cat <(echo <(true))` from the bottom of its range.
+		{`true | true | /bin/cat <(echo <(true))`, []int{0}},
 		// A substitution a redirection reads from is a source too; one it
 		// writes into is made after the save.
 		{`{ echo <(true) <(true); } < <(true)`, []int{0, 2}},

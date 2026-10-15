@@ -69,3 +69,24 @@ setopt
 		t.Errorf("out %q, want noevallineno in the deviation listing", out)
 	}
 }
+
+// A parse failure in the text moves with the option too, and only by its name:
+// the caller's — the shell's, a function's, an `emulate`d script's — stands
+// where `(eval)` did, while the line stays the one inside the text, where a
+// command not found above carries the caller's. `emulate sh` turns the option
+// off, which is how it was found (#6540). Measured 2026-10-15 on zsh 5.9.2
+// under `-fc`.
+func TestEvalLinenoNamesAParseFailureInTheTextByTheCaller(t *testing.T) {
+	for _, tc := range []struct{ src, want string }{
+		{"setopt evallineno\neval 'echo )'\n", "(eval):1: parse error near `)'\n"},
+		{"unsetopt evallineno\neval 'echo )'\n", "zsh:1: parse error near `)'\n"},
+		{"unsetopt evallineno\neval $'echo a\\necho )'\n", "zsh:2: parse error near `)'\n"},
+		{"emulate sh\neval 'echo )'\n", "zsh:1: parse error near `)'\n"},
+		{"unsetopt evallineno\nf() { eval 'echo )'; }\nf\n", "f:1: parse error near `)'\n"},
+	} {
+		out, _, errs := runZshSplit(t, t.TempDir(), tc.src)
+		if got := out + errs; got != tc.want {
+			t.Errorf("%q:\n got %q\nwant %q", tc.src, got, tc.want)
+		}
+	}
+}

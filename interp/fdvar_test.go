@@ -100,7 +100,14 @@ echo "st=$?"`)
 // runs it in dir with the posix answers, adjusted by tweak.
 func runFdVar(t *testing.T, dir string, tweak func(*Semantics), src string) string {
 	t.Helper()
-	f, err := syntax.Parse(src, syntax.Core())
+	return runFdVarIn(t, syntax.Core(), dir, tweak, src)
+}
+
+// runFdVarIn is runFdVar under a grammar of the caller's choosing, for the
+// spellings only some grammars take — `{1}<f` is one.
+func runFdVarIn(t *testing.T, d syntax.Dialect, dir string, tweak func(*Semantics), src string) string {
+	t.Helper()
+	f, err := syntax.Parse(src, d)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -197,6 +197,16 @@ func (r *Runner) applyRedirList(ctx context.Context, rs []*syntax.Redirect, comp
 			_ = own.Close()
 		}
 	}
+	// setFdVar stores a `{name}` redirection's number, and on a command that
+	// is a process of its own first takes what the store overwrites so the
+	// command's end can put it back. See fdvarexternal.go.
+	var fdVarsHeld fdVarsInTheCommand
+	setFdVar := func(ref, value string) bool {
+		if restore := fdVarsHeld.beforeStore(r); restore != nil {
+			closers = append(closers, restore)
+		}
+		return r.setFdVar(ref, value)
+	}
 	// closeMovedSource is the second half of `N<&M-`: M is closed, and
 	// forKeeps says whether the command takes that back when it ends.
 	//
@@ -380,9 +390,7 @@ func (r *Runner) applyRedirList(ctx context.Context, rs []*syntax.Redirect, comp
 			// with the same axis deciding whether it outlives the command.
 			persists := false
 			if fdVar != "" {
-				persists = r.ask(r.sem().FdVariableOutlivesTheCommand,
-					"a variable-named descriptor outliving its command") &&
-					r.FdVariableDescriptorOutlivesTheCommand()
+				persists = r.fdVarOutlivesItsCommand()
 				if r.unspecified {
 					r.redirErr = true
 					return closers, nil
@@ -427,7 +435,7 @@ func (r *Runner) applyRedirList(ctx context.Context, rs []*syntax.Redirect, comp
 				r.setFd(hfd, held)
 				r.redirWrote(hfd)
 				if fdVar != "" {
-					if !r.setFdVar(fdVar, itoa(hfd)) {
+					if !setFdVar(fdVar, itoa(hfd)) {
 						dropFdVarDescriptor(hfd, closer, persists)
 						r.redirErr = true
 						return closers, nil
@@ -657,9 +665,7 @@ func (r *Runner) applyRedirList(ctx context.Context, rs []*syntax.Redirect, comp
 				// first and closes after, so the name gets the next one up.
 				fd = r.nextFreeFd(moveFrom)
 			}
-			persists := fdVar != "" &&
-				r.ask(r.sem().FdVariableOutlivesTheCommand, "a variable-named descriptor outliving its command") &&
-				r.FdVariableDescriptorOutlivesTheCommand()
+			persists := fdVar != "" && r.fdVarOutlivesItsCommand()
 			if r.unspecified {
 				r.redirErr = true
 				return closers, nil
@@ -706,7 +712,7 @@ func (r *Runner) applyRedirList(ctx context.Context, rs []*syntax.Redirect, comp
 			}
 			r.redirWrote(fd)
 			if fdVar != "" {
-				if !r.setFdVar(fdVar, itoa(fd)) {
+				if !setFdVar(fdVar, itoa(fd)) {
 					// A duplication opens nothing of its own — the entry is
 					// a second name for a file something else holds — so
 					// only the name goes.
@@ -847,9 +853,7 @@ func (r *Runner) applyRedirList(ctx context.Context, rs []*syntax.Redirect, comp
 			// The session's own switch can only take the descriptor back
 			// sooner, never keep it longer — see
 			// Runner.FdVariableDescriptorOutlivesTheCommand.
-			persists = r.ask(r.sem().FdVariableOutlivesTheCommand,
-				"a variable-named descriptor outliving its command") &&
-				r.FdVariableDescriptorOutlivesTheCommand()
+			persists = r.fdVarOutlivesItsCommand()
 			if r.unspecified {
 				r.redirErr = true
 				return closers, nil
@@ -1138,7 +1142,7 @@ func (r *Runner) applyRedirList(ctx context.Context, rs []*syntax.Redirect, comp
 				r.setFd(fd, held)
 				r.redirWrote(fd)
 				if fdVar != "" {
-					if !r.setFdVar(fdVar, itoa(fd)) {
+					if !setFdVar(fdVar, itoa(fd)) {
 						dropFdVarDescriptor(fd, f, persists)
 						r.redirErr = true
 						return closers, nil

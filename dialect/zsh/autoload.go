@@ -1282,6 +1282,12 @@ func autoloadBodyRefusedIn(r *interp.Runner, path, name, body string) bool {
 // runs the function. Both are narrower gaps than the one this closes and
 // neither is made worse by it.
 func autoloadSubstitutionSwallowsTheCloser(r *interp.Runner, path, text string) bool {
+	if !strings.Contains(text, "$(") {
+		// No body this asks about can be written without those two
+		// characters, and a parse of the whole file to find none is a
+		// parse per function file at every start (#6363).
+		return false
+	}
 	d := Dialect()
 	// The bodies come from the parser rather than from a walk of the tree:
 	// asking for them with the line is what syntax.File.Substitutions is, and
@@ -1438,6 +1444,9 @@ func zshDefineFromText(r *interp.Runner, name, body, file string, keepAliases bo
 // directory an `-X` was handed. A file read one way and not the other would
 // be the same bug reachable by the other road.
 func autoloadLoneDefinition(r *interp.Runner, path, name, body string) (inner string, lone bool) {
+	if !autoloadMayOpenWithADefinition(name, body) {
+		return "", false
+	}
 	f, err := r.ParseFileText(path, "definition", body, Dialect(), interp.ParseNoAliases)
 	if err != nil || len(f.Stmts) != 1 {
 		return "", false
@@ -1468,6 +1477,27 @@ func autoloadLoneDefinition(r *interp.Runner, path, name, body string) (inner st
 		return "", false
 	}
 	return body[start:end], true
+}
+
+// autoloadMayOpenWithADefinition is a look at the text before the parse in
+// autoloadLoneDefinition, which says "no" only where that parse cannot say
+// "yes": a file that is one definition of name opens with it, so the first
+// line that is neither blank nor a comment holds the name — `name() {` and
+// `function name {` alike, since a newline after `function` is not a
+// definition at all (measured on zsh 5.9.2: `function` alone on the first
+// line and `kh { print H }` on the second is a parse error at the call). A
+// line ending in a backslash carries the statement on, and is left to the
+// parse. Most function files open with something else — `emulate -L zsh`, a
+// `local` — and the parse was one per file at every start (#6363).
+func autoloadMayOpenWithADefinition(name, body string) bool {
+	for line := range strings.Lines(body) {
+		t := strings.TrimSpace(line)
+		if t == "" || t[0] == '#' {
+			continue
+		}
+		return strings.Contains(t, name) || strings.HasSuffix(t, "\\")
+	}
+	return false
 }
 
 // autoloadFile reads the first file named `name` on `$fpath`, and says which

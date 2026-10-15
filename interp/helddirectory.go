@@ -6,6 +6,7 @@ package interp
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"sync/atomic"
 
 	"github.com/blairham/sh/internal/opened"
@@ -71,6 +72,75 @@ type heldDirectory struct {
 	// reference to the file is collected, which is the safety net os.File
 	// carries for exactly this.
 	shared atomic.Bool
+	// copyFd is dir's number where it is registered as a private copy, and -1
+	// where it is not; cleanup is what releases that registration and closes
+	// dir for a shared hold nobody closes. See newHeldDirectory.
+	copyFd  int
+	cleanup runtime.Cleanup
+}
+
+// heldCopy is what a shared hold's cleanup needs: the file it closes and the
+// number whose registration it releases first. Not the hold itself, which
+// would keep the hold reachable for ever.
+type heldCopy struct {
+	dir *os.File
+	fd  int
+}
+
+// newHeldDirectory makes dir the hold on the directory named, moved out of
+// the numbers a substitution publishes.
+//
+// **A real shell's working directory is not a descriptor**, so nothing it does
+// to its directory is in the table a substitution is numbered from. This one's
+// is, and the open lands on the lowest free number — so the first external
+// command a script ran left the hold on 3 or 4, and every substitution after
+// it stepped over it: `/bin/echo x >/dev/null; echo <(true) <(true) <(true)`
+// answered `3 5 6` in the ksh dialect where ksh93u+ answers `3 4 5`. And
+// because the hold is opened lazily, by whichever element of a pipeline first
+// asked where it was, a substitution in a sibling element raced it: `echo x |
+// { echo <(true) <(true) <(true); } | { cat; }` answered `4 5 6`, `3 5 6` or
+// `3 4 6` (#6454).
+//
+// So it is moved exactly as a body's private copies are: into
+// privateCopyFloor's band, where a substitution would only reach it past
+// twenty-odd live descriptors, and registered, so that one which does reaches
+// it publishes the number rather than stepping over it. See dupFile.
+//
+// The registration has to end where the descriptor does, and a shared hold is
+// never closed by anybody — it goes when the last copy holding it is
+// collected. So the release and the close are one cleanup, in that order,
+// which is the order releasePrivateCopy asks for; a hold closed on purpose
+// stops the cleanup first, so the number is never released twice.
+//
+// A failure to move is not one: the hold stays where the open put it, which is
+// where every hold was before this.
+//
+// The caller holds transientFds for reading, from the open that made dir to
+// here, because until this returns the original is on a low number.
+func newHeldDirectory(named string, dir *os.File, floor int) *heldDirectory {
+	h := &heldDirectory{named: named, dir: dir, copyFd: -1}
+	raised, n, err := dupFile(dir, floor)
+	if err != nil {
+		return h
+	}
+	holdPrivateCopy(n)
+	_ = dir.Close()
+	h.dir, h.copyFd = raised, n
+	h.cleanup = runtime.AddCleanup(h, func(c heldCopy) {
+		releasePrivateCopy(c.fd)
+		_ = c.dir.Close()
+	}, heldCopy{dir: raised, fd: n})
+	return h
+}
+
+// close lets go of the descriptor, releasing its registration first.
+func (h *heldDirectory) close() {
+	if h.copyFd >= 0 {
+		h.cleanup.Stop()
+		releasePrivateCopy(h.copyFd)
+		h.copyFd = -1
+	}
+	_ = h.dir.Close()
 }
 
 // holdDirectory is the Runner's hold on its own directory, opened if there is
@@ -109,7 +179,17 @@ func (r *Runner) holdDirectory() *heldDirectory {
 		// moved *and* being renamed out from under afterwards.
 		return nil
 	}
-	dir, err := opened.Hold(r.Dir)
+	// The open and the move out of the low numbers in one window — see
+	// newHeldDirectory and transientFds.
+	var held *heldDirectory
+	err := withTransientFds(func() error {
+		dir, err := opened.Hold(r.Dir)
+		if err != nil {
+			return err
+		}
+		held = newHeldDirectory(r.Dir, dir, r.privateFdFloor())
+		return nil
+	})
 	if err != nil {
 		// Nothing is said about this. A directory the shell cannot open is
 		// one it will hear about from the next thing it does there, in that
@@ -119,7 +199,7 @@ func (r *Runner) holdDirectory() *heldDirectory {
 		return nil
 	}
 	r.dropDirectoryHold()
-	r.held = &heldDirectory{named: r.Dir, dir: dir}
+	r.held = held
 	return r.held
 }
 
@@ -130,7 +210,7 @@ func (r *Runner) dropDirectoryHold() {
 		return
 	}
 	if !r.held.shared.Load() {
-		_ = r.held.dir.Close()
+		r.held.close()
 	}
 	r.held = nil
 }
@@ -238,7 +318,9 @@ func (r *Runner) enteredFromTheDirectoryHeld(operand string) (arrived *os.File, 
 // hold it keeps, under the name the Runner has settled on.
 func (r *Runner) adoptTheDirectoryHeld(dir *os.File, name string) {
 	r.dropDirectoryHold()
-	r.held = &heldDirectory{named: name, dir: dir}
+	transientFds.RLock()
+	defer transientFds.RUnlock()
+	r.held = newHeldDirectory(name, dir, r.privateFdFloor())
 }
 
 // cdFromTheDirectoryHeld is `cd`'s last resort: the operand tried again from

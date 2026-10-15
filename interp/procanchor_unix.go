@@ -41,7 +41,9 @@ func startProcAnchor(argv []string) (*exec.Cmd, *os.File, error) {
 	// Not through Runner.startMasked: an anchor is a placeholder with no
 	// environment, no output and nothing to run, so there is no file for a
 	// file-creation mask to be about. It is also not a Runner's command.
-	err = cmd.Start()
+	// It is still a start, and opens descriptors in this process while it
+	// runs — see transientFds.
+	err = withTransientFds(cmd.Start)
 	// This shell's copy of the reading end has done its work either way — the
 	// child has it now, or there is no child.
 	_ = read.Close()

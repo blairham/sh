@@ -184,6 +184,13 @@ func (r *Runner) procSubFdDir() string {
 // keeps the reading one, `<(cmd)` the other way about. dir is the directory
 // the path is named after — see Runner.procSubFdDir.
 func newProcSubPipe(childWrites bool, dir string, want []int, view substFdView) (procSubEnds, error) {
+	// From the pipe to the number published, no process start is in flight:
+	// a start's own descriptors sit on the lowest free numbers until it
+	// returns, and a sibling pipeline element's start would otherwise be in
+	// the table this number is counted from (#6454). Nothing below starts a
+	// process, which is what makes holding this safe. See transientFds.
+	transientFds.Lock()
+	defer transientFds.Unlock()
 	rd, wr, err := os.Pipe()
 	if err != nil {
 		return procSubEnds{}, err

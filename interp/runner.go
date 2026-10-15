@@ -1230,6 +1230,9 @@ type Runner struct {
 	// assignmentGuards are the names whose assignment can be refused by what
 	// it would change outside the shell. See SetAssignmentGuard.
 	assignmentGuards map[string]func(*Runner, string) (string, bool)
+	// valueRefusals are the names whose stores refuse some values, the way
+	// a freeze refuses every value. See RefuseValues.
+	valueRefusals map[string]func(string) (string, bool)
 	// declaringWithoutAValue says the store under way is a declaration's own
 	// empty value rather than an assignment. See declareEmpty.
 	declaringWithoutAValue bool
@@ -9955,6 +9958,12 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 			// the call just made, which no hook is watching — see
 			// Runner.prefixScopedToTheCall.
 			r.storePrefixQuietlyIfTakenBack(ctx, a, held, !scoped, fresh, takenBack)
+			if r.ctl == controlExit {
+				// The store was refused and the refusal ended the shell —
+				// a value the name does not take, see RefuseValues. Nothing
+				// after it in the walk is asked.
+				break
+			}
 			callHeld = append(callHeld, held)
 			// The export attribute for the duration, which the two readings
 			// move in opposite directions rather than one of them leaving it
@@ -10693,6 +10702,9 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 	}
 	env = append(withoutPrefixArrayNames(env, prefixArrays), prefixEnv...)
 	if _, stop := r.refusePrefixes(c.Assigns, external, !r.expandErr); stop {
+		return nil
+	}
+	if r.prefixValueRefused(prefixEnv, external) {
 		return nil
 	}
 	if r.prefixGuardRefuses(prefixEnv) {
@@ -13337,6 +13349,14 @@ func (r *Runner) readonlyRefusalNamesBuiltin(form assignForm) bool {
 // kind of command that follows it — so the sentence is shared and the
 // consequence is decided where the refusal happened (#1219).
 func (r *Runner) reportReadonlyRefusal(name string, form assignForm, fatal bool) {
+	r.reportFreezeRefusal(name, form, fatal, "")
+}
+
+// reportFreezeRefusal is reportReadonlyRefusal with the sentence replaced where
+// sentence is not empty, and everything else about the report — which builtin
+// is named, where, and whether the script ends — the freeze's. See
+// RefuseValues.
+func (r *Runner) reportFreezeRefusal(name string, form assignForm, fatal bool, sentence string) {
 	if r.refusalSpokenAs != "" {
 		// A declaration that reached this through a name **reference**, in
 		// the column that speaks of the operand the script wrote rather than
@@ -13417,6 +13437,16 @@ func (r *Runner) reportReadonlyRefusal(name string, form assignForm, fatal bool)
 	// And except for a name restricted mode froze, in the dialect that keeps
 	// the builtin's location for that one. See
 	// Diagnostics.RestrictedVariableNamesTheBuiltin.
+	if sentence != "" {
+		// A refused value rather than a freeze. The builtin goes in front
+		// where the dialect puts it in front of a freeze's sentence:
+		// `read: Illegal number: x` beside `read: y: is read only`.
+		msg = sentence
+		if r.inBuiltin != "" && (form.namesTheBuiltin() || r.locatedUnderACall) &&
+			r.diag().ReadonlyVariableInDeclaration != "" && r.readonlyRefusalNamesBuiltin(form) {
+			msg = r.inBuiltin + ": " + sentence
+		}
+	}
 	keep := restrictedLetter || r.diag().RestrictedVariableNamesTheBuiltin && r.restrictedFreeze(name)
 	if !r.readonlyRefusalNamesBuiltin(form) && !keep {
 		outer := r.inBuiltin
@@ -13563,8 +13593,16 @@ func (r *Runner) refuseReadonly(name string, form assignForm) bool {
 	// against a file with newlines — which varied two things at once and is
 	// confirmatory for either reading (#1182).
 	//
+	return r.refuseAsAFreezeWould(name, form, "")
+}
+
+// refuseAsAFreezeWould is the second half of refuseReadonly: the name is
+// refused, and this says so and settles what that costs. sentence replaces
+// the freeze's own where it is not empty — see RefuseValues, the one caller
+// that refuses a name that is not frozen.
+func (r *Runner) refuseAsAFreezeWould(name string, form assignForm, sentence string) bool {
 	if (form == assignedAnyhow || form == assignedAsTheCompoundView) && (r.inBuiltin != "" || r.arithCommand > 0) {
-		return r.refuseReadonlyInACommand(name)
+		return r.refuseReadonlyInACommand(name, sentence)
 	}
 	fatal := r.sem().ReadonlyReassignmentFatal
 	switch {
@@ -13579,7 +13617,7 @@ func (r *Runner) refuseReadonly(name string, form assignForm) bool {
 			fatal = r.sem().ReadonlyReassignmentBySpecialBuiltinFatal
 		}
 	}
-	return r.refuseWithTheReadonlySentence(name, form, fatal)
+	return r.refuseWithASentence(name, form, fatal, sentence)
 }
 
 // refuseWithTheReadonlySentence writes the refusal a frozen name earns and
@@ -13592,11 +13630,17 @@ func (r *Runner) refuseReadonly(name string, form assignForm) bool {
 // and every other thing about the refusal — the wording, the status, the line
 // it gives up — is this one. See Runner.MarkProducedTableFrozenByKey.
 func (r *Runner) refuseWithTheReadonlySentence(name string, form assignForm, fatal Answer) bool {
+	return r.refuseWithASentence(name, form, fatal, "")
+}
+
+// refuseWithASentence is refuseWithTheReadonlySentence with the sentence
+// replaced where sentence is not empty. See RefuseValues.
+func (r *Runner) refuseWithASentence(name string, form assignForm, fatal Answer, sentence string) bool {
 	if r.ask(fatal, "a readonly reassignment being fatal") {
-		r.reportReadonlyRefusal(name, form, true)
+		r.reportFreezeRefusal(name, form, true, sentence)
 		return true
 	}
-	r.reportReadonlyRefusal(name, form, false)
+	r.reportFreezeRefusal(name, form, false, sentence)
 	r.status, r.assignFailed = 1, true
 	// Reported and not fatal, and the shell still gives up what it was
 	// running: `readonly r=1; r=2; echo one` never prints `one`, and the line
@@ -13637,12 +13681,12 @@ func (r *Runner) refuseWithTheReadonlySentence(name string, form assignForm, fat
 // which a failed evaluation already asks. This path used to take the
 // assignment's answers, so bash gave up the line after `printf -v` and bash
 // in POSIX mode ended the script there.
-func (r *Runner) refuseReadonlyInACommand(name string) bool {
+func (r *Runner) refuseReadonlyInACommand(name, sentence string) bool {
 	r.refusedInACommand = true
 	if r.arithCommand > 0 && r.inBuiltin == "" {
 		// The command reports and decides in arithCmd, through the same
 		// door an evaluation error goes through.
-		r.reportReadonlyRefusal(name, assignedAnyhow, false)
+		r.reportFreezeRefusal(name, assignedAnyhow, false, sentence)
 		return true
 	}
 	if r.inBuiltin == "let" {
@@ -13670,13 +13714,13 @@ func (r *Runner) refuseReadonlyInACommand(name string) bool {
 		// builtin's location, and `(( x=2 ))` on the next line carries
 		// neither. The fatality is the `false` beside it, which stays
 		// #3470's answer (#3568).
-		r.reportReadonlyRefusal(name, assignedByBuiltin, false)
+		r.reportFreezeRefusal(name, assignedByBuiltin, false, sentence)
 		r.status = 1
 		return true
 	}
 	fatal := r.ask(r.sem().ReadonlyRefusalInABuiltinIsFatal,
 		"a builtin's refused write to its own output parameter ending the script")
-	r.reportReadonlyRefusal(name, assignedAnyhow, fatal)
+	r.reportFreezeRefusal(name, assignedAnyhow, fatal, sentence)
 	if !fatal {
 		r.status = 1
 	}
@@ -13822,6 +13866,11 @@ func (r *Runner) setVarAs(name, value string, form assignForm) {
 	// moved yet. See Runner.watchHiddenKinds.
 	r.noteHiddenWrite(name)
 	if r.refuseReadonly(name, form) {
+		return
+	}
+	if r.refuseTheValue(name, value, form) {
+		// A value this name does not take, refused on the freeze's route.
+		// See RefuseValues.
 		return
 	}
 	if !r.scopeWarningsAreOff() && !form.declaresRatherThanAssigns() &&

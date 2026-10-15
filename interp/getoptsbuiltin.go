@@ -576,6 +576,15 @@ func (r *Runner) getoptsWrite(name, value string, own bool) bool {
 	if !r.getoptsMayWrite(name, own) {
 		return false
 	}
+	if sentence, refused := r.refusedValue(name, value); refused {
+		// A value the name does not take, refused on the freeze's route
+		// just above: measured 2026-10-15 on dash 0.5.12, `getopts a
+		// OPTIND -a` is `getopts: Illegal number: a` at 2 and the cursor's
+		// own 2 stays, as `readonly o; getopts a o -a` is `getopts: o: is
+		// read only` at 2. See RefuseValues.
+		r.reportFreezeRefusal(name, assignedByBuiltin, r.getoptsRefusalIsFatal(), sentence)
+		return false
+	}
 	if r.attrHas(name, attrReadonly) {
 		// Written *through* the freeze rather than around it: the freeze is
 		// lifted for the one store, so that everything else a scalar store

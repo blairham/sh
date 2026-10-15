@@ -2897,6 +2897,13 @@ func Apply(r *interp.Runner) {
 	// function. Corpus rows getopts/an-unset-optind-is-not-a-fresh-cursor
 	// and its two neighbors.
 	r.RefuseUnset("OPTIND")
+	// **And every other store into it is checked for a number**, on the
+	// route a freeze's refusal takes: `OPTIND=x` ends the script with
+	// `Illegal number: x`, `read OPTIND` over a letter is `read: Illegal
+	// number: x` at 2 and goes on. The `unset` above is the same check
+	// meeting the empty string. See optindRefuses and interp.RefuseValues
+	// (#6537).
+	r.RefuseValues("OPTIND", optindRefuses)
 	// dash has no `builtin`.
 	r.Unregister("builtin")
 	// No `compgen` here; it is bash's alone.

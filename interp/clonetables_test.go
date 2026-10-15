@@ -490,6 +490,7 @@ func seedTables(r *Runner) {
 	r.dynamicWriters = map[string]func(*Runner, string){"seed": func(*Runner, string) {}}
 	r.assignmentActions = map[string]func(*Runner, string){"seed": func(*Runner, string) {}}
 	r.assignmentGuards = map[string]func(*Runner, string) (string, bool){"seed": func(*Runner, string) (string, bool) { return "", false }}
+	r.valueRefusals = map[string]func(string) (string, bool){"seed": func(string) (string, bool) { return "", false }}
 	r.unsetActions = map[string]func(*Runner){"seed": func(*Runner) {}}
 	r.inheritedParameterActions = map[string]func(*Runner, string){"seed": func(*Runner, string) {}}
 	r.restrictedFrozen = map[string]bool{"seed": true}

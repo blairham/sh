@@ -54,7 +54,7 @@ var theFullRoad = map[string][]string{
 		"fatalQuiet", "forgetEveryHashedCommand", "ignoredNamesAssigned", "indirectElement",
 		"localizeMemberWrite", "markForAllexport", "mirrorScalarToArray", "nameIsBack",
 		"namerefAssignmentTarget", "namespaceWriteName", "noteHiddenWrite", "pipelineStatuses",
-		"producersLookup", "refuseReadonly", "refuseUnaimedReference", "scalarOverCompound",
+		"producersLookup", "refuseReadonly", "refuseTheValue", "refuseUnaimedReference", "scalarOverCompound",
 		"scopeWarningsAreOff", "selfNameref", "selfNamerefAssignment", "settleCtypeBeforeChanging",
 		"storeIntoSelectedFrame", "storeThroughNamerefElement", "tiedUniqueFold", "unaimedReferenceBase",
 		"varsPut", "warnAboutTheScope", "assigned", "registeredAction", "attrClear", "releaseEnvCopy",

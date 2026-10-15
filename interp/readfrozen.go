@@ -42,6 +42,28 @@ package interp
 // bash 5.3.20 and in 3.2.57 alike.
 const readRefusedStatus = 2
 
+// readMayStore is readMayWrite with the value in hand: a name whose stores
+// refuse some values refuses this one on the freeze's route, so everything
+// readFill decides about a refused write — whether the builtin ends there,
+// what status it leaves — is decided the same way. Measured 2026-10-15 on dash
+// 0.5.12, `read y OPTIND` over `b x` is `read: Illegal number: x` at 2 with y
+// filled, and `read OPTIND y` over `x b` the same with y left empty: the
+// freeze's rows exactly. See RefuseValues.
+func (r *Runner) readMayStore(name, value string) bool {
+	if !r.readMayWrite(name) {
+		return false
+	}
+	target := r.frozenReadName(name)
+	sentence, refused := r.refusedValue(target, value)
+	if !refused {
+		return true
+	}
+	fatal := r.ask(r.sem().ReadonlyRefusalInABuiltinIsFatal,
+		"a builtin's refused write to its own output parameter ending the script")
+	r.reportFreezeRefusal(target, assignedByBuiltin, fatal, sentence)
+	return false
+}
+
 // readMayWrite reports whether a freeze lets `read` fill one of its names,
 // having written the refusal where it does not.
 //

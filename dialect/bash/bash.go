@@ -3204,6 +3204,11 @@ func Semantics() interp.Semantics {
 	// A `{name}` store is an ordinary assignment here: attributes and
 	// export are kept. See interp.Semantics.FdVariableStoreTyping.
 	s.FdVariableStoreTyping = interp.FdVariableStoreIsAnAssignment
+	// And a program is handed the environment from before its own `{name}`
+	// store: `export v=keep; /usr/bin/env {v}</dev/null` shows it
+	// `v=keep`, measured 2026-10-15 (#6521). See
+	// interp.Semantics.FdVariableReachesTheProgramsEnvironment.
+	s.FdVariableReachesTheProgramsEnvironment = interp.No
 	s.DuplicationTargetError = interp.DuplicationTargetErrorCarriesOn
 	s.LocalOutsideAFunctionIsAnError = interp.Yes
 	s.LocalOutsideAFunctionIsFatal = interp.No

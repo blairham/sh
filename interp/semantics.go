@@ -24390,6 +24390,46 @@ type Semantics struct {
 	// unpinned ksh: the same; TestAFdVariableStoreStartsTheNameOver pins it.
 	FdVariableStoreTyping FdVariableStoreTypingPolicy
 
+	// FdVariableReachesTheProgramsEnvironment says whether a `{name}` store
+	// made on a program is in the environment that program is handed, where
+	// the name is exported or becomes so.
+	//
+	// Measured 2026-10-15 with `-c` against bash 5.3.20, zsh 5.9.2 under `-f`
+	// and ksh93u+ 2012-08-01 (/bin/ksh), then `| grep ^v=`:
+	//
+	//	                                        bash     zsh     ksh93
+	//	set -a; /usr/bin/env {v}</dev/null      nothing  v=11    nothing
+	//	export v=keep; /usr/bin/env {v}…        v=keep   v=11    nothing
+	//	command /usr/bin/env {v}…  (set -a)     nothing  v=11    nothing
+	//	set -a; /usr/bin/env {v}… {w}…          nothing  v, w    nothing
+	//	v=keep; /usr/bin/env {v}…  (control)    nothing  nothing nothing
+	//	export v=keep; v=pre /usr/bin/env {v}…  v=pre    v=pre   (#6569)
+	//
+	// No is bash: the program is handed the environment from before the
+	// store, so an exported name arrives with the value it had. Yes is zsh
+	// and ksh93: the environment from after it. ksh93's column reads
+	// "nothing" because its store takes the name out of the environment —
+	// FdVariableStoreTyping — and the before-reading would have shown it
+	// `v=keep`, so it is Yes and not No.
+	//
+	// The store is still made in the program's process in all three (the
+	// name is put back when the command ends, see fdvarexternal.go), and a
+	// prefix assignment of the same name wins over either reading.
+	//
+	// Asked only where a program's own redirections stored a name *and* the
+	// environment before the store and after it differ over that name: a
+	// name nobody exports is the control row, and every column agrees.
+	//
+	// unpinned bash: no corpus case hands a program an exported `{name}`;
+	// TestAnFdVariableIsNotInTheProgramsEnvironment pins it.
+	//
+	// unpinned zsh: the same; TestAnFdVariableIsInTheProgramsEnvironment pins
+	// it.
+	//
+	// unpinned ksh: the same; TestAFdVariableStoreStartsTheNameOver pins it,
+	// in its row about the program's environment.
+	FdVariableReachesTheProgramsEnvironment Answer
+
 	// DescriptorNumberCeiling is the highest descriptor number a duplication
 	// may name, past which the refusal is about the *number* rather than
 	// about what is open at it.

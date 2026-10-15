@@ -4208,6 +4208,12 @@ type Runner struct {
 	// 2026-09-17 on bash 5.3.20; see Runner.setFdVar.
 	redirForCommandWord string
 
+	// fdVarsForTheProgram is the hold a program's own `{name}` stores were
+	// taken under, from the moment its redirections store a name until the
+	// program's environment is built from it — see Runner.fdVarEnviron. Nil
+	// everywhere else, and in every clone.
+	fdVarsForTheProgram *fdVarsInTheCommand
+
 	// fdVarSpeaker is the command word lent to a `{name}>` store's own
 	// refusal while that store runs, since the store is reached from a
 	// redirection rather than from inside a builtin and r.inBuiltin is empty
@@ -5898,6 +5904,9 @@ func (r *Runner) clone() *Runner {
 	// into the middle of the operand it is waiting for. See
 	// interp/compoundoperandorder.go.
 	c.heldTrace = heldTrace{}
+	// And the environment a program's `{name}` store is weighed against is
+	// that program's, which a copy is not. See Runner.fdVarEnviron.
+	c.fdVarsForTheProgram = nil
 	// And a DEBUG firing a command is holding back belongs to the shell
 	// holding it, for the reason the trace line above does: the command that
 	// held it is this shell's, the flush is this shell's, and a copy running
@@ -10611,6 +10620,14 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 	env := r.environ()
 	if child != nil {
 		env = child.environ()
+	}
+	// Whether a `{name}` this command stored is in the program's
+	// environment is a dialect's question, and it is asked of the
+	// environment before the prefix joins it: the prefix is the program's
+	// own word for the name and wins in every column. See fdVarEnviron.
+	env = r.fdVarEnviron(env)
+	if r.unspecified {
+		return nil
 	}
 	env = append(withoutPrefixArrayNames(env, prefixArrays), prefixEnv...)
 	if _, stop := r.refusePrefixes(c.Assigns, external, !r.expandErr); stop {

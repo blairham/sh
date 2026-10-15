@@ -3,7 +3,11 @@
 
 package interp
 
-import "slices"
+import (
+	"maps"
+	"slices"
+	"strings"
+)
 
 // A `{name}` redirection on a command that becomes a process of its own is
 // made in that process, so the shell that ran the command keeps neither the
@@ -107,6 +111,10 @@ type fdVarsInTheCommand struct {
 	tables expansionTables
 	params []string
 	attrs  map[string]nameAttributes
+	// envBefore is the environment the program would have been handed had
+	// nothing been stored, read once when the hold is taken. Only for a
+	// program: a subshell's stores are made before anything in it runs.
+	envBefore []string
 }
 
 // beforeStore takes the copy, once, for a command that is a process of its
@@ -132,7 +140,20 @@ func (h *fdVarsInTheCommand) beforeStore(r *Runner, ref string) closerFunc {
 	h.held = true
 	h.tables = r.saveExpansionTables()
 	h.params = slices.Clone(r.Params)
+	if r.redirOwner == redirOwnerTheCommand {
+		// Only for a program, which is the one owner whose environment
+		// is built after its redirections. A subshell's body runs in a
+		// copy that never carries the hold, so reading the environment
+		// there would be work nothing uses.
+		h.envBefore = r.environ()
+		r.fdVarsForTheProgram = h
+	}
 	return func() error {
+		if r.fdVarsForTheProgram == h {
+			// A program that never ran — a later redirection failed —
+			// leaves its hold here, and the next one must not read it.
+			r.fdVarsForTheProgram = nil
+		}
 		r.restoreExpansionTables(h.tables)
 		r.Params = h.params
 		for name, a := range h.attrs {
@@ -140,4 +161,76 @@ func (h *fdVarsInTheCommand) beforeStore(r *Runner, ref string) closerFunc {
 		}
 		return nil
 	}
+}
+
+// fdVarEnviron is the environment a program is handed, once the `{name}`
+// stores its own redirections made have been weighed (#6521).
+//
+// Every column makes those stores in the program's process. What differs is
+// whether the environment the program is handed is built before or after:
+// measured 2026-10-15 with `-c` against bash 5.3.20, zsh 5.9.2 under `-f`
+// and ksh93u+ 2012-08-01, then `| grep ^v=`:
+//
+//	                                        bash      zsh    ksh93
+//	set -a; /usr/bin/env {v}</dev/null      nothing   v=11   nothing
+//	export v=keep; /usr/bin/env {v}…        v=keep    v=11   nothing
+//	command /usr/bin/env {v}… (set -a)      nothing   v=11   nothing
+//	v=keep; /usr/bin/env {v}… (control)     nothing   nothing nothing
+//	set -a; true {v}…; /usr/bin/env         v=10      v=11   nothing
+//
+// bash hands the program the environment from before the store; zsh and
+// ksh93 from after it, and ksh93's store takes the name out of the
+// environment (Semantics.FdVariableStoreTyping), which is its column. So
+// only the names stored are in question, and only where the two
+// environments differ over them is anything asked — a name nobody exports
+// is the control row, and no column puts it there.
+//
+// The hold answers the one program it was taken for: it is cleared when the
+// command ends, and a copy of the runner never carries it, so the programs a
+// `command_not_found_handle` or a substitution runs are handed environments
+// of their own (bash shows the handler's `v=10`).
+func (r *Runner) fdVarEnviron(env []string) []string {
+	h := r.fdVarsForTheProgram
+	if h == nil || len(h.attrs) == 0 {
+		return env
+	}
+	before := environEntries(h.envBefore, h.attrs)
+	after := environEntries(env, h.attrs)
+	if maps.Equal(before, after) {
+		return env
+	}
+	if r.ask(r.sem().FdVariableReachesTheProgramsEnvironment,
+		"a variable-named descriptor's number reaching the program's environment") {
+		return env
+	}
+	if r.unspecified {
+		return nil
+	}
+	out := make([]string, 0, len(env))
+	for _, kv := range env {
+		name, _, _ := strings.Cut(kv, "=")
+		if _, stored := h.attrs[name]; !stored {
+			out = append(out, kv)
+		}
+	}
+	for _, kv := range h.envBefore {
+		name, _, _ := strings.Cut(kv, "=")
+		if _, stored := h.attrs[name]; stored {
+			out = append(out, kv)
+		}
+	}
+	return out
+}
+
+// environEntries is the entries of env whose names are among names, keyed by
+// name.
+func environEntries[V any](env []string, names map[string]V) map[string]string {
+	out := map[string]string{}
+	for _, kv := range env {
+		name, value, _ := strings.Cut(kv, "=")
+		if _, ok := names[name]; ok {
+			out[name] = value
+		}
+	}
+	return out
 }

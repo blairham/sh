@@ -26374,6 +26374,19 @@ that is a process of its own the name is put back afterwards, letters and
 all. Read rather than asked: ksh93 differs on nearly every store, so asking
 would refuse every `{name}` in a vector with no dialect (#6550).
 
+**`FdVariableReachesTheProgramsEnvironment`** — bash no · dash — · ksh93 yes · zsh yes
+
+Whether a `{name}` store made on a program is in the environment that
+program is handed. Measured 2026-10-15, `-c`: `set -a; /usr/bin/env
+{v}</dev/null` shows the program nothing in bash 5.3.20 and `v=11` in zsh
+5.9.2; `export v=keep` in front of it shows `v=keep` in bash and `v=11` in
+zsh. bash builds the environment before the store, zsh and ksh93 after —
+ksh93's program sees no `v` at all, because its store takes the name out of
+the environment (`FdVariableStoreTyping`). A prefix assignment of the same
+name wins in bash and zsh (#6569). Asked only where a program's own
+redirections stored a name and the environment before and after the store
+differ over it (#6521).
+
 **`ReadonlyFdVariableRefusesAClose`** — bash no · dash — · ksh93 yes · zsh yes
 
 Refuses `exec {name}>&-` when the name holding the descriptor is frozen.

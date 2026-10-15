@@ -147,6 +147,7 @@ ash   ExportThroughASubscriptedOperandRecordsTheLetter
 ash   ExportedCompoundReachesAChildAsItsFirstValue
 ash   FailingPipelineWhoseLastElementRanHere
 ash   FdVariableOnASubshellIsTheSubshells
+ash   FdVariableReachesTheProgramsEnvironment
 ash   FloatFormatLetterE
 ash   FloatLetterChangeRereadsTheRendering
 ash   ForNameWhenTheLoopRuns
@@ -533,6 +534,7 @@ dash  ExportThroughASubscriptedOperandRecordsTheLetter
 dash  ExportedCompoundReachesAChildAsItsFirstValue
 dash  FailingPipelineWhoseLastElementRanHere
 dash  FdVariableOnASubshellIsTheSubshells
+dash  FdVariableReachesTheProgramsEnvironment
 dash  FloatFormatLetterE
 dash  FloatLetterChangeRereadsTheRendering
 dash  ForNameWhenTheLoopRuns

@@ -374,6 +374,8 @@ func Semantics() interp.Semantics {
 	// unanswered NoclobberProtectsAnFdVariable: the same reason as the axis
 	// below it — there is no `{name}` redirection here for `set -C` to
 	// protect the name of.
+	// unanswered FdVariableReachesTheProgramsEnvironment: there is no
+	// `{name}` redirection here for a program's environment to hold.
 	// unanswered FdVariableOnASubshellIsTheSubshells: there is no `{name}`
 	// redirection here for a subshell to carry, the same reason as the two
 	// axes beside it.

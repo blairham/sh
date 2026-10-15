@@ -9932,7 +9932,7 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 			if r.prefixAssignsPositional(ctx, a) {
 				continue
 			}
-			if refused && r.attrHas(a.Name, attrReadonly) {
+			if refused && r.prefixEntryIsFrozen(a) {
 				// The frozen name keeps what it holds, the same way the
 				// builtin route leaves it: the body runs with the shell's
 				// value, which is what every column shows for `readonly v=1;
@@ -10154,7 +10154,7 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 				// gap. See Runner.prefixAssignsPositional.
 				continue
 			}
-			if refused && r.attrHas(a.Name, attrReadonly) {
+			if refused && r.prefixEntryIsFrozen(a) {
 				// Reported above, or deliberately not reported where the
 				// dialect says a regular builtin's prefix is no refusal at
 				// all. Either way the name keeps its value: the builtin runs
@@ -10583,7 +10583,7 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 			_ = r.prefixValue(a)
 			continue
 		}
-		if frozenValueSpent && r.attrHas(a.Name, attrReadonly) {
+		if frozenValueSpent && r.prefixEntryIsFrozen(a) {
 			// Refused without its value ever being evaluated, so
 			// `x=$((1/0)) cmd` says nothing about the division in the column
 			// that answers so — or already evaluated by the early check,
@@ -10630,7 +10630,7 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 		// about `x` there and about the expansion and the file everywhere
 		// else. Ours is on the everywhere-else side on both, and staying
 		// there is what keeps this change to the half the panel agrees on.
-		if r.attrHas(a.Name, attrReadonly) {
+		if r.prefixEntryIsFrozen(a) {
 			// Refused, so nothing is appended: the assignment did not happen,
 			// and the child is handed this shell's own environment for the
 			// name. The two are only distinguishable with the name exported,

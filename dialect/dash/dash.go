@@ -804,6 +804,9 @@ func Semantics() interp.Semantics {
 	// unanswered StoreRefusalThroughPrintfLeavesZero: this shell's
 	// `printf` has no `-v`, so no store is reached through it.
 	//
+	// unanswered ArrayStoreRefusalThroughSetOrReadLeavesZero: no arrays, so
+	// neither `set -A` nor `read -A` exists to store a whole one (#6486).
+	//
 	// unanswered StoreRefusalOfADeclaredElementLeavesZero:
 	// there is no declaration utility and no array for one's operand to name
 	// an element of, so no store of this shell's can refuse a declaration's

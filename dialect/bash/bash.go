@@ -2180,6 +2180,10 @@ func Semantics() interp.Semantics {
 	// The refusal is not fatal here at all, so the builtin's own status is
 	// what a script reads and there is no give-up whose number could move.
 	s.StoreRefusalThroughPrintfLeavesZero = interp.No
+	// No `set -A`, and a refused `read -a` is not fatal — `readonly v=1;
+	// read -a v <<< x; echo after` writes `after` — so there is no give-up
+	// whose number could move (#6486).
+	s.ArrayStoreRefusalThroughSetOrReadLeavesZero = interp.No
 	// `a=(1 2); a+=x` joins the first element and leaves the rest standing —
 	// `declare -a a=([0]="1x" [1]="2")`, two elements, in 5.3.15, in the same
 	// binary under argv[0] of `sh` and in 3.2.57. The value lands at the base

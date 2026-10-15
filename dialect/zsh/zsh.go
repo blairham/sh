@@ -3087,6 +3087,12 @@ func Semantics() interp.Semantics {
 	// `( read "a[1/0]" < in.txt )` is 1, by both routes, and the empty
 	// subscript answers the same way at each.
 	s.StoreRefusalThroughPrintfLeavesZero = interp.Yes
+	// And a refused whole-array store through `set -A` or `read -A`, which
+	// parts from `read`'s scalar store the same way: measured 2026-10-15,
+	// `-c 'typeset -r v=1; read -A v <<< x'` exits 0 and the same with `read
+	// v` exits 1, and so does `set -A HOME x` against a bare `HOME=(x)`
+	// (#6486).
+	s.ArrayStoreRefusalThroughSetOrReadLeavesZero = interp.Yes
 	s.HeredocExpandsInTheCommandsProcess = interp.Yes
 	// And a `( … )`'s body with it: `n=0; ( cat ) <<END` with `$(( n+=5 ))`
 	// in it leaves `n` at 0 here, where the same body on a group, a

@@ -24905,6 +24905,25 @@ type Semantics struct {
 	// and ksh93u+ the same, which is the base (corpus row
 	// variable/allexport-marks-a-declarations-assignment).
 	AllexportMarksACompound Answer
+
+	// AllexportMarksAnExpansionsAssignment makes `set -a` mark a name that an
+	// expansion or an arithmetic expression assigns, as it marks one an
+	// assignment statement does: `${name:=word}`, `${name=word}`, zsh's
+	// `${name::=word}`, and every store arithmetic makes — `$(( n = 2 ))`,
+	// `(( n++ ))`, `let n=1`.
+	//
+	// ksh93 alone answers No. Measured 2026-10-15 under `-c`, each name
+	// unset beforehand and read back from `env` after `set +a`: `set -a; :
+	// ${w:=1} ${v=2}; : $((m=3))` puts `w=1`, `v=2` and `m=3` in a child's
+	// environment in bash 5.3.20, zsh 5.9.2 (`${u::=4}` too), dash 0.5.12 and
+	// BusyBox ash (the pinned alpine image), and none of them in ksh93u+,
+	// whose `set -a; x=9` exports as every column's does — which is the
+	// control. The standard puts it in the base: allexport sets the export
+	// attribute on each variable to which an assignment is performed, and
+	// says nothing that excludes these. A subscripted target is not this
+	// question: an element store is a compound's, and
+	// AllexportMarksACompound answers it (#6441).
+	AllexportMarksAnExpansionsAssignment Answer
 	// KillJoinsANumberToTheNameOption takes a *number* written onto `-s` —
 	// `kill -s9` — as the same thing as `kill -s 9`, where the rule
 	// KillReadsASignalJoinedToItsOption describes joins only a name to `-s`.
@@ -34649,6 +34668,9 @@ func PosixSemantics() Semantics {
 		// `set -a` is about the environment, which holds strings; four of the
 		// columns that have arrays leave them unmarked, and zsh overrides.
 		AllexportMarksACompound: No,
+		// The standard's allexport reaches every assignment, the ones an
+		// expansion or arithmetic makes included; ksh93 overrides.
+		AllexportMarksAnExpansionsAssignment: Yes,
 		// And so nothing joined to it that is a number either; dash and
 		// ksh93 override.
 		KillJoinsANumberToTheNameOption: No,

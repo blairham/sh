@@ -4568,6 +4568,9 @@ func (r *Runner) storeThroughExpansion(name, v string) {
 	n, ok := atoi(name)
 	if !ok || !isPositional(name) {
 		r.setVar(name, v)
+		// Marked here rather than at the two operators, which both come
+		// through: `${name:=word}` and `${name::=word}` (#6441).
+		r.markAnExpansionsStoreForAllexport(name)
 		return
 	}
 	if n == 0 {

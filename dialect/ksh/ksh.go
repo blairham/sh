@@ -3800,6 +3800,10 @@ func Semantics() interp.Semantics {
 	// But an option word is refused before that. Measured 2026-10-03; see
 	// the axis.
 	s.JobResumeRefusesAnOptionFirst = interp.Yes
+	// `set -a` leaves alone a name an expansion or an arithmetic expression
+	// assigns: `set -a; : ${w:=1}; : $((m=3))` exports neither, where `x=9`
+	// is exported. Measured 2026-10-15 on ksh93u+; see the axis.
+	s.AllexportMarksAnExpansionsAssignment = interp.No
 	// A `( … )` or `$( … )` hashes into this shell's own table, and empties
 	// it with `hash -r`. Measured 2026-10-03; see the axis.
 	s.SubshellSharesTheCommandHash = interp.Yes

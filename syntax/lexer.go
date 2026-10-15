@@ -6189,6 +6189,10 @@ func (l *Lexer) scanBraces(q Quoting) Span {
 	// the cursor inside a word rather than at the end of a token. Only the
 	// token-start reading consults it.
 	wordParen := -1
+	// Where the most recent `{name}` stepped over by the token-start reading
+	// ended, because a `{` straight behind one is read as though it began a
+	// token. See braceNameWordLen.
+	braceNameEnd := -1
 	dollarParens := 0
 	for depth > 0 {
 		if l.eof() {
@@ -6444,7 +6448,17 @@ func (l *Lexer) scanBraces(q Quoting) Span {
 				(q == DoubleQuoted && l.dialect.BareBraceNestsInAQuotedPatternOperand &&
 					l.braceOperandIsAPattern(l.src[bodies[len(bodies)-1]:l.off]))
 			if tokenStart[len(tokenStart)-1] {
-				nests = l.atBraceTokenStart(body, wordParen)
+				nests = l.atBraceTokenStart(body, wordParen) || l.off == braceNameEnd
+				if n := braceNameWordLen(l.src[l.off:]); nests && n > 0 {
+					// A `{name}` opens no level, so the `{v}` of a
+					// redirection that picks its own descriptor is read
+					// through. See braceNameWordLen.
+					for range n {
+						l.advance()
+					}
+					braceNameEnd = l.off
+					continue
+				}
 			}
 			if nests {
 				depth++
@@ -6471,7 +6485,8 @@ func (l *Lexer) scanBraces(q Quoting) Span {
 			}
 			l.advance()
 		case '}':
-			if tokenStart[len(tokenStart)-1] && !l.atBraceTokenStart(body, wordParen) {
+			if tokenStart[len(tokenStart)-1] && !l.atBraceTokenStart(body, wordParen) &&
+				l.off != braceNameEnd {
 				// A `}` in the middle of a word is an ordinary character
 				// there: `${ echo a}b;}` yields `a}b`.
 				l.advance()
@@ -6595,6 +6610,54 @@ func (l *Lexer) atBraceTokenStart(from, wordParen int) bool {
 		return l.off-1 != wordParen
 	}
 	return false
+}
+
+// braceNameWordLen is how long the `{name}` at the head of s is, for the
+// token-start reading of a `${ cmd;}` body, and 0 where s does not begin with
+// one the reading steps over. See [BraceProgramBodyEndsAtATokenStart].
+//
+// A `{` that begins a token opens a level there, and a `}` in the middle of a
+// word closes nothing — but not when the two hold nothing but a name's
+// characters and what follows the `}` is not one more of the characters the
+// reading takes for part of the word. Measured 2026-10-15 on ksh93u+
+// 2012-08-01 with `-c 'echo ${ <body>; }'` (#6559):
+//
+//	exec {v}</dev/null; echo $v    10 — and `{ab}`, `>`, `>>`, `<>`, `<&0`, `>&-`
+//	echo {v} / {abc} / {} / {9a}   the word itself
+//	echo {v}{w}                    the word itself: a `{` behind one is a start
+//	echo {v}};                     `end of file' unexpected: so is a `}`, which
+//	                               closes the body with no `;` in front of it
+//	echo {v}- * ] [ % ~ @ : + ? !  the word, with that character after it
+//	echo {v}"x" / {v}'x' / {v}$x   the same
+//	echo {v}| ( & ;                the same, the character ending the word
+//	echo {v}x / {v}1 / {v}_        `{' unmatched
+//	echo {v}. , / = #              `{' unmatched
+//	echo {a,b} / {1..2} / {a-b}    `{' unmatched — not a name inside
+//	echo {a[1]} / {a b} / {é}      `{' unmatched
+//	echo {v}{a,b}                  `{' unmatched — the second is a level
+//
+// So inside: letters, digits and `_`, or nothing. Behind: anything but a
+// letter, a digit, or one of `_.,/=#`.
+func braceNameWordLen(s string) int {
+	if s == "" || s[0] != '{' {
+		return 0
+	}
+	i := 1
+	for i < len(s) && isBraceNameByte(s[i]) {
+		i++
+	}
+	if i >= len(s) || s[i] != '}' {
+		return 0
+	}
+	i++
+	if i < len(s) && (isBraceNameByte(s[i]) || strings.IndexByte("_.,/=#", s[i]) >= 0) {
+		return 0
+	}
+	return i
+}
+
+func isBraceNameByte(c byte) bool {
+	return c == '_' || c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9'
 }
 
 func isBraceCommandStart(c byte) bool {

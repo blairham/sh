@@ -617,6 +617,10 @@ const (
 	// same body written `${ echo $(echo x)}` is `` `{' unmatched ``, so the
 	// `)` that closes a `$( )` leaves the cursor inside a word while the
 	// `)` of a subshell — `${ (echo q)}` — begins the next token.
+	//
+	// A `{name}` is the exception to the opening half: it opens no level, so
+	// `${ exec {v}</dev/null; echo $v; }` runs there. See braceNameWordLen
+	// for the rows that bound it (#6559).
 	BraceProgramBodyEndsAtATokenStart
 )
 

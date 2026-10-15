@@ -124,8 +124,13 @@ func TestASubstitutionDoesNotStepOverItsOwnFreeNumber(t *testing.T) {
 	}
 	got := substNumbers(t, runSubstPlacement(t, SubstitutionEndsAtTheLowestFreeNumber,
 		AllocateDescriptorsFromTen, nil, "echo >(read x) <(true)", nil))
+	// The writing one first is on the second number, its reading end having
+	// stepped it over the first — ksh93u+ answers `4 3` on a clean table —
+	// so the first number is the second substitution's own. See
+	// Runner.writingEndStepsOverTheReadingEnd.
+	want = []int{want[1], want[0]}
 	if !sameFds(got, want) {
-		t.Errorf("got %v, want %v — the second substitution stepped over the number "+
+		t.Errorf("got %v, want %v — a substitution stepped over the number "+
 			"its own pipe was sitting on", got, want)
 	}
 }

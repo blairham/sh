@@ -261,6 +261,7 @@ func (r *Runner) applyRedirList(ctx context.Context, rs []*syntax.Redirect, comp
 		r.line, r.locatedWithoutALine = commandLine, wasUnnumbered
 		r.heredocBodyLineShift = wasShift
 	}()
+	defer holds.makeFirst(ctx, rs)()
 	trace := r.beginRedirTrace(rs)
 	for i, rd := range rs {
 		// The redirection before this one has been made. See redirTrace.
@@ -374,7 +375,7 @@ func (r *Runner) applyRedirList(ctx context.Context, rs []*syntax.Redirect, comp
 				hfd = fd
 			}
 			if fdVar == "" {
-				holds.save(hfd, false, -1)
+				holds.save(hfd, false)
 			}
 			// And `{v}<<X` picks a descriptor the same way `{v}<file` does,
 			// with the same axis deciding whether it outlives the command.
@@ -551,7 +552,7 @@ func (r *Runner) applyRedirList(ctx context.Context, rs []*syntax.Redirect, comp
 			if fdVar == "" {
 				// A close replaces the stream as much as a duplication does,
 				// and copies nothing while it does it.
-				holds.save(fd, name != "-", -1)
+				holds.save(fd, name != "-")
 			}
 			// One dialect will not take a duplication target wider than a
 			// single digit, and refuses before it looks at what is open.

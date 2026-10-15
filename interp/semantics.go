@@ -15308,6 +15308,13 @@ type Semantics struct {
 	// 11. A substitution a redirection reads from is a source like the others:
 	// `{ echo <(true) <(true); } < <(true)` is `11 13`.
 	//
+	// And the list's substitutions are all made **before** its first save,
+	// wherever they are written in it: `{ echo <(true) <(true); } 2>/dev/null
+	// < <(true)` is `11 14`, the substitution on 11 when standard error is
+	// saved. That order is the same value's, because it is only the numbers
+	// that make it visible on a list that succeeds — see redirHolds.makeFirst
+	// for the one place it shows without them (#6505).
+	//
 	// **There is no unanswered value.** A save happens whether or not anything
 	// is counted after it, so a refusal would refuse every redirected group in
 	// the language. The zero value is the answer this shell gave everywhere

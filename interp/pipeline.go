@@ -484,7 +484,7 @@ func (r *Runner) runPipeline(ctx context.Context, p *syntax.Pipeline, timing *pi
 	heldBefore := r.heldNumbers
 	if n > 1 && r.countsOwnDescriptors() {
 		for range n - 1 {
-			reads = append(reads, r.holdNumber(true, -1))
+			reads = append(reads, r.holdNumber(true))
 		}
 		defer func() { r.heldNumbers, r.entering = heldBefore, elementEntry{} }()
 	}

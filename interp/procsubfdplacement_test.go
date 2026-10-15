@@ -105,6 +105,47 @@ func TestASubstitutionEndTakesTheDialectsRegion(t *testing.T) {
 	}
 }
 
+// A writing substitution's number is the second its rule's walk finds free, in
+// the two rules that walk upward: the pipe's reading end, which the body keeps,
+// took the first and gave it back once the body had it. So `<(…) >(…) <(…)`
+// is out of order there and in order in the other two. Measured 2026-10-15:
+// zsh 5.9.2 answers `11 13 12`, ksh93u+ `3 5 4`, bash 5.3.20 `63 62 61` and
+// BusyBox 1.37 `64 65 66` (#6505).
+func TestAWritingSubstitutionStepsOverItsReadingEnd(t *testing.T) {
+	if measuredInAQuietDescriptorTable(t) {
+		return
+	}
+	for _, tc := range []struct {
+		where    SubstEndPlacement
+		from, to int
+		want     []int
+	}{
+		{SubstitutionEndsWhereAnyDescriptorGoes, 10, 10 + 63, []int{0, 2, 1}},
+		{SubstitutionEndsAtTheLowestFreeNumber, 3, 3 + 63, []int{0, 2, 1}},
+		{SubstitutionEndsAtTheTopOfTheTable, 63, 10, []int{0, 1, 2}},
+		{SubstitutionEndsAboveTheTopOfTheTable, 64, 64 + 63, []int{0, 1, 2}},
+	} {
+		t.Run(tc.where.String(), func(t *testing.T) {
+			const attempts = 3
+			var got, want []int
+			for i := range attempts {
+				free := freeFdsAlong(t, tc.from, tc.to, 3)
+				want = nil
+				for _, j := range tc.want {
+					want = append(want, free[j])
+				}
+				got = substNumbers(t, runSubstPlacement(t, tc.where, AllocateDescriptorsFromTen, nil,
+					"echo <(true) >(true) <(true)", nil))
+				if sameFds(got, want) {
+					return
+				}
+				t.Logf("attempt %d: got %v, wanted %v", i+1, got, want)
+			}
+			t.Errorf("got %v over %d attempts, want %v", got, attempts, want)
+		})
+	}
+}
+
 // A number the script parked before the word expanded is stepped over.
 //
 // Measured the same day on bash 5.3.20: `exec 63</dev/null; echo <(true)

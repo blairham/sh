@@ -70,6 +70,20 @@ func TestTheShellsOwnDescriptorsAreInItsNumbers(t *testing.T) {
 		{`{ echo <(true) <(true); } < <(true)`, []int{0, 2}},
 		{`{ echo <(true) <(true); } 3< <(true)`, []int{0, 1}},
 		{`exec 3>/dev/null; { echo <(true) <(true); } 3> >(true)`, []int{1, 2}},
+		// And every substitution of the list is made before any of its
+		// saves, so one written after a save is on its number first (#6505).
+		{`{ echo <(true) <(true); } < <(true) 2>/dev/null`, []int{2, 3}},
+		{`{ echo <(true) <(true); } 2>/dev/null < <(true)`, []int{0, 3}},
+		{`{ echo <(true) <(true); } < <(true) 3< <(true)`, []int{0, 1}},
+		{`echo x | { echo <(true) <(true); } 2>/dev/null < <(true)`, []int{0, 3}},
+		// A writing substitution is on the second number, its reading end
+		// having taken the first and given it back: alone it holds nothing
+		// a save steps over, after another save it holds the number between.
+		{`{ echo <(true) <(true); } 2> >(true)`, []int{1, 2}},
+		{`{ echo <(true) <(true); } 2> >(true) </dev/null`, []int{2, 3}},
+		{`{ echo <(true) <(true); } </dev/null 2> >(true)`, []int{1, 3}},
+		{`{ echo <(true) <(true); } </dev/null 2>/dev/null 3> >(true)`, []int{1, 3}},
+		{`{ echo <(true) <(true); } </dev/null 2>&1 3> >(true)`, []int{1, 2}},
 	} {
 		t.Run(c.src, func(t *testing.T) {
 			got := substNumbers(t, runOwnDescriptors(t, SavedStreamsAndPipeReadEndsTakeNumbers, c.src))
@@ -126,10 +140,48 @@ func TestTheShellsOwnDescriptorsTakeNoNumberWhereTheDialectSaysSo(t *testing.T) 
 	}
 }
 
+// A list's substitutions are made before its first redirection is applied,
+// so one whose redirection is never reached has still been started: zsh 5.9.2
+// prints `ran` for this, bash 5.3.20 and ksh93u+ do not. A command
+// substitution is not made early — `>$(echo ran)` after the failure prints
+// nothing in all three.
+func TestARedirectionListsSubstitutionsAreMadeFirst(t *testing.T) {
+	for _, c := range []struct {
+		own OwnDescriptorNumbers
+		src string
+		ran bool
+	}{
+		{SavedStreamsAndPipeReadEndsTakeNumbers, `: </nonexistent > >(echo ran); wait`, true},
+		{SavedStreamsAndPipeReadEndsTakeNumbers, `: </nonexistent >$(echo ran >&2; echo /dev/null)`, false},
+		{OwnDescriptorsTakeNoNumber, `: </nonexistent > >(echo ran); wait`, false},
+	} {
+		t.Run(c.own.String()+": "+c.src, func(t *testing.T) {
+			out, errs := runOwnDescriptorsAllowingErrors(t, c.own, c.src)
+			if ran := strings.Contains(out+errs, "ran"); ran != c.ran {
+				t.Errorf("ran: got %v, want %v (stdout %q, stderr %q)", ran, c.ran, out, errs)
+			}
+			if !strings.Contains(errs, "nonexistent") {
+				t.Errorf("stderr %q, want the failed open", errs)
+			}
+		})
+	}
+}
+
 // runOwnDescriptors runs src the way the dialect that counts its own
 // descriptors would: substitutions and `{v}` from the base up, the base at
 // 10, and a pipeline's last element in the shell itself.
 func runOwnDescriptors(t *testing.T, own OwnDescriptorNumbers, src string) string {
+	t.Helper()
+	out, errs := runOwnDescriptorsAllowingErrors(t, own, src)
+	if errs != "" {
+		t.Fatalf("stderr: %s", errs)
+	}
+	return out
+}
+
+// runOwnDescriptorsAllowingErrors is runOwnDescriptors for a script that is
+// meant to complain, answering what it wrote to each stream.
+func runOwnDescriptorsAllowingErrors(t *testing.T, own OwnDescriptorNumbers, src string) (string, string) {
 	t.Helper()
 	d := syntax.Core()
 	d.ProcessSubstitution = true
@@ -152,8 +204,5 @@ func runOwnDescriptors(t *testing.T, own OwnDescriptorNumbers, src string) strin
 	if _, err := r.Run(context.Background(), f); err != nil {
 		t.Fatal(err)
 	}
-	if errs.Len() > 0 {
-		t.Fatalf("stderr: %s", errs)
-	}
-	return out.String()
+	return out.String(), errs.String()
 }

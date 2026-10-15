@@ -8775,6 +8775,14 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 	namedAfter := r.leadingModifierWords(c.Args)
 	for i, w := range c.Args {
 		argvBefore = append(argvBefore, len(argv))
+		// Whether the word is written `name=…` or `name+=…`, read once: the
+		// three questions below each used to scan the word for itself.
+		// Never asked of the first word, which names the command.
+		var assignShaped, appendShaped bool
+		if i > 0 {
+			_, _, appends, shaped := r.declarationNameSplit(w)
+			assignShaped, appendShaped = shaped && !appends, shaped && appends
+		}
 		if keepsTheStatus && r.expandErr {
 			// The word that failed was read under the rule set for it, and
 			// its failure is reported below, after the loop.
@@ -8785,7 +8793,7 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 			// `local -a $((1/0))` leave 1, and `local x=1 $((1/0))` leaves 0.
 			r.failedExpansionStatus = wordsRule
 			if i > 0 && len(argv) > 0 && (declaredYet ||
-				(r.assignShaped(w) || r.appendOperandShaped(w)) && r.declarationCommand(c, argv)) {
+				(assignShaped || appendShaped) && r.declarationCommand(c, argv)) {
 				declaredYet = true
 				r.failedExpansionStatus = failedExpansionKeepsTheStatus
 			}
@@ -8816,7 +8824,7 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 		// word to be a declaration: with argv empty there is no utility yet,
 		// so the word is an ordinary promotion and the axis below is never
 		// reached.
-		if i > 0 && r.assignShaped(w) {
+		if assignShaped {
 			declaring := len(argv) > 0 && r.declarationCommand(c, argv)
 			// `set -k` takes the word before the declaration route can,
 			// where the dialect says it reaches that far. bash's does and
@@ -8887,7 +8895,7 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 		// separate question — zsh and ksh93 refuse it, bash appends — and
 		// that is Semantics.DeclarationTakesAnAppendOperand, which was
 		// answering about a word that had already been split (#3772).
-		appendOperand := i > 0 && len(argv) > 0 && r.appendOperandShaped(w) &&
+		appendOperand := appendShaped && len(argv) > 0 &&
 			r.declarationCommand(c, argv)
 		if appendOperand && r.lang().AppendAssign {
 			if r.unspecified {

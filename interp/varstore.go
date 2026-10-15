@@ -1031,6 +1031,11 @@ func (r *Runner) exportedLookup(name string) (on, spoken bool) {
 
 // exportedPut records name as exported or as taken out of the environment.
 func (r *Runner) exportedPut(name string, on bool) {
+	if !on {
+		// Out of the environment, so there is no copy left to hold; an
+		// `export` after it hands a child the value the shell has.
+		r.releaseEnvCopy(name)
+	}
 	to := attrExportSpoken
 	if on {
 		to |= attrExportOn
@@ -1039,7 +1044,10 @@ func (r *Runner) exportedPut(name string, on bool) {
 }
 
 // exportedDel forgets anything said about name's export.
-func (r *Runner) exportedDel(name string) { r.setAttrs(name, attrExportSpoken|attrExportOn, 0) }
+func (r *Runner) exportedDel(name string) {
+	r.releaseEnvCopy(name)
+	r.setAttrs(name, attrExportSpoken|attrExportOn, 0)
+}
 
 // exportedRange is every name something has said the export of, and whether
 // it is exported.

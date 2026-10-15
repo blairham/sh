@@ -263,7 +263,7 @@ func (r *Runner) getoptsAt(name, spec string, silent bool, words []string, ind i
 			// visible: measured, a frozen OPTARG leaves dash and BusyBox
 			// ash with OPTIND still at its old value, so neither had
 			// written it by the time the refusal ended the builtin.
-			if !r.getoptsWrite("OPTARG", rest) && r.getoptsRefusalEndsTheBuiltin() {
+			if !r.getoptsWriteOwn("OPTARG", rest) && r.getoptsRefusalEndsTheBuiltin() {
 				return getoptsRefusedStatus
 			}
 			if !r.setOptind(ind+1) && r.getoptsRefusalEndsTheBuiltin() {
@@ -287,7 +287,7 @@ func (r *Runner) getoptsAt(name, spec string, silent bool, words []string, ind i
 			return r.getoptsBad(name, sign, c, silent, getoptsMissingArgument, func() bool { return r.setOptind(ind + 1) })
 		}
 		r.optChar = 1
-		if !r.getoptsWrite("OPTARG", words[ind]) && r.getoptsRefusalEndsTheBuiltin() {
+		if !r.getoptsWriteOwn("OPTARG", words[ind]) && r.getoptsRefusalEndsTheBuiltin() {
 			return getoptsRefusedStatus
 		}
 		if !r.setOptind(ind+2) && r.getoptsRefusalEndsTheBuiltin() {
@@ -425,7 +425,7 @@ func (r *Runner) getoptsNumericArgument(name string, sign, c byte, silent bool, 
 		}
 		// OPTARG ahead of OPTIND, for the reason the string branch writes it
 		// first: a refusal is visible in the order.
-		if !r.getoptsWrite("OPTARG", rest) && r.getoptsRefusalEndsTheBuiltin() {
+		if !r.getoptsWriteOwn("OPTARG", rest) && r.getoptsRefusalEndsTheBuiltin() {
 			return getoptsRefusedStatus
 		}
 		if !r.advanceBy(word, ind, 1+n) && r.getoptsRefusalEndsTheBuiltin() {
@@ -458,7 +458,7 @@ func (r *Runner) getoptsNumericArgument(name string, sign, c byte, silent bool, 
 		return r.getoptsBad(name, sign, c, silent, getoptsBadNumericArgument,
 			func() bool { return r.setOptind(ind + 2) })
 	}
-	if !r.getoptsWrite("OPTARG", arg) && r.getoptsRefusalEndsTheBuiltin() {
+	if !r.getoptsWriteOwn("OPTARG", arg) && r.getoptsRefusalEndsTheBuiltin() {
 		return getoptsRefusedStatus
 	}
 	if !r.setOptind(ind+2) && r.getoptsRefusalEndsTheBuiltin() {
@@ -563,7 +563,7 @@ const getoptsRefusedStatus = 2
 // on the same line, and so does zsh 5.9.2 — which reaches it by never
 // refusing at all. What the refusal *costs* splits three ways, and the two
 // axes below are that split.
-func (r *Runner) getoptsWrite(name, value string) bool {
+func (r *Runner) getoptsWrite(name, value string, own bool) bool {
 	if !r.getoptsMayWrite(name) {
 		return false
 	}
@@ -596,12 +596,29 @@ func (r *Runner) getoptsWrite(name, value string) bool {
 	// The `set -a` mark is the one thing that is not `read`'s: fewer shells
 	// mark what this builtin fills, and they part again between the name
 	// operand and the two parameters that are this builtin's own (#6462).
-	mark := r.markAFilledNameForAllexport
-	if name == "OPTARG" || name == "OPTIND" {
-		mark = r.markGetoptsOwnForAllexport
+	//
+	// Told apart by the *route* and not by the name, because the name
+	// operand may itself be spelled OPTARG or OPTIND and is then still the
+	// operand: measured 2026-10-15 on zsh 5.9.2, `set -a; getopts x: OPTARG
+	// -x6` hands a child `OPTARG=x` — the operand's store, marked as the
+	// operand's is — and `export OPTARG=pre; getopts x: OPTARG -x6` hands
+	// it `x` too, where the parameter's own store would have left `pre`
+	// (#6475).
+	if own {
+		r.getoptsFillOwnParameter(name, value)
+		return true
 	}
-	r.fillOperandValue(name, value, mark)
+	r.fillOperandValue(name, value, r.markAFilledNameForAllexport)
 	return true
+}
+
+// getoptsWriteOwn is getoptsWrite for OPTARG and OPTIND as the builtin's own
+// two parameters, and getoptsWriteName for its name operand — whatever that
+// is spelled.
+func (r *Runner) getoptsWriteOwn(name, value string) bool { return r.getoptsWrite(name, value, true) }
+
+func (r *Runner) getoptsWriteName(name, value string) bool {
+	return r.getoptsWrite(name, value, false)
 }
 
 // getoptsMayWrite reports whether a freeze lets `getopts` touch one of the
@@ -674,7 +691,7 @@ func (r *Runner) getoptsSetName(name, value string, ok int) int {
 		}
 		return ok
 	}
-	if r.getoptsWrite(name, value) {
+	if r.getoptsWriteName(name, value) {
 		return ok
 	}
 	return getoptsRefusedStatus
@@ -769,7 +786,7 @@ func (r *Runner) getoptsEnd(name string, ind int) int {
 	// Semantics.GetoptsFrozenNameAtTheEndOfTheOptionsIsFatal, which
 	// getoptsRefusalIsFatal reads through this.
 	r.optRanOut = true
-	wrote := r.getoptsWrite(name, "?")
+	wrote := r.getoptsWriteName(name, "?")
 	r.optRanOut = false
 	if wrote {
 		return 1
@@ -819,7 +836,7 @@ func (r *Runner) getoptsEnd(name string, ind int) int {
 func (r *Runner) getoptsBad(name string, sign, c byte, silent bool, why getoptsComplaint, advanceOptind func() bool) int {
 	letter := getoptsLetter(sign, c)
 	if silent {
-		if !r.getoptsWrite("OPTARG", letter) && r.getoptsRefusalEndsTheBuiltin() {
+		if !r.getoptsWriteOwn("OPTARG", letter) && r.getoptsRefusalEndsTheBuiltin() {
 			return getoptsRefusedStatus
 		}
 		if !advanceOptind() && r.getoptsRefusalEndsTheBuiltin() {
@@ -1026,7 +1043,7 @@ func (r *Runner) optindValue() int {
 }
 
 func (r *Runner) setOptind(n int) bool {
-	wrote := r.getoptsWrite("OPTIND", strconv.Itoa(n))
+	wrote := r.getoptsWriteOwn("OPTIND", strconv.Itoa(n))
 	if r.optWord > 0 {
 		// The scan's own position moves with the parameter: they part only
 		// at a call boundary, and this is not one.
@@ -1126,7 +1143,7 @@ func (r *Runner) clearOptargForAnArgumentlessOption() bool {
 // so the two cannot come to mean different things by the same word.
 func (r *Runner) emptyOrUnsetOptarg(empty bool) bool {
 	if empty {
-		return r.getoptsWrite("OPTARG", "")
+		return r.getoptsWriteOwn("OPTARG", "")
 	}
 	if !r.getoptsMayWrite("OPTARG") {
 		return false

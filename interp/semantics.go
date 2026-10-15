@@ -24961,6 +24961,33 @@ type Semantics struct {
 	// variable to which an assignment is performed, and these two are
 	// assigned (#6462).
 	AllexportMarksGetoptsOwnParameters Answer
+
+	// GetoptsLeavesTheEnvironmentCopyOfItsOwnParameters makes `getopts`
+	// leave behind the copy of an **exported** OPTARG or OPTIND that a child
+	// is handed: the parameter takes the new value and a child goes on being
+	// handed the one it had before.
+	//
+	// zsh alone answers Yes. Measured 2026-10-15, each script run as a file
+	// under `env -i PATH=/usr/bin:/bin`, reading the child with `printenv`:
+	// `export OPTIND=1; getopts x: o -x6` leaves `$OPTIND` at 2 in every
+	// column and hands a child `OPTIND=1` in zsh 5.9.2 and `OPTIND=2` in bash
+	// 5.3.20, dash 0.5.12, ksh93u+ and BusyBox ash 1.37.0 (the pinned alpine
+	// image); `export OPTARG=pre` before the same line splits the same way,
+	// `pre` against `6`, and so does `set -a; OPTIND=1` in place of the
+	// `export`. The observer was varied so the child cannot be the thing
+	// refreshing it — `env`, `printenv`, `/bin/sh -c`, a subshell's child,
+	// a `$(…)` and `exec printenv` all hand zsh's child the old value.
+	//
+	// It is the store that does it and not the parameters: an assignment
+	// (`OPTIND=$OPTIND`, `OPTIND+=0`), `(( … ))`, `let`, `${OPTIND::=5}`,
+	// `read OPTIND` and a `for OPTIND` loop each refresh the copy in zsh too,
+	// and so does `getopts` writing OPTARG as its *name* operand — `export
+	// OPTARG=pre; getopts x: OPTARG -x6` hands a child `OPTARG=x`. Once held
+	// the copy outlives every later `getopts` (`-x6 -x7`, two calls, still
+	// `OPTIND=1`), and a bare `export OPTIND` does not refresh it, where
+	// taking the export off and putting it back does. See
+	// Runner.getoptsFillOwnParameter (#6475).
+	GetoptsLeavesTheEnvironmentCopyOfItsOwnParameters Answer
 	// KillJoinsANumberToTheNameOption takes a *number* written onto `-s` —
 	// `kill -s9` — as the same thing as `kill -s 9`, where the rule
 	// KillReadsASignalJoinedToItsOption describes joins only a name to `-s`.
@@ -34712,6 +34739,9 @@ func PosixSemantics() Semantics {
 		// overrides both and zsh the second.
 		AllexportMarksALoopOrGetoptsName:   Yes,
 		AllexportMarksGetoptsOwnParameters: Yes,
+		// And a child is handed what getopts wrote into an exported OPTARG
+		// or OPTIND, as it is for any other store; zsh overrides.
+		GetoptsLeavesTheEnvironmentCopyOfItsOwnParameters: No,
 		// And so nothing joined to it that is a number either; dash and
 		// ksh93 override.
 		KillJoinsANumberToTheNameOption: No,

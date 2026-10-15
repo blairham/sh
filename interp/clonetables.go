@@ -110,6 +110,8 @@ func (c *Runner) ownTables(r *Runner) {
 	c.shellOwn = maps.Clone(r.shellOwn)
 	c.notShellOwn = maps.Clone(r.notShellOwn)
 	c.envNotAdopted = maps.Clone(r.envNotAdopted)
+	// A subshell's child is handed the same stale copy its parent's would be.
+	c.envCopyHeld = maps.Clone(r.envCopyHeld)
 	// A slice rather than a table, and cloned for the same reason the tables
 	// are: a substitution's body pushes an entry of its own, and an append
 	// onto the parent's backing array would write into a stack the parent is

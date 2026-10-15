@@ -507,6 +507,11 @@ func (r *Runner) runPipeline(ctx context.Context, p *syntax.Pipeline, timing *pi
 		sub := r.clone()
 		if reads != nil {
 			sub.enterAsAnElement(heldBefore, reads, i, p.Cmds[i])
+		} else if r.savesRedirectedStreams() {
+			// A fork with no pipes to account for, whose own list saves
+			// nothing all the same: `{ … } </dev/null | cat` is 10 in bash
+			// 5.3.20, as it is outside the pipeline with no redirection.
+			sub.entering = elementEntry{pending: true, forked: true}
 		}
 		if holdLast && i == n-1 {
 			// The last element as a fork of its own — a `( … )`, an

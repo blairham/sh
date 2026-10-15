@@ -73,7 +73,7 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 		return nil, nil
 	}
 	var holds *redirHolds
-	if r.entering.pending || r.countsOwnDescriptors() {
+	if r.entering.pending || r.savesRedirectedStreams() {
 		holds = r.beginRedirHolds(owner)
 	}
 	if len(rs) == 0 {

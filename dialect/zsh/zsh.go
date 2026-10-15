@@ -6934,6 +6934,9 @@ func Diagnostics() interp.Diagnostics {
 // simply searched the current directory for both would agree with the first
 // and break the second. See where the name is registered below.
 func Apply(r *interp.Runner) {
+	// Room for everything registered below, before any of it is: see
+	// tablesizes.go.
+	r.ReserveTables(zshTables)
 	// Everything this shell keeps under `.zsh.` is its own state and not a
 	// parameter of the shell being emulated — the loaded module set, the
 	// `zstyle` table, the scheduled events, the line editor's buffer and

@@ -270,6 +270,14 @@ func newProcSubPipe(childWrites bool, dir string, want []int, view substFdView) 
 // beside the file, and -1 where nothing was; whoever closes the end releases
 // it first — see substEnd.letGo.
 //
+// # A pipeline's ends too
+//
+// runPipeline moves both ends of every pipe it makes through here, for the same
+// reason: in a real shell each element is a fork holding only its own end, so
+// neither number is in the table a substitution inside an element is counted
+// from (#6409). The mode put back below is right for those too — an external
+// element is handed the end through os/exec, which needs it blocking.
+//
 // A best effort, and the failure is not one. Under a low `ulimit -n` the floor
 // is past the limit and the duplicate is refused, which leaves the end where
 // `os.Pipe` put it — the arrangement every release before this one shipped.

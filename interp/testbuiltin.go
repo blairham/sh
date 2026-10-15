@@ -10,6 +10,8 @@ import (
 	"os"
 	"strconv"
 	"strings"
+
+	"github.com/blairham/sh/internal/opened"
 )
 
 // `test` and `[`, which until now were not builtins at all.
@@ -1272,16 +1274,30 @@ func (r *Runner) fileTest(op, operand string) bool {
 		// asks the filesystem nothing, so it is not a probe to audit.
 		return false
 	}
-	path := r.atDir(operand)
-	if own, ok := r.ownDescriptorPath(operand); ok {
-		// A path naming one of **this shell's** descriptors is the file the
-		// shell has open there, not the process's Nth. See
-		// ownDescriptorPath.
-		path = own
+	// A relative operand is asked of the directory this shell holds, in one
+	// call, wherever nothing needs the absolute name — see
+	// heldForRelativeProbe. held is nil everywhere else, and every question
+	// below then goes by name exactly as it did before.
+	held := r.heldForRelativeProbe(operand)
+	var (
+		path string
+		info os.FileInfo
+		err  error
+	)
+	if held != nil {
+		info, err = opened.StatAt(held.dir, operand, true)
+	} else {
+		path = r.atDir(operand)
+		if own, ok := r.ownDescriptorPath(operand); ok {
+			// A path naming one of **this shell's** descriptors is the file
+			// the shell has open there, not the process's Nth. See
+			// ownDescriptorPath.
+			path = own
+		}
+		// Through the gate, like every stat; a denied one is err != nil
+		// here, so every test below reads it as the file not existing.
+		info, err = r.stat(path)
 	}
-	// Through the gate, like every stat; a denied one is err != nil here,
-	// so every test below reads it as the file not existing.
-	info, err := r.stat(path)
 	switch op {
 	case "-e", "-a":
 		// `-a` is the older spelling of `-e` and asks the same question,
@@ -1304,9 +1320,13 @@ func (r *Runner) fileTest(op, operand string) bool {
 		if err != nil {
 			return false
 		}
-		return r.accessible(path, map[string]uint32{
+		mode := map[string]uint32{
 			"-r": accessRead, "-w": accessWrite, "-x": accessExecute,
-		}[op])
+		}[op]
+		if held != nil {
+			return opened.AccessAt(held.dir, operand, mode) == nil
+		}
+		return r.accessible(path, mode)
 	case "-b":
 		return err == nil && info.Mode()&os.ModeDevice != 0 && info.Mode()&os.ModeCharDevice == 0
 	case "-c":
@@ -1322,7 +1342,15 @@ func (r *Runner) fileTest(op, operand string) bool {
 	case "-k":
 		return err == nil && info.Mode()&os.ModeSticky != 0
 	case "-L", "-h":
-		li, lerr := r.lstat(path)
+		var (
+			li   os.FileInfo
+			lerr error
+		)
+		if held != nil {
+			li, lerr = opened.StatAt(held.dir, operand, false)
+		} else {
+			li, lerr = r.lstat(path)
+		}
 		return lerr == nil && li.Mode()&os.ModeSymlink != 0
 	case "-O", "-G":
 		// Ownership, against the *effective* identity rather than the real

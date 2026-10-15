@@ -3201,6 +3201,9 @@ func Semantics() interp.Semantics {
 	// keeps neither `v` nor descriptor 10, measured 2026-10-15 on 5.3.20
 	// (#6520). See interp.Semantics.FdVariableOnASubshellIsTheSubshells.
 	s.FdVariableOnASubshellIsTheSubshells = interp.Yes
+	// A `{name}` store is an ordinary assignment here: attributes and
+	// export are kept. See interp.Semantics.FdVariableStoreTyping.
+	s.FdVariableStoreTyping = interp.FdVariableStoreIsAnAssignment
 	s.DuplicationTargetError = interp.DuplicationTargetErrorCarriesOn
 	s.LocalOutsideAFunctionIsAnError = interp.Yes
 	s.LocalOutsideAFunctionIsFatal = interp.No

@@ -212,7 +212,7 @@ func (r *Runner) applyRedirList(ctx context.Context, rs []*syntax.Redirect, comp
 	// command's end can put it back. See fdvarexternal.go.
 	var fdVarsHeld fdVarsInTheCommand
 	setFdVar := func(ref, value string) bool {
-		if restore := fdVarsHeld.beforeStore(r); restore != nil {
+		if restore := fdVarsHeld.beforeStore(r, ref); restore != nil {
 			closers = append(closers, restore)
 		}
 		return r.setFdVar(ref, value)
@@ -2735,6 +2735,9 @@ func (r *Runner) setFdVar(ref, value string) bool {
 		return false
 	}
 	r.fdVarSpeaker, r.assignFailed = r.redirForCommandWord, false
+	// What the store does to the name beyond the value is a dialect's
+	// question — see fdvartyping.go.
+	r.retypeForAnFdVariable(ref)
 	// Marked for `set -a` as a loop's name is rather than as `read`'s: one
 	// column that has the construct leaves it alone (#6462).
 	_, refused := r.storeThroughOperandMarking(ref, value, r.markAFilledNameForAllexport)

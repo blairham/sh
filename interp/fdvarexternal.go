@@ -94,17 +94,39 @@ func (r *Runner) fdVarIsInAnotherProcess() bool {
 // positional parameters go with them, which is the one dialect's
 // `{1}<file`. Taken once per redirection list — a second copy would hold the
 // first store, and putting that back is the leak this is here to stop.
+//
+// The attributes of each name stored to go with them as well, because the
+// store can retype the name (Semantics.FdVariableStoreTyping) and the tables
+// carry a name's export but not its letters: `typeset -u v=abc;
+// /usr/bin/true {v}</dev/null` must leave `-u` on `v`, and a fresh name must
+// not be left an integer with no value. Captured per name on its first
+// store, before the store, so a second store to it cannot capture its own
+// retyping.
 type fdVarsInTheCommand struct {
 	held   bool
 	tables expansionTables
 	params []string
+	attrs  map[string]nameAttributes
 }
 
 // beforeStore takes the copy, once, for a command that is a process of its
-// own, and returns the closer that puts it back — nil where there is nothing
-// to put back.
-func (h *fdVarsInTheCommand) beforeStore(r *Runner) closerFunc {
-	if h.held || !r.fdVarIsInAnotherProcess() {
+// own, records ref's attributes the first time ref is stored to, and returns
+// the closer that puts it all back — nil where there is nothing new to put
+// back.
+func (h *fdVarsInTheCommand) beforeStore(r *Runner, ref string) closerFunc {
+	if !h.held && !r.fdVarIsInAnotherProcess() {
+		return nil
+	}
+	if isPlainName(ref) {
+		name := r.throughNameref(ref)
+		if _, ok := h.attrs[name]; !ok {
+			if h.attrs == nil {
+				h.attrs = map[string]nameAttributes{}
+			}
+			h.attrs[name] = r.captureAttributes(name)
+		}
+	}
+	if h.held {
 		return nil
 	}
 	h.held = true
@@ -113,6 +135,9 @@ func (h *fdVarsInTheCommand) beforeStore(r *Runner) closerFunc {
 	return func() error {
 		r.restoreExpansionTables(h.tables)
 		r.Params = h.params
+		for name, a := range h.attrs {
+			r.restoreAttributes(name, a)
+		}
 		return nil
 	}
 }

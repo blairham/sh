@@ -4593,6 +4593,11 @@ func Semantics() interp.Semantics {
 	// echo $v` is 10 in ksh93u+, measured 2026-10-15 (#6520). See
 	// interp.Semantics.FdVariableOnASubshellIsTheSubshells.
 	s.FdVariableOnASubshellIsTheSubshells = interp.No
+	// And a `{name}` store starts the name over as a plain integer, export
+	// and all: `export v=keep; true {v}</dev/null; typeset -p v` is
+	// `typeset -i v=10` in ksh93u+, measured 2026-10-15 (#6550). See
+	// interp.Semantics.FdVariableStoreTyping.
+	s.FdVariableStoreTyping = interp.FdVariableStoreStartsTheNameOver
 	// `exec 3<<X` puts the body in a temporary file here, so `/dev/fd/3` is
 	// a regular file and the descriptor is seekable: `head -1 <&3` reads a
 	// block and seeks back, and the `cat <&3` after it still gets the rest of

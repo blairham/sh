@@ -26360,6 +26360,20 @@ it come back untouched in bash. zsh refuses a `{name}` behind any compound
 at parse time and dash has none, so neither answers. Asked only where the
 parentheses carry a `{name}` redirection (#6520).
 
+**`FdVariableStoreTyping`** — bash an assignment · dash — · ksh93 starts the name over · zsh a new name becomes an integer
+
+What a `{name}` store does to the name beyond the number. Measured
+2026-10-15, `-c`, then `typeset -p`: `true {v}</dev/null` on a fresh name is
+`v="10"` in bash 5.3.20, `typeset -i v=11` in zsh 5.9.2 and `typeset -i
+v=10` in ksh93u+. zsh gives the integer letter only to a name that is not
+already holding a scalar (unset, an array, a table) and keeps an existing
+scalar's letters; ksh93 makes the name a plain integer whatever it was,
+dropping every other letter, its kind and its export — so `export v=keep;
+/usr/bin/env {v}</dev/null` hands the program no `v` there. On a command
+that is a process of its own the name is put back afterwards, letters and
+all. Read rather than asked: ksh93 differs on nearly every store, so asking
+would refuse every `{name}` in a vector with no dialect (#6550).
+
 **`ReadonlyFdVariableRefusesAClose`** — bash no · dash — · ksh93 yes · zsh yes
 
 Refuses `exec {name}>&-` when the name holding the descriptor is frozen.

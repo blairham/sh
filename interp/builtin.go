@@ -6968,6 +6968,12 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 				return r.arrayStoreRefusalStatus(r.status)
 			default:
 				r.setArray(array, elems)
+				if r.ctl == controlExit {
+					// Refused inside the store rather than by the freeze above — a
+					// name an enclosing call declared private — and the number is
+					// the whole-array store's all the same (#6515).
+					return r.arrayStoreRefusalStatus(r.status)
+				}
 			}
 			if clearRest {
 				for i, name := range args[:fill] {
@@ -7036,6 +7042,12 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 			return r.arrayStoreRefusalStatus(r.status)
 		default:
 			r.setArray(array, fields)
+			if r.ctl == controlExit {
+				// Refused inside the store rather than by the freeze above — a
+				// name an enclosing call declared private — and the number is
+				// the whole-array store's all the same (#6515).
+				return r.arrayStoreRefusalStatus(r.status)
+			}
 		}
 		if clearRest {
 			for i, name := range args[:fill] {

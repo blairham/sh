@@ -637,6 +637,17 @@ func (r *Runner) refusePrivateWrite(name string) bool {
 	if r.localInTheInnermostScope(name) {
 		return false
 	}
+	// Located as the shell and never as a builtin, whichever builtin's store
+	// reached this gate. Measured 2026-10-15 on zsh 5.9.2, `-f`, with `f() {
+	// private v=1; g; }` around each: `set -A v x`, `read -A v`, `read v`,
+	// `printf -v v x`, `print -v v x`, `zparseopts -a v a`, `export v=2`,
+	// `let v=1` and `getopts a v` in g are all `g: v: can't change parameter
+	// attribute`, the same location `v=(x)` and `(( v = 3 ))` get. The
+	// readonly sentence puts the builtin aside the same way — see
+	// Runner.reportReadonlyRefusal (#6515).
+	outer := r.inBuiltin
+	r.inBuiltin = ""
+	defer func() { r.inBuiltin = outer }()
 	r.fatal("%s\n", Wording(r.diag().PrivateParameterWrite,
 		"%[1]s: can't change parameter attribute", name))
 	return true

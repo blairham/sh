@@ -118,3 +118,34 @@ func (r *Runner) arrayStoreRefusalStatus(status int) int {
 	return r.refusalLeavesZero(r.sem().ArrayStoreRefusalThroughSetOrReadLeavesZero,
 		"a refused whole-array store through `set -A` or `read -A` leaving 0 behind", status)
 }
+
+// RefusesAWholeArrayStore reports whether a registered builtin's store of a
+// whole array — or, with table set, a whole association — into name is
+// refused, having written the refusal; status is what the builtin returns.
+//
+// The checks `set -A` and `read -A` make in front of their own whole-array
+// store, offered to a builtin outside this package so that it asks the same
+// ones rather than a copy: the freeze, and for an indexed array a slot of a
+// fixed scalar kind (interp/privatekindfixed.go). The number is
+// arrayStoreRefusalStatus's, so a fatal refusal leaves 0 from `-c` in the
+// column that answers so. Measured 2026-10-15 on zsh 5.9.2, `-f`, `env -i
+// PATH=/usr/bin:/bin`, `-c` then a script file:
+//
+//	typeset -r v=1; zparseopts -a v a     read-only variable: v   0   1
+//	typeset -r v=1; zparseopts -A v a     the same                0   1
+//	typeset -rA m;  zparseopts -A m a     the same                0   1
+//	zparseopts -a HOME a                  HOME: attempt to assign array
+//	                                      value to non-array      0   1
+//	typeset -r v=1; ( zparseopts -A v a ); echo $?            0 by both
+//
+// SetAssoc consults no freeze at all, which is how `zparseopts -A` over a
+// readonly name was taken silently (#6513).
+func (r *Runner) RefusesAWholeArrayStore(name string, table bool) (status int, refused bool) {
+	if r.refuseReadonly(name, assignedByDeclaration) {
+		return r.arrayStoreRefusalStatus(1), true
+	}
+	if !table && r.fixedSlotRefusesAnArrayValue(name) {
+		return r.arrayStoreRefusalStatus(r.status), true
+	}
+	return 0, false
+}

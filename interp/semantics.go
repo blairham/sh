@@ -31367,7 +31367,11 @@ type Semantics struct {
 	// The empty subscript answers the same way — `( printf -v 'a[]' X )` is
 	// 0 and `( read 'a[]' )` is 1 — so it is the *builtin* and not which
 	// subscript refused, which is what makes this one field rather than one
-	// per refusal (#3497, #3518).
+	// per refusal (#3497, #3518). So does a frozen name, measured 2026-10-15:
+	// `typeset -r v=1; printf -v v x` and `print -v v x` are 0 from `-c` and
+	// 1 from a file, and `( print -v v x ); echo $?` is 0 by both, where
+	// `read v` over the same name is 1 (#6513). `print -v` is here because it
+	// stores through `printf -v`.
 	//
 	// The file/`-c` split on the third row is not this field: the shell is
 	// ending either way and a script file's top level reports 1 whatever the
@@ -31421,10 +31425,13 @@ type Semantics struct {
 	// `set -A HOME x && echo yes` is 1 by both routes, `set -A HOME x || echo
 	// no` is 0 under `-c`, and `for i in 1; do set -A HOME x; done` is 1.
 	//
-	// Not every refused store through a builtin's operand: `print -v` and
-	// `zparseopts -a` over a readonly name leave 0 there as well, and are
-	// not asked here — this field is the two builtins whose whole-array
-	// store the measurement covered.
+	// `zparseopts -a` and `-A` ask it too, through
+	// Runner.RefusesAWholeArrayStore: a whole array or a whole association
+	// stored by a builtin, refused by the freeze or by a fixed scalar slot,
+	// ends `-c` at 0 there as well — `typeset -r v=1; zparseopts -A v a`,
+	// `typeset -rA m; zparseopts -A m a` and `zparseopts -a HOME a` are 0
+	// from `-c` and 1 from a file, measured 2026-10-15 (#6513). `print -v`
+	// is a scalar store and answers to StoreRefusalThroughPrintfLeavesZero.
 	//
 	// True in zsh. False in ksh93, whose `set -A` refusal is fatal and leaves
 	// 1 from `-c` (`typeset -r v=1; set -A v x` — `set: v: is read only`, exit

@@ -93,7 +93,12 @@ func biPrintf(r *Runner, _ context.Context, args []string) (status int) {
 	// `printf -v 'm[k]'` alike with the base name in the sentence, at status
 	// 1, and writes nothing (#3469).
 	if assign != "" && !r.readMayWrite(assign) {
-		return 1
+		// The number the refusal leaves is the operand store's, through the
+		// same door the bad subscript reaches: one column leaves 0 for a
+		// fatal one from `-c`, where `read`'s identical refusal leaves 1 —
+		// see Semantics.StoreRefusalThroughPrintfLeavesZero. `print -v`
+		// stores through this builtin and is answered here too (#6513).
+		return r.storeRefusalStatus("printf", 1)
 	}
 
 	// `-v name` collects the text instead of printing it. Swapped rather than

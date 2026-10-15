@@ -3,7 +3,10 @@
 
 package interp
 
-import "os"
+import (
+	"io"
+	"os"
+)
 
 // ownDescriptors gives a shell that runs *beside* the one that made it its own
 // copy of every descriptor in the table, and answers with what gives them
@@ -56,7 +59,10 @@ import "os"
 // oversight to fix later: a second holder of a pipe's *write* end is a reader
 // that never sees end-of-file, so duplicating stdout here would change when a
 // pipeline ends rather than only who owns what. Nothing holds a read end
-// against anybody, which is why this half is safe on its own.
+// against anybody, which is why this half is safe on its own. The one shell
+// that *should* change when its stream's reader ends is a writing
+// substitution's body, and it takes its copy by name — see
+// ownWritingSubstOutput.
 //
 // # What it does not copy
 //
@@ -126,4 +132,57 @@ func (c *Runner) ownDescriptors() func() {
 			_ = d.Close()
 		}
 	}
+}
+
+// ownWritingSubstOutput gives a `>(cmd)`'s body its own copy of the output it
+// writes into, where that output is a descriptor, and answers with what gives
+// the copy back. ok is false where there is no descriptor to copy — an
+// embedder's io.Writer — or the copy could not be made, and then out is w
+// unchanged.
+//
+// # The second holder ownDescriptors refuses is exactly right here
+//
+// Every shell that has the construct forks the body, so the body is a process
+// holding its standard output open for as long as it runs, and whoever reads
+// that stream reads until the body is done as well. That is a measured
+// ordering, not a lifetime detail. In bash 5.3.20, 20 runs of 20 each,
+// 2026-10-15:
+//
+//	{ echo hi; echo B >&4; } > >(sed s/^/A/) 4> >(sed s/^/b/)    Ahi AbB
+//	{ echo A >&3; echo B >&4; } 3> >(sed s/^/x/) 4> >(sed s/^/y/) yB xA
+//
+// The second body is started after `> >(sed s/^/A/)` was applied, so its
+// standard output *is* the first pipe's writing end, and it writes `bB`
+// through the first sed. Here that stream was the shell's own `*os.File`,
+// shared: the command's redirections were undone, the shell closed it, and
+// the body's bytes — held for the join — were delivered into a closed file
+// and lost without a word (#6526). The same sharing is the zsh dialect's
+// `sed: stdout: Bad file descriptor` on that row. And `{ : >(sleep 1); } |
+// cat` takes a second in bash and zsh, because the body holds the pipeline's
+// writing end; here it took none.
+//
+// # And a descriptor is written straight through
+//
+// A body that does not hold its own copy has its output captured and
+// delivered at the join — procSubPipe.captured — because two goroutines on
+// one io.Writer are a data race. Two writers on one descriptor are the
+// kernel's problem, as they are for every shell that forks, so a body given a
+// copy here writes as it goes, and the order its bytes arrive in is the order
+// it wrote them: `echo a > >(cat); sleep .3; echo b` is `a b` in bash, and
+// was `b a` in this shell's bash dialect while the bytes were held to the end
+// of the script.
+func (c *Runner) ownWritingSubstOutput(w io.Writer) (out io.Writer, release func(), ok bool) {
+	f, isFile := w.(*os.File)
+	if !isFile {
+		return w, func() {}, false
+	}
+	d, n, err := dupFile(f, c.privateFdFloor())
+	if err != nil {
+		return w, func() {}, false
+	}
+	holdPrivateCopy(n)
+	return d, func() {
+		releasePrivateCopy(n)
+		_ = d.Close()
+	}, true
 }

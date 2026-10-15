@@ -113,6 +113,15 @@ func (r *Runner) procSub(ctx context.Context, span syntax.Span) (string, bool) {
 		// them and read as an accident to whoever arrives next.
 		sub.Stdout = bodyWriter(r.Stdout)
 	}
+	// And held by the body as its own, where it is a descriptor: the body is
+	// a process holding its standard output in every shell that forks it,
+	// and a stream shared with this shell is closed under the body the
+	// moment the command's redirections are undone. See
+	// Runner.ownWritingSubstOutput, which carries the measurements (#6526).
+	releaseOut, ownsOut := func() {}, false
+	if kind == syntax.ProcSubstOut {
+		sub.Stdout, releaseOut, ownsOut = sub.ownWritingSubstOutput(sub.Stdout)
+	}
 	// The end this shell keeps is counted rather than closed on the body's
 	// return, and the count starts at one for the body itself. What else can
 	// join it, and why the body is not always the last, is in substEnd.
@@ -130,10 +139,10 @@ func (r *Runner) procSub(ctx context.Context, span syntax.Span) (string, bool) {
 	exitBody := sub.forkProcess()
 
 	// And where its *output* goes, for the dialect that does not wait for the
-	// body: held rather than written straight through. See
-	// procSubPipe.captured.
+	// body: held rather than written straight through, unless the body holds
+	// a descriptor of its own to write into. See procSubPipe.captured.
 	var captured *capturedBody
-	if kind == syntax.ProcSubstOut && r.sem().WritingSubstitutionIsWaitedForAtTheCommand != Yes {
+	if kind == syntax.ProcSubstOut && !ownsOut && r.sem().WritingSubstitutionIsWaitedForAtTheCommand != Yes {
 		captured = &capturedBody{to: sub.Stdout}
 		sub.Stdout = &captured.buf
 	}
@@ -205,8 +214,10 @@ func (r *Runner) procSub(ctx context.Context, span syntax.Span) (string, bool) {
 		// is the shape.
 		began.mark()
 		// And the copies of the table this body was given, on the same
-		// terms and released by the same hand — see ownDescriptors.
+		// terms and released by the same hand — see ownDescriptors — with
+		// the copy of its output beside them.
 		releaseFds()
+		releaseOut()
 	})
 
 	// The body travels with the path for `>(cmd)` only, because that is the

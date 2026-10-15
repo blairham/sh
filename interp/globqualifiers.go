@@ -588,6 +588,15 @@ func (r *Runner) fieldQualifiers(field string) (pattern string, q globQualifiers
 	if !found {
 		return field, globQualifiers{}, false, true
 	}
+	if r.givingUpAlready() {
+		// The second view of a redirection target, arriving to find the
+		// first view's refusal unwinding: one refusal is one sentence, as it
+		// is for a pattern that missed or would not compile. Measured
+		// 2026-10-15 on zsh 5.9.2 (`-f -c`), `: >*(Z)` writes `unknown file
+		// attribute: Z` once, where this wrote it twice. See
+		// Runner.givingUpAlready.
+		return field, globQualifiers{}, false, false
+	}
 	// A refusal here sets its status wherever it is written, as an unmatched
 	// pattern does: measured 2026-10-05 on zsh 5.9.2, `(exit 4); print
 	// *(.zzq)` and `(exit 4); print *([1,])` exit 1, where `$((1/0))` in the

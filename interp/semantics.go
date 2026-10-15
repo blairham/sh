@@ -835,6 +835,24 @@ type Semantics struct {
 	// The same under a script file, standard input and `emulate sh` with
 	// `nomatch` set. bash 5.3.20 with `shopt -s failglob` ends the line for
 	// `/usr/bin/true [x]`, as for a builtin.
+	//
+	// **Every refusal the pathname stage raises is the same rule**, not only
+	// the miss (#6576). Measured 2026-10-15 the same way, each `after st=1`
+	// where `print` in place of the program ends the script:
+	//
+	//	/usr/bin/true *(/nonexist)       missing end of string
+	//	/usr/bin/true *(Z) / *(oZ) / *(f) unknown file attribute: Z, unknown
+	//	                                 sort specifier, invalid mode
+	//	                                 specification
+	//	/usr/bin/true *(u:nosuchuser:)   unknown username 'nosuchuser'
+	//	/usr/bin/true *([1,])            bad math expression: empty string
+	//	/usr/bin/true a(b / nos[a / *(Q  bad pattern: …
+	//	/usr/bin/true [x] *(Z)           no matches found: [x] — the first
+	//	                                 refusal is named, whatever its kind
+	//
+	// So the hold is taken where each of them is written — the miss,
+	// Runner.fatalPattern and Runner.fatal — through the one question,
+	// Runner.holdForTheProgram.
 	UnmatchedPatternFailsOnlyTheProgram Answer
 
 	// IgnoredNamesVariable names the parameter whose patterns take names
@@ -39797,7 +39815,14 @@ func (r *Runner) fatalPattern(pattern string, status int) {
 	// Measured the same day on both routes, so it moves them together or
 	// neither; the near-text field's own rows were measured under `LC_ALL=C`
 	// and this follows them.
-	r.diagf("%s\n", Wording(r.diag().BadPattern, "bad pattern: %s", escapeControlBytes(pattern)))
+	msg := Wording(r.diag().BadPattern, "bad pattern: %s", escapeControlBytes(pattern))
+	if r.holdForTheProgram(msg) {
+		// A pattern in a program's words that will not compile is the
+		// program's failure, as one that matched nothing is. See
+		// interp/programglobrefusal.go.
+		return
+	}
+	r.diagf("%s\n", msg)
 	r.status = status
 	r.ctl, r.abandon, r.errexitStopped = controlExit, abandonError, false
 }

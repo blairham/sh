@@ -8,6 +8,11 @@ package interp
 // dialect that refuses an unmatched pattern by default. See
 // Semantics.UnmatchedPatternFailsOnlyTheProgram for the measurement.
 //
+// Not only a miss: a pattern that will not compile and a qualifier list that
+// will not read are the program's failure in the same place, so the three
+// places those are written — refuseUnmatchedPattern, fatalPattern and fatal —
+// each ask holdForTheProgram first, and nothing else decides it (#6576).
+//
 // The refusal is held rather than written while the command's words are
 // expanded, and written once they all have been: every other expansion in the
 // line runs first and a failure among them wins, the redirections are never

@@ -667,6 +667,10 @@ type Runner struct {
 	// ends. Empty outside the dialect that counts them. See heldnumbers.go
 	// and Semantics.OwnDescriptors.
 	heldNumbers []heldNumber
+	// bodyOutput is the output of the command substitution this runner is
+	// inside, as the dialect that numbers it holds it, or nil. See
+	// heldnumbers.go.
+	bodyOutput *bodyOutput
 	// entering is what the next redirection list this runner applies owes
 	// for the runner having been entered as a pipeline element or a
 	// background job. See elementEntry.
@@ -10875,6 +10879,10 @@ func (r *Runner) exec(ctx context.Context, argv, env []string) error {
 		r.status = r.restrictedCommandName(argv[0])
 		return nil
 	}
+	// A command looked for outside the shell needs a command substitution's
+	// output as a descriptor, whether or not it is then found. See
+	// bodyOutput.
+	r.needsBodyOutput()
 	// This runner's PATH, not the process's — see lookpath.go for why that
 	// distinction is the whole bug and not a detail.
 	path, spelled, written, lookErr := r.lookPathSpelled(argv[0])

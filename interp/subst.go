@@ -172,6 +172,9 @@ func (r *Runner) runCommandSubst(ctx context.Context, span syntax.Span) string {
 	// Runner.runAsItsOwnJob.
 	sub.runAsItsOwnJob(r)
 	sub.inCommandSubst = true
+	// And the numbers the body holds in the dialect that holds them there.
+	// See enterSubstBody.
+	r.enterSubstBody(sub)
 	// And one entry on the stack of what the shell is inside. Pushed onto
 	// the clone rather than entered and left on this runner: the body runs
 	// in that clone and the entry goes away with it, so there is no pop to

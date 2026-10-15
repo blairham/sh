@@ -7,6 +7,7 @@ import (
 	"context"
 	"io"
 	"slices"
+	"sync/atomic"
 
 	"github.com/blairham/sh/syntax"
 )
@@ -65,7 +66,92 @@ func (r *Runner) holdsNumber(fd int) bool {
 			return true
 		}
 	}
+	for o := r.bodyOutput; o != nil; o = o.outer {
+		if o.held == fd || int(o.fd.Load()) == fd {
+			return true
+		}
+	}
 	return false
+}
+
+// bodyOutput is what a command substitution's body holds in ksh93u+: the
+// number entering it held, if it held one (see enterSubstBody), and the
+// body's output — zero until something in the body needs that output to be a
+// descriptor, and the number it was put on from then until the body ends.
+//
+// ksh93u+ runs a command substitution's body without a fork and catches what
+// it writes without a descriptor — until something needs one. **What decides
+// is the body's standard output being needed as a descriptor**, not the kind
+// of command: an external command or a pipeline needs it, and so does a
+// redirection that names standard output, while a builtin writing to it or to
+// another stream does not, and a process substitution, which is a fork,
+// does. Measured 2026-10-15, `/bin/ksh -c` (ksh93u+
+// 2012-08-01), the `{v}` allocated after the shape named (#6558):
+//
+//	echo $(exec {v}</dev/null; echo $v)                  11   see enterSubstBody
+//	echo $(/usr/bin/true; exec {v}</dev/null; echo $v)   12   external
+//	echo $(command -p true; exec {v}</dev/null; echo $v) 11   builtin
+//	echo $(nosuchcmd 2>/dev/null; exec {v}…)             12   looked for outside
+//	echo $(echo x | read y; exec {v}</dev/null; echo $v) 12   a pipeline of builtins
+//	echo $(echo hi >&2; exec {v}</dev/null; echo $v)     12   names standard output
+//	echo $(print -u2 hi; exec {v}</dev/null; echo $v)    11   writes elsewhere, names nothing
+//	echo $(true >/dev/null; exec {v}</dev/null; echo $v) 12
+//	echo $(true 2>/dev/null; exec {v}</dev/null; echo $v) 11
+//	echo $(echo hi 2>&1; exec {v}</dev/null; echo $v)    12   standard output as the source
+//	echo $( (/usr/bin/true); exec {v}</dev/null; …)      12   inside parentheses too
+//	echo $(exec {v}</dev/null; /usr/bin/true; …{w}…)     11 13
+//	echo $(: <(/bin/sh -c :); sleep 1; exec {w}…)        12   a process substitution
+//	echo $(cat <(exec {v}</dev/null; echo $v))           12   whose body holds both
+//
+// It is taken once and kept: a second external command adds nothing. A body
+// nested in this one sees it and has its own besides — `echo $(/usr/bin/true;
+// echo $(exec {v}</dev/null; echo $v))` is 12 — which outer is for, while the
+// inner body's own is gone with it: `echo $(echo $(/usr/bin/true); exec
+// {v}</dev/null; echo $v)` is 11.
+//
+// Shared rather than copied, because the shape that needs it may run in a
+// clone of the body — the parentheses row — and the number is the body's.
+// A process substitution's body shares it too, as the last row says: unlike
+// everything else a fork into that body drops (see substRunner), this is
+// still held there, and the output is already a descriptor by then, so the
+// body can add nothing to it that its parent would not.
+type bodyOutput struct {
+	held  int
+	fd    atomic.Int32
+	outer *bodyOutput
+}
+
+// enterSubstBody is what entering a command substitution's body holds, in
+// the dialect that holds it: sub is the body's runner, cloned from r.
+//
+// ksh93u+ holds one number from its base for as long as a subshell it runs
+// without a fork lasts, and a command substitution is one: `echo $(exec
+// {v}</dev/null; echo $v)` is 11 there, from the base of 10, and so is every
+// spelling of it — backquotes, an assignment's value, a function's body.
+// One however deeply the substitutions nest, because the shell is already in
+// such a subshell: `echo $(echo $(exec {v}</dev/null; echo $v))` is 11 too.
+// From a script file every row is one higher than it is from `-c`, the file
+// itself already being on 10. A process substitution's body is a fork and
+// holds none of it — `echo <(echo $(exec {v}</dev/null; echo $v) >&2)` is
+// 11, the outer `<( … )` adding nothing. Measured 2026-10-15 (#6558).
+func (r *Runner) enterSubstBody(sub *Runner) {
+	if r.sem().OwnDescriptors != LastPipelineElementsInputTakesANumber {
+		return
+	}
+	o := &bodyOutput{outer: r.bodyOutput}
+	if r.bodyOutput == nil {
+		o.held = sub.lowestFreeNumber(-1)
+	}
+	sub.bodyOutput = o
+}
+
+// needsBodyOutput is something in a command substitution's body needing the
+// body's output as a descriptor, which puts it on the lowest free number the
+// first time. See bodyOutput.
+func (r *Runner) needsBodyOutput() {
+	if o := r.bodyOutput; o != nil && o.fd.Load() == 0 {
+		o.fd.CompareAndSwap(0, int32(r.lowestFreeNumber(-1)))
+	}
 }
 
 // substitutionPublishedAt is whether a live substitution of this shell's has
@@ -127,8 +213,9 @@ func (r *Runner) savesRedirectedStreams() bool {
 // `{v}` allocated there is one higher: `echo x | { exec {v}</dev/null; echo
 // $v; }` is 11, and `true | true | { … }` is 11 too. Only where the shell's
 // own input was open, which is what says it is a copy of that input: after
-// `exec 0<&-` it is 10. A substitution's body holds none of it, as it holds
-// none of anything (see substRunner). Measured 2026-10-15 (#6503).
+// `exec 0<&-` it is 10. A process substitution's body holds none of it (see
+// substRunner); a command substitution's body holds it and one number of its
+// own (see enterSubstBody). Measured 2026-10-15 (#6503).
 //
 // One shape holds it once rather than twice: a last element that is a group
 // holding nothing but another pipeline, which is the same pipeline as far as

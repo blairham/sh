@@ -28,20 +28,20 @@ func TestAReservedTableDoesNotGrow(t *testing.T) {
 			r.SetVar(n, "")
 		}
 	}
-	plain := testing.AllocsPerRun(20, func() { fill(&interp.Runner{}) })
+	plain := testing.AllocsPerRun(20, func() { fill(emptyRunner()) })
 	reserved := testing.AllocsPerRun(20, func() {
-		r := &interp.Runner{}
+		r := emptyRunner()
 		r.ReserveTables(interp.TableSizes{Builtins: len(names), ShellOwn: len(names), Parameters: len(names)})
 		fill(r)
 	})
 	if reserved >= plain {
 		t.Errorf("registering %d names allocated %.0f times into reserved tables and %.0f into empty ones", len(names), reserved, plain)
 	}
-	got := (&interp.Runner{}).TableSizes()
+	got := emptyRunner().TableSizes()
 	if got != (interp.TableSizes{}) {
 		t.Errorf("a runner nothing has written holds %+v", got)
 	}
-	r := &interp.Runner{}
+	r := emptyRunner()
 	fill(r)
 	if got := r.TableSizes(); got.Builtins != len(names) || got.ShellOwn != len(names) || got.Parameters < len(names) {
 		t.Errorf("after %d registrations the tables hold %+v", len(names), got)
@@ -51,7 +51,7 @@ func TestAReservedTableDoesNotGrow(t *testing.T) {
 // A reservation made after a table exists leaves it alone, so a name already
 // in it is still there.
 func TestAReservationKeepsWhatATableHolds(t *testing.T) {
-	r := &interp.Runner{}
+	r := emptyRunner()
 	r.Register("early", func(*interp.Runner, context.Context, []string) int { return 7 })
 	r.SetVar("early", "kept")
 	r.ReserveTables(interp.TableSizes{Builtins: 64, Parameters: 64})
@@ -61,4 +61,13 @@ func TestAReservationKeepsWhatATableHolds(t *testing.T) {
 	if v, _ := r.GetVar("early"); v != "kept" {
 		t.Errorf("the parameter stored before the reservation reads %q", v)
 	}
+}
+
+// emptyRunner is a runner nothing has written, which is what a reservation is
+// made into.
+func emptyRunner() *interp.Runner {
+	// testrunner:bare — nothing here runs a command, and the subject is how
+	// much a runner's own tables allocate: the helper's directory and cleanup
+	// would be counted by AllocsPerRun on both sides of the comparison.
+	return &interp.Runner{}
 }

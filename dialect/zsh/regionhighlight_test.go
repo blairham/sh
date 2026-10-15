@@ -102,8 +102,11 @@ func TestTheOffsetsAreCharactersAndTheRunsAreBytes(t *testing.T) {
 // to say that it did.
 func TestAnElementThisShellCannotDrawIsDropped(t *testing.T) {
 	for _, c := range []struct{ name, elem string }{
-		{"a PREDISPLAY this shell does not have", `P 0 3 fg=red`},
-		{"the same flag glued to the offset", `P0 3 fg=red`},
+		// A `P` element is drawn where it says now that there is a
+		// PREDISPLAY to count (#6414), so what is refused is one past the
+		// text, in either spelling of the flag.
+		{"a P element past the line", `P 0 99 fg=red`},
+		{"the same flag glued to the offset", `P0 99 fg=red`},
 		{"an end before the start", `4 2 fg=red`},
 		{"an end past the line", `0 99 fg=red`},
 		{"a start before the line", `-1 3 fg=red`},

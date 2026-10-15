@@ -370,8 +370,20 @@ func (r *Runner) runPipeline(ctx context.Context, p *syntax.Pipeline, timing *pi
 	if n > 1 {
 		want = r.substEndCandidates()
 	}
+	//
+	// Made and moved inside transientFds, because between the two the ends
+	// are on the lowest free numbers — and a pipeline nested in one element
+	// is made while a sibling element may be choosing a number (#6454).
 	for i := 0; i < n-1; i++ {
-		pr, pw, err := os.Pipe()
+		err := withTransientFds(func() error {
+			pr, pw, err := os.Pipe()
+			if err != nil {
+				return err
+			}
+			writers[i], writerCopies[i] = raiseShellEnd(pw, want)
+			readers[i+1], readerCopies[i+1] = raiseShellEnd(pr, want)
+			return nil
+		})
 		if err != nil {
 			for j := range i {
 				closeEnd(writers[j], &writerCopies[j])
@@ -379,8 +391,6 @@ func (r *Runner) runPipeline(ctx context.Context, p *syntax.Pipeline, timing *pi
 			}
 			return err
 		}
-		writers[i], writerCopies[i] = raiseShellEnd(pw, want)
-		readers[i+1], readerCopies[i+1] = raiseShellEnd(pr, want)
 	}
 
 	// The streams the shell itself supplied are shared by every element that

@@ -148,7 +148,9 @@ func (r *Runner) createMode(perm int) fs.FileMode {
 // child inherits whatever the shell itself inherited.
 func (r *Runner) startMasked(cmd *exec.Cmd) error {
 	defer r.holdMaskForFork()()
-	return r.startWithAsyncDispositions(cmd.Start)
+	// And inside the window a substitution's park waits out, because the
+	// start opens descriptors of its own in this one table. See transientFds.
+	return withTransientFds(func() error { return r.startWithAsyncDispositions(cmd.Start) })
 }
 
 // holdMaskForFork puts this shell's mask on the process and answers with what

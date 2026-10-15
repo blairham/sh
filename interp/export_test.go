@@ -87,3 +87,10 @@ func (r *Runner) MemberNamesInUseForTest() bool { return r.memberNamesInUse }
 // table are asked for first, so a test can crowd the numbers below it and
 // make a substitution's wish reach a copy. See privateCopyFloor.
 const PrivateCopyFloorForTest = privateCopyFloor
+
+// InTransientFdWindowForTest runs f inside the window a substitution's park
+// waits out — what a process start and the shell's own pipe and directory
+// moves hold while their descriptors are on low numbers. See transientFds.
+func InTransientFdWindowForTest(f func()) {
+	_ = withTransientFds(func() error { f(); return nil })
+}

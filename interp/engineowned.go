@@ -49,6 +49,11 @@ import "strings"
 // one with teeth: `unset -m '.zsh*'` unloaded a module before this, the
 // pattern reaching state no script put there.
 //
+// **A name handed to a listing is the fourth route**, and it is not a walk:
+// `typeset -p .zsh.zstyle` collects nothing, it asks. That is answered in
+// Runner.listedDeclarationOf, which every listing form asks about one name,
+// so the store is `no such variable` there as it is in the reference (#6427).
+//
 // The two bash-shaped walks — `compgen -v` and `${!p@}` — deliberately do
 // **not** ask, because the only dialect that names a prefix has neither
 // builtin: `compgen` is `command not found` in zsh and `${!.@}` is `bad

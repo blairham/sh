@@ -371,6 +371,19 @@ func (r *Runner) lastProducedReading(name string) (string, bool) {
 // declarationOf is what draws, so the flag is set around it rather than the
 // value thrown away after.
 func (r *Runner) listedDeclarationOf(name string, produced bool, p ProducedListing) (declaration, bool) {
+	if r.engineOwns(name) {
+		// The engine's own state is no parameter of the shell being
+		// emulated, so a listing that *names* one has not found it either.
+		// The whole-table walks already leave these names out (see
+		// SetEngineOwnedPrefix); an operand was the route still open, and it
+		// is answered here, in the one function every listing form asks,
+		// rather than in the `typeset -p` loop alone — `export -p`,
+		// `readonly -p`, `typeset +p`, `declare -p` and `local -p` reached
+		// the same row. Measured 2026-10-15 on zsh 5.9.2 after `zstyle :a b
+		// c`: each of those is `no such variable: .zsh.zstyle` at 1, which
+		// is the missing-name route an unknown answer takes (#6427).
+		return declaration{}, false
+	}
 	if !produced {
 		// The one place a whole-table listing differs from a named one: what
 		// it makes of the running command's own assignment prefix. See

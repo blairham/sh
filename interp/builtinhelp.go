@@ -83,7 +83,10 @@ func (r *Runner) callBuiltin(ctx context.Context, name string, fn Builtin, args 
 	r.writeFailed = nil
 	refused := r.refusedInACommand
 	r.refusedInACommand = false
-	hold := r.holdBuiltinOutput()
+	var hold builtinHold
+	if _, nested := r.Stdout.(*heldOutput); nested || !writesNoOutput(name) {
+		hold = r.holdBuiltinOutput()
+	}
 	status := fn(r, ctx, args)
 	r.endBuiltinHold(hold)
 	status = r.builtinWriteStatus(name, status)
@@ -94,4 +97,19 @@ func (r *Runner) callBuiltin(ctx context.Context, name string, fn Builtin, args 
 	}
 	r.refusedInACommand = refused
 	return status
+}
+
+// writesNoOutput names the builtins that never write to their standard
+// output — a test and the three that only set a status — so that holding
+// what they write until they return holds nothing. The hold was an
+// allocation on every `[ … ]` in the dialects that hold (#6496). Their
+// `--help` and `--version` are answered above, before any hold. One inside
+// another's hold still takes it, since ending a nested hold is what lets the
+// outer one's text through.
+func writesNoOutput(name string) bool {
+	switch name {
+	case "[", "test", ":", "true", "false":
+		return true
+	}
+	return false
 }

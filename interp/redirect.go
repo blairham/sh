@@ -62,6 +62,16 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 	// saved copies, and the pipe an element was entered with. Above the
 	// length check, because an element's pipe is installed by a list with
 	// nothing written in it. Nil in every dialect that counts none of it.
+	if len(rs) == 0 && !r.entering.pending {
+		// Nothing to redirect and no element entry to settle: the holds
+		// would be made only to hold nothing, which was an allocation on
+		// every command in the dialects that count their own descriptors
+		// (#6496). beginRedirHolds's one effect then is the entry it clears.
+		if r.countsOwnDescriptors() {
+			r.entering = elementEntry{}
+		}
+		return nil, nil
+	}
 	var holds *redirHolds
 	if r.entering.pending || r.countsOwnDescriptors() {
 		holds = r.beginRedirHolds(owner)

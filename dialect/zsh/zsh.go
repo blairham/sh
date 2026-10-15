@@ -59,6 +59,10 @@ func Dialect() syntax.Dialect {
 	// which is how a prompt theme's scheduler closes the one it was handed.
 	// zsh alone — see the flag for what bash and ksh93 answer instead.
 	d.FdVariablePositional = true
+	// And refuses the construct after a compound command, as a parse error
+	// naming either the brace or the whole word by the compound's kind. See
+	// the flag for the table.
+	d.FdVariableRefusedAfterACompound = true
 	// zsh expands with nobody asking; `unsetopt aliases` is how it is turned
 	// off, and measured 2026-09-12 that option is the only gate on `eval`, a
 	// command substitution, a sourced file and a trap body alike — under a

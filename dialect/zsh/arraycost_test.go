@@ -5,57 +5,38 @@ package zsh_test
 
 import (
 	"strconv"
-	"strings"
 	"testing"
 )
 
 // The cost of reading one element, counting, and appending does not grow with
 // the array (#6099).
 //
-// Each row times the same 500 operations on an array of 2,000 elements and on
-// one of 20,000, with the shell's own clock around the loop so that building
-// the array is not in the figure. An operation that walks the array costs ten
-// times as much on the larger one; one that does not costs the same. The
-// threshold of 3 sits between the two with room for a loaded machine, and the
-// best of three runs is taken so that one descheduled run does not decide it.
+// Each row runs the same operation on an array of 2,000 elements and on one of
+// 20,000 and compares what one run of it allocates; see
+// [dialecttest.Preset.CheckArrayOperationsDoNotGrow]. An operation that reads
+// the array into a list allocates at least a string header per element, and one
+// that does not allocates the same on both. It was a ratio of two wall-clock
+// times until #6411: each about a millisecond, which a shared runner's jitter
+// exceeds, and it failed the macOS job three times on diffs that could not
+// reach it.
 //
 // Every row walked the array before #6099: the store was a map searched for
 // its end on every append, a read built the whole list to index it, and a
 // count built the list, or the join, to measure it. The element read inside
 // an expression still built the list after that, and so did the length of one
 // element on an array with a gap (#6358); those are the last two rows.
+//
+// `${a[*]}` is the control: a join reads every element, and the check fails
+// outright if it is not seen to grow.
 func TestArrayOperationsDoNotGrowWithTheArray(t *testing.T) {
 	if testing.Short() {
-		t.Skip("times loops over large arrays")
+		t.Skip("builds two large arrays per row")
 	}
-	for _, op := range []string{`y=${a[5]}`, `y=$#a`, `y=${#a[@]}`, `a+=(z)`, `y=$(( a[5] ))`, `y=${#a[5]}`} {
-		t.Run(op, func(t *testing.T) {
-			cost := func(size int) float64 {
-				best := 0.0
-				for i := range 3 {
-					src := `typeset -F SECONDS; a=(); for ((i=0;i<` + strconv.Itoa(size) + `;i++)); do a+=(x); done
-t0=$SECONDS; for ((i=0;i<500;i++)); do ` + op + `; done; print -r -- $(( SECONDS - t0 ))`
-					out, st := runZsh(t, t.TempDir(), src)
-					v, err := strconv.ParseFloat(strings.TrimSpace(out), 64)
-					if st != 0 || err != nil {
-						t.Fatalf("size %d: %q (status %d)", size, out, st)
-					}
-					if i == 0 || v < best {
-						best = v
-					}
-				}
-				return best
-			}
-			small, large := cost(2000), cost(20000)
-			if small <= 0 {
-				small = 1e-6
-			}
-			if ratio := large / small; ratio > 3 {
-				t.Errorf("500 x %s took %.4fs on 2,000 elements and %.4fs on 20,000: ratio %.1f, want about 1",
-					op, small, large, ratio)
-			}
-		})
+	build := func(n int) string {
+		return `a=(); for ((i=0;i<` + strconv.Itoa(n) + `;i++)); do a+=(x); done`
 	}
+	preset.CheckArrayOperationsDoNotGrow(t, build, `y="${a[*]}"`,
+		`y=${a[5]}`, `y=$#a`, `y=${#a[@]}`, `a+=(z)`, `y=$(( a[5] ))`, `y=${#a[5]}`)
 }
 
 // The counts the faster paths answer are the ones the reference gives, in the

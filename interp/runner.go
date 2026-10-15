@@ -8865,7 +8865,7 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 			}
 		}
 		// An appending operand, `typeset x+=v`. A second reading beside
-		// assignShaped rather than a loosening of it — see
+		// assignNameSplit rather than a loosening of it — see
 		// interp.appendNameSplit for why the two cannot be one — and gated
 		// on the grammar flag that gives a dialect the operator at all,
 		// because the panel splits exactly there.

@@ -16,7 +16,7 @@ import (
 // its value is neither split into fields nor matched against the filesystem —
 // exactly as `name=value` already was.
 //
-// It was neither until #3772. Runner.assignShaped wants a plain name in front
+// It was neither until #3772. Runner.assignNameSplit wants a plain name in front
 // of the `=` and `x+` is not one, so `typeset x+=$v` took the ordinary word
 // route: field splitting and then pathname expansion. Where the declarations
 // take the operator that is a **silent wrong value** — `v="a b"` left `a`

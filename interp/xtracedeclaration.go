@@ -85,7 +85,7 @@ const (
 // and `n=x; typeset $n=1` are not — one line each, operand and all. Every one
 // of those expands to a string with an `=` in it, and only the *word* says
 // whether the name was written as a name. That is the same question
-// Runner.assignShaped asked when it routed the word through
+// Runner.assignNameSplit asked when it routed the word through
 // Runner.expandAssignArg, so the answer is kept from there.
 func (r *Runner) declarationOperandIndex(i int) bool {
 	for _, at := range r.declarationOperands {

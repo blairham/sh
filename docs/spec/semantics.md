@@ -26419,6 +26419,13 @@ ksh93 writes the generic one alone. So the preposition is the whole of zsh's
 rule: a number goes *to* a frozen name and is taken *from* one, and neither
 can happen.
 
+zsh adds a second line when the refused redirection opened a file for
+reading — `<` or `<>`, not `>`, `>>`, a duplication or a here-document:
+the platform's sentence for errno zero, then the target, `undefined error:
+0: /dev/null` on darwin and `success: /dev/null` on Linux (measured
+2026-10-15, #6523). That is `Diagnostics.FdVariableReadonlyReadOpen`, filled
+from the dialect's own errno table.
+
 **`FirstAllocatedDescriptor`** — bash from ten · dash from ten · ksh93 from
 ten · zsh **from eleven**
 

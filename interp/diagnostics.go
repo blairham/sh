@@ -2250,6 +2250,28 @@ type Diagnostics struct {
 	// CannotAssignFdToVariable instead.
 	FdVariableReadonlyOpen string
 
+	// FdVariableReadonlyReadOpen is the line the same shell writes *after*
+	// that refusal when the redirection opens a file for reading — `<` and
+	// `<>` (#6523).
+	//
+	// Measured 2026-10-15 with `-fc` on zsh 5.9.2, `readonly v=1` first:
+	//
+	//	true {v}</dev/null      can't allocate …  then  undefined error: 0: /dev/null
+	//	true {v}<>/dev/null     the same two
+	//	true {v}</nonexist      the same two, the target named as written
+	//	true {v}>/dev/null      the first alone; `>>`, `>|` likewise
+	//	true {v}>&2, <&0        the first alone
+	//	true {v}<<<x, <<EOF     the first alone
+	//
+	// It reads as the open's own failure reported with an errno nothing set,
+	// and the sentence is the platform's text for zero: `undefined error: 0`
+	// on darwin, `success` in the pinned Linux image (zsh 5.9.2, measured the
+	// same day). So the field holds that sentence as the C library spells it,
+	// taken from the dialect's own errno table, and the line is the sentence
+	// — in the dialect's reason casing, LowercaseReason — then `: ` and the
+	// target. Empty writes nothing, which is every other shell.
+	FdVariableReadonlyReadOpen string
+
 	// FdVariableReadonlyClose is the same refusal on the other side: `exec
 	// {name}>&-` closing the descriptor a frozen name holds. One verb: the
 	// name.

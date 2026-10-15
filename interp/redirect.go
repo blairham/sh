@@ -211,11 +211,11 @@ func (r *Runner) applyRedirList(ctx context.Context, rs []*syntax.Redirect, comp
 	// is a process of its own first takes what the store overwrites so the
 	// command's end can put it back. See fdvarexternal.go.
 	var fdVarsHeld fdVarsInTheCommand
-	setFdVar := func(ref, value string) bool {
+	setFdVar := func(ref, value, readTarget string) bool {
 		if restore := fdVarsHeld.beforeStore(r, ref); restore != nil {
 			closers = append(closers, restore)
 		}
-		return r.setFdVar(ref, value)
+		return r.setFdVar(ref, value, readTarget)
 	}
 	// closeMovedSource is the second half of `N<&M-`: M is closed, and
 	// forKeeps says whether the command takes that back when it ends.
@@ -446,7 +446,7 @@ func (r *Runner) applyRedirList(ctx context.Context, rs []*syntax.Redirect, comp
 				r.setFd(hfd, held)
 				r.redirWrote(hfd)
 				if fdVar != "" {
-					if !setFdVar(fdVar, itoa(hfd)) {
+					if !setFdVar(fdVar, itoa(hfd), "") {
 						dropFdVarDescriptor(hfd, closer, persists)
 						r.redirErr = true
 						return closers, nil
@@ -723,7 +723,7 @@ func (r *Runner) applyRedirList(ctx context.Context, rs []*syntax.Redirect, comp
 			}
 			r.redirWrote(fd)
 			if fdVar != "" {
-				if !setFdVar(fdVar, itoa(fd)) {
+				if !setFdVar(fdVar, itoa(fd), "") {
 					// A duplication opens nothing of its own — the entry is
 					// a second name for a file something else holds — so
 					// only the name goes.
@@ -1153,7 +1153,15 @@ func (r *Runner) applyRedirList(ctx context.Context, rs []*syntax.Redirect, comp
 				r.setFd(fd, held)
 				r.redirWrote(fd)
 				if fdVar != "" {
-					if !setFdVar(fdVar, itoa(fd)) {
+					// A file opened for reading is named to the store, for
+					// the one dialect that adds a line about it when the
+					// name refuses the number. See
+					// Diagnostics.FdVariableReadonlyReadOpen.
+					readTarget := ""
+					if flags&os.O_WRONLY == 0 {
+						readTarget = name
+					}
+					if !setFdVar(fdVar, itoa(fd), readTarget) {
 						dropFdVarDescriptor(fd, f, persists)
 						r.redirErr = true
 						return closers, nil
@@ -2694,7 +2702,11 @@ func (r *Runner) fdVarValue(ref string) (string, bool) {
 // one of them, and the first names the command word where there is one —
 // which is why the brace group's is unprefixed and the external command's
 // says `/bin/echo`. See Diagnostics.CannotAssignFdToVariable (#3491).
-func (r *Runner) setFdVar(ref, value string) bool {
+//
+// readTarget is the file the redirection opened for reading, or empty: the
+// one dialect that adds a line after a frozen name's refusal adds it only
+// there. See Diagnostics.FdVariableReadonlyReadOpen.
+func (r *Runner) setFdVar(ref, value, readTarget string) bool {
 	if n, ok := positionalFdVar(ref); ok {
 		// A positional parameter receives the number, which is how a
 		// function that was handed a descriptor hands back the one the
@@ -2725,6 +2737,9 @@ func (r *Runner) setFdVar(ref, value string) bool {
 	// Diagnostics.FdVariableReadonlyOpen for the three columns' wordings.
 	if w := r.diag().FdVariableReadonlyOpen; w != "" && r.attrHas(ref, attrReadonly) {
 		r.diagf("%s\n", fmt.Sprintf(w, ref))
+		if t := r.diag().FdVariableReadonlyReadOpen; t != "" && readTarget != "" {
+			r.diagf("%s: %s\n", r.diag().reasonText(t), readTarget)
+		}
 		// The status and the failure mark are the store's on the path below,
 		// and leaving here without them made the refusal quieter than it
 		// looks: the sentence still printed and the script ended at 0, where

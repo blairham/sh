@@ -6402,8 +6402,14 @@ func Diagnostics() interp.Diagnostics {
 		// variable:` is not written at either site, which is why the open
 		// wording replaces the store's sentence rather than following it the
 		// way bash's `cannot assign fd to variable` does.
-		FdVariableReadonlyOpen:     "can't allocate file descriptor to readonly parameter %[1]s",
-		FdVariableReadonlyClose:    "can't close file descriptor from readonly parameter %[1]s",
+		FdVariableReadonlyOpen:  "can't allocate file descriptor to readonly parameter %[1]s",
+		FdVariableReadonlyClose: "can't close file descriptor from readonly parameter %[1]s",
+		// And after the open refusal, when the file was opened for reading,
+		// a second line: this platform's sentence for errno zero, then the
+		// target — `undefined error: 0: /dev/null` on darwin and `success:
+		// /dev/null` on Linux, measured 2026-10-15 (#6523). The lowercase is
+		// LowercaseReason's, applied where the line is written.
+		FdVariableReadonlyReadOpen: errnoText(0),
 		FdVariableWouldBeClobbered: "can't clobber parameter %[1]s containing file descriptor %[2]d",
 		// `mkdir dir; v=$(<dir)` — the read after a successful open, which
 		// this shell alone words. The name is the word as it expanded, not

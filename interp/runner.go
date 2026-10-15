@@ -15276,6 +15276,13 @@ func (r *Runner) assign(ctx context.Context, a *syntax.Assign) {
 			return
 		}
 		text := subscriptSubject(a.IndexText, r.subscriptAsWritten(a.Index))
+		// Expanded where each of the three stores below used to expand it,
+		// behind the subscript and its text, and refused before any of them
+		// takes it — see the indexed branch below (#6579).
+		value := r.assignValue(a)
+		if r.assignmentGaveUp() {
+			return
+		}
 		if place.span {
 			// `(f)` over a string names the **span** of characters its line
 			// covers, and the value replaces the whole of it:
@@ -15284,15 +15291,14 @@ func (r *Runner) assign(ctx context.Context, a *syntax.Assign) {
 			// the line — `aa\nZZbb\ncc` — which is the plausible wrong
 			// string the letter was refused by name for until now. See
 			// Runner.lineTargetSpan.
-			r.spliceCharacterSpan(a.Name, place.from, place.to,
-				r.assignValue(a), a.Append)
+			r.spliceCharacterSpan(a.Name, place.from, place.to, value, a.Append)
 			return
 		}
 		if a.Append {
-			r.appendArrayElem(a.Name, place.from, text, r.assignValue(a))
+			r.appendArrayElem(a.Name, place.from, text, value)
 			return
 		}
-		r.setArrayElem(a.Name, place.from, text, r.assignValue(a))
+		r.setArrayElem(a.Name, place.from, text, value)
 	case a.Index != nil:
 		// The subscript is an expression, and one that will not evaluate ends
 		// the script in every shell measured — the same complaint, worded the
@@ -15340,9 +15346,14 @@ func (r *Runner) assign(ctx context.Context, a *syntax.Assign) {
 		case outcome == spanReported:
 			return
 		case outcome == spanResolved && r.spanReplacesElements(a.Name):
+			value := r.elementValue(a, globbed)
+			if r.assignmentGaveUp() {
+				// See the indexed store below; read the elements only
+				// after the value, which may write them.
+				return
+			}
 			elems, _ := r.arrayElemsOfTheName(a.Name)
-			r.spliceElementSpan(a.Name, subject, elems, from, to,
-				[]string{r.elementValue(a, globbed)})
+			r.spliceElementSpan(a.Name, subject, elems, from, to, []string{value})
 			return
 		case outcome == spanResolved && r.subscriptSplicesCharacters(a.Name):
 			// The name is holding a string, so the pair names a span of its
@@ -15356,8 +15367,12 @@ func (r *Runner) assign(ctx context.Context, a *syntax.Assign) {
 					"%[1]s[%[2]s]: bad array subscript", a.Name, subject))
 				return
 			}
-			r.spliceCharacterSpan(a.Name, from, to,
-				r.elementValue(a, globbed), false)
+			value := r.elementValue(a, globbed)
+			if r.assignmentGaveUp() {
+				// See the indexed store below.
+				return
+			}
+			r.spliceCharacterSpan(a.Name, from, to, value, false)
 			return
 		}
 		// Told what the source spelled, because that is what decides whether
@@ -15375,14 +15390,38 @@ func (r *Runner) assign(ctx context.Context, a *syntax.Assign) {
 		// store below because both the plain write and the append pass
 		// through it, and because the value is this one whichever they do.
 		r.resolvedSubscript(itoa(idx))
+		value := r.elementValue(a, globbed)
+		if r.assignmentGaveUp() {
+			// A value that would not expand is not stored, and the element
+			// keeps what it held — the scalar store's rule (#6544), and the
+			// same rule for every store that names a subscript. Measured
+			// 2026-10-15: `a=(1 2)` then `a[0]=$((1/0))` leaves `[1 2]` in
+			// bash 5.3.20 (`-c`, a file and `-i`) and in ksh93u+ and zsh
+			// 5.9.2 interactively, the one route where those two reach the
+			// next line; `a[5]=…`, `a[0]+=…` and a partial
+			// `a[1]=$(echo hi)$((1/0))` add nothing, and an unset name is
+			// not created. It stored the empty string, and in the dialect
+			// whose arrays start at one `a[0]=…` went on to refuse the
+			// subscript after the division had already been reported
+			// (#6579).
+			//
+			// Checked between each road's own expansion of the value and its
+			// store rather than hoisted to the top, so the order the pieces
+			// are expanded in (subscript, pattern, span, value) does not
+			// move. Every sibling road asks the same question at the same
+			// point: the flagged one above, the spans, the table's keyed
+			// store, the whole-array spelling, the chain and the positional
+			// parameters.
+			return
+		}
 		if a.Append {
 			// `a[0]+=Q` appends to element 0. Distinct from `a+=(Q)`, which
 			// adds an element after the last: the subscript is what says
 			// which of the two `+=` means.
-			r.appendArrayElem(a.Name, idx, subject, r.elementValue(a, globbed))
+			r.appendArrayElem(a.Name, idx, subject, value)
 			return
 		}
-		r.setArrayElem(a.Name, idx, subject, r.elementValue(a, globbed))
+		r.setArrayElem(a.Name, idx, subject, value)
 	default:
 		value, fields, globbed := r.scalarAssignValue(a)
 		if globbed {

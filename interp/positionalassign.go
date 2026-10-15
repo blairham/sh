@@ -85,6 +85,11 @@ func (r *Runner) assignPositional(a *syntax.Assign, n int) {
 	}
 	params := r.paramsExtendedTo(n)
 	value := r.assignValue(a)
+	if r.assignmentGaveUp() {
+		// A value that would not expand stores nothing — see the indexed
+		// store in Runner.assign (#6579).
+		return
+	}
 	if a.Append {
 		value = params[n-1] + value
 	}
@@ -106,6 +111,11 @@ func (r *Runner) assignDollarZero(a *syntax.Assign) {
 		return
 	}
 	value := r.assignValue(a)
+	if r.assignmentGaveUp() {
+		// A value that would not expand stores nothing — see the indexed
+		// store in Runner.assign (#6579).
+		return
+	}
 	if a.Append {
 		// The shell's own name, which is what `$0` reads at the top level.
 		// A function or a sourced file can be what `$0` *answers* in this
@@ -143,6 +153,13 @@ func (r *Runner) spliceParams(n int, a *syntax.Assign) {
 			continue
 		}
 		words = append(words, r.expandWord(e.Word)...)
+	}
+	if r.assignmentGaveUp() {
+		// A word that would not expand costs the whole splice, as it costs
+		// an array literal: measured 2026-10-15 on zsh 5.9.2 interactively,
+		// `set -- p q; 1=(x $((1/0)))` leaves `p q`. It spliced in the
+		// words that had expanded (#6579).
+		return
 	}
 	params := r.paramsExtendedTo(n)
 	if a.Append {

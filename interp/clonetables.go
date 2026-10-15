@@ -143,6 +143,9 @@ func (c *Runner) ownTables(r *Runner) {
 	// change nobody would think to look at this file for.
 	c.freezing = maps.Clone(r.freezing)
 	c.literalOperands = maps.Clone(r.literalOperands)
+	// Written by key, one name at a time, as the declaration lands each
+	// operand's letters — see noteALetterMakingAFrozenScalarAContainer.
+	c.containerByThisLinesLetter = maps.Clone(r.containerByThisLinesLetter)
 	c.operandsOverANonArray = maps.Clone(r.operandsOverANonArray)
 	c.compoundOperands = maps.Clone(r.compoundOperands)
 	c.compoundOperandUnset = maps.Clone(r.compoundOperandUnset)

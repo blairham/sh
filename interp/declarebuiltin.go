@@ -4043,7 +4043,7 @@ func (f declareFlags) namesANumericType(r *Runner) bool {
 // `local` alike, so that one of them does not keep the refusal the other
 // lost.
 func (r *Runner) noteALetterMakingAFrozenScalarAContainer(name string, f declareFlags) {
-	if !(f.array || f.assoc) || !r.literalOperands[name] ||
+	if !f.array && !f.assoc || !r.literalOperands[name] ||
 		!r.attrHas(name, attrReadonly) || r.nameIsAnArray(name) {
 		return
 	}

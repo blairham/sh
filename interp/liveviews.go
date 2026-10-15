@@ -156,8 +156,8 @@ func (r *Runner) printFunctionBodyText(fn *syntax.FuncDecl) string {
 	// dialect's own layout. Dropping the first and last lines is the whole
 	// of the difference, and it is done on the print rather than on the
 	// tree so that the indentation is the listing's.
-	text := syntax.PrintWith(fn.Body, r.functionLayout)
-	if len(syntax.Redirections(fn.Body)) > 0 {
+	text := syntax.PrintWith(fn.Body(), r.functionLayout)
+	if len(syntax.Redirections(fn.Body())) > 0 {
 		// The closing brace carries them, so it stays and so does its
 		// partner. See the paragraph above.
 		return strings.TrimSuffix(text, "\n")

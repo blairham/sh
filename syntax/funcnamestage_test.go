@@ -70,7 +70,7 @@ func TestARefusedFunctionNameParsesUnderTheFlag(t *testing.T) {
 		}
 		// The body is read, which is the point of parsing at all: the script
 		// after the definition is what carries on.
-		if fn.Body == nil {
+		if fn.Body() == nil {
 			t.Errorf("%q: the body was not read", tc.src)
 		}
 	}

@@ -70,7 +70,7 @@ func texts(t *testing.T) []string {
 // back equal to itself — and sharing what it shared.
 func TestATreeComesBackAsTheParserMadeIt(t *testing.T) {
 	all := texts(t)
-	trees, refused := 0, 0
+	trees, refused, deferred := 0, 0, 0
 	for name, d := range dialects() {
 		for _, src := range all {
 			p := syntax.NewParser(src, d)
@@ -91,6 +91,8 @@ func TestATreeComesBackAsTheParserMadeIt(t *testing.T) {
 				if err != nil {
 					t.Fatalf("%s: decoding %q: %v", name, src, err)
 				}
+				deferred += countDeferred(got)
+				treecodec.Settle(got)
 				if !reflect.DeepEqual(got, f) {
 					t.Fatalf("%s: the tree of %q came back different", name, src)
 				}
@@ -106,6 +108,11 @@ func TestATreeComesBackAsTheParserMadeIt(t *testing.T) {
 	// keeping nothing and this test would be passing on nothing.
 	if trees < 50000 || refused > trees/20 {
 		t.Fatalf("%d trees carried and %d refused", trees, refused)
+	}
+	// And bodies came back deferred, so the comparison above covered the
+	// read that happens when a function is first called (#6483).
+	if deferred < 1000 {
+		t.Fatalf("only %d bodies came back deferred", deferred)
 	}
 }
 

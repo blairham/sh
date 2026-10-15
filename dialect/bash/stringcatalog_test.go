@@ -56,7 +56,7 @@ func TestAListingDropsTheTranslationMark(t *testing.T) {
 		},
 	} {
 		t.Run(c.name, func(t *testing.T) {
-			if got := syntax.PrintWith(decl.Body, c.layout); got != c.want {
+			if got := syntax.PrintWith(decl.Body(), c.layout); got != c.want {
 				t.Errorf("got %q, want %q", got, c.want)
 			}
 		})

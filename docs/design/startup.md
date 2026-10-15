@@ -106,8 +106,14 @@ the method:
   per-call option saves and fewer autoload parses (#6465); glob
   qualifiers that stat each file once (#6455); and `$PENDING`, so plugins
   skip keys typed ahead (#6479).
+- A cached function body is decoded when the function is first called or
+  listed rather than when it is defined, and a nested `${(k)functions}`
+  no longer renders every body to learn it is a list (#6483). Of 510
+  bodies a warm start defines, it reads 90. Paired against `main` on
+  2026-10-15: 173M fewer instructions retired (-5.0%, 24 of 24 pairs),
+  `-i -c exit` CPU 8 ms lower (21 of 24), and peak memory 22 MB lower. A
+  cold start is no slower.
 - What is left is mostly per-command interpretation (#6353, #6423, #6373).
-  Decoding function bodies that a start never calls is #6483.
 
 ## What the first measurement found
 

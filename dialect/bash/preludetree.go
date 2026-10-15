@@ -209,7 +209,7 @@ var preludeTree = &syntax.File{
 				Cmds: []syntax.Command{
 					&syntax.FuncDecl{
 						Name: "dirs",
-						Body: &syntax.Group{
+						BodyCommand: &syntax.Group{
 							List: []*syntax.Stmt{
 								{
 									Expr: &syntax.Pipeline{
@@ -3260,7 +3260,7 @@ var preludeTree = &syntax.File{
 				Cmds: []syntax.Command{
 					&syntax.FuncDecl{
 						Name: "__dirs_rotate",
-						Body: &syntax.Group{
+						BodyCommand: &syntax.Group{
 							List: []*syntax.Stmt{
 								{
 									Expr: &syntax.Pipeline{
@@ -4599,7 +4599,7 @@ var preludeTree = &syntax.File{
 				Cmds: []syntax.Command{
 					&syntax.FuncDecl{
 						Name: "pushd",
-						Body: &syntax.Group{
+						BodyCommand: &syntax.Group{
 							List: []*syntax.Stmt{
 								{
 									Expr: &syntax.Pipeline{
@@ -6403,7 +6403,7 @@ var preludeTree = &syntax.File{
 				Cmds: []syntax.Command{
 					&syntax.FuncDecl{
 						Name: "popd",
-						Body: &syntax.Group{
+						BodyCommand: &syntax.Group{
 							List: []*syntax.Stmt{
 								{
 									Expr: &syntax.Pipeline{

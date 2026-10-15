@@ -39,8 +39,8 @@ func TestExtraWordsAfterTheNameAreDiscarded(t *testing.T) {
 			if len(fn.AlsoNamed) != 0 {
 				t.Errorf("%d extra names kept; the list names nothing", len(fn.AlsoNamed))
 			}
-			if _, isGroup := fn.Body.(*Group); !isGroup {
-				t.Errorf("body is %T, want the brace group", fn.Body)
+			if _, isGroup := fn.Body().(*Group); !isGroup {
+				t.Errorf("body is %T, want the brace group", fn.Body())
 			}
 		})
 	}
@@ -56,8 +56,8 @@ func TestTheListStopsAtTheEndOfTheLine(t *testing.T) {
 	if fn.Name != "a" {
 		t.Errorf("name is %q, want `a`", fn.Name)
 	}
-	if _, isGroup := fn.Body.(*Group); !isGroup {
-		t.Errorf("body is %T, want the brace group", fn.Body)
+	if _, isGroup := fn.Body().(*Group); !isGroup {
+		t.Errorf("body is %T, want the brace group", fn.Body())
 	}
 	// And with nothing but a simple command after the line, there is no body
 	// this dialect will take.

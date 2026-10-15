@@ -52,9 +52,9 @@ func TestTheKeywordFormMayEndWithoutABody(t *testing.T) {
 		// parse leaves behind, so saying "no body on purpose" that way would
 		// be saying it in the one spelling everything downstream already
 		// reads as a refusal.
-		g, ok := fn.Body.(*Group)
+		g, ok := fn.Body().(*Group)
 		if !ok {
-			t.Errorf("%s: body is %T, want an empty group", tc.src, fn.Body)
+			t.Errorf("%s: body is %T, want an empty group", tc.src, fn.Body())
 			continue
 		}
 		if len(g.List) != 0 {
@@ -108,9 +108,9 @@ func TestASeparatorMayStandBetweenTheNamesAndTheBody(t *testing.T) {
 		{"function a\necho B", "echo B"},
 	} {
 		fn := decl(t, tc.src, d)
-		simple, ok := fn.Body.(*SimpleCmd)
+		simple, ok := fn.Body().(*SimpleCmd)
 		if !ok {
-			t.Errorf("%s: body is %T, want a simple command", tc.src, fn.Body)
+			t.Errorf("%s: body is %T, want a simple command", tc.src, fn.Body())
 			continue
 		}
 		if len(simple.Args) == 0 || simple.Args[0].Literal() != "echo" {

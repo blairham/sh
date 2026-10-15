@@ -1450,7 +1450,7 @@ func (p *printer) command(c Command) {
 			// A body that is not a brace group still opens one where the
 			// arrangement braces every body, so the question is whether a `{`
 			// is about to be written and not whether the source had one.
-			_, braced := x.Body.(*Group)
+			_, braced := x.Body().(*Group)
 			if (braced || p.layout.BodyIsAlwaysBraced) && p.layout.BraceAfterAFunctionHeaderOnItsOwnLine {
 				p.str(" \n" + p.pad())
 			} else {
@@ -1461,7 +1461,7 @@ func (p *printer) command(c Command) {
 			// name list is greedy — see
 			// [FunctionKeywordBodyNeedsItsOwnLine], which is where that rule
 			// and its measurement live, and which the formatter asks too.
-			if FunctionKeywordBodyNeedsItsOwnLine(x.Body) {
+			if FunctionKeywordBodyNeedsItsOwnLine(x.Body()) {
 				p.str("\n" + p.pad())
 			} else {
 				p.str(" ")
@@ -1478,7 +1478,7 @@ func (p *printer) command(c Command) {
 		// normalization was owed.
 		saved := p.inDeclaration
 		p.inDeclaration = true
-		p.printed(x.Body)
+		p.printed(x.Body())
 		p.inDeclaration = saved
 	case *CoprocClause:
 		p.str("coproc ")

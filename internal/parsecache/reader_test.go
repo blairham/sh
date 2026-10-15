@@ -166,6 +166,9 @@ func cached(c parsecache.Cache, path, src string, d syntax.Dialect, sh *shell, s
 	r := parsecache.NewReader(c, path, src, d, sh)
 	o := read(r, sh, sch)
 	r.Finish()
+	// Bodies the cache deferred are read now, so that the trees compare
+	// field by field with the parser's (#6483).
+	treecodec.Settle(o.Reads)
 	return o, parsecache.Served.Load() - before
 }
 

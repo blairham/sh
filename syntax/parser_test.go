@@ -103,7 +103,7 @@ func dump(n Node) string {
 		if x.Keyword {
 			kw = "kw:"
 		}
-		return "func " + kw + x.Name + " " + dump(x.Body)
+		return "func " + kw + x.Name + " " + dump(x.Body())
 	}
 	return fmt.Sprintf("?%T", n)
 }

@@ -113,8 +113,8 @@ func Nodes(n syntax.Node, fn func(syntax.Node) bool) {
 		for _, n := range x.AlsoNamed {
 			word(n.Word, fn)
 		}
-		if x.Body != nil {
-			Nodes(x.Body, fn)
+		if x.HasBody() {
+			Nodes(x.Body(), fn)
 		}
 	case *syntax.Assign:
 		word(x.Value, fn)

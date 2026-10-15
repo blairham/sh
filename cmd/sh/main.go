@@ -893,7 +893,7 @@ func printNode(w io.Writer, n syntax.Node, depth int) {
 			kw = " (function keyword)"
 		}
 		printf(w, "%s%-8s func %s%s\n", pad, x.Pos(), x.Name, kw)
-		printNode(w, x.Body, depth+1)
+		printNode(w, x.Body(), depth+1)
 	default:
 		printf(w, "%s%-8s %T\n", pad, n.Pos(), n)
 	}

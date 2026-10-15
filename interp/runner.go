@@ -5150,6 +5150,11 @@ type Runner struct {
 	// opens a tilde context, and equalsTildeContext is armed for one such
 	// argument. See interp/equalstildebuiltins.go.
 	equalsTildeBuiltins map[string]bool
+	// equalsTildeMemoName and equalsTildeMemo are the table's answer for
+	// the name it was last asked about; see equalsOpensATildeContextFor.
+	equalsTildeMemoName string
+	equalsTildeMemo     bool
+	equalsTildeMemoSet  bool
 	equalsTildeContext  bool
 	// pipeStatus is what the last pipeline's elements reported, and
 	// pipeStatusName is what the dialect calls it. The record is only kept

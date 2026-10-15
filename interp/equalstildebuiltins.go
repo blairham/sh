@@ -29,6 +29,7 @@ func (r *Runner) MarkBuiltinWhoseEqualsOpensATildeContext(name string) {
 		r.equalsTildeBuiltins = map[string]bool{}
 	}
 	r.equalsTildeBuiltins[name] = true
+	r.equalsTildeMemoSet = false
 }
 
 // equalsOpensATildeContextFor reports whether the i-th word of a command
@@ -42,7 +43,14 @@ func (r *Runner) equalsOpensATildeContextFor(c *syntax.SimpleCmd, argv []string,
 	if argv[0] == "builtin" && len(argv) > 1 {
 		k = 1
 	}
-	if !r.equalsTildeBuiltins[argv[k]] {
+	// The table's answer for the last name asked, since every word of a
+	// command asks it about the same name: a map lookup a word was the cost
+	// (#6496). The table is filled before anything runs, and a mark clears
+	// the memory.
+	if name := argv[k]; !r.equalsTildeMemoSet || name != r.equalsTildeMemoName {
+		r.equalsTildeMemoName, r.equalsTildeMemo, r.equalsTildeMemoSet = name, r.equalsTildeBuiltins[name], true
+	}
+	if !r.equalsTildeMemo {
 		return false
 	}
 	// A declaration the reserved word runs reads its operands on a route of

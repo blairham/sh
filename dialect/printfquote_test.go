@@ -59,9 +59,14 @@ func TestEachDialectQuotesForReuse(t *testing.T) {
 		{"abc", `abc`, `abc`, `abc`, ""},
 		{"", `''`, `''`, `''`, ""},
 
-		// A valid multibyte rune is written as itself in every column, which
-		// is what keeps the byte rules from reaching a character.
-		{"aĉb", "aĉb", "aĉb", "aĉb", ""},
+		// A valid multibyte rune is written as itself by bash and zsh, which
+		// is what keeps the byte rules from reaching a character. Not by
+		// ksh93 with no locale or `LC_ALL=C`, which spells every byte out —
+		// `$'a\xc4\x89b'` from `%q`, `typeset -p` and a trace alike, and
+		// `aĉb` only under a UTF-8 locale. Measured 2026-10-15 on ksh93u+
+		// 2012-08-01 under `env -i`. This row expected the character until
+		// `%q` was read off the listing's rules, which had it right (#6582).
+		{"aĉb", "aĉb", "aĉb", `$'a\xc4\x89b'`, ""},
 	} {
 		for _, d := range []struct{ name, want string }{
 			{"bash", c.bash}, {"zsh", c.zsh}, {"ksh", c.ksh},

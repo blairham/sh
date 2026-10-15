@@ -960,3 +960,79 @@ func (r *Runner) pairHalfKeepsItsMark(name string) bool {
 	t, tied := r.tieOf(name)
 	return tied && t.wordless && r.shellOwn[name]
 }
+
+// kindLetterUntiesAScriptTie takes a script's tie apart where a declaration
+// asks one half to become a kind it is not, and removes the other half. It
+// reports whether removing that half was refused, having said so.
+//
+// Measured 2026-10-15 on zsh 5.9.2 under `env -i PATH=/usr/bin:/bin`, `-f`
+// from a script file, after `typeset -T FOO=a:b foo` (#6387):
+//
+//	typeset -a FOO        FOO an empty array, foo gone (`${+foo}` 0)
+//	typeset -i FOO=3      FOO the integer 3, foo gone
+//	typeset -A FOO        FOO an empty table, foo gone
+//	typeset -F FOO        FOO a float, foo gone (from an empty FOO)
+//	typeset -i foo        foo the integer 0, FOO gone
+//	typeset -A foo        foo an empty table, FOO gone
+//	typeset +a foo        foo a scalar, FOO gone
+//	typeset -a foo        the tie kept — the half already is one
+//	typeset FOO, -x, -r,
+//	-L5, -u, -U foo,
+//	typeset +i FOO        the tie kept — no kind changes
+//	f(){ local -i FOO }   the tie kept, and the call's local is an integer
+//	f(){ typeset -g -i FOO=2 }  untied, as at the top level
+//
+// So the question is whether the kind the line *leaves* the half with differs
+// from the one it has, and it is asked only where the declaration lands on the
+// tie's own binding — a fresh local stands in front of it and touches nothing.
+// The converted half is then converted exactly as an untied name of that kind
+// would be, which the plain rows already did right: `x=a:b; typeset -a x` is
+// an empty array in both shells, and so is the tied row above.
+//
+// The shell's own pairs never reach this: their kind letters are refused
+// first, `PATH: can't change type of a special parameter`, in both shells.
+// And the partner goes as an `unset` does, refusal included: with `typeset -r
+// foo` standing, `typeset -i FOO` is `read-only variable: foo` there.
+func (r *Runner) kindLetterUntiesAScriptTie(name string, f declareFlags) bool {
+	t, ok := r.tieOf(name)
+	if !ok || t.special || t.wordless || !r.tieDescribesTheBinding(name) {
+		return false
+	}
+	kind, plus, written := f.kindLetterWritten()
+	if !written {
+		return false
+	}
+	has, partner := ScalarParameter, t.array
+	if name == t.array {
+		has, partner = ArrayParameter, t.scalar
+	}
+	leaves := kind
+	if plus {
+		if kind != has {
+			return false
+		}
+		leaves = ScalarParameter
+	}
+	if leaves == has {
+		return false
+	}
+	if r.unsetReadonly(partner) != 0 {
+		// Refused before anything moves, which is the order the reference
+		// shows: the sentence names the partner and the converted half is
+		// never reached — `typeset -T FOO=a:b foo; typeset -r foo; typeset
+		// -i FOO` is `read-only variable: foo`, not the `bad math
+		// expression` converting `a:b` would have said.
+		return true
+	}
+	r.untie(name)
+	if r.tieHalfShadowedInItsScope(t, partner) {
+		// A `-g` declaration inside a call where the partner is a local of
+		// that call: the reference removes the *global* partner and leaves
+		// the local standing. Removing the visible name would take the local
+		// instead, so the partner is left alone here — the pair is still
+		// untied, and the global half outliving the call is the residual
+		// recorded in #6469.
+		return false
+	}
+	return r.unsetName(partner) != 0
+}

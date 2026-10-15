@@ -17,7 +17,10 @@ import (
 // this preset answers both the way the shell does. Measured 2026-09-17 on
 // ksh93u+ 2012-08-01, as a script file under `env -i PATH=/usr/bin:/bin
 // LC_ALL=C` with stdin on /dev/null, and again through `-c` and through
-// standard input.
+// standard input. The freeze's own sentence was re-measured 2026-10-15
+// (#6563): it is located as a builtin's, `ksh[3]:`, and names `$0` where the
+// builtin's name goes — `ksh[3]: ksh: N: is read only` under `-c` with `$0`
+// set to `ksh`, and `./ksh[3]: ./ksh: N: …` from a script file of that name.
 
 // Every other diagnostic this shell writes names a location — `file: line N:`
 // or `file[N]:` — and all three of the builtin's wordings write the name and
@@ -39,7 +42,7 @@ func TestGetoptsComplaintCarriesNoLine(t *testing.T) {
 	}
 	// The same shell, three lines in, still giving a line to everything else.
 	const frozen = "OPTIND=1\nN=kept; readonly N\ngetopts 'a:' N -a\n"
-	if out, _ := getoptsRun(t, frozen); out != "ksh: -a: argument expected\nksh: line 3: N: is read only\n" {
+	if out, _ := getoptsRun(t, frozen); out != "ksh: -a: argument expected\nksh[3]: ksh: N: is read only\n" {
 		t.Errorf("got %q, want the builtin's line with no number and the freeze's with one", out)
 	}
 }
@@ -53,10 +56,10 @@ func TestGetoptsFrozenNameEndsTheScriptOnlyAtTheEndOfTheOptions(t *testing.T) {
 		name, params, want string
 		status             int
 	}{
-		{"a letter the scan found", "set -- -a v", "ksh: line 3: N: is read only\nst=2\nafter\n", 0},
-		{"the end of the options", "set -- x", "ksh: line 3: N: is read only\n", 2},
-		{"a double dash", "set -- --", "ksh: line 3: N: is read only\n", 2},
-		{"no words at all", "set --", "ksh: line 3: N: is read only\n", 2},
+		{"a letter the scan found", "set -- -a v", "ksh[3]: ksh: N: is read only\nst=2\nafter\n", 0},
+		{"the end of the options", "set -- x", "ksh[3]: ksh: N: is read only\n", 2},
+		{"a double dash", "set -- --", "ksh[3]: ksh: N: is read only\n", 2},
+		{"no words at all", "set --", "ksh[3]: ksh: N: is read only\n", 2},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			src := tc.params + "\nN=kept; readonly N\ngetopts 'a:' N\necho \"st=$?\"\necho after\n"

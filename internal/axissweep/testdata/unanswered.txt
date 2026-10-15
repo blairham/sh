@@ -153,6 +153,7 @@ ash   FloatFormatLetterE
 ash   FloatLetterChangeRereadsTheRendering
 ash   ForNameWhenTheLoopRuns
 ash   FunctionNamesUnderPlus
+ash   GetoptsTypedValueFailureIsAFreeze
 ash   GlobalReplacementAnchors
 ash   HangupAtExitNeedsALoginShell
 ash   HangupAtExitPrecedesTheExitTrap
@@ -240,6 +241,7 @@ ash   ReadArrayTakesOneNameOnly
 ash   ReadEchoLettersWriteTheValues
 ash   ReadExactCountKeepsPartial
 ash   ReadPartialCountSucceeds
+ash   ReadTypedValueFailureIsAnAssignmentFailure
 ash   ReadonlyAttributeCanBeRemoved
 ash   ReadonlyElement
 ash   ReadonlyFdVariableRefusesAClose
@@ -543,6 +545,7 @@ dash  FloatLetterChangeRereadsTheRendering
 dash  ForNameWhenTheLoopRuns
 dash  FunctionNameWhenTheDefinitionRuns
 dash  FunctionNamesUnderPlus
+dash  GetoptsTypedValueFailureIsAFreeze
 dash  GlobalReplacementAnchors
 dash  HangupAtExitNeedsALoginShell
 dash  HangupAtExitPrecedesTheExitTrap
@@ -633,6 +636,7 @@ dash  ReadExactCountKeepsPartial
 dash  ReadPartialCountSucceeds
 dash  ReadTimeoutBoundsReadability
 dash  ReadTimeoutKeepsWhatArrived
+dash  ReadTypedValueFailureIsAnAssignmentFailure
 dash  ReadZeroTimeout
 dash  ReadonlyAttributeCanBeRemoved
 dash  ReadonlyElement
@@ -807,6 +811,7 @@ zsh   FdVariableOnASubshellIsTheSubshells
 zsh   ForNameWhenTheLoopRuns
 zsh   FunctionNameWhenTheDefinitionRuns
 zsh   GetoptsRefusedNameStillScans
+zsh   GetoptsTypedValueFailureIsAFreeze
 zsh   IgnoredNamesFollowTheParameter
 zsh   IgnoredNamesMatchTheLastComponent
 zsh   IgnoredNamesValueIsOnePattern

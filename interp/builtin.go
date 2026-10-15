@@ -7164,7 +7164,11 @@ func (r *Runner) readFill(name, value string, left int, defaulted bool, refused 
 		return 0, false
 	}
 	if r.readMayStore(name, value) {
-		if st, refused := r.storeThroughOperand(name, value); refused {
+		st, refused, ended := r.readStoreCatchingATypedValueFailure(name, value)
+		if ended {
+			return st, true
+		}
+		if refused {
 			// The subscript would not evaluate, so nothing was written and
 			// the builtin gives up at that name: the ones behind it keep
 			// what they held. Measured 2026-09-17, `r=(1 2 3); b=preset;

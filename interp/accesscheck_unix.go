@@ -5,7 +5,11 @@
 
 package interp
 
-import "syscall"
+import (
+	"syscall"
+
+	"github.com/blairham/sh/internal/opened"
+)
 
 // pathAccessible asks the kernel whether this process may read, write or
 // execute a path, rather than working it out from the mode bits.
@@ -29,7 +33,11 @@ import "syscall"
 // under, so what is written here is the call that was chosen and not a claim
 // about what the reference does in a state neither shell can be put into.
 func pathAccessible(path string, mode uint32) bool {
-	return syscall.Access(path, mode) == nil
+	// From the held directory where path was built from it: see dirNow.
+	_, err := opened.AtHeld(path, func(name string) (struct{}, error) {
+		return struct{}{}, syscall.Access(name, mode)
+	})
+	return err == nil
 }
 
 // The three modes access(2) takes, named here so the caller reads as the test

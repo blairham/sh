@@ -410,7 +410,11 @@ var exempt = map[string]string{
 		"is the person's own and nothing else needs to read it.",
 	// interp. helddirectory.go asks after the shell's *own* working directory
 	// and nothing else.
-	"interp.dirNow": "the directory this shell is already in, twice: whether the name it " +
+	"interp.path": "helddirectory.go's check that the path through a held descriptor " +
+		"(opened.HeldName) leads to the directory that descriptor holds, before it is handed " +
+		"out. The directory is the one this shell is already in, for dirCalled's reason below, " +
+		"and the path is never one a script chose.",
+	"interp.dirCalled": "the directory this shell is already in, twice: whether the name it " +
 		"remembers still leads to the descriptor it holds, and whether the name the kernel " +
 		"gives that descriptor leads there either. Neither is a path a script chose — a policy " +
 		"was asked about this directory at the `cd` that put the shell in it — and the answer " +
@@ -688,14 +692,18 @@ func directCalls(t *testing.T, p pkg) []string {
 
 // callsThePathVerbs reports whether a piece of syntax reaches the filesystem
 // through the os or syscall package on a path.
+//
+// **A verb named is a verb reached**, whether it is called on the spot or
+// handed to something that calls it. `opened.AtHeld(path, os.Stat)` reaches
+// the filesystem exactly as `os.Stat(path)` does, and a guard that read only
+// call expressions went blind on every site that was routed through the held
+// directory that way (#6532): the count below fell from 78 to 73 with the
+// exemptions still on the list, which is the assertion that caught it. So any
+// selector naming a path verb counts, called or not.
 func callsThePathVerbs(n ast.Node) bool {
 	found := false
 	ast.Inspect(n, func(n ast.Node) bool {
-		call, ok := n.(*ast.CallExpr)
-		if !ok {
-			return true
-		}
-		sel, ok := call.Fun.(*ast.SelectorExpr)
+		sel, ok := n.(*ast.SelectorExpr)
 		if !ok {
 			return true
 		}

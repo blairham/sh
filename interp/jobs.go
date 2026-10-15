@@ -16,6 +16,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/blairham/sh/internal/opened"
 	"github.com/blairham/sh/syntax"
 )
 
@@ -444,7 +445,7 @@ func (r *Runner) settleBackgroundJobBeforeABlockingOpen(path string) {
 	if r.bg == nil && r.part == nil {
 		return
 	}
-	fi, err := os.Stat(path)
+	fi, err := opened.AtHeld(path, os.Stat)
 	if err != nil {
 		// Not there, or not reachable. Either way the open will fail rather
 		// than wait, and the job carries on to whatever it does next.

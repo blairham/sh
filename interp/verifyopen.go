@@ -118,7 +118,10 @@ func (r *Runner) openGatedFile(ctx context.Context, a *Action, path string, flag
 		// With the thread's signals held, because a redirection to a FIFO
 		// waits in the open for its peer, and an interrupted wait can lose a
 		// peer that came and went (#5763). See opened.WithSignalsHeld.
-		return opened.WithSignalsHeld(func() (*os.File, error) { return os.OpenFile(path, flags, perm) })
+		// From the held directory where path was built from it: see dirNow.
+		return opened.AtHeld(path, func(name string) (*os.File, error) {
+			return opened.WithSignalsHeld(func() (*os.File, error) { return os.OpenFile(name, flags, perm) })
+		})
 	}
 	return opened.Verified(path, flags, perm, func(reached opened.Reached) error {
 		if !r.verifyOpened(ctx, a, reached) {
@@ -141,7 +144,7 @@ func (r *Runner) readFileGated(ctx context.Context, a *Action, path string) ([]b
 
 func (r *Runner) readFileGatedBytes(ctx context.Context, a *Action, path string) ([]byte, error) {
 	if r.Gate == nil {
-		return os.ReadFile(path)
+		return opened.AtHeld(path, os.ReadFile)
 	}
 	// Through Verified rather than os.Open, so that this open is resolved the
 	// same way a redirect's is. It was a plain os.Open while the verification

@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"sync"
 	"sync/atomic"
 
 	"github.com/blairham/sh/internal/opened"
@@ -89,6 +90,13 @@ type heldDirectory struct {
 	// dir for a shared hold nobody closes. See newHeldDirectory.
 	copyFd  int
 	cleanup runtime.Cleanup
+	// byDescriptor is the path that leads to this directory through the
+	// descriptor rather than through any name — opened.HeldName's answer,
+	// verified — or "" where there is none. Asked only once the directory
+	// has no name left, and computed once, since the descriptor's number is
+	// fixed for its life. See dirNow.
+	byDescriptorOnce sync.Once
+	byDescriptor     string
 }
 
 // heldCopy is what a shared hold's cleanup needs: the file it closes and the
@@ -144,6 +152,7 @@ func newHeldDirectory(named string, dir *os.File, checked bool, floor int) *held
 	_ = dir.Close()
 	h.dir, h.copyFd = raised, n
 	h.cleanup = runtime.AddCleanup(h, func(c heldCopy) {
+		opened.ForgetHeld(c.fd)
 		releasePrivateCopy(c.fd)
 		_ = c.dir.Close()
 	}, heldCopy{dir: raised, fd: n})
@@ -154,10 +163,40 @@ func newHeldDirectory(named string, dir *os.File, checked bool, floor int) *held
 func (h *heldDirectory) close() {
 	if h.copyFd >= 0 {
 		h.cleanup.Stop()
+		opened.ForgetHeld(h.copyFd)
 		releasePrivateCopy(h.copyFd)
 		h.copyFd = -1
 	}
 	_ = h.dir.Close()
+}
+
+// path is the path that reaches this directory through its descriptor, for a
+// directory no name reaches any more, or "" where there is none.
+//
+// Only a hold moved into the private band has one. That is the hold with a
+// cleanup, so its registration with opened ends exactly where its descriptor
+// does; a hold left where the open put it is closed by os.File's own
+// finalizer, which could not withdraw a registration first.
+//
+// Verified by asking it, because the answer is only worth handing out if it
+// is this directory: on Linux it is /proc, which a container may not mount.
+func (h *heldDirectory) path() string {
+	if h.copyFd < 0 {
+		return ""
+	}
+	h.byDescriptorOnce.Do(func() {
+		p := opened.HeldName(h.copyFd)
+		if p == "" {
+			return
+		}
+		there, err := opened.AtHeld(p, os.Stat)
+		if err != nil || h.ident == nil || !os.SameFile(there, h.ident) {
+			opened.ForgetHeld(h.copyFd)
+			return
+		}
+		h.byDescriptor = p
+	})
+	return h.byDescriptor
 }
 
 // holdDirectory is the Runner's hold on its own directory, opened if there is
@@ -194,6 +233,16 @@ func (r *Runner) holdDirectory() *heldDirectory {
 		// the name", and a subshell that has moved is back to what this shell
 		// did before the hold existed — for the one combination of having
 		// moved *and* being renamed out from under afterwards.
+		//
+		// And it is not only the leak. A hold taken at a subshell's `cd` is
+		// what `( cd s; …s removed and made again…; [ -e f ] )` needs to
+		// answer as zsh, bash, ksh93 and dash do (#6560), and it is an open
+		// on every `$(cd dir && …)`: measured 2026-10-15 on Darwin, 2000 of
+		// `x=$(cd /tmp && echo y)` went from 37 ms to 66 ms of CPU with the
+		// hold taken there (paired median 1.73x, 15 of 15 slower), and the
+		// bare open-dup-close-fstat it needs is ~7 µs against a ~19 µs
+		// substitution. That is a hot idiom paying for a corner, so it is
+		// left as filed rather than taken.
 		return nil
 	}
 	// The open and the move out of the low numbers in one window — see
@@ -257,15 +306,40 @@ func (r *Runner) dropDirectoryHold() {
 // answer the panel gives — after an rmdir every one of those six shells keeps
 // printing the name it had.
 func (r *Runner) dirNow() string {
+	now, nameless := r.dirCalled()
+	if nameless != nil && r.Gate == nil && r.Events == nil {
+		// No name reaches the directory in hand, so the remembered one is
+		// about to send the path somewhere else — to the directory made since
+		// under the same name, or nowhere. The descriptor's own path reaches
+		// it. Not under a gate or a sink: an action names an absolute path a
+		// policy can read, and a descriptor's number is not one, so those
+		// keep the name, as heldForRelativeProbe does. See
+		// opened.HeldName.
+		if p := nameless.path(); p != "" {
+			return p
+		}
+	}
+	return now
+}
+
+// dirCalled is dirNow's answer in names only: what this Runner's directory is
+// called now, or the remembered name where nothing is. It is the right answer
+// for a caller that *shows* the directory — `pwd -P`, the spelling one dialect
+// hands an `exec`ed program as its name — and the wrong one for a caller about
+// to hand a relative path to the system, which is dirNow's job.
+//
+// nameless is the hold where no name was found for it, and nil wherever the
+// answer is a name that leads to the directory or there is no hold to ask.
+func (r *Runner) dirCalled() (now string, nameless *heldDirectory) {
 	held := r.holdDirectory()
 	if held == nil {
-		return r.workDir()
+		return r.workDir(), nil
 	}
 	here := held.ident
 	if here == nil {
 		var err error
 		if here, err = held.dir.Stat(); err != nil {
-			return r.workDir()
+			return r.workDir(), nil
 		}
 	}
 	// **Not through the gate**, which is the one place in this package where
@@ -279,18 +353,40 @@ func (r *Runner) dirNow() string {
 	// made every relative path in the shell emit a second ActionStat, which
 	// TestEmptyFileOperandAsksTheFilesystemNothing reads as the shell asking
 	// the filesystem something it was not asked to. See the entry for
-	// interp.dirNow in internal/boundary.
+	// interp.dirCalled in internal/boundary.
 	if named, err := os.Stat(r.Dir); err == nil && os.SameFile(named, here) {
-		return r.Dir
+		return r.Dir, nil
 	}
 	now, ok := opened.Path(held.dir)
 	if !ok {
-		return r.workDir()
+		return r.workDir(), held
 	}
 	if there, err := os.Stat(now); err != nil || !os.SameFile(there, here) {
-		return r.workDir()
+		return r.workDir(), held
 	}
-	return now
+	return now, nil
+}
+
+// dirForReplacement is dirNow for a process replacement, which reads where to
+// start and then lets go of everything the shell holds before the execve.
+//
+// Where dirNow's answer is the path through the held descriptor, that
+// descriptor is what the replacement is about to move the process into, so it
+// is taken out of the Runner's hands first — cleanUpAtEnd would otherwise
+// close it between the two — and closed by release, which is only reached
+// when the replacement failed and this process is a shell again.
+func (r *Runner) dirForReplacement() (dir string, release func()) {
+	dir = r.dirNow()
+	h := r.held
+	if h == nil || dir != h.path() {
+		return dir, func() {}
+	}
+	r.held = nil
+	return dir, func() {
+		if !h.shared.Load() {
+			h.close()
+		}
+	}
 }
 
 // heldForRelativeProbe is the hold a file test asks a relative operand of,

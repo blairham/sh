@@ -6223,7 +6223,7 @@ func biPwd(r *Runner, _ context.Context, args []string) int {
 		// want the same answer here, and only the built-name reading declines
 		// to look. A bare `pwd` is not asked at all — all six keep the name
 		// they were reached by (#4667, #4653).
-		if now := r.dirNow(); now != dir &&
+		if now, _ := r.dirCalled(); now != dir &&
 			r.sem().CdDestinationIsNotThere != CdDestinationNotThereEntersAndKeepsTheBuiltName {
 			dir = now
 		}

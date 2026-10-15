@@ -7,6 +7,8 @@ import (
 	"io/fs"
 	"os/exec"
 	"sync"
+
+	"github.com/blairham/sh/internal/opened"
 )
 
 // The file-creation mask, held by the Runner rather than by the process.
@@ -150,7 +152,16 @@ func (r *Runner) startMasked(cmd *exec.Cmd) error {
 	defer r.holdMaskForFork()()
 	// And inside the window a substitution's park waits out, because the
 	// start opens descriptors of its own in this one table. See transientFds.
-	return withTransientFds(func() error { return r.startWithAsyncDispositions(cmd.Start) })
+	return withTransientFds(func() error { return r.startWithAsyncDispositions(func() error { return startFromDir(cmd) }) })
+}
+
+// startFromDir starts cmd in its Dir — which, where dirNow had no name for the
+// directory, is a path through the held descriptor rather than a name. Linux
+// resolves that path in the child itself; Darwin cannot, so the child is
+// forked from a thread standing in the held directory instead. See
+// opened.HeldStart, and the measurement in opened's heldname_darwin.go.
+func startFromDir(cmd *exec.Cmd) error {
+	return opened.HeldStart(cmd.Dir, cmd.Path, func(dir, path string) { cmd.Dir, cmd.Path = dir, path }, cmd.Start)
 }
 
 // holdMaskForFork puts this shell's mask on the process and answers with what

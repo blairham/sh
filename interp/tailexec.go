@@ -8,6 +8,7 @@ import (
 	"context"
 	"os"
 
+	"github.com/blairham/sh/internal/opened"
 	"github.com/blairham/sh/syntax"
 )
 
@@ -182,7 +183,8 @@ func (r *Runner) becomeTheProgram(ctx context.Context, path, run string, argv, e
 		return false
 	}
 	_ = ctx
-	dir := r.dirNow()
+	dir, releaseDir := r.dirForReplacement()
+	defer releaseDir()
 	if r.unforkedSelf {
 		// The parentheses are the shell itself, so its end is this one.
 		r.CleanUp()
@@ -200,7 +202,7 @@ func (r *Runner) becomeTheProgram(ctx context.Context, path, run string, argv, e
 // kernelStartsIt reports whether the file begins the way a file the kernel
 // runs by itself does: an interpreter line, or an executable image.
 func kernelStartsIt(path string) bool {
-	f, err := os.Open(path)
+	f, err := opened.AtHeld(path, os.Open)
 	if err != nil {
 		return false
 	}

@@ -2145,8 +2145,7 @@ func (r *Runner) expandAt(s syntax.Span, sp splitPolicy, head bool) ([]string, l
 	// through for cannot leave one behind for a later expansion of the same
 	// node — a `for` loop expands one node many times, and a value from the
 	// wrong pass is exactly the silent kind of wrong.
-	r.nestedHeld = nestedHold{}
-	r.sourceHeld, r.subscriptHeld = sourceHold{}, subscriptHold{}
+	r.forgetSpanHolds()
 	// And the marks the unquoted list path leaves for this one, for the same
 	// reason: they belong to the expansion this call is about, and a set left
 	// over from an earlier one would say a field is a null that is not, or
@@ -10531,6 +10530,22 @@ type sourceHold struct {
 	set       bool
 	subscript bool
 	held      bool
+}
+
+// forgetSpanHolds lets go of what the last span's expansion held, which every
+// road that starts reading a span has to do before it reads: a hold is keyed
+// on the node, and a loop reaches the same node again with the parameter
+// moved. expandAt does it for a word; patternSpan for a pattern's span.
+//
+// The second road was the one without it, and it held a pattern's value
+// across a loop for as long as nothing else on the way round expanded a
+// word: `x=a; for c in upper lower; do case $x in [[:$c:]]) …` matched
+// `[[:upper:]]` twice, where every shell in the panel matches `lower` the
+// second time. Unseen until an unquoted `$x` subject stopped going through
+// expandAt, which is the plain-parameter shortcut (#6373).
+func (r *Runner) forgetSpanHolds() {
+	r.nestedHeld = nestedHold{}
+	r.sourceHeld, r.subscriptHeld = sourceHold{}, subscriptHold{}
 }
 
 // holdSource keeps a parameter's source for the rest of this span.

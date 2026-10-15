@@ -4,6 +4,7 @@
 package zsh_test
 
 import (
+	"io/fs"
 	"os"
 	"path/filepath"
 	"slices"
@@ -96,6 +97,42 @@ func TestAnUnflattenedLibraryIsEveryDirectoryUnderIt(t *testing.T) {
 		filepath.Join(lib, "Zle"),
 	}
 	if !slices.Equal(got, want) {
+		t.Errorf("library = %q, want %q", got, want)
+	}
+}
+
+// The walk skips listing a directory whose link count says it has no
+// subdirectories (#6459), so this tree puts files beside directories at every
+// depth, a directory three deep, and a link to a directory — and asks for
+// exactly what filepath.WalkDir's directories-only preorder gives, which is
+// what the library was before the walk was made to skip files.
+func TestTheLibraryWalkIsWalkDirsOrderAtEveryDepth(t *testing.T) {
+	t.Parallel()
+	usr := t.TempDir()
+	lib := filepath.Join(usr, "share/zsh/functions")
+	mkdirs(t, lib, "Completion/Base/Deep/Deeper", "Completion/Unix", "Calendar", "Zle", "VCS_Info/Backends")
+	for _, f := range []string{"_main", "Completion/_x", "Completion/Base/_y", "Completion/Base/Deep/_z", "Zle/w", "VCS_Info/Backends/v"} {
+		if err := os.WriteFile(filepath.Join(lib, f), nil, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.Symlink(filepath.Join(lib, "Zle"), filepath.Join(lib, "Completion/Linked")); err != nil {
+		t.Fatal(err)
+	}
+	var want []string
+	err := filepath.WalkDir(lib, func(p string, d fs.DirEntry, err error) error {
+		if err == nil && d.IsDir() && p != lib {
+			want = append(want, p)
+		}
+		return err
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(want) != 9 {
+		t.Fatalf("the reference walk found %d directories, want 9: %q", len(want), want)
+	}
+	if got := zsh.InstalledFunctionLibrary("", roots(nil, usr, "")); !slices.Equal(got, want) {
 		t.Errorf("library = %q, want %q", got, want)
 	}
 }

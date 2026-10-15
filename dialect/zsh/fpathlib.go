@@ -4,7 +4,6 @@
 package zsh
 
 import (
-	"io/fs"
 	"os"
 	"path/filepath"
 	"slices"
@@ -220,26 +219,66 @@ func libraryUnder(prefix string) []string {
 // source tree instead, and its zsh lists every directory under the top one
 // and not the top one itself — each parent before its children, siblings in
 // name order — which is a walk.
+//
+// The walk visits directories only, and that is a measurement rather than a
+// tidy-up (#6459). Every zsh start seeds `$fpath` through here, `-c :`
+// included, and Debian's library is some 1,100 files in two dozen
+// directories: filepath.WalkDir sorted and joined a path for every one of
+// those files to find the directories among them, which was most of the
+// 2 ms our zsh's bare start cost over our bash's on the ubuntu runner. Here
+// only a directory's subdirectories are joined and sorted, and a directory
+// whose link count says it has none is not opened at all — see hasNoSubdirs.
 func libraryDirs(lib string) []string {
 	if !isDir(filepath.Join(lib, "Completion")) {
 		return []string{lib}
 	}
 	var dirs []string
-	_ = filepath.WalkDir(lib, func(p string, d fs.DirEntry, err error) error {
-		if err != nil {
-			// An unreadable subdirectory is left out, the way `autoload`
-			// walks past an entry it cannot read.
-			if d != nil && d.IsDir() && p != lib {
-				return fs.SkipDir
-			}
-			return nil
-		}
-		if d.IsDir() && p != lib {
-			dirs = append(dirs, p)
-		}
-		return nil
-	})
+	appendSubdirs(&dirs, lib)
 	return dirs
+}
+
+// appendSubdirs appends every directory below dir, each parent before its
+// children and siblings in name order — filepath.WalkDir's order. A directory
+// that cannot be read is listed and not descended into, the way `autoload`
+// walks past an entry it cannot read; a symbolic link is not a directory here,
+// as it is not to WalkDir.
+func appendSubdirs(dirs *[]string, dir string) {
+	f, err := os.Open(dir)
+	if err != nil {
+		return
+	}
+	entries, _ := f.ReadDir(-1)
+	_ = f.Close()
+	var names []string
+	for _, e := range entries {
+		if e.IsDir() {
+			names = append(names, e.Name())
+		}
+	}
+	slices.Sort(names)
+	for _, name := range names {
+		p := filepath.Join(dir, name)
+		*dirs = append(*dirs, p)
+		if !hasNoSubdirs(p) {
+			appendSubdirs(dirs, p)
+		}
+	}
+}
+
+// hasNoSubdirs reports whether a directory's link count says it has no
+// subdirectories, so that listing it can be skipped.
+//
+// A directory's link count is two — its own name and its `.` — plus one for
+// each subdirectory's `..`, on the filesystems that keep the count; those that
+// do not (btrfs, and others) report 1 and are always listed. So exactly 2 is
+// the one answer that is taken at its word. Every leaf of Debian's library,
+// which is where nearly all of its files are, is skipped by it.
+func hasNoSubdirs(p string) bool {
+	info, err := os.Lstat(p)
+	if err != nil {
+		return false
+	}
+	return hasTwoLinks(info)
 }
 
 func isDir(p string) bool {

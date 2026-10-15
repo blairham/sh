@@ -92,3 +92,24 @@ func TestATracedPrefixThatWouldNotExpandRunsNothing(t *testing.T) {
 		}
 	}
 }
+
+// The list stops at the failure, so nothing behind it is expanded or stored
+// whatever it is: not an element write, which has a store of its own, and not
+// a command substitution's side effect. Measured 2026-10-15 on bash 5.3.20:
+// `a=(1 2)` then `x=$((1/0)) a[0]=9` leaves `[1 2]`, and `x=$((1/0))
+// z=$(echo SIDE >&2)` writes no `SIDE` (#6544).
+func TestNothingBehindAFailedAssignmentRuns(t *testing.T) {
+	for _, traced := range []bool{false, true} {
+		src := "x=$((1/0)) a[0]=9\nx=$((1/0)) z=$(echo SIDE >&2)\necho \"[${a[*]}][${z-unset}]\"\n"
+		if traced {
+			src = "set -x\n" + src
+		}
+		// Ahead of the trace, whose line for a literal asks a question this
+		// row is not about.
+		src = "a=(1 2)\n" + src
+		out, _ := assignFailRun(t, src, Yes, Yes)
+		if !strings.HasSuffix(out, "[1 2][unset]\n") || strings.Contains(out, "SIDE") {
+			t.Errorf("traced=%v: said %q, want nothing behind the failure run", traced, out)
+		}
+	}
+}

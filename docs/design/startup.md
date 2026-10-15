@@ -5,10 +5,17 @@ opens, and on every subshell a script spawns. Neither had ever been
 measured here, so this records the measurement, the method, and what it
 found.
 
-The short version: **startup is not a problem, and there is nothing to
-optimize.** Both routes cost about four milliseconds, which is roughly
-half of what bash costs and level with zsh on the same machine in the
-same minute. An rc file of ordinary size costs nothing measurable.
+The short version, as of 2026-10-15: **startup was a problem, and part
+of it still is.** This note first said there was nothing to optimize. That
+came from one macOS machine and a fifteen-line rc. On macOS, starting
+*any* process is slow enough to hide a Go runtime. On Linux it is not:
+there a `-c :` costs this shell three to five times what bash and zsh pay.
+And a real `~/.zshrc` costs hundreds of milliseconds, where the synthetic
+rc cost half of one. The 2026-10-11 performance pass (#6352) measured all
+three and cut a good part of them. *Where it stands now* below has the
+current numbers, what was removed, and what is left. The first
+measurement is kept after it, because the traps it found are still the
+traps.
 
 ## The two numbers, and why they are two
 
@@ -26,7 +33,83 @@ harness; the method is committed and the numbers are not, for the reason
 
     go test ./internal/startupcost/ -run XXX -bench . -benchtime 40x -count 3
 
-## What it found
+## Where it stands now
+
+Measured 2026-10-15 with the benchmarks `make startup` runs —
+`BenchmarkCommandString`, `BenchmarkFirstPrompt` and
+`BenchmarkFirstPromptWithRC`, `-benchtime 40x -count 3`. Each figure is
+the median of the three runs, in milliseconds. Ours was built from
+`main` at `b8505b14f` with #6479 on top.
+
+- **macOS:** Apple silicon, 18 cores, Homebrew bash 5.3.20 and zsh 5.9.2,
+  load 17. Other agents were running, so treat each figure as good to
+  about a fifth.
+- **Linux:** inside `golang:1.26.9` (Debian, arm64, 14 cores) with the
+  distribution's bash 5.2.37 and zsh 5.9. The binaries were built into
+  the container's own filesystem, never a bind mount (see #6396 for what
+  a bind mount adds). Load 13.
+
+| | ours, bash dialect | ours, zsh dialect | bash | zsh |
+| --- | --- | --- | --- | --- |
+| macOS `-c :` | 5.9 | 6.0 | 9.4 | 4.5 |
+| macOS first prompt, no rc | 5.2 | 6.0 | 9.7 | 12.7 |
+| macOS first prompt, with an rc | 6.0 | 6.6 | 10.3 | 13.4 |
+| Linux `-c :` | 1.58 | 2.60 | 0.38 | 0.48 |
+| Linux first prompt, no rc | 2.02 | 3.27 | 0.45 | 0.82 |
+| Linux first prompt, with an rc | 1.98 | 2.88 | 0.59 | 0.86 |
+
+What that says:
+
+- **On macOS this shell is still ahead of bash on every row, and ahead of
+  zsh to a first prompt. It is behind zsh on `-c :`.** A second run, ten
+  minutes later at load 19, moved single cells by anything from −15% to
+  +85%, and every row kept the same order.
+- **On Linux it is three to five and a half times the shell it claims to
+  be, on every row.** The comparison is ours, but most of the gap is not.
+  Linux starts a C program in a fraction of a millisecond, and an empty Go
+  binary costs more than real dash's whole run (see *What it found, and
+  the part that is not ours* below). The CI perf gate's bare row reads about 3x bash on
+  the ubuntu runner for the same reason (#6396). That row is measured and
+  reported but does not gate; see *Why the bare case does not gate*.
+- **The zsh dialect costs about a millisecond more than the bash dialect
+  on Linux, and nothing more on macOS.** That is not "a dialect is free"
+  breaking. On a Debian-layout zsh install, every start walks the
+  installed function library to seed `$fpath`, which is about 0.6 ms of
+  CPU. Homebrew's and Apple's flat libraries cost two `stat`s. That walk
+  is #6482.
+
+**What was removed since the first measurement:**
+
+- package init tables moved to first use (#6360);
+- the dialect prelude is built in at compile time instead of parsed at
+  every start, which was 430–467 µs (#6397, #6399);
+- the Linux low-descriptor hold now stays inside the kernel's first file
+  descriptor table. Growing that table under an RCU grace period cost
+  12.6 ms of wall time per spawn, and is now 1.9 ms (#6401);
+- the same fix for a pipeline's private descriptor copies (#6402, #6404);
+- a collector policy that keeps a `-c` script's footprint bounded without
+  paying CPU for it (#6364).
+
+**And the real configuration** (zi, 31 plugins, powerlevel10k), which is
+the start a person actually waits for. It is tracked on #6363, which holds
+the method:
+
+- `-i -c exit` CPU is about 1.2x real zsh's (~270 against ~226 ms), and
+  1.26x its instructions retired (3.47G against 2.77G).
+- In a 160x40 tmux pane, launch until a typed `echo x` is drawn
+  highlighted: zsh is at ~300 ms. Ours measured 320–460 ms in blocks at
+  load 7–8. That spread is wider than the gap, so the number to trust is
+  the paired one: 31 ms faster than `main` on 2026-10-12 (24 of 30
+  pairs).
+- What paid for that: a parse cache for sourced and autoloaded files
+  (#6424); a parser that stopped re-checking every word (#6415); cheaper
+  per-call option saves and fewer autoload parses (#6465); glob
+  qualifiers that stat each file once (#6455); and `$PENDING`, so plugins
+  skip keys typed ahead (#6479).
+- What is left is mostly per-command interpretation (#6353, #6423, #6373).
+  Decoding function bodies that a start never calls is #6483.
+
+## What the first measurement found
 
 Apple M5 Max, macOS 25.5, Homebrew bash 5.3.15 and zsh 5.9.2, `-benchtime
 40x -count 3`, median of the three runs, milliseconds. The machine had
@@ -42,7 +125,9 @@ figure — which is the precision this claim needs and no more.
 Four things are worth taking from that.
 
 **We are about half of bash on both routes**, and level with or ahead of
-zsh. Whatever else is worth working on, this is not it.
+zsh. Whatever else is worth working on, this is not it. *(That held on
+macOS only. On a platform where starting a process is cheap, bash's
+margin was never ours. See* The runner is not this machine *below.)*
 
 **An rc file costs about half a millisecond**, and costs every shell in
 the table the same half. The file is fifteen lines of aliases, exports

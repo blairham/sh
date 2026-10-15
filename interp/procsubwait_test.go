@@ -164,3 +164,68 @@ func TestAShellStillHoldingTheWritingEndDoesNotWaitForTheBody(t *testing.T) {
 		t.Fatal("the shell waited for a body it was itself still writing to")
 	}
 }
+
+// And a command naming several writing substitutions closes every one of its
+// ends before it waits for any body.
+//
+// A body started after the command's first redirection was applied is handed
+// that redirection's descriptor, so in `: 3> >(cat) 4> >(cat)` the second
+// body holds the first pipe's writing end as its own 3. Closing the first
+// placeholder and waiting for the first body before closing the second waits
+// for a reader whose last writer is the second body — which is itself reading
+// until the placeholder this shell has not closed yet. Measured 2026-10-15,
+// zsh 5.9.2 returns at once on every shape below, and this shell never
+// returned at the answer that waits at the command (#6501). The answer that
+// does not wait is a row as well, because its joins are a second place for
+// the same order to be wrong.
+//
+// A builtin body as well as an external one: the copy of the table a body is
+// given holds the descriptor exactly as a forked process's inherited one does,
+// so the hang needs no PATH to show, and the external row is the shape the
+// issue was found with.
+func TestACommandsWritingSubstitutionsAreAllClosedBeforeAnyIsWaitedFor(t *testing.T) {
+	const reader = `>(while read -r x; do :; done)`
+	for _, tc := range []struct{ name, src string }{
+		{"a builtin", `: 3> ` + reader + ` 4> ` + reader + `; echo done`},
+		{"a group", `{ :; } 3> ` + reader + ` 4> ` + reader + `; echo done`},
+		{"a function", `f() { :; }; f 3> ` + reader + ` 4> ` + reader + `; echo done`},
+		{"three of them", `: 3> ` + reader + ` 4> ` + reader + ` 5> ` + reader + `; echo done`},
+		{"standard output second", `: 3> ` + reader + ` > ` + reader + `; echo done`},
+		{"external bodies", `: 3> >(cat) 4> >(cat); echo done`},
+	} {
+		for _, a := range []struct {
+			name   string
+			answer Answer
+		}{
+			{"waiting at the command", Yes},
+			{"not waiting", No},
+		} {
+			t.Run(tc.name+", "+a.name, func(t *testing.T) {
+				f, err := syntax.Parse(tc.src, syntax.Core())
+				if err != nil {
+					t.Fatal(err)
+				}
+				var out, errs strings.Builder
+				sem := testSemantics()
+				sem.WritingSubstitutionIsWaitedForAtTheCommand = a.answer
+				r := newTestRunner(t, &Runner{Stdout: &out, Stderr: &errs, Semantics: &sem, Env: testPATH()})
+				done := make(chan struct{})
+				go func() {
+					defer close(done)
+					_, _ = r.Run(context.Background(), f)
+				}()
+				select {
+				case <-done:
+				case <-time.After(10 * time.Second):
+					// Fatal rather than Error, for the reason the test above
+					// gives: the goroutine is blocked on pipes nothing will
+					// close, and the binary has to move on without it.
+					t.Fatal("the command waited for one body while another still held its pipe open")
+				}
+				if got := out.String(); got != "done\n" {
+					t.Errorf("got %q (stderr %q), want %q", got, errs.String(), "done\n")
+				}
+			})
+		}
+	}
+}

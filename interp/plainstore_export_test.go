@@ -17,3 +17,10 @@ func SetPlainScalarStoreShortcutForTest(on bool) (was bool) {
 func StoresAPlainScalarForTest(r *Runner, a *syntax.Assign) bool {
 	return r.storesAPlainScalar(a)
 }
+
+// SetAssignmentsAloneShortcutForTest switches assignmentsAloneCommand on or
+// off and returns what it was, so a test can run the same script both ways.
+func SetAssignmentsAloneShortcutForTest(on bool) (was bool) {
+	was, assignmentsAloneShortcut = assignmentsAloneShortcut, on
+	return was
+}

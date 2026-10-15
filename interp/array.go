@@ -1816,9 +1816,18 @@ func (r *Runner) storeOperandWholeArraySubscript(base, sub, value string) (statu
 // stopped a script that two of the three columns finish. See
 // Semantics.BadSubscriptToAnOutputOperand for the rows.
 func (r *Runner) storeThroughOperand(name, value string) (status int, refused bool) {
+	return r.storeThroughOperandMarking(name, value, r.markForAllexport)
+}
+
+// storeThroughOperandMarking is storeThroughOperand with the `set -a` mark a
+// plain name gets chosen by the caller: a builtin's output operand is marked
+// by every shell, and a `{fd}` redirection's name is not — see
+// fillOperandValue. An element is a compound's store and is marked, or not,
+// there.
+func (r *Runner) storeThroughOperandMarking(name, value string, mark func(string)) (status int, refused bool) {
 	base, raw, sub, ok := r.subscriptOperandParts(name, r.outputOperandBracketsAreLexed(name))
 	if !ok || !isPlainName(base) {
-		r.setOperandValue(name, value)
+		r.fillOperandValue(name, value, mark)
 		return 0, false
 	}
 	// In front of every reading of the brackets below, for the reason
@@ -1950,11 +1959,28 @@ func (r *Runner) storeThroughOperand(name, value string) (status int, refused bo
 // `printf 'x\n' | read 0; f() { echo "[$0]"; }; f` is `[x]` then `[f]`, so a
 // call made after a write still reports its own name. See
 // Runner.storeDollarZero, which is where it goes, and #3672.
+//
+// A name stored here is marked for `set -a`, as an assignment's is: measured
+// 2026-10-15, `read r`, `printf -v p`, `wait -n -p w` and zsh's `print -v`,
+// `zformat -f` and `sysread` all put the name in a child's environment in
+// every panel shell that has them — ksh93 included, which marks none of the
+// names getopts and the loops fill (#6462).
 func (r *Runner) setOperandValue(name, value string) {
+	r.fillOperandValue(name, value, r.markForAllexport)
+}
+
+// fillOperandValue is setOperandValue with the `set -a` mark chosen by the
+// caller, which is the one thing the routes through here part on: `getopts`
+// and a `{fd}` redirection store exactly as `read` does and are marked by
+// fewer shells — see Semantics.AllexportMarksALoopOrGetoptsName and
+// AllexportMarksGetoptsOwnParameters. A position is not a name and is never
+// marked.
+func (r *Runner) fillOperandValue(name, value string, mark func(string)) {
 	if r.storeThroughPositional(name, value) {
 		return
 	}
 	r.setVar(name, value)
+	mark(name)
 }
 
 // storeThroughPositional is the half of setOperandValue that knows the rule,

@@ -1542,6 +1542,10 @@ func Semantics() interp.Semantics {
 	// stored it: `set -a; A=(1); typeset -p A` is `typeset -ax A=( 1 )`.
 	// Measured 2026-10-03; see the axis.
 	s.AllexportMarksACompound = interp.Yes
+	// But not OPTARG and OPTIND as `getopts` writes them, where the name it
+	// was given is marked: `set -a; getopts x: o -x6` hands a child `o=x` and
+	// nothing else. Measured 2026-10-15; see the axis.
+	s.AllexportMarksGetoptsOwnParameters = interp.No
 	// And the opposite answer for the other errno, which is the half of the
 	// pair this shell reverses. A builtin writing into a pipe nobody is
 	// reading, with SIGPIPE disarmed, reports 1 here -- where `echo hi >&-`

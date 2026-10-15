@@ -3804,6 +3804,11 @@ func Semantics() interp.Semantics {
 	// assigns: `set -a; : ${w:=1}; : $((m=3))` exports neither, where `x=9`
 	// is exported. Measured 2026-10-15 on ksh93u+; see the axis.
 	s.AllexportMarksAnExpansionsAssignment = interp.No
+	// Nor a name a construct fills — the `for` and `select` variable,
+	// `getopts`'s name and OPTARG and OPTIND, a `{fd}` redirection's — where
+	// `read`'s is marked. Measured 2026-10-15 on ksh93u+; see the axes.
+	s.AllexportMarksALoopOrGetoptsName = interp.No
+	s.AllexportMarksGetoptsOwnParameters = interp.No
 	// A `( … )` or `$( … )` hashes into this shell's own table, and empties
 	// it with `hash -r`. Measured 2026-10-03; see the axis.
 	s.SubshellSharesTheCommandHash = interp.Yes

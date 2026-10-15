@@ -24924,6 +24924,43 @@ type Semantics struct {
 	// question: an element store is a compound's, and
 	// AllexportMarksACompound answers it (#6441).
 	AllexportMarksAnExpansionsAssignment Answer
+
+	// AllexportMarksALoopOrGetoptsName makes `set -a` mark a name the shell
+	// fills while it runs a construct: the variable of `for` and `select`, the
+	// name operand of `getopts`, and the `{name}` of a redirection that
+	// allocates a descriptor.
+	//
+	// ksh93 alone answers No. Measured 2026-10-15 under `-c` with `env -i
+	// PATH=/usr/bin:/bin`, each name unset beforehand and read back from
+	// `env` after `set +a`: `for f in 4`, `getopts x: o -x6` and `select s in
+	// a` (answered `1`) put `f=4`, `o=x` and `s=a` in a child's environment in
+	// bash 5.3.20 and zsh 5.9.2, and `f` and `o` in dash 0.5.12 and BusyBox ash
+	// (the pinned alpine image), which have no `select`; `exec {fd}>/dev/null`
+	// exports `fd` in bash and zsh. ksh93u+ exports none of the four.
+	//
+	// Its own question rather than AllexportMarksAnExpansionsAssignment,
+	// although the panel splits the two alike, because nothing ties them:
+	// one is a store an expression makes and the other one a construct makes.
+	// Nor is it `read`'s operand, which ksh93 *does* mark — `read r` and
+	// `select`'s REPLY reach a child there as in every column — so that store
+	// is marked without asking, along with `printf -v`'s and `wait -p`'s.
+	// Nor OPTARG and OPTIND, which split differently: see
+	// AllexportMarksGetoptsOwnParameters (#6462).
+	AllexportMarksALoopOrGetoptsName Answer
+
+	// AllexportMarksGetoptsOwnParameters makes `set -a` mark OPTARG and
+	// OPTIND as `getopts` writes them.
+	//
+	// zsh and ksh93 answer No. Measured 2026-10-15 under `-c`, as
+	// AllexportMarksALoopOrGetoptsName was: `getopts x: o -x6` puts
+	// `OPTARG=6` and `OPTIND=2` in a child's environment in bash 5.3.20, dash
+	// 0.5.12 and BusyBox ash, and neither of them in zsh 5.9.2 — which does
+	// export `o` — or in ksh93u+, which exports neither them nor `o`. A
+	// script's own `OPTIND=1` under `set -a` is an assignment and is marked
+	// in all five. The standard puts it in the base: allexport reaches every
+	// variable to which an assignment is performed, and these two are
+	// assigned (#6462).
+	AllexportMarksGetoptsOwnParameters Answer
 	// KillJoinsANumberToTheNameOption takes a *number* written onto `-s` —
 	// `kill -s9` — as the same thing as `kill -s 9`, where the rule
 	// KillReadsASignalJoinedToItsOption describes joins only a name to `-s`.
@@ -34671,6 +34708,10 @@ func PosixSemantics() Semantics {
 		// The standard's allexport reaches every assignment, the ones an
 		// expansion or arithmetic makes included; ksh93 overrides.
 		AllexportMarksAnExpansionsAssignment: Yes,
+		// And every name a construct fills, and getopts's own two; ksh93
+		// overrides both and zsh the second.
+		AllexportMarksALoopOrGetoptsName:   Yes,
+		AllexportMarksGetoptsOwnParameters: Yes,
 		// And so nothing joined to it that is a number either; dash and
 		// ksh93 override.
 		KillJoinsANumberToTheNameOption: No,

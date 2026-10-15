@@ -592,7 +592,15 @@ func (r *Runner) getoptsWrite(name, value string) bool {
 	// of the three would come to answer `getopts x 1` differently from
 	// `read 1`, which is the shape that has cost this tree a bug more than
 	// once.
-	r.setOperandValue(name, value)
+	//
+	// The `set -a` mark is the one thing that is not `read`'s: fewer shells
+	// mark what this builtin fills, and they part again between the name
+	// operand and the two parameters that are this builtin's own (#6462).
+	mark := r.markAFilledNameForAllexport
+	if name == "OPTARG" || name == "OPTIND" {
+		mark = r.markGetoptsOwnForAllexport
+	}
+	r.fillOperandValue(name, value, mark)
 	return true
 }
 

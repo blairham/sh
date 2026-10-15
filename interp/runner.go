@@ -13946,11 +13946,17 @@ func (r *Runner) setVarAs(name, value string, form assignForm) {
 //
 // What is marked is measured and is narrower than "every store". A **compound**
 // is not: `set -a; declare -a A=(1)` is `declare -a A=([0]="1")` in bash with no
-// `x` on it, and neither a table nor an array literal earns one. Nor is a write
-// the shell makes for itself, which is why this is called from the assignment
-// sites rather than from setVarAs — `getopts` filling OPTIND in an exporting
-// shell would otherwise put the shell's own bookkeeping in every child's
-// environment.
+// `x` on it, and neither a table nor an array literal earns one.
+//
+// It is called from the sites that store, rather than from setVarAs, because
+// not every store is one every shell marks — and the ones that are not ask an
+// axis instead: an expansion's or arithmetic's (markAnExpansionsStoreForAllexport),
+// a loop's or `getopts`'s name and a `{fd}` redirection's
+// (markAFilledNameForAllexport), and OPTARG and OPTIND as `getopts` writes them
+// (markGetoptsOwnForAllexport). This one is for the stores the whole panel
+// marks: an assignment, a declaration, and a builtin's output operand — `read`,
+// `printf -v`, `wait -p` — which ksh93 marks too where it marks none of the
+// others (#6462).
 func (r *Runner) markForAllexport(name string) {
 	if !r.allexport {
 		return
@@ -13979,11 +13985,38 @@ func (r *Runner) markCompoundForAllexport(name string) {
 // markCompoundForAllexport already: `a=(1 2); set -a; (( a = 5 ))` writes
 // element 0 in bash 5.3.20 and lists `declare -a` with no `x`.
 func (r *Runner) markAnExpansionsStoreForAllexport(name string) {
-	if !r.allexport || r.arrayDeclared(name) || r.assocDeclared(name) {
+	if r.arrayDeclared(name) || r.assocDeclared(name) {
 		return
 	}
-	if !r.ask(r.sem().AllexportMarksAnExpansionsAssignment,
-		"`set -a` exporting a name an expansion or arithmetic assigns") {
+	r.markWhereTheAxisSays(name, r.sem().AllexportMarksAnExpansionsAssignment,
+		"`set -a` exporting a name an expansion or arithmetic assigns")
+}
+
+// markAFilledNameForAllexport is markForAllexport for a name the shell fills
+// while running a construct — the `for` and `select` variable, `getopts`'s
+// name operand, a `{fd}` redirection's name. See
+// Semantics.AllexportMarksALoopOrGetoptsName.
+//
+// Unlike an expansion's store, a name holding an array is marked here: `a=(1
+// 2); set -a; for a in 5; do :; done` lists `declare -ax` in bash 5.3.20, and
+// so does the same over `getopts x a -x`, as a bare `a=7` does.
+func (r *Runner) markAFilledNameForAllexport(name string) {
+	r.markWhereTheAxisSays(name, r.sem().AllexportMarksALoopOrGetoptsName,
+		"`set -a` exporting a name a loop, `getopts` or a `{fd}` redirection fills")
+}
+
+// markGetoptsOwnForAllexport is markForAllexport for OPTARG and OPTIND as
+// `getopts` writes them. See Semantics.AllexportMarksGetoptsOwnParameters.
+func (r *Runner) markGetoptsOwnForAllexport(name string) {
+	r.markWhereTheAxisSays(name, r.sem().AllexportMarksGetoptsOwnParameters,
+		"`set -a` exporting OPTARG and OPTIND as `getopts` writes them")
+}
+
+// markWhereTheAxisSays is the mark for a store the shells part on, asked only
+// where `set -a` is on: the option is read first, so a script that never says
+// `set -a` reaches no axis.
+func (r *Runner) markWhereTheAxisSays(name string, axis Answer, question string) {
+	if !r.allexport || !r.ask(axis, question) {
 		return
 	}
 	r.markExportedByAllexport(name)

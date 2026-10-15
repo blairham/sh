@@ -2692,7 +2692,9 @@ func (r *Runner) setFdVar(ref, value string) bool {
 		return false
 	}
 	r.fdVarSpeaker, r.assignFailed = r.redirForCommandWord, false
-	_, refused := r.storeThroughOperand(ref, value)
+	// Marked for `set -a` as a loop's name is rather than as `read`'s: one
+	// column that has the construct leaves it alone (#6462).
+	_, refused := r.storeThroughOperandMarking(ref, value, r.markAFilledNameForAllexport)
 	failed := refused || r.assignFailed || r.ctl == controlExit
 	r.fdVarSpeaker, r.assignFailed = outerSpeaker, outerFailed || failed
 	if !failed {

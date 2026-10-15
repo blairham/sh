@@ -160,3 +160,36 @@ func TestAValuelessSubscriptedOperandDeclaresTheArray(t *testing.T) {
 		})
 	}
 }
+
+// The column that reads the brackets of a valueless operand: an element past
+// the first declares the array, as the array that has held an element, and
+// the first element is the name itself and declares none. The brackets are
+// read twice only where the first pass found the first element (#6490).
+func TestAValuelessSubscriptReadPastTheFirstDeclaresTheArray(t *testing.T) {
+	for _, tc := range []struct{ name, src, want string }{
+		// The listing of the held state is a dialect's, and the ksh tests
+		// assert it; what the core can see is the kind.
+		{"past the first: an array", `typeset a[3]; a=q; printf "[%s]" "${#a[@]}" "$(typeset -p a)"`, `[1][declare -a a=([0]="q")]`},
+		{"the first: no array", `typeset a[0]; a=q; printf "[%s]" "$(typeset -p a)"`, `[declare -- a="q"]`},
+		{"an array already standing is left alone", `a=(x y); typeset a[3]; printf "[%s]" "${a[@]}"`, `[x][y]`},
+		{"read once past the first", `i=1; typeset "a[i++]"; printf "[%s]" "$i"`, `[2]`},
+		{"read twice at the first", `i=0; typeset "a[i++]"; printf "[%s]" "$i"`, `[2]`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, st := runGrammar(t, tc.src, func(d *syntax.Dialect) {
+				d.ArraySubscript = true
+				d.ArrayLiteral = true
+				d.DeclarationUtilities = map[string]bool{"typeset": true}
+			}, func(r *Runner) {
+				sem := *r.Semantics
+				sem.ArraysAreSparse = Yes
+				sem.TypesetTakesASubscript = Yes
+				sem.ValuelessSubscriptedOperand = ValuelessSubscriptedOperandReadsTheSubscript
+				r.Semantics = &sem
+			})
+			if out != tc.want || st != 0 {
+				t.Errorf("%s = %q (status %d), want %q at 0", tc.src, out, st, tc.want)
+			}
+		})
+	}
+}

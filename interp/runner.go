@@ -5717,10 +5717,22 @@ type Runner struct {
 	actionIDs *atomic.Uint64
 	// trimWhere is the matchWhere a parameter trim matches through, kept
 	// here rather than allocated per trim, and trimWhereBusy says one is in
-	// use — see Runner.borrowTrimWhere. A value rather than a pointer, so a
+	// use — see Runner.trimWith. A value rather than a pointer, so a
 	// clone has its own.
 	trimWhere     matchWhere
 	trimWhereBusy bool
+	// trimBad is the refusal flag a trim holding trimWhere hands the
+	// matcher, borrowed with it for the same reason: a `bool` escaping per
+	// `${x#pat}` was an allocation a loop paid every time (#6353).
+	trimBad bool
+	// askBracketAfterSub is bracketAfterSubPolicy bound to askOwner, made
+	// once rather than at every pattern a script matches: a method value
+	// that escapes is an allocation, and patternOpts built one per call
+	// (#6353). askOwner is the Runner it was bound to, so a Runner copied by
+	// value — a clone — binds its own rather than asking through its
+	// parent's. See Runner.bracketAfterSubAsker.
+	askBracketAfterSub func() BracketPolicy
+	askOwner           *Runner
 }
 
 // maxDepth bounds nested function calls: the substrate's own ceiling, which

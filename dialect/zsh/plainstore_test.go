@@ -45,6 +45,12 @@ func TestABareAssignmentToOneOfTheShellsOwnNamesStillDoesItsWork(t *testing.T) {
 		{`psvar=one; print -r -- "${psvar[1]}"`, "one\n"},
 		{`cdpath=/c; print -r -- "$CDPATH"`, "/c\n"},
 		{`readonly rr=1; rr=2; print -r -- "$rr"`, "read-only variable: rr\n"},
+		// A trim that publishes what it matched writes `$match` while the
+		// value is expanded, and the store after it replaces that array with
+		// the value. The plain store takes trims and leaves these to the
+		// full road (#6353).
+		{`setopt extendedglob; s=ab; match=${s#(#b)(a)}; typeset -p match`, "typeset match=b\n"},
+		{`setopt extendedglob; s=ab; x=${s#(#b)(a)}; typeset -p x match`, "typeset x=b\ntypeset -a match=( a )\n"},
 	} {
 		got, _ := runZsh(t, t.TempDir(), row.src)
 		// The location in front of a diagnostic is the route's, not the

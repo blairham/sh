@@ -123,6 +123,9 @@ func (r *Runner) valueOnlyReads(w *syntax.Word) bool {
 		s := &w.Spans[i]
 		if s.Kind != syntax.Literal || strings.ContainsAny(s.Value, "~=") {
 			if len(w.Spans) == 1 {
+				if r.plainTrimOf(s) {
+					return true
+				}
 				_, ok := r.plainParamValue(w)
 				return ok
 			}
@@ -148,4 +151,54 @@ func (r *Runner) storePlainScalar(a *syntax.Assign) {
 	// accepted carries none.
 	r.varsPut(a.Name, value)
 	r.markForAllexport(a.Name)
+}
+
+// plainTrimOf reports whether a value's one span is a trim of an ordinary
+// scalar by written text — `${s#*/}`, `${s%%.*}` — which reads and does
+// nothing else.
+//
+// The value is still expanded by the full road (storePlainScalar falls back
+// to expandAssignValue), so nothing here decides what the trim answers. What
+// this settles is that expanding it cannot change any of the answers
+// storesAPlainScalar has already taken about the name being written: the
+// subject is a name plainParamValue would read, in a state where it would
+// read it, and the operand is text with nothing in it to expand. Two things a
+// trim's operand can do besides match are left to the full road by name. A
+// `(#b)` or `(#m)` flag publishes `$match` and `$MATCH`, which a script can
+// be assigning — measured on zsh 5.9.2, `s=ab; match=${s#(#b)(a)}` leaves
+// `typeset match=b`, where taking the plain store here left the array the
+// publish wrote. And a `~` reaches the tilde pass, and a `~(…)` group the
+// matcher's own reading of one.
+//
+// The record a pattern match writes where `=~` writes one is not on that
+// list: it is written to a name no assignment spells (`.sh.match`), and a
+// reference that could alias it already sends every store to the full road.
+//
+// This is the trim row of #6353's construct table: before it, `x=${s#*/}`
+// asked the full road's thirty questions about `x` on every iteration.
+func (r *Runner) plainTrimOf(s *syntax.Span) bool {
+	if s.Kind != syntax.ParamExp || s.Quoting != syntax.Unquoted || s.Param == nil || !r.readsAreOnlyReads() {
+		return false
+	}
+	e := s.Param
+	switch e.Op {
+	case syntax.ParamTrimPrefix, syntax.ParamTrimPrefixLong, syntax.ParamTrimSuffix, syntax.ParamTrimSuffixLong:
+	default:
+		return false
+	}
+	if e.Arg == nil || !bareApartFromTheOperator(e) || !r.ordinaryScalarName(e.Name) {
+		return false
+	}
+	var last byte
+	for i := range e.Arg.Spans {
+		a := &e.Arg.Spans[i]
+		if a.Kind != syntax.Literal || strings.IndexByte(a.Value, '~') >= 0 ||
+			strings.Contains(a.Value, "(#") || (last == '(' && strings.HasPrefix(a.Value, "#")) {
+			return false
+		}
+		if a.Value != "" {
+			last = a.Value[len(a.Value)-1]
+		}
+	}
+	return true
 }

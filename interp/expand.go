@@ -1175,7 +1175,7 @@ func (r *Runner) wordTextUnsplit(w *syntax.Word, mark func(syntax.Span, string) 
 	// here rather than at each of the places that could break it.
 	defer r.withoutGlobbing()()
 	defer r.inWord(w)()
-	var b strings.Builder
+	var b spanText
 	for i, s := range w.Spans {
 		if (r.expandErr && !failed) || r.ctl == controlExit {
 			// The word is abandoned at its first failed expansion, here as
@@ -1223,6 +1223,49 @@ func (r *Runner) wordTextUnsplit(w *syntax.Word, mark func(syntax.Span, string) 
 	// reading makes. See Runner.cutAtNul.
 	return r.resolveTildesThrough(r.cutAtNul(b.String(), keepMarks), keepMarks)
 }
+
+// spanText joins the texts of a word's spans, and hands back the first one
+// itself while it is the only one. A strings.Builder copies even a single
+// piece, which was an allocation on every `x=${s#*/}` for a value that was
+// already a string (#6353).
+type spanText struct {
+	only string
+	b    strings.Builder
+	n    int
+}
+
+func (t *spanText) WriteString(s string) {
+	switch t.n {
+	case 0:
+		t.only = s
+	case 1:
+		t.b.Grow(len(t.only) + len(s))
+		t.b.WriteString(t.only)
+		t.b.WriteString(s)
+	default:
+		t.b.WriteString(s)
+	}
+	t.n++
+}
+
+// WriteByte adds one byte, which is never the only text a caller keeps
+// as-is, so it is joined the ordinary way.
+func (t *spanText) WriteByte(c byte) error {
+	if t.n == 1 {
+		t.b.WriteString(t.only)
+	}
+	t.n = max(t.n, 1) + 1
+	return t.b.WriteByte(c)
+}
+
+func (t *spanText) String() string {
+	if t.n <= 1 {
+		return t.only
+	}
+	return t.b.String()
+}
+
+func (t *spanText) Len() int { return len(t.String()) }
 
 // expandRedirectTargetViews expands a redirection's target once and returns
 // the three readings of it: the fields an ordinary word would have become,
@@ -6027,8 +6070,25 @@ func (r *Runner) trimWith(value, pattern string, e *syntax.ParamExpr) string {
 	// A literal pattern records here where the same literal in a condition
 	// does not, which is measured and is why the record is turned on without
 	// asking whether the pattern is one — see interp/patternrecord.go.
-	var bad bool
-	o, refused := r.operandPatternOpts(pattern, &bad, value)
+	//
+	// The refusal flag and the matchWhere are the Runner's own while no
+	// other trim holds them, which is what holdWhere and a `bool` escaping
+	// would otherwise allocate on every `${x#pat}` a loop runs (#6353).
+	// Nothing outlives the trim that holds a reference to either — a report
+	// carries spans and the subject, never the matchWhere — so both are
+	// handed back when the trim returns, and a trim reached while one is
+	// running allocates as before.
+	borrowed := !r.trimWhereBusy
+	var bad *bool
+	if borrowed {
+		r.trimWhereBusy = true
+		r.trimBad = false
+		bad = &r.trimBad
+		defer func() { r.trimWhereBusy = false }()
+	} else {
+		bad = new(bool)
+	}
+	o, refused := r.operandPatternOpts(pattern, bad, value)
 	if refused {
 		// The value stands where the shell gave up over the pattern. Nothing
 		// reads it — fatalPattern has already set the control flow — and
@@ -6043,29 +6103,17 @@ func (r *Runner) trimWith(value, pattern string, e *syntax.ParamExpr) string {
 	o.tildeGlobRead = e.Op == syntax.ParamTrimSuffix
 	o.nth = r.matchIndexFlag(e)
 	o = r.recordingPatternOpts(o, pattern)
-	if o.where == nil && !r.trimWhereBusy {
-		o.where = r.borrowTrimWhere()
-		defer func() { r.trimWhereBusy = false }()
+	if o.where == nil && borrowed {
+		r.trimWhere = matchWhere{}
+		o.where = &r.trimWhere
 	}
 	out, m := trim(value, pattern, e.Op, o, r.armOrder(), searchingFlag(e))
-	if r.metABadExpansionPattern(bad, pattern) {
+	if r.metABadExpansionPattern(*bad, pattern) {
 		return value
 	}
 	r.publishMatch(m)
 	r.recordPatternMatch(m)
 	return out
-}
-
-// borrowTrimWhere hands a trim the Runner's own matchWhere, emptied, which
-// is what holdWhere would otherwise allocate on every `${x#pat}` a loop runs
-// (#6353). Nothing outlives the trim that holds a reference to it — a report
-// carries spans and the subject, never the matchWhere — so it is handed back
-// when the trim returns, and a trim reached while one is running allocates
-// as before.
-func (r *Runner) borrowTrimWhere() *matchWhere {
-	r.trimWhereBusy = true
-	r.trimWhere = matchWhere{}
-	return &r.trimWhere
 }
 
 // armOrder is the axis a longest prefix trim asks when the arms of an

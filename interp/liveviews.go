@@ -349,7 +349,7 @@ func readDirNames(dir string) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	return f.Readdirnames(-1)
 }
 

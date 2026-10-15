@@ -2446,6 +2446,9 @@ func Semantics() interp.Semantics {
 	// pattern. Measured 2026-10-01; see Semantics.JobSpecQuestionMarkIsLiteral.
 	s.JobSpecQuestionMarkIsLiteral = interp.Yes
 	s.GlobNoMatchIsError = interp.Yes
+	// And a refusal in a program's words is the program's: the script
+	// carries on at 1 (#6524). See the axis for the table.
+	s.UnmatchedPatternFailsOnlyTheProgram = interp.Yes
 	// No parameter of GLOBIGNORE's kind, and `.` and `..` are not in what a
 	// pattern may match: `echo .*` is `.dot` alone and `echo .*/` matches
 	// nothing at all. Measured 2026-09-14 (#2748).

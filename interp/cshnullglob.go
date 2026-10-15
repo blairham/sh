@@ -46,7 +46,13 @@ func (r *Runner) beginGlobUnit() func() {
 	return func() {
 		r.globUnit = outer
 		if unit.missed && !unit.matched && !r.givingUpAlready() {
-			r.diagf("%s\n", Wording(r.diag().CshNullGlobNoMatch, "no match"))
+			msg := Wording(r.diag().CshNullGlobNoMatch, "no match")
+			if r.holdForTheProgram(msg) {
+				// The program's, as an unmatched pattern is. See
+				// interp/programglobrefusal.go.
+				return
+			}
+			r.diagf("%s\n", msg)
 			// Sets its status as an unmatched pattern does — see
 			// Runner.refuseUnmatchedPattern.
 			restore := r.globRefusalSetsItsStatus()

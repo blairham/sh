@@ -4846,6 +4846,9 @@ type Runner struct {
 	// it is judged over. See interp/cshnullglob.go.
 	cshNullGlob bool
 	globUnit    *globUnit
+	// progGlob holds a refusal of a pattern in a program's words for the
+	// program. See interp/programglobrefusal.go.
+	progGlob programGlob
 	// histSubstPattern is one dialect's `histsubstpattern`. See
 	// Runner.substitutePattern.
 	histSubstPattern bool
@@ -8799,6 +8802,10 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 	argvBefore := argvBefore0[:0]
 	var lexedAt, sourceClosedAt []string
 	endGlobUnit := r.beginGlobUnit()
+	// A refusal of a pattern in a program's words is held for this command,
+	// over whatever the substitutions in its words run. See
+	// interp/programglobrefusal.go.
+	defer r.enterProgramGlob()()
 	// A failed expansion in a declaration's words leaves `$?` alone, in the
 	// dialect that says so: set word by word, since only the words after a
 	// declaration's name are its own. See
@@ -9059,7 +9066,15 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 				break
 			}
 		}
+		if !scanning && len(argv) > modifierWords {
+			// Behind the command's name, so a refusal here may be the
+			// program's. Armed around the pathname stage alone, which runs
+			// no command: a substitution in the next word runs a loop or
+			// an array assignment of its own, whose refusal is its own.
+			r.armProgramGlob(argv, modifierWords, stoppedAtCommand)
+		}
 		argv = append(argv, r.globFieldsUnlessSuppressed(fields, noglob)...)
+		r.disarmProgramGlob()
 		if appendOperand && len(argv) == operandStart+1 {
 			// One field, so there is a single position to record. A word that
 			// split has none, and nothing in the panel splits one.
@@ -9078,7 +9093,13 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 		failedUnder = r.failedExpansionStatus
 	}
 	r.failedExpansionStatus = statusBefore
+	if len(argv) > modifierWords {
+		r.armProgramGlob(argv, modifierWords, stoppedAtCommand)
+	}
 	endGlobUnit()
+	// And off for the redirections, whose own refusal is not held: it is
+	// raised after the line below has looked for a held one.
+	r.disarmProgramGlob()
 	// The operand positions belong to this command alone: a command
 	// substitution in one of the values has already run, with a set of its
 	// own, and whatever ran before this command must come back afterwards.
@@ -9272,6 +9293,15 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 		// let the first report the complaint and then run the command
 		// anyway, printing the pattern it had just refused. r.failedHeading
 		// one screen down reads `!= controlNone` for exactly this reason.
+		return nil
+	}
+	if msg := r.takeProgramGlobRefusal(); msg != "" {
+		// A pattern in a program's words matched nothing, which the program
+		// fails on rather than the script: every other expansion has run, the
+		// redirections are never opened, and the command is 1. See
+		// Semantics.UnmatchedPatternFailsOnlyTheProgram.
+		r.diagf("%s\n", msg)
+		r.status = 1
 		return nil
 	}
 

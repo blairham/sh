@@ -24,3 +24,10 @@ func SetAssignmentsAloneShortcutForTest(on bool) (was bool) {
 	was, assignmentsAloneShortcut = assignmentsAloneShortcut, on
 	return was
 }
+
+// SetPlainArithShortcutForTest switches plainArithValue on or off and returns
+// what it was, so a test can run the same script both ways.
+func SetPlainArithShortcutForTest(on bool) (was bool) {
+	was, plainArithShortcut = plainArithShortcut, on
+	return was
+}

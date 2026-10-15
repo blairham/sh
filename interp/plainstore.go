@@ -262,3 +262,30 @@ func (r *Runner) arithOnlyReads(e syntax.ArithExpr) bool {
 	}
 	return false
 }
+
+// plainArithShortcut switches plainArithValue on. A variable so a test can run
+// the same script with the word road answering every arithmetic expansion.
+var plainArithShortcut = true
+
+// plainArithValue is the text of a word that is one arithmetic expansion
+// plainArithOf admits — `$((i + 1))`, `"$((n * 2))"` — read without the word
+// road around it: the span's own expansion, and nothing else. What the road
+// would add is nothing for such a word: no literal for the tilde passes, no
+// subscript to arm, no field to split or glob, and a number's text is the
+// same after the escape a result is given and the unescape that takes it off
+// again. That road was about half of what `x=$((x + 1))` cost (#6496).
+//
+// The expansion is subscriptArith, which is the word road's own call for the
+// span, so a held result and a failure are answered exactly as there; a
+// failed one is the empty text the road leaves.
+func (r *Runner) plainArithValue(w *syntax.Word) (string, bool) {
+	if !plainArithShortcut || w == nil || len(w.Spans) != 1 || !r.plainArithOf(&w.Spans[0]) {
+		return "", false
+	}
+	defer r.inWord(w)()
+	v, ok := r.subscriptArith(w, w.Spans[0])
+	if !ok {
+		return "", true
+	}
+	return v, true
+}

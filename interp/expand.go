@@ -1158,6 +1158,9 @@ func (r *Runner) wordTextUnsplit(w *syntax.Word, mark func(syntax.Span, string) 
 		if v, ok := r.plainParamValue(w); ok {
 			return v
 		}
+		if v, ok := r.plainArithValue(w); ok {
+			return v
+		}
 	}
 	w = spansCopiedForTildes(r.wordForRun(w))
 	// A prefix running through a quote or an expansion is marked and read at
@@ -1994,6 +1997,11 @@ func (r *Runner) listOfNoPositionalsIsSet(e *syntax.ParamExpr, set bool) bool {
 func (r *Runner) expandAssignValue(w *syntax.Word) string {
 	if w == nil {
 		return ""
+	}
+	// Ahead of the tilde, colon-tilde and `=cmd` passes, which rewrite
+	// unquoted literals, and a word that is one arithmetic expansion has none.
+	if v, ok := r.plainArithValue(w); ok {
+		return v
 	}
 	// The colon closes this word's leading tilde prefix as well as opening
 	// the ones expandColonTildes answers for — `foo=~:~` is two homes in

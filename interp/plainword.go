@@ -123,18 +123,53 @@ func (r *Runner) plainParamValue(w *syntax.Word) (string, bool) {
 		return "", false
 	}
 	s := &w.Spans[0]
-	if s.Kind != syntax.ParamExp || s.Quoting != syntax.Unquoted || !bareNameOnly(s.Param) {
+	if s.Kind != syntax.ParamExp || s.Quoting != syntax.Unquoted || !bareParamOnly(s.Param) {
 		return "", false
 	}
 	name := s.Param.Name
-	if !r.ordinaryScalarName(name) {
-		return "", false
+	var v string
+	if n, ok := positionalNumber(name); ok {
+		// `$1`, which is read off the frame's list and is never a reference,
+		// a produced parameter, an array or a name a discipline watches —
+		// the questions ordinaryScalarName asks of an identifier. The list
+		// is the one specialParam reads, through the selected frame. Unset
+		// goes to the full road, which is where `set -u` is answered.
+		p := r.params()
+		if n > len(p) {
+			return "", false
+		}
+		v = p[n-1]
+	} else {
+		if !identifierName(name) || !r.ordinaryScalarName(name) {
+			return "", false
+		}
+		var set bool
+		if v, set = r.getVar(name); !set {
+			return "", false
+		}
 	}
-	v, set := r.getVar(name)
-	if !set || !plainField(v) || strings.ContainsAny(v, "[]") {
+	if !plainField(v) || strings.ContainsAny(v, "[]") {
 		return "", false
 	}
 	return v, true
+}
+
+// positionalNumber is the positional parameter a bare expansion's name
+// denotes, from 1: digits only, and not starting with a zero, which leaves
+// every spelling of `$0` — `${00}` among them — to the full road.
+func positionalNumber(name string) (int, bool) {
+	if name == "" || name[0] < '1' || name[0] > '9' || len(name) > 9 {
+		return 0, false
+	}
+	n := 0
+	for i := 0; i < len(name); i++ {
+		c := name[i]
+		if c < '0' || c > '9' {
+			return 0, false
+		}
+		n = n*10 + int(c-'0')
+	}
+	return n, true
 }
 
 // readsAreOnlyReads reports whether reading an ordinary scalar's text is
@@ -147,17 +182,25 @@ func (r *Runner) readsAreOnlyReads() bool {
 	return !r.splitWordLiterals.on && !r.shFileExpansion && r.ctl != controlExit && r.disciplined == nil
 }
 
-// bareNameOnly reports whether a parameter expansion is a name and nothing
-// else: no subscript, operator, flag, modifier, nesting or indirection, and a
-// name that is an identifier rather than a special or positional parameter.
-func bareNameOnly(e *syntax.ParamExpr) bool {
-	return e != nil && e.Op == syntax.ParamNone && e.Arg == nil && bareApartFromTheOperator(e)
+// bareParamOnly reports whether a parameter expansion is a name and nothing
+// else: no subscript, operator, flag, modifier, nesting or indirection. What
+// kind of name it is — an identifier, a positional parameter or a special
+// one — is the caller's question.
+func bareParamOnly(e *syntax.ParamExpr) bool {
+	return e != nil && e.Op == syntax.ParamNone && e.Arg == nil && bareShape(e)
 }
 
-// bareApartFromTheOperator is bareNameOnly's list with the operator and its
-// operand left out, so the one other shape that admits an operator — a trim,
-// see plainTrimOf — is decided by the same list rather than a copy of it.
+// bareApartFromTheOperator is bareParamOnly's list with the operator and its
+// operand left out, for a name that is an identifier, so the one other shape
+// that admits an operator — a trim, see plainTrimOf — is decided by the same
+// list rather than a copy of it.
 func bareApartFromTheOperator(e *syntax.ParamExpr) bool {
+	return bareShape(e) && identifierName(e.Name)
+}
+
+// bareShape is the list the two above share: nothing on the expansion but
+// its name and, where the caller admits one, its operator.
+func bareShape(e *syntax.ParamExpr) bool {
 	if e.Index != nil || e.BareIndexText != nil || e.BareIndexUnclosed ||
 		e.Length || e.Indirect || e.Prefix != 0 || e.Member != "" || e.Inner != nil ||
 		e.Arg2 != nil || e.OperandUnreadable != nil ||
@@ -167,7 +210,7 @@ func bareApartFromTheOperator(e *syntax.ParamExpr) bool {
 		e.Bad || e.BadTransform || e.RefusedAtExpansion != nil || e.InsideASubscript {
 		return false
 	}
-	return identifierName(e.Name)
+	return true
 }
 
 // identifierName reports whether name is a shell identifier: a letter or an

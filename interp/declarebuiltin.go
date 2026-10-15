@@ -6961,6 +6961,24 @@ func (r *Runner) expandAssignArg(w *syntax.Word) string {
 		// Never, from either caller: both asked one of those two questions.
 		return r.expandAssignValue(w)
 	}
+	if i == 0 && j+1 == len(w.Spans[0].Value) && len(w.Spans) == 2 && w.Spans[0].Quoting == syntax.Unquoted {
+		// `name=$v` and `name=$1`, which is most valued operands there are:
+		// the `=` ends the first span and the value is one expansion. Built
+		// as below, the value is an empty literal and that expansion, which
+		// is two words of allocation and the full road for a read of one
+		// parameter. Without the empty literal it is the one span
+		// plainParamValue answers — and that is all expandAssignValue would
+		// have done with it, since the tilde, colon-tilde and `=cmd` passes
+		// it makes first rewrite unquoted literals and there are none. A
+		// word on the stack rather than the copy, so asking is free when the
+		// answer is no.
+		if head := w.Spans[0].Value[:j]; isPlainName(head) {
+			one := syntax.Word{Spans: w.Spans[1:]}
+			if v, ok := r.plainParamValue(&one); ok {
+				return head + "=" + v
+			}
+		}
+	}
 	value := *w
 	// Made at its full length in one allocation: the literal from the `=` on,
 	// then the spans after it.

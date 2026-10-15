@@ -77,11 +77,17 @@ declaring() { local a=$1 b=$2 c; c=$a$b; }
 // names it declares and the names it stores to instead (see
 // Runner.watchDeclarationKinds).
 //
+// And 5 after that, on main at 7fd1b8456 (#6373): an operand written
+// `name=$1` or `name=$v` is read as the one parameter it is rather than
+// built into a word of its own and taken down the full road, the list of
+// operands that are names is the front of the line's own until one is
+// left out, and a builtin's held output is one allocation rather than three.
+//
 // Allocations rather than time, so the row is deterministic. The bound has
 // room above what a call costs now and is well below what it cost before.
 func TestLocalCostsFewAllocations(t *testing.T) {
-	if got := localCostAllocs(t, localCostDefs, "declaring", "plain"); got > 16 {
-		t.Errorf("three declarations allocate %v times a call more than plain assignments; want at most 16", got)
+	if got := localCostAllocs(t, localCostDefs, "declaring", "plain"); got > 7 {
+		t.Errorf("three declarations allocate %v times a call more than plain assignments; want at most 7", got)
 	}
 }
 

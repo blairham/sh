@@ -76,6 +76,10 @@ func (r *Runner) tracePrefixAsItGoes(c *syntax.SimpleCmd, argv []string, walk pr
 	r.openTrace = line
 	defer func() { r.openTrace = outer }()
 	stopped := false
+	// Held across the entries rather than per entry, so each value sees the
+	// ones in front of it. See expandPrefixTraceValuesHolding.
+	var held heldPrefix
+	defer held.release(r)
 	for i, a := range c.Assigns {
 		if a.Operand {
 			continue
@@ -101,7 +105,7 @@ func (r *Runner) tracePrefixAsItGoes(c *syntax.SimpleCmd, argv []string, walk pr
 			}
 		} else {
 			one := c.Assigns[i : i+1]
-			r.expandPrefixTraceValues(one)
+			r.expandPrefixTraceValuesHolding(one, &held)
 			if words := r.prefixTraceWords(one, *d); len(words) == 1 {
 				word = words[0]
 			}

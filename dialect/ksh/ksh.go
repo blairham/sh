@@ -1815,6 +1815,10 @@ func Semantics() interp.Semantics {
 	// 5. The same split this shell makes for a `typeset` inside the body,
 	// read from the prefix's side (#3161).
 	s.PrefixToAKeywordFunctionIsScopedToTheCall = interp.Yes
+	// An array literal written as a prefix is the array: measured 2026-10-15
+	// on ksh93u+, `f(){ typeset -p x; }; x=(a b) f` lists `typeset -a
+	// x=(a b)` and `x=(a b) printenv x` finds no `x` (#6547).
+	s.PrefixArrayLiteralIsAnArray = interp.Yes
 	// A prefix in front of a POSIX-form function writes the binding the name
 	// already has, elements and letters and all. Measured 2026-09-21 on
 	// ksh93u+ 2012 from a script file under `env -i` with a scratch HOME:

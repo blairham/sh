@@ -118,9 +118,7 @@ func (r *Runner) expandThePrefixUpToTheFrozenName(assigns []*syntax.Assign, refu
 		if r.expandErr || r.ctl != controlNone {
 			return true
 		}
-		if name, ok := r.prefixHoldableName(a); ok {
-			held.hold(r, name, joined)
-		}
+		r.holdPrefixEntry(&held, a, joined)
 		if !frozen && r.tracing() && r.diag().TracePrefixAssignment == TracePrefixOwnLineBefore {
 			// Written as it is expanded, ahead of the refusal still to come,
 			// in the column that writes a line per entry in front of the

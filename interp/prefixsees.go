@@ -65,6 +65,53 @@ func (h *heldPrefix) hold(r *Runner, name, value string) {
 	r.varsPut(name, value)
 }
 
+// holdArray is hold for an entry that puts an array under its name.
+func (h *heldPrefix) holdArray(r *Runner, name string, values []string) {
+	h.undo = append(h.undo, r.saveVar(name))
+	elems := make([]Element, len(values))
+	for i, v := range values {
+		elems[i] = Scalar(v)
+	}
+	r.varsDel(name)
+	r.dropAssocTable(name)
+	r.attrClear(name, attrRemoved)
+	r.arraysPut(name, ArrayOf(elems...))
+}
+
+// holdPrefixEntry holds what one entry came to for the entries behind it, the
+// one spelling every walk uses so that none of them can hold a different
+// thing: the scalar, or the **array** an entry that stores one puts there.
+// Measured 2026-10-15 from `-c` under `env -i PATH=/usr/bin:/bin`, `x=(a b)
+// y=$x /usr/bin/printenv y` is `a` in ksh93u+ and `a b` in zsh 5.9.2 —
+// each shell's own reading of an array's name — where holding the scalar the
+// routes carry for a literal showed `y` nothing (#6547).
+//
+// A literal whose elements name their own places, or nest, is not held: its
+// array is the statement form's to build, and that is the store the route
+// makes for real.
+func (r *Runner) holdPrefixEntry(h *heldPrefix, a *syntax.Assign, joined string) {
+	name, ok := r.prefixHoldableName(a)
+	if !ok {
+		return
+	}
+	if elems, isArray := r.prefixArrayLiteral(a); isArray {
+		var values []string
+		for _, e := range elems {
+			if e.subscripted || e.nested != nil || e.members != nil {
+				return
+			}
+			values = append(values, e.fields...)
+		}
+		h.holdArray(r, name, values)
+		return
+	}
+	if fields, globbed := r.prefixGlobFields(a); globbed && len(fields) > 1 {
+		h.holdArray(r, name, fields)
+		return
+	}
+	h.hold(r, name, joined)
+}
+
 // release puts every held cell back, most recent first.
 func (h *heldPrefix) release(r *Runner) {
 	r.restoreVars(h.undo)

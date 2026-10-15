@@ -32397,6 +32397,29 @@ binding and the store lands in the new cell. bash 3.2.57 answers `declare
 -x foo="bar"` for the same line, emptying the cell before the join rather
 than after; that is the one row of this where the two builds part.
 
+### An array literal as a prefix
+
+`x=(a b) cmd` is read three ways, and `PrefixArrayLiteralIsAnArray` is the
+split. Measured 2026-10-15 from `-c` under `env -i PATH=/usr/bin:/bin`, with
+`f(){ typeset -p x; }`:
+
+| | bash 5.3.20 | ksh93u+ | zsh 5.9.2 |
+|---|---|---|---|
+| `x=(a b) f` | `declare -x x="(a b)"` | `typeset -a x=(a b)` | `typeset -g -a x=( a b )` |
+| `x=(a b) printenv x` | `(a b)` | status 1 | status 1 |
+| `set -x; x=(a $(echo b)) true` | `+ x='(a b)'` | `+ x=( a b )` | `x=( a b )` |
+| `x=(a b) y=$x printenv y` | `(a b)` | `a` | `a b` |
+
+bash keeps the literal's text as a scalar: each element is expanded as an
+assignment's value is, the elements are joined with a space, and the
+parentheses stay. Nothing is globbed, brace-expanded or tilde-expanded
+(`x=(*.txt ~ {a,b})` is `(*.txt ~ {a,b})`), a subscript keeps its brackets
+with its expansions made, and `+=` joins the text onto what the name held.
+ksh93 and zsh store the array for the length of the command. An array takes
+no export attribute, so a child is handed no `x` at all, even over an
+exported `x`, and the entries behind the literal read the name as each
+shell reads an array's name.
+
 ### Two prefixes over one name, and which take-back runs
 
 A call's prefix and an inner command's prefix can stand over the same

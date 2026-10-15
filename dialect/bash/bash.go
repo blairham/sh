@@ -1244,6 +1244,11 @@ func Semantics() interp.Semantics {
 	// shows the body `base5`, which is the append reading the shell's value
 	// (#3161).
 	s.PrefixToAKeywordFunctionIsScopedToTheCall = interp.No
+	// An array literal written as a prefix is a scalar holding its text, the
+	// elements expanded and joined: measured 2026-10-15 on 5.3.20, `x=(a
+	// $(echo b)) printenv x` is `(a b)` and `f(){ typeset -p x; }; x=(a b) f`
+	// lists `declare -x x="(a b)"` (#6547).
+	s.PrefixArrayLiteralIsAnArray = interp.No
 	// The cell that prefix writes is the prefix's own, though, and not the
 	// binding the name already had: `foo=(asdf fdsa); ff() { declare -p foo;
 	// }; foo=bar ff` lists `declare -x foo="bar"` — a plain exported scalar,

@@ -926,6 +926,9 @@ func Semantics() interp.Semantics {
 	// `function` keyword here, so there is no second function spelling for a
 	// prefix to be scoped differently in front of. Measured 2026-09-18,
 	// `function kf { :; }` is `Syntax error: "{" unexpected` (#3161).
+	// unanswered PrefixArrayLiteralIsAnArray: there is no array literal to
+	// write as a prefix. Measured 2026-10-15, `x=(a b) true` is `Syntax
+	// error: "(" unexpected` (#6547).
 	// unanswered NamerefCycleIsRefused: there are no name references to make
 	// a cycle of. Measured 2026-09-15, `typeset` is not a builtin here —
 	// `typeset: not found` at 127 — so the declaration that would build one

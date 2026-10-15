@@ -4,6 +4,7 @@
 package interp
 
 import (
+	"slices"
 	"strings"
 
 	"github.com/blairham/sh/syntax"
@@ -69,11 +70,11 @@ import (
 // Nothing is asked where nothing could move, so an ordinary `x=1` reaches no
 // axis: a refusal reported for every assignment in a script would be an axis
 // refusing the shape rather than the behavior.
-func (r *Runner) assignValueEquals(w *syntax.Word) {
+func (r *Runner) assignValueEquals(w *syntax.Word) *syntax.Word {
 	if w == nil || len(w.Spans) == 0 {
-		return
+		return w
 	}
-	r.expandEqualsSegments(w, 0, 0, true, false)
+	return r.expandEqualsSegments(w, 0, 0, true, false)
 }
 
 // wordEquals is the same pair of positions counted from the first unquoted
@@ -86,22 +87,22 @@ func (r *Runner) assignValueEquals(w *syntax.Word) {
 // option off and in bash 5.3.20, which is the shell the narrow rule was
 // measured on. EqualsExpansion stands in front of both, so a dialect without
 // the expansion asks neither.
-func (r *Runner) wordEquals(w *syntax.Word) {
+func (r *Runner) wordEquals(w *syntax.Word) *syntax.Word {
 	if len(w.Spans) == 0 {
-		return
+		return w
 	}
 	span, eq, ok := firstUnquotedEquals(w.Spans)
 	if !ok || !equalsCouldMove(w.Spans, span, eq) {
-		return
+		return w
 	}
 	if !r.ask(r.sem().EqualsExpansion, "`=cmd` expanding to a path") {
-		return
+		return w
 	}
 	if !r.ask(r.sem().TheFirstUnquotedEqualsInAWordOpensATildeContext,
 		"every word with an unquoted `=` in it being a tilde context") {
-		return
+		return w
 	}
-	r.expandEqualsSegments(w, span, eq+1, true, true)
+	return r.expandEqualsSegments(w, span, eq+1, true, true)
 }
 
 // equalsCouldMove reports whether a `=` at span/eq has a `=cmd` behind it
@@ -121,8 +122,12 @@ func equalsCouldMove(spans []syntax.Span, span, eq int) bool {
 // The axis is asked on the first segment that could move rather than up
 // front, for assignValueEquals' reason — and it is asked once, because a
 // value with two of them is one reading of one word.
-func (r *Runner) expandEqualsSegments(w *syntax.Word, headSpan, headOff int, head, answered bool) {
+//
+// The word it is given is never written: the first segment that moves copies
+// it, and the copy is returned. See Runner.expandEquals for why (#6433).
+func (r *Runner) expandEqualsSegments(w *syntax.Word, headSpan, headOff int, head, answered bool) *syntax.Word {
 	asked, on := answered, answered
+	copied := false
 	for i := range w.Spans {
 		s := &w.Spans[i]
 		if s.Kind != syntax.Literal || s.Quoting != syntax.Unquoted {
@@ -165,18 +170,24 @@ func (r *Runner) expandEqualsSegments(w *syntax.Word, headSpan, headOff int, hea
 				asked = true
 			}
 			if !on {
-				return
+				return w
 			}
 			path, ok := r.equalsPath(v[j+1 : k])
 			if !ok {
-				return
+				return w
 			}
 			b.WriteString(path)
 			j = k - 1
 			moved = true
 		}
 		if moved {
-			s.Value = b.String()
+			if !copied {
+				c := *w
+				c.Spans = slices.Clone(w.Spans)
+				w, copied = &c, true
+			}
+			w.Spans[i].Value = b.String()
 		}
 	}
+	return w
 }

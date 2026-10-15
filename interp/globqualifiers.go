@@ -448,6 +448,17 @@ func parseGlobQualifiers(list string) (globQualifiers, string, bool) {
 	return q, "", true
 }
 
+// tests reports whether the list holds anything that asks about a file, as
+// against only `N`, `D`, sorts, subscripts and modifiers.
+func (q globQualifiers) tests() bool {
+	for _, section := range q.sections {
+		if len(section) > 0 {
+			return true
+		}
+	}
+	return false
+}
+
 // keep reports whether one path survives the list: every test in a section
 // has to hold, and any section will do.
 //
@@ -713,14 +724,23 @@ func (r *Runner) globRangeIndex(text string) (int, bool) {
 // ones reported, because a type test is a question about a file and the
 // working directory is not the shell's process directory. A path that cannot
 // be read is dropped rather than kept: it is not a regular file, not a
-// directory and not a link, so no qualifier can hold of it.
+// directory and not a link, so no qualifier can hold of it. That is
+// sectionKeeps's answer, asked by the first test that reads the file.
+//
+// **A list with no test in it asks the filesystem nothing.** `*(N)`, `*(:t)`
+// and `*([1])` keep every name the walk reported, and the walk reports only
+// names that are there — a literal component included: `./nope(N)` and
+// `/nonexistent(N)` are empty in zsh 5.9.2 and here without a stat from this
+// function. compinit's `^([^_]*|*~|*.zwc)(N)` over every `$fpath` directory
+// is such a list, and asking each of its ~1,500 names for an lstat was
+// ~4 ms of every real-config start (#6363).
 func (r *Runner) keepQualified(paths []string, q globQualifiers) []string {
+	if !q.tests() {
+		return paths
+	}
 	kept := make([]string, 0, len(paths))
 	for _, p := range paths {
 		f := globFile{r: r, path: strings.TrimSuffix(p, "/")}
-		if f.info(false) == nil {
-			continue
-		}
 		if q.keep(&f) {
 			kept = append(kept, p)
 		}
@@ -807,11 +827,28 @@ type globFile struct {
 // file in its own right", and measured: `*(-@)` lists the dangling link and
 // neither of the two that resolve, because following those two reaches a
 // regular file and a directory while following this one reaches nothing.
+//
+// **One system call answers most files, whichever is asked first.** A test
+// that follows asks stat before lstat, and only a stat that fails — a
+// dangling link, or nothing there — goes on to ask lstat. An lstat that finds
+// something other than a link is also the target's answer, so a later
+// following test does not stat it again. compaudit's `(N-^u0^u$EUID)` over
+// every `$fpath` file paid for two calls per name before (#6363).
 func (f *globFile) info(follow bool) fs.FileInfo {
+	if follow && !f.askedLink && !f.askedTarget {
+		f.askedTarget = true
+		if info, err := f.r.stat(f.path); err == nil {
+			f.target = info
+			return info
+		}
+	}
 	if !f.askedLink {
 		f.askedLink = true
 		if info, err := f.r.lstat(f.path); err == nil {
 			f.link = info
+			if info.Mode()&fs.ModeSymlink == 0 {
+				f.target, f.askedTarget = info, true
+			}
 		}
 	}
 	if !follow || f.link == nil {

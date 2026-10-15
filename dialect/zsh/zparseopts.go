@@ -898,6 +898,11 @@ func zparseoptsStore(
 			}
 			continue
 		}
+		// The freeze and a fixed scalar slot refuse the store as they refuse
+		// `set -A`'s, and the refusal is the builtin's last act (#6513).
+		if st, stop := r.RefusesAWholeArrayStore(name, false); stop {
+			return st
+		}
 		var elems []string
 		for _, slot := range lists[name] {
 			elems = append(elems, slot...)
@@ -909,6 +914,12 @@ func zparseoptsStore(
 			if !refused {
 				bad, refused = opts.assoc, true
 			}
+		} else if opts.keep && len(assoc) == 0 {
+			// `-K` with nothing matched leaves the association alone, so
+			// there is no store for a freeze to refuse: measured,
+			// `typeset -r v=1; zparseopts -K -A v a` says nothing.
+		} else if st, stop := r.RefusesAWholeArrayStore(opts.assoc, true); stop {
+			return st
 		} else {
 			table := map[string]string{}
 			if opts.keep {

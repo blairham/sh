@@ -160,8 +160,17 @@ func (c *varCell) clearSlot(s cellSlots) {
 // is compacted or let go: a name is never moved otherwise, a name added goes
 // on the end, and a clone's slab has the same positions as its parent's. Both
 // of those places forget it.
+//
+// Two are remembered, the last and the one before it, and a hit on the older
+// one swaps them. A loop that counts two names — `i=$((i + 1)); n=$((n +
+// 1))` — alternates between them, and with one remembered every first
+// question about either was a probe (#6496).
 func (r *Runner) cell(name string) *varCell {
 	if r.lastCell != 0 && sameName(name, r.lastCellName) {
+		return &r.cellSlab[r.lastCell-1]
+	}
+	if r.prevCell != 0 && sameName(name, r.prevCellName) {
+		r.rememberCell(name, r.prevCell-1)
 		return &r.cellSlab[r.lastCell-1]
 	}
 	r.cellProbes++
@@ -172,10 +181,24 @@ func (r *Runner) cell(name string) *varCell {
 			r.settleFirstUse(name)
 			return r.cell(name)
 		}
-		r.lastCellName, r.lastCell = name, i+1
+		r.rememberCell(name, i)
 		return &r.cellSlab[i]
 	}
 	return nil
+}
+
+// rememberCell makes the cell at i the last one found, and the last one the
+// one before it.
+func (r *Runner) rememberCell(name string, i int32) {
+	r.prevCellName, r.prevCell = r.lastCellName, r.lastCell
+	r.lastCellName, r.lastCell = name, i+1
+}
+
+// forgetCells drops both remembered cells, for a slab whose positions no
+// longer say what the index says.
+func (r *Runner) forgetCells() {
+	r.lastCellName, r.lastCell = "", 0
+	r.prevCellName, r.prevCell = "", 0
 }
 
 // sameName reports whether two names are one, asking the length and the first
@@ -195,7 +218,7 @@ func (r *Runner) cellFor(name string) *varCell {
 	r.cellSlab = append(r.cellSlab, varCell{name: name})
 	i := int32(len(r.cellSlab) - 1)
 	r.cellIndex[name] = i
-	r.lastCellName, r.lastCell = name, i+1
+	r.rememberCell(name, i)
 	return &r.cellSlab[i]
 }
 
@@ -267,7 +290,7 @@ func (r *Runner) compactCellsIfSparse() {
 	}
 	leaveShare(&r.cellIndexShare)
 	r.cellSlab, r.cellIndex = slab, index
-	r.lastCellName, r.lastCell = "", 0
+	r.forgetCells()
 }
 
 // slotRange is every cell holding s, in the order the names were made. A
@@ -531,7 +554,7 @@ func (r *Runner) releaseVarTables() {
 	leaveShare(&r.cellIndexShare)
 	leaveShare(&r.assocShare)
 	r.cellIndex, r.cellSlab = nil, nil
-	r.lastCellName, r.lastCell = "", 0
+	r.forgetCells()
 	r.cellCount, r.liveCells = [cellSlotCount]int{}, 0
 	r.attrCount, r.attrTotal = [cellAttrCount]int{}, 0
 }

@@ -86,7 +86,7 @@ func (r *Runner) SetVarOnFirstUse(name string, value func() (string, bool)) {
 	r.firstUseSeeds = seeds
 	// cellFor remembered the cell as the last one found, and the shortcut
 	// that answers from that memory does not look at the flag.
-	r.lastCellName, r.lastCell = "", 0
+	r.forgetCells()
 }
 
 // settleFirstUse lays down the value waiting under a name that was touched.

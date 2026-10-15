@@ -64,9 +64,12 @@ type Runner struct {
 	firstUseSeeds   map[string]*firstUseSeed
 	firstUsePending int
 	// lastCellName is the name Runner.cell found last and lastCell its
-	// position in the slab plus one; zero is none.
+	// position in the slab plus one; zero is none. prevCellName and prevCell
+	// are the one found before it.
 	lastCellName string
 	lastCell     int32
+	prevCellName string
+	prevCell     int32
 	// cellProbes counts the lookups Runner.cell made in the index, so a test
 	// can say how many a construct costs.
 	cellProbes int

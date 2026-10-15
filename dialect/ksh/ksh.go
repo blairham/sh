@@ -4752,7 +4752,7 @@ func Diagnostics() interp.Diagnostics {
 		// `whence: ']]': not found`, `whence: $'a\tb': not found`. The same
 		// spelling as TraceQuoting below, measured character for character
 		// including the leading-only `=` and the `$'…'` form (#3666).
-		NameReportQuoting:       interp.QuoteDollar,
+		NameReportQuoting:       interp.QuoteAsListed,
 		CommandVNotFound:        "command: %[1]s: not found",
 		JobStarted:              "[%[1]d]\t%[2]d",
 		JobNoticeShowsAmpersand: true,
@@ -4945,15 +4945,15 @@ func Diagnostics() interp.Diagnostics {
 		ScriptNotReadable:            "%[1]s: cannot open [%[2]s]",
 		ScriptNotReadableStatus:      126,
 		Location:                     interp.LocationLineWordAfterFirst,
-		TraceQuoting:                 interp.QuoteDollar,
-		TraceEscape:                  interp.TraceEscapeHex,
-		// The tilde and the hash count anywhere here rather than only at the
-		// front, `=` counts only at the front, and `^` and `!` do not count
-		// at all — three splits from bash in one set. Measured 2026-09-12.
-		TraceMetacharacters: interp.TraceMetacharacters{
-			Anywhere: "*?[]{}~#",
-			Leading:  "=",
-		},
+		// A traced word is written exactly as `typeset -p` writes a value,
+		// and so is `%q`'s and `whence`'s: one function in this shell, so
+		// which characters need quoting is the listing's to say and there
+		// are no TraceMetacharacters here. The set this column carried —
+		// `*?[]{}~#` anywhere, `=` only at the front — was read off 36 words
+		// none of which had a `name=` head, an `=` past the front, or a `#`
+		// after a number (#6582).
+		TraceQuoting: interp.QuoteAsListed,
+		TraceEscape:  interp.TraceEscapeHex,
 		// Both ends of a test are printed bare: `[ 1 -lt 2 ]`, where bash
 		// quotes both and zsh quotes the closer. Only the final operand —
 		// `[ -n "]" ]` is `[ -n ']' ]`.
@@ -4980,7 +4980,7 @@ func Diagnostics() interp.Diagnostics {
 		// The same quoting inside a condition as outside it, which is where
 		// this shell parts from bash: `[[ "a b" == "a b" ]]` traces
 		// `[[ 'a b' == 'a b' ]]` here and `[[ a b == a b ]]` there.
-		TraceConditionQuoting: interp.QuoteDollar,
+		TraceConditionQuoting: interp.QuoteAsListed,
 		// And a pattern operand is traced as the pattern this shell reads it
 		// as, `=~` included. See the field.
 		TraceConditionAsKsh93: true,

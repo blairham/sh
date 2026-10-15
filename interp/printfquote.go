@@ -86,23 +86,6 @@ func bashQuotableByte(i int, c byte) bool {
 	return quotableByte(i, c)
 }
 
-// kshQuotableByte is the same difference for ksh93, whose `'…'` decision is
-// taken over the whole value: one byte in this set puts the *value* in
-// quotes rather than that byte behind a backslash.
-//
-//	`^`   zsh escapes it, ksh93 does not
-//	`~`   ksh93 quotes it wherever it stands, not only at the start
-//	`=`   both only at the start
-func kshQuotableByte(i int, c byte) bool {
-	switch c {
-	case '^':
-		return false
-	case '~':
-		return true
-	}
-	return quotableByte(i, c)
-}
-
 // ansiCWordQuote is bash's `%q`: backslash escaping while every byte can be
 // written as itself, and the whole word inside one `$'…'` as soon as one
 // cannot.
@@ -188,46 +171,11 @@ func zshControlEscape(c byte) string {
 	return string(rune(c))
 }
 
-// kshSingleQuote is ksh93's `%q`, which has three shapes rather than two.
-//
-// A value it can write bare it writes bare — `abc` is `abc`, where the other
-// two agree. A value holding a byte it cannot write, or a `'`, goes into
-// `$'…'`; anything else that needs quoting goes into plain `'…'`, where a
-// backslash is *not* doubled because a single-quoted backslash is already
-// itself. That last row is the one a `'\”`-style quoter gets wrong: `a\b` is
-// `'a\b'` here and `'a\b'` read back is `a\b`.
-func kshSingleQuote(s string) string {
-	if s == "" {
-		return "''"
-	}
-	if hasUnwritableByte(s) || strings.IndexByte(s, '\'') >= 0 {
-		var b strings.Builder
-		b.WriteString("$'")
-		eachQuotableByte(s, func(_ int, c byte) {
-			switch {
-			case c == '\'' || c == '\\':
-				b.WriteByte('\\')
-				b.WriteByte(c)
-			case unwritableByte(c):
-				b.WriteString(kshControlEscape(c))
-			default:
-				b.WriteByte(c)
-			}
-		}, func(_ int, raw string) { b.WriteString(raw) })
-		b.WriteByte('\'')
-		return b.String()
-	}
-	quote := false
-	eachQuotableByte(s, func(i int, c byte) {
-		if kshQuotableByte(i, c) {
-			quote = true
-		}
-	}, func(int, string) {})
-	if quote {
-		return "'" + s + "'"
-	}
-	return s
-}
+// ksh93's `%q` has no function here: it is the listing's spelling, reached
+// through Runner.wordAsListed, because that shell's `%q`, trace and `typeset
+// -p` are one function and a copy of it here had already drifted — `a=b c`
+// was `'a=b c'` where the shell writes `a='b c'`, and `16#ff` was quoted
+// (#6582).
 
 // kshControlEscape is the third spelling of one byte, and the reason it is a
 // third rather than a second: ksh93 writes two-digit lower-case hex where the

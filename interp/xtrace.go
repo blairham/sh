@@ -300,8 +300,11 @@ const (
 	// is a special case in the newer shell rather than the lazy rule
 	// QuoteShellLazy names.
 	QuoteShell
-	// QuoteDollar is ksh93, which reaches for `$'…'` for an embedded quote
-	// where bash and zsh write `'it'\''s'`.
+	// QuoteDollar reaches for `$'…'` for an embedded quote where bash and
+	// zsh write `'it'\''s'`. It was ksh93's until #6582 showed that shell
+	// writes a word with its listing's rules, which is QuoteAsListed; no
+	// preset holds this one now, and the interp tests that model the
+	// `$'…'` spelling on its own still do.
 	QuoteDollar
 	// QuoteSingleOnly is BusyBox ash, which has no `$'…'` in its trace at
 	// all: a single quote is the only device it reaches for.
@@ -338,6 +341,22 @@ const (
 	// falls out of the general rule in zsh, which is why the second and
 	// third rows are the ones that pin this value.
 	QuoteShellLazy
+	// QuoteAsListed writes a word exactly as the dialect lists a value back,
+	// and as its `printf %q` writes one: ksh93, whose trace, `%q`, `whence`'s
+	// name and `typeset -p` are one quoting function. Measured 2026-10-15 on
+	// ksh93u+ 2012-08-01 over 96 words, each written all four ways, and the
+	// four agreed on every one — including the three shapes a quoter of its
+	// own got wrong (#6582):
+	//
+	//	word        all four ways
+	//	st=1 [4]    st='1 [4]'      a leading `name=` stands bare
+	//	a=b=c       a='b=c'         and an `=` anywhere else is quoted
+	//	16#ff       16#ff           a `#` after a non-name is bare
+	//	a=é         a=$'\u[e9]'     the listing's spelling of a character
+	//
+	// So it is not a fourth spelling to keep in step with the listing's: it
+	// is the listing's, reached from here. See Runner.wordAsListed.
+	QuoteAsListed
 )
 
 // TraceMetacharacters is the characters that make an expanded word need
@@ -604,7 +623,9 @@ func (r *Runner) traceAssignments(assigns []*syntax.Assign, values []string, pre
 // double run #1915 fixed for a scalar's value. Tracked as #1959.
 func (r *Runner) traceAssign(a *syntax.Assign, value string, e *expandedAssign, d Diagnostics) string {
 	var b strings.Builder
-	b.WriteString(traceAssignTarget(a, e))
+	b.WriteString(traceAssignTarget(a, e, func(key string) string {
+		return r.traceQuote(key, d.TraceQuoting, d.TraceMetacharacters)
+	}))
 	if a.IsArray {
 		b.WriteString(r.traceArrayLiteral(a.Elems, expandedElemsOf(e),
 			d.TraceArrayLiteral, d, r.traceWordLayout(d)))
@@ -642,7 +663,13 @@ func (r *Runner) traceAssign(a *syntax.Assign, value string, e *expandedAssign, 
 // one dialect writes it before the value has been expanded — see
 // interp/xtraceopenline.go — and the two halves must agree with the word
 // traceAssign writes whole.
-func traceAssignTarget(a *syntax.Assign, e *expandedAssign) string {
+//
+// quote is how a resolved subscript is written, which is a word written back
+// like any other: measured 2026-10-15 on ksh93u+ 2012-08-01, `m["a b"]=w`
+// traces as `m['a b']=w` and `m["k=1 2"]=v` as `m[k='1 2']=v`, the same
+// spelling `typeset -p m` gives the keys, where this wrote them raw (#6582).
+// A subscript as written is the script's own text and is not quoted again.
+func traceAssignTarget(a *syntax.Assign, e *expandedAssign, quote func(string) string) string {
 	var b strings.Builder
 	b.WriteString(a.Name)
 	if a.Index != nil {
@@ -650,7 +677,7 @@ func traceAssignTarget(a *syntax.Assign, e *expandedAssign) string {
 		if e != nil && e.subscriptSet {
 			// What the store resolved it to, in the one column that writes
 			// that — see Semantics.TraceElementSubscriptIsEvaluated.
-			b.WriteString(e.subscript)
+			b.WriteString(quote(e.subscript))
 		} else {
 			b.WriteString(syntax.PrintWord(a.Index))
 		}
@@ -1440,6 +1467,9 @@ func (r *Runner) traceQuote(s string, q TraceQuoting, meta TraceMetacharacters) 
 	units := r.eachTraceUnit
 	if q == QuoteNever {
 		return s
+	}
+	if q == QuoteAsListed {
+		return r.wordAsListed(s)
 	}
 	if s == "" {
 		// An empty field is `''` in the three shells that have a `$'…'` and

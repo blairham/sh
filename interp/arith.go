@@ -1390,6 +1390,12 @@ func (r *Runner) writePlace(p arithPlace, v arithNum, from syntax.ArithExpr) err
 	was := r.refusedInACommand
 	r.refusedInACommand = false
 	err := r.storePlace(p, v, from)
+	if err == nil && !r.refusedInACommand && !p.subscripted && !p.empty {
+		// Every arithmetic store comes through here — `$(( ))`, `(( ))`,
+		// `let` and the C-style `for` — so this is where `set -a` reaches
+		// them. An element is a compound's store and is marked there.
+		r.markAnExpansionsStoreForAllexport(p.name)
+	}
 	if err == nil && r.refusedInACommand {
 		// Refused and already reported, and the evaluation stops here: `let
 		// x=2 y=3` and `(( x = 2, y = 3 ))` leave y unset over a frozen x in

@@ -13957,6 +13957,26 @@ func (r *Runner) markCompoundForAllexport(name string) {
 	r.markExportedByAllexport(name)
 }
 
+// markAnExpansionsStoreForAllexport is markForAllexport for a name an
+// expansion or an arithmetic expression assigned — see
+// Semantics.AllexportMarksAnExpansionsAssignment. The option is read first, so
+// a script that never says `set -a` is asked nothing.
+//
+// A name that holds an array or a table after the store was written through
+// as an element, which is a compound's store and has been marked, or not, by
+// markCompoundForAllexport already: `a=(1 2); set -a; (( a = 5 ))` writes
+// element 0 in bash 5.3.20 and lists `declare -a` with no `x`.
+func (r *Runner) markAnExpansionsStoreForAllexport(name string) {
+	if !r.allexport || r.arrayDeclared(name) || r.assocDeclared(name) {
+		return
+	}
+	if !r.ask(r.sem().AllexportMarksAnExpansionsAssignment,
+		"`set -a` exporting a name an expansion or arithmetic assigns") {
+		return
+	}
+	r.markExportedByAllexport(name)
+}
+
 // markExportedByAllexport is the mark itself.
 func (r *Runner) markExportedByAllexport(name string) {
 	r.exportedPut(name, true)

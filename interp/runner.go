@@ -8769,6 +8769,10 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 		r.failedExpansionStatus = wordsRule
 	}
 	failedUnder, declaredYet := statusBefore, false
+	// How many written words open the command as modifiers, so that the word
+	// at i names the command when i is no more than this. See
+	// leadingModifierWords.
+	namedAfter := r.leadingModifierWords(c.Args)
 	for i, w := range c.Args {
 		argvBefore = append(argvBefore, len(argv))
 		if keepsTheStatus && r.expandErr {
@@ -8905,7 +8909,7 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 		// than by what the words in front of it came to. See
 		// interp/equalscontextposition.go.
 		restorePosition := func() {}
-		if r.namesTheCommand(c.Args, i) {
+		if i <= namedAfter {
 			restorePosition = r.outsideTheEqualsContextWord()
 		} else if r.equalsOpensATildeContextFor(c, argv, i) {
 			restorePosition = r.equalsTildeContextWord()

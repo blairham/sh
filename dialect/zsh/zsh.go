@@ -5349,6 +5349,11 @@ func Semantics() interp.Semantics {
 	// on this under `NO_CLOBBER prevents overwriting parameter with allocated
 	// fd`. See interp.Semantics.NoclobberProtectsAnFdVariable.
 	s.NoclobberProtectsAnFdVariable = interp.Yes
+	// And a `{name}` store makes a name that is not holding a scalar an
+	// integer: `true {v}</dev/null; typeset -p v` is `typeset -i v=11`,
+	// measured 2026-10-15 (#6550). See
+	// interp.Semantics.FdVariableStoreTyping.
+	s.FdVariableStoreTyping = interp.FdVariableStoreMakesANewNameAnInteger
 	// unanswered FdVariableOnASubshellIsTheSubshells: a `{name}` behind
 	// parentheses never parses here — `( : ) {v}</dev/null` is ``parse error
 	// near `{'`` in zsh 5.9.2 under every emulation, measured 2026-10-15

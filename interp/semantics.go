@@ -24344,6 +24344,52 @@ type Semantics struct {
 	// unpinned ksh: the same; TestAnFdVariableOnASubshellIsTheShells pins it.
 	FdVariableOnASubshellIsTheSubshells Answer
 
+	// FdVariableStoreTyping is what a `{name}` redirection's store does to
+	// the name's kind and attributes, beyond giving it the number.
+	//
+	// Measured 2026-10-15 with `-c` against bash 5.3.20, zsh 5.9.2 under
+	// `-f` and ksh93u+ 2012-08-01 (/bin/ksh), each line then `typeset -p`:
+	//
+	//	                                bash          zsh          ksh93
+	//	true {v}</dev/null              v="10"        -i v=11      -i v=10
+	//	set -a; true {v}</dev/null      -x v="10"     export -i    -i v=10
+	//	export v=keep; true {v}…        -x v="10"     export v=11  -i v=10
+	//	v=x; true {v}…                  v="10"        v=11         -i v=10
+	//	typeset -u v=abc; true {v}…     -u v="10"     -u v=11      -i v=10
+	//	typeset -F v=1.5; true {v}…     —             -F v=11.0…   -i v=10
+	//	a=(1 2); true {a}…              -a ([0]=10…)  -i a=11      -i a=10
+	//	typeset -A m; m[k]=1; true {m}… —             -i m=11      -i m=10
+	//	env v=keep <shell> -c 'true {v}…; env'  v=10  v=11         no v
+	//
+	// bash stores the number the way any assignment would. zsh makes a name
+	// that is not already holding a scalar — unset, or an array or a table —
+	// an integer, and leaves an existing scalar's attributes as they were.
+	// ksh93 starts the name over: whatever it was, it is a plain `typeset -i`
+	// afterwards, every other attribute gone, export included, and `set -a`
+	// does not export it either (that half is #6462's, already answered by
+	// the store's allexport marking). A local stays local in both, measured
+	// with `local -a v` in a zsh function and `typeset v` in a ksh93
+	// `function f`. A name reached through a reference is retyped at its
+	// target (ksh93: `typeset -n r=t; true {r}` leaves `typeset -i t=10`).
+	//
+	// The zero value is bash's, which is what this shell did in every
+	// dialect before the axis existed. **Read rather than asked**, and on
+	// purpose: ksh93 disagrees with the other two about nearly every store —
+	// a fresh name is the common case and it is already a split — so asking
+	// would refuse every `{name}` redirection in a vector with no dialect,
+	// which is the axis on the common path. dash and BusyBox ash have no
+	// `{name}` redirection to reach it.
+	//
+	// An element (`{a[1]}`) and a positional parameter (`{1}`) are not
+	// retyped by this: they are not the name. ksh93 does something stranger
+	// with an element still, and that is left alone (#6550).
+	//
+	// unpinned zsh: no corpus case lists a name after a `{name}` store;
+	// TestAFdVariableStoreMakesANewNameAnInteger pins it.
+	//
+	// unpinned ksh: the same; TestAFdVariableStoreStartsTheNameOver pins it.
+	FdVariableStoreTyping FdVariableStoreTypingPolicy
+
 	// DescriptorNumberCeiling is the highest descriptor number a duplication
 	// may name, past which the refusal is about the *number* rather than
 	// about what is open at it.
@@ -36119,6 +36165,41 @@ func (p ArithEmptyBaseDigitsPolicy) String() string {
 		return "zero at ten or above"
 	}
 	return "unspecified"
+}
+
+// FdVariableStoreTypingPolicy is what a `{name}` redirection's store does to
+// the name beyond the value. See [Semantics.FdVariableStoreTyping], which
+// holds the measurements and the reason there is no unanswered value.
+type FdVariableStoreTypingPolicy uint8
+
+const (
+	// FdVariableStoreIsAnAssignment stores the number as any assignment
+	// would, keeping the name's attributes and kind.
+	//
+	// bash 5.3, and the zero value because it is what this shell did in
+	// every dialect before the axis existed.
+	FdVariableStoreIsAnAssignment FdVariableStoreTypingPolicy = iota
+
+	// FdVariableStoreMakesANewNameAnInteger gives the integer attribute to a
+	// name that is not already holding a scalar — unset, or an array or a
+	// table, which the scalar store then replaces — and leaves an existing
+	// scalar as it was: zsh 5.9.2.
+	FdVariableStoreMakesANewNameAnInteger
+
+	// FdVariableStoreStartsTheNameOver makes the name a plain integer
+	// whatever it was, dropping its kind, its other attributes and its
+	// export: ksh93u+.
+	FdVariableStoreStartsTheNameOver
+)
+
+func (p FdVariableStoreTypingPolicy) String() string {
+	switch p {
+	case FdVariableStoreMakesANewNameAnInteger:
+		return "a new name becomes an integer"
+	case FdVariableStoreStartsTheNameOver:
+		return "the name starts over as an integer"
+	}
+	return "an assignment"
 }
 
 // PrintfCountAttributePolicy is which parameters a `%n` gives the integer

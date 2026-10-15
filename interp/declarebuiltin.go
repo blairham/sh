@@ -1365,6 +1365,9 @@ func (r *Runner) numberEndsTheWord(c byte, rest string, later []string) bool {
 
 func biDeclare(r *Runner, _ context.Context, args []string) int {
 	defer func() { r.listsOneElementPerLine = false }()
+	// A function without the `function` word declares into the keyword call
+	// it runs in, where the dialect gives only such a call a scope (#6488).
+	defer r.declareInTheKeywordCallersScope()()
 	name := r.inBuiltin
 	if name == "" {
 		name = "declare"

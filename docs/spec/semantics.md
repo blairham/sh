@@ -5806,6 +5806,25 @@ is not there. It was named that way first, and the core stopped running
 It is asked only where the two answers differ. Inside a keyword-defined
 function they do not, so that case needs no dialect.
 
+"No scope" means the POSIX-style function runs in its **caller's** scope, not
+that its declarations reach the shell: called from a keyword-defined function,
+`typeset` there declares a local of that call (#6488). Measured 2026-10-15 on
+ksh93u+ 2012-08-01, `-c` under `env -i PATH=/usr/bin:/bin`:
+
+| script | ksh93u+ |
+|---|---|
+| `function g { h; echo "g=${x-u}"; }; h() { typeset x=5; }; g; echo "top=${x-u}"` | `g=5`, `top=u` |
+| `x=1; function g { h; echo "g=$x"; }; h() { typeset x=5; x=6; }; g; echo "top=$x"` | `g=6`, `top=1` |
+| the same through a second POSIX-style function, `g` → `k()` → `h()` | `k=5`, `g=5`, `top=u` |
+| `function o { g; …; }` around the first row | `g=5`, `o=u` — the innermost keyword call |
+| `h() { typeset x=5; }; h; echo "top=${x-u}"` | `top=5` — no keyword call below |
+| `function g { h; …; }; h() { readonly x=5; }; …; x=1` | `g=u`, `top=5`, the write taken |
+
+The last row is `ReadonlyFreezeStaysWithTheCall` reached from the same place:
+the freeze lands where `typeset` would declare, so it is the keyword caller's
+too. The declaration is made exactly as if written in the caller's own body —
+see `Runner.declareInTheKeywordCallersScope`.
+
 ## And the axis one level over: who can see a local
 
 Given that a declaration *is* local, who else can see it. Every shell in

@@ -25,6 +25,9 @@ import "strings"
 // holding nothing. The function reads its own empty local afterwards:
 // `readonly x=5; echo "${x-u}"` writes `u`.
 func (r *Runner) readonlyFreezesACallLocal(name, value string, hasValue, appends bool) bool {
+	// The scope `typeset` would declare into, which from a function without
+	// the keyword is the keyword call it runs in (#6488).
+	defer r.declareInTheKeywordCallersScope()()
 	if len(r.scopes) == 0 || r.sem().ReadonlyDeclaresALocal != No {
 		// No scope to take, or the dialect's `readonly` declares one of its
 		// own (or has not said, which readonlyDeclaresALocal reports).

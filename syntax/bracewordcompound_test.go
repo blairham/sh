@@ -47,19 +47,21 @@ func TestABraceWordBehindACompoundIsNamedByItsKind(t *testing.T) {
 }
 
 // An arithmetic command's redirection refused, in the grammar that takes none
-// there: the operator is blamed past a number, the `{name}` itself otherwise,
-// and the flag off reads every one. See
-// [syntax.Dialect.ArithCommandTakesNoRedirection].
+// there: the operator is blamed where nothing stands in front of it, and a
+// number or a `{name}` in front of it is blamed itself, carrying the operator
+// for the dialect that names that instead (#6552). The flag off reads every
+// one. See [syntax.Dialect.ArithCommandTakesNoRedirection].
 func TestARedirectionBehindAnArithmeticCommand(t *testing.T) {
 	t.Parallel()
 	for _, c := range []struct {
-		src, want string
-		fdVar     bool
+		src, want, op string
+		fdVar         bool
 	}{
-		{"(( 1 )) </dev/null", "<", false},
-		{"(( 1 )) 3</dev/null", "<", false},
-		{"(( 1 )) {v}</dev/null", "IO number", true},
-		{"if (( 1 )) >/dev/null; then :; fi", ">", false},
+		{"(( 1 )) </dev/null", "<", "", false},
+		{"(( 1 )) 3</dev/null", "3", "<", false},
+		{"(( 1 )) 3>>/dev/null", "3", ">>", false},
+		{"(( 1 )) {v}</dev/null", "{v}", "<", true},
+		{"if (( 1 )) >/dev/null; then :; fi", ">", "", false},
 	} {
 		d := syntax.Core()
 		d.FdVariableRedirections = true
@@ -73,9 +75,9 @@ func TestARedirectionBehindAnArithmeticCommand(t *testing.T) {
 			t.Errorf("%q: err %v, want a syntax.Error", c.src, err)
 			continue
 		}
-		if se.Token != c.want || se.FdVariable != c.fdVar {
-			t.Errorf("%q: blamed %q (fd variable %v), want %q (%v)",
-				c.src, se.Token, se.FdVariable, c.want, c.fdVar)
+		if se.Token != c.want || se.FdVariable != c.fdVar || se.IONumberOperator != c.op {
+			t.Errorf("%q: blamed %q (fd variable %v, operator %q), want %q (%v, %q)",
+				c.src, se.Token, se.FdVariable, se.IONumberOperator, c.want, c.fdVar, c.op)
 		}
 	}
 	d := syntax.Core()

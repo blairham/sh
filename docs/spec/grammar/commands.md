@@ -2214,6 +2214,36 @@ skips a separator to find this word.
 short form may be closed with its keyword". The short loops take no
 `done`.
 
+### Anything else in the `fi`'s place is refused one token later
+
+Where that `fi` could stand — behind a brace arm, with no `else` and
+nothing in between — **any other token is read as though it might have
+closed the `if`, and the refusal falls on the token after it**: past any
+`;` and newlines behind it, and on the last token read where the input
+ends first. Measured 2026-10-15 on zsh 5.9.2 under `-fc`, a script file
+and standard input (#6553):
+
+| probe | zsh 5.9 |
+| --- | --- |
+| `if [[ x ]] { :; } a b c` | parse error near `b` |
+| `if [[ x ]] { :; } a` ⏎ `echo ok` | near `echo`, line 2 |
+| `if [[ x ]] { :; } a; b` | near `b` |
+| `if [[ x ]] { :; } \| cat` | near `cat` |
+| `if [[ x ]] { :; } >/dev/null foo` | near `/dev/null` |
+| `if [[ x ]] { :; } a fi` | near `fi` |
+| `if [[ x ]] { :; } {foo}` | near `foo` — the `{` is a token of its own |
+| `if [[ x ]] { :; } {v}</dev/null` | near `v` |
+| `{ if [[ x ]] { echo in; } }` ⏎ `echo ok` | near `echo`, line 2 |
+| `if [[ x ]] { :; } a` (`-c`, nothing after) | near `a` |
+| `if [[ x ]] { :; } a;` (`-c`) | near `;` |
+| `if [[ x ]] { :; } a` ⏎ (a script file) | near `\n`, line 2 |
+| `if [[ x ]] { :; } ; echo ok` | `ok` |
+| `if [[ x ]]; { :; } a b` | runs `a` — a `;`-ended condition is another form |
+
+The `}` of an enclosing brace group is no exception, so `f() { if [[ x ]]
+{ echo in; } }` is refused. `emulate sh`, `emulate ksh` and `setopt
+noshortloops` change none of the rows. See `Parser.refuseAfterABraceArm`.
+
 Rows 4 and 5 say the chain's *last* arm decides rather than its first: an
 `elif` with a brace body ends the chain short whether what came before it
 was short or long, and the optional `fi` follows the arm that ended it.

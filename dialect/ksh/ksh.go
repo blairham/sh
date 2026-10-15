@@ -5981,6 +5981,10 @@ func withPromptWordings(d interp.Diagnostics) interp.Diagnostics {
 	// (#6528).
 	d.SyntaxUnexpectedHereDocumentIsTwoAngles = true
 	d.SyntaxUnexpectedFdVariable = "\x04"
+	// And a refused IO number is named by the operator behind it, except a
+	// `{name}` outside a `case` word, which is the byte above. See
+	// SyntaxUnexpectedIONumberIsItsOperator (#6552).
+	d.SyntaxUnexpectedIONumberIsItsOperator = true
 	// A refused word comes back with its quoting off — `"zzz"` is `zzz` —
 	// unless it holds an expansion, and then every quote in it stays:
 	// `"$x"` is `"$x"` and `"a"~` is `a~`. See UnexpectedWordNaming.

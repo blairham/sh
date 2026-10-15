@@ -4858,6 +4858,10 @@ func Diagnostics() interp.Diagnostics {
 		// the measured rows.
 		CondGroupCloserExpected: "unexpected token `%[1]s', expected `%[2]s'",
 		CondSyntaxUnexpected:    "syntax error near `%[1]s'",
+		// A refused `{name}` in front of a redirection is quoted with the
+		// text around it, in the sentence the condition uses. See the field
+		// (#6552).
+		SyntaxUnexpectedFdVariableReadText: "syntax error near `%[1]s'",
 		// And what it quotes there is the text it had read, not the token:
 		// `(a` for the `(` of `(ab)`. See conditions.md.
 		CondSyntaxNamesTheTextRead: true,

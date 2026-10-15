@@ -538,6 +538,29 @@ type Error struct {
 	// own rather than by the text. See
 	// interp.Diagnostics.SyntaxUnexpectedFdVariable.
 	FdVariable bool
+	// IONumberOperator is, where the unexpected token was the digits or the
+	// `{name}` in front of a redirection operator, that operator as written:
+	// `<` for `2<x`, `>>` for `{v}>>x`. Two dialects name it in place of the
+	// token. See interp.Diagnostics.SyntaxUnexpectedIONumberIsItsOperator.
+	//
+	// Empty for every other token, and where the token came out of an alias,
+	// whose positions do not index the input.
+	IONumberOperator string
+	// InCaseWord says the refused token stood where a `case` wants a word —
+	// its subject, or an arm's pattern. The two dialects that name an
+	// operator in place of a `{name}` do it there and only there.
+	InCaseWord bool
+	// InItemList says the refused token stood among the words of a `for`'s
+	// or a `select`'s item list, where it is what ended the list. One of
+	// those two dialects names the operator there too.
+	InItemList bool
+	// FdVariableReadText is, where the unexpected token was a `{name}` in
+	// front of a redirection operator, the text one dialect quotes in its
+	// place: the token and the first byte of the operator, with the byte in
+	// front of the token too unless that is a blank or a newline. `{v}<` for
+	// `for {v}</dev/null`, `|{v}<` for `case x in a|{v}<x)`. See
+	// interp.Diagnostics.SyntaxUnexpectedFdVariableReadText.
+	FdVariableReadText string
 	// FuncBody says the grammar was waiting for a function's body, and that
 	// the body never began — `f() ;` and `f()` rather than `f() {` with the
 	// input running out inside the braces.

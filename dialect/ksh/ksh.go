@@ -4579,11 +4579,11 @@ func Semantics() interp.Semantics {
 	// /dev/fd/4 /dev/fd/5`, `4 5` with 3 parked and `6 7` with 3, 4 and 5
 	// parked — below the 10 this shell's own `exec {a}<` allocates from.
 	s.SubstitutionEndPlacement = interp.SubstitutionEndsAtTheLowestFreeNumber
-	// And nothing the shell saves for a redirected group is in the way of a
-	// number: `{ exec {v}</dev/null; echo $v; } </dev/null` is 10 in ksh93u+,
-	// measured 2026-10-15 (#6473). The one number it holds for a pipeline's
-	// last element is #6503.
-	s.OwnDescriptors = interp.OwnDescriptorsTakeNoNumber
+	// Nothing the shell saves for a redirected group is in the way of a
+	// number — `{ exec {v}</dev/null; echo $v; } </dev/null` is 10 in ksh93u+
+	// (#6473) — but it holds one for a pipeline's last element: `echo x | {
+	// exec {v}</dev/null; echo $v; }` is 11. Measured 2026-10-15 (#6503).
+	s.OwnDescriptors = interp.LastPipelineElementsInputTakesANumber
 
 	// A `{name}>f` descriptor goes back with the command's other
 	// redirections, and closing through a name that holds nothing is not

@@ -15364,11 +15364,15 @@ type Semantics struct {
 	// from 63 down, so only `exec {v}` inside a redirected command can see
 	// it. Filed as #6502 rather than half-modeled.
 	//
-	// unpinned ksh: ksh93u+ answers 10 for `{ exec {v}</dev/null; echo $v; }
-	// </dev/null`, so no saved copy is in the way there, and its
-	// substitutions are published below the base anyway. It does hold one
-	// number while a pipeline's last element runs, which is neither of the
-	// two kinds here — #6503.
+	// ksh93u+ is the third value: it answers 10 for `{ exec {v}</dev/null;
+	// echo $v; } </dev/null`, so no saved copy is in the way there, but holds
+	// one number while a pipeline's last element runs — `echo x | { exec
+	// {v}</dev/null; echo $v; }` is 11 (#6503).
+	//
+	// unpinned ksh: its substitutions are published from 3, below the base
+	// the held number is taken from, so only a `{v}` inside a pipeline's last
+	// element can see it, and no corpus row allocates one there.
+	// TestTheLastPipelineElementHoldsANumber pins it.
 	//
 	// unpinned dash: no `{v}` redirection and no process substitution, so no
 	// number this could move is ever printed.
@@ -38643,11 +38647,20 @@ const (
 	// stream the current shell replaces, and the reading end of each pipe a
 	// pipeline makes, as zsh 5.9.2 holds them.
 	SavedStreamsAndPipeReadEndsTakeNumbers
+
+	// LastPipelineElementsInputTakesANumber counts one number for a
+	// pipeline's last element, held while it runs, and nothing for a
+	// redirected group, as ksh93u+ holds them. See
+	// Runner.holdsTheLastElementsInput.
+	LastPipelineElementsInputTakesANumber
 )
 
 func (o OwnDescriptorNumbers) String() string {
-	if o == SavedStreamsAndPipeReadEndsTakeNumbers {
+	switch o {
+	case SavedStreamsAndPipeReadEndsTakeNumbers:
 		return "saved streams and pipe reading ends take numbers"
+	case LastPipelineElementsInputTakesANumber:
+		return "the last pipeline element's input takes a number"
 	}
 	return "take no number"
 }

@@ -110,6 +110,49 @@ func (r *Runner) countsOwnDescriptors() bool {
 	return r.sem().OwnDescriptors == SavedStreamsAndPipeReadEndsTakeNumbers
 }
 
+// holdsTheLastElementsInput is whether, in the dialect that holds a number for
+// a pipeline's last element, this pipeline's last element holds one.
+//
+// ksh93u+ holds one number from its base while a pipeline's last element runs
+// — however long the pipeline, and in a fork of the element as well — so a
+// `{v}` allocated there is one higher: `echo x | { exec {v}</dev/null; echo
+// $v; }` is 11, and `true | true | { … }` is 11 too. Only where the shell's
+// own input was open, which is what says it is a copy of that input: after
+// `exec 0<&-` it is 10. A substitution's body holds none of it, as it holds
+// none of anything (see substRunner). Measured 2026-10-15 (#6503).
+//
+// One shape holds it once rather than twice: a last element that is a group
+// holding nothing but another pipeline, which is the same pipeline as far as
+// the input is concerned. `echo x | { echo y | { exec {v}</dev/null; echo
+// $v; }; }` is 11, where a second command in the group, a redirection on it,
+// a `!` or a `time` makes it 12.
+func (r *Runner) holdsTheLastElementsInput(last syntax.Command) bool {
+	return r.sem().OwnDescriptors == LastPipelineElementsInputTakesANumber &&
+		r.streamOpen(0) && !aPipelineInBraces(last)
+}
+
+// aPipelineInBraces is whether c is `{ a | b; }`, through any number of such
+// braces: one statement, nothing redirected or backgrounded, and that
+// statement a pipeline of more than one element with no `!`.
+func aPipelineInBraces(c syntax.Command) bool {
+	for {
+		g, ok := c.(*syntax.Group)
+		if !ok || len(g.List) != 1 || len(g.Redirs) > 0 || g.List[0].Background {
+			return false
+		}
+		switch x := g.List[0].Expr.(type) {
+		case *syntax.Pipeline:
+			if len(x.Cmds) == 1 && !x.Negated {
+				c = x.Cmds[0]
+				continue
+			}
+			return len(x.Cmds) > 1 && !x.Negated
+		default:
+			return false
+		}
+	}
+}
+
 // elementEntry is what entering a runner as a pipeline element or a
 // background job owes the first redirection list it applies, which is the
 // element's own.

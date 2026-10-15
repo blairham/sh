@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/blairham/sh/dialect/bash"
+	"github.com/blairham/sh/dialect/ksh"
 	"github.com/blairham/sh/dialect/zsh"
 	"github.com/blairham/sh/internal/dialecttest"
 	. "github.com/blairham/sh/interp"
@@ -40,7 +41,16 @@ trap 'echo err' ERR; ex=$(false); trap - ERR
 (nx=$((1 / 0)); echo after); p "$?"
 x=1 && p and; x=$(false) || p or
 cnt=0; while [ $cnt -lt 3 ]; do cnt=$((cnt + 1)); done; p "$cnt"
+x=<(echo ps) && p "$(cat "$x" 2>/dev/null || echo closed)"
 p end
+`
+
+// assignmentsAloneKsh is the one dialect whose `$_` moves only between the
+// lines the shell reads, where a command run in this shell from inside an
+// assignment's value must not count as the line's command.
+const assignmentsAloneKsh = `echo one two
+x=${ echo a b; }
+echo "[$_]"
 `
 
 // TestACommandOfAssignmentsAloneAnswersAsSimpleCommandDoes runs
@@ -50,12 +60,17 @@ func TestACommandOfAssignmentsAloneAnswersAsSimpleCommandDoes(t *testing.T) {
 	for _, p := range []dialecttest.Preset{
 		{Name: "bash", Dialect: bash.Dialect, Semantics: bash.Semantics, Diagnostics: bash.Diagnostics, Apply: bash.Apply},
 		{Name: "zsh", Dialect: zsh.Dialect, Semantics: zsh.Semantics, Diagnostics: zsh.Diagnostics, Apply: zsh.Apply},
+		{Name: "ksh", Dialect: ksh.Dialect, Semantics: ksh.Semantics, Diagnostics: ksh.Diagnostics, Apply: ksh.Apply},
 	} {
 		t.Run(p.Name, func(t *testing.T) {
+			script := assignmentsAloneScript
+			if p.Name == "ksh" {
+				script = assignmentsAloneKsh
+			}
 			run := func(on bool) (string, int) {
 				was := SetAssignmentsAloneShortcutForTest(on)
 				defer SetAssignmentsAloneShortcutForTest(was)
-				out, st, err := p.Combined(t, dialecttest.Base{Dir: t.TempDir()}, assignmentsAloneScript)
+				out, st, err := p.Combined(t, dialecttest.Base{Dir: t.TempDir()}, script)
 				if err != nil {
 					t.Fatalf("shortcut %v: %v", on, err)
 				}
@@ -68,7 +83,11 @@ func TestACommandOfAssignmentsAloneAnswersAsSimpleCommandDoes(t *testing.T) {
 			}
 			// The rows the comparison leans on, so a script that stopped
 			// early compares nothing.
-			for _, row := range []string{"<0>\n<3>\n<4><>\n", "<1><5>\n", "<4><5>\n<5>\n", "<1><2><3>\n", "dbg\n", "err\n", "<and>\n<or>\n<3>\n<end>\n"} {
+			rows := []string{"<0>\n<3>\n<4><>\n", "<1><5>\n", "<4><5>\n<5>\n", "<1><2><3>\n", "dbg\n", "err\n", "<and>\n<or>\n<3>\n", "<end>\n"}
+			if p.Name == "ksh" {
+				rows = []string{"[two]\n"}
+			}
+			for _, row := range rows {
 				if !strings.Contains(full, row) {
 					t.Errorf("the script did not reach %q:\n%s", row, full)
 				}

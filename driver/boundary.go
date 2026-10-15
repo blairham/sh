@@ -22,7 +22,7 @@ import (
 // so both are accesses a policy is entitled to refuse and an audit trail is
 // entitled to see. They were latent while nothing supplied a gate, and #460
 // stopped them being latent.
-func (sh Shell) boundary() boundary.Boundary {
+func (sh *Shell) boundary() boundary.Boundary {
 	return boundary.Boundary{Gate: sh.Gate, Events: sh.Events, Session: sh.Session}
 }
 
@@ -40,7 +40,7 @@ func (sh Shell) boundary() boundary.Boundary {
 // same words, which is the point: `sh -policy p link` where the link points
 // into a denied place fails the way `sh -policy p denied-file` fails, and the
 // record — not the diagnostic — says where the link went.
-func (sh Shell) readFile(path string) ([]byte, error) {
+func (sh *Shell) readFile(path string) ([]byte, error) {
 	b, err := sh.boundary().ReadFile(context.Background(), path)
 	if errors.Is(err, boundary.ErrRefused) {
 		return nil, &fs.PathError{Op: "open", Path: path, Err: syscall.EACCES}

@@ -73,7 +73,7 @@ func mcpOption(word string, args []string, inv *invocation) (rest []string, matc
 
 // runMCP hands the process to the protocol server the binary supplied, and
 // returns the status to exit with.
-func (sh Shell) runMCP() int {
+func (sh *Shell) runMCP() int {
 	if sh.ServeMCP == nil {
 		// Refused, not ignored: a binary that never wired the hook has no
 		// protocol to serve, and saying so is the whole difference between a
@@ -81,7 +81,7 @@ func (sh Shell) runMCP() int {
 		sh.errf("%s: --mcp: this binary does not serve the Model Context Protocol\n", sh.Name)
 		return usageStatus
 	}
-	return sh.ServeMCP(sh)
+	return sh.ServeMCP(*sh)
 }
 
 // DevVersion is what a build from a checkout reports to a protocol client. Not

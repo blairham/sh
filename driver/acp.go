@@ -102,7 +102,7 @@ func acpOption(word string, args []string, inv *invocation) (rest []string, matc
 // The Shell it is given is the one the invocation built — gate, sink, streams
 // and dialect — so a policy named on the same line governs every session the
 // client opens.
-func (sh Shell) runACP() int {
+func (sh *Shell) runACP() int {
 	if sh.ServeACP == nil {
 		// Refused, not ignored. See the note above: a binary that never wired
 		// the hook has no protocol to serve, and saying so is the whole
@@ -110,7 +110,7 @@ func (sh Shell) runACP() int {
 		sh.errf("%s: --acp: this binary does not serve the Agent Client Protocol\n", sh.Name)
 		return usageStatus
 	}
-	return sh.ServeACP(sh)
+	return sh.ServeACP(*sh)
 }
 
 // connectOption reads `--acp-connect`, `--acp-auth` and `--acp-allow`.
@@ -152,10 +152,10 @@ func connectOption(word string, args []string, inv *invocation) (rest []string, 
 }
 
 // runConnectACP hands the process to the client the binary supplied.
-func (sh Shell) runConnectACP(in source) int {
+func (sh *Shell) runConnectACP(in source) int {
 	if sh.ConnectACP == nil {
 		sh.errf("%s: --acp-connect: this binary does not drive an Agent Client Protocol agent\n", sh.Name)
 		return usageStatus
 	}
-	return sh.ConnectACP(sh, in.acpAllow, in.acpAuth, in.acpArgv)
+	return sh.ConnectACP(*sh, in.acpAllow, in.acpAuth, in.acpArgv)
 }

@@ -56,7 +56,7 @@ prompt() {
 // at all: it would claim a name this shell does not really have, and the
 // lookup answers that word only while a prelude function is running, so the
 // failure would be visible nowhere else.
-func (sh Shell) sourcePromptPrelude(r *interp.Runner, name string) int {
+func (sh *Shell) sourcePromptPrelude(r *interp.Runner, name string) int {
 	if !r.HasPromptEngine() {
 		return 0
 	}

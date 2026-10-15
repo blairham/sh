@@ -38,8 +38,9 @@ func InteractiveArgs(sh Shell, argv []string) int { return sh.interactive(argv, 
 // happens on either side of the loop — the dialect's prelude, the runner being
 // built, the EXIT trap at the end. A session that cannot be started is at
 // least a session that says why.
-func (sh Shell) interactive(argv []string, in source) (status int) {
-	sh = sh.withDefaults(argv)
+func (sh *Shell) interactive(argv []string, in source) (status int) {
+	defaulted := sh.withDefaults(argv)
+	sh = &defaulted
 	if sh.guard().Do(func() { status = sh.session(argv, in) }) {
 		return panicguard.Status
 	}
@@ -48,7 +49,7 @@ func (sh Shell) interactive(argv []string, in source) (status int) {
 
 // session is interactive once the defaults are filled in and a guard is
 // around it.
-func (sh Shell) session(argv []string, in source) int {
+func (sh *Shell) session(argv []string, in source) int {
 	dg := sh.Diagnostics
 	name := sh.Name
 	params, opts := in.params, in.opts
@@ -242,7 +243,7 @@ func (sh Shell) session(argv []string, in source) int {
 //
 // A nil function rather than one returning an empty table, because repl tells
 // the two apart to skip the lookup entirely — see bindings.go.
-func (sh Shell) keyBindings(r *interp.Runner) func(repl.Keymap) map[string]repl.Binding {
+func (sh *Shell) keyBindings(r *interp.Runner) func(repl.Keymap) map[string]repl.Binding {
 	if sh.KeyBindings == nil {
 		return nil
 	}
@@ -250,7 +251,7 @@ func (sh Shell) keyBindings(r *interp.Runner) func(repl.Keymap) map[string]repl.
 }
 
 // namedWidgets is the same for the widgets a name reaches.
-func (sh Shell) namedWidgets(r *interp.Runner) func() map[string]repl.Binding {
+func (sh *Shell) namedWidgets(r *interp.Runner) func() map[string]repl.Binding {
 	if sh.NamedWidgets == nil {
 		return nil
 	}
@@ -258,7 +259,7 @@ func (sh Shell) namedWidgets(r *interp.Runner) func() map[string]repl.Binding {
 }
 
 // viEditing is the same for whether this session has a command mode at all.
-func (sh Shell) viEditing(r *interp.Runner) func() bool {
+func (sh *Shell) viEditing(r *interp.Runner) func() bool {
 	if sh.ViEditing == nil {
 		return nil
 	}
@@ -272,7 +273,7 @@ func (sh Shell) viEditing(r *interp.Runner) func() bool {
 // What the editor runs for a key, for a completion, for a terminal operation
 // or for a descriptor that woke runs between commands: a function it calls
 // holds no job number. See interp.Runner.BetweenCommands (#5891).
-func (sh Shell) runWidget(r *interp.Runner) func(context.Context, string, repl.Line) (repl.Line, bool) {
+func (sh *Shell) runWidget(r *interp.Runner) func(context.Context, string, repl.Line) (repl.Line, bool) {
 	if sh.RunWidget == nil {
 		return nil
 	}
@@ -285,7 +286,7 @@ func (sh Shell) runWidget(r *interp.Runner) func(context.Context, string, repl.L
 // runCompletion is the same for the dialect's completion system, and is nil
 // for the same reason: repl asks whether it has one before a key's binding can
 // name anything for it to run.
-func (sh Shell) runCompletion(r *interp.Runner) func(context.Context, string, repl.Completion) []repl.Candidate {
+func (sh *Shell) runCompletion(r *interp.Runner) func(context.Context, string, repl.Completion) []repl.Candidate {
 	if sh.RunCompletion == nil {
 		return nil
 	}
@@ -297,7 +298,7 @@ func (sh Shell) runCompletion(r *interp.Runner) func(context.Context, string, re
 
 // listScrollPrompt is ListScrollPrompt bound to this runner, and nil where the
 // dialect has none.
-func (sh Shell) listScrollPrompt(r *interp.Runner) func(repl.ListScrollView) (string, bool) {
+func (sh *Shell) listScrollPrompt(r *interp.Runner) func(repl.ListScrollView) (string, bool) {
 	if sh.ListScrollPrompt == nil {
 		return nil
 	}
@@ -310,7 +311,7 @@ func (sh Shell) listScrollPrompt(r *interp.Runner) func(repl.ListScrollView) (st
 // Nil when there is neither, which repl reads as "draw the line plainly" — so
 // a dialect that has no coloring costs the redraw nothing, not even a call
 // that returns no runs.
-func (sh Shell) highlighter(r *interp.Runner) repl.Highlighter {
+func (sh *Shell) highlighter(r *interp.Runner) repl.Highlighter {
 	if sh.Highlighter != nil {
 		return sh.Highlighter
 	}
@@ -343,7 +344,7 @@ func (h dialectHighlighter) HighlightBuffer(displayed string, start, end int) []
 
 // transformTermcap binds the dialect's termcap transformation to this runner,
 // and is nil for a dialect with none.
-func (sh Shell) transformTermcap(r *interp.Runner) func(context.Context, string, string) (string, bool) {
+func (sh *Shell) transformTermcap(r *interp.Runner) func(context.Context, string, string) (string, bool) {
 	if sh.TransformTermcap == nil {
 		return nil
 	}
@@ -355,7 +356,7 @@ func (sh Shell) transformTermcap(r *interp.Runner) func(context.Context, string,
 
 // startLine binds the dialect's per-line reset to this runner, and is nil for
 // a dialect with none — repl skips the call rather than making an empty one.
-func (sh Shell) startLine(r *interp.Runner) func() {
+func (sh *Shell) startLine(r *interp.Runner) func() {
 	if sh.StartLine == nil {
 		return nil
 	}
@@ -364,7 +365,7 @@ func (sh Shell) startLine(r *interp.Runner) func() {
 
 // pastedTextStyle binds the dialect's paste style to this runner, and is nil
 // for a dialect with a fixed one.
-func (sh Shell) pastedTextStyle(r *interp.Runner) func() (on, off string) {
+func (sh *Shell) pastedTextStyle(r *interp.Runner) func() (on, off string) {
 	if sh.PastedTextStyle == nil {
 		return nil
 	}
@@ -374,7 +375,7 @@ func (sh Shell) pastedTextStyle(r *interp.Runner) func() (on, off string) {
 	return func() (on, off string) { return sh.PastedTextStyle(r) }
 }
 
-func (sh Shell) runScheduled(r *interp.Runner) func(context.Context) {
+func (sh *Shell) runScheduled(r *interp.Runner) func(context.Context) {
 	if sh.RunScheduled == nil {
 		return nil
 	}
@@ -385,14 +386,14 @@ func (sh Shell) runScheduled(r *interp.Runner) func(context.Context) {
 // Nil for the same reason again: repl skips the wait entirely rather than
 // waiting on an empty list, which is what keeps a keystroke in a session with
 // nothing armed exactly as cheap as it was.
-func (sh Shell) watchedDescriptors(r *interp.Runner) func() []int {
+func (sh *Shell) watchedDescriptors(r *interp.Runner) func() []int {
 	if sh.WatchedDescriptors == nil {
 		return nil
 	}
 	return func() []int { return sh.WatchedDescriptors(r) }
 }
 
-func (sh Shell) descriptorReady(r *interp.Runner) func(context.Context, int, repl.Line) (repl.Line, bool) {
+func (sh *Shell) descriptorReady(r *interp.Runner) func(context.Context, int, repl.Line) (repl.Line, bool) {
 	if sh.DescriptorReady == nil {
 		return nil
 	}
@@ -417,7 +418,7 @@ func (sh Shell) descriptorReady(r *interp.Runner) func(context.Context, int, rep
 // Different from Interactively, which asks only about standard input: that one
 // decides whether to draw a prompt, and a prompt is drawn on the stream the
 // lines come from.
-func (sh Shell) hasTerminal() bool {
+func (sh *Shell) hasTerminal() bool {
 	if repl.IsTerminal(sh.stdinFile()) {
 		return true
 	}
@@ -453,17 +454,24 @@ func (sh Shell) hasTerminal() bool {
 // interactive while it does, which `$-` reports and which decides whether
 // aliases expand. That fact is `source.interactive`; this is only whether to
 // draw a prompt.
-func Interactively(sh Shell, hasWork bool) bool {
+func Interactively(sh Shell, hasWork bool) bool { return sh.interactively(hasWork) }
+
+// interactively is Interactively for a Shell this package holds by pointer,
+// which asks without copying it: a Shell is 17 KB and route, which asks, is on
+// the way to every start (#6491).
+func (sh *Shell) interactively(hasWork bool) bool {
 	if hasWork {
 		return false
 	}
-	if sh.Stdin == nil {
-		sh.Stdin = os.Stdin
+	in := sh.Stdin
+	if in == nil {
+		in = os.Stdin
 	}
 	// repl owns the termios calls, so the ioctl lives there and there is one
 	// of it. The decision is still the front end's: this function is what
 	// says a terminal plus no operands means a person.
-	return repl.IsTerminal(sh.stdinFile())
+	f, _ := in.(*os.File)
+	return repl.IsTerminal(f)
 }
 
 // stdinFile is this shell's input as a descriptor, or nil where it is not one.
@@ -479,7 +487,7 @@ func Interactively(sh Shell, hasWork bool) bool {
 // widening it to take an any would make every caller's mistake — passing
 // something that could never be a terminal — look like a question rather than
 // like the type error it is.
-func (sh Shell) stdinFile() *os.File {
+func (sh *Shell) stdinFile() *os.File {
 	f, _ := sh.Stdin.(*os.File)
 	return f
 }
@@ -492,7 +500,7 @@ func (sh Shell) stdinFile() *os.File {
 // terminal, so no test could reach the fields being carried across, and a
 // dialect's answer dropped on the floor here looks exactly like a dialect
 // that did not answer.
-func (sh Shell) frontEnd(r *interp.Runner, name string, dg interp.Diagnostics) repl.Shell {
+func (sh *Shell) frontEnd(r *interp.Runner, name string, dg interp.Diagnostics) repl.Shell {
 	return sh.frontEndWith(r, name, dg, repl.NewTheme(r.GetVar))
 }
 
@@ -501,7 +509,7 @@ func (sh Shell) frontEnd(r *interp.Runner, name string, dg interp.Diagnostics) r
 // function is defined only where there is an engine behind it, and a startup
 // file may call it. Everything else builds a theme here and never touches it
 // again, which is what a session that configures no prompt costs.
-func (sh Shell) frontEndWith(r *interp.Runner, name string, dg interp.Diagnostics, theme *repl.Theme) repl.Shell {
+func (sh *Shell) frontEndWith(r *interp.Runner, name string, dg interp.Diagnostics, theme *repl.Theme) repl.Shell {
 	return repl.Shell{
 		Runner:  r,
 		Dialect: sh.Dialect,

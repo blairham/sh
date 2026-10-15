@@ -19,7 +19,7 @@ import (
 // a prompt, which repl holds because it is the only thing that knows where a
 // line ends. interp itself keeps panicking, which is correct for a library —
 // see internal/panicguard for the whole of the reasoning.
-func (sh Shell) guard() panicguard.Guard {
+func (sh *Shell) guard() panicguard.Guard {
 	return panicguard.Guard{Name: sh.Name, Err: sh.Stderr, Trace: panicTrace()}
 }
 
@@ -46,7 +46,7 @@ func (sh Shell) guard() panicguard.Guard {
 // background job's status is the job's, and interp records it either way — so
 // what is left is the diagnostic, which is the whole of what a person gets to
 // see that anything happened at all.
-func (sh Shell) guardConcurrent() func(func(), io.Writer) {
+func (sh *Shell) guardConcurrent() func(func(), io.Writer) {
 	name, trace := sh.Name, panicTrace()
 	return func(work func(), errs io.Writer) {
 		_ = panicguard.Guard{Name: name, Err: errs, Trace: trace}.Do(work)

@@ -5937,6 +5937,30 @@ scope `readonly` in the same function, so the two words part company there
 and one field could not say both. The scope this one takes is therefore the
 plain one `local` takes rather than the keyword-gated one.
 
+That sentence is about where the **value** goes, and in ksh93 the freeze goes
+somewhere else (#6466). Inside a `function`-defined function, `readonly
+name=value` is an ordinary assignment of the value to the name the function
+sees, followed by a fresh local of the name — declared where `typeset` would
+declare it, holding nothing — that takes the freeze. So the caller gets the
+value and keeps a writable name, and the function reads its own empty local.
+Measured 2026-10-15 on ksh93u+ 2012-08-01 under `env -i PATH=/usr/bin:/bin`,
+`-c`, one thing varied at a time:
+
+| script | ksh93u+ |
+|---|---|
+| `function f { readonly x; }; f; x=1; echo "x=$x"` | `x=1` |
+| `x=0; function f { readonly x=5; echo "in=${x-u}"; }; f; echo "out=$x"; x=1` | `in=u`, `out=5`, the write taken |
+| `x=0; function f { readonly x; typeset -p x; }; f; typeset -p x` | `typeset -r x`, then `x=0` |
+| `function f { typeset x=3; readonly x=5; echo "in=$x"; x=4; }; f` | `in=5`, then `x: is read only` — a name the call already declared is frozen there |
+| `readonly x=0; function f { readonly x=1; }; f` | `x: is read only` — the value half meets the caller's freeze |
+| `f() { readonly x; }; f; x=1` | `x: is read only` — no `function` word, no scope |
+| `x=(a b); function f { readonly x; typeset -p x; }; f; typeset -p x` | `typeset -r x`, then `typeset -a x=(a b)` |
+
+bash 5.3.20 refuses the write after `function f { readonly x; }` as it does
+after `f()`, and dash has no `function` word. The axis is
+`Semantics.ReadonlyFreezeStaysWithTheCall`, asked only inside a function and
+only where this one answered no.
+
 `export` is the third word of the family and answers no everywhere,
 including in the shell that scopes `readonly`, where it is `typeset -gx` and
 the `g` is the whole difference. So "declarations in a function are local"

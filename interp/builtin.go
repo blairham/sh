@@ -8530,6 +8530,21 @@ func biReadonly(r *Runner, ctx context.Context, args []string) int {
 			r.assignFailed = true
 			continue
 		}
+		// The shell whose function keeps the freeze and gives the caller the
+		// value. Ahead of the subscript and the scope below, because both
+		// halves are decided here — `readonly a[1]=5` writes the caller's
+		// element and freezes a local `a` — and the rest of this loop is the
+		// freeze on the name the shell already has. See
+		// Semantics.ReadonlyFreezeStaysWithTheCall.
+		if r.readonlyFreezesACallLocal(name, value, hasValue, appends) {
+			if r.unspecified || r.ctl == controlExit {
+				return r.status
+			}
+			continue
+		}
+		if r.unspecified {
+			return r.status
+		}
 		if base, subs, subscripted := r.operandSubscripts("readonly", name); subscripted {
 			sub := subs[len(subs)-1]
 			// The readonly attribute on an element is the axis with three

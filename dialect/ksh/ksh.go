@@ -2131,6 +2131,13 @@ func Semantics() interp.Semantics {
 	// ReadonlyOptions has no `n`, which is what keeps the question off
 	// this column rather than answered wrongly.
 	s.ReadonlyOptions = "p"
+	// `readonly` in a `function`-defined function freezes a local of its
+	// own and gives the value to the caller. Measured 2026-10-15 under
+	// `env -i PATH=/usr/bin:/bin`, `-c`: `function f { readonly x; }; f;
+	// x=1` takes the write, and `x=0; function f { readonly x=5; echo
+	// "${x-u}"; }; f; echo $x` writes `u` and then `5` (#6466). See
+	// Semantics.ReadonlyFreezeStaysWithTheCall.
+	s.ReadonlyFreezeStaysWithTheCall = interp.Yes
 	// Measured 2026-09-12: `x=1; unset -n x` leaves `x` gone at 0, which is
 	// what `unset x` does — the letter changes nothing for a name that is not
 	// a reference, where bash removes nothing at all (#932).

@@ -69,6 +69,11 @@ type heldDirectory struct {
 	// of the three system calls a relative file test made (#6423). Nil where
 	// that stat failed; dirNow then asks as it did before.
 	ident os.FileInfo
+	// checked says a lookup from dir is permission-checked at every lookup,
+	// as one from a process's working directory is, so StatAt from it may
+	// stand in for a relative path. See opened.HoldChecked: false for a
+	// Darwin hold that could only be opened to pass through.
+	checked bool
 	// shared says a clone took this hold too, so the Runner that opened it may
 	// no longer close it: a subshell is a copy running in the same process and
 	// the copy is reading the same descriptor. Closing one out from under the
@@ -124,8 +129,8 @@ type heldCopy struct {
 //
 // The caller holds transientFds for reading, from the open that made dir to
 // here, because until this returns the original is on a low number.
-func newHeldDirectory(named string, dir *os.File, floor int) *heldDirectory {
-	h := &heldDirectory{named: named, dir: dir, copyFd: -1}
+func newHeldDirectory(named string, dir *os.File, checked bool, floor int) *heldDirectory {
+	h := &heldDirectory{named: named, dir: dir, checked: checked, copyFd: -1}
 	// Read once, here, for dirNow: see ident. The copy below is the same
 	// directory, so the identity read off the original is the copy's too.
 	if ident, err := dir.Stat(); err == nil {
@@ -195,11 +200,11 @@ func (r *Runner) holdDirectory() *heldDirectory {
 	// newHeldDirectory and transientFds.
 	var held *heldDirectory
 	err := withTransientFds(func() error {
-		dir, err := opened.Hold(r.Dir)
+		dir, checked, err := opened.HoldChecked(r.Dir)
 		if err != nil {
 			return err
 		}
-		held = newHeldDirectory(r.Dir, dir, r.privateFdFloor())
+		held = newHeldDirectory(r.Dir, dir, checked, r.privateFdFloor())
 		return nil
 	})
 	if err != nil {
@@ -288,6 +293,68 @@ func (r *Runner) dirNow() string {
 	return now
 }
 
+// heldForRelativeProbe is the hold a file test asks a relative operand of,
+// or nil where the operand is to be asked by name.
+//
+// **Through the descriptor is one system call where by name is two**, and it
+// is the answer the panel gives in the one place the two routes part. By name
+// is dirNow and then the path: a stat of the remembered name, to check it
+// still leads to the directory in hand, and a stat of the joined result. zsh
+// makes one call, because its directory is the process's and a relative path
+// is resolved from there by the kernel (#6494). fstatat on the held
+// descriptor is that same question.
+//
+// Where the two routes part is a directory deleted and then **created again
+// under the same name** while the shell is sitting in it. By name, dirNow
+// finds the name leads to a different directory, the kernel has no name for
+// the deleted one, and the answer falls back to the remembered name — the
+// new directory. Measured 2026-10-15, a script that enters `a`, has `a`
+// removed and recreated holding a file `f`, and asks:
+//
+//	                   [ -e f ]  [ -e . ]  [ -d . ]  ( [ -e f ] )
+//	zsh 5.9.2          no        yes       yes       no
+//	bash 5.3, 3.2      no        yes       yes       no
+//	ksh93, dash        no        yes       yes       no
+//	this shell, before yes       yes       yes       yes
+//
+// and with `a` removed and nothing in its place every shell in the panel
+// still answers yes to `[ -e . ]` and `[ -d . ]` where this one answered no.
+// The process's working directory is the deleted directory, so a relative
+// path finds nothing new there; the descriptor is the same object, so asking
+// it gives the panel's answer in every column. A rename, a directory reached
+// through a symbolic link (the hold is the link's target, which the kernel
+// resolves a relative `..` from as well), a directory made unsearchable or
+// unreadable after the shell entered it, and a subshell that has not moved
+// all answer the same both ways, measured alongside.
+//
+// nil — ask by name — wherever that would not hold:
+//
+//   - **A gate or an event sink.** A probe is an action and an action names an
+//     absolute path; that path is dirNow's, so the route that builds it is
+//     the route that is asked. The fast path is the no-policy one, as
+//     fsgate.go's nil-nil path already is.
+//   - **An absolute operand**, which has nothing to be relative to.
+//   - **A hold checked only when it was opened**: Darwin's open to pass through
+//     a directory is permission-checked at the open and never again, so a
+//     directory made 0000 after the shell entered it would still answer
+//     through it, where every shell in the panel but ksh93 is refused. A
+//     readable hold is checked at every lookup, and is what Darwin holds
+//     wherever the directory is readable; see opened.HoldChecked.
+//   - **No hold**: no Dir, a directory that would not open, a platform with no
+//     fstatat, or a subshell that has moved — holdDirectory's nil, which
+//     dirNow reads the same way. That last one keeps this shell's old answer
+//     for the deleted-and-recreated directory, since a copy that has done a
+//     `cd` of its own holds nothing to ask.
+func (r *Runner) heldForRelativeProbe(operand string) *heldDirectory {
+	if !opened.StatAtSupported || r.Gate != nil || r.Events != nil || r.Dir == "" || filepath.IsAbs(operand) {
+		return nil
+	}
+	if held := r.holdDirectory(); held != nil && held.checked {
+		return held
+	}
+	return nil
+}
+
 // enteredFromTheDirectoryHeld opens a directory named relative to the one this
 // Runner is holding, and reports what the kernel calls the place it reached —
 // the empty string where the kernel has no name for it.
@@ -335,7 +402,10 @@ func (r *Runner) adoptTheDirectoryHeld(dir *os.File, name string) {
 	r.dropDirectoryHold()
 	transientFds.RLock()
 	defer transientFds.RUnlock()
-	r.held = newHeldDirectory(name, dir, r.privateFdFloor())
+	// Not checked: Within opens to pass through, which on Darwin is checked
+	// only at the open, so a relative probe here goes by name. See
+	// heldForRelativeProbe.
+	r.held = newHeldDirectory(name, dir, false, r.privateFdFloor())
 }
 
 // cdFromTheDirectoryHeld is `cd`'s last resort: the operand tried again from

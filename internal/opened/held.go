@@ -3,7 +3,10 @@
 
 package opened
 
-import "os"
+import (
+	"os"
+	"syscall"
+)
 
 // Hold opens a directory in order to keep hold of **the directory**, rather
 // than of the name it currently answers to.
@@ -18,14 +21,43 @@ import "os"
 // trust it. That property is a hazard for a rule about names and it is the
 // whole mechanism here.
 //
-// The traverse flags rather than a readable open, for the reason
-// walkat_darwin.go gives: a directory that is traversable and not readable —
+// The traverse flags where a readable open is refused, for the reason
+// walkat_darwin.go gives (and a readable open first on Darwin, for the reason
+// HoldChecked gives): a directory that is traversable and not readable —
 // 0111, an ordinary way to publish one file out of a private tree — answers
 // EACCES to O_RDONLY|O_DIRECTORY and is walked straight through by the kernel.
 // A shell can be sitting in one, and a hold that refused it would take the
 // answer away exactly where the shell still has one.
 func Hold(path string) (*os.File, error) {
-	return os.OpenFile(path, traverseFlags(), 0)
+	f, _, err := HoldChecked(path)
+	return f, err
+}
+
+// HoldChecked is Hold, also reporting whether a lookup made *from* the
+// descriptor is permission-checked the way one made from a process's working
+// directory is — which is what StatAt needs before it may stand in for a
+// relative path.
+//
+// **Darwin's traverse open is checked once, at the open, and never again.**
+// That is O_SEARCH's contract and it is what lets a walk pass through a 0111
+// directory; it is also why a hold made that way answers a relative stat in a
+// directory that has since been made 0000, where every real shell is refused
+// (measured 2026-10-15 against zsh 5.9.2, bash 5.3, bash 3.2 and dash). A
+// readable descriptor is checked at every lookup, so on Darwin the readable
+// open is tried first and the traverse open is the fallback for a directory
+// that may be passed through and not read. Linux's O_PATH is checked at every
+// lookup either way, measured in a container as an unprivileged user.
+func HoldChecked(path string) (*os.File, bool, error) {
+	if !traverseChecksEveryLookup {
+		if f, err := os.OpenFile(path, os.O_RDONLY|syscall.O_DIRECTORY, 0); err == nil {
+			return f, true, nil
+		}
+	}
+	f, err := os.OpenFile(path, traverseFlags(), 0)
+	if err != nil {
+		return nil, false, err
+	}
+	return f, traverseChecksEveryLookup, nil
 }
 
 // Within opens a directory named relative to a directory already held, so that

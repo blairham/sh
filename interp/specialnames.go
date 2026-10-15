@@ -47,3 +47,31 @@ func (f *nameFilter) mayHold(name string) bool {
 	a, b := nameFilterBits(name)
 	return f[a/64]&(1<<(a%64)) != 0 && f[b/64]&(1<<(b%64)) != 0
 }
+
+// registeredArrayWriter, registeredGuard and registeredAction are the store's
+// three lookups in the tables the filter answers for, each asking the filter
+// first: an ordinary name is in none of them, and a declaration or a full-road
+// assignment of one paid three hashed lookups to learn it (#6373).
+func (r *Runner) registeredArrayWriter(name string) (func(*Runner, []string), bool) {
+	if !r.specialNames.mayHold(name) {
+		return nil, false
+	}
+	w, ok := r.dynamicArrayWriters[name]
+	return w, ok
+}
+
+func (r *Runner) registeredGuard(name string) (func(*Runner, string) (string, bool), bool) {
+	if !r.specialNames.mayHold(name) {
+		return nil, false
+	}
+	g, ok := r.assignmentGuards[name]
+	return g, ok
+}
+
+func (r *Runner) registeredAction(name string) (func(*Runner, string), bool) {
+	if !r.specialNames.mayHold(name) {
+		return nil, false
+	}
+	a, ok := r.assignmentActions[name]
+	return a, ok
+}

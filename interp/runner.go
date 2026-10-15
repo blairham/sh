@@ -13841,7 +13841,7 @@ func (r *Runner) setVarAs(name, value string, form assignForm) {
 	// See interp/tiedunique.go.
 	value = r.tiedUniqueFold(name, value)
 	r.endProducerUnsetEnded(name)
-	if write, ok := r.dynamicArrayWriters[name]; ok {
+	if write, ok := r.registeredArrayWriter(name); ok {
 		if _, record := r.pipelineStatuses(name); record {
 			// A scalar written to the pipeline record is a record of one,
 			// in the dialect whose name for it takes a write: measured on
@@ -13911,7 +13911,7 @@ func (r *Runner) setVarAs(name, value string, form assignForm) {
 		// changed. See interp/framescope.go.
 		return
 	}
-	if guard, ok := r.assignmentGuards[name]; ok && !r.declaringWithoutAValue {
+	if guard, ok := r.registeredGuard(name); ok && !r.declaringWithoutAValue {
 		if msg, refused := guard(r, value); refused {
 			// The assignment would change something outside the shell and
 			// the change was refused, which ends the shell. See
@@ -13931,7 +13931,7 @@ func (r *Runner) setVarAs(name, value string, form assignForm) {
 	r.mirrorScalarToArray(name, value)
 	// And the message for a name whose assignment does something. After the
 	// store, so that an action reading the name back sees what was written.
-	if act, ok := r.assignmentActions[name]; ok {
+	if act, ok := r.registeredAction(name); ok {
 		act(r, value)
 	}
 }

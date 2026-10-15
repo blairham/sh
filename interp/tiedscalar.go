@@ -94,6 +94,11 @@ type tie struct {
 
 // tieOf is the tie a name is half of, and whether it is one at all.
 func (r *Runner) tieOf(name string) (tie, bool) {
+	// A tie is registered through tieNames, which records both halves in the
+	// filter, so a name the filter has never seen is not one (#6373).
+	if !r.specialNames.mayHold(name) {
+		return tie{}, false
+	}
 	t, ok := r.tied[name]
 	return t, ok
 }

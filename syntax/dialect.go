@@ -8374,6 +8374,29 @@ type Dialect struct {
 	// feature never reaches.
 	FdVariableRefusedAfterACompound bool
 
+	// ArithCommandTakesNoRedirection refuses a redirection written behind an
+	// arithmetic command: `(( 1 )) >/dev/null` is a syntax error, where the
+	// same redirection behind `[[ … ]]` or a C-style `for` is read.
+	//
+	// ksh93 alone; bash and zsh apply it. Measured 2026-10-15 on ksh93u+
+	// 2012-08-01 `-c '<program>; echo ok'` (#6528):
+	//
+	//	(( 1 )) </dev/null            syntax error at line 1: `<' unexpected
+	//	(( 1 )) 3</dev/null           `<' unexpected — the number is not named
+	//	(( 1 )) 2>&1                  `>&' unexpected
+	//	(( 1 )) {v}</dev/null         `' unexpected — an empty token
+	//	((1))>/dev/null               `>' unexpected
+	//	if (( 1 )) >/dev/null; then   `>' unexpected
+	//	f() (( 1 )) >/dev/null        `>' unexpected
+	//	(( 1 )) 3 </dev/null          `3' unexpected — a word, as anywhere
+	//	[[ -n x ]] </dev/null         ok
+	//	</dev/null (( 1 ))            ok
+	//
+	// A parse error: from a script file the lines before it run and the
+	// script ends there. Stored as the refusal, so the zero value is the
+	// reading the other dialects share.
+	ArithCommandTakesNoRedirection bool
+
 	// FdVariablePositional lets the name inside those braces begin with a
 	// digit, which is how a *positional parameter* names a descriptor:
 	// `exec {1}>&-` closes the one whose number is in `$1`.

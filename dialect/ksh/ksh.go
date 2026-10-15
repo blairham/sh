@@ -588,6 +588,11 @@ func Dialect() syntax.Dialect {
 	// other half of what this shell alone does to a descriptor. Measured
 	// 2026-09-16 on ksh93u+ 2012-08-01 (#3034).
 	d.SeekRedirect = true
+	// And an arithmetic command takes no redirection at all: `(( 1 ))
+	// >/dev/null` is a syntax error naming the operator, where `[[ … ]]` in
+	// the same place is read. Measured 2026-10-15 on ksh93u+ (#6528); see the
+	// flag for the table.
+	d.ArithCommandTakesNoRedirection = true
 	// `times` is a reserved word here, so `times foo` is a syntax error
 	// rather than a builtin ignoring an argument — the one place in the panel
 	// where which builtin a shell has changes what parses.
@@ -5942,6 +5947,11 @@ func withPromptWordings(d interp.Diagnostics) interp.Diagnostics {
 	// by the `((` that opened it here, where bash and zsh name the expression
 	// it held — see Diagnostics.SyntaxUnexpectedNamesTheOpener.
 	d.SyntaxUnexpectedNamesTheOpener = true
+	// A refused `<<<` or `<<-` is named `<<`, and a refused `{name}` in front
+	// of a redirection is named by the byte 0x04. See the two fields
+	// (#6528).
+	d.SyntaxUnexpectedHereDocumentIsTwoAngles = true
+	d.SyntaxUnexpectedFdVariable = "\x04"
 	// A refused word comes back with its quoting off — `"zzz"` is `zzz` —
 	// unless it holds an expansion, and then every quote in it stays:
 	// `"$x"` is `"$x"` and `"a"~` is `a~`. See UnexpectedWordNaming.

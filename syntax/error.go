@@ -533,6 +533,11 @@ type Error struct {
 	// unexpected` where the other three name the token — so the fact has to
 	// travel with the error rather than being worked out from the text.
 	Redirect bool
+	// FdVariable says the unexpected token was the `{name}` that picks a
+	// descriptor for a redirection, which one dialect names by a byte of its
+	// own rather than by the text. See
+	// interp.Diagnostics.SyntaxUnexpectedFdVariable.
+	FdVariable bool
 	// FuncBody says the grammar was waiting for a function's body, and that
 	// the body never began — `f() ;` and `f()` rather than `f() {` with the
 	// input running out inside the braces.

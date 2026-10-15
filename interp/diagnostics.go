@@ -6489,6 +6489,34 @@ type Diagnostics struct {
 	// SyntaxUnexpectedNamesTheOpener has (#3747).
 	SyntaxUnexpectedNamesTheDisowningOperatorWithAPipe bool
 
+	// SyntaxUnexpectedHereDocumentIsTwoAngles names every refused operator
+	// of the here-document family by its first two characters: `<<<` and
+	// `<<-` are both written `<<`.
+	//
+	// ksh93 alone. Measured 2026-10-15 on ksh93u+ 2012-08-01 `-c`:
+	//
+	//	(( 1 )) <<<x             syntax error at line 1: `<<' unexpected
+	//	(( 1 )) <<-E             `<<' unexpected
+	//	for <<<x                 `<<' unexpected
+	//	case x in <<<x) esac     `<<' unexpected
+	//	(( 1 )) >>/dev/null      `>>' unexpected — the other doubled
+	//	                         operator names itself
+	//
+	// Gated on the token being a redirection, so a word spelled `<<<` is
+	// still echoed as written.
+	SyntaxUnexpectedHereDocumentIsTwoAngles bool
+
+	// SyntaxUnexpectedFdVariable is what a refusal writes where the token it
+	// refused is the `{name}` in front of a redirection operator, empty to
+	// name the text. ksh93 writes the byte 0x04 between its quotes, whatever
+	// the name and whichever operator follows. Measured 2026-10-15 on ksh93u+
+	// 2012-08-01, with `od -c` because the byte does not show:
+	//
+	//	(( 1 )) {v}</dev/null    syntax error at line 1: `\004' unexpected
+	//	(( 1 )) {abc}>&-         `\004' unexpected
+	//	for {v}</dev/null        `\004' unexpected
+	SyntaxUnexpectedFdVariable string
+
 	// FlagGroupNamesTheWordTail writes the rest of the word a refused
 	// expansion flag group stands in, rather than the `(` that opened it.
 	//
@@ -10938,6 +10966,13 @@ func (d Diagnostics) unexpectedToken(se *syntax.Error) string {
 		// which of the two it read, so it is the only thing parting them —
 		// dropping it folds the word too. See the field.
 		token = "&|"
+	}
+	if d.SyntaxUnexpectedHereDocumentIsTwoAngles && se.Redirect &&
+		strings.HasPrefix(token, "<<") {
+		token = "<<"
+	}
+	if se.FdVariable && d.SyntaxUnexpectedFdVariable != "" {
+		token = d.SyntaxUnexpectedFdVariable
 	}
 	form := d.SyntaxUnexpected
 	if se.Class == syntax.ClassWord && d.SyntaxUnexpectedWord != "" {

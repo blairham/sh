@@ -505,6 +505,15 @@ type Lexer struct {
 	// leave alone.
 	noHeredocBodies bool
 
+	// firstArmParens, when non-nil, collects the offset of a `(` the parser
+	// read as the paren in front of a `case`'s *first* pattern, written on
+	// the line the `in` (or the brace spelling's `{`) is on. It is filled only for ShellWords, which spells
+	// that one paren and its pattern back as a single word: measured on zsh
+	// 5.9.2, `${(z)…}` of `case x in (a) echo;; (*) echo;; esac` is `(a)` and
+	// then `(`, `*`, `)` (#6435). The parser knows which paren this is and a
+	// token stream does not, so the parser says.
+	firstArmParens map[int32]bool
+
 	// inOperand is set while the tokens being read are an expansion's
 	// operand — the pattern of `${v#pat}`, the word of `${v:-word}`, the
 	// replacement of `${v/pat/repl}` — rather than a command.

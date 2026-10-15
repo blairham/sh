@@ -154,6 +154,39 @@ func TestShellWordsSplitsAValueTheWayTheShellWouldSplitALine(t *testing.T) {
 			ShellSplit{Comments: CommentsSkipped, NewlineIsBlank: true},
 			[]string{"a", "$(b\n# c\n)", "d"},
 		},
+
+		// The first `case` arm's parenthesized pattern is one word, and only
+		// the first one's, and only on the `in`'s line (#6435).
+		{
+			"the first arm's paren holds its pattern", "case x in (a) echo a;; (*) echo b;; esac",
+			ShellSplit{},
+			[]string{"case", "x", "in", "(a)", "echo", "a", ";;", "(", "*", ")", "echo", "b", ";;", "esac"},
+		},
+		{
+			"blanks and a bar inside it", "case x in ( a | b ) e;; esac",
+			ShellSplit{},
+			[]string{"case", "x", "in", "( a | b )", "e", ";;", "esac"},
+		},
+		{
+			"a word written against it joins", "case x in (a)echo;; esac",
+			ShellSplit{},
+			[]string{"case", "x", "in", "(a)echo", ";;", "esac"},
+		},
+		{
+			"an operator against it does not", "case x in (a);; esac",
+			ShellSplit{},
+			[]string{"case", "x", "in", "(a)", ";;", "esac"},
+		},
+		{
+			"a newline after the in splits it", "case x in\n(a) e;; esac",
+			ShellSplit{},
+			[]string{"case", "x", "in", ";", "(", "a", ")", "e", ";;", "esac"},
+		},
+		{
+			"an arm with no paren is not this", "case x in a) e;; (b) f;; esac",
+			ShellSplit{},
+			[]string{"case", "x", "in", "a", ")", "e", ";;", "(", "b", ")", "f", ";;", "esac"},
+		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			got := ShellWords(tc.src, zshLike(), tc.opt)

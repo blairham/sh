@@ -90,6 +90,7 @@ func ShellWords(src string, d Dialect, opt ShellSplit) []string {
 	lex.comments = opt.Comments
 	lex.noHeredocBodies = true
 	lex.recorded = &toks
+	lex.firstArmParens = map[int32]bool{}
 	p := newParserOn(lex, d)
 	p.Parse()
 	// The parser holds one token of lookahead, so what it read is exactly
@@ -141,8 +142,40 @@ func ShellWords(src string, d Dialect, opt ShellSplit) []string {
 	cmdWord, atCommand := "", true
 	depth := 0
 	var wordFrom int32
+	// The first `case` arm's parenthesized pattern, which is one word from
+	// its `(` through the `)` that closes it and any word written against
+	// that. armDepth counts the parentheses still open; armTail says the
+	// pattern has closed and a word touching it still joins. Measured on zsh
+	// 5.9.2: `case x in ( a | b ) e;; esac` gives `( a | b )`, `(a)echo` is
+	// one word, and `(a);;` and `(a)&&b` stop at the operator. See
+	// Lexer.firstArmParens (#6435).
+	armDepth, armTail := 0, false
 	for _, t := range toks {
 		if t.Kind == TokEOF {
+			continue
+		}
+		if armDepth > 0 && t.Kind != TokNewline {
+			switch t.Kind {
+			case TokLeftParen:
+				armDepth++
+			case TokRightParen:
+				armDepth--
+			}
+			out[len(out)-1] = src[wordFrom:t.End.Offset]
+			armTail = armDepth == 0
+			prevKind, prevEnd = t.Kind, t.End.Offset
+			continue
+		}
+		if armTail && t.Kind == TokWord && t.Pos.Offset == prevEnd {
+			out[len(out)-1] = src[wordFrom:t.End.Offset]
+			prevKind, prevEnd = t.Kind, t.End.Offset
+			continue
+		}
+		armDepth, armTail = 0, false
+		if t.Kind == TokLeftParen && lex.firstArmParens[t.Pos.Offset] {
+			armDepth, wordFrom = 1, t.Pos.Offset
+			out = append(out, src[t.Pos.Offset:t.End.Offset])
+			prevKind, prevEnd = t.Kind, t.End.Offset
 			continue
 		}
 		if t.Kind == TokNewline {

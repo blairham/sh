@@ -10134,6 +10134,14 @@ type Diagnostics struct {
 	// Zero means "the same as Location". The prompt borrowed the general
 	// answer before this existed, so every dialect wrote a line no shell
 	// writes there (#1892).
+	//
+	// **"No line at all" was read off one-line inputs**, and for one of the
+	// three it is true only of line 1. ksh93 locates a *run-time* failure at
+	// a prompt as its `-c` does — nothing on the first line of the input,
+	// `line N:` past it, N counted from that input's own first line — so a
+	// typed `if` failing on its third line is `ksh: line 3: …` (#6581). Its
+	// parse failures still name none: their sentence carried the line, and
+	// it is the sentence that is replaced there.
 	PromptLocation LocationStyle
 	// InteractiveCommandStringIsLocatedAsAPrompt locates a command string
 	// run by an interactive shell — `-i -c` — the way PromptLocation and
@@ -11417,10 +11425,11 @@ func (d *Diagnostics) keepBodyLocation() {
 // (#1892).
 //
 // Two things change, and the second is why this is not only a location. Every
-// dialect but dash writes no line at a prompt, which PromptLocation says — six
-// of the seven columns, re-measured 2026-09-20 — and the one that writes the
-// line inside its own sentence needs the sentence replaced, which the Prompt
-// wordings say.
+// dialect but dash writes no line for a one-line input at a prompt, which
+// PromptLocation says — six of the seven columns, re-measured 2026-09-20, and
+// ksh93 names one past an input's first line (#6581) — and the one that
+// writes the line inside its own sentence needs the sentence replaced, which
+// the Prompt wordings say.
 func (d Diagnostics) ForPrompt() Diagnostics {
 	d.keepBodyLocation()
 	if d.PromptLocation != LocationNone {

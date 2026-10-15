@@ -49,12 +49,23 @@ func TestAParseFailureAtAPromptNamesNoLine(t *testing.T) {
 	}
 }
 
-// The location goes with it: name only, whatever line the construct reached.
-func TestAPromptLocationIsTheNameAlone(t *testing.T) {
+// The location does not go with it: a run-time failure at a prompt is located
+// the way `-c` locates one, name only on the first line and `line N:` past it
+// (#6581). This test said "name only, whatever line" until a typed `if` over
+// three lines was measured — every earlier row had been a one-line input, and
+// line 1 is where the two readings agree.
+func TestAPromptLocationNamesALinePastTheFirst(t *testing.T) {
 	d := ksh.Diagnostics().ForPrompt()
-	for _, line := range []int{1, 2, 7} {
-		if got, want := d.Report("ksh", line, "m"), "ksh: m"; got != want {
-			t.Errorf("line %d: %q, want %q", line, got, want)
+	for _, c := range []struct {
+		line int
+		want string
+	}{
+		{1, "ksh: m"},
+		{2, "ksh: line 2: m"},
+		{7, "ksh: line 7: m"},
+	} {
+		if got := d.Report("ksh", c.line, "m"); got != c.want {
+			t.Errorf("line %d: %q, want %q", c.line, got, c.want)
 		}
 	}
 }

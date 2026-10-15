@@ -1746,6 +1746,24 @@ Not one of them names a line, and every line typed at a prompt is line 1, so
 the number this shell wrote said nothing whatever it was. The same failures in
 a file name a line in all three.
 
+**Every row above is a one-line input, and that is the only reason ksh93
+agrees with the other two.** Its prompt locates a run-time failure the way its
+`-c` does — nothing on line 1, `line N:` past it — counted from the first line
+of the input typed, since each input restarts `$LINENO` at 1. Measured
+2026-10-15 on ksh93u+ 2012-08-01 under `-i`:
+
+| typed | ksh93u+ | bash 5.3, zsh 5.9.2 |
+| --- | --- | --- |
+| `nosuch; :` | `ksh: nosuch: not found` | no line |
+| `if true; then` / `:` / `nosuch` / `fi` | `ksh: line 3: nosuch: not found` | no line |
+| `f(){` / `:` / `: $((1/0))` / `}`, then `f` | `ksh: line 3: 1/0: divide by zero` | no line; zsh `f:2:` for its own message |
+| `f(){ nosuch; }`, then `f` | `ksh: nosuch: not found` | no line |
+
+The first two rows are the pair that names the noun: both are at the top level
+with no function anywhere, and only the line within the typed input moves. A
+function body was where this was first seen, and it is the same rule, since the
+body's lines count from where the definition was typed (#6581).
+
 **A builtin's complaint is a second question.** zsh answers it differently
 from its own messages *in the same session* — `cd: no such file or directory`,
 the builtin's name with no shell and no line, against `zsh: command not found`

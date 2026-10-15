@@ -52,3 +52,44 @@ func TestAKshPromptNumbersEachInputFromOne(t *testing.T) {
 		}
 	}
 }
+
+// At a prompt a run-time failure past the first line of what was typed is
+// located `line N:`, counted from that input's own first line, and one on the
+// first line is not (#6581). The noun is the *line within the typed input*,
+// not the function: the pair that says so is two top-level commands, one
+// written on one line and one written over three, with no function in either.
+//
+// Measured 2026-10-15 on ksh93u+ 2012-08-01 under `-i` on a pipe; every
+// expected line is that shell's. This shell located every one of them by name
+// alone, as it does a parse failure there — which is the one kind that keeps
+// no line at a prompt, because its sentence carried it.
+func TestAKshPromptLocatesAFailurePastTheInputsFirstLine(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("ENV", "")
+	t.Setenv("HISTFILE", filepath.Join(home, ".sh_history"))
+	t.Chdir(home)
+	for _, c := range []struct{ name, typed, want string }{
+		{"one line, top level", "PS1=''\nnosuch_zq; :\n", "ksh: nosuch_zq: not found\n"},
+		{"third line of a typed if", "PS1=''\nif true; then\n:\nnosuch_zq\nfi\n", "ksh: line 3: nosuch_zq: not found\n"},
+		{"second line of a brace group", "PS1=''\n{ :\nnosuch_zq; }\n", "ksh: line 2: nosuch_zq: not found\n"},
+		{"function body, from its definition", "PS1=''\nf(){\n:\n: $((1/0))\n}\nf\n", "ksh: line 3: 1/0: divide by zero\n"},
+		{"function body on one line", "PS1=''\nf(){ nosuch_zq; }\nf\n", "ksh: nosuch_zq: not found\n"},
+		{"keyword function", "PS1=''\nfunction k {\n:\nnosuch_zq\n}\nk\n", "ksh: k: line 3: nosuch_zq: not found\n"},
+		{"a parse failure keeps no line", "PS1=''\nif true; then\n:\nfi )\n", "ksh: syntax error: `)' unexpected\n"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			_, errs, _ := prompt(t, c.typed, "ksh", "-i")
+			// The prompts are written to the same stream, so the line is
+			// looked for rather than compared whole; and a row with no line
+			// must have none anywhere, which is the half a contains alone
+			// would pass for the wrong reason.
+			if !strings.Contains(errs, c.want) {
+				t.Errorf("stderr %q, want %q in it", errs, c.want)
+			}
+			if !strings.Contains(c.want, "line ") && strings.Contains(errs, "line ") {
+				t.Errorf("stderr %q names a line, want none", errs)
+			}
+		})
+	}
+}

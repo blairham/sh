@@ -2440,10 +2440,16 @@ func (r *Runner) nestedElementsAreBare(e *syntax.ParamExpr) nestedBareKind {
 	if p.Name == "@" || p.Name == "*" {
 		return nestedBareFromAList
 	}
-	if _, ok := r.arrayElems(p.Name); ok {
+	// The association first, because the question is only what kind of
+	// name this is, and asking arrayElems of an association reads its value:
+	// for a produced table that is building every entry. `${(k)functions}`
+	// nested in another expansion rendered every function body in the shell
+	// to say it was a list — and, with bodies the parse cache defers, decoded
+	// every one of them (#6483). Either answer is the same one.
+	if isAssoc := r.assocDeclared(p.Name); isAssoc {
 		return nestedBareFromAList
 	}
-	if isAssoc := r.assocDeclared(p.Name); isAssoc {
+	if _, ok := r.arrayElems(p.Name); ok {
 		return nestedBareFromAList
 	}
 	return nestedBareNone

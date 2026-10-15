@@ -106,11 +106,11 @@ func TestOneCommandIsStillTheBodyItAlwaysWas(t *testing.T) {
 	// differently for having crossed this branch.
 	d := keywordAndOrBody()
 	fn := decl(t, "function a; echo X", d)
-	if _, isGroup := fn.Body.(*Group); isGroup {
+	if _, isGroup := fn.Body().(*Group); isGroup {
 		t.Error("one command was wrapped in a group")
 	}
-	if _, isSimple := fn.Body.(*SimpleCmd); !isSimple {
-		t.Errorf("body is %T, want a simple command", fn.Body)
+	if _, isSimple := fn.Body().(*SimpleCmd); !isSimple {
+		t.Errorf("body is %T, want a simple command", fn.Body())
 	}
 }
 

@@ -4850,7 +4850,7 @@ func (r *Runner) listedFunction(name string, fn *syntax.FuncDecl) string {
 			return Wording(row, "", r.listedFunctionNameIn(name))
 		}
 	}
-	body := syntax.PrintWith(fn.Body, r.functionLayout)
+	body := syntax.PrintWith(fn.Body(), r.functionLayout)
 	body = r.tracedFunctionBody(name, body)
 	if text, ok := r.undefinedFunction(name); ok {
 		// A function whose body has not been read yet does not print its

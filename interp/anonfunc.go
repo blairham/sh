@@ -82,7 +82,7 @@ func (r *Runner) anonFunc(ctx context.Context, c *syntax.AnonFunc) error {
 		// pushed before the files are opened.
 		return r.callFuncInPlace(ctx, &syntax.FuncDecl{
 			Name: r.anonymousFunctionName(), Keyword: c.Keyword,
-			Body: empty, Start: c.Start,
+			BodyCommand: empty, Start: c.Start,
 		}, r.anonymousFunctionName(), nil, &inPlaceCall{origin: r.originHere()})
 	}
 	return r.withRedirsOfABracketedCommand(ctx, c.Redirs, func() error {
@@ -118,7 +118,7 @@ func (r *Runner) anonFunc(ctx context.Context, c *syntax.AnonFunc) error {
 		}
 		defer r.underscoreAcrossAFunctionCall(beforeArg, beforeSet).undo()
 		decl := &syntax.FuncDecl{
-			Name: name, Keyword: c.Keyword, Body: c.Body, Start: c.Start,
+			Name: name, Keyword: c.Keyword, BodyCommand: c.Body, Start: c.Start,
 		}
 		err := r.callFuncInPlace(ctx, decl, name, args, &inPlaceCall{
 			origin: r.originHere(), numberFrom: r.anonBodyNumberedFrom(c),

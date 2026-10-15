@@ -111,7 +111,7 @@ func TestABodyUnderARefusedNameIsStillParsed(t *testing.T) {
 		t.Error("a broken body parsed; the declaration is read whole here")
 	}
 	fn := decl(t, `'h'() { echo one; echo two; }`, d)
-	if fn.Body == nil {
+	if fn.Body() == nil {
 		t.Fatal("no body was kept under a refused name")
 	}
 }

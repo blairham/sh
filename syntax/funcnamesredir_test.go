@@ -27,9 +27,9 @@ func namesWithRedirs() Dialect {
 // bodyRedirs is the redirection operators on a declaration's body, as written.
 func bodyRedirs(t *testing.T, fn *FuncDecl) []string {
 	t.Helper()
-	g, ok := fn.Body.(*Group)
+	g, ok := fn.Body().(*Group)
 	if !ok {
-		t.Fatalf("body is %T, want a brace group", fn.Body)
+		t.Fatalf("body is %T, want a brace group", fn.Body())
 	}
 	out := make([]string, 0, len(g.Redirs))
 	for _, r := range g.Redirs {

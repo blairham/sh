@@ -12,6 +12,7 @@ import (
 
 	"github.com/blairham/sh/driver"
 	"github.com/blairham/sh/internal/parsecache"
+	"github.com/blairham/sh/internal/treecodec"
 )
 
 // worthCaching is commentary enough to put a file over the size the cache
@@ -264,5 +265,89 @@ func TestAnAutoloadedAliasChangeIsSeen(t *testing.T) {
 	}
 	if got := run("echo two:"); got.out != "two: there\n" {
 		t.Fatalf("the body read with the old alias: %q", got.out)
+	}
+}
+
+// deferredLib defines functions long enough for the parse cache to keep their
+// bodies encoded until they are asked for (#6483): one that is listed, called
+// and fails partway; one defined inside it; and one nobody touches.
+var deferredLib = worthCaching + `big() {
+  local n=$1
+  print -r -- "big $n at $LINENO in ${funcfiletrace[1]##*/}"
+  inner() {
+    print -r -- "inner $1 at $LINENO"
+    print -r -- "inner again $(( $1 * 2 )) ${(j:,:)@}"
+  }
+  inner $n
+  if [[ $n == fail ]]; then
+    print -r -- ${missing_one:?is not set in big}
+  fi
+  print -r -- "big done $n ${#n} ${(U)n}"
+}
+untouched() {
+  print -r -- "untouched $LINENO $1 $2 $3"
+  print -r -- "more text so the body is long enough to defer $(( 1 + 2 ))"
+  print -r -- "and more, still untouched, ${HOME:+home} ${PATH:+path}"
+  print -r -- "and a last line that nothing ever runs during a start"
+}
+`
+
+// TestADeferredBodyIsUnobservable: a body the cache kept encoded must behave
+// exactly as a parsed one wherever a script can see it — called, listed by
+// `functions`, `typeset -f`, `whence -c` and `$functions`, failing at the
+// line it fails on, redefined, removed — and a definition alone must not
+// decode it.
+func TestADeferredBodyIsUnobservable(t *testing.T) {
+	dir, cache := t.TempDir(), t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "lib"), []byte(deferredLib), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	script := strings.Join([]string{
+		". ./lib",
+		"functions big",
+		"typeset -f inner; echo inner-before=$?",
+		"big one",
+		"typeset -f inner",
+		`print -r -- "$functions[big]"`,
+		"whence -c untouched",
+		"(big fail); echo st=$?",
+		"big() { print redefined $1; }",
+		"big two",
+		"unfunction big",
+		"big three; echo st=$?",
+		"functions untouched | wc -l",
+	}, "\n")
+	argv := []string{"zsh", "-f", "-c", script}
+	off := runWithCache(t, cache, dir, false, nil, argv...)
+	cold := runWithCache(t, cache, dir, true, nil, argv...)
+	deferred, read := treecodec.BodiesDeferred.Load(), treecodec.BodiesRead.Load()
+	warm := runWithCache(t, cache, dir, true, nil, argv...)
+	deferred, read = treecodec.BodiesDeferred.Load()-deferred, treecodec.BodiesRead.Load()-read
+	if !strings.Contains(off.out, "inner one at") || !strings.Contains(off.errs, "is not set in big") {
+		t.Fatalf("the script did not run as written: %q %q", off.out, off.errs)
+	}
+	for name, got := range map[string]cacheRun{"cold": cold, "warm": warm} {
+		if got.out != off.out || got.errs != off.errs || got.code != off.code {
+			t.Errorf("%s: out %q errs %q code %d\nwant out %q errs %q code %d",
+				name, got.out, got.errs, got.code, off.out, off.errs, off.code)
+		}
+	}
+	if warm.served == 0 || deferred < 2 || read < 2 {
+		t.Errorf("warm served %d reads, deferred %d bodies and read %d: deferring was not exercised",
+			warm.served, deferred, read)
+	}
+
+	// Defining is not reading: a start that only sources the file leaves
+	// every body it deferred encoded — and so does asking for the names
+	// alone, nested in another expansion the way a plugin manager diffs the
+	// function table around each load, which once rendered every body to
+	// learn that the inner value was a list.
+	deferred, read = treecodec.BodiesDeferred.Load(), treecodec.BodiesRead.Load()
+	only := runWithCache(t, cache, dir, true, nil, "zsh", "-f", "-c",
+		". ./lib; x=( ${${(k)functions}:#_*} ); print ${#x} ${(o)x}")
+	deferred, read = treecodec.BodiesDeferred.Load()-deferred, treecodec.BodiesRead.Load()-read
+	if only.served == 0 || deferred < 2 || read != 0 || only.out != "2 big untouched\n" {
+		t.Errorf("sourcing alone wrote %q, served %d, deferred %d bodies and read %d of them",
+			only.out, only.served, deferred, read)
 	}
 }

@@ -416,7 +416,7 @@ func (p *printer) expr(e syntax.Expr) {
 // the pipeline can write the operator back instead of the redirection.
 func mergesBoth(c syntax.Command) bool {
 	if f, ok := c.(*syntax.FuncDecl); ok {
-		return f.Body != nil && mergesBoth(f.Body)
+		return f.Body() != nil && mergesBoth(f.Body())
 	}
 	rs := redirsOf(c)
 	return len(rs) > 0 && rs[len(rs)-1].PipeBoth
@@ -1461,11 +1461,11 @@ func (p *printer) caseClause(x *syntax.CaseClause) {
 // `function f { }` stays keyword-only where that is what was written, because
 // one dialect rejects the hybrid form.
 func (p *printer) funcDecl(x *syntax.FuncDecl) {
-	if x.Body == nil {
+	if x.Body() == nil {
 		p.node(x)
 		return
 	}
-	from, to := int(x.Pos().Offset), int(x.Body.Pos().Offset)
+	from, to := int(x.Pos().Offset), int(x.Body().Pos().Offset)
 	// A redirection may stand *between* the names and the parentheses, and it
 	// is the body's — `a b >out () { … }` sends both calls to the file. It is
 	// therefore inside the header span this copies from the source, and the
@@ -1473,7 +1473,7 @@ func (p *printer) funcDecl(x *syntax.FuncDecl) {
 	// printed twice the file is redirected twice, which is not a fixed point
 	// and is a formatted file that does something the source did not (#1838).
 	p.headerComments(from, to)
-	p.b.WriteString(p.headerText(from, to, insideTheHeader(redirsOf(x.Body), from, to)...))
+	p.b.WriteString(p.headerText(from, to, insideTheHeader(redirsOf(x.Body()), from, to)...))
 	// A line break where the `function` keyword's name list would otherwise
 	// swallow the body — see [syntax.FunctionKeywordBodyNeedsItsOwnLine],
 	// which holds the rule, the measurement, and why both printers in this
@@ -1485,7 +1485,7 @@ func (p *printer) funcDecl(x *syntax.FuncDecl) {
 	// p.newline rather than a raw byte, because a here-document opened
 	// earlier on this line is read from the first newline after it and this
 	// is now that newline.
-	if x.Keyword && syntax.FunctionKeywordBodyNeedsItsOwnLine(x.Body) {
+	if x.Keyword && syntax.FunctionKeywordBodyNeedsItsOwnLine(x.Body()) {
 		p.newline()
 		p.pad()
 	} else {
@@ -1495,7 +1495,7 @@ func (p *printer) funcDecl(x *syntax.FuncDecl) {
 	// it, not in front of it — which is the one place a redirection standing
 	// before a command does not belong there. See Printer.command.
 	p.bodyOfADeclaration = true
-	p.command(x.Body)
+	p.command(x.Body())
 }
 
 // insideTheHeader is the source extent of each redirection lying wholly

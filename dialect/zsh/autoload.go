@@ -1459,7 +1459,7 @@ func autoloadLoneDefinition(r *interp.Runner, path, name, body string) (inner st
 	if !ok || decl.Name != name {
 		return "", false
 	}
-	group, ok := decl.Body.(*syntax.Group)
+	group, ok := decl.Body().(*syntax.Group)
 	if !ok || len(group.List) == 0 {
 		// A body that is not a brace group, or a definition with nothing in
 		// it: there is no inner text to hand back, and the file is left to be

@@ -150,8 +150,8 @@ func (r *Runner) RunFunctionBodyInPlace(ctx context.Context, name string) (bool,
 			r.frames[n-1].FuncLine, r.frames[n-1].FuncAbsLine = saved.FuncLine, saved.FuncAbsLine
 		}()
 	}
-	defer r.openRuntimeFresh(fn.Body)()
-	return true, r.command(ctx, fn.Body)
+	defer r.openRuntimeFresh(fn.Body())()
+	return true, r.command(ctx, fn.Body())
 }
 
 // HasFunction reports whether a name is a function this shell has defined.

@@ -495,7 +495,7 @@ func listedBody(t *testing.T, src string) syntax.Command {
 	if !ok {
 		t.Fatalf("%q is not a function declaration", src)
 	}
-	return fn.Body
+	return fn.Body()
 }
 
 // testAnsiC is a decoder for the rows above: enough of the escape table to

@@ -2237,7 +2237,7 @@ func (p *Parser) keepFunctionSource(expr Expr, term Pos) {
 		return
 	}
 	fn, ok := pl.Cmds[0].(*FuncDecl)
-	if !ok || fn.Body == nil {
+	if !ok || fn.BodyCommand == nil {
 		return
 	}
 	if !term.IsValid() {
@@ -2923,7 +2923,7 @@ func (r *redirs) prependRedirs(xs []*Redirect) {
 // prependRedirs on a definition reaches its body, as addRedir does and for the
 // same reason: the definition itself has no list to hold one.
 func (c *FuncDecl) prependRedirs(xs []*Redirect) {
-	if h, ok := c.Body.(interface{ prependRedirs([]*Redirect) }); ok {
+	if h, ok := c.BodyCommand.(interface{ prependRedirs([]*Redirect) }); ok {
 		h.prependRedirs(xs)
 	}
 }
@@ -2948,7 +2948,7 @@ func (c *SimpleCmd) prependRedirs(xs []*Redirect) {
 // already puts a written one: `f() { :; } 2>&1` reads the redirection as the
 // body compound's, and the definition itself has no list to hold it.
 func (c *FuncDecl) addRedir(x *Redirect) {
-	if h, ok := c.Body.(interface{ addRedir(*Redirect) }); ok {
+	if h, ok := c.BodyCommand.(interface{ addRedir(*Redirect) }); ok {
 		h.addRedir(x)
 	}
 }
@@ -5508,7 +5508,7 @@ func (p *Parser) parseFuncParensAndBody(fn *FuncDecl) Command {
 	// the redirection has been parsed as a command of its own.
 	body := p.tok
 	p.funcBody = true
-	if fn.Body = p.parseCommand(); fn.Body == nil {
+	if fn.BodyCommand = p.parseCommand(); fn.BodyCommand == nil {
 		hadError := p.err != nil
 		p.failUnexpectedAt(body, "", false)
 		if se, ok := p.err.(*Error); ok && !hadError {
@@ -5517,7 +5517,7 @@ func (p *Parser) parseFuncParensAndBody(fn *FuncDecl) Command {
 		return fn
 	}
 	if p.dialect.FuncBodyMustBeCompound {
-		if _, isSimple := fn.Body.(*SimpleCmd); isSimple {
+		if _, isSimple := fn.BodyCommand.(*SimpleCmd); isSimple {
 			p.failUnexpectedAt(body, "", false)
 			return fn
 		}
@@ -5526,7 +5526,7 @@ func (p *Parser) parseFuncParensAndBody(fn *FuncDecl) Command {
 		// The operator rather than the body's first token: this dialect takes
 		// the command and objects to what it redirects, so `f() echo hi >out`
 		// is refused at the `>` with the `echo` already accepted.
-		if simple, isSimple := fn.Body.(*SimpleCmd); isSimple && len(simple.Redirs) > 0 {
+		if simple, isSimple := fn.BodyCommand.(*SimpleCmd); isSimple && len(simple.Redirs) > 0 {
 			r := simple.Redirs[0]
 			p.failRedirectAt(r.OpPos, r.Op)
 		}
@@ -6481,20 +6481,20 @@ func (p *Parser) parseFuncKeyword() Command {
 	// have read `function a; echo X && echo Y` as one and taken it.
 	bracedBody := p.atWord("{")
 	p.funcBody = true
-	if fn.Body = p.funcKeywordBody(); fn.Body == nil {
+	if fn.BodyCommand = p.funcKeywordBody(); fn.BodyCommand == nil {
 		if p.dialect.FunctionKeywordBodyIsOptional && p.err == nil {
 			// No body at all, which is a declaration rather than a failure:
 			// each name is defined with an empty one. An empty group is how
 			// that is said, so nothing downstream has a nil body to read as
 			// a refusal — and it is what the shell itself reports, printing
 			// `a () { }` for a name declared this way.
-			fn.Body = &Group{Start: afterNames, Stop: afterNames}
+			fn.BodyCommand = &Group{Start: afterNames, Stop: afterNames}
 			return fn
 		}
 		p.failUnexpectedAt(body, "", false)
 		return fn
 	}
-	if !p.funcKeywordBodyIsTakenHere(fn.Body, bracedBody, parens) {
+	if !p.funcKeywordBodyIsTakenHere(fn.BodyCommand, bracedBody, parens) {
 		p.failUnexpectedAt(body, "", false)
 	}
 	return fn

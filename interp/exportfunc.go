@@ -129,7 +129,7 @@ func (r *Runner) functionEnviron() []string {
 			// rather than told about a function this shell no longer has.
 			continue
 		}
-		body := syntax.PrintWith(fn.Body, r.exportedFunctionLayout)
+		body := syntax.PrintWith(fn.Body(), r.exportedFunctionLayout)
 		out = append(out, r.funcExportPrefix+name+r.funcExportSuffix+"=() "+body)
 	}
 	return out

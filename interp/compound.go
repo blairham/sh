@@ -1231,7 +1231,7 @@ func isPlainFuncName(s string) bool {
 }
 
 func (r *Runner) funcDecl(c *syntax.FuncDecl) error {
-	if r.diag().FunctionDefinitionRefusalIsLocatedWhereTheShellWasReading && c.Body != nil {
+	if r.diag().FunctionDefinitionRefusalIsLocatedWhereTheShellWasReading && c.HasBody() {
 		// A definition's own complaints are located where the shell's own
 		// counter last stood rather than where the name was written — the
 		// shell has read the whole definition before it runs any of it. Put
@@ -2102,7 +2102,7 @@ func (r *Runner) callFuncInPlace(ctx context.Context, fn *syntax.FuncDecl, name 
 	// Put back afterwards, because a body whose commands never run would
 	// otherwise leave the line moved.
 	enteredAt := r.line
-	r.line = int(fn.Body.Pos().Line)
+	r.line = int(fn.Body().Pos().Line)
 	r.runDebugTrapOnFunctionEntry(ctx)
 	r.line = enteredAt
 
@@ -2175,13 +2175,13 @@ func (r *Runner) callFuncInPlace(ctx context.Context, fn *syntax.FuncDecl, name 
 	// refusal happens. The same number the DEBUG trap above is located at,
 	// and measured the same way. See Runner.readersLine.
 	outerReader := r.readersLine
-	r.readersLine = r.lineOf(fn.Body.Pos())
+	r.readersLine = r.lineOf(fn.Body().Pos())
 	// And the loop register does not cross a call: measured, a definition
 	// inside a function called from a `for` is reported at the definition and
 	// not at the loop. See Runner.constructLine.
 	outerConstruct := r.constructLine
 	r.constructLine = 0
-	restoreOpen := r.openRuntimeFresh(fn.Body)
+	restoreOpen := r.openRuntimeFresh(fn.Body())
 	if inPlace != nil || betweenCommands {
 		// A nameless function's body is not a brace group that holds a
 		// number of its own: `() { sleep 1 & jobs }` is [1]. See holdsAJobSlot.
@@ -2189,10 +2189,10 @@ func (r *Runner) callFuncInPlace(ctx context.Context, fn *syntax.FuncDecl, name 
 		// nothing either: `precmd() { sleep 1 & }` is [1] where
 		// `precmd() { { sleep 1 & } }` is [2]. See Runner.BetweenCommands.
 		outerBody := r.bodyHoldsNoSlot
-		r.bodyHoldsNoSlot = fn.Body
+		r.bodyHoldsNoSlot = fn.Body()
 		defer func() { r.bodyHoldsNoSlot = outerBody }()
 	}
-	err := r.command(ctx, fn.Body)
+	err := r.command(ctx, fn.Body())
 	restoreOpen()
 	r.readersLine = outerReader
 	r.constructLine = outerConstruct
@@ -2295,8 +2295,8 @@ func (r *Runner) callFuncInPlace(ctx context.Context, fn *syntax.FuncDecl, name 
 	// that falls off the end fires at the line the **body opened** on. The
 	// first needs nothing here, because the line record is still sitting on
 	// the `return`; the second is this.
-	if r.ctl != controlReturn && fn.Body != nil {
-		r.line = r.lineOf(fn.Body.Pos())
+	if r.ctl != controlReturn && fn.Body() != nil {
+		r.line = r.lineOf(fn.Body().Pos())
 	}
 	r.runReturnTrap(ctx, frameSerial, name)
 	// And the shell is back where the call was made, which is a line the

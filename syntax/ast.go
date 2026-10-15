@@ -665,7 +665,7 @@ func mergesStderr(c Command) bool {
 	if f, ok := c.(*FuncDecl); ok {
 		// A definition holds its redirections on its body, which is where
 		// the parser puts the written ones too.
-		return f.Body != nil && mergesStderr(f.Body)
+		return f.Body() != nil && mergesStderr(f.Body())
 	}
 	h, ok := c.(interface{ redirList() []*Redirect })
 	if !ok {
@@ -688,10 +688,10 @@ func mergesStderr(c Command) bool {
 // the same hand-off mergesStderr makes, for the same reason.
 func Redirections(c Command) []*Redirect {
 	if f, ok := c.(*FuncDecl); ok {
-		if f.Body == nil {
+		if f.Body() == nil {
 			return nil
 		}
-		return Redirections(f.Body)
+		return Redirections(f.Body())
 	}
 	h, ok := c.(interface{ redirList() []*Redirect })
 	if !ok {
@@ -1125,8 +1125,15 @@ type FuncDecl struct {
 	// universal: dash rejects it, and ksh93 rejects the hybrid form with
 	// parentheses as well.
 	Keyword bool
-	Body    Command
-	Start   Pos
+
+	// BodyCommand is the body as the parser made it. Read it through
+	// [FuncDecl.Body] and never directly: a tree read back from the parse
+	// cache holds the body still encoded, and decodes it the first time
+	// anything asks, so this field is nil on such a tree until then and
+	// stays nil after (#6483). TestNothingReadsADefinitionsBodyField holds
+	// every package to that.
+	BodyCommand Command
+	Start       Pos
 
 	// SourceText is the definition as it was **written** — from the name
 	// through the character that ended the statement — and is recorded only
@@ -1144,6 +1151,10 @@ type FuncDecl struct {
 	// parser refused has, so a listing that reads it must fall back to the
 	// layout rather than write nothing.
 	SourceText string
+
+	// deferred is the body still encoded, for a declaration read back from
+	// the parse cache; see [FuncDecl.DeferBody].
+	deferred *deferredBody
 }
 
 // FuncName is one name in a definition's name list, read the way a first name
@@ -1174,11 +1185,17 @@ func (c *FuncDecl) Pos() Pos { return c.Start }
 // The extent is empty rather than wrong. Nothing downstream of a failed parse
 // measures a declaration that has no body, and an empty extent at the name
 // keeps the one invariant a reader may hold: Pos is never past End.
+//
+// A body that has not been decoded yet answers from the end it was encoded
+// with, so that measuring a declaration does not decode it.
 func (c *FuncDecl) End() Pos {
-	if c.Body == nil {
+	if d := c.deferred; d != nil {
+		return d.end
+	}
+	if c.BodyCommand == nil {
 		return c.Start
 	}
-	return c.Body.End()
+	return c.BodyCommand.End()
 }
 
 func (c *FuncDecl) commandNode() {}

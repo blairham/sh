@@ -64,6 +64,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"unsafe"
 
 	"github.com/blairham/sh/syntax"
@@ -149,6 +150,7 @@ const (
 	opInterface
 	opMustBeNil // an error value, or a pointer to syntax.Error: nil or refused
 	opPos       // syntax.Pos, the commonest struct in a tree, read without a walk
+	opBody      // a definition's body, which may be written to be read later
 )
 
 // plan is how one type is walked. Built once per type, on first use.
@@ -174,6 +176,11 @@ type plan struct {
 
 	// maskBytes is how many bytes a struct's mask of present fields takes.
 	maskBytes int
+
+	// declAt is, for opBody, how far the body field sits from the start of
+	// the syntax.FuncDecl holding it; elem is then the plan of the field's
+	// own type, the Command interface.
+	declAt uintptr
 }
 
 // field is one step of a struct: where the field sits from the start of the
@@ -210,6 +217,7 @@ type codec struct {
 	types   []*plan // the registry's types' plans, by tag
 	file    *plan
 	remarks *plan
+	command *plan // syntax.Command, which a deferred body is read as
 	layout  uint64
 	err     error
 }
@@ -227,6 +235,7 @@ func build() *codec {
 	}
 	c.file = c.planFor(reflect.TypeFor[*syntax.File](), h)
 	c.remarks = c.planFor(reflect.TypeFor[[]syntax.Remark](), h)
+	c.command = c.planFor(reflect.TypeFor[syntax.Command](), h)
 	for _, p := range c.byID {
 		if p.op == opInterface {
 			c.interfaceWords(p)
@@ -341,14 +350,38 @@ func (c *codec) structFields(p *plan, t reflect.Type, base uintptr, h hasher) {
 				// Never walked: an error in a tree refuses the tree.
 				continue
 			}
+			if t == funcDeclType && f.Name == "deferred" {
+				// A body this package has not decoded yet. Never written:
+				// the body is, through the accessor, under BodyCommand.
+				continue
+			}
 			c.fail("the unexported field %s.%s", t, f.Name)
 			continue
 		}
+		fp := c.planFor(f.Type, h)
+		if t == funcDeclType && f.Name == "BodyCommand" {
+			fp = c.bodyPlan(fp, base+f.Offset, h)
+		}
 		p.fields = append(p.fields, field{
-			name: f.Name, offset: base + f.Offset, plan: c.planFor(f.Type, h),
+			name: f.Name, offset: base + f.Offset, plan: fp,
 			shared: slices.Contains(sharedFields[t.String()], f.Name),
 		})
 	}
+}
+
+var funcDeclType = reflect.TypeFor[syntax.FuncDecl]()
+
+// bodyPlan is the plan of a definition's body field: the Command it holds,
+// written so that it can be read when it is first asked for rather than when
+// the tree is. See Encoder.writeBody and decodeBody.
+func (c *codec) bodyPlan(cmd *plan, at uintptr, h hasher) *plan {
+	if cmd.op != opInterface {
+		c.fail("a definition's body that is not an interface (%s)", cmd.t)
+	}
+	_, _ = fmt.Fprintf(h, "deferred body @%d;", at)
+	p := &plan{id: len(c.byID), t: cmd.t, op: opBody, size: cmd.size, elem: cmd, declAt: at}
+	c.byID = append(c.byID, p)
+	return p
 }
 
 // interfaceWords finds, for each registered type that implements the
@@ -389,7 +422,7 @@ func (c *codec) interfaceWords(p *plan) {
 // would count.
 func (c *codec) isLeaf(p *plan, on map[*plan]bool) bool {
 	switch p.op {
-	case opPointer, opSlice, opInterface, opMustBeNil:
+	case opPointer, opSlice, opInterface, opMustBeNil, opBody:
 		return false
 	case opStruct:
 		if on[p] {
@@ -440,6 +473,17 @@ type Encoder struct {
 	// pointer of any other type is not looked up at all.
 	sideTypes []bool
 	next      int
+
+	// frames are the buffers a definition's body is written into before it
+	// goes into the tree holding it, one per depth of definitions inside
+	// definitions, kept so that the next body at that depth reuses them.
+	frames []*frame
+	depth  int
+}
+
+type frame struct {
+	buf    []byte
+	counts []int
 }
 
 // ptrKey is a pointer and the plan of the type it points to: two types can
@@ -607,7 +651,63 @@ func (e *Encoder) collect(p *plan, at unsafe.Pointer) {
 		if tag, ok := p.tagOf[words[0]]; ok {
 			e.collect(e.c.types[tag], unsafe.Pointer(&words[1]))
 		}
+	case opBody:
+		body := bodyOf(p, at)
+		e.collect(p.elem, unsafe.Pointer(&body))
 	}
+}
+
+// bodyOf is the body of the definition whose body field is at at, read
+// through the accessor: a tree this package read back may hold it still
+// encoded, and BodyCommand is then nil.
+func bodyOf(p *plan, at unsafe.Pointer) syntax.Command {
+	return (*syntax.FuncDecl)(unsafe.Add(at, -int(p.declAt))).Body()
+}
+
+// reaches reports whether the value at at holds a pointer of the side set:
+// one that something outside a definition's body may refer to as well.
+func (e *Encoder) reaches(p *plan, at unsafe.Pointer) bool {
+	switch p.op {
+	case opPointer:
+		ptr := *(*unsafe.Pointer)(at)
+		if ptr == nil {
+			return false
+		}
+		if e.sideTypes[p.id] {
+			if _, ok := e.side[ptrKey{uintptr(ptr), p.id}]; ok {
+				return true
+			}
+		}
+		return e.reaches(p.elem, ptr)
+	case opStruct:
+		for i := range p.inner {
+			if e.reaches(p.inner[i].plan, unsafe.Add(at, p.inner[i].offset)) {
+				return true
+			}
+		}
+	case opSlice:
+		if p.elem.leaf {
+			return false
+		}
+		h := (*sliceHeader)(at)
+		for i := range uintptr(h.len) {
+			if e.reaches(p.elem, unsafe.Add(h.data, i*p.elem.size)) {
+				return true
+			}
+		}
+	case opInterface:
+		words := (*[2]unsafe.Pointer)(at)
+		if words[0] == nil {
+			return false
+		}
+		if tag, ok := p.tagOf[words[0]]; ok {
+			return e.reaches(e.c.types[tag], unsafe.Pointer(&words[1]))
+		}
+	case opBody:
+		body := bodyOf(p, at)
+		return e.reaches(p.elem, unsafe.Pointer(&body))
+	}
+	return false
 }
 
 // Pointer tags: nil, new, new and remembered, and a reference back to a
@@ -749,6 +849,13 @@ func (e *Encoder) write(p *plan, at unsafe.Pointer) {
 		for i := range p.fields {
 			f := &p.fields[i]
 			fa := unsafe.Add(at, f.offset)
+			if f.plan.op == opBody {
+				if body := bodyOf(f.plan, fa); body != nil {
+					e.buf[mask+i>>3] |= 1 << (i & 7)
+					e.writeBody(f.plan, body)
+				}
+				continue
+			}
 			if isZero(fa, f.plan.size) {
 				continue
 			}
@@ -820,6 +927,105 @@ func (e *Encoder) write(p *plan, at unsafe.Pointer) {
 		}
 		e.buf = append(e.buf, 0)
 	}
+}
+
+// Body tags: a body written where it stands, read with the tree, and a body
+// written as an entry of its own, read when the definition's body is first
+// asked for.
+const (
+	bodyInline = iota
+	bodyDeferred
+)
+
+// MinDeferredBody is the shortest encoded body worth deferring. A deferred
+// body costs a closure and a record when it is read, and a pooled decoder
+// when it is called, so a tiny one is cheaper decoded with the tree. The
+// figure is not sharp: on the maintainer's real configuration, 64 and 1024
+// each came within 0.1% of 256 in instructions retired over a warm
+// `-i -c exit` (2026-10-15, 12 interleaved pairs each), because nearly all
+// of the bytes are in bodies far longer than any of the three.
+const MinDeferredBody = 256
+
+// writeBody writes a definition's body (#6483).
+//
+// Most of the functions a start defines are never called during it — on a
+// real configuration, hundreds of kilobytes of a prompt theme's and a plugin
+// manager's function bodies — so a body is written as an entry of its own,
+// with its own count of what it allocates and its own numbering of the
+// pointers it keeps, and the reader decodes it when the function is first
+// called or listed rather than when it is defined.
+//
+// Written where it stands instead when anything outside the body may refer
+// into it — a pointer of the file's side lists, which in the dialects that
+// keep them can name a node inside a body — because the reader of a deferred
+// body cannot hand back a node the tree already holds. And written where it
+// stands when it is small and keeps nothing, where deferring it costs more
+// than it saves.
+func (e *Encoder) writeBody(p *plan, body syntax.Command) {
+	at := unsafe.Pointer(&body)
+	if e.side != nil && e.reaches(p.elem, at) {
+		e.buf = append(e.buf, bodyInline)
+		e.write(p.elem, at)
+		return
+	}
+	if e.depth == len(e.frames) {
+		e.frames = append(e.frames, &frame{counts: make([]int, len(e.c.byID))})
+	}
+	fr := e.frames[e.depth]
+	clear(fr.counts)
+	outerBuf, outerCounts, outerNext := e.buf, e.counts, e.next
+	e.buf, e.counts, e.next = fr.buf[:0], fr.counts, 0
+	e.depth++
+	e.write(p.elem, at)
+	e.depth--
+	tree, kept := e.buf, e.next
+	fr.buf = tree
+	e.buf, e.counts, e.next = outerBuf, outerCounts, outerNext
+	if e.err != nil {
+		return
+	}
+	if kept == 0 && len(tree) < MinDeferredBody {
+		// Numbered nothing of its own, so it reads the same inside the
+		// tree, whose allocation counts take its nodes as well.
+		for id, k := range fr.counts {
+			e.counts[id] += k
+		}
+		e.buf = append(e.buf, bodyInline)
+		e.buf = append(e.buf, tree...)
+		return
+	}
+	e.buf = append(e.buf, bodyDeferred)
+	end := body.End()
+	e.buf = varint(e.buf, int64(end.Offset))
+	e.buf = varint(e.buf, int64(end.Line))
+	e.buf = varint(e.buf, int64(end.Col))
+	n := 0
+	head := 0
+	for id, k := range fr.counts {
+		if k > 0 {
+			n++
+			head += uvarintLen(uint64(id)) + uvarintLen(uint64(k))
+		}
+	}
+	head += uvarintLen(uint64(n))
+	e.buf = uvarint(e.buf, uint64(head+len(tree)))
+	e.buf = uvarint(e.buf, uint64(n))
+	for id, k := range fr.counts {
+		if k > 0 {
+			e.buf = uvarint(e.buf, uint64(id))
+			e.buf = uvarint(e.buf, uint64(k))
+		}
+	}
+	e.buf = append(e.buf, tree...)
+}
+
+func uvarintLen(x uint64) int {
+	n := 1
+	for x >= 0x80 {
+		x >>= 7
+		n++
+	}
+	return n
 }
 
 // writeShared writes a pointer out of one of the sharedFields: the first
@@ -1130,7 +1336,70 @@ func (d *Decoder) read(p *plan, at unsafe.Pointer) {
 		if d.byte() != 0 {
 			panic("a refusal in a cached tree")
 		}
+	case opBody:
+		switch d.byte() {
+		case bodyInline:
+			d.read(p.elem, at)
+		case bodyDeferred:
+			var end syntax.Pos
+			end.Offset = int32(d.varint())
+			end.Line = int32(d.varint())
+			end.Col = int32(d.varint())
+			n := int(d.uvarint())
+			blob := d.data[d.off : d.off+n : d.off+n]
+			d.off += n
+			c, src := d.c, d.src
+			decl := (*syntax.FuncDecl)(unsafe.Add(at, -int(p.declAt)))
+			decl.DeferBody(end, func() syntax.Command {
+				BodiesRead.Add(1)
+				return decodeBody(c, blob, src)
+			})
+			BodiesDeferred.Add(1)
+		default:
+			panic("bad body tag")
+		}
 	}
+}
+
+// BodiesDeferred and BodiesRead count, for this process, the definitions'
+// bodies a decoder left encoded and the ones of those that were then asked
+// for: what deferring saved is the difference. For tests and for measuring.
+var BodiesDeferred, BodiesRead atomic.Int64
+
+// bodyPool holds the decoders deferred bodies are read with. A body is read
+// long after the tree that held it, by whichever goroutine calls the
+// function first, so it cannot use that tree's decoder.
+var bodyPool sync.Pool
+
+// decodeBody reads a body writeBody deferred.
+//
+// It cannot fail: the entry it was cut from passed its checksum before its
+// trees were read, and those trees were read whole, so bytes that do not
+// decode here are this package's fault, not the cache's. There is nowhere to
+// report one either — the definition ran long ago — so it is said loudly.
+func decodeBody(c *codec, blob []byte, src string) syntax.Command {
+	d, ok := bodyPool.Get().(*Decoder)
+	if !ok || d.c != c {
+		n := len(c.byID)
+		d = &Decoder{c: c, slab: make([]slab, n), reserve: make([]int, n)}
+	}
+	d.data, d.src, d.off, d.err = blob, src, 0, c.err
+	var body syntax.Command
+	err := d.root(c.command, unsafe.Pointer(&body))
+	if err == nil && d.off != len(blob) {
+		err = fmt.Errorf("%w: %d bytes after a body", ErrCorrupt, len(blob)-d.off)
+	}
+	// Nothing of this body is held by the pooled decoder: its blocks and
+	// kept nodes belong to the tree just read.
+	d.data, d.src = nil, ""
+	clear(d.kept)
+	d.kept = d.kept[:0]
+	clear(d.slab)
+	bodyPool.Put(d)
+	if err != nil {
+		panic(fmt.Sprintf("parse cache: a function body did not decode: %v", err))
+	}
+	return body
 }
 
 // sliceHeader is a slice's three words, written in one store.

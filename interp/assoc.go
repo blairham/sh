@@ -555,7 +555,7 @@ func (r *Runner) assocKeyIn(w *syntax.Word, inDoubleQuotes bool) string {
 	// A key is read as a double-quoted string is, as far as one refusal's
 	// wording goes. See readingQuotedText.
 	defer r.readingQuotedText()()
-	r.expandSubscriptTilde(w)
+	w = r.expandSubscriptTilde(w)
 	failedBefore := r.expansionHasFailed()
 	quoted := r.expandKeyQuoted(w)
 	if r.expansionFailedHere(failedBefore) {
@@ -613,18 +613,22 @@ func keyKeepsEscape(c string) bool {
 // two readings differ: a subscript with no leading unquoted `~` is the same
 // key either way, which is every subscript a script normally writes.
 //
-// The word is rewritten in place, as expandTilde does everywhere else. That
-// is safe to repeat: the value it leaves no longer starts with a `~`, so a
-// subscript inside a loop expands once and reads the same on every pass.
-func (r *Runner) expandSubscriptTilde(w *syntax.Word) {
+// The word is rewritten on a copy, which is returned. It used to be rewritten
+// in place on the reasoning that a value no longer starting with `~` reads the
+// same on every pass — which is exactly the bug: the pass after HOME changed
+// read the first pass's home, in a loop body and a function body alike, where
+// bash 5.3 expands the tilde afresh (#6433).
+func (r *Runner) expandSubscriptTilde(w *syntax.Word) *syntax.Word {
 	if !startsWithAnUnquotedTilde(w) {
-		return
+		return w
 	}
 	if !r.ask(r.sem().SubscriptKeyExpandsALeadingTilde,
 		"a subscript's leading tilde expanding to the home directory") {
-		return
+		return w
 	}
+	w = spansCopiedForTildes(w)
 	r.expandTilde(w)
+	return w
 }
 
 // startsWithAnUnquotedTilde is the guard that keeps the axis from being asked

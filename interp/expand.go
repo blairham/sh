@@ -76,7 +76,7 @@ func (r *Runner) expandWordEscaped(w *syntax.Word) []string {
 	if r.shFileExpansion {
 		// `=` before the braces and every other expansion, in the order
 		// the option names. See Runner.SetShFileExpansion.
-		r.expandEquals(w)
+		w = r.expandEquals(w)
 	}
 	_, hasBrace := findBraceFrom(w.Spans, cursor{0, 0}, '{')
 	if hasBrace && r.braceFieldsFirst(w) {
@@ -209,13 +209,13 @@ func (r *Runner) expandWordFieldsTracked(w *syntax.Word, track bool) ([]string, 
 	// interp/assignmentshapedword.go.
 	if !outside {
 		r.expandAssignmentShapedWord(w, equalsTilde)
-		r.wordEquals(w)
+		w = r.wordEquals(w)
 	}
 	// Under `shfileexpansion` the word's `=` was answered before its braces
 	// and its expansions were, so what they produced is not looked at
 	// again. See Runner.SetShFileExpansion.
 	if !r.shFileExpansion {
-		r.expandEquals(w)
+		w = r.expandEquals(w)
 	}
 
 	// Fields are built up span by span. A span joins onto the field before it
@@ -1954,9 +1954,14 @@ func (r *Runner) expandAssignValue(w *syntax.Word) string {
 	// The colon closes this word's leading tilde prefix as well as opening
 	// the ones expandColonTildes answers for — `foo=~:~` is two homes in
 	// every column — so the assignment road names its own set.
+	//
+	// On a copy, as every road that rewrites a word's head is: the value is
+	// the program's, and `f() { x=~/q; }` read the first call's home on
+	// every later call (#6433). assignValueEquals copies for itself.
+	w = spansCopiedForTildes(w)
 	r.expandTildeIn(w, tildeEndsAtASlashOrColon)
 	r.expandColonTildes(w)
-	r.assignValueEquals(w)
+	w = r.assignValueEquals(w)
 	return r.wordTextUnsplit(w, nil, false, true)
 }
 
@@ -1974,9 +1979,10 @@ func (r *Runner) expandAssignValueMarked(w *syntax.Word) string {
 	if w == nil {
 		return ""
 	}
+	w = spansCopiedForTildes(w)
 	r.expandTildeIn(w, tildeEndsAtASlashOrColon)
 	r.expandColonTildes(w)
-	r.assignValueEquals(w)
+	w = r.assignValueEquals(w)
 	return r.wordTextUnsplit(w, nil, true, true)
 }
 
@@ -8286,14 +8292,22 @@ func (r *Runner) parseSpans(spans []syntax.Span) []syntax.Span {
 // filename before anything else looks at it. Quoting removes it, and so does
 // anything other than `=` in first position — `a=b` is an assignment and stays
 // one.
-func (r *Runner) expandEquals(w *syntax.Word) {
+//
+// The word it is given is never written: the rewrite is made on a copy, which
+// is returned, and the word itself comes back where nothing moved. The word
+// belongs to the parsed program, and a function body is expanded again on its
+// next call — writing the path into the tree kept the first call's answer
+// after PATH changed, and `functions` then listed the path rather than the
+// `=cmd` the script wrote (#6433). The tilde passes learned the same thing in
+// #5155; see spansCopiedForTildes.
+func (r *Runner) expandEquals(w *syntax.Word) *syntax.Word {
 	if len(w.Spans) == 0 {
-		return
+		return w
 	}
 	s := &w.Spans[0]
 	if s.Kind != syntax.Literal || s.Quoting != syntax.Unquoted ||
 		!strings.HasPrefix(s.Value, "=") {
-		return
+		return w
 	}
 	// The head is every unquoted literal span in a row, not only the first:
 	// a brace product arrives as the text before the braces and the text
@@ -8305,19 +8319,22 @@ func (r *Runner) expandEquals(w *syntax.Word) {
 		n++
 	}
 	if len(text) == 1 {
-		return
+		return w
 	}
 	if !r.ask(r.sem().EqualsExpansion, "`=cmd` expanding to a path") {
-		return
+		return w
 	}
 	path, ok := r.equalsPath(text[1:])
 	if !ok {
-		return
+		return w
 	}
-	s.Value = path
+	c := *w
+	c.Spans = slices.Clone(w.Spans)
+	c.Spans[0].Value = path
 	for i := 1; i < n; i++ {
-		w.Spans[i].Value = ""
+		c.Spans[i].Value = ""
 	}
+	return &c
 }
 
 // equalsPath is the lookup behind `=cmd`, in the one place both roads reach

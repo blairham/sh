@@ -8607,7 +8607,15 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 	// expanded, which is measured rather than assumed: `echo [[a == a]]`
 	// reports the `==` and never reaches the `[[a`, so zsh has finished this
 	// phase before pathname expansion begins on the first word.
-	for _, w := range c.Args {
+	//
+	// The words it rewrites are copies, and so is the command that holds
+	// them: the tree is the program, and a function body that kept the path
+	// its first call resolved went on running that path after PATH changed
+	// (#6433). written is the command as the tree holds it, for the checks
+	// that ask which node is running.
+	written := c
+	var args []*syntax.Word
+	for i, w := range c.Args {
 		// A word with braces in it is answered a name at a time, after the
 		// braces made them, unless `shfileexpansion` puts `=` first: zsh
 		// 5.9.2 writes `/bin/ls =` for `print ={ls,}` and refuses `{ls,}`
@@ -8615,7 +8623,17 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 		if _, braced := findBraceFrom(w.Spans, cursor{0, 0}, '{'); braced && !r.shFileExpansion {
 			continue
 		}
-		r.expandEquals(w)
+		if moved := r.expandEquals(w); moved != w {
+			if args == nil {
+				args = slices.Clone(c.Args)
+			}
+			args[i] = moved
+		}
+	}
+	if args != nil {
+		resolved := *c
+		resolved.Args = args
+		c = &resolved
 	}
 	if r.expandErr {
 		// Only what this pass just set. Testing r.ctl here as well made
@@ -9813,7 +9831,7 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 	}
 	if fn, ok := r.funcs[r.namespaceFuncLookup(argv[0])]; ok && !r.presentedButSwitchedOff(argv[0]) &&
 		!r.specialBuiltinOutranksAFunction(argv[0]) {
-		r.noteANegatedCall(c)
+		r.noteANegatedCall(written)
 		// A name the dialect's prelude presents is a builtin to every
 		// question asked about it, so switching it off has to stop the word
 		// finding it — and the implementation is a function in the one table
@@ -10057,7 +10075,7 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 	// `set` and `shift` change state a child process could not.
 	if fn, ok := r.lookupBuiltin(argv[0]); ok {
 		if argv[0] == "eval" {
-			r.noteANegatedCall(c)
+			r.noteANegatedCall(written)
 		}
 		// `$_` belongs to this call where the builtin's job is to run the
 		// script's own commands — `eval` and `.` — exactly as it belongs to

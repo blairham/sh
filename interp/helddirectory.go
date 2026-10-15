@@ -62,6 +62,13 @@ type heldDirectory struct {
 	named string
 	// dir is the descriptor. It is what a rename moves and a name does not.
 	dir *os.File
+	// ident is what dir answered to a stat when the hold was made, and is
+	// what dirNow compares a name against. A descriptor's identity — its
+	// device and inode — cannot change while it is open, so asking the
+	// descriptor again on every relative path bought nothing, and it was one
+	// of the three system calls a relative file test made (#6423). Nil where
+	// that stat failed; dirNow then asks as it did before.
+	ident os.FileInfo
 	// shared says a clone took this hold too, so the Runner that opened it may
 	// no longer close it: a subshell is a copy running in the same process and
 	// the copy is reading the same descriptor. Closing one out from under the
@@ -119,6 +126,11 @@ type heldCopy struct {
 // here, because until this returns the original is on a low number.
 func newHeldDirectory(named string, dir *os.File, floor int) *heldDirectory {
 	h := &heldDirectory{named: named, dir: dir, copyFd: -1}
+	// Read once, here, for dirNow: see ident. The copy below is the same
+	// directory, so the identity read off the original is the copy's too.
+	if ident, err := dir.Stat(); err == nil {
+		h.ident = ident
+	}
 	raised, n, err := dupFile(dir, floor)
 	if err != nil {
 		return h
@@ -244,9 +256,12 @@ func (r *Runner) dirNow() string {
 	if held == nil {
 		return r.workDir()
 	}
-	here, err := held.dir.Stat()
-	if err != nil {
-		return r.workDir()
+	here := held.ident
+	if here == nil {
+		var err error
+		if here, err = held.dir.Stat(); err != nil {
+			return r.workDir()
+		}
 	}
 	// **Not through the gate**, which is the one place in this package where
 	// that is the right answer and it is worth saying why. Every stat in

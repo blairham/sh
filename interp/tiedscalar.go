@@ -802,6 +802,7 @@ func (r *Runner) setOuterScriptTiesAside(scalar, array string) {
 	r.AtFunctionReturn(func() {
 		for name, t := range saved {
 			r.tied[name] = t
+			r.specialNames.add(name)
 		}
 	})
 }

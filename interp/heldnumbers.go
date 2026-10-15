@@ -4,6 +4,7 @@
 package interp
 
 import (
+	"context"
 	"io"
 	"slices"
 
@@ -84,10 +85,9 @@ func (r *Runner) substitutionPublishedAt(fd int) bool {
 }
 
 // holdNumber takes the number nextFreeFd would hand out next and holds it for
-// the shell's own plumbing. ignoring is a number to count as free although it
-// is held, or -1.
-func (r *Runner) holdNumber(keptByAFork bool, ignoring int) int {
-	fd := r.lowestFreeNumber(ignoring)
+// the shell's own plumbing.
+func (r *Runner) holdNumber(keptByAFork bool) int {
+	fd := r.lowestFreeNumber(-1)
 	r.heldNumbers = append(slices.Clip(r.heldNumbers), heldNumber{fd: fd, keptByAFork: keptByAFork})
 	return fd
 }
@@ -177,7 +177,7 @@ func (r *Runner) beginRedirHolds(owner redirOwner) *redirHolds {
 	if entry.pending && entry.input != 0 {
 		// The pipe is the list's first redirection: standard input is saved
 		// with the end still held, then the end is let go of.
-		h.save(0, false, -1)
+		h.save(0, false)
 		r.letGoOfNumber(entry.input)
 	}
 	return h
@@ -207,11 +207,8 @@ func (r *Runner) streamOpen(fd int) bool {
 // duplicating says the redirection copies another descriptor, whose copy
 // sits on the lowest free number while the save is taken and is let go of
 // after — `{ … } 2>&1` holds 12 and leaves 11 free, where `2>/dev/null`
-// holds 11. ignoring is a number to count as free although it is held, or -1:
-// the substitution an output redirection consumes, whose pipe a real shell
-// makes only after the save. `exec 3>/dev/null; { … } 3> >(cat)` holds 11
-// in zsh 5.9.2, as `3>/dev/null` would.
-func (h *redirHolds) save(fd int, duplicating bool, ignoring int) {
+// holds 11.
+func (h *redirHolds) save(fd int, duplicating bool) {
 	if h == nil || slices.Contains(h.decided, fd) {
 		return
 	}
@@ -222,9 +219,9 @@ func (h *redirHolds) save(fd int, duplicating bool, ignoring int) {
 	r := h.r
 	source := -1
 	if duplicating {
-		source = r.holdNumber(false, ignoring)
+		source = r.holdNumber(false)
 	}
-	h.saved = append(h.saved, r.holdNumber(false, ignoring))
+	h.saved = append(h.saved, r.holdNumber(false))
 	if source >= 0 {
 		r.letGoOfNumber(source)
 	}
@@ -252,27 +249,25 @@ func (h *redirHolds) closers(cs []io.Closer) []io.Closer {
 // saveForAnOpen is save for a redirection that opens name onto fd — or onto
 // both output streams, where fd is -1 — and the substitution it may consume.
 //
-// A substitution a redirection reads from is a source like a duplication's:
-// its number is held while the save is taken and comes free after. `{ echo
+// A substitution a redirection opens is a source like a duplication's: its
+// number is held while the save is taken and comes free after. `{ echo
 // <(true) <(true); } < <(true)` is `11 13` in zsh 5.9.2 and `3< <(true)` on
-// the same group is `11 12`. One it writes into is made only after the save,
-// so the save does not step over it: `exec 3>/dev/null; { … } 3> >(cat)`
-// holds 11, exactly as `3>/dev/null` does.
+// the same group is `11 12`. It is held from before the list's first save,
+// because the list's substitutions are all made first — see makeFirst — and
+// a writing one is no exception: `exec 3>/dev/null; { … } 3> >(cat)` holds
+// 11 only because that substitution is on 12, its reading end having taken
+// 11 and given it back (see Runner.writingEndStepsOverTheReadingEnd).
 func (h *redirHolds) saveForAnOpen(fd int, name string) {
 	r := h.r
 	i := -1
 	if h.consuming {
 		i = r.consumedSubstitution(name)
 	}
-	ignoring := -1
-	if i >= 0 && r.procSubs[i].commandWrites {
-		ignoring = r.procSubs[i].fd
-	}
 	if fd < 0 {
-		h.save(1, false, ignoring)
-		h.save(2, false, ignoring)
+		h.save(1, false)
+		h.save(2, false)
 	} else {
-		h.save(fd, false, ignoring)
+		h.save(fd, false)
 	}
 	if i >= 0 {
 		r.releaseConsumedSubstitution(i)
@@ -327,4 +322,81 @@ func (sub *Runner) enterAsAnElement(before []heldNumber, reads []int, i int, cmd
 	if i > 0 {
 		sub.entering.input = reads[i-1]
 	}
+}
+
+// madeFirstSubst is one process substitution of a redirection list, made
+// before any redirection of the list was applied.
+type madeFirstSubst struct {
+	pos  syntax.Pos
+	path string
+	ok   bool
+}
+
+// makeFirst makes every process substitution written in the list's words
+// before the first of its redirections is applied, and answers what puts the
+// runner back once the list is done.
+//
+// zsh 5.9.2 does, and it is the order the numbers come out in: the list's
+// substitutions are on their numbers before any stream is saved, so `{ echo
+// <(true) <(true); } 2>/dev/null < <(true)` is `11 14` there — the
+// substitution on 11, standard error saved on 12 and standard input on 13,
+// then 11 given back as standard input takes the pipe over. Made where it is
+// reached, it was `12 14`. The order is also visible without a number: `:
+// </nonexistent > >(echo ran >&2)` prints `ran` in zsh, whose first
+// redirection fails after the second's substitution was started, and in
+// neither bash 5.3.20 nor ksh93u+. Only the substitutions: a command
+// substitution in a later word is not run, `: </nonexistent >$(echo ran >&2)`
+// printing nothing in all three. And after what entering as a pipeline
+// element owes, which is the list's first redirection (see beginRedirHolds):
+// `echo x | { … } 2>/dev/null < <(true)` holds 12 and 13 as the group does
+// outside a pipeline. Measured 2026-10-15 (#6505).
+//
+// Nil-safe like every method here, so the dialects that count nothing make
+// each substitution where its word is expanded, as before.
+func (h *redirHolds) makeFirst(ctx context.Context, rs []*syntax.Redirect) func() {
+	if h == nil {
+		return func() {}
+	}
+	r := h.r
+	outer := r.madeFirst
+	var made []madeFirstSubst
+	for _, rd := range rs {
+		if rd.Word == nil || rd.Heredoc != nil {
+			continue
+		}
+		for _, s := range rd.Word.Spans {
+			if s.Kind != syntax.ProcSubstIn && s.Kind != syntax.ProcSubstOut {
+				continue
+			}
+			// Made as the target's own expansion would make it: a
+			// redirection target's body traces nowhere. See redirectTarget.
+			wasTarget := r.redirectTargetWord
+			r.redirectTargetWord = true
+			path, ok := r.procSub(ctx, s)
+			r.redirectTargetWord = wasTarget
+			made = append(made, madeFirstSubst{pos: s.Pos, path: path, ok: ok})
+		}
+	}
+	r.madeFirst = made
+	return func() { r.madeFirst = outer }
+}
+
+// takeMadeFirst is the path a process substitution expands to: the one
+// makeFirst made for it, or one made now.
+//
+// Taken rather than read, so that a word expanded twice makes its second
+// substitution where it always did. A substitution that failed when it was
+// made fails its word again without being retried — its complaint is already
+// written.
+func (r *Runner) takeMadeFirst(s syntax.Span) (string, bool) {
+	for i, m := range r.madeFirst {
+		if m.pos == s.Pos {
+			r.madeFirst = slices.Delete(slices.Clip(r.madeFirst), i, i+1)
+			if !m.ok {
+				r.expandErr = true
+			}
+			return m.path, m.ok
+		}
+	}
+	return r.procSub(r.ctx, s)
 }

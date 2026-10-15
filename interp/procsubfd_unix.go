@@ -183,7 +183,12 @@ func (r *Runner) procSubFdDir() string {
 // between the two spellings: `>(cmd)` hands the command the writing end and
 // keeps the reading one, `<(cmd)` the other way about. dir is the directory
 // the path is named after — see Runner.procSubFdDir.
-func newProcSubPipe(childWrites bool, dir string, want []int, view substFdView) (procSubEnds, error) {
+//
+// stepOver says the published number is the second free wish rather than the
+// first: a placeholder takes the first while the end is parked and is closed
+// after, which is where a real shell's own other end of the pipe sat. See
+// Runner.writingEndStepsOverTheReadingEnd.
+func newProcSubPipe(childWrites bool, dir string, want []int, view substFdView, stepOver bool) (procSubEnds, error) {
 	// From the pipe to the number published, no process start is in flight:
 	// a start's own descriptors sit on the lowest free numbers until it
 	// returns, and a sibling pipeline element's start would otherwise be in
@@ -203,6 +208,18 @@ func newProcSubPipe(childWrites bool, dir string, want []int, view substFdView) 
 	// Before the park, because the number it gives up is one of the numbers
 	// the park is about to ask for.
 	shell, shellCopy := raiseShellEnd(shell, want)
+	if stepOver {
+		// After the raise, because the number the shell's end gave up may be
+		// the one the placeholder is for. Through the same park and the same
+		// view, so it lands exactly where the end itself would have; a number
+		// it borrowed rather than took is marked taken for the end's park.
+		if placeholder, at, _, perr := parkDescriptor(child, dir, want, view); perr == nil {
+			defer func() { _ = placeholder.Close() }()
+			if at != int(placeholder.Fd()) {
+				view.taken = append(slices.Clip(view.taken), at)
+			}
+		}
+	}
 	parked, pub, fellBack, err := parkDescriptor(child, dir, want, view)
 	// The original is closed either way: on success the parked duplicate is
 	// the one the path names, and on failure there is nothing to hand over.

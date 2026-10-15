@@ -85,7 +85,7 @@ func (r *Runner) procSub(ctx context.Context, span syntax.Span) (string, bool) {
 	// Runner.PipesMadeForTest.
 	r.procSubHomeBox().seq.Add(1)
 	ends, err := newProcSubPipe(kind == syntax.ProcSubstOut, r.procSubFdDir(),
-		r.substEndCandidates(), r.substFdView())
+		r.substEndCandidates(), r.substFdView(), r.writingEndStepsOverTheReadingEnd(kind))
 	if err != nil {
 		r.diagf("%v\n", err)
 		r.expandErr = true
@@ -1702,6 +1702,35 @@ func (r *Runner) substEndCandidates() []int {
 		return lowest(up(topOfTheDescriptorTable+1, nil))
 	}
 	return up(r.firstAllocatedDescriptor(), nil)
+}
+
+// writingEndStepsOverTheReadingEnd is whether a substitution's published
+// number is the second one its wish list offers rather than the first: where
+// the command writes into it, in the two dialects that allocate upward.
+//
+// A real shell makes the pipe with both ends on the lowest free numbers, the
+// reading one below the writing one, and moves both into the region it
+// publishes from before it forks the body. For `<(cmd)` the shell keeps the
+// lower, reading end; for `>(cmd)` it keeps the upper, writing one, and the
+// reading end it stepped over is closed once the body has it — so the number
+// below comes free again for whatever is allocated next. Measured 2026-10-15:
+//
+//	                                zsh 5.9.2     ksh93u+       BusyBox 1.37
+//	echo >(true) >(true)            12 13         4 5           64 65
+//	echo <(true) >(true) <(true)    11 13 12      3 5 4         64 65 66
+//	: >(true) {v}</dev/null         v=11          —             —
+//
+// BusyBox counts up from 64 and does not step, and bash counts down from 63,
+// where an end below cannot be in the way; both keep the first wish. #6505.
+func (r *Runner) writingEndStepsOverTheReadingEnd(kind syntax.SpanKind) bool {
+	if kind != syntax.ProcSubstOut {
+		return false
+	}
+	switch r.sem().SubstitutionEndPlacement {
+	case SubstitutionEndsWhereAnyDescriptorGoes, SubstitutionEndsAtTheLowestFreeNumber:
+		return true
+	}
+	return false
 }
 
 // shellEndFloor is the lowest number the shell's own end of a substitution

@@ -668,6 +668,10 @@ type Runner struct {
 	// for the runner having been entered as a pipeline element or a
 	// background job. See elementEntry.
 	entering elementEntry
+	// madeFirst are the process substitutions of the redirection list being
+	// applied, made before any of its redirections and waiting for the
+	// expansion of their word to take them. See redirHolds.makeFirst.
+	madeFirst []madeFirstSubst
 	// heldProcSubs are the ones removeProcSubs could not finish with, because
 	// one of this shell's *own* descriptors was still open on the pipe —
 	// `exec > >(cmd)` is the shape. They keep until the shell itself ends,
@@ -5894,6 +5898,9 @@ func (r *Runner) clone() *Runner {
 	// every saved copy. See keptByAFork.
 	c.heldNumbers = keptByAFork(r.heldNumbers)
 	c.entering = elementEntry{}
+	// The positions are in this runner's text, and a clone's body is parsed
+	// from its own.
+	c.madeFirst = nil
 	// And the same for the ones the shell is still holding a descriptor onto.
 	// They belong to whichever shell opened them: a subshell must not close
 	// its parent's pipe on the way out, nor wait for a body the parent is

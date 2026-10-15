@@ -9881,7 +9881,7 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 		// part of this walk — a marker taken after it would read a value
 		// that would not expand as something that had already failed.
 		walk = r.beginPrefixWalk(c.Assigns)
-		if !r.prefixCheckedFirst && r.expandThePrefixUpToTheFrozenName(c.Assigns) {
+		if !r.prefixCheckedFirst && r.expandThePrefixUpToTheFrozenName(c.Assigns, nil) {
 			// A frozen name's own value is what failed, in one of the four
 			// columns that evaluate it first: the expansion's sentence is
 			// the whole of what the script is told, the refusal is never
@@ -10141,7 +10141,7 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 		// on the record. The redirections have been opened since the marker
 		// runSimple took, and what they may have left is not this prefix's.
 		walk = r.beginPrefixWalk(c.Assigns)
-		if !r.prefixCheckedFirst && r.expandThePrefixUpToTheFrozenName(c.Assigns) {
+		if !r.prefixCheckedFirst && r.expandThePrefixUpToTheFrozenName(c.Assigns, nil) {
 			// What the frozen name was being given is what failed, in one of
 			// the four columns that evaluate it ahead of the refusal: its
 			// sentence is the whole of what the script is told, and the

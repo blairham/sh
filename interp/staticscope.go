@@ -347,3 +347,47 @@ func (r *Runner) callerShadowHolders() map[string]*scope {
 	}
 	return holders
 }
+
+// sealEnclosingPrefixExports takes the export attribute off the cells an
+// enclosing call's prefix made, for the length of a call whose body reads past
+// its callers, and gives it back at the return.
+//
+// A prefix scoped to a `function`-form call is exported for that call — see
+// Semantics.PrefixToAKeywordFunctionIsScopedToTheCall — and the seal above
+// does not cover it, because the prefix is not a declaration the caller's
+// scope recorded: the callee still reads its value. What the callee does not
+// do is hand it on. Measured 2026-10-15 on ksh93u+, `-c` under `env -i
+// PATH=/usr/bin:/bin`, with `v=base; function f { g; }; v=4 f`:
+//
+//	function g { echo "[$v]"; printenv v; }   [4], and printenv finds nothing
+//	g() { echo "[$v]"; printenv v; }          [4], and printenv prints 4
+//	the first, after `export v=base`          [4], and printenv finds nothing
+//
+// So the cell hides the shell's own exported `v` from the child as well,
+// which is why the attribute is taken off rather than the cell put aside.
+func (r *Runner) sealEnclosingPrefixExports(sc *scope) {
+	if !sc.keyword || len(r.callPrefixes) == 0 || r.sem().CallerLocalsReachTheCallee == Yes {
+		return
+	}
+	enclosing := len(r.scopes) - 1
+	var hidden []string
+	for _, frame := range r.callPrefixes {
+		if !frame.scoped || frame.scopeDepth >= enclosing {
+			continue
+		}
+		for _, name := range frame.names {
+			if r.isExported(name) {
+				r.exportedPut(name, false)
+				hidden = append(hidden, name)
+			}
+		}
+	}
+	if len(hidden) == 0 {
+		return
+	}
+	sc.onReturn = append(sc.onReturn, func() {
+		for _, name := range hidden {
+			r.exportedPut(name, true)
+		}
+	})
+}

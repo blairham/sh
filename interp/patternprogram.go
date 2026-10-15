@@ -181,6 +181,13 @@ type cpiece struct {
 	// let through. tail is kept only for a pure piece. See pieceEdges, and
 	// cexec.group for what they save.
 	lead, tail *[utf8.RuneSelf]bool
+	// closure is the piece's one step where that step is a repetition of a
+	// plain unit with nothing after it — `[^}]##` as a group's arm. Where
+	// units are bytes, such a piece matches a span exactly when every byte
+	// of it is the item's and the count is within the bounds, so a group
+	// reads which spans it matches off one scan rather than running it over
+	// each. See plainUnit and cexec.group.
+	closure *cnode
 }
 
 type cop uint8
@@ -315,7 +322,28 @@ func (c *compiler) piece(p string, pp int, o patternOpts) *cpiece {
 			pc.unit = !n.o.matchSkipsToAnyBracket
 		}
 	}
+	if n := pc.first; n != nil && n.next == nil && n.op == opRepeat && n.after.empty && plainUnit(n.item) {
+		pc.closure = n
+	}
 	return pc
+}
+
+// plainUnit says a unit piece's answer about one byte is a function of that
+// byte and where it stands, and asking it can leave nothing behind: no
+// bracket question, no bad-pattern verdict, no capture. A bracket qualifies
+// only with its byte table, since without one it is answered by
+// matchBracket, which can ask the dialect about the bracket it is reading.
+func plainUnit(c *cpiece) bool {
+	if !c.unit || !c.pure {
+		return false
+	}
+	switch n := c.first; n.op {
+	case opByte, opChar, opAny:
+		return true
+	case opBracket:
+		return n.set != nil
+	}
+	return false
 }
 
 // branch is matchBranch's loop with the subject taken out. Each arm below is
@@ -1178,12 +1206,23 @@ func (x *cexec) group(n *cnode, b repeatBound, first bool, at, end int) bool {
 		if unitOnly(a, n.o) {
 			top, bottom = min(top, 1), max(bottom, 1)
 		}
+		// An arm that is a closure of a plain unit matches the spans from
+		// its lower bound up to the run of its item's bytes, and no others:
+		// a longer span holds a byte the item refuses, a shorter one too few
+		// repetitions. Running it over each span would answer the same,
+		// taking the same items again, and leave nothing behind either way.
+		known := a.closure != nil && !a.closure.o.chars
+		if known {
+			r := a.closure
+			top = x.unitRun(r, 0, at, at+top) - at
+			bottom = max(bottom, r.lo)
+		}
 		for i := top; i >= bottom; i-- {
-			if x.tailRulesOut(a, at, at+i) {
+			if !known && x.tailRulesOut(a, at, at+i) {
 				continue
 			}
 			mark := caps.mark()
-			if !x.item(a, at, at+i) {
+			if !known && !x.item(a, at, at+i) {
 				caps.rollback(mark)
 				continue
 			}
@@ -1215,6 +1254,22 @@ func (x *cexec) anyArm(n *cnode, at, end int) bool {
 // repeat is repeatFrom: k repetitions of the item have been taken.
 func (x *cexec) repeat(n *cnode, k, at, end int) bool {
 	caps := x.w.caps
+	if unitOnly(n.item, n.o) {
+		// repeatFrom recurses once per repetition, and where the item is one
+		// byte each level tries it at exactly one span, so the recursion is
+		// a scan forward followed by the attempts at what comes after from
+		// the deepest level back up: the same items asked in the same
+		// order, then the same rests, with nothing between to unwind since
+		// a unit writes no capture.
+		for j := x.unitRun(n, k, at, end) - at; j >= 0 && k+j >= n.lo; j-- {
+			mark := caps.mark()
+			if x.here(n.after, at+j, end) {
+				return true
+			}
+			caps.rollback(mark)
+		}
+		return false
+	}
 	if n.hi == unboundedRepeat || k < n.hi {
 		s := x.sub(at, end)
 		i := x.ceiling(n.item, n.o, at, end)
@@ -1239,6 +1294,20 @@ func (x *cexec) repeat(n *cnode, k, at, end int) bool {
 	}
 	caps.rollback(mark)
 	return false
+}
+
+// unitRun takes repetitions of n's one-byte item from at, k having been
+// taken already, for as long as the item matches, the bound allows and the
+// span lasts, and says where they stopped.
+func (x *cexec) unitRun(n *cnode, k, at, end int) int {
+	if n.hi != unboundedRepeat {
+		end = min(end, at+max(0, n.hi-k))
+	}
+	first := n.item.first
+	for at < end && x.run(first, at, at+1) {
+		at++
+	}
+	return at
 }
 
 // numericRange is matchNumericRange.

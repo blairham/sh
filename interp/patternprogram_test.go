@@ -138,6 +138,15 @@ var progCases = []struct {
 	{`\S*`, []string{".a", "a", " "}},
 	{`\d#`, []string{"12", "1a"}},
 	{`\bab`, []string{"aab", "ab", "x ab"}},
+	// A group's arm that is a closure of one plain unit has its spans read
+	// off one scan of the item's bytes (#6380): its lower and upper bounds,
+	// a run cut short by a byte it refuses, and characters wider than a byte,
+	// over which the scan must not run.
+	{"(#b)(x(#c2,3))y", []string{"xy", "xxy", "xxxxy", "y"}},
+	{"(#b)([ab](#c2,3))*", []string{"a", "ab", "abab", "abxab"}},
+	{"(#b)([^x]##)(x|)", []string{"ééx", "aéx", "x", "abxb"}},
+	{"(#b)(?#)(é)", []string{"aéé", "é"}},
+	{"(#b)(é##)(x|)", []string{"ééx", "éx", "x", "eéx"}},
 	{`a\B`, []string{"ab", "a b", "a"}},
 	{`ab\b`, []string{"abc", "ab c"}},
 	// A bare group inside a group is a group again, however the group in
@@ -448,8 +457,9 @@ func TestSubstitutionAnswersTheSameCompiledAsWalked(t *testing.T) {
 
 // The substitution #6380 is measured on, counted in matcher questions rather
 // than timed: a program is what ran, and it asked about a quarter of what the
-// walk asks — 535 against 2,195 on the change that set this, and 396 once a
-// group stopped trying arms over spans their edge bytes rule out. Run with the
+// walk asks — 535 against 2,195 on the change that set this, 396 once a
+// group stopped trying arms over spans their edge bytes rule out, and 98 once
+// a closure arm's spans were read off one scan rather than asked one by one. Run with the
 // program off, or with those edge tables off, the same count fails it, which
 // is the check that this is counting the thing it claims to.
 func TestTheThemeSubstitutionRunsAsAProgram(t *testing.T) {
@@ -464,7 +474,7 @@ func TestTheThemeSubstitutionRunsAsAProgram(t *testing.T) {
 		if o.where.prog == nil {
 			t.Fatal("no program ran, so the count below is the walk's")
 		}
-		if n := o.where.asked; n > 450 {
+		if n := o.where.asked; n > 120 {
 			t.Errorf("the theme's substitution asked the program %d questions for nine matches", n)
 		}
 	})

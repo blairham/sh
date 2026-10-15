@@ -30,7 +30,7 @@ var errStatAtUnsupported = errors.New("opened: no stat relative to a descriptor 
 //
 // The FileInfo it returns carries a *syscall.Stat_t in Sys, as os.Stat's does,
 // so the readers in interp that decompose a stat — owner, access time — read
-// it unchanged. It is not one os.SameFile recognises; a caller comparing
+// it unchanged. It is not one os.SameFile recognizes; a caller comparing
 // identities uses os.Stat.
 func StatAt(dir *os.File, name string, follow bool) (fs.FileInfo, error) {
 	if !statAtSupported {

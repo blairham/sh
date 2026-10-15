@@ -24437,6 +24437,42 @@ type Semantics struct {
 	// in its row about the program's environment.
 	FdVariableReachesTheProgramsEnvironment Answer
 
+	// FdVariableBadName is what becomes of a `{word}` redirection whose word
+	// is not a name, in the two grammars that take one (#6522): ksh93 takes
+	// any brace word there (syntax.Dialect.FdVariableAnyBraceWord) and zsh a
+	// digit-led one (syntax.Dialect.FdVariablePositional).
+	//
+	// Measured 2026-10-15 with `-c` against ksh93u+ 2012-08-01 and zsh 5.9.2
+	// under `-f`:
+	//
+	//	                                  ksh93                        zsh
+	//	echo {a-b}</dev/null; echo st=$?  a-b: invalid variable name   {a-b} (a word)
+	//	                                  st=1
+	//	echo {1a}</dev/null; echo st=$?   1a: invalid variable name    not an identifier: 1a
+	//	                                  st=1                         and the shell ends, 1
+	//	echo {1a}</nonexist               1a: invalid …                no such file …: st=1
+	//	echo {1a}>&-                      1a: invalid …                parameter 1a does not
+	//	                                                               contain a file descriptor
+	//	f(){ echo {1a}</dev/null; echo in; }; f; echo after
+	//	                                  …, in, after                 f: not an identifier: 1a,
+	//	                                                               and nothing more
+	//	/usr/bin/true {1a}</dev/null; echo st=$?
+	//	                                  …, st=1                      not an identifier, st=1
+	//	exec {1}</dev/null; echo after    …, and the shell ends        (a positional: fine)
+	//
+	// So ksh93 refuses the word before it does anything with the
+	// redirection — before the open, and on a close too — and the
+	// redirection fails as a file that would not open fails: the command
+	// does not run, the status is 1, and only a special builtin's ends the
+	// script. zsh opens first, refuses at the store, and the refusal is
+	// fatal to the shell the store is made in; on a program that is the
+	// program's own process, so there it costs the command alone. `always`
+	// blocks still run (`{ … } always { echo always }` prints `always`).
+	//
+	// Asked only where a `{word}` is not a name — bash and the core never
+	// lex one, so they never ask.
+	FdVariableBadName FdVariableBadNamePolicy
+
 	// DescriptorNumberCeiling is the highest descriptor number a duplication
 	// may name, past which the refusal is about the *number* rather than
 	// about what is open at it.
@@ -36227,6 +36263,33 @@ func (p ArithEmptyBaseDigitsPolicy) String() string {
 		return "refused"
 	case ArithEmptyBaseDigitsZeroAtTenOrAbove:
 		return "zero at ten or above"
+	}
+	return "unspecified"
+}
+
+// FdVariableBadNamePolicy is what a `{word}` redirection whose word is not a
+// name comes to. See [Semantics.FdVariableBadName] for the measurements.
+type FdVariableBadNamePolicy uint8
+
+const (
+	// FdVariableBadNameUnspecified is no answer, and is refused like any
+	// other — but only where a word that is not a name is reached.
+	FdVariableBadNameUnspecified FdVariableBadNamePolicy = iota
+	// FdVariableBadNameFailsTheRedirection refuses the word before anything
+	// else about the redirection is done, and fails it as a file that would
+	// not open fails: ksh93u+.
+	FdVariableBadNameFailsTheRedirection
+	// FdVariableBadNameIsAFatalStoreError refuses it at the store, after the
+	// open, as an error that ends the shell the store is made in: zsh 5.9.2.
+	FdVariableBadNameIsAFatalStoreError
+)
+
+func (p FdVariableBadNamePolicy) String() string {
+	switch p {
+	case FdVariableBadNameFailsTheRedirection:
+		return "fails the redirection"
+	case FdVariableBadNameIsAFatalStoreError:
+		return "a fatal store error"
 	}
 	return "unspecified"
 }

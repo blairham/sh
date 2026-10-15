@@ -1788,17 +1788,27 @@ func (l *Lexer) tryFdVariable() (Token, bool) {
 		}
 		break
 	}
-	if n == 1 {
+	if n == 1 && !l.dialect.FdVariableAnyBraceWord {
 		return Token{}, false
 	}
 	if l.peekAt(n) == '[' {
-		sub, ok := l.fdVariableSubscript(n)
-		if !ok {
+		if sub, ok := l.fdVariableSubscript(n); ok {
+			n = sub
+		} else if !l.dialect.FdVariableAnyBraceWord {
 			return Token{}, false
 		}
-		n = sub
 	}
 	if l.peekAt(n) != '}' {
+		if !l.dialect.FdVariableAnyBraceWord {
+			return Token{}, false
+		}
+		// The dialect that takes any brace word here reads on to the
+		// closing brace over whatever is not a blank, an operator, a comma
+		// or another brace, and the runtime refuses what is not a name.
+		// See Dialect.FdVariableAnyBraceWord.
+		n = l.anyBraceWordEnd(n)
+	}
+	if n == 1 || l.peekAt(n) != '}' {
 		return Token{}, false
 	}
 	// The same strict adjacency an IO number has: anything but a
@@ -1823,6 +1833,19 @@ func (l *Lexer) tryFdVariable() (Token, bool) {
 		Text:  text,
 		Spans: []Span{{Kind: Literal, Value: text, Quoting: Unquoted, Pos: start}},
 	}, true
+}
+
+// anyBraceWordEnd reads on from n to where a brace word could close: the
+// first byte that is a blank, a newline, an operator character, a comma, a
+// brace, or the end of input.
+func (l *Lexer) anyBraceWordEnd(n int) int {
+	for {
+		switch c := l.peekAt(n); c {
+		case 0, ' ', '\t', '\n', ';', '&', '|', '(', ')', '<', '>', ',', '{', '}':
+			return n
+		}
+		n++
+	}
 }
 
 // fdVariableSubscript reads the `[...]` of `{a[1]}`, reporting how far the

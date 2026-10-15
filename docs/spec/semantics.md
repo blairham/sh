@@ -26387,6 +26387,20 @@ name wins in bash and zsh (#6569). Asked only where a program's own
 redirections stored a name and the environment before and after the store
 differ over it (#6521).
 
+**`FdVariableBadName`** — bash — · dash — · ksh93 fails the redirection · zsh a fatal store error
+
+What a `{word}` redirection whose word is not a name comes to, in the two
+grammars that lex one. ksh93 takes any brace word directly before a
+redirection operator (`syntax.Dialect.FdVariableAnyBraceWord`) — `{a-b}`,
+`{1}`, `{$x}`, `{x"y"}`, written as they stand — and refuses one that is not
+a name before doing anything else: `a-b: invalid variable name`, status 1,
+the command not run, the open never tried, a close refused the same way, and
+only `exec`'s ending the script. zsh lexes only a digit-led word (`{1a}`,
+for the positional `{1}`), opens first, and refuses at the store with `not
+an identifier: 1a` as an error that ends the shell — a subshell, or just the
+command where the command is a program. Measured 2026-10-15 (#6522). bash
+reads all of these as ordinary words.
+
 **`ReadonlyFdVariableRefusesAClose`** — bash no · dash — · ksh93 yes · zsh yes
 
 Refuses `exec {name}>&-` when the name holding the descriptor is frozen.

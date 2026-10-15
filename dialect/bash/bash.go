@@ -3209,6 +3209,10 @@ func Semantics() interp.Semantics {
 	// `v=keep`, measured 2026-10-15 (#6521). See
 	// interp.Semantics.FdVariableReachesTheProgramsEnvironment.
 	s.FdVariableReachesTheProgramsEnvironment = interp.No
+	// unanswered FdVariableBadName: this grammar never lexes a `{word}` that
+	// is not a name — `echo {a-b}</dev/null` and `echo {1}</dev/null` print
+	// the word, measured 2026-10-15 on 5.3.20 — so there is nothing for the
+	// question to be about (#6522).
 	s.DuplicationTargetError = interp.DuplicationTargetErrorCarriesOn
 	s.LocalOutsideAFunctionIsAnError = interp.Yes
 	s.LocalOutsideAFunctionIsFatal = interp.No

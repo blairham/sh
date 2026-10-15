@@ -63,8 +63,13 @@ func TestTheShellsOwnDescriptorsAreInItsNumbers(t *testing.T) {
 		{`true | true | ( echo <(true) <(true) )`, []int{0, 1}},
 		{`{ echo <(true) <(true); } </dev/null & wait`, []int{0, 1}},
 		// And a substitution's body holds none of it: zsh 5.9.2 answers
-		// `true | true | cat <(echo <(true))` from the bottom of its range.
-		{`true | true | /bin/cat <(echo <(true))`, []int{0}},
+		// `true | true | cat <(echo <(true))` from the bottom of its range,
+		// and the same with `read` for `cat`. Written with `read` because a
+		// program started here holds a pipe os/exec made for it on the
+		// lowest free number while it runs, which made this row answer one
+		// high about half the time on Linux — that is #6543's, not this
+		// row's.
+		{`true | true | read x < <(echo <(true)); echo $x`, []int{0}},
 		// A substitution a redirection reads from is a source too; one it
 		// writes into is made after the save.
 		{`{ echo <(true) <(true); } < <(true)`, []int{0, 2}},

@@ -463,7 +463,10 @@ func (r *Runner) execRunSpelling(run string) string {
 	if !r.diag().NamesResolvedPath || run == "" || filepath.IsAbs(run) {
 		return run
 	}
-	return uncleanedJoin(r.dirNow(), strings.TrimPrefix(run, "./"))
+	// A name, not dirNow's path through the descriptor: this is the spelling
+	// the program is handed, and that dialect builds it from the name.
+	now, _ := r.dirCalled()
+	return uncleanedJoin(now, strings.TrimPrefix(run, "./"))
 }
 
 // pathCandidate is the file a PATH entry offers for name, as the operating

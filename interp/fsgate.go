@@ -35,6 +35,11 @@ import (
 // are documented on ActionStat and ActionReadDir, and every caller inherits
 // them by treating the error exactly as it treats a missing path.
 //
+// Each of these hands its path to opened.AtHeld rather than to the os package
+// directly, so a path built from a directory no name reaches any more — see
+// dirNow — is resolved from the descriptor the shell holds on it. Everywhere
+// else that is the os call and a prefix test.
+//
 // The nil-nil fast path is load-bearing: glob descent and PATH lookup are
 // hot, and a Runner with no Gate and no Sink must pay two nil checks and
 // nothing else.
@@ -42,7 +47,7 @@ import (
 // stat is os.Stat through the gate.
 func (r *Runner) stat(path string) (os.FileInfo, error) {
 	if r.Gate == nil && r.Events == nil {
-		return os.Stat(path)
+		return opened.AtHeld(path, os.Stat)
 	}
 	if r.probeDenied(r.act(Action{Kind: ActionStat, Path: path})) {
 		// The errno the kernel gives for a path that is not there, not
@@ -50,7 +55,7 @@ func (r *Runner) stat(path string) (os.FileInfo, error) {
 		// same sentence for both, or the refusal identifies itself.
 		return nil, &fs.PathError{Op: "stat", Path: path, Err: syscall.ENOENT}
 	}
-	return os.Stat(path)
+	return opened.AtHeld(path, os.Stat)
 }
 
 // enterable asks whether a directory could be *entered*, which is the question
@@ -88,7 +93,7 @@ func (r *Runner) enterable(dir string) error {
 // embedded in other programs and two of them in one process must not fight
 // over one working directory. See biCd.
 func statEntering(dir string) error {
-	_, err := os.Stat(dir + string(os.PathSeparator) + ".")
+	_, err := opened.AtHeld(dir+string(os.PathSeparator)+".", os.Stat)
 	return err
 }
 
@@ -133,12 +138,12 @@ func (r *Runner) accessible(path string, mode uint32) bool {
 // itself, so it is the same action to the policy.
 func (r *Runner) lstat(path string) (os.FileInfo, error) {
 	if r.Gate == nil && r.Events == nil {
-		return os.Lstat(path)
+		return opened.AtHeld(path, os.Lstat)
 	}
 	if r.probeDenied(r.act(Action{Kind: ActionStat, Path: path})) {
 		return nil, &fs.PathError{Op: "lstat", Path: path, Err: syscall.ENOENT}
 	}
-	return os.Lstat(path)
+	return opened.AtHeld(path, os.Lstat)
 }
 
 // readLink is os.Readlink through the gate. Reading where a link points is
@@ -147,12 +152,12 @@ func (r *Runner) lstat(path string) (os.FileInfo, error) {
 // the policy hides answers the way a path that is not a link answers.
 func (r *Runner) readLink(path string) (string, error) {
 	if r.Gate == nil && r.Events == nil {
-		return os.Readlink(path)
+		return opened.AtHeld(path, os.Readlink)
 	}
 	if r.probeDenied(r.act(Action{Kind: ActionStat, Path: path})) {
 		return "", &fs.PathError{Op: "readlink", Path: path, Err: syscall.ENOENT}
 	}
-	return os.Readlink(path)
+	return opened.AtHeld(path, os.Readlink)
 }
 
 // readDir is os.ReadDir through the gate. A denied directory reads as empty,
@@ -227,7 +232,7 @@ func (r *Runner) readDir(path string) ([]os.DirEntry, error) {
 // below is this file's single decision about order rather than one taken here
 // and taken again by os.ReadDir.
 func (r *Runner) dirEntries(path string) ([]os.DirEntry, error) {
-	f, err := os.Open(path)
+	f, err := opened.AtHeld(path, os.Open)
 	if err != nil {
 		return nil, err
 	}

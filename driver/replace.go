@@ -8,6 +8,8 @@ import (
 	"os"
 	"runtime"
 	"runtime/debug"
+
+	"github.com/blairham/sh/internal/opened"
 )
 
 // atPlacement is called on the way through a replacement, named for where it
@@ -153,7 +155,11 @@ func replaceProcess(dir, path string, argv, env []string, files []*os.File) erro
 	// where it was for whatever this shell does next.
 	if dir != "" {
 		if was, err := os.Getwd(); err == nil {
-			if err := os.Chdir(dir); err != nil {
+			// HeldChdir rather than os.Chdir: dir may be the path through the
+			// descriptor the shell holds on a directory no name reaches any
+			// more, which Darwin cannot chdir to by that path. See
+			// interp.Runner.dirForReplacement.
+			if err := opened.HeldChdir(dir); err != nil {
 				return err
 			}
 			defer func() { _ = os.Chdir(was) }()

@@ -200,7 +200,8 @@ func (r *Runner) replaceSelfWith(ctx context.Context, argv []string, flags execF
 		// under an open descriptor is the ordinary case here, not a race.
 		// Where the replacement starts, read while the shell still holds its
 		// directory: cleanUpAtEnd lets go of that hold.
-		dir := r.dirNow()
+		dir, releaseDir := r.dirForReplacement()
+		defer releaseDir()
 		r.cleanUpAtEnd()
 		// And the mask goes onto the process for the same reason it goes on
 		// around a fork: an execve keeps the mask the image had, and this

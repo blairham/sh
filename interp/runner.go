@@ -10624,6 +10624,15 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 			// where a second expansion here would run a substitution twice.
 			// The name keeps its value and the child sees that, the same as
 			// below. See interp/frozenprefixvalue.go.
+			if r.prefixRefusalEndsTheWalk(external) {
+				// And nothing behind it is expanded either, in a shell that
+				// gives the command up at the refusal (#6511). No preset
+				// reaches this today — the one column that skips the value
+				// (bash) carries on past the refusal — so it is here for the
+				// shape rather than a measured row; the branch below is the
+				// one dash, ash, ksh93 and zsh take.
+				break
+			}
 			continue
 		}
 		if r.subscriptedPrefixDropped(a) {
@@ -10639,6 +10648,13 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 		// runs where the trace wrote it.
 		part := r.prefixExpansion(a)
 		value := r.prefixJoined(a, part)
+		if r.prefixEntryIsFrozen(a) && r.prefixRefusalEndsTheWalk(external) {
+			// Its own value expanded, in the columns that evaluate it before
+			// refusing the name, and the walk ends here: the entries behind a
+			// refused one are never expanded where the refusal gives the
+			// command up. See Runner.prefixRefusalEndsTheWalk (#6511).
+			break
+		}
 		if r.prefixGlobbedToAnArray(a) {
 			// The value was read as a pattern and matched more than one
 			// name, so the entry is an **array** — and no child's

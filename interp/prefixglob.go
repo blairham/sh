@@ -80,6 +80,10 @@ func (r *Runner) prefixAssignValue(a *syntax.Assign) string {
 	// commands of its own does not lend them a speaker. See
 	// interp/prefixfailurelocation.go.
 	defer r.speakForAPrefixValue()()
+	if a.IsArray && a.Index == nil && len(a.Members) == 0 {
+		r.expandPrefixArrayLiteral(a)
+		return ""
+	}
 	value, fields, globbed := r.expandScalarAssignValue(a.Value)
 	if globbed {
 		r.prefixGlobMatches = append(r.prefixGlobMatches, prefixGlobMatch{assign: a, fields: fields})
@@ -189,4 +193,32 @@ func withoutPrefixArrayNames(env, names []string) []string {
 		}
 	}
 	return kept
+}
+
+// expandPrefixArrayLiteral expands an array literal written as a prefix, for
+// what its elements do, and keeps nothing it built.
+//
+// **The elements are expanded in every shell that reads the literal there**,
+// refused name or not. Measured 2026-10-15 from `-c` and from a script file
+// under `env -i PATH=/usr/bin:/bin`:
+//
+//	x=($(echo s >&2) b) /bin/echo ran              bash 5.3.20, ksh93u+, zsh 5.9.2: `s`, `ran`
+//	readonly r=1; r=($(echo s >&2)) true           zsh: `s`, then the refusal
+//	readonly r=1; r=($(echo s >&2)) /bin/echo ran  zsh, ksh93: `s`, then the refusal
+//	HOME=($(echo s >&2)) true                      zsh: `s`, then the array sentence
+//
+// The value read for a literal was its scalar text, which a literal does not
+// have, so no substitution inside the parentheses ever ran — the refused
+// rows lost the substitution the scalar spelling of the same row keeps
+// (#6512). Whether the elements are expanded at all for a refused name is
+// still Semantics.FrozenPrefixIsCheckedBeforeItsValue's to say: every route
+// that skips a frozen name's value skips it before reaching here.
+//
+// Through literalElems, which is how every literal's elements are read, so
+// splitting, globbing and a failed expansion are the statement form's own.
+// The scalar this hands back is the empty one the routes already handed on:
+// storing an array prefix as an array is a different defect, and this is
+// only the half that expands.
+func (r *Runner) expandPrefixArrayLiteral(a *syntax.Assign) {
+	_, _ = r.literalElems(a.Elems, r.literalShapeReadsSubscripts(a.Elems), false)
 }

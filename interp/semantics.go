@@ -11746,6 +11746,13 @@ type Semantics struct {
 	//	                                   **refused** — a table is one too
 	//	readonly q=1;  q=(b)               **refused** — no declaration word
 	//
+	// The container that matters is the one the name was **before** the
+	// line: the `-a` or `-A` letter on the same operand lands ahead of the
+	// literal and does not count. Measured 2026-10-15, `typeset -r v=1;
+	// typeset -a v=(x)` is `array-readonly` holding `x`, the same as with no
+	// letter, and so are `typeset -A v=(k x)`, `local -a`, `export -a` and
+	// `readonly -a` (#6514).
+	//
 	// So the exemption is a *retype* and not a write: the name has to be
 	// leaving the scalar kind, and the operand has to be a declaration's
 	// rather than a bare assignment's. Every declaration word does it —

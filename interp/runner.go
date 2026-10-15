@@ -5308,6 +5308,12 @@ type Runner struct {
 	// retypingFrozen is the one name a frozen-scalar retype is under way for.
 	// See the method of the same name for why it is a field.
 	retypingFrozen string
+	// containerByThisLinesLetter holds the frozen scalars a declaration's
+	// own `-a` or `-A` letter has just made containers. The letter lands
+	// when the builtin runs and the operand's literal is stored after it, by
+	// assignOperands, so it lives as long as literalOperands does: one
+	// simple command, restored behind it. See Runner.frozenScalarRetyped.
+	containerByThisLinesLetter map[string]bool
 	// badNameWordedAs is the builtin whose bad-name *sentence* a declaration
 	// now in progress borrows, while still naming itself. Empty is the
 	// ordinary case. See Diagnostics.ExportLetterTakesExportsBadName.
@@ -10355,6 +10361,8 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 		// z=(1 2)` is refused in the same words as `typeset -i z=(1 2)`.
 		outerLiterals := r.literalOperands
 		r.literalOperands = arrayLiteralOperands(c)
+		outerLetterContainers := r.containerByThisLinesLetter
+		r.containerByThisLinesLetter = nil
 		outerOverANonArray := r.operandsOverANonArray
 		r.operandsOverANonArray = r.literalOperandsOverANonArray(argv)
 		defer func() { r.operandsOverANonArray = outerOverANonArray }()
@@ -10521,6 +10529,7 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 		}
 		r.freezing = outerFreezing
 		r.literalOperands = outerLiterals
+		r.containerByThisLinesLetter = outerLetterContainers
 		r.declarationArgvLen = outerArgvLen
 		r.compoundOperands = outerCompounds
 		r.compoundOperandUnset = outerCompoundUnset
@@ -15524,7 +15533,16 @@ func (r *Runner) frozenScalarRetyped(a *syntax.Assign) bool {
 	if !r.attrHas(a.Name, attrReadonly) || !a.Operand || !a.IsArray || a.Index != nil || a.Append {
 		return false
 	}
-	if r.nameIsAnArray(a.Name) {
+	if r.nameIsAnArray(a.Name) && !r.containerByThisLinesLetter[a.Name] {
+		// Already a container, so this is not a retype — unless the
+		// container is this very operand's letter's own doing. The letter
+		// lands before the value, so `typeset -a v=(x)` over a frozen scalar
+		// would otherwise refuse its own literal for the array its own `-a`
+		// had just made, where `typeset v=(x)` with no letter is taken.
+		// Measured 2026-10-15 on zsh 5.9.2, `typeset -r v=1` in front: `typeset
+		// -a v=(x)`, `typeset -A v=(k x)`, `local -a`, `export -a`, `readonly
+		// -a` and `typeset -a v=()` are all taken and leave the freeze on,
+		// and `typeset -ra v=(a); typeset -a v=(x)` is still refused (#6514).
 		return false
 	}
 	if r.AbsentParameter(a.Name) {

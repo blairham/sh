@@ -47,6 +47,7 @@ ash   ArrayLiteralOverANameNotDeclaredAnArrayStartsItOver
 ash   ArrayLiteralSubscriptIsAKey
 ash   ArrayNameWithoutSubscriptIsTheList
 ash   ArrayScalarIsTheWholeArray
+ash   ArrayStoreRefusalThroughSetOrReadLeavesZero
 ash   ArrayUnderATableDeclaration
 ash   ArrayUnderATableLiteralDeclaration
 ash   ArraysAreSparse
@@ -406,6 +407,7 @@ dash  ArrayLiteralOverANameNotDeclaredAnArrayStartsItOver
 dash  ArrayLiteralSubscriptIsAKey
 dash  ArrayNameWithoutSubscriptIsTheList
 dash  ArrayScalarIsTheWholeArray
+dash  ArrayStoreRefusalThroughSetOrReadLeavesZero
 dash  ArrayUnderATableDeclaration
 dash  ArrayUnderATableLiteralDeclaration
 dash  ArraysAreSparse

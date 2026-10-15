@@ -8315,6 +8315,12 @@ func (p *Parser) parseCase() Command {
 		p.expectWord("in")
 	}
 	c.Header = p.slice(c.Start, inEnd)
+	// The first arm's paren, where nothing but blanks stand between it and
+	// the `in` or the brace, for the one reader that asks. See Lexer.firstArmParens.
+	if p.lex.firstArmParens != nil && p.at(TokLeftParen) &&
+		!strings.ContainsAny(p.slice(inEnd, p.tok.Pos), "\n;") {
+		p.lex.firstArmParens[p.tok.Pos.Offset] = true
+	}
 	// Where the dialect says so, an `esac` standing here — after the `in`,
 	// before any newline — is the first arm's first pattern and not the
 	// terminator. A newline takes the reading away again, so this is asked

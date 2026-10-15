@@ -15,9 +15,8 @@ import "testing"
 // PATH=/usr/bin:/bin TERM=xterm`), each script's whole output (#6425). The
 // pairs hold the kind fixed and move only `special`: HOME and LOGNAME are both
 // exported scalars, HISTSIZE and MAILCHECK both integers, PS1 and TTY both
-// scalars. The integer pair is written as arithmetic because that is the
-// route both shells call `numeric`; a plain `MAILCHECK=5` is `scalar` there
-// and `numeric` here, which is #6461's and not this test's.
+// scalars. The integer pair is written as arithmetic, the route both shells
+// call `numeric`; the word itself is TestScopeLintWordFollowsTheArithmeticRoute's.
 func TestScopeLintsPassOverTheShellsOwnParameters(t *testing.T) {
 	const on = "setopt localoptions warn_nested_var warn_create_global"
 	for _, tc := range []struct{ name, src, want string }{

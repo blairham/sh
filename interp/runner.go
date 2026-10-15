@@ -4810,9 +4810,10 @@ type Runner struct {
 	// shFileExpansion is one dialect's `shfileexpansion`. See
 	// Runner.SetShFileExpansion.
 	shFileExpansion bool
-	// creatingANumber is set while arithmetic stores a name it is declaring
-	// numeric. See scopeWarningNumeric.
-	creatingANumber bool
+	// arithStoring is the route an arithmetic store is being made by, for
+	// the length of that one store, and arithNotStoring everywhere else. See
+	// scopeWarningNumeric.
+	arithStoring arithStoreRoute
 	// localLoops is one dialect's `localloops`. See Runner.endLocalLoops.
 	localLoops bool
 	// rmStarSilent is one dialect's `rmstarsilent`, and rmStarAsks says the

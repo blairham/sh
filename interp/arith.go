@@ -1389,7 +1389,15 @@ func (r *Runner) readPlace(p arithPlace) (arithNum, error) {
 func (r *Runner) writePlace(p arithPlace, v arithNum, from syntax.ArithExpr) error {
 	was := r.refusedInACommand
 	r.refusedInACommand = false
+	// The route the scope lints key their word and their silence on. See
+	// scopeWarningNumeric.
+	route := r.arithStoring
+	r.arithStoring = arithAssigns
+	if p.modifies {
+		r.arithStoring = arithModifies
+	}
 	err := r.storePlace(p, v, from)
+	r.arithStoring = route
 	if err == nil && !r.refusedInACommand && !p.subscripted && !p.empty {
 		// Every arithmetic store comes through here — `$(( ))`, `(( ))`,
 		// `let` and the C-style `for` — so this is where `set -a` reaches
@@ -1446,11 +1454,6 @@ func (r *Runner) storePlace(p arithPlace, v arithNum, from syntax.ArithExpr) err
 			return nil
 		}
 		if r.arithAssignmentDeclaresANumber(p.name) || (from != nil && r.arithAssignmentReplacesAnArray(p.name)) {
-			// What the scope lint calls the name it is about to see made.
-			// See scopeWarningNumeric.
-			outerNumber := r.creatingANumber
-			r.creatingANumber = true
-			defer func() { r.creatingANumber = outerNumber }()
 			if v.floatKind() {
 				// **The value's type decides which attribute**, and a float
 				// value declares a float. See declareFloatFromArithmetic,
@@ -1550,6 +1553,12 @@ func (r *Runner) storePlace(p arithPlace, v arithNum, from syntax.ArithExpr) err
 	if r.assocDeclared(p.name) {
 		r.setAssocElem(p.name, r.arithAssocKey(r.arithSubscriptRead(p.subMarked, subscriptAsKey)), text)
 		return nil
+	}
+	if !r.scopeWarningsAreOff() {
+		// An element arithmetic writes is an assignment to the array as far
+		// as the scope lints go, where the same element written by a plain
+		// `a[1]=3` is not one. See scopeWarningNumeric.
+		r.warnAboutTheScope(p.name, scopeWarningNumeric)
 	}
 	// Through the same reader the element is read by, so a text that is no
 	// expression is refused here as it is there — refused rather than

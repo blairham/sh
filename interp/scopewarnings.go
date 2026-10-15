@@ -69,7 +69,16 @@ import (
 // is silent. Both rows are left alone rather than guessed at: the first needs
 // a word this shell would have to choose against its own reading of the
 // statement, and neither is what the lint is for, which is an assignment a
-// `local` was forgotten in front of.
+// `local` was forgotten in front of. That is the plain route only: an
+// element *arithmetic* writes is an assignment to the array, see
+// scopeWarningNumeric.
+//
+// An arithmetic element write to an **associative** array is measured and
+// not modeled either: the reference names the *key* rather than the table —
+// `typeset -A h; f() { (( h[zz]=3 )) }` draws `numeric parameter zz set in
+// enclosing scope` with no `zz` set anywhere, and a `local k` does not
+// silence `(( h[k]=3 ))` — which is not a sentence about any parameter this
+// shell could name.
 
 // scopeWarningKind is the word the sentence uses for what the name holds.
 type scopeWarningKind string
@@ -77,11 +86,48 @@ type scopeWarningKind string
 const (
 	scopeWarningScalar scopeWarningKind = "scalar"
 	scopeWarningArray  scopeWarningKind = "array"
-	// scopeWarningNumeric is the word for a name arithmetic declares as it
-	// creates it. Measured 2026-10-02 on zsh 5.9.2, `f() { setopt
-	// warncreateglobal; (( g=1.5 )); let h=2 }; f` names both `numeric
-	// parameter` (#5155).
+	// scopeWarningNumeric is the word for a store **arithmetic** makes, and
+	// the word follows that route rather than what the name holds. Measured
+	// 2026-10-15 on zsh 5.9.2 under `-f`, both lints on, each row the body of
+	// a function after the setup shown:
+	//
+	//	x=5; x=8 / x+=1 / read / for x in       scalar … set in enclosing scope
+	//	integer g=5; g=8 / g+=1 / read / for    scalar …, the same
+	//	float g=5; g=8; MAILCHECK=6             scalar …, the same
+	//	x=5; (( x=8 )) / let / $(( )) / x=abc   numeric … set in enclosing scope
+	//	integer g=5; (( g=8 )); float alike     numeric …, the same
+	//	x=5; (( x++ )) / ++x / x-- / x+=1       nothing
+	//	  / x*=2 / let x++ / $(( x++ ))
+	//	integer g=5; (( g++ )) / g+=1; float    nothing
+	//	(( y=1 )) / (( y++ )) / (( y+=1 ))      numeric … created globally
+	//	a=(1 2); (( a[1]=3 )) / let / a[3]      numeric parameter a set …
+	//	a=(1 2); (( a[1]++ )) / a[1]+=1         nothing
+	//	(( n[1]=3 )) / (( n[1]++ ))             numeric parameter n created …
+	//	a=(1 2); a[1]=3                         nothing (the plain route)
+	//
+	// So the two pairs that hold the type fixed and move the route — `x=8`
+	// against `(( x=8 ))` on a scalar, and on an integer — both move the
+	// word, and the pairs that hold the route fixed and move the type move
+	// nothing. A read-modify-write is the other half of the route: it never
+	// reports a name that is already set, and still reports one it creates,
+	// which is why `for (( y=0; y<1; y++ ))` is one sentence and not two
+	// (#6461). See arithStoreRoute.
 	scopeWarningNumeric scopeWarningKind = "numeric"
+)
+
+// arithStoreRoute is which arithmetic store is being made, the one thing the
+// scope lints read about how an assignment was written. See
+// scopeWarningNumeric.
+type arithStoreRoute uint8
+
+const (
+	// arithNotStoring is every store that is not arithmetic's own.
+	arithNotStoring arithStoreRoute = iota
+	// arithAssigns is a plain `=` — `(( x=8 ))`, `let x=8`, `$(( x=8 ))`.
+	arithAssigns
+	// arithModifies is a read-modify-write — `++`, `--`, `+=` and the other
+	// compound operators.
+	arithModifies
 )
 
 // warnAboutTheScope writes whichever of the two sentences this assignment has
@@ -142,18 +188,20 @@ func (r *Runner) warnAboutTheScope(name string, kind scopeWarningKind) {
 	if r.localInTheInnermostScope(name) {
 		return
 	}
-	if kind == scopeWarningScalar {
-		// A number arithmetic is creating, or a name already holding one:
-		// measured 2026-10-02 on zsh 5.9.2, `integer g=5; f() { (( g=8 )) }`
-		// under the nested lint is `numeric parameter g set in enclosing
-		// scope` (#5155).
-		if a := r.numericAttributeOf(name); r.creatingANumber || a.isInteger || a.isFloat {
-			kind = scopeWarningNumeric
-		}
+	if kind == scopeWarningScalar && r.arithStoring != arithNotStoring {
+		// The route and not the name's type: an integer written by `g=8` is
+		// `scalar`, a string written by `(( x=8 ))` is `numeric`. See
+		// scopeWarningNumeric.
+		kind = scopeWarningNumeric
 	}
 	d := r.diag()
 	defer r.scopeWarningSpeaksForTheShell()()
 	if r.nameIsSet(name) {
+		if r.arithStoring == arithModifies {
+			// `(( x++ ))` on a name that is already there. See
+			// scopeWarningNumeric.
+			return
+		}
 		if r.warnsNestedSetHere() && d.EnclosingScopeSetInAFunction != "" {
 			r.diagf(d.EnclosingScopeSetInAFunction+"\n", kind, name, r.inFunc)
 		}

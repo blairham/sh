@@ -172,6 +172,44 @@ func TestARedirectionListsSubstitutionsAreMadeFirst(t *testing.T) {
 	}
 }
 
+// The other dialect that counts holds one number for a pipeline's last
+// element and nothing for a redirected group, measured 2026-10-15 against
+// ksh93u+ (#6503). `{v}` numbers are this shell's own table, so the rows are
+// exact numbers rather than positions in the kernel's free list.
+func TestTheLastPipelineElementHoldsANumber(t *testing.T) {
+	for _, c := range []struct {
+		own  OwnDescriptorNumbers
+		src  string
+		want string
+	}{
+		{LastPipelineElementsInputTakesANumber, `echo x | { exec {v}</dev/null; echo $v; }`, "11"},
+		{LastPipelineElementsInputTakesANumber, `true | true | { exec {v}</dev/null; echo $v; }`, "11"},
+		{LastPipelineElementsInputTakesANumber, `echo x | ( exec {v}</dev/null; echo $v )`, "11"},
+		{LastPipelineElementsInputTakesANumber, `{ exec {v}</dev/null; echo $v; } </dev/null`, "10"},
+		{LastPipelineElementsInputTakesANumber, `{ exec {v}</dev/null; } | :; exec {w}</dev/null; echo $w`, "10"},
+		// Held while the element runs and let go of after, and only where
+		// the shell's input was open.
+		{LastPipelineElementsInputTakesANumber, `echo x | { exec {v}</dev/null; echo $v; }; exec {w}</dev/null; echo $w`, "11 10"},
+		{LastPipelineElementsInputTakesANumber, `exec 0<&-; echo x | { exec {v}</dev/null; echo $v; }`, "10"},
+		// A group holding nothing but another pipeline holds it once.
+		{LastPipelineElementsInputTakesANumber, `echo x | { echo y | { exec {v}</dev/null; echo $v; }; }`, "11"},
+		{LastPipelineElementsInputTakesANumber, `echo x | { echo y | { exec {v}</dev/null; echo $v; }; :; }`, "12"},
+		{LastPipelineElementsInputTakesANumber, `echo x | { ! echo y | { exec {v}</dev/null; echo $v; }; }; :`, "12"},
+		{OwnDescriptorsTakeNoNumber, `echo x | { exec {v}</dev/null; echo $v; }`, "10"},
+	} {
+		t.Run(c.own.String()+": "+c.src, func(t *testing.T) {
+			sem := permissive()
+			sem.FirstAllocatedDescriptor = AllocateDescriptorsFromTen
+			sem.OwnDescriptors = c.own
+			sem.LastPipelineElementInCurrentShell = Yes
+			out, st := run(t, c.src, withSem(sem))
+			if got := strings.Join(strings.Fields(out), " "); got != c.want || st != 0 {
+				t.Errorf("got %q (status %d), want %q", got, st, c.want)
+			}
+		})
+	}
+}
+
 // runOwnDescriptors runs src the way the dialect that counts its own
 // descriptors would: substitutions and `{v}` from the base up, the base at
 // 10, and a pipeline's last element in the shell itself.

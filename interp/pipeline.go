@@ -482,6 +482,10 @@ func (r *Runner) runPipeline(ctx context.Context, p *syntax.Pipeline, timing *pi
 	// 5.9.2, both ends still held while the last element's words expand.
 	var reads []int
 	heldBefore := r.heldNumbers
+	// And the one number the other dialect that counts holds for the last
+	// element's input. Decided here, while the shell's own input is still
+	// the one the element replaces. See holdsTheLastElementsInput.
+	holdLast := n > 1 && r.holdsTheLastElementsInput(p.Cmds[n-1])
 	if n > 1 && r.countsOwnDescriptors() {
 		for range n - 1 {
 			reads = append(reads, r.holdNumber(true))
@@ -503,6 +507,11 @@ func (r *Runner) runPipeline(ctx context.Context, p *syntax.Pipeline, timing *pi
 		sub := r.clone()
 		if reads != nil {
 			sub.enterAsAnElement(heldBefore, reads, i, p.Cmds[i])
+		}
+		if holdLast && i == n-1 {
+			// The last element as a fork of its own — a `( … )`, an
+			// external command — holds it as the shell would have.
+			sub.holdNumber(true)
 		}
 		if commandIsParenthesized(p.Cmds[i]) {
 			// A stage is a fork and a `( … )` standing as one is that fork,
@@ -789,6 +798,9 @@ func (r *Runner) runPipeline(ctx context.Context, p *syntax.Pipeline, timing *pi
 				// The shell itself, entered as the last element: its own
 				// first list installs the last pipe. See elementEntry.
 				r.entering = elementEntry{pending: true, input: reads[i-1]}
+			}
+			if holdLast {
+				defer r.letGoOfNumber(r.holdNumber(true))
 			}
 			start := time.Now()
 			serialBefore := r.stmtSerial

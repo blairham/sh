@@ -56,3 +56,18 @@ func TestGetoptsNameSpelledOPTARGIsTheOperand(t *testing.T) {
 		}
 	}
 }
+
+// The copy zsh holds goes with the export: measured 2026-10-15 on zsh 5.9.2,
+// `export OPTIND=1; getopts x: o -x6; typeset +x OPTIND` hands a child no
+// OPTIND, and an `export OPTIND` after that hands it the shell's own 2 — where
+// a bare `export OPTIND` with the export still on leaves it at 1.
+func TestGetoptsHeldCopyGoesWithTheExport(t *testing.T) {
+	src := "PATH=/usr/bin:/bin\nexport OPTIND=1\ngetopts x: o -x6\nexport OPTIND\nenv | grep -E '^OPTIND='\ntypeset +x OPTIND\nenv | grep -cE '^OPTIND='\nexport OPTIND\nenv | grep -E '^OPTIND='\n"
+	out, _, err := presets["zsh"].Combined(t, dialecttest.Base{Dir: t.TempDir()}, src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := "OPTIND=1\n0\nOPTIND=2\n"; out != want {
+		t.Errorf("got %q, want %q", out, want)
+	}
+}

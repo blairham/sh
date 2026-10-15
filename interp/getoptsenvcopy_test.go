@@ -23,6 +23,7 @@ func TestGetoptsLeavesTheEnvironmentCopyOfItsOwnParameters(t *testing.T) {
 		{"an assignment refreshes", `export OPTIND=1; getopts x: o -x6; OPTIND=$OPTIND`, "OPTIND=2\n", "OPTIND=2\n"},
 		{"a bare export does not", `export OPTIND=1; getopts x: o -x6; export OPTIND`, "OPTIND=1\n", "OPTIND=2\n"},
 		{"in a subshell's child", `export OPTIND=1; getopts x: o -x6; (`, "OPTIND=1\n", "OPTIND=2\n"},
+		{"a subshell's hold stays in it", `export OPTIND=1; getopts x: o -x6; export OPTARG=pre; (OPTARG=mid; getopts x: o -x6 -x7)`, "OPTARG=pre\nOPTIND=1\n", "OPTARG=pre\nOPTIND=2\n"},
 		{"the name operand refreshes", `export OPTARG=pre; getopts x: OPTARG -x6`, "OPTARG=x\n", "OPTARG=x\n"},
 	} {
 		for _, answer := range []Answer{Yes, No} {
@@ -32,7 +33,7 @@ func TestGetoptsLeavesTheEnvironmentCopyOfItsOwnParameters(t *testing.T) {
 				// `export OPTIND=1` asks what an assignment to the cursor
 				// means, which is a question of its own and beside the point.
 				sem.GetoptsAssignmentRestartsWord = Yes
-				src := tc.src + "; env | grep -E '^(OPTARG|OPTIND)='"
+				src := tc.src + "; env | grep -E '^(OPTARG|OPTIND)=' | sort"
 				if tc.src[len(tc.src)-1] == '(' {
 					src = tc.src + " env | grep -E '^(OPTARG|OPTIND)=' )"
 				}

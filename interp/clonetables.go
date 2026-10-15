@@ -349,6 +349,7 @@ func (c *Runner) ownTables(r *Runner) {
 	// parent's name, which is the split every table above this one avoids.
 	c.assignmentActions = maps.Clone(r.assignmentActions)
 	c.assignmentGuards = maps.Clone(r.assignmentGuards)
+	c.valueRefusals = maps.Clone(r.valueRefusals)
 	// And the removal half of the same message, for the same reason.
 	c.unsetActions = maps.Clone(r.unsetActions)
 	// And the startup half. A subshell never delivers these — the shell was

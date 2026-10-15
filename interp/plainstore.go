@@ -78,7 +78,7 @@ func (r *Runner) storesAPlainScalar(a *syntax.Assign) bool {
 		return false
 	}
 	// The tables the shell registers its own names in. One test of a filter
-	// answers for all seven where the name was never registered, which is
+	// answers for all eight where the name was never registered, which is
 	// nearly every name a script writes.
 	if r.specialNames.mayHold(name) {
 		if r.deferredParams[name] {
@@ -88,6 +88,9 @@ func (r *Runner) storesAPlainScalar(a *syntax.Assign) bool {
 			return false
 		}
 		if _, ok := r.assignmentGuards[name]; ok {
+			return false
+		}
+		if _, ok := r.valueRefusals[name]; ok {
 			return false
 		}
 		if _, ok := r.assignmentActions[name]; ok {

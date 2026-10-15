@@ -7151,7 +7151,7 @@ func (r *Runner) readFill(name, value string, left int, defaulted bool, refused 
 		// at 0 under `-e` and `read-only variable` under `-E`.
 		return 0, false
 	}
-	if r.readMayWrite(name) {
+	if r.readMayStore(name, value) {
 		if st, refused := r.storeThroughOperand(name, value); refused {
 			// The subscript would not evaluate, so nothing was written and
 			// the builtin gives up at that name: the ones behind it keep
@@ -8002,6 +8002,19 @@ func biLocal(r *Runner, _ context.Context, args []string) (endStatus int) {
 		if ended {
 			return r.endAfterABadName(status)
 		}
+		// And a value the name would not take is still refused: measured
+		// 2026-10-15 on dash 0.5.12, `f() { command local OPTIND=x; echo
+		// $?; }; f` is `local: Illegal number: x` and then 2, the script
+		// going on. See RefuseValues.
+		for _, a := range args {
+			if name, value, hasValue, _ := declarationOperand(a); hasValue &&
+				r.refuseTheValue(name, value, assignedByDeclaration) {
+				if r.ctl == controlExit {
+					return r.status
+				}
+				status = 1
+			}
+		}
 		return status
 	}
 	defer func(was bool) { r.declarationEvaluatesItsValue = was }(r.declarationEvaluatesItsValue)
@@ -8343,6 +8356,17 @@ func biLocal(r *Runner, _ context.Context, args []string) (endStatus int) {
 			}
 		case hasValue && slot == ArrayParameter:
 			r.setDeclaredSlotArray(name, value)
+		case hasValue && r.refuseTheValue(name, value, assignedByDeclaration):
+			// A value the name does not take. Asked here, as the
+			// declaration it is, because the store below is setVar's and
+			// would ask it as a command's write — and measured 2026-10-15
+			// on dash 0.5.12, `f() { local OPTIND=x; }; f` is `local:
+			// Illegal number: x` and the script ends at 2, as `export
+			// OPTIND=x` does. See RefuseValues.
+			if r.ctl == controlExit {
+				return r.status
+			}
+			status = 1
 		case hasValue:
 			r.setVar(name, value)
 			if r.ctl == controlExit {

@@ -207,12 +207,14 @@ func TestARedirectionOnlyBodyFollowsItsOwnFlag(t *testing.T) {
 	t.Parallel()
 	noRedir := Core()
 	noRedir.FuncBodyTakesNoRedirection = true
-	for _, c := range []struct{ src, token string }{
-		{`f() >out; f`, ">"},
-		{`f() echo hi >out; f`, ">"},
-		{`f() x=1 >out; f`, ">"},
-		{`f() 2>&1; f`, ">&"},
-		{`f() cat <in; f`, "<"},
+	// A number in front of the operator is blamed itself and carries the
+	// operator, which the dialect with this flag names (#6552).
+	for _, c := range []struct{ src, token, op string }{
+		{`f() >out; f`, ">", ""},
+		{`f() echo hi >out; f`, ">", ""},
+		{`f() x=1 >out; f`, ">", ""},
+		{`f() 2>&1; f`, "2", ">&"},
+		{`f() cat <in; f`, "<", ""},
 	} {
 		_, err := Parse(c.src, noRedir)
 		var se *Error
@@ -220,9 +222,9 @@ func TestARedirectionOnlyBodyFollowsItsOwnFlag(t *testing.T) {
 			t.Errorf("%s: refusal = %v, want a syntax error", c.src, err)
 			continue
 		}
-		if se.Kind != ErrUnexpected || se.Token != c.token {
-			t.Errorf("%s: kind %v token %q, want the operator named as %q",
-				c.src, se.Kind, se.Token, c.token)
+		if se.Kind != ErrUnexpected || se.Token != c.token || se.IONumberOperator != c.op {
+			t.Errorf("%s: kind %v token %q operator %q, want %q and %q",
+				c.src, se.Kind, se.Token, se.IONumberOperator, c.token, c.op)
 		}
 		if !se.Redirect {
 			t.Errorf("%s: the error does not say it was a redirection", c.src)

@@ -6549,7 +6549,67 @@ type Diagnostics struct {
 	//	(( 1 )) {v}</dev/null    syntax error at line 1: `\004' unexpected
 	//	(( 1 )) {abc}>&-         `\004' unexpected
 	//	for {v}</dev/null        `\004' unexpected
+	//
+	// Where SyntaxUnexpectedIONumberIsItsOperator names the operator
+	// instead, the operator wins.
 	SyntaxUnexpectedFdVariable string
+
+	// SyntaxUnexpectedIONumberIsItsOperator names a refused IO number by the
+	// redirection operator behind it rather than by itself: always for
+	// digits, and for a `{name}` only where it stood in a `case` subject or
+	// pattern. Measured 2026-10-15, `-c '<program>'`, on zsh 5.9.2 (`-f`)
+	// and ksh93u+ 2012-08-01 (#6552):
+	//
+	//	                          zsh 5.9.2     ksh93u+
+	//	for 2>x / select 2<x      `>' / `<'     `>' / `<'
+	//	case x in 2>x) esac       `>'           `>'
+	//	case x in {v}<x) esac     `<'           `<'
+	//	case x in {v}>>x) esac    `>>'          `>>'
+	//	case x in {v}<<<x) esac   `<<<'         `<<' (see the field above)
+	//	case {v}<x in x) esac     `<'           `<'
+	//	for {v}</dev/null         `{v}'         `\004'
+	//	f() {v}</dev/null         runs          `\004'
+	//	f() 2>&1                  runs          `>&'
+	//	for i in a {v}<x; do      `<'           `\004' (the field below)
+	//
+	// So the two agree on where, and part only on how a `{name}` that is not
+	// passed over is written: zsh by its text, ksh93 by the byte in
+	// SyntaxUnexpectedFdVariable. bash names the digits — `for 2>x` is
+	// ``near unexpected token `2'`` — and a `{name}` by
+	// SyntaxUnexpectedFdVariableReadText.
+	SyntaxUnexpectedIONumberIsItsOperator bool
+
+	// SyntaxUnexpectedFdVariableInAnItemListIsItsOperator widens the rule
+	// above, for a `{name}`, from a `case` word to the item list of a `for`
+	// or a `select` too. zsh 5.9.2 does that and ksh93u+ does not, measured
+	// 2026-10-15 under `-c` (#6552):
+	//
+	//	                                  zsh 5.9.2   ksh93u+
+	//	for i in a {v}<x; do :; done      `<'         `\004'
+	//	for i in {v}<x; do :; done        `<'         `\004'
+	//	for i in a {v}>>x; do :; done     `>>'        `\004'
+	//	select i in a {v}<x; do :; done   `<'         `\004'
+	//	for i ({v}<x) :                   `<'         (no such form)
+	SyntaxUnexpectedFdVariableInAnItemListIsItsOperator bool
+
+	// SyntaxUnexpectedFdVariableReadText is the sentence a refused `{name}`
+	// in front of a redirection operator is written in, quoting
+	// syntax.Error.FdVariableReadText rather than the token, empty for the
+	// ordinary sentence. bash writes it without the words "unexpected
+	// token", as it does inside `[[ ]]`. Measured 2026-10-15 on bash 5.3.20,
+	// `-c '<program>'` and a script file alike:
+	//
+	//	for {v}</dev/null             syntax error near `{v}<'
+	//	for {v}>>x / for {v}<&0       near `{v}>' / near `{v}<'
+	//	case x in ({v}>x) esac        near `({v}>'
+	//	case x in a|{v}<x) esac       near `|{v}<'
+	//	case x in a) ;;{v}<x) esac    near `;{v}<'
+	//	case x in a| {v}<x) esac      near `{v}<'
+	//	f() {v}</dev/null             near `{v}<'
+	//
+	// One byte past the name — the operator's first, whatever the operator —
+	// and one byte in front of it unless that is a blank or a newline.
+	SyntaxUnexpectedFdVariableReadText string
 
 	// FlagGroupNamesTheWordTail writes the rest of the word a refused
 	// expansion flag group stands in, rather than the `(` that opened it.
@@ -11009,12 +11069,21 @@ func (d Diagnostics) unexpectedToken(se *syntax.Error) string {
 		// dropping it folds the word too. See the field.
 		token = "&|"
 	}
+	// A refused IO number, named by the operator behind it where this
+	// dialect passes over it, and by a byte of its own where it does not.
+	// Ahead of the here-document rule, which then applies to the operator.
+	// See SyntaxUnexpectedIONumberIsItsOperator.
+	switch {
+	case d.SyntaxUnexpectedIONumberIsItsOperator && se.IONumberOperator != "" &&
+		(!se.FdVariable || se.InCaseWord ||
+			(se.InItemList && d.SyntaxUnexpectedFdVariableInAnItemListIsItsOperator)):
+		token = se.IONumberOperator
+	case se.FdVariable && d.SyntaxUnexpectedFdVariable != "":
+		token = d.SyntaxUnexpectedFdVariable
+	}
 	if d.SyntaxUnexpectedHereDocumentIsTwoAngles && se.Redirect &&
 		strings.HasPrefix(token, "<<") {
 		token = "<<"
-	}
-	if se.FdVariable && d.SyntaxUnexpectedFdVariable != "" {
-		token = d.SyntaxUnexpectedFdVariable
 	}
 	form := d.SyntaxUnexpected
 	if se.Class == syntax.ClassWord && d.SyntaxUnexpectedWord != "" {
@@ -11022,6 +11091,9 @@ func (d Diagnostics) unexpectedToken(se *syntax.Error) string {
 	}
 	if se.Class == syntax.ClassNewline && d.SyntaxUnexpectedNewline != "" {
 		form = d.SyntaxUnexpectedNewline
+	}
+	if se.FdVariable && se.FdVariableReadText != "" && d.SyntaxUnexpectedFdVariableReadText != "" {
+		form, token = d.SyntaxUnexpectedFdVariableReadText, se.FdVariableReadText
 	}
 	if se.Redirect && d.SyntaxRedirectUnexpected != "" {
 		// One dialect does not name the token here at all. What it expected

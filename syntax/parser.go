@@ -447,6 +447,12 @@ type Parser struct {
 	subshellsLeftOpen int
 
 	inCaseWord bool
+
+	// itemListStoppedAt is where the token stood that ended the item list of
+	// a `for` or a `select` — after `in`, or inside the parentheses of the
+	// short form — so a refusal of that token can say it stood among the
+	// list's words. See Error.InItemList.
+	itemListStoppedAt Pos
 }
 
 // maxParamDepth is how far `${x:-${y:-…}}` may nest before the parser stops.
@@ -1364,16 +1370,57 @@ func (p *Parser) failUnexpectedAt(tok Token, expected string, plain bool) {
 	// refusal only, which the guard at the top of this function already
 	// makes true of everything else here.
 	p.refusedWaitingForAThen = p.waitsForAThen()
+	fdVariable := tok.Kind == TokIONumber && strings.HasPrefix(tok.Text, "{")
+	operator, readText := p.ioNumberSurroundings(tok, fdVariable)
 	p.err = &Error{
 		Pos: tok.Pos, tokEnd: tok.End, Kind: ErrUnexpected,
 		Token: literal, TokenOpener: tokenOpener(tok),
 		TokenSource: source, TokenHoldsExpansion: tokenHoldsAnExpansion(tok),
 		Class: tokenClass(tok, plain), Expected: expected,
-		Redirect:    tok.Kind.IsRedirect(),
-		FdVariable:  tok.Kind == TokIONumber && strings.HasPrefix(tok.Text, "{"),
+		// An IO number is the front of a redirection, and the dialects
+		// that word a refused redirection by its kind word it that way:
+		// measured 2026-10-15, `case 2>x in x) esac` is `redirection
+		// unexpected (expecting word)` on dash 0.5.12 and `unexpected
+		// redirection (expecting word)` on BusyBox ash 1.37.0.
+		Redirect:   tok.Kind.IsRedirect() || tok.Kind == TokIONumber,
+		FdVariable: fdVariable,
+
+		IONumberOperator: operator, InCaseWord: p.inCaseWord,
+		InItemList:         tok.Pos.IsValid() && tok.Pos == p.itemListStoppedAt,
+		FdVariableReadText: readText,
+
 		AliasSource: p.aliasSource,
 		Msg:         text + " unexpected",
 	}
+}
+
+// ioNumberSurroundings is, for a refused IO number, the operator standing
+// behind it and — for a `{name}` — the text one dialect quotes in its place.
+// See Error.IONumberOperator and Error.FdVariableReadText.
+//
+// Both are read from the input around the token, so a token whose position
+// does not index the input — an alias's text — has neither.
+func (p *Parser) ioNumberSurroundings(tok Token, fdVariable bool) (operator, readText string) {
+	if tok.Kind != TokIONumber {
+		return "", ""
+	}
+	src := p.lex.src
+	from, to := int(tok.Pos.Offset), int(tok.End.Offset)
+	if from < 0 || to > len(src) || from > to || src[from:to] != tok.Text {
+		return "", ""
+	}
+	k, ok := p.lex.operatorAt(to)
+	if !ok {
+		return "", ""
+	}
+	operator = text[k]
+	if !fdVariable {
+		return operator, ""
+	}
+	if from > 0 && !strings.ContainsRune(" \t\n", rune(src[from-1])) {
+		from--
+	}
+	return operator, src[from : to+1]
 }
 
 // emptyParensStartAt reports whether tok is the `(` of an adjacent `()`, in a
@@ -1406,6 +1453,12 @@ func tokenLiteral(tok Token) string {
 		// Kind.String() answers `arithmetic command`, a description written
 		// for prose, and standing it where a diagnostic quotes what it read
 		// produced a sentence no shell writes (#2013).
+		return tok.Text
+	case TokIONumber:
+		// The digits, or the `{name}`, as written: Kind.String() answered
+		// `IO number` here, which is the same prose-for-a-quote mistake as
+		// the case above (#6552). Which of the two a dialect names — this,
+		// or the operator behind it — is Error.IONumberOperator's question.
 		return tok.Text
 	}
 	return tok.Kind.String()
@@ -3009,8 +3062,9 @@ func (p *Parser) fdVariableRefusedAfter(c Command) bool {
 //
 // The operator is what is named when a number stands in front of it — the
 // number is passed over — while a `{name}` there is named itself, which the
-// dialect writes by a byte of its own; see
-// interp.Diagnostics.SyntaxUnexpectedFdVariable.
+// dialect writes by a byte of its own. Both are the naming every refused IO
+// number gets; see interp.Diagnostics.SyntaxUnexpectedIONumberIsItsOperator
+// and interp.Diagnostics.SyntaxUnexpectedFdVariable.
 func (p *Parser) arithCommandRefusesARedirection(c Command) bool {
 	if !p.dialect.ArithCommandTakesNoRedirection {
 		return false
@@ -3018,9 +3072,9 @@ func (p *Parser) arithCommandRefusesARedirection(c Command) bool {
 	if _, ok := c.(*ArithCmdClause); !ok {
 		return false
 	}
-	if p.at(TokIONumber) && !strings.HasPrefix(p.tok.Text, "{") {
-		p.next()
-	}
+	// The number in front of the operator is refused like any other, and the
+	// dialect that passes over it says so where every refused IO number is
+	// named. See interp.Diagnostics.SyntaxUnexpectedIONumberIsItsOperator.
 	p.failUnexpected("")
 	return true
 }
@@ -5653,6 +5707,18 @@ func (p *Parser) parseFuncParensAndBody(fn *FuncDecl) Command {
 		// is refused at the `>` with the `echo` already accepted.
 		if simple, isSimple := fn.BodyCommand.(*SimpleCmd); isSimple && len(simple.Redirs) > 0 {
 			r := simple.Redirs[0]
+			if r.N != nil {
+				// A number or a `{name}` in front of it is refused as every
+				// IO number is, which is what passes over the one and names
+				// the other by the dialect's byte: `f() 2>&1` is `>&` and
+				// `f() {v}</dev/null` is 0x04 on ksh93u+ (#6552). See
+				// interp.Diagnostics.SyntaxUnexpectedIONumberIsItsOperator.
+				p.failUnexpectedAt(Token{
+					Kind: TokIONumber, Pos: r.N.Pos(), End: r.N.End(),
+					Text: r.N.Literal(), Spans: r.N.Spans,
+				}, "", false)
+				return fn
+			}
 			p.failRedirectAt(r.OpPos, r.Op)
 		}
 	}
@@ -7654,7 +7720,11 @@ func (p *Parser) shortElse(c *IfClause) {
 // this is reached only where the chain ended with no `else` at all, so a `fi`
 // accepted unconditionally after the chain would take a line zsh refuses. #2242.
 func (p *Parser) redundantFi(c *IfClause) {
-	if c.HasElse || !p.shortBodyBraced || !p.atWord("fi") {
+	if c.HasElse || !p.shortBodyBraced {
+		return
+	}
+	if !p.atWord("fi") {
+		p.refuseAfterABraceArm()
 		return
 	}
 	c.Stop = p.tok.End
@@ -7662,6 +7732,88 @@ func (p *Parser) redundantFi(c *IfClause) {
 	// One and not a run: a second `fi` is a parse error there, and the flag
 	// is what a second call would read, so it goes down with the first.
 	p.shortBodyBraced = false
+}
+
+// refuseAfterABraceArm refuses what stands behind the `}` of a short `if`'s
+// last arm, where that arm was a brace group, nothing separated it from what
+// follows, and there was no `else` — and it refuses it one token later than
+// the token that stands there.
+//
+// The place where a `fi` may close the `if` is the place where anything else
+// is read as though it might have, and the refusal falls on the token after
+// it. Measured 2026-10-15 on zsh 5.9.2, `-fc '<program>' ⏎ 'echo ok'`:
+//
+//	if [[ x ]] { :; } a b c           parse error near `b'
+//	if [[ x ]] { :; } a ⏎ echo ok     near `echo', on line 2
+//	if [[ x ]] { :; } a; b            near `b' — the `;` is passed over
+//	if [[ x ]] { :; } | cat           near `cat'
+//	if [[ x ]] { :; } >/dev/null foo  near `/dev/null'
+//	if [[ x ]] { :; } foo >/dev/null  near `>'
+//	if [[ x ]] { :; } then :; fi      near `:'
+//	if [[ x ]] { :; } (echo x)        near `echo'
+//	{ if [[ x ]] { :; } } ⏎ echo ok   near `echo' — a `}` is no different
+//	if [[ x ]] { :; } {foo}           near `foo' — the `{` is a token alone
+//	if [[ x ]] { :; } {v}</dev/null   near `v'
+//	if [[ x ]] { :; } elif [[ y ]] { :; } foo bar   near `bar'
+//
+// and where the input ends first, the last token read is named: `-c` with
+// `a` is near `a`, with `a;` near `;`, and a script file holding `a` ⏎ is
+// near `\n` on line 2. The controls: a `;` or a newline straight behind the
+// `}` ends the `if` (`if [[ x ]] { :; } ; echo ok` runs), a `fi` closes it,
+// an `else` is the next arm and puts the refusal back where it was, and a
+// condition ended by a `;` is another form altogether (`if :; { :; } a b`
+// runs `a`). `emulate sh`, `emulate ksh` and `setopt noshortloops` change
+// none of it, and neither does the route.
+func (p *Parser) refuseAfterABraceArm() {
+	if p.err != nil || p.at(TokEOF) || p.at(TokSemi) || p.at(TokNewline) {
+		return
+	}
+	if next, ok := p.wordAfterABrace(p.tok); ok {
+		// `{foo}` and `{v}<` are read here as a `{` and what follows it,
+		// which is the token the refusal names.
+		p.failUnexpectedAt(next, "", false)
+		return
+	}
+	p.next()
+	for p.at(TokSemi) || p.at(TokNewline) {
+		p.next()
+	}
+	// The end of the input is refused as it is anywhere, which names the
+	// last token read.
+	p.failUnexpected("")
+}
+
+// wordAfterABrace is, for a token that begins with a `{` and goes on, the
+// word that follows that brace when the brace is read as a token of its own.
+// See refuseAfterABraceArm, whose rows `{foo}`, `{echo hi}` and
+// `{v}</dev/null` name `foo`, `echo` and `v`.
+func (p *Parser) wordAfterABrace(tok Token) (Token, bool) {
+	if !strings.HasPrefix(tok.Text, "{") || len(tok.Text) < 2 {
+		return Token{}, false
+	}
+	start, end := int(tok.Pos.Offset)+1, int(tok.Pos.Offset)+1
+	src := p.lex.src
+	if end > len(src) || src[start-1] != '{' {
+		// Positions that do not index this input — an alias's text.
+		return Token{}, false
+	}
+	for end < len(src) && !strings.ContainsRune("} \t\n;&|<>()", rune(src[end])) {
+		end++
+	}
+	if end == start {
+		return Token{}, false
+	}
+	text := src[start:end]
+	pos := tok.Pos
+	pos.Offset++
+	pos.Col++
+	stop := pos
+	stop.Offset += int32(len(text))
+	stop.Col += int32(len(text))
+	return Token{
+		Kind: TokWord, Pos: pos, End: stop, Text: text,
+		Spans: []Span{{Kind: Literal, Value: text, Quoting: Unquoted, Pos: pos}},
+	}, true
 }
 
 // condEndedItself reports whether the condition just parsed closed on its own
@@ -7887,6 +8039,7 @@ func (p *Parser) itemList(items *[]*Word, end Pos) Pos {
 		}
 		*items = append(*items, w)
 	}
+	p.itemListStoppedAt = p.tok.Pos
 	p.lex.inArgument = saved
 	if p.at(TokLeftParen) && p.refuseParenAfterAName(*items) {
 		// The same refusal a command's only word gets, and for a list of
@@ -8014,10 +8167,10 @@ func (p *Parser) forName(word string) (name, refused string, ok bool) {
 
 // forNameIsUsable is the predicate.
 //
-// A token that is not a word needs no test of its own: only a word has spans,
-// so its literal is empty and [isName] refuses it. A guard for it here read as
-// if it decided something and did not — the mutant that removed it survived,
-// which is the whole of the evidence that it was dead.
+// A token that is not a word is refused first. Only a word and an IO number
+// have spans, and an IO number's literal is its digits: once a refusal named
+// it by them rather than as `IO number`, `for 2>x` read the `2` as a
+// positional parameter in the dialect that takes one and ran (#6552).
 //
 // What a non-word in that position *should* say is a separate answer and not a
 // second predicate. `for ; in a b` is an ordinary unexpected-token failure in
@@ -8027,6 +8180,9 @@ func (p *Parser) forName(word string) (name, refused string, ok bool) {
 // wordings coincide. That is the stage question of #1110 showing through, and
 // modeling it as its own axis would be modeling the symptom.
 func (p *Parser) forNameIsUsable() bool {
+	if p.tok.Kind != TokWord {
+		return false
+	}
 	for _, sp := range p.tok.Spans {
 		if sp.Kind != Literal {
 			// A name out of a substitution: refused everywhere.
@@ -8175,6 +8331,7 @@ func (p *Parser) shortItems() (items []*Word, end Pos) {
 		items = append(items, p.word())
 		p.skipNewlines()
 	}
+	p.itemListStoppedAt = p.tok.Pos
 	p.lex.inArgument = saved
 	end = p.tok.End
 	if !p.at(TokRightParen) {

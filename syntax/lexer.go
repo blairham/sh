@@ -1973,7 +1973,18 @@ func (l *Lexer) enabled(k Kind) bool {
 // real zsh startup the old order, a map lookup and a dialect question per
 // entry for every word, was about 5% of the shell's own CPU (#5873).
 func (l *Lexer) matchOperator() (Kind, bool) {
-	rest := l.src[l.off:]
+	return l.operatorAt(l.off)
+}
+
+// operatorAt is matchOperator at an offset of the input other than the
+// cursor's, which is how a refusal names the operator standing behind the
+// token it refused without reading another token. See
+// Error.IONumberOperator.
+func (l *Lexer) operatorAt(off int) (Kind, bool) {
+	if off < 0 || off > len(l.src) {
+		return 0, false
+	}
+	rest := l.src[off:]
 	if rest == "" || !operatorStarts[rest[0]] {
 		return 0, false
 	}

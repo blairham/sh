@@ -149,6 +149,10 @@ func (r *Runner) storePlainScalar(a *syntax.Assign) {
 	// The full road clears the declared-empty and unset marks here; both are
 	// attributes in the cell now (#6442), and a name storesAPlainScalar
 	// accepted carries none.
+	// And it lets go of a held environment copy as the full road does: a
+	// name exported by having arrived in the environment carries no attribute
+	// in the cell, so one can be held for a name this road accepts.
+	r.releaseEnvCopy(a.Name)
 	r.varsPut(a.Name, value)
 	r.markForAllexport(a.Name)
 }

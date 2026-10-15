@@ -57,7 +57,7 @@ var theFullRoad = map[string][]string{
 		"producersLookup", "refuseReadonly", "refuseUnaimedReference", "scalarOverCompound",
 		"scopeWarningsAreOff", "selfNameref", "selfNamerefAssignment", "settleCtypeBeforeChanging",
 		"storeIntoSelectedFrame", "storeThroughNamerefElement", "tiedUniqueFold", "unaimedReferenceBase",
-		"varsPut", "warnAboutTheScope", "assigned", "registeredAction", "attrClear",
+		"varsPut", "warnAboutTheScope", "assigned", "registeredAction", "attrClear", "releaseEnvCopy",
 		"declaringWithoutAValue", "registeredArrayWriter", "dynamicWriters", "inBuiltin", "optindAssigned",
 		"storingSelfNameref", "underscoreWritten", "viewIsAlreadyFolded",
 	},

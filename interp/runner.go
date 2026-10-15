@@ -5425,6 +5425,12 @@ type Runner struct {
 	// stays off the parameter. See Runner.MarkEnvironmentEntryNotAdopted,
 	// which is where the measurement is.
 	envNotAdopted map[string]bool
+	// envCopyHeld is the value a child is still handed for an exported name
+	// whose stores since were ones that leave the environment's copy behind
+	// — OPTARG and OPTIND as `getopts` writes them, in the dialect that does.
+	// Any other store takes the entry away. See
+	// Runner.getoptsFillOwnParameter (#6475).
+	envCopyHeld map[string]heldEnvCopy
 	// evalContexts is what the shell is currently inside, innermost last,
 	// with the route's own entry left out — see interp/evalcontext.go, and
 	// Runner.EvalContextStack, which puts it back.
@@ -11497,52 +11503,18 @@ func (r *Runner) environ() []string {
 		if !r.isExported(k) {
 			continue
 		}
-		if r.sem().NameBeyondASCIIStaysOutOfTheEnvironment == Yes && !isASCII(k) {
-			// Exported in the shell and left out of a child's environment,
-			// in the dialect that does. See
-			// Semantics.NameBeyondASCIIStaysOutOfTheEnvironment.
-			continue
-		}
-		if entry, compound := r.exportedCompound(k); compound {
-			// A name holding an array or a table has no environment
-			// representation, and the columns part over whether it reaches a
-			// child at all — see
-			// Semantics.ExportedCompoundReachesAChildAsItsFirstValue. The
-			// scalar view this store keeps in step is *not* the answer: it
-			// handed a child the first element in every dialect, and an
-			// empty entry for an empty array, which is nobody's.
-			if entry != "" {
-				out = append(out, k+"="+entry)
+		if held, holding := r.envCopyHeld[k]; holding {
+			// A store that left the copy a child is handed behind, so it is
+			// the copy and not the value that goes — or nothing, where there
+			// was no copy to leave. See Runner.getoptsFillOwnParameter (#6475).
+			if held.present {
+				out = append(out, k+"="+held.value)
 			}
 			continue
 		}
-		if r.attrHas(k, attrDeclaredEmpty) {
-			// Declared rather than assigned, so the name has no value of
-			// its own and an exported name with no value reaches no child
-			// in any shell measured — including the one whose declaration
-			// makes the shell itself read it as empty.
-			continue
+		if entry, ok := r.exportedScalarEntry(k, v); ok {
+			out = append(out, entry)
 		}
-		// A child is told the case-folded value, not the text the assignment
-		// carried: measured, `typeset -l v=AB; export v` puts `v=ab` in the
-		// environment in every shell with the letter.
-		//
-		// The environment is **not** a read like any other, though, and the
-		// width attribute is where the two part: measured 2026-09-12 on zsh
-		// 5.9.2, `typeset -L 5 b=xy; export b` puts `b=xy` in the
-		// environment — the raw text, five characters short of what `$b`
-		// answers in the shell itself — while `typeset -u a=ab` in the same
-		// run puts `a=AB` there. So the padding is a presentation of the
-		// parameter and the fold is a property of the value, which is why
-		// this calls the case one by name rather than the pair.
-		//
-		// And a `.get` discipline is asked, because the environment is a
-		// *read* of the name and this is the one reader that was built from
-		// the tables instead. Measured on ksh93u+ 2012-08-01, 2026-09-16:
-		// `g=raw; function g.get { .sh.value=A; }; export g; env` hands the
-		// child `g=A`, not the `raw` the store holds. See
-		// interp/discipline.go.
-		out = append(out, k+"="+r.exportedThroughDiscipline(k, r.readCaseFolded(k, v)))
 	}
 	// A **table** keeps no scalar view, so the loop above never sees one and
 	// the dialect that hands a child its first value would hand it nothing.
@@ -11576,6 +11548,60 @@ func (r *Runner) environ() []string {
 		out = append(out, k+"="+v)
 	}
 	return endEachEntryAtItsFirstNUL(out)
+}
+
+// exportedScalarEntry is the `name=value` an exported name holding v puts in a
+// child's environment, and whether it puts one there at all. It is environ's
+// answer for one name, kept apart so that a store which must remember what a
+// child *was* being handed (Runner.getoptsFillOwnParameter) asks the same
+// question environ does rather than a second copy of it.
+func (r *Runner) exportedScalarEntry(k, v string) (string, bool) {
+	if r.sem().NameBeyondASCIIStaysOutOfTheEnvironment == Yes && !isASCII(k) {
+		// Exported in the shell and left out of a child's environment,
+		// in the dialect that does. See
+		// Semantics.NameBeyondASCIIStaysOutOfTheEnvironment.
+		return "", false
+	}
+	if entry, compound := r.exportedCompound(k); compound {
+		// A name holding an array or a table has no environment
+		// representation, and the columns part over whether it reaches a
+		// child at all — see
+		// Semantics.ExportedCompoundReachesAChildAsItsFirstValue. The
+		// scalar view this store keeps in step is *not* the answer: it
+		// handed a child the first element in every dialect, and an
+		// empty entry for an empty array, which is nobody's.
+		if entry != "" {
+			return k + "=" + entry, true
+		}
+		return "", false
+	}
+	if r.attrHas(k, attrDeclaredEmpty) {
+		// Declared rather than assigned, so the name has no value of
+		// its own and an exported name with no value reaches no child
+		// in any shell measured — including the one whose declaration
+		// makes the shell itself read it as empty.
+		return "", false
+	}
+	// A child is told the case-folded value, not the text the assignment
+	// carried: measured, `typeset -l v=AB; export v` puts `v=ab` in the
+	// environment in every shell with the letter.
+	//
+	// The environment is **not** a read like any other, though, and the
+	// width attribute is where the two part: measured 2026-09-12 on zsh
+	// 5.9.2, `typeset -L 5 b=xy; export b` puts `b=xy` in the
+	// environment — the raw text, five characters short of what `$b`
+	// answers in the shell itself — while `typeset -u a=ab` in the same
+	// run puts `a=AB` there. So the padding is a presentation of the
+	// parameter and the fold is a property of the value, which is why
+	// this calls the case one by name rather than the pair.
+	//
+	// And a `.get` discipline is asked, because the environment is a
+	// *read* of the name and this is the one reader that was built from
+	// the tables instead. Measured on ksh93u+ 2012-08-01, 2026-09-16:
+	// `g=raw; function g.get { .sh.value=A; }; export g; env` hands the
+	// child `g=A`, not the `raw` the store holds. See
+	// interp/discipline.go.
+	return k + "=" + r.exportedThroughDiscipline(k, r.readCaseFolded(k, v)), true
 }
 
 // endEachEntryAtItsFirstNUL cuts every entry where a NUL byte falls, because
@@ -13744,6 +13770,9 @@ func (r *Runner) assignmentLandsOn(name string) string {
 }
 
 func (r *Runner) setVarAs(name, value string, form assignForm) {
+	// Every store but the one that holds it refreshes the copy a child is
+	// handed, so the held copy goes first. See Runner.getoptsFillOwnParameter.
+	r.releaseEnvCopy(name)
 	if form == assignedByDeclaration {
 		// `set -a` reaches a declaration utility's assignment as much as a
 		// plain one's — measured, and it was missing: see

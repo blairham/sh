@@ -576,6 +576,7 @@ func seedTables(r *Runner) {
 	r.localKeepsOuter = map[string]bool{"seed": true}
 	r.equalsTildeBuiltins = map[string]bool{"seed": true}
 	r.envNotAdopted = map[string]bool{"seed": true}
+	r.envCopyHeld = map[string]heldEnvCopy{"seed": {value: "seed", present: true}}
 	r.scopeFixed = map[string]bool{"seed": true}
 	r.kindFixed = map[string]parameterKinds{"seed": kindBit(ArrayParameter)}
 	r.nameref = map[string]string{"seed": "target"}

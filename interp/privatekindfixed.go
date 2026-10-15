@@ -275,16 +275,16 @@ func (r *Runner) fixedContainerKeepsItsKind(a *syntax.Assign) bool {
 		return false
 	}
 	value, _, globbed := r.scalarAssignValue(a)
-	if r.assignmentGaveUp() {
-		// Nothing to store — the value would not expand. See the scalar
-		// store in Runner.assign, which this stands in front of (#6544).
-		return true
-	}
 	if globbed {
 		// The right-hand side was a pattern and the option that reads it as
 		// one replaces the name outright, kind included, which is a road
 		// this rule is not on. Left to the ordinary store.
 		return false
+	}
+	if r.assignmentGaveUp() {
+		// Nothing to store — the value would not expand. See the scalar
+		// store in Runner.assign, which this stands in front of (#6544).
+		return true
 	}
 	r.setArray(a.Name, []string{value})
 	r.markForAllexport(a.Name)

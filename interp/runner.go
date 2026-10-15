@@ -15250,6 +15250,15 @@ func (r *Runner) assign(ctx context.Context, a *syntax.Assign) {
 		r.setArrayElem(a.Name, idx, subject, r.elementValue(a, globbed))
 	default:
 		value, fields, globbed := r.scalarAssignValue(a)
+		if globbed {
+			// The right-hand side was a pattern and this shell asked for it
+			// to be one. A match replaces the name outright — the kind, the
+			// value and the numeric attributes together — so none of the
+			// scalar machinery below is on its road. See
+			// interp/globassign.go.
+			r.storeGlobbedScalarAssign(a, fields)
+			return
+		}
 		if r.assignmentGaveUp() {
 			// The value would not expand, so there is nothing to store and
 			// the name keeps what it held. Measured 2026-10-15: `x=4` then
@@ -15263,15 +15272,10 @@ func (r *Runner) assign(ctx context.Context, a *syntax.Assign) {
 			// failed `$(( ))` all reach this store, and only the traced list
 			// used to look before it. That made `set -x` change the answer
 			// (#6544).
-			return
-		}
-		if globbed {
-			// The right-hand side was a pattern and this shell asked for it
-			// to be one. A match replaces the name outright — the kind, the
-			// value and the numeric attributes together — so none of the
-			// scalar machinery below is on its road. See
-			// interp/globassign.go.
-			r.storeGlobbedScalarAssign(a, fields)
+			//
+			// Behind the pattern's store, which has a failure of its own to
+			// answer: a refused miss takes the name with it rather than
+			// leaving what it held. See interp/globassign.go.
 			return
 		}
 		if r.compoundAssignedFromAName(a.Name, value, a.Append) {

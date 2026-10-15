@@ -464,6 +464,9 @@ func (r *Runner) declareTie(builtin string, args []string, f declareFlags) int {
 		}
 		return r.badBuiltinName(builtin, n, n, fatal)
 	}
+	if !f.global {
+		r.setOuterScriptTiesAside(scalar, array)
+	}
 	if t, already := r.tieOf(scalar); already && t.array != array {
 		// Tying the same pair again is silence and 0 — measured — so only a
 		// tie to a *different* name is refused. The separator is not part of
@@ -753,6 +756,56 @@ func (r *Runner) declareTie(builtin string, args []string, f declareFlags) int {
 	return 0
 }
 
+// setOuterScriptTiesAside takes a script's tie made **outside** the running
+// call off the two names a local tie is about to claim, and has it put back
+// when the call returns.
+//
+// A local tie is a fresh pair, whatever the names were tied to further out.
+// Measured 2026-10-15 on zsh 5.9.2 under `-f` from a script file, after
+// `typeset -T FOO=a:b foo` at the top level (#6470):
+//
+//	f(){ local -T FOO foo }      `[$FOO] [${#foo}]` is `[] [0]` inside, as
+//	                             any fresh local is, and `typeset -p FOO foo`
+//	                             lists `foo=(  )`
+//	f(){ local -T foo FOO }      taken at 0, a fresh pair the other way round
+//	f(){ local -T FOO bar }      taken at 0, and `foo` inside is still
+//	                             `array-tied` — the outer tie of the half
+//	                             this line did not name is left alone
+//	after any of the three       `${(t)FOO}` `scalar-tied`, and `foo=(z w)`
+//	                             makes `$FOO` `z:w`: the outer pair is tied
+//	                             again
+//
+// Read as the same pair tied again, the first row kept the outer elements,
+// the next two were refused as `already tied`, and the call's untie on return
+// took the outer pair apart for good.
+//
+// Only the two names, which is the third row: the outer tie's other half keeps
+// its entry. Registered ahead of the local tie's own untie, so it runs after
+// it — the hooks unwind in reverse — and what the untie removed is what is put
+// back. A tie this call made is its own and is retied rather than set aside;
+// the shell's own pairs are never set aside either.
+func (r *Runner) setOuterScriptTiesAside(scalar, array string) {
+	saved := map[string]tie{}
+	for _, name := range []string{scalar, array} {
+		t, ok := r.tieOf(name)
+		if !ok || t.special || t.wordless || t.depth >= len(r.scopes) {
+			continue
+		}
+		saved[name] = t
+	}
+	if len(saved) == 0 {
+		return
+	}
+	for name := range saved {
+		delete(r.tied, name)
+	}
+	r.AtFunctionReturn(func() {
+		for name, t := range saved {
+			r.tied[name] = t
+		}
+	})
+}
+
 // tieListing is `typeset -T` with no operands: every tied name, both halves
 // of each.
 //
@@ -999,6 +1052,14 @@ func (r *Runner) kindLetterUntiesAScriptTie(name string, f declareFlags) bool {
 		return false
 	}
 	kind, plus, written := f.kindLetterWritten()
+	if !written && name == t.scalar && r.literalOperands[name] {
+		// An array literal on the scalar half's declaration asks for an
+		// array as `-a` does, and unties the same way: `typeset FOO=(x)`,
+		// `export FOO=(x)` and a call's own `local FOO=(x)` leave FOO an
+		// array and foo gone in zsh 5.9.2, measured 2026-10-15 (#6468) —
+		// where the bare `FOO=(x)` is refused; see scriptTieSlotKinds.
+		kind, written = ArrayParameter, true
+	}
 	if !written {
 		return false
 	}
@@ -1016,6 +1077,32 @@ func (r *Runner) kindLetterUntiesAScriptTie(name string, f declareFlags) bool {
 	if leaves == has {
 		return false
 	}
+	if beneath := r.scopeHoldingTheTiedBinding(t, partner); beneath != nil {
+		// A `-g` declaration inside a call where the partner is a local of
+		// that call, or of one the call is running under: the reference
+		// removes the *tied* partner — the binding the local displaced — and
+		// leaves the local standing. Measured 2026-10-15 on zsh 5.9.2 (#6469):
+		//
+		//	typeset -T FOO=a:b foo
+		//	f(){ local foo; typeset -g -a FOO }     in f `foo` scalar-local;
+		//	                                        after it `${+foo}` 0 and
+		//	                                        `typeset -p foo` is `no
+		//	                                        such variable`
+		//	g(){ local foo; f }; f(){ typeset -g -a FOO }   the same, with
+		//	                                        g's local the one standing
+		//	typeset -r foo; f(){ local foo; typeset -g -a FOO }
+		//	                                        `f: read-only variable: foo`
+		//
+		// So the freeze asked about is the displaced binding's and not the
+		// local's, and the removal is a write into the scope's saved copy —
+		// what the unwind will hand back — rather than to the live table.
+		if beneath.recordBit(recSavedReadonly, partner) {
+			return r.refuseUnsetOfAFrozenName(partner, false) != 0
+		}
+		r.untie(name)
+		removeTheBindingBeneathALocal(beneath, partner)
+		return false
+	}
 	if r.unsetReadonly(partner) != 0 {
 		// Refused before anything moves, which is the order the reference
 		// shows: the sentence names the partner and the converted half is
@@ -1025,14 +1112,44 @@ func (r *Runner) kindLetterUntiesAScriptTie(name string, f declareFlags) bool {
 		return true
 	}
 	r.untie(name)
-	if r.tieHalfShadowedInItsScope(t, partner) {
-		// A `-g` declaration inside a call where the partner is a local of
-		// that call: the reference removes the *global* partner and leaves
-		// the local standing. Removing the visible name would take the local
-		// instead, so the partner is left alone here — the pair is still
-		// untied, and the global half outliving the call is the residual
-		// recorded in #6469.
-		return false
-	}
 	return r.unsetName(partner) != 0
+}
+
+// scopeHoldingTheTiedBinding is the scope whose saved records hold the tie's
+// own binding of one half, where a local stands over that half; nil where
+// nothing does, and the live table is the tie's.
+//
+// The outermost such scope past the tie's own depth, because that is the one
+// that displaced the tie's binding: every scope inside it displaced a local.
+// The same window tieHalfShadowedInItsScope walks, so the two cannot disagree
+// about whether a half is shadowed.
+func (r *Runner) scopeHoldingTheTiedBinding(t tie, name string) *scope {
+	if t.depth >= len(r.scopes) {
+		return nil
+	}
+	for _, sc := range r.scopes[t.depth:] {
+		if sc.shadowsValue(name) {
+			return sc
+		}
+	}
+	return nil
+}
+
+// removeTheBindingBeneathALocal unsets a name in the scope that saved it, so
+// that the scope's unwind leaves the name gone rather than putting back what
+// the local displaced. The local itself is untouched.
+//
+// Every record the unwind restores from is rewritten to "there was nothing":
+// the value and both tables absent, no attributes, no freeze, no export and
+// no hide letter, and not an `unset` name either — what follows is an
+// ordinary absent name, as `unset` leaves one.
+func removeTheBindingBeneathALocal(sc *scope, name string) {
+	sc.saveValue(name, "", false)
+	sc.saveArray(name, nil, false)
+	sc.saveAssocTable(name, nil, false)
+	sc.saveAttributes(name, nameAttributes{})
+	sc.putRecord(recSavedReadonly, name, false)
+	sc.putRecord(recSavedHideInScope, name, false)
+	sc.putRecord(recExported, name, false)
+	sc.putRecord(recRemovedBefore, name, false)
 }

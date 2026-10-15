@@ -1216,7 +1216,7 @@ var zshOptions = []zshOption{
 	// separately — see the table there (#4945).
 	{
 		base: "ignorebraces", def: false,
-		get: func(r *interp.Runner) bool { on, _ := r.NamedOption("braceexpand"); return !on },
+		get: func(r *interp.Runner) bool { return !braceExpandReader.Read(r) },
 		set: func(r *interp.Runner, on bool) int {
 			if st := r.ApplyNamedOption("braceexpand", !on); st != 0 {
 				return st
@@ -2780,13 +2780,18 @@ var zshOptionIndex = func() map[string]int {
 	return m
 }()
 
+// braceExpandReader is the `set -o` name `ignorebraces` reads upside down,
+// resolved once: the option is read at every function call (#6363).
+var braceExpandReader = interp.NewOptionReader("braceexpand")
+
 // setOptBacked binds a zsh name to a `set -o` name this shell really applies,
 // inverted where zsh's base is the substrate's negation — zsh's `clobber` is
 // the same switch as `set -o noclobber`, read from the other end.
 func setOptBacked(base string, def bool, opt string, inv bool) zshOption {
+	read := interp.NewOptionReader(opt)
 	return zshOption{
 		base: base, def: def,
-		get: func(r *interp.Runner) bool { on, _ := r.NamedOption(opt); return on != inv },
+		get: func(r *interp.Runner) bool { return read.Read(r) != inv },
 		set: func(r *interp.Runner, on bool) int { return r.ApplyNamedOption(opt, on != inv) },
 	}
 }
@@ -3614,9 +3619,10 @@ func spellOption(base string, on bool) string {
 // interp.EditingMode gives: the core holds *which* mode, and the two dialects
 // with a line editor spell it — `vi-insert` in one and `viins` in the other.
 func editingOption(base, keymap string) zshOption {
+	read := interp.NewOptionReader(base)
 	return zshOption{
 		base: base, def: false,
-		get: func(r *interp.Runner) bool { on, _ := r.NamedOption(base); return on },
+		get: func(r *interp.Runner) bool { return read.Read(r) },
 		set: func(r *interp.Runner, on bool) int {
 			code := r.ApplyNamedOption(base, on)
 			if code == 0 && on {

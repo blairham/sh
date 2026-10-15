@@ -1731,6 +1731,54 @@ func (r *Runner) NamedOption(name string) (on, known bool) {
 	return o.state(r), true
 }
 
+// OptionReader is [Runner.NamedOption] for one name, with the substrate's
+// half of the lookup done once rather than at every read.
+//
+// For a dialect that asks the same name very often: zsh saves its whole
+// option table at every function call for LOCAL_OPTIONS and compares it
+// again at every return, and a dozen of its names read a `set -o` option
+// through NamedOption — three map lookups and a copy of the row each time,
+// about two thirds of what the save cost (#6363).
+//
+// Only the substrate's own tables are resolved ahead of time, since they are
+// the same for every runner. What a runner adds — a negated spelling, the
+// negative of its name for being interactive, a name it declared — is still
+// asked at the read, and a name that one of those could claim is read
+// through NamedOption itself, so the two can never answer differently.
+type OptionReader struct {
+	name   string
+	opt    setOption
+	common bool
+	extra  bool
+}
+
+// NewOptionReader resolves name against the substrate's tables.
+func NewOptionReader(name string) OptionReader {
+	if o, ok := commonSetOptions[name]; ok {
+		return OptionReader{name: name, opt: o, common: true}
+	}
+	if o, ok := extraSetOptions[name]; ok {
+		return OptionReader{name: name, opt: o, extra: true}
+	}
+	return OptionReader{name: name}
+}
+
+// Read is NamedOption's first result for the name.
+func (o *OptionReader) Read(r *Runner) bool {
+	if len(r.negatedOptions) == 0 && r.sem().NonInteractiveOptionName != o.name {
+		// Neither runner-specific route applies, so lookupSetOption would
+		// reach the substrate's tables — which is what o holds.
+		switch {
+		case o.common:
+			return o.opt.state(r)
+		case o.extra && r.extraOptions[o.name]:
+			return o.opt.state(r)
+		}
+	}
+	on, _ := r.NamedOption(o.name)
+	return on
+}
+
 // ListedOptions is every row a `set -o` listing would write, in the order it
 // writes them: the dialect's own table where it installed one with
 // [Runner.SetOptionTable], and the substrate's names with their live states

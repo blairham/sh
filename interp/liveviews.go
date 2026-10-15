@@ -338,6 +338,21 @@ func (r *Runner) CommandsOnPath() map[string]string { return r.pathEntries(true)
 // it. Earlier PATH entries win, as they do in a lookup.
 func (r *Runner) PathEntries() map[string]string { return r.pathEntries(false) }
 
+// readDirNames is the names a directory holds, in the order the directory
+// gives them. Not os.ReadDir, which sorts and builds an entry per name: the
+// walk below wants only the names, and which of two directories wins a name
+// is decided by PATH's order, never by an order inside one directory. A zsh
+// start fills the command table from PATH twice, about two thousand names
+// each time (#6363).
+func readDirNames(dir string) ([]string, error) {
+	f, err := os.Open(dir)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	return f.Readdirnames(-1)
+}
+
 // pathEntries is the one walk both listings share, so the two cannot come to
 // disagree about which directory wins or how a relative entry is resolved.
 func (r *Runner) pathEntries(runnableOnly bool) map[string]string {
@@ -355,19 +370,17 @@ func (r *Runner) pathEntries(runnableOnly bool) map[string]string {
 		if dir == "" {
 			dir = "."
 		}
-		entries, err := os.ReadDir(r.absolute(dir))
+		names, err := readDirNames(r.absolute(dir))
 		if err != nil {
 			// A PATH entry that is not a directory is not an error: real
 			// shells carry stale entries for years and say nothing.
 			continue
 		}
-		for _, e := range entries {
-			name := e.Name()
+		for _, name := range names {
 			if _, taken := out[name]; taken {
 				continue
 			}
-			full := r.pathCandidate(dir, name)
-			if runnableOnly && r.runnable(full) != nil {
+			if runnableOnly && r.runnable(r.pathCandidate(dir, name)) != nil {
 				continue
 			}
 			// The table's spelling and not the path that runs — see

@@ -165,9 +165,10 @@ func (e *editor) belowAll(prompt drawnPrompt, rows []string) {
 	if cols <= 0 {
 		return
 	}
-	end := (prompt.cells + len(e.line)) / cols
+	// A predisplay is drawn before the line and moves both by its width.
+	end := (prompt.cells + e.displayPos() - e.pos + len(e.line)) / cols
 	down := end - e.row + 1
-	col := (prompt.cells + e.pos) % cols
+	col := (prompt.cells + e.displayPos()) % cols
 	var b strings.Builder
 	m := e.moves()
 	for range down {

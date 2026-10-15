@@ -109,12 +109,15 @@ func (f HighlighterFunc) Highlight(line string) []Highlight { return f(line) }
 // displayed text it read a suggestion appearing after the cursor as an insert
 // there and moved every offset past it off the text it was set for (#6412).
 //
-// buffer is the byte length of the line within displayed: displayed[:buffer]
-// is the line, and anything after it is drawn after the line without being
-// part of it. The editor calls this in place of Highlight when it is there.
+// start and end are where the line is within displayed, in bytes:
+// displayed[start:end] is the line, anything before it is a predisplay and
+// anything after it a postdisplay, neither of them part of the line. The
+// start is there because zsh counts `region_highlight` from the line's start
+// and not the displayed text's, unless an element says otherwise (#6414). The
+// editor calls this in place of Highlight when it is there.
 type BufferHighlighter interface {
 	Highlighter
-	HighlightBuffer(displayed string, buffer int) []Highlight
+	HighlightBuffer(displayed string, start, end int) []Highlight
 }
 
 // highlightReset ends a run: SGR with no parameters, which is every attribute
@@ -147,10 +150,11 @@ type styleRun struct {
 // and that is why highlighting is safe to add here: place and cells count the
 // *runes* of the line, and what this adds occupies no cells.
 // The text it colors is what is **displayed** rather than the line, which is
-// what lets a run reach into a postdisplay: measured, `region_highlight` with
-// offsets past `$#BUFFER` colors the suggestion after it, so the offsets count
-// one text and not two (#4217). A session with no postdisplay hands over
-// exactly the line, which is every session in every dialect but one.
+// what lets a run reach into a predisplay or a postdisplay: measured,
+// `region_highlight` with offsets past `$#BUFFER` colors the suggestion after
+// it, so the offsets count one text and not two (#4217). A session with
+// neither hands over exactly the line, which is every session in every dialect
+// but one.
 func (e *editor) styled() string {
 	line := string(e.displayed())
 	runs := e.styleRuns(line)
@@ -204,14 +208,22 @@ func (e *editor) styled() string {
 // session: no highlighter, and nothing pasted on the line.
 func (e *editor) styleRuns(line string) []styleRun {
 	var runs []styleRun
+	// Where the line starts in what is displayed: past a predisplay, which
+	// every offset into the line has to be moved over. Zero for every
+	// session without one. Counted as displayed spells it, which is what
+	// line is.
+	pre := 0
+	if e.predisplay != "" {
+		pre = runesBytes([]rune(e.predisplay))
+	}
 	if e.pastedTo > e.pastedFrom && e.pastedTo <= len(e.line) && e.pastedStyle != "" {
 		// Positions in the line are runes and a run is bytes, which is the
 		// same conversion Highlight documents for a highlighter working in
 		// runes — done here rather than asked of the caller, because the
 		// caller is this package.
 		runs = append(runs, styleRun{
-			start: len(string(e.line[:e.pastedFrom])),
-			end:   len(string(e.line[:e.pastedTo])),
+			start: pre + len(string(e.line[:e.pastedFrom])),
+			end:   pre + len(string(e.line[:e.pastedTo])),
 			on:    e.pastedStyle,
 			off:   e.pastedStyleEnd,
 		})
@@ -220,17 +232,22 @@ func (e *editor) styleRuns(line string) []styleRun {
 		return runs
 	}
 	var asked []Highlight
+	shift := 0
 	if bh, ok := e.highlighter.(BufferHighlighter); ok {
-		asked = bh.HighlightBuffer(line, runesBytes(e.line))
+		asked = bh.HighlightBuffer(line, pre, pre+runesBytes(e.line))
 	} else {
-		asked = e.highlighter.Highlight(line)
+		// A highlighter that knows only one text is handed the line and
+		// what follows it, as it was before there was a predisplay, and its
+		// runs are moved over the predisplay: a quote inside text a widget
+		// drew is not one in the line.
+		asked, shift = e.highlighter.Highlight(line[pre:]), pre
 	}
 	for _, r := range asked {
 		if r.Point {
-			runs = append(runs, styleRun{start: r.Start, end: r.Start, on: r.Style, point: true})
+			runs = append(runs, styleRun{start: shift + r.Start, end: shift + r.Start, on: r.Style, point: true})
 			continue
 		}
-		runs = append(runs, styleRun{start: r.Start, end: r.End, on: r.Style, off: highlightReset})
+		runs = append(runs, styleRun{start: shift + r.Start, end: shift + r.End, on: r.Style, off: highlightReset})
 	}
 	return runs
 }

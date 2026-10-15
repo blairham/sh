@@ -670,9 +670,10 @@ func (e *editor) drawSearch(prompt drawnPrompt, query []rune, dir searchDir, fai
 // where the cursor was.
 func (e *editor) below(prompt drawnPrompt, text string) {
 	cols := e.cols()
-	end := (prompt.cells + len(e.line)) / cols
+	// A predisplay is drawn before the line and moves both by its width.
+	end := (prompt.cells + e.displayPos() - e.pos + len(e.line)) / cols
 	down := end - e.row + 1
-	col := (prompt.cells + e.pos) % cols
+	col := (prompt.cells + e.displayPos()) % cols
 
 	var b strings.Builder
 	m := e.moves()

@@ -262,6 +262,10 @@ type editor struct {
 	// it takes cells, moves the end of the drawn text to the right, and is
 	// what the cursor has to come back over.
 	postdisplay string
+	// predisplay is the same thing drawn before the line: `PREDISPLAY`, see
+	// Line.Predisplay. It moves every position in the line to the right by
+	// its width, which is why geometry asks displayPos and not pos.
+	predisplay string
 	// specials says the shell has special widgets to ask for at all. See
 	// EditorStyle.SpecialWidgets.
 	specials bool
@@ -789,6 +793,7 @@ func (e *editor) readLine(prompt drawnPrompt) (string, error) {
 	// for the read that set it and the next one starts with none — the widget
 	// asked about it at the following prompt found it empty (#4217).
 	e.postdisplay = ""
+	e.predisplay = ""
 	e.row = 0
 	// Fresh for every line: an edit made to a recalled entry lasts as long as
 	// the line does and no longer, which is what both shells do — see drafts.
@@ -1984,7 +1989,7 @@ func (e *editor) redraw(prompt drawnPrompt) {
 		// columns, and one `日` to the right of it is two of them. Over the
 		// *displayed* text, so a postdisplay is come back over too — measured,
 		// zsh moves left by the rest of the line plus the whole of it (#4217).
-		if back := cells(shown[e.pos:]); back > 0 {
+		if back := cells(shown[e.displayPos():]); back > 0 {
 			b.WriteString("\x1b[")
 			b.WriteString(itoa(back))
 			b.WriteString("D")
@@ -2044,7 +2049,7 @@ func (e *editor) redraw(prompt drawnPrompt) {
 	}
 	drewRight := m.writeRightPrompt(&b, prompt, lineCells, cols, rowNow)
 
-	curRow, curCol, endRow, endCol := place(prompt.cells, shown, e.pos, cols)
+	curRow, curCol, endRow, endCol := place(prompt.cells, shown, e.displayPos(), cols)
 	if endCol == cols {
 		// The line ends exactly at the right-hand edge. A terminal does not
 		// move to the next row until there is something to put there, so the
@@ -2109,7 +2114,7 @@ func (e *editor) toLastRow(prompt drawnPrompt) {
 	if cols <= 0 {
 		return
 	}
-	_, _, endRow, endCol := place(prompt.cells, e.displayed(), e.pos, cols)
+	_, _, endRow, endCol := place(prompt.cells, e.displayed(), e.displayPos(), cols)
 	if endCol == cols {
 		// Sitting at the right-hand edge with the wrap still pending is being
 		// on the row already, not below it.
@@ -2147,7 +2152,7 @@ func (e *editor) endLine(prompt drawnPrompt, before string) {
 	// cheaper half of that trade.
 	if cols := e.cols(); cols > 0 {
 		shown := e.displayed()
-		_, curCol, _, _ := place(prompt.cells, shown, e.pos, cols)
+		_, curCol, _, _ := place(prompt.cells, shown, e.displayPos(), cols)
 		var erase strings.Builder
 		e.moves().rightPromptErase(&erase, prompt, cells(shown), cols, curCol)
 		if erase.Len() > 0 {
@@ -2220,21 +2225,32 @@ func (e *editor) recordDrawn(prompt drawnPrompt, styled string, cols int) {
 	}
 }
 
-// displayed is the text on the row: the line, and then whatever a widget asked
-// to be shown after it.
+// displayed is the text on the row: whatever a widget asked to be shown before
+// the line, the line, and then whatever it asked to be shown after it.
 //
 // Every geometry question the editor asks is about this and not about the
 // line — where the drawn text ends, how many rows it takes, how far the cursor
-// has to come back — because a postdisplay occupies cells like anything else.
-// The *cursor* is still an offset into the line, which is what makes the two
-// safe to mix: the line is a prefix of this, so a position inside the line
-// means the same thing in both.
+// has to come back — because a predisplay or a postdisplay occupies cells like
+// anything else. The *cursor* is an offset into the line, so it is asked of
+// this through displayPos, which moves it past the predisplay: a position in
+// e.pos's units handed to place with this text is wrong by the predisplay's
+// length, and was right only while there was none (#6414).
 func (e *editor) displayed() []rune {
-	if e.postdisplay == "" {
+	if e.postdisplay == "" && e.predisplay == "" {
 		return e.line
 	}
-	out := make([]rune, 0, len(e.line)+len(e.postdisplay))
-	return append(append(out, e.line...), []rune(e.postdisplay)...)
+	pre := []rune(e.predisplay)
+	out := make([]rune, 0, len(pre)+len(e.line)+len(e.postdisplay))
+	return append(append(append(out, pre...), e.line...), []rune(e.postdisplay)...)
+}
+
+// displayPos is the cursor as a position in displayed: e.pos, moved past what
+// is drawn before the line. See displayed.
+func (e *editor) displayPos() int {
+	if e.predisplay == "" {
+		return e.pos
+	}
+	return utf8.RuneCountInString(e.predisplay) + e.pos
 }
 
 // displayWidth is how many columns a string takes on the screen.
@@ -2384,7 +2400,7 @@ func (e *editor) list(matches []Candidate, prompt drawnPrompt) int {
 	// the prompt and what the line wraps onto. See listPage.
 	lineRows := 1
 	if cols := e.cols(); cols > 0 {
-		_, _, endRow, endCol := place(e.live(prompt).cells, e.displayed(), e.pos, cols)
+		_, _, endRow, endCol := place(e.live(prompt).cells, e.displayed(), e.displayPos(), cols)
 		if endCol == cols {
 			endRow++
 		}
@@ -2500,7 +2516,7 @@ func (e *editor) returnToTheLine(listed int, prompt drawnPrompt) bool {
 		return false
 	}
 	cols := e.cols()
-	_, _, endRow, endCol := place(e.live(prompt).cells, e.displayed(), e.pos, cols)
+	_, _, endRow, endCol := place(e.live(prompt).cells, e.displayed(), e.displayPos(), cols)
 	if endCol == cols {
 		endRow++
 	}

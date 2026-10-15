@@ -152,7 +152,7 @@ func (e *editor) repaint(prompt drawnPrompt, cols int) bool {
 	}
 
 	resRow, resCol := placeAt(prompt.cells, shown, resume, cols)
-	curRow, curCol, endRow, endCol := place(prompt.cells, shown, e.pos, cols)
+	curRow, curCol, endRow, endCol := place(prompt.cells, shown, e.displayPos(), cols)
 	resRow, resCol = pastEdge(resRow, resCol, cols)
 	curRow, curCol = pastEdge(curRow, curCol, cols)
 

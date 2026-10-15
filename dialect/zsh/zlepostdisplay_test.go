@@ -105,3 +105,39 @@ func runZleScript(t *testing.T, r *interp.Runner, src string) {
 		t.Fatalf("run %q: %v", src, rerr)
 	}
 }
+
+// `PREDISPLAY` is POSTDISPLAY's other half, the text drawn before the line,
+// and a widget reads, writes and unsets it the same way. Measured 2026-10-15
+// against zsh 5.9.2 in tmux: `typeset -p` in a widget writes `typeset
+// PREDISPLAY=pre:`, `${(t)…}` is `scalar-local-special`, `unset` leaves `${+…}`
+// 0 and nothing drawn, and outside a widget the name is unset (#6414).
+func TestAWidgetReadsWritesAndUnsetsTheTextDrawnBeforeTheLine(t *testing.T) {
+	r, out := zleRunner(t, `
+		pre() { PREDISPLAY="pre:"; }
+		seen() { typeset -p PREDISPLAY; print -r -- "[$PREDISPLAY][${(t)PREDISPLAY}]"; unset PREDISPLAY; print -r -- "[${+PREDISPLAY}]"; }
+		zle -N pre
+		zle -N seen
+	`)
+	line, ok, _ := runWidget(t, r, out, "pre", repl.Line{Buffer: "e", Cursor: 1})
+	if !ok {
+		t.Fatal("the widget did not run")
+	}
+	if line.Predisplay != "pre:" || line.Buffer != "e" || line.Cursor != 1 {
+		t.Fatalf("the editor was handed %+v, want predisplay %q over the line %q at 1", line, "pre:", "e")
+	}
+	line, ok, said := runWidget(t, r, out, "seen", repl.Line{Buffer: "e", Cursor: 1, Predisplay: "pre:"})
+	if !ok {
+		t.Fatal("the widget did not run")
+	}
+	if want := "typeset PREDISPLAY=pre:\n[pre:][scalar-local-special]\n[0]\n"; said != want {
+		t.Errorf("the widget saw %q, want %q", said, want)
+	}
+	if line.Predisplay != "" {
+		t.Errorf("after unset the editor was handed %q, want it cleared", line.Predisplay)
+	}
+	out.Reset()
+	runZleScript(t, r, `print -r -- "[${+PREDISPLAY}][$PREDISPLAY]"`)
+	if want := "[0][]\n"; !strings.Contains(out.String(), want) {
+		t.Errorf("a script after the widget saw %q, want %q — the parameter is the call's", out.String(), want)
+	}
+}

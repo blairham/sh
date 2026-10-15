@@ -980,10 +980,10 @@ the parameter and reading the bytes that reached the terminal.
 
     [P] start end spec [memo=token]
 
-- **`P`** is optional and means the offsets count `PREDISPLAY` too. There is
-  no `PREDISPLAY` here, so an element carrying it is dropped rather than
-  applied at the wrong place — a highlighter that asked about text this shell
-  does not have is not answered by pretending the flag was absent.
+- **`P`** is optional and means the offsets count `PREDISPLAY` too: an
+  element without it counts from the buffer's start, past any predisplay, and
+  one with it from the predisplay's start. With no predisplay the two are the
+  same place, so `P0 1 fg=red` colors the line's first character (#6414).
 - **`start` and `end`** are "in the same units as `CURSOR`", which is
   **characters, not bytes**. Measured: `BUFFER="héllo wörld"` — eleven
   characters, thirteen bytes — reads `${#BUFFER}` of 11.
@@ -1291,14 +1291,29 @@ So what the offsets are lined up with is `$BUFFER`, never what is drawn, and
 the highlighter is told where the line ends in the displayed text
 (`repl.BufferHighlighter`) for exactly this (#6412).
 
-**`PREDISPLAY` is still absent**, and it is the other half of the same pair in
-that shell. Nothing on this machine writes it: an element of
-`region_highlight` carrying the `P` flag is dropped rather than drawn at the
-wrong place, which is the rule above and is unchanged (#4217). Measured the
-same day with `PREDISPLAY="pre:"` added to the widget above, zsh draws `pre:`
-before the line and colors the line exactly as in the first row — an element
-without `P` counts from the buffer's start — and `P0 4 fg=blue` colors the
-`pre:`. Here the line is colored the same, and `pre:` is not drawn.
+**`PREDISPLAY` is the other half of the same pair**: text drawn *before* the
+line without being part of it (#6414). Measured 2026-10-15 in tmux against zsh
+5.9.2, a prompt `UPPER` over `> `, and a `self-insert` replacement that runs
+`zle .self-insert` and sets `PREDISPLAY="pre:"`:
+
+| asked | drawn |
+| --- | --- |
+| `e` typed | `> pre:e`, cursor in column 7, after the `e` |
+| `x` after it, then ^A | `> pre:ex`, cursor in column 6: the line's start, past `pre:` |
+| Return | the command run is `e`; the next prompt starts without one |
+| a predisplay wider than the row | it wraps, and the line follows it onto the next row |
+| `"0 1 fg=red" "1 10 fg=8"` with `POSTDISPLAY="cho hello"` | `pre:` plain, a red `e`, the suggestion gray |
+| `"P0 4 fg=blue" "P4 5 fg=red" "1 10 fg=8"` | a blue `pre:`, a red `e`, the suggestion gray |
+
+In a widget `${(t)PREDISPLAY}` is `scalar-local-special`, `typeset -p` writes
+`typeset PREDISPLAY=pre:`, and `unset PREDISPLAY` leaves nothing drawn; outside
+a widget the name is unset. All of that is `POSTDISPLAY`'s shape, and it is
+carried the same way: `repl.Line.Predisplay` beside `Line.Postdisplay`, at every
+site the other is. The editor's cursor stays an offset into the line, and every
+question about the screen asks it as a position in the displayed text through
+`displayPos`, which moves it past the predisplay. The highlighter is told where
+the line starts as well as where it ends (`repl.BufferHighlighter`), so the
+offsets are moved past the predisplay and only the line is followed.
 
 ## Work put aside until a time
 

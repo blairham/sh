@@ -101,7 +101,7 @@ func (e *editor) repaintAsTheScreenIs(m *terminalMotion, prompt drawnPrompt, col
 	for p < len(old) && p < len(cur) && old[p] == cur[p] {
 		p++
 	}
-	to := pc + e.pos
+	to := pc + e.displayPos()
 
 	var b strings.Builder
 	col := d.col

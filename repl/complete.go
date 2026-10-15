@@ -1030,7 +1030,7 @@ func (e *editor) backToTheLine(prompt drawnPrompt) {
 	}
 	// The row endLine left the line from, counted the way toLastRow counts
 	// it, which is the row the question was written under.
-	_, _, endRow, endCol := place(prompt.cells, e.displayed(), e.pos, cols)
+	_, _, endRow, endCol := place(prompt.cells, e.displayed(), e.displayPos(), cols)
 	if endCol == cols {
 		endRow++
 	}

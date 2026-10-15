@@ -103,6 +103,27 @@ type Line struct {
 	// editor draws whatever came back (#4217).
 	Postdisplay string
 
+	// Predisplay is text drawn **before** the line without being part of it:
+	// Postdisplay's other half, and carried the same way, round trip and all.
+	// The shell that has it calls it `PREDISPLAY`.
+	//
+	// Measured 2026-10-15 in tmux against zsh 5.9.2, a two-row prompt ending
+	// `> `, and a `self-insert` replacement that runs `zle .self-insert` and
+	// sets PREDISPLAY="pre:":
+	//
+	//	typing `e` draws `> pre:e` with the cursor in column 7 — after the
+	//	`e`, so the cursor is moved by it as by anything else on the row;
+	//	`x` after it draws `> pre:ex`, and ^A puts the cursor in column 6,
+	//	after `pre:` and not on it: it is never part of the line;
+	//	`$BUFFER` is the line alone, so the accepted command is `e`;
+	//	a widget at the next prompt reads it empty, so like a postdisplay it
+	//	lives for the read that set it;
+	//	one wider than the row wraps, and the line follows it.
+	//
+	// region_highlight's offsets start at the line, and an element flagged `P`
+	// counts from the start of this instead (#6414).
+	Predisplay string
+
 	// Keys are the bytes of the key sequence the action is about: the
 	// keystroke that ran it, on the way out, and on the way back in whatever
 	// the action says it read instead. zsh's `$KEYS`. A key an action read
@@ -182,6 +203,7 @@ func (e *editor) runShellWidget(name string, prompt drawnPrompt) (ran, accept bo
 	// survives the keystrokes after the one that set it and is redrawn with
 	// the line. See Line.Postdisplay.
 	e.postdisplay = out.Postdisplay
+	e.predisplay = out.Predisplay
 	// A widget that returned non-zero rings, before the line is drawn
 	// again — unless it broke. A broken widget is one giveUp rings for, or
 	// one that asked for a send-break, which rings nothing. See

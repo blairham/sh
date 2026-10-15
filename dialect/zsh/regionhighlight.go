@@ -7,6 +7,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/blairham/sh/interp"
 	"github.com/blairham/sh/repl"
@@ -208,22 +209,30 @@ func lineEdit(was, now []rune, cursor int) (at, removed, inserted int) {
 // because the offsets have to be converted against it: zsh counts characters
 // and repl.Highlight counts bytes, and nothing else here knows the text.
 //
-// An element this shell cannot honor is **dropped**, never approximated. A
-// `P` flag counts a PREDISPLAY that does not exist here, and an offset pair
-// that does not parse is not a region at all — drawing either one somewhere
-// plausible would put color under text the highlighter did not name, which is
-// worse than leaving it plain and is the kind of silent wrong answer the
-// editor has no way to report.
+// An element this shell cannot honor is **dropped**, never approximated. An
+// offset pair that does not parse, or that runs past what is displayed, is not
+// a region at all — drawing it somewhere plausible would put color under text
+// the highlighter did not name, which is worse than leaving it plain and is
+// the kind of silent wrong answer the editor has no way to report.
 //
 // The answer is points rather than runs — repl.Highlight.Point — because
 // where one region ends inside another, what goes out depends on both. See
 // regionTransition for the rule.
 //
-// line is what is displayed, the buffer and then any `POSTDISPLAY`, and buffer
-// is the buffer's length in bytes within it. The offsets count the two as one
-// text — that is how a highlighter colors a suggestion — but only the buffer
-// is followed: a suggestion is not an edit (#6412). See regionsFollow.
-func RegionHighlights(r *interp.Runner, line string, buffer int) []repl.Highlight {
+// line is what is displayed — any `PREDISPLAY`, the buffer, and then any
+// `POSTDISPLAY` — and line[start:end] is the buffer, in bytes. The offsets
+// run on past the buffer into the postdisplay as one text — that is how a
+// highlighter colors a suggestion — but only the buffer is followed: a
+// suggestion is not an edit (#6412). See regionsFollow.
+//
+// They count from the buffer's start, past the predisplay, and an element
+// flagged `P` counts from the predisplay's start instead. Measured 2026-10-15
+// in tmux against zsh 5.9.2 with PREDISPLAY="pre:", POSTDISPLAY="cho hello"
+// and `e` typed: `0 1 fg=red` and `1 10 fg=8` draw `pre:` plain, a red `e`
+// and a gray suggestion; `P0 4 fg=blue` and `P4 5 fg=red` draw a blue
+// `pre:` and a red `e`. With no predisplay the two counts are the same, and
+// `P0 1 fg=red` colors the first character of the line (#6414).
+func RegionHighlights(r *interp.Runner, line string, start, end int) []repl.Highlight {
 	elems, _ := r.GetArray(zleRegion)
 	if len(elems) == 0 {
 		return nil
@@ -240,22 +249,24 @@ func RegionHighlights(r *interp.Runner, line string, buffer int) []repl.Highligh
 	// line and moved every offset at or past it by the suggestion's length:
 	// typing `e` with `cho hello` suggested put `0 1 fg=red` over `echo hello`
 	// and `1 10 fg=8` off the end, where zsh 5.9.2 draws a red `e` and a gray
-	// suggestion (#6412). zsh also has a `PREDISPLAY`, drawn before the
-	// buffer, and measured on 5.9.2 an element without `P` still counts from
-	// the buffer's start with one set; this shell draws none, so there is no
-	// prefix to leave out here.
+	// suggestion (#6412). Nor what is drawn before it, for the same reason:
+	// a `PREDISPLAY` is not an edit either (#6414).
+	end = min(max(end, 0), len(line))
+	start = min(max(start, 0), end)
 	if !editorRunning(r) {
-		buffer = min(max(buffer, 0), len(line))
-		regionsFollow(r, line[:buffer], -1)
+		regionsFollow(r, line[start:end], -1)
 		elems, _ = r.GetArray(zleRegion)
 	}
 	// The rune offsets of every byte boundary, built once: an element is
 	// three small integer lookups after this, where converting per element
 	// would walk the line again for each.
 	starts := runeStarts(line)
+	// The predisplay's length in characters, which an element without `P`
+	// is moved over.
+	pre := utf8.RuneCountInString(line[:start])
 	var layers []regionLayer
 	for _, elem := range elems {
-		if layer, ok := parseRegionElement(elem, len(starts)-1); ok {
+		if layer, ok := parseRegionElement(elem, len(starts)-1, pre); ok {
 			layers = append(layers, layer)
 		}
 	}
@@ -312,20 +323,25 @@ type regionAttrs struct {
 func (a regionAttrs) colored() bool { return a.fg != "" || a.bg != "" }
 
 // parseRegionElement turns one element into a layer, or reports that it is
-// not one this shell can draw. chars is the length of the line in characters.
+// not one this shell can draw. chars is the length of what is displayed in
+// characters, and pre the length of the predisplay at its start.
 //
 // It reads the element the way it is read back — see regionelement.go — so
 // what is drawn is what a script finds in the array.
-func parseRegionElement(elem string, chars int) (regionLayer, bool) {
+func parseRegionElement(elem string, chars, pre int) (regionLayer, bool) {
 	e := parseRegionText(elem, 0)
-	// A `P` element counts a PREDISPLAY, which this shell does not have, so
-	// it must not be drawn somewhere plausible instead.
-	if e.predisplay {
+	// Out of the line's range is dropped rather than clamped, for the reason
+	// the doc comment gives: a clamp invents a region. Asked of the offsets
+	// as written, before the move below, which only ever adds.
+	if e.start < 0 || e.end < e.start {
 		return regionLayer{}, false
 	}
-	// Out of the line's range is dropped rather than clamped, for the reason
-	// the doc comment gives: a clamp invents a region.
-	if e.start < 0 || e.end < e.start || e.end > chars {
+	// An element without `P` counts from the buffer's start, which is past
+	// the predisplay; one with it counts from the predisplay's own (#6414).
+	if !e.predisplay {
+		e.start, e.end = e.start+pre, e.end+pre
+	}
+	if e.end > chars {
 		return regionLayer{}, false
 	}
 	attrs := e.spec.attrs()

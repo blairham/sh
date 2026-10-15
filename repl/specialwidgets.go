@@ -48,6 +48,7 @@ func (e *editor) specialWidget(name string, prompt drawnPrompt) bool {
 	e.line = []rune(out.Buffer)
 	e.pos = min(max(out.Cursor, 0), len(e.line))
 	e.postdisplay = out.Postdisplay
+	e.predisplay = out.Predisplay
 	return true
 }
 

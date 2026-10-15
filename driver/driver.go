@@ -177,10 +177,10 @@ type Shell struct {
 	// both gets Highlighter, since that one is the binary's own answer and
 	// this one is the dialect's default.
 	//
-	// The string is what is displayed — the line and then any postdisplay —
-	// and the int is the line's length in bytes within it, which is
-	// repl.BufferHighlighter's buffer.
-	HighlightLine func(*interp.Runner, string, int) []repl.Highlight
+	// The string is what is displayed — any predisplay, the line and then
+	// any postdisplay — and the ints are where the line starts and ends in
+	// it, in bytes, which are repl.BufferHighlighter's start and end.
+	HighlightLine func(*interp.Runner, string, int, int) []repl.Highlight
 
 	// StartLine is what this dialect clears when a new line begins — the
 	// other half of HighlightLine, since `region_highlight` is kept for the

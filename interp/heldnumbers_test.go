@@ -302,39 +302,39 @@ func runOwnDescriptorsAllowingErrors(t *testing.T, own OwnDescriptorNumbers, src
 // held for the body, and one more once something needs the body's output as
 // a descriptor. Exact `{v}` numbers from a base of 10.
 func TestACommandSubstitutionBodyHoldsANumber(t *testing.T) {
-	const ksh = LastPipelineElementsInputTakesANumber
+	const lastInput = LastPipelineElementsInputTakesANumber
 	for _, c := range []struct {
 		own  OwnDescriptorNumbers
 		src  string
 		want string
 	}{
-		{ksh, `exec {v}</dev/null; echo $v`, "10"},
-		{ksh, `echo $(exec {v}</dev/null; echo $v)`, "11"},
-		{ksh, "echo `exec {v}</dev/null; echo $v`", "11"},
-		{ksh, `echo $(echo $(exec {v}</dev/null; echo $v))`, "11"},
-		{ksh, `echo $( (exec {v}</dev/null; echo $v) )`, "11"},
-		{ksh, `exec {a}</dev/null; echo $a $(exec {v}</dev/null; echo $v)`, "10 12"},
-		{ksh, `echo x | { echo $(exec {v}</dev/null; echo $v); }`, "12"},
+		{lastInput, `exec {v}</dev/null; echo $v`, "10"},
+		{lastInput, `echo $(exec {v}</dev/null; echo $v)`, "11"},
+		{lastInput, "echo `exec {v}</dev/null; echo $v`", "11"},
+		{lastInput, `echo $(echo $(exec {v}</dev/null; echo $v))`, "11"},
+		{lastInput, `echo $( (exec {v}</dev/null; echo $v) )`, "11"},
+		{lastInput, `exec {a}</dev/null; echo $a $(exec {v}</dev/null; echo $v)`, "10 12"},
+		{lastInput, `echo x | { echo $(exec {v}</dev/null; echo $v); }`, "12"},
 		// The body's output, needed as a descriptor.
-		{ksh, `echo $(/bin/sh -c :; exec {v}</dev/null; echo $v)`, "12"},
-		{ksh, `echo $(/bin/sh -c :; /bin/sh -c :; exec {v}</dev/null; echo $v)`, "12"},
-		{ksh, `echo $(exec {v}</dev/null; /bin/sh -c :; exec {w}</dev/null; echo $v $w)`, "11 13"},
-		{ksh, `echo $( (/bin/sh -c :); exec {v}</dev/null; echo $v)`, "12"},
-		{ksh, `echo $(echo x | read y; exec {v}</dev/null; echo $v)`, "12"},
-		{ksh, `echo $(true >/dev/null; exec {v}</dev/null; echo $v)`, "12"},
-		{ksh, `echo $(echo hi 2>&1; exec {v}</dev/null; echo $v)`, "hi 12"},
-		{ksh, `echo $(true 2>/dev/null; exec {v}</dev/null; echo $v)`, "11"},
-		{ksh, `echo $(true </dev/null; exec {v}</dev/null; echo $v)`, "11"},
+		{lastInput, `echo $(/bin/sh -c :; exec {v}</dev/null; echo $v)`, "12"},
+		{lastInput, `echo $(/bin/sh -c :; /bin/sh -c :; exec {v}</dev/null; echo $v)`, "12"},
+		{lastInput, `echo $(exec {v}</dev/null; /bin/sh -c :; exec {w}</dev/null; echo $v $w)`, "11 13"},
+		{lastInput, `echo $( (/bin/sh -c :); exec {v}</dev/null; echo $v)`, "12"},
+		{lastInput, `echo $(echo x | read y; exec {v}</dev/null; echo $v)`, "12"},
+		{lastInput, `echo $(true >/dev/null; exec {v}</dev/null; echo $v)`, "12"},
+		{lastInput, `echo $(echo hi 2>&1; exec {v}</dev/null; echo $v)`, "hi 12"},
+		{lastInput, `echo $(true 2>/dev/null; exec {v}</dev/null; echo $v)`, "11"},
+		{lastInput, `echo $(true </dev/null; exec {v}</dev/null; echo $v)`, "11"},
 		// Seen by a body nested in it; a nested body's own is gone with it.
-		{ksh, `echo $(/bin/sh -c :; echo $(exec {v}</dev/null; echo $v))`, "12"},
-		{ksh, `echo $(echo $(/bin/sh -c :); exec {v}</dev/null; echo $v)`, "11"},
+		{lastInput, `echo $(/bin/sh -c :; echo $(exec {v}</dev/null; echo $v))`, "12"},
+		{lastInput, `echo $(echo $(/bin/sh -c :); exec {v}</dev/null; echo $v)`, "11"},
 		// A process substitution's body holds none of it, but one made
 		// inside a command substitution's body holds that body's numbers,
 		// and making it is a fork, which needs the output.
-		{ksh, `cat <(exec {v}</dev/null; echo $v)`, "10"},
-		{ksh, `echo $(cat <(exec {v}</dev/null; echo $v))`, "12"},
-		{ksh, `echo $(: <(:); exec {w}</dev/null; echo $w)`, "12"},
-		{ksh, `echo $(cat <(echo $(/bin/sh -c :; exec {v}</dev/null; echo $v)))`, "13"},
+		{lastInput, `cat <(exec {v}</dev/null; echo $v)`, "10"},
+		{lastInput, `echo $(cat <(exec {v}</dev/null; echo $v))`, "12"},
+		{lastInput, `echo $(: <(:); exec {w}</dev/null; echo $w)`, "12"},
+		{lastInput, `echo $(cat <(echo $(/bin/sh -c :; exec {v}</dev/null; echo $v)))`, "13"},
 		{OwnDescriptorsTakeNoNumber, `echo $(/bin/sh -c :; exec {v}</dev/null; echo $v)`, "10"},
 	} {
 		t.Run(c.own.String()+": "+c.src, func(t *testing.T) {

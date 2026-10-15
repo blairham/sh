@@ -2137,6 +2137,12 @@ type Runner struct {
 	// A flag rather than a count because the question is which text this is,
 	// not how deep it is, and a clone carries it over the boundary.
 	inSubstBody bool
+	// shellInputClosed says this shell runs in the fork a process
+	// substitution's body is, which has closed the descriptor the shell reads
+	// its program from. Only the zsh allocation base reads it — see
+	// Runner.firstAllocatedDescriptor — and a clone carries it, since
+	// whatever the body forks has lost it too.
+	shellInputClosed bool
 	// emptyNameIsASelfReference says the declaration being read carries the
 	// reference letter under its on sign, where an empty name is refused as a
 	// reference to itself rather than as a bad name. See

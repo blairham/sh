@@ -350,6 +350,10 @@ func (r *Runner) substRunner(span syntax.Span) (*Runner, func()) {
 	// into a substitution's body closes them all, the pipes' reading ends
 	// with the saved copies. See heldnumbers.go.
 	sub.heldNumbers = nil
+	// And the shell's own input, which is what the zsh base steps over: the
+	// fork into the body has closed it, so allocation there starts at 10.
+	// See Runner.firstAllocatedDescriptor (#6504).
+	sub.shellInputClosed = true
 	sub.inheritJobs(jobBoundarySubstitution)
 	// A substitution's body is parentheses too as far as job numbering is
 	// concerned — measured, `$( … )`, a backquoted substitution and

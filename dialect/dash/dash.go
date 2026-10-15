@@ -162,6 +162,9 @@ func Semantics() interp.Semantics {
 	// unanswered NoclobberProtectsAnFdVariable: the same reason as the axis
 	// below it — there is no `{name}` redirection here for `set -C` to
 	// protect the name of.
+	// unanswered FdVariableOnASubshellIsTheSubshells: there is no `{name}`
+	// redirection here for a subshell to carry, the same reason as the two
+	// axes beside it.
 	// unanswered ReadonlyFdVariableRefusesAClose: there is no `{name}`
 	// redirection here at all, so there is no close through a name for a
 	// frozen name to refuse. Measured 2026-09-29, a script file: `exec

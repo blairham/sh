@@ -24295,6 +24295,48 @@ type Semantics struct {
 	// so the number the variable holds is already dead.
 	FdVariableOutlivesTheCommand Answer
 
+	// FdVariableOnASubshellIsTheSubshells says whether a `{name}`
+	// redirection on a `( … )` is made inside the subshell, so that the shell
+	// around the parentheses keeps neither the name nor the descriptor.
+	//
+	// Measured 2026-10-15 with `-c` against bash 5.3.20 and ksh93u+
+	// 2012-08-01 (/bin/ksh), then `echo "[$v]"` and `exec {x}</dev/null`:
+	//
+	//	                                        bash    ksh93
+	//	( : ) {v}</dev/null                     []      [10]
+	//	v=keep; ( : ) {v}</dev/null             [keep]  [10]
+	//	( exit 3 ) {v}</dev/null                st=3 [] st=3 [10]
+	//	( echo "in[$v]" ) {v}</dev/null         in[10]  in[10]
+	//	… then exec {x}</dev/null               x=10    x=10
+	//	readonly v=1; ( echo in ) {v}</dev/null refused, st=1, `in` not run
+	//
+	// So the parentheses see the number in both; only what the shell keeps
+	// differs. Yes is bash: the allocation is the subshell's, the name goes
+	// back to what it was — value and attributes — and the descriptor goes
+	// with it, which is the `x=10` row (ours kept 10 open and picked 11).
+	// No is ksh93, which publishes the number in the shell; whether that
+	// descriptor stays open is FdVariableOutlivesTheCommand's question, and
+	// ksh93 answers it No there too.
+	//
+	// It is not RedirectTargetOnASubshellExpandsInTheSubshell, though every
+	// dialect that can be asked both answers them alike: that one is where a
+	// redirection's *word* is expanded, this one is whose variable the number
+	// is stored in, and `( : ) {v}>"${u:=f}"` keeps both or neither in each
+	// column only because each column happens to do both in one place.
+	//
+	// zsh refuses a `{name}` behind any compound at parse time
+	// (syntax.Dialect.FdVariableRefusedAfterACompound), so this is never
+	// reached there; dash and BusyBox ash have no `{name}` redirection.
+	//
+	// Asked only where the parentheses carry a `{name}` redirection: a
+	// subshell with a numbered one, or none, is every other subshell.
+	//
+	// unpinned bash: no corpus case runs a `{name}` on parentheses;
+	// TestAnFdVariableOnASubshellIsTheSubshells pins it.
+	//
+	// unpinned ksh: the same; TestAnFdVariableOnASubshellIsTheShells pins it.
+	FdVariableOnASubshellIsTheSubshells Answer
+
 	// DescriptorNumberCeiling is the highest descriptor number a duplication
 	// may name, past which the refusal is about the *number* rather than
 	// about what is open at it.

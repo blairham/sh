@@ -37,24 +37,24 @@ import (
 // anything.
 func TestAMadeFirstBodyDoesNotSeeItsOwnCommandsRedirections(t *testing.T) {
 	const look = `>({ true >&3; } 2>/dev/null && echo seen || echo unseen)`
-	const zsh, bash = SavedStreamsAndPipeReadEndsTakeNumbers, OwnDescriptorsTakeNoNumber
+	const first, inOrder = SavedStreamsAndPipeReadEndsTakeNumbers, OwnDescriptorsTakeNoNumber
 	for _, c := range []struct {
 		own       OwnDescriptorNumbers
 		src, want string
 	}{
-		{zsh, `: 3>/dev/null 4> ` + look, "unseen\n"},
-		{bash, `: 3>/dev/null 4> ` + look, "seen\n"},
-		{zsh, `: 3> >(read -r x) 4> ` + look, "unseen\n"},
-		{bash, `: 3> >(read -r x) 4> ` + look, "seen\n"},
-		{zsh, `exec 3>/dev/null; : 4> ` + look, "seen\n"},
-		{bash, `exec 3>/dev/null; : 4> ` + look, "seen\n"},
-		{zsh, `{ : 4> ` + look + `; } 3>/dev/null`, "seen\n"},
-		{bash, `{ : 4> ` + look + `; } 3>/dev/null`, "seen\n"},
+		{first, `: 3>/dev/null 4> ` + look, "unseen\n"},
+		{inOrder, `: 3>/dev/null 4> ` + look, "seen\n"},
+		{first, `: 3> >(read -r x) 4> ` + look, "unseen\n"},
+		{inOrder, `: 3> >(read -r x) 4> ` + look, "seen\n"},
+		{first, `exec 3>/dev/null; : 4> ` + look, "seen\n"},
+		{inOrder, `exec 3>/dev/null; : 4> ` + look, "seen\n"},
+		{first, `{ : 4> ` + look + `; } 3>/dev/null`, "seen\n"},
+		{inOrder, `{ : 4> ` + look + `; } 3>/dev/null`, "seen\n"},
 		// Standard output: the second body writes into the shell's output
 		// in zsh, and into the first body, which reads it and drops it, in
 		// bash.
-		{zsh, `: > >(read -r x) 4> >(echo wrote)`, "wrote\n"},
-		{bash, `: > >(read -r x) 4> >(echo wrote)`, ""},
+		{first, `: > >(read -r x) 4> >(echo wrote)`, "wrote\n"},
+		{inOrder, `: > >(read -r x) 4> >(echo wrote)`, ""},
 	} {
 		t.Run(c.own.String()+": "+c.src, func(t *testing.T) {
 			out, errs := runOwnDescriptorsAllowingErrors(t, c.own, c.src)

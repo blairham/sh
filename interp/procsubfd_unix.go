@@ -214,7 +214,7 @@ func newProcSubPipe(childWrites bool, dir string, want []int, view substFdView, 
 		// view, so it lands exactly where the end itself would have; a number
 		// it borrowed rather than took is marked taken for the end's park.
 		if placeholder, at, _, perr := parkDescriptor(child, dir, want, view); perr == nil {
-			defer placeholder.Close()
+			defer func() { _ = placeholder.Close() }()
 			if at != int(placeholder.Fd()) {
 				view.taken = append(slices.Clip(view.taken), at)
 			}

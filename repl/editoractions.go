@@ -129,6 +129,11 @@ type Actions interface {
 	// the start of a longer one, is read on.
 	InputPending() bool
 
+	// PendingBytes is how many bytes of typed input have arrived and not
+	// been read by any key yet — zsh's `$PENDING`, which a widget reads to
+	// skip work that the next key would only redo.
+	PendingBytes() int
+
 	// ChangeNumber closes the change the line is in and reports its number:
 	// a later change is a new one, and UndoTo with this number puts the line
 	// back as it stands now. zsh's `UNDO_CHANGE_NO`, and its `split-undo`,
@@ -393,6 +398,8 @@ func (a editorActions) ReadKeyByte() (byte, bool) {
 }
 
 func (a editorActions) InputPending() bool { return a.e.inputPending() }
+
+func (a editorActions) PendingBytes() int { return a.e.pendingBytes() }
 
 func (a editorActions) ChangeNumber(in Line) int {
 	a.e.take(in)

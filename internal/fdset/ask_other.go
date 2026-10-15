@@ -28,3 +28,6 @@ func Wait(int, []int) ([]int, bool, error) { return nil, false, ErrUnsupported }
 func Ready([]int, []int, []int, *time.Duration) (r, w, e []int, err error) {
 	return nil, nil, nil, ErrUnsupported
 }
+
+// Pending cannot be asked here, and nothing is counted as waiting.
+func Pending(int) int { return 0 }

@@ -1446,6 +1446,21 @@ func (e *editor) inputPending() bool {
 	return e.oneByte && e.descriptorHasInput()
 }
 
+// pendingBytes is how many bytes the terminal has delivered that no key has
+// read yet: what this editor already holds and what the descriptor would
+// still hand over. It is zsh's `$PENDING`, which counts typed input and not
+// what an action pushed back (that is `$KEYS_QUEUED_COUNT`), so pushed is not
+// in it. Measured 2026-10-15 on zsh 5.9.2 through a pseudo-terminal, `abcdef`
+// typed in one write into a self-insert wrapper: `$PENDING` reads 5, 4, 3, 2,
+// 1, 0 across the six keys, and a key typed on its own reads 0 (#6363).
+func (e *editor) pendingBytes() int {
+	n := e.heldLen - e.heldPos
+	if e.inFd != nil {
+		n += fdset.Pending(e.inFd())
+	}
+	return n
+}
+
 // descriptorHasInput asks the descriptor underneath whether a byte can be read
 // without waiting, which is what held answers when the editor reads ahead.
 // Nothing is read: a byte taken here could be the first one after the line,

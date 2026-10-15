@@ -53,7 +53,7 @@ type Session struct {
 // and it is 0 for a session that opened, which is the ordinary case. A nil
 // Session always comes with a non-zero status.
 func NewSession(sh Shell) (*Session, int) {
-	sh = sh.withDefaults(nil)
+	sh.setDefaults(nil)
 	// The command-string route, because that is what each input will be. The
 	// runner reads it for the status one dialect gives a failed expansion,
 	// the fatality another gives a readonly reassignment, and the route
@@ -92,7 +92,7 @@ func (s *Session) Run(ctx context.Context, src string) (status int) {
 }
 
 func (s *Session) run(ctx context.Context, src string) int {
-	in := commandSource(s.sh, src, nil)
+	in := commandSource(&s.sh, src, nil)
 	pr := wholeProgram(src, s.r.ParsingDialect(s.dialect().On(syntax.RouteFromCommandString)))
 	// Aliases are expanded when a line is parsed and the table is the
 	// runner's, so joining the two is the front end's job here exactly as it

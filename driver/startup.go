@@ -74,7 +74,7 @@ type startupFlags struct {
 // A file that is not there is not a failure. Every shell starts for the first
 // time with none of these, and a complaint about it would be the first thing
 // anyone saw.
-func (sh Shell) startup(r *interp.Runner, in source) int {
+func (sh *Shell) startup(r *interp.Runner, in source) int {
 	if sh.BeforeStartupFiles != nil {
 		sh.BeforeStartupFiles(r)
 	}
@@ -115,7 +115,7 @@ func (sh Shell) startup(r *interp.Runner, in source) int {
 //
 // Empty in three of the four dialects, which is what makes this do nothing at
 // all for them; see Semantics.UnconditionalStartupFile.
-func (sh Shell) unconditionalStartupFile(r *interp.Runner, in source) int {
+func (sh *Shell) unconditionalStartupFile(r *interp.Runner, in source) int {
 	// The one system file the option does not reach — see
 	// Semantics.SystemStartupFilesOptionName — so only the invocation asks.
 	if !in.startup.noSystem {
@@ -142,7 +142,7 @@ func (sh Shell) unconditionalStartupFile(r *interp.Runner, in source) int {
 // deciding anything: the caller has already answered whether this slot is read
 // at all, and the only question left here is the one option that separates
 // root's files from the person's.
-func (sh Shell) systemStartupFile(r *interp.Runner, in source, name string) int {
+func (sh *Shell) systemStartupFile(r *interp.Runner, in source, name string) int {
 	if !sh.readsSystemStartupFiles(r, in) {
 		return 0
 	}
@@ -153,7 +153,7 @@ func (sh Shell) systemStartupFile(r *interp.Runner, in source, name string) int 
 // the option the dialect names for it, asked now, where it has one — so a
 // `~/.zshenv` that turns `globalrcs` off, or back on over a `-d`, decides the
 // system files after it (#5905) — and by the invocation where it has none.
-func (sh Shell) readsSystemStartupFiles(r *interp.Runner, in source) bool {
+func (sh *Shell) readsSystemStartupFiles(r *interp.Runner, in source) bool {
 	if name := sh.Semantics.SystemStartupFilesOptionName; name != "" {
 		if on, known := r.DialectOption(name); known {
 			return on
@@ -167,7 +167,7 @@ func (sh Shell) readsSystemStartupFiles(r *interp.Runner, in source) bool {
 // `~/.zshenv` stops every file after it, the logout file included. A dialect
 // with no such option reads by the invocation, which the caller has already
 // asked (#5905).
-func (sh Shell) readsStartupFiles(r *interp.Runner) bool {
+func (sh *Shell) readsStartupFiles(r *interp.Runner) bool {
 	if name := sh.Semantics.StartupFilesOptionName; name != "" {
 		if on, known := r.DialectOption(name); known {
 			return on
@@ -182,7 +182,7 @@ func (sh Shell) readsStartupFiles(r *interp.Runner) bool {
 // Nothing rather than a path built on an empty directory, for the reason
 // startupPath answers nothing for an empty home: joining would give
 // `/profile`, which is a real path on a real machine and belongs to root.
-func (sh Shell) systemStartupPath(name string) string {
+func (sh *Shell) systemStartupPath(name string) string {
 	if sh.SystemStartupDirectory == "" || name == "" {
 		return ""
 	}
@@ -200,7 +200,7 @@ func (sh Shell) systemStartupPath(name string) string {
 // with the *first one that can be read* winning. That is bash's rule —
 // `.bash_profile`, then `.bash_login`, then `.profile`, and exactly one of them
 // — and it reduces to "the file" for every shell that has one name for it.
-func (sh Shell) loginProfile(r *interp.Runner, in source) int {
+func (sh *Shell) loginProfile(r *interp.Runner, in source) int {
 	if !sh.readsLoginProfile(in) {
 		return 0
 	}
@@ -225,7 +225,7 @@ func (sh Shell) loginProfile(r *interp.Runner, in source) int {
 // zsh alone has one. Its position is the whole of why it is a second field
 // rather than another entry in the list above: measured, an interactive login
 // zsh reads `.zprofile`, then `.zshrc`, then `.zlogin`.
-func (sh Shell) lateLoginProfile(r *interp.Runner, in source) int {
+func (sh *Shell) lateLoginProfile(r *interp.Runner, in source) int {
 	if !sh.readsLoginProfile(in) {
 		return 0
 	}
@@ -241,7 +241,7 @@ func (sh Shell) lateLoginProfile(r *interp.Runner, in source) int {
 // shells read a profile for an interactive login shell, so the axis below is
 // only ever asked of a shell with a script to run. `--noprofile` overrides
 // both.
-func (sh Shell) readsLoginProfile(in source) bool {
+func (sh *Shell) readsLoginProfile(in source) bool {
 	if !in.loginShell() || in.startup.noLogin {
 		return false
 	}
@@ -275,7 +275,7 @@ func (sh Shell) readsLoginProfile(in source) bool {
 // run — measured, `set -o` in a file read by `-sh -i` reports `posix off` —
 // so a shell that only asked the runner would pick its file before the answer
 // existed.
-func (sh Shell) interactiveStartupFile(r *interp.Runner, in source) int {
+func (sh *Shell) interactiveStartupFile(r *interp.Runner, in source) int {
 	if !sh.readsRunCommandsFile(r, in) {
 		return 0
 	}
@@ -334,7 +334,7 @@ func (sh Shell) interactiveStartupFile(r *interp.Runner, in source) int {
 // route `-o <name>` interactivity takes, one step later. A name the dialect
 // declares and this shell does not answer falls back to interactivity, which
 // is what a dialect naming an option it never installed would mean.
-func (sh Shell) readsRunCommandsFile(r *interp.Runner, in source) bool {
+func (sh *Shell) readsRunCommandsFile(r *interp.Runner, in source) bool {
 	name := sh.Semantics.RunCommandsOptionName
 	if name == "" {
 		return in.interactive
@@ -366,7 +366,7 @@ func (sh Shell) readsRunCommandsFile(r *interp.Runner, in source) bool {
 // is the reason this asks the runner rather than the dialect: the mode is
 // runtime state by then, and a second axis keyed on the invocation would have
 // recorded the accident instead of the rule (#691, #733).
-func (sh Shell) nonInteractiveStartupFile(r *interp.Runner, in source) int {
+func (sh *Shell) nonInteractiveStartupFile(r *interp.Runner, in source) int {
 	name := sh.Semantics.NonInteractiveStartupVariable
 	if name == "" || in.interactive || in.startup.none || r.PosixMode() {
 		return 0
@@ -386,7 +386,7 @@ func (sh Shell) nonInteractiveStartupFile(r *interp.Runner, in source) int {
 // file's output and then the trap's. The status the shell is leaving with
 // stands unless the file names one of its own by running `exit`, which is the
 // other half of the same measurement.
-func (sh Shell) logoutFile(r *interp.Runner, in source) {
+func (sh *Shell) logoutFile(r *interp.Runner, in source) {
 	if sh.Semantics.LogoutFile == "" || !in.loginShell() {
 		return
 	}
@@ -431,7 +431,7 @@ func (sh Shell) logoutFile(r *interp.Runner, in source) {
 }
 
 // sourceFile runs a file on the runner, as `.` would.
-func (sh Shell) sourceFile(r *interp.Runner, in source, path string) int {
+func (sh *Shell) sourceFile(r *interp.Runner, in source, path string) int {
 	status, _ := sh.sourceFoundFile(r, in, path)
 	return status
 }
@@ -448,7 +448,7 @@ func (sh Shell) sourceFile(r *interp.Runner, in source, path string) int {
 // half-configured prompt is a far better answer to that than no prompt at all.
 // A file that will not parse costs that file too, which is measured rather
 // than chosen — see sourceText.
-func (sh Shell) sourceFoundFile(r *interp.Runner, in source, path string) (status int, found bool) {
+func (sh *Shell) sourceFoundFile(r *interp.Runner, in source, path string) (status int, found bool) {
 	if path == "" || !sh.readsStartupFiles(r) {
 		return 0, false
 	}
@@ -475,7 +475,7 @@ func (sh Shell) sourceFoundFile(r *interp.Runner, in source, path string) (statu
 
 // sourceText is sourceFile once the bytes are in hand and a guard is around
 // it.
-func (sh Shell) sourceText(r *interp.Runner, in source, path, text string) int {
+func (sh *Shell) sourceText(r *interp.Runner, in source, path, text string) int {
 	// Read and run a line at a time, so a line that will not parse costs the
 	// rest of this file and nothing else: what came before it has run, the
 	// files after it are read, and the program still runs. Measured in every
@@ -514,7 +514,7 @@ func (sh Shell) sourceText(r *interp.Runner, in source, path, text string) int {
 // The path was handed over as the shell's name and the file's whole text as
 // the input's, which put the entire file into bash's diagnostic where its
 // name belonged (#5869).
-func (sh Shell) startupParseFailure(r *interp.Runner, in source, path, text string, err error, ran bool) int {
+func (sh *Shell) startupParseFailure(r *interp.Runner, in source, path, text string, err error, ran bool) int {
 	dg := sh.Diagnostics
 	name := path
 	if dg.StartupParseFailureNamesTheShell {
@@ -552,7 +552,7 @@ func (sh Shell) startupParseFailure(r *interp.Runner, in source, path, text stri
 // `/.profile`, which is a real path on a real machine and belongs to root. A
 // shell started without HOME must not read it, and neither must one whose
 // ZDOTDIR is set to nothing.
-func (sh Shell) startupPath(r *interp.Runner, name string) string {
+func (sh *Shell) startupPath(r *interp.Runner, name string) string {
 	if name == "" {
 		return ""
 	}

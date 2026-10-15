@@ -29,7 +29,7 @@ import (
 // The furthest line and not the latest, because a function the script
 // defined earlier runs lines above the one that called it and the shell's
 // reading has not gone back for them.
-func (sh Shell) holdTheScript(r *interp.Runner, in source) {
+func (sh *Shell) holdTheScript(r *interp.Runner, in source) {
 	n := sh.ScriptDescriptor
 	if n <= 0 || in.file == "" {
 		return

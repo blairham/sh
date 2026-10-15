@@ -124,8 +124,16 @@ func (s Sinks) Emit(ctx context.Context, e interp.Event) {
 // most once however many gates are composed: a session does not become
 // sandboxed twice.
 func AddGate(sh Shell, g interp.Gate) Shell {
+	sh.addGate(g)
+	return sh
+}
+
+// addGate is AddGate on a Shell the caller owns, changed where it stands
+// rather than copied: a Shell is 17 KB, and a copy in and a copy out sat on
+// the frame of every start whether or not a gate was asked for (#6491).
+func (sh *Shell) addGate(g interp.Gate) {
 	if g == nil {
-		return sh
+		return
 	}
 	switch had := sh.Gate.(type) {
 	case nil:
@@ -135,7 +143,7 @@ func AddGate(sh Shell, g interp.Gate) Shell {
 	default:
 		sh.Gate = Gates{had, g}
 	}
-	return markGated(sh)
+	sh.markGated()
 }
 
 // AddSink returns sh with s fed every event in addition to whatever sink it
@@ -146,8 +154,14 @@ func AddGate(sh Shell, g interp.Gate) Shell {
 // An event sink alone is not a sandbox and is not marked. Watching a shell
 // does not change what it may do.
 func AddSink(sh Shell, s interp.Sink) Shell {
+	sh.addSink(s)
+	return sh
+}
+
+// addSink is AddSink on a Shell the caller owns, for addGate's reason.
+func (sh *Shell) addSink(s interp.Sink) {
 	if s == nil {
-		return sh
+		return
 	}
 	switch had := sh.Events.(type) {
 	case nil:
@@ -157,7 +171,6 @@ func AddSink(sh Shell, s interp.Sink) Shell {
 	default:
 		sh.Events = Sinks{had, s}
 	}
-	return sh
 }
 
 // LoadPolicy reads a policy file and returns it as a gate, along with the
@@ -248,14 +261,13 @@ func (sandboxMarker) Prompt(info repl.PromptInfo) string {
 }
 
 // markGated adds the mark once, however it is reached.
-func markGated(sh Shell) Shell {
+func (sh *Shell) markGated() {
 	for _, p := range sh.PromptProviders {
 		if _, ok := p.(sandboxMarker); ok {
-			return sh
+			return
 		}
 	}
 	sh.PromptProviders = append(sh.PromptProviders, sandboxMarker{})
-	return sh
 }
 
 // sandboxOption reads `--policy` and `--audit`, in either of the two forms the
@@ -294,7 +306,7 @@ func sandboxOption(word string, args []string, inv *invocation) (rest []string, 
 }
 
 // installSandbox turns what the option loop read into a Gate and a Sink on the
-// shell, and hands back the audit file to close.
+// shell it is called on, and hands back the audit file to close.
 //
 // Called before the operands are read, which is not an ordering detail: the
 // program a shell was pointed at is an access chosen by whoever invoked it, so
@@ -305,28 +317,28 @@ func sandboxOption(word string, args []string, inv *invocation) (rest []string, 
 // A policy that will not load ends the invocation. A shell that quietly ran
 // unsandboxed because its rules would not parse is the failure this whole
 // surface exists to prevent.
-func (sh Shell) installSandbox(inv invocation) (Shell, io.Closer, error) {
+func (sh *Shell) installSandbox(inv invocation) (io.Closer, error) {
 	if inv.policy != "" {
 		g, _, err := LoadPolicy(inv.policy)
 		if err != nil {
-			return sh, nil, err
+			return nil, err
 		}
-		sh = AddGate(sh, g)
+		sh.addGate(g)
 	}
 	var closer io.Closer
 	if inv.audit != "" {
 		s, c, err := OpenAudit(inv.audit, sh.Stderr)
 		if err != nil {
-			return sh, nil, err
+			return nil, err
 		}
 		closer = c
-		sh = AddSink(sh, s)
+		sh.addSink(s)
 	}
 	if sh.Gate != nil {
 		// An embedder that assigned a Gate of its own and passed no flag gets
 		// the mark too. Keyed on the gate rather than on the invocation, for
 		// the reason AddGate is.
-		sh = markGated(sh)
+		sh.markGated()
 	}
-	return sh, closer, nil
+	return closer, nil
 }

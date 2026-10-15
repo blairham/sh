@@ -42,7 +42,7 @@ import "github.com/blairham/sh/interp"
 // `--norc`, `--noprofile` and `-f` do not suppress this. Measured: with no
 // startup file read at all, every column still has its default in hand. So
 // this runs before the escape hatch in startup rather than after it.
-func (sh Shell) promptDefaults(r *interp.Runner, in source, afterTheFiles bool) {
+func (sh *Shell) promptDefaults(r *interp.Runner, in source, afterTheFiles bool) {
 	if sh.PromptStyle.DefaultsFollowTheStartupFiles != afterTheFiles {
 		return
 	}

@@ -126,7 +126,7 @@ func installPrefix(exe string) string {
 // The whole of the front end's part in this: which parameter is the dialect's
 // answer, and what goes in it is a fact about this process that no library may
 // reach for. The same split `$PATH` has.
-func (sh Shell) seedFunctionSearch(r *interp.Runner) {
+func (sh *Shell) seedFunctionSearch(r *interp.Runner) {
 	name := sh.Semantics.FunctionSearchVariable
 	if name == "" {
 		return
@@ -159,7 +159,7 @@ func (sh Shell) seedFunctionSearch(r *interp.Runner) {
 
 // functionSearchDefault is the default function search path, joined, or
 // false where there is nothing to say.
-func (sh Shell) functionSearchDefault(path string) (string, bool) {
+func (sh *Shell) functionSearchDefault(path string) (string, bool) {
 	exe, err := os.Executable()
 	if err != nil {
 		// Nothing to derive from. The default is the empty one this shell

@@ -579,7 +579,7 @@ func Main(sh Shell) int {
 	// The collector's threshold, which only a binary may set — see
 	// collector.go for the measurement and for why MainArgs does not.
 	TuneCollector()
-	return MainArgs(sh, os.Args)
+	return sh.mainArgs(os.Args)
 }
 
 // MainArgs is Main with the argument vector given rather than taken from the
@@ -587,8 +587,14 @@ func Main(sh Shell) int {
 //
 // argv includes argv[0]. An argv with nothing in it is treated as bare, since
 // a shell that cannot name itself still has to produce diagnostics.
-func MainArgs(sh Shell, argv []string) int {
-	sh = sh.withDefaults(argv)
+func MainArgs(sh Shell, argv []string) int { return sh.mainArgs(argv) }
+
+// mainArgs is MainArgs on a Shell its caller owns. Main hands over its own
+// rather than a copy: the start's stack is measured from here, and a copy of a
+// 17 KB struct at its bottom is the same depth under every frame above it
+// (#6491).
+func (sh *Shell) mainArgs(argv []string) int {
+	sh.setDefaults(argv)
 	if heldProcessGroup(argv) {
 		// Not a shell at all this time: a placeholder leading a process group
 		// for the shell that started it. Read before any route is chosen —
@@ -604,7 +610,7 @@ func MainArgs(sh Shell, argv []string) int {
 		// would silently read the test binary's input.
 		return holdProcessGroup(sh.Stdin)
 	}
-	sh, in, closer, err := sh.input(argv)
+	in, closer, err := sh.input(argv)
 	if closer != nil {
 		// The audit file, when the invocation named one. Deferred here and
 		// not inside input, because the shell has not run yet when input
@@ -615,59 +621,7 @@ func MainArgs(sh Shell, argv []string) int {
 		defer func() { _ = closer.Close() }()
 	}
 	if err != nil {
-		var se *scriptError
-		if errors.As(err, &se) {
-			// A script operand that would not open is the shell failing to
-			// reach a program rather than failing to understand its own
-			// argument vector, and the panel numbers it that way: 127 for a
-			// path that is not there and 126 for one that will not open, in
-			// the shells that tell them apart. Named the way
-			// Shell.reportScriptError says: the shell itself, since nothing
-			// has been read and there is no `$0` yet — unless this dialect
-			// had the file open before it failed.
-			return sh.reportScriptError(se)
-		}
-		var er *emulationRefusal
-		if errors.As(err, &er) {
-			// The dialect's sentence and the dialect's status, which is the
-			// whole reason this is a type of its own: the word was placed
-			// and then refused, so neither the usage block below nor this
-			// front end's usage status is the answer.
-			sh.errf("%s: %s\n", sh.Name, er.text)
-			return er.status
-		}
-		var vr *verbatimRefusal
-		if errors.As(err, &vr) {
-			sh.errf("%s\n", vr.text)
-			return vr.status
-		}
-		var me *missingArgumentError
-		if errors.As(err, &me) {
-			// The dialect's status rather than this front end's usage
-			// status, which one column does not use for it. See
-			// Diagnostics.InvocationMissingOptionArgumentStatus.
-			sh.errf("%s: %s\n", sh.Name, me.text)
-			return sh.Diagnostics.MissingOptionArgumentStatus()
-		}
-		var oe *optionError
-		if errors.As(err, &oe) {
-			// An option word this front end could not place. The dialect's
-			// own sentence where it has one, and its usage block under that
-			// where it writes one — measured, `bash --badopt` writes the
-			// same twenty-two lines `bash -q` does, and dash and BusyBox ash
-			// write one line each.
-			//
-			// The status is not asked for: the three columns that reach here
-			// all answer 2, which is this front end's usage status already.
-			// The two whose namespace takes a `--name` never arrive — their
-			// word travels to the runner, which carries their status with it.
-			if text := sh.Diagnostics.InvocationOptionDiagnostic(sh.Name, oe.word); text != "" {
-				sh.errf("%s", text)
-				return usageStatus
-			}
-		}
-		sh.errf("%s: %v\n", sh.Name, err)
-		return usageStatus
+		return sh.invocationFailure(err)
 	}
 	if in.help {
 		// Before the version, which is the order measured: `bash --version
@@ -713,17 +667,79 @@ func MainArgs(sh Shell, argv []string) int {
 	return sh.run(in)
 }
 
+// invocationFailure reports an argument vector input could not read and
+// answers the status the shell exits with.
+//
+// Its own function rather than a branch of MainArgs, because MainArgs is at
+// the bottom of every start's stack and this branch's table lookups copy
+// the shell's 10 KB of diagnostics onto whichever frame makes them (#6491).
+func (sh *Shell) invocationFailure(err error) int {
+	var se *scriptError
+	if errors.As(err, &se) {
+		// A script operand that would not open is the shell failing to
+		// reach a program rather than failing to understand its own
+		// argument vector, and the panel numbers it that way: 127 for a
+		// path that is not there and 126 for one that will not open, in
+		// the shells that tell them apart. Named the way
+		// Shell.reportScriptError says: the shell itself, since nothing
+		// has been read and there is no `$0` yet — unless this dialect
+		// had the file open before it failed.
+		return sh.reportScriptError(se)
+	}
+	var er *emulationRefusal
+	if errors.As(err, &er) {
+		// The dialect's sentence and the dialect's status, which is the
+		// whole reason this is a type of its own: the word was placed
+		// and then refused, so neither the usage block below nor this
+		// front end's usage status is the answer.
+		sh.errf("%s: %s\n", sh.Name, er.text)
+		return er.status
+	}
+	var vr *verbatimRefusal
+	if errors.As(err, &vr) {
+		sh.errf("%s\n", vr.text)
+		return vr.status
+	}
+	var me *missingArgumentError
+	if errors.As(err, &me) {
+		// The dialect's status rather than this front end's usage
+		// status, which one column does not use for it. See
+		// Diagnostics.InvocationMissingOptionArgumentStatus.
+		sh.errf("%s: %s\n", sh.Name, me.text)
+		return sh.Diagnostics.MissingOptionArgumentStatus()
+	}
+	var oe *optionError
+	if errors.As(err, &oe) {
+		// An option word this front end could not place. The dialect's
+		// own sentence where it has one, and its usage block under that
+		// where it writes one — measured, `bash --badopt` writes the
+		// same twenty-two lines `bash -q` does, and dash and BusyBox ash
+		// write one line each.
+		//
+		// The status is not asked for: the three columns that reach here
+		// all answer 2, which is this front end's usage status already.
+		// The two whose namespace takes a `--name` never arrive — their
+		// word travels to the runner, which carries their status with it.
+		if text := sh.Diagnostics.InvocationOptionDiagnostic(sh.Name, oe.word); text != "" {
+			sh.errf("%s", text)
+			return usageStatus
+		}
+	}
+	sh.errf("%s: %v\n", sh.Name, err)
+	return usageStatus
+}
+
 // Run parses and executes src, returning the status to exit with.
 //
 // It is exported because a binary with argument handling of its own — cmd/sh
 // has -tokens, -parse and -dialect — still wants this half, and this is the
 // half that has to agree across every driver.
 func Run(sh Shell, src, name string) int {
-	sh = sh.withDefaults(nil)
+	sh.setDefaults(nil)
 	if name == "" {
 		name = sh.Name
 	}
-	return sh.run(source{src: src, name: name, dg: sh.Diagnostics})
+	return sh.run(source{src: src, name: name, dg: sh.diagnosticsFor(shellDiagnostics)})
 }
 
 // RunCommand is Run for a `-c` command string, which is not the same as
@@ -737,8 +753,8 @@ func Run(sh Shell, src, name string) int {
 // `sh -dialect bash` printing a location without the `-c` in it and running
 // `-c 'echo $1' a b` with no parameters at all.
 func RunCommand(sh Shell, src string, operands []string) int {
-	sh = sh.withDefaults(nil)
-	return sh.run(commandSource(sh, src, operands))
+	sh.setDefaults(nil)
+	return sh.run(commandSource(&sh, src, operands))
 }
 
 // RunStdin is Run for a script arriving on standard input, where there is
@@ -750,15 +766,15 @@ func RunCommand(sh Shell, src string, operands []string) int {
 // program has nothing left on the descriptor for the script to share, which is
 // the other half of what MainArgs does here. See program.
 func RunStdin(sh Shell, src string) int {
-	sh = sh.withDefaults(nil)
-	return sh.run(source{src: src, name: sh.Name, dg: sh.Diagnostics.ForStdin()})
+	sh.setDefaults(nil)
+	return sh.run(source{src: src, name: sh.Name, dg: sh.diagnosticsFor(stdinDiagnostics)})
 }
 
 // RunScript is Run for input that came from a file, which selects the
 // script-form diagnostics and names the script rather than the shell.
 func RunScript(sh Shell, src, path string) int {
-	sh = sh.withDefaults(nil)
-	return sh.run(source{src: src, name: path, file: path, dg: sh.Diagnostics.ForScript()})
+	sh.setDefaults(nil)
+	return sh.run(source{src: src, name: path, file: path, dg: sh.diagnosticsFor(scriptDiagnostics)})
 }
 
 // errf writes to the shell's error stream.
@@ -796,7 +812,7 @@ func (sh *Shell) reportFinishedJobs(r *interp.Runner) {
 // process, and a library Runner must take the environment it is handed rather
 // than reach for shared state; this binary *is* the process, so the read is
 // made here, where it is visible.
-func (sh Shell) env() []string {
+func (sh *Shell) env() []string {
 	if sh.Env != nil {
 		return sh.Env
 	}
@@ -811,7 +827,7 @@ func (sh Shell) env() []string {
 // shell's own name standing. That second test is the whole of "the invocation
 // named no `$0`" — a script operand and a `-c` name operand both write one
 // here, and both are measured to win. See Semantics.DollarZeroFromEnvironment.
-func (sh Shell) inheritedZeroName(name string) string {
+func (sh *Shell) inheritedZeroName(name string) string {
 	if name != sh.Name || sh.Semantics.DollarZeroFromEnvironment == "" {
 		return name
 	}
@@ -830,7 +846,7 @@ func (sh Shell) inheritedZeroName(name string) string {
 // it. Dropped whether or not the route used it, which is the same
 // measurement: a script operand overrides it and it is gone from the child's
 // environment all the same.
-func (sh Shell) runnerEnv() []string {
+func (sh *Shell) runnerEnv() []string {
 	name := sh.Semantics.DollarZeroFromEnvironment
 	if name == "" {
 		return sh.env()
@@ -854,7 +870,7 @@ func (sh Shell) runnerEnv() []string {
 // somewhere else. None when SH_NO_PARSE_CACHE is set to anything but empty
 // or 0, and none where the cache's parent directory does not already exist —
 // see parsecache.Dir.
-func (sh Shell) parseCache() interp.ParseCache {
+func (sh *Shell) parseCache() interp.ParseCache {
 	if sh.Gate != nil {
 		return nil
 	}
@@ -883,7 +899,7 @@ func lookupEnv(env []string, name string) (string, bool) {
 }
 
 // context is what bounds the run, and nil means nothing does.
-func (sh Shell) context() context.Context {
+func (sh *Shell) context() context.Context {
 	if sh.Context != nil {
 		return sh.Context
 	}
@@ -895,7 +911,7 @@ func (sh Shell) context() context.Context {
 //
 // Which stream and which status are the dialect's, not this front end's — see
 // Semantics.VersionOption, where the panel disagrees about both.
-func (sh Shell) announceVersion() int {
+func (sh *Shell) announceVersion() int {
 	v := sh.Semantics.VersionOption
 	w := sh.Stdout
 	if v.ToStandardError {
@@ -913,7 +929,7 @@ func (sh Shell) announceVersion() int {
 // gets, measured byte-for-byte — and a trailer. Drawing the block from the
 // one place keeps the help and the refusal from drifting, which is exactly
 // what a second copy of twenty-two lines would do.
-func (sh Shell) announceHelp() int {
+func (sh *Shell) announceHelp() int {
 	h := sh.Semantics.HelpOption
 	w := sh.Stdout
 	if h.ToStandardError {
@@ -952,7 +968,7 @@ func (sh Shell) announceHelp() int {
 // dialect's ScriptListingOption.ParseFailureStatus where the program was
 // asked for — measured 1, against the 2 a *run* of the same script exits —
 // and the ordinary parse status where only the strings were.
-func (sh Shell) listProgram(in source, r *interp.Runner, src string) int {
+func (sh *Shell) listProgram(in source, r *interp.Runner, src string) int {
 	if in.onStdin {
 		// The program is on the descriptor and there is no run to read it a
 		// block at a time, so it is read whole. Nothing reads the descriptor
@@ -995,7 +1011,7 @@ func (sh Shell) listProgram(in source, r *interp.Runner, src string) int {
 	if in.scriptListing {
 		return sh.Semantics.ScriptListingOption.ParseFailureStatus
 	}
-	return in.dg.StatusForParseError(err)
+	return in.diag().StatusForParseError(err)
 }
 
 // writeMarkedStrings lists the strings the program marked for translation.
@@ -1003,7 +1019,7 @@ func (sh Shell) listProgram(in source, r *interp.Runner, src string) int {
 // Nothing is translated and no message catalog is consulted — see
 // Semantics.StringCatalogOption, and syntax.Span.Translated, which is what
 // records the mark. The option lists what a translator would be given.
-func (sh Shell) writeMarkedStrings(in source, f *syntax.File) {
+func (sh *Shell) writeMarkedStrings(in source, f *syntax.File) {
 	for _, m := range syntax.TranslatedStrings(f) {
 		if in.stringCatalogPortable {
 			// The portable form wins wherever both were written, in either
@@ -1023,7 +1039,7 @@ func (sh Shell) writeMarkedStrings(in source, f *syntax.File) {
 // from, which differs by route: a script is named by its path, a command
 // string by the front end's label for it, and standard input by the shell
 // itself. Measured on all three.
-func (sh Shell) markedStringOrigin(in source) string {
+func (sh *Shell) markedStringOrigin(in source) string {
 	switch {
 	case in.file != "":
 		return in.file
@@ -1064,11 +1080,20 @@ func portableObjectEscape(text string) string {
 	return strings.ReplaceAll(text, `"`, `\"`)
 }
 
-func (sh Shell) errf(format string, args ...any) {
+func (sh *Shell) errf(format string, args ...any) {
 	_, _ = fmt.Fprintf(sh.Stderr, format, args...)
 }
 
 func (sh Shell) withDefaults(argv []string) Shell {
+	sh.setDefaults(argv)
+	return sh
+}
+
+// setDefaults is withDefaults on a Shell the caller owns, filled in where it
+// stands. The entry points hold their Shell by value already, and building a
+// second one to assign back over the first put two more copies of a 17 KB
+// struct on the frame at the bottom of every start (#6491).
+func (sh *Shell) setDefaults(argv []string) {
 	// The axis sweep's hook, and the identity in every build but its own —
 	// see driver/axissweep_off.go. It is here because this is the one gate
 	// every route passes through, and because the front end reads the vector
@@ -1105,7 +1130,6 @@ func (sh Shell) withDefaults(argv []string) Shell {
 		// do not claim to be.
 		sh.Session = event.NewID(time.Now())
 	}
-	return sh
 }
 
 // input decides what to run and what to call it.
@@ -1262,7 +1286,14 @@ type source struct {
 	// argument vector, and a caller reaching Run or RunCommand directly has
 	// an invocation of its own and none of these.
 	startup startupFlags
-	dg      interp.Diagnostics
+	// dg is how this input's shell words its diagnostics, held by pointer
+	// because a source is passed by value through every step of a start and
+	// the table is about 10 KB: carried inline, each of those frames held its
+	// own copy, and the stack a script file's start reached was deep enough
+	// to grow twice more than it needed to (#6491). Never written through —
+	// a change makes a new table, see diag — so two copies of one source
+	// still cannot see each other's.
+	dg *interp.Diagnostics
 }
 
 // loginShell reports whether this invocation is a login shell, by either of
@@ -1273,6 +1304,51 @@ type source struct {
 // The two are the same fact for *which* files are read and differ for whether
 // a shell with a script to run reads them at all; see readsLoginProfile.
 func (s source) loginShell() bool { return s.login || s.startup.login }
+
+// diag is the table this input's diagnostics are worded from: the one the
+// route that built it chose, or none — every field zero — for a source made
+// without one, which is what the field held before it was a pointer.
+func (s *source) diag() *interp.Diagnostics {
+	if s.dg == nil {
+		return &noDiagnostics
+	}
+	return s.dg
+}
+
+// noDiagnostics is the zero table diag answers for a source built without
+// one. Read and never written: a change to a source's table replaces it.
+var noDiagnostics interp.Diagnostics
+
+// diagnosticsKind is which of this shell's three wordings a source carries:
+// its own, the one for a program read from standard input, or the one for a
+// script file.
+type diagnosticsKind int
+
+const (
+	shellDiagnostics diagnosticsKind = iota
+	stdinDiagnostics
+	scriptDiagnostics
+)
+
+// diagnosticsFor is a new table of a source's own, so that nothing done to the
+// shell's reaches it.
+//
+// Built here and not at each route that makes a source, because a table is
+// about 10 KB and one built in place is a temporary on the frame of the
+// function that builds it: route built seven, and every start's stack was
+// deeper by all seven whichever one it took (#6491).
+func (sh *Shell) diagnosticsFor(kind diagnosticsKind) *interp.Diagnostics {
+	dg := new(interp.Diagnostics)
+	switch kind {
+	case stdinDiagnostics:
+		*dg = sh.Diagnostics.ForStdin()
+	case scriptDiagnostics:
+		*dg = sh.Diagnostics.ForScript()
+	default:
+		*dg = sh.Diagnostics
+	}
+	return dg
+}
 
 // invocationRoute is which of the three routes the program came by, for the
 // runner. The same three cases programRoute splits on and the same reason: a
@@ -1296,8 +1372,8 @@ func (s source) loginShell() bool { return s.login || s.startup.login }
 // still reports the whole path there, which is why this is a separate answer
 // and not a change to the name.
 func (s *source) diagName() string {
-	if s.file == "" && s.dg.SelfName != "" {
-		return s.dg.SelfName
+	if s.file == "" && s.diag().SelfName != "" {
+		return s.diag().SelfName
 	}
 	return s.name
 }
@@ -1307,7 +1383,7 @@ func (s *source) diagName() string {
 // the prompt's: `-i -c` and `-i script`. See
 // interp.Diagnostics.InteractiveShellSpeaksAsAtAPrompt.
 func (s *source) speaksAsAtAPrompt(r *interp.Runner) bool {
-	return s.interactive && s.dg.InteractiveShellSpeaksAsAtAPrompt && r != nil && r.Interactive
+	return s.interactive && s.diag().InteractiveShellSpeaksAsAtAPrompt && r != nil && r.Interactive
 }
 
 // parseDiagnostic is the whole of what a parse failure in the program says.
@@ -1330,13 +1406,13 @@ func (s *source) speaksAsAtAPrompt(r *interp.Runner) bool {
 // front of each line, as a startup file does (#6008, #6262).
 func (s source) parseDiagnostic(r *interp.Runner, err error, src string, reached int) string {
 	if !s.speaksAsAtAPrompt(r) {
-		return s.dg.ParseDiagnosticAfter(s.diagName(), s.input, err, src, reached)
+		return s.diag().ParseDiagnosticAfter(s.diagName(), s.input, err, src, reached)
 	}
 	name := r.DiagnosticName()
 	if s.file == "" {
-		return s.dg.ForPrompt().ParseDiagnostic(name, "", err, "")
+		return s.diag().ForPrompt().ParseDiagnostic(name, "", err, "")
 	}
-	msg := s.dg.ParseDiagnosticAfter(s.diagName(), s.input, err, src, reached)
+	msg := s.diag().ParseDiagnosticAfter(s.diagName(), s.input, err, src, reached)
 	lead := name + ": "
 	return lead + strings.ReplaceAll(strings.TrimSuffix(msg, "\n"), "\n", "\n"+lead) + "\n"
 }
@@ -1361,12 +1437,12 @@ func (s source) parseStatus(r *interp.Runner, err error, src string, status int)
 		return status
 	}
 	if !s.interactive || !r.Interactive {
-		if n := s.dg.SubstitutionParseFailureStatusFromCommandString; n != 0 && bodyRefusedAToken(err) {
+		if n := s.diag().SubstitutionParseFailureStatusFromCommandString; n != 0 && bodyRefusedAToken(err) {
 			return n
 		}
 		return status
 	}
-	if n := s.dg.SubstitutionParseFailureStatusFromAnInteractiveCommandString; n != 0 && refusedInASubstitutionBody(err, src) {
+	if n := s.diag().SubstitutionParseFailureStatusFromAnInteractiveCommandString; n != 0 && refusedInASubstitutionBody(err, src) {
 		return n
 	}
 	return status
@@ -1428,9 +1504,9 @@ func refusedInASubstitutionBody(err error, src string) bool {
 // front, where the same script without `-i` is `s5.sh: line 2: warning: …`.
 func (s *source) remarkDiagnostics(r *interp.Runner) interp.Diagnostics {
 	if s.speaksAsAtAPrompt(r) {
-		return s.dg.ForPrompt()
+		return s.diag().ForPrompt()
 	}
-	return s.dg
+	return *s.diag()
 }
 
 func (s *source) remarkName(r *interp.Runner) string {
@@ -1649,7 +1725,7 @@ type invocation struct {
 // Separate from startupOption because that one has a side effect and this
 // question is asked in a switch's condition. The two read the same four lists,
 // which is why neither takes an opinion about what a spelling means.
-func (sh Shell) namesStartupOption(spelling string, borrowed bool) bool {
+func (sh *Shell) namesStartupOption(spelling string, borrowed bool) bool {
 	o := sh.Semantics.StartupFileOptions
 	return spelt(o.Login, spelling) ||
 		sh.speltHere(o.SuppressAll, spelling, borrowed) ||
@@ -1669,7 +1745,7 @@ func (sh Shell) namesStartupOption(spelling string, borrowed bool) bool {
 // and the dialect's own table is installed on a shell that does not exist at
 // that point. The order is what makes it possible at all — this shell refuses
 // an `--emulate` that another option word came before.
-func (sh Shell) lettersAreBorrowed(inv *invocation) bool {
+func (sh *Shell) lettersAreBorrowed(inv *invocation) bool {
 	mode := inv.emulation
 	if !inv.emulating {
 		// The mode argv[0] names, which borrows the letters as `--emulate`
@@ -1684,7 +1760,7 @@ func (sh Shell) lettersAreBorrowed(inv *invocation) bool {
 // speltHere is spelt with the borrowed-letter rule applied: a one-letter
 // spelling is not this shell's while another shell's letter set is in force,
 // and a long spelling always is.
-func (sh Shell) speltHere(list, spelling string, borrowed bool) bool {
+func (sh *Shell) speltHere(list, spelling string, borrowed bool) bool {
 	if borrowed && len(spelling) == 2 && spelling[0] == '-' {
 		return false
 	}
@@ -1708,7 +1784,7 @@ func spelt(list, spelling string) bool {
 // opinion about the letter would have to hold both. A dialect that names none
 // of them — dash and ksh93 name none — is a shell whose startup files cannot
 // be skipped, which is measured and is what those two do.
-func (sh Shell) startupOption(spelling string, args []string, inv *invocation) (rest []string, matched bool, err error) {
+func (sh *Shell) startupOption(spelling string, args []string, inv *invocation) (rest []string, matched bool, err error) {
 	o := sh.Semantics.StartupFileOptions
 	borrowed := sh.lettersAreBorrowed(inv)
 	switch {
@@ -1752,7 +1828,7 @@ func (sh Shell) startupOption(spelling string, args []string, inv *invocation) (
 // and `zsh --emulate -c 'echo ran'` reads `-c` as the mode and then fails to
 // open `echo ran`. A front end that claimed either word back would be
 // answering a command line real zsh does not.
-func (sh Shell) emulationOption(spelling string, args []string, inv *invocation) (rest []string, matched bool, err error) {
+func (sh *Shell) emulationOption(spelling string, args []string, inv *invocation) (rest []string, matched bool, err error) {
 	e := sh.Semantics.EmulationOption
 	if e.Spellings == "" || !spelt(e.Spellings, spelling) {
 		return args, false, nil
@@ -1803,13 +1879,13 @@ func (e *emulationRefusal) Error() string { return e.text }
 
 // input reads the whole argument vector: the options, then the operands.
 //
-// It hands back a Shell as well as the source because reading an invocation
-// can *change* the shell it is being read for: `--policy` installs a gate and
+// It fills in the Shell it is called on as well as returning the source,
+// because reading an invocation can *change* the shell it is being read for: `--policy` installs a gate and
 // `--audit` a sink, and both have to be in place before the operands are
 // read, since a script operand is opened through the gate. The closer is the
 // audit file when the invocation named one — returned rather than deferred
 // here, because a binary's main ends with os.Exit.
-func (sh Shell) input(argv []string) (Shell, source, io.Closer, error) {
+func (sh *Shell) input(argv []string) (source, io.Closer, error) {
 	args := argv
 	if len(args) > 0 {
 		args = args[1:]
@@ -1819,24 +1895,24 @@ func (sh Shell) input(argv []string) (Shell, source, io.Closer, error) {
 	// Shell.lettersAreBorrowed and Shell.searchesForTheScript.
 	rest, inv, err := sh.options(args, EmulationNamed(argv, sh.Semantics.EmulationOption))
 	if err != nil {
-		return sh, source{}, nil, err
+		return source{}, nil, err
 	}
 	if inv.version || inv.help {
 		// Nothing after it is read and nothing before it runs, so no gate is
 		// installed either: the route the rest of the vector would have
 		// chosen is never decided.
-		return sh, source{version: inv.version, help: inv.help}, nil, nil
+		return source{version: inv.version, help: inv.help}, nil, nil
 	}
-	sh, closer, err := sh.installSandbox(inv)
+	closer, err := sh.installSandbox(inv)
 	if err != nil {
-		return sh, source{}, nil, err
+		return source{}, nil, err
 	}
 	if inv.acpConnect {
 		// The words after the flag are the agent's command, not a shell
 		// invocation, so nothing here reads them as operands. The gate is
 		// already installed, which is the point: a policy governs what the
 		// agent asks this shell to do exactly as it governs a script.
-		return sh, source{
+		return source{
 			acpConnect: true, acpArgv: inv.acpArgv,
 			acpAllow: inv.acpAllow, acpAuth: inv.acpAuth,
 		}, closer, nil
@@ -1852,9 +1928,9 @@ func (sh Shell) input(argv []string) (Shell, source, io.Closer, error) {
 			if closer != nil {
 				_ = closer.Close()
 			}
-			return sh, source{}, nil, fmt.Errorf("--acp takes no operands: %v", rest)
+			return source{}, nil, fmt.Errorf("--acp takes no operands: %v", rest)
 		}
-		return sh, source{acp: true}, closer, nil
+		return source{acp: true}, closer, nil
 	}
 	if inv.mcp {
 		// The same place and the same rule: after the gate, before the
@@ -1865,18 +1941,18 @@ func (sh Shell) input(argv []string) (Shell, source, io.Closer, error) {
 			if closer != nil {
 				_ = closer.Close()
 			}
-			return sh, source{}, nil, fmt.Errorf("--mcp takes no operands: %v", rest)
+			return source{}, nil, fmt.Errorf("--mcp takes no operands: %v", rest)
 		}
-		return sh, source{mcp: true}, closer, nil
+		return source{mcp: true}, closer, nil
 	}
 	in, err := sh.operands(rest, inv)
 	if err != nil {
 		if closer != nil {
 			_ = closer.Close()
 		}
-		return sh, source{}, nil, err
+		return source{}, nil, err
 	}
-	return sh, in, closer, nil
+	return in, closer, nil
 }
 
 // options reads the words before the first operand, and returns the operands
@@ -1893,7 +1969,7 @@ func (sh Shell) input(argv []string) (Shell, source, io.Closer, error) {
 // boundary the options may have asked for — and it has to be installed before
 // an operand is read rather than at each of the places an operand is read,
 // which is the shape of #472 one level up.
-func (sh Shell) options(args []string, namedEmulation string) ([]string, invocation, error) {
+func (sh *Shell) options(args []string, namedEmulation string) ([]string, invocation, error) {
 	inv := invocation{namedEmulation: namedEmulation}
 	for len(args) > 0 {
 		a := args[0]
@@ -1941,7 +2017,7 @@ func (sh Shell) options(args []string, namedEmulation string) ([]string, invocat
 // across the panel. Every other letter is a `set` option and stays text here;
 // whether the shell has it is the dialect's question, answered by the same
 // machinery `set` uses once the runner exists.
-func (sh Shell) optionWord(a string, args []string, inv *invocation) (rest []string, err error) {
+func (sh *Shell) optionWord(a string, args []string, inv *invocation) (rest []string, err error) {
 	on := a[0] == '-'
 	body := a[1:]
 	// A double-dash word is a whole spelling and never a bundle, so it is
@@ -2242,7 +2318,7 @@ func (sh Shell) optionWord(a string, args []string, inv *invocation) (rest []str
 // themselves whatever happened, since nothing has been read and there is no
 // `$0` yet, and bash names the operand once it has the file *open* — see
 // Diagnostics.ScriptOperandNamedByItselfOnceOpened.
-func (sh Shell) reportScriptError(se *scriptError) int {
+func (sh *Shell) reportScriptError(se *scriptError) int {
 	name := sh.Name
 	if sh.Diagnostics.ScriptOperandNamesItself(se.err) {
 		name = se.path
@@ -2298,7 +2374,7 @@ func (e *optionError) Error() string { return fmt.Sprintf("unknown option %q", e
 // the only branch that consulted the flag was the one with nothing to run
 // (#472). A fifth route added below would inherit the answer rather than have
 // to remember it.
-func (sh Shell) operands(args []string, inv invocation) (source, error) {
+func (sh *Shell) operands(args []string, inv invocation) (source, error) {
 	in, err := sh.route(args, inv)
 	if err != nil {
 		return source{}, err
@@ -2314,9 +2390,12 @@ func (sh Shell) operands(args []string, inv invocation) (source, error) {
 	// written. Measured, all four shells agree on both.
 	in.interactive = (inv.interactiveWritten && inv.interactive) || in.prompt
 	if in.interactive && !in.prompt && in.invocationRoute() == interp.RouteCommandString &&
-		in.dg.InteractiveCommandStringIsLocatedAsAPrompt {
-		// See Diagnostics.InteractiveCommandStringIsLocatedAsAPrompt.
-		in.dg.LocateCommandStringAsAPrompt()
+		in.diag().InteractiveCommandStringIsLocatedAsAPrompt {
+		// See Diagnostics.InteractiveCommandStringIsLocatedAsAPrompt. On a
+		// table of this source's own, never through the one it was handed.
+		located := *in.diag()
+		located.LocateCommandStringAsAPrompt()
+		in.dg = &located
 	}
 	// `-s` as written, carried here for the same reason and in the same
 	// place: it survives a route that overrode it, and `sh -s -c cmd` shows
@@ -2360,7 +2439,7 @@ func (sh Shell) operands(args []string, inv invocation) (source, error) {
 // A dialect that declares neither reaches nothing here, which is bash 5.3.20
 // and BusyBox ash 1.37.0: both refuse the name outright, so a front end acting
 // on the spelling alone would act on a word those shells never grant.
-func (sh Shell) noteNamedOption(inv *invocation, name string, on bool) {
+func (sh *Shell) noteNamedOption(inv *invocation, name string, on bool) {
 	if sh.Semantics.OptionNamesFoldCaseAndUnderscores {
 		name = strings.ReplaceAll(strings.ToLower(name), "_", "")
 	}
@@ -2390,16 +2469,16 @@ func (sh Shell) noteNamedOption(inv *invocation, name string, on bool) {
 // Both directions, which is what makes it the invocation's word rather than a
 // second way to say `-i`: `zsh -f +o interactive` on a terminal draws no
 // prompt, measured through a pseudo-terminal.
-func (sh Shell) invocationPrompts(inv invocation) bool {
+func (sh *Shell) invocationPrompts(inv invocation) bool {
 	if inv.interactiveWritten {
 		return inv.interactive
 	}
-	return Interactively(sh, false)
+	return sh.interactively(false)
 }
 
 // route is operands without the part that is the same for every route: which
 // of the four the invocation named, and what the shell is to run.
-func (sh Shell) route(args []string, inv invocation) (source, error) {
+func (sh *Shell) route(args []string, inv invocation) (source, error) {
 	if inv.sawC {
 		// `-c` wins over both of the other routes, which is measured rather
 		// than a precedence invented here: all four shells run the command
@@ -2416,7 +2495,7 @@ func (sh Shell) route(args []string, inv invocation) (source, error) {
 			// options first can reproduce.
 			return source{
 				missingCommand: true,
-				name:           sh.Name, dg: sh.Diagnostics,
+				name:           sh.Name, dg: sh.diagnosticsFor(shellDiagnostics),
 				opts: inv.opts,
 			}, nil
 		}
@@ -2458,7 +2537,7 @@ func (sh Shell) route(args []string, inv invocation) (source, error) {
 			// Nothing to run and someone at a keyboard. Asked before
 			// reading, not after: reading standard input from a terminal
 			// waits for an end-of-file that a person has not typed yet.
-			return source{prompt: true, name: sh.Name, params: args, dg: sh.Diagnostics, opts: inv.opts}, nil
+			return source{prompt: true, name: sh.Name, params: args, dg: sh.diagnosticsFor(shellDiagnostics), opts: inv.opts}, nil
 		}
 		// Not read here. The program is on the same descriptor everything
 		// else the script does reads from, so how much of it the shell takes
@@ -2466,7 +2545,7 @@ func (sh Shell) route(args []string, inv invocation) (source, error) {
 		// runs — see program and Semantics.StdinProgramReadSize. Reading
 		// it all here is what handed `read x` end of input and then ran the
 		// data line as a command.
-		return source{onStdin: true, name: sh.Name, params: args, dg: sh.Diagnostics.ForStdin(), opts: inv.opts}, nil
+		return source{onStdin: true, name: sh.Name, params: args, dg: sh.diagnosticsFor(stdinDiagnostics), opts: inv.opts}, nil
 	}
 	path := args[0]
 	// A slash-less operand is looked for along PATH in the dialects that do
@@ -2516,7 +2595,7 @@ func (sh Shell) route(args []string, inv invocation) (source, error) {
 		// with no operand at all.
 		return source{
 			scriptErr: &scriptError{path: read, err: err},
-			name:      sh.Name, dg: sh.Diagnostics,
+			name:      sh.Name, dg: sh.diagnosticsFor(shellDiagnostics),
 			params: args[1:], opts: inv.opts,
 		}, nil
 	}
@@ -2529,7 +2608,7 @@ func (sh Shell) route(args []string, inv invocation) (source, error) {
 		// search resolved, which is what the shell had open.
 		return source{
 			scriptErr: &scriptError{path: read, err: interp.ErrBinaryScript},
-			name:      sh.Name, dg: sh.Diagnostics,
+			name:      sh.Name, dg: sh.diagnosticsFor(shellDiagnostics),
 			params: args[1:], opts: inv.opts,
 		}, nil
 	}
@@ -2538,7 +2617,7 @@ func (sh Shell) route(args []string, inv invocation) (source, error) {
 	// changes how it names the line.
 	return source{
 		src: string(b), name: read, file: read, zero: zero,
-		params: args[1:], dg: sh.Diagnostics.ForScript(), opts: inv.opts,
+		params: args[1:], dg: sh.diagnosticsFor(scriptDiagnostics), opts: inv.opts,
 	}, nil
 }
 
@@ -2547,7 +2626,7 @@ func (sh Shell) route(args []string, inv invocation) (source, error) {
 // wrote nothing, as the emulation the shell starts in has it. The mode is the
 // `--emulate` word or argv[0]'s, whichever named one — see
 // Semantics.ScriptSearchUnderEmulation.
-func (sh Shell) searchesForTheScript(inv invocation) bool {
+func (sh *Shell) searchesForTheScript(inv invocation) bool {
 	if inv.scriptSearchWritten {
 		return inv.scriptSearch
 	}
@@ -2571,7 +2650,7 @@ func (sh Shell) searchesForTheScript(inv invocation) bool {
 // a file of the name both here and on PATH, `bash name`, `ksh name` and `zsh
 // -o pathscript name` all run the one here, measured 2026-10-02. What counts
 // as being here is where they part — see Semantics.ScriptSearchTakesTheFirstFile.
-func (sh Shell) scriptOnPath(operand string, optionSaysSearch bool) (read, zero string, body []byte, found bool) {
+func (sh *Shell) scriptOnPath(operand string, optionSaysSearch bool) (read, zero string, body []byte, found bool) {
 	if !sh.Semantics.ScriptOperandSearchedOnPath && !optionSaysSearch || strings.ContainsRune(operand, '/') {
 		return operand, "", nil, false
 	}
@@ -2619,7 +2698,7 @@ func (sh Shell) scriptOnPath(operand string, optionSaysSearch bool) (read, zero 
 // open input file: name` for a mode-000 file on PATH as it does for nothing
 // anywhere, so the read of the operand below, which finds nothing or the
 // same refusal here, words it.
-func (sh Shell) firstScriptFile(operand string) (read, zero string, body []byte, found bool) {
+func (sh *Shell) firstScriptFile(operand string) (read, zero string, body []byte, found bool) {
 	list, _ := lookupEnv(sh.env(), "PATH")
 	candidates := []string{operand}
 	for _, dir := range filepath.SplitList(list) {
@@ -2653,7 +2732,7 @@ func (sh Shell) firstScriptFile(operand string) (read, zero string, body []byte,
 // positional parameter and `$0` stays the shell. See
 // Semantics.StdinOptionNamesTheOperands, which is the whole of it: nothing
 // else about the invocation changes.
-func (sh Shell) commandWithStdinOption(cmd string, operands []string, inv invocation) (source, error) {
+func (sh *Shell) commandWithStdinOption(cmd string, operands []string, inv invocation) (source, error) {
 	survives := sh.Semantics.StdinOptionSurvivesTheCommandString
 	switch sh.Semantics.StdinOptionNamesTheOperands {
 	case interp.Yes:
@@ -2679,7 +2758,7 @@ func (sh Shell) commandWithStdinOption(cmd string, operands []string, inv invoca
 // Spelled here as well as there because this is the one such refusal the front
 // end makes on its own account: whether `-c` with `-s` names its operands is a
 // question about the *invocation*, and there is no runner yet to ask.
-func (sh Shell) unanswered(what string) string {
+func (sh *Shell) unanswered(what string) string {
 	msg := what + ": the shells disagree here and no dialect was chosen"
 	if sh.AxisRemedy != "" {
 		msg += "; " + sh.AxisRemedy
@@ -2701,11 +2780,11 @@ func inputLabelFor(route interp.Route) string {
 // from every other route: the first is `$0` and only the rest are parameters,
 // so `sh -c 'echo $0' name a` prints `name`. With no operands at all the shell
 // keeps its own name and there are no parameters.
-func commandSource(sh Shell, src string, operands []string) source {
+func commandSource(sh *Shell, src string, operands []string) source {
 	in := source{
 		src: src, name: sh.Name, input: commandStringLabel,
 		wholeFirst: sh.Diagnostics.CommandStringParsedWhole,
-		dg:         sh.Diagnostics,
+		dg:         sh.diagnosticsFor(shellDiagnostics),
 	}
 	if len(operands) > 0 {
 		in.name, in.params = operands[0], operands[1:]
@@ -2722,13 +2801,18 @@ func commandSource(sh Shell, src string, operands []string) source {
 // about every hook: an interactive shell that could not `exec`, or whose
 // `umask` did nothing, would be a different shell from the one that runs the
 // same lines from a file.
-func (sh Shell) newRunner(name string, params []string, dg interp.Diagnostics, route interp.Route) *interp.Runner {
+func (sh *Shell) newRunner(name string, params []string, dg interp.Diagnostics, route interp.Route) *interp.Runner {
 	return sh.newRunnerAs(name, params, dg, route, "")
 }
 
 // newRunnerAs is newRunner for a shell started in an emulation — see
 // interp.Runner.InvocationEmulation.
-func (sh Shell) newRunnerAs(name string, params []string, dg interp.Diagnostics, route interp.Route, emulation string) *interp.Runner {
+func (sh *Shell) newRunnerAs(name string, params []string, dg interp.Diagnostics, route interp.Route, emulation string) *interp.Runner {
+	// The runner's own copies of the vector and the semantics, because a
+	// script moves both — `shopt -s extglob` is a field of the one and
+	// `inherit_errexit` of the other — and the Shell they came from is the
+	// one every later runner of this process is built from.
+	dialect, semantics := sh.Dialect, sh.Semantics
 	r := &interp.Runner{
 		// The emulation the invocation named, which the dialect reads as it
 		// registers. See interp.Runner.InvocationEmulation.
@@ -2744,8 +2828,8 @@ func (sh Shell) newRunnerAs(name string, params []string, dg interp.Diagnostics,
 		// parsed at *run* time can name the route a failure the front end
 		// saw itself would have named. See Runner.InputName.
 		InputName:   inputLabelFor(route),
-		Dialect:     &sh.Dialect,
-		Semantics:   &sh.Semantics,
+		Dialect:     &dialect,
+		Semantics:   &semantics,
 		Diagnostics: &dg,
 		Name:        name,
 		// argv[0], which is a different fact from Name and is the one the
@@ -2981,7 +3065,7 @@ func (sh Shell) newRunnerAs(name string, params []string, dg interp.Diagnostics,
 // The prelude is here and not in setUpRunner because the ordinary route
 // sources it later, at its own point in runInput and after the parser's alias
 // tables are wired; calling it from both would source it twice.
-func (sh Shell) setUpFreshShell(r *interp.Runner) {
+func (sh *Shell) setUpFreshShell(r *interp.Runner) {
 	// The vector this front end composed, not the one the calling shell is
 	// holding. interp builds the child from the caller's exported fields, and
 	// two of those carry state a *script* has moved: `shopt -s extglob` lives
@@ -3018,7 +3102,7 @@ func (sh Shell) setUpFreshShell(r *interp.Runner) {
 // setUpRunner is everything a Runner this front end built needs past its
 // fields, in one function so that the shell interp builds for itself gets the
 // same two steps in the same order rather than a second copy of them.
-func (sh Shell) setUpRunner(r *interp.Runner) {
+func (sh *Shell) setUpRunner(r *interp.Runner) {
 	if sh.Register != nil {
 		// The dialect's own adjustment: what it adds to or removes from the
 		// substrate's builtins, which is neither grammar nor semantics.
@@ -3040,19 +3124,19 @@ func (sh Shell) setUpRunner(r *interp.Runner) {
 // is no session to keep, so the run ends. What the guard buys is that it ends
 // the way a shell ends: a diagnostic on stderr and a status, rather than a Go
 // stack trace and whatever the runtime exits with.
-func (sh Shell) run(in source) (status int) {
+func (sh *Shell) run(in source) (status int) {
 	if sh.guard().Do(func() { status = sh.runInput(in) }) {
 		return panicguard.Status
 	}
 	return status
 }
 
-func (sh Shell) runInput(in source) int {
+func (sh *Shell) runInput(in source) int {
 	// `name` is `$0` — the path the shell was invoked by — and not what a
 	// diagnostic calls the shell, which one dialect answers with a fixed name
 	// instead (source.diagName). Folding the two together shortened `$0`
 	// along with the diagnostic, which is a thing no shell in the panel does.
-	src, name, dg := in.src, in.name, in.dg
+	src, name, dg := in.src, in.name, *in.diag()
 	r := sh.newRunnerAs(name, in.params, dg, in.invocationRoute(), in.invocationEmulation())
 	sh.holdTheScript(r, in)
 	if in.zero != "" {
@@ -3083,8 +3167,8 @@ func (sh Shell) runInput(in source) int {
 	// And the word an `exit` says on the way out on this route, which the
 	// runner writes itself only when jobs hold the exit back. See
 	// interp.Runner.LeavingWord and sayLeaving.
-	if in.interactive && in.dg.LeavingIsAlsoSaidOnTheseRoutes.Has(in.programRoute()) {
-		r.LeavingWord = leavingWord(in.dg, in.loginShell())
+	if in.interactive && in.diag().LeavingIsAlsoSaidOnTheseRoutes.Has(in.programRoute()) {
+		r.LeavingWord = leavingWord(*in.diag(), in.loginShell())
 	}
 	// And the third invocation fact an option namespace publishes: whether
 	// this shell was told to read none of its startup files. Carried over
@@ -3332,7 +3416,7 @@ func (sh Shell) runInput(in source) int {
 // names a spelling and no builtin — it would read the word and apply nothing,
 // which reads as a working option — so that pair is asserted where the value
 // is written rather than defended here.
-func (sh Shell) applyEmulation(r *interp.Runner, in source) {
+func (sh *Shell) applyEmulation(r *interp.Runner, in source) {
 	if !in.emulating {
 		return
 	}
@@ -3369,7 +3453,7 @@ func (sh Shell) applyEmulation(r *interp.Runner, in source) {
 // Measured 2026-09-18 on ksh93u+ 2012-08-01 with a `~/.profile` that announces
 // itself: `ksh -o login_shell -c 'echo $-'` runs the profile and reports
 // `chsBl`, byte for byte with `ksh -l -c`.
-func loginShellOption(sh Shell, r *interp.Runner, in source) source {
+func loginShellOption(sh *Shell, r *interp.Runner, in source) source {
 	if r.LoginShell && !in.loginShell() {
 		in.startup.login = true
 	}
@@ -3388,7 +3472,7 @@ func loginShellOption(sh Shell, r *interp.Runner, in source) source {
 // zsh exits 1 while `zsh -o nosuchoption` already exited 1 — one question
 // answered two ways because only one of the paths could carry an answer
 // (#483).
-func (sh Shell) applyOptions(r *interp.Runner, opts []optionSpec) (int, bool) {
+func (sh *Shell) applyOptions(r *interp.Runner, opts []optionSpec) (int, bool) {
 	// The *second* namespace last, whatever order the words were written in.
 	// The one shell with that letter judges every `set` letter and every
 	// `set -o` name before it looks at a `shopt` name, and the two tables
@@ -3467,7 +3551,7 @@ func (sh Shell) applyOptions(r *interp.Runner, opts []optionSpec) (int, bool) {
 // beside it, and one no input in the corpus reaches, so nothing said so. The
 // library had it right all along: interp's own Run runs the EXIT trap on the
 // same error, and only this front end disagreed.
-func (sh Shell) execute(r *interp.Runner, pr *program, in source) int {
+func (sh *Shell) execute(r *interp.Runner, pr *program, in source) int {
 	ctx := sh.context()
 	status, how := sh.executeLines(ctx, r, pr, in)
 	if how == endingRanOut && in.thenStdin && !r.Exited() {
@@ -3521,12 +3605,12 @@ func (sh Shell) execute(r *interp.Runner, pr *program, in source) int {
 // nothing and neither does an `exit` in a sourced file. See
 // Diagnostics.LeavingIsAlsoSaidOnTheseRoutes and Runner.ExitRanOutsideAFile,
 // which carry what was measured for each.
-func (sh Shell) sayLeaving(r *interp.Runner, in source) {
-	word := leavingWord(in.dg, in.loginShell())
+func (sh *Shell) sayLeaving(r *interp.Runner, in source) {
+	word := leavingWord(*in.diag(), in.loginShell())
 	if !in.interactive || word == "" || r.LeavingWordWithheld() {
 		return
 	}
-	if !in.dg.LeavingIsAlsoSaidOnTheseRoutes.Has(in.programRoute()) {
+	if !in.diag().LeavingIsAlsoSaidOnTheseRoutes.Has(in.programRoute()) {
 		return
 	}
 	if !r.ExitRanOutsideAFile() {
@@ -3563,7 +3647,7 @@ func endOfInputRefused(dg interp.Diagnostics, login bool) string {
 // standard-input diagnostics, and takes its input in whatever size this
 // dialect's StdinProgramReadSize says — so a `read` in it finds what a
 // `read` on a plain `sh -s` would.
-func (sh Shell) stdinAfterCommandString(r *interp.Runner) *program {
+func (sh *Shell) stdinAfterCommandString(r *interp.Runner) *program {
 	pr := wholeProgram("", r.ParsingDialect(sh.Dialect.On(syntax.RouteOnStandardInput)))
 	pr.more = stdinProgram(r, sh.Semantics.StdinProgramReadSize)
 	if sh.Dialect.ExpandAliasesInProgramText.Has(syntax.RouteOnStandardInput) {
@@ -3577,10 +3661,10 @@ func (sh Shell) stdinAfterCommandString(r *interp.Runner) *program {
 // asStandardInput is this source relabeled as the standard-input half that
 // follows it: the same shell and the same parameters, reported the way the
 // standard-input route reports.
-func (in source) asStandardInput(sh Shell) source {
+func (in source) asStandardInput(sh *Shell) source {
 	in.src, in.input, in.wholeFirst = "", "", false
 	in.onStdin, in.thenStdin = true, false
-	in.dg = sh.Diagnostics.ForStdin()
+	in.dg = sh.diagnosticsFor(stdinDiagnostics)
 	return in
 }
 
@@ -3620,7 +3704,7 @@ const (
 // `echo one` on line 1 runs before line 3 fails to parse. The line is the
 // unit and not the statement: with `echo one; { fi; }` on one line nothing
 // runs, so a whole line is parsed before any of it is.
-func (sh Shell) executeLines(
+func (sh *Shell) executeLines(
 	ctx context.Context, r *interp.Runner, pr *program, in source,
 ) (int, ending) {
 	shown := 0
@@ -3733,7 +3817,7 @@ func (sh Shell) executeLines(
 				// first.
 				sh.sayRemarks(in.remarkDiagnostics(r), in.remarkName(r), p.Remarks(), 0, true)
 				sh.errf("%s", in.parseDiagnostic(r, err, pr.text(), 0))
-				return in.parseStatus(r, err, pr.text(), in.dg.StatusForParseError(err)), endingParseFailure
+				return in.parseStatus(r, err, pr.text(), in.diag().StatusForParseError(err)), endingParseFailure
 			}
 		}
 		handed = true
@@ -3758,7 +3842,7 @@ func (sh Shell) executeLines(
 				// is one complaint and status 1 in all four.
 				say(verboseUpTo(pr.text(), err))
 				sh.errf("%s", in.parseDiagnostic(r, err, pr.text(), r.LineReached()))
-				return in.parseStatus(r, err, pr.text(), in.dg.StatusForParseErrorAfter(err, r.ExitStatus())), endingParseFailure
+				return in.parseStatus(r, err, pr.text(), in.diag().StatusForParseErrorAfter(err, r.ExitStatus())), endingParseFailure
 			}
 			// Whatever is left once the last line has been handed out is
 			// still input the shell read, and `set -v` writes back what it
@@ -3776,7 +3860,7 @@ func (sh Shell) executeLines(
 			if sh.readOn(r, pr, in, err) {
 				continue
 			}
-			return in.parseStatus(r, err, pr.text(), in.dg.StatusForParseErrorAfter(err, r.ExitStatus())), endingParseFailure
+			return in.parseStatus(r, err, pr.text(), in.diag().StatusForParseErrorAfter(err, r.ExitStatus())), endingParseFailure
 		}
 		if line.Refused != nil {
 			// A construct inside the line did not read, and only the line
@@ -3790,7 +3874,7 @@ func (sh Shell) executeLines(
 				// `set -e` makes it the file's after all: measured, bash 5.3
 				// stops at the refused line and exits at the parse-failure
 				// status rather than carrying on at 1.
-				return in.dg.StatusForParseError(line.Refused), endingParseFailure
+				return in.diag().StatusForParseError(line.Refused), endingParseFailure
 			}
 			r.SetExitStatus(1)
 			continue
@@ -3825,7 +3909,7 @@ func (sh Shell) executeLines(
 		if err := r.RunPart(ctx, line); err != nil {
 			// Refused rather than silently doing nothing: a shell that
 			// quietly skips what it cannot do is worse than one that says so.
-			sh.errf("%s", in.dg.Report(in.diagName(), 1, err.Error()+"\n"))
+			sh.errf("%s", in.diag().Report(in.diagName(), 1, err.Error()+"\n"))
 			return usageStatus, endingRefused
 		}
 		// An interactive shell's program may cost only its line over a fatal
@@ -3870,7 +3954,7 @@ func (sh Shell) executeLines(
 		if pr.gate == nil && r.HistoryRecording() && r.HistoryExpansionInAScript() {
 			pr.handOver(&histGate{
 				r:      r,
-				report: func(line int, msg string) string { return in.dg.Report(in.diagName(), line, msg) },
+				report: func(line int, msg string) string { return in.diag().Report(in.diagName(), line, msg) },
 			}, echoed.off)
 			// And the list now holds the line a builtin is written on, which
 			// is the state `history -s` and `history -p` each drop one entry
@@ -3983,7 +4067,7 @@ func (sh *Shell) sayVerbose(w io.Writer, src string, upTo int, at verbosePos, ec
 // Not called where the shell stopped early. A script that runs `exit` is done
 // reading, and three of the four echo nothing after it; a line that failed to
 // parse is a separate question with its own answer.
-func (sh Shell) sayVerboseRest(w io.Writer, src string, at verbosePos, echo bool) {
+func (sh *Shell) sayVerboseRest(w io.Writer, src string, at verbosePos, echo bool) {
 	for at.off < len(src) {
 		rest := src[at.off:]
 		text := rest
@@ -4061,7 +4145,7 @@ func linesIn(text string) int {
 // writes the newline anyway and the rest leave the echo and the first byte
 // the script writes on the same line. See
 // interp.Semantics.VerboseEchoAddsAMissingNewline.
-func (sh Shell) echoLine(w io.Writer, text string, ended bool) {
+func (sh *Shell) echoLine(w io.Writer, text string, ended bool) {
 	if !ended && sh.Semantics.VerboseEchoAddsAMissingNewline == interp.No {
 		_, _ = io.WriteString(w, text)
 		return
@@ -4085,7 +4169,7 @@ func (sh Shell) echoLine(w io.Writer, text string, ended bool) {
 // and it turned every `zsh -c` into a shell that had already exited before
 // its first command. That is exactly the split RunPart's own comment
 // describes, and this was the one caller on the wrong side of it. #2111.
-func (sh Shell) source(r *interp.Runner, name string) int {
+func (sh *Shell) source(r *interp.Runner, name string) int {
 	// What follows is the dialect rather than a script, and the runner has to
 	// know: a function defined here speaks for the shell, so its refusals
 	// carry the location and the name a builtin's would. See
@@ -4118,7 +4202,7 @@ func (sh Shell) source(r *interp.Runner, name string) int {
 // dialect's parameter for it, over whatever its prelude wrote there: the base
 // name of argv[0], a login shell's leading `-` taken off. See
 // interp.Semantics.InvocationNameParameter.
-func (sh Shell) nameTheInvocation(r *interp.Runner) {
+func (sh *Shell) nameTheInvocation(r *interp.Runner) {
 	param := sh.Semantics.InvocationNameParameter
 	if param == "" || r.Invocation == "" {
 		return
@@ -4174,10 +4258,10 @@ func (sh *Shell) sayRemarks(dg interp.Diagnostics, name string, rs []syntax.Rema
 // The failed text has to be retired before reading on, because the parser
 // keeps its error until the pending text is replaced — otherwise the next turn
 // of the loop would find the same failure and report it again forever.
-func (sh Shell) readOn(r *interp.Runner, pr *program, in source, err error) bool {
-	if !in.onStdin || !in.dg.StdinProgramSurvivesAParseFailure {
+func (sh *Shell) readOn(r *interp.Runner, pr *program, in source, err error) bool {
+	if !in.onStdin || !in.diag().StdinProgramSurvivesAParseFailure {
 		return false
 	}
-	r.SetExitStatus(in.dg.StatusForParseErrorAfter(err, r.ExitStatus()))
+	r.SetExitStatus(in.diag().StatusForParseErrorAfter(err, r.ExitStatus()))
 	return pr.fill(true)
 }

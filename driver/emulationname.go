@@ -97,7 +97,7 @@ func EmulationNamed(argv []string, e interp.EmulationOption) string {
 // so the option does not fall back to the name when its word names no
 // emulation of its own. Writing the option at all is what puts the name aside, which is
 // what leaving in.emulating alone here does.
-func (sh Shell) emulationFromName(argv []string, in *source) {
+func (sh *Shell) emulationFromName(argv []string, in *source) {
 	if in.emulating {
 		return
 	}

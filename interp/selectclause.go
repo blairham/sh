@@ -135,6 +135,10 @@ func (r *Runner) selectClause(ctx context.Context, c *syntax.SelectClause) error
 			// name empty and REPLY holding what was typed, and the body still
 			// runs. A script tests the name to find out.
 			r.setVar("REPLY", line)
+			// REPLY is what `read` with no name fills, and it is marked as
+			// `read`'s is — by ksh93 too, which leaves the loop's own name
+			// alone (#6462).
+			r.markForAllexport("REPLY")
 			// **A name that will not take the choice ends the loop.** The
 			// only way the store can fail here is the reference one: a
 			// `select` variable that is a reference with nothing to point at
@@ -162,6 +166,7 @@ func (r *Runner) selectClause(ctx context.Context, c *syntax.SelectClause) error
 			if r.assignFailed && !failedBefore {
 				return nil
 			}
+			r.markAFilledNameForAllexport(c.Name)
 			if err := r.runList(ctx, c.Body); err != nil {
 				return err
 			}

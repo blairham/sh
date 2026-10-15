@@ -241,4 +241,5 @@ func (r *Runner) setLoopName(name, value string) {
 		return
 	}
 	r.setVar(name, value)
+	r.markAFilledNameForAllexport(name)
 }

@@ -12871,12 +12871,19 @@ type Semantics struct {
 	// refusal, so `a=(x 1); export -A a` was `cannot convert indexed to
 	// associative array` where the reference exports the array and says nothing.
 	//
-	// unpinned dash, ksh, zsh, ash: `export` takes no container letter in any of
-	// them, which Semantics.ExportOptions is the statement of — it is empty
-	// everywhere but the one dialect, and `export -A` is a bad option there.
-	// Measured the same day: ksh93u+ is `export: -A: unknown option` with its
-	// usage line and zsh 5.9.2 `bad option: -A`, and both of this shell's
-	// columns already answer exactly that.
+	// zsh says **No**, and only for the indexed letter, because that is the
+	// one container letter its `export` takes: `-A` is `bad option: -A` there.
+	// Measured 2026-10-15 on zsh 5.9.2 from a script file under `env -i
+	// PATH=/usr/bin:/bin` and `-f` (#6452): `export -a b` lists as `typeset
+	// -ax b=(  )`, an empty exported array, and `x=s; export -a x` converts
+	// the standing scalar to the same. The letter takes effect without a
+	// value, so nothing is taken back.
+	//
+	// dash, ksh and ash leave it unanswered: `export` takes no container
+	// letter in any of them, which Semantics.ExportOptions is the statement
+	// of, so the question has no line to be about. ksh93u+ is `export: -a:
+	// unknown option` and dash `Illegal option -a`, and this shell's columns
+	// already answer exactly that.
 	ExportContainerLetterNeedsAValue Answer
 	// TypeLetterAndAnArrayLiteralIsAnInconsistentType refuses a declaration
 	// that names a *type* — the integer or the float letter — and assigns an

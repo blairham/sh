@@ -457,6 +457,15 @@ func (r *Runner) bareLocalListing() int {
 	case BareLocalListsNothing:
 		return 0
 	case BareLocalListsLocals:
+		if len(r.scopes) == 0 {
+			// The top level, in a dialect that both lets the word run there
+			// and lists the running call's locals: there is no call, so
+			// there are no locals to list. No shell in the panel answers
+			// that pair — the one that lists locals refuses the word outside
+			// a function — so this is the shape's only consistent reading
+			// rather than a measurement.
+			return 0
+		}
 		sc := r.scopes[len(r.scopes)-1]
 		if row := r.localDashListingRow(); row != "" {
 			// Ahead of the names, which is where it is measured — see

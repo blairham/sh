@@ -146,6 +146,7 @@ ash   ExportOrReadonlyTakesAReferenceToAnElement
 ash   ExportThroughASubscriptedOperandRecordsTheLetter
 ash   ExportedCompoundReachesAChildAsItsFirstValue
 ash   FailingPipelineWhoseLastElementRanHere
+ash   FdVariableOnASubshellIsTheSubshells
 ash   FloatFormatLetterE
 ash   FloatLetterChangeRereadsTheRendering
 ash   ForNameWhenTheLoopRuns
@@ -531,6 +532,7 @@ dash  ExportOrReadonlyTakesAReferenceToAnElement
 dash  ExportThroughASubscriptedOperandRecordsTheLetter
 dash  ExportedCompoundReachesAChildAsItsFirstValue
 dash  FailingPipelineWhoseLastElementRanHere
+dash  FdVariableOnASubshellIsTheSubshells
 dash  FloatFormatLetterE
 dash  FloatLetterChangeRereadsTheRendering
 dash  ForNameWhenTheLoopRuns
@@ -796,6 +798,7 @@ zsh   DeclarationThroughAReferenceNamesTheOperand
 zsh   ErrtraceReachesSubshells
 zsh   ExitTrapFiresWhereTheScriptStopped
 zsh   ExportOrReadonlyTakesAReferenceToAnElement
+zsh   FdVariableOnASubshellIsTheSubshells
 zsh   ForNameWhenTheLoopRuns
 zsh   FunctionNameWhenTheDefinitionRuns
 zsh   GetoptsRefusedNameStillScans

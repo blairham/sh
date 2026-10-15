@@ -5349,6 +5349,11 @@ func Semantics() interp.Semantics {
 	// on this under `NO_CLOBBER prevents overwriting parameter with allocated
 	// fd`. See interp.Semantics.NoclobberProtectsAnFdVariable.
 	s.NoclobberProtectsAnFdVariable = interp.Yes
+	// unanswered FdVariableOnASubshellIsTheSubshells: a `{name}` behind
+	// parentheses never parses here — `( : ) {v}</dev/null` is ``parse error
+	// near `{'`` in zsh 5.9.2 under every emulation, measured 2026-10-15
+	// (#6507, syntax.Dialect.FdVariableRefusedAfterACompound) — so there is no
+	// allocation for the question to be about.
 	// A command word written with a leading `%` is a job specification here,
 	// read as the script wrote it: `"%prep"`, `\%prep` and a parameter
 	// holding the text are all ordinary command names, where bash takes all

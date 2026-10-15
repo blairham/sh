@@ -26348,6 +26348,18 @@ it — two of the three that have the grammar; ksh93 takes it back with
 the command's other redirections, so the number the variable holds is
 already dead.
 
+**`FdVariableOnASubshellIsTheSubshells`** — bash yes · dash — · ksh93 no · zsh —
+
+Makes a `{name}` redirection on a `( … )` in the subshell, so the shell
+around the parentheses keeps neither the name nor the descriptor. Measured
+2026-10-15, `-c`: `( : ) {v}</dev/null; echo "[$v]"; exec {x}</dev/null;
+echo "x=$x"` is `[]` and `x=10` in bash 5.3.20, `[10]` and `x=10` in
+ksh93u+ (whose descriptor still goes back, by the axis above). The
+parentheses see the number in both, and `v=keep` or `declare -i v=3` before
+it come back untouched in bash. zsh refuses a `{name}` behind any compound
+at parse time and dash has none, so neither answers. Asked only where the
+parentheses carry a `{name}` redirection (#6520).
+
 **`ReadonlyFdVariableRefusesAClose`** — bash no · dash — · ksh93 yes · zsh yes
 
 Refuses `exec {name}>&-` when the name holding the descriptor is frozen.

@@ -3192,6 +3192,10 @@ func Semantics() interp.Semantics {
 	// allocates a second descriptor and overwrites it in silence, measured
 	// 2026-09-29. See interp.Semantics.NoclobberProtectsAnFdVariable.
 	s.NoclobberProtectsAnFdVariable = interp.No
+	// `( : ) {v}</dev/null` makes the allocation in the subshell: the shell
+	// keeps neither `v` nor descriptor 10, measured 2026-10-15 on 5.3.20
+	// (#6520). See interp.Semantics.FdVariableOnASubshellIsTheSubshells.
+	s.FdVariableOnASubshellIsTheSubshells = interp.Yes
 	s.DuplicationTargetError = interp.DuplicationTargetErrorCarriesOn
 	s.LocalOutsideAFunctionIsAnError = interp.Yes
 	s.LocalOutsideAFunctionIsFatal = interp.No

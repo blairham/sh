@@ -113,3 +113,38 @@ func TestTheQueueParametersBelongToTheCall(t *testing.T) {
 		})
 	}
 }
+
+// Under an editor, `PENDING` is the editor's count of typed bytes behind the
+// key, read when the widget asks. Measured 2026-10-15 on zsh 5.9.2 through a
+// pseudo-terminal: `abcdef` typed in one write into a self-insert wrapper
+// reads 5 at `a` and 0 at `f`, and a key typed on its own reads 0.
+//
+// It is what F-Sy-H and zsh-autosuggestions test to skip a key that more
+// input will redo, so a line typed ahead of the prompt is highlighted once
+// rather than once per key (#6363) — the `[pending]` row is their shape.
+func TestPendingIsTheEditorsCountOfTypedBytes(t *testing.T) {
+	r, out := zleRunner(t, `
+		kind() {
+			if (( $PENDING > 0 || $KEYS_QUEUED_COUNT > 0 )); then
+				print -r -- "[$PENDING pending]"
+			else
+				print -r -- "[$PENDING idle]"
+			fi
+		}
+		zle -N kind
+	`)
+	for _, tc := range []struct {
+		input, want string
+	}{
+		{"bcdef", "[5 pending]"},
+		{"", "[0 idle]"},
+	} {
+		_, ok, said, _ := runWidgetWatching(t, r, out, "kind", repl.Line{Buffer: "a"}, &stubEditor{input: []byte(tc.input)})
+		if !ok {
+			t.Fatal("the widget did not run")
+		}
+		if !strings.Contains(said, tc.want) {
+			t.Errorf("%d bytes behind the key: got %q, want %q", len(tc.input), said, tc.want)
+		}
+	}
+}

@@ -335,8 +335,7 @@ var zleLineParameters = []string{"BUFFER", "CURSOR", "LBUFFER", "RBUFFER"}
 var zleParameters = append(slices.Clone(zleLineParameters), "WIDGET")
 
 // zleQueueParameters are what a widget reads to ask how much input is
-// waiting behind the keystroke it was called for, and this editor's answer
-// to both is the constant 0.
+// waiting behind the keystroke it was called for.
 //
 // Not in zleParameters, for the reason region_highlight is not: that list is
 // the line and the widget's name, which is what the completion branch marks
@@ -345,10 +344,9 @@ var zleParameters = append(slices.Clone(zleLineParameters), "WIDGET")
 // rather than only a completion one.
 //
 // `PENDING` is the count of bytes already typed and immediately readable;
-// `KEYS_QUEUED_COUNT` is what `zle -U` has pushed back. This shell reads one
-// keystroke at a time and pushes nothing back, so 0 is the honest answer to
-// both rather than a placeholder — the same answer real zsh gives on a
-// system that cannot ask its terminal how much is buffered.
+// `KEYS_QUEUED_COUNT` is what `zle -U` has pushed back. Both start at 0 here,
+// which is what a widget no editor is running reads; under the editor,
+// `PENDING` is the editor's own count — see openPendingCount.
 //
 // They were absent, which is not the same as 0 and is what #4211 was:
 // zsh-autosuggestions opens `_zsh_autosuggest_modify` with
@@ -356,6 +354,19 @@ var zleParameters = append(slices.Clone(zleLineParameters), "WIDGET")
 // the arithmetic with no left operand at all, so every keystroke at a real
 // prompt printed `bad math expression: operand expected at `> 0 || 0 > 0 ”.
 var zleQueueParameters = []string{"PENDING", "KEYS_QUEUED_COUNT"}
+
+// openPendingCount answers `$PENDING` from the editor running the widget:
+// the bytes typed behind this key that no key has read yet. Opened beside the
+// line's parameters, which give it 0 for a widget no editor is running.
+//
+// The count is what makes typing ahead cheap, and that is the reason it is
+// asked rather than left at 0: F-Sy-H returns from its highlighter with
+// `[[ $PENDING -gt 0 ]]` and zsh-autosuggestions from its suggester with
+// `(( $PENDING > 0 ))`, so a line typed before the prompt was ready is
+// highlighted once, for its last key, rather than once per key (#6363).
+func openPendingCount(r *interp.Runner, a repl.Actions) {
+	r.SetDynamic("PENDING", func(*interp.Runner) string { return strconv.Itoa(a.PendingBytes()) })
+}
 
 // zleCompleters is what may be named as the second word of `zle -C`: the
 // builtin completion widgets, each under its own name and under the `.`
@@ -1654,6 +1665,7 @@ func runWidgetCall(
 	}
 	if editing {
 		openUndoChangeNumber(r, actions, opened.scope)
+		openPendingCount(r, actions)
 		fetchCutBuffer(r, actions)
 	}
 	openHistNo(r, actions, editing)
@@ -1674,6 +1686,7 @@ func runWidgetCall(
 			// The caller's own, which closing this call took away with
 			// the rest. The same editor is on both ends of a nested call.
 			openUndoChangeNumber(r, actions, caller.opened.scope)
+			openPendingCount(r, actions)
 		}
 		if caller.open {
 			openHistNo(r, actions, editing)

@@ -148,6 +148,8 @@ func (e *stubEditor) ReadKeyByte() (byte, bool) {
 
 func (e *stubEditor) InputPending() bool { return len(e.input) > 0 }
 
+func (e *stubEditor) PendingBytes() int { return len(e.input) }
+
 func (e *stubEditor) ChangeNumber(repl.Line) int {
 	e.changesAsked++
 	return e.changes

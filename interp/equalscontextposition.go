@@ -55,6 +55,7 @@ func (r *Runner) SetCommandWordModifier(name string) {
 		r.commandWordModifiers = map[string]bool{}
 	}
 	r.commandWordModifiers[name] = true
+	r.modifierMemoSet = false
 }
 
 // leadingModifierWords counts the written words in front of the one naming
@@ -75,18 +76,26 @@ func (r *Runner) leadingModifierWords(args []*syntax.Word) int {
 		return 0
 	}
 	for j, w := range args {
-		name := literalName(w)
-		if name == "" {
-			return j
-		}
-		if _, ok := r.precommands[name]; ok {
-			continue
-		}
-		if !r.commandWordModifiers[name] {
+		if !r.modifierWord(literalName(w)) {
 			return j
 		}
 	}
 	return len(args)
+}
+
+// modifierWord reports whether a written word is a precommand modifier or a
+// command-word modifier, remembering the answer for the last word asked: a
+// command's first word is the same name loop after loop, and the two tables
+// are filled before anything runs. Setting either one clears the memory.
+func (r *Runner) modifierWord(name string) bool {
+	if name == "" {
+		return false
+	}
+	if !r.modifierMemoSet || name != r.modifierMemoName {
+		_, pre := r.precommands[name]
+		r.modifierMemoName, r.modifierMemo, r.modifierMemoSet = name, pre || r.commandWordModifiers[name], true
+	}
+	return r.modifierMemo
 }
 
 // outsideTheEqualsContextWord arms the flag for one word and hands back the

@@ -5155,7 +5155,12 @@ type Runner struct {
 	equalsTildeMemoName string
 	equalsTildeMemo     bool
 	equalsTildeMemoSet  bool
-	equalsTildeContext  bool
+	// modifierMemoName and modifierMemo are whether the word last asked
+	// about is a modifier; see modifierWord.
+	modifierMemoName   string
+	modifierMemo       bool
+	modifierMemoSet    bool
+	equalsTildeContext bool
 	// pipeStatus is what the last pipeline's elements reported, and
 	// pipeStatusName is what the dialect calls it. The record is only kept
 	// when a dialect has named it, because nothing else can read it.

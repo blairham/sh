@@ -1305,6 +1305,16 @@ type Semantics struct {
 	// scopes the prefix — the store lands in a cell the call just made and
 	// nothing was watching it.
 	//
+	// **The call's cell is exported for the call**, whatever
+	// PrefixToAFunctionIsExported says about a prefix the shell owns: the
+	// prefix is the call's environment. Measured 2026-10-15 on ksh93u+,
+	// `function f { printenv v; typeset -p v; }; v=4 f` prints `4` and
+	// `typeset -x v=4`, where the POSIX form's child finds nothing. A
+	// `function`-form call nested inside reads the value and hands its own
+	// children nothing — see Runner.sealEnclosingPrefixExports. And an OPTIND
+	// prefix is the call's getopts cursor rather than being reset to 1 — see
+	// Runner.optindPrefixedToThisCall (#6538).
+	//
 	// Asked only where a `function`-form function is really called with a
 	// named prefix in front of it, so a dialect without the keyword is never
 	// asked.

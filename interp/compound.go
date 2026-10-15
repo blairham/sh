@@ -2014,6 +2014,10 @@ func (r *Runner) callFuncInPlace(ctx context.Context, fn *syntax.FuncDecl, name 
 	// of names and a body that never reads `v` may still write it. See
 	// staticscope.go.
 	r.sealCallerLocals(sc)
+	// And the export the cells an enclosing call's prefix made carry, which
+	// such a body does not hand its own children. See
+	// Runner.sealEnclosingPrefixExports.
+	r.sealEnclosingPrefixExports(sc)
 	// And, in the dialect with a second declaration word, the names the
 	// calls below this one declared **private** — put aside for exactly the
 	// same reason and through the same machinery, over a set of names

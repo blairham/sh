@@ -5,6 +5,7 @@ package interp
 
 import (
 	"context"
+	"slices"
 	"strconv"
 	"strings"
 )
@@ -1378,6 +1379,16 @@ func (r *Runner) localizeGetoptsCursor(sc *scope) {
 			// and zsh leaves an exported OPTIND's environment copy where it
 			// was: `export OPTIND=3; f() { printenv OPTIND; }; f` hands the
 			// child `3` (#6497).
+			if r.optindPrefixedToThisCall() {
+				// The call's own cursor is the one its prefix set: the
+				// prefix is a cell the call owns, written over the reset.
+				// Measured 2026-10-15 on ksh93u+, `function f { echo
+				// $OPTIND; getopts a o -a; echo $OPTIND; }; OPTIND=4 f;
+				// echo $OPTIND` is `4 4 1` — the body starts at 4, a scan
+				// from 4 over one word finds nothing, and the caller's 1
+				// comes back (#6538).
+				break
+			}
 			r.storeOwnParameter("OPTIND", "1", func() { r.setVarQuietly("OPTIND", "1") })
 			r.optChar, r.optindAssigned = 1, false
 		case GetoptsFunctionPositionIsTheCallsOwn:
@@ -1570,4 +1581,18 @@ func (r *Runner) restoreGetoptsCursor(sc *scope) {
 		return
 	}
 	r.optChar, r.optindAssigned = sc.savedOptChar, sc.savedOptindAssigned
+}
+
+// optindPrefixedToThisCall reports whether the call being entered was given
+// OPTIND by a prefix scoped to it — see Runner.prefixScopedToTheCall. The
+// prefix's frame is the one pushed just before the call's scope.
+func (r *Runner) optindPrefixedToThisCall() bool {
+	if len(r.callPrefixes) == 0 {
+		return false
+	}
+	frame := r.callPrefixes[len(r.callPrefixes)-1]
+	if !frame.scoped || frame.scopeDepth != len(r.scopes)-1 {
+		return false
+	}
+	return slices.Contains(frame.names, "OPTIND")
 }

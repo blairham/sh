@@ -9906,6 +9906,9 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 		// told about it, are the two axes taken back below.
 		var undo []savedVar
 		var callHeld []string
+		// The caller's getopts cursor, before a prefix moves it. See the
+		// take-back below.
+		callerWord, callerChar, callerAssigned := r.optWord, r.optChar, r.optindAssigned
 		// Whether the cell the prefix writes belongs to the **call** rather
 		// than to the shell. Asked once for the command and not once per
 		// name, because it is a fact about the function being called — see
@@ -9981,6 +9984,15 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 				break
 			}
 			callHeld = append(callHeld, held)
+			if scoped {
+				// A cell the call owns is exported for the call, whatever
+				// the axis below says about a prefix the shell owns: the
+				// prefix is the call's environment, and every child the body
+				// starts is handed it. See
+				// Semantics.PrefixToAKeywordFunctionIsScopedToTheCall.
+				r.exportedPut(held, true)
+				continue
+			}
 			// The export attribute for the duration, which the two readings
 			// move in opposite directions rather than one of them leaving it
 			// alone: where the prefix is the command's *environment* the name
@@ -10061,6 +10073,16 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 				left = r.callPrefixes[frame].undo
 			}
 			r.takeBackFunctionPrefix(left, scoped)
+			if scoped && slices.Contains(callHeld, "OPTIND") {
+				// A prefixed OPTIND was the call's own cursor (see
+				// localizeGetoptsCursor), so the caller gets back the
+				// cursor it had, place inside a word and all — the cell's
+				// take-back is not an assignment that moves it. Measured
+				// 2026-10-15 on ksh93u+, `set -- -ab; getopts ab o;
+				// function f { :; }; OPTIND=2 f; getopts ab o` reads `b`
+				// at 2 (#6538).
+				r.optWord, r.optChar, r.optindAssigned = callerWord, callerChar, callerAssigned
+			}
 			r.line = bodyLine
 		}()
 		// A value that would not expand gives the call up. Behind the

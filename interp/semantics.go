@@ -15357,12 +15357,15 @@ type Semantics struct {
 	// the language. The zero value is the answer this shell gave everywhere
 	// before the axis existed.
 	//
-	// unpinned bash: bash 5.3.20 saves too, but by a different rule this
-	// shell does not yet hold — one save per *redirection* rather than per
-	// stream, `{ … } 2>/dev/null 2>/dev/null` holding 10 and 11, and no
-	// copy of a duplication's source — and its substitutions are published
-	// from 63 down, so only `exec {v}` inside a redirected command can see
-	// it. Filed as #6502 rather than half-modeled.
+	// bash 5.3.20 is the fourth value: it saves too, but once per
+	// *redirection* rather than per stream — `{ … } 2>/dev/null 2>/dev/null`
+	// holding 10 and 11 — wherever the stream is open when the redirection
+	// is reached, with no copy of a duplication's source, and with the pipe
+	// a `lastpipe` element reads saving nothing (#6502).
+	//
+	// unpinned bash: its substitutions are published from 63 down, so only
+	// a `{v}` inside a redirected command can see it, and no corpus row
+	// allocates one there. TestEachRedirectionSavesItsStream pins it.
 	//
 	// ksh93u+ is the third value: it answers 10 for `{ exec {v}</dev/null;
 	// echo $v; } </dev/null`, so no saved copy is in the way there, but holds
@@ -38653,6 +38656,12 @@ const (
 	// redirected group, as ksh93u+ holds them. See
 	// Runner.holdsTheLastElementsInput.
 	LastPipelineElementsInputTakesANumber
+
+	// EachRedirectionSavesItsStreams counts a saved copy for every
+	// redirection the current shell applies to a stream that is open at that
+	// moment — two for `2>/dev/null 2>/dev/null` — with no copy of a
+	// duplication's source, as bash 5.3.20 holds them. See redirHolds.
+	EachRedirectionSavesItsStreams
 )
 
 func (o OwnDescriptorNumbers) String() string {
@@ -38661,6 +38670,8 @@ func (o OwnDescriptorNumbers) String() string {
 		return "saved streams and pipe reading ends take numbers"
 	case LastPipelineElementsInputTakesANumber:
 		return "the last pipeline element's input takes a number"
+	case EachRedirectionSavesItsStreams:
+		return "each redirection saves its streams"
 	}
 	return "take no number"
 }

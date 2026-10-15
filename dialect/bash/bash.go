@@ -4137,11 +4137,12 @@ func Semantics() interp.Semantics {
 	// in 5.3.20 and in 3.2.57, `62 61` with 63 parked, and `3 4` at any
 	// `ulimit -n` of 63 or below.
 	s.SubstitutionEndPlacement = interp.SubstitutionEndsAtTheTopOfTheTable
-	// bash saves the streams a redirected group replaces too, but once per
-	// redirection rather than once per stream, and only a `{v}` inside such a
-	// group can see it — measured and not yet modeled, so the zero answer
-	// stands here (#6502).
-	s.OwnDescriptors = interp.OwnDescriptorsTakeNoNumber
+	// bash saves the streams a redirected group replaces, once per
+	// redirection rather than once per stream and with no copy of a
+	// duplication's source: `{ exec {v}</dev/null; echo $v; }
+	// 2>/dev/null 2>/dev/null` is 12 in 5.3.20 and `… 2>&1` is 11. Only a
+	// `{v}` inside such a group can see it. Measured 2026-10-15 (#6502).
+	s.OwnDescriptors = interp.EachRedirectionSavesItsStreams
 	// A duplication's descriptor number has no ceiling of this shell's own
 	// — `echo x >&99` is the ordinary bad-descriptor sentence (#3210) — the
 	// `-v` echo ends a line the input did not end (#3130), and `read -t`

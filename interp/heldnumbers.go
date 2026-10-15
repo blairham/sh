@@ -103,11 +103,20 @@ func (r *Runner) letGoOfNumber(fd int) {
 	r.heldNumbers = slices.Concat(r.heldNumbers[:i], r.heldNumbers[i+1:])
 }
 
-// countsOwnDescriptors is whether this dialect's numbers step over the
-// shell's own plumbing at all, which every caller asks first so the other
-// dialects pay one comparison.
+// countsOwnDescriptors is whether this dialect's numbers step over all of
+// zsh's plumbing — the saved streams, the pipes' reading ends and the order
+// a list's substitutions are made in — which every caller asks first so the
+// other dialects pay one comparison.
 func (r *Runner) countsOwnDescriptors() bool {
 	return r.sem().OwnDescriptors == SavedStreamsAndPipeReadEndsTakeNumbers
+}
+
+// savesRedirectedStreams is whether a redirection list run in the shell
+// itself saves the streams it replaces on numbers a script can see: zsh's
+// rule, or bash's, which saves per redirection. See redirHolds.
+func (r *Runner) savesRedirectedStreams() bool {
+	o := r.sem().OwnDescriptors
+	return o == SavedStreamsAndPipeReadEndsTakeNumbers || o == EachRedirectionSavesItsStreams
 }
 
 // holdsTheLastElementsInput is whether, in the dialect that holds a number for
@@ -199,6 +208,13 @@ type redirHolds struct {
 	// saved are the numbers this list holds, given back when the command
 	// ends.
 	saved []int
+	// perRedirection says every redirection saves the stream it replaces,
+	// where that stream is open at the moment it is reached, and no
+	// duplication holds a copy of its source while it does: bash's rule.
+	// `{ … } 2>/dev/null 2>/dev/null` saves twice there, and `{ … } 2>&1`
+	// holds 10 where zsh holds 11 and leaves 10 free. See
+	// EachRedirectionSavesItsStreams.
+	perRedirection bool
 }
 
 // beginRedirHolds starts a redirection list's holds, settling first what the
@@ -206,13 +222,17 @@ type redirHolds struct {
 func (r *Runner) beginRedirHolds(owner redirOwner) *redirHolds {
 	entry := r.entering
 	r.entering = elementEntry{}
-	if !r.countsOwnDescriptors() {
+	if !r.savesRedirectedStreams() {
 		return nil
 	}
 	inThisShell := owner == redirOwnerThisShell && r.redirectForBuiltin != "exec"
 	h := &redirHolds{
-		r:         r,
-		consuming: inThisShell,
+		r:              r,
+		perRedirection: r.sem().OwnDescriptors == EachRedirectionSavesItsStreams,
+		// A consumed substitution's number comes free in zsh only: bash
+		// publishes the next one below it however the first was used —
+		// `{ echo <(true) <(true); } < <(true)` is `62 61` in 5.3.20.
+		consuming: inThisShell && r.countsOwnDescriptors(),
 		// A `( … )` is a fork, `exec`'s list is never put back, and a command
 		// that becomes a process of its own puts nothing back in this one.
 		saving: inThisShell && (!entry.pending || !entry.forked),
@@ -252,16 +272,21 @@ func (r *Runner) streamOpen(fd int) bool {
 // after — `{ … } 2>&1` holds 12 and leaves 11 free, where `2>/dev/null`
 // holds 11.
 func (h *redirHolds) save(fd int, duplicating bool) {
-	if h == nil || slices.Contains(h.decided, fd) {
+	if h == nil {
 		return
 	}
-	h.decided = append(h.decided, fd)
+	if !h.perRedirection {
+		if slices.Contains(h.decided, fd) {
+			return
+		}
+		h.decided = append(h.decided, fd)
+	}
 	if !h.saving || !h.r.streamOpen(fd) {
 		return
 	}
 	r := h.r
 	source := -1
-	if duplicating {
+	if duplicating && !h.perRedirection {
 		source = r.holdNumber(false)
 	}
 	h.saved = append(h.saved, r.holdNumber(false))
@@ -397,7 +422,7 @@ type madeFirstSubst struct {
 // Nil-safe like every method here, so the dialects that count nothing make
 // each substitution where its word is expanded, as before.
 func (h *redirHolds) makeFirst(ctx context.Context, rs []*syntax.Redirect) func() {
-	if h == nil {
+	if h == nil || !h.r.countsOwnDescriptors() {
 		return func() {}
 	}
 	r := h.r

@@ -210,6 +210,53 @@ func TestTheLastPipelineElementHoldsANumber(t *testing.T) {
 	}
 }
 
+// The dialect that saves per redirection, measured 2026-10-15 against bash
+// 5.3.20 (#6502), beside the per-stream answer on the two shapes that tell
+// them apart. Exact `{v}` numbers from a base of 10.
+func TestEachRedirectionSavesItsStream(t *testing.T) {
+	const (
+		each   = EachRedirectionSavesItsStreams
+		stream = SavedStreamsAndPipeReadEndsTakeNumbers
+	)
+	for _, c := range []struct {
+		own  OwnDescriptorNumbers
+		src  string
+		want string
+	}{
+		{each, `{ exec {v}</dev/null; echo $v; } </dev/null`, "11"},
+		{each, `{ exec {v}</dev/null; echo $v; } 2>/dev/null 2>/dev/null`, "12"},
+		{stream, `{ exec {v}</dev/null; echo $v; } 2>/dev/null 2>/dev/null`, "11"},
+		// No copy of a duplication's source.
+		{each, `{ exec {v}</dev/null; echo $v; } 2>&1`, "11"},
+		{stream, `{ exec {v}</dev/null; echo $v; } 2>&1`, "10"},
+		// Only a stream open when its redirection is reached.
+		{each, `{ exec {v}</dev/null; echo $v; } 3</dev/null`, "10"},
+		{each, `exec 3</dev/null; { exec {v}</dev/null; echo $v; } 3</dev/null`, "11"},
+		{each, `{ exec {v}</dev/null; echo $v; } 3</dev/null 3</dev/null`, "11"},
+		{each, `{ exec {v}</dev/null; echo $v; } &>/dev/null; echo $v`, "12"},
+		{each, `f() { exec {v}</dev/null; echo $v; } 2>/dev/null; f </dev/null`, "12"},
+		// Given back with the command, and none in a fork's own list.
+		{each, `{ exec {v}</dev/null; echo $v; } </dev/null; exec {w}</dev/null; echo $w`, "11 10"},
+		{each, `( exec {v}</dev/null; echo $v ) </dev/null`, "10"},
+		{each, `{ exec {v}</dev/null; echo $v >&2; } </dev/null | :`, "10"},
+		{each, `{ exec {v}</dev/null; echo $v; } </dev/null & wait`, "10"},
+		{OwnDescriptorsTakeNoNumber, `{ exec {v}</dev/null; echo $v; } 2>/dev/null 2>/dev/null`, "10"},
+	} {
+		t.Run(c.own.String()+": "+c.src, func(t *testing.T) {
+			sem := permissive()
+			sem.FirstAllocatedDescriptor = AllocateDescriptorsFromTen
+			sem.OwnDescriptors = c.own
+			// The second of two redirections of one stream replaces the
+			// first, as it does in the shell measured.
+			sem.RedirectsUseEveryTarget = No
+			out, st := run(t, c.src, withSem(sem))
+			if got := strings.Join(strings.Fields(out), " "); got != c.want || st != 0 {
+				t.Errorf("got %q (status %d), want %q", got, st, c.want)
+			}
+		})
+	}
+}
+
 // runOwnDescriptors runs src the way the dialect that counts its own
 // descriptors would: substitutions and `{v}` from the base up, the base at
 // 10, and a pipeline's last element in the shell itself.

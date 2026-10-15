@@ -143,8 +143,14 @@ func biPrintf(r *Runner, _ context.Context, args []string) (status int) {
 			// — measured 2026-09-17, `r=(1 2 3); printf -v 'r[1/0]' %s Q` is
 			// status 1 with the array untouched in bash 5.3.20, where this
 			// reported the formatting's 0 over a store that never happened.
+			exiting := r.ctl == controlExit
 			if st, refused := r.storeThroughOperand(assign, into.String()); refused {
 				status = st
+			} else if !exiting && r.ctl == controlExit {
+				// Refused inside the store — a name an enclosing call
+				// declared private — which leaves the operand store's
+				// number, as the frozen name above does (#6515).
+				status = r.storeRefusalStatus("printf", 1)
 			}
 		}()
 	}

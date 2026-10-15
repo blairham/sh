@@ -150,6 +150,7 @@ func (r *Runner) storePlainScalar(ctx context.Context, a *syntax.Assign) {
 			// answers now. The full road asks them again of the value already
 			// expanded, the arrangement a traced assignment uses, so nothing
 			// is expanded twice.
+			r.plainStoreHandedOn++
 			r.withPreparedValue(ctx, &expandedAssign{assign: a, value: value})
 			return
 		}

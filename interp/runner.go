@@ -5611,6 +5611,10 @@ type Runner struct {
 	// text, and hands the value to the full road when this moved while the
 	// value was expanded.
 	arithValuesReread uint64
+	// plainStoreHandedOn counts the assignments storePlainScalar handed to
+	// the full road after expanding them, so a test can say the hand-off is
+	// made.
+	plainStoreHandedOn int
 	// arithSubscriptDepth counts how many array subscripts are being
 	// evaluated around the expression now being read, so that a name inside
 	// the brackets can be answered differently from the same name outside

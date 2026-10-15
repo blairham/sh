@@ -31,6 +31,14 @@ case $((i % 3)) in 2) p two ;; *) p other ;; esac
 p end
 `
 
+// plainArithFailureKept is the one place a failed expansion's text is seen
+// afterwards: bash gives up the line and carries on at the next, and the
+// name the failed assignment named is read there.
+const plainArithFailureKept = `dz=4
+dz=$((1 / 0))
+printf '<%s>\n' "$dz"
+`
+
 // TestAPlainArithmeticValueAnswersAsTheWordRoadDoes runs plainArithScript with
 // plainArithValue on and off, and requires the same output and status (#6496).
 func TestAPlainArithmeticValueAnswersAsTheWordRoadDoes(t *testing.T) {
@@ -42,7 +50,11 @@ func TestAPlainArithmeticValueAnswersAsTheWordRoadDoes(t *testing.T) {
 			run := func(on bool) (string, int) {
 				was := SetPlainArithShortcutForTest(on)
 				defer SetPlainArithShortcutForTest(was)
-				out, st, err := p.Combined(t, dialecttest.Base{Dir: t.TempDir()}, plainArithScript)
+				script := plainArithScript
+				if p.Name == "bash" {
+					script += plainArithFailureKept
+				}
+				out, st, err := p.Combined(t, dialecttest.Base{Dir: t.TempDir()}, script)
 				if err != nil {
 					t.Fatalf("shortcut %v: %v", on, err)
 				}

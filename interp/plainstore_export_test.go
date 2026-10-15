@@ -31,3 +31,7 @@ func SetPlainArithShortcutForTest(on bool) (was bool) {
 	was, plainArithShortcut = plainArithShortcut, on
 	return was
 }
+
+// PlainStoreHandedOnForTest is how many assignments the plain store handed to
+// the full road after expanding their value.
+func PlainStoreHandedOnForTest(r *Runner) int { return r.plainStoreHandedOn }

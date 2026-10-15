@@ -117,6 +117,15 @@ func TestThePlainScalarStoreIsReached(t *testing.T) {
 		return f.Stmts[0].Expr.(*syntax.Pipeline).Cmds[0].(*syntax.SimpleCmd).Assigns[0]
 	}
 	run("plain=1; y=abc; readonly ro=1; typeset -i n; a=(1 2)")
+	// An arithmetic value is taken on its text and handed to the full road
+	// when a value it read was read again as an expression, which can write.
+	for src, want := range map[string]int{"plain=$((plain + 1))": 0, "xr='q=9'; plain=$((xr))": 1, "plain=$((y))": 1} {
+		before := PlainStoreHandedOnForTest(r)
+		run(src)
+		if got := PlainStoreHandedOnForTest(r) - before; got != want {
+			t.Errorf("%s: handed %d assignments to the full road, want %d", src, got, want)
+		}
+	}
 	for src, want := range map[string]bool{
 		"plain=":                    true,
 		"plain=2":                   true,

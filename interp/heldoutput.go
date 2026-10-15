@@ -30,6 +30,9 @@ type heldOutput struct {
 	to, out  io.Writer
 	buf      []byte
 	released bool
+	// guard is the lock wrapper out is, where the stream needs one: kept in
+	// the hold rather than made beside it, so a hold is one allocation.
+	guard lockedWriter
 }
 
 func (h *heldOutput) Write(p []byte) (int, error) {
@@ -85,9 +88,18 @@ func unheld(w io.Writer) io.Writer {
 	}
 }
 
+// builtinHold is what holdBuiltinOutput started, for endBuiltinHold to end:
+// nothing, a hold of this builtin's own, or the hold of a builtin it runs
+// inside, which is flushed rather than let go of. A value rather than a
+// closure, so starting one costs only the hold itself (#6373).
+type builtinHold struct {
+	h      *heldOutput
+	nested bool
+}
+
 // holdBuiltinOutput starts holding the running builtin's standard output where
-// the dialect does, and answers what ends the hold and reports a failed write
-// — or nothing, where there is nothing to hold.
+// the dialect does, and answers what endBuiltinHold ends — or nothing, where
+// there is nothing to hold.
 //
 // Nested, the hold already in place is flushed at the inner builtin's end
 // rather than stacked: each builtin's output reaches the
@@ -99,32 +111,48 @@ func unheld(w io.Writer) io.Writer {
 // builtin would refuse every builtin in a vector that has not answered — so an
 // unanswered vector holds nothing, which is the zero value and four of the six
 // columns' reading of a single write.
-func (r *Runner) holdBuiltinOutput() func() {
+func (r *Runner) holdBuiltinOutput() builtinHold {
 	if r.sem().BuiltinOutputHeldUntilItReturns != Yes || r.Stdout == nil {
-		return nil
+		return builtinHold{}
 	}
 	if h, ok := r.Stdout.(*heldOutput); ok {
-		return func() {
-			if err := h.flush(); err != nil && r.writeFailed == nil {
-				r.writeFailed = err
-			}
-		}
+		return builtinHold{h: h, nested: true}
 	}
 	if r.stdoutIsACharDevice() {
 		// A terminal, and the shell being modeled writes a line to one as it
 		// is finished; `/dev/null` is one too, and holding what is thrown
 		// away would change nothing.
-		return nil
+		return builtinHold{}
 	}
-	h := &heldOutput{to: r.Stdout, out: lockWriter(r.streamLocks(), r.Stdout)}
+	h := &heldOutput{to: r.Stdout, out: r.Stdout}
+	// lockWriter's answer, with the wrapper it would have made kept in the
+	// hold: the same stream under the same lock either way.
+	if locks := r.streamLocks(); needsLockWrapper(locks, r.Stdout) {
+		h.guard = lockedWriter{locks: locks, w: r.Stdout}
+		h.out = &h.guard
+	}
 	r.Stdout = h
-	return func() {
-		if r.Stdout == h {
-			r.Stdout = h.to
-		}
-		if err := h.release(); err != nil && r.writeFailed == nil {
+	return builtinHold{h: h}
+}
+
+// endBuiltinHold ends what holdBuiltinOutput started: a nested hold is
+// flushed and goes on holding, and the builtin's own is let go of and the
+// stream it replaced put back. A failed write is the builtin's to report.
+func (r *Runner) endBuiltinHold(b builtinHold) {
+	if b.h == nil {
+		return
+	}
+	if b.nested {
+		if err := b.h.flush(); err != nil && r.writeFailed == nil {
 			r.writeFailed = err
 		}
+		return
+	}
+	if r.Stdout == b.h {
+		r.Stdout = b.h.to
+	}
+	if err := b.h.release(); err != nil && r.writeFailed == nil {
+		r.writeFailed = err
 	}
 }
 

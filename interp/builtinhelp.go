@@ -83,11 +83,9 @@ func (r *Runner) callBuiltin(ctx context.Context, name string, fn Builtin, args 
 	r.writeFailed = nil
 	refused := r.refusedInACommand
 	r.refusedInACommand = false
-	end := r.holdBuiltinOutput()
+	hold := r.holdBuiltinOutput()
 	status := fn(r, ctx, args)
-	if end != nil {
-		end()
-	}
+	r.endBuiltinHold(hold)
 	status = r.builtinWriteStatus(name, status)
 	if r.refusedInACommand && status == 0 {
 		// A write this builtin made was refused, which fails the builtin

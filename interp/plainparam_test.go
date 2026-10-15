@@ -50,6 +50,10 @@ i=9; [ $i -lt 10 ] && echo lt; [[ $i -lt 10 ]] && echo dlt; [[ $i == 9 ]] && ech
 i='/dev/nul?'; [[ $i == /dev/null ]] && echo dpat; [[ /dev/null == $i ]] && echo dglob
 i=1; command eval 'a=(x y z)'; p ${a[$i]}; s=abcdef; p ${s:$i:2}; command eval 'p $(( a[$i] ))'
 (set -u; p $nosuch); echo "<$?>"
+set -- pos5 'a b' '' '/dev/nul?' '[x]'; p $1 ${1} $2 $3 $4 $5 $6; x=$1; p "$x"; x=$2; p "$x"; x=$6; p "$x"
+IFS=o; p $1; x=$1; p "$x"; unset IFS
+g() { local a=$1 b=$2 c=$3 d=$9; p "$a" "$b" "$c" "$d"; typeset e=$1; p "$e"; }; g pos1 'q r' ''
+(set -u; p $7); echo "<$?>"
 `
 
 // plainParamVectors are the answers the script is run under: arrays read as
@@ -117,7 +121,7 @@ func TestAPlainParameterWordAnswersAsTheFullRoadDoes(t *testing.T) {
 			}
 			// The rows the comparison leans on, so a script that stopped
 			// early or a vector that refused the arrays compares nothing.
-			for _, row := range []string{"[5][5]\n", "[][0]\n", "d10\n", "[1][11]\n", "[ABC]\n", "dlt\n", "deq\n", "[bc]\n", "parameter not set"} {
+			for _, row := range []string{"[5][5]\n", "[][0]\n", "d10\n", "[1][11]\n", "[ABC]\n", "dlt\n", "deq\n", "[bc]\n", "parameter not set", "[pos5][pos5][a][b][/dev/null][[x]]", "[pos1][q r][][]\n"} {
 				if !strings.Contains(full, row) {
 					t.Errorf("the script did not reach %q:\n%s", row, full)
 				}
@@ -159,6 +163,17 @@ func TestThePlainParameterShortcutIsReached(t *testing.T) {
 					t.Errorf("%s holding 5: got %q, %v; want the shortcut's \"5\"", w, v, ok)
 				}
 			}
+			// A positional parameter is read off the frame's list.
+			setup("set -- 5 6 7 8 9 10 11 12 13 14")
+			for _, w := range []string{"$1", "${1}", "${10}"} {
+				want := "5"
+				if w == "${10}" {
+					want = "14"
+				}
+				if v, ok := PlainParamWordForTest(r, word(w)); !ok || v != want {
+					t.Errorf("%s holding %s: got %q, %v; want the shortcut's %q", w, want, v, ok, want)
+				}
+			}
 			for _, declined := range []struct{ setup, word string }{
 				{"IFS=5", "$i"},
 				{"unset IFS; i='a b'", "$i"},
@@ -169,7 +184,14 @@ func TestThePlainParameterShortcutIsReached(t *testing.T) {
 				{"i=5", "$i$i"},
 				{"i=5", `"$i"`},
 				{"i=5", "${#i}"},
-				{"set -- 5", "$1"},
+				{"set -- 5", "$2"},
+				{"set -- 5", "$0"},
+				{"set -- 5", "${00}"},
+				{"set -- 5", "$#"},
+				{"set -- 'a b'", "$1"},
+				{"set -- '*'", "$1"},
+				{"set -- ''", "$1"},
+				{"set -- 5", "${1-x}"},
 				{"", "$COUNT"},
 				{"", "$LIST"},
 				{"", "$TABLE"},

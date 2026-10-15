@@ -49,7 +49,7 @@ var theFullRoad = map[string][]string{
 		"diag", "retypingFrozen", "unspecified",
 	},
 	"setVarAs": {
-		"assignmentGuards", "attributeFolded", "compoundMemberThroughAReference",
+		"registeredGuard", "attributeFolded", "compoundMemberThroughAReference",
 		"compoundVariableRetyped", "disciplineWrite", "endProducerUnsetEnded", "fatal",
 		"fatalQuiet", "forgetEveryHashedCommand", "ignoredNamesAssigned", "indirectElement",
 		"localizeMemberWrite", "markForAllexport", "mirrorScalarToArray", "nameIsBack",
@@ -57,8 +57,8 @@ var theFullRoad = map[string][]string{
 		"producersLookup", "refuseReadonly", "refuseUnaimedReference", "scalarOverCompound",
 		"scopeWarningsAreOff", "selfNameref", "selfNamerefAssignment", "settleCtypeBeforeChanging",
 		"storeIntoSelectedFrame", "storeThroughNamerefElement", "tiedUniqueFold", "unaimedReferenceBase",
-		"varsPut", "warnAboutTheScope", "assigned", "assignmentActions", "attrClear",
-		"declaringWithoutAValue", "dynamicArrayWriters", "dynamicWriters", "inBuiltin", "optindAssigned",
+		"varsPut", "warnAboutTheScope", "assigned", "registeredAction", "attrClear",
+		"declaringWithoutAValue", "registeredArrayWriter", "dynamicWriters", "inBuiltin", "optindAssigned",
 		"storingSelfNameref", "underscoreWritten", "viewIsAlreadyFolded",
 	},
 }

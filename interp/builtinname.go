@@ -350,7 +350,7 @@ func (r *Runner) builtinNames(builtin string, args []string, explicitVariable bo
 		// brackets are read as a subscript only once the base is a name.
 		if base, _, subscripted := r.operandSubscripts(builtin, name); subscripted && isPlainName(base) {
 			if r.takesASubscript(builtin) {
-				rest = keepOperand(rest, a, len(args)-i)
+				rest = keepOperand(rest, args, i)
 				continue
 			}
 			if r.unspecified {
@@ -372,7 +372,7 @@ func (r *Runner) builtinNames(builtin string, args []string, explicitVariable bo
 			}
 			continue
 		} else if r.isBuiltinName(builtin, name, takes) {
-			rest = keepOperand(rest, a, len(args)-i)
+			rest = keepOperand(rest, args, i)
 			continue
 		}
 		if r.unspecified {
@@ -392,15 +392,25 @@ func (r *Runner) builtinNames(builtin string, args []string, explicitVariable bo
 	return rest, status, false
 }
 
-// keepOperand appends an operand builtinNames passes on, making the list the
-// first time with room for every operand still to come — the common case is
-// that all of them are names, and growing the list one append at a time was
-// most of what a declaration line allocated past its own records.
-func keepOperand(rest []string, a string, left int) []string {
-	if rest == nil {
-		rest = make([]string, 0, left)
+// keepOperand appends args[i], an operand builtinNames passes on.
+//
+// The common case is that every operand is a name, and then the list is the
+// front of args itself: no copy is made until an operand is left out, and
+// then one is made with room for every operand still to come. Growing the
+// list one append at a time was most of what a declaration line allocated
+// past its own records, and making it at all was one allocation a line
+// (#6373). The front of args is handed out with its capacity cut to its
+// length, so an append to the list — namesAfterARefusal makes them — copies
+// rather than writing over an operand of args.
+func keepOperand(rest, args []string, i int) []string {
+	alias := len(rest) > 0 && &rest[0] == &args[0]
+	if len(rest) == i && (i == 0 || alias) {
+		return args[: i+1 : i+1]
 	}
-	return append(rest, a)
+	if rest == nil || alias {
+		rest = append(make([]string, 0, len(rest)+len(args)-i), rest...)
+	}
+	return append(rest, args[i])
 }
 
 // badLocalNameWaitsForTheReturn takes a `local` operand whose name is bad and

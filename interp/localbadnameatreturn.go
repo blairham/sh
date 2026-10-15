@@ -16,6 +16,13 @@ func (r *Runner) badNamesHeldForTheReturn(word string, args []string, nowhere bo
 	if nowhere || len(r.scopes) == 0 {
 		return args
 	}
+	if r.sem().LocalBadNameWithAValueIsRefusedAtTheReturn == No {
+		// Read rather than asked: a vector that says no has nothing to hold,
+		// so the line's names are not read twice — builtinNames reads them
+		// next (#6373). One that has not answered is still asked below, on
+		// the bad name that needs the answer.
+		return args
+	}
 	_, takes := r.nameRules(word)
 	var kept []string
 	for i, a := range args {

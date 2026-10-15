@@ -177,15 +177,24 @@ func (r *Runner) lockedStderr() io.Writer {
 // shells of the panel. That was the price #735 recorded for guarding both
 // sides of a construct, and it is not one that has to be paid.
 func lockWriter(locks *streamLocks, w io.Writer) io.Writer {
+	if !needsLockWrapper(locks, w) {
+		return w
+	}
+	return &lockedWriter{locks: locks, w: w}
+}
+
+// needsLockWrapper is lockWriter's question: whether w goes under the lock as
+// a lockedWriter, or is handed back as it is.
+func needsLockWrapper(locks *streamLocks, w io.Writer) bool {
 	// A builtin's held output guards itself, and its destination is guarded
 	// by this same lock: wrapped again, a flush would take the lock twice.
 	// Unwrapped, it would be let go of at the builtin's first write. See
 	// heldOutput.
-	if h, ok := w.(*heldOutput); ok {
-		return h
+	if _, ok := w.(*heldOutput); ok {
+		return false
 	}
 	if _, ok := w.(*os.File); ok {
-		return w
+		return false
 	}
 	// A closed descriptor is left alone for the first of those reasons and
 	// for one of its own. There is no state behind closedFd to serialize —
@@ -194,12 +203,9 @@ func lockWriter(locks *streamLocks, w io.Writer) io.Writer {
 	// is closed. Wrapped, it is a writer like any other, and `exec 1>&-;
 	// /bin/echo hi &` handed the child an ordinary pipe again (#1260).
 	if _, ok := w.(closedFd); ok {
-		return w
+		return false
 	}
-	if guardedBy(locks, w) {
-		return w
-	}
-	return &lockedWriter{locks: locks, w: w}
+	return !guardedBy(locks, w)
 }
 
 // WriterUnder is a stream wrapper that can say what it wraps.

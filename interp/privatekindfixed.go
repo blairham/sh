@@ -104,6 +104,11 @@ func (r *Runner) fixedSlotKinds(name string) (parameterKinds, bool) {
 		// the value side.
 		return 0, false
 	}
+	if !r.specialNames.mayHold(name) {
+		// Never fixed: MarkParameterKindFixed records every name it fixes in the
+		// filter. See specialnames.go.
+		return 0, false
+	}
 	allowed, fixed := r.kindFixed[name]
 	return allowed, fixed
 }

@@ -568,6 +568,9 @@ func (r *Runner) patternTilde(w *syntax.Word, b *spanText) []syntax.Span {
 func (r *Runner) patternSpan(s syntax.Span) (text string, live bool) {
 	switch s.Kind {
 	case syntax.ParamExp:
+		// A fresh read of this node, whatever the last span held: see
+		// forgetSpanHolds.
+		r.forgetSpanHolds()
 		// A group that marks its join separator answers for itself: the
 		// words it joined are literal and the separator between them is not,
 		// which is one string neither of the two answers below can be. See

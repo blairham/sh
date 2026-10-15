@@ -4598,6 +4598,12 @@ func Semantics() interp.Semantics {
 	// `typeset -i v=10` in ksh93u+, measured 2026-10-15 (#6550). See
 	// interp.Semantics.FdVariableStoreTyping.
 	s.FdVariableStoreTyping = interp.FdVariableStoreStartsTheNameOver
+	// And a program is handed the environment from after its own `{name}`
+	// store — which, the store having taken the name out of it, has no `v`:
+	// `export v=keep; /usr/bin/env {v}</dev/null` shows nothing, measured
+	// 2026-10-15 (#6521). See
+	// interp.Semantics.FdVariableReachesTheProgramsEnvironment.
+	s.FdVariableReachesTheProgramsEnvironment = interp.Yes
 	// `exec 3<<X` puts the body in a temporary file here, so `/dev/fd/3` is
 	// a regular file and the descriptor is seekable: `head -1 <&3` reads a
 	// block and seeks back, and the `cat <&3` after it still gets the rest of

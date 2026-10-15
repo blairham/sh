@@ -46,6 +46,10 @@ func TestAnFdVariableStoreRetypes(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			out := runFdVar(t, t.TempDir(), func(s *Semantics) {
 				s.FdVariableStoreTyping = c.typing
+				// The program rows ask whether the store is in the
+				// program's environment, and both readings here answer
+				// with the shells that hold them: after.
+				s.FdVariableReachesTheProgramsEnvironment = Yes
 			}, c.src)
 			if out != c.want {
 				t.Errorf("got %q, want %q", out, c.want)

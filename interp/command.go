@@ -501,7 +501,11 @@ func (r *Runner) runWithoutFunctions(ctx context.Context, args []string, default
 	// looks `ls` up on the caller's PATH in every column.
 	defer r.searchingTheDefaultPath(defaultPath)()
 	r.commandRanAWord = true
-	if err := r.exec(ctx, args, r.environ()); err != nil {
+	env := r.fdVarEnviron(r.environ())
+	if r.unspecified {
+		return r.status
+	}
+	if err := r.exec(ctx, args, env); err != nil {
 		r.diagf("command: %v\n", err)
 		return 1
 	}

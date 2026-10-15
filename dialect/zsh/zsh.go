@@ -5354,6 +5354,11 @@ func Semantics() interp.Semantics {
 	// measured 2026-10-15 (#6550). See
 	// interp.Semantics.FdVariableStoreTyping.
 	s.FdVariableStoreTyping = interp.FdVariableStoreMakesANewNameAnInteger
+	// And a program is handed the environment from after its own `{name}`
+	// store: `set -a; /usr/bin/env {v}</dev/null` shows it `v=11`, measured
+	// 2026-10-15 (#6521). See
+	// interp.Semantics.FdVariableReachesTheProgramsEnvironment.
+	s.FdVariableReachesTheProgramsEnvironment = interp.Yes
 	// unanswered FdVariableOnASubshellIsTheSubshells: a `{name}` behind
 	// parentheses never parses here — `( : ) {v}</dev/null` is ``parse error
 	// near `{'`` in zsh 5.9.2 under every emulation, measured 2026-10-15

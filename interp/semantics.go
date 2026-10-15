@@ -38447,6 +38447,14 @@ const (
 	//	-fi on a terminal          11  (the terminal is)
 	//	-f < script, -fs, a pipe   10, and 10 is handed out again once closed
 	//
+	// And 10 inside a process substitution's body on every route, whose fork
+	// has closed the input — measured 2026-10-15, `cat <(echo <(true)
+	// <(true))` is `/dev/fd/10 /dev/fd/11` on `-c` and on a script file, and
+	// `cat <(exec {v}</dev/null; echo $v)` is 10, as is anything the body
+	// forks in turn (`<( ( … ) )`, `<( $( … ) )`) and the `=( … )` spelling.
+	// A command substitution's body keeps the input: `echo $(echo <(true))`
+	// is 11, and so is `( exec {v}</dev/null; echo $v )` (#6504).
+	//
 	// #5133 reported 3 for `sysopen`, which no route reproduces.
 	AllocateDescriptorsPastTheShellsInput
 )
@@ -38469,11 +38477,13 @@ func (b DescriptorAllocationBase) String() string {
 
 // firstAllocatedDescriptor is the number this shell counts up from when it
 // picks a descriptor: the base, and for the one base keyed on the shell's
-// input, 10 where that input is a standard input nobody is typing at. See
-// AllocateDescriptorsPastTheShellsInput.
+// input, 10 where that input is a standard input nobody is typing at, or
+// where the shell is a process substitution's body, whose fork has closed the
+// input. See AllocateDescriptorsPastTheShellsInput.
 func (r *Runner) firstAllocatedDescriptor() int {
 	b := r.sem().FirstAllocatedDescriptor
-	if b == AllocateDescriptorsPastTheShellsInput && r.Route == RouteStandardInput && !r.Interactive {
+	if b == AllocateDescriptorsPastTheShellsInput &&
+		(r.shellInputClosed || r.Route == RouteStandardInput && !r.Interactive) {
 		return 10
 	}
 	return b.number()

@@ -51,6 +51,32 @@ func TestTheSecondPickedDescriptorIsTheNextFreeOne(t *testing.T) {
 	}
 }
 
+// Inside a process substitution's body the base past the shell's input is
+// 10, because the fork that runs the body has closed the input; a command
+// substitution's body and a subshell keep it. Measured 2026-10-15 against zsh
+// 5.9.2 on `-c` and on a script file alike (#6504).
+func TestAProcessSubstitutionsBodyCountsFromTen(t *testing.T) {
+	for _, tc := range []struct {
+		src  string
+		want string
+	}{
+		{`read x < <(exec {v}</dev/null; echo $v); echo $x`, "10\n"},
+		{`read x < <( (exec {v}</dev/null; echo $v) ); echo $x`, "10\n"},
+		{`read x < <(echo $(exec {v}</dev/null; echo $v)); echo $x`, "10\n"},
+		{`echo $(exec {v}</dev/null; echo $v)`, "11\n"},
+		{`( exec {v}</dev/null; echo $v )`, "11\n"},
+	} {
+		t.Run(tc.src, func(t *testing.T) {
+			sem := permissive()
+			sem.FirstAllocatedDescriptor = AllocateDescriptorsPastTheShellsInput
+			out, st := run(t, tc.src, withSem(sem))
+			if out != tc.want || st != 0 {
+				t.Errorf("got %q (status %d), want %q at 0", out, st, tc.want)
+			}
+		})
+	}
+}
+
 // And it is clear of the single digits a script addresses itself, under
 // either answer: a descriptor the script parked at 9 is not what the shell
 // hands back.

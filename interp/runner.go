@@ -9574,13 +9574,20 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 		lateTrace = append(lateTrace, func() {
 			if asItGoes {
 				r.tracePrefixAsItGoes(c, argv, lateWalk)
-				*failed = r.prefixWalkFailed(lateWalk)
-				return
+			} else {
+				r.expandPrefixTraceValues(c.Assigns)
+				if !r.assignmentGaveUp() {
+					r.tracePrefixAndCommand(c, argv)
+				}
 			}
-			r.expandPrefixTraceValues(c.Assigns)
-			if !r.assignmentGaveUp() {
-				r.tracePrefixAndCommand(c, argv)
-			}
+			// Read for both shapes of the line. The trace's expansion takes
+			// the failure onto the record before the route below takes its
+			// own walk, so that walk sees it as already there and runs the
+			// command; this is what gives it up instead. Read for the
+			// as-it-goes shape alone, `set -x` made dash and BusyBox ash run
+			// `x=$((1/0)) eval …` with `x` empty where both end the script
+			// without it (#6544).
+			*failed = r.prefixWalkFailed(lateWalk)
 		})
 	} else if asItGoes {
 		// A word at a time, and a value that would not expand gives the
@@ -9605,6 +9612,15 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 			// never reached: `set -x; a=1 b=${x?boom} true` writes the
 			// complaint and nothing else there (#5509).
 			r.tracePrefixAndCommand(c, argv)
+		}
+		// And the command is given up here, as on the as-it-goes road
+		// above: the trace's expansion has put the failure on the record
+		// before the route below takes its own walk, which then reads it as
+		// already there and runs the command. Without this `set -x` made
+		// dash and BusyBox ash run `x=$((1/0)) eval …`, where both end the
+		// script (#6544).
+		if r.givesUpForAFailedPrefix(walk, r.prefixCommandOf(argv)) {
+			return nil
 		}
 	}
 
@@ -14752,6 +14768,14 @@ func (r *Runner) assignAll(ctx context.Context, assigns []*syntax.Assign) {
 	if !r.tracing() {
 		for _, a := range assigns {
 			r.assign(ctx, a)
+			if r.assignmentGaveUp() {
+				// The same stop the traced loops below make: a value that
+				// would not expand ends the list, so `x=$((1/0)) y=6`
+				// leaves `y` alone and `y=6 x=$((1/0))` keeps the `y=6`
+				// already made — measured in bash 5.3.20, and in zsh,
+				// ksh93 and BusyBox ash interactively (#6544).
+				return
+			}
 		}
 		return
 	}
@@ -15338,6 +15362,25 @@ func (r *Runner) assign(ctx context.Context, a *syntax.Assign) {
 			// scalar machinery below is on its road. See
 			// interp/globassign.go.
 			r.storeGlobbedScalarAssign(a, fields)
+			return
+		}
+		if r.assignmentGaveUp() {
+			// The value would not expand, so there is nothing to store and
+			// the name keeps what it held. Measured 2026-10-15: `x=4` then
+			// `x=$((1/0))` on the next line leaves `[4]` in bash 5.3.20
+			// (`-c`, a file and `-i`), and in zsh 5.9.2, ksh93u+ and BusyBox
+			// ash 1.38 interactively, the one route where those reach the
+			// next line; an unset name stays unset, and a partial value —
+			// `x=$(echo hi)$((1/0))` — is not stored either. Here rather
+			// than at a caller because every road ends here: the untraced
+			// list, the traced one, and the plain store's hand-off for a
+			// failed `$(( ))` all reach this store, and only the traced list
+			// used to look before it. That made `set -x` change the answer
+			// (#6544).
+			//
+			// Behind the pattern's store, which has a failure of its own to
+			// answer: a refused miss takes the name with it rather than
+			// leaving what it held. See interp/globassign.go.
 			return
 		}
 		if r.compoundAssignedFromAName(a.Name, value, a.Append) {

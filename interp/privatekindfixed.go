@@ -281,6 +281,11 @@ func (r *Runner) fixedContainerKeepsItsKind(a *syntax.Assign) bool {
 		// this rule is not on. Left to the ordinary store.
 		return false
 	}
+	if r.assignmentGaveUp() {
+		// Nothing to store — the value would not expand. See the scalar
+		// store in Runner.assign, which this stands in front of (#6544).
+		return true
+	}
 	r.setArray(a.Name, []string{value})
 	r.markForAllexport(a.Name)
 	return true

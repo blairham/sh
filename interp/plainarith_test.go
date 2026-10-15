@@ -30,7 +30,8 @@ p end
 
 // plainArithFailureKept is the one place a failed expansion's text is seen
 // afterwards: where the shell gives up the line and carries on at the next,
-// the name the failed assignment named is read there.
+// the name the failed assignment named is read there, and it still holds
+// what it held before (#6544).
 const plainArithFailureKept = `dz=4
 dz=$((1 / 0))
 printf '<%s>\n' "$dz"
@@ -70,7 +71,7 @@ func plainArithVectors() map[string]struct {
 		},
 		"the line given up": {
 			plainArithFailureKept,
-			[]string{"division by zero\n<"},
+			[]string{"division by zero\n<4>\n"},
 			nil,
 			with(func(s *Semantics) { s.FailedExpansionAbandonsTheLine = Yes }),
 		},

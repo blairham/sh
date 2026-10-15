@@ -46,7 +46,7 @@ var theFullRoad = map[string][]string{
 		"subscriptAsWritten", "subscriptFailure", "subscriptSplicesCharacters",
 		"subscriptValueAsWritten", "suppressDiscipline", "tableRefusesAScalarStore",
 		"unaimedReferenceBase", "watchHiddenKinds", "appendArrayElem", "arrayElemsOfTheName",
-		"diag", "retypingFrozen", "unspecified",
+		"diag", "retypingFrozen", "unspecified", "assignmentGaveUp",
 	},
 	"setVarAs": {
 		"registeredGuard", "attributeFolded", "compoundMemberThroughAReference",

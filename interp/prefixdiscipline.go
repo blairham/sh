@@ -160,6 +160,15 @@ func (r *Runner) prefixStoredForAChild(a *syntax.Assign, part string) string {
 // supposed to displace. See interp/namerefprefix.go (#4110).
 func (r *Runner) prefixStore(ctx context.Context, a *syntax.Assign, landsOn string, stores, fresh bool) {
 	value := r.prefixExpansion(a)
+	if r.assignmentGaveUp() {
+		// The value would not expand, so the command is given up and there
+		// is nothing to store — the same answer the scalar store in
+		// Runner.assign gives a bare `x=$((1/0))`. It shows where a prefix
+		// outlives its command: measured 2026-10-15, BusyBox ash 1.38 run
+		// interactively leaves `x=4` after `x=$((1/0)) eval …`, where
+		// storing the empty value left it empty (#6544).
+		return
+	}
 	if prefixIsSubscripted(a) {
 		// The subscript names where the value goes, so the store is the
 		// element write the same word performs as a statement — the

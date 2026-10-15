@@ -390,11 +390,37 @@ func (s armSearch) endsFor(n int, value string, stops []int) *reachEnds {
 	return e
 }
 
+// release hands back the end analyses the search made — see
+// reachSet.release. The search must not be asked anything after it.
+func (s armSearch) release() {
+	for _, r := range s.reach {
+		r.release()
+	}
+}
+
 // onlyOneCanBegin reports whether the end analysis rules out every variant
 // but one at start. A variant it does not read is never ruled out.
 func (s armSearch) onlyOneCanBegin(value string, stops []int, start int) bool {
 	if armShortcutDisabled {
 		return false
+	}
+	// The first-byte tables first, which are a lookup each. Where they leave
+	// one variant, that variant is the one: the caller asks only about a
+	// match it found, every match of the pattern is a match of some variant,
+	// and a table never rules out a variant that could begin here. So its
+	// end analysis would say yes, and running it — a simulation over the
+	// rest of the subject — was half of what this cost on #1398's
+	// substitution (#6380).
+	if s.autos != nil {
+		could := 0
+		for n := range s.variants {
+			if s.autos[n] == nil || s.autos[n].mayBegin(value, start) {
+				could++
+			}
+		}
+		if could == 1 {
+			return true
+		}
 	}
 	open := 0
 	for n := range s.variants {

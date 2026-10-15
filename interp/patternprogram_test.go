@@ -109,6 +109,12 @@ var progCases = []struct {
 	{"a|", []string{"a", ""}},
 	{"[a|b]", []string{"a", "|"}},
 	{"(x|xx)##(y|yy)##z", []string{"xxxxxyyyyz", "xxxxxyyyy_"}},
+	// A group's arm whose bracket, under the reading that skips to the next
+	// `]` once a member matches, hands the rest of the arm to the walk: the
+	// compiled last step is then not the step that ends the span, so the
+	// arm's last byte says nothing about it (#6380).
+	{`@([a\]x]y)z`, []string{"ayz", "a]xyz", "axyz", "x]yz", "a]yz"}},
+	{`@([a\]y]|b)`, []string{"ay", "a]y", "y", "b", "a]"}},
 	// A group's floor is in bytes and the rest's reach in units, so a rest
 	// that takes one multi-byte character needs the floor's widening.
 	{"(a|ab)?", []string{"abé", "aé"}},
@@ -188,6 +194,8 @@ func programReadings() []struct {
 	member := patternOpts{caret: true, bracket: BracketLiteral, bracketMember: true, matchSkipsToAnyBracket: true}
 	skip := member
 	skip.bracketMember = false
+	skipGroups := skip
+	skipGroups.quantified = true
 	period := flags
 	period.period = true
 	periodQuantified := quantified
@@ -217,6 +225,7 @@ func programReadings() []struct {
 		{"swallowing class", swallow},
 		{"bracket member", member},
 		{"bracket skip", skip},
+		{"bracket skip in groups", skipGroups},
 		{"period", period},
 		{"period quantified", periodQuantified},
 		{"whole", whole},
@@ -439,9 +448,10 @@ func TestSubstitutionAnswersTheSameCompiledAsWalked(t *testing.T) {
 
 // The substitution #6380 is measured on, counted in matcher questions rather
 // than timed: a program is what ran, and it asked about a quarter of what the
-// walk asks — 535 against 2,195 on the change that set this. Run with the
-// program off, the same count fails it, which is the check that this is
-// counting the thing it claims to.
+// walk asks — 535 against 2,195 on the change that set this, and 396 once a
+// group stopped trying arms over spans their edge bytes rule out. Run with the
+// program off, or with those edge tables off, the same count fails it, which
+// is the check that this is counting the thing it claims to.
 func TestTheThemeSubstitutionRunsAsAProgram(t *testing.T) {
 	e := &syntax.ParamExpr{All: true}
 	withCompiling(true, func() {
@@ -454,7 +464,7 @@ func TestTheThemeSubstitutionRunsAsAProgram(t *testing.T) {
 		if o.where.prog == nil {
 			t.Fatal("no program ran, so the count below is the walk's")
 		}
-		if n := o.where.asked; n > 800 {
+		if n := o.where.asked; n > 450 {
 			t.Errorf("the theme's substitution asked the program %d questions for nine matches", n)
 		}
 	})

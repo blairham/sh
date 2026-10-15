@@ -1478,7 +1478,7 @@ func matchPatternIn(pattern, piece, subject string, base int, o patternOpts) (bo
 		w = &matchWhere{}
 		o.where = w
 	}
-	w.total, w.caps = len(subject), newCaptures(w.plan)
+	w.total, w.caps = len(subject), w.trialCaptures()
 	// Where this piece sits in the subject, for the zero-width escapes. Set
 	// on every entry rather than once: matchPatternIn is re-entered for a
 	// group this surface declines, and a stale pair would answer about the
@@ -3059,7 +3059,7 @@ func hasUnterminatedBracket(p string, emptyCompiles bool) bool {
 // with a `[` in it.
 func (r *Runner) bracketAfterSubIsABadPattern(p string) bool {
 	return r.sem().UnterminatedBracketAfterASubExpression == BracketBadPattern &&
-		bracketLeftOpenBySubExpression(p, r.readsCollatingElements())
+		scannedOnce(p, scanLeftOpenBySub, r.readsCollatingElements(), bracketLeftOpenBySubExpression)
 }
 
 // readsCollatingElements is whether `[.x.]` and `[=x=]` are one element here,

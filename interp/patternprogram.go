@@ -173,6 +173,14 @@ type cpiece struct {
 	// rather than through here, and where units are bytes it is asked only
 	// about the one span it could fill. See cexec.item.
 	unit bool
+	// lead and tail are the ASCII bytes the first and the last unit of any
+	// span the piece matches can be, or nil where the compiled steps do not
+	// say. A piece with either consumes at least one unit, so it never
+	// matches the empty span. Only ASCII bytes are ever looked up: a byte
+	// past ASCII may be part of a character the steps compare whole, and is
+	// let through. tail is kept only for a pure piece. See pieceEdges, and
+	// cexec.group for what they save.
+	lead, tail *[utf8.RuneSelf]bool
 }
 
 type cop uint8
@@ -292,6 +300,10 @@ func (c *compiler) piece(p string, pp int, o patternOpts) *cpiece {
 	}
 	pc.empty = p == ""
 	pc.units, pc.pure = pieceFacts(pc.first)
+	pc.lead = leadOf(pc.first)
+	if pc.pure {
+		pc.tail = tailOf(pc.first)
+	}
 	if n := pc.first; n != nil && n.next == nil {
 		switch n.op {
 		case opByte, opChar, opAny:
@@ -956,6 +968,165 @@ func pieceFacts(n *cnode) (units int, pure bool) {
 	return units, pure
 }
 
+// Which bytes a piece's matches begin and end with (#6380).
+//
+// A group tries each arm over every span from its ceiling down, and a span is
+// settled by running the arm against exactly that much subject. Most of those
+// runs are ones the subject's own bytes rule out at a glance: an arm that
+// starts `[\\]` tried at a `{`, an arm that ends `[\}]` tried over a span
+// whose last byte is a letter. On the prompt theme's substitution that was
+// most of what the program did — an arm walked a dozen bytes to find that the
+// span it had been handed did not end where its closing brace was.
+//
+// So a piece records, from its compiled steps, the bytes its first and last
+// units can be, and the group skips a span whose edges are outside them. The
+// skip changes no answer: the run it saves is one that fails. And it changes
+// nothing the run would have done on the way to failing:
+//
+//   - A span skipped for its first byte fails at the first consuming step,
+//     which is a byte or a bracket compared against a table — the steps
+//     leadOf reads through before it (a group that must take an arm, a
+//     closure that must take an item) consume nothing and ask nothing.
+//   - A span skipped for its last byte would have run the whole piece, which
+//     is why tail is kept only for a pure piece: nothing in one can ask the
+//     dialect a question or mark the pattern bad (see pieceFacts), so a run
+//     of it that fails leaves nothing behind but the captures it rolls back.
+//     That guard is belt and braces as the steps stand — the impure steps
+//     either end a piece, and so have no table of their own, or move where
+//     the pattern goes on without moving its trailing text — and a mutant
+//     without it survives the comparison for that reason. It is kept so the
+//     next impure step does not have to be thought about here.
+//
+// Both are about ASCII bytes only, where a unit is the byte; a byte past
+// ASCII may be inside a character a step compares whole, and is let through.
+// TestTheProgramAnswersWhatTheWalkAnswers and its generated twin compare every
+// span against the walk, which has neither table.
+
+// edgeSet is one consuming step's own table, or nil where it has none: the
+// bytes opByte and an ASCII opChar compare, and a bracket's per-byte answer.
+func edgeSet(n *cnode) *[utf8.RuneSelf]bool {
+	var t [utf8.RuneSelf]bool
+	switch n.op {
+	case opByte:
+		if n.b < utf8.RuneSelf {
+			t[n.b] = true
+		}
+		if n.alt < utf8.RuneSelf {
+			t[n.alt] = true
+		}
+	case opChar:
+		if !n.ascii {
+			return nil
+		}
+		t[n.b], t[n.alt] = true, true
+	case opBracket:
+		if n.set == nil || n.o.matchSkipsToAnyBracket {
+			return nil
+		}
+		copy(t[:], n.set[:utf8.RuneSelf])
+	default:
+		return nil
+	}
+	return &t
+}
+
+// edgeUnion is every arm's table together, or nil where any arm has none.
+func edgeUnion(arms []*cpiece, of func(*cpiece) *[utf8.RuneSelf]bool) *[utf8.RuneSelf]bool {
+	if len(arms) == 0 {
+		return nil
+	}
+	var t [utf8.RuneSelf]bool
+	for _, a := range arms {
+		e := of(a)
+		if e == nil {
+			return nil
+		}
+		for b, ok := range e {
+			t[b] = t[b] || ok
+		}
+	}
+	return &t
+}
+
+// mustTakeAnArm says a group consumes through one of its arms before
+// anything after it: a plain group, `@(…)` or `+(…)`, never one that may stop
+// before its first repetition and never `!(…)`, which matches what its arms
+// do not.
+func mustTakeAnArm(n *cnode) bool {
+	return n.quant != '!' && !n.bound.mayStopHere()
+}
+
+// leadOf is the table of the first unit a piece beginning at n consumes.
+func leadOf(n *cnode) *[utf8.RuneSelf]bool {
+	if n == nil {
+		return nil
+	}
+	switch n.op {
+	case opGroup:
+		if !mustTakeAnArm(n) {
+			return nil
+		}
+		return edgeUnion(n.arms, func(a *cpiece) *[utf8.RuneSelf]bool { return a.lead })
+	case opRepeat:
+		if n.lo < 1 {
+			return nil
+		}
+		return n.item.lead
+	}
+	return edgeSet(n)
+}
+
+// tailOf is the table of the last unit a piece beginning at n consumes:
+// its last step's, where that step is the piece's last and consumes, or
+// stands for one that does.
+func tailOf(n *cnode) *[utf8.RuneSelf]bool {
+	if n == nil {
+		return nil
+	}
+	for n.next != nil {
+		n = n.next
+	}
+	switch n.op {
+	case opGroup:
+		if !n.rest.empty || !mustTakeAnArm(n) {
+			return nil
+		}
+		return edgeUnion(n.arms, func(a *cpiece) *[utf8.RuneSelf]bool { return a.tail })
+	case opRepeat:
+		if !n.after.empty || n.lo < 1 {
+			return nil
+		}
+		return n.item.tail
+	}
+	return edgeSet(n)
+}
+
+// leadRulesOut says no span of c beginning at at can match: the subject is
+// empty there, or its byte is ASCII and not one c begins with.
+func (x *cexec) leadRulesOut(c *cpiece, at, end int) bool {
+	if c.lead == nil {
+		return false
+	}
+	if at == end {
+		return true
+	}
+	b := x.piece[at-x.base]
+	return b < utf8.RuneSelf && !c.lead[b]
+}
+
+// tailRulesOut says the span of c from at to end cannot match: it is empty,
+// or its last byte is ASCII and not one c ends with.
+func (x *cexec) tailRulesOut(c *cpiece, at, end int) bool {
+	if c.tail == nil {
+		return false
+	}
+	if at == end {
+		return true
+	}
+	b := x.piece[end-1-x.base]
+	return b < utf8.RuneSelf && !c.tail[b]
+}
+
 // item is here for a piece that may be a unit: the same question, asked
 // without the memo for a piece that is one step, since a step is cheaper to
 // take than to look up.
@@ -1000,11 +1171,17 @@ func (x *cexec) group(n *cnode, b repeatBound, first bool, at, end int) bool {
 		floor = x.floor(n.rest, n.o.chars, n.tight, at, end)
 	}
 	for _, a := range n.arms {
+		if x.leadRulesOut(a, at, end) {
+			continue
+		}
 		top, bottom := x.ceiling(a, n.o, at, end), floor
 		if unitOnly(a, n.o) {
 			top, bottom = min(top, 1), max(bottom, 1)
 		}
 		for i := top; i >= bottom; i-- {
+			if x.tailRulesOut(a, at, at+i) {
+				continue
+			}
 			mark := caps.mark()
 			if !x.item(a, at, at+i) {
 				caps.rollback(mark)
@@ -1177,6 +1354,10 @@ type programCache struct {
 type programFamily struct {
 	mu      sync.Mutex
 	entries atomic.Pointer[[]*programEntry]
+	// scans holds the answers of the scans that decide whether the pattern
+	// compiles at all, which are facts about its text and one setting each
+	// — see scannedOnce. Two bits a question: asked, and the answer.
+	scans atomic.Uint32
 }
 
 // programEntry is one pattern under one reading. Its counters are shared by
@@ -1208,8 +1389,9 @@ const programCacheSize = 512
 
 var programs programCache
 
-// entry answers the entry for pattern under rd, making one on a miss.
-func (c *programCache) entry(pattern string, rd *patternReading) *programEntry {
+// family answers pattern's family, making one on a miss, or nil where the
+// map holds something else — which nothing ever stores, so is unreachable.
+func (c *programCache) family(pattern string) *programFamily {
 	m := c.m.Load()
 	if m == nil {
 		c.m.CompareAndSwap(nil, &sync.Map{})
@@ -1224,10 +1406,16 @@ func (c *programCache) entry(pattern string, rd *patternReading) *programEntry {
 		}
 		f, _ = m.LoadOrStore(pattern, &programFamily{})
 	}
-	fam, isFamily := f.(*programFamily)
-	if !isFamily {
-		// Nothing else is ever stored, so this is unreachable; an entry of
-		// its own is a correct answer that merely is not shared.
+	fam, _ := f.(*programFamily)
+	return fam
+}
+
+// entry answers the entry for pattern under rd, making one on a miss.
+func (c *programCache) entry(pattern string, rd *patternReading) *programEntry {
+	fam := c.family(pattern)
+	if fam == nil {
+		// An entry of its own is a correct answer that merely is not
+		// shared.
 		return &programEntry{reading: *rd}
 	}
 	if list := fam.entries.Load(); list != nil {
@@ -1294,4 +1482,54 @@ var byteStrings = func() (t [256]string) {
 // below packBase where it is used, so every question gets its own number.
 func packProgramKey(id uint64, at, end int) uint64 {
 	return (id*packBase+uint64(at))*packBase + uint64(end)
+}
+
+// patternScan names one of the scans scannedOnce keeps.
+type patternScan uint32
+
+const (
+	// scanOpenGroup is hasUnterminatedPatternGroup.
+	scanOpenGroup patternScan = iota
+	// scanLeftOpenBySub is bracketLeftOpenBySubExpression.
+	scanLeftOpenBySub
+	// scanOpenBracket is hasUnterminatedBracket.
+	scanOpenBracket
+)
+
+// scanMemoFrom is the shortest pattern scannedOnce keeps answers for. Below
+// it the scan is cheaper than finding the pattern in the cache: `*/` is a
+// few bytes to walk and a hash and a map probe to look up.
+const scanMemoFrom = 24
+
+// scannedOnce is scan(p, setting), kept with p's family so that a pattern
+// a loop expands every time round is scanned once.
+//
+// Each of these scans asks whether the pattern will compile — a group or a
+// bracket nothing closes — and a pattern operand asks all three before it is
+// matched, at every expansion. On #1398's substitution that was a sixth of
+// building the options and more than the setting questions themselves
+// (#6380). The answer is a function of the text and the one setting passed
+// with it, which is the whole key, so a kept answer is the scan's own.
+func scannedOnce(p string, which patternScan, setting bool, scan func(string, bool) bool) bool {
+	if len(p) < scanMemoFrom || !patternFactsCached {
+		return scan(p, setting)
+	}
+	fam := programs.family(p)
+	if fam == nil {
+		return scan(p, setting)
+	}
+	slot := uint32(which) * 2
+	if setting {
+		slot++
+	}
+	asked, yes := uint32(1)<<(2*slot), uint32(1)<<(2*slot+1)
+	if v := fam.scans.Load(); v&asked != 0 {
+		return v&yes != 0
+	}
+	got := scan(p, setting)
+	if got {
+		asked |= yes
+	}
+	fam.scans.Or(asked)
+	return got
 }

@@ -101,6 +101,13 @@ type matchWhere struct {
 	// caps is where the groups of the trial now running report themselves,
 	// and is replaced for each trial.
 	caps *captures
+	// capsHeld is the captures caps is reset to at each trial, made once for
+	// this matchWhere's plan rather than once per trial: a substitution asks
+	// the matcher at every position it could match from, and a fresh set per
+	// question was the largest share of what #1398's substitution allocated
+	// (#6380). A report copies the spans out, so nothing outlives the trial
+	// that holds them.
+	capsHeld *captures
 	// asked counts the questions put to matchHere against the pattern and
 	// subject below, and dead is the ones that came back false. See
 	// memoThreshold for why the count exists at all.
@@ -477,6 +484,24 @@ type capUndo struct {
 
 // newCaptures is the state for one pattern, or nil where the pattern asks for
 // nothing — which is the common case and costs nothing at all.
+// trialCaptures is the empty captures a trial of w's plan starts from:
+// w's own, cleared, where it has made them before. The plan is fixed when a
+// matchWhere is made, so the held set always has its shape.
+func (w *matchWhere) trialCaptures() *captures {
+	if w.plan.count == 0 {
+		return nil
+	}
+	c := w.capsHeld
+	if c == nil {
+		c = newCaptures(w.plan)
+		w.capsHeld = c
+		return c
+	}
+	clear(c.spans)
+	c.journal = c.journal[:0]
+	return c
+}
+
 func newCaptures(plan capturePlan) *captures {
 	if plan.count == 0 {
 		return nil

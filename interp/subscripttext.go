@@ -303,7 +303,14 @@ func (r *Runner) outputOperandBracketsAreLexed(operand string) bool {
 // an expansion: `unset a[$k]` with `k=']'` is one written pair and a key made
 // of the other bracket.
 func wordBracketsAreLexed(w *syntax.Word) bool {
-	if w == nil {
+	if w == nil || len(w.Spans) == 0 {
+		return false
+	}
+	// The answer needs the word to end in an unquoted literal `]`, which is
+	// one look at its last byte; nearly every word is answered by that look
+	// rather than by the walk (#6496).
+	if last := w.Spans[len(w.Spans)-1]; last.Kind != syntax.Literal || last.Quoting != syntax.Unquoted ||
+		last.Value == "" || last.Value[len(last.Value)-1] != ']' {
 		return false
 	}
 	opens, closes, endsThere := 0, 0, false

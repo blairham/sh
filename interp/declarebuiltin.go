@@ -5547,13 +5547,20 @@ func plainDecimal(text string) (int, bool) {
 	if digits == "" || len(digits) > 18 || (digits[0] == '0' && len(digits) > 1) {
 		return 0, false
 	}
+	// Accumulated here rather than handed to strconv.Atoi, which would walk
+	// the digits again: eighteen of them cannot overflow a machine word.
+	n := 0
 	for i := 0; i < len(digits); i++ {
-		if digits[i] < '0' || digits[i] > '9' {
+		c := digits[i]
+		if c < '0' || c > '9' {
 			return 0, false
 		}
+		n = n*10 + int(c-'0')
 	}
-	n, err := strconv.Atoi(text)
-	return n, err == nil
+	if len(digits) < len(text) {
+		n = -n
+	}
+	return n, true
 }
 
 // zeroPadded reports whether text is a decimal digit string, optionally

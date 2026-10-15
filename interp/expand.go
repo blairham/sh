@@ -3731,6 +3731,19 @@ func (r *Runner) resultReadsAsPattern(esc string) bool {
 }
 
 func containsAnyOf(s, chars string) bool {
+	if len(chars) <= 4 {
+		// IFS, nearly always: three characters, asked of a value a few
+		// bytes long. strings.IndexByte is a vector search on amd64 that
+		// costs more to set up than these comparisons do (#6496).
+		for i := 0; i < len(s); i++ {
+			for j := 0; j < len(chars); j++ {
+				if s[i] == chars[j] {
+					return true
+				}
+			}
+		}
+		return false
+	}
 	for i := 0; i < len(s); i++ {
 		if strings.IndexByte(chars, s[i]) >= 0 {
 			return true

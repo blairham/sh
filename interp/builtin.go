@@ -8057,6 +8057,21 @@ func biLocal(r *Runner, _ context.Context, args []string) (endStatus int) {
 		// the dialect that took this as a global: there is nothing to put
 		// back, and it becomes a plain assignment.
 		fresh, redeclared := r.shadow(name)
+		if r.kindLetterUntiesAScriptTie(name, f) {
+			// The same untie `typeset` makes, on the one declaration route
+			// that does not go through declareNames: a call's own tie given a
+			// kind letter by `local` in that call. Measured 2026-10-15 on zsh
+			// 5.9.2, `f(){ typeset -T FOO foo; local -i FOO }` leaves `foo`
+			// gone and `FOO` `integer-local`, as the `typeset -i FOO`
+			// spelling does. A fresh local over an outer tie answers no,
+			// because the tie does not describe the binding just made. See
+			// Runner.kindLetterUntiesAScriptTie.
+			if r.unspecified || r.ctl == controlExit {
+				return r.status
+			}
+			r.assignFailed = true
+			continue
+		}
 		// And a name already holding a **reference** puts everything below on
 		// what it points at. After the shadow, which is what leaves a fresh
 		// binding out of it: the copy drops the reference along with every

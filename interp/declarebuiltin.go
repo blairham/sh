@@ -2209,6 +2209,19 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) (endSt
 		if !df.global {
 			fresh, redeclared = r.shadowTypeset(name)
 		}
+		if r.kindLetterUntiesAScriptTie(name, df) {
+			// A kind letter on one half of a script's tie, landing on the
+			// tie's own binding: the pair comes apart and the other half
+			// goes, ahead of the attributes below converting this one. A
+			// fresh local over an outer tie is not that binding and answers
+			// no, while a call's own tie redeclared in the call is. See
+			// Runner.kindLetterUntiesAScriptTie.
+			if r.unspecified || r.ctl == controlExit {
+				return r.status
+			}
+			r.assignFailed = true
+			continue
+		}
 		// And a name that is already a **reference** is not what the rest of
 		// this operand is about: the attributes, the value and the freeze all
 		// belong to what it points at. **After** the shadow, because a shadow

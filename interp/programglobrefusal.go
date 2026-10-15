@@ -79,7 +79,7 @@ func (r *Runner) runsAsAProgram() bool {
 	}
 	name := g.words[g.modifiers]
 	if g.viaCommand {
-		return !(r.presentsAsBuiltin(name) && r.sem().CommandReachesABuiltin == Yes)
+		return !r.presentsAsBuiltin(name) || r.sem().CommandReachesABuiltin != Yes
 	}
 	if r.HasFunction(name) {
 		return false

@@ -807,6 +807,36 @@ type Semantics struct {
 	// passing it through. True only in zsh.
 	GlobNoMatchIsError Answer
 
+	// UnmatchedPatternFailsOnlyTheProgram makes a pattern refused for
+	// matching nothing, in a word behind the name of a command that runs as
+	// a program, that program's failure: the refusal is written, the command
+	// does not run and is 1, and the script carries on. Off, the refusal ends
+	// whatever a failed expansion ends, wherever it stands.
+	//
+	// Asked only where a refusal lands in such a word, so a dialect that
+	// refuses no pattern never reaches it. Measured 2026-10-15 on zsh 5.9.2
+	// under `-fc '<program>; echo "after st=$?"'` (#6524):
+	//
+	//	/usr/bin/true [x]                no matches found: [x], after st=1
+	//	nosuchcmd [x] / command true [x] the same — both are programs there
+	//	/usr/bin/true [x] || echo or     the message, then `or`
+	//	{ /usr/bin/true [x]; echo in; }  the message, then `in`
+	//	/usr/bin/true [x] $(echo hi >&2) `hi` first: every other expansion runs
+	//	/usr/bin/true [x] ${y?unset}     y: unset, and the script ends — that
+	//	                                 failure wins
+	//	/usr/bin/true [x] 2>err          the message on the shell's stderr, and
+	//	                                 `err` is never made
+	//	echo [x] / f [x] / builtin echo [x] / exec /usr/bin/true [x]
+	//	                                 the script ends: a builtin, a function,
+	//	                                 a builtin, and no child at all
+	//	[x] a / /usr/bin/[x]rue a        the script ends: the name decides
+	//	                                 where the command runs
+	//
+	// The same under a script file, standard input and `emulate sh` with
+	// `nomatch` set. bash 5.3.20 with `shopt -s failglob` ends the line for
+	// `/usr/bin/true [x]`, as for a builtin.
+	UnmatchedPatternFailsOnlyTheProgram Answer
+
 	// IgnoredNamesVariable names the parameter whose patterns take names
 	// back out of a pathname expansion, and it is empty in every dialect
 	// that has no such parameter.
@@ -33518,6 +33548,10 @@ func PosixSemantics() Semantics {
 		TrailingSeparatorEndsAField: No,
 		GlobExpansionResults:        Yes,
 		GlobNoMatchIsError:          No,
+		// The standard refuses no unmatched pattern, so it has nothing to
+		// hand to a program; bash's `failglob` ends the line as it does
+		// anywhere. See UnmatchedPatternFailsOnlyTheProgram.
+		UnmatchedPatternFailsOnlyTheProgram: No,
 		// XCU 2.13.1 gives `%` no meaning in a pattern, so a `?` after one is
 		// a pattern like any other; four of the five dialects agree.
 		JobSpecQuestionMarkIsLiteral: No,

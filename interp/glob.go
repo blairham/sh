@@ -2340,7 +2340,13 @@ func (r *Runner) workDir() string {
 // zz*zz` exit 1, where a failed arithmetic expansion in the same place leaves
 // the 4. See Semantics.FailedExpansionInACommandKeepsAFailingStatus (#6067).
 func (r *Runner) refuseUnmatchedPattern(pattern string) {
-	r.diagf("%s\n", Wording(r.diag().GlobNoMatch, "no matches found: %s", pattern))
+	msg := Wording(r.diag().GlobNoMatch, "no matches found: %s", pattern)
+	if r.holdForTheProgram(msg) {
+		// A program's failure and not the script's: written when the
+		// command's words are done. See interp/programglobrefusal.go.
+		return
+	}
+	r.diagf("%s\n", msg)
 	defer r.globRefusalSetsItsStatus()()
 	r.failedExpansion()
 }

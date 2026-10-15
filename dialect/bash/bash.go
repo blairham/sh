@@ -3193,6 +3193,11 @@ func Semantics() interp.Semantics {
 	// what makes this a question at all — see
 	// interp.Semantics.ReadonlyFdVariableRefusesAClose.
 	s.ReadonlyFdVariableRefusesAClose = interp.No
+	// And a frozen name is found out only when the number will not store:
+	// `readonly v=1; true {v}>/nodir/f` reports the open's failure and not
+	// the name, measured 2026-10-15 on 5.3.20 (#6571). See
+	// interp.Semantics.FdVariableReadonlyRefusedFirst.
+	s.FdVariableReadonlyRefusedFirst = interp.No
 	// And `set -C` does not protect the name: `exec {m}>f1; exec {m}>f2`
 	// allocates a second descriptor and overwrites it in silence, measured
 	// 2026-09-29. See interp.Semantics.NoclobberProtectsAnFdVariable.

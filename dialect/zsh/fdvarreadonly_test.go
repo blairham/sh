@@ -117,3 +117,29 @@ func TestAWritableNameIsUntouchedAndTheGenericRefusalIsStillItself(t *testing.T)
 		}
 	})
 }
+
+// TestAFrozenNameIsRefusedBeforeTheTarget — the Yes side of
+// interp.Semantics.FdVariableReadonlyRefusedFirst: the name is looked at
+// before the target is opened or duplicated, so a target that would not open
+// is never reported, and a read still names its target on the second line
+// (#6571, #6523). The target is still expanded first. zsh 5.9.2 `-fc`,
+// measured 2026-10-15.
+func TestAFrozenNameIsRefusedBeforeTheTarget(t *testing.T) {
+	const refusal = "zsh:1: can't allocate file descriptor to readonly parameter v\n"
+	for _, c := range []struct{ name, src, errs string }{
+		{"a write that would not open", `readonly v=1; true {v}>/nodir/f; echo "st=$?"`, refusal},
+		{"an append", `readonly v=1; true {v}>>/nodir/f; echo "st=$?"`, refusal},
+		{"a closed descriptor", `readonly v=1; true {v}>&3; echo "st=$?"`, refusal},
+		{"a read names what it never opened", `readonly v=1; true {v}</nonexist; echo "st=$?"`, refusal + "zsh:1: undefined error: 0: /nonexist\n"},
+		{"so does a read-write", `readonly v=1; true {v}<>/nodir/f; echo "st=$?"`, refusal + "zsh:1: undefined error: 0: /nodir/f\n"},
+		{"the target is expanded first", `readonly v=1; true {v}<$(echo X >&2; echo /nonexist); echo "st=$?"`, "X\n" + refusal + "zsh:1: undefined error: 0: /nonexist\n"},
+		{"ahead of noclobber", `exec {v}>/dev/null; readonly v; set -C; true {v}>/dev/null; echo "st=$?"`, refusal},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			out, st, errs := runZshSplit(t, t.TempDir(), c.src)
+			if out != "st=1\n" || errs != c.errs || st != 0 {
+				t.Errorf("out %q err %q status %d, want st=1 and %q", out, errs, st, c.errs)
+			}
+		})
+	}
+}

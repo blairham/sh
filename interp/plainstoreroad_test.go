@@ -72,6 +72,9 @@ var theFullRoad = map[string][]string{
 		"optindCursorScope", "optScanInDoubt",
 		// `0` only, which is no identifier and so never a plain store (#6809).
 		"namesAPosition", "storeDollarZero",
+		// A name with a declared base only, which carries the integer
+		// attribute and so is never a plain store (#6758).
+		"producedNumberOfRendered",
 	},
 }
 

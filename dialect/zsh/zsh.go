@@ -5369,6 +5369,11 @@ func Semantics() interp.Semantics {
 	// parameter v` and not the open's failure, measured 2026-10-15 (#6571).
 	// See interp.Semantics.FdVariableReadonlyRefusedFirst.
 	s.FdVariableReadonlyRefusedFirst = interp.Yes
+	// But a `{name}` store is made before the command's prefix, which the
+	// command sees: `f() { echo "in[$v]"; }; v=pre f {v}</dev/null; echo
+	// "[$v]"` is `in[0] [11]`, measured 2026-10-15 (#6569). See
+	// interp.Semantics.FdVariableStoredAfterThePrefix.
+	s.FdVariableStoredAfterThePrefix = interp.No
 	// And `set -C` protects a name that already holds an open descriptor, so
 	// `exec {m}>f1; exec {m}>f2` is refused rather than reallocating. The
 	// name is what is protected and not the file — the same file twice is

@@ -2814,6 +2814,9 @@ func (r *Runner) setFdVar(ref, value, readTarget string) bool {
 	failed := refused || r.assignFailed || r.ctl == controlExit
 	r.fdVarSpeaker, r.assignFailed = outerSpeaker, outerFailed || failed
 	if !failed {
+		if r.redirOwner == redirOwnerThisShell {
+			r.fdVarStores = append(r.fdVarStores, fdVarStore{ref, value})
+		}
 		return true
 	}
 	r.ctl, r.ctlDepth = outerCtl, outerDepth

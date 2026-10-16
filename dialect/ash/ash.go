@@ -382,6 +382,8 @@ func Semantics() interp.Semantics {
 	// redirection here for a subshell to carry, the same reason as the two
 	// axes beside it.
 	// unanswered ReadonlyFdVariableRefusesAClose: there is no `{name}`
+	// unanswered FdVariableStoredAfterThePrefix: there is no `{name}`
+	// redirection here for a prefix to meet.
 	// unanswered FdVariableReadonlyRefusedFirst: there is no `{name}`
 	// redirection here for a frozen name to be aimed by, the same reason as
 	// the axis below it.

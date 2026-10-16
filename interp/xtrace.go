@@ -727,7 +727,12 @@ func (r *Runner) traceLiteralAsElementWrites(a *syntax.Assign, e *expandedAssign
 		if el.appendValue {
 			op = "+="
 		}
-		lines = append(lines, a.Name+"["+el.sub+"]"+op+
+		// The key is quoted by the rule traceAssignTarget quotes a resolved
+		// subscript by, since that is what each line is: measured 2026-10-15
+		// on ksh93u+ 2012-08-01, `a=(["a b"]=1 [""]=3)` traces `a['a b']=1`
+		// and `a['']=3`, where this wrote the keys raw — `a[]=3` (#6609).
+		lines = append(lines, a.Name+"["+
+			r.traceQuote(el.sub, d.TraceQuoting, d.TraceMetacharacters)+"]"+op+
 			r.traceQuote(el.value, d.TraceQuoting, d.TraceMetacharacters))
 	}
 	return lines, true

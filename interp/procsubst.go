@@ -330,6 +330,13 @@ func (r *Runner) substRunner(span syntax.Span) (*Runner, func()) {
 	// apart (#1933) and the offset is the second thing to have been fixed
 	// apart in it.
 	sub.lineBase = r.spanLineBase(span)
+	// And one level of indirection, the same one a command substitution's
+	// body is given: the body is text read again, which is what the level
+	// counts. Measured on bash 5.3.20, `-c` and from a file, `set -x; :
+	// <(true)` traces the body at `++ true`, `: $(: <(true))` at `+++ true`,
+	// and `: <(: <(true))` at `+++ true` again, where every one of them was
+	// one `+` short here (#6736). See Runner.tracePrefixDepth.
+	sub.indirection = r.indirection + 1
 	// A redirection target's body renders its trace lines and writes them
 	// nowhere, which is the reference's answer and is about the substitution's
 	// place rather than its direction. The mark itself does not travel with

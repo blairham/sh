@@ -245,6 +245,7 @@ ash   ReadEchoLettersWriteTheValues
 ash   ReadExactCountKeepsPartial
 ash   ReadPartialCountSucceeds
 ash   ReadTypedValueFailureIsAnAssignmentFailure
+ash   TypedValueFailureGivesUpTheLine
 ash   ReadonlyAttributeCanBeRemoved
 ash   ReadonlyElement
 ash   ReadonlyFdVariableRefusesAClose
@@ -643,6 +644,7 @@ dash  ReadPartialCountSucceeds
 dash  ReadTimeoutBoundsReadability
 dash  ReadTimeoutKeepsWhatArrived
 dash  ReadTypedValueFailureIsAnAssignmentFailure
+dash  TypedValueFailureGivesUpTheLine
 dash  ReadZeroTimeout
 dash  ReadonlyAttributeCanBeRemoved
 dash  ReadonlyElement

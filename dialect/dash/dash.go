@@ -1570,6 +1570,8 @@ func Semantics() interp.Semantics {
 	// type, so no value can fail to fit one.
 	// unanswered ReadTypedValueFailureIsAnAssignmentFailure: no name here carries a type,
 	// so no value `read` writes can fail to fit one.
+	// unanswered TypedValueFailureGivesUpTheLine: no name here carries a type,
+	// so no value can fail to fit one.
 	// And so does `read`, on the same reading and with the same status: 2
 	// wherever the frozen name stood, where bash answers 1 for the last one
 	// (#3208).

@@ -973,6 +973,16 @@ func (r *Runner) runSourcedText(ctx context.Context, src string, s sourced) int 
 				return 2
 			}
 			if r.ctl == controlAbandon {
+				if r.abandonPassesBorrowedText && !r.inSubshell {
+					// A give-up this text does not stop: it goes on out
+					// and takes the caller's line, which is the line the
+					// caller was reading. See Runner.giveUpPastBorrowedText.
+					if outerInputLine != 0 {
+						r.abandonLine = outerInputLine
+					}
+					stopped = true
+					break
+				}
 				if r.inSubshell {
 					// Except inside a subshell, where the give-up is not
 					// caught here at all: it goes on out and the subshell

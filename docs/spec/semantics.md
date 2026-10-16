@@ -1804,6 +1804,24 @@ text that came from a *file*, and does not stop at `eval`'s, which is not one.
 `interp.Runner.AtPrompt` is what the front end sets and `Runner.borrowedFiles`
 is where it stops applying (#2024).
 
+**BusyBox ash draws the same line from the other side, and by the shell being
+interactive rather than by the prompt.** Its `eval` text keeps the `eval:` name
+everywhere, and under `-i` — at the prompt, `-i -c` and `-i` with a script
+alike — loses its line, wherever the eval is: typed, in a function, or inside a
+file `.` read. A file `.` reads keeps its line there. Measured 2026-10-15 in the
+pinned alpine image (BusyBox v1.37.0):
+
+| the same text | `sh -c` | `sh -i`, `-i -c`, `-i file` |
+| --- | --- | --- |
+| `eval "true` ⏎ `nosuch_b"` | `sh: eval: line 2: nosuch_b: not found` | `sh: eval: nosuch_b: not found` |
+| `eval "true` ⏎ `cd /nonexist"` | `sh: cd: line 4: can't cd …` | `sh: cd: can't cd …` |
+| `. ./s3.inc` (`nosuch_s3`) | `sh: ./s3.inc: line 1: …` | `sh: ./s3.inc: line 1: …` |
+| `eval "$(cat s3.inc)"` | `sh: eval: line 3: …` | `sh: eval: nosuch_s3: not found` |
+
+The last two rows are the pair that names the noun: the same bytes, one as a
+file and one as `eval`'s text, at the same prompt. See
+`Diagnostics.EvalTextNamesNoLineWhenInteractive` (#6611).
+
 **One difference left unfixed and stated.** bash sourcing a file at a prompt
 names *itself* rather than the file — `bash: cd: /nope: …` where the same
 `. ./f.sh` under `-c` is `./f.sh: line 1: cd: …`. This shell names the file on

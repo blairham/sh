@@ -6889,6 +6889,36 @@ type Semantics struct {
 	// `getopts` loop reaches no question at all.
 	GetoptsFrozenNameAtTheEndOfTheOptionsIsFatal Answer
 
+	// GetoptsStoreRefusalLeavesZero leaves 0 behind where a refused `getopts`
+	// store ended the shell, the number the operand stores of `set -A`, `read
+	// -A`, `printf -v`, `print -v` and `zparseopts` leave in the same shell
+	// (#6486, #6513, #6515). No leaves the builtin's own refused status.
+	//
+	// Measured 2026-10-15 on zsh 5.9.2, `-f`, `env -i PATH=/usr/bin:/bin`:
+	//
+	//	                                            -c    script file
+	//	typeset -r v=1; set -- -a; getopts a v      0     1
+	//	the same with `set -- -z`                   0     1
+	//	… getopts a v || echo or                    0     1
+	//	… getopts a v && echo and                   1     1
+	//	… for i in 1; do getopts a v; done          1     1
+	//	… ( getopts a v ); echo $?                  0     0
+	//	f(){ private v=1; g; }; g(){ set -- -a; getopts a v; }; f
+	//	                                            0     1
+	//
+	// which is the raisers of Runner.refusalZeroIsRaisedBackToOne exactly, so
+	// the number is asked through Runner.refusalLeavesZero like the others.
+	// ksh93 ends the shell at 2 where its scan has run out over a frozen name
+	// (GetoptsFrozenNameAtTheEndOfTheOptionsIsFatal): measured 2026-10-15,
+	// `readonly o; getopts a o; echo after $?` from `-c` is the refusal and
+	// status 2.
+	//
+	// Asked only where the refusal ended the shell, so a refused store that
+	// only reports asks nothing.
+	//
+	// unanswered bash, dash, ash: no refused `getopts` store ends the shell.
+	GetoptsStoreRefusalLeavesZero Answer
+
 	// GetoptsTypedValueFailureIsAFreeze refuses a value `getopts`'s typed
 	// name will not take exactly as it refuses a frozen name — reported, the
 	// builtin at 2, and the script ended only where

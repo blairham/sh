@@ -1813,6 +1813,9 @@ func Semantics() interp.Semantics {
 	// and with `set -- x` both write `getopts: line 1: N: is read only` at 2
 	// and the script runs on.
 	s.GetoptsFrozenNameAtTheEndOfTheOptionsIsFatal = interp.No
+	// unanswered GetoptsStoreRefusalLeavesZero: no refused `getopts` store
+	// ends the shell here — the two axes above are both No — so there is
+	// no number left by one to measure (#6588).
 	// unanswered GetoptsTypedValueFailureIsAFreeze: no name here carries a
 	// type, so no value can fail to fit one.
 	// unanswered ReadTypedValueFailureIsAnAssignmentFailure: no name here carries a type,

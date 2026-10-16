@@ -426,11 +426,16 @@ type substLevel struct {
 // sentence here instead is a split of the whole program's text, on every
 // `$( … )` a script runs, for a message almost none of them will write.
 type substEntry struct {
-	// at is the substitution's span, and word the word of the enclosing text
-	// that holds it — nil where the expansion was reached from something
-	// that is not a word.
-	at   syntax.Span
-	word *syntax.Word
+	// atPos and atQuoting are where the substitution's span stands and how
+	// it was quoted, and word the word of the enclosing text that holds it —
+	// nil where the expansion was reached from something that is not a word.
+	//
+	// The two fields and not the span: the sentence reads nothing else of
+	// it, and a whole Span copied into every level entered was most of what
+	// opening an arithmetic expansion's level cost (#6496).
+	atPos     syntax.Pos
+	atQuoting syntax.Quoting
+	word      *syntax.Word
 	// outer is the outermost word of that nesting as the level held it. The
 	// sentence is only written for a span the word places directly, which is
 	// the pair being equal. See Runner.expandingOuterWord.
@@ -552,11 +557,12 @@ func (r *Runner) outerLevel(at substLevel, span syntax.Span) substLevel {
 		at.quoted = true
 	}
 	at.entry = substEntry{
-		at:       span,
-		word:     r.expandingWord,
-		outer:    r.expandingOuterWord,
-		lineBase: r.lineBase,
-		fragment: r.substFragmentLine,
+		atPos:     span.Pos,
+		atQuoting: span.Quoting,
+		word:      r.expandingWord,
+		outer:     r.expandingOuterWord,
+		lineBase:  r.lineBase,
+		fragment:  r.substFragmentLine,
 	}
 	return at
 }
@@ -730,16 +736,16 @@ func (r *Runner) substWordEcho(span syntax.Span, lines []string, textBase, own, 
 // level rather than anything the failing span carries.
 func (r *Runner) substWordSentence(e substEntry, lines []string, textBase int) string {
 	w := e.word
-	if w == nil || w != e.outer || e.at.Quoting != syntax.Unquoted ||
-		w.Start.Line != e.at.Pos.Line || w.Start.Col > e.at.Pos.Col {
+	if w == nil || w != e.outer || e.atQuoting != syntax.Unquoted ||
+		w.Start.Line != e.atPos.Line || w.Start.Col > e.atPos.Col {
 		return ""
 	}
-	start := e.lineBase + e.fragment + int(e.at.Pos.Line) - textBase
+	start := e.lineBase + e.fragment + int(e.atPos.Line) - textBase
 	if start < 1 || start > len(lines) {
 		return ""
 	}
 	row := lines[start-1]
-	from, at := int(w.Start.Col)-1, int(e.at.Pos.Col)-1
+	from, at := int(w.Start.Col)-1, int(e.atPos.Col)-1
 	if at+2 > len(row) || row[at+1] != '(' || !strings.ContainsRune("$<>", rune(row[at])) {
 		return ""
 	}

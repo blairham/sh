@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 )
 
@@ -111,6 +112,13 @@ type signalState struct {
 	// pending is what the shell already knows has arrived, ahead of the
 	// runtime telling it. Only `kill` puts anything here — see selfSignaled.
 	pending []string
+	// queued is true while pending or a shared death may hold something,
+	// and is written only with mu held, by queue and recordSharedDeath and
+	// by the two takers that empty them. It is what lets the check made at
+	// the top of every statement answer "nothing arrived" without taking
+	// the lock — that check was about 3% of a counting loop (#6496). It may
+	// say true when nothing is there; it never says false when something is.
+	queued atomic.Bool
 	// heldForInput is what the shell recorded for itself and is not running
 	// between commands: one condition, in one dialect, that arrives when the
 	// shell next reads a unit of its input or finishes waiting for a child.
@@ -256,6 +264,31 @@ func (s *signalState) drainForwarded() {
 	}
 }
 
+// queue puts arrivals on pending, with mu held, and is the only writer of it
+// that adds: see signalState.queued, which it keeps true while anything is
+// there.
+func (s *signalState) queue(names ...string) {
+	s.pending = append(s.pending, names...)
+	s.queued.Store(true)
+}
+
+// settleQueued clears signalState.queued once both of what it stands for are
+// empty, with mu held.
+func (s *signalState) settleQueued() {
+	if len(s.pending) == 0 && s.diedSig == 0 {
+		s.queued.Store(false)
+	}
+}
+
+// nothingArrived reports, without the lock, that a statement has no handler
+// to run and no death to die of: nothing queued, and nothing the runtime
+// forwarded still in the channel. A signal that lands just after it answers
+// is run at the next statement, which is where it would have run had it
+// landed just after the drain this stands in for.
+func (s *signalState) nothingArrived() bool {
+	return !s.queued.Load() && len(s.ch) == 0
+}
+
 // forwarded records one arrival the runtime handed over, with the lock already
 // held, and is the only place that decides whether it counts.
 //
@@ -293,7 +326,7 @@ func (s *signalState) forwarded(sig os.Signal) {
 		// instead — see Runner.childReaped, where both directions of that are
 		// measured.
 	default:
-		s.pending = append(s.pending, name)
+		s.queue(name)
 	}
 }
 
@@ -713,7 +746,7 @@ func (r *Runner) selfSignaled(name string) {
 		s.heldForInput = append(s.heldForInput, name)
 		return
 	}
-	s.pending = append(s.pending, name)
+	s.queue(name)
 	// A background job sending this is the shape the issue was reported as:
 	// the arrival has to reach a `wait` that is already blocked, and nothing
 	// else here would tell it.
@@ -756,7 +789,7 @@ func (r *Runner) brokenPipeAbsorbed(deliver bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if deliver {
-		s.pending = append(s.pending, "PIPE")
+		s.queue("PIPE")
 	}
 	s.pipeAbsorbed++
 	s.poke()
@@ -823,7 +856,7 @@ func (r *Runner) releaseSignalsHeldForInput() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if len(s.heldForInput) > 0 {
-		s.pending = append(s.pending, s.heldForInput...)
+		s.queue(s.heldForInput...)
 		s.heldForInput = nil
 	}
 }
@@ -888,6 +921,7 @@ func (r *Runner) recordSharedDeath(name string, sig syscall.Signal) {
 	defer s.mu.Unlock()
 	if s.diedSig == 0 {
 		s.died, s.diedSig = name, sig
+		s.queued.Store(true)
 	}
 }
 
@@ -904,6 +938,7 @@ func (r *Runner) takeSharedDeath() (string, syscall.Signal, bool) {
 	}
 	name, sig := s.died, s.diedSig
 	s.died, s.diedSig = "", 0
+	s.settleQueued()
 	return name, sig, true
 }
 
@@ -921,6 +956,7 @@ func (r *Runner) takePending() []string {
 	s.drainForwarded()
 	got := s.pending
 	s.pending = nil
+	s.settleQueued()
 	return got
 }
 
@@ -1130,6 +1166,9 @@ func (r *Runner) runPendingTraps(ctx context.Context) {
 				r.runTrapHandler(ctx, name, body)
 			}
 		}
+		return
+	}
+	if s := r.signals; s == nil || s.nothingArrived() {
 		return
 	}
 	if name, sig, died := r.takeSharedDeath(); died {

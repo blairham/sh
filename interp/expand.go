@@ -8366,6 +8366,19 @@ func (r *Runner) parseSpans(spans []syntax.Span) []syntax.Span {
 // An assignment's value is also a tilde context, which is what makes
 // `PATH=~/bin` work — and it comes for free here, because the parser gives an
 // assignment's value its own word.
+// opensWithAnEquals is expandEquals' first question: whether the word begins
+// with an unquoted literal `=`. Every other word comes back from expandEquals
+// untouched, so a caller that has a dearer question to ask first (whether the
+// word holds braces, in simpleCommand) asks this one before it and spends
+// nothing on the words that cannot move — which is nearly all of them (#6496).
+func opensWithAnEquals(w *syntax.Word) bool {
+	if len(w.Spans) == 0 {
+		return false
+	}
+	s := &w.Spans[0]
+	return s.Kind == syntax.Literal && s.Quoting == syntax.Unquoted && strings.HasPrefix(s.Value, "=")
+}
+
 // expandEquals replaces `=cmd` with the path of cmd, which zsh alone does.
 //
 // It sits beside expandTilde because it is the same kind of thing and zsh
@@ -8382,14 +8395,10 @@ func (r *Runner) parseSpans(spans []syntax.Span) []syntax.Span {
 // `=cmd` the script wrote (#6433). The tilde passes learned the same thing in
 // #5155; see spansCopiedForTildes.
 func (r *Runner) expandEquals(w *syntax.Word) *syntax.Word {
-	if len(w.Spans) == 0 {
+	if !opensWithAnEquals(w) {
 		return w
 	}
 	s := &w.Spans[0]
-	if s.Kind != syntax.Literal || s.Quoting != syntax.Unquoted ||
-		!strings.HasPrefix(s.Value, "=") {
-		return w
-	}
 	// The head is every unquoted literal span in a row, not only the first:
 	// a brace product arrives as the text before the braces and the text
 	// they made, so `={ls,}` makes `=` and `ls` as two spans of one word,

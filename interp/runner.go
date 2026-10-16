@@ -8915,6 +8915,11 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 	written := c
 	var args []*syntax.Word
 	for i, w := range c.Args {
+		// Only a word that opens with `=` can move, and asking that first
+		// keeps the brace scan below off every other word (#6496).
+		if !opensWithAnEquals(w) {
+			continue
+		}
 		// A word with braces in it is answered a name at a time, after the
 		// braces made them, unless `shfileexpansion` puts `=` first: zsh
 		// 5.9.2 writes `/bin/ls =` for `print ={ls,}` and refuses `{ls,}`

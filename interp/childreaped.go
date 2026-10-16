@@ -206,6 +206,6 @@ func (r *Runner) recordChildDeath() {
 	s := r.sigs()
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.pending = append(s.pending, "CHLD")
+	s.queue("CHLD")
 	s.poke()
 }

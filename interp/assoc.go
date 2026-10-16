@@ -220,6 +220,9 @@ func (r *Runner) setAssocElemAs(name, key, value string, kind ElementKind) {
 		// about. See Runner.MarkProducedTableFrozenByKey.
 		return
 	}
+	if r.refuseAFrozenTableStore(name) {
+		return
+	}
 	if write, ok := r.dynamicAssocWriters[name]; ok {
 		write(r, key, value, true)
 		return
@@ -1799,4 +1802,25 @@ func (r *Runner) tableLiteralRefusesAWholeArrayKey(e literalElem) bool {
 		r.status, r.unspecified = 2, true
 	}
 	return true
+}
+
+// refuseAFrozenTableStore is the freeze asked at the one writer every keyed
+// store reaches, and reports whether it refused. An assignment statement, a
+// declaration and `read` are refused before they get here; `(( a[k]=5 ))`,
+// `let`, `getopts` and `${a[k]:=x}` were not refused anywhere, so a frozen
+// table took their writes in silence (#6826). The form is the one an indexed
+// element's refusal is asked with in setArrayElem, so the two kinds of array
+// answer alike.
+func (r *Runner) refuseAFrozenTableStore(name string) bool {
+	if r.arithKeyReadCreating || !r.freezeRefuses(name, assignedAsTheCompoundView) {
+		return false
+	}
+	if r.arithStoringAnElement && r.ask(r.sem().ArithStoreIntoAFrozenTableIsTaken,
+		"an arithmetic store into a frozen associative array being taken") {
+		return false
+	}
+	if r.unspecified {
+		return true
+	}
+	return r.refuseReadonly(name, assignedAsTheCompoundView)
 }

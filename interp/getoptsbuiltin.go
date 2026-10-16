@@ -822,6 +822,19 @@ func (r *Runner) getoptsSetName(name, value string, ok int) int {
 		//
 		// Only ever reached where isGetoptsName let the brackets past, which
 		// is Semantics.GetoptsOperandTakesASubscript.
+		//
+		// The two guards getoptsWrite carries for a plain name, carried here
+		// too: a name the dialect refused but scanned for anyway is not
+		// stored — bash refused `getopts x 'b[1]' -x` as not a valid
+		// identifier and stored `b[1]` regardless — and the freeze is asked
+		// of the array, which ksh93u+ refuses as `a: is read only` at 2
+		// where this wrote the element (#6826).
+		if r.getoptsRefusedName != "" && name == r.getoptsRefusedName {
+			return ok
+		}
+		if !r.getoptsMayWrite(r.frozenReadName(name), false) {
+			return getoptsRefusedStatus
+		}
 		if st, refused := r.storeThroughOperand(name, value); refused {
 			return st
 		}

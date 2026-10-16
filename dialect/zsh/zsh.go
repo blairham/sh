@@ -1606,6 +1606,8 @@ func Semantics() interp.Semantics {
 	s.ArithFloatOverflowIsZero = interp.No
 	// An expression reading a missing key leaves the table as it was.
 	s.ArithKeyReadCreatesTheElement = interp.No
+	// See interp.Semantics.ArithStoreIntoAFrozenTableIsTaken (#6826).
+	s.ArithStoreIntoAFrozenTableIsTaken = interp.Yes
 	// A negative exponent is a float answer here, not a refusal: `2**-1`
 	// is 0.5.
 	s.ArithNegativeExponentIsError = interp.No

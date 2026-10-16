@@ -1775,6 +1775,8 @@ func Semantics() interp.Semantics {
 	s.ArithNegativeExponentIsError = interp.Yes
 	// An expression reading a missing key leaves the table as it was.
 	s.ArithKeyReadCreatesTheElement = interp.No
+	// See interp.Semantics.ArithStoreIntoAFrozenTableIsTaken (#6826).
+	s.ArithStoreIntoAFrozenTableIsTaken = interp.No
 	// unanswered FloatLetterChangeRereadsTheRendering: this shell spells
 	// neither float letter, so no declaration of its own can change one and
 	// there is no rendering for a re-read to be about. Measured 2026-09-26

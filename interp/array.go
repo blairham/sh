@@ -570,6 +570,16 @@ func (r *Runner) setArrayElem(name string, idx int, sub, value string) {
 		r.spliceScalarElem(name, idx, sub, value, false)
 		return
 	}
+	// The freeze is asked before the element is placed, not after. The array
+	// below is the stored one, so a write placed in it and then refused by
+	// storeArray's view of the name had already happened: `a=(1 2); readonly
+	// a; (( a[1]=5 ))` said `a: readonly variable` and left `(1 5)` in bash,
+	// ksh and zsh alike, and `let` and `getopts` did the same (#6826). The
+	// form is the one that refusal was asked with, so the sentence and what
+	// it costs are unchanged.
+	if r.refuseReadonly(name, assignedAsTheCompoundView) {
+		return
+	}
 	a := r.elementsOfName(name, idx)
 	if r.unspecified {
 		return

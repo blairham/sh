@@ -9765,6 +9765,23 @@ type Semantics struct {
 	// dialect without associations.
 	ArithKeyReadCreatesTheElement Answer
 
+	// ArithStoreIntoAFrozenTableIsTaken lets an arithmetic expression write an
+	// element of a frozen **associative** array, where every other route to the
+	// same element is refused by the freeze.
+	//
+	// zsh alone. Measured 2026-10-16, `-c`, `typeset -A a; readonly a` first:
+	//
+	//	                        bash 5.3.20         ksh93u+            zsh 5.9.2
+	//	(( a[k]=5 ))            a: readonly var…    a: is read only    st=0, [k]=5
+	//	let 'a[k]=5'            refused, st=1       let: a: …, st=1    st=0, [k]=5
+	//	a[k]=5, : ${a[k]::=x}   refused             refused            refused
+	//	a=(1); (( a[1]=5 ))     refused             refused            refused
+	//
+	// So it is the expression's store and the table's, together: an indexed
+	// array frozen the same way refuses the same expression in zsh too. Asked
+	// only where an expression stores into a frozen table (#6826).
+	ArithStoreIntoAFrozenTableIsTaken Answer
+
 	// ArithNegativeExponentIsError refuses `2**-1` rather than answering
 	// with a float. bash says yes and stops the expression; ksh93 and zsh
 	// say no and answer 0.5. It does not arise where the grammar has no
@@ -34753,6 +34770,8 @@ func PosixSemantics() Semantics {
 		PrintfCharPrecisionRepeats:       No,
 		// POSIX has no associations, so no read can add a key to one.
 		ArithKeyReadCreatesTheElement: No,
+		// Nor any to freeze, so no expression writes into a frozen one.
+		ArithStoreIntoAFrozenTableIsTaken: No,
 		// XCU gives printf's format the XSI escape set and nothing else —
 		// `\\`, `\a`, `\b`, `\f`, `\n`, `\r`, `\t`, `\v` and `\ddd` — so
 		// neither spelling of the escape character is in it and a backslash

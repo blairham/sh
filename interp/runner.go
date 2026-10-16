@@ -3118,8 +3118,15 @@ type Runner struct {
 	// arithCommand counts the `(( ))` commands being evaluated, and
 	// refusedInACommand says a readonly refusal was made inside one or inside
 	// a builtin — see Runner.refuseReadonlyInACommand.
-	arithCommand      int
-	refusedInACommand bool
+	arithCommand int
+	// arithStoringAnElement says the keyed store in flight is an arithmetic
+	// expression's. See Runner.refuseAFrozenTableStore.
+	arithStoringAnElement bool
+	// arithKeyReadCreating says the keyed store in flight is the key an
+	// expression's read leaves behind, which no freeze refuses. See
+	// Semantics.ArithKeyReadCreatesTheElement.
+	arithKeyReadCreating bool
+	refusedInACommand    bool
 	// arithConstruct is the spelling of the arithmetic *command* whose
 	// expression is being evaluated — `((` for both `(( ))` and the C-style
 	// `for` header — and empty everywhere else, which includes every

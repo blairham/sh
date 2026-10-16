@@ -3413,6 +3413,9 @@ type Runner struct {
 	// tailInALoop says the tail was handed on through the last pass of a
 	// loop. See TailExecWhereverLastOutsideALoop.
 	tailInALoop bool
+	// tailReached says this shell came to the program it becomes, whether or
+	// not it could become it. See Runner.TailReached.
+	tailReached bool
 	// jobOrder is the order jobs became *notable*, oldest first: a job is
 	// appended when it enters the table and again, moved to the end, every
 	// time it stops. It is not the table's order, which is slot order, and
@@ -11034,6 +11037,13 @@ func (r *Runner) exec(ctx context.Context, argv, env []string) error {
 		if handled := r.commandNotFoundHandled(ctx, argv, lookErr); handled {
 			return nil
 		}
+		// The tail a real shell would have exec'd: it looked the name up in
+		// the process it was about to replace, so the failure is the end of
+		// that process and not something it goes on from. See
+		// Runner.TailReached.
+		if r.replacesItselfHere() {
+			r.tailReached = true
+		}
 		r.emit(ctx, Event{Kind: EventError, Action: action, Err: lookErr})
 		// 127 for a name that resolved to nothing and 126 for a file that is
 		// there and will not start. Both unanimous, and collapsing them into
@@ -11052,8 +11062,14 @@ func (r *Runner) exec(ctx context.Context, argv, env []string) error {
 	// than fork it. Nothing after a successful replacement is this shell.
 	// See tailexec.go.
 	run := r.runSpelling(argv[0], path, spelled, written)
-	if r.replacesItselfHere() && r.becomeTheProgram(ctx, path, run, argv, env) {
-		return nil
+	if r.replacesItselfHere() {
+		// Reached even where it is forked after all, as a file the kernel
+		// will not start is: a real shell runs that in its own place too.
+		// See Runner.TailReached.
+		r.tailReached = true
+		if r.becomeTheProgram(ctx, path, run, argv, env) {
+			return nil
+		}
 	}
 
 	// A command names itself from argv[0], and what it should find there is

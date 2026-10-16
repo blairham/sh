@@ -1223,6 +1223,19 @@ nothing. bash writes its `exit` word, which is
 
 That is `Semantics.PromptEndOfInputEndsTheLine` (#6330).
 
+**ksh93 ends the line on the routes it reads as a prompt, too.** Its `-i -c`
+string and `-i` script file are read the way its prompt is (#6597), and they
+end the same way: measured 2026-10-15 on ksh93u+, `true`, a failing `cd` and a
+parse failure each leave a `\n` on standard error after whatever else was
+written, before the EXIT trap's output, on descriptor 2 as the script left it.
+`exit 3`, an `exit` in a function and `set -e` ending the run write none. The
+one exception is a command string whose last command is the program the shell
+becomes in place of forking it (`interp.TailExec`): `-i -c nosuch`, `-i -c
+./noexec` and `-i -c ./noshebang` write no newline, where `-i -c 'nosuch; :'`,
+`-i -c 'trap : EXIT; nosuch'` and `-i nosuch.sh` do. The shell is that program
+from there, or learned it could not be in the process it was replacing, so its
+own end of input never comes. That is `Runner.TailReached` (#6654).
+
 **An input that ends partway through its last line gets one more prompt** in
 two of them, drawn before that line runs. Measured 2026-10-07 with
 `PS1='P> '` and `PS2='Q> '`: on `echo A` with no newline, dash draws

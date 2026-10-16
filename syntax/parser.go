@@ -29,6 +29,9 @@ type Parser struct {
 	// firstLine is the number NewParserAt was given for the text's first
 	// line, kept so EndsOfInputAt can start the read again from it.
 	firstLine int
+	// eachLineFromOne restarts the line count at 1 for every logical line
+	// NextLine hands out. See Parser.NumberEachLineFromOne.
+	eachLineFromOne bool
 
 	tok Token
 
@@ -1591,7 +1594,11 @@ func (p *Parser) Parse() *File {
 // already failed.
 func (p *Parser) NextLine() (*File, bool) {
 	p.primeAliases()
-	p.skipNewlines()
+	if p.eachLineFromOne {
+		p.skipNewlinesNumberingFromOne()
+	} else {
+		p.skipNewlines()
+	}
 	if p.at(TokEOF) || p.err != nil {
 		return nil, false
 	}
@@ -1770,6 +1777,34 @@ func (p *Parser) lineEnd() Pos {
 
 func (p *Parser) skipNewlines() {
 	for p.at(TokNewline) {
+		p.next()
+	}
+}
+
+// NumberEachLineFromOne makes every logical line NextLine hands out number its
+// own lines from 1, as though each had been read on its own — which is how a
+// shell that numbers each input typed at its prompt from 1 numbers a program
+// it reads interactively from anywhere else. See
+// interp.Semantics.PromptNumbersEachInputFromOne.
+//
+// Set before the first NextLine. Offsets are untouched: only Line moves, so a
+// caller that has to find a line in the text it handed over goes by offset.
+func (p *Parser) NumberEachLineFromOne() { p.eachLineFromOne = true }
+
+// skipNewlinesNumberingFromOne is skipNewlines for a parser numbering each
+// line from 1: the counter goes back to 1 before every token read past a
+// newline, so whatever begins the next line — or a blank line before it,
+// which is an input of its own — is on line 1.
+//
+// Before the read rather than after it, because the token carries its
+// position and anything a word holds was numbered as it was read. Not while
+// an alias expansion is still handing out tokens: those were read already,
+// and the input has not moved.
+func (p *Parser) skipNewlinesNumberingFromOne() {
+	for p.at(TokNewline) {
+		if len(p.pending) == 0 {
+			p.lex.line = 1
+		}
 		p.next()
 	}
 }

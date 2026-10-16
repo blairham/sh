@@ -10267,6 +10267,25 @@ type Diagnostics struct {
 	// `bash: cd: /nonexist: …`, with no line, where `bash -c` names `line 1`.
 	// zsh 5.9.2 keeps `zsh:1:` there, so it is one dialect's.
 	InteractiveCommandStringIsLocatedAsAPrompt bool
+	// InteractiveScriptIsLocatedAsAPrompt locates a script file run by an
+	// interactive shell — `-i script.sh` — the way a line typed at a prompt
+	// is located, for the run-time messages, rather than the way the same
+	// file is located without `-i`.
+	//
+	// ksh93's, and it goes with Semantics.PromptNumbersEachInputFromOne:
+	// an interactive ksh93 numbers each input of the file from 1 as it does
+	// at a prompt, so the file's own `line N:` and `t.sh[N]:` give way to the
+	// prompt's, which name nothing on an input's first line. Measured
+	// 2026-10-15 on ksh93u+ 2012-08-01, a file whose line 14 is `cd
+	// /nonexist` and line 15 `nosuch_z`:
+	//
+	//	ksh t.sh       t.sh[14]: cd: …     t.sh: line 15: nosuch_z: not found
+	//	ksh -i t.sh    t.sh: cd: …         t.sh: nosuch_z: not found
+	//
+	// and a failure on the third line of a typed `if` is `t.sh: line 3:`
+	// under `-i`, where the file has it on line 5 (#6597). `-c` needs no such
+	// field in that dialect: its location already is the prompt's.
+	InteractiveScriptIsLocatedAsAPrompt bool
 	// PromptCountsTheSessionsLines numbers a line typed at a prompt by how
 	// many the **session** has read, rather than restarting at 1 for every
 	// construct.
@@ -11532,6 +11551,21 @@ func (d Diagnostics) ForStdin() Diagnostics {
 // one refusal still writes (#6279).
 func (d *Diagnostics) LocateCommandStringAsAPrompt() {
 	d.writtenLocation, d.writtenBuiltinLocation, d.writtenLocationKept = d.Location, d.BuiltinLocation, true
+	if d.PromptLocation != LocationNone {
+		d.Location = d.PromptLocation
+	}
+	if d.PromptBuiltinLocation != LocationNone {
+		d.BuiltinLocation = d.PromptBuiltinLocation
+	}
+}
+
+// LocateScriptAsAPrompt moves Location and BuiltinLocation from a script
+// file's to the prompt's, for an interactive shell's script — see
+// InteractiveScriptIsLocatedAsAPrompt. general is the vector before
+// ForScript, whose answers the prompt's fall back to where it names none.
+func (d *Diagnostics) LocateScriptAsAPrompt(general Diagnostics) {
+	d.writtenLocation, d.writtenBuiltinLocation, d.writtenLocationKept = d.Location, d.BuiltinLocation, true
+	d.Location, d.BuiltinLocation = general.Location, general.BuiltinLocation
 	if d.PromptLocation != LocationNone {
 		d.Location = d.PromptLocation
 	}

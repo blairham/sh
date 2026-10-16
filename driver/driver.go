@@ -1247,6 +1247,10 @@ type source struct {
 	// wholeFirst parses the whole input before running any of it, which one
 	// dialect does for a command string and no dialect does for a script.
 	wholeFirst bool
+	// readAsAPrompt is an interactive shell reading this program as it reads
+	// a prompt, each input numbered from 1 — see runInput — which words a
+	// parse failure the way the prompt does too.
+	readAsAPrompt bool
 	// login says argv[0] began with a dash, the convention by which `login`
 	// and every terminal emulator's "run as a login shell" tell a shell what
 	// it is. It travels on the source for the same reason interactive does:
@@ -1405,6 +1409,15 @@ func (s *source) speaksAsAtAPrompt(r *interp.Runner) bool {
 // no echo, and the file keeps its location and echo with the shell's name in
 // front of each line, as a startup file does (#6008, #6262).
 func (s source) parseDiagnostic(r *interp.Runner, err error, src string, reached int) string {
+	if s.readAsAPrompt {
+		// Read as a prompt reads, so worded as a prompt words it: the
+		// sentence that carried the line is replaced and nothing locates
+		// it. Measured 2026-10-15 on ksh93u+ 2012-08-01 with `echo a` ⏎ `if
+		// true` ⏎ `then )` ⏎ `fi`: `ksh -c` is `syntax error at line 3: `)'
+		// unexpected`, and `ksh -i -c` is `ksh: syntax error: `)' unexpected`,
+		// as `ksh -i t.sh` is `t.sh: syntax error: …` (#6597).
+		return s.diag().ForPrompt().ParseDiagnostic(s.diagName(), "", err, "")
+	}
 	if !s.speaksAsAtAPrompt(r) {
 		return s.diag().ParseDiagnosticAfter(s.diagName(), s.input, err, src, reached)
 	}
@@ -2397,6 +2410,14 @@ func (sh *Shell) operands(args []string, inv invocation) (source, error) {
 		located.LocateCommandStringAsAPrompt()
 		in.dg = &located
 	}
+	if in.interactive && !in.prompt && in.invocationRoute() == interp.RouteScriptFile &&
+		in.diag().InteractiveScriptIsLocatedAsAPrompt {
+		// See Diagnostics.InteractiveScriptIsLocatedAsAPrompt, and the
+		// numbering it goes with in runInput.
+		located := *in.diag()
+		located.LocateScriptAsAPrompt(sh.Diagnostics)
+		in.dg = &located
+	}
 	// `-s` as written, carried here for the same reason and in the same
 	// place: it survives a route that overrode it, and `sh -s -c cmd` shows
 	// `s` in `$-` in all four shells while running the command string.
@@ -3225,6 +3246,23 @@ func (sh *Shell) runInput(in source) int {
 	// depends on it: the shell that ends an unterminated quote at the end of
 	// a command string refuses the same text in a file.
 	pr := wholeProgram(src, r.ParsingDialect(sh.Dialect.On(in.programRoute())))
+	// An interactive shell in the dialect that numbers each input typed at
+	// its prompt from 1 numbers each input of a `-c` string or a script file
+	// the same way: it reads them as it reads a prompt, a logical line at a
+	// time, and the line count starts again with each. Measured 2026-10-15
+	// on ksh93u+ 2012-08-01, `:` ⏎ `:` ⏎ `echo A=$LINENO` ⏎ `if true` ⏎ `then
+	// echo B=$LINENO; fi`:
+	//
+	//	ksh -c, ksh t.sh                A=3 B=5
+	//	ksh -i -c, ksh -i t.sh          A=1 B=2
+	//	bash, zsh, dash -i -c           A=3 B=5
+	//
+	// so the noun is the shell being interactive, not the route: the three
+	// routes agree under `-i` and part without it (#6597). See
+	// interp.Semantics.PromptNumbersEachInputFromOne.
+	pr.eachLineFromOne = in.interactive && !in.onStdin && sh.Semantics.PromptNumbersEachInputFromOne == interp.Yes
+	in.readAsAPrompt = pr.eachLineFromOne
+	r.AtPrompt = in.readAsAPrompt
 	if in.onStdin {
 		// The program is on the descriptor rather than in hand, so it is read
 		// as it runs. How much at a time is the dialect's answer, and it is
@@ -3840,7 +3878,7 @@ func (sh *Shell) executeLines(
 				// so the shell that reads on and the shell that stops end
 				// the same way — measured, an unterminated quote piped in
 				// is one complaint and status 1 in all four.
-				say(verboseUpTo(pr.text(), err))
+				say(pr.verboseUpTo(err))
 				sh.errf("%s", in.parseDiagnostic(r, err, pr.text(), r.LineReached()))
 				return in.parseStatus(r, err, pr.text(), in.diag().StatusForParseErrorAfter(err, r.ExitStatus())), endingParseFailure
 			}
@@ -3855,7 +3893,7 @@ func (sh *Shell) executeLines(
 		if err := pr.err(); err != nil {
 			// The line did not parse, so none of it runs — not even the
 			// statements before the failure, which is measured.
-			say(verboseUpTo(pr.text(), err))
+			say(pr.verboseUpTo(err))
 			sh.errf("%s", in.parseDiagnostic(r, err, pr.text(), r.LineReached()))
 			if sh.readOn(r, pr, in, err) {
 				continue
@@ -3868,7 +3906,7 @@ func (sh *Shell) executeLines(
 			// what it read, says what was wrong, leaves the status a failed
 			// command leaves, and goes on to the next line without running
 			// any of this one.
-			say(verboseUpTo(pr.text(), line.Refused))
+			say(pr.verboseUpTo(line.Refused))
 			sh.errf("%s", in.parseDiagnostic(r, line.Refused, pr.text(), 0))
 			if r.ErrExit() {
 				// `set -e` makes it the file's after all: measured, bash 5.3
@@ -3890,7 +3928,7 @@ func (sh *Shell) executeLines(
 		// spent, not saved — the line that says `set -v` is not echoed by the
 		// shell it turns on — and the line after it can only be found once
 		// every line before it has been walked past.
-		say(int(line.Last.Line))
+		say(pr.physicalLine(line.Last))
 		// The command joins the history list **before** it runs, which is
 		// measured and is not a detail: `history` written in a script lists
 		// itself, and `history -s planted` followed by `!!` recalls what it
@@ -3901,7 +3939,12 @@ func (sh *Shell) executeLines(
 		pr.recordHistory()
 		// And the text it came from, which a diagnostic raised while the line
 		// runs may have to quote — see interp.Runner.SetProgramText.
-		r.SetProgramText(pr.text())
+		// Not where each line is numbered from 1, which reads the text as a
+		// prompt does: the lines a diagnostic would find in it by number are
+		// the logical line's, not the text's, and a prompt sets none either.
+		if !pr.eachLineFromOne {
+			r.SetProgramText(pr.text())
+		}
 		// And whether anything follows it, which the one dialect that does
 		// not fork the last command of a command string needs to know. See
 		// interp.Runner.LastPart.

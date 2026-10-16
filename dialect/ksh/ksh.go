@@ -5053,9 +5053,13 @@ func Diagnostics() interp.Diagnostics {
 		// sentence carries the line, so at a prompt the sentence is replaced
 		// and the location cleared — see withPromptWordings, and
 		// Diagnostics.ParseFailureNamesItsOwnLine.
-		PromptLocation:        interp.LocationLineWordAfterFirst,
-		BuiltinLocation:       interp.LocationBracketLineAfterFirst,
-		ScriptBuiltinLocation: interp.LocationBracketLine,
+		PromptLocation: interp.LocationLineWordAfterFirst,
+		// And `-i script.sh` is located as the prompt is, since the file is
+		// read as a prompt reads: see
+		// Diagnostics.InteractiveScriptIsLocatedAsAPrompt (#6597).
+		InteractiveScriptIsLocatedAsAPrompt: true,
+		BuiltinLocation:                     interp.LocationBracketLineAfterFirst,
+		ScriptBuiltinLocation:               interp.LocationBracketLine,
 		// And a value in an assignment prefix that will not expand is the
 		// builtin's where the prefix is that builtin's environment, and this
 		// shell's where it is a store this shell keeps. The eighteen rows

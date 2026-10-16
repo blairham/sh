@@ -976,7 +976,17 @@ func (r *Runner) caseClause(ctx context.Context, c *syntax.CaseClause) error {
 		r.beginHeading()
 		restore := r.caseSubjectLine()
 		keep := r.failedExpansionStatusIs(failedExpansionLeavesZero)
+		// Whether a substitution ran in the subject, and the one dialect that
+		// keeps what it left — see caseRunsNoCommand.
+		outerSubst := r.substRan
+		r.substRan = false
 		subject := strings.Join(r.expandWordNoSplit(c.Word), "")
+		subst := caseSubstitution{}
+		if r.substRan {
+			subst = caseSubstitution{status: r.status, ran: true}
+		}
+		subjectSubst := subst
+		r.substRan = outerSubst
 		restore()
 		failed := r.failedHeading()
 		keep()
@@ -1026,7 +1036,7 @@ func (r *Runner) caseClause(ctx context.Context, c *syntax.CaseClause) error {
 		// it already had for that shape in every dialect rather than picking
 		// one — see the note on the terminator loop below.
 		for i, item := range c.Items {
-			matched, ok := r.caseItemMatched(item, subject)
+			matched, ok := r.caseItemMatchedNoting(item, subject, &subst)
 			if !ok {
 				return nil
 			}
@@ -1050,6 +1060,11 @@ func (r *Runner) caseClause(ctx context.Context, c *syntax.CaseClause) error {
 			}
 			if err := r.runList(ctx, item.Body); err != nil {
 				return err
+			}
+			if len(item.Body) == 0 && subjectSubst.ran && r.caseRunsNoCommand() {
+				// An empty arm keeps the subject's substitution status in
+				// the one dialect that keeps it. See caseRunsNoCommand.
+				r.status = subjectSubst.status
 			}
 			// The matched body has run; from here the terminators drive,
 			// and every arm reached is honored in turn. `;;` stops. `;&`
@@ -1095,6 +1110,17 @@ func (r *Runner) caseClause(ctx context.Context, c *syntax.CaseClause) error {
 				}
 			}
 		}
+		// No arm matched, and that is 0 whatever the patterns' own
+		// substitutions left: measured 2026-10-16, `case a in $(false)) echo
+		// m ;; esac; echo $?` writes 0 in zsh 5.9.2, bash 5.3.20, dash 0.5.12
+		// and BusyBox ash 1.37.0, and so does `case a in b|$(false)) …`. The
+		// zero above was written before the patterns were expanded, so the
+		// last of their substitutions overwrote it (#6710). The one dialect
+		// that keeps the last substitution's status is caseRunsNoCommand's.
+		r.status = 0
+		if subst.ran && r.caseRunsNoCommand() {
+			r.status = subst.status
+		}
 		return nil
 	})
 }
@@ -1121,6 +1147,34 @@ func (r *Runner) caseClause(ctx context.Context, c *syntax.CaseClause) error {
 // Which of them the *script* survives is the fatal-error axis, and it is
 // answered where it always was: `case` is a site on it and not a question of
 // its own.
+// caseSubstitution is the status the last command substitution of a `case`
+// header left, and whether one ran at all.
+type caseSubstitution struct {
+	status int
+	ran    bool
+}
+
+// caseItemMatchedNoting is caseItemMatched, noting the status a substitution
+// in the item's patterns left.
+func (r *Runner) caseItemMatchedNoting(item *syntax.CaseItem, subject string, subst *caseSubstitution) (matched, ok bool) {
+	outer := r.substRan
+	r.substRan = false
+	matched, ok = r.caseItemMatched(item, subject)
+	if r.substRan {
+		*subst = caseSubstitution{status: r.status, ran: true}
+	}
+	r.substRan = outer
+	return matched, ok
+}
+
+// caseRunsNoCommand is whether a `case` that runs no command of its own ends
+// on the status its header's last command substitution left, rather than on
+// 0. See Semantics.CaseWithoutACommandKeepsTheSubstitutionStatus.
+func (r *Runner) caseRunsNoCommand() bool {
+	return r.ask(r.sem().CaseWithoutACommandKeepsTheSubstitutionStatus,
+		"a `case` that runs no command ending on its substitutions' status")
+}
+
 func (r *Runner) caseItemMatched(item *syntax.CaseItem, subject string) (matched, ok bool) {
 	// Defensive rather than load-bearing, and that is measured: a mutant
 	// that drops this clearing survives, because every route that could

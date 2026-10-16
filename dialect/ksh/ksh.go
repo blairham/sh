@@ -3224,6 +3224,10 @@ func Semantics() interp.Semantics {
 	// scan runs out (#3275).
 	s.GetoptsCountsTheWordOnTheNextCall = interp.No
 	s.GetoptsEndOfOptionsNamesIt = interp.Yes
+	// A `case` that runs no command ends on its header's last command
+	// substitution: measured 2026-10-16 on ksh93u+, `case a in $(false)) echo
+	// m ;; esac; echo $?` writes 1 (#6710).
+	s.CaseWithoutACommandKeepsTheSubstitutionStatus = interp.Yes
 	// A `+`-prefixed word is an operand and ends the scan: measured
 	// 2026-09-17 on ksh93u+ 2012-08-01, `getopts a o +a` is 1 with the name
 	// `?` — which is worth measuring rather than inheriting, this shell's own

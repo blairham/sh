@@ -383,6 +383,16 @@ type Parser struct {
 	terminatorStood Pos
 	armTerminator   string
 
+	// redirectionOnlyStood is the token that ended the most recent command
+	// made of nothing but redirections, spelled as the dialect that names it
+	// spells it — `newline`, `;`, `|`, `&&` — or empty. See
+	// [Dialect.RedirectionOnlyCommandNamesTheTokenAfterIt].
+	//
+	// Kept and dropped as separatorStood is, with one difference that is
+	// measured: a clause displaces it. `if {v}<x; then` names the `then`,
+	// where `if false || ; then` goes on naming the `;`.
+	redirectionOnlyStood string
+
 	// inCondition says the list about to be read is a keyword's condition,
 	// where one dialect refuses the `;` it steps over elsewhere. Set by
 	// parseCondition and cleared by the parseList that reads it.
@@ -1016,11 +1026,14 @@ func (p *Parser) opensNamed(word, named string) func() {
 	// the same reason: `case x in x) : ; ;; esac` then `{` names the `{`.
 	termStood, termText := p.terminatorStood, p.armTerminator
 	p.terminatorStood, p.armTerminator = Pos{}, ""
+	redirStood := p.redirectionOnlyStood
+	p.redirectionOnlyStood = ""
 	p.open = append(p.open, opener{word: word, named: named, line: int(p.tok.Pos.Line), construct: true})
 	return func() {
 		p.open = p.open[:depth]
 		p.separatorStood = stood
 		p.terminatorStood, p.armTerminator = termStood, termText
+		p.redirectionOnlyStood = redirStood
 	}
 }
 
@@ -1036,6 +1049,7 @@ func (p *Parser) opensClause(word string) {
 		p.open = p.open[:len(p.open)-1]
 	}
 	p.open = append(p.open, opener{word: word, line: int(p.tok.Pos.Line)})
+	p.redirectionOnlyStood = ""
 }
 
 // ranOut records that the input ended with something unfinished, and keeps
@@ -1204,6 +1218,22 @@ func (p *Parser) waitsForAThen() bool {
 	return true
 }
 
+// noteRedirectionOnly records the token that ended c where c is a command
+// of redirections alone, in the dialect that names it. See
+// [Dialect.RedirectionOnlyCommandNamesTheTokenAfterIt].
+func (p *Parser) noteRedirectionOnly(c *SimpleCmd) {
+	if !p.dialect.RedirectionOnlyCommandNamesTheTokenAfterIt || p.err != nil ||
+		len(c.Redirs) == 0 || len(c.Args) > 0 || len(c.Assigns) > 0 ||
+		len(c.Precommands) > 0 || p.at(TokEOF) || p.insideACaseArm() {
+		return
+	}
+	if p.at(TokNewline) {
+		p.redirectionOnlyStood = "newline"
+		return
+	}
+	p.redirectionOnlyStood = p.tok.Text
+}
+
 // unterminated describes the state the parser gave up in.
 func (p *Parser) unterminated(expected string) *Error {
 	e := &Error{
@@ -1212,7 +1242,12 @@ func (p *Parser) unterminated(expected string) *Error {
 	}
 	if n := len(p.open); n > 0 {
 		e.Innermost = p.open[n-1].word
-		if p.separatorStood.IsValid() {
+		if p.redirectionOnlyStood != "" {
+			// The token after a command of redirections alone, which the
+			// one shell naming an innermost keyword names instead. See
+			// Parser.redirectionOnlyStood.
+			e.Innermost = p.redirectionOnlyStood
+		} else if p.separatorStood.IsValid() {
 			// A `;` this dialect stepped over is what the one shell naming
 			// an innermost keyword names instead, and it outlasts a clause:
 			// `if false || ; then` with the input ending there is
@@ -4227,6 +4262,7 @@ func (p *Parser) parseSimple() Command {
 	// the one place that disarms it. Left armed, it would refuse the next
 	// definition this parser read, whoever's it was.
 	defer func() { p.aliasFuncRefused = false }()
+	defer p.noteRedirectionOnly(c)
 
 	for p.err == nil {
 		switch {
@@ -8905,6 +8941,23 @@ func (p *Parser) casePatterns(it *CaseItem, parenthesized bool) bool {
 			// is what separates this from the flag above. The two are never
 			// set together, and the empty alternative is asked first because
 			// its `|` is an operator too.
+			//
+			// An IO number is part of the redirection operator it touches, so
+			// `2>` is that one operator and `case a in 2> )` runs as `> )`
+			// does, where the digits read as a pattern would leave the `>`
+			// for the arm's `)` to be refused at. How many digits make one is
+			// the lexer's question already: `22>` is a word and an operator in
+			// the dialect that reads one digit. Measured 2026-10-15 on dash
+			// 0.5.12 and BusyBox ash 1.37.0 (#6617):
+			//
+			//	case x in 2>x) esac         word unexpected (expecting ")")
+			//	case x in a|2>x) / (2>x)    the same
+			//	case a in 2> ) …;; *) …     the `*` arm runs
+			//	case x in a 2>x) esac       redirection unexpected — not where
+			//	                            the pattern list starts
+			if p.at(TokIONumber) && !strings.HasPrefix(p.tok.Text, "{") {
+				p.next()
+			}
 			p.next()
 		default:
 			w := p.word()

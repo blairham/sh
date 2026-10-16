@@ -342,6 +342,7 @@ ash   WidthNumberPrecedence
 ash   ZeroFillGoesAfterAnIntegersSign
 ash   ZeroFillKeepsLeadingBlanks
 ash   FunctionBodyListingWritesItsAttributes
+ash   OptindUnsetInACallStaysUnbound
 
 bash  ALoneTrapCommandKeepsTrapListing
 bash  ArithDivisionByZeroYieldsAValue
@@ -393,6 +394,7 @@ bash  WidthLettersExcludeTheIntegerLetter
 bash  WidthNumberPrecedence
 bash  ZeroFillGoesAfterAnIntegersSign
 bash  ZeroFillKeepsLeadingBlanks
+bash  OptindUnsetInACallStaysUnbound
 
 dash  ASubshellAsTheLastPipelineElementJudgesItself
 dash  AliasInvalidNameFatal
@@ -754,6 +756,7 @@ dash  ZeroFillGoesAfterAnIntegersSign
 dash  ZeroFillKeepsLeadingBlanks
 dash  FunctionBodyListingWritesItsAttributes
 dash  SubstringCountsBytes
+dash  OptindUnsetInACallStaysUnbound
 
 ksh   ArithSubscriptSkippedWhenNameUnset
 ksh   ArrayAssignmentUpdatesPipelineStatus

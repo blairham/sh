@@ -3981,6 +3981,10 @@ func Semantics() interp.Semantics {
 	// comes back on return. It is what lets this shell's own function
 	// library parse options without resetting OPTIND by hand.
 	s.GetoptsFunctionPosition = interp.GetoptsFunctionPositionIsLocal
+	// A call that unsets OPTIND and assigns it again still hands the
+	// caller's back: measured 2026-10-15, `f() { unset OPTIND; OPTIND=3; };
+	// f; echo $OPTIND` is 1 (#6633).
+	s.OptindUnsetInACallStaysUnbound = interp.No
 	// The same answer by a second route, and recorded rather than left to
 	// the axis above: every call here has its own cursor whether or not
 	// anything was declared, so a declaration inside one cannot be the

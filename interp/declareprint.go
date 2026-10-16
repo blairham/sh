@@ -93,6 +93,9 @@ type declaration struct {
 	hasValue bool
 	arr      Array
 	isArr    bool
+	// baseZero lists an integer with a base word of 0. See
+	// Runner.optindDeclaredAsTheCursor.
+	baseZero bool
 	assoc    AssocArray
 	isAssoc  bool
 	// compoundVar is a ksh93 compound variable — `typeset -C`. A fourth kind
@@ -256,6 +259,11 @@ func (r *Runner) declarationOf(name string) (declaration, bool) {
 		localHere:   r.localInTheInnermostScope(name),
 
 		declaredOnly: r.attrHas(name, attrDeclaredOnlyCompound),
+	}
+	if name == "OPTIND" && d.integer && d.base == 0 {
+		if sc := r.optindCursorScope(); sc != nil && sc.optindListsBaseZero {
+			d.baseZero = true
+		}
 	}
 	if lower, upper, recorded := r.caseListingOf(name); recorded {
 		// The listing letters, where the dialect keeps them apart from the
@@ -1700,6 +1708,9 @@ func bareAssignmentFlags(d declaration) []string {
 			// where the other listed form attaches it. Measured in the one
 			// shell with this arrangement.
 			flags = append(flags, itoa(d.base))
+		} else if d.baseZero {
+			// See Runner.optindDeclaredAsTheCursor.
+			flags = append(flags, "0")
 		}
 	}
 	if d.hasWidth {

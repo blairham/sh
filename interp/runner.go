@@ -1240,6 +1240,13 @@ type Runner struct {
 	// optindKeptThroughDeclarations says a declaration of OPTIND keeps the
 	// cell the shell gave it. See KeepOptindThroughDeclarations.
 	optindKeptThroughDeclarations bool
+	// optindCursorMadeHere says the declaration operand now being handled is
+	// the one that made the running call's OPTIND local. See
+	// Runner.optindDeclaredAsTheCursor.
+	optindCursorMadeHere bool
+	// declarationKeeps is the shell's own integer names a declaration at the
+	// top leaves their attributes on. See KeepThroughDeclarations.
+	declarationKeeps map[string]bool
 	// typedValueCatch, where set, takes the failure of a typed name's value
 	// instead of ending the shell. See catchingATypedValueFailure.
 	typedValueCatch *typedValueCatch
@@ -12289,6 +12296,16 @@ type scope struct {
 	// and make the answer that was never measured win.
 	optindCursorDropped bool
 
+	// optindListsBaseZero records that the declaration which made this
+	// call's OPTIND local named no integer letter and gave no value, so the
+	// cell lists with a base of 0 until the script assigns it. See
+	// Runner.optindDeclaredAsTheCursor.
+	optindListsBaseZero bool
+
+	// optindUnsetHere records that OPTIND was unset while this call was the
+	// innermost. See Semantics.OptindUnsetInACallStaysUnbound.
+	optindUnsetHere bool
+
 	// savedTraps is what this call displaced while its dialect was scoping
 	// traps to the function, keyed by the canonical condition. Nil until the
 	// first such modification, so a call that traps nothing carries nothing.
@@ -14255,6 +14272,13 @@ func (r *Runner) setVarAs(name, value string, form assignForm) {
 	if name == "OPTIND" {
 		// Noted rather than compared: see optindAssigned.
 		r.optindAssigned = true
+		if r.inBuiltin != "getopts" {
+			// And the script's own number is an ordinary integer's, which
+			// lists without the 0. See Runner.optindDeclaredAsTheCursor.
+			if sc := r.optindCursorScope(); sc != nil {
+				sc.optindListsBaseZero = false
+			}
+		}
 	}
 	// The locale the variables named until now is settled before the new
 	// value replaces it, so a name that will not load falls back to that one

@@ -1537,6 +1537,10 @@ func (r *Runner) localizeGetoptsCursor(sc *scope) {
 		if !still {
 			return
 		}
+		if sc.optindUnsetHere && r.ask(r.sem().OptindUnsetInACallStaysUnbound,
+			"an OPTIND a call unset and assigned again staying as the call left it") {
+			return
+		}
 		// The shell's write as the entry's was, so an exported OPTIND's
 		// environment copy stays at whatever the body left it in the dialect
 		// that leaves it: `export OPTIND=3; f() { OPTIND=7; }; f` hands a

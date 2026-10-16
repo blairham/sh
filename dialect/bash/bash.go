@@ -2615,6 +2615,11 @@ func Semantics() interp.Semantics {
 	// bash reports success if it signaled anything at all, where the others
 	// count failures one way or another.
 	s.ExitTrapRunsOnSignalDeath = interp.Yes
+	// And a `-c` string ending over an error the shell reported still runs
+	// it: measured 2026-10-16 on bash 5.3.20, a division by zero, a readonly
+	// reassignment and an unset name under `set -u` each print the handler
+	// through `-c`, where zsh's does not (#6666).
+	s.FatalErrorOnACommandStringSkipsTheExitTrap = interp.No
 	s.ExitTrapRunsInsideTheExitingCall = interp.Yes
 	// 5.3 ignores an untrapped QUIT when it is not interactive, where 3.2
 	// dies by it — a divergence between two builds of the same shell, and

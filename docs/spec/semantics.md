@@ -20794,7 +20794,7 @@ is what the other four columns do and what a cleanup handler is written
 expecting.
 
 **`FatalErrorOnACommandStringSkipsTheExitTrap`** — bash no · dash no ·
-ksh93 no · zsh yes
+ksh93 no · zsh yes · ash no
 
 The same question on the `-c` route, where it has an answer of its own: the
 option decides nothing. Measured 2026-10-16 on zsh 5.9.2 under `-f`, each
@@ -20820,8 +20820,9 @@ it, as it does under `FatalErrorUnderErrexitSkipsTheExitTrap`. An `exit`
 after an error something caught — `eval '…'; exit 4`, `(…); exit 2`, an
 `always` block that exits — keeps it too.
 
-bash 5.3, dash and ksh93 run the trap on the first row through `-c`. Read
-without asking, like the field above it (#6666).
+bash 5.3, dash, ksh93 and BusyBox ash 1.37.0 run the trap through `-c` on
+the division, the readonly reassignment and the unset name alike, and each
+dialect writes its answer (#6666).
 
 **`SubshellExitTrapAfterAGiveUp`** — bash always runs · dash always runs ·
 ksh93 skipped by a reported error · zsh skipped by a reported error or a

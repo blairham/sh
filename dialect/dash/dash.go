@@ -1247,6 +1247,11 @@ func Semantics() interp.Semantics {
 	// silent at status 0, which zsh agrees with and bash and ksh93 do not.
 	s.DotDirectoryOperandIsAnError = interp.No
 	s.ExitTrapRunsOnSignalDeath = interp.No
+	// And a `-c` string ending over an error the shell reported still runs
+	// it: measured 2026-10-16 on dash, a division by zero, a readonly
+	// reassignment and an unset name under `set -u` each print the handler
+	// through `-c`, where zsh's does not (#6666).
+	s.FatalErrorOnACommandStringSkipsTheExitTrap = interp.No
 	s.ExitTrapRunsInsideTheExitingCall = interp.Yes
 	s.QuitIgnoredWhenNotInteractive = interp.No
 	// unanswered QuitResetRestoresTheDefault: that axis is what a reset does

@@ -2944,6 +2944,8 @@ func Semantics() interp.Semantics {
 	// so the same wall. Measured 2026-09-12 on BusyBox, `x=(p q)` is `syntax
 	// error: unexpected "("` and `x[@]=Z` alone is `x[@]=Z: not found`
 	// (#2285).
+	// unanswered WholeArraySubscriptKeyInATableLiteral: the same wall, a
+	// literal being the first thing refused (#6686).
 	//
 	// unanswered EarlierDeclarationLetterBlocksALaterPlus: there is no
 	// declaration command to write the letter on. `typeset` is not a

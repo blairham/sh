@@ -14588,6 +14588,31 @@ type Semantics struct {
 	// unpinned zsh: likewise, and by dialect/zsh's
 	// TestAWholeArraySubscriptThroughAReferenceIsASlice.
 	WholeArraySubscriptThroughAReferenceToATable WholeArraySubscriptAssignPolicy
+	// WholeArraySubscriptKeyInATableLiteral is the same two spellings written
+	// as an element's **key in a table literal** — `a=([k]=1 [*]=s)` — with
+	// the brackets holding `*` or `@` as the script typed it.
+	//
+	// A field of its own because one column swaps sides again between the
+	// assignment and the literal. Measured 2026-10-15, a script file with
+	// `typeset -A a` (bash: `declare -A a`) in front of each:
+	//
+	//	shell         `a=([k]=1 [*]=s)`, then a listing
+	//	bash 5.3.20   stored, at 0: `(["*"]="s" [k]="1" )` — as `m[@]=Z` is
+	//	zsh 5.9.2     stored, at 0: `( ['*']=s [k]=1 )` — where `m[@]=Z` is
+	//	              the slice refusal and ends the input
+	//	ksh93u+       `*: invalid subscript in assignment`, status 1, and
+	//	              nothing after it runs — as `m[@]=Z` does
+	//
+	// ksh93 gives the same refusal for `[@]=`, for a literal on a name not
+	// declared a table — `a=([1]=1 [*]=2)` reads as keyed there and is
+	// refused the same way — for `typeset -A a=([*]=s)` and for `a+=`;
+	// under `set -x` the elements in front of it are written first (`+
+	// a[k]=1`) and then the refusal. A key that only comes out `*` is an
+	// ordinary key in all three: `a=(["*"]=s)` and `k='*'; a=([$k]=s)` are
+	// both stored (#6686).
+	//
+	// unpinned dash, ash: neither has tables to put a literal on.
+	WholeArraySubscriptKeyInATableLiteral WholeArraySubscriptAssignPolicy
 
 	// ValuelessDeclarationHidesTheOuterValue makes `local u` in a function
 	// hide any outer `u` — the local exists unset, so `${u-UNSET}` fires the

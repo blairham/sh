@@ -10696,9 +10696,13 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 		return nil
 	}
 	// The shell the prefix's stores land in. An external command is run by a
-	// **child**, and where a hook is watching one of these names the store is
-	// the child's — see Runner.prefixChildForTheDisciplines.
-	child := r.prefixChildForTheDisciplines(c.Assigns)
+	// **child**, and where a hook is watching one of these names, or a type
+	// letter on one would fold its value, the store is the child's — see
+	// Runner.prefixChildForTheStores.
+	child := r.prefixChildForTheStores(c.Assigns)
+	if r.unspecified {
+		return nil
+	}
 	var prefixEnv []string
 	// What the prefix has assigned so far, visible to the entries behind it.
 	// An external command is run by a child, so this route makes no store of
@@ -10823,10 +10827,24 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 			// hands the refused value on is not a refusal.
 			continue
 		}
-		if child != nil {
-			// The store the child makes, and the hook that goes with it:
-			// what the hook leaves is what the child is handed.
-			value = child.prefixStoredForAChild(a, part)
+		if child != nil && (r.disciplined != nil || r.prefixStoreFoldsThroughTheLetters(a)) {
+			// The store the child makes, and the hook and the type letters
+			// that go with it: what the store leaves is what the child is
+			// handed. Every entry, where a hook could be watching — one may
+			// write a name another entry reads — and only the entries the
+			// letters fold where none can, so a letterless `HISTSIZE=5`
+			// beside a typed entry never reaches a parameter's writer.
+			stored, failed := child.prefixStoredForAChild(a, part)
+			if failed {
+				// The letters would not take the value, and the store has
+				// said so. The failure is this command's, where an
+				// expansion's would be, so it is put on the record the walk
+				// reads: nothing behind it is expanded and the command is
+				// given up below (#6698).
+				r.expandErr, r.ctl = child.expandErr, child.ctl
+				break
+			}
+			value = stored
 		}
 		// The entry is named for where the value landed and not for the word
 		// in front of the command, which a **name reference** makes two
@@ -10859,7 +10877,7 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 	}
 	// Read after the stores above rather than before them, so a hook that
 	// wrote some *other* exported name is answered by the environment the
-	// child is given. See Runner.prefixChildForTheDisciplines.
+	// child is given. See Runner.prefixChildForTheStores.
 	env := r.environ()
 	if child != nil {
 		env = child.environ()
@@ -10948,6 +10966,23 @@ func (r *Runner) prefixExpansion(a *syntax.Assign) string {
 // `typeset -i x=2; x+=5 printenv x` is `7`, and this concatenation made it
 // `25`. The statement form had asked the attribute since #2027's helper
 // existed; the prefix form was the second concatenation that did not.
+//
+// And the left side is what the name was **assigned**, read through
+// Runner.appendedOldValue as both statement forms read it, and not what a read
+// of it answers — the third copy of "what does this name hold" was this one,
+// on getVar. The two part where the letters fold on the read: measured
+// 2026-10-15 on zsh 5.9.2, `typeset -u v=ab; v+=cd typeset -p v` lists `v=abcd`
+// (as the statement `v+=cd` does) where reading `AB` first stored `ABcd`, and
+// `typeset -R5 v=ab; v+=cd /usr/bin/env` shows the child `v=abcd` rather than
+// the padded `   abcd`.
+//
+// A join that lands in a **fresh cell** is folded by the case letter of the
+// binding it displaced, because the fresh cell has no letter left to fold it
+// with. Measured on bash 5.3.20, `declare -u v=ab; v+=cd` written in front of
+// `/usr/bin/env`, `eval` or a function hands every one of them `ABCD` — where
+// the plain `v=cd` in the same place is handed `cd`, so it is the join that
+// reads through the letter and not the cell. Asked only where the fold
+// changes the join, so a letterless name reaches no question (#6698).
 func (r *Runner) prefixJoined(a *syntax.Assign, value string) string {
 	if !a.Append {
 		return value
@@ -10963,7 +10998,7 @@ func (r *Runner) prefixJoined(a *syntax.Assign, value string) string {
 		// `a=x; a+=plain printenv a` is `xplain` in both states.
 		return value
 	}
-	old, _ := r.getVar(a.Name)
+	old := r.appendedOldValue(a.Name)
 	if r.ctl == controlExit {
 		// The script is already ending, which here means an earlier reading of
 		// this same prefix failed and said so: the value is computed twice on
@@ -10981,6 +11016,10 @@ func (r *Runner) prefixJoined(a *syntax.Assign, value string) string {
 		// one the name already had, so nothing half-evaluated is stored on
 		// the way out.
 		return old
+	}
+	if name := r.attributedName(r.prefixEntryName(a.Name)); r.caseFolded(name, joined) != joined &&
+		r.prefixEntryIsFresh(name) {
+		joined = r.caseFolded(name, joined)
 	}
 	return joined
 }
@@ -14931,6 +14970,18 @@ func (r *Runner) nameCarriesATypeAttribute(name string) bool {
 	}
 	_, ok := r.fieldWidth[name]
 	return ok
+}
+
+// anyNameCarriesATypeAttribute is nameCarriesATypeAttribute asked of every
+// name at once, from the counts and the tables' sizes, so a caller on the
+// common path can learn that no name in the shell carries one without asking
+// about a name. The same list as the one above, deliberately written beside
+// it: a letter added there and not here is a letter this answers "none" for.
+// A table that keeps an entry for a name that has lost its letter only sends
+// the caller the long way round.
+func (r *Runner) anyNameCarriesATypeAttribute() bool {
+	return r.attrLen(attrInteger) > 0 || r.attrLen(attrLower) > 0 || r.attrLen(attrUpper) > 0 ||
+		len(r.capitalized) > 0 || len(r.floatPrecision) > 0 || len(r.fieldWidth) > 0
 }
 
 func (r *Runner) clearTypeAttributes(name string) {

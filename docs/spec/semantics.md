@@ -32456,6 +32456,46 @@ binding and the store lands in the new cell. bash 3.2.57 answers `declare
 -x foo="bar"` for the same line, emptying the cell before the join rather
 than after; that is the one row of this where the two builds part.
 
+The append also reads the displaced binding's **case letter**, which is
+the one way the fresh cell is folded at all: `declare -u v=ab; v+=cd`
+written in front of `/usr/bin/env`, `eval` or a function hands every one
+of them `ABCD` in bash 5.3.20, where the plain `v=cd` in the same place is
+handed `cd`. And what the join reads is what the name was *assigned*, as
+the statement `v+=cd` reads it, not what a read of it answers — they part
+in zsh, which folds and pads on the read: `typeset -u v=ab; v+=cd typeset
+-p v` lists `v=abcd` there.
+
+### The entry a program is handed
+
+A program makes no store in this shell, but the answer above decides
+what it is handed all the same: the shells that overlay make the store in
+the child they fork, through the binding's letters. Measured 2026-10-15
+from `-c`, `<decl>; v=<value> /usr/bin/printenv v`:
+
+| declaration, value | bash 5.3.20 | zsh 5.9.2 | ksh93u+ |
+|---|---|---|---|
+| `typeset -i v=3`, `2+2` | `2+2` | `4` | `4` |
+| `typeset -i v`, `pre` | `pre` | `0` | `0` |
+| `typeset -i 16 v`, `20` | — | `16#14` | `16#14` |
+| `typeset -i v`, `0x10` | `0x10` | `16#10` | `16` |
+| `typeset -F 2 v`, `1/3` | — | `0.00` | `0.00` |
+| `typeset -u v`, `abc` | `abc` | `ABC` | `ABC` |
+| `typeset -R5 v`, `ab` | — | `ab` | `   ab` |
+| `typeset -Z5 v`, `42` | — | `42` | `00042` |
+| `typeset -i v`, `1+` | `1+` | complaint, status 1 | complaint, status 1 |
+
+So the integer, float and case letters reach a program in both overlaying
+columns, and the field widths only where the shell pads on the store —
+zsh pads on the read, which an environment is not, the same split an
+exported `typeset -R5 v=ab` already shows. The store is the child's: the
+base `0x10` teaches zsh's name is gone again when the command ends, and an
+entry behind reads the fold (`typeset -i v; v=2+2 w=$v printenv w` is `4`
+in both). A value the letter cannot read costs the command alone, as a
+failed expansion in the same place does — nothing behind it is expanded,
+`|| echo CAUGHT` catches it, and the script goes on. This is
+`Runner.prefixChildForTheStores`, the same throwaway shell a discipline's
+store is made in (#6698).
+
 ### An array literal as a prefix
 
 `x=(a b) cmd` is read three ways, and `PrefixArrayLiteralIsAnArray` is the

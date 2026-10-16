@@ -340,3 +340,11 @@ func (r *Runner) aLocalInsideThisFrameHoldsTheName(f *callPrefixFrame, name stri
 	}
 	return false
 }
+
+// caseLetterKeepsTheExport is whether a name keeps its export attribute
+// through a builtin's prefix that otherwise takes it off, which a case letter
+// on the name does in the one column that takes it off. See
+// Semantics.PrefixExportAtABuiltin and #6859.
+func (r *Runner) caseLetterKeepsTheExport(name string) bool {
+	return r.attrHas(name, attrLower) || r.attrHas(name, attrUpper)
+}

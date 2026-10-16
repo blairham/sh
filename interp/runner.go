@@ -10507,7 +10507,8 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 				// otherwise, and drops one the name had. See
 				// Runner.prefixStoresAnArray.
 				r.exportedPut(landsOn, false)
-			} else if kind.throughCommand {
+			} else if kind.throughCommand && (kind.kind == prefixBeforeExternal ||
+				r.sem().PrefixExportAtABuiltin != PrefixExportAtABuiltinOff) {
 				// `command` is a precommand word rather than a command, so
 				// the prefix in front of it belongs to whatever it goes on
 				// to run — and when that is an external, belonging to it
@@ -10535,7 +10536,19 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 				// as an ordinary assignment and takes the attribute off a
 				// name that had it, and the rest leave it exactly as it was.
 				// See Semantics.PrefixExportAtABuiltin.
-				r.exportedPut(landsOn, on)
+				//
+				// `command` in front of a builtin is that builtin's prefix
+				// in the column that takes the attribute off: measured
+				// 2026-10-16 on ksh93u+, `v=9 command eval '/usr/bin/printenv
+				// v'` finds nothing and `$v` is 9 afterwards, where bash and
+				// dash hand the child `v=9` (#6859).
+				//
+				// And a name carrying a case letter keeps it there: `typeset
+				// -xu v=x; v=abc :` hands a child `v=ABC`, where `typeset -x
+				// v=x; v=abc :` hands it nothing.
+				if on || !r.caseLetterKeepsTheExport(landsOn) {
+					r.exportedPut(landsOn, on)
+				}
 			}
 		}
 		// A `{name}` this command stored, seen through the prefix — the same

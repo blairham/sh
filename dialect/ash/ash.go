@@ -3033,6 +3033,10 @@ func Diagnostics() interp.Diagnostics {
 		BuiltinLocation:       interp.LocationLineWord,
 		StdinBuiltinLocation:  interp.LocationLineWord,
 		PromptBuiltinLocation: interp.LocationNameOnly,
+		// And a function a file defined is located as the prompt's own line
+		// once the file is done — see
+		// interp.Diagnostics.PromptLocatesAFunctionReadFromAFile.
+		PromptLocatesAFunctionReadFromAFile: true,
 		// And the line belongs to the builtin's own complaint rather than to
 		// anything a builtin was merely involved in: `ash -c 'read x <
 		// /nofile'` is `ash: can't open /nofile: no such file`, with neither
@@ -3079,6 +3083,20 @@ func Diagnostics() interp.Diagnostics {
 		// name alone wherever the eval is (#6611). See
 		// interp.Diagnostics.EvalTextNamesNoLineWhenInteractive.
 		EvalTextNamesNoLineWhenInteractive: true,
+		// And the whole of an interactive shell's `-c` string is located as
+		// a line typed at the prompt: a builtin's complaint names itself and
+		// no line, where `ash -c` names `line 0`. The noun is the shell being
+		// interactive, and the deciding pair holds the bytes fixed — `ash -c
+		// 'cd /nx'` is `ash: cd: line 0: can't cd …` and `ash -i -c 'cd /nx'`
+		// is `ash: cd: can't cd …`. Measured 2026-10-15 on BusyBox v1.37.0
+		// in the pinned image, over a builtin on the string's first and
+		// second lines, `shift -1`, a function body on one line and on four,
+		// and an EXIT trap: every row by name alone, as at the prompt. A
+		// file `.` reads keeps its line, as it does at the prompt, and
+		// `$LINENO` still counts the string from 0 — it is the location that
+		// moves and not the counter (#6694). See
+		// interp.Diagnostics.InteractiveCommandStringIsLocatedAsAPrompt.
+		InteractiveCommandStringIsLocatedAsAPrompt: true,
 
 		// The parse failures, in this shell's own order: the complaint first
 		// and the token after it, all lower case.

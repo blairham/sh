@@ -1822,6 +1822,26 @@ The last two rows are the pair that names the noun: the same bytes, one as a
 file and one as `eval`'s text, at the same prompt. See
 `Diagnostics.EvalTextNamesNoLineWhenInteractive` (#6611).
 
+**And its `-i -c` string is located as the prompt is, by the shell being
+interactive.** The same program with and without `-i`, measured 2026-10-15 in
+the same image, on the null device and through a pseudo-terminal alike:
+
+| the same program | `sh -c` | `sh -i -c` |
+| --- | --- | --- |
+| `cd /nx` | `sh: cd: line 0: can't cd …` | `sh: cd: can't cd …` |
+| `:` ⏎ `cd /nx` | `sh: cd: line 1: …` | `sh: cd: can't cd …` |
+| a function body, its `cd` on line 2 | `sh: cd: line 2: …` | `sh: cd: can't cd …` |
+| `. ./s.inc`, its `cd` on line 2 | `sh: cd: line 2: …` | `sh: cd: line 2: …` |
+| `. ./g.inc; g`, `g`'s `cd` on the file's line 3 | `sh: cd: line 3: …` | `sh: cd: can't cd …` |
+
+`$LINENO` still counts the string from 0 under `-i`, so it is the location
+that moves and not the counter. A function a file defined is located by the
+input being read when it fails, not by where it was defined: called at the
+prompt once the file is done it names no line, and called from inside another
+`.` file it names its own — which is the opposite of zsh's answer above. See
+`Diagnostics.InteractiveCommandStringIsLocatedAsAPrompt` and
+`Diagnostics.PromptLocatesAFunctionReadFromAFile` (#6694).
+
 **One difference left unfixed and stated.** bash sourcing a file at a prompt
 names *itself* rather than the file — `bash: cd: /nope: …` where the same
 `. ./f.sh` under `-c` is `./f.sh: line 1: cd: …`. This shell names the file on

@@ -78,6 +78,12 @@ jobs:
   #
   # The tests: the race detector on the Linux leg only, not both.
   #
+  # And with a package timeout of 30m on that leg rather than go test's 10m.
+  # `interp` alone takes 394-594s there under -race (ten `main` runs on
+  # 2026-10-16), so the default fails the leg on an ordinary slow runner with
+  # no test hung: the alarm lands on whichever test happens to be running
+  # (#6730). A genuine hang still fails, later.
+  #
   # macOS was the long pole and `-race` was why: 326s of its 516s against
   # 252s of Ubuntu's 434s, for an answer that is a property of the Go memory
   # model rather than of the platform. macOS still runs every test in the
@@ -111,7 +117,7 @@ jobs:
       os: '["ubuntu-latest","macos-latest"]'
       golangci-lint-hook: false
       test-command: >-
-        if [ "$RUNNER_OS" = Linux ]; then go test -race ./...; else go test -skip='^TestNoDialectCombinationPanics$' ./...; fi
+        if [ "$RUNNER_OS" = Linux ]; then go test -race -timeout 30m ./...; else go test -skip='^TestNoDialectCombinationPanics$' ./...; fi
         && make sandbox
 
   # Change detection alone, for the jobs below. `code` is go-ci's own answer

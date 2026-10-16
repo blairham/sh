@@ -7,8 +7,11 @@ import (
 	"fmt"
 	"math/rand"
 	"reflect"
+	"runtime"
 	"slices"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"unsafe"
 
@@ -307,20 +310,79 @@ func withCompiling(on bool, f func()) {
 // one matchWhere, so the program is compiled once and its memo is carried
 // between trials exactly as a substitution carries it.
 func sweep(o patternOpts, pattern, subject string, compiled bool) (out []matchOutcome, ran bool) {
-	withCompiling(compiled, func() {
-		var bad bool
-		asks := 0
-		o = readingFor(o, pattern, &bad, &asks)
-		for i := 0; i <= len(subject); i++ {
-			for j := len(subject); j >= i; j-- {
-				bad = false
-				ok, m := matchPatternIn(pattern, subject[i:j], subject, i, o)
-				out = append(out, matchOutcome{ok: ok, report: fmt.Sprintf("%v %v %v", m.groups, m.whole, m.wantsAll), bad: bad, asked: asks})
+	withCompiling(compiled, func() { out, ran = sweepAsSet(o, pattern, subject) })
+	return out, ran
+}
+
+// sweepAsSet is sweep with the program left however withCompiling set it, so
+// that one setting can serve many sweeps running at once.
+func sweepAsSet(o patternOpts, pattern, subject string) (out []matchOutcome, ran bool) {
+	var bad bool
+	asks := 0
+	o = readingFor(o, pattern, &bad, &asks)
+	for i := 0; i <= len(subject); i++ {
+		for j := len(subject); j >= i; j-- {
+			bad = false
+			ok, m := matchPatternIn(pattern, subject[i:j], subject, i, o)
+			out = append(out, matchOutcome{ok: ok, report: fmt.Sprintf("%v %v %v", m.groups, m.whole, m.wantsAll), bad: bad, asked: asks})
+		}
+	}
+	return out, o.where.prog != nil
+}
+
+// eachInParallel calls f for every i in [0, n), spread over GOMAXPROCS
+// goroutines, and returns once every call has.
+//
+// The equivalence tests below are the bulk of this package's running time:
+// thousands of independent pattern-and-subject pairs, each a pure computation,
+// and under -race on the Linux runner they took the package to its timeout
+// (#6730, #6800) one core at a time. The pairs are independent by
+// construction — every one gets its own matchWhere — and what they share is
+// the process's program cache, which the shell itself reads from several
+// goroutines at once. So running them side by side is both faster and the
+// shape production has, and under -race it is a question the detector can
+// now answer about that cache rather than none.
+//
+// The settings a test changes (withCompiling, memoThreshold and the rest) are
+// package variables, so they are only ever changed between calls to this, never
+// during one.
+func eachInParallel(n int, f func(i int)) {
+	var next atomic.Int64
+	var wg sync.WaitGroup
+	for range min(runtime.GOMAXPROCS(0), n) {
+		wg.Go(func() {
+			for {
+				i := int(next.Add(1) - 1)
+				if i >= n {
+					return
+				}
+				f(i)
+			}
+		})
+	}
+	wg.Wait()
+}
+
+// programPair is one reading, pattern and subject of the equivalence corpus.
+type programPair struct {
+	reading          string
+	o                patternOpts
+	pattern, subject string
+}
+
+// programPairs flattens every reading over every case and subject, in the
+// order the tests used to walk them, so that a failure names the same row.
+func programPairs() []programPair {
+	var out []programPair
+	cases := allProgramCases()
+	for _, rd := range programReadings() {
+		for _, c := range cases {
+			for _, subject := range c.subjects {
+				out = append(out, programPair{rd.name, rd.o, c.pattern, subject})
 			}
 		}
-		ran = o.where.prog != nil
-	})
-	return out, ran
+	}
+	return out
 }
 
 // **The program answers every span exactly as the walk over the text does**,
@@ -332,29 +394,39 @@ func sweep(o patternOpts, pattern, subject string, compiled bool) (out []matchOu
 // half the assertion: a reading under which the compiler declined everything
 // would compare the walk with itself and agree on every row.
 func TestTheProgramAnswersWhatTheWalkAnswers(t *testing.T) {
+	pairs := programPairs()
 	for _, memo := range []int{memoThreshold, 0} {
 		t.Run(fmt.Sprintf("memo after %d", memo), func(t *testing.T) {
 			defer func(was int) { memoThreshold = was }(memoThreshold)
 			memoThreshold = memo
+			got := make([][]matchOutcome, len(pairs))
+			ran := make([]bool, len(pairs))
+			want := make([][]matchOutcome, len(pairs))
+			withCompiling(true, func() {
+				eachInParallel(len(pairs), func(i int) {
+					p := pairs[i]
+					got[i], ran[i] = sweepAsSet(p.o, p.pattern, p.subject)
+				})
+			})
+			withCompiling(false, func() {
+				eachInParallel(len(pairs), func(i int) {
+					p := pairs[i]
+					want[i], _ = sweepAsSet(p.o, p.pattern, p.subject)
+				})
+			})
 			compiledPairs := 0
-			for _, rd := range programReadings() {
-				for _, c := range allProgramCases() {
-					for _, subject := range c.subjects {
-						got, ran := sweep(rd.o, c.pattern, subject, true)
-						want, _ := sweep(rd.o, c.pattern, subject, false)
-						if ran {
-							compiledPairs += len(got)
+			for n, p := range pairs {
+				if ran[n] {
+					compiledPairs += len(got[n])
+				}
+				k := 0
+				for i := 0; i <= len(p.subject); i++ {
+					for j := len(p.subject); j >= i; j-- {
+						if g, w := got[n][k], want[n][k]; g.ok != w.ok || g.report != w.report || g.bad != w.bad || g.asked != w.asked {
+							t.Errorf("%s: %q on %q[%d:%d]: compiled %+v, walked %+v",
+								p.reading, p.pattern, p.subject, i, j, g, w)
 						}
-						k := 0
-						for i := 0; i <= len(subject); i++ {
-							for j := len(subject); j >= i; j-- {
-								if g, w := got[k], want[k]; g.ok != w.ok || g.report != w.report || g.bad != w.bad || g.asked != w.asked {
-									t.Errorf("%s: %q on %q[%d:%d]: compiled %+v, walked %+v",
-										rd.name, c.pattern, subject, i, j, g, w)
-								}
-								k++
-							}
-						}
+						k++
 					}
 				}
 			}
@@ -429,28 +501,39 @@ func TestSubstitutionAnswersTheSameCompiledAsWalked(t *testing.T) {
 	with := func(m matchReport, text string) string {
 		return fmt.Sprintf("<%s|%v|%v>", text, m.groups, m.whole)
 	}
-	run := func(o patternOpts, pattern, subject string, anchor byte, all, compiled bool) (got string) {
-		withCompiling(compiled, func() {
-			o.where = &matchWhere{plan: planCapturesFor(pattern, o)}
-			got = replace(subject, pattern, replaceExprForTest(anchor, all), o, armOrder{},
-				func() EmptyMatchDeclinedPolicy { return EmptyMatchDeclinedAtTheEnd }, with)
-		})
-		return got
+	type row struct {
+		programPair
+		anchor byte
+		all    bool
 	}
-	for _, rd := range programReadings() {
-		for _, c := range allProgramCases() {
-			for _, subject := range c.subjects {
-				for _, anchor := range []byte{0, '#', '%'} {
-					for _, all := range []bool{false, true} {
-						got := run(rd.o, c.pattern, subject, anchor, all, true)
-						want := run(rd.o, c.pattern, subject, anchor, all, false)
-						if got != want {
-							t.Errorf("%s: %q on %q anchor %q all=%v: compiled %q, walked %q",
-								rd.name, c.pattern, subject, anchor, all, got, want)
-						}
-					}
-				}
+	var rows []row
+	for _, p := range programPairs() {
+		for _, anchor := range []byte{0, '#', '%'} {
+			for _, all := range []bool{false, true} {
+				rows = append(rows, row{p, anchor, all})
 			}
+		}
+	}
+	// Every row compiled, then every row walked: the setting is the
+	// package's, so it is changed between the two passes and not inside one.
+	answers := func(compiled bool) []string {
+		out := make([]string, len(rows))
+		withCompiling(compiled, func() {
+			eachInParallel(len(rows), func(i int) {
+				r := rows[i]
+				o := r.o
+				o.where = &matchWhere{plan: planCapturesFor(r.pattern, o)}
+				out[i] = replace(r.subject, r.pattern, replaceExprForTest(r.anchor, r.all), o, armOrder{},
+					func() EmptyMatchDeclinedPolicy { return EmptyMatchDeclinedAtTheEnd }, with)
+			})
+		})
+		return out
+	}
+	got, want := answers(true), answers(false)
+	for i, r := range rows {
+		if got[i] != want[i] {
+			t.Errorf("%s: %q on %q anchor %q all=%v: compiled %q, walked %q",
+				r.reading, r.pattern, r.subject, r.anchor, r.all, got[i], want[i])
 		}
 	}
 }

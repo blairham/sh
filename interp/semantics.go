@@ -5387,6 +5387,35 @@ type Semantics struct {
 	// the control that says the two axes are asked in that order.
 	ReturnInTheExitTrapNamesTheStatus Answer
 
+	// FunctionExitTrapSkippedByAGiveUp leaves a function-local EXIT trap
+	// unrun when the call is left by an error the shell reported and gave up
+	// over. Measured 2026-10-16 on zsh 5.9.2 under `-f`, by `-c`, a script
+	// file and standard input alike, `f(){ trap 'echo ft=$?' EXIT; <row>; };
+	// f; echo after` (#6667):
+	//
+	//	echo $((1/0)), readonly r=1; r=2       the complaint only
+	//	set -o nosuch, set -u; : $nosuch       the complaint only
+	//	v=`echo hi; for`, ${x:bad}             the complaint only
+	//	: ${q?b}                               the complaint, then ft=1
+	//	set -e; false                          ft=1
+	//	false, return 4                        ft=1 / ft=4, then after
+	//
+	// and an error in a function the body calls skips it too, while one the
+	// body survives — inside an `eval`, or in a subshell — does not. ksh93's
+	// `function name { … }` scope runs its trap on every row (with a status
+	// of its own, #6720's neighbour). bash, dash and BusyBox ash never fire
+	// a function-local EXIT trap, so the preset's no is never read there.
+	FunctionExitTrapSkippedByAGiveUp Answer
+
+	// FunctionExitTrapReadsZeroOnAnExit shows a function-local EXIT trap a
+	// `$?` of 0 when an `exit` is what unwinds the call. The shell still
+	// leaves with the `exit`'s status. Measured 2026-10-16 on zsh 5.9.2,
+	// `f(){ trap 'echo ft=$?' EXIT; exit 3; }; f` writes `ft=0` and ends at
+	// 3 — by `-c`, a script file and standard input, and with `false; exit
+	// 3`, `(exit 5); exit` and a `TRAPEXIT` declared in the body alike —
+	// where a `return 4` shows 4 (#6836). ksh93u+ (`function f`) shows 3.
+	FunctionExitTrapReadsZeroOnAnExit Answer
+
 	// SignalHandlerSeesEarlierStatus shows a signal handler the status from
 	// before the command that triggered it rather than that command's own.
 	// zsh alone: after `false; kill -INT $$`, zsh's handler reads 1 where
@@ -34752,6 +34781,10 @@ func PosixSemantics() Semantics {
 		// BusyBox ash 1.37.0, where `trap 'return 5' EXIT; false` is 1. The
 		// two that take the status say so themselves.
 		ReturnInTheExitTrapNamesTheStatus: No,
+		// A function-local EXIT trap runs, and reads the call's status,
+		// however the call ends: ksh93. zsh says otherwise itself.
+		FunctionExitTrapSkippedByAGiveUp:  No,
+		FunctionExitTrapReadsZeroOnAnExit: No,
 		// A `return` typed at a prompt with nothing to return from ends the
 		// session where it ends a script: ksh93, dash and BusyBox ash. zsh
 		// keeps the session and says so itself.

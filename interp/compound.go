@@ -2429,6 +2429,32 @@ func (r *Runner) callFuncInPlace(ctx context.Context, fn *syntax.FuncDecl, name 
 	return err
 }
 
+// functionExitTrapSkippedByAGiveUp reports whether the call is being left by
+// an error the shell reported and gave up over, in the dialect that does not
+// run a function-local EXIT trap for one. See
+// Semantics.FunctionExitTrapSkippedByAGiveUp for the rows (#6667).
+//
+// The kinds are the ones a `-c` string's own EXIT trap is skipped for —
+// Runner.exitTrapSkippedOnACommandString — and for the same reason
+// `${x?word}` is not among them: it is a stop the script asked for, and the
+// handler runs. An `exit` and errexit are requests too, and the kind is left
+// standing by both, so they are excluded by what raised the stop rather than
+// by the kind.
+//
+// Read rather than asked: the two columns that fire a function-local EXIT
+// trap at all both answer it, and the others never reach here.
+func (r *Runner) functionExitTrapSkippedByAGiveUp(ctl control) bool {
+	if ctl != controlExit || r.exitRan || r.errexitStopped {
+		return false
+	}
+	switch r.abandon {
+	case abandonError, abandonUsage, abandonSubstParse:
+	default:
+		return false
+	}
+	return r.sem().FunctionExitTrapSkippedByAGiveUp == Yes
+}
+
 // runFunctionExitTrap runs an EXIT trap at the return of the call that set
 // it, in the two shells that fire one there — zsh by a rule of its own, and
 // ksh93 because a `function name { … }` call has a trap table of its own and
@@ -2476,8 +2502,18 @@ func (r *Runner) callFuncInPlace(ctx context.Context, fn *syntax.FuncDecl, name 
 // script wherever it is written, which is what controlExit already means.
 func (r *Runner) runFunctionExitTrap(ctx context.Context, body string) (returnedFromTheCaller bool) {
 	ctl := r.ctl
+	if r.functionExitTrapSkippedByAGiveUp(ctl) {
+		return false
+	}
 	r.ctl = controlNone
 	returned := r.status
+	if ctl == controlExit && r.exitRan &&
+		r.sem().FunctionExitTrapReadsZeroOnAnExit == Yes {
+		// Read as 0 by the handler, and only by the handler: the shell still
+		// leaves with the status the `exit` named, which is put back below.
+		// See Semantics.FunctionExitTrapReadsZeroOnAnExit (#6836).
+		r.status = 0
+	}
 	r.runTrapBody(ctx, "EXIT", body)
 	if r.ctl == controlReturn {
 		return true

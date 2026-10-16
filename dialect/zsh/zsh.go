@@ -3724,6 +3724,10 @@ func Semantics() interp.Semantics {
 	// the other column that answers this way; dash and BusyBox ash end the
 	// body and keep the status they had.
 	s.ReturnInTheExitTrapNamesTheStatus = interp.Yes
+	// A function-local EXIT trap is not run for a call an error ended, and
+	// reads `$?` as 0 for one an `exit` ended (#6667, #6836).
+	s.FunctionExitTrapSkippedByAGiveUp = interp.Yes
+	s.FunctionExitTrapReadsZeroOnAnExit = interp.Yes
 	s.KillListAcceptsName = interp.Yes
 	// One subtraction, and what it cannot name it prints back — `kill -l
 	// 160` is `160` here. No EXIT: this shell answers `kill -l 0` with 0.

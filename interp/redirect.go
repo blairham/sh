@@ -80,6 +80,7 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 		return holds.closers(nil), nil
 	}
 	closers, err := r.applyRedirList(ctx, rs, compound, owner, holds)
+	holds.applied()
 	return holds.closers(closers), err
 }
 
@@ -143,9 +144,11 @@ func (r *Runner) applyRedirList(ctx context.Context, rs []*syntax.Redirect, comp
 	if pipe := r.takePipeMultio(); r.sem().RedirectsUseEveryTarget == Yes {
 		if pipe.out != nil {
 			opened[1] = pipe.out
+			holds.reach(1)
 		}
 		if pipe.in != nil {
 			sources[0] = pipe.in
+			holds.reach(0)
 		}
 	}
 	// Saved streams are restored when the command finishes, which is why the
@@ -448,6 +451,7 @@ func (r *Runner) applyRedirList(ctx context.Context, rs []*syntax.Redirect, comp
 					return closers, nil
 				}
 				hfd = r.nextFreeFd(-1)
+				holds.took(hfd)
 			}
 			if r.refuseFdOverLimitFor(fdVar, hfd, "") || r.unspecified {
 				r.redirErr = true
@@ -464,6 +468,9 @@ func (r *Runner) applyRedirList(ctx context.Context, rs []*syntax.Redirect, comp
 			// file and then the line, measured, so the source need not be a file
 			// to be one of several.
 			held := r.eachSource(hfd, src, sources)
+			if fdVar == "" {
+				holds.join(hfd, true)
+			}
 			switch hfd {
 			case 0:
 				r.Stdin = held
@@ -608,10 +615,17 @@ func (r *Runner) applyRedirList(ctx context.Context, rs []*syntax.Redirect, comp
 			if rd.N == nil && op == syntax.TokLessAmp {
 				fd = 0
 			}
+			if m, err := strconv.Atoi(strings.TrimSuffix(name, "-")); err == nil {
+				// Copying a joined stream ends its join. See copiedFrom.
+				holds.copiedFrom(m)
+			}
 			if fdVar == "" {
 				// A close replaces the stream as much as a duplication does,
 				// and copies nothing while it does it.
 				holds.save(fd, name != "-")
+				if name != "-" {
+					holds.join(fd, op == syntax.TokLessAmp)
+				}
 			}
 			if (fdVar == "" && fd == 1) || name == "1" {
 				// Standard output replaced or copied: a command
@@ -722,6 +736,7 @@ func (r *Runner) applyRedirList(ctx context.Context, rs []*syntax.Redirect, comp
 				// and the move is a rename. The duplicating form chooses
 				// first and closes after, so the name gets the next one up.
 				fd = r.nextFreeFd(moveFrom)
+				holds.took(fd)
 			}
 			// A frozen name, in the dialects that look at it before the
 			// duplication — and before the close half of a move. See
@@ -903,6 +918,16 @@ func (r *Runner) applyRedirList(ctx context.Context, rs []*syntax.Redirect, comp
 		}
 		if fdVar == "" && holds != nil {
 			holds.saveForAnOpen(fd, name)
+			// A join of the stream's targets or sources, where the open
+			// goes one way: `<>` is left alone as the join leaves it, and
+			// so is `&>` for now.
+			switch {
+			case fd < 0:
+			case flags == os.O_RDONLY:
+				holds.join(fd, true)
+			case flags&os.O_RDWR == 0:
+				holds.join(fd, false)
+			}
 		}
 		if fdVar == "" && (fd == 1 || fd == -1) {
 			// Standard output, alone or with standard error. See bodyOutput.
@@ -984,6 +1009,7 @@ func (r *Runner) applyRedirList(ctx context.Context, rs []*syntax.Redirect, comp
 				if held >= 0 {
 					r.letGoOfNumber(held)
 				}
+				holds.took(fd)
 			}
 			// A name that is not there is not a relative one. Joining it to the
 			// working directory turns "no name" into *the directory*, which then

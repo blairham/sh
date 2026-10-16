@@ -284,8 +284,8 @@ type elementEntry struct {
 // the common path is one nil test.
 type redirHolds struct {
 	r *Runner
-	// saving is false for a list whose replacements are never put back —
-	// `exec`'s — and for a fork's own list.
+	// saving is false for a fork's own list and a command that is a process
+	// of its own; `exec`'s list saves while it applies.
 	saving bool
 	// consuming is whether a substitution this list redirects from is taken
 	// over by the redirection, so that its number comes free: every list
@@ -306,7 +306,25 @@ type redirHolds struct {
 	// holds 10 where zsh holds 11 and leaves 10 free. See
 	// EachRedirectionSavesItsStreams.
 	perRedirection bool
+	// joins says a stream redirected again in this list joins its targets
+	// or sources, the dialect's multios, and reached counts how many
+	// redirections of the list have named each stream so far. See join.
+	joins   bool
+	reached []streamReached
+	// owed is the stream whose join of sources waits to hold one more
+	// number after the next one anything in the list takes, or -1. See
+	// join.
+	owed int
+	// joined are the numbers the list's joins hold, each with its stream,
+	// given back once the list has applied or the join is ended.
+	joined []streamHeld
 }
+
+// streamHeld is one number a join holds, and the stream joined.
+type streamHeld struct{ fd, n int }
+
+// streamReached is how many redirections of one list have named a stream.
+type streamReached struct{ fd, n int }
 
 // beginRedirHolds starts a redirection list's holds, settling first what the
 // runner owes for having been entered as an element.
@@ -322,16 +340,26 @@ func (r *Runner) beginRedirHolds(owner redirOwner) *redirHolds {
 		return nil
 	}
 	inThisShell := owner == redirOwnerThisShell && r.redirectForBuiltin != "exec"
+	// `exec`'s list saves what it replaces as any list in the shell does,
+	// and gives the copies back once it has applied, which is the end of
+	// the command it belongs to: `exec </dev/null {v}</dev/null` leaves 12 in
+	// `v` in zsh 5.9.2 and 11 in bash 5.3.20, from bases of 11 and 10, and
+	// `exec {w}</dev/null` after it is the base again in both. Measured
+	// 2026-10-15 (#6529).
+	execList := owner == redirOwnerThisShell && r.redirectForBuiltin == "exec"
 	h := &redirHolds{
 		r:              r,
 		perRedirection: r.sem().OwnDescriptors == EachRedirectionSavesItsStreams,
+		owed:           -1,
+		joins:          r.countsOwnDescriptors() && r.sem().RedirectsUseEveryTarget == Yes,
 		// A consumed substitution's number comes free in zsh only: bash
 		// publishes the next one below it however the first was used —
 		// `{ echo <(true) <(true); } < <(true)` is `62 61` in 5.3.20.
 		consuming: inThisShell && r.countsOwnDescriptors(),
-		// A `( … )` is a fork, `exec`'s list is never put back, and a command
-		// that becomes a process of its own puts nothing back in this one.
-		saving: inThisShell && (!entry.pending || !entry.forked),
+		// A `( … )` is a fork, and a command that becomes a process of its
+		// own puts nothing back in this one; `exec`'s list saves while it
+		// applies, though nothing is put back after.
+		saving: (inThisShell || execList) && (!entry.pending || !entry.forked),
 	}
 	if entry.pending && entry.input != 0 {
 		// The pipe is the list's first redirection: standard input is saved
@@ -384,11 +412,149 @@ func (h *redirHolds) save(fd int, duplicating bool) {
 	source := -1
 	if duplicating && !h.perRedirection {
 		source = r.holdNumber(false)
+		h.took(-1)
 	}
 	h.saved = append(h.saved, r.holdNumber(false))
+	h.took(-1)
 	if source >= 0 {
 		r.letGoOfNumber(source)
 	}
+}
+
+// join is a redirection of fd reached that joins the stream's earlier
+// targets or sources, input saying which: zsh's multios, which holds numbers
+// for the join from the redirection that starts it until the list has
+// applied — only a `{v}` later in the same list can see them.
+//
+// Measured 2026-10-15 against zsh 5.9.2 run as `zsh -fc`, `v` from a base of
+// 11 after each list; the pipe an element sits on is one of the stream's
+// sources or targets, as the join itself has it (see pipemultio.go):
+//
+//	: </dev/null </dev/null {v}</dev/null                    14   save, 2
+//	: </dev/null </dev/null </dev/null {v}</dev/null         16   save, 2, 1, owed
+//	: 3</dev/null 3</dev/null {v}</dev/null                  13   2: 3 was not open
+//	: </dev/null <<<x {v}</dev/null                          14   a body is a source
+//	: </dev/null <&0 {v}</dev/null                           14   and so is a copy
+//	: >/dev/null >/dev/null {v}</dev/null                    15   save, 3
+//	: >/dev/null >/dev/null >/dev/null {v}</dev/null         16   save, 3, 1
+//	: >/dev/null >&2 {v}</dev/null                           15
+//	: 3>/dev/null 3>/dev/null {v}</dev/null                  14
+//	f </dev/null </dev/null {v}</dev/null | cat              13   a fork's list saves nothing
+//	f >/dev/null >/dev/null {v}</dev/null | cat              15   the pipe is the first target
+//	echo x | : </dev/null {v}</dev/null                      14   the pipe is the first source
+//	: </dev/null </dev/null {v}</dev/null {w}</dev/null      14 16
+//	: </dev/null </dev/null 2>&1 {v}… {w}… {x}…              14 17 18
+//	: </dev/null </dev/null 3</dev/null {v}… {w}…            14 16
+//	: </dev/null </dev/null >/dev/null >/dev/null {v}…       19
+//	{ exec {a}</dev/null; echo $a; } </dev/null </dev/null   12   only while the list applies
+//	setopt nomultios; : </dev/null </dev/null {v}</dev/null  12   no join, nothing held
+//
+// So a join of targets holds three numbers and each further target one, and
+// a join of sources holds two and each further source one — and owes one
+// more, taken straight after the next number anything in the list takes,
+// whether a save, a duplication's source, a `{v}` or another join's: the
+// rows with `{w}` show the hole it leaves above `v`, and the `3<` row that
+// a redirection taking no number from the base does not pay it.
+func (h *redirHolds) join(fd int, input bool) {
+	if h == nil || !h.joins {
+		return
+	}
+	n := h.reach(fd)
+	if n < 2 {
+		return
+	}
+	count := 1
+	if n == 2 {
+		count = 2
+		if !input {
+			count = 3
+		}
+	}
+	r := h.r
+	for range count {
+		h.joined = append(h.joined, streamHeld{fd: fd, n: r.holdNumber(false)})
+		h.took(-1)
+	}
+	if n == 2 && input {
+		h.owed = fd
+	}
+}
+
+// copiedFrom is a duplication reached whose source is fd, which ends a join
+// of that stream: what it holds is given back, nothing more is owed for it,
+// and the stream counts as reached once, by the join itself. zsh 5.9.2
+// answers `12 13` for `: </dev/null </dev/null 3<&0 {v}</dev/null
+// {w}</dev/null; echo $v $w` where the same list with no `3<&0` is `14 16`,
+// and `12 14` for `: >/dev/null >/dev/null 2>&1 {v}… {w}…` where the
+// targets' join alone is `15 16`. Then the stream can be joined again: `:
+// </dev/null </dev/null {v}<&0 </dev/null {w}</dev/null` is `12 15`.
+// Measured 2026-10-15 (#6529).
+func (h *redirHolds) copiedFrom(fd int) {
+	if h == nil || !h.joins {
+		return
+	}
+	i := slices.IndexFunc(h.reached, func(s streamReached) bool { return s.fd == fd })
+	if i < 0 || h.reached[i].n < 2 {
+		return
+	}
+	h.reached[i].n = 1
+	if h.owed == fd {
+		h.owed = -1
+	}
+	kept := h.joined[:0]
+	for _, j := range h.joined {
+		if j.fd == fd {
+			h.r.letGoOfNumber(j.n)
+			continue
+		}
+		kept = append(kept, j)
+	}
+	h.joined = kept
+}
+
+// reach counts one more redirection of fd and answers how many there have
+// been. A pipe the element sits on is reached before the list: see
+// applyRedirList.
+func (h *redirHolds) reach(fd int) int {
+	if h == nil || !h.joins {
+		return 0
+	}
+	for i := range h.reached {
+		if h.reached[i].fd == fd {
+			h.reached[i].n++
+			return h.reached[i].n
+		}
+	}
+	h.reached = append(h.reached, streamReached{fd: fd, n: 1})
+	return 1
+}
+
+// took is the list having taken a number, which pays what a join of
+// sources owes. taken is that number where nothing holds it yet — a `{v}`'s,
+// chosen before it is opened — or -1.
+func (h *redirHolds) took(taken int) {
+	if h == nil || h.owed < 0 {
+		return
+	}
+	owing := h.owed
+	h.owed = -1
+	r := h.r
+	if taken >= 0 && !r.holdsNumber(taken) {
+		r.heldNumbers = append(slices.Clip(r.heldNumbers), heldNumber{fd: taken})
+		defer r.letGoOfNumber(taken)
+	}
+	h.joined = append(h.joined, streamHeld{fd: owing, n: r.holdNumber(false)})
+}
+
+// applied is the end of the list, and of what its joins hold.
+func (h *redirHolds) applied() {
+	if h == nil {
+		return
+	}
+	for _, j := range h.joined {
+		h.r.letGoOfNumber(j.n)
+	}
+	h.joined, h.owed = nil, -1
 }
 
 // Close gives the list's saved copies back, which is the end of the command

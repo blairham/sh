@@ -151,7 +151,10 @@ func identifierCharacters(s string) bool {
 // positionalForZip is the value of a positional parameter named by digits,
 // empty past the end of the list.
 func (r *Runner) positionalForZip(name string) string {
-	n, _ := atoi(name)
+	n, _ := positionalIndex(name)
+	if n < 0 {
+		return ""
+	}
 	if n == 0 {
 		v, _ := r.dollarZero()
 		return v

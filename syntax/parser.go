@@ -7767,7 +7767,27 @@ func (p *Parser) clauseStepsOverWhatItCannotUse() {
 // three words that are its legal continuations.
 func (p *Parser) clauseCannotUse() bool {
 	if !p.atListEnd() {
-		return false
+		// A token behind a statement the list took without a separator —
+		// a compound command, and then a word, a `(` or a `{` straight after
+		// it — is as unusable here as a stray closer, and is stepped over
+		// the same way. Measured 2026-10-16 on zsh 5.9.2, `-fc`:
+		//
+		//	if true; then { echo a; } echo hi; fi       near `hi'
+		//	if true; then { echo a; } foo bar baz; fi   near `bar'
+		//	if true; then { echo a; } echo; fi          near `fi'
+		//	if true; then { echo a; } echo & fi         near `&'
+		//	if true; then ( echo a ) echo hi; fi        near `hi'
+		//	if true; then { echo a; } (x); fi           near `x'
+		//	if :; then :; elif :; then { echo a; } echo hi; fi   near `hi'
+		//	if true; then if :; then :; fi echo hi; fi  near `hi'
+		//
+		// where `{ echo a; } echo hi` at the top level, after `else` and
+		// after `do` all name the `echo` — which is this function being
+		// asked of an `if` and an `elif` clause and of nothing else (#6749).
+		//
+		// A `&` is still refused where it stands, as the rows below say: it
+		// is a list's own operator, never a token behind a finished one.
+		return !p.at(TokEOF) && !p.at(TokNewline) && !p.at(TokSemi) && !p.at(TokAmp)
 	}
 	switch p.tok.Literal() {
 	case "fi", "else", "elif":

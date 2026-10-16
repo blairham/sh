@@ -166,8 +166,8 @@ func TestPrintPAndThePercentFlagAgree(t *testing.T) {
 func TestTheRefusalsThatRemainAfterOneTable(t *testing.T) {
 	dir := t.TempDir()
 	for _, tc := range []struct{ src, want string }{
-		{`print -P '%q'`, "zsh:print:1: the %q prompt escape is not implemented\n"},
-		{`echo "${(%):-%q}"`, "zsh:1: ${(%):-%q}: the %q prompt escape is not implemented\n"},
+		{`print -P '%e'`, "zsh:print:1: the %e prompt escape is not implemented\n"},
+		{`echo "${(%):-%e}"`, "zsh:1: ${(%):-%e}: the %e prompt escape is not implemented\n"},
 		// The ternary is answered now (#1695), and what remains of it is a
 		// *test letter* the table has and this reader cannot count: the
 		// eval depth. Named by the character that opens the construct and

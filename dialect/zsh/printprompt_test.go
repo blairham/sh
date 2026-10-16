@@ -61,17 +61,17 @@ func TestBothSpellingsRefuseTheSameEscapeByName(t *testing.T) {
 	// expansion's ends the script — which is not this change's doing but the
 	// expansion's own rule for a word it could not produce. Two runs rather
 	// than one, so the second is reached at all.
-	out, st := runZsh(t, t.TempDir(), `print -P '[%q]' 2>&1
+	out, st := runZsh(t, t.TempDir(), `print -P '[%e]' 2>&1
 print -r -- "print=$?"
 print -r -- "after"`)
-	want := "zsh:print:1: the %q prompt escape is not implemented\nprint=1\nafter\n"
+	want := "zsh:print:1: the %e prompt escape is not implemented\nprint=1\nafter\n"
 	if out != want || st != 0 {
 		t.Errorf("the builtin's refusal = %q (status %d), want %q", out, st, want)
 	}
-	out, st = runZsh(t, t.TempDir(), `v='[%q]'
+	out, st = runZsh(t, t.TempDir(), `v='[%e]'
 print -r -- "[${(%)v}]" 2>&1
 print -r -- "after"`)
-	want = "zsh:2: ${(%)v}: the %q prompt escape is not implemented\n"
+	want = "zsh:2: ${(%)v}: the %e prompt escape is not implemented\n"
 	if out != want || st != 1 {
 		t.Errorf("the expansion's refusal = %q (status %d), want %q with 1", out, st, want)
 	}
@@ -81,7 +81,7 @@ print -r -- "after"`)
 // managed and then complained would leave a script holding a line it could
 // not tell apart from a whole one.
 func TestARefusedEscapeWritesNoPartialLine(t *testing.T) {
-	out, st := runZsh(t, t.TempDir(), `print -lP 'first' 'second%q' 'third' 2>/dev/null
+	out, st := runZsh(t, t.TempDir(), `print -lP 'first' 'second%e' 'third' 2>/dev/null
 print -r -- "st=$?"`)
 	want := "st=1\n"
 	if out != want || st != 0 {
@@ -137,11 +137,11 @@ func TestTheBuiltinsRefusalDoesNotDisarmTheNextExpansionFailure(t *testing.T) {
 	// takes effect — a word is expanded before the command it belongs to is
 	// set up — so it stands in the output. What this asserts is the line
 	// *after* it, which must not be reached.
-	out, st := runZsh(t, t.TempDir(), `print -P '[%q]' 2>/dev/null
-v='%q'
+	out, st := runZsh(t, t.TempDir(), `print -P '[%e]' 2>/dev/null
+v='%e'
 print -r -- "[${(%)v}]"
 print -r -- "reached"`)
-	want := "zsh:3: ${(%)v}: the %q prompt escape is not implemented\n"
+	want := "zsh:3: ${(%)v}: the %e prompt escape is not implemented\n"
 	if out != want || st != 1 {
 		t.Errorf("after a builtin refusal = %q (status %d), want %q with 1", out, st, want)
 	}

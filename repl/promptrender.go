@@ -88,14 +88,7 @@ func (s Shell) history(text string) string {
 // that has to obey it.
 func (s Shell) promptField(f PromptField, arg string, braced bool) (string, bool) {
 	if f == FieldNone {
-		switch s.Style.Unknown {
-		case DropEscape:
-			return arg, true
-		case DropBoth:
-			return "", true
-		default: // KeepBoth
-			return string(s.Style.Escape) + arg, true
-		}
+		return s.Style.UnknownText(arg), true
 	}
 	return s.field(f, arg, braced), true
 }

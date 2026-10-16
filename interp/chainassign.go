@@ -66,6 +66,16 @@ import "github.com/blairham/sh/syntax"
 // reported with no `VAL` and the second row stored 10. See
 // interp/elementorder.go (#6604).
 func (r *Runner) assignChainedElement(a *syntax.Assign) {
+	r.assignChainedElementWith(a, nil)
+}
+
+// assignChainedElementWith is assignChainedElement with the value an array
+// literal builds, where build is not nil: `f[1][2]=(p q)` nests the literal
+// under 2 of the array held in element 1. Built after every subscript has
+// been evaluated, not before them as a scalar value is: measured 2026-10-16
+// on ksh93u+ 2012-08-01, `i=0; f[i++][i++]=(p $((i*10)))` is
+// `typeset -a f=(([1]=(p 20) ) )` (#6733).
+func (r *Runner) assignChainedElementWith(a *syntax.Assign, build func() (Element, bool)) {
 	first := a.Leading[0]
 	// Where the dialect names the element, the refusal waits for the first
 	// subscript to resolve, and so for every expansion before it: measured
@@ -100,11 +110,14 @@ func (r *Runner) assignChainedElement(a *syntax.Assign) {
 	if r.expansionFailedHere(failedBefore) {
 		return
 	}
-	value := r.assignValue(a)
-	if r.assignmentGaveUp() {
-		// A value that would not expand stores nothing — see the indexed
-		// store in Runner.assign (#6579).
-		return
+	var value string
+	if build == nil {
+		value = r.assignValue(a)
+		if r.assignmentGaveUp() {
+			// A value that would not expand stores nothing — see the indexed
+			// store in Runner.assign (#6579).
+			return
+		}
 	}
 	var (
 		held  Element
@@ -139,9 +152,22 @@ func (r *Runner) assignChainedElement(a *syntax.Assign) {
 			return
 		}
 	}
-	links, wrote := r.chainWrite(a.Name, held, there, place, rest, last, value, a.Append)
+	var built *Element
+	if build != nil {
+		inner := build
+		build = func() (Element, bool) {
+			v, ok := inner()
+			built = &v
+			return v, ok
+		}
+	}
+	links, wrote := r.chainWrite(a.Name, held, there, place, rest, last, value, a.Append, build)
 	if wrote {
 		r.resolvedChain(append([]string{root}, links...))
+		if built != nil && r.expanded != nil && r.expanded.tracesAfterTheStore {
+			// The literal as it was built, for the line: `+ f[1][2]=( p q )`.
+			r.expanded.nested = built
+		}
 	}
 }
 
@@ -160,7 +186,7 @@ func (r *Runner) assignChainedElement(a *syntax.Assign) {
 // which with `x` unset is 0. The attribute is the *name's*, and what a link
 // indexes is an array.
 func (r *Runner) chainWrite(name string, held Element, there bool, place func(Element),
-	rest []string, last, value string, appendTo bool,
+	rest []string, last, value string, appendTo bool, build func() (Element, bool),
 ) (links []string, wrote bool) {
 	links = make([]string, 0, len(rest)+1)
 	for _, text := range rest {
@@ -185,6 +211,18 @@ func (r *Runner) chainWrite(name string, held Element, there bool, place func(El
 		return nil, false
 	}
 	links = append(links, itoa(idx))
+	if build != nil {
+		// An array value, placed as an element literal places one: `+=`
+		// joins an array already there and replaces a string. See
+		// nestedAppended.
+		v, ok := build()
+		if !ok {
+			return nil, false
+		}
+		inner.Set(idx, nestedAppended(inner.Get(idx), v, appendTo))
+		place(Element{Nested: inner})
+		return links, true
+	}
 	// The last subscript is an ordinary element write, append included:
 	// `a[1][2]+=Q` joins what is under 2 of the nested array exactly as
 	// `a[2]+=Q` joins what is under 2 of an ordinary one.
@@ -315,7 +353,7 @@ func (r *Runner) declareChainedElement(base string, leading []string, last, valu
 	if !ok {
 		return
 	}
-	r.chainWrite(base, held, there, place, leading[1:], last, value, appends)
+	r.chainWrite(base, held, there, place, leading[1:], last, value, appends, nil)
 }
 
 // refuseReadonlySpokenAs is refuseReadonly asked about name and saying spoken
@@ -352,4 +390,22 @@ func (r *Runner) declaredChainRoot(base, first string, tableBefore bool) (string
 		}
 	}
 	return itoa(idx), true
+}
+
+// tracedElementPosition is the subscript a traced element write names: the
+// position a negative one counts back to, in the array the name holds now.
+// Measured 2026-10-15 on ksh93u+ 2012-08-01, `a=(x y); set -x; a[-1]=v`
+// traces `+ a[1]=v` and `a[-2]=w` traces `+ a[0]=w` — what the chained write
+// already records (#6735). A subscript that counts past the front is left as
+// written, since the store refuses it before a line is due.
+func (r *Runner) tracedElementPosition(name string, idx int) int {
+	if idx >= 0 {
+		return idx
+	}
+	if arr, ok := r.arraysLookup(name); ok {
+		if pos, within := r.elemPos(arr, idx); within {
+			return pos + r.arrayBase()
+		}
+	}
+	return idx
 }

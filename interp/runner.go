@@ -16025,7 +16025,7 @@ func (r *Runner) assign(ctx context.Context, a *syntax.Assign) {
 		// Semantics.TraceElementSubscriptIsEvaluated. Here rather than at the
 		// store below because both the plain write and the append pass
 		// through it, and because the value is this one whichever they do.
-		r.resolvedSubscript(itoa(idx))
+		r.resolvedSubscript(itoa(r.tracedElementPosition(a.Name, idx)))
 		if a.Append {
 			// `a[0]+=Q` appends to element 0. Distinct from `a+=(Q)`, which
 			// adds an element after the last: the subscript is what says

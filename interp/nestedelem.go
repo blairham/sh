@@ -50,6 +50,16 @@ import (
 // `a[$(echo SUB >&2; echo 1/0)]=(p $(echo VAL >&2))` reports the division
 // without writing VAL in the column that does this (#6675).
 func (r *Runner) nestElemLiteral(a *syntax.Assign) {
+	if len(a.Leading) > 0 {
+		// A chain of subscripts in front of the literal: the walk the scalar
+		// chain takes, with the literal as what lands at the end of it. It
+		// read the last subscript alone and nested the literal one level
+		// too shallow, under `f[2]` (#6733).
+		r.assignChainedElementWith(a, func() (Element, bool) {
+			return r.nestedLiteral(a.Name, a.Elems)
+		})
+		return
+	}
 	value, ok := elementLiteralBuilt(r, a, func() (Element, bool) {
 		return r.nestedLiteral(a.Name, a.Elems)
 	})

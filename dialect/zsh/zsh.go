@@ -126,9 +126,16 @@ func Dialect() syntax.Dialect {
 	// autoload, so the grammar cannot be gated on a load that never happens.
 	// A script that writes the `zmodload` — which is every script the word
 	// was measured through — sees the same shell either way.
+	//
+	// And the two numeric words, which take an array literal as an operand
+	// exactly as `typeset` does: measured 2026-10-15, `integer v=(1+1 2)` and
+	// `float v=(1)` are `inconsistent type for assignment` — the literal
+	// read and refused — where reading `(1 2)` as a scalar wrote `bad math
+	// expression` (#6566).
 	d.DeclarationUtilities = map[string]bool{
 		"declare": true, "typeset": true, "local": true,
 		"export": true, "readonly": true, "private": true,
+		"integer": true, "float": true,
 	}
 	// The reserved-word declarations, which `private` is not: it is the
 	// module's builtin. Measured 2026-10-02 through `which` (#5138).
@@ -6229,6 +6236,9 @@ func Diagnostics() interp.Diagnostics {
 		// `private v; v=(p q)` is ArrayValueToNonArray above. See
 		// interp/privatekindfixed.go.
 		ArrayValueToANonArraySpecial: "%s: can't assign array value to non-array special",
+		// A numeric letter beside an array literal over a name already set
+		// in the cell the line lands on. See the field (#6566).
+		TypeLetterOverAHeldName: "%s: can't assign array value to non-array",
 		// The one dialect that words the refusal to unset exactly as it words
 		// the refusal to assign, and the only one that does not name `unset`.
 		UnsetReadonly: "read-only variable: %s",

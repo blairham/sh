@@ -88,7 +88,7 @@ func (r *Runner) nestElemLiteral(a *syntax.Assign) {
 	text := r.joinWord(a.Index)
 	// The subscript as written is what a boundary refusal quotes back, and it
 	// is not the text the arithmetic reads — see subscriptSubject.
-	subject := subscriptSubject(a.IndexText, text)
+	subject := subscriptSubject(r.writtenIndex(a), text)
 	idx, err := r.subscriptValueAsWritten(subject, text)
 	if err != nil {
 		r.fatal("%s\n", r.subscriptFailure(text, err))

@@ -3724,6 +3724,53 @@ func (r *Runner) elemAtCounted(name string, count int, at func(pos int) string, 
 // is quoted back as the expanded text in every column — `i=1; a[$i/0]=x` is
 // `1/0: division by 0` in bash — so subscriptFailure keeps what it was given
 // (#1373).
+// writtenIndex is an assignment's subscript as the script wrote it, for a
+// refusal to quote back: the source text, with the body of each command
+// substitution in it laid out the way the function listing lays one out in
+// the dialect that does.
+//
+// Measured 2026-10-16 on bash 5.3.20, `-c` and file: `a=(1 2); a[$(echo SUB
+// >&2; echo 1)]=(p q)` is `a[$(echo SUB 1>&2; echo 1)]: cannot assign list
+// to array member`, and `a=(1); a[$( (echo -9) )]=x` is `a[$( ( echo -9
+// ))]: bad array subscript` — the text the trace already writes for the same
+// word (#6679, #6762). Only those bodies: `a[${i}$(echo)]=x` keeps its braces,
+// `a[${i}$(echo)]`, which a reprint of the whole word would have dropped. The
+// other columns leave the reader nil, and the source text is what they quote.
+func (r *Runner) writtenIndex(a *syntax.Assign) string {
+	text := a.IndexText
+	if a.Index == nil || text == "" {
+		return text
+	}
+	l := syntax.Layout{CommandSubstitutionIsReprinted: r.wordAsWrittenLayout().CommandSubstitutionIsReprinted}
+	if l.CommandSubstitutionIsReprinted == nil {
+		return text
+	}
+	// Found in the source text in order rather than placed by offset: the
+	// text is the subscript between its brackets, blanks trimmed, and a
+	// span's position counts from wherever the word began.
+	var b strings.Builder
+	rest := text
+	for _, sp := range a.Index.Spans {
+		if sp.Kind != syntax.CommandSubst || sp.Backquoted || sp.CurrentShell {
+			continue
+		}
+		written := "$(" + sp.Value + ")"
+		at := strings.Index(rest, written)
+		if at < 0 {
+			// The source text and the span do not line up, so there is
+			// nothing safe to lay out.
+			return a.IndexText
+		}
+		one := sp
+		one.Quoting = syntax.Unquoted
+		b.WriteString(rest[:at])
+		b.WriteString(syntax.PrintWordWith(&syntax.Word{Spans: []syntax.Span{one}}, l))
+		rest = rest[at+len(written):]
+	}
+	b.WriteString(rest)
+	return b.String()
+}
+
 func subscriptSubject(written, expanded string) string {
 	if written != "" {
 		return written

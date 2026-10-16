@@ -1289,14 +1289,7 @@ func (r *Runner) tracePromptField(f PromptField, arg string, braced bool) (strin
 	if v, ok := r.promptField(f, arg, braced); ok {
 		return v, true
 	}
-	switch r.promptStyle.Unknown {
-	case DropEscape:
-		return arg, true
-	case DropBoth:
-		return "", true
-	default:
-		return string(r.promptStyle.Escape) + arg, true
-	}
+	return r.promptStyle.UnknownText(arg), true
 }
 
 // tracePrefixDepth repeats the prefix's first character once per level of

@@ -178,7 +178,7 @@ func TestPrintRefusals(t *testing.T) {
 		// still refused by name is a code in no part of the table, and a
 		// code whose value is a fact about a *session* that a runner has not
 		// got — the terminal's name here.
-		{`print -P '%q'`, "zsh:print:1: the %q prompt escape is not implemented\n", 1},
+		{`print -P '%e'`, "zsh:print:1: the %e prompt escape is not implemented\n", 1},
 		{`print -P '%y'`, "zsh:print:1: the %y prompt escape is not implemented\n", 1},
 		// `-v`, `-x` and `-X` have left it: see printfpositions_test.go
 		// (#5143).

@@ -56,6 +56,17 @@ func TestAnIfClauseStepsOverWhatItCannotUse(t *testing.T) {
 		// The end of input is what comes next as readily as a token is, and
 		// it is the row the substitution sweep turns on.
 		{"if true; then )\n", ""},
+		// **Nor need the token be a closer.** What stands behind a statement
+		// the list took without a separator — a word, a `(` or a `{` after a
+		// compound command — is as unusable here, measured 2026-10-16 on
+		// zsh 5.9.2 (#6749).
+		{"if true; then { echo a; } echo hi; fi\n", "hi"},
+		{"if true; then { echo a; } foo bar baz; fi\n", "bar"},
+		{"if true; then { echo a; } echo; fi\n", "fi"},
+		{"if true; then ( echo a ) echo hi; fi\n", "hi"},
+		{"if true; then { echo a; } (x); fi\n", "x"},
+		{"if true; then if :; then :; fi echo hi; fi\n", "hi"},
+		{"if :; then :; elif :; then { echo a; } echo hi; fi\n", "hi"},
 	} {
 		t.Run(c.src, func(t *testing.T) {
 			_, err := Parse(c.src, stepOverDialect())
@@ -98,6 +109,11 @@ func TestWhatAnIfClauseDoesNotStepOver(t *testing.T) {
 		// The operator that names itself in the one shell with this rule,
 		// which is the same boundary it draws for a bare `!`.
 		{"if true; then & echo X; fi\n", "&"},
+		// And a word behind a compound command anywhere but an `if` or
+		// `elif` clause names that word (#6749).
+		{"{ echo a; } echo hi\n", "echo"},
+		{"if false; then :; else { echo a; } echo hi; fi\n", "echo"},
+		{"while true; do { echo a; } echo hi; done\n", "echo"},
 	} {
 		t.Run(c.src, func(t *testing.T) {
 			_, err := Parse(c.src, stepOverDialect())

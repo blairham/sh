@@ -401,6 +401,15 @@ type PromptStyle struct {
 	// different answers.
 	Unknown UnknownCode
 
+	// Unbuilt is every code the reference shell has an escape for that this
+	// table does not answer. Where it is set, a code in no part of the table
+	// and not in it is one the reference has no escape for at all, and a
+	// script's expansion draws it the way the prompt does — by Unknown —
+	// instead of refusing it by name. The refusal is kept for these codes
+	// alone, because it is true of them: the escape exists and is not carried
+	// here. Nil keeps the refusal for every code outside the table.
+	Unbuilt map[rune]bool
+
 	// History is a character that draws the history number on its own and
 	// itself when doubled. ksh93 spells it `!`, where `<!>` drew 1, 2, 3 on
 	// successive prompts and `<!!>` drew `<!>`; bash, dash and zsh draw a
@@ -665,6 +674,21 @@ const (
 	// DropBoth removes both, which is what zsh does.
 	DropBoth
 )
+
+// UnknownText is what the style's Unknown draws for code, an escape in no part
+// of its table. One function for the three readers that obey it — the
+// prompt's drawer, the trace prefix and the walker itself — so that the three
+// answers cannot drift apart.
+func (st PromptStyle) UnknownText(code string) string {
+	switch st.Unknown {
+	case DropEscape:
+		return code
+	case DropBoth:
+		return ""
+	default: // KeepBoth
+		return string(st.Escape) + code
+	}
+}
 
 // PromptField is something a prompt draws that is not literal text.
 //
@@ -1562,6 +1586,13 @@ func (w *promptWalk) walk(runes []rune) {
 		// So Unknown is read by the resolver that has to obey it rather than
 		// by this walker, and the refusal is read by the one that can afford
 		// it.
+		if w.st.Unbuilt != nil && !w.st.Unbuilt[code] {
+			// No escape the reference has: what it draws is Unknown's
+			// answer in every reader, a script's expansion included. See
+			// PromptStyle.Unbuilt.
+			w.draw(w.st.UnknownText(string(code)))
+			continue
+		}
 		v, answered := w.field(FieldNone, string(code), false)
 		if !answered {
 			w.refused = string(code)

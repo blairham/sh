@@ -418,12 +418,17 @@ func Dialect() syntax.Dialect {
 	// this shell reaches the reader with one, so it would be a row no
 	// measurement of ours could hold honest.
 	//
-	// The control bytes are also not here. That shell refuses every one but
-	// tab and newline, and renders them in caret notation — `illegal
-	// character: ^A` — which is a second change: the caret reaches the
-	// operand sentence as well, so ``operand expected at `^A'`` would have to
-	// move with it. Recorded rather than half-done.
-	d.ArithBytesRefusedOutright = "'@;{}\\]"
+	// So are the control bytes, every one but tab and newline, which are
+	// blanks to the reader. Measured 2026-10-16 on zsh 5.9.2 through `let`
+	// and `[[ … -eq … ]]`: `let $'1 \x01'`, `$'1\x01'` and `$'\x01'` are
+	// `illegal character: ^A`, and the same for `\x7f` (`^?`), `\r`, `\x0b`
+	// and `\x1b`; `let $'1+\x01'` keeps ``operand expected at `^A'`` and
+	// `let $'(1\x01)'` is `')' expected`, the two positions every byte here
+	// answers that way at (#6723). The caret spelling is the diagnostic's
+	// visible rendering, which reaches this sentence like any other.
+	d.ArithBytesRefusedOutright = "'@;{}\\]" +
+		"\x01\x02\x03\x04\x05\x06\x07\x08\x0b\x0c\x0d\x0e\x0f" +
+		"\x10\x11\x12\x13\x14\x15\x16\x17\x18\x19\x1a\x1b\x1c\x1d\x1e\x1f\x7f"
 	// A bare `(a|b)` inside a pattern word, which makes `@(abc|xyz)` a
 	// literal `@` followed by a group here rather than an extended pattern.
 	d.PatternAlternation = true

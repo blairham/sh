@@ -12497,10 +12497,15 @@ What was built, all through the extension seam — registered builtins in each
   fixing it fixed both spellings at once because there is only one.
 
   What is carried is what the flag carried: `%%`, `%x`, `%N` and `%n`.
-  Everything else is refused **by name** — `the %q prompt escape is not
-  implemented` — where zsh drops an escape it does not know. Naming it is
-  the choice: a prompt quietly short of a field is the kind of wrong
-  answer nobody reports. The builtin's refusal is a status the script goes
+  An escape zsh has and the table lacks is refused **by name** — `the %e
+  prompt escape is not implemented` — because a prompt quietly short of a
+  field is the kind of wrong answer nobody reports. A letter that is no
+  escape in zsh at all is dropped, as zsh drops it: measured 2026-10-16,
+  `print -rP -- 'x%<c>y'` one code at a time, `%q`, `%z`, `%J`, the
+  punctuation and a control character are each `xy` at status 0, where
+  `%e`, `%l`, `%y`, `%[` and `%^` are escapes there (#6724). The refusal
+  was for every unknown code until then, which named as missing a field
+  that exists nowhere. The builtin's refusal is a status the script goes
   on from and writes nothing at all, because a `print` that put out the
   operands it managed and then complained would leave a script holding a
   line it could not tell apart from a whole one; the expansion's ends the

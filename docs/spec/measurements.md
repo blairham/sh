@@ -6918,7 +6918,7 @@ grades it and nothing drift-checks it either, for the same reason.
   ```sh
   print -P 'x%'; echo "st=$?"
   ```
-- `print/a-prompt-escape-this-shell-has-not` — zsh's prompt language has about forty escapes and this shell carries four of them. `%q` is one it does not, and zsh drops it silently — `[]` and 0 — so the row records the difference between dropping an escape and naming it as missing. Naming it is the choice here: a prompt quietly short of a field is the kind of wrong answer nobody reports
+- `print/a-prompt-escape-this-shell-has-not` — `%q` names no escape in zsh, which drops it silently — `[]` and 0. This shell named it as missing until #6724, on the reasoning that a prompt quietly short of a field is the kind of wrong answer nobody reports; that reasoning holds for an escape zsh has and this table lacks, which is still refused by name, and not for a letter that is no field anywhere
   ```sh
   print -P '[%q]'; echo "st=$?"
   ```
@@ -14960,7 +14960,7 @@ y][x][y]`. The row exists because the plausible implementation is a split follow
   ```sh
   USER=someone-else; LOGNAME=someone-else; case "${(%):-%n}" in someone-else) echo follows-the-variable;; *) echo ignores-it;; esac
   ```
-- `param/prompt-percent-refuses-an-escape-by-name` — an escape outside the prompt language: zsh expands `%z` to nothing at all and carries on at 0, so the shell that has the construct is *quieter* here than this one, which refuses it by name. The refusal is the deliberate difference — a wrong answer wearing a success is worse than a complaint — and this row is where it is written down rather than left to be discovered
+- `param/prompt-percent-refuses-an-escape-by-name` — an escape outside the prompt language: zsh expands `%z` to nothing at all and carries on at 0. This shell refused it by name until #6724, on the reasoning that a wrong answer wearing a success is worse than a complaint — which is true of an escape zsh has and this table lacks, and still refused for those (`%e`, `%l`, `%y`), but `%z` is no escape in zsh at all, so dropping it is the answer and not a gap
   ```sh
   echo "[${(%):-%zz}]"; echo "st=$?"
   ```

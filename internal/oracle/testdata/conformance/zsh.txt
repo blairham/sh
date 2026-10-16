@@ -4,8 +4,6 @@
 complist/the-widget-the-module-defines
 diag/trap-refusing-a-condition-it-does-not-know
 jobs/a-background-job-outlives-the-shell
-param/prompt-percent-refuses-an-escape-by-name
 pat/a-whole-match-flag-in-mid-pattern
-print/a-prompt-escape-this-shell-has-not
 trap/an-elements-pipe-handler-runs-inside-the-elements-redirections
 zmodload/the-selection-as-the-command-that-would-make-it

@@ -24,6 +24,10 @@ func TestADiagnosticWritesTheTextItQuotesVisibly(t *testing.T) {
 		{`/usr/bin/true $'zz\x01q'*`, "zsh:1: no matches found: zz^Aq*\n"},
 		{`unset x; echo ${x?$'bo\x01om'}`, "zsh:1: x: bo^Aom\n"},
 		{`print *($'\x01')`, "zsh:1: unknown file attribute: ^A\n"},
+		// A newline an open group read on through, which is the shape #6727
+		// was filed for: one line, the newline written `\n`.
+		{"echo k(\n)\necho q", "zsh:1: unknown file attribute: \\n\n"},
+		{"print -r -- x(|y\nz)\necho q", "zsh:1: no matches found: x(|y\\nz)\n"},
 		{`setopt $'no\x01opt'`, "zsh:setopt:1: no such option: no^Aopt\n"},
 		{`unsetopt $'no\x01opt'`, "zsh:unsetopt:1: no such option: no^Aopt\n"},
 		{`typeset $'a\x01b'`, "zsh:typeset:1: not valid in this context: a^Ab\n"},

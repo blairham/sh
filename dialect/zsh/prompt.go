@@ -254,6 +254,17 @@ func PromptStyle() interp.PromptStyle {
 		Formats: map[rune]bool{'D': true},
 		// `%q` drew nothing at all.
 		Unknown: interp.DropBoth,
+		// The escapes that shell has and this table does not answer, which a
+		// script's expansion keeps refusing by name. Every other letter in no
+		// part of the table is no escape there, and is dropped in every
+		// reader. Measured 2026-10-16 on zsh 5.9.2, `print -rP -- 'x%<c>y'`
+		// one code at a time over each code the table lacked: `%e` draws
+		// `x0y`, `%l` and `%y` draw `x()y` with no terminal, `%[` cuts what
+		// follows; `%^` draws `xy` here and is the parser state in reverse,
+		// which is empty outside the editor. `%A %H %J %O %P %Q %R %V %X %Y
+		// %Z %a %g %o %p %q %r %z`, the punctuation `$ & + , : ; = \ ] ` |
+		// "` and a control character are each `xy` at status 0 (#6724).
+		Unbuilt: map[rune]bool{'e': true, 'l': true, 'y': true, '[': true, '^': true},
 		// And a `%` with nothing after it is dropped rather than drawn, in
 		// both of this shell's readers: measured through a pty, `PS1='x%'`
 		// draws `x`, and `print -P 'x%'` and `${(%):-x%}` are `x` too. bash

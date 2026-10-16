@@ -250,6 +250,7 @@ ash   PrintfOutputPrecedesComplaint
 ash   PrintfQuoteOfNoArgumentIsEmpty
 ash   PrintfRefusedOperandKeepsItsLeadingNumber
 ash   PrintfTimeOperandIsADateString
+ash   ProducedIntegerReadsInItsBase
 ash   ReadArrayDefault
 ash   ReadArrayTakesOneNameOnly
 ash   ReadEchoLettersWriteTheValues
@@ -386,6 +387,7 @@ bash  NumericTypeLettersAreExclusive
 bash  PrintfFloatOperandIsEvaluatedTwice
 bash  PrintfOutputPrecedesComplaint
 bash  PrintfRefusedOperandKeepsItsLeadingNumber
+bash  ProducedIntegerReadsInItsBase
 bash  ReadArrayDefault
 bash  ReadArrayTakesOneNameOnly
 bash  RestrictedFreezeRefusesALetterThatChangesTheName
@@ -656,6 +658,7 @@ dash  PrintfOutputPrecedesComplaint
 dash  PrintfQuoteOfNoArgumentIsEmpty
 dash  PrintfRefusedOperandKeepsItsLeadingNumber
 dash  PrintfReportsAMissingHexDigit
+dash  ProducedIntegerReadsInItsBase
 dash  ProducedParameterListing
 dash  RangeOperandBackslash
 dash  ReadArrayDefault

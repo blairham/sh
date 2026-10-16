@@ -14466,6 +14466,11 @@ func (r *Runner) setVarAs(name, value string, form assignForm) {
 		if r.assigned == nil {
 			r.assigned = map[string]string{}
 		}
+		// The producer is told the number, not the text a declared base
+		// rendered it as: `typeset -i16 SECONDS; SECONDS=20` counts from 20
+		// and reads `16#14` in zsh 5.9.2 and ksh93u+, where the rendered
+		// text read back as no number at all and counted from 0 (#6758).
+		value = r.producedNumberOfRendered(name, value)
 		r.assigned[name] = value
 		r.attrClear(name, attrRemoved)
 		if name == "_" {
@@ -14920,7 +14925,7 @@ func (r *Runner) storedValue(name string, folded bool) (string, bool) {
 		// assigned is kept where the producer can see it — SECONDS counts
 		// from it — rather than shadowing the producer entirely.
 		if !r.attrHas(name, attrRemoved) {
-			v := f(r)
+			v := r.producedThroughItsAttributes(name, f(r))
 			// This is the *expansion* of the parameter, so it is the reading
 			// one dialect's listing writes back. Recorded here rather than
 			// inside the producers because every one of them would otherwise

@@ -2918,6 +2918,8 @@ func Semantics() interp.Semantics {
 	// A `case` that runs no command ends on 0: measured 2026-10-16 on
 	// bash 5.3.20, `case a in $(false)) echo m ;; esac; echo $?` writes 0 (#6710).
 	s.CaseWithoutACommandKeepsTheSubstitutionStatus = interp.No
+	// unanswered ProducedIntegerReadsInItsBase: `declare -i` takes no output base here, so no
+	// produced integer can carry one to read it in.
 	// A `+`-prefixed word is an operand and ends the scan: measured
 	// 2026-09-17 on 5.3.20, on 3.2.57 and under the name `sh`, `getopts a o
 	// +a` is 1 with the name `?`.

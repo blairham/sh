@@ -3,6 +3,11 @@
 
 package interp
 
+import (
+	"strconv"
+	"strings"
+)
+
 // How a produced parameter lists back.
 //
 // A produced parameter is in none of the tables a listing walks — not Vars,
@@ -506,4 +511,64 @@ func (r *Runner) listedNames() ([]string, map[string]bool, ProducedListing) {
 		seen[name], produced[name] = true, true
 	}
 	return sortedNames(seen), produced, listing
+}
+
+// producedFloatRetyped is whether a script has given the integer attribute to
+// a parameter its dialect produces as a float.
+func (r *Runner) producedFloatRetyped(name string, pd ProducedDeclaration) bool {
+	return pd.Float && r.attrHas(name, attrInteger)
+}
+
+// producedThroughItsAttributes is a produced value as a read of the parameter
+// gives it, once the script's own declaration has had its say.
+//
+// Two shapes, measured 2026-10-16 under `-c` on zsh 5.9.2 (`-f`) and ksh93u+
+// (#6758):
+//
+//	                                      zsh 5.9.2      ksh93u+
+//	typeset -i16 RANDOM; $RANDOM          16#7EDE        a decimal number
+//	typeset -i2 LINENO; $LINENO           2#1            1
+//	typeset -i16 SECONDS; SECONDS=20      16#14          16#14
+//	typeset -i SECONDS; $SECONDS          (an integer)   0, not 0.000
+//
+// So a produced integer is written in a base the script declared in one
+// dialect and not in the other — Semantics.ProducedIntegerReadsInItsBase —
+// while a produced *float* the script made an integer is an integer in the
+// one dialect that produces it as a float, whole seconds rendered in the
+// declared base. The listing writes the number zsh produced in decimal and
+// the text ksh93 reads, which is why the declaration's own listing applies
+// only the second shape.
+func (r *Runner) producedThroughItsAttributes(name, v string) string {
+	if r.integerBase[name] == 0 && !r.attrHas(name, attrInteger) {
+		// Nearly every read: nothing the script declared is on the name.
+		return v
+	}
+	if pd, ok := r.producedDeclaration(name); ok && r.producedFloatRetyped(name, pd) {
+		f, err := strconv.ParseFloat(strings.TrimSpace(v), 64)
+		if err != nil {
+			return v
+		}
+		return r.integerRendered(name, int(f))
+	}
+	if r.integerBase[name] == 0 || !r.attrHas(name, attrInteger) {
+		return v
+	}
+	if !r.ask(r.sem().ProducedIntegerReadsInItsBase,
+		"a produced integer read in the base the script declared for it") {
+		return v
+	}
+	return r.integerRenderedText(name, v)
+}
+
+// producedNumberOfRendered is the number a declared base rendered as text,
+// for a produced parameter whose producer is told what was assigned.
+func (r *Runner) producedNumberOfRendered(name, value string) string {
+	if r.integerBase[name] == 0 || !strings.Contains(value, "#") {
+		return value
+	}
+	n, err := r.parseArithStored(strings.TrimSpace(value))
+	if err != nil {
+		return value
+	}
+	return r.formatNum(n)
 }

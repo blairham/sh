@@ -69,6 +69,11 @@ func Dialect() syntax.Dialect {
 	// and syntax.Dialect.DoubledAngleOpensAProcessSubstitution.
 	d.FdVariableBeforeBothStreams = true
 	d.DoubledAngleOpensAProcessSubstitution = true
+	// A plain redirection onto a process substitution running the other
+	// way is refused while reading: `echo hi > <(cat)` is ``parse error near
+	// `<(cat)'`` (#6812). See
+	// syntax.Dialect.ProcessSubstitutionAgainstAPlainRedirectionIsRefused.
+	d.ProcessSubstitutionAgainstAPlainRedirectionIsRefused = true
 	// And refuses the construct after a compound command, as a parse error
 	// naming either the brace or the whole word by the compound's kind. See
 	// the flag for the table.
@@ -4291,6 +4296,12 @@ func Semantics() interp.Semantics {
 	s.FdMove = interp.FdMoveIsNotAnOperator
 	// And the reading side ends the shell, on a builtin alone.
 	s.DuplicationTargetError = interp.DuplicationTargetErrorEndsTheShellOnABuiltin
+	// A target a process substitution begins with more after it is refused
+	// before anything is opened — `echo hi > >(cat)x` is `invalid syntax for
+	// process substitution in redirection` — and ends the shell on the
+	// boundary above. Measured 2026-10-16 on 5.9.2 (#6766). See
+	// interp.Semantics.SubstitutionTargetWithMoreIsRefused.
+	s.SubstitutionTargetWithMoreIsRefused = interp.Yes
 	// zsh takes it and sets a global instead of refusing.
 	s.LocalOutsideAFunctionIsAnError = interp.No
 	// Fatal to all three, which is the one place zsh is stricter than bash
@@ -5895,6 +5906,7 @@ func Diagnostics() interp.Diagnostics {
 		// nothing of its own to say. The writing side never reaches this —
 		// GreatAmpTarget sends it to the file.
 		DuplicationTargetIsNotADescriptor: "file number expected",
+		SubstitutionTargetWithMore:        "invalid syntax for process substitution in redirection",
 		// A refused `>&p` names the facility rather than the word:
 		// `coprocess: bad file descriptor`, measured 2026-09-16 with no
 		// coprocess running. ksh93 quotes the `p` the script wrote.

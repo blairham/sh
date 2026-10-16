@@ -223,6 +223,9 @@ func Semantics() interp.Semantics {
 	// no process substitution, so there is no `>(cmd)` body for a command to
 	// wait for or not. `echo >(:)` is the two characters as written (#2197).
 	//
+	// unanswered SubstitutionTargetWithMoreIsRefused: the same absence — no
+	// substitution, so no redirection target can begin with one (#6766).
+	//
 	// unanswered SubstitutionPathPrefersProcSelfFd: the same absence seen
 	// from the other end — with no substitution there is no path for a
 	// directory to be chosen for. `echo <(true)` is `Syntax error: "("

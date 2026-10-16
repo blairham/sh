@@ -31610,6 +31610,46 @@ type Semantics struct {
 	// decides anything: `<&2` is nobody's question.
 	DuplicationTargetError DuplicationTargetErrorForm
 
+	// SubstitutionTargetWithMoreIsRefused is whether a plain redirection's
+	// target that begins with a process substitution and has anything after
+	// it — `> >(cat)x`, `< <(cat)""` — is refused before anything is opened,
+	// rather than opened as the path it comes to.
+	//
+	// Measured 2026-10-16 on zsh 5.9.2 over a script file `echo hi OP WORD`
+	// then `echo next` (#6766):
+	//
+	//	<  3<  {v}<  <>  3<>   then <(cat)x, <(cat)""   refused
+	//	>  >|  >!  3>  {v}>    then >(cat)x, >(cat)""   refused
+	//	<>  3<>                then >(cat)x             refused
+	//	>>  >&  &>             then >(cat)x             opened: /dev/fd/12x
+	//	>                      then x>(cat)             opened: the word does not begin with it
+	//
+	// zsh's sentence is `invalid syntax for process substitution in
+	// redirection`, at status 1, and nothing in the list is opened and the
+	// substitution is not started: `: </nonexistent > >(echo ran >&2)x` names
+	// the substitution and not the file, and prints no `ran`. A substitution
+	// in an *earlier* redirection of the list is started, because zsh makes
+	// the list's substitutions first (see redirHolds.makeFirst): `: >
+	// >(echo r1 >&2) 3> >(echo r2 >&2)x` prints `r1`. Whether the shell goes
+	// on is DuplicationTargetErrorEndsTheShellOnABuiltin's boundary, which zsh
+	// draws in the same place for both refusals.
+	//
+	// Not modeled: with the refused redirection *first* and a substitution
+	// after it, zsh starts the later one and then carries on to the next
+	// command — `: 3> >(echo r2 >&2)x > >(echo r1 >&2); echo next` prints
+	// `r1` and `next`. Here the list stops at the refusal, as it does with
+	// the order the other way round.
+	//
+	// bash 5.3.20 opens `/dev/fd/63x` and BusyBox ash 1.37.0 `/dev/fd/64x`,
+	// and in ksh93u+ a process substitution is a word of its own, so a
+	// target never has anything after one.
+	//
+	// Asked only where a target has that shape.
+	//
+	// unpinned dash: no process substitution, so no target can begin with
+	// one.
+	SubstitutionTargetWithMoreIsRefused Answer
+
 	// RedirectErrorOnSpecialBuiltinFatal ends a non-interactive shell when a
 	// redirection written on a *special* builtin cannot be made — a file that
 	// will not open, a descriptor that is not there, a number the open-file

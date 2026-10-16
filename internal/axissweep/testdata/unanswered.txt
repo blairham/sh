@@ -764,6 +764,7 @@ dash  WidthLettersExcludeTheIntegerLetter
 dash  WidthNumberPrecedence
 dash  ReadWriteRedirectionTakesTheSubstitutionsEnd
 dash  WritingSubstitutionIsWaitedForAtTheCommand
+dash  SubstitutionTargetWithMoreIsRefused
 dash  ZeroFillGoesAfterAnIntegersSign
 dash  ZeroFillKeepsLeadingBlanks
 dash  FunctionBodyListingWritesItsAttributes

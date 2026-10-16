@@ -3280,6 +3280,10 @@ func Semantics() interp.Semantics {
 	// the word, measured 2026-10-15 on 5.3.20 — so there is nothing for the
 	// question to be about (#6522).
 	s.DuplicationTargetError = interp.DuplicationTargetErrorCarriesOn
+	// A target a process substitution begins with more after it is opened
+	// as the path it comes to: `cat < <(echo a)x` is `/dev/fd/63x`, measured
+	// 2026-10-16 (#6766). See interp.Semantics.SubstitutionTargetWithMoreIsRefused.
+	s.SubstitutionTargetWithMoreIsRefused = interp.No
 	s.LocalOutsideAFunctionIsAnError = interp.Yes
 	s.LocalOutsideAFunctionIsFatal = interp.No
 	// bash reports every operand that is not a name, exports the ones that

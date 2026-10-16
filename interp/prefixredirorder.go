@@ -285,6 +285,12 @@ func (r *Runner) openTheBareRedirections(ctx context.Context, c *syntax.SimpleCm
 	r.redirectWithNoWord = true
 	closers, err := r.applyRedirs(ctx, c.Redirs, false, owner)
 	r.redirectWithNoWord = before
+	if r.redirErr {
+		// Assignments are the shell's own, where redirections alone are the
+		// null command's, which zsh runs as a program. See
+		// endsTheShellOverABadTarget.
+		r.endsTheShellOverABadTarget(len(c.Assigns) > 0)
+	}
 	put := func() {
 		for _, cl := range closers {
 			_ = cl.Close()

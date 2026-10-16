@@ -3678,10 +3678,12 @@ type Runner struct {
 	redirFailureStatusOfItsOwn int
 
 	// badDupTarget records that the redirection which failed was `<&word` or
-	// `>&word` naming something that is not a descriptor, rather than an open
-	// that did not work. One dialect ends the shell over the first and not
-	// the second, and only on a command that runs in the shell, so the
-	// distinction has to reach the place that knows which command it was.
+	// `>&word` naming something that is not a descriptor, or a process
+	// substitution target the dialect refuses, rather than an open that did
+	// not work. One dialect ends the shell over the first two and not the
+	// third, and only on a command that runs in the shell, so the distinction
+	// has to reach the place that knows which command it was. See
+	// Runner.endsTheShellOverABadTarget.
 	badDupTarget bool
 	// pipeMultio is the pipe end this command is a pipeline element on, for
 	// the dialect that joins a redirection to a stream rather than replacing
@@ -6160,6 +6162,10 @@ func (r *Runner) withRedirsOwnedBy(ctx context.Context, rs []*syntax.Redirect, o
 			// suspension to cover.
 			r.unjudged = true
 		}
+		// And where the refusal ends the shell, a compound command is
+		// one the shell runs itself, except the parentheses. See
+		// endsTheShellOverABadTarget.
+		r.endsTheShellOverABadTarget(owner == redirOwnerThisShell)
 		return nil
 	}
 	return body()
@@ -9963,14 +9969,7 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 		// One dialect ends the shell over a `<&word` that named something
 		// other than a descriptor, and the boundary is the *command*: the
 		// same word on an external command complains and carries on there.
-		// A function is not a builtin here — the redirection is the caller's
-		// and the shell it would end is the same one either way, and no
-		// measurement puts a function on the fatal side.
-		_, isBuiltin := r.lookupBuiltin(argv[0])
-		_, isFunc := r.funcs[argv[0]]
-		if r.badDupTarget && !isFunc && isBuiltin {
-			r.fatalQuiet()
-		}
+		r.endsTheShellOverABadTarget(owner == redirOwnerThisShell)
 		r.applyArrayOperandsPastAFailedOpen(ctx, c)
 		return nil
 	}

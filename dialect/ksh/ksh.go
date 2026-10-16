@@ -3511,6 +3511,11 @@ func Semantics() interp.Semantics {
 	// `{v}<&$w-` receives, so the name answers with `$w`'s own number.
 	s.FdMove = interp.FdMoveRelocates
 	s.DuplicationTargetError = interp.DuplicationTargetErrorCarriesOn
+	// A process substitution is a word of its own in ksh93u+, so a target
+	// never has more after one; answered for the shape all the same, which
+	// is what opening the path does (#6766). See
+	// interp.Semantics.SubstitutionTargetWithMoreIsRefused.
+	s.SubstitutionTargetWithMoreIsRefused = interp.No
 	// Fatal to `export` and `readonly` and not to `unset`, which prints the
 	// same kind of complaint, returns 1 and carries on. Not `unset` being
 	// less special: a bad *option* to it is fatal, just above.

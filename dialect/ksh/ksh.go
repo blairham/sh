@@ -1326,13 +1326,27 @@ func Semantics() interp.Semantics {
 	// letter here, which Semantics.ExportOptions is the statement of — it is
 	// empty in this dialect, so `export -A` is a bad option and the question has
 	// no line to be about. Measured 2026-09-23.
-	// unanswered MixedTableLiteral, EmptyKeyInATableLiteral: a table literal
-	// mixing `[key]=` heads with bare words is refused while the program is
-	// *read* here — syntax.Dialect.ArrayLiteralShapeFollowsTheFirstElement is
-	// what does it — so no run reaches either question. Measured 2026-09-23,
-	// `typeset -A a; a=([zero]=5 four)` is `syntax error at line 3: `four'
-	// unexpected` and nothing runs, and an all-subscripted literal carrying
-	// `[""]=` is refused the same way.
+	// unanswered MixedTableLiteral: a table literal mixing `[key]=` heads with
+	// bare words is refused while the program is *read* here —
+	// syntax.Dialect.ArrayLiteralShapeFollowsTheFirstElement is what does it —
+	// so no run reaches the question. Measured 2026-09-23, `typeset -A a;
+	// a=([zero]=5 four)` is `syntax error at line 3: `four' unexpected` and
+	// nothing runs; re-measured 2026-10-15, `typeset -A m=([x]=1 2)` is still
+	// `` `2' unexpected`` at 3.
+	//
+	// An **empty key** in an all-subscripted literal is stored, the reading
+	// zsh gives. This preset used to leave it unanswered on a note that
+	// `[""]=` was refused the same way as the mixture, and on ksh93u+
+	// 2012-08-01 it is not: measured 2026-10-15 by script file and by `-c`,
+	// `typeset -A a; a=([""]=1 [b]=2)` lists `typeset -A a=(['']=1 [b]=2)`
+	// at 0, and `[$e]=` with `e` empty, `['']=`, the `+=` spelling and a
+	// repeated `[""]=` (the last one wins) all store it. Brackets written
+	// with nothing between them are another matter — `g=([]=x)` is refused
+	// while the program is read, which
+	// syntax.Dialect.EmptyAssignSubscriptIsASyntaxError carries. The bare
+	// shape never gets here: BareElementsInATableLiteralEndTheScript below
+	// refuses it first (#6607).
+	s.EmptyKeyInATableLiteral = interp.EmptyKeyInATableLiteralAccepted
 	// unanswered UmaskPermissionCopyBesideLetters: a copy is `bad format`
 	// here whatever is beside it — the line above is that refusal — so a
 	// clause holding a copy and a letter never reaches the question.

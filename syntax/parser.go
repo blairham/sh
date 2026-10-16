@@ -4840,6 +4840,14 @@ func (p *Parser) parseAssign(h assignHead) *Assign {
 			if p.refuseProcSubstOutOfPlace(el) {
 				break
 			}
+			if subscripted && p.dialect.EmptyAssignSubscriptIsASyntaxError && emptyElementSubscript(el) {
+				// `g=([]=x)`: the same brackets with nothing between them that
+				// `a[]=v` is refused for, and refused the same way, while the
+				// program is read. Only in the keyed shape — after a bare
+				// first element `[]=x` is text, and is taken as text. See
+				// [Dialect.EmptyAssignSubscriptIsASyntaxError] (#6607).
+				p.failEmptyAssignSubscript(at.Pos)
+			}
 			a.Elems = append(a.Elems, WordElem(el))
 			if p.skipArrayElementSeparators(true) {
 				break

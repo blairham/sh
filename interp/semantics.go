@@ -14277,8 +14277,13 @@ type Semantics struct {
 	// Diagnostics.EmptyKeyInATableLiteralPair and
 	// Diagnostics.EmptyKeyInATableLiteralElement.
 	//
-	// unpinned ksh: a mixed literal is refused at the read and an all-subscripted
-	// one carrying `[""]=` is the same refusal, so no run of its reaches this.
+	// ksh93u+ 2012-08-01 stores it, zsh's answer: measured 2026-10-15,
+	// `typeset -A h; h=([p]=1 [""]=x [r]=2)` lists all three at 0. Its bare
+	// shape never reaches here — a bare element in a table literal ends the
+	// script there first, see BareElementsInATableLiteralEndTheScript — and
+	// `[]=x`, brackets with nothing written between them, is refused while
+	// the program is read (#6607).
+	//
 	// unpinned dash, ash: neither has tables to put a literal on.
 	EmptyKeyInATableLiteral EmptyKeyInATableLiteralPolicy
 

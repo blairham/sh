@@ -759,7 +759,6 @@ ksh   CoprocEndsInAnArray
 ksh   DeclarationMayShadowAnEnclosingScopesReadonly
 ksh   DeclareGlobalReachesPastALocal
 ksh   EchoLastEscapeFlagWins
-ksh   EmptyKeyInATableLiteral
 ksh   EmptySubscriptToAnAssignment
 ksh   ErrtraceReachesSubshells
 ksh   ExportContainerLetterNeedsAValue

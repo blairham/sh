@@ -329,6 +329,14 @@ type Lexer struct {
 	// Exactly the shape inPattern has, for exactly the same reason.
 	inArgument bool
 
+	// inCommandArguments is set while the token being read follows a
+	// simple command's command word — the narrower half of inArgument,
+	// which a `for` list, an array literal and a nameless function's call
+	// words also set. One dialect reads a `{name}` with blanks before its
+	// operator as a descriptor variable there and nowhere else. See
+	// [Dialect.FdVariableAcrossBlanks].
+	inCommandArguments bool
+
 	// inDeclarationOperand is set while the token being read stands where a
 	// *declaration utility's* operand does — behind `typeset`, `local`,
 	// `export` or `readonly` written the way the dialect requires, and
@@ -1812,13 +1820,19 @@ func (l *Lexer) tryFdVariable() (Token, bool) {
 		return Token{}, false
 	}
 	// The same strict adjacency an IO number has: anything but a
-	// redirection after the brace and this is an ordinary word.
-	if c := l.peekAt(n + 1); c != '<' && c != '>' {
-		return Token{}, false
+	// redirection after the brace and this is an ordinary word — except in
+	// the dialect that reads across blanks to an operator there. See
+	// Dialect.FdVariableAcrossBlanks.
+	op := n + 1
+	if c := l.peekAt(op); c != '<' && c != '>' {
+		var ok bool
+		if op, ok = l.fdVariableOperatorAcrossBlanks(op); !ok {
+			return Token{}, false
+		}
 	}
 	// And the same exception: `{a}<->` is a word, not a descriptor the shell
 	// would pick.
-	if _, ok := l.numericRangeAt(n + 1); ok {
+	if _, ok := l.numericRangeAt(op); ok {
 		return Token{}, false
 	}
 	start := l.pos()
@@ -1833,6 +1847,33 @@ func (l *Lexer) tryFdVariable() (Token, bool) {
 		Text:  text,
 		Spans: []Span{{Kind: Literal, Value: text, Quoting: Unquoted, Pos: start}},
 	}, true
+}
+
+// fdVariableOperatorAcrossBlanks reports where a redirection operator
+// begins after the blanks at n, in the dialect that reads a `{name}` across
+// them, and whether one does. Only among a command's arguments, and only an
+// operator with no number of its own: a digit, a word or a newline in
+// between leaves the `{name}` a word. A `<(` or `>(` is a process
+// substitution, which is a word too.
+func (l *Lexer) fdVariableOperatorAcrossBlanks(n int) (int, bool) {
+	if !l.dialect.FdVariableAcrossBlanks || !l.inCommandArguments || l.inArrayLiteral {
+		return 0, false
+	}
+	for {
+		switch c := l.peekAt(n); {
+		case c == ' ' || c == '\t':
+			n++
+			continue
+		case c == '\\' && l.peekAt(n+1) == '\n':
+			n += 2
+			continue
+		}
+		break
+	}
+	if c := l.peekAt(n); (c != '<' && c != '>') || l.peekAt(n+1) == '(' {
+		return 0, false
+	}
+	return n, true
 }
 
 // anyBraceWordEnd reads on from n to where a brace word could close: the

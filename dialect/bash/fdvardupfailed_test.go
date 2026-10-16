@@ -38,3 +38,13 @@ func TestAnFdVariableDuplicationOfAClosedDescriptorSaysSoFirst(t *testing.T) {
 		})
 	}
 }
+
+// TestAnFdVariableNeedsItsOperatorAdjacent — a blank between `{v}` and the
+// operator leaves `{v}` an argument here, where zsh reads across it (#6587).
+// bash 5.3.20, measured 2026-10-15.
+func TestAnFdVariableNeedsItsOperatorAdjacent(t *testing.T) {
+	out, _ := runBashSplit(t, "echo {v} >/dev/null; echo \"[$v]\"\n")
+	if out != "[]\n" {
+		t.Errorf("out %q, want the word written to the file and v unset", out)
+	}
+}

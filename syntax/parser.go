@@ -4162,7 +4162,11 @@ func (p *Parser) parseSimple() Command {
 	// ends it has already been read by the time this returns, so restoring
 	// the flag here is soon enough and is the only place that catches every
 	// way out.
-	defer func() { p.lex.inArgument, p.lex.inDeclarationOperand = false, false }()
+	// inCommandArguments with them, which the next command's first token
+	// must not see. See Lexer.inCommandArguments.
+	defer func() {
+		p.lex.inArgument, p.lex.inDeclarationOperand, p.lex.inCommandArguments = false, false, false
+	}()
 	// And a refusal armed for a name in this command and never met at its
 	// parentheses is dropped with it. `echo $x GA () { … }` arms one — the
 	// alias is followed by `()` — and is then a parse error by the route a
@@ -4386,6 +4390,7 @@ func (p *Parser) parseSimple() Command {
 				p.lex.inDeclarationOperand = true
 			}
 			p.lex.inArgument = true
+			p.lex.inCommandArguments = true
 			c.Args = append(c.Args, p.word())
 		case p.at(TokLeftParen) && len(c.Assigns) == 0 && len(c.Redirs) > 0 &&
 			p.dialect.FunctionMultipleNames && p.argsCanBeFuncNames(c.Args) &&

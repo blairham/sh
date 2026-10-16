@@ -289,9 +289,10 @@ func PromptStyle() interp.PromptStyle {
 			"then":   {Text: "then", Replaces: true},
 			"else":   {Text: "else", Replaces: true},
 			"elif":   {Text: "elif", Replaces: true},
-			// Two words drawn only while a command runs, never by a
-			// continuation prompt: a running `elif`'s body, and `repeat`.
-			// See interp/openruntime.go.
+			// An `elif`'s body, drawn by a continuation prompt once its
+			// `then` is read (measured 2026-10-16, `if :; then :; elif :;
+			// then` draws `elif-then`) and while it runs; and `repeat`,
+			// drawn only while a command runs. See interp/openruntime.go.
 			"elif-then": {Text: "elif-then", Replaces: true},
 			"repeat":    {Text: "repeat"},
 			"{":         {Text: "cursh"},

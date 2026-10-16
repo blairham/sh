@@ -8467,6 +8467,39 @@ type Dialect struct {
 	//	case a in a) <x                 `case' — an arm is the exception
 	RedirectionOnlyCommandNamesTheTokenAfterIt bool
 
+	// UnclosedCaseArmIsNumberedAtItsCase numbers a run-out inside a `case`
+	// arm's command list — after the arm's `)` and before its terminator —
+	// at the line the `case` was read on, rather than at the line the input
+	// ran out on. ksh93u+ alone, the one shell whose wording carries a line
+	// for this refusal. Measured 2026-10-16 on ksh93u+ 2012-08-01 `-c`, a
+	// script file and standard input (#6681):
+	//
+	//	case a in a) : ⏎ echo ok             line 1
+	//	echo x ⏎ case a in a) : ⏎ echo ok    line 2 — the `case`'s line
+	//	case a in ⏎ a) ⏎ : ⏎ echo ok         line 1
+	//	case a ⏎ in a) : ⏎ echo              line 1 — the `case`, not the `in`
+	//	case a in a) :;; b) : ⏎ echo         line 1 — any arm
+	//	case a in a) : | ⏎ echo              line 1
+	//	case a in ⏎ a) ⏎ case b in ⏎ b) : …  line 3 — the innermost `case`
+	//	case a in a) :;; ⏎                   line 2 — between arms
+	//	case a in ⏎ a                        line 2 — in a pattern list
+	//	case a in a) if :; then : ⏎ echo     line 2 — another construct inside
+	UnclosedCaseArmIsNumberedAtItsCase bool
+
+	// ElifIsNamedByItsIf names an `elif` the input ran out in by the `if` it
+	// continues, and the body after that `elif`'s `then` by the `then`. The
+	// one shell that names an innermost keyword at all, ksh93u+. Measured
+	// 2026-10-16 on ksh93u+ 2012-08-01 `-c` with `echo ok` on the line after
+	// each (#6682):
+	//
+	//	if :; then :; elif :                 `if' unmatched
+	//	if :; then :; elif                   `if' unmatched
+	//	if :; then :; elif : ||              `if' unmatched
+	//	if :; then :; elif :; then           `then' unmatched
+	//	if :; then :; elif :; then :         `then' unmatched
+	//	if :; then :; elif :; then :; else : `else' unmatched — as for an `if`
+	ElifIsNamedByItsIf bool
+
 	// FdVariablePositional lets the name inside those braces begin with a
 	// digit, which is how a *positional parameter* names a descriptor:
 	// `exec {1}>&-` closes the one whose number is in `$1`.

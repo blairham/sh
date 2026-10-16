@@ -102,7 +102,7 @@ func TestAnUnterminatedCaseNamesTheArmsTerminatorHere(t *testing.T) {
 		// It is the arm's own, so a second arm clears the first one's — the
 		// pair being what says it does not simply linger.
 		{"case x in x) : ;; y) : ; ;;\n", "syntax error at line 2: `;;' unmatched"},
-		{"case x in x) : ; ;; y) : ;\n", "syntax error at line 2: `case' unmatched"},
+		{"case x in x) : ; ;; y) : ;\n", "syntax error at line 1: `case' unmatched"},
 		// And a construct closing over it takes it away, exactly as it takes
 		// away a stepped-over separator.
 		{"case x in x) : ; ;; esac\n{\n", "syntax error at line 3: `{' unmatched"},
@@ -117,10 +117,12 @@ func TestAnUnterminatedCaseNamesTheArmsTerminatorHere(t *testing.T) {
 		{"case x in x) ; ;&\n", "syntax error at line 2: `;' unmatched"},
 		// The arm with no terminator at all is unchanged, which is the
 		// control: these are the rows #1207 closed on and they still answer
-		// the keyword.
-		{"case x in x) false\n", "syntax error at line 2: `case' unmatched"},
-		{"case x in x) ;\n", "syntax error at line 2: `case' unmatched"},
-		{"case x in x) : ;; y) : ;\n", "syntax error at line 2: `case' unmatched"},
+		// the keyword, numbered at the line the `case` was read on (#6681;
+		// re-measured 2026-10-16 on /bin/ksh from a file, with -n and on
+		// standard input alike).
+		{"case x in x) false\n", "syntax error at line 1: `case' unmatched"},
+		{"case x in x) ;\n", "syntax error at line 1: `case' unmatched"},
+		{"case x in x) : ;; y) : ;\n", "syntax error at line 1: `case' unmatched"},
 	} {
 		_, err := syntax.Parse(c.src, ksh.Dialect())
 		if err == nil {

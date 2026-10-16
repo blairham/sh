@@ -49,6 +49,12 @@ func TestWhatIsStillOpen(t *testing.T) {
 		{"until true\ndo\n", "until do*"},
 		{"select x in a\ndo\n", "select"},
 		{"if true\nthen\n:\nelif false\n", "if elif*"},
+		// The `then` after an `elif` is a clause of its own, and zsh draws
+		// it `elif-then` — measured 2026-10-16 on zsh 5.9.2 with
+		// PS2='[%_]', both after `elif :; then` and after `then` on a line
+		// of its own (#6682).
+		{"if true\nthen\n:\nelif false\nthen\n", "if elif-then*"},
+		{"if true\nthen\n:\nelif false; then :\n", "if elif-then*"},
 		// Inside something, and not displacing it.
 		{"if true\nthen\ntrue &&\n", "if then* &&*"},
 		// And stops being open once it has one. The input below runs out

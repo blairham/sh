@@ -542,7 +542,7 @@ func (r *Runner) assignArrayLiteral(name string, elems []*syntax.ArrayElem, appe
 		// builds a subscripted literal as it goes. Before
 		// literalSubscriptIsAKey, because a half-expanded list is not
 		// evidence about the shape either.
-		r.keepWhatAFailedLiteralStored(name, elems, parsed, appendTo, false)
+		r.keepWhatAFailedLiteralStored(name, elems, parsed, failedLiteral{appendTo: appendTo})
 		return
 	}
 	if r.literalSubscriptIsAKey(name, parsed) {

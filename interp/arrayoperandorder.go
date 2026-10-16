@@ -93,8 +93,16 @@ func (r *Runner) expandArrayOperands(tableLetterAhead, indexedLetter bool) bool 
 			// time: `typeset -a a=(5 $((1/0)) $(echo AFTER >&2))` reported
 			// the division twice and ran `AFTER` (#6606). What a
 			// subscripted literal had stored stays, in the column that
-			// keeps it.
-			r.keepWhatAFailedLiteralStored(a.Name, a.Elems, parsed, a.Append, indexedLetter)
+			// keeps it — and in the column whose container letter re-creates
+			// the name, the name of that kind with nothing in it (#6705).
+			how := failedLiteral{appendTo: a.Append, operand: true}
+			switch {
+			case tableLetterAhead:
+				how.letter = 'A'
+			case indexedLetter:
+				how.letter = 'a'
+			}
+			r.keepWhatAFailedLiteralStored(a.Name, a.Elems, parsed, how)
 			return false
 		}
 		op.expanded = &expandedAssign{

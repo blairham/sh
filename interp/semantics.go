@@ -4983,6 +4983,63 @@ type Semantics struct {
 	// TestAFailedSubscriptedLiteralKeepsWhatItStored.
 	FailedSubscriptedLiteralKeepsWhatItStored Answer
 
+	// FailedTableAppendKeepsThePairsItAdded keeps the pairs a bare append
+	// onto a table had added before one of its elements failed to expand,
+	// plain pairs as well as subscripted ones. Measured 2026-10-15 from a
+	// file, each row after `typeset -A m; m=([k]=old)`, read by an exit trap:
+	//
+	//	written                                 bash 5.3.20            zsh, ksh93
+	//	m+=([k]=new [i]=$((1/0)) [l]=z)         ([k]=new)              (see below)
+	//	m+=([j]=$(echo new) [i]=${u?boom})      ([k]=old [j]=new)      (see below)
+	//	m+=(j new i $((1/0)))                   ([k]=old [j]=new)      ([k]=old)
+	//	m+=(j new $(echo i) $(echo q) l $((1/0)))  (… [j]=new [i]=q)   ([k]=old)
+	//	declare -A m+=([j]=new [i]=$((1/0)))    ([k]=old)              ([k]=old)
+	//	m=([j]=new [k]=$((1/0)))                ([k]=old)              (see below)
+	//	a=(1 2); a+=([5]=x [6]=$((1/0)))        (1 2)                  (1 2)
+	//
+	// So bash streams a bare append onto a table one pair at a time, and a
+	// key whose value never came is dropped; it does not stream an
+	// assignment, a declaration's operand, or an append onto an indexed
+	// array. zsh keeps `old` on every row. ksh93 keeps the subscripted rows
+	// by FailedSubscriptedLiteralKeepsWhatItStored, which is asked first,
+	// and nothing of a plain one. See Runner.keepWhatAFailedLiteralStored
+	// (#6704).
+	//
+	// Asked only once an append onto a table has failed; dash and BusyBox
+	// ash have no array literal.
+	//
+	// unpinned bash: no corpus row fails partway through a table append;
+	// pinned by TestAFailedTableAppendKeepsThePairsItAdded.
+	//
+	// unpinned zsh: the same reach, pinned by
+	// TestAFailedTableAppendKeepsNothing.
+	//
+	// unpinned ksh: the same reach, pinned by
+	// TestAFailedTableAppendKeepsOnlySubscriptedPairs.
+	FailedTableAppendKeepsThePairsItAdded Answer
+
+	// FailedOperandLeavesTheLettersKind leaves a name of a declaration's
+	// container kind, with no value and no other attribute, when the
+	// declaration carries `-a` or `-A` and its literal fails to expand:
+	// `a=(1 2); typeset -a a=(5 $((1/0)))` leaves `typeset -a a`. Measured
+	// 2026-10-15 on ksh93u+ 2012-08-01 from a file; bash 5.3.20 and zsh 5.9.2
+	// leave the name as it was on every row, as ksh93 does with no letter
+	// or with `+=`. The rows are at Runner.startOverAsTheLettersKind
+	// (#6705).
+	//
+	// Asked only once a declaration's literal operand has failed under a
+	// container letter; dash and BusyBox ash have no array literal.
+	//
+	// unpinned bash: no corpus row fails a declaration's literal; pinned by
+	// TestAFailedOperandKeepsTheNameWithAnyLetter.
+	//
+	// unpinned zsh: the same reach, pinned by
+	// TestAFailedOperandKeepsTheNameWithAnyLetter.
+	//
+	// unpinned ksh: the same reach, pinned by
+	// TestAFailedPlainLiteralWithALetterLeavesThatKind.
+	FailedOperandLeavesTheLettersKind Answer
+
 	// ElementSubscriptIsExpandedBeforeTheValue expands the words of an
 	// element write's subscript before its value: `a[$(f)]=$(g)` runs `f`
 	// first. Measured 2026-10-15 under `-c` and a script file, traced and

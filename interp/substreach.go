@@ -154,8 +154,13 @@ type reachSet struct {
 	slotGen [5][]int
 	// base keeps one call's queue marks from being read as another's: a
 	// mark is base plus the offset plus one, and base moves past every
-	// offset a call could have written.
+	// offset the call before could have written. span is how far that is:
+	// the previous call's subject, which since the set is handed from one
+	// expansion to the next (see release) can be longer than this one's —
+	// moving by this call's own length instead read a longer subject's
+	// marks as this one's and dropped states (#6819).
 	base int
+	span int
 	// endBuf is the end table newReachEnds binds to a subject, kept with
 	// the set so that a set reused for the next expansion brings it along.
 	endBuf []bool
@@ -604,7 +609,8 @@ func (r *reachSet) ends(value string, i int, stop, end []bool, marked []int) ([]
 	for k := range r.slots {
 		r.slots[k] = r.slots[k][:0]
 	}
-	r.base += len(value) + 2
+	r.base += r.span
+	r.span = len(value) + 2
 	pending := r.push(i, r.start)
 	for x := i; x <= len(value) && pending > 0; x++ {
 		slot := x % 5

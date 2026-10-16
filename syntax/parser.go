@@ -3038,8 +3038,25 @@ func (p *Parser) withRedirs(c Command) Command {
 // same place. Read again in an argument's position rather than rebuilt from
 // the characters, so the word ends wherever an argument's would.
 func (p *Parser) wholeBraceWord(tok Token) Token {
-	if tok.Kind != TokWord || tok.Text != "{" || !tok.endedByRule ||
-		!p.braceWordAt.IsValid() || tok.Pos != p.braceWordAt {
+	if !p.braceWordAt.IsValid() || tok.Pos != p.braceWordAt {
+		return tok
+	}
+	return p.braceWordAsAnArgument(tok)
+}
+
+// braceWordAsAnArgument is the word a bare `{` the lexer split off begins,
+// read again where an argument stands, or tok itself when tok is not such a
+// brace. It is the one reading behind every refusal that names the whole
+// word: [Parser.wholeBraceWord] behind a compound, and a loop's variable,
+// where zsh names `{v}` in `for {v} in a` (#6615).
+//
+// A `{name}` touching a redirection reads as the descriptor variable in an
+// argument's place, and its text is still the word named: `if :; then :; fi
+// {v}</dev/null` and `for {v}</dev/null` both say `{v}` in zsh, which is
+// what they said while the lexer still read that token at a command's
+// beginning (#6616).
+func (p *Parser) braceWordAsAnArgument(tok Token) Token {
+	if tok.Kind != TokWord || tok.Text != "{" || !tok.endedByRule {
 		return tok
 	}
 	off := int(tok.Pos.Offset)
@@ -3050,7 +3067,8 @@ func (p *Parser) wholeBraceWord(tok Token) Token {
 	probe := newLexer(p.lex.src[off:], &p.dialect)
 	probe.inArgument = true
 	word := probe.Next()
-	if word.Kind != TokWord || probe.Err() != nil {
+	if probe.Err() != nil || (word.Kind != TokWord &&
+		(word.Kind != TokIONumber || !strings.HasPrefix(word.Text, "{"))) {
 		return tok
 	}
 	text := word.Text
@@ -8204,9 +8222,16 @@ func (p *Parser) forName(word string) (name, refused string, ok bool) {
 		return "", "", false
 	}
 	if p.err == nil {
+		named := p.forNameAsWritten()
+		if whole := p.braceWordAsAnArgument(p.tok); whole.Text != p.tok.Text {
+			// The lexer split the brace off because a loop's variable
+			// stands where a command could; zsh names the word it begins.
+			// See [Parser.braceWordAsAnArgument].
+			named = whole.Text
+		}
 		p.err = &Error{
 			Pos: p.tok.Pos, Kind: ErrForName,
-			Token: p.forNameAsWritten(), Class: p.tokenClass(false),
+			Token: named, Class: p.tokenClass(false),
 			Msg: "expected a name after `" + word + "`",
 		}
 	}

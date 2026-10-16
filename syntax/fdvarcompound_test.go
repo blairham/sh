@@ -70,6 +70,10 @@ func TestAnFdVariableAfterABraceGroupIsNamedWholeWithoutABareBrace(t *testing.T)
 // The controls: the same text in a grammar that reads it, a numbered
 // redirection behind a compound, and a `{name}` on a simple command — each
 // of which the refusing grammar must still take.
+//
+// Without the bare brace, because with it a `{` where a command may begin is
+// the reserved word before it is a descriptor's name, and `{v}</dev/null`
+// there is a group and not this construct at all (#6616).
 func TestAnFdVariableAfterACompoundAsksOnlyThere(t *testing.T) {
 	t.Parallel()
 	for _, c := range []struct {
@@ -82,7 +86,7 @@ func TestAnFdVariableAfterACompoundAsksOnlyThere(t *testing.T) {
 		{"true {v}</dev/null", true},
 		{"for i (1) : {v}</dev/null", true},
 	} {
-		d := refusingDialect(true)
+		d := refusingDialect(false)
 		d.FdVariableRefusedAfterACompound = c.refuse
 		if _, err := syntax.Parse(c.src, d); err != nil {
 			t.Errorf("%q (refusing=%v): %v", c.src, c.refuse, err)

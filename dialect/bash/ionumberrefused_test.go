@@ -13,7 +13,9 @@ import (
 // A refused IO number is named by its digits, and a refused `{name}` in front
 // of a redirection operator by the text around it — one byte past the brace
 // and one in front of the name unless that is a blank — in the sentence
-// without "unexpected token" (#6552). Measured 2026-10-15 on bash 5.3.20 with
+// without "unexpected token" (#6552) — and an array literal's first element,
+// against its `(`, from the front of the assignment. Measured 2026-10-15 and
+// 2026-10-16 on bash 5.3.20 with
 // `-c '<program>'` and a script file alike; the table is on
 // interp.Diagnostics.SyntaxUnexpectedFdVariableReadText.
 func TestARefusedIONumberIsNamedAsBashNamesIt(t *testing.T) {
@@ -39,6 +41,14 @@ func TestARefusedIONumberIsNamedAsBashNamesIt(t *testing.T) {
 		{"case x in a) ;;\n{v}<x) esac\n", "syntax error near `{v}<'"},
 		{"case {v}<x in x) esac\n", "syntax error near `{v}<'"},
 		{"for i in a {v}<x; do :; done\n", "syntax error near `{v}<'"},
+		{"a=({v}>/dev/null)\n", "syntax error near `a=({v}>'"},
+		{"a+=({v}>/dev/null)\n", "syntax error near `a+=({v}>'"},
+		{"a[1]=({v}>/dev/null)\n", "syntax error near `a[1]=({v}>'"},
+		{"x=1 a=({v}>/dev/null)\n", "syntax error near `a=({v}>'"},
+		{"declare a=({v}>/dev/null)\n", "syntax error near `a=({v}>'"},
+		{"a=( {v}>/dev/null)\n", "syntax error near `{v}>'"},
+		{"a=(x {v}>/dev/null)\n", "syntax error near `{v}>'"},
+		{"a=(); for i in {v}>x; do :; done\n", "syntax error near `{v}>'"},
 	} {
 		_, err := syntax.Parse(tc.src, bash.Dialect())
 		if err == nil {

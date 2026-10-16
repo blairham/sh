@@ -461,11 +461,17 @@ type Parser struct {
 
 	inCaseWord bool
 
-	// itemListStoppedAt is where the token stood that ended the item list of
-	// a `for` or a `select` — after `in`, or inside the parentheses of the
-	// short form — so a refusal of that token can say it stood among the
-	// list's words. See Error.InItemList.
-	itemListStoppedAt Pos
+	// wordListStoppedAt is where the token stood that ended a list of words:
+	// the item list of a `for` or a `select` — after `in`, or inside the
+	// parentheses of the short form — or the elements of an array literal.
+	// A refusal of that token can then say it stood among the list's words.
+	// See Error.InWordList.
+	wordListStoppedAt Pos
+	// wordListReadFrom is, where the token at wordListStoppedAt is an array
+	// literal's first element written against its `(`, where the assignment
+	// that opened the literal began. One dialect quotes everything from
+	// there in its refusal of a `{name}` — see Parser.ioNumberSurroundings.
+	wordListReadFrom Pos
 }
 
 // maxParamDepth is how far `${x:-${y:-…}}` may nest before the parser stops.
@@ -1468,7 +1474,7 @@ func (p *Parser) failUnexpectedAt(tok Token, expected string, plain bool) {
 		FdVariable: fdVariable,
 
 		IONumberOperator: operator, InCaseWord: p.inCaseWord,
-		InItemList:         tok.Pos.IsValid() && tok.Pos == p.itemListStoppedAt,
+		InWordList:         tok.Pos.IsValid() && tok.Pos == p.wordListStoppedAt,
 		FdVariableReadText: readText,
 
 		AliasSource: p.aliasSource,
@@ -1501,6 +1507,15 @@ func (p *Parser) ioNumberSurroundings(tok Token, fdVariable bool) (operator, rea
 	}
 	if from > 0 && !strings.ContainsRune(" \t\n", rune(src[from-1])) {
 		from--
+	}
+	// The first element of an array literal, against its `(`, is quoted from
+	// the front of the assignment instead: `a=({v}>/dev/null)` is ``syntax
+	// error near `a=({v}>'`` on bash 5.3.20, and so are `a+=(`, `a[1]=(`
+	// and `declare a=(`, measured 2026-10-16. A blank after the `(` gives the
+	// ordinary `{v}>`.
+	if tok.Pos == p.wordListStoppedAt && p.wordListReadFrom.IsValid() &&
+		int(p.wordListReadFrom.Offset) < from {
+		from = int(p.wordListReadFrom.Offset)
 	}
 	return operator, src[from : to+1]
 }
@@ -4991,6 +5006,10 @@ func (p *Parser) parseAssign(h assignHead) *Assign {
 				break
 			}
 		}
+		p.wordListStoppedAt, p.wordListReadFrom = p.tok.Pos, Pos{}
+		if p.tok.Pos.Offset == opening.Offset+1 {
+			p.wordListReadFrom = a.Start
+		}
 		if !p.at(TokRightParen) && p.giveUpOnTheArray(saved, opening) {
 			p.lex.inArrayLiteral = savedArray
 			p.lex.inDeclarationOperand = savedDecl
@@ -8185,7 +8204,7 @@ func (p *Parser) itemList(items *[]*Word, end Pos) Pos {
 		}
 		*items = append(*items, w)
 	}
-	p.itemListStoppedAt = p.tok.Pos
+	p.wordListStoppedAt, p.wordListReadFrom = p.tok.Pos, Pos{}
 	p.lex.inArgument = saved
 	if p.at(TokLeftParen) && p.refuseParenAfterAName(*items) {
 		// The same refusal a command's only word gets, and for a list of
@@ -8484,7 +8503,7 @@ func (p *Parser) shortItems() (items []*Word, end Pos) {
 		items = append(items, p.word())
 		p.skipNewlines()
 	}
-	p.itemListStoppedAt = p.tok.Pos
+	p.wordListStoppedAt, p.wordListReadFrom = p.tok.Pos, Pos{}
 	p.lex.inArgument = saved
 	end = p.tok.End
 	if !p.at(TokRightParen) {

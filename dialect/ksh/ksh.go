@@ -5653,6 +5653,12 @@ func Diagnostics() interp.Diagnostics {
 			"let": true,
 		},
 		ReadonlyVariableInRead: "%[2]s: warning: %[1]s: is read only",
+		// And the array `read -A` fills, which is not called a warning. See
+		// ReadonlyVariableInReadArray (#6811).
+		ReadonlyVariableInReadArray: "%[2]s: %[1]s: is read only",
+		// A frozen table's element named on three routes. See
+		// FrozenElementRefusalNamesTheElement (#6734, #6774, #6775).
+		FrozenElementRefusalNamesTheElement: true,
 		// A store under a table's empty key, and only under `set -x`. See
 		// interp.Diagnostics.EmptyTableKeyTraced (#6609).
 		EmptyTableKeyTraced: "warning: adding empty subscript",

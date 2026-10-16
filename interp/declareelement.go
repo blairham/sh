@@ -97,6 +97,15 @@ func (r *Runner) declareElement(base string, leading []string, sub, value string
 	// `declare t[k]=z` over a frozen table. At the top level, where no
 	// shadow is taken, this shell already refused all four — which is what
 	// says it is the shadow and not the subscript (#4163).
+	if len(leading) > 0 && r.diag().FrozenElementRefusalNamesTheElement && r.freezeRefuses(base, assignedByDeclaration) {
+		// A chain, named by its first element as it resolved: `readonly r;
+		// typeset r[1+1][2]=z` is `r[2]: is read only`. See
+		// Diagnostics.FrozenElementRefusalNamesTheElement (#6734).
+		if root, ok := r.declaredChainRoot(base, leading[0], tableBefore); ok {
+			r.refuseReadonlySpokenAs(base, base+"["+root+"]", assignedByDeclaration)
+		}
+		return
+	}
 	if r.refuseReadonly(base, assignedByDeclaration) {
 		// By the base's name, which is the same rule `unset a[0]` follows.
 		return

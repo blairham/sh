@@ -7484,6 +7484,34 @@ type Diagnostics struct {
 	// other three columns want — dash and BusyBox ash word `read` exactly as
 	// they word `export`, and bash names no builtin here at all (#3208).
 	ReadonlyVariableInRead string
+	// ReadonlyVariableInReadArray replaces ReadonlyVariableInRead where the
+	// refused name is the one `read -A` fills. ksh93 calls the scalar refusal
+	// a warning and drops the word for the array: measured 2026-10-16 on
+	// ksh93u+, `typeset -r v; read -A v <<< x` is `read: v: is read only` at
+	// 1, where `read v <<< x` is `read: warning: v: is read only` at 1. The
+	// status and the carrying-on are the same, so only the sentence moves.
+	// The same two verbs; empty falls back to ReadonlyVariableInRead (#6811).
+	ReadonlyVariableInReadArray string
+	// FrozenElementRefusalNamesTheElement names the element, rather than the
+	// array, in the refusal of three writes to a frozen name, and only those
+	// three. Measured 2026-10-16 on ksh93u+ 2012-08-01, `-c`:
+	//
+	//	typeset -A a; readonly a; read 'a["p q"]'   read: warning: a["p q"]: is read only
+	//	  ... read -A 'a[k]'                        read: a[k]: is read only
+	//	  ... read x 'a[k]'                         read: warning: a: is read only
+	//	k='p q'; ... a[$k]=(p)                      a[p q]: is read only
+	//	readonly r; r[1+1][2]=z                     r[2]: is read only
+	//	typeset -A r; readonly r; r[$k][2]=z        r[p q]: is read only
+	//	  ... a[k]=p, a[k]+=p, typeset a[k]=p        a: is read only
+	//	b=(1 2); readonly b; read 'b[1]'            read: warning: b: is read only
+	//
+	// So `read`'s *first* name, when it is a table's element, is named as the
+	// operand was written; an element literal under a table's key is named
+	// with the key it came to; and a chained write is named by its first
+	// subscript as it resolved, whatever the root. A scalar element write,
+	// a later `read` name and an indexed `read` operand keep the array's name
+	// (#6734, #6774, #6775).
+	FrozenElementRefusalNamesTheElement bool
 	// ReadonlyRefusalNamesBuiltin is which declaration builtins use that
 	// wording. Empty means none, and the wording is then never reached.
 	//

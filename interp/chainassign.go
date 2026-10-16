@@ -67,7 +67,13 @@ import "github.com/blairham/sh/syntax"
 // interp/elementorder.go (#6604).
 func (r *Runner) assignChainedElement(a *syntax.Assign) {
 	first := a.Leading[0]
-	if r.refuseReadonly(a.Name, assignedAlone) {
+	// Where the dialect names the element, the refusal waits for the first
+	// subscript to resolve, and so for every expansion before it: measured
+	// 2026-10-16 on ksh93u+, `readonly r; r[$(echo S >&2; echo 1)][2]=$(echo
+	// V >&2)` writes S and V and then `r[1]: is read only`, and `i=0;
+	// r[i++][2]=z` says `r[0]`. See Diagnostics.FrozenElementRefusalNamesTheElement.
+	named := r.diag().FrozenElementRefusalNamesTheElement
+	if !named && r.refuseReadonly(a.Name, assignedAlone) {
 		return
 	}
 	// A declared table takes its first subscript as a key, expanded and never
@@ -121,6 +127,17 @@ func (r *Runner) assignChainedElement(a *syntax.Assign) {
 	}
 	if !ok {
 		return
+	}
+	if named {
+		spoken := a.Name + "[" + root + "]"
+		if r.heldFreeze.assign == a {
+			r.heldFreeze.spoken = spoken
+			if r.refuseTheHeldFreeze(a) {
+				return
+			}
+		} else if r.refuseReadonlySpokenAs(a.Name, spoken, assignedAlone) {
+			return
+		}
 	}
 	links, wrote := r.chainWrite(a.Name, held, there, place, rest, last, value, a.Append)
 	if wrote {
@@ -299,4 +316,40 @@ func (r *Runner) declareChainedElement(base string, leading []string, last, valu
 		return
 	}
 	r.chainWrite(base, held, there, place, leading[1:], last, value, appends)
+}
+
+// refuseReadonlySpokenAs is refuseReadonly asked about name and saying spoken
+// in the sentence: an element's refusal in the dialect that names the element.
+// See Diagnostics.FrozenElementRefusalNamesTheElement.
+func (r *Runner) refuseReadonlySpokenAs(name, spoken string, form assignForm) bool {
+	defer func(was string) { r.refusalSpokenAs = was }(r.refusalSpokenAs)
+	r.refusalSpokenAs = spoken
+	return r.refuseReadonly(name, form)
+}
+
+// declaredChainRoot is what a declaration's chain names with its first
+// subscript — the key, or the position it evaluates to — for the refusal that
+// names it. Only the refusal asks, so the subscript is resolved once.
+func (r *Runner) declaredChainRoot(base, first string, tableBefore bool) (string, bool) {
+	key, evaluated, isKey := r.subscriptedOperandKey(base, first, tableBefore)
+	if r.unspecified {
+		return "", false
+	}
+	if isKey && !evaluated {
+		return key, true
+	}
+	idx, err := r.subscriptValue(first)
+	if err != nil {
+		r.fatal("%s\n", r.subscriptFailure(first, err))
+		return "", false
+	}
+	if !isKey && idx < 0 {
+		// Counted back from the end, as the store would count it.
+		if arr, ok := r.arraysLookup(base); ok {
+			if pos, within := r.elemPos(arr, idx); within {
+				return itoa(pos + r.arrayBase()), true
+			}
+		}
+	}
+	return itoa(idx), true
 }

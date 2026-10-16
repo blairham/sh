@@ -58,6 +58,10 @@ import (
 type heldFreeze struct {
 	assign *syntax.Assign
 	name   string
+	// spoken is what the refusal names where that is not name: the element,
+	// in the dialect that names it. See
+	// Diagnostics.FrozenElementRefusalNamesTheElement.
+	spoken string
 }
 
 // frozenOutcome is what Runner.refuseAFrozenAssignment decided.
@@ -93,6 +97,20 @@ func (r *Runner) refuseAFrozenAssignment(a *syntax.Assign) (frozenOutcome, strin
 		return freezeRefusedIt, name
 	}
 	switch {
+	case a.Operand && a.IsArray && a.Index != nil && len(a.Leading) == 0 &&
+		r.diag().FrozenElementRefusalNamesTheElement && r.assocDeclared(name):
+		// A declaration's element literal under a table's key, refused under
+		// the key: `typeset a[k]=(p)` is `a[k]: is read only`. See
+		// Diagnostics.FrozenElementRefusalNamesTheElement (#6774).
+		key, ok := r.assocAssignKey(name, a.Index)
+		if ok {
+			r.refuseReadonlySpokenAs(name, name+"["+key+"]", assignedAlone)
+		}
+		return freezeRefusedIt, name
+	case len(a.Leading) > 0 && !a.Operand && r.diag().FrozenElementRefusalNamesTheElement:
+		// A chain refused under its first element, which waits for that
+		// subscript to resolve. See Runner.assignChainedElement.
+		return freezeWaitsForTheStore, name
 	case a.Operand || a.Members != nil || len(a.Leading) > 0:
 		// A declaration's operand was expanded by the declaration, and a
 		// compound body and a chain of subscripts have stores of their own
@@ -141,6 +159,10 @@ func (r *Runner) refuseTheHeldFreeze(a *syntax.Assign) bool {
 		return false
 	}
 	r.heldFreeze = heldFreeze{}
+	if h.spoken != "" {
+		defer func(was string) { r.refusalSpokenAs = was }(r.refusalSpokenAs)
+		r.refusalSpokenAs = h.spoken
+	}
 	r.refuseAsAFreezeWould(h.name, assignedAlone, "")
 	return true
 }

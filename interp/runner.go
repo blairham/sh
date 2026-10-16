@@ -2261,6 +2261,11 @@ type Runner struct {
 	// than the cell the redirect led to. Empty everywhere else. See
 	// Runner.declarationRefusalNamesTheOperand.
 	refusalSpokenAs string
+	// readWritesAsked counts the names a `read` has asked the freeze about,
+	// so the first can be told from the rest; readRefusesTheArray says the
+	// name refused is the array `read -A` fills. See Runner.readMayWriteAs.
+	readWritesAsked     int
+	readRefusesTheArray bool
 	// declarationSpeaker is the builtin whose operand a declaration's element
 	// store is running for, kept while the store has that builtin's name out
 	// of the location. The one complaint in that region which is the
@@ -13836,6 +13841,11 @@ func (r *Runner) reportFreezeRefusal(name string, form assignForm, fatal bool, s
 			// builtin's, calling it a warning. See
 			// Diagnostics.ReadonlyVariableInRead.
 			wording = r.diag().ReadonlyVariableInRead
+		}
+		if r.inBuiltin == "read" && r.readRefusesTheArray && r.diag().ReadonlyVariableInReadArray != "" {
+			// And words the array `read -A` fills apart again. See
+			// Diagnostics.ReadonlyVariableInReadArray.
+			wording = r.diag().ReadonlyVariableInReadArray
 		}
 		msg = Wording(wording, "", name, r.inBuiltin)
 	}

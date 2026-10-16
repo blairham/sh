@@ -6274,6 +6274,8 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 	// dialect's: `n` takes a count in the two shells that count and is a
 	// flag in the one where it decorates completion, so even the shape of
 	// the optstring is an answer rather than a constant.
+	defer func(was int) { r.readWritesAsked = was }(r.readWritesAsked)
+	r.readWritesAsked = 0
 	letters := r.sem().ReadOptions
 	if letters == "" {
 		letters = "r"
@@ -7128,7 +7130,7 @@ func (r *Runner) readStoreTheArray(array string, elems []string, own int, echo r
 			}
 			return st, true
 		}
-	case !r.readMayWrite(array):
+	case !r.readMayWriteAs(array, true):
 		if r.ctl == controlExit {
 			// The whole-array store's number, not the scalar's — see
 			// Runner.arrayStoreRefusalStatus (#6486).

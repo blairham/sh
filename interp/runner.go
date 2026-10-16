@@ -10813,6 +10813,7 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 			// expansion, since prefixExpansion reads back what
 			// expandPrefixTraceValues put aside.
 			_ = r.prefixValue(a)
+			r.warnATruncatedPosition(a.Name)
 			continue
 		}
 		if frozenValueSpent && r.prefixEntryIsFrozen(a) {

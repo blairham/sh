@@ -109,6 +109,13 @@ func biPrintf(r *Runner, _ context.Context, args []string) (status int) {
 	var passEnds []int
 	perPass := false
 	if assign != "" && r.sem().PrintfVTakesAnElementPerPass == Yes {
+		if r.namesAPosition(assign) {
+			// Asking whether a position is an array reads its index, and an
+			// index too wide is warned about there as well as at the store:
+			// `printf -v 99999999999999999999 x` warns twice on zsh 5.9.2,
+			// where `print -v` with the same name warns once (#6743).
+			r.warnATruncatedPosition(assign)
+		}
 		name := r.throughNameref(assign)
 		assoc := r.assocDeclared(name)
 		perPass = !assoc && r.nameIsAnArray(name)

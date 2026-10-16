@@ -53,6 +53,16 @@ func markTheKindFixedParameters(r *interp.Runner) {
 	for _, name := range scalarSlotParameters {
 		r.MarkParameterKindFixed(name, interp.ScalarParameter)
 	}
+	// And `0`, which is not a name and so was never a row of the sweep, but
+	// is a scalar slot all the same: `typeset -a 0`, `typeset -A 0`, `local
+	// -A 0`, `typeset -i10 0`, `integer 0` and `float 0` each say `0: can't
+	// change type of a special parameter` and end the shell at 1, and every
+	// plus letter is taken. Measured 2026-10-16 on zsh 5.9.2, `-f`, `env -i
+	// PATH=/usr/bin:/bin`, `-c` and a script file (#6740). `typeset -i 0`
+	// and `typeset -F 0` are no counterexample: there the `0` is the letter's
+	// base or precision, so no name is written at all. The store routes into
+	// it already refuse an array (interp/positionalassign.go).
+	r.MarkParameterKindFixed("0", interp.ScalarParameter)
 	// Both halves of all eight built-in ties, which is the fourth walk of
 	// that table and for the same reason as the others: a pair added to it
 	// is a pair this shell hardwires. The scalar half is a scalar slot and

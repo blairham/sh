@@ -506,7 +506,9 @@ func (r *Runner) currentDirectoryForTheStack() string {
 // 2026-10-03 on zsh 5.9.2 under -f: `~99999999999999999999/x` (twenty
 // digits) warns `number truncated after 19 digits: 99999999999999999999/x`,
 // and the nineteen of `~9223372036854775808` and of `~9999999999999999999`
-// after 18 — the count is the length less one, wherever the overflow fell.
+// after 18. The count is truncatedPositionDigits's, which is the length less
+// one only while the run is at most a digit past what fits: twenty-one nines
+// are `after 19 digits` too, measured 2026-10-16 (#6743).
 // A warning and not a refusal: what the tilde then comes to is the lookup's
 // answer (#5694).
 func (r *Runner) warnTruncatedTildeNumber(digits string) {
@@ -514,15 +516,8 @@ func (r *Runner) warnTruncatedTildeNumber(digits string) {
 	if wording == "" {
 		return
 	}
-	const limit = uint64(1<<63 - 1)
-	var v uint64
-	for i := 0; i < len(digits); i++ {
-		d := uint64(digits[i] - '0')
-		if v > (limit-d)/10 {
-			r.diagf("%s\n", Wording(wording, "", len(digits)-1, digits+r.tildeWarnTail))
-			return
-		}
-		v = v*10 + d
+	if read, cut := truncatedPositionDigits(digits); cut {
+		r.diagf("%s\n", Wording(wording, "", read, digits+r.tildeWarnTail))
 	}
 }
 

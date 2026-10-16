@@ -5528,6 +5528,7 @@ func Diagnostics() interp.Diagnostics {
 		// 99999999999999999999` and goes on. See
 		// interp.Runner.warnTruncatedTildeNumber (#5694).
 		NumberedTildeTruncated: "number truncated after %d digits: %s",
+		PositionTruncated:      "number truncated after %d digits: %s",
 		// A table literal mixing `[key]=` heads with bare words, refused
 		// whichever way round it was written and naming neither the variable nor
 		// the element: measured 2026-09-23, `typeset -A a; a=([zero]=5 four)` is

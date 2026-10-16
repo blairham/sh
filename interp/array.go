@@ -2019,6 +2019,7 @@ func (r *Runner) storeThroughPositional(name, value string) bool {
 	}
 	n, _ := positionalAssignIndex(name)
 	if n < 0 {
+		r.warnATruncatedPosition(name)
 		return true
 	}
 	if n == 0 {

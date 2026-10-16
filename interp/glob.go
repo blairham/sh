@@ -1326,7 +1326,13 @@ func (r *Runner) glob(field string) ([]string, bool) {
 	// result. Measured, `GLOBSORT=nosort; echo */*` is the top level in the
 	// directory's own order with each level below it in its own.
 	order, ordered := r.globSortOrderOf()
-	unsorted := (ordered && order.key == globSortNone) || quals.unsorted
+	// And a list that runs code walks each directory in its own order too,
+	// because that is the order the code sees the files in: measured
+	// 2026-10-15 on zsh 5.9.2, `n=0; print *(e:'(( n++ ))':)` leaves out the
+	// first name `ls -f` lists rather than the first in name order, and the
+	// code's own output comes in that order. The matches are still sorted
+	// at the end, as every list without `oN` is. See interp/globqualcode.go.
+	unsorted := (ordered && order.key == globSortNone) || quals.unsorted || quals.runsCode
 	if quals.numeric != globNumericUnsaid {
 		// `n` and `^n` are `numericglobsort` for this one pattern, and the
 		// per-component sorts below read the switch as well as the last one.
@@ -1708,11 +1714,19 @@ func (r *Runner) glob(field string) ([]string, bool) {
 		}
 	}
 
+	// What a code qualifier left each kept path as, index for index with
+	// dirs; nil where no code ran, which is every list but one with `e` or
+	// `+` in it.
+	var replaced [][]string
 	if hasQuals {
 		// Narrowed here, on the absolute paths the walk produced, because a
 		// type test is a question about a file and the relative names below
 		// are not what would answer it.
-		dirs = r.keepQualified(dirs, quals)
+		var kept bool
+		dirs, replaced, kept = r.keepQualified(dirs, quals, render)
+		if !kept {
+			return nil, false
+		}
 		if len(dirs) == 0 {
 			return missed()
 		}
@@ -1747,7 +1761,7 @@ func (r *Runner) glob(field string) ([]string, bool) {
 	if keepPaths {
 		paths = make([]string, 0, len(dirs))
 	}
-	for _, d := range dirs {
+	for i, d := range dirs {
 		w, ok := render(d)
 		if !ok {
 			continue
@@ -1755,15 +1769,25 @@ func (r *Runner) glob(field string) ([]string, bool) {
 		if !filterListing && len(ignore) > 0 && r.ignoredName(w, ignore) {
 			continue
 		}
-		if r.markDirs {
-			// One shell's `markdirs`: a directory the pattern produced is
-			// written with a slash after it — even one the pattern already
-			// ended in. Measured 2026-10-02 on zsh 5.9.2, `setopt markdirs;
-			// print tmp*` is `tmpcd/ tmpfile1 tmpfile2` beside a directory
-			// `tmpcd`, and `print */` is `tmpcd//` (#5155).
-			if fi, err := r.stat(d); err == nil && fi.IsDir() {
-				w += "/"
+		if replaced != nil {
+			// The words the code chose, as many as it chose — none at all
+			// for an empty `reply` — each one a match of its own with the
+			// path's stat behind it, and each marked as the path would be:
+			// measured, `setopt markdirs; print *(e:'REPLY=x$REPLY':)` is
+			// `… xd/ …`.
+			for _, rw := range replaced[i] {
+				if r.markDirs {
+					rw = r.markedDirectory(rw, d)
+				}
+				out = append(out, rw)
+				if keepPaths {
+					paths = append(paths, d)
+				}
 			}
+			continue
+		}
+		if r.markDirs {
+			w = r.markedDirectory(w, d)
 		}
 		out = append(out, w)
 		if keepPaths {
@@ -1814,6 +1838,18 @@ func (r *Runner) glob(field string) ([]string, bool) {
 		}
 	}
 	return out, false
+}
+
+// markedDirectory is one shell's `markdirs`: a directory the pattern produced
+// is written with a slash after it — even one the pattern already ended in.
+// Measured 2026-10-02 on zsh 5.9.2, `setopt markdirs; print tmp*` is `tmpcd/
+// tmpfile1 tmpfile2` beside a directory `tmpcd`, and `print */` is `tmpcd//`
+// (#5155).
+func (r *Runner) markedDirectory(w, path string) string {
+	if fi, err := r.stat(path); err == nil && fi.IsDir() {
+		return w + "/"
+	}
+	return w
 }
 
 // fieldExclusions peels a field's top-level `~` exclusions off, returning the

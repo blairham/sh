@@ -2110,7 +2110,55 @@ the list, so `*([1]:e)` gave `zz`.
 sort produced. `*(oL)` over a set of empty files is in neither name order
 nor directory order, so there is no tie order to copy, and name order at
 least gives the same answer on every run. `oe` and `o+`, which sort by
-the output of a piece of code, are refused by name, as `e` is.
+the output of a piece of code, are refused by name.
+
+### `e` and `+` run code for each file
+
+`e` takes shell code between delimiters, read as `u`'s argument is —
+`e:…:`, `e{…}`, `e[…]` or any character that closes itself — and `+`
+takes the name of a command, which is the same thing: `*(+isd)` is
+`*(e:isd:)`. The name is identifier characters only, so it ends at the
+next qualifier; `*(+)` and `*(+.)` are `missing identifier after `+'`.
+Measured 2026-10-15 on zsh 5.9.2 (`-f -c`), in a directory holding
+regular files `a b big c10 c9`, a directory `d` and a link `lnk`:
+
+    *(e:'[[ -d $REPLY ]]':)          d            REPLY is the word, the code's
+                                                  status selects
+    *(e'[[ -d $REPLY ]]')            unknown file attribute: ]
+                                                  quoting does not hide a
+                                                  delimiter, and a bracket
+                                                  closes at its first partner
+    *(e:'true||false':)              every name   a quoted `|` is no alternation
+    *(e:'REPLY=x$REPLY':)            xa xb …      the word is what REPLY is left
+    *(e:'reply=(x$REPLY y)':)        xa … xlnk y y y y y y y
+                                                  an array is several words,
+                                                  each a match of its own
+    *(e:'reply=()':)                 no matches found
+    *(e:'REPLY=x$REPLY':e:'REPLY=y$REPLY':)
+                                     ya yb …      each run starts from the name
+    *(^e:'REPLY=z$REPLY; false':)    za zb …      the word stands whatever the
+    *(e:'REPLY=z$REPLY; false':,/)   zd           status, `^` or section said
+    *(e:…:On), *(e:…:[1,3]), (…::t)  the sort, the picks and the modifiers
+                                     read the new words; a size or a time is
+                                     still the file's
+    ./*, */                          REPLY is `./a`, `d/`
+
+The code runs in the shell itself, in the caller's scope, and in the
+**directory's own order** — `n=0; *(e:'(( n++ ))':)` leaves out the first
+name `ls -f` lists, not the first in name order — while the matches are
+still sorted at the end. `REPLY` is left at the last file's name and
+`reply` unset. `$zsh_eval_context` reads `… globqual` inside it.
+
+**A failure inside the code is the code's**, as it is inside `eval`:
+`nosuchcmd`, `echo [x]`, a parse failure or `break` outside a loop is
+written once per file, the file is not kept, and the pattern then reports
+its own miss. `${x?boom}`, `exit` and `set -e` with a failing command end
+the shell. A diagnostic is located where the pattern is — `zsh:3:` for
+code on line 3, its second line at 4, `f:2:` in a function — and the line
+comes back to the pattern's afterwards. A `return` or `break` in the code
+lets every later file pass without running it, and takes effect once the
+command has run. See `interp/globqualcode.go` and
+`TestAGlobQualifierRunsCodeForEachFile`.
 
 ### What is read and not implemented
 
@@ -2121,7 +2169,7 @@ argument for the link count, the three file times `m`, `a` and `c` with
 their unit letter and signed number, the `-` that follows a link before
 testing, the `^` that turns any of them, the `,` that unions them, `N`
 and `D`, the `[n,m]` picks, the `o` and `O` sort specifiers and `n`, and
-the `:` that opens a modifier list.
+the `:` that opens a modifier list, and `e` and `+`, above.
 
 The three times are one qualifier with three clocks behind it, and they
 were one letter until #3533: `m` reads the modification time, `a` the
@@ -2137,8 +2185,8 @@ differently on each — a per-GOOS file beside the qualifiers, the shape the
 signal table already takes.
 
 Everything else in that language — `=` for a socket, the `%b` and `%c`
-spellings that separate the two kinds of device, `e` and `+` for a
-command's verdict and `oe` and `o+` for an order taken from one, `d` for
+spellings that separate the two kinds of device, `oe` and `o+` for an
+order taken from a command, `d` for
 a device, `Y` for counting, `L` for a size, and
 the `(#q…)` form that needs `extended_glob` — is refused by name with the
 shell's own wording rather than answered wrong. `*(L+1)` here is

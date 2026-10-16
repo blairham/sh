@@ -99,7 +99,7 @@ func splitGlobQualifiers(field string) (pattern, list string, ok bool) {
 				continue
 			}
 			inner := field[i+1 : len(field)-1]
-			if inner == "" || strings.ContainsRune(inner, '|') {
+			if inner == "" || holdsAnUnquotedBar(inner) {
 				// `()` is not a group at all, and a group holding an
 				// alternation is that alternation.
 				return field, "", false
@@ -108,6 +108,27 @@ func splitGlobQualifiers(field string) (pattern, list string, ok bool) {
 		}
 	}
 	return field, "", false
+}
+
+// holdsAnUnquotedBar reports whether a `|` in s is live, which is what makes
+// a group an alternation rather than a qualifier list.
+//
+// **A quoted bar is a character**, measured 2026-10-15 on zsh 5.9.2 (`-f`):
+// `*(.\|)` and `*("|")` are `unknown file attribute: |`, and
+// `*(e:'true||false':)` runs its code — while the unquoted `*(e|true|)` is
+// the alternation `*` followed by `e`, `true` or nothing. Counting every bar
+// read the code of an `e` qualifier as a pattern as soon as it held `||` or
+// a pipe (#6612).
+func holdsAnUnquotedBar(s string) bool {
+	for i := 0; i < len(s); i++ {
+		switch s[i] {
+		case '\\':
+			i++
+		case '|':
+			return true
+		}
+	}
+	return false
 }
 
 // escapedAt reports whether the byte at i is preceded by an odd number of
@@ -150,6 +171,12 @@ type globQualifiers struct {
 	// number for this pattern, whatever `numericglobsort` says. Zero leaves
 	// the option to decide; see globNumeric.
 	numeric globNumeric
+	// runsCode says a test in the list is `e` or `+`, which run shell code
+	// per file and may replace the name a file is reported as. Read by the
+	// walk, which then lists each directory in its own order — the order the
+	// code sees the files in — and by keepQualified, which hands back the
+	// words the code chose. See interp/globqualcode.go.
+	runsCode bool
 	// picks is ranges with the arithmetic done, filled by fieldQualifiers.
 	// The parser has no Runner and a subscript is an *expression* — `*([i])`
 	// and `*([1+1])` both name the second match — so the two halves are
@@ -273,6 +300,10 @@ type globTest struct {
 	// count is `l`'s comparison, and `m`'s: the number written and which way
 	// the file's own number has to stand against it.
 	count globCount
+	// code is the shell code `e` runs for each file, unquoted, and for `+`
+	// the name of the command it calls — which is the same thing, a command
+	// with no arguments being code too. See interp/globqualcode.go.
+	code string
 }
 
 // parseGlobQualifiers reads a list. The second result is the diagnostic when
@@ -285,6 +316,15 @@ func parseGlobQualifiers(list string) (globQualifiers, string, bool) {
 	for i := 0; i < len(list); {
 		c := list[i]
 		i++
+		if c == '\\' && i < len(list) {
+			// A quoted letter is the letter: the list is read for its
+			// characters, and quoting only kept them from being read as
+			// anything else on the way here. Measured 2026-10-15 on zsh 5.9.2,
+			// `*(\/)` is the directories, and `*(e'[[ -d $REPLY ]]')` names
+			// the `]` its delimiter left over rather than a backslash.
+			c = list[i]
+			i++
+		}
 		switch c {
 		case ',':
 			// A section may be empty — every file passes it — which is what
@@ -341,10 +381,12 @@ func parseGlobQualifiers(list string) (globQualifiers, string, bool) {
 			case 'n', 'L', 'l', 'a', 'm', 'c', 'd':
 				q.sorts = append(q.sorts, globSortSpec{key: key, desc: (c == 'O') != negate, follow: follow})
 			case 'e', '+':
-				// The specifiers that sort by a string of code run per match,
-				// which this engine does not carry — the same refusal the `e`
-				// qualifier makes, said as what it is rather than as the
-				// reference's sentence for a letter it does not know.
+				// The specifiers that sort by what a string of code leaves in
+				// `REPLY` for each match. The code runs as the `e` qualifier's
+				// does (interp/globqualcode.go), but the order has rules of
+				// its own that are not measured yet, so this is refused as
+				// what it is rather than with the reference's sentence for a
+				// letter it does not know.
 				return q, fmt.Sprintf("the o%c sort specifier is not implemented", key), false
 			default:
 				return q, "unknown sort specifier", false
@@ -420,17 +462,38 @@ func parseGlobQualifiers(list string) (globQualifiers, string, bool) {
 			}
 			section = append(section, globTest{kind: kind, negated: negate, follow: follow, id: id})
 		case 'e':
-			// The qualifier that runs a string of code per match, which this
-			// engine does not carry. Its argument is still *read*, and a list
-			// that leaves it unclosed is refused for that before the letter is
-			// weighed at all: measured 2026-10-04 on zsh 5.9.2, `echo x(e)`,
-			// `x(echo)` and `x=(echo hi)` are all `missing end of string` —
-			// the last being a mid-word group read as qualifiers, its first
-			// letter `e` and its delimiter `c`.
-			if _, _, closed := delimitedArgumentOrNone(list[i:]); !closed {
+			// Shell code run for each file, between delimiters read as `u`'s
+			// are — `e:…:`, `e{…}`, `e[…]` or any character closing itself.
+			// A list that leaves it unclosed is refused for that: measured
+			// 2026-10-04 on zsh 5.9.2, `echo x(e)`, `x(echo)` and
+			// `x=(echo hi)` are all `missing end of string` — the last being
+			// a mid-word group read as qualifiers, its first letter `e` and
+			// its delimiter `c`. See interp/globqualcode.go for what the code
+			// is asked and what it may answer.
+			code, n, closed := delimitedArgumentOrNone(list[i:])
+			if !closed {
 				return q, "missing end of string", false
 			}
-			return q, "unknown file attribute: e", false
+			i += n
+			q.runsCode = true
+			section = append(section, globTest{kind: 'e', negated: negate, follow: follow, code: code})
+		case '+':
+			// `+name` is `e:name:`: the command of that name, with no
+			// arguments, run for each file. The name is an identifier's
+			// characters and nothing else, so it ends at the next qualifier —
+			// measured 2026-10-15 on zsh 5.9.2, `*(+isd.)` is `isd` and the
+			// regular-file test, `*(+f-g)` reaches `g`, and `*(+)`, `*(+.)`
+			// and `*(+'[[')` are `missing identifier after `+'`.
+			n := 0
+			for n < len(list[i:]) && isNameByte(list[i+n]) {
+				n++
+			}
+			if n == 0 {
+				return q, "missing identifier after `+'", false
+			}
+			q.runsCode = true
+			section = append(section, globTest{kind: '+', negated: negate, follow: follow, code: list[i : i+n]})
+			i += n
 		case '.', '/', '@', 'p', '%',
 			'r', 'w', 'x', 'A', 'I', 'E', 'R', 'W', 'X',
 			's', 'S', 't':
@@ -477,12 +540,33 @@ func (q globQualifiers) keep(f *globFile) bool {
 		if sectionKeeps(section, f) {
 			return true
 		}
+		if f.stopped {
+			return false
+		}
 	}
 	return false
 }
 
 func sectionKeeps(section []globTest, f *globFile) bool {
 	for _, t := range section {
+		if t.kind == 'e' || t.kind == '+' {
+			// Code rather than a stat, and its answer is a status. What it
+			// leaves the name as stands whichever way the status went and
+			// whatever `^` made of it: measured, `*(^e:'REPLY=z$REPLY;
+			// false':)` lists every name with the `z`, and
+			// `*(e:'REPLY=z$REPLY; false':,/)` lists `zd` — the code ran for
+			// `d`, failed, and the second section kept it as renamed.
+			run, ok := f.r.runGlobCode(t.code, f.word)
+			if !ok {
+				f.stopped = true
+				return false
+			}
+			f.words = run.words
+			if run.kept == t.negated {
+				return false
+			}
+			continue
+		}
 		info := f.info(t.follow)
 		if info == nil {
 			return false
@@ -743,18 +827,49 @@ func (r *Runner) globRangeIndex(text string) (int, bool) {
 // function. compinit's `^([^_]*|*~|*.zwc)(N)` over every `$fpath` directory
 // is such a list, and asking each of its ~1,500 names for an lstat was
 // ~4 ms of every real-config start (#6363).
-func (r *Runner) keepQualified(paths []string, q globQualifiers) []string {
+//
+// **A list that runs code answers words as well**, one list per path kept: what
+// the code left in `reply` or `REPLY`, which is what the path is reported as
+// from here on. render is the word the pattern spells a path as, which is
+// what `REPLY` holds while the code runs — `./a` for `./*`, `d/` for `*/`.
+// ok is false where the code stopped the shell, and the expansion stops with
+// it. See interp/globqualcode.go.
+func (r *Runner) keepQualified(paths []string, q globQualifiers, render func(string) (string, bool)) (kept []string, words [][]string, ok bool) {
 	if !q.tests() {
-		return paths
+		return paths, nil, true
 	}
-	kept := make([]string, 0, len(paths))
+	kept = make([]string, 0, len(paths))
+	if !q.runsCode {
+		for _, p := range paths {
+			f := globFile{r: r, path: strings.TrimSuffix(p, "/")}
+			if q.keep(&f) {
+				kept = append(kept, p)
+			}
+		}
+		return kept, nil, true
+	}
+	words = make([][]string, 0, len(paths))
 	for _, p := range paths {
-		f := globFile{r: r, path: strings.TrimSuffix(p, "/")}
-		if q.keep(&f) {
+		w, shown := render(p)
+		if !shown {
+			// The starting point of a zero-level `**`, which is never
+			// reported and so is never shown to the code either.
+			continue
+		}
+		f := globFile{r: r, path: strings.TrimSuffix(p, "/"), word: w}
+		keep := q.keep(&f)
+		if f.stopped {
+			return nil, nil, false
+		}
+		if keep {
+			if f.words == nil {
+				f.words = []string{w}
+			}
 			kept = append(kept, p)
+			words = append(words, f.words)
 		}
 	}
-	return kept
+	return kept, words, true
 }
 
 // pickRanges applies the `[n,m]` subscripts, in the order they were written.
@@ -824,6 +939,13 @@ func (f *globFile) now() time.Time {
 type globFile struct {
 	r    *Runner
 	path string
+
+	// word is the path as the pattern spells it, and words what a code
+	// qualifier left it as — nil until one has run. stopped says the code
+	// ended the shell or left a function, so nothing more is asked.
+	word    string
+	words   []string
+	stopped bool
 
 	link, target fs.FileInfo
 	askedLink    bool

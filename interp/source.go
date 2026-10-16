@@ -95,6 +95,17 @@ type sourced struct {
 	// and `.` is a boundary for exactly one kind of it.
 	catchReturn bool
 
+	// callersPlace marks text that is not a place of its own and was never
+	// one: a glob qualifier's code (see interp/globqualcode.go). It runs as
+	// `eval`'s text does — an error in it ends the text and not the shell —
+	// but a diagnostic from it names whatever the caller is named, and its
+	// lines continue the caller's: measured 2026-10-15 on zsh 5.9.2 (`-f
+	// -c`), code on line 3 of the program refuses `nosuchcmd` at `zsh:3:`
+	// from its first line and at `zsh:4:` from its second, fails to parse at
+	// `zsh:3:`, and inside a function is `f:2:`. Whatever `evallineno` says,
+	// since that option is about `eval`.
+	callersPlace bool
+
 	// builtinText marks the text as `.`'s or `eval`'s own, rather than text
 	// another builtin or a hook borrowed the same reader for. Those two are
 	// the boundary Semantics.BorrowedTextErrorWhenInteractiveCostsTheLine was
@@ -363,7 +374,7 @@ func (r *Runner) reportBorrowedParseFailure(err error, s sourced, src string) {
 		return
 	}
 	source := s.sourceName(*d)
-	if s.eval && !r.EvalTextHasALocationOfItsOwn() {
+	if s.callersPlace || (s.eval && !r.EvalTextHasALocationOfItsOwn()) {
 		// Text that is not a place of its own is refused under the caller's
 		// name — the script, the sourced file, the function or the shell —
 		// where a run-time failure inside it is located too. **Only the name
@@ -544,7 +555,10 @@ func (r *Runner) runSourcedText(ctx context.Context, src string, s sourced) int 
 	// names the text by, so the two cannot drift apart — see the sourced
 	// struct's `eval`, and interp/evalcontext.go.
 	inside := EvalContextSourcedFile
-	if s.eval {
+	switch {
+	case s.callersPlace:
+		inside = EvalContextGlobQualifier
+	case s.eval:
 		inside = EvalContextEval
 	}
 	defer r.enterEvalContext(inside)()
@@ -581,7 +595,7 @@ func (r *Runner) runSourcedText(ctx context.Context, src string, s sourced) int 
 	// Runner.EvalTextHasALocationOfItsOwn. Then the line stays pinned at the
 	// `eval`'s own and the text is never pushed onto the borrowed stack, so
 	// a diagnostic raised inside it names the script rather than the text.
-	keepsCallersLocation := s.eval && !r.EvalTextHasALocationOfItsOwn()
+	keepsCallersLocation := s.eval && !s.callersPlace && !r.EvalTextHasALocationOfItsOwn()
 	if keepsCallersLocation {
 		outerPin, outerEnds, outerPinFunc := r.linePin, r.linePinEndsAtACall, r.linePinFuncLine
 		r.linePin = r.lineNow()
@@ -657,7 +671,11 @@ func (r *Runner) runSourcedText(ctx context.Context, src string, s sourced) int 
 	} else {
 		defer func() { r.lineBase = outerBase }()
 	}
-	if s.eval && !keepsCallersLocation && r.line != 1+r.lineOrigin {
+	if s.callersPlace {
+		// The caller's lines, continued: the text's first line is the line
+		// the pattern is on. See sourced.callersPlace.
+		r.lineBase = r.line - 1 - r.lineOrigin
+	} else if s.eval && !keepsCallersLocation && r.line != 1+r.lineOrigin {
 		// Asked at the disagreement and nowhere else: on the route's *first*
 		// line the two readings are the same offset — nothing — so an `eval`
 		// there has nothing to disagree about, and that is the shape most
@@ -691,12 +709,12 @@ func (r *Runner) runSourcedText(ctx context.Context, src string, s sourced) int 
 	// Skipped whole for text that is not a place of its own, since the name
 	// and the line move together — the manual for the one option that turns
 	// this off names `$LINENO`, `%i` and `%N` in one sentence.
-	if !keepsCallersLocation {
+	if !keepsCallersLocation && !s.callersPlace {
 		r.borrowed = append(r.borrowed, borrowedText{sourced: s, callerLine: r.line, frames: len(r.frames)})
 		defer func() { r.borrowed = r.borrowed[:len(r.borrowed)-1] }()
 	}
 	switch {
-	case keepsCallersLocation:
+	case keepsCallersLocation, s.callersPlace:
 		// Neither of the two below: the text is the caller's place, so it
 		// gains neither a file's prompt wording nor an `eval`'s own name.
 	case !s.eval:

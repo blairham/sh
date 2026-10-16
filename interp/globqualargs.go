@@ -389,9 +389,23 @@ func lookupOwner(kind byte, name string) (uint64, string) {
 // argument. `<` is documented alongside them and is unreachable in a qualifier
 // list, the `<` ending the word before the list is ever read; it is here
 // because the rule is the rule and not because a probe could show it.
+//
+// **Quoting does not hide a delimiter, and the text comes back unquoted.** s
+// is the field's escaped form, where a quoted metacharacter carries a
+// backslash; the qualifier reads the characters themselves. Measured
+// 2026-10-15 on zsh 5.9.2 (`-f`): `*(e:'a:b':)` closes at the quoted `:`
+// and names `b` as the next attribute, `*(e'%true%')` is delimited by the
+// quoted `%`, and `*(e'[[ -d $REPLY ]]')` closes at the first `]` — no
+// nesting — where the code that ran was `[[ -d $REPLY ]]` with the quotes'
+// marks gone. A bracket is not counted either: `*(e{'{ true; }'})` stops at
+// the first `}` (#6612).
 func delimitedArgument(s string) (string, int, bool) {
-	closing := s[0]
-	switch closing {
+	open, i := s[0], 1
+	if open == '\\' && len(s) > 1 {
+		open, i = s[1], 2
+	}
+	closing := open
+	switch open {
 	case '[':
 		closing = ']'
 	case '{':
@@ -399,11 +413,18 @@ func delimitedArgument(s string) (string, int, bool) {
 	case '<':
 		closing = '>'
 	}
-	end := strings.IndexByte(s[1:], closing)
-	if end < 0 {
-		return "", 0, false
+	start := i
+	for i < len(s) {
+		c, w := s[i], 1
+		if c == '\\' && i+1 < len(s) {
+			c, w = s[i+1], 2
+		}
+		if c == closing {
+			return globUnescape(s[start:i]), i + w, true
+		}
+		i += w
 	}
-	return s[1 : 1+end], end + 2, true
+	return "", 0, false
 }
 
 // delimitedArgumentOrNone is delimitedArgument for text that may be empty,

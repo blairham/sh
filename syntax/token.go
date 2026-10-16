@@ -326,13 +326,6 @@ type Span struct {
 	// only the reading, the writing back and the choice of shell differ.
 	CurrentShell bool
 
-	// ClosedBehindABraceName says a `${ cmd;}` body was closed by a `}`
-	// standing straight behind a `{name}` word in it — `${ echo {v}}` —
-	// which the one dialect that reads that brace as a closer refuses when
-	// the substitution runs. See syntax.Dialect.BraceProgramBodyEnd and
-	// interp's readSubstBody (#6642).
-	ClosedBehindABraceName bool
-
 	// ReplyValue says a current-shell command substitution was written
 	// `${| cmd;}`, whose value is whatever the body left in `$REPLY` rather
 	// than what it printed — so its body's output goes where the shell's

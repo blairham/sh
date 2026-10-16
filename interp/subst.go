@@ -1147,7 +1147,7 @@ func (r *Runner) readSubstBody(span syntax.Span) (*syntax.File, int, int, bool) 
 	// how the two came to be one wrong answer for both.
 	base := r.substRunBase(span, src, f, textBase)
 	err := p.Err()
-	if err == nil && span.ClosedBehindABraceName {
+	if err == nil && syntax.BraceBodyClosedBehindABraceName(span, r.bodyDialect(span)) {
 		// The `}` that closed the body stood straight behind a `{name}`, and
 		// the shell that reads it as a closer then refuses the body as one
 		// that never ended — when it runs, so what came before it on the

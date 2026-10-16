@@ -693,6 +693,11 @@ type Lexer struct {
 	// substEnds is the ends of input inside the substitutions this lexer has
 	// read, for the parser to put on the file. See [File.EndsOfInput].
 	substEnds []SubstitutionEnds
+
+	// bodyClosedBehindABraceName says the `${ cmd;}` body read last was
+	// closed by a `}` straight behind a `{name}`. See
+	// [BraceBodyClosedBehindABraceName], its one reader.
+	bodyClosedBehindABraceName bool
 }
 
 // queueHeredoc registers a redirection whose body is still to be read. The
@@ -6596,11 +6601,8 @@ func (l *Lexer) scanBraces(q Quoting) Span {
 		// *ends* is the one place they differ and is settled above; `body`
 		// is past the `|` of the reply form, because the blank form's
 		// opening blank is body text and this one's pipe is its marker.
-		return Span{
-			Kind: CommandSubst, CurrentShell: true, ReplyValue: reply, Value: l.src[body:end],
-			Quoting: q, Pos: open, Comments: l.bodyComments(CommandSubst),
-			ClosedBehindABraceName: closedBehindName,
-		}
+		l.bodyClosedBehindABraceName = closedBehindName
+		return Span{Kind: CommandSubst, CurrentShell: true, ReplyValue: reply, Value: l.src[body:end], Quoting: q, Pos: open, Comments: l.bodyComments(CommandSubst)}
 	}
 	// And a here-document a `$( )` in this word opened and could not feed,
 	// which the body's own scan noted on the way past. Raised here rather
@@ -6673,6 +6675,36 @@ func (l *Lexer) atBraceTokenStart(from, wordParen int) bool {
 		return l.off-1 != wordParen
 	}
 	return false
+}
+
+// BraceBodyClosedBehindABraceName reports whether a `${ cmd;}` span's body
+// was closed by a `}` standing straight behind a `{name}` word — `${ echo
+// {v}}` — in the dialect that reads that brace as the closer. That shell
+// refuses such a body when the substitution runs, as one that never ended:
+// measured 2026-10-15 on ksh93u+ 2012-08-01, `echo before; echo ${ echo
+// {v}}` prints `before` and then refuses with `end of file' unexpected at
+// status 3, and the same word in a branch nothing takes says nothing (#6642).
+//
+// Answered by reading the text again with the scanner that closed it, so the
+// rule has one owner: which `}` closes the body is that scanner's decision,
+// and a second reading written beside it would drift from it. Only a body
+// ending in `}` can have been closed that way, which keeps every other span
+// from paying for the read. A flag on Span would have been cheaper still and
+// takes it past its size class; see TestTheTwoShapesATreeIsMadeOfStayWithinTheirBudget.
+func BraceBodyClosedBehindABraceName(span Span, d Dialect) bool {
+	if !span.CurrentShell || span.Kind != CommandSubst ||
+		d.BraceProgramBodyEnd != BraceProgramBodyEndsAtATokenStart ||
+		!strings.HasSuffix(span.Value, "}") {
+		return false
+	}
+	open := "${"
+	if span.ReplyValue {
+		open = "${|"
+	}
+	src := open + span.Value + "}"
+	l := newLexer(src, &d)
+	got := l.scanBraces(span.Quoting)
+	return l.err == nil && got.CurrentShell && l.off == len(src) && l.bodyClosedBehindABraceName
 }
 
 // braceNameWordLen is how long the `{name}` at the head of s is, for the

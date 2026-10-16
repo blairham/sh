@@ -24,6 +24,10 @@ func TestABodyClosedBehindABraceNameIsRefusedWhenItRuns(t *testing.T) {
 		{"echo ${ echo {}}", "", refused},
 		{"echo ${ echo {v}} }", "", refused},
 		{"echo ${ echo a\necho {v}}", "", "syntax error at line 2: `end of file' unexpected"},
+		// Wherever the body comes to run: a function read on an earlier
+		// line, and a string handed to eval.
+		{"f() { echo ${ echo {v}}; }\necho defined; f", "defined\n", "syntax error at line 1: `end of file' unexpected"},
+		{"eval 'echo ${ echo {v}}'", "", "syntax error at line 1: `end of file' unexpected"},
 		// The controls: never run, and a blank in front of the brace.
 		{"false && echo ${ echo {v}}; echo after", "after\n", ""},
 		{"echo ${ echo {v} }", "{v}\n", ""},

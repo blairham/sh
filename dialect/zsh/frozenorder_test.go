@@ -62,6 +62,28 @@ func TestAFlaggedTableWriteExpandsItsOperandBeforeTheRefusal(t *testing.T) {
 		"VAL SUB SLICE ERR VAL SUB typeset -A t=( [k]=Q ) done")
 }
 
+// The whole-array spelling over a frozen name is refused for the freeze
+// once the value is expanded, an array's and a table's alike, and nothing is
+// stored. Measured 2026-10-16 on zsh 5.9.2 from a file, this script, byte
+// for byte before normalizing — already the answer before #6761, which moved
+// the other two columns; pinned so that change cannot move this one.
+func TestAFrozenWholeArraySubscriptIsRefusedForTheFreeze(t *testing.T) {
+	checkFrozen(t, frozenWholeArrayScript,
+		"VAL RO RO VAL RO VAL RO VAL RO done")
+}
+
+// Each row reads its name back from an exit trap, since a refusal ends the
+// subshell and a store taken before it would otherwise go unseen.
+const frozenWholeArrayScript = "v() { echo VAL >&2; }\n" +
+	"readonly a=(1 2)\n" +
+	"typeset -A m; m[k]=1; readonly m\n" +
+	"(trap 'typeset -p a' EXIT; a[@]=$(v)x)\n" +
+	"(trap 'typeset -p a' EXIT; a[*]+=x)\n" +
+	"(trap 'typeset -p m' EXIT; m[@]=$(v)x)\n" +
+	"(trap 'typeset -p m' EXIT; m[@]+=$(v)x)\n" +
+	"(set -x; a[@]=$(v)x)\n" +
+	"echo done\n"
+
 const frozenElementScript = "s() { echo SUB >&2; echo \"$1\"; }\n" +
 	"v() { echo VAL >&2; }\n" +
 	"readonly a=(1 2)\n" +
@@ -103,6 +125,10 @@ func frozenNormalized(out string) string {
 			keep = append(keep, "ERR")
 		case strings.Contains(line, "cannot assign list"):
 			keep = append(keep, "LIST")
+		case strings.Contains(line, "bad array subscript"):
+			keep = append(keep, "BAD")
+		case strings.Contains(line, "invalid subscript"):
+			keep = append(keep, "INVALID")
 		case strings.Contains(line, "attempt to set slice"):
 			keep = append(keep, "SLICE")
 		case line == "", strings.HasPrefix(line, "+"):

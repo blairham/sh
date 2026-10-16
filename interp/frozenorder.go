@@ -199,8 +199,14 @@ func (r *Runner) frozenElementOrder(a *syntax.Assign) frozenElementOrder {
 // write up front could differ from refusing it later: the value or the
 // subscript can run or fail something. Deliberately wide, for the reason
 // elementOrderIsObservable is.
+//
+// The whole-array spelling is always observable: where its own refusal
+// comes first, the sentence is a different one even when nothing in the
+// assignment runs — over a table too, where `@` is no arithmetic for the
+// last clause to fail on (#6761).
 func (r *Runner) frozenElementOrderIsObservable(a *syntax.Assign) bool {
 	return r.wordTouchesState(a.Value) || r.wordTouchesState(a.Index) ||
+		a.IndexFlags == nil && wholeArraySubscript(a.IndexText) ||
 		!r.assocDeclared(a.Name) && r.subscriptArithTouchesState(a.Index)
 }
 
@@ -225,14 +231,20 @@ func (r *Runner) subscriptArithTouchesState(w *syntax.Word) bool {
 
 // frozenElementWaitsForItsStore reports whether this element write's store
 // asks Runner.refuseTheHeldFreeze: the plain subscript over an indexed array
-// or a table. A flag group, a pair of ends, the whole-array spelling and a
-// chain each have a road that does not, and are refused up front as they
-// always were — measured, `a[@]=$(…)` over a frozen name is refused for its
-// subscript in two columns and not for the freeze, which is a different
-// question.
+// or a table, and the whole-array spelling. A flag group, a pair of ends and
+// a chain each have a road that does not, and are refused up front as they
+// always were.
+//
+// The whole-array spelling waits because its own refusal comes first where
+// it has one (#6761). Measured 2026-10-16 on bash 5.3.20 and ksh93u+, `-c`
+// and file, after `readonly a=(1 2)`: `a[@]=$(echo VAL >&2)x` is VAL and
+// `a[@]: bad array subscript` in bash and `@: invalid subscript in
+// assignment`, with no VAL, in ksh93 — the sentences each writes over a name
+// that is not frozen. Over a frozen table bash stores `@` as a key, so there
+// the store is reached and refused for the freeze, after VAL.
 func (r *Runner) frozenElementWaitsForItsStore(a *syntax.Assign) bool {
 	return a.IndexFlags == nil && a.IndexRange == nil && len(a.Leading) == 0 &&
-		!wholeArraySubscript(a.IndexText) && !r.scalarAssignmentGlobs()
+		!r.scalarAssignmentGlobs()
 }
 
 // frozenLiteralIsExpandedFirst answers

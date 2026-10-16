@@ -279,7 +279,12 @@ func (r *Runner) openTheBareRedirections(ctx context.Context, c *syntax.SimpleCm
 		r.redirErr = true
 		return func() {}, true, nil
 	}
+	// The shell's own, so a failure among them is located as the shell's.
+	// See Runner.builtinIsSpeaking (#6655).
+	before := r.redirectWithNoWord
+	r.redirectWithNoWord = true
 	closers, err := r.applyRedirs(ctx, c.Redirs, false, owner)
+	r.redirectWithNoWord = before
 	put := func() {
 		for _, cl := range closers {
 			_ = cl.Close()

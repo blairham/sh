@@ -4243,6 +4243,11 @@ type Runner struct {
 	// builtin's — while the dialect that writes the builtin's name into the
 	// location does not name it for that message.
 	redirectForBuiltin string
+	// redirectWithNoWord says the redirections being opened belong to a
+	// command with no command word — `>f`, `x=1 <f` — which nothing but the
+	// shell itself can open, so a failure among them is the shell's own and
+	// located as a builtin's would be. See Runner.builtinIsSpeaking.
+	redirectWithNoWord bool
 
 	// redirForCommandWord is the command word whose redirections are being
 	// opened, builtin or not. A `{name}>f` whose store is refused names it —
@@ -6362,7 +6367,23 @@ func (r *Runner) builtinIsSpeaking() bool {
 		// interp/prefixfailurelocation.go.
 		return byBuiltin
 	}
-	return r.speaking() != "" || r.redirectForBuiltin != ""
+	// A command with no word is the shell opening the files itself, so a
+	// failure among them is located as a builtin's — measured 2026-10-15 on
+	// ksh93u+ 2012-08-01, a script whose line 2 is each of these (#6655):
+	//
+	//	>/nonexist/x, x=1 >/nonexist/x       t.sh[2]: /nonexist/x: cannot create …
+	//	echo a >/nonexist/x                  t.sh[2]: …
+	//	/bin/echo a >/nonexist/x             t.sh: line 2: …
+	//	>$((1/0)), <<E with $((1/0)), >&7    t.sh[2]: …
+	//
+	// and inside a sourced file it is `.[2]:` where a command not found on
+	// line 1 of it is `.: line 1:`. The noun is the command having no word:
+	// the first two rows differ only in the `echo`, which is a builtin, and
+	// the third only in the word being a program. The other dialects locate
+	// a builtin's redirection as they locate the shell's (measured on bash,
+	// zsh and dash at a prompt, on standard input and in a file), so this
+	// moves nothing there.
+	return r.speaking() != "" || r.redirectForBuiltin != "" || r.redirectWithNoWord
 }
 
 // locationIsInsideEvalText reports whether the line a diagnostic is about was

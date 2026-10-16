@@ -6181,6 +6181,9 @@ func withPromptWordings(d interp.Diagnostics) interp.Diagnostics {
 	// as its own call rather than shared with UnmatchedCmdSubst so that a
 	// later change to one cannot silently move the other.
 	d.UnmatchedArithSubst, d.PromptUnmatchedArithSubst = parseWording(4, "`(' unmatched")
+	// And the arithmetic command is the same parenthesis rather than the
+	// `((` it was written as (#6754).
+	d.UnmatchedArithCommand, d.PromptUnmatchedArithCommand = parseWording(4, "`(' unmatched")
 	// An expansion the input ran out inside is the brace unmatched, and it is
 	// the brace for the command form `${ echo hi` as much as for a `${x` the
 	// input simply stopped after. It said `${x{: bad substitution` until

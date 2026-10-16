@@ -1147,6 +1147,29 @@ func (r *Runner) readSubstBody(span syntax.Span) (*syntax.File, int, int, bool) 
 	// how the two came to be one wrong answer for both.
 	base := r.substRunBase(span, src, f, textBase)
 	err := p.Err()
+	if se, ok := err.(*syntax.Error); ok && se.Kind == syntax.ErrUnterminated &&
+		syntax.BraceBodyClosesAtAToken(span, r.bodyDialect(span)) {
+		// The body ran out with something still open, and in the dialect
+		// whose closing brace is a token of the body that brace is what
+		// arrived where the body could not take it. Measured 2026-10-16 on
+		// ksh93u+ 2012-08-01, by `-c`, a script file and standard input,
+		// each refused when the substitution runs (#6817):
+		//
+		//	echo ${ if :; then }          `}' unexpected — not `then' unmatched
+		//	echo ${ while :; do }         `}' unexpected
+		//	echo ${ case a in a) }        `}' unexpected
+		//	echo ${ echo a && }           `}' unexpected — not `end of file'
+		//	echo ${ [[ a }                `}' unexpected
+		//	echo ${ if :; then ⏎ : ⏎ }    at line 3 of the body, the brace's
+		//	echo ${ { :; }                `{' unmatched — the brace closed the
+		//	                              group, and the body never ended
+		line := int32(r.diag().ParseFailureLine(se))
+		err = &syntax.Error{
+			Pos: syntax.Pos{Line: line}, Kind: syntax.ErrUnexpected,
+			Token: "}", Class: syntax.ClassReserved, EndLine: int(line),
+			Msg: "`}' unexpected",
+		}
+	}
 	if err == nil && syntax.BraceBodyClosedBehindABraceName(span, r.bodyDialect(span)) {
 		// The `}` that closed the body stood straight behind a `{name}`, and
 		// the shell that reads it as a closer then refuses the body as one

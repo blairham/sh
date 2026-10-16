@@ -6272,6 +6272,16 @@ type Diagnostics struct {
 	// in the panel states an answer here, so the fallback is what the core
 	// and a new dialect get rather than what any measured shell relies on.
 	UnmatchedArithSubst string
+	// UnmatchedArithCommand is the `((` of an arithmetic command the input
+	// ran out inside, in the dialect that names it apart from the token it
+	// was written as. Same verbs. Empty is the quote's sentence with the
+	// token, which is what every other dialect says.
+	//
+	// ksh93u+: measured 2026-10-15 over script files and standard input,
+	// `(( 1 +`, `((`, `((1+`, `(( "`, `(( $(echo` and `for (( i=0` are each
+	// ``syntax error at line 1: `(' unmatched`` — the one parenthesis, as
+	// for `$((` — where `(( ${` names the `{` it ran out in (#6754).
+	UnmatchedArithCommand string
 	// UnmatchedReportedAtOpener puts an unmatched quote's diagnostic on
 	// the line the opener is on rather than the line the input ran out on.
 	UnmatchedReportedAtOpener bool
@@ -10595,6 +10605,7 @@ type Diagnostics struct {
 	PromptUnmatchedQuote            string
 	PromptUnmatchedCmdSubst         string
 	PromptUnmatchedArithSubst       string
+	PromptUnmatchedArithCommand     string
 	PromptUnmatchedBraceSubst       string
 	PromptUnmatchedBraceSubstAtStop string
 	PromptUnmatchedProcSubst        string
@@ -11618,6 +11629,10 @@ func (d Diagnostics) ParseFailure(err error) string {
 			if se.BraceNameStop != "" && d.UnmatchedBraceSubstAtStop != "" {
 				form = d.UnmatchedBraceSubstAtStop
 			}
+		case "((":
+			if d.UnmatchedArithCommand != "" {
+				form = d.UnmatchedArithCommand
+			}
 		case "$((", "$[":
 			// Assigned whatever the dialect says, empty included, because
 			// empty here must *not* leave form as UnmatchedQuote — a shell
@@ -11864,6 +11879,7 @@ func (d Diagnostics) ForPrompt() Diagnostics {
 		{&d.UnmatchedQuote, d.PromptUnmatchedQuote},
 		{&d.UnmatchedCmdSubst, d.PromptUnmatchedCmdSubst},
 		{&d.UnmatchedArithSubst, d.PromptUnmatchedArithSubst},
+		{&d.UnmatchedArithCommand, d.PromptUnmatchedArithCommand},
 		{&d.UnmatchedBraceSubst, d.PromptUnmatchedBraceSubst},
 		{&d.UnmatchedBraceSubstAtStop, d.PromptUnmatchedBraceSubstAtStop},
 		{&d.UnmatchedProcSubst, d.PromptUnmatchedProcSubst},

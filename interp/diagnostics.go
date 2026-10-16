@@ -7419,6 +7419,10 @@ type Diagnostics struct {
 	// and inside `function f` it is `f[1]: f: o: …`, `$0` being the
 	// function's name there. Needs "getopts" in ReadonlyRefusalNamesBuiltin,
 	// which puts the builtin's name in front for this to replace.
+	//
+	// Where BorrowedTextRendersTheCallStack writes a chain, it is the chain's
+	// innermost frame rather than `$0`: `eval[1]: eval: o: …` inside an
+	// `eval` and `.[1]: .: o: …` inside a `.` (#6632).
 	GetoptsRefusalNamesTheScript bool
 	// LiteralOperandAfterADeclarationIsLocatedUnderTheCall puts the
 	// *enclosing function's* name where a builtin's would go, for the one

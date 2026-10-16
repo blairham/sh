@@ -25134,6 +25134,48 @@ type Semantics struct {
 	// on the same command stored into. dash and ash have no `{name}`.
 	FdVariableStoredAfterThePrefix Answer
 
+	// FdVariableMakesABareListASubshell says whether a command with no
+	// command word whose redirections include a `{name}` makes the whole
+	// list in a child of its own, the way the redirections of a `( … )` are
+	// made — so the shell keeps neither the name, nor the descriptor, nor
+	// anything else the list did (#6630).
+	//
+	// Measured 2026-10-15 with `-c` against bash 5.3.20 and ksh93u+
+	// 2012-08-01 (/bin/ksh), each line then `echo "[$v]"`:
+	//
+	//	                                        bash 5.3.20     ksh93u+
+	//	{v}>/dev/null                           []              [10]
+	//	v=5; {v}>/dev/null                      [5]             [10]
+	//	… then exec {w}>/dev/null; echo $w      10              11
+	//	{v}>/dev/null 2>/dev/nul${x:=l}; $x     []              l
+	//	2>/dev/nul${x:=l} {v}>/dev/null; $x     []              l
+	//	x=1 {v}>/dev/null; echo "[$v][$x]"      [][1]           [10][1]
+	//	exec 9</dev/null; 4<&9- {v}>/dev/null   9 still open    —
+	//	readonly v=1; {v}>/dev/null             refused, st=1   refused
+	//
+	// bash's `$BASHPID` written into a target is the parent's on a bare
+	// `2>p.$BASHPID` and a child's on `{v}>/dev/null 2>p.$BASHPID`, so Yes
+	// is a fork of the whole list, not a store taken back: an expansion in
+	// a target *ahead* of the `{name}` is lost with it, and a move's source
+	// comes back. The prefix is assigned before the list and stays. A
+	// readonly name is still refused out loud, by the child, at 1. ksh93
+	// answers No: the list is the shell's, and whether the descriptor
+	// outlives it is FdVariableOutlivesTheCommand's question.
+	//
+	// zsh has no such command: a `{name}` in front of the command word opens
+	// a brace group there, so `{v}>/dev/null` runs a command named `v` and a
+	// command of redirections alone has no `{name}` in it (#6629). dash and
+	// ash have no `{name}` redirection.
+	//
+	// Asked only where a bare list has a `{name}` in it; `>f` and `x=1 >f`
+	// with no command word ask nothing.
+	//
+	// unpinned bash: no corpus case runs a bare `{name}` redirection;
+	// TestABareFdVariableListIsASubshell pins it.
+	//
+	// unpinned ksh: the same; TestABareFdVariableListIsTheShells pins it.
+	FdVariableMakesABareListASubshell Answer
+
 	// NoclobberProtectsAnFdVariable refuses a `{name}` redirection under
 	// `set -C` when the name already holds a descriptor this shell has open.
 	//

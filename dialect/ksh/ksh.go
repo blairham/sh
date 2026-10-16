@@ -4698,6 +4698,11 @@ func Semantics() interp.Semantics {
 	// echo "[$v]"` is `in[10] [10]`, measured 2026-10-15 on ksh93u+
 	// (#6569). See interp.Semantics.FdVariableStoredAfterThePrefix.
 	s.FdVariableStoredAfterThePrefix = interp.Yes
+	// And a command with no command word makes a `{name}` redirection in the
+	// shell like any other: `{v}>/dev/null; echo "[$v]"` is `[10]`, measured
+	// 2026-10-15 on ksh93u+ (#6630). See
+	// interp.Semantics.FdVariableMakesABareListASubshell.
+	s.FdVariableMakesABareListASubshell = interp.No
 	// And `set -C` does not protect the name: `exec {m}>f1; exec {m}>f2`
 	// allocates a second descriptor and overwrites it in silence, measured
 	// 2026-09-29. See interp.Semantics.NoclobberProtectsAnFdVariable.

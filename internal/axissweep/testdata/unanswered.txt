@@ -149,6 +149,7 @@ ash   ExportedCompoundReachesAChildAsItsFirstValue
 ash   FailedSubscriptedLiteralKeepsWhatItStored
 ash   FailingPipelineWhoseLastElementRanHere
 ash   FdVariableBadName
+ash   FdVariableMakesABareListASubshell
 ash   FdVariableOnASubshellIsTheSubshells
 ash   FdVariableReachesTheProgramsEnvironment
 ash   FdVariableReadonlyRefusedFirst
@@ -547,6 +548,7 @@ dash  ExportedCompoundReachesAChildAsItsFirstValue
 dash  FailedSubscriptedLiteralKeepsWhatItStored
 dash  FailingPipelineWhoseLastElementRanHere
 dash  FdVariableBadName
+dash  FdVariableMakesABareListASubshell
 dash  FdVariableOnASubshellIsTheSubshells
 dash  FdVariableReachesTheProgramsEnvironment
 dash  FdVariableReadonlyRefusedFirst
@@ -820,6 +822,7 @@ zsh   DeclarationThroughAReferenceNamesTheOperand
 zsh   ErrtraceReachesSubshells
 zsh   ExitTrapFiresWhereTheScriptStopped
 zsh   ExportOrReadonlyTakesAReferenceToAnElement
+zsh   FdVariableMakesABareListASubshell
 zsh   FdVariableOnASubshellIsTheSubshells
 zsh   ForNameWhenTheLoopRuns
 zsh   FunctionNameWhenTheDefinitionRuns

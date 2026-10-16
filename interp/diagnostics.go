@@ -10388,6 +10388,23 @@ type Diagnostics struct {
 	// dialect that names the place two ways in one session. Zero means "the
 	// same as BuiltinLocation".
 	PromptBuiltinLocation LocationStyle
+	// PromptLocatesAFunctionReadFromAFile locates a function a file defined,
+	// called at the prompt once the file is done, the way the prompt locates
+	// its own lines — where the default keeps the file's location for it,
+	// which is zsh's (#2052, and Runner.diag). It is the input being read
+	// when the failure happens that decides, not where the body came from.
+	//
+	// BusyBox ash's. Measured 2026-10-15 on v1.37.0 in the pinned image,
+	// with `g` defined in `g.inc` and running `cd /nx` on that file's line 3:
+	//
+	//	at the prompt, `. ./g.inc` then `g`        ash: cd: can't cd …
+	//	`g` called from inside another `.` file     ash: cd: line 3: can't cd …
+	//	`h` typed at the prompt, called from a file ash: cd: line 2: can't cd …
+	//	`ash -c '. ./g.inc; g'` (control)           ash: cd: line 3: can't cd …
+	//
+	// so the same body names its line while a file is being read and not at
+	// the prompt, wherever it was defined.
+	PromptLocatesAFunctionReadFromAFile bool
 
 	// bodyLocation and bodyBuiltinLocation are Location and BuiltinLocation
 	// as they stood before a route replaced them, for a diagnostic the
@@ -12829,8 +12846,18 @@ func (r *Runner) promptLocated() bool {
 	if r.speaksAsAtAPrompt() {
 		return true
 	}
-	return r.AtPrompt && r.borrowedFiles == 0 && !r.inFunctionReadFromAFile() && !r.evalTextAtAPrompt(true) &&
+	return r.AtPrompt && r.borrowedFiles == 0 && !r.functionKeepsItsFilesLocation() && !r.evalTextAtAPrompt(true) &&
 		!r.evalTextKeepsItsLocationAtAPrompt()
+}
+
+// functionKeepsItsFilesLocation reports whether the body running now was read
+// from a file, in a dialect whose prompt leaves such a body the file's
+// location. See Diagnostics.PromptLocatesAFunctionReadFromAFile.
+func (r *Runner) functionKeepsItsFilesLocation() bool {
+	if r.Diagnostics != nil && r.Diagnostics.PromptLocatesAFunctionReadFromAFile {
+		return false
+	}
+	return r.inFunctionReadFromAFile()
 }
 
 // evalTextKeepsItsLocationAtAPrompt reports whether the line being located is

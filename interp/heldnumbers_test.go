@@ -104,6 +104,44 @@ func TestTheShellsOwnDescriptorsAreInItsNumbers(t *testing.T) {
 	}
 }
 
+// A simple command as a forked pipeline element holds one more number from
+// its first process substitution's pipe until its words are expanded,
+// measured against zsh 5.9.2 (#6530): after that pipe's first end, so a
+// writing substitution steps over it as well; seen by a command substitution
+// in a later word; given back before a function body runs and before the
+// command's own list. A case of its own, in a quiet table of its own, because
+// a writing substitution's body that is still finishing is in the table the
+// next case counts from (#6701).
+func TestAForkedElementsFirstSubstitutionHoldsANumber(t *testing.T) {
+	if measuredInAQuietDescriptorTable(t) {
+		return
+	}
+	free := freeFdsAlong(t, 10, 200, 4)
+	for _, c := range []struct {
+		src  string
+		want []int
+	}{
+		{`echo <(true) <(true) <(true) | read -r x; echo $x`, []int{0, 2, 3}},
+		{`echo >(true) >(true) | read -r x; echo $x`, []int{2, 3}},
+		{`echo <(true) >(true) | read -r x; echo $x`, []int{0, 3}},
+		{`{ echo <(true) <(true); } | read -r x; echo $x`, []int{0, 1}},
+		{`echo <(true) $(exec {v}</dev/null; echo $v) | read -r x; echo $x`, []int{0, 2}},
+		{`f() { echo <(true) "$@"; }; f <(true) <(true) | read -r x; echo $x`, []int{1, 0, 2}},
+		{`f() { echo "$@" $v; }; f <(true) <(true) {v}</dev/null | read -r x; echo $x`, []int{0, 2, 1}},
+	} {
+		t.Run(c.src, func(t *testing.T) {
+			got := substNumbers(t, runOwnDescriptors(t, SavedStreamsAndPipeReadEndsTakeNumbers, c.src))
+			var want []int
+			for _, i := range c.want {
+				want = append(want, free[i])
+			}
+			if !sameFds(got, want) {
+				t.Errorf("got %v, want %v", got, want)
+			}
+		})
+	}
+}
+
 // And `exec {v}` steps over the same numbers, because it is the same
 // allocation: zsh 5.9.2 answers 12 for both of these, where 11 is free with
 // nothing held.

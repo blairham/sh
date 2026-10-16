@@ -84,6 +84,7 @@ func (r *Runner) procSub(ctx context.Context, span syntax.Span) (string, bool) {
 	// expands, is compared against, and never starts its command. See
 	// Runner.PipesMadeForTest.
 	r.procSubHomeBox().seq.Add(1)
+	r.holdForTheFirstSubstitution()
 	ends, err := newProcSubPipe(kind == syntax.ProcSubstOut, r.procSubFdDir(),
 		r.substEndCandidates(), r.substFdView(), r.writingEndStepsOverTheReadingEnd(kind))
 	if err != nil {

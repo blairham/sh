@@ -206,6 +206,14 @@ func (r *Runner) ExitRan() bool { return r.ctl == controlExit && r.exitRan }
 // Semantics.LogoutFileReadWhen.
 func (r *Runner) ErrExitEnded() bool { return r.ctl == controlExit && r.errexitStopped }
 
+// ReturnEnded reports whether a `return` outside any function is what ended
+// the program — which, like `exit`, ends it before its input runs out.
+// Measured 2026-10-15, `echo a; return 4; echo b` as a file under `-i` and
+// as a `-i -c` string: ksh93u+ and BusyBox ash v1.37.0 stop at 4 and write
+// no newline for the end of the input, where `echo a` alone ends with one
+// (#6695).
+func (r *Runner) ReturnEnded() bool { return r.ctl == controlReturn }
+
 // ExitFoundStatus is the status the last `exit` found when it ran, before it
 // named one of its own — what a logout file reads in `$?` (#5996).
 func (r *Runner) ExitFoundStatus() int { return r.exitFoundStatus }

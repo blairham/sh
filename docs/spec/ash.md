@@ -901,6 +901,28 @@ The status was already right and is not this field's: dash and ash exit 2
 where the other five columns exit 1, which is
 `Semantics.FatalErrorStatusIsOne`.
 
+## An interactive script is located and ended as a file and a prompt at once
+
+Measured 2026-10-15 in the digest-pinned image, BusyBox v1.37.0, `sh -i FILE`
+with no terminal against `sh FILE` (#6695):
+
+- **The terminal remark is located like anything else on the route**, at a
+  line nothing has reached: `FILE: line 0: can't access tty; job control
+  turned off`, where `-i -c`, `-i -s` and the prompt write `sh: can't access
+  tty; …` with no line. See `Diagnostics.NoJobControlAtStartupIsLocated`.
+- **A subshell names no line.** The same failure keeps `line N:` at the top
+  of the file, in a `{ }` group and in a function, and loses it in `( )`,
+  `$( )`, a pipeline's commands and a job started with `&` — but a file `.`
+  reads inside a subshell still names its own line, as it does at the prompt.
+  Without `-i` every one of them names its line. See
+  `Diagnostics.InteractiveSubshellNamesNoLine`.
+- **The end of the file ends the line**, as the prompt does when its input
+  runs out: a newline on standard error after the last command, and after a
+  fatal error's diagnostic, but not after `exit`, `return` or `set -e` ended
+  the program first, and not on `-i -c`. See
+  `Semantics.InteractiveScriptEndOfInputEndsTheLine`. The `return` half is
+  ksh93's too, on both of its routes, and was wrong there as well.
+
 ## Vector summary
 
 `dialect/ash/ash.go` carries the evidence for each answer beside the

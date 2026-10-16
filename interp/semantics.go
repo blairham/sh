@@ -20567,6 +20567,37 @@ type Semantics struct {
 	// (TestTheEndOfInputEndsTheLineInDashAshAndKsh).
 	PromptEndOfInputEndsTheLine bool
 
+	// InteractiveScriptEndOfInputEndsTheLine writes that same newline when
+	// an interactive shell's script file — `-i FILE` — runs out, in a shell
+	// that does not otherwise read the file as a prompt.
+	//
+	// BusyBox ash's. Measured 2026-10-15 on v1.37.0 in the pinned image,
+	// standard error alone:
+	//
+	//	the file                     sh -i FILE        sh -i -c, sh FILE
+	//	echo a                       \n                nothing
+	//	nosuch, cd /nonexist         diagnostic, \n    diagnostic
+	//	: ${zz?b}; echo after        diagnostic, \n    diagnostic
+	//	echo a; )                    diagnostic, \n    diagnostic
+	//	trap "echo T>&2" EXIT; true  \n then T         T
+	//	/bin/true                    \n                nothing
+	//	exit 3, return 4, set -e; false, f(){ exit 2;}; f   nothing
+	//	exec 2>/dev/null; true       nothing
+	//
+	// So it is the end of the file and not of the shell: an `exit` writes
+	// none, and so does a fatal error's end in `-i -c`, which is the one
+	// interactive route left without it. ksh93 writes the same newline on
+	// `-i FILE` and `-i -c` alike, which it reaches by reading both as a
+	// prompt — Semantics.PromptNumbersEachInputFromOne (#6654) — so this
+	// field is for a shell that numbers the file's lines as a file's (#6695).
+	//
+	// Read by the front end, for the reason PromptEndOfInputEndsTheLine is.
+	//
+	// unpinned: reached, and the corpus cannot discriminate: no case runs
+	// `-i`. cmd/ash's TestAnInteractiveAshScriptIsLocatedAndEndedAsBusyBoxDoes
+	// pins it.
+	InteractiveScriptEndOfInputEndsTheLine bool
+
 	// PromptAgainForAnUnterminatedLine is the prompt drawn once more when
 	// the input of a prompt that is not a terminal ends partway through a
 	// line, before that line is run.

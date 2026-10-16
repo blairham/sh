@@ -45,6 +45,11 @@ func TestAnInteractiveKshEndsTheLineAtTheEndOfItsProgram(t *testing.T) {
 		{"exit", "exit 3", "", ""},
 		{"exit in a function", "f() { exit 2; }; f", "", ""},
 		{"set -e", "set -e; false; echo x", "", ""},
+		// And `return` outside any function, which ends the program at its
+		// status as `exit` does: measured 2026-10-15 on ksh93u+, `echo a;
+		// return 4; echo b` stops at 4 and writes nothing here on either
+		// route (#6695).
+		{"return", "echo a; return 4; echo b", "", ""},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			if err := os.WriteFile(filepath.Join(home, "e.sh"), []byte(c.program+"\n"), 0o600); err != nil {

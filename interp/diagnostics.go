@@ -4296,6 +4296,30 @@ type Diagnostics struct {
 	// session at a prompt (#6611).
 	EvalTextNamesNoLineWhenInteractive bool
 
+	// InteractiveSubshellNamesNoLine locates a diagnostic written in a
+	// subshell of an interactive shell — `( )`, `$( )`, a pipeline's
+	// commands, a job started with `&` — by name alone, where the shell
+	// itself names its line.
+	//
+	// BusyBox ash's, and it shows on `-i FILE`, the one interactive route
+	// that names lines at all. Measured 2026-10-15 on v1.37.0 in the pinned
+	// image, one file under `-i` and without it:
+	//
+	//	                            sh FILE                  sh -i FILE
+	//	nosuch_top                  FILE: line 2: …          FILE: line 2: …
+	//	{ nosuch_br; }              FILE: line 4: …          FILE: line 4: …
+	//	f(){ nosuch_fn; }; f        FILE: line 7: …          FILE: line 7: …
+	//	x=$(nosuch_cs)              FILE: line 3: …          FILE: nosuch_cs: …
+	//	(nosuch_sub), y=$(cd /nx)   FILE: line 5:, cd: line 6:  no line
+	//	nosuch_p1 | cat, nosuch &   FILE: line 2:, line 5:   no line
+	//	x=$(f)                      FILE: line 6: …          no line
+	//	( . ./s.inc )               ./s.inc: line 3: …       ./s.inc: line 3: …
+	//
+	// so the noun is the subshell: the same command keeps its line in a brace
+	// group or a function and loses it in a `( )`, and a file `.` reads keeps
+	// its own line inside one, as it does at the prompt (#6695).
+	InteractiveSubshellNamesNoLine bool
+
 	// SetInvalidOptionName is a long `set -o` name this shell does not have.
 	// Two verbs: the name, and the sign it was asked with — `-` or `+`.
 	//
@@ -8590,6 +8614,22 @@ type Diagnostics struct {
 	// one file of bash's own suite (#2298).
 	NoJobControlAtStartupNamesTheBaseName bool
 
+	// NoJobControlAtStartupIsLocated writes that remark with the route's own
+	// location at line 0 in front of it, rather than with the name alone.
+	//
+	// BusyBox ash's. Measured 2026-10-15 on v1.37.0 in the pinned image,
+	// with no terminal:
+	//
+	//	ash -i FILE     FILE: line 0: can't access tty; job control turned off
+	//	ash -i -c …     ash: can't access tty; …
+	//	ash -i, -i -s   ash: can't access tty; …
+	//
+	// which is the remark located as any diagnostic on the route is — a line
+	// on the script route and none on the other two — at a line the program
+	// has not reached. dash writes `0:` on all three, which is
+	// InvocationNamesTheUnreadLine and not this (#6695).
+	NoJobControlAtStartupIsLocated bool
+
 	// LeavingAPromptSession is what an interactive shell writes as its
 	// prompt session ends, on the error stream, after the last prompt it
 	// drew. No verbs.
@@ -11853,6 +11893,11 @@ func (d Diagnostics) invocationUsageBlock(shell string, long bool) string {
 func (d Diagnostics) JobControlDiagnostic(shell string) string {
 	if d.NoJobControlAtStartup == "" {
 		return ""
+	}
+	if d.NoJobControlAtStartupIsLocated {
+		// The route's own location, at the line nothing has reached yet. See
+		// the field.
+		return d.prefix(shell, "", false, 0) + d.NoJobControlAtStartup + "\n"
 	}
 	return d.invocationPrefix(shell) + d.NoJobControlAtStartup + "\n"
 }

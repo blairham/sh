@@ -2487,6 +2487,9 @@ func Semantics() interp.Semantics {
 	s.PromptReadSize = 1024
 	// See Semantics.PromptEndOfInputEndsTheLine (#6330).
 	s.PromptEndOfInputEndsTheLine = true
+	// And the end of an interactive script's file, measured in the pinned
+	// image (#6695). See Semantics.InteractiveScriptEndOfInputEndsTheLine.
+	s.InteractiveScriptEndOfInputEndsTheLine = true
 	// And an unterminated last line has its prompt drawn again. See
 	// Semantics.PromptAgainForAnUnterminatedLine (#6331).
 	s.PromptAgainForAnUnterminatedLine = interp.SamePromptForAnUnterminatedLine
@@ -3083,6 +3086,10 @@ func Diagnostics() interp.Diagnostics {
 		// name alone wherever the eval is (#6611). See
 		// interp.Diagnostics.EvalTextNamesNoLineWhenInteractive.
 		EvalTextNamesNoLineWhenInteractive: true,
+		// And a subshell of an interactive shell names no line, where the
+		// shell itself names one on `-i FILE` (#6695). See
+		// interp.Diagnostics.InteractiveSubshellNamesNoLine.
+		InteractiveSubshellNamesNoLine: true,
 		// And the whole of an interactive shell's `-c` string is located as
 		// a line typed at the prompt: a builtin's complaint names itself and
 		// no line, where `ash -c` names `line 0`. The noun is the shell being
@@ -3685,6 +3692,11 @@ func Diagnostics() interp.Diagnostics {
 		// `ash -i /tmp/s.sh` is `/tmp/s.sh: line 0: …`, whose line this
 		// field does not write (#5723).
 		NoJobControlAtStartupNamesTheScript: true,
+		// And located as the route locates anything, at line 0: `ash -i
+		// /tmp/s.sh` is `/tmp/s.sh: line 0: …` and the other two routes name
+		// no line. See interp.Diagnostics.NoJobControlAtStartupIsLocated
+		// (#6695).
+		NoJobControlAtStartupIsLocated: true,
 
 		// `alias -g` is a name this shell cannot find, said with nothing in
 		// front of it at all — no shell, no line.

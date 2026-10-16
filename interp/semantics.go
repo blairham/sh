@@ -5403,7 +5403,7 @@ type Semantics struct {
 	// and an error in a function the body calls skips it too, while one the
 	// body survives — inside an `eval`, or in a subshell — does not. ksh93's
 	// `function name { … }` scope runs its trap on every row (with a status
-	// of its own, #6720's neighbour). bash, dash and BusyBox ash never fire
+	// of its own, #6873). bash, dash and BusyBox ash never fire
 	// a function-local EXIT trap, so the preset's no is never read there.
 	FunctionExitTrapSkippedByAGiveUp Answer
 

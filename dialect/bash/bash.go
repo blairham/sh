@@ -3336,6 +3336,8 @@ func Semantics() interp.Semantics {
 	// `read -n 3 a 1bad` refuses `1bad` and fills a with the three
 	// characters, exactly as `read a 1bad` refuses it.
 	s.ReadCountJudgesTheNamesAfterTheFirst = interp.Yes
+	// See interp.Semantics.ReadCountFillsTheFirstNameWhole (#6776).
+	s.ReadCountFillsTheFirstNameWhole = interp.No
 	// unanswered ExportThroughASubscriptedOperandRecordsTheLetter: the
 	// operand is refused one complaint earlier here, as
 	// ``export: `a[1]': not a valid identifier`` at 1, so no element

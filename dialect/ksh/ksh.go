@@ -3567,6 +3567,8 @@ func Semantics() interp.Semantics {
 	// `read -N 3 1bad` is refused — so it is the names after it that a
 	// count releases.
 	s.ReadCountJudgesTheNamesAfterTheFirst = interp.No
+	// See interp.Semantics.ReadCountFillsTheFirstNameWhole (#6776).
+	s.ReadCountFillsTheFirstNameWhole = interp.Yes
 	s.DeclarationTakesASubscript = interp.Yes
 	// And the letter lands on the array: measured 2026-09-17,
 	// `a=(1 2 3); export 'a[1]'=v` leaves `typeset -x -a a` and puts `a=1`

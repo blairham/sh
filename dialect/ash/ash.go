@@ -2613,6 +2613,8 @@ func Semantics() interp.Semantics {
 	// really is a count here — `read -n 3 v` of `abcdef` leaves `abc`. ksh93
 	// is the shell a count quiets (#2272).
 	s.ReadCountJudgesTheNamesAfterTheFirst = interp.Yes
+	// See interp.Semantics.ReadCountFillsTheFirstNameWhole (#6776).
+	s.ReadCountFillsTheFirstNameWhole = interp.No
 
 	// `set -e` stops for a failure only pipefail saw: `set -eo pipefail;
 	// false | true; echo reached` reaches nothing and the shell ends at 1,

@@ -256,6 +256,9 @@ func testSemantics() Semantics {
 	s.ReadOptions = "rsa:d:n:N:p:t:u:"
 	s.ReadExactCountKeepsPartial = Yes
 	s.ReadPartialCountSucceeds = No
+	// A count splits what it took across the names, which is bash's answer.
+	// The suite that is about both is readcountwhole_test.go.
+	s.ReadCountFillsTheFirstNameWhole = No
 	s.ReadTimeoutKeepsWhatArrived = Yes
 	// And what the deadline is a deadline *for*: the whole read, which is
 	// what two of the three answer. The suite that is *about* it sets both —

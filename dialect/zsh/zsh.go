@@ -4362,7 +4362,9 @@ func Semantics() interp.Semantics {
 	// have a reader left to ask.
 	s.ReadRefusesABadNameBeforeReading = interp.No
 	s.ReadJudgesEveryNameBeforeReading = interp.No
-	// ReadCountJudgesTheNamesAfterTheFirst is left unanswered here too.
+	// ReadCountJudgesTheNamesAfterTheFirst is left unanswered here too, and
+	// so is ReadCountFillsTheFirstNameWhole, for the reason below.
+	// unanswered ReadCountFillsTheFirstNameWhole: see the line above.
 	// This shell's `-n` is a flag rather than a count and its `-k` reads
 	// from the terminal — `printf 'XYZW\n' | zsh -c 'read -k 3 a'` answers
 	// `not interactive and can't open terminal` — so no count ever reaches

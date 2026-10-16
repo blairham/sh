@@ -326,6 +326,19 @@ func (r *Runner) declarationOf(name string) (declaration, bool) {
 		if pd.Float {
 			d.precision = pd.Places
 		}
+		if r.producedFloatRetyped(name, pd) {
+			// The script made the produced float an integer, and it lists
+			// as one. See Runner.producedThroughItsAttributes.
+			d.integer, d.float, d.precision = true, false, 0
+		}
+		if b := r.integerBase[name]; b != 0 && d.integer {
+			// And a base the script declared is the one written, over the
+			// one the dialect states: measured 2026-10-16, `typeset -i16
+			// RANDOM; typeset -p RANDOM` is `typeset -i16 RANDOM=…` on zsh
+			// 5.9.2 and `typeset -i 16 RANDOM=…` on ksh93u+, where this wrote
+			// the stated `-i10` and `-i` (#6758).
+			d.base = b
+		}
 		d.silent = pd.Silent
 		// See ProducedDeclaration.Array: the operand-less listing withholds a
 		// *reading* and an array's elements are not one, so the two produced
@@ -481,6 +494,11 @@ func (r *Runner) declarationOf(name string) (declaration, bool) {
 	// rather than around it.
 	if produce, ok := r.producersLookup(name); ok && attributed && !r.listingDrawsNoReading {
 		d.value, d.hasValue = produce(r), true
+		if pd, ok := r.producedDeclaration(name); ok && r.producedFloatRetyped(name, pd) {
+			// A retyped float lists the text it reads as. See
+			// Runner.producedThroughItsAttributes.
+			d.value = r.producedThroughItsAttributes(name, d.value)
+		}
 		return d, true
 	}
 	if _, ok := r.producersLookup(name); ok && attributed {

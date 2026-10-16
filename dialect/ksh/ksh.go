@@ -3235,6 +3235,11 @@ func Semantics() interp.Semantics {
 	// substitution: measured 2026-10-16 on ksh93u+, `case a in $(false)) echo
 	// m ;; esac; echo $?` writes 1 (#6710).
 	s.CaseWithoutACommandKeepsTheSubstitutionStatus = interp.Yes
+	// A produced integer reads in decimal whatever base the script
+	// declared, which only the listing writes: measured 2026-10-16,
+	// `typeset -i2 LINENO; echo $LINENO` is `1` and `typeset -p LINENO` is
+	// `typeset -i 2 LINENO=1` (#6758).
+	s.ProducedIntegerReadsInItsBase = interp.No
 	// A `+`-prefixed word is an operand and ends the scan: measured
 	// 2026-09-17 on ksh93u+ 2012-08-01, `getopts a o +a` is 1 with the name
 	// `?` — which is worth measuring rather than inheriting, this shell's own

@@ -4007,6 +4007,10 @@ func Semantics() interp.Semantics {
 	// A `case` that runs no command ends on 0: measured 2026-10-16 on
 	// zsh 5.9.2, `case a in $(false)) echo m ;; esac; echo $?` writes 0 (#6710).
 	s.CaseWithoutACommandKeepsTheSubstitutionStatus = interp.No
+	// A produced integer reads in the base the script declared for it:
+	// measured 2026-10-16, `typeset -i2 LINENO; echo $LINENO` is `2#1` and
+	// `typeset -i16 RANDOM` reads `16#…` (#6758).
+	s.ProducedIntegerReadsInItsBase = interp.Yes
 	// A `+`-prefixed word is an option word here, and this shell is alone in
 	// it: `getopts a o +a` is 0 with `+a` in the name, the sign kept so a
 	// script can tell it from `-a`. `+ab` clusters, `+a val` and `+aval` take

@@ -6907,6 +6907,29 @@ type Semantics struct {
 	// last substitution's, pattern or subject (#6710).
 	CaseWithoutACommandKeepsTheSubstitutionStatus Answer
 
+	// ProducedIntegerReadsInItsBase writes a produced integer parameter —
+	// RANDOM, LINENO, SECONDS — in an output base the script declared for it,
+	// where the other answer reads it in decimal whatever the declaration
+	// said. Both list the declared base.
+	//
+	// Measured 2026-10-16 under `-c` on zsh 5.9.2 (`-f`) and ksh93u+:
+	//
+	//	                                          zsh 5.9.2   ksh93u+
+	//	typeset -i16 RANDOM; echo ${#RANDOM}      7           4 or 5
+	//	typeset -i2 LINENO; echo $LINENO          2#1         1
+	//	typeset -p of either                      -i16        -i 16
+	//
+	// ksh93's float SECONDS made an integer is not this question: there it is
+	// written in the declared base, which is the float becoming a stored
+	// integer rather than a produced one keeping its base. See
+	// Runner.producedThroughItsAttributes (#6758).
+	//
+	// unpinned bash: `declare -i` takes no base, so no produced name can
+	// carry one.
+	// unpinned dash: no `typeset`, so no base.
+	// unpinned ash: the same.
+	ProducedIntegerReadsInItsBase Answer
+
 	// GetoptsLocalOptindRestoresTheCursor hands the caller back its position
 	// *inside* a clustered word when a call that declared a local `OPTIND`
 	// returns — not only the number the parameter held.

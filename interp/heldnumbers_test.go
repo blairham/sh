@@ -7,6 +7,7 @@ package interp_test
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"strings"
 	"testing"
@@ -224,7 +225,9 @@ func TestTheLastPipelineElementHoldsANumber(t *testing.T) {
 		{LastPipelineElementsInputTakesANumber, `echo x | { exec {v}</dev/null; echo $v; }`, "11"},
 		{LastPipelineElementsInputTakesANumber, `true | true | { exec {v}</dev/null; echo $v; }`, "11"},
 		{LastPipelineElementsInputTakesANumber, `echo x | ( exec {v}</dev/null; echo $v )`, "11"},
-		{LastPipelineElementsInputTakesANumber, `{ exec {v}</dev/null; echo $v; } </dev/null`, "10"},
+		// Not the last command of a `-c` string here, so the group saves
+		// its input. See TestTheLastCommandSavesNothing.
+		{LastPipelineElementsInputTakesANumber, `{ exec {v}</dev/null; echo $v; } </dev/null`, "11"},
 		{LastPipelineElementsInputTakesANumber, `{ exec {v}</dev/null; } | :; exec {w}</dev/null; echo $w`, "10"},
 		// Held while the element runs and let go of after, and only where
 		// the shell's input was open.
@@ -244,6 +247,85 @@ func TestTheLastPipelineElementHoldsANumber(t *testing.T) {
 			out, st := run(t, c.src, withSem(sem))
 			if got := strings.Join(strings.Fields(out), " "); got != c.want || st != 0 {
 				t.Errorf("got %q (status %d), want %q", got, st, c.want)
+			}
+		})
+	}
+}
+
+// The dialect that holds a number for the last pipeline element's input
+// saves each stream a redirection list replaces, and a move's source, except
+// on the last command a `-c` string runs, measured 2026-10-16 against ksh93u+
+// (#6814, #6747, #6637). last says the text is the whole of a `-c` string's
+// last part. Exact `{v}` numbers from a base of 10. See
+// Runner.tailPutsNothingBack and redirHolds.moved.
+func TestTheLastCommandSavesNothing(t *testing.T) {
+	const g = `{ exec {v}</dev/null; echo $v; }`
+	for _, c := range []struct {
+		src  string
+		last bool
+		want string
+	}{
+		// Each open stream a list replaces, once, and a `{v}` later in the
+		// same list steps over it.
+		{`true </dev/null {v}</dev/null; echo $v`, true, "11"},
+		{`true 2>/dev/null {v}</dev/null; echo $v`, true, "11"},
+		{`true </dev/null </dev/null {v}</dev/null; echo $v`, true, "11"},
+		{`true </dev/null 2>/dev/null {v}</dev/null; echo $v`, true, "12"},
+		{`true {v}</dev/null </dev/null {w}</dev/null; echo $v $w`, true, "10 12"},
+		{`true 3</dev/null {v}</dev/null; echo $v`, true, "10"},
+		{`exec 3</dev/null; true 3</dev/null {v}</dev/null; echo $v`, true, "11"},
+		// No copy of a duplication's source; a move's source is saved.
+		{`exec 4</dev/null 9</dev/null; true 4<&9 {v}</dev/null; echo $v`, true, "11"},
+		{`exec 4</dev/null 9</dev/null; true 4<&9- {v}</dev/null; echo $v`, true, "12"},
+		{`exec 9</dev/null; true 1>&9- {v}</dev/null; echo $v`, true, "12"},
+		{`exec 9</dev/null; true 4<&9- {v}</dev/null; echo $v`, true, "11"},
+		{`exec 9</dev/null; true {v}<&9-; echo $v`, true, "11"},
+		{`exec 9</dev/null; true {v}<&9-; true {w}</dev/null; echo $v $w`, true, "11 10"},
+		{`exec 9</dev/null; true {v}<&9; echo $v`, true, "10"},
+		// `exec` saves nothing.
+		{`exec </dev/null {v}</dev/null; echo $v`, true, "10"},
+		{`exec 9</dev/null; exec {v}<&9-; echo $v`, true, "10"},
+		// And the last command saves nothing, however it is reached.
+		{g + ` </dev/null`, true, "10"},
+		{g + ` </dev/null`, false, "11"},
+		{g + ` </dev/null; :`, true, "11"},
+		{`: ; ` + g + ` </dev/null`, true, "10"},
+		{`true && ` + g + ` </dev/null`, true, "10"},
+		{g + ` </dev/null && :`, true, "11"},
+		{`! ` + g + ` 2>/dev/null`, true, "11"},
+		{`if true; then ` + g + ` </dev/null; fi`, true, "10"},
+		{`case a in a) ` + g + ` 2>/dev/null;; esac`, true, "10"},
+		{`{ ` + g + ` </dev/null; }`, true, "10"},
+		{`{ ` + g + ` </dev/null; } 2>/dev/null; :`, true, "12"},
+		{`for i in 1; do ` + g + ` </dev/null; done`, true, "11"},
+		{`f() { ` + g + ` </dev/null; }; f`, true, "11"},
+		{`f() { exec {v}</dev/null; echo $v; }; f 2>/dev/null`, true, "10"},
+		{`f() { exec {v}</dev/null; echo $v; }; f 2>/dev/null; :`, true, "11"},
+		{`eval '` + g + ` </dev/null'`, true, "10"},
+		{`eval '` + g + ` </dev/null'; :`, true, "11"},
+		{`echo x | ` + g + ` 2>/dev/null`, true, "11"},
+		{`echo x | ` + g + ` 2>/dev/null; :`, true, "12"},
+		{`echo x | { ` + g + ` 2>/dev/null; }`, true, "11"},
+		{`! echo x | ` + g + ` 2>/dev/null`, true, "12"},
+		{`( ` + g + ` 2>/dev/null )`, true, "10"},
+		{`( ` + g + ` 2>/dev/null; : )`, true, "11"},
+		{g + ` 2>/dev/null | cat; :`, true, "10"},
+		{`trap 'echo t' EXIT; ` + g + ` 2>/dev/null`, true, "10 t"},
+	} {
+		t.Run(fmt.Sprintf("last=%v: %s", c.last, c.src), func(t *testing.T) {
+			sem := permissive()
+			sem.FirstAllocatedDescriptor = AllocateDescriptorsFromTen
+			sem.OwnDescriptors = LastPipelineElementsInputTakesANumber
+			sem.LastPipelineElementInCurrentShell = Yes
+			sem.FdVariableOutlivesTheCommand = Yes
+			sem.RedirectsUseEveryTarget = No
+			sem.FdMove = FdMoveRelocates
+			out, _ := run(t, c.src, func(r *Runner) {
+				r.Semantics = &sem
+				r.LastPart = c.last
+			})
+			if got := strings.Join(strings.Fields(out), " "); got != c.want {
+				t.Errorf("got %q, want %q", got, c.want)
 			}
 		})
 	}

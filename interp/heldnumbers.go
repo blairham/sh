@@ -199,10 +199,67 @@ func (r *Runner) countsOwnDescriptors() bool {
 
 // savesRedirectedStreams is whether a redirection list run in the shell
 // itself saves the streams it replaces on numbers a script can see: zsh's
-// rule, or bash's, which saves per redirection. See redirHolds.
+// rule, bash's, which saves per redirection, or ksh93's, which saves nothing
+// for the last command. See redirHolds.
 func (r *Runner) savesRedirectedStreams() bool {
 	o := r.sem().OwnDescriptors
-	return o == SavedStreamsAndPipeReadEndsTakeNumbers || o == EachRedirectionSavesItsStreams
+	return o == SavedStreamsAndPipeReadEndsTakeNumbers || o == EachRedirectionSavesItsStreams ||
+		o == LastPipelineElementsInputTakesANumber
+}
+
+// tailPutsNothingBack is whether c is the last thing this shell runs, in the
+// dialect where that leaves a redirection list on it with nothing to save.
+//
+// ksh93u+ saves each stream a list replaces, like zsh, except on the last
+// command of a `-c` string, where there is nothing left to put the stream
+// back for. Measured 2026-10-16, `/bin/ksh -c` (ksh93u+ 2012-08-01), the
+// `{v}` allocated inside the redirected group (#6637):
+//
+//	{ exec {v}</dev/null; echo $v; } </dev/null          10   the last command
+//	{ exec {v}</dev/null; echo $v; } </dev/null; :       11   saved on 10
+//	true && { … } </dev/null, if true; then { … } …; fi  10   still the last
+//	{ … } </dev/null && :, ! { … } …, time { … } …       11
+//	case a in a) { … } </dev/null;; esac                 10   but `;&` is 11
+//	for i in 1; do { … } </dev/null; done                11   a loop's body never is
+//	f(){ { … } </dev/null; }; f                          11   nor a function's
+//	eval '{ … } </dev/null', command eval '…'            10   but an eval's text is
+//	. /dev/stdin <<<'{ … } </dev/null'                   11   and a sourced file's is not
+//	echo x | { … } 2>/dev/null                           11   the last element: its input
+//	echo x | { … } 2>/dev/null; :                        12   is held on 10 (see
+//	                                                          holdsTheLastElementsInput)
+//	( { … } 2>/dev/null )                                10   parentheses run it through
+//	( { … } 2>/dev/null; : )                             11
+//	trap 'echo t' EXIT; { … } 2>/dev/null                10   a trap changes nothing
+//
+// From a script file nothing is last: `{ … } </dev/null` is 12 there, the
+// file itself on 10. So this is tailexec.go's tail with three more places it
+// reaches, none of them a place a shell becomes its last program: the last
+// element of a pipeline, an `eval`'s text, a `( … )` — see
+// tailPutsNothingBackOnly.
+func (r *Runner) tailPutsNothingBack(c syntax.Command) bool {
+	return r.putsNothingBackAtTheTail() && r.isTail(c)
+}
+
+// tailPipelinePutsNothingBack is tailPutsNothingBack for a pipeline of
+// several, whose last element is the tail as far as that rule goes.
+func (r *Runner) tailPipelinePutsNothingBack(p *syntax.Pipeline) bool {
+	return r.putsNothingBackAtTheTail() && r.tailPipe == p && len(p.Cmds) > 1
+}
+
+// putsNothingBackAtTheTail is the half of tailPutsNothingBack that is not
+// about which command: the dialect, and not inside a loop.
+func (r *Runner) putsNothingBackAtTheTail() bool {
+	return r.sem().OwnDescriptors == LastPipelineElementsInputTakesANumber && !r.tailInALoop
+}
+
+// handTailToPutNothingBack makes cmd the tail, and pipe the pipeline it
+// stands in, for the save rule only — somewhere the shell runs a body
+// straight through as its last and is still not the program it becomes —
+// and answers what puts the old tail back. See tailPutsNothingBackOnly.
+func (r *Runner) handTailToPutNothingBack(cmd syntax.Command, pipe *syntax.Pipeline) func() {
+	oldCmd, oldPipe, oldOnly := r.tailCmd, r.tailPipe, r.tailPutsNothingBackOnly
+	r.tailCmd, r.tailPipe, r.tailPutsNothingBackOnly = cmd, pipe, true
+	return func() { r.tailCmd, r.tailPipe, r.tailPutsNothingBackOnly = oldCmd, oldPipe, oldOnly }
 }
 
 // holdsTheLastElementsInput is whether, in the dialect that holds a number for
@@ -306,6 +363,13 @@ type redirHolds struct {
 	// holds 10 where zsh holds 11 and leaves 10 free. See
 	// EachRedirectionSavesItsStreams.
 	perRedirection bool
+	// holdsSources says a duplication's source sits on the lowest free
+	// number while the stream it replaces is saved, and is let go of after:
+	// zsh's rule. See save.
+	holdsSources bool
+	// savesMoveSources says a move's source is a stream the list replaces
+	// too, saved as the destination is: ksh93u+'s rule. See moved.
+	savesMoveSources bool
 	// joins says a stream redirected again in this list joins its targets
 	// or sources, the dialect's multios, and reached counts how many
 	// redirections of the list have named each stream so far. See join.
@@ -347,11 +411,18 @@ func (r *Runner) beginRedirHolds(owner redirOwner) *redirHolds {
 	// `exec {w}</dev/null` after it is the base again in both. Measured
 	// 2026-10-15 (#6529).
 	execList := owner == redirOwnerThisShell && r.redirectForBuiltin == "exec"
+	o := r.sem().OwnDescriptors
+	// The dialect that saves nothing for its last command saves nothing for
+	// `exec` either, which is never put back. See tailPutsNothingBack.
+	putsNothingBack := o == LastPipelineElementsInputTakesANumber &&
+		(execList || r.listOnTheTail && r.putsNothingBackAtTheTail())
 	h := &redirHolds{
-		r:              r,
-		perRedirection: r.sem().OwnDescriptors == EachRedirectionSavesItsStreams,
-		owed:           -1,
-		joins:          r.countsOwnDescriptors() && r.sem().RedirectsUseEveryTarget == Yes,
+		r:                r,
+		perRedirection:   o == EachRedirectionSavesItsStreams,
+		holdsSources:     o == SavedStreamsAndPipeReadEndsTakeNumbers,
+		savesMoveSources: o == LastPipelineElementsInputTakesANumber,
+		owed:             -1,
+		joins:            r.countsOwnDescriptors() && r.sem().RedirectsUseEveryTarget == Yes,
 		// A consumed substitution's number comes free in zsh only: bash
 		// publishes the next one below it however the first was used —
 		// `{ echo <(true) <(true); } < <(true)` is `62 61` in 5.3.20.
@@ -359,7 +430,7 @@ func (r *Runner) beginRedirHolds(owner redirOwner) *redirHolds {
 		// A `( … )` is a fork, and a command that becomes a process of its
 		// own puts nothing back in this one; `exec`'s list saves while it
 		// applies, though nothing is put back after.
-		saving: (inThisShell || execList) && (!entry.pending || !entry.forked),
+		saving: (inThisShell || execList) && (!entry.pending || !entry.forked) && !putsNothingBack,
 	}
 	if entry.pending && entry.input != 0 {
 		// The pipe is the list's first redirection: standard input is saved
@@ -410,7 +481,7 @@ func (h *redirHolds) save(fd int, duplicating bool) {
 	}
 	r := h.r
 	source := -1
-	if duplicating && !h.perRedirection {
+	if duplicating && h.holdsSources {
 		source = r.holdNumber(false)
 		h.took(-1)
 	}
@@ -419,6 +490,27 @@ func (h *redirHolds) save(fd int, duplicating bool) {
 	if source >= 0 {
 		r.letGoOfNumber(source)
 	}
+}
+
+// moved is a move reached whose source is from: `N<&M-`, `N>&M-` or
+// `{v}<&M-` takes M away for the command and gives it back after, so in the
+// dialect that saves it, M is saved as the stream the move replaces is.
+// Measured 2026-10-16, `/bin/ksh -c` (ksh93u+ 2012-08-01), with 4 and 9 open
+// on the null device and `{v}` after the move in the same list (#6747,
+// #6814):
+//
+//	true 4<&9 {v}</dev/null                      11   4 saved; a copy is no move
+//	true 4<&9- {v}</dev/null                     12   4 and 9 saved
+//	true 1>&9- {v}</dev/null                     12   1 and 9
+//	true 4<&9- {v}</dev/null, 4 not open         11   9 alone
+//	true {v}<&9-                                 11   9 saved, then the name's pick
+//	true {v}<&9-; true {w}</dev/null             11 10   given back after
+//	exec {v}<&9-                                 10   `exec` saves nothing
+func (h *redirHolds) moved(from int) {
+	if h == nil || !h.savesMoveSources {
+		return
+	}
+	h.save(from, false)
 }
 
 // join is a redirection of fd reached that joins the stream's earlier

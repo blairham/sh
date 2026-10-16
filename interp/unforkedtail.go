@@ -58,6 +58,17 @@ import "github.com/blairham/sh/syntax"
 // alone: the right of an `&&`/`||`, a pipeline of one, not negated and not
 // sent to the background. Nil where the list ends any other way.
 func tailCommandOf(list []*syntax.Stmt) syntax.Command {
+	p := tailPipelineOf(list)
+	if p == nil || len(p.Cmds) != 1 {
+		return nil
+	}
+	return p.Cmds[0]
+}
+
+// tailPipelineOf is the pipeline a list ends on: the right of an `&&`/`||`,
+// not negated and not sent to the background, of one element or of several.
+// Nil where the list ends any other way.
+func tailPipelineOf(list []*syntax.Stmt) *syntax.Pipeline {
 	if len(list) == 0 {
 		return nil
 	}
@@ -74,10 +85,18 @@ func tailCommandOf(list []*syntax.Stmt) syntax.Command {
 		e = b.Y
 	}
 	p, ok := e.(*syntax.Pipeline)
-	if !ok || len(p.Cmds) != 1 || p.Negated {
+	if !ok || p.Negated || len(p.Cmds) == 0 {
 		return nil
 	}
-	return p.Cmds[0]
+	return p
+}
+
+// handTail makes the command list ends on the last thing this shell runs:
+// the tail, and the pipeline it is the whole of. Every construct that runs
+// one list straight through as its last hands the tail on through this —
+// see the grid above.
+func (r *Runner) handTail(list []*syntax.Stmt) {
+	r.tailCmd, r.tailPipe = tailCommandOf(list), tailPipelineOf(list)
 }
 
 // isTail says c is the last thing this shell runs. The caller hands the tail
@@ -117,7 +136,7 @@ func (r *Runner) holdsATrapWithAnAction() bool {
 // runsUnforked is whether these parentheses are the last thing this shell
 // runs, in the dialect where that leaves them unforked.
 func (r *Runner) runsUnforked(c *syntax.Subshell) bool {
-	return r.isTail(c) && r.sem().SubshellIsAJobInItsOwnTable == Yes &&
+	return r.isTail(c) && !r.tailPutsNothingBackOnly && r.sem().SubshellIsAJobInItsOwnTable == Yes &&
 		!r.holdsATrapWithAnAction()
 }
 
@@ -138,7 +157,7 @@ func (r *Runner) runAsTheShellItself(c *syntax.Subshell, parent *Runner) {
 	r.unforkedSelf = true
 	r.subshellSelfWaited = false
 	r.commandSlot, r.commandSlotHeld, r.outerSlots = 1, true, nil
-	r.tailCmd = tailCommandOf(c.List)
+	r.handTail(c.List)
 	current, _ := parent.markedEntries()
 	num := current.numOrZero()
 	if current == emptyJobSlot {

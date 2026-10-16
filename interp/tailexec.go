@@ -122,7 +122,8 @@ func (r *Runner) replacesItselfHere() bool {
 	// the parent shell with it. The one exception is a `( … )` the dialect
 	// does not fork because nothing follows it: that clone is the shell
 	// itself. See unforkedtail.go.
-	if c == nil || r.ReplaceProcess == nil || (r.inSubshell && !r.unforkedSelf) || r.bg != nil {
+	if c == nil || r.ReplaceProcess == nil || (r.inSubshell && !r.unforkedSelf) || r.bg != nil ||
+		r.tailPutsNothingBackOnly {
 		return false
 	}
 	switch r.sem().TailExec {

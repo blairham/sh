@@ -122,6 +122,11 @@ type Runner struct {
 	// vector. See Runner.diag.
 	promptDiagnostics   *Diagnostics
 	promptDiagnosticsOf *Diagnostics
+	// stdinScriptDiagnostics is Diagnostics as a line standard input's route
+	// does not shape reads it, made from stdinScriptDiagnosticsOf the same
+	// way. See Runner.stdinTextLocatedAsAScript.
+	stdinScriptDiagnostics   *Diagnostics
+	stdinScriptDiagnosticsOf *Diagnostics
 
 	// Semantics is where the shells disagree about what identical syntax
 	// means, as distinct from which syntax they accept. Nil means bash's.

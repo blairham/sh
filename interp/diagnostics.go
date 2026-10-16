@@ -10296,6 +10296,27 @@ type Diagnostics struct {
 	// `name[line]:` — a shape it uses nowhere else on this route.
 	StdinBuiltinLocation LocationStyle
 
+	// StdinIsLocatedAsAPrompt applies StdinLocation and StdinBuiltinLocation
+	// only where a prompt would apply its own: to the text the shell read
+	// from standard input and to `eval`'s text outside a function. A file
+	// that text sources, a function defined in such a file, and `eval`'s text
+	// inside a function keep the script's location, as they do at a prompt.
+	//
+	// zsh's. Measured 2026-10-15 on zsh 5.9.2 under `-f`, each line piped to
+	// the shell, with `-f -i` giving the same answer for every row:
+	//
+	//	eval 'echo ${q?b}'                        zsh: q: b
+	//	eval 'echo )'                             zsh: parse error near `)'
+	//	( eval 'echo $((1/0))' )                  zsh: division by zero
+	//	f(){ eval 'echo $((1/0))'; }; f           (eval):1: division by zero
+	//	f(){ eval 'cd /nonexistent'; }; f         (eval):cd:1: no such file …
+	//	. ./src.zsh, which holds `echo ${q?b}`    ./src.zsh:1: q: b
+	//
+	// Ours named the first three `(eval):` and wrote no line in the other
+	// three, because the route's shape was applied to everything the shell
+	// ran (#6622).
+	StdinIsLocatedAsAPrompt bool
+
 	// ScriptBuiltinLocation is BuiltinLocation for a script read from a
 	// file, the way ScriptLocation is Location for one. ksh93 names line 1
 	// in a file and not under `-c`, in both of its styles.
@@ -10411,6 +10432,9 @@ type Diagnostics struct {
 	// function rule locates. See keepBodyLocation.
 	bodyLocation, bodyBuiltinLocation LocationStyle
 	bodyLocationKept                  bool
+	// locatedForStdin says ForStdin made this vector, so the route's shape
+	// is the one StdinIsLocatedAsAPrompt narrows. See Runner.locatesAsAPrompt.
+	locatedForStdin bool
 	// writtenLocation and writtenBuiltinLocation are what Location and
 	// BuiltinLocation were before LocateCommandStringAsAPrompt moved them,
 	// kept for the refusal that is worded as written. See
@@ -11602,6 +11626,7 @@ func (d Diagnostics) ForScript() Diagnostics {
 // the line. A property of the invocation, like ForScript.
 func (d Diagnostics) ForStdin() Diagnostics {
 	d.keepBodyLocation()
+	d.locatedForStdin = true
 	if d.StdinLocation != LocationNone {
 		d.Location = d.StdinLocation
 	}
@@ -12872,9 +12897,32 @@ func (r *Runner) evalTextKeepsItsLocationAtAPrompt() bool {
 // eval inside a function or outside one as inFunction says. See
 // Diagnostics.EvalTextAtAPromptSpeaksAsTheLine.
 func (r *Runner) evalTextAtAPrompt(inFunction bool) bool {
-	return r.AtPrompt && r.borrowedFiles == 0 && r.Diagnostics != nil &&
+	return r.locatesAsAPrompt() && r.borrowedFiles == 0 && r.Diagnostics != nil &&
 		r.Diagnostics.EvalTextAtAPromptSpeaksAsTheLine && r.locationIsInsideEvalText() &&
 		(r.inFunc != "") == inFunction
+}
+
+// locatesAsAPrompt reports whether the shell's own input is located the way a
+// line typed at a prompt is: at a prompt, and on standard input in the
+// dialect that locates that route the same way. See
+// Diagnostics.StdinIsLocatedAsAPrompt.
+func (r *Runner) locatesAsAPrompt() bool {
+	return r.AtPrompt || r.stdinIsLocatedAsAPrompt()
+}
+
+// stdinIsLocatedAsAPrompt is the second half of locatesAsAPrompt.
+func (r *Runner) stdinIsLocatedAsAPrompt() bool {
+	return r.Diagnostics != nil && r.Diagnostics.locatedForStdin && r.Diagnostics.StdinIsLocatedAsAPrompt
+}
+
+// stdinTextLocatedAsAScript reports whether the line being located is one
+// that standard input's route does not shape, in the dialect where that
+// route is located as a prompt is: a file the text sourced, a function
+// defined in one, or `eval`'s text inside a function. Those keep the
+// location the script would have had. See Diagnostics.StdinIsLocatedAsAPrompt.
+func (r *Runner) stdinTextLocatedAsAScript() bool {
+	return r.stdinIsLocatedAsAPrompt() &&
+		(r.borrowedFiles > 0 || r.inFunctionReadFromAFile() || r.evalTextAtAPrompt(true))
 }
 
 // speaksAsAtAPrompt is the dialect whose interactive shell words everything
@@ -12918,6 +12966,17 @@ func (r *Runner) diag() *Diagnostics {
 			d := *r.Diagnostics
 			d.Location, d.BuiltinLocation = d.writtenLocation, d.writtenBuiltinLocation
 			return &d
+		}
+		if r.stdinTextLocatedAsAScript() {
+			// The script's location, which the route's shape replaced and
+			// keepBodyLocation kept. Made once per vector, for the reason
+			// the prompt's reading below is.
+			if r.stdinScriptDiagnostics == nil || r.stdinScriptDiagnosticsOf != r.Diagnostics {
+				d := *r.Diagnostics
+				d.Location, d.BuiltinLocation = d.bodyLocation, d.bodyBuiltinLocation
+				r.stdinScriptDiagnostics, r.stdinScriptDiagnosticsOf = &d, r.Diagnostics
+			}
+			return r.stdinScriptDiagnostics
 		}
 		return r.Diagnostics
 	}

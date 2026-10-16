@@ -6712,7 +6712,9 @@ func Diagnostics() interp.Diagnostics {
 		EnclosingScopeSetInAFunction: "%[1]s parameter %[2]s set in enclosing scope in function %[3]s",
 		StdinLocation:                interp.LocationNameOnly,
 		StdinBuiltinLocation:         interp.LocationBuiltinNameOnly,
-		CannotExecute:                "%[2]s: %[1]s",
+		// See Diagnostics.StdinIsLocatedAsAPrompt.
+		StdinIsLocatedAsAPrompt: true,
+		CannotExecute:           "%[2]s: %[1]s",
 		// A `#!` line naming an interpreter that is not there, which this
 		// shell reads the file to find out about — and words the other way
 		// round from bash, with the complaint before the name it could not

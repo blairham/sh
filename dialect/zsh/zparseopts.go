@@ -892,6 +892,17 @@ func zparseoptsStore(
 			// `-a` on the command line is not.
 			continue
 		}
+		var elems []string
+		for _, slot := range lists[name] {
+			elems = append(elems, slot...)
+		}
+		if st, took, stop := r.StoreAWholeArrayAtAPosition(name, elems, false); stop {
+			return st
+		} else if took {
+			// `argv[N]` takes the words, as `set -A N` gives them to it
+			// (#6648).
+			continue
+		}
 		if !isIdentifier(name) {
 			if !refused {
 				bad, refused = name, true
@@ -903,14 +914,14 @@ func zparseoptsStore(
 		if st, stop := r.RefusesAWholeArrayStore(name, false); stop {
 			return st
 		}
-		var elems []string
-		for _, slot := range lists[name] {
-			elems = append(elems, slot...)
-		}
 		r.SetArray(name, elems)
 	}
 	if opts.hasAssoc {
-		if !isIdentifier(opts.assoc) {
+		if st, _, stop := r.StoreAWholeArrayAtAPosition(opts.assoc, nil, true); stop {
+			// A position takes no table, `0` included: the kind sentence,
+			// as over the shell's own parameters (#6648).
+			return st
+		} else if !isIdentifier(opts.assoc) {
 			if !refused {
 				bad, refused = opts.assoc, true
 			}

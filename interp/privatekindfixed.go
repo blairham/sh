@@ -407,13 +407,20 @@ func (r *Runner) fixedSlotRefusesATable(name string) bool {
 	if _, tied := r.scriptTieSlotKinds(name); tied {
 		return false
 	}
+	r.reportATableToAFixedSlot(name)
+	r.fatalQuiet()
+	return true
+}
+
+// reportATableToAFixedSlot writes the kind sentence a whole table over a
+// slot of a fixed kind gets, located as the store and not as the builtin, and
+// nothing else; what the refusal costs is the caller's.
+func (r *Runner) reportATableToAFixedSlot(name string) {
 	outer := r.inBuiltin
 	r.inBuiltin = ""
 	r.diagf("%s\n", Wording(r.diag().SpecialParameterKind,
 		"%s: can't change type of a special parameter", name))
 	r.inBuiltin = outer
-	r.fatalQuiet()
-	return true
 }
 
 // reportAnArrayValueToAFixedSlot writes the store's sentence and nothing

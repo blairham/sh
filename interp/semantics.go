@@ -5853,6 +5853,13 @@ type Semantics struct {
 	// number OPTIND already held, and those three still restart and read `a`
 	// a second time where zsh carries on to `b`.
 	GetoptsAssignmentRestartsWord Answer
+	// GetoptsCursorPastTheEnd is what `getopts` makes of an OPTIND that
+	// points past the word after the last one it scans — more than `$# + 1`,
+	// or one more than the operands it was given. See
+	// GetoptsCursorPastTheEndPolicy for the three answers and the
+	// measurements. Asked only there: a cursor at or before `$# + 1` reaches
+	// no question.
+	GetoptsCursorPastTheEnd GetoptsCursorPastTheEndPolicy
 
 	// GetoptsRefusedNameStillScans is whether the scan runs anyway when the
 	// name operand is not an identifier — which is to say, whether OPTIND
@@ -38419,6 +38426,54 @@ const (
 	// puts the caller's back over it.
 	GetoptsFunctionPositionIsLocalToAKeywordFunction
 )
+
+// GetoptsCursorPastTheEndPolicy is what `getopts` does with a cursor past
+// the word after its last operand (#6575).
+//
+// Measured 2026-10-15 under `-c` and from a script file, as `set -- -a -b -c;
+// OPTIND=$v; getopts abc o; echo "$? $o $OPTIND"` and a second `getopts`
+// after it. bash 5.3.20 and 3.2.57, dash 0.5.12, BusyBox ash 1.37.0 (the
+// pinned alpine digest), ksh93u+ and zsh 5.9.2:
+//
+//	OPTIND           dash, ash        bash          ksh93, zsh
+//	4 ($# + 1)       1 ? 4            1 ? 4         1 ? 4
+//	5                0 a 2, 0 b 3     1 ? 4         1 ? 5
+//	100              0 a 2, 0 b 3     1 ? 4         1 ? 100
+//
+// It is the count of the words scanned and not of `$#` that decides:
+// `OPTIND=5; getopts a o -a -a` is `0 a 2` in dash and ash and `1 ? 3` in
+// bash. And it is the cursor and not the assignment: `set -- -a -b x`, three
+// `getopts` (OPTIND 3), then `set -- -a` gives the same three answers with
+// nothing assigned. zsh prints its own empty name in place of `?`, which is
+// GetoptsEndOfOptionsNamesIt and not this.
+type GetoptsCursorPastTheEndPolicy uint8
+
+const (
+	// GetoptsCursorPastTheEndUnspecified is no answer, and is reported
+	// where a cursor past the end is scanned.
+	GetoptsCursorPastTheEndUnspecified GetoptsCursorPastTheEndPolicy = iota
+	// GetoptsCursorPastTheEndIsKept reports the end of the options and
+	// leaves OPTIND where it was set: ksh93 and zsh.
+	GetoptsCursorPastTheEndIsKept
+	// GetoptsCursorPastTheEndIsClamped reports the end of the options with
+	// OPTIND moved back to the word after the last: bash.
+	GetoptsCursorPastTheEndIsClamped
+	// GetoptsCursorPastTheEndRestarts reads the cursor as a fresh one, and
+	// the scan begins again at the first word: dash and BusyBox ash.
+	GetoptsCursorPastTheEndRestarts
+)
+
+func (p GetoptsCursorPastTheEndPolicy) String() string {
+	switch p {
+	case GetoptsCursorPastTheEndIsKept:
+		return "kept"
+	case GetoptsCursorPastTheEndIsClamped:
+		return "clamped to the word after the last"
+	case GetoptsCursorPastTheEndRestarts:
+		return "a restart at the first word"
+	}
+	return "unspecified"
+}
 
 // GetoptsOptargOrderPolicy is the order `getopts` writes its name operand and
 // OPTARG in, which a script sees only when the operand is spelled OPTARG and

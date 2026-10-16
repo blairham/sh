@@ -1698,6 +1698,10 @@ func Semantics() interp.Semantics {
 	s.FatalErrorEndsAtTheCommandWord = interp.Yes
 	s.GetoptsRejectsUnknownOption = interp.No
 	s.GetoptsAssignmentRestartsWord = interp.Yes
+	// A cursor past the word after the last is a fresh one, as in dash:
+	// measured 2026-10-15 in the pinned image, `set -- -a -b -c; OPTIND=5;
+	// getopts abc o` reads `a` and leaves OPTIND at 2 (#6575).
+	s.GetoptsCursorPastTheEnd = interp.GetoptsCursorPastTheEndRestarts
 	// And the same after the scan, measured 2026-09-21 in the pinned image:
 	// `set -- -a; getopts a opt-var` is OPTIND 2 at status 2, as in dash.
 	s.GetoptsRefusedNameStillScans = interp.Yes

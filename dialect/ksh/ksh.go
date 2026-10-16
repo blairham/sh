@@ -3126,6 +3126,10 @@ func Semantics() interp.Semantics {
 	// 01. Measured 2026-09-18 by `od` (#3415).
 	s.DollarSingleOctalPastAByteDropsTheLastDigit = interp.No
 	s.GetoptsAssignmentRestartsWord = interp.Yes
+	// A cursor past the word after the last stays where it was set:
+	// measured 2026-10-15, `set -- -a -b -c; OPTIND=100; getopts abc o` is
+	// the end of the options with OPTIND still 100 (#6575).
+	s.GetoptsCursorPastTheEnd = interp.GetoptsCursorPastTheEndIsKept
 	// The one column that judges the name *before* scanning: measured
 	// 2026-09-21, `set -- -a; getopts a opt-var` leaves OPTIND at 1 at
 	// status 1, where bash, dash and BusyBox ash all leave it at 2.

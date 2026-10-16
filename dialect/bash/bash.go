@@ -2598,6 +2598,9 @@ func Semantics() interp.Semantics {
 	// An element write expands its value before its subscript:
 	// `a[$(echo SUB >&2; echo 1)]=$(echo VAL >&2)x` writes VAL, then SUB.
 	s.ElementSubscriptIsExpandedBeforeTheValue = interp.No
+	// A literal that fails partway through stores nothing, subscripted or
+	// not: the name keeps what it held.
+	s.FailedSubscriptedLiteralKeepsWhatItStored = interp.No
 	// bash reports success if it signaled anything at all, where the others
 	// count failures one way or another.
 	s.ExitTrapRunsOnSignalDeath = interp.Yes

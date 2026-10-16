@@ -72,7 +72,7 @@ import (
 // Runner.tableLetterHere is written by the utility. See
 // Runner.bareLiteralElementIsOneValue, which is the one question that needs
 // it.
-func (r *Runner) expandArrayOperands(tableLetterAhead bool) {
+func (r *Runner) expandArrayOperands(tableLetterAhead, indexedLetter bool) bool {
 	for i := range r.arrayOperands {
 		op := &r.arrayOperands[i]
 		a := op.assign
@@ -87,15 +87,37 @@ func (r *Runner) expandArrayOperands(tableLetterAhead bool) {
 			r.bareLiteralElementIsOneValue(a.Name, a.Elems, tableLetterAhead))
 		if !ok {
 			// The element list failed — an unmatched pattern where the
-			// dialect calls that an error, a division by zero. The store
-			// abandons the assignment for the same reason, so there is
-			// nothing left for it to take.
-			continue
+			// dialect calls that an error, a division by zero — and the
+			// command ends here, its later operands unexpanded. It used to
+			// go on to the store, which expanded the same list a second
+			// time: `typeset -a a=(5 $((1/0)) $(echo AFTER >&2))` reported
+			// the division twice and ran `AFTER` (#6606). What a
+			// subscripted literal had stored stays, in the column that
+			// keeps it.
+			r.keepWhatAFailedLiteralStored(a.Name, a.Elems, parsed, a.Append, indexedLetter)
+			return false
 		}
 		op.expanded = &expandedAssign{
 			assign: a, elems: parsed, elemsSet: true, elemsAreOperands: true,
 		}
 	}
+	return true
+}
+
+// indexedLetterAmongTheOptions reports whether a declaration utility's option
+// words carry the indexed-array letter, read the same narrow way as the table
+// letter below. Only a failed subscripted operand asks — see
+// Runner.keepWhatAFailedLiteralStored.
+func indexedLetterAmongTheOptions(argv []string) bool {
+	for _, w := range argv[1:] {
+		if w == "--" || len(w) < 2 || w[0] != '-' {
+			return false
+		}
+		if strings.ContainsRune(w, 'a') {
+			return true
+		}
+	}
+	return false
 }
 
 // tableLetterAmongTheOptions reports whether a declaration utility's option

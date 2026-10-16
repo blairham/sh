@@ -2679,6 +2679,11 @@ func Semantics() interp.Semantics {
 	// VAL — though its arithmetic is still evaluated after the value, as in
 	// every column. The only column that does.
 	s.ElementSubscriptIsExpandedBeforeTheValue = interp.Yes
+	// A subscripted literal is built as a table, a pair at a time, so one
+	// that fails partway through leaves the pairs before the failure: `a=(1
+	// 2); a=([0]=x [1]=$((1/0)))` is `typeset -A a=([0]=x)`. The only column
+	// that does.
+	s.FailedSubscriptedLiteralKeepsWhatItStored = interp.Yes
 	s.TraceAssignmentsSeparately = interp.Yes
 	// An unparseable `eval` is reported and survived here, unlike dash, but a
 	// file `.` cannot open still ends the script — so the two halves of the

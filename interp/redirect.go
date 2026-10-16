@@ -217,6 +217,37 @@ func (r *Runner) applyRedirList(ctx context.Context, rs []*syntax.Redirect, comp
 		}
 		return r.setFdVar(ref, value, readTarget)
 	}
+	// storeFdVar is the last step of every `{name}` redirection that picked
+	// a descriptor — a file, a duplication, a here-document — and the one
+	// place all three settle the descriptor's fate: a refused store takes the
+	// descriptor back (dropFdVarDescriptor), and an accepted one on a
+	// descriptor that outlives its command is written into the table the
+	// command's end puts back, if one was saved.
+	//
+	// That last half is what a persisting descriptor had been missing. The
+	// table is saved whole, on the first redirection that touches it, so a
+	// `{name}` written behind such a redirection was installed into a copy
+	// the command's end then threw away: bash's `true 5>/dev/null
+	// {v}>/dev/null; true >&$v` is 0 and ours said `$v: Bad file
+	// descriptor`. The same throwaway is what a move's source has to be put
+	// back from (closeMovedSource), so a `{v}<&9-` that gives 9 back needs
+	// it too. Measured 2026-10-15 on bash 5.3.20 (#6626).
+	storeFdVar := func(fdVar string, fd int, own io.Closer, persists bool, readTarget string) bool {
+		if !setFdVar(fdVar, itoa(fd), readTarget) {
+			dropFdVarDescriptor(fd, own, persists)
+			return false
+		}
+		if persists && fdsTouched {
+			// Clone before writing: the saved table is the one the Runner
+			// had, and a sibling may be holding it.
+			savedFds = maps.Clone(savedFds)
+			if savedFds == nil {
+				savedFds = map[int]any{}
+			}
+			savedFds[fd] = r.fds[fd]
+		}
+		return true
+	}
 	// closeMovedSource is the second half of `N<&M-`: M is closed, and
 	// forKeeps says whether the command takes that back when it ends.
 	//
@@ -455,12 +486,9 @@ func (r *Runner) applyRedirList(ctx context.Context, rs []*syntax.Redirect, comp
 				}
 				r.setFd(hfd, held)
 				r.redirWrote(hfd)
-				if fdVar != "" {
-					if !setFdVar(fdVar, itoa(hfd), "") {
-						dropFdVarDescriptor(hfd, closer, persists)
-						r.redirErr = true
-						return closers, nil
-					}
+				if fdVar != "" && !storeFdVar(fdVar, hfd, closer, persists, "") {
+					r.redirErr = true
+					return closers, nil
 				}
 			}
 			continue
@@ -499,6 +527,9 @@ func (r *Runner) applyRedirList(ctx context.Context, rs []*syntax.Redirect, comp
 		// the right answer where the operator does not exist and the wrong
 		// one where it does — bash moves for `>&5-` and makes no file.
 		moveFrom := -1
+		// The word as it expanded, suffix and all, which one column quotes
+		// back when a move finds nothing open. See dupTargetText.
+		expanded := name
 		if src, isMove := fdMoveSource(name); isMove {
 			form := r.fdMove()
 			if r.unspecified {
@@ -714,13 +745,20 @@ func (r *Runner) applyRedirList(ctx context.Context, rs []*syntax.Redirect, comp
 			if fd > 2 && !persists {
 				saveFds()
 			}
-			if err := r.dupFd(fd, name, r.dupTargetText(rd, moveFrom), rd.Op != syntax.TokLessAmp, opened); err != nil {
+			// Whether a move's destination was open as the move was made,
+			// which bash reads twice: such a move says first that it could
+			// not duplicate, and gives its source back when the command ends.
+			// See FdMoveDuplicatesThenCloses. A `{name}`'s number is a fresh
+			// one, so the question is never asked of it.
+			destOpen := moveFrom >= 0 && fdVar == "" && r.streamOpen(fd)
+			if err := r.dupFd(fd, name, r.dupTargetText(rd, fd, moveFrom, expanded), rd.Op != syntax.TokLessAmp, opened); err != nil {
 				// One dialect says first that the descriptor it picked for
-				// the name could not be made a copy of the source. Only for a
+				// the name could not be made a copy of the source — and the
+				// same of a move onto a number that was open. Only for a
 				// source that is a number: a word that is not one is the
 				// ambiguous redirect, which no copy was tried for. See
 				// Diagnostics.FdVariableDuplicationFailed.
-				if _, numeric := atoi(name); numeric && fdVar != "" {
+				if _, numeric := atoi(name); numeric && (fdVar != "" || destOpen) {
 					if w := r.diag().FdVariableDuplicationFailed; w != "" {
 						r.errf("%s%s\n", r.diag().prefixWithoutLine(r.name(), ""),
 							fmt.Sprintf(w, r.diag().reasonText(reason(syscall.EBADF))))
@@ -745,26 +783,16 @@ func (r *Runner) applyRedirList(ctx context.Context, rs []*syntax.Redirect, comp
 			// relocates a descriptor onto itself, which is a descriptor that
 			// is still open, and closing it would be a close the script did
 			// not write.
-			//
-			// A destination that outlives its command takes the close with
-			// it whatever the form says, and that is not a nicety: giving
-			// the source back needs a save of the table, and a save is
-			// exactly what a persisting `{name}` redirection must not have,
-			// since restoring it would take the install back too. One
-			// operation, one lifetime.
 			if moveFrom >= 0 && moveFrom != fd {
-				closeMovedSource(moveFrom, persists || r.sem().FdMove == FdMoveDuplicatesThenCloses)
+				closeMovedSource(moveFrom, r.moveCloseIsForKeeps(fdVar, destOpen))
 			}
 			r.redirWrote(fd)
-			if fdVar != "" {
-				if !setFdVar(fdVar, itoa(fd), "") {
-					// A duplication opens nothing of its own — the entry is
-					// a second name for a file something else holds — so
-					// only the name goes.
-					dropFdVarDescriptor(fd, nil, persists)
-					r.redirErr = true
-					return closers, nil
-				}
+			// A duplication opens nothing of its own — the entry is a second
+			// name for a file something else holds — so a refused store
+			// takes only the name.
+			if fdVar != "" && !storeFdVar(fdVar, fd, nil, persists, "") {
+				r.redirErr = true
+				return closers, nil
 			}
 			continue
 		}
@@ -1211,8 +1239,7 @@ func (r *Runner) applyRedirList(ctx context.Context, rs []*syntax.Redirect, comp
 					if flags&os.O_WRONLY == 0 {
 						readTarget = name
 					}
-					if !setFdVar(fdVar, itoa(fd), readTarget) {
-						dropFdVarDescriptor(fd, f, persists)
+					if !storeFdVar(fdVar, fd, f, persists, readTarget) {
 						r.redirErr = true
 						return closers, nil
 					}
@@ -2391,10 +2418,41 @@ func (r *Runner) lowestFreeNumber(freeing int) int {
 // alone — `exec 6<&5-` with 5 closed is `5: Bad file descriptor` — where
 // ksh93 quotes the whole word it was handed and says `5-: cannot open`. Both
 // name what they parsed; they parsed the same text into different pieces.
-func (r *Runner) dupTargetText(rd *syntax.Redirect, moveFrom int) string {
+// ksh93's word is the one it was handed *after* expansion: `x=3; true
+// 4<&$x-` is `3-: cannot open` there, as `x=3-; true 4<&$x` is, so the word
+// is expanded rather than the text.
+//
+// And bash, which quotes a target with an expansion in it as written, does
+// so only where nothing was written in front of the operator — or only the
+// number the operator would have chosen anyway, `1>&` or `0<&`. A number of
+// its own is named instead, and a move always names its destination once
+// the source is not plain digits. Measured 2026-10-15 on bash 5.3.20, `-c`,
+// 3 closed, `x=3`:
+//
+//	true >&$x   true 1>&$x   true 0<&$x      $x: Bad file descriptor
+//	true 4>&$x  true 2>&$x   true 0>&$x      4:, 2:, 0: Bad file descriptor
+//	true 4>&"$x"  4>&${x}  4>&$(echo 3)  4>&3$x   all 4: Bad file descriptor
+//	true 4<&$x-  true >&$x-                  4:, 1: Bad file descriptor
+//	true 4>&3    true 4<&3-                  3: Bad file descriptor
+//
+// The `{name}>&$x` spelling names a different number on every run there
+// (`113347440`, then `3`), which is not something to reproduce, so a
+// `{name}` keeps the word as written (#6627).
+func (r *Runner) dupTargetText(rd *syntax.Redirect, fd, moveFrom int, expanded string) string {
+	written := -1
+	if rd.N != nil {
+		if n, ok := atoi(rd.N.Literal()); ok {
+			written = n
+		}
+	}
+	fdVar := rd.N != nil && written < 0
 	if moveFrom >= 0 {
 		if r.diag().NamesTheMoveSuffixInTheTarget {
-			return rd.Text
+			return expanded
+		}
+		if r.diag().NamesTheDuplicationTargetAsWritten && !fdVar &&
+			!allDigits(strings.TrimSuffix(rd.Text, "-")) {
+			return itoa(fd)
 		}
 		return ""
 	}
@@ -2402,6 +2460,14 @@ func (r *Runner) dupTargetText(rd *syntax.Redirect, moveFrom int) string {
 		// As written — but a target written as a plain number is named as
 		// the number it is: `>&08` is `8: Bad file descriptor` in bash
 		// 5.3.20, measured 2026-10-04, where `>&$x` is `$x`.
+		if operatorDefault := 1; written >= 0 {
+			if rd.Op == syntax.TokLessAmp {
+				operatorDefault = 0
+			}
+			if written != operatorDefault {
+				return itoa(written)
+			}
+		}
 		return rd.Text
 	}
 	if r.diag().NamesADuplicationNumberAsWritten && rd.Text != "" && allDigits(rd.Text) {
@@ -2973,14 +3039,17 @@ const (
 	// absence of this operator rather than two answers to it.
 	FdMoveIsNotAnOperator
 	// FdMoveDuplicatesThenCloses is two steps in written order: copy the
-	// source onto the destination, then close the source — and only the
-	// copy is a redirection the command takes back. bash.
+	// source onto the destination, then close the source — and where the
+	// destination had been closed, only the copy is a redirection the
+	// command takes back. bash.
 	//
 	// Both halves are observable. `exec 5<f; true 6<&5-` leaves 5 closed
 	// once the command has ended, where the plain close `true 5<&-` is
 	// undone like any other redirection; and `{v}<&$w-` picks the
 	// destination number before the source is closed, so the name receives
-	// a number one higher than the one it moved from.
+	// a number one higher than the one it moved from. A destination that
+	// was open — `true 0<&5-` — and a `{name}`'s gives 5 back; see
+	// Runner.moveCloseIsForKeeps for the grid (#6626).
 	FdMoveDuplicatesThenCloses
 	// FdMoveRelocates is one operation: the descriptor changes number.
 	// Both halves are the command's redirection, so both are taken back —

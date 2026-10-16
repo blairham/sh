@@ -5393,6 +5393,10 @@ func Semantics() interp.Semantics {
 	// "[$v]"` is `in[0] [11]`, measured 2026-10-15 (#6569). See
 	// interp.Semantics.FdVariableStoredAfterThePrefix.
 	s.FdVariableStoredAfterThePrefix = interp.No
+	// unanswered FdVariableMakesABareListASubshell: a `{name}` in front of
+	// the command word opens a brace group here, so `{v}>/dev/null` runs a
+	// command named `v` and a command of redirections alone carries no
+	// `{name}`, measured 2026-10-15 on zsh 5.9.2 (#6629).
 	// And `set -C` protects a name that already holds an open descriptor, so
 	// `exec {m}>f1; exec {m}>f2` is refused rather than reallocating. The
 	// name is what is protected and not the file — the same file twice is

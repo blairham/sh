@@ -3230,6 +3230,11 @@ func Semantics() interp.Semantics {
 	// is `in[10]`, measured 2026-10-15 (#6569). See
 	// interp.Semantics.FdVariableStoredAfterThePrefix.
 	s.FdVariableStoredAfterThePrefix = interp.Yes
+	// And a command with no command word whose redirections carry a
+	// `{name}` makes the whole list in a child: `{v}>/dev/null; echo "[$v]"`
+	// is `[]`, and the next `exec {w}` still gets 10, measured 2026-10-15 on
+	// 5.3.20 (#6630). See interp.Semantics.FdVariableMakesABareListASubshell.
+	s.FdVariableMakesABareListASubshell = interp.Yes
 	// And `set -C` does not protect the name: `exec {m}>f1; exec {m}>f2`
 	// allocates a second descriptor and overwrites it in silence, measured
 	// 2026-09-29. See interp.Semantics.NoclobberProtectsAnFdVariable.

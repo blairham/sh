@@ -2713,6 +2713,8 @@ func Semantics() interp.Semantics {
 	// is ever traced (#1959).
 	// unanswered TraceSubscriptedArrayLiteralIsElementAssignments: the
 	// subscripted shape is the same literal and does not parse here either.
+	// unanswered ElementSubscriptIsExpandedBeforeTheValue: no element write
+	// to order — `a[1]=v` is a command word here.
 	// unanswered TraceElementSubscriptIsEvaluated: and no subscript, so
 	// `a[1]=v` names a variable spelled `a[1]` and there is nothing to
 	// resolve.

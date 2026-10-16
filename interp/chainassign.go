@@ -57,20 +57,66 @@ import "github.com/blairham/sh/syntax"
 
 // assignChainedElement is `a[i][j]…=v`, where Assign.Leading holds every
 // subscript but the last.
+//
+// Every subscript's words are expanded, then the value, and only then is any
+// subscript evaluated — measured on ksh93u+, the shell with the construct:
+// `a[$(echo S1 >&2; echo 1/0)][2]=$(echo VAL >&2)x` writes `S1`, `VAL`, then
+// the division, and `i=0; a[i++][i++]=$((i*10))` stores 0. It resolved the
+// first subscript before the value was expanded, so the division was
+// reported with no `VAL` and the second row stored 10. See
+// interp/elementorder.go (#6604).
 func (r *Runner) assignChainedElement(a *syntax.Assign) {
-	held, there, place, ok := r.chainRoot(a)
-	if !ok {
+	first := a.Leading[0]
+	if r.refuseReadonly(a.Name, assignedAlone) {
 		return
+	}
+	// A declared table takes its first subscript as a key, expanded and never
+	// evaluated — the same switch the attribute throws for a plain `m[k]=v`,
+	// and the reason the links below it cannot be keys: what they index is
+	// an array.
+	table := r.assocDeclared(a.Name)
+	var key, text string
+	failedBefore := r.expansionHasFailed()
+	if table {
+		k, ok := r.assocAssignKey(a.Name, first.Index)
+		if !ok {
+			return
+		}
+		key = k
+	} else {
+		text = r.joinWord(first.Index)
 	}
 	rest := make([]string, 0, len(a.Leading))
 	for _, link := range a.Leading[1:] {
 		rest = append(rest, r.joinWord(link.Index))
 	}
 	last := r.joinWord(a.Index)
+	if r.expansionFailedHere(failedBefore) {
+		return
+	}
 	value := r.assignValue(a)
 	if r.assignmentGaveUp() {
 		// A value that would not expand stores nothing — see the indexed
 		// store in Runner.assign (#6579).
+		return
+	}
+	var (
+		held  Element
+		there bool
+		place func(Element)
+		ok    bool
+	)
+	if table {
+		held, there, place, ok = r.chainRootInTable(a.Name, key)
+	} else {
+		idx, err := r.subscriptValue(text)
+		if err != nil {
+			r.fatal("%s\n", r.subscriptFailure(text, err))
+			return
+		}
+		held, there, place, ok = r.chainRootInArray(a.Name, idx, subscriptSubject(first.Text, text))
+	}
+	if !ok {
 		return
 	}
 	r.chainWrite(a.Name, held, there, place, rest, last, value, a.Append)
@@ -132,33 +178,6 @@ func (r *Runner) chainWrite(name string, held Element, there bool, place func(El
 	}
 	inner.Set(idx, Scalar(value))
 	place(Element{Nested: inner})
-}
-
-// chainRoot resolves the first subscript against the *name*, which is the one
-// link that is not an element of an array.
-func (r *Runner) chainRoot(a *syntax.Assign) (Element, bool, func(Element), bool) {
-	first := a.Leading[0]
-	if r.refuseReadonly(a.Name, assignedAlone) {
-		return Element{}, false, nil, false
-	}
-	if r.assocDeclared(a.Name) {
-		// A declared table takes its subscript as a key, expanded and never
-		// evaluated — the same switch the attribute throws for a plain
-		// `m[k]=v`, and the reason the links below it cannot be keys: what
-		// they index is an array.
-		key, ok := r.assocAssignKey(a.Name, first.Index)
-		if !ok {
-			return Element{}, false, nil, false
-		}
-		return r.chainRootInTable(a.Name, key)
-	}
-	text := r.joinWord(first.Index)
-	idx, err := r.subscriptValue(text)
-	if err != nil {
-		r.fatal("%s\n", r.subscriptFailure(text, err))
-		return Element{}, false, nil, false
-	}
-	return r.chainRootInArray(a.Name, idx, subscriptSubject(first.Text, text))
 }
 
 // chainRootInTable and chainRootInArray are the two roots a chain can have,

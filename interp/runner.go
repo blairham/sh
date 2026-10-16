@@ -14923,23 +14923,36 @@ func (r *Runner) assignAll(ctx context.Context, assigns []*syntax.Assign) {
 	values := make([]string, len(assigns))
 	prepared := make([]*expandedAssign, len(assigns))
 	for i, a := range assigns {
-		// Both readings, in one expansion. The fields are nil for every
-		// assignment but the one shape the option reaches — see
-		// Runner.expandScalarAssignValue — and they travel with the value so
-		// that the store below matches nothing a second time.
-		value, fields, globbed := r.expandScalarAssignValue(a.Value)
-		if r.assignmentGaveUp() {
-			// The value would not expand and the shell is on its way out,
-			// so the list is over: nothing after it is stored, and nothing
-			// about it is written. Every column stops its trace at the
-			// failure — the ones with a line each have written the lines
-			// before it, and the ones with one line for the list never
-			// reach the line (#5509).
+		// An element write in the dialect that expands its subscript first
+		// leaves its value to the store, which expands it after the
+		// subscript's words — and the line waits for the store, since the
+		// value is not known before. See interp/elementorder.go (#6604).
+		later := elementWriteHasAValueToOrder(a) && r.subscriptExpandsBeforeTheValue(a)
+		if r.unspecified {
 			return
 		}
-		values[i] = value
-		prepared[i] = r.prepareTracedAssign(a, values[i])
-		prepared[i].fields, prepared[i].fieldsSet = fields, globbed
+		if later {
+			prepared[i] = r.prepareTracedAssign(a, "")
+			prepared[i].valuePending, prepared[i].tracesAfterTheStore = true, true
+		} else {
+			// Both readings, in one expansion. The fields are nil for every
+			// assignment but the one shape the option reaches — see
+			// Runner.expandScalarAssignValue — and they travel with the
+			// value so that the store below matches nothing a second time.
+			value, fields, globbed := r.expandScalarAssignValue(a.Value)
+			if r.assignmentGaveUp() {
+				// The value would not expand and the shell is on its way
+				// out, so the list is over: nothing after it is stored, and
+				// nothing about it is written. Every column stops its trace
+				// at the failure — the ones with a line each have written
+				// the lines before it, and the ones with one line for the
+				// list never reach the line (#5509).
+				return
+			}
+			values[i] = value
+			prepared[i] = r.prepareTracedAssign(a, values[i])
+			prepared[i].fields, prepared[i].fieldsSet = fields, globbed
+		}
 		// The subscript is the one thing a trace can show that only the
 		// *store* knows, because resolving it here as well would resolve it
 		// twice — `a[i++]=v` steps `i` once in the column that prints the
@@ -14957,6 +14970,7 @@ func (r *Runner) assignAll(ctx context.Context, assigns []*syntax.Assign) {
 			// ash do with `readonly r; set -x; a=1 r=2` (#5509).
 			return
 		}
+		values[i] = prepared[i].value
 		if separately && after {
 			r.traceAssignments(assigns[i:i+1], values[i:i+1], prepared[i:i+1])
 		}
@@ -15015,6 +15029,11 @@ func (r *Runner) withPreparedValue(ctx context.Context, e *expandedAssign) {
 type expandedAssign struct {
 	assign *syntax.Assign
 	value  string
+	// valuePending says the value has not been expanded yet and the store
+	// is to expand it when it reaches it: an element write in the dialect
+	// that expands its subscript first, traced. The line waits for the
+	// store, which fills value in. See Runner.heldAssignValue (#6604).
+	valuePending bool
 
 	// elems is the array literal's element list, expanded once for the
 	// dialect whose trace prints what the elements came to rather than what
@@ -15090,8 +15109,8 @@ func (r *Runner) resolvedSubscript(text string) {
 // which assignment the value belongs to, and a stale one silently stored the
 // previous assignment's value under this one's name.
 func (r *Runner) assignValue(a *syntax.Assign) string {
-	if r.expanded != nil && r.expanded.assign == a {
-		return r.expanded.value
+	if e, ok := r.heldAssignValue(a); ok {
+		return e.value
 	}
 	return r.expandAssignValue(a.Value)
 }
@@ -15244,6 +15263,25 @@ func (r *Runner) assign(ctx context.Context, a *syntax.Assign) {
 			return
 		}
 	}
+	// An element write's value, ahead of its subscript, in the dialects that
+	// expand it there — and the stores below read it from where it is put.
+	// The other answer is each store's own order: the subscript's words,
+	// then the value, then the subscript's arithmetic. See
+	// interp/elementorder.go (#6604).
+	if e := r.valueAheadOfTheSubscript(a); e != nil {
+		if r.assignmentGaveUp() {
+			// A value that would not expand stores nothing, and the
+			// subscript is never expanded: `a[$(echo SUB >&2; echo
+			// 1)]=$((1/0))` writes no `SUB` in either column that expands
+			// the value first.
+			return
+		}
+		saved := r.expanded
+		r.expanded = e
+		defer func() { r.expanded = saved }()
+	} else if r.unspecified {
+		return
+	}
 	switch {
 	case a.Members != nil && a.Index != nil:
 		// The body standing where one *element's* value goes, which is the
@@ -15360,6 +15398,7 @@ func (r *Runner) assign(ctx context.Context, a *syntax.Assign) {
 		// ordinary keyed branch because that one would take `(r)v` for a key,
 		// which is a plausible wrong element and exactly what this construct
 		// must not produce. See Runner.assignFlaggedTableElement.
+		defer r.armAssignSubscript(a).undo()
 		r.assignFlaggedTableElement(a)
 	case a.Index != nil && r.assocDeclared(a.Name):
 		// A declared name takes its subscript as a string, expanded and
@@ -15376,6 +15415,7 @@ func (r *Runner) assign(ctx context.Context, a *syntax.Assign) {
 		// `a[(r)y]=Q` replaces the element whose value is `y`, and
 		// `a[(i)nomatch]=W` appends, because `(i)` missing answers one past
 		// the last element. See Runner.flaggedAssignIndex.
+		defer r.armAssignSubscript(a).undo()
 		place, ok := r.flaggedAssignPlace(a)
 		if !ok {
 			return
@@ -15440,6 +15480,36 @@ func (r *Runner) assign(ctx context.Context, a *syntax.Assign) {
 			// has no room for a list and is refused by name.
 			return
 		}
+		// The value, before anything evaluates the subscript: every column
+		// expands the value ahead of the subscript's arithmetic, including the
+		// one that expands the subscript's words first — `a[$(echo SUB >&2;
+		// echo 1/0)]=$(echo VAL >&2)y` writes `VAL` before the division is
+		// reported, and `i=1; a[i++]=$((i*10))` stores 10. Where the value
+		// was expanded ahead of the subscript too this reads that one. See
+		// interp/elementorder.go (#6604).
+		value := r.elementValue(a, globbed)
+		if r.assignmentGaveUp() {
+			// A value that would not expand is not stored, and the element
+			// keeps what it held — the scalar store's rule (#6544), and the
+			// same rule for every store that names a subscript. Measured
+			// 2026-10-15: `a=(1 2)` then `a[0]=$((1/0))` leaves `[1 2]` in
+			// bash 5.3.20 (`-c`, a file and `-i`) and in ksh93u+ and zsh
+			// 5.9.2 interactively, the one route where those two reach the
+			// next line; `a[5]=…`, `a[0]+=…` and a partial
+			// `a[1]=$(echo hi)$((1/0))` add nothing, and an unset name is
+			// not created. It stored the empty string, and in the dialect
+			// whose arrays start at one `a[0]=…` went on to refuse the
+			// subscript after the division had already been reported
+			// (#6579).
+			//
+			// Checked between each road's own expansion of the value and its
+			// store rather than hoisted to the top, so the order the pieces
+			// are expanded in does not move. Every sibling road asks the same
+			// question at the same point: the flagged one above, the table's
+			// keyed store, the whole-array spelling, the chain and the
+			// positional parameters.
+			return
+		}
 		// A range on the left names a span of elements rather than one, and
 		// the value is the single word that replaces the whole span:
 		// `a=(1 2 3); a[2,3]=x` is `[1][x]`. Ahead of the single-subscript
@@ -15451,12 +15521,8 @@ func (r *Runner) assign(ctx context.Context, a *syntax.Assign) {
 		case outcome == spanReported:
 			return
 		case outcome == spanResolved && r.spanReplacesElements(a.Name):
-			value := r.elementValue(a, globbed)
-			if r.assignmentGaveUp() {
-				// See the indexed store below; read the elements only
-				// after the value, which may write them.
-				return
-			}
+			// The elements are read only after the value, which may write
+			// them.
 			elems, _ := r.arrayElemsOfTheName(a.Name)
 			r.spliceElementSpan(a.Name, subject, elems, from, to, []string{value})
 			return
@@ -15470,11 +15536,6 @@ func (r *Runner) assign(ctx context.Context, a *syntax.Assign) {
 			if r.spanIsBelowTheFirstElement(from, to) {
 				r.fatal("%s\n", Wording(r.diag().BadArraySubscript,
 					"%[1]s[%[2]s]: bad array subscript", a.Name, subject))
-				return
-			}
-			value := r.elementValue(a, globbed)
-			if r.assignmentGaveUp() {
-				// See the indexed store below.
 				return
 			}
 			r.spliceCharacterSpan(a.Name, from, to, value, false)
@@ -15495,30 +15556,6 @@ func (r *Runner) assign(ctx context.Context, a *syntax.Assign) {
 		// store below because both the plain write and the append pass
 		// through it, and because the value is this one whichever they do.
 		r.resolvedSubscript(itoa(idx))
-		value := r.elementValue(a, globbed)
-		if r.assignmentGaveUp() {
-			// A value that would not expand is not stored, and the element
-			// keeps what it held — the scalar store's rule (#6544), and the
-			// same rule for every store that names a subscript. Measured
-			// 2026-10-15: `a=(1 2)` then `a[0]=$((1/0))` leaves `[1 2]` in
-			// bash 5.3.20 (`-c`, a file and `-i`) and in ksh93u+ and zsh
-			// 5.9.2 interactively, the one route where those two reach the
-			// next line; `a[5]=…`, `a[0]+=…` and a partial
-			// `a[1]=$(echo hi)$((1/0))` add nothing, and an unset name is
-			// not created. It stored the empty string, and in the dialect
-			// whose arrays start at one `a[0]=…` went on to refuse the
-			// subscript after the division had already been reported
-			// (#6579).
-			//
-			// Checked between each road's own expansion of the value and its
-			// store rather than hoisted to the top, so the order the pieces
-			// are expanded in (subscript, pattern, span, value) does not
-			// move. Every sibling road asks the same question at the same
-			// point: the flagged one above, the spans, the table's keyed
-			// store, the whole-array spelling, the chain and the positional
-			// parameters.
-			return
-		}
 		if a.Append {
 			// `a[0]+=Q` appends to element 0. Distinct from `a+=(Q)`, which
 			// adds an element after the last: the subscript is what says

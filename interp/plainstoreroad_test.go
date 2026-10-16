@@ -47,6 +47,8 @@ var theFullRoad = map[string][]string{
 		"subscriptValueAsWritten", "suppressDiscipline", "tableRefusesAScalarStore",
 		"unaimedReferenceBase", "watchHiddenKinds", "appendArrayElem", "arrayElemsOfTheName",
 		"diag", "retypingFrozen", "unspecified", "assignmentGaveUp",
+		// The element road only — storesAPlainScalar refuses every subscript (#6604).
+		"armAssignSubscript", "expanded", "valueAheadOfTheSubscript",
 	},
 	"setVarAs": {
 		"registeredGuard", "attributeFolded", "compoundMemberThroughAReference",

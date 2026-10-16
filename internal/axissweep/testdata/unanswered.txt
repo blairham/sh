@@ -131,6 +131,7 @@ ash   DisownRemovesTheJob
 ash   EarlierDeclarationLetterBlocksALaterPlus
 ash   ALetterUnderBothSignsComesOff
 ash   EarlierPlusMakesALaterLetterARemoval
+ash   ElementSubscriptIsExpandedBeforeTheValue
 ash   EmptyArithSubscript
 ash   EmptyAssociativeKeyIsAnError
 ash   EmptyAssociativeKeyIsReportedWhenRead
@@ -514,6 +515,7 @@ dash  EarlierDeclarationLetterBlocksALaterPlus
 dash  ALetterUnderBothSignsComesOff
 dash  EarlierPlusMakesALaterLetterARemoval
 dash  EchoLastEscapeFlagWins
+dash  ElementSubscriptIsExpandedBeforeTheValue
 dash  EmptyArithSubscript
 dash  EmptyAssociativeKeyIsAnError
 dash  EmptyAssociativeKeyIsReportedWhenRead

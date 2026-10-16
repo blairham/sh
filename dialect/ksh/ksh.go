@@ -2675,6 +2675,10 @@ func Semantics() interp.Semantics {
 	// is `a[2]=v`, `a[i]=v` is too, and a table's `m[k$x]=v` is `m[k]=v`.
 	// The only column that does.
 	s.TraceElementSubscriptIsEvaluated = interp.Yes
+	// And the subscript's words are expanded before the value — SUB, then
+	// VAL — though its arithmetic is still evaluated after the value, as in
+	// every column. The only column that does.
+	s.ElementSubscriptIsExpandedBeforeTheValue = interp.Yes
 	s.TraceAssignmentsSeparately = interp.Yes
 	// An unparseable `eval` is reported and survived here, unlike dash, but a
 	// file `.` cannot open still ends the script — so the two halves of the

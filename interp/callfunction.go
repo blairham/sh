@@ -120,11 +120,12 @@ func (r *Runner) RunFunctionBodyInPlace(ctx context.Context, name string) (bool,
 	// definition seam. See funcOrigin.wrapperLines (#4471).
 	origin := r.funcOrigins[name]
 	defLine := origin.definitionLine(int(fn.Pos().Line))
-	savedLine, savedIn, savedBase := r.funcLine, r.inBuiltin, r.lineBase
+	savedLine, savedIn, savedBase, savedOrigin := r.funcLine, r.inBuiltin, r.lineBase, r.lineOrigin
 	r.funcLine, r.inBuiltin = defLine, ""
 	r.lineBase = origin.bodyLineBase()
+	r.lineOrigin = origin.bodyLineOrigin(r.lineOrigin)
 	defer func() {
-		r.funcLine, r.inBuiltin, r.lineBase = savedLine, savedIn, savedBase
+		r.funcLine, r.inBuiltin, r.lineBase, r.lineOrigin = savedLine, savedIn, savedBase, savedOrigin
 	}()
 	// The frame was pushed for the stub, whose file is wherever the
 	// declaration was read; the body running in it now came out of the file

@@ -66,6 +66,11 @@ type funcOrigin struct {
 	// defined, which is quoted against the script's text wherever it is
 	// called and so needs no record.
 	text runningText
+	// linesFromZero is whether the text the definition was read out of
+	// numbered its lines from 0 — the `-c` route's, in the dialect that
+	// counts that route from 0 — which the body keeps wherever it is called
+	// from. See Runner.lineOrigin (#6696).
+	linesFromZero bool
 }
 
 // originHere is where a definition read at this moment came from: the file the
@@ -80,7 +85,7 @@ type funcOrigin struct {
 // be the same answer — a nameless function's frame reports the file its
 // declaration would have reported had it been given a name.
 func (r *Runner) originHere() funcOrigin {
-	return funcOrigin{file: r.currentFile(), lineBase: r.lineBase, fileOffset: r.definitionFileOffset(), text: r.runText}
+	return funcOrigin{file: r.currentFile(), lineBase: r.lineBase, fileOffset: r.definitionFileOffset(), text: r.runText, linesFromZero: r.lineOrigin != 0}
 }
 
 // definitionFileOffset is the file offset a body defined here is numbered at.
@@ -131,6 +136,28 @@ func (r *Runner) recordFunctionOrigin(name string, o funcOrigin) {
 // body around it carries the wrapper and no offset.
 func (o funcOrigin) definitionLine(parsed int) int {
 	return parsed + o.lineBase - o.wrapperLines
+}
+
+// bodyLineOrigin is the Runner.lineOrigin a body read at this origin runs
+// under: the numbering of the text it was written in, not of the text it is
+// called from. An origin with nothing recorded says nothing, and the caller's
+// stands.
+//
+// Measured 2026-10-15 on BusyBox v1.37.0 in the pinned image, the one column
+// that counts a route from 0 (`-c`) beside one that counts from 1 (a file `.`
+// reads): a function a file defined, called from the `-c` string, names the
+// file's own line — `fe(){ eval "nosuch_fn"; }` on line 3 of `s.inc` is
+// `eval: line 3:` — and a function the string defined, called from inside the
+// file, names the string's — `cd` on the string's second line is `cd: line
+// 1:`. `$LINENO` in either body moves with it (#6696).
+func (o funcOrigin) bodyLineOrigin(caller int) int {
+	if o == (funcOrigin{}) {
+		return caller
+	}
+	if o.linesFromZero {
+		return -1
+	}
+	return 0
 }
 
 // bodyLineBase is the offset a body read at this origin runs under, which

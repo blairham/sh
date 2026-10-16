@@ -1146,7 +1146,26 @@ func (r *Runner) readSubstBody(span syntax.Span) (*syntax.File, int, int, bool) 
 	// and the runner that runs what parsed wants the run's; a single base is
 	// how the two came to be one wrong answer for both.
 	base := r.substRunBase(span, src, f, textBase)
-	if err := p.Err(); err != nil {
+	err := p.Err()
+	if err == nil && span.ClosedBehindABraceName {
+		// The `}` that closed the body stood straight behind a `{name}`, and
+		// the shell that reads it as a closer then refuses the body as one
+		// that never ended — when it runs, so what came before it on the
+		// line has run. Measured 2026-10-15 on ksh93u+ 2012-08-01 (#6642):
+		//
+		//	echo before; echo ${ echo {v}}     before, then `end of file'
+		//	                                   unexpected at line 1, 3
+		//	echo ${ echo a ⏎ echo {v}}          the same, at line 2
+		//	echo ${ print -u2 side; echo {v}}  nothing of the body runs
+		//	false && echo ${ echo {v}}         nothing said
+		//	echo ${ echo {v} }                 {v} — a blank first
+		line := int32(1 + strings.Count(src, "\n"))
+		err = &syntax.Error{
+			Pos: syntax.Pos{Line: line}, Kind: syntax.ErrUnterminated,
+			EndLine: int(line), Msg: "unexpected end of input",
+		}
+	}
+	if err != nil {
 		// A substitution re-parses, so the syntax-error status is the
 		// dialect's here too — not only in whatever first read the script.
 		//

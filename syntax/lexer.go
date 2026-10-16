@@ -2976,6 +2976,14 @@ func (l *Lexer) scanGroupSpans() []Span {
 	if l.err == nil && !l.dialect.UnterminatedPatternGroupIsAWord {
 		l.ranOut("pattern")
 		l.fail(l.pos(), "unterminated pattern group")
+	} else if l.err == nil {
+		// Still input that could be finished, though not a failure: a
+		// reader with more to give hands it over and the group reads on
+		// through the newline, as it does when the whole text is in hand.
+		// On standard input zsh 5.9.2 reads `print a(b` ⏎ `echo x` as one
+		// word exactly as from a file, and an interactive shell draws PS2
+		// there (#6614). With nothing more, the text is the word.
+		l.ranOut("pattern")
 	}
 	return spans
 }
@@ -6238,6 +6246,8 @@ func (l *Lexer) scanBraces(q Quoting) Span {
 	// ended, because a `{` straight behind one is read as though it began a
 	// token. See braceNameWordLen.
 	braceNameEnd := -1
+	// Whether the `}` that closed the body was one of those.
+	closedBehindName := false
 	dollarParens := 0
 	for depth > 0 {
 		if l.eof() {
@@ -6538,6 +6548,10 @@ func (l *Lexer) scanBraces(q Quoting) Span {
 				continue
 			}
 			depth--
+			// Every close assigns it, so the body's own `}` has the last
+			// word; `depth == 0` says which close is meant rather than
+			// deciding anything, and dropping it is an equivalent mutant.
+			closedBehindName = depth == 0 && l.off == braceNameEnd
 			if len(bodies) > 1 {
 				bodies = bodies[:len(bodies)-1]
 			}
@@ -6582,7 +6596,11 @@ func (l *Lexer) scanBraces(q Quoting) Span {
 		// *ends* is the one place they differ and is settled above; `body`
 		// is past the `|` of the reply form, because the blank form's
 		// opening blank is body text and this one's pipe is its marker.
-		return Span{Kind: CommandSubst, CurrentShell: true, ReplyValue: reply, Value: l.src[body:end], Quoting: q, Pos: open, Comments: l.bodyComments(CommandSubst)}
+		return Span{
+			Kind: CommandSubst, CurrentShell: true, ReplyValue: reply, Value: l.src[body:end],
+			Quoting: q, Pos: open, Comments: l.bodyComments(CommandSubst),
+			ClosedBehindABraceName: closedBehindName,
+		}
 	}
 	// And a here-document a `$( )` in this word opened and could not feed,
 	// which the body's own scan noted on the way past. Raised here rather

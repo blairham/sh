@@ -302,6 +302,9 @@ type globTest struct {
 	// qualifier, defaulting to a day. Zero for every test that is not about
 	// a time, which is what keeps fileAge from being asked about one.
 	unit time.Duration
+	// bytes is how many bytes one of `L`'s units is: 1, or the size its unit
+	// letter names. Zero for every other test.
+	bytes uint64
 	// count is `l`'s comparison, and `m`'s: the number written and which way
 	// the file's own number has to stand against it.
 	count globCount
@@ -451,6 +454,16 @@ func parseGlobQualifiers(list string) (globQualifiers, string, bool) {
 			}
 			i += n
 			section = append(section, globTest{kind: 'l', negated: negate, follow: follow, count: count})
+		case 'L':
+			// The size, in bytes or in the unit a letter names, which is
+			// read like a time's unit and compared like a link count. See
+			// parseGlobSize for the measured rows (#6613).
+			count, bytes, n, diag := parseGlobSize(list[i:])
+			if diag != "" {
+				return q, diag, false
+			}
+			i += n
+			section = append(section, globTest{kind: 'L', negated: negate, follow: follow, count: count, bytes: bytes})
 		case 'a', 'c', 'm':
 			// The three file times, as an age in whole units — `m` for the
 			// modification, `a` for the access and `c` for the inode change.
@@ -662,6 +675,8 @@ func globTestMatches(t globTest, info fs.FileInfo, now time.Time) bool {
 	case 'l':
 		links, ok := fileLinks(info)
 		return ok && t.count.holds(links)
+	case 'L':
+		return t.count.holds(fileSizeIn(info.Size(), t.bytes))
 	case 'm':
 		return t.count.holds(fileAge(info.ModTime(), now, t.unit))
 	case 'a', 'c':
@@ -839,14 +854,17 @@ func (r *Runner) globRangeIndex(text string) (int, bool) {
 		r.fatal("%s\n", err)
 		return 0, false
 	}
+	// Worded as the same expression is in an array's subscript, which is
+	// `bad math expression: operand expected at end of string` for `x+`
+	// where the parser's own error text was printed (#6613).
 	tree, err := r.arithTreeRead(text)
 	if err != nil {
-		r.fatal("%s\n", err)
+		r.fatal("%s\n", r.expressionFailure(text, err))
 		return 0, false
 	}
 	n, err := r.evalArith(tree)
 	if err != nil {
-		r.fatal("%s\n", err)
+		r.fatal("%s\n", r.expressionFailure(text, err))
 		return 0, false
 	}
 	return n, true

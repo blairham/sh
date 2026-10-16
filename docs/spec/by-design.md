@@ -161,3 +161,7 @@ Measured 2026-10-04 on ksh93u+ 2012-08-01.
 ## From lane P (#5971)
 
 No oracle row. In the C locale, a typed multibyte character reaches a `self-insert` wrapper once here, where zsh 5.9.2 calls it once per byte. The line ends up identical. Matching it would need a line that can hold a lone byte, and no wrapper in the maintainer's plugin set counts calls. Recorded in `editing.md`, "Measured, and deliberately not a field".
+
+## From #6760 (ksh93, a frozen name)
+
+No oracle row. ksh93u+ 2012-08-01 writes an element literal, `a[i]=(…)`, through `readonly`: `readonly a=(1 2); a[1]=(p q)` is status 0 and `typeset -r -a a=(1 (p q) )`, while `a[1]=p`, `a+=(p)` and `a[1]=(x=1)` over the same name are refused. The same road turns a frozen *scalar* into an array (`readonly s=1; s[1]=(p)` lists `typeset -r -a s=(1 (p) )`) and then writes into the nested element (`a[1][0]=z`), so it is a store that never consults the freeze, not a rule about literals. sh refuses it, at the store and after the subscript and the list are expanded in ksh93's order (#6674, #6675). Measured 2026-10-16, `-c` and file.

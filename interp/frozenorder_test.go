@@ -261,6 +261,10 @@ func TestAnOrdinaryFrozenWriteAsksNothing(t *testing.T) {
 		{"readonly a=(1 2)\na[1]=$(echo x)\n", "refused before its subscript"},
 		{"readonly a=(1 2)\na=($(echo x))\n", "expanded before it is refused"},
 		{"readonly a=(1 2)\na=([i++]=x)\n", "expanded before it is refused"},
+		// The whole-array spelling's own refusal is a different sentence
+		// from the freeze's, so its order shows with nothing to run (#6761).
+		{"readonly a=(1 2)\na[@]=x\n", "refused before its subscript"},
+		{"typeset -A m\nm[k]=1\nreadonly m\nm[@]=x\n", "refused before its subscript"},
 	} {
 		out, _ := run(t, c.src, withSem(sem))
 		if !strings.Contains(out, c.question) || !strings.Contains(out, "disagree") {
@@ -291,6 +295,67 @@ func TestAFrozenNameRefusedAtItsStoreKeepsItsElements(t *testing.T) {
 		out, _ := run(t, "readonly a=(1 2)\n"+c.src+"\necho \"[${a[*]}] ${#a[@]}\"\n", withSem(sem))
 		if !strings.Contains(out, "readonly") || !strings.HasSuffix(out, "[1 2] 2\n") {
 			t.Errorf("%s: said %q, want the refusal and the array as it was", c.name, out)
+		}
+	}
+}
+
+// The whole-array spelling over a frozen name waits for its store where the
+// element order is "at the store": a store that names every element or
+// takes `@` for a key is refused there and keeps what the name had, and a
+// spelling refused for its subscript says that and not the freeze (#6761).
+func TestAFrozenWholeArraySubscriptWaitsForItsStore(t *testing.T) {
+	for _, c := range []struct {
+		name, src, want string
+		array, table    WholeArraySubscriptAssignPolicy
+		readBack        string
+	}{
+		{
+			"every element", "readonly a=(1 2)\na[@]=$(echo VAL >&2)x\n", "VAL RO",
+			WholeArraySubscriptNamesEveryElement, WholeArraySubscriptIsASliceOfATable,
+			`[${a[*]}] ${#a[@]}`,
+		},
+		{
+			"every element, appended", "readonly a=(1 2)\na[@]+=$(echo VAL >&2)x\n", "VAL RO",
+			WholeArraySubscriptNamesEveryElement, WholeArraySubscriptIsASliceOfATable,
+			`[${a[*]}] ${#a[@]}`,
+		},
+		{
+			"a key", "typeset -A a\na[k]=1\nreadonly a\na[@]=$(echo VAL >&2)x\n", "VAL RO",
+			WholeArraySubscriptIsABadSubscript, WholeArraySubscriptIsAnOrdinaryKey,
+			`[${a[k]}] ${#a[@]}`,
+		},
+		{
+			"a key, appended", "typeset -A a\na[k]=1\nreadonly a\na[@]+=$(echo VAL >&2)x\n", "VAL RO",
+			WholeArraySubscriptIsABadSubscript, WholeArraySubscriptIsAnOrdinaryKey,
+			`[${a[k]}] ${#a[@]}`,
+		},
+		{
+			"a bad subscript", "readonly a=(1 2)\na[@]=x\n", "a[@]: bad array subscript",
+			WholeArraySubscriptIsABadSubscript, WholeArraySubscriptIsAnOrdinaryKey,
+			`[${a[*]}] ${#a[@]}`,
+		},
+		{
+			"an invalid subscript", "readonly a=(1 2)\na[*]=x\n", "*: invalid subscript in assignment",
+			WholeArraySubscriptIsInvalidInAnAssignment, WholeArraySubscriptIsInvalidInAnAssignment,
+			`[${a[*]}] ${#a[@]}`,
+		},
+	} {
+		sem := frozenOrderSem(No, No, No)
+		sem.ReadonlyReassignmentFatal = No
+		sem.WholeArraySubscriptAssigningAnArray = c.array
+		sem.WholeArraySubscriptAssigningATable = c.table
+		out, _ := run(t, c.src+"echo \""+c.readBack+"\"\n", withSem(sem))
+		got := frozenSideEffects(out)
+		if !strings.Contains(got, c.want) {
+			t.Errorf("%s: said %q, want %q", c.name, got, c.want)
+		}
+		if c.want != "VAL RO" && strings.Contains(got, "RO") {
+			t.Errorf("%s: said %q, want the subscript's refusal and not the freeze's", c.name, got)
+		}
+		// The invalid subscript ends the script, so there is nothing to read.
+		if c.array != WholeArraySubscriptIsInvalidInAnAssignment &&
+			!strings.HasSuffix(got, "[1 2] 2") && !strings.HasSuffix(got, "[1] 1") {
+			t.Errorf("%s: said %q, want the name as it was", c.name, got)
 		}
 	}
 }

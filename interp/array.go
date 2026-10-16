@@ -1545,6 +1545,11 @@ func (r *Runner) assignWholeArraySubscript(a *syntax.Assign) {
 			// indexed store in Runner.assign (#6579).
 			return
 		}
+		if r.refuseTheHeldFreeze(a) {
+			// A frozen name, refused at the store. See
+			// interp/frozenorder.go (#6761).
+			return
+		}
 		if a.Append {
 			// `a[@]+=Z` adds one element at the end rather than joining
 			// every element: measured, `x=(p q); x[@]+=Z` is `p q Z`.
@@ -1565,6 +1570,12 @@ func (r *Runner) assignWholeArraySubscript(a *syntax.Assign) {
 		if r.assignmentGaveUp() {
 			// A value that would not expand stores nothing — see the
 			// indexed store in Runner.assign (#6579).
+			return
+		}
+		if r.refuseTheHeldFreeze(a) {
+			// A frozen table, refused at the store once the key and the
+			// value are expanded: measured, bash 5.3.20 writes VAL and then
+			// `m: readonly variable` for `m[@]=$(echo VAL >&2)` (#6761).
 			return
 		}
 		if a.Append {

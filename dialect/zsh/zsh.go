@@ -4009,6 +4009,11 @@ func Semantics() interp.Semantics {
 	// 5.9.2. Answered so that nothing reports an axis this shell cannot be
 	// asked.
 	s.GetoptsFrozenNameAtTheEndOfTheOptionsIsFatal = interp.No
+	// A refused store ends the shell and leaves 0 from `-c`, as the other
+	// operand stores do: measured 2026-10-15, `typeset -r v=1; set -- -a;
+	// getopts a v` is the refusal and status 0, and 1 from a script file
+	// (#6588).
+	s.GetoptsStoreRefusalLeavesZero = interp.Yes
 	// A value `read` writes to a typed name that will not evaluate ends the
 	// script: measured 2026-10-15 on zsh 5.9.2, `typeset -i n=5; read n <<<
 	// 1+` is `bad math expression` and nothing after it.

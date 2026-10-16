@@ -155,6 +155,7 @@ ash   FloatFormatLetterE
 ash   FloatLetterChangeRereadsTheRendering
 ash   ForNameWhenTheLoopRuns
 ash   FunctionNamesUnderPlus
+ash   GetoptsStoreRefusalLeavesZero
 ash   GetoptsTypedValueFailureIsAFreeze
 ash   GlobalReplacementAnchors
 ash   HangupAtExitNeedsALoginShell
@@ -550,6 +551,7 @@ dash  FloatLetterChangeRereadsTheRendering
 dash  ForNameWhenTheLoopRuns
 dash  FunctionNameWhenTheDefinitionRuns
 dash  FunctionNamesUnderPlus
+dash  GetoptsStoreRefusalLeavesZero
 dash  GetoptsTypedValueFailureIsAFreeze
 dash  GlobalReplacementAnchors
 dash  HangupAtExitNeedsALoginShell

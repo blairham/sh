@@ -3240,6 +3240,10 @@ func Semantics() interp.Semantics {
 	// word, a `--` and no words at all — with the silent form answering the
 	// same.
 	s.GetoptsFrozenNameAtTheEndOfTheOptionsIsFatal = interp.Yes
+	// And that refusal leaves the builtin's own 2: measured 2026-10-15,
+	// `readonly o; getopts a o; echo after $?` from `-c` is the refusal and
+	// status 2 (#6588).
+	s.GetoptsStoreRefusalLeavesZero = interp.No
 	// A value the typed name will not take is refused as a freeze is, by
 	// `getopts`, and reported at 1 with the builtin given up, by `read`:
 	// measured 2026-10-15 on ksh93u+, `typeset -i n=5; getopts x n -y` is

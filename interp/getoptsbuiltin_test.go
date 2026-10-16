@@ -276,6 +276,10 @@ func getoptsFrozenSem() Semantics {
 	// refusal and take the order most columns have. The suite about the
 	// order is getoptsoptargorder_test.go (#6498).
 	s.GetoptsOptargOrder = GetoptsOptargBeforeTheName
+	// And a refusal that ends the shell leaves the builtin's own status, the
+	// answer ksh93 has; the zsh column's 0 is pinned in
+	// dialect/zsh (#6588).
+	s.GetoptsStoreRefusalLeavesZero = No
 	return s
 }
 

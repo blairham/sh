@@ -14292,6 +14292,18 @@ func (r *Runner) setVarAs(name, value string, form assignForm) {
 	// Every store but the one that holds it refreshes the copy a child is
 	// handed, so the held copy goes first. See Runner.getoptsFillOwnParameter.
 	r.releaseEnvCopy(name)
+	if name == "0" && r.namesAPosition(name) {
+		// `$0` is a value the frame carries, not a parameter in the table,
+		// and a declaration's store reaches it as `0=x` does — `local`'s
+		// through setVar, the other words' through this form. Measured
+		// 2026-10-16 on zsh 5.9.2: `typeset 0=x`, `export 0=x`, `readonly
+		// 0=x` and `typeset -g 0=x` all set `$0`, and inside a function
+		// `local 0=x` and `typeset -g 0=x` alike leave `$0` at `x` there and
+		// back at the shell's name after the return — the frame's lifetime.
+		// They stored into a table entry `$0` never reads (#6809).
+		r.storeDollarZero(value)
+		return
+	}
 	if form == assignedByDeclaration {
 		// `set -a` reaches a declaration utility's assignment as much as a
 		// plain one's — measured, and it was missing: see

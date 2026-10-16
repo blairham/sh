@@ -173,9 +173,58 @@ func (r *Runner) kindLetterOverAShellParameterRefused(name string, f declareFlag
 	} else if allowed.has(kind) {
 		return false
 	}
+	if r.literalOperands[name] && !allowed.has(ArrayParameter) && !allowed.has(AssocParameter) &&
+		!r.declarationTakesAShadow(f) {
+		// An array literal beside the letter, on a line that lands on the
+		// shell's own slot rather than on a fresh local: there the *value*
+		// is refused first. See refuseALiteralOverAFixedScalar.
+		r.refuseALiteralOverAFixedScalar(name, f)
+		return true
+	}
 	r.fatal("%s\n", Wording(r.diag().SpecialParameterKind,
 		"%s: can't change type of a special parameter", name))
 	return true
+}
+
+// declarationTakesAShadow is whether this declaration makes a local in the
+// running call rather than landing on the cell standing there: inside a
+// function, and without `-g` — which `export` writes for itself.
+func (r *Runner) declarationTakesAShadow(f declareFlags) bool {
+	return len(r.scopes) > 0 && !f.global
+}
+
+// refuseALiteralOverAFixedScalar refuses an array literal written on a
+// declaration over one of the shell's scalar or numeric slots, and ends the
+// script, in the sentence the line's letter picks. Measured 2026-10-16 on zsh
+// 5.9.2, `-f`, `env -i PATH=/usr/bin:/bin`, each ending the shell at 1
+// (#6807):
+//
+//	typeset -A HOME=(a b), typeset -a RANDOM=(1)   …: can't assign array value to non-array special
+//	typeset -a 0=(a b), export -a HOME=(a) in f    the same
+//	typeset -i HOME=(1), typeset -i RANDOM=(1)     …: can't assign array value to non-array
+//	typeset -F SECONDS=(1), readonly -i HOME=(1)   the same, with no `special`
+//	f(){ typeset -g -i RANDOM=(1) }                the same
+//	f(){ local -i RANDOM=(1) }                     …: inconsistent type for assignment
+//	f(){ local -a HOME=(a) }, f(){ local -i HOME=(1) }
+//	                                               the kind sentence, from the caller
+//
+// So a numeric letter words it as a typed name refusing a literal, an array
+// letter or none as the slot refusing one; and on a line that makes a local,
+// a letter the slot takes meets the literal as any fresh local would.
+func (r *Runner) refuseALiteralOverAFixedScalar(name string, f declareFlags) {
+	kind, plus, written := f.kindLetterWritten()
+	if written && !plus && (kind == IntegerParameter || kind == FloatParameter) {
+		if r.declarationTakesAShadow(f) {
+			r.refuseInconsistentType(name)
+			return
+		}
+		r.fatal("%s\n", Wording(r.diag().TypeLetterOverAHeldName,
+			"%s: can't assign array value to non-array", name))
+		return
+	}
+	r.fatal("%s\n", Wording(r.diag().ArrayValueToANonArraySpecial,
+		Wording(r.diag().ArrayValueToNonArray,
+			"%[1]s: attempt to assign array value to non-array", name), name))
 }
 
 // localSlotKind is the kind a fresh local of one of the shell's own

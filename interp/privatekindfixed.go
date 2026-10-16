@@ -194,9 +194,7 @@ func (r *Runner) fixedSlotRefusesThisOperand(name string, f declareFlags) bool {
 		// named in the location and the sentence is not the bare
 		// assignment's — see Diagnostics.ArrayValueToANonArraySpecial, and
 		// the ordering rows above for why this is ahead of the letter.
-		r.fatal("%s\n", Wording(r.diag().ArrayValueToANonArraySpecial,
-			Wording(r.diag().ArrayValueToNonArray,
-				"%[1]s: attempt to assign array value to non-array", name), name))
+		r.refuseALiteralOverAFixedScalar(name, f)
 		return true
 	}
 	if _, private := r.privateSlotKindsOnly(name); !private {

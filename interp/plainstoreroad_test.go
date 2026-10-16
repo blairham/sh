@@ -70,6 +70,8 @@ var theFullRoad = map[string][]string{
 		"storingSelfNameref", "underscoreWritten", "viewIsAlreadyFolded",
 		// OPTIND only, which storesAPlainScalar refuses by name (#6633, #6653).
 		"optindCursorScope", "optScanInDoubt",
+		// `0` only, which is no identifier and so never a plain store (#6809).
+		"namesAPosition", "storeDollarZero",
 	},
 }
 

@@ -42,7 +42,7 @@ import (
 // Semantics.DisciplineFunctionIsAVariableHook — so a dialect without one has
 // no hook to fire and every line below is inert in it.
 
-// prefixChildForTheDisciplines is the throwaway shell an **external**
+// prefixChildForTheStores is the throwaway shell an **external**
 // command's assignment prefix stores into, or nil where there is nothing for
 // one to be about.
 //
@@ -75,16 +75,37 @@ import (
 // made with the same ownTables a subshell is made with and thrown away when
 // the command has been started.
 //
-// It is nil unless a hook is really watching one of the names, which is what
-// keeps an ordinary `PATH=/x cmd` from copying every table in the shell. The
-// copy is otherwise invisible: with no hook the stores in it and the entries
-// they produce are what prefixValue already computed.
+// It is nil unless a store in it could hand the child something other than
+// the text the prefix expanded to, which is what keeps an ordinary `PATH=/x
+// cmd` from copying every table in the shell. Two things can:
 //
-// Not an axis. A discipline is one shell's alone — see
-// Semantics.DisciplineFunctionIsAVariableHook — so nothing here is reachable
-// in a dialect that has none.
-func (r *Runner) prefixChildForTheDisciplines(assigns []*syntax.Assign) *Runner {
-	if r.disciplined == nil {
+//   - a hook really watching one of the names, above;
+//   - a name carrying a **type** letter — the integer or float letters, a
+//     case letter, a field width — in the dialect whose prefix writes over
+//     the binding it displaces rather than into a fresh cell. The store
+//     folds the value through those letters, and the fold is what the child
+//     is handed. Measured 2026-10-15 under `-c`, `typeset -i v=3; v=2+2
+//     /usr/bin/env` shows `v=4` in zsh 5.9.2 and ksh93u+ and `v=2+2` in bash
+//     5.3.20; `typeset -u`, `-F`, `-i 16` and ksh93's `-R5`/`-L5`/`-Z5` go
+//     the same way, and a value that will not evaluate (`v=1+`) is the
+//     arithmetic complaint and status 1 for the command alone, with the
+//     entries behind it never expanded. The store is the child's, so the
+//     base `v=0x10` teaches the name (zsh shows the child `16#10`) is gone
+//     again afterwards — which a store into a copy keeps for free (#6698).
+//
+// Otherwise the copy is invisible: the stores in it and the entries they
+// produce are what prefixValue already computed.
+//
+// Not an axis of its own. A discipline is one shell's alone — see
+// Semantics.DisciplineFunctionIsAVariableHook — and the type letters are
+// Semantics.AssignmentPrefixMakesAFreshCell's question, asked only of a name
+// that carries one.
+func (r *Runner) prefixChildForTheStores(assigns []*syntax.Assign) *Runner {
+	typed := r.anyNameCarriesATypeAttribute()
+	if r.disciplined == nil && !typed {
+		// Neither can be true of any name, so the answer needs no word about
+		// the names. A dialect that starts with a typed parameter of its own
+		// never takes this, and the per-name test below answers there.
 		return nil
 	}
 	watching := false
@@ -92,8 +113,12 @@ func (r *Runner) prefixChildForTheDisciplines(assigns []*syntax.Assign) *Runner 
 		if a.Operand || prefixIsSubscripted(a) {
 			continue
 		}
-		if r.disciplineIsWatching(a.Name, disciplineSet) ||
-			(a.Append && r.disciplineIsWatching(a.Name, disciplineAppend)) {
+		if r.disciplined != nil && (r.disciplineIsWatching(a.Name, disciplineSet) ||
+			(a.Append && r.disciplineIsWatching(a.Name, disciplineAppend))) {
+			watching = true
+			break
+		}
+		if typed && r.prefixStoreFoldsThroughTheLetters(a) {
 			watching = true
 			break
 		}
@@ -121,7 +146,18 @@ func (r *Runner) prefixChildForTheDisciplines(assigns []*syntax.Assign) *Runner 
 // where the same hook in front of a *special builtin* does leave 7 — so the
 // store's status belongs to the shell that made the store, and this one is
 // about to be thrown away.
-func (r *Runner) prefixStoredForAChild(a *syntax.Assign, part string) string {
+//
+// And it is read the way the environment reads a name, not the way an
+// expansion does: the case letters fold, and a field width does not pad.
+// Measured 2026-10-15 on zsh 5.9.2, `typeset -R5 v; v=ab /usr/bin/env` shows
+// the child `v=ab` where `$v` would be `   ab` — the same split
+// Runner.exportedScalarEntry records for an exported name. The column that
+// pads on the store (ksh93: `v=   ab`) has the padding in what is stored.
+//
+// failed is a store the type letters refused — a value that would not
+// evaluate — which has said so and leaves the walk where an expansion that
+// failed leaves it. See Runner.prefixWalkFailed.
+func (r *Runner) prefixStoredForAChild(a *syntax.Assign, part string) (stored string, failed bool) {
 	if a.Append {
 		// The hook is given the part being appended and may rewrite it,
 		// exactly as it is for the spellings that store in this shell.
@@ -130,9 +166,31 @@ func (r *Runner) prefixStoredForAChild(a *syntax.Assign, part string) string {
 		}
 		defer r.suppressDiscipline(a.Name, disciplineSet)()
 	}
+	before := r.expandErr || r.ctl != controlNone
 	r.setVar(a.Name, r.prefixJoined(a, part))
-	stored, _ := r.storedValue(a.Name, true)
-	return stored
+	if !before && (r.expandErr || r.ctl != controlNone) {
+		return "", true
+	}
+	stored, _ = r.storedValue(a.Name, false)
+	return r.readCaseFolded(r.attributedName(a.Name), stored), false
+}
+
+// prefixStoreFoldsThroughTheLetters reports whether a prefix entry's store
+// would make something other than its text of it, in the dialect whose prefix
+// keeps the letters of the binding it lands on. See
+// Runner.prefixChildForTheStores.
+//
+// The type letters are looked for first, so the question is never asked of a
+// name that carries none — which is every prefix the common language writes.
+//
+// A positional parameter carries no letter, so it is never one; a readonly
+// name is refused before any store, so it is never one either.
+func (r *Runner) prefixStoreFoldsThroughTheLetters(a *syntax.Assign) bool {
+	name := r.attributedName(a.Name)
+	if !r.nameCarriesATypeAttribute(name) || r.attrHas(name, attrReadonly) {
+		return false
+	}
+	return !r.prefixEntryIsFresh(name)
 }
 
 // prefixStore performs one assignment prefix's store, firing the discipline

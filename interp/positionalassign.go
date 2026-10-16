@@ -161,15 +161,97 @@ func (r *Runner) spliceParams(n int, a *syntax.Assign) {
 		// words that had expanded (#6579).
 		return
 	}
-	params := r.paramsExtendedTo(n)
 	if a.Append {
-		words = append([]string{params[n-1]}, words...)
+		words = append([]string{r.paramsExtendedTo(n)[n-1]}, words...)
 	}
+	r.spliceParamWords(n, words)
+}
+
+// spliceParamWords replaces parameter n with words, padding the list with
+// empty parameters when n lies past its end. It is the splice itself, shared
+// by `N=(words)` and by a builtin's whole-array store into a position — see
+// Runner.StoreAWholeArrayAtAPosition.
+func (r *Runner) spliceParamWords(n int, words []string) {
+	params := r.paramsExtendedTo(n)
 	out := make([]string, 0, len(params)-1+len(words))
 	out = append(out, params[:n-1]...)
 	out = append(out, words...)
 	out = append(out, params[n:]...)
 	r.Params = out
+}
+
+// StoreAWholeArrayAtAPosition is a registered builtin's whole-array store —
+// or, with table set, its whole-association store — into a name that is a
+// position rather than a name, and reports whether name was one. When it
+// was, stop says the builtin ends here, with status as what it returns.
+//
+// It answers only in the dialect whose builtins fill a position by its number
+// (ReadNameOperands holding NamesAndPositionals, the rule
+// storeThroughPositional reads for a scalar), and there `set -A`, `set +A`,
+// `read -A` and `zparseopts -a` treat `N` as `N=(words)` treats it: as
+// `argv[N]`, which the words replace. Position 0 is `$0`, a slot of a fixed
+// scalar kind, so the array is refused with the sentence `0=(x)` gets; a
+// table is refused at every position with the kind sentence, as it is over
+// the shell's own parameters. Each refusal ends the script, and the number is
+// arrayStoreRefusalStatus's. Measured 2026-10-15 on zsh 5.9.2, `-f`, `env -i
+// PATH=/usr/bin:/bin`, `-c` then a script file (#6648):
+//
+//	set -- a b; set -A 1 x y         x y b
+//	set -- a b c; set +A 2 x y       a x y c — the plus spelling alike
+//	set -- a b; set -A 1             b, the empty splice
+//	set -- a b; set -A 4             a b and an empty $3: the list padded
+//	set -- a b; read -A 4 <<< p      a b, an empty $3, then p
+//	set -- -a b; zparseopts -a 2 a   -a -a
+//	set -A 0 x                       0: attempt to assign array value to
+//	                                 non-array, and the script ends
+//	read -A 0, set +A 0, zparseopts -a 0 a   the same
+//	zparseopts -A 1 a                1: can't change type of a special
+//	                                 parameter, and the script ends
+//	zparseopts -A 0 a                the same, naming 0
+//
+// `01` is position 1 in that shell as it is to `01=(x)`. An index too wide to
+// represent stores nothing, as positionalAssignIndex declines it for the
+// statement form.
+func (r *Runner) StoreAWholeArrayAtAPosition(name string, values []string, table bool) (status int, took, stop bool) {
+	took, refused := r.storeAWholeArrayAtAPosition(name, values, table)
+	if !refused {
+		return 0, took, false
+	}
+	return r.arrayStoreRefusalStatus(r.status), true, true
+}
+
+// storeAWholeArrayAtAPosition is StoreAWholeArrayAtAPosition without the
+// number a builtin leaves, for the route that leaves its own: `${(A)N::=…}`,
+// whose refusal over `0` is the expansion's and ends the script at 1.
+func (r *Runner) storeAWholeArrayAtAPosition(name string, values []string, table bool) (took, refused bool) {
+	if !r.namesAPosition(name) {
+		return false, false
+	}
+	n, _ := positionalAssignIndex(name)
+	switch {
+	case table:
+		r.reportATableToAFixedSlot(name)
+	case n == 0:
+		r.reportAnArrayValueToAFixedSlot(name)
+	case n > 0:
+		r.spliceParamWords(n, values)
+		return true, false
+	default:
+		return true, false
+	}
+	r.fatalQuiet()
+	return true, true
+}
+
+// namesAPosition reports whether a builtin's store into name is a store into
+// a position, which is StoreAWholeArrayAtAPosition's question asked without
+// storing.
+func (r *Runner) namesAPosition(name string) bool {
+	if r.sem().ReadNameOperands != NamesAndPositionals {
+		return false
+	}
+	_, ok := positionalAssignIndex(name)
+	return ok
 }
 
 // paramsExtendedTo copies the positional parameters into a slice at least n
@@ -257,6 +339,10 @@ func (r *Runner) setLoopName(name, value string) {
 		r.assignPositional(&syntax.Assign{Name: name, Value: quoted}, n)
 		return
 	}
+	// A pass that retypes a hidden name takes the word off it. See
+	// Runner.storeForgetsARetypedHide.
+	end := r.storeForgetsARetypedHide(name)
 	r.setVar(name, value)
+	end()
 	r.markAFilledNameForAllexport(name)
 }

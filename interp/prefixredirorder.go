@@ -271,8 +271,15 @@ func (r *Runner) openTheBareRedirections(ctx context.Context, c *syntax.SimpleCm
 	}
 	r.traceCommand(argv)
 	// Assignments and a redirection with no command name. There is no other
-	// process for a here-document body to expand in.
-	closers, err := r.applyRedirs(ctx, c.Redirs, false, redirOwnerThisShell)
+	// process for a here-document body to expand in — except in the one
+	// column that makes a list carrying a `{name}` in a child of its own.
+	// See bareRedirectionsOwner.
+	owner := r.bareRedirectionsOwner(c.Redirs)
+	if r.unspecified {
+		r.redirErr = true
+		return func() {}, true, nil
+	}
+	closers, err := r.applyRedirs(ctx, c.Redirs, false, owner)
 	put := func() {
 		for _, cl := range closers {
 			_ = cl.Close()

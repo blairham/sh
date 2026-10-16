@@ -170,6 +170,10 @@ func Semantics() interp.Semantics {
 	// redirection here for a subshell to carry, the same reason as the two
 	// axes beside it.
 	// unanswered ReadonlyFdVariableRefusesAClose: there is no `{name}`
+	// unanswered FdVariableStoredAfterThePrefix: there is no `{name}`
+	// redirection here for a prefix to meet.
+	// unanswered FdVariableMakesABareListASubshell: there is no `{name}`
+	// redirection here for a command of redirections alone to carry.
 	// unanswered FdVariableReadonlyRefusedFirst: there is no `{name}`
 	// redirection here for a frozen name to be aimed by, the same reason as
 	// the axis below it.
@@ -738,8 +742,14 @@ func Semantics() interp.Semantics {
 	// no line of this shape ever reaches a trace (#1959).
 	// unanswered TraceSubscriptedArrayLiteralIsElementAssignments: and the
 	// subscripted shape is the same literal, so it does not parse either.
+	// unanswered FailedSubscriptedLiteralKeepsWhatItStored: no array
+	// literal here to fail partway through.
 	// unanswered ElementSubscriptIsExpandedBeforeTheValue: no element write
 	// to order — `a[1]=v` is a command word here.
+	// unanswered FrozenElementIsRefusedBeforeItsSubscript: and so no frozen
+	// element to refuse.
+	// unanswered FrozenLiteralIsExpandedBeforeItIsRefused: no array literal
+	// to expand.
 	// unanswered TraceElementSubscriptIsEvaluated: nor a subscript. `a[1]=v`
 	// is an ordinary word here, assigned to a variable literally named
 	// `a[1]`, so there is nothing for the trace to resolve.
@@ -1566,10 +1576,15 @@ func Semantics() interp.Semantics {
 	// ending the script: measured 2026-09-17 on 0.5.12, `readonly N` over
 	// `set -- -a v` and over `set -- x`.
 	s.GetoptsFrozenNameAtTheEndOfTheOptionsIsFatal = interp.No
+	// unanswered GetoptsStoreRefusalLeavesZero: no refused `getopts` store
+	// ends the shell here — the two axes above are both No — so there is
+	// no number left by one to measure (#6588).
 	// unanswered GetoptsTypedValueFailureIsAFreeze: no name here carries a
 	// type, so no value can fail to fit one.
 	// unanswered ReadTypedValueFailureIsAnAssignmentFailure: no name here carries a type,
 	// so no value `read` writes can fail to fit one.
+	// unanswered TypedValueFailureGivesUpTheLine: no name here carries a type,
+	// so no value can fail to fit one.
 	// And so does `read`, on the same reading and with the same status: 2
 	// wherever the frozen name stood, where bash answers 1 for the last one
 	// (#3208).

@@ -26486,6 +26486,33 @@ reaching it as written). A subscript that never closes is no subscript —
 the locale has it, so `{é}` stores under a UTF-8 locale and is refused under
 C (#6591).
 
+**`FdVariableStoredAfterThePrefix`** — bash yes · dash — · ksh93 yes · zsh no
+
+Whether a `{name}` store on a function or builtin is what the command sees
+when its own prefix assigns the same name. bash and ksh93 store after the
+prefix and into it: `f() { echo "in[$v]"; }; v=pre f {v}</dev/null; echo
+"[$v]"` is `in[10] [10]` in both — bash's prefix cell is taken back and leaves
+the number, ksh93's persists as the integer the store made it. zsh stores
+first and the prefix wins: `in[0] [11]`, `pre` evaluated as an integer over a
+fresh name the store retyped, kept as text over a scalar. A program's prefix
+is its environment and is not this question (#6698). Asked only where a
+prefix entry names a stored name. Measured 2026-10-15 (#6569).
+
+**`FdVariableMakesABareListASubshell`** — bash yes · dash — · ksh93 no · zsh —
+
+Whether a command with no command word whose redirections carry a `{name}`
+makes the whole list in a child of its own, as a `( … )`'s redirections are
+made. bash does: `{v}>/dev/null; echo "[$v]"` is `[]`, a value the name had
+before is still there, the next `exec {w}` gets 10, and an expansion in any
+target of that list — ahead of the `{name}` or behind it — is lost with it,
+while the same `2>/dev/nul${x:=l}` with no `{name}` beside it keeps `x`. A
+`$BASHPID` written into the target is a child's. ksh93 makes the list in the
+shell: `[10]`, and the expansions stay. The prefix is assigned in the shell in
+both, and a frozen name is refused out loud in both at 1. zsh has no such
+command — a `{name}` ahead of the command word opens a brace group there
+(#6629) — and dash and ash have no `{name}`. Asked only where a bare list has
+a `{name}` in it. Measured 2026-10-15 (#6630).
+
 **`FdVariableReadonlyRefusedFirst`** — bash no · dash — · ksh93 yes · zsh yes
 
 Whether a `{name}` redirection aimed at a frozen name is refused before its
@@ -31052,11 +31079,15 @@ the vector's — the same reasoning, and the same probe, as
 about what a move *is*,** and one answer decides both halves of the
 disagreement:
 
-- **bash duplicates and then closes.** Two steps, and only the first is a
-  redirection the command takes back. `exec 5< f; true 6<&5-` leaves 5
-  *closed* once the command has ended; and `{v}<&$w-` chooses the destination
-  before the source is given up, so the name receives the number above the one
-  it moved from.
+- **bash duplicates and then closes.** Two steps, and where the destination
+  had been closed only the first is a redirection the command takes back.
+  `exec 5< f; true 6<&5-` leaves 5 *closed* once the command has ended; and
+  `{v}<&$w-` chooses the destination before the source is given up, so the
+  name receives the number above the one it moved from. A destination that
+  was open as the move was made — `true 0<&5-`, or `exec 6<f` first — gives
+  5 back, as does a `{name}`'s destination and a move on a program or in
+  parentheses; such a move onto an open number that finds nothing at its
+  source also says `redirection error: cannot duplicate fd` first (#6626).
 - **ksh93 relocates.** One step, so both halves are undone with the command —
   the same line leaves 5 open — and the number the source gives up is free for
   the name to receive, so `{v}<&$w-` answers with `$w`'s own number.
@@ -32463,6 +32494,46 @@ joined, and landed in a plain exported scalar — so the join reads the old
 binding and the store lands in the new cell. bash 3.2.57 answers `declare
 -x foo="bar"` for the same line, emptying the cell before the join rather
 than after; that is the one row of this where the two builds part.
+
+The append also reads the displaced binding's **case letter**, which is
+the one way the fresh cell is folded at all: `declare -u v=ab; v+=cd`
+written in front of `/usr/bin/env`, `eval` or a function hands every one
+of them `ABCD` in bash 5.3.20, where the plain `v=cd` in the same place is
+handed `cd`. And what the join reads is what the name was *assigned*, as
+the statement `v+=cd` reads it, not what a read of it answers — they part
+in zsh, which folds and pads on the read: `typeset -u v=ab; v+=cd typeset
+-p v` lists `v=abcd` there.
+
+### The entry a program is handed
+
+A program makes no store in this shell, but the answer above decides
+what it is handed all the same: the shells that overlay make the store in
+the child they fork, through the binding's letters. Measured 2026-10-15
+from `-c`, `<decl>; v=<value> /usr/bin/printenv v`:
+
+| declaration, value | bash 5.3.20 | zsh 5.9.2 | ksh93u+ |
+|---|---|---|---|
+| `typeset -i v=3`, `2+2` | `2+2` | `4` | `4` |
+| `typeset -i v`, `pre` | `pre` | `0` | `0` |
+| `typeset -i 16 v`, `20` | — | `16#14` | `16#14` |
+| `typeset -i v`, `0x10` | `0x10` | `16#10` | `16` |
+| `typeset -F 2 v`, `1/3` | — | `0.00` | `0.00` |
+| `typeset -u v`, `abc` | `abc` | `ABC` | `ABC` |
+| `typeset -R5 v`, `ab` | — | `ab` | `   ab` |
+| `typeset -Z5 v`, `42` | — | `42` | `00042` |
+| `typeset -i v`, `1+` | `1+` | complaint, status 1 | complaint, status 1 |
+
+So the integer, float and case letters reach a program in both overlaying
+columns, and the field widths only where the shell pads on the store —
+zsh pads on the read, which an environment is not, the same split an
+exported `typeset -R5 v=ab` already shows. The store is the child's: the
+base `0x10` teaches zsh's name is gone again when the command ends, and an
+entry behind reads the fold (`typeset -i v; v=2+2 w=$v printenv w` is `4`
+in both). A value the letter cannot read costs the command alone, as a
+failed expansion in the same place does — nothing behind it is expanded,
+`|| echo CAUGHT` catches it, and the script goes on. This is
+`Runner.prefixChildForTheStores`, the same throwaway shell a discipline's
+store is made in (#6698).
 
 ### An array literal as a prefix
 

@@ -462,6 +462,10 @@ func (c *Runner) ownTables(r *Runner) {
 	// the parent still holds is the hazard this file is about. See
 	// Runner.prefixHeldNames.
 	c.prefixHeldNames = slices.Clone(r.prefixHeldNames)
+	// And the `{name}` stores of the command being set up, which a clone
+	// made part-way through one must not append to the parent's array of.
+	// See Runner.fdVarStores.
+	c.fdVarStores = slices.Clone(r.fdVarStores)
 	c.prefixKeptNames = slices.Clone(r.prefixKeptNames)
 	c.prefixShadowed = slices.Clone(r.prefixShadowed)
 	// And the names a `-g` declaration has lifted the running command's own

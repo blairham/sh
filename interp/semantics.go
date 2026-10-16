@@ -1383,6 +1383,13 @@ type Semantics struct {
 	// with an `-i` row of its own that is neither answer and wants its own
 	// measurement.
 	//
+	// **A program is handed the answer too**, although nothing is stored in
+	// this shell for one: the overlaying columns store in the child they fork,
+	// through the letters, so `typeset -i v=3; v=2+2 /usr/bin/env` shows the
+	// child `v=4` in zsh 5.9.2 and ksh93u+ and `v=2+2` in bash 5.3.20 (#6698).
+	// See Runner.prefixChildForTheStores, which asks this of a typed name
+	// only.
+	//
 	// **Asked only where the two readings can part.** A name holding a plain
 	// scalar and carrying no letter reaches the same place either way, which
 	// is every prefix a script in the common language writes, so dash and ash
@@ -4937,6 +4944,45 @@ type Semantics struct {
 	// columns with no subscript at all leave it unanswered.
 	TraceElementSubscriptIsEvaluated Answer
 
+	// FailedSubscriptedLiteralKeepsWhatItStored leaves a name holding the
+	// elements an array literal had placed before one of its elements failed
+	// to expand, where the literal's first element names its subscript.
+	// Measured 2026-10-15 on ksh93u+ 2012-08-01 from a file, each row after
+	// `a=(1 2)` or `typeset -A m=([k]=old)`, read back by an exit trap:
+	//
+	//	a=([0]=x [1]=$((1/0)))            typeset -A a=([0]=x)
+	//	a=([2]=x [5]=y [1]=$((1/0)))      typeset -A a=([2]=x [5]=y)
+	//	a=([$((1/0))]=v)                  typeset -A a=()
+	//	typeset -a a; a=([0]=x [1]=…)     typeset -A a=([0]=x)
+	//	x=s; x=([0]=x [1]=…)              typeset -A x=([0]=x)
+	//	typeset a=([0]=x [1]=…)           typeset -A a=([0]=x)
+	//	m=([j]=new [k]=$((1/0)))          typeset -A m=([j]=new)
+	//	m+=([k]=new [i]=$((1/0)))         typeset -A m=([k]=new)
+	//	a+=([5]=x [6]=$((1/0)))           typeset -a a=(1 2)
+	//	a=(x [3]=$((1/0)))                typeset -a a=(1 2)
+	//
+	// So the literal is built as a **table**, one pair at a time: an
+	// assignment starts the name over as one and keeps the pairs before the
+	// failure, an append onto a table keeps the pairs it added, and an append
+	// onto an indexed array keeps nothing. A literal opening with a bare word
+	// is the ordinary all-or-nothing store, as it is in bash 5.3.20 and zsh
+	// 5.9.2 for every row above. Only the kind a listing shows is a table:
+	// `${a[0]}` reads `x` either way.
+	//
+	// Asked only once a subscripted literal has failed — see
+	// Runner.keepWhatAFailedLiteralStored — so no literal that expands asks
+	// anything. dash and BusyBox ash have no array literal.
+	//
+	// unpinned bash: no corpus row fails partway through a literal; pinned by
+	// TestAFailedSubscriptedLiteralStoresNothing.
+	//
+	// unpinned zsh: the same reach, pinned by
+	// TestAFailedSubscriptedLiteralStoresNothing.
+	//
+	// unpinned ksh: the same reach, pinned by
+	// TestAFailedSubscriptedLiteralKeepsWhatItStored.
+	FailedSubscriptedLiteralKeepsWhatItStored Answer
+
 	// ElementSubscriptIsExpandedBeforeTheValue expands the words of an
 	// element write's subscript before its value: `a[$(f)]=$(g)` runs `f`
 	// first. Measured 2026-10-15 under `-c` and a script file, traced and
@@ -4969,6 +5015,73 @@ type Semantics struct {
 	// unpinned ksh: the same reach, pinned by
 	// TestAnElementWriteExpandsItsSubscriptFirst.
 	ElementSubscriptIsExpandedBeforeTheValue Answer
+
+	// FrozenElementIsRefusedBeforeItsSubscript refuses an element write to a
+	// frozen name once its value has been expanded and before anything in
+	// its subscript is, where the other answer refuses it at the store, after
+	// the subscript's words and its arithmetic. Measured 2026-10-15 on bash
+	// 5.3.20, zsh 5.9.2 and ksh93u+ 2012-08-01 under `-c` and from a file,
+	// each row after `readonly a=(1 2)`, the side effects on standard error:
+	//
+	//	written                                 bash         zsh        ksh93
+	//	a[$(echo SUB >&2; echo 1)]=$(…VAL…)x    VAL SUB, ro  VAL, ro    SUB VAL, ro
+	//	a[$(echo SUB >&2; echo 1)]=x            SUB, ro      ro         SUB, ro
+	//	a[$(…SUB…; echo 1/0)]=$(…VAL…)          VAL SUB, 1/0 VAL, ro    SUB VAL, 1/0
+	//	a[1]=$((1/0))                           1/0          1/0        1/0
+	//
+	// where `ro` is the readonly sentence and `1/0` the division's complaint.
+	// So the value is expanded before the refusal in every column, and a
+	// value that will not expand is reported in the refusal's place; what
+	// splits is the subscript, which the freeze stops in one column and lets
+	// run to its arithmetic in the other two. A table's key is the same row:
+	// `m[$(…SUB…)]=$(…VAL…)x` is `VAL, ro` in zsh. See interp/frozenorder.go
+	// (#6674).
+	//
+	// Asked only of a write to a frozen name whose value or subscript can
+	// run or fail something — see Runner.frozenElementOrderIsObservable — so
+	// an ordinary element write never reaches it. dash and BusyBox ash have
+	// no element write.
+	//
+	// unpinned bash: no corpus row writes an element of a frozen name with a
+	// side effect on either side; pinned by
+	// TestAFrozenElementIsRefusedAtItsStore.
+	//
+	// unpinned zsh: the same reach, pinned by
+	// TestAFrozenElementIsRefusedBeforeItsSubscript.
+	//
+	// unpinned ksh: the same reach, pinned by
+	// TestAFrozenElementIsRefusedAtItsStore.
+	FrozenElementIsRefusedBeforeItsSubscript Answer
+
+	// FrozenLiteralIsExpandedBeforeItIsRefused expands every word of a
+	// whole-array literal assigned to a frozen name before the name is
+	// refused, where the other answer refuses it before any of them is
+	// expanded. Measured 2026-10-15 under `-c` and from a file, each row
+	// after `readonly a=(1 2)`:
+	//
+	//	written                                    bash, ksh93  zsh 5.9.2
+	//	a=($(echo VAL >&2))                        ro           VAL, ro
+	//	a+=($(echo VAL >&2))                       ro           VAL, ro
+	//	a=(p $((1/0)))                             ro           1/0
+	//	a=([$(…SUB…; echo 1)]=$(…VAL…))            ro           SUB VAL, ro
+	//
+	// and a frozen table's literal is the same split. The literal through a
+	// subscript is not this question: `a[$(…)]=(p $(…))` reaches its store in
+	// every column before the freeze is consulted. See interp/frozenorder.go
+	// (#6674).
+	//
+	// Asked only of a literal assigned to a frozen name with something in it
+	// that can run or fail; dash and BusyBox ash have no array literal.
+	//
+	// unpinned bash: no corpus row assigns a literal to a frozen name; pinned
+	// by TestAFrozenLiteralIsRefusedBeforeItsWords.
+	//
+	// unpinned zsh: the same reach, pinned by
+	// TestAFrozenLiteralIsExpandedBeforeItIsRefused.
+	//
+	// unpinned ksh: the same reach, pinned by
+	// TestAFrozenLiteralIsRefusedBeforeItsWords.
+	FrozenLiteralIsExpandedBeforeItIsRefused Answer
 
 	// TraceLineFollowsTheStore writes an assignment's trace line once the
 	// assignment has been made, so a store that is refused writes no line and
@@ -6922,6 +7035,40 @@ type Semantics struct {
 	// `getopts` loop reaches no question at all.
 	GetoptsFrozenNameAtTheEndOfTheOptionsIsFatal Answer
 
+	// GetoptsStoreRefusalLeavesZero leaves 0 behind where a refused `getopts`
+	// store ended the shell, the number the operand stores of `set -A`, `read
+	// -A`, `printf -v`, `print -v` and `zparseopts` leave in the same shell
+	// (#6486, #6513, #6515). No leaves the builtin's own refused status.
+	//
+	// Measured 2026-10-15 on zsh 5.9.2, `-f`, `env -i PATH=/usr/bin:/bin`:
+	//
+	//	                                            -c    script file
+	//	typeset -r v=1; set -- -a; getopts a v      0     1
+	//	the same with `set -- -z`                   0     1
+	//	… getopts a v || echo or                    0     1
+	//	… getopts a v && echo and                   1     1
+	//	… for i in 1; do getopts a v; done          1     1
+	//	… ( getopts a v ); echo $?                  0     0
+	//	f(){ private v=1; g; }; g(){ set -- -a; getopts a v; }; f
+	//	                                            0     1
+	//
+	// which is the raisers of Runner.refusalZeroIsRaisedBackToOne exactly, so
+	// the number is asked through Runner.refusalLeavesZero like the others.
+	// ksh93 ends the shell at 2 where its scan has run out over a frozen name
+	// (GetoptsFrozenNameAtTheEndOfTheOptionsIsFatal): measured 2026-10-15,
+	// `readonly o; getopts a o; echo after $?` from `-c` is the refusal and
+	// status 2.
+	//
+	// bash ends the shell over one store, a typed name's value that will not
+	// evaluate, and leaves 1: `declare -i v; set -- -z; getopts a v` from
+	// `-c`.
+	//
+	// Asked only where the refusal ended the shell, so a refused store that
+	// only reports asks nothing.
+	//
+	// unanswered dash, ash: no refused `getopts` store ends the shell.
+	GetoptsStoreRefusalLeavesZero Answer
+
 	// GetoptsTypedValueFailureIsAFreeze refuses a value `getopts`'s typed
 	// name will not take exactly as it refuses a frozen name — reported, the
 	// builtin at 2, and the script ended only where
@@ -6958,6 +7105,33 @@ type Semantics struct {
 	//
 	// Asked only where the store has failed. See interp/typedvaluecatch.go.
 	ReadTypedValueFailureIsAnAssignmentFailure Answer
+
+	// TypedValueFailureGivesUpTheLine has a value a typed name will not take
+	// give up the rest of the input line, the script going on at the next,
+	// where the other answer ends the script. Read only off a `-c` string:
+	// that route ends the script in every column, the whole string being the
+	// one line, exactly as a bracketed subscript's failure does there.
+	//
+	// Measured 2026-10-15 on bash 5.3.20 and 3.2.57, from a script file and
+	// from standard input, with `typeset -i n=5` on line 1 and `echo next $?`
+	// on line 3:
+	//
+	//	n=1+; echo same                    the complaint, `next 1`, exit 0
+	//	n+=1+; typeset n=1+; export n=1+   the same
+	//	read n <<< 1+; printf -v n %s 1+   the same, `read:` / `printf:` in front
+	//	getopts x n -y; for n in 1+        the same
+	//	f() { n=1+; echo in; }; f; echo s  the same, the calling line given up
+	//	set -o posix in front              the same
+	//	( n=1+; echo in ); echo same $?    `same 1`: a subshell contains it
+	//
+	// and under `-c` the complaint and nothing after it, at 1. zsh 5.9.2 and
+	// ksh93u+ end the script on both routes. `n=$((1+))` gives the line up
+	// in bash on both routes, which is FailedExpansionAbandonsTheLine and not
+	// this (#6631).
+	//
+	// Read only where such a value has failed, off a `-c` string, and read
+	// rather than asked: anything but Yes ends the script, as it always did.
+	TypedValueFailureGivesUpTheLine Answer
 
 	// ReadRefusedWriteEndsTheBuiltin stops `read` at the first name a freeze
 	// refuses, leaving the names after it alone. bash 5.3, dash and BusyBox
@@ -14652,6 +14826,11 @@ type Semantics struct {
 	//	and none of the caller's local attributes — measured one at a time
 	//	with `typeset -a`, `typeset -A`, `unset`, `typeset -r` and
 	//	`typeset -i`, each of which answers from the global in ksh93.
+	//
+	//	A caller's **exported** local is the exception: the callee is handed
+	//	its value as a plain local of its own, attribute-free and not
+	//	exported, which a write lands in and the return takes away. See
+	//	Runner.exportedLocalHandedOn (#6595).
 	//
 	// Two stores are deliberately outside the seal, because no column can
 	// put a question to them: a shell-*produced* parameter hidden by a
@@ -24996,6 +25175,80 @@ type Semantics struct {
 	// **Asked only where the name is frozen**, which is the rare case. bash
 	// 3.2 and dash have no `{name}` redirection to ask.
 	FdVariableReadonlyRefusedFirst Answer
+
+	// FdVariableStoredAfterThePrefix is whether a `{name}` store on a
+	// command this shell runs itself — a function or a builtin — is what
+	// the command sees when its own assignment prefix names the same
+	// variable (#6569).
+	//
+	// Measured 2026-10-15 with `-c`, bash 5.3.20, zsh 5.9.2 under `-f`,
+	// ksh93u+ 2012-08-01, `f() { echo "in[$v]"; }`:
+	//
+	//	                                          bash         zsh          ksh93
+	//	v=pre f {v}</dev/null; echo "[$v]"        in[10] [10]  in[0] [11]   in[10] [10]
+	//	v=old; v=pre f {v}</dev/null; …           in[10] [10]  in[pre] [11] in[10] [10]
+	//	f(){ …; v=x; }; v=pre f {v}</dev/null; …  in[10] [10]  in[0] [11]   in[10] [0]
+	//	v=pre eval 'echo "in[$v]"' {v}</dev/null  in[10] [10]  in[0] [11]   in[10] [10]
+	//	v=pre : {v}</dev/null; echo "[$v]"        [10]         [11]         [10]
+	//	v=pre true {v}</dev/null; echo "[$v]"     [10]         [11]         [10]
+	//
+	// bash and ksh93 store the number after the prefix and into it: the
+	// command sees the number, and bash's `typeset -p v` inside says
+	// `declare -x v="10"` — the prefix's exported cell holding it — while
+	// the shell is left at 10 once that cell is taken back, whatever the body
+	// did to it. ksh93's prefix persists, and the store has made it an
+	// integer, so the body's `v=x` leaves 0. zsh stores first and assigns
+	// the prefix after, so the prefix is what the command sees: `pre`
+	// evaluated as an integer where the store retyped a fresh name
+	// (Semantics.FdVariableStoreTyping), kept as text over a scalar.
+	//
+	// A program is not this question: its prefix is its environment, which
+	// FdVariableReachesTheProgramsEnvironment and the typing of a prefix
+	// (#6698) answer. Asked only where a prefix entry names a name a `{name}`
+	// on the same command stored into. dash and ash have no `{name}`.
+	FdVariableStoredAfterThePrefix Answer
+
+	// FdVariableMakesABareListASubshell says whether a command with no
+	// command word whose redirections include a `{name}` makes the whole
+	// list in a child of its own, the way the redirections of a `( … )` are
+	// made — so the shell keeps neither the name, nor the descriptor, nor
+	// anything else the list did (#6630).
+	//
+	// Measured 2026-10-15 with `-c` against bash 5.3.20 and ksh93u+
+	// 2012-08-01 (/bin/ksh), each line then `echo "[$v]"`:
+	//
+	//	                                        bash 5.3.20     ksh93u+
+	//	{v}>/dev/null                           []              [10]
+	//	v=5; {v}>/dev/null                      [5]             [10]
+	//	… then exec {w}>/dev/null; echo $w      10              11
+	//	{v}>/dev/null 2>/dev/nul${x:=l}; $x     []              l
+	//	2>/dev/nul${x:=l} {v}>/dev/null; $x     []              l
+	//	x=1 {v}>/dev/null; echo "[$v][$x]"      [][1]           [10][1]
+	//	exec 9</dev/null; 4<&9- {v}>/dev/null   9 still open    —
+	//	readonly v=1; {v}>/dev/null             refused, st=1   refused
+	//
+	// bash's `$BASHPID` written into a target is the parent's on a bare
+	// `2>p.$BASHPID` and a child's on `{v}>/dev/null 2>p.$BASHPID`, so Yes
+	// is a fork of the whole list, not a store taken back: an expansion in
+	// a target *ahead* of the `{name}` is lost with it, and a move's source
+	// comes back. The prefix is assigned before the list and stays. A
+	// readonly name is still refused out loud, by the child, at 1. ksh93
+	// answers No: the list is the shell's, and whether the descriptor
+	// outlives it is FdVariableOutlivesTheCommand's question.
+	//
+	// zsh has no such command: a `{name}` in front of the command word opens
+	// a brace group there, so `{v}>/dev/null` runs a command named `v` and a
+	// command of redirections alone has no `{name}` in it (#6629). dash and
+	// ash have no `{name}` redirection.
+	//
+	// Asked only where a bare list has a `{name}` in it; `>f` and `x=1 >f`
+	// with no command word ask nothing.
+	//
+	// unpinned bash: no corpus case runs a bare `{name}` redirection;
+	// TestABareFdVariableListIsASubshell pins it.
+	//
+	// unpinned ksh: the same; TestABareFdVariableListIsTheShells pins it.
+	FdVariableMakesABareListASubshell Answer
 
 	// NoclobberProtectsAnFdVariable refuses a `{name}` redirection under
 	// `set -C` when the name already holds a descriptor this shell has open.

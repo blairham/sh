@@ -106,6 +106,18 @@ type sourced struct {
 	// since that option is about `eval`.
 	callersPlace bool
 
+	// globSort marks callersPlace text that is a sort specifier's rather
+	// than a test's, which the shell records being inside under a name of
+	// its own. See interp/globqualsort.go.
+	globSort bool
+
+	// gaveUp, where set, is told whether the text was given up over an
+	// error — a parse failure, or an error caught at this boundary — rather
+	// than having run to an end or a status. Only a sort specifier asks:
+	// such an error stops its code for every later match (see
+	// interp/globqualsort.go).
+	gaveUp *bool
+
 	// builtinText marks the text as `.`'s or `eval`'s own, rather than text
 	// another builtin or a hook borrowed the same reader for. Those two are
 	// the boundary Semantics.BorrowedTextErrorWhenInteractiveCostsTheLine was
@@ -282,6 +294,9 @@ func bodyLineOf(src string, at int, f *syntax.File) int {
 // the builtin leaves behind.
 func (r *Runner) borrowedTextFailed(err error, s sourced, src string) int {
 	r.reportBorrowedParseFailure(err, s, src)
+	if s.gaveUp != nil {
+		*s.gaveUp = true
+	}
 	// POSIX makes a special builtin's failure fatal to a non-interactive
 	// shell. dash is the only member of the panel that does it here; the
 	// other three report the error and carry on.
@@ -564,6 +579,8 @@ func (r *Runner) runSourcedText(ctx context.Context, src string, s sourced) int 
 	// struct's `eval`, and interp/evalcontext.go.
 	inside := EvalContextSourcedFile
 	switch {
+	case s.globSort:
+		inside = EvalContextGlobSort
 	case s.callersPlace:
 		inside = EvalContextGlobQualifier
 	case s.eval:
@@ -999,6 +1016,16 @@ func (r *Runner) runSourcedText(ctx context.Context, src string, s sourced) int 
 				return 2
 			}
 			if r.ctl == controlAbandon {
+				if r.abandonPassesBorrowedText && !r.inSubshell {
+					// A give-up this text does not stop: it goes on out
+					// and takes the caller's line, which is the line the
+					// caller was reading. See Runner.giveUpPastBorrowedText.
+					if outerInputLine != 0 {
+						r.abandonLine = outerInputLine
+					}
+					stopped = true
+					break
+				}
 				if r.inSubshell {
 					// Except inside a subshell, where the give-up is not
 					// caught here at all: it goes on out and the subshell
@@ -1095,6 +1122,9 @@ func (r *Runner) runSourcedText(ctx context.Context, src string, s sourced) int 
 	// borrowed text the boundary: the caller then carries on at the command
 	// after the builtin, and this is what the builtin reports.
 	if st, ok := r.caughtBorrowedError(s); ok {
+		if s.gaveUp != nil {
+			*s.gaveUp = true
+		}
 		return st
 	}
 	return r.status

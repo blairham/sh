@@ -3413,6 +3413,9 @@ type Runner struct {
 	// tailInALoop says the tail was handed on through the last pass of a
 	// loop. See TailExecWhereverLastOutsideALoop.
 	tailInALoop bool
+	// tailReached says this shell came to the program it becomes, whether or
+	// not it could become it. See Runner.TailReached.
+	tailReached bool
 	// jobOrder is the order jobs became *notable*, oldest first: a job is
 	// appended when it enters the table and again, moved to the end, every
 	// time it stops. It is not the table's order, which is slot order, and
@@ -4260,6 +4263,11 @@ type Runner struct {
 	// there. See Runner.setFdVar and Runner.refuseNamerefAim.
 	fdVarSpeaker string
 
+	// fdVarStores is what the `{name}` redirections of the simple command
+	// being set up stored in this shell, for its prefix to be weighed
+	// against. See interp/fdvarprefix.go.
+	fdVarStores []fdVarStore
+
 	// redirOwner says whose process the redirections being opened belong
 	// to, which is where a real shell has already forked and so where a
 	// here-document body's or a target's expansion happens somewhere the
@@ -4289,6 +4297,11 @@ type Runner struct {
 	// function body the two are different numbers and it is the caller's that
 	// is given up (#3503).
 	abandonLine int
+	// abandonPassesBorrowedText says the give-up in hand is one that an
+	// `eval` or a `.` does not stop at: it takes the caller's line with it.
+	// Set by the two give-ups measured doing so, and cleared by every other.
+	// See Runner.giveUpPastBorrowedText.
+	abandonPassesBorrowedText bool
 
 	// inputLine is the last line of the top-level statement being run — the
 	// line a give-up anywhere inside it takes with it. Set by the two
@@ -5159,6 +5172,12 @@ type Runner struct {
 	// a flag through every one of them would put the question to callers
 	// that have nothing to do with it.
 	globUnsorted bool
+	// globNumeric is the `n` qualifier of the expansion running right now,
+	// held for the length of one glob as globUnsorted is. It is the
+	// pattern's and not the option's: globSortsNumerically is left alone
+	// so that code a qualifier runs reads, sets and globs by the shell's
+	// own option. See Runner.globMatchOrder.
+	globNumeric globNumeric
 
 	// matchOptions is the run-time pattern behaviors a dialect's builtin has
 	// switched on, one bit per MatchOption. A plain value so a subshell's
@@ -5388,6 +5407,9 @@ type Runner struct {
 	// retypingFrozen is the one name a frozen-scalar retype is under way for.
 	// See the method of the same name for why it is a field.
 	retypingFrozen string
+	// heldFreeze is the assignment to a frozen name whose refusal waits for
+	// its store, and the name it refuses. See interp/frozenorder.go.
+	heldFreeze heldFreeze
 	// containerByThisLinesLetter holds the frozen scalars a declaration's
 	// own `-a` or `-A` letter has just made containers. The letter lands
 	// when the builtin runs and the operand's literal is stored after it, by
@@ -9486,8 +9508,13 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 	if len(r.arrayOperands) > 0 {
 		keepForArrays = r.failedExpansionStatusIs(failedExpansionKeepsTheStatus)
 	}
-	r.expandArrayOperands(tableLetterAmongTheOptions(argv))
+	expandedAll := r.expandArrayOperands(tableLetterAmongTheOptions(argv), indexedLetterAmongTheOptions(argv))
 	keepForArrays()
+	if !expandedAll {
+		// The failure has been reported and has ended what it ends. See
+		// Runner.expandArrayOperands.
+		return nil
+	}
 	holdsItsLine := r.holdsItsLineForACompoundOperand()
 	if holdsItsLine {
 		// A compound operand's members are performed in front of the command
@@ -9739,7 +9766,10 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 	if len(lateTrace) > 0 {
 		traceDest = r.traceDestination()
 	}
+	r.fdVarStores = nil
 	closers, err := r.applyRedirs(ctx, c.Redirs, false, owner)
+	fdStores := r.fdVarStores
+	r.fdVarStores = nil
 	r.redirectForBuiltin, r.redirForCommandWord = "", ""
 	// Read here rather than in the defer: a builtin that runs a program of its
 	// own — `eval`, `.` — applies redirections of its own on the way, and this
@@ -10132,6 +10162,10 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 		// a function calls functions: an inner call written without a prefix
 		// of its own is holding nothing, and the outer call's names come back
 		// when it returns.
+		// A `{name}` this command stored, seen through the prefix that names
+		// it in the dialects that store after the prefix. See
+		// interp/fdvarprefix.go.
+		r.fdVarStoresThroughThePrefix(c.Assigns, fdStores)
 		outerCallHeld := r.functionPrefixNames
 		r.functionPrefixNames = callHeld
 		// And the same names as a **frame**, so that an `unset` written
@@ -10389,6 +10423,9 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 				r.exportedPut(landsOn, on)
 			}
 		}
+		// A `{name}` this command stored, seen through the prefix — the same
+		// as the function route above. See interp/fdvarprefix.go.
+		r.fdVarStoresThroughThePrefix(c.Assigns, fdStores)
 		// The names this command's prefix is holding, for the declaration
 		// that may keep one of them — and the outer pair put back first,
 		// because a builtin can run another one. See Runner.prefixHeldNames.
@@ -10676,9 +10713,13 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 		return nil
 	}
 	// The shell the prefix's stores land in. An external command is run by a
-	// **child**, and where a hook is watching one of these names the store is
-	// the child's — see Runner.prefixChildForTheDisciplines.
-	child := r.prefixChildForTheDisciplines(c.Assigns)
+	// **child**, and where a hook is watching one of these names, or a type
+	// letter on one would fold its value, the store is the child's — see
+	// Runner.prefixChildForTheStores.
+	child := r.prefixChildForTheStores(c.Assigns)
+	if r.unspecified {
+		return nil
+	}
 	var prefixEnv []string
 	// What the prefix has assigned so far, visible to the entries behind it.
 	// An external command is run by a child, so this route makes no store of
@@ -10803,10 +10844,24 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 			// hands the refused value on is not a refusal.
 			continue
 		}
-		if child != nil {
-			// The store the child makes, and the hook that goes with it:
-			// what the hook leaves is what the child is handed.
-			value = child.prefixStoredForAChild(a, part)
+		if child != nil && (r.disciplined != nil || r.prefixStoreFoldsThroughTheLetters(a)) {
+			// The store the child makes, and the hook and the type letters
+			// that go with it: what the store leaves is what the child is
+			// handed. Every entry, where a hook could be watching — one may
+			// write a name another entry reads — and only the entries the
+			// letters fold where none can, so a letterless `HISTSIZE=5`
+			// beside a typed entry never reaches a parameter's writer.
+			stored, failed := child.prefixStoredForAChild(a, part)
+			if failed {
+				// The letters would not take the value, and the store has
+				// said so. The failure is this command's, where an
+				// expansion's would be, so it is put on the record the walk
+				// reads: nothing behind it is expanded and the command is
+				// given up below (#6698).
+				r.expandErr, r.ctl = child.expandErr, child.ctl
+				break
+			}
+			value = stored
 		}
 		// The entry is named for where the value landed and not for the word
 		// in front of the command, which a **name reference** makes two
@@ -10839,7 +10894,7 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 	}
 	// Read after the stores above rather than before them, so a hook that
 	// wrote some *other* exported name is answered by the environment the
-	// child is given. See Runner.prefixChildForTheDisciplines.
+	// child is given. See Runner.prefixChildForTheStores.
 	env := r.environ()
 	if child != nil {
 		env = child.environ()
@@ -10928,6 +10983,23 @@ func (r *Runner) prefixExpansion(a *syntax.Assign) string {
 // `typeset -i x=2; x+=5 printenv x` is `7`, and this concatenation made it
 // `25`. The statement form had asked the attribute since #2027's helper
 // existed; the prefix form was the second concatenation that did not.
+//
+// And the left side is what the name was **assigned**, read through
+// Runner.appendedOldValue as both statement forms read it, and not what a read
+// of it answers — the third copy of "what does this name hold" was this one,
+// on getVar. The two part where the letters fold on the read: measured
+// 2026-10-15 on zsh 5.9.2, `typeset -u v=ab; v+=cd typeset -p v` lists `v=abcd`
+// (as the statement `v+=cd` does) where reading `AB` first stored `ABcd`, and
+// `typeset -R5 v=ab; v+=cd /usr/bin/env` shows the child `v=abcd` rather than
+// the padded `   abcd`.
+//
+// A join that lands in a **fresh cell** is folded by the case letter of the
+// binding it displaced, because the fresh cell has no letter left to fold it
+// with. Measured on bash 5.3.20, `declare -u v=ab; v+=cd` written in front of
+// `/usr/bin/env`, `eval` or a function hands every one of them `ABCD` — where
+// the plain `v=cd` in the same place is handed `cd`, so it is the join that
+// reads through the letter and not the cell. Asked only where the fold
+// changes the join, so a letterless name reaches no question (#6698).
 func (r *Runner) prefixJoined(a *syntax.Assign, value string) string {
 	if !a.Append {
 		return value
@@ -10943,7 +11015,7 @@ func (r *Runner) prefixJoined(a *syntax.Assign, value string) string {
 		// `a=x; a+=plain printenv a` is `xplain` in both states.
 		return value
 	}
-	old, _ := r.getVar(a.Name)
+	old := r.appendedOldValue(a.Name)
 	if r.ctl == controlExit {
 		// The script is already ending, which here means an earlier reading of
 		// this same prefix failed and said so: the value is computed twice on
@@ -10961,6 +11033,10 @@ func (r *Runner) prefixJoined(a *syntax.Assign, value string) string {
 		// one the name already had, so nothing half-evaluated is stored on
 		// the way out.
 		return old
+	}
+	if name := r.attributedName(r.prefixEntryName(a.Name)); r.caseFolded(name, joined) != joined &&
+		r.prefixEntryIsFresh(name) {
+		joined = r.caseFolded(name, joined)
 	}
 	return joined
 }
@@ -11034,6 +11110,13 @@ func (r *Runner) exec(ctx context.Context, argv, env []string) error {
 		if handled := r.commandNotFoundHandled(ctx, argv, lookErr); handled {
 			return nil
 		}
+		// The tail a real shell would have exec'd: it looked the name up in
+		// the process it was about to replace, so the failure is the end of
+		// that process and not something it goes on from. See
+		// Runner.TailReached.
+		if r.replacesItselfHere() {
+			r.tailReached = true
+		}
 		r.emit(ctx, Event{Kind: EventError, Action: action, Err: lookErr})
 		// 127 for a name that resolved to nothing and 126 for a file that is
 		// there and will not start. Both unanimous, and collapsing them into
@@ -11052,8 +11135,14 @@ func (r *Runner) exec(ctx context.Context, argv, env []string) error {
 	// than fork it. Nothing after a successful replacement is this shell.
 	// See tailexec.go.
 	run := r.runSpelling(argv[0], path, spelled, written)
-	if r.replacesItselfHere() && r.becomeTheProgram(ctx, path, run, argv, env) {
-		return nil
+	if r.replacesItselfHere() {
+		// Reached even where it is forked after all, as a file the kernel
+		// will not start is: a real shell runs that in its own place too.
+		// See Runner.TailReached.
+		r.tailReached = true
+		if r.becomeTheProgram(ctx, path, run, argv, env) {
+			return nil
+		}
 	}
 
 	// A command names itself from argv[0], and what it should find there is
@@ -12471,10 +12560,19 @@ func (r *Runner) failedHeading() bool {
 		r.status = 2
 		return true
 	}
-	if r.ctl != controlNone {
+	if r.givingUpAlready() {
 		// The heading raised a fatal error of its own, or the script is
 		// being abandoned for a reason of its own. Either way the construct
 		// does not run and the status it set stands.
+		//
+		// Not a `return`, `break` or `continue`, which reach an expansion
+		// from code run inside it — a glob qualifier's, or a `${ …; }` body —
+		// and take effect once the construct has finished. Measured
+		// 2026-10-15: on zsh 5.9.2, `f() { x=( [ab](e:'return 3':) ); }; f`
+		// leaves one element in x and `for j in 1; do x=( [ab](e:'break':) );
+		// done` leaves two, and on bash 5.3 and ksh93u+ `for i in 1 2; do x=(
+		// ${ break; } a ); done` leaves one. The array literal used to be
+		// dropped in all three.
 		return true
 	}
 	if !r.expandErr {
@@ -13773,6 +13871,29 @@ func (r *Runner) refuseReadonly(name string, form assignForm) bool {
 		// interp/privatescope.go.
 		return true
 	}
+	if !r.freezeRefuses(name, form) {
+		return false
+	}
+	// Fatal everywhere but bash, measured with a plain assignment in a
+	// script — which is the contaminated-probe case oracle.md records.
+	//
+	// The invocation route has nothing to do with it, which took a full
+	// route-by-separator square to see: `bash -c 'readonly x=1; x=2; echo
+	// after'` stops and exits 1, and so does the same one-line program from
+	// a *file*; the same three commands on three lines print `after` and exit
+	// 0 by **both** routes. What ends is the command list, which is
+	// controlAbandon below. The field that used to be read here was measured
+	// from the two cells on the diagonal of that square — `-c` with a `;`
+	// against a file with newlines — which varied two things at once and is
+	// confirmatory for either reading (#1182).
+	return r.refuseAsAFreezeWould(name, form, "")
+}
+
+// freezeRefuses reports whether the freeze on name refuses a write of this
+// form, without saying so: the half of refuseReadonly that decides, for the
+// caller that has expansions to perform before the refusal is reported. See
+// interp/frozenorder.go.
+func (r *Runner) freezeRefuses(name string, form assignForm) bool {
 	if !r.attrHas(name, attrReadonly) {
 		return false
 	}
@@ -13822,20 +13943,7 @@ func (r *Runner) refuseReadonly(name string, form assignForm) bool {
 		// See freezeSurvivesAShadow, where the six rows are.
 		return false
 	}
-	// Fatal everywhere but bash, measured with a plain assignment in a
-	// script — which is the contaminated-probe case oracle.md records.
-	//
-	// The invocation route has nothing to do with it, which took a full
-	// route-by-separator square to see: `bash -c 'readonly x=1; x=2; echo
-	// after'` stops and exits 1, and so does the same one-line program from
-	// a *file*; the same three commands on three lines print `after` and exit
-	// 0 by **both** routes. What ends is the command list, which is
-	// controlAbandon below. The field that used to be read here was measured
-	// from the two cells on the diagonal of that square — `-c` with a `;`
-	// against a file with newlines — which varied two things at once and is
-	// confirmatory for either reading (#1182).
-	//
-	return r.refuseAsAFreezeWould(name, form, "")
+	return true
 }
 
 // refuseAsAFreezeWould is the second half of refuseReadonly: the name is
@@ -14913,6 +15021,18 @@ func (r *Runner) nameCarriesATypeAttribute(name string) bool {
 	return ok
 }
 
+// anyNameCarriesATypeAttribute is nameCarriesATypeAttribute asked of every
+// name at once, from the counts and the tables' sizes, so a caller on the
+// common path can learn that no name in the shell carries one without asking
+// about a name. The same list as the one above, deliberately written beside
+// it: a letter added there and not here is a letter this answers "none" for.
+// A table that keeps an entry for a name that has lost its letter only sends
+// the caller the long way round.
+func (r *Runner) anyNameCarriesATypeAttribute() bool {
+	return r.attrLen(attrInteger) > 0 || r.attrLen(attrLower) > 0 || r.attrLen(attrUpper) > 0 ||
+		len(r.capitalized) > 0 || len(r.floatPrecision) > 0 || len(r.fieldWidth) > 0
+}
+
 func (r *Runner) clearTypeAttributes(name string) {
 	delete(r.caseListing, name)
 	r.attrClear(name, attrInteger)
@@ -15086,6 +15206,7 @@ func (r *Runner) assignAll(ctx context.Context, assigns []*syntax.Assign) {
 func (r *Runner) prepareTracedAssign(a *syntax.Assign, value string) *expandedAssign {
 	e := &expandedAssign{assign: a, value: value}
 	if a.IsArray && a.Members == nil && a.Index == nil && len(a.Elems) > 0 &&
+		!r.frozenLiteralIsRefusedBeforeItsWords(a) &&
 		r.ask(r.sem().TraceArrayLiteralShowsTheExpandedElements,
 			"an array literal traced as what its elements expanded to") {
 		if parsed, ok := r.literalElems(a.Elems,
@@ -15172,6 +15293,10 @@ type expandedAssign struct {
 	// `readonly a=(1); a=(2 3)` or for `a[1/0]=v`, and this is why.
 	subscript    string
 	subscriptSet bool
+	// chain is every subscript of a chained element write — `a[1][2]=v` —
+	// resolved, first to last, recorded beside subscript for the same column
+	// and for the same reason. Nil for an assignment with one subscript.
+	chain []string
 
 	// tracesAfterTheStore says this assignment's line is written once it has
 	// been performed, which is the arrangement the subscript above needs.
@@ -15185,6 +15310,19 @@ func (r *Runner) resolvedSubscript(text string) {
 		return
 	}
 	r.expanded.subscript, r.expanded.subscriptSet = text, true
+}
+
+// resolvedChain records what every subscript of a chained element write came
+// to, once the write has landed — the chain's counterpart of
+// resolvedSubscript. The last link is the subscript the value went under, so
+// it is recorded there as well, which is what lets the trace tell a chain that
+// landed from one that was refused.
+func (r *Runner) resolvedChain(links []string) {
+	if r.expanded == nil || !r.expanded.tracesAfterTheStore || len(links) == 0 {
+		return
+	}
+	r.expanded.chain = links
+	r.resolvedSubscript(links[len(links)-1])
 }
 
 // assignValue is the value an assignment stores, expanded.
@@ -15292,8 +15430,18 @@ func (r *Runner) assign(ctx context.Context, a *syntax.Assign) {
 		// body that would first give it one. See
 		// interp/frozencompoundbody.go, where the state the rows part on is
 		// the one `${c+word}` answers.
-	} else if r.refuseReadonly(r.assignmentLandsOn(a.Name), assignedAlone) {
-		return
+	} else {
+		// A frozen name is refused once what the dialect expands ahead of
+		// the refusal has been expanded — the value, a whole literal, or
+		// everything up to the store. See interp/frozenorder.go (#6674).
+		switch outcome, name := r.refuseAFrozenAssignment(a); outcome {
+		case freezeRefusedIt:
+			return
+		case freezeWaitsForTheStore:
+			outer := r.heldFreeze
+			r.heldFreeze = heldFreeze{assign: a, name: name}
+			defer func() { r.heldFreeze = outer }()
+		}
 	}
 	if r.unspecified {
 		return
@@ -15608,6 +15756,11 @@ func (r *Runner) assign(ctx context.Context, a *syntax.Assign) {
 		// comma's right operand and write element 3, leaving element 2 in
 		// front of it — see Runner.assignSpan.
 		from, to, outcome := r.assignSpan(a, text)
+		if outcome == spanResolved && r.refuseTheHeldFreeze(a) {
+			// A frozen name, refused now that the span is evaluated —
+			// see interp/frozenorder.go.
+			return
+		}
 		switch {
 		case outcome == spanReported:
 			return
@@ -15640,6 +15793,12 @@ func (r *Runner) assign(ctx context.Context, a *syntax.Assign) {
 		idx, err := r.subscriptValueAsWritten(subject, text)
 		if err != nil {
 			r.failedSubscript("%s\n", r.subscriptFailure(text, err))
+			return
+		}
+		if r.refuseTheHeldFreeze(a) {
+			// A frozen name, refused at the store: after the value, the
+			// subscript's words and its arithmetic, in the dialects that
+			// get this far. See interp/frozenorder.go (#6674).
 			return
 		}
 		// The number, for the trace that writes it — see

@@ -40,7 +40,29 @@ func init() {
 	builtins["getopts"] = biGetopts
 }
 
-func biGetopts(r *Runner, _ context.Context, args []string) int {
+// biGetopts is the builtin, and the number a refusal that ended the shell
+// leaves behind — see Semantics.GetoptsStoreRefusalLeavesZero. One door for
+// every refused store inside, the readonly name, OPTARG, a value the name does
+// not take and a private's scope alike, because the number is the same for
+// all of them and a second copy is how one of them would be missed (#6588).
+func biGetopts(r *Runner, ctx context.Context, args []string) int {
+	status := getoptsBuiltin(r, ctx, args)
+	if r.ctl != controlExit {
+		// Not a refusal that ended the shell. A private's scope refusal is
+		// one even where the builtin itself returned 0: the store reports
+		// the write as made and the refusal is the runner's.
+		return status
+	}
+	if !r.ask(r.sem().GetoptsStoreRefusalLeavesZero,
+		"a refused `getopts` store ending the shell leaving 0 behind") {
+		return status
+	}
+	// The raised number is 1 and not the builtin's 2, in the one column that
+	// answers Yes: measured, from a script file the rows above end at 1.
+	return r.refusalLeavesZero(Yes, "", 1)
+}
+
+func getoptsBuiltin(r *Runner, _ context.Context, args []string) int {
 	// It has no options of its own, so a leading `-` word is the only thing
 	// worth asking about: the dialects split between refusing it as an
 	// option and reading it as the optstring — see the axis's comment for

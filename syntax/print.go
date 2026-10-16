@@ -121,6 +121,19 @@ func PrintWordWith(w *Word, l Layout) string {
 	return p.b.String()
 }
 
+// PrintSubscriptWith renders the word between an assignment's brackets the
+// way the printer writes it inside them: as written, since the brackets and
+// not the blanks are what delimit it — see the assignment case in the
+// printer, which this must agree with.
+func PrintSubscriptWith(w *Word, l Layout) string {
+	if w == nil {
+		return ""
+	}
+	p := printer{layout: l}
+	p.rawWord(w)
+	return p.b.String()
+}
+
 // PrintArrayElem renders one element of an array literal as it was written —
 // an ordinary word, or a nested literal with its parentheses.
 func PrintArrayElem(e *ArrayElem) string { return PrintArrayElemWith(e, Layout{}) }
@@ -604,6 +617,23 @@ type Layout struct {
 	// anything. Left nil by every arrangement that does not reprint a
 	// substitution's body either.
 	ParameterExpansionIsReprinted func(string) (string, bool)
+
+	// ArithmeticIsReprinted writes an arithmetic expression's text back
+	// through this function before it is written out: the inside of a
+	// `$(( … ))`, a `$[ … ]`, a `(( … ))` command and each of the three
+	// expressions of an arithmetic `for`.
+	//
+	// The same shape as ParameterExpansionIsReprinted and for the same
+	// reason: the expression is held as text, so a substitution written in
+	// it is not a tree this printer can reach. The engine that lays a
+	// substitution's body out reaches it there too — measured 2026-10-15 on
+	// bash 5.3.20 through `declare -f`, `echo $((1+$(a;b)))`,
+	// `echo $[1+$(a;b)]`, `(( x=$(a;b) ))` and `for ((i=$(a;b); i<$(c;d);
+	// i++))` all come back with `$(a; b)` and `$(c; d)` — while the
+	// expression around a substitution is written as it was: `$((1+ 2))`
+	// keeps its odd blank. Left nil by every arrangement that does not
+	// reprint a substitution's body.
+	ArithmeticIsReprinted func(string) (string, bool)
 
 	// FunctionHeader is how a function declaration's header is spelled: the
 	// `function` keyword, the `()`, or both.
@@ -1347,6 +1377,7 @@ func (p *printer) command(c Command) {
 		if p.layout.EmptyArithmeticForExpressionIsOne {
 			init, cond, post = arithForOne(init), arithForOne(cond), arithForOne(post)
 		}
+		init, cond, post = p.arithText(init), p.arithText(cond), p.arithText(post)
 		p.str("for ((" + init + "; " + cond + "; " + post + "))")
 		if len(x.Body) > 0 {
 			p.arithDoKeyword()
@@ -1360,7 +1391,7 @@ func (p *printer) command(c Command) {
 		p.str(" ]]")
 		p.redirs(x.Redirs)
 	case *ArithCmdClause:
-		p.str("((" + x.Expr + "))")
+		p.str("((" + p.arithText(x.Expr) + "))")
 		p.redirs(x.Redirs)
 	case *FuncDecl:
 		// With the `function` keyword where it was written with one. The
@@ -2059,18 +2090,24 @@ func (p *printer) assign(a *Assign) {
 		}()
 	}
 	p.str(a.Name)
-	if a.Index != nil {
+	for _, link := range a.Leading {
+		// The subscripts before the last, each one in its own brackets and
+		// written the way the last one is. See Assign.Leading.
 		p.str("[")
-		if a.IndexFlags != nil {
-			// A flag group's parentheses belong to the subscript, exactly as
-			// a pattern's do inside `[[ … ]]`: escaping them would put a
-			// backslash where the reader expects a group, and `b[(r)y]=Q`
-			// would come back as `b[\(r\)y]=Q` — arithmetic again, and a
-			// failure rather than the element it named.
-			p.rawWord(a.Index)
-		} else {
-			p.word(a.Index)
-		}
+		p.rawWord(link.Index)
+		p.str("]")
+	}
+	if a.Index != nil {
+		// Raw, because the brackets are what delimit a subscript and not the
+		// blanks and operators in it: the reader takes everything up to the
+		// matching `]`, so an unquoted `<`, `&` or blank there was written
+		// that way and is read back that way. Escaping it wrote `a[1<2]=1` as
+		// `a[1\<2]=1` and `a[1 + 1]=2` as `a[1\ +\ 1]=2`, where bash 5.3.20's
+		// `declare -f` and `set -x` both give the subscript back as it was
+		// written (#6679). A flag group's parentheses are the same case: an
+		// escaped `b[(r)y]=Q` would read back as arithmetic.
+		p.str("[")
+		p.rawWord(a.Index)
 		p.str("]")
 	}
 	// The member path stands between the bracket and the operator, which is
@@ -2715,15 +2752,16 @@ func (p *printer) span(s Span) {
 		// The spelling that was read, for the reason Span.Bracketed gives:
 		// the two are one node and are not one syntax, and normalizing them
 		// would edit a script rather than print it.
+		text := p.arithText(s.Value)
 		if s.Bracketed {
-			p.str("$[" + s.Value + "]")
+			p.str("$[" + text + "]")
 			return
 		}
 		if s.Braced {
-			p.str("${((" + s.Value + "))}")
+			p.str("${((" + text + "))}")
 			return
 		}
-		p.str("$((" + s.Value + "))")
+		p.str("$((" + text + "))")
 	case ParamExp:
 		// `$x` where that is what it means, and `${x}` where the braces are
 		// doing something. The braced form is always *correct* — `${x}y` and
@@ -2740,6 +2778,21 @@ func (p *printer) span(s Span) {
 		// Through the same spelling the subscript reading uses, so the two
 		// cannot come to disagree about what this span was written with. See
 		// procSubstSourceText.
+		//
+		// The body is laid out by the reader a `$( … )` body is, where the
+		// arrangement has one: measured 2026-10-15 on bash 5.3.20 through
+		// `declare -f`, `cat <(echo 1 >&2) >(a;b)` comes back `cat <(echo 1
+		// 1>&2) >(a; b)`, and `<( (a;b) )` comes back `<( ( a; b ))` — a
+		// body that now opens with a parenthesis keeps a blank in front of
+		// it, so `<((` is never written (#6679).
+		if reprint := p.layout.CommandSubstitutionIsReprinted; reprint != nil {
+			if body, ok := reprint(s.Value); ok {
+				if strings.HasPrefix(body, "(") {
+					body = " " + body
+				}
+				s.Value = body
+			}
+		}
 		p.str(procSubstSourceText(s))
 	default:
 		p.literal(s)
@@ -2781,6 +2834,20 @@ func (p *printer) commandSubstBody(body string) string {
 // reprinted it, so there is nothing left there for the scan to find twice.
 func (p *printer) paramExpText(text string) string {
 	reprint := p.layout.ParameterExpansionIsReprinted
+	if reprint == nil {
+		return text
+	}
+	if out, ok := reprint(text); ok {
+		return out
+	}
+	return text
+}
+
+// arithText is an arithmetic expression's text as it goes out: the
+// characters it holds, unless the arrangement has a reader for the
+// substitutions written in it — see [Layout.ArithmeticIsReprinted].
+func (p *printer) arithText(text string) string {
+	reprint := p.layout.ArithmeticIsReprinted
 	if reprint == nil {
 		return text
 	}

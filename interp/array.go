@@ -320,6 +320,14 @@ func (r *Runner) setArray(name string, elems []string) {
 	r.storeArray(name, a)
 }
 
+// setArrayForgettingARetypedHide is setArray for a builtin's whole store,
+// which takes the hide word off a name it retypes as a bare assignment does.
+// See Runner.storeForgetsARetypedHide.
+func (r *Runner) setArrayForgettingARetypedHide(name string, elems []string) {
+	defer r.storeForgetsARetypedHide(name)()
+	r.setArray(name, elems)
+}
+
 // storeArray puts an array back and keeps the scalar view in step.
 func (r *Runner) storeArray(name string, a Array) {
 	name = r.namespaceWriteName(name)
@@ -1989,19 +1997,29 @@ func (r *Runner) fillOperandValue(name, value string, mark func(string)) {
 	if r.storeThroughPositional(name, value) {
 		return
 	}
+	// A store that retypes a hidden name takes the word off it, as a bare
+	// assignment's does. See Runner.storeForgetsARetypedHide.
+	defer r.storeForgetsARetypedHide(name)()
 	r.setVar(name, value)
 	mark(name)
 }
 
 // storeThroughPositional is the half of setOperandValue that knows the rule,
 // and it reports whether it took the operand.
+//
+// The index is read as `N=value` reads it, through positionalAssignIndex and
+// its bound, which is what namesAPosition asks for a whole-array store too.
+// It used an unbounded parse, so `read 99999999999999999999` wrapped to an
+// index in the quintillions and grew the list until the machine ran out of
+// memory; past the bound the store does nothing, as the statement form's
+// does.
 func (r *Runner) storeThroughPositional(name, value string) bool {
-	if r.sem().ReadNameOperands != NamesAndPositionals {
+	if !r.namesAPosition(name) {
 		return false
 	}
-	n, ok := positionalFdVar(name)
-	if !ok {
-		return false
+	n, _ := positionalAssignIndex(name)
+	if n < 0 {
+		return true
 	}
 	if n == 0 {
 		// Position 0 is `$0`, which is not in the positional list at all and

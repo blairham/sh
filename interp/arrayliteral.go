@@ -155,7 +155,23 @@ func (r *Runner) literalElems(elems []*syntax.ArrayElem, readsSubscripts, bareIs
 	// interp/cshnullglob.go.
 	endGlobUnit := r.beginGlobUnit()
 	defer endGlobUnit()
+	failedBefore := r.expansionHasFailed()
 	for _, el := range elems {
+		if r.expansionFailedHere(failedBefore) {
+			// An element that would not expand ends the list where it
+			// stands: the elements after it are not expanded, so their side
+			// effects do not run. Measured 2026-10-15 under `-c` and from a
+			// file, `a=(5 $(echo SIDE >&2) $((1/0)) $(echo AFTER >&2))`
+			// writes `SIDE` and the complaint and nothing else in bash
+			// 5.3.20, zsh 5.9.2 and ksh93u+ alike — and so do `a+=(…)`, a
+			// subscripted literal, a table's pairs and a declaration's
+			// operand. We went on to the end and asked only then (#6606).
+			//
+			// An expansion's failure and not an unmatched pattern's, which
+			// is a different stop: those shells expand every word before
+			// they glob any of them. See #6677.
+			break
+		}
 		if el.Nested != nil {
 			if el.Nested.Members != nil {
 				// The parentheses held a compound variable's body rather than
@@ -232,6 +248,13 @@ func (r *Runner) literalElems(elems []*syntax.ArrayElem, readsSubscripts, bareIs
 		// is shaped, in the column with the narrow rule and in the column
 		// with the wider one alike. See interp/equalscontextposition.go.
 		out = append(out, literalElem{fields: r.expandLiteralElement(w), written: written})
+	}
+	if r.expansionFailedHere(failedBefore) && len(out) > 0 {
+		// The element that failed is the last one read; what is left is
+		// what came before it, which is what the one column that keeps a
+		// failed literal's earlier elements keeps. Every other caller
+		// stores nothing on a failure. See Runner.keepWhatAFailedLiteralStored.
+		out = out[:len(out)-1]
 	}
 	return out, !r.failedHeading()
 }
@@ -490,8 +513,11 @@ func (r *Runner) assignArrayLiteral(name string, elems []*syntax.ArrayElem, appe
 		r.bareLiteralElementIsOneValue(name, elems, false))
 	if !ok {
 		// The elements were not read, so there is nothing to store and the
-		// name keeps whatever it was holding. Before literalSubscriptIsAKey,
-		// because a half-expanded list is not evidence about the shape either.
+		// name keeps whatever it was holding — except in the column that
+		// builds a subscripted literal as it goes. Before
+		// literalSubscriptIsAKey, because a half-expanded list is not
+		// evidence about the shape either.
+		r.keepWhatAFailedLiteralStored(name, elems, parsed, appendTo, false)
 		return
 	}
 	if r.literalSubscriptIsAKey(name, parsed) {

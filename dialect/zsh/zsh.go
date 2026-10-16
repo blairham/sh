@@ -1641,6 +1641,14 @@ func Semantics() interp.Semantics {
 	// does: `a[$(echo SUB >&2; echo 1)]=$(echo VAL >&2)x` writes VAL, then
 	// SUB.
 	s.ElementSubscriptIsExpandedBeforeTheValue = interp.No
+	// A frozen name is refused once the value is expanded: an element write
+	// never expands its subscript, and a whole literal expands every word
+	// before the refusal. The only column that does either.
+	s.FrozenElementIsRefusedBeforeItsSubscript = interp.Yes
+	s.FrozenLiteralIsExpandedBeforeItIsRefused = interp.Yes
+	// A literal that fails partway through stores nothing, subscripted or
+	// not, as in bash.
+	s.FailedSubscriptedLiteralKeepsWhatItStored = interp.No
 	// Asked only under `ksharrays`, which is what makes a bare name one
 	// element here: a table is read as an ordered list, so the element is the
 	// first value in the order this shell lists rather than the one keyed `0`
@@ -4009,10 +4017,19 @@ func Semantics() interp.Semantics {
 	// 5.9.2. Answered so that nothing reports an axis this shell cannot be
 	// asked.
 	s.GetoptsFrozenNameAtTheEndOfTheOptionsIsFatal = interp.No
+	// A refused store ends the shell and leaves 0 from `-c`, as the other
+	// operand stores do: measured 2026-10-15, `typeset -r v=1; set -- -a;
+	// getopts a v` is the refusal and status 0, and 1 from a script file
+	// (#6588).
+	s.GetoptsStoreRefusalLeavesZero = interp.Yes
 	// A value `read` writes to a typed name that will not evaluate ends the
 	// script: measured 2026-10-15 on zsh 5.9.2, `typeset -i n=5; read n <<<
 	// 1+` is `bad math expression` and nothing after it.
 	s.ReadTypedValueFailureIsAnAssignmentFailure = interp.Yes
+	// And that cost is the script, from a file as from `-c`: measured
+	// 2026-10-15, `typeset -i n=5`, then `n=1+; echo same`, then `echo next`
+	// in a script file is the complaint and nothing after it (#6631).
+	s.TypedValueFailureGivesUpTheLine = interp.No
 	// unanswered GetoptsTypedValueFailureIsAFreeze: `?` is a value a typed
 	// name takes here — `typeset -i n; getopts x n -y` leaves 0 — so the
 	// write never fails and there is nothing to ask.
@@ -5380,6 +5397,15 @@ func Semantics() interp.Semantics {
 	// parameter v` and not the open's failure, measured 2026-10-15 (#6571).
 	// See interp.Semantics.FdVariableReadonlyRefusedFirst.
 	s.FdVariableReadonlyRefusedFirst = interp.Yes
+	// But a `{name}` store is made before the command's prefix, which the
+	// command sees: `f() { echo "in[$v]"; }; v=pre f {v}</dev/null; echo
+	// "[$v]"` is `in[0] [11]`, measured 2026-10-15 (#6569). See
+	// interp.Semantics.FdVariableStoredAfterThePrefix.
+	s.FdVariableStoredAfterThePrefix = interp.No
+	// unanswered FdVariableMakesABareListASubshell: a `{name}` in front of
+	// the command word opens a brace group here, so `{v}>/dev/null` runs a
+	// command named `v` and a command of redirections alone carries no
+	// `{name}`, measured 2026-10-15 on zsh 5.9.2 (#6629).
 	// And `set -C` protects a name that already holds an open descriptor, so
 	// `exec {m}>f1; exec {m}>f2` is refused rather than reallocating. The
 	// name is what is protected and not the file — the same file twice is

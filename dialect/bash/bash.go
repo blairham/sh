@@ -2598,6 +2598,15 @@ func Semantics() interp.Semantics {
 	// An element write expands its value before its subscript:
 	// `a[$(echo SUB >&2; echo 1)]=$(echo VAL >&2)x` writes VAL, then SUB.
 	s.ElementSubscriptIsExpandedBeforeTheValue = interp.No
+	// A frozen element is refused at its store, after the value, the
+	// subscript's words and its arithmetic: `readonly a=(1 2);
+	// a[$(echo SUB >&2; echo 1)]=$(echo VAL >&2)x` writes VAL, SUB, then the
+	// refusal. A frozen whole literal is refused before any of its words.
+	s.FrozenElementIsRefusedBeforeItsSubscript = interp.No
+	s.FrozenLiteralIsExpandedBeforeItIsRefused = interp.No
+	// A literal that fails partway through stores nothing, subscripted or
+	// not: the name keeps what it held.
+	s.FailedSubscriptedLiteralKeepsWhatItStored = interp.No
 	// bash reports success if it signaled anything at all, where the others
 	// count failures one way or another.
 	s.ExitTrapRunsOnSignalDeath = interp.Yes
@@ -2936,12 +2945,23 @@ func Semantics() interp.Semantics {
 	// the scan was: measured 2026-09-17 on 5.3.20 and 3.2.57, `readonly N`
 	// over `set -- -a v` and over `set -- x` alike.
 	s.GetoptsFrozenNameAtTheEndOfTheOptionsIsFatal = interp.No
+	// The one `getopts` store that ends the shell here is a typed name's
+	// value that will not evaluate, and it leaves 1, not 0: measured
+	// 2026-10-15 on 5.3.20, `declare -i v; set -- -z; getopts a v; echo
+	// after` is the arithmetic complaint and status 1 from `-c` and from a
+	// script file (#6588).
+	s.GetoptsStoreRefusalLeavesZero = interp.No
 	// A value the typed name will not take ends the script, from `getopts`
 	// and `read` alike: measured 2026-10-15 on bash 5.3.20 and 3.2.57,
 	// `typeset -i n=5; getopts x n -y` and `read n <<< 1+` are each the
 	// arithmetic complaint and nothing after it. See the two axes.
 	s.GetoptsTypedValueFailureIsAFreeze = interp.No
 	s.ReadTypedValueFailureIsAnAssignmentFailure = interp.Yes
+	// And that cost is the rest of the line rather than the script, off a
+	// `-c` string: measured 2026-10-15 on 5.3.20 and 3.2.57 from a script
+	// file, `typeset -i n=5`, then `n=1+; echo same`, then `echo next $?` is
+	// the complaint and `next 1` (#6631).
+	s.TypedValueFailureGivesUpTheLine = interp.Yes
 	// `read` stops at the first name a freeze refuses and leaves the names
 	// after it alone, which is the other answer from `getopts` above and is
 	// why the two are separate axes: `readonly a; printf 'x y\n' | { read a
@@ -3216,6 +3236,16 @@ func Semantics() interp.Semantics {
 	// the name, measured 2026-10-15 on 5.3.20 (#6571). See
 	// interp.Semantics.FdVariableReadonlyRefusedFirst.
 	s.FdVariableReadonlyRefusedFirst = interp.No
+	// And a `{name}` store is made after the command's own prefix of the
+	// same name and into it: `f() { echo "in[$v]"; }; v=pre f {v}</dev/null`
+	// is `in[10]`, measured 2026-10-15 (#6569). See
+	// interp.Semantics.FdVariableStoredAfterThePrefix.
+	s.FdVariableStoredAfterThePrefix = interp.Yes
+	// And a command with no command word whose redirections carry a
+	// `{name}` makes the whole list in a child: `{v}>/dev/null; echo "[$v]"`
+	// is `[]`, and the next `exec {w}` still gets 10, measured 2026-10-15 on
+	// 5.3.20 (#6630). See interp.Semantics.FdVariableMakesABareListASubshell.
+	s.FdVariableMakesABareListASubshell = interp.Yes
 	// And `set -C` does not protect the name: `exec {m}>f1; exec {m}>f2`
 	// allocates a second descriptor and overwrites it in silence, measured
 	// 2026-09-29. See interp.Semantics.NoclobberProtectsAnFdVariable.

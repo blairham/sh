@@ -100,6 +100,9 @@ func Dialect() syntax.Dialect {
 	// reaches a branch that is never taken — measured, and the reason this
 	// is a grammar flag rather than only a runtime axis.
 	d.EmptyAssignSubscriptIsASyntaxError = true
+	// A here-document left open inside an open construct is what is named.
+	// See the flag (#6599).
+	d.UnterminatedHeredocOutranksItsConstruct = true
 	// And the read half of the same nesting: `${a[1][2]}` was a parse error
 	// here while the write built a value only `typeset -p` could show. The
 	// grammar is shared with the other shell that writes the text and the
@@ -593,6 +596,7 @@ func Dialect() syntax.Dialect {
 	// the same place is read. Measured 2026-10-15 on ksh93u+ (#6528); see the
 	// flag for the table.
 	d.ArithCommandTakesNoRedirection = true
+	d.RedirectionOnlyCommandNamesTheTokenAfterIt = true
 	// `times` is a reserved word here, so `times foo` is a syntax error
 	// rather than a builtin ignoring an argument — the one place in the panel
 	// where which builtin a shell has changes what parses.
@@ -2679,6 +2683,16 @@ func Semantics() interp.Semantics {
 	// VAL — though its arithmetic is still evaluated after the value, as in
 	// every column. The only column that does.
 	s.ElementSubscriptIsExpandedBeforeTheValue = interp.Yes
+	// And a frozen element is refused at its store, after both of them and
+	// the subscript's arithmetic, as in bash. A frozen whole literal is
+	// refused before any of its words.
+	s.FrozenElementIsRefusedBeforeItsSubscript = interp.No
+	s.FrozenLiteralIsExpandedBeforeItIsRefused = interp.No
+	// A subscripted literal is built as a table, a pair at a time, so one
+	// that fails partway through leaves the pairs before the failure: `a=(1
+	// 2); a=([0]=x [1]=$((1/0)))` is `typeset -A a=([0]=x)`. The only column
+	// that does.
+	s.FailedSubscriptedLiteralKeepsWhatItStored = interp.Yes
 	s.TraceAssignmentsSeparately = interp.Yes
 	// An unparseable `eval` is reported and survived here, unlike dash, but a
 	// file `.` cannot open still ends the script — so the two halves of the
@@ -3239,6 +3253,10 @@ func Semantics() interp.Semantics {
 	// word, a `--` and no words at all — with the silent form answering the
 	// same.
 	s.GetoptsFrozenNameAtTheEndOfTheOptionsIsFatal = interp.Yes
+	// And that refusal leaves the builtin's own 2: measured 2026-10-15,
+	// `readonly o; getopts a o; echo after $?` from `-c` is the refusal and
+	// status 2 (#6588).
+	s.GetoptsStoreRefusalLeavesZero = interp.No
 	// A value the typed name will not take is refused as a freeze is, by
 	// `getopts`, and reported at 1 with the builtin given up, by `read`:
 	// measured 2026-10-15 on ksh93u+, `typeset -i n=5; getopts x n -y` is
@@ -3247,6 +3265,11 @@ func Semantics() interp.Semantics {
 	// after both (#6563).
 	s.GetoptsTypedValueFailureIsAFreeze = interp.Yes
 	s.ReadTypedValueFailureIsAnAssignmentFailure = interp.No
+	// A value a typed name will not take ends the script from a file as from
+	// `-c`: measured 2026-10-15, `typeset -i n=5`, then `n=1+; echo same`,
+	// then `echo next` in a script file is `1+: more tokens expected` and
+	// nothing after it (#6631).
+	s.TypedValueFailureGivesUpTheLine = interp.No
 	// And `read` does not stop either: every frozen name is reported and
 	// every other name is filled — `readonly a; printf 'x y\n' | { read a b; }`
 	// leaves b holding `y` here, where bash, dash and BusyBox ash leave it
@@ -4675,6 +4698,16 @@ func Semantics() interp.Semantics {
 	// failure, measured 2026-10-15 on ksh93u+ (#6571). See
 	// interp.Semantics.FdVariableReadonlyRefusedFirst.
 	s.FdVariableReadonlyRefusedFirst = interp.Yes
+	// And a `{name}` store is made after the command's own prefix of the
+	// same name and into it: `f() { echo "in[$v]"; }; v=pre f {v}</dev/null;
+	// echo "[$v]"` is `in[10] [10]`, measured 2026-10-15 on ksh93u+
+	// (#6569). See interp.Semantics.FdVariableStoredAfterThePrefix.
+	s.FdVariableStoredAfterThePrefix = interp.Yes
+	// And a command with no command word makes a `{name}` redirection in the
+	// shell like any other: `{v}>/dev/null; echo "[$v]"` is `[10]`, measured
+	// 2026-10-15 on ksh93u+ (#6630). See
+	// interp.Semantics.FdVariableMakesABareListASubshell.
+	s.FdVariableMakesABareListASubshell = interp.No
 	// And `set -C` does not protect the name: `exec {m}>f1; exec {m}>f2`
 	// allocates a second descriptor and overwrites it in silence, measured
 	// 2026-09-29. See interp.Semantics.NoclobberProtectsAnFdVariable.

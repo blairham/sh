@@ -533,7 +533,13 @@ func (r *Runner) GetVar(name string) (string, bool) { return r.getVar(name) }
 // first element answers to subscript 1 in one shell and 0 in another, so a
 // list written in at 0 reads back short — or empty — under the other answer.
 // The base is this package's to know, and these two ask it.
-func (r *Runner) SetArray(name string, values []string) { r.setArray(name, values) }
+//
+// A store that retypes a hidden name takes the word off it, as a bare
+// assignment's does — see Runner.storeForgetsARetypedHide.
+func (r *Runner) SetArray(name string, values []string) {
+	defer r.storeForgetsARetypedHide(name)()
+	r.setArray(name, values)
+}
 
 // ArrayHolds reports whether an indexed array holds this word, without
 // building the list to find out.
@@ -2538,6 +2544,9 @@ func (r *Runner) Expand(text string) string {
 // array and an absent one are different things to `${(k)m}` and to
 // `${m[k]:-d}`.
 func (r *Runner) SetAssoc(name string, values map[string]string) {
+	// A store that retypes a hidden name takes the word off it, as SetArray's
+	// does.
+	defer r.storeForgetsARetypedHide(name)()
 	r.markAssoc(name)
 	table := make(AssocArray, len(values))
 	for k, v := range values {

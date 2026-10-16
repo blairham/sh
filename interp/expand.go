@@ -4631,7 +4631,11 @@ func (r *Runner) assignedThrough(name, v string) string {
 func (r *Runner) storeThroughExpansion(name, v string) {
 	n, ok := atoi(name)
 	if !ok || !isPositional(name) {
+		// A store that retypes a hidden name takes the word off it. See
+		// Runner.storeForgetsARetypedHide.
+		end := r.storeForgetsARetypedHide(name)
 		r.setVar(name, v)
+		end()
 		// Marked here rather than at the two operators, which both come
 		// through: `${name:=word}` and `${name::=word}` (#6441).
 		r.markAnExpansionsStoreForAllexport(name)

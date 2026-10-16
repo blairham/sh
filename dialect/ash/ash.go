@@ -382,6 +382,10 @@ func Semantics() interp.Semantics {
 	// redirection here for a subshell to carry, the same reason as the two
 	// axes beside it.
 	// unanswered ReadonlyFdVariableRefusesAClose: there is no `{name}`
+	// unanswered FdVariableStoredAfterThePrefix: there is no `{name}`
+	// redirection here for a prefix to meet.
+	// unanswered FdVariableMakesABareListASubshell: there is no `{name}`
+	// redirection here for a command of redirections alone to carry.
 	// unanswered FdVariableReadonlyRefusedFirst: there is no `{name}`
 	// redirection here for a frozen name to be aimed by, the same reason as
 	// the axis below it.
@@ -1813,10 +1817,15 @@ func Semantics() interp.Semantics {
 	// and with `set -- x` both write `getopts: line 1: N: is read only` at 2
 	// and the script runs on.
 	s.GetoptsFrozenNameAtTheEndOfTheOptionsIsFatal = interp.No
+	// unanswered GetoptsStoreRefusalLeavesZero: no refused `getopts` store
+	// ends the shell here — the two axes above are both No — so there is
+	// no number left by one to measure (#6588).
 	// unanswered GetoptsTypedValueFailureIsAFreeze: no name here carries a
 	// type, so no value can fail to fit one.
 	// unanswered ReadTypedValueFailureIsAnAssignmentFailure: no name here carries a type,
 	// so no value `read` writes can fail to fit one.
+	// unanswered TypedValueFailureGivesUpTheLine: no name here carries a type,
+	// so no value can fail to fit one.
 	// And `read` the same, at 2 wherever the frozen name stood. Measured in
 	// the pinned 1.37.0 image, 2026-09-16 (#3208).
 	s.ReadRefusedWriteEndsTheBuiltin = interp.Yes
@@ -2713,8 +2722,14 @@ func Semantics() interp.Semantics {
 	// is ever traced (#1959).
 	// unanswered TraceSubscriptedArrayLiteralIsElementAssignments: the
 	// subscripted shape is the same literal and does not parse here either.
+	// unanswered FailedSubscriptedLiteralKeepsWhatItStored: no array
+	// literal here to fail partway through.
 	// unanswered ElementSubscriptIsExpandedBeforeTheValue: no element write
 	// to order — `a[1]=v` is a command word here.
+	// unanswered FrozenElementIsRefusedBeforeItsSubscript: and so no frozen
+	// element to refuse.
+	// unanswered FrozenLiteralIsExpandedBeforeItIsRefused: no array literal
+	// to expand.
 	// unanswered TraceElementSubscriptIsEvaluated: and no subscript, so
 	// `a[1]=v` names a variable spelled `a[1]` and there is nothing to
 	// resolve.

@@ -38,6 +38,12 @@ func (r *Runner) setArrayOperands(name string, front bool, values []string) int 
 		r.diagf("set: -A with a subscripted name is not implemented yet\n")
 		return 2
 	}
+	if status, took, _ := r.StoreAWholeArrayAtAPosition(name, values, false); took {
+		// A position rather than a name: `argv[N]` takes the words, under
+		// either sign, and `0` refuses them. See
+		// Runner.StoreAWholeArrayAtAPosition.
+		return status
+	}
 	rest, status, ended := r.builtinNames("set", []string{name}, true)
 	if ended {
 		// One operand and nothing behind it, so there is nothing to declare
@@ -87,6 +93,9 @@ func (r *Runner) setArrayOperands(name string, front bool, values []string) int 
 		// interp/privatekindfixed.go.
 		return r.arrayStoreRefusalStatus(r.status)
 	}
+	// The store retypes a hidden name as `name=(…)` does, and takes the word
+	// off it the same way. See Runner.storeForgetsARetypedHide.
+	defer r.storeForgetsARetypedHide(name)()
 	if front && len(values) == 0 {
 		// Nothing to put at the front, which is a store that may not happen
 		// at all — see emptyPrependStores, where the two columns part. Ahead

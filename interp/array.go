@@ -1586,7 +1586,22 @@ func (r *Runner) assignWholeArraySubscript(a *syntax.Assign) {
 			value = v
 		}
 		r.setAssocElem(a.Name, key, value)
-	case WholeArraySubscriptIsABadSubscript:
+	case WholeArraySubscriptIsABadSubscript, WholeArraySubscriptIsInvalidInAnAssignment:
+		r.refuseWholeArraySubscript(a, policy)
+	case WholeArraySubscriptIsASliceOfATable:
+		r.fatal("%s\n", Wording(r.diag().SliceOfAnAssociativeArray,
+			"%[1]s: attempt to set slice of associative array", a.Name))
+	default:
+		r.diagf("%s\n", r.unanswered(what))
+		r.status, r.unspecified = 2, true
+	}
+}
+
+// refuseWholeArraySubscript is the two refusals of the whole-array spelling
+// on the left that end more than the assignment, shared by the scalar road
+// above and the literal road in Runner.assignWholeArrayElemLiteral.
+func (r *Runner) refuseWholeArraySubscript(a *syntax.Assign, policy WholeArraySubscriptAssignPolicy) {
+	if policy == WholeArraySubscriptIsABadSubscript {
 		// Reported, 1, and the rest of the command list given up — the same
 		// cost a bare assignment to a frozen name has, and measured the same
 		// way: the commands after it run when they are on the next line and
@@ -1595,17 +1610,11 @@ func (r *Runner) assignWholeArraySubscript(a *syntax.Assign) {
 			"%[1]s[%[2]s]: bad array subscript", a.Name, a.IndexText))
 		r.status, r.assignFailed = 1, true
 		r.abandonTheCommand()
-	case WholeArraySubscriptIsInvalidInAnAssignment:
-		// The subscript is the verb here, not the name.
-		r.fatal("%s\n", Wording(r.diag().InvalidSubscriptInAssignment,
-			"%s: invalid subscript in assignment", a.IndexText))
-	case WholeArraySubscriptIsASliceOfATable:
-		r.fatal("%s\n", Wording(r.diag().SliceOfAnAssociativeArray,
-			"%[1]s: attempt to set slice of associative array", a.Name))
-	default:
-		r.diagf("%s\n", r.unanswered(what))
-		r.status, r.unspecified = 2, true
+		return
 	}
+	// The subscript is the verb here, not the name.
+	r.fatal("%s\n", Wording(r.diag().InvalidSubscriptInAssignment,
+		"%s: invalid subscript in assignment", a.IndexText))
 }
 
 // storeWholeArraySubscriptThroughAReference is `a[@]=Z` reached through a

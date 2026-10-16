@@ -70,6 +70,9 @@ func elementNamespace(name, subscript string) string {
 // element is being written. See [Runner.nestElemLiteral], whose shape this
 // follows line for line up to the point the value is built.
 func (r *Runner) assignSubscriptedCompound(ctx context.Context, a *syntax.Assign) {
+	if r.refusedWholeArrayCompound(a) {
+		return
+	}
 	at, ok := r.elementAddress(a.Name, a.Index, a.IndexText)
 	if !ok {
 		return

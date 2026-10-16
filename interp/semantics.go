@@ -14661,6 +14661,9 @@ type Semantics struct {
 	//
 	// `[*]` and `[@]` are one answer in all three, so a second field would
 	// have nothing to say (#2285).
+	//
+	// A literal on the right asks the same field, and so does the next one:
+	// see Runner.assignWholeArrayElemLiteral for the rows (#6821).
 	WholeArraySubscriptAssigningAnArray WholeArraySubscriptAssignPolicy
 	// WholeArraySubscriptAssigningATable is the same spelling over a name
 	// **declared a table**, and the panel is not the same panel — which is

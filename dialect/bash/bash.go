@@ -2595,6 +2595,9 @@ func Semantics() interp.Semantics {
 	// And the subscript is the text as written: `i=2; a[$i]=v` is
 	// `a[$i]=v`, and so is `a[i]=v`.
 	s.TraceElementSubscriptIsEvaluated = interp.No
+	// An element write expands its value before its subscript:
+	// `a[$(echo SUB >&2; echo 1)]=$(echo VAL >&2)x` writes VAL, then SUB.
+	s.ElementSubscriptIsExpandedBeforeTheValue = interp.No
 	// bash reports success if it signaled anything at all, where the others
 	// count failures one way or another.
 	s.ExitTrapRunsOnSignalDeath = interp.Yes

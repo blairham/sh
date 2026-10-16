@@ -4937,6 +4937,39 @@ type Semantics struct {
 	// columns with no subscript at all leave it unanswered.
 	TraceElementSubscriptIsEvaluated Answer
 
+	// ElementSubscriptIsExpandedBeforeTheValue expands the words of an
+	// element write's subscript before its value: `a[$(f)]=$(g)` runs `f`
+	// first. Measured 2026-10-15 under `-c` and a script file, traced and
+	// not:
+	//
+	//	written                                   bash 5.3.20, zsh 5.9.2  ksh93u+
+	//	a[$(echo SUB >&2; echo 1)]=$(echo VAL >&2)x  VAL SUB              SUB VAL
+	//	typeset -A m; m[$(…SUB…)]=$(…VAL…)z          VAL SUB              SUB VAL
+	//	i=1; a[$((i++))]=$((i*10))                   10                   20
+	//	i=1; a[i++]=$((i*10))                        10                   10
+	//
+	// The last row is the one all three agree on and the reason the axis is
+	// about the *words*: a subscript's arithmetic is evaluated after the
+	// value in every column, so ksh93 expands `$((i++))` before the value and
+	// evaluates `i++` after it. A value that will not expand ends the write
+	// before the subscript is expanded where the answer is no, and after it
+	// where it is yes. See interp/elementorder.go (#6604).
+	//
+	// Asked only where the order can be seen — see
+	// Runner.elementOrderIsObservable — so `a[$i]=$x` is never a question;
+	// dash and BusyBox ash, which have no element write, leave it unanswered.
+	//
+	// unpinned bash: no corpus row writes an element whose subscript and
+	// value both have side effects; pinned by
+	// TestAnElementWriteExpandsItsValueFirst.
+	//
+	// unpinned zsh: the same reach, pinned by
+	// TestAnElementWriteExpandsItsValueFirst.
+	//
+	// unpinned ksh: the same reach, pinned by
+	// TestAnElementWriteExpandsItsSubscriptFirst.
+	ElementSubscriptIsExpandedBeforeTheValue Answer
+
 	// TraceLineFollowsTheStore writes an assignment's trace line once the
 	// assignment has been made, so a store that is refused writes no line and
 	// one with a side effect writes it after the effect. Measured 2026-10-02

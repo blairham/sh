@@ -63,8 +63,8 @@ func (r *Runner) scalarAssignmentGlobs() bool {
 // side effects (#1915). The fields travel with the value for the same reason,
 // which is why expandedAssign carries them.
 func (r *Runner) scalarAssignValue(a *syntax.Assign) (string, []string, bool) {
-	if r.expanded != nil && r.expanded.assign == a {
-		return r.expanded.value, r.expanded.fields, r.expanded.fieldsSet
+	if e, ok := r.heldAssignValue(a); ok {
+		return e.value, e.fields, e.fieldsSet
 	}
 	return r.expandScalarAssignValue(a.Value)
 }
@@ -180,7 +180,12 @@ func (r *Runner) globbedElementValue(a *syntax.Assign) globbedValue {
 	if a.Value == nil || !r.scalarAssignmentGlobs() {
 		return globbedValue{}
 	}
-	value, fields, globbed := r.expandScalarAssignValue(a.Value)
+	// The value the caller expanded already, where it did: the trace's loop
+	// and an element write that expands its value first both have one, and
+	// expanding the word again here ran its substitutions twice — `set -x;
+	// a[2]=$(echo X >&2)y` with the option on wrote `X` twice where zsh
+	// 5.9.2 writes it once (#1915 again, one road over).
+	value, fields, globbed := r.scalarAssignValue(a)
 	return globbedValue{value: value, fields: fields, list: globbed && len(fields) > 1, read: true}
 }
 

@@ -1626,6 +1626,10 @@ func Semantics() interp.Semantics {
 	// here where ksh93 writes `a[2]=v`. That pair is why the two are
 	// separate axes.
 	s.TraceElementSubscriptIsEvaluated = interp.No
+	// An element write expands its value before its subscript, as bash
+	// does: `a[$(echo SUB >&2; echo 1)]=$(echo VAL >&2)x` writes VAL, then
+	// SUB.
+	s.ElementSubscriptIsExpandedBeforeTheValue = interp.No
 	// Asked only under `ksharrays`, which is what makes a bare name one
 	// element here: a table is read as an ordered list, so the element is the
 	// first value in the order this shell lists rather than the one keyed `0`

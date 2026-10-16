@@ -56,6 +56,11 @@ type subscriptSubstHold struct {
 	// word is the written subscript word this hold belongs to, where the
 	// expansion has one.
 	word *syntax.Word
+	// whole is the same brackets read as one word with their flag group
+	// still on, where an assignment's subscript opened with one: the place
+	// is found from the operand behind the group and the refusals quote the
+	// whole, two words over the same spans. See armAssignSubscript.
+	whole *syntax.Word
 	// refText and refNode are a resolved indirection's target, parsed once
 	// for this span. `${!d}` with `d='a[$(f)]'` reads its target through a
 	// node built from that text, and building it again for each of the four
@@ -107,6 +112,34 @@ func (r *Runner) armSubscriptSubsts(s syntax.Span) subscriptRelease {
 	return subscriptRelease{r: r, prev: prev}
 }
 
+// armSubscriptWord arms the hold for a subscript word read outside any
+// expansion of one — the brackets on the left of an assignment, which no
+// `${…}` opened — and returns what gives the previous hold back. A word the
+// hold already speaks for is left alone, for the reason armSubscriptSubsts
+// gives: re-arming would empty it between two readers of one subscript.
+func (r *Runner) armSubscriptWord(w *syntax.Word) subscriptRelease {
+	if w == nil || r.armedForSubscript(w) {
+		return subscriptRelease{}
+	}
+	prev := r.subscriptSubsts
+	r.subscriptSubsts = subscriptSubstHold{armed: true, word: w}
+	return subscriptRelease{r: r, prev: prev}
+}
+
+// armAssignSubscript arms the hold for an assignment's subscript, under
+// both of the words it is read through when it opens with a flag group: the
+// operand behind the group, which names the place, and the whole, which the
+// refusals quote. Each was expanded on its own, so `a[(r)$(f)]=v` ran `f`
+// twice where zsh 5.9.2 runs it once — the double run #6605 found for a
+// table's key, one construct over.
+func (r *Runner) armAssignSubscript(a *syntax.Assign) subscriptRelease {
+	release := r.armSubscriptWord(a.Subscript())
+	if a.IndexFlags != nil && r.armedForSubscript(a.Subscript()) {
+		r.subscriptSubsts.whole = a.Index
+	}
+	return release
+}
+
 // subscriptRelease puts back the hold armSubscriptSubsts replaced. The zero
 // value replaced nothing and puts nothing back.
 type subscriptRelease struct {
@@ -127,7 +160,7 @@ func (r *Runner) armedForSubscript(w *syntax.Word) bool {
 	if w == nil || !r.subscriptSubsts.armed {
 		return false
 	}
-	if r.subscriptSubsts.word == w {
+	if r.subscriptSubsts.word == w || r.subscriptSubsts.whole == w {
 		return true
 	}
 	ref := r.subscriptSubsts.refNode

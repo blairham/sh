@@ -556,6 +556,15 @@ func (r *Runner) assocKeyIn(w *syntax.Word, inDoubleQuotes bool) string {
 	// wording goes. See readingQuotedText.
 	defer r.readingQuotedText()()
 	w = r.expandSubscriptTilde(w)
+	// Both readings below expand the word, and a key is one expansion
+	// however many readings compare it: `typeset -A m; m[$(f)]=v` runs `f`
+	// once in every column with tables. A read of `${m[$(f)]}` arrives with
+	// the hold already armed for these brackets by the expansion around it;
+	// a *write* has no expansion around it, so nothing had armed it, and the
+	// substitution ran once for each reading — measured 2026-10-15, `SUB
+	// SUB` where bash 5.3.20, zsh 5.9.2 and ksh93u+ write `SUB` once
+	// (#6605). See subscriptSubstHold.
+	defer r.armSubscriptWord(w).undo()
 	failedBefore := r.expansionHasFailed()
 	quoted := r.expandKeyQuoted(w)
 	if r.expansionFailedHere(failedBefore) {

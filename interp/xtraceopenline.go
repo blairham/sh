@@ -80,6 +80,13 @@ func (r *Runner) assignListIsWrittenAsItGoes(assigns []*syntax.Assign) bool {
 		if a.Members != nil {
 			return false
 		}
+		if elementWriteHasAValueToOrder(a) && r.sem().ElementSubscriptIsExpandedBeforeTheValue == Yes {
+			// And an element write whose value waits for its subscript,
+			// which this loop expands ahead of everything. Read rather than
+			// asked, for the same reason: no dialect writing its line as it
+			// goes expands the subscript first. See interp/elementorder.go.
+			return false
+		}
 	}
 	return r.ask(r.sem().TraceAssignmentListIsWrittenAsItGoes,
 		"an assignment list's trace line written a word at a time")

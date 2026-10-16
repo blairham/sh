@@ -5930,11 +5930,18 @@ type Semantics struct {
 	//	trap - QUIT; kill -QUIT $$; echo after
 	//
 	// prints after and exits 0 in bash 5.3 and BusyBox ash, and is killed by
-	// SIGQUIT in zsh 5.9.2. Asked only where QuitIgnoredWhenNotInteractive
-	// says yes and only after a reset, because it is the *ignore* that a
-	// reset can take away: a shell that dies of an untrapped QUIT anyway
-	// answers the same way whichever reading is taken, which is why dash,
-	// ksh93 and bash 3.2 leave it unanswered.
+	// SIGQUIT in zsh 5.9.2. Asked only where the shell is ignoring the
+	// signal and only after a reset, because it is the *ignore* that a reset
+	// can take away: a shell that dies of an untrapped QUIT anyway answers
+	// the same way whichever reading is taken.
+	//
+	// An interactive shell ignores TERM as well as QUIT, in every column,
+	// and the same reset splits the same way over both — measured
+	// 2026-10-16 under `-i -c`, `trap - TERM; kill -TERM $$; echo alive` and
+	// its QUIT twin write `alive` in bash 5.3, ksh93u+, dash and BusyBox ash
+	// and end zsh at 143 and 131 (#6718). That is where dash and ksh93,
+	// which have no ignore to take away without `-i`, answer it. See
+	// bornIgnoring for the rule both roads ask.
 	//
 	// The issue that filed this (#645) framed it as what happens after a
 	// handler is installed and removed again, and re-measuring says the

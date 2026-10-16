@@ -75,6 +75,11 @@ func (sh *Shell) session(argv []string, in source) int {
 	// answer different questions, and ksh93 is alone in turning the monitor
 	// on for `-i script.sh`.
 	r.Interactive = true
+	if !sh.KeepProcess {
+		// And the watch is told, as on the script routes. See
+		// watchWhatTheShellIgnores.
+		watchWhatTheShellIgnores(r)
+	}
 	// And the speed of the terminal it set up, which a dialect padding its
 	// terminal's delays reads. See interp.Runner.TerminalSpeed.
 	r.TerminalSpeed = tty.OutputSpeed(sh.stdinFile())

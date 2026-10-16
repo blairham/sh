@@ -552,6 +552,19 @@ func (r *Runner) trapSignal(name string, sig syscall.Signal, body *string) {
 	case body == nil:
 		signal.Reset(sig)
 		s.dropOwnIgnore(sig)
+		// And where the shell goes on ignoring the signal untrapped after
+		// the reset, the process goes on handling it: signal.Reset hands it
+		// back to the runtime's default, which ends the process, and the
+		// front end's own subscription went with it. A drain keeps the
+		// arrival harmless and still gives a child the default. Measured
+		// 2026-10-16: `trap - TERM`, then a TERM from another process, leaves
+		// an interactive bash, ksh93, dash and BusyBox ash running and ends
+		// zsh — see bornIgnoring (#6718). Read rather than asked, because
+		// the lock is held and the kill path asks the same axis anyway.
+		if bornIgnoring(name, r.Interactive, func() bool { return true },
+			func(a Answer, _ string) (bool, bool) { return a == Yes, a != Yes && a != No }, r.sem()) {
+			signal.Notify(dispositionSink, sig)
+		}
 	case *body == "":
 		signal.Ignore(sig)
 	default:

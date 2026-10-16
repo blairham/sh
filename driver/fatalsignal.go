@@ -78,6 +78,9 @@ var fatalWatch struct {
 	// held answers whether the current shell is holding an interrupt while
 	// a foreground program runs. See interp.Runner.InterruptHeld.
 	held atomic.Pointer[func() bool]
+	// ignores answers whether the current shell, with no trap for a signal,
+	// does nothing at all with it. See interp.Runner.IgnoresUntrapped.
+	ignores atomic.Pointer[func(syscall.Signal) bool]
 	// holdOnce subscribes the watch to SIGINT the first time a shell holds
 	// one, so a shell that never does keeps the runtime's default.
 	holdOnce sync.Once
@@ -99,6 +102,7 @@ func watchFatalSignals(r *interp.Runner) {
 	fatalWatch.traps.Store(&traps)
 	held := r.InterruptHeld()
 	fatalWatch.held.Store(&held)
+	watchWhatTheShellIgnores(r)
 	r.HoldInterrupts = holdInterrupts
 	fatalWatch.once.Do(func() {
 		// Buffered, because os/signal drops an arrival rather than blocking
@@ -119,6 +123,12 @@ func watchFatalSignals(r *interp.Runner) {
 					// channels are told; only one of them may act.
 					continue
 				}
+				if ignores := fatalWatch.ignores.Load(); ignores != nil && (*ignores)(sig) {
+					// Ignored by the shell itself, which is not the same as
+					// trapped: no handler runs, and nothing dies. See
+					// interp.Runner.IgnoresUntrapped.
+					continue
+				}
 				if held := fatalWatch.held.Load(); sig == syscall.SIGINT && held != nil && (*held)() {
 					// Held until the program the shell waits for is done,
 					// which decides whether the shell dies of it. See
@@ -132,6 +142,26 @@ func watchFatalSignals(r *interp.Runner) {
 			}
 		}()
 	})
+}
+
+// watchWhatTheShellIgnores tells the watch what the shell ignores untrapped,
+// and subscribes it to SIGTERM where an interactive shell ignores that too.
+//
+// Called again once the invocation has said whether the shell is
+// interactive, because the answer is taken as the shell stood — see
+// interp.Runner.IgnoresUntrapped. TERM is the runtime's to end the process
+// with until then, which is right for every shell that is not interactive;
+// an interactive one ignores it in every column of the panel, measured
+// 2026-10-16 with `sh -c 'kill -TERM $PPID'` at a pseudo-terminal (#6718).
+//
+// Not where the process was born ignoring TERM: subscribing would take that
+// ignore away from every child, and the shell ignores it anyway.
+func watchWhatTheShellIgnores(r *interp.Runner) {
+	ignores := r.IgnoresUntrapped()
+	fatalWatch.ignores.Store(&ignores)
+	if r.Interactive && fatalWatch.ch != nil && !signal.Ignored(syscall.SIGTERM) {
+		signal.Notify(fatalWatch.ch, syscall.SIGTERM)
+	}
 }
 
 // startIgnoringInterrupts starts a program of an asynchronous list with

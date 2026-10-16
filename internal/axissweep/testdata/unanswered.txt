@@ -651,7 +651,6 @@ dash  PrintfQuoteOfNoArgumentIsEmpty
 dash  PrintfRefusedOperandKeepsItsLeadingNumber
 dash  PrintfReportsAMissingHexDigit
 dash  ProducedParameterListing
-dash  QuitResetRestoresTheDefault
 dash  RangeOperandBackslash
 dash  ReadArrayDefault
 dash  ReadArrayTakesOneNameOnly
@@ -804,7 +803,6 @@ ksh   LongOptionNameIgnoresHyphens
 ksh   MixedTableLiteral
 ksh   NegatedTestRecordsThePostNegationStatus
 ksh   PrintfReportsAMissingHexDigit
-ksh   QuitResetRestoresTheDefault
 ksh   ReadDelimiterIsTheLocalesCharacter
 ksh   ReadEchoLettersWriteTheValues
 ksh   ReadonlyRecordsTheCompoundAttribute

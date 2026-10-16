@@ -1197,6 +1197,22 @@ func (r *Runner) sendSignal(pid int, name string, sig syscall.Signal) error {
 		// kernel and put nothing in its place, so the raise is not merely
 		// survivable — it does not happen. Reported as sent, because the
 		// builtin succeeded: what the signal then did is not `kill`'s answer.
+		//
+		// Except to a subshell in the one dialect that runs it in the
+		// shell's own process: the signal lands on the subshell, which
+		// ignores nothing, and ends it while the shell above carries on.
+		// Measured 2026-10-16, `ksh -i -c '(kill -TERM $$; echo inner); echo
+		// st=$?'` writes `st=271` and nothing else, and QUIT is `st=259`;
+		// the other columns write `inner` and `st=0` (#6718). See
+		// Semantics.SubshellRunsOnAfterSignalingTheShell.
+		if r.inSubshell && !r.ask(r.sem().SubshellRunsOnAfterSignalingTheShell,
+			"whether a subshell runs on after signaling the shell") {
+			r.status = 128 + int(sig)
+			if r.sem().SignalDeathStatusIsTwoFiftySix == Yes {
+				r.status = 256 + int(sig)
+			}
+			r.stopTheShell()
+		}
 		return nil
 	case !trapped && fatalSignal(name, sig):
 		// Nothing is sent here either, and for a sharper reason. A signal
@@ -1259,30 +1275,87 @@ func (r *Runner) sendSignal(pid int, name string, sig syscall.Signal) error {
 // they are killed by an untrapped QUIT with or without the reset, so both
 // readings run their scripts the same way and neither has to answer.
 func (r *Runner) untrappedSignalIgnored(name string) bool {
-	if name != "QUIT" {
+	return bornIgnoring(name, r.Interactive, func() bool { return r.defaultRestored(name) },
+		func(a Answer, what string) (bool, bool) {
+			yes := r.ask(a, what)
+			// Refused rather than answered. Saying "still ignored" here
+			// would swallow the refusal and run the next command, which is
+			// the one thing an unanswered axis must not do; saying "not
+			// ignored" hands the caller back to the path that reads
+			// r.unspecified and reports it.
+			return yes, r.unspecified
+		}, r.sem())
+}
+
+// bornIgnoring is the rule untrappedSignalIgnored and IgnoresUntrapped both
+// answer from, so that a signal the shell sends itself and one that arrives
+// from another process meet the same shell. It used to be the first road
+// alone, and the second was the Go runtime's: an interactive shell that
+// ignored `kill -QUIT $$` died of the same signal sent by `kill` from outside.
+//
+// Two signals, and both measured unanimous for an interactive shell —
+// 2026-10-16, `-i -c 'kill -TERM $$; echo alive'` on a pipe and the same and
+// `sh -c 'kill -TERM $PPID'` at a pseudo-terminal: bash 5.3, bash 3.2, ksh93u+,
+// dash, zsh 5.9.2 and BusyBox ash 1.37.0 all write `alive` and carry on, and
+// the same holds for QUIT (#6718). Without `-i` every one of them dies of an
+// untrapped TERM, and QUIT is the axis QuitIgnoredWhenNotInteractive.
+//
+// A child is not ignoring anything: `sh -c 'kill -TERM $$'` is 143 at the same
+// prompt in every column, which is why this is a handler that drops the
+// arrival and never a SIG_IGN a child would inherit.
+//
+// And `trap -` takes the ignore away in one column only — see
+// Semantics.QuitResetRestoresTheDefault, which answers it for TERM too: zsh's
+// reset is the default action for either signal, and the others keep what the
+// shell was born with.
+//
+// answer reads an axis and says whether the read was refused; restored says
+// whether `trap -` has named the signal.
+func bornIgnoring(name string, interactive bool, restored func() bool,
+	answer func(Answer, string) (yes, refused bool), sem *Semantics,
+) bool {
+	switch {
+	case name == "TERM" && interactive, name == "QUIT" && interactive:
+	case name == "QUIT":
+		yes, refused := answer(sem.QuitIgnoredWhenNotInteractive,
+			"whether an untrapped QUIT ends a shell that is not interactive")
+		if !yes || refused {
+			return false
+		}
+	default:
 		return false
 	}
-	if r.Interactive {
+	if !restored() {
 		return true
 	}
-	if !r.ask(r.sem().QuitIgnoredWhenNotInteractive,
-		"whether an untrapped QUIT ends a shell that is not interactive") {
-		return false
-	}
-	if !r.defaultRestored(name) {
-		return true
-	}
-	restores := r.ask(r.sem().QuitResetRestoresTheDefault,
+	restores, refused := answer(sem.QuitResetRestoresTheDefault,
 		"whether `trap -` on an ignored signal restores its default action")
-	if r.unspecified {
-		// Refused rather than answered. Saying "still ignored" here would
-		// swallow the refusal and run the next command, which is the one
-		// thing an unanswered axis must not do; saying "not ignored" hands
-		// the caller back to the path that reads r.unspecified and reports
-		// it, which is where the axis above already lands.
-		return false
+	return !restores && !refused
+}
+
+// IgnoresUntrapped hands a front end the same question for a signal that
+// arrives from another process: does this shell, with no trap for it, do
+// nothing at all? The shape is TrapsSignal's and for the same reason — it is
+// asked from a goroutine of the front end's own, so what it closes over is
+// what the shell was when it was taken and the shared signal state behind its
+// lock, never the Runner's fields. Take it again once Interactive is set.
+//
+// The axes are read and not asked here, because there is nobody on this
+// goroutine to refuse to: an unanswered one reads as no, which leaves the
+// signal to end the shell as it did before anything ignored it.
+func (r *Runner) IgnoresUntrapped() func(sig syscall.Signal) bool {
+	s, sem, interactive := r.sigs(), r.sem(), r.Interactive
+	return func(sig syscall.Signal) bool {
+		name, ok := signalName(sig)
+		if !ok {
+			return false
+		}
+		return bornIgnoring(name, interactive, func() bool {
+			s.mu.Lock()
+			defer s.mu.Unlock()
+			return s.defaultRestored[name]
+		}, func(a Answer, _ string) (bool, bool) { return a == Yes, a != Yes && a != No }, sem)
 	}
-	return !restores
 }
 
 // fatalSignal reports whether a signal with no handler ends the process.

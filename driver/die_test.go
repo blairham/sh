@@ -25,6 +25,9 @@ import (
 // test".
 const dyingScript = "SH_TEST_DYING_SCRIPT"
 
+// dyingInteractive runs the shell half under `-i` as well.
+const dyingInteractive = "SH_TEST_DYING_INTERACTIVE"
+
 // deathDeadline is how long a shell that has been asked to die is given
 // before this test gives up on it and says so.
 //
@@ -80,7 +83,11 @@ func dieRunningAsAShell() {
 	// handler. Which way they are answered does not matter to it.
 	sh.Semantics.TrapBodyRunsWhatParsed = interp.Yes
 	sh.Semantics.SignalHandlerSeesEarlierStatus = interp.Yes
-	os.Exit(driver.MainArgs(sh, []string{"testsh", "-c", src}))
+	args := []string{"testsh", "-c", src}
+	if os.Getenv(dyingInteractive) != "" {
+		args = []string{"testsh", "-i", "-c", src}
+	}
+	os.Exit(driver.MainArgs(sh, args))
 }
 
 // writeNoCore stops this process dumping core when a signal kills it, which is
@@ -317,6 +324,34 @@ func reachesTheFrontEnd(sig syscall.Signal) bool {
 	return true
 }
 
+// An interactive shell ignores a TERM or a QUIT that another process sends
+// it, and every shell in the panel agrees: measured 2026-10-16 with
+// `sh -c 'kill -TERM $PPID'` at a pseudo-terminal and under `-i -c`, bash 5.3,
+// bash 3.2, ksh93u+, dash, zsh 5.9.2 and BusyBox ash 1.37.0 all carry on, and
+// the same with QUIT. This shell ended at the TERM — the runtime's default,
+// which the front end never asked to change — and died of the QUIT through
+// the watch, which asked only whether it was trapped (#6718).
+//
+// The line after the sleeps is what says the shell carried on rather than
+// merely failing to die in time, and the sleeps are children that must not
+// have inherited an ignore — which the corpus answers, not this.
+func TestAnInteractiveShellIgnoresATermOrAQuitFromOutside(t *testing.T) {
+	dieRunningAsAShell()
+	for _, sig := range []syscall.Signal{syscall.SIGTERM, syscall.SIGQUIT} {
+		t.Run(sig.String(), func(t *testing.T) {
+			ws, out := shellSignaledFromOutside(t,
+				"TestAnInteractiveShellIgnoresATermOrAQuitFromOutside", "",
+				"sleep 1; echo survived", sig, dyingInteractive+"=1")
+			if ws.Signaled() {
+				t.Fatalf("killed by %v, want an interactive shell to ignore it: %q", ws.Signal(), out)
+			}
+			if !strings.Contains(out, "survived") {
+				t.Errorf("wrote %q, want the line after the signal", out)
+			}
+		})
+	}
+}
+
 // A signal the script has trapped is still the script's.
 //
 // os/signal hands an arrival to every channel registered for it, so a shell
@@ -406,11 +441,12 @@ const (
 //
 // The wait is measured from the signal rather than from the start, because
 // what is being timed is the death and not the second copy of a test binary.
-func shellSignaledFromOutside(t *testing.T, name, setup, hold string, sig syscall.Signal) (syscall.WaitStatus, string) {
+func shellSignaledFromOutside(t *testing.T, name, setup, hold string, sig syscall.Signal, env ...string) (syscall.WaitStatus, string) {
 	t.Helper()
 	ready := filepath.Join(t.TempDir(), "ready")
 	cmd := exec.Command(os.Args[0], "-test.run="+name)
 	cmd.Env = append(os.Environ(), dyingScript+"="+setup+"printf r >"+ready+"; "+hold)
+	cmd.Env = append(cmd.Env, env...)
 	// A file rather than a buffer, and this is the difference between timing
 	// a death and timing a sleep. os/exec copies a non-file stream on a
 	// goroutine and Wait does not return until that copy ends — and the copy

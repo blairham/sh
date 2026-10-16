@@ -2865,11 +2865,13 @@ func Semantics() interp.Semantics {
 	// one that registers builtins from a library, and is not the one this
 	// axis is asked in (#3217).
 	//
-	// unanswered QuitResetRestoresTheDefault: that axis is what a reset does
-	// to the *ignore* above, and this shell has no ignore to take away — an
-	// untrapped QUIT kills it whether or not `trap - QUIT` has been run, so
-	// both readings run every script identically and there is nothing to
-	// measure a preference from.
+	// And a reset keeps the ignore an *interactive* shell was born with,
+	// which is where this shell has one to take away: measured 2026-10-16,
+	// `-i -c 'trap - QUIT; kill -QUIT $$; echo alive'` and the same for
+	// TERM write `alive` and end at 0 (#6718). Not interactive, an
+	// untrapped QUIT kills it with or without the reset, so that route asks
+	// nothing.
+	s.QuitResetRestoresTheDefault = interp.No
 	s.HangupIsAnOrderlyExit = interp.No
 	s.ExitInTrapReportsEarlierStatus = interp.Yes
 	// A `return` in an EXIT trap's body names the status the shell leaves

@@ -3174,6 +3174,11 @@ func (sh *Shell) runInput(in source) int {
 	// whether anyone is watching. `$-` reports it as `i`, which is measured
 	// unanimous for `-i` on every route.
 	r.Interactive = in.interactive
+	if !sh.KeepProcess {
+		// And the watch is told, because what an interactive shell ignores
+		// is more than what any other does. See watchWhatTheShellIgnores.
+		watchWhatTheShellIgnores(r)
+	}
 	// And the other invocation fact `$-` reports, by either of the two
 	// routes there are — a dashed argv[0] or an explicit `-l`. Handed over
 	// for the same reason: interp never saw an argument vector, and no

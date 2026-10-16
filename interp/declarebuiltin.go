@@ -39,6 +39,15 @@ type declareFlags struct {
 	// plain, so the two cannot be one field.
 	base      int
 	baseNamed bool
+	// refusedBase is a base the dialect will not spell, as it was written,
+	// held back rather than refused where it was read. Whether it is refused
+	// at all is decided by the operands: measured 2026-10-16 on zsh 5.9.2,
+	// `typeset -i 0` and `typeset -i99` with no name are the integer listing
+	// at 0, `typeset -i0 x y` is `invalid base` once per name at 1 with
+	// neither declared, and a later number or letter that takes the base
+	// away first — `typeset -i0 -i16 x`, `typeset -i0 -F 3 x` — declares at
+	// 0 with no complaint (#6810). See Runner.refuseAHeldBase.
+	refusedBase string
 	// float is `-F` where that letter is a float's precision rather than
 	// bash's function listing, and precision is the number written after it
 	// — `typeset -F 3 x` — with precisionNamed saying one was written at
@@ -1000,6 +1009,13 @@ func (r *Runner) parseDeclareFlags(name string, args []string, known string) (re
 	r.aLetterUnderBothSigns(&f)
 	r.rankTheNumericLetters(&f)
 	rest = args[i:]
+	if code := r.refuseAHeldBase(name, f, rest); code != 0 {
+		return nil, f, code
+	}
+	if f.refusedBase != "" {
+		// A listing, so the base it named is nobody's.
+		f.base, f.baseNamed, f.refusedBase = 0, false, ""
+	}
 	if code := r.refuseTheReferenceLetterInCompany(name, f); code != 0 {
 		return nil, f, code
 	}
@@ -1188,7 +1204,7 @@ func (r *Runner) rankTheNumericLetters(f *declareFlags) {
 		if f.baseNamed && !f.precisionNamed {
 			f.precision, f.precisionNamed = f.base, true
 		}
-		f.base, f.baseNamed = 0, false
+		f.base, f.baseNamed, f.refusedBase = 0, false, ""
 	}
 }
 
@@ -4759,7 +4775,7 @@ func (r *Runner) declarationListing(f declareFlags) (int, bool) {
 // answers and falls through to the branch that does.
 func withoutListingLetters(f declareFlags) declareFlags {
 	f.integer, f.integerOff, f.base, f.baseNamed = false, false, 0, false
-	f.float, f.precision, f.precisionNamed = false, 0, false
+	f.float, f.floatExponent, f.precision, f.precisionNamed = false, false, 0, false
 	f.widthLetter, f.widthZeroFill, f.widthConflicted = 0, false, false
 	f.width, f.widthNamed = 0, false
 	f.justificationWidth, f.justificationNamed = 0, false

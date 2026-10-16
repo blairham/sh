@@ -346,7 +346,14 @@ func (r *Runner) attributeFilter(f declareFlags) (func(declaration) bool, bool) 
 	add(f.array, func(d declaration) bool { return d.isArr }, &kinds)
 	add(f.assoc, func(d declaration) bool { return d.isAssoc }, &kinds)
 	add(f.integer, func(d declaration) bool { return d.integer }, &attrs)
-	add(f.float, func(d declaration) bool { return d.float }, &attrs)
+	// The two float letters select apart, each the names its own letter
+	// gave: measured 2026-10-16 on zsh 5.9.2 over `typeset -F a=1; typeset
+	// -E b=2`, `typeset -F` and `typeset +F` write `a` alone, `typeset -E`,
+	// `typeset -E 3`, `typeset +E` and `typeset -pE` write `b` alone. Here
+	// `-F` wrote both and every `E` form wrote nothing, or the whole table
+	// under `local` (#6810).
+	add(f.float && !f.floatExponent, func(d declaration) bool { return d.float && !d.floatExponent }, &attrs)
+	add(f.float && f.floatExponent, func(d declaration) bool { return d.float && d.floatExponent }, &attrs)
 	add(f.readonly, func(d declaration) bool { return d.readonly }, &attrs)
 	add(f.export, func(d declaration) bool { return d.exported }, &attrs)
 	add(f.lower, func(d declaration) bool { return d.lower }, &attrs)

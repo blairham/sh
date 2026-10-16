@@ -565,6 +565,15 @@ func (r *Runner) readIntegerBase(builtin string, f *declareFlags, written string
 		// so this is belt and braces rather than the check that does the work.
 		return true
 	}
+	f.refusedBase = ""
+	if !r.validIntegerBase(n) && r.diag().IntegerBadBase != "" {
+		// Refused, but not yet: the operands decide whether this is a
+		// declaration that complains or a listing that does not. See
+		// declareFlags.refusedBase and refuseAHeldBase.
+		f.refusedBase = written
+		f.base, f.baseNamed = n, true
+		return true
+	}
 	if !r.integerBaseAccepted(builtin, n, written) {
 		return false
 	}
@@ -574,6 +583,24 @@ func (r *Runner) readIntegerBase(builtin string, f *declareFlags, written string
 	// setting it again covered for the truncation being wrong.
 	f.base, f.baseNamed = n, true
 	return true
+}
+
+// refuseAHeldBase is the complaint about a base the dialect will not spell,
+// made once the option words are all read and the operands are known.
+//
+// With no operand the line is a listing and the base selects nothing a name
+// carries, so it is dropped in silence. With operands the reference refuses
+// once per operand and declares none of them, at 1 — `typeset -i0 x y`
+// writes the sentence twice. The status is the line's; the caller ends the
+// declaration there.
+func (r *Runner) refuseAHeldBase(builtin string, f declareFlags, operands []string) int {
+	if f.refusedBase == "" || !f.integer || len(operands) == 0 {
+		return 0
+	}
+	for range operands {
+		r.integerBaseAccepted(builtin, f.base, f.refusedBase)
+	}
+	return 1
 }
 
 // integerRenderedText is integerRendered over the decimal text integerValue

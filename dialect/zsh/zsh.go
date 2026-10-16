@@ -5230,11 +5230,11 @@ func Semantics() interp.Semantics {
 	// `_zsh_highlight_bind_widgets` opens with one, which is where a real
 	// startup lost syntax highlighting (#1594).
 	//
-	// `E`, `L`, `R` and `t` stay out, and that is the honest half: zsh takes
-	// them and this shell has not built them, `typeset -E` being `-E is not
-	// implemented yet` in the same run. Claiming them here would move the
-	// refusal from the letter to nowhere at all.
-	s.LocalOptions = "aAFHhiLlPpRrtuUTxZ"
+	// `E` came in once `typeset -E` was built: measured 2026-10-16, `f(){
+	// local -E x=1.5; typeset -p x; }; f` is `typeset -E x=1.500000000e+00`
+	// on zsh 5.9.2, where this refused the letter as a bad option long after
+	// `typeset` took it.
+	s.LocalOptions = "aAEFHhiLlPpRrtuUTxZ"
 	// `private`'s set is neither that one nor DeclareOptions, which is why it
 	// is a field of its own. Measured a letter at a time against `private -X
 	// v` inside a function on zsh 5.9.2, 2026-09-27: it takes `aAEFHhiLlmpRr

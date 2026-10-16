@@ -300,13 +300,20 @@ func (r *Runner) transferEndsTheShell(ctl control, abandon abandonKind) bool {
 			return true
 		}
 		switch abandon {
-		case abandonError:
+		case abandonError, abandonUsage:
 			// An error the shell reported and gave up over is what zsh calls
 			// an *error condition*, and the whole point of the construct is
 			// to clean up after one: the always half runs and the error is
 			// re-raised behind it. Measured — `f(){ { readonly q=1; q=2; }
 			// always { echo A; }; echo after-f; }; f` prints the complaint
 			// and A, skips after-f, and leaves 1.
+			//
+			// A builtin's complaint about how it was called is one too, and
+			// is answered the same way at the top level as well as in a
+			// function: measured 2026-10-16 on zsh 5.9.2, `{ true; set -o
+			// nosuch } always { echo in=$? }; echo after` writes the
+			// complaint and `in=1` and ends at 1, and `set -Z` the same,
+			// where this ran neither (#6668).
 			return false
 		case abandonParamError:
 			// `${x?word}` is documented as exiting the shell, which is the
@@ -369,7 +376,11 @@ func (r *Runner) paramErrorAsAnErrorCondition() bool {
 // runs, and a second reading of "what counts as an error condition" is exactly
 // the divergence this file cannot afford.
 func (r *Runner) errorConditionIn(ctl control, abandon abandonKind) bool {
-	return ctl == controlAbandon || (ctl == controlExit && abandon == abandonError)
+	// A usage refusal counts as the error it is, in both halves: in the
+	// always half it is discarded like any other — `{ true } always { set
+	// -o nosuch; echo in }; echo after $?` writes the complaint and `after
+	// 0` on zsh 5.9.2, as `readonly q=1; q=2` there does (#6668).
+	return ctl == controlAbandon || (ctl == controlExit && (abandon == abandonError || abandon == abandonUsage))
 }
 
 // reportedError is the transfer the construct ends with once the always half

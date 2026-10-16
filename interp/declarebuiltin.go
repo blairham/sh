@@ -5451,6 +5451,12 @@ func (r *Runner) integerNumber(text string) (int, bool) {
 	if r.unspecified {
 		return 0, false
 	}
+	// The blanks are kept on the text itself, because a failure quotes it
+	// back with them: measured 2026-10-16, `typeset -i n; n=' 1+ '` is
+	// `1+ : arithmetic syntax error … (error token is "+ ")` on bash 5.3.20
+	// and ` 1+ : more tokens expected` on ksh93u+, and a line `mapfile`
+	// stores with its newline is quoted with the newline (#6709).
+	written := text
 	text = strings.TrimSpace(text)
 	if text == "" {
 		return 0, true
@@ -5462,6 +5468,7 @@ func (r *Runner) integerNumber(text string) (int, bool) {
 		// real start's allocation (#5873).
 		return n, true
 	}
+	text = written
 	p := syntax.NewParser("", r.dialect())
 	e := p.ParseArithFor(text, syntax.Pos{})
 	if err := p.Err(); err != nil {
@@ -5474,10 +5481,8 @@ func (r *Runner) integerNumber(text string) (int, bool) {
 		// value is quoted back the way the dialect quotes an expression:
 		// `typeset -i b; b=0x` is `0x: arithmetic syntax error` in ksh93,
 		// where the raw error said `arithmetic syntax error` with nothing
-		// named at all. The blamed text is the assignment's own value, which
-		// carries no surrounding blanks — `$(( 0x ))` in the same shell is
-		// `` 0x `` with them, from the same wording and a different text
-		// (#2420).
+		// named at all. The blamed text is the assignment's own value, blanks
+		// and all, as it was written (#2420, #6709).
 		if r.arithNounsetNamedTheParameter {
 			// Already fatal and already carrying the status that route gives
 			// a `set -u` refusal — 127 from a `-c` string in bash, which

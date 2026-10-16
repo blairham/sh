@@ -2689,16 +2689,21 @@ func (r *Runner) arithValueAsExpression(value string) (arithNum, error) {
 			// parse, which is the failure a written one earns, worded the
 			// same way and blaming the value rather than the name it came
 			// out of: `v="3 4"; $(( v ))` names `3 4`.
-			return intNum(0), arithError{msg: r.expressionFailure(text, err), complete: true}
+			//
+			// With the value's own blanks, as the shells quote it: measured
+			// 2026-10-16, `x=' 1+ '; echo $((x))` names ` 1+ ` on ksh93u+
+			// and `x=$'1+\n'` names the value with its newline on bash
+			// 5.3.20 (#6709).
+			return intNum(0), arithError{msg: r.expressionFailure(value, err), complete: true}
 		}
 		// Nowhere for it to be an expression, so it is simply not a number.
 		// No ask: every dialect refuses this text and only the sentence
 		// differs, so a question here would be one asked where the panel
 		// agrees.
-		return intNum(0), arithError{msg: r.wordInvalidNumber(text), token: text, badNumeral: true, complete: true}
+		return intNum(0), arithError{msg: r.wordInvalidNumber(value), token: text, badNumeral: true, complete: true}
 	}
 	if !r.ask(r.sem().ArithNameValueRecurses, "re-reading a stored value as an expression") {
-		return intNum(0), arithError{msg: r.wordInvalidNumber(text), token: text, badNumeral: true, complete: true}
+		return intNum(0), arithError{msg: r.wordInvalidNumber(value), token: text, badNumeral: true, complete: true}
 	}
 	r.arithValueDepth++
 	defer func() { r.arithValueDepth-- }()
@@ -2709,7 +2714,7 @@ func (r *Runner) arithValueAsExpression(value string) (arithNum, error) {
 		// `v: division by 0`, measured on bash 5.3.15 and ksh93u+ alike.
 		// Already-complete failures are handed back as they stand, which is
 		// what arithFailure does with them.
-		return intNum(0), arithError{msg: r.arithFailure(text, err), complete: true}
+		return intNum(0), arithError{msg: r.arithFailure(value, err), complete: true}
 	}
 	return n, nil
 }

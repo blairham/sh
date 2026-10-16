@@ -1770,8 +1770,12 @@ func (l *Lexer) tryIONumber() (Token, bool) {
 // says so it may be a subscripted one — `{a[1]}>&-` names an element — and
 // the comma rule survives that, because a subscript ends at its own `]` and
 // what follows has to be the closing brace.
+//
+// Never where a bare `{` is the reserved word by itself: there the brace
+// opens a group before anything asks whether it names a descriptor, so
+// `{v}<f` is `{ v } <f` (#6616). See [Dialect.OpenBraceNeedsNoBlank].
 func (l *Lexer) tryFdVariable() (Token, bool) {
-	if !l.dialect.FdVariableRedirections || l.peek() != '{' {
+	if !l.dialect.FdVariableRedirections || l.peek() != '{' || l.openBraceIsAWordOfItsOwn() {
 		return Token{}, false
 	}
 	n := 1

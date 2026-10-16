@@ -411,6 +411,17 @@ the lexer still has it.
 Grammar flag: `FdVariableRedirections` — core: on; `posix` and `dash`:
 off.
 
+**Where a command begins, zsh reads the brace first.** A bare `{` there is
+the reserved word in zsh whether or not a blank follows it
+(`OpenBraceNeedsNoBlank`), and that reading wins: `{v}<f` is the group
+`{ v }` with its input from `f`, and zsh says `command not found: v`
+rather than picking a descriptor. The same holds after `|`, `!`, `then`,
+`do`, a leading redirection and a short loop's header, so `for i {v}<x`
+is a loop with a brace body and a redirection on the loop — opened once,
+refused once when `x` is missing, whatever the positional parameters hold.
+`exec {v}<f` and `true {v}<f` are an argument's place and pick the
+descriptor as before. Measured 2026-10-15 on zsh 5.9.2 (#6616).
+
 ### The name in those braces may be an element
 
 `exec {a[1]}>&-` closes the descriptor that element holds, and that is

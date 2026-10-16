@@ -7004,6 +7004,27 @@ type Dialect struct {
 	// The closing half is [Dialect.CloseBraceAlwaysReserved], which the same
 	// shell has and which the one-line spelling needs as well — `{print A}`
 	// is three tokens and this flag reads only the first of them.
+	//
+	// **The reserved word wins over a descriptor's name.** Where this brace
+	// opens a group, `{v}<f` is the group `{ v }` with its input from f, and
+	// never the `{name}` redirection [Dialect.FdVariableRedirections] reads
+	// in an argument's place. Measured 2026-10-15 on zsh 5.9.2 `-fc`, a
+	// script file and standard input, with f a file and x none (#6616):
+	//
+	//	{v}<f; print v=$v                command not found: v, then v=
+	//	true | {v}<f / ! {v}<f           command not found: v
+	//	>/dev/null {v}<f                 command not found: v
+	//	{v}>&-                           command not found: v, status 127
+	//	set -- a b; for i {v}<f; …       command not found: v, twice
+	//	set -- a b; for i {v}<x; …       no such file or directory: x, once,
+	//	                                 and the loop never runs
+	//	x=1 {v}<f / {v}<f {w}<f          parse error near `{'
+	//	{v}<f :                          parse error near `:'
+	//	exec {v}<f / true {v}<f          v=11 — an argument's place
+	//
+	// So the `for` row is a loop with a brace body and a redirection on the
+	// loop, which is why the file is opened once whatever the parameters
+	// hold.
 	OpenBraceNeedsNoBlank bool
 
 	// EmptyCompoundBody lets a compound command stand with nothing in it:

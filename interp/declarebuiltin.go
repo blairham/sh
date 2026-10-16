@@ -639,7 +639,7 @@ func (r *Runner) parseDeclareFlags(name string, args []string, known string) (re
 			break
 		}
 		if len(a) < 2 || (a[0] != '-' && a[0] != '+') {
-			if pending != 0 && isAllDigits(a) {
+			if pending != 0 && isAllDigits(a) && !r.literalOperands[a] {
 				// The detached spelling: the word after the letter is its
 				// number and not the first name. Consumed here, which is
 				// also what keeps it away from the operand name check — a

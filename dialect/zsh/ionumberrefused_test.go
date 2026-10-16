@@ -11,9 +11,10 @@ import (
 )
 
 // A refused IO number is named by the operator behind it: always for digits,
-// and for a `{name}` in a `case` subject or pattern or among a loop's items,
-// where in a loop's name position the `{name}` is named by its text (#6552).
-// Measured 2026-10-15 on zsh 5.9.2 at /opt/homebrew/bin/zsh with
+// and for a `{name}` in a `case` subject or pattern, among a loop's items or
+// among an array literal's elements, where in a loop's name position the
+// `{name}` is named by its text (#6552, #6790). Measured 2026-10-15 and
+// 2026-10-16 on zsh 5.9.2 at /opt/homebrew/bin/zsh with
 // `-fc '<program>'`; the table is on
 // interp.Diagnostics.SyntaxUnexpectedIONumberIsItsOperator.
 func TestARefusedIONumberIsNamedByItsOperator(t *testing.T) {
@@ -36,6 +37,11 @@ func TestARefusedIONumberIsNamedByItsOperator(t *testing.T) {
 		{"for i in a {v}>>x; do :; done\n", ">>"},
 		{"select i in a {v}<x; do :; done\n", "<"},
 		{"for i ({v}<x) :\n", "<"},
+		{"a=({v}>/dev/null)\n", ">"},
+		{"a=(x {v}>/dev/null)\n", ">"},
+		{"a=(x {v}>>/dev/null y)\n", ">>"},
+		{"typeset a=({v}>/dev/null)\n", ">"},
+		{"a+=({v}</dev/null)\n", "<"},
 		// In a loop's name position the `{name}` is named itself.
 		{"for {v}</dev/null\n", "{v}"},
 		{"for {ab}>>x\n", "{ab}"},

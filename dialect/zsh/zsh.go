@@ -6581,8 +6581,8 @@ func Diagnostics() interp.Diagnostics {
 		// A refused IO number is named by the operator behind it, except a
 		// `{name}` outside a `case` word, which is named by its text. See
 		// interp.Diagnostics.SyntaxUnexpectedIONumberIsItsOperator (#6552).
-		SyntaxUnexpectedIONumberIsItsOperator:               true,
-		SyntaxUnexpectedFdVariableInAnItemListIsItsOperator: true,
+		SyntaxUnexpectedIONumberIsItsOperator:              true,
+		SyntaxUnexpectedFdVariableInAWordListIsItsOperator: true,
 		// The operator that backgrounds a command and lets go of it is
 		// written two ways here and named by one of them — `&!` in a
 		// refusal comes back `&|`. It is the only pair this shell folds;

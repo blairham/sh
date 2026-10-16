@@ -550,10 +550,11 @@ type Error struct {
 	// its subject, or an arm's pattern. The two dialects that name an
 	// operator in place of a `{name}` do it there and only there.
 	InCaseWord bool
-	// InItemList says the refused token stood among the words of a `for`'s
-	// or a `select`'s item list, where it is what ended the list. One of
-	// those two dialects names the operator there too.
-	InItemList bool
+	// InWordList says the refused token stood among the words of a `for`'s
+	// or a `select`'s item list, or among the elements of an array literal,
+	// where it is what ended the list. One of those two dialects names the
+	// operator there too.
+	InWordList bool
 	// FdVariableReadText is, where the unexpected token was a `{name}` in
 	// front of a redirection operator, the text one dialect quotes in its
 	// place: the token and the first byte of the operator, with the byte in

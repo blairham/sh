@@ -6641,10 +6641,11 @@ type Diagnostics struct {
 	// SyntaxUnexpectedFdVariableReadText.
 	SyntaxUnexpectedIONumberIsItsOperator bool
 
-	// SyntaxUnexpectedFdVariableInAnItemListIsItsOperator widens the rule
-	// above, for a `{name}`, from a `case` word to the item list of a `for`
-	// or a `select` too. zsh 5.9.2 does that and ksh93u+ does not, measured
-	// 2026-10-15 under `-c` (#6552):
+	// SyntaxUnexpectedFdVariableInAWordListIsItsOperator widens the rule
+	// above, for a `{name}`, from a `case` word to the other lists of words:
+	// the item list of a `for` or a `select`, and the elements of an array
+	// literal. zsh 5.9.2 does that and ksh93u+ does not, measured 2026-10-15
+	// and 2026-10-16 under `-c` and from a script file (#6552, #6790):
 	//
 	//	                                  zsh 5.9.2   ksh93u+
 	//	for i in a {v}<x; do :; done      `<'         `\004'
@@ -6652,7 +6653,9 @@ type Diagnostics struct {
 	//	for i in a {v}>>x; do :; done     `>>'        `\004'
 	//	select i in a {v}<x; do :; done   `<'         `\004'
 	//	for i ({v}<x) :                   `<'         (no such form)
-	SyntaxUnexpectedFdVariableInAnItemListIsItsOperator bool
+	//	a=({v}>/dev/null)                 `>'         `\004'
+	//	a=(x {v}>/dev/null)               `>'         `\004'
+	SyntaxUnexpectedFdVariableInAWordListIsItsOperator bool
 
 	// SyntaxUnexpectedFdVariableReadText is the sentence a refused `{name}`
 	// in front of a redirection operator is written in, quoting
@@ -11250,7 +11253,7 @@ func (d Diagnostics) unexpectedToken(se *syntax.Error) string {
 	switch {
 	case d.SyntaxUnexpectedIONumberIsItsOperator && se.IONumberOperator != "" &&
 		(!se.FdVariable || se.InCaseWord ||
-			(se.InItemList && d.SyntaxUnexpectedFdVariableInAnItemListIsItsOperator)):
+			(se.InWordList && d.SyntaxUnexpectedFdVariableInAWordListIsItsOperator)):
 		token = se.IONumberOperator
 	case se.FdVariable && d.SyntaxUnexpectedFdVariable != "":
 		token = d.SyntaxUnexpectedFdVariable

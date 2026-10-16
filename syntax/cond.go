@@ -748,7 +748,7 @@ func (p *Parser) blameCondition(start Pos) {
 		// it stood where a binary operator could have. See condPrimary.
 		se.CondTermUndecided = true
 	}
-	if se.Kind == ErrUnterminated {
+	if se.Kind == ErrUnterminated && (se.Innermost != "<<" || se.Pos != p.lex.heredocRanOutAt) {
 		// A `[[` that never closed is unclosed *by the condition*, and two
 		// dialects name it: one as the construct and one as the innermost
 		// keyword still open. `[[` is not a word the list parser stacks, so
@@ -763,6 +763,10 @@ func (p *Parser) blameCondition(start Pos) {
 		// else had was written first, and a mutant that deleted it passed
 		// every test — which is how the three nested shapes came to be
 		// measured at all.
+		//
+		// Except over a here-document a substitution in the condition left
+		// open, which is more innermost still. See
+		// Parser.heredocOutranksItsSubstitution.
 		se.Innermost = "[["
 	}
 }

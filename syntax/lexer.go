@@ -962,6 +962,24 @@ func (l *Lexer) atAnEndOfInput() (n int, ok bool) {
 	return 0, false
 }
 
+// adoptHeredocRanOut takes the place a substitution's body read recorded for
+// a here-document that ran to the end of the input as this lexer's own. sub
+// read this lexer's text from offset from. A body that ran out took the rest
+// of the input with it, so there is never a second one to choose between.
+//
+// The body is read by a lexer of its own, so without this the outer parse
+// never hears that a document took the rest of the input and names the
+// substitution instead. See
+// [Dialect.UnterminatedHeredocOutranksItsConstruct] and #6706.
+func (l *Lexer) adoptHeredocRanOut(sub *Lexer, from int) {
+	if !sub.heredocRanOutAt.IsValid() {
+		return
+	}
+	at := sub.heredocRanOutAt
+	at.Offset += int32(from)
+	l.heredocRanOutAt = at
+}
+
 // lendEnds gives a lexer reading this one's text from offset from the ends of
 // input this one was given. See endsOfInput.
 func (l *Lexer) lendEnds(sub *Lexer, from int) {
@@ -5659,6 +5677,7 @@ func (l *Lexer) parseToClose(from int) (int, []Remark, bool, bool) {
 	l.bodyPending, l.bodyPendingQuoted = sub.lex.pending, sub.lex.pendingQuoted
 	l.noteHeredocOutside(sub)
 	if sub.err != nil || !sub.at(TokRightParen) {
+		l.adoptHeredocRanOut(sub.lex, from)
 		// Kept for the one caller that goes on to run out of input itself,
 		// which is where it becomes true of this lexer too. See innerOpen.
 		l.lastInner = ""
@@ -6002,6 +6021,7 @@ func (l *Lexer) funsubBodyRefusal(open Pos, body int) *Error {
 	sub := NewParserAt(l.src[body:], *l.dialect, line)
 	sub.InsideASubstitution()
 	sub.parseList()
+	l.adoptHeredocRanOut(sub.lex, body)
 	if sub.err == nil && !sub.at(TokEOF) {
 		sub.failUnexpected("")
 	}

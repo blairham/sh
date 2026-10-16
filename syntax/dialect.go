@@ -3397,6 +3397,13 @@ type Dialect struct {
 	// where the operator's line has no newline and the body never began. A
 	// quote left open is still the quote. At the top level an unfinished
 	// body is not an error anywhere in the panel (#6599).
+	//
+	// A document inside a substitution is named the same way where the
+	// substitution sits in an open construct, `[[` included: `if true; then`,
+	// `x=$(cat <<EOF`, `abc` names the `<<` at line 2, as do the same lines
+	// in `${ … }`, `<( )` or a quoted `"$( )"`. With nothing open around it,
+	// or only a list after `&&` or `|`, the substitution's `(` is what is
+	// named there, as before (#6706).
 	UnterminatedHeredocOutranksItsConstruct bool
 
 	// HeredocLastLineIsADelimiterPrefix reads the last line of the text

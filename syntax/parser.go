@@ -693,6 +693,7 @@ func (p *Parser) next() {
 	p.tokTail = ""
 	if p.err == nil && p.lex.Err() != nil {
 		p.err = p.lex.Err()
+		p.heredocOutranksItsSubstitution()
 	}
 	// And a refusal the lexer is holding for this parser: the body of a
 	// substitution gave up its line with the input already spent, which is
@@ -1232,6 +1233,43 @@ func (p *Parser) noteRedirectionOnly(c *SimpleCmd) {
 		return
 	}
 	p.redirectionOnlyStood = p.tok.Text
+}
+
+// heredocOutranksItsSubstitution names a here-document whose body ran to the
+// end of the input inside a substitution, where the substitution is itself
+// inside an open compound command, in the dialect that names the document
+// over what it is in.
+//
+// The substitution's own refusal — `(` unmatched — is what is left where no
+// construct is open, and that is what the dialect says there: measured
+// 2026-10-15 on ksh93u+ 2012-08-01, `x=$(cat <<EOF`, `abc` names the `(` at
+// line 1, and the same two lines inside `if true; then` name the `<<` at the
+// document's line. A list waiting after `&&`
+// or `|` is not a construct here, and the document is not named there. See
+// [Dialect.UnterminatedHeredocOutranksItsConstruct] and #6706.
+//
+// A `[[` counts as well, and it is not on the stack: `[[ $(cat <<EOF`, `abc`
+// names the `<<` there too. See blameCondition, which leaves the
+// document named.
+func (p *Parser) heredocOutranksItsSubstitution() {
+	se, ok := p.err.(*Error)
+	if !ok || se.Kind != ErrUnmatched || !p.dialect.UnterminatedHeredocOutranksItsConstruct ||
+		!p.lex.heredocRanOutAt.IsValid() {
+		return
+	}
+	if p.condStart.IsValid() {
+		e := p.unterminated("")
+		e.Construct, e.ConstructLine = "[[", int(p.condStart.Line)
+		e.Innermost, e.Pos = "<<", p.lex.heredocRanOutAt
+		p.err = e
+		return
+	}
+	for _, o := range p.open {
+		if o.construct {
+			p.err = p.unterminated("")
+			return
+		}
+	}
 }
 
 // unterminated describes the state the parser gave up in.

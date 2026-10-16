@@ -1000,6 +1000,11 @@ func (r *Runner) assignAssocElems(name string, parsed []literalElem, appendTo, r
 	var pairs, pairWords []string
 	for _, e := range parsed {
 		if e.subscripted {
+			if r.tableLiteralRefusesAWholeArrayKey(e) {
+				// The elements in front of it are stored and the rest are
+				// not. See Semantics.WholeArraySubscriptKeyInATableLiteral.
+				return
+			}
 			if e.sub == "" && !r.tableLiteralKeyIsThere(name, e.writtenText(), true) {
 				// An empty key written with a head, in the reading that refuses
 				// one. It costs the rest of the literal and leaves what is
@@ -1017,6 +1022,7 @@ func (r *Runner) assignAssocElems(name string, parsed []literalElem, appendTo, r
 					return
 				}
 				r.storeAssocElement(name, e.sub, value)
+				r.traceStoredElementLine(parsed)
 				continue
 			}
 			if e.nested != nil {
@@ -1024,6 +1030,7 @@ func (r *Runner) assignAssocElems(name string, parsed []literalElem, appendTo, r
 				// `a=( [0]=(1 2) )` — which the whole-element write stores
 				// rather than the string one. See storeAssocElement.
 				r.storeAssocElement(name, e.sub, *e.nested)
+				r.traceStoredElementLine(parsed)
 				continue
 			}
 			value := e.value
@@ -1035,6 +1042,9 @@ func (r *Runner) assignAssocElems(name string, parsed []literalElem, appendTo, r
 				value = v
 			}
 			r.setAssocElem(name, e.sub, value)
+			// Its trace line, now that it is stored, in the column that
+			// writes one per element. See interp/xtraceelementlines.go.
+			r.traceStoredElementLine(parsed)
 			continue
 		}
 		if refuseBare {
@@ -1735,4 +1745,31 @@ func (r *Runner) warnEmptyTableKeyTraced() {
 		w = r.inBuiltin + ": " + w
 	}
 	r.diagf("%s\n", w)
+}
+
+// tableLiteralRefusesAWholeArrayKey reports whether a table literal's element
+// is refused for naming every element with its key, and writes the refusal
+// where it is. See Semantics.WholeArraySubscriptKeyInATableLiteral.
+//
+// The key as the script **typed** it, which is why the element's own word is
+// read and not only the key it came to: `["*"]=s` and `[$k]=s` with `k='*'`
+// are ordinary keys in every column, and only `[*]=` and `[@]=` are asked
+// about. Asked only of those two keys, so the word is printed for one element
+// in a great many — see literalElem.written for why that matters.
+func (r *Runner) tableLiteralRefusesAWholeArrayKey(e literalElem) bool {
+	if !wholeArraySubscript(e.sub) || !strings.HasPrefix(e.writtenText(), "["+e.sub+"]") {
+		return false
+	}
+	switch r.sem().WholeArraySubscriptKeyInATableLiteral {
+	case WholeArraySubscriptIsAnOrdinaryKey:
+		return false
+	case WholeArraySubscriptIsInvalidInAnAssignment:
+		// The subscript is the verb, as it is for `m[@]=Z`.
+		r.fatal("%s\n", Wording(r.diag().InvalidSubscriptInAssignment,
+			"%s: invalid subscript in assignment", e.sub))
+	default:
+		r.diagf("%s\n", r.unanswered("the whole-array subscript written as a key in a table literal"))
+		r.status, r.unspecified = 2, true
+	}
+	return true
 }

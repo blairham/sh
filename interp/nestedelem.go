@@ -69,7 +69,14 @@ func (r *Runner) nestElemLiteral(a *syntax.Assign) {
 		if !built {
 			return
 		}
+		written := v
+		if a.Append {
+			v = keyedNestedAppended(r.assocsAt(a.Name), key, v)
+		}
 		r.storeAssocElement(a.Name, key, v)
+		// The line says what was written, not what the key came to hold:
+		// `a[n]+=(v)` traces `( v )` whatever was there.
+		r.resolvedNestedElement(key, written)
 		return
 	}
 	text := r.joinWord(a.Index)
@@ -86,6 +93,9 @@ func (r *Runner) nestElemLiteral(a *syntax.Assign) {
 		return
 	}
 	r.storeArrayElement(a.Name, idx, subject, v, a.Append)
+	if r.ctl == controlNone {
+		r.resolvedNestedElement(itoa(idx), v)
+	}
 }
 
 // nestedLiteral is the value a literal standing in an element's place builds.
@@ -164,6 +174,12 @@ func (r *Runner) storeAssocElement(name, key string, value Element) {
 		a = AssocArray{}
 		r.ownAssocs()
 		r.assocsPut(name, a)
+	}
+	if key == "" {
+		// The same warning every keyed store makes under the empty key —
+		// `a[""]=(x y)` and a literal's `[""]=(p)` included. See
+		// Runner.warnEmptyTableKeyTraced (#6684).
+		r.warnEmptyTableKeyTraced()
 	}
 	r.ownAssocs()
 	a = r.assocsAt(name)
@@ -317,4 +333,26 @@ func (a AssocArray) lastElement() (Element, bool) {
 		return Element{}, false
 	}
 	return a[keys[len(keys)-1]], true
+}
+
+// keyedNestedAppended is what `a[k]+=(p)` leaves under a table's key, which
+// is not what the same operator leaves in an indexed array's element: a
+// string already under the key becomes the first word rather than being
+// replaced. Measured 2026-10-15 on ksh93u+ 2012-08-01:
+//
+//	typeset -A t; t[n]+=(w); t[n]+=(v)    [n]=(w v)
+//	typeset -A t; t[s]=str; t[s]+=(q)     [s]=(str q)
+//	typeset -A t; t[e]+=(q)               [e]=(q)
+//	a=(x y); a[1]+=(p)                    a=(x (p) ) — see nestedAppended
+//
+// This kept only the words written, losing what the key held either way.
+func keyedNestedAppended(t AssocArray, key string, value Element) Element {
+	held, had := t[key]
+	if !had {
+		return value
+	}
+	if held.Nested == nil {
+		held = Element{Nested: ArrayOf(Scalar(held.Str))}
+	}
+	return nestedAppended(held, value, true)
 }

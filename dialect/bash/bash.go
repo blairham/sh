@@ -3455,6 +3455,10 @@ func Semantics() interp.Semantics {
 	// between the two questions (#2285).
 	s.WholeArraySubscriptAssigningAnArray = interp.WholeArraySubscriptIsABadSubscript
 	s.WholeArraySubscriptAssigningATable = interp.WholeArraySubscriptIsAnOrdinaryKey
+	// And written as a key in a table literal it is an ordinary key too:
+	// measured 2026-10-15, `declare -A a; a=([k]=1 [*]=s)` lists
+	// `(["*"]="s" [k]="1" )` at 0, and `[@]=` likewise (#6686).
+	s.WholeArraySubscriptKeyInATableLiteral = interp.WholeArraySubscriptIsAnOrdinaryKey
 	// Through a reference the same table refuses, where the bare form above
 	// stores a key. Measured 2026-09-20; see
 	// Semantics.WholeArraySubscriptThroughAReferenceToATable.

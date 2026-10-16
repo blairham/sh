@@ -622,6 +622,9 @@ func (r *Runner) traceAssignments(assigns []*syntax.Assign, values []string, pre
 // second time, with `a[$((i++))]=v` incrementing twice, which is exactly the
 // double run #1915 fixed for a scalar's value. Tracked as #1959.
 func (r *Runner) traceAssign(a *syntax.Assign, value string, e *expandedAssign, d Diagnostics) string {
+	if e != nil && e.nested != nil {
+		return r.traceNestedElementWrite(a.Name, e.subscript, a.Append, *e.nested, d)
+	}
 	var b strings.Builder
 	b.WriteString(traceAssignTarget(a, e, func(key string) string {
 		return r.traceQuote(key, d.TraceQuoting, d.TraceMetacharacters)
@@ -737,6 +740,12 @@ func (r *Runner) traceLiteralAsElementWrites(a *syntax.Assign, e *expandedAssign
 		// The literal's own `+=` is not written: `a+=([5]=z)` performs the
 		// element write `a[5]=z`, and that is what the line says. An append
 		// on the *element* is kept, for the same reason.
+		if el.nested != nil {
+			// A value that is an array of its own, written as the element
+			// write that stores one is. See traceNestedElementWrite.
+			lines = append(lines, r.traceNestedElementWrite(a.Name, el.sub, el.appendValue, *el.nested, d))
+			continue
+		}
 		op := "="
 		if el.appendValue {
 			op = "+="
@@ -813,7 +822,9 @@ func wrapArrayLiteral(joined string, style TraceArrayLiteral) string {
 // expandedElemsOf is the element list prepareTracedAssign expanded, or nil
 // where this dialect's trace prints the words as written.
 func expandedElemsOf(e *expandedAssign) []literalElem {
-	if e == nil || !e.elemsSet {
+	if e == nil || !e.elemsSet || e.elemsFailed {
+		// A list that failed partway is shorter than the words it is drawn
+		// beside, so the literal is drawn as written.
 		return nil
 	}
 	return e.elems
@@ -1848,4 +1859,30 @@ func (r *Runner) traceEmptyCommand() {
 	r.awaitTraceTurn()
 	defer r.releaseTraceTurn()
 	r.tracef("%s", line)
+}
+
+// traceNestedElementWrite is an element write whose value is an array of its
+// own, written from what was stored: the subscript as it resolved, unquoted,
+// and the words between the parentheses quoted as values.
+//
+// Measured 2026-10-15 on ksh93u+ 2012-08-01, the one column that nests, from
+// script files under `set -x`: `typeset -A a; a[k]=(x y)` is `+ a[k]=( x y
+// )`, `a["p q"]=("1 2" z)` is `+ a[p q]=( '1 2' z )`, `a[""]=(x y)` is `+
+// a[]=( x y )` after the empty-key warning, `a[n]+=(w)` is `+ a[n]+=( w )`
+// and `x[3]=(p q)` on an indexed array is `+ x[3]=( p q )` — so the key is
+// not quoted on this route as it is for a string value. The same element
+// written inside a table literal, `a=([k]=(x y))`, is the same line. This
+// wrote no line at all for the first five (#6684).
+func (r *Runner) traceNestedElementWrite(name, sub string, appended bool, value Element, d Diagnostics) string {
+	op := "="
+	if appended {
+		op = "+="
+	}
+	var words []string
+	if value.Nested != nil {
+		for _, el := range value.Nested.All() {
+			words = append(words, r.traceQuote(r.elemText(el), d.TraceQuoting, d.TraceMetacharacters))
+		}
+	}
+	return name + "[" + sub + "]" + op + wrapArrayLiteral(strings.Join(words, " "), d.TraceArrayLiteral)
 }

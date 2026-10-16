@@ -15243,10 +15243,15 @@ func (r *Runner) assignAll(ctx context.Context, assigns []*syntax.Assign) {
 		// number. So that column's line waits for the assignment, which is
 		// also why a refused one leaves no line at all there.
 		after := prepared[i].tracesAfterTheStore
-		if separately && !after {
+		// A keyed literal's lines, in the column that writes one per element,
+		// are written by the store as it places each element rather than
+		// before or after the whole of it. See interp/xtraceelementlines.go.
+		held := separately && r.elementLinesFollowTheirStores(a, prepared[i])
+		if separately && !after && !held {
 			r.traceAssignments(assigns[i:i+1], values[i:i+1], prepared[i:i+1])
 		}
 		r.withPreparedValue(ctx, prepared[i])
+		r.traceUnstoredElementLines(prepared[i])
 		if r.assignmentGaveUp() {
 			// The store was refused and the refusal ends the list. A line
 			// already written for it stays; the one line a list-at-once
@@ -15255,7 +15260,7 @@ func (r *Runner) assignAll(ctx context.Context, assigns []*syntax.Assign) {
 			return
 		}
 		values[i] = prepared[i].value
-		if separately && after {
+		if separately && after && !held {
 			r.traceAssignments(assigns[i:i+1], values[i:i+1], prepared[i:i+1])
 		}
 	}
@@ -15282,11 +15287,16 @@ func (r *Runner) prepareTracedAssign(a *syntax.Assign, value string) *expandedAs
 		!r.frozenLiteralIsRefusedBeforeItsWords(a) &&
 		r.ask(r.sem().TraceArrayLiteralShowsTheExpandedElements,
 			"an array literal traced as what its elements expanded to") {
-		if parsed, ok := r.literalElems(a.Elems,
+		parsed, ok := r.literalElems(a.Elems,
 			r.literalReadsSubscripts(a.Name, a.Elems, a.Append),
-			r.bareLiteralElementIsOneValue(a.Name, a.Elems, false)); ok {
-			e.elems, e.elemsSet = parsed, true
-		}
+			r.bareLiteralElementIsOneValue(a.Name, a.Elems, false))
+		// A list that failed partway is handed on as well, with its failure,
+		// so the store makes of it what it makes of any failed list rather
+		// than expanding the elements a second time with the failure still
+		// standing: that read every element as empty, and the traced
+		// `typeset -A a; a=([k]=1 [x]=$((1/0)))` left `['']=''` where the
+		// untraced one leaves `[k]=1` (#6683).
+		e.elems, e.elemsSet, e.elemsFailed = parsed, true, !ok
 	}
 	if a.Index != nil && r.ask(r.sem().TraceElementSubscriptIsEvaluated,
 		"a traced subscript written as what it resolved to") {
@@ -15334,6 +15344,9 @@ type expandedAssign struct {
 	elems      []literalElem
 	elemsSet   bool
 	elemsTaken bool
+	// elemsFailed says the expansion of elems failed partway, and elems is
+	// what was read before the failure. See Runner.literalElems.
+	elemsFailed bool
 	// elemsAreOperands says the list was expanded as a **declaration
 	// utility's operand** and not as an assignment of its own. The two setters
 	// of the field above are not the same route — one is the trace of a plain
@@ -15366,6 +15379,11 @@ type expandedAssign struct {
 	// `readonly a=(1); a=(2 3)` or for `a[1/0]=v`, and this is why.
 	subscript    string
 	subscriptSet bool
+	// nested is the value an element write stored where that value is an
+	// array of its own — `a[k]=(x y)` in the column that nests it — and the
+	// trace writes the element from it, with the subscript as it resolved
+	// and unquoted. See Runner.resolvedNestedElement (#6684).
+	nested *Element
 	// chain is every subscript of a chained element write — `a[1][2]=v` —
 	// resolved, first to last, recorded beside subscript for the same column
 	// and for the same reason. Nil for an assignment with one subscript.
@@ -15374,6 +15392,25 @@ type expandedAssign struct {
 	// tracesAfterTheStore says this assignment's line is written once it has
 	// been performed, which is the arrangement the subscript above needs.
 	tracesAfterTheStore bool
+
+	// elementLines are a keyed literal's trace lines, one per element, in
+	// the column that traces the literal as the element writes it performs
+	// — and writes each of those lines once its own element is stored, so a
+	// warning or a refusal the store makes lands between them. written is
+	// how many have gone out. See Runner.traceStoredElementLine (#6683).
+	elementLines        []string
+	elementLinesWritten int
+}
+
+// resolvedNestedElement records what an element write that stores an array
+// of its own resolved its subscript to and stored, for the dialect that
+// traces it. See expandedAssign.nested.
+func (r *Runner) resolvedNestedElement(sub string, value Element) {
+	if r.expanded == nil || !r.expanded.tracesAfterTheStore {
+		return
+	}
+	r.expanded.subscript, r.expanded.subscriptSet = sub, true
+	r.expanded.nested = &value
 }
 
 // resolvedSubscript records what an assignment's subscript came to, for the

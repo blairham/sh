@@ -3681,6 +3681,13 @@ func Semantics() interp.Semantics {
 	// m[@]=Z` are both `@: invalid subscript in assignment` (#2285).
 	s.WholeArraySubscriptAssigningAnArray = interp.WholeArraySubscriptIsInvalidInAnAssignment
 	s.WholeArraySubscriptAssigningATable = interp.WholeArraySubscriptIsInvalidInAnAssignment
+	// And the same refusal for the spelling written as a table literal's
+	// key, with the elements in front of it already stored: measured
+	// 2026-10-15, `typeset -A a; set -x; a=([k]=1 [*]=s)` is `+ a[k]=1`, then
+	// `*: invalid subscript in assignment`, status 1, and nothing after it
+	// runs; `[@]=`, `typeset -A a=([*]=s)`, `a+=` and an undeclared
+	// `a=([1]=1 [*]=2)` are refused alike (#6686).
+	s.WholeArraySubscriptKeyInATableLiteral = interp.WholeArraySubscriptIsInvalidInAnAssignment
 	// Through a reference the table takes the key, which is **not** this
 	// column's answer to either field above and is the reason the route has
 	// a field of its own. Measured 2026-09-20 on ksh93u+: `typeset -A

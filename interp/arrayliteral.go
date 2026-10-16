@@ -152,6 +152,11 @@ func (r *Runner) literalElems(elems []*syntax.ArrayElem, readsSubscripts, bareIs
 		// Already expanded, by the caller that is about to trace what they
 		// came to, or by the declaration utility whose operand this is. See
 		// Runner.assignAll and Runner.expandArrayOperands.
+		if r.expanded.elemsFailed {
+			// And that expansion failed partway: what it read is what a
+			// failed list hands back.
+			return parsed, false
+		}
 		if !operands {
 			return parsed, true
 		}

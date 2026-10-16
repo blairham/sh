@@ -904,6 +904,8 @@ func Semantics() interp.Semantics {
 	// 2026-09-12, `x=(p q)` is `Syntax error: "(" unexpected` and `x[@]=Z`
 	// on its own is `x[@]=Z: not found` — the word is a command name here,
 	// which is a third thing again and not an answer to either field (#2285).
+	// unanswered WholeArraySubscriptKeyInATableLiteral: the same wall, a
+	// literal being the first thing refused (#6686).
 	// unanswered EarlierDeclarationLetterBlocksALaterPlus: there is no
 	// declaration command to write the letter on. `typeset` is not a
 	// builtin here and `integer` is not a word, so neither sign of `-i`

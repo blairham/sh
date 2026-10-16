@@ -4446,6 +4446,11 @@ func Semantics() interp.Semantics {
 	// associative array` under both separators (#2285).
 	s.WholeArraySubscriptAssigningAnArray = interp.WholeArraySubscriptNamesEveryElement
 	s.WholeArraySubscriptAssigningATable = interp.WholeArraySubscriptIsASliceOfATable
+	// But written as a key in a table literal it is an ordinary key, which
+	// is this column swapping sides between the two routes: measured
+	// 2026-10-15, `typeset -A a; a=([k]=1 [*]=s)` lists `( ['*']=s [k]=1 )`
+	// at 0 (#6686).
+	s.WholeArraySubscriptKeyInATableLiteral = interp.WholeArraySubscriptIsAnOrdinaryKey
 	// And the `(P)` route answers it the same way, which is the column that
 	// does *not* swap sides between the two.
 	s.WholeArraySubscriptThroughAReferenceToATable = interp.WholeArraySubscriptIsASliceOfATable

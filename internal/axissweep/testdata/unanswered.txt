@@ -340,6 +340,7 @@ ash   UpperCaseLetterBesideANumericTypeLetterRecordsNothing
 ash   ValuelessSubscriptedOperand
 ash   WholeArraySubscriptAssigningATable
 ash   WholeArraySubscriptAssigningAnArray
+ash   WholeArraySubscriptKeyInATableLiteral
 ash   WholeArraySubscriptThroughAReferenceToATable
 ash   WidthJustificationPrecedence
 ash   WidthLettersExcludeTheIntegerLetter
@@ -756,6 +757,7 @@ dash  UpperCaseLetterBesideANumericTypeLetterRecordsNothing
 dash  ValuelessSubscriptedOperand
 dash  WholeArraySubscriptAssigningATable
 dash  WholeArraySubscriptAssigningAnArray
+dash  WholeArraySubscriptKeyInATableLiteral
 dash  WholeArraySubscriptThroughAReferenceToATable
 dash  WidthJustificationPrecedence
 dash  WidthLettersExcludeTheIntegerLetter

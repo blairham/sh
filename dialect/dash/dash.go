@@ -2001,6 +2001,8 @@ func Semantics() interp.Semantics {
 	// that `<&qq` gets. Worded as a syntax error and raised at run time —
 	// the same text inside `if false; then … fi` runs clean.
 	s.FdMove = interp.FdMoveIsNotAnOperator
+	// unanswered FdMoveSuffixMustBeWritten: there is no move operator, so
+	// no `-` is read as one however it arrived (#6746).
 	s.DuplicationTargetError = interp.DuplicationTargetErrorEndsTheShell
 	s.LocalOutsideAFunctionIsAnError = interp.Yes
 	s.LocalOutsideAFunctionIsFatal = interp.Yes

@@ -555,10 +555,14 @@ func (r *Runner) applyRedirList(ctx context.Context, rs []*syntax.Redirect, comp
 				r.redirErr = true
 				return closers, nil
 			}
-			if form != FdMoveIsNotAnOperator {
+			if form != FdMoveIsNotAnOperator && r.moveSuffixCounts(rd) {
 				// atoi cannot fail: fdMoveSource answered for digits.
 				moveFrom, _ = atoi(src)
 				name = src
+			}
+			if r.unspecified {
+				r.redirErr = true
+				return closers, nil
 			}
 		}
 
@@ -621,7 +625,7 @@ func (r *Runner) applyRedirList(ctx context.Context, rs []*syntax.Redirect, comp
 
 		if op == syntax.TokGreatAmp || op == syntax.TokLessAmp {
 			if !isDescriptorSpec(name) {
-				r.refuseDupTarget(rd, name)
+				r.refuseDupTarget(rd, name, fdVar, fd)
 				return closers, nil
 			}
 			if rd.N == nil && op == syntax.TokLessAmp {
@@ -3307,6 +3311,16 @@ func (r *Runner) refuseSubstitutionTargetWithMore() {
 	r.badDupTarget = true
 }
 
+// moveSuffixCounts says the `-` ending a duplication target's expansion makes
+// it a move: always where the word as written ends in one too, and otherwise
+// as the dialect answers. See Semantics.FdMoveSuffixMustBeWritten.
+func (r *Runner) moveSuffixCounts(rd *syntax.Redirect) bool {
+	if strings.HasSuffix(rd.Text, "-") {
+		return true
+	}
+	return !r.ask(r.sem().FdMoveSuffixMustBeWritten, "a move's `-` that arrived by expansion")
+}
+
 // fdMoveSource splits `5-` into the descriptor it names and the fact that a
 // move was written. It answers only for a run of digits followed by the
 // suffix, which is what keeps the axis from being asked about `-` on its own
@@ -3429,11 +3443,40 @@ func (r *Runner) greatAmpTarget() GreatAmpTargetForm {
 // ksh93 says `: cannot open` for the first and `bad file unit number` for the
 // second. Leaving it empty means "the same thing either way", which is zsh's
 // answer.
-func (r *Runner) refuseDupTarget(rd *syntax.Redirect, target string) {
+//
+// fdVar is the `{name}` in front of the operator, or empty, and one dialect
+// words the refusal differently for one: see
+// Diagnostics.FdVariableDuplicationTargetIsNotADescriptor.
+//
+// fd is the descriptor the operator is aimed at, which one dialect names for
+// an empty word where it is not the operator's own: see
+// Diagnostics.EmptyDuplicationTargetOnAnotherDescriptor.
+func (r *Runner) refuseDupTarget(rd *syntax.Redirect, target, fdVar string, fd int) {
 	general := Wording(r.diag().DuplicationTargetIsNotADescriptor,
 		"%[2]s: ambiguous redirect", rd.Text, target)
 	if target == "" && r.diag().EmptyDuplicationTarget != "" {
 		general = Wording(r.diag().EmptyDuplicationTarget, "", rd.Text, target)
+		own := 1
+		if rd.Op == syntax.TokLessAmp {
+			own = 0
+		}
+		if w := r.diag().EmptyDuplicationTargetOnAnotherDescriptor; w != "" && rd.N != nil && fdVar == "" && fd != own {
+			general = Wording(w, "", rd.Text, target, fdVar, fd)
+		}
+	}
+	if fdVar != "" {
+		switch d := r.diag(); {
+		case target == "" && d.FdVariableEmptyDuplicationTarget != "":
+			// Tried as a duplication of the empty word, which is what the
+			// line in front says. See Diagnostics.FdVariableDuplicationFailed.
+			if w := d.FdVariableDuplicationFailed; w != "" {
+				r.errf("%s%s\n", d.prefixWithoutLine(r.name(), ""),
+					fmt.Sprintf(w, d.reasonText(reason(syscall.EBADF))))
+			}
+			general = Wording(d.FdVariableEmptyDuplicationTarget, "", rd.Text, target, fdVar)
+		case target != "" && d.FdVariableDuplicationTargetIsNotADescriptor != "":
+			general = Wording(d.FdVariableDuplicationTargetIsNotADescriptor, "", rd.Text, target, fdVar)
+		}
 	}
 	r.diagf("%s\n", general)
 	r.status = 1

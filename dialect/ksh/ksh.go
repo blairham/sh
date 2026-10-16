@@ -3526,6 +3526,9 @@ func Semantics() interp.Semantics {
 	// bash leaves it closed — and the number the source gives up is the one
 	// `{v}<&$w-` receives, so the name answers with `$w`'s own number.
 	s.FdMove = interp.FdMoveRelocates
+	// Read off the expansion: `x=9-; exec 4<&$x` moves 9 (#6746). See
+	// interp.Semantics.FdMoveSuffixMustBeWritten.
+	s.FdMoveSuffixMustBeWritten = interp.No
 	s.DuplicationTargetError = interp.DuplicationTargetErrorCarriesOn
 	// A process substitution is a word of its own in ksh93u+, so a target
 	// never has more after one; answered for the shape all the same, which

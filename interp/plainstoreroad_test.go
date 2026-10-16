@@ -65,6 +65,8 @@ var theFullRoad = map[string][]string{
 		"varsPut", "warnAboutTheScope", "assigned", "registeredAction", "attrClear", "releaseEnvCopy",
 		"declaringWithoutAValue", "registeredArrayWriter", "dynamicWriters", "inBuiltin", "optindAssigned",
 		"storingSelfNameref", "underscoreWritten", "viewIsAlreadyFolded",
+		// OPTIND only, which storesAPlainScalar refuses by name (#6633).
+		"optindCursorScope",
 	},
 }
 

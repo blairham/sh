@@ -565,6 +565,7 @@ func seedTables(r *Runner) {
 	r.inheritedIgnored = map[string]bool{"seed": true}
 	r.localMarked = map[string]bool{"seed": true}
 	r.integerBase = map[string]int{"seed": 16}
+	r.declarationKeeps = map[string]bool{"seed": true}
 	r.floatPrecision = map[string]int{"seed": 3}
 	r.fieldWidth = map[string]fieldWidth{"seed": {letter: 76, width: 3}}
 	r.caseListing = map[string]byte{"seed": 'l'}

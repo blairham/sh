@@ -2985,6 +2985,8 @@ func Semantics() interp.Semantics {
 	// `local OPTIND=1`: without it a second call starts where the first
 	// stopped and reads nothing.
 	s.GetoptsFunctionPosition = interp.GetoptsFunctionPositionIsShared
+	// unanswered OptindUnsetInACallStaysUnbound: a call shares the caller's
+	// cursor here, so there is none of its own for an unset to take away.
 	// A `local OPTIND` gives the call the whole cursor and gives the caller
 	// the whole cursor back — the position inside a clustered word along
 	// with the number. bash 3.2 restores only the number, so a loop whose

@@ -3295,6 +3295,10 @@ func Semantics() interp.Semantics {
 	// POSIX-form option-parsing helper here has to reset OPTIND itself
 	// (#3321).
 	s.GetoptsFunctionPosition = interp.GetoptsFunctionPositionIsLocalToAKeywordFunction
+	// A call that unsets OPTIND and assigns it again leaves the caller that
+	// value: measured 2026-10-15, `function f { unset OPTIND; OPTIND=3+4; };
+	// f; echo $OPTIND` is `3+4` (#6633).
+	s.OptindUnsetInACallStaysUnbound = interp.Yes
 	// Reached through `typeset` in a function defined with the `function`
 	// word, this shell having no `local`: the caller's position inside a
 	// clustered word comes back with the number.
@@ -6300,6 +6304,10 @@ func Apply(r *interp.Runner) {
 	// ordinary integer name loses the attribute to the same line. See
 	// interp.Runner.KeepOptindThroughDeclarations (#6563).
 	r.KeepOptindThroughDeclarations()
+	// And the shell's other integer parameters, which start with the
+	// attribute and keep it through a declaration at the top: see
+	// integerparameters.go (#6633).
+	registerTheIntegerParameters(r)
 	// The `set -o` names beyond the ones every shell has. Measured 2026-09-15
 	// against ksh93u+ 2012-08-01 by diffing the whole listing: 32 rows there
 	// against 20 here, and five of the twenty spelled the other way round

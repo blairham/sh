@@ -101,6 +101,7 @@ func (c *Runner) ownTables(r *Runner) {
 	c.recordedOptions = maps.Clone(r.recordedOptions)
 
 	c.integerBase = maps.Clone(r.integerBase)
+	c.declarationKeeps = maps.Clone(r.declarationKeeps)
 	c.floatPrecision = maps.Clone(r.floatPrecision)
 	c.floatExact = maps.Clone(r.floatExact)
 	c.fieldWidth = maps.Clone(r.fieldWidth)

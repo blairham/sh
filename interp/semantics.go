@@ -6769,6 +6769,28 @@ type Semantics struct {
 	// same reusability by the other route below, and a helper function
 	// called twice parsed its options once here and twice there (#2944).
 	GetoptsFunctionPosition GetoptsFunctionPositionPolicy
+	// OptindUnsetInACallStaysUnbound leaves OPTIND as a call left it, where
+	// the call had unset it and then assigned it again: the unset took the
+	// call's own cursor away, so the value written afterwards is the shell's
+	// and the return has nothing to put back. The other answer gives the
+	// caller's number back at the return, as for any other call that moved
+	// the cursor.
+	//
+	// Measured 2026-10-15 under `-c` on ksh93u+ and zsh 5.9.2 (`zsh -f`):
+	//
+	//	                                          ksh93u+   zsh 5.9.2
+	//	function f { unset OPTIND; OPTIND=3; }    [3]       [1]
+	//	  f; echo "[$OPTIND]"
+	//	the same after `getopts a o -a`            [3]       [1]
+	//	function f { unset OPTIND; OPTIND=3+4; }  [3+4]     [1]
+	//	control: function f { OPTIND=3; }         [1]       [1]
+	//	control: function f { unset OPTIND; }     [unset]   [unset]
+	//
+	// Asked only at the return of a call with a cursor of its own that
+	// unset OPTIND and has a value for it again. bash shares the cursor and
+	// dash and BusyBox ash leave the parameter the shell's, so none of the
+	// three reaches it (#6633).
+	OptindUnsetInACallStaysUnbound Answer
 
 	// GetoptsLocalOptindRestoresTheCursor hands the caller back its position
 	// *inside* a clustered word when a call that declared a local `OPTIND`

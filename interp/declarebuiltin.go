@@ -2472,6 +2472,9 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) (endSt
 		r.kindLetterReplacesWhatTheNameWas(name, df)
 		r.noteALetterMakingAFrozenScalarAContainer(name, df)
 		r.applyAttributes(name, df)
+		if r.optindCursorMadeHere && name == "OPTIND" {
+			r.optindDeclaredAsTheCursor(df, hasValue)
+		}
 		if hasValue && !fresh && r.compoundNameHolds(name) && r.declaresAType(name) {
 			// An attribute **arriving** over a standing array or table reaches
 			// the elements already there, in the column that answers
@@ -6689,6 +6692,7 @@ func (r *Runner) shadowTypeset(name string) (fresh, redeclared bool) {
 		// reason.
 		return false, true
 	}
+	r.optindCursorMadeHere = false
 	if name == "OPTIND" && r.optindKeptThroughDeclarations {
 		return r.shadowOptindAsTheCursor()
 	}

@@ -195,6 +195,15 @@ func (r *Runner) validIntegerBase(base int) bool {
 // arithmetic parses them back. Measured in both shells that have the feature.
 func (r *Runner) integerRendered(name string, v int) string {
 	base := r.integerBase[name]
+	if base != 0 && name == "OPTIND" && r.optindKeptThroughDeclarations {
+		// The cursor is the shell's number and is written in decimal
+		// whatever base a declaration gave the name, which only the listing
+		// carries: measured 2026-10-15 on ksh93u+, `typeset -i16 OPTIND=20`
+		// reads back 20 and lists as `typeset -i 16 OPTIND=20`, and a
+		// `getopts` after it leaves 2, where an ordinary `-i16` name holds
+		// `16#14` (#6633).
+		return itoa(v)
+	}
 	if !r.spellsIntegerBase(base) {
 		if alphabet := len(r.sem().IntegerBaseDigits); alphabet > 0 && base > alphabet {
 			// A base past the end of the alphabet is *kept* and only the

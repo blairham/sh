@@ -3664,10 +3664,10 @@ func (sh *Shell) endTheLine(r *interp.Runner, in source, how ending) {
 	if r.ReturnEnded() || r.TailReached() {
 		return
 	}
-	if r.Exited() && !(asAFile && !r.ExitRan() && !r.ErrExitEnded()) {
-		// Ended before its input ran out. A fatal error is the exception on
-		// the file's route, which BusyBox ends with the newline all the
-		// same: `: ${zz?b}; echo after` writes the diagnostic and then it.
+	// Ended before its input ran out, which writes none — except a fatal
+	// error on the file's route, which BusyBox ends with the newline all the
+	// same: `: ${zz?b}; echo after` writes the diagnostic and then it.
+	if r.Exited() && (!asAFile || r.ExitRan() || r.ErrExitEnded()) {
 		return
 	}
 	_, _ = io.WriteString(r.Err(), "\n")

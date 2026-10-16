@@ -52,6 +52,8 @@ var theFullRoad = map[string][]string{
 		"heldFreeze", "refuseAFrozenAssignment", "refuseTheHeldFreeze",
 		// The element road only — storesAPlainScalar refuses every subscript (#6604).
 		"armAssignSubscript", "expanded", "valueAheadOfTheSubscript",
+		// A refused element's subscript as written (#6762), on the same road.
+		"writtenIndex",
 		// A dotted name's missing parent — storesAPlainScalar takes only an
 		// identifier, which has no dot in it (#6628).
 		"refuseAStoreWithNoParent",

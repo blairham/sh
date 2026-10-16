@@ -12440,10 +12440,19 @@ func (r *Runner) failedHeading() bool {
 		r.status = 2
 		return true
 	}
-	if r.ctl != controlNone {
+	if r.givingUpAlready() {
 		// The heading raised a fatal error of its own, or the script is
 		// being abandoned for a reason of its own. Either way the construct
 		// does not run and the status it set stands.
+		//
+		// Not a `return`, `break` or `continue`, which reach an expansion
+		// from code run inside it — a glob qualifier's, or a `${ …; }` body —
+		// and take effect once the construct has finished. Measured
+		// 2026-10-15: on zsh 5.9.2, `f() { x=( [ab](e:'return 3':) ); }; f`
+		// leaves one element in x and `for j in 1; do x=( [ab](e:'break':) );
+		// done` leaves two, and on bash 5.3 and ksh93u+ `for i in 1 2; do x=(
+		// ${ break; } a ); done` leaves one. The array literal used to be
+		// dropped in all three.
 		return true
 	}
 	if !r.expandErr {

@@ -2206,7 +2206,11 @@ once**, at the code's status: `print X *(e:'echo r; return 3':); echo
 next` writes `r` once and nothing else and ends at 3, by `-c`, `-i -c`, a
 script file and standard input, and a subshell ends the same way. The
 EXIT trap still runs and a top-level `always` half does not, as for
-`exit` (#6692).
+`exit` (#6692). Where the pattern is a word of an array literal or of an
+assignment prefix rather than of a command, the construct still finishes
+first: `f() { x=( [ab](e:'return 3':) ); }; f` leaves one element in `x`,
+and `x=( … ) print in` writes `in`. A `break` or `continue` in a `${ …; }`
+body does the same in bash 5.3 and ksh93u+ (see `Runner.failedHeading`).
 
 **The code sorts by the shell's `numericglobsort`, not by the pattern's
 `n`.** `*(ne:'print -r -- c*':)` writes `c10 c9` from the code with the

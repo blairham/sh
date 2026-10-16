@@ -295,10 +295,11 @@ func TestATopLevelReturnInGlobQualifierCodeEndsTheShell(t *testing.T) {
 		{`{ print X *(e:'return 3':) } always { print alw }; print next`, "", 3},
 		// A subshell is a top level of its own.
 		{`( print X *(e:'return 3':); print in ); print after $?`, "after 3\n", 0},
-		// A sourced file is something to return from.
+		// A sourced file is something to return from: one of the two names
+		// passes, the file returns, and the shell goes on.
 		{
-			`print -r -- 'print X [ab](e:"return 3":); print inx' > s; . ./s; print after $?`,
-			"X b\nafter 0\n", 0,
+			`print -r -- 'x=( [ab](e:"return 3":) ); print inx' > s; . ./s; print after $? $#x`,
+			"after 0 1\n", 0,
 		},
 	} {
 		out, status, errs := runZshSplit(t, globCodeFixture(t), tc.src)
@@ -308,10 +309,30 @@ func TestATopLevelReturnInGlobQualifierCodeEndsTheShell(t *testing.T) {
 	}
 }
 
+// A `return`, `break` or `continue` in qualifier code that is a word of an
+// array literal or of an assignment prefix takes effect once the construct
+// has finished: the literal is stored and the command runs. Measured on zsh
+// 5.9.2; both used to be dropped.
+func TestControlFlowInGlobQualifierCodeLetsTheConstructFinish(t *testing.T) {
+	for _, tc := range []struct{ src, out string }{
+		{`f() { x=( [ab](e:"return 3":) ); print inf; }; f; print after $? $#x`, "after 0 1\n"},
+		{`f() { x=( [ab](e:"return 3":) ) print in; print inf; }; f; print after $?`, "in\nafter 0\n"},
+		{`for j in 1; do x=( [ab](e:"break":) ); print in; done; print after $#x`, "after 2\n"},
+		{`for j in 1 2; do x=( [ab](e:"continue":) ); print in; done; print after $#x`, "after 2\n"},
+		{`print -r -- 'x=( [ab](e:"return 3":) ); print inx' > s; . ./s; print after $? $#x`, "after 0 1\n"},
+	} {
+		out, _, errs := runZshSplit(t, globCodeFixture(t), tc.src)
+		if out != tc.out || errs != "" {
+			t.Errorf("%q:\n out %q errs %q\nwant %q", tc.src, out, errs, tc.out)
+		}
+	}
+}
+
 // At a prompt a `return` with nothing to return from costs the line and not
 // the shell, so in qualifier code it waits for the command, as it does in a
 // function. Measured on zsh 5.9.2 through a pseudo-terminal: `print X
-// *(e:'return 3':); echo next` writes `X a b c10 c9 d lnk` and no `next`.
+// *(e:'return 3':); echo next` writes `X a b c10 c9 d lnk` — every name but
+// `big`, the first the directory lists there — and no `next`.
 func TestATopLevelReturnInGlobQualifierCodeAtAPromptWaitsForTheCommand(t *testing.T) {
 	src := `print X *(e:'return 3':); print next`
 	f, err := syntax.Parse(src, zsh.Dialect())
@@ -329,7 +350,10 @@ func TestATopLevelReturnInGlobQualifierCodeAtAPromptWaitsForTheCommand(t *testin
 	if _, err := r.Run(context.Background(), f); err != nil {
 		t.Fatal(err)
 	}
-	if got, want := o.String(), "X a b c10 c9 d lnk\n"; got != want || e.Len() != 0 {
-		t.Errorf("out %q errs %q, want %q", got, e.String(), want)
+	// The file whose code returned is the first the directory lists, which
+	// is the filesystem's choice; every other file passes without its code.
+	got := strings.Fields(o.String())
+	if len(got) != 7 || got[0] != "X" || e.Len() != 0 || strings.Contains(o.String(), "next") {
+		t.Errorf("out %q errs %q, want `X` and six of the seven names, and no `next`", o.String(), e.String())
 	}
 }

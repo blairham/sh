@@ -201,11 +201,18 @@ func TestTheBlamedArithmeticTextIsCutAtTenBytes(t *testing.T) {
 		{`(( 1 abcdefghijk ))`, "zsh:1: bad math expression: operator expected at `abcdefghij...'\n"},
 		{`(( 1 abcdefghi ))`, "zsh:1: bad math expression: operator expected at `abcdefghi '\n"},
 		{`(( 1 + @abcdefghijk ))`, "zsh:1: bad math expression: operand expected at `@abcdefghi...'\n"},
-		{`(( 1 é€abcdefghijk ))`, "zsh:1: bad math expression: operator expected at `é€abcde...'\n"},
 	} {
 		out, _ := runZsh(t, t.TempDir(), tc.src)
 		if out != tc.want {
 			t.Errorf("%s = %q, want %q", tc.src, out, tc.want)
 		}
+	}
+	// Under a UTF-8 locale, which is where this row was measured: the text
+	// is written as it is. Under `C` the `0x82` inside `€` begins no
+	// character and is written `\M-^B`, as every diagnostic writes it
+	// (#6690), so the locale is named rather than left to the environment.
+	src := `(( 1 é€abcdefghijk ))`
+	if _, _, errs := runZshUTF8(t, src); errs != "zsh:1: bad math expression: operator expected at `é€abcde...'\n" {
+		t.Errorf("%s = %q, want the ten bytes cut after `é€abcde`", src, errs)
 	}
 }

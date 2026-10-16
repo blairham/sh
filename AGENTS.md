@@ -96,6 +96,9 @@ refuses what every real shell accepts is a core nobody can write against.
                       they drift. docs/design/mcp.md argues it
     internal/gateguard reads a front end's source and says, per served verb,
                       whether it reaches a gate that can refuse
+    internal/pgo      the profile every shell is built with, and the
+                      programs it is trained on: cmd/<shell>/default.pgo
+                      links to it, `make pgo` remakes it
     internal/cmd/     the instruments: not shipped, and under internal/
                       so nothing outside the module can import them
       oracle          records what real shells do

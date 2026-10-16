@@ -56,7 +56,7 @@ SHELLS := sh bash zsh ksh dash ash
 FUNCSRC := share/sh/functions
 FUNCS := $(sort $(notdir $(wildcard $(FUNCSRC)/*)))
 
-.PHONY: all build test test-cover fmt vet tidy clean check corpus-guard oracle oracle-case oracle-check conformance conformance-gated conformance-dialects conformance-recorded conformance-ratchet conformance-baseline axis-sweep axis-coverage emulate-sweep coverage wild wild-run wild-run-contained fmt-wild smoke prompt-fidelity acp acp-wire acp-bench startup perfgate suite suite-cells suite-guard suite-panel bash-suite zsh-suite ksh-suite dash-suite install uninstall
+.PHONY: all build test test-cover fmt vet tidy clean check corpus-guard oracle oracle-case oracle-check conformance conformance-gated conformance-dialects conformance-recorded conformance-ratchet conformance-baseline axis-sweep axis-coverage emulate-sweep coverage wild wild-run wild-run-contained fmt-wild smoke prompt-fidelity acp acp-wire acp-bench startup perfgate pgo suite suite-cells suite-guard suite-panel bash-suite zsh-suite ksh-suite dash-suite install uninstall
 
 all: build
 
@@ -490,6 +490,18 @@ acp-bench: ## Time the protocol's own costs in ns/op, against the process-per-co
 
 startup: ## Time process start to a prompt, and the -c path, against the real shells
 	@go test ./internal/startupcost/ -run XXX -bench . -benchtime 40x -count 3 $(ARGS)
+
+# The profile every shell under cmd/ is built with: each cmd/<shell>/default.pgo
+# is a link to internal/pgo/default.pgo, which `go build` reads unasked. This
+# remakes it from internal/pgo's training programs. A Linux host gives the
+# cleaner profile (macOS's profiler charges system calls to whatever is near
+# them), and either is a valid one; see internal/pgo for when it is worth
+# remaking (#6496).
+pgo: ## Remake the profile the shipped binaries are built with
+	@mkdir -p $(BINDIR)
+	go test ./internal/pgo -run '^$$' -bench '^BenchmarkTrain$$' -benchtime 30x -count 1 \
+		-o $(BINDIR)/pgo.test -cpuprofile $(BINDIR)/pgo.cpu
+	go tool pprof -proto $(BINDIR)/pgo.test $(BINDIR)/pgo.cpu > internal/pgo/default.pgo
 
 perfgate: ## Fail if any dialect is slower than the shell it claims to be (#1403)
 	@SH_PERFGATE=1 go test ./internal/startupcost/ -run TestNoDialectIsSlowerThanItsOriginal -v -count 1 -timeout 30m $(ARGS)

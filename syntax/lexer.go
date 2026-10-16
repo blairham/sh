@@ -697,6 +697,11 @@ type Lexer struct {
 	// substEnds is the ends of input inside the substitutions this lexer has
 	// read, for the parser to put on the file. See [File.EndsOfInput].
 	substEnds []SubstitutionEnds
+
+	// bodyClosedBehindABraceName says the `${ cmd;}` body read last was
+	// closed by a `}` straight behind a `{name}`. See
+	// [BraceBodyClosedBehindABraceName], its one reader.
+	bodyClosedBehindABraceName bool
 }
 
 // queueHeredoc registers a redirection whose body is still to be read. The
@@ -2998,6 +3003,14 @@ func (l *Lexer) scanGroupSpans() []Span {
 	if l.err == nil && !l.dialect.UnterminatedPatternGroupIsAWord {
 		l.ranOut("pattern")
 		l.fail(l.pos(), "unterminated pattern group")
+	} else if l.err == nil {
+		// Still input that could be finished, though not a failure: a
+		// reader with more to give hands it over and the group reads on
+		// through the newline, as it does when the whole text is in hand.
+		// On standard input zsh 5.9.2 reads `print a(b` ⏎ `echo x` as one
+		// word exactly as from a file, and an interactive shell draws PS2
+		// there (#6614). With nothing more, the text is the word.
+		l.ranOut("pattern")
 	}
 	return spans
 }
@@ -6262,6 +6275,8 @@ func (l *Lexer) scanBraces(q Quoting) Span {
 	// ended, because a `{` straight behind one is read as though it began a
 	// token. See braceNameWordLen.
 	braceNameEnd := -1
+	// Whether the `}` that closed the body was one of those.
+	closedBehindName := false
 	dollarParens := 0
 	for depth > 0 {
 		if l.eof() {
@@ -6562,6 +6577,10 @@ func (l *Lexer) scanBraces(q Quoting) Span {
 				continue
 			}
 			depth--
+			// Every close assigns it, so the body's own `}` has the last
+			// word; `depth == 0` says which close is meant rather than
+			// deciding anything, and dropping it is an equivalent mutant.
+			closedBehindName = depth == 0 && l.off == braceNameEnd
 			if len(bodies) > 1 {
 				bodies = bodies[:len(bodies)-1]
 			}
@@ -6606,6 +6625,7 @@ func (l *Lexer) scanBraces(q Quoting) Span {
 		// *ends* is the one place they differ and is settled above; `body`
 		// is past the `|` of the reply form, because the blank form's
 		// opening blank is body text and this one's pipe is its marker.
+		l.bodyClosedBehindABraceName = closedBehindName
 		return Span{Kind: CommandSubst, CurrentShell: true, ReplyValue: reply, Value: l.src[body:end], Quoting: q, Pos: open, Comments: l.bodyComments(CommandSubst)}
 	}
 	// And a here-document a `$( )` in this word opened and could not feed,
@@ -6679,6 +6699,36 @@ func (l *Lexer) atBraceTokenStart(from, wordParen int) bool {
 		return l.off-1 != wordParen
 	}
 	return false
+}
+
+// BraceBodyClosedBehindABraceName reports whether a `${ cmd;}` span's body
+// was closed by a `}` standing straight behind a `{name}` word — `${ echo
+// {v}}` — in the dialect that reads that brace as the closer. That shell
+// refuses such a body when the substitution runs, as one that never ended:
+// measured 2026-10-15 on ksh93u+ 2012-08-01, `echo before; echo ${ echo
+// {v}}` prints `before` and then refuses with `end of file' unexpected at
+// status 3, and the same word in a branch nothing takes says nothing (#6642).
+//
+// Answered by reading the text again with the scanner that closed it, so the
+// rule has one owner: which `}` closes the body is that scanner's decision,
+// and a second reading written beside it would drift from it. Only a body
+// ending in `}` can have been closed that way, which keeps every other span
+// from paying for the read. A flag on Span would have been cheaper still and
+// takes it past its size class; see TestTheTwoShapesATreeIsMadeOfStayWithinTheirBudget.
+func BraceBodyClosedBehindABraceName(span Span, d Dialect) bool {
+	if !span.CurrentShell || span.Kind != CommandSubst ||
+		d.BraceProgramBodyEnd != BraceProgramBodyEndsAtATokenStart ||
+		!strings.HasSuffix(span.Value, "}") {
+		return false
+	}
+	open := "${"
+	if span.ReplyValue {
+		open = "${|"
+	}
+	src := open + span.Value + "}"
+	l := newLexer(src, &d)
+	got := l.scanBraces(span.Quoting)
+	return l.err == nil && got.CurrentShell && l.off == len(src) && l.bodyClosedBehindABraceName
 }
 
 // braceNameWordLen is how long the `{name}` at the head of s is, for the

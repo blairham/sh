@@ -1296,6 +1296,14 @@ func (r *Runner) optindValue() int {
 }
 
 func (r *Runner) setOptind(n int) bool {
+	if r.optindStaysUnset() {
+		// The scan moves and the name is not written: the position goes on
+		// in the scan's own cursor, which optCursorWord reads ahead of the
+		// parameter. See Semantics.GetoptsLeavesAnUnsetOptindUnset.
+		r.optWord = n
+		r.optindAssigned = false
+		return true
+	}
 	wrote := r.getoptsWriteOwn("OPTIND", strconv.Itoa(n))
 	if r.optWord > 0 {
 		// The scan's own position moves with the parameter: they part only
@@ -1305,6 +1313,33 @@ func (r *Runner) setOptind(n int) bool {
 	// This builtin's own write is not the script's.
 	r.optindAssigned = false
 	return wrote
+}
+
+// optindStaysUnset is whether `getopts` leaves OPTIND unset rather than
+// writing its number, which is asked only where the name is unset.
+func (r *Runner) optindStaysUnset() bool {
+	if r.nameIsSet("OPTIND") {
+		return false
+	}
+	return r.ask(r.sem().GetoptsLeavesAnUnsetOptindUnset,
+		"`getopts` leaving an unset OPTIND unset")
+}
+
+// optindUnsetKeepsTheScansPlace hands the scan's position to its own cursor
+// as OPTIND is unset, where the dialect goes on scanning from there without
+// the name: the number the name held was the position, and after the unset
+// nothing else holds it. A call with a cursor of its own already has it there.
+//
+// Called with the name still set, from the unset.
+func (r *Runner) optindUnsetKeepsTheScansPlace() {
+	if r.optWord > 0 {
+		return
+	}
+	pos := r.optindValue()
+	if r.ask(r.sem().GetoptsLeavesAnUnsetOptindUnset,
+		"`getopts` leaving an unset OPTIND unset") {
+		r.optWord = pos
+	}
 }
 
 // clearOptarg takes OPTARG away after a *bad* option, or empties it where the

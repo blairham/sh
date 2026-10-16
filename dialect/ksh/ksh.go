@@ -3309,6 +3309,11 @@ func Semantics() interp.Semantics {
 	// value: measured 2026-10-15, `function f { unset OPTIND; OPTIND=3+4; };
 	// f; echo $OPTIND` is `3+4` (#6633).
 	s.OptindUnsetInACallStaysUnbound = interp.Yes
+	// Once unset, OPTIND is never written by `getopts` again, and the scan
+	// goes on from its own place: measured 2026-10-16, `getopts ab o -a -b;
+	// unset OPTIND; getopts ab o -a -b` reads `b` and leaves the name unset
+	// (#6660).
+	s.GetoptsLeavesAnUnsetOptindUnset = interp.Yes
 	// Reached through `typeset` in a function defined with the `function`
 	// word, this shell having no `local`: the caller's position inside a
 	// clustered word comes back with the number.

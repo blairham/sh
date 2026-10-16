@@ -3563,6 +3563,11 @@ func (r *Runner) unsetOneName(name string) {
 	// parameter in a dialect where unset takes only its value, and whether
 	// it is exported now. See Semantics.UnsetKeepsTheShellsOwnAttributes.
 	keep, wasExported := r.unsetKeepsTheAttributes(name)
+	if name == "OPTIND" && r.nameIsSet(name) {
+		// The scan keeps its place where the dialect goes on without the
+		// name. See Semantics.GetoptsLeavesAnUnsetOptindUnset.
+		r.optindUnsetKeepsTheScansPlace()
+	}
 	if name == "OPTIND" && len(r.scopes) > 0 {
 		// The call's own cursor goes with the name. See
 		// Semantics.OptindUnsetInACallStaysUnbound.

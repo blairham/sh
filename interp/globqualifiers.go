@@ -165,7 +165,8 @@ type globQualifiers struct {
 	// the first decides, and each later one breaks the ties the ones before
 	// it left. See globSortSpec.
 	sorts []globSortSpec
-	// unsorted is `oN`: the directory's own order, with no sort at all.
+	// unsorted is `oN` written as the first specifier: the directory's own
+	// order, with no sort at all.
 	unsorted bool
 	// numeric is `n`, and `^n`: whether a run of digits in a name sorts as a
 	// number for this pattern, whatever `numericglobsort` says. Zero leaves
@@ -231,6 +232,10 @@ type globSortSpec struct {
 	key    byte
 	desc   bool
 	follow bool
+	// code is the shell code of `oe` and `o+`, whose key is `e`: what the
+	// code leaves in `REPLY` for each match is that match's key. See
+	// interp/globqualsort.go.
+	code string
 }
 
 // globRange is one `[…]` subscript as written: the expressions either side of
@@ -375,22 +380,46 @@ func parseGlobQualifiers(list string) (globQualifiers, string, bool) {
 			}
 			key := list[i]
 			i++
+			spec := globSortSpec{key: key, desc: (c == 'O') != negate, follow: follow}
 			switch key {
 			case 'N':
-				q.unsorted = true
+				// The directory's own order, but only as the first
+				// specifier: measured 2026-10-15 on zsh 5.9.2, `*(oNOn)`
+				// and `*(oNoL)` are the directory's order, while `*(OnoN)`
+				// is `On`'s and `*(oLoNOn)` is `*(oLOn)` — a later `oN`
+				// breaks no ties and changes nothing.
+				if len(q.sorts) == 0 {
+					q.unsorted = true
+				}
+				continue
 			case 'n', 'L', 'l', 'a', 'm', 'c', 'd':
-				q.sorts = append(q.sorts, globSortSpec{key: key, desc: (c == 'O') != negate, follow: follow})
-			case 'e', '+':
-				// The specifiers that sort by what a string of code leaves in
-				// `REPLY` for each match. The code runs as the `e` qualifier's
-				// does (interp/globqualcode.go), but the order has rules of
-				// its own that are not measured yet, so this is refused as
-				// what it is rather than with the reference's sentence for a
-				// letter it does not know.
-				return q, fmt.Sprintf("the o%c sort specifier is not implemented", key), false
+			case 'e':
+				// The key is what code leaves in `REPLY`, the argument read
+				// as `e`'s is. See interp/globqualsort.go.
+				code, n, closed := delimitedArgumentOrNone(list[i:])
+				if !closed {
+					return q, "missing end of string", false
+				}
+				i += n
+				spec.code = code
+			case '+':
+				// And `o+name` is `oe:name:`, the name read as `+`'s is.
+				n := 0
+				for n < len(list[i:]) && isNameByte(list[i+n]) {
+					n++
+				}
+				if n == 0 {
+					return q, "missing identifier after `+'", false
+				}
+				spec.key, spec.code = 'e', list[i:i+n]
+				i += n
 			default:
 				return q, "unknown sort specifier", false
 			}
+			// Behind a leading `oN` a specifier is read and does nothing —
+			// `*(oNoe:'print x >&2':)` runs no code — because nothing is
+			// sorted at all once q.unsorted is set (see Runner.glob).
+			q.sorts = append(q.sorts, spec)
 		case 'n':
 			// `numericglobsort` for one pattern, and `^n` is it turned off
 			// for one: measured, `setopt numericglobsort; print *(^n)` is the
@@ -511,6 +540,18 @@ func parseGlobQualifiers(list string) (globQualifiers, string, bool) {
 	return q, "", true
 }
 
+// sortsRunCode reports whether a sort specifier in the list is `oe` or `o+`,
+// whose code sees the matches in the order the walk read them — so the walk
+// reads each directory in its own order, as it does for `e`.
+func (q globQualifiers) sortsRunCode() bool {
+	for _, s := range q.sorts {
+		if s.key == 'e' {
+			return true
+		}
+	}
+	return false
+}
+
 // tests reports whether the list holds anything that asks about a file, as
 // against only `N`, `D`, sorts, subscripts and modifiers.
 func (q globQualifiers) tests() bool {
@@ -556,7 +597,7 @@ func sectionKeeps(section []globTest, f *globFile) bool {
 			// false':)` lists every name with the `z`, and
 			// `*(e:'REPLY=z$REPLY; false':,/)` lists `zd` — the code ran for
 			// `d`, failed, and the second section kept it as renamed.
-			run, ok := f.r.runGlobCode(t.code, f.word)
+			run, ok := f.r.runGlobCode(t.code, f.word, globCodeTests)
 			if !ok {
 				f.stopped = true
 				return false

@@ -1332,13 +1332,20 @@ func (r *Runner) glob(field string) ([]string, bool) {
 	// first name `ls -f` lists rather than the first in name order, and the
 	// code's own output comes in that order. The matches are still sorted
 	// at the end, as every list without `oN` is. See interp/globqualcode.go.
-	unsorted := (ordered && order.key == globSortNone) || quals.unsorted || quals.runsCode
+	unsorted := (ordered && order.key == globSortNone) || quals.unsorted || quals.runsCode || quals.sortsRunCode()
 	if quals.numeric != globNumericUnsaid {
 		// `n` and `^n` are `numericglobsort` for this one pattern, and the
-		// per-component sorts below read the switch as well as the last one.
-		saved := r.globSortsNumerically
-		r.globSortsNumerically = quals.numeric == globNumericOn
-		defer func() { r.globSortsNumerically = saved }()
+		// per-component sorts below read it as well as the last one.
+		//
+		// Beside the option rather than written over it: code an `e`
+		// qualifier runs is the shell's, and it sees the option as the
+		// shell has it. Measured 2026-10-15 on zsh 5.9.2, `print
+		// *(ne:'print -r -- c*':)` writes `c10 c9` from the code, `[[ -o
+		// numericglobsort ]]` there is off, and a `setopt
+		// numericglobsort` there is still on after the line.
+		saved := r.globNumeric
+		r.globNumeric = quals.numeric
+		defer func() { r.globNumeric = saved }()
 	}
 	if unsorted {
 		// The listing's own order is what is asked for, and the listing is
@@ -1810,7 +1817,9 @@ func (r *Runner) glob(field string) ([]string, bool) {
 	case quals.unsorted:
 		// `oN`: the order the walk read the directories in, untouched.
 	case len(quals.sorts) > 0:
-		r.sortQualified(out, paths, quals.sorts)
+		if !r.sortQualified(out, paths, quals.sorts) {
+			return nil, false
+		}
 	case ordered:
 		r.sortMatchesBy(out, paths, order)
 	default:
@@ -2161,7 +2170,11 @@ func (r *Runner) sortMatches(names []string) {
 // globMatchOrder is the comparator this shell puts a glob's matches in order
 // with, which is shellOrder unless a switch has been thrown.
 func (r *Runner) globMatchOrder() func(a, b string) int {
-	if r.globSortsNumerically {
+	numeric := r.globSortsNumerically
+	if r.globNumeric != globNumericUnsaid {
+		numeric = r.globNumeric == globNumericOn
+	}
+	if numeric {
 		return numericSegmentOrder
 	}
 	return shellOrder

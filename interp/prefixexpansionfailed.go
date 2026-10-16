@@ -108,8 +108,14 @@ func (r *Runner) beginPrefixWalk(assigns []*syntax.Assign) prefixWalk {
 // or dash. Written `$(echo SIDE)` the probe proves nothing — a substitution's
 // output is captured either way, so the entry running and not running print
 // the same nothing.
+//
+// A `return`, `break` or `continue` raised by code inside a value is not a
+// failure, and the command runs before it takes effect — measured
+// 2026-10-15, `f() { x=( [ab](e:'return 3':) ) print in; }; f` writes `in`
+// on zsh 5.9.2, and `for i in 1 2; do x=( ${ break; } a ) echo in; done`
+// writes it once on bash 5.3 and ksh93u+. See Runner.failedHeading.
 func (r *Runner) prefixWalkFailed(w prefixWalk) bool {
-	return w.written && !w.before && (r.expandErr || r.ctl != controlNone)
+	return w.written && !w.before && (r.expandErr || r.givingUpAlready())
 }
 
 // givesUpForAFailedPrefix ends a command whose assignment prefix could not be

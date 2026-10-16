@@ -10356,6 +10356,28 @@ type Diagnostics struct {
 	// under `-i`, where the file has it on line 5 (#6597). `-c` needs no such
 	// field in that dialect: its location already is the prompt's.
 	InteractiveScriptIsLocatedAsAPrompt bool
+	// ShellsExitTrapNamesItsFirstLine names line 1 of the shell's own EXIT
+	// trap body in a location, on the routes whose style otherwise leaves an
+	// input's first line unnamed (LocationLineWordAfterFirst,
+	// LocationBracketLineAfterFirst).
+	//
+	// ksh93's. Measured 2026-10-15 on ksh93u+ 2012-08-01, `ksh -c`:
+	//
+	//	nosuch_t                                 ksh: nosuch_t: not found
+	//	trap nosuch_t EXIT                       ksh: line 1: nosuch_t: not found
+	//	(trap nosuch_t EXIT; :)                  ksh: nosuch_t: not found
+	//	trap nosuch_u USR1; kill -USR1 $$        ksh: nosuch_u: not found
+	//	trap "cd /nonexist" EXIT                 ksh[1]: cd: /nonexist: …
+	//	trap "eval nosuch_t" EXIT                ksh[1]: eval: line 1: …
+	//
+	// and the same at a prompt (`-i` on a pipe) and under `-i script`. So the
+	// body the shell runs as it ends is located as a text entered after the
+	// one the shell was given, the way an `eval` frame is
+	// (Diagnostics.prefixAfterTheFirstFrame), while a subshell's EXIT trap
+	// and a signal's trap keep the ordinary rule (#6656). The body's lines
+	// count from 1 in both dialect families already; only whether line 1 is
+	// written moves.
+	ShellsExitTrapNamesItsFirstLine bool
 	// PromptCountsTheSessionsLines numbers a line typed at a prompt by how
 	// many the **session** has read, rather than restarting at 1 for every
 	// construct.

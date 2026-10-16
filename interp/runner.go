@@ -1547,6 +1547,11 @@ type Runner struct {
 	// had, and three of the four restart the word on the strength of the
 	// assignment rather than the number.
 	optindAssigned bool
+	// optScanInDoubt records that `set` or `shift` replaced the positional
+	// parameters under a cursor that was not fresh, in a vector that has not
+	// answered whether that restarts the scan — so the next `getopts` is the
+	// one place that has to ask. See getoptsParametersReplaced.
+	optScanInDoubt bool
 	// optRanOut records that the `getopts` write in flight is the name
 	// operand on the run that reports "no more options", which is the one
 	// write whose freeze a dialect answers apart from every other write the
@@ -14371,6 +14376,9 @@ func (r *Runner) setVarAs(name, value string, form assignForm) {
 	if name == "OPTIND" {
 		// Noted rather than compared: see optindAssigned.
 		r.optindAssigned = true
+		// And the script's number is the position in every column, so a
+		// replacement of the parameters before it is no longer a question.
+		r.optScanInDoubt = false
 		if r.inBuiltin != "getopts" {
 			// And the script's own number is an ordinary integer's, which
 			// lists without the 0. See Runner.optindDeclaredAsTheCursor.

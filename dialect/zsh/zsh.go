@@ -3925,6 +3925,7 @@ func Semantics() interp.Semantics {
 	// ksh93: measured 2026-10-15, `set -- -a -b -c; OPTIND=100; getopts abc
 	// o` is the end of the options with OPTIND still 100 (#6575).
 	s.GetoptsCursorPastTheEnd = interp.GetoptsCursorPastTheEndIsKept
+	s.GetoptsNewParametersRestartTheScan = interp.No
 	// unanswered GetoptsRefusedNameStillScans: a refused name operand ends
 	// the shell here, so nothing downstream can read OPTIND back and say
 	// whether the scan ran. Measured 2026-09-21, `set -- -a; getopts a

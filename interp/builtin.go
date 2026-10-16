@@ -1121,6 +1121,7 @@ func (r *Runner) setOptionWordsAndOperands(_ context.Context, args []string) int
 		// both bash builds, `set -x`, a bare `set` and `shift` all leave
 		// that restore alone, and only a replacement cancels it.
 		r.paramsReplacedBySet = true
+		r.getoptsParametersReplaced()
 	}
 	if r.setSortsOperands {
 		// With operands they are sorted as they arrive, and with none the
@@ -4618,9 +4619,12 @@ func biShift(r *Runner, _ context.Context, args []string) int {
 	}
 	if fromEnd {
 		r.Params = r.Params[:len(r.Params)-n]
-		return 0
+	} else {
+		r.Params = r.Params[n:]
 	}
-	r.Params = r.Params[n:]
+	// Even `shift 0`: measured, dash and BusyBox ash restart the scan on it
+	// as on any other shift. A count refused above does not.
+	r.getoptsParametersReplaced()
 	return 0
 }
 

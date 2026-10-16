@@ -3129,9 +3129,25 @@ shell.
     bash 3.2  → killed by SIGQUIT    ksh93  → killed by SIGQUIT
     zsh       → killed by SIGQUIT    ash    → after, exit 0
 
-`Semantics.QuitResetRestoresTheDefault` — bash no · zsh yes · ash no,
-preset no. The three that die on the row above die here too, so they are
-asked nothing and leave it unanswered.
+`Semantics.QuitResetRestoresTheDefault` — bash no · zsh yes · ash no ·
+dash no · ksh93 no, preset no. dash and ksh93 die on the row above and are
+asked only once they are interactive, which is where they have an ignore
+to take away.
+
+**An interactive shell ignores TERM as well, and the same reset decides
+both.** Measured 2026-10-16, `-i -c` and at a pseudo-terminal, with the
+signal sent by the shell itself and by `sh -c 'kill -TERM $PPID'` (#6718):
+
+    kill -TERM $$; echo alive               alive, 0 — all seven
+    the same without -i                      killed, 143 — all seven
+    trap - TERM; kill -TERM $$; echo alive  alive, 0 — bash, ksh93, dash, ash
+                                             killed, 143 — zsh
+    trap - QUIT; kill -QUIT $$; echo alive  the same split, 131 in zsh
+    sh -c 'kill -TERM $$'                    143 (271 in ksh93) — a child
+                                             is not ignoring anything
+    (kill -TERM $$; echo inner); echo $?    inner, 0 — all but ksh93, whose
+                                             subshell is what the signal
+                                             ends: 271, no `inner`
 
 POSIX makes both readings defensible: `trap -` restores the disposition
 the shell *inherited*, and the two sides disagree about what that was for

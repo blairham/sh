@@ -1256,11 +1256,13 @@ func Semantics() interp.Semantics {
 	s.FatalErrorOnACommandStringSkipsTheExitTrap = interp.No
 	s.ExitTrapRunsInsideTheExitingCall = interp.Yes
 	s.QuitIgnoredWhenNotInteractive = interp.No
-	// unanswered QuitResetRestoresTheDefault: that axis is what a reset does
-	// to the *ignore* above, and this shell has no ignore to take away — an
-	// untrapped QUIT kills it whether or not `trap - QUIT` has been run, so
-	// both readings run every script identically and there is nothing to
-	// measure a preference from.
+	// And a reset keeps the ignore an *interactive* shell was born with,
+	// which is where this shell has one to take away: measured 2026-10-16,
+	// `-i -c 'trap - QUIT; kill -QUIT $$; echo alive'` and the same for
+	// TERM write `alive` and end at 0 (#6718). Not interactive, an
+	// untrapped QUIT kills it with or without the reset, so that route asks
+	// nothing.
+	s.QuitResetRestoresTheDefault = interp.No
 	s.HangupIsAnOrderlyExit = interp.No
 	s.ExitInTrapReportsEarlierStatus = interp.Yes
 	// A subshell's own EXIT trap runs however the subshell ended, as it does

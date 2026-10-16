@@ -175,6 +175,9 @@ func Dialect() syntax.Dialect {
 	// way: `: <> >(cat)` is `>(' unexpected. See
 	// syntax.Dialect.ProcessSubstitutionAgainstTheRedirectionIsRefused (#5514).
 	d.ProcessSubstitutionAgainstTheRedirectionIsRefused = true
+	// And a substitution is a word of its own: `echo a<(true)x` is three
+	// fields (#6813). See syntax.Dialect.ProcessSubstitutionIsAWordOfItsOwn.
+	d.ProcessSubstitutionIsAWordOfItsOwn = true
 	d.ParamIndirection = true
 	// And the prefix spelling: `${!ZQ_@}` is `ZQ_a ZQ_b` here, measured
 	// beside bash in the corpus. See

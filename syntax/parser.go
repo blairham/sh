@@ -3653,6 +3653,10 @@ func (p *Parser) parseRedirect() *Redirect {
 	if p.refuseProcSubstAgainstTheRedirection(r.Op, r.Word, p.tok.Pos, r.Text) {
 		return nil
 	}
+	if p.tok.procSubstTouches {
+		p.refuseProcSubstTouchingATarget()
+		return nil
+	}
 	if r.Op == TokTLess && p.refuseProcSubstOutOfPlace(r.Word) {
 		// A here-string's operand is text to be fed in rather than a file to
 		// be opened, and the dialect that admits `cat < <(:)` refuses
@@ -6242,6 +6246,22 @@ func (p *Parser) failProcSubstAgainstAPlainRedirection(pos Pos, text string) {
 		Pos: pos, Kind: ErrUnexpected,
 		Token: text, Class: ClassWord,
 		Msg: "`" + text + "' unexpected",
+	}
+}
+
+// refuseProcSubstTouchingATarget refuses a process substitution written
+// against a redirection's target, in the dialect where a substitution is a
+// word of its own: there the opener behind a target is a redirection
+// operator and a `(`, and the refusal names the `)` that closes nothing. See
+// [Dialect.ProcessSubstitutionIsAWordOfItsOwn].
+func (p *Parser) refuseProcSubstTouchingATarget() {
+	if p.err != nil {
+		return
+	}
+	p.err = &Error{
+		Pos: p.tok.End, Kind: ErrUnexpected,
+		Token: ")", Class: ClassOperator,
+		Msg: "`)' unexpected",
 	}
 }
 

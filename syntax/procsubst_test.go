@@ -149,3 +149,50 @@ func TestASubstitutionAgainstAPlainRedirectionIsRefusedByItsWord(t *testing.T) {
 		}
 	}
 }
+
+// ProcessSubstitutionIsAWordOfItsOwn: the word before a substitution ends at
+// its opener and the substitution's own word ends at its closer, and one
+// touching a redirection's target is refused naming the `)` (#6813).
+func TestASubstitutionIsAWordOfItsOwn(t *testing.T) {
+	d := syntax.Core()
+	d.ProcessSubstitution = true
+	d.ProcessSubstitutionIsAWordOfItsOwn = true
+	for _, c := range []struct {
+		src   string
+		words int
+	}{
+		{"echo <(true)x", 3},
+		{"echo a<(true)", 3},
+		{"echo <(true)<(true)", 3},
+		{`echo "a"<(true)"b"`, 4},
+		{"echo a<(true)b>(true)c", 6},
+		{"cat < <(echo a)x", 2},
+		{`echo "<(true)x"`, 2},
+	} {
+		f, err := syntax.Parse(c.src, d)
+		if err != nil {
+			t.Errorf("%s: %v", c.src, err)
+			continue
+		}
+		call, ok := f.Stmts[0].Expr.(*syntax.Pipeline).Cmds[0].(*syntax.SimpleCmd)
+		if !ok || len(call.Args) != c.words {
+			t.Errorf("%s: %d words, want %d", c.src, len(call.Args), c.words)
+		}
+		plain := syntax.Core()
+		plain.ProcessSubstitution = true
+		if f, err := syntax.Parse(c.src, plain); err == nil && c.words > 2 {
+			if n := len(f.Stmts[0].Expr.(*syntax.Pipeline).Cmds[0].(*syntax.SimpleCmd).Args); n == c.words {
+				t.Errorf("%s without the flag: also %d words, so the row tells nothing", c.src, n)
+			}
+		}
+	}
+	for _, src := range []string{
+		"cat < x<(echo a)", "cat <x<(echo a)", "cat < <(echo a)<(echo b)",
+		"echo hi > x>(cat)", `cat < "x"<(echo a)`, "cat 3< x<(echo a)",
+	} {
+		_, err := syntax.Parse(src, d)
+		if err == nil || !strings.Contains(err.Error(), "`)' unexpected") {
+			t.Errorf("%s: got %v, want `)' unexpected", src, err)
+		}
+	}
+}

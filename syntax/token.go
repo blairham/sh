@@ -480,6 +480,13 @@ type Token struct {
 	// word character still to come, so the two would touch. See
 	// [Parser.spliceAlias].
 	endedByRule bool
+
+	// procSubstTouches says a process substitution begins at the very next
+	// character, in the dialect where one is a word of its own — so this
+	// word ended there rather than taking it in. The parser refuses that
+	// touch behind a redirection's target. See
+	// [Dialect.ProcessSubstitutionIsAWordOfItsOwn].
+	procSubstTouches bool
 }
 
 // IsQuoted reports whether any part of the word was quoted. A word can be

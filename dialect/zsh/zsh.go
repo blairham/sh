@@ -4009,6 +4009,11 @@ func Semantics() interp.Semantics {
 	// caller's back: measured 2026-10-15, `f() { unset OPTIND; OPTIND=3; };
 	// f; echo $OPTIND` is 1 (#6633).
 	s.OptindUnsetInACallStaysUnbound = interp.No
+	// Once unset, OPTIND is never written by `getopts` again, and the scan
+	// goes on from its own place: measured 2026-10-16, `getopts ab o -a -b;
+	// unset OPTIND; getopts ab o -a -b` reads `b` and leaves the name unset,
+	// in a function and after it (#6660).
+	s.GetoptsLeavesAnUnsetOptindUnset = interp.Yes
 	// The same answer by a second route, and recorded rather than left to
 	// the axis above: every call here has its own cursor whether or not
 	// anything was declared, so a declaration inside one cannot be the

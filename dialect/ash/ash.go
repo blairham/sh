@@ -1787,6 +1787,10 @@ func Semantics() interp.Semantics {
 	s.GetoptsFunctionPosition = interp.GetoptsFunctionPositionIsTheCallsOwn
 	// unanswered OptindUnsetInACallStaysUnbound: a call's cursor is its own
 	// but OPTIND stays the shell's, so the return puts nothing back over it.
+	// And `getopts` writes an unset OPTIND back on its next call: measured
+	// 2026-10-16, BusyBox ash 1.37.0, `unset OPTIND; getopts a o -a` leaves
+	// it at 2, and the scan after the unset starts at the first word (#6660).
+	s.GetoptsLeavesAnUnsetOptindUnset = interp.No
 	// `#` in an option string is another option letter here. Measured
 	// 2026-09-16, BusyBox ash 1.37.0 (#2947).
 	s.GetoptsOptionStringHasANumericType = interp.No

@@ -6848,6 +6848,35 @@ type Semantics struct {
 	// three reaches it (#6633).
 	OptindUnsetInACallStaysUnbound Answer
 
+	// GetoptsLeavesAnUnsetOptindUnset is `getopts` going on scanning after
+	// `unset OPTIND` without ever writing the name again: the scan keeps its
+	// place where a script cannot see it, and OPTIND stays unset inside a
+	// function and after it. The other answer writes the number back on the
+	// next call, as it would over any value.
+	//
+	// Measured 2026-10-16 under `-c` on zsh 5.9.2 (`-f`), ksh93u+, bash
+	// 5.3.20 and BusyBox ash 1.37.0:
+	//
+	//	                                              zsh, ksh93   bash, ash
+	//	unset OPTIND; getopts a o -a                  [unset]      [2]
+	//	  echo "[${OPTIND-unset}]"
+	//	f(){ unset OPTIND; getopts a o -a; }; f       [unset]      [2]
+	//	getopts ab o -a -b; unset OPTIND              b            a
+	//	  getopts ab o -a -b; echo $o
+	//
+	// The third row is the one that says the scan keeps its *own* place
+	// rather than starting over at 1 the way a missing OPTIND reads: in both
+	// columns that leave the name unset the next letter is the one after the
+	// last. Not modeled: what an assignment after the unset does to the
+	// scan, where the two shells part from each other and from every other
+	// reading — `OPTIND=1` there continues at the next word in both, and
+	// only zsh writes the name again. The assignment restarts the scan here,
+	// as it does over a name that was never unset (#6660).
+	//
+	// dash refuses `unset OPTIND` itself, so it keeps the standard's answer
+	// without ever being asked. See TestGetoptsLeavesAnUnsetOptindUnset.
+	GetoptsLeavesAnUnsetOptindUnset Answer
+
 	// GetoptsLocalOptindRestoresTheCursor hands the caller back its position
 	// *inside* a clustered word when a call that declared a local `OPTIND`
 	// returns — not only the number the parameter held.
@@ -34488,6 +34517,9 @@ func PosixSemantics() Semantics {
 		// The standard has the name set to a question mark when the options
 		// run out.
 		GetoptsEndOfOptionsNamesIt: Yes,
+		// POSIX has `getopts` set OPTIND, and says nothing of a name that
+		// was unset first; the reading that writes it is the plain one.
+		GetoptsLeavesAnUnsetOptindUnset: No,
 		// And it has an option word begin with a `-`, so a `+` word is an
 		// operand. zsh is the one column that reads it as an option and says
 		// so itself.
@@ -36152,6 +36184,9 @@ func CoreSemantics() Semantics {
 		// builtin's ordinary use rather than a disagreement about it. zsh,
 		// the one column that leaves the name alone, says so itself.
 		GetoptsEndOfOptionsNamesIt: Yes,
+		// POSIX has `getopts` set OPTIND, and says nothing of a name that
+		// was unset first; the reading that writes it is the plain one.
+		GetoptsLeavesAnUnsetOptindUnset: No,
 		// An option word begins with a `-`, which is the standard's wording
 		// and six of the seven columns. Answered rather than refused for the
 		// reason the answer above is: a `+` word reaching `getopts` is an

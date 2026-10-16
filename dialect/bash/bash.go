@@ -2993,6 +2993,10 @@ func Semantics() interp.Semantics {
 	s.GetoptsFunctionPosition = interp.GetoptsFunctionPositionIsShared
 	// unanswered OptindUnsetInACallStaysUnbound: a call shares the caller's
 	// cursor here, so there is none of its own for an unset to take away.
+	// And `getopts` writes an unset OPTIND back on its next call: measured
+	// 2026-10-16 on bash 5.3.20, `unset OPTIND; getopts a o -a` leaves it at
+	// 2, and the scan after the unset starts at the first word (#6660).
+	s.GetoptsLeavesAnUnsetOptindUnset = interp.No
 	// A `local OPTIND` gives the call the whole cursor and gives the caller
 	// the whole cursor back — the position inside a clustered word along
 	// with the number. bash 3.2 restores only the number, so a loop whose

@@ -398,3 +398,69 @@ func TestACommandSubstitutionBodyHoldsANumber(t *testing.T) {
 		})
 	}
 }
+
+// A stream redirected again in one list joins its targets or sources in the
+// dialect that joins them, and the join holds numbers until the list has
+// applied — measured 2026-10-15 against zsh 5.9.2 (#6529), whose base is 11,
+// so every number here is one below zsh's. And `exec`'s list saves as any
+// list does, given back when it has applied, in both dialects that save.
+func TestAJoinHoldsNumbersWhileItsListApplies(t *testing.T) {
+	const (
+		stream = SavedStreamsAndPipeReadEndsTakeNumbers
+		each   = EachRedirectionSavesItsStreams
+	)
+	for _, c := range []struct {
+		own   OwnDescriptorNumbers
+		joins Answer
+		src   string
+		want  string
+	}{
+		// Sources: two, then one each, after the save.
+		{stream, Yes, `: </dev/null </dev/null {v}</dev/null; echo $v`, "13"},
+		{stream, Yes, `: </dev/null </dev/null </dev/null {v}</dev/null; echo $v`, "15"},
+		{stream, Yes, `: 3</dev/null 3</dev/null {v}</dev/null; echo $v`, "12"},
+		{stream, Yes, `: </dev/null <&0 {v}</dev/null; echo $v`, "13"},
+		// Targets: three, then one each.
+		{stream, Yes, `: >/dev/null >/dev/null {v}</dev/null; echo $v`, "14"},
+		{stream, Yes, `: >/dev/null >/dev/null >/dev/null {v}</dev/null; echo $v`, "15"},
+		{stream, Yes, `: >/dev/null >&2 {v}</dev/null; echo $v`, "14"},
+		// A join of sources owes one more after the next number taken.
+		{stream, Yes, `: </dev/null </dev/null {v}</dev/null {w}</dev/null; echo $v $w`, "13 15"},
+		{stream, Yes, `: </dev/null </dev/null 2>&1 {v}</dev/null {w}</dev/null; echo $v $w`, "13 16"},
+		{stream, Yes, `: </dev/null </dev/null 3</dev/null {v}</dev/null {w}</dev/null; echo $v $w`, "13 15"},
+		{stream, Yes, `: 3</dev/null 3</dev/null 3</dev/null {v}</dev/null {w}</dev/null; echo $v $w`, "14 15"},
+		{stream, Yes, `: </dev/null </dev/null >/dev/null >/dev/null {v}</dev/null; echo $v`, "18"},
+		// Copying a joined stream ends the join; a `{v}`'s number is not
+		// the one owed.
+		{stream, Yes, `: </dev/null </dev/null 3<&0 {v}</dev/null {w}</dev/null; echo $v $w`, "11 12"},
+		{stream, Yes, `: >/dev/null >/dev/null 2>&1 {v}</dev/null {w}</dev/null; echo $v $w`, "11 13"},
+		{stream, Yes, `: </dev/null </dev/null {v}<&0 </dev/null {w}</dev/null; echo $v $w`, "11 14"},
+		{stream, Yes, `: </dev/null </dev/null {v}<&2 {w}</dev/null; echo $v $w`, "13 15"},
+		{stream, Yes, `: </dev/null </dev/null {x}</dev/null 3<&0 {v}</dev/null {w}</dev/null; echo $x $v $w`, "13 11 12"},
+		{stream, Yes, `: </dev/null </dev/null {v}</dev/null; exec {v}<&-; exec {a}</dev/null {b}</dev/null {c}</dev/null {d}</dev/null; echo $d`, "13"},
+		{stream, Yes, `{ exec {a}</dev/null {b}</dev/null {c}</dev/null {d}</dev/null; echo $d; } </dev/null </dev/null 2>&1`, "14"},
+		// Only while the list applies; the pipe is a source of the stream.
+		{stream, Yes, `{ exec {a}</dev/null; echo $a; } </dev/null </dev/null`, "11"},
+		{stream, Yes, `: </dev/null </dev/null {v}</dev/null; exec {w}</dev/null; echo $v $w`, "13 10"},
+		{stream, Yes, `echo x | : </dev/null {v}</dev/null; echo $v`, "13"},
+		{stream, No, `: </dev/null </dev/null {v}</dev/null; echo $v`, "11"},
+		// `exec`'s list saves while it applies.
+		{stream, Yes, `exec </dev/null {v}</dev/null; exec {w}</dev/null; echo $v $w`, "11 10"},
+		{stream, Yes, `exec 2>&1 {v}</dev/null {w}</dev/null; echo $v $w`, "10 12"},
+		{each, No, `exec </dev/null {v}</dev/null; exec {w}</dev/null; echo $v $w`, "11 10"},
+		{each, No, `exec 2>&1 {v}</dev/null {w}</dev/null; echo $v $w`, "11 12"},
+		{OwnDescriptorsTakeNoNumber, Yes, `exec </dev/null </dev/null {v}</dev/null; echo $v`, "10"},
+	} {
+		t.Run(c.own.String()+": "+c.src, func(t *testing.T) {
+			sem := permissive()
+			sem.FirstAllocatedDescriptor = AllocateDescriptorsFromTen
+			sem.OwnDescriptors = c.own
+			sem.RedirectsUseEveryTarget = c.joins
+			sem.LastPipelineElementInCurrentShell = Yes
+			out, st := run(t, c.src, withSem(sem))
+			if got := strings.Join(strings.Fields(out), " "); got != c.want || st != 0 {
+				t.Errorf("got %q (status %d), want %q", got, st, c.want)
+			}
+		})
+	}
+}

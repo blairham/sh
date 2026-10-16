@@ -6947,39 +6947,8 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 		// with the letter.
 		if array != "" {
 			elems := exactElems(text)
-			switch {
-			case !echo.elements(r, elems):
-				// `read -e`: the elements were written and the array is
-				// left as it was — and the freeze below is never asked,
-				// because there is no write to refuse.
-			case r.namesAPosition(array):
-				// `argv[N]` takes the words and `0` refuses them, as `set -A`
-				// does. See Runner.StoreAWholeArrayAtAPosition.
-				if st, _, stop := r.StoreAWholeArrayAtAPosition(array, elems, false); stop {
-					return st
-				}
-			case !r.readMayWrite(array):
-				if r.ctl == controlExit {
-					// The whole-array store's number, not the scalar's — see
-					// Runner.arrayStoreRefusalStatus (#6486).
-					return r.arrayStoreRefusalStatus(r.status)
-				}
-				if r.readRefusalEndsTheBuiltin() {
-					return r.readFrozenStatus(len(args[:fill]), !defaulted)
-				}
-				refused = true
-			case r.fixedSlotRefusesAnArrayValue(array):
-				// A slot that is not a container refuses the whole array, as
-				// `set -A` does. See interp/privatekindfixed.go.
-				return r.arrayStoreRefusalStatus(r.status)
-			default:
-				r.setArrayForgettingARetypedHide(array, elems)
-				if r.ctl == controlExit {
-					// Refused inside the store rather than by the freeze above — a
-					// name an enclosing call declared private — and the number is
-					// the whole-array store's all the same (#6515).
-					return r.arrayStoreRefusalStatus(r.status)
-				}
+			if st, stop := r.readStoreTheArray(array, elems, status, echo, len(args[:fill]), defaulted, &refused); stop {
+				return st
 			}
 			if clearRest {
 				for i, name := range args[:fill] {
@@ -7028,38 +6997,8 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 		if r.unspecified {
 			return r.status
 		}
-		switch {
-		case !echo.elements(r, fields):
-			// See the same three-way above: `-e` writes the elements and
-			// assigns none of them, and asks nothing about the freeze.
-		case r.namesAPosition(array):
-			// `argv[N]` takes the words and `0` refuses them, as `set -A`
-			// does. See Runner.StoreAWholeArrayAtAPosition.
-			if st, _, stop := r.StoreAWholeArrayAtAPosition(array, fields, false); stop {
-				return st
-			}
-		case !r.readMayWrite(array):
-			if r.ctl == controlExit {
-				// The whole-array store's number, not the scalar's — see
-				// Runner.arrayStoreRefusalStatus (#6486).
-				return r.arrayStoreRefusalStatus(r.status)
-			}
-			if r.readRefusalEndsTheBuiltin() {
-				return r.readFrozenStatus(len(args[:fill]), !defaulted)
-			}
-			refused = true
-		case r.fixedSlotRefusesAnArrayValue(array):
-			// A slot that is not a container refuses the whole array, as
-			// `set -A` does. See interp/privatekindfixed.go.
-			return r.arrayStoreRefusalStatus(r.status)
-		default:
-			r.setArrayForgettingARetypedHide(array, fields)
-			if r.ctl == controlExit {
-				// Refused inside the store rather than by the freeze above — a
-				// name an enclosing call declared private — and the number is
-				// the whole-array store's all the same (#6515).
-				return r.arrayStoreRefusalStatus(r.status)
-			}
+		if st, stop := r.readStoreTheArray(array, fields, status, echo, len(args[:fill]), defaulted, &refused); stop {
+			return st
 		}
 		if clearRest {
 			for i, name := range args[:fill] {
@@ -7144,6 +7083,77 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 		}
 	}
 	return r.readRefusedOrStatus(refused, status, badName, bad)
+}
+
+// readStoreTheArray is `read -A`'s whole-array store, one for the line read
+// by a count and the line split into fields, reporting the status to return
+// where the builtin stops there. A freeze that does not end the builtin sets
+// refused instead.
+//
+// The four ways the store can be refused — a position that is `$0`, the
+// freeze, a slot of a fixed scalar kind, and a call's private — each end the
+// script, and the number they leave is the read's own when the read hit end
+// of input: measured 2026-10-16 on zsh 5.9.2, `-f`, `env -i
+// PATH=/usr/bin:/bin`, `read -A HOME </dev/null`, `read -A 0 </dev/null`,
+// `typeset -r v; read -A v </dev/null`, a private reached from a callee and
+// `print -n x | read -A HOME` all leave 1 from `-c` and from `( … )`, where
+// the same reads given a whole line leave arrayStoreRefusalStatus's 0
+// (#6744). So that answer is about a read that succeeded, and is asked only
+// for one.
+//
+// Written once because it was written twice, and a copy is where a fix to one
+// of the four goes missing.
+func (r *Runner) readStoreTheArray(array string, elems []string, own int, echo readEcho, names int, defaulted bool, refused *bool) (int, bool) {
+	switch {
+	case !echo.elements(r, elems):
+		// `read -e`: the elements were written and the array is left as it
+		// was — and the freeze below is never asked, because there is no
+		// write to refuse.
+	case r.namesAPosition(array):
+		// `argv[N]` takes the words and `0` refuses them, as `set -A` does.
+		// See Runner.StoreAWholeArrayAtAPosition.
+		if st, _, stop := r.StoreAWholeArrayAtAPosition(array, elems, false); stop {
+			if own != 0 {
+				r.status = own
+				return own, true
+			}
+			return st, true
+		}
+	case !r.readMayWrite(array):
+		if r.ctl == controlExit {
+			// The whole-array store's number, not the scalar's — see
+			// Runner.arrayStoreRefusalStatus (#6486).
+			return r.readArrayRefusalStatus(own), true
+		}
+		if r.readRefusalEndsTheBuiltin() {
+			return r.readFrozenStatus(names, !defaulted), true
+		}
+		*refused = true
+	case r.fixedSlotRefusesAnArrayValue(array):
+		// A slot that is not a container refuses the whole array, as `set
+		// -A` does. See interp/privatekindfixed.go.
+		return r.readArrayRefusalStatus(own), true
+	default:
+		r.setArrayForgettingARetypedHide(array, elems)
+		if r.ctl == controlExit {
+			// Refused inside the store rather than by the freeze above — a
+			// name an enclosing call declared private — and the number is
+			// the whole-array store's all the same (#6515).
+			return r.readArrayRefusalStatus(own), true
+		}
+	}
+	return 0, false
+}
+
+// readArrayRefusalStatus is what a refused `read -A` leaves: the read's own
+// status where it was not 0, and arrayStoreRefusalStatus's answer where it
+// was. See Runner.readStoreTheArray.
+func (r *Runner) readArrayRefusalStatus(own int) int {
+	if own != 0 {
+		r.status = own
+		return own
+	}
+	return r.arrayStoreRefusalStatus(r.status)
 }
 
 // readRefusedOrStatus folds a refusal the builtin went on past into the

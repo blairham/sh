@@ -49,6 +49,74 @@ func positionalAssignIndex(name string) (int, bool) {
 	return n, true
 }
 
+// truncatedPositionDigits reports how many digits of a decimal index the
+// shell says it read when the index is too wide for a signed 64-bit integer,
+// and whether it was.
+//
+// The count is one past the digit that went over, or that digit's own place
+// where it is the last one written — so it is the length less one only while
+// the run is at most a digit longer than what fits. Measured 2026-10-16 on zsh
+// 5.9.2, `-f`, through `N=x` (the same count comes back for a numbered tilde):
+//
+//	9223372036854775808         18   the last digit went over
+//	9999999999999999999         18   the same
+//	10000000000000000000        19   the same, one digit later
+//	99999999999999999999        19   the 19th went over, one more follows
+//	999999999999999999999       19   and two more: still 19
+//	100000000000000000000       20   the 20th went over
+//	1000000000000000000000      20
+//	00000000000000000003         —   leading zeros are not width
+//	9223372036854775807          —   fits
+//
+// The length less one, which was the reading before, is right for the first
+// five rows and wrong for the fifth and seventh (#6743).
+func truncatedPositionDigits(digits string) (int, bool) {
+	const limit = uint64(1<<63 - 1)
+	var v uint64
+	for i := 0; i < len(digits); i++ {
+		d := uint64(digits[i] - '0')
+		if v > (limit-d)/10 {
+			if i < len(digits)-1 {
+				return i + 1, true
+			}
+			return i, true
+		}
+		v = v*10 + d
+	}
+	return 0, false
+}
+
+// warnATruncatedPosition says so where a store names a position too wide for
+// the shell's integer, in the dialect with a sentence for it.
+//
+// A warning and not a refusal, and the store is still declined here. The
+// shell being modeled goes on to store at the index the truncated digits make,
+// reduced again to the width of its own list index, and that is an artifact
+// with no reading to model: measured 2026-10-16 on zsh 5.9.2, an index whose
+// low 32 bits are negative puts the value in front of the list, one whose low
+// bits are a large positive grows the list until the shell is killed, and
+// `4294967297=x` stores at position 1 — while two neighboring cells of the
+// negative half (`$#` plus one, under `+=(…)`) leave a list of what looks like
+// unrelated memory. positionalAssignLimit is the bound on the second shape and
+// nothing here is the first or third.
+//
+// Once per store, and on every route that stores: `N=x`, `N=(x)`, `N+=x`, a prefix to a builtin, a
+// function or an external command, `for N in`, `read`, `read -A`, `set -A`,
+// `printf -v`, `print -v`, `zparseopts -a` and `${(A)N::=x}`. `printf -v`
+// warns twice, the first time where it asks whether the name is an array.
+func (r *Runner) warnATruncatedPosition(name string) {
+	wording := r.diag().PositionTruncated
+	if wording == "" {
+		return
+	}
+	if read, cut := truncatedPositionDigits(name); cut {
+		// The number reader's warning and not the builtin's that handed it
+		// the name: `zsh:1:` for `read`, `set -A` and `printf -v` alike,
+		// which is arithmetic's own location for the same sentence.
+		r.arithDiagf("%s\n", Wording(wording, "", read, name))
+	}
+}
+
 // assignPositional performs `N=value`, the assignment whose name is a number.
 //
 // It is `argv[N]=value` under another spelling, and measured to be exactly
@@ -72,7 +140,22 @@ func positionalAssignIndex(name string) (int, bool) {
 // grammar flag is what keeps the other five from reaching this at all.
 func (r *Runner) assignPositional(a *syntax.Assign, n int) {
 	if n < 0 {
-		// An index this shell cannot represent. See positionalAssignLimit.
+		// An index this shell cannot represent, or one past
+		// positionalAssignLimit. The value is expanded all the same, and the
+		// warning comes after it: `99999999999999999999=$(echo side >&2)`
+		// writes `side` and then the truncation, on zsh 5.9.2 (#6743).
+		if a.IsArray {
+			for _, e := range a.Elems {
+				if e.Word != nil {
+					r.expandWord(e.Word)
+				}
+			}
+		} else {
+			r.assignValue(a)
+		}
+		if !r.assignmentGaveUp() {
+			r.warnATruncatedPosition(a.Name)
+		}
 		return
 	}
 	if n == 0 {
@@ -237,6 +320,7 @@ func (r *Runner) storeAWholeArrayAtAPosition(name string, values []string, table
 		r.spliceParamWords(n, values)
 		return true, false
 	default:
+		r.warnATruncatedPosition(name)
 		return true, false
 	}
 	r.fatalQuiet()

@@ -1006,6 +1006,11 @@ type Diagnostics struct {
 	// 64-bit count: the digits read, then the rest of the word from the first
 	// digit. Empty is no warning. See Runner.warnTruncatedTildeNumber.
 	NumberedTildeTruncated string
+	// PositionTruncated warns that a store names a positional parameter by
+	// an index too wide for a signed 64-bit integer: the digits read, then
+	// the index as written. Empty is no warning. See
+	// Runner.warnATruncatedPosition.
+	PositionTruncated string
 	// CshNullGlobNoMatch is the sentence a word list under one shell's
 	// `cshnullglob` writes when none of its patterns matched: no verbs. See
 	// interp/cshnullglob.go.

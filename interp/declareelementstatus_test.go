@@ -104,6 +104,8 @@ func declaredElementRun(t *testing.T, src string, answer Answer, route Route) (s
 	sem.NegativeSubscriptPastTheStartInserts = No
 	sem.FatalErrorStatusIsOne = Yes
 	sem.StoreRefusalOfADeclaredElementLeavesZero = answer
+	// Fatal, which is the reading the zero belongs to (#6835).
+	sem.OutOfRangeElementToADeclaration = BadSubscriptEndsTheScript
 	return declaredElementRunWith(t, src, sem, route)
 }
 

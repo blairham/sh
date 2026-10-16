@@ -3564,6 +3564,9 @@ func Semantics() interp.Semantics {
 	// on 5.3.15, `a=(5 6 7); w=; ${a[$w]}` is `5` at status 0, and `${a[ ]}`
 	// beside it is too.
 	s.EmptySubscriptTextIsAMathError = interp.No
+	// A literal's own reading of the same empty subscript, measured 2026-10-16
+	// (#6738): see interp.Semantics.EmptySubscriptInAnIndexedLiteralIsBad.
+	s.EmptySubscriptInAnIndexedLiteralIsBad = interp.Yes
 	// The comma inside a subscript is the arithmetic operator here, as it is
 	// everywhere else: measured 2026-09-12, `a=(p q r s); i="2,3";
 	// ${a[$i]}` is the *third* element, which is the operator's right
@@ -3619,6 +3622,10 @@ func Semantics() interp.Semantics {
 	// and the line carries on, which is the control.
 	s.BadSubscriptEscapesAnArithmeticCommand = interp.Yes
 	s.BadSubscriptToADeclaration = interp.BadSubscriptAbandonsTheCommand
+	// An out-of-range store through each builtin, measured 2026-10-16 (#6835):
+	// see interp.Semantics.OutOfRangeElementToAnOutputOperand.
+	s.OutOfRangeElementToAnOutputOperand = interp.BadSubscriptReported
+	s.OutOfRangeElementToADeclaration = interp.BadSubscriptReported
 	// And a plain `a[]=6` gives up exactly as much again — the rest of the
 	// line, the enclosing function or list with it, and 1 at the next
 	// top-level command. Measured 2026-09-20 on 5.3.20 from a script file:

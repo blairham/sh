@@ -92,6 +92,83 @@ func (r *Runner) literalSubscriptIndex(e literalElem) (int, error) {
 	return r.subscriptValue(e.sub)
 }
 
+// literalElemPos is the position a subscripted literal element is placed at,
+// and reports the refusal where there is none. value is what the refusing
+// column quotes after the subscript: the element's value, or nothing for a
+// nested literal or a compound body.
+//
+// One function for the three kinds of element literalInto places, so that
+// they cannot come to disagree about which subscripts are refused.
+func (r *Runner) literalElemPos(name string, a Array, e literalElem, value string) (int, bool) {
+	idx, empty, err := r.literalSubscriptIndexOrEmpty(e)
+	if err != nil {
+		// The last of the places a subscript is read, and the one #649
+		// missed: it kept a wording of its own and carried on, where the
+		// two shells that evaluate a literal's subscript report the
+		// arithmetic failure and end the script. The third reads the text
+		// as a key and never reaches this.
+		r.failedSubscript("%s\n", r.subscriptFailure(e.sub, err))
+		return 0, false
+	}
+	if r.unspecified {
+		return 0, false
+	}
+	pos, ok := r.elemPos(a, idx)
+	if !ok || empty {
+		// Before the first element, or a subscript that expanded to nothing
+		// where that is refused. Refused as the plain form is — and worded
+		// apart from it by both shells that get here: one names the element
+		// as written and the other the subscript. What it costs is what
+		// failedSubscript says, which is not the `-c` give-up an arithmetic
+		// failure has (#6835).
+		wording := r.diag().BadArrayLiteralSubscript
+		if wording == "" {
+			wording = r.diag().BadArraySubscript
+		}
+		// A declaration's status as well as the line's: `declare -a
+		// q=([-5]=x)` leaves 1 in bash 5.3.20, where this left 0.
+		r.assignFailed = true
+		r.failedSubscript("%s\n", Wording(wording,
+			"%[1]s[%[2]s]: bad array subscript", name, e.sub, value))
+		return 0, false
+	}
+	return pos, true
+}
+
+// literalSubscriptIndexOrEmpty is literalSubscriptIndex with a literal's own
+// reading of a subscript that expanded to nothing put first — see
+// Semantics.EmptySubscriptInAnIndexedLiteralIsBad. empty reports the refusal
+// for the caller to word.
+func (r *Runner) literalSubscriptIndexOrEmpty(e literalElem) (idx int, empty bool, err error) {
+	if e.subPlaced || strings.TrimSpace(e.sub) != "" {
+		idx, err = r.literalSubscriptIndex(e)
+		return idx, false, err
+	}
+	bad := r.sem().EmptySubscriptInAnIndexedLiteralIsBad
+	if bad == Unspecified {
+		if r.ask(bad, "an array literal element whose subscript expanded to nothing") {
+			bad = Yes
+		} else {
+			bad = No
+		}
+		if r.unspecified {
+			return 0, false, nil
+		}
+	}
+	if bad == Yes && e.sub == "" {
+		return 0, true, nil
+	}
+	if bad == Yes {
+		// Blanks rather than nothing, which the refusing column reads as
+		// an expression like any other subscript.
+		idx, err = r.literalSubscriptIndex(e)
+		return idx, false, err
+	}
+	// Element zero, empty and blank alike, and not the math error the same
+	// text is elsewhere in the column that refuses that.
+	return 0, false, nil
+}
+
 // writtenText is the element as the source wrote it. See literalElem.written.
 func (e literalElem) writtenText() string {
 	if e.written == nil {
@@ -913,19 +990,8 @@ func (r *Runner) literalInto(name string, a Array, next int, parsed []literalEle
 			// q=2))` — placed where the subscript says. The same arithmetic
 			// the nested-array spelling below reads, so the two readings of
 			// one syntax cannot disagree about which element is meant.
-			idx, err := r.literalSubscriptIndex(e)
-			if err != nil {
-				r.failedSubscript("%s\n", r.subscriptFailure(e.sub, err))
-				return a, false
-			}
-			pos, ok := r.elemPos(a, idx)
+			pos, ok := r.literalElemPos(name, a, e, "")
 			if !ok {
-				wording := r.diag().BadArrayLiteralSubscript
-				if wording == "" {
-					wording = r.diag().BadArraySubscript
-				}
-				r.failedSubscript("%s\n", Wording(wording,
-					"%[1]s[%[2]s]: bad array subscript", name, e.sub, ""))
 				return a, false
 			}
 			value, ok := r.literalElementCompound(name, itoa(pos), e.members)
@@ -943,19 +1009,8 @@ func (r *Runner) literalInto(name string, a Array, next int, parsed []literalEle
 			// A subscripted head whose value is a literal, placed where the
 			// subscript says. Read below by the same arithmetic every other
 			// subscripted element uses.
-			idx, err := r.literalSubscriptIndex(e)
-			if err != nil {
-				r.failedSubscript("%s\n", r.subscriptFailure(e.sub, err))
-				return a, false
-			}
-			pos, ok := r.elemPos(a, idx)
+			pos, ok := r.literalElemPos(name, a, e, "")
 			if !ok {
-				wording := r.diag().BadArrayLiteralSubscript
-				if wording == "" {
-					wording = r.diag().BadArraySubscript
-				}
-				r.failedSubscript("%s\n", Wording(wording,
-					"%[1]s[%[2]s]: bad array subscript", name, e.sub, ""))
 				return a, false
 			}
 			a.Set(pos, nestedAppended(a.Get(pos), *e.nested, e.appendValue))
@@ -965,27 +1020,8 @@ func (r *Runner) literalInto(name string, a Array, next int, parsed []literalEle
 			}
 			continue
 		}
-		idx, err := r.literalSubscriptIndex(e)
-		if err != nil {
-			// The last of the places a subscript is read, and the one #649
-			// missed: it kept a wording of its own and carried on, where the
-			// two shells that evaluate a literal's subscript report the
-			// arithmetic failure and end the script. The third reads the
-			// text as a key and never reaches this.
-			r.failedSubscript("%s\n", r.subscriptFailure(e.sub, err))
-			return a, false
-		}
-		pos, ok := r.elemPos(a, idx)
+		pos, ok := r.literalElemPos(name, a, e, e.value)
 		if !ok {
-			// Before the first element. Refused and fatal, as the plain form
-			// is — and worded apart from it by both shells that get here:
-			// one names the element as written and the other the subscript.
-			wording := r.diag().BadArrayLiteralSubscript
-			if wording == "" {
-				wording = r.diag().BadArraySubscript
-			}
-			r.failedSubscript("%s\n", Wording(wording,
-				"%[1]s[%[2]s]: bad array subscript", name, e.sub, e.value))
 			return a, false
 		}
 		value := e.value

@@ -3801,6 +3801,9 @@ func Semantics() interp.Semantics {
 	// shell reads as the empty expression exactly as it reads the written
 	// `${a[]}`: measured 2026-09-11 on ksh93u+, both are element zero.
 	s.EmptySubscriptTextIsAMathError = interp.No
+	// A literal's own reading of the same empty subscript, measured 2026-10-16
+	// (#6738): see interp.Semantics.EmptySubscriptInAnIndexedLiteralIsBad.
+	s.EmptySubscriptInAnIndexedLiteralIsBad = interp.No
 	// The comma is the operator here too, and there are no ranges for the
 	// question to be about (#2160).
 	s.SubscriptExpressionStopsAtASeparator = interp.No
@@ -3835,6 +3838,10 @@ func Semantics() interp.Semantics {
 	// syntax error` and exit 1 with nothing after it, by both routes.
 	s.BadSubscriptEscapesAnArithmeticCommand = interp.No
 	s.BadSubscriptToADeclaration = interp.BadSubscriptEndsTheScript
+	// An out-of-range store through each builtin, measured 2026-10-16 (#6835):
+	// see interp.Semantics.OutOfRangeElementToAnOutputOperand.
+	s.OutOfRangeElementToAnOutputOperand = interp.BadSubscriptReported
+	s.OutOfRangeElementToADeclaration = interp.BadSubscriptEndsTheScript
 	// unanswered EmptySubscriptToAnAssignment: this shell refuses `a[]=6`
 	// while the program is *read*, so no assignment with empty brackets ever
 	// reaches the runtime. Measured 2026-09-20 on ksh93u+ 2012-08-01: `echo

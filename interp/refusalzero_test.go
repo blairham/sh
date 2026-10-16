@@ -155,5 +155,7 @@ func refusalZeroRunAs(t *testing.T, answer Answer, src string, route Route) (str
 		s.NegativeSubscriptPastTheStartInserts = No
 		s.FatalErrorStatusIsOne = Yes
 		s.StoreRefusalOfADeclaredElementLeavesZero = answer
+		// Fatal, which is the reading the zero belongs to (#6835).
+		s.OutOfRangeElementToADeclaration = BadSubscriptEndsTheScript
 	}, Diagnostics{}, src, route)
 }

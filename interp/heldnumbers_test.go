@@ -62,6 +62,18 @@ func TestTheShellsOwnDescriptorsAreInItsNumbers(t *testing.T) {
 		{`true | true | { ( echo <(true) <(true) ); }`, []int{1, 2}},
 		{`true | true | ( echo <(true) <(true) )`, []int{0, 1}},
 		{`{ echo <(true) <(true); } </dev/null & wait`, []int{0, 1}},
+		// A simple command as a forked element holds one more from its first
+		// substitution's pipe until its words are expanded (#6530): after
+		// that pipe's first end, so a writing substitution steps over it as
+		// well; seen by a command substitution in a later word; given back
+		// before the function body runs and before the command's own list.
+		{`echo <(true) <(true) <(true) | read -r x; echo $x`, []int{0, 2, 3}},
+		{`echo >(true) >(true) | read -r x; echo $x`, []int{2, 3}},
+		{`echo <(true) >(true) | read -r x; echo $x`, []int{0, 3}},
+		{`{ echo <(true) <(true); } | read -r x; echo $x`, []int{0, 1}},
+		{`echo <(true) $(exec {v}</dev/null; echo $v) | read -r x; echo $x`, []int{0, 2}},
+		{`f() { echo <(true) "$@"; }; f <(true) <(true) | read -r x; echo $x`, []int{1, 0, 2}},
+		{`f() { echo "$@" $v; }; f <(true) <(true) {v}</dev/null | read -r x; echo $x`, []int{0, 2, 1}},
 		// And a substitution's body holds none of it: zsh 5.9.2 answers
 		// `true | true | cat <(echo <(true))` from the bottom of its range,
 		// and the same with `read` for `cat`. Written with `read` because a

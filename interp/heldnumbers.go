@@ -270,6 +270,10 @@ type elementEntry struct {
 	// zero where the element reads no pipe. Never a real number below the
 	// allocation base, so zero cannot be one.
 	input int
+	// substHeld is the number an element's first process substitution
+	// holds until its words are expanded, once it is held, or zero. See
+	// holdForTheFirstSubstitution.
+	substHeld int
 }
 
 // redirHolds is what one redirection list holds while it applies: the saved
@@ -309,6 +313,11 @@ type redirHolds struct {
 func (r *Runner) beginRedirHolds(owner redirOwner) *redirHolds {
 	entry := r.entering
 	r.entering = elementEntry{}
+	if entry.substHeld != 0 {
+		// The words are expanded and the list is reached. See
+		// holdForTheFirstSubstitution.
+		r.letGoOfNumber(entry.substHeld)
+	}
 	if !r.savesRedirectedStreams() {
 		return nil
 	}
@@ -477,6 +486,43 @@ func (sub *Runner) enterAsAnElement(before []heldNumber, reads []int, i int, cmd
 	if i > 0 {
 		sub.entering.input = reads[i-1]
 	}
+}
+
+// holdForTheFirstSubstitution is a process substitution about to be made in
+// the words of a forked pipeline element before the element's own
+// redirection list: the first one holds a number until the words are all
+// expanded.
+//
+// zsh 5.9.2 holds one more number there, from the first substitution's pipe
+// on, and only there: `echo <(true) <(true) | cat` is `11 13`, where the same
+// command alone, as the last element, run with `&`, in a group or in
+// parentheses is `11 12`. It is taken after the first end of that pipe —
+// `echo >(true) >(true) | cat` is `13 14`, the reading end on 11 and the
+// writing end the substitution publishes stepping over both — and given back
+// before the command's redirections: `f(){ exec {w}</dev/null; echo $w
+// "$@"; }; f <(true) <(true) | cat` is `12 11 13`, and with `{v}</dev/null`
+// on `f` it is `v` that is 12. A command substitution in a later word holds
+// it, being a fork of the element — `echo <(true) $(exec {v}</dev/null; echo
+// $v) | cat` is `11 13` — and makes nothing: `echo $(true) <(true) <(true) |
+// cat` is `11 13` too, and so is a file substitution before the pipes.
+// Measured 2026-10-15 (#6530).
+//
+// So the number is the one after the lowest free one, whichever end of the
+// pipe then takes the lowest.
+//
+// What decides is whether the words are expanded before the element's own
+// list, which settles the entry, and not the command's kind, so nothing here
+// tests it: `for i in <(true) <(true); do echo $i; done | cat` is `11 12`,
+// as are a `case` word and an `if` or `while` condition, where `repeat 1
+// echo <(true) <(true) | cat` is `11 13`.
+func (r *Runner) holdForTheFirstSubstitution() {
+	e := &r.entering
+	if !e.pending || e.substHeld != 0 || !r.countsOwnDescriptors() {
+		return
+	}
+	end := r.holdNumber(true)
+	e.substHeld = r.holdNumber(true)
+	r.letGoOfNumber(end)
 }
 
 // madeFirstSubst is one process substitution of a redirection list, made

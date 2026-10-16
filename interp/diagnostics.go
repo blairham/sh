@@ -3986,6 +3986,13 @@ type Diagnostics struct {
 	// this one. See Runner.fatalExpansionQuiet for the rows.
 	ExpansionFailureStatusFromCommandString int
 
+	// ParamErrorInABareAssignmentStatusAtAPrompt is the status `${x?word}`
+	// leaves when it fails in an assignment that is a command of its own, in
+	// an interactive shell and outside a loop. Zero leaves the ordinary
+	// status. zsh's is 5; see Runner.paramErrorInABareAssignment for the rows
+	// and the controls.
+	ParamErrorInABareAssignmentStatusAtAPrompt int
+
 	// CasePatternRefusalLeavesNought says that a pattern the shell will not
 	// compile, standing as a `case` arm, leaves **nought** behind it — where
 	// every other give-up on the same line leaves the dialect's ordinary

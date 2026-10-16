@@ -5521,6 +5521,10 @@ func Diagnostics() interp.Diagnostics {
 		// the first alone looks like a base name rather than a fixed one.
 		// The other three shells print argv[0] whole.
 		SelfName: "zsh",
+		// `x=${q?boom}` at a prompt leaves 5, where a bare assignment's other
+		// failures leave 1. Measured 2026-10-15 on 5.9.2 run `-f -i`; see
+		// interp.Runner.paramErrorInABareAssignment for the rows (#6580).
+		ParamErrorInABareAssignmentStatusAtAPrompt: 5,
 		// A pattern this shell will not compile, standing as a `case` arm,
 		// ends the shell at **nought** from `-c` and at 1 from a script file
 		// or from standard input. Measured 2026-09-27 on 5.9.2 run `-f`, both

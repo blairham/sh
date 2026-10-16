@@ -143,6 +143,13 @@ func (r *Runner) literalElems(elems []*syntax.ArrayElem, readsSubscripts, bareIs
 		}
 		return marked, true
 	}
+	// A literal's words are not a bare assignment's value, whatever the
+	// literal is assigned by: `a=(${q?b})` at a prompt leaves 1 where
+	// `x=${q?b}` leaves 5. See Runner.paramErrorInABareAssignment.
+	if r.inABareAssignment {
+		r.inABareAssignment = false
+		defer func() { r.inABareAssignment = true }()
+	}
 	out := make([]literalElem, 0, len(elems))
 	// The literal is one word list for `cshnullglob`. See
 	// interp/cshnullglob.go.

@@ -173,7 +173,13 @@ func (r *Runner) subshell(ctx context.Context, c *syntax.Subshell) error {
 			// the jobs this body starts are numbered from two and never take
 			// the `+`. See Runner.runAsItsOwnJob.
 			sub.runAsItsOwnJob(r)
-			if r.tailPutsNothingBack(c) {
+			if r.subshellBecomesTheTail(c) {
+				// The parentheses are the last thing the shell runs, so
+				// their own last program is the one it becomes. See
+				// subshellBecomesTheTail.
+				sub.tailSubshell = true
+				sub.handTail(c.List)
+			} else if r.tailPutsNothingBack(c) {
 				// Run through to the shell's end, as far as putting streams
 				// back goes. See tailPutsNothingBack.
 				defer sub.handTailToPutNothingBack(tailCommandOf(c.List), tailPipelineOf(c.List))()
@@ -187,6 +193,11 @@ func (r *Runner) subshell(ctx context.Context, c *syntax.Subshell) error {
 		defer sub.anchorForkedBody()()
 		sub.inParensBody = true
 		err := sub.runList(ctx, c.List)
+		if sub.tailReached {
+			// The program the parentheses came to is the shell's. See
+			// Runner.TailReached.
+			r.tailReached = true
+		}
 		if sub.interruptAtParenthesesEnd() {
 			// An interrupt left pending inside the parentheses ends the
 			// shell as they end. See interruptAtParenthesesEnd.

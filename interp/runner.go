@@ -3385,6 +3385,10 @@ type Runner struct {
 	// shell's own do, and the slot it holds, one, is the parentheses
 	// themselves. See unforkedtail.go.
 	unforkedSelf bool
+	// tailSubshell says this shell is a `( … )` that is the last thing its
+	// parent runs, in the dialect whose last program in it replaces the
+	// shell. See Runner.subshellBecomesTheTail.
+	tailSubshell bool
 	// tailCmd is the command that is the last thing this shell runs, where the
 	// front end has said nothing follows — see LastPart and unforkedtail.go.
 	// A node rather than a flag, so that a stale value matches nothing: it is
@@ -6001,6 +6005,7 @@ func (r *Runner) clone() *Runner {
 	// A clone is a fork until the one construct that knows otherwise says so,
 	// and nothing a fork runs is the shell's last. See unforkedtail.go.
 	c.tailCmd, c.tailPipe, c.unforkedSelf, c.slotOneIsTheBody = nil, nil, false, false
+	c.tailSubshell = false
 	c.tailPutsNothingBackOnly, c.listOnTheTail = false, false
 	// And a subshell's diagnostics are its own process's in the shells this
 	// one is measured against, which no line editor ever hears about. See

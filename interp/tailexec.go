@@ -54,9 +54,6 @@ import (
 //
 // **Not modeled here**, and forked instead:
 //
-//   - a `( … )` in the tail, in the dialects that fork the parentheses: dash,
-//     ksh93 and ash. Here a subshell is a clone in one process. zsh does not
-//     fork them, and that clone is the shell itself, so it is replaced;
 //   - a shell that still has a job running, or has ever made a process
 //     substitution. Those are goroutines here and would die with the
 //     process. zsh, dash and ksh93 replace themselves anyway, and bash 5.3
@@ -122,7 +119,7 @@ func (r *Runner) replacesItselfHere() bool {
 	// the parent shell with it. The one exception is a `( … )` the dialect
 	// does not fork because nothing follows it: that clone is the shell
 	// itself. See unforkedtail.go.
-	if c == nil || r.ReplaceProcess == nil || (r.inSubshell && !r.unforkedSelf) || r.bg != nil ||
+	if c == nil || r.ReplaceProcess == nil || (r.inSubshell && !r.unforkedSelf && !r.tailSubshell) || r.bg != nil ||
 		r.tailPutsNothingBackOnly {
 		return false
 	}
@@ -165,6 +162,39 @@ func (r *Runner) replacesItselfHere() bool {
 	return true
 }
 
+// subshellBecomesTheTail is whether a `( … )` is the last thing this shell
+// runs in the dialect that reaches through the parentheses for the program it
+// becomes, rather than forking them.
+//
+// Measured 2026-10-15 on dash 0.5.12 and ksh93u+ 2012-08-01, `sh -c 'echo $$;
+// <P>'` with the probe `/bin/sh -c "echo \$PPID"` (#6721): **E** is the
+// probe's parent being the shell's own parent, **f** the shell's own pid.
+//
+//	(probe)             E in both
+//	true; (probe)       E
+//	(true; probe)       E
+//	(probe); true       f — the same parentheses, with something after them
+//
+// So the parentheses are the shell and their own last program replaces it,
+// the reach TailExecWhereverLastOutsideALoop already has through `{ … }`,
+// `if` and `&&`. zsh reaches the same place through the parentheses it does
+// not fork at all — see unforkedtail.go — and bash 5.3 forks them.
+//
+// Asked only of parentheses that are the tail, and only where this shell
+// could become a program at all.
+func (r *Runner) subshellBecomesTheTail(c *syntax.Subshell) bool {
+	if r.ReplaceProcess == nil || !r.isTail(c) || r.tailInALoop || r.tailPutsNothingBackOnly {
+		return false
+	}
+	if r.inSubshell && !r.unforkedSelf && !r.tailSubshell {
+		return false
+	}
+	if r.sem().TailExec != TailExecWhereverLastOutsideALoop {
+		return false
+	}
+	return !r.holdsATrapWithAnAction()
+}
+
 // TailReached reports whether this shell came to the last command of a
 // command string as the program it becomes in place of forking it — whether
 // it then became it, found nothing by that name, found a file that would not
@@ -201,7 +231,7 @@ func (r *Runner) becomeTheProgram(ctx context.Context, path, run string, argv, e
 	_ = ctx
 	dir, releaseDir := r.dirForReplacement()
 	defer releaseDir()
-	if r.unforkedSelf {
+	if r.unforkedSelf || r.tailSubshell {
 		// The parentheses are the shell itself, so its end is this one.
 		r.CleanUp()
 	} else {

@@ -25,6 +25,7 @@ func TestAPersistingPrefixMakesATypedNameAPlainScalar(t *testing.T) {
 		// it, and a regular builtin's prefix is given back.
 		{`typeset -u v=x; v=abc :; typeset -p v`, "typeset -u v=ABC\n"},
 		{`typeset -i v=1; v=2+2 true; typeset -p v`, "typeset -i v=1\n"},
+		{`typeset -i x=2; x+=5 :; typeset -p x`, "typeset -i x=7\n"},
 	} {
 		out, _ := runKsh(t, t.TempDir(), tc.src)
 		if out != tc.want {

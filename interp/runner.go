@@ -10230,7 +10230,7 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 				// function in one column. Read rather than asked: the take-back
 				// after the call is where that question is put. See
 				// Semantics.PersistingPrefixMakesATypedNameAPlainScalar.
-				r.persistingPrefixResetsATypedName(held)
+				r.persistingPrefixResetsATypedName(a, held)
 			}
 			// A prefix to a function persists here, so it is a store and
 			// fires the discipline a store fires — with `.append` for `+=`,
@@ -10512,7 +10512,7 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 				// give back. See Runner.callPrefixesLetTheNameGo, which is
 				// the other end of the frames an `unset` reaches into.
 				r.callPrefixesLetTheNameGo(landsOn)
-				r.persistingPrefixResetsATypedName(landsOn)
+				r.persistingPrefixResetsATypedName(a, landsOn)
 			}
 			// Whether a discipline hears about it is whether there is a
 			// store for it to hear about. A *regular* builtin's prefix is the

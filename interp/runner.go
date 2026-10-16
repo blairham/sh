@@ -6622,6 +6622,13 @@ func (r *Runner) locationPrefixNamed(construct string) string {
 		// borrowed text's own name all stay whatever they already were.
 		d.Location = LocationNameOnly
 	}
+	if r.inSubshell && r.Interactive && d.InteractiveSubshellNamesNoLine {
+		// A subshell of an interactive shell, located by name alone where
+		// the shell names its line. Moved on the copy, so a borrowed text's
+		// own location below still answers for itself. See
+		// Diagnostics.InteractiveSubshellNamesNoLine.
+		d.Location, d.BuiltinLocation = LocationNameOnly, LocationNameOnly
+	}
 	name, line, inBody := r.locationNameAndLine(r.speaker == "" || r.speakerAtTheCall)
 	if construct != "" {
 		name += ": " + construct

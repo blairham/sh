@@ -3652,10 +3652,22 @@ func (sh *Shell) execute(r *interp.Runner, pr *program, in source) int {
 // before the EXIT trap. A refusal by the front end ran nothing and draws
 // nothing.
 func (sh *Shell) endTheLine(r *interp.Runner, in source, how ending) {
-	if !in.readAsAPrompt || !sh.Semantics.PromptEndOfInputEndsTheLine || how == endingRefused {
+	asAPrompt := in.readAsAPrompt && sh.Semantics.PromptEndOfInputEndsTheLine
+	// And the one dialect that ends an interactive script's file this way
+	// without reading it as a prompt. See
+	// interp.Semantics.InteractiveScriptEndOfInputEndsTheLine.
+	asAFile := in.interactive && in.invocationRoute() == interp.RouteScriptFile &&
+		sh.Semantics.InteractiveScriptEndOfInputEndsTheLine
+	if !asAPrompt && !asAFile || how == endingRefused {
 		return
 	}
-	if r.Exited() || r.TailReached() {
+	if r.ReturnEnded() || r.TailReached() {
+		return
+	}
+	// Ended before its input ran out, which writes none — except a fatal
+	// error on the file's route, which BusyBox ends with the newline all the
+	// same: `: ${zz?b}; echo after` writes the diagnostic and then it.
+	if r.Exited() && (!asAFile || r.ExitRan() || r.ErrExitEnded()) {
 		return
 	}
 	_, _ = io.WriteString(r.Err(), "\n")

@@ -5407,6 +5407,9 @@ type Runner struct {
 	// retypingFrozen is the one name a frozen-scalar retype is under way for.
 	// See the method of the same name for why it is a field.
 	retypingFrozen string
+	// heldFreeze is the assignment to a frozen name whose refusal waits for
+	// its store, and the name it refuses. See interp/frozenorder.go.
+	heldFreeze heldFreeze
 	// containerByThisLinesLetter holds the frozen scalars a declaration's
 	// own `-a` or `-A` letter has just made containers. The letter lands
 	// when the builtin runs and the operand's literal is stored after it, by
@@ -13868,6 +13871,29 @@ func (r *Runner) refuseReadonly(name string, form assignForm) bool {
 		// interp/privatescope.go.
 		return true
 	}
+	if !r.freezeRefuses(name, form) {
+		return false
+	}
+	// Fatal everywhere but bash, measured with a plain assignment in a
+	// script — which is the contaminated-probe case oracle.md records.
+	//
+	// The invocation route has nothing to do with it, which took a full
+	// route-by-separator square to see: `bash -c 'readonly x=1; x=2; echo
+	// after'` stops and exits 1, and so does the same one-line program from
+	// a *file*; the same three commands on three lines print `after` and exit
+	// 0 by **both** routes. What ends is the command list, which is
+	// controlAbandon below. The field that used to be read here was measured
+	// from the two cells on the diagonal of that square — `-c` with a `;`
+	// against a file with newlines — which varied two things at once and is
+	// confirmatory for either reading (#1182).
+	return r.refuseAsAFreezeWould(name, form, "")
+}
+
+// freezeRefuses reports whether the freeze on name refuses a write of this
+// form, without saying so: the half of refuseReadonly that decides, for the
+// caller that has expansions to perform before the refusal is reported. See
+// interp/frozenorder.go.
+func (r *Runner) freezeRefuses(name string, form assignForm) bool {
 	if !r.attrHas(name, attrReadonly) {
 		return false
 	}
@@ -13917,20 +13943,7 @@ func (r *Runner) refuseReadonly(name string, form assignForm) bool {
 		// See freezeSurvivesAShadow, where the six rows are.
 		return false
 	}
-	// Fatal everywhere but bash, measured with a plain assignment in a
-	// script — which is the contaminated-probe case oracle.md records.
-	//
-	// The invocation route has nothing to do with it, which took a full
-	// route-by-separator square to see: `bash -c 'readonly x=1; x=2; echo
-	// after'` stops and exits 1, and so does the same one-line program from
-	// a *file*; the same three commands on three lines print `after` and exit
-	// 0 by **both** routes. What ends is the command list, which is
-	// controlAbandon below. The field that used to be read here was measured
-	// from the two cells on the diagonal of that square — `-c` with a `;`
-	// against a file with newlines — which varied two things at once and is
-	// confirmatory for either reading (#1182).
-	//
-	return r.refuseAsAFreezeWould(name, form, "")
+	return true
 }
 
 // refuseAsAFreezeWould is the second half of refuseReadonly: the name is
@@ -15193,6 +15206,7 @@ func (r *Runner) assignAll(ctx context.Context, assigns []*syntax.Assign) {
 func (r *Runner) prepareTracedAssign(a *syntax.Assign, value string) *expandedAssign {
 	e := &expandedAssign{assign: a, value: value}
 	if a.IsArray && a.Members == nil && a.Index == nil && len(a.Elems) > 0 &&
+		!r.frozenLiteralIsRefusedBeforeItsWords(a) &&
 		r.ask(r.sem().TraceArrayLiteralShowsTheExpandedElements,
 			"an array literal traced as what its elements expanded to") {
 		if parsed, ok := r.literalElems(a.Elems,
@@ -15416,8 +15430,18 @@ func (r *Runner) assign(ctx context.Context, a *syntax.Assign) {
 		// body that would first give it one. See
 		// interp/frozencompoundbody.go, where the state the rows part on is
 		// the one `${c+word}` answers.
-	} else if r.refuseReadonly(r.assignmentLandsOn(a.Name), assignedAlone) {
-		return
+	} else {
+		// A frozen name is refused once what the dialect expands ahead of
+		// the refusal has been expanded — the value, a whole literal, or
+		// everything up to the store. See interp/frozenorder.go (#6674).
+		switch outcome, name := r.refuseAFrozenAssignment(a); outcome {
+		case freezeRefusedIt:
+			return
+		case freezeWaitsForTheStore:
+			outer := r.heldFreeze
+			r.heldFreeze = heldFreeze{assign: a, name: name}
+			defer func() { r.heldFreeze = outer }()
+		}
 	}
 	if r.unspecified {
 		return
@@ -15732,6 +15756,11 @@ func (r *Runner) assign(ctx context.Context, a *syntax.Assign) {
 		// comma's right operand and write element 3, leaving element 2 in
 		// front of it — see Runner.assignSpan.
 		from, to, outcome := r.assignSpan(a, text)
+		if outcome == spanResolved && r.refuseTheHeldFreeze(a) {
+			// A frozen name, refused now that the span is evaluated —
+			// see interp/frozenorder.go.
+			return
+		}
 		switch {
 		case outcome == spanReported:
 			return
@@ -15764,6 +15793,12 @@ func (r *Runner) assign(ctx context.Context, a *syntax.Assign) {
 		idx, err := r.subscriptValueAsWritten(subject, text)
 		if err != nil {
 			r.failedSubscript("%s\n", r.subscriptFailure(text, err))
+			return
+		}
+		if r.refuseTheHeldFreeze(a) {
+			// A frozen name, refused at the store: after the value, the
+			// subscript's words and its arithmetic, in the dialects that
+			// get this far. See interp/frozenorder.go (#6674).
 			return
 		}
 		// The number, for the trace that writes it — see

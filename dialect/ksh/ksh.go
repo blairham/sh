@@ -2683,6 +2683,11 @@ func Semantics() interp.Semantics {
 	// VAL — though its arithmetic is still evaluated after the value, as in
 	// every column. The only column that does.
 	s.ElementSubscriptIsExpandedBeforeTheValue = interp.Yes
+	// And a frozen element is refused at its store, after both of them and
+	// the subscript's arithmetic, as in bash. A frozen whole literal is
+	// refused before any of its words.
+	s.FrozenElementIsRefusedBeforeItsSubscript = interp.No
+	s.FrozenLiteralIsExpandedBeforeItIsRefused = interp.No
 	// A subscripted literal is built as a table, a pair at a time, so one
 	// that fails partway through leaves the pairs before the failure: `a=(1
 	// 2); a=([0]=x [1]=$((1/0)))` is `typeset -A a=([0]=x)`. The only column

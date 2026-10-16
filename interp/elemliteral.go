@@ -26,9 +26,15 @@ func (r *Runner) assignElemLiteral(a *syntax.Assign) {
 		// shell quotes `a[$i]` back, and it refuses before evaluating it at
 		// all — `a[1/0]=(p q)` is the same sentence there and not a division
 		// by zero, so nothing is asked of the subscript on this route.
+		//
+		// So the subscript is not expanded to quote it either, where the
+		// source holds its text: `a[$(f)]=(p q)` does not run `f` (#6674).
+		subject := a.IndexText
+		if subject == "" {
+			subject = r.subscriptAsWritten(a.Index)
+		}
 		r.failedSubscript("%s\n", Wording(r.diag().ArrayLiteralThroughASubscript,
-			"%[1]s[%[2]s]: cannot assign list to array member",
-			a.Name, subscriptSubject(a.IndexText, r.subscriptAsWritten(a.Index))))
+			"%[1]s[%[2]s]: cannot assign list to array member", a.Name, subject))
 	case SubscriptedArrayLiteralSplices:
 		r.spliceElemLiteral(a)
 	case SubscriptedArrayLiteralNests:
@@ -52,13 +58,63 @@ func (r *Runner) assignElemLiteral(a *syntax.Assign) {
 // distinction a scalar `a[0]+=Q` already draws against `a+=(Q)` — the
 // subscript is what says which of the two the operator means.
 func (r *Runner) spliceElemLiteral(a *syntax.Assign) {
-	if a.IndexRange != nil {
-		r.spliceElemLiteralOverAFlaggedSpan(a)
-		return
-	}
-	r.spliceWordsIntoElement(a, r.joinWord(a.Index), func() ([]string, bool) {
+	build, ok := elementLiteralBuilt(r, a, func() ([]string, bool) {
 		return r.literalWords(a.Name, a.Elems)
 	})
+	if !ok {
+		return
+	}
+	if a.IndexRange != nil {
+		r.spliceElemLiteralOverAFlaggedSpan(a, build)
+		return
+	}
+	r.spliceWordsIntoElement(a, func() string { return r.joinWord(a.Index) }, build)
+}
+
+// elementLiteralBuilt arranges when an element literal's value is built
+// against its subscript, and hands back what the store calls for the value
+// at the point where it writes.
+//
+// The two are not interleaved: each column does the whole of one side
+// before the other. Measured 2026-10-15 on zsh 5.9.2 and ksh93u+
+// 2012-08-01 under `-c`, after `a=(1 2)`:
+//
+//	written                                  zsh               ksh93
+//	a[$(echo SUB >&2; echo 1)]=(p $(…VAL…))  VAL SUB, `p 2`    SUB VAL, `1 (p)`
+//	a[$(…SUB…; echo 1/0)]=(p $(…VAL…))       VAL SUB, 1/0      SUB, 1/0
+//	a[$(…SUB…; echo 1)]=(p $((1/0)))         1/0               SUB, 1/0
+//	i=1; a[i++]=(p $((i*10)))                `p 10 2`          `1 (p 20)`
+//
+// So the subscript's arithmetic goes with its words here, where a scalar
+// element write evaluates it after the value in every column — which is
+// why this is Semantics.ElementSubscriptIsExpandedBeforeTheValue's answer
+// and not a second axis: the axis says which side comes first, and an
+// element literal does all of that side first. A table's key in ksh93 is
+// the same row: `h[$(…SUB…)]=(p $(…VAL…))` is SUB VAL.
+//
+// The store's call goes through the held freeze, so a frozen name is
+// refused there, with both sides done. See interp/frozenorder.go (#6675,
+// #6674).
+func elementLiteralBuilt[T any](r *Runner, a *syntax.Assign, build func() (T, bool)) (func() (T, bool), bool) {
+	first := r.subscriptExpandsBeforeTheValue(a)
+	if r.unspecified {
+		return nil, false
+	}
+	if !first {
+		v, ok := build()
+		if !ok {
+			return nil, false
+		}
+		build = func() (T, bool) { return v, true }
+	}
+	return func() (T, bool) {
+		v, ok := build()
+		if !ok || r.refuseTheHeldFreeze(a) {
+			var none T
+			return none, false
+		}
+		return v, true
+	}, true
 }
 
 // spliceWordsIntoElement is that splice with the words handed in, because two
@@ -72,19 +128,25 @@ func (r *Runner) spliceElemLiteral(a *syntax.Assign) {
 // rather than a second one that would come to disagree with it. See
 // Runner.globbedElementIsAList.
 //
-// The words are a function rather than a slice because they are built *after*
-// the target has been refused and after the subscript has been read, in both
-// branches below, and building them early would run a literal's own
-// expansions on a line the shell is about to give up.
+// The words are a function rather than a slice because the store calls for
+// them at the point where it writes, after the target has been refused and
+// after the subscript has been read, in both branches below: a dialect that
+// builds a literal's value after its subscript builds it there, and the
+// call is where a frozen name is refused. One that builds it first hands in
+// what it has already built — see elementLiteralBuilt.
 //
-// The subscript arrives **expanded**, and that is not tidiness: the caller on
-// the pattern road has already read it, and joining the word a second time
-// here runs its substitutions a second time — `a[$(f)]=*.txt` ran `f` twice
-// (#1915 again, one construct over).
-func (r *Runner) spliceWordsIntoElement(a *syntax.Assign, text string, build func() ([]string, bool)) {
+// The subscript is a function too, called once the target has been
+// accepted, because the column that splices refuses a table's slice before
+// it reads the subscript: `typeset -A h; h[$(f)]=(p q)` never runs `f`. It
+// is read **once**, and that is not tidiness: the caller on the pattern
+// road has already read it and hands in what it got, and joining the word a
+// second time runs its substitutions a second time — `a[$(f)]=*.txt` ran
+// `f` twice (#1915 again, one construct over).
+func (r *Runner) spliceWordsIntoElement(a *syntax.Assign, subscript func() string, build func() ([]string, bool)) {
 	if !r.spliceTargetIsAnArray(a) {
 		return
 	}
+	text := subscript()
 	// The subscript as written is what a boundary refusal quotes back, and it
 	// is not the text the arithmetic reads — see subscriptSubject (#1373).
 	subject := subscriptSubject(a.IndexText, text)

@@ -1363,6 +1363,11 @@ func (r *Runner) assignAssocElement(a *syntax.Assign) {
 		// store in Runner.assign (#6579).
 		return
 	}
+	if r.refuseTheHeldFreeze(a) {
+		// A frozen table, refused at the store — the key and the value both
+		// expanded. See interp/frozenorder.go.
+		return
+	}
 	if a.Append {
 		// `m[k]+=v` joins the element it names, the same operation the
 		// indexed form performs on a subscript — an unset key leaves
@@ -1400,7 +1405,7 @@ func (r *Runner) assignAssocElement(a *syntax.Assign) {
 // silent no-op at status 0 while `${m[(e)aa]}` beside it read the key (#2288).
 func (r *Runner) assignFlaggedTableElement(a *syntax.Assign) {
 	e := &syntax.ParamExpr{Name: a.Name, Index: a.IndexFlags.Arg, IndexFlags: a.IndexFlags}
-	if !r.flaggedTableWriteIsAKey(e, true) {
+	if !r.flaggedTableWriteIsAKey(e, true, a.IndexFlags.Arg) {
 		return
 	}
 	r.assignAssocElement(a)
@@ -1419,7 +1424,14 @@ func (r *Runner) assignFlaggedTableElement(a *syntax.Assign) {
 //
 // endsTheLine is the assignment's road, where the refusal is fatal, against
 // `unset`'s, where it is a status the builtin carries on past.
-func (r *Runner) flaggedTableWriteIsAKey(e *syntax.ParamExpr, endsTheLine bool) bool {
+//
+// operand is the group's operand where it is still a word to expand, which
+// is the assignment's road: the refusal comes after it is expanded.
+// Measured 2026-10-15 on zsh 5.9.2, `typeset -A h; h=(k 1)`, then
+// `h[(r)$(echo SUB >&2; echo 1)]=$(echo VAL >&2)Q` writes VAL, SUB, then
+// the refusal, and `h[(r)$((1/0))]=v` reports the division instead of it.
+// It was refused on the letter with the operand never expanded (#6674).
+func (r *Runner) flaggedTableWriteIsAKey(e *syntax.ParamExpr, endsTheLine bool, operand *syntax.Word) bool {
 	search, ok := r.subscriptSearch(e)
 	if !ok {
 		// A letter this does not carry, refused by name already — the read
@@ -1432,6 +1444,12 @@ func (r *Runner) flaggedTableWriteIsAKey(e *syntax.ParamExpr, endsTheLine bool) 
 	}
 	if search == 0 {
 		return true
+	}
+	if operand != nil {
+		r.searchOperand(operand)
+		if r.assignmentGaveUp() {
+			return false
+		}
 	}
 	r.refuseTableSliceWrite(e.Name, endsTheLine)
 	return false

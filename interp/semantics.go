@@ -5016,6 +5016,73 @@ type Semantics struct {
 	// TestAnElementWriteExpandsItsSubscriptFirst.
 	ElementSubscriptIsExpandedBeforeTheValue Answer
 
+	// FrozenElementIsRefusedBeforeItsSubscript refuses an element write to a
+	// frozen name once its value has been expanded and before anything in
+	// its subscript is, where the other answer refuses it at the store, after
+	// the subscript's words and its arithmetic. Measured 2026-10-15 on bash
+	// 5.3.20, zsh 5.9.2 and ksh93u+ 2012-08-01 under `-c` and from a file,
+	// each row after `readonly a=(1 2)`, the side effects on standard error:
+	//
+	//	written                                 bash         zsh        ksh93
+	//	a[$(echo SUB >&2; echo 1)]=$(…VAL…)x    VAL SUB, ro  VAL, ro    SUB VAL, ro
+	//	a[$(echo SUB >&2; echo 1)]=x            SUB, ro      ro         SUB, ro
+	//	a[$(…SUB…; echo 1/0)]=$(…VAL…)          VAL SUB, 1/0 VAL, ro    SUB VAL, 1/0
+	//	a[1]=$((1/0))                           1/0          1/0        1/0
+	//
+	// where `ro` is the readonly sentence and `1/0` the division's complaint.
+	// So the value is expanded before the refusal in every column, and a
+	// value that will not expand is reported in the refusal's place; what
+	// splits is the subscript, which the freeze stops in one column and lets
+	// run to its arithmetic in the other two. A table's key is the same row:
+	// `m[$(…SUB…)]=$(…VAL…)x` is `VAL, ro` in zsh. See interp/frozenorder.go
+	// (#6674).
+	//
+	// Asked only of a write to a frozen name whose value or subscript can
+	// run or fail something — see Runner.frozenElementOrderIsObservable — so
+	// an ordinary element write never reaches it. dash and BusyBox ash have
+	// no element write.
+	//
+	// unpinned bash: no corpus row writes an element of a frozen name with a
+	// side effect on either side; pinned by
+	// TestAFrozenElementIsRefusedAtItsStore.
+	//
+	// unpinned zsh: the same reach, pinned by
+	// TestAFrozenElementIsRefusedBeforeItsSubscript.
+	//
+	// unpinned ksh: the same reach, pinned by
+	// TestAFrozenElementIsRefusedAtItsStore.
+	FrozenElementIsRefusedBeforeItsSubscript Answer
+
+	// FrozenLiteralIsExpandedBeforeItIsRefused expands every word of a
+	// whole-array literal assigned to a frozen name before the name is
+	// refused, where the other answer refuses it before any of them is
+	// expanded. Measured 2026-10-15 under `-c` and from a file, each row
+	// after `readonly a=(1 2)`:
+	//
+	//	written                                    bash, ksh93  zsh 5.9.2
+	//	a=($(echo VAL >&2))                        ro           VAL, ro
+	//	a+=($(echo VAL >&2))                       ro           VAL, ro
+	//	a=(p $((1/0)))                             ro           1/0
+	//	a=([$(…SUB…; echo 1)]=$(…VAL…))            ro           SUB VAL, ro
+	//
+	// and a frozen table's literal is the same split. The literal through a
+	// subscript is not this question: `a[$(…)]=(p $(…))` reaches its store in
+	// every column before the freeze is consulted. See interp/frozenorder.go
+	// (#6674).
+	//
+	// Asked only of a literal assigned to a frozen name with something in it
+	// that can run or fail; dash and BusyBox ash have no array literal.
+	//
+	// unpinned bash: no corpus row assigns a literal to a frozen name; pinned
+	// by TestAFrozenLiteralIsRefusedBeforeItsWords.
+	//
+	// unpinned zsh: the same reach, pinned by
+	// TestAFrozenLiteralIsExpandedBeforeItIsRefused.
+	//
+	// unpinned ksh: the same reach, pinned by
+	// TestAFrozenLiteralIsRefusedBeforeItsWords.
+	FrozenLiteralIsExpandedBeforeItIsRefused Answer
+
 	// TraceLineFollowsTheStore writes an assignment's trace line once the
 	// assignment has been made, so a store that is refused writes no line and
 	// one with a side effect writes it after the effect. Measured 2026-10-02

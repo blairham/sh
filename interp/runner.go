@@ -7589,6 +7589,11 @@ func (r *Runner) runExitTrap(ctx context.Context) (exitedInTheBody bool) {
 	if r.exitTrapSkippedByAFatalError() {
 		return false
 	}
+	// And a `-c` command string ending over one, where the option decides
+	// nothing. See Runner.exitTrapSkippedOnACommandString.
+	if r.exitTrapSkippedOnACommandString() {
+		return false
+	}
 	// And a *subshell* ending over one, which is a question of its own: the
 	// option decides nothing there, two columns answer it rather than one,
 	// and `${x?word}` joins the errors. See

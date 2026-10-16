@@ -20820,6 +20820,37 @@ Read without asking. A shell that has chosen nothing runs the trap, which
 is what the other four columns do and what a cleanup handler is written
 expecting.
 
+**`FatalErrorOnACommandStringSkipsTheExitTrap`** — bash no · dash no ·
+ksh93 no · zsh yes · ash no
+
+The same question on the `-c` route, where it has an answer of its own: the
+option decides nothing. Measured 2026-10-16 on zsh 5.9.2 under `-f`, each
+row written after `trap 'echo T=$?' EXIT` and followed by `; echo after`:
+
+| row | `-c` | file, standard input |
+| --- | --- | --- |
+| `echo $((1/0))` | ends, **no** `T` | ends, `T=1` |
+| `readonly r=1; readonly r=2` | ends, **no** `T` | ends, `T=1` |
+| `set -Z` | ends, **no** `T` | ends, `T=1` |
+| `break` | ends, **no** `T` | ends, `T=1` |
+| `set -u; echo "$nosuch"` | ends, **no** `T` | ends, `T=1` |
+| ``v=`echo hi; for` `` | ends, **no** `T` | ends, `T=1` |
+| `false`, `exit 3` | `T` | `T` |
+| `: ${q?b}` | ends, `T=1` | ends, `T=1` |
+| `shift 5`, `cd /nonexistent` | runs on, `T=0` | runs on, `T=0` |
+
+`TRAPEXIT` answers exactly as the trap does, and so does `zsh -i -c`. So on
+this route every error the shell reported and gave up over takes the
+handler — `abandonError`, `abandonUsage` and `abandonSubstParse` — with or
+without `set -e`, and nothing the script asked for does: `${x?word}` keeps
+it, as it does under `FatalErrorUnderErrexitSkipsTheExitTrap`. An `exit`
+after an error something caught — `eval '…'; exit 4`, `(…); exit 2`, an
+`always` block that exits — keeps it too.
+
+bash 5.3, dash, ksh93 and BusyBox ash 1.37.0 run the trap through `-c` on
+the division, the readonly reassignment and the unset name alike, and each
+dialect writes its answer (#6666).
+
 **`SubshellExitTrapAfterAGiveUp`** — bash always runs · dash always runs ·
 ksh93 skipped by a reported error · zsh skipped by a reported error or a
 builtin's usage · ash always runs

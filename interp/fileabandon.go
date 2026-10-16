@@ -483,6 +483,49 @@ func (r *Runner) exitTrapSkippedByAFatalError() bool {
 	return r.sem().FatalErrorUnderErrexitSkipsTheExitTrap == Yes
 }
 
+// exitTrapSkippedOnACommandString is the same question on the `-c` route,
+// where it has an answer of its own: the option decides nothing.
+//
+// Measured 2026-10-16 on zsh 5.9.2 under `-f`, each row written after
+// `trap 'echo T=$?' EXIT` and followed by `; echo after`, run through `-c`:
+//
+//	row                          -c                 file, standard input
+//	echo $((1/0))                ends, **no** T     ends, T=1
+//	readonly r=1; readonly r=2   ends, **no** T     ends, T=1
+//	set -Z                       ends, **no** T     ends, T=1
+//	break                        ends, **no** T     ends, T=1
+//	set -u; echo "$nosuch"       ends, **no** T     ends, T=1
+//	v=`echo hi; for`             ends, **no** T     ends, T=1
+//	false, exit 3                T                  T
+//	: ${q?b}                     ends, T=1          ends, T=1
+//	shift 5, cd /nonexistent     runs on, T=0       runs on, T=0
+//	eval 'set -Z'                runs on, T=0       runs on, T=0
+//
+// `TRAPEXIT` answers exactly as the trap does, and so does `zsh -i -c`. So
+// on this route every error the shell reported and gave up over takes the
+// handler — abandonError, abandonUsage and abandonSubstParse — and nothing
+// the script asked for does: `${x?word}` is a request to stop in this column
+// (Semantics.ParamErrorIsAnExitRequest), and keeps it.
+//
+// `exit` keeps the handler even after an error was caught on the way: zsh
+// runs it for `eval '…error…'; exit 4`, for `(…error…); exit 2` and for an
+// `always` block whose cleanup half exits, and so does this, because a
+// boundary that catches an error clears the kind with it
+// (Runner.takeFileError).
+//
+// bash, dash and ksh93 run the trap on every row.
+func (r *Runner) exitTrapSkippedOnACommandString() bool {
+	if r.Route != RouteCommandString {
+		return false
+	}
+	switch r.abandon {
+	case abandonError, abandonUsage, abandonSubstParse:
+	default:
+		return false
+	}
+	return r.sem().FatalErrorOnACommandStringSkipsTheExitTrap == Yes
+}
+
 // subshellExitTrapSkippedByAGiveUp is the same question at the subshell
 // boundary, where it has an answer of its own: the option decides nothing
 // there and two columns answer it rather than one.

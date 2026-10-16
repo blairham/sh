@@ -2854,6 +2854,11 @@ func Semantics() interp.Semantics {
 	// zsh still search the current directory.
 	s.EmptyPathIsTheCurrentDirectory = interp.No
 	s.ExitTrapRunsOnSignalDeath = interp.Yes
+	// And a `-c` string ending over an error the shell reported still runs
+	// it: measured 2026-10-16 on ksh93, a division by zero, a readonly
+	// reassignment and an unset name under `set -u` each print the handler
+	// through `-c`, where zsh's does not (#6666).
+	s.FatalErrorOnACommandStringSkipsTheExitTrap = interp.No
 	s.ExitTrapRunsInsideTheExitingCall = interp.No
 	s.QuitIgnoredWhenNotInteractive = interp.No
 	// unanswered BuiltinReadsOptions: ksh93's `builtin` is another command,

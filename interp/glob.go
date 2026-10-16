@@ -1335,10 +1335,17 @@ func (r *Runner) glob(field string) ([]string, bool) {
 	unsorted := (ordered && order.key == globSortNone) || quals.unsorted || quals.runsCode
 	if quals.numeric != globNumericUnsaid {
 		// `n` and `^n` are `numericglobsort` for this one pattern, and the
-		// per-component sorts below read the switch as well as the last one.
-		saved := r.globSortsNumerically
-		r.globSortsNumerically = quals.numeric == globNumericOn
-		defer func() { r.globSortsNumerically = saved }()
+		// per-component sorts below read it as well as the last one.
+		//
+		// Beside the option rather than written over it: code an `e`
+		// qualifier runs is the shell's, and it sees the option as the
+		// shell has it. Measured 2026-10-15 on zsh 5.9.2, `print
+		// *(ne:'print -r -- c*':)` writes `c10 c9` from the code, `[[ -o
+		// numericglobsort ]]` there is off, and a `setopt
+		// numericglobsort` there is still on after the line.
+		saved := r.globNumeric
+		r.globNumeric = quals.numeric
+		defer func() { r.globNumeric = saved }()
 	}
 	if unsorted {
 		// The listing's own order is what is asked for, and the listing is
@@ -2161,7 +2168,11 @@ func (r *Runner) sortMatches(names []string) {
 // globMatchOrder is the comparator this shell puts a glob's matches in order
 // with, which is shellOrder unless a switch has been thrown.
 func (r *Runner) globMatchOrder() func(a, b string) int {
-	if r.globSortsNumerically {
+	numeric := r.globSortsNumerically
+	if r.globNumeric != globNumericUnsaid {
+		numeric = r.globNumeric == globNumericOn
+	}
+	if numeric {
 		return numericSegmentOrder
 	}
 	return shellOrder

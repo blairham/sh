@@ -5146,6 +5146,12 @@ type Runner struct {
 	// a flag through every one of them would put the question to callers
 	// that have nothing to do with it.
 	globUnsorted bool
+	// globNumeric is the `n` qualifier of the expansion running right now,
+	// held for the length of one glob as globUnsorted is. It is the
+	// pattern's and not the option's: globSortsNumerically is left alone
+	// so that code a qualifier runs reads, sets and globs by the shell's
+	// own option. See Runner.globMatchOrder.
+	globNumeric globNumeric
 
 	// matchOptions is the run-time pattern behaviors a dialect's builtin has
 	// switched on, one bit per MatchOption. A plain value so a subshell's

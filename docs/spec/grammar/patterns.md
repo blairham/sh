@@ -2157,8 +2157,22 @@ the shell. A diagnostic is located where the pattern is — `zsh:3:` for
 code on line 3, its second line at 4, `f:2:` in a function — and the line
 comes back to the pattern's afterwards. A `return` or `break` in the code
 lets every later file pass without running it, and takes effect once the
-command has run. See `interp/globqualcode.go` and
-`TestAGlobQualifierRunsCodeForEachFile`.
+command has run — inside a function, a sourced file or a loop, and at a
+prompt, where a `return` with nothing to return from costs the line. **A
+`return` with nothing to return from in a program ends the shell at
+once**, at the code's status: `print X *(e:'echo r; return 3':); echo
+next` writes `r` once and nothing else and ends at 3, by `-c`, `-i -c`, a
+script file and standard input, and a subshell ends the same way. The
+EXIT trap still runs and a top-level `always` half does not, as for
+`exit` (#6692).
+
+**The code sorts by the shell's `numericglobsort`, not by the pattern's
+`n`.** `*(ne:'print -r -- c*':)` writes `c10 c9` from the code with the
+option off; `[[ -o numericglobsort ]]` there is off, and a `setopt
+numericglobsort` there is still on after the line. So `n` is held beside
+the option for the one pattern rather than written over it.
+
+See `interp/globqualcode.go` and `TestAGlobQualifierRunsCodeForEachFile`.
 
 ### What is read and not implemented
 

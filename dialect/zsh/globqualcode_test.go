@@ -4,11 +4,17 @@
 package zsh_test
 
 import (
+	"bytes"
+	"context"
 	"os"
 	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/blairham/sh/dialect/zsh"
+	"github.com/blairham/sh/interp"
+	"github.com/blairham/sh/syntax"
 )
 
 // globCodeFixture is the directory every row below was measured in: regular
@@ -106,6 +112,20 @@ func TestAGlobQualifierRunsCodeForEachFile(t *testing.T) {
 		{`print *(e:'exit 3':); print after`, "", ""},
 		{`set -e; print a(e:'false':N); print after`, "", ""},
 		{`f() { print X *(e:'[[ $REPLY != a ]] || return 4':); print inf; }; f; print $?`, "X b big c10 c9 d lnk\n0\n", ""},
+		// The code globs, tests and sets by the shell's own numericglobsort,
+		// not by the `n` of the pattern it is running for.
+		{`print -r -- *(ne:'[[ $REPLY == a ]] && print -r -- in c*':)`, "in c10 c9\na\n", ""},
+		{`print -r -- *(e:'[[ $REPLY == a ]] && print -r -- in c*':n)`, "in c10 c9\na\n", ""},
+		{
+			`setopt numericglobsort; print -r -- *(^ne:'[[ $REPLY == a ]] && print -r -- in c*':)`,
+			"in c9 c10\nb big c10 c9 d lnk\n", "",
+		},
+		{`print -r -- [ab](ne:'[[ -o numericglobsort ]] && print on || print off':)`, "off\noff\na b\n", ""},
+		{`print -r -- [ab](e:'setopt numericglobsort':n); [[ -o numericglobsort ]] && print on`, "a b\non\n", ""},
+		{
+			`setopt numericglobsort; print -r -- [ab](e:'unsetopt numericglobsort':^n); [[ -o numericglobsort ]] || print off`,
+			"a b\noff\n", "",
+		},
 		// A program's word holds the refusal for the program, and the code's
 		// own refusals are its own.
 		{
@@ -157,5 +177,62 @@ func TestAGlobQualifiersCodeRunsInTheDirectorysOrder(t *testing.T) {
 	slices.Sort(sorted)
 	if want := strings.Join(sorted, " ") + "\n"; out != want {
 		t.Errorf("out %q, want the matches in name order %q", out, want)
+	}
+}
+
+// A `return` with nothing to return from, in a program, ends the shell as the
+// code runs and at the code's status: the command the pattern is a word of
+// never runs, nor do later files' code (#6692). Inside a function or a sourced
+// file it waits for the command instead; see TestAGlobQualifierRunsCodeForEachFile.
+// Measured on zsh 5.9.2 by `-c`, `-i -c`, a script file and standard input.
+func TestATopLevelReturnInGlobQualifierCodeEndsTheShell(t *testing.T) {
+	for _, tc := range []struct {
+		src, out string
+		status   int
+	}{
+		{`print X *(e:'echo r; return 3':); print next`, "r\n", 3},
+		{`false; print X *(e:'return':); print next`, "", 1},
+		{`x=( *(e:'return 3':) ); print next`, "", 3},
+		{`print X *(e:'return 3':) && print and; print next`, "", 3},
+		{`for i in 1; do print X *(e:'return 3':); done; print next`, "", 3},
+		{`{ print X *(e:'return 3':) } always { print alw }; print next`, "", 3},
+		// A subshell is a top level of its own.
+		{`( print X *(e:'return 3':); print in ); print after $?`, "after 3\n", 0},
+		// A sourced file is something to return from.
+		{
+			`print -r -- 'print X [ab](e:"return 3":); print inx' > s; . ./s; print after $?`,
+			"X b\nafter 0\n", 0,
+		},
+	} {
+		out, status, errs := runZshSplit(t, globCodeFixture(t), tc.src)
+		if out != tc.out || status != tc.status || errs != "" {
+			t.Errorf("%q:\n out %q status %d errs %q\nwant %q status %d", tc.src, out, status, errs, tc.out, tc.status)
+		}
+	}
+}
+
+// At a prompt a `return` with nothing to return from costs the line and not
+// the shell, so in qualifier code it waits for the command, as it does in a
+// function. Measured on zsh 5.9.2 through a pseudo-terminal: `print X
+// *(e:'return 3':); echo next` writes `X a b c10 c9 d lnk` and no `next`.
+func TestATopLevelReturnInGlobQualifierCodeAtAPromptWaitsForTheCommand(t *testing.T) {
+	src := `print X *(e:'return 3':); print next`
+	f, err := syntax.Parse(src, zsh.Dialect())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var o, e bytes.Buffer
+	sem, diag := zsh.Semantics(), zsh.Diagnostics()
+	r := (&interp.Runner{
+		Stdout: &o, Stderr: &e, Semantics: &sem, Diagnostics: &diag,
+		Dir: globCodeFixture(t), Name: "zsh", Dialect: presetDialect(),
+		Interactive: true, AtPrompt: true,
+	}).SeedVars(map[string]string{"PATH": "/nonexistent"})
+	zsh.Apply(r)
+	if _, err := r.Run(context.Background(), f); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := o.String(), "X a b c10 c9 d lnk\n"; got != want || e.Len() != 0 {
+		t.Errorf("out %q errs %q, want %q", got, e.String(), want)
 	}
 }

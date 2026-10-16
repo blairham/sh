@@ -67,11 +67,13 @@ func (r *Runner) runGlobCode(code, word string) (globCodeRun, bool) {
 	}
 	// The pattern being expanded around this has state of its own on the
 	// runner, and a pattern inside the code would read it as its own: the
-	// walk's order, the unit a `cshnullglob` line is counting, whether it
-	// missed, and the refusal a program's word holds.
-	unsorted, unit, missed := r.globUnsorted, r.globUnit, r.globMissed
-	r.globUnsorted, r.globUnit, r.globMissed = false, nil, false
-	defer func() { r.globUnsorted, r.globUnit, r.globMissed = unsorted, unit, missed }()
+	// walk's order, its `n`, the unit a `cshnullglob` line is counting,
+	// whether it missed, and the refusal a program's word holds.
+	unsorted, numeric, unit, missed := r.globUnsorted, r.globNumeric, r.globUnit, r.globMissed
+	r.globUnsorted, r.globNumeric, r.globUnit, r.globMissed = false, globNumericUnsaid, nil, false
+	defer func() {
+		r.globUnsorted, r.globNumeric, r.globUnit, r.globMissed = unsorted, numeric, unit, missed
+	}()
 
 	// And the line the shell is on, which the code's own statements move:
 	// the pattern's miss is reported at the pattern's line however many
@@ -89,6 +91,19 @@ func (r *Runner) runGlobCode(code, word string) (globCodeRun, bool) {
 		label:        "eval",
 		syntaxStatus: r.diag().SyntaxStatus(),
 	})
+	if r.ctl == controlReturn && !r.hasSomethingToReturnFrom() && !r.AtPrompt {
+		// A `return` with nothing to return from, in a program rather than
+		// at a prompt, ends the shell there and then, at the code's status:
+		// measured 2026-10-15 on zsh 5.9.2, `print X *(e:'echo r; return
+		// 3':); echo next` writes `r` once and nothing else and ends at 3 —
+		// by `-c`, `-i -c`, a script file and standard input alike, in a
+		// subshell (which ends at 3) and in a trap action, with the EXIT
+		// trap still run and a top-level `always` half not. Inside a
+		// function or a sourced file the `return` waits for the command
+		// instead (the controlNone test above). So does one typed at a
+		// prompt, which costs the rest of the line rather than the shell.
+		r.stopTheShell()
+	}
 	if r.givingUpAlready() {
 		// `exit`, an error the code could not contain — `${x?word}` — or
 		// errexit: the shell is stopping, and the expansion with it.

@@ -557,6 +557,53 @@ func parseGlobAge(s string) (globCount, time.Duration, int, string) {
 	return c, unit, i + n, ""
 }
 
+// globSizeUnits is how many bytes each of `L`'s unit letters stands for,
+// either case alike.
+var globSizeUnits = map[byte]uint64{
+	'p': 512, 'P': 512,
+	'k': 1 << 10, 'K': 1 << 10,
+	'm': 1 << 20, 'M': 1 << 20,
+	'g': 1 << 30, 'G': 1 << 30,
+	't': 1 << 40, 'T': 1 << 40,
+}
+
+// parseGlobSize reads `L`'s argument: an optional unit letter, then the
+// number parseGlobCount reads, the same shape parseGlobAge reads for a time.
+//
+// Measured 2026-10-15 on zsh 5.9.2 over files of 0, 1, 511, 512, 513, 1023,
+// 1024, 1025, 2048, 1048576 and 1048577 bytes (#6613):
+//
+//	L1024 / L+1024 / L-1024   exactly, more than and fewer than 1024 bytes
+//	Lk1 and LK1               1 to 1024 bytes — the size in units rounds up
+//	Lk0 / Lm0 / Lg0 / Lt0     only the empty file
+//	Lp1 / Lp2                 1–512 and 513–1024, so `p` is 512 bytes
+//	Lm1 and LM1               1 byte to 1048576
+//	L, Lk, L+, Lx, Lb1, Lkk1  number expected
+//	L1k / L-1k                unknown file attribute: k — the unit is first
+func parseGlobSize(s string) (globCount, uint64, int, string) {
+	unit, i := uint64(1), 0
+	if i < len(s) {
+		if b, named := globSizeUnits[s[i]]; named {
+			unit = b
+			i++
+		}
+	}
+	c, n, diag := parseGlobCount(s[i:])
+	if diag != "" {
+		return globCount{}, 0, 0, diag
+	}
+	return c, unit, i + n, ""
+}
+
+// fileSizeIn is a file's size in whole units, rounded up: a one-byte file is
+// one kilobyte to `Lk1`, and only an empty one is zero.
+func fileSizeIn(size int64, unit uint64) uint64 {
+	if size <= 0 || unit == 0 {
+		return 0
+	}
+	return (uint64(size) + unit - 1) / unit
+}
+
 // fileAge is how many whole units old a file is, which is the number every
 // comparison here is against.
 //

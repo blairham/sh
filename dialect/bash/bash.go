@@ -2951,6 +2951,11 @@ func Semantics() interp.Semantics {
 	// arithmetic complaint and nothing after it. See the two axes.
 	s.GetoptsTypedValueFailureIsAFreeze = interp.No
 	s.ReadTypedValueFailureIsAnAssignmentFailure = interp.Yes
+	// And that cost is the rest of the line rather than the script, off a
+	// `-c` string: measured 2026-10-15 on 5.3.20 and 3.2.57 from a script
+	// file, `typeset -i n=5`, then `n=1+; echo same`, then `echo next $?` is
+	// the complaint and `next 1` (#6631).
+	s.TypedValueFailureGivesUpTheLine = interp.Yes
 	// `read` stops at the first name a freeze refuses and leaves the names
 	// after it alone, which is the other answer from `getopts` above and is
 	// why the two are separate axes: `readonly a; printf 'x y\n' | { read a

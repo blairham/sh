@@ -5688,6 +5688,32 @@ func (r *Runner) typedValueFatalf(format string, args ...any) {
 		r.failedExpansionStatus = failedExpansionLeavesZero
 		defer func() { r.failedExpansionStatus = saved }()
 	}
+	r.typedValueFailed(format, args...)
+}
+
+// typedValueFailed is what a value a typed name will not take costs once no
+// builtin has taken the failure to decide for itself: the end of the script,
+// or, in the dialect that reads it as a failed expansion, the rest of the
+// line. The one door for the assignment's cost, which `read` and `getopts`
+// reach as well where they answer that they pay it. See
+// Semantics.TypedValueFailureGivesUpTheLine.
+func (r *Runner) typedValueFailed(format string, args ...any) {
+	// Read rather than asked, which is failedExpansion's reason: where the
+	// answer is not yes, ending the script is what every other column with a
+	// typed name does and what this path always did, so an unanswered axis
+	// has a correct answer to fall back on rather than a missing one.
+	if r.Route != RouteCommandString && r.sem().TypedValueFailureGivesUpTheLine == Yes {
+		r.mathWrite(r.diagf, format, args...)
+		r.setFatalStatus()
+		if r.inBuiltin != "" {
+			// The line's status is the failure's and not the builtin's own
+			// return: `typeset n=1+`, `printf -v n %s 1+` and `getopts x n
+			// -y` each leave the next line's `$?` at 1.
+			r.fatalStatusSettled = true
+		}
+		r.giveUpPastBorrowedText()
+		return
+	}
 	r.mathFatalf(format, args...)
 }
 

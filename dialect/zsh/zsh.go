@@ -4021,6 +4021,10 @@ func Semantics() interp.Semantics {
 	// script: measured 2026-10-15 on zsh 5.9.2, `typeset -i n=5; read n <<<
 	// 1+` is `bad math expression` and nothing after it.
 	s.ReadTypedValueFailureIsAnAssignmentFailure = interp.Yes
+	// And that cost is the script, from a file as from `-c`: measured
+	// 2026-10-15, `typeset -i n=5`, then `n=1+; echo same`, then `echo next`
+	// in a script file is the complaint and nothing after it (#6631).
+	s.TypedValueFailureGivesUpTheLine = interp.No
 	// unanswered GetoptsTypedValueFailureIsAFreeze: `?` is a value a typed
 	// name takes here — `typeset -i n; getopts x n -y` leaves 0 — so the
 	// write never fails and there is nothing to ask.

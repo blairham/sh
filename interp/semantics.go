@@ -7032,6 +7032,33 @@ type Semantics struct {
 	// Asked only where the store has failed. See interp/typedvaluecatch.go.
 	ReadTypedValueFailureIsAnAssignmentFailure Answer
 
+	// TypedValueFailureGivesUpTheLine has a value a typed name will not take
+	// give up the rest of the input line, the script going on at the next,
+	// where the other answer ends the script. Read only off a `-c` string:
+	// that route ends the script in every column, the whole string being the
+	// one line, exactly as a bracketed subscript's failure does there.
+	//
+	// Measured 2026-10-15 on bash 5.3.20 and 3.2.57, from a script file and
+	// from standard input, with `typeset -i n=5` on line 1 and `echo next $?`
+	// on line 3:
+	//
+	//	n=1+; echo same                    the complaint, `next 1`, exit 0
+	//	n+=1+; typeset n=1+; export n=1+   the same
+	//	read n <<< 1+; printf -v n %s 1+   the same, `read:` / `printf:` in front
+	//	getopts x n -y; for n in 1+        the same
+	//	f() { n=1+; echo in; }; f; echo s  the same, the calling line given up
+	//	set -o posix in front              the same
+	//	( n=1+; echo in ); echo same $?    `same 1`: a subshell contains it
+	//
+	// and under `-c` the complaint and nothing after it, at 1. zsh 5.9.2 and
+	// ksh93u+ end the script on both routes. `n=$((1+))` gives the line up
+	// in bash on both routes, which is FailedExpansionAbandonsTheLine and not
+	// this (#6631).
+	//
+	// Read only where such a value has failed, off a `-c` string, and read
+	// rather than asked: anything but Yes ends the script, as it always did.
+	TypedValueFailureGivesUpTheLine Answer
+
 	// ReadRefusedWriteEndsTheBuiltin stops `read` at the first name a freeze
 	// refuses, leaving the names after it alone. bash 5.3, dash and BusyBox
 	// ash yes; ksh93 no — it reports every frozen name and fills the rest.

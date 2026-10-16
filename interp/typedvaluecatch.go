@@ -76,7 +76,7 @@ func (r *Runner) readStoreCatchingATypedValueFailure(name, value string) (st int
 	}
 	if r.ask(r.sem().ReadTypedValueFailureIsAnAssignmentFailure,
 		"`read` failing as an assignment does over a value its typed name will not take") {
-		r.mathFatalf("%s", sentence)
+		r.typedValueFailed("%s", sentence)
 		return r.status, false, true
 	}
 	r.mathWrite(r.diagf, "%s", sentence)
@@ -92,7 +92,7 @@ func (r *Runner) getoptsTypedValueRefused(name, sentence string) bool {
 		"`getopts` refusing a value its typed name will not take as it refuses a frozen name") {
 		// What an assignment's failure costs, which is what this was
 		// before the failure was caught — and the scan goes on as it did.
-		r.mathFatalf("%s", sentence)
+		r.typedValueFailed("%s", sentence)
 		return true
 	}
 	defer r.getoptsSpeaksAsTheScript()()

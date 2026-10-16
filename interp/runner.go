@@ -4294,6 +4294,11 @@ type Runner struct {
 	// function body the two are different numbers and it is the caller's that
 	// is given up (#3503).
 	abandonLine int
+	// abandonPassesBorrowedText says the give-up in hand is one that an
+	// `eval` or a `.` does not stop at: it takes the caller's line with it.
+	// Set by the two give-ups measured doing so, and cleared by every other.
+	// See Runner.giveUpPastBorrowedText.
+	abandonPassesBorrowedText bool
 
 	// inputLine is the last line of the top-level statement being run — the
 	// line a give-up anywhere inside it takes with it. Set by the two

@@ -3260,6 +3260,11 @@ func Semantics() interp.Semantics {
 	// after both (#6563).
 	s.GetoptsTypedValueFailureIsAFreeze = interp.Yes
 	s.ReadTypedValueFailureIsAnAssignmentFailure = interp.No
+	// A value a typed name will not take ends the script from a file as from
+	// `-c`: measured 2026-10-15, `typeset -i n=5`, then `n=1+; echo same`,
+	// then `echo next` in a script file is `1+: more tokens expected` and
+	// nothing after it (#6631).
+	s.TypedValueFailureGivesUpTheLine = interp.No
 	// And `read` does not stop either: every frozen name is reported and
 	// every other name is filled — `readonly a; printf 'x y\n' | { read a b; }`
 	// leaves b holding `y` here, where bash, dash and BusyBox ash leave it

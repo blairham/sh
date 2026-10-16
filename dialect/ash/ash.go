@@ -1822,6 +1822,8 @@ func Semantics() interp.Semantics {
 	// type, so no value can fail to fit one.
 	// unanswered ReadTypedValueFailureIsAnAssignmentFailure: no name here carries a type,
 	// so no value `read` writes can fail to fit one.
+	// unanswered TypedValueFailureGivesUpTheLine: no name here carries a type,
+	// so no value can fail to fit one.
 	// And `read` the same, at 2 wherever the frozen name stood. Measured in
 	// the pinned 1.37.0 image, 2026-09-16 (#3208).
 	s.ReadRefusedWriteEndsTheBuiltin = interp.Yes

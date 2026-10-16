@@ -23,6 +23,28 @@ import "github.com/blairham/sh/syntax"
 // is measured per site; this sets the control flow alone.
 func (r *Runner) abandonTheCommand() {
 	r.ctl, r.abandonLine = controlAbandon, r.giveUpLine()
+	r.abandonPassesBorrowedText = false
+}
+
+// giveUpPastBorrowedText is abandonTheCommand for the give-ups that do not
+// stop at an `eval` or a `.`: the line given up is the one the shell itself
+// is reading, however deep in borrowed text the failure was.
+//
+// Measured 2026-10-15 on bash 5.3.20 and 3.2.57 from a script file, each
+// followed by `echo same` on its line and `echo next $?` on the next:
+//
+//	a=(1); eval "echo \${a[1+]}; echo in"            the complaint, `next 1`
+//	a=(1); . ./d.sh, d.sh `echo ${a[1+]}` + 2nd line  the same, line 2 unread
+//	typeset -i n; eval "n=1+<newline>echo in2"        the same
+//	f() { eval "n=1+"; echo f; }; f                   the same
+//	eval "echo \$((1/0)); echo in"                   `same`, `next 0`: stops
+//	readonly r=1; eval 'r=2<newline>echo inner'       `inner`: stops
+//
+// so a bracketed subscript and a typed value are the two that pass, and the
+// last two rows are the controls for the ones that do not (#6631).
+func (r *Runner) giveUpPastBorrowedText() {
+	r.abandonTheCommand()
+	r.abandonPassesBorrowedText = true
 }
 
 // giveUpLine is how much of the input a give-up takes with it: the last line
@@ -142,8 +164,9 @@ func (r *Runner) giveUpForABadSubscript() {
 	r.setFatalStatus()
 	// controlAbandon rather than controlExit: it unwinds past loops,
 	// functions, groups and subshells alike and is consumed at the top-level
-	// statement loop, which is precisely the shape measured.
-	r.abandonTheCommand()
+	// statement loop, which is precisely the shape measured — past an `eval`
+	// and a `.` as well.
+	r.giveUpPastBorrowedText()
 }
 
 // GiveUpTheCommandAt is that same give-up for a **registered builtin** whose

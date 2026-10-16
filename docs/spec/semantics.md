@@ -26419,6 +26419,16 @@ an identifier: 1a` as an error that ends the shell — a subshell, or just the
 command where the command is a program. Measured 2026-10-15 (#6522). bash
 reads all of these as ordinary words.
 
+ksh93 settles a name it cannot store into at the same point, before the
+open and on a close too: a dotted name whose parent (the name before its last
+dot) is nothing the shell holds and has no compound variable above it is
+`a.b: no parent`, and a subscript the arithmetic refuses is refused in the
+arithmetic's own words (`{a[$i]}` is `$i: arithmetic syntax error`, the `$`
+reaching it as written). A subscript that never closes is no subscript —
+`{a[}` stores into `a` — and a letter past ASCII is a name character where
+the locale has it, so `{é}` stores under a UTF-8 locale and is refused under
+C (#6591).
+
 **`FdVariableReadonlyRefusedFirst`** — bash no · dash — · ksh93 yes · zsh yes
 
 Whether a `{name}` redirection aimed at a frozen name is refused before its

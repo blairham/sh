@@ -5754,6 +5754,9 @@ func Diagnostics() interp.Diagnostics {
 		// this dialect admits the shape at all. See
 		// interp/namerefmember.go, where every row is.
 		NamerefTargetHasNoParent: "%[1]s: no parent",
+		// And a `{name}` redirection's: `echo {a.b}</dev/null` with `a`
+		// unset, measured 2026-10-15 (#6591). See Runner.fdVarNameFailsFirst.
+		FdVariableNoParent: "%[1]s: no parent",
 		// A `${!r}` over a reference with nothing to point at, which is the
 		// one indirection refusal this shell makes: IndirectionYieldsName
 		// sends the rest of that expansion somewhere else here, so the two

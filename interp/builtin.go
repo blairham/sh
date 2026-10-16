@@ -7965,13 +7965,21 @@ func biLocal(r *Runner, _ context.Context, args []string) (endStatus int) {
 			}
 			return r.declarePrint(args)
 		}
-		if f.remove && !f.print {
+		listsEvery := r.sem().BareLocalListing == BareLocalListsEveryParameter
+		if (f.remove || listsEvery && f.attributeLetterWritten()) && !f.print {
 			// A plus sign with nothing after it is `typeset`'s plus listing
 			// and not this word's own, whole table and all. Measured
 			// 2026-10-01 on zsh 5.9.2 inside a function: `local +` writes
 			// what `typeset +` writes, names and no values, and `local +x`
 			// writes the exported names, where this wrote every value
 			// (#5157).
+			//
+			// The minus form too, where the bare word lists every parameter:
+			// measured 2026-10-16 on zsh 5.9.2 inside a function, `local -i`
+			// writes `typeset -i`'s integer rows, `local -a` the arrays,
+			// `local -x` the exports and `local -F` nothing on a table with
+			// no float, where this wrote the whole table for every one of
+			// them (#6810).
 			if code, answered := r.declarationListing(f); answered {
 				return code
 			}

@@ -1483,6 +1483,7 @@ func Semantics() interp.Semantics {
 	// 2026-10-15, `set -- -a -b -c; OPTIND=5; getopts abc o` reads `a` and
 	// leaves OPTIND at 2 (#6575).
 	s.GetoptsCursorPastTheEnd = interp.GetoptsCursorPastTheEndRestarts
+	s.GetoptsNewParametersRestartTheScan = interp.Yes
 	// The refused name operand is judged after the scan here too: measured
 	// 2026-09-21, `set -- -a; getopts a opt-var` leaves OPTIND at 2, at
 	// this shell's own status of 2.

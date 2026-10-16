@@ -171,6 +171,19 @@ func (r *Runner) getoptsScan(optstring, name string, given []string) int {
 	silent := strings.HasPrefix(optstring, ":")
 	spec := strings.TrimPrefix(optstring, ":")
 
+	if r.optScanInDoubt {
+		// `set` or `shift` replaced the parameters under a used cursor, and
+		// the vector had no answer to apply then. Asked here and not there,
+		// so the `shift $((OPTIND-1))` behind every option loop is not a
+		// question until another scan follows it.
+		r.optScanInDoubt = false
+		if r.ask(r.sem().GetoptsNewParametersRestartTheScan,
+			"replacing the positional parameters restarting the `getopts` scan") {
+			r.restartGetoptsScan()
+		} else if r.unspecified {
+			return r.status
+		}
+	}
 	ind := r.optIndex()
 	if r.optindAssigned {
 		// The script wrote OPTIND itself — resetting it to 1 to scan a second
@@ -219,6 +232,39 @@ func (r *Runner) getoptsScan(optstring, name string, given []string) int {
 		return r.getoptsAt(name, spec, silent, words, ind+1)
 	}
 	return r.getoptsAt(name, spec, silent, words, ind)
+}
+
+// getoptsParametersReplaced is told that `set` replaced the positional
+// parameters or `shift` moved them, which in dash and BusyBox ash starts the
+// next scan at the first word again while OPTIND keeps the number it holds —
+// see Semantics.GetoptsNewParametersRestartTheScan.
+//
+// One door for both builtins, and the restart is the override a call with a
+// cursor of its own already uses (optWord), so a call made afterwards saves
+// and hands back the restarted position like any other, and a later
+// assignment to OPTIND outranks it the way it outranks that one. Read rather
+// than asked where the vector answers; where it does not, the question is
+// left for the next `getopts`, and only when the cursor was used — a fresh
+// one restarts to where it already is.
+func (r *Runner) getoptsParametersReplaced() {
+	switch r.sem().GetoptsNewParametersRestartTheScan {
+	case No:
+		return
+	case Yes:
+		if r.optCursorWord() != 1 || r.optChar > 1 {
+			r.restartGetoptsScan()
+		}
+	default:
+		r.optScanInDoubt = r.optCursorWord() != 1 || r.optChar > 1
+	}
+}
+
+// restartGetoptsScan puts the scan's own position at the first letter of the
+// first word and leaves OPTIND as it is: the two part company until the next
+// `getopts` writes the parameter, exactly as across a call that has a cursor
+// of its own.
+func (r *Runner) restartGetoptsScan() {
+	r.optWord, r.optChar, r.optindAssigned = 1, 1, false
 }
 
 // getoptsOptionSign reports which sign the scan reads this word as an option

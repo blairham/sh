@@ -6063,6 +6063,45 @@ type Semantics struct {
 	// measurements. Asked only there: a cursor at or before `$# + 1` reaches
 	// no question.
 	GetoptsCursorPastTheEnd GetoptsCursorPastTheEndPolicy
+	// GetoptsNewParametersRestartTheScan makes `set` replacing the
+	// positional parameters, or `shift` moving them, start the next `getopts`
+	// at the first word again, whatever OPTIND holds. OPTIND itself is not
+	// written: it keeps the number the last scan left until that next call
+	// writes its own. The other answer carries on from OPTIND.
+	//
+	// Measured 2026-10-16 under `-c` and from a script file, on dash 0.5.12,
+	// BusyBox ash 1.37.0 (the pinned alpine image), bash 5.3.20, ksh93u+ and
+	// zsh 5.9.2; `S` is `set -- -a -b -c; getopts abcd o; getopts abcd o`,
+	// and each row ends `getopts abcd o; echo "$? $o $OPTIND"`:
+	//
+	//	                                 dash, ash   bash, ksh93   zsh
+	//	S; set -- -a -b -c -d            0 a 2       0 c 4         0 c 3
+	//	S; shift                         0 b 2       1 ? 3         1 b 3
+	//	S; shift; echo $OPTIND (alone)   3           3             2
+	//	S; set -- (no operands), then    0 a 2       0 c 4         0 c 3
+	//	  the call given -a -b -c -d
+	//	S; shift 0                       0 a 2       0 c 4         0 c 3
+	//	set -- -abc; getopts abc o;      0 a 2       0 b 1         0 b 1
+	//	  set -- -abc (inside a word)
+	//	OPTIND=3; set -- …               0 a 2       0 c 4         0 c 3
+	//	S; set -- …; OPTIND=3            0 c 4       0 c 4         0 d 4
+	//	control: S; set -x; set +x       0 c 4       0 c 4         0 c 3
+	//	control: S; f x y (a call)       0 c 4       0 c 4         0 c 3
+	//	control: S; f, f does set -- q   0 c 4       0 c 4         0 c 3
+	//	control: S; . ./file x y         0 c 4       0 c 4         0 c 3
+	//	control: S; shift 9 (refused)    0 c 4       0 c 4
+	//
+	// So it is the scan's own position that is reset and not the parameter,
+	// a call given operands of its own is reset as well, an assignment made
+	// before the replacement is dropped by it and one made after it wins, and
+	// it is the *current* parameters that count: a call's are its own, and a
+	// sourced file's operands do not do it.
+	//
+	// Asked only at a `getopts` that follows such a replacement with nothing
+	// assigned to OPTIND in between and a cursor that is not already fresh —
+	// the idiom `shift $((OPTIND-1))` after the loop reaches no question
+	// unless another scan follows it without resetting OPTIND (#6653).
+	GetoptsNewParametersRestartTheScan Answer
 
 	// GetoptsRefusedNameStillScans is whether the scan runs anyway when the
 	// name operand is not an identifier — which is to say, whether OPTIND

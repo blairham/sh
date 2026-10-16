@@ -30,7 +30,11 @@ import "github.com/blairham/sh/syntax"
 // literal's element writes, and where it is, holds the lines on e for the
 // store to write as it goes.
 func (r *Runner) elementLinesFollowTheirStores(a *syntax.Assign, e *expandedAssign) bool {
-	if e == nil || a.Index != nil || a.Members != nil || !r.tracing() {
+	if e == nil || a.Index != nil || a.Members != nil || !r.tracing() ||
+		r.sem().TraceSubscriptedArrayLiteralIsElementAssignments != Yes {
+		// Read rather than asked: a dialect that has not answered gets the
+		// question where the line is written, as it did before, and not
+		// a second time here.
 		return false
 	}
 	lines, ok := r.traceLiteralAsElementWrites(a, e, *r.diag())

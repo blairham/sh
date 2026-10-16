@@ -456,9 +456,23 @@ func (r *Runner) arithElement(x *syntax.ArithIndex) (arithNum, error) {
 		key := r.arithAssocKey(r.arithSubscriptRead(x.SubMarked, subscriptAsKey))
 		if _, there := a[key]; !there && r.stored(x.Name) &&
 			r.ask(r.sem().ArithKeyReadCreatesTheElement, "an expression reading a key an association does not have, creating it") {
-			// The read leaves the key behind, empty — see
-			// Semantics.ArithKeyReadCreatesTheElement.
-			r.setAssocElem(x.Name, key, "")
+			// The read leaves the key behind, declared and holding nothing:
+			// measured 2026-10-16 on ksh93u+, `typeset -A a; (( a[q] ));
+			// typeset -p a` lists `([q]=)`, the listing of a valueless
+			// declaration, where `a[q]=` lists `([q]='')` (#6779). And through
+			// a freeze: `readonly a; let a[k]=2` refuses the store and leaves
+			// `[k]=` behind, so the read is not a write the freeze is asked
+			// about. See Semantics.ArithKeyReadCreatesTheElement.
+			r.arithKeyReadCreating = true
+			r.setAssocElemAs(x.Name, key, "", ElementDeclaredAndEmpty)
+			r.arithKeyReadCreating = false
+		} else if key == "" {
+			// Every read of the empty key warns, not only the one that
+			// creates it: measured 2026-10-16 on ksh93u+ under `set -x`,
+			// `(( a[""] )); (( a[""] ))` warns twice, `(( a[""] + a[""] ))`
+			// twice, and `a[""]=1; x=$(( a[""] ))` once (#6779). See
+			// Diagnostics.EmptyTableKeyTraced.
+			r.warnEmptyTableKeyTraced()
 		}
 		return r.arithElemValue(arithIndexWritten(x), a[key].scalar())
 	}
@@ -1551,7 +1565,12 @@ func (r *Runner) storePlace(p arithPlace, v arithNum, from syntax.ArithExpr) err
 		return nil
 	}
 	if r.assocDeclared(p.name) {
-		r.setAssocElem(p.name, r.arithAssocKey(r.arithSubscriptRead(p.subMarked, subscriptAsKey)), text)
+		key := r.arithAssocKey(r.arithSubscriptRead(p.subMarked, subscriptAsKey))
+		// Marked for the freeze, which one dialect does not ask of this store.
+		// See Semantics.ArithStoreIntoAFrozenTableIsTaken.
+		r.arithStoringAnElement = true
+		r.setAssocElem(p.name, key, text)
+		r.arithStoringAnElement = false
 		return nil
 	}
 	if !r.scopeWarningsAreOff() {

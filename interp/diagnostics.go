@@ -4274,6 +4274,28 @@ type Diagnostics struct {
 	// eval: unset: boom`, no line (#6074).
 	EvalTextAtAPromptKeepsItsLocation bool
 
+	// EvalTextNamesNoLineWhenInteractive locates a diagnostic from `eval`'s
+	// text by name alone in an interactive shell — the `eval:` (or the
+	// speaking builtin's name) is kept and the line is not — wherever the
+	// eval is: typed at the prompt, in a function, in a file `.` read, in a
+	// substitution or a trap. A file `.` reads keeps its line there.
+	//
+	// BusyBox ash's. Measured 2026-10-15 in the pinned alpine image
+	// (BusyBox v1.37.0), the same text both ways:
+	//
+	//	                                  sh -c / a file      sh -i, -i -c, -i file
+	//	eval "true⏎nosuch_b"              eval: line 2: …     eval: nosuch_b: not found
+	//	eval "true⏎cd /nonexist"          cd: line 4: …       cd: can't cd to …
+	//	eval 'echo )'                     eval: line 2: …     eval: syntax error: …
+	//	. ./s3.inc (nosuch_s3, line 1)    ./s3.inc: line 1:   ./s3.inc: line 1:
+	//	eval "$(cat s3.inc)"              eval: line 3: …     eval: nosuch_s3: …
+	//
+	// So the noun is the shell being interactive and the text being
+	// eval's: the same bytes as a file keep the line, and the same eval
+	// without `-i` keeps it too. This wrote the line counted over the whole
+	// session at a prompt (#6611).
+	EvalTextNamesNoLineWhenInteractive bool
+
 	// SetInvalidOptionName is a long `set -o` name this shell does not have.
 	// Two verbs: the name, and the sign it was asked with — `-` or `+`.
 	//

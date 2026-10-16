@@ -373,6 +373,14 @@ func (r *Runner) reportBorrowedParseFailure(err error, s sourced, src string) {
 		r.errf("%s", d.Report(r.name(), line, d.ParseFailure(err)+"\n"))
 		return
 	}
+	if s.eval && r.Interactive && d.EvalTextNamesNoLineWhenInteractive {
+		// The parse half of the run-time rule, written by the same
+		// borrowed prefix: `sh: eval: syntax error: …` with no line. See
+		// Diagnostics.EvalTextNamesNoLineWhenInteractive.
+		cp := *d
+		cp.BorrowedLocation = LocationNameOnly
+		d = &cp
+	}
 	source := s.sourceName(*d)
 	if s.callersPlace || (s.eval && !r.EvalTextHasALocationOfItsOwn()) {
 		// Text that is not a place of its own is refused under the caller's

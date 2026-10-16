@@ -3060,6 +3060,10 @@ func Diagnostics() interp.Diagnostics {
 		// shell's own text carries one only from a file. See
 		// interp.Diagnostics.BorrowedLocation for the five rows.
 		BorrowedLocation: interp.LocationLineWord,
+		// Except `eval`'s text in an interactive shell, which is located by
+		// name alone wherever the eval is (#6611). See
+		// interp.Diagnostics.EvalTextNamesNoLineWhenInteractive.
+		EvalTextNamesNoLineWhenInteractive: true,
 
 		// The parse failures, in this shell's own order: the complaint first
 		// and the token after it, all lower case.

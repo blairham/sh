@@ -6625,9 +6625,26 @@ func (r *Runner) locationPrefixNamed(construct string) string {
 			// inside the borrowed text either way.
 			source = b
 		}
-		return d.forBorrowed().borrowedPrefix(name, source, line)
+		bd := d.forBorrowed()
+		if r.evalTextNamesNoLine() {
+			// Located by name alone. See
+			// Diagnostics.EvalTextNamesNoLineWhenInteractive.
+			bd.Location = LocationNameOnly
+		}
+		return bd.borrowedPrefix(name, source, line)
 	}
 	return d.prefix(name, r.speaking(), r.builtinIsSpeaking(), line) + r.borrowedName(d)
+}
+
+// evalTextNamesNoLine reports whether the innermost borrowed text is
+// `eval`'s, in an interactive shell of the dialect that locates that text by
+// name alone. See Diagnostics.EvalTextNamesNoLineWhenInteractive.
+func (r *Runner) evalTextNamesNoLine() bool {
+	if !r.Interactive || r.Diagnostics == nil || !r.Diagnostics.EvalTextNamesNoLineWhenInteractive {
+		return false
+	}
+	b, ok := r.borrowedAtLocation()
+	return ok && b.eval
 }
 
 // borrowedText is one level of Runner.borrowed: what the text is called, and

@@ -36,12 +36,110 @@ func (r *Runner) assignElemLiteral(a *syntax.Assign) {
 		r.failedSubscript("%s\n", Wording(r.diag().ArrayLiteralThroughASubscript,
 			"%[1]s[%[2]s]: cannot assign list to array member", a.Name, subject))
 	case SubscriptedArrayLiteralSplices:
+		if r.assignWholeArrayElemLiteral(a) {
+			return
+		}
 		r.spliceElemLiteral(a)
 	case SubscriptedArrayLiteralNests:
+		if r.assignWholeArrayElemLiteral(a) {
+			return
+		}
 		r.nestElemLiteral(a)
 	}
 	// Unspecified has already been reported by name, and r.unspecified is set
 	// so nothing after it writes.
+}
+
+// assignWholeArrayElemLiteral is `a[@]=(p q)` and `a[*]=(p q)`: the
+// whole-array spelling with a literal on the right. It reports whether it
+// answered the line; where it did not, the element road goes on as it would.
+//
+// The subscript names no element, so neither element road can take it: the
+// splice and the nest each read it as arithmetic, met a character with no
+// operand, and complained about the expression — and `*` was globbed against
+// the working directory on the way. It is the same spelling the scalar road
+// answers in Runner.assignWholeArraySubscript, so it asks the same two fields.
+// Measured 2026-10-16 under `-c`, after `a=(1 2)`:
+//
+//	written                       zsh 5.9.2                ksh93u+
+//	a[@]=(p $(echo VAL >&2))      VAL, `a=( p )`, 0        `@: invalid subscript
+//	a[*]=(p q)                    `a=( p q )`, 0           in assignment`, no
+//	a[@]+=(p q)                   `a=( 1 2 p q )`          VAL, and the input
+//	unset a; a[@]=(p q)           `a=( p q )`              ends — in every row,
+//	a[@]=([5]=x y)                four empty, `x y`        over a table too
+//
+// bash refuses the list before it reads the subscript, on the Refused road,
+// so it never reaches here.
+//
+// The taking column takes it as the whole name, as its scalar road does, but
+// not over a scalar or a table: `s=x; s[@]=(p q)` is `attempt to assign array
+// value to non-array` and a table is `attempt to set slice of associative
+// array`, both after the literal is expanded — the splice's own two refusals,
+// so the splice's gate answers them.
+func (r *Runner) assignWholeArrayElemLiteral(a *syntax.Assign) bool {
+	policy, whole := r.wholeArrayLiteralPolicy(a)
+	if !whole {
+		return false
+	}
+	switch policy {
+	case WholeArraySubscriptNamesEveryElement:
+		words, ok := r.literalWords(a.Name, a.Elems)
+		if !ok {
+			return true
+		}
+		if !r.spliceTargetIsAnArray(a) || r.refuseTheHeldFreeze(a) {
+			return true
+		}
+		if a.Append {
+			elems, _ := r.arrayElemsOfTheName(a.Name)
+			words = append(append([]string{}, elems...), words...)
+		}
+		r.setArray(a.Name, words)
+		return true
+	case WholeArraySubscriptIsInvalidInAnAssignment, WholeArraySubscriptIsABadSubscript:
+		// Refused before the literal is expanded, as the scalar road
+		// refuses it before its value is.
+		r.refuseWholeArraySubscript(a, policy)
+		return true
+	case WholeArraySubscriptAssignUnspecified:
+		r.diagf("%s\n", r.unanswered("the whole-array subscript on the left of an assignment"))
+		r.status, r.unspecified = 2, true
+		return true
+	}
+	// A key named `@`, or a table's slice: the element road already answers
+	// both, the second through the splice's gate.
+	return false
+}
+
+// wholeArrayLiteralPolicy reports whether a subscripted literal or compound
+// body is written with the whole-array spelling, and which of the two fields
+// answers it for this name.
+func (r *Runner) wholeArrayLiteralPolicy(a *syntax.Assign) (WholeArraySubscriptAssignPolicy, bool) {
+	if a.IndexFlags != nil || a.IndexRange != nil || len(a.Leading) > 0 ||
+		!wholeArraySubscript(a.IndexText) {
+		return WholeArraySubscriptAssignUnspecified, false
+	}
+	if r.assocDeclared(a.Name) {
+		return r.sem().WholeArraySubscriptAssigningATable, true
+	}
+	return r.sem().WholeArraySubscriptAssigningAnArray, true
+}
+
+// refusedWholeArrayCompound is the whole-array spelling with a compound body
+// on the right — `a[@]=(x=1)`, and `a[@]=()` in the grammar that reads an
+// empty list as one. Measured 2026-10-16 on ksh93u+, the one column with the
+// construct, under `-c`: `@: invalid subscript in assignment` for both, and
+// over a table too, with the input ended and nothing in the body expanded —
+// the literal's own answer. Only a refusal is taken here; nothing measured
+// says what a taking column would do with a body.
+func (r *Runner) refusedWholeArrayCompound(a *syntax.Assign) bool {
+	policy, whole := r.wholeArrayLiteralPolicy(a)
+	if !whole || policy != WholeArraySubscriptIsInvalidInAnAssignment &&
+		policy != WholeArraySubscriptIsABadSubscript {
+		return false
+	}
+	r.refuseWholeArraySubscript(a, policy)
+	return true
 }
 
 // spliceElemLiteral replaces the element a subscript names with the words a

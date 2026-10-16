@@ -8422,6 +8422,26 @@ type Dialect struct {
 	// reading the other dialects share.
 	ArithCommandTakesNoRedirection bool
 
+	// RedirectionOnlyCommandNamesTheTokenAfterIt names, when the input runs
+	// out with a construct open, the token that ended the last command made
+	// of nothing but redirections inside it, rather than the construct's
+	// keyword. ksh93u+ alone, the one shell that names an innermost keyword
+	// at all. Measured 2026-10-15 on ksh93u+ 2012-08-01 `-c '<program>'`
+	// with `echo ok` on the line after each (#6618):
+	//
+	//	if {v}<x / if <x / if 3<x       `newline' unmatched
+	//	while / until / { / ( / do …    the same
+	//	if : | <x / if ! <x / if :; <x  the same
+	//	if {v}<x; / if {v}<x; echo a    `;' unmatched
+	//	if {v}<x | / && / || / &        that operator
+	//	if <x; :; <y |                  `|' — the last such command
+	//	if {v}<x; then                  `then' — a clause displaces it
+	//	if : {v}<x / if x=1 {v}<x       `if' — a word or an assignment
+	//	if { <x; } / if (<x)            `if' — a construct closing drops it
+	//	if {v}<x  (input ends there)    `if'
+	//	case a in a) <x                 `case' — an arm is the exception
+	RedirectionOnlyCommandNamesTheTokenAfterIt bool
+
 	// FdVariablePositional lets the name inside those braces begin with a
 	// digit, which is how a *positional parameter* names a descriptor:
 	// `exec {1}>&-` closes the one whose number is in `$1`.

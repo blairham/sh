@@ -593,6 +593,7 @@ func Dialect() syntax.Dialect {
 	// the same place is read. Measured 2026-10-15 on ksh93u+ (#6528); see the
 	// flag for the table.
 	d.ArithCommandTakesNoRedirection = true
+	d.RedirectionOnlyCommandNamesTheTokenAfterIt = true
 	// `times` is a reserved word here, so `times foo` is a syntax error
 	// rather than a builtin ignoring an argument — the one place in the panel
 	// where which builtin a shell has changes what parses.

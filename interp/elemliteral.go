@@ -29,7 +29,7 @@ func (r *Runner) assignElemLiteral(a *syntax.Assign) {
 		//
 		// So the subscript is not expanded to quote it either, where the
 		// source holds its text: `a[$(f)]=(p q)` does not run `f` (#6674).
-		subject := a.IndexText
+		subject := r.writtenIndex(a)
 		if subject == "" {
 			subject = r.subscriptAsWritten(a.Index)
 		}
@@ -247,7 +247,7 @@ func (r *Runner) spliceWordsIntoElement(a *syntax.Assign, subscript func() strin
 	text := subscript()
 	// The subscript as written is what a boundary refusal quotes back, and it
 	// is not the text the arithmetic reads — see subscriptSubject (#1373).
-	subject := subscriptSubject(a.IndexText, text)
+	subject := subscriptSubject(r.writtenIndex(a), text)
 	from, to, outcome := r.assignSpan(a, text)
 	if outcome == spanReported {
 		return

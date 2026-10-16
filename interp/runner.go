@@ -15927,7 +15927,7 @@ func (r *Runner) assign(ctx context.Context, a *syntax.Assign) {
 		// `a[$i]: bad array subscript` in the column that names it. Only the
 		// boundary refusals take it — an expression that will not evaluate is
 		// quoted back expanded in every column (#1373).
-		subject := subscriptSubject(a.IndexText, text)
+		subject := subscriptSubject(r.writtenIndex(a), text)
 		// The match a pattern on the right came to, in the shell that reads
 		// an assignment's value as one — read after the subscript and before
 		// the span, so the order the two are expanded in does not move, and

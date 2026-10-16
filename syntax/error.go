@@ -403,6 +403,25 @@ type Error struct {
 	// group in front of the rest.
 	CondGroupsOpen int
 
+	// GroupLeftover is, on ErrArithMissingCloseParen, the kind the text the
+	// group could not use would have drawn had it been left over after a
+	// complete expression instead — ErrArithOperator for `(1 a)`,
+	// ErrArithBadOperator or ErrArithIllegalByte for `(1 ;)` depending on
+	// the dialect's reader — and GroupLeftoverToken what that kind names.
+	// Zero (ErrSyntax) where the group ran out of text instead.
+	//
+	// Recorded beside the group's own kind rather than in place of it,
+	// because the panel splits on it in opposite directions. Measured
+	// 2026-10-16: bash 5.3.20 keeps ``missing `)'`` for an operand left in
+	// the group and words a byte that could be no operator as the leftover
+	// it is (`invalid arithmetic operator`); zsh 5.9.2 keeps `operator
+	// expected` for the operand and says `')' expected` for the byte; dash
+	// says `expecting ')'` for both, and ksh93u+ its one leftover sentence
+	// (#6803). See interp.Diagnostics.ArithGroupWordsTheLeftover and
+	// ArithRefusedByteInAGroup.
+	GroupLeftover      ErrorKind
+	GroupLeftoverToken string
+
 	// CondGroupCloserWanted says the refusal happened where a condition
 	// group's `)` was wanted rather than inside one of its terms. One
 	// dialect names that closer in the same sentence as the token it did not

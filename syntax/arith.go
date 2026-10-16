@@ -788,22 +788,7 @@ func (p *Parser) parseArithIn(src string, at Pos, expanded, dequote bool) ArithE
 	e := a.expr()
 	a.space()
 	if e != nil && a.off < len(a.src) {
-		kind := a.leftoverKind()
-		// The two operand and operator failures name everything from here to
-		// the end of the expression; the byte's own verdict names the byte.
-		token := a.src[a.blame:]
-		if kind == ErrArithIllegalByte {
-			token = a.src[a.off : a.off+1]
-		}
-		if kind == ErrArithOperator && a.dial.ArithLeftoverOperandReadsTheNextToken {
-			// The reader has already taken the token behind the operand,
-			// and a byte it could not read refuses first. See
-			// [Dialect.ArithLeftoverOperandReadsTheNextToken].
-			if at, ok := a.unreadableByteBehindAnOperand(a.off); ok {
-				kind, token = ErrArithBadOperator, a.src[at:]
-			}
-		}
-		a.failArith(kind, token)
+		a.failArith(a.leftover())
 	}
 	if a.format != nil {
 		// Lifted to the top rather than left where it was written, and over
@@ -813,6 +798,29 @@ func (p *Parser) parseArithIn(src string, at Pos, expanded, dequote bool) ArithE
 		return a.format
 	}
 	return e
+}
+
+// leftover is the refusal for text left over where an operator belonged —
+// after a complete expression, or inside a group that read a value and did
+// not close. Its kind is [arithParser.leftoverKind]'s, refined by what the
+// dialect's reader has already taken, and its token is what that kind names.
+func (a *arithParser) leftover() (ErrorKind, string) {
+	kind := a.leftoverKind()
+	// The two operand and operator failures name everything from here to
+	// the end of the expression; the byte's own verdict names the byte.
+	token := a.src[a.blame:]
+	if kind == ErrArithIllegalByte {
+		token = a.src[a.off : a.off+1]
+	}
+	if kind == ErrArithOperator && a.dial.ArithLeftoverOperandReadsTheNextToken {
+		// The reader has already taken the token behind the operand,
+		// and a byte it could not read refuses first. See
+		// [Dialect.ArithLeftoverOperandReadsTheNextToken].
+		if at, ok := a.unreadableByteBehindAnOperand(a.off); ok {
+			kind, token = ErrArithBadOperator, a.src[at:]
+		}
+	}
+	return kind, token
 }
 
 // leftoverKind tells the three ways an expression can have something left
@@ -826,7 +834,19 @@ func (a *arithParser) leftoverKind() ErrorKind {
 	c := a.src[a.off]
 	switch {
 	case c >= '0' && c <= '9', c >= 'a' && c <= 'z', c >= 'A' && c <= 'Z',
-		c == '_', c == '(', c == '$':
+		c == '_', c == '(', c == '$',
+		// A unary operator begins an operand as much as a name does, so
+		// what is left over is an operand where an operator belonged and
+		// not a byte that could be neither. Measured 2026-10-16, bash
+		// 5.3.20: `$(( 1 ~ 2 ))` and `$(( 1 ! 2 ))` are `arithmetic syntax
+		// error in expression`, the sentence of `$(( 1 a ))`, where
+		// `$(( 1 ; 2 ))` is `invalid arithmetic operator`; and inside a group
+		// `(1 ~)` is ``missing `)'`` with `(1 a)` where `(1 ;)` is the
+		// invalid operator. zsh 5.9.2 says `operator expected` for all four
+		// of `1 ~`, `1 !`, `(1 ~)` and `(1 a)`, and `illegal character` and
+		// `')' expected` for the `;` (#6803). `-` and `+` cannot be left
+		// over: after an operand they are the binary operators.
+		c == '~', c == '!':
 		return ErrArithOperator
 	case c == ')':
 		// A parenthesis that closes nothing. See
@@ -1575,7 +1595,16 @@ func (a *arithParser) primary() ArithExpr {
 			// arithmetic` was this parser's prose about a production standing
 			// where a diagnostic about the script belonged, and it took one
 			// dialect down at a syntax error's status besides (#3071).
+			first := a.p.err == nil
 			a.failArith(ErrArithMissingCloseParen, a.src[a.blame:])
+			if first && a.off < len(a.src) {
+				// And what the leftover would have drawn had the group
+				// closed, which two dialects word instead of the group's
+				// own sentence for some leftovers. See [Error.GroupLeftover].
+				if se, ok := a.p.err.(*Error); ok {
+					se.GroupLeftover, se.GroupLeftoverToken = a.leftover()
+				}
+			}
 			return nil
 		}
 		return x

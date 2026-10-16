@@ -6563,6 +6563,9 @@ func Diagnostics() interp.Diagnostics {
 		// `abcdefghij...'. Measured 2026-10-02 (#5138).
 		ArithBlamedTextShownTo:   10,
 		ArithUnmatchedCloseParen: "bad math expression: unexpected ')'",
+		// The byte `illegal character` names outside a group, met where a
+		// group's `)` belongs. See the field (#6803).
+		ArithRefusedByteInAGroup: "bad math expression: ')' expected",
 		// The output format's own two, neither of which opens with `bad math
 		// expression:` and neither of which names the text it refused —
 		// measured 2026-09-12, `zsh:1: bad output format specification` for

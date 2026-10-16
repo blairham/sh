@@ -15,3 +15,23 @@ func TestAStrayCloseParenInArithmetic(t *testing.T) {
 		t.Errorf("got %q, %q", out, errs)
 	}
 }
+
+// A byte the reader refuses outright, met where a group's `)` belongs, is the
+// `)` that was expected; an operand there keeps `operator expected`. Outside a
+// group the same byte is `illegal character`.
+//
+// Measured 2026-10-16 on zsh 5.9.2, from a file (#6803).
+func TestARefusedByteInAGroupWantsTheCloseParen(t *testing.T) {
+	for _, tc := range []struct{ expr, want string }{
+		{`(1;2)`, "bad math expression: ')' expected"},
+		{`((1) ;)`, "bad math expression: ')' expected"},
+		{`(1 a)`, "bad math expression: operator expected at `a) '"},
+		{`(1 ~)`, "bad math expression: operator expected at `~) '"},
+		{`1;2`, "bad math expression: illegal character: ;"},
+	} {
+		_, _, errs := runZshUTF8(t, `print $(( `+tc.expr+` ))`)
+		if errs != "zsh:1: "+tc.want+"\n" {
+			t.Errorf("%s: got %q, want %q", tc.expr, errs, tc.want)
+		}
+	}
+}

@@ -41,3 +41,26 @@ func TestAnUnclosedGroupLeavesTheScriptRunning(t *testing.T) {
 		t.Errorf("got %q at %d, want it to contain %q at 0", out, st, "after=1")
 	}
 }
+
+// Only an operand left in the group is the group's sentence. Text that could
+// begin no operand is worded as itself, exactly as it would be after a
+// complete expression, and a unary operator is an operand's beginning.
+//
+// Measured 2026-10-16 on bash 5.3.20, from a file (#6803).
+func TestAGroupsLeftoverByteIsWordedAsTheByte(t *testing.T) {
+	for _, tc := range []struct{ expr, want string }{
+		{`(1;2)`, "(1;2) : arithmetic syntax error: invalid arithmetic operator (error token is \";2) \")"},
+		{`(1,2;3)`, "(1,2;3) : arithmetic syntax error: invalid arithmetic operator (error token is \";3) \")"},
+		{`(1 a;)`, "(1 a;) : arithmetic syntax error: invalid arithmetic operator (error token is \";) \")"},
+		{`((1) ;)`, "((1) ;) : arithmetic syntax error: operand expected (error token is \";) \")"},
+		{`(1 2)`, "(1 2) : missing `)' (error token is \"2) \")"},
+		{`(1 ~)`, "(1 ~) : missing `)' (error token is \"~) \")"},
+		{`(1:2)`, "(1:2) : missing `)' (error token is \":2) \")"},
+		{`1 ! 2`, "1 ! 2 : arithmetic syntax error in expression (error token is \"! 2 \")"},
+	} {
+		out, st := answersRun(t, `echo $(( `+tc.expr+` ))`)
+		if !strings.Contains(out, tc.want) || st != 1 {
+			t.Errorf("%s: got %q at %d, want it to contain %q at 1", tc.expr, out, st, tc.want)
+		}
+	}
+}

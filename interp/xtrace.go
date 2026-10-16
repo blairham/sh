@@ -625,7 +625,7 @@ func (r *Runner) traceAssign(a *syntax.Assign, value string, e *expandedAssign, 
 	var b strings.Builder
 	b.WriteString(traceAssignTarget(a, e, func(key string) string {
 		return r.traceQuote(key, d.TraceQuoting, d.TraceMetacharacters)
-	}))
+	}, r.traceWordLayout(d)))
 	if a.IsArray {
 		b.WriteString(r.traceArrayLiteral(a.Elems, expandedElemsOf(e),
 			d.TraceArrayLiteral, d, r.traceWordLayout(d)))
@@ -668,18 +668,32 @@ func (r *Runner) traceAssign(a *syntax.Assign, value string, e *expandedAssign, 
 // like any other: measured 2026-10-15 on ksh93u+ 2012-08-01, `m["a b"]=w`
 // traces as `m['a b']=w` and `m["k=1 2"]=v` as `m[k='1 2']=v`, the same
 // spelling `typeset -p m` gives the keys, where this wrote them raw (#6582).
-// A subscript as written is the script's own text and is not quoted again.
-func traceAssignTarget(a *syntax.Assign, e *expandedAssign, quote func(string) string) string {
+// A subscript as written is the script's own text and is not quoted again,
+// and it is written through layout, which is how this dialect writes a word
+// back as written — see Runner.traceWordLayout.
+func traceAssignTarget(a *syntax.Assign, e *expandedAssign, quote func(string) string, layout syntax.Layout) string {
 	var b strings.Builder
 	b.WriteString(a.Name)
-	if a.Index != nil {
+	switch {
+	case len(a.Leading) > 0 && e != nil && e.subscriptSet && len(e.chain) == len(a.Leading)+1:
+		// A chain, in the column that writes each link as what it came to:
+		// `a[$(echo 1)][k]=v` is `a[1][0]=v` there. See Runner.resolvedChain.
+		for _, link := range e.chain {
+			b.WriteString("[" + quote(link) + "]")
+		}
+	case len(a.Leading) > 0:
+		for _, link := range a.Leading {
+			b.WriteString("[" + syntax.PrintSubscriptWith(link.Index, layout) + "]")
+		}
+		fallthrough
+	case a.Index != nil:
 		b.WriteString("[")
 		if e != nil && e.subscriptSet {
 			// What the store resolved it to, in the one column that writes
 			// that — see Semantics.TraceElementSubscriptIsEvaluated.
 			b.WriteString(quote(e.subscript))
 		} else {
-			b.WriteString(syntax.PrintWord(a.Index))
+			b.WriteString(syntax.PrintSubscriptWith(a.Index, layout))
 		}
 		b.WriteString("]")
 	}
@@ -1751,12 +1765,35 @@ func (r *Runner) tracef(format string, args ...any) {
 // Diagnostics.TraceArrayLiteralDecodesAnsiCQuoting, and
 // syntax.Layout.AnsiCQuotedWordIsItsValue for why the decoder has to be
 // handed over rather than named.
+//
+// A command substitution in it is written the way the function listing
+// writes one, which is the same text: bash keeps a word as the text it parsed,
+// and the text it keeps for a `$( … )` is the body read and laid out again.
+// Measured 2026-10-15 on bash 5.3.20 from a file and with -c,
+// `set -x; a[$(echo 1 >&2; echo 1)]=x` traces `+ a[$(echo 1 1>&2; echo
+// 1)]=x`, and `a=([$(a;b)]=x)` traces `+ a=([$(a; b)]=x)` — in double quotes,
+// inside a `${ … }` and inside arithmetic alike, and `declare -f` lists every
+// one of those the same way. A backquoted body is written as written there
+// too. The dialects that write a substitution back as written leave the
+// listing's readers nil, so this copies nothing for them (#6679).
 func (r *Runner) traceWordLayout(d Diagnostics) syntax.Layout {
-	var l syntax.Layout
+	l := r.wordAsWrittenLayout()
 	if d.TraceArrayLiteralDecodesAnsiCQuoting {
 		l.AnsiCQuotedWordIsItsValue = r.AnsiCValue
 	}
 	return l
+}
+
+// wordAsWrittenLayout is the arrangement a word is written back with where a
+// diagnostic or a trace quotes it as the script wrote it: nothing but the
+// function listing's readers for the bodies of substitutions, which is all
+// that the shell that has them changes about such a word.
+func (r *Runner) wordAsWrittenLayout() syntax.Layout {
+	return syntax.Layout{
+		CommandSubstitutionIsReprinted: r.functionLayout.CommandSubstitutionIsReprinted,
+		ParameterExpansionIsReprinted:  r.functionLayout.ParameterExpansionIsReprinted,
+		ArithmeticIsReprinted:          r.functionLayout.ArithmeticIsReprinted,
+	}
 }
 
 // traceEmptyCommand is xtrace's line for a command that has nothing left to

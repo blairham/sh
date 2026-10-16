@@ -15177,6 +15177,10 @@ type expandedAssign struct {
 	// `readonly a=(1); a=(2 3)` or for `a[1/0]=v`, and this is why.
 	subscript    string
 	subscriptSet bool
+	// chain is every subscript of a chained element write — `a[1][2]=v` —
+	// resolved, first to last, recorded beside subscript for the same column
+	// and for the same reason. Nil for an assignment with one subscript.
+	chain []string
 
 	// tracesAfterTheStore says this assignment's line is written once it has
 	// been performed, which is the arrangement the subscript above needs.
@@ -15190,6 +15194,19 @@ func (r *Runner) resolvedSubscript(text string) {
 		return
 	}
 	r.expanded.subscript, r.expanded.subscriptSet = text, true
+}
+
+// resolvedChain records what every subscript of a chained element write came
+// to, once the write has landed — the chain's counterpart of
+// resolvedSubscript. The last link is the subscript the value went under, so
+// it is recorded there as well, which is what lets the trace tell a chain that
+// landed from one that was refused.
+func (r *Runner) resolvedChain(links []string) {
+	if r.expanded == nil || !r.expanded.tracesAfterTheStore || len(links) == 0 {
+		return
+	}
+	r.expanded.chain = links
+	r.resolvedSubscript(links[len(links)-1])
 }
 
 // assignValue is the value an assignment stores, expanded.

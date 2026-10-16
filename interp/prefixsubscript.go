@@ -68,17 +68,27 @@ func aPrefixIsSubscripted(assigns []*syntax.Assign) bool {
 // about `a[$((1/0))]=v cmd` there is this sentence and not a division.
 //
 // [syntax.Assign.IndexText] is the spelling and [syntax.PrintWord] the
-// fallback, for a tree built by hand rather than by the parser.
-func subscriptedPrefixSpelling(a *syntax.Assign) string {
+// fallback, for a tree built by hand rather than by the parser — except where
+// the dialect lays out the body of a command substitution it writes back,
+// which it does here as well: bash 5.3.20 quotes `a[$(echo 1;echo 2)]=x f`
+// back as `a[$(echo 1; echo 2)]`, the text a trace of the same word writes.
+// See Runner.wordAsWrittenLayout (#6679).
+func subscriptedPrefixSpelling(a *syntax.Assign, layout syntax.Layout) string {
+	written := func(text string, w *syntax.Word) string {
+		if layout.CommandSubstitutionIsReprinted != nil {
+			return syntax.PrintSubscriptWith(w, layout)
+		}
+		return subscriptSubject(text, syntax.PrintWord(w))
+	}
 	var b strings.Builder
 	b.WriteString(a.Name)
 	for _, lead := range a.Leading {
 		b.WriteByte('[')
-		b.WriteString(subscriptSubject(lead.Text, syntax.PrintWord(lead.Index)))
+		b.WriteString(written(lead.Text, lead.Index))
 		b.WriteByte(']')
 	}
 	b.WriteByte('[')
-	b.WriteString(subscriptSubject(a.IndexText, syntax.PrintWord(a.Index)))
+	b.WriteString(written(a.IndexText, a.Index))
 	b.WriteByte(']')
 	return b.String()
 }
@@ -135,7 +145,7 @@ func (r *Runner) subscriptedPrefixRefusalAnswered(assigns []*syntax.Assign) bool
 // refuseOneSubscriptedPrefix is the complaint for one such word.
 func (r *Runner) refuseOneSubscriptedPrefix(a *syntax.Assign) {
 	r.diagf("%s\n", Wording(r.diag().SubscriptedPrefixIsNotAName,
-		"`%[1]s': not a valid identifier", subscriptedPrefixSpelling(a)))
+		"`%[1]s': not a valid identifier", subscriptedPrefixSpelling(a, r.wordAsWrittenLayout())))
 }
 
 // subscriptedPrefixDropped reports whether a prefix entry is one this dialect

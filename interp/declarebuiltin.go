@@ -3560,8 +3560,12 @@ func (r *Runner) inconsistentTypeRefused(name string, fresh bool, f declareFlags
 // shell that refuses refuses all four in the same words with its own name in
 // the location — the same shape inconsistentTypeRefused already has, and they
 // share the sentence for the same reason.
+//
+// Which of two sentences it writes is the name's: one that already holds a
+// value that is not an array, in the cell this declaration lands on, is told
+// so in Diagnostics.TypeLetterOverAHeldName's words (#6566).
 func (r *Runner) typeLetterOverAnArrayLiteralRefused(name string, f declareFlags) bool {
-	if f.remove || !r.literalOperands[name] {
+	if !r.literalOperands[name] || !f.numericLetterAdded() {
 		return false
 	}
 	if !f.integer && !f.float {
@@ -3571,7 +3575,44 @@ func (r *Runner) typeLetterOverAnArrayLiteralRefused(name string, f declareFlags
 		"a type letter on a declaration whose value is an array literal") {
 		return false
 	}
+	if words := r.diag().TypeLetterOverAHeldName; words != "" && r.typeLetterLandsOnAHeldScalar(name, f) {
+		r.fatal("%s\n", Wording(words, "%s: can't assign array value to non-array", name))
+		return true
+	}
 	return r.refuseInconsistentType(name)
+}
+
+// numericLetterAdded reports whether this line adds a numeric type: an `i`,
+// `F` or `E` written under a minus. The letter's own sign and not the line's
+// last one, which is what f.remove holds: measured 2026-10-15 on zsh 5.9.2,
+// `typeset -i +r v=(x)` is refused as `-i v=(x)` is, where `typeset +i
+// v=(x)` writes the array (#6566). A line that recorded no numeric letter at
+// all falls back to the line's sign.
+func (f declareFlags) numericLetterAdded() bool {
+	written := false
+	for i, c := range f.letters {
+		if c != 'i' && c != 'F' && c != 'E' {
+			continue
+		}
+		written = true
+		if i < len(f.letterSigns) && f.letterSigns[i] == '-' {
+			return true
+		}
+	}
+	return !written && !f.remove
+}
+
+// typeLetterLandsOnAHeldScalar reports whether a declaration lands on a cell
+// that already holds a value that is not an array: the name holds one, and the
+// declaration writes that cell rather than a fresh local in front of it. Asked
+// before the declaration has made its local, which is why the second half is
+// worked out here rather than read from the shadow: a declaration inside a
+// function makes a fresh local unless it says `-g` or the call has one already.
+func (r *Runner) typeLetterLandsOnAHeldScalar(name string, f declareFlags) bool {
+	if !r.declaredNameHolds(name) || r.compoundCell(name) {
+		return false
+	}
+	return len(r.scopes) == 0 || f.global || r.localInTheInnermostScope(name)
 }
 
 // refuseInconsistentType writes the one sentence two questions reach and ends

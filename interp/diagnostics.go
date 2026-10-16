@@ -7361,6 +7361,29 @@ type Diagnostics struct {
 	// ScalarOverACompoundIsAnInconsistentType answers — the wording exists
 	// only for the dialect that says yes.
 	InconsistentType string
+	// TypeLetterOverAHeldName is what a declaration says when a numeric type
+	// letter is written beside an array literal over a name that **already
+	// holds** a value that is not an array, in the cell the declaration
+	// lands on. One verb: the name.
+	//
+	// The same refusal as the unset name's InconsistentType, and the shell
+	// with both picks the sentence by whether the name is set before the line
+	// runs — not by whether it is readonly. Measured 2026-10-15 on zsh 5.9.2,
+	// `-f`, `env -i PATH=/usr/bin:/bin`:
+	//
+	//	typeset -i v=(x)                      v: inconsistent type for assignment
+	//	v=1; typeset -i v=(x)                 v: can't assign array value to non-array
+	//	typeset -r v=1; typeset -i v=(x)      the same
+	//	v=; typeset -i v=(x)                  the same — set, however empty
+	//	v=1; unset v; typeset -i v=(x)        inconsistent type for assignment
+	//	v=(a); typeset -i v=(x)               the same — an array is held
+	//	v=1; f(){ typeset -i v=(x); }; f      the same — a fresh local holds nothing
+	//	v=1; f(){ typeset -gi v=(x); }; f     can't assign array value to non-array
+	//
+	// The builtin is named in the location, as InconsistentType's is. Empty
+	// falls back to InconsistentType, so a dialect that has measured one
+	// sentence keeps it (#6566).
+	TypeLetterOverAHeldName string
 
 	// ReadonlyVariableInDeclaration replaces it when the assignment was made
 	// through a declaration utility. Two verbs: the name and the builtin.

@@ -1649,6 +1649,10 @@ func Semantics() interp.Semantics {
 	// A literal that fails partway through stores nothing, subscripted or
 	// not, as in bash.
 	s.FailedSubscriptedLiteralKeepsWhatItStored = interp.No
+	// A table append that fails keeps nothing, and a declaration's letter
+	// does not re-create a name whose literal failed.
+	s.FailedTableAppendKeepsThePairsItAdded = interp.No
+	s.FailedOperandLeavesTheLettersKind = interp.No
 	// Asked only under `ksharrays`, which is what makes a bare name one
 	// element here: a table is read as an ordered list, so the element is the
 	// first value in the order this shell lists rather than the one keyed `0`

@@ -2607,6 +2607,11 @@ func Semantics() interp.Semantics {
 	// A literal that fails partway through stores nothing, subscripted or
 	// not: the name keeps what it held.
 	s.FailedSubscriptedLiteralKeepsWhatItStored = interp.No
+	// A bare append onto a table that fails partway keeps the pairs it
+	// had added, plain pairs too: `m+=(j new i $((1/0)))` keeps `j`. A
+	// declaration's letter does not re-create a name whose literal failed.
+	s.FailedTableAppendKeepsThePairsItAdded = interp.Yes
+	s.FailedOperandLeavesTheLettersKind = interp.No
 	// bash reports success if it signaled anything at all, where the others
 	// count failures one way or another.
 	s.ExitTrapRunsOnSignalDeath = interp.Yes

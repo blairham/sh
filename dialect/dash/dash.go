@@ -744,6 +744,9 @@ func Semantics() interp.Semantics {
 	// subscripted shape is the same literal, so it does not parse either.
 	// unanswered FailedSubscriptedLiteralKeepsWhatItStored: no array
 	// literal here to fail partway through.
+	// unanswered FailedTableAppendKeepsThePairsItAdded: nor a table to
+	// append to.
+	// unanswered FailedOperandLeavesTheLettersKind: nor a container letter.
 	// unanswered ElementSubscriptIsExpandedBeforeTheValue: no element write
 	// to order — `a[1]=v` is a command word here.
 	// unanswered FrozenElementIsRefusedBeforeItsSubscript: and so no frozen

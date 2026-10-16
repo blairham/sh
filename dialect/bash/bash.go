@@ -4892,8 +4892,11 @@ func Diagnostics() interp.Diagnostics {
 		ArithBadOperator:       "arithmetic syntax error: invalid arithmetic operator",
 		ArithAssignToNonPlace:  "attempted assignment to non-variable",
 		ArithMissingCloseParen: "missing `)'",
-		ArithFailureStatus:     1,
-		SyntaxUnexpected:       "syntax error near unexpected token `%[1]s'",
+		// Only for an operand left in the group: a byte that could be no
+		// operator is worded as itself. See the field (#6803).
+		ArithGroupWordsTheLeftover: true,
+		ArithFailureStatus:         1,
+		SyntaxUnexpected:           "syntax error near unexpected token `%[1]s'",
 		// And, inside a `$( … )` body, what the shell was still looking
 		// for. See Diagnostics.SubstitutionBodyExpecting for the six rows
 		// and for the two shapes that get nothing (#3467).

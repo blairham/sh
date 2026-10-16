@@ -9170,6 +9170,28 @@ type Diagnostics struct {
 	// outside a group is the invalid-character sentence. Empty falls back to
 	// what any other text in that place draws.
 	ArithColonInAGroup string
+	// ArithGroupWordsTheLeftover words a group that met, where its `)`
+	// belongs, text that could begin no operand as that text would be
+	// worded after a complete expression — keeping ArithMissingCloseParen
+	// for an operand standing there. See syntax.Error.GroupLeftover.
+	//
+	// bash: measured 2026-10-16 on 5.3.20 (3.2.57 agrees, with its older
+	// `syntax error:` prefix), from a file. `$(( (1;2) ))`, `(1 @)`, `(1 })`
+	// and `(1 a;)` are `invalid arithmetic operator` and `((1) ;)` is
+	// `operand expected`, each exactly what the same leftover draws outside
+	// a group; `(1 2)`, `(1 a)`, `(1 ~)`, `(1 !)` and `(1:2)` keep ``missing
+	// `)'`` (#6803).
+	ArithGroupWordsTheLeftover bool
+	// ArithRefusedByteInAGroup is the reason when a group meets, where its
+	// `)` belongs, a byte the dialect's reader refuses outright — what
+	// ArithIllegalByte words outside a group. No verbs: it quotes nothing.
+	//
+	// zsh: measured 2026-10-16 on 5.9.2, `$(( (1;2) ))`, `(1 @)`, `(1 })`,
+	// `(1 \")` and `((1) ;)` are `bad math expression: ')' expected`, where
+	// `1;2` outside a group is `illegal character: ;` and an operand in the
+	// group — `(1 a)`, `(1 ~)`, `(1 (2))` — keeps `operator expected at`
+	// (#6803). Empty words it as any other leftover in the group.
+	ArithRefusedByteInAGroup string
 	// ArithConditionalThen and ArithConditionalElse are a conditional missing
 	// one of the two values it chooses between: `$(( 1 ? ))` and
 	// `$(( 1 ? 2 : ))`. No verbs. Empty falls through to the ordinary
@@ -10956,6 +10978,17 @@ func (d Diagnostics) arithParseFailure(se *syntax.Error, expr string) string {
 		// ArithBadFloatConstant.
 		return d.ArithBadFloatConstant
 	}
+	if se.Kind == syntax.ErrArithMissingCloseParen && d.ArithGroupWordsTheLeftover {
+		switch se.GroupLeftover {
+		case syntax.ErrArithBadOperator, syntax.ErrArithOperand, syntax.ErrArithIllegalByte:
+			// A group whose leftover could be no operand, in the dialect
+			// that words that leftover as itself. See the field.
+			left := *se
+			left.Kind, left.Token = se.GroupLeftover, se.GroupLeftoverToken
+			left.GroupLeftover, left.GroupLeftoverToken = syntax.ErrSyntax, ""
+			return d.arithParseFailure(&left, expr)
+		}
+	}
 	reason, fallback := d.ArithOperandExpected, "operand expected"
 	switch se.Kind {
 	case syntax.ErrArithOperandEnd:
@@ -10999,6 +11032,11 @@ func (d Diagnostics) arithParseFailure(se *syntax.Error, expr string) string {
 			// A colon where the `)` belongs, in the dialect with a sentence
 			// for it. See the field.
 			reason = d.ArithColonInAGroup
+		}
+		if d.ArithRefusedByteInAGroup != "" && se.GroupLeftover == syntax.ErrArithIllegalByte {
+			// A byte the reader refuses outright, where the `)` belongs, in
+			// the dialect with a sentence for it. See the field.
+			reason = d.ArithRefusedByteInAGroup
 		}
 		if reason == "" {
 			// A dialect with no sentence of its own for the unclosed group

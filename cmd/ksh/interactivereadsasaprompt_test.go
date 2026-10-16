@@ -19,8 +19,9 @@ import (
 // file with and without `-i`, part company, while `-i -c`, `-i t.sh` and `-i`
 // with the program on a pipe all agree. Measured 2026-10-15 on ksh93u+
 // 2012-08-01 with `ENV=/dev/null`; every expected line is that shell's, the
-// file's name in place of `ksh` on the file route, less the newline ksh93
-// writes at the end of the input under `-i`, which is #6654's. This shell numbered the
+// file's name in place of `ksh` on the file route, and under `-i` it ends
+// with the newline the end of the input writes (#6654, see
+// TestAnInteractiveKshEndsTheLineAtTheEndOfItsProgram). This shell numbered the
 // string and the file whole, as without `-i`: `L=5`, `L2=7`, `FL=11`,
 // `ksh[14]: cd: …` and `syntax error at line 3`.
 func TestAnInteractiveKshReadsItsProgramAsAPrompt(t *testing.T) {
@@ -37,10 +38,10 @@ func TestAnInteractiveKshReadsItsProgramAsAPrompt(t *testing.T) {
 		return name + ": line 3: nosuch_zq: not found\n" +
 			name + ": line 3: nosuch_zr: not found\n" +
 			name + ": cd: /nonexist_zq: [No such file or directory]\n" +
-			name + ": eval: line 2: nosuch_ze: not found\n"
+			name + ": eval: line 2: nosuch_ze: not found\n\n"
 	}
 	const broken = "echo a\nif true\nthen )\nfi\necho b\n"
-	brokenErrs := func(name string) string { return name + ": syntax error: `)' unexpected\n" }
+	brokenErrs := func(name string) string { return name + ": syntax error: `)' unexpected\n\n" }
 	write := func(name, text string) {
 		if err := os.WriteFile(filepath.Join(home, name), []byte(text), 0o600); err != nil {
 			t.Fatal(err)
@@ -60,7 +61,7 @@ func TestAnInteractiveKshReadsItsProgramAsAPrompt(t *testing.T) {
 		{"-i script, a parse failure", []string{"ksh", "-i", "b.sh"}, "a\n", brokenErrs("b.sh"), 3},
 		// A substitution's body is refused as the line runs, and says so as
 		// it would at a prompt.
-		{"-i -c, a refused substitution body", []string{"ksh", "-i", "-c", "echo $(fi)"}, "", "ksh: syntax error: `fi' unexpected\n", 3},
+		{"-i -c, a refused substitution body", []string{"ksh", "-i", "-c", "echo $(fi)"}, "", "ksh: syntax error: `fi' unexpected\n\n", 3},
 		// The other half of each pair: the same text, not interactive.
 		{
 			"-c",

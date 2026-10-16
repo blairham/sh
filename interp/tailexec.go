@@ -164,6 +164,21 @@ func (r *Runner) replacesItselfHere() bool {
 	return true
 }
 
+// TailReached reports whether this shell came to the last command of a
+// command string as the program it becomes in place of forking it — whether
+// it then became it, found nothing by that name, found a file that would not
+// start, or ran a file with no `#!` line in a child after all.
+//
+// A real shell is that program from there on, or finds out it cannot be in
+// the process it was replacing, so nothing it does at the end of its input
+// follows. Measured 2026-10-15 on ksh93u+ 2012-08-01, whose `-i -c` ends the
+// line on standard error when its input runs out (#6654): `-i -c 'nosuch'`,
+// `-i -c ./noexec` and `-i -c ./noshebang` write no newline, where `-i -c
+// 'nosuch; :'`, `-i -c 'trap : EXIT; nosuch'` and `-i nosuch.sh` all write
+// it. The front end reads it there. See
+// interp.Semantics.PromptEndOfInputEndsTheLine.
+func (r *Runner) TailReached() bool { return r.tailReached }
+
 // becomeTheProgram replaces this shell with the program at path, as `exec`
 // would. It reports false if the program could not be started that way. In
 // that case the caller forks the program as usual.

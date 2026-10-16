@@ -3604,6 +3604,10 @@ func (sh *Shell) execute(r *interp.Runner, pr *program, in source) int {
 		// at the end of both.
 		status, how = sh.executeLines(ctx, r, sh.stdinAfterCommandString(r), in.asStandardInput(sh))
 	}
+	// An interactive shell that read this program as it reads a prompt ends
+	// the line at the end of it, as the prompt does. Before the EXIT trap,
+	// which is measured. See Shell.endTheLine.
+	sh.endTheLine(r, in, how)
 	// Before Finish, which is measured: `-i -c 'trap "echo BYE" EXIT; exit
 	// 3'` writes the word and then the trap's output, so the word belongs to
 	// the `exit` that was run and not to the end of the process.
@@ -3623,6 +3627,38 @@ func (sh *Shell) execute(r *interp.Runner, pr *program, in source) int {
 		return status
 	}
 	return r.Finish(ctx)
+}
+
+// endTheLine writes the newline an interactive shell ends its input with, on
+// the routes that read a program as a prompt is read: `-i -c` and `-i
+// script`, in the dialect that does. Measured 2026-10-15 on ksh93u+
+// 2012-08-01, standard error alone (#6654):
+//
+//	program                  ksh -i -c                   ksh -i script
+//	true, false, echo hi     \n                          \n
+//	cd /nonexist             the diagnostic, \n          the diagnostic, \n
+//	echo $(fi), echo a; )    the diagnostic, \n          the diagnostic, \n
+//	nosuch; :                the diagnostic, \n          the diagnostic, \n
+//	nosuch                   the diagnostic, no \n       the diagnostic, \n
+//	exit 3, set -e; false    nothing                     nothing
+//	trap "echo T>&2" EXIT    \n then T                   \n then T
+//	exec 2>/dev/null         nothing                     nothing
+//
+// So it is the newline the prompt writes when its input ends
+// (Semantics.PromptEndOfInputEndsTheLine), and it belongs to the *end of the
+// input*: an `exit` reached before it writes none, and neither does a command
+// string whose last command is the program the shell becomes, even where it
+// could not become it (Runner.TailReached). It goes to descriptor 2 as the script left it, and
+// before the EXIT trap. A refusal by the front end ran nothing and draws
+// nothing.
+func (sh *Shell) endTheLine(r *interp.Runner, in source, how ending) {
+	if !in.readAsAPrompt || !sh.Semantics.PromptEndOfInputEndsTheLine || how == endingRefused {
+		return
+	}
+	if r.Exited() || r.TailReached() {
+		return
+	}
+	_, _ = io.WriteString(r.Err(), "\n")
 }
 
 // sayLeaving writes the word an interactive shell says on its way out, on the

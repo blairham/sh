@@ -1000,6 +1000,11 @@ type opener struct {
 	// Empty means the diagnostic uses word, which is every other construct.
 	named string
 	line  int
+	// inArm marks a `case` whose current arm has read its `)` and not yet
+	// its terminator — the arm's command list is what is being read. One
+	// dialect numbers a run-out there at the `case`'s own line. See
+	// [Dialect.UnclosedCaseArmIsNumberedAtItsCase].
+	inArm bool
 	// construct marks a compound command rather than a clause of one. `if`
 	// is a construct and the `then` inside it is not, which is the
 	// distinction one shell's wording turns on.
@@ -1280,6 +1285,16 @@ func (p *Parser) unterminated(expected string) *Error {
 	}
 	if n := len(p.open); n > 0 {
 		e.Innermost = p.open[n-1].word
+		if p.dialect.ElifIsNamedByItsIf {
+			// An `elif` is still the `if` it continues, and the body after
+			// its `then` is a `then`. See [Dialect.ElifIsNamedByItsIf].
+			switch e.Innermost {
+			case "elif":
+				e.Innermost = "if"
+			case "elif-then":
+				e.Innermost = "then"
+			}
+		}
 		if p.redirectionOnlyStood != "" {
 			// The token after a command of redirections alone, which the
 			// one shell naming an innermost keyword names instead. See
@@ -1302,6 +1317,12 @@ func (p *Parser) unterminated(expected string) *Error {
 				e.Construct, e.ConstructLine = p.open[i].word, p.open[i].line
 				if p.open[i].named != "" {
 					e.Construct = p.open[i].named
+				}
+				if p.open[i].inArm && p.dialect.UnclosedCaseArmIsNumberedAtItsCase {
+					// The arm's list is what ran out, and the dialect numbers
+					// that at the line its `case` was read on. See
+					// [Dialect.UnclosedCaseArmIsNumberedAtItsCase].
+					e.Pos.Line = int32(p.open[i].line)
 				}
 				break
 			}
@@ -7627,6 +7648,11 @@ func (p *Parser) longIfTail(c *IfClause) {
 			return
 		}
 		p.requireSep("then")
+		// The `then` of an `elif` is a clause of its own, recorded where the
+		// `if`'s is and for the same reason. zsh draws it `elif-then` at a
+		// continuation prompt, and ksh93 names it `then` when the input
+		// runs out inside it.
+		p.opensClause("elif-then")
 		p.expectWord("then")
 		e.Then = p.parseBody()
 		p.clauseStepsOverWhatItCannotUse()
@@ -7803,6 +7829,7 @@ func (p *Parser) shortElse(c *IfClause) {
 			// way a `then` is owed here and a `fi` at the end, so the rest of
 			// the chain belongs to longIfTail.
 			p.requireSep("then")
+			p.opensClause("elif-then") // see longIfTail
 			p.expectWord("then")
 			e.Then = p.parseBody()
 			c.Elifs = append(c.Elifs, e)
@@ -8691,6 +8718,7 @@ func (p *Parser) parseSelect() Command {
 func (p *Parser) parseCase() Command {
 	c := &CaseClause{Start: p.tok.Pos}
 	defer p.opens("case")()
+	self := len(p.open) - 1
 	// The subject stands at what is otherwise command position and is not an
 	// assignment: measured, `case a==(echo hi) in *)` matches with no
 	// command run and no file made, in the dialect where a bare
@@ -8844,6 +8872,10 @@ func (p *Parser) parseCase() Command {
 		// Cleared before the read that follows, which is the arm's *body* —
 		// ordinary commands, where a newline is a statement separator again.
 		p.lex.inCaseParenList = savedList
+		// From the `)` to the terminator the arm's list is open. Set before
+		// the `p.next()` that reads its first token, which is where the
+		// input can already have run out.
+		p.open[self].inArm = true
 		p.next()
 		bodyFrom := p.tok.Pos
 		it.Body = p.parseList()
@@ -8851,6 +8883,7 @@ func (p *Parser) parseCase() Command {
 		switch p.tok.Kind {
 		case TokDSemi, TokSemiAmp, TokDSemiAmp, TokSemiPipe:
 			it.Term, it.TermPos = p.tok.Kind, p.tok.Pos
+			p.open[self].inArm = false
 			p.recordArmTerminator(it, bodyFrom)
 			// The terminator's own `p.next()` reads the *next arm's* first
 			// token, so the flag goes back on in front of it.

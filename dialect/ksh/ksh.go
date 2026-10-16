@@ -597,6 +597,10 @@ func Dialect() syntax.Dialect {
 	// flag for the table.
 	d.ArithCommandTakesNoRedirection = true
 	d.RedirectionOnlyCommandNamesTheTokenAfterIt = true
+	// A `case` arm's open list is numbered at its `case`, and an `elif` is
+	// named by its `if` (#6681, #6682). See the two fields.
+	d.UnclosedCaseArmIsNumberedAtItsCase = true
+	d.ElifIsNamedByItsIf = true
 	// `times` is a reserved word here, so `times foo` is a syntax error
 	// rather than a builtin ignoring an argument — the one place in the panel
 	// where which builtin a shell has changes what parses.

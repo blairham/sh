@@ -5,6 +5,7 @@ package driver
 
 import (
 	"bytes"
+	"errors"
 	"io"
 	"strings"
 
@@ -61,6 +62,13 @@ type program struct {
 	suffixAliases syntax.Aliases
 
 	p *syntax.Parser
+	// eachLineFromOne numbers every logical line from 1, as a prompt numbers
+	// each input in the dialect that does. See syntax.Parser.NumberEachLineFromOne;
+	// physicalLine is what finds a line of the text again.
+	eachLineFromOne bool
+	// counted caches physicalLine's walk: the offset counted up to and the
+	// line it was on.
+	countedOff, countedLine int
 	// carried are the remarks of parsers already retired, so that a count of
 	// what has been reported stays monotonic across the rebuilds.
 	carried []syntax.Remark
@@ -153,6 +161,9 @@ func (pr *program) parser() *syntax.Parser {
 		return pr.p
 	}
 	p := syntax.NewParserAt(pr.pending, pr.dialect, pr.base+1)
+	if pr.eachLineFromOne {
+		p.NumberEachLineFromOne()
+	}
 	p.Aliases = pr.aliases
 	p.GlobalAliases = pr.globalAliases
 	p.SuffixAliases = pr.suffixAliases
@@ -163,6 +174,37 @@ func (pr *program) parser() *syntax.Parser {
 	}
 	pr.p = p
 	return p
+}
+
+// physicalLine is the line of the text pos is on, which is pos.Line except
+// where each logical line is numbered from 1: there the line has to be found
+// again from the offset, which is what `set -v` walks the text by.
+//
+// Counted on from where the last call stopped, since the lines are asked for
+// in order; a position behind that is counted from the start.
+func (pr *program) physicalLine(pos syntax.Pos) int {
+	if !pr.eachLineFromOne {
+		return int(pos.Line)
+	}
+	text := pr.text()
+	off := min(max(int(pos.Offset), 0), len(text))
+	if off < pr.countedOff {
+		pr.countedOff, pr.countedLine = 0, 0
+	}
+	pr.countedLine += strings.Count(text[pr.countedOff:off], "\n")
+	pr.countedOff = off
+	return pr.countedLine + 1
+}
+
+// verboseUpTo is the package's verboseUpTo over this program's text, with a
+// failure numbered from its own logical line moved back onto the text's.
+func (pr *program) verboseUpTo(err error) int {
+	var se *syntax.Error
+	if !pr.eachLineFromOne || !errors.As(err, &se) {
+		return verboseUpTo(pr.text(), err)
+	}
+	shift := pr.physicalLine(se.Pos) - int(se.Pos.Line)
+	return min(max(int(se.Pos.Line), se.EndLine, se.EofLine)+shift, linesIn(pr.text()))
 }
 
 // nextLine parses the next logical line, reading more input if it takes more

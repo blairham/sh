@@ -1764,6 +1764,25 @@ with no function anywhere, and only the line within the typed input moves. A
 function body was where this was first seen, and it is the same rule, since the
 body's lines count from where the definition was typed (#6581).
 
+**And an interactive ksh93 reads everything as it reads a prompt, not only a
+prompt.** A `-c` string and a script file under `-i` are numbered an input at a
+time — each logical line, with whatever it takes to finish it, restarting
+`$LINENO` at 1 — located as the prompt locates, and a parse failure in them is
+worded with no line. Measured 2026-10-15 on ksh93u+ 2012-08-01 over `:` ⏎ `:` ⏎
+`echo A=$LINENO` ⏎ `if true` ⏎ `then echo B=$LINENO; fi`:
+
+| route | ksh93u+ | bash 5.3, zsh 5.9.2, dash |
+| --- | --- | --- |
+| `-c`, a script file | `A=3 B=5` | `A=3 B=5` |
+| `-i -c`, `-i` with a script file | `A=1 B=2` | `A=3 B=5` |
+
+The noun is the shell being interactive, not the route: the same text under
+`-c` and `-i -c`, and the same file with and without `-i`, part company, while
+`-i -c`, `-i t.sh` and `-i` reading a pipe all agree. In the other dialects
+nothing moves, because their prompt numbers the session and the session of a
+`-c` string is the string. The file keeps its own name in front (`t.sh: line
+3: …`, `t.sh: cd: …`) where the prompt route writes the shell's (#6597).
+
 **A builtin's complaint is a second question.** zsh answers it differently
 from its own messages *in the same session* — `cd: no such file or directory`,
 the builtin's name with no shell and no line, against `zsh: command not found`

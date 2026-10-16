@@ -1478,6 +1478,12 @@ func (s Shell) runEach(ctx context.Context, stmts []*syntax.File) (done, gaveUp 
 			s.errf("%v\n", err)
 			return false, false
 		}
+		if s.Runner.EndTheTypedLineOnAReturn() {
+			// A `return` with nothing to return from: the rest of the line
+			// goes, and either the session or nothing else does. See
+			// interp.Runner.EndTheTypedLineOnAReturn (#6717).
+			return s.Runner.Exited(), false
+		}
 		if s.Runner.GiveUpTheLine() {
 			// An error the line gave up over. The status it left behind is
 			// the line's status, exactly as a command's own failure would

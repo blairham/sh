@@ -214,6 +214,32 @@ func (r *Runner) ErrExitEnded() bool { return r.ctl == controlExit && r.errexitS
 // (#6695).
 func (r *Runner) ReturnEnded() bool { return r.ctl == controlReturn }
 
+// EndTheTypedLineOnAReturn is the prompt's boundary for a `return` with
+// nothing to return from, for a front end to call after each statement of a
+// typed line. It reports whether one ended the line.
+//
+// A front end has to ask, because the `return` is still standing when the
+// statement hands back: left there, every command after it is refused, and a
+// session that reads on draws prompts that run nothing — `exit` included,
+// which is how a mistyped `return` wedged a terminal (#6717). So it is taken
+// here one way or the other. Where the dialect ends the session over it, it
+// becomes the stop `exit` would have raised, with the status the `return`
+// named and the EXIT trap still to run; where it does not, it is cleared and
+// the status stands for the next line to read. See
+// Semantics.ReturnAtThePromptEndsTheSession.
+func (r *Runner) EndTheTypedLineOnAReturn() bool {
+	if r.ctl != controlReturn {
+		return false
+	}
+	if r.ask(r.sem().ReturnAtThePromptEndsTheSession,
+		"a `return` typed at a prompt ending the session") {
+		r.stopTheShell()
+		return true
+	}
+	r.ctl = controlNone
+	return true
+}
+
 // ExitFoundStatus is the status the last `exit` found when it ran, before it
 // named one of its own — what a logout file reads in `$?` (#5996).
 func (r *Runner) ExitFoundStatus() int { return r.exitFoundStatus }

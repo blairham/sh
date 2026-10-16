@@ -1383,6 +1383,13 @@ type Semantics struct {
 	// with an `-i` row of its own that is neither answer and wants its own
 	// measurement.
 	//
+	// **A program is handed the answer too**, although nothing is stored in
+	// this shell for one: the overlaying columns store in the child they fork,
+	// through the letters, so `typeset -i v=3; v=2+2 /usr/bin/env` shows the
+	// child `v=4` in zsh 5.9.2 and ksh93u+ and `v=2+2` in bash 5.3.20 (#6698).
+	// See Runner.prefixChildForTheStores, which asks this of a typed name
+	// only.
+	//
 	// **Asked only where the two readings can part.** A name holding a plain
 	// scalar and carrying no letter reaches the same place either way, which
 	// is every prefix a script in the common language writes, so dash and ash

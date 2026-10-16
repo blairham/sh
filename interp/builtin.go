@@ -3450,7 +3450,16 @@ func (r *Runner) unsetName(name string) int {
 	// expansion stops where it is unset — taking the hidden-name switch back
 	// off with it, whoever turned that on. See interp/ignorednames.go.
 	r.ignoredNamesUnset(name)
-	if t, tied := r.tieOf(name); tied {
+	if t, tied := r.tieOf(name); tied && !r.tieDetached(t) {
+		// A binding the tie no longer reaches is not half of it: a local
+		// of a script's tie half, or a hidden local of one of the shell's
+		// own, is unset alone and the outer pair stands. Measured
+		// 2026-10-16 on zsh 5.9.2, `typeset -T FOO foo=(a b); f(){ local
+		// FOO=x; unset FOO; echo "[$foo]"; }; f` is `[a b]`, and `f(){ local
+		// -h PATH=/x; unset PATH; echo $path; }` writes the global `path`
+		// (#6822). A local of the shell's own pair that is *not* hidden is
+		// still tied and still reaches here.
+		//
 		// Half a tie is not a state this shell has: `unset SCA` leaves `sca`
 		// with no elements *and* unset, and `unset sca` leaves `$SCA` unset.
 		//
@@ -3536,6 +3545,7 @@ func (r *Runner) unsetName(name string) int {
 	if ownAgain {
 		r.MarkShellOwnParameter(name)
 	}
+	r.unsetForgetsTheHide(name)
 	// And a local of the scope that is *running* is left declared where the
 	// column says so — the value and the letters go, the shadow stays, and
 	// the name is still a row in a listing. After the removal, because the

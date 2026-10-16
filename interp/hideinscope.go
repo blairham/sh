@@ -395,6 +395,46 @@ func (r *Runner) kindChangeForgetsTheHide(was map[string]ParameterKind) {
 	}
 }
 
+// unsetForgetsTheHide takes the hide word off a binding `unset` has just
+// removed, unless the binding is the shell's own parameter.
+//
+// Measured 2026-10-16 on zsh 5.9.2, `-f`, under `env -i PATH=/usr/bin:/bin`,
+// each name stored to again after the `unset` (#6741):
+//
+//	f(){ local -h v; unset v; v=x; ${(t)v} }          scalar-local
+//	f(){ local -h -a v; unset v; v=x; ${(t)v} }       scalar-local
+//	f(){ local -h HOME=3; unset HOME; HOME=4; … }     scalar-local
+//	typeset -h v; unset v; v=x                        scalar
+//	typeset -h WORDCHARS; unset WORDCHARS; WORDCHARS=x
+//	                                                  scalar-hide-special
+//	typeset -h PATH; unset PATH; PATH=/y              …-hide-special
+//
+// So the letter goes with any binding a script made — a hidden local of one
+// of the shell's own names included — and stays on the shell's own. Only the
+// attribute: the shadow's own record that it hides is the scope's, and it is
+// what keeps the local an ordinary parameter afterwards — `f(){ local -h
+// PATH=/q; unset PATH; PATH=/y; print $path }` writes the global `path`
+// there. The same split kindChangeForgetsTheHide makes.
+func (r *Runner) unsetForgetsTheHide(name string) {
+	if !r.attrHas(name, attrHideInScope) {
+		return
+	}
+	if r.shellOwnsTheName(name) && !r.localDescribesTheBinding(name) {
+		return
+	}
+	r.attrClear(name, attrHideInScope)
+}
+
+// shellOwnsTheName is whether a name is the shell's own parameter, a half of
+// one of the shell's own ties counted — `PATH` is both.
+func (r *Runner) shellOwnsTheName(name string) bool {
+	if r.wasTheShellsOwnParameter(name) {
+		return true
+	}
+	t, tied := r.tieOf(name)
+	return tied && t.special
+}
+
 // noteTheHideLetter records that the declaration being run writes `-h`, which
 // is the exemption watchDeclarationKinds and watchHiddenKinds read.
 //

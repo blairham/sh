@@ -5111,8 +5111,11 @@ func Diagnostics() interp.Diagnostics {
 		// read as a prompt reads: see
 		// Diagnostics.InteractiveScriptIsLocatedAsAPrompt (#6597).
 		InteractiveScriptIsLocatedAsAPrompt: true,
-		BuiltinLocation:                     interp.LocationBracketLineAfterFirst,
-		ScriptBuiltinLocation:               interp.LocationBracketLine,
+		// And the shell's own EXIT trap names its line 1 where nothing else
+		// does. See Diagnostics.ShellsExitTrapNamesItsFirstLine (#6656).
+		ShellsExitTrapNamesItsFirstLine: true,
+		BuiltinLocation:                 interp.LocationBracketLineAfterFirst,
+		ScriptBuiltinLocation:           interp.LocationBracketLine,
 		// And a value in an assignment prefix that will not expand is the
 		// builtin's where the prefix is that builtin's environment, and this
 		// shell's where it is a store this shell keeps. The eighteen rows

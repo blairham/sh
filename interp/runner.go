@@ -6613,6 +6613,11 @@ func (r *Runner) locationPrefixNamed(construct string) string {
 	// copy of it. Writing through that pointer would move the style for the
 	// rest of the run. See diag, and TestNothingWritesThroughTheDiagnostics.
 	d := *r.diag()
+	if d.ShellsExitTrapNamesItsFirstLine && r.runningExitTrap != nil && !r.inSubshell {
+		// The shell's own EXIT trap names its first line. See the field.
+		d.Location = namesEveryLine(d.Location)
+		d.BuiltinLocation = namesEveryLine(d.BuiltinLocation)
+	}
 	if r.locatedByNameAlone {
 		// One refusal this dialect locates by name alone, and it reaches
 		// here by the route Diagnostics.ParseDiagnostic does not: a body

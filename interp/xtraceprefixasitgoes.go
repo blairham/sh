@@ -151,14 +151,15 @@ func (r *Runner) writeHeldPrefixTrace() {
 }
 
 // prefixLineForAChild is the copy of an unfinished trace line a substitution
-// starts with. The child writes it in front of its first trace line, where
-// the dialect's own buffered stream would, and drops it if it writes none.
+// starts with. The child writes it in front of its first trace line or its
+// first diagnostic, where the dialect's own buffered stream would, and drops
+// it if it writes neither.
 func (r *Runner) prefixLineForAChild() *openTraceLine {
 	line := r.openTrace
 	if line == nil || line.owner != r || line.pending == "" {
 		return nil
 	}
-	return &openTraceLine{pending: line.pending, inherited: true}
+	return &openTraceLine{pending: line.pending, inherited: true, unflushed: line.unflushed}
 }
 
 // takeInheritedTraceLine is the copied line a child writes ahead of its

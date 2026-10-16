@@ -53,13 +53,18 @@ type openTraceLine struct {
 	owner   *Runner
 	pending string
 	// inherited says this is a child's copy of its parent's line, written
-	// ahead of the child's first trace line rather than ahead of a
-	// diagnostic. See Runner.prefixLineForAChild.
+	// ahead of the child's first trace line or its first diagnostic. See
+	// Runner.prefixLineForAChild.
 	inherited bool
 	// unflushed says a diagnostic does not write this line first: a
 	// command's prefix line is written after its complaint, if at all. See
 	// interp/xtraceprefixasitgoes.go.
 	unflushed bool
+	// carries is a child's inherited line whose text this one starts with
+	// and has not taken, because this line may be dropped rather than
+	// written. Writing this one writes that text, so it is emptied there.
+	// See Runner.openTraceLineCarryingTheInherited.
+	carries *openTraceLine
 }
 
 // assignListIsWrittenAsItGoes reports whether this list's one trace line is
@@ -98,7 +103,7 @@ func (r *Runner) assignAllAsItGoes(ctx context.Context, assigns []*syntax.Assign
 	d := r.diag()
 	r.awaitTraceTurn()
 	defer r.releaseTraceTurn()
-	line := &openTraceLine{owner: r, pending: r.tracePrefix()}
+	line := &openTraceLine{owner: r, pending: r.openTraceLineText()}
 	outer := r.openTrace
 	r.openTrace = line
 	defer func() { r.openTrace = outer }()
@@ -107,21 +112,31 @@ func (r *Runner) assignAllAsItGoes(ctx context.Context, assigns []*syntax.Assign
 		line.pending += target
 		failedBefore := r.expandErr
 		value, fields, globbed := r.expandScalarAssignValue(a.Value)
-		if r.ctl != controlNone {
-			// The expansion ended the shell, and the line stays where it got
-			// to: `b=${x?boom}` leaves `b=` and no newline.
-			return
-		}
-		if r.expandErr && !failedBefore {
-			// A value that would not expand and did not end the shell on its
-			// own: the list stops, nothing is stored, and the line gets its
-			// newline. Measured 2026-10-03, `b=0; set -x; a=1 b=$((1/0)) c=3;
-			// echo "[$b][$c]"` is `+zsh:1> a=1 b=`, the complaint and an empty
-			// line, and nothing after it (#5546).
+		if r.assignValueFailed(failedBefore) {
+			// The list stops, nothing is stored, and the line gets its
+			// newline unless the failure left it open. Measured 2026-10-03,
+			// `b=0; set -x; a=1 b=$((1/0)) c=3; echo "[$b][$c]"` is `+zsh:1>
+			// a=1 b=`, the complaint and an empty line, and nothing after it
+			// (#5546).
+			if r.traceLineLeftOpenByTheFailure() {
+				return
+			}
 			break
 		}
 		e := r.prepareTracedAssign(a, value)
 		e.fields, e.fieldsSet = fields, globbed
+		if r.assignValueFailed(failedBefore) {
+			// An array literal's elements are expanded here rather than
+			// above, and a failure among them stops the list the same way:
+			// nothing of the literal is written, where the words as the
+			// script spelled them used to end the line. Measured
+			// 2026-10-15 on zsh 5.9.2, `set -x; x=( a $((1/0)) b )` is
+			// `+zsh:1> x=`, the complaint and an empty line (#6623).
+			if r.traceLineLeftOpenByTheFailure() {
+				return
+			}
+			break
+		}
 		if !e.tracesAfterTheStore {
 			line.pending += r.traceAssignRest(a, value, e, *d, target)
 		}
@@ -139,6 +154,66 @@ func (r *Runner) assignAllAsItGoes(ctx context.Context, assigns []*syntax.Assign
 	r.tracef("%s\n", line.pending)
 }
 
+// assignValueFailed reports whether expanding an assignment's value failed:
+// it ended the shell, or it would not expand and the list stops there.
+func (r *Runner) assignValueFailed(failedBefore bool) bool {
+	return r.ctl != controlNone || r.expandErr && !failedBefore
+}
+
+// traceLineLeftOpenByTheFailure reports whether a list's trace line is left
+// where it got to, with no newline, after a value that failed.
+//
+// Only where the failure is a request to stop: a `${x?word}` the shell
+// exits on at once. Every other failure ends the line, with the complaint
+// written into it and the newline after it, whether or not the shell then
+// ends. Measured 2026-10-15 on zsh 5.9.2 under -f, `set -x` in front:
+//
+//	x=${q?b}           -c  `+zsh:1> x=zsh:1: q: b`, no empty line
+//	x=${q?b}           -i  `+zsh:2> x=zsh: q: b`, then an empty line
+//	x=${q?b}        -i -c  the same, and the shell then ends
+//	set -u; x=$nope    -c  `+zsh:1> x=zsh:1: nope: …`, then an empty line
+//	x=$((1/0))         -c  the same
+//
+// So whether the shell ends is not what decides it, since `set -u` ends it
+// too. What decides it is whether the operand is an exit request, and in an
+// interactive shell it is not (see Runner.paramErrorAsAnErrorCondition).
+// This used to leave the line open after every failure that set a transfer,
+// which gave the rest of the rows the first row's answer (#6623).
+func (r *Runner) traceLineLeftOpenByTheFailure() bool {
+	return r.ctl == controlExit && r.abandon == abandonParamError && !r.Interactive &&
+		r.sem().ParamErrorIsAnExitRequest == Yes
+}
+
+// openTraceLineText is what a line opened a word at a time starts with: the
+// prefix, behind whatever part of its parent's line a child was handed and
+// has not written yet.
+//
+// The parent's line is in the child's buffer ahead of anything the child
+// writes, so a line the child opens goes after it, and whatever writes the
+// child's line writes the parent's first. Measured 2026-10-15 on zsh 5.9.2,
+// `set -x; x=$( y=$( echo ${q?b} ) )` writes `+zsh:1> x=+zsh:1> y=` and then
+// the complaint (#6623).
+func (r *Runner) openTraceLineText() string {
+	return r.takeInheritedTraceLine() + r.tracePrefix()
+}
+
+// openTraceLineCarryingTheInherited opens a line that is held only for what
+// a complaint or a child writes of it, and is then dropped for a line written
+// whole: a `case` arm's patterns as they are reached. A child's inherited text
+// goes in front of it, as it goes in front of a list's line, but it is not
+// taken, so the whole line written afterwards still carries it. Measured
+// 2026-10-15 on zsh 5.9.2, `set -x; x=$( case a in $(echo a)) ;; esac )`
+// writes `+zsh:1> x=+zsh:1> case a (+zsh:1> echo a` and then `+zsh:1>
+// x=+zsh:1> case a (a)`, and with `$((1/0))` as the pattern it writes
+// `+zsh:1> x=+zsh:1> case a (`, the complaint, and then only `)` (#6623).
+func (r *Runner) openTraceLineCarryingTheInherited(text string) *openTraceLine {
+	line := &openTraceLine{owner: r, pending: text}
+	if in := r.openTrace; in != nil && in.inherited && in.owner == r && in.pending != "" {
+		line.pending, line.carries = in.pending+text, in
+	}
+	return line
+}
+
 // traceAssignRest is the part of one assignment's word after its target,
 // with the space that follows every word on this line.
 func (r *Runner) traceAssignRest(a *syntax.Assign, value string, e *expandedAssign, d Diagnostics, target string) string {
@@ -147,12 +222,23 @@ func (r *Runner) traceAssignRest(a *syntax.Assign, value string, e *expandedAssi
 
 // flushOpenTraceLine writes what an open assignment trace line holds so far,
 // ahead of a diagnostic about to be written into the middle of it.
+//
+// A child's copy of its parent's line is also written ahead of a diagnostic,
+// as it is ahead of the child's first trace line. Measured 2026-10-15 on zsh
+// 5.9.2 under -f, through -c and at a prompt: `set -x; x=$( echo ${q?b} )`
+// writes `+zsh:1> x=` and then the complaint, and so do `a=1 x=$( … ) b=2`,
+// `x=( $( … ) )`, and a `case` pattern holding the substitution. A command's
+// prefix line is the exception in the child as it is in the parent: `x=$(
+// echo ${q?b} ) true` writes only the complaint (#6623).
 func (r *Runner) flushOpenTraceLine() {
 	line := r.openTrace
-	if line == nil || line.owner != r || line.pending == "" || line.inherited || line.unflushed {
+	if line == nil || line.owner != r || line.pending == "" || line.unflushed {
 		return
 	}
 	text := line.pending
 	line.pending = ""
+	if line.carries != nil {
+		line.carries.pending = ""
+	}
 	r.tracef("%s", text)
 }

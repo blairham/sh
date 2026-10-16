@@ -1201,11 +1201,8 @@ func (r *Runner) patternOfTracedArm(p *syntax.Word, subject string, tried []stri
 	for i, t := range tried {
 		shown[i] = r.tracePattern(t)
 	}
-	line := &openTraceLine{
-		owner:   r,
-		pending: r.tracePrefix() + "case " + subject + " (" + strings.Join(shown, " | "),
-	}
-	opened := line.pending
+	opened := r.tracePrefix() + "case " + subject + " (" + strings.Join(shown, " | ")
+	line := r.openTraceLineCarryingTheInherited(opened)
 	outer := r.openTrace
 	r.openTrace = line
 	defer func() { r.openTrace = outer }()

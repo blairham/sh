@@ -1382,6 +1382,40 @@ func (r *Runner) NamedWord(s string) string {
 	return dollarQuote(s, r.diag().TraceEscape, r.eachTraceUnit)
 }
 
+// visibleDiagnostic is a diagnostic's sentence as the dialect that names
+// words visibly writes it: every character in it that cannot be printed in
+// visibleWord's notation, and the newline that ends it as it is.
+//
+// The whole sentence rather than the word it names, because that dialect
+// renders every piece of text a diagnostic quotes — a pattern, a parameter's
+// message, an option or a signal name — and quoting text is what the
+// sentence's own words never need. Measured 2026-10-15 on zsh 5.9.2 `-f -c`,
+// with `\x01` written `^A`: `no matches found: zz^Aq*` (and `zz\tq*`,
+// `zz\nq*`, and `[ab](e:true\nfalse:)` for code on two lines), `x: bo^Aom`
+// for `${x?…}`, `unknown file attribute: ^A`, `no such option: no^Aopt`,
+// `not valid in this context: a^Ab`, `a^Ab: invalid parameter name`,
+// `integer expression expected: a^A`, `%^A: invalid directive`, `undefined
+// signal: SIGNO^A`, `unknown signal: SIGX^A`, `no such builtin: no^A`,
+// `no^Afn: function definition file not found` and `no such file or
+// directory: /nonexistent/f^A` for a redirection and for `source`. One
+// sentence per call, which is what lets the newline that ends it be told
+// from one inside the text: no diagnostic is written two lines at a time.
+// bash writes every one of those bytes raw, and is not this dialect.
+func (r *Runner) visibleDiagnostic(msg string) string {
+	if !r.diag().DiagnosticNamesAWordVisibly {
+		return msg
+	}
+	body, nl := strings.CutSuffix(msg, "\n")
+	if isPrintableASCII(body) {
+		return msg
+	}
+	body = r.visibleWord(body)
+	if nl {
+		body += "\n"
+	}
+	return body
+}
+
 // visibleWord is a word with each character that cannot be printed written
 // in the caret notation niceRangeChar spells, the way
 // Diagnostics.DiagnosticNamesAWordVisibly names one. A byte that begins no

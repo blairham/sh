@@ -6272,7 +6272,7 @@ func (r *Runner) diagLine(format string, args ...any) string {
 // diagLineNamed is diagLine with a construct named in the location. See
 // Runner.locationPrefixNamed.
 func (r *Runner) diagLineNamed(construct, format string, args ...any) string {
-	msg := fmt.Sprintf(format, args...)
+	msg := r.visibleDiagnostic(fmt.Sprintf(format, args...))
 	if name := r.speaking(); name != "" && r.diag().BuiltinNamesTheShellAlone[name] && !r.locatedDespiteTheShellAlone {
 		// A builtin that reports as the shell itself rather than as a line of
 		// a script. See Diagnostics.BuiltinNamesTheShellAlone: the name is

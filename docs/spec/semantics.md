@@ -938,6 +938,33 @@ Three questions, then, about what reads in the standard as one sentence:
 is it fatal, what status does it carry, and how is it worded. The rule for
 adding an axis at the end of this file is what forced them apart.
 
+## Text a diagnostic quotes is written visibly in zsh
+
+zsh writes every character a diagnostic quotes that cannot be printed in a
+visible form: a tab and a newline as `\t` and `\n`, the other control
+characters in caret notation (`^A`, `^[`, `^?`), and a byte that begins no
+character as `\M-` and its low half's form (`\M-^@`, `\M-a`). This is what
+`${(V)x}` does too. It holds for every sentence, not only those that name a
+command: measured 2026-10-15 on zsh 5.9.2 (`-f -c`), `no matches found:
+zz\tq*`, `x: bo^Aom` for `${x?…}`, `unknown file attribute: ^A`, `no such
+option: no^Aopt`, `not valid in this context: a^Ab`, `integer expression
+expected: a^A`, `%^A: invalid directive`, `undefined signal: SIGNO^A`, `no
+such builtin: no^A`, and `no such file or directory: /no^Ape` for `source`
+and a redirection. A pattern whose `e` qualifier holds two lines is
+`[ab](e:true\nfalse:)`.
+
+bash 5.3 writes the same bytes raw in its `no match:`, its `${x?…}` message,
+`source` and `kill`, and quotes only the word a `command not found` or `cd`
+names, as `$'…'`.
+
+Here the rendering is done once, by the writer every diagnostic goes
+through (`Runner.visibleDiagnostic`), for the dialect that sets
+`Diagnostics.DiagnosticNamesAWordVisibly` (#6690). That is safe because no
+diagnostic writes two sentences in one call, which
+`TestNoDiagnosticWritesTwoLinesInOneCall` holds. Characters that are valid
+but do not print (U+0085, U+2028) are #6725, and parse-error text, which
+renders through its own locale-blind helper, is #6786.
+
 ## How far a fatal error reaches: the file, or every file above it
 
 Measured 2026-09-06. The previous section is about *whether* a failure is

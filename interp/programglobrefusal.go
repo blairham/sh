@@ -34,6 +34,15 @@ type programGlob struct {
 	// refused is the sentence held for the first refusal, empty while there
 	// is none.
 	refused string
+
+	// listOpen says a word list is being expanded — a command's words, an
+	// array literal's elements, a `for` loop's list — and globbing that the
+	// pathname stage of one of its words is running. While both hold, a
+	// refusal that is not a program's is held too, in held and raise, and
+	// raised once every word has been expanded. See holdPathnameRefusal.
+	listOpen, globbing bool
+	held               string
+	raise              func()
 }
 
 // armProgramGlob says the pathname stage about to run is for a word behind
@@ -94,6 +103,80 @@ func (r *Runner) runsAsAProgram() bool {
 	}
 	return !r.presentsAsBuiltin(name)
 }
+
+// holdPathnameRefusal holds a refusal the pathname stage raised in a word of a
+// list, and reports whether it did: as the program's failure, where the
+// command runs as one (see holdForTheProgram), and otherwise until every word
+// of the list has been expanded, when raiseHeldRefusal performs raise.
+//
+// Every word is expanded before any refusal is raised, and only the first
+// refusal is named. Measured 2026-10-15 on bash 5.3.20 under `shopt -s
+// failglob` and on zsh 5.9.2, -c and from a file, in a directory where nothing
+// matches (#6677):
+//
+//	echo $(echo S >&2) nomatch*zz $(echo A >&2)   S, A, then the refusal
+//	nomatch*zz $(echo A >&2)                      A, then the refusal
+//	f nomatch*zz / builtin echo / local / export  the same
+//	a=(5 $(echo S >&2) nomatch*zz $(echo A >&2))  the same, and so a `for` list
+//	                                              and `declare -a a=(…)`
+//	echo nomatch*zz other*qq $(echo A >&2)        A, then nomatch*zz alone
+//	echo nomatch*zz $((1/0)) $(echo A >&2)        the division alone: an
+//	                                              expansion's failure stops the
+//	                                              list where it stands, and wins
+//	echo nomatch*zz $(…) >$(echo R >&2)f          no R: the redirections are
+//	                                              never expanded, nor is a
+//	x=$(echo X >&2) echo nomatch*zz               prefix assignment's value
+//
+// zsh's refusals of a pattern that will not compile or a qualifier that will
+// not read are held the same way: `echo *(Z) $(echo A >&2)` writes A first.
+func (r *Runner) holdPathnameRefusal(msg string, raise func()) bool {
+	if r.holdForTheProgram(msg) {
+		return true
+	}
+	g := &r.progGlob
+	if !g.listOpen || !g.globbing {
+		return false
+	}
+	if g.raise == nil && g.refused == "" {
+		g.held, g.raise = msg, raise
+	}
+	return true
+}
+
+// openWordList gives a word list a hold of its own, and answers with what
+// puts the outer one back. A substitution in one of its words runs commands
+// whose lists are their own.
+func (r *Runner) openWordList() func() {
+	outer := r.progGlob
+	r.progGlob = programGlob{listOpen: true}
+	return func() { r.progGlob = outer }
+}
+
+// raiseHeldRefusal raises the refusal held while the list's words were
+// expanded, unless a failure since has already ended the list, and closes the
+// hold: what is expanded after the words — a redirection's target — raises
+// its own.
+func (r *Runner) raiseHeldRefusal() {
+	g := &r.progGlob
+	raise := g.raise
+	g.listOpen, g.held, g.raise = false, "", nil
+	if raise == nil || r.expansionHasFailed() {
+		return
+	}
+	raise()
+}
+
+// globbingAListWord marks the pathname stage of a list's word as running,
+// and answers whether it did, so that the caller clears only its own mark.
+func (r *Runner) globbingAListWord() bool {
+	if !r.progGlob.listOpen || r.progGlob.globbing {
+		return false
+	}
+	r.progGlob.globbing = true
+	return true
+}
+
+func (r *Runner) doneGlobbingAListWord() { r.progGlob.globbing = false }
 
 // takeProgramGlobRefusal answers the sentence held for this command, if any,
 // and forgets it.

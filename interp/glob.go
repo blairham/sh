@@ -1045,6 +1045,11 @@ func (r *Runner) glob(field string) ([]string, bool) {
 		// here rather than in the matcher.
 		return nil, false
 	}
+	if r.globbingAListWord() {
+		// A refusal raised from here waits for the list's other words. See
+		// Runner.holdPathnameRefusal.
+		defer r.doneGlobbingAListWord()
+	}
 	// A value's backslash is a mark until here, because until here there is
 	// no whole field to ask the question of. Resolved once, in front of
 	// everything that reads the field, so nothing below this line has to
@@ -2377,12 +2382,15 @@ func (r *Runner) workDir() string {
 // the 4. See Semantics.FailedExpansionInACommandKeepsAFailingStatus (#6067).
 func (r *Runner) refuseUnmatchedPattern(pattern string) {
 	msg := Wording(r.diag().GlobNoMatch, "no matches found: %s", pattern)
-	if r.holdForTheProgram(msg) {
-		// A program's failure and not the script's: written when the
-		// command's words are done. See interp/programglobrefusal.go.
+	raise := func() {
+		r.diagf("%s\n", msg)
+		defer r.globRefusalSetsItsStatus()()
+		r.failedExpansion()
+	}
+	if r.holdPathnameRefusal(msg, raise) {
+		// The program's failure, or the list's once its other words are
+		// expanded. See interp/programglobrefusal.go.
 		return
 	}
-	r.diagf("%s\n", msg)
-	defer r.globRefusalSetsItsStatus()()
-	r.failedExpansion()
+	raise()
 }

@@ -8910,10 +8910,10 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 	argvBefore := argvBefore0[:0]
 	var lexedAt, sourceClosedAt []string
 	endGlobUnit := r.beginGlobUnit()
-	// A refusal of a pattern in a program's words is held for this command,
-	// over whatever the substitutions in its words run. See
+	// A refusal of a pattern in the command's words is held for this
+	// command, over whatever the substitutions in its words run. See
 	// interp/programglobrefusal.go.
-	defer r.enterProgramGlob()()
+	defer r.openWordList()()
 	// A failed expansion in a declaration's words leaves `$?` alone, in the
 	// dialect that says so: set word by word, since only the words after a
 	// declaration's name are its own. See
@@ -9206,6 +9206,10 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 		r.armProgramGlob(argv, modifierWords, stoppedAtCommand)
 	}
 	endGlobUnit()
+	// Every word is expanded, so a pattern refused in one of them is raised
+	// now, ahead of the redirections and the assignment prefix, neither of
+	// which is expanded after it. See Runner.holdPathnameRefusal (#6677).
+	r.raiseHeldRefusal()
 	// And off for the redirections, whose own refusal is not held: it is
 	// raised after the line below has looked for a held one.
 	r.disarmProgramGlob()
@@ -12429,12 +12433,14 @@ func (r *Runner) fatalPosixSpecialUsageQuiet() {
 }
 
 func (r *Runner) fatal(format string, args ...any) {
-	if r.progGlob.words != nil &&
-		r.holdForTheProgram(strings.TrimSuffix(fmt.Sprintf(format, args...), "\n")) {
-		// Raised by the pathname stage of a program's word — a qualifier
-		// that will not read, or a subscript in one that will not evaluate —
-		// and the program's failure rather than the script's, as an
-		// unmatched pattern is. See interp/programglobrefusal.go.
+	if (r.progGlob.words != nil || r.progGlob.globbing) &&
+		r.holdPathnameRefusal(strings.TrimSuffix(fmt.Sprintf(format, args...), "\n"), func() {
+			r.diagf(format, args...)
+			r.fatalQuiet()
+		}) {
+		// Raised by the pathname stage of a list's word — a qualifier that
+		// will not read, or a subscript in one that will not evaluate — and
+		// held as an unmatched pattern is. See interp/programglobrefusal.go.
 		return
 	}
 	r.diagf(format, args...)

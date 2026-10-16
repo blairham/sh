@@ -40249,15 +40249,17 @@ func (r *Runner) fatalPattern(pattern string, status int) {
 	// neither; the near-text field's own rows were measured under `LC_ALL=C`
 	// and this follows them.
 	msg := Wording(r.diag().BadPattern, "bad pattern: %s", escapeControlBytes(pattern))
-	if r.holdForTheProgram(msg) {
-		// A pattern in a program's words that will not compile is the
-		// program's failure, as one that matched nothing is. See
-		// interp/programglobrefusal.go.
+	raise := func() {
+		r.diagf("%s\n", msg)
+		r.status = status
+		r.ctl, r.abandon, r.errexitStopped = controlExit, abandonError, false
+	}
+	if r.holdPathnameRefusal(msg, raise) {
+		// A pattern in a list's word that will not compile is held as one
+		// that matched nothing is. See interp/programglobrefusal.go.
 		return
 	}
-	r.diagf("%s\n", msg)
-	r.status = status
-	r.ctl, r.abandon, r.errexitStopped = controlExit, abandonError, false
+	raise()
 }
 
 // OutsideLocaleEscapePolicy is what a `\u` or `\U` escape does when the code

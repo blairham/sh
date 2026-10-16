@@ -71,6 +71,25 @@ type literalElem struct {
 	// element of every literal for it was a measurable share of F-Sy-H's
 	// highlighter, which builds its reply a literal at a time (#6423).
 	written *syntax.Word
+	// subPlaced marks a subscript whose arithmetic has been read already,
+	// and subAt is the index it came to. See Runner.literalSubscriptIndex.
+	subPlaced bool
+	subAt     int
+}
+
+// literalSubscriptIndex is the index a subscripted element's subscript comes
+// to, read through its arithmetic once.
+//
+// Once, because a literal can be placed twice for one assignment: an
+// assignment prefix places it for the entries behind it to read — see
+// Runner.holdPrefixEntry — and the route then stores it for real. A subscript
+// with a side effect in it, `x=([i++]=a) cmd`, must move `i` once, so the
+// first placement records what it read and the second takes the record.
+func (r *Runner) literalSubscriptIndex(e literalElem) (int, error) {
+	if e.subPlaced {
+		return e.subAt, nil
+	}
+	return r.subscriptValue(e.sub)
 }
 
 // writtenText is the element as the source wrote it. See literalElem.written.
@@ -883,7 +902,7 @@ func (r *Runner) literalInto(name string, a Array, next int, parsed []literalEle
 			// q=2))` — placed where the subscript says. The same arithmetic
 			// the nested-array spelling below reads, so the two readings of
 			// one syntax cannot disagree about which element is meant.
-			idx, err := r.subscriptValue(e.sub)
+			idx, err := r.literalSubscriptIndex(e)
 			if err != nil {
 				r.failedSubscript("%s\n", r.subscriptFailure(e.sub, err))
 				return a, false
@@ -913,7 +932,7 @@ func (r *Runner) literalInto(name string, a Array, next int, parsed []literalEle
 			// A subscripted head whose value is a literal, placed where the
 			// subscript says. Read below by the same arithmetic every other
 			// subscripted element uses.
-			idx, err := r.subscriptValue(e.sub)
+			idx, err := r.literalSubscriptIndex(e)
 			if err != nil {
 				r.failedSubscript("%s\n", r.subscriptFailure(e.sub, err))
 				return a, false
@@ -935,7 +954,7 @@ func (r *Runner) literalInto(name string, a Array, next int, parsed []literalEle
 			}
 			continue
 		}
-		idx, err := r.subscriptValue(e.sub)
+		idx, err := r.literalSubscriptIndex(e)
 		if err != nil {
 			// The last of the places a subscript is read, and the one #649
 			// missed: it kept a wording of its own and carried on, where the

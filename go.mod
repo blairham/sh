@@ -7,7 +7,7 @@ tool (
 	mvdan.cc/gofumpt
 )
 
-require golang.org/x/text v0.40.0 // indirect
+require golang.org/x/text v0.42.0 // indirect
 
 require (
 	4d63.com/gocheckcompilerdirectives v1.4.0 // indirect
@@ -209,8 +209,8 @@ require (
 	go.uber.org/zap v1.27.0 // indirect
 	go.yaml.in/yaml/v3 v3.0.5 // indirect
 	golang.org/x/exp/typeparams v0.0.0-20260811152304-ee035b5b010f // indirect
-	golang.org/x/mod v0.40.0 // indirect
-	golang.org/x/sync v0.22.0 // indirect
+	golang.org/x/mod v0.41.0 // indirect
+	golang.org/x/sync v0.23.0 // indirect
 	golang.org/x/sys v0.47.0 // indirect
 	golang.org/x/tools v0.49.0 // indirect
 	google.golang.org/protobuf v1.36.11 // indirect

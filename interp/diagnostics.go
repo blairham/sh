@@ -2303,13 +2303,14 @@ type Diagnostics struct {
 	// cannot take one out. Empty leaves the refusal silent.
 	FdVariableReadonlyClose string
 
-	// FdVariableNoParent is the refusal of a `{name}` redirection whose name
-	// is a dotted one with no parent, in the one grammar that has dotted
-	// names: `echo {a.b}</dev/null` with `a` unset is `a.b: no parent` at 1
-	// in ksh93u+, before the open (#6591). %[1]s is the word as written.
-	// Empty asks nothing, which is every other dialect. See
-	// Runner.fdVarNameFailsFirst.
-	FdVariableNoParent string
+	// NoParent is the refusal of a store into a dotted name whose parent is
+	// missing, in the one grammar that has dotted names. %[1]s is what is
+	// being refused: the `{name}` word of a redirection (`echo {a.b}</dev/null`
+	// with `a` unset is `a.b: no parent` at 1 in ksh93u+, before the open —
+	// #6591), or an assignment written out with its value expanded (`a.b=$(echo
+	// v)` is `a.b=v: no parent`, and the script ends — #6628). Empty asks
+	// nothing, which is every other dialect. See Runner.dottedNameHasNoParent.
+	NoParent string
 
 	// FdVariableDuplicationFailed is the line one shell writes *before* the
 	// usual one when a `{name}` redirection duplicates a descriptor that is
@@ -2605,12 +2606,11 @@ type Diagnostics struct {
 	// it. Empty is every other dialect, where the builtin names itself
 	// whatever the operand looks like.
 	//
-	// One row of the family is **recorded rather than modeled**: `typeset -x
-	// nosuch.x=1` is `nosuch.x=1: no parent` there — the same prefixless
-	// shape with a different reason, on a path the valueless `typeset -x
-	// nosuch.x` does not take. A second wording for one letter with a value
-	// is a table of its own for one row, which is the trade
-	// ExportLetterTakesExportsBadName above states.
+	// One row of the family is the store's refusal and not this one:
+	// `typeset -x nosuch.x=1` is `nosuch.x=1: no parent` there — the
+	// operand with a value reaches the store, and its missing parent is said
+	// first, on a path the valueless `typeset -x nosuch.x` does not take. See
+	// Diagnostics.NoParent and Runner.refuseAnOperandWithNoParent (#6628).
 	BadNameOfADottedOperandWithAValue string
 
 	// BuiltinBadNameNumeric is that wording where the operand begins with a

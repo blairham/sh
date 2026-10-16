@@ -143,7 +143,7 @@ func (r *Runner) refuseFdVarName(ref string) {
 // command is not run, the status is 1, and `exec`'s ends the script.
 func (r *Runner) fdVarNameFailsFirst(ref string) bool {
 	name := r.fdVarStoredName(ref)
-	if w := r.diag().FdVariableNoParent; w != "" && r.fdVarHasNoParent(name) {
+	if w := r.diag().NoParent; w != "" && r.dottedNameHasNoParent(name) {
 		r.diagf("%s\n", Wording(w, "%[1]s: no parent", ref))
 		r.status = 1
 		return true
@@ -158,34 +158,4 @@ func (r *Runner) fdVarNameFailsFirst(ref string) bool {
 		return true
 	}
 	return false
-}
-
-// fdVarHasNoParent reports whether a dotted name's parent is missing: the
-// name before its last dot is nothing the shell holds, and no compound
-// variable stands above it. A name with no dot past its first byte has no
-// parent to miss.
-func (r *Runner) fdVarHasNoParent(name string) bool {
-	if i := strings.IndexByte(name, '['); i > 0 {
-		name = name[:i]
-	}
-	if !r.dottedName(name) {
-		return false
-	}
-	i := strings.LastIndexByte(name, '.')
-	if i <= 0 {
-		return false
-	}
-	parent := name[:i]
-	// `.sh` is the shell's own namespace and is always there, though nothing
-	// is stored under the name itself: `{.sh.x}` is taken where `{.sh.q.r}`
-	// is `no parent`, measured.
-	if parent == ".sh" || r.namerefMemberParentIsThere(parent) {
-		return false
-	}
-	for j := 1; j < len(parent); j++ {
-		if parent[j] == '.' && r.isCompoundVariable(parent[:j]) {
-			return false
-		}
-	}
-	return true
 }

@@ -3,7 +3,11 @@
 
 package interp
 
-import "github.com/blairham/sh/syntax"
+import (
+	"strings"
+
+	"github.com/blairham/sh/syntax"
+)
 
 // Who speaks for a value in an assignment prefix that will not expand.
 //
@@ -127,7 +131,10 @@ func (r *Runner) prefixValueIsTheBuiltins() (bool, bool) {
 // whether the question above is worth asking for this command.
 func aPrefixValueCanFail(assigns []*syntax.Assign) bool {
 	for _, a := range assigns {
-		if !a.Operand && wordCanWrite(a.Value) {
+		// A dotted name can be refused as well, and is located the same
+		// way — see Runner.refuseADottedPrefix. No grammar without dotted
+		// names makes an assignment of one.
+		if !a.Operand && (wordCanWrite(a.Value) || strings.IndexByte(a.Name, '.') >= 0) {
 			return true
 		}
 	}

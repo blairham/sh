@@ -26486,6 +26486,36 @@ reaching it as written). A subscript that never closes is no subscript —
 the locale has it, so `{é}` stores under a UTF-8 locale and is refused under
 C (#6591).
 
+The parent rule is not the redirection's: it is ksh93's rule for **every**
+store into a dotted name, and `.sh` itself is a name nothing may be stored
+into. Measured 2026-10-15 on ksh93u+ from a script file and `-c` (#6628):
+
+| written | ksh93u+ |
+|---|---|
+| `a.b=1`, `a.b+=x`, `a.b[1]=x` | `a.b=1: no parent` (the word as written, value expanded), the script ends at 1 |
+| `a=1; a.b.c=1` | `a.b.c=1: no parent` — the parent is `a.b` |
+| `a.b=(x y)` | `a.b: no parent` |
+| `typeset a.b=1`, `typeset -x a.b=1`, `integer a.b=1` | `a.b=1: no parent`, no builtin named, ends |
+| `typeset a.b`, `integer a.b`, `readonly a.b` | `typeset: a.b: no parent` (`readonly:`), ends |
+| `unset a.b` | `unset: a.b: no parent`, status 1, goes on |
+| `a.b=1 :`, `a.b=1 eval …`, `f(){ …; }; a.b=1 f` | `a.b=1: no parent`, ends |
+| `a.b=1 true`, `a.b=1 /usr/bin/true` | `a.b=1: is not an identifier`, status 1 — parent or not |
+| `function g {…}; a.b=1 g` | `a.b=1: is not an identifier`, ends |
+| `.sh=1`, `.sh+=x`, `typeset .sh=1`, `{.sh}` | `.sh: is read only`, as a readonly name |
+| `unset .sh`, `read .sh` | `unset: warning: .sh: is read only`, status 1 |
+
+A parent is there if the shell holds it as anything — a scalar, an array, a
+compound — or a compound stands higher up the path, or it is `.sh` or a
+declared `namespace`. A path that starts at a reference starts at what the
+reference points at, and the reference itself counts as there (`typeset -n
+e=c; e.x=9` is stored with `c` unset). A prefix that stores — a special
+builtin's, a POSIX-form function's — is an assignment and meets the parent;
+one the command is only shown takes no dotted name at all, and its refusal is
+the prefix's failure: the entries behind it are not expanded, and it costs
+the command or the script as a value that will not expand does in the same
+place. `.sh` is not listed by `readonly -p` for all that it refuses stores.
+See interp/dottednoparent.go.
+
 **`FdVariableStoredAfterThePrefix`** — bash yes · dash — · ksh93 yes · zsh no
 
 Whether a `{name}` store on a function or builtin is what the command sees

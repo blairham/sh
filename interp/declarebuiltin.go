@@ -1931,6 +1931,12 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) (endSt
 		outer := r.dottedOperandRefusedByALetter
 		r.dottedOperandRefusedByALetter = true
 		defer func() { r.dottedOperandRefusedByALetter = outer }()
+		// The reference letter refuses the dotted word whatever it carries,
+		// where the export letter lets one with a value reach the store and
+		// its missing parent. See Runner.refuseAnOperandWithNoParent.
+		outerValued := r.dottedOperandRefusedWithAValue
+		r.dottedOperandRefusedWithAValue = f.nameref || f.namerefOff
+		defer func() { r.dottedOperandRefusedWithAValue = outerValued }()
 	}
 	if f.nameref {
 		// **An empty name references itself**, which is the one bad name the

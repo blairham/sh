@@ -73,7 +73,7 @@ func (r *Runner) readMayStore(name, value string) bool {
 // the base name and not the operand as written.
 func (r *Runner) readMayWrite(name string) bool {
 	target := r.frozenReadName(name)
-	if !r.attrHas(target, attrReadonly) {
+	if !r.nameIsFrozen(target) {
 		return true
 	}
 	fatal := r.ask(r.sem().ReadonlyRefusalInABuiltinIsFatal,

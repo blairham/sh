@@ -2629,7 +2629,7 @@ func (r *Runner) badSubscriptToUnset(sub string, err error) int {
 // does, so there is no status of this error's own.
 func (r *Runner) unsetReadonly(name string) int {
 	refused := r.unsetRefused[name] && !r.attrHas(name, attrReadonly)
-	if !r.attrHas(name, attrReadonly) && !refused {
+	if !r.nameIsFrozen(name) && !refused {
 		return 0
 	}
 	if r.DeferredParameter(name) {

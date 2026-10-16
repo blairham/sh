@@ -65,6 +65,12 @@ func (r *Runner) nestElemLiteral(a *syntax.Assign) {
 		if !keyed {
 			return
 		}
+		if r.heldFreeze.assign == a && r.diag().FrozenElementRefusalNamesTheElement {
+			// Refused under the key it came to: `k='p q'; a[$k]=(p)` over a
+			// frozen table is `a[p q]: is read only`. See
+			// Diagnostics.FrozenElementRefusalNamesTheElement (#6774).
+			r.heldFreeze.spoken = a.Name + "[" + key + "]"
+		}
 		v, built := value()
 		if !built {
 			return

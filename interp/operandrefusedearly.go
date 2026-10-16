@@ -149,7 +149,7 @@ func (r *Runner) refuseFrozenOperandValuesEarly(argv []string) bool {
 		// `declare: not found` and the script goes on.
 		return false
 	}
-	var frozen string
+	var frozen, spoken string
 	for _, a := range r.arrayOperands {
 		if a.assign.Members != nil {
 			// A compound body is its own question: over a name frozen with no
@@ -161,6 +161,17 @@ func (r *Runner) refuseFrozenOperandValuesEarly(argv []string) bool {
 		}
 		if r.attrHas(a.assign.Name, attrReadonly) {
 			frozen = a.assign.Name
+			if a.assign.Index != nil && len(a.assign.Leading) == 0 &&
+				r.diag().FrozenElementRefusalNamesTheElement && r.assocDeclared(frozen) {
+				// An element literal under a table's key, refused under the
+				// key: `typeset a[k]=(p)` is `a[k]: is read only`. See
+				// Diagnostics.FrozenElementRefusalNamesTheElement (#6774).
+				key, ok := r.assocAssignKey(frozen, a.assign.Index)
+				if !ok {
+					return true
+				}
+				spoken = frozen + "[" + key + "]"
+			}
 			break
 		}
 	}
@@ -188,6 +199,10 @@ func (r *Runner) refuseFrozenOperandValuesEarly(argv []string) bool {
 	if !r.ask(r.sem().OperandValueOverAFrozenNameRefusedFirst,
 		"a declaration's value over a frozen name refused before the command runs") {
 		return r.unspecified
+	}
+	if spoken != "" {
+		defer func(was string) { r.refusalSpokenAs = was }(r.refusalSpokenAs)
+		r.refusalSpokenAs = spoken
 	}
 	r.refuseWithTheReadonlySentence(frozen, assignedAlone, Yes)
 	return true

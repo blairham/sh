@@ -72,9 +72,32 @@ func (r *Runner) readMayStore(name, value string) bool {
 // `a=1; readonly a; read 'a[0]'` is `a: readonly variable` in bash 5.3.20,
 // the base name and not the operand as written.
 func (r *Runner) readMayWrite(name string) bool {
+	return r.readMayWriteAs(name, false)
+}
+
+// readMayWriteAs is readMayWrite told whether name is the array `read -A`
+// fills, which one dialect words apart. See
+// Diagnostics.ReadonlyVariableInReadArray.
+func (r *Runner) readMayWriteAs(name string, array bool) bool {
+	first := r.inBuiltin == "read" && r.readWritesAsked == 0
+	if r.inBuiltin == "read" {
+		r.readWritesAsked++
+	}
 	target := r.frozenReadName(name)
 	if !r.nameIsFrozen(target) {
 		return true
+	}
+	if array {
+		defer func(was bool) { r.readRefusesTheArray = was }(r.readRefusesTheArray)
+		r.readRefusesTheArray = true
+	}
+	if first && target != name && r.diag().FrozenElementRefusalNamesTheElement {
+		if base, _, ok := r.subscriptOperand(name); ok && base == target && r.assocDeclared(base) {
+			// The first name, a table's element: named as it was written.
+			// See Diagnostics.FrozenElementRefusalNamesTheElement.
+			defer func(was string) { r.refusalSpokenAs = was }(r.refusalSpokenAs)
+			r.refusalSpokenAs = name
+		}
 	}
 	fatal := r.ask(r.sem().ReadonlyRefusalInABuiltinIsFatal,
 		"a builtin's refused write to its own output parameter ending the script")

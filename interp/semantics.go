@@ -11188,6 +11188,35 @@ type Semantics struct {
 	// about the one case they split on.
 	ReturnOutsideAFunctionIsRefused Answer
 
+	// ReturnAtThePromptEndsTheSession makes a `return` with nothing to return
+	// from, typed at a prompt, end the session at the status it names — with
+	// the EXIT trap run — instead of costing the rest of that line and
+	// drawing the next prompt.
+	//
+	// Measured 2026-10-16 through a pseudo-terminal with a two-row PS1, one
+	// line at a time: `trap "echo T \$?" EXIT`, then `if true; then return
+	// 5; fi; echo n2`, then `echo line3 $?`:
+	//
+	//	ksh93u+ 2012-08-01   T 5, and the shell ends at 5
+	//	dash 0.5.12          T 5, and the shell ends at 5
+	//	zsh 5.9.2            nothing for the line, then `line3 5`
+	//
+	// BusyBox ash 1.37.0 ends at the `return` too, measured with the same
+	// lines on standard input of `sh -i` (no terminal in the pinned image);
+	// ksh93 and dash answer the terminal and that route alike. Inside a
+	// function every column returns from the function and reads on, which is
+	// why this is asked only where there is nothing to return from.
+	//
+	// Either way the `return` is not left standing once the line is over: a
+	// front end that reads on with it still set refuses every command after
+	// it, `exit` included (#6717).
+	//
+	// unpinned bash: the question cannot be put to it. bash refuses a
+	// `return` with nothing to return from — Semantics.ReturnOutsideAFunctionIsRefused,
+	// asked first — so the line reads on past it and nothing is left to end.
+	// Pinned for the other columns by TestAReturnAtThePromptEndsTheLineOrTheSession.
+	ReturnAtThePromptEndsTheSession Answer
+
 	// StartupFileReturnCarriesItsArgument makes `return 3` at the top of a
 	// startup file leave `$?` as 3, instead of leaving whatever the command
 	// before it left. True in dash, ksh93 and zsh; false in bash.
@@ -34532,9 +34561,13 @@ func PosixSemantics() Semantics {
 		// BusyBox ash 1.37.0, where `trap 'return 5' EXIT; false` is 1. The
 		// two that take the status say so themselves.
 		ReturnInTheExitTrapNamesTheStatus: No,
-		UnsetPositionalIsAllowed:          No,
-		TraceShowsItsOwnDisabling:         Yes,
-		TraceAssignmentsSeparately:        No,
+		// A `return` typed at a prompt with nothing to return from ends the
+		// session where it ends a script: ksh93, dash and BusyBox ash. zsh
+		// keeps the session and says so itself.
+		ReturnAtThePromptEndsTheSession: Yes,
+		UnsetPositionalIsAllowed:        No,
+		TraceShowsItsOwnDisabling:       Yes,
+		TraceAssignmentsSeparately:      No,
 		// The line is written once the list is done: dash and BusyBox ash,
 		// measured 2026-10-02. zsh writes it a word at a time and says so.
 		TraceAssignmentListIsWrittenAsItGoes: No,

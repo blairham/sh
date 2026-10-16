@@ -21077,6 +21077,23 @@ Asked only where there is nothing to return from. Inside a function and
 inside a sourced file all four obey it, so the question is about the one
 case they split on.
 
+**`ReturnAtThePromptEndsTheSession`** — bash — · dash yes · ksh93 yes · zsh no
+
+Makes a `return` with nothing to return from, typed at a prompt, end the
+session at the status it names, with the EXIT trap run, instead of costing
+the rest of that line and drawing the next prompt. Measured 2026-10-16
+through a pseudo-terminal with a two-row PS1, one line at a time (#6717):
+
+| lines | ksh93u+ | dash 0.5.12 | zsh 5.9.2 |
+| --- | --- | --- | --- |
+| `trap "echo T \$?" EXIT` / `if true; then return 5; fi; echo n2` / `echo line3 $?` | `T 5`, ends at 5 | `T 5`, ends at 5 | nothing for line 2, `line3 5` |
+| `f(){ return 4; echo nf; }; f; echo after $?` (control) | `after 4` | `after 4` | `after 4` |
+
+BusyBox ash 1.37.0 ends at the `return` too, measured on standard input of
+`sh -i`. bash refuses the `return` (`ReturnOutsideAFunctionIsRefused`) and
+is never asked. Either way the `return` does not outlive the line: left
+standing, it refuses every command read after it, `exit` included.
+
 **`StartupFileReturnCarriesItsArgument`** — bash no · dash yes · ksh93 yes · zsh yes
 
 Makes `return 3` at the top of a startup file leave `$?` as 3, instead of

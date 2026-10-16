@@ -4848,6 +4848,10 @@ func Semantics() interp.Semantics {
 	// it — with the option off both readings answer 1 (#4436).
 	s.ConditionOptionTakesAnOptionLetter = interp.Yes
 	s.ReturnOutsideAFunctionIsRefused = interp.No
+	// And typed at a prompt it costs the line and not the session: measured
+	// 2026-10-16 through a pseudo-terminal, `return 4; echo n2` writes
+	// nothing, and the next line reads `$?` as 4 and runs (#6717).
+	s.ReturnAtThePromptEndsTheSession = interp.No
 	// And `break` with no loop around it stops the script here, which is the
 	// opposite way round from the line above: measured, `echo t; break` on
 	// one line and on two both end at status 1 with nothing after the

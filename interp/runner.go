@@ -3396,6 +3396,9 @@ type Runner struct {
 	// parent runs, in the dialect whose last program in it replaces the
 	// shell. See Runner.subshellBecomesTheTail.
 	tailSubshell bool
+	// prefixExpandedInTheChild says this shell is the copy an external
+	// command's prefix is expanded in. See Runner.prefixExpansionShell.
+	prefixExpandedInTheChild bool
 	// tailCmd is the command that is the last thing this shell runs, where the
 	// front end has said nothing follows — see LastPart and unforkedtail.go.
 	// A node rather than a flag, so that a stale value matches nothing: it is
@@ -10844,7 +10847,11 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 	// **child**, and where a hook is watching one of these names, or a type
 	// letter on one would fold its value, the store is the child's — see
 	// Runner.prefixChildForTheStores.
-	child := r.prefixChildForTheStores(c.Assigns)
+	// And the shell the prefix's values are *expanded* in, which is that
+	// child as well in the dialects that expand them there: a side effect in
+	// a value stays in it. See Runner.prefixExpansionShell.
+	ex := r.prefixExpansionShell(c.Assigns)
+	child := ex.prefixChildForTheStores(c.Assigns)
 	if r.unspecified {
 		return nil
 	}
@@ -10863,7 +10870,7 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 	// Taken again for the reason the function route's is.
 	walk = r.beginPrefixWalk(c.Assigns)
 	for _, a := range c.Assigns {
-		if r.prefixWalkFailed(walk) {
+		if ex.prefixWalkFailed(walk) {
 			// The entries behind a value that would not expand are not
 			// expanded at all — see interp/prefixexpansionfailed.go, where
 			// the panel is and where the command is given up once the walk
@@ -10892,7 +10899,7 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 			// what keeps the value the trace renders from being a second
 			// expansion, since prefixExpansion reads back what
 			// expandPrefixTraceValues put aside.
-			_ = r.prefixValue(a)
+			_ = ex.prefixValue(a)
 			r.warnATruncatedPosition(a.Name)
 			continue
 		}
@@ -10925,8 +10932,8 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 		// being appended and `.set` with the whole value. Expanded here
 		// either way, so a substitution in the right-hand side runs once and
 		// runs where the trace wrote it.
-		part := r.prefixExpansion(a)
-		value := r.prefixJoined(a, part)
+		part := ex.prefixExpansion(a)
+		value := ex.prefixJoined(a, part)
 		if r.refuseADottedPrefix(a, value, false, false) {
 			// A program takes no dotted name, and the walk ends here. See
 			// interp/dottednoparent.go.
@@ -10939,7 +10946,7 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 			// command up. See Runner.prefixRefusalEndsTheWalk (#6511).
 			break
 		}
-		if r.prefixStoresAnArray(a) {
+		if ex.prefixStoresAnArray(a) {
 			// The value was read as a pattern and matched more than one
 			// name, or was an array literal read as the array, so the entry
 			// is an **array** — and no child's environment can carry one.
@@ -10948,7 +10955,7 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 			// withoutPrefixArrayNames. Held as the array for the entries
 			// behind it all the same — see Runner.holdPrefixEntry.
 			prefixArrays = append(prefixArrays, r.prefixEntryName(a.Name))
-			r.holdPrefixEntry(&held, a, value)
+			ex.holdPrefixEntry(&held, a, value)
 			continue
 		}
 		if prefixIsSubscripted(a) {
@@ -10992,7 +10999,7 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 				// expansion's would be, so it is put on the record the walk
 				// reads: nothing behind it is expanded and the command is
 				// given up below (#6698).
-				r.expandErr, r.ctl = child.expandErr, child.ctl
+				ex.expandErr, ex.ctl = child.expandErr, child.ctl
 				break
 			}
 			value = stored
@@ -11014,10 +11021,14 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 		}
 		prefixEnv = append(prefixEnv, landsOn+"="+value)
 		if name, ok := r.prefixHoldableName(a); ok {
-			held.hold(r, name, value)
+			held.hold(ex, name, value)
 		}
 	}
-	held.release(r)
+	held.release(ex)
+	// What the child's expansion left on the record is this command's
+	// failure, and nothing else of the child comes back. See
+	// Runner.prefixExpansionShell.
+	r.takeThePrefixChildsFailure(ex)
 	// A value that would not expand gives the command up, here rather than
 	// in front of refusePrefixes below: the report there is already withheld
 	// when an expansion failed, because three of the panel name the

@@ -3,7 +3,11 @@
 
 package interp
 
-import "github.com/blairham/sh/syntax"
+import (
+	"strings"
+
+	"github.com/blairham/sh/syntax"
+)
 
 // A command's assignment prefixes are worked through **left to right**, and
 // each one's right-hand side sees the ones in front of it.
@@ -183,6 +187,12 @@ func (r *Runner) holdPlacedLiteral(h *heldPrefix, a *syntax.Assign, name string,
 		}
 		idx, err := r.subscriptValue(e.sub)
 		if err != nil || idx < r.arrayBase() {
+			if r.prefixExpandedInTheChild {
+				// The child places the literal and owns the refusal: the
+				// placement below reports the subscript, and the walk gives
+				// the command up. See Runner.prefixExpansionShell.
+				continue
+			}
 			return
 		}
 		e.subPlaced, e.subAt = true, idx
@@ -221,4 +231,86 @@ func (r *Runner) prefixHoldableName(a *syntax.Assign) (string, bool) {
 		return "", false
 	}
 	return r.prefixEntryName(a.Name), true
+}
+
+// prefixExpansionShell is the shell an external command's assignment prefix
+// is expanded in: a copy of this one, where the dialect expands it in the
+// child that runs the command, and this shell itself otherwise.
+//
+// Measured 2026-10-16 under `-c`, `env -i PATH=/usr/bin:/bin` (#6784, #6783):
+//
+//	                                            zsh 5.9.2, ksh93u+   bash 5.3, dash, ash
+//	i=1; y=$((i++)) /usr/bin/true; echo $i      1                    2
+//	unset i; y=${i:=5} /usr/bin/true; echo $i   (empty)              5
+//	i=1; x=([i++]=a) /usr/bin/true; echo $i     1 (zsh)
+//	x=([0]=a) /usr/bin/true; echo after $?      bad subscript …, after 1 (zsh)
+//	i=1; y=$((i++)) true; echo $i               2 — a builtin is this shell
+//
+// The entries behind still see what an entry before them did — `x=([i++]=a)
+// y=$i:${x[1]} /usr/bin/printenv y` is `2:a` — because the child expands them
+// all in order; it is only the shell that never sees it. So the copy is made
+// once for the whole prefix, and only where a value could change something:
+// an arithmetic expansion, a parameter expansion that assigns or subscripts,
+// or an array literal. Every other prefix expands in this shell to the same
+// result, and copying the tables for it would cost every prefixed command.
+func (r *Runner) prefixExpansionShell(assigns []*syntax.Assign) *Runner {
+	may := false
+	for _, a := range assigns {
+		if prefixValueMayChangeTheShell(a) {
+			may = true
+			break
+		}
+	}
+	if !may || !r.ask(r.sem().PrefixExpandsInTheExternalCommandsChild,
+		"an external command's assignment prefix expanded in its child") {
+		return r
+	}
+	child := *r
+	child.dialectMoves = nil
+	child.bodyTexts = nil
+	child.ownTables(r)
+	child.prefixExpandedInTheChild = true
+	return &child
+}
+
+// prefixValueMayChangeTheShell is whether expanding a prefix's value could
+// write to the shell: arithmetic, a parameter expansion that assigns or
+// subscripts, or an array literal, whose subscripts are arithmetic.
+func prefixValueMayChangeTheShell(a *syntax.Assign) bool {
+	if a.IsArray || len(a.Elems) > 0 {
+		return true
+	}
+	if a.Value == nil {
+		return false
+	}
+	for _, sp := range a.Value.Spans {
+		switch sp.Kind {
+		case syntax.ArithSubst:
+			return true
+		case syntax.ParamExp:
+			if strings.ContainsAny(sp.Value, "=[") {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// takeThePrefixChildsFailure carries what the child's expansion left on the
+// failure record back to this shell, which is where the walk is judged and
+// the command given up. Nothing where the prefix expanded here.
+func (r *Runner) takeThePrefixChildsFailure(ex *Runner) {
+	if ex == r {
+		return
+	}
+	r.expandErr, r.badSubscript, r.badRange = ex.expandErr, ex.badSubscript, ex.badRange
+	if ex.givingUpAlready() {
+		// A failure that unwound the child. A `return` or `break` raised by
+		// code inside a value is the child's alone and is not carried: the
+		// child's end is the end of it (#6752).
+		r.ctl, r.abandon, r.errexitStopped = ex.ctl, ex.abandon, ex.errexitStopped
+	}
+	if ex.expandErr || ex.givingUpAlready() {
+		r.status = ex.status
+	}
 }

@@ -2544,6 +2544,10 @@ func Semantics() interp.Semantics {
 	// `foo=(asdf fdsa); foo=bar ff` lists `export foo=bar` under the overlay
 	// too (#4087).
 	s.AssignmentPrefixMakesAFreshCell = interp.No
+	// And the prefix of an external command is expanded in its child, so a
+	// side effect in it never reaches this shell: measured 2026-10-16, `i=1;
+	// y=$((i++)) /usr/bin/true; echo $i` is 1 (#6784).
+	s.PrefixExpandsInTheExternalCommandsChild = interp.Yes
 	// A prefix to a *builtin* is the other question and this shell answers it
 	// the other way: the attribute is left exactly where it was. `export z=1;
 	// z=2 typeset -p z` lists `export z=2` and `c=1; c=2 typeset -p c` lists a

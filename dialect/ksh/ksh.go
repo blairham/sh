@@ -5591,6 +5591,9 @@ func Diagnostics() interp.Diagnostics {
 			"let": true,
 		},
 		ReadonlyVariableInRead: "%[2]s: warning: %[1]s: is read only",
+		// A store under a table's empty key, and only under `set -x`. See
+		// interp.Diagnostics.EmptyTableKeyTraced (#6609).
+		EmptyTableKeyTraced: "warning: adding empty subscript",
 		// A failed history substitution names what was *typed* here, where
 		// bash names the modifier it rewrote the line into: measured
 		// 2026-09-15 through a pseudo-terminal, `^hello^goodbye^` against a

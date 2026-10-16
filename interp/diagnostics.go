@@ -8008,6 +8008,22 @@ type Diagnostics struct {
 	// for what the refusal costs.
 	UnpairedTableLiteralElements string
 
+	// EmptyTableKeyTraced is the warning written when a value is stored in a
+	// table under the empty key while the shell is **tracing**, and empty
+	// where nothing is written. No verbs.
+	//
+	// One column says anything. Measured 2026-10-15 on ksh93u+ 2012-08-01
+	// from a script file, `typeset -A m` first: under `set -x`, `m[""]=e`,
+	// `e=; m[$e]=f`, `m=([""]=1 [b]=2)`, `m+=([""]=1)`, `typeset m[""]=1`,
+	// `m[""]+=1`, `: ${m[""]:=z}` and `(( m[""]=3 ))` each write `<script>:
+	// line N: warning: adding empty subscript`, once per store — a second
+	// `m[""]=2` warns again, so it is not about the key being new — and
+	// ahead of the assignment's own trace line. `read 'm[]'` writes it as the
+	// builtin, `<script>[N]: read: warning: …`. Without `set -x` none of
+	// them writes anything, and neither does an indexed array's `x[""]=1`,
+	// which is element 0 there (#6609).
+	EmptyTableKeyTraced string
+
 	// ScalarStoredOverATable is a scalar store — either spelling — over a
 	// name that is holding a table, in the dialect that refuses one instead
 	// of writing the key `0` or replacing the name. One verb, the **name**:

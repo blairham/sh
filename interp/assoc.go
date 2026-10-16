@@ -252,6 +252,9 @@ func (r *Runner) setAssocElemAs(name, key, value string, kind ElementKind) {
 			return
 		}
 	}
+	if key == "" {
+		r.warnEmptyTableKeyTraced()
+	}
 	// Owned only now, and the table read again: the attribute's fold above
 	// can run arithmetic, and a table taken before it may have been shared
 	// with a subshell since. See sharedtable.go.
@@ -1709,4 +1712,25 @@ func (r *Runner) assocFor(name string) (AssocArray, bool) {
 		return produce(r), true
 	}
 	return nil, false
+}
+
+// warnEmptyTableKeyTraced writes the warning one dialect gives a store under
+// the empty key, and only while the shell is tracing. See
+// Diagnostics.EmptyTableKeyTraced for the rows.
+//
+// Here, in the one writer every keyed store reaches, rather than at the
+// assignment: the literal, `+=`, a declaration's operand, `${a[""]:=v}`,
+// arithmetic and `read` all warned in the same measurement, and a site per
+// route is how one of them would be left out.
+func (r *Runner) warnEmptyTableKeyTraced() {
+	w := r.diag().EmptyTableKeyTraced
+	if w == "" || !r.tracing() {
+		return
+	}
+	if r.inBuiltin == "read" {
+		// Spoken by the builtin, and located the way a builtin's own
+		// complaint is.
+		w = r.inBuiltin + ": " + w
+	}
+	r.diagf("%s\n", w)
 }

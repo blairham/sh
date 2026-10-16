@@ -14753,6 +14753,11 @@ type Semantics struct {
 	//	with `typeset -a`, `typeset -A`, `unset`, `typeset -r` and
 	//	`typeset -i`, each of which answers from the global in ksh93.
 	//
+	//	A caller's **exported** local is the exception: the callee is handed
+	//	its value as a plain local of its own, attribute-free and not
+	//	exported, which a write lands in and the return takes away. See
+	//	Runner.exportedLocalHandedOn (#6595).
+	//
 	// Two stores are deliberately outside the seal, because no column can
 	// put a question to them: a shell-*produced* parameter hidden by a
 	// declaration (Semantics.DeclareHideInScopeLetter, which ksh93 has no letter

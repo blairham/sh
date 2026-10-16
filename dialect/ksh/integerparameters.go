@@ -86,7 +86,7 @@ func importedInteger(s string) int {
 	if s == "" || strings.ContainsAny(s, "+-") {
 		return 0
 	}
-	v, err := strconv.ParseInt(s, base, 64)
+	v, err := strconv.ParseInt(s, base, 0)
 	if err != nil {
 		return 0
 	}

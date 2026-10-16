@@ -100,8 +100,15 @@ func TestWithNoMonitorTheResumeIsStillRefused(t *testing.T) {
 // processes` at 1, where the panel runs the job and reports its status. Before
 // `set -m` reached the builtin the only resumable job was one ^Z had left
 // behind, which nobody is waiting on, so the shape was unreachable (#2720).
+//
+// The job is held running until `fg` continues it. `echoCmd` is
+// `/usr/bin/true`, so a `&` job nothing holds is sometimes over before `fg`
+// reads it, and then `fg: job has terminated` at 1 is the right answer to a
+// different question — bash's own, measured in jobs/fg-on-an-ended-job. That
+// is what failed this row on both runners at random (#6658), the same coin
+// toss #4021 and #5763 took out of their own rows.
 func TestFgWaitsOutABackgroundJobSomebodyElseHolds(t *testing.T) {
-	f := &fakeJobs{}
+	f := heldJobs()
 	out, st, _ := jobSessionWith(t, f, echoCmd+" &\nfg", false, func(r *Runner) {
 		sem := *r.Semantics
 		sem.MonitorAloneResumesAJob = Yes
@@ -110,7 +117,17 @@ func TestFgWaitsOutABackgroundJobSomebodyElseHolds(t *testing.T) {
 		// does not hold the child, which is the whole of the fault: the
 		// fake's canned reply would let a second wait succeed and the row
 		// would pass against the code it is here to catch.
-		r.WaitForCommand = func(int) (Wait, error) { return Wait{}, syscall.ECHILD }
+		//
+		// Only once the hold is let go. The job's own goroutine is the
+		// first caller, and blocking it there is what keeps the job running
+		// until `fg` has sent the continue; it then falls back to os/exec's
+		// wait, which holds the child. A `fg` that waited on the pid itself
+		// calls this after its own continue, so it still gets ECHILD and
+		// still fails the row.
+		r.WaitForCommand = func(int) (Wait, error) {
+			<-f.held
+			return Wait{}, syscall.ECHILD
+		}
 	})
 	if out != echoCmd+"\n" {
 		t.Errorf("the run wrote %q, want the job named and nothing else", out)

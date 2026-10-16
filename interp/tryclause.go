@@ -46,8 +46,8 @@ func (r *Runner) tryClause(ctx context.Context, c *syntax.TryClause) error {
 	// at all, and a redirection written between the halves instead is a
 	// syntax error there.
 	return r.withRedirs(ctx, c.Redirs, func() error {
-		setNoStatusBefore := r.fatalSetNoStatus
-		r.fatalSetNoStatus = false
+		setNoStatusBefore, turnedZeroBefore := r.fatalSetNoStatus, r.fatalTurnedZero
+		r.fatalSetNoStatus, r.fatalTurnedZero = false, false
 		if err := r.runList(ctx, c.Try); err != nil {
 			return err
 		}
@@ -56,7 +56,12 @@ func (r *Runner) tryClause(ctx context.Context, c *syntax.TryClause) error {
 		// measured, `{ local x=$((1/0)); } always { print $?; }` prints 0 and
 		// exits 1 in zsh 5.9.2 (#5657).
 		setNoStatus := r.fatalSetNoStatus
-		r.fatalSetNoStatus = setNoStatusBefore
+		if setNoStatus && r.fatalTurnedZero {
+			// Including the 0 a shell that is going to end on it has turned
+			// into a failure already. See Runner.turnTheZeroIntoAFailure.
+			r.status = 0
+		}
+		r.fatalSetNoStatus, r.fatalTurnedZero = setNoStatusBefore, turnedZeroBefore
 		if r.trapInterrupt && r.ctl == controlExit {
 			// Interrupted by a TRAP function: the always half runs, with
 			// the status the interruption left, and then fails. See
@@ -68,6 +73,7 @@ func (r *Runner) tryClause(ctx context.Context, c *syntax.TryClause) error {
 			}
 			return err
 		}
+		paramErrorCaught := r.paramErrorAsAnErrorCondition()
 		ctl, status, sig := r.ctl, r.status, r.diedOfSig
 		ctlDepth, abandon, abandonLine := r.ctlDepth, r.abandon, r.abandonLine
 		errexitStopped := r.errexitStopped
@@ -125,8 +131,26 @@ func (r *Runner) tryClause(ctx context.Context, c *syntax.TryClause) error {
 			r.ctl, r.ctlDepth, r.abandon, r.abandonLine = ctl, ctlDepth, abandon, abandonLine
 			r.errexitStopped = errexitStopped
 		}
-		if setNoStatus && tryErrored && wantsError {
+		if setNoStatus && status == 0 {
+			// Only a 0, and whether or not the half recovered from the
+			// error. Measured 2026-10-15 on zsh 5.9.2 under -f, by -c, a
+			// script file and standard input: `{ (exit 7); export
+			// x=$((1/0)); } always { … }` exits 7 where the same with
+			// `true` exits 1, and `{ true; export x=$((1/0)); } always {
+			// TRY_BLOCK_ERROR=0; }; echo $?` writes 1 where `(exit 7)` in
+			// front writes 7 (#6621).
 			status = r.fatalStatus()
+			if n := r.diag().ParamErrorInABareAssignmentStatusAtAPrompt; paramErrorCaught && n != 0 {
+				// And at a prompt a `${x?word}` that left the 0 ends it at
+				// the number the same failure leaves in a bare assignment
+				// there. Measured 2026-10-15 on zsh 5.9.2 run `-f -i` from
+				// standard input, `true` in front: `{ export x=${q?b} }
+				// always { echo in=$? }` writes in=0 and leaves 5, and so do
+				// `local`, `typeset -i` and a `case` subject, and with
+				// TRY_BLOCK_ERROR=0 in the half the line goes on at 5;
+				// `(exit 7)` in front leaves 7 (#6644).
+				status = n
+			}
 		}
 		// Whichever transfer won, the status is the try half's — and what
 		// produced it travels with it, the way a subshell's does: a try half
@@ -290,11 +314,49 @@ func (r *Runner) transferEndsTheShell(ctl control, abandon abandonKind) bool {
 			// skips the always half even inside a function. Measured:
 			// `f(){ { : ${x?boom}; } always { echo A; }; }; f` prints the
 			// complaint and nothing else.
+			//
+			// Not in an interactive shell, where it never arrives here: it
+			// is an error condition like any other by then — see
+			// Runner.paramErrorAsAnErrorCondition.
 			return true
 		}
 		return !r.insideFunctionCall()
 	case controlReturn:
 		return !r.hasSomethingToReturnFrom()
+	}
+	return false
+}
+
+// paramErrorAsAnErrorCondition makes a `${x?word}` that ended an interactive
+// shell's try half an ordinary error condition: the always half runs, can
+// clear it, and what is left of it costs what any other error costs.
+//
+// Measured 2026-10-15 on zsh 5.9.2 run `-f -i`, through a terminal and from
+// standard input, with `q` unset (#6644):
+//
+//	{ x=${q?b} } always { echo in=$? }                      in=5, then $? is 5
+//	{ echo ${q?b} } always { echo in=$? }                   in=1
+//	f(){ { x=${q?b} } always { echo in=$? }; echo n; }; f   in=5, no n
+//	( { x=${q?b} } always { echo in=$? } ); echo s=$?       in=5, s=5
+//	eval '{ echo ${q?b} } always { echo in=$? }'; echo e=$? in=1, e=1
+//	{ x=${q?b} } always { TRY_BLOCK_ERROR=0 }; echo r=$?    r=5
+//	{ x=${q?b} } always { exit }                            the shell ends
+//
+// and the same `{ x=${q?b} } always { … }` as the first line of `zsh -f -i
+// script` writes in=5 and goes on to the next line, where without the
+// construct the script ends there; under `-i -c` it writes in=5 and ends at 5.
+// That last pair is the shape the shell's other errors already have on those
+// two routes, which is why the kind is rewritten rather than the routes taught
+// about a new one: eval's boundary, the line a prompt gives up, and the
+// script line all read abandonError. Asked before Runner.transferEndsTheShell,
+// which is what makes the half run. Not interactively, the operand still ends
+// the shell and the half never runs.
+//
+// It reports whether it did, for the status the construct ends on.
+func (r *Runner) paramErrorAsAnErrorCondition() bool {
+	if r.Interactive && r.ctl == controlExit && r.abandon == abandonParamError {
+		r.abandon = abandonError
+		return true
 	}
 	return false
 }

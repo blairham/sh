@@ -145,7 +145,7 @@ var theRoadToNoWords = []string{
 	"arrayOperandName", "arrayOperands", "beginGlobUnit",
 	"ctl", "dashPrecommand", "declarationOperands", "declinesRmStar", "expandErr",
 	"failedExpansion", "failedExpansionStatus", "fatal", "diag", "lastArg", "lastArgSet",
-	"lexedSubscriptOperands", "loopDepth", "noteInputLevelArgument", "nullCommand", "operandWasRejoined",
+	"lexedSubscriptOperands", "noteInputLevelArgument", "nullCommand", "operandWasRejoined",
 	"precommands", "rejoinedArrayOperand", "rejoinsArrayOperand", "scopeProcSubs", "sem",
 	"sourceClosedSubscriptOperands", "startSimpleCommand", "status", "storeTheAssignmentsAlone",
 	"traceEmptyCommand", "underscoreBeforeADeclarationsAssignment", "unspecified", "leadingModifierWords",

@@ -98,5 +98,8 @@ func (r *Runner) breakLoopsForAStop() {
 // because what a stop has to break out of is what it is *inside* at the time.
 func (r *Runner) enteringLoop() func() {
 	r.loopDepth++
-	return func() { r.loopDepth-- }
+	return func() {
+		r.loopDepth--
+		r.leavingALoopOnAnError()
+	}
 }

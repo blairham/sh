@@ -3383,6 +3383,14 @@ type Runner struct {
 	// failedExpansionStatus, for an `always` half to read: the error still
 	// ends the construct with the fatal status. See tryClause.
 	fatalSetNoStatus bool
+	// fatalTurnedZero says the fatal status in `$?` stands for a 0 the
+	// failure left, turned into a failure early because the shell is going
+	// to end on it. An `always` half reads the 0. See Runner.setFatalStatus.
+	fatalTurnedZero bool
+	// fatalStatusOwed says the fatal error unwinding left `$?` at something
+	// other than the fatal status, which a loop it unwinds out of sets. See
+	// Runner.leavingALoopOnAnError.
+	fatalStatusOwed bool
 	// inABareAssignment says the assignments being stored are a command of
 	// their own, with no command word behind them. See
 	// Runner.paramErrorInABareAssignment.
@@ -6921,16 +6929,18 @@ func (r *Runner) fatalParamError(format string, args ...any) {
 // failed value; `x=${q?b} true` and `a=(${q?b})` are 1, so it is the bare
 // scalar store and not any assignment; `x=$((1/0)) y=${q?b}` is 1, so it is
 // the failure that stopped the list; a declaration's `export x=${q?b}` keeps
-// `$?`; and inside a loop it is 1, the rule a loop already puts on a
-// failure's status (see Runner.callExpr's words rule). bash 5.3.20 and
+// `$?`; and after a loop it is 1, the rule a loop puts on a failure's status
+// as the failure leaves it (see Runner.leavingALoopOnAnError) — an `always`
+// half inside the loop still reads 5. bash 5.3.20 and
 // ksh93u+ leave 1 in every row, and every route that is not interactive
 // ends the shell at 1 (#6580).
 func (r *Runner) paramErrorInABareAssignment() {
 	n := r.diag().ParamErrorInABareAssignmentStatusAtAPrompt
-	if n == 0 || !r.Interactive || !r.inABareAssignment || r.loopDepth != 0 {
+	if n == 0 || !r.Interactive || !r.inABareAssignment {
 		return
 	}
 	r.status = n
+	r.fatalStatusOwed = true
 }
 
 // fatalExpansionQuiet is the same for a failure that has already reported
@@ -8876,11 +8886,12 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 	// The rule the words are read under outside a declaration's own.
 	wordsRule := statusBefore
 	//
-	// Not inside a loop, however far in, where the failure sets 1 whatever
-	// `$?` held: measured on zsh 5.9.2, `for i in 1; do (exit 6); print
-	// $((1/0)); done` exits 1, and so does a function doing the same called
-	// from a loop's body, where the function called outside one exits 6.
-	if statusBefore == failedExpansionSetsTheStatus && r.loopDepth == 0 &&
+	// A loop around it still ends at 1 whatever `$?` held: measured on zsh
+	// 5.9.2, `for i in 1; do (exit 6); print $((1/0)); done` exits 1, and so
+	// does a function doing the same called from a loop's body, where the
+	// function called outside one exits 6. The loop sets that as the error
+	// leaves it — see Runner.leavingALoopOnAnError.
+	if statusBefore == failedExpansionSetsTheStatus &&
 		r.sem().FailedExpansionInACommandKeepsAFailingStatus == Yes {
 		wordsRule = failedExpansionKeepsAFailingStatus
 		r.failedExpansionStatus = wordsRule
@@ -12632,45 +12643,99 @@ func (r *Runner) failedSubscript(format string, args ...any) {
 func (r *Runner) setFatalStatus() {
 	// A declaration's words and a `case`'s, in the dialect where a failed
 	// expansion there leaves `$?` alone. See Runner.failedExpansionStatus.
-	if r.Interactive && r.loopDepth != 0 &&
-		(r.failedExpansionStatus == failedExpansionKeepsTheStatus ||
-			r.failedExpansionStatus == failedExpansionLeavesZero) {
-		// Not at a prompt inside a loop, however far in, where the failure
-		// sets the fatal status whatever `$?` held — the rule
-		// Runner.callExpr's words already follow. Measured 2026-10-15 on
-		// zsh 5.9.2 run `-f -i`: `(exit 7); for i in 1; do export
-		// x=$((1/0)); done` leaves 1, and so do `true` in front, a `case`
-		// pattern, and a function doing it called from the body. From a
-		// file the same loop keeps 7 at the failure, which an `always` half
-		// reads (#6580).
-		r.status = r.fatalStatus()
-		return
-	}
+	//
+	// Whatever `$?` is left at, a loop the error unwinds out of sets the
+	// fatal status as it goes — see Runner.leavingALoopOnAnError, which is
+	// where the loop's rule is kept rather than here at the failure.
+	r.fatalStatusOwed = false
 	switch r.failedExpansionStatus {
 	case failedExpansionKeepsTheStatus:
 		if r.status == 0 && r.fatalExitTurnsZeroToFailure() {
-			break
+			r.turnTheZeroIntoAFailure()
+			return
 		}
-		r.fatalSetNoStatus = true
+		r.fatalSetNoStatus, r.fatalStatusOwed = true, true
 		return
 	case failedExpansionLeavesZero:
 		if r.fatalExitTurnsZeroToFailure() {
-			break
+			r.turnTheZeroIntoAFailure()
+			return
 		}
 		r.status = 0
-		r.fatalSetNoStatus = true
+		r.fatalSetNoStatus, r.fatalStatusOwed = true, true
 		return
 	case failedExpansionKeepsAFailingStatus:
 		if r.status != 0 {
 			// Not fatalSetNoStatus: the status kept is the one the
 			// construct ends on as well. Measured 2026-10-05 on zsh 5.9.2,
 			// `(exit 4); { echo $((1/0)); } always { echo in=$? }` writes
-			// `in=4` and exits 4, where a declaration's kept status ends
-			// the construct at 1 (#6067).
+			// `in=4` and exits 4, and so does a declaration's kept 4 (#6067,
+			// re-measured 2026-10-15 for #6621).
+			r.fatalStatusOwed = true
 			return
 		}
 	}
 	r.status = r.fatalStatus()
+}
+
+// leavingALoopOnAnError is the fatal status a loop sets as an error unwinds
+// out of it, over whatever status the error itself left.
+//
+// Measured 2026-10-15 on zsh 5.9.2 under -f, by -c, a script file and standard
+// input, and run `-f -i` from standard input, with an `always` half to read
+// `$?` at each point:
+//
+//	(exit 7); { for i in 1; do export x=$((1/0)); done } always { echo $?; }   1
+//	(exit 7); for i in 1; do { export x=$((1/0)) } always { echo $?; }; done   7, then 1
+//	for i in 1; do { (exit 6); print $((1/0)) } always { echo $?; }; done      6, then 1
+//	for i in 1; do { x=${q?b} } always { echo $?; }; done            (-i)      5, then 1
+//	for i in 1; do ( (exit 6); print $((1/0)) ); echo $?; done                 6
+//	( for i in 1; do (exit 6); print $((1/0)); done ); echo $?                 1
+//
+// and `while`, `repeat` and the arithmetic `for` the same, and a function
+// failing that way called from the body the same. So it is the loop boundary
+// that sets 1 and not the failure inside one: an `always` half inside the
+// loop reads the status the error kept, and a subshell inside the loop ends
+// on it. This was set at the failure when the runner was inside any loop at
+// all, which got the first row right and the rest wrong (#6621).
+//
+// Owed only where the error left something other than the fatal status, which
+// only the dialect that keeps a status there does — see
+// Runner.fatalStatusOwed's setters.
+func (r *Runner) leavingALoopOnAnError() {
+	if !r.fatalStatusOwed || r.ctl != controlExit {
+		return
+	}
+	switch r.abandon {
+	case abandonError, abandonParamError:
+		// And the status is set now, so an `always` half around the loop
+		// reads it rather than the one the failure kept: `while :; do
+		// export x=$((1/0)); done` inside the try half writes 1 there by
+		// every route, where the 0 a script file turns early would be
+		// handed back to it otherwise. See Runner.turnTheZeroIntoAFailure.
+		r.status = r.fatalStatus()
+		r.fatalStatusOwed, r.fatalSetNoStatus, r.fatalTurnedZero = false, false, false
+	}
+}
+
+// turnTheZeroIntoAFailure is setFatalStatus for a failure that left `$?` at 0
+// in a shell that is going to end on it: the status is the fatal one from
+// here on, and the 0 is remembered for the one reader that runs before the
+// shell ends.
+//
+// That reader is an `always` half, which sees the 0. Measured 2026-10-15 on
+// zsh 5.9.2 under -f, from a script file, from standard input and through -c:
+// `{ true; export x=$((1/0)) } always { echo in=$? }` writes `in=0` by every
+// route and exits 1, `{ (exit 7); case x in $((1/0))) ;; esac } always { … }`
+// the same, and a bare `exit` in that half exits 0. An EXIT trap and a
+// TRAPEXIT function, which run as the shell ends, see 1 from the file and from
+// standard input (#6621). So the conversion belongs to the end of the shell,
+// and the always half is the only thing between the two that can tell: it is
+// handed the 0 by Runner.tryClause rather than moving the conversion into
+// every way a shell can end.
+func (r *Runner) turnTheZeroIntoAFailure() {
+	r.status = r.fatalStatus()
+	r.fatalSetNoStatus, r.fatalTurnedZero, r.fatalStatusOwed = true, true, true
 }
 
 // fatalExitTurnsZeroToFailure reports whether the status a failed expansion

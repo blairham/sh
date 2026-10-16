@@ -82,3 +82,12 @@ func TestABraceNameTakesALetterOfTheLocale(t *testing.T) {
 		t.Errorf("C: got %q, want the refusal", out)
 	}
 }
+
+// TestAnFdVariableNeedsItsOperatorAdjacent — a blank between `{v}` and the
+// operator leaves `{v}` an argument here, where zsh reads across it (#6587).
+// ksh93u+, measured 2026-10-15.
+func TestAnFdVariableNeedsItsOperatorAdjacent(t *testing.T) {
+	if out, _ := runKsh(t, t.TempDir(), `echo {v} >/dev/null; echo "[$v]"`); out != "[]\n" {
+		t.Errorf("got %q, want the word written to the file and v unset", out)
+	}
+}

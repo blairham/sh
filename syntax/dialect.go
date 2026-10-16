@@ -8497,6 +8497,24 @@ type Dialect struct {
 	// and anything a blank or an operator would end.
 	FdVariableAnyBraceWord bool
 
+	// FdVariableAcrossBlanks takes a `{name}` as a descriptor variable when
+	// blanks stand between it and the redirection operator, as long as the
+	// operator has no number of its own and the word stands among a
+	// command's arguments (#6587).
+	//
+	// zsh alone. Measured 2026-10-15 with `-fc` on zsh 5.9.2, then `echo
+	// "[$v]"`: `echo {v} >/dev/null`, `echo {v}   </dev/null`, `echo {v}
+	// >>/dev/null`, `echo {v} >&2`, `echo {v} <<<x`, `echo {v} > >(cat)`,
+	// a tab, and a backslash-newline between them all allocate, and `exec
+	// {v} </dev/null` does too. What stays a word: a number in front of the
+	// operator (`echo {v} 2>/dev/null`), another word between (`echo {v} x
+	// >f`, `echo {v} {w} >f` allocates only `w`), a quoted `"{v}"`, a
+	// process substitution (`echo {v} <(echo)`), the numeric glob `<->`,
+	// and every position before the command word — there the `{` opens a
+	// brace group, and a `for` list or an array literal refuses the
+	// operator. bash and ksh93 need the operator adjacent.
+	FdVariableAcrossBlanks bool
+
 	// CloseQuotesAtEOF is the set of routes on which an unterminated `'`,
 	// `"` or backquote ends at the end of input as if the closing mark were
 	// there, instead of the parse being refused: `echo "abc` prints abc.

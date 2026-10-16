@@ -59,6 +59,10 @@ func Dialect() syntax.Dialect {
 	// which is how a prompt theme's scheduler closes the one it was handed.
 	// zsh alone — see the flag for what bash and ksh93 answer instead.
 	d.FdVariablePositional = true
+	// And blanks may stand between the `{name}` and its operator, among a
+	// command's arguments: `echo {v} >/dev/null` allocates (#6587). See
+	// syntax.Dialect.FdVariableAcrossBlanks.
+	d.FdVariableAcrossBlanks = true
 	// And refuses the construct after a compound command, as a parse error
 	// naming either the brace or the whole word by the compound's kind. See
 	// the flag for the table.

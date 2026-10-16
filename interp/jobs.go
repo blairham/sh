@@ -816,9 +816,22 @@ func (r *Runner) background(ctx context.Context, st *syntax.Stmt) error {
 	// And the elements of a pipeline, in the dialect that lists one a row
 	// at a time. See jobelements.go.
 	r.trackElements(job, st)
+	// The DEBUG firing a backgrounded pipeline makes in the shell starting
+	// it, before the fork. See debugBackgroundPipeline.
+	fired := r.debugBackgroundPipeline(ctx, st)
+	if r.ctl != controlNone {
+		// The action unwound — an `exit` or a `return` written in it — and
+		// the job is not started.
+		return nil
+	}
 	r.registerInventedJob(job)
 
 	sub := r.clone()
+	if fired {
+		// The firing has been made for the job's statement, so the copy that
+		// runs it makes none of its own even where it carries the trap.
+		sub.sublistOperand = true
+	}
 	if theForkIsTheParentheses(st) {
 		// `( … ) &` forks once and the parentheses are that fork, so the
 		// clone the parentheses are about to make is not a second boundary.

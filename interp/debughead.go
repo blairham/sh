@@ -392,6 +392,56 @@ func (r *Runner) debugPipeline(ctx context.Context, p *syntax.Pipeline, armed bo
 	return nil, false
 }
 
+// debugBackgroundPipeline fires the DEBUG trap for a pipeline sent to the
+// background, in the shell that starts it, where the dialect fires a
+// pipeline's elements in that shell; and reports whether it did.
+//
+// The job is a copy that does not carry the trap, so without this nothing
+// fired at all. Measured 2026-10-16 on bash 5.3.20 and 3.2.57, `-c`, with
+// `trap 'echo "D[$BASH_COMMAND]"' DEBUG` (#6801):
+//
+//	true & wait                     D[true] D[wait]
+//	true | true | true & wait       D[true] D[true] D[true] D[wait]
+//	{ true; } | true & wait         D[true] D[wait]
+//	! true & wait                   D[true] D[wait]
+//	x=1 & wait, f & wait            D[x=1] D[wait], D[f] D[wait]
+//	{ :; } & wait, (true) & wait    D[wait] — a compound fires nothing
+//	true && true & wait             D[wait] — and neither does a list
+//	[[ a ]] & wait, ((1)) & wait    D[wait]
+//
+// So a simple element of the pipeline fires, a compound element does not, and
+// a statement that is not a pipeline fires nothing here — the same elements
+// the foreground firing picks, one element counting as a pipeline. With `set
+// -T` the job carries the trap and the counts are the same, so the firing is
+// made once, here, and the copy is told so.
+//
+// The dialects that fire a pipeline in its elements, or once for the whole of
+// it, carry the trap into the job and fire there; they are not asked.
+func (r *Runner) debugBackgroundPipeline(ctx context.Context, st *syntax.Stmt) bool {
+	if r.debugTrap == nil || *r.debugTrap == "" || r.sublistOperand {
+		return false
+	}
+	p, ok := st.Expr.(*syntax.Pipeline)
+	if !ok || r.sem().DebugTrapPipelines != DebugTrapPipelinePerSimpleElement {
+		return false
+	}
+	saved := r.line
+	defer func() { r.line = saved }()
+	for _, c := range p.Cmds {
+		if _, simple := c.(*syntax.SimpleCmd); !simple {
+			continue
+		}
+		r.recordRunning(c, WholeCommand)
+		r.line = r.commandLine(c)
+		r.runDebugTrap(ctx)
+		r.debugTrapSkipped()
+		if r.ctl != controlNone {
+			break
+		}
+	}
+	return true
+}
+
 // And where an `&&`/`||` list fires it, which is the layer outside the
 // pipeline and the last one a statement has.
 //

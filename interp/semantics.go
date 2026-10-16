@@ -6884,6 +6884,29 @@ type Semantics struct {
 	// without ever being asked. See TestGetoptsLeavesAnUnsetOptindUnset.
 	GetoptsLeavesAnUnsetOptindUnset Answer
 
+	// CaseWithoutACommandKeepsTheSubstitutionStatus ends a `case` that runs
+	// no command of its own on the status the last command substitution in
+	// its subject or patterns left, where the other answer ends it on 0.
+	//
+	// Measured 2026-10-16 under `-c` on ksh93u+, zsh 5.9.2, bash 5.3.20,
+	// dash 0.5.12 and BusyBox ash 1.37.0, each followed by `echo $?`:
+	//
+	//	                                                  ksh93u+   the rest
+	//	case a in $(false)) echo m ;; esac                1         0
+	//	case a in $(exit 3)) ;; $(exit 4)) ;; esac        4         0
+	//	case a in $(exit 3)|$(exit 4)) ;; esac            3         0
+	//	case $(false) in b) ;; esac                       1         0
+	//	case $(false) in *) ;; esac                       1         0
+	//	case $(false) in *) : ;; esac                     0         0
+	//	case a in $(false)|a) ;; esac                     0         0
+	//	false; case a in a) ;; esac                       0         0
+	//
+	// So in ksh93 an arm that matched and holds no commands keeps the
+	// *subject's* substitution status — the pattern's in the sixth row has
+	// already been put back by the match — and no arm matching keeps the
+	// last substitution's, pattern or subject (#6710).
+	CaseWithoutACommandKeepsTheSubstitutionStatus Answer
+
 	// GetoptsLocalOptindRestoresTheCursor hands the caller back its position
 	// *inside* a clustered word when a call that declared a local `OPTIND`
 	// returns — not only the number the parameter held.
@@ -34685,6 +34708,9 @@ func PosixSemantics() Semantics {
 		// POSIX has `getopts` set OPTIND, and says nothing of a name that
 		// was unset first; the reading that writes it is the plain one.
 		GetoptsLeavesAnUnsetOptindUnset: No,
+		// A `case` that runs nothing is 0 in the standard's words, whatever
+		// a substitution in its header left.
+		CaseWithoutACommandKeepsTheSubstitutionStatus: No,
 		// And it has an option word begin with a `-`, so a `+` word is an
 		// operand. zsh is the one column that reads it as an option and says
 		// so itself.
@@ -36358,6 +36384,9 @@ func CoreSemantics() Semantics {
 		// POSIX has `getopts` set OPTIND, and says nothing of a name that
 		// was unset first; the reading that writes it is the plain one.
 		GetoptsLeavesAnUnsetOptindUnset: No,
+		// A `case` that runs nothing is 0 in the standard's words, whatever
+		// a substitution in its header left.
+		CaseWithoutACommandKeepsTheSubstitutionStatus: No,
 		// An option word begins with a `-`, which is the standard's wording
 		// and six of the seven columns. Answered rather than refused for the
 		// reason the answer above is: a `+` word reaching `getopts` is an

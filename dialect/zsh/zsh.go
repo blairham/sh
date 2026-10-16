@@ -3999,6 +3999,9 @@ func Semantics() interp.Semantics {
 	// read something that is the last letter still standing, which is how it
 	// reads as a written value and is not one.
 	s.GetoptsEndOfOptionsNamesIt = interp.No
+	// A `case` that runs no command ends on 0: measured 2026-10-16 on
+	// zsh 5.9.2, `case a in $(false)) echo m ;; esac; echo $?` writes 0 (#6710).
+	s.CaseWithoutACommandKeepsTheSubstitutionStatus = interp.No
 	// A `+`-prefixed word is an option word here, and this shell is alone in
 	// it: `getopts a o +a` is 0 with `+a` in the name, the sign kept so a
 	// script can tell it from `-a`. `+ab` clusters, `+a val` and `+aval` take

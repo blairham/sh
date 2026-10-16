@@ -1781,6 +1781,9 @@ func Semantics() interp.Semantics {
 	// rather than assumed from dash (#3275).
 	s.GetoptsCountsTheWordOnTheNextCall = interp.No
 	s.GetoptsEndOfOptionsNamesIt = interp.Yes
+	// A `case` that runs no command ends on 0: measured 2026-10-16 on
+	// BusyBox ash 1.37.0, `case a in $(false)) echo m ;; esac; echo $?` writes 0 (#6710).
+	s.CaseWithoutACommandKeepsTheSubstitutionStatus = interp.No
 	// A `+`-prefixed word is an operand and ends the scan: measured
 	// 2026-09-17 in the pinned alpine image on BusyBox v1.37.0, `getopts a o
 	// +a` is 1 with the name `?`.

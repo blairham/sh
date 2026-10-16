@@ -114,7 +114,7 @@ func (r *Runner) group(ctx context.Context, c *syntax.Group) error {
 	if r.isTail(c) {
 		// Run straight through, so its last command is the shell's last. See
 		// unforkedtail.go.
-		r.tailCmd = tailCommandOf(c.List)
+		r.handTail(c.List)
 	}
 	return r.withRedirs(ctx, c.Redirs, func() error { return r.runList(ctx, c.List) })
 }
@@ -173,6 +173,11 @@ func (r *Runner) subshell(ctx context.Context, c *syntax.Subshell) error {
 			// the jobs this body starts are numbered from two and never take
 			// the `+`. See Runner.runAsItsOwnJob.
 			sub.runAsItsOwnJob(r)
+			if r.tailPutsNothingBack(c) {
+				// Run through to the shell's end, as far as putting streams
+				// back goes. See tailPutsNothingBack.
+				defer sub.handTailToPutNothingBack(tailCommandOf(c.List), tailPipelineOf(c.List))()
+			}
 		}
 		// The group a real shell's fork would have given these parentheses,
 		// for a body that asks which process it is. Its lifetime is the
@@ -269,7 +274,7 @@ func (r *Runner) ifClause(ctx context.Context, c *syntax.IfClause) error {
 		tail := r.isTail(c)
 		branch := func(list []*syntax.Stmt) error {
 			if tail {
-				r.tailCmd = tailCommandOf(list)
+				r.handTail(list)
 			}
 			return r.runList(ctx, list)
 		}
@@ -607,7 +612,7 @@ func (r *Runner) forClause(ctx context.Context, c *syntax.ForClause) error {
 			if i+stride >= len(items) && r.isTail(c) {
 				// The last pass is the shell's last; the ones before it are
 				// not. See unforkedtail.go.
-				r.tailCmd = tailCommandOf(c.Body)
+				r.handTail(c.Body)
 				r.tailInALoop = true
 			}
 			if err := r.runList(ctx, c.Body); err != nil {
@@ -1041,7 +1046,7 @@ func (r *Runner) caseClause(ctx context.Context, c *syntax.CaseClause) error {
 				item.Term != syntax.TokSemiPipe {
 				// The arm is the shell's last, where nothing runs after it.
 				// See unforkedtail.go.
-				r.tailCmd = tailCommandOf(item.Body)
+				r.handTail(item.Body)
 			}
 			if err := r.runList(ctx, item.Body); err != nil {
 				return err

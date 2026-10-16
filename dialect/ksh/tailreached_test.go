@@ -51,6 +51,11 @@ func TestTheTailIsReachedEvenWhereItCannotBeBecome(t *testing.T) {
 		{"nosuch_tr; :", false},
 		{"nosuch_tr || :", false},
 		{"trap : EXIT; nosuch_tr", false},
+		// Last as far as putting streams back goes, and still forked:
+		// ksh93u+ becomes neither an `eval`'s program nor a pipeline's last
+		// element. See interp.Runner.tailPutsNothingBack.
+		{"eval nosuch_tr", false},
+		{"echo x | nosuch_tr", false},
 		{"true", false},
 	} {
 		f, err := syntax.Parse(tc.src, ksh.Dialect())

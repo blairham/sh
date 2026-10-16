@@ -3387,6 +3387,21 @@ type Runner struct {
 	// plainTail is the lone simple command the input ends on, where that is
 	// the whole of its statement. See TailExecPlainTopLevel.
 	plainTail *syntax.SimpleCmd
+	// tailPipe is the pipeline tailCmd stands in, or the pipeline of several
+	// the shell's last statement is, where tailCmd is nil. See handTail.
+	tailPipe *syntax.Pipeline
+	// tailPutsNothingBackOnly says tailCmd was handed on somewhere a shell
+	// does not become its last program and does not leave its last
+	// parentheses unforked, but does still skip putting back what its last
+	// command's redirections replace: the last element of a pipeline, the
+	// text of an `eval`, a `( … )`. Only the save rule reads such a tail. See
+	// Runner.tailPutsNothingBack.
+	tailPutsNothingBackOnly bool
+	// listOnTheTail says the command most recently entered is the tail, read
+	// as it is entered: by the time its redirection list is applied, a
+	// compound command has handed the tail on to its body. See
+	// Runner.tailPutsNothingBack.
+	listOnTheTail bool
 	// lastWordEdges is what the last word built into fields left at its two
 	// ends, read straight after the build by the one caller that asks. See
 	// keepAnExpansionsEdges.
@@ -5979,7 +5994,8 @@ func (r *Runner) clone() *Runner {
 	c.bodyTexts = nil
 	// A clone is a fork until the one construct that knows otherwise says so,
 	// and nothing a fork runs is the shell's last. See unforkedtail.go.
-	c.tailCmd, c.unforkedSelf, c.slotOneIsTheBody = nil, false, false
+	c.tailCmd, c.tailPipe, c.unforkedSelf, c.slotOneIsTheBody = nil, nil, false, false
+	c.tailPutsNothingBackOnly, c.listOnTheTail = false, false
 	// And a subshell's diagnostics are its own process's in the shells this
 	// one is measured against, which no line editor ever hears about. See
 	// Runner.BeforeDiagnostic.
@@ -7322,9 +7338,9 @@ func (r *Runner) RunPart(ctx context.Context, f *syntax.File) error {
 		r.inputUnitLine = r.inputUnitLineOf(f.Stmts, i)
 		if last && i == len(f.Stmts)-1 {
 			// The last thing this shell runs. See unforkedtail.go.
-			r.tailCmd = tailCommandOf(f.Stmts)
+			r.handTail(f.Stmts)
 			r.plainTail = plainTopLevelTail(f.Stmts)
-			r.tailInALoop = false
+			r.tailInALoop, r.tailPutsNothingBackOnly = false, false
 		}
 		err := r.stmt(ctx, st)
 		if arg, ok := r.takeInputLevelArgument(); ok {
@@ -8460,6 +8476,8 @@ func (r *Runner) command(ctx context.Context, c syntax.Command) error {
 	// Runner.ownPipeMultio.
 	r.ownPipeMultio()
 	defer func() { r.pipeMultioOwn = pipeAsAMultioTarget{} }()
+	// And whether its list is the tail's. See Runner.tailPutsNothingBack.
+	r.listOnTheTail = r.isTail(c)
 	// A DEBUG firing this command holds until it has run is flushed here, on
 	// the way back out — see Runner.debugAfterScope for why the slot is the
 	// command's and not the runner's. Installed only in the one state that

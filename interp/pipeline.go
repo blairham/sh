@@ -825,6 +825,12 @@ func (r *Runner) runPipeline(ctx context.Context, p *syntax.Pipeline, timing *pi
 				r.pendingPipeJob = fgJob
 				defer func() { r.pendingPipeJob = outerPending }()
 			}
+			if r.tailPipelinePutsNothingBack(p) {
+				// The last element of the shell's last pipeline is its last
+				// command, as far as putting streams back goes. See
+				// tailPutsNothingBack.
+				defer r.handTailToPutNothingBack(p.Cmds[i], nil)()
+			}
 			errs[i] = r.command(ctx, p.Cmds[i])
 			popOpen()
 			hereBodyRan = r.stmtSerial != serialBefore

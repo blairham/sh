@@ -15878,10 +15878,14 @@ type Semantics struct {
 	// a `{v}` inside a redirected command can see it, and no corpus row
 	// allocates one there. TestEachRedirectionSavesItsStream pins it.
 	//
-	// ksh93u+ is the third value: it answers 10 for `{ exec {v}</dev/null;
-	// echo $v; } </dev/null`, so no saved copy is in the way there, but holds
-	// one number while a pipeline's last element runs — `echo x | { exec
-	// {v}</dev/null; echo $v; }` is 11 (#6503). And it holds one inside a
+	// ksh93u+ is the third value: it holds one number while a pipeline's
+	// last element runs — `echo x | { exec {v}</dev/null; echo $v; }` is 11
+	// (#6503) — and saves each open stream a list replaces, once, as zsh
+	// does, with no copy of a duplication's source but a save of a move's —
+	// except on the last command of a `-c` string, which has nothing to put
+	// back: `{ exec {v}</dev/null; echo $v; } </dev/null` is 10 there and 11
+	// with `; :` after it (#6637, #6814). See Runner.tailPutsNothingBack and
+	// redirHolds.moved. And it holds one inside a
 	// command substitution's body, and one more once that body's output has
 	// to be a descriptor: `echo $(exec {v}</dev/null; echo $v)` is 11 and
 	// `echo $(/bin/sh -c :; exec {v}</dev/null; echo $v)` is 12 (#6558). See
@@ -15889,9 +15893,11 @@ type Semantics struct {
 	//
 	// unpinned ksh: its substitutions are published from 3, below the base
 	// the held number is taken from, so only a `{v}` inside a pipeline's last
-	// element or a command substitution's body can see it, and no corpus
-	// row allocates one there. TestTheLastPipelineElementHoldsANumber and
-	// TestACommandSubstitutionBodyHoldsANumber pin it.
+	// element, a command substitution's body or a redirected command can see
+	// it, and no corpus row allocates one there.
+	// TestTheLastPipelineElementHoldsANumber,
+	// TestACommandSubstitutionBodyHoldsANumber and
+	// TestTheLastCommandSavesNothing pin it.
 	//
 	// unpinned dash: no `{v}` redirection and no process substitution, so no
 	// number this could move is ever printed.
@@ -39427,9 +39433,10 @@ const (
 	SavedStreamsAndPipeReadEndsTakeNumbers
 
 	// LastPipelineElementsInputTakesANumber counts one number for a
-	// pipeline's last element, held while it runs, and nothing for a
-	// redirected group, as ksh93u+ holds them. See
-	// Runner.holdsTheLastElementsInput.
+	// pipeline's last element, held while it runs, and a saved copy of each
+	// stream a list replaces and of a move's source, except on the last
+	// command, as ksh93u+ holds them. See Runner.holdsTheLastElementsInput
+	// and Runner.tailPutsNothingBack.
 	LastPipelineElementsInputTakesANumber
 
 	// EachRedirectionSavesItsStreams counts a saved copy for every

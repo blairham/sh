@@ -874,6 +874,13 @@ func (r *Runner) runSourcedText(ctx context.Context, src string, s sourced) int 
 			}
 			return r.borrowedTextFailed(err, s, src)
 		}
+		if s.eval && whole != nil && r.tailPutsNothingBack(r.runningSimple) {
+			// An `eval` that is the shell's last command runs its text as
+			// the last, as far as putting streams back goes. Only text
+			// read whole, where the last statement is known before any
+			// runs. See tailPutsNothingBack.
+			defer r.handTailToPutNothingBack(tailCommandOf(whole.Stmts), tailPipelineOf(whole.Stmts))()
+		}
 	}
 	// Whatever a borrowed script reports is the *script's*, not this
 	// builtin's. Measured: an unset parameter inside a sourced file is

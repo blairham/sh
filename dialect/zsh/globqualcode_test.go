@@ -148,6 +148,74 @@ func TestAGlobQualifierRunsCodeForEachFile(t *testing.T) {
 			`print [ab](+nosuchfn)`, "",
 			"zsh:1: command not found: nosuchfn\nzsh:1: command not found: nosuchfn\nzsh:1: no matches found: [ab](+nosuchfn)\n",
 		},
+		// An expansion that fails inside the code is the code's, and the
+		// command the pattern is a word of still runs.
+		{
+			`n=0; print [ab](e:'(( n++ )); x=$(( 1/0 )); true':N); print n=$n`, "\nn=2\n",
+			"zsh:1: division by zero\nzsh:1: division by zero\n",
+		},
+	} {
+		out, _, errs := runZshSplit(t, globCodeFixture(t), tc.src)
+		if out != tc.out || errs != tc.errs {
+			t.Errorf("%q:\n out %q errs %q\nwant %q errs %q", tc.src, out, errs, tc.out, tc.errs)
+		}
+	}
+}
+
+// `oe:code:` and `o+name` sort by what the code leaves in `REPLY` for each
+// match (#6691). Rows whose answer is the directory's own order are in
+// TestAGlobQualifiersCodeRunsInTheDirectorysOrder, since that order is the
+// filesystem's; every row here was measured on zsh 5.9.2 under `-fc`. See
+// interp/globqualsort.go.
+func TestAGlobSortSpecifierSortsByWhatTheCodeLeaves(t *testing.T) {
+	const all = "a b big c10 c9 d lnk\n"
+	for _, tc := range []struct{ src, out, errs string }{
+		{`print *(oe:'REPLY=${REPLY[-1]}':)`, "c10 c9 a b d big lnk\n", ""},
+		{`rev() { REPLY=${REPLY[-1]} }; print *(o+rev)`, "c10 c9 a b d big lnk\n", ""},
+		{`print *(Oe:'REPLY=${REPLY[-1]}':)`, "lnk big d b a c9 c10\n", ""},
+		{`print *(Oe:'REPLY=${REPLY[-1]}':[1,2])`, "lnk big\n", ""},
+		{`print [ab]*(^oe:'REPLY=${REPLY[-1]}':)`, "big b a\n", ""},
+		{`print [ab]*(oe:'REPLY=${REPLY[1]}':Oe:'REPLY=${REPLY[-1]}':)`, "a big b\n", ""},
+		// The status and `reply` are not read.
+		{`print *(oe:'false':)`, all, ""},
+		{`print *(oe:'reply=(z $REPLY)':)`, all, ""},
+		{`print *(oe:'reply=(${REPLY[-1]})':)`, all, ""},
+		// The keys compare as names do, numbers and all.
+		{
+			`print *(oe:'REPLY=$(( 12 - ${#REPLY} ))x$REPLY':) / *(noe:'REPLY=$(( 12 - ${#REPLY} ))x$REPLY':)`,
+			"c9 a b d big c10 lnk / big c10 lnk c9 a b d\n", "",
+		},
+		// What the code sees: the word after every test, every `e`, the
+		// modifiers and markdirs. `reply` is left alone, and REPLY is left
+		// at the last key.
+		{`print *(oe:'print -r -- $REPLY >&2':/)`, "d\n", "d\n"},
+		{`print a(oe:'print -r -- o$REPLY >&2':e:'print -r -- e$REPLY >&2':)`, "a\n", "ea\noa\n"},
+		{`print ./a(oe:'print -r -- $REPLY >&2'::t) ./a(oe:'print -r -- $REPLY >&2':)`, "a ./a\n", "a\n./a\n"},
+		{`setopt markdirs; print d(oe:'print -r -- $REPLY >&2':)`, "d/\n", "d/\n"},
+		{`reply=(q); print a(oe:'print -r -- $reply >&2; reply=(w)':); print $reply`, "a\nw\n", "q\n"},
+		{`REPLY=orig; print a(oe:'REPLY=x$REPLY':); print $REPLY`, "a\nxa\n", ""},
+		{`print a(oe:'print -r -- $zsh_eval_context >&2':)`, "a\n", "toplevel globsort\n"},
+		// One `:` closes the code, so a letter after it is a qualifier:
+		// `t` is the sticky bit.
+		{`print [ab]*(oe:true:t)`, "", "zsh:1: no matches found: [ab]*(oe:true:t)\n"},
+		{`print *(oe)`, "", "zsh:1: missing end of string\n"},
+		{`print *(o+)`, "", "zsh:1: missing identifier after `+'\n"},
+		// A failure is the code's. One that gives the code up stops it for
+		// every later match, which keys on its name — the one that gave up
+		// included — while another specifier still runs for all of them.
+		{`n=0; print *(oe:'(( n++ )); nosuchcmd':) >/dev/null; print $n`, "7\n", strings.Repeat("zsh:1: command not found: nosuchcmd\n", 7)},
+		{`n=0; print *(oe:'(( n++ )); echo [x]':); print $n`, all + "1\n", "zsh:1: no matches found: [x]\n"},
+		{`print *(oe:'if':)`, all, "zsh:1: parse error near `if'\n"},
+		{
+			`print *(oe:'REPLY=zzz; echo [x]':) *(oe:'REPLY=0; echo [x]':)`,
+			"a b big c10 c9 d lnk a b big c10 c9 d lnk\n", "zsh:1: no matches found: [x]\nzsh:1: no matches found: [x]\n",
+		},
+		{`n=0; print *(oe:'(( n++ )); echo [x]':oe:'(( n+=10 ))':) >/dev/null; print $n`, "71\n", "zsh:1: no matches found: [x]\n"},
+		{`n=0; print *(oe:'(( n++ )); x=$(( 1/0 ))':) >/dev/null; print $n`, "1\n", "zsh:1: division by zero\n"},
+		// `oN` is the directory's order only as the first specifier; later
+		// it does nothing, and behind it a specifier's code does not run.
+		{`print *(OnoN) / *(oe:'REPLY=${REPLY[-1]}':oN)`, "lnk d c9 c10 big b a / c10 c9 a b d big lnk\n", ""},
+		{`print -r -- *(oNoe:'print x >&2':) >/dev/null`, "", ""},
 	} {
 		out, _, errs := runZshSplit(t, globCodeFixture(t), tc.src)
 		if out != tc.out || errs != tc.errs {
@@ -180,6 +248,34 @@ func TestAGlobQualifiersCodeRunsInTheDirectorysOrder(t *testing.T) {
 	}
 }
 
+// A sort specifier's code runs in the directory's own order too, and a key
+// that counts the runs sorts the matches into that order; behind a leading
+// `oN` nothing is sorted at all.
+func TestAGlobSortSpecifiersCodeRunsInTheDirectorysOrder(t *testing.T) {
+	dir := globCodeFixture(t)
+	f, err := os.Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, err := f.Readdirnames(-1)
+	_ = f.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	listing := strings.Join(raw, " ")
+	for _, tc := range []struct{ src, out, errs string }{
+		{`print -r -- *(oe:'print -rn -- "$REPLY " >&2':[1])`, "a\n", listing + " "},
+		{`n=0; print -r -- *(oe:'REPLY=$(( n++ ))':)`, listing + "\n", ""},
+		{`print -r -- *(oNOn)`, listing + "\n", ""},
+		{`print -r -- *(oNoe:'REPLY=${REPLY[-1]}':)`, listing + "\n", ""},
+	} {
+		out, _, errs := runZshSplit(t, dir, tc.src)
+		if out != tc.out || errs != tc.errs {
+			t.Errorf("%q:\n out %q errs %q\nwant %q errs %q", tc.src, out, errs, tc.out, tc.errs)
+		}
+	}
+}
+
 // A `return` with nothing to return from, in a program, ends the shell as the
 // code runs and at the code's status: the command the pattern is a word of
 // never runs, nor do later files' code (#6692). Inside a function or a sourced
@@ -191,6 +287,7 @@ func TestATopLevelReturnInGlobQualifierCodeEndsTheShell(t *testing.T) {
 		status   int
 	}{
 		{`print X *(e:'echo r; return 3':); print next`, "r\n", 3},
+		{`print X *(oe:'echo r; return 3':); print next`, "r\n", 3},
 		{`false; print X *(e:'return':); print next`, "", 1},
 		{`x=( *(e:'return 3':) ); print next`, "", 3},
 		{`print X *(e:'return 3':) && print and; print next`, "", 3},

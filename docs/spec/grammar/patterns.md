@@ -2084,7 +2084,9 @@ sorts them the other way. Measured 2026-10-05 on zsh 5.9.2 under
     *(om)        by modification time, youngest first; `a` and `c` are
                  the access and inode-change times, the same way round
     *(od)        a subdirectory's entries ahead of the directory's own
-    *(oN)        not sorted at all: the order the directory gave
+    *(oN)        not sorted at all: the order the directory gave, but
+                 only as the first specifier — `*(OnoN)` is `On`'s order,
+                 `*(oLoNOn)` is `*(oLOn)`'s, and `*(oNOn)` is unsorted
     *(oL-on)     a second specifier breaks the ties the first one left
     *(om[1])     the newest file: the pick counts into the sorted list
     *(n)         numbers in names compare as numbers, `numericglobsort`
@@ -2109,8 +2111,46 @@ the list, so `*([1]:e)` gave `zz`.
 **Ties are broken by name.** zsh leaves them in whatever order its own
 sort produced. `*(oL)` over a set of empty files is in neither name order
 nor directory order, so there is no tie order to copy, and name order at
-least gives the same answer on every run. `oe` and `o+`, which sort by
-the output of a piece of code, are refused by name.
+least gives the same answer on every run.
+
+### `oe` and `o+` sort by what code leaves in `REPLY`
+
+`oe:code:` takes its code as `e` does, and `o+name` is `oe:name:`. The
+code runs once for each match, with `REPLY` set to the match's word, and
+what it leaves in `REPLY` is the key, compared as a name is — so `n` and
+`numericglobsort` reach it. Measured 2026-10-15 on zsh 5.9.2 (`-f -c`), in
+a directory holding `a b big c10 c9`, a directory `d` and a link `lnk`,
+whose own order is `big c9 a c10 lnk d b`:
+
+    *(oe:'REPLY=${REPLY[-1]}':)    c10 c9 a b d big lnk
+    *(Oe:…:), *(^oe:…:)            reversed, and `[1,2]` picks from that
+    *(oe:'false':)                 name order: the status is not read, and
+    *(oe:'reply=(x)':)             neither is `reply`, which is not unset
+                                   for the code as it is for `e`
+    n=0; *(oe:'REPLY=$((n++))':)   the directory's order: the code runs in
+                                   it, after every test and every `e` in
+                                   the list, on the words the modifiers
+                                   and `markdirs` made
+    *(oe:…:oe:…:)                  the first spec's code for every match,
+                                   then the second's
+    *(oe:true:t)                   no matches found: one `:` ends the code,
+                                   so `t` is the sticky-bit test; `::t` is
+                                   the modifier
+
+`REPLY` is left at the last key and `$zsh_eval_context` reads `…
+globsort`. Control flow and fatal errors are `e`'s. One failure is not:
+an error that gives the code up, of the kind that ends `eval`'s text
+(`echo [x]`, a read-only assignment, `x=$((1/0))`, a parse failure), stops
+that specifier's code for every later match. Those matches, and the one
+that failed, key on their own words, and a second specifier still runs for
+all of them. `nosuchcmd` and `(( 1/0 ))` are only statuses and stop
+nothing.
+
+Two answers are not copied. `*(oe:'unset REPLY':)` ends zsh 5.9.2 with a
+segmentation fault (status 139); here such a match keys on its word. Keys
+that tie come back in whatever order zsh's sort leaves them, the order
+`*(oL)` gives over empty files, and are broken by name here, as above. See
+`interp/globqualsort.go` and `TestAGlobSortSpecifierSortsByWhatTheCodeLeaves`.
 
 ### `e` and `+` run code for each file
 
@@ -2147,7 +2187,9 @@ The code runs in the shell itself, in the caller's scope, and in the
 **directory's own order** — `n=0; *(e:'(( n++ ))':)` leaves out the first
 name `ls -f` lists, not the first in name order — while the matches are
 still sorted at the end. `REPLY` is left at the last file's name and
-`reply` unset. `$zsh_eval_context` reads `… globqual` inside it.
+`reply` unset. `$zsh_eval_context` reads `… globqual` inside it. An
+expansion that fails inside the code, such as `x=$(( 1/0 ))`, is the code's,
+and the command the pattern is a word of still runs.
 
 **A failure inside the code is the code's**, as it is inside `eval`:
 `nosuchcmd`, `echo [x]`, a parse failure or `break` outside a loop is
@@ -2183,7 +2225,8 @@ argument for the link count, the three file times `m`, `a` and `c` with
 their unit letter and signed number, the `-` that follows a link before
 testing, the `^` that turns any of them, the `,` that unions them, `N`
 and `D`, the `[n,m]` picks, the `o` and `O` sort specifiers and `n`, and
-the `:` that opens a modifier list, and `e` and `+`, above.
+the `:` that opens a modifier list, and `e` and `+`, and `oe` and `o+`,
+above.
 
 The three times are one qualifier with three clocks behind it, and they
 were one letter until #3533: `m` reads the modification time, `a` the
@@ -2199,8 +2242,7 @@ differently on each — a per-GOOS file beside the qualifiers, the shape the
 signal table already takes.
 
 Everything else in that language — `=` for a socket, the `%b` and `%c`
-spellings that separate the two kinds of device, `oe` and `o+` for an
-order taken from a command, `d` for
+spellings that separate the two kinds of device, `d` for
 a device, `Y` for counting, `L` for a size, and
 the `(#q…)` form that needs `extended_glob` — is refused by name with the
 shell's own wording rather than answered wrong. `*(L+1)` here is

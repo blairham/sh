@@ -26,12 +26,53 @@ import (
 // `*([1]:e)` picked before the modifiers re-sorted until this was written,
 // and gave `zz`.
 
+// `oe:code:` and `o+name` sort by a key the code computes: it runs once for
+// each match with `REPLY` set to the match's word, and what it leaves in
+// `REPLY` is the key, compared as a name is — `n` and `numericglobsort`
+// included. Measured 2026-10-15 on zsh 5.9.2 in a directory holding `a b big
+// c10 c9`, a directory `d` and a link `lnk`, whose own order (`ls -f`) is
+// `big c9 a c10 lnk d b`:
+//
+//	*(oe:'REPLY=${REPLY[-1]}':)     c10 c9 a b d big lnk
+//	*(Oe:…:), *(^oe:…:)             reversed; `[1,2]` picks from that
+//	*(oe:'false':), reply=(z …)     the name order: the status and `reply`
+//	                                are not read
+//	n=0; *(oe:'REPLY=$((n++))':)    big c9 a c10 lnk d b — the code runs in
+//	                                the directory's order, after every test
+//	                                and every `e`, whichever is written
+//	                                first, and sees the words the modifiers
+//	                                and `markdirs` made (`d/`, `./a`)
+//	REPLY=$(( 12 - ${#REPLY} ))     c9 b d a lnk c10 big by text, and by
+//	                                number under `n` or `numericglobsort`
+//	*(oe:…:oe:…:)                   the first spec's code runs for every
+//	                                match, then the second's
+//
+// The code runs as `e`'s does (interp/globqualcode.go): in the shell, `exit`
+// and a top-level `return` ending it, a `return` or `break` in a function or
+// loop leaving every later match its own name as its key. `$zsh_eval_context`
+// reads `globsort`. One difference: an error that gives up the code — the
+// kind that ends `eval`'s text, `echo [x]` or a read-only assignment, and not
+// `nosuchcmd` or `(( 1/0 ))` — stops that specifier's code for every later
+// match, which keeps its own name as its key: `n=0; *(oe:'(( n++ )); echo
+// [x]':)` leaves `n` at 1, while a second `oe` beside it still runs for all
+// seven.
+//
+// Not reproduced: `*(oe:'unset REPLY':)` ends zsh 5.9.2 on a segmentation
+// fault, status 139; here a match whose code unset `REPLY` keys on its name.
+// And a list of keys that tie comes back in the order zsh's own sort leaves
+// them — the same order `*(oL)` gives over empty files — which is broken by
+// name here, as below. `*(oe:'true':t)` being `no matches found` is not an
+// oddity of the specifier: one `:` closes the code, so the `t` is the
+// sticky-bit test, and `::t` is the modifier.
+
 // sortQualified puts the words in the order the list's specifiers ask for.
 // paths are the files the words came from, one each, which is what a size or
-// a time is asked of.
-func (r *Runner) sortQualified(words, paths []string, specs []globSortSpec) {
+// a time is asked of. The words arrive in the order the walk read them,
+// which is the order a specifier's code runs in. ok is false where that code
+// stopped the shell, and the expansion stops with it.
+func (r *Runner) sortQualified(words, paths []string, specs []globSortSpec) (ok bool) {
 	if len(words) != len(paths) {
-		return
+		return true
 	}
 	byName := r.globMatchOrder()
 	type keyed struct {
@@ -39,6 +80,7 @@ func (r *Runner) sortQualified(words, paths []string, specs []globSortSpec) {
 		path  string
 		value []int64
 		parts []string
+		keys  []string
 	}
 	items := make([]keyed, len(words))
 	for i := range words {
@@ -46,7 +88,7 @@ func (r *Runner) sortQualified(words, paths []string, specs []globSortSpec) {
 		f := globFile{r: r, path: it.path}
 		for k, spec := range specs {
 			switch spec.key {
-			case 'n':
+			case 'n', 'e':
 			case 'd':
 				if it.parts == nil {
 					it.parts = strings.Split(it.path, "/")
@@ -57,12 +99,40 @@ func (r *Runner) sortQualified(words, paths []string, specs []globSortSpec) {
 		}
 		items[i] = it
 	}
+	for k, spec := range specs {
+		if spec.key != 'e' {
+			continue
+		}
+		gaveUp := false
+		for i := range items {
+			key := items[i].word
+			if !gaveUp {
+				run, ok := r.runGlobCode(spec.code, key, globCodeSortKey)
+				if !ok {
+					return false
+				}
+				if len(run.words) == 1 && !run.gaveUp {
+					// What a run that gave up left in `REPLY` is not a key:
+					// `*(oe:'REPLY=${REPLY[-1]}; echo [x]':)` is the name
+					// order, though `big`'s run set its key to `g` first.
+					key = run.words[0]
+				}
+				gaveUp = run.gaveUp
+			}
+			if items[i].keys == nil {
+				items[i].keys = make([]string, len(specs))
+			}
+			items[i].keys[k] = key
+		}
+	}
 	slices.SortStableFunc(items, func(a, b keyed) int {
 		for k, spec := range specs {
 			c := 0
 			switch spec.key {
 			case 'n':
 				c = byName(a.word, b.word)
+			case 'e':
+				c = byName(a.keys[k], b.keys[k])
 			case 'd':
 				c = deeperFirst(a.parts, b.parts)
 			default:
@@ -90,6 +160,7 @@ func (r *Runner) sortQualified(words, paths []string, specs []globSortSpec) {
 	for i, it := range items {
 		words[i] = it.word
 	}
+	return true
 }
 
 // globSortValueOf is the number one key letter reads off a file. A file that

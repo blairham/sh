@@ -1332,7 +1332,7 @@ func (r *Runner) glob(field string) ([]string, bool) {
 	// first name `ls -f` lists rather than the first in name order, and the
 	// code's own output comes in that order. The matches are still sorted
 	// at the end, as every list without `oN` is. See interp/globqualcode.go.
-	unsorted := (ordered && order.key == globSortNone) || quals.unsorted || quals.runsCode
+	unsorted := (ordered && order.key == globSortNone) || quals.unsorted || quals.runsCode || quals.sortsRunCode()
 	if quals.numeric != globNumericUnsaid {
 		// `n` and `^n` are `numericglobsort` for this one pattern, and the
 		// per-component sorts below read it as well as the last one.
@@ -1817,7 +1817,9 @@ func (r *Runner) glob(field string) ([]string, bool) {
 	case quals.unsorted:
 		// `oN`: the order the walk read the directories in, untouched.
 	case len(quals.sorts) > 0:
-		r.sortQualified(out, paths, quals.sorts)
+		if !r.sortQualified(out, paths, quals.sorts) {
+			return nil, false
+		}
 	case ordered:
 		r.sortMatchesBy(out, paths, order)
 	default:

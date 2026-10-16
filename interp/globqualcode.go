@@ -48,14 +48,33 @@ package interp
 type globCodeRun struct {
 	// kept is the code's status being 0.
 	kept bool
-	// words is what the file is reported as from here on.
+	// words is what the file is reported as from here on — for a sort
+	// specifier, its one key.
 	words []string
+	// gaveUp is the code having been given up over an error rather than
+	// having ended, which only a sort specifier acts on.
+	gaveUp bool
 }
+
+// globCodeUse is what a run of glob code is for: a test, which keeps or drops
+// the file and may rename it, or a sort specifier's key.
+type globCodeUse uint8
+
+const (
+	globCodeTests globCodeUse = iota
+	globCodeSortKey
+)
 
 // runGlobCode runs a code qualifier for one file whose word is word. ok is
 // false where the code stopped the shell, and the expansion must stop with
 // it.
-func (r *Runner) runGlobCode(code, word string) (globCodeRun, bool) {
+//
+// A sort key's run differs from a test's in what it touches: `reply` is
+// neither unset for it nor read from it, and the key is `REPLY` alone —
+// measured 2026-10-15 on zsh 5.9.2, `reply=(q); print *(oe:'print -r --
+// $reply >&2':)` writes `q` for each file, and `reply=(w)` in the code is
+// still `w` after the line. See interp/globqualsort.go.
+func (r *Runner) runGlobCode(code, word string, use globCodeUse) (globCodeRun, bool) {
 	if r.ctl != controlNone {
 		// An earlier file's code asked to leave a function or a loop. The
 		// code does not run again and every file after that one passes —
@@ -83,11 +102,25 @@ func (r *Runner) runGlobCode(code, word string) (globCodeRun, bool) {
 
 	defer r.enterProgramGlob()()
 
+	// And the failure flags the command the pattern belongs to reads to
+	// decide whether it runs: an expansion that failed inside the code —
+	// `x=$(( 1/0 ))`, `${(j)x}` — is the code's, which `eval` gives up, and
+	// not a failure of the outer command's own words. Measured 2026-10-15
+	// on zsh 5.9.2, `n=0; print [ab](e:'(( n++ )); x=$(( 1/0 )); true':N);
+	// print n=$n` writes the two complaints, an empty line and `n=2`; this
+	// shell abandoned the `print` and the line after it.
+	defer r.assignBookkeeping()()
+
 	r.setVar("REPLY", word)
-	r.unsetName("reply")
+	if use == globCodeTests {
+		r.unsetName("reply")
+	}
+	var gaveUp bool
 	status := r.runSourced(r.ctx, code, sourced{
 		eval:         true,
 		callersPlace: true,
+		globSort:     use == globCodeSortKey,
+		gaveUp:       &gaveUp,
 		label:        "eval",
 		syntaxStatus: r.diag().SyntaxStatus(),
 	})
@@ -109,8 +142,8 @@ func (r *Runner) runGlobCode(code, word string) (globCodeRun, bool) {
 		// errexit: the shell is stopping, and the expansion with it.
 		return globCodeRun{}, false
 	}
-	run := globCodeRun{kept: status == 0}
-	if words, ok := r.arrayElems("reply"); ok {
+	run := globCodeRun{kept: status == 0, gaveUp: gaveUp}
+	if words, ok := r.arrayElems("reply"); ok && use == globCodeTests {
 		run.words = words
 	} else if v, ok := r.getVar("REPLY"); ok {
 		run.words = []string{v}

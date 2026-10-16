@@ -38,6 +38,9 @@ func readRun(t *testing.T, tweak func(*Semantics), dg Diagnostics, src string) (
 	return optRun(t, func(s *Semantics) {
 		s.BadNameToReadFatal = No
 		s.ReadJudgesEveryNameBeforeReading = No
+		// A count splitting across the names, which no test here is about.
+		// See readcountwhole_test.go.
+		s.ReadCountFillsTheFirstNameWhole = No
 		if tweak != nil {
 			tweak(s)
 		}
@@ -437,6 +440,7 @@ func TestAReadCountDecidesWhoIsJudgedAfterTheFirstName(t *testing.T) {
 	// bad name past the first never reaches it.
 	out, st := optRun(t, func(s *Semantics) {
 		s.ReadCountJudgesTheNamesAfterTheFirst = Unspecified
+		s.ReadCountFillsTheFirstNameWhole = No
 		s.ReadOptions = "rn:N:"
 	}, Diagnostics{}, `printf 'XYZW\n' | { read -n 3 a b; echo "st=$? a=[$a]"; }`)
 	if !strings.Contains(out, "st=0 a=[XYZ]") || st != 0 {

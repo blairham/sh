@@ -6967,6 +6967,20 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 		fill, badName, bad = i, name, true
 		break
 	}
+	if count >= 0 && (array != "" || len(args[:fill]) > 1 || !exact) {
+		// Asked only where the answer could show: an array to fill, a second
+		// name to split into, or a `-n` whose one name would be trimmed —
+		// `read -n 4 x <<< "  pq"` keeps the blanks in ksh93u+. `-N` into one
+		// name is whole either way. See
+		// Semantics.ReadCountFillsTheFirstNameWhole.
+		if r.ask(r.sem().ReadCountFillsTheFirstNameWhole,
+			"a counted `read` filling its first name with everything it took") {
+			return r.readCountedWhole(array, args[:fill], text, status, echo, defaulted, &refused, badName, bad)
+		}
+		if r.unspecified {
+			return 2
+		}
+	}
 	if exact {
 		// -N hands the text over whole: `read -N 5 x y` on `a b c` puts all
 		// five characters in x and nothing in y, measured in both shells
@@ -7159,6 +7173,9 @@ func (r *Runner) readStoreTheArray(array string, elems []string, own int, echo r
 		// A slot that is not a container refuses the whole array, as `set
 		// -A` does. See interp/privatekindfixed.go.
 		return r.readArrayRefusalStatus(own), true
+	case r.readArrayIntoATableKey(array, elems):
+		// A table's element takes the words as an array of its own. See
+		// Runner.readArrayIntoATableKey (#6685).
 	default:
 		r.setArrayForgettingARetypedHide(array, elems)
 		if r.ctl == controlExit {

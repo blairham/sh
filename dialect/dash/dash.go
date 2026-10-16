@@ -2032,6 +2032,7 @@ func Semantics() interp.Semantics {
 	// ReadCountJudgesTheNamesAfterTheFirst is left unanswered: dash's
 	// `read` has no count letter — `-n` and `-N` are both `Illegal option`
 	// — so nothing here can ask it.
+	// unanswered ReadCountFillsTheFirstNameWhole: the same reason.
 	// unanswered ExportThroughASubscriptedOperandRecordsTheLetter: no
 	// arrays and no subscripted operand, so nothing reaches it.
 	s.DeclarationTakesASubscript = interp.No

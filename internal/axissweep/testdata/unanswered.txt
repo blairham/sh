@@ -660,6 +660,7 @@ dash  ProducedParameterListing
 dash  RangeOperandBackslash
 dash  ReadArrayDefault
 dash  ReadArrayTakesOneNameOnly
+dash  ReadCountFillsTheFirstNameWhole
 dash  ReadCountJudgesTheNamesAfterTheFirst
 dash  ReadDelimiterIsTheLocalesCharacter
 dash  ReadEchoLettersWriteTheValues
@@ -871,6 +872,7 @@ zsh   PrintfHexFloatDefaultIsTwelveDigits
 zsh   PrintfHexFloatZeroFillPrecedesThePrefix
 zsh   PrintfOutputPrecedesComplaint
 zsh   PrintfReportsAMissingHexDigit
+zsh   ReadCountFillsTheFirstNameWhole
 zsh   ReadCountJudgesTheNamesAfterTheFirst
 zsh   ReadExactCountKeepsPartial
 zsh   ReadPartialCountSucceeds

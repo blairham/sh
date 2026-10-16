@@ -26942,6 +26942,28 @@ type Semantics struct {
 	// claim nothing measured.
 	ReadCountJudgesTheNamesAfterTheFirst Answer
 
+	// ReadCountFillsTheFirstNameWhole hands everything a counted `read` took
+	// to its first name, unsplit, and leaves the names after it as they were;
+	// under the array letter the array is emptied and takes the text as its
+	// one value, and a name holding nothing takes it as a scalar.
+	//
+	// ksh93 does. Measured 2026-10-16 on ksh93u+ 2012-08-01, `-c`, against
+	// bash 5.3.20 and BusyBox ash 1.37.0:
+	//
+	//	                                   ksh93u+          bash, ash
+	//	y=keep; read -n 3 x y <<< "p q rs" x='p q', y=keep  x=p, y=q
+	//	y=keep; read -N 3 x y <<< "p q rs" x='p q', y=keep  bash: y=''
+	//	read -n 3 -A x <<< "p q rs"        x='p q'          bash -a: (p q)
+	//	read -N 3 -A x <<< pqrs            x=pqr            bash -a: (pqr)
+	//	x=(o1 o2); read -N 3 -A x <<< pqrs (pqr)
+	//	typeset -A a; read -N 3 -A 'a[k]'  [k]=pqr
+	//	read -n 4 x <<< "  pq"             '  pq'           pq
+	//
+	// Left unanswered where nothing reaches it, for the reasons
+	// ReadCountJudgesTheNamesAfterTheFirst gives: dash has no count and zsh's
+	// `-k` is its own route (#6776).
+	ReadCountFillsTheFirstNameWhole Answer
+
 	// ReadPromptOperand says whether `read`'s first operand may carry a
 	// prompt after a `?`, and what an operand that is nothing else names.
 	//

@@ -155,6 +155,9 @@ func (r *Runner) literalElems(elems []*syntax.ArrayElem, readsSubscripts, bareIs
 	// interp/cshnullglob.go.
 	endGlobUnit := r.beginGlobUnit()
 	defer endGlobUnit()
+	// And one list for a refused pattern, raised once every element has
+	// been expanded. See Runner.holdPathnameRefusal (#6677).
+	defer r.openWordList()()
 	failedBefore := r.expansionHasFailed()
 	for _, el := range elems {
 		if r.expansionFailedHere(failedBefore) {
@@ -169,7 +172,7 @@ func (r *Runner) literalElems(elems []*syntax.ArrayElem, readsSubscripts, bareIs
 			//
 			// An expansion's failure and not an unmatched pattern's, which
 			// is a different stop: those shells expand every word before
-			// they glob any of them. See #6677.
+			// they raise that one. See Runner.holdPathnameRefusal (#6677).
 			break
 		}
 		if el.Nested != nil {
@@ -248,6 +251,9 @@ func (r *Runner) literalElems(elems []*syntax.ArrayElem, readsSubscripts, bareIs
 		// is shaped, in the column with the narrow rule and in the column
 		// with the wider one alike. See interp/equalscontextposition.go.
 		out = append(out, literalElem{fields: r.expandLiteralElement(w), written: written})
+	}
+	if !r.expansionFailedHere(failedBefore) {
+		r.raiseHeldRefusal()
 	}
 	if r.expansionFailedHere(failedBefore) && len(out) > 0 {
 		// The element that failed is the last one read; what is left is

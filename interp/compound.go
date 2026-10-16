@@ -440,9 +440,18 @@ func (r *Runner) forClause(ctx context.Context, c *syntax.ForClause) error {
 		r.beginHeading()
 		if c.HasItems {
 			endGlobUnit := r.beginGlobUnit()
+			// One list for a refused pattern too, raised once every word
+			// is expanded. See Runner.holdPathnameRefusal (#6677).
+			closeList := r.openWordList()
+			failedBefore := r.expansionHasFailed()
 			for _, w := range c.Items {
+				if r.expansionFailedHere(failedBefore) {
+					break
+				}
 				items = append(items, r.expandWord(w)...)
 			}
+			r.raiseHeldRefusal()
+			closeList()
 			endGlobUnit()
 		} else {
 			// The list a loop over the parameters walks is fixed when the

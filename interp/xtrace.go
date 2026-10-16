@@ -1826,6 +1826,10 @@ func (r *Runner) traceWordLayout(d Diagnostics) syntax.Layout {
 // diagnostic or a trace quotes it as the script wrote it: nothing but the
 // function listing's readers for the bodies of substitutions, which is all
 // that the shell that has them changes about such a word.
+// WordAsWrittenLayout is wordAsWrittenLayout for a dialect's own renderer of
+// a command written back, `$BASH_COMMAND` being the one that asks (#6739).
+func (r *Runner) WordAsWrittenLayout() syntax.Layout { return r.wordAsWrittenLayout() }
+
 func (r *Runner) wordAsWrittenLayout() syntax.Layout {
 	return syntax.Layout{
 		CommandSubstitutionIsReprinted: r.functionLayout.CommandSubstitutionIsReprinted,

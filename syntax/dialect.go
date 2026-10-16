@@ -3381,6 +3381,24 @@ type Dialect struct {
 	// writes nothing at all. See #3711.
 	HeredocBodyFromAfterTheCommand HeredocBodyOutside
 
+	// UnterminatedHeredocOutranksItsConstruct names a here-document whose
+	// body ran to the end of the input as what was left open, at the line
+	// of its `<<`, where the input also ended inside a compound command or
+	// a list still waiting for its next command.
+	//
+	// One shell. Measured 2026-10-15 on ksh93u+ 2012-08-01 from script
+	// files: `if true; then`, `:`, `cat <<EOF`, `abc` is ``syntax error at
+	// line 3: `<<' unmatched`` at 3, and so is the same document inside a
+	// `{`, a `(`, a `while`/`do`, a `for`, a `case` arm, a function body,
+	// an `else`, or after a trailing `&&` or `|`; a `<<` opened on the line
+	// that opens the `if` is named at that line, and of two documents the
+	// one that ran out is named. Where the delimiter does arrive the
+	// construct is named as before (`` `then' unmatched ``), and so it is
+	// where the operator's line has no newline and the body never began. A
+	// quote left open is still the quote. At the top level an unfinished
+	// body is not an error anywhere in the panel (#6599).
+	UnterminatedHeredocOutranksItsConstruct bool
+
 	// HeredocLastLineIsADelimiterPrefix reads the last line of the text
 	// inside `$( )` as a delimiter *prefix*, where a here-document in that
 	// text reached the end of it without ever seeing the delimiter on a line

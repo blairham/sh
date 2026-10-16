@@ -100,6 +100,9 @@ func Dialect() syntax.Dialect {
 	// reaches a branch that is never taken — measured, and the reason this
 	// is a grammar flag rather than only a runtime axis.
 	d.EmptyAssignSubscriptIsASyntaxError = true
+	// A here-document left open inside an open construct is what is named.
+	// See the flag (#6599).
+	d.UnterminatedHeredocOutranksItsConstruct = true
 	// And the read half of the same nesting: `${a[1][2]}` was a parse error
 	// here while the write built a value only `typeset -p` could show. The
 	// grammar is shared with the other shell that writes the text and the

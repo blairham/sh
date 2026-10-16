@@ -15465,12 +15465,17 @@ type Semantics struct {
 	// ksh93u+ is the third value: it answers 10 for `{ exec {v}</dev/null;
 	// echo $v; } </dev/null`, so no saved copy is in the way there, but holds
 	// one number while a pipeline's last element runs — `echo x | { exec
-	// {v}</dev/null; echo $v; }` is 11 (#6503).
+	// {v}</dev/null; echo $v; }` is 11 (#6503). And it holds one inside a
+	// command substitution's body, and one more once that body's output has
+	// to be a descriptor: `echo $(exec {v}</dev/null; echo $v)` is 11 and
+	// `echo $(/bin/sh -c :; exec {v}</dev/null; echo $v)` is 12 (#6558). See
+	// bodyOutput.
 	//
 	// unpinned ksh: its substitutions are published from 3, below the base
 	// the held number is taken from, so only a `{v}` inside a pipeline's last
-	// element can see it, and no corpus row allocates one there.
-	// TestTheLastPipelineElementHoldsANumber pins it.
+	// element or a command substitution's body can see it, and no corpus
+	// row allocates one there. TestTheLastPipelineElementHoldsANumber and
+	// TestACommandSubstitutionBodyHoldsANumber pin it.
 	//
 	// unpinned dash: no `{v}` redirection and no process substitution, so no
 	// number this could move is ever printed.

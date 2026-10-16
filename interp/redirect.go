@@ -579,6 +579,12 @@ func (r *Runner) applyRedirList(ctx context.Context, rs []*syntax.Redirect, comp
 				// and copies nothing while it does it.
 				holds.save(fd, name != "-")
 			}
+			if (fdVar == "" && fd == 1) || name == "1" {
+				// Standard output replaced or copied: a command
+				// substitution's output is needed as a descriptor for
+				// either. See bodyOutput.
+				r.needsBodyOutput()
+			}
 			// One dialect will not take a duplication target wider than a
 			// single digit, and refuses before it looks at what is open.
 			if r.refuseWideDupTarget(name) || r.unspecified {
@@ -866,6 +872,10 @@ func (r *Runner) applyRedirList(ctx context.Context, rs []*syntax.Redirect, comp
 		}
 		if fdVar == "" && holds != nil {
 			holds.saveForAnOpen(fd, name)
+		}
+		if fdVar == "" && (fd == 1 || fd == -1) {
+			// Standard output, alone or with standard error. See bodyOutput.
+			r.needsBodyOutput()
 		}
 		// Whether a descriptor the shell picks outlives the command is the
 		// axis ksh93 answers alone, and it is asked once for the redirection

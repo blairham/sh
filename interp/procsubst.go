@@ -307,6 +307,11 @@ func (r *Runner) substBody(span syntax.Span) (*syntax.File, bool) {
 // with nothing to say so.
 func (r *Runner) substRunner(span syntax.Span) (*Runner, func()) {
 	kind := span.Kind
+	// The body is a fork, which needs a command substitution's output as a
+	// descriptor where it is made inside one — and keeps what that
+	// substitution holds, which is why the clone below carries it on. See
+	// bodyOutput.
+	r.needsBodyOutput()
 	sub := r.clone()
 	// The body is parsed on its own and counts from one, and the script it
 	// was written in did not start there: `cat <(echo $LINENO)` on line 3 is
@@ -348,7 +353,8 @@ func (r *Runner) substRunner(span syntax.Span) (*Runner, func()) {
 	sub.releasedSubstFds = r.bodyReleasedFds()
 	// And none of the numbers the shell holds for its own plumbing: the fork
 	// into a substitution's body closes them all, the pipes' reading ends
-	// with the saved copies. See heldnumbers.go.
+	// with the saved copies. See heldnumbers.go. Not a command
+	// substitution's, which bodyOutput carries past this.
 	sub.heldNumbers = nil
 	// And the shell's own input, which is what the zsh base steps over: the
 	// fork into the body has closed it, so allocation there starts at 10.

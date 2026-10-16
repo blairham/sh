@@ -481,6 +481,11 @@ func (r *Runner) runPipeline(ctx context.Context, p *syntax.Pipeline, timing *pi
 	// made. See heldnumbers.go — `true | true | echo <(true)` is 13 in zsh
 	// 5.9.2, both ends still held while the last element's words expand.
 	var reads []int
+	// A pipe needs a command substitution's output as a descriptor, before
+	// anything the pipeline holds. See bodyOutput.
+	if n > 1 {
+		r.needsBodyOutput()
+	}
 	heldBefore := r.heldNumbers
 	// And the one number the other dialect that counts holds for the last
 	// element's input. Decided here, while the shell's own input is still

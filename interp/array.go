@@ -2006,13 +2006,20 @@ func (r *Runner) fillOperandValue(name, value string, mark func(string)) {
 
 // storeThroughPositional is the half of setOperandValue that knows the rule,
 // and it reports whether it took the operand.
+//
+// The index is read as `N=value` reads it, through positionalAssignIndex and
+// its bound, which is what namesAPosition asks for a whole-array store too.
+// It used an unbounded parse, so `read 99999999999999999999` wrapped to an
+// index in the quintillions and grew the list until the machine ran out of
+// memory; past the bound the store does nothing, as the statement form's
+// does.
 func (r *Runner) storeThroughPositional(name, value string) bool {
-	if r.sem().ReadNameOperands != NamesAndPositionals {
+	if !r.namesAPosition(name) {
 		return false
 	}
-	n, ok := positionalFdVar(name)
-	if !ok {
-		return false
+	n, _ := positionalAssignIndex(name)
+	if n < 0 {
+		return true
 	}
 	if n == 0 {
 		// Position 0 is `$0`, which is not in the positional list at all and

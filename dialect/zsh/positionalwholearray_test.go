@@ -90,3 +90,18 @@ func TestWholeArrayStoreIntoZeroOrATableIntoAPositionIsRefused(t *testing.T) {
 		}
 	}
 }
+
+// TestAnOperandStoreAtAPositionPastTheBoundStoresNothing pins the bound a
+// builtin's scalar store into a position shares with `N=value`: an index too
+// wide to represent stores nothing, where an unbounded parse wrapped it to an
+// index in the quintillions and grew the list until memory ran out. The bound
+// is a resource limit and not a modeled answer — zsh 5.9.2 warns `number
+// truncated after 19 digits` there — so this asserts only that the shell
+// comes back with the list untouched.
+func TestAnOperandStoreAtAPositionPastTheBoundStoresNothing(t *testing.T) {
+	const src = `set -- a b; read 99999999999999999999 <<< x; printf -v 99999999999999999999 %s y; echo $? $#; read 01 <<< q; echo "[$*]"`
+	out, _ := runZshOnPath(t, t.TempDir(), src)
+	if want := "0 2\n[q b]\n"; out != want {
+		t.Errorf("%s = %q, want %q", src, out, want)
+	}
+}

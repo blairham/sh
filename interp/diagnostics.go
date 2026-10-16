@@ -3988,9 +3988,14 @@ type Diagnostics struct {
 
 	// ParamErrorInABareAssignmentStatusAtAPrompt is the status `${x?word}`
 	// leaves when it fails in an assignment that is a command of its own, in
-	// an interactive shell and outside a loop. Zero leaves the ordinary
-	// status. zsh's is 5; see Runner.paramErrorInABareAssignment for the rows
-	// and the controls.
+	// an interactive shell. Zero leaves the ordinary status. zsh's is 5; see
+	// Runner.paramErrorInABareAssignment for the rows and the controls. A loop
+	// the failure leaves sets the ordinary status over it (see
+	// Runner.leavingALoopOnAnError).
+	//
+	// It is also the number an `always` half's construct ends on where the
+	// same failure left `$?` at 0 in a declaration or a `case` at a prompt —
+	// see Runner.tryClause, where the rows are.
 	ParamErrorInABareAssignmentStatusAtAPrompt int
 
 	// CasePatternRefusalLeavesNought says that a pattern the shell will not

@@ -160,6 +160,22 @@ func (r *Runner) getoptsScan(optstring, name string, given []string) int {
 			r.optChar = 1
 		}
 	}
+	if ind > len(words)+1 {
+		// Past the word after the last: asked only here, so a scan that
+		// runs out the ordinary way reaches no question. See
+		// Semantics.GetoptsCursorPastTheEnd.
+		switch r.sem().GetoptsCursorPastTheEnd {
+		case GetoptsCursorPastTheEndIsKept:
+		case GetoptsCursorPastTheEndIsClamped:
+			ind = len(words) + 1
+		case GetoptsCursorPastTheEndRestarts:
+			ind, r.optChar = 1, 1
+		default:
+			r.diagf("%s\n", r.unanswered("`getopts` reading an OPTIND past the word after the last"))
+			r.unspecified = true
+			return 2
+		}
+	}
 
 	i := ind - 1
 	if i < 0 || i >= len(words) {

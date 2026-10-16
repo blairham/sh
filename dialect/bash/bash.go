@@ -2837,6 +2837,10 @@ func Semantics() interp.Semantics {
 	s.DollarSingleQuestionEscape = interp.Yes
 	s.DollarSingleUnicodeEscapes = interp.Yes
 	s.GetoptsAssignmentRestartsWord = interp.Yes
+	// A cursor past the word after the last is moved back to it: measured
+	// 2026-10-15 on 5.3.20 and 3.2.57, `set -- -a -b -c; OPTIND=100;
+	// getopts abc o` is the end of the options with OPTIND 4 (#6575).
+	s.GetoptsCursorPastTheEnd = interp.GetoptsCursorPastTheEndIsClamped
 	// A name operand that is not an identifier is refused on the *store*,
 	// after the scan has already moved the cursor. Measured 2026-09-21:
 	// `set -- -a; getopts a opt-var` leaves OPTIND at 2 at status 1, while

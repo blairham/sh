@@ -583,6 +583,7 @@ func (r *Runner) getoptsWrite(name, value string, own bool) bool {
 		// OPTIND -a` is `getopts: Illegal number: a` at 2 and the cursor's
 		// own 2 stays, as `readonly o; getopts a o -a` is `getopts: o: is
 		// read only` at 2. See RefuseValues.
+		defer r.getoptsSpeaksAsTheScript()()
 		r.reportFreezeRefusal(name, assignedByBuiltin, r.getoptsRefusalIsFatal(), sentence)
 		return false
 	}
@@ -627,6 +628,18 @@ func (r *Runner) getoptsWrite(name, value string, own bool) bool {
 		r.getoptsFillOwnParameter(name, value)
 		if name == "OPTARG" {
 			r.optargLast = &getoptsOptargStore{value: value, set: true}
+		}
+		return true
+	}
+	if r.attrHas(name, attrInteger) {
+		// A typed name may not take the value — `?` does not evaluate — and
+		// what that costs is a question per dialect. See
+		// getoptsTypedValueRefused.
+		sentence, failed := r.catchingATypedValueFailure(func() {
+			r.fillOperandValue(name, value, r.markAFilledNameForAllexport)
+		})
+		if failed {
+			return r.getoptsTypedValueRefused(name, sentence)
 		}
 		return true
 	}
@@ -680,6 +693,7 @@ func (r *Runner) getoptsMayWrite(name string, own bool) bool {
 	// written for: the builtin names itself where the dialect names one —
 	// `getopts: OPTARG: is read only` in dash and BusyBox ash — and the rest
 	// of the line is not given up, which is what #3147 was.
+	defer r.getoptsSpeaksAsTheScript()()
 	r.reportReadonlyRefusal(name, assignedByBuiltin, r.getoptsRefusalIsFatal())
 	return false
 }

@@ -3217,6 +3217,14 @@ func Semantics() interp.Semantics {
 	// word, a `--` and no words at all — with the silent form answering the
 	// same.
 	s.GetoptsFrozenNameAtTheEndOfTheOptionsIsFatal = interp.Yes
+	// A value the typed name will not take is refused as a freeze is, by
+	// `getopts`, and reported at 1 with the builtin given up, by `read`:
+	// measured 2026-10-15 on ksh93u+, `typeset -i n=5; getopts x n -y` is
+	// `?: arithmetic syntax error` and [2] [5], and `read n m <<< "1+ b"` is
+	// `read: 1+: more tokens expected` and [1] [5] [], the script going on
+	// after both (#6563).
+	s.GetoptsTypedValueFailureIsAFreeze = interp.Yes
+	s.ReadTypedValueFailureIsAnAssignmentFailure = interp.No
 	// And `read` does not stop either: every frozen name is reported and
 	// every other name is filled — `readonly a; printf 'x y\n' | { read a b; }`
 	// leaves b holding `y` here, where bash, dash and BusyBox ash leave it
@@ -5542,8 +5550,12 @@ func Diagnostics() interp.Diagnostics {
 		// And `read`, which names itself in its builtin location as `set`
 		// does — and then calls itself a warning, which nothing else in the
 		// panel does. See ReadonlyVariableInRead.
+		// And `getopts`, whose refusal of one of its names is located as a
+		// builtin's and names `$0` where the builtin's name goes: `w1.sh[1]:
+		// w1.sh: o: is read only`. See GetoptsRefusalNamesTheScript (#6563).
+		GetoptsRefusalNamesTheScript: true,
 		ReadonlyRefusalNamesBuiltin: map[string]bool{
-			"set": true, "read": true,
+			"set": true, "read": true, "getopts": true,
 			// And `let`, measured 2026-09-18: `readonly x=1; let x=2` is
 			// `<file>[2]: let: x: is read only` at 1, where the same refusal
 			// raised by `(( x=3 ))` on the next line is
@@ -6213,6 +6225,11 @@ func Apply(r *interp.Runner) {
 	// takes the attribute with the name, so `OPTIND=x` after it is `x`
 	// (#6498).
 	r.MarkInteger("OPTIND")
+	// And a declaration of it keeps that cell: `typeset OPTIND=y` reads
+	// back 0 at the top and in a `function`-form body alike, where an
+	// ordinary integer name loses the attribute to the same line. See
+	// interp.Runner.KeepOptindThroughDeclarations (#6563).
+	r.KeepOptindThroughDeclarations()
 	// The `set -o` names beyond the ones every shell has. Measured 2026-09-15
 	// against ksh93u+ 2012-08-01 by diffing the whole listing: 32 rows there
 	// against 20 here, and five of the twenty spelled the other way round

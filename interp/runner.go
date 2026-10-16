@@ -1233,6 +1233,16 @@ type Runner struct {
 	// valueRefusals are the names whose stores refuse some values, the way
 	// a freeze refuses every value. See RefuseValues.
 	valueRefusals map[string]func(string) (string, bool)
+	// optindKeptThroughDeclarations says a declaration of OPTIND keeps the
+	// cell the shell gave it. See KeepOptindThroughDeclarations.
+	optindKeptThroughDeclarations bool
+	// typedValueCatch, where set, takes the failure of a typed name's value
+	// instead of ending the shell. See catchingATypedValueFailure.
+	typedValueCatch *typedValueCatch
+	// builtinSpokenAs replaces the running builtin's name at the front of
+	// its complaint, leaving its location alone. See
+	// getoptsSpeaksAsTheScript.
+	builtinSpokenAs string
 	// declaringWithoutAValue says the store under way is a declaration's own
 	// empty value rather than an assignment. See declareEmpty.
 	declaringWithoutAValue bool
@@ -6225,6 +6235,14 @@ func (r *Runner) diagLineNamed(construct, format string, args ...any) string {
 		// says the name it runs as. See Runner.RunBuiltinAs.
 		if rest, cut := strings.CutPrefix(msg, from+": "); cut {
 			msg = r.inBuiltin + ": " + rest
+		}
+	}
+	if as := r.builtinSpokenAs; as != "" && r.inBuiltin != "" {
+		// A builtin whose complaint names something else where its own
+		// name goes, and keeps its own location. See
+		// Runner.getoptsSpeaksAsTheScript.
+		if rest, cut := strings.CutPrefix(msg, r.inBuiltin+": "); cut {
+			msg = as + ": " + rest
 		}
 	}
 	if r.speaker != "" && r.inBuiltin != "" && r.inBuiltin != r.speaker {

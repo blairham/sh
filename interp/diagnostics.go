@@ -7396,6 +7396,15 @@ type Diagnostics struct {
 	// two spellings POSIX has. dash names both of the two it has. ksh93 and
 	// zsh name none, including ksh93's own `typeset`.
 	ReadonlyRefusalNamesBuiltin map[string]bool
+	// GetoptsRefusalNamesTheScript writes `$0` where the builtin's name goes
+	// when `getopts` refuses one of its names — a freeze, or a value a typed
+	// name will not take — keeping the builtin's location. Measured
+	// 2026-10-15 on ksh93u+, `readonly o; getopts x o -x` in a script `w1.sh`
+	// is `w1.sh[1]: w1.sh: o: is read only`, `-c` writes `ksh: ksh: o: …`,
+	// and inside `function f` it is `f[1]: f: o: …`, `$0` being the
+	// function's name there. Needs "getopts" in ReadonlyRefusalNamesBuiltin,
+	// which puts the builtin's name in front for this to replace.
+	GetoptsRefusalNamesTheScript bool
 	// LiteralOperandAfterADeclarationIsLocatedUnderTheCall puts the
 	// *enclosing function's* name where a builtin's would go, for the one
 	// operand assignment that runs after its builtin has already returned.

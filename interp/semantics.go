@@ -6882,6 +6882,43 @@ type Semantics struct {
 	// `getopts` loop reaches no question at all.
 	GetoptsFrozenNameAtTheEndOfTheOptionsIsFatal Answer
 
+	// GetoptsTypedValueFailureIsAFreeze refuses a value `getopts`'s typed
+	// name will not take exactly as it refuses a frozen name — reported, the
+	// builtin at 2, and the script ended only where
+	// GetoptsFrozenNameAtTheEndOfTheOptionsIsFatal ends it — where the other
+	// answer ends the script as an assignment's failure would.
+	//
+	// Measured 2026-10-15 under `-c`, each line followed by `echo "[$?]
+	// [$n]"; echo after`:
+	//
+	//	typeset -i n=5; getopts x n -y   bash 5.3.20, 3.2.57: the script ends
+	//	                                 ksh93u+: `?: arithmetic syntax
+	//	                                 error`, [2] [5], after
+	//	typeset -i n=5; getopts x n      bash: the script ends; ksh93u+: the
+	//	                                 same sentence, and the script ends
+	//
+	// zsh is never asked: `?` is a value there, so the write never fails —
+	// `getopts x n -y` leaves 0.
+	//
+	// Asked only where the store has failed. See interp/typedvaluecatch.go.
+	GetoptsTypedValueFailureIsAFreeze Answer
+
+	// ReadTypedValueFailureIsAnAssignmentFailure has a value `read` writes
+	// to a typed name, and that will not evaluate, cost what an assignment's
+	// failure costs; the other answer reports it, gives the builtin up at that
+	// name with status 1, and leaves the name and every one after it as they
+	// were, the line going on.
+	//
+	// Measured 2026-10-15 under `-c`, `typeset -i n=5; read n m <<< "1+ b";
+	// echo "[$?] [$n] [$m]"; echo after`: bash 5.3.20, bash 3.2.57 and zsh
+	// 5.9.2 end the script at the complaint; ksh93u+ writes `read: 1+: more
+	// tokens expected` and goes on with `[1] [5] []` and `after`. From a
+	// script file bash gives up only the rest of the line, exactly as it does
+	// for `n=1+` there — which is the assignment's cost and not `read`'s.
+	//
+	// Asked only where the store has failed. See interp/typedvaluecatch.go.
+	ReadTypedValueFailureIsAnAssignmentFailure Answer
+
 	// ReadRefusedWriteEndsTheBuiltin stops `read` at the first name a freeze
 	// refuses, leaving the names after it alone. bash 5.3, dash and BusyBox
 	// ash yes; ksh93 no — it reports every frozen name and fills the rest.

@@ -5,6 +5,7 @@ package interp
 
 import (
 	"context"
+	"fmt"
 	"strconv"
 	"strings"
 	"unicode"
@@ -2442,6 +2443,12 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) (endSt
 			// stored, so the letters it writes are the ones it keeps and the
 			// value is read without the ones it drops. See
 			// Runner.declarationAssignmentResets.
+			if r.optindKeptThroughThis(name) && df.namesANumericLetter() {
+				// A numeric letter on the line replaces the integer one
+				// rather than landing beside it: `typeset -Z3 OPTIND=5` is
+				// `typeset -Z 3 -R 3 OPTIND=005` there, as over any name.
+				r.attrClear(name, attrInteger)
+			}
 			r.declarationAssignmentResets(name, fresh, df.export, true)
 			if r.unspecified {
 				return r.status
@@ -5628,6 +5635,12 @@ func floatPlaces(prec int) int {
 // carried the way a failed `case` subject's is, so an `always` half reads 0
 // and a subshell exits 0. See Semantics.DeclaredTypedValueFailureLeavesZero.
 func (r *Runner) typedValueFatalf(format string, args ...any) {
+	if c := r.typedValueCatch; c != nil && !c.caught {
+		// A builtin is storing and decides what the failure costs itself.
+		// See Runner.catchingATypedValueFailure.
+		c.caught, c.sentence = true, fmt.Sprintf(format, args...)
+		return
+	}
 	if r.declarationEvaluatesItsValue && r.ask(r.sem().DeclaredTypedValueFailureLeavesZero,
 		"a declaration's typed value that will not evaluate leaving 0") {
 		saved := r.failedExpansionStatus
@@ -5875,6 +5888,10 @@ func (r *Runner) declareEmpty(name string, fresh, keepsTheEnvironmentEntry, name
 // That is narrower than the rule that stood here, which exempted any name the
 // running scope had shadowed.
 func (r *Runner) declarationAssignmentResets(name string, fresh, namesExport, valueToo bool) {
+	if r.optindKeptThroughThis(name) {
+		// See Runner.KeepOptindThroughDeclarations.
+		return
+	}
 	if fresh || r.caseLetterStands(name) {
 		// A case letter already on the name keeps every attribute, export
 		// included: `typeset -lx s=A; typeset s=7` is `typeset -x -l s=7`
@@ -6604,6 +6621,9 @@ func (r *Runner) shadowTypeset(name string) (fresh, redeclared bool) {
 		// already — the same answer the no-scope case gives and for the same
 		// reason.
 		return false, true
+	}
+	if name == "OPTIND" && r.optindKeptThroughDeclarations {
+		return r.shadowOptindAsTheCursor()
 	}
 	return r.shadow(name)
 }

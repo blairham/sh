@@ -94,6 +94,9 @@ type procSubEnds struct {
 	// real names child's actual descriptor where that is not fd. Empty when
 	// the two agree, which is every substitution outside another one's body.
 	real string
+	// claim is the stamp of the claim made on child's number where it is
+	// on its published one, and zero otherwise. See foreignfds_unix.go.
+	claim uint64
 }
 
 // substFdView is how the shell making a substitution sees the descriptor
@@ -119,6 +122,9 @@ type procSubEnds struct {
 type substFdView struct {
 	released []int
 	taken    []int
+	// at is the runner's node in the fork tree, which says whose claimed
+	// descriptors are in its table. See foreignfds_unix.go.
+	at *fdLineage
 }
 
 func (v substFdView) isReleased(fd int) bool { return slices.Contains(v.released, fd) }
@@ -209,6 +215,17 @@ func newProcSubPipe(childWrites bool, dir string, want []int, view substFdView, 
 	// the park is about to ask for.
 	shell, shellCopy := raiseShellEnd(shell, want)
 	if stepOver {
+		// The end's original out of the way first, for the shell end's
+		// reason. Left where `os.Pipe` put it, it can be on the very number
+		// the placeholder is for — wherever everything below the dialect's
+		// base is taken, which a test process with a few children alive
+		// often has — and then the placeholder steps past it, the end lands
+		// above both, and reparkPreferred moves the end down onto the
+		// original's number once that is closed: the reading end's number,
+		// published for the writing end. `exec 3>/dev/null; { echo <(true)
+		// <(true); } 3> >(true)` answered one low in more than half of the
+		// whole-table runs on Linux (#6543).
+		child = raiseOriginal(child)
 		// After the raise, because the number the shell's end gave up may be
 		// the one the placeholder is for. Through the same park and the same
 		// view, so it lands exactly where the end itself would have; a number
@@ -217,6 +234,11 @@ func newProcSubPipe(childWrites bool, dir string, want []int, view substFdView, 
 			defer func() { _ = placeholder.Close() }()
 			if at != int(placeholder.Fd()) {
 				view.taken = append(slices.Clip(view.taken), at)
+			} else {
+				// This park's own, so whatever a claim on the number says
+				// is about a descriptor closed before it. See
+				// dropFdClaimMade.
+				dropFdClaim(at)
 			}
 		}
 	}
@@ -254,6 +276,12 @@ func newProcSubPipe(childWrites bool, dir string, want []int, view substFdView, 
 	}
 	if raw := int(parked.Fd()); raw != pub {
 		ends.real = dir + "/" + strconv.Itoa(raw)
+	} else {
+		// On its own number, in this runner's table and in no sibling's —
+		// which only a claim can say, the kernel's table being everybody's.
+		// Inside the lock, so no other park can look before it is said. See
+		// foreignfds_unix.go.
+		ends.claim = claimFd(raw, view.at, false)
 	}
 	return ends, nil
 }
@@ -365,6 +393,42 @@ func raiseShellEnd(f *os.File, want []int) (*os.File, int) {
 	raised := os.NewFile(uintptr(moved), f.Name())
 	_ = f.Close()
 	return raised, moved
+}
+
+// raiseOriginal moves the end a substitution hands its command into
+// privateCopyFloor's band, closing the original, and answers the file to park
+// from. Only for a park that steps over a placeholder: see newProcSubPipe.
+//
+// A best effort, as raiseShellEnd is — a refusal, or a band already full,
+// leaves the original where it was, which is the arrangement before this
+// existed. Nothing registers the
+// copy: it is closed by the park that follows, inside the same window, so no
+// other park can see it.
+func raiseOriginal(f *os.File) *os.File {
+	conn, err := f.SyscallConn()
+	if err != nil {
+		return f
+	}
+	moved := -1
+	if cerr := conn.Control(func(fd uintptr) {
+		got, err := fcntlInt(int(fd), syscall.F_DUPFD_CLOEXEC, privateCopyFloor)
+		if err != nil {
+			return
+		}
+		if got >= kernelFirstTable {
+			// The band is full, and a copy above it would grow the kernel's
+			// table for a descriptor that lives a moment. See
+			// privateCopyFloor.
+			_ = syscall.Close(got)
+			return
+		}
+		moved = got
+	}); cerr != nil || moved < 0 {
+		return f
+	}
+	raised := os.NewFile(uintptr(moved), f.Name())
+	_ = f.Close()
+	return raised
 }
 
 // reparkPreferred asks the wish list again, once, now that this pipe's own
@@ -582,7 +646,29 @@ func parkDescriptor(f *os.File, dir string, want []int, view substFdView) (*os.F
 			// the wrong number, so it is closed rather than kept: keeping it
 			// would leak one descriptor per wish that missed.
 			_ = syscall.Close(got)
-			if !passedOwn && isPrivateCopy(n) {
+			if passedOwn {
+				continue
+			}
+			if afterAWishMissed != nil {
+				afterAWishMissed(n)
+			}
+			outside, gone := outsideTable(n, view.at)
+			if gone && !isPrivateCopy(n) {
+				// Let go of since the miss: a sibling's end closed in
+				// between, its claim dropped with it. The number is free, so
+				// it is asked for again rather than stepped over — once,
+				// since a second miss is something else that has landed
+				// there, and the walk goes on as for any taken wish.
+				if got, err := fcntlInt(int(fd), syscall.F_DUPFD_CLOEXEC, n); err == nil {
+					if got == n {
+						parked, published = got, n
+						return
+					}
+					_ = syscall.Close(got)
+				}
+				continue
+			}
+			if isPrivateCopy(n) || outside {
 				// Taken by a body's private copy of the table, which a fork
 				// would not hold — so the number is free in the shell this
 				// one imitates, and it is published the way a released one
@@ -642,6 +728,11 @@ func parkDescriptor(f *os.File, dir string, want []int, view substFdView) (*os.F
 	}
 	return os.NewFile(uintptr(parked), dir+"/"+strconv.Itoa(parked)), published, fellBack, nil
 }
+
+// afterAWishMissed is called with a wish's number between the kernel refusing
+// it and the park asking whose it is, and is nil outside a test: the moment a
+// sibling's end can be let go of, which only a test can hold open.
+var afterAWishMissed func(n int)
 
 // fcntlInt is the one fcntl this package needs, with the errno turned into an
 // error.

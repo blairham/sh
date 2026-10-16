@@ -7,6 +7,7 @@ package interp_test
 
 import (
 	"context"
+	"io"
 	"strings"
 	"testing"
 
@@ -273,6 +274,13 @@ func runOwnDescriptors(t *testing.T, own OwnDescriptorNumbers, src string) strin
 // meant to complain, answering what it wrote to each stream.
 func runOwnDescriptorsAllowingErrors(t *testing.T, own OwnDescriptorNumbers, src string) (string, string) {
 	t.Helper()
+	return runOwnDescriptorsReading(t, own, src, nil)
+}
+
+// runOwnDescriptorsReading is runOwnDescriptorsAllowingErrors with the
+// shell's input given, where stdin is not nil.
+func runOwnDescriptorsReading(t *testing.T, own OwnDescriptorNumbers, src string, stdin io.Reader) (string, string) {
+	t.Helper()
 	d := syntax.Core()
 	d.ProcessSubstitution = true
 	d.FdVariableRedirections = true
@@ -286,11 +294,18 @@ func runOwnDescriptorsAllowingErrors(t *testing.T, own OwnDescriptorNumbers, src
 	sem.OwnDescriptors = own
 	sem.LastPipelineElementInCurrentShell = Yes
 	sem.FdVariableOutlivesTheCommand = Yes
+	// Answered only so that a row starting a background job can be run at
+	// all: a substitution's body asks it the moment there is a job.
+	sem.SubshellJobTable = SubshellJobsCleared
 	out, errs := &strings.Builder{}, &strings.Builder{}
-	r := newTestRunner(t, &Runner{
+	r := &Runner{
 		Semantics: &sem, Diagnostics: &Diagnostics{}, Name: "sh",
 		Stdout: out, Stderr: errs,
-	})
+	}
+	if stdin != nil {
+		r.Stdin = stdin
+	}
+	r = newTestRunner(t, r)
 	if _, err := r.Run(context.Background(), f); err != nil {
 		t.Fatal(err)
 	}

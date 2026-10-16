@@ -962,6 +962,25 @@ func (r *Runner) getoptsEnd(name string, ind int) int {
 	// freeze directly: the question was already put at the write, and asking
 	// it twice would record two answers for one disagreement.
 	if r.sem().GetoptsFrozenNameAtTheEndOfTheOptionsIsFatal == Yes {
+		// And the end it makes is the script's and not the text's: no
+		// boundary that catches an ordinary fatal error catches this one.
+		// Measured 2026-10-15 on ksh93u+ under `-c` and from a script file,
+		// with `readonly o` in front and `echo after` behind:
+		//
+		//	function f { getopts x o; }; f        the complaint, exit 2
+		//	function f { …; }; function g { f; }; g   the same
+		//	eval "getopts x o"                    the same
+		//	. ./file holding `getopts x o`        the same
+		//	( f ); x=$(f)                         `after`: a copy of the shell
+		//	function f { readonly x=1; x=2; }; f  `after` — an ordinary one
+		//
+		// where a `function`-form call, an `eval` and a `.` each end an
+		// ordinary fatal error there and go on (#6632). So the stop is a
+		// request rather than an error, which those boundaries pass, and a
+		// subshell still contains it by being one.
+		if r.ctl == controlExit {
+			r.abandon = abandonRequested
+		}
 		return getoptsRefusedStatus
 	}
 	// The one refused name that does not carry the status with it. There is

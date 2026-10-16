@@ -109,6 +109,17 @@ func (r *Runner) getoptsSpeaksAsTheScript() func() {
 		return func() {}
 	}
 	zero, _ := r.dollarZero()
+	if d := r.diag(); d.BorrowedTextRendersTheCallStack && r.callStackHasAComponent(*d) {
+		// The innermost frame of the chain the location writes, which is a
+		// `function`-form call's name — `$0` there anyway — or `eval` or `.`
+		// where the refusal is in borrowed text. Measured 2026-10-15 on
+		// ksh93u+, with `readonly o`: `eval "getopts x o -x"` is `eval[1]:
+		// eval: o: is read only`, the same inside `function f` is `f[1]:
+		// eval[1]: eval: …`, a `.` inside one is `f[1]: .[1]: .: …`, and an
+		// `eval g` of a POSIX-form `g` names `eval`, since that call is no
+		// frame of the chain (#6632).
+		_, zero = r.borrowedStack(*d, zero)
+	}
 	outer := r.builtinSpokenAs
 	r.builtinSpokenAs = zero
 	return func() { r.builtinSpokenAs = outer }

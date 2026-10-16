@@ -105,6 +105,7 @@ func (r *Runner) assignChainedElement(a *syntax.Assign) {
 		there bool
 		place func(Element)
 		ok    bool
+		root  = key
 	)
 	if table {
 		held, there, place, ok = r.chainRootInTable(a.Name, key)
@@ -114,12 +115,17 @@ func (r *Runner) assignChainedElement(a *syntax.Assign) {
 			r.fatal("%s\n", r.subscriptFailure(text, err))
 			return
 		}
-		held, there, place, ok = r.chainRootInArray(a.Name, idx, subscriptSubject(first.Text, text))
+		var at int
+		held, there, place, at, ok = r.chainRootInArray(a.Name, idx, subscriptSubject(first.Text, text))
+		root = itoa(at)
 	}
 	if !ok {
 		return
 	}
-	r.chainWrite(a.Name, held, there, place, rest, last, value, a.Append)
+	links, wrote := r.chainWrite(a.Name, held, there, place, rest, last, value, a.Append)
+	if wrote {
+		r.resolvedChain(append([]string{root}, links...))
+	}
 }
 
 // chainWrite walks the subscripts after the first and writes the value under
@@ -138,14 +144,16 @@ func (r *Runner) assignChainedElement(a *syntax.Assign) {
 // indexes is an array.
 func (r *Runner) chainWrite(name string, held Element, there bool, place func(Element),
 	rest []string, last, value string, appendTo bool,
-) {
+) (links []string, wrote bool) {
+	links = make([]string, 0, len(rest)+1)
 	for _, text := range rest {
 		inner := nestedForWrite(held, there, r.arrayBase())
 		idx, err := r.subscriptValue(text)
 		if err != nil {
 			r.fatal("%s\n", r.subscriptFailure(text, err))
-			return
+			return nil, false
 		}
+		links = append(links, itoa(idx))
 		outer, outerPlace := inner, place
 		held, there = inner.Lookup(idx)
 		place = func(e Element) {
@@ -157,8 +165,9 @@ func (r *Runner) chainWrite(name string, held Element, there bool, place func(El
 	idx, err := r.subscriptValue(last)
 	if err != nil {
 		r.fatal("%s\n", r.subscriptFailure(last, err))
-		return
+		return nil, false
 	}
+	links = append(links, itoa(idx))
 	// The last subscript is an ordinary element write, append included:
 	// `a[1][2]+=Q` joins what is under 2 of the nested array exactly as
 	// `a[2]+=Q` joins what is under 2 of an ordinary one.
@@ -174,10 +183,11 @@ func (r *Runner) chainWrite(name string, held Element, there bool, place func(El
 	if folded, ok := r.attributeFolded(name, value); ok {
 		value = folded
 	} else {
-		return
+		return nil, false
 	}
 	inner.Set(idx, Scalar(value))
 	place(Element{Nested: inner})
+	return links, true
 }
 
 // chainRootInTable and chainRootInArray are the two roots a chain can have,
@@ -197,26 +207,30 @@ func (r *Runner) chainRootInTable(name, key string) (Element, bool, func(Element
 	return held, there, func(e Element) { r.storeAssocElement(name, key, e) }, true
 }
 
-func (r *Runner) chainRootInArray(name string, idx int, subject string) (Element, bool, func(Element), bool) {
+// chainRootInArray's at is the position the first subscript named, counted from the array's
+// base, which is what the trace of the chain writes for it: measured
+// 2026-10-15 on ksh93u+ 2012-08-01, `a=(x y); a[-1][2]=v` traces as
+// `a[1][2]=v`.
+func (r *Runner) chainRootInArray(name string, idx int, subject string) (held Element, there bool, place func(Element), at int, ok bool) {
 	// elementsOfName is what promotes a scalar the name is holding — `s=abc;
 	// s[1][2]=v` is `typeset -a s=(abc ([2]=v) )`, with `abc` kept at the
 	// base — and it is the same call the single-subscript store makes, so the
 	// promotion cannot come to differ between the two spellings.
 	arr := r.elementsOfName(name, idx)
 	if r.unspecified {
-		return Element{}, false, nil, false
+		return Element{}, false, nil, 0, false
 	}
 	pos, within := r.elemPos(arr, idx)
 	if !within {
 		r.fatal("%s\n", Wording(r.diag().BadArraySubscript,
 			"%[1]s[%[2]s]: bad array subscript", name, subject))
-		return Element{}, false, nil, false
+		return Element{}, false, nil, 0, false
 	}
-	held, there := arr.Lookup(pos)
+	held, there = arr.Lookup(pos)
 	return held, there, func(e Element) {
 		arr.Set(pos, e)
 		r.storeArray(name, arr)
-	}, true
+	}, pos + r.arrayBase(), true
 }
 
 // nestedForWrite is the array a link writes in, given what the element above
@@ -279,7 +293,7 @@ func (r *Runner) declareChainedElement(base string, leading []string, last, valu
 			r.fatal("%s\n", r.subscriptFailure(leading[0], err))
 			return
 		}
-		held, there, place, ok = r.chainRootInArray(base, idx, leading[0])
+		held, there, place, _, ok = r.chainRootInArray(base, idx, leading[0])
 	}
 	if !ok {
 		return

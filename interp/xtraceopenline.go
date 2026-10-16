@@ -108,7 +108,7 @@ func (r *Runner) assignAllAsItGoes(ctx context.Context, assigns []*syntax.Assign
 	r.openTrace = line
 	defer func() { r.openTrace = outer }()
 	for _, a := range assigns {
-		target := traceAssignTarget(a, nil, nil)
+		target := traceAssignTarget(a, nil, nil, r.wordAsWrittenLayout())
 		line.pending += target
 		failedBefore := r.expandErr
 		value, fields, globbed := r.expandScalarAssignValue(a.Value)

@@ -956,6 +956,10 @@ func (r *Runner) applyRedirList(ctx context.Context, rs []*syntax.Redirect, comp
 		// and fan-in below join them exactly as two redirections written out
 		// would be joined; `{name}` is the exception and takes a fresh number
 		// per name, leaving the variable holding the last, which is measured.
+		// The both-streams operators, which a `{name}` reaches in one
+		// dialect only — the others read `{v}&>` as a word, and refuse
+		// `{v}>&word` before anything is opened.
+		bothStreams := fd == -1
 		for _, name := range names {
 			// The shell picks the descriptor: the next free number from its
 			// base up, clear of the single digits a script says `2>&1`
@@ -965,7 +969,21 @@ func (r *Runner) applyRedirList(ctx context.Context, rs []*syntax.Redirect, comp
 			// second file — measured on zsh 5.9.2, which is the only shell
 			// that has both halves.
 			if fdVar != "" {
+				// The both-streams spelling holds one number of its own
+				// while the name's is picked, and gives it up at once:
+				// `: {v}&>/dev/null {w}</dev/null; echo $v $w` is `12 11`
+				// in zsh 5.9.2, as are `{v}&>>`, `{v}&>|` and the csh
+				// `{v}>&/dev/null`, measured 2026-10-15 (#6665). Nothing
+				// else about the open changes: the standard streams are left
+				// alone and the name's number is the file.
+				held := -1
+				if bothStreams {
+					held = r.holdNumber(false)
+				}
 				fd = r.nextFreeFd(-1)
+				if held >= 0 {
+					r.letGoOfNumber(held)
+				}
 			}
 			// A name that is not there is not a relative one. Joining it to the
 			// working directory turns "no name" into *the directory*, which then
@@ -1242,6 +1260,17 @@ func (r *Runner) applyRedirList(ctx context.Context, rs []*syntax.Redirect, comp
 					if !storeFdVar(fdVar, fd, f, persists, readTarget) {
 						r.redirErr = true
 						return closers, nil
+					}
+					if bothStreams {
+						// And standard error goes to the name's file with
+						// it, joining what the list already aimed there,
+						// while standard output is left alone: `print -u2
+						// err {v}&>f` writes `err` into f and `echo hi
+						// {v}&>f` still prints `hi`, and `2>g {v}&>f`
+						// fills both, measured 2026-10-15 on zsh 5.9.2
+						// (#6665). Put back with the command's other streams
+						// unless the command is `exec`.
+						r.Stderr = r.eachTarget(2, f, opened)
 					}
 				}
 			}

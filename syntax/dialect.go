@@ -8581,6 +8581,32 @@ type Dialect struct {
 	// operator. bash and ksh93 need the operator adjacent.
 	FdVariableAcrossBlanks bool
 
+	// FdVariableBeforeBothStreams takes a `{name}` as a descriptor variable
+	// in front of the both-streams operators — `&>`, `&>>` and their
+	// clobber-marked spellings — as it is taken in front of `>` (#6665).
+	//
+	// zsh alone. Measured 2026-10-15 with `-fc` on zsh 5.9.2, then `echo
+	// "[$v]"`: `echo hi {v}&>/dev/null`, `{v}&>>`, `{v}&>|`, `{v}&>!`,
+	// `{v}&>>|` and, across a blank, `echo hi {v} &>/dev/null` all print
+	// `hi` and leave a number in `v`; the standard streams are not touched,
+	// so the operator is an ordinary open under that spelling. bash reads
+	// `{v}` as a word before `&>`, and ksh93 has no `&>`.
+	FdVariableBeforeBothStreams bool
+
+	// DoubledAngleOpensAProcessSubstitution reads `>>(` and `<<(` as a
+	// one-character redirection operator followed by a process
+	// substitution, rather than as an append or a here-document whose
+	// delimiter starts with `(` (#6665).
+	//
+	// zsh alone. Measured 2026-10-15 with `-fc` on zsh 5.9.2: `echo hi
+	// >>(cat)` and `echo hi 2>>(cat >&2)` write `hi` through the
+	// substitution, `cat <<(echo a)<<(echo b)` prints `a` and `b`, and `cat
+	// 3<<(echo hi) <&3` prints `hi`. `&>>(cat)` is not this — it stays the
+	// appending both-streams operator and is refused with `number expected`
+	// — and `<<<(` stays a here-string. bash and ksh93 refuse `>>(` at the
+	// `(`.
+	DoubledAngleOpensAProcessSubstitution bool
+
 	// CloseQuotesAtEOF is the set of routes on which an unterminated `'`,
 	// `"` or backquote ends at the end of input as if the closing mark were
 	// there, instead of the parse being refused: `echo "abc` prints abc.

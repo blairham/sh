@@ -2720,6 +2720,10 @@ func Semantics() interp.Semantics {
 	// literal here to fail partway through.
 	// unanswered ElementSubscriptIsExpandedBeforeTheValue: no element write
 	// to order — `a[1]=v` is a command word here.
+	// unanswered FrozenElementIsRefusedBeforeItsSubscript: and so no frozen
+	// element to refuse.
+	// unanswered FrozenLiteralIsExpandedBeforeItIsRefused: no array literal
+	// to expand.
 	// unanswered TraceElementSubscriptIsEvaluated: and no subscript, so
 	// `a[1]=v` names a variable spelled `a[1]` and there is nothing to
 	// resolve.

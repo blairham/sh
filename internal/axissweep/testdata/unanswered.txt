@@ -132,6 +132,8 @@ ash   EarlierDeclarationLetterBlocksALaterPlus
 ash   ALetterUnderBothSignsComesOff
 ash   EarlierPlusMakesALaterLetterARemoval
 ash   ElementSubscriptIsExpandedBeforeTheValue
+ash   FrozenElementIsRefusedBeforeItsSubscript
+ash   FrozenLiteralIsExpandedBeforeItIsRefused
 ash   EmptyArithSubscript
 ash   EmptyAssociativeKeyIsAnError
 ash   EmptyAssociativeKeyIsReportedWhenRead
@@ -518,6 +520,8 @@ dash  ALetterUnderBothSignsComesOff
 dash  EarlierPlusMakesALaterLetterARemoval
 dash  EchoLastEscapeFlagWins
 dash  ElementSubscriptIsExpandedBeforeTheValue
+dash  FrozenElementIsRefusedBeforeItsSubscript
+dash  FrozenLiteralIsExpandedBeforeItIsRefused
 dash  EmptyArithSubscript
 dash  EmptyAssociativeKeyIsAnError
 dash  EmptyAssociativeKeyIsReportedWhenRead

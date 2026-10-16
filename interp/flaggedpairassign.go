@@ -81,7 +81,10 @@ func (r *Runner) assignFlaggedSpan(a *syntax.Assign) {
 
 // spliceElemLiteralOverAFlaggedSpan is the literal spelling: the words replace
 // the span, or go in after the element the second end names under `+=`.
-func (r *Runner) spliceElemLiteralOverAFlaggedSpan(a *syntax.Assign) {
+//
+// build is the literal's words as spliceElemLiteral arranged them — see
+// elementLiteralBuilt.
+func (r *Runner) spliceElemLiteralOverAFlaggedSpan(a *syntax.Assign, build func() ([]string, bool)) {
 	if !r.spliceTargetIsAnArray(a) {
 		return
 	}
@@ -89,11 +92,10 @@ func (r *Runner) spliceElemLiteralOverAFlaggedSpan(a *syntax.Assign) {
 	if !ok {
 		return
 	}
-	build := func() ([]string, bool) { return r.literalWords(a.Name, a.Elems) }
 	if a.Append {
 		// The second end is one subscript here, and the splice that takes
 		// one subscript is the one to hand it to.
-		r.spliceWordsIntoElement(a, itoa(to), build)
+		r.spliceWordsIntoElement(a, func() string { return itoa(to) }, build)
 		return
 	}
 	words, ok := build()

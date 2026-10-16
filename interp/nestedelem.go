@@ -44,8 +44,15 @@ import (
 // reads a subscript's comma as the arithmetic operator whose value is its
 // right operand, so `a[2,3]=(x y)` is `a[3]=(x y)` — the same reading
 // `a[2,3]=x` already takes here, reached by the same single-subscript route.
+//
+// The value is built on the side of the subscript elementLiteralBuilt says,
+// and the subscript is read whole — words and arithmetic — on the other:
+// `a[$(echo SUB >&2; echo 1/0)]=(p $(echo VAL >&2))` reports the division
+// without writing VAL in the column that does this (#6675).
 func (r *Runner) nestElemLiteral(a *syntax.Assign) {
-	value, ok := r.nestedLiteral(a.Name, a.Elems)
+	value, ok := elementLiteralBuilt(r, a, func() (Element, bool) {
+		return r.nestedLiteral(a.Name, a.Elems)
+	})
 	if !ok {
 		return
 	}
@@ -58,7 +65,11 @@ func (r *Runner) nestElemLiteral(a *syntax.Assign) {
 		if !keyed {
 			return
 		}
-		r.storeAssocElement(a.Name, key, value)
+		v, built := value()
+		if !built {
+			return
+		}
+		r.storeAssocElement(a.Name, key, v)
 		return
 	}
 	text := r.joinWord(a.Index)
@@ -70,7 +81,11 @@ func (r *Runner) nestElemLiteral(a *syntax.Assign) {
 		r.fatal("%s\n", r.subscriptFailure(text, err))
 		return
 	}
-	r.storeArrayElement(a.Name, idx, subject, value, a.Append)
+	v, built := value()
+	if !built {
+		return
+	}
+	r.storeArrayElement(a.Name, idx, subject, v, a.Append)
 }
 
 // nestedLiteral is the value a literal standing in an element's place builds.

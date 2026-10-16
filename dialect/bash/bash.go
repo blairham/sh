@@ -2598,6 +2598,12 @@ func Semantics() interp.Semantics {
 	// An element write expands its value before its subscript:
 	// `a[$(echo SUB >&2; echo 1)]=$(echo VAL >&2)x` writes VAL, then SUB.
 	s.ElementSubscriptIsExpandedBeforeTheValue = interp.No
+	// A frozen element is refused at its store, after the value, the
+	// subscript's words and its arithmetic: `readonly a=(1 2);
+	// a[$(echo SUB >&2; echo 1)]=$(echo VAL >&2)x` writes VAL, SUB, then the
+	// refusal. A frozen whole literal is refused before any of its words.
+	s.FrozenElementIsRefusedBeforeItsSubscript = interp.No
+	s.FrozenLiteralIsExpandedBeforeItIsRefused = interp.No
 	// A literal that fails partway through stores nothing, subscripted or
 	// not: the name keeps what it held.
 	s.FailedSubscriptedLiteralKeepsWhatItStored = interp.No

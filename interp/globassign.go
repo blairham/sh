@@ -221,6 +221,6 @@ func (r *Runner) globbedElementIsAList(a *syntax.Assign, text string, g globbedV
 	if !g.list {
 		return false
 	}
-	r.spliceWordsIntoElement(a, text, func() ([]string, bool) { return g.fields, true })
+	r.spliceWordsIntoElement(a, func() string { return text }, func() ([]string, bool) { return g.fields, true })
 	return true
 }

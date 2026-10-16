@@ -29,7 +29,7 @@ var theFullRoad = map[string][]string{
 		"assignChainedElement", "assignCompoundBodyIntoElement", "assignCompoundVariable",
 		"assignElemLiteral", "assignElementMember", "assignFlaggedSpan", "assignFlaggedTableElement",
 		"assignPositional", "assignSpan", "assignSubscriptedCompound", "assignTableCompoundBase",
-		"assignValue", "assignWholeArraySubscript", "assignmentLandsOn", "assocDeclared", "assocsAt",
+		"assignValue", "assignWholeArraySubscript", "assocDeclared", "assocsAt",
 		"clearAttributesAReCreationDrops", "clearTypeAttributes", "compoundAssignedFromAName",
 		"disciplineWrite", "elementValue", "endHiddenWatch", "endProducerUnsetEnded",
 		"expandArithText", "expansionFailedHere", "expansionHasFailed", "failedSubscript", "fatal",
@@ -38,7 +38,7 @@ var theFullRoad = map[string][]string{
 		"globbedElementIsAList", "globbedElementValue", "indexedSubscriptKeepsItsQuoting",
 		"indirectElement", "isCompoundVariable", "isNameref", "joinWord", "markForAllexport",
 		"namerefArrayLiteralTarget", "namerefCompoundBodyStore", "namerefTarget", "readingQuotedText",
-		"referredToParameter", "refuseNamerefAim", "refuseReadonly", "refuseUnaimedReference",
+		"referredToParameter", "refuseNamerefAim", "refuseUnaimedReference",
 		"refusesEmptyAssignSubscript", "resolvedSubscript", "scalarAssignValue",
 		"scalarStoreReplacesACompound", "setArrayElem", "setAssocElem", "setVarAs",
 		"spanIsBelowTheFirstElement", "spanReplacesElements", "spliceCharacterSpan",
@@ -47,6 +47,9 @@ var theFullRoad = map[string][]string{
 		"subscriptValueAsWritten", "suppressDiscipline", "tableRefusesAScalarStore",
 		"unaimedReferenceBase", "watchHiddenKinds", "appendArrayElem", "arrayElemsOfTheName",
 		"diag", "retypingFrozen", "unspecified", "assignmentGaveUp",
+		// The freeze, which a plain store never meets: a frozen name carries
+		// an attribute and a private one a shield (#6674).
+		"heldFreeze", "refuseAFrozenAssignment", "refuseTheHeldFreeze",
 		// The element road only — storesAPlainScalar refuses every subscript (#6604).
 		"armAssignSubscript", "expanded", "valueAheadOfTheSubscript",
 	},

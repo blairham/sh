@@ -180,3 +180,53 @@ func TestOnlyTheFirstRefusedSetOptionIsReportedWhereTheLoopCarriesOn(t *testing.
 		t.Errorf("the loop that reports every one says two, got %d in %q", n, every)
 	}
 }
+
+// The same question on the `-c` route, where the option decides nothing: an
+// error the shell reported and gave up over takes the handler away in the one
+// column that answers yes, and a stop the script asked for keeps it.
+//
+// Each row is run on every route and under both answers, because a rule keyed
+// on the route is proved only by the rows it leaves alone on the others.
+func TestWhetherAFatalErrorOnACommandStringSkipsTheExitTrap(t *testing.T) {
+	const handler = `trap 'printf TRAP_RAN' EXIT` + "\n"
+	for _, c := range []struct {
+		name  string
+		src   string
+		skips bool
+	}{
+		// Errors the shell reports and gives up over.
+		{"a readonly reassignment", "readonly r=1\nreadonly r=2\nprintf after", true},
+		{"an unset parameter under nounset", "set -u\nprintf '[%s]' \"$nosuch\"\nprintf after", true},
+		{"a division by zero", "printf '[%s]' \"$((1/0))\"\nprintf after", true},
+		{"a division by zero in a function", "f() { printf '[%s]' \"$((1/0))\"; }\nf\nprintf after", true},
+		// Stops the script asked for.
+		{"an explicit exit", "exit 3\nprintf after", false},
+		{"errexit firing", "set -e\nfalse\nprintf after", false},
+		{"an exit after a subshell gave up", "(printf '[%s]' \"$((1/0))\")\nexit 4\nprintf after", false},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			for _, route := range []Route{RouteCommandString, RouteScriptFile, RouteStandardInput} {
+				for _, answer := range []Answer{Yes, No} {
+					out, _ := run(t, handler+c.src, func(r *Runner) {
+						sem := permissive()
+						sem.FatalErrorOnACommandStringSkipsTheExitTrap = answer
+						sem.ReadonlyReassignmentByDeclarationFatal = Yes
+						sem.ReadonlyReassignmentBySpecialBuiltinFatal = Yes
+						sem.ArithDivisionByZeroYieldsAValue = No
+						r.Semantics = &sem
+						r.Diagnostics = &Diagnostics{}
+						r.Route = route
+					})
+					ran := strings.Contains(out, "TRAP_RAN")
+					want := !c.skips || answer != Yes || route != RouteCommandString
+					if ran != want {
+						t.Errorf("%v, answer=%v: trap ran=%v, want %v — got %q", route, answer, ran, want, out)
+					}
+					if strings.Contains(out, "after") {
+						t.Errorf("%v, answer=%v: the script should have ended, got %q", route, answer, out)
+					}
+				}
+			}
+		})
+	}
+}

@@ -5497,6 +5497,23 @@ type Semantics struct {
 	// division by zero prints `TRAP` there every time.
 	FatalErrorUnderErrexitSkipsTheExitTrap Answer
 
+	// FatalErrorOnACommandStringSkipsTheExitTrap runs no EXIT trap, and no
+	// TRAPEXIT, when a `-c` command string ends over an error the shell
+	// reported and gave up over — with `set -e` or without. zsh alone; see
+	// Runner.exitTrapSkippedOnACommandString for the table.
+	//
+	// It is the `-c` route's counterpart of
+	// FatalErrorUnderErrexitSkipsTheExitTrap, and wider than it: on this
+	// route the option is not half the discriminator, and a command
+	// substitution whose body would not parse joins the errors. A stop the
+	// script asked for keeps the trap here as well — `exit 3`, errexit
+	// firing on `false`, and `${x?word}`, which this column reads as a
+	// request to stop (ParamErrorIsAnExitRequest).
+	//
+	// Read without asking. A shell that has chosen nothing runs the trap,
+	// which is what bash, dash and ksh93 do on the same lines.
+	FatalErrorOnACommandStringSkipsTheExitTrap Answer
+
 	// SubshellExitTrapAfterAGiveUp is the same question at the subshell
 	// boundary, and it is a second axis rather than the field above reaching
 	// further: one column answers the two differently. See

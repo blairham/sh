@@ -3637,6 +3637,14 @@ func Semantics() interp.Semantics {
 	// without; `exit 3`, a plain `false` under the option and `${x?word}` all
 	// keep it. See interp.Runner.exitTrapSkippedByAFatalError (#2744).
 	s.FatalErrorUnderErrexitSkipsTheExitTrap = interp.Yes
+	// And through `-c` it loses them for the same errors with no option at
+	// all, TRAPEXIT included. Measured 2026-10-16 on zsh 5.9.2 under `-f`:
+	// a division by zero, a readonly reassignment, a refused `set` option,
+	// `break` outside a loop, an unset parameter under `set -u` and a
+	// substitution that would not parse each end the string with no
+	// handler, where the same line from a file or standard input runs it.
+	// See interp.Runner.exitTrapSkippedOnACommandString (#6666).
+	s.FatalErrorOnACommandStringSkipsTheExitTrap = interp.Yes
 	// A *subshell* loses it for the same errors with no option at all, and
 	// for two more besides: `${x?word}`, which keeps it at the top level
 	// here, and a refused `set` option, which ksh93's subshell keeps.

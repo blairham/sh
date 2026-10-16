@@ -6741,6 +6741,15 @@ func (l *Lexer) atBraceTokenStart(from, wordParen int) bool {
 	return false
 }
 
+// BraceBodyClosesAtAToken reports whether span is a `${ cmd;}` body in the
+// dialect that ends one at a `}` beginning a token, so that the closing brace
+// is a token of the body's own grammar — one a body still in the middle of a
+// construct refuses as unexpected. See [BraceProgramBodyEndsAtATokenStart].
+func BraceBodyClosesAtAToken(span Span, d Dialect) bool {
+	return span.CurrentShell && span.Kind == CommandSubst &&
+		d.BraceProgramBodyEnd == BraceProgramBodyEndsAtATokenStart
+}
+
 // BraceBodyClosedBehindABraceName reports whether a `${ cmd;}` span's body
 // was closed by a `}` standing straight behind a `{name}` word — `${ echo
 // {v}}` — in the dialect that reads that brace as the closer. That shell
@@ -6756,9 +6765,7 @@ func (l *Lexer) atBraceTokenStart(from, wordParen int) bool {
 // from paying for the read. A flag on Span would have been cheaper still and
 // takes it past its size class; see TestTheTwoShapesATreeIsMadeOfStayWithinTheirBudget.
 func BraceBodyClosedBehindABraceName(span Span, d Dialect) bool {
-	if !span.CurrentShell || span.Kind != CommandSubst ||
-		d.BraceProgramBodyEnd != BraceProgramBodyEndsAtATokenStart ||
-		!strings.HasSuffix(span.Value, "}") {
+	if !BraceBodyClosesAtAToken(span, d) || !strings.HasSuffix(span.Value, "}") {
 		return false
 	}
 	open := "${"
@@ -7308,6 +7315,14 @@ func (l *Lexer) scanArithCommand(start Pos) (Token, bool) {
 			if !l.eof() {
 				l.advance()
 			}
+		case '`':
+			// A backquoted substitution is stepped over whole, as its quoting
+			// is its own, and the input running out inside it is the
+			// backquote's to report. Measured 2026-10-16 over a script file
+			// `(( `echo`: bash 5.3.20 `looking for matching ``'`, ksh93u+
+			// ``syntax error at line 1: ``' unmatched``, dash `EOF in
+			// backquote substitution` — where this named the `((` (#6754).
+			l.skipBackticks()
 		case '$':
 			// A command substitution holds a *program*, so where it ends is
 			// a question about the grammar and not about how many

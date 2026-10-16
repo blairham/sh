@@ -41,6 +41,22 @@ func SubscriptedElement(w *Word) bool {
 	return ok
 }
 
+// emptyElementSubscript reports whether a literal's element was written with
+// brackets holding nothing at all — `[]=v`, or `[]+=v`. A quoted empty key,
+// `[""]=v`, is not that: it wrote a word, and the word came to nothing.
+func emptyElementSubscript(w *Word) bool {
+	sub, _, _, ok := ElementSubscript(w)
+	if !ok {
+		return false
+	}
+	for _, s := range sub.Spans {
+		if s.Kind != Literal || s.Quoting != Unquoted || s.Value != "" {
+			return false
+		}
+	}
+	return true
+}
+
 // subscriptedElementSpans is SubscriptedElement before the spans are a word.
 //
 // The parser needs the answer one token early — the shape of the literal

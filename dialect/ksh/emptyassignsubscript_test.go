@@ -47,6 +47,17 @@ func TestAnEmptyAssignmentSubscriptIsASyntaxError(t *testing.T) {
 		{"a[2][]=6\n", "syntax error at line 1: `[]' empty subscript"},
 		// A prefix assignment carries the brackets too.
 		{"a[]=6 true\n", "syntax error at line 1: `[]' empty subscript"},
+		// And an element of a keyed literal, by every spelling a literal
+		// is written in. Measured 2026-10-15, the same sentence, the
+		// untaken branch included (#6607).
+		{"g=([]=x)\n", "syntax error at line 1: `[]' empty subscript"},
+		{"typeset -A g=([]=x)\n", "syntax error at line 1: `[]' empty subscript"},
+		{"g=([a]=1 []+=x)\n", "syntax error at line 1: `[]' empty subscript"},
+		{"g+=([a]=1\n[]=x)\n", "syntax error at line 2: `[]' empty subscript"},
+		{
+			"echo before\nif false; then g=([]=x); fi\necho after\n",
+			"syntax error at line 2: `[]' empty subscript",
+		},
 	} {
 		_, err := syntax.Parse(tc.src, ksh.Dialect())
 		if err == nil {
@@ -96,6 +107,24 @@ func TestTheSubscriptsThatAreNotWrittenEmpty(t *testing.T) {
 		out, st := runKsh(t, t.TempDir(), c.src)
 		if out != c.want || st != 0 {
 			t.Errorf("%s = %q (status %d), want %q at 0", c.src, out, st, c.want)
+		}
+	}
+}
+
+// The literal's refusal is the keyed shape's alone. After a bare first element
+// every bracket in the literal is text, and `[]=y` is then an ordinary word —
+// measured 2026-10-15, `if false; then g=(a [1]=x []=y); fi` runs to the end
+// at 0 — and a quoted empty key wrote a word, which is stored rather than
+// refused (#6607).
+func TestAnEmptyKeyThatIsNotEmptyBracketsIsNotASyntaxError(t *testing.T) {
+	for _, src := range []string{
+		"g=(a [1]=x []=y)\n",
+		"g=([\"\"]=x)\n",
+		"g=(['']=x)\n",
+		"e=; g=([$e]=x)\n",
+	} {
+		if _, err := syntax.Parse(src, ksh.Dialect()); err != nil {
+			t.Errorf("%q: %v, want it read", src, err)
 		}
 	}
 }

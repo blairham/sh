@@ -4260,6 +4260,11 @@ type Runner struct {
 	// there. See Runner.setFdVar and Runner.refuseNamerefAim.
 	fdVarSpeaker string
 
+	// fdVarStores is what the `{name}` redirections of the simple command
+	// being set up stored in this shell, for its prefix to be weighed
+	// against. See interp/fdvarprefix.go.
+	fdVarStores []fdVarStore
+
 	// redirOwner says whose process the redirections being opened belong
 	// to, which is where a real shell has already forked and so where a
 	// here-document body's or a target's expansion happens somewhere the
@@ -9744,7 +9749,10 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 	if len(lateTrace) > 0 {
 		traceDest = r.traceDestination()
 	}
+	r.fdVarStores = nil
 	closers, err := r.applyRedirs(ctx, c.Redirs, false, owner)
+	fdStores := r.fdVarStores
+	r.fdVarStores = nil
 	r.redirectForBuiltin, r.redirForCommandWord = "", ""
 	// Read here rather than in the defer: a builtin that runs a program of its
 	// own — `eval`, `.` — applies redirections of its own on the way, and this
@@ -10137,6 +10145,10 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 		// a function calls functions: an inner call written without a prefix
 		// of its own is holding nothing, and the outer call's names come back
 		// when it returns.
+		// A `{name}` this command stored, seen through the prefix that names
+		// it in the dialects that store after the prefix. See
+		// interp/fdvarprefix.go.
+		r.fdVarStoresThroughThePrefix(c.Assigns, fdStores)
 		outerCallHeld := r.functionPrefixNames
 		r.functionPrefixNames = callHeld
 		// And the same names as a **frame**, so that an `unset` written
@@ -10394,6 +10406,9 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 				r.exportedPut(landsOn, on)
 			}
 		}
+		// A `{name}` this command stored, seen through the prefix — the same
+		// as the function route above. See interp/fdvarprefix.go.
+		r.fdVarStoresThroughThePrefix(c.Assigns, fdStores)
 		// The names this command's prefix is holding, for the declaration
 		// that may keep one of them — and the outer pair put back first,
 		// because a builtin can run another one. See Runner.prefixHeldNames.

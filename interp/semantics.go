@@ -25070,6 +25070,38 @@ type Semantics struct {
 	// 3.2 and dash have no `{name}` redirection to ask.
 	FdVariableReadonlyRefusedFirst Answer
 
+	// FdVariableStoredAfterThePrefix is whether a `{name}` store on a
+	// command this shell runs itself — a function or a builtin — is what
+	// the command sees when its own assignment prefix names the same
+	// variable (#6569).
+	//
+	// Measured 2026-10-15 with `-c`, bash 5.3.20, zsh 5.9.2 under `-f`,
+	// ksh93u+ 2012-08-01, `f() { echo "in[$v]"; }`:
+	//
+	//	                                          bash         zsh          ksh93
+	//	v=pre f {v}</dev/null; echo "[$v]"        in[10] [10]  in[0] [11]   in[10] [10]
+	//	v=old; v=pre f {v}</dev/null; …           in[10] [10]  in[pre] [11] in[10] [10]
+	//	f(){ …; v=x; }; v=pre f {v}</dev/null; …  in[10] [10]  in[0] [11]   in[10] [0]
+	//	v=pre eval 'echo "in[$v]"' {v}</dev/null  in[10] [10]  in[0] [11]   in[10] [10]
+	//	v=pre : {v}</dev/null; echo "[$v]"        [10]         [11]         [10]
+	//	v=pre true {v}</dev/null; echo "[$v]"     [10]         [11]         [10]
+	//
+	// bash and ksh93 store the number after the prefix and into it: the
+	// command sees the number, and bash's `typeset -p v` inside says
+	// `declare -x v="10"` — the prefix's exported cell holding it — while
+	// the shell is left at 10 once that cell is taken back, whatever the body
+	// did to it. ksh93's prefix persists, and the store has made it an
+	// integer, so the body's `v=x` leaves 0. zsh stores first and assigns
+	// the prefix after, so the prefix is what the command sees: `pre`
+	// evaluated as an integer where the store retyped a fresh name
+	// (Semantics.FdVariableStoreTyping), kept as text over a scalar.
+	//
+	// A program is not this question: its prefix is its environment, which
+	// FdVariableReachesTheProgramsEnvironment and the typing of a prefix
+	// (#6698) answer. Asked only where a prefix entry names a name a `{name}`
+	// on the same command stored into. dash and ash have no `{name}`.
+	FdVariableStoredAfterThePrefix Answer
+
 	// NoclobberProtectsAnFdVariable refuses a `{name}` redirection under
 	// `set -C` when the name already holds a descriptor this shell has open.
 	//

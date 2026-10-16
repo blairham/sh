@@ -152,6 +152,7 @@ ash   FdVariableBadName
 ash   FdVariableOnASubshellIsTheSubshells
 ash   FdVariableReachesTheProgramsEnvironment
 ash   FdVariableReadonlyRefusedFirst
+ash   FdVariableStoredAfterThePrefix
 ash   FloatFormatLetterE
 ash   FloatLetterChangeRereadsTheRendering
 ash   ForNameWhenTheLoopRuns
@@ -548,6 +549,7 @@ dash  FdVariableBadName
 dash  FdVariableOnASubshellIsTheSubshells
 dash  FdVariableReachesTheProgramsEnvironment
 dash  FdVariableReadonlyRefusedFirst
+dash  FdVariableStoredAfterThePrefix
 dash  FloatFormatLetterE
 dash  FloatLetterChangeRereadsTheRendering
 dash  ForNameWhenTheLoopRuns

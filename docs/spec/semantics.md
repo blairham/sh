@@ -26466,6 +26466,18 @@ reaching it as written). A subscript that never closes is no subscript —
 the locale has it, so `{é}` stores under a UTF-8 locale and is refused under
 C (#6591).
 
+**`FdVariableStoredAfterThePrefix`** — bash yes · dash — · ksh93 yes · zsh no
+
+Whether a `{name}` store on a function or builtin is what the command sees
+when its own prefix assigns the same name. bash and ksh93 store after the
+prefix and into it: `f() { echo "in[$v]"; }; v=pre f {v}</dev/null; echo
+"[$v]"` is `in[10] [10]` in both — bash's prefix cell is taken back and leaves
+the number, ksh93's persists as the integer the store made it. zsh stores
+first and the prefix wins: `in[0] [11]`, `pre` evaluated as an integer over a
+fresh name the store retyped, kept as text over a scalar. A program's prefix
+is its environment and is not this question (#6698). Asked only where a
+prefix entry names a stored name. Measured 2026-10-15 (#6569).
+
 **`FdVariableReadonlyRefusedFirst`** — bash no · dash — · ksh93 yes · zsh yes
 
 Whether a `{name}` redirection aimed at a frozen name is refused before its

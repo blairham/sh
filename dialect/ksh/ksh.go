@@ -4685,6 +4685,11 @@ func Semantics() interp.Semantics {
 	// failure, measured 2026-10-15 on ksh93u+ (#6571). See
 	// interp.Semantics.FdVariableReadonlyRefusedFirst.
 	s.FdVariableReadonlyRefusedFirst = interp.Yes
+	// And a `{name}` store is made after the command's own prefix of the
+	// same name and into it: `f() { echo "in[$v]"; }; v=pre f {v}</dev/null;
+	// echo "[$v]"` is `in[10] [10]`, measured 2026-10-15 on ksh93u+
+	// (#6569). See interp.Semantics.FdVariableStoredAfterThePrefix.
+	s.FdVariableStoredAfterThePrefix = interp.Yes
 	// And `set -C` does not protect the name: `exec {m}>f1; exec {m}>f2`
 	// allocates a second descriptor and overwrites it in silence, measured
 	// 2026-09-29. See interp.Semantics.NoclobberProtectsAnFdVariable.

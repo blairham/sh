@@ -238,7 +238,7 @@ func (r *Runner) procSub(ctx context.Context, span syntax.Span) (string, bool) {
 	ident, _ := ends.child.Stat()
 	r.procSubs = append(r.procSubs, procSubPipe{
 		path: ends.path, real: ends.real, fd: ends.fd, ident: ident, hold: ends.child,
-		body: body, captured: captured, keep: keep, began: began,
+		body: body, captured: captured, keep: keep, began: began, claim: ends.claim,
 		commandWrites: kind == syntax.ProcSubstOut,
 	})
 	return ends.path, true
@@ -869,6 +869,9 @@ type procSubPipe struct {
 	// happened. Released before hold is closed. See
 	// Runner.releaseConsumedSubstitution.
 	consumed int
+	// claim is the stamp of the claim newProcSubPipe made on hold's number,
+	// or zero where it made none. See foreignfds_unix.go.
+	claim uint64
 	// body answers when a `>(cmd)`'s body has finished writing. Nil for the
 	// other two forms, which have nothing to wait for: `<(cmd)`'s body
 	// writes into the pipe, so the command that named the path has already
@@ -1052,7 +1055,17 @@ func (r *Runner) removeProcSubs(pipes []procSubPipe) {
 			releasePrivateCopy(p.consumed)
 		}
 		if p.hold != nil {
+			// And the claim after the close, the opposite of
+			// releasePrivateCopy's order. Dropped first, the number read as
+			// open and nobody's to a sibling numbering in between, which
+			// stepped over it — about one run in a hundred of `cat <(echo
+			// <(true)) <(echo <(true))`. Dropped after, a park that lands
+			// something of its own there in between replaces the claim,
+			// and a later claim on the number is not this one's to drop. See
+			// dropFdClaimMade.
+			fd := int(p.hold.Fd())
 			_ = p.hold.Close()
+			dropFdClaimMade(fd, p.claim)
 		}
 		if r.holdsDescriptorOnto(p) {
 			// Kept rather than dropped. The clause above says the *name*
@@ -1785,7 +1798,7 @@ func (r *Runner) privateFdFloor() int {
 // Empty in every shell that is not running a substitution's body, which is
 // the common path and is why the two lists are slices rather than sets.
 func (r *Runner) substFdView() substFdView {
-	v := substFdView{released: r.releasedSubstFds}
+	v := substFdView{released: r.releasedSubstFds, at: r.lineage()}
 	// Only the borrowed numbers. A number a live substitution both published
 	// *and* holds is already refused by the kernel, so offering it and being
 	// told no costs one fcntl and needs no bookkeeping to stay true.

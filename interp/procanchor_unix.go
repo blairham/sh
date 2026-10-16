@@ -27,12 +27,7 @@ import (
 //     no environment, so that a placeholder cannot print, cannot hold a
 //     terminal, and cannot inherit whatever the shell happened to have open.
 func startProcAnchor(argv []string) (*exec.Cmd, *os.File, error) {
-	read, write, err := os.Pipe()
-	if err != nil {
-		return nil, nil, err
-	}
 	cmd := exec.Command(argv[0], argv[1:]...)
-	cmd.Stdin = read
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	// An empty slice rather than nil: nil is os/exec's spelling for "this
 	// process's environment", which is the one thing a placeholder must not
@@ -42,13 +37,30 @@ func startProcAnchor(argv []string) (*exec.Cmd, *os.File, error) {
 	// environment, no output and nothing to run, so there is no file for a
 	// file-creation mask to be about. It is also not a Runner's command.
 	// It is still a start, and opens descriptors in this process while it
-	// runs — see transientFds.
-	err = withTransientFds(cmd.Start)
+	// runs — see transientFds. And it leaves two behind for the anchor's
+	// life, the writing end below and on Linux a pidfd, which are no forking
+	// shell's: so the pipe is made inside the same window and both are
+	// claimed as nobody's. See claimStartLeftovers.
+	var read, write *os.File
+	err := withTransientFds(func() error {
+		return claimStartLeftovers(nil, func() error {
+			var perr error
+			if read, write, perr = os.Pipe(); perr != nil {
+				return perr
+			}
+			cmd.Stdin = read
+			return cmd.Start()
+		})
+	})
 	// This shell's copy of the reading end has done its work either way — the
 	// child has it now, or there is no child.
-	_ = read.Close()
+	if read != nil {
+		_ = read.Close()
+	}
 	if err != nil {
-		_ = write.Close()
+		if write != nil {
+			_ = write.Close()
+		}
 		return nil, nil, err
 	}
 	return cmd, write, nil

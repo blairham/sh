@@ -9,7 +9,6 @@ import (
 	"context"
 	"os"
 	"os/exec"
-	"runtime"
 	"testing"
 	"time"
 
@@ -85,17 +84,15 @@ func TestTheHeldDirectoryIsNotInASubstitutionsNumber(t *testing.T) {
 // starting a program while the other numbers its substitutions.
 //
 // Measured on darwin before the fix, the first answer was the free one about
-// half the time, so twenty runs all agreeing is not luck. Darwin only, because
-// on Linux os/exec keeps a pidfd for the life of the child, which is a
-// descriptor of a different kind — held, not momentary — and is #6476's.
+// half the time, so twenty runs all agreeing is not luck. On Linux os/exec
+// also keeps a pidfd for the life of the child, which is a descriptor of a
+// different kind — held, not momentary — and is claimed as nobody's once the
+// start returns (#6476; see claimStartLeftovers).
 // Both of the shell's output streams are files so that os/exec hands them
 // straight to the child: given anything else it makes a pipe of its own to
 // copy through, and that pipe is held for the child's life rather than for a
 // moment.
 func TestASiblingStartingAProgramIsNotInASubstitutionsNumber(t *testing.T) {
-	if runtime.GOOS != "darwin" {
-		t.Skip("a started child holds a pidfd on Linux for its whole life — see #6476")
-	}
 	if measuredInAQuietDescriptorTable(t) {
 		return
 	}

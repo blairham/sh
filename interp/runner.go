@@ -2181,6 +2181,11 @@ type Runner struct {
 	// Runner.firstAllocatedDescriptor — and a clone carries it, since
 	// whatever the body forks has lost it too.
 	shellInputClosed bool
+	// fdNode is this runner's place in the tree of forks it stands in for,
+	// which says whose descriptor table a claimed descriptor is in. Made
+	// lazily for the runner a script started in and by clone for every
+	// other. See fdlineage.go (#6543).
+	fdNode *fdLineage
 	// emptyNameIsASelfReference says the declaration being read carries the
 	// reference letter under its on sign, where an empty name is refused as a
 	// reference to itself rather than as a bad name. See
@@ -5903,7 +5908,11 @@ func (r *Runner) clone() *Runner {
 	// is how a substitution's body and the shell that named it came to race on a
 	// caller's writer with both of them holding a lock. See lockedWriter.
 	r.streamLocks()
+	// And this runner's place in the fork tree, before the copy for the same
+	// reason: the copy's node hangs under it. See fdlineage.go.
+	fdNode := r.forkLineage()
 	c := *r
+	c.fdNode = fdNode
 	c.inSubshell = true
 	// A copy is running its own commands and not the parent's assignment,
 	// whatever the parent was doing when it made the copy: `x=$(echo

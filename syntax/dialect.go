@@ -8354,10 +8354,37 @@ type Dialect struct {
 	//     not the grammar's about `<(`, and this shell reads the opener there
 	//     as a word.
 	//   - The opener also *ends the word before it* in ksh93 — `echo a<(:)b`
-	//     writes three fields, `a`, the path and `b` — where this shell keeps
-	//     one. A separate fact about word boundaries, measured here so it is
-	//     not rediscovered as this rule.
+	//     writes three fields, `a`, the path and `b`. A separate fact about
+	//     word boundaries, and a flag of its own: see
+	//     ProcessSubstitutionIsAWordOfItsOwn.
 	ProcessSubstitutionOnlyWhereACommandTakesAWord bool
+
+	// ProcessSubstitutionIsAWordOfItsOwn reads a process substitution as a
+	// word by itself: the word before it ends at its opener and the word it
+	// is ends at its closer, so what is written against it on either side is
+	// a word of its own. And one touching a redirection's target is refused
+	// while reading.
+	//
+	// ksh93 alone. Measured 2026-10-16 on ksh93u+ 2012-08-01 under `-c`
+	// (#6813):
+	//
+	//	echo <(true)x, echo <(true)"x"     /dev/fd/3 x
+	//	echo a<(true), echo "a"<(true)     a /dev/fd/3
+	//	echo <(true)<(true)                /dev/fd/3 /dev/fd/4
+	//	echo a<(true)b<(true)c             a /dev/fd/3 b /dev/fd/4 c
+	//	echo <(true)$(echo q)              /dev/fd/3 q
+	//	a=<(true)x                         `a=` an assignment, the path the command
+	//	cat < <(echo a)x                   `cat: x: No such file or directory`
+	//	cat < <(echo a)<(echo b)           syntax error: `)' unexpected
+	//	cat < x<(echo a), cat <x<(echo a)  syntax error: `)' unexpected
+	//	echo hi > x>(cat), cat 3< x<(…)    syntax error: `)' unexpected
+	//
+	// So behind a redirection's target the opener is not a substitution's
+	// and the program does not parse, which is why the touch is recorded on
+	// the token the target came from — see Parser.refuseProcSubstTouchingATarget.
+	// bash 5.3.20, zsh 5.9.2 and BusyBox ash 1.37.0 keep one word:
+	// `/dev/fd/63x`, `a/dev/fd/63`.
+	ProcessSubstitutionIsAWordOfItsOwn bool
 
 	// ProcessSubstitutionAgainstTheRedirectionIsRefused refuses, while
 	// reading, a redirection target that begins with a process substitution

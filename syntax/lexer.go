@@ -3363,6 +3363,11 @@ func (l *Lexer) scanWord(start Pos) Token {
 	// arms for are one turn of this loop apart, and nothing outside sees it.
 	pidArmed := false
 
+	// ownWord says a process substitution ended the word, before it or after
+	// it, in the dialect where one is a word of its own. See
+	// [Dialect.ProcessSubstitutionIsAWordOfItsOwn].
+	ownWord := false
+
 	if l.openBraceIsAWordOfItsOwn() {
 		lit.take(l)
 		flush()
@@ -3543,8 +3548,17 @@ func (l *Lexer) scanWord(start Pos) Token {
 			// quoting to change. Measured, and pinned by the corpus case
 			// procsub/quoted-is-not-a-substitution; see
 			// docs/spec/grammar/substitutions.md.
+			if l.dialect.ProcessSubstitutionIsAWordOfItsOwn && (lit.Len() > 0 || len(spans) > 0) {
+				// The word ends before it, in the dialect where the
+				// substitution is a word of its own. See
+				// [Dialect.ProcessSubstitutionIsAWordOfItsOwn].
+				ownWord = true
+				break
+			}
 			flush()
 			spans = append(spans, l.scanParens(procSubstKind(c), Unquoted))
+			// And ends after it, in the same dialect.
+			ownWord = l.dialect.ProcessSubstitutionIsAWordOfItsOwn
 
 		default:
 			// Every other quoting and substitution form, from the list
@@ -3599,7 +3613,7 @@ func (l *Lexer) scanWord(start Pos) Token {
 			}
 			lit.take(l)
 		}
-		if l.err != nil {
+		if l.err != nil || ownWord {
 			break
 		}
 	}
@@ -3612,11 +3626,12 @@ func (l *Lexer) scanWord(start Pos) Token {
 	flush()
 
 	return Token{
-		Kind:  TokWord,
-		Pos:   start,
-		End:   l.pos(),
-		Text:  l.src[start.Offset:l.off],
-		Spans: spans,
+		Kind:             TokWord,
+		Pos:              start,
+		End:              l.pos(),
+		Text:             l.src[start.Offset:l.off],
+		Spans:            spans,
+		procSubstTouches: ownWord && l.startsProcSubst(),
 	}
 }
 

@@ -149,12 +149,13 @@ var theRoadToNoWords = []string{
 	"precommands", "rejoinedArrayOperand", "rejoinsArrayOperand", "scopeProcSubs", "sem",
 	"sourceClosedSubscriptOperands", "startSimpleCommand", "status", "storeTheAssignmentsAlone",
 	"traceEmptyCommand", "underscoreBeforeADeclarationsAssignment", "unspecified", "leadingModifierWords",
-	// The hold for a refusal in a program's words (#6524), which a command
-	// with no words never arms: there is no name for a word to stand behind,
-	// so nothing is held and nothing is written. The entry and its restore
-	// are for a substitution in a later word of a program, which a command of
-	// assignments alone does not have.
-	"armProgramGlob", "diagf", "disarmProgramGlob", "enterProgramGlob", "takeProgramGlobRefusal",
+	// The hold for a refusal in the command's words (#6524, #6677), which a
+	// command with no words never fills: no word reaches the pathname stage,
+	// so nothing is held, raiseHeldRefusal raises nothing and nothing is
+	// written. The entry and its restore are for a substitution in a later
+	// word, which a command of assignments alone does not have.
+	"armProgramGlob", "diagf", "disarmProgramGlob", "openWordList", "raiseHeldRefusal",
+	"takeProgramGlobRefusal",
 }
 
 // TestTheAssignmentsAloneRoadIsTheOneItWasCheckedAgainst fails when what

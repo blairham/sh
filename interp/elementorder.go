@@ -135,6 +135,13 @@ func (r *Runner) elementOrderIsObservable(a *syntax.Assign) bool {
 	}
 	subTouches = subTouches || r.wordTouchesState(a.Index)
 	subExpands = subExpands || wordCanWrite(a.Index)
+	if a.IsArray {
+		// An element literal's subscript is evaluated on its own side of
+		// the list, arithmetic and all — see Runner.elementLiteralOrder —
+		// so `a[i++]=(p $i)` is a question where `a[i++]=$i` is not.
+		subTouches = subTouches || !r.assocDeclared(a.Name) && r.subscriptArithTouchesState(a.Index)
+		return subTouches || r.literalTouchesState(a.Elems) && (subExpands || a.IndexText != "" && !isDecimalSubscript(a.IndexText))
+	}
 	if !subExpands {
 		// A subscript with nothing to expand is only evaluated, and that is
 		// after the value in every column.

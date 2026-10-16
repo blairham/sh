@@ -310,7 +310,7 @@ func (r *Runner) assignThroughReference(e *syntax.ParamExpr, v string) bool {
 			// and `n="m[(e)aa]"` beside it stores `Z` under `aa` — the same
 			// pair the direct spelling gives, which is why this road may not
 			// have a rule of its own (#2288).
-			if !r.flaggedTableWriteIsAKey(e, true) {
+			if !r.flaggedTableWriteIsAKey(e, true, nil) {
 				return false
 			}
 			r.setAssocElem(e.Name, r.assocKey(e.Subscript()), v)

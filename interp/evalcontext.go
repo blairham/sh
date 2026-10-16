@@ -89,6 +89,11 @@ const (
 	// `-c`, and `cmdarg shfunc globqual` in a function. See
 	// interp/globqualcode.go.
 	EvalContextGlobQualifier
+	// EvalContextGlobSort is the code a glob sort specifier runs for each
+	// match — zsh's `*(oe:code:)` and `*(o+name)`. Measured 2026-10-15 on
+	// zsh 5.9.2, the parameter reads `cmdarg globsort` inside it under `-c`.
+	// See interp/globqualsort.go.
+	EvalContextGlobSort
 )
 
 // EvalContextStack is the stack outermost first, with the route's own entry

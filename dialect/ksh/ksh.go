@@ -2683,6 +2683,11 @@ func Semantics() interp.Semantics {
 	// VAL — though its arithmetic is still evaluated after the value, as in
 	// every column. The only column that does.
 	s.ElementSubscriptIsExpandedBeforeTheValue = interp.Yes
+	// And a frozen element is refused at its store, after both of them and
+	// the subscript's arithmetic, as in bash. A frozen whole literal is
+	// refused before any of its words.
+	s.FrozenElementIsRefusedBeforeItsSubscript = interp.No
+	s.FrozenLiteralIsExpandedBeforeItIsRefused = interp.No
 	// A subscripted literal is built as a table, a pair at a time, so one
 	// that fails partway through leaves the pairs before the failure: `a=(1
 	// 2); a=([0]=x [1]=$((1/0)))` is `typeset -A a=([0]=x)`. The only column
@@ -4698,6 +4703,11 @@ func Semantics() interp.Semantics {
 	// echo "[$v]"` is `in[10] [10]`, measured 2026-10-15 on ksh93u+
 	// (#6569). See interp.Semantics.FdVariableStoredAfterThePrefix.
 	s.FdVariableStoredAfterThePrefix = interp.Yes
+	// And a command with no command word makes a `{name}` redirection in the
+	// shell like any other: `{v}>/dev/null; echo "[$v]"` is `[10]`, measured
+	// 2026-10-15 on ksh93u+ (#6630). See
+	// interp.Semantics.FdVariableMakesABareListASubshell.
+	s.FdVariableMakesABareListASubshell = interp.No
 	// And `set -C` does not protect the name: `exec {m}>f1; exec {m}>f2`
 	// allocates a second descriptor and overwrites it in silence, measured
 	// 2026-09-29. See interp.Semantics.NoclobberProtectsAnFdVariable.

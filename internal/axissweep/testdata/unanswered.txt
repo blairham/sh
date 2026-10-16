@@ -132,6 +132,8 @@ ash   EarlierDeclarationLetterBlocksALaterPlus
 ash   ALetterUnderBothSignsComesOff
 ash   EarlierPlusMakesALaterLetterARemoval
 ash   ElementSubscriptIsExpandedBeforeTheValue
+ash   FrozenElementIsRefusedBeforeItsSubscript
+ash   FrozenLiteralIsExpandedBeforeItIsRefused
 ash   EmptyArithSubscript
 ash   EmptyAssociativeKeyIsAnError
 ash   EmptyAssociativeKeyIsReportedWhenRead
@@ -149,6 +151,7 @@ ash   ExportedCompoundReachesAChildAsItsFirstValue
 ash   FailedSubscriptedLiteralKeepsWhatItStored
 ash   FailingPipelineWhoseLastElementRanHere
 ash   FdVariableBadName
+ash   FdVariableMakesABareListASubshell
 ash   FdVariableOnASubshellIsTheSubshells
 ash   FdVariableReachesTheProgramsEnvironment
 ash   FdVariableReadonlyRefusedFirst
@@ -520,6 +523,8 @@ dash  ALetterUnderBothSignsComesOff
 dash  EarlierPlusMakesALaterLetterARemoval
 dash  EchoLastEscapeFlagWins
 dash  ElementSubscriptIsExpandedBeforeTheValue
+dash  FrozenElementIsRefusedBeforeItsSubscript
+dash  FrozenLiteralIsExpandedBeforeItIsRefused
 dash  EmptyArithSubscript
 dash  EmptyAssociativeKeyIsAnError
 dash  EmptyAssociativeKeyIsReportedWhenRead
@@ -547,6 +552,7 @@ dash  ExportedCompoundReachesAChildAsItsFirstValue
 dash  FailedSubscriptedLiteralKeepsWhatItStored
 dash  FailingPipelineWhoseLastElementRanHere
 dash  FdVariableBadName
+dash  FdVariableMakesABareListASubshell
 dash  FdVariableOnASubshellIsTheSubshells
 dash  FdVariableReachesTheProgramsEnvironment
 dash  FdVariableReadonlyRefusedFirst
@@ -820,6 +826,7 @@ zsh   DeclarationThroughAReferenceNamesTheOperand
 zsh   ErrtraceReachesSubshells
 zsh   ExitTrapFiresWhereTheScriptStopped
 zsh   ExportOrReadonlyTakesAReferenceToAnElement
+zsh   FdVariableMakesABareListASubshell
 zsh   FdVariableOnASubshellIsTheSubshells
 zsh   ForNameWhenTheLoopRuns
 zsh   FunctionNameWhenTheDefinitionRuns

@@ -310,10 +310,60 @@ func (r *Runner) sealCallerLocals(sc *scope) {
 		return
 	}
 	sc.sealed = make(map[string]sealedName, len(holders))
+	var handed map[string]string
 	for name, holder := range holders {
+		if v, ok := r.exportedLocalHandedOn(name); ok {
+			if handed == nil {
+				handed = map[string]string{}
+			}
+			handed[name] = v
+		}
 		sc.sealed[name] = sealedName{holder: holder, held: r.captureBinding(name)}
 		r.installBinding(name, bindingFromScope(holder, name))
 	}
+	for name, v := range handed {
+		r.handExportedLocalOn(name, v)
+	}
+}
+
+// exportedLocalHandedOn reports the value a sealed body is handed for a name
+// the caller holds as an **exported** local, read before the seal goes up.
+//
+// The seal's one exception. ksh93's `function`-form body reads past its
+// callers' locals, but not past one the caller exported: it is handed that
+// local's value as a plain local of its own — no attribute, not exported, and
+// gone at the return. Measured 2026-10-15 on ksh93u+ under `-c` and `env -i
+// PATH=/usr/bin:/bin`, with `v=base` in front and the caller `function f {
+// typeset -x v=4; g; echo "f[$v]"; }; f; echo "[$v]"`:
+//
+//	function g { echo "[$v]"; printenv v; }   [4], printenv finds nothing
+//	function g { v=7; echo "[$v]"; }          [7], then f[4] and [base]
+//	function g { unset v; echo "[${v-u}]"; }  [u], then f[4] and [base]
+//	function g { typeset -p v; }              v=4 — no -x, under typeset -xi too
+//	function g { h; }, h reads $v             [base] — the copy is not exported
+//	function g { typeset -x v; h; }           [4] in h
+//	f calls a POSIX p, p calls g              [4]: p shares f's locals
+//	typeset -xa v=(4 5) in f                  [4] and one element
+//	control: typeset v=4 (not exported)       [base]
+//
+// So the copy is made from what the caller sees, which is the first element
+// of an array, and a write lands in neither the caller's local nor the
+// shell's name (#6595). OPTIND is left to the call's own cursor, which
+// overrides it the same way: `typeset -x OPTIND=3` in f leaves g reading 1.
+func (r *Runner) exportedLocalHandedOn(name string) (string, bool) {
+	if name == "OPTIND" || !r.isExported(name) {
+		return "", false
+	}
+	return r.getVar(name)
+}
+
+// handExportedLocalOn makes name a plain local of the sealed body holding v.
+// A fresh shadow is already what the copy is — no attribute, the freeze
+// included, and not exported — so the value is all that is written. See
+// exportedLocalHandedOn.
+func (r *Runner) handExportedLocalOn(name, v string) {
+	r.shadow(name)
+	r.varsPut(name, v)
 }
 
 // unsealCallerLocals is the return: each caller gets its declaration back, and

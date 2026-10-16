@@ -275,6 +275,43 @@ func (r *Runner) watchDeclarationKinds(args []string, f declareFlags) (hiddenWat
 	return w, true
 }
 
+// storeForgetsARetypedHide starts the watch kindChangeForgetsTheHide reads
+// around one store a builtin or an expansion makes into name, and returns
+// what ends it — a bare assignment's rule, at the routes that store without
+// being one. Measured 2026-10-15 on zsh 5.9.2, `-f`, `env -i
+// PATH=/usr/bin:/bin`, `-c` and a script file alike (#6649):
+//
+//	f(){ local -h v; set -A v x; ${(t)v} }          array-local
+//	f(){ local -h v; set +A v x; … }                array-local
+//	f(){ local -h v; read -A v <<< x; … }           array-local
+//	f(){ local -h v; zparseopts -a v a; … }         array-local
+//	f(){ local -h v; zparseopts -A v a; … }         association-local
+//	f(){ local -h v; : ${(A)v::=x}; … }             array-local
+//	f(){ local -h -a v; read v <<< x; … }           scalar-local
+//	f(){ local -h -a v; printf -v v %s x; … }       scalar-local, and so for
+//	                                                `print -v` and `getopts`
+//	f(){ local -h -a v; : ${v::=x}; … }             scalar-local
+//	f(){ local -h -a v; for v in x; do :; done; … } scalar-local
+//
+// and the controls keep the word, because the kind stands: `local -h -a v;
+// set -A v x` and `local -h v=(a b); set +A v x` are `array-local-hide`,
+// `local -h -A v; zparseopts -A v a` is `association-local-hide`, and `local
+// -h -i v; read v <<< x` is `integer-local-hide`. Every one of these kept the
+// word here until each route asked, since only a bare assignment and a
+// declaration did.
+//
+// The returned func is a shared no-op where nothing is hidden, so a store in a
+// dialect without the letter allocates nothing for the question.
+func (r *Runner) storeForgetsARetypedHide(name string) func() {
+	w, on := r.watchHiddenKinds(name)
+	if !on {
+		return noHiddenWatch
+	}
+	return func() { r.endHiddenWatch(w) }
+}
+
+func noHiddenWatch() {}
+
 // hiddenWatch is what a watch started by watchHiddenKinds puts back when it
 // ends: the enclosing watch, if there was one. A value rather than a closure
 // so that ending it allocates nothing.

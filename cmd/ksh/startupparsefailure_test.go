@@ -37,13 +37,13 @@ func TestAnEnvFileThatWillNotParseRunsUpToTheFailure(t *testing.T) {
 		},
 		{
 			// And at a prompt the status is the syntax-error status instead.
-			// (The reference's standard error then ends with one more
-			// newline, which an interactive ksh93 writes on its way out
-			// whatever happened and which is not this question.)
+			// The reference's standard error then ends with one more
+			// newline, the one an interactive ksh93 ends its input with
+			// (#6654).
 			name: "under -i",
 			argv: []string{"ksh", "-i", "-c", "echo main $?"},
 			out:  "before\nmain 3\n",
-			errs: "@: line 2: syntax error: `)' unexpected\n",
+			errs: "@: line 2: syntax error: `)' unexpected\n\n",
 		},
 	} {
 		t.Run(c.name, func(t *testing.T) {

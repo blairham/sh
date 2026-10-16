@@ -384,6 +384,8 @@ func Semantics() interp.Semantics {
 	// unanswered ReadonlyFdVariableRefusesAClose: there is no `{name}`
 	// unanswered FdVariableStoredAfterThePrefix: there is no `{name}`
 	// redirection here for a prefix to meet.
+	// unanswered FdVariableMakesABareListASubshell: there is no `{name}`
+	// redirection here for a command of redirections alone to carry.
 	// unanswered FdVariableReadonlyRefusedFirst: there is no `{name}`
 	// redirection here for a frozen name to be aimed by, the same reason as
 	// the axis below it.
@@ -2724,6 +2726,10 @@ func Semantics() interp.Semantics {
 	// literal here to fail partway through.
 	// unanswered ElementSubscriptIsExpandedBeforeTheValue: no element write
 	// to order — `a[1]=v` is a command word here.
+	// unanswered FrozenElementIsRefusedBeforeItsSubscript: and so no frozen
+	// element to refuse.
+	// unanswered FrozenLiteralIsExpandedBeforeItIsRefused: no array literal
+	// to expand.
 	// unanswered TraceElementSubscriptIsEvaluated: and no subscript, so
 	// `a[1]=v` names a variable spelled `a[1]` and there is nothing to
 	// resolve.

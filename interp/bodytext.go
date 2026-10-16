@@ -48,5 +48,6 @@ func (r *Runner) keepBodyText(fn *syntax.FuncDecl, text string) {
 func layoutIsTheTreeAlone(l *syntax.Layout) bool {
 	return l.AnsiCQuotedWordIsItsValue == nil &&
 		l.CommandSubstitutionIsReprinted == nil &&
-		l.ParameterExpansionIsReprinted == nil
+		l.ParameterExpansionIsReprinted == nil &&
+		l.ArithmeticIsReprinted == nil
 }

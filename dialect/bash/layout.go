@@ -176,7 +176,7 @@ func common() syntax.Layout {
 
 // attachTheReprints gives an arrangement both readers at once.
 //
-// One call rather than a field per caller, because there are two fields now
+// One call rather than a field per caller, because there are three fields now
 // and three arrangements that want them: a caller that set one and not the
 // other would lay out `$(a;b)` and leave the identical body inside
 // `${v-$(a;b)}` as the author typed it, which is exactly the half-reached
@@ -187,6 +187,7 @@ func attachTheReprints(l *syntax.Layout) {
 	l.ParameterExpansionIsReprinted = func(text string) (string, bool) {
 		return reprintInsideAnExpansion(text, reprint)
 	}
+	l.ArithmeticIsReprinted = l.ParameterExpansionIsReprinted
 }
 
 // reprintBody re-reads a command substitution's body and writes it back
@@ -217,6 +218,7 @@ func reprintBody(l syntax.Layout) func(string) (string, bool) {
 	l.ParameterExpansionIsReprinted = func(text string) (string, bool) {
 		return reprintInsideAnExpansion(text, reprint)
 	}
+	l.ArithmeticIsReprinted = l.ParameterExpansionIsReprinted
 	return reprint
 }
 

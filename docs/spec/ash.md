@@ -432,7 +432,13 @@ Measured 2026-10-04 in the digest-pinned image, BusyBox v1.37.0 (#5723):
   program from 0, and the offset reaches an `eval`'s text, but not a file
   `.` reads: `ash -c '. ./inc.sh'` over a file with `nosuchcmd` on its
   second line is `./inc.sh: line 2: nosuchcmd: not found`, as from a
-  script.
+  script. **And a function keeps the count of the text it was written
+  in**, wherever it is called from: one the file defined, called from the
+  string, names the file's line (`fe(){ eval "nosuch_fn"; }` on line 3 of
+  `s.inc` is `eval: line 3:`), and one the string defined, called from
+  inside the file, names the string's (`cd` on the string's second line is
+  `cd: line 1:`). `$LINENO` in either body moves with it. Measured
+  2026-10-15; see `funcOrigin.bodyLineOrigin` (#6696).
 - **A bad substitution is placed where the reader stood.** `echo
   one⏎echo ${a[1]}⏎echo two` prints `one` and reports `line 3`: the line
   after the one the command was read to, because a newline ended it, and

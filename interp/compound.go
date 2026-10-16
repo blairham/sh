@@ -1976,9 +1976,12 @@ func (r *Runner) callFuncInPlace(ctx context.Context, fn *syntax.FuncDecl, name 
 	// this engine reported `line 1` (#2565). Where the dialect numbers
 	// `eval`'s text from one there was no offset in force to record, so the
 	// origin holds nothing and this is the zero it always was.
-	savedBase, savedText, savedOffset := r.lineBase, r.runText, r.fileLineOffset
+	savedBase, savedText, savedOffset, savedOrigin := r.lineBase, r.runText, r.fileLineOffset, r.lineOrigin
 	if numberFrom == nil {
 		r.lineBase = origin.bodyLineBase()
+		// And the numbering the body's text had, which a file and the `-c`
+		// string do not share. See funcOrigin.bodyLineOrigin.
+		r.lineOrigin = origin.bodyLineOrigin(r.lineOrigin)
 		r.fileLineOffset = origin.fileOffset
 		// And the text the body was read from, on the same terms: a
 		// function defined in a sourced file quotes that file however it is
@@ -1991,7 +1994,9 @@ func (r *Runner) callFuncInPlace(ctx context.Context, fn *syntax.FuncDecl, name 
 	// $LINENO)` written on line 2 is 2 on the reference, which is what the
 	// substitution itself answers there, and was 1 here because the offset
 	// the substitution was running under had been reset underneath it.
-	defer func() { r.lineBase, r.runText, r.fileLineOffset = savedBase, savedText, savedOffset }()
+	defer func() {
+		r.lineBase, r.runText, r.fileLineOffset, r.lineOrigin = savedBase, savedText, savedOffset, savedOrigin
+	}()
 	// This call's own serial, because the RETURN trap fires for the one
 	// function whose body set it and for nobody else — not a caller, and
 	// not a sibling entered after it returned.

@@ -6913,10 +6913,14 @@ type Semantics struct {
 	// `readonly o; getopts a o; echo after $?` from `-c` is the refusal and
 	// status 2.
 	//
+	// bash ends the shell over one store, a typed name's value that will not
+	// evaluate, and leaves 1: `declare -i v; set -- -z; getopts a v` from
+	// `-c`.
+	//
 	// Asked only where the refusal ended the shell, so a refused store that
 	// only reports asks nothing.
 	//
-	// unanswered bash, dash, ash: no refused `getopts` store ends the shell.
+	// unanswered dash, ash: no refused `getopts` store ends the shell.
 	GetoptsStoreRefusalLeavesZero Answer
 
 	// GetoptsTypedValueFailureIsAFreeze refuses a value `getopts`'s typed

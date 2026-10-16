@@ -361,7 +361,6 @@ bash  ExportThroughASubscriptedOperandRecordsTheLetter
 bash  FdVariableBadName
 bash  FloatFormatLetterE
 bash  FloatLetterChangeRereadsTheRendering
-bash  GetoptsStoreRefusalLeavesZero
 bash  ImmovableOptionsSetAtInvocation
 bash  IntegerPlusFormTakesAttributesOff
 bash  JobsListsWhatChangedSinceTheLastReport

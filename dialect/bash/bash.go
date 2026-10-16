@@ -2933,9 +2933,12 @@ func Semantics() interp.Semantics {
 	// the scan was: measured 2026-09-17 on 5.3.20 and 3.2.57, `readonly N`
 	// over `set -- -a v` and over `set -- x` alike.
 	s.GetoptsFrozenNameAtTheEndOfTheOptionsIsFatal = interp.No
-	// unanswered GetoptsStoreRefusalLeavesZero: no refused `getopts` store
-	// ends the shell here — the two axes above are both No — so there is
-	// no number left by one to measure (#6588).
+	// The one `getopts` store that ends the shell here is a typed name's
+	// value that will not evaluate, and it leaves 1, not 0: measured
+	// 2026-10-15 on 5.3.20, `declare -i v; set -- -z; getopts a v; echo
+	// after` is the arithmetic complaint and status 1 from `-c` and from a
+	// script file (#6588).
+	s.GetoptsStoreRefusalLeavesZero = interp.No
 	// A value the typed name will not take ends the script, from `getopts`
 	// and `read` alike: measured 2026-10-15 on bash 5.3.20 and 3.2.57,
 	// `typeset -i n=5; getopts x n -y` and `read n <<< 1+` are each the

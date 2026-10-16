@@ -49,6 +49,10 @@ type Lexer struct {
 	// internal/histjoin, where a continuation the reader resolved is one
 	// line of a history entry and one the reader left alone is two.
 	openHeredocExpands bool
+	// heredocRanOutAt is where the first here-document whose body ran to the
+	// end of the input was named, and the zero Pos where none did. See
+	// [Dialect.UnterminatedHeredocOutranksItsConstruct].
+	heredocRanOutAt Pos
 	// ends are the places the input ended once already and the reading went
 	// on past them, shared with every lexer that reads a substitution's body
 	// out of this one's text; endsOrigin is where this lexer's src begins in
@@ -7562,6 +7566,14 @@ func (l *Lexer) readOneHeredoc(r *Redirect, quoted bool) {
 				l.openHeredocExpands = !quoted
 			}
 			l.ranOut("<<")
+			if !l.heredocRanOutAt.IsValid() && r.OpPos.Offset >= 0 && int(r.OpPos.Offset) <= len(l.src) &&
+				strings.IndexByte(l.src[r.OpPos.Offset:], '\n') >= 0 {
+				// Only a body that began: an operator on a last line with no
+				// newline after it opened nothing, and the construct around
+				// it is what is named there. See
+				// Dialect.UnterminatedHeredocOutranksItsConstruct.
+				l.heredocRanOutAt = r.OpPos
+			}
 			// Said out loud by one shell and passed over by three, so it is
 			// recorded here and worded — or not — by the front end.
 			l.remarks = append(l.remarks, Remark{

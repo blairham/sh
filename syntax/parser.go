@@ -1269,6 +1269,12 @@ func (p *Parser) unterminated(expected string) *Error {
 			}
 		}
 	}
+	if p.dialect.UnterminatedHeredocOutranksItsConstruct && e.Construct != "" && p.lex.heredocRanOutAt.IsValid() {
+		// The construct ran out because a document's body took the rest
+		// of the input, and that document is what the dialect names, at
+		// its operator. See [Dialect.UnterminatedHeredocOutranksItsConstruct].
+		e.Innermost, e.Pos = "<<", p.lex.heredocRanOutAt
+	}
 	e.EndLine = int(p.tok.Pos.Line)
 	e.CommentRanOut = p.dialect.CommentRunningOutCountsANewline && p.at(TokEOF) && p.lex.CommentRanToTheEnd()
 	if !strings.HasSuffix(p.lex.src, "\n") {

@@ -49,3 +49,28 @@ func TestAnArrayLiteralPrefixIsAnArray(t *testing.T) {
 		})
 	}
 }
+
+// TestAPlacedArrayLiteralPrefixIsSeenBehindIt pins #6636: a prefix literal
+// whose elements name their places is seen by the entries behind it as the
+// array it places, on the route that stores nothing (an external command) as
+// on the ones that store it, and a subscript with a side effect moves the
+// variable once — the hold places it ahead of the store and the store reuses
+// the index. Measured 2026-10-15 on zsh 5.9.2, `-f`, `env -i
+// PATH=/usr/bin:/bin`, `-c` and a script file alike.
+func TestAPlacedArrayLiteralPrefixIsSeenBehindIt(t *testing.T) {
+	for _, tc := range []struct{ src, want string }{
+		{`x=([2]=a) y=${x[2]} /usr/bin/printenv y`, "a\n"},
+		{`x=([2]=a b) y=${x[3]} /usr/bin/printenv y`, "b\n"},
+		{`x=([1]=a [3]=c) y="${x[*]}" /usr/bin/printenv y`, "a  c\n"},
+		{`typeset -A x; x=([k]=v) y=${x[k]} /usr/bin/printenv y`, "v\n"},
+		{`i=1; x=([i++]=a) y=$i:${x[1]} /usr/bin/printenv y`, "2:a\n"},
+		{`f(){ echo "[$y]"; }; x=([2]=a) y=${x[2]} f`, "[a]\n"},
+		{`i=1; f(){ echo "$i $y"; }; x=([i++]=a) y=$i:${x[1]} f; echo $i`, "2 2:a\n2\n"},
+		{`i=1; { set -x; x=([i++]=a) y=$i:${x[1]} true; set +x; } 2>/dev/null; echo $i $y`, "2\n"},
+		{`x=([2]=a) y=${x[2]} /usr/bin/printenv y; echo "[${x[2]}]"`, "a\n[]\n"},
+	} {
+		if out, _ := runZshOnPath(t, t.TempDir(), tc.src); out != tc.want {
+			t.Errorf("%s\n= %q, want %q", tc.src, out, tc.want)
+		}
+	}
+}

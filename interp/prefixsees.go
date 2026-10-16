@@ -67,15 +67,31 @@ func (h *heldPrefix) hold(r *Runner, name, value string) {
 
 // holdArray is hold for an entry that puts an array under its name.
 func (h *heldPrefix) holdArray(r *Runner, name string, values []string) {
-	h.undo = append(h.undo, r.saveVar(name))
 	elems := make([]Element, len(values))
 	for i, v := range values {
 		elems[i] = Scalar(v)
 	}
+	h.holdPlaced(r, name, ArrayOf(elems...))
+}
+
+// holdPlaced is holdArray for an array already built, which is what a literal
+// whose elements name their places comes to.
+func (h *heldPrefix) holdPlaced(r *Runner, name string, a Array) {
+	h.undo = append(h.undo, r.saveVar(name))
 	r.varsDel(name)
 	r.dropAssocTable(name)
 	r.attrClear(name, attrRemoved)
-	r.arraysPut(name, ArrayOf(elems...))
+	r.arraysPut(name, a)
+}
+
+// holdTable is hold for an entry whose literal is a keyed table.
+func (h *heldPrefix) holdTable(r *Runner, name string, table AssocArray) {
+	h.undo = append(h.undo, r.saveVar(name))
+	r.varsDel(name)
+	r.arraysDel(name)
+	r.attrClear(name, attrRemoved)
+	r.ownAssocs()
+	r.assocsPut(name, table)
 }
 
 // holdPrefixEntry holds what one entry came to for the entries behind it, the
@@ -86,9 +102,8 @@ func (h *heldPrefix) holdArray(r *Runner, name string, values []string) {
 // each shell's own reading of an array's name — where holding the scalar the
 // routes carry for a literal showed `y` nothing (#6547).
 //
-// A literal whose elements name their own places, or nest, is not held: its
-// array is the statement form's to build, and that is the store the route
-// makes for real.
+// A literal whose elements name their own places, or nest, is held as the
+// array or table it places — see holdPlacedLiteral.
 func (r *Runner) holdPrefixEntry(h *heldPrefix, a *syntax.Assign, joined string) {
 	name, ok := r.prefixHoldableName(a)
 	if !ok {
@@ -98,6 +113,7 @@ func (r *Runner) holdPrefixEntry(h *heldPrefix, a *syntax.Assign, joined string)
 		var values []string
 		for _, e := range elems {
 			if e.subscripted || e.nested != nil || e.members != nil {
+				r.holdPlacedLiteral(h, a, name, elems)
 				return
 			}
 			values = append(values, e.fields...)
@@ -110,6 +126,72 @@ func (r *Runner) holdPrefixEntry(h *heldPrefix, a *syntax.Assign, joined string)
 		return
 	}
 	h.hold(r, name, joined)
+}
+
+// holdPlacedLiteral holds a prefix literal whose elements name their places,
+// or nest, as what the statement form places for it: an indexed array with
+// each value where its subscript says, or a keyed table in the dialect, or
+// over the name, that reads the subscripts as keys. Measured 2026-10-15
+// under `env -i PATH=/usr/bin:/bin`, `-c` and a script file alike (#6636):
+//
+//	                                         ksh93u+   zsh 5.9.2
+//	x=([2]=a) y=${x[2]} /usr/bin/printenv y   a         a
+//	x=([2]=a b) y=${x[3]} /usr/bin/printenv y  (refused)  b
+//	x=([1]=a [3]=c) y="${x[*]}" printenv y    a c       a  c
+//	x=([2]=a [5]=b) y="${!x[*]}" printenv y   2 5
+//	typeset -A x; x=([k]=v) y=${x[k]} …                 v
+//	x=( (1 2) ) y=${x[0][1]} printenv y       2
+//	f(){ echo "[$y]"; }; x=([2]=a) y=${x[2]} f   [a]  [a]
+//	x=([2]=a) y=${x[2]} eval 'echo "[$y]"'    [a]       [a]
+//	i=1; x=([i++]=a) y=$i:${x[1]} printenv y            2:a
+//
+// The last row is why the subscripts are read once: the arithmetic is the
+// placement's, the hold places ahead of the store the route makes for real,
+// and the store must not move `i` a second time. The index each one came to
+// is recorded on the element — see Runner.literalSubscriptIndex — so the
+// store places from the record. A subscript that does not come to a place
+// the array has (an arithmetic failure, a position before the first) is left
+// to the store, which owns the refusal, and nothing is held.
+//
+// An append is not held, nor a literal holding a compound body or one whose
+// nesting makes it a table: each starts from what the name holds or runs a
+// body at placement, and neither is a shape this needs to see.
+func (r *Runner) holdPlacedLiteral(h *heldPrefix, a *syntax.Assign, name string, elems []literalElem) {
+	if a.Append || nestingRetypesTheLiteral(elems) {
+		return
+	}
+	for _, e := range elems {
+		if e.members != nil {
+			return
+		}
+	}
+	if r.assocDeclared(name) || r.literalSubscriptIsAKey(name, elems) {
+		table := AssocArray{}
+		for _, e := range elems {
+			if !e.subscripted || e.nested != nil || e.appendValue {
+				return
+			}
+			table[e.sub] = Scalar(e.value)
+		}
+		h.holdTable(r, name, table)
+		return
+	}
+	for i := range elems {
+		e := &elems[i]
+		if !e.subscripted || e.subPlaced {
+			continue
+		}
+		idx, err := r.subscriptValue(e.sub)
+		if err != nil || idx < r.arrayBase() {
+			return
+		}
+		e.subPlaced, e.subAt = true, idx
+	}
+	built, ok := r.literalInto(name, NewArray(literalLen(elems)), 0, elems, true)
+	if !ok {
+		return
+	}
+	h.holdPlaced(r, name, built)
 }
 
 // release puts every held cell back, most recent first.

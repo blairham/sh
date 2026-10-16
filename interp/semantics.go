@@ -32392,6 +32392,41 @@ type Semantics struct {
 	//     subscript, so neither can be asked.
 	BadSubscriptToADeclaration BadSubscriptPolicy
 
+	// OutOfRangeElementToAnOutputOperand is how much a store through a
+	// builtin's output operand gives up when its subscript evaluates and
+	// lands **out of range** — before the first element — rather than failing
+	// to evaluate, which is BadSubscriptToAnOutputOperand's question.
+	//
+	// Measured 2026-10-16, a script file and a `-c` string, `a=(1)` first and
+	// `echo st=$?` on the same line, `echo next` on the one after:
+	//
+	//	                     bash 5.3.20       ksh93u+                zsh 5.9.2
+	//	read 'a[-5]' <<< x   complaint, st=1,  `read: a: subscript    `a[0]`: invalid
+	//	printf -v 'a[-5]' x  next              out of range`, st=1    subscript range,
+	//	                                       (no printf -v)         the script ends
+	//
+	// So bash reports it here where the arithmetic failure one field over
+	// gives up the command list, and the statement `a[-5]=x` gives up the
+	// list as well: what the builtin reaches is a failed builtin and nothing
+	// more. Under `-c` too — the string goes on (#6835).
+	//
+	// dash and BusyBox ash have no arrays to ask.
+	OutOfRangeElementToAnOutputOperand BadSubscriptPolicy
+
+	// OutOfRangeElementToADeclaration is the same out-of-range store reached
+	// through a declaration's operand, `declare a[-5]=x`. Measured as
+	// OutOfRangeElementToAnOutputOperand was:
+	//
+	//	                   bash 5.3.20               ksh93u+           zsh 5.9.2
+	//	typeset a[-5]=x    complaint, st=1, next —   `a: subscript     `a[0]=x`: the
+	//	                   the same in POSIX mode,   out of range`,    script ends
+	//	                   declare is not special    the script ends
+	//
+	// A field of its own because ksh93 parts its two builtins: `read` reports
+	// and `typeset` ends the script, `command typeset` included, which is the
+	// statement's own cost there.
+	OutOfRangeElementToADeclaration BadSubscriptPolicy
+
 	// BadSubscriptEscapesAnArithmeticCommand lets a subscript that will not
 	// evaluate **inside `(( ))`** be given up as the subscript's failure
 	// rather than caught and reported as the construct's.
@@ -33070,6 +33105,34 @@ type Semantics struct {
 	// The wording is Diagnostics.ArithWholeArraySubscript, whose two verbs are
 	// the name and the subscript (#1978).
 	ArithWholeArraySubscriptIsReportedAsBad Answer
+
+	// EmptySubscriptInAnIndexedLiteralIsBad refuses an array literal element
+	// whose subscript expanded to **nothing** — `a=([$(true)]=x)`, `[""]=x`
+	// — as a bad subscript, where No reads it, empty or blank, as element
+	// zero.
+	//
+	// Measured 2026-10-16 under `-c` and from a file:
+	//
+	//	probe                   bash 5.3.20                 zsh 5.9.2              ksh93u+
+	//	a=([$(true)]=x)         `[]=x: bad array            `bad subscript for     `a=(['']=x)`, a
+	//	                        subscript`, 1, the rest of  direct array           table
+	//	                        the line given up           assignment: `, ends
+	//	b=(1 [$(true)]=x 3)     the same, `b=([0]="1")`     the same               element text
+	//	typeset -a q=([$(true)]=x) the same                 the same               `q=(x)`
+	//	a=([$(echo " ")]=x)     `a=([0]="x")`               `…assignment:  `       a table
+	//
+	// So bash refuses nothing at all and reads blanks as the expression
+	// zero, where its plain `a[$(true)]=x` stores element zero — a literal's
+	// own rule, not EmptySubscriptTextIsAMathError. zsh reads both as zero,
+	// where its plain spelling is a math error, and then refuses zero the way
+	// it refuses `[0]=x`: Diagnostics.BadArrayLiteralSubscript quotes the
+	// subscript, which is what shows it was read and not refused as text.
+	// ksh93 reads it as zero.
+	//
+	// The refusal costs what `[-1]=x` costs in that column (#6738).
+	//
+	// dash and BusyBox ash have no array literal.
+	EmptySubscriptInAnIndexedLiteralIsBad Answer
 
 	// EmptySubscriptTextIsAMathError refuses a subscript whose text is
 	// *empty or blank once it has been expanded* — `${a[$w]}` with an empty

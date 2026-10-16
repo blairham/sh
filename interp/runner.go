@@ -2135,6 +2135,12 @@ type Runner struct {
 	// sentence of an element store arithmetic is making, rather than writing
 	// it and giving up. See Runner.storePlace.
 	arithStoreRefusal *string
+	// elementRangeRefusal, where it is set, is where setArrayElem leaves the
+	// sentence of an element store whose subscript landed out of range,
+	// rather than writing it and giving up: a builtin that stores through
+	// an operand decides the cost itself. See
+	// Semantics.OutOfRangeElementToAnOutputOperand.
+	elementRangeRefusal *string
 	// callEndedOnAReturn says the function call that last unwound ended on
 	// a `return` written in it rather than by running off its end. See
 	// Runner.forcedByATrapFunction.
@@ -12850,13 +12856,17 @@ func (r *Runner) failedSubscript(format string, args ...any) {
 		return
 	}
 	r.diagf(format, args...)
-	// A subscript, whatever wording reached here: the `-c` rule on
-	// Runner.giveUpForABadSubscript is a rule about brackets and the door
-	// below cannot see them. Set rather than assumed, because
-	// Runner.subscriptFailure is only one of the two ways a caller words
-	// this — an out-of-range index and a whole-array subscript have
-	// sentences of their own (#3502).
-	r.badSubscript = true
+	// **Not** marked as a subscript failure here. The `-c` rule on
+	// Runner.giveUpForABadSubscript is a rule about a subscript whose
+	// *arithmetic* failed, and Runner.subscriptFailure — the wording every
+	// such caller goes through — marks it. The other sentences that reach
+	// this door give up the command list on both routes: measured 2026-10-16
+	// on bash 5.3.20 as one `-c` string, `a=(1)` first and `echo next=$?` on
+	// the line after, `a[-5]=x`, `a=([-1]=x)`, `a[1]=(p q)`, `read 'a[-5]'`,
+	// `printf -v 'a[-5]' x`, `declare a[-5]=x`, an empty key in a table
+	// literal and a bare element after a keyed one each write their
+	// complaint and then `next=1`, where `a[b c]=v` ends the string. Marking
+	// every caller ended the string for all of them (#6835).
 	r.failedExpansion()
 }
 

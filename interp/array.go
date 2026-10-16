@@ -584,8 +584,14 @@ func (r *Runner) setArrayElem(name string, idx int, sub, value string) {
 		if r.unspecified {
 			return
 		}
-		r.failedSubscript("%s\n", Wording(r.diag().BadArraySubscript,
-			"%[1]s[%[2]s]: bad array subscript", name, sub))
+		sentence := Wording(r.diag().BadArraySubscript,
+			"%[1]s[%[2]s]: bad array subscript", name, sub)
+		if r.elementRangeRefusal != nil {
+			// A builtin's store, which says what the refusal costs.
+			*r.elementRangeRefusal = sentence
+			return
+		}
+		r.failedSubscript("%s\n", sentence)
 		return
 	}
 	// What the name's attributes make of the value, **before** it reaches the
@@ -1954,8 +1960,26 @@ func (r *Runner) storeThroughOperandMarking(name, value string, mark func(string
 				builtin, r.subscriptFailure(sub, err)),
 		)), true
 	}
-	r.setArrayElem(base, idx, sub, value)
+	if refusal := r.elementStoreRefusal(func() { r.setArrayElem(base, idx, sub, value) }); refusal != "" {
+		return r.storeRefusalStatus(builtin, r.badSubscriptGivesUp(
+			r.sem().OutOfRangeElementToAnOutputOperand,
+			"how much a store through a builtin's operand gives up for a subscript out of range",
+			Wording(r.diag().StoreOperandBadSubscript, "%[2]s", builtin, refusal),
+		)), true
+	}
 	return 0, false
+}
+
+// elementStoreRefusal runs a builtin's element store and hands back the
+// out-of-range sentence the store would have written and given up over, or
+// nothing where it stored. See Runner.elementRangeRefusal.
+func (r *Runner) elementStoreRefusal(store func()) string {
+	var refusal string
+	saved := r.elementRangeRefusal
+	r.elementRangeRefusal = &refusal
+	defer func() { r.elementRangeRefusal = saved }()
+	store()
+	return refusal
 }
 
 // setOperandValue is the store behind a builtin's plain output operand: the

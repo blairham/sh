@@ -225,14 +225,25 @@ func (r *Runner) declareElement(base string, leading []string, sub, value string
 			r.badSubscriptToADeclaration(sub, err)
 			return
 		}
-		if appends {
-			// The statement's own store: `typeset a[1]+=q` joins what the
-			// element holds exactly as `a[1]+=q` does, through the name's
-			// attributes — measured on the column that takes it, `typeset -i
-			// a; a[1]=2; typeset a[1]+=3` is 5.
-			r.appendArrayElem(base, idx, sub, value)
-		} else {
-			r.setArrayElem(base, idx, sub, value)
+		refusal := r.elementStoreRefusal(func() {
+			if appends {
+				// The statement's own store: `typeset a[1]+=q` joins what
+				// the element holds exactly as `a[1]+=q` does, through the
+				// name's attributes — measured on the column that takes it,
+				// `typeset -i a; a[1]=2; typeset a[1]+=3` is 5.
+				r.appendArrayElem(base, idx, sub, value)
+			} else {
+				r.setArrayElem(base, idx, sub, value)
+			}
+		})
+		if refusal != "" {
+			// Out of range, and the declaration decides what that costs.
+			// The store's sentence, from the shell's location: ksh93 writes
+			// `a: subscript out of range` with no builtin in front of it.
+			r.status = r.badSubscriptGivesUp(r.sem().OutOfRangeElementToADeclaration,
+				"how much a declaration gives up for an operand's subscript out of range", refusal)
+			r.assignFailed = true
+			return
 		}
 		if r.unspecified || r.ctl == controlExit {
 			return

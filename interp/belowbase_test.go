@@ -18,6 +18,10 @@ func runBelowBase(t *testing.T, zeroBased, inserts Answer, src string) (string, 
 		sem := *r.Semantics
 		sem.ArrayBaseIsZero = zeroBased
 		sem.NegativeSubscriptPastTheStartInserts = inserts
+		// A builtin's out-of-range store reported and carried on, so a row
+		// through one reaches its sentence (#6835).
+		sem.OutOfRangeElementToAnOutputOperand = BadSubscriptReported
+		sem.OutOfRangeElementToADeclaration = BadSubscriptReported
 		r.Semantics = &sem
 	})
 }

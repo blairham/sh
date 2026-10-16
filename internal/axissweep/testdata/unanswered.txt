@@ -132,6 +132,7 @@ ash   EarlierDeclarationLetterBlocksALaterPlus
 ash   ALetterUnderBothSignsComesOff
 ash   EarlierPlusMakesALaterLetterARemoval
 ash   ElementSubscriptIsExpandedBeforeTheValue
+ash   EmptySubscriptInAnIndexedLiteralIsBad
 ash   FrozenElementIsRefusedBeforeItsSubscript
 ash   FrozenLiteralIsExpandedBeforeItIsRefused
 ash   EmptyArithSubscript
@@ -229,6 +230,8 @@ ash   NumericTypeWithNoValueReachesAChildAsZero
 ash   OneCommandStopsACommandString
 ash   OperandSubscriptQuoting
 ash   OperatorAfterTheSubscriptListingIsBad
+ash   OutOfRangeElementToADeclaration
+ash   OutOfRangeElementToAnOutputOperand
 ash   PatternMatchWritesTheMatchRecord
 ash   PrefixArrayLiteralIsAnArray
 ash   PrefixInAWholeTableListing
@@ -528,6 +531,7 @@ dash  ALetterUnderBothSignsComesOff
 dash  EarlierPlusMakesALaterLetterARemoval
 dash  EchoLastEscapeFlagWins
 dash  ElementSubscriptIsExpandedBeforeTheValue
+dash  EmptySubscriptInAnIndexedLiteralIsBad
 dash  FrozenElementIsRefusedBeforeItsSubscript
 dash  FrozenLiteralIsExpandedBeforeItIsRefused
 dash  EmptyArithSubscript
@@ -633,6 +637,8 @@ dash  NumericTypeWithNoValueReachesAChildAsZero
 dash  OneCommandStopsACommandString
 dash  OperandSubscriptQuoting
 dash  OperatorAfterTheSubscriptListingIsBad
+dash  OutOfRangeElementToADeclaration
+dash  OutOfRangeElementToAnOutputOperand
 dash  PatternMatchWritesTheMatchRecord
 dash  PipefailSubstitutesTheBareSignal
 dash  PrefixArrayLiteralIsAnArray

@@ -1216,6 +1216,14 @@ func Semantics() interp.Semantics {
 	// over. `echo Y | read 'q[b c]'` is `read: 'q[b c]': bad variable name`
 	// at 1, so the store that walks the brackets is never reached either.
 	//
+	// unanswered EmptySubscriptInAnIndexedLiteralIsBad: no array literal.
+	//
+	// unanswered OutOfRangeElementToAnOutputOperand: no arrays, so no subscript
+	// lands out of range.
+	//
+	// unanswered OutOfRangeElementToADeclaration: no arrays, and no declaration
+	// utility that takes a subscript.
+	//
 	// unanswered BadSubscriptToADeclaration: and the third site does not
 	// exist at all. Measured 2026-09-17 in the pinned image, BusyBox
 	// v1.37.0: there is no `declare` or `typeset` (`declare: not found`,

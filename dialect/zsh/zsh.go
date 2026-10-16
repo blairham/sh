@@ -4510,6 +4510,9 @@ func Semantics() interp.Semantics {
 	// where `${a[ ]}` is the expression running out. The written `${a[]}`
 	// above is a third sentence again, which is why they are two axes.
 	s.EmptySubscriptTextIsAMathError = interp.Yes
+	// A literal's own reading of the same empty subscript, measured 2026-10-16
+	// (#6738): see interp.Semantics.EmptySubscriptInAnIndexedLiteralIsBad.
+	s.EmptySubscriptInAnIndexedLiteralIsBad = interp.No
 	// A subscript's expression stops at the first top-level `,` or `;` and
 	// the rest of the text is discarded, unevaluated: measured 2026-09-12,
 	// `a=(p q r s); i="2,3"; ${a[$i]}` is `q` where the comma operator would
@@ -4562,6 +4565,10 @@ func Semantics() interp.Semantics {
 	// same shell ends the input, so the two constructs really do part here.
 	s.BadSubscriptEscapesAnArithmeticCommand = interp.No
 	s.BadSubscriptToADeclaration = interp.BadSubscriptEndsTheScript
+	// An out-of-range store through each builtin, measured 2026-10-16 (#6835):
+	// see interp.Semantics.OutOfRangeElementToAnOutputOperand.
+	s.OutOfRangeElementToAnOutputOperand = interp.BadSubscriptEndsTheScript
+	s.OutOfRangeElementToADeclaration = interp.BadSubscriptEndsTheScript
 	// And a plain `a[]=6` ends it too, which is this column's answer
 	// wherever a write walks into brackets it cannot use. Measured
 	// 2026-09-20 on 5.9.2 from a script file: `a=(1 2 3); a[]=6; echo

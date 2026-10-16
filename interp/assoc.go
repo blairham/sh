@@ -1005,7 +1005,7 @@ func (r *Runner) assignAssocElems(name string, parsed []literalElem, appendTo, r
 				// not. See Semantics.WholeArraySubscriptKeyInATableLiteral.
 				return
 			}
-			if e.sub == "" && !r.tableLiteralKeyIsThere(name, e.writtenText(), true) {
+			if e.sub == "" && !r.tableLiteralKeyIsThere(name, r.emptyKeyElementSpelled(e), true) {
 				// An empty key written with a head, in the reading that refuses
 				// one. It costs the rest of the literal and leaves what is
 				// already stored standing. See Semantics.EmptyKeyInATableLiteral.
@@ -1295,9 +1295,36 @@ func (r *Runner) tableLiteralKeyIsThere(name, written string, head bool) bool {
 		r.diagf("%s\n", wording)
 		return false
 	}
+	// The declaration's status as well as the line's, through the door the
+	// bare element's refusal goes through: measured 2026-10-16 on bash
+	// 5.3.20, `declare -A m=([""]=x)` leaves 1, where this left the
+	// builtin's own 0 (#6738).
+	r.assignFailed = true
 	r.failedSubscript("%s\n", Wording(r.diag().EmptyKeyInATableLiteralElement,
 		"%[1]s: bad array subscript", written))
 	return false
+}
+
+// emptyKeyElementSpelled is how the refusal of an empty key quotes its
+// element: as written for a bare assignment, and for a declaration's operand
+// as the element the operand's trace line writes — the shell expanded it
+// before the builtin saw it. Measured 2026-10-16 on bash 5.3.20, the column
+// that refuses, the second byte for byte the element of the trace line the
+// same declaration writes (#6738):
+//
+//	m=([$(true)]=x)              [$(true)]=x: bad array subscript
+//	declare -A m=([$(true)]=x)   ['']='x': bad array subscript
+//	set -x; declare -A m=(…)     + m=(['']='x')
+func (r *Runner) emptyKeyElementSpelled(e literalElem) string {
+	if !e.operand {
+		return e.writtenText()
+	}
+	d := *r.diag()
+	op := "="
+	if e.appendValue {
+		op = "+="
+	}
+	return "[" + r.traceArrayOperandElement(e.sub, d) + "]" + op + r.traceArrayOperandElement(e.value, d)
 }
 
 // refuseBareTableLiteralElement is the sentence a bare element earns inside a

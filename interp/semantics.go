@@ -34622,6 +34622,8 @@ func PosixSemantics() Semantics {
 		PrintfCharPrecisionRepeats:       No,
 		// POSIX has no associations, so no read can add a key to one.
 		ArithKeyReadCreatesTheElement: No,
+		// Nor any to freeze, so no expression writes into a frozen one.
+		ArithStoreIntoAFrozenTableIsTaken: No,
 		// XCU gives printf's format the XSI escape set and nothing else —
 		// `\\`, `\a`, `\b`, `\f`, `\n`, `\r`, `\t`, `\v` and `\ddd` — so
 		// neither spelling of the escape character is in it and a backslash

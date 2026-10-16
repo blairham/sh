@@ -1896,10 +1896,27 @@ func (l *Lexer) fdVariableOperatorAcrossBlanks(n int) (int, bool) {
 		}
 		break
 	}
+	if l.bothStreamsAt(n) {
+		return n, true
+	}
 	if c := l.peekAt(n); (c != '<' && c != '>') || l.peekAt(n+1) == '(' {
 		return 0, false
 	}
 	return n, true
+}
+
+// bothStreamsAt reports whether a both-streams operator — `&>` and its
+// family — begins at n, in the dialect that takes a `{name}` in front of
+// one. See Dialect.FdVariableBeforeBothStreams.
+//
+// Asked only by fdVariableOperatorAcrossBlanks, adjacent or not: that
+// dialect is the one that reads across blanks, and the places that read
+// refuses — a `for` list, an array literal — are the places the reference
+// leaves `{v}` a word before `&>` too. `a=(x {v}&>/dev/null)` is “parse
+// error near `&>'“ in zsh 5.9.2, measured 2026-10-15.
+func (l *Lexer) bothStreamsAt(n int) bool {
+	return l.dialect.FdVariableBeforeBothStreams && l.dialect.AmpersandRedirect &&
+		l.peekAt(n) == '&' && l.peekAt(n+1) == '>'
 }
 
 // anyBraceWordEnd reads on from n to where a brace word could close: the
@@ -2057,6 +2074,14 @@ func (l *Lexer) operatorAt(off int) (Kind, bool) {
 	}
 	for i, k := range operators {
 		if !strings.HasPrefix(rest, operatorText[i]) || !l.enabled(k) {
+			continue
+		}
+		// `>>(` and `<<(` are `>` and `<` in front of a process
+		// substitution in the dialect that reads them so; the shorter
+		// operator is the next in the table. See
+		// Dialect.DoubledAngleOpensAProcessSubstitution.
+		if (k == TokDGreat || k == TokDLess) && len(rest) > 2 && rest[2] == '(' &&
+			l.dialect.DoubledAngleOpensAProcessSubstitution && l.dialect.ProcessSubstitution {
 			continue
 		}
 		return k, true

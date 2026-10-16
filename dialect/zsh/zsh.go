@@ -63,6 +63,12 @@ func Dialect() syntax.Dialect {
 	// command's arguments: `echo {v} >/dev/null` allocates (#6587). See
 	// syntax.Dialect.FdVariableAcrossBlanks.
 	d.FdVariableAcrossBlanks = true
+	// And in front of `&>` and its family, and `>>(` / `<<(` are a
+	// one-character operator before a process substitution, measured
+	// 2026-10-15 on 5.9.2 (#6665). See syntax.Dialect.FdVariableBeforeBothStreams
+	// and syntax.Dialect.DoubledAngleOpensAProcessSubstitution.
+	d.FdVariableBeforeBothStreams = true
+	d.DoubledAngleOpensAProcessSubstitution = true
 	// And refuses the construct after a compound command, as a parse error
 	// naming either the brace or the whole word by the compound's kind. See
 	// the flag for the table.

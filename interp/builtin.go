@@ -6952,6 +6952,12 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 				// `read -e`: the elements were written and the array is
 				// left as it was — and the freeze below is never asked,
 				// because there is no write to refuse.
+			case r.namesAPosition(array):
+				// `argv[N]` takes the words and `0` refuses them, as `set -A`
+				// does. See Runner.StoreAWholeArrayAtAPosition.
+				if st, _, stop := r.StoreAWholeArrayAtAPosition(array, elems, false); stop {
+					return st
+				}
 			case !r.readMayWrite(array):
 				if r.ctl == controlExit {
 					// The whole-array store's number, not the scalar's — see
@@ -6967,7 +6973,7 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 				// `set -A` does. See interp/privatekindfixed.go.
 				return r.arrayStoreRefusalStatus(r.status)
 			default:
-				r.setArray(array, elems)
+				r.setArrayForgettingARetypedHide(array, elems)
 				if r.ctl == controlExit {
 					// Refused inside the store rather than by the freeze above — a
 					// name an enclosing call declared private — and the number is
@@ -7026,6 +7032,12 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 		case !echo.elements(r, fields):
 			// See the same three-way above: `-e` writes the elements and
 			// assigns none of them, and asks nothing about the freeze.
+		case r.namesAPosition(array):
+			// `argv[N]` takes the words and `0` refuses them, as `set -A`
+			// does. See Runner.StoreAWholeArrayAtAPosition.
+			if st, _, stop := r.StoreAWholeArrayAtAPosition(array, fields, false); stop {
+				return st
+			}
 		case !r.readMayWrite(array):
 			if r.ctl == controlExit {
 				// The whole-array store's number, not the scalar's — see
@@ -7041,7 +7053,7 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 			// `set -A` does. See interp/privatekindfixed.go.
 			return r.arrayStoreRefusalStatus(r.status)
 		default:
-			r.setArray(array, fields)
+			r.setArrayForgettingARetypedHide(array, fields)
 			if r.ctl == controlExit {
 				// Refused inside the store rather than by the freeze above — a
 				// name an enclosing call declared private — and the number is

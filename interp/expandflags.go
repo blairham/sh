@@ -958,15 +958,21 @@ func (r *Runner) assignThroughFlags(e *syntax.ParamExpr, indirect *indirectTarge
 	// interp/arrayassignflag.go.
 	if arrayAssignFlag(e) && indirect == nil && !writesOneElement(e, r) {
 		elems := r.assignedArrayElements(e, quoted)
-		if !r.assignableTarget(e.Op, e.Name) {
+		if took, refused := r.storeAWholeArrayAtAPosition(e.Name, elems, false); refused {
+			// `$0` takes no array, as `set -A 0` meets it.
 			return nil, false, false
-		}
-		if r.fixedSlotRefusesAnArrayValue(e.Name) {
+		} else if took {
+			// `argv[N]` takes the words, as `N=(words)` gives them to it.
+			// See Runner.StoreAWholeArrayAtAPosition.
+		} else if !r.assignableTarget(e.Op, e.Name) {
+			return nil, false, false
+		} else if r.fixedSlotRefusesAnArrayValue(e.Name) {
 			// The store's refusal, as `set -A` meets it. See
 			// interp/privatekindfixed.go.
 			return nil, false, false
+		} else {
+			r.setArrayForgettingARetypedHide(e.Name, elems)
 		}
-		r.setArray(e.Name, elems)
 		// The group's `=` has split the operand already, element by element
 		// as it expanded, so what is substituted is not split a second time:
 		// measured on zsh 5.9.2, `${(A)=foo=a "k p" b}` substitutes `a`,
@@ -1006,7 +1012,12 @@ func (r *Runner) assignThroughFlags(e *syntax.ParamExpr, indirect *indirectTarge
 		if !r.assignableTarget(e.Op, e.Name) {
 			return nil, false, false
 		}
+		// A store that retypes a hidden name takes the word off it, as the
+		// route without a flag group does. See
+		// Runner.storeForgetsARetypedHide.
+		end := r.storeForgetsARetypedHide(e.Name)
 		r.setVar(e.Name, v)
+		end()
 	}
 	return []string{v}, false, true
 }

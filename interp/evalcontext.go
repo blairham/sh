@@ -83,6 +83,12 @@ const (
 	// where this shell said `cmdarg` or `toplevel` in the file's place on
 	// every row (#5885).
 	EvalContextStartupFile
+	// EvalContextGlobQualifier is the code a glob qualifier runs for each
+	// file — zsh's `*(e:code:)` and `*(+name)`. Measured 2026-10-15 on zsh
+	// 5.9.2, the parameter reads `cmdarg globqual` inside such code under
+	// `-c`, and `cmdarg shfunc globqual` in a function. See
+	// interp/globqualcode.go.
+	EvalContextGlobQualifier
 )
 
 // EvalContextStack is the stack outermost first, with the route's own entry

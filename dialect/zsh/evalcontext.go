@@ -166,4 +166,5 @@ var evalContextWord = map[interp.EvalContext]string{
 	interp.EvalContextAutoloadedBody:           "loadautofunc",
 	interp.EvalContextAutoloadedFile:           "evalautofunc",
 	interp.EvalContextStartupFile:              "file",
+	interp.EvalContextGlobQualifier:            "globqual",
 }

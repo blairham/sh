@@ -550,7 +550,9 @@ func (r *Runner) producedThroughItsAttributes(name, v string) string {
 		}
 		return r.integerRendered(name, int(f))
 	}
-	if r.integerBase[name] == 0 || !r.attrHas(name, attrInteger) {
+	if !r.spellsIntegerBase(r.integerBase[name]) || !r.attrHas(name, attrInteger) {
+		// No base, or base ten, which writes every number as it is: asked
+		// only where the two readings can differ.
 		return v
 	}
 	if !r.ask(r.sem().ProducedIntegerReadsInItsBase,

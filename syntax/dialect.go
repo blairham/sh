@@ -8376,8 +8376,34 @@ type Dialect struct {
 	//	<> 3<>           then <(…)   opens the path, which is refused at run
 	//	>  >>  >|  3>    then >(…)   opens the path
 	//
-	// bash 5.3.20 and zsh 5.9.2 read every row.
+	// bash 5.3.20 reads every row, and zsh 5.9.2 refuses a narrower set of
+	// its own — see ProcessSubstitutionAgainstAPlainRedirectionIsRefused.
 	ProcessSubstitutionAgainstTheRedirectionIsRefused bool
+
+	// ProcessSubstitutionAgainstAPlainRedirectionIsRefused refuses, while
+	// reading, a redirection target that begins with a process substitution
+	// running the other way from a *plain* redirection: `>(cmd)` after `<`,
+	// `<(cmd)` after `>`, `>|` or `>!`, numbered or named. The refusal names
+	// the whole target word, as written.
+	//
+	// zsh alone. Measured 2026-10-16 on zsh 5.9.2 over a script file `echo
+	// hi OP WORD` then `echo next`, and under `-c` with an `echo before` in
+	// front, which does not print (#6812):
+	//
+	//	<  3<  {v}<             then >(cat)     parse error near `>(cat)'
+	//	>  >|  >!  3>  {v}>     then <(cat)     parse error near `<(cat)'
+	//	>                       then <(cat)x    parse error near `<(cat)x'
+	//	>                       then <(cat)""   parse error near `<(cat)""'
+	//	<>  3<>                 then either     read, and opened at the run
+	//	>>  >&  &>  &>>  >>|    then <(cat)     read, and opened at the run
+	//	>                       then x<(cat)    read: the word does not begin with it
+	//
+	// So it is the operators that are one direction and nothing else — not
+	// the append, not the duplication, not the read-write — and only a word
+	// the substitution *begins*. ksh93's rule is wider and words the opener
+	// alone; see ProcessSubstitutionAgainstTheRedirectionIsRefused. bash
+	// 5.3.20 reads every row.
+	ProcessSubstitutionAgainstAPlainRedirectionIsRefused bool
 
 	// FdVariableRedirections is `{name}>file` and its family: the shell
 	// picks the descriptor and the variable receives its number. Consumed

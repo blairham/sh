@@ -3650,7 +3650,7 @@ func (p *Parser) parseRedirect() *Redirect {
 	// rebuilt from the spans: `$e` and `${e}` are the same word and not the
 	// same text, and it is the text that goes in the message.
 	r.Text = p.textBetween(p.tok.Pos, p.tok.End)
-	if p.refuseProcSubstAgainstTheRedirection(r.Op, r.Word, p.tok.Pos) {
+	if p.refuseProcSubstAgainstTheRedirection(r.Op, r.Word, p.tok.Pos, r.Text) {
 		return nil
 	}
 	if r.Op == TokTLess && p.refuseProcSubstOutOfPlace(r.Word) {
@@ -6187,12 +6187,30 @@ func (p *Parser) refuseProcSubstOutOfPlace(w *Word) bool {
 // begins with a process substitution running against the operator, and
 // reports whether it did. See
 // [Dialect.ProcessSubstitutionAgainstTheRedirectionIsRefused].
-func (p *Parser) refuseProcSubstAgainstTheRedirection(op Kind, w *Word, start Pos) bool {
-	if w == nil || len(w.Spans) == 0 || !p.dialect.ProcessSubstitutionAgainstTheRedirectionIsRefused {
+func (p *Parser) refuseProcSubstAgainstTheRedirection(op Kind, w *Word, start Pos, text string) bool {
+	if w == nil || len(w.Spans) == 0 {
 		return false
 	}
 	s := w.Spans[0]
 	if s.Pos != start || (s.Kind != ProcSubstIn && s.Kind != ProcSubstOut) {
+		return false
+	}
+	if p.dialect.ProcessSubstitutionAgainstAPlainRedirectionIsRefused {
+		var refused bool
+		switch op {
+		case TokLess:
+			refused = s.Kind == ProcSubstOut
+		case TokGreat, TokClobber, TokClobberBang:
+			refused = s.Kind == ProcSubstIn
+		}
+		if refused {
+			// The whole word, as written. See
+			// [Dialect.ProcessSubstitutionAgainstAPlainRedirectionIsRefused].
+			p.failProcSubstAgainstAPlainRedirection(s.Pos, text)
+			return true
+		}
+	}
+	if !p.dialect.ProcessSubstitutionAgainstTheRedirectionIsRefused {
 		return false
 	}
 	var refused bool
@@ -6210,6 +6228,21 @@ func (p *Parser) refuseProcSubstAgainstTheRedirection(op Kind, w *Word, start Po
 	opener, _ := procSubstOpener(s.Kind)
 	p.failProcSubstOutOfPlace(s.Pos, opener)
 	return true
+}
+
+// failProcSubstAgainstAPlainRedirection records a redirection target that
+// begins with a process substitution running against its plain operator,
+// naming the whole target as it was written. A word rather than an operator,
+// because what the refusal quotes is the word.
+func (p *Parser) failProcSubstAgainstAPlainRedirection(pos Pos, text string) {
+	if p.err != nil {
+		return
+	}
+	p.err = &Error{
+		Pos: pos, Kind: ErrUnexpected,
+		Token: text, Class: ClassWord,
+		Msg: "`" + text + "' unexpected",
+	}
 }
 
 // procSubstOpener is the two characters a process substitution is refused by

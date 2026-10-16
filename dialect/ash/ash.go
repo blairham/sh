@@ -2421,6 +2421,10 @@ func Semantics() interp.Semantics {
 	// 3>/nope/x` stops at 1.
 	s.RedirectErrorOnSpecialBuiltinFatal = interp.Yes
 	s.DuplicationTargetError = interp.DuplicationTargetErrorEndsTheShell
+	// A target a process substitution begins with more after it is opened
+	// as the path it comes to: `cat < <(echo a)x` is `/dev/fd/64x`, measured
+	// 2026-10-16 (#6766). See interp.Semantics.SubstitutionTargetWithMoreIsRefused.
+	s.SubstitutionTargetWithMoreIsRefused = interp.No
 	// A duplication target wider than one digit is not refused while
 	// parsing: `echo hi >&10` reaches the kernel and comes back `dup2(10,1):
 	// Bad file descriptor`, where dash refuses the word outright.

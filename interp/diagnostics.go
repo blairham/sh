@@ -3537,6 +3537,12 @@ type Diagnostics struct {
 	// wording here may use neither verb.
 	DuplicationTargetIsNotADescriptor string
 
+	// SubstitutionTargetWithMore is the refusal of a redirection target that
+	// begins with a process substitution and has more after it — see
+	// Semantics.SubstitutionTargetWithMoreIsRefused. No verbs: the one shell
+	// that refuses it names nothing.
+	SubstitutionTargetWithMore string
+
 	// EmptyDuplicationTarget replaces it where the word expanded to nothing.
 	// The same two verbs, and here the first earns its place: bash writes
 	// `"": Bad file descriptor` for `<&""`, quotation marks and all, which is

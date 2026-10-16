@@ -315,6 +315,18 @@ func (r *Runner) applyRedirList(ctx context.Context, rs []*syntax.Redirect, comp
 		r.line, r.locatedWithoutALine = commandLine, wasUnnumbered
 		r.heredocBodyLineShift = wasShift
 	}()
+	// A target the dialect refuses stops the list before anything in it is
+	// opened, though not before the substitutions written ahead of it are
+	// made. See Semantics.SubstitutionTargetWithMoreIsRefused.
+	if bad, unanswered := r.substitutionTargetWithMore(rs); bad >= 0 || unanswered {
+		if unanswered {
+			r.redirErr = true
+			return closers, nil
+		}
+		defer holds.makeFirst(ctx, rs[:bad])()
+		r.refuseSubstitutionTargetWithMore()
+		return closers, nil
+	}
 	defer holds.makeFirst(ctx, rs)()
 	trace := r.beginRedirTrace(rs)
 	for i, rd := range rs {
@@ -3182,6 +3194,15 @@ const (
 	// `echo hi <&""`, `true <&""` and `: <&""` end it — the same word, the
 	// same complaint, and a builtin on the left.
 	//
+	// "In the shell" is every command the shell does not fork for, not only
+	// a builtin. Measured 2026-10-16 on zsh 5.9.2 with `<&x` and then `echo
+	// next`: a function call, `{ :; }`, a `while` loop and `x=1 <&x` end
+	// it, and `( : )`, `command echo` (an external program in zsh) and a
+	// bare `<&x` (the null command, which is `cat`) carry on. A process
+	// substitution target zsh refuses ends it on the same boundary — see
+	// Semantics.SubstitutionTargetWithMoreIsRefused and
+	// Runner.endsTheShellOverABadTarget.
+	//
 	// Not RedirectErrorOnSpecialBuiltinFatal, which zsh answers No and which
 	// would not reach `read` or `echo` in any case. Nor is it redirection
 	// failure in general: an ordinary one on a zsh builtin — `read x
@@ -3217,6 +3238,73 @@ func (r *Runner) duplicationTargetError() DuplicationTargetErrorForm {
 		r.unspecified = true
 	}
 	return f
+}
+
+// endsTheShellOverABadTarget ends the shell over a refused target where the
+// dialect ends it only on a command it runs itself, and inShell says this
+// command is one: a builtin, a function, a compound command other than the
+// parentheses, or assignments. See DuplicationTargetErrorEndsTheShellOnABuiltin
+// for the measurements, which put every one of those on the fatal side and an
+// external program, `( … )` and a bare redirection on the other.
+//
+// One place for every kind of command, because the boundary is the command
+// and not the refusal: it was decided once, in the simple command's path, for
+// a builtin alone, and `{ :; } <&x` and `f <&x` carried on in zsh's dialect
+// where zsh ends the shell.
+func (r *Runner) endsTheShellOverABadTarget(inShell bool) {
+	if r.badDupTarget && inShell {
+		r.fatalQuiet()
+	}
+}
+
+// substitutionTargetWithMore is the index of the first redirection in rs
+// whose target begins with a process substitution and has anything after it,
+// on an operator that is one direction or both, in the dialect that refuses
+// one, or -1 — and whether the dialect left the question unanswered, which
+// has refused already. See Semantics.SubstitutionTargetWithMoreIsRefused.
+//
+// Read from the word as written, before anything is expanded, because what
+// is refused is the shape: `> >(cat)""` is refused though it would come to
+// the path alone.
+func (r *Runner) substitutionTargetWithMore(rs []*syntax.Redirect) (int, bool) {
+	for i, rd := range rs {
+		switch rd.Op {
+		case syntax.TokLess, syntax.TokGreat, syntax.TokClobber, syntax.TokClobberBang, syntax.TokLessGreat:
+		default:
+			continue
+		}
+		w := rd.Word
+		if w == nil || len(w.Spans) < 2 {
+			continue
+		}
+		if k := w.Spans[0].Kind; k != syntax.ProcSubstIn && k != syntax.ProcSubstOut {
+			continue
+		}
+		if w.Spans[0].Pos != w.Pos() {
+			continue
+		}
+		refused := r.ask(r.sem().SubstitutionTargetWithMoreIsRefused,
+			"a redirection target a process substitution begins, with more after it")
+		if r.unspecified {
+			return -1, true
+		}
+		if refused {
+			return i, false
+		}
+		return -1, false
+	}
+	return -1, false
+}
+
+// refuseSubstitutionTargetWithMore is the refusal itself: nothing in the
+// list is opened, the status is 1, and the shell ends where it would over a
+// duplication target that is not a descriptor.
+func (r *Runner) refuseSubstitutionTargetWithMore() {
+	r.diagf("%s\n", Wording(r.diag().SubstitutionTargetWithMore,
+		"a process substitution cannot be part of a redirection's target"))
+	r.status = 1
+	r.redirErr = true
+	r.badDupTarget = true
 }
 
 // fdMoveSource splits `5-` into the descriptor it names and the fact that a

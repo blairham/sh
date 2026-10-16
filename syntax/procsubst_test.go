@@ -113,3 +113,39 @@ func TestASubstitutionAgainstItsRedirectionIsRefused(t *testing.T) {
 		}
 	}
 }
+
+// ProcessSubstitutionAgainstAPlainRedirectionIsRefused: a target that begins
+// with a substitution running against a one-direction operator is refused by
+// the whole word as written, and the append, the duplication, the read-write
+// operator and a word the substitution does not begin are read (#6812).
+func TestASubstitutionAgainstAPlainRedirectionIsRefusedByItsWord(t *testing.T) {
+	d := syntax.Core()
+	d.ProcessSubstitutionAgainstAPlainRedirectionIsRefused = true
+	d.FdVariableRedirections = true
+	for _, c := range []struct{ src, word string }{
+		{": > <(cat)", "<(cat)"},
+		{": >| <(cat)", "<(cat)"},
+		{": 3> <(cat)", "<(cat)"},
+		{": {v}> <(cat)", "<(cat)"},
+		{": < >(cat)", ">(cat)"},
+		{": 3< >(cat)", ">(cat)"},
+		{": > <(cat)x", "<(cat)x"},
+		{`: > <(cat)""`, `<(cat)""`},
+	} {
+		_, err := syntax.Parse(c.src, d)
+		if err == nil || !strings.Contains(err.Error(), "`"+c.word+"' unexpected") {
+			t.Errorf("%s: got %v, want %s refused", c.src, err, c.word)
+		}
+		if _, err := syntax.Parse(c.src, syntax.Core()); err != nil {
+			t.Errorf("%s without the flag: %v", c.src, err)
+		}
+	}
+	for _, src := range []string{
+		": >> <(cat)", ": <> >(cat)", ": <> <(cat)", ": >& <(cat)", ": &> <(cat)",
+		": > x<(cat)", ": > >(cat)", ": < <(cat)", ": > >(cat)x",
+	} {
+		if _, err := syntax.Parse(src, d); err != nil {
+			t.Errorf("%s: %v, want it read", src, err)
+		}
+	}
+}

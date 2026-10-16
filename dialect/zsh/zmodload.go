@@ -1268,7 +1268,14 @@ func zmodloadBuiltin(r *interp.Runner, _ context.Context, args []string) int {
 // zmodloadOptions reads the leading option words.
 func zmodloadOptions(r *interp.Runner, args []string) (opts zmodloadOpts, rest []string, code int) {
 	rest = args
-	for len(rest) > 0 && strings.HasPrefix(rest[0], "-") && len(rest[0]) > 1 {
+	for len(rest) > 0 && strings.HasPrefix(rest[0], "-") {
+		if rest[0] == "-" {
+			// A bare sign ends the options as `--` does, and is not a module
+			// name: measured 2026-10-16 on zsh 5.9.2, `zmodload -` is the
+			// listing at 0 and `zmodload - zsh/datetime` loads the module.
+			rest = rest[1:]
+			break
+		}
 		word := rest[0]
 		rest = rest[1:]
 		if word == "--" {
@@ -1344,7 +1351,48 @@ func setZmodloadLetter(opts *zmodloadOpts, letter byte) {
 // puts back every feature `-F` had switched off, so it is the one command
 // that widens a narrowed module. See zmodloadWiden.
 func zmodloadLoad(r *interp.Runner, opts zmodloadOpts, module string) int {
+	if code, refused := zmodloadNameRefused(r, opts, module); refused {
+		return code
+	}
 	return zmodloadLoadDepending(r, opts, module, nil)
+}
+
+// zmodloadNameRefused refuses a module name spelled with a character no
+// module name has, before anything is loaded, and reports the status.
+//
+// The spelling is asked first and the module second: measured 2026-10-16 on
+// zsh 5.9.2, `-f`, a character at a time inside `zsh/a?b` — letters, digits,
+// `_` and `/` reach the load and its `failed to load module`, and a space,
+// `;`, `-`, `.`, `:`, `+`, `*` or a non-ASCII letter is the sentence
+// `invalid module name` instead. That refusal **ends the shell** at 1 — the line
+// after it does not run, `|| echo` is not reached, a function's caller does
+// not resume and `( … )` is 1 — unless `-s` is written, where it is a silent
+// 1 and the script carries on. An empty name, `//` and a leading digit are
+// spelled well enough and fail to load (#6787).
+func zmodloadNameRefused(r *interp.Runner, opts zmodloadOpts, module string) (int, bool) {
+	if zmodloadNameWellSpelled(module) {
+		return 0, false
+	}
+	if opts.silent {
+		return 1, true
+	}
+	r.DiagnoseAsTheShellf("invalid module name `%s'\n", module)
+	r.StopTheScript(1)
+	return 1, true
+}
+
+// zmodloadNameWellSpelled is whether every byte of a module name is an ASCII
+// letter, a digit, `_` or `/`.
+func zmodloadNameWellSpelled(module string) bool {
+	for i := 0; i < len(module); i++ {
+		c := module[i]
+		switch {
+		case c >= 'a' && c <= 'z', c >= 'A' && c <= 'Z', c >= '0' && c <= '9', c == '_', c == '/':
+		default:
+			return false
+		}
+	}
+	return true
 }
 
 // zmodloadLoadDepending is zmodloadLoad with the chain of modules already
@@ -1837,6 +1885,9 @@ func zmodloadFeatureCommand(r *interp.Runner, opts zmodloadOpts, args []string) 
 		return 1
 	}
 	module, specs := args[0], args[1:]
+	if code, refused := zmodloadNameRefused(r, opts, module); refused {
+		return code
+	}
 	if opts.list || opts.commands {
 		return zmodloadFeatureListing(r, opts, module, specs)
 	}

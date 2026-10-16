@@ -298,14 +298,10 @@ func runOwnDescriptorsReading(t *testing.T, own OwnDescriptorNumbers, src string
 	// all: a substitution's body asks it the moment there is a job.
 	sem.SubshellJobTable = SubshellJobsCleared
 	out, errs := &strings.Builder{}, &strings.Builder{}
-	r := &Runner{
+	r := newTestRunner(t, &Runner{
 		Semantics: &sem, Diagnostics: &Diagnostics{}, Name: "sh",
-		Stdout: out, Stderr: errs,
-	}
-	if stdin != nil {
-		r.Stdin = stdin
-	}
-	r = newTestRunner(t, r)
+		Stdin: stdin, Stdout: out, Stderr: errs,
+	})
 	if _, err := r.Run(context.Background(), f); err != nil {
 		t.Fatal(err)
 	}

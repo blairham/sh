@@ -34,6 +34,8 @@ func BenchmarkProcessSubstitution(b *testing.B) {
 			sem.SubstitutionEndPlacement = SubstitutionEndsWhereAnyDescriptorGoes
 			sem.FirstAllocatedDescriptor = AllocateDescriptorsFromTen
 			sem.OwnDescriptors = SavedStreamsAndPipeReadEndsTakeNumbers
+			// testrunner:bare — a benchmark has no *testing.T for the
+			// helper, and nothing here touches the directory or TMPDIR.
 			r := &Runner{Semantics: &sem, Diagnostics: &Diagnostics{}, Name: "sh", Stdout: io.Discard, Stderr: io.Discard}
 			b.ReportAllocs()
 			for b.Loop() {

@@ -18,7 +18,7 @@ func WhenAWishMissesForTest(f func(n int)) (restore func()) {
 // drops the claim the way the sibling's own close does, after the close. See
 // foreignfds_unix.go.
 func ClaimForASiblingForTest(fd int) (drop func()) {
-	stamp := claimFd(fd, (&Runner{}).lineage(), false)
+	stamp := claimFd(fd, &fdLineage{forkedAt: fdClock.Add(1)}, false)
 	return func() { dropFdClaimMade(fd, stamp) }
 }
 

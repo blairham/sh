@@ -5427,6 +5427,11 @@ type Runner struct {
 	// Runner.builtinNames, several calls below the loop that read the
 	// letters. See Runner.dottedBuiltinName for the measurement.
 	dottedOperandRefusedByALetter bool
+	// dottedOperandRefusedWithAValue is the reference letter's half of that:
+	// a dotted operand is not a name to it even carrying a value, where the
+	// export letter's operand with a value is a store, and meets its parent
+	// first. See Runner.refuseAnOperandWithNoParent.
+	dottedOperandRefusedWithAValue bool
 	// indexedLetterHere is the subset of those names whose declaration also
 	// carried the *indexed* container letter — `typeset -a a=([5]=q)` and not
 	// `typeset -a a` followed by the assignment on the next line.
@@ -9934,6 +9939,12 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 			if r.prefixWalkFailed(walk) {
 				break
 			}
+			if r.dottedPrefixIsNotTaken(one[0], kind) {
+				// Refused once the walk below reaches it, and never written:
+				// `set -x; a.b=1 true` is `+ true` and the refusal. See
+				// interp/dottednoparent.go.
+				break
+			}
 			r.tracePrefixAfterTheCommand(one)
 		}
 		held.release(r)
@@ -10798,6 +10809,11 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 		// runs where the trace wrote it.
 		part := r.prefixExpansion(a)
 		value := r.prefixJoined(a, part)
+		if r.refuseADottedPrefix(a, value, false, false) {
+			// A program takes no dotted name, and the walk ends here. See
+			// interp/dottednoparent.go.
+			break
+		}
 		if r.prefixEntryIsFrozen(a) && r.prefixRefusalEndsTheWalk(external) {
 			// Its own value expanded, in the columns that evaluate it before
 			// refusing the name, and the walk ends here: the entries behind a
@@ -13894,7 +13910,7 @@ func (r *Runner) refuseReadonly(name string, form assignForm) bool {
 // caller that has expansions to perform before the refusal is reported. See
 // interp/frozenorder.go.
 func (r *Runner) freezeRefuses(name string, form assignForm) bool {
-	if !r.attrHas(name, attrReadonly) {
+	if !r.nameIsFrozen(name) {
 		return false
 	}
 	if name == r.retypingFrozen {
@@ -15375,6 +15391,12 @@ func (r *Runner) assign(ctx context.Context, a *syntax.Assign) {
 		// reads what the name holds — or the write starts from what the
 		// producer would have said. See Runner.endProducerUnsetEnded.
 		r.endProducerUnsetEnded(a.Name)
+	}
+	// A dotted name whose parent is missing, in the grammar that has dotted
+	// names, ahead of every kind of store below. See
+	// interp/dottednoparent.go.
+	if r.refuseAStoreWithNoParent(a) {
+		return
 	}
 	// The refusal stands in front of all three, and it used to stand in front
 	// of one: setVarAs is where it lived, and only the scalar branch below

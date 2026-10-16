@@ -343,6 +343,15 @@ func (r *Runner) builtinNames(builtin string, args []string, explicitVariable bo
 				continue
 			}
 		}
+		// A dotted name whose parent is missing, ahead of every other
+		// question about it. See interp/dottednoparent.go.
+		if refused, ended := r.refuseAnOperandWithNoParent(builtin, a, name); refused {
+			status = r.status
+			if ended {
+				return r.namesAfterARefusal(builtin, rest, args[i+1:], takes), status, true
+			}
+			continue
+		}
 		// A subscript on something that is not a name is not a subscripted
 		// operand at all: measured, `typeset 1x[0]=v` is a bad name in every
 		// column that has the word, and bash quotes the *whole* operand back
@@ -663,6 +672,13 @@ func (r *Runner) badBuiltinName(builtin, operand, name string, fatal Answer) int
 	// Diagnostics.BadNameOfADottedOperandWithAValue.
 	if w := d.BadNameOfADottedOperandWithAValue; w != "" && operand != name && strings.Contains(name, ".") {
 		wording = w
+		// And located as the script's own line, the builtin's location going
+		// with its name: measured 2026-10-15 from a script file, `export
+		// a.b=1` is `t.sh: line 1: a.b=1: is not an identifier` in ksh93u+,
+		// where this wrote `t.sh[1]:` (#6628).
+		outer := r.inBuiltin
+		r.inBuiltin = ""
+		defer func() { r.inBuiltin = outer }()
 	}
 	line := Wording(wording, "%[1]s: `%[2]s': not a valid identifier", builtin, shown)
 	if d.BadNameRefusalOmitsTheLine[builtin] {

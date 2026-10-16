@@ -218,6 +218,11 @@ func (r *Runner) prefixStoreFoldsThroughTheLetters(a *syntax.Assign) bool {
 // supposed to displace. See interp/namerefprefix.go (#4110).
 func (r *Runner) prefixStore(ctx context.Context, a *syntax.Assign, landsOn string, stores, fresh bool) {
 	value := r.prefixExpansion(a)
+	if !r.assignmentGaveUp() && r.refuseADottedPrefix(a, value, true, stores) {
+		// A dotted name the command will not take. See
+		// interp/dottednoparent.go.
+		return
+	}
 	if r.assignmentGaveUp() {
 		// The value would not expand, so the command is given up and there
 		// is nothing to store — the same answer the scalar store in

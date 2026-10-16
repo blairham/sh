@@ -1443,6 +1443,39 @@ type Semantics struct {
 	// the array-literal refusal zsh reports from the child (#6784, #6783).
 	PrefixExpandsInTheExternalCommandsChild Answer
 
+	// PersistingPrefixMakesATypedNameAPlainScalar stores a prefix that
+	// persists — before a special builtin, a POSIX-form function, `eval` —
+	// into a plain scalar where the name carries a numeric or a width letter:
+	// the letters and the export attribute go, and a value the letter could
+	// not read is stored as text without complaint. The other answer writes
+	// the value through the letters, as any assignment would.
+	//
+	// Measured 2026-10-16 on ksh93u+ 2012-08-01 under `-c`:
+	//
+	//	typeset -i v=1; v=2+2 :; typeset -p v          v=2+2
+	//	typeset -i v=1; f(){ :; }; v=2+2 f             v=2+2 afterwards
+	//	typeset -i v=1; v=2+2 eval "typeset -p v"      v=2+2
+	//	typeset -xi v=1; v=5 :                         v=5 — the export goes too
+	//	typeset -R5 v=x; v=ab :, typeset -Z3 v=1; v=5 :   v=ab, v=5
+	//	typeset -F 2 v; v=1/3 :; echo $v               1/3
+	//	typeset -i v=1; v=1+ :; echo "st=$? [$v]"      st=0 [1+]
+	//	typeset -xu v=x; v=abc :                       typeset -x -u v=ABC
+	//	typeset -x v=x; v=abc :                        typeset -x v=abc
+	//
+	// The last two are the controls: a name with only a case letter, or
+	// only the export attribute, keeps them and the store goes through them.
+	// bash 5.3.20 under `set -o posix` keeps the letters on the prefix it
+	// keeps (`declare -ix v="4"`), and zsh 5.9.2 keeps none of these prefixes
+	// at all (#6750).
+	//
+	// Asked only where the name carries a numeric or a width letter. Not
+	// modeled: `v=2+2 command eval …`, which leaves the name unexported there
+	// where `command` hands this shell's prefix the export attribute.
+	//
+	// unpinned dash: no typed names, so no prefix can meet one.
+	// unpinned ash: the same.
+	PersistingPrefixMakesATypedNameAPlainScalar Answer
+
 	// PrefixExportAtABuiltin is what an assignment prefix does to the export
 	// attribute of the name it stands in front of, for the length of a
 	// *builtin* — so it decides what a builtin that reads the attribute back
@@ -34804,6 +34837,9 @@ func PosixSemantics() Semantics {
 		CaseWithoutACommandKeepsTheSubstitutionStatus: No,
 		// A prefix's value is expanded in the shell, as every word is.
 		PrefixExpandsInTheExternalCommandsChild: No,
+		// A persisting prefix writes through the name's letters, as any
+		// assignment does. See the field.
+		PersistingPrefixMakesATypedNameAPlainScalar: No,
 		// And it has an option word begin with a `-`, so a `+` word is an
 		// operand. zsh is the one column that reads it as an option and says
 		// so itself.
@@ -36486,6 +36522,9 @@ func CoreSemantics() Semantics {
 		CaseWithoutACommandKeepsTheSubstitutionStatus: No,
 		// A prefix's value is expanded in the shell, as every word is.
 		PrefixExpandsInTheExternalCommandsChild: No,
+		// A persisting prefix writes through the name's letters, as any
+		// assignment does. See the field.
+		PersistingPrefixMakesATypedNameAPlainScalar: No,
 		// An option word begins with a `-`, which is the standard's wording
 		// and six of the seven columns. Answered rather than refused for the
 		// reason the answer above is: a `+` word reaching `getopts` is an

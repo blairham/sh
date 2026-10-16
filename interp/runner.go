@@ -10214,6 +10214,23 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 				// `base5`. Emptied after the name has been saved, so the
 				// take-back below puts the shell's own back.
 				r.hideVar(held)
+				// And with none of the letters the shell's name carries,
+				// the case letter included: measured 2026-10-16 on ksh93u+,
+				// `typeset -i v=1; function g { typeset -p v; }; v=2+2 g` is
+				// `typeset -x v=2+2` and the same over `typeset -u v=x` is
+				// `typeset -x v=abc` (#6750). Not one of the shell's own,
+				// whose type is the shell's: `function f { typeset -p
+				// SECONDS; }; SECONDS=5 f` is `typeset -x -F 3 SECONDS=5.000`
+				// there, and `OPTIND=x` reads 0 in the body.
+				if !r.shellKeepsTheType(held) {
+					r.emptyPrefixEntry(held)
+				}
+			} else if r.sem().AssignmentPrefixPersistsAfterAFunction == Yes {
+				// A prefix to a function that persists, which is a POSIX-form
+				// function in one column. Read rather than asked: the take-back
+				// after the call is where that question is put. See
+				// Semantics.PersistingPrefixMakesATypedNameAPlainScalar.
+				r.persistingPrefixResetsATypedName(held)
 			}
 			// A prefix to a function persists here, so it is a store and
 			// fires the discipline a store fires — with `.append` for `+=`,
@@ -10495,6 +10512,7 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 				// give back. See Runner.callPrefixesLetTheNameGo, which is
 				// the other end of the frames an `unset` reaches into.
 				r.callPrefixesLetTheNameGo(landsOn)
+				r.persistingPrefixResetsATypedName(landsOn)
 			}
 			// Whether a discipline hears about it is whether there is a
 			// store for it to hear about. A *regular* builtin's prefix is the

@@ -790,7 +790,9 @@ func (r *Runner) assignAssocLiteral(name string, elems []*syntax.ArrayElem, appe
 		r.bareLiteralElementIsOneValue(name, elems, false))
 	if !ok {
 		// A failed element list costs the whole table, exactly as it costs
-		// the whole indexed array — see literalElems.
+		// the whole indexed array — see literalElems — but for the column
+		// that keeps what a subscripted literal had stored.
+		r.keepWhatAFailedLiteralStored(name, elems, parsed, appendTo, false)
 		return
 	}
 	if r.indexArrayIntoATable(name, parsed, appendTo) {

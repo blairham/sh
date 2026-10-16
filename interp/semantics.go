@@ -4937,6 +4937,45 @@ type Semantics struct {
 	// columns with no subscript at all leave it unanswered.
 	TraceElementSubscriptIsEvaluated Answer
 
+	// FailedSubscriptedLiteralKeepsWhatItStored leaves a name holding the
+	// elements an array literal had placed before one of its elements failed
+	// to expand, where the literal's first element names its subscript.
+	// Measured 2026-10-15 on ksh93u+ 2012-08-01 from a file, each row after
+	// `a=(1 2)` or `typeset -A m=([k]=old)`, read back by an exit trap:
+	//
+	//	a=([0]=x [1]=$((1/0)))            typeset -A a=([0]=x)
+	//	a=([2]=x [5]=y [1]=$((1/0)))      typeset -A a=([2]=x [5]=y)
+	//	a=([$((1/0))]=v)                  typeset -A a=()
+	//	typeset -a a; a=([0]=x [1]=…)     typeset -A a=([0]=x)
+	//	x=s; x=([0]=x [1]=…)              typeset -A x=([0]=x)
+	//	typeset a=([0]=x [1]=…)           typeset -A a=([0]=x)
+	//	m=([j]=new [k]=$((1/0)))          typeset -A m=([j]=new)
+	//	m+=([k]=new [i]=$((1/0)))         typeset -A m=([k]=new)
+	//	a+=([5]=x [6]=$((1/0)))           typeset -a a=(1 2)
+	//	a=(x [3]=$((1/0)))                typeset -a a=(1 2)
+	//
+	// So the literal is built as a **table**, one pair at a time: an
+	// assignment starts the name over as one and keeps the pairs before the
+	// failure, an append onto a table keeps the pairs it added, and an append
+	// onto an indexed array keeps nothing. A literal opening with a bare word
+	// is the ordinary all-or-nothing store, as it is in bash 5.3.20 and zsh
+	// 5.9.2 for every row above. Only the kind a listing shows is a table:
+	// `${a[0]}` reads `x` either way.
+	//
+	// Asked only once a subscripted literal has failed — see
+	// Runner.keepWhatAFailedLiteralStored — so no literal that expands asks
+	// anything. dash and BusyBox ash have no array literal.
+	//
+	// unpinned bash: no corpus row fails partway through a literal; pinned by
+	// TestAFailedSubscriptedLiteralStoresNothing.
+	//
+	// unpinned zsh: the same reach, pinned by
+	// TestAFailedSubscriptedLiteralStoresNothing.
+	//
+	// unpinned ksh: the same reach, pinned by
+	// TestAFailedSubscriptedLiteralKeepsWhatItStored.
+	FailedSubscriptedLiteralKeepsWhatItStored Answer
+
 	// ElementSubscriptIsExpandedBeforeTheValue expands the words of an
 	// element write's subscript before its value: `a[$(f)]=$(g)` runs `f`
 	// first. Measured 2026-10-15 under `-c` and a script file, traced and

@@ -738,6 +738,8 @@ func Semantics() interp.Semantics {
 	// no line of this shape ever reaches a trace (#1959).
 	// unanswered TraceSubscriptedArrayLiteralIsElementAssignments: and the
 	// subscripted shape is the same literal, so it does not parse either.
+	// unanswered FailedSubscriptedLiteralKeepsWhatItStored: no array
+	// literal here to fail partway through.
 	// unanswered ElementSubscriptIsExpandedBeforeTheValue: no element write
 	// to order — `a[1]=v` is a command word here.
 	// unanswered TraceElementSubscriptIsEvaluated: nor a subscript. `a[1]=v`

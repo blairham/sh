@@ -9486,8 +9486,13 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 	if len(r.arrayOperands) > 0 {
 		keepForArrays = r.failedExpansionStatusIs(failedExpansionKeepsTheStatus)
 	}
-	r.expandArrayOperands(tableLetterAmongTheOptions(argv))
+	expandedAll := r.expandArrayOperands(tableLetterAmongTheOptions(argv), indexedLetterAmongTheOptions(argv))
 	keepForArrays()
+	if !expandedAll {
+		// The failure has been reported and has ended what it ends. See
+		// Runner.expandArrayOperands.
+		return nil
+	}
 	holdsItsLine := r.holdsItsLineForACompoundOperand()
 	if holdsItsLine {
 		// A compound operand's members are performed in front of the command

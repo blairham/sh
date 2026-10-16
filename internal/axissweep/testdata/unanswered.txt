@@ -146,6 +146,7 @@ ash   ExportLetterDeclaresAGlobal
 ash   ExportOrReadonlyTakesAReferenceToAnElement
 ash   ExportThroughASubscriptedOperandRecordsTheLetter
 ash   ExportedCompoundReachesAChildAsItsFirstValue
+ash   FailedSubscriptedLiteralKeepsWhatItStored
 ash   FailingPipelineWhoseLastElementRanHere
 ash   FdVariableBadName
 ash   FdVariableOnASubshellIsTheSubshells
@@ -541,6 +542,7 @@ dash  ExportLetterDeclaresAGlobal
 dash  ExportOrReadonlyTakesAReferenceToAnElement
 dash  ExportThroughASubscriptedOperandRecordsTheLetter
 dash  ExportedCompoundReachesAChildAsItsFirstValue
+dash  FailedSubscriptedLiteralKeepsWhatItStored
 dash  FailingPipelineWhoseLastElementRanHere
 dash  FdVariableBadName
 dash  FdVariableOnASubshellIsTheSubshells

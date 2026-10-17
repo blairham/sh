@@ -129,6 +129,7 @@ func TestTheUsageNamesEveryFlagThisBinaryReads(t *testing.T) {
 		{"-acp-connect", []string{"-acp-connect"}},
 		{"-acp-allow", []string{"-acp-allow"}},
 		{"-acp-auth", []string{"-acp-auth", "m"}},
+		{"-acp-prompt", []string{"-acp-prompt", "-"}},
 		{"-help", []string{"-help"}},
 	} {
 		t.Run(tc.flag, func(t *testing.T) {

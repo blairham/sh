@@ -806,6 +806,33 @@ func clientChecks(self string) []check {
 			}
 			return true, "with -deny /bin/echo the agent's command produced: " + strings.TrimSpace(denied.Got)
 		},
+	}, {
+		name:  "client-sends-a-whole-prompt-as-one-turn",
+		claim: "-acp-prompt sends every line of its input as one prompt, where the default sends a turn per line",
+		run: func(t *harness) (bool, string) {
+			// The prompt from #6937's report, and the pair that makes the row
+			// worth reading: the same input, one flag apart. The default half
+			// is the control — it is the behavior the issue reported, and it
+			// proves the agent end counts turns rather than agreeing with
+			// whatever it is shown.
+			const prompt = "Run each of these and report the results:\n1. echo one\n2. echo two\n"
+			perLine, err := driveAgentWith(t, self, "prompt", "", nil, prompt)
+			if err != nil {
+				return false, err.Error()
+			}
+			once, err := driveAgentWith(t, self, "prompt", "", []string{t.dash() + "acp-prompt", "-"}, prompt)
+			if err != nil {
+				return false, err.Error()
+			}
+			want := strings.TrimRight(prompt, "\n")
+			switch {
+			case len(perLine.Prompts) != 3:
+				return false, fmt.Sprintf("the control is not a turn per line: %q", perLine.Prompts)
+			case len(once.Prompts) != 1 || once.Prompts[0] != want:
+				return false, fmt.Sprintf("with -acp-prompt - the agent got %q, want one turn", once.Prompts)
+			}
+			return true, fmt.Sprintf("the same three lines were %d turns by default and 1 with %sacp-prompt -", len(perLine.Prompts), t.dash())
+		},
 	}}
 }
 
@@ -816,6 +843,13 @@ func clientChecks(self string) []check {
 // the only thing that varies between a pair of runs is the flags — which is
 // what makes a pair worth comparing.
 func driveAgent(t *harness, self, script, target string, flags []string) (AgentReport, error) {
+	// One prompt, then end of input, which is how the prompt loop ends.
+	return driveAgentWith(t, self, script, target, flags, "do the thing\n")
+}
+
+// driveAgentWith is driveAgent with the shell's standard input chosen by the
+// row, for the rows whose subject is how that input becomes turns.
+func driveAgentWith(t *harness, self, script, target string, flags []string, stdin string) (AgentReport, error) {
 	var r AgentReport
 	out := filepath.Join(t.dir, script+"-report.json")
 	_ = os.Remove(out)
@@ -828,8 +862,7 @@ func driveAgent(t *harness, self, script, target string, flags []string) (AgentR
 	cmd.Dir = t.dir
 	cmd.Env = append(os.Environ(),
 		envAgentScript+"="+script, envAgentOut+"="+out, envAgentTarget+"="+target)
-	// One prompt, then end of input, which is how the prompt loop ends.
-	cmd.Stdin = strings.NewReader("do the thing\n")
+	cmd.Stdin = strings.NewReader(stdin)
 	shellOut, _ := cmd.CombinedOutput()
 	b, readErr := os.ReadFile(out)
 	if readErr != nil {

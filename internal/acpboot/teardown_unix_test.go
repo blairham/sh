@@ -65,7 +65,7 @@ func TestAnAgentThatOutlivesItsInputIsEnded(t *testing.T) {
 
 	done := make(chan int, 1)
 	start := time.Now()
-	go func() { done <- connectACP("sh", "-", driver.Shell{}, true, "", []string{self}) }()
+	go func() { done <- connectACP("sh", "-", driver.Shell{}, true, "", "", []string{self}) }()
 
 	const bound = 10 * time.Second
 	select {

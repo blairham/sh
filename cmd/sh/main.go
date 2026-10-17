@@ -189,6 +189,12 @@ func run(argv []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	if err != nil {
 		return fail(stderr, err)
 	}
+	if own.acpPrompt != "" && !own.acpConnect {
+		// Refused rather than ignored: with no agent to send it to, the line
+		// would go on to run a shell, reading standard input as a script where
+		// somebody meant it as a prompt.
+		return fail(stderr, errors.New("-acp-prompt is only read with -acp-connect"))
+	}
 	sh, err := pickDialect(own.dialect)
 	// The protocol server, for the front end's own `--acp` as well as this
 	// binary's `-acp`. Both spellings reach one implementation; see #2585 for
@@ -281,7 +287,7 @@ func run(argv []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		// they are not a shell invocation either — and the seams are already
 		// installed, so a policy governs what the agent asks us to do exactly
 		// as it governs what a script does.
-		code := acpboot.ConnectAs("sh", "-")(sh, own.acpAllow, own.acpAuth, rest)
+		code := acpboot.ConnectAs("sh", "-")(sh, own.acpAllow, own.acpAuth, own.acpPrompt, rest)
 		done()
 		return code
 	}
@@ -388,6 +394,10 @@ type ownFlags struct {
 	// to choose, and picking one for them is the kind of silent default this
 	// front end refuses everywhere else.
 	acpAuth string
+	// acpPrompt is the file whose whole contents are one prompt, or "-" for
+	// standard input. Empty is the default: a prompt per line, until the
+	// input ends. See acpboot.readPrompt and #6937.
+	acpPrompt string
 	// plugins are the plugin executables this invocation named, in the order
 	// it named them. Repeatable, like -deny and unlike -policy: two plugins
 	// are two sets of commands, which composes without ambiguity, where two
@@ -458,6 +468,20 @@ func readOwnFlags(args []string) (own ownFlags, rest []string, err error) {
 				val = args[i]
 			}
 			own.acpAuth = val
+		case "acp-prompt":
+			// The next word is taken even when it is `-`, which is the value
+			// most people will write: standard input.
+			if !hasVal {
+				if i+1 >= len(args) {
+					return own, nil, errors.New("-acp-prompt requires a file, or - for standard input")
+				}
+				i++
+				val = args[i]
+			}
+			if val == "" {
+				return own, nil, errors.New("-acp-prompt requires a file, or - for standard input")
+			}
+			own.acpPrompt = val
 		case "deny":
 			if !hasVal {
 				if i+1 >= len(args) {

@@ -437,7 +437,11 @@ type Shell struct {
 	// file we open and the command it runs is a command we start — which is
 	// exactly why a dialect binary that could not do it was a gap worth
 	// closing rather than a convenience.
-	ConnectACP func(sh Shell, allow bool, authMethod string, argv []string) int
+	//
+	// prompt is `--acp-prompt`: empty for a prompt per line of standard input,
+	// otherwise the file whose whole contents are the one prompt, with `-`
+	// naming standard input.
+	ConnectACP func(sh Shell, allow bool, authMethod, prompt string, argv []string) int
 
 	// Version is what this binary tells a protocol client it is, stamped over
 	// by the release build with `-X main.version=`. Empty is a build from a
@@ -1154,12 +1158,13 @@ type source struct {
 	// mcp is the same for the Model Context Protocol, and travels beside acp
 	// because it ends the invocation the same way.
 	mcp bool
-	// acpConnect and its three companions are the client direction, carried
-	// the same way and for the same reason.
+	// acpConnect and its companions are the client direction, carried the
+	// same way and for the same reason.
 	acpConnect bool
 	acpArgv    []string
 	acpAllow   bool
 	acpAuth    string
+	acpPrompt  string
 	// input is the front end's label for the origin — "-c", and empty for a
 	// file or for standard input. One dialect names it in a parse failure's
 	// location and nowhere else, which is why it travels beside the name
@@ -1682,12 +1687,13 @@ type invocation struct {
 	mcp bool
 	// acpConnect is `--acp-connect`, and acpArgv is the command that starts
 	// the agent: every word after the flag, which is why the flag ends option
-	// reading. acpAllow and acpAuth are `--acp-allow` and `--acp-auth`, and
-	// so must be written before it.
+	// reading. acpAllow, acpAuth and acpPrompt are `--acp-allow`,
+	// `--acp-auth` and `--acp-prompt`, and so must be written before it.
 	acpConnect bool
 	acpArgv    []string
 	acpAllow   bool
 	acpAuth    string
+	acpPrompt  string
 	// plusC is that letter written with a plus — `+c`, `+ce`. Both signs
 	// select the command string, which is unanimous and is what sawC
 	// records; the sign is kept because one shell then names the operands
@@ -1928,6 +1934,12 @@ func (sh *Shell) input(argv []string) (source, io.Closer, error) {
 		// chosen is never decided.
 		return source{version: inv.version, help: inv.help}, nil, nil
 	}
+	if inv.acpPrompt != "" && !inv.acpConnect {
+		// Refused rather than ignored: without an agent to send it to, the
+		// line would otherwise go on to run a shell — reading standard input
+		// as a script where somebody meant it as a prompt.
+		return source{}, nil, fmt.Errorf("--acp-prompt is only read with --acp-connect")
+	}
 	closer, err := sh.installSandbox(inv)
 	if err != nil {
 		return source{}, nil, err
@@ -1939,7 +1951,7 @@ func (sh *Shell) input(argv []string) (source, io.Closer, error) {
 		// agent asks this shell to do exactly as it governs a script.
 		return source{
 			acpConnect: true, acpArgv: inv.acpArgv,
-			acpAllow: inv.acpAllow, acpAuth: inv.acpAuth,
+			acpAllow: inv.acpAllow, acpAuth: inv.acpAuth, acpPrompt: inv.acpPrompt,
 		}, closer, nil
 	}
 	if inv.acp {

@@ -757,6 +757,42 @@ permission request or an elicitation only arrives *during* a turn, so the
 scanner is idle exactly when a question needs it. Two readers on one descriptor
 would race for bytes and lose lines to whichever won.
 
+#### One prompt from a file: `-acp-prompt`
+
+A line per turn is right for a person at a terminal and wrong for a script.
+A prompt piped in from a heredoc cannot hold a newline: an instruction and the
+four numbered commands under it became five turns, the first of which asked
+what the four commands were (#6937). So `-acp-prompt FILE` (`--acp-prompt` on
+the dialect binaries, written before `-acp-connect` like the other client
+flags) reads the **whole** of `FILE` as one prompt, sends it as one
+`session/prompt`, and exits when that turn ends. `-` names standard input.
+Trailing newlines are dropped, as the line reader drops the one each line ends
+on; everything inside is sent as written. An empty prompt, or a file that is
+not there, is refused before the agent is launched. The file is read **through
+the gate**, as a script operand is: its contents go to the agent, so a policy
+that hides a file from the agent hides it from the prompt too, and `-deny f
+-acp-prompt f` is refused rather than sending the agent what it was denied.
+The default is unchanged: without the flag, a line is a turn.
+
+**The shared reader decides what a prompt from standard input costs.** Reading
+the prompt there takes the input to its end, so nobody is left on it to answer
+a question — a pipe has closed, and a person at a terminal has ended their
+input. That run therefore counts as having **no terminal**, whatever standard
+input is: permission requests fall to the ladder's last rung, so `-acp-allow`
+answers them and anything else is a denial, and the form capability is withheld
+so an agent is not told it can ask for one. Nobody to ask is still a denial;
+`-acp-prompt -` cannot turn into a run that asks questions nobody can answer. A
+prompt from a *file* leaves standard input alone, so a person at a terminal is
+asked exactly as before — which is the reason to take a file rather than only
+`-`.
+
+The name follows the value flags already here — `-policy FILE`, `-audit FILE`,
+`-acp-auth ID` name the thing rather than its container, so it is not
+`-acp-prompt-file` — and the `acp-` prefix keeps it with the other client
+flags. A flag rather than a sentinel line or a blank-line convention, because
+either of those would change what the default does with input somebody already
+writes. It is item 11 under *Decisions flagged for review*.
+
 It is a line read rather than `repl`'s line editor, which is worth stating
 because this shell has one. What `repl` exports is `Shell.Run`: a whole prompt
 loop that owns the terminal, the history and the shell it drives. There is no
@@ -1250,6 +1286,10 @@ genuinely the maintainer's.
     attempted, rather than the client choosing when an agent offers exactly
     one. Picking a credential path for somebody is a guess about their
     account, and a guess that succeeds is worse than one that fails.
+11. **`-acp-prompt FILE` for a multi-line prompt**, opt-in, one turn, then
+    exit; the line-per-turn default untouched (#6937). Chosen by the session
+    that implemented it over a blank-line or sentinel convention, and not by
+    the maintainer — it is a proposal turned implementation, and his to veto.
 
 ## Staging
 

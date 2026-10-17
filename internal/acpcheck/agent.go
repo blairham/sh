@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 )
@@ -49,6 +50,10 @@ type AgentReport struct {
 	Got     string `json:"got"`
 	Refused bool   `json:"refused"`
 	Error   string `json:"error,omitempty"`
+	// Prompts is the text of every session/prompt the client sent, in order,
+	// one entry per turn. It is what the `prompt` script is for: how many
+	// turns a piece of input became is a fact only the agent end can see.
+	Prompts []string `json:"prompts,omitempty"`
 	// Pids are the processes a "linger" agent is made of: itself, then the
 	// child it started. Whoever drove it checks that none of them outlived
 	// the client.
@@ -166,8 +171,16 @@ func RunAgent(script string) int {
 		case "session/prompt":
 			var p struct {
 				SessionID string `json:"sessionId"`
+				Prompt    []struct {
+					Text string `json:"text"`
+				} `json:"prompt"`
 			}
 			_ = json.Unmarshal(m.Params, &p)
+			var text strings.Builder
+			for _, b := range p.Prompt {
+				text.WriteString(b.Text)
+			}
+			report.Prompts = append(report.Prompts, text.String())
 			target := os.Getenv(envAgentTarget)
 			switch script {
 			case "read":
@@ -244,6 +257,10 @@ func RunAgent(script string) int {
 
 // agentSaid is the sentence the agent reports to the person at the other end.
 func agentSaid(r AgentReport) string {
+	if r.Script == "prompt" {
+		// Asks for nothing: the script exists to count the turns it is given.
+		return fmt.Sprintf("turn %d", len(r.Prompts))
+	}
 	if r.Refused {
 		return fmt.Sprintf("the client refused %s: %s", r.Asked, r.Error)
 	}

@@ -111,7 +111,7 @@ func TestTalkCarriesTheNamedAuthMethod(t *testing.T) {
 		wg.Wait()
 	})
 
-	if code := talk("sh", "-", ctx, client, "no-such-method", bufio.NewScanner(strings.NewReader(""))); code == 0 {
+	if code := talk("sh", "-", ctx, client, "no-such-method", lines(bufio.NewScanner(strings.NewReader("")))); code == 0 {
 		t.Error("a method the agent never advertised was reported as a success")
 	}
 }

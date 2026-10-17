@@ -308,6 +308,49 @@ func TestACPAuthFlag(t *testing.T) {
 	}
 }
 
+// -acp-prompt is a value flag in both spellings, and its commonest value is
+// `-` — so the next word must be taken even though it starts with a dash, and
+// the agent's command line after -acp-connect must still be left alone.
+func TestACPPromptFlag(t *testing.T) {
+	for _, tc := range []struct {
+		args []string
+		want string
+	}{
+		{[]string{"-acp-prompt", "-", "-acp-connect", "npx", "pkg"}, "-"},
+		{[]string{"-acp-prompt=-", "-acp-connect", "npx", "pkg"}, "-"},
+		{[]string{"--acp-prompt", "task.md", "-acp-connect", "npx", "pkg"}, "task.md"},
+	} {
+		own, rest, err := readOwnFlags(tc.args)
+		if err != nil {
+			t.Fatalf("readOwnFlags(%v): %v", tc.args, err)
+		}
+		if own.acpPrompt != tc.want || !own.acpConnect {
+			t.Errorf("readOwnFlags(%v) = prompt %q connect %v, want %q and true", tc.args, own.acpPrompt, own.acpConnect, tc.want)
+		}
+		if !slices.Equal(rest, []string{"npx", "pkg"}) {
+			t.Errorf("rest = %v, want the agent's command line", rest)
+		}
+	}
+	for _, args := range [][]string{{"-acp-prompt"}, {"-acp-prompt="}} {
+		if _, _, err := readOwnFlags(args); err == nil {
+			t.Errorf("readOwnFlags(%v) accepted a prompt with no file", args)
+		}
+	}
+}
+
+// Without -acp-connect there is nobody to send the prompt to, and the line
+// would otherwise run a shell that reads the prompt as a script.
+func TestACPPromptWithoutAnAgentIsRefused(t *testing.T) {
+	var out, errs strings.Builder
+	code := run([]string{"sh", "-acp-prompt", "-"}, strings.NewReader("echo RAN\n"), &out, &errs)
+	if code == 0 || strings.Contains(out.String(), "RAN") {
+		t.Fatalf("status %d, stdout %q: the prompt was run as a script", code, out.String())
+	}
+	if !strings.Contains(errs.String(), "-acp-connect") {
+		t.Errorf("stderr %q does not name -acp-connect", errs.String())
+	}
+}
+
 // With no command there is nothing to connect to, and saying so beats hanging
 // on a pipe nobody is on the other end of.
 func TestACPConnectNeedsACommand(t *testing.T) {
@@ -315,7 +358,7 @@ func TestACPConnectNeedsACommand(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if code := acpboot.ConnectAs("sh", "-")(sh, false, "", nil); code == 0 {
+	if code := acpboot.ConnectAs("sh", "-")(sh, false, "", "", nil); code == 0 {
 		t.Error("connecting to nothing reported success")
 	}
 }

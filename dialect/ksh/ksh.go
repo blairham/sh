@@ -5727,6 +5727,9 @@ func Diagnostics() interp.Diagnostics {
 		// A store under a table's empty key, and only under `set -x`. See
 		// interp.Diagnostics.EmptyTableKeyTraced (#6609).
 		EmptyTableKeyTraced: "warning: adding empty subscript",
+		// And unlocated when `getopts` makes the store. See
+		// interp.Diagnostics.EmptyTableKeyTracedFromGetoptsIsUnlocated.
+		EmptyTableKeyTracedFromGetoptsIsUnlocated: true,
 		// And an arithmetic command is traced with its subscripts' quotes
 		// taken off. See interp.Diagnostics.TraceArithSubscriptQuotesRemoved.
 		TraceArithSubscriptQuotesRemoved: true,

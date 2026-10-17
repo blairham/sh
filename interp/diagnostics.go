@@ -8186,6 +8186,13 @@ type Diagnostics struct {
 	// them writes anything, and neither does an indexed array's `x[""]=1`,
 	// which is element 0 there (#6609).
 	EmptyTableKeyTraced string
+	// EmptyTableKeyTracedFromGetoptsIsUnlocated writes that warning, when
+	// `getopts` makes the store, behind the shell's name alone: measured
+	// 2026-10-16 on ksh93u+ 2012-08-01 under `set -x`, `getopts a 'a[]' -a`
+	// in a script file `t.sh` is `t.sh: warning: adding empty subscript`, with
+	// no line number and no builtin, where `read 'a[]'` on the next line is
+	// `t.sh[3]: read: warning: …` (#6683).
+	EmptyTableKeyTracedFromGetoptsIsUnlocated bool
 
 	// TraceArithSubscriptQuotesRemoved writes an arithmetic command's trace
 	// with the quotes taken off its subscripts, and a bracket the removal

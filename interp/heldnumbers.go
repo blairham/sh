@@ -797,6 +797,29 @@ func (h *redirHolds) join(fd int, input bool) {
 	}
 }
 
+// substitutionANameTakes is the index of this command's live substitution
+// that a `{name}` redirection's target is, where the name takes the
+// substitution's own number rather than a new one, or -1.
+//
+// zsh 5.9.2 hands the name the substitution's number: `exec {v}< <(true)` is
+// 11 and `exec {v}> >(cat)` is 12, the number the substitution was published
+// on, and the next pick finds the other end's number free — `exec {v}>
+// >(cat); exec {w}</dev/null {x}</dev/null` is `12 11 13` and the `<(…)`
+// spelling `11 12 13`. Made before the list's other redirections, as every
+// substitution of the list is (see makeFirst): `: {w}</dev/null {v}<
+// <(true)` is `11 12` for `v` and `w`. `echo hi {v}>>(cat)` is 12 too.
+// Without a name the number stays the command's, as it was. Measured
+// 2026-10-15 (#6789).
+//
+// Only in the dialect that counts its own descriptors, which is the dialect
+// it was measured in, and not for `{name}&>`.
+func (r *Runner) substitutionANameTakes(name string, bothStreams bool) int {
+	if bothStreams || !r.countsOwnDescriptors() {
+		return -1
+	}
+	return r.consumedSubstitution(name)
+}
+
 // copiedFrom is a duplication reached whose source is fd, which ends a join
 // of that stream: what it holds is given back, nothing more is owed for it,
 // and the stream counts as reached once, by the join itself. zsh 5.9.2

@@ -8176,6 +8176,11 @@ func biLocal(r *Runner, _ context.Context, args []string) (endStatus int) {
 			r.assignFailed = true
 			continue
 		}
+		if !hasValue && r.subscriptedLiteralOperandRefused(name, f) {
+			// `local b[1]=(p q)`, the same question `typeset` asks of it.
+			// See Runner.subscriptedLiteralOperandRefused (#6828).
+			return r.status
+		}
 		if r.typeLetterOverAnArrayLiteralRefused(name, f) {
 			// `local -i z=(1 2)` is refused in the same words `typeset -i
 			// z=(1 2)` is, with `local` in the location — see

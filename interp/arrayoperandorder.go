@@ -219,14 +219,15 @@ func (r *Runner) containerLetterOverALiteral(argv []string, c *syntax.SimpleCmd)
 
 // noteArrayOperandName records that the utility has reached the bare name an
 // array operand left in its place.
-func (r *Runner) noteArrayOperandName(name string) {
+func (r *Runner) noteArrayOperandName(name string) *syntax.Assign {
 	for i := range r.arrayOperands {
 		op := &r.arrayOperands[i]
 		if !op.seen && op.assign.Name == name {
 			op.seen = true
-			return
+			return op.assign
 		}
 	}
+	return nil
 }
 
 // storeArrayOperandBefore stores the array operand on base that the utility

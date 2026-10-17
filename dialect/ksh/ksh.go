@@ -1857,6 +1857,10 @@ func Semantics() interp.Semantics {
 	// kept, and hands a *child* `foo=0` where the fresh-cell column hands it
 	// `foo=bar`. It wants its own measurement (#4087).
 	s.AssignmentPrefixMakesAFreshCell = interp.No
+	// And the prefix of an external command is expanded in its child, so a
+	// side effect in it never reaches this shell: measured 2026-10-16, `i=1;
+	// y=$((i++)) /usr/bin/true; echo $i` is 1 (#6784).
+	s.PrefixExpandsInTheExternalCommandsChild = interp.Yes
 	// The same direction at a builtin, and the same reading: a prefix is an
 	// ordinary assignment to this shell, so a name that had the export
 	// attribute *loses* it for the length of the command. `export z=1; z=2

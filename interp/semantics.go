@@ -1426,6 +1426,23 @@ type Semantics struct {
 	// Runner.prefixEntryTakesTheDisplacedShapeBack.
 	AssignmentPrefixMakesAFreshCell Answer
 
+	// PrefixExpandsInTheExternalCommandsChild expands an assignment prefix in
+	// front of an external command in the child that runs the command, so a
+	// side effect in a value never reaches the shell and a refusal in one
+	// costs the child. The other answer expands it in the shell, as for every
+	// other command.
+	//
+	// Measured 2026-10-16 under `-c`, `env -i PATH=/usr/bin:/bin`:
+	//
+	//	                                       zsh 5.9.2  ksh93u+  bash 5.3  dash  ash
+	//	i=1; y=$((i++)) /usr/bin/true; echo $i  1          1        2         —     2
+	//	unset i; y=${i:=5} /usr/bin/true        unset      unset    5         5     5
+	//
+	// dash refuses `i++` and answers through the second row. See
+	// Runner.prefixExpansionShell for the rows that hold the order, and for
+	// the array-literal refusal zsh reports from the child (#6784, #6783).
+	PrefixExpandsInTheExternalCommandsChild Answer
+
 	// PrefixExportAtABuiltin is what an assignment prefix does to the export
 	// attribute of the name it stands in front of, for the length of a
 	// *builtin* — so it decides what a builtin that reads the attribute back
@@ -34785,6 +34802,8 @@ func PosixSemantics() Semantics {
 		// A `case` that runs nothing is 0 in the standard's words, whatever
 		// a substitution in its header left.
 		CaseWithoutACommandKeepsTheSubstitutionStatus: No,
+		// A prefix's value is expanded in the shell, as every word is.
+		PrefixExpandsInTheExternalCommandsChild: No,
 		// And it has an option word begin with a `-`, so a `+` word is an
 		// operand. zsh is the one column that reads it as an option and says
 		// so itself.
@@ -36465,6 +36484,8 @@ func CoreSemantics() Semantics {
 		// A `case` that runs nothing is 0 in the standard's words, whatever
 		// a substitution in its header left.
 		CaseWithoutACommandKeepsTheSubstitutionStatus: No,
+		// A prefix's value is expanded in the shell, as every word is.
+		PrefixExpandsInTheExternalCommandsChild: No,
 		// An option word begins with a `-`, which is the standard's wording
 		// and six of the seven columns. Answered rather than refused for the
 		// reason the answer above is: a `+` word reaching `getopts` is an

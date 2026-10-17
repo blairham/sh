@@ -4,6 +4,7 @@
 package zsh_test
 
 import (
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -27,8 +28,12 @@ import (
 // baseline count, so a row that counts is measuring the harness rather than
 // the shell — which is the trap this whole family has to be written around.
 func TestFcPushRefusesASizeThatIsNotAnInteger(t *testing.T) {
-	seed := "HISTFILE=$PWD/h; SAVEHIST=100; HISTSIZE=100\n" +
-		"print -l one two three > $PWD/h\nfc -R $PWD/h\n"
+	// The history file lives in a scratch directory: the shell runs with the
+	// package directory as its working directory, so `$PWD/h` left a tracked
+	// `h` behind in the source tree on every run.
+	h := "'" + filepath.Join(t.TempDir(), "h") + "'"
+	seed := "HISTFILE=" + h + "; SAVEHIST=100; HISTSIZE=100\n" +
+		"print -l one two three > " + h + "\nfc -R " + h + "\n"
 	for _, tc := range []struct {
 		name, args, want string
 		status           int

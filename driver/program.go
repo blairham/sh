@@ -160,7 +160,15 @@ func (pr *program) parser() *syntax.Parser {
 	if pr.p != nil {
 		return pr.p
 	}
-	p := syntax.NewParserAt(pr.pending, pr.dialect, pr.base+1)
+	start := pr.base + 1
+	if pr.eachLineFromOne {
+		// Each logical line is numbered from 1 wherever it begins, so the
+		// lines a refill retired say nothing about the next one. Only
+		// standard input refills, which is how this was found: an `if` read
+		// after one retired line was numbered from 2 (#6659).
+		start = 1
+	}
+	p := syntax.NewParserAt(pr.pending, pr.dialect, start)
 	if pr.eachLineFromOne {
 		p.NumberEachLineFromOne()
 	}

@@ -1417,6 +1417,9 @@ func Semantics() interp.Semantics {
 	s.InteractiveProgramErrorWhenInteractive = interp.InteractiveProgramErrorCostsTheLine
 	// At a prompt, ksh93 numbers each typed input from 1: `echo $LINENO` is 1 every time (#6074). See Semantics.PromptNumbersEachInputFromOne.
 	s.PromptNumbersEachInputFromOne = interp.Yes
+	// And a standard input it can rewind is read as a script, not at a
+	// prompt (#6659).
+	s.InteractiveRewindableStdinIsAScript = interp.Yes
 	// A fatal error in `.` or `eval` text: an interactive ksh93 gives up the text (#6057).
 	// See Semantics.BorrowedTextErrorWhenInteractiveCostsTheLine.
 	s.BorrowedTextErrorWhenInteractiveCostsTheLine = interp.No

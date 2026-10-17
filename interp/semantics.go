@@ -24094,6 +24094,28 @@ type Semantics struct {
 	// TestAKshPromptNumbersEachInputFromOne.
 	PromptNumbersEachInputFromOne Answer
 
+	// InteractiveRewindableStdinIsAScript reads an interactive shell's
+	// standard input as a script when it is a descriptor the shell can
+	// rewind — a regular file, `/dev/null` — rather than as a prompt: no
+	// prompt is drawn, and the input is read as `-i script` reads its file,
+	// so a syntax error ends the shell rather than costing a line. A stream
+	// — a pipe, a FIFO, a socket — and a terminal are read at a prompt.
+	//
+	// ksh93 alone. Measured 2026-10-15 and again 2026-10-16 on ksh93u+
+	// 2012-08-01, `ENV=/dev/null PS1='P> ' ksh -i`, the same bytes as a
+	// regular file and through `cat |` (#6659):
+	//
+	//	                                  < in.txt              cat in.txt |
+	//	echo A=$LINENO ⏎ if true ⏎        A=1, B=2, no prompt,  P> A=1,
+	//	then echo B=$LINENO; fi           then \n on stderr     P> > B=2, P> \n
+	//	echo a ⏎ ) ⏎ echo b               a, the diagnostic,    prompts, a, the
+	//	                                  \n, status 3          diagnostic, b, 0
+	//
+	// bash 5.3, zsh 5.9.2, dash and BusyBox ash prompt on both. The noun is
+	// the kind of descriptor: the deciding pair holds the bytes and `-i`
+	// fixed and moves only that.
+	InteractiveRewindableStdinIsAScript Answer
+
 	// StartupFileGivenUpLeavesTheStatusBefore leaves `$?` as it stood before
 	// the command whose fatal error gave up a startup file, instead of the
 	// status the error carries. True in ksh93 alone.
@@ -35000,6 +35022,9 @@ func PosixSemantics() Semantics {
 		// A subshell's EXIT trap is counted as the shell's own is. ksh93
 		// says otherwise itself, and zsh's third answer is #6899.
 		SubshellExitTrapFiresWhereItStopped: No,
+		// Standard input is read at a prompt under `-i` whatever kind of
+		// descriptor it is. ksh93 says otherwise itself.
+		InteractiveRewindableStdinIsAScript: No,
 		FunctionExitTrapReadsZeroOnAnExit:   No,
 		// A `return` typed at a prompt with nothing to return from ends the
 		// session where it ends a script: ksh93, dash and BusyBox ash. zsh

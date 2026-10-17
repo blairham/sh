@@ -76,7 +76,7 @@ func TestAnAgentThatOutlivesItsInputIsEnded(t *testing.T) {
 		t.Logf("returned in %v", time.Since(start).Round(time.Millisecond))
 	case <-time.After(bound):
 		// Clean up by pid, never by group: unfixed, the agent shares this
-		// test's group, and signalling that would end the test with it.
+		// test's group, and signaling that would end the test with it.
 		for _, pid := range pids(t, report) {
 			_ = syscall.Kill(pid, syscall.SIGKILL)
 		}

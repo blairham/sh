@@ -15,7 +15,7 @@ import (
 //
 // An agent is rarely one process. The registry launches them through npx, so
 // the child this shell starts is `npm exec` and the one speaking the protocol
-// is a node process under it; signalling the child alone leaves that one
+// is a node process under it; signaling the child alone leaves that one
 // running, orphaned, still holding the pipe. A group is what lets the shell
 // end everything the agent started with one signal.
 func ownGroup(cmd *exec.Cmd) {
@@ -45,7 +45,7 @@ func signalGroup(cmd *exec.Cmd) error {
 // not: a leader that exits on end of input can still leave a grandchild
 // behind it, and that grandchild is exactly the process nobody would think to
 // look for. SIGKILL, because a process that has outlived both end of input and
-// a SIGTERM is not going to honour a third request. A group that is already
+// a SIGTERM is not going to honor a third request. A group that is already
 // empty answers ESRCH, which is the outcome wanted.
 func killGroup(cmd *exec.Cmd) {
 	if cmd.Process == nil || cmd.Process.Pid <= 0 {

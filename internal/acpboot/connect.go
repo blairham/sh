@@ -174,10 +174,10 @@ var (
 // time, along with everything it started.
 //
 // End of input is the protocol's own way to say the session is over, and an
-// agent that honours it is waited for. One that does not — the npx launch of
+// agent that honors it is waited for. One that does not — the npx launch of
 // claude-code-acp is one, measured in #6935 holding the shell for as long as
 // anyone cared to wait — is sent SIGTERM as a group after grace, which is what
-// cancelling the context does through agent.Cancel; WaitDelay then bounds the
+// canceling the context does through agent.Cancel; WaitDelay then bounds the
 // wait for that, and the group is killed whatever happened, since a leader
 // that left can still have left a grandchild behind.
 func endAgent(agent *exec.Cmd, toAgent io.Closer, cancel context.CancelFunc, grace time.Duration) {

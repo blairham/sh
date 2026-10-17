@@ -8,6 +8,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
+	"os/signal"
+	"syscall"
+	"time"
 )
 
 // The other direction: this instrument as an *agent*, so the shell can be
@@ -45,6 +49,28 @@ type AgentReport struct {
 	Got     string `json:"got"`
 	Refused bool   `json:"refused"`
 	Error   string `json:"error,omitempty"`
+	// Pids are the processes a "linger" agent is made of: itself, then the
+	// child it started. Whoever drove it checks that none of them outlived
+	// the client.
+	Pids []int `json:"pids,omitempty"`
+}
+
+// AgentFromEnv runs this process as the scripted agent if the environment
+// asks for one, and reports whether it did. It is for a test binary's
+// TestMain, which is how a package other than this one re-executes its own
+// test binary as an agent rather than writing a second one.
+func AgentFromEnv() (int, bool) {
+	script := os.Getenv(envAgentScript)
+	if script == "" {
+		return 0, false
+	}
+	return RunAgent(script), true
+}
+
+// AgentEnv is the environment that turns a re-executed binary into the
+// scripted agent: the script to follow, and where to write its report.
+func AgentEnv(script, report string) []string {
+	return []string{envAgentScript + "=" + script, envAgentOut + "=" + report}
 }
 
 // RunAgent is the -as-agent mode: speak ACP as an agent until the client goes.
@@ -63,6 +89,29 @@ func RunAgent(script string) int {
 			_ = os.WriteFile(path, b, 0o600)
 		}
 	}()
+
+	// "linger" is the agent that will not leave: it starts a child, as an
+	// npx launch does, ignores SIGTERM — and the child inherits that — and
+	// does not exit when its input ends. A client has to end both of them
+	// itself, which is what #6935 was a client failing to do. The report is
+	// written now rather than on return, since this one never returns.
+	if script == "linger" {
+		signal.Ignore(syscall.SIGTERM)
+		child := exec.Command("sleep", "600")
+		// Holding the connection's output, as the node process under npx
+		// does: a client cannot rely on the pipe closing to know it is over.
+		child.Stdout = os.Stdout
+		if err := child.Start(); err != nil {
+			report.Error = err.Error()
+		} else {
+			report.Pids = []int{os.Getpid(), child.Process.Pid}
+		}
+		if path := os.Getenv(envAgentOut); path != "" {
+			b, _ := json.Marshal(report)
+			_ = os.WriteFile(path, b, 0o600)
+		}
+		defer time.Sleep(time.Hour)
+	}
 
 	// One reader, and requests we make are answered on it between the
 	// client's own: an agent is a server and a caller on the same pipe.

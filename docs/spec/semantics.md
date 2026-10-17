@@ -26421,6 +26421,33 @@ EXIT, and the `stty` failing made the script exit 1 where every shell
 exits 0. A wrong exit status is what a caller branches on, so this is
 the quiet kind of difference.
 
+**`FunctionExitTrapSkippedByAGiveUp`** — bash — · dash — · ksh93 no · zsh yes
+
+Leaves a function-local EXIT trap unrun when the call is left by an error
+the shell reported and gave up over. Measured 2026-10-16 on zsh 5.9.2 under
+`-f`, by `-c`, a script file and standard input alike, `f(){ trap 'echo
+ft=$?' EXIT; <row>; }; f; echo after` (#6667):
+
+| row | zsh |
+| --- | --- |
+| `echo $((1/0))`, `readonly r=1; r=2`, `set -o nosuch`, `` v=`echo hi; for` ``, `${x:bad}`, `set -u; : $nosuch` | the complaint only |
+| `: ${q?b}` | the complaint, `ft=1` |
+| `set -e; false` | `ft=1` |
+| `false`, `return 4` | `ft=1` / `ft=4`, `after` |
+
+An error in a function the body calls skips it too; one the body survives
+(inside `eval`, or in a subshell) does not. ksh93's `function name { … }`
+scope runs its trap on every row. bash, dash and BusyBox ash have no
+function-local EXIT trap to ask about.
+
+**`FunctionExitTrapReadsZeroOnAnExit`** — bash — · dash — · ksh93 no · zsh yes
+
+Shows a function-local EXIT trap a `$?` of 0 when an `exit` is what unwinds
+the call; the shell still leaves with the `exit`'s status. zsh 5.9.2:
+`f(){ trap 'echo ft=$?' EXIT; exit 3; }; f` writes `ft=0` and ends at 3, on
+every route and with `TRAPEXIT` alike, where `return 4` shows 4; ksh93u+
+shows 3 (#6836).
+
 **`ReturnInTheExitTrapNamesTheStatus`** — bash unpinned · dash no · ksh93 yes · zsh yes
 
 Makes a `return` written in an EXIT trap's body the shell's last word,

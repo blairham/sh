@@ -26440,6 +26440,23 @@ An error in a function the body calls skips it too; one the body survives
 scope runs its trap on every row. bash, dash and BusyBox ash have no
 function-local EXIT trap to ask about.
 
+**`InteractiveRewindableStdinIsAScript`** — bash no · dash no · ksh93 yes · zsh no
+
+Reads an interactive shell's standard input as a script when it is a
+descriptor the shell can rewind (a regular file, `/dev/null`) rather than at
+a prompt. ksh93u+ 2012-08-01, `ENV=/dev/null PS1='P> ' ksh -i`, the same bytes
+as `< in.txt` and through `cat in.txt |` (#6659):
+
+| input | `< in.txt` | `cat in.txt \|` |
+| --- | --- | --- |
+| `echo A=$LINENO` ⏎ `if true` ⏎ `then echo B=$LINENO; fi` | `A=1`, `B=2`, no prompt, then `\n` | `P> A=1`, `P> > B=2`, `P> \n` |
+| `echo a` ⏎ `)` ⏎ `echo b` | `a`, the diagnostic, `\n`, status 3 | prompts, `a`, the diagnostic, `b`, 0 |
+
+A FIFO, a socket and a terminal behave as the pipe does. So it is the
+`-i script` reading (each input numbered from 1, a syntax error ending the
+shell) on the descriptor that can be rewound. bash, zsh, dash and BusyBox
+ash prompt on both.
+
 **`SubshellExitTrapFiresWhereItStopped`** — bash — · dash — · ksh93 yes · zsh no (#6899)
 
 Counts a subshell's own EXIT trap as having fired on the last line the

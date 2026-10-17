@@ -2500,9 +2500,36 @@ func (sh *Shell) noteNamedOption(inv *invocation, name string, on bool) {
 // prompt, measured through a pseudo-terminal.
 func (sh *Shell) invocationPrompts(inv invocation) bool {
 	if inv.interactiveWritten {
+		if inv.interactive && sh.stdinIsReadAsAScript() {
+			return false
+		}
 		return inv.interactive
 	}
 	return sh.interactively(false)
+}
+
+// stdinIsReadAsAScript reports whether an interactive shell reads its standard
+// input as a script rather than at a prompt: in the dialect that does, when the
+// descriptor is one it can rewind and is not a terminal. See
+// interp.Semantics.InteractiveRewindableStdinIsAScript.
+//
+// Seek is the question because it is the property: a regular file and
+// `/dev/null` answer it, and a pipe, a FIFO and a socket refuse it. The
+// terminal is asked first because some systems let a terminal answer it too,
+// and a terminal is a person.
+func (sh *Shell) stdinIsReadAsAScript() bool {
+	if sh.Semantics.InteractiveRewindableStdinIsAScript != interp.Yes {
+		return false
+	}
+	f := sh.stdinFile()
+	if f == nil && sh.Stdin == nil {
+		f = os.Stdin
+	}
+	if f == nil || repl.IsTerminal(f) {
+		return false
+	}
+	_, err := f.Seek(0, io.SeekCurrent)
+	return err == nil
 }
 
 // route is operands without the part that is the same for every route: which
@@ -3273,7 +3300,12 @@ func (sh *Shell) runInput(in source) int {
 	// so the noun is the shell being interactive, not the route: the three
 	// routes agree under `-i` and part without it (#6597). See
 	// interp.Semantics.PromptNumbersEachInputFromOne.
-	pr.eachLineFromOne = in.interactive && !in.onStdin && sh.Semantics.PromptNumbersEachInputFromOne == interp.Yes
+	//
+	// Standard input is read the same way where the dialect reads a
+	// rewindable one as a script under `-i` (#6659), which is the only way an
+	// interactive shell reaches this route rather than a prompt.
+	pr.eachLineFromOne = in.interactive && sh.Semantics.PromptNumbersEachInputFromOne == interp.Yes &&
+		(!in.onStdin || sh.Semantics.InteractiveRewindableStdinIsAScript == interp.Yes)
 	in.readAsAPrompt = pr.eachLineFromOne
 	r.AtPrompt = in.readAsAPrompt
 	if in.onStdin {

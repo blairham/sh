@@ -39,7 +39,8 @@ func (r *Runner) coprocClause(ctx context.Context, c *syntax.CoprocClause) error
 	// A coprocess is a subshell too, and startBeside is where it ends — see
 	// concurrentcommand.go, which ends every command run beside the shell in
 	// one place rather than once per caller.
-	job, err := r.startCoproc(ctx, name, func(sub *Runner) error {
+	_, simple := c.Cmd.(*syntax.SimpleCmd)
+	job, err := r.startCoproc(ctx, name, simple, func(sub *Runner) error {
 		return sub.command(ctx, c.Cmd)
 	})
 	if err != nil || job == nil {
@@ -272,7 +273,7 @@ func (r *Runner) coprocStmt(ctx context.Context, st *syntax.Stmt) error {
 		r.fatal("%s\n", Wording(r.diag().CoprocessAlreadyRunning, "process already exists"))
 		return nil
 	}
-	if _, err := r.startCoproc(ctx, st.Text, func(sub *Runner) error {
+	if _, err := r.startCoproc(ctx, st.Text, false, func(sub *Runner) error {
 		// A whole statement, so it fires for its own `&&`/`||` list — see
 		// Semantics.DebugTrapSublists and the same call in interp/jobs.go.
 		return sub.sublistExpr(ctx, st.Expr)
@@ -298,7 +299,7 @@ func (r *Runner) coprocStmt(ctx context.Context, st *syntax.Stmt) error {
 // It returns the job so the caller that has a name to publish can read its
 // process, and a nil job with a nil error when the pipes could not be made —
 // which is already reported and already status 1.
-func (r *Runner) startCoproc(ctx context.Context, name string, run func(*Runner) error) (*Job, error) {
+func (r *Runner) startCoproc(ctx context.Context, name string, simpleBody bool, run func(*Runner) error) (*Job, error) {
 	// What the command reads: the shell writes shellW, the command reads
 	// childIn. And the reverse for what it writes.
 	childIn, shellW, err := os.Pipe()
@@ -321,9 +322,30 @@ func (r *Runner) startCoproc(ctx context.Context, name string, run func(*Runner)
 	// seam. The ordering of the closes, the descriptor table the body gets
 	// and the handing over of the status are all startBeside's now, and the
 	// reasons are written down there.
+	// The near ends' numbers, taken before the body is started because in
+	// one dialect the body holds some of them. See coprocEndNumbers.
+	if r.sem().CoprocessEndPlacement == CoprocEndsFirstAndFourthFromTheBase && r.coproc != nil &&
+		r.coproc.owner == r {
+		// The coprocess this one replaces gives its ends up first.
+		r.forgetCoprocFd(r.coproc.read)
+		r.forgetCoprocFd(r.coproc.write)
+	}
+	rfd, wfd, bodyHolds := r.coprocEndNumbers(simpleBody)
 	job := r.startBeside(ctx, name,
 		concurrentStreams{in: childIn, out: childOut, closeEnds: true}, true,
-		func(_ context.Context, sub *Runner) error { return run(sub) })
+		func(_ context.Context, sub *Runner) error {
+			for _, n := range bodyHolds {
+				sub.heldNumbers = append(sub.heldNumbers, heldNumber{fd: n, keptByAFork: true})
+			}
+			if sub.savesRedirectedStreams() {
+				// A fork, so the body's own redirection list saves nothing,
+				// as a background job's does not: `coproc { exec
+				// {v}</dev/null; echo $v; } </dev/null` is 12 in zsh 5.9.2,
+				// the body holding 11 and nothing more. See elementEntry.
+				sub.entering = elementEntry{pending: true, forked: true, coprocess: true}
+			}
+			return run(sub)
+		})
 
 	r.addJob(job)
 	r.setLastJob(job)
@@ -335,7 +357,6 @@ func (r *Runner) startCoproc(ctx context.Context, name string, run func(*Runner)
 	// Marked as the shell's own, so they stay out of an external child's
 	// descriptor table — see shellOwnedFd for what a child holding the write
 	// end open would cost the coprocess.
-	rfd, wfd := r.coprocEndNumbers()
 	readEnd, writeEnd := shellOwnedFd{shellR}, shellOwnedFd{shellW}
 	r.setFd(rfd, readEnd)
 	r.setFd(wfd, writeEnd)
@@ -374,16 +395,38 @@ func (r *Runner) startCoproc(ctx context.Context, name string, run func(*Runner)
 // starts there: below it are the single digits a script addresses by number,
 // and a shell with nowhere left above the base takes the ordinary answer
 // instead.
-func (r *Runner) coprocEndNumbers() (read, write int) {
-	if r.sem().CoprocessEndPlacement == CoprocEndsAtTheTopOfTheTable && r.topOfTableIsReachable() {
-		if fds, ok := r.highestFreeFds(topOfTheDescriptorTable, 4); ok {
-			return fds[0], fds[3]
+//
+// The upward answer has a second form, zsh's, which takes four as well — the
+// four lowest free numbers from the base — and keeps the first and the
+// fourth, for the same reason. There the coprocess's body holds numbers of
+// its own, which are answered beside the two: see
+// CoprocEndsFirstAndFourthFromTheBase. simpleBody says the body is a simple
+// command.
+func (r *Runner) coprocEndNumbers(simpleBody bool) (read, write int, body []int) {
+	switch r.sem().CoprocessEndPlacement {
+	case CoprocEndsAtTheTopOfTheTable:
+		if r.topOfTableIsReachable() {
+			if fds, ok := r.highestFreeFds(topOfTheDescriptorTable, 4); ok {
+				return fds[0], fds[3], nil
+			}
 		}
+	case CoprocEndsFirstAndFourthFromTheBase:
+		var four []int
+		for n := r.firstAllocatedDescriptor(); len(four) < 4; n++ {
+			if !r.holdsNumber(n) && !r.substitutionPublishedAt(n) {
+				four = append(four, n)
+			}
+		}
+		body = four[:1]
+		if simpleBody {
+			body = four
+		}
+		return four[0], four[3], body
 	}
 	read = r.nextFreeFd(-1)
 	for write = read + 1; ; write++ {
 		if !r.holdsNumber(write) {
-			return read, write
+			return read, write, nil
 		}
 	}
 }

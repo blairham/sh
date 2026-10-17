@@ -9962,6 +9962,26 @@ type Semantics struct {
 	// only where an expression stores into a frozen table (#6826).
 	ArithStoreIntoAFrozenTableIsTaken Answer
 
+	// TableLiteralStoresEachElementAsItIsExpanded builds a keyed literal
+	// over a table a pair at a time: the table is emptied, then each element
+	// is expanded and stored before the next is expanded, so a later element
+	// sees the earlier one's store and its trace line is written before the
+	// next element's substitution runs. Measured 2026-10-16, `-c`, a table
+	// `a` holding `[k]=old [z]=zz` first:
+	//
+	//	                                   ksh93u+                bash, zsh
+	//	a=([k]=1 [x]=${a[k]})              [x]=1                  [x]=old
+	//	a+=([k]=1 [x]=${a[k]}${a[z]})      [x]=1zz                [x]=oldzz
+	//	a=([k]=1 [x]=$(typeset -p a))      sees `([k]=1)`         the old table
+	//	set -x; a=([k]=1 [x]=$(echo s >&2) [y]=2)
+	//	                                   `+ a[k]=1`, the substitution's
+	//	                                   lines, then `+ a[x]=''`, `+ a[y]=2`
+	//
+	// A word list does not do this in any column — `c=(old); c=(1 ${c[0]})`
+	// is `(1 old)` in ksh93 too — and dash and BusyBox ash have no tables
+	// (#6770).
+	TableLiteralStoresEachElementAsItIsExpanded Answer
+
 	// ArithSubscriptDollarSingleIsDecoded decodes the escapes of a `$'…'`
 	// quotation written in an arithmetic expression's subscript, where the
 	// other reading only takes the quotes off. Measured 2026-10-16, `-c`, a
@@ -35047,6 +35067,8 @@ func PosixSemantics() Semantics {
 		ArithKeyReadCreatesTheElement: No,
 		// Nor any to freeze, so no expression writes into a frozen one.
 		ArithStoreIntoAFrozenTableIsTaken: No,
+		// And no keyed literal to build a pair at a time.
+		TableLiteralStoresEachElementAsItIsExpanded: No,
 		// XCU gives printf's format the XSI escape set and nothing else —
 		// `\\`, `\a`, `\b`, `\f`, `\n`, `\r`, `\t`, `\v` and `\ddd` — so
 		// neither spelling of the escape character is in it and a backslash

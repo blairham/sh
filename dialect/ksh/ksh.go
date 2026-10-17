@@ -2718,6 +2718,8 @@ func Semantics() interp.Semantics {
 	// 2); a=([0]=x [1]=$((1/0)))` is `typeset -A a=([0]=x)`. The only column
 	// that does.
 	s.FailedSubscriptedLiteralKeepsWhatItStored = interp.Yes
+	// See interp.Semantics.TableLiteralStoresEachElementAsItIsExpanded (#6770).
+	s.TableLiteralStoresEachElementAsItIsExpanded = interp.Yes
 	// A plain table append that fails keeps nothing; but a declaration's
 	// container letter re-creates the name before its literal fails, so
 	// `typeset -a a=(5 $((1/0)))` leaves `typeset -a a`. The only column.

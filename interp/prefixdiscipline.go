@@ -267,6 +267,22 @@ func (r *Runner) prefixStore(ctx context.Context, a *syntax.Assign, landsOn stri
 		r.withPreparedValue(ctx, &expandedAssign{assign: a, elems: elems, elemsSet: true})
 		return
 	}
+	if arr, ok := r.prefixAppendsAnElement(a); ok {
+		// A scalar appended to an array, in the dialect where that adds an
+		// element: the array the name held with the value after it, as the
+		// statement `a+=z` leaves it. See Runner.prefixAppendsAnElement.
+		if !stores {
+			defer r.suppressDiscipline(a.Name, disciplineSet)()
+			defer r.suppressDiscipline(a.Name, disciplineAppend)()
+		}
+		grown := arr.clone()
+		grown.Set(grown.pastTheEnd(), Scalar(value))
+		if fresh {
+			r.emptyPrefixEntry(landsOn)
+		}
+		r.storeArray(a.Name, grown)
+		return
+	}
 	if fields, ok := r.prefixGlobFields(a); ok {
 		// The value was read as a pattern and matched — the one shell that
 		// asks for that, and only where the value was a pattern at all. The

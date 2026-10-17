@@ -839,6 +839,9 @@ func (r *Runner) background(ctx context.Context, st *syntax.Stmt) error {
 		// rather than copied — see theForkIsTheParentheses for the grid.
 		sub.subshellDepth = r.subshellDepth
 	}
+	// And its statement is the last thing the fork runs. See
+	// Runner.handForkTail.
+	sub.handForkTail(forkTailOf(st))
 	sub.inheritJobs(jobBoundaryBackground)
 	// And `( … ) &` numbers a job its body starts from two where `{ … } &`
 	// numbers one, measured — the same node test the pipeline makes, and

@@ -523,12 +523,23 @@ func (r *Runner) runPipeline(ctx context.Context, p *syntax.Pipeline, timing *pi
 			// external command — holds it as the shell would have.
 			sub.holdNumber(true)
 		}
+		// The last element, in the dialect that holds a number for its input,
+		// is the shell's own and not a fork, though it runs on a copy here:
+		// `echo x | ( exec {v}</dev/null; echo $v ); :` is 12 in ksh93u+,
+		// the input on 10 and the parentheses' own hold on 11.
+		standsForTheShell := holdLast && i == n-1
 		if commandIsParenthesized(p.Cmds[i]) {
 			// A stage is a fork and a `( … )` standing as one is that fork,
 			// so the parentheses' own clone is not a second boundary — the
 			// same rule `( … ) &` follows, and measured on the same grid.
 			// See theForkIsTheParentheses.
 			sub.subshellDepth = r.subshellDepth
+		}
+		if !standsForTheShell || r.tailPipelinePutsNothingBack(p) {
+			// And the element is the last thing its fork runs — or, standing
+			// for the shell, the last thing the shell runs where the pipeline
+			// is. See Runner.handForkTail and Runner.tailPutsNothingBack.
+			sub.handForkTail(p.Cmds[i], nil)
 		}
 		if r.bg != nil {
 			sub.part = &jobPart{job: r.bg}

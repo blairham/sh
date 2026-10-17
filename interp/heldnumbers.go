@@ -7,6 +7,7 @@ import (
 	"context"
 	"io"
 	"slices"
+	"sync"
 	"sync/atomic"
 
 	"github.com/blairham/sh/syntax"
@@ -67,7 +68,7 @@ func (r *Runner) holdsNumber(fd int) bool {
 		}
 	}
 	for o := r.bodyOutput; o != nil; o = o.outer {
-		if o.held == fd || int(o.fd.Load()) == fd {
+		if (o.held != 0 && o.held == fd) || int(o.fd.Load()) == fd || o.holds(fd) {
 			return true
 		}
 	}
@@ -119,6 +120,24 @@ type bodyOutput struct {
 	held  int
 	fd    atomic.Int32
 	outer *bodyOutput
+	// parens says this is a `( … )` ksh93 runs without a fork rather than a
+	// command substitution's body: it holds a number the same way, and has
+	// no output to make a descriptor of. See Runner.enterParentheses.
+	parens bool
+	// mu guards the two lists below, which an `exec` inside the body writes
+	// and every allocation in it, and in what it runs concurrently, reads.
+	mu sync.Mutex
+	// decided are the streams an `exec` in this body has already reached,
+	// and saved the numbers it holds for them until the body ends. See
+	// redirHolds.saveForTheBody.
+	decided, saved []int
+}
+
+// holds is whether this body's own `exec` saves hold fd.
+func (o *bodyOutput) holds(fd int) bool {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	return slices.Contains(o.saved, fd)
 }
 
 // enterSubstBody is what entering a command substitution's body holds, in
@@ -148,10 +167,81 @@ func (r *Runner) enterSubstBody(sub *Runner) {
 // needsBodyOutput is something in a command substitution's body needing the
 // body's output as a descriptor, which puts it on the lowest free number the
 // first time. See bodyOutput.
+//
+// The parentheses have no output of their own to make one of, so it is the
+// command substitution around them that does: `echo $( (/usr/bin/true);
+// exec {v}</dev/null; echo $v)` is 12 in ksh93u+.
 func (r *Runner) needsBodyOutput() {
-	if o := r.bodyOutput; o != nil && o.fd.Load() == 0 {
+	o := r.bodyOutput
+	for o != nil && o.parens {
+		o = o.outer
+	}
+	if o != nil && o.fd.Load() == 0 {
 		o.fd.CompareAndSwap(0, int32(r.lowestFreeNumber(-1)))
 	}
+}
+
+// enterParentheses is what a `( … )` ksh93 runs without a fork holds: sub is
+// the parentheses' runner, cloned from r. Parentheses that are a pipeline
+// element's or a background job's fork are that fork's last command, which
+// holds nothing — see handForkTail.
+//
+// ksh93u+ forks the parentheses only where nothing follows them in the
+// shell, and otherwise runs them in the shell as it runs a command
+// substitution's body, holding one number from its base for as long as they
+// last — the same one, so a body inside a body holds nothing more. Measured
+// 2026-10-16, `/bin/ksh -c` (ksh93u+ 2012-08-01), the `{v}` allocated inside
+// (#6638):
+//
+//	( exec {v}</dev/null; echo $v )                  10   the last command
+//	( exec {v}</dev/null; echo $v ); :               11
+//	( /usr/bin/true; exec {v}…; echo $v ); :         11   no output to need
+//	( ( exec {v}…; echo $v ) ); :                    11   one hold, nested
+//	echo $( ( exec {v}…; echo $v ) )                 11   and inside a body
+//	( echo $(exec {v}…; echo $v) ); :                11
+//	( echo $(/usr/bin/true; exec {v}…; echo $v) ); : 12   the body's output
+//	( … ) && :, for i in 1; do ( … ); done, f        11
+//	( … ) | cat; :, ( … ) & wait; :                  10   the fork itself
+//	( ( … ) ) | cat; :                               10   the fork's last command
+//	( ( … ); : ) | cat; :                            11
+//	echo x | ( … ); :                                12   behind the last element's
+//	( … ) 2>/dev/null; :                             12   behind the save of 2
+//
+// A process substitution's body is a fork: `cat <(exec {v}…; echo $v)` is 10.
+func (r *Runner) enterParentheses(sub *Runner, c *syntax.Subshell) {
+	if r.sem().OwnDescriptors != LastPipelineElementsInputTakesANumber || r.tailPutsNothingBack(c) {
+		return
+	}
+	// Not a fork, so the saved copies the shell holds are held in here too,
+	// the parentheses' own list's among them.
+	sub.heldNumbers = slices.Clone(r.heldNumbers)
+	o := &bodyOutput{outer: r.bodyOutput, parens: true}
+	if r.bodyOutput == nil {
+		o.held = sub.lowestFreeNumber(-1)
+	}
+	sub.bodyOutput = o
+}
+
+// handForkTail makes cmd the last thing a fork runs, in the dialect that
+// saves nothing for its last command: ksh93u+ treats a pipeline element's or
+// a background job's last command as the shell's own last. `{ { exec
+// {v}</dev/null; echo $v; } 2>/dev/null; } | cat; :` is 10 there and the
+// same with `:;` after the inner group is 11, and `&` answers the same pair.
+// See tailPutsNothingBack.
+func (r *Runner) handForkTail(cmd syntax.Command, pipe *syntax.Pipeline) {
+	if r.sem().OwnDescriptors != LastPipelineElementsInputTakesANumber {
+		return
+	}
+	r.tailCmd, r.tailPipe, r.tailPutsNothingBackOnly = cmd, pipe, true
+}
+
+// forkTailOf is the command and the pipeline a background job's statement
+// ends on, as a fork that ran it would see them.
+func forkTailOf(st *syntax.Stmt) (syntax.Command, *syntax.Pipeline) {
+	body := *st
+	body.Background, body.Coprocess, body.Disown = false, false, false
+	list := []*syntax.Stmt{&body}
+	return tailCommandOf(list), tailPipelineOf(list)
 }
 
 // substitutionPublishedAt is whether a live substitution of this shell's has
@@ -370,6 +460,10 @@ type redirHolds struct {
 	// savesMoveSources says a move's source is a stream the list replaces
 	// too, saved as the destination is: ksh93u+'s rule. See moved.
 	savesMoveSources bool
+	// forTheBody says this is `exec`'s list inside a body the shell runs
+	// without a fork, whose saves last as long as the body. See
+	// saveForTheBody.
+	forTheBody bool
 	// joins says a stream redirected again in this list joins its targets
 	// or sources, the dialect's multios, and reached counts how many
 	// redirections of the list have named each stream so far. See join.
@@ -403,7 +497,12 @@ func (r *Runner) beginRedirHolds(owner redirOwner) *redirHolds {
 	if !r.savesRedirectedStreams() {
 		return nil
 	}
-	inThisShell := owner == redirOwnerThisShell && r.redirectForBuiltin != "exec"
+	o := r.sem().OwnDescriptors
+	// The parentheses are this shell's in the dialect that does not fork
+	// them, and their own list saves as a group's does: `( … ) 2>/dev/null;
+	// :` is 12 in ksh93u+. See enterParentheses.
+	ownsTheParentheses := o == LastPipelineElementsInputTakesANumber && owner == redirOwnerASubshell
+	inThisShell := (owner == redirOwnerThisShell || ownsTheParentheses) && r.redirectForBuiltin != "exec"
 	// `exec`'s list saves what it replaces as any list in the shell does,
 	// and gives the copies back once it has applied, which is the end of
 	// the command it belongs to: `exec </dev/null {v}</dev/null` leaves 12 in
@@ -411,16 +510,19 @@ func (r *Runner) beginRedirHolds(owner redirOwner) *redirHolds {
 	// `exec {w}</dev/null` after it is the base again in both. Measured
 	// 2026-10-15 (#6529).
 	execList := owner == redirOwnerThisShell && r.redirectForBuiltin == "exec"
-	o := r.sem().OwnDescriptors
 	// The dialect that saves nothing for its last command saves nothing for
-	// `exec` either, which is never put back. See tailPutsNothingBack.
-	putsNothingBack := o == LastPipelineElementsInputTakesANumber &&
+	// `exec` either, which is never put back — except inside a body it runs
+	// without a fork, which puts it back when the body ends. See
+	// tailPutsNothingBack and saveForTheBody.
+	forTheBody := o == LastPipelineElementsInputTakesANumber && execList && r.bodyOutput != nil
+	putsNothingBack := o == LastPipelineElementsInputTakesANumber && !forTheBody &&
 		(execList || r.listOnTheTail && r.putsNothingBackAtTheTail())
 	h := &redirHolds{
 		r:                r,
 		perRedirection:   o == EachRedirectionSavesItsStreams,
 		holdsSources:     o == SavedStreamsAndPipeReadEndsTakeNumbers,
 		savesMoveSources: o == LastPipelineElementsInputTakesANumber,
+		forTheBody:       forTheBody,
 		owed:             -1,
 		joins:            r.countsOwnDescriptors() && r.sem().RedirectsUseEveryTarget == Yes,
 		// A consumed substitution's number comes free in zsh only: bash
@@ -470,6 +572,10 @@ func (h *redirHolds) save(fd int, duplicating bool) {
 	if h == nil {
 		return
 	}
+	if h.forTheBody {
+		h.saveForTheBody(fd, true)
+		return
+	}
 	if !h.perRedirection {
 		if slices.Contains(h.decided, fd) {
 			return
@@ -490,6 +596,78 @@ func (h *redirHolds) save(fd int, duplicating bool) {
 	if source >= 0 {
 		r.letGoOfNumber(source)
 	}
+}
+
+// closed is save for a close: the same, except that a close puts nothing on
+// the number. See saveForTheBody.
+func (h *redirHolds) closed(fd int) {
+	if h != nil && h.forTheBody {
+		if !h.perRedirection {
+			h.saveForTheBody(fd, false)
+		}
+		return
+	}
+	h.save(fd, false)
+}
+
+// saveForTheBody is save for `exec` inside a body ksh93u+ runs without a fork
+// — a command substitution's, or parentheses that are not the fork itself:
+// the stream is saved for as long as the body lasts, so that it can be put
+// back when it ends, and once however many `exec`s name it.
+//
+// Which streams is the part to read carefully. Measured 2026-10-16, `/bin/ksh
+// -c` (ksh93u+ 2012-08-01), the `{v}` allocated after, from a body holding 10
+// (#6639):
+//
+//	echo $(exec 2>/dev/null; exec {v}…; echo $v)             12
+//	echo $(exec 0</dev/null; exec 2>/dev/null; exec {v}…)    13
+//	echo $(exec 2>/dev/null; exec 2>/dev/null; exec {v}…)    12   once
+//	echo $(exec 0<&-; exec {v}…)                             12   a close too
+//	echo $(exec {v}…; exec 2>/dev/null; exec {w}…)           11 13
+//	echo $(exec 3</dev/null; exec {v}…)                      12   3 was not open
+//	echo $(exec 4</dev/null; exec {v}…) … 9                  11   nor were these
+//	exec 4</dev/null; echo $(exec 4<&-; exec {v}…)           12   this one was
+//	exec 3</dev/null; ( exec 4</dev/null; exec {v}…); :      12
+//	( exec 4</dev/null; exec 4<&-; exec {v}…); :             11   decided at the first
+//	( exec >/dev/null; exec {v}…; echo $v >&2 ); :           11   never standard output
+//	( exec 2>/dev/null ); exec {v}…                          10   gone with the body
+//
+// So a stream is saved where it is open, or where it is the lowest number
+// nothing is open on — the number an open would land on — and never standard
+// output, which the body already holds as its own.
+//
+// opens says the redirection puts something on fd, which a close does not:
+// `( exec 3<&-; exec {v}</dev/null; echo $v ); :` is 11, 3 being where an
+// open would land and nothing landing there.
+func (h *redirHolds) saveForTheBody(fd int, opens bool) {
+	o := h.r.bodyOutput
+	if o == nil || fd == 1 {
+		return
+	}
+	r := h.r
+	o.mu.Lock()
+	decided := slices.Contains(o.decided, fd)
+	if !decided {
+		o.decided = append(o.decided, fd)
+	}
+	o.mu.Unlock()
+	if decided || (!r.streamOpen(fd) && (!opens || fd != r.lowestUnopened())) {
+		return
+	}
+	n := r.lowestFreeNumber(-1)
+	o.mu.Lock()
+	o.saved = append(o.saved, n)
+	o.mu.Unlock()
+}
+
+// lowestUnopened is the lowest number nothing is open on, as this shell's
+// table has it: the number a fresh open would land on.
+func (r *Runner) lowestUnopened() int {
+	n := 0
+	for r.streamOpen(n) {
+		n++
+	}
+	return n
 }
 
 // moved is a move reached whose source is from: `N<&M-`, `N>&M-` or

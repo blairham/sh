@@ -11511,6 +11511,15 @@ func (d Diagnostics) unexpectedToken(se *syntax.Error) string {
 	if moved, ok := d.newlineLine(se); ok {
 		line = moved
 	}
+	if d.DiagnosticNamesAWordVisibly && se.Class != syntax.ClassNewline {
+		// The token as the near text of an unmatched construct is written:
+		// measured 2026-10-16 on zsh 5.9.2, `{ echo; } <0x01>a` is near
+		// `^Aa`, and under a UTF-8 locale `{ echo; } <0xe1>a` is near
+		// `\M-aa` on every route — a file, standard input, `-c`, `eval`,
+		// `.`, a trap's text, `-n` and a startup file (#6786). The bytes
+		// past ASCII are the writer's; see nearText.
+		token = escapeASCIIControls(token)
+	}
 	return Wording(form, `"%[1]s" unexpected`, token, se.Expected, line) +
 		d.expectingClause(se)
 }
@@ -11549,7 +11558,34 @@ func (d Diagnostics) nearText(text string) string {
 	if !d.NearTextEscapesControlCharacters {
 		return text
 	}
+	if d.DiagnosticNamesAWordVisibly {
+		// The bytes past ASCII are the writer's to render, because what
+		// they are depends on the locale and this table has none: under a
+		// UTF-8 locale `€` is a character and is written as itself, where
+		// the rendering below cuts it into a lead byte, `\M-^B` and a
+		// trail byte. See Runner.visibleDiagnosticLines (#6786).
+		return escapeASCIIControls(text)
+	}
 	return escapeControlBytes(text)
+}
+
+// escapeASCIIControls is escapeControlBytes for the control characters below
+// 0x80 alone, which are the same characters in every locale. A newline among
+// them is written `\n` here rather than left to the writer, because the
+// writer renders a message a line at a time.
+func escapeASCIIControls(text string) string {
+	if isPrintableASCII(text) || !strings.ContainsFunc(text, func(r rune) bool { return r < ' ' || r == 0x7f }) {
+		return text
+	}
+	var b strings.Builder
+	for i := 0; i < len(text); i++ {
+		if c := text[i]; c >= 0x80 {
+			b.WriteByte(c)
+			continue
+		}
+		b.WriteString(escapeControlByte(text[i]))
+	}
+	return b.String()
 }
 
 // escapeControlBytes renders a control character the way the dialect that

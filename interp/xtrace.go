@@ -1432,6 +1432,42 @@ func (r *Runner) visibleDiagnostic(msg string) string {
 	return body
 }
 
+// visibleDiagnosticLines is visibleDiagnostic over a message of one or more
+// lines, each rendered as its own sentence, location and all.
+//
+// It is how a parse failure is written in the dialect that names words
+// visibly, on the routes that write one other than through diagf: a parse
+// failure quotes the script's own text, and what a byte past ASCII is depends
+// on the locale, which the table that words the sentence does not have. The
+// whole line rather than the quoted text, because that dialect renders the
+// script's name in the location too: measured 2026-10-16 on zsh 5.9.2, a
+// script named `n<0x01>m.zsh` holding `{ echo; } x` is `n^Am.zsh:1: parse
+// error near `x'` (#6786). A newline *inside* the quoted text has already
+// been written `\n` by the table, so every newline left here ends a line.
+func (r *Runner) visibleDiagnosticLines(msg string) string {
+	if !r.diag().DiagnosticNamesAWordVisibly || isPrintableASCII(strings.ReplaceAll(msg, "\n", "")) {
+		return msg
+	}
+	lines := strings.SplitAfter(msg, "\n")
+	for i, l := range lines {
+		lines[i] = r.visibleDiagnostic(l)
+	}
+	return strings.Join(lines, "")
+}
+
+// VisibleDiagnostic is visibleDiagnosticLines for a front end writing a parse
+// failure of its own: the program it could not read, a startup file, or a
+// line typed at the prompt. See Runner.visibleDiagnosticLines.
+func (r *Runner) VisibleDiagnostic(msg string) string {
+	return r.visibleDiagnosticLines(msg)
+}
+
+// parseErrf writes a parse failure through visibleDiagnosticLines, for the
+// routes that write one with errf rather than diagf.
+func (r *Runner) parseErrf(format string, args ...any) {
+	r.errf("%s", r.visibleDiagnosticLines(fmt.Sprintf(format, args...)))
+}
+
 // visibleWord is a word with each character that cannot be printed written
 // in the caret notation niceRangeChar spells, the way
 // Diagnostics.DiagnosticNamesAWordVisibly names one. A byte that begins no

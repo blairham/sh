@@ -83,13 +83,18 @@ func splitRunWithText(t *testing.T, p dialecttest.Preset, src string) (out, errs
 		// because a script is read a line at a time — the point of the case
 		// is the *second* message either way, and it is the same message on
 		// both routes. See syntax.Lexer.bodyRefusalRefusesTheLine (#4859).
+		//
+		// Rendered by a runner as the front end's is, because what a byte
+		// past ASCII is depends on the locale and the table has none (#6786).
+		// The rows were measured under LC_ALL=C, so that is the runner's.
 		d := p.Diagnostics().ForScript()
 		first, _, _ := strings.Cut(src, "\n")
 		out, _, _ = p.Combined(t, dialecttest.Base{}, first+"\n")
-		return out, d.ParseDiagnostic("./s.sh", "", perr, src), 1
+		r := p.Runner(dialecttest.Base{Vars: map[string]string{"LC_ALL": "C"}})
+		return out, r.VisibleDiagnostic(d.ParseDiagnostic("./s.sh", "", perr, src)), 1
 	}
 	var o, e strings.Builder
-	r := p.Runner(dialecttest.Base{Stdout: &o, Stderr: &e})
+	r := p.Runner(dialecttest.Base{Stdout: &o, Stderr: &e, Vars: map[string]string{"LC_ALL": "C"}})
 	r.SetProgramText(src)
 	st, err := r.Run(context.Background(), f)
 	if err != nil {

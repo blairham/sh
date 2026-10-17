@@ -379,13 +379,13 @@ func (r *Runner) reportBorrowedParseFailure(err error, s sourced, src string) {
 		err = shiftParseError(err, r.lineBase+r.lineOrigin)
 	}
 	if bare {
-		r.errf("%s: %s\n", r.name(), d.ParseFailure(err))
+		r.parseErrf("%s: %s\n", r.name(), d.ParseFailure(err))
 		return
 	}
 	if s.eval && r.evalTextAtAPrompt(false) {
 		// Worded as the typed line's: see
 		// Diagnostics.EvalTextAtAPromptSpeaksAsTheLine.
-		r.errf("%s", d.Report(r.name(), line, d.ParseFailure(err)+"\n"))
+		r.parseErrf("%s", d.Report(r.name(), line, d.ParseFailure(err)+"\n"))
 		return
 	}
 	if s.eval && r.Interactive && d.EvalTextNamesNoLineWhenInteractive {
@@ -426,7 +426,7 @@ func (r *Runner) reportBorrowedParseFailure(err error, s sourced, src string) {
 		// Runner.locationPrefixNamed, and the two render one rule from the two
 		// places a diagnostic about borrowed text is written.
 		chain, innermost := r.borrowedStack(*d, r.locationFileOrName())
-		r.errf("%s%s: %s\n", chain, innermost, d.ParseFailure(err))
+		r.parseErrf("%s%s: %s\n", chain, innermost, d.ParseFailure(err))
 	} else {
 		if body, at, _, ok := d.bodyRefusalToWriteFirst(err); ok {
 			// The program between the delimiters never got to say what was
@@ -439,10 +439,10 @@ func (r *Runner) reportBorrowedParseFailure(err error, s sourced, src string) {
 			if bodyLine < 0 {
 				bodyLine = line
 			}
-			r.errf("%s%s\n", lead, d.SourceReport(s.naming(*d), r.name(), source,
+			r.parseErrf("%s%s\n", lead, d.SourceReport(s.naming(*d), r.name(), source,
 				bodyLine+r.lineBase+r.lineOrigin, d.ParseFailure(body)))
 		}
-		r.errf("%s%s\n", lead, d.SourceReport(s.naming(*d), r.name(), source,
+		r.parseErrf("%s%s\n", lead, d.SourceReport(s.naming(*d), r.name(), source,
 			line, d.ParseFailure(err)))
 	}
 	// And the offending line quoted back, for the dialect that writes

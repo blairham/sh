@@ -7913,7 +7913,7 @@ func (r *Runner) reportTrapParseFailure(err error, body string) {
 		// What the location calls this body, which is the condition's and
 		// not simply "a trap": see trapLocationName for the six words and
 		// for the second message that reads the same one.
-		r.errf("%s", r.diag().ParseDiagnostic(r.name(), trapLocationName(r.trapBodyCond), err, body))
+		r.parseErrf("%s", r.diag().ParseDiagnostic(r.name(), trapLocationName(r.trapBodyCond), err, body))
 	}
 	// No status of its own where the failure is not fatal: measured, a
 	// signal trap whose body will not parse leaves `$?` at 0 in both
@@ -7945,8 +7945,8 @@ func (r *Runner) reportTrapParseFailureAtFiringLine(err error, body string) {
 	if at := r.firedAt(); at > 1 {
 		loc = d.prefix(r.name(), "", false, at)
 	}
-	r.errf("%s%s\n", loc, d.ParseFailure(err))
-	r.errf("%s", d.echoLine(r.name(), "", d.ParseFailureLine(err), err, body))
+	r.parseErrf("%s%s\n", loc, d.ParseFailure(err))
+	r.parseErrf("%s", d.echoLine(r.name(), "", d.ParseFailureLine(err), err, body))
 }
 
 // shiftParseError moves a parse failure's lines by an offset, so a failure in

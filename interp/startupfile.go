@@ -120,7 +120,7 @@ func (r *Runner) RunStartupFile(ctx context.Context, path, src string, failed fu
 	}
 	if failed == nil {
 		failed = func(err error, _ bool) int {
-			r.errf("%s", r.diag().ParseDiagnostic(path, "", err, src))
+			r.parseErrf("%s", r.diag().ParseDiagnostic(path, "", err, src))
 			return r.diag().StatusForParseError(err)
 		}
 	}

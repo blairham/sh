@@ -537,7 +537,7 @@ func (sh *Shell) frontEndWith(r *interp.Runner, name string, dg interp.Diagnosti
 		// whole of argv[0] — each exactly what it writes for `cd /nope` on
 		// the next line (#6244).
 		Report: func(err error) string {
-			said := dg.ForPrompt().ParseDiagnostic(r.DiagnosticName(), "", err, "")
+			said := r.VisibleDiagnostic(dg.ForPrompt().ParseDiagnostic(r.DiagnosticName(), "", err, ""))
 			// A substitution still open whose body refused a token, which
 			// the prompt now refuses as the token is read: the one shell
 			// that words its interactive refusals as the prompt's follows the

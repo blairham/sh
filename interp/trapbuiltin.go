@@ -427,7 +427,7 @@ func (r *Runner) trapActionRefused(body string) (int, bool) {
 	}
 	// The action's own lines, rendered the way a script's parse failure is:
 	// it is the same failure, in text that arrived another way.
-	r.errf("%s", r.diag().ParseDiagnostic(r.name(), "", err, body))
+	r.parseErrf("%s", r.diag().ParseDiagnostic(r.name(), "", err, body))
 	r.diagf("%s\n", Wording(r.diag().TrapCouldNotParse, "couldn't read the action"))
 	return 1, true
 }

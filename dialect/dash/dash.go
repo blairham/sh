@@ -690,6 +690,9 @@ func Semantics() interp.Semantics {
 	s.PromptReadSize = interp.ReadSizeCBuffer
 	// See Semantics.PromptEndOfInputEndsTheLine (#6330).
 	s.PromptEndOfInputEndsTheLine = true
+	// And an `-i FILE` is read at that prompt, PS1 and PS2 drawn for its
+	// lines (#6805). See Semantics.InteractiveScriptIsReadAtAPrompt.
+	s.InteractiveScriptIsReadAtAPrompt = true
 	// And a backslash the input ends on is a word, not a continuation. See
 	// Semantics.PromptBackslashTheInputEndsOnIsLiteral (#6337).
 	s.PromptBackslashTheInputEndsOnIsLiteral = true

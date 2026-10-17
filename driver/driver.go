@@ -1251,6 +1251,10 @@ type source struct {
 	// a prompt, each input numbered from 1 — see runInput — which words a
 	// parse failure the way the prompt does too.
 	readAsAPrompt bool
+	// drawsPrompts is a script file read a line at a time with the prompt
+	// drawn for each — see scriptReadAtAPrompt — which ends the line at the
+	// end of the input as a prompt does.
+	drawsPrompts bool
 	// login says argv[0] began with a dash, the convention by which `login`
 	// and every terminal emulator's "run as a login shell" tell a shell what
 	// it is. It travels on the source for the same reason interactive does:
@@ -3308,6 +3312,13 @@ func (sh *Shell) runInput(in source) int {
 		(!in.onStdin || sh.Semantics.InteractiveRewindableStdinIsAScript == interp.Yes)
 	in.readAsAPrompt = pr.eachLineFromOne
 	r.AtPrompt = in.readAsAPrompt
+	if in.interactive && in.invocationRoute() == interp.RouteScriptFile && sh.Semantics.InteractiveScriptIsReadAtAPrompt {
+		// The file is read a line at a time with the prompt drawn before
+		// each, which is the one route dash draws one on without a person to
+		// read it. See interp.Semantics.InteractiveScriptIsReadAtAPrompt.
+		pr = scriptReadAtAPrompt(r, src, pr)
+		in.drawsPrompts = true
+	}
 	if in.onStdin {
 		// The program is on the descriptor rather than in hand, so it is read
 		// as it runs. How much at a time is the dialect's answer, and it is
@@ -3649,6 +3660,16 @@ func (sh *Shell) execute(r *interp.Runner, pr *program, in source) int {
 		// at the end of both.
 		status, how = sh.executeLines(ctx, r, sh.stdinAfterCommandString(r), in.asStandardInput(sh))
 	}
+	if how == endingParseFailure && pr.prompt != nil {
+		// A file read at a prompt goes on to the next read after a line
+		// that will not parse, as the prompt does, and dash's next read
+		// finds nothing: the rest of the file came in the block the failed
+		// line was read from, and a prompt's error discards that block
+		// (Semantics.PromptErrorDiscardsTheRestOfTheReadBlock). Measured,
+		// `echo a` ⏎ `)` ⏎ `echo b` under `dash -i` is `a`, the diagnostic,
+		// one more prompt and the closing newline, at 2 (#6805).
+		pr.prompt(false)
+	}
 	// An interactive shell that read this program as it reads a prompt ends
 	// the line at the end of it, as the prompt does. Before the EXIT trap,
 	// which is measured. See Shell.endTheLine.
@@ -3697,7 +3718,7 @@ func (sh *Shell) execute(r *interp.Runner, pr *program, in source) int {
 // before the EXIT trap. A refusal by the front end ran nothing and draws
 // nothing.
 func (sh *Shell) endTheLine(r *interp.Runner, in source, how ending) {
-	asAPrompt := in.readAsAPrompt && sh.Semantics.PromptEndOfInputEndsTheLine
+	asAPrompt := (in.readAsAPrompt || in.drawsPrompts) && sh.Semantics.PromptEndOfInputEndsTheLine
 	// And the one dialect that ends an interactive script's file this way
 	// without reading it as a prompt. See
 	// interp.Semantics.InteractiveScriptEndOfInputEndsTheLine.

@@ -2880,3 +2880,12 @@ func (r *Runner) promptNow() time.Time {
 	}
 	return now
 }
+
+// RenderPrompt is a prompt parameter's value as this shell draws it: the
+// dialect's codes and the expansion, in the dialect's order. For a front end
+// that draws a prompt outside the line editor — see the driver's
+// scriptReadAtAPrompt. An escape it cannot answer is drawn as written.
+func (r *Runner) RenderPrompt(value string) string {
+	out, _, _ := RenderPromptValue(r.promptStyle, r, value, r.promptField, r.promptQuantity)
+	return out
+}

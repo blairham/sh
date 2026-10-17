@@ -1999,6 +1999,9 @@ func (r *Runner) runDotText(ctx context.Context, args []string, display, path st
 	// was set, which is the half of the rule functions do not share. The
 	// action sees the file's status, and an `exit` of its own wins.
 	r.status = st
+	// Where the file stopped, for the one reader that wants it once the
+	// line is back on the `.`. See Runner.dotStoppedAt.
+	r.dotStoppedAt = dotStop{dot: dotLine, inner: r.line}
 	r.line = dotLine
 	// The frame goes **before** the trap body runs, which is the half of
 	// this rule a function's RETURN does not share. Measured 2026-09-22 on

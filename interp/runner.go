@@ -4275,6 +4275,14 @@ type Runner struct {
 	// See Diagnostics.CommandStringLinesFromZero, which is where the value
 	// comes from and which carries the panel's table.
 	lineOrigin int
+	// dotStoppedAt is the line a `.` file's last command ran on, and the
+	// line of the `.` itself, kept from the moment the `.` returns until the
+	// next command starts. BusyBox ash counts an EXIT trap as having fired
+	// where the script stopped, and when the last thing the script ran was a
+	// `.`, that is inside the file: `trap "cd /nxT" EXIT; . ./b.inc`, with a
+	// three-line b.inc, is `cd: line 3:` by `-c` and from a script file,
+	// where this said the `.`'s own line (#6715). See Runner.firedAt.
+	dotStoppedAt dotStop
 	// killed is the command being run, for the notice that a signal ended
 	// it — the only message that has to render a command rather than name
 	// one. Innermost wins, which is what the shell prints: a command inside
@@ -8623,6 +8631,9 @@ func (r *Runner) commandAt(ctx context.Context, c syntax.Command) error {
 		// package is a library.
 		r.prevLine, r.line = r.line, r.commandLine(c)
 		r.reachedLine = r.line
+		// A command after a `.` is where the script stopped, if it stops
+		// here, and not the file the `.` read. See Runner.dotStoppedAt.
+		r.dotStoppedAt = dotStop{}
 		switch c.(type) {
 		case *syntax.Group, *syntax.Subshell, *syntax.NamespaceClause:
 			// A grouping's head is not a statement, so it does not advance

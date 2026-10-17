@@ -958,6 +958,7 @@ func Semantics() interp.Semantics {
 	// cannot be written (#2553).
 	// unanswered NamerefLetterStandsAlone: `typeset` is not a builtin here,
 	// so there is no line for an `n` letter to keep company on (#3171).
+	// unanswered ContainerWriteThroughAReferenceNamesTheReference: no references.
 	// unanswered DeclarationThroughAReferenceNamesTheOperand: no references,
 	// and no `typeset` to write one on (#3173).
 	// unanswered ExportOrReadonlyTakesAReferenceToAnElement: the same wall,

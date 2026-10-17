@@ -1471,6 +1471,9 @@ func Semantics() interp.Semantics {
 	// variable` where the valueless `declare -i s` beside it is `declare: u:
 	// readonly variable` (#3173).
 	s.DeclarationThroughAReferenceNamesTheOperand = interp.Yes
+	// The element and array writes beside it, measured 2026-10-16 (#6763): see
+	// interp.Semantics.ContainerWriteThroughAReferenceNamesTheReference.
+	s.ContainerWriteThroughAReferenceNamesTheReference = interp.Yes
 	// `export` and `readonly` over a reference aimed at one **element**
 	// refuse the attribute by the target's own text and let the value
 	// through: measured 2026-09-20 on 5.3.20, with `a=(p q r); typeset -n

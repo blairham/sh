@@ -50,6 +50,8 @@ var theFullRoad = map[string][]string{
 		// The freeze, which a plain store never meets: a frozen name carries
 		// an attribute and a private one a shield (#6674).
 		"heldFreeze", "refuseAFrozenAssignment", "refuseTheHeldFreeze",
+		// And what it is spoken as through a reference (#6763), on the same road.
+		"frozenWriteSpokenAs",
 		// The element road only — storesAPlainScalar refuses every subscript (#6604).
 		"armAssignSubscript", "expanded", "valueAheadOfTheSubscript",
 		// A refused element's subscript as written (#6762), on the same road.

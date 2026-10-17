@@ -2686,6 +2686,24 @@ type Semantics struct {
 	// in ksh93u+.
 	DeclarationThroughAReferenceNamesTheOperand Answer
 
+	// ContainerWriteThroughAReferenceNamesTheReference speaks a freeze's
+	// refusal of an **element or array** write through a name reference under
+	// the reference, where a scalar write through it names the target.
+	//
+	// Measured 2026-10-16 on bash 5.3.20 under `-c`, after `a=(1 2); readonly
+	// a; typeset -n r=a`:
+	//
+	//	r[1]=x  r[1]+=x  r=(p)  r+=(p)    r: readonly variable
+	//	read 'r[1]'  printf -v 'r[1]' x   r: readonly variable
+	//	(( r[1]=3 ))                      r: readonly variable
+	//	r=x  r+=x                         a: readonly variable
+	//	unset 'r[1]'                      unset: a: cannot unset: …
+	//
+	// ksh93u+ names the target in every row, `a: is read only` (#6763).
+	// DeclarationThroughAReferenceNamesTheOperand is the declaration's own
+	// question and keeps its own answer.
+	ContainerWriteThroughAReferenceNamesTheReference Answer
+
 	// ExportOrReadonlyTakesAReferenceToAnElement decides what those two
 	// builtins do with an operand that is a reference aimed at **one element**
 	// — `a=(p q r); typeset -n b='a[1]'; export b=Z`.

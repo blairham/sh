@@ -757,6 +757,12 @@ func (r *Runner) namerefTargetIsAName(target string) bool {
 	if r.namerefTargetIsAMember(target) {
 		return true
 	}
+	if r.isTheShellsOwnNamespace(target) {
+		// `.sh` itself, which a reference may aim at: measured 2026-10-16 on
+		// ksh93u+, `nameref r=.sh` is taken at 0, `$r` reads the namespace's
+		// member names and `r=1` is `.sh: is read only` (#6794).
+		return true
+	}
 	base, _, bracketed := strings.Cut(target, "[")
 	return bracketed && isNameLike(base) && strings.HasSuffix(target, "]")
 }

@@ -7221,6 +7221,13 @@ func (r *Runner) readRefusedOrStatus(refused bool, status int, badName string, b
 // one column that parts "I stopped early" from "a write failed"; written says
 // the name is one the script wrote rather than the shell's own REPLY.
 func (r *Runner) readFill(name, value string, left int, defaulted bool, refused *bool, echo readEcho) (int, bool) {
+	if no, _ := r.refuseAnOperandWithNoParent("read", name, name); no {
+		// A dotted name whose parent is missing ends the builtin at 1 with
+		// the names before it filled: measured 2026-10-16 on ksh93u+, `read
+		// a.b c <<< "x y"` is `read: a.b: no parent` at 1 with c empty, and
+		// `read c a.b` fills c first (#6794).
+		return 1, true
+	}
 	if !echo.value(r, value) {
 		// `read -e`: the value was written to standard output and is not
 		// written to the name. The write is never *attempted*, which is the

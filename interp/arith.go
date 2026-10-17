@@ -1457,6 +1457,11 @@ func (r *Runner) storePlace(p arithPlace, v arithNum, from syntax.ArithExpr) err
 		// name*, which would have replaced the array with a number.
 	}
 	if !p.subscripted {
+		if refused, err := r.arithStoreWithNoParent(p.name); refused {
+			// A dotted name whose parent is missing. See
+			// Runner.arithStoreWithNoParent (#6794).
+			return err
+		}
 		// The bare name alone. The empty pair used to join it here, on the
 		// grounds that a dialect reading `a[]` as the empty expression and
 		// not answering it above had nowhere else to go — and that was the

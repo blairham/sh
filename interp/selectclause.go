@@ -57,6 +57,11 @@ func (r *Runner) selectClause(ctx context.Context, c *syntax.SelectClause) error
 			// said it could not read (#1215).
 			return nil
 		}
+		if r.refuseALoopNameWithNoParent(c.Name) {
+			// Before the menu, as `for` refuses before its first pass. See
+			// Runner.refuseALoopNameWithNoParent (#6794).
+			return nil
+		}
 		// An empty menu is not an endless prompt: the loop does not run, the
 		// status is 0 and nothing is printed. Unanimous, and the alternative
 		// would hang.

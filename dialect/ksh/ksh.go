@@ -6291,6 +6291,10 @@ func parseWording(lineArg int, rest string) (inAScript, atAPrompt string) {
 // `source` arrives because ksh93 has it as a synonym for `.` and dash does
 // not, which makes the name a dialect's answer. It is the same function under
 // a second name rather than a second implementation.
+// kshNamespaceMembers is what `${.sh}` reads. See Apply.
+const kshNamespaceMembers = "command dollar edchar edcol edmode edtext file fun level lineno " +
+	"match math name pool stats subscript subshell type value version"
+
 func Apply(r *interp.Runner) {
 	// The prompt-escape table, so the escape language travels with the
 	// dialect rather than only with the front end. ksh93's is a language of
@@ -6685,6 +6689,14 @@ func Apply(r *interp.Runner) {
 	// `.sh.version` is: real ksh93 lists nothing from this namespace, and no
 	// stored value could follow a call stack anyway.
 	r.SetDynamic(".sh.version", func(*interp.Runner) string { return kshVersion })
+	// And `${.sh}` itself is the namespace's member names, in that order and
+	// on one line: measured 2026-10-16 on ksh93u+ 2012-08-01, `echo
+	// "[${.sh}]"` is `[command dollar edchar edcol edmode edtext file fun level
+	// lineno match math name pool stats subscript subshell type value
+	// version]`, `${#.sh}` is 128 and `[[ -v .sh ]]` is 0. A reference aimed
+	// at `.sh` reads the same list. Produced, for the reason the rest of the
+	// namespace is, and a store to it is still refused (#6794).
+	r.SetDynamic(".sh", func(*interp.Runner) string { return kshNamespaceMembers })
 	//
 	// And the pair is **writable**, which is the half #3090 measured: an
 	// assignment to `.sh.level` selects a frame and `${.sh.fun}` then answers

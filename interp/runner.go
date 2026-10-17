@@ -3122,6 +3122,10 @@ type Runner struct {
 	// arithStoringAnElement says the keyed store in flight is an arithmetic
 	// expression's. See Runner.refuseAFrozenTableStore.
 	arithStoringAnElement bool
+	// prefixTraceStoppedForNoParent says the prefix walk met an entry whose
+	// store a missing parent will refuse, so the command's line is not
+	// written. See Runner.walkThePrefixBeforeTheRedirections.
+	prefixTraceStoppedForNoParent bool
 	// arithKeyReadCreating says the keyed store in flight is the key an
 	// expression's read leaves behind, which no freeze refuses. See
 	// Semantics.ArithKeyReadCreatesTheElement.
@@ -9799,8 +9803,13 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 		}
 	}
 	if tracedHere {
-		// The prefix's lines are written; the command's is all that is left.
-		r.traceCommand(argv)
+		// The prefix's lines are written; the command's is all that is left,
+		// unless an entry with no parent stopped them. See
+		// Runner.walkThePrefixBeforeTheRedirections.
+		if !r.prefixTraceStoppedForNoParent {
+			r.traceCommand(argv)
+		}
+		r.prefixTraceStoppedForNoParent = false
 	} else if tracesPrefix && !prefixFollows && traceLater && !early {
 		// After the redirections, with the prefix expanded there too. See
 		// Semantics.TraceLineFollowsTheRedirections.

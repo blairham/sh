@@ -125,12 +125,6 @@ shell on purpose, and one `COPY --from` gives it one without giving it a
 libc, a package manager or a userland. `docs/install.md` has what is in
 them and what a `scratch` image does not have.
 
-Those images carry a whole shell, which can run whatever the image holds.
-For a shell an operator can only *look* with — no exec ever, reads bounded to
-`/proc` and `/sys/fs/cgroup`, every action recorded — link the `gated`
-package into your own image's `/bin/sh`; `gated/README.md` has the
-five-line `main` and the Dockerfile lines.
-
 A session reads everything a real shell of the same name reads, in the
 same order: `~/.bashrc`, `~/.zshrc`, the profile files, and the machine's
 own file in front of each. `docs/install.md` has the measured grid.
@@ -204,7 +198,6 @@ needs no Go at all.
       style.md                measured: how source is laid back out
       grammar/                per-construct specs
     cmd/shfmt                 the formatter — every dialect the parser reads
-    gated/                    a /bin/sh for distroless images that cannot exec
 
 ## License
 

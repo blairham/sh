@@ -11213,6 +11213,15 @@ func (r *Runner) prefixJoined(a *syntax.Assign, value string) string {
 		// `a=x; a+=plain printenv a` is `xplain` in both states.
 		return value
 	}
+	if r.assocDeclared(r.prefixEntryName(a.Name)) && r.sem().ScalarAssignedOverACompoundReplacesTheName == Yes {
+		// Over a table, in the dialect where a scalar store replaces one, the
+		// join is with nothing — the statement's own answer: measured
+		// 2026-10-16 on zsh 5.9.2, `typeset -A h; h=(k v); h+=z` and `h+=z
+		// eval "typeset -p h"` are both `typeset h=z`, where reading the
+		// table's scalar view joined `vz` (#6902). See the table branch of
+		// Runner.assign.
+		return value
+	}
 	old := r.appendedOldValue(a.Name)
 	if r.ctl == controlExit {
 		// The script is already ending, which here means an earlier reading of

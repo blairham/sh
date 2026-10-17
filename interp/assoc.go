@@ -1778,6 +1778,13 @@ func (r *Runner) warnEmptyTableKeyTraced() {
 		// complaint is.
 		w = r.inBuiltin + ": " + w
 	}
+	if r.inBuiltin == "getopts" && r.diag().EmptyTableKeyTracedFromGetoptsIsUnlocated {
+		// The shell's name alone, no line and no builtin. See
+		// Diagnostics.EmptyTableKeyTracedFromGetoptsIsUnlocated.
+		r.flushOpenTraceLine()
+		r.errf("%s: %s\n", r.name(), w)
+		return
+	}
 	r.diagf("%s\n", w)
 }
 

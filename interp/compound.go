@@ -137,6 +137,8 @@ func (r *Runner) subshell(ctx context.Context, c *syntax.Subshell) error {
 	// Semantics.RedirectTargetOnASubshellExpandsInTheSubshell (#4695).
 	return r.withRedirsOwnedBy(ctx, c.Redirs, redirOwnerASubshell, func() error {
 		sub := r.clone()
+		// And what the dialect that does not fork them holds while they run.
+		r.enterParentheses(sub, c)
 		// Given back once the body, its EXIT trap and everything below have
 		// finished with the clone's tables. See sharedtable.go.
 		defer sub.releaseSharedTables()

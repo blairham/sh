@@ -224,7 +224,9 @@ func TestTheLastPipelineElementHoldsANumber(t *testing.T) {
 	}{
 		{LastPipelineElementsInputTakesANumber, `echo x | { exec {v}</dev/null; echo $v; }`, "11"},
 		{LastPipelineElementsInputTakesANumber, `true | true | { exec {v}</dev/null; echo $v; }`, "11"},
-		{LastPipelineElementsInputTakesANumber, `echo x | ( exec {v}</dev/null; echo $v )`, "11"},
+		// The parentheses hold one more of their own where they are not the
+		// last command. See TestAnUnforkedSubshellHoldsANumber.
+		{LastPipelineElementsInputTakesANumber, `echo x | ( exec {v}</dev/null; echo $v )`, "12"},
 		// Not the last command of a `-c` string here, so the group saves
 		// its input. See TestTheLastCommandSavesNothing.
 		{LastPipelineElementsInputTakesANumber, `{ exec {v}</dev/null; echo $v; } </dev/null`, "11"},
@@ -311,6 +313,77 @@ func TestTheLastCommandSavesNothing(t *testing.T) {
 		{`( ` + g + ` 2>/dev/null; : )`, true, "11"},
 		{g + ` 2>/dev/null | cat; :`, true, "10"},
 		{`trap 'echo t' EXIT; ` + g + ` 2>/dev/null`, true, "10 t"},
+	} {
+		t.Run(fmt.Sprintf("last=%v: %s", c.last, c.src), func(t *testing.T) {
+			sem := permissive()
+			sem.FirstAllocatedDescriptor = AllocateDescriptorsFromTen
+			sem.OwnDescriptors = LastPipelineElementsInputTakesANumber
+			sem.LastPipelineElementInCurrentShell = Yes
+			sem.FdVariableOutlivesTheCommand = Yes
+			sem.RedirectsUseEveryTarget = No
+			sem.FdMove = FdMoveRelocates
+			out, _ := run(t, c.src, func(r *Runner) {
+				r.Semantics = &sem
+				r.LastPart = c.last
+			})
+			if got := strings.Join(strings.Fields(out), " "); got != c.want {
+				t.Errorf("got %q, want %q", got, c.want)
+			}
+		})
+	}
+}
+
+// The parentheses the dialect runs without a fork hold one number while they
+// run, their own list saves as a group's does, an `exec` inside them or inside
+// a command substitution's body saves for as long as the body lasts, and a
+// fork's last command is a last command. Measured 2026-10-16 against ksh93u+
+// (#6638, #6639). Exact `{v}` numbers from a base of 10. See
+// Runner.enterParentheses, redirHolds.saveForTheBody and Runner.handForkTail.
+func TestAnUnforkedSubshellHoldsANumber(t *testing.T) {
+	const g = `{ exec {v}</dev/null; echo $v; }`
+	for _, c := range []struct {
+		src  string
+		last bool
+		want string
+	}{
+		{`( exec {v}</dev/null; echo $v )`, true, "10"},
+		{`( exec {v}</dev/null; echo $v ); :`, true, "11"},
+		{`( exec {v}</dev/null; echo $v )`, false, "11"},
+		{`( ( exec {v}</dev/null; echo $v ) ); :`, true, "11"},
+		{`echo $( ( exec {v}</dev/null; echo $v ) )`, true, "11"},
+		{`( exec {v}</dev/null; echo $v ) | cat; :`, true, "10"},
+		{`( exec {v}</dev/null; echo $v ) & wait; :`, true, "10"},
+		{`( ( exec {v}</dev/null; echo $v ) ) | cat; :`, true, "10"},
+		{`( ( exec {v}</dev/null; echo $v ); : ) | cat; :`, true, "11"},
+		{`echo x | ( exec {v}</dev/null; echo $v ); :`, true, "12"},
+		{`echo x | ( exec {v}</dev/null; echo $v )`, true, "11"},
+		{`( exec {v}</dev/null; echo $v ) 2>/dev/null; :`, true, "12"},
+		{`( exec {v}</dev/null; echo $v ) 3</dev/null; :`, true, "11"},
+		{`( exec {v}</dev/null; exec {w}</dev/null; echo $v $w ); :`, true, "11 12"},
+		// An `exec` in such a body saves where the stream is open or is
+		// where an open lands, once, never standard output, and the body's
+		// end gives it back.
+		{`( exec 2>/dev/null; exec {v}</dev/null; echo $v ); :`, true, "12"},
+		{`( exec 2>/dev/null; exec 2>/dev/null; exec {v}</dev/null; echo $v ); :`, true, "12"},
+		{`( exec 0</dev/null; exec 2>/dev/null; exec {v}</dev/null; echo $v ); :`, true, "13"},
+		{`( exec {v}</dev/null; exec 2>/dev/null; exec {w}</dev/null; echo $v $w ); :`, true, "11 13"},
+		{`( exec 0<&-; exec {v}</dev/null; echo $v ); :`, true, "12"},
+		{`( exec 3</dev/null; exec {v}</dev/null; echo $v ); :`, true, "12"},
+		{`( exec 3<&-; exec {v}</dev/null; echo $v ); :`, true, "11"},
+		{`( exec 4</dev/null; exec {v}</dev/null; echo $v ); :`, true, "11"},
+		{`exec 3</dev/null; ( exec 4</dev/null; exec {v}</dev/null; echo $v ); :`, true, "12"},
+		{`exec 5</dev/null; ( exec 5<&-; exec {v}</dev/null; echo $v ); :`, true, "12"},
+		{`( exec 4</dev/null; exec 4<&-; exec {v}</dev/null; echo $v ); :`, true, "11"},
+		{`( exec >/dev/null; exec {v}</dev/null; echo $v >&2 ); :`, true, "11"},
+		{`( exec 2>/dev/null ); exec {v}</dev/null; echo $v`, true, "10"},
+		{`echo $(exec 2>/dev/null; exec {v}</dev/null; echo $v)`, true, "12"},
+		{`echo $(exec 2>&1; exec {v}</dev/null; echo $v)`, true, "13"},
+		{`echo $(exec {v}</dev/null; exec 2>/dev/null; exec {w}</dev/null; echo $v $w)`, true, "11 13"},
+		// A fork's last command saves nothing.
+		{`{ ` + g + ` 2>/dev/null; } | cat; :`, true, "10"},
+		{`{ ` + g + ` 2>/dev/null; :; } | cat; :`, true, "11"},
+		{`{ ` + g + ` 2>/dev/null; } & wait; :`, true, "10"},
+		{`( ` + g + ` 2>/dev/null ); :`, true, "12"},
 	} {
 		t.Run(fmt.Sprintf("last=%v: %s", c.last, c.src), func(t *testing.T) {
 			sem := permissive()

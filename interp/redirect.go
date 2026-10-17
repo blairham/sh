@@ -662,7 +662,11 @@ func (r *Runner) applyRedirList(ctx context.Context, rs []*syntax.Redirect, comp
 			if fdVar == "" {
 				// A close replaces the stream as much as a duplication does,
 				// and copies nothing while it does it.
-				holds.save(fd, name != "-")
+				if name == "-" {
+					holds.closed(fd)
+				} else {
+					holds.save(fd, true)
+				}
 				if name != "-" {
 					holds.join(fd, op == syntax.TokLessAmp)
 				}

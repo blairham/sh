@@ -11,3 +11,14 @@ third-party code. See CLEANROOM.md for the rules that keep that true.
 
 If that ever ceases to be the case, the third-party notices belong in
 this file, and CLEANROOM.md has been broken.
+
+One file of third-party data is in the tree, and it is test data that is
+never shipped: internal/mcp/testdata/schema-2026-07-28.json is the Model
+Context Protocol's published schema for revision 2026-07-28, from
+https://github.com/modelcontextprotocol/modelcontextprotocol
+(schema/2026-07-28/schema.json). It is a specification rather than a
+shell, so CLEANROOM.md's red list does not reach it. The MCP project
+licenses it under the Apache License, Version 2.0, with contributions
+predating its relicensing under the MIT License. It is used only to
+check that this server's answers have the shape the published protocol
+requires.

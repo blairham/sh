@@ -81,6 +81,32 @@ That measurement is committed as a test, verbatim
 (`TestTheHandshakeAMeasuredClientSendsIsAnswered`), because a test
 written from the specification alone could not have found it.
 
+### The caching hint, and the test that is not ours
+
+`2026-07-28` also makes `server/discover`, `tools/list` and every other
+list or read result a *CacheableResult*: `ttlMs` (a non-negative integer,
+read like HTTP `max-age`) and `cacheScope` (`"public"` or `"private"`,
+read like `Cache-Control`) are **required**. This server sent neither for
+as long as it claimed the revision, and its tests passed, because they
+decoded results into this package's own types — a field the types never
+had is a field no test looks for. Claude Code 2.1.292 negotiates
+`2026-07-28`, validates the result, and rejected the tool list outright,
+so a model connected to `sh -mcp` had no tools at all (#6934).
+
+The values are `cacheScope: "public"` and `ttlMs` of one day, on the
+modern era only; the legacy revision has no such fields. Public because
+nothing in either result depends on who asks — not the policy, the
+dialect or the directory. A day because the only thing that can change
+the answer is a different binary, which a stdio client reaches by
+reconnecting anyway. If a tool list ever depends on the gate, the scope
+becomes `private` in the same change.
+
+`TestEveryModernResultValidatesAgainstThePublishedSchema` is the guard:
+it validates every modern result against the revision's published
+`schema.json`, committed under `internal/mcp/testdata`, rather than
+against anything this package defines. It is the argument
+`internal/acpcheck` makes for ACP, at the size of one test.
+
 ## The mapping: a command is a handle
 
 This is the part that does not port from ACP, and #1338 reserved it as a

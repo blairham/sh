@@ -3571,6 +3571,11 @@ type Diagnostics struct {
 	// (#6868). Empty leaves EmptyDuplicationTarget standing.
 	EmptyDuplicationTargetOnAnotherDescriptor string
 
+	// JoinedModeMismatch is the refusal of a redirection list that joins one
+	// descriptor both for reading and for writing — see joinModes. One verb,
+	// `%[1]d`, the descriptor. Empty is a sentence of the substrate's own.
+	JoinedModeMismatch string
+
 	// EmptyDuplicationTarget replaces it where the word expanded to nothing.
 	// The same two verbs, and here the first earns its place: bash writes
 	// `"": Bad file descriptor` for `<&""`, quotation marks and all, which is

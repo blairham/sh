@@ -5956,6 +5956,7 @@ func Diagnostics() interp.Diagnostics {
 		// GreatAmpTarget sends it to the file.
 		DuplicationTargetIsNotADescriptor: "file number expected",
 		SubstitutionTargetWithMore:        "invalid syntax for process substitution in redirection",
+		JoinedModeMismatch:                "file mode mismatch on fd %[1]d",
 		// A refused `>&p` names the facility rather than the word:
 		// `coprocess: bad file descriptor`, measured 2026-09-16 with no
 		// coprocess running. ksh93 quotes the `p` the script wrote.

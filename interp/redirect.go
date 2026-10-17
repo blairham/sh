@@ -141,14 +141,20 @@ func (r *Runner) applyRedirList(ctx context.Context, rs []*syntax.Redirect, comp
 	// bare Semantics from "the file, as before" into a refusal by name for
 	// an ordinary pipeline, which is the axis being asked away from the
 	// disagreement. So the ends go in only where the answer is already Yes.
+	// The direction each descriptor has been joined in so far, where the
+	// dialect joins at all. See joinModes.
+	var modes *joinModes
 	if pipe := r.takePipeMultio(); r.sem().RedirectsUseEveryTarget == Yes {
+		modes = &joinModes{}
 		if pipe.out != nil {
 			opened[1] = pipe.out
 			holds.reach(1)
+			modes.set(1, false)
 		}
 		if pipe.in != nil {
 			sources[0] = pipe.in
 			holds.reach(0)
+			modes.set(0, true)
 		}
 	}
 	// Saved streams are restored when the command finishes, which is why the
@@ -399,6 +405,18 @@ func (r *Runner) applyRedirList(ctx context.Context, rs []*syntax.Redirect, comp
 		}
 		if fdVar != "" {
 			fdVar = r.fdVarStoredName(fdVar)
+		}
+		// A join of one descriptor's targets and sources that goes both
+		// ways is refused, in the dialect that joins. See modes.
+		if fdVar == "" && modes != nil && modes.mismatch(rd, fd) {
+			r.diagf("%s\n", Wording(r.diag().JoinedModeMismatch,
+				"file mode mismatch on fd %[1]d", modes.at))
+			r.status = 1
+			r.redirErr = true
+			// And the shell ends on the boundary a duplication target that
+			// is not a descriptor ends it on. See endsTheShellOverABadTarget.
+			r.badDupTarget = true
+			return closers, nil
 		}
 		// `<#` and `>#` move where a descriptor next reads or writes. No
 		// file is opened, closed or duplicated, so this is settled before
@@ -3636,4 +3654,81 @@ func oddBackslashRunAtTheEnd(s string) bool {
 		n++
 	}
 	return n%2 == 1
+}
+
+// joinModes is the direction each descriptor of one redirection list has been
+// redirected in, for the dialect that joins a descriptor's targets or sources
+// rather than replacing them (Semantics.RedirectsUseEveryTarget).
+//
+// A join goes one way. zsh 5.9.2 refuses a list that names one descriptor for
+// reading and for writing, with `file mode mismatch on fd N` at status 1, on
+// the boundary a duplication target that is not a descriptor ends the shell
+// on. Measured 2026-10-16 under `-fc` (#6647):
+//
+//	: 3</dev/null 3>/dev/null, the other order       refused
+//	: 3<>/dev/null 3>/dev/null, the other order      refused: `<>` reads
+//	: 3</dev/null 3<>/dev/null, 3<> 3<>              joined
+//	: 3</dev/null 3>&1, : 3>/dev/null 3<&0           refused: a copy goes one way too
+//	: 3<<<x 3>/dev/null                              refused: a body is a source
+//	: >/dev/null 1</dev/null, : 0</dev/null 0>…      refused, and `1<` alone is not
+//	echo x | : >/dev/null 0>/dev/null                refused: the pipe is a source
+//	: 3</dev/null 3>&-, : 3>&- 3</dev/null           a close goes neither way
+//	: 3>/dev/null 3>>/dev/null                       joined
+//	setopt nomultios; : 3</dev/null 3>/dev/null      nothing is joined
+//	: 2>/dev/null 2</dev/null                        refused, the complaint into /dev/null
+//
+// A function call, a group and the parentheses end where a duplication's
+// refusal does, `cat` carries on at 1.
+type joinModes struct {
+	reads, writes []int
+	// at is the descriptor the last mismatch was on.
+	at int
+}
+
+func (m *joinModes) set(fd int, input bool) {
+	if input {
+		m.reads = append(m.reads, fd)
+	} else {
+		m.writes = append(m.writes, fd)
+	}
+}
+
+// mismatch records rd, aimed at fd unless the operator decides otherwise,
+// and reports whether it goes the other way from a redirection of the same
+// descriptor before it.
+func (m *joinModes) mismatch(rd *syntax.Redirect, fd int) bool {
+	var input bool
+	fds := []int{fd}
+	switch rd.Op {
+	case syntax.TokLess, syntax.TokLessGreat, syntax.TokDLess, syntax.TokDLessDash, syntax.TokTLess, syntax.TokLessAmp:
+		input = true
+		if rd.N == nil {
+			fds[0] = 0
+		}
+	case syntax.TokAmpGreat, syntax.TokAmpDGreat, syntax.TokAmpGreatClobber, syntax.TokAmpGreatBang,
+		syntax.TokAmpDGreatClobber, syntax.TokAmpDGreatBang, syntax.TokDGreatAmp,
+		syntax.TokDGreatAmpClobber, syntax.TokDGreatAmpBang:
+		fds = []int{1, 2}
+	case syntax.TokGreat, syntax.TokDGreat, syntax.TokClobber, syntax.TokClobberBang,
+		syntax.TokDGreatClobber, syntax.TokDGreatBang, syntax.TokGreatAmp,
+		syntax.TokGreatAmpClobber, syntax.TokGreatAmpBang:
+	default:
+		return false
+	}
+	if (rd.Op == syntax.TokLessAmp || rd.Op == syntax.TokGreatAmp) && rd.Word != nil && rd.Word.Literal() == "-" {
+		// A close goes neither way.
+		return false
+	}
+	for _, n := range fds {
+		other := m.writes
+		if !input {
+			other = m.reads
+		}
+		if slices.Contains(other, n) {
+			m.at = n
+			return true
+		}
+		m.set(n, input)
+	}
+	return false
 }

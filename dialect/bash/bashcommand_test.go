@@ -266,3 +266,24 @@ func TestAPipelineElementNamesItselfToItself(t *testing.T) {
 		})
 	}
 }
+
+// TestACommandSubstitutionInTheRunningCommandIsLaidOut is the body of a
+// `$( … )` in the command, written back the way `declare -f` and the trace
+// write it: measured 2026-10-16 on bash 5.3.20 from a file and with `-c`,
+// `: $(echo 6 >&2) 2>/dev/null` reads `: $(echo 6 1>&2) 2> /dev/null`, and the
+// same in a loop head, a `case` head and an assignment (#6739).
+func TestACommandSubstitutionInTheRunningCommandIsLaidOut(t *testing.T) {
+	const act = `trap 'echo "D:[$BASH_COMMAND]"' DEBUG` + "\n"
+	for _, c := range []struct{ src, want string }{
+		{act + `: $(echo 6 >&2) 2>/dev/null`, "D:[: $(echo 6 1>&2) 2> /dev/null]\n"},
+		{act + `: $( (:;:) )`, "D:[: $( ( :; : ))]\n"},
+		{act + `x=$(:;:) :`, "D:[x=$(:; :) :]\n"},
+		{act + `case $(:;:) in *) ;; esac`, "D:[case $(:; :) in ]\n"},
+		{act + `for w in $(:;echo q); do :; done`, "D:[for w in $(:; echo q)]\nD:[:]\n"},
+	} {
+		out, _, _ := runTraced(t, c.src)
+		if out != c.want {
+			t.Errorf("ran %q:\n got %q\nwant %q", c.src, out, c.want)
+		}
+	}
+}

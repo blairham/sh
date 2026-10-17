@@ -58,7 +58,7 @@ import (
 // worth making.
 func registerRunningCommand(r *interp.Runner) {
 	r.SetDynamic("BASH_COMMAND", func(rr *interp.Runner) string {
-		return runningCommandText(rr.RunningCommand())
+		return runningCommandText(rr.RunningCommand(), rr.WordAsWrittenLayout())
 	})
 	// An assignment goes nowhere, and that is what bash does with one rather
 	// than a refusal: measured, `BASH_COMMAND=zzz; echo "[$BASH_COMMAND]"`
@@ -75,7 +75,13 @@ func registerRunningCommand(r *interp.Runner) {
 
 // runningCommandText renders the command this shell is running the way this
 // shell prints one back.
-func runningCommandText(rc interp.RunningCommand) string {
+//
+// A command substitution's body is laid out as `declare -f` and the trace lay
+// one out: measured 2026-10-16 on bash 5.3.20 from a file, `trap 'echo
+// "$BASH_COMMAND"' DEBUG; : $(echo 6 >&2) 2>/dev/null` reads `: $(echo 6
+// 1>&2) 2> /dev/null` (#6739). l is the layout that says so; nothing else in
+// it moves.
+func runningCommandText(rc interp.RunningCommand, l syntax.Layout) string {
 	if rc.Cmd == nil {
 		return ""
 	}
@@ -84,20 +90,20 @@ func runningCommandText(rc interp.RunningCommand) string {
 	}
 	switch c := rc.Cmd.(type) {
 	case *syntax.ForClause:
-		return "for " + strings.Join(c.Names, " ") + wordList(c.Items, c.HasItems)
+		return "for " + strings.Join(c.Names, " ") + wordList(c.Items, c.HasItems, l)
 	case *syntax.SelectClause:
-		return "select " + c.Name + wordList(c.Items, c.HasItems)
+		return "select " + c.Name + wordList(c.Items, c.HasItems, l)
 	case *syntax.CaseClause:
 		// The trailing space is this shell's, and it is a head with no arms
 		// printed after it rather than a separator — see the note above.
-		return "case " + syntax.PrintWord(c.Word) + " in "
+		return "case " + syntax.PrintWordWith(c.Word, l) + " in "
 	}
-	return syntax.PrintCommand(rc.Cmd)
+	return syntax.PrintWith(rc.Cmd, l)
 }
 
 // wordList is the ` in …` a loop head reads with, including the `"$@"` this
 // shell fills in for a head that named no list.
-func wordList(items []*syntax.Word, has bool) string {
+func wordList(items []*syntax.Word, has bool, l syntax.Layout) string {
 	if !has {
 		return ` in "$@"`
 	}
@@ -105,7 +111,7 @@ func wordList(items []*syntax.Word, has bool) string {
 	b.WriteString(" in")
 	for _, w := range items {
 		b.WriteString(" ")
-		b.WriteString(syntax.PrintWord(w))
+		b.WriteString(syntax.PrintWordWith(w, l))
 	}
 	return b.String()
 }

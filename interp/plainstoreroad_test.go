@@ -29,7 +29,7 @@ var theFullRoad = map[string][]string{
 		"assignChainedElement", "assignCompoundBodyIntoElement", "assignCompoundVariable",
 		"assignElemLiteral", "assignElementMember", "assignFlaggedSpan", "assignFlaggedTableElement",
 		"assignPositional", "assignSpan", "assignSubscriptedCompound", "assignTableCompoundBase",
-		"assignValue", "assignWholeArraySubscript", "assocDeclared", "assocsAt",
+		"assignValue", "assignWholeArraySubscript", "assocDeclared", "assocsAt", "tracedElementPosition",
 		"clearAttributesAReCreationDrops", "clearTypeAttributes", "compoundAssignedFromAName",
 		"disciplineWrite", "elementValue", "endHiddenWatch", "endProducerUnsetEnded",
 		"expandArithText", "expansionFailedHere", "expansionHasFailed", "failedSubscript", "fatal",

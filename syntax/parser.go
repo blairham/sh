@@ -4781,7 +4781,7 @@ func (p *Parser) parseAssign(h assignHead) *Assign {
 			p.newWord(h.index, h.index[0].Pos, p.tok.End), true,
 		)
 		a.IndexFlags = p.assignIndexFlags(h.index)
-		a.IndexText = p.textBetween(h.from, h.to)
+		a.IndexText = p.rawBetween(h.from, h.to)
 		if p.dialect.ArraySubscriptFlags {
 			// The pair is asked about the way the read side asks it, and for
 			// its reason: the group at the front of `(r)q,(r)r` is the first

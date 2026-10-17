@@ -3543,6 +3543,34 @@ type Diagnostics struct {
 	// that refuses it names nothing.
 	SubstitutionTargetWithMore string
 
+	// FdVariableDuplicationTargetIsNotADescriptor replaces it where a
+	// `{name}` stands in front of the operator. A third verb, `%[3]s`, the
+	// name — which is what bash 5.3.20 names: `true {v}<&foo` is `v:
+	// ambiguous redirect` where `true 4<&foo` is `foo: ambiguous redirect`
+	// (#6868). Empty leaves DuplicationTargetIsNotADescriptor standing, which
+	// is ksh93's answer.
+	FdVariableDuplicationTargetIsNotADescriptor string
+
+	// FdVariableEmptyDuplicationTarget is the same for a word that came to
+	// nothing, the same three verbs, and it follows
+	// FdVariableDuplicationFailed's line where the dialect writes one: bash
+	// 5.3.20 answers `true {v}<&""` with `redirection error: cannot
+	// duplicate fd: Bad file descriptor` and then `: Bad file descriptor` —
+	// the expansion, where `true 4<&""` names the word as written (#6868).
+	// In about half of all runs bash writes a number in place of the empty
+	// name — a different one each time, so a value it never set — and the
+	// empty name is the run it gives otherwise.
+	FdVariableEmptyDuplicationTarget string
+
+	// EmptyDuplicationTargetOnAnotherDescriptor replaces
+	// EmptyDuplicationTarget where a descriptor is written in front of the
+	// operator and it is not the operator's own — 0 for `<&`, 1 for `>&`. A
+	// fourth verb, `%[4]d`, that descriptor: bash 5.3.20 answers `true
+	// 4<&""` with `4: Bad file descriptor` and `true 2>&""` with `2: …`,
+	// where `true 0<&""` and `true 1>&""` name `""` as the bare operator does
+	// (#6868). Empty leaves EmptyDuplicationTarget standing.
+	EmptyDuplicationTargetOnAnotherDescriptor string
+
 	// EmptyDuplicationTarget replaces it where the word expanded to nothing.
 	// The same two verbs, and here the first earns its place: bash writes
 	// `"": Bad file descriptor` for `<&""`, quotation marks and all, which is

@@ -3239,6 +3239,10 @@ func Semantics() interp.Semantics {
 	// the number *above* the one it moved from, because the destination is
 	// chosen before the source is given up.
 	s.FdMove = interp.FdMoveDuplicatesThenCloses
+	// And the `-` has to be written: one that arrives by expansion leaves
+	// `9-`, which is not a descriptor — `x=9-; exec 4<&$x` is `9-: ambiguous
+	// redirect` (#6746). See interp.Semantics.FdMoveSuffixMustBeWritten.
+	s.FdMoveSuffixMustBeWritten = interp.Yes
 	// A command word beginning with `%` is a job specification here too, and
 	// this shell asks it of the **name the lookup is about to use** rather
 	// than of the word the script wrote: `"%prep"`, `\%prep`, a parameter
@@ -4388,7 +4392,12 @@ func Diagnostics() interp.Diagnostics {
 		// preset is.
 		DuplicationTargetIsNotADescriptor: "%[2]s: ambiguous redirect",
 		EmptyDuplicationTarget:            "%[1]s: Bad file descriptor",
-		JobStarted:                        "[%[1]d] %[2]d",
+		// With a `{name}` in front the name is what is refused, and an
+		// empty word is a duplication that failed (#6868).
+		FdVariableDuplicationTargetIsNotADescriptor: "%[3]s: ambiguous redirect",
+		FdVariableEmptyDuplicationTarget:            "%[2]s: Bad file descriptor",
+		EmptyDuplicationTargetOnAnotherDescriptor:   "%[4]d: Bad file descriptor",
+		JobStarted: "[%[1]d] %[2]d",
 		// The one line all three members of the panel's bash write when an
 		// interactive shell has no terminal to run the monitor on: 5.3.15 and
 		// 3.2.57 as `bash`, and 3.2 run as `sh`, which writes it with its own

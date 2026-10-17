@@ -31768,6 +31768,32 @@ type Semantics struct {
 	// which every shell in the panel has.
 	FdMove FdMoveForm
 
+	// FdMoveSuffixMustBeWritten is whether the `-` that makes a duplication a
+	// move has to be in the word as written, rather than in what the word
+	// expanded to. Where it must, a `-` that arrives by expansion leaves a
+	// word that is not a descriptor.
+	//
+	// Measured 2026-10-16, `-c`, with 9 open on the null device (#6746):
+	//
+	//	                        bash 5.3.20               ksh93u+
+	//	x=9-; exec 4<&$x        `9-: ambiguous redirect`  moves 9 onto 4
+	//	x=3-; true 4<&$x        `3-: ambiguous redirect`  `3-: cannot open`
+	//	true 4<&"9-"            `9-: ambiguous redirect`  moves
+	//	true 4<&$x- (x=9)       moves                     moves
+	//	true 4<&'9'-, 4<&9\-    moves                     moves
+	//	true 4<&${x}-, $((9))-  moves                     moves
+	//
+	// So bash reads the suffix off the word's last written character —
+	// even a quoted one, `9\-` — and ksh93 off the expansion. bash 3.2.57
+	// and bash as `sh` refuse the expanded spelling too.
+	//
+	// Asked only where the expanded word ends in the suffix and the written
+	// one does not, in a dialect that has the operator.
+	//
+	// unanswered zsh, dash and ash: no move operator, so there is no suffix
+	// to read; see the dialects' own notes.
+	FdMoveSuffixMustBeWritten Answer
+
 	// DuplicationTargetError is what becomes of the shell when `<&word` or
 	// `>&word` names something that is not a descriptor. A form rather than
 	// a flag because the panel gives three answers and one of them is

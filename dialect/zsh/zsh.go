@@ -4321,6 +4321,8 @@ func Semantics() interp.Semantics {
 	// GreatAmpTarget above sends it to a *file* called `5-` — measured, and
 	// the file really appears.
 	s.FdMove = interp.FdMoveIsNotAnOperator
+	// unanswered FdMoveSuffixMustBeWritten: there is no move operator, so
+	// no `-` is read as one however it arrived (#6746).
 	// And the reading side ends the shell, on a builtin alone.
 	s.DuplicationTargetError = interp.DuplicationTargetErrorEndsTheShellOnABuiltin
 	// A target a process substitution begins with more after it is refused

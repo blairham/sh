@@ -353,6 +353,7 @@ ash   ZeroFillGoesAfterAnIntegersSign
 ash   ZeroFillKeepsLeadingBlanks
 ash   FunctionBodyListingWritesItsAttributes
 ash   OptindUnsetInACallStaysUnbound
+ash   FdMoveSuffixMustBeWritten
 
 bash  ALoneTrapCommandKeepsTrapListing
 bash  ArithDivisionByZeroYieldsAValue
@@ -779,6 +780,7 @@ dash  ZeroFillKeepsLeadingBlanks
 dash  FunctionBodyListingWritesItsAttributes
 dash  SubstringCountsBytes
 dash  OptindUnsetInACallStaysUnbound
+dash  FdMoveSuffixMustBeWritten
 
 ksh   ArithSubscriptSkippedWhenNameUnset
 ksh   ArrayAssignmentUpdatesPipelineStatus
@@ -896,3 +898,4 @@ zsh   UmaskPermissionCopyBesideLetters
 zsh   UnsetReferenceLetterRemovesANonReference
 zsh   FunctionBodyListingWritesItsAttributes
 zsh   SubstitutionRunsTheBodyReadWithItsLine
+zsh   FdMoveSuffixMustBeWritten

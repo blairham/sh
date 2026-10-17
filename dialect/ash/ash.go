@@ -2440,6 +2440,8 @@ func Semantics() interp.Semantics {
 	// BusyBox ash has no move operator either, and answers `redir error` at
 	// 2 — its own sentence for any word after `<&` that is not a descriptor.
 	s.FdMove = interp.FdMoveIsNotAnOperator
+	// unanswered FdMoveSuffixMustBeWritten: there is no move operator, so
+	// no `-` is read as one however it arrived (#6746).
 	s.RedirectTargetIsAnOrdinaryWord = interp.No
 	// And no pathname expansion, as in dash and ksh93: `cat < only-*.txt`
 	// is `can't open only-*.txt: no such file` with the match sitting there.

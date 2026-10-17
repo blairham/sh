@@ -157,7 +157,11 @@ func (r *Runner) refusedWholeArrayCompound(a *syntax.Assign) bool {
 // subscript is what says which of the two the operator means.
 func (r *Runner) spliceElemLiteral(a *syntax.Assign) {
 	build, ok := elementLiteralBuilt(r, a, func() ([]string, bool) {
-		return r.literalWords(a.Name, a.Elems)
+		words, ok := r.literalWords(a.Name, a.Elems)
+		if ok {
+			r.openTraceTakesTheLiteral(a, words)
+		}
+		return words, ok
 	})
 	if !ok {
 		return

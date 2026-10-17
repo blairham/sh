@@ -66,9 +66,12 @@ type bodyTraceStart struct {
 
 // newBodyTraceStart is the pair of signals for one body, or nil where nothing
 // can observe its order — which is every run with tracing off, every writing
-// spelling, and every body whose trace is discarded.
+// spelling, and every redirection target's body. A target's body is made
+// while the redirections are applied, which is after the point that would
+// release it, so it is never held — whether or not its trace is written
+// (#6799), it is written as the body runs.
 func (r *Runner) newBodyTraceStart(reading bool) *bodyTraceStart {
-	if !reading || !r.tracing() || r.bodyTraceIsDiscarded() {
+	if !reading || !r.tracing() || r.redirectTargetWord {
 		return nil
 	}
 	return &bodyTraceStart{release: make(chan struct{}), began: make(chan struct{})}

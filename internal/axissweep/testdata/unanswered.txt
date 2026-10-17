@@ -775,6 +775,7 @@ dash  WidthNumberPrecedence
 dash  ReadWriteRedirectionTakesTheSubstitutionsEnd
 dash  WritingSubstitutionIsWaitedForAtTheCommand
 dash  SubstitutionTargetWithMoreIsRefused
+dash  RedirectTargetSubstitutionBodyIsTraced
 dash  ZeroFillGoesAfterAnIntegersSign
 dash  ZeroFillKeepsLeadingBlanks
 dash  FunctionBodyListingWritesItsAttributes

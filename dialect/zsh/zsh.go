@@ -4331,6 +4331,10 @@ func Semantics() interp.Semantics {
 	// boundary above. Measured 2026-10-16 on 5.9.2 (#6766). See
 	// interp.Semantics.SubstitutionTargetWithMoreIsRefused.
 	s.SubstitutionTargetWithMoreIsRefused = interp.Yes
+	// A redirection target's substitution body: `set -x; cat < <(echo hi)` writes no body line, measured
+	// 2026-10-16 (#6799). See
+	// interp.Semantics.RedirectTargetSubstitutionBodyIsTraced.
+	s.RedirectTargetSubstitutionBodyIsTraced = interp.No
 	// zsh takes it and sets a global instead of refusing.
 	s.LocalOutsideAFunctionIsAnError = interp.No
 	// Fatal to all three, which is the one place zsh is stricter than bash

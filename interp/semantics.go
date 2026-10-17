@@ -31876,6 +31876,24 @@ type Semantics struct {
 	// one.
 	SubstitutionTargetWithMoreIsRefused Answer
 
+	// RedirectTargetSubstitutionBodyIsTraced is whether a process
+	// substitution written as a redirection's target has its body traced
+	// under `set -x`, as one written as a word does.
+	//
+	// Measured 2026-10-16, `-c` and from a file, `set -x; cat < <(echo hi);
+	// read v < <(echo x)` (#6799):
+	//
+	//	bash 5.3.20, 3.2.57   + cat, ++ echo hi, hi, + read v, ++ echo x
+	//	ksh93u+               + cat, + 0< /dev/fd/3, + echo hi, hi, ...
+	//	BusyBox ash 1.37.0    + cat, + echo hi, hi, + read v, + echo x
+	//	zsh 5.9.2             +zsh:1> cat, hi, +zsh:1> read v
+	//
+	// zsh renders the body's lines and writes them nowhere — see
+	// interp/redirsubsttrace.go, where its rows are (#5089).
+	//
+	// Asked only where the shell is tracing as the body is made.
+	RedirectTargetSubstitutionBodyIsTraced Answer
+
 	// RedirectErrorOnSpecialBuiltinFatal ends a non-interactive shell when a
 	// redirection written on a *special* builtin cannot be made — a file that
 	// will not open, a descriptor that is not there, a number the open-file

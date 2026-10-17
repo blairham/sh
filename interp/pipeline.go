@@ -559,6 +559,9 @@ func (r *Runner) runPipeline(ctx context.Context, p *syntax.Pipeline, timing *pi
 		// descriptor — `{ exec {a}<&-; } | { read v <&$a; }` — is a real
 		// shell closing its own process's name for the file and nobody
 		// else's. See ownDescriptors (#2116).
+		// And what a fork inside a command substitution's body holds in the
+		// dialect that holds one. See Runner.forkInABody.
+		r.forkInABody(sub)
 		releaseFds[i] = sub.ownDescriptors()
 		// And the group a fork would have given this element. Released with
 		// the descriptors below, because it has the same lifetime they do:

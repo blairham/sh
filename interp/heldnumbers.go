@@ -131,6 +131,9 @@ type bodyOutput struct {
 	// and saved the numbers it holds for them until the body ends. See
 	// redirHolds.saveForTheBody.
 	decided, saved []int
+	// jobHeld says a background job started in this body has held its one
+	// number already. See Runner.forkInABody.
+	jobHeld bool
 }
 
 // holds is whether this body's own `exec` saves hold fd.
@@ -179,6 +182,50 @@ func (r *Runner) needsBodyOutput() {
 	if o != nil && o.fd.Load() == 0 {
 		o.fd.CompareAndSwap(0, int32(r.lowestFreeNumber(-1)))
 	}
+}
+
+// forkInABody is what starting a fork inside a command substitution's body
+// holds in ksh93u+, beyond what the body held already: the body's output as a
+// descriptor, and one more number — for a pipeline element, in the element
+// while it runs (element is its runner, nil for a background job); for a
+// background job, in the body from then on, once however many jobs it
+// starts. Measured 2026-10-16, `/bin/ksh -c` (ksh93u+ 2012-08-01), the `{v}`
+// allocated after the shape named, from a body holding 10 (#6640):
+//
+//	echo $({ exec {v}…; echo $v; } | cat)               13   in the element
+//	echo $({ …; } | cat; exec {w}…; echo $w)            13 12   gone with it
+//	echo $(echo x | { …; } | cat)                       13
+//	echo $(echo x | { …; })                             13   the last element: its input
+//	echo $(true & wait; exec {v}…; echo $v)             13   and kept
+//	echo $(/bin/sh -c : & wait; exec {v}…; echo $v)     13
+//	echo $(true & true & wait; exec {v}…; echo $v)      13   once
+//	echo $({ exec {v}…; echo $v; } & wait)              13   in the job as well
+//	echo $(echo $(true & wait; exec {v}…; echo $v))     13   a nested body's own
+//	( { …; } | cat ); :, ( true & wait; exec {v}… ); :  11   parentheses: nothing more
+//
+// Only directly in a command substitution's body: the parentheses have no
+// output, and hold nothing more for a fork.
+func (r *Runner) forkInABody(element *Runner) {
+	o := r.bodyOutput
+	if o == nil || o.parens || r.sem().OwnDescriptors != LastPipelineElementsInputTakesANumber {
+		return
+	}
+	r.needsBodyOutput()
+	if element != nil {
+		element.holdNumber(true)
+		return
+	}
+	o.mu.Lock()
+	held := o.jobHeld
+	o.jobHeld = true
+	o.mu.Unlock()
+	if held {
+		return
+	}
+	n := r.lowestFreeNumber(-1)
+	o.mu.Lock()
+	o.saved = append(o.saved, n)
+	o.mu.Unlock()
 }
 
 // enterParentheses is what a `( … )` ksh93 runs without a fork holds: sub is

@@ -333,6 +333,42 @@ func TestTheLastCommandSavesNothing(t *testing.T) {
 	}
 }
 
+// A fork started inside a command substitution's body holds one number more:
+// a pipeline element in itself while it runs, a background job in the body
+// from then on, once. Measured 2026-10-16 against ksh93u+ (#6640). Exact
+// `{v}` numbers from a base of 10. See Runner.forkInABody.
+func TestAForkInABodyHoldsANumber(t *testing.T) {
+	for _, c := range []struct{ src, want string }{
+		{`echo $({ exec {v}</dev/null; echo $v; } | cat)`, "13"},
+		{`echo $({ exec {v}</dev/null; echo $v; } | cat; exec {w}</dev/null; echo $w)`, "13 12"},
+		{`echo $(echo x | { exec {v}</dev/null; echo $v; } | cat)`, "13"},
+		{`echo $(echo x | { exec {v}</dev/null; echo $v; })`, "13"},
+		{`echo $(true & wait; exec {v}</dev/null; echo $v)`, "13"},
+		{`echo $(true & true & wait; exec {v}</dev/null; echo $v)`, "13"},
+		{`echo $({ exec {v}</dev/null; echo $v; } & wait)`, "13"},
+		{`echo $(echo $(true & wait; exec {v}</dev/null; echo $v))`, "13"},
+		{`echo $(true &); exec {v}</dev/null; echo $v`, "10"},
+		{`( true & wait; exec {v}</dev/null; echo $v ); :`, "11"},
+		{`( { exec {v}</dev/null; echo $v; } | cat ); :`, "11"},
+	} {
+		t.Run(c.src, func(t *testing.T) {
+			sem := permissive()
+			sem.FirstAllocatedDescriptor = AllocateDescriptorsFromTen
+			sem.OwnDescriptors = LastPipelineElementsInputTakesANumber
+			sem.LastPipelineElementInCurrentShell = Yes
+			sem.FdVariableOutlivesTheCommand = Yes
+			sem.RedirectsUseEveryTarget = No
+			out, _ := run(t, c.src, func(r *Runner) {
+				r.Semantics = &sem
+				r.LastPart = true
+			})
+			if got := strings.Join(strings.Fields(out), " "); got != c.want {
+				t.Errorf("got %q, want %q", got, c.want)
+			}
+		})
+	}
+}
+
 // The parentheses the dialect runs without a fork hold one number while they
 // run, their own list saves as a group's does, an `exec` inside them or inside
 // a command substitution's body saves for as long as the body lasts, and a

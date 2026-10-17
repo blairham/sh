@@ -71,11 +71,22 @@ func connectACP(self, dash string, sh driver.Shell, allow bool, authMethod, prom
 		fmt.Fprintf(os.Stderr, "%s: %sacp-connect needs the command that starts an agent\n", self, dash)
 		return serveFailure
 	}
+	// The same gate and sink a shell here would have been given, so -deny and
+	// -trace-events reach the agent's accesses exactly as they reach a
+	// script's — and the prompt file's, below.
+	//
+	// The session is the front end's, and this route makes its own: nothing
+	// here goes through driver, which is where a shell's run is normally
+	// named, so without one every record of what the agent was allowed would
+	// belong to no run.
+	bound := boundary.Boundary{Gate: sh.Gate, Events: sh.Events, Session: runID(sh)}
+
 	// The prompt is read before the agent is started, so a file that is not
-	// there, or holds nothing, costs no launch, no handshake and no turn.
+	// there, holds nothing, or is one the policy refuses costs no launch, no
+	// handshake and no turn.
 	var next prompts
 	if promptFile != "" {
-		text, err := readPrompt(promptFile, os.Stdin)
+		text, err := readPrompt(context.Background(), bound, promptFile, os.Stdin)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "%s: %sacp-prompt: %v\n", self, dash, err)
 			return serveFailure
@@ -130,15 +141,8 @@ func connectACP(self, dash string, sh driver.Shell, allow bool, authMethod, prom
 		// And the sharper half of it. An agent not told it can ask us to run
 		// something runs it itself, and there is no argv for any gate to see.
 		Terminals: true,
-		// The same gate and sink a shell here would have been given, so
-		// -deny and -trace-events reach the agent's accesses exactly as they
-		// reach a script's.
-		//
-		// The session is the front end's, and this route makes its own: nothing
-		// here goes through driver, which is where a shell's run is normally
-		// named, so without one every record of what the agent was allowed
-		// would belong to no run.
-		Boundary: boundary.Boundary{Gate: sh.Gate, Events: sh.Events, Session: runID(sh)},
+		// See bound, above: one boundary for the prompt and the agent alike.
+		Boundary: bound,
 		Update:   func(n acp.SessionNotification) { renderUpdate(self, n) },
 		// The person is at this end of the connection, and this is the one
 		// reader they answer on — the prompt loop's own, shared rather than
@@ -392,10 +396,12 @@ func askable(promptFile string, in, out *os.File) bool {
 // nothing in it is refused, because a turn spent on an empty prompt is never
 // what a script meant.
 //
-// Read directly rather than through the gate, as the policy file itself is:
-// it is the invocation's own input, named by whoever wrote the command line,
-// and not something the agent asked for.
-func readPrompt(name string, stdin io.Reader) (string, error) {
+// A file is read through the gate, as a script operand is: whatever is in it
+// is handed to the agent, so a policy that hides a file from the agent must
+// hide it from the prompt too, or `-deny f -acp-prompt f` would send the agent
+// exactly what it was refused. Standard input is a descriptor this process was
+// handed and is not a path anybody aimed, so it is read as it is.
+func readPrompt(ctx context.Context, bound boundary.Boundary, name string, stdin io.Reader) (string, error) {
 	var (
 		b   []byte
 		err error
@@ -403,7 +409,11 @@ func readPrompt(name string, stdin io.Reader) (string, error) {
 	if name == "-" {
 		b, err = io.ReadAll(stdin)
 	} else {
-		b, err = os.ReadFile(name)
+		b, err = bound.ReadFile(ctx, name)
+	}
+	if errors.Is(err, boundary.ErrRefused) {
+		// The gate's refusal names no path, and an open's error does.
+		return "", fmt.Errorf("%s: %w", name, err)
 	}
 	if err != nil {
 		return "", err

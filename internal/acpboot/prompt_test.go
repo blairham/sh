@@ -17,7 +17,9 @@ import (
 	"testing"
 
 	"github.com/blairham/sh/internal/acp"
+	"github.com/blairham/sh/internal/boundary"
 	"github.com/blairham/sh/internal/pty"
+	"github.com/blairham/sh/interp"
 )
 
 // The prompt from #6937: an instruction and the four lines it refers to. Read a
@@ -126,7 +128,7 @@ func TestAWholePromptIsOneTurn(t *testing.T) {
 		t.Fatalf("line at a time: the agent got %d turns, want 5: %q", len(perLine), perLine)
 	}
 
-	text, err := readPrompt("-", strings.NewReader(fourCommands))
+	text, err := readPrompt(t.Context(), boundary.Boundary{}, "-", strings.NewReader(fourCommands))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -147,11 +149,11 @@ func TestReadPrompt(t *testing.T) {
 	if err := os.WriteFile(file, []byte("first\n\nsecond\r\n\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	got, err := readPrompt(file, strings.NewReader("not this"))
+	got, err := readPrompt(t.Context(), boundary.Boundary{}, file, strings.NewReader("not this"))
 	if err != nil || got != "first\n\nsecond" {
 		t.Errorf("from a file: %q, %v", got, err)
 	}
-	got, err = readPrompt("-", strings.NewReader("from\nstdin\n"))
+	got, err = readPrompt(t.Context(), boundary.Boundary{}, "-", strings.NewReader("from\nstdin\n"))
 	if err != nil || got != "from\nstdin" {
 		t.Errorf("from standard input: %q, %v", got, err)
 	}
@@ -160,14 +162,45 @@ func TestReadPrompt(t *testing.T) {
 	if err := os.WriteFile(empty, []byte(" \n\n\t\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := readPrompt(empty, nil); err == nil {
+	if _, err := readPrompt(t.Context(), boundary.Boundary{}, empty, nil); err == nil {
 		t.Error("a file of whitespace was accepted as a prompt")
 	}
-	if _, err := readPrompt("-", strings.NewReader("")); err == nil || !strings.Contains(err.Error(), "standard input") {
+	if _, err := readPrompt(t.Context(), boundary.Boundary{}, "-", strings.NewReader("")); err == nil || !strings.Contains(err.Error(), "standard input") {
 		t.Errorf("an empty standard input: %v, want a refusal naming it", err)
 	}
-	if _, err := readPrompt(filepath.Join(dir, "absent"), nil); !errors.Is(err, os.ErrNotExist) {
+	if _, err := readPrompt(t.Context(), boundary.Boundary{}, filepath.Join(dir, "absent"), nil); !errors.Is(err, os.ErrNotExist) {
 		t.Errorf("a missing file: %v, want not-exist", err)
+	}
+}
+
+// The prompt file goes through the same gate as the agent's own reads: its
+// contents are handed to the agent, so a policy that refuses the file must
+// refuse it here, or the prompt would be a way round the policy. The control
+// is the same file with no gate, which reads.
+func TestAPromptFileIsReadThroughTheGate(t *testing.T) {
+	file := filepath.Join(t.TempDir(), "task.md")
+	if err := os.WriteFile(file, []byte("the secret\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := readPrompt(t.Context(), boundary.Boundary{}, file, nil); err != nil || got != "the secret" {
+		t.Fatalf("ungated: %q, %v", got, err)
+	}
+	asked := 0
+	deny := boundary.Boundary{Gate: interp.GateFunc(func(context.Context, interp.Action) interp.Decision {
+		asked++
+		return interp.Deny
+	})}
+	got, err := readPrompt(t.Context(), deny, file, nil)
+	if !errors.Is(err, boundary.ErrRefused) || got != "" {
+		t.Errorf("denied: %q, %v, want a refusal", got, err)
+	}
+	if asked == 0 {
+		t.Error("the gate was never asked")
+	}
+	// Standard input is a descriptor, not a path: the same gate is not asked.
+	asked = 0
+	if got, err := readPrompt(t.Context(), deny, "-", strings.NewReader("piped\n")); err != nil || got != "piped" || asked != 0 {
+		t.Errorf("standard input under a denying gate: %q, %v, asked %d", got, err, asked)
 	}
 }
 

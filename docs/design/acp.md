@@ -768,8 +768,11 @@ flags) reads the **whole** of `FILE` as one prompt, sends it as one
 `session/prompt`, and exits when that turn ends. `-` names standard input.
 Trailing newlines are dropped, as the line reader drops the one each line ends
 on; everything inside is sent as written. An empty prompt, or a file that is
-not there, is refused before the agent is launched. The default is unchanged:
-without the flag, a line is a turn.
+not there, is refused before the agent is launched. The file is read **through
+the gate**, as a script operand is: its contents go to the agent, so a policy
+that hides a file from the agent hides it from the prompt too, and `-deny f
+-acp-prompt f` is refused rather than sending the agent what it was denied.
+The default is unchanged: without the flag, a line is a turn.
 
 **The shared reader decides what a prompt from standard input costs.** Reading
 the prompt there takes the input to its end, so nobody is left on it to answer

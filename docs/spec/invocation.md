@@ -3332,18 +3332,26 @@ installs a policy as the gate and `--audit FILE` writes the event stream;
 both take their value attached with `=` or as the next word and both are
 refused when they name no path. `--acp` serves the Agent Client Protocol on
 standard input and output, and `--acp-connect CMD ...` drives an agent,
-with `--acp-auth ID` and `--acp-allow` settling how it answers. All of them
+with `--acp-auth ID` and `--acp-allow` settling how it answers and
+`--acp-prompt FILE` sending the whole of one file — `-` for standard
+input — as a single prompt in place of a prompt per line. All of them
 are read on **every** binary built on `driver` — `sh`, `bash`, `zsh`, `ksh`,
 `dash` and `ash`.
 
 `--acp-connect` **ends option reading**: every word after it is the command
-that starts the agent, so `--acp-auth` and `--acp-allow` have to be written
-before it. A shell that kept reading those words as its own flags would be
-claiming the agent's.
+that starts the agent, so `--acp-auth`, `--acp-allow` and `--acp-prompt`
+have to be written before it. A shell that kept reading those words as its
+own flags would be claiming the agent's.
+
+`--acp-prompt` takes its value attached with `=` or as the next word, and
+the next word is taken even when it is `-`. An empty value is refused, and
+so is the option on a line without `--acp-connect`: with no agent to send
+the prompt to, the line would otherwise run a shell that reads the prompt as
+a script. Both refusals end the invocation with the usage status.
 
 Long form only. The substrate driver `sh` additionally keeps its own
 single-dash spellings — `-policy`, `-audit`, `-deny`, `-trace-events`,
-`-acp`, `-acp-connect` — because its whole flag namespace is already its
+`-acp`, `-acp-connect`, `-acp-prompt` — because its whole flag namespace is already its
 own; the dialect binaries get the long forms and nothing else.
 
 The `--acp` four were added last, in #2585, and the gap they closed is worth
@@ -3406,6 +3414,23 @@ and `--acp-allow`:
 
 All four spellings are refused by all five shells and none of them ran the
 command, so the same argument that makes `--policy` safe makes these safe.
+
+**`--acp-prompt` was measured the same way when it was added (#6937)**, on
+macOS 27.0.1 — measured 2026-10-17, invoked `<shell> --acp-prompt - -c 'echo
+RAN'` and again as `<shell> --acp-prompt=f -c 'echo RAN'`, with standard
+input from `/dev/null`:
+
+| shell | what it said for `--acp-prompt -` | status | ran the command |
+| --- | --- | --- | --- |
+| bash 5.3.20 | `--acp-prompt: invalid option` + usage | 2 | no |
+| bash 3.2.57 | `--acp-prompt: invalid option` + usage | 2 | no |
+| zsh 5.9.2 | `no such option: acp_prompt` | 1 | no |
+| ksh93u+ 2012-08-01 | `acp-prompt: bad option(s)` + usage | 2 | no |
+| dash | `Illegal option --` | 2 | no |
+
+The attached form is refused identically, each shell naming the whole word
+(`--acp-prompt=f`, `acp_prompt=f`). Neither form ran the command in any
+shell, so this spelling shadows nothing either.
 
 One detail is worth recording because it would otherwise look like a
 discrepancy. **zsh folds the dashes out of the name it reports**, so

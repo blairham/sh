@@ -113,11 +113,12 @@ func (sh *Shell) runACP() int {
 	return sh.ServeACP(*sh)
 }
 
-// connectOption reads `--acp-connect`, `--acp-auth` and `--acp-allow`.
+// connectOption reads `--acp-connect`, `--acp-auth`, `--acp-allow` and
+// `--acp-prompt`.
 //
 // `--acp-connect` ends option reading: every word after it is the command that
 // starts the agent, and a shell that kept reading them as its own flags would
-// claim the agent's. That is why the other two have to be written before it —
+// claim the agent's. That is why the others have to be written before it —
 // the same ordering `cmd/sh` has always had for its single-dash spellings.
 func connectOption(word string, args []string, inv *invocation) (rest []string, matched bool, err error) {
 	name, val, hasVal := strings.Cut(word, "=")
@@ -147,6 +148,21 @@ func connectOption(word string, args []string, inv *invocation) (rest []string, 
 		}
 		inv.acpAuth = val
 		return args, true, nil
+	case "--acp-prompt":
+		// A file holding one whole prompt, or `-` for standard input. The
+		// next word is taken even when it starts with a dash, because `-` is
+		// the value most people will write. See acpboot.readPrompt.
+		if !hasVal {
+			if len(args) < 1 {
+				return nil, true, fmt.Errorf("--acp-prompt requires a file, or - for standard input")
+			}
+			val, args = args[0], args[1:]
+		}
+		if val == "" {
+			return nil, true, fmt.Errorf("--acp-prompt requires a file, or - for standard input")
+		}
+		inv.acpPrompt = val
+		return args, true, nil
 	}
 	return args, false, nil
 }
@@ -157,5 +173,5 @@ func (sh *Shell) runConnectACP(in source) int {
 		sh.errf("%s: --acp-connect: this binary does not drive an Agent Client Protocol agent\n", sh.Name)
 		return usageStatus
 	}
-	return sh.ConnectACP(*sh, in.acpAllow, in.acpAuth, in.acpArgv)
+	return sh.ConnectACP(*sh, in.acpAllow, in.acpAuth, in.acpPrompt, in.acpArgv)
 }

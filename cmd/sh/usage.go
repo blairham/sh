@@ -78,6 +78,7 @@ first word that is not one of them belongs to the shell.
 	-acp-connect CMD ...   drive an ACP agent, under the same policy
 	-acp-allow             answer the agent's permission requests with yes
 	-acp-auth METHOD       sign in with one of the methods the agent offers
+	-acp-prompt FILE       send all of FILE as one prompt, run one turn, exit
 	-mcp                   serve the Model Context Protocol on standard input
 	-highlight             color a quotation left open, while it is typed
 
@@ -104,6 +105,13 @@ reads and writes, and the commands it asks us to run. A command it runs in its
 own process instead is its own fork and its own exec, and no gate sees it —
 two of the three published agents work that way today, so -acp-connect says
 after a turn how many commands it reported and how many it asked us for.
+
+-acp-connect reads a prompt per line of standard input, a turn each, until the
+input ends. -acp-prompt FILE sends the whole of FILE instead, newlines and all,
+as one prompt, and exits after that one turn; - names standard input. Like the
+other -acp flags it is written before -acp-connect. A prompt taken from
+standard input leaves nobody on it to answer the agent, so without -acp-allow
+every permission request is refused.
 
 Everything else — -c, -i, -s, a lone -, set options like -e — is read by the
 shared front end, exactly as each dialect binary reads it.

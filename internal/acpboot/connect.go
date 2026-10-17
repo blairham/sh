@@ -43,7 +43,9 @@ import (
 //	sh -acp-connect npx @agentclientprotocol/codex-acp
 //
 // Prompts are read from standard input, a line at a time, and what the agent
-// says comes back on standard output.
+// says comes back on standard output — unless `-acp-prompt FILE` names one
+// whole prompt instead, which is sent as a single turn before the shell exits.
+// See readPrompt.
 //
 // Authentication is the first thing that happens rather than the last: two of
 // the three published agents refuse a session with -32000 until it has, so
@@ -64,10 +66,21 @@ import (
 // terminal refuses everything, because nobody to ask is a denial.
 
 // connectACP drives an agent and returns the status to exit with.
-func connectACP(self, dash string, sh driver.Shell, allow bool, authMethod string, argv []string) int {
+func connectACP(self, dash string, sh driver.Shell, allow bool, authMethod, promptFile string, argv []string) int {
 	if len(argv) == 0 {
 		fmt.Fprintf(os.Stderr, "%s: %sacp-connect needs the command that starts an agent\n", self, dash)
 		return serveFailure
+	}
+	// The prompt is read before the agent is started, so a file that is not
+	// there, or holds nothing, costs no launch, no handshake and no turn.
+	var next prompts
+	if promptFile != "" {
+		text, err := readPrompt(promptFile, os.Stdin)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "%s: %sacp-prompt: %v\n", self, dash, err)
+			return serveFailure
+		}
+		next = whole(text)
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -104,7 +117,10 @@ func connectACP(self, dash string, sh driver.Shell, allow bool, authMethod strin
 	// time. Two scanners on one descriptor would each buffer whatever they
 	// read, so a line meant for one would sit unread inside the other.
 	in := bufio.NewScanner(os.Stdin)
-	tty := repl.IsTerminal(os.Stdin) && repl.IsTerminal(os.Stderr)
+	tty := askable(promptFile, os.Stdin, os.Stderr)
+	if next == nil {
+		next = lines(in)
+	}
 
 	client := &acp.Client{
 		Info: acp.Implementation{Name: self, Title: self, Version: sh.ReportedVersion()},
@@ -149,7 +165,7 @@ func connectACP(self, dash string, sh driver.Shell, allow bool, authMethod strin
 	signal.Notify(sigs, endSignals...)
 	defer signal.Stop(sigs)
 	talked := make(chan int, 1)
-	go func() { talked <- talk(self, dash, ctx, client, authMethod, in) }()
+	go func() { talked <- talk(self, dash, ctx, client, authMethod, next) }()
 
 	var status int
 	select {
@@ -351,9 +367,87 @@ func loginCommand(ctx context.Context, argv, args []string, env map[string]strin
 	return login
 }
 
+// askable reports whether a person can be asked a question on in and shown
+// it on out: a terminal on both.
+//
+// A prompt read from standard input has used it up — a pipe has ended, and a
+// person at a terminal has ended their input — so nobody is left there to
+// answer, and it counts as no terminal. The ladder in answerer then falls to
+// its last rung: -acp-allow, or a denial, because nobody to ask is a denial.
+// It also withholds the form capability, so an agent is not told it can
+// collect one. A prompt from a file leaves standard input alone, and a person
+// at a terminal is asked exactly as before.
+func askable(promptFile string, in, out *os.File) bool {
+	return promptFile != "-" && repl.IsTerminal(in) && repl.IsTerminal(out)
+}
+
+// readPrompt reads the whole of one prompt: the file `-acp-prompt` named, or
+// standard input when it named `-`.
+//
+// Whole, newlines and all, which is the point (#6937). The default reads a
+// prompt per line because that is right for a person typing at a terminal,
+// and it turns a heredoc of numbered instructions into a turn per line, each
+// one missing the rest. Trailing newlines are dropped, as the line reader drops
+// the one it ends on; everything inside is sent as written. A prompt with
+// nothing in it is refused, because a turn spent on an empty prompt is never
+// what a script meant.
+//
+// Read directly rather than through the gate, as the policy file itself is:
+// it is the invocation's own input, named by whoever wrote the command line,
+// and not something the agent asked for.
+func readPrompt(name string, stdin io.Reader) (string, error) {
+	var (
+		b   []byte
+		err error
+	)
+	if name == "-" {
+		b, err = io.ReadAll(stdin)
+	} else {
+		b, err = os.ReadFile(name)
+	}
+	if err != nil {
+		return "", err
+	}
+	text := strings.TrimRight(string(b), "\r\n")
+	if strings.TrimSpace(text) == "" {
+		where := name
+		if name == "-" {
+			where = "standard input"
+		}
+		return "", fmt.Errorf("%s holds no prompt", where)
+	}
+	return text, nil
+}
+
+// A prompt source: the next prompt and true, or false once there are no more.
+// An error is a read that failed rather than input that ended.
+type prompts func() (string, bool, error)
+
+// lines is the default source: one prompt per line, until the input ends.
+func lines(in *bufio.Scanner) prompts {
+	return func() (string, bool, error) {
+		if in.Scan() {
+			return in.Text(), true, nil
+		}
+		return "", false, in.Err()
+	}
+}
+
+// whole is `-acp-prompt`: the one prompt, and then nothing.
+func whole(text string) prompts {
+	sent := false
+	return func() (string, bool, error) {
+		if sent {
+			return "", false, nil
+		}
+		sent = true
+		return text, true, nil
+	}
+}
+
 // talk does the handshake, authenticates if asked to, and then relays prompts
-// until the input ends.
-func talk(self, dash string, ctx context.Context, client *acp.Client, authMethod string, in *bufio.Scanner) int {
+// until there are none left.
+func talk(self, dash string, ctx context.Context, client *acp.Client, authMethod string, next prompts) int {
 	info, err := client.Initialize(ctx)
 	if err != nil {
 		return fail1(self, "initialize: %v", err)
@@ -391,9 +485,16 @@ func talk(self, dash string, ctx context.Context, client *acp.Client, authMethod
 		return fail1(self, "session/new: %v", err)
 	}
 
-	for in.Scan() {
+	for {
+		text, ok, err := next()
+		if err != nil && err != io.EOF {
+			return fail1(self, "reading a prompt: %v", err)
+		}
+		if !ok {
+			return 0
+		}
 		askedBefore, saidBefore := client.Commands()
-		stop, err := client.Prompt(ctx, session, in.Text())
+		stop, err := client.Prompt(ctx, session, text)
 		if err != nil {
 			return fail1(self, "session/prompt: %v", err)
 		}
@@ -403,10 +504,6 @@ func talk(self, dash string, ctx context.Context, client *acp.Client, authMethod
 		asked, said := client.Commands()
 		fmt.Fprint(os.Stderr, commandCoverage(self, asked-askedBefore, said-saidBefore))
 	}
-	if err := in.Err(); err != nil && err != io.EOF {
-		return fail1(self, "reading a prompt: %v", err)
-	}
-	return 0
 }
 
 // commandCoverage is what to tell a person about the half of this they did not
@@ -776,8 +873,8 @@ func coerce(typed string, p acp.ElicitationProperty) (any, error) {
 // assumed because four of the diagnostics *name a flag back to the reader*,
 // and telling somebody running zsh to type `-acp-auth` is telling them to
 // type something that shell will refuse.
-func ConnectAs(self, dash string) func(driver.Shell, bool, string, []string) int {
-	return func(sh driver.Shell, allow bool, authMethod string, argv []string) int {
-		return connectACP(self, dash, sh, allow, authMethod, argv)
+func ConnectAs(self, dash string) func(driver.Shell, bool, string, string, []string) int {
+	return func(sh driver.Shell, allow bool, authMethod, prompt string, argv []string) int {
+		return connectACP(self, dash, sh, allow, authMethod, prompt, argv)
 	}
 }

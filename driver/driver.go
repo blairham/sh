@@ -1409,6 +1409,14 @@ func (s *source) speaksAsAtAPrompt(r *interp.Runner) bool {
 // no echo, and the file keeps its location and echo with the shell's name in
 // front of each line, as a startup file does (#6008, #6262).
 func (s source) parseDiagnostic(r *interp.Runner, err error, src string, reached int) string {
+	// Rendered by the runner in the one dialect that writes the script's text
+	// visibly, because what a byte past ASCII is depends on the locale and
+	// only the runner knows it. See interp.Runner.VisibleDiagnostic (#6786).
+	return r.VisibleDiagnostic(s.parseDiagnosticText(r, err, src, reached))
+}
+
+// parseDiagnosticText is parseDiagnostic before the runner renders it.
+func (s source) parseDiagnosticText(r *interp.Runner, err error, src string, reached int) string {
 	if s.readAsAPrompt {
 		// Read as a prompt reads, so worded as a prompt words it: the
 		// sentence that carried the line is replaced and nothing locates

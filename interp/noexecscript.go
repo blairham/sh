@@ -605,7 +605,7 @@ func (r *Runner) runImageAsScript(ctx context.Context, name, path string, argv, 
 		// what the child is. The shell is named rather than the operand: on
 		// the script route every column prints the script's path, including
 		// the one that shortens its own name elsewhere.
-		child.errf("%s", child.diag().ParseDiagnostic(child.name(), "", perr, src))
+		child.parseErrf("%s", child.diag().ParseDiagnostic(child.name(), "", perr, src))
 		return child.diag().StatusForParseError(perr)
 	}
 	status, runErr := child.Run(ctx, f)

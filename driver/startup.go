@@ -525,7 +525,7 @@ func (sh *Shell) startupParseFailure(r *interp.Runner, in source, path, text str
 		dg = dg.ForPrompt()
 		dg.Location = located
 	}
-	msg := dg.ParseDiagnosticAfter(name, "", err, text, r.LineReached())
+	msg := r.VisibleDiagnostic(dg.ParseDiagnosticAfter(name, "", err, text, r.LineReached()))
 	if dg.InteractiveShellSpeaksAsAtAPrompt && in.interactive {
 		// Its own name in front of every line, as for any file this shell
 		// reports a parse failure in while it is interactive: measured

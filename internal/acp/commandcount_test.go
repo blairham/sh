@@ -30,15 +30,15 @@ func TestAnAgentThatRunsItsOwnCommandsIsCountedApartFromOneThatAsks(t *testing.T
 	// The agent announces two commands it ran in its own process. This is
 	// exactly the shape measured off the published adapters: a tool call of
 	// kind execute, and no client method behind it.
-	announce(t, conn, acp.KindExecute)
-	announce(t, conn, acp.KindExecute)
+	announceID(t, conn, "call-1", acp.KindExecute)
+	announceID(t, conn, "call-2", acp.KindExecute)
 	if asked, announced := client.Commands(); asked != 0 || announced != 2 {
 		t.Errorf("asked %d and announced %d, want 0 and 2", asked, announced)
 	}
 
 	// And one it asks for, which is a command *we* start.
 	create(t, conn, acp.CreateTerminalRequest{SessionID: "s1", Command: "/bin/echo"})
-	announce(t, conn, acp.KindExecute)
+	announceID(t, conn, "call-3", acp.KindExecute)
 	if asked, announced := client.Commands(); asked != 1 || announced != 3 {
 		t.Errorf("asked %d and announced %d, want 1 and 3", asked, announced)
 	}
@@ -56,6 +56,40 @@ func TestOnlyTheAnnouncementOfAnExecutedCommandIsCounted(t *testing.T) {
 	update(t, conn, acp.KindExecute)
 	if _, announced := client.Commands(); announced != 0 {
 		t.Errorf("announced %d, want none: nothing here was a command being announced", announced)
+	}
+}
+
+// #6936. claude-code-acp 0.16.2 announces every Bash call twice under one
+// toolCallId — once titled "Terminal" while its input streams, again with the
+// command once it is whole — and then asks for it through terminal/create.
+// Counted by message, every gated command read as one run ungated, and the
+// notice told a person their policy was leaking when it was not.
+func TestACommandAnnouncedTwiceAndAskedForIsOneCommandThatAsked(t *testing.T) {
+	t.Parallel()
+	conn, client := withTerminals(t, nil)
+	announceID(t, conn, "toolu_1", acp.KindExecute)
+	announceID(t, conn, "toolu_1", acp.KindExecute)
+	create(t, conn, acp.CreateTerminalRequest{SessionID: "s1", Command: "/bin/echo"})
+	asked, announced := client.Commands()
+	if asked != 1 || announced != 1 {
+		t.Errorf("asked %d and announced %d, want 1 and 1: one command, announced twice, asked for once", asked, announced)
+	}
+}
+
+// The other direction, and the property the notice exists for: a command the
+// agent announced — however many times — and never asked for is still one it
+// ran in its own process, and must still be counted as such. Deduplicating
+// must not make an ungated command disappear.
+func TestACommandAnnouncedTwiceAndNeverAskedForIsStillReported(t *testing.T) {
+	t.Parallel()
+	conn, client := withTerminals(t, nil)
+	announceID(t, conn, "toolu_1", acp.KindExecute)
+	announceID(t, conn, "toolu_1", acp.KindExecute)
+	// A second, ungated command in the same turn is a second command.
+	announceID(t, conn, "toolu_2", acp.KindExecute)
+	asked, announced := client.Commands()
+	if asked != 0 || announced != 2 {
+		t.Errorf("asked %d and announced %d, want 0 and 2: two commands ran ungated", asked, announced)
 	}
 }
 
@@ -94,22 +128,29 @@ func TestARefusedCreateStillCountsAsHavingAsked(t *testing.T) {
 // announce sends the update an agent sends when it has run something itself.
 func announce(t *testing.T, conn *jsonrpc.Conn, kind string) {
 	t.Helper()
-	notifyUpdate(t, conn, acp.UpdateToolCall, kind)
+	notifyUpdate(t, conn, acp.UpdateToolCall, "call-1", kind)
+}
+
+// announceID is announce for a tool call with an id of the caller's choosing:
+// the count is per tool call, so two commands need two ids.
+func announceID(t *testing.T, conn *jsonrpc.Conn, id, kind string) {
+	t.Helper()
+	notifyUpdate(t, conn, acp.UpdateToolCall, id, kind)
 }
 
 // update sends a change to a tool call already announced.
 func update(t *testing.T, conn *jsonrpc.Conn, kind string) {
 	t.Helper()
-	notifyUpdate(t, conn, acp.UpdateToolCallUpdate, kind)
+	notifyUpdate(t, conn, acp.UpdateToolCallUpdate, "call-1", kind)
 }
 
-func notifyUpdate(t *testing.T, conn *jsonrpc.Conn, sessionUpdate, kind string) {
+func notifyUpdate(t *testing.T, conn *jsonrpc.Conn, sessionUpdate, id, kind string) {
 	t.Helper()
 	err := conn.Notify(acp.MethodSessionUpdate, map[string]any{
 		"sessionId": "s1",
 		"update": map[string]any{
 			"sessionUpdate": sessionUpdate,
-			"toolCallId":    "call-1",
+			"toolCallId":    id,
 			"kind":          kind,
 			"status":        acp.StatusCompleted,
 			"rawInput":      map[string]any{"command": "ls -la"},

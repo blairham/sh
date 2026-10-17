@@ -136,8 +136,39 @@ func (r *Runner) prefixStoresAnArray(a *syntax.Assign) bool {
 	if _, ok := r.prefixArrayLiteral(a); ok {
 		return true
 	}
+	if _, ok := r.prefixAppendsAnElement(a); ok {
+		return true
+	}
 	fields, ok := r.prefixGlobFields(a)
 	return ok && len(fields) > 1
+}
+
+// prefixAppendsAnElement reports whether this prefix is a scalar `+=` onto a
+// name holding an indexed array in the dialect where that adds an element,
+// and hands back the array it adds to.
+//
+// The statement's own reading, Semantics.ScalarAppendedToAnArrayBecomesANewElement,
+// read as a prefix: measured 2026-10-15 on zsh 5.9.2 `-f`, `a=(x y); a+=z f`
+// lists `typeset -g -a a=( x y z )` in the body and `a+=z /usr/bin/printenv
+// a` hands the child no `a` at all — an array, which no environment
+// carries. The columns that join the first element store the scalar they
+// always did (#6751).
+func (r *Runner) prefixAppendsAnElement(a *syntax.Assign) (Array, bool) {
+	if !a.Append || a.IsArray || a.Index != nil || len(a.Leading) > 0 {
+		return nil, false
+	}
+	if _, globbed := r.prefixGlobFields(a); globbed {
+		return nil, false
+	}
+	name := r.prefixEntryName(a.Name)
+	if r.assocDeclared(name) {
+		return nil, false
+	}
+	arr, ok := r.arraysLookup(name)
+	if !ok || r.sem().ScalarAppendedToAnArrayBecomesANewElement != Yes {
+		return nil, false
+	}
+	return arr, true
 }
 
 // storeGlobbedPrefix puts a matched prefix where the name is, for the length

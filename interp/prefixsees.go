@@ -129,6 +129,11 @@ func (r *Runner) holdPrefixEntry(h *heldPrefix, a *syntax.Assign, joined string)
 		h.holdArray(r, name, fields)
 		return
 	}
+	if arr, appends := r.prefixAppendsAnElement(a); appends {
+		// The array with the value after it — see prefixAppendsAnElement.
+		h.holdArray(r, name, append(r.readArray(arr), joined))
+		return
+	}
 	h.hold(r, name, joined)
 }
 

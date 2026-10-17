@@ -1474,6 +1474,9 @@ func Semantics() interp.Semantics {
 	// The element and array writes beside it, measured 2026-10-16 (#6763): see
 	// interp.Semantics.ContainerWriteThroughAReferenceNamesTheReference.
 	s.ContainerWriteThroughAReferenceNamesTheReference = interp.Yes
+	// Measured 2026-10-16 (#6781): see
+	// interp.Semantics.DeclarationOperandSplitsAfterTheSubscript.
+	s.DeclarationOperandSplitsAfterTheSubscript = interp.Yes
 	// `export` and `readonly` over a reference aimed at one **element**
 	// refuse the attribute by the target's own text and let the value
 	// through: measured 2026-09-20 on 5.3.20, with `a=(p q r); typeset -n

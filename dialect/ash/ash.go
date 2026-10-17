@@ -1015,6 +1015,8 @@ func Semantics() interp.Semantics {
 	// unanswered NamerefLetterStandsAlone: the same wall — there is no
 	// `typeset` to write the letters on (#3171).
 	// unanswered ContainerWriteThroughAReferenceNamesTheReference: no references.
+	// unanswered DeclarationOperandSplitsAfterTheSubscript: no arrays, so no
+	// operand has a subscript to hold an `=`.
 	// unanswered DeclarationThroughAReferenceNamesTheOperand: the same wall
 	// again — no references and no `typeset` (#3173).
 	// unanswered ExportOrReadonlyTakesAReferenceToAnElement: the same wall

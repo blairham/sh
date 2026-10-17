@@ -112,6 +112,7 @@ ash   DebugTrapRunsInSubshells
 ash   DebugActionArmingErrExitSkipsTheCommand
 ash   DebugTrapRunsInsideCalls
 ash   DeclarationListingFilter
+ash   DeclarationOperandSplitsAfterTheSubscript
 ash   DeclarationRereadsAParenthesizedValue
 ash   DeclarationThroughAReferenceNamesTheOperand
 ash   DeclareGlobalReachesPastALocal
@@ -501,6 +502,7 @@ dash  DebugTrapRunsInSubshells
 dash  DebugActionArmingErrExitSkipsTheCommand
 dash  DebugTrapRunsInsideCalls
 dash  DeclarationListingFilter
+dash  DeclarationOperandSplitsAfterTheSubscript
 dash  DeclarationRereadsAParenthesizedValue
 dash  DeclarationThroughAReferenceNamesTheOperand
 dash  DeclareGlobalReachesPastALocal

@@ -175,7 +175,7 @@ func (r *Runner) signAloneIsNotAPrivateDeclaration(args []string, f declareFlags
 		return
 	}
 	for _, a := range args {
-		if _, _, hasValue, _ := declarationOperand(a); hasValue {
+		if _, _, hasValue, _ := r.declarationOperand(a); hasValue {
 			return
 		}
 	}

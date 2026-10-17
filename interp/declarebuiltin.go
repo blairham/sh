@@ -1998,7 +1998,7 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) (endSt
 	if f.global {
 		var held []string
 		for _, a := range args {
-			name, _, _, _ := declarationOperand(a)
+			name, _, _, _ := r.declarationOperand(a)
 			if name == "" {
 				continue
 			}
@@ -2039,7 +2039,7 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) (endSt
 	r.caseFoldMayBeHeld = true
 	for _, a := range args {
 		r.caseFoldHeld = ""
-		name, value, hasValue, appends := declarationOperand(a)
+		name, value, hasValue, appends := r.declarationOperand(a)
 		// This line's numeric letter is what evaluates the value, which is
 		// the question typedValueFatalf asks.
 		r.declarationEvaluatesItsValue = hasValue && (f.integer || f.float)

@@ -3,8 +3,6 @@
 
 package interp
 
-import "strings"
-
 // badNamesHeldForTheReturn takes out of a `local` line the operands whose
 // name is not a name but which carry a value, in the dialect that says
 // nothing about them until the call returns, and keeps them on the running
@@ -26,7 +24,7 @@ func (r *Runner) badNamesHeldForTheReturn(word string, args []string, nowhere bo
 	_, takes := r.nameRules(word)
 	var kept []string
 	for i, a := range args {
-		name, _, hasValue := strings.Cut(a, "=")
+		name, hasValue := r.operandNameAndValued(a)
 		if !hasValue || r.isBuiltinName(word, name, takes) {
 			if kept != nil {
 				kept = append(kept, a)

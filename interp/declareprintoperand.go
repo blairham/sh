@@ -131,7 +131,7 @@ func (r *Runner) declarePrintPerformsItsOperands(name string, args []string, f d
 			literals = true
 			continue
 		}
-		if _, _, hasValue, _ := declarationOperand(a); hasValue {
+		if _, _, hasValue, _ := r.declarationOperand(a); hasValue {
 			values = true
 		}
 	}
@@ -240,7 +240,7 @@ func (r *Runner) declarePrintAssignsItsOperands(builtin string, args []string) (
 			}
 			continue
 		}
-		base, value, hasValue, appends := declarationOperand(a)
+		base, value, hasValue, appends := r.declarationOperand(a)
 		if !hasValue || !isPlainName(subscriptedOperandBase(base)) {
 			// Not a name this shell would take, so nothing is performed and
 			// nothing is left to list: measured 2026-09-20, `typeset -p 'bad

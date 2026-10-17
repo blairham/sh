@@ -43,14 +43,93 @@ func appendOperand(operand string) (name string, appends bool) {
 // declaration loop is one this dialect said yes to — and asking twice would
 // report an unanswered axis twice for one operand.
 func declarationOperand(operand string) (name, value string, hasValue, appends bool) {
-	name, value, hasValue = strings.Cut(operand, "=")
+	return declarationOperandSplit(operand, false)
+}
+
+// declarationOperand is the free function's split, asked whether an `=`
+// inside a subscript belongs to the subscript — see
+// Semantics.DeclarationOperandSplitsAfterTheSubscript.
+func (r *Runner) declarationOperand(operand string) (name, value string, hasValue, appends bool) {
+	return declarationOperandSplit(operand, r.operandSplitsAfterTheSubscript(operand))
+}
+
+// appendOperand is the free function's, asked the same question.
+func (r *Runner) appendOperand(operand string) (name string, appends bool) {
+	if r.operandSplitsAfterTheSubscript(operand) {
+		before, _, hasValue := cutOperandAfterTheSubscript(operand)
+		if !hasValue || !strings.HasSuffix(before, "+") || len(before) == 1 {
+			return "", false
+		}
+		return strings.TrimSuffix(before, "+"), true
+	}
+	return appendOperand(operand)
+}
+
+// operandSplitsAfterTheSubscript asks the axis only of an operand where the
+// answer moves the split: a name, a subscript holding an `=`, and an `=`
+// after it.
+func (r *Runner) operandSplitsAfterTheSubscript(operand string) bool {
+	first, _, _ := strings.Cut(operand, "=")
+	if !strings.Contains(first, "[") {
+		return false
+	}
+	if before, _, ok := cutOperandAfterTheSubscript(operand); !ok || before == first {
+		return false
+	}
+	return r.ask(r.sem().DeclarationOperandSplitsAfterTheSubscript,
+		"a declaration operand's `=` looked for after its subscript")
+}
+
+func declarationOperandSplit(operand string, afterTheSubscript bool) (name, value string, hasValue, appends bool) {
+	if afterTheSubscript {
+		name, value, hasValue = cutOperandAfterTheSubscript(operand)
+	} else {
+		name, value, hasValue = strings.Cut(operand, "=")
+	}
 	if !hasValue {
 		return name, value, hasValue, false
 	}
-	if base, ok := appendOperand(operand); ok {
-		return base, value, true, true
+	if strings.HasSuffix(name, "+") && len(name) > 1 {
+		return strings.TrimSuffix(name, "+"), value, true, true
 	}
 	return name, value, hasValue, false
+}
+
+// cutOperandAfterTheSubscript is strings.Cut at the `=` that follows a
+// name's closing bracket, the brackets counted so that a subscript may hold
+// brackets and `=` of its own: `m[a=b]=w` is the key `a=b`, `m[b[1]=2]=v`
+// the key `b[1]=2`. An operand that is not a name, a bracketed subscript and
+// then `=` or `+=` is cut at its first `=`, which is every other operand.
+func cutOperandAfterTheSubscript(operand string) (before, after string, found bool) {
+	i := 0
+	for i < len(operand) && (operand[i] == '_' || operand[i] >= 'a' && operand[i] <= 'z' ||
+		operand[i] >= 'A' && operand[i] <= 'Z' || i > 0 && operand[i] >= '0' && operand[i] <= '9') {
+		i++
+	}
+	if i > 0 && i < len(operand) && operand[i] == '[' {
+		depth := 0
+	scan:
+		for j := i; j < len(operand); j++ {
+			switch operand[j] {
+			case '[':
+				depth++
+			case ']':
+				depth--
+			}
+			if depth != 0 {
+				continue
+			}
+			rest := operand[j+1:]
+			switch {
+			case strings.HasPrefix(rest, "="):
+				return operand[:j+1], rest[1:], true
+			case strings.HasPrefix(rest, "+="):
+				return operand[:j+2], rest[2:], true
+			}
+			break scan
+		}
+	}
+	return strings.Cut(operand, "=")
 }
 
 // appendOverCompound performs `name+=value` where the name is holding an
@@ -182,4 +261,21 @@ func (r *Runner) arrayOperandName(a *syntax.Assign) string {
 		return a.Name
 	}
 	return a.Name + "+"
+}
+
+// operandName is the name half of a declaration operand, the `=` looked for
+// where the dialect looks for it — see Runner.declarationOperand.
+func (r *Runner) operandName(operand string) string {
+	name, _ := r.operandNameAndValued(operand)
+	return name
+}
+
+// operandNameAndValued is operandName and whether the operand carried a value.
+func (r *Runner) operandNameAndValued(operand string) (string, bool) {
+	if r.operandSplitsAfterTheSubscript(operand) {
+		name, _, valued := cutOperandAfterTheSubscript(operand)
+		return name, valued
+	}
+	name, _, valued := strings.Cut(operand, "=")
+	return name, valued
 }

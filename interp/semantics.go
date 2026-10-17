@@ -2704,6 +2704,25 @@ type Semantics struct {
 	// question and keeps its own answer.
 	ContainerWriteThroughAReferenceNamesTheReference Answer
 
+	// DeclarationOperandSplitsAfterTheSubscript looks for a declaration
+	// operand's `=` after its subscript's closing bracket, so an `=` inside
+	// the subscript is part of the key. No cuts the operand at its first `=`.
+	//
+	// Measured 2026-10-16 under `-c`, with `typeset -A m` first:
+	//
+	//	operand                   bash 5.3.20       ksh93u+           zsh 5.9.2
+	//	typeset m["a=b"]=w        key a=b           key a=b           key a=b
+	//	typeset 'm[a=b]=w'        key a=b           key a=b           not an identifier: m[a
+	//	v='m[c=d]=x'; typeset "$v" key c=d          key c=d           not an identifier: m[c
+	//	typeset 'm[b[1]=2]=v'     key b[1]=2        key b[1]=2
+	//	typeset 'm[a=b'           not a valid identifier, both
+	//
+	// So bash and ksh93 split the text however it arrived, and zsh splits a
+	// *written* assignment at its subscript and anything else at the first
+	// `=`. The operand reaches the builtin as text, so the written case is not
+	// told apart here and zsh keeps the first-`=` reading (#6781).
+	DeclarationOperandSplitsAfterTheSubscript Answer
+
 	// ExportOrReadonlyTakesAReferenceToAnElement decides what those two
 	// builtins do with an operand that is a reference aimed at **one element**
 	// — `a=(p q r); typeset -n b='a[1]'; export b=Z`.

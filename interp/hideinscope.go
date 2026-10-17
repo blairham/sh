@@ -261,7 +261,7 @@ func (r *Runner) watchDeclarationKinds(args []string, f declareFlags) (hiddenWat
 		return w, true
 	}
 	for _, a := range args {
-		name, _, _ := strings.Cut(a, "=")
+		name := r.operandName(a)
 		name = strings.TrimSuffix(name, "+")
 		if base, _, ok := strings.Cut(name, "["); ok {
 			name = base

@@ -2251,6 +2251,9 @@ func Semantics() interp.Semantics {
 	// The element and array writes beside it, measured 2026-10-16 (#6763): see
 	// interp.Semantics.ContainerWriteThroughAReferenceNamesTheReference.
 	s.ContainerWriteThroughAReferenceNamesTheReference = interp.No
+	// Measured 2026-10-16 (#6781): see
+	// interp.Semantics.DeclarationOperandSplitsAfterTheSubscript.
+	s.DeclarationOperandSplitsAfterTheSubscript = interp.Yes
 	// And `export` and `readonly` over a reference aimed at one **element**
 	// are taken in silence, with the letter on the container: measured
 	// 2026-09-20 on ksh93u+, with `a=(p q r); nameref b='a[1]'`, `export b=Z`

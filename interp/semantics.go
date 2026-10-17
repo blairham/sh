@@ -15987,11 +15987,9 @@ type Semantics struct {
 	// has no dialect of its own here (#2596).
 	//
 	// unpinned zsh: a shell that publishes no array publishes no number, and
-	// the indirect probe above is red in that column for a reason that is not
-	// this axis: this shell's coprocess takes two adjacent numbers from the
-	// base up, where zsh's are 11 and 14. A row measuring the probe would stay
-	// red under a flip, and a red row that stays red is not an objection
-	// (#2596).
+	// no corpus row allocates beside a coprocess. Its ends are on 11 and 14,
+	// the first and fourth of four (#6661), and
+	// TestACoprocessHoldsTheFirstAndFourth pins that.
 	//
 	// unpinned ksh: the same, from the other side — ksh93's `|&` publishes
 	// nothing either, and only one of its two ends is at or above the base it
@@ -39944,8 +39942,8 @@ const (
 	// CoprocEndsWhereAnyDescriptorGoes numbers them as `exec {v}>f` would —
 	// the first free entries from the dialect's allocation base up.
 	//
-	// zsh 5.9.2 and ksh93 (AJM 93u+ 2012-08-01), and the zero value because it
-	// is what this shell did everywhere before the axis existed.
+	// ksh93 (AJM 93u+ 2012-08-01), and the zero value because it is what this
+	// shell did everywhere before the axis existed.
 	CoprocEndsWhereAnyDescriptorGoes CoprocEndPlacement = iota
 
 	// CoprocEndsAtTheTopOfTheTable moves them out of the way of the numbers a
@@ -39954,11 +39952,35 @@ const (
 	//
 	// bash 5.3.15, and bash invoked as sh.
 	CoprocEndsAtTheTopOfTheTable
+
+	// CoprocEndsFirstAndFourthFromTheBase takes the four lowest free entries
+	// from the allocation base up and keeps the first and the fourth — the
+	// shell's read end and its write end, the coprocess's two ends between
+	// them closed after the fork — and frees the ends of a coprocess the new
+	// one replaces first. The coprocess's own body holds the first, and a
+	// simple command as the body all four: its words are expanded before the
+	// fork closes the middle two.
+	//
+	// zsh 5.9.2. Measured 2026-10-17 under `-fc` (#6661), `exec {a}… {b}…
+	// {c}…` after the coprocess unless the row says otherwise:
+	//
+	//	coproc cat                                12 13 15   ends on 11 and 14
+	//	exec {x}</dev/null; coproc cat            13 14 16   ends on 12 and 15
+	//	exec {x}… {y}…; exec {x}<&-; coproc cat   13 14 16   ends on 11 and 15
+	//	coproc cat; coproc cat                    12 13 15   the first's ends freed
+	//	coproc cat; echo <(true)                  /dev/fd/12
+	//	coproc { exec {a}… {b}…; echo $a $b; }    12 13      the body holds 11
+	//	coproc { echo <(true) <(true); }          12 13
+	//	coproc echo <(true) <(true) <(true)       15 16 17   and a simple one 11-14
+	CoprocEndsFirstAndFourthFromTheBase
 )
 
 func (p CoprocEndPlacement) String() string {
-	if p == CoprocEndsAtTheTopOfTheTable {
+	switch p {
+	case CoprocEndsAtTheTopOfTheTable:
 		return "at the top of the table"
+	case CoprocEndsFirstAndFourthFromTheBase:
+		return "the first and fourth from the base"
 	}
 	return "where any descriptor goes"
 }

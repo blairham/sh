@@ -468,6 +468,11 @@ type elementEntry struct {
 	// holds until its words are expanded, once it is held, or zero. See
 	// holdForTheFirstSubstitution.
 	substHeld int
+	// coprocess says the fork is a coprocess's, whose words hold its four
+	// pipe ends instead of that one number: `coproc echo <(true) <(true)` is
+	// `/dev/fd/15 /dev/fd/16` in zsh 5.9.2. See
+	// CoprocEndsFirstAndFourthFromTheBase.
+	coprocess bool
 }
 
 // redirHolds is what one redirection list holds while it applies: the saved
@@ -1067,7 +1072,7 @@ func (sub *Runner) enterAsAnElement(before []heldNumber, reads []int, i int, cmd
 // echo <(true) <(true) | cat` is `11 13`.
 func (r *Runner) holdForTheFirstSubstitution() {
 	e := &r.entering
-	if !e.pending || e.substHeld != 0 || !r.countsOwnDescriptors() {
+	if !e.pending || e.coprocess || e.substHeld != 0 || !r.countsOwnDescriptors() {
 		return
 	}
 	end := r.holdNumber(true)

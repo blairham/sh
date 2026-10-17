@@ -688,3 +688,55 @@ func TestAJoinHoldsNumbersWhileItsListApplies(t *testing.T) {
 		})
 	}
 }
+
+// A coprocess's ends in the placement that takes the four lowest free numbers
+// and keeps the first and the fourth, and what its body holds, measured
+// 2026-10-17 against zsh 5.9.2 (#6661). From a base of 10 here, where zsh's
+// is 11, and in a quiet table, because a substitution's number is the
+// kernel's. See CoprocEndsFirstAndFourthFromTheBase.
+func TestACoprocessHoldsTheFirstAndFourth(t *testing.T) {
+	if measuredInAQuietDescriptorTable(t) {
+		return
+	}
+	// The rows with a substitution first, while no earlier row's coprocess
+	// holds a descriptor this process counts; every body ends by itself.
+	for _, c := range []struct{ src, want string }{
+		{`coproc echo <(true) <(true); read -r l <&${COPROC[0]}; echo $l`, "/dev/fd/14 /dev/fd/15"},
+		{`coproc C { echo <(true) <(true); }; read -r l <&${C[0]}; echo $l`, "/dev/fd/11 /dev/fd/12"},
+		{`coproc C { :; }; exec {a}</dev/null {b}</dev/null {c}</dev/null; echo $a $b $c`, "11 12 14"},
+		{`exec {x}</dev/null; coproc C { :; }; exec {a}</dev/null {b}</dev/null; echo $x $a $b`, "10 12 13"},
+		{`coproc C { :; }; coproc C { :; }; exec {a}</dev/null {b}</dev/null {c}</dev/null; echo $a $b $c`, "11 12 14"},
+		{`coproc C { exec {a}</dev/null {b}</dev/null; echo $a $b; }; read -r l <&${C[0]}; echo $l`, "11 12"},
+		{`coproc C { exec {a}</dev/null; echo $a; } </dev/null; read -r l <&${C[0]}; echo $l`, "11"},
+	} {
+		t.Run(c.src, func(t *testing.T) {
+			d := syntax.Core()
+			d.Coproc, d.CoprocName = true, true
+			d.ProcessSubstitution, d.FdVariableRedirections = true, true
+			f, err := syntax.Parse(c.src, d)
+			if err != nil {
+				t.Fatal(err)
+			}
+			sem := PosixSemantics()
+			sem.CoprocEndsInAnArray = Yes
+			sem.CoprocessEndPlacement = CoprocEndsFirstAndFourthFromTheBase
+			sem.SubstitutionEndPlacement = SubstitutionEndsWhereAnyDescriptorGoes
+			sem.FirstAllocatedDescriptor = AllocateDescriptorsFromTen
+			sem.OwnDescriptors = SavedStreamsAndPipeReadEndsTakeNumbers
+			sem.FdVariableOutlivesTheCommand = Yes
+			sem.SubshellJobTable = SubshellJobsCleared
+			sem.RedirectTargetIsAnOrdinaryWord = No
+			out := &strings.Builder{}
+			r := newTestRunner(t, &Runner{
+				Semantics: &sem, Diagnostics: &Diagnostics{}, Name: "sh",
+				Stdout: out, Stderr: out, Env: testPATH(),
+			})
+			if _, err := r.Run(context.Background(), f); err != nil {
+				t.Fatal(err)
+			}
+			if got := strings.Join(strings.Fields(out.String()), " "); got != c.want {
+				t.Errorf("got %q, want %q", got, c.want)
+			}
+		})
+	}
+}

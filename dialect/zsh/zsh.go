@@ -5438,7 +5438,11 @@ func Semantics() interp.Semantics {
 	// what is left for it to hand out. Measured 2026-09-13: `exec
 	// {a}>/dev/null {b}>/dev/null {c}>/dev/null` answers `11 12 13` with no
 	// coprocess running and `12 13 15` with one (#2596).
-	s.CoprocessEndPlacement = interp.CoprocEndsWhereAnyDescriptorGoes
+	//
+	// Four of them, the first and fourth kept, measured 2026-10-17 (#6661):
+	// the `12 13 15` above is ends on 11 and 14. See
+	// interp.CoprocEndsFirstAndFourthFromTheBase.
+	s.CoprocessEndPlacement = interp.CoprocEndsFirstAndFourthFromTheBase
 	// And a process substitution's far end goes there too, which is the
 	// reading that makes 11 the base rather than a number of its own:
 	// measured 2026-09-21, `echo <(true) <(true) <(true)` is `/dev/fd/11

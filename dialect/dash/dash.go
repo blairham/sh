@@ -223,6 +223,9 @@ func Semantics() interp.Semantics {
 	// no process substitution, so there is no `>(cmd)` body for a command to
 	// wait for or not. `echo >(:)` is the two characters as written (#2197).
 	//
+	// unanswered RedirectTargetSubstitutionBodyIsTraced: no substitution, so
+	// no body to trace (#6799).
+	//
 	// unanswered SubstitutionTargetWithMoreIsRefused: the same absence — no
 	// substitution, so no redirection target can begin with one (#6766).
 	//

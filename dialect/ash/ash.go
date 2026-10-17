@@ -2430,6 +2430,10 @@ func Semantics() interp.Semantics {
 	// as the path it comes to: `cat < <(echo a)x` is `/dev/fd/64x`, measured
 	// 2026-10-16 (#6766). See interp.Semantics.SubstitutionTargetWithMoreIsRefused.
 	s.SubstitutionTargetWithMoreIsRefused = interp.No
+	// A redirection target's substitution body: `set -x; cat < <(echo hi)` writes `+ echo hi`, measured
+	// 2026-10-16 (#6799). See
+	// interp.Semantics.RedirectTargetSubstitutionBodyIsTraced.
+	s.RedirectTargetSubstitutionBodyIsTraced = interp.Yes
 	// A duplication target wider than one digit is not refused while
 	// parsing: `echo hi >&10` reaches the kernel and comes back `dup2(10,1):
 	// Bad file descriptor`, where dash refuses the word outright.

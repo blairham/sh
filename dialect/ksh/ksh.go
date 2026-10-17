@@ -3544,6 +3544,10 @@ func Semantics() interp.Semantics {
 	// is what opening the path does (#6766). See
 	// interp.Semantics.SubstitutionTargetWithMoreIsRefused.
 	s.SubstitutionTargetWithMoreIsRefused = interp.No
+	// A redirection target's substitution body: `set -x; cat < <(echo hi)` writes `+ echo hi`, measured
+	// 2026-10-16 (#6799). See
+	// interp.Semantics.RedirectTargetSubstitutionBodyIsTraced.
+	s.RedirectTargetSubstitutionBodyIsTraced = interp.Yes
 	// Fatal to `export` and `readonly` and not to `unset`, which prints the
 	// same kind of complaint, returns 1 and carries on. Not `unset` being
 	// less special: a bad *option* to it is fatal, just above.

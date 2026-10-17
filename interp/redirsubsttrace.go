@@ -56,4 +56,27 @@ func discardedTrace(*Runner) io.Writer { return io.Discard }
 // one that would have shown a difference — so the two spellings are equivalent
 // and this is the one that says what the field means: an expansion is running
 // now and it is a redirection's target.
-func (r *Runner) bodyTraceIsDiscarded() bool { return r.redirectTargetWord }
+//
+// **zsh's rule and nobody else's**, which is why it asks: bash 5.3.20 and
+// 3.2.57, ksh93u+ and BusyBox ash 1.37.0 all trace that body — `set -x; cat <
+// <(echo hi)` writes `++ echo hi` in bash and `+ echo hi` in the other two —
+// and zsh 5.9.2 alone writes nothing (#6799). See
+// Semantics.RedirectTargetSubstitutionBodyIsTraced. Asked only where the
+// shell is tracing as the body is made: with tracing off there is nothing a
+// discard could hide, so an unanswered dialect is not refused for it.
+func (r *Runner) bodyTraceIsDiscarded() bool {
+	if !r.redirectTargetWord {
+		return false
+	}
+	switch r.sem().RedirectTargetSubstitutionBodyIsTraced {
+	case Yes:
+		return false
+	case No:
+		return true
+	}
+	if !r.tracing() {
+		return true
+	}
+	return !r.ask(r.sem().RedirectTargetSubstitutionBodyIsTraced,
+		"the trace of a process substitution's body written as a redirection target")
+}

@@ -116,7 +116,7 @@ func (r *Runner) refuseAnOperandWithNoParent(builtin, operand, name string) (ref
 	}
 	speaker := builtin
 	switch builtin {
-	case "typeset", "readonly", "unset":
+	case "typeset", "readonly", "unset", "read", "let":
 	case "integer", "float":
 		speaker = "typeset"
 	default:
@@ -142,7 +142,7 @@ func (r *Runner) refuseAnOperandWithNoParent(builtin, operand, name string) (ref
 		r.diagf("%s: %s\n", speaker, Wording(w, "%[1]s: no parent", name))
 	}
 	r.status = 1
-	if builtin == "unset" {
+	if builtin == "unset" || builtin == "read" || builtin == "let" {
 		return true, false
 	}
 	r.fatalUsageQuiet()
@@ -259,4 +259,67 @@ func (r *Runner) dottedPrefixIsNotTaken(a *syntax.Assign, p prefixCommand) bool 
 		return false
 	}
 	return !a.Operand && r.diag().BadNameOfADottedOperandWithAValue != "" && r.dottedName(a.Name)
+}
+
+// refuseALoopNameWithNoParent refuses a `for` or `select` variable that is a
+// dotted name whose parent is missing, and reports whether it did. Measured
+// 2026-10-16 on ksh93u+ 2012-08-01 from a script file:
+//
+//	for a.b in 1; do :; done; echo st   t.sh: line 1: a.b: no parent, ends
+//	for a.b in $(echo X >&2); do …      X, then the refusal: the words first
+//	for a.b; do :; done                 refused with nothing to iterate too
+//	for a.b in 1; do :; done > f        f is made: the clause's redirection
+//	select a.b in 1; do break; done     the refusal, and no menu
+//
+// So it is the store's refusal, fatal wherever it is made, and asked once the
+// words are expanded rather than per pass (#6794).
+func (r *Runner) refuseALoopNameWithNoParent(name string) bool {
+	return r.refuseAStoreToANameWithNoParent(name)
+}
+
+// refuseAStoreToANameWithNoParent is the refusal a store to a name with no
+// parent makes where no assignment was written — a loop's variable and an
+// arithmetic expression's — fatal as the assignment's is, naming the name.
+func (r *Runner) refuseAStoreToANameWithNoParent(name string) bool {
+	w := r.diag().NoParent
+	if w == "" || !r.dottedNameHasNoParent(name) {
+		return false
+	}
+	r.diagf("%s\n", Wording(w, "%[1]s: no parent", name))
+	r.status = 1
+	r.fatalQuiet()
+	return true
+}
+
+// arithStoreWithNoParent refuses an arithmetic expression's store to a dotted
+// name whose parent is missing, and reports whether it did with the error the
+// evaluation stops on. Measured 2026-10-16 on ksh93u+ 2012-08-01 from a script
+// file:
+//
+//	((a.b=1)); echo st        t.sh: line 1: a.b: no parent, ends
+//	x=$((a.b=1)); echo st     the same
+//	let a.b=1; echo "st=$?"   t.sh[1]: let: a.b: no parent, st=1
+//	(( a.b )); echo "st=$?"   st=1 — a read asks no parent
+//
+// `let` speaks as a builtin and carries on, as it does over a frozen name;
+// the language's own arithmetic ends the script (#6794).
+func (r *Runner) arithStoreWithNoParent(name string) (bool, error) {
+	if r.inBuiltin == "let" {
+		refused, _ := r.refuseAnOperandWithNoParent("let", name, name)
+		if !refused {
+			return false, nil
+		}
+		r.refusedInACommand = true
+		return true, errReadonlyRefusedInACommand
+	}
+	if !r.refuseAStoreToANameWithNoParent(name) {
+		return false, nil
+	}
+	if r.arithCommand > 0 {
+		// The command stops on the refusal it was already told about.
+		return true, errReadonlyRefusedInACommand
+	}
+	// An expansion has nothing to report it to: the shell is already on its
+	// way out, which is the whole of what the refusal costs.
+	return true, nil
 }

@@ -492,6 +492,14 @@ func (r *Runner) forClause(ctx context.Context, c *syntax.ForClause) error {
 			// It ran three times for `for i in a "$((1/0))" b` (#1215).
 			return nil
 		}
+		for _, name := range c.Names {
+			// A dotted variable whose parent is missing, refused once the
+			// words are expanded and before any pass. See
+			// Runner.refuseALoopNameWithNoParent (#6794).
+			if r.refuseALoopNameWithNoParent(name) {
+				return nil
+			}
+		}
 
 		// The same two questions the conditional loops answer, and the same
 		// local for the same reason: what the loop reports is 0 until its

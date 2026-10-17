@@ -237,6 +237,18 @@ func (r *Runner) walkThePrefixBeforeTheRedirections(assigns []*syntax.Assign, wa
 		if !traceEach {
 			continue
 		}
+		if r.diag().NoParent != "" && r.dottedNameHasNoParent(a.Name) {
+			// Its store will be refused for a missing parent, which ends the
+			// script before the command runs: the lines stop here and the
+			// command's is never written. Measured 2026-10-16 on ksh93u+,
+			// `set -x; x=1 a.b=1 :` is `+ x=1` and then `a.b=1: no parent`,
+			// and `a.b=$(echo v) :` traces the substitution and nothing else
+			// (#6794).
+			traceEach = false
+			r.prefixTraceStoppedForNoParent = true
+			wrote = true
+			continue
+		}
 		if slices.Contains(r.prefixTracedEarly, a) {
 			// Written already, ahead of a refusal; it still counts as the
 			// prefix's lines being written.

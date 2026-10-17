@@ -8,6 +8,9 @@ package interp_test
 import (
 	"os"
 	"os/exec"
+	"path/filepath"
+	"strconv"
+	"strings"
 	"testing"
 
 	. "github.com/blairham/sh/interp"
@@ -261,5 +264,54 @@ func TestASiblingLettingGoInsideTheParksQuestionIsTaken(t *testing.T) {
 	if !sameFds(got, free) || asked != 1 {
 		t.Errorf("got %v after %d let-goes on the base, want %v — a number a sibling "+
 			"let go of mid-question was stepped over", got, asked, free)
+	}
+}
+
+// And a file test asks about the substitution's pipe where its published
+// number is borrowed and the pipe is parked on another: a number held in this
+// process by a descriptor no fork of the shell would hold — a sibling's end,
+// here a regular file claimed as one — is published, and the pipe goes
+// elsewhere. `test` stats the path in this process, so it has to take the
+// mapping an open takes, or it answers about the file (#6900). bash 5.3,
+// ksh93u+ and zsh 5.9.2 all answer yes to both rows, where nothing is in the
+// way.
+func TestAFileTestOnABorrowedNumberAsksAboutThePipe(t *testing.T) {
+	if measuredInAQuietDescriptorTable(t) {
+		return
+	}
+	want := freeFdsAlong(t, 10, 200, 1)[0]
+	path := filepath.Join(t.TempDir(), "f")
+	if err := os.WriteFile(path, nil, 0o444); err != nil {
+		t.Fatal(err)
+	}
+	var extra []*os.File
+	var on *os.File
+	for on == nil {
+		f, err := os.Open(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		switch {
+		case int(f.Fd()) == want:
+			on = f
+		case int(f.Fd()) > want:
+			t.Skipf("could not put a file on %d", want)
+		default:
+			extra = append(extra, f)
+		}
+	}
+	for _, f := range extra {
+		_ = f.Close()
+	}
+	defer func() { _ = on.Close() }()
+	defer ClaimForASiblingForTest(want)()
+	for _, src := range []string{
+		`test -p <(true) && echo yes`,
+		`test -w >(true) && echo yes`,
+	} {
+		out := runSubstPlacement(t, SubstitutionEndsWhereAnyDescriptorGoes, AllocateDescriptorsFromTen, nil, src+`; echo <(true)`, nil)
+		if got, path, _ := strings.Cut(strings.TrimSpace(out), "\n"); got != "yes" || path != "/dev/fd/"+strconv.Itoa(want) {
+			t.Errorf("%s: got %q, want yes from a substitution published on %d", src, out, want)
+		}
 	}
 }

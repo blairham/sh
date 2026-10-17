@@ -88,6 +88,10 @@ refuses what every real shell accepts is a core nobody can write against.
                       a digest-pinned alpine image rather than through a path
     cmd/shfmt         the formatter: the first thing that consumes the
                       parser as a product rather than as test scaffolding
+    gated/            a /bin/sh for distroless and scratch images that
+                      cannot exec: the dash dialect behind a deny-by-default
+                      gate, as gated.Main — public, no network front end,
+                      promoted from blairham/localiam, its first consumer
     internal/acp      the Agent Client Protocol, both roles
     internal/mcp      the Model Context Protocol, as a server (#1338)
     internal/termhost the terminal verbs both protocols serve — create,
@@ -152,6 +156,9 @@ caught it until something exercised it.
 consumed them.** `syntax` and `interp` are public now: the parser was built
 on the first and the interpreter on both, which is the criterion. The oracle
 stays internal because it is test infrastructure rather than product.
+`gated` met the criterion from the other side: it was written in
+blairham/localiam on top of `interp`, consumed there, and promoted here
+(#6890) so any image without a shell can use it.
 
 This is a library others import and extend — a dialect is built *on* the
 core, not forked from it — and there are exactly three ways to do that:
@@ -254,6 +261,12 @@ package, its Shell is configured from outside it by `driver/`, and
 the process's environment. `driver/`, the binaries and every test are where
 these calls belong, and are excluded.
 
+`gated/` is library code too, and outside forbidigo's list, which is rendered
+from blairham/.github. It holds the rule itself and more strictly:
+`TestThePackageTouchesNoProcessState` fails if a non-test file there imports
+`os`, `os/exec`, `os/signal` or `syscall`, so `gated.Main` takes its streams,
+arguments and host name from the binary that calls it.
+
 The streams are the sharpest case, because they are the one piece of process
 state a library *writes*: a nil Stdout used to fall back to `os.Stdout`, so an
 embedder who wired two of the three had a script's output in the host's
@@ -308,6 +321,14 @@ so `make conformance-dialects` graded the *drivers* and reported bash at
 literally `bash: -c is required`. Adding a front-end feature to one
 binary, or writing a fifth copy for a new dialect, brings that straight
 back.
+
+**`gated.Main` is the one other front end, and it is not a dialect's.** It
+does not run a shell a person chose; it runs a fixed, refusing one, and its
+invocation surface is deliberately smaller than `driver`'s — `-c` and standard
+input, no script file, no `-i`, no prompt, a fresh Runner per run. Routing it
+through `driver` would hand it every route `driver` grows, which is the
+opposite of what a diagnostic shell wants. It binds `$0` and the parameters
+the way all four shells do, and its tests pin that.
 
 Each `cmd/<shell>` still builds its own `driver.Shell` from its own
 dialect package rather than looking one up in a shared registry. That

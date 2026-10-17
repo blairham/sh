@@ -22,6 +22,11 @@ report can hold it to:
 - **The ACP front end** (`--acp`, `docs/design/acp.md`) runs commands for the
   client on the other end of its stdio, through the same gate. It opens no
   socket; whoever holds its stdio is its client.
+- **The `gated` package** (`gated/README.md`) is a shell that refuses every
+  exec and signal, opens nothing for writing, and reads only under its
+  configured roots with `environ` refused inside them. It has no network
+  front end. It cannot vouch for the image it is installed in: beside another
+  shell or userland it protects nothing.
 
 ## Supported versions
 
@@ -106,6 +111,8 @@ In scope, among others:
   any other route
 - a policy file that loads while dropping or misreading a rule
 - the ACP front end running anything its gate refused
+- the `gated` shell executing, signaling, writing, or reading outside its
+  roots
 - the history file or the block store being created readable by other
   users (both are `0600`), or written outside the paths configured for them
 

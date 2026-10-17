@@ -1861,6 +1861,10 @@ func Semantics() interp.Semantics {
 	// side effect in it never reaches this shell: measured 2026-10-16, `i=1;
 	// y=$((i++)) /usr/bin/true; echo $i` is 1 (#6784).
 	s.PrefixExpandsInTheExternalCommandsChild = interp.Yes
+	// But a prefix that persists makes a name carrying a numeric or width
+	// letter a plain scalar, export and all: measured 2026-10-16, `typeset -i
+	// v=1; v=2+2 :; typeset -p v` is `v=2+2` (#6750).
+	s.PersistingPrefixMakesATypedNameAPlainScalar = interp.Yes
 	// The same direction at a builtin, and the same reading: a prefix is an
 	// ordinary assignment to this shell, so a name that had the export
 	// attribute *loses* it for the length of the command. `export z=1; z=2

@@ -3,6 +3,8 @@
 
 package interp
 
+import "github.com/blairham/sh/syntax"
+
 // What an assignment prefix's entry *is*, as against what it holds.
 //
 // One reading makes the prefix a fresh cell — a plain scalar the command sees
@@ -165,4 +167,37 @@ func (r *Runner) freshenedPrefixEntry(name string) *savedVar {
 		}
 	}
 	return nil
+}
+
+// persistingPrefixResetsATypedName makes the name a persisting prefix is
+// about to store into a plain scalar, where the dialect does that to a name
+// carrying a numeric or a width letter. See
+// Semantics.PersistingPrefixMakesATypedNameAPlainScalar.
+//
+// An append is not this: it joins through the letters and keeps them —
+// measured, `typeset -i x=2; x+=5 :; typeset -p x` is `typeset -i x=7`.
+func (r *Runner) persistingPrefixResetsATypedName(a *syntax.Assign, name string) {
+	if a.Append {
+		return
+	}
+	_, float := r.floatPrecision[name]
+	_, width := r.fieldWidth[name]
+	if !float && !width && !r.attrHas(name, attrInteger) || r.shellKeepsTheType(name) {
+		// A name with no such letter, or one of the shell's own, whose type
+		// is the shell's and stays.
+		return
+	}
+	if !r.ask(r.sem().PersistingPrefixMakesATypedNameAPlainScalar,
+		"a persisting prefix making a typed name a plain scalar") {
+		return
+	}
+	r.emptyPrefixEntry(name)
+	r.exportedPut(name, false)
+}
+
+// shellKeepsTheType is whether a name's type is the shell's own rather than a
+// script's: one of its own parameters, or a name it keeps typed through a
+// declaration (OPTIND and the integer parameters in one column).
+func (r *Runner) shellKeepsTheType(name string) bool {
+	return r.wasTheShellsOwnParameter(name) || r.optindKeptThroughThis(name)
 }

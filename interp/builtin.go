@@ -3913,7 +3913,7 @@ func biExport(r *Runner, _ context.Context, args []string) (endStatus int) {
 		return status
 	}
 	for _, a := range args {
-		name, value, hasValue, appends := declarationOperand(a)
+		name, value, hasValue, appends := r.declarationOperand(a)
 		// See the same variable in biReadonly.
 		var bracketed declareFlags
 		if r.exportRefusesACompound(name, declareFlags{
@@ -8096,7 +8096,7 @@ func biLocal(r *Runner, _ context.Context, args []string) (endStatus int) {
 		// $?; }; f` is `local: Illegal number: x` and then 2, the script
 		// going on. See RefuseValues.
 		for _, a := range args {
-			if name, value, hasValue, _ := declarationOperand(a); hasValue &&
+			if name, value, hasValue, _ := r.declarationOperand(a); hasValue &&
 				r.refuseTheValue(name, value, assignedByDeclaration) {
 				if r.ctl == controlExit {
 					return r.status
@@ -8119,7 +8119,7 @@ func biLocal(r *Runner, _ context.Context, args []string) (endStatus int) {
 		// 5.9.2 leaves `o` a plain scalar (getopts/a-function-with-its-own-
 		// optind). A subscripted operand's array letter is the same shape.
 		f, asked := f, lineAsked
-		name, value, hasValue, appends := declarationOperand(a)
+		name, value, hasValue, appends := r.declarationOperand(a)
 		// See declareNames: this line's numeric letter evaluates the value.
 		r.declarationEvaluatesItsValue = hasValue && (f.integer || f.float)
 		// The hide-in-scope letter asks for an ordinary local over the
@@ -8697,7 +8697,7 @@ func biReadonly(r *Runner, ctx context.Context, args []string) int {
 	// walked out of one must not leave the next command inside it.
 	defer func(was bool) { r.rereadingAQuotedLiteral = was }(r.rereadingAQuotedLiteral)
 	for _, a := range args {
-		name, value, hasValue, appends := declarationOperand(a)
+		name, value, hasValue, appends := r.declarationOperand(a)
 		// The array letter a valueless operand's brackets gave the name,
 		// which this word has no letter to write — see
 		// valuelessSubscriptedOperand.

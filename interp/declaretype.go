@@ -137,7 +137,7 @@ func (r *Runner) declareType(builtin string, operands []string, f declareFlags) 
 			// parser lifted out is never stored.
 			return r.refuseTypeLetter(builtin)
 		}
-		if variable, _, valued := strings.Cut(operand, "="); valued {
+		if variable, _, valued, _ := r.declarationOperand(operand); valued {
 			return r.refuseTypeNeedsACompound(builtin, variable)
 		}
 		if _, takes := r.nameRules(builtin); r.isBuiltinName(builtin, operand, takes) {

@@ -4556,6 +4556,9 @@ func Semantics() interp.Semantics {
 	// A literal's own reading of the same empty subscript, measured 2026-10-16
 	// (#6738): see interp.Semantics.EmptySubscriptInAnIndexedLiteralIsBad.
 	s.EmptySubscriptInAnIndexedLiteralIsBad = interp.No
+	// Measured 2026-10-16 (#6781): see
+	// interp.Semantics.DeclarationOperandSplitsAfterTheSubscript.
+	s.DeclarationOperandSplitsAfterTheSubscript = interp.No
 	// A subscript's expression stops at the first top-level `,` or `;` and
 	// the rest of the text is discarded, unevaluated: measured 2026-09-12,
 	// `a=(p q r s); i="2,3"; ${a[$i]}` is `q` where the comma operator would

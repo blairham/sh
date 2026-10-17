@@ -319,8 +319,8 @@ func (r *Runner) builtinNames(builtin string, args []string, explicitVariable bo
 		takes = PlainNamesOnly
 	}
 	for i, a := range args {
-		name, _, _ := strings.Cut(a, "=")
-		if base, appends := appendOperand(a); appends && builtin != "unset" {
+		name := r.operandName(a)
+		if base, appends := r.appendOperand(a); appends && builtin != "unset" {
 			// `declare a+=2` carries the append operator, which one shell
 			// takes as an operand and the others refuse. Asked here because
 			// this is where an operand becomes a name, and only for the one
@@ -522,8 +522,8 @@ func (r *Runner) namesAfterARefusal(builtin string, kept, remaining []string, ta
 		return kept
 	}
 	for _, a := range remaining {
-		name, _, _ := strings.Cut(a, "=")
-		if base, appends := appendOperand(a); appends && builtin != "unset" {
+		name := r.operandName(a)
+		if base, appends := r.appendOperand(a); appends && builtin != "unset" {
 			// The same reading the first pass gave this shape. The axis was
 			// answered there — it is the same dialect — so this asks
 			// nothing and only has to agree about which operands are names.

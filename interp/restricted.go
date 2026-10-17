@@ -328,7 +328,7 @@ func (r *Runner) restrictedRefusalStatus(args []string, f declareFlags, local bo
 	}
 	status, after := 0, false
 	for _, a := range args {
-		name, _, _, _ := declarationOperand(a)
+		name, _, _, _ := r.declarationOperand(a)
 		if !after {
 			after = name == refused
 			continue

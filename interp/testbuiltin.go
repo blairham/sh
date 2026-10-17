@@ -1251,6 +1251,31 @@ func (r *Runner) ownDescriptorPath(operand string) (string, bool) {
 	return inheritedPath(sys), true
 }
 
+// testOperandPath is the path a file test asks this process about, for an
+// operand the script wrote: the operand against the shell's directory, except
+// where it names a descriptor whose number in this process is not the number
+// the script sees. Two kinds: one of the shell's own descriptors (see
+// ownDescriptorPath), and a process substitution whose published number is
+// borrowed, its pipe parked on another — see Runner.substOpenPath, which
+// every open of such a path already goes through.
+//
+// The second was missing, and a borrowed number is ordinary in a process
+// holding low descriptors it does not own: `test -w >(true)` asked about
+// whatever the process held at the published number and answered false
+// (#6900). One function for every operand the builtin stats, because the
+// binary comparisons and `-N` had neither mapping.
+func (r *Runner) testOperandPath(operand string) string {
+	if real := r.substOpenPath(operand); real != operand {
+		return real
+	}
+	if own, ok := r.ownDescriptorPath(operand); ok {
+		// A path naming one of **this shell's** descriptors is the file the
+		// shell has open there, not the process's Nth.
+		return own
+	}
+	return r.atDir(operand)
+}
+
 func (r *Runner) fileTest(op, operand string) bool {
 	if operand == "" {
 		// An empty operand is not a path, so the answer is false for every
@@ -1287,13 +1312,7 @@ func (r *Runner) fileTest(op, operand string) bool {
 	if held != nil {
 		info, err = opened.StatAt(held.dir, operand, true)
 	} else {
-		path = r.atDir(operand)
-		if own, ok := r.ownDescriptorPath(operand); ok {
-			// A path naming one of **this shell's** descriptors is the file
-			// the shell has open there, not the process's Nth. See
-			// ownDescriptorPath.
-			path = own
-		}
+		path = r.testOperandPath(operand)
 		// Through the gate, like every stat; a denied one is err != nil
 		// here, so every test below reads it as the file not existing.
 		info, err = r.stat(path)
@@ -1386,7 +1405,7 @@ func (r *Runner) modifiedSinceRead(operand string) bool {
 	if operand == "" {
 		return false
 	}
-	info, err := r.stat(r.atDir(operand))
+	info, err := r.stat(r.testOperandPath(operand))
 	if err != nil {
 		return false
 	}
@@ -1429,7 +1448,7 @@ func (r *Runner) compareStat(operand string) (os.FileInfo, error) {
 	if operand == "" {
 		return nil, fs.ErrNotExist
 	}
-	return r.stat(r.atDir(operand))
+	return r.stat(r.testOperandPath(operand))
 }
 
 // compareFiles is `a -nt b`, `a -ot b` and `a -ef b` — the binary file

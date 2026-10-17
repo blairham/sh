@@ -911,13 +911,57 @@ func (h *redirHolds) saveForAnOpen(fd int, name string) {
 		i = r.consumedSubstitution(name)
 	}
 	if fd < 0 {
-		h.save(1, false)
-		h.save(2, false)
+		// Both streams onto one file, which is a source like a
+		// duplication's: held while the saves are taken, let go of after.
+		// See saveBothForAnOpen.
+		h.saveBothForAnOpen()
 	} else {
 		h.save(fd, false)
 	}
 	if i >= 0 {
 		r.releaseConsumedSubstitution(i)
+	}
+}
+
+// saveBothForAnOpen is the saves and joins of `&>file`, which zsh 5.9.2
+// takes stream by stream, standard output first — the save where the stream
+// is open and undecided, then the join where it was named before — with the
+// file it opened held on the lowest free number until the last save it takes,
+// as `{ … } 2>&1` holds its source. Measured 2026-10-15 and 2026-10-16 under
+// `-fc`, `v` and `w` allocated after (#6756):
+//
+//	: &>/dev/null {v}… {w}…              11 14   the file on 11, saves 12 13
+//	: >/dev/null 2>&1 {v}… {w}…          12 14   (control)
+//	: 2>/dev/null &>/dev/null {v}… {w}…  16 17   save 1, let go, join 2's three
+//	: 1>/dev/null &>/dev/null {v}… {w}…  12 17   join 1's three, save 2, let go
+//	: &>/dev/null >/dev/null {v}…        16      the join is the later `>`'s
+//	: &>/dev/null &>/dev/null {v}…       19      no save, no file held: two joins
+//	: >/dev/null 2>/dev/null &>… {v}…    19
+func (h *redirHolds) saveBothForAnOpen() {
+	if h == nil {
+		return
+	}
+	r := h.r
+	saves := func(fd int) bool {
+		return h.saving && !slices.Contains(h.decided, fd) && r.streamOpen(fd)
+	}
+	last := -1
+	for _, fd := range []int{1, 2} {
+		if saves(fd) {
+			last = fd
+		}
+	}
+	source := -1
+	if h.holdsSources && last >= 0 {
+		source = r.holdNumber(false)
+		h.took(-1)
+	}
+	for _, fd := range []int{1, 2} {
+		h.save(fd, false)
+		if fd == last && source >= 0 {
+			r.letGoOfNumber(source)
+		}
+		h.join(fd, false)
 	}
 }
 

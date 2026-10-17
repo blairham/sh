@@ -79,11 +79,15 @@ var (
 // is. Such a process leaves the environment alone: its parent aimed it.
 func Assembled() bool { return os.Getenv(TripwireHome) != "" }
 
-// Run assembles the environment, runs m in it, and then checks that the home
-// it handed out is still untouched. suite names the package in the messages,
+// Run closes the descriptors this process inherited, assembles the
+// environment, runs m in it, and then checks that the home it handed out is
+// still untouched. suite names the package in the messages,
 // since the person reading one will be reading it from a `go test ./...` line
 // that says nothing about which suite tripped.
 func Run(suite string, m interface{ Run() int }) int {
+	// The descriptor table is inherited from whoever ran `go test` just as
+	// the environment is, and the shells below read it just as directly.
+	closeInheritedDescriptors()
 	home, err := os.MkdirTemp("", "sh-"+strings.ReplaceAll(suite, "/", "-")+"-home-")
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "%s tests: no scratch home: %v\n", suite, err)

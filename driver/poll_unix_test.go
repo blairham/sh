@@ -22,7 +22,18 @@ import (
 // `bg` would report a command as done while it was still running — and a test
 // that only checked the positive half would pass for exactly that bug.
 func TestPollingACommandAnswersOnlyWhenItHasChanged(t *testing.T) {
-	cmd := exec.Command("/bin/sleep", "0.4")
+	// A child that ends when it is told to rather than on a clock. It was
+	// `sleep 0.4` against a hundred polls a millisecond apart, which assumed a
+	// millisecond sleep takes a millisecond: on a loaded macOS runner the
+	// hundred took 0.52s, the child had genuinely exited by poll 88, and the
+	// test reported a correct answer as the bug it exists to catch (#6944).
+	// cat runs until its input closes and then exits 0, so "still running" is
+	// true for exactly as long as this test holds the pipe open.
+	cmd := exec.Command("/bin/cat")
+	stdin, err := cmd.StdinPipe()
+	if err != nil {
+		t.Fatalf("a pipe to end the child with: %v", err)
+	}
 	// A group of its own, which is what a shell puts a job in; the poll must
 	// work the same either way, and this is the arrangement it is used in.
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
@@ -46,7 +57,11 @@ func TestPollingACommandAnswersOnlyWhenItHasChanged(t *testing.T) {
 		time.Sleep(time.Millisecond)
 	}
 
-	// And the status, once there is one. Waited for by polling rather than by
+	// And the status, once there is one: closing the pipe is what ends it.
+	if err := stdin.Close(); err != nil {
+		t.Fatalf("closing the child's input: %v", err)
+	}
+	// Waited for by polling rather than by
 	// sleeping a guessed amount: the deadline turns a hang into a failure and
 	// the loop is the thing being tested.
 	deadline := time.Now().Add(10 * time.Second)

@@ -127,6 +127,12 @@ type Client struct {
 	// attempt to join them: see Commands.
 	mu        sync.Mutex
 	announced int
+	// The tool calls already counted, by session and id. A tool call is one
+	// command however many times it is announced: measured against
+	// claude-code-acp 0.16.2, one Bash call arrives as two `tool_call`
+	// updates with the same id — titled "Terminal" while its input streams,
+	// then again with the command once it is complete (#6936).
+	counted map[[2]string]struct{}
 }
 
 // Commands reports how many commands the agent asked this shell to run, and
@@ -241,13 +247,23 @@ func (c *Client) Notify(_ context.Context, method string, params json.RawMessage
 // count notes a tool call the agent announced for a command it ran.
 //
 // The announcement only — `tool_call` and not `tool_call_update` — so a
-// command whose status changes three times is one command. Decoded on its own
-// rather than out of the loose update above, because this reads two fields of
-// one variant and that one must keep handing the caller the bytes it was sent.
+// command whose status changes three times is one command. And one per
+// `toolCallId`, because the announcement itself can be repeated: the protocol
+// lets an agent re-send a `tool_call` it has already sent, and claude-code-acp
+// does exactly that for every Bash call, so counting messages reported every
+// gated command as one the agent ran itself (#6936). An announcement with no
+// id cannot be matched to another, and counts on its own: a notice that
+// over-reports a missing id is the safe side of this one.
+//
+// Decoded on its own rather than out of the loose update above, because this
+// reads a few fields of one variant and that one must keep handing the caller
+// the bytes it was sent.
 func (c *Client) count(params json.RawMessage) {
 	var n struct {
-		Update struct {
+		SessionID string `json:"sessionId"`
+		Update    struct {
 			SessionUpdate string `json:"sessionUpdate"`
+			ToolCallID    string `json:"toolCallId"`
 			Kind          string `json:"kind"`
 		} `json:"update"`
 	}
@@ -258,8 +274,18 @@ func (c *Client) count(params json.RawMessage) {
 		return
 	}
 	c.mu.Lock()
+	defer c.mu.Unlock()
+	if id := n.Update.ToolCallID; id != "" {
+		key := [2]string{n.SessionID, id}
+		if _, seen := c.counted[key]; seen {
+			return
+		}
+		if c.counted == nil {
+			c.counted = map[[2]string]struct{}{}
+		}
+		c.counted[key] = struct{}{}
+	}
 	c.announced++
-	c.mu.Unlock()
 }
 
 // Initialize performs the handshake and returns what the agent claims.

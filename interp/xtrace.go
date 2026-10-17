@@ -623,7 +623,16 @@ func (r *Runner) traceAssignments(assigns []*syntax.Assign, values []string, pre
 // double run #1915 fixed for a scalar's value. Tracked as #1959.
 func (r *Runner) traceAssign(a *syntax.Assign, value string, e *expandedAssign, d Diagnostics) string {
 	if e != nil && e.nested != nil {
-		return r.traceNestedElementWrite(a.Name, e.subscript, a.Append, *e.nested, d)
+		sub := e.subscript
+		if len(e.chain) > 1 {
+			// A chain, every link as it resolved. See Runner.resolvedChain.
+			links := make([]string, len(e.chain))
+			for i, link := range e.chain {
+				links[i] = r.traceQuote(link, d.TraceQuoting, d.TraceMetacharacters)
+			}
+			sub = strings.Join(links, "][")
+		}
+		return r.traceNestedElementWrite(a.Name, sub, a.Append, *e.nested, d)
 	}
 	var b strings.Builder
 	b.WriteString(traceAssignTarget(a, e, func(key string) string {

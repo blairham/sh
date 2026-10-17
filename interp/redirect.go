@@ -970,7 +970,7 @@ func (r *Runner) applyRedirList(ctx context.Context, rs []*syntax.Redirect, comp
 			holds.saveForAnOpen(fd, name)
 			// A join of the stream's targets or sources, where the open
 			// goes one way: `<>` is left alone as the join leaves it, and
-			// so is `&>` for now.
+			// `&>` joins its two streams inside saveBothForAnOpen.
 			switch {
 			case fd < 0:
 			case flags == os.O_RDONLY:

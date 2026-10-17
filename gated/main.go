@@ -42,7 +42,7 @@ func Main(ctx context.Context, argv []string, stdin io.Reader, stdout, stderr io
 	res, err := sh.Run(ctx, src, args...)
 
 	if _, werr := io.WriteString(stdout, res.Stdout); werr != nil {
-		fmt.Fprintf(stderr, "sh: write stdout: %v\n", werr)
+		_, _ = fmt.Fprintf(stderr, "sh: write stdout: %v\n", werr)
 		return 1
 	}
 	if _, werr := io.WriteString(stderr, res.Stderr); werr != nil {
@@ -50,18 +50,18 @@ func Main(ctx context.Context, argv []string, stdin io.Reader, stdout, stderr io
 	}
 
 	if res.Denied > 0 {
-		fmt.Fprintf(stderr, "\nsh: the gate refused %d action(s):\n", res.Denied)
+		_, _ = fmt.Fprintf(stderr, "\nsh: the gate refused %d action(s):\n", res.Denied)
 		for _, r := range res.Trail {
 			if r.Kind == "denied" {
-				fmt.Fprintf(stderr, "  line %d: %s %s\n", r.Line, r.Action, r.Path)
+				_, _ = fmt.Fprintf(stderr, "  line %d: %s %s\n", r.Line, r.Action, r.Path)
 			}
 		}
-		fmt.Fprintln(stderr,
+		_, _ = fmt.Fprintln(stderr,
 			"  (this shell cannot exec, and reads are bounded; see github.com/blairham/sh/gated)")
 	}
 
 	if err != nil {
-		fmt.Fprintf(stderr, "sh: %v\n", err)
+		_, _ = fmt.Fprintf(stderr, "sh: %v\n", err)
 		return 1
 	}
 	return res.Status
@@ -84,13 +84,13 @@ func source(argv []string, stdin io.Reader, stderr io.Writer) (src string, args 
 		// whole into memory first.
 		b, err := io.ReadAll(io.LimitReader(stdin, maxScript+1))
 		if err != nil {
-			fmt.Fprintf(stderr, "sh: read stdin: %v\n", err)
+			_, _ = fmt.Fprintf(stderr, "sh: read stdin: %v\n", err)
 			return "", nil, 1
 		}
 		return string(b), nil, -1
 	default:
-		fmt.Fprintln(stderr, "usage: sh -c <script> [arg0 [arg...]]   |   sh < script")
-		fmt.Fprintln(stderr, "a gated shell: no exec, reads bounded to /proc and /sys/fs/cgroup")
+		_, _ = fmt.Fprintln(stderr, "usage: sh -c <script> [arg0 [arg...]]   |   sh < script")
+		_, _ = fmt.Fprintln(stderr, "a gated shell: no exec, reads bounded to /proc and /sys/fs/cgroup")
 		return "", nil, 2
 	}
 }

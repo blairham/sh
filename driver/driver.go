@@ -3648,6 +3648,14 @@ func (sh *Shell) applyOptions(r *interp.Runner, opts []optionSpec) (int, bool) {
 func (sh *Shell) execute(r *interp.Runner, pr *program, in source) int {
 	ctx := sh.context()
 	status, how := sh.executeLines(ctx, r, pr, in)
+	if sh.goesOnToAPrompt(r, in, how) {
+		// A line that would not parse hands back its own status; an error
+		// inside one left it on the runner. See Shell.promptAfterTheString.
+		if how != endingParseFailure {
+			status = r.ExitStatus()
+		}
+		return sh.promptAfterTheString(r, in, status)
+	}
 	if how == endingRanOut && in.thenStdin && !r.Exited() {
 		// `-c` with `-s`, in the one dialect that goes on to read standard
 		// input as a program once the command string has run. See
@@ -3693,6 +3701,46 @@ func (sh *Shell) execute(r *interp.Runner, pr *program, in source) int {
 		return status
 	}
 	return r.Finish(ctx)
+}
+
+// goesOnToAPrompt reports whether an interactive `-i -c` string that has just
+// ended goes on to a prompt on standard input, in the dialect that does: when
+// it ended at an error the shell reported and gave up over — a line that
+// would not parse, or a fatal error inside one — and not at a stop the
+// script asked for. See interp.Semantics.InteractiveCommandStringErrorGoesOnToAPrompt.
+func (sh *Shell) goesOnToAPrompt(r *interp.Runner, in source, how ending) bool {
+	if !sh.Semantics.InteractiveCommandStringErrorGoesOnToAPrompt || !in.interactive ||
+		in.invocationRoute() != interp.RouteCommandString {
+		return false
+	}
+	return how == endingParseFailure || r.GaveUpOverAnError()
+}
+
+// promptAfterTheString is the session that follows a `-i -c` string an error
+// ended, in the dialect that goes on: the same runner, its variables,
+// functions and `$0` and the positional parameters the string had, reading
+// standard input at a prompt with the error's status as `$?`, and ending as
+// a session ends — the status of its last command, and the EXIT trap. See
+// interp.Semantics.InteractiveCommandStringErrorGoesOnToAPrompt (#6693).
+func (sh *Shell) promptAfterTheString(r *interp.Runner, in source, status int) int {
+	r.ResumeAfterExit()
+	r.SetExitStatus(status)
+	r.AtPrompt = true
+	dg := *in.diag()
+	s := sh.frontEndWith(r, in.name, dg, repl.NewTheme(r.GetVar))
+	ctx := sh.context()
+	st, err := s.Run(ctx)
+	if err != nil {
+		sh.errf("%s", dg.Report(in.name, 1, err.Error()+"\n"))
+		return usageStatus
+	}
+	if r.Exited() {
+		st = r.ExitStatus()
+	}
+	if code := r.Finish(ctx); code != 0 && st == 0 {
+		st = code
+	}
+	return st
 }
 
 // endTheLine writes the newline an interactive shell ends its input with, on

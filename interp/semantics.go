@@ -21092,6 +21092,32 @@ type Semantics struct {
 	// Read by the front end, for the reason PromptEndOfInputEndsTheLine is.
 	InteractiveScriptIsReadAtAPrompt bool
 
+	// InteractiveCommandStringErrorGoesOnToAPrompt makes an interactive
+	// shell whose `-c` string hits an error that would end a shell that is
+	// not interactive carry on at a prompt on standard input instead, as if
+	// the string had been its startup: the status the error left is `$?`
+	// there, and the session ends as any session does.
+	//
+	// BusyBox ash's. Measured 2026-10-15 and 2026-10-16 in the pinned
+	// alpine@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b
+	// (v1.37.0), `PS1='P> ' sh -i -c …` (#6693):
+	//
+	//	string, standard input                  BusyBox
+	//	echo ), /dev/null                       the error, P> \n, status 2
+	//	echo ), `echo st=$?`                    the error, P> st=2, P> \n, 0
+	//	: ${zz?boom}; echo after, /dev/null     the error, P> \n, 2
+	//	readonly r=1; r=2; echo after           the error, P> st=2 …
+	//	echo $((1/0))                           the error, P> st=2 …
+	//	echo ), `echo $0 $1` with zero one      zero: the error, P> zero one …
+	//	echo x; exit 4                          x, status 4, no prompt
+	//	set -e; false                           status 1, no prompt
+	//
+	// So it is an error the shell reported and gave up over, and not a stop
+	// the script asked for.
+	//
+	// Read by the front end, for the reason PromptEndOfInputEndsTheLine is.
+	InteractiveCommandStringErrorGoesOnToAPrompt bool
+
 	// PromptAgainForAnUnterminatedLine is the prompt drawn once more when
 	// the input of a prompt that is not a terminal ends partway through a
 	// line, before that line is run.

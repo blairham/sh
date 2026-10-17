@@ -82,7 +82,12 @@ func TestAnInteractiveAshNamesNoLineForEvalText(t *testing.T) {
 	}{
 		// The prompt ends its line at the end of the input, as BusyBox's does.
 		{"at a prompt", typed, []string{"ash", "-i"}, interactive + "\n"},
-		{"-i -c", "", []string{"ash", "-i", "-c", typed}, interactive},
+		// And the string's last line is a syntax error inside `eval`, which
+		// ends `-i -c` at an error — so this shell goes on to a prompt on
+		// standard input, which here is empty: an empty PS1 and the closing
+		// newline. Measured 2026-10-16, `sh -i -c 'eval "echo )"'` is the
+		// error, `P> ` and the newline at 2 (#6693).
+		{"-i -c", "", []string{"ash", "-i", "-c", typed}, interactive + "\n"},
 		// The other half of the pair: the same text, not interactive, where
 		// `-c` counts its lines from 0.
 		{"-c", "", []string{"ash", "-c", typed}, "ash: eval: line 0: nosuch_a: not found\n" +

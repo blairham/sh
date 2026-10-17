@@ -206,6 +206,23 @@ func (r *Runner) ExitRan() bool { return r.ctl == controlExit && r.exitRan }
 // Semantics.LogoutFileReadWhen.
 func (r *Runner) ErrExitEnded() bool { return r.ctl == controlExit && r.errexitStopped }
 
+// GaveUpOverAnError reports whether what is ending the shell is an error it
+// reported and gave up over — a fatal expansion, a readonly assignment, a
+// refused special builtin, a substitution that will not parse — rather than
+// something the script asked for: an `exit`, `set -e` firing, or a signal it
+// sent itself. For the front end of the one dialect whose `-i -c` goes on to
+// a prompt after such an error. See Semantics.InteractiveCommandStringErrorGoesOnToAPrompt.
+func (r *Runner) GaveUpOverAnError() bool {
+	if r.ctl != controlExit || r.exitRan || r.errexitStopped || r.killedBySig != 0 {
+		return false
+	}
+	switch r.abandon {
+	case abandonError, abandonParamError, abandonUsage, abandonSubstParse:
+		return true
+	}
+	return false
+}
+
 // ReturnEnded reports whether a `return` outside any function is what ended
 // the program — which, like `exit`, ends it before its input runs out.
 // Measured 2026-10-15, `echo a; return 4; echo b` as a file under `-i` and

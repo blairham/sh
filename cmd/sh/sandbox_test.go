@@ -182,6 +182,42 @@ func TestAnExecAllowlistFindsWhatItPermits(t *testing.T) {
 	}
 }
 
+// TestAnArgvRuleReachesEveryExecTheShellInterprets is #6938 from the outside:
+// a policy that refuses `git stash` and not `git status`, handed a command line
+// the way a coding agent hands one over. Every route here is the shell building
+// the inner vector itself — a list, `eval`, a function, `command`, a subshell,
+// a substitution, options in front of the subcommand — so each is asked about
+// with the vector it actually runs. The allowed row is what keeps a policy that
+// refused `git` outright from passing.
+func TestAnArgvRuleReachesEveryExecTheShellInterprets(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	prog := filepath.Join(dir, "git")
+	if err := os.WriteFile(prog, []byte("#!/bin/sh\necho ran \"$@\"\n"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	p := writePolicy(t, "default allow", "deny exec-argv "+dir+"/git -- stash")
+	script := "PATH=" + dir + "\n" +
+		"git status; echo s1=$?\n" +
+		"git stash; echo s2=$?\n" +
+		"git -C . stash; echo s3=$?\n" +
+		"eval 'git stash pop'; echo s4=$?\n" +
+		"f() { git \"$@\"; }; f stash; echo s5=$?\n" +
+		"command git stash; echo s6=$?\n" +
+		"true && git stash list; echo s7=$?\n" +
+		"(git stash); echo s8=$?\n" +
+		"x=$(git stash); echo s9=$?\n"
+	const wantOut = "ran status\ns1=0\ns2=126\ns3=126\ns4=126\ns5=126\ns6=126\ns7=126\ns8=126\ns9=126\n"
+	// Not "core": it declines `eval` text spanning lines until a dialect is
+	// chosen, which is about eval and not about the gate.
+	for _, dialect := range []string{"posix", "bash", "zsh", "ksh", "dash"} {
+		got := sandboxed(t, dialect, "-policy", p, "-c", script)
+		if got.out != wantOut {
+			t.Errorf("%s: out = %q err = %q, want %q", dialect, got.out, got.errs, wantOut)
+		}
+	}
+}
+
 // TestABadPolicyStopsTheShell, and stops it before anything runs. A policy
 // that will not parse is not a shell that runs unsandboxed.
 func TestABadPolicyStopsTheShell(t *testing.T) {

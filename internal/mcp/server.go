@@ -186,6 +186,8 @@ func unsupported(requested string) error {
 func (s *Server) discover() DiscoverResult {
 	return DiscoverResult{
 		ResultType:        ResultComplete,
+		TTLMs:             CacheTTLMs,
+		CacheScope:        CacheScopePublic,
 		SupportedVersions: []string{Version},
 		Capabilities:      Capabilities{Tools: &ToolsCapability{}},
 		Instructions:      Instructions,

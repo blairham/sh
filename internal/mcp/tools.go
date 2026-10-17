@@ -164,8 +164,17 @@ func Tools() []Tool {
 
 func schema(s Schema) *Schema { return &s }
 
+// listTools answers `tools/list`, with the caching hint on the modern era
+// only: the legacy revision has no such fields, and a result in one era's
+// shape answered to the other is how a dual-era server fails.
 func (s *Server) listTools(modern bool) ListToolsResult {
-	return ListToolsResult{ResultType: resultType(modern), Tools: Tools()}
+	r := ListToolsResult{ResultType: resultType(modern), Tools: Tools()}
+	if modern {
+		ttl := CacheTTLMs
+		r.TTLMs = &ttl
+		r.CacheScope = CacheScopePublic
+	}
+	return r
 }
 
 // resultType is the discriminator a modern result carries and a legacy one

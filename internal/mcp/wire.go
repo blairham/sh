@@ -105,6 +105,34 @@ const CodeUnsupportedProtocolVersion = -32022
 // rather than written into each constructor.
 const ResultComplete = "complete"
 
+// The caching hint a modern list result carries, and the discovery result
+// with it.
+//
+// `2026-07-28` defines a CacheableResult — `ttlMs` and `cacheScope`, both
+// required — and makes `server/discover`, `tools/list` and every other list
+// and read result one. A client that validates against the revision rejects
+// a result without them, and Claude Code 2.1.292 does exactly that: it threw
+// the whole tool list away, so the model was handed no tools at all (#6934).
+// The legacy revision has neither field, so a legacy result carries none.
+//
+// The values are a decision rather than a measurement, and this is the
+// reasoning. Everything these results describe — the five verbs, their
+// schemas, the one capability, the revision list — is fixed by the binary,
+// and nothing in them depends on the policy, the dialect, the directory or
+// who is asking. So the scope is `public`: the revision's own words for "does
+// not contain user-specific data". And the lifetime is long, because the only
+// thing that can change the answer is a different binary, and a different
+// binary is a different process that a stdio client has to reconnect to
+// anyway. A day says that without claiming forever.
+//
+// If a tool list ever starts to depend on the gate — tools hidden by policy,
+// say — the scope has to become `private` in the same change, because a
+// shared cache would then hand one caller's list to another.
+const (
+	CacheScopePublic = "public"
+	CacheTTLMs       = int64(24 * 60 * 60 * 1000)
+)
+
 // Implementation names a side of the connection.
 type Implementation struct {
 	Name    string `json:"name"`
@@ -154,6 +182,8 @@ type withMeta struct {
 // modern client that it is a legacy server.
 type DiscoverResult struct {
 	ResultType        string         `json:"resultType"`
+	TTLMs             int64          `json:"ttlMs"`
+	CacheScope        string         `json:"cacheScope"`
 	SupportedVersions []string       `json:"supportedVersions"`
 	Capabilities      Capabilities   `json:"capabilities"`
 	Instructions      string         `json:"instructions,omitempty"`
@@ -212,8 +242,14 @@ type Property struct {
 }
 
 // ListToolsResult answers `tools/list`.
+//
+// TTLMs is a pointer because zero is a value the revision gives a meaning to
+// ("immediately stale"), so absent and zero are different answers; a legacy
+// result is the absent one. See CacheScopePublic for the values.
 type ListToolsResult struct {
 	ResultType string `json:"resultType,omitempty"`
+	TTLMs      *int64 `json:"ttlMs,omitempty"`
+	CacheScope string `json:"cacheScope,omitempty"`
 	Tools      []Tool `json:"tools"`
 }
 

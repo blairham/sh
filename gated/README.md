@@ -50,9 +50,15 @@ import (
 )
 
 func main() {
+	os.Exit(run())
+}
+
+// run holds the work so the deferred stop runs before os.Exit; an os.Exit
+// after a defer skips it, and gocritic's exitAfterDefer refuses that shape.
+func run() int {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	os.Exit(gated.Main(ctx, os.Args[1:], os.Stdin, os.Stdout, os.Stderr, os.Getenv("HOSTNAME")))
+	return gated.Main(ctx, os.Args[1:], os.Stdin, os.Stdout, os.Stderr, os.Getenv("HOSTNAME"))
 }
 ```
 

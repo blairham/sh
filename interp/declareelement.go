@@ -381,11 +381,40 @@ func (r *Runner) elementDeclarationRefused(base, sub string, f declareFlags, sha
 	// array[1]=a } }` is `a` in the reference — and a subshell carries the
 	// scopes it was forked with, so the element lands inside it and the outer
 	// call sees nothing, which is the subshell and not this rule (#5106).
+	return r.localElementDeclarationRefused(base, sub, f, shadows)
+}
+
+// subscriptedLiteralOperandRefused reports whether a literal written through
+// a subscript on this line, `local b[1]=(p q)`, is refused before the
+// utility brings its bare name into being, having said so.
+//
+// It asks the question a subscripted scalar operand asks: measured
+// 2026-10-16 on zsh 5.9.2 `-f`, `f(){ local b[1]=(p q) }; f` and the same
+// under `typeset` are `f:local: b[1]: can't create local array elements`
+// and the script ends, where over a local the call already made the literal
+// splices and at the top level it is taken. The operand reaches the
+// utility as the bare name, so the literal is looked up to find it was one.
+func (r *Runner) subscriptedLiteralOperandRefused(name string, f declareFlags) bool {
+	for _, op := range r.arrayOperands {
+		a := op.assign
+		if a.Name != name || a.Index == nil || len(a.Leading) > 0 || a.Members != nil {
+			continue
+		}
+		return r.localElementDeclarationRefused(name, a.IndexText, f, true)
+	}
+	return false
+}
+
+// localElementDeclarationRefused is the last of those questions on its own,
+// for the operand that writes a literal through a subscript and reaches the
+// utility as a bare name: whether naming one element may make the array a
+// local of this call. See elementDeclarationRefused for the rows.
+func (r *Runner) localElementDeclarationRefused(base, sub string, f declareFlags, shadows bool) bool {
 	if shadows && !f.global && len(r.scopes) > 0 && !r.localCell(base) &&
 		!r.ask(r.sem().SubscriptedOperandTakesALocalDeclaration,
 			"a declaration of one array element making the array local") {
 		if !r.unspecified {
-			r.refuseElementDeclaration(base, sub, d.LocalElementRefusal)
+			r.refuseElementDeclaration(base, sub, r.diag().LocalElementRefusal)
 		}
 		return true
 	}

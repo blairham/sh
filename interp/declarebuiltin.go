@@ -2056,6 +2056,7 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) (endSt
 				continue
 			}
 		}
+		var literal *syntax.Assign
 		if len(r.arrayOperands) > 0 {
 			// An array literal written earlier on this line, on the name this
 			// operand reaches, is stored first; and a bare name is where one
@@ -2064,7 +2065,7 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) (endSt
 				base, _, _ := strings.Cut(name, "[")
 				r.storeArrayOperandBefore(base)
 			} else {
-				r.noteArrayOperandName(name)
+				literal = r.noteArrayOperandName(name)
 			}
 		}
 		r.rereadingAQuotedLiteral = hasValue && r.operandHidesALiteral(name, value, f, false)
@@ -2116,6 +2117,10 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) (endSt
 			df.global = true
 		}
 		if r.unspecified {
+			return r.status
+		}
+		if literal != nil && r.subscriptedLiteralOperandRefused(name, df) {
+			// See Runner.subscriptedLiteralOperandRefused (#6828).
 			return r.status
 		}
 		if df.nameref && r.namerefNameCannotBeSubscripted(complaintName, name) {

@@ -826,6 +826,10 @@ func (r *Runner) background(ctx context.Context, st *syntax.Stmt) error {
 	}
 	r.registerInventedJob(job)
 
+	// What a job started inside a command substitution's body holds, before
+	// the copy that runs it is made, so it is held there too. See
+	// Runner.forkInABody.
+	r.forkInABody(nil)
 	sub := r.clone()
 	if fired {
 		// The firing has been made for the job's statement, so the copy that

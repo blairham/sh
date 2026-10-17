@@ -155,8 +155,9 @@ jobs:
     # `debian:sid-slim` carries **GNU bash 5.3.15**, which is what
     # `AgainstReport: "version 5.3"` asks for, and it is `apt` and glibc, so
     # the step list below and `setup-go` are untouched. The digest is the one
-    # `images/zsh-5.9.2/Dockerfile` already pins: **one pin for debian sid in
-    # this tree**, not a second one that can drift from it. Pinned by an
+    # the zsh reference image (`ghcr.io/blairham/sh/zsh`) was built over: **one
+    # pin for debian sid in this tree**, not a second one that can drift from
+    # it. Pinned by an
     # *index* digest and never by the tag, for the reason `internal/suite`'s
     # `Suite.Image` states at length -- sid moves, and a column pinned to a
     # tag reports a shell that changed with nothing able to tell that from a
@@ -480,7 +481,7 @@ jobs:
     name: zsh's own suite (report only)
     runs-on: ubuntu-latest
     # The same pinned image as the bash column above, and deliberately the
-    # same one rather than a second pin. `images/zsh-5.9.2/Dockerfile` already
+    # same one rather than a second pin. The zsh reference image already
     # establishes what this digest carries -- Debian sid packages **zsh
     # 5.9.2** -- and that is the build `suite.Panel`'s zsh entry names in
     # `Against`. So this column is graded against the build it names from its

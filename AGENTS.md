@@ -393,11 +393,10 @@ true while only that binary served the protocol, and false the moment they
 all did. One left unstamped announces `0.0.0-dev` out of a tagged release.
 
 Releases after `v0.0.22` are signed and attested in the same run: keyless
-cosign over `checksums.txt` and each of the six images by digest (`signs`
-and `docker_signs` in `.goreleaser.yaml`), and SLSA build provenance from
-`actions/attest-build-provenance`, uploaded to the release as
+cosign over `checksums.txt` (`signs` in `.goreleaser.yaml`), and SLSA build
+provenance from `actions/attest-build-provenance`, uploaded to the release as
 `sh-<tag>.intoto.jsonl` because Scorecard reads the asset, not the attestation
-store. The commands that verify all three are in `SECURITY.md`; keep them
+store. The commands that verify both are in `SECURITY.md`; keep them
 working when the workflow or an artifact name changes.
 
 ### The shared baseline
@@ -429,8 +428,7 @@ clean under it.
 - Every `uses:` in `.github/workflows/` is pinned by commit SHA with a
   `# vX.Y.Z` comment, and every workflow is read-only at the top level — a
   job that writes asks for it. Dependabot bumps the pins and the Go modules
-  monthly; it deliberately does not touch `images/`, whose reference shells
-  are pinned to the versions the oracle grades.
+  monthly.
 - CodeQL (`codeql.yml`, `security-extended`) and OpenSSF Scorecard
   (`scorecard.yml`) run beside `ci.yml`. `Analyze` is a required check.
 - `main` is guarded by a **repository ruleset**, not classic branch
@@ -2200,18 +2198,14 @@ deliberately **not** pinned this way and stays report-only: no distribution
 packages AT&T's 2012 build, and grading `cmd/ksh` against ksh93u+m would
 measure the fork.
 
-**Two of the three references had to be built, and `images/` is where.** bash
-was off the shelf. Nothing public reports `zsh 5.9.2`, and 5.9 is not a
-substitute — it answers two of that column's own files differently — and
-nothing public is an unpatched dash, whose patch is the whole of that column's
-gap on a runner. So `images/zsh-5.9.2` and `images/dash-0.5.12` are recipes
-published by `.github/workflows/reference-images.yml` to `ghcr.io`, and each
-**asserts at build time that what it holds is the build the column names**:
-an image that is not the reference fails to build rather than being discovered
-later through a banner. Publishing is a deliberate act on a `refimages/`
-branch, never a merge, because the recipes are not reproducible byte for byte
-and a rebuild under the same tag would leave a pinned digest untagged.
-`images/README.md` has the measurements and how to republish.
+**Two of the three references had to be built.** bash was off the shelf.
+Nothing public reports `zsh 5.9.2`, and 5.9 is not a substitute — it answers
+two of that column's own files differently — and nothing public is an
+unpatched dash, whose patch is the whole of that column's gap on a runner. So
+`ghcr.io/blairham/sh/zsh` and `ghcr.io/blairham/sh/dash` were built once and
+published, and `internal/suite/own.go` pins each by digest. Their recipes are
+no longer in the tree: the pinned digests are what the columns grade against,
+and must not be deleted from the package.
 
 **`make suite` can be scoped to a column.** `ARGS='-column zsh,dash'` runs only
 those, which is what a change to how one column reaches its reference actually

@@ -618,7 +618,7 @@ var Panel = []Suite{
 		MustReport:    "zsh",
 		// 5.9.2 rather than 5.9, and the distinction is the one #4106 had to
 		// make for bash. It is free here: the suite is the 5.9.2 tag's, and
-		// `images/zsh-5.9.2/Dockerfile` already establishes that Debian sid
+		// the zsh column's pinned image already establishes that Debian sid
 		// packages 5.9.2 — so this column is graded against the build it
 		// names from its first run, rather than acquiring a banner later.
 		Against:       "zsh 5.9.2",

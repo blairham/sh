@@ -15,6 +15,13 @@ import (
 // Dialect is what bash 5 parses.
 func Dialect() syntax.Dialect {
 	d := syntax.Core()
+	// A process substitution written in a subscript is held as its laid-out
+	// text — see syntax.Dialect.ProcSubstInSubscriptIsReprinted. Through the
+	// function listing's own reader, asked when a body is met rather than
+	// built here, since that reader parses with this very dialect.
+	d.ProcSubstInSubscriptIsReprinted = func(body string) (string, bool) {
+		return FunctionLayout().CommandSubstitutionIsReprinted(body)
+	}
 	// A NUL byte in the program's text is not there. See the flag.
 	d.SourceDropsNulBytes = true
 	// `$[expr]`, the older spelling of `$((expr))`. Measured

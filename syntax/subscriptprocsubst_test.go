@@ -63,7 +63,7 @@ func TestProcSubstInSubscriptIsReadAsTheTextItWasWrittenWith(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			w := wordOf(t, d, tc.src)
-			got := syntax.ProcSubstInSubscriptAsText(w, tc.isSubscript)
+			got := syntax.ProcSubstInSubscriptAsText(w, tc.isSubscript, nil)
 			var kinds []syntax.SpanKind
 			var text string
 			for _, sp := range got.Spans {
@@ -92,10 +92,10 @@ func TestProcSubstInSubscriptIsReadAsTheTextItWasWrittenWith(t *testing.T) {
 func TestAWordWithNoProcSubstIsHandedBackUntouched(t *testing.T) {
 	d := syntax.Dialect{ProcessSubstitution: true, ArraySubscript: true}
 	w := wordOf(t, d, "1+1")
-	if got := syntax.ProcSubstInSubscriptAsText(w, true); got != w {
+	if got := syntax.ProcSubstInSubscriptAsText(w, true, nil); got != w {
 		t.Errorf("= %p, want the word itself at %p", got, w)
 	}
-	if got := syntax.ProcSubstInSubscriptAsText(nil, true); got != nil {
+	if got := syntax.ProcSubstInSubscriptAsText(nil, true, nil); got != nil {
 		t.Errorf("nil = %v, want nil", got)
 	}
 }

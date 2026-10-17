@@ -70,6 +70,11 @@ func (r *Runner) firedAt() int {
 	// Semantics.ExitTrapFiresWhereTheScriptStopped. Asked only behind a no,
 	// so a refusal above is not followed by a second one.
 	if r.sem().ExitTrapFiresPastTheEnd == No && r.ask(r.sem().ExitTrapFiresWhereTheScriptStopped, "where the EXIT trap counts as having fired") {
+		if r.dotStoppedAt.inner != 0 && r.dotStoppedAt.dot == r.line {
+			// The script stopped on a `.`, so it stopped inside the file.
+			// See Runner.dotStoppedAt.
+			return r.dotStoppedAt.inner
+		}
 		return r.line
 	}
 	return 1
@@ -242,3 +247,7 @@ func (t TrapListingSequence) String() string {
 // Diagnostics.ParseFailureIsLocatedWhereTheProgramGotTo and
 // Runner.reachedLine.
 func (r *Runner) LineReached() int { return r.reachedLine }
+
+// dotStop is Runner.dotStoppedAt: the line of a `.` and the line its file
+// stopped on, both as a location names them.
+type dotStop struct{ dot, inner int }

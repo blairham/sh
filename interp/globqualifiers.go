@@ -178,6 +178,13 @@ type globQualifiers struct {
 	// code sees the files in — and by keepQualified, which hands back the
 	// words the code chose. See interp/globqualcode.go.
 	runsCode bool
+	// markDirs and listTypes are `M` and `T`: `markdirs`, and its form that
+	// writes a character for every type of file, for this one pattern. A `^`
+	// in front turns either off, `markdirs` included. markFollow is whether
+	// a `-` stood in force when the last of them was read, which makes the
+	// mark answer for a link's target. See Runner.globMark.
+	markDirs, listTypes globNumeric
+	markFollow          bool
 	// picks is ranges with the arithmetic done, filled by fieldQualifiers.
 	// The parser has no Runner and a subscript is an *expression* — `*([i])`
 	// and `*([1+1])` both name the second match — so the two halves are
@@ -431,6 +438,18 @@ func parseGlobQualifiers(list string) (globQualifiers, string, bool) {
 			if negate {
 				q.numeric = globNumericOff
 			}
+		case 'M', 'T':
+			// Not tests: what the names are *written* as. See Runner.globMark.
+			state := globNumericOn
+			if negate {
+				state = globNumericOff
+			}
+			if c == 'M' {
+				q.markDirs = state
+			} else {
+				q.listTypes = state
+			}
+			q.markFollow = follow
 		case 'N':
 			q.allowNoMatch = true
 		case 'D':

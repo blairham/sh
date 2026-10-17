@@ -4,6 +4,7 @@
 package interp
 
 import (
+	"io/fs"
 	"os"
 	"slices"
 	"strings"
@@ -1730,12 +1731,25 @@ func (r *Runner) glob(field string) ([]string, bool) {
 	// dirs; nil where no code ran, which is every list but one with `e` or
 	// `+` in it.
 	var replaced [][]string
+	// What each name is written with after it, which is part of the name an
+	// `e` qualifier's code is shown. See Runner.globMark.
+	mark := r.globMark(quals)
+	marked := render
+	if mark != nil {
+		marked = func(d string) (string, bool) {
+			w, ok := render(d)
+			if !ok {
+				return w, ok
+			}
+			return w + mark(d+trail), true
+		}
+	}
 	if hasQuals {
 		// Narrowed here, on the absolute paths the walk produced, because a
 		// type test is a question about a file and the relative names below
 		// are not what would answer it.
 		var kept bool
-		dirs, replaced, kept = r.keepQualified(dirs, quals, render)
+		dirs, replaced, kept = r.keepQualified(dirs, quals, marked)
 		if !kept {
 			return nil, false
 		}
@@ -1784,13 +1798,11 @@ func (r *Runner) glob(field string) ([]string, bool) {
 		if replaced != nil {
 			// The words the code chose, as many as it chose — none at all
 			// for an empty `reply` — each one a match of its own with the
-			// path's stat behind it, and each marked as the path would be:
-			// measured, `setopt markdirs; print *(e:'REPLY=x$REPLY':)` is
-			// `… xd/ …`.
+			// path's stat behind it. Not marked again: the code was shown
+			// the marked name, so `setopt markdirs; print
+			// *(e:'REPLY=x$REPLY':)` is `… xd/ …` and `*(e:'REPLY+=q':)` is
+			// `d/q`, where marking the code's answer wrote `dq/` (#6726).
 			for _, rw := range replaced[i] {
-				if r.markDirs {
-					rw = r.markedDirectory(rw, d)
-				}
 				out = append(out, rw)
 				if keepPaths {
 					paths = append(paths, d)
@@ -1798,8 +1810,8 @@ func (r *Runner) glob(field string) ([]string, bool) {
 			}
 			continue
 		}
-		if r.markDirs {
-			w = r.markedDirectory(w, d)
+		if mark != nil {
+			w += mark(d + trail)
 		}
 		out = append(out, w)
 		if keepPaths {
@@ -1854,16 +1866,67 @@ func (r *Runner) glob(field string) ([]string, bool) {
 	return out, false
 }
 
-// markedDirectory is one shell's `markdirs`: a directory the pattern produced
-// is written with a slash after it — even one the pattern already ended in.
-// Measured 2026-10-02 on zsh 5.9.2, `setopt markdirs; print tmp*` is `tmpcd/
-// tmpfile1 tmpfile2` beside a directory `tmpcd`, and `print */` is `tmpcd//`
-// (#5155).
-func (r *Runner) markedDirectory(w, path string) string {
-	if fi, err := r.stat(path); err == nil && fi.IsDir() {
-		return w + "/"
+// globMark is what a name the pattern produced is written with after it, or
+// nil where nothing is: one shell's `markdirs`, and the `M` and `T`
+// qualifiers that turn it and its every-type form on or off for one pattern.
+//
+// `markdirs` writes a slash after a directory — even one the pattern already
+// ended in: measured 2026-10-02 on zsh 5.9.2, `setopt markdirs; print tmp*` is
+// `tmpcd/ tmpfile1 tmpfile2` beside a directory `tmpcd`, and `print */` is
+// `tmpcd//` (#5155). `T` writes a character for every file. Measured
+// 2026-10-16 on zsh 5.9.2, `-f`, over a directory holding one of each (#6726):
+//
+//	print *(T)        `a ` regular, `x*` executable, `d/` directory, `lnk@`
+//	                  link, `f|` fifo, `s=` socket; `/dev/null(T)` is `%`
+//	print *(-T)       a link answers for its target: `dl/`, `xl*`, `lnk `,
+//	                  and one that leads nowhere stays `@`; `*(T-)` does not
+//	print *(M)        `d/` alone, and a link to a directory is not one —
+//	                  as `markdirs` itself, where this followed the link
+//	print *(MT^M)     as `T`: `^` turns `M` off and leaves `T`'s slash
+//	setopt markdirs; print *(^M)   no slash
+//
+// The mark is part of the name before an `e` qualifier's code sees it —
+// `*(Te:'REPLY+=q':)` is `a q d/q …`, and `[[ -f $REPLY ]]` is false for
+// `a ` — and before a modifier: `*(T:u)` is `A  D/ …`.
+func (r *Runner) globMark(q globQualifiers) func(path string) string {
+	types := q.listTypes == globNumericOn
+	dirs := q.markDirs == globNumericOn || (r.markDirs && q.markDirs != globNumericOff)
+	if !types && !dirs {
+		return nil
 	}
-	return w
+	follow := q.markFollow
+	return func(path string) string {
+		// The path with the slash a pattern ending in one wrote, which
+		// resolves a link to a directory through it: `setopt markdirs;
+		// print */` is `d// dl//`, measured, where `print *` is `d/ dl`.
+		f := globFile{r: r, path: path}
+		info := f.info(follow)
+		if info == nil {
+			return ""
+		}
+		mode := info.Mode()
+		if mode.IsDir() {
+			return "/"
+		}
+		if !types {
+			return ""
+		}
+		switch {
+		case mode&fs.ModeSymlink != 0:
+			return "@"
+		case mode&fs.ModeNamedPipe != 0:
+			return "|"
+		case mode&fs.ModeSocket != 0:
+			return "="
+		case mode&fs.ModeCharDevice != 0:
+			return "%"
+		case mode&fs.ModeDevice != 0:
+			return "#"
+		case mode&0o111 != 0:
+			return "*"
+		}
+		return " "
+	}
 }
 
 // fieldExclusions peels a field's top-level `~` exclusions off, returning the

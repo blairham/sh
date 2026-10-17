@@ -219,10 +219,11 @@ var Ours = []Suite{
 		//
 		// **So the build was put in an image rather than the claim loosened.**
 		// Debian sid packages 5.9.2 as of 2026-09-20, which none of the
-		// earlier sweeps found; images/zsh-5.9.2 is that package over a
-		// digest-pinned base, and it runs the two kill probes above at build
-		// time, so an image that is not this reference fails to build rather
-		// than being discovered later through a banner. #3480.
+		// earlier sweeps found; the image below is that package over a
+		// digest-pinned base, and its recipe ran the two kill probes above at build
+		// time, so an image that was not this reference failed to build rather
+		// than being discovered later through a banner. #3480. The recipe is
+		// no longer in the tree; the digest is the reference.
 		//
 		// CrossHere for the reason the bash column carries it: grading wants a
 		// pinned reference and the cross-check wants every reference in one
@@ -326,14 +327,15 @@ var Ours = []Suite{
 		// put, would grade cmd/dash against a shell answering three of its own
 		// cases differently from the one they were written beside.
 		//
-		// **So the build is made rather than found.** images/dash-0.5.12
-		// compiles upstream's tarball — pinned by content, since the
+		// **So the build was made rather than found.** The image below
+		// compiled upstream's tarball — pinned by content, since the
 		// distribution mirror's orig archive and upstream's own host serve the
 		// same 241KB byte for byte — over a digest-pinned base, and puts it at
 		// /bin/dash over the distribution's own so the image holds one dash and
 		// a lookup cannot pick the wrong one. It runs AgainstProbe above
-		// verbatim at build time, so an image that is not this reference fails
-		// to build. #3480.
+		// verbatim at build time, so an image that was not this reference
+		// failed to build. #3480. The recipe is no longer in the tree; the
+		// digest is the reference.
 		//
 		// CrossHere for the reason the bash column carries it: the cross-check
 		// asks whether the references on one machine agree with each other,

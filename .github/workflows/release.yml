@@ -3,10 +3,9 @@ name: Release
 # A `v*` tag is the whole trigger, which is this tree's release convention:
 # green CI on main → tag → this workflow → the tap is updated. The release
 # itself is blairham/.github's go-release.yml: the tests, GoReleaser (one
-# archive per platform carrying all six binaries, the Homebrew formula, and
-# the six scratch images on ghcr.io), keyless cosign over checksums.txt and
-# over each image by digest (`signs` and `docker_signs` in .goreleaser.yaml),
-# and SLSA build provenance for the archives and the images. The signing
+# archive per platform carrying all six binaries, and the Homebrew formula),
+# keyless cosign over checksums.txt (`signs` in .goreleaser.yaml), and SLSA
+# build provenance for the archives. The signing
 # identity is go-release.yml itself; SECURITY.md shows how to verify it.
 #
 # `workflow_dispatch` re-runs a tag that already exists, for the case where
@@ -37,9 +36,6 @@ jobs:
     name: Release
     permissions:
       contents: write # the GitHub release and its assets
-      # The six container images go to ghcr.io in the same run -- see
-      # `dockers_v2` in `.goreleaser.yaml`.
-      packages: write
       # Keyless cosign and the provenance attestations both sign with the
       # workflow's OIDC identity.
       id-token: write
@@ -57,13 +53,6 @@ jobs:
       # against a record made on another machine -- see AGENTS.md for why that
       # is report-only in CI. A release must not fail on it.
       test-command: make test
-      images: >-
-        ["ghcr.io/blairham/sh/scratch/sh",
-         "ghcr.io/blairham/sh/scratch/bash",
-         "ghcr.io/blairham/sh/scratch/zsh",
-         "ghcr.io/blairham/sh/scratch/ksh",
-         "ghcr.io/blairham/sh/scratch/dash",
-         "ghcr.io/blairham/sh/scratch/ash"]
     secrets:
       HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
       MACOS_SIGN_P12: ${{ secrets.MACOS_SIGN_P12 }}
@@ -71,50 +60,3 @@ jobs:
       MACOS_NOTARY_ISSUER_ID: ${{ secrets.MACOS_NOTARY_ISSUER_ID }}
       MACOS_NOTARY_KEY_ID: ${{ secrets.MACOS_NOTARY_KEY_ID }}
       MACOS_NOTARY_KEY: ${{ secrets.MACOS_NOTARY_KEY }}
-
-  # The published index, pulled back and run. CI's `packaging` job smokes the
-  # same six images on every pull request that touches the recipe, but it
-  # builds them with `--snapshot`, which never creates the **multi-platform
-  # index** -- it loads one image per architecture and stops. The index is
-  # made by the release and nowhere else, so this is the only place a broken
-  # one can be caught. One architecture is enough for that: if the index were
-  # wrong, the runner's own pull is what would fail.
-  #
-  # The roster is go-release.yml's `digests` output -- each image and the
-  # index digest GoReleaser recorded -- rather than a list written here, so a
-  # seventh image is smoked the day it is added to `images` above. Pulled by
-  # digest, so this answers for exactly what was published and attested.
-  smoke:
-    name: Does the published index run?
-    needs: release
-    if: ${{ !inputs.dry-run }}
-    runs-on: ubuntu-latest
-    steps:
-      - name: Run each published image
-        env:
-          DIGESTS: ${{ needs.release.outputs.digests }}
-        run: |
-          set -euo pipefail
-          mapfile -t rows < <(jq -r 'to_entries[] | "\(.key)@\(.value)"' <<<"$DIGESTS")
-          if [ "${#rows[@]}" -eq 0 ]; then
-            echo "::error::the release reported no image digests -- this step proved nothing"
-            exit 1
-          fi
-          err=$(mktemp)
-          status=0
-          for ref in "${rows[@]}"; do
-            # ghcr.io/blairham/sh/scratch/bash@sha256:… -> bash
-            name=${ref%@*}; name=${name##*/}
-            # stderr separately, not folded in: `docker run` writes the pull's
-            # progress and any platform note there, and a comparison that read
-            # it would fail on output the shell never produced.
-            got=$(docker run --rm "$ref" -c 'echo $0' 2>"$err") || true
-            if [ "$got" != "/bin/$name" ]; then
-              echo "::error::$ref answered [$got], wanted [/bin/$name]"
-              sed 's/^/    /' "$err"
-              status=1
-            else
-              echo "$ref: ok"
-            fi
-          done
-          exit "$status"

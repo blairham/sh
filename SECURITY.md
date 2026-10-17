@@ -68,26 +68,12 @@ gh attestation verify sh_Linux_x86_64.tar.gz --repo blairham/sh \
   --signer-workflow blairham/.github/.github/workflows/go-release.yml
 ```
 
-**Images.** Each of the six `ghcr.io/blairham/sh/scratch/*` images is signed
-by digest, and carries provenance in the registry beside it:
-
-```sh
-cosign verify "ghcr.io/blairham/sh/scratch/bash:${VERSION#v}" \
-  --certificate-identity-regexp '^https://github\.com/blairham/\.github/\.github/workflows/go-release\.yml@' \
-  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
-  --certificate-github-workflow-repository blairham/sh
-gh attestation verify "oci://ghcr.io/blairham/sh/scratch/bash:${VERSION#v}" --repo blairham/sh \
-  --signer-workflow blairham/.github/.github/workflows/go-release.yml
-```
-
 The macOS binaries are additionally Developer ID signed and notarized.
 
 **Tags released before the move to blairham/.github** (`v0.0.23` through
 `v0.0.30`) were signed by this repository's own `release.yml`. Verify those
 with `--certificate-identity "https://github.com/blairham/sh/.github/workflows/release.yml@refs/tags/$VERSION"`
-in place of the identity flags above (for an image,
-`--certificate-identity-regexp '^https://github\.com/blairham/sh/\.github/workflows/release\.yml@refs/'`),
-without `--signer-workflow`; their provenance asset is `sh.intoto.jsonl`.
+in place of the identity flags above, without `--signer-workflow`; their provenance asset is `sh.intoto.jsonl`.
 
 ## Reporting a vulnerability
 

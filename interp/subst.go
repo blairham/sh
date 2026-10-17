@@ -1015,6 +1015,34 @@ func (r *Runner) spanLineBase(span syntax.Span) int {
 	return r.lineBase + r.substFragmentLine + int(span.Pos.Line) - 1
 }
 
+// substTextBase is where a substitution body's own lines are counted from:
+// the span's place in the script, except where a dialect numbers the older
+// spelling some other way. The one place that says so, for the three that
+// read it — a body that runs, a body that will not parse, and `<file`.
+//
+// Two dialects restart a backquoted body at one —
+// Diagnostics.BackquotedSubstitutionRestartsLines — and BusyBox ash starts it
+// on the line above its opener, never below 0 —
+// Diagnostics.BackquotedBodyIsNumberedFromTheLineAbove (#6716).
+func (r *Runner) substTextBase(span syntax.Span) int {
+	base := r.spanLineBase(span)
+	if !span.Backquoted {
+		return base
+	}
+	switch {
+	case r.diag().BackquotedSubstitutionRestartsLines:
+		return 0
+	case r.diag().BackquotedBodyIsNumberedFromTheLineAbove:
+		// Body line b is reported at the base plus b, and base + 1 is the
+		// opener's own line, so the line above it as the first line is a
+		// base one lower. The floor is a first line of 0 as the route counts
+		// it, which under `-c` is one more than a file's — see
+		// Runner.lineOrigin.
+		return max(base-1, -1-r.lineOrigin)
+	}
+	return base
+}
+
 // substSource is a substitution's body text as the parse that runs it should
 // see it: its own text, and then any here-document bodies the *outer* lexer
 // read for it put back where its own text would have held them.
@@ -1134,10 +1162,7 @@ func (r *Runner) readSubstBody(span syntax.Span) (*syntax.File, int, int, bool) 
 	// the file rather than in whichever body most recently began. One dialect
 	// numbers the older spelling from the top of the body instead, which is
 	// Diagnostics.BackquotedSubstitutionRestartsLines.
-	textBase := r.spanLineBase(span)
-	if span.Backquoted && r.diag().BackquotedSubstitutionRestartsLines {
-		textBase = 0
-	}
+	textBase := r.substTextBase(span)
 	f := p.Parse()
 	// And where its *run* counts from, which is a second question with a
 	// second answer in one dialect — see substRunBase, and

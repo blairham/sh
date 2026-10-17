@@ -347,14 +347,13 @@ func TestDisownIsNotABuiltin(t *testing.T) {
 	}
 }
 
-// This shell numbers a backquoted body from one and a `$( … )` body from the
-// file — two answers for the two spellings of one construct, and the same
-// pair dash gives. Measured 2026-09-18 on BusyBox 1.37.0 in the pinned image,
-// on both routes to the body: a refusal and a `not found` inside “ ` ` “
-// both name `line 1` where the `$( … )` spelling names `line 2` (#2471).
-func TestABackquotedBodyIsNumberedFromOne(t *testing.T) {
-	if !ash.Diagnostics().BackquotedSubstitutionRestartsLines {
-		t.Error("a backquoted body is numbered from one here")
+// This shell numbers a backquoted body from the line above the one it opens
+// on, never below 0, where dash restarts it at 1 — see
+// TestABackquotedBodyStartsOnTheLineAboveItsOpener for the rows (#6716).
+func TestABackquotedBodyIsNotRestartedHere(t *testing.T) {
+	dg := ash.Diagnostics()
+	if dg.BackquotedSubstitutionRestartsLines || !dg.BackquotedBodyIsNumberedFromTheLineAbove {
+		t.Error("a backquoted body is numbered from the line above its opener here, not from one")
 	}
 }
 

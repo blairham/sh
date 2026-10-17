@@ -4800,6 +4800,33 @@ type Diagnostics struct {
 	// answer it would have to refuse to report the line at all.
 	BackquotedSubstitutionRestartsLines bool
 
+	// BackquotedBodyIsNumberedFromTheLineAbove numbers a backquoted
+	// substitution's body with its first line at the line *above* the one
+	// it opens on — never below 0 — and its later lines counting up from
+	// there. BusyBox ash, and only for backticks.
+	//
+	// Measured 2026-10-16 in the pinned
+	// alpine@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b
+	// (BusyBox v1.37.0), a failure inside the body (#6716):
+	//
+	//	script file                                       BusyBox
+	//	x=`nosuch` on line 1                              line 0
+	//	x=`nosuch` on line 4                              line 3
+	//	x=`:⏎nosuch` opening on line 3                    line 3
+	//	x=`:⏎:⏎nosuch` opening on line 5                  line 6
+	//	echo `nosuch` on line 9                           line 8
+	//	x=$(:⏎nosuch) opening on line 3 (control)         line 4
+	//	x=`echo $LINENO` on line 3                        2
+	//
+	// and under `-c`, which counts its lines from 0, the same rule on that
+	// count: `x=`cd /nx`` on the string's first line is `line 0`, on its
+	// fourth `line 2`, and `x=`:⏎cd /nx`` on its first `line 1`.
+	//
+	// This used to be read as BackquotedSubstitutionRestartsLines, dash's
+	// answer, from rows that all had the substitution on line 2 — where the
+	// line above it and a restart at 1 are the same number.
+	BackquotedBodyIsNumberedFromTheLineAbove bool
+
 	// CommandIsLocatedWhereItsFirstWordEnds names a command at the line its
 	// first word ends on rather than at the line it begins on, so a first word
 	// that spans lines — a multi-line substitution, a multi-line quoted string,

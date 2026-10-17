@@ -15,15 +15,14 @@ It is not the same thing as this repository's `ghcr.io/blairham/sh/scratch/*`
 images. Those carry a whole shell, which can exec whatever the image holds; this
 is a diagnostic shell whose answer to exec is always no.
 
-Two front ends, one gate:
+`gated.Main` is the front end: install it as your image's `/bin/sh` and reach
+it with `kubectl exec <pod> -- /bin/sh -c '<script>'` or
+`kubectl exec -i <pod> -- /bin/sh < probe.sh`. `gated.Shell` is the same shell
+as a function call, for a front end of your own. Localiam was its first home
+and is its first consumer.
 
-| Front end | Where | Reach it with |
-|---|---|---|
-| `/bin/sh` | `gated.Main`, as your image's `cmd/sh` | `kubectl exec <pod> -- /bin/sh -c '<script>'` or `kubectl exec -i <pod> -- /bin/sh < probe.sh` |
-| `POST /debug/sh` | `gated.Register` on your `http.ServeMux`, mounted only when you pass a non-empty token | `curl -H "Authorization: Bearer $TOK" --data-binary @probe.sh host:port/debug/sh` |
-
-Both build the same `Shell` with the same `Policy`, so there is one boundary to
-review. Localiam was its first home and is its first consumer.
+The package ships **no network front end**, on purpose: nothing in it accepts
+input from anyone who cannot already exec into the container.
 
 ## Adopting it
 
@@ -89,18 +88,12 @@ ARG TARGETOS TARGETARCH
 COPY ${TARGETOS}/${TARGETARCH}/sh /bin/sh
 ```
 
-**4. Optionally, the HTTP endpoint.** On the mux your service already serves:
-
-```go
-gated.Register(mux, gated.Config{
-	Token:   token,                 // from a Secret; "" mounts nothing
-	Session: os.Getenv("HOSTNAME"),
-	Log:     logger,                // nil means slog.Default
-})
-```
-
-The package reads no environment itself: the token, the session name and the
-logger are yours to supply.
+**4. Optionally, an HTTP front end of your own.** If you want one, wrap
+`Shell.Run` yourself behind your own authentication, return the `Result` (it
+carries JSON tags, including the trail and the `denied` count), and put a
+deadline on the context. Localiam's `internal/shell` does exactly this, with a
+bearer token from a Secret that leaves the endpoint unmounted when empty. The
+package reads no environment itself; the session name is yours to supply.
 
 ## Operating it: what the deployment must get right
 
@@ -115,16 +108,11 @@ none of this can be enforced from inside the package:
    needs a `sleep` binary; the image has none and this shell refuses exec
    anyway. Use `preStop: sleep: {seconds: 5}` (Kubernetes >= 1.30), and HTTP or
    gRPC probes rather than `exec` ones.
-3. **The token comes from a Secret, and an empty token unmounts the endpoint.**
-   `Register` mounts nothing without one, so a 404 from `/debug/sh` is proof the
-   endpoint is off. Read it with `secretKeyRef.optional: true` so a missing
-   Secret leaves the endpoint off rather than failing the pod.
-4. **The endpoint must not be reachable from the internet.** If it shares a
-   port with your service, never route that path through an Ingress or a public
-   load balancer, and restrict the port with a NetworkPolicy so the token is not
-   the only control.
+3. **If you add your own HTTP front end**, it is a remote shell into the pod
+   however tightly the gate holds: authenticate it, mount it only when its
+   secret is present, and never make it reachable from the internet.
 
-`/bin/sh` needs no token: it is reachable only by someone who can already
+`/bin/sh` needs no credential of its own: it is reachable only by someone who can already
 `kubectl exec`, which is its own authorization.
 
 ## What it can do
@@ -155,15 +143,15 @@ this table.
 | Action | Answer |
 |---|---|
 | `exec`, anything | **Refused, unconditionally**, including a path that exists, so adding a binary to the image later does not widen it. |
-| `signal` | Refused. pid 1 is the service, and an endpoint that can `kill` it is a liveness probe with extra steps. |
+| `signal` | Refused. pid 1 is the service, and a shell that can `kill` it is a liveness probe with extra steps. |
 | open for **write** | Refused, including inside the roots. `> /proc/sys/...` is a real write on a real kernel knob. |
 | read outside `ReadRoots` | Refused. Default roots are `/proc` and `/sys/fs/cgroup`. Paths are cleaned first, so `/proc/1/../../etc/shadow` is tested as `/etc/shadow`. |
 | read `*/environ` | Refused, although it sits inside an allowed root. See below. |
 | `stat` an ancestor of a root | **Allowed.** Globbing stats each component on the way down, and refusing `stat /proc` made `/proc/1/*` collapse to the literal pattern with exit status 0. Existence of a directory on the way to a root leaks nothing. |
 | an action kind added by a later interpreter | Refused, so an upgrade's failure mode is a diagnostic that stops working rather than a boundary that quietly widened. |
 
-Every action, allowed or refused, is recorded. The HTTP response carries the
-trail and a `denied` count; `/bin/sh` prints a summary of refusals to stderr.
+Every action, allowed or refused, is recorded. A `Result` carries the trail
+and a `denied` count; `/bin/sh` prints a summary of refusals to stderr.
 That matters because **an empty answer and a refused answer look identical on
 stdout.**
 
@@ -174,8 +162,8 @@ the gate is asked about is refused on that basis alone.
 ### Why `environ` is a deny rather than a comment
 
 `/proc/<pid>/environ` is where a service's credentials arrive, including the
-endpoint's own token, and it is inside `/proc`. Without the deny,
-`read -r v < /proc/1/environ` returns every variable. The first probe of it came
+token of any front end you put before this shell, and it is inside `/proc`.
+Without the deny, `read -r v < /proc/1/environ` returns every variable. The first probe of it came
 back *empty*, which read as safe and was not: it used `while read`, and a file
 with no trailing newline never runs a `while read` body. Real dash behaves
 identically. `TestTheEnvironmentIsRefusedInsideTheRoots` uses the bare `read`
@@ -183,9 +171,9 @@ for that reason and fails if the deny is removed.
 
 ## Bounds
 
-8 KiB of script, 256 KiB of output per stream, 4096 trail records, a 5-second
-deadline on the HTTP path (the interpreter checks the context at every
-command). Each run gets a fresh interpreter, so no variable, function or cwd
+8 KiB of script, 256 KiB of output per stream and 4096 trail records. `Run`
+stops when its context does (the interpreter checks it at every command), so a
+front end of your own should pass one with a deadline. Each run gets a fresh interpreter, so no variable, function or cwd
 survives between two scripts, and there is deliberately no interactive mode.
 
 `Main` always runs with `DefaultPolicy`. A front end that needs other roots

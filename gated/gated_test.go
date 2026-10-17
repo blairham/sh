@@ -5,9 +5,6 @@ package gated_test
 
 import (
 	"context"
-	"encoding/json"
-	"net/http"
-	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -197,78 +194,6 @@ func TestTheDenialAndItsActionShareAnID(t *testing.T) {
 	}
 	if d[0].ID == "" || d[0].ID == d[1].ID {
 		t.Fatalf("two runs of the same command share or lack an id: %q and %q", d[0].ID, d[1].ID)
-	}
-}
-
-// TestTheEndpointIsAbsentWithoutAToken is the fail-closed direction, and it
-// asserts the 404 rather than Register's bool, because 404 is what an operator
-// checking a deployment actually sees.
-func TestTheEndpointIsAbsentWithoutAToken(t *testing.T) {
-	mux := http.NewServeMux()
-	if gated.Register(mux, gated.Config{Token: ""}) {
-		t.Fatal("registered with no token")
-	}
-
-	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, gated.Path, strings.NewReader("echo hi")))
-	if rec.Code != http.StatusNotFound {
-		t.Fatalf("want 404 with no token, got %d", rec.Code)
-	}
-}
-
-func TestTheEndpointRefusesAWrongToken(t *testing.T) {
-	mux := http.NewServeMux()
-	if !gated.Register(mux, gated.Config{Token: "right"}) {
-		t.Fatal("did not register with a token")
-	}
-
-	for name, auth := range map[string]string{
-		"absent": "",
-		"wrong":  "Bearer wrong",
-		"raw":    "right",
-	} {
-		t.Run(name, func(t *testing.T) {
-			req := httptest.NewRequest(http.MethodPost, gated.Path, strings.NewReader("echo hi"))
-			if auth != "" {
-				req.Header.Set("Authorization", auth)
-			}
-			rec := httptest.NewRecorder()
-			mux.ServeHTTP(rec, req)
-			if rec.Code != http.StatusForbidden {
-				t.Fatalf("want 403, got %d", rec.Code)
-			}
-		})
-	}
-}
-
-func TestTheEndpointRunsAndReturnsTheTrail(t *testing.T) {
-	root, _ := readableRoot(t)
-	mux := http.NewServeMux()
-	gated.Register(mux, gated.Config{
-		Token:  "right",
-		Policy: &gated.Policy{ReadRoots: []string{root}},
-	})
-
-	req := httptest.NewRequest(http.MethodPost, gated.Path, strings.NewReader("echo "+root+"/*; /bin/echo nope"))
-	req.Header.Set("Authorization", "Bearer right")
-	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("want 200, got %d: %s", rec.Code, rec.Body.String())
-	}
-	var res gated.Result
-	if err := json.Unmarshal(rec.Body.Bytes(), &res); err != nil {
-		t.Fatalf("decode: %v", err)
-	}
-	if !strings.Contains(res.Stdout, "status") {
-		t.Fatalf("glob output missing: %q", res.Stdout)
-	}
-	if strings.Contains(res.Stdout, "nope") {
-		t.Fatalf("the exec ran: %q", res.Stdout)
-	}
-	if res.Denied == 0 {
-		t.Fatalf("want the exec denial in the response trail: %+v", res.Trail)
 	}
 }
 

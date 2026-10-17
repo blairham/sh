@@ -24,9 +24,9 @@ report can hold it to:
   socket; whoever holds its stdio is its client.
 - **The `gated` package** (`gated/README.md`) is a shell that refuses every
   exec and signal, opens nothing for writing, and reads only under its
-  configured roots with `environ` refused inside them. Its HTTP endpoint is
-  not mounted without a token. It cannot vouch for the image it is installed
-  in: beside another shell or userland it protects nothing.
+  configured roots with `environ` refused inside them. It has no network
+  front end. It cannot vouch for the image it is installed in: beside another
+  shell or userland it protects nothing.
 
 ## Supported versions
 
@@ -112,7 +112,7 @@ In scope, among others:
 - a policy file that loads while dropping or misreading a rule
 - the ACP front end running anything its gate refused
 - the `gated` shell executing, signaling, writing, or reading outside its
-  roots, or its endpoint answering without the right token
+  roots
 - the history file or the block store being created readable by other
   users (both are `0600`), or written outside the paths configured for them
 

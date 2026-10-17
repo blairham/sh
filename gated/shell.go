@@ -16,11 +16,11 @@ import (
 )
 
 const (
-	// maxScript bounds the request body. A diagnostic is a few lines.
+	// maxScript bounds a script. A diagnostic is a few lines.
 	maxScript = 8 << 10
 	// maxOutput bounds what a script may write back. `echo /proc/*/status`
 	// under a `while read` loop can produce megabytes from a pod with many
-	// threads, and the response is buffered.
+	// threads, and the output is buffered.
 	maxOutput = 256 << 10
 	// maxRecords bounds the audit trail. See Recorder.
 	maxRecords = 4096
@@ -65,7 +65,7 @@ type Shell struct {
 //
 // The dialect is dash. It is the smallest of the five presets the interpreter
 // ships, it is what an operator's muscle memory for `sh` expects, and a
-// diagnostic endpoint has no use for the bash and zsh surface, arrays,
+// diagnostic shell has no use for the bash and zsh surface, arrays,
 // coprocesses, process substitution, beyond the parameter expansion and
 // globbing that dash already has. A smaller grammar is a smaller thing to be
 // wrong about.
@@ -106,8 +106,8 @@ func (s *Shell) Run(ctx context.Context, src string, args ...string) (Result, er
 		// the interpreter is naming something this package did not set up,
 		// and Policy.reachable can refuse it on that basis alone.
 		Dir: "/",
-		// No environment. The service's env holds its credentials, and an
-		// endpoint that can print it is a secret-exfiltration primitive with
+		// No environment. The service's env holds its credentials, and a
+		// shell that can print it is a secret-exfiltration primitive with
 		// an audit trail attached. Nothing here needs it, and the same data
 		// at /proc/<pid>/environ is refused by the gate (see DenyNames).
 		Env: []string{},
@@ -127,7 +127,7 @@ func (s *Shell) Run(ctx context.Context, src string, args ...string) (Result, er
 		Truncated: stdout.truncated || stderr.truncated,
 	}
 	// A non-zero status is a result, not an error: a denied command is a
-	// command that failed, and the whole point of this endpoint is to hand
+	// command that failed, and the whole point of this shell is to hand
 	// that back with the trail that explains it. Only a runner-level failure
 	// is an error, and a deadline is reported as itself so the caller can
 	// tell "your script was stopped" from "your script was wrong".

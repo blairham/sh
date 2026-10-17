@@ -90,7 +90,7 @@ refuses what every real shell accepts is a core nobody can write against.
                       parser as a product rather than as test scaffolding
     gated/            a /bin/sh for distroless and scratch images that
                       cannot exec: the dash dialect behind a deny-by-default
-                      gate, as gated.Main and an HTTP endpoint — public,
+                      gate, as gated.Main — public, no network front end,
                       promoted from blairham/localiam, its first consumer
     internal/acp      the Agent Client Protocol, both roles
     internal/mcp      the Model Context Protocol, as a server (#1338)

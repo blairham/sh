@@ -34,10 +34,10 @@ type Record struct {
 
 // Recorder is the event sink: a bounded slice of Records.
 //
-// Bounded because the endpoint hands the trail back in the response, and an
-// unbounded audit buffer is a memory amplifier reachable by anyone who can
-// reach the endpoint, `for i in 1 2 3 ...; do echo /proc/*; done` emits an
-// event per access. Over the cap, records are dropped and the count is
+// Bounded because a Result carries the whole trail, and an unbounded audit
+// buffer is a memory amplifier reachable by anyone who can run a
+// script: `for i in 1 2 3 ...; do echo /proc/*; done` emits an event per
+// access. Over the cap, records are dropped and the count is
 // reported, which is the honest failure: a truncated trail that says it was
 // truncated beats a complete one that costs the process its heap.
 type Recorder struct {

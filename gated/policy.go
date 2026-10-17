@@ -26,7 +26,7 @@ import (
 // That is not a hardening measure bolted on afterwards; it is the shape of the
 // feature. There is nothing to exec, and a gate that says so can never be
 // talked into finding something later, an operator who adds a binary to the
-// image does not thereby widen this endpoint.
+// image does not thereby widen this shell.
 type Policy struct {
 	// ReadRoots are the path prefixes an open or a stat may reach. A path is
 	// cleaned before it is compared, so `/proc/1/../../etc/shadow` is tested
@@ -55,13 +55,13 @@ type Policy struct {
 // DefaultDenyNames is what a Policy refuses when DenyNames is nil.
 var DefaultDenyNames = []string{"environ"}
 
-// DefaultPolicy is what the endpoint runs with unless a caller overrides it.
+// DefaultPolicy is what a Shell runs with unless a caller overrides it.
 //
 // /proc is the whole point. /sys/fs/cgroup answers the memory-limit question
 // that /proc gets wrong in a container, which is the single most common thing
 // a person execs in to check. Nothing else is listed, deliberately: a
 // service's config and credentials arrive as env and as files outside these
-// roots, and an endpoint that can read /proc must not be able to read those.
+// roots, and a shell that can read /proc must not be able to read those.
 func DefaultPolicy() *Policy {
 	return &Policy{
 		ReadRoots: []string{"/proc", "/sys/fs/cgroup"},
@@ -83,7 +83,7 @@ func (p *Policy) Allow(_ context.Context, a interp.Action) interp.Decision {
 
 	case interp.ActionSignal:
 		// The shell can address any process in the pod's PID namespace, and
-		// pid 1 is the service itself. A diagnostic endpoint that can SIGKILL the
+		// pid 1 is the service itself. A diagnostic shell that can SIGKILL the
 		// service it is diagnosing is a liveness probe with extra steps.
 		p.denied.Add(1)
 		return interp.Deny

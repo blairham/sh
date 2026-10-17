@@ -26440,6 +26440,26 @@ An error in a function the body calls skips it too; one the body survives
 scope runs its trap on every row. bash, dash and BusyBox ash have no
 function-local EXIT trap to ask about.
 
+**`InteractiveScriptIsReadAtAPrompt`** — bash no · dash yes · ksh93 no · zsh no
+
+Reads `-i FILE` the way a prompt is read: PS1 before each line that starts a
+command, PS2 before each line that continues one, read afresh each time, and
+the closing newline at the end of the input. The file's own line numbers are
+kept. On the macOS /bin/dash, `env -i PS1='P> ' PS2='C> ' dash -i FILE
+</dev/null`, standard error after the job-control remark (#6805):
+
+| file | dash |
+| --- | --- |
+| `echo a` ⏎ `echo b` | `P> P> P> \n` |
+| `echo a` ⏎ `if true` ⏎ `then echo $LINENO` ⏎ `fi` ⏎ `nosuch` ⏎ `echo $LINENO` | `P> P> C> C> P> d3.sh: 5: …` `P> P> \n`, `$LINENO` 3 and 6 |
+| `echo a; echo b` ⏎ (blank) ⏎ `# c` ⏎ `cat <<E` ⏎ `x` ⏎ `E` ⏎ `exit 3` | `P> P> P> P> C> C> P> `, status 3 |
+| `echo $(` ⏎ `echo z)` ⏎ `x=1 PS1="Q> "` ⏎ `echo done` | `P> C> P> Q> Q> \n` |
+| `echo a` ⏎ `)` ⏎ `echo b` | `P> P> ` the diagnostic `P> \n`, status 2, `b` not run |
+
+`dash -i -c` draws nothing. In the last row the prompt drawn after the
+failure finds nothing to read: the rest of the file came in with the block
+the failed line was read from, and a prompt's error discards that block.
+
 **`InteractiveRewindableStdinIsAScript`** — bash no · dash no · ksh93 yes · zsh no
 
 Reads an interactive shell's standard input as a script when it is a

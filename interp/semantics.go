@@ -21063,6 +21063,35 @@ type Semantics struct {
 	// pins it.
 	InteractiveScriptEndOfInputEndsTheLine bool
 
+	// InteractiveScriptIsReadAtAPrompt reads an interactive shell's script
+	// file — `-i FILE` — the way a prompt is read: PS1 is drawn before each
+	// line that starts a command and PS2 before each line that continues
+	// one, and the end of the file ends the line as the prompt's end of input
+	// does (PromptEndOfInputEndsTheLine). The file's lines are still numbered
+	// as a file's.
+	//
+	// dash's. Measured 2026-10-16 on the macOS /bin/dash, `env -i PS1='P> '
+	// PS2='C> ' dash -i FILE </dev/null`, standard error after the job-control
+	// remark (#6805):
+	//
+	//	echo a ⏎ echo b                         P> P> P> \n
+	//	echo a ⏎ if true ⏎ then echo $LINENO ⏎ fi ⏎ nosuch ⏎ echo $LINENO
+	//	                                         P> P> C> C> P> d3.sh: 5: … P> P> \n
+	//	echo a; echo b ⏎ (blank) ⏎ # c ⏎ cat <<E ⏎ x ⏎ E ⏎ exit 3
+	//	                                         P> P> P> P> C> C> P>, status 3
+	//	echo $( ⏎ echo z) ⏎ x=1 PS1="Q> " ⏎ echo done
+	//	                                         P> C> P> Q> Q> \n
+	//	echo a \ ⏎ b ⏎ echo c                   P> C> P> P> \n
+	//
+	// with `$LINENO` 3 and 6 on the second, which is the file's numbering.
+	// `dash -i -c` draws nothing (#6805). ksh93 reads both routes as a prompt
+	// without drawing one (PromptNumbersEachInputFromOne), BusyBox ash draws
+	// none and writes only the closing newline
+	// (InteractiveScriptEndOfInputEndsTheLine), and bash and zsh neither.
+	//
+	// Read by the front end, for the reason PromptEndOfInputEndsTheLine is.
+	InteractiveScriptIsReadAtAPrompt bool
+
 	// PromptAgainForAnUnterminatedLine is the prompt drawn once more when
 	// the input of a prompt that is not a terminal ends partway through a
 	// line, before that line is run.

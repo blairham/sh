@@ -78,6 +78,11 @@ type program struct {
 	// see driver/historygate.go, where the design and what it replaced are
 	// written down.
 	gate *histGate
+
+	// prompt draws the prompt before each line is read, where the program is
+	// read at one: continuing says the line continues a command. Nil for
+	// every program that is not. See Semantics.InteractiveScriptIsReadAtAPrompt.
+	prompt func(continuing bool)
 }
 
 // handOver puts the text the program has not run yet behind a history gate,
@@ -309,6 +314,9 @@ func (pr *program) fill(retire bool) bool {
 	// until a remark arrived that a whole one-line program can raise: a
 	// program that ends part-way through a construct never gets here, which
 	// is the shape the here-document remark has.
+	if pr.prompt != nil {
+		pr.prompt(!retire)
+	}
 	text, ok := pr.more()
 	if !ok {
 		pr.more = nil
@@ -348,6 +356,9 @@ func (pr *program) fill(retire bool) bool {
 			// four answers the lexer already has. Only ever reached by a
 			// line ending in a backslash.
 			pr.gate.open, pr.gate.heredocExpands = openIn(pr.pending, pr.dialect)
+		}
+		if pr.prompt != nil {
+			pr.prompt(true)
 		}
 		next, ok := pr.more()
 		if !ok {
@@ -465,4 +476,39 @@ func (b *blockReader) read(in io.Reader) string {
 		b.carry = append([]byte(nil), data[i+1:]...)
 		return string(data[:i+1])
 	}
+}
+
+// scriptReadAtAPrompt is a script file's program read the way a prompt reads
+// it: a line at a time, with PS1 drawn before a line that starts a command and
+// PS2 before one that continues one, on standard error, rendered as the prompt
+// renders them and read afresh each time — a line that assigns PS1 changes the
+// next prompt. See interp.Semantics.InteractiveScriptIsReadAtAPrompt.
+//
+// The whole text is in hand, so the lines are cut from it rather than read
+// from a descriptor; what the parser sees is what fill hands it, exactly as a
+// program on standard input is fed.
+func scriptReadAtAPrompt(r *interp.Runner, src string, whole *program) *program {
+	pr := wholeProgram("", whole.dialect)
+	pr.eachLineFromOne = whole.eachLineFromOne
+	rest := src
+	pr.more = func() (string, bool) {
+		if rest == "" {
+			return "", false
+		}
+		line := rest
+		if i := strings.IndexByte(rest, '\n'); i >= 0 {
+			line = rest[:i+1]
+		}
+		rest = rest[len(line):]
+		return line, true
+	}
+	pr.prompt = func(continuing bool) {
+		name := "PS1"
+		if continuing {
+			name = "PS2"
+		}
+		v, _ := r.GetVar(name)
+		_, _ = io.WriteString(r.Err(), r.RenderPrompt(v))
+	}
+	return pr
 }

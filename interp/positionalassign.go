@@ -22,6 +22,33 @@ import (
 // machine cannot serve.
 const positionalAssignLimit = 1 << 20
 
+// positionalIndex is the position a name of decimal digits reads, and -1 for
+// one too wide for the machine's integer — a position past the end of any
+// list, so it is read as unset and stored nowhere. Every reader of `$N` asks
+// this rather than parsing the digits itself: a parse that wraps on overflow
+// handed `${9223372036854775808}` a negative index, which panicked the shell
+// in every dialect (#6849).
+//
+// What such an index reads is a different artifact in each shell in the
+// panel, measured 2026-10-16: bash 5.3.20 wraps `${18446744073709551617}` to
+// `$1`, ksh93u+ reads `${9223372036854775808}` as `$0`, and zsh 5.9.2 reads
+// the 19 digits it kept. None of those is a reading; past the end is.
+func positionalIndex(name string) (int, bool) {
+	if name == "" {
+		return 0, false
+	}
+	for i := 0; i < len(name); i++ {
+		if name[i] < '0' || name[i] > '9' {
+			return 0, false
+		}
+	}
+	n, err := strconv.Atoi(name)
+	if err != nil {
+		return -1, true
+	}
+	return n, true
+}
+
 // positionalAssignIndex reports the positional parameter an assignment's name
 // points at, when the name is a run of decimal digits.
 //

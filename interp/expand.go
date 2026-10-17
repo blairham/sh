@@ -4629,7 +4629,7 @@ func (r *Runner) assignedThrough(name, v string) string {
 }
 
 func (r *Runner) storeThroughExpansion(name, v string) {
-	n, ok := atoi(name)
+	n, ok := positionalIndex(name)
 	if !ok || !isPositional(name) {
 		// A store that retypes a hidden name takes the word off it. See
 		// Runner.storeForgetsARetypedHide.
@@ -4639,6 +4639,12 @@ func (r *Runner) storeThroughExpansion(name, v string) {
 		// Marked here rather than at the two operators, which both come
 		// through: `${name:=word}` and `${name::=word}` (#6441).
 		r.markAnExpansionsStoreForAllexport(name)
+		return
+	}
+	if n < 0 {
+		// Too wide for any list: stored nowhere, with the warning the
+		// dialect gives every store to such a position. See positionalIndex.
+		r.warnATruncatedPosition(name)
 		return
 	}
 	if n == 0 {
@@ -8013,7 +8019,11 @@ func (r *Runner) specialParam(e *syntax.ParamExpr) (string, bool) {
 		p := r.params()
 		return strings.Join(p, r.unsplitJoinSeparator(e.Name == "*", len(p))), true
 	}
-	if n, ok := atoi(e.Name); ok {
+	if n, ok := positionalIndex(e.Name); ok {
+		if n < 0 {
+			// Too wide for any list. See positionalIndex.
+			return "", false
+		}
 		if n == 0 {
 			// A digit run worth nothing is `$0`, however it was spelled.
 			// Measured 2026-09-15 across the whole panel — bash 5.3, bash

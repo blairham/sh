@@ -107,3 +107,58 @@ func dupFile(f *os.File, floor int) (*os.File, int, error) {
 	// points at a substitution's pipe before the path is taken away.
 	return os.NewFile(uintptr(dup), f.Name()), dup, nil
 }
+
+// raiseScriptFile moves a file a redirection opened into privateCopyFloor's
+// band and closes the original, in a dialect that publishes process
+// substitutions, answering the file the script's table holds.
+//
+// The script's descriptor is in this shell's table at the number the script
+// names, and in the kernel's at whatever number the open returned — the
+// lowest free one. A substitution asks the kernel which numbers are free, so
+// a file left there was counted at its real number, which no shell being
+// imitated holds, and the substitution stepped over it: `exec 5</dev/null;
+// echo <(true)` was `/dev/fd/4` in the ksh dialect where ksh93u+ answers 3,
+// `{ echo <(true); } 2>/dev/null; :` the same, and each file the script
+// opened cost one more number (#6662). Up in the band it is out of the way of
+// every dialect's first answers, as the shell's own ends of a substitution's
+// and a pipeline's pipes are (see raiseShellEnd).
+//
+// A best effort, as those are: a band that is full, or a refusal, leaves the
+// file where the open put it.
+func (r *Runner) raiseScriptFile(f *os.File) *os.File {
+	if !r.lang().ProcessSubstitution {
+		return f
+	}
+	conn, err := f.SyscallConn()
+	if err != nil {
+		return f
+	}
+	moved := -1
+	if cerr := conn.Control(func(fd uintptr) {
+		got, err := fcntlInt(int(fd), syscall.F_DUPFD_CLOEXEC, privateCopyFloor)
+		if err != nil {
+			return
+		}
+		if got >= kernelFirstTable {
+			// The band is full, and a copy above it would grow the kernel's
+			// table. See privateCopyFloor.
+			_ = syscall.Close(got)
+			return
+		}
+		moved = got
+	}); cerr != nil || moved < 0 {
+		return f
+	}
+	// And in blocking mode, for raiseShellEnd's reason: the copy shares the
+	// open file description, Go opens a pipe or a FIFO non-blocking, and the
+	// program the file is handed to meets EAGAIN on an empty one — measured,
+	// `head` answered `Resource temporarily unavailable` on Linux. The file
+	// answered is one Go did not open, so the mode is the description's.
+	if err := syscall.SetNonblock(moved, false); err != nil {
+		_ = syscall.Close(moved)
+		return f
+	}
+	raised := os.NewFile(uintptr(moved), f.Name())
+	_ = f.Close()
+	return raised
+}

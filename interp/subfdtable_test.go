@@ -315,3 +315,28 @@ func TestAFileTestOnABorrowedNumberAsksAboutThePipe(t *testing.T) {
 		}
 	}
 }
+
+// A file a redirection opened is counted at the number the script names and
+// not at the number the open landed on, which a substitution published from
+// the lowest free number would otherwise step over: ksh93u+ answers
+// `/dev/fd/3` to every row (#6662). In a quiet table, where 3 is the lowest
+// free number. See Runner.raiseScriptFile.
+func TestAScriptsFileIsNotInASubstitutionsWay(t *testing.T) {
+	if measuredInAQuietDescriptorTable(t) {
+		return
+	}
+	low := freeFdsAlong(t, 3, 200, 1)[0]
+	for _, src := range []string{
+		// Numbers no process here holds, so the only thing in the way can be
+		// the files' real numbers.
+		`exec 21</dev/null; echo <(true); exec 21<&-`,
+		`exec 21</dev/null 22</dev/null 23</dev/null; echo <(true); exec 21<&- 22<&- 23<&-`,
+		`{ echo <(true); } 2>/dev/null`,
+		`exec {v}</dev/null; echo <(true); exec {v}<&-`,
+	} {
+		out := runSubstPlacement(t, SubstitutionEndsAtTheLowestFreeNumber, AllocateDescriptorsFromTen, nil, src, nil)
+		if want := "/dev/fd/" + strconv.Itoa(low) + "\n"; out != want {
+			t.Errorf("%s: got %q, want %q", src, out, want)
+		}
+	}
+}

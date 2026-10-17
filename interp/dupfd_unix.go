@@ -129,13 +129,36 @@ func (r *Runner) raiseScriptFile(f *os.File) *os.File {
 	if !r.lang().ProcessSubstitution {
 		return f
 	}
-	raised, n, err := dupFile(f, kernelFirstTable)
-	if err != nil || n >= kernelFirstTable {
-		if raised != nil {
-			_ = raised.Close()
-		}
+	conn, err := f.SyscallConn()
+	if err != nil {
 		return f
 	}
+	moved := -1
+	if cerr := conn.Control(func(fd uintptr) {
+		got, err := fcntlInt(int(fd), syscall.F_DUPFD_CLOEXEC, privateCopyFloor)
+		if err != nil {
+			return
+		}
+		if got >= kernelFirstTable {
+			// The band is full, and a copy above it would grow the kernel's
+			// table. See privateCopyFloor.
+			_ = syscall.Close(got)
+			return
+		}
+		moved = got
+	}); cerr != nil || moved < 0 {
+		return f
+	}
+	// And in blocking mode, for raiseShellEnd's reason: the copy shares the
+	// open file description, Go opens a pipe or a FIFO non-blocking, and the
+	// program the file is handed to meets EAGAIN on an empty one — measured,
+	// `head` answered `Resource temporarily unavailable` on Linux. The file
+	// answered is one Go did not open, so the mode is the description's.
+	if err := syscall.SetNonblock(moved, false); err != nil {
+		_ = syscall.Close(moved)
+		return f
+	}
+	raised := os.NewFile(uintptr(moved), f.Name())
 	_ = f.Close()
 	return raised
 }

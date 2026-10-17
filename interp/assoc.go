@@ -220,7 +220,7 @@ func (r *Runner) setAssocElemAs(name, key, value string, kind ElementKind) {
 		// about. See Runner.MarkProducedTableFrozenByKey.
 		return
 	}
-	if r.refuseAFrozenTableStore(name) {
+	if r.refuseAFrozenTableStore(name, kind) {
 		return
 	}
 	if write, ok := r.dynamicAssocWriters[name]; ok {
@@ -1811,8 +1811,11 @@ func (r *Runner) tableLiteralRefusesAWholeArrayKey(e literalElem) bool {
 // table took their writes in silence (#6826). The form is the one an indexed
 // element's refusal is asked with in setArrayElem, so the two kinds of array
 // answer alike.
-func (r *Runner) refuseAFrozenTableStore(name string) bool {
-	if r.arithKeyReadCreating || !r.freezeRefuses(name, assignedAsTheCompoundView) {
+func (r *Runner) refuseAFrozenTableStore(name string, kind ElementKind) bool {
+	// A key declared and holding nothing is not a write either: measured
+	// 2026-10-16 on ksh93u+, `typeset -A m; readonly m; typeset m[k]` is 0
+	// and lists `([k]=)` (#6536).
+	if kind == ElementDeclaredAndEmpty || r.arithKeyReadCreating || !r.freezeRefuses(name, assignedAsTheCompoundView) {
 		return false
 	}
 	if r.arithStoringAnElement && r.ask(r.sem().ArithStoreIntoAFrozenTableIsTaken,

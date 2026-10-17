@@ -3824,9 +3824,14 @@ func (r *Runner) arithTreeRead(text string) (syntax.ArithExpr, error) {
 // substitution on the right-hand side twice, which is the mistake #1915 was.
 func (r *Runner) arithTreeOver(tree syntax.ArithExpr, text string, origin arithTextOrigin) (syntax.ArithExpr, string, error) {
 	if tree != nil && !r.arithPrecedenceOptionInCharge() {
-		return tree, text, nil
+		return tree, r.writtenArithTextShown(text, origin), nil
 	}
 	expanded := r.expandArithText(text, origin)
+	if !strings.ContainsAny(text, "$`") {
+		// Nothing was expanded, so the removal the parse-time reader makes
+		// has not been made on the text this hands back to be shown.
+		expanded = r.writtenArithTextShown(text, origin)
+	}
 	p := syntax.NewParser("", r.dialect())
 	// Read as the *result* it now is. A `$` still standing after the
 	// expansion came out of a value, and begins no operand: measured
@@ -3850,6 +3855,24 @@ func (r *Runner) arithTreeOver(tree syntax.ArithExpr, text string, origin arithT
 		return nil, shown, r.shownArithFailure(err)
 	}
 	return out, shown, nil
+}
+
+// writtenArithTextShown is a written expression's text as the dialect that
+// removes its double quotes shows it, in a trace and in a refusal: measured
+// 2026-10-16 on bash 5.3.20 from a file, `(( c = "1" ))` traces `((  c = 1
+// ))`, `(( a["x"]=3 ))` traces `a[x]=3`, and `$(( "1"+ ))` refuses `1+ `,
+// where `let 'c="1"+'` keeps its quotes. The reader already evaluated it
+// so; only the text it was shown as kept them (#6777). An expression with an
+// expansion in it is joined without them already, by expandArithText.
+func (r *Runner) writtenArithTextShown(text string, origin arithTextOrigin) string {
+	if origin != arithTextWritten || r.lang().ArithDoubleQuote != syntax.ArithDoubleQuoteRemoved ||
+		!strings.Contains(text, `"`) || strings.ContainsAny(text, "$`\\") {
+		// A backslash too: bash turns `\"` into a quote character there, and
+		// the reader's removal does not model that, so the text is left as it
+		// was rather than shown as a third thing.
+		return text
+	}
+	return syntax.RemoveArithDoubleQuotes(text)
 }
 
 // arithTextOrigin says whether text handed to [Runner.arithTreeOver] is the

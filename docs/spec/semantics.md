@@ -26440,6 +26440,22 @@ An error in a function the body calls skips it too; one the body survives
 scope runs its trap on every row. bash, dash and BusyBox ash have no
 function-local EXIT trap to ask about.
 
+**`InteractiveCommandStringErrorGoesOnToAPrompt`** — BusyBox ash yes, the rest no
+
+An interactive `-c` string that hits an error a shell that is not
+interactive would end at goes on to a prompt on standard input, as if the
+string had been its startup: `$?` there is the error's status, and `$0`, the
+parameters, variables and functions carry over. BusyBox v1.37.0 in the pinned
+alpine image, `PS1='P> ' sh -i -c …` (#6693):
+
+| string, standard input | BusyBox |
+| --- | --- |
+| `echo )`, `/dev/null` | the error, `P> \n`, status 2 |
+| `echo )`, `echo from-stdin` | the error, `P> from-stdin`, `P> \n`, 0 |
+| `: ${zz?boom}`, `readonly r=1; r=2`, `echo $((1/0))`, `eval "echo )"` | the error, then the prompt with `$?` 2 |
+| `echo x; exit 4` | `x`, status 4, no prompt |
+| `set -e; false` | status 1, no prompt |
+
 **`InteractiveScriptIsReadAtAPrompt`** — bash no · dash yes · ksh93 no · zsh no
 
 Reads `-i FILE` the way a prompt is read: PS1 before each line that starts a

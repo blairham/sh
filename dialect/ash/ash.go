@@ -2530,6 +2530,10 @@ func Semantics() interp.Semantics {
 	// And the end of an interactive script's file, measured in the pinned
 	// image (#6695). See Semantics.InteractiveScriptEndOfInputEndsTheLine.
 	s.InteractiveScriptEndOfInputEndsTheLine = true
+	// And an error that would end `-i -c` goes on to a prompt on standard
+	// input instead (#6693). See
+	// Semantics.InteractiveCommandStringErrorGoesOnToAPrompt.
+	s.InteractiveCommandStringErrorGoesOnToAPrompt = true
 	// And an unterminated last line has its prompt drawn again. See
 	// Semantics.PromptAgainForAnUnterminatedLine (#6331).
 	s.PromptAgainForAnUnterminatedLine = interp.SamePromptForAnUnterminatedLine

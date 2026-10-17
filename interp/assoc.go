@@ -789,6 +789,10 @@ func (r *Runner) assignAssocLiteral(name string, elems []*syntax.ArrayElem, appe
 	if !ok {
 		return
 	}
+	if r.tableLiteralIsStoredAsItIsExpanded(elems) {
+		r.assignAssocElemsAsTheyExpand(name, elems, reads, appendTo, refuseBare)
+		return
+	}
 	parsed, ok := r.literalElems(elems, reads,
 		r.bareLiteralElementIsOneValue(name, elems, false))
 	if !ok {
@@ -1826,4 +1830,74 @@ func (r *Runner) refuseAFrozenTableStore(name string, kind ElementKind) bool {
 		return true
 	}
 	return r.refuseReadonly(name, assignedAsTheCompoundView)
+}
+
+// tableLiteralIsStoredAsItIsExpanded reports whether a keyed literal over a
+// table is built a pair at a time. Every element has to carry its key — a
+// literal with a bare word in it is paired off as a whole — and none may have
+// been expanded already, by a trace or a declaration, since expanding it a
+// second time would run it twice. See
+// Semantics.TableLiteralStoresEachElementAsItIsExpanded.
+func (r *Runner) tableLiteralIsStoredAsItIsExpanded(elems []*syntax.ArrayElem) bool {
+	if len(elems) == 0 {
+		return false
+	}
+	for _, el := range elems {
+		if el.Word == nil || el.Nested != nil || !syntax.SubscriptedElement(el.Word) {
+			return false
+		}
+	}
+	if e := r.expanded; e != nil && e.elemsSet && sameWordList(e.assign.Elems, elems) {
+		return false
+	}
+	return r.ask(r.sem().TableLiteralStoresEachElementAsItIsExpanded,
+		"a keyed literal over a table stored a pair at a time as it is expanded")
+}
+
+// assignAssocElemsAsTheyExpand is that pair-at-a-time build: the table is
+// emptied unless the literal appends, and each element is expanded, stored
+// and traced before the next is expanded. An element that will not expand
+// ends the literal with the pairs before it stored, which is
+// Semantics.FailedSubscriptedLiteralKeepsWhatItStored's reading reached by
+// construction; a refused element ends it the same way.
+func (r *Runner) assignAssocElemsAsTheyExpand(name string, elems []*syntax.ArrayElem, reads, appendTo, refuseBare bool) {
+	if !appendTo {
+		r.assignAssocElems(name, nil, false, refuseBare)
+		if r.ctl != controlNone || r.unspecified {
+			return
+		}
+	}
+	bareOne := r.bareLiteralElementIsOneValue(name, elems, false)
+	for i := range elems {
+		parsed, ok := r.literalElems(elems[i:i+1], reads, bareOne)
+		if !ok {
+			return
+		}
+		r.assignAssocElems(name, parsed, true, refuseBare)
+		if r.ctl != controlNone || r.unspecified || r.assignmentGaveUp() {
+			return
+		}
+		r.traceAnElementAsItIsStored(name, parsed)
+	}
+}
+
+// traceAnElementAsItIsStored writes the line of one element a pair-at-a-time
+// build has just stored, in the dialect that traces a keyed literal as the
+// element writes it performs. See Runner.assignAssocElemsAsTheyExpand.
+func (r *Runner) traceAnElementAsItIsStored(name string, parsed []literalElem) {
+	e := r.expanded
+	if e == nil || !e.elementsTracedAsStored || !r.tracing() {
+		return
+	}
+	lines, ok := r.traceLiteralAsElementWrites(&syntax.Assign{Name: name, IsArray: true},
+		&expandedAssign{elems: parsed, elemsSet: true}, *r.diag())
+	if !ok {
+		return
+	}
+	d := r.diag()
+	for _, line := range lines {
+		r.awaitTraceTurn()
+		r.traceLine(line, *d)
+		r.releaseTraceTurn()
+	}
 }

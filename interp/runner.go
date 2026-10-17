@@ -15419,7 +15419,7 @@ func (r *Runner) assignAll(ctx context.Context, assigns []*syntax.Assign) {
 		// A keyed literal's lines, in the column that writes one per element,
 		// are written by the store as it places each element rather than
 		// before or after the whole of it. See interp/xtraceelementlines.go.
-		held := separately && r.elementLinesFollowTheirStores(a, prepared[i])
+		held := separately && (prepared[i].elementsTracedAsStored || r.elementLinesFollowTheirStores(a, prepared[i]))
 		if separately && !after && !held {
 			r.traceAssignments(assigns[i:i+1], values[i:i+1], prepared[i:i+1])
 		}
@@ -15456,6 +15456,14 @@ func (r *Runner) assignAll(ctx context.Context, assigns []*syntax.Assign) {
 // in it.
 func (r *Runner) prepareTracedAssign(a *syntax.Assign, value string) *expandedAssign {
 	e := &expandedAssign{assign: a, value: value}
+	if a.IsArray && a.Members == nil && a.Index == nil && !a.Operand && r.assocDeclared(a.Name) &&
+		r.sem().TraceSubscriptedArrayLiteralIsElementAssignments == Yes &&
+		r.tableLiteralIsStoredAsItIsExpanded(a.Elems) {
+		// Expanded by the store a pair at a time, which writes each pair's
+		// line as it goes. See Runner.assignAssocElemsAsTheyExpand (#6770).
+		e.elementsTracedAsStored = true
+		return e
+	}
 	if a.IsArray && a.Members == nil && a.Index == nil && len(a.Elems) > 0 &&
 		!r.frozenLiteralIsRefusedBeforeItsWords(a) &&
 		r.ask(r.sem().TraceArrayLiteralShowsTheExpandedElements,
@@ -15573,6 +15581,11 @@ type expandedAssign struct {
 	// how many have gone out. See Runner.traceStoredElementLine (#6683).
 	elementLines        []string
 	elementLinesWritten int
+
+	// elementsTracedAsStored says a keyed literal is built a pair at a time
+	// and each pair's line is written by the store. See
+	// Runner.assignAssocElemsAsTheyExpand.
+	elementsTracedAsStored bool
 }
 
 // resolvedNestedElement records what an element write that stores an array

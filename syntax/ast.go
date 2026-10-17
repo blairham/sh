@@ -524,7 +524,11 @@ type Assign struct {
 	// same reason Redirect.Text exists, and the same shape.
 	//
 	// Only what stands between the brackets, so a reader adds the name and
-	// the brackets itself, exactly as it does for the expanded reading.
+	// the brackets itself, exactly as it does for the expanded reading — and
+	// all of it, blanks included: measured 2026-10-16 on bash 5.3.20,
+	// `a[ -9 ]=x` is `a[ -9 ]: bad array subscript`, and `a[ @ ]=x` is not
+	// the whole-array spelling there or in ksh93u+ but arithmetic that
+	// refuses `@ ` (#6866).
 	IndexText string
 	// Leading holds the subscripts written *before* Index, in written order,
 	// where the grammar lets an assignment's name carry several:

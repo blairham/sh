@@ -14,3 +14,6 @@ import (
 // platform hands a child — the same absence childFiles answers, so a shell
 // there shares the table entry as it did before ownDescriptors existed.
 func dupFile(*os.File, int) (*os.File, int, error) { return nil, 0, errors.ErrUnsupported }
+
+// raiseScriptFile leaves the file where it is, for dupFile's reason.
+func (r *Runner) raiseScriptFile(f *os.File) *os.File { return f }

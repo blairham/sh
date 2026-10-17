@@ -1253,6 +1253,9 @@ func (r *Runner) applyRedirList(ctx context.Context, rs []*syntax.Redirect, comp
 			// trail fed by the error path alone held every file the shell could
 			// not open and none it could.
 			r.emit(ctx, Event{Kind: EventAccess, Action: action})
+			// Out of the way of the numbers a substitution is published
+			// from. See Runner.raiseScriptFile.
+			f = r.raiseScriptFile(f)
 			// The name as the script named it, kept for the one caller that has
 			// to word a failure of its own *after* this succeeded. See
 			// Runner.openedName.

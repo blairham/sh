@@ -273,6 +273,8 @@ func Semantics() interp.Semantics {
 	// found` at 127, where bash and zsh run `fg` on it. See
 	// interp.Semantics.JobSpecCommandWord.
 	s.JobSpecCommandWord = interp.JobSpecCommandWordIsNotOne
+	// unanswered ArithSubscriptDollarSingleIsDecoded: no `$'…'` in an arithmetic
+	// subscript reaches a reading that takes its quotes off here. See the field.
 
 	s.ArithmeticOnlyBodyIsAnArithmeticExpansion = interp.No
 	// unanswered DebugActionArmingErrExitSkipsTheCommand: the same, and

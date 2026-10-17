@@ -7304,7 +7304,14 @@ func (l *Lexer) scanArithCommand(start Pos) (Token, bool) {
 			// the quote is an ordinary character and the `)` behind it is
 			// counted like any other. See
 			// Dialect.ArithCommandScanIgnoresQuoting for the rows.
-			if l.dialect.ArithCommandScanIgnoresQuoting {
+			//
+			// Inside a subscript's brackets the quotes are seen in that
+			// dialect too, so a quoted bracket or parenthesis is the key's
+			// and not the scan's: measured 2026-10-16 on ksh93u+ 2012-08-01,
+			// `(( a["["]=1 ))`, `(( a["]"]=1 ))` and `(( a[")"]=1 ))` each
+			// store under that one character, where this refused the line as
+			// `)' unexpected` (#6772).
+			if l.dialect.ArithCommandScanIgnoresQuoting && brackets == 0 {
 				l.advance()
 				continue
 			}

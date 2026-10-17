@@ -1017,6 +1017,9 @@ func (r *Runner) traceArithCommand(text string, spelling TraceArithSpelling) {
 	if !r.tracing() {
 		return
 	}
+	if r.diag().TraceArithSubscriptQuotesRemoved {
+		text = traceArithSubscriptsUnquoted(text)
+	}
 	r.awaitTraceTurn()
 	defer r.releaseTraceTurn()
 	var line string
@@ -1891,4 +1894,73 @@ func (r *Runner) traceNestedElementWrite(name, sub string, appended bool, value 
 		}
 	}
 	return name + "[" + sub + "]" + op + wrapArrayLiteral(strings.Join(words, " "), d.TraceArrayLiteral)
+}
+
+// traceArithSubscriptsUnquoted is an arithmetic expression with the quotes
+// taken off every subscript in it and a bracket left in a key escaped, for the
+// dialect that traces it so. See Diagnostics.TraceArithSubscriptQuotesRemoved.
+// A subscript whose quotation does not close is left as written.
+func traceArithSubscriptsUnquoted(text string) string {
+	if !strings.ContainsAny(text, `'"\$`) {
+		return text
+	}
+	var b strings.Builder
+	for i := 0; i < len(text); i++ {
+		if text[i] != '[' || i == 0 || !isNameByte(text[i-1]) {
+			b.WriteByte(text[i])
+			continue
+		}
+		end := subscriptCloser(text, i+1)
+		if end < 0 {
+			b.WriteString(text[i:])
+			break
+		}
+		inner := text[i+1 : end]
+		if bare, removed := subscriptQuoteRemoval(inner, func(body string) string { return body }); removed {
+			inner = strings.NewReplacer("[", `\[`, "]", `\]`).Replace(bare)
+		}
+		b.WriteString("[" + inner + "]")
+		i = end
+	}
+	return b.String()
+}
+
+// subscriptCloser is where the subscript opened just before from closes,
+// stepping over quotations and nested brackets, or -1.
+func subscriptCloser(s string, from int) int {
+	depth := 0
+	for i := from; i < len(s); i++ {
+		switch s[i] {
+		case '\\':
+			i++
+		case '\'':
+			if i > 0 && s[i-1] == '$' {
+				end := indexUnescaped(s[i+1:], '\'')
+				if end < 0 {
+					return -1
+				}
+				i += end + 1
+				continue
+			}
+			end := strings.IndexByte(s[i+1:], '\'')
+			if end < 0 {
+				return -1
+			}
+			i += end + 1
+		case '"':
+			end := indexUnescaped(s[i+1:], '"')
+			if end < 0 {
+				return -1
+			}
+			i += end + 1
+		case '[':
+			depth++
+		case ']':
+			if depth == 0 {
+				return i
+			}
+			depth--
+		}
+	}
+	return -1
 }

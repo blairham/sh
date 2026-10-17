@@ -1611,6 +1611,8 @@ func Semantics() interp.Semantics {
 	s.ArithFloatOverflowIsZero = interp.No
 	// An expression reading a missing key leaves the table as it was.
 	s.ArithKeyReadCreatesTheElement = interp.No
+	// unanswered ArithSubscriptDollarSingleIsDecoded: no `$'…'` in an arithmetic
+	// subscript reaches a reading that takes its quotes off here. See the field.
 	// See interp.Semantics.ArithStoreIntoAFrozenTableIsTaken (#6826).
 	s.ArithStoreIntoAFrozenTableIsTaken = interp.Yes
 	// A negative exponent is a float answer here, not a refusal: `2**-1`

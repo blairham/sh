@@ -8155,6 +8155,21 @@ type Diagnostics struct {
 	// which is element 0 there (#6609).
 	EmptyTableKeyTraced string
 
+	// TraceArithSubscriptQuotesRemoved writes an arithmetic command's trace
+	// with the quotes taken off its subscripts, and a bracket the removal
+	// leaves in a key escaped with a backslash. Measured 2026-10-16 on ksh93u+
+	// 2012-08-01 under `set -x`, a table `a` declared first:
+	//
+	//	(( a["p q"]=1 + b["x"] ))   + (( a[p q]=1 + b[x] ))
+	//	(( a[""]=3 ))               + (( a[]=3 ))
+	//	(( a[$'x']=1 ))             + (( a[x]=1 ))
+	//	(( a["a\"b"]=4 ))           + (( a[a"b]=4 ))
+	//	(( a["["]=1 )), a["]"]      + (( a[\[]=1 )), a[\]]
+	//
+	// bash and zsh write the expression as the script wrote it (#6683, #6772,
+	// #6773).
+	TraceArithSubscriptQuotesRemoved bool
+
 	// ScalarStoredOverATable is a scalar store — either spelling — over a
 	// name that is holding a table, in the dialect that refuses one instead
 	// of writing the key `0` or replacing the name. One verb, the **name**:

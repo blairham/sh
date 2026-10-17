@@ -4457,15 +4457,30 @@ func (r *Runner) arithSubscriptKeyScan(text string) string {
 // backslash in it — nearly every key a script writes — never demands a
 // dialect for the question.
 func (r *Runner) arithAssocKey(sub string) string {
-	bare, quoted := subscriptQuoteRemoval(sub)
+	// The body of a `$'…'` is taken as written for the first pass, so the
+	// question about decoding it is put only to a dialect that takes the
+	// quotes off at all.
+	_, quoted := subscriptQuoteRemoval(sub, func(body string) string { return body })
 	if !quoted {
 		return syntax.UnmarkArithValue(sub)
 	}
 	if r.ask(r.sem().SubscriptIsAQuotingContext,
 		"an array subscript written inside arithmetic being a quoting context") {
+		bare, _ := subscriptQuoteRemoval(sub, r.arithSubscriptDollarSingle)
 		return bare
 	}
 	return syntax.UnmarkArithValue(sub)
+}
+
+// arithSubscriptDollarSingle is what a `$'…'` quotation in an arithmetic
+// subscript leaves of its body: decoded, or taken as written. See
+// Semantics.ArithSubscriptDollarSingleIsDecoded.
+func (r *Runner) arithSubscriptDollarSingle(body string) string {
+	if r.ask(r.sem().ArithSubscriptDollarSingleIsDecoded,
+		"a `$'…'` quotation in an arithmetic subscript having its escapes decoded") {
+		return r.expandDollarSingle(body)
+	}
+	return body
 }
 
 // subscriptQuoteRemoval performs quote removal on an arithmetic subscript and
@@ -4481,7 +4496,14 @@ func (r *Runner) arithAssocKey(sub string) string {
 // An unterminated quotation removes nothing. The expression will not parse
 // past it in any case, and text that ran off the end is not a key anybody
 // wrote on purpose.
-func subscriptQuoteRemoval(sub string) (string, bool) {
+//
+// dollarSingle is what a `$'…'` quotation's body comes to, which is a
+// dialect's answer; its closing quote is the first one no backslash escapes.
+// Inside double quotes a backslash escapes `"`, `\`, `$` and a backquote and
+// is taken out with it, as it is anywhere else: measured 2026-10-16 on
+// ksh93u+, `(( a["\""]=3 ))` stores under `"` and `(( a["a\"b"]=4 ))` under
+// `a"b`, where this left the quotation whole (#6773).
+func subscriptQuoteRemoval(sub string, dollarSingle func(string) string) (string, bool) {
 	if !strings.ContainsAny(sub, arithValueMarked) {
 		return sub, false
 	}
@@ -4516,7 +4538,27 @@ func subscriptQuoteRemoval(sub string) (string, bool) {
 			}
 			b.WriteByte(sub[i])
 			removed = true
-		case '\'', '"':
+		case '$':
+			if i+1 >= len(sub) || sub[i+1] != '\'' || dollarSingle == nil {
+				b.WriteByte(c)
+				continue
+			}
+			end := indexUnescaped(sub[i+2:], '\'')
+			if end < 0 {
+				return sub, false
+			}
+			b.WriteString(dollarSingle(syntax.UnmarkArithValue(sub[i+2 : i+2+end])))
+			i += end + 2
+			removed = true
+		case '"':
+			end := indexUnescaped(sub[i+1:], c)
+			if end < 0 {
+				return sub, false
+			}
+			b.WriteString(doubleQuotedBody(syntax.UnmarkArithValue(sub[i+1 : i+1+end])))
+			i += end + 1
+			removed = true
+		case '\'':
 			end := indexUnmarked(sub[i+1:], c)
 			if end < 0 {
 				return sub, false
@@ -4529,6 +4571,36 @@ func subscriptQuoteRemoval(sub string) (string, bool) {
 		}
 	}
 	return b.String(), removed
+}
+
+// indexUnescaped is indexUnmarked with a backslash stepping over the byte
+// after it, which is how a double quotation and a `$'…'` one find their end.
+func indexUnescaped(s string, c byte) int {
+	for i := 0; i < len(s); i++ {
+		switch s[i] {
+		case syntax.ArithValueMark, '\\':
+			i++
+		case c:
+			return i
+		}
+	}
+	return -1
+}
+
+// doubleQuotedBody is a double quotation's body with the backslashes that
+// escape something there taken out, and every other one kept.
+func doubleQuotedBody(s string) string {
+	if !strings.Contains(s, `\`) {
+		return s
+	}
+	var b strings.Builder
+	for i := 0; i < len(s); i++ {
+		if s[i] == '\\' && i+1 < len(s) && strings.IndexByte("\"\\$`", s[i+1]) >= 0 {
+			i++
+		}
+		b.WriteByte(s[i])
+	}
+	return b.String()
 }
 
 // indexUnmarked is strings.IndexByte over the bytes a *script* wrote: the one

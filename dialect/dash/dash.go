@@ -141,6 +141,8 @@ func Semantics() interp.Semantics {
 	// found` at 127, where bash and zsh run `fg` on it. See
 	// interp.Semantics.JobSpecCommandWord.
 	s.JobSpecCommandWord = interp.JobSpecCommandWordIsNotOne
+	// unanswered ArithSubscriptDollarSingleIsDecoded: no `$'…'` in an arithmetic
+	// subscript reaches a reading that takes its quotes off here. See the field.
 	// `fg` and `bg` read their options before anything else: measured
 	// 2026-10-04 on dash 0.5.12 with no job control, `bg -x` is `bg: Illegal
 	// option -x`, `bg --version` is `bg: Illegal option --` and `bg --` is

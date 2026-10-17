@@ -9925,6 +9925,20 @@ type Semantics struct {
 	// only where an expression stores into a frozen table (#6826).
 	ArithStoreIntoAFrozenTableIsTaken Answer
 
+	// ArithSubscriptDollarSingleIsDecoded decodes the escapes of a `$'…'`
+	// quotation written in an arithmetic expression's subscript, where the
+	// other reading only takes the quotes off. Measured 2026-10-16, `-c`, a
+	// table `a` declared first:
+	//
+	//	                     bash 5.3.20       ksh93u+
+	//	(( a[$'x']=1 ))      [x]               [x]
+	//	(( a[$'x\ty']=1 ))   [$'x\ty'], a tab  ['x\ty'], backslash and t
+	//
+	// zsh 5.9.2 does not take the quotes off at all (SubscriptIsAQuotingContext)
+	// and keeps `$'x'` as the key, so it never asks; neither do dash and
+	// BusyBox ash, which have no arrays (#6773).
+	ArithSubscriptDollarSingleIsDecoded Answer
+
 	// ArithNegativeExponentIsError refuses `2**-1` rather than answering
 	// with a float. bash says yes and stops the expression; ksh93 and zsh
 	// say no and answer 0.5. It does not arise where the grammar has no

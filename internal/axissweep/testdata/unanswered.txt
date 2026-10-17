@@ -35,6 +35,7 @@ ash   ArithFloatOverflowIsZero
 ash   ArithIntegerOperatorRefusesFloat
 ash   ArithNounsetRefusalIsFatal
 ash   ArithStoreRefusalIsAnError
+ash   ArithSubscriptDollarSingleIsDecoded
 ash   ArithSubscriptNameMustBeSet
 ash   ArithSubscriptSkippedWhenNameUnset
 ash   ArithWholeArraySubscriptIsReportedAsBad
@@ -423,6 +424,7 @@ dash  ArithNounsetRefusalIsFatal
 dash  ArithRecursedNameMustBeSet
 dash  ArithRecursionBound
 dash  ArithStoreRefusalIsAnError
+dash  ArithSubscriptDollarSingleIsDecoded
 dash  ArithSubscriptNameMustBeSet
 dash  ArithSubscriptSkippedWhenNameUnset
 dash  ArithWholeArraySubscriptIsReportedAsBad
@@ -839,6 +841,7 @@ ksh   SubstitutionRunsTheBodyReadWithItsLine
 
 zsh   AliasInvalidNameFatal
 zsh   AliasNameCheckReachesALookup
+zsh   ArithSubscriptDollarSingleIsDecoded
 zsh   ArrayLetterOverAnUnaimedReferenceDropsIt
 zsh   BackgroundJobInputIsOnlyTheShellsOwn
 zsh   BraceFreesProducedGroupSyntax

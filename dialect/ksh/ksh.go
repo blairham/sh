@@ -1106,6 +1106,8 @@ func Semantics() interp.Semantics {
 	s.ArithKeyReadCreatesTheElement = interp.Yes
 	// See interp.Semantics.ArithStoreIntoAFrozenTableIsTaken (#6826).
 	s.ArithStoreIntoAFrozenTableIsTaken = interp.No
+	// See interp.Semantics.ArithSubscriptDollarSingleIsDecoded (#6773).
+	s.ArithSubscriptDollarSingleIsDecoded = interp.No
 	// A negative exponent is a float answer here, not a refusal: `2**-1`
 	// is 0.5.
 	s.ArithNegativeExponentIsError = interp.No
@@ -5715,6 +5717,9 @@ func Diagnostics() interp.Diagnostics {
 		// A store under a table's empty key, and only under `set -x`. See
 		// interp.Diagnostics.EmptyTableKeyTraced (#6609).
 		EmptyTableKeyTraced: "warning: adding empty subscript",
+		// And an arithmetic command is traced with its subscripts' quotes
+		// taken off. See interp.Diagnostics.TraceArithSubscriptQuotesRemoved.
+		TraceArithSubscriptQuotesRemoved: true,
 		// A failed history substitution names what was *typed* here, where
 		// bash names the modifier it rewrote the line into: measured
 		// 2026-09-15 through a pseudo-terminal, `^hello^goodbye^` against a

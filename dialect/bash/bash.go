@@ -1780,6 +1780,8 @@ func Semantics() interp.Semantics {
 	s.ArithKeyReadCreatesTheElement = interp.No
 	// See interp.Semantics.ArithStoreIntoAFrozenTableIsTaken (#6826).
 	s.ArithStoreIntoAFrozenTableIsTaken = interp.No
+	// See interp.Semantics.ArithSubscriptDollarSingleIsDecoded (#6773).
+	s.ArithSubscriptDollarSingleIsDecoded = interp.Yes
 	// unanswered FloatLetterChangeRereadsTheRendering: this shell spells
 	// neither float letter, so no declaration of its own can change one and
 	// there is no rendering for a re-read to be about. Measured 2026-09-26

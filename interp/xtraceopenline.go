@@ -137,10 +137,18 @@ func (r *Runner) assignAllAsItGoes(ctx context.Context, assigns []*syntax.Assign
 			}
 			break
 		}
-		if !e.tracesAfterTheStore {
+		// An element literal's words are written once the store has built
+		// them, which is after a substitution among them has run and before
+		// the subscript is read. See Runner.openTraceTakesTheLiteral (#6764).
+		literalLater := a.IsArray && a.Index != nil && !e.tracesAfterTheStore
+		if !e.tracesAfterTheStore && !literalLater {
 			line.pending += r.traceAssignRest(a, value, e, *d, target)
 		}
+		if literalLater {
+			r.openTraceLiteral = a
+		}
 		r.withPreparedValue(ctx, e)
+		r.openTraceLiteral = nil
 		if e.tracesAfterTheStore {
 			line.pending += r.traceAssignRest(a, value, e, *d, target)
 		}
@@ -241,4 +249,28 @@ func (r *Runner) flushOpenTraceLine() {
 		line.carries.pending = ""
 	}
 	r.tracef("%s", text)
+}
+
+// openTraceTakesTheLiteral writes an element literal's words onto the open
+// trace line, as they were built. Measured 2026-10-15 on zsh 5.9.2 under
+// `-c`, `a=(1 2); set -x; a[$(echo SUB >&2; echo 1)]=(p $(echo VAL >&2))`:
+//
+//	+zsh:1> a[$(echo SUB >&2; echo 1)]=+zsh:1> echo VAL
+//	VAL
+//	+zsh:1> a[$(echo SUB >&2; echo 1)]=( p ) +zsh:1> echo SUB
+//
+// So the line holds the target alone while the literal's own substitution
+// runs and the expanded words by the time the subscript's does, where this
+// wrote the words as the script spelled them on both (#6764).
+func (r *Runner) openTraceTakesTheLiteral(a *syntax.Assign, words []string) {
+	if r.openTraceLiteral != a || r.openTrace == nil || r.openTrace.owner != r {
+		return
+	}
+	r.openTraceLiteral = nil
+	d := r.diag()
+	quoted := make([]string, len(words))
+	for i, w := range words {
+		quoted[i] = r.traceQuote(w, d.TraceQuoting, d.TraceMetacharacters)
+	}
+	r.openTrace.pending += wrapArrayLiteral(strings.Join(quoted, " "), d.TraceArrayLiteral) + " "
 }

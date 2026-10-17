@@ -3122,6 +3122,9 @@ type Runner struct {
 	// arithStoringAnElement says the keyed store in flight is an arithmetic
 	// expression's. See Runner.refuseAFrozenTableStore.
 	arithStoringAnElement bool
+	// openTraceLiteral is the element literal whose words the open trace line
+	// is waiting for. See Runner.openTraceTakesTheLiteral.
+	openTraceLiteral *syntax.Assign
 	// prefixTraceStoppedForNoParent says the prefix walk met an entry whose
 	// store a missing parent will refuse, so the command's line is not
 	// written. See Runner.walkThePrefixBeforeTheRedirections.

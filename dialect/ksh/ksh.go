@@ -5737,7 +5737,13 @@ func Diagnostics() interp.Diagnostics {
 		// only` where `typeset x=2` on the same name is `<script>: line 2:
 		// x: is read only`. One word, two shapes, two sentences — which is
 		// what the second table is for.
-		ReadonlyAttributeRefusalNamesBuiltin: map[string]bool{"typeset": true},
+		//
+		// And `readonly` and `export` for the one attribute refusal they
+		// make: an element declared past the first over a frozen name that
+		// holds nothing, `readonly x[1]; readonly x[2]`, is `readonly: x: is
+		// read only` and `readonly x; export x[2]` is `export: x: is read
+		// only`, measured 2026-10-16 (#6536).
+		ReadonlyAttributeRefusalNamesBuiltin: map[string]bool{"typeset": true, "readonly": true, "export": true},
 		ReadBadFileDescriptor:                "read: bad file unit number [Bad file descriptor]",
 		// And a number that is not one names the letter, not the word, with
 		// the usage under it — see Diagnostics.ReadBadNumberUsageLetters.

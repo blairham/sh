@@ -169,6 +169,18 @@ func (r *Runner) valuelessSubscriptedOperand(base string, subs []string, f decla
 			r.badSubscriptToADeclaration(sub, err)
 			return "", letters, true
 		}
+		if at != 0 && indexed && !r.nameHoldsAnything(base) && r.refuseReadonly(base, attributeRatherThanAValue) {
+			// An element past the first over a frozen name holding nothing
+			// is a write, where the same brackets over a frozen name holding
+			// a value are taken. Measured 2026-10-16 on ksh93u+ 2012-08-01:
+			// `readonly x; typeset x[2]` is `typeset: x: is read only` and
+			// ends the script, and so are `typeset -a x; readonly x;
+			// typeset x[2]` and `readonly x[1]; readonly x[2]`, where
+			// `x=s; readonly x; typeset x[2]`, `x=(a); readonly x; typeset
+			// x[3]`, `x=''; readonly x; typeset x[2]` and `readonly x;
+			// typeset x[0]` are each 0 (#6536).
+			return "", letters, true
+		}
 		if at != 0 {
 			// An element past the first makes the name an indexed array, and
 			// one that has held an element if it is left holding none — see
@@ -464,4 +476,16 @@ func (r *Runner) keptBuiltinLocation(builtin string) string {
 		return builtin
 	}
 	return ""
+}
+
+// nameHoldsAnything reports whether a name holds a value: a string, empty or
+// not, or an array with an element in it. A declared array with none, and a
+// name never assigned, hold nothing.
+func (r *Runner) nameHoldsAnything(name string) bool {
+	name = r.throughNameref(name)
+	if a, held := r.arraysLookup(name); held {
+		return a.Len() > 0
+	}
+	_, ok := r.getVar(name)
+	return ok
 }

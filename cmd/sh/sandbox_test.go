@@ -218,6 +218,22 @@ func TestAnArgvRuleReachesEveryExecTheShellInterprets(t *testing.T) {
 	}
 }
 
+// TestADenyValueCanBeAnArgvRule: `-deny` values are rule bodies parsed by the
+// same package, so `exec-argv:` reaches the gate with no flag of its own.
+func TestADenyValueCanBeAnArgvRule(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	prog := filepath.Join(dir, "git")
+	if err := os.WriteFile(prog, []byte("#!/bin/sh\necho ran \"$@\"\n"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	script := "PATH=" + dir + "\ngit status; echo s1=$?\ngit stash; echo s2=$?\n"
+	got := sandboxed(t, "bash", "-deny", "exec-argv:"+dir+"/git -- stash", "-c", script)
+	if want := "ran status\ns1=0\ns2=126\n"; got.out != want {
+		t.Errorf("out = %q err = %q, want %q", got.out, got.errs, want)
+	}
+}
+
 // TestABadPolicyStopsTheShell, and stops it before anything runs. A policy
 // that will not parse is not a shell that runs unsandboxed.
 func TestABadPolicyStopsTheShell(t *testing.T) {

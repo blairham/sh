@@ -60,10 +60,20 @@ func nonblockingOpener(t *testing.T) func(*Runner) {
 			// nothing this case is about (#1909). os.OpenFile is not the
 			// fix here — the flag has to be on at open time and off
 			// afterwards, which is the whole of what this helper is for.
+			//
+			// And through PathToOpen, as any builtin that does its own open
+			// must: the published number is the one a *command* gets its
+			// table built at, and where this process holds something else on
+			// it — a start's leftover pipe, which a test binary with another
+			// test's jobs still running has on the low numbers — the pipe is
+			// parked elsewhere and an open of the name reaches that other
+			// thing. Opening the raw name read another runner's job's
+			// stderr pipe and blocked until the job ended, which is how this
+			// failed whenever TestTheGateSeesEverySignalThatLeaves ran first.
 			var fd int
 			var err error
 			for {
-				fd, err = syscall.Open(args[0], syscall.O_RDONLY|syscall.O_NONBLOCK, 0)
+				fd, err = syscall.Open(r.PathToOpen(args[0]), syscall.O_RDONLY|syscall.O_NONBLOCK, 0)
 				if !errors.Is(err, syscall.EINTR) {
 					break
 				}

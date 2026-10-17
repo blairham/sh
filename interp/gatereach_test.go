@@ -318,6 +318,14 @@ func TestTheGateSeesEverySignalThatLeaves(t *testing.T) {
 				t.Fatalf("run: %v", err)
 			}
 			jobPID := lastJobPID(t, r)
+			if jobPID > 0 {
+				// The gate refused the signal, so the job is still running
+				// and would outlive this test by half a minute — with its
+				// output pipes open on the low numbers every later test's
+				// substitutions are counted from. Killed here, outside the
+				// shell, because nothing in the shell was allowed to.
+				t.Cleanup(func() { _ = syscall.Kill(jobPID, syscall.SIGKILL) })
+			}
 			mu.Lock()
 			defer mu.Unlock()
 			for _, a := range seen {

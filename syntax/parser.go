@@ -4779,6 +4779,7 @@ func (p *Parser) parseAssign(h assignHead) *Assign {
 		// a grouping, not a substitution. See ProcSubstInSubscriptAsText.
 		a.Index = ProcSubstInSubscriptAsText(
 			p.newWord(h.index, h.index[0].Pos, p.tok.End), true,
+			p.dialect.ProcSubstInSubscriptIsReprinted,
 		)
 		a.IndexFlags = p.assignIndexFlags(h.index)
 		a.IndexText = p.rawBetween(h.from, h.to)
@@ -4820,6 +4821,7 @@ func (p *Parser) parseAssign(h assignHead) *Assign {
 		a.Leading = append(a.Leading, LeadingIndex{
 			Index: ProcSubstInSubscriptAsText(
 				p.newWord(link.spans, link.spans[0].Pos, p.tok.End), true,
+				p.dialect.ProcSubstInSubscriptIsReprinted,
 			),
 			Flags: p.assignIndexFlags(link.spans),
 			Text:  p.textBetween(link.from, link.to),

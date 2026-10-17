@@ -3,6 +3,8 @@
 
 package syntax
 
+import "strings"
+
 // ProcSubstInSubscriptAsText returns w with every process substitution that
 // stands inside an **array subscript** read as the characters it was written
 // with, and w itself where there is none.
@@ -39,7 +41,11 @@ package syntax
 // The substitution is replaced rather than refused, because the text is still
 // an expression — `0<(1)` reads as `0<1`, parentheses and all — and a reader
 // that saw nothing there would take the subscript for `0`.
-func ProcSubstInSubscriptAsText(w *Word, isSubscript bool) *Word {
+//
+// reprint, where it is not nil, lays out the body the way the dialect writes a
+// command substitution's back — see Dialect.ProcSubstInSubscriptIsReprinted —
+// and the text the subscript holds is that laid-out text.
+func ProcSubstInSubscriptAsText(w *Word, isSubscript bool, reprint func(string) (string, bool)) *Word {
 	if w == nil || !wordHoldsProcSubst(w) {
 		return w
 	}
@@ -73,6 +79,16 @@ func ProcSubstInSubscriptAsText(w *Word, isSubscript bool) *Word {
 		case sp.Kind == Literal && sp.Quoting == Unquoted:
 			advance(sp.Value)
 		case isProcSubstSpan(sp.Kind) && scan.Depth > 0:
+			if reprint != nil {
+				if body, ok := reprint(sp.Value); ok {
+					// A body that now opens with a parenthesis keeps a blank in
+					// front of it, as the printer writes one (#6679).
+					if strings.HasPrefix(body, "(") {
+						body = " " + body
+					}
+					sp.Value = body
+				}
+			}
 			text := procSubstSourceText(sp)
 			out.Spans[i] = Span{
 				Kind: Literal, Quoting: Unquoted, Pos: sp.Pos, Value: text,

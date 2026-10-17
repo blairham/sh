@@ -470,8 +470,8 @@ func (r *Runner) evalCondBinary(x *syntax.CondBinary) (bool, error) {
 	if condOpReadsArithmetic(x.Op) {
 		x = &syntax.CondBinary{
 			Op: x.Op,
-			X:  syntax.ProcSubstInSubscriptAsText(x.X, false),
-			Y:  syntax.ProcSubstInSubscriptAsText(x.Y, false),
+			X:  syntax.ProcSubstInSubscriptAsText(x.X, false, r.lang().ProcSubstInSubscriptIsReprinted),
+			Y:  syntax.ProcSubstInSubscriptAsText(x.Y, false, r.lang().ProcSubstInSubscriptIsReprinted),
 		}
 	}
 	// The status the refusal leaves is a property of the **expression** and

@@ -3008,6 +3008,20 @@ type Dialect struct {
 	// is no smaller decoder that would do.
 	HeredocDelimiterValue func(string) string
 
+	// ProcSubstInSubscriptIsReprinted lays out the body of a process
+	// substitution written inside a subscript, which is text there rather
+	// than a substitution — see ProcSubstInSubscriptAsText — the way the
+	// dialect writes a command substitution's body back. Nil keeps the body
+	// as written.
+	//
+	// The laid-out text is what the subscript *holds*, not only what is
+	// printed: measured 2026-10-16 on bash 5.3.20, `declare -A A;
+	// A[<(a;b)]=v` stores the key `<(a; b)`, `set -x; a[<(echo 1 >&2)]=x`
+	// traces `a[<(echo 1 1>&2)]` and refuses `<(echo 1 1>&2)` as arithmetic,
+	// and `declare -f` lists `a[<(a; b)]=1` (#6737). The other dialects keep
+	// the text as written.
+	ProcSubstInSubscriptIsReprinted func(string) (string, bool)
+
 	// DoubledQuoteInSingleQuotesIsALiteralQuote makes a doubled `'` inside a
 	// single-quoted string stand for one literal quote, with the string
 	// carrying on: `''''` is one quote character and `'a''b'` is `a'b`.

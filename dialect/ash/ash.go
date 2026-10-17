@@ -3200,10 +3200,16 @@ func Diagnostics() interp.Diagnostics {
 		// `line 1: syntax error: unexpected ";"` against `line 2` for the
 		// `$( … )` spelling, and `x=`nosuchcmd`` is `line 1: nosuchcmd: not
 		// found` against `line 2`. Both were `line 2` here (#2471).
-		BackquotedSubstitutionRestartsLines: true,
-		UnmatchedBraceSubst:                 "syntax error: missing '}'",
-		UnmatchedArithSubst:                 "syntax error: missing '))'",
-		BadSubstitution:                     "syntax error: bad substitution",
+		//
+		// Re-measured 2026-10-16 with the substitution on other lines, and it
+		// is not a restart: the body starts on the line above its opener,
+		// never below 0 — `x=`nosuch`` is `line 0` on line 1 and `line 3` on
+		// line 4 — and every row above had it on line 2, where the two
+		// readings agree (#6716).
+		BackquotedBodyIsNumberedFromTheLineAbove: true,
+		UnmatchedBraceSubst:                      "syntax error: missing '}'",
+		UnmatchedArithSubst:                      "syntax error: missing '))'",
+		BadSubstitution:                          "syntax error: bad substitution",
 		// And it is placed at the line the reader had reached rather than
 		// the line the command began on — see the field for the rows.
 		BadSubstitutionIsLocatedAtTheReader: true,

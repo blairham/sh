@@ -99,10 +99,7 @@ func (r *Runner) readFileSubst(ctx context.Context, rd *syntax.Redirect, span sy
 	// Runner.runAsItsOwnJob.
 	sub.runAsItsOwnJob(r)
 	sub.inCommandSubst = true
-	sub.lineBase = r.spanLineBase(span)
-	if span.Backquoted && r.diag().BackquotedSubstitutionRestartsLines {
-		sub.lineBase = 0
-	}
+	sub.lineBase = r.substTextBase(span)
 	// A read that works reports success, whatever the status before it was:
 	// measured, `false; v=$(<f); echo $?` is 0 in every shell that has the
 	// form. The clone starts with this runner's status, so leaving it alone

@@ -3848,6 +3848,12 @@ func setBraceGrammar(r *interp.Runner, ignoreBraces, ignoreCloseBraces bool) {
 	// reading under it follows the *opening* name alone: `ignoreclosebraces`
 	// leaves it standing, which is the whole of `print a}` being `a }` there.
 	r.SetBraceReservedWordReadings(!ignoreBraces, !ignoreBraces && !ignoreCloseBraces, !ignoreBraces)
+	// And `{name}` in front of a redirection is an ordinary word under the
+	// opening name, which `ignoreclosebraces` leaves alone: `setopt
+	// ignorebraces` then `exec {w}<f` is `command not found: {w}`, and so is
+	// the same under `emulate sh`, which sets the name. Measured 2026-10-15
+	// on 5.9.2 (#6680).
+	r.SetFdVariableRedirections(!ignoreBraces)
 }
 
 // braceExpansionIgnored reads `ignorebraces` back, which is the substrate's

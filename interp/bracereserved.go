@@ -79,3 +79,19 @@ func (r *Runner) SetBraceReservedWordReadings(open, closing, endsWord bool) {
 	d.CloseBraceEndsAWord = endsWord
 	r.Dialect = &d
 }
+
+// SetFdVariableRedirections moves whether `{name}` in front of a redirection
+// operator is the shell picking a descriptor for the name, for a dialect
+// whose option namespace can take the reading away. See
+// syntax.Dialect.FdVariableRedirections.
+//
+// The dialect is copied and replaced rather than written through, for the
+// reason SetBraceReservedWordReadings is.
+func (r *Runner) SetFdVariableRedirections(on bool) {
+	if r.lang().FdVariableRedirections == on {
+		return
+	}
+	d := r.dialect()
+	d.FdVariableRedirections = on
+	r.Dialect = &d
+}

@@ -1051,7 +1051,14 @@ func (r *Runner) applyRedirList(ctx context.Context, rs []*syntax.Redirect, comp
 				if bothStreams {
 					held = r.holdNumber(false)
 				}
-				fd = r.nextFreeFd(-1)
+				if sub := r.substitutionANameTakes(name, bothStreams); sub >= 0 {
+					// The substitution's own number is the name's. See
+					// substitutionANameTakes.
+					fd = r.procSubs[sub].fd
+					r.releaseConsumedSubstitution(sub)
+				} else {
+					fd = r.nextFreeFd(-1)
+				}
 				if held >= 0 {
 					r.letGoOfNumber(held)
 				}

@@ -537,6 +537,39 @@ func runOwnDescriptorsReading(t *testing.T, own OwnDescriptorNumbers, src string
 	return out.String(), errs.String()
 }
 
+// A `{name}` whose target is this command's process substitution takes the
+// substitution's own number, and the other end's number is the next pick's,
+// measured 2026-10-15 against zsh 5.9.2 (#6789). In a quiet table, because
+// the substitution's number is the kernel's and the name's is this shell's,
+// and only there do the two count from the same place. See
+// Runner.substitutionANameTakes. From a base of 10 here, where zsh's is 11.
+func TestANameTakesItsSubstitutionsNumber(t *testing.T) {
+	if measuredInAQuietDescriptorTable(t) {
+		return
+	}
+	for _, c := range []struct{ src, want string }{
+		// The two without a name first, while no earlier row's body is
+		// still holding a descriptor this process counts.
+		{`: < <(true) {w}</dev/null; echo $w`, "10"},
+		{`: > >(read -r x) {w}</dev/null; echo $w`, "11"},
+		// What `exec` opens outlives the run in this process, so each row
+		// closes it again for the rows after it.
+		{`exec {v}> >(read -r x); exec {w}</dev/null {x}</dev/null; echo $v $w $x; exec {v}>&- {w}<&- {x}<&-`, "11 10 12"},
+		{`exec {v}< <(true); exec {w}</dev/null {x}</dev/null; echo $v $w $x; exec {v}<&- {w}<&- {x}<&-`, "10 11 12"},
+		{`: {v}> >(read -r x) {w}</dev/null; echo $v $w`, "11 10"},
+		{`: {v}< <(true) {w}</dev/null; echo $v $w`, "10 11"},
+		{`: {w}</dev/null {v}< <(true); echo $v $w`, "10 11"},
+		{`exec {v}< <(echo hi); read x <&$v; echo $x; exec {v}<&-`, "hi"},
+	} {
+		t.Run(c.src, func(t *testing.T) {
+			out := runOwnDescriptors(t, SavedStreamsAndPipeReadEndsTakeNumbers, c.src)
+			if got := strings.Join(strings.Fields(out), " "); got != c.want {
+				t.Errorf("got %q, want %q", got, c.want)
+			}
+		})
+	}
+}
+
 // A command substitution's body in the dialect that holds the last pipeline
 // element's input, measured 2026-10-15 against ksh93u+ (#6558): one number
 // held for the body, and one more once something needs the body's output as

@@ -12,6 +12,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"os/signal"
 	"slices"
 	"strconv"
 	"strings"
@@ -72,6 +73,12 @@ func connectACP(self, dash string, sh driver.Shell, allow bool, authMethod strin
 	defer cancel()
 
 	agent := exec.CommandContext(ctx, argv[0], argv[1:]...)
+	// Its own group, so that ending it ends what it started; and ending it
+	// is bounded, so that an agent which does not leave when its input
+	// closes cannot keep this shell waiting. See endAgent.
+	ownGroup(agent)
+	agent.Cancel = func() error { return signalGroup(agent) }
+	agent.WaitDelay = agentKillDelay
 	toAgent, err := agent.StdinPipe()
 	if err != nil {
 		return fail1(self, "agent input: %v", err)
@@ -134,10 +141,51 @@ func connectACP(self, dash string, sh driver.Shell, allow bool, authMethod strin
 	client.Connect(fromAgent, toAgent)
 	go func() { _ = client.Serve(ctx) }()
 
-	status := talk(self, dash, ctx, client, authMethod, in)
-	_ = toAgent.Close()
-	_ = agent.Wait()
+	// The conversation runs beside a watch for the signals that end it
+	// early, because the agent is in a group of its own now and a ^C at the
+	// terminal no longer reaches it: the shell has to end it, and it cannot
+	// do that from inside a read of standard input that will not return.
+	sigs := make(chan os.Signal, 1)
+	signal.Notify(sigs, endSignals...)
+	defer signal.Stop(sigs)
+	talked := make(chan int, 1)
+	go func() { talked <- talk(self, dash, ctx, client, authMethod, in) }()
+
+	var status int
+	select {
+	case status = <-talked:
+		endAgent(agent, toAgent, cancel, agentGrace)
+	case sig := <-sigs:
+		status = signalStatus(sig)
+		endAgent(agent, toAgent, cancel, 0)
+	}
 	return status
+}
+
+// How long an agent is given to leave by itself once its input has closed,
+// and then how long it is given to answer a SIGTERM before its group is
+// killed. Variables so a test can shorten them.
+var (
+	agentGrace     = 2 * time.Second
+	agentKillDelay = 2 * time.Second
+)
+
+// endAgent closes the agent's input and makes sure it is gone, in bounded
+// time, along with everything it started.
+//
+// End of input is the protocol's own way to say the session is over, and an
+// agent that honours it is waited for. One that does not — the npx launch of
+// claude-code-acp is one, measured in #6935 holding the shell for as long as
+// anyone cared to wait — is sent SIGTERM as a group after grace, which is what
+// cancelling the context does through agent.Cancel; WaitDelay then bounds the
+// wait for that, and the group is killed whatever happened, since a leader
+// that left can still have left a grandchild behind.
+func endAgent(agent *exec.Cmd, toAgent io.Closer, cancel context.CancelFunc, grace time.Duration) {
+	_ = toAgent.Close()
+	stop := time.AfterFunc(grace, cancel)
+	_ = agent.Wait()
+	stop.Stop()
+	killGroup(agent)
 }
 
 // Interpreter runs one command line on a shell built like this one.

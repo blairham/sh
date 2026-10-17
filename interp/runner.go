@@ -15675,7 +15675,7 @@ func (r *Runner) assign(ctx context.Context, a *syntax.Assign) {
 			return
 		case freezeWaitsForTheStore:
 			outer := r.heldFreeze
-			r.heldFreeze = heldFreeze{assign: a, name: name}
+			r.heldFreeze = heldFreeze{assign: a, name: name, spoken: r.frozenWriteSpokenAs(a, name)}
 			defer func() { r.heldFreeze = outer }()
 		}
 	}

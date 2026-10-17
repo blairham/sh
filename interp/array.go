@@ -535,7 +535,13 @@ func (r *Runner) markIndexed(name string) {
 // where the first element is 1 it is `a[0]`, which is below it. Neither shell
 // has both, and that is why one rule needs two spellings to show it.
 func (r *Runner) setArrayElem(name string, idx int, sub, value string) {
-	name = r.throughNameref(name)
+	if resolved := r.throughNameref(name); resolved != name {
+		if spoken := r.containerWriteSpokenAs(name); spoken != "" {
+			defer func(was string) { r.refusalSpokenAs = was }(r.refusalSpokenAs)
+			r.refusalSpokenAs = spoken
+		}
+		name = resolved
+	}
 	// Before anything reads the elements the write starts from: `read`,
 	// `printf -v` and `declare` reach an element by this route and not by
 	// the assignment statement. See Runner.endProducerUnsetEnded.

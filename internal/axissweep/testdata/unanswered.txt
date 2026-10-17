@@ -103,6 +103,7 @@ ash   CompoundElementsGoThroughTheAttribute
 ash   CompoundPipelineStatusRecord
 ash   CompoundRedirectionFailureIsJudged
 ash   ConditionWholeArraySubscript
+ash   ContainerWriteThroughAReferenceNamesTheReference
 ash   CoprocEndsInAnArray
 ash   DebugTrapRefiresOnEnteringAFunction
 ash   DebugTrapRunsBeforeTheCommand
@@ -490,6 +491,7 @@ dash  CompoundAttribute
 dash  CompoundElementsGoThroughTheAttribute
 dash  CompoundPipelineStatusRecord
 dash  ConditionWholeArraySubscript
+dash  ContainerWriteThroughAReferenceNamesTheReference
 dash  CoprocEndsInAnArray
 dash  DebugTrapRefiresOnEnteringAFunction
 dash  DebugTrapRunsBeforeTheCommand
@@ -840,6 +842,7 @@ zsh   ArrayLetterOverAnUnaimedReferenceDropsIt
 zsh   BackgroundJobInputIsOnlyTheShellsOwn
 zsh   BraceFreesProducedGroupSyntax
 zsh   BraceMakesAProducedStarOrBracketText
+zsh   ContainerWriteThroughAReferenceNamesTheReference
 zsh   DeclarationMayShadowAnEnclosingScopesReadonly
 zsh   DeclarationRereadsAParenthesizedValue
 zsh   DeclarationThroughAReferenceNamesTheOperand

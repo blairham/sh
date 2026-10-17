@@ -84,6 +84,10 @@ const (
 // expand before.
 func (r *Runner) refuseAFrozenAssignment(a *syntax.Assign) (frozenOutcome, string) {
 	name := r.assignmentLandsOn(a.Name)
+	if spoken := r.frozenWriteSpokenAs(a, name); spoken != "" {
+		defer func(was string) { r.refusalSpokenAs = was }(r.refusalSpokenAs)
+		r.refusalSpokenAs = spoken
+	}
 	if r.refusePrivateWrite(name) {
 		return freezeRefusedIt, name
 	}
@@ -147,6 +151,34 @@ func (r *Runner) refuseAFrozenAssignment(a *syntax.Assign) (frozenOutcome, strin
 	}
 	r.refuseAsAFreezeWould(name, assignedAlone, "")
 	return freezeRefusedIt, name
+}
+
+// frozenWriteSpokenAs is the name a freeze's refusal of this assignment
+// says where that is not the name it lands on, and nothing where it is: an
+// element or array write through a reference, in the column that names the
+// reference — see Semantics.ContainerWriteThroughAReferenceNamesTheReference.
+func (r *Runner) frozenWriteSpokenAs(a *syntax.Assign, landsOn string) string {
+	if landsOn == a.Name || a.Index == nil && !a.IsArray {
+		return ""
+	}
+	return r.containerWriteSpokenAs(a.Name)
+}
+
+// containerWriteSpokenAs is the reference an element or array write went
+// through, where the dialect names that rather than the target, and nothing
+// otherwise. Every road that stores an element or a list through a
+// reference asks it: the statement, `declare`, `read`, `printf -v` and
+// arithmetic (#6763).
+func (r *Runner) containerWriteSpokenAs(name string) string {
+	if r.refusalSpokenAs != "" || !r.isNameref(name) {
+		// A road that has already chosen what to say keeps its choice.
+		return ""
+	}
+	if !r.ask(r.sem().ContainerWriteThroughAReferenceNamesTheReference,
+		"an element or array write's refusal through a reference naming the reference") {
+		return ""
+	}
+	return name
 }
 
 // refuseTheHeldFreeze is the store's half of a held refusal: true when this

@@ -268,7 +268,16 @@ func TestSyntaxIsTheDialectTheBinaryIsBuiltFrom(t *testing.T) {
 	if !ok {
 		t.Fatal("no dialect")
 	}
-	if !reflect.DeepEqual(got, bash.Dialect()) {
+	// The one function field is compared by identity and then left out,
+	// since reflect.DeepEqual calls two non-nil funcs unequal however they
+	// were built — the arrangement dialecttest.PromptTableInstalled makes.
+	want := bash.Dialect()
+	if reflect.ValueOf(got.ProcSubstInSubscriptIsReprinted).Pointer() !=
+		reflect.ValueOf(want.ProcSubstInSubscriptIsReprinted).Pointer() {
+		t.Error("the parsed figure would lay out a subscript's process substitution differently")
+	}
+	got.ProcSubstInSubscriptIsReprinted, want.ProcSubstInSubscriptIsReprinted = nil, nil
+	if !reflect.DeepEqual(got, want) {
 		t.Error("the parsed figure would be measured with a parser the binary does not have")
 	}
 	var zero syntax.Dialect

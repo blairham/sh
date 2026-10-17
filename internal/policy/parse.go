@@ -23,6 +23,7 @@ import (
 //	# — and `exec-unconfined` because git is a process this gate cannot
 //	#   follow, which is the one thing the grammar insists you write down
 //	allow exec-unconfined /usr/bin/git
+//	deny  exec-argv /usr/bin/git -- push
 //	allow read  /srv/build/**
 //	allow write /srv/build/out/**
 //	deny  read  /srv/build/.env
@@ -250,6 +251,12 @@ func (p *Policy) defaultDirective(rest string) error {
 				"Write `default allow exec-unconfined` to say so",
 		)
 	}
+	if s == SelExecArgv {
+		// A default is what happens to an action no rule mentions, and an
+		// argument vector is something a rule mentions. A default keyed by
+		// one would be a rule with no program in it.
+		return errors.New("exec-argv names arguments and a default has none; the default for exec is `default deny exec`")
+	}
 	for _, sl := range s.slots() {
 		if p.setSlot[sl] {
 			return fmt.Errorf("the default for %s is set twice", sel)
@@ -311,6 +318,21 @@ func (p *Policy) parseRule(decision interp.Decision, rest string) error {
 	if pattern == "" {
 		return fmt.Errorf("%s needs a pattern", name)
 	}
+	var args []string
+	if sel == SelExecArgv {
+		if decision == interp.Allow {
+			// Deny only, and argv.go has the argument in full: the match is a
+			// widening, which a deny can afford and an allow cannot, because
+			// a widened grant is a grant somebody else gets to aim.
+			return errors.New(
+				"exec-argv is deny only: argument matching is best-effort, and a grant must not rest on it. " +
+					"Grant the program with `allow exec-unconfined` and carve out what it must not be asked to do with `deny exec-argv`",
+			)
+		}
+		if pattern, args, err = splitArgvRule(pattern); err != nil {
+			return err
+		}
+	}
 	if !strings.HasPrefix(pattern, "/") {
 		// A relative pattern would mean "relative to a working directory",
 		// and the policy owns none: the shell's directory moves with `cd` and
@@ -326,7 +348,7 @@ func (p *Policy) parseRule(decision interp.Decision, rest string) error {
 	// no filesystem read behind it, so it is settled once, when the rule is
 	// read, exactly as Landlock settles a path when its ruleset is built.
 	p.rules = append(p.rules, Rule{
-		Decision: decision, Sel: sel, Pattern: pattern,
+		Decision: decision, Sel: sel, Pattern: pattern, Args: args,
 		Alias: expandAlias(pattern, platformAliases),
 	})
 	return nil
@@ -366,7 +388,7 @@ func selectorOf(name string) (Selector, error) {
 		)
 	}
 	return 0, fmt.Errorf(
-		"unknown selector %q, want exec, exec-unconfined, read, write, open, stat, list, path or signal", name,
+		"unknown selector %q, want exec, exec-unconfined, exec-argv, read, write, open, stat, list, path or signal", name,
 	)
 }
 

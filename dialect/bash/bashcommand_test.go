@@ -280,6 +280,10 @@ func TestACommandSubstitutionInTheRunningCommandIsLaidOut(t *testing.T) {
 		{act + `x=$(:;:) :`, "D:[x=$(:; :) :]\n"},
 		{act + `case $(:;:) in *) ;; esac`, "D:[case $(:; :) in ]\n"},
 		{act + `for w in $(:;echo q); do :; done`, "D:[for w in $(:; echo q)]\nD:[:]\n"},
+		// And a braced parameter keeps its braces, as `declare -f` keeps them
+		// (#6878).
+		{act + `: "${y}" ${y} ${#y} ${y:-x}`, "D:[: \"${y}\" ${y} ${#y} ${y:-x}]\n"},
+		{act + `for w in ${y:-q}; do :; done`, "D:[for w in ${y:-q}]\nD:[:]\n"},
 	} {
 		out, _, _ := runTraced(t, c.src)
 		if out != c.want {

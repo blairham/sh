@@ -58,7 +58,12 @@ import (
 // worth making.
 func registerRunningCommand(r *interp.Runner) {
 	r.SetDynamic("BASH_COMMAND", func(rr *interp.Runner) string {
-		return runningCommandText(rr.RunningCommand(), rr.WordAsWrittenLayout())
+		// A braced parameter keeps its braces, as `declare -f` keeps them:
+		// measured 2026-10-16 on bash 5.3.20, `: "${y}" ${y}` reads back
+		// exactly so (#6878).
+		l := rr.WordAsWrittenLayout()
+		l.ParameterBracesAsWritten = true
+		return runningCommandText(rr.RunningCommand(), l)
 	})
 	// An assignment goes nowhere, and that is what bash does with one rather
 	// than a refusal: measured, `BASH_COMMAND=zzz; echo "[$BASH_COMMAND]"`

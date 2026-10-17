@@ -2878,6 +2878,8 @@ func Semantics() interp.Semantics {
 	// through `-c`, where zsh's does not (#6666).
 	s.FatalErrorOnACommandStringSkipsTheExitTrap = interp.No
 	s.ExitTrapRunsInsideTheExitingCall = interp.No
+	// A subshell's own EXIT trap fires where the subshell stopped (#6720).
+	s.SubshellExitTrapFiresWhereItStopped = interp.Yes
 	s.QuitIgnoredWhenNotInteractive = interp.No
 	// unanswered BuiltinReadsOptions: ksh93's `builtin` is another command,
 	// one that registers builtins from a library, and is not the one this

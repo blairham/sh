@@ -157,6 +157,11 @@ func (r *Runner) subshell(ctx context.Context, c *syntax.Subshell) error {
 		// `$( … )` gets and a background job, a pipeline element and a
 		// process substitution do not. See Runner.unsetEmptiesAnUnwrittenArray.
 		sub.arraysAreAView = !r.forkedForABackgroundJob
+		// And whether these parentheses are a subshell the dialect that
+		// asks runs in its own process rather than a fork: not where they
+		// are a background job's body or a pipeline element that is not the
+		// last. See Runner.subshellUnforked.
+		sub.subshellUnforked = !r.forkedForABackgroundJob && !r.midPipeline
 		// And a signal aimed at the job, where these parentheses are the
 		// job's fork: their traps are the ones it reaches. See
 		// bodyinbox.go.
@@ -2316,6 +2321,34 @@ func (r *Runner) callFuncInPlace(ctx context.Context, fn *syntax.FuncDecl, name 
 	// the script. Only a trap this call installed counts, which is what the
 	// depth records — an inherited one is the caller's business.
 	var exitTrapReturned bool
+	// The handler runs with the call already left: in the caller's frame,
+	// with the caller's parameters, at the line of the call. Measured
+	// 2026-10-16, and the two columns that fire a function-local EXIT trap
+	// agree — `f(){ local v=in; trap 'echo v=$v a=$1 ft=$funcstack' EXIT; };
+	// v=out; set -- top; f arg` is `v=out a=top ft=` on zsh 5.9.2, and the
+	// `function f` spelling is `v=out a=top` on ksh93u+. Where it fired is
+	// the call's line too: a body line after it is the caller's line plus
+	// the body's in ksh93 (`t.sh: line 10:` for a call on line 9, with no
+	// `f:` frame) and the call's line in zsh (`z2.sh:9:`). This ran it inside
+	// the frame, so it read the function's `$1`, its stack, and the body's
+	// last line (#6720).
+	fireInTheCaller := func(body string) bool {
+		params, inFunc, funcLine, line := r.Params, r.inFunc, r.funcLine, r.line
+		r.Params, r.inFunc, r.funcLine, r.line = saved, savedIn, savedLine, calledAt
+		var top Frame
+		popped := len(r.frames) > 0
+		if popped {
+			top = r.frames[len(r.frames)-1]
+			r.frames = r.frames[:len(r.frames)-1]
+		}
+		defer func() {
+			if popped {
+				r.frames = append(r.frames, top)
+			}
+			r.Params, r.inFunc, r.funcLine, r.line = params, inFunc, funcLine, line
+		}()
+		return r.runFunctionExitTrap(ctx, body)
+	}
 	if tableTaken {
 		// The call had a table of its own, so anything standing under EXIT
 		// now is this call's: it fires here, and the caller's comes back
@@ -2323,7 +2356,7 @@ func (r *Runner) callFuncInPlace(ctx context.Context, fn *syntax.FuncDecl, name 
 		body := r.exitTrap
 		r.exitTrap, r.trapDepth, r.exitTrapLocal = outerTrap, outerDepth, outerLocal
 		if body != nil {
-			exitTrapReturned = r.runFunctionExitTrap(ctx, *body)
+			exitTrapReturned = fireInTheCaller(*body)
 		}
 		r.restoreTheExitTrapFunction(outerTrapFn, outerTrapDecl)
 	} else if r.exitTrap != nil && r.exitTrap != outerTrap && r.trapDepth == r.depth+1 {
@@ -2336,7 +2369,7 @@ func (r *Runner) callFuncInPlace(ctx context.Context, fn *syntax.FuncDecl, name 
 		if r.ask(r.exitTrapLocal, "an EXIT trap set in a function firing when it returns") {
 			body := *r.exitTrap
 			r.exitTrap, r.trapDepth, r.exitTrapLocal = outerTrap, outerDepth, outerLocal
-			exitTrapReturned = r.runFunctionExitTrap(ctx, body)
+			exitTrapReturned = fireInTheCaller(body)
 			r.restoreTheExitTrapFunction(outerTrapFn, outerTrapDecl)
 		} else if enteredHoldingTheTrap && outerTrap != nil {
 			// It does not fire, and the call was nonetheless entered with

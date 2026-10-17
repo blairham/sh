@@ -185,6 +185,7 @@ func (r *Runner) runCommandSubst(ctx context.Context, span syntax.Span) string {
 	// Runner.unsetEmptiesAnUnwrittenArray, where the contexts that do not
 	// get it are measured.
 	sub.arraysAreAView = true
+	sub.subshellUnforked = true
 	// **Whether the body's shell holds `set -e`** — the one option a
 	// substitution does not simply inherit, and a disagreement rather than a
 	// gap. See Semantics.ErrExitEntersACommandSubstitution for the panel.

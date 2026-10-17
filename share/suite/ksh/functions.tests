@@ -145,12 +145,15 @@ printf -- '--- typeset -f writes the definition back out ---\n'
 
 printf -- '--- autoload finds a definition on FPATH ---\n'
 (
-  mkdir -p fns
-  printf 'function auto { printf "autoloaded\\n"; }\n' > fns/auto
-  FPATH=$PWD/fns
+  # A scratch directory, not $PWD: run from the checkout, this left fns/auto
+  # behind and it was committed with an unrelated change.
+  fns=$(mktemp -d)
+  printf 'function auto { printf "autoloaded\\n"; }\n' > "$fns/auto"
+  FPATH=$fns
   autoload auto
   auto
   printf 'the autoloaded call -> %s\n' "$?"
+  rm -rf "$fns"
 )
 
 printf -- '--- return takes the low byte ---\n'

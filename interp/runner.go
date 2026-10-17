@@ -5056,6 +5056,17 @@ type Runner struct {
 	// substitution, which are the contexts that shell forks.
 	arraysAreAView bool
 
+	// subshellUnforked marks a `( … )` or a `$( … )` that ksh93 runs in its
+	// own process: not a background job's body and not a pipeline element
+	// other than the last, which it forks. Its EXIT trap is counted from the
+	// last line it ran there, and a fork's from 1 as a shell's own is —
+	// measured 2026-10-16, `(trap 'echo L=$LINENO' EXIT; :⏎:)` on line 2 is
+	// L=3 alone, after `: |`, nested in another `( )` and as `$( … )`, and
+	// L=1 before `| cat` and with `&` (#6720). See
+	// Semantics.SubshellExitTrapFiresWhereItStopped. Set where the subshell
+	// is made, and cleared by clone so it reaches no further.
+	subshellUnforked bool
+
 	// forkedForABackgroundJob marks the shell a background job runs in, so
 	// that a `( … )` standing as that job's body does not take the view above
 	// — it is the fork, in the column this is measured on. Cleared by clone
@@ -6062,6 +6073,7 @@ func (r *Runner) clone() *Runner {
 	// reading turns it on rather than inheriting it. See
 	// Runner.unsetEmptiesAnUnwrittenArray.
 	c.subshellWroteArrays, c.arraysAreAView, c.forkedForABackgroundJob = nil, false, false
+	c.subshellUnforked = false
 	// A trace line a command is holding back belongs to the shell holding
 	// it: a subshell cloned while one waits — `typeset c=(b=$(echo two))`
 	// makes one for the member's value — must not write its parent's line

@@ -91,7 +91,13 @@ func TestTheExitTrapSurvivesAFatalErrorWithoutErrexit(t *testing.T) {
 // such a trap at all, and both answers there agree; the columns that never
 // fire one cannot be asked.
 func TestAReturnInAFunctionExitTrapIsTheCallersReturn(t *testing.T) {
-	local := func(s *Semantics) { s.ExitTrapIsFunctionLocal = Yes }
+	local := func(s *Semantics) {
+		s.ExitTrapIsFunctionLocal = Yes
+		// The handler runs in the caller's frame (#6720), so at the top
+		// level its `return` is one with nothing to return from — which
+		// both columns with the trap answer by ending the script.
+		s.ReturnOutsideAFunctionIsRefused = No
+	}
 	const p = "p() { trap 'return 9' EXIT; return 3; }\n"
 
 	// With no caller, there is no frame to return from and the script ends.

@@ -57,6 +57,12 @@ func (r *Runner) firedAt() int {
 	if !r.inExitTrap {
 		return r.line
 	}
+	if r.subshellUnforked && r.sem().SubshellExitTrapFiresWhereItStopped == Yes {
+		// A subshell's own EXIT trap, in the dialect that counts it from the
+		// last line the subshell ran. See
+		// Semantics.SubshellExitTrapFiresWhereItStopped.
+		return r.line
+	}
 	if r.ask(r.sem().ExitTrapFiresPastTheEnd, "where the EXIT trap counts as having fired") {
 		return r.programEnd
 	}

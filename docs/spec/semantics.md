@@ -26440,6 +26440,30 @@ An error in a function the body calls skips it too; one the body survives
 scope runs its trap on every row. bash, dash and BusyBox ash have no
 function-local EXIT trap to ask about.
 
+**`SubshellExitTrapFiresWhereItStopped`** — bash — · dash — · ksh93 yes · zsh no (#6899)
+
+Counts a subshell's own EXIT trap as having fired on the last line the
+subshell ran (its last command, or its `exit`) rather than where the shell's
+own trap is counted from. ksh93u+ 2012-08-01, script files (#6720):
+
+| file | ksh93 |
+| --- | --- |
+| `:` ⏎ `(trap "echo L=\$LINENO" EXIT` ⏎ `:` ⏎ `exit 0` ⏎ `:` ⏎ `)` | `L=4` |
+| a three-line body failing on its second line, last command on line 7 | `line 8`, `L=9` |
+| `(trap …; :⏎:)` after `: \|`, nested in `( )`, or as `$( … )` | `L=3` |
+| the same before `\| cat`, or with `&` | `L=1` |
+
+The forked shapes count from 1, as the shell's own trap does: a pipeline
+element before the last and a background job are the contexts ksh93 forks.
+
+**A function-local EXIT trap runs in the caller's frame.** Unanimous between
+the two columns that have one, so a correction and not an axis:
+`f(){ local v=in; trap 'echo v=$v a=$1 ft=$funcstack' EXIT; }; v=out; set --
+top; f arg` is `v=out a=top ft=` on zsh 5.9.2 and `v=out a=top` with
+`function f` on ksh93u+, and the trap counts as having fired at the call's
+line: ksh93 writes `t.sh: line 10:` for a body's second line with the call on
+line 9 and no `f:` frame, and zsh writes `z2.sh:9:`.
+
 **`FunctionExitTrapReadsZeroOnAnExit`** — bash — · dash — · ksh93 no · zsh yes
 
 Shows a function-local EXIT trap a `$?` of 0 when an `exit` is what unwinds

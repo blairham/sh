@@ -5494,6 +5494,24 @@ type Semantics struct {
 	// a function-local EXIT trap, so the preset's no is never read there.
 	FunctionExitTrapSkippedByAGiveUp Answer
 
+	// SubshellExitTrapFiresWhereItStopped counts a subshell's own EXIT trap
+	// as having fired on the last line the subshell ran — its last command,
+	// or the `exit` that ended it — rather than where the shell's own EXIT
+	// trap is counted from (Semantics.ExitTrapFiresPastTheEnd and the
+	// field after it). Measured 2026-10-16 on ksh93u+ 2012-08-01 over script
+	// files, with a two-line body whose second line fails (#6720):
+	//
+	//	(trap … EXIT, :, :, exit 0, :) — exit on line 7     line 8
+	//	the same with no exit, last command on line 7       line 8
+	//	the shell's own EXIT trap (control)                 line 2
+	//
+	// ksh93 alone. bash and dash number a trap body from its own first line,
+	// so where it fired is never read; BusyBox ash already counts the
+	// shell's own trap where the script stopped. zsh counts a subshell's
+	// from the `exit`'s line, or from the subshell's opening line when it
+	// ran off its end, which is a third answer and #6899's.
+	SubshellExitTrapFiresWhereItStopped Answer
+
 	// FunctionExitTrapReadsZeroOnAnExit shows a function-local EXIT trap a
 	// `$?` of 0 when an `exit` is what unwinds the call. The shell still
 	// leaves with the `exit`'s status. Measured 2026-10-16 on zsh 5.9.2,
@@ -34978,8 +34996,11 @@ func PosixSemantics() Semantics {
 		ReturnInTheExitTrapNamesTheStatus: No,
 		// A function-local EXIT trap runs, and reads the call's status,
 		// however the call ends: ksh93. zsh says otherwise itself.
-		FunctionExitTrapSkippedByAGiveUp:  No,
-		FunctionExitTrapReadsZeroOnAnExit: No,
+		FunctionExitTrapSkippedByAGiveUp: No,
+		// A subshell's EXIT trap is counted as the shell's own is. ksh93
+		// says otherwise itself, and zsh's third answer is #6899.
+		SubshellExitTrapFiresWhereItStopped: No,
+		FunctionExitTrapReadsZeroOnAnExit:   No,
 		// A `return` typed at a prompt with nothing to return from ends the
 		// session where it ends a script: ksh93, dash and BusyBox ash. zsh
 		// keeps the session and says so itself.

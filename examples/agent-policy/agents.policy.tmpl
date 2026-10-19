@@ -1,0 +1,13 @@
+version 1
+default allow
+
+# A coding agent does not run the linter by hand: the pre-commit hook and CI
+# already do, and a hand-started run costs gigabytes of memory for an answer
+# the hook gives a minute later. run.sh fills in the path the shell resolves.
+deny exec @LINTER@
+
+# An agent writes inside its own working directory and nowhere else under
+# the home directory: not another agent's worktree, not dotfiles. Evaluation
+# is deny-overrides, so the working directory has to be outside this subtree
+# rather than carved out of it — run.sh uses a temporary directory.
+deny write @HOME@/**

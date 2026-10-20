@@ -17,7 +17,7 @@ import (
 // read, so nothing runs and no runner is involved.
 //
 // The other message — a substitution body that would not parse — is exercised
-// in dialect/nearcontrol_test.go against the preset that answers yes. Between
+// in tests/cross/nearcontrol_test.go against the preset that answers yes. Between
 // them the claim that the two move together is checked at both ends rather
 // than asserted once.
 func TestTheUnmatchedConstructsQuoteEscapesControlCharactersToo(t *testing.T) {

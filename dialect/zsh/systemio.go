@@ -13,6 +13,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/blairham/sh/dialect/zsh/internal/gatedfs"
 	"github.com/blairham/sh/internal/fdset"
 	"github.com/blairham/sh/interp"
 )
@@ -164,7 +165,7 @@ func sysopenBuiltin(r *interp.Runner, ctx context.Context, args []string) int {
 	// the letter asks for is what a `-m` asks for anywhere: the bits before
 	// the mask, not after it. See interp.Runner.CreationMode.
 	perm = r.CreationMode(perm)
-	path := shellPath(r, rest[0])
+	path := gatedfs.ShellPath(r, rest[0])
 	// Through the gate, like every other open the shell makes. This builtin
 	// opened files directly until #1805, so a policy refusing every read and
 	// write still handed a script the filesystem and recorded nothing.

@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/blairham/sh/dialect/zsh/internal/gatedfs"
 	"github.com/blairham/sh/interp"
 	"github.com/blairham/sh/repl"
 )
@@ -705,7 +706,7 @@ func fileSuffix(r *interp.Runner, ctx context.Context, o compaddOptions, candida
 	if !o.files {
 		return false, false
 	}
-	info, err := fileStat(r, ctx, filePath(o, candidate))
+	info, err := gatedfs.StatPath(r, ctx, filePath(o, candidate))
 	switch {
 	case err != nil:
 		return true, false
@@ -756,7 +757,7 @@ func fileRow(r *interp.Runner, ctx context.Context, o compaddOptions, candidate 
 
 // fileMark is the character LIST_TYPES draws after a `-f` candidate, or none.
 func fileMark(r *interp.Runner, ctx context.Context, o compaddOptions, candidate string) string {
-	info, err := fileLstat(r, ctx, filePath(o, candidate))
+	info, err := gatedfs.LstatPath(r, ctx, filePath(o, candidate))
 	if err != nil {
 		return ""
 	}

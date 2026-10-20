@@ -1,0 +1,16 @@
+An error in a sourced file ends the shell here, at the sourced file's own
+line, and nothing after the `.` runs.
+
+-- file p.sh --
+echo IN-BEFORE
+set -u
+echo X${NOPE}
+echo IN-AFTER
+-- script --
+. ./p.sh
+echo "OUT-AFTER st=$?"
+-- out --
+IN-BEFORE
+dash: 3: ./p.sh: NOPE: parameter not set
+-- status --
+2

@@ -1,0 +1,14 @@
+The third column with a `%a`, and it agrees with bash rather than with the
+shell whose twelve-digit default it does not share: the zero fill goes
+between the `0x` and the digits. Measured 2026-09-17 against dash 0.5.12
+under LC_ALL=C (#3089).
+
+-- config --
+name: sh
+env: PATH=/usr/bin:/bin
+-- script --
+printf '[%030a]' 1.5
+-- contains --
+[0x00000000000000000000001.8p+0]
+-- status --
+0

@@ -603,7 +603,7 @@ func KeyBindings(r *interp.Runner, km repl.Keymap) map[string]repl.Binding {
 //
 // This is the same split complist.go makes for `zsh/complist` — the keymaps,
 // which are real here, and not the widget, which is not — and the one
-// filesmodule.go makes between `zf_rm` and `rm`. Take the half that is true.
+// dialect/zsh/modules/files/files.go makes between `zf_rm` and `rm`. Take the half that is true.
 //
 // The lookup is bindkeyWidgets, the table every other widget name is answered
 // from, with the leading `.` off: `.complete-word` reaches the builtin even

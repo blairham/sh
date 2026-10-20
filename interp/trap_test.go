@@ -437,7 +437,7 @@ func itoaForTest(n int) string { return strconv.Itoa(n) }
 // A bare `return` in a trap action's own body — Semantics.TrapReturnStatus.
 //
 // Four readings, and this asserts each is reachable and that they are four.
-// Which value each preset picks is in dialect/trapreturn_test.go against the
+// Which value each preset picks is in tests/cross/trapreturn_test.go against the
 // panel's own bytes.
 //
 // The action's last command reports 123 and the status the handler is entered

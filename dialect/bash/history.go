@@ -1310,7 +1310,7 @@ func historyReadMark(r *interp.Runner, name string) int {
 // the gate asked first. Nothing above reaches the `os` package by another
 // route.
 //
-// The same discipline `dialect/zsh/filesgate.go` opens with, and the reason
+// The same discipline `dialect/zsh/internal/gatedfs/gate.go` opens with, and the reason
 // it is two functions rather than four call sites: the property is checkable
 // by reading them, and `internal/boundary`'s guard has one name each to hold.
 
@@ -1402,7 +1402,7 @@ func historyReason(err error) string {
 // shellPath resolves a name against the *shell's* directory rather than the
 // process's, which is the difference between the file the script meant and
 // whatever that name happens to be beside the program that embedded this
-// shell. The same rule dialect/zsh/shellpath.go states at length.
+// shell. The same rule dialect/zsh/internal/gatedfs/shellpath.go states at length.
 func shellPath(r *interp.Runner, name string) string {
 	if name == "" || filepath.IsAbs(name) || r.Dir == "" {
 		return name

@@ -11451,7 +11451,7 @@ echo "st=$?"`,
 	{
 		ID: "shape/case-pattern-group-then-a-blank", Category: "compound shapes", SyntaxError: true,
 		Snippet: `case 'x y' in ((x) y) echo hit;; (*) echo no;; esac`,
-		Why:     "the failing line's actual shape — a group, a blank, more pattern — which is what `VCS_INFO_get_data_git` line 234 is: `(''(x|exec) *)`. Its own panel, and the reason it is not folded into the row above: the four columns that name a token blame the `(` here and the `b` there, because the arm's paren and the group's arrive at the same character — dash and ash name neither, saying `word unexpected` and `unexpected word` to both. It is marked a syntax error because the corpus's own grammar declines a bare `(` inside a word — that is two further flags, and turning them on here would change how every other snippet reads — so the construct is pinned in syntax/caseblank_test.go and dialect/zsh/caseblank_test.go, and this row is here for the seven columns. It is also the row that catches a printer dropping the arm's `(` as layout, since `(x) y)` parses to a different program rather than failing",
+		Why:     "the failing line's actual shape — a group, a blank, more pattern — which is what `VCS_INFO_get_data_git` line 234 is: `(''(x|exec) *)`. Its own panel, and the reason it is not folded into the row above: the four columns that name a token blame the `(` here and the `b` there, because the arm's paren and the group's arrive at the same character — dash and ash name neither, saying `word unexpected` and `unexpected word` to both. It is marked a syntax error because the corpus's own grammar declines a bare `(` inside a word — that is two further flags, and turning them on here would change how every other snippet reads — so the construct is pinned in syntax/caseblank_test.go and tests/zsh/caseblank_test.go, and this row is here for the seven columns. It is also the row that catches a printer dropping the arm's `(` as layout, since `(x) y)` parses to a different program rather than failing",
 	},
 	{
 		ID: "shape/case-pattern-alternatives", Category: "compound shapes",
@@ -22554,7 +22554,7 @@ echo "st=$?"`,
 	// the same act in all seven columns, so what is here is everything a single
 	// shell can be held to — the vocabulary, the refusals, the descriptor —
 	// and the exclusion itself is proved against a second process in
-	// dialect/zsh/systemlock_test.go, which is where it belongs because it
+	// tests/zsh/systemlock_test.go, which is where it belongs because it
 	// needs a child that does not go through any shell.
 	{
 		ID: "system/what-this-shells-zsystem-supports", Category: "builtins",
@@ -22584,7 +22584,7 @@ echo "st=$?"`,
 	// `zsh/zselect`'s one builtin (#1768). What is graded is the *status
 	// vocabulary*, because that is what the prompt theme's worker is written
 	// against — and the waiting itself is proved with a clock and a second
-	// process in dialect/zsh/zselect_test.go, which a corpus row comparing
+	// process in tests/zsh/zselect_test.go, which a corpus row comparing
 	// text cannot do.
 	{
 		ID: "zselect/the-probe-a-prompt-worker-guards-on", Category: "builtins",

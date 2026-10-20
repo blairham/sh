@@ -191,7 +191,7 @@ func TestTheTwoValueBackslashMarksAgree(t *testing.T) {
 // spent it on a character that had nothing live about it — the `\*` the script
 // wrote — and the two collapsed into one. Every column in the panel produces one
 // field there and this shell produced two, which is what says it is a defect
-// rather than a reading: see dialect/bash/valuebackslashquotedalready_test.go
+// rather than a reading: see tests/bash/valuebackslashquotedalready_test.go
 // for the seven-column measurement (#4158).
 //
 // Asserted under all three readings, because the fix is about the *absence* of

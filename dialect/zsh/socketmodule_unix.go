@@ -14,6 +14,7 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/blairham/sh/dialect/zsh/internal/gatedfs"
 	"github.com/blairham/sh/interp"
 )
 
@@ -123,10 +124,10 @@ func zsocketConnect(r *interp.Runner, ctx context.Context, opts zsocketOpts, pat
 	// may only read a path must not be able to send down a socket at it.
 	// Refused the way a refused redirection is, because there is no honest
 	// way to carry on — see interp.AllowModify (#1819).
-	if !r.AllowModify(ctx, shellPath(r, path)) {
+	if !r.AllowModify(ctx, gatedfs.ShellPath(r, path)) {
 		return 1
 	}
-	f, err := zsocketOpen(shellPath(r, path), func(fd int, addr *syscall.SockaddrUnix) error {
+	f, err := zsocketOpen(gatedfs.ShellPath(r, path), func(fd int, addr *syscall.SockaddrUnix) error {
 		return syscall.Connect(fd, addr)
 	})
 	if err != nil {
@@ -150,10 +151,10 @@ func zsocketListen(r *interp.Runner, ctx context.Context, opts zsocketOpts, path
 	// as much a write as `> path` is, and was not asked about at all until
 	// #1819: `zsocket -l` under `default deny` returned 0 and left a socket
 	// outside the boundary.
-	if !r.AllowModify(ctx, shellPath(r, path)) {
+	if !r.AllowModify(ctx, gatedfs.ShellPath(r, path)) {
 		return 1
 	}
-	f, err := zsocketOpen(shellPath(r, path), func(fd int, addr *syscall.SockaddrUnix) error {
+	f, err := zsocketOpen(gatedfs.ShellPath(r, path), func(fd int, addr *syscall.SockaddrUnix) error {
 		if err := syscall.Bind(fd, addr); err != nil {
 			return err
 		}

@@ -6,6 +6,7 @@ package zsh
 import (
 	"os"
 
+	"github.com/blairham/sh/dialect/zsh/internal/gatedfs"
 	"github.com/blairham/sh/interp"
 )
 
@@ -34,7 +35,7 @@ import (
 // — which is a readdir and then a read of everything it found, spelled as a
 // parameter flag. A boundary that only watches commands does not see it.
 //
-// So the discipline `filesgate.go` opens with is the discipline here, and
+// So the discipline `dialect/zsh/internal/gatedfs/gate.go` opens with is the discipline here, and
 // this file is small enough to be the whole of it: **nothing below calls the
 // `os` package with a script-chosen path except through mapfileRead,
 // mapfileWrite, mapfileRemove and mapfileNames**, each of which asks the gate
@@ -181,7 +182,7 @@ func writeMapfile(r *interp.Runner, key, value string, set bool) {
 // what makes `${(f)mapfile[f]}` split into three fields with an empty last
 // one rather than two.
 func mapfileRead(r *interp.Runner, key string) ([]byte, bool) {
-	path := shellPath(r, key)
+	path := gatedfs.ShellPath(r, key)
 	if !r.AllowReadPath(r.ShellContext(), path) {
 		return nil, false
 	}
@@ -205,7 +206,7 @@ func mapfileRead(r *interp.Runner, key string) ([]byte, bool) {
 // A refusal is silent here because AllowModify has already reported it, in
 // the same words a refused redirection gets.
 func mapfileWrite(r *interp.Runner, key, value string) {
-	path := shellPath(r, key)
+	path := gatedfs.ShellPath(r, key)
 	if !r.AllowModify(r.ShellContext(), path) {
 		return
 	}
@@ -222,7 +223,7 @@ func mapfileWrite(r *interp.Runner, key, value string) {
 // the same question a write does. Measured: `unset "mapfile[w]"` removes `w`,
 // and `unset mapfile` — the whole parameter — removes nothing at all.
 func mapfileRemove(r *interp.Runner, key string) {
-	path := shellPath(r, key)
+	path := gatedfs.ShellPath(r, key)
 	if !r.AllowModify(r.ShellContext(), path) {
 		return
 	}

@@ -133,7 +133,7 @@ func permissive() Semantics {
 	// give: it does not, and the attributes accumulate. That is what every
 	// suite here that writes a second kind letter on the way to something
 	// else already expects, and the suite that is *about* the axis sets it
-	// itself — see dialect/zsh/typeflag_test.go (#4881).
+	// itself — see tests/zsh/typeflag_test.go (#4881).
 	s.KindLetterReplacesTheKind = No
 	// And whether a declaration keeps the value its own prefix set. No,
 	// which is five of the six and is the answer every suite here that
@@ -143,7 +143,7 @@ func permissive() Semantics {
 	// signal goes out. No, which is five of the six columns and is what
 	// every suite here that merely kills a job already expects; the suites
 	// that are *about* the axis set it themselves — see
-	// interp/killstoppedjob_test.go and dialect/killstoppedjob_test.go
+	// interp/killstoppedjob_test.go and tests/cross/killstoppedjob_test.go
 	// (#4526).
 	s.KillJobSpecContinuesAStoppedJob = No
 	s.BuiltinSyntaxErrorFatal = No

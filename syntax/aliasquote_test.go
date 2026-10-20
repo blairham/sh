@@ -267,7 +267,7 @@ func TestABlankInsideAnOpenConstructMakesNoNextWordEligible(t *testing.T) {
 // `x  b CEE` in bash 5.3, that binary as `sh`, and bash 3.2 — and dash,
 // ksh93, zsh and BusyBox ash offer nothing, because what follows the value is
 // inside the quote. The core refuses what the panel disagrees about, so the
-// field is off there; dialect/aliasquote_test.go says which preset holds
+// field is off there; tests/cross/aliasquote_test.go says which preset holds
 // which value.
 func TestTheAxisDecidesWhetherTheBlankReachesPastTheConstruct(t *testing.T) {
 	t.Parallel()

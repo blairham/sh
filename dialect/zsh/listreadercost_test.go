@@ -129,7 +129,7 @@ func TestAListReaderPaysOnlyForItsElements(t *testing.T) {
 }
 
 // What the map was for — an attribute that folds what is written — is pinned
-// in dialect/bash/elementfold_test.go and dialect/ksh/elementfold_test.go,
+// in tests/bash/elementfold_test.go and tests/ksh/elementfold_test.go,
 // the two dialects whose literals go through one; zsh's do not.
 
 func BenchmarkKeyValueLiteral(b *testing.B) {

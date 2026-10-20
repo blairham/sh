@@ -5600,7 +5600,7 @@ such a format.
 A 6-1 split has no suite tier: a dialect file guards one column against its
 own reference and `core/` needs all five to agree, so `core/printf.tests`
 carries a paragraph here rather than a line and the panel's whole answer is
-asserted in Go, in `dialect/printfesc_test.go`.
+asserted in Go, in `tests/cross/printfesc_test.go`.
 
 `$'…'` is a third site and had both letters already, in every dialect:
 `printf '%s' $'a\eZ'` and `$'a\EZ'` are `61 1b 5a` in every reference that
@@ -9373,7 +9373,7 @@ a path is taken; `exec cmd` ends the script while `command -p cmd` carries on;
 every redirection that writes is `writing redirection not allowed in restricted
 mode`, `>/dev/null` included; and `hash name=path`, `hash -d name=path` and
 `commands[name]=path` are each `restricted: <path>` with no search behind it.
-`dialect/zsh/restricted_test.go` holds the rows. dash and BusyBox ash are the
+`tests/zsh/restricted_test.go` holds the rows. dash and BusyBox ash are the
 two with no such letter and they refuse it outright, ending the input at 2.
 
 **A frozen name cannot be declared around, either.** The freeze rides the
@@ -12781,7 +12781,7 @@ What was built, all through the extension seam — registered builtins in each
   and 1, which is this builtin's wording and `bindkey`'s, not `zstyle`'s
   `invalid option`. Corpus: `zmodload/*`.
 - **zsh `zsh/stat`, `zsh/files` and `zsh/net/socket`** (dialect/zsh/statmodule.go,
-  filesmodule.go, socketmodule_unix.go): the three modules a prompt theme
+  dialect/zsh/modules/files/files.go, socketmodule_unix.go): the three modules a prompt theme
   narrows to at startup, measured 2026-09-09 against zsh 5.9.2 with `zsh -f`.
 
   **A name that would shadow a command is registered withdrawn, so a script
@@ -28676,8 +28676,8 @@ front of the sentence and the shell still leaves.
 
 `Diagnostics.UnpairedTableLiteralElements` is the wording and
 `Runner.tableLiteralPairsOff` is the check. Pinned by
-`dialect/zsh/tableliteralpairs_test.go`,
-`dialect/bash/tableliteralpairs_test.go`, the axis suite in
+`tests/zsh/tableliteralpairs_test.go`,
+`tests/bash/tableliteralpairs_test.go`, the axis suite in
 `interp/tableliteralpairs_test.go` and a block of
 `share/suite/zsh/arrays.tests` (#4594).
 
@@ -28738,9 +28738,9 @@ and this one is the opposite of what both of them do.
 
 `Diagnostics.ScalarStoredOverATable` is the wording, with the name as its
 one verb, and `Runner.tableRefusesAScalarStore` is the check. Pinned by
-`dialect/zsh/scalarovertable_test.go`, `dialect/zsh/ksharrays_test.go`,
-`dialect/bash/scalarovertable_test.go`,
-`dialect/ksh/scalarovertable_test.go`, the axis suite in
+`tests/zsh/scalarovertable_test.go`, `tests/zsh/ksharrays_test.go`,
+`tests/bash/scalarovertable_test.go`,
+`tests/ksh/scalarovertable_test.go`, the axis suite in
 `interp/scalarovertable_test.go` and a block of
 `share/suite/zsh/arrays.tests` (#4617).
 
@@ -28793,7 +28793,7 @@ widget-rebinding loop saw the last file it had read. `emulate sh` and
 `Runner.scalarOverCompound` is the one place it is asked, and
 `Runner.scalarStoreReplacesACompound` is the ask, spelled once because
 two routes reach it. Pinned by
-`array/assigning-a-scalar-over-an-array`, `dialect/zsh/ksharrays_test.go`
+`array/assigning-a-scalar-over-an-array`, `tests/zsh/ksharrays_test.go`
 and a block of `share/suite/zsh/arrays.tests` (#1390, #1645, #4618).
 
 **A local declaration builds the array cell rather than converting one**,
@@ -28881,7 +28881,7 @@ and `emulate ksh` carry it as they carry the five readings, which is how
 a script reaches it without anybody typing `setopt`.
 
 Pinned by `array/appending-a-scalar-to-an-array` and the five rows beside
-it, by `dialect/zsh/ksharrays_test.go` for the option's half and by a
+it, by `tests/zsh/ksharrays_test.go` for the option's half and by a
 block of `share/suite/zsh/arrays.tests`. This implementation deleted the
 array and left a plain string — `1x` under bash's reading and `1 2x`
 under zsh's, the scalar *view* of the whole array with the value stuck on

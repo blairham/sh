@@ -3592,7 +3592,7 @@ func (sh *Shell) applyOptions(r *interp.Runner, opts []optionSpec) (int, bool) {
 	//	-O nosuchopt -Z              -Z: invalid option
 	//	-x -O nosuchopt              nosuchopt: invalid shell option name
 	//
-	// Four of those six are the row `cmd/bash/shoptinvocation_test.go` held
+	// Four of those six are the row `cmd/bash/tests/shoptinvocation_test.go` held
 	// out: written either way round the letter is named, where this front
 	// end named whichever word came first (#3284). The `set -o` names are
 	// **not** reordered, and that is measured in the same run: `-o

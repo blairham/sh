@@ -49,10 +49,12 @@ const interpPath = "github.com/blairham/sh/interp"
 // naming itself by a constant arrive at the comparison spelt alike.
 func TestEveryRunnerUnderDialectIsToldWhichShellItIs(t *testing.T) {
 	t.Parallel()
-	root := filepath.Join(moduleRoot(t), "dialect")
+	// Both trees: a dialect's own package, and tests/<shell>, where its tests
+	// live. The second is where nearly every runner literal is written.
+	module := moduleRoot(t)
 	fset := token.NewFileSet()
 	files := 0
-	err := filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
+	walk := func(path string, d os.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
@@ -66,24 +68,24 @@ func TestEveryRunnerUnderDialectIsToldWhichShellItIs(t *testing.T) {
 			return nil
 		}
 		for _, pos := range runnersMissingDialect(f) {
-			rel, _ := filepath.Rel(root, path)
-			t.Errorf("dialect/%s:%d builds an interp.Runner without Dialect.\n"+
+			rel, _ := filepath.Rel(module, path)
+			t.Errorf("%s:%d builds an interp.Runner without Dialect.\n"+
 				"\tNil means the core, so every nested parse — eval, command substitution,\n"+
 				"\ta sourced file, a trap body — runs as a shell this suite is not about.\n"+
 				"\tSet Dialect, or build the runner with dialecttest.Preset.Runner.",
 				rel, fset.Position(pos).Line)
 		}
 		for _, pos := range runnersMissingField(f, "Name") {
-			rel, _ := filepath.Rel(root, path)
-			t.Errorf("dialect/%s:%d builds an interp.Runner without Name.\n"+
+			rel, _ := filepath.Rel(module, path)
+			t.Errorf("%s:%d builds an interp.Runner without Name.\n"+
 				"\tName is `$0`, and unset it is the empty string — so a diagnostic that\n"+
 				"\tshould begin `zsh:` begins `:`, and a Contains assertion still passes.\n"+
 				"\tSet Name, or build the runner with dialecttest.Preset.Runner.",
 				rel, fset.Position(pos).Line)
 		}
 		for _, pos := range preludesPastedOnto(f) {
-			rel, _ := filepath.Rel(root, path)
-			t.Errorf("dialect/%s:%d pastes Prelude() onto a snippet.\n"+
+			rel, _ := filepath.Rel(module, path)
+			t.Errorf("%s:%d pastes Prelude() onto a snippet.\n"+
 				"\tThe functions then arrive as the *script's*, so they speak with no\n"+
 				"\tlocation in front of them and cannot reach the seam that gives them one —\n"+
 				"\tand the line a diagnostic names is a line of the prelude (#603).\n"+
@@ -91,14 +93,16 @@ func TestEveryRunnerUnderDialectIsToldWhichShellItIs(t *testing.T) {
 				rel, fset.Position(pos).Line)
 		}
 		return nil
-	})
-	if err != nil {
-		t.Fatal(err)
+	}
+	for _, tree := range []string{"dialect", "tests"} {
+		if err := filepath.WalkDir(filepath.Join(module, tree), walk); err != nil {
+			t.Fatal(err)
+		}
 	}
 	// A walk that silently visited nothing passes for the wrong reason, which
 	// is the failure mode of every assertion made over a traversal.
 	if files < 20 {
-		t.Fatalf("the walk read %d Go files under dialect/; it should be reading dozens", files)
+		t.Fatalf("the walk read %d Go files under dialect/ and tests/; it should be reading dozens", files)
 	}
 }
 

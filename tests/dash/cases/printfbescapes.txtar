@@ -1,0 +1,36 @@
+`%b` takes dash's own escapes: `\0NNN` and a bare `\NNN` are octal, `\e`,
+`\E` and `\x` are not escapes at all, and `\c` stops the output. Outside
+`%b`, `\0101` is `\010` then `1`.
+
+-- script --
+printf '%b' 'a\0101Z'
+-- out noeol --
+aAZ
+-- script --
+printf '%b' 'a\101Z'
+-- out noeol --
+aAZ
+-- script --
+printf '%b' 'a\eZ:a\EZ'
+-- out noeol --
+a\eZ:a\EZ
+-- script --
+printf '%b' 'a\x41Z'
+-- out noeol --
+a\x41Z
+-- script --
+printf '%b' 'a\cbZ'
+-- out noeol --
+a
+-- script --
+printf 'a\cbZ'
+-- out noeol --
+a\cbZ
+-- script --
+printf '%b' 'a\0300Z'
+-- out noeol --
+a¿Z
+-- script --
+printf 'a\0101Z'
+-- out noeol --
+a1Z

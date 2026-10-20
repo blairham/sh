@@ -171,7 +171,7 @@ func TestTheDigitClassAxisIsStillItsOwnQuestion(t *testing.T) {
 		// distinction is worth keeping: BusyBox reaches `=~` through the
 		// `[[` *builtin*, so it never runs the code this test drives. What
 		// it measures is the factoring — a written `\d` needs both gates —
-		// and dialect/ash/regexdigitclass_test.go is where that shell's own
+		// and tests/ash/regexdigitclass_test.go is where that shell's own
 		// rows are. This row used to read `match` because the narrow axis
 		// governed quote removal too, which is what made the column
 		// inexpressible.

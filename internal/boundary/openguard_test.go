@@ -265,24 +265,24 @@ var exempt = map[string]string{
 		"that ever runs here. A refusal could only make the shell spell its own pipe " +
 		"`/dev/fd/N` instead of `/proc/self/fd/N`, which is the same descriptor under the other " +
 		"name and protects nothing (#3986).",
-	// dialect/zsh. filesgate.go is the module's gate — every call in it is
+	// dialect/zsh. dialect/zsh/internal/gatedfs/gate.go is the module's gate — every call in it is
 	// behind the consultation above it — and the rest are the mutating system
-	// calls, each one behind a fileMayModify about that exact path (#1819).
-	"dialect/zsh.fileWriteWhole": "filesgate.go's gated whole-file write, which asks AllowModify " +
+	// calls, each one behind a MayModify about that exact path (#1819).
+	"dialect/zsh/internal/gatedfs.WriteWhole": "dialect/zsh/internal/gatedfs/gate.go's gated whole-file write, which asks AllowModify " +
 		"about the name first. The removal in front of the write is what lets a " +
 		"second `zcompile` replace a product the first one made read-only.",
-	"dialect/zsh.fileLstat": "filesgate.go's gated Lstat: AllowProbe first, and a refusal reads as a path that is not there.",
-	"dialect/zsh.fileStat":  "filesgate.go's gated Stat, behind the same AllowProbe.",
-	"dialect/zsh.fileLn": "the unlink `-f` does before a link, and the link itself, both after " +
-		"fileMayModify on the target and fileMayRead on the source — a hard link puts the " +
+	"dialect/zsh/internal/gatedfs.LstatPath": "dialect/zsh/internal/gatedfs/gate.go's gated Lstat: AllowProbe first, and a refusal reads as a path that is not there.",
+	"dialect/zsh/internal/gatedfs.StatPath":  "dialect/zsh/internal/gatedfs/gate.go's gated Stat, behind the same AllowProbe.",
+	"dialect/zsh/modules/files.fileLn": "the unlink `-f` does before a link, and the link itself, both after " +
+		"MayModify on the target and fileMayRead on the source — a hard link puts the " +
 		"contents inside the new name's directory, so that is where the read is asked about.",
-	"dialect/zsh.fileMv":      "the rename, after fileMayModify on both the source and the target.",
-	"dialect/zsh.fileMakeDir": "the directory creation, after fileMayModify on it and on every parent `-p` would make.",
-	"dialect/zsh.fileRmdir":   "the directory removal, after fileMayModify on it.",
-	"dialect/zsh.fileWritable": "the access check `-i` and `zf_mv`'s default ask about, on a " +
+	"dialect/zsh/modules/files.fileMv":      "the rename, after MayModify on both the source and the target.",
+	"dialect/zsh/modules/files.fileMakeDir": "the directory creation, after MayModify on it and on every parent `-p` would make.",
+	"dialect/zsh/modules/files.fileRmdir":   "the directory removal, after MayModify on it.",
+	"dialect/zsh/internal/gatedfs.Writable": "the access check `-i` and `zf_mv`'s default ask about, on a " +
 		"path fileConfirm has just passed through fileLstat's AllowProbe and the caller through " +
 		"fileMayModify. Two spellings, one per platform.",
-	"dialect/zsh.fileUnlink": "the unlink itself, after fileMayModify on the path. Two spellings, one per platform.",
+	"dialect/zsh/internal/gatedfs.Unlink": "the unlink itself, after MayModify on the path. Two spellings, one per platform.",
 
 	// Six names left this list when `-s` landed (#1669) and none of them went
 	// away: fileWalk, fileChmod, fileChown, fileRemoveTree, fileReadDir and
@@ -290,24 +290,24 @@ var exempt = map[string]string{
 	// than through the `os` package, so the calls the guard sees are the
 	// place's and the reasons moved with them.
 	//
-	// filesparanoid.go: the `-s` letter's walk, which is a *place* — a
+	// dialect/zsh/internal/gatedfs/place.go: the `-s` letter's walk, which is a *place* — a
 	// directory held open and a name inside it — rather than a path. The
 	// gate is asked about the place's resolved name before any of these
 	// runs, in exactly the spots the path-shaped route asks about a path;
 	// what the descriptor changes is the call afterwards, not who decides.
-	// See dialect/zsh/filesparanoid.go.
-	"dialect/zsh.openParanoidDir": "the paranoid descent itself: the operand's directory components " +
+	// See dialect/zsh/internal/gatedfs/place.go.
+	"dialect/zsh/internal/gatedfs.OpenParanoidDir": "the paranoid descent itself: the operand's directory components " +
 		"opened one at a time so that none of them may be a symbolic link. It touches no name a " +
 		"script gave beyond the operand's own parents, and the operand is asked about by the " +
-		"caller through fileLstatAt.",
-	"dialect/zsh.lstat":   "filePlace.lstat, which fileLstatAt calls after AllowProbe — the gated route, one level down.",
-	"dialect/zsh.readDir": "filePlace.readDir, which fileReadDirAt calls after AllowList.",
-	"dialect/zsh.removeDir": "filePlace.removeDir, after fileMayModifyAt on the place. The unlink " +
+		"caller through LstatAt.",
+	"dialect/zsh/internal/gatedfs.Lstat":   "Place.Lstat, which LstatAt calls after AllowProbe — the gated route, one level down.",
+	"dialect/zsh/internal/gatedfs.ReadDir": "Place.ReadDir, which ReadDirAt calls after AllowList.",
+	"dialect/zsh/internal/gatedfs.RemoveDir": "Place.RemoveDir, after MayModifyAt on the place. The unlink " +
 		"beside it is filePlace.unlinkOnly, which goes through os.Root and so does not reach here.",
-	"dialect/zsh.chmod":  "filePlace.chmod, after the walk's own allow callback on the place.",
-	"dialect/zsh.chown":  "filePlace.chown, on the same terms.",
-	"dialect/zsh.lchown": "filePlace.lchown, on the same terms — `-h`, which changes the link and not what it points at.",
-	"dialect/zsh.fileMayModifyTargetPath": "the link chain chmod and chown follow, walked one hop " +
+	"dialect/zsh/internal/gatedfs.Chmod":  "Place.Chmod, after the walk's own allow callback on the place.",
+	"dialect/zsh/internal/gatedfs.Chown":  "Place.Chown, on the same terms.",
+	"dialect/zsh/internal/gatedfs.Lchown": "Place.Lchown, on the same terms — `-h`, which changes the link and not what it points at.",
+	"dialect/zsh/internal/gatedfs.MayModifyTargetPath": "the link chain chmod and chown follow, walked one hop " +
 		"at a time with AllowModify asked at every one. It is fileMayModifyTarget with the path " +
 		"already resolved, for the caller holding a place rather than an operand.",
 	"dialect/zsh.statPath": "the stat behind `zstat`, which statmodule.go asks AllowProbe about " +

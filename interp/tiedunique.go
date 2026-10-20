@@ -34,7 +34,7 @@ import "strings"
 // scalar and `typeset -aT S s=( a b )` for the array — deduplicated on both,
 // and the letter written on one.
 //
-// The rest of the measurements, each a row of dialect/zsh/tiedunique_test.go:
+// The rest of the measurements, each a row of tests/zsh/tiedunique_test.go:
 //
 //   - The **first** occurrence is the one kept, on the scalar side as on the
 //     array side: `S=3:1:2:3` is `3:1:2` and `S=1:3:1` is `1:3`.

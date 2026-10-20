@@ -16,7 +16,7 @@ repos:
     hooks:
       # The two fixers rewrite in place, so generated files stay out of them.
       - id: trailing-whitespace
-        exclude: ^(dist/|internal/oracle/testdata/golden\.json$|docs/spec/measurements\.md$)
+        exclude: ^(dist/|internal/oracle/testdata/golden\.json$|docs/spec/measurements\.md$|tests/[^/]+/cases/.*\.txtar$)
       - id: end-of-file-fixer
         exclude: ^(dist/|internal/oracle/testdata/golden\.json$|docs/spec/measurements\.md$)
       - id: check-yaml

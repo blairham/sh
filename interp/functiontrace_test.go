@@ -11,7 +11,7 @@ import (
 )
 
 // The substrate half of the trace mark, graded without any dialect in front
-// of it — dialect/zsh/functiontrace_test.go is the column's own rows, and a
+// of it — tests/zsh/functiontrace_test.go is the column's own rows, and a
 // case here passing proves nothing about those.
 //
 // What this file is for is the two things the seam decides and the letters do

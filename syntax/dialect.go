@@ -3099,7 +3099,7 @@ type Dialect struct {
 	// `alpine:3.20` on 2026-09-29, BusyBox 1.36.1 accepts none of the seven:
 	// `>>|`, `&>|`, `&>>|` and `&>>!` are syntax errors and `>!`, `>>!` and
 	// `&>!` write a file named `!out`. Fixed in #5119; ash answers false and
-	// `dialect/ash/clobbermarker_test.go` grades the rows on **which file
+	// `tests/ash/clobbermarker_test.go` grades the rows on **which file
 	// was written**, because three of them are silent.
 	//
 	// The two fallbacks are different and both are what the shells do, which

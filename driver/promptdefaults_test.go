@@ -16,7 +16,7 @@ import (
 // any of them, so a fix that hard-coded `\s-\v\$ ` somewhere in driver would
 // fail here rather than pass. What the *real* tables hold, and that they hold
 // anything at all, is asserted where they live and graded by the corpus:
-// dialect/bash/prompt_test.go, dialect/ksh/prompt_test.go and the
+// tests/bash/prompt_test.go, tests/ksh/prompt_test.go and the
 // prompt/default-* cases. A driver test cannot see those and must not pretend
 // to (#1386).
 func promptTable() interp.PromptStyle {

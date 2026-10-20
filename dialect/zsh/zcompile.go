@@ -8,6 +8,7 @@ import (
 	"errors"
 	"strings"
 
+	"github.com/blairham/sh/dialect/zsh/internal/gatedfs"
 	"github.com/blairham/sh/interp"
 	"github.com/blairham/sh/syntax"
 )
@@ -138,20 +139,20 @@ func zcompileBuiltin(r *interp.Runner, ctx context.Context, args []string) int {
 		}
 	}
 
-	// Through filesgate.go rather than the `os` package directly, which is
+	// Through dialect/zsh/internal/gatedfs/gate.go rather than the `os` package directly, which is
 	// this dialect's discipline for every path a script named — see the file's
 	// own comment, and internal/boundary's guard, which is what makes the
 	// property checkable by reading one file (#1819).
 	//
 	// 0444 is zsh's mode for a compiled file, measured. A cache is not a thing
 	// to make easy to edit by hand.
-	if err := fileWriteWhole(r, ctx, out, []byte(b.String()), 0o444); err != nil {
+	if err := gatedfs.WriteWhole(r, ctx, out, []byte(b.String()), 0o444); err != nil {
 		// A refusal by the gate has already been reported, in the words a
 		// refused redirection gets. Anything else is the kernel declining,
 		// and zsh's sentence for that is measured: `zcompile out.zwc a.zsh`
 		// into a directory with no write permission says `can't write zwc
 		// file: out.zwc` at 1.
-		if !errors.Is(err, errGateRefused) {
+		if !errors.Is(err, gatedfs.ErrGateRefused) {
 			r.Diagnosef("can't write zwc file: %s\n", out)
 		}
 		return 1

@@ -1,0 +1,8 @@
+A bare `trap` inside the running EXIT trap lists nothing here.
+Measured 2026-10-02 on dash (#5357).
+
+-- script --
+trap 'echo E; trap' EXIT; echo b
+-- out --
+b
+E

@@ -12,6 +12,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/blairham/sh/dialect/zsh/internal/gatedfs"
 	"github.com/blairham/sh/interp"
 )
 
@@ -34,7 +35,7 @@ import (
 // It does not have to be this shell's problem either. Registered *withdrawn*,
 // the name is out of the lookup until the module is loaded and the word finds
 // /usr/bin/stat exactly as before, which is the state zsh is in and the one
-// filesmodule.go measures in full. `zmodload -F zsh/stat b:stat` then answers
+// dialect/zsh/modules/files/files.go measures in full. `zmodload -F zsh/stat b:stat` then answers
 // 0 and produces the builtin rather than refusing by name (#1670).
 //
 // Every real caller still writes the narrowed `zstat` form. Counted on this
@@ -404,7 +405,7 @@ func zstatReport(r *interp.Runner, ctx context.Context, opts zstatOpts, files []
 // path, following links unless `-L` said not to.
 func zstatOne(r *interp.Runner, ctx context.Context, opts zstatOpts, name string) (statFields, error) {
 	if !opts.useFd {
-		at := shellPath(r, name)
+		at := gatedfs.ShellPath(r, name)
 		// The gate first, and answered as "not there" when it refuses.
 		// interp/fsgate.go opens by saying every probe in the shell comes
 		// through the gate because a probe is an oracle, and this one was

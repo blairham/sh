@@ -15,7 +15,7 @@ import (
 // against. These cases turn on nothing else.
 //
 // What they can*not* see is which dialect registers the words, or which
-// letters a real one gives them — that is dialect/zsh/functions_test.go, and
+// letters a real one gives them — that is tests/zsh/functions_test.go, and
 // a case here passing proves nothing about it (#1386).
 func functionsSem() Semantics {
 	s := permissive()

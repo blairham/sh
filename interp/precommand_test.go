@@ -17,7 +17,7 @@ import (
 //
 // The names here are the test's own rather than any dialect's — the core has
 // no table of its own and cannot see one — so what is checked is the rule and
-// not the roster. See dialect/zsh/precommand_test.go for the measured words.
+// not the roster. See tests/zsh/precommand_test.go for the measured words.
 
 func TestAnUnregisteredWordIsAnOrdinaryCommandName(t *testing.T) {
 	dir := fileDir(t, "a.txt")

@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/blairham/sh/dialect/zsh/internal/gatedfs"
 	"github.com/blairham/sh/interp"
 )
 
@@ -342,7 +343,7 @@ func zsystemLock(r *interp.Runner, ctx context.Context, opts zsystemFlockOpts, n
 	if opts.read {
 		direction, verb = "reading", true
 	}
-	path := shellPath(r, name)
+	path := gatedfs.ShellPath(r, name)
 	// A lock is taken by opening the file, so it is an open and goes through
 	// the gate like one (#1805). Recorded as a write unless `-r` asked for a
 	// read lock, which is the access it actually makes.

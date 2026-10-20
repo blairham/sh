@@ -10,6 +10,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/blairham/sh/dialect/zsh/internal/gatedfs"
 	"github.com/blairham/sh/interp"
 	"github.com/blairham/sh/syntax"
 )
@@ -1563,7 +1564,7 @@ func autoloadLocate(r *interp.Runner, name string) (path, text string, ok bool) 
 		if err != nil {
 			continue
 		}
-		return shellPath(r, candidate), string(body), true
+		return gatedfs.ShellPath(r, candidate), string(body), true
 	}
 	return "", "", false
 }

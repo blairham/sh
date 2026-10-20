@@ -18,7 +18,7 @@ import (
 // written nowhere at all and the command word stood alone.
 //
 // Named for the fields and not for the shells; which value each preset holds
-// is asserted in dialect/xtracearrayoperand_test.go against the panel's own
+// is asserted in tests/cross/xtracearrayoperand_test.go against the panel's own
 // bytes. What is asserted here is that the fields are different answers, that
 // each can be reached, and — the part that makes the suite worth running —
 // that neither reaches a word it must not.

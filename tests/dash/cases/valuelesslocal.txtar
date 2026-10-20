@@ -1,0 +1,12 @@
+A valueless `local` of a name its own scope already holds lists nothing
+and keeps the value. Measured 2026-10-04 on dash 0.5.12.
+
+-- config --
+name: sh
+env: PATH=/usr/bin:/bin
+-- script --
+f() { local FOO=x; local FOO; echo "read=[${FOO-UNSET}]"; }; f
+-- out --
+read=[x]
+-- status --
+0

@@ -15,7 +15,7 @@ import (
 // UnderscoreMovesOnlyBetweenInputCommands, and #3134.
 //
 // Named for the fields rather than for the shells: which value each preset
-// picks is asserted in dialect/underscoreframe_test.go against the panel's own
+// picks is asserted in tests/cross/underscoreframe_test.go against the panel's own
 // bytes. What is asserted here is that each reading can be reached and that
 // they are three readings and not one.
 
@@ -232,7 +232,7 @@ func TestTheWaysAScriptWritesUnderscore(t *testing.T) {
 // Semantics.UnderscoreHoldsTheCallAcrossEvalAndSource.
 //
 // Two readings, and this asserts both are reachable and that they are two.
-// Which value each preset picks is in dialect/underscoreeval_test.go against
+// Which value each preset picks is in tests/cross/underscoreeval_test.go against
 // the panel's own bytes.
 const underscoreEvalProbe = ": outer\n" +
 	"eval ': first; printf '\\''in [%s] '\\'' \"$_\"'\n" +

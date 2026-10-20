@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"go/parser"
 	"go/token"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -291,26 +292,38 @@ func readAllDialectNotes() {
 
 func readDialectNotes(name string) (map[string]string, error) {
 	dir := dialectDir(name)
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		return nil, fmt.Errorf("reading %s: %w", dir, err)
-	}
 	fset := token.NewFileSet()
 	out := map[string]string{}
-	for _, e := range entries {
-		n := e.Name()
-		if e.IsDir() || !strings.HasSuffix(n, ".go") || strings.HasSuffix(n, "_test.go") {
-			continue
-		}
-		f, err := parser.ParseFile(fset, filepath.Join(dir, n), nil, parser.ParseComments)
+	// The whole tree under the dialect, not only its top directory: a zsh
+	// module lives in a package of its own below dialect/zsh, and a marker
+	// there answers for the dialect exactly as one beside zsh.go does.
+	err := filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
-			return nil, fmt.Errorf("reading %s: %w", filepath.Join(dir, n), err)
+			return err
+		}
+		n := d.Name()
+		if d.IsDir() {
+			if n == "testdata" {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if !strings.HasSuffix(n, ".go") || strings.HasSuffix(n, "_test.go") {
+			return nil
+		}
+		f, err := parser.ParseFile(fset, path, nil, parser.ParseComments)
+		if err != nil {
+			return fmt.Errorf("reading %s: %w", path, err)
 		}
 		for _, cg := range f.Comments {
 			scanMarkers(cg.Text(), unansweredLine, func(m []string, body string) {
 				out[m[1]] = body
 			})
 		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
 	}
 	return out, nil
 }

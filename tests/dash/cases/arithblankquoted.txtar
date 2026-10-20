@@ -1,0 +1,11 @@
+A stored value that is not a number is named with its own blanks.
+Measured 2026-10-16 on dash 0.5.12 under `-c` (#6709).
+
+-- script leading-and-trailing --
+x=' 1+ '; echo $((x))
+-- suffix --
+Illegal number:  1+ 
+-- script inner --
+x='3 4'; echo $((x))
+-- suffix --
+Illegal number: 3 4

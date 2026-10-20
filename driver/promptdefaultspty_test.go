@@ -65,7 +65,7 @@ func TestAnInteractiveSessionHasTheDefaultPromptInPS1(t *testing.T) {
 	// A table unlike any real shell's, because nothing outside dialect/ names
 	// one — and because a driver that had hard-coded a real default would
 	// pass here by accident. What the real tables hold is asserted in
-	// dialect/bash/prompt_test.go and graded by the corpus.
+	// tests/bash/prompt_test.go and graded by the corpus.
 	sh.PromptStyle = repl.PromptStyle{Default: ptyPrompt, DefaultContinued: ptyContinued}
 	sh.Stdin, sh.Stdout, sh.Stderr = tty, tty, tty
 

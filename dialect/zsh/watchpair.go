@@ -67,7 +67,7 @@ import "github.com/blairham/sh/interp"
 // user and the tie table has the other nine. The tie branch in
 // interp/builtin.go still removes both halves of a tie, which is what the
 // reference does for `typeset -T SCA sca` and for the shell's own eight, and
-// dialect/zsh/watchunset_test.go carries those six rows as the control beside
+// tests/zsh/watchunset_test.go carries those six rows as the control beside
 // the four that moved.
 //
 // The surviving half is **emptied** and keeps `special`, and the join is then

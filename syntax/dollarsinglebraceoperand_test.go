@@ -18,7 +18,7 @@ import "testing"
 // which matched nothing where every reference replaces.
 //
 // The rows are about [Dialect.DollarSingleQuote] and name no shell. What the
-// reference columns print is in dialect/bash/dollarsingleinbracequoted_test.go
+// reference columns print is in tests/bash/dollarsingleinbracequoted_test.go
 // and its three siblings.
 func TestADollarSingleQuoteInABraceOperandIsOneConstruct(t *testing.T) {
 	t.Parallel()

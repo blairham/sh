@@ -1,0 +1,11 @@
+interp.Semantics.PrintfArgumentPositions in a column that has no positions.
+Measured 2026-10-02 against the shell this dialect claims:
+`printf '%2$s %1$s\n' a b` is a refusal at a non-zero status, where zsh
+5.9.2 writes `b a`.
+
+-- script --
+printf '%2$s %1$s\n' a b
+-- lacks --
+b a
+-- status --
+nonzero

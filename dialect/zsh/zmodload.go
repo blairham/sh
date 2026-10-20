@@ -11,6 +11,9 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/blairham/sh/dialect/zsh/modules/files"
+	"github.com/blairham/sh/dialect/zsh/modules/mathfunc"
+
 	"github.com/blairham/sh/interp"
 )
 
@@ -231,7 +234,7 @@ var zmodloadFeatures = map[string][]string{
 	"zsh/zleparameter": {"p:keymaps", "p:widgets"},
 	// Forty-seven math functions and not one builtin or parameter, which
 	// makes it the module the math-function kind of feature was measured
-	// for. All forty-seven are implemented; see mathmodule.go.
+	// for. All forty-seven are implemented; see dialect/zsh/modules/mathfunc.
 	"zsh/mathfunc": {
 		"f:abs", "f:acos", "f:acosh", "f:asin", "f:asinh", "f:atan",
 		"f:atanh", "f:cbrt", "f:ceil", "f:copysign", "f:cos", "f:cosh",
@@ -320,7 +323,7 @@ var zmodloadFeatures = map[string][]string{
 	// Nine file operations under eighteen names: the plain spellings and the
 	// `zf_` ones, which are the same commands. The `zf_` half is implemented
 	// and the plain half is not, for the reason `zsh/stat` gives — see
-	// filesmodule.go, where the split is argued rather than assumed.
+	// dialect/zsh/modules/files/files.go, where the split is argued rather than assumed.
 	"zsh/files": {
 		"b:chgrp", "b:chmod", "b:chown", "b:ln", "b:mkdir", "b:mv", "b:rm",
 		"b:rmdir", "b:sync",
@@ -881,7 +884,7 @@ func zmodloadEnforce(r *interp.Runner, module string, was, selected []string) {
 			// The third kind, and it joined the other two when startup
 			// began withdrawing them: a math function the selection leaves
 			// off is `unknown function` inside the expression that called
-			// it. See gatedmathfuncs.go (#5060).
+			// it. See dialect/zsh/modules/mathfunc/gated.go (#5060).
 			r.SetMathFunctionWithdrawn(name, !on[f])
 		}
 	}
@@ -910,7 +913,7 @@ func zmodloadEnforce(r *interp.Runner, module string, was, selected []string) {
 // back to withdrawn — which is `rm: command` and `stat: command`, the rows
 // #1670 exists for — and a name it registers outright stays registered,
 // which is `zstyle: builtin` and also the long-standing `zf_rm: builtin`
-// that filesmodule.go argues for on its own grounds. So this is strictly the
+// that dialect/zsh/modules/files/files.go argues for on its own grounds. So this is strictly the
 // state before the load, and no row moves that was not the load's doing.
 func zmodloadRelease(r *interp.Runner, module string) {
 	withdrawn := zmodloadWithdrawnAtStart(module)
@@ -925,7 +928,7 @@ func zmodloadRelease(r *interp.Runner, module string) {
 	// times, which is why they are in one function — a module half-unloaded
 	// is a state neither shell has (#5025, #5060).
 	releaseGatedParameters(r, module)
-	releaseGatedMathFuncs(r, module)
+	mathfunc.Release(r, module)
 }
 
 // zmodloadWithdrawnAtStart is the features a module provides whose names this
@@ -2119,7 +2122,7 @@ func isOrAre(n int) string {
 func zshWithdrawnPlainNames(module string) []string {
 	switch module {
 	case "zsh/files":
-		return filesPlainNames()
+		return files.PlainNames()
 	case "zsh/stat":
 		return statPlainNames()
 	}

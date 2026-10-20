@@ -1,0 +1,14 @@
+`unset` on `LINENO`, a parameter the shell owns, leaves its export letter, so
+the value assigned next reaches a child; a name the script made loses it.
+Measured 2026-10-03 on dash 0.5.12 under `env -i`. See
+Semantics.UnsetKeepsTheShellsOwnAttributes.
+
+-- script the-shells-own --
+export LINENO=5; unset LINENO; LINENO=7
+/usr/bin/env | while read -r kv; do case $kv in LINENO=*|FOO=*) echo "$kv";; esac; done
+-- out --
+LINENO=7
+-- script the-scripts-own --
+export FOO=1; unset FOO; FOO=2
+/usr/bin/env | while read -r kv; do case $kv in LINENO=*|FOO=*) echo "$kv";; esac; done
+-- out noeol --

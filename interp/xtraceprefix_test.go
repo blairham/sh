@@ -17,7 +17,7 @@ import (
 // Diagnostics.TracePrefixAssignment, and #3133, where it was written nowhere.
 //
 // Named for the field and not for the shells: which value each preset picks is
-// asserted in dialect/xtraceprefix_test.go against the panel's own bytes. What
+// asserted in tests/cross/xtraceprefix_test.go against the panel's own bytes. What
 // is asserted here is that the four shapes are four shapes, and that each of
 // them can be reached.
 //

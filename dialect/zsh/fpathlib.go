@@ -9,6 +9,8 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+
+	"github.com/blairham/sh/dialect/zsh/internal/gatedfs"
 )
 
 // InstalledFunctionLibrary is the function library of a zsh installed on this
@@ -278,7 +280,7 @@ func hasNoSubdirs(p string) bool {
 	if err != nil {
 		return false
 	}
-	return hasTwoLinks(info)
+	return gatedfs.HasTwoLinks(info)
 }
 
 func isDir(p string) bool {

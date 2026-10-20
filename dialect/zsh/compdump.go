@@ -21,6 +21,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/blairham/sh/dialect/zsh/internal/gatedfs"
 	"github.com/blairham/sh/interp"
 )
 
@@ -203,7 +204,7 @@ func compdumpWalk(r *interp.Runner, ctx context.Context, dirs []string, lines bo
 	for i, dir := range dirs {
 		// `$dir/_*` is what compinit globs, so an empty entry is the root
 		// and a relative one is the shell's directory's.
-		path := shellPath(r, dir+"/")
+		path := gatedfs.ShellPath(r, dir+"/")
 		if !r.AllowList(ctx, path) {
 			files = append(files, compdumpEntry{dir: i, sig: "!"})
 			continue
@@ -220,7 +221,7 @@ func compdumpWalk(r *interp.Runner, ctx context.Context, dirs []string, lines bo
 			}
 			e := compdumpEntry{dir: i, name: name, path: filepath.Join(path, name)}
 			switch fi, err := compdumpStatGated(r, ctx, e.path); {
-			case errors.Is(err, errGateRefused):
+			case errors.Is(err, gatedfs.ErrGateRefused):
 				e.sig = "?"
 			case err != nil:
 				e.sig = "-"
@@ -247,7 +248,7 @@ func compdumpWalk(r *interp.Runner, ctx context.Context, dirs []string, lines bo
 
 func compdumpStatGated(r *interp.Runner, ctx context.Context, path string) (fs.FileInfo, error) {
 	if !r.AllowProbe(ctx, path) {
-		return nil, errGateRefused
+		return nil, gatedfs.ErrGateRefused
 	}
 	return compdumpStat(path)
 }

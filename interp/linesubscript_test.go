@@ -245,7 +245,7 @@ func TestWritingThroughALineSubscriptReplacesTheLine(t *testing.T) {
 		// And the same span through the arithmetic store, so one construct
 		// does not come to have two answers. The third road a store reaches
 		// it by is a named reference, which needs a grammar these rows do
-		// not have — dialect/zsh/linesubscript_test.go carries that one.
+		// not have — tests/zsh/linesubscript_test.go carries that one.
 		{`(( v[(f)2] = 9 ))`, "[aa\n9\ncc]"},
 	} {
 		out, st := runSub(t, v+tc.src+`

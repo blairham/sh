@@ -34,7 +34,7 @@ package interp
 //
 //   - `-n` written on the same line keeps the letters on the reference.
 //     `declare -rn r=v` freezes the reference and leaves `v` alone, which
-//     `dialect/bash/namerefreadonly_test.go` pins.
+//     `tests/bash/namerefreadonly_test.go` pins.
 //   - A declaration that makes a **fresh** binding is not a declaration about
 //     the reference at all. `u=1; typeset -n s=u; f() { local -i s; }` gives
 //     the function its own `s` in bash and leaves `u` plain, exactly as

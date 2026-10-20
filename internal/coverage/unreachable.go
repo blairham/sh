@@ -42,7 +42,7 @@ var UnreachableByConstruction = []Unreachable{
 			"suite.OnlyHere runs every dialect tier under every reference on the " +
 			"machine and core/ and ext/ are cross-checked the same way, so a line " +
 			"that runs `suspend` stops the harness rather than failing it; the " +
-			"corpus has the same property (dialect/bash/suspend_test.go). " +
+			"corpus has the same property (tests/bash/suspend_test.go). " +
 			"`if false; then suspend; fi` would retire the element and ask nothing, " +
 			"and a `$BASH_VERSION` guard would make the line alone by the guard " +
 			"rather than by the shell, which is the grade OnlyHere exists to give.",

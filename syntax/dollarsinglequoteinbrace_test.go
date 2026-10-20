@@ -19,7 +19,7 @@ import "testing"
 //
 // The rows are about [Dialect.DollarSingleQuote] and name no shell. What the
 // four reference shells print for each is in
-// dialect/bash/dollarsinglequoteinbrace_test.go and its two siblings.
+// tests/bash/dollarsinglequoteinbrace_test.go and its two siblings.
 func TestADollarSingleQuoteInsideABraceBodyKeepsItsEscapes(t *testing.T) {
 	t.Parallel()
 	on := Core()

@@ -197,7 +197,7 @@ leaves open, and it is settled by measurement rather than by taste:
 **1600 of 1600 pairs agree.** The panel is every zsh release spelling from
 `2.6-17` to `6.0` crossed with itself, `-beta`, `-zefram` and `-dev`
 suffixes included. That sweep is too wide for a corpus row and is run by
-hand, with the case list in `dialect/zsh/shippedfunctions_test.go`; the four
+hand, with the case list in `tests/zsh/shippedfunctions_test.go`; the four
 readings the sweep turns on — component counts, numeric ordering, a
 non-numeric segment, the defaulted second argument — are corpus cases, under
 `fnlib/is-at-least-*`. The two are the same measurement at two widths, and
@@ -277,7 +277,7 @@ is a fact about whose file it is rather than about the behavior.
 
 Fills eight associative arrays and two scalars, all global, and is 0. Every
 key and every value was read back out of a live shell and is reproduced
-byte for byte; `dialect/zsh/shippedfunctions_test.go` asserts the whole
+byte for byte; `tests/zsh/shippedfunctions_test.go` asserts the whole
 table.
 
 | parameter | holds | hidden? |
@@ -606,7 +606,7 @@ did not have, the action came first, as its own change: the beginning search,
 
 Every row in the tables below was re-run against this shell's copy through the
 same probe and gave the same line and cursor, unless the row says otherwise.
-`cmd/zsh/contribwidgetspty_test.go` drives the shipped files through a real
+`cmd/zsh/tests/contribwidgetspty_test.go` drives the shipped files through a real
 session for the rows that decide each widget's shape.
 
 ### `up-line-or-beginning-search`, `down-line-or-beginning-search`
@@ -746,9 +746,9 @@ and printing the seven parts: 177 rows over five buffers, the cursor at every
 interesting place, eight styles. The widgets were measured by calling each from a
 widget and recording the line, the cursor, `$CUTBUFFER` and the status: 544 rows
 across `bash`, `normal`, `whitespace` and `B`, plus the line's edges. Both tables
-are committed as `dialect/zsh/testdata/wordstyle-*.tsv`, and
-`dialect/zsh/wordstyle_test.go` runs every row through this shell's copies.
-`cmd/zsh/wordstylepty_test.go` drives the keys through a real session. Measured
+are committed as `tests/zsh/testdata/wordstyle-*.tsv`, and
+`tests/zsh/wordstyle_test.go` runs every row through this shell's copies.
+`cmd/zsh/tests/wordstylepty_test.go` drives the keys through a real session. Measured
 beyond the manual:
 
 * with no word before the cursor, everything before it goes into the start and
@@ -828,8 +828,8 @@ since #5972 the editor keeps it, as zsh does.)
 dest` renames every file matching `srcpat` to `dest`, expanded once per file with
 the parenthesized parts as `$1`, `$2`, … and the name as `$f`. Measured by running
 zsh's own `zmv` in scratch directories and recording what it printed and what the
-directory held afterwards: 44 cases, committed as `dialect/zsh/testdata/zmv.tsv`
-and run against this copy by `dialect/zsh/contrib2_test.go`. Among them:
+directory held afterwards: 44 cases, committed as `tests/zsh/testdata/zmv.tsv`
+and run against this copy by `tests/zsh/contrib2_test.go`. Among them:
 
 | case | zsh 5.9.2 |
 | --- | --- |
@@ -857,7 +857,7 @@ gives it arrived after the function was written (#5951).
 
 `zargs [ option … -- ] [ input … ] [ -- command [ arg … ] ]` is xargs with its
 input on the command line. Measured by running zsh's own `zargs`: 37 cases,
-committed as `dialect/zsh/testdata/zargs.tsv` and run against this copy. The
+committed as `tests/zsh/testdata/zargs.tsv` and run against this copy. The
 shape of it:
 
 * the default command is `print -r --`, and its words are not counted by `-n`;
@@ -920,8 +920,8 @@ manual.
 `promptinit` finds every `prompt_<name>_setup` file on `$fpath`, autoloads it,
 lists the names in `prompt_themes`, and defines `prompt`. Measured with three
 themes of the test's own first on `$fpath` — 25 rows, committed as
-`dialect/zsh/testdata/promptinit.tsv` and run against this copy by
-`dialect/zsh/contrib3_test.go`. Among them:
+`tests/zsh/testdata/promptinit.tsv` and run against this copy by
+`tests/zsh/contrib3_test.go`. Among them:
 
 | call | zsh 5.9.2 |
 | --- | --- |
@@ -951,8 +951,8 @@ its own themes, so that call has no row.
 
 `zcalc [ -erf ] [ -#base ] [ expression … ]` is a calculator on the shell's
 arithmetic. Measured by running zsh's own `zcalc -e` over 137 calls, committed
-as `dialect/zsh/testdata/zcalc.tsv`, and through a pseudo-terminal for the
-session (`cmd/zsh/zcalcpty_test.go`). The shape of it:
+as `tests/zsh/testdata/zcalc.tsv`, and through a pseudo-terminal for the
+session (`cmd/zsh/tests/zcalcpty_test.go`). The shape of it:
 
 * each line's result is `$N`, N the number in the prompt, and `ans`;
 * a result the arithmetic writes with no point in it is printed through
@@ -998,8 +998,8 @@ zsh's own `vcs_info` was run in 31 git repositories built in fixed states:
 clean, changed, unborn, detached, bare, a linked worktree, inside `.git`, and
 part-way through a merge, rebases of three kinds, an am, cherry-picks, a
 revert and a bisect. That is 163 rows, committed as
-`dialect/zsh/testdata/vcs_info.tsv` beside `vcs_info-fixtures.sh`, which
-builds the repositories, and `dialect/zsh/vcsinfo_test.go` runs them against
+`tests/zsh/testdata/vcs_info.tsv` beside `vcs_info-fixtures.sh`, which
+builds the repositories, and `tests/zsh/vcsinfo_test.go` runs them against
 this copy. git 2.56.0 and Apple git 2.54.0 agreed on every row. The shape of
 it:
 
@@ -1053,9 +1053,9 @@ changed to, newest first, in `${ZDOTDIR:-$HOME}/.chpwd-recent-dirs`. `cdr N`
 goes back to the Nth of them. `chpwd_recent_filehandler` reads and writes the
 file, and `chpwd_recent_add` puts a directory at the front. The hook keeps a
 change only in an interactive shell, so these were measured by typing into
-`zsh -f -i` on a pipe. The 36 rows are committed as `cmd/zsh/testdata/cdr.tsv`
+`zsh -f -i` on a pipe. The 36 rows are committed as `cmd/zsh/tests/testdata/cdr.tsv`
 and run against this copy through the same kind of session by
-`cmd/zsh/cdr_test.go`.
+`cmd/zsh/tests/cdr_test.go`.
 
 | what | zsh 5.9.2 |
 | --- | --- |
@@ -1092,7 +1092,7 @@ Differences:
 Exceptions on top of `{ … } always { … }`. `throw name` raises an error
 carrying the name, and `catch pattern` in the always part answers 0 if the
 name matches, clearing the error so the script carries on. 15 rows, measured
-against zsh's own copies, are committed in `dialect/zsh/testdata/contrib5.tsv`
+against zsh's own copies, are committed in `tests/zsh/testdata/contrib5.tsv`
 together with the rows below them. What they show:
 
 * an exception thrown from a nested function lands in the nearest always
@@ -1118,7 +1118,7 @@ is one. As in zsh, the `+` has to be a word of its own: the manual's
 ### `history-search-end`, `incarg`, `smart-insert-last-word`, `bracketed-paste-url-magic`
 
 Four more widgets. Each was measured through a pseudo-terminal against zsh
-5.9.2 with its own copy, and `cmd/zsh/smallwidgetspty_test.go` replays every
+5.9.2 with its own copy, and `cmd/zsh/tests/smallwidgetspty_test.go` replays every
 row through a real session.
 
 `history-search-end` gives the widgets `history-beginning-search-backward-end`

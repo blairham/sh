@@ -63,7 +63,7 @@ import "strings"
 //   - A guard that declines an element **in this function** is *wrong*. The
 //     member path below shares this rule, so declining here would take the
 //     element's members away with it — four rows of
-//     dialect/ksh/namerefcompoundbody_test.go fail.
+//     tests/ksh/namerefcompoundbody_test.go fail.
 //   - A guard that declines an element **at the one call site that stores a
 //     body** is *dead*. Nothing moves: the members reach the element through
 //     the member path whichever name this hands back, and the element's own

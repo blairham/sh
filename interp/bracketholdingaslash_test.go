@@ -23,7 +23,7 @@ import (
 // looking at the expansion.
 //
 // The rows name the axis and no shell. What each column prints is in
-// dialect/bash/bracketholdingaslash_test.go and its zsh sibling.
+// tests/bash/bracketholdingaslash_test.go and its zsh sibling.
 func TestABracketHoldingASlashIsStillABracket(t *testing.T) {
 	dir := t.TempDir()
 	// A name `[zQ]` could match and a name `[a/b]` cannot exist, so the second

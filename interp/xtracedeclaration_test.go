@@ -15,7 +15,7 @@ import (
 // because nothing else was modeled.
 //
 // Named for the fields and not for the shells: which value each preset picks
-// is asserted in dialect/xtracedeclaration_test.go against the panel's own
+// is asserted in tests/cross/xtracedeclaration_test.go against the panel's own
 // bytes. What is asserted here is that the answers are different answers, that
 // each can be reached, and that neither reaches a word it should not.
 //

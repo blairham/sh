@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/blairham/sh/dialect/zsh/internal/gatedfs"
 	"github.com/blairham/sh/interp"
 	"github.com/blairham/sh/repl"
 )
@@ -624,7 +625,7 @@ func fcSetDropped(r *interp.Runner, n int) {
 
 // Every system call this file makes about a path a script named, with the
 // gate asked first. Nothing above reaches the `os` package by another route —
-// the same discipline `filesgate.go` and `mapfile.go` state, and the reason
+// the same discipline `dialect/zsh/internal/gatedfs/gate.go` and `mapfile.go` state, and the reason
 // `internal/boundary`'s guard has one name for each direction.
 
 // fcWriteFile puts the list down, having asked whether the script may modify
@@ -637,7 +638,7 @@ func fcSetDropped(r *interp.Runner, n int) {
 // A refusal is silent here because AllowModify has already reported it, in
 // the words a refused redirection gets.
 func fcWriteFile(r *interp.Runner, name string, entries []string, appendTo bool) int {
-	path := shellPath(r, name)
+	path := gatedfs.ShellPath(r, name)
 	if !r.AllowModify(r.ShellContext(), path) {
 		return 1
 	}
@@ -682,7 +683,7 @@ func fcWriteFile(r *interp.Runner, name string, entries []string, appendTo bool)
 // is — reading a file's contents is an open, and answering with an empty list
 // and saying nothing would leave a script believing the file was empty.
 func fcReadFile(r *interp.Runner, name string) (string, bool) {
-	path := shellPath(r, name)
+	path := gatedfs.ShellPath(r, name)
 	if !r.AllowReadPath(r.ShellContext(), path) {
 		return "", false
 	}

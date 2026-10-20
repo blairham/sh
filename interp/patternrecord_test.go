@@ -16,7 +16,7 @@ import (
 // holding whatever the last regular expression had put there.
 //
 // Named for the axis and never for a shell; which value each preset holds is
-// asserted in dialect/patternrecord_test.go against the panel's own bytes.
+// asserted in tests/cross/patternrecord_test.go against the panel's own bytes.
 //
 // Every row below is run at **both** values of the axis, and the `No` column
 // is the control: the record must be exactly what the seeding `=~` left, which

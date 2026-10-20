@@ -19,7 +19,7 @@ import (
 // between the parser and the builtin.
 //
 // Named for the axis and not for a shell; which value each preset holds, and
-// what it then writes, is in dialect/appendarrayoperand_test.go against the
+// what it then writes, is in tests/cross/appendarrayoperand_test.go against the
 // panel's own bytes.
 //
 // What is asserted is the **name that was declared**, and never the wording of

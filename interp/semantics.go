@@ -725,7 +725,7 @@ type Semantics struct {
 	// and zsh, so bash is the column it is wrong for, and giving bash its own
 	// answer wants a value on ValueBackslashInAPattern rather than a fix.
 	// Measured 2026-09-23; the seven-column table is in
-	// dialect/bash/valuebackslashquotedalready_test.go (#4158).
+	// tests/bash/valuebackslashquotedalready_test.go (#4158).
 	//
 	// Asked only of a piece that describes a name, and only where a value's
 	// backslash ran out of value in front of a separator — which is one shape
@@ -20854,7 +20854,7 @@ type Semantics struct {
 	// alike. driver/promptrefuse_test.go carries it to the front end
 	// (TestTheFrontEndCarriesWhetherAPromptAsksAgain),
 	// the tests beside repl/promptcomments_test.go drive the retry through a
-	// session, and dialect/zsh/promptrefuse_test.go pins one shell's answer
+	// session, and tests/zsh/promptrefuse_test.go pins one shell's answer
 	// (TestAPromptKeepsAskingAfterARefusedToken) (#2058).
 	PromptAsksAgainAfterARefusedToken bool
 
@@ -20921,7 +20921,7 @@ type Semantics struct {
 	// asking, for the reason the prompt answers beside it are (#6319).
 	//
 	// unpinned: reached, and the corpus cannot discriminate: no case draws a
-	// prompt. cmd/dash/substrefusalprompt_test.go drives a session on a pipe
+	// prompt. cmd/dash/tests/substrefusalprompt_test.go drives a session on a pipe
 	// and pins the dialect that leaves the line out
 	// (TestADashPromptDoesNotCountARefusedLine).
 	PromptRefusedLineIsNotCounted bool
@@ -20963,9 +20963,9 @@ type Semantics struct {
 	// unpinned: reached, and the corpus cannot discriminate: no case draws a
 	// prompt. repl/readblock_test.go drives a session on a pipe and pins both
 	// answers (TestAnErrorThrowsAwayTheRestOfTheReadBlock), and
-	// cmd/dash/readblock_test.go carries the dialect's answer through the
+	// cmd/dash/tests/readblock_test.go carries the dialect's answer through the
 	// binary (TestADashPromptLosesTheRestOfTheBlockAfterAnError), and
-	// dialect/readblock_test.go holds every preset to its measurement
+	// tests/cross/readblock_test.go holds every preset to its measurement
 	// (TestOnlyDashLosesTheRestOfTheReadBlock).
 	PromptErrorDiscardsTheRestOfTheReadBlock bool
 
@@ -20996,7 +20996,7 @@ type Semantics struct {
 	// unpinned: reached, and the corpus cannot discriminate: no case draws a
 	// prompt. repl/readsize_test.go drives a session on a pipe for each kind
 	// of answer (TestAReadAtAPromptFindsWhatThePromptLeft), and
-	// dialect/readsize_test.go holds each preset to its measurement
+	// tests/cross/readsize_test.go holds each preset to its measurement
 	// (TestEveryDialectReadsWhatItWasMeasuredToRead).
 	PromptReadSize ReadSize
 
@@ -21026,7 +21026,7 @@ type Semantics struct {
 	// unpinned: reached, and the corpus cannot discriminate: no case draws a
 	// prompt. repl/endofinputnewline_test.go drives a session on a pipe and
 	// pins both answers (TestTheEndOfInputEndsThePromptsLine), and
-	// dialect/readsize_test.go holds the presets to the measurement
+	// tests/cross/readsize_test.go holds the presets to the measurement
 	// (TestTheEndOfInputEndsTheLineInDashAshAndKsh).
 	PromptEndOfInputEndsTheLine bool
 
@@ -21139,7 +21139,7 @@ type Semantics struct {
 	// unpinned: reached, and the corpus cannot discriminate: no case draws a
 	// prompt. repl/unterminatedline_test.go drives a session on a pipe for
 	// every answer (TestAnUnterminatedLastLineIsPromptedForAgain), and
-	// dialect/readsize_test.go holds the presets to the measurement
+	// tests/cross/readsize_test.go holds the presets to the measurement
 	// (TestAnUnterminatedLastLineIsPromptedForAsMeasured).
 	PromptAgainForAnUnterminatedLine UnterminatedLinePrompt
 
@@ -21158,7 +21158,7 @@ type Semantics struct {
 	//	bash 5.3.20, zsh 5.9.2 A
 	//
 	// So in the three the backslash is a word of its own, as it is under
-	// `-c` in each (dialect/endinputbackslash_test.go), and no continuation
+	// `-c` in each (tests/cross/endinputbackslash_test.go), and no continuation
 	// prompt is drawn for it; ksh93's `Q>` and ash's second `P>` are
 	// PromptAgainForAnUnterminatedLine. bash is the one whose prompt and
 	// `-c` part: `bash -c 'echo A \'` keeps the backslash and the prompt
@@ -21170,7 +21170,7 @@ type Semantics struct {
 	// unpinned: reached, and the corpus cannot discriminate: no case draws a
 	// prompt. repl/lastbackslash_test.go drives a session on a pipe for both
 	// answers (TestABackslashTheInputEndsOnAtAPrompt), and
-	// dialect/readsize_test.go holds the presets to the measurement
+	// tests/cross/readsize_test.go holds the presets to the measurement
 	// (TestABackslashTheInputEndsOnIsLiteralAsMeasured).
 	PromptBackslashTheInputEndsOnIsLiteral bool
 
@@ -21257,7 +21257,7 @@ type Semantics struct {
 	// unpinned: reached, and the corpus cannot discriminate: no case draws a
 	// prompt. repl/endofinputconstruct_test.go pins both answers on a pipe
 	// (TestTheEndOfInputInAHeredocEndsOnlyThatBody), and
-	// cmd/bash/heredoceofpty_test.go presses ^D at a real prompt
+	// cmd/bash/tests/heredoceofpty_test.go presses ^D at a real prompt
 	// (TestControlDEndsOneHeredocBodyAtATime).
 	EndOfInputEndsOneHeredocBody bool
 	// PromptStatusWritesThePipelineRecord makes a status the prompt sets for
@@ -21282,7 +21282,7 @@ type Semantics struct {
 	//
 	// unpinned: reached, and the corpus cannot discriminate. Every case runs
 	// under `-c` or a script with no prompt, so no row has a line the prompt
-	// abandoned or refused. cmd/bash/interruptstatuspty_test.go presses ^C at
+	// abandoned or refused. cmd/bash/tests/interruptstatuspty_test.go presses ^C at
 	// a real prompt and pins the record
 	// (TestControlCAtThePromptSetsTheStatus).
 	PromptStatusWritesThePipelineRecord bool
@@ -21297,8 +21297,8 @@ type Semantics struct {
 	//
 	// unpinned: reached, and the corpus cannot discriminate. Every case runs
 	// under `-c` or a script with no prompt, so no row has a ^C typed at
-	// one. cmd/zsh/interrupttrappty_test.go and
-	// cmd/bash/interrupttrappty_test.go press ^C at a real prompt and pin
+	// one. cmd/zsh/tests/interrupttrappty_test.go and
+	// cmd/bash/tests/interrupttrappty_test.go press ^C at a real prompt and pin
 	// both answers (TestControlCAtThePromptRunsTheTrap).
 	PromptInterruptTrap PromptInterruptTrapping
 
@@ -21394,7 +21394,7 @@ type Semantics struct {
 	// comment in every row already, because the question is what an
 	// *interactive line* does with one and no row is typed at a prompt.
 	// Measured 2026-09-13. bash is pinned: its name moves with the option a
-	// row can set, so dialect/bash/interactivecomments_test.go answers it
+	// row can set, so tests/bash/interactivecomments_test.go answers it
 	// (TestTheCommentOptionNamesItselfToThePrompt and the three beside it,
 	// including the one that keeps `[[ -o ]]` out of the second namespace).
 	// repl/promptcomments_test.go drives a session and pins both answers
@@ -27285,7 +27285,7 @@ type Semantics struct {
 	//
 	// unpinned: reached, and the corpus cannot discriminate: no case puts
 	// more than a block of program before a read. driver/stdinprogram_test.go
-	// pins line against block, and dialect/readsize_test.go holds each preset
+	// pins line against block, and tests/cross/readsize_test.go holds each preset
 	// to its measurement (TestEveryDialectReadsWhatItWasMeasuredToRead).
 	StdinProgramReadSize ReadSize
 
@@ -30111,7 +30111,7 @@ type Semantics struct {
 	// unpinned: never reached from the corpus, for the reason the axis above
 	// it is not — no row draws a prompt, and with no prompt there is no
 	// "before the next one" for a notice to be held until. Measured 2026-09-25
-	// across the whole panel. cmd/zsh/jobnotifypty_test.go pins it through a
+	// across the whole panel. cmd/zsh/tests/jobnotifypty_test.go pins it through a
 	// pseudo-terminal, in both states of the option
 	// (TestNotifyDecidesWhenAFinishedJobIsReported), and
 	// repl/jobnotify_test.go pins the seam it is read at (#4524).

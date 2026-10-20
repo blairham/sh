@@ -1,0 +1,7 @@
+A `+` that fires on an empty positional list is one empty field here.
+Measured 2026-10-03 on dash.
+
+-- script --
+set --; set -- "${@:+w}"; echo $#
+-- out --
+1

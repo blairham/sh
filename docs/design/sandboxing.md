@@ -114,16 +114,27 @@ it fits in a paragraph.
     version  := 'version' ws '1'
     default  := 'default' ws decision [ws selector]
     rule     := decision ws selector [ws pattern]
+              | 'deny' ws 'exec-argv' ws program ws '--' ws word (ws word)*
     decision := 'allow' | 'deny'
     selector := 'exec' | 'exec-unconfined' | 'read' | 'write' | 'open'
               | 'stat' | 'list' | 'path' | 'signal'
     pattern  := rest of the line, trailing whitespace trimmed
+    program  := a pattern, ending before the first '--' that stands alone
+    word     := any run of non-whitespace without '*', '?', '[' or '\'
 
 The pattern is *the rest of the line* rather than a whitespace-delimited
 field, so a path containing spaces is written as it stands. A path
 containing a newline cannot be written; name a containing directory
 instead. That is the one expressible path this format cannot hold, and
 it is recorded here rather than left to be discovered.
+
+`exec-argv` is the one rule whose line holds more than a pattern, and it
+keeps the pattern's spaces by splitting at a delimiter rather than at
+whitespace: the program is everything before the first `--` standing
+alone, the argument words are everything after it. *Refusing a
+subcommand*, below, has the argument; a program path that itself holds a
+stand-alone ` -- ` is the one name that rule cannot write, and `?`
+stands in for the space there.
 
 `version 1` is **required** and must be the first directive. A parser
 that met a file it does not understand has to refuse it rather than read
@@ -193,6 +204,7 @@ for a subset of it.
 | --- | --- |
 | `exec`             | exec — **`deny` only** |
 | `exec-unconfined`  | exec — the spelling an `allow` has to use |
+| `exec-argv`        | exec of one program with given words in its arguments — **`deny` only** |
 | `read`             | open for reading, stat, read-dir |
 | `write`            | open for writing |
 | `open`             | open, either direction |
@@ -1667,6 +1679,105 @@ repository can; that is the scope decision at the head of this page and
 it is unmoved. An `allow exec-unconfined` is exactly as wide as an `allow
 exec` was. The policy file now says so.
 
+### Refusing a subcommand: `exec-argv`
+
+**Proposed in #6938 and awaiting the maintainer's decision** — the issue
+is labeled `needs-decision`, and everything in this section is the
+proposal's argument rather than a ruling.
+
+An `exec` rule matches the program the shell resolved and nothing else,
+so `deny exec` can refuse `make` and cannot refuse `make check` while
+leaving `make build`. Those are the rules a coding agent's harness most
+needs, and allowing the program allows all of them:
+
+```
+version 1
+default allow
+deny exec-argv /**/make -- check
+deny exec-argv /**/make -- oracle
+deny exec-argv /**/git  -- stash
+deny exec-argv /**/git  -- worktree remove
+deny exec-argv /**/git  -- commit --no-verify
+deny exec-argv /**/go   -- tool golangci-lint
+```
+
+**The program is a pattern like any other** — absolute, a glob over
+components, matched against the path the shell resolved rather than the
+name the script typed, given the platform alias and, being a deny, the
+case and composition fold. `/**/git` is every program called `git`, a
+version manager's shim included.
+
+**The words are literal, and the rule matches when all of them appear
+after the program, in the order written, with anything between them.**
+`git -C /srv/repo stash`, `make -j8 check` and `git commit -m x
+--no-verify` are all refused. A word is a whole argument: `check` does
+not match `oracle-check` and `stash` does not match `-m "stash it"`.
+
+Not a prefix, and the issue's own example is why: `git -C dir stash`
+begins `-C`, so a prefix rule about `stash` lets it through. Skipping the
+options first would need to know that `-C` takes a value, which is a fact
+about one program, and this package knows no programs. The ordered
+subsequence is the widening instead, and the cost is over-refusal:
+`deny exec-argv /**/git -- stash` also refuses `git log --grep stash`.
+That is the trade *A deny covers the other spellings* makes for case, in
+the same direction and for the same reason — a widened deny refuses
+more, which the script can see, and never permits anything.
+
+**Which is why there is no `allow exec-argv`.** A widened allow grants,
+and "these words appear somewhere in the arguments" is a grant
+`git -c alias.status='!sh' status` satisfies. The way to say "git, but
+not these" is the shape deny-overrides already wants — `allow
+exec-unconfined` for the program and `deny exec-argv` for what it must
+not be asked to do — and it composes like every other deny: concatenated
+in either order, the carve-out holds.
+
+**A glob character in a word is refused** rather than read literally,
+because `check*` matching only the word `check*` would be a rule that
+never fires. Giving words glob meaning is a second decision this does not
+need yet, and it is additive: every file that parses now would mean the
+same afterwards.
+
+**It is additive within `version 1`, and that is argued rather than
+assumed.** The version line exists so that a parser never *misreads* a
+file. No file that parses today contains `exec-argv` — it was an unknown
+selector, which is fatal — so no existing policy changes meaning, and an
+older binary handed a policy that uses it refuses the file at that line,
+which is exactly the refusal the version line asks for. A delimiter
+taught to the plain `exec` selector would not have been additive: a path
+may legally contain ` -- `, so an `exec` line that parses today would be
+read a new way.
+
+#### What it is for, and what it cannot see
+
+**This is a guardrail for a cooperative agent, not a boundary against a
+hostile script.** It stops an agent that is following instructions from
+running the command it was told not to, which is most of what a harness
+enforcing working agreements needs. It does not stop a script that is
+trying, and every limit below is a way of trying:
+
+- **Bundled and abbreviated options.** `git commit -nm x` carries
+  `--no-verify` as `-n` inside `-nm`. A rule names the words a program
+  will see; it cannot know that a program reads `-n` there.
+- **Anything the program reads instead of its arguments.** A git alias
+  (`git -c alias.x=stash x`), a Makefile target that runs another, an
+  environment variable or a configuration file.
+- **Launchers.** `env git stash`, `xargs`, `nice`, `timeout`: the program
+  the shell execs is the launcher, and the rule is about `git`.
+- **Another name for the program.** A copy or a link under a name the
+  pattern does not cover.
+- **Children.** An exec this policy allows starts a process this package
+  never hears from, so `bash -c 'git stash'` with `/bin/bash` allowed is
+  the head of this page again.
+
+**What it does see is every exec the shell itself makes**, and that is the
+part an agent harness can lean on. When this shell interprets the command
+line — `-c`, a script, an agent's terminal request that arrived as a line
+rather than as a vector, `eval`, a function, `command`, a subshell, a
+command substitution — each inner command is asked about with the vector
+the shell built for it. `cd x && git stash` is refused at the `git`.
+`cmd/sh`'s `TestAnArgvRuleReachesEveryExecTheShellInterprets` runs those
+routes under every dialect.
+
 ## What is deliberately not here
 
 - **Network rules.** The gate has no network action kind, so a policy
@@ -1682,7 +1793,9 @@ exec` was. The policy file now says so.
   caused them. "Let `git` read `/srv` but not `curl`" is not
   expressible, because by the time an exec has happened the child is
   outside the boundary entirely and the shell's own later accesses have
-  no command to attribute them to.
+  no command to attribute them to. `exec-argv` is not an exception: it
+  speaks about the exec itself, whose arguments are on the action, and
+  never about what the program does once it runs.
 - **Prompting.** `Decision` has `Allow` and `Deny` and no `Ask`. A
   question needs somewhere to ask it, which a library does not have; an
   embedder that has one writes a `Gate` that blocks on its own UI, which
@@ -1691,8 +1804,8 @@ exec` was. The policy file now says so.
 
 ## Open, and flagged for the maintainer
 
-Two decisions here are defensible defaults chosen in the absence of an
-answer, and both are cheap to reverse:
+Three decisions here are defensible defaults chosen in the absence of an
+answer, and all three are cheap to reverse:
 
 1. **`default allow <selector>` is supported at all.** The uniform
    posture is argued above and the per-kind override is documented as
@@ -1704,3 +1817,7 @@ answer, and both are cheap to reverse:
    verbose. The grouping was chosen because the ungrouped form makes
    `[ -f x ]` fail under a policy that plainly meant to allow it, which
    is the mistake people actually make.
+3. **`exec-argv`, its syntax and its match (#6938).** Proposed above and
+   not ratified: the selector word, the ` -- ` delimiter, deny-only,
+   literal words, and an ordered subsequence rather than a prefix are
+   each a choice the maintainer has not made.

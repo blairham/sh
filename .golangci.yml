@@ -244,9 +244,9 @@ formatters:
   enable:
     # Not yet enabled here — overrides/sh.yml says why. Adopt one
     # per pull request and shrink that list:
-    #   gofmt
     #   gci
     #   golines
+    - gofmt
     - gofumpt
     - goimports
 

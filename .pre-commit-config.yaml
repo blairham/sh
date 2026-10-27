@@ -18,7 +18,7 @@ repos:
       - id: trailing-whitespace
         exclude: ^(dist/|internal/oracle/testdata/golden\.json$|docs/spec/measurements\.md$|tests/[^/]+/cases/.*\.txtar$)
       - id: end-of-file-fixer
-        exclude: ^(dist/|internal/oracle/testdata/golden\.json$|docs/spec/measurements\.md$)
+        exclude: ^(dist/|internal/oracle/testdata/golden\.json$|docs/spec/measurements\.md$|tests/[^/]+/cases/.*\.txtar$)
       - id: check-yaml
         args: ['--allow-multiple-documents']
       - id: check-added-large-files
@@ -62,7 +62,7 @@ repos:
       - id: misspell
         args: [-locale, US, -i, "importas,colour,cancelled", -error]
         files: \.(md|ya?ml)$
-        exclude: ^(dist/|internal/oracle/testdata/golden\.json$|docs/spec/measurements\.md$)
+        exclude: ^(dist/|internal/oracle/testdata/golden\.json$|docs/spec/measurements\.md$|tests/[^/]+/cases/.*\.txtar$)
 
   # Secret scanning; the rules and any allowlist are in .gitleaks.toml.
   - repo: https://github.com/gitleaks/gitleaks

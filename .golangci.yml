@@ -30,37 +30,6 @@ linters:
   # The hook reports only what a commit introduces, so an older finding surfaces
   # when its lines are next touched: fix it then rather than adding a disable.
   enable:
-    # Not yet enabled here — overrides/sh.yml says why. Adopt one
-    # per pull request and shrink that list:
-    #   whitespace
-    #   unconvert
-    #   unparam
-    #   gocritic
-    #   goconst
-    #   revive
-    #   bodyclose
-    #   contextcheck
-    #   rowserrcheck
-    #   sqlclosecheck
-    #   errname
-    #   errorlint
-    #   forcetypeassert
-    #   nilerr
-    #   nilnil
-    #   noctx
-    #   predeclared
-    #   prealloc
-    #   sloglint
-    #   nestif
-    #   funlen
-    #   gocognit
-    #   gocyclo
-    #   thelper
-    #   tparallel
-    #   testableexamples
-    #   importas
-    #   interfacebloat
-    #   wastedassign
     # Core linters (enabled by default)
     - errcheck # Check for unchecked errors
     - govet # Suspicious constructs; the analyzers are in settings
@@ -69,24 +38,53 @@ linters:
     - unused # Check for unused constants, variables, functions and types
 
     # Code quality and style
+    - whitespace # Detection of leading and trailing whitespace
+    - unconvert # Remove unnecessary type conversions
+    - unparam # Reports unused function parameters
+    - gocritic # Diagnostic, performance and style checks
+    - goconst # Repeated strings that should be constants
     - misspell # Commonly misspelled English words (US locale)
+    - revive # Configurable style linter (see settings for the rule set)
 
     # Bug detection
+    - bodyclose # Check whether HTTP response body is closed
+    - contextcheck # Check if function use a non-inherited context
+    - rowserrcheck # Check whether Err of rows is checked
+    - sqlclosecheck # Check that sql.Rows and sql.Stmt are closed
+    - errname # Checks sentinel errors are prefixed with Err
+    - errorlint # Find code that will cause problems with error wrapping
+    - forcetypeassert # Finds forced type assertions
+    - nilerr # Finds a nil return after a non-nil error check
+    - nilnil # Checks for simultaneous return of nil error and nil value
+    - noctx # Finds HTTP requests without context.Context
+    - predeclared # Find code that shadows predeclared identifiers
 
     # Performance
+    - prealloc # Finds slice declarations that could be preallocated
+    - sloglint # Ensure consistent code style when using log/slog
 
     # Security
     - gosec # Inspects source code for security problems
 
     # Code complexity
+    - nestif # Reports deeply nested if statements
+    - funlen # Reports overly long functions
+    - gocognit # Reports high cognitive complexity
+    - gocyclo # Reports high cyclomatic complexity
 
     # Testing
+    - thelper # Detects test helpers not starting with t.Helper()
+    - tparallel # Detects inappropriate usage of t.Parallel()
+    - testableexamples # Checks if examples are testable
 
     # Import management
+    - importas # Enforces consistent import aliases
 
     # Interfaces
+    - interfacebloat # Checks the number of methods in an interface
 
     # Memory
+    - wastedassign # Finds wasted assignment statements
 
     # Beyond the baseline, for this repository (overrides/sh.yml)
     - forbidigo
@@ -209,12 +207,12 @@ linters:
     govet:
       enable:
         - atomicalign
+        - fieldalignment
         - nilness
         - reflectvaluecompare
+        - shadow
         - timeformat
         - unusedwrite
-        # fieldalignment: pending (staged adoption) here — overrides/sh.yml
-        # shadow: pending (staged adoption) here — overrides/sh.yml
 
     goconst:
       min-len: 3
@@ -242,13 +240,11 @@ linters:
 
 formatters:
   enable:
-    # Not yet enabled here — overrides/sh.yml says why. Adopt one
-    # per pull request and shrink that list:
-    #   gofmt
-    #   gci
-    #   golines
+    - gofmt
     - gofumpt
     - goimports
+    - gci
+    - golines
 
   settings:
     goimports:

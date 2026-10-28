@@ -311,6 +311,7 @@ func (r *Runner) nameRules(builtin string) (fatal Answer, takes NameOperands) {
 // when an operand has a subscript, so nothing else is affected.
 func (r *Runner) builtinNames(builtin string, args []string, explicitVariable bool) (rest []string, status int, ended bool) {
 	fatal, takes := r.nameRules(builtin)
+	r.landedPastARefusal = false
 	// `unset -v` asks for a variable by name, and gets a name checked even
 	// where the bare form checks nothing: bash 5.3 is quiet about `unset 1x`
 	// and refuses `unset -v 1x`. Measured in all four; only bash has a bare
@@ -336,6 +337,19 @@ func (r *Runner) builtinNames(builtin string, args []string, explicitVariable bo
 			} else if r.unspecified {
 				return nil, 2, false
 			} else {
+				// One shell lands the operand as the statement it spells
+				// before it refuses the name, and a store that refuses is
+				// then the line's whole complaint: `readonly x+=5` over a
+				// frozen `x` is `x: is read only` and nothing about `x+`.
+				// The operands in front have their names kept for the
+				// caller to declare, as they are behind any refusal. See
+				// interp/assignednotdeclared.go.
+				if r.valuesPastARefusal(builtin, fatal, a, base, args[i+1:]) {
+					return rest, r.status, false
+				}
+				if r.unspecified {
+					return nil, 2, false
+				}
 				status = r.badBuiltinName(builtin, name, name, fatal)
 				if r.ctl == controlExit {
 					return r.namesAfterARefusal(builtin, rest, args[i+1:], takes), status, true
@@ -375,6 +389,14 @@ func (r *Runner) builtinNames(builtin string, args []string, explicitVariable bo
 			if r.unspecified {
 				return nil, 2, false
 			}
+			// The values behind the refusal, ahead of its sentence. See
+			// interp/assignednotdeclared.go.
+			if r.valuesPastARefusal(builtin, fatal, "", "", args[i+1:]) {
+				return rest, r.status, false
+			}
+			if r.unspecified {
+				return nil, 2, false
+			}
 			status = r.badSubscriptOperand(builtin, a, name, fatal)
 			if r.ctl == controlExit {
 				return r.namesAfterARefusal(builtin, rest, args[i+1:], takes), status, true
@@ -389,6 +411,14 @@ func (r *Runner) builtinNames(builtin string, args []string, explicitVariable bo
 		}
 		if r.badLocalNameWaitsForTheReturn(builtin, a, name) {
 			continue
+		}
+		if r.unspecified {
+			return nil, 2, false
+		}
+		// The values behind the refusal, ahead of its sentence. See
+		// interp/assignednotdeclared.go.
+		if r.valuesPastARefusal(builtin, fatal, "", "", args[i+1:]) {
+			return rest, r.status, false
 		}
 		if r.unspecified {
 			return nil, 2, false
@@ -519,6 +549,25 @@ func (r *Runner) namesAfterARefusal(builtin string, kept, remaining []string, ta
 	r.ctl, r.abandon, r.errexitStopped = controlNone, abandonRequested, false
 	if !r.ask(r.sem().BadNameDeclaresTheOperandsAfterIt,
 		"a fatal bad name leaving the operands after it declared") {
+		return kept
+	}
+	// The shell that carries the **values** past the refusal and not the
+	// declaring has landed them already, ahead of the refusal's sentence,
+	// and hands the caller nothing behind it to declare. Where the refusal
+	// was raised by a path that did not land them — a dotted operand with
+	// no parent — they are landed now. See interp/assignednotdeclared.go.
+	if r.landedPastARefusal {
+		r.landedPastARefusal = false
+		return kept
+	}
+	if len(remaining) > 0 {
+		fatal, _ := r.nameRules(builtin)
+		if r.valuesPastARefusal(builtin, fatal, "", "", remaining) || r.landedPastARefusal {
+			r.landedPastARefusal = false
+			return kept
+		}
+	}
+	if r.unspecified {
 		return kept
 	}
 	for _, a := range remaining {

@@ -29131,6 +29131,76 @@ Pinned by `declare/a-bad-name-among-good-ones`,
 `unset/a-bad-name-among-names-to-remove` and
 `declare/a-bad-name-with-more-bad-names-behind-it`.
 
+**What ksh93 carries past the refusal is the values, and not the
+declaring.** The table above was read off `export`, where a value the word
+lands is exported either way, so the two could not be told apart there;
+`readonly 1y z=2` leaves `z` writable in that shell. The next axis is that
+refinement.
+
+**`BadNameEndsTheDeclaringNotTheAssigning`** — bash no · dash no · ksh93 yes · zsh no
+
+Carries a declaration's **values** past the bad operand that ended its
+**declaring**: the refused operand itself where it spells `name+=value`, and
+every plain `name=value` or `name+=value` behind it, land as the statement
+would land them — with none of the line's letters, no freeze, and in the
+scope the word takes on its own. A valueless or subscripted operand behind
+the refusal declares nothing. The operands in front of it were declared in
+full before the refusal was reached. Asked only on the fatal path, of a
+declaration word, where `BadNameDeclaresTheOperandsAfterIt` is yes — so
+`unset`, `set -A`, and every column that stops at the refusal never reach
+it, and bash, which takes the append operand and does not stop, never does
+either.
+
+Measured 2026-10-27 on ksh93u+ 2012-08-01 under `env -i PATH=/usr/bin:/bin`,
+`-c`, with `command` in front so the special builtin's refusal does not end
+the script (#6510):
+
+| script | ksh93u+ |
+| --- | --- |
+| `x=0; command readonly x+=5; echo "st=$? x=$x"; x=9` | `readonly: x+: invalid variable name`, `st=1 x=05`, and `x=9` is taken |
+| `x=0; command typeset -i x+=5; typeset -p x` | `x=05` — the line's letter does not reach it |
+| `typeset -i x=0; command readonly x+=5; typeset -p x` | `typeset -i x=5` — a standing attribute joins as the statement would |
+| `x=0; command export x+=5` | `x=05`, exported |
+| `command readonly 1y z=2; z=1` | `z=1`, not frozen |
+| `command readonly z=2 1y; z=1` | `z: is read only` |
+| `command typeset -i 1y z=1+1; typeset -p z` | `z=1+1` |
+| `command typeset -x 1y z=2` | not exported |
+| `command export 1y z=2; typeset -p z` | `typeset -x z=2` |
+| `z=1; command export 1y z` | not exported |
+| `command readonly 1y "a[1]=v"; typeset -p a` | nothing stored |
+| `command readonly 1y z` | nothing declared |
+
+The scope is the word's own, measured inside `function f`: `command typeset
+x+=5` leaves a local `x=5` over an untouched caller's `0`; `command readonly
+x+=5` writes `05` into the **caller's** `x` and leaves an empty, unfrozen
+local behind it — so an `x=3` after it in the call lists `x=3` and the
+caller still reads `05` — which is `ReadonlyFreezeStaysWithTheCall`'s order
+minus the freeze, and only for the refused operand: `command readonly 1y
+z=2` in the same function writes the caller's `z=2` and makes no local. And
+`command export x+=5` writes `typeset -x x=05` on the caller's cell with no
+local at all.
+
+**The store comes first, so its refusal is the line's.** Over a frozen `x`,
+`readonly x+=5` is `x: is read only` alone, under `command` as well, and
+the name is never judged; so is `readonly 1y x=5`, with nothing said about
+`1y`. The operands in front of it have landed by then: `function f {
+readonly z=1 x+=5; }; f` leaves `z=1`.
+
+The other columns, measured the same day: bash 5.3.20 and 3.2.57 take
+`x+=5` (`DeclarationTakesAnAppendOperand`) and leave `z` frozen after
+`readonly 1y z=2`; zsh 5.9.2's `{ readonly x+=5 z=2 } always { … }` shows
+`x=0` and a frozen `z=2`, so its operands behind a refusal are declared in
+full; dash 0.5.12 and BusyBox ash 1.37.0 leave `x=0` and `z` unset, which is
+`BadNameDeclaresTheOperandsAfterIt`'s no.
+
+This implementation refused `x+` with nothing assigned and then declared
+the operands behind any bad name in full, so `command readonly x+=5 y; y=1`
+was `y: is read only` here and `y=1` there. `interp/assignednotdeclared.go`
+lands the values at the refusal site, ahead of its sentence. Pinned by
+`TestWhetherABadNameLeavesTheValuesAssigned` and its neighbors in
+`interp/assignednotdeclared_test.go`, and by
+`tests/ksh/appendoperandrefused_test.go`.
+
 ### A declaration whose operand names an element
 
 `typeset a[1]=v` writes the element in every column that takes the

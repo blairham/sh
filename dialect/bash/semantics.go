@@ -3070,6 +3070,7 @@ func Semantics() interp.Semantics {
 	// bash columns answer alike.
 	s.BareReadTakesTheLineWhole = interp.Yes
 	s.BadNameDeclaresTheOperandsAfterIt = interp.No
+	s.BadNameEndsTheDeclaringNotTheAssigning = interp.No
 	s.SubscriptedOperandTakesTheIntegerAttribute = interp.Yes
 	// And the container letter, which this shell takes: `typeset -A m[k]=v`
 	// puts `v` under the key `k` and `typeset -a n[2]=v` puts it at index 2.

@@ -2571,6 +2571,7 @@ func Semantics() interp.Semantics {
 	s.ReadRefusesABadNameBeforeReading = interp.Yes
 	s.ReadJudgesEveryNameBeforeReading = interp.Yes
 	s.BadNameDeclaresTheOperandsAfterIt = interp.No
+	s.BadNameEndsTheDeclaringNotTheAssigning = interp.No
 	s.InteractiveSelectsEmacs = interp.No
 	// A line the prompt refused is not counted. See
 	// Semantics.PromptRefusedLineIsNotCounted (#6319).

@@ -32418,7 +32418,81 @@ type Semantics struct {
 	// carries on, so its whole list is declared by the loop rather than by
 	// this — the answer recorded for it is the one bash-as-`sh` gives, which
 	// is the same shell with the fatality turned on.
+	//
+	// What ksh93 carries past the refusal is the **values** and not the
+	// declaring — `readonly 1y z=2` leaves `z` writable there — which the
+	// `export` measurement above could not tell apart, since a value that
+	// word lands is exported either way. That refinement is the next axis.
 	BadNameDeclaresTheOperandsAfterIt Answer
+
+	// BadNameEndsTheDeclaringNotTheAssigning carries a declaration's
+	// **values** past the bad operand that ended its **declaring**. The
+	// refused operand itself, where it spells `name+=value`, lands as that
+	// statement would, and so does every plain `name=value` or `name+=value`
+	// behind it — with none of the line's letters, no freeze, and in the
+	// scope the word takes on its own: `typeset`'s local, `readonly`'s
+	// caller-side value, `export`'s mark. A valueless or subscripted operand
+	// behind the refusal declares nothing at all. The operands in front of
+	// it were declared in full before the refusal was reached.
+	//
+	// Measured 2026-10-27 on ksh93u+ 2012-08-01 under `env -i
+	// PATH=/usr/bin:/bin`, `-c`, with `command` in front so the special
+	// builtin's refusal does not end the script (#6510):
+	//
+	//	x=0; command readonly x+=5; echo "st=$? x=$x"; x=9
+	//	    `readonly: x+: invalid variable name`, `st=1 x=05`, and `x=9`
+	//	    is taken — assigned, refused as a name, and not frozen
+	//	x=0; command typeset -i x+=5; typeset -p x        `x=05`, no letter
+	//	typeset -i x=0; command readonly x+=5; typeset -p x
+	//	    `typeset -i x=5` — a standing attribute joins as the bare
+	//	    statement would join it
+	//	x=0; command export x+=5                          `x=05`, exported
+	//	command readonly 1y z=2; z=1                      `z=1`, not frozen
+	//	command readonly z=2 1y; z=1                      `z: is read only`
+	//	command typeset -i 1y z=1+1; typeset -p z         `z=1+1`
+	//	command typeset -x 1y z=2                         not exported
+	//	command export 1y z=2; typeset -p z               `typeset -x z=2`
+	//	z=1; command export 1y z                          not exported
+	//	command readonly 1y "a[1]=v"; typeset -p a        nothing stored
+	//	command readonly 1y z                             nothing declared
+	//
+	// The scope is the word's own, measured inside `function f`: `command
+	// typeset x+=5` leaves a local `x=5` over an untouched caller's `0`;
+	// `command readonly x+=5` writes `05` into the **caller's** `x` and
+	// leaves an empty, unfrozen local behind it, so an `x=3` after it in
+	// the call lists `x=3` and the caller still reads `05` — the order
+	// ReadonlyFreezeStaysWithTheCall has, minus the freeze; and `command
+	// export x+=5` writes `typeset -x x=05` on the caller's cell with no
+	// local at all.
+	//
+	// **The assignment comes first, so its refusal is the line's.** Over a
+	// frozen `x`, `readonly x+=5` is `x: is read only` alone, under
+	// `command` as well, and the name is never judged; the operands in
+	// front of it have landed by then (`function f { readonly z=1 x+=5; }`
+	// leaves `z=1`).
+	//
+	// The other columns, measured the same day: bash 5.3.20 and 3.2.57 take
+	// `x+=5` (DeclarationTakesAnAppendOperand) and leave `z` frozen after
+	// `readonly 1y z=2`; zsh 5.9.2's `{ readonly x+=5 z=2 } always { … }`
+	// shows `x=0` and a frozen `z=2`, so its operands behind a refusal are
+	// declared in full; dash 0.5.12 and BusyBox ash 1.37.0 leave `x=0` and
+	// `z` unset, which is BadNameDeclaresTheOperandsAfterIt's no.
+	//
+	// Asked only on the fatal path, of a declaration word, and only where
+	// BadNameDeclaresTheOperandsAfterIt has said yes — which is where there
+	// is anything behind the refusal to carry, and where a refused `+=`
+	// operand has a value to land. `unset` and `set -A` never reach it.
+	//
+	// unpinned bash: its refusal is not fatal and it takes the append
+	// operand, so no line of bash reaches the question; the interp suite
+	// pins both answers in TestWhetherABadNameLeavesTheValuesAssigned.
+	//
+	// unpinned dash: BadNameDeclaresTheOperandsAfterIt is no there, so the
+	// question is never asked; TestWhetherABadNameLeavesTheValuesAssigned
+	// pins the value's effect.
+	//
+	// unpinned ash: the same, for the same reason, and the same test.
+	BadNameEndsTheDeclaringNotTheAssigning Answer
 
 	// SubscriptedOperandTakesTheIntegerAttribute lets `typeset -i a[1]=0x10`
 	// give the array the integer attribute and write the element with it.
@@ -35854,6 +35928,9 @@ func PosixSemantics() Semantics {
 		// is the standard's reading — the builtin stops where it failed —
 		// and dash's and bash-as-`sh`'s measured answer.
 		BadNameDeclaresTheOperandsAfterIt: No,
+		// And with nothing carried past the refusal, nothing is assigned past
+		// it either.
+		BadNameEndsTheDeclaringNotTheAssigning: No,
 		// The standard names fourteen builtins special and says the shell
 		// may treat them differently, so a `type` that draws the
 		// distinction is the reading of this text — and it is what all

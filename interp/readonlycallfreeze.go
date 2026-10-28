@@ -25,6 +25,15 @@ import "strings"
 // holding nothing. The function reads its own empty local afterwards:
 // `readonly x=5; echo "${x-u}"` writes `u`.
 func (r *Runner) readonlyFreezesACallLocal(name, value string, hasValue, appends bool) bool {
+	return r.readonlyLandsACallValue(name, value, hasValue, appends, true)
+}
+
+// readonlyLandsACallValue is readonlyFreezesACallLocal with the freeze made
+// optional: without it, the value still goes to the name the function sees
+// and the local is still made, holding nothing, and nothing is frozen. That
+// is what the word leaves behind for an operand whose name it then refuses —
+// see Semantics.BadNameEndsTheDeclaringNotTheAssigning.
+func (r *Runner) readonlyLandsACallValue(name, value string, hasValue, appends, freezes bool) bool {
 	// The scope `typeset` would declare into, which from a function without
 	// the keyword is the keyword call it runs in (#6488).
 	defer r.declareInTheKeywordCallersScope()()
@@ -74,7 +83,7 @@ func (r *Runner) readonlyFreezesACallLocal(name, value string, hasValue, appends
 	// { readonly x; typeset -p x; }` lists `typeset -r x`, and the caller's
 	// array is back whole after the call.
 	r.dropTheOuterCompound(base, fresh)
-	r.declareEmpty(base, fresh, true, true, true, r.LocalInheritsTheOuterValue(), true)
+	r.declareEmpty(base, fresh, freezes, freezes, freezes, r.LocalInheritsTheOuterValue(), true)
 	if r.unspecified || r.ctl == controlExit {
 		return true
 	}
@@ -96,6 +105,8 @@ func (r *Runner) readonlyFreezesACallLocal(name, value string, hasValue, appends
 			return true
 		}
 	}
-	r.markReadonly(base)
+	if freezes {
+		r.markReadonly(base)
+	}
 	return true
 }

@@ -3678,6 +3678,10 @@ func Semantics() interp.Semantics {
 	// none of them. zsh's answer; bash and BusyBox ash keep them.
 	s.BareReadTakesTheLineWhole = interp.No
 	s.BadNameDeclaresTheOperandsAfterIt = interp.Yes
+	// What carries past the refusal is the values and not the declaring:
+	// `command readonly 1y z=2` leaves `z=2` writable, and `command readonly
+	// x+=5` leaves `x=05` writable. Measured 2026-10-27 on ksh93u+ (#6510).
+	s.BadNameEndsTheDeclaringNotTheAssigning = interp.Yes
 	s.SubscriptedOperandTakesTheIntegerAttribute = interp.Yes
 	// And the container letter, taken here too — what this shell then does
 	// with the subscript is TableLetterReachesItsOwnOperandsSubscript and

@@ -78,6 +78,9 @@ type arrayOperand struct {
 	// already, ahead of a later operand on the same name. See
 	// interp/arrayoperandorder.go.
 	seen, applied bool
+	// traced says the operand's lines were written as it was held, ahead of
+	// the command's own line. See interp/declarationinturn.go.
+	traced bool
 }
 
 // expandedArrayOperand is the element list already expanded for this operand,
@@ -106,7 +109,11 @@ func (r *Runner) traceArrayOperandsBefore(d *Diagnostics) []string {
 	}
 	var lines []string
 	for _, op := range r.arrayOperands {
-		lines = append(lines, r.traceArrayOperandLines(op, d)...)
+		if op.traced {
+			continue
+		}
+		l, _ := r.traceArrayOperandLines(op, d)
+		lines = append(lines, l...)
 	}
 	return lines
 }
@@ -123,13 +130,16 @@ func (r *Runner) traceArrayOperandsBefore(d *Diagnostics) []string {
 // declarations of their own and trace themselves as they are performed, which
 // is after the utility has run where ksh93 writes them in front of it; that row
 // is a second ordering and is not this one.
-func (r *Runner) traceArrayOperandLines(op arrayOperand, d *Diagnostics) []string {
+//
+// The second result says the lines are the element writes, one per element
+// of the expanded list and in its order.
+func (r *Runner) traceArrayOperandLines(op arrayOperand, d *Diagnostics) ([]string, bool) {
 	a := op.assign
 	if a.Members != nil {
-		return nil
+		return nil, false
 	}
 	if lines, ok := r.traceLiteralAsElementWrites(a, op.expanded, d); ok {
-		return lines
+		return lines, true
 	}
 	if len(a.Elems) == 0 && r.emptyListIsACompound() {
 		// Nothing between the parentheses, in the dialect where that pair is
@@ -139,9 +149,9 @@ func (r *Runner) traceArrayOperandLines(op arrayOperand, d *Diagnostics) []strin
 		// ksh93u+ 2012-08-01, `typeset -A s=()` and `typeset -a t=()` are
 		// `+ typeset -A s` and `+ typeset -a t` alone, which is also what the
 		// bare `mm=()` on a declared table writes there — nothing.
-		return nil
+		return nil, false
 	}
-	return []string{r.traceArrayOperandAssignment(a, op.expanded, d)}
+	return []string{r.traceArrayOperandAssignment(a, op.expanded, d)}, false
 }
 
 // traceArrayOperandAssignment is the operand written as the assignment it
@@ -149,6 +159,28 @@ func (r *Runner) traceArrayOperandLines(op arrayOperand, d *Diagnostics) []strin
 func (r *Runner) traceArrayOperandAssignment(a *syntax.Assign, e *expandedAssign, d *Diagnostics) string {
 	var b strings.Builder
 	b.WriteString(a.Name)
+	if a.Index != nil {
+		// An element literal's subscript, which the one column with the
+		// construct writes as it resolved and unquoted: `typeset f[1+1]=(p)`
+		// is `+ f[2]=( p )` and `typeset m[$k]=(p)` with `k='x y'` is `+ m[x
+		// y]=( p )`, where the same column quotes a scalar operand's key. A
+		// chain's leading links are written as the script spelled them.
+		// Measured 2026-10-16 on ksh93u+ 2012-08-01 (#6876).
+		layout := r.wordAsWrittenLayout()
+		for _, link := range a.Leading {
+			b.WriteString("[" + syntax.PrintSubscriptWith(link.Index, layout) + "]")
+		}
+		b.WriteString("[")
+		switch {
+		case e != nil && e.indexAheadSet:
+			b.WriteString(itoa(e.indexAhead))
+		case e != nil && e.subscriptAheadSet:
+			b.WriteString(e.subscriptAhead)
+		default:
+			b.WriteString(syntax.PrintSubscriptWith(a.Index, layout))
+		}
+		b.WriteString("]")
+	}
 	if a.Append {
 		b.WriteString("+")
 	}

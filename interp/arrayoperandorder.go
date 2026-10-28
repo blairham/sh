@@ -76,11 +76,25 @@ func (r *Runner) expandArrayOperands(tableLetterAhead, indexedLetter bool) bool 
 	for i := range r.arrayOperands {
 		op := &r.arrayOperands[i]
 		a := op.assign
+		if op.expanded != nil {
+			// Expanded already, ahead of a scalar operand written behind it.
+			// See interp/declarationinturn.go.
+			continue
+		}
 		if a.Members != nil || len(a.Elems) == 0 {
 			// A compound body writes the member assignments it performs and
 			// has no element list of its own, and an empty literal has
 			// nothing to expand.
 			continue
+		}
+		e := &expandedAssign{assign: a, elemsAreOperands: true}
+		if r.sem().DeclarationOperandsAreStoredInTurn == Yes {
+			// The subscript's side first, read once for the trace and the
+			// store alike. See Runner.resolveLiteralOperandSubscript.
+			r.resolveLiteralOperandSubscript(a, e)
+			if r.unspecified || r.givingUpAlready() {
+				return false
+			}
 		}
 		parsed, ok := r.literalElems(a.Elems,
 			r.literalReadsSubscripts(a.Name, a.Elems, a.Append),
@@ -105,9 +119,8 @@ func (r *Runner) expandArrayOperands(tableLetterAhead, indexedLetter bool) bool 
 			r.keepWhatAFailedLiteralStored(a.Name, a.Elems, parsed, how)
 			return false
 		}
-		op.expanded = &expandedAssign{
-			assign: a, elems: parsed, elemsSet: true, elemsAreOperands: true,
-		}
+		e.elems, e.elemsSet = parsed, true
+		op.expanded = e
 	}
 	return true
 }

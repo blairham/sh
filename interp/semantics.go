@@ -10015,6 +10015,30 @@ type Semantics struct {
 	// (#6770).
 	TableLiteralStoresEachElementAsItIsExpanded Answer
 
+	// DeclarationOperandsAreStoredInTurn expands and stores a declaration
+	// utility's `name=value` operands one at a time: each operand is stored
+	// — as a plain assignment, ahead of the utility's letters — and its
+	// trace line written before the operand behind it is expanded, so a
+	// later operand sees an earlier one's store, and a store that is refused
+	// or a value that will not expand ends the command with the operands
+	// before it in place. The utility then runs over the bare names. The
+	// other answer hands the utility every operand expanded against the
+	// state the command started in. Measured 2026-10-27 from a script file:
+	//
+	//	                                        ksh93u+ 2012-08-01   bash 5.3.20, 3.2.57, zsh 5.9.2, dash 0.5.12
+	//	x=0; typeset x=1 y=$x; echo $y          1                    0
+	//	export a=1 b=$a; echo $b                1                    (empty)
+	//	readonly c=1 d=$c; echo $d              1                    (empty)
+	//	typeset -A a; typeset a[k]=1 b=${a[k]}  b=1
+	//	typeset a=(1 2) x=${a[1]}               x=2
+	//	typeset -i x=1+1 y=$x                   y=1+1 before the letter lands
+	//	set -x; typeset x=1 y=${q?boom} z=2     `+ x=1`, then the complaint
+	//	readonly r; set -x; typeset x=1 r=2 y=3 `+ x=1`, `r: is read only`, x stays 1
+	//
+	// bash's `local` and zsh's `typeset` answer as their `export` does, and
+	// BusyBox ash as dash. See interp/declarationinturn.go (#6770).
+	DeclarationOperandsAreStoredInTurn Answer
+
 	// ArithSubscriptDollarSingleIsDecoded decodes the escapes of a `$'…'`
 	// quotation written in an arithmetic expression's subscript, where the
 	// other reading only takes the quotes off. Measured 2026-10-16, `-c`, a
@@ -35188,6 +35212,9 @@ func PosixSemantics() Semantics {
 		ArithStoreIntoAFrozenTableIsTaken: No,
 		// And no keyed literal to build a pair at a time.
 		TableLiteralStoresEachElementAsItIsExpanded: No,
+		// And a declaration's operands reach the utility expanded together:
+		// `export a=1 b=$a` leaves `b` empty in dash.
+		DeclarationOperandsAreStoredInTurn: No,
 		// XCU gives printf's format the XSI escape set and nothing else —
 		// `\\`, `\a`, `\b`, `\f`, `\n`, `\r`, `\t`, `\v` and `\ddd` — so
 		// neither spelling of the escape character is in it and a backslash
@@ -36689,6 +36716,12 @@ func CoreSemantics() Semantics {
 		// refusing a shape five columns agree about. ksh93 and zsh are the
 		// departures and say so themselves. See interp/prefixoperandorder.go.
 		PrefixExpandedBeforeADeclarationsOperand: No,
+		// And a declaration's operands reach the utility expanded together,
+		// which is four of the five columns — bash, zsh, dash and BusyBox
+		// ash, with ksh93 the departure. Answered here for the reason above
+		// it: the question is asked of every `typeset x=1`. See
+		// DeclarationOperandsAreStoredInTurn.
+		DeclarationOperandsAreStoredInTurn: No,
 		// A `~` with no home at all is the word as written, which is
 		// what this package has always done and what dash does. Answered
 		// here for the reason above it — the question is put to every

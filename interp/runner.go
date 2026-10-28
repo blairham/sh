@@ -5474,6 +5474,19 @@ type Runner struct {
 	// length of one simple command and restored behind it, for the reason
 	// declarationOperands is. See interp/xtracearrayoperand.go.
 	arrayOperands []arrayOperand
+	// operandsTracedInTurn says this command's declaration operands wrote
+	// their trace lines as they were held, so the command's own line does not
+	// write them again. See interp/declarationinturn.go.
+	operandsTracedInTurn bool
+	// emptyKeyWarningsOwed is how many stores under a table's empty key were
+	// held ahead of the utility and warned about there, so the real store the
+	// utility makes is not warned about a second time. See
+	// Runner.warnEmptyTableKeyTraced.
+	emptyKeyWarningsOwed int
+	// holdingAnOperand is set while an operand's store is being made ahead
+	// of the utility, so that store's own warning is written and not
+	// counted against what is owed.
+	holdingAnOperand bool
 	// lexedSubscriptOperands is this command's operands whose brackets the
 	// **parser** read — `unset a[$k]`, where the `[` and the `]` stood
 	// outside every quoting construct, so the subscript between them was a
@@ -8949,6 +8962,7 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 	savedSourceClosed := r.sourceClosedSubscriptOperands
 	savedArrayOperands := r.arrayOperands
 	savedRejoined := r.operandWasRejoined
+	savedTracedInTurn, savedOwed := r.operandsTracedInTurn, r.emptyKeyWarningsOwed
 	defer func() {
 		r.dashPrecommand = savedDash
 		r.declarationOperands = savedOperands
@@ -8956,6 +8970,7 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 		r.sourceClosedSubscriptOperands = savedSourceClosed
 		r.arrayOperands = savedArrayOperands
 		r.operandWasRejoined = savedRejoined
+		r.operandsTracedInTurn, r.emptyKeyWarningsOwed = savedTracedInTurn, savedOwed
 	}()
 	if assignmentsAlone(c) {
 		return r.assignmentsAloneCommand(ctx, c, fired)
@@ -9077,6 +9092,12 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 	// Where in argv the declaration operands land, for the trace. See
 	// Runner.declarationOperands.
 	var operandAt []int
+	// The operands stored one at a time as they are reached, in the column
+	// that does, and what that walk holds for the operands behind each. Put
+	// back at the end of the command as the backstop; the walk releases it
+	// once every operand is expanded. See interp/declarationinturn.go.
+	var turn operandsInTurn
+	defer turn.held.release(r)
 	// How much of argv had been built when each of the command's words was
 	// reached, which is what puts an array-literal operand back at the index
 	// it was written at. See interp/operandwrittenorder.go.
@@ -9196,8 +9217,19 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 				if !r.prefixBeforeADeclarationsOperand(c.Assigns) {
 					break
 				}
+				// Stored and traced as it is reached, in the column that
+				// does, with the literal operands written in front of it
+				// settled before its word expands — see
+				// interp/declarationinturn.go.
+				if !r.reachOperandInTurn(c, w, argv, &turn) && turn.stopped {
+					break
+				}
 				operandAt = append(operandAt, len(argv))
 				argv = append(argv, r.expandAssignArg(w))
+				argv = r.storeOperandInTurn(argv, &turn)
+				if turn.stopped {
+					break
+				}
 				sourceClosedAt = recordASourceClosedSubscript(sourceClosedAt, w, argv)
 				continue
 			}
@@ -9249,8 +9281,15 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 			if !r.prefixBeforeADeclarationsOperand(c.Assigns) {
 				break
 			}
+			if !r.reachOperandInTurn(c, w, argv, &turn) && turn.stopped {
+				break
+			}
 			operandAt = append(operandAt, len(argv))
 			argv = append(argv, r.expandAssignArg(w))
+			argv = r.storeOperandInTurn(argv, &turn)
+			if turn.stopped {
+				break
+			}
 			sourceClosedAt = recordASourceClosedSubscript(sourceClosedAt, w, argv)
 			continue
 		}
@@ -9537,9 +9576,20 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 			// has to put something else in that position and the expanded
 			// word cannot say which operand it came from. See
 			// interp/xtracearrayoperand.go.
-			r.arrayOperands = append(r.arrayOperands, arrayOperand{assign: a, at: at})
+			r.arrayOperands = append(r.arrayOperands, arrayOperand{
+				assign: a, at: at, expanded: turn.literals[a], traced: turn.traced[a],
+			})
 			argv = slices.Insert(argv, at, r.arrayOperandName(a))
 			inserted++
+			// The scalar operands behind it move along with it, or the
+			// trace reads the wrong word as the assignment: `typeset a=(1
+			// 2) x=5` wrote `typeset a x=5` with the scalar's position
+			// still counting from before the name went in.
+			for k, pos := range r.declarationOperands {
+				if pos >= at {
+					r.declarationOperands[k] = pos + 1
+				}
+			}
 		}
 	}
 	// A command whose expansion failed, or depended on an axis no dialect
@@ -9680,6 +9730,9 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 		keepForArrays = r.failedExpansionStatusIs(failedExpansionKeepsTheStatus)
 	}
 	expandedAll := r.expandArrayOperands(tableLetterAmongTheOptions(argv), indexedLetterAmongTheOptions(argv))
+	// Every operand is expanded, so what the walk held for the ones behind
+	// it goes back before the utility stores them for real.
+	turn.held.release(r)
 	keepForArrays()
 	if !expandedAll {
 		// The failure has been reported and has ended what it ends. See
@@ -15605,6 +15658,16 @@ type expandedAssign struct {
 	// been performed, which is the arrangement the subscript above needs.
 	tracesAfterTheStore bool
 
+	// subscriptAhead is an element literal operand's subscript as its words
+	// expanded, read once ahead of the store so that the trace can show it
+	// and the store need not read it again; indexAhead is the position it
+	// evaluated to, for an indexed array. See
+	// Runner.resolveLiteralOperandSubscript (#6876).
+	subscriptAhead    string
+	subscriptAheadSet bool
+	indexAhead        int
+	indexAheadSet     bool
+
 	// elementLines are a keyed literal's trace lines, one per element, in
 	// the column that traces the literal as the element writes it performs
 	// — and writes each of those lines once its own element is stored, so a
@@ -16793,6 +16856,7 @@ func (r *Runner) assignmentsAloneCommand(ctx context.Context, c *syntax.SimpleCm
 	r.dashPrecommand = false
 	r.declarationOperands, r.lexedSubscriptOperands, r.sourceClosedSubscriptOperands = nil, nil, nil
 	r.arrayOperands, r.operandWasRejoined = nil, false
+	r.operandsTracedInTurn, r.emptyKeyWarningsOwed = false, 0
 	if r.ctl == controlExit || r.ctl == controlAbandon {
 		return nil
 	}

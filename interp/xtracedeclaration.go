@@ -152,7 +152,9 @@ func traceOperandCommandWord(w string) string {
 // traceOperandsBefore is the assignment lines this dialect writes ahead of a
 // declaration utility's own line, in the order the operands were written.
 func (r *Runner) traceOperandsBefore(words []string, d *Diagnostics) []string {
-	if !r.traceOperandSplitsBefore(words, d) {
+	if r.operandsTracedInTurn || !r.traceOperandSplitsBefore(words, d) {
+		// Written already, one by one as each operand was stored — see
+		// interp/declarationinturn.go.
 		return nil
 	}
 	lines := make([]string, 0, len(r.declarationOperands))

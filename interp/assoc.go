@@ -1773,6 +1773,18 @@ func (r *Runner) warnEmptyTableKeyTraced() {
 	if w == "" || !r.tracing() {
 		return
 	}
+	if r.emptyKeyWarningsOwed > 0 && !r.holdingAnOperand {
+		// The same store, made and warned about already while the operand
+		// was held ahead of the utility. See interp/declarationinturn.go.
+		r.emptyKeyWarningsOwed--
+		return
+	}
+	r.writeEmptyTableKeyWarning()
+}
+
+// writeEmptyTableKeyWarning writes the warning, owed or not.
+func (r *Runner) writeEmptyTableKeyWarning() {
+	w := r.diag().EmptyTableKeyTraced
 	if r.inBuiltin == "read" {
 		// Spoken by the builtin, and located the way a builtin's own
 		// complaint is.

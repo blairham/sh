@@ -2723,6 +2723,10 @@ func Semantics() interp.Semantics {
 	s.FailedSubscriptedLiteralKeepsWhatItStored = interp.Yes
 	// See interp.Semantics.TableLiteralStoresEachElementAsItIsExpanded (#6770).
 	s.TableLiteralStoresEachElementAsItIsExpanded = interp.Yes
+	// And a declaration's operands are stored one at a time, each before the
+	// next is expanded: `typeset x=1 y=$x` leaves `y` holding 1. The only
+	// column. See interp.Semantics.DeclarationOperandsAreStoredInTurn (#6770).
+	s.DeclarationOperandsAreStoredInTurn = interp.Yes
 	// A plain table append that fails keeps nothing; but a declaration's
 	// container letter re-creates the name before its literal fails, so
 	// `typeset -a a=(5 $((1/0)))` leaves `typeset -a a`. The only column.

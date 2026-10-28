@@ -260,6 +260,11 @@ func (r *Runner) literalElems(elems []*syntax.ArrayElem, readsSubscripts, bareIs
 	// been expanded. See Runner.holdPathnameRefusal (#6677).
 	defer r.openWordList()()
 	failedBefore := r.expansionHasFailed()
+	// And one list for the pathname stage, which runs once every element
+	// is expanded: the positions in out whose fields wait for it. See
+	// interp/pathnamestage.go (#6768).
+	var waiting0 [8]int
+	waiting := waiting0[:0]
 	for _, el := range elems {
 		if r.expansionFailedHere(failedBefore) {
 			// An element that would not expand ends the list where it
@@ -352,7 +357,9 @@ func (r *Runner) literalElems(elems []*syntax.ArrayElem, readsSubscripts, bareIs
 		// is shaped, in the column with the narrow rule and in the column
 		// with the wider one alike. See interp/equalscontextposition.go.
 		out = append(out, literalElem{fields: r.expandLiteralElement(w), written: written})
+		waiting = append(waiting, len(out)-1)
 	}
+	r.matchLiteralElements(out, waiting)
 	if !r.expansionFailedHere(failedBefore) {
 		r.raiseHeldRefusal()
 	}
@@ -1154,10 +1161,27 @@ func (r *Runner) arrayToAppendTo(name string) (Array, bool) {
 	return nil, false
 }
 
-// expandLiteralElement is expandWord for one bare element of an array
+// expandLiteralElement is expandWordEscaped for one bare element of an array
 // literal, in the position that is not an assignment's value however the
-// element is shaped. See interp/equalscontextposition.go.
+// element is shaped. See interp/equalscontextposition.go. The pathname stage
+// is the literal's, once every element is expanded: see matchLiteralElements.
 func (r *Runner) expandLiteralElement(w *syntax.Word) []string {
 	defer r.outsideTheEqualsContextWord()()
-	return r.expandWord(w)
+	return r.expandWordEscaped(w)
+}
+
+// matchLiteralElements runs the pathname stage over a literal's bare elements,
+// the ones at the given positions of out, in order. One stage over one list,
+// the same way a command's words are matched. See interp/pathnamestage.go
+// (#6768).
+func (r *Runner) matchLiteralElements(out []literalElem, waiting []int) {
+	for _, at := range waiting {
+		el := &out[at]
+		// Each element is a run of its own, so the stage's loop is written
+		// out here rather than through a list that would have to be built
+		// for it: a literal is on the path a highlighter rebuilds on every
+		// keystroke, and an allocation per element was measured there
+		// (see dialect/zsh's TestALiteralDoesNotPrintItsElements).
+		el.fields = r.globFieldsUnlessSuppressed(el.fields, r.pathnameStageStopped())
+	}
 }

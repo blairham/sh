@@ -156,6 +156,10 @@ var theRoadToNoWords = []string{
 	// word, which a command of assignments alone does not have.
 	"armProgramGlob", "diagf", "disarmProgramGlob", "openWordList", "raiseHeldRefusal",
 	"takeProgramGlobRefusal",
+	// The pathname stage over the command's words, run once every word is
+	// expanded (#6768): a command with no words holds no run of fields for
+	// it, so it matches nothing and moves nothing.
+	"pathnameStage",
 }
 
 // TestTheAssignmentsAloneRoadIsTheOneItWasCheckedAgainst fails when what

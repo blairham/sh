@@ -90,6 +90,18 @@ func (r *Runner) readMayWriteAs(name string, array bool) bool {
 	if array {
 		defer func(was bool) { r.readRefusesTheArray = was }(r.readRefusesTheArray)
 		r.readRefusesTheArray = true
+		if spoken := r.containerWriteSpokenAs(name); spoken != "" {
+			// A whole array filled through a **reference**, in the column
+			// that names the reference the script wrote rather than the
+			// array it points at: measured 2026-10-27 on bash 5.3.20, `a=(1
+			// 2); readonly a; typeset -n r=a; read -a r` is `r: readonly
+			// variable` where `read r` is `a: readonly variable`, and ksh93u+
+			// names `a` for both (#6887). The same answer every container
+			// write through a reference gives — see
+			// Semantics.ContainerWriteThroughAReferenceNamesTheReference.
+			defer func(was string) { r.refusalSpokenAs = was }(r.refusalSpokenAs)
+			r.refusalSpokenAs = spoken
+		}
 	}
 	if first && target != name && r.diag().FrozenElementRefusalNamesTheElement {
 		if base, _, ok := r.subscriptOperand(name); ok && base == target && r.assocDeclared(base) {

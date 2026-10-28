@@ -151,6 +151,7 @@ func biMapfile(r *Runner, ctx context.Context, name string, args []string) int {
 	// walk, which answers nothing for an unaimed reference and left the store
 	// below trying to *aim* it at a file descriptor. See interp/nameref.go.
 	r.namerefGivesUpForAContainer(target)
+	written := target
 	if aimed, is := r.namerefTarget(target); is {
 		target = aimed
 	}
@@ -163,6 +164,17 @@ func biMapfile(r *Runner, ctx context.Context, name string, args []string) int {
 	}
 	if !isPlainName(target) {
 		r.diagf("%s: `%s': not a valid identifier\n", name, target)
+		return 1
+	}
+	// The freeze, asked once and before the kind: measured 2026-10-27 on
+	// bash 5.3.20, `declare -A b; readonly b; mapfile -t b` is `b: readonly
+	// variable` at 1, the kind never reached, and a frozen array behind a
+	// reference is `r: readonly variable` once — the reference as written,
+	// as `read -a r` names it. Asked here rather than left to the stores
+	// below, which each refused on their own: the emptying store and the
+	// first element's wrote the sentence twice, named the array the
+	// reference pointed at, and a `-C` callback ran in between (#6887).
+	if !r.readMayWriteAs(written, true) {
 		return 1
 	}
 	if _, ok := r.assocsLookup(target); ok {

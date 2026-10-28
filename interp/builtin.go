@@ -6893,6 +6893,21 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 	// and always did.
 	if letterA {
 		if aimed, is := r.namerefTarget(array); is {
+			// Asked only of a target that will refuse, so an ordinary fill
+			// through a reference reaches no axis.
+			if r.nameIsFrozen(aimed) {
+				// The refusal a freeze on the target makes names the
+				// reference as written, in the column that does: measured
+				// 2026-10-27 on bash 5.3.20, `a=(1 2); readonly a; typeset
+				// -n r=a; read -a r` is `r: readonly variable` where `read
+				// r` is `a: readonly variable`, and ksh93u+ names `a` for
+				// both (#6887). Chosen before the name is resolved, since
+				// the written one is gone after this line.
+				if spoken := r.containerWriteSpokenAs(array); spoken != "" {
+					defer func(was string) { r.refusalSpokenAs = was }(r.refusalSpokenAs)
+					r.refusalSpokenAs = spoken
+				}
+			}
 			array = aimed
 		}
 		if !isPlainName(array) {

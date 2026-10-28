@@ -2895,6 +2895,11 @@ func Semantics() interp.Semantics {
 	// ft=$?' EXIT; (exit 5); echo $((1/0)); }; f` is `ft=5` and the caller
 	// sees 1; the same for the shell's own trap. Measured 2026-10-27 (#6873).
 	s.ExitTrapAfterAGiveUpSeesEarlierStatus = interp.Yes
+	// A type letter other than the stated one ends a produced parameter:
+	// `typeset +i RANDOM` leaves a number that never changes, and `typeset
+	// -i16 SECONDS; typeset +i SECONDS` leaves `SECONDS=16#0`. Measured
+	// 2026-10-27 (#6854).
+	s.RetypingEndsAProducedParameter = interp.Yes
 	// A subshell's own EXIT trap fires where the subshell stopped (#6720):
 	// the last line it ran, which for a body that ran out is its last
 	// command and never the `(` — `(trap … EXIT` on line 2 with the last
@@ -6816,6 +6821,12 @@ func Apply(r *interp.Runner) {
 	// Three decimal places, where the two other shells that have SECONDS
 	// report whole seconds.
 	r.SetDynamic("SECONDS", func(rr *interp.Runner) string {
+		// Or in the places and format a script's own float letter asks
+		// for: `typeset -F 5 SECONDS` reads `1.00159` and a bare `-F`
+		// reads ten places, measured 2026-10-27 (#6854).
+		if s, ok := rr.FloatRendered("SECONDS", rr.SecondsFrom()); ok {
+			return s
+		}
 		return strconv.FormatFloat(rr.SecondsFrom(), 'f', 3, 64)
 	})
 	// And it lists with the places as a word of their own, read or not:

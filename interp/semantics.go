@@ -5594,6 +5594,34 @@ type Semantics struct {
 	// shell as well as the trap, which is not this.
 	ExitTrapAfterAGiveUpSeesEarlierStatus Answer
 
+	// RetypingEndsAProducedParameter makes a declaration that gives a
+	// produced parameter a type letter other than the one the dialect
+	// states for it — or takes the stated one off — end the producer, so
+	// the name is an ordinary variable holding the reading it gave at that
+	// moment, rendered through the new letters. The stated letter's own
+	// base or places may change and the producer goes on. Measured
+	// 2026-10-27 on ksh93u+ 2012-08-01 under `-c`, each with a `sleep 1`
+	// or two reads to tell a reading from a stored value (#6854):
+	//
+	//	typeset +i RANDOM; $RANDOM twice             the same number; lists RANDOM=…
+	//	typeset -u RANDOM; $RANDOM twice             the same number; typeset -u RANDOM=…
+	//	typeset -i16 RANDOM; $RANDOM twice           two numbers; typeset -i 16 RANDOM=…
+	//	typeset +i LINENO; $LINENO on two lines      1 and 1
+	//	typeset -i SECONDS; sleep 1; $SECONDS        0
+	//	typeset -i16 SECONDS; typeset +i SECONDS     SECONDS=16#0, still after a sleep
+	//	typeset +F SECONDS; sleep 1; $SECONDS        .001
+	//	typeset -E SECONDS; sleep 1 (any places)     0.001; typeset -E SECONDS=0.001
+	//	typeset -F 5 SECONDS; sleep 1; $SECONDS      1.00159; typeset -F 5 SECONDS=…
+	//	typeset -F SECONDS; sleep 1; $SECONDS        1.0018458366
+	//
+	// ksh93 alone. zsh 5.9.2 refuses to change the type of a special
+	// parameter at all (`typeset +i RANDOM`), and where it takes the letter
+	// the producer goes on: `typeset -F 5 SECONDS` counts fractions and
+	// `typeset -u RANDOM` keeps drawing. bash 5.3 keeps drawing after
+	// `declare +i RANDOM` and lists `declare -i RANDOM` still. dash and
+	// BusyBox ash have no declaration utility.
+	RetypingEndsAProducedParameter Answer
+
 	// SignalHandlerSeesEarlierStatus shows a signal handler the status from
 	// before the command that triggered it rather than that command's own.
 	// zsh alone: after `false; kill -INT $$`, zsh's handler reads 1 where
@@ -35262,6 +35290,9 @@ func PosixSemantics() Semantics {
 		// shell leaves with it: bash, dash, BusyBox ash and zsh. ksh93 says
 		// otherwise itself.
 		ExitTrapAfterAGiveUpSeesEarlierStatus: No,
+		// A produced parameter goes on producing whatever letters a script
+		// puts on it: bash and zsh. ksh93 says otherwise itself.
+		RetypingEndsAProducedParameter: No,
 		// A `return` typed at a prompt with nothing to return from ends the
 		// session where it ends a script: ksh93, dash and BusyBox ash. zsh
 		// keeps the session and says so itself.

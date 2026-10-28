@@ -10329,6 +10329,10 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 					r.emptyPrefixEntry(held)
 				case r.DynamicParameter(held):
 					undo[len(undo)-1].producedCell = true
+					// With the script's own letters off it, as any cell:
+					// `typeset -F 5 SECONDS; SECONDS=1 f` shows the body the
+					// stated `-F 3`, measured 2026-10-27 (#6854).
+					r.dropNameAttributes(held)
 					// One of the shell's own, whose type is the shell's: the
 					// prefix is an assignment to the parameter for the length
 					// of the call, which the save above already carries, and

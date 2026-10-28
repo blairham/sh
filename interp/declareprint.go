@@ -326,6 +326,17 @@ func (r *Runner) declarationOf(name string) (declaration, bool) {
 		if pd.Float {
 			d.precision = pd.Places
 		}
+		if prec, declared := r.floatPrecision[name]; declared {
+			// A float letter the script put on the name is the one
+			// written, places and format included, over the stated shape:
+			// measured 2026-10-27, `typeset -F 5 SECONDS` lists `typeset
+			// -F 5 SECONDS=0.00042` on ksh93u+ and `typeset -F SECONDS=…`
+			// on zsh 5.9.2, where this wrote the stated `-F 3` and `-i10`
+			// (#6854). The reading beside it is already in that shape —
+			// see Runner.FloatRendered.
+			d.integer, d.base = false, 0
+			d.float, d.precision, d.floatExponent = true, prec, r.floatIsExponent(name)
+		}
 		if r.underACallsProducedCell(name) {
 			// A call's own cell over the parameter keeps the stated float
 			// letter and not the stated integer one. See

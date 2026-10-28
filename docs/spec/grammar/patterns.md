@@ -2240,6 +2240,12 @@ it by the status that stood before the pattern — not before that file —
 and the function's status is 0 or the last substitution's, never the
 operand's.
 
+The rows that name a file are in this directory's order on macOS, `big c9
+a c10 lnk d b`, since the code runs in the order the directory lists. On
+Linux, in the suite's pinned image on a tmpfs listing `lnk d b c10 a big
+c9`, zsh 5.9.2 runs the code on `b` before `a`, and the two rows read `X a`
+and `X` (measured 2026-10-28); this shell answers the same there.
+
 **Under `set -x`, code in a qualifier writes the assignment's line as far
 as it has got ahead of its own**, and the line goes on from there: `set -x;
 x=( [ab](e:"print -u2 code":) )` is `+zsh:1> x=+zsh:1> print -u2 code`,

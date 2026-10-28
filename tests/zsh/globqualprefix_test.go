@@ -3,7 +3,11 @@
 
 package zsh_test
 
-import "testing"
+import (
+	"os"
+	"strings"
+	"testing"
+)
 
 // A `return` raised by glob qualifier code inside a command of assignments
 // alone leaves the function at the list's own status — 0, or the last
@@ -32,13 +36,17 @@ func TestAReturnFromQualifierCodeInABareAssignmentLeavesTheListsStatus(t *testin
 		{`f() { x=( [ab](e:"false; return 3":) ) y=1; print inf; }; f; print after $? $#x`, "after 0 1\n", ""},
 		// `return 0` keeps its own file and the 5 drops the next.
 		{`f() { (exit 5); x=( [ab](e:"return 0":) ); print inf; }; f; print after $? $#x`, "after 0 1\n", ""},
-		// The same rule in a builtin's words.
+		// The same rule in a builtin's words. The file kept is the one the
+		// directory lists second, since the code ran on the first: see
+		// laterOf.
 		{`f() { (exit 5); print X [ab](e:"return 3":N); print inf; }; f; print "after $?"`, "X\nafter 0\n", ""},
-		{`f() { print X [ab](e:"return 3":N); print inf; }; f; print "after $?"`, "X b\nafter 0\n", ""},
+		{`f() { print X [ab](e:"return 3":N); print inf; }; f; print "after $?"`, "X {later}\nafter 0\n", ""},
 	} {
-		out, _, errs := runZshSplit(t, globCodeFixture(t), tc.src)
-		if out != tc.out || errs != tc.errs {
-			t.Errorf("%s\n out %q errs %q\nwant %q errs %q", tc.src, out, errs, tc.out, tc.errs)
+		dir := globCodeFixture(t)
+		want := strings.ReplaceAll(tc.out, "{later}", laterOf(t, dir, "a", "b"))
+		out, _, errs := runZshSplit(t, dir, tc.src)
+		if out != want || errs != tc.errs {
+			t.Errorf("%s\n out %q errs %q\nwant %q errs %q", tc.src, out, errs, want, tc.errs)
 		}
 	}
 }
@@ -76,7 +84,7 @@ func TestATraceLineIsWrittenAheadOfQualifierCodesOwnTrace(t *testing.T) {
 		{
 			"the issue's row: a return in the code",
 			`set -x; f() { x=( [ab](e:"return 3":) ) print in; }; f`,
-			"+zsh:1> f\n+f:0> x=+f:0> return 3\n( b ) +f:0> print in\nin\n",
+			"+zsh:1> f\n+f:0> x=+f:0> return 3\n( {later} ) +f:0> print in\nin\n",
 		},
 		{
 			"a prefix to a program",
@@ -135,10 +143,42 @@ func TestATraceLineIsWrittenAheadOfQualifierCodesOwnTrace(t *testing.T) {
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			out, _ := runZsh(t, globCodeFixture(t), tc.src)
-			if out != tc.want {
-				t.Errorf("out %q\nwant %q", out, tc.want)
+			dir := globCodeFixture(t)
+			want := strings.ReplaceAll(tc.want, "{later}", laterOf(t, dir, "a", "b"))
+			out, _ := runZsh(t, dir, tc.src)
+			if out != want {
+				t.Errorf("out %q\nwant %q", out, want)
 			}
 		})
 	}
+}
+
+// laterOf names whichever of x and y the directory lists second, in its own
+// order rather than by name, which is the order qualifier code runs in: a
+// `return` from the code on the first leaves the second to be kept. That
+// order is the filesystem's, so a row naming the kept file names it through
+// this. Measured 2026-10-28 on zsh 5.9.2 in the suite's pinned image, on a
+// tmpfs that lists `b` ahead of `a`: `print X [ab](e:"return 3":N)` writes
+// `X a`, where macOS lists `a` first and the same line writes `X b`.
+func laterOf(t *testing.T, dir, x, y string) string {
+	t.Helper()
+	f, err := os.Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = f.Close() }()
+	names, err := f.Readdirnames(-1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range names {
+		switch name {
+		case x:
+			return y
+		case y:
+			return x
+		}
+	}
+	t.Fatalf("%s holds neither %s nor %s", dir, x, y)
+	return ""
 }

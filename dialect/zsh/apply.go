@@ -612,8 +612,12 @@ func Apply(r *interp.Runner) {
 		// The producer asks rather than the attribute reaching it, because a
 		// counted value never passes through the fold every stored name
 		// does: there is nothing to fold until the moment of the read.
-		if places, ok := rr.FloatPlacesOf("SECONDS"); ok {
-			return strconv.FormatFloat(rr.SecondsFrom(), 'f', places, 64)
+		//
+		// Through the letter's own rendering, so `typeset -E SECONDS` reads
+		// `1.012485000e+00` as zsh 5.9.2 does (measured 2026-10-27, #6854)
+		// and not a fixed-point number with ten places.
+		if s, ok := rr.FloatRendered("SECONDS", rr.SecondsFrom()); ok {
+			return s
 		}
 		return strconv.Itoa(int(rr.SecondsFrom()))
 	})

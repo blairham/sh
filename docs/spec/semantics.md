@@ -26621,6 +26621,50 @@ the call; the shell still leaves with the `exit`'s status. zsh 5.9.2:
 every route and with `TRAPEXIT` alike, where `return 4` shows 4; ksh93u+
 shows 3 (#6836).
 
+**`RetypingEndsAProducedParameter`** — bash no · dash — · ksh93 yes · zsh no · ash —
+
+Makes a declaration that gives a produced parameter a type letter other than
+the one the dialect states for it — or takes the stated one off — end the
+producer, so the name is an ordinary variable holding the reading it gave at
+that moment, rendered through the new letters. The stated letter's own base
+or places may change and the producer goes on. ksh93u+ 2012-08-01 under `-c`
+(#6854):
+
+| program | ksh93u+ |
+| --- | --- |
+| `typeset +i RANDOM`, then `$RANDOM` twice | the same number; lists `RANDOM=…` |
+| `typeset -u RANDOM`, then `$RANDOM` twice | the same number; `typeset -u RANDOM=…` |
+| `typeset -i16 RANDOM`, then `$RANDOM` twice | two numbers; `typeset -i 16 RANDOM=…` |
+| `typeset +i LINENO`, then `$LINENO` on two lines | `1` and `1`; lists `LINENO=1` |
+| `typeset -i SECONDS; sleep 1; echo $SECONDS` | `0` |
+| `typeset -i16 SECONDS; typeset +i SECONDS` | `SECONDS=16#0`, still after a sleep |
+| `typeset +F SECONDS; sleep 1` | `.001` |
+| `typeset -E SECONDS; sleep 1` (any places) | `0.001`; `typeset -E 2 SECONDS=0` |
+| `typeset -F 5 SECONDS; sleep 1` | `1.00159`; `typeset -F 5 SECONDS=…` |
+| `typeset -F SECONDS; sleep 1` | `1.0018458366` |
+
+The reading kept is the one the shell was showing a moment before, read as a
+number and written in the new letters: the stated three-place `0.000` is what
+`typeset -E 2 SECONDS` lists as `0`, and `16#0` is what `-i16` makes of it.
+`+F` leaves ksh93 writing `.000`, the leading zero gone, which is not modeled.
+
+zsh 5.9.2 refuses to change the type of a special parameter at all
+(`typeset +i RANDOM: can't change type of a special parameter`), and where it
+takes the letter the producer goes on: `typeset -F 5 SECONDS` counts fractions
+and `typeset -u RANDOM` keeps drawing. bash 5.3 keeps drawing after `declare
++i RANDOM` and still lists `declare -i RANDOM`. dash and BusyBox ash have no
+declaration utility.
+
+**A float letter's places and format reach the parameter in both shells that
+take it**, so that half is a correction and not an axis: `typeset -F 5
+SECONDS` reads seven characters and lists `typeset -F 5 SECONDS=0.00042` on
+ksh93u+ and `typeset -F SECONDS=…` on zsh, and `typeset -E SECONDS` reads
+`1.012485000e+00` on zsh, where this shell wrote the stated `-F 3` and
+`-i10` and a fixed-point number. A `function`-form call's cell over the
+parameter drops the script's letters and shows the stated shape — `typeset
+-F 5 SECONDS; SECONDS=1 f` is `typeset -x -F 3 SECONDS=1.000` in the body
+and `-F 5` again after it.
+
 **`ExitTrapAfterAGiveUpSeesEarlierStatus`** — bash no · dash no · ksh93 yes · zsh no · ash no
 
 Shows an EXIT trap that runs because the shell gave up over an error it

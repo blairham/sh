@@ -3738,6 +3738,11 @@ func (f declareFlags) integerComesOff(r *Runner) bool {
 
 // applyAttributes records what a name has been declared to be.
 func (r *Runner) applyAttributes(name string, f declareFlags) {
+	// The letters a produced parameter carries before this line moves them,
+	// for the reading it gives up if the line ends it. See
+	// Runner.producedParameterRetyped.
+	before := r.producedLettersBefore(name, f)
+	defer r.producedParameterRetyped(name, f, before)
 	// What the name was before this line's numeric letters land, which the
 	// case letters below ask. See caseLettersKeptApart.
 	_, floatBefore := r.floatPrecision[name]
@@ -4090,6 +4095,134 @@ func (r *Runner) applyAttributes(name string, f declareFlags) {
 			r.attrSet(name, attrHidden)
 		}
 	}
+}
+
+// producedLetters is the type letters a produced parameter carried before a
+// declaration moved them, and whether there is anything to settle at all.
+type producedLetters struct {
+	watch    bool
+	integer  bool
+	base     int
+	float    bool
+	prec     int
+	exponent bool
+}
+
+// producedLettersBefore takes the snapshot producedParameterRetyped reads the
+// parameter's last value through, for a line that writes a type letter over
+// a produced name. A line that writes none — `typeset -x SECONDS`, `typeset
+// -r RANDOM` — moves nothing and is not watched.
+func (r *Runner) producedLettersBefore(name string, f declareFlags) producedLetters {
+	if !f.integer && !f.float && !f.lower && !f.upper && !f.capital {
+		return producedLetters{}
+	}
+	if _, ok := r.producedDeclaration(name); !ok || !r.DynamicParameter(name) {
+		return producedLetters{}
+	}
+	prec, float := r.floatPrecision[name]
+	return producedLetters{
+		watch: true, integer: r.attrHas(name, attrInteger), base: r.integerBase[name],
+		float: float, prec: prec, exponent: r.floatIsExponent(name),
+	}
+}
+
+// producedParameterRetyped ends a producer whose parameter a declaration has
+// just given a type letter other than the stated one, in the dialect that
+// does that, leaving the name holding the reading it gave at that moment
+// through the new letters. See Semantics.RetypingEndsAProducedParameter.
+//
+// By letter and not by kind, because that is where the measurement draws the
+// line: `-F 5` over the stated `-F 3` keeps SECONDS counting and `-E` of any
+// precision stops it, both being floats. Asked only once a letter has moved,
+// so a dialect's own `typeset -F 3 SECONDS` opener and every `typeset -i16
+// RANDOM` meet no question.
+//
+// The reading is taken through the letters the name carried *before* the
+// line, which is what the shell was showing a moment ago: `typeset -E 2
+// SECONDS` lists `typeset -E 2 SECONDS=0`, the stated three-place `0.000`
+// read as a number and written in the new format, and not the clock's raw
+// fraction in that format.
+func (r *Runner) producedParameterRetyped(name string, f declareFlags, before producedLetters) {
+	if !before.watch || r.unspecified {
+		return
+	}
+	pd, ok := r.producedDeclaration(name)
+	if !ok || !r.DynamicParameter(name) {
+		return
+	}
+	if r.producedLetterStands(name, pd) {
+		return
+	}
+	if !r.ask(r.sem().RetypingEndsAProducedParameter,
+		"a declaration of another type ending a produced parameter") {
+		return
+	}
+	produce, ok := r.producersLookup(name)
+	if !ok {
+		return
+	}
+	reading := r.withProducedLetters(name, before, func() string { return produce(r) })
+	r.producersDel(name)
+	delete(r.dynamicWriters, name)
+	delete(r.assigned, name)
+	delete(r.dynamicDeclarations, name)
+	if r.endedProducers == nil {
+		r.endedProducers = map[string]bool{}
+	}
+	r.endedProducers[name] = true
+	if folded, ok := r.attributeFolded(name, reading); ok {
+		r.varsPut(name, folded)
+	}
+}
+
+// withProducedLetters runs read with the name's type letters put back the way
+// the snapshot holds them, and the line's own letters back on afterwards.
+func (r *Runner) withProducedLetters(name string, before producedLetters, read func() string) string {
+	prec, float := r.floatPrecision[name]
+	integer, base, exponent := r.attrHas(name, attrInteger), r.integerBase[name], r.floatIsExponent(name)
+	put := func(p producedLetters) {
+		if p.float {
+			if r.floatPrecision == nil {
+				r.floatPrecision = map[string]int{}
+			}
+			r.floatPrecision[name] = p.prec
+		} else {
+			delete(r.floatPrecision, name)
+		}
+		r.markFloatExponent(name, p.exponent)
+		if p.integer {
+			r.attrSet(name, attrInteger)
+		} else {
+			r.attrClear(name, attrInteger)
+		}
+		if p.base != 0 {
+			if r.integerBase == nil {
+				r.integerBase = map[string]int{}
+			}
+			r.integerBase[name] = p.base
+		} else {
+			delete(r.integerBase, name)
+		}
+	}
+	put(before)
+	v := read()
+	put(producedLetters{integer: integer, base: base, float: float, prec: prec, exponent: exponent})
+	return v
+}
+
+// producedLetterStands reports whether the type letter the dialect states
+// for a produced parameter is the one the name carries now: the integer
+// letter, in any base, or the fixed-point float letter, at any precision.
+// A stated shape with neither letter has nothing to lose.
+func (r *Runner) producedLetterStands(name string, pd ProducedDeclaration) bool {
+	_, float := r.floatPrecision[name]
+	switch {
+	case pd.Integer:
+		return r.attrHas(name, attrInteger)
+	case pd.Float:
+		return float && !r.floatIsExponent(name)
+	}
+	return true
 }
 
 // namesANumericType reports whether this declaration actually *adds* the

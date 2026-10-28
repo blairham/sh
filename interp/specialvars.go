@@ -1060,6 +1060,20 @@ func (r *Runner) Uptime() time.Duration {
 	return time.Since(r.started)
 }
 
+// FloatRendered is a produced number written the way the float letters a
+// script put on the name say — `-F 5` places, or the `E` letter's format —
+// and false where the name carries no float letter, so the producer writes
+// its own shape. One reader for both letters, because a producer that asked
+// FloatPlacesOf alone wrote `typeset -E SECONDS` as a fixed-point number:
+// measured 2026-10-27, zsh 5.9.2 reads `1.012485000e+00` there and ksh93u+
+// `0.0004010201` after a bare `-F` (#6854).
+func (r *Runner) FloatRendered(name string, v float64) (string, bool) {
+	if _, ok := r.floatPrecision[name]; !ok {
+		return "", false
+	}
+	return r.floatFormatted(name, v)
+}
+
 // FloatPlacesOf is how many decimal places a name's float attribute writes it
 // in, and whether the name has one at all — `typeset -F 3 SECONDS=0`.
 //

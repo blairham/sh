@@ -467,12 +467,16 @@ func (r *Runner) forClause(ctx context.Context, c *syntax.ForClause) error {
 			// is expanded. See Runner.holdPathnameRefusal (#6677).
 			closeList := r.openWordList()
 			failedBefore := r.expansionHasFailed()
+			// And one list for the pathname stage, which runs once every
+			// word is expanded. See interp/pathnamestage.go (#6768).
+			var waiting []heldGlob
 			for _, w := range c.Items {
 				if r.expansionFailedHere(failedBefore) {
 					break
 				}
-				items = append(items, r.expandWord(w)...)
+				items, waiting = holdGlob(items, waiting, r.expandWordEscaped(w), false, false)
 			}
+			items = r.pathnameStage(items, waiting, nil)
 			r.raiseHeldRefusal()
 			closeList()
 			endGlobUnit()

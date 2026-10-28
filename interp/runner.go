@@ -9063,6 +9063,13 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 	var argvBefore0 [8]int
 	argvBefore := argvBefore0[:0]
 	var lexedAt, sourceClosedAt []string
+	// The words' fields, expanded and waiting for the pathname stage, and
+	// the positions whose operands wait to be read after it. On this frame
+	// for the same reason argvBefore is. See interp/pathnamestage.go.
+	var waiting0 [8]heldGlob
+	waiting := waiting0[:0]
+	var lexedFrom0 [2]int
+	lexedFrom := lexedFrom0[:0]
 	endGlobUnit := r.beginGlobUnit()
 	// A refusal of a pattern in the command's words is held for this
 	// command, over whatever the substitutions in its words run. See
@@ -9329,18 +9336,16 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 				break
 			}
 		}
-		if !scanning && len(argv) > modifierWords {
-			// Behind the command's name, so a refusal here may be the
-			// program's. Armed around the pathname stage alone, which runs
-			// no command: a substitution in the next word runs a loop or
-			// an array assignment of its own, whose refusal is its own.
-			r.armProgramGlob(argv, modifierWords, stoppedAtCommand)
-		}
-		argv = append(argv, r.globFieldsUnlessSuppressed(fields, noglob)...)
-		r.disarmProgramGlob()
+		// The fields go onto the list expanded and not yet matched: the
+		// pathname stage runs over the whole list once every word is
+		// expanded, below. Behind the command's name a refusal there may be
+		// the program's, which is what armed carries. See
+		// interp/pathnamestage.go (#6768).
+		argv, waiting = holdGlob(argv, waiting, fields, noglob, !scanning && len(argv) > modifierWords)
 		if appendOperand && len(argv) == operandStart+1 {
 			// One field, so there is a single position to record. A word that
-			// split has none, and nothing in the panel splits one.
+			// split has none, and nothing in the panel splits one. Whether
+			// the match leaves it one field is asked after the stage.
 			operandAt = append(operandAt, operandStart)
 		}
 		// The same one-field rule, for the same reason, and the fact is about
@@ -9348,7 +9353,7 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 		// operand stood outside every quoting construct. See
 		// Runner.lexedSubscriptOperands.
 		if len(argv) == operandStart+1 && wordBracketsAreLexed(w) {
-			lexedAt = append(lexedAt, argv[operandStart])
+			lexedFrom = append(lexedFrom, operandStart)
 		}
 	}
 	if keepsTheStatus && r.expandErr && failedUnder == statusBefore {
@@ -9356,6 +9361,31 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 		failedUnder = r.failedExpansionStatus
 	}
 	r.failedExpansionStatus = statusBefore
+	// Every word is expanded, so the pathname stage runs over the list now,
+	// word by word, and stops at the first word it refuses. Armed around each
+	// word behind the command's name alone: the stage runs no substitution,
+	// and the code a qualifier runs has a hold of its own. See
+	// interp/pathnamestage.go (#6768).
+	argv = r.pathnameStage(argv, waiting, func(list []string) {
+		r.armProgramGlob(list, modifierWords, stoppedAtCommand)
+	})
+	// The positions recorded while the list was built, where the matches
+	// moved them.
+	for i, at := range argvBefore {
+		argvBefore[i] = shiftedBy(waiting, at)
+	}
+	kept := operandAt[:0]
+	for _, at := range operandAt {
+		if from := shiftedBy(waiting, at); cameToOneField(waiting, at) || !heldAt(waiting, at) {
+			kept = append(kept, from)
+		}
+	}
+	operandAt = kept
+	for _, from := range lexedFrom {
+		if cameToOneField(waiting, from) {
+			lexedAt = append(lexedAt, argv[shiftedBy(waiting, from)])
+		}
+	}
 	if len(argv) > modifierWords {
 		r.armProgramGlob(argv, modifierWords, stoppedAtCommand)
 	}

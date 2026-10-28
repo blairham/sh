@@ -1172,6 +1172,42 @@ no) and `GlobNoMatchIsError` (dash, bash and ksh93 no; zsh yes). Neither
 is answered in the core, so an unqualified core run refuses the glob
 rather than picking a side.
 
+### The stage runs once every word of the list is expanded
+
+A command's words, a `for` or `select` list, an array literal and a
+declaration's literal operand are each one list, and the pathname stage
+runs over the finished list, word by word, after every word has had its
+other expansions. Only zsh can show the order, because a glob qualifier's
+code is the one place the stage runs a command. Measured 2026-10-27 on
+zsh 5.9.2 under `-fc` and from a file, in a directory holding one file
+`q`, with both streams on one pipe:
+
+    echo q*(e:'print -u2 Q':) $(echo A >&2)        A, Q, q
+    echo q*(e:'…Q1':) $(echo A >&2) q*(e:'…Q2':) $(echo B >&2)
+                                                   A, B, Q1, Q2
+    q*(e:'print -u2 Q':) $(echo A >&2)             A, Q: the name is a word
+    for w in …, a=( … ), typeset -a a=( … ), select the same order
+    echo q*(e:'X=set':) $X                         q: the later word was
+                                                   expanded before the code
+    echo q*(e:'print -u2 Q':) > $(echo A >&2; …)   Q, A: the redirections
+                                                   follow the words
+
+**And the stage stops at the first word it refuses.** A later word's code
+never runs, whether the refusal is the shell's or a program's:
+
+    echo zz* q*(e:'print -u2 Q':)                  the refusal alone, no Q
+    /bin/echo zz* q*(e:…)                          the same, at 1
+    echo *(Z) q*(e:…)                              the same, for a qualifier
+                                                   that will not read
+    echo q*(e:'…Q1; false':) q*(e:'…Q2':)          Q1, then the first
+                                                   word's own refusal
+    for w in zz* q*(e:…), a=( zz* q*(e:…) )        the refusal alone
+
+bash and ksh93 run nothing in the stage, so for them the pass is the same
+list in the same order with the same refusals (bash's `failglob` refusal
+already waited for the list, #6677), and nothing is asked.
+`interp/pathnamestage.go` holds it (#6768).
+
 ## 8. Quote removal
 
 The quote characters that survived stages 1-7 are removed. Nothing else

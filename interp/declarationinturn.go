@@ -74,10 +74,9 @@ type operandsInTurn struct {
 	// for them.
 	held    heldPrefix
 	undoBuf [4]savedVar
-	// on says the dialect stores its operands this way and the walk has
-	// begun; stopped says a refusal or a failed value ended it: nothing more
+	// stopped says a refusal or a failed value ended the walk: nothing more
 	// is expanded, the utility does not run, and what was held stays.
-	on, stopped bool
+	stopped bool
 	// literals is each array-literal operand expanded ahead of a scalar
 	// operand written after it, so the two are stored in written order; a
 	// nil entry is one with nothing to expand.
@@ -93,33 +92,62 @@ func (t *operandsInTurn) commit() {
 	t.stopped = true
 }
 
-// declarationOperandsStoredInTurn asks the axis, of a command that has a
-// declaration operand to ask it about.
+// declarationOperandsStoredInTurn reads the axis. Read and not asked, because
+// the question is put to every `typeset x=1` there is: a vector that leaves
+// it unanswered gets the answer four of the five columns give, which is also
+// what this engine did before the axis existed, rather than a refusal of the
+// commonest declaration a script writes.
 func (r *Runner) declarationOperandsStoredInTurn() bool {
-	return r.ask(r.sem().DeclarationOperandsAreStoredInTurn,
-		"a declaration utility's operands expanded and stored one at a time")
+	return r.sem().DeclarationOperandsAreStoredInTurn == Yes
 }
 
 // reachOperandInTurn is the walk arriving at a declaration operand, before
 // its word is expanded: the literal operands written in front of it are
 // settled first, so the word's expansion sees them stored. Reports whether the
 // walk is on and goes on.
-func (r *Runner) reachOperandInTurn(c *syntax.SimpleCmd, w *syntax.Word, argv []string, turn *operandsInTurn) bool {
-	if !turn.on && !r.declarationUtilityIsHere(argv) {
-		// `local` is in the substrate's list of declaration utilities and
-		// this column has no such command: nothing is about to store the
-		// operands, so nothing is held — the same gate the trace's split
-		// uses, see Runner.traceOperandSplitsBefore.
-		return false
-	}
-	if !r.declarationOperandsStoredInTurn() || r.unspecified {
-		return false
-	}
-	if !turn.on {
-		turn.on = true
+//
+// The state is made on the first operand of a command in the column that
+// walks this way and is nil everywhere else, so a command that is not such
+// a declaration allocates nothing for it. Hands the state back, and reports
+// whether the walk is on and goes on.
+func (r *Runner) reachOperandInTurn(c *syntax.SimpleCmd, w *syntax.Word, argv []string, turn *operandsInTurn) (*operandsInTurn, bool) {
+	if turn == nil {
+		if !r.declarationOperandsStoredInTurn() || !r.declarationUtilityIsHere(argv) {
+			// Not the column, or `local`: it is in the substrate's list of
+			// declaration utilities and this column has no such command,
+			// so nothing is about to store the operands and nothing is
+			// held — the same gate the trace's split uses, see
+			// Runner.traceOperandSplitsBefore.
+			return nil, false
+		}
+		turn = &operandsInTurn{}
 		turn.held.undo = turn.undoBuf[:0]
 	}
-	return r.settleLiteralOperandsBefore(c, w, argv, turn)
+	if turn.stopped {
+		return turn, false
+	}
+	return turn, r.settleLiteralOperandsBefore(c, w, argv, turn)
+}
+
+// literal is the element list expanded ahead for this operand, or nil.
+func (t *operandsInTurn) literal(a *syntax.Assign) *expandedAssign {
+	if t == nil {
+		return nil
+	}
+	return t.literals[a]
+}
+
+// wasTraced reports whether this literal operand's lines were written by the
+// walk.
+func (t *operandsInTurn) wasTraced(a *syntax.Assign) bool {
+	return t != nil && t.traced[a]
+}
+
+// release puts back what the walk held, where there was a walk.
+func (t *operandsInTurn) release(r *Runner) {
+	if t != nil {
+		t.held.release(r)
+	}
 }
 
 // declarationWouldShadow reports whether the utility is about to give this
@@ -147,7 +175,7 @@ func (r *Runner) declarationWouldShadow(name string) bool {
 // its name and writes its trace line. argv is handed back with the operand
 // rewritten where its subscript was evaluated.
 func (r *Runner) storeOperandInTurn(argv []string, turn *operandsInTurn) []string {
-	if !turn.on || turn.stopped {
+	if turn == nil || turn.stopped {
 		return argv
 	}
 	if r.expandErr || r.givingUpAlready() {

@@ -10036,7 +10036,10 @@ type Semantics struct {
 	//	readonly r; set -x; typeset x=1 r=2 y=3 `+ x=1`, `r: is read only`, x stays 1
 	//
 	// bash's `local` and zsh's `typeset` answer as their `export` does, and
-	// BusyBox ash as dash. See interp/declarationinturn.go (#6770).
+	// BusyBox ash as dash. **Read rather than asked**, since the question is
+	// put to every declaration with an operand: a vector that leaves it
+	// unanswered gets the four columns' answer. See
+	// interp/declarationinturn.go (#6770).
 	DeclarationOperandsAreStoredInTurn Answer
 
 	// ArithSubscriptDollarSingleIsDecoded decodes the escapes of a `$'…'`

@@ -9096,8 +9096,8 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 	// that does, and what that walk holds for the operands behind each. Put
 	// back at the end of the command as the backstop; the walk releases it
 	// once every operand is expanded. See interp/declarationinturn.go.
-	var turn operandsInTurn
-	defer turn.held.release(r)
+	var turn *operandsInTurn
+	defer func() { turn.release(r) }()
 	// How much of argv had been built when each of the command's words was
 	// reached, which is what puts an array-literal operand back at the index
 	// it was written at. See interp/operandwrittenorder.go.
@@ -9221,13 +9221,14 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 				// does, with the literal operands written in front of it
 				// settled before its word expands — see
 				// interp/declarationinturn.go.
-				if !r.reachOperandInTurn(c, w, argv, &turn) && turn.stopped {
+				var on bool
+				if turn, on = r.reachOperandInTurn(c, w, argv, turn); !on && turn != nil && turn.stopped {
 					break
 				}
 				operandAt = append(operandAt, len(argv))
 				argv = append(argv, r.expandAssignArg(w))
-				argv = r.storeOperandInTurn(argv, &turn)
-				if turn.stopped {
+				argv = r.storeOperandInTurn(argv, turn)
+				if turn != nil && turn.stopped {
 					break
 				}
 				sourceClosedAt = recordASourceClosedSubscript(sourceClosedAt, w, argv)
@@ -9281,13 +9282,14 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 			if !r.prefixBeforeADeclarationsOperand(c.Assigns) {
 				break
 			}
-			if !r.reachOperandInTurn(c, w, argv, &turn) && turn.stopped {
+			var on bool
+			if turn, on = r.reachOperandInTurn(c, w, argv, turn); !on && turn != nil && turn.stopped {
 				break
 			}
 			operandAt = append(operandAt, len(argv))
 			argv = append(argv, r.expandAssignArg(w))
-			argv = r.storeOperandInTurn(argv, &turn)
-			if turn.stopped {
+			argv = r.storeOperandInTurn(argv, turn)
+			if turn != nil && turn.stopped {
 				break
 			}
 			sourceClosedAt = recordASourceClosedSubscript(sourceClosedAt, w, argv)
@@ -9577,7 +9579,7 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 			// word cannot say which operand it came from. See
 			// interp/xtracearrayoperand.go.
 			r.arrayOperands = append(r.arrayOperands, arrayOperand{
-				assign: a, at: at, expanded: turn.literals[a], traced: turn.traced[a],
+				assign: a, at: at, expanded: turn.literal(a), traced: turn.wasTraced(a),
 			})
 			argv = slices.Insert(argv, at, r.arrayOperandName(a))
 			inserted++
@@ -9732,7 +9734,7 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 	expandedAll := r.expandArrayOperands(tableLetterAmongTheOptions(argv), indexedLetterAmongTheOptions(argv))
 	// Every operand is expanded, so what the walk held for the ones behind
 	// it goes back before the utility stores them for real.
-	turn.held.release(r)
+	turn.release(r)
 	keepForArrays()
 	if !expandedAll {
 		// The failure has been reported and has ended what it ends. See

@@ -451,6 +451,9 @@ func (c *Runner) ownTables(r *Runner) {
 	// reading — a clone appending into the parent's slice is exactly what this
 	// file exists to prevent.
 	c.arrayOperands = slices.Clone(r.arrayOperands)
+	// A warning owed is owed by the command that held the store, and a
+	// clone runs commands of its own.
+	c.emptyKeyWarningsOwed = 0
 	// And which of that command's operands were written with their brackets
 	// unquoted, for the same reason and with the same reading. See
 	// Runner.lexedSubscriptOperands.

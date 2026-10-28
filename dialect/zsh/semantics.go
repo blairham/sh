@@ -682,6 +682,9 @@ func Semantics() interp.Semantics {
 	s.FailedSubscriptedLiteralKeepsWhatItStored = interp.No
 	// See interp.Semantics.TableLiteralStoresEachElementAsItIsExpanded (#6770).
 	s.TableLiteralStoresEachElementAsItIsExpanded = interp.No
+	// See interp.Semantics.DeclarationOperandsAreStoredInTurn (#6770):
+	// `x=0; typeset x=1 y=$x` leaves `y` holding 0.
+	s.DeclarationOperandsAreStoredInTurn = interp.No
 	// A table append that fails keeps nothing, and a declaration's letter
 	// does not re-create a name whose literal failed.
 	s.FailedTableAppendKeepsThePairsItAdded = interp.No

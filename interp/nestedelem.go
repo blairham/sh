@@ -71,7 +71,10 @@ func (r *Runner) nestElemLiteral(a *syntax.Assign) {
 		// `h[a,b]=(x y)` measures — and it is not refused as a slice the way
 		// the splicing dialect refuses it, because nothing here replaces a
 		// span.
-		key, keyed := r.assocAssignKey(a.Name, a.Index)
+		key, keyed := r.subscriptReadAhead(a)
+		if !keyed {
+			key, keyed = r.assocAssignKey(a.Name, a.Index)
+		}
 		if !keyed {
 			return
 		}
@@ -101,11 +104,19 @@ func (r *Runner) nestElemLiteral(a *syntax.Assign) {
 		r.resolvedNestedElement(key, written)
 		return
 	}
-	text := r.joinWord(a.Index)
+	text, ahead := r.subscriptReadAhead(a)
+	if !ahead {
+		text = r.joinWord(a.Index)
+	}
 	// The subscript as written is what a boundary refusal quotes back, and it
 	// is not the text the arithmetic reads — see subscriptSubject.
 	subject := subscriptSubject(r.writtenIndex(a), text)
-	idx, err := r.subscriptValueAsWritten(subject, text)
+	idx, err := 0, error(nil)
+	if at, ok := r.indexReadAhead(a); ok {
+		idx = at
+	} else {
+		idx, err = r.subscriptValueAsWritten(subject, text)
+	}
 	if err != nil {
 		r.fatal("%s\n", r.subscriptFailure(text, err))
 		return

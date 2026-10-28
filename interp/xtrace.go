@@ -426,11 +426,19 @@ func (r *Runner) traceCommand(words []string) {
 		// interp/xtracedeclaration.go.
 		r.traceLine(line, d)
 	}
-	for _, line := range r.traceArrayOperandsBefore(d) {
+	if d.TraceDeclarationArrayOperand == TraceOperandSplitBefore {
 		// And an operand whose value is a parenthesized list is a question
 		// of its own, because one column moves it and leaves a scalar where
-		// it was written. See interp/xtracearrayoperand.go.
-		r.traceLine(line, d)
+		// it was written. See interp/xtracearrayoperand.go. One operand at
+		// a time, because the column that stores its operands in turn
+		// writes a store's warning in front of that element's own line.
+		table := tableLetterAmongTheOptions(words)
+		for _, op := range r.arrayOperands {
+			if op.traced {
+				continue
+			}
+			r.writeArrayOperandLines(op, table, d)
+		}
 	}
 	tail := []string{r.tracePrefix() + strings.Join(r.traceCommandWords(words, d), " ") + "\n"}
 	for _, line := range r.traceOperandsAfter(words, d) {

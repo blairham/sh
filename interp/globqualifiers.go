@@ -912,7 +912,11 @@ func (r *Runner) globRangeIndex(text string) (int, bool) {
 // what `REPLY` holds while the code runs — `./a` for `./*`, `d/` for `*/`.
 // ok is false where the code stopped the shell, and the expansion stops with
 // it. See interp/globqualcode.go.
-func (r *Runner) keepQualified(paths []string, q globQualifiers, render func(string) (string, bool)) (kept []string, words [][]string, ok bool) {
+func (r *Runner) keepQualified(
+	paths []string,
+	q globQualifiers,
+	render func(string) (string, bool),
+) (kept []string, words [][]string, ok bool) {
 	if !q.tests() {
 		return paths, nil, true
 	}

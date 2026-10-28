@@ -297,7 +297,9 @@ func TestHashForgetsOneNameOrAllOfThem(t *testing.T) {
 }
 
 func TestHashPutsAPathThereByHandAndReadsItBack(t *testing.T) {
-	out, st := run(t, `hash -p "$PWD/d1/zzp" zzq; echo "p=$?"; zzq; hash -t zzq | sed "s|.*/||"; hash -l | sed "s|/[^ ]*/||"`,
+	out, st := run(
+		t,
+		`hash -p "$PWD/d1/zzp" zzq; echo "p=$?"; zzq; hash -t zzq | sed "s|.*/||"; hash -l | sed "s|/[^ ]*/||"`,
 		func(r *Runner) {
 			hashable(t, filepath.Join(r.Dir, "d1"), "zzp", "echo PUT")
 			s := testSemantics()
@@ -305,7 +307,8 @@ func TestHashPutsAPathThereByHandAndReadsItBack(t *testing.T) {
 			s.HashReportsThePath = Yes
 			s.HashListsAsCommands = Yes
 			r.Semantics = &s
-		})
+		},
+	)
 	if st != 0 || out != "p=0\nPUT\nzzp\nbuiltin hash -p zzp zzq\n" {
 		t.Errorf("out=%q st=%d, want a name PATH would never find run and read back", out, st)
 	}

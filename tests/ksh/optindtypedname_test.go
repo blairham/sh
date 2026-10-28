@@ -34,7 +34,11 @@ func TestGetoptsRefusalNamesTheScript(t *testing.T) {
 // 2026-10-15 on ksh93u+ (#6563). See
 // interp.Semantics.GetoptsTypedValueFailureIsAFreeze.
 func TestATypedNameRefusesGetoptsAsAFreezeDoes(t *testing.T) {
-	out, st := runKsh(t, t.TempDir(), `typeset -i n=5; getopts x n -y 2>/dev/null; echo "st=$? [$n]"; getopts x n 2>/dev/null; echo after`)
+	out, st := runKsh(
+		t,
+		t.TempDir(),
+		`typeset -i n=5; getopts x n -y 2>/dev/null; echo "st=$? [$n]"; getopts x n 2>/dev/null; echo after`,
+	)
 	if out != "st=2 [5]\n" || st != 2 {
 		t.Errorf("got %q (%d), want %q (2)", out, st, "st=2 [5]\n")
 	}

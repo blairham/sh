@@ -313,64 +313,78 @@ func TestZparseoptsRefusals(t *testing.T) {
 // answer `command not found` at 127, so there is nothing here for a dialect
 // axis to disagree about.
 func TestZparseoptsMapsOneDescriptionOntoAnother(t *testing.T) {
-	runZparseoptsCases(t, []zparseoptsCase{{
-		name:    "the-equals-half-names-a-description-instead-of-an-array",
-		snippet: `set -- -a -b; zparseopts -M -a arr a=b b; echo "st=$? arr=[${(j:|:)arr}] b=[${(j:|:)b}]"`,
-		want:    "st=0 arr=[-a] b=[]\n",
-	}, {
-		name:    "and-without-the-letter-the-same-line-names-an-array",
-		snippet: `set -- -a -b; zparseopts -a arr a=b b; echo "st=$? arr=[${(j:|:)arr}] b=[${(j:|:)b}]"`,
-		want:    "st=0 arr=[-b] b=[-a]\n",
-	}, {
-		name:    "a-name-no-description-has-is-still-an-array",
-		snippet: `set -- -a; zparseopts -M -a arr a=foo; echo "st=$? arr=[${(j:|:)arr}] foo=[${(j:|:)foo}]"`,
-		want:    "st=0 arr=[] foo=[-a]\n",
-	}, {
-		name:    "links-follow-through-a-chain",
-		snippet: `set -- -a v; zparseopts -M a:=b b:=c c:=q; echo "st=$? q=[${(j:|:)q}]"`,
-		want:    "st=0 q=[-a|v]\n",
-	}, {
-		name:    "the-first-spelling-and-the-last-argument-share-one-slot",
-		snippet: `set -- -a v -b w; zparseopts -M a:=b b:=q; echo "st=$? q=[${(j:|:)q}]"; set -- -b w -a v; zparseopts -M a:=b b:=q; echo "other=$? q=[${(j:|:)q}]"`,
-		want:    "st=0 q=[-a|w]\nother=0 q=[-b|v]\n",
-	}, {
-		name:    "a-later-match-without-an-argument-shortens-the-slot",
-		snippet: `set -- -b w -a; zparseopts -M a=b b:=q; echo "st=$? q=[${(j:|:)q}]"`,
-		want:    "st=0 q=[-b]\n",
-	}, {
-		name:    "a-joined-target-spells-the-element-its-own-way",
-		snippet: `set -- -a v; zparseopts -M a:=b b:-=q; echo "st=$? q=[${(j:|:)q}]"`,
-		want:    "st=0 q=[-bv]\n",
-	}, {
-		name:    "the-target-decides-the-shape-and-the-match-decides-the-argument",
-		snippet: `set -- -a v -b; zparseopts -D -M a:=b b=q; echo "st=$? q=[${(j:|:)q}] argv=[${(j:|:)@}]"; set -- -a v; zparseopts -D -M a=b b:=q; echo "other=$? q=[${(j:|:)q}] argv=[${(j:|:)@}]"`,
-		want:    "st=0 q=[-a] argv=[]\nother=0 q=[-a] argv=[v]\n",
-	}, {
-		name:    "the-plus-of-the-target-decides-and-not-the-sources",
-		snippet: `set -- -a v1 -b w -a v2; zparseopts -M a+:=b b:=q; echo "st=$? q=[${(j:|:)q}]"; set -- -a v1 -b w -a v2; zparseopts -M a:=b b+:=q; echo "plus=$? q=[${(j:|:)q}]"`,
-		want:    "st=0 q=[-a|v2]\nplus=0 q=[-a|v1|-b|w|-a|v2]\n",
-	}, {
-		// The `+` on the source above is read for nothing, and this is where
-		// that is observable: the slot still keeps the first spelling. A
-		// reading that took `+` from the source would spell this `-b`, which
-		// the row above cannot tell apart because its last match happens to
-		// be the first one's option again.
-		name:    "a-source-with-a-plus-does-not-unpin-the-first-spelling",
-		snippet: `set -- -a v1 -b w; zparseopts -M a+:=b b:=q; echo "st=$? q=[${(j:|:)q}]"; set -- -b w -a v1; zparseopts -M a+:=b b:=q; echo "other=$? q=[${(j:|:)q}]"`,
-		want:    "st=0 q=[-a|w]\nother=0 q=[-b|v1]\n",
-	}, {
-		name:    "an-accumulating-joined-target-spells-every-element-its-own-way",
-		snippet: `set -- -a v1 -b w -a v2; zparseopts -M a:=b b+:-=q; echo "st=$? q=[${(j:|:)q}]"`,
-		want:    "st=0 q=[-bv1|-bw|-bv2]\n",
-	}, {
-		name:    "the-association-is-keyed-by-the-target",
-		snippet: `set -- -a v -b w; zparseopts -M -A h a:=b b:; echo "st=$? ${(kv)h}"; set -- -a v -b w; zparseopts -M -A g a:=b b+:; echo "plus=$? ${(kv)g}"`,
-		want:    "st=0 -b w\nplus=0 -b vw\n",
-	}, {
-		name:    "the-manual-s-own-example",
-		snippet: `set -- -a -b1 -b2 -c3; zparseopts -A bar -M a=foo b+: c:=b; echo "st=$? foo=[${(j:|:)foo}] ${(kv)bar}"`,
-		want:    "st=0 foo=[-a] -a  -b 123\n",
-	}})
+	runZparseoptsCases(t, []zparseoptsCase{
+		{
+			name:    "the-equals-half-names-a-description-instead-of-an-array",
+			snippet: `set -- -a -b; zparseopts -M -a arr a=b b; echo "st=$? arr=[${(j:|:)arr}] b=[${(j:|:)b}]"`,
+			want:    "st=0 arr=[-a] b=[]\n",
+		},
+		{
+			name:    "and-without-the-letter-the-same-line-names-an-array",
+			snippet: `set -- -a -b; zparseopts -a arr a=b b; echo "st=$? arr=[${(j:|:)arr}] b=[${(j:|:)b}]"`,
+			want:    "st=0 arr=[-b] b=[-a]\n",
+		},
+		{
+			name:    "a-name-no-description-has-is-still-an-array",
+			snippet: `set -- -a; zparseopts -M -a arr a=foo; echo "st=$? arr=[${(j:|:)arr}] foo=[${(j:|:)foo}]"`,
+			want:    "st=0 arr=[] foo=[-a]\n",
+		},
+		{
+			name:    "links-follow-through-a-chain",
+			snippet: `set -- -a v; zparseopts -M a:=b b:=c c:=q; echo "st=$? q=[${(j:|:)q}]"`,
+			want:    "st=0 q=[-a|v]\n",
+		},
+		{
+			name:    "the-first-spelling-and-the-last-argument-share-one-slot",
+			snippet: `set -- -a v -b w; zparseopts -M a:=b b:=q; echo "st=$? q=[${(j:|:)q}]"; set -- -b w -a v; zparseopts -M a:=b b:=q; echo "other=$? q=[${(j:|:)q}]"`,
+			want:    "st=0 q=[-a|w]\nother=0 q=[-b|v]\n",
+		},
+		{
+			name:    "a-later-match-without-an-argument-shortens-the-slot",
+			snippet: `set -- -b w -a; zparseopts -M a=b b:=q; echo "st=$? q=[${(j:|:)q}]"`,
+			want:    "st=0 q=[-b]\n",
+		},
+		{
+			name:    "a-joined-target-spells-the-element-its-own-way",
+			snippet: `set -- -a v; zparseopts -M a:=b b:-=q; echo "st=$? q=[${(j:|:)q}]"`,
+			want:    "st=0 q=[-bv]\n",
+		},
+		{
+			name:    "the-target-decides-the-shape-and-the-match-decides-the-argument",
+			snippet: `set -- -a v -b; zparseopts -D -M a:=b b=q; echo "st=$? q=[${(j:|:)q}] argv=[${(j:|:)@}]"; set -- -a v; zparseopts -D -M a=b b:=q; echo "other=$? q=[${(j:|:)q}] argv=[${(j:|:)@}]"`,
+			want:    "st=0 q=[-a] argv=[]\nother=0 q=[-a] argv=[v]\n",
+		},
+		{
+			name:    "the-plus-of-the-target-decides-and-not-the-sources",
+			snippet: `set -- -a v1 -b w -a v2; zparseopts -M a+:=b b:=q; echo "st=$? q=[${(j:|:)q}]"; set -- -a v1 -b w -a v2; zparseopts -M a:=b b+:=q; echo "plus=$? q=[${(j:|:)q}]"`,
+			want:    "st=0 q=[-a|v2]\nplus=0 q=[-a|v1|-b|w|-a|v2]\n",
+		},
+		{
+			// The `+` on the source above is read for nothing, and this is where
+			// that is observable: the slot still keeps the first spelling. A
+			// reading that took `+` from the source would spell this `-b`, which
+			// the row above cannot tell apart because its last match happens to
+			// be the first one's option again.
+			name:    "a-source-with-a-plus-does-not-unpin-the-first-spelling",
+			snippet: `set -- -a v1 -b w; zparseopts -M a+:=b b:=q; echo "st=$? q=[${(j:|:)q}]"; set -- -b w -a v1; zparseopts -M a+:=b b:=q; echo "other=$? q=[${(j:|:)q}]"`,
+			want:    "st=0 q=[-a|w]\nother=0 q=[-b|v1]\n",
+		},
+		{
+			name:    "an-accumulating-joined-target-spells-every-element-its-own-way",
+			snippet: `set -- -a v1 -b w -a v2; zparseopts -M a:=b b+:-=q; echo "st=$? q=[${(j:|:)q}]"`,
+			want:    "st=0 q=[-bv1|-bw|-bv2]\n",
+		},
+		{
+			name:    "the-association-is-keyed-by-the-target",
+			snippet: `set -- -a v -b w; zparseopts -M -A h a:=b b:; echo "st=$? ${(kv)h}"; set -- -a v -b w; zparseopts -M -A g a:=b b+:; echo "plus=$? ${(kv)g}"`,
+			want:    "st=0 -b w\nplus=0 -b vw\n",
+		},
+		{
+			name:    "the-manual-s-own-example",
+			snippet: `set -- -a -b1 -b2 -c3; zparseopts -A bar -M a=foo b+: c:=b; echo "st=$? foo=[${(j:|:)foo}] ${(kv)bar}"`,
+			want:    "st=0 foo=[-a] -a  -b 123\n",
+		},
+	})
 }
 
 // A description aliased to itself, and a cycle, which are two different
@@ -454,46 +468,56 @@ func TestZparseoptsEmptiesTheDefaultArrayNobodyNamed(t *testing.T) {
 // comment records — which is the one respect in which these wants are not real
 // zsh's transcript.
 func TestZparseoptsRefusesAnArrayNameWhereItWritesIt(t *testing.T) {
-	runZparseoptsCases(t, []zparseoptsCase{{
-		name:    "a-missing-argument-is-refused-before-the-name-is",
-		snippet: `set -- -a; zparseopts -a arr "a:=" 2>&1; echo "st=$?"`,
-		want:    "zsh:zparseopts:1: missing argument for option: -a\nst=1\n",
-	}, {
-		name:    "an-equals-with-nothing-after-it-names-an-array-called-nothing",
-		snippet: `set -- -a; zparseopts -a arr "a=" 2>&1; echo "st=$?"`,
-		want:    "zsh:1: not an identifier: \nst=1\n",
-	}, {
-		name:    "and-a-description-with-no-equals-at-all-is-silent",
-		snippet: `set -- -a; zparseopts -a arr a; echo "st=$? arr=[${(j:|:)arr}]"`,
-		want:    "st=0 arr=[-a]\n",
-	}, {
-		name:    "nothing-written-is-nothing-checked",
-		snippet: `zparseopts -K -a arr "a=1bad" 2>&1; echo "st=$?"; set -- -a; zparseopts -K -a arr "a=1bad" 2>&1; echo "wrote=$?"`,
-		want:    "st=0\nzsh:1: not an identifier: 1bad\nwrote=1\n",
-	}, {
-		name:    "the-missing-array-complaint-comes-first-whatever-the-order",
-		snippet: `zparseopts "a=1bad" b 2>&1; echo "st=$?"`,
-		want:    "zsh:zparseopts:1: no default array defined: b\nst=1\n",
-	}, {
-		// And an `=` with nothing after it satisfies that check as much as
-		// one with a name after it, which is the other side of the empty
-		// array name: the complaint is about `b` and not about `a=`.
-		name:    "an-empty-equals-still-counts-as-having-named-an-array",
-		snippet: `zparseopts "a=" b 2>&1; echo "st=$?"`,
-		want:    "zsh:zparseopts:1: no default array defined: b\nst=1\n",
-	}, {
-		name:    "the-descriptions-are-scanned-last-first-and-the-default-after-them",
-		snippet: `zparseopts -a arr "a=1bad" "b=2bad" 2>&1; echo "st=$?"; zparseopts -a "1bad" "a=2bad" b 2>&1; echo "other=$?"`,
-		want:    "zsh:1: not an identifier: 2bad\nst=1\nzsh:1: not an identifier: 2bad\nother=1\n",
-	}, {
-		name:    "removal-still-happened",
-		snippet: `set -- -a v; zparseopts -D -a arr "a=1bad" 2>&1; echo "st=$? argv=[${(j:|:)@}]"`,
-		want:    "zsh:1: not an identifier: 1bad\nst=1 argv=[v]\n",
-	}, {
-		name:    "an-alias-may-name-a-description-that-is-no-identifier",
-		snippet: `set -- --b -a; zparseopts -M -a arr a=-b -b; echo "st=$? arr=[${(j:|:)arr}]"`,
-		want:    "st=0 arr=[--b]\n",
-	}})
+	runZparseoptsCases(t, []zparseoptsCase{
+		{
+			name:    "a-missing-argument-is-refused-before-the-name-is",
+			snippet: `set -- -a; zparseopts -a arr "a:=" 2>&1; echo "st=$?"`,
+			want:    "zsh:zparseopts:1: missing argument for option: -a\nst=1\n",
+		},
+		{
+			name:    "an-equals-with-nothing-after-it-names-an-array-called-nothing",
+			snippet: `set -- -a; zparseopts -a arr "a=" 2>&1; echo "st=$?"`,
+			want:    "zsh:1: not an identifier: \nst=1\n",
+		},
+		{
+			name:    "and-a-description-with-no-equals-at-all-is-silent",
+			snippet: `set -- -a; zparseopts -a arr a; echo "st=$? arr=[${(j:|:)arr}]"`,
+			want:    "st=0 arr=[-a]\n",
+		},
+		{
+			name:    "nothing-written-is-nothing-checked",
+			snippet: `zparseopts -K -a arr "a=1bad" 2>&1; echo "st=$?"; set -- -a; zparseopts -K -a arr "a=1bad" 2>&1; echo "wrote=$?"`,
+			want:    "st=0\nzsh:1: not an identifier: 1bad\nwrote=1\n",
+		},
+		{
+			name:    "the-missing-array-complaint-comes-first-whatever-the-order",
+			snippet: `zparseopts "a=1bad" b 2>&1; echo "st=$?"`,
+			want:    "zsh:zparseopts:1: no default array defined: b\nst=1\n",
+		},
+		{
+			// And an `=` with nothing after it satisfies that check as much as
+			// one with a name after it, which is the other side of the empty
+			// array name: the complaint is about `b` and not about `a=`.
+			name:    "an-empty-equals-still-counts-as-having-named-an-array",
+			snippet: `zparseopts "a=" b 2>&1; echo "st=$?"`,
+			want:    "zsh:zparseopts:1: no default array defined: b\nst=1\n",
+		},
+		{
+			name:    "the-descriptions-are-scanned-last-first-and-the-default-after-them",
+			snippet: `zparseopts -a arr "a=1bad" "b=2bad" 2>&1; echo "st=$?"; zparseopts -a "1bad" "a=2bad" b 2>&1; echo "other=$?"`,
+			want:    "zsh:1: not an identifier: 2bad\nst=1\nzsh:1: not an identifier: 2bad\nother=1\n",
+		},
+		{
+			name:    "removal-still-happened",
+			snippet: `set -- -a v; zparseopts -D -a arr "a=1bad" 2>&1; echo "st=$? argv=[${(j:|:)@}]"`,
+			want:    "zsh:1: not an identifier: 1bad\nst=1 argv=[v]\n",
+		},
+		{
+			name:    "an-alias-may-name-a-description-that-is-no-identifier",
+			snippet: `set -- --b -a; zparseopts -M -a arr a=-b -b; echo "st=$? arr=[${(j:|:)arr}]"`,
+			want:    "st=0 arr=[--b]\n",
+		},
+	})
 }
 
 // A refusal leaves the store as it found it (#1535). The assertion is
@@ -505,31 +529,38 @@ func TestZparseoptsRefusesAnArrayNameWhereItWritesIt(t *testing.T) {
 // Every want here is real zsh's own, byte for byte, including the location
 // inside the function.
 func TestZparseoptsRefusesWithoutTouchingItsTarget(t *testing.T) {
-	runZparseoptsCases(t, []zparseoptsCase{{
-		name:    "a-declared-array-is-still-an-empty-array",
-		snippet: `f() { local -a opts; zparseopts -a opts "X:::y" 2>&1; print -r -- "st=$? n=${#opts[@]}"; typeset -p opts; }; f -X`,
-		want:    "f:zparseopts: invalid option description: X:::y\nst=1 n=0\ntypeset -a opts=(  )\n",
-	}, {
-		name:    "an-array-holding-elements-keeps-them",
-		snippet: `f() { local -a opts=(p q); zparseopts -F -a opts X 2>&1; print -r -- "st=$?"; typeset -p opts; }; f -Z`,
-		want:    "f:zparseopts: bad option: -Z\nst=1\ntypeset -a opts=( p q )\n",
-	}, {
-		name:    "an-unset-name-stays-unset",
-		snippet: `f() { zparseopts -a opts "X:::y" 2>&1; print -r -- "st=$? [${opts-UNSET}]"; }; f -X`,
-		want:    "f:zparseopts: invalid option description: X:::y\nst=1 [UNSET]\n",
-	}, {
-		name:    "a-scalar-stays-a-scalar",
-		snippet: `f() { local opts=str; zparseopts -F -a opts X 2>&1; print -r -- "st=$?"; typeset -p opts; }; f -Z`,
-		want:    "f:zparseopts: bad option: -Z\nst=1\ntypeset opts=str\n",
-	}, {
-		name:    "the-new-refusal-is-the-same",
-		snippet: `f() { local -a opts=(p q); zparseopts -M -a opts a=b b=a 2>&1; print -r -- "st=$?"; typeset -p opts; }; f -a`,
-		want:    "f:zparseopts: cyclic option mapping: b=a\nst=1\ntypeset -a opts=( p q )\n",
-	}, {
-		name:    "and-the-line-the-issue-was-found-on-now-parses",
-		snippet: `f() { local -a opts; zparseopts -D -E -M -a opts X; print -r -- "st=$? [${opts[(r)-X]}]"; typeset -p opts; }; f -X`,
-		want:    "st=0 [-X]\ntypeset -a opts=( -X )\n",
-	}})
+	runZparseoptsCases(t, []zparseoptsCase{
+		{
+			name:    "a-declared-array-is-still-an-empty-array",
+			snippet: `f() { local -a opts; zparseopts -a opts "X:::y" 2>&1; print -r -- "st=$? n=${#opts[@]}"; typeset -p opts; }; f -X`,
+			want:    "f:zparseopts: invalid option description: X:::y\nst=1 n=0\ntypeset -a opts=(  )\n",
+		},
+		{
+			name:    "an-array-holding-elements-keeps-them",
+			snippet: `f() { local -a opts=(p q); zparseopts -F -a opts X 2>&1; print -r -- "st=$?"; typeset -p opts; }; f -Z`,
+			want:    "f:zparseopts: bad option: -Z\nst=1\ntypeset -a opts=( p q )\n",
+		},
+		{
+			name:    "an-unset-name-stays-unset",
+			snippet: `f() { zparseopts -a opts "X:::y" 2>&1; print -r -- "st=$? [${opts-UNSET}]"; }; f -X`,
+			want:    "f:zparseopts: invalid option description: X:::y\nst=1 [UNSET]\n",
+		},
+		{
+			name:    "a-scalar-stays-a-scalar",
+			snippet: `f() { local opts=str; zparseopts -F -a opts X 2>&1; print -r -- "st=$?"; typeset -p opts; }; f -Z`,
+			want:    "f:zparseopts: bad option: -Z\nst=1\ntypeset opts=str\n",
+		},
+		{
+			name:    "the-new-refusal-is-the-same",
+			snippet: `f() { local -a opts=(p q); zparseopts -M -a opts a=b b=a 2>&1; print -r -- "st=$?"; typeset -p opts; }; f -a`,
+			want:    "f:zparseopts: cyclic option mapping: b=a\nst=1\ntypeset -a opts=( p q )\n",
+		},
+		{
+			name:    "and-the-line-the-issue-was-found-on-now-parses",
+			snippet: `f() { local -a opts; zparseopts -D -E -M -a opts X; print -r -- "st=$? [${opts[(r)-X]}]"; typeset -p opts; }; f -X`,
+			want:    "st=0 [-X]\ntypeset -a opts=( -X )\n",
+		},
+	})
 }
 
 // The two builtins are registrations of this dialect and not the substrate's,

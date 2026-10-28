@@ -262,7 +262,10 @@ func TestTheScriptFileIsOnlyWrittenWhenACaseAsksForIt(t *testing.T) {
 
 	command(t.Context(), sh, Case{ID: "t", Snippet: "echo *", Args: []string{"-c" + ArgSnippet}}, dir)
 	if _, err := os.Stat(filepath.Join(dir, "case.sh")); !os.IsNotExist(err) {
-		t.Errorf("case.sh exists in the working directory of a case that never named it (%v); a snippet that globs would see it", err)
+		t.Errorf(
+			"case.sh exists in the working directory of a case that never named it (%v); a snippet that globs would see it",
+			err,
+		)
 	}
 	// The control, so this cannot pass by the file never being written at all.
 	other := t.TempDir()
@@ -971,8 +974,11 @@ func TestArgv0ReachesTheBinaryOnTheScriptRoute(t *testing.T) {
 
 	got := Exec(t.Context(), asSh, c)
 	if got.Status != 1 || strings.Contains(got.Stdout, "survived") {
-		t.Errorf("bash-as-sh: status %d, stdout %q; want status 1 and no 'survived' — a failed special builtin is fatal in sh mode",
-			got.Status, got.Stdout)
+		t.Errorf(
+			"bash-as-sh: status %d, stdout %q; want status 1 and no 'survived' — a failed special builtin is fatal in sh mode",
+			got.Status,
+			got.Stdout,
+		)
 	}
 	// And the control: the same binary, the same script, the other name. If
 	// this stopped disagreeing, the probe would have stopped measuring argv[0]
@@ -1187,8 +1193,11 @@ func TestTheRecordMarksARelaxedRow(t *testing.T) {
 		{ID: "strict", Category: "invocation", Snippet: "echo hi"},
 	}
 	run := &Run{
-		Shells:  []ShellRecord{{Name: "dash", Version: "x"}},
-		Results: map[string]map[string]Result{"loose": {"dash": {Status: 2, Stderr: "no"}}, "strict": {"dash": {Stdout: "hi"}}},
+		Shells: []ShellRecord{{Name: "dash", Version: "x"}},
+		Results: map[string]map[string]Result{
+			"loose":  {"dash": {Status: 2, Stderr: "no"}},
+			"strict": {"dash": {Stdout: "hi"}},
+		},
 	}
 	md := run.Markdown(cases)
 	for _, line := range strings.Split(md, "\n") {
@@ -1759,6 +1768,11 @@ func TestAContainedReferenceRefusesAHostBinary(t *testing.T) {
 	local := Found{Shell: Shell{Name: "dash"}}
 	got, err := (Target{Path: "/bin/sh"}).place(context.Background(), local)
 	if err != nil || got.sess != nil || got.Path != "/bin/sh" {
-		t.Errorf("a local reference placed ours at %q (session %v, err %v), want the host binary", got.Path, got.sess != nil, err)
+		t.Errorf(
+			"a local reference placed ours at %q (session %v, err %v), want the host binary",
+			got.Path,
+			got.sess != nil,
+			err,
+		)
 	}
 }

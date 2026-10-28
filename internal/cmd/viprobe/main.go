@@ -70,12 +70,24 @@ func main() {
 	argv := flag.String("argv", "", "extra arguments, space separated — e.g. `--norc --noprofile -i` for real bash")
 	seed := flag.String("seed", "echo true alpha beta gamma", "the line typed in insert mode before the keys")
 	keys := flag.String("keys", "", "the key sequence, Go-escaped; usually starts with \\x1b")
-	setup := flag.String("setup", "set -o vi", "commands run before the case, Go-escaped and one per \\n; empty to run none")
+	setup := flag.String(
+		"setup",
+		"set -o vi",
+		"commands run before the case, Go-escaped and one per \\n; empty to run none",
+	)
 	gap := flag.Duration("gap", 40*time.Millisecond, "how long to wait between keystrokes")
-	inputrc := flag.String("inputrc", "/dev/null", "the INPUTRC the shell is given; /dev/null means no readline settings at all")
+	inputrc := flag.String(
+		"inputrc",
+		"/dev/null",
+		"the INPUTRC the shell is given; /dev/null means no readline settings at all",
+	)
 	term := flag.String("term", "xterm", "the TERM the shell is told it is talking to")
 	burst := flag.Bool("burst", false, "write the key sequence in one write, the way a terminal writes an escape sequence")
-	idle := flag.Duration("idle", 0, "sit at the prompt this long after the setup and report what arrived with nobody typing")
+	idle := flag.Duration(
+		"idle",
+		0,
+		"sit at the prompt this long after the setup and report what arrived with nobody typing",
+	)
 	flag.Parse()
 	if *bin == "" || *keys == "" {
 		fmt.Fprintln(os.Stderr, "viprobe: -bin and -keys are required")

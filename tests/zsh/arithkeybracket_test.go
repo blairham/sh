@@ -37,7 +37,11 @@ func TestAnExpandedSubscriptIsReadAgainAsSyntax(t *testing.T) {
 // comes back out through the expansion route, which is what makes the
 // divergence above the arithmetic route alone.
 func TestTheSameKeyStoresAndReadsBack(t *testing.T) {
-	if out, st := answersRun(t, `typeset -A m; key='x],b['; m[$key]=9; printf "[%s]" "${m[$key]}"`); out != "[9]" || st != 0 {
+	if out, st := answersRun(
+		t,
+		`typeset -A m; key='x],b['; m[$key]=9; printf "[%s]" "${m[$key]}"`,
+	); out != "[9]" ||
+		st != 0 {
 		t.Errorf("= %q status %d, want %q at 0", out, st, "[9]")
 	}
 }

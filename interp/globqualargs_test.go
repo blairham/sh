@@ -473,7 +473,12 @@ func linkCountDir(t *testing.T) string {
 	}
 	for name, want := range map[string]uint64{"dir1": 2, "dir2": 3, "f1": 2, "f1b": 2, "g1": 1, "lnk": 1} {
 		if got := linksOf(t, filepath.Join(dir, name)); got != want {
-			t.Fatalf("%s has %d links, want %d: this filesystem does not count links the way the fixture assumes", name, got, want)
+			t.Fatalf(
+				"%s has %d links, want %d: this filesystem does not count links the way the fixture assumes",
+				name,
+				got,
+				want,
+			)
 		}
 	}
 	return dir

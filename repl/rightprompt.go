@@ -88,7 +88,12 @@ func rightPromptAt(prompt drawnPrompt, cols int) int {
 // the whole-line draw clears to the end of the screen before it writes the
 // prompt, so a right prompt that no longer fits is gone by the time this
 // declines to write one.
-func (m *terminalMotion) writeRightPrompt(b *strings.Builder, prompt drawnPrompt, lineCells, cols int, row *rowView) bool {
+func (m *terminalMotion) writeRightPrompt(
+	b *strings.Builder,
+	prompt drawnPrompt,
+	lineCells, cols int,
+	row *rowView,
+) bool {
 	if _, ok := m.writeRightPromptOnly(b, prompt, lineCells, cols, row); !ok {
 		return false
 	}
@@ -99,7 +104,12 @@ func (m *terminalMotion) writeRightPrompt(b *strings.Builder, prompt drawnPrompt
 // writeRightPromptOnly is writeRightPrompt without the carriage return: it
 // leaves the cursor after the right prompt and answers the column that is.
 // row is what the row holds, for a terminal moved over by writing it again.
-func (m *terminalMotion) writeRightPromptOnly(b *strings.Builder, prompt drawnPrompt, lineCells, cols int, row *rowView) (int, bool) {
+func (m *terminalMotion) writeRightPromptOnly(
+	b *strings.Builder,
+	prompt drawnPrompt,
+	lineCells, cols int,
+	row *rowView,
+) (int, bool) {
 	if !rightFits(prompt, lineCells, cols) {
 		return 0, false
 	}

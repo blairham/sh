@@ -105,10 +105,26 @@ func TestTheComplaintMaySayWhichKindOfCharacter(t *testing.T) {
 		UmaskBadSymbolicMode:     "umask: `%[2]s': invalid symbolic mode character",
 		UmaskBadSymbolicOperator: "umask: `%[2]s': invalid symbolic mode operator",
 	}
-	if out, _, _ := umaskSymbolicRun(t, 0o022, both, "umask -- u=q"); !strings.Contains(out, "`q': invalid symbolic mode character") {
+	if out, _, _ := umaskSymbolicRun(
+		t,
+		0o022,
+		both,
+		"umask -- u=q",
+	); !strings.Contains(
+		out,
+		"`q': invalid symbolic mode character",
+	) {
 		t.Errorf("said %q, want the permission wording naming q", out)
 	}
-	if out, _, _ := umaskSymbolicRun(t, 0o022, both, "umask -- zz"); !strings.Contains(out, "`z': invalid symbolic mode operator") {
+	if out, _, _ := umaskSymbolicRun(
+		t,
+		0o022,
+		both,
+		"umask -- zz",
+	); !strings.Contains(
+		out,
+		"`z': invalid symbolic mode operator",
+	) {
 		t.Errorf("said %q, want the operator wording naming z", out)
 	}
 	// A dialect with no operator wording uses the one it has for both, and

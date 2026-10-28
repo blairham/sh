@@ -471,9 +471,12 @@ func TestAliasingAWidgetCopiesIt(t *testing.T) {
 // `scalar-local-special` — so a shell that is not running one must find them
 // unset, and assigning to one there is an ordinary variable assignment.
 func TestTheWidgetParametersAreNotThereOutsideAWidget(t *testing.T) {
-	out, _ := runZsh(t, t.TempDir(),
+	out, _ := runZsh(
+		t,
+		t.TempDir(),
 		`print -r -- "B=[${BUFFER-UNSET}] C=[${CURSOR-UNSET}] L=[${LBUFFER-UNSET}] R=[${RBUFFER-UNSET}] W=[${WIDGET-UNSET}]"`+"\n"+
-			"BUFFER=hi; print -r -- \"set=[$BUFFER]\"\n")
+			"BUFFER=hi; print -r -- \"set=[$BUFFER]\"\n",
+	)
 	want := "B=[UNSET] C=[UNSET] L=[UNSET] R=[UNSET] W=[UNSET]\nset=[hi]\n"
 	if out != want {
 		t.Errorf("output = %q, want %q", out, want)
@@ -483,9 +486,12 @@ func TestTheWidgetParametersAreNotThereOutsideAWidget(t *testing.T) {
 // TestRunningAWidgetHandsOverTheLineAndTakesItBack is the round trip, and the
 // parameters are the whole of what a widget can do with a line.
 func TestRunningAWidgetHandsOverTheLineAndTakesItBack(t *testing.T) {
-	r, out := zleRunner(t, `w() { print -r -- "W=$WIDGET B=[$BUFFER] C=$CURSOR L=[$LBUFFER] R=[$RBUFFER]"; BUFFER="rewritten"; CURSOR=3; }
+	r, out := zleRunner(
+		t,
+		`w() { print -r -- "W=$WIDGET B=[$BUFFER] C=$CURSOR L=[$LBUFFER] R=[$RBUFFER]"; BUFFER="rewritten"; CURSOR=3; }
 zle -N w
-`)
+`,
+	)
 	line, ok, printed := runWidget(t, r, out, "w", repl.Line{Buffer: "hello world", Cursor: 5})
 	if !ok {
 		t.Fatal("the widget did not run")
@@ -534,9 +540,12 @@ zle -N w
 // the clamp on the *other* parameter's assignment and the one a widget that
 // replaces the whole buffer reaches.
 func TestShorteningTheBufferBringsTheCursorWithIt(t *testing.T) {
-	r, out := zleRunner(t, `w() { print -r -- "before=$CURSOR"; BUFFER="ab"; print -r -- "after=$CURSOR L=[$LBUFFER] R=[$RBUFFER]"; }
+	r, out := zleRunner(
+		t,
+		`w() { print -r -- "before=$CURSOR"; BUFFER="ab"; print -r -- "after=$CURSOR L=[$LBUFFER] R=[$RBUFFER]"; }
 zle -N w
-`)
+`,
+	)
 	line, ok, printed := runWidget(t, r, out, "w", repl.Line{Buffer: "abcdefgh", Cursor: 8})
 	if !ok {
 		t.Fatal("the widget did not run")
@@ -712,9 +721,12 @@ func TestAnActionTheEditorDeclinesIsRefusedByName(t *testing.T) {
 // line as it was, and so does the key that ended it, as `$KEYS`.
 func TestTheSearchStatusIsTheCallsStatus(t *testing.T) {
 	for _, status := range []int{0, 1, 3} {
-		r, out := zleRunner(t, `a() { zle .history-incremental-search-backward; print -r -- "rc=$? B=$BUFFER C=$CURSOR K=${(q)KEYS}"; }
+		r, out := zleRunner(
+			t,
+			`a() { zle .history-incremental-search-backward; print -r -- "rc=$? B=$BUFFER C=$CURSOR K=${(q)KEYS}"; }
 zle -N a
-`)
+`,
+		)
 		ed := &stubEditor{gives: map[repl.Widget]repl.Line{
 			repl.WidgetSearchHistoryBackward: {Buffer: "echo bravo", Cursor: 5, Status: status, Keys: "\r"},
 		}}
@@ -1552,7 +1564,10 @@ func TestTheEveryWidgetListingIsBareNames(t *testing.T) {
 	out, _ := runZsh(t, t.TempDir(), define+"zle -la\n")
 	for _, line := range strings.Split(strings.TrimSuffix(out, "\n"), "\n") {
 		if strings.ContainsAny(line, " \t") {
-			t.Errorf("`zle -la` wrote %q, want bare names — a line with a blank in it is a name to the plugin that reads it back", line)
+			t.Errorf(
+				"`zle -la` wrote %q, want bare names — a line with a blank in it is a name to the plugin that reads it back",
+				line,
+			)
 		}
 	}
 	for _, want := range []string{"foo", "cw"} {

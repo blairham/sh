@@ -740,7 +740,14 @@ func TestPipelineStatusName(t *testing.T) {
 		}
 		var out bytes.Buffer
 		s, d := zsh.Semantics(), zsh.Diagnostics()
-		r := &interp.Runner{Name: preset.Name, Stdout: &out, Stderr: &out, Semantics: &s, Diagnostics: &d, Dialect: presetDialect()}
+		r := &interp.Runner{
+			Name:        preset.Name,
+			Stdout:      &out,
+			Stderr:      &out,
+			Semantics:   &s,
+			Diagnostics: &d,
+			Dialect:     presetDialect(),
+		}
 		zsh.Apply(r)
 		if _, err := r.Run(context.Background(), f); err != nil {
 			t.Fatal(err)
@@ -761,7 +768,14 @@ func TestRegexMatchLeavesTheBashNameAlone(t *testing.T) {
 	}
 	var out bytes.Buffer
 	s, d := zsh.Semantics(), zsh.Diagnostics()
-	r := &interp.Runner{Name: preset.Name, Stdout: &out, Stderr: &out, Semantics: &s, Diagnostics: &d, Dialect: presetDialect()}
+	r := &interp.Runner{
+		Name:        preset.Name,
+		Stdout:      &out,
+		Stderr:      &out,
+		Semantics:   &s,
+		Diagnostics: &d,
+		Dialect:     presetDialect(),
+	}
 	zsh.Apply(r)
 	if _, err := r.Run(context.Background(), f); err != nil {
 		t.Fatal(err)
@@ -785,7 +799,14 @@ func TestCloseBraceIsReservedEverywhere(t *testing.T) {
 	}
 	var out bytes.Buffer
 	s, d := zsh.Semantics(), zsh.Diagnostics()
-	r := &interp.Runner{Name: preset.Name, Stdout: &out, Stderr: &out, Semantics: &s, Diagnostics: &d, Dialect: presetDialect()}
+	r := &interp.Runner{
+		Name:        preset.Name,
+		Stdout:      &out,
+		Stderr:      &out,
+		Semantics:   &s,
+		Diagnostics: &d,
+		Dialect:     presetDialect(),
+	}
 	zsh.Apply(r)
 	if _, err := r.Run(context.Background(), f); err != nil {
 		t.Fatal(err)
@@ -861,7 +882,14 @@ func TestTheRefusalOfANonBuiltinNamesNoBuiltin(t *testing.T) {
 	}
 	var out bytes.Buffer
 	s, d := zsh.Semantics(), zsh.Diagnostics()
-	r := &interp.Runner{Name: preset.Name, Stdout: &out, Stderr: &out, Semantics: &s, Diagnostics: &d, Dialect: presetDialect()}
+	r := &interp.Runner{
+		Name:        preset.Name,
+		Stdout:      &out,
+		Stderr:      &out,
+		Semantics:   &s,
+		Diagnostics: &d,
+		Dialect:     presetDialect(),
+	}
 	zsh.Apply(r)
 	if _, err := r.Run(context.Background(), f); err != nil {
 		t.Fatal(err)
@@ -879,7 +907,14 @@ func TestTheRefusalOfANonBuiltinNamesNoBuiltin(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	r = &interp.Runner{Name: preset.Name, Stdout: &out, Stderr: &out, Semantics: &s, Diagnostics: &d, Dialect: presetDialect()}
+	r = &interp.Runner{
+		Name:        preset.Name,
+		Stdout:      &out,
+		Stderr:      &out,
+		Semantics:   &s,
+		Diagnostics: &d,
+		Dialect:     presetDialect(),
+	}
 	zsh.Apply(r)
 	if _, err := r.Run(context.Background(), f); err != nil {
 		t.Fatal(err)
@@ -1125,7 +1160,14 @@ func TestABareArrayNameIsTheElements(t *testing.T) {
 		}
 		var out bytes.Buffer
 		s, d := zsh.Semantics(), zsh.Diagnostics()
-		r := &interp.Runner{Name: preset.Name, Stdout: &out, Stderr: &out, Semantics: &s, Diagnostics: &d, Dialect: presetDialect()}
+		r := &interp.Runner{
+			Name:        preset.Name,
+			Stdout:      &out,
+			Stderr:      &out,
+			Semantics:   &s,
+			Diagnostics: &d,
+			Dialect:     presetDialect(),
+		}
 		zsh.Apply(r)
 		if _, err := r.Run(context.Background(), f); err != nil {
 			t.Fatalf("%s: %v", tc.src, err)

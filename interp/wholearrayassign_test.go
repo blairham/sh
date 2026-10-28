@@ -161,11 +161,21 @@ func TestAnOrdinarySubscriptAsksNeitherField(t *testing.T) {
 // An unanswered field refuses rather than picking a shell, and says which of
 // the two was asked.
 func TestAnUnansweredWholeArraySubscriptRefuses(t *testing.T) {
-	out, st := wholeAssign(t, `x=(p q); x[@]=Z`, WholeArraySubscriptAssignUnspecified, WholeArraySubscriptAssignUnspecified)
+	out, st := wholeAssign(
+		t,
+		`x=(p q); x[@]=Z`,
+		WholeArraySubscriptAssignUnspecified,
+		WholeArraySubscriptAssignUnspecified,
+	)
 	if st == 0 || !strings.Contains(out, "whole-array subscript on the left of an assignment") {
 		t.Errorf("= %q (status %d), want the unanswered refusal", out, st)
 	}
-	out, st = wholeAssign(t, `typeset -A m; m[@]=Z`, WholeArraySubscriptNamesEveryElement, WholeArraySubscriptAssignUnspecified)
+	out, st = wholeAssign(
+		t,
+		`typeset -A m; m[@]=Z`,
+		WholeArraySubscriptNamesEveryElement,
+		WholeArraySubscriptAssignUnspecified,
+	)
 	if st == 0 || !strings.Contains(out, "assignment to a table") {
 		t.Errorf("table: = %q (status %d), want the table field's unanswered refusal", out, st)
 	}

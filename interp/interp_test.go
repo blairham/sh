@@ -225,7 +225,13 @@ func runLeavingJobsRunning(t *testing.T, src string, setup func(*Runner)) (out s
 	return runScript(t, src, nil, setup, false)
 }
 
-func runScript(t *testing.T, src string, enable func(*syntax.Dialect), setup func(*Runner), wait bool) (out string, status int) {
+func runScript(
+	t *testing.T,
+	src string,
+	enable func(*syntax.Dialect),
+	setup func(*Runner),
+	wait bool,
+) (out string, status int) {
 	t.Helper()
 	d := syntax.Core()
 	if enable != nil {

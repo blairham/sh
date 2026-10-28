@@ -314,7 +314,8 @@ func TestACloneOwnsEveryScopeTable(t *testing.T) {
 			t.Errorf("the record of %q is one record shared by a subshell and its parent", prec.name)
 			continue
 		}
-		if crec.array == prec.array || reflect.ValueOf(crec.assoc).UnsafePointer() == reflect.ValueOf(prec.assoc).UnsafePointer() {
+		if crec.array == prec.array ||
+			reflect.ValueOf(crec.assoc).UnsafePointer() == reflect.ValueOf(prec.assoc).UnsafePointer() {
 			t.Errorf("the record of %q shares a saved table with its parent's", prec.name)
 		}
 		if crec.producer == prec.producer {
@@ -436,7 +437,11 @@ func TestACellHoldingOnlyAnAttributeIsKept(t *testing.T) {
 	}
 	r.attrClear("frozen", attrReadonly)
 	if r.attrLen(attrReadonly) != 0 || r.liveCells != 0 {
-		t.Errorf("%d readonly names in %d live cells after the last attribute went, want 0 in 0", r.attrLen(attrReadonly), r.liveCells)
+		t.Errorf(
+			"%d readonly names in %d live cells after the last attribute went, want 0 in 0",
+			r.attrLen(attrReadonly),
+			r.liveCells,
+		)
 	}
 	var names []string
 	for n := range r.attrNames(attrReadonly) {
@@ -491,7 +496,9 @@ func seedTables(r *Runner) {
 	}
 	r.dynamicWriters = map[string]func(*Runner, string){"seed": func(*Runner, string) {}}
 	r.assignmentActions = map[string]func(*Runner, string){"seed": func(*Runner, string) {}}
-	r.assignmentGuards = map[string]func(*Runner, string) (string, bool){"seed": func(*Runner, string) (string, bool) { return "", false }}
+	r.assignmentGuards = map[string]func(*Runner, string) (string, bool){
+		"seed": func(*Runner, string) (string, bool) { return "", false },
+	}
 	r.valueRefusals = map[string]func(string) (string, bool){"seed": func(string) (string, bool) { return "", false }}
 	r.unsetActions = map[string]func(*Runner){"seed": func(*Runner) {}}
 	r.inheritedParameterActions = map[string]func(*Runner, string){"seed": func(*Runner, string) {}}

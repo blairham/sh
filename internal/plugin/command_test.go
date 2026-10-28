@@ -164,7 +164,10 @@ func TestInputLongerThanOneChunkArrivesWhole(t *testing.T) {
 	h := launch(t, "greet", plugin.Options{})
 	sh := newShell(t, h)
 	// The fixture asks for 64 bytes at a time, so this is many reads.
-	if code := sh.run(t, "for i in 1 2 3 4 5 6 7 8 9 0; do printf 'abcdefghijklmnopqrstuvwxyz0123'; done | sink"); code != 0 {
+	if code := sh.run(
+		t,
+		"for i in 1 2 3 4 5 6 7 8 9 0; do printf 'abcdefghijklmnopqrstuvwxyz0123'; done | sink",
+	); code != 0 {
 		t.Fatalf("status = %d: %s", code, sh.errs.String())
 	}
 	if got, want := len(sh.out.String()), 300; got != want {

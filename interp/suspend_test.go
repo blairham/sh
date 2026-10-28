@@ -21,19 +21,38 @@ import (
 // The output is one file for both streams, so the order between a notice and
 // what the resumed command printed is the order they were written — the
 // notices are the only thing these tests run anything for.
-func jobSession(t *testing.T, f *fakeJobs, src string, jobControl bool, shape func(*Semantics, *Diagnostics)) (string, int, *Runner) {
+func jobSession(
+	t *testing.T,
+	f *fakeJobs,
+	src string,
+	jobControl bool,
+	shape func(*Semantics, *Diagnostics),
+) (string, int, *Runner) {
 	t.Helper()
 	return jobSessionShaped(t, f, src, jobControl, shape, nil)
 }
 
 // jobSessionWith is the same with the dialect left alone and the Runner handed
 // to the caller before it runs, for a test that wires a front-end hook.
-func jobSessionWith(t *testing.T, f *fakeJobs, src string, jobControl bool, adjust func(*Runner)) (string, int, *Runner) {
+func jobSessionWith(
+	t *testing.T,
+	f *fakeJobs,
+	src string,
+	jobControl bool,
+	adjust func(*Runner),
+) (string, int, *Runner) {
 	t.Helper()
 	return jobSessionShaped(t, f, src, jobControl, func(*Semantics, *Diagnostics) {}, adjust)
 }
 
-func jobSessionShaped(t *testing.T, f *fakeJobs, src string, jobControl bool, shape func(*Semantics, *Diagnostics), adjust func(*Runner)) (string, int, *Runner) {
+func jobSessionShaped(
+	t *testing.T,
+	f *fakeJobs,
+	src string,
+	jobControl bool,
+	shape func(*Semantics, *Diagnostics),
+	adjust func(*Runner),
+) (string, int, *Runner) {
 	t.Helper()
 	file, err := syntax.Parse(src, syntax.Core())
 	if err != nil {

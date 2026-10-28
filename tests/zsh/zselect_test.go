@@ -30,10 +30,14 @@ import (
 // The two lines above it are here as well, because the whole of #1768 is that
 // they are three consecutive lines and the first two are `|| return`.
 func TestTheProbeAPromptWorkerGuardsOnPasses(t *testing.T) {
-	out, st, errs := runZshSplitWithZselect(t, t.TempDir(), `zmodload zsh/zselect || { print -r -- "module=failed"; return }
+	out, st, errs := runZshSplitWithZselect(
+		t,
+		t.TempDir(),
+		`zmodload zsh/zselect || { print -r -- "module=failed"; return }
 print -r -- "module=$?"
 ! { zselect -t0 || (( $? != 1 )) } || { print -r -- "probe=failed"; return }
-print -r -- "probe=ok"`)
+print -r -- "probe=ok"`,
+	)
 	want := "module=0\nprobe=ok\n"
 	if out != want || st != 0 || errs != "" {
 		t.Errorf("the worker's two guards = %q (status %d, stderr %q), want %q", out, st, errs, want)

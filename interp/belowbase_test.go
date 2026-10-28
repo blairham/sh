@@ -141,7 +141,13 @@ func TestANegativeSubscriptPastTheStartIsAnAxis(t *testing.T) {
 	}
 	// On an array with nothing in it the same subscript makes the first
 	// element, under the answer that places one.
-	if out, st := runBelowBase(t, Yes, Yes, `a[-1]=x; printf "[%s]" "${a[@]}"; echo " ok"`); strings.TrimSpace(out) != "[x] ok" || st != 0 {
+	if out, st := runBelowBase(
+		t,
+		Yes,
+		Yes,
+		`a[-1]=x; printf "[%s]" "${a[@]}"; echo " ok"`,
+	); strings.TrimSpace(out) != "[x] ok" ||
+		st != 0 {
 		t.Errorf("empty array = %q (status %d), want %q at 0", out, st, "[x] ok")
 	}
 	// And appending through one places the value with nothing to join.

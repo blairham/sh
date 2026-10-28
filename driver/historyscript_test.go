@@ -62,7 +62,10 @@ const historyProgram = "set -o history\nset -o histexpand\necho one two three\ne
 // to the script's standard error.
 func TestAScriptExpandsWhereTheDialectSaysSo(t *testing.T) {
 	var out, errs strings.Builder
-	if code := driver.MainArgs(historyShell(&out, &errs, interp.Yes), []string{"testsh", "-c", historyProgram}); code != 0 {
+	if code := driver.MainArgs(
+		historyShell(&out, &errs, interp.Yes),
+		[]string{"testsh", "-c", historyProgram},
+	); code != 0 {
 		t.Fatalf("status %d (stderr %q)", code, errs.String())
 	}
 	if out.String() != "one two three\necho one two three\n" {

@@ -54,9 +54,17 @@ func main() {
 	dialects := flag.String("dialects", "", "comma-separated dialects to sweep (default all four)")
 	jobs := flag.Int("jobs", 4, "how many corpus rows to run at once")
 	out := flag.String("json", "", "write every flip to this file as JSON")
-	unspecified := flag.Bool("unspecified", false, "also flip to and from the unspecified constant, which measures reachability rather than disagreement")
+	unspecified := flag.Bool(
+		"unspecified",
+		false,
+		"also flip to and from the unspecified constant, which measures reachability rather than disagreement",
+	)
 	quiet := flag.Bool("quiet", false, "only print the report")
-	presets := flag.Bool("presets", false, "only ask the presets what they hold — no shell is run, which takes a second rather than an hour")
+	presets := flag.Bool(
+		"presets",
+		false,
+		"only ask the presets what they hold — no shell is run, which takes a second rather than an hour",
+	)
 	coverage := flag.Bool("coverage", false, "only report the axes each dialect does not answer — no shell is run")
 	grade := flag.Bool("grade", false, "only grade each preset against the golden record — no shell is run")
 	write := flag.Bool("write", false, "with -coverage or -grade, rewrite that check's committed ledger")

@@ -32,7 +32,12 @@ func leadingZeroSemantics(letDecimal, storedDecimal Answer) Semantics {
 // rewritten and the rest stays octal. `1+010` is the probe that parts them.
 func TestLetHasAReaderOfItsOwnForALeadingZero(t *testing.T) {
 	const src = `let "x=010"; let "y=1+010"; echo "[$x][$y][$(( 010 ))]"`
-	if out, st := run(t, src, withSem(leadingZeroSemantics(Yes, Yes))); strings.TrimSpace(out) != "[10][11][8]" || st != 0 {
+	if out, st := run(
+		t,
+		src,
+		withSem(leadingZeroSemantics(Yes, Yes)),
+	); strings.TrimSpace(out) != "[10][11][8]" ||
+		st != 0 {
 		t.Errorf("decimal: got %q (status %d), want [10][11][8] at 0", out, st)
 	}
 	// And with the same reader as `(( ))`, which is what the other three do.

@@ -441,7 +441,12 @@ const (
 //
 // The wait is measured from the signal rather than from the start, because
 // what is being timed is the death and not the second copy of a test binary.
-func shellSignaledFromOutside(t *testing.T, name, setup, hold string, sig syscall.Signal, env ...string) (syscall.WaitStatus, string) {
+func shellSignaledFromOutside(
+	t *testing.T,
+	name, setup, hold string,
+	sig syscall.Signal,
+	env ...string,
+) (syscall.WaitStatus, string) {
 	t.Helper()
 	ready := filepath.Join(t.TempDir(), "ready")
 	cmd := exec.Command(os.Args[0], "-test.run="+name)

@@ -162,7 +162,13 @@ func TestEscapedPatternsAnswerAsTheMatcherDoes(t *testing.T) {
 			gl, wl := strings.Split(got, "\n"), strings.Split(want, "\n")
 			for i := range min(len(gl), len(wl)) {
 				if gl[i] != wl[i] {
-					t.Errorf("%s: the shortcut changed the answers for %s\nwith:    %q\nwithout: %q", c.name, patterns[min(i, len(patterns)-1)], gl[i], wl[i])
+					t.Errorf(
+						"%s: the shortcut changed the answers for %s\nwith:    %q\nwithout: %q",
+						c.name,
+						patterns[min(i, len(patterns)-1)],
+						gl[i],
+						wl[i],
+					)
 				}
 			}
 			if len(gl) != len(wl) {

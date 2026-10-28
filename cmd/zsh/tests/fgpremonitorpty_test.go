@@ -35,7 +35,12 @@ func TestFgResumesAJobStartedBeforeSetM(t *testing.T) {
 				t.Errorf("%s refused the job:\n%s", c.verb, smoke.Readable(smoke.LastLines(screen, 10)))
 			}
 			if !strings.Contains(screen, c.want) {
-				t.Errorf("%s: the screen was\n%s\nwant a line containing %q", c.verb, smoke.Readable(smoke.LastLines(screen, 10)), c.want)
+				t.Errorf(
+					"%s: the screen was\n%s\nwant a line containing %q",
+					c.verb,
+					smoke.Readable(smoke.LastLines(screen, 10)),
+					c.want,
+				)
 			}
 			if !strings.Contains(screen, monitorExitFence) {
 				t.Errorf("the script did not reach its end:\n%s", smoke.Readable(screen))

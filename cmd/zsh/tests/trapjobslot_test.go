@@ -52,7 +52,11 @@ func TestTheShellsOwnCallsHoldJobNumbersAsZshDoes(t *testing.T) {
 			// string read whole before it runs would not see; and the
 			// background job's streams on the null device, so its output
 			// is not a second writer into the buffer the shell writes to.
-			src := "zmodload zsh/parameter\n" + strings.ReplaceAll(c.body, "J", "sleep 0.3 >/dev/null 2>&1 & print -r -- R=${(k)jobstates};") + "\n"
+			src := "zmodload zsh/parameter\n" + strings.ReplaceAll(
+				c.body,
+				"J",
+				"sleep 0.3 >/dev/null 2>&1 & print -r -- R=${(k)jobstates};",
+			) + "\n"
 			driver.MainArgs(sh, []string{"zsh", "-f", "-c", src})
 			first, _, _ := strings.Cut(o.String(), "\n")
 			if want := "R=" + c.want; first != want {

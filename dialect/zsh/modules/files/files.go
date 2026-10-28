@@ -951,7 +951,14 @@ func fileSyncOp(r *interp.Runner, _ context.Context, _ fileFlags, args []string)
 // The question goes to standard error with no newline after it, measured, and
 // end of input is a no: a script whose input came from nowhere is not
 // answering yes by accident.
-func fileConfirm(r *interp.Runner, ctx context.Context, command, verb string, flags fileFlags, place gatedfs.Place, unwritable bool) bool {
+func fileConfirm(
+	r *interp.Runner,
+	ctx context.Context,
+	command, verb string,
+	flags fileFlags,
+	place gatedfs.Place,
+	unwritable bool,
+) bool {
 	info, err := gatedfs.LstatAt(r, ctx, place)
 	switch {
 	case err != nil:

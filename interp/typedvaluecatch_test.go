@@ -31,7 +31,13 @@ echo "[$n]"; getopts x n -x; echo "[$n]"`, func(r *Runner) {
 			t.Errorf("asked %q: %q", q, out)
 		}
 	}
-	if !strings.HasPrefix(strings.TrimPrefix(out, "sh: a declaration without a value setting the name: the shells disagree here and no dialect was chosen\n"), "[7]\n") {
+	if !strings.HasPrefix(
+		strings.TrimPrefix(
+			out,
+			"sh: a declaration without a value setting the name: the shells disagree here and no dialect was chosen\n",
+		),
+		"[7]\n",
+	) {
 		t.Errorf("the value was not stored: %q", out)
 	}
 }

@@ -455,7 +455,10 @@ func (r *Runner) arithElement(x *syntax.ArithIndex) (arithNum, error) {
 	if a, ok := r.assocFor(x.Name); ok {
 		key := r.arithAssocKey(r.arithSubscriptRead(x.SubMarked, subscriptAsKey))
 		if _, there := a[key]; !there && r.stored(x.Name) &&
-			r.ask(r.sem().ArithKeyReadCreatesTheElement, "an expression reading a key an association does not have, creating it") {
+			r.ask(
+				r.sem().ArithKeyReadCreatesTheElement,
+				"an expression reading a key an association does not have, creating it",
+			) {
 			// The read leaves the key behind, declared and holding nothing:
 			// measured 2026-10-16 on ksh93u+, `typeset -A a; (( a[q] ));
 			// typeset -p a` lists `([q]=)`, the listing of a valueless
@@ -2424,7 +2427,10 @@ func (sh *Runner) integerOperand(n arithNum, op string) (int, error) {
 		return n.asInt(), nil
 	}
 	if sh.ask(sh.sem().ArithIntegerOperatorRefusesFloat, "an integer-only operator refusing a float") {
-		return 0, arithError{msg: Wording(sh.diag().ArithInvalidFloatOperation, "invalid floating point operation"), token: op}
+		return 0, arithError{
+			msg:   Wording(sh.diag().ArithInvalidFloatOperation, "invalid floating point operation"),
+			token: op,
+		}
 	}
 	return n.asInt(), nil
 }
@@ -3822,7 +3828,11 @@ func (r *Runner) arithTreeRead(text string) (syntax.ArithExpr, error) {
 // The expansion happens once, here, and the text is handed back rather than
 // recomputed: expanding it a second time to find an offset would run a command
 // substitution on the right-hand side twice, which is the mistake #1915 was.
-func (r *Runner) arithTreeOver(tree syntax.ArithExpr, text string, origin arithTextOrigin) (syntax.ArithExpr, string, error) {
+func (r *Runner) arithTreeOver(
+	tree syntax.ArithExpr,
+	text string,
+	origin arithTextOrigin,
+) (syntax.ArithExpr, string, error) {
 	if tree != nil && !r.arithPrecedenceOptionInCharge() {
 		return tree, r.writtenArithTextShown(text, origin), nil
 	}

@@ -47,9 +47,16 @@ declaring() { local a=$1 b=$2 c=; c=$a$b; }`)
 	extra := probes("declaring x y") - base
 	run(`echo "$c"`)
 	if out.String() != "g\n" || errOut.Len() != 0 {
-		t.Fatalf("the calls wrote %q and %q, want g and nothing: the local leaked or was refused", out.String(), errOut.String())
+		t.Fatalf(
+			"the calls wrote %q and %q, want g and nothing: the local leaked or was refused",
+			out.String(),
+			errOut.String(),
+		)
 	}
 	if extra > 12 {
-		t.Errorf("three declarations probe the store's index %d times a call more than plain assignments; want at most 12", extra)
+		t.Errorf(
+			"three declarations probe the store's index %d times a call more than plain assignments; want at most 12",
+			extra,
+		)
 	}
 }

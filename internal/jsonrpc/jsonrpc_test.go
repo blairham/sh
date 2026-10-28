@@ -297,11 +297,15 @@ func TestPendingCallsFailWhenTheConnectionEnds(t *testing.T) {
 	// A handler that never answers, so the call is still outstanding when the
 	// stream is closed underneath it.
 	blocked := make(chan struct{})
-	peer := jsonrpc.NewConn(c, c, handlerFuncs{handle: func(ctx context.Context, _ string, _ json.RawMessage) (any, error) {
-		close(blocked)
-		<-ctx.Done()
-		return nil, ctx.Err()
-	}})
+	peer := jsonrpc.NewConn(
+		c,
+		c,
+		handlerFuncs{handle: func(ctx context.Context, _ string, _ json.RawMessage) (any, error) {
+			close(blocked)
+			<-ctx.Done()
+			return nil, ctx.Err()
+		}},
+	)
 	conn := jsonrpc.NewConn(a, a, nil)
 	go func() { _ = peer.Serve(t.Context()) }()
 	go func() { _ = conn.Serve(t.Context()) }()

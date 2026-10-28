@@ -51,7 +51,12 @@ func TestTheShellsExitTrapNamesItsFirstLine(t *testing.T) {
 	}
 	// At a prompt, on a pipe, where the prompt's own line 1 names nothing.
 	t.Run("at a prompt", func(t *testing.T) {
-		if _, errs, _ := prompt(t, "trap nosuch_et EXIT\n", "ksh", "-i"); errs != "$ $ \nksh: line 1: nosuch_et: not found\n" {
+		if _, errs, _ := prompt(
+			t,
+			"trap nosuch_et EXIT\n",
+			"ksh",
+			"-i",
+		); errs != "$ $ \nksh: line 1: nosuch_et: not found\n" {
 			t.Errorf("standard error %q", errs)
 		}
 	})

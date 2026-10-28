@@ -15,7 +15,11 @@ import (
 // 2026-10-02 on zsh 5.9.2 under `-f` (#5155).
 func TestKshAutoloadIsReadAsTheFunctionLoads(t *testing.T) {
 	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, "foo"), []byte("echo foo loaded; foo() { echo foo run $*; }\n"), 0o644); err != nil {
+	if err := os.WriteFile(
+		filepath.Join(dir, "foo"),
+		[]byte("echo foo loaded; foo() { echo foo run $*; }\n"),
+		0o644,
+	); err != nil {
 		t.Fatal(err)
 	}
 	for _, tc := range []struct{ src, want string }{

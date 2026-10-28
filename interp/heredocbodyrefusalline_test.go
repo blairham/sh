@@ -95,7 +95,14 @@ func TestARefusedBodyOnAPipelineElementNamesTheCommandsLine(t *testing.T) {
 	if !strings.Contains(got, "at line 1:") {
 		t.Errorf("said %q, want `at line 1:`", got)
 	}
-	if off := refusalSentenceLine(t, "cat <<END | cat\n$(echo hi; for)\nEND\n", false); strings.Contains(off, "at line 1:") {
+	if off := refusalSentenceLine(
+		t,
+		"cat <<END | cat\n$(echo hi; for)\nEND\n",
+		false,
+	); strings.Contains(
+		off,
+		"at line 1:",
+	) {
 		t.Errorf("with the answer off: said %q, want the body's line instead", off)
 	}
 }

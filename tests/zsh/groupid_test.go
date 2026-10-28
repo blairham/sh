@@ -79,7 +79,11 @@ func TestAGroupIDReachesACommandAsAWord(t *testing.T) {
 			t.Fatalf("%s: %v", name, err)
 		}
 		if !strings.HasPrefix(out, "argc=2 ") {
-			t.Errorf("$%s as an argument gave %q, want two arguments — an empty word is dropped and the command runs one short", name, out)
+			t.Errorf(
+				"$%s as an argument gave %q, want two arguments — an empty word is dropped and the command runs one short",
+				name,
+				out,
+			)
 		}
 	}
 }

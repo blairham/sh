@@ -77,7 +77,11 @@ import (
 // script route is the script's path, so a `set -u` failure on line 3 of a
 // `~/.zshenv` sent a person to line 3 of a script that was fine. Every shell
 // in the panel that reads a startup file names the startup file (#1123).
-func (r *Runner) RunStartupFile(ctx context.Context, path, src string, failed func(err error, ran bool) int) (int, error) {
+func (r *Runner) RunStartupFile(
+	ctx context.Context,
+	path, src string,
+	failed func(err error, ran bool) int,
+) (int, error) {
 	// The frame a `return` returns from. A count rather than a flag, and
 	// raised the same way `.` raises it, because a startup file may source
 	// another and each of them is its own boundary.

@@ -216,7 +216,8 @@ func (e *editor) repaintAsTheScreenIs(m *terminalMotion, prompt drawnPrompt, col
 			if x+1 < len(cur) && x+1 < len(old) && same(x+1) {
 				continue
 			}
-			if k > 0 && string(old[x+k:]) == string(cur[x:]) || k < 0 && x-k <= len(cur) && string(cur[x-k:]) == string(old[x:]) {
+			if k > 0 && string(old[x+k:]) == string(cur[x:]) ||
+				k < 0 && x-k <= len(cur) && string(cur[x-k:]) == string(old[x:]) {
 				at = x
 			}
 			break

@@ -14,7 +14,10 @@ import "testing"
 // outside completion; `bye`; and `logout`, which refuses a shell that is not a
 // login one and ends it anyway.
 func TestTheBuiltinsZshListsAreHere(t *testing.T) {
-	out, st := runZsh(t, t.TempDir(), `whence -w bye chdir history r getln pushln ttyctl echotc compcall logout noglob - zsocket
+	out, st := runZsh(
+		t,
+		t.TempDir(),
+		`whence -w bye chdir history r getln pushln ttyctl echotc compcall logout noglob - zsocket
 print -l ${(ko)builtins[(I)(bye|chdir|history|r|getln|pushln|ttyctl|echotc|compcall|logout|noglob|-|zsocket)]}
 chdir /nonexistent-dir
 f() {
@@ -28,8 +31,10 @@ ttyctl; ttyctl -f; ttyctl; ttyctl -u; ttyctl
 compcall; print -r -- "st=$?"
 zmodload zsh/net/socket; whence -w zsocket
 ( bye 3 ); print -r -- "bye=$?"
-logout; print -r -- unreached`)
-	if want := "bye: builtin\nchdir: builtin\nhistory: builtin\nr: builtin\ngetln: builtin\npushln: builtin\nttyctl: builtin\nechotc: builtin\ncompcall: builtin\nlogout: builtin\nnoglob: builtin\n-: builtin\nzsocket: none\nbye\nchdir\ncompcall\nechotc\ngetln\nhistory\nlogout\nnoglob\npushln\nr\nttyctl\nzsh:chdir:3: no such file or directory: /nonexistent-dir\nf:chdir:1: no such file or directory: /nonexistent-dir\nzsh:fc:8: no such event: 1\nzsh:fc:9: current history line would recurse endlessly, aborted\n[a b c]\nst=1 []\ntty is not frozen\ntty is frozen\ntty is not frozen\nzsh:compcall:12: can only be called from completion function\nst=1\nzsocket: builtin\nbye=3\nzsh:logout:15: not login shell\n"; out != want || st != 1 {
+logout; print -r -- unreached`,
+	)
+	if want := "bye: builtin\nchdir: builtin\nhistory: builtin\nr: builtin\ngetln: builtin\npushln: builtin\nttyctl: builtin\nechotc: builtin\ncompcall: builtin\nlogout: builtin\nnoglob: builtin\n-: builtin\nzsocket: none\nbye\nchdir\ncompcall\nechotc\ngetln\nhistory\nlogout\nnoglob\npushln\nr\nttyctl\nzsh:chdir:3: no such file or directory: /nonexistent-dir\nf:chdir:1: no such file or directory: /nonexistent-dir\nzsh:fc:8: no such event: 1\nzsh:fc:9: current history line would recurse endlessly, aborted\n[a b c]\nst=1 []\ntty is not frozen\ntty is frozen\ntty is not frozen\nzsh:compcall:12: can only be called from completion function\nst=1\nzsocket: builtin\nbye=3\nzsh:logout:15: not login shell\n"; out != want ||
+		st != 1 {
 		t.Errorf("got %q (status %d), want %q at 1", out, st, want)
 	}
 }
@@ -38,7 +43,11 @@ logout; print -r -- unreached`)
 // backslashes.
 func TestGetlnKeepsABackslash(t *testing.T) {
 	// Measured on zsh 5.9.2: `[a\b]` and `[c\]`.
-	out, st := runZsh(t, t.TempDir(), `print -rz -- 'a\b'; getln x; print -r -- "[$x]"; print -rz -- 'c\'; getln y; print -r -- "[$y]"`)
+	out, st := runZsh(
+		t,
+		t.TempDir(),
+		`print -rz -- 'a\b'; getln x; print -r -- "[$x]"; print -rz -- 'c\'; getln y; print -r -- "[$y]"`,
+	)
 	if want := "[a\\b]\n[c\\]\n"; out != want || st != 0 {
 		t.Errorf("got %q (status %d), want %q", out, st, want)
 	}

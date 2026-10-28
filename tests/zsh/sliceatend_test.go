@@ -23,7 +23,12 @@ func TestANegativeLengthPastTheEndIsStillRefused(t *testing.T) {
 		}
 	}
 	// The control: an offset past the end with a positive length, and a negative one ending exactly at the offset, are empty.
-	if out, st := runZshOnPath(t, t.TempDir(), `a=(ax bx cx); print -r -- "[${a[@]:3:1}][${a[@]:2:-1}]"`); out != "[][]\n" || st != 0 {
+	if out, st := runZshOnPath(
+		t,
+		t.TempDir(),
+		`a=(ax bx cx); print -r -- "[${a[@]:3:1}][${a[@]:2:-1}]"`,
+	); out != "[][]\n" ||
+		st != 0 {
 		t.Errorf("control: %q at %d", out, st)
 	}
 }

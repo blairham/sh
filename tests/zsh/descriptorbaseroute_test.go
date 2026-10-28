@@ -38,7 +38,11 @@ func TestAPickedDescriptorStartsAtTenOnStandardInput(t *testing.T) {
 		{"control: an interactive session", interp.RouteStandardInput, true, `exec {x}</dev/null; echo $x`, "11\n"},
 	} {
 		t.Run(c.name, func(t *testing.T) {
-			out, _, err := preset.Combined(t, dialecttest.Base{Dir: t.TempDir(), Route: c.route, Interactive: c.interactive}, c.src)
+			out, _, err := preset.Combined(
+				t,
+				dialecttest.Base{Dir: t.TempDir(), Route: c.route, Interactive: c.interactive},
+				c.src,
+			)
 			if err != nil {
 				t.Fatal(err)
 			}

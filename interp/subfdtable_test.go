@@ -309,7 +309,14 @@ func TestAFileTestOnABorrowedNumberAsksAboutThePipe(t *testing.T) {
 		`test -p <(true) && echo yes`,
 		`test -w >(true) && echo yes`,
 	} {
-		out := runSubstPlacement(t, SubstitutionEndsWhereAnyDescriptorGoes, AllocateDescriptorsFromTen, nil, src+`; echo <(true)`, nil)
+		out := runSubstPlacement(
+			t,
+			SubstitutionEndsWhereAnyDescriptorGoes,
+			AllocateDescriptorsFromTen,
+			nil,
+			src+`; echo <(true)`,
+			nil,
+		)
 		if got, path, _ := strings.Cut(strings.TrimSpace(out), "\n"); got != "yes" || path != "/dev/fd/"+strconv.Itoa(want) {
 			t.Errorf("%s: got %q, want yes from a substitution published on %d", src, out, want)
 		}

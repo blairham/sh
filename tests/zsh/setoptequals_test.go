@@ -90,7 +90,11 @@ func TestEqualsOptionIsReportedBack(t *testing.T) {
 func equalsOptionRun(t *testing.T, src string) (string, string) {
 	t.Helper()
 	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, "p"), []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil { //nolint:gosec // a program has to be executable
+	if err := os.WriteFile(
+		filepath.Join(dir, "p"),
+		[]byte("#!/bin/sh\nexit 0\n"),
+		0o755,
+	); err != nil { //nolint:gosec // a program has to be executable
 		t.Fatalf("write the program: %v", err)
 	}
 	out, _, err := preset.Combined(t, dialecttest.Base{

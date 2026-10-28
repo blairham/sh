@@ -52,7 +52,8 @@ func TestAnIdentityAssignmentAsksTheProcess(t *testing.T) {
 		t.Errorf("got %q status %d, want %q at 1", buf.String(), st, want)
 	}
 	n, _ := strconv.Atoi(other)
-	if len(calls) != 2 || calls[0] != (call{interp.IdentityEffectiveUser, n}) || calls[1] != (call{interp.IdentityGroup, n}) {
+	if len(calls) != 2 || calls[0] != (call{interp.IdentityEffectiveUser, n}) ||
+		calls[1] != (call{interp.IdentityGroup, n}) {
 		t.Errorf("the hook was asked %v, want EUID then GID with %d", calls, n)
 	}
 }
@@ -68,7 +69,11 @@ func TestAnIdentityAssignmentLeavesTheProcessAloneWhereItMust(t *testing.T) {
 		asked++
 		return nil
 	}
-	src := "EUID=" + strconv.Itoa(os.Geteuid()) + "; echo a$?\n( EUID=" + strconv.Itoa(os.Geteuid()+1) + " ) 2>/dev/null; echo b\n"
+	src := "EUID=" + strconv.Itoa(
+		os.Geteuid(),
+	) + "; echo a$?\n( EUID=" + strconv.Itoa(
+		os.Geteuid()+1,
+	) + " ) 2>/dev/null; echo b\n"
 	if _, err := r.Run(context.Background(), preset.ParseThrough(t, r, src)); err != nil {
 		t.Fatal(err)
 	}

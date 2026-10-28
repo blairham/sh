@@ -39,7 +39,11 @@ import (
 func TestNoRealTimeSignalIsNamed(t *testing.T) {
 	for _, e := range platformSignals {
 		if int(e.Sig) >= 32 {
-			t.Errorf("%s names signal %d, which is in the real-time range: its name is the C library's and differs between glibc and musl", e.Name, e.Sig)
+			t.Errorf(
+				"%s names signal %d, which is in the real-time range: its name is the C library's and differs between glibc and musl",
+				e.Name,
+				e.Sig,
+			)
 		}
 	}
 

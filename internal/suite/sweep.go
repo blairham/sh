@@ -465,7 +465,10 @@ func Sweep(ctx context.Context, s Suite, dir, ours, reference string, opts Optio
 	statuses := map[[2]int]int{}
 	var meanSum float64
 	for i, res := range results {
-		rep.Cases = append(rep.Cases, NamedResult{Name: s.attribute(files[i].Tier, files[i].Name), Result: res, Moved: moved[i]})
+		rep.Cases = append(
+			rep.Cases,
+			NamedResult{Name: s.attribute(files[i].Tier, files[i].Name), Result: res, Moved: moved[i]},
+		)
 		switch {
 		case res.Parsed:
 			rep.Parsed++
@@ -600,7 +603,15 @@ func plan(s Suite, dir string, opts Options) ([]file, error) {
 // The second return is how the reference disagreed with itself, and it is
 // empty for every column but ours — see [difference], which is where that
 // carve-out is made rather than here.
-func grade(ctx context.Context, s Suite, root, tests, name, ours, reference string, read StaticRead, haveDialect bool, doc Doc, opts Options) (Result, string) {
+func grade(
+	ctx context.Context,
+	s Suite,
+	root, tests, name, ours, reference string,
+	read StaticRead,
+	haveDialect bool,
+	doc Doc,
+	opts Options,
+) (Result, string) {
 	var res Result
 	src, err := os.ReadFile(filepath.Join(tests, name))
 	if err != nil {
@@ -780,7 +791,11 @@ func placeBeside(s Suite, root, run string) error {
 	for _, b := range s.Beside {
 		at := filepath.Join(run, filepath.FromSlash(b.At))
 		owned := filepath.Dir(run)
-		if rel, err := filepath.Rel(owned, at); err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		if rel, err := filepath.Rel(
+			owned,
+			at,
+		); err != nil || rel == ".." ||
+			strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
 			return fmt.Errorf("%s: Beside %q climbs out of the run's own directory", s.Name, b.At)
 		}
 		src, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(b.From)))

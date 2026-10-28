@@ -45,7 +45,14 @@ package interp
 // operand became a name; by here it is a store and not a question. Nothing
 // arrives with it set unless it was written, so the columns that refuse the
 // operator never reach the join.
-func (r *Runner) declareElement(base string, leading []string, sub, value string, appends bool, f declareFlags, shadows bool) {
+func (r *Runner) declareElement(
+	base string,
+	leading []string,
+	sub, value string,
+	appends bool,
+	f declareFlags,
+	shadows bool,
+) {
 	// **A name that is already a reference**, which is settled in front of
 	// everything else here because it decides what the rest of the operand is
 	// even about: one column takes the attribute off and writes the element

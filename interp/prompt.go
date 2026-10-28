@@ -1050,7 +1050,12 @@ type PromptResolver func(f PromptField, arg string, braced bool) (string, bool)
 //
 // quantity answers the conditional's tests and may be nil for a reader with
 // no answers to them; a style with no [PromptStyle.Conditional] never asks it.
-func ExpandPromptStyle(st PromptStyle, text string, field PromptResolver, quantity PromptQuantityResolver) (string, string, bool) {
+func ExpandPromptStyle(
+	st PromptStyle,
+	text string,
+	field PromptResolver,
+	quantity PromptQuantityResolver,
+) (string, string, bool) {
 	var visual promptVisualState
 	return expandPromptStyle(st, text, field, quantity, &visual)
 }
@@ -1058,7 +1063,13 @@ func ExpandPromptStyle(st PromptStyle, text string, field PromptResolver, quanti
 // expandPromptStyle is [ExpandPromptStyle] over a visual state the caller
 // keeps, which is every caller inside this package: the state is the shell's
 // and outlives one rendering. See [promptVisualState].
-func expandPromptStyle(st PromptStyle, text string, field PromptResolver, quantity PromptQuantityResolver, visual *promptVisualState) (string, string, bool) {
+func expandPromptStyle(
+	st PromptStyle,
+	text string,
+	field PromptResolver,
+	quantity PromptQuantityResolver,
+	visual *promptVisualState,
+) (string, string, bool) {
 	if st.Escape == 0 || text == "" {
 		return text, "", true
 	}
@@ -1101,7 +1112,13 @@ func expandPromptStyle(st PromptStyle, text string, field PromptResolver, quanti
 //
 // r may be nil, which is a value with no shell behind it: the escapes are
 // drawn and nothing is expanded.
-func RenderPromptValue(st PromptStyle, r *Runner, text string, field PromptResolver, quantity PromptQuantityResolver) (string, string, bool) {
+func RenderPromptValue(
+	st PromptStyle,
+	r *Runner,
+	text string,
+	field PromptResolver,
+	quantity PromptQuantityResolver,
+) (string, string, bool) {
 	expand := func(v string) string {
 		if r == nil || st.Expand == nil || !st.Expand(r) {
 			return v

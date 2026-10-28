@@ -19,11 +19,14 @@ import (
 // the removal for the rest of the session and the second widget read every
 // one of them empty.
 func TestAnUnsetInOneWidgetIsGoneByTheNext(t *testing.T) {
-	r, out := zleRunner(t, `c() { unset POSTDISPLAY CUTBUFFER BUFFER LBUFFER RBUFFER CURSOR region_highlight NUMERIC; print -r -- "c ${+POSTDISPLAY}${+CUTBUFFER}${+BUFFER}${+LBUFFER}${+RBUFFER}${+CURSOR}" }
+	r, out := zleRunner(
+		t,
+		`c() { unset POSTDISPLAY CUTBUFFER BUFFER LBUFFER RBUFFER CURSOR region_highlight NUMERIC; print -r -- "c ${+POSTDISPLAY}${+CUTBUFFER}${+BUFFER}${+LBUFFER}${+RBUFFER}${+CURSOR}" }
 zle -N c
 b() { print -r -- "b ${(t)POSTDISPLAY} ${(t)CUTBUFFER} ${(t)BUFFER} ${(t)LBUFFER} ${(t)RBUFFER} ${(t)CURSOR} ${(t)region_highlight} n=${NUMERIC-unset}" }
 zle -N b
-`)
+`,
+	)
 	if _, _, said := runWidget(t, r, out, "c", repl.Line{Buffer: "ab", Cursor: 1}); said != "c 000000\n" {
 		t.Errorf("the unsetting widget said %q, want %q", said, "c 000000\n")
 	}
@@ -68,13 +71,20 @@ zle -N w
 // as text. This shell made the queue counter 6, its attribute outliving the
 // call.
 func TestTheCursorIsAnIntegerOnlyInsideAWidget(t *testing.T) {
-	r, out := zleRunner(t, `w() { CURSOR=1; CURSOR+=2; a=$CURSOR; CURSOR=5; CURSOR=CURSOR-1; CURSOR+=x; NUMERIC=2; NUMERIC+=3; b=$NUMERIC; NUMERIC=x; print -r -- "c=$a e=$CURSOR n=$b x=$NUMERIC" }
+	r, out := zleRunner(
+		t,
+		`w() { CURSOR=1; CURSOR+=2; a=$CURSOR; CURSOR=5; CURSOR=CURSOR-1; CURSOR+=x; NUMERIC=2; NUMERIC+=3; b=$NUMERIC; NUMERIC=x; print -r -- "c=$a e=$CURSOR n=$b x=$NUMERIC" }
 zle -N w
-`)
+`,
+	)
 	if _, _, said := runWidget(t, r, out, "w", repl.Line{Buffer: "abcdefghij"}); said != "c=3 e=4 n=5 x=0\n" {
 		t.Errorf("the widget said %q, want %q", said, "c=3 e=4 n=5 x=0\n")
 	}
-	got, _ := runZshVars(t, r, `CURSOR=1+1 NUMERIC=2+2 KEYS_QUEUED_COUNT=3+3; print -r -- "$CURSOR $NUMERIC $KEYS_QUEUED_COUNT"`)
+	got, _ := runZshVars(
+		t,
+		r,
+		`CURSOR=1+1 NUMERIC=2+2 KEYS_QUEUED_COUNT=3+3; print -r -- "$CURSOR $NUMERIC $KEYS_QUEUED_COUNT"`,
+	)
 	if want := "1+1 2+2 3+3\n"; got != want {
 		t.Errorf("after the widget: %q, want %q", got, want)
 	}

@@ -121,14 +121,28 @@ func TestTheLastBackgroundPidRefusalIsWordedByTheDialect(t *testing.T) {
 	sem.LastBackgroundPid = LastBackgroundPidUnset
 
 	sigil := Diagnostics{UnboundPositional: "$%[1]s: measured sigil wording"}
-	if got, _ := run(t, `set -u; echo "$!"`, withDialect(sem, sigil)); !strings.Contains(got, "$!: measured sigil wording") {
+	if got, _ := run(
+		t,
+		`set -u; echo "$!"`,
+		withDialect(sem, sigil),
+	); !strings.Contains(
+		got,
+		"$!: measured sigil wording",
+	) {
 		t.Errorf("the sigil wording is the one consulted: got %q", got)
 	}
 
 	// Empty means "the same line as an unset name", which is what three of
 	// the four presets leave it at.
 	plain := Diagnostics{UnboundVariable: "%[1]s: measured plain wording"}
-	if got, _ := run(t, `set -u; echo "$!"`, withDialect(sem, plain)); !strings.Contains(got, "!: measured plain wording") {
+	if got, _ := run(
+		t,
+		`set -u; echo "$!"`,
+		withDialect(sem, plain),
+	); !strings.Contains(
+		got,
+		"!: measured plain wording",
+	) {
 		t.Errorf("the fallback wording names the parameter: got %q", got)
 	}
 }

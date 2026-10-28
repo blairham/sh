@@ -48,8 +48,16 @@ func TestEmulateReadsLettersAfterTheModeAsSetDoes(t *testing.T) {
 		{"sh's table: +b is notify", "emulate sh; emulate zsh +b -c '" + read + "'", "nonotify|st=0"},
 		// -L and -R before the mode are the builtin's own, unchanged.
 		{"control: -L before the mode", "f() { emulate -L zsh; " + read + "; }; f", "lo|st=0"},
-		{"control: -R before the mode", "setopt histignorespace; emulate -R zsh; [[ -o histignorespace ]] || print nohis", "nohis|st=0"},
-		{"and -R after it does not reset", "setopt histignorespace; emulate zsh -R; [[ -o histignorespace ]] && print his", "his|st=0"},
+		{
+			"control: -R before the mode",
+			"setopt histignorespace; emulate -R zsh; [[ -o histignorespace ]] || print nohis",
+			"nohis|st=0",
+		},
+		{
+			"and -R after it does not reset",
+			"setopt histignorespace; emulate zsh -R; [[ -o histignorespace ]] && print his",
+			"his|st=0",
+		},
 	}
 	for _, row := range rows {
 		t.Run(row.name, func(t *testing.T) {

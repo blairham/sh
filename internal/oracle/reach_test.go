@@ -53,14 +53,23 @@ func TestAContainerColumnIsPinnedByDigest(t *testing.T) {
 			t.Errorf("%s: %q is not a digest, so the column pins a moving target", s.Name, c.Digest)
 		}
 		if strings.ContainsAny(c.Image, ":@") {
-			t.Errorf("%s: image %q carries a tag; the digest is what is pulled and the repository is what a reader looks up", s.Name, c.Image)
+			t.Errorf(
+				"%s: image %q carries a tag; the digest is what is pulled and the repository is what a reader looks up",
+				s.Name,
+				c.Image,
+			)
 		}
 		if s.MustReport == "" {
-			t.Errorf("%s: a container column with no MustReport records whatever shell the image happens to have at that path", s.Name)
+			t.Errorf(
+				"%s: a container column with no MustReport records whatever shell the image happens to have at that path",
+				s.Name,
+			)
 		}
 	}
 	if containers == 0 {
-		t.Error("no panel member is reached through a container, so this guard proves nothing; ash was one when it was written")
+		t.Error(
+			"no panel member is reached through a container, so this guard proves nothing; ash was one when it was written",
+		)
 	}
 }
 

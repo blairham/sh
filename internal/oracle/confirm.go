@@ -130,7 +130,12 @@ type Rerun func(context.Context, []Case) (*Run, error)
 //
 // Both are returned, because "nothing changed" and "one thing changed and did
 // not hold" are different states and a caller has to be able to say which.
-func (r *Run) Confirm(ctx context.Context, prev *Run, cases []Case, again Rerun) (held, dropped []CellChange, err error) {
+func (r *Run) Confirm(
+	ctx context.Context,
+	prev *Run,
+	cases []Case,
+	again Rerun,
+) (held, dropped []CellChange, err error) {
 	changed := r.CellChangesFrom(prev)
 	if len(changed) == 0 {
 		return nil, nil, nil

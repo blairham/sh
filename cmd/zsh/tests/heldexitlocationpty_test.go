@@ -83,7 +83,11 @@ func TestAnExitInsideEvalOrAFunctionOnACommandString(t *testing.T) {
 // have running jobs.` and `st=1`, where this shell located the sentence at
 // the script's own line and left.
 func TestAHeldExitInEvalInAScript(t *testing.T) {
-	screen := monitorExitScript(t, []string{"-f"}, "set -m\n/bin/sleep 1 &\neval exit; print -r -- st=$?\nprint -r -- "+monitorExitFence+"\n")
+	screen := monitorExitScript(
+		t,
+		[]string{"-f"},
+		"set -m\n/bin/sleep 1 &\neval exit; print -r -- st=$?\nprint -r -- "+monitorExitFence+"\n",
+	)
 	for _, w := range []string{"(eval):1: you have running jobs.", "st=1", monitorExitFence} {
 		if !strings.Contains(screen, w) {
 			t.Errorf("want %q; the screen was\n%s", w, smoke.Readable(smoke.LastLines(screen, 10)))

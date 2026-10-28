@@ -1470,7 +1470,8 @@ func (s source) parseStatus(r *interp.Runner, err error, src string, status int)
 		}
 		return status
 	}
-	if n := s.diag().SubstitutionParseFailureStatusFromAnInteractiveCommandString; n != 0 && refusedInASubstitutionBody(err, src) {
+	if n := s.diag().SubstitutionParseFailureStatusFromAnInteractiveCommandString; n != 0 &&
+		refusedInASubstitutionBody(err, src) {
 		return n
 	}
 	return status
@@ -1813,7 +1814,11 @@ func spelt(list, spelling string) bool {
 // opinion about the letter would have to hold both. A dialect that names none
 // of them — dash and ksh93 name none — is a shell whose startup files cannot
 // be skipped, which is measured and is what those two do.
-func (sh *Shell) startupOption(spelling string, args []string, inv *invocation) (rest []string, matched bool, err error) {
+func (sh *Shell) startupOption(
+	spelling string,
+	args []string,
+	inv *invocation,
+) (rest []string, matched bool, err error) {
 	o := sh.Semantics.StartupFileOptions
 	borrowed := sh.lettersAreBorrowed(inv)
 	switch {
@@ -1857,7 +1862,11 @@ func (sh *Shell) startupOption(spelling string, args []string, inv *invocation) 
 // and `zsh --emulate -c 'echo ran'` reads `-c` as the mode and then fails to
 // open `echo ran`. A front end that claimed either word back would be
 // answering a command line real zsh does not.
-func (sh *Shell) emulationOption(spelling string, args []string, inv *invocation) (rest []string, matched bool, err error) {
+func (sh *Shell) emulationOption(
+	spelling string,
+	args []string,
+	inv *invocation,
+) (rest []string, matched bool, err error) {
 	e := sh.Semantics.EmulationOption
 	if e.Spellings == "" || !spelt(e.Spellings, spelling) {
 		return args, false, nil
@@ -2607,7 +2616,13 @@ func (sh *Shell) route(args []string, inv invocation) (source, error) {
 			// Nothing to run and someone at a keyboard. Asked before
 			// reading, not after: reading standard input from a terminal
 			// waits for an end-of-file that a person has not typed yet.
-			return source{prompt: true, name: sh.Name, params: args, dg: sh.diagnosticsFor(shellDiagnostics), opts: inv.opts}, nil
+			return source{
+				prompt: true,
+				name:   sh.Name,
+				params: args,
+				dg:     sh.diagnosticsFor(shellDiagnostics),
+				opts:   inv.opts,
+			}, nil
 		}
 		// Not read here. The program is on the same descriptor everything
 		// else the script does reads from, so how much of it the shell takes
@@ -2615,7 +2630,13 @@ func (sh *Shell) route(args []string, inv invocation) (source, error) {
 		// runs — see program and Semantics.StdinProgramReadSize. Reading
 		// it all here is what handed `read x` end of input and then ran the
 		// data line as a command.
-		return source{onStdin: true, name: sh.Name, params: args, dg: sh.diagnosticsFor(stdinDiagnostics), opts: inv.opts}, nil
+		return source{
+			onStdin: true,
+			name:    sh.Name,
+			params:  args,
+			dg:      sh.diagnosticsFor(stdinDiagnostics),
+			opts:    inv.opts,
+		}, nil
 	}
 	path := args[0]
 	// A slash-less operand is looked for along PATH in the dialects that do
@@ -2877,7 +2898,13 @@ func (sh *Shell) newRunner(name string, params []string, dg *interp.Diagnostics,
 
 // newRunnerAs is newRunner for a shell started in an emulation — see
 // interp.Runner.InvocationEmulation.
-func (sh *Shell) newRunnerAs(name string, params []string, dg *interp.Diagnostics, route interp.Route, emulation string) *interp.Runner {
+func (sh *Shell) newRunnerAs(
+	name string,
+	params []string,
+	dg *interp.Diagnostics,
+	route interp.Route,
+	emulation string,
+) *interp.Runner {
 	// The runner's own copies of the vector and the semantics, because a
 	// script moves both — `shopt -s extglob` is a field of the one and
 	// `inherit_errexit` of the other — and the Shell they came from is the
@@ -4052,7 +4079,12 @@ func (sh *Shell) executeLines(
 				// is one complaint and status 1 in all four.
 				say(pr.verboseUpTo(err))
 				sh.errf("%s", in.parseDiagnostic(r, err, pr.text(), r.LineReached()))
-				return in.parseStatus(r, err, pr.text(), in.diag().StatusForParseErrorAfter(err, r.ExitStatus())), endingParseFailure
+				return in.parseStatus(
+					r,
+					err,
+					pr.text(),
+					in.diag().StatusForParseErrorAfter(err, r.ExitStatus()),
+				), endingParseFailure
 			}
 			// Whatever is left once the last line has been handed out is
 			// still input the shell read, and `set -v` writes back what it

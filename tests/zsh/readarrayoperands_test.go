@@ -50,11 +50,15 @@ print "C st=$? a3=(${(j:,:)a3})"`)
 // `REPLY` — which these two used to write instead — is left alone. A script
 // that seeded either one can tell, which is why both are seeded here.
 func TestReadKeysAndQueryFillTheArrayLettersName(t *testing.T) {
-	out, st := runZsh(t, t.TempDir(), `REPLY=S; a=A0;       read -k2 -u0 -A a <<<'xy'; print "1 st=$? a=[$a] REPLY=[$REPLY]"
+	out, st := runZsh(
+		t,
+		t.TempDir(),
+		`REPLY=S; a=A0;       read -k2 -u0 -A a <<<'xy'; print "1 st=$? a=[$a] REPLY=[$REPLY]"
 REPLY=S; reply=(R0); read -k2 -u0 -A   <<<'xy'; print "2 st=$? reply=[$reply] REPLY=[$REPLY]"
 REPLY=S; a=A0;       read -q  -u0 -A a <<<'y';  print "3 st=$? a=[$a] REPLY=[$REPLY]"
 REPLY=S; reply=(R0); read -q  -u0 -A   <<<'y';  print "4 st=$? reply=[$reply] REPLY=[$REPLY]"
-REPLY=S;             read -k2 -u0      <<<'xy'; print "5 st=$? REPLY=[$REPLY]"`)
+REPLY=S;             read -k2 -u0      <<<'xy'; print "5 st=$? REPLY=[$REPLY]"`,
+	)
 	// Row 5 is the control and it is what keeps this from being "these two
 	// never write REPLY": with no `-A` the text still goes there.
 	want := "1 st=0 a=[xy] REPLY=[S]\n" +

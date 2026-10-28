@@ -21,7 +21,8 @@ func TestAnArithStoreRefusalIsAnError(t *testing.T) {
 	sh.Stdout, sh.Stderr = &out, &errs
 	sh.Env = []string{"PATH=/usr/bin:/bin", "HOME=" + t.TempDir()}
 	driver.MainArgs(sh, []string{"ksh", "-c", `a=(1); let "a[-10] = 1"; echo st=$?; (( a[-10] = 1 )); echo no`})
-	if got, want := out.String(), "st=1\n"; got != want || !strings.Contains(errs.String(), "let: a: subscript out of range") {
+	if got, want := out.String(), "st=1\n"; got != want ||
+		!strings.Contains(errs.String(), "let: a: subscript out of range") {
 		t.Errorf("got %q, %q, want %q after let's complaint and nothing after the (( ))", got, errs.String(), want)
 	}
 }

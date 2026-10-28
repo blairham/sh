@@ -256,7 +256,11 @@ const (
 // A *scalar* does not do this — `s="hello world"; ${s[(ib:-12:)l]}` is 12,
 // the ordinary forward miss — which is why the answer is here rather than in
 // searchStart, where both walks would inherit it.
-func (r *Runner) searchElements(g *syntax.SubscriptFlags, search byte, elems []string) (at int, found bool, miss missKind) {
+func (r *Runner) searchElements(
+	g *syntax.SubscriptFlags,
+	search byte,
+	elems []string,
+) (at int, found bool, miss missKind) {
 	matches := r.subscriptMatcher(g, false)
 	back := search == 'R' || search == 'I'
 	from, within := r.searchStart(g, len(elems), back)

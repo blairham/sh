@@ -258,7 +258,14 @@ func TestAHookTheShippedFunctionRegisteredFiresAtThePrompt(t *testing.T) {
 
 	// And it ran *before* the command did. A hook that fired afterwards would
 	// satisfy both checks above and be the wrong hook.
-	if before, after := strings.Index(out, "MARK-PREEXEC echo body"), strings.Index(out, "body\n"); before < 0 || after < 0 || before > after {
+	if before, after := strings.Index(
+		out,
+		"MARK-PREEXEC echo body",
+	), strings.Index(
+		out,
+		"body\n",
+	); before < 0 || after < 0 ||
+		before > after {
 		t.Errorf("out = %q: the command hook ran at %d and the command at %d, want the hook first", out, before, after)
 	}
 }

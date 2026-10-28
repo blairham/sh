@@ -185,7 +185,11 @@ func zmodloadKeepPromise(r *interp.Runner, ctx context.Context, name string, arg
 		// A module this shell has that does not define the name: zsh says so
 		// twice, leaves the module unloaded and the promise standing, and
 		// ends the script.
-		r.DiagnoseAsTheShellf("module `%s' has no such feature: `%s': autoload cancelled\n", module, feature) //nolint:misspell // zsh's spelling
+		r.DiagnoseAsTheShellf(
+			"module `%s' has no such feature: `%s': autoload cancelled\n", //nolint:misspell // zsh's spelling
+			module,
+			feature,
+		)
 		r.DiagnoseAsTheShellf("autoloading module %s failed to define builtin: %s\n", module, name)
 		r.StopTheScript(1)
 		return 1

@@ -401,7 +401,12 @@ func TestADocumentedRouteThatStopsWorkingIsInertRatherThanDocumented(t *testing.
 	t.Parallel()
 	for _, did := range [][3]bool{{false, false, false}, {false, true, true}} {
 		if got := verdictOf(did, true); got != Inert {
-			t.Errorf("verdictOf(%v, documented) = %v, want %v: a route that does nothing ungated is measuring nothing, documented or not", did, got, Inert)
+			t.Errorf(
+				"verdictOf(%v, documented) = %v, want %v: a route that does nothing ungated is measuring nothing, documented or not",
+				did,
+				got,
+				Inert,
+			)
 		}
 	}
 }
@@ -445,7 +450,11 @@ func TestTheDocumentedRowCitesSomethingThatIsActuallyThere(t *testing.T) {
 		t.Fatalf("the documented row cites %s, which cannot be read: %v", file, err)
 	}
 	if !strings.Contains(string(b), "## "+section) {
-		t.Errorf("%s has no section %q: the citation has rotted, and a rotted citation is why this is a heading and not a line number", file, section)
+		t.Errorf(
+			"%s has no section %q: the citation has rotted, and a rotted citation is why this is a heading and not a line number",
+			file,
+			section,
+		)
 	}
 	// And the section has to be the one that accounts for the escape, not
 	// merely a heading that still exists. This is the sentence the row is
@@ -476,7 +485,11 @@ func TestOnlyRoutesThatMeanToEscapeCarryACitation(t *testing.T) {
 	// than a number going up.
 	want := []string{"exec/child-reads-denied"}
 	if !slices.Equal(cited, want) {
-		t.Errorf("documented routes = %v, want %v: a new one needs the argument on the package comment made for it too", cited, want)
+		t.Errorf(
+			"documented routes = %v, want %v: a new one needs the argument on the package comment made for it too",
+			cited,
+			want,
+		)
 	}
 }
 
@@ -491,13 +504,19 @@ func TestOnlyADocumentedRouteMayOpenTheDeniedPolicy(t *testing.T) {
 			continue
 		}
 		if rt.Cites == "" {
-			t.Errorf("route %s opens the denied policy with %v but does not cite a reason: a grant that is not admitting a documented hole is an instrument grading itself",
-				rt.Name, rt.Grant)
+			t.Errorf(
+				"route %s opens the denied policy with %v but does not cite a reason: a grant that is not admitting a documented hole is an instrument grading itself",
+				rt.Name,
+				rt.Grant,
+			)
 		}
 		for _, rule := range rt.Grant {
 			if !strings.HasPrefix(rule, "allow exec-unconfined ") {
-				t.Errorf("route %s grants %q; only `allow exec-unconfined` may be granted, or the row could be passing on a path rule it was supposed to be refused by",
-					rt.Name, rule)
+				t.Errorf(
+					"route %s grants %q; only `allow exec-unconfined` may be granted, or the row could be passing on a path rule it was supposed to be refused by",
+					rt.Name,
+					rule,
+				)
 			}
 		}
 	}

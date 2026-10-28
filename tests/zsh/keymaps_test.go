@@ -60,7 +60,10 @@ func TestBindkeyNewAndLinkRefusals(t *testing.T) {
 // main is vi editing, and a key bound into it reaches the editor, where a key
 // bound only in emacs does not.
 func TestAMadeKeymapSelectedAsMainDrivesTheEditor(t *testing.T) {
-	r := bindkeyRunner(t, "bindkey -N myvi viins\nbindkey -A myvi main\nbindkey -M myvi '^Xw' undo\nbindkey -M emacs '^Xe' undo\n")
+	r := bindkeyRunner(
+		t,
+		"bindkey -N myvi viins\nbindkey -A myvi main\nbindkey -M myvi '^Xw' undo\nbindkey -M emacs '^Xe' undo\n",
+	)
 	if !zsh.ViEditing(r) {
 		t.Error("a copy of viins selected as main is not vi editing")
 	}

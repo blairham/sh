@@ -46,8 +46,12 @@ func TestAPastedLineIsDrawnOnce(t *testing.T) {
 	// orders of magnitude over it, not a few bytes of escape sequence either
 	// way.
 	if written := out.Len(); written > 3*n {
-		t.Errorf("a %d-byte paste wrote %d bytes to the terminal, want no more than %d — the line is being drawn more than once",
-			n, written, 3*n)
+		t.Errorf(
+			"a %d-byte paste wrote %d bytes to the terminal, want no more than %d — the line is being drawn more than once",
+			n,
+			written,
+			3*n,
+		)
 	}
 	// And it really was drawn: a bound alone would be satisfied by a shell that
 	// drew nothing at all.

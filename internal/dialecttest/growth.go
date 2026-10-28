@@ -99,7 +99,11 @@ func (p Preset) BytesPerOperation(t testing.TB, setup, op string) float64 {
 // source that makes an array of n elements. Near zero for an operation that
 // does not depend on the array's length, and 16 or more for one that reads
 // the array into a list.
-func (p Preset) ArrayOperationGrowth(t testing.TB, build func(n int) string, op string) (perElement, small, large float64) {
+func (p Preset) ArrayOperationGrowth(
+	t testing.TB,
+	build func(n int) string,
+	op string,
+) (perElement, small, large float64) {
 	t.Helper()
 	small = p.BytesPerOperation(t, build(growthSmall), op)
 	large = p.BytesPerOperation(t, build(growthLarge), op)

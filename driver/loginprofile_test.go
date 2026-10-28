@@ -168,7 +168,11 @@ func TestTheProfileRunsAsThisShell(t *testing.T) {
 // route uses, and it is why the profile is sourced after applyOptions rather
 // than before it.
 func TestTheInvocationsOptionsComeBeforeTheProfile(t *testing.T) {
-	sh, out, errs := profileShell(t, withProfile(), `case $- in *x*) echo "PROFILE sees x";; *) echo "PROFILE does not";; esac`+"\n")
+	sh, out, errs := profileShell(
+		t,
+		withProfile(),
+		`case $- in *x*) echo "PROFILE sees x";; *) echo "PROFILE does not";; esac`+"\n",
+	)
 	script := scriptAt(t, "true\n")
 	if code := MainArgs(sh, []string{"-testsh", "-x", script}); code != 0 {
 		t.Fatalf("status %d, stderr %q", code, errs)

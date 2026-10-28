@@ -55,7 +55,12 @@ func reapForTest(t *testing.T, pid int) {
 	}
 }
 
-func stoppedWaitRunner(t *testing.T, axis Answer, monitor bool, wait func(int) (Wait, error)) (*Runner, *syntax.File, func() string) {
+func stoppedWaitRunner(
+	t *testing.T,
+	axis Answer,
+	monitor bool,
+	wait func(int) (Wait, error),
+) (*Runner, *syntax.File, func() string) {
 	t.Helper()
 	file, err := syntax.Parse(echoCmd+" &\nwait $!\n", syntax.Core())
 	if err != nil {

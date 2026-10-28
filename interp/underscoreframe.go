@@ -277,7 +277,11 @@ func (r *Runner) underscoreWrittenValue() (string, bool) {
 // it *reads* never wrote inside the text in the first place — so a bracket
 // there would hold a record that never moved, and asking would report an
 // unanswered axis on every `eval` in a script that never reads the name.
-func (r *Runner) underscoreAcrossABuiltinsOwnCommands(argv []string, beforeArg string, beforeSet bool) underscoreRestore {
+func (r *Runner) underscoreAcrossABuiltinsOwnCommands(
+	argv []string,
+	beforeArg string,
+	beforeSet bool,
+) underscoreRestore {
 	if !builtinRunsTheScriptsOwnCommands(argv) ||
 		r.sem().UnderscoreTracksTheLastArgument != Yes ||
 		r.sem().UnderscoreMovesOnlyBetweenInputCommands == Yes {

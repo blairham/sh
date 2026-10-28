@@ -6381,7 +6381,14 @@ func (l *Lexer) scanSubshellSubstitution(open Pos, start int, q Quoting) (Span, 
 	value := l.src[start:l.off]
 	l.advance() // the }
 	l.noteSubstEnds(open, l.endsWithin(start, start+len(value)))
-	return Span{Kind: CommandSubst, CurrentShell: true, Value: value, Quoting: q, Pos: open, Comments: l.bodyComments(CommandSubst)}, true
+	return Span{
+		Kind:         CommandSubst,
+		CurrentShell: true,
+		Value:        value,
+		Quoting:      q,
+		Pos:          open,
+		Comments:     l.bodyComments(CommandSubst),
+	}, true
 }
 
 // scanBraces reads ${ … }. Same rule as scanParens: a `}` inside quotes does
@@ -6834,7 +6841,15 @@ func (l *Lexer) scanBraces(q Quoting) Span {
 		// is past the `|` of the reply form, because the blank form's
 		// opening blank is body text and this one's pipe is its marker.
 		l.bodyClosedBehindABraceName = closedBehindName
-		return Span{Kind: CommandSubst, CurrentShell: true, ReplyValue: reply, Value: l.src[body:end], Quoting: q, Pos: open, Comments: l.bodyComments(CommandSubst)}
+		return Span{
+			Kind:         CommandSubst,
+			CurrentShell: true,
+			ReplyValue:   reply,
+			Value:        l.src[body:end],
+			Quoting:      q,
+			Pos:          open,
+			Comments:     l.bodyComments(CommandSubst),
+		}
 	}
 	// And a here-document a `$( )` in this word opened and could not feed,
 	// which the body's own scan noted on the way past. Raised here rather
@@ -7017,13 +7032,26 @@ func (l *Lexer) scanBackticks(q Quoting) Span {
 			if !l.closesQuotesAtEOF() {
 				l.failUnmatched(open, "`", "`", "unterminated backquote substitution")
 			}
-			return Span{Kind: CommandSubst, Backquoted: true, Value: unescapeBackquoted(l.src[start:l.off], q), Quoting: q, Pos: open, Comments: l.bodyComments(CommandSubst)}
+			return Span{
+				Kind:       CommandSubst,
+				Backquoted: true,
+				Value:      unescapeBackquoted(l.src[start:l.off], q),
+				Quoting:    q,
+				Pos:        open,
+				Comments:   l.bodyComments(CommandSubst),
+			}
 		}
 		switch l.peek() {
 		case '\n':
 			if l.dialect.QuotedNewlineIsUnmatched {
 				l.failUnmatched(open, "`", "`", "unterminated backquote substitution")
-				return Span{Kind: CommandSubst, Backquoted: true, Value: unescapeBackquoted(l.src[start:l.off], q), Quoting: q, Pos: open}
+				return Span{
+					Kind:       CommandSubst,
+					Backquoted: true,
+					Value:      unescapeBackquoted(l.src[start:l.off], q),
+					Quoting:    q,
+					Pos:        open,
+				}
 			}
 			l.advance()
 		case '\\':
@@ -7034,7 +7062,14 @@ func (l *Lexer) scanBackticks(q Quoting) Span {
 		case '`':
 			end := l.off
 			l.advance()
-			return Span{Kind: CommandSubst, Backquoted: true, Value: unescapeBackquoted(l.src[start:end], q), Quoting: q, Pos: open, Comments: l.bodyComments(CommandSubst)}
+			return Span{
+				Kind:       CommandSubst,
+				Backquoted: true,
+				Value:      unescapeBackquoted(l.src[start:end], q),
+				Quoting:    q,
+				Pos:        open,
+				Comments:   l.bodyComments(CommandSubst),
+			}
 		default:
 			l.advance()
 		}

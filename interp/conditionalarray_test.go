@@ -88,14 +88,22 @@ func TestAFiredTestStillAssignsAndStillFails(t *testing.T) {
 		t.Errorf("fired `?`: got %q status %d, want the word and a nonzero status with nothing after it", out, st)
 	}
 	// `=` substitutes its word, and the word's own fields — one here.
-	if out, st := condArrayRun(t, `unset a; set -- "${a[@]:=d}"; printf "%d" "$#"; printf "[%s]" "$@"`); out != `1[d]` || st != 0 {
+	if out, st := condArrayRun(
+		t,
+		`unset a; set -- "${a[@]:=d}"; printf "%d" "$#"; printf "[%s]" "$@"`,
+	); out != `1[d]` ||
+		st != 0 {
 		t.Errorf("fired `=`: got %q status %d, want %q at 0", out, st, `1[d]`)
 	}
 	// A `+` that fires yields nothing at all, which is zero fields rather
 	// than one empty one.
 	// `printf "[%s]"` runs its format once with no arguments, so the empty
 	// brackets are printf's and the `0` is the field count.
-	if out, st := condArrayRun(t, `a=(); set -- "${a[@]:+w}"; printf "%d" "$#"; printf "[%s]" "$@"`); out != `0[]` || st != 0 {
+	if out, st := condArrayRun(
+		t,
+		`a=(); set -- "${a[@]:+w}"; printf "%d" "$#"; printf "[%s]" "$@"`,
+	); out != `0[]` ||
+		st != 0 {
 		t.Errorf("fired `+`: got %q status %d, want %q at 0", out, st, `0[]`)
 	}
 }

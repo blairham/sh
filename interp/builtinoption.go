@@ -43,7 +43,11 @@ func (r *Runner) builtinOptions(name string, args []string, known string) (rest 
 // by the caller. A second scan would be a second copy of "where do the
 // options end", and the two would part company the first time a letter grew
 // an argument.
-func (r *Runner) builtinOptionsSeparated(name string, args []string, known string) (rest []string, opts string, separated bool, code int) {
+func (r *Runner) builtinOptionsSeparated(
+	name string,
+	args []string,
+	known string,
+) (rest []string, opts string, separated bool, code int) {
 	rest, opts, _, separated, code = r.builtinOptionsArg(name, args, known)
 	return rest, opts, separated, code
 }
@@ -82,7 +86,11 @@ func (r *Runner) builtinOptionsSeparated(name string, args []string, known strin
 // letter took no argument and the bundle carries on, while a digit commits the
 // **whole** remainder to being the number, so `2v` is handed on to be refused
 // rather than being read as `2` and a letter `v`.
-func (r *Runner) builtinOptionsArg(name string, args []string, known string) (rest []string, opts string, optArg map[byte]string, separated bool, code int) {
+func (r *Runner) builtinOptionsArg(
+	name string,
+	args []string,
+	known string,
+) (rest []string, opts string, optArg map[byte]string, separated bool, code int) {
 	for len(args) > 0 {
 		a := args[0]
 		if a == "-" {
@@ -514,7 +522,11 @@ func (r *Runner) builtinUsageLine(name string) {
 // words up to the first such operand are handed to the ordinary reader, so
 // the bundling, the `--` marker, `--help`, the refusal wording and its usage
 // line are all still that reader's and there is no second copy of them here.
-func (r *Runner) builtinOptionsCountingBack(name string, args []string, known string) (rest []string, opts string, optArg map[byte]string, code int) {
+func (r *Runner) builtinOptionsCountingBack(
+	name string,
+	args []string,
+	known string,
+) (rest []string, opts string, optArg map[byte]string, code int) {
 	cut := len(args)
 	for i := 0; i < len(args); {
 		a := args[i]

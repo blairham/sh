@@ -126,14 +126,17 @@ func TestACapabilityReadsAsTheBytesTheDescriptionHolds(t *testing.T) {
 // that failed either would leave the table unbuilt and every message the
 // manager printed would come out as raw markup.
 func TestThePluginManagersColorTestPasses(t *testing.T) {
-	out, st := runZshTerminfo(t, `if [[ ( ${+terminfo} -eq 1 && -n ${terminfo[colors]} ) || ( ${+termcap} -eq 1 && -n ${termcap[Co]} ) ]] {
+	out, st := runZshTerminfo(
+		t,
+		`if [[ ( ${+terminfo} -eq 1 && -n ${terminfo[colors]} ) || ( ${+termcap} -eq 1 && -n ${termcap[Co]} ) ]] {
   print -r -- built
 } else {
   print -r -- "unbuilt +ti=${+terminfo} colors=[${terminfo[colors]}] +tc=${+termcap} Co=[${termcap[Co]}]"
 }
 if [[ ( ${+terminfo} -eq 1 && ${terminfo[colors]} -ge 256 ) || ( ${+termcap} -eq 1 && ${termcap[Co]} -ge 256 ) ]] {
   print -r -- "256-color branch"
-}`)
+}`,
+	)
 	want := "built\n256-color branch\n"
 	if out != want || st != 0 {
 		t.Errorf("the color test = %q (status %d), want %q", out, st, want)

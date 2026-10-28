@@ -171,7 +171,15 @@ func TestTheListingPreferenceAndTheShellsOwnSpellingAreNotOneField(t *testing.T)
 	// The preference: the listing writes the older word, the translation
 	// does not.
 	preference := func(s *Semantics) { s.SignalNamesTheShellAlsoReads = "IOT=ABRT" }
-	if out := run(t, preference, Diagnostics{SignalListingWritesTheAlias: true}, `kill -l`); !strings.Contains(out, "\nIOT\n") {
+	if out := run(
+		t,
+		preference,
+		Diagnostics{SignalListingWritesTheAlias: true},
+		`kill -l`,
+	); !strings.Contains(
+		out,
+		"\nIOT\n",
+	) {
 		t.Errorf("preference listing: wrote %q, want IOT", out)
 	}
 	if out := run(t, preference, Diagnostics{SignalListingWritesTheAlias: true}, `kill -l 6`); out != "ABRT\n" {

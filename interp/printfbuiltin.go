@@ -775,7 +775,10 @@ func (r *Runner) printfStarOperand(next func() (string, bool)) (n int64, absent 
 		if r.unspecified {
 			return 0, false, r.status, true
 		}
-		if r.ask(r.sem().PrintfStarWithoutOperandIsAbsent, "a `printf` `*` the operands ran out before leaving its field out") {
+		if r.ask(
+			r.sem().PrintfStarWithoutOperandIsAbsent,
+			"a `printf` `*` the operands ran out before leaving its field out",
+		) {
 			// zsh: the field the star stood for is left out, so a precision
 			// is the conversion's default rather than zero — see
 			// Semantics.PrintfStarWithoutOperandIsAbsent.
@@ -820,7 +823,8 @@ func (r *Runner) printfStarOperand(next func() (string, bool)) (n int64, absent 
 			return 0, false, r.status, true
 		}
 	}
-	if code != 0 && !r.ask(r.sem().PrintfStarComplaintCostsTheStatus, "a `printf` complaint about a `*` operand reporting failure") {
+	if code != 0 &&
+		!r.ask(r.sem().PrintfStarComplaintCostsTheStatus, "a `printf` complaint about a `*` operand reporting failure") {
 		// ash alone writes the complaint and reports success anyway:
 		// `printf '%*s' abc hi` is `hi` on stderr's evidence and 0 on the
 		// status's. Asked only where there is a complaint to cost anything,
@@ -1841,8 +1845,10 @@ func (r *Runner) printfHexFloat(spec string, verb byte, f float64) (string, bool
 	if i < len(spec) && spec[i] == '.' {
 		i++
 		prec, _ = strconv.Atoi(spec[i : i+printfFieldRun(spec, i)])
-	} else if r.ask(r.sem().PrintfHexFloatDefaultIsTwelveDigits,
-		"`printf '%a'` with no precision writing twelve digits of significand rather than the shortest run that names the value") {
+	} else if r.ask(
+		r.sem().PrintfHexFloatDefaultIsTwelveDigits,
+		"`printf '%a'` with no precision writing twelve digits of significand rather than the shortest run that names the value",
+	) {
 		// One column's default, and a precision rather than a minimum: the
 		// thirteenth digit of `0.1` is rounded away there.
 		prec = 12
@@ -2064,7 +2070,10 @@ func (r *Runner) printfNonFinite(spec string, verb byte, f float64) (string, boo
 		// dialect should have to be chosen for.
 		return bare, true, false
 	}
-	if !r.ask(r.sem().PrintfNonFiniteIsConverted, "`printf` putting an infinity or a not-a-number through the conversion rather than writing the bare word") {
+	if !r.ask(
+		r.sem().PrintfNonFiniteIsConverted,
+		"`printf` putting an infinity or a not-a-number through the conversion rather than writing the bare word",
+	) {
 		if r.unspecified {
 			return "", true, true
 		}
@@ -2151,7 +2160,10 @@ func (r *Runner) printfEmptyNumberIsAnError(present bool) bool {
 		if r.sem().PrintfEmptyIsNotANumber != Yes {
 			return false
 		}
-		return r.ask(r.sem().PrintfAbsentNumberIsAnEmptyOne, "`printf` reading a numeric conversion with no operand left as an empty one")
+		return r.ask(
+			r.sem().PrintfAbsentNumberIsAnEmptyOne,
+			"`printf` reading a numeric conversion with no operand left as an empty one",
+		)
 	}
 	return r.ask(r.sem().PrintfEmptyIsNotANumber, "`printf` complaining about an empty operand where a number belongs")
 }
@@ -3404,7 +3416,10 @@ func (r *Runner) expandPrintfEscape(s string) (string, int, printfPassEnd) {
 	// characters as they stand and one writes the character alone, so the
 	// axis is asked here — where the table has run out — and nowhere on the
 	// way to it. See Semantics.PrintfUnknownEscapeDropsTheBackslash.
-	if r.ask(r.sem().PrintfUnknownEscapeDropsTheBackslash, "`printf` writing an undefined escape's character without its backslash") {
+	if r.ask(
+		r.sem().PrintfUnknownEscapeDropsTheBackslash,
+		"`printf` writing an undefined escape's character without its backslash",
+	) {
 		return string(s[1]), 2, printfPassRan
 	}
 	return `\` + string(s[1]), 2, printfPassRan

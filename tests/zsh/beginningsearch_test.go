@@ -41,9 +41,12 @@ func TestTheBeginningSearchNamesReachTheEditor(t *testing.T) {
 // leaves the line alone; without a string it is refused by name, since this
 // editor has no mark to copy from.
 func TestCopyRegionAsKillHandsTheStringToTheEditor(t *testing.T) {
-	r, out := zleRunner(t, `w() { zle copy-region-as-kill "foo bar" extra; print -r -- st=$? "[$BUFFER|$CURSOR]"; zle copy-region-as-kill; print -r -- st=$? }
+	r, out := zleRunner(
+		t,
+		`w() { zle copy-region-as-kill "foo bar" extra; print -r -- st=$? "[$BUFFER|$CURSOR]"; zle copy-region-as-kill; print -r -- st=$? }
 zle -N w
-`)
+`,
+	)
 	ed := &stubEditor{}
 	_, ok, said, _ := runWidgetWatching(t, r, out, "w", repl.Line{Buffer: "xy", Cursor: 1}, ed)
 	if !ok {
@@ -60,10 +63,14 @@ zle -N w
 
 // They are the editor's own, so `zle -la` names them.
 func TestTheBeginningSearchNamesAreListed(t *testing.T) {
-	out, _ := runZsh(t, t.TempDir(), `for w in history-beginning-search-backward history-beginning-search-forward up-line down-line copy-region-as-kill; do
+	out, _ := runZsh(
+		t,
+		t.TempDir(),
+		`for w in history-beginning-search-backward history-beginning-search-forward up-line down-line copy-region-as-kill; do
   zle -la $w && print -r -- $w
 done
-`)
+`,
+	)
 	const want = "history-beginning-search-backward\nhistory-beginning-search-forward\nup-line\ndown-line\ncopy-region-as-kill\n"
 	if out != want {
 		t.Errorf("got %q, want %q", out, want)

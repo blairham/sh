@@ -52,7 +52,11 @@ echo caught`
 	cmd.WaitDelay = time.Second
 	out, _ := cmd.CombinedOutput()
 	if ctx.Err() != nil {
-		t.Fatalf("the loop was still waiting for the trap after %v: the forwarded USR1 was never handled (wrote %q)", deathDeadline, out)
+		t.Fatalf(
+			"the loop was still waiting for the trap after %v: the forwarded USR1 was never handled (wrote %q)",
+			deathDeadline,
+			out,
+		)
 	}
 	if string(out) != "caught\n" {
 		t.Fatalf("got %q, want %q", out, "caught\n")

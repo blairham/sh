@@ -60,7 +60,12 @@ func (s Shell) editorIsOff() bool {
 // fire, and a construct still spans as many lines as it needs. Only the read
 // is different — and so is what a ^C does to it, which is the terminal's to
 // deliver here and not the editor's to read. See interruptedWhileReading.
-func (s Shell) readWithoutTheEditor(state *terminalState, ed *editor, prompt drawnPrompt, sig *interrupts) (string, error) {
+func (s Shell) readWithoutTheEditor(
+	state *terminalState,
+	ed *editor,
+	prompt drawnPrompt,
+	sig *interrupts,
+) (string, error) {
 	// The interrupt character is made a byte first — before the prompt is
 	// written, because a ^C typed the moment the prompt appears would
 	// otherwise be the signal again, and before the job-notice wait below,

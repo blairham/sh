@@ -362,7 +362,12 @@ func TestShoptHistoryNamesAreOnAndTheRestStayRefused(t *testing.T) {
 		}
 		// And back off again, which a name wired to a real switch can do and
 		// a name granted by a table entry cannot.
-		if out, st := runBash(t, t.TempDir(), "shopt -s "+name+"; shopt -u "+name+"; shopt "+name); st != 1 || out != offWant {
+		if out, st := runBash(
+			t,
+			t.TempDir(),
+			"shopt -s "+name+"; shopt -u "+name+"; shopt "+name,
+		); st != 1 ||
+			out != offWant {
 			t.Errorf("shopt -u %s = %q status %d, want %q status 1", name, out, st, offWant)
 		}
 	}

@@ -43,13 +43,24 @@ func TestAJobBuiltinReportsAFinishedJobUnderNonotify(t *testing.T) {
 			}
 			got := strings.Contains(screen[:fence], done)
 			if got != c.reports {
-				t.Errorf("%s: done row written = %v, want %v; the screen was\n%s", c.verb, got, c.reports, smoke.Readable(smoke.LastLines(screen, 10)))
+				t.Errorf(
+					"%s: done row written = %v, want %v; the screen was\n%s",
+					c.verb,
+					got,
+					c.reports,
+					smoke.Readable(smoke.LastLines(screen, 10)),
+				)
 			}
 			if c.reports && strings.Index(screen, done) > strings.Index(screen, c.after) {
 				t.Errorf("%s: the done row came after %q:\n%s", c.verb, c.after, smoke.Readable(smoke.LastLines(screen, 10)))
 			}
 			if !strings.Contains(screen, c.after) || strings.Contains(screen, "job has terminated") {
-				t.Errorf("%s: the screen was\n%s\nwant a line containing %q", c.verb, smoke.Readable(smoke.LastLines(screen, 10)), c.after)
+				t.Errorf(
+					"%s: the screen was\n%s\nwant a line containing %q",
+					c.verb,
+					smoke.Readable(smoke.LastLines(screen, 10)),
+					c.after,
+				)
 			}
 			if !strings.Contains(screen, monitorExitFence) {
 				t.Errorf("the script did not reach its end:\n%s", smoke.Readable(screen))

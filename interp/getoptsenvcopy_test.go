@@ -60,10 +60,14 @@ func TestGetoptsHoldsAnInheritedParametersEntry(t *testing.T) {
 		t.Run(answer.String(), func(t *testing.T) {
 			sem := permissive()
 			sem.GetoptsLeavesTheEnvironmentCopyOfItsOwnParameters = answer
-			out, _ := run(t, `getopts x: o -x6; echo $OPTARG; env | grep -E '^OPTARG='; OPTARG=new; env | grep -E '^OPTARG='`, func(r *Runner) {
-				r.Semantics = &sem
-				r.Env = append(r.Env, "OPTARG=pre")
-			})
+			out, _ := run(
+				t,
+				`getopts x: o -x6; echo $OPTARG; env | grep -E '^OPTARG='; OPTARG=new; env | grep -E '^OPTARG='`,
+				func(r *Runner) {
+					r.Semantics = &sem
+					r.Env = append(r.Env, "OPTARG=pre")
+				},
+			)
 			want := "6\nOPTARG=6\nOPTARG=new\n"
 			if answer == Yes {
 				want = "6\nOPTARG=pre\nOPTARG=new\n"
@@ -80,7 +84,11 @@ func TestGetoptsHoldsAnInheritedParametersEntry(t *testing.T) {
 // over an OPTARG nothing exported writes no refusal, and neither does one
 // whose exported name operand it fills.
 func TestAGetoptsOverUnexportedParametersAsksNothing(t *testing.T) {
-	out, st := run(t, `export o=1; getopts x: o -x6; echo $o $OPTARG; env | grep -E '^(o|OPTARG)='`, withSem(CoreSemantics()))
+	out, st := run(
+		t,
+		`export o=1; getopts x: o -x6; echo $o $OPTARG; env | grep -E '^(o|OPTARG)='`,
+		withSem(CoreSemantics()),
+	)
 	if st != 0 || out != "x 6\no=x\n" {
 		t.Errorf("out=%q st=%d, want the values, o refreshed and no refusal", out, st)
 	}

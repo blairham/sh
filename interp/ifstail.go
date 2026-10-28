@@ -46,8 +46,23 @@ func (r *Runner) splitFieldsAsk(s, ifs string, ifsSet bool) []string {
 // disagree.
 // boundary is the list-boundary mask, and nil for every caller but the one
 // dialect reading that has boundaries at all — see interp/listboundary.go.
-func (r *Runner) splitFieldsAskEdge(s string, boundary []bool, ifs string, ifsSet bool) (fields []string, openEnd bool) {
-	out, openEnd := splitFieldsOpenEnd(s, nil, boundary, ifs, r.ifsSpace(ifs), ifsSet, false, true, r.countsTheLocalesWideUnits)
+func (r *Runner) splitFieldsAskEdge(
+	s string,
+	boundary []bool,
+	ifs string,
+	ifsSet bool,
+) (fields []string, openEnd bool) {
+	out, openEnd := splitFieldsOpenEnd(
+		s,
+		nil,
+		boundary,
+		ifs,
+		r.ifsSpace(ifs),
+		ifsSet,
+		false,
+		true,
+		r.countsTheLocalesWideUnits,
+	)
 	fields = r.trailingSeparatorField(out, s, nil, ifs, ifsSet, false, true)
 	return fields, openEnd && len(fields) == len(out)
 }
@@ -82,7 +97,13 @@ func (r *Runner) splitFieldsAskPlain(s, ifs string, ifsSet bool) []string {
 // the edge-keeping rule of a quoted `${=spec}` the field behind the last
 // separator is there already, so there is nothing to decide and asking would
 // add a second one.
-func (r *Runner) trailingSeparatorField(fields []string, s string, literal []bool, ifs string, ifsSet, keepEdges, escaped bool) []string {
+func (r *Runner) trailingSeparatorField(
+	fields []string,
+	s string,
+	literal []bool,
+	ifs string,
+	ifsSet, keepEdges, escaped bool,
+) []string {
 	if keepEdges || !trailingRunSeparates(s, literal, ifs, r.ifsSpace(ifs), ifsSet, escaped) {
 		return fields
 	}

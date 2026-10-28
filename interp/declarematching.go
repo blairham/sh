@@ -608,7 +608,12 @@ func (r *Runner) matchedListedNames(patterns []string) ([]string, map[string]boo
 //
 // signAlone says the line was a bare `+`, which in one dialect writes the names
 // with no attribute words — see Runner.signAloneListingCarriesAttributeWords.
-func (r *Runner) declarationNameListingOf(names []string, produced map[string]bool, listing ProducedListing, signAlone bool) int {
+func (r *Runner) declarationNameListingOf(
+	names []string,
+	produced map[string]bool,
+	listing ProducedListing,
+	signAlone bool,
+) int {
 	locals := r.innermostLocalNames()
 	for _, name := range names {
 		d, _ := r.listedDeclarationOf(name, produced[name], listing)

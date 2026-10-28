@@ -1308,7 +1308,8 @@ func (r *Runner) readSubstBody(span syntax.Span) (*syntax.File, int, int, bool) 
 		}
 		restore()
 		putBack()
-		if span.Backquoted && !r.ask(r.sem().SubstitutionParseErrorIsFatal, "a substitution body that does not parse ending the shell") {
+		if span.Backquoted &&
+			!r.ask(r.sem().SubstitutionParseErrorIsFatal, "a substitution body that does not parse ending the shell") {
 			// The word expands to nothing and the statement goes on, which
 			// is a failed *expansion* rather than a failed script. The
 			// status is left alone for the same reason: the command that

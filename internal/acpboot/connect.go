@@ -334,7 +334,11 @@ func fail1(self, format string, args ...any) int {
 // Both streams are checked rather than one. A login TUI reads keystrokes *and*
 // draws, and a `sh -acp-connect … < script` has a terminal on exactly one of
 // the two.
-func terminalAuth(self string, argv []string, in, out *os.File) func(context.Context, []string, map[string]string) error {
+func terminalAuth(
+	self string,
+	argv []string,
+	in, out *os.File,
+) func(context.Context, []string, map[string]string) error {
 	if !repl.IsTerminal(in) || !repl.IsTerminal(out) {
 		return nil
 	}
@@ -570,7 +574,10 @@ func commandCoverage(self string, asked, announced int) string {
 // refusal the default. What it is not is a *silent* default — the question and
 // the answer both go to standard error, so a session run this way still leaves
 // the record that a person would have been shown.
-func fixedAnswer(self string, allow bool) func(context.Context, acp.RequestPermissionRequest) (acp.PermissionOutcome, error) {
+func fixedAnswer(
+	self string,
+	allow bool,
+) func(context.Context, acp.RequestPermissionRequest) (acp.PermissionOutcome, error) {
 	kind := acp.KindRejectOnce
 	if allow {
 		kind = acp.KindAllowOnce
@@ -667,7 +674,11 @@ func renderUpdate(self string, n acp.SessionNotification) {
 // for a one-word answer, in the middle of a turn whose output is still
 // arriving on the same screen, would be the worse answer rather than the
 // better one.
-func answerer(self string, allow, tty bool, in *bufio.Scanner) func(context.Context, acp.RequestPermissionRequest) (acp.PermissionOutcome, error) {
+func answerer(
+	self string,
+	allow, tty bool,
+	in *bufio.Scanner,
+) func(context.Context, acp.RequestPermissionRequest) (acp.PermissionOutcome, error) {
 	if allow || !tty {
 		return fixedAnswer(self, allow)
 	}
@@ -750,7 +761,11 @@ func refusal(options []acp.PermissionOption) acp.PermissionOutcome {
 // Nil where there is no terminal, and that nil is what withholds the
 // capability: an agent is told this client can collect a form only where it
 // can. The same rule the terminal login and the file methods are held to.
-func form(self string, tty bool, in *bufio.Scanner) func(context.Context, acp.CreateElicitationRequest) (acp.CreateElicitationResponse, error) {
+func form(
+	self string,
+	tty bool,
+	in *bufio.Scanner,
+) func(context.Context, acp.CreateElicitationRequest) (acp.CreateElicitationResponse, error) {
 	if !tty {
 		return nil
 	}

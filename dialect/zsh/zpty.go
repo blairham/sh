@@ -452,7 +452,16 @@ func zptyRead(r *interp.Runner, ctx context.Context, opts zptyOpts, rest []strin
 // string read *so far*: a pattern is matched against it after each byte and a
 // line ends at the first newline, so a reader that took a block would have to
 // give the rest back.
-func zptyCollect(r *interp.Runner, ctx context.Context, e zptyEntry, reader io.Reader, sys int, addressable bool, running func() bool, param, pattern string) ([]byte, bool) {
+func zptyCollect(
+	r *interp.Runner,
+	ctx context.Context,
+	e zptyEntry,
+	reader io.Reader,
+	sys int,
+	addressable bool,
+	running func() bool,
+	param, pattern string,
+) ([]byte, bool) {
 	var got []byte
 	var one [1]byte
 	for {

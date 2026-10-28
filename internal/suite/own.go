@@ -697,7 +697,13 @@ func CrossCheck(ctx context.Context, root, name string, refs []Reference, opts O
 // which reference did not and what moved — the tier checks run every
 // reference twice, so "a reference answered it two ways" without the name
 // and the line sent #2291's reading to four files with nothing to go on.
-func crossOne(ctx context.Context, s Suite, dir, name string, refs []Reference, timeout time.Duration) (CrossSplit, string) {
+func crossOne(
+	ctx context.Context,
+	s Suite,
+	dir, name string,
+	refs []Reference,
+	timeout time.Duration,
+) (CrossSplit, string) {
 	split := CrossSplit{Name: name}
 	groups := map[string][]string{}
 	type answer struct {

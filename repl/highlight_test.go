@@ -168,7 +168,14 @@ func TestAPlainHighlighterIsNotHandedThePredisplay(t *testing.T) {
 // A paste is marked on the line, so with a predisplay before it the mark
 // moves with the line (#6414).
 func TestAPasteIsMarkedOnTheLineAfterAPredisplay(t *testing.T) {
-	e := &editor{line: []rune("abcd"), predisplay: "pre:", pastedFrom: 1, pastedTo: 3, pastedStyle: "<", pastedStyleEnd: ">"}
+	e := &editor{
+		line:           []rune("abcd"),
+		predisplay:     "pre:",
+		pastedFrom:     1,
+		pastedTo:       3,
+		pastedStyle:    "<",
+		pastedStyleEnd: ">",
+	}
 	if got, want := e.styled(), "pre:a<bc>d"; got != want {
 		t.Errorf("drew %q, want %q", got, want)
 	}

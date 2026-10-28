@@ -53,7 +53,11 @@ func plainArithVectors() map[string]struct {
 			r.Semantics = &sem
 		}
 	}
-	common := []string{"<6>\n<-15>\n<5>\n<2>\n<-5>\n<-6>\n<0>\n<41>\n<1>\n<4>\n", "<5>\n<1>\n<12>\n<6>\n<two>\n", "<end>\n"}
+	common := []string{
+		"<6>\n<-15>\n<5>\n<2>\n<-5>\n<-6>\n<0>\n<41>\n<1>\n<4>\n",
+		"<5>\n<1>\n<12>\n<6>\n<two>\n",
+		"<end>\n",
+	}
 	return map[string]struct {
 		script string
 		rows   []string

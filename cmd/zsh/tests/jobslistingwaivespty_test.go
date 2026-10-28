@@ -87,7 +87,12 @@ func TestAJobsListingWaivesTheSentenceWithNoPrompt(t *testing.T) {
 				t.Errorf("left with %d, want %d; the screen was\n%s", code, c.want, smoke.Readable(smoke.LastLines(screen, 10)))
 			}
 			if got := strings.Contains(screen, "running jobs"); got != c.sentence {
-				t.Errorf("sentence written = %v, want %v; the screen was\n%s", got, c.sentence, smoke.Readable(smoke.LastLines(screen, 10)))
+				t.Errorf(
+					"sentence written = %v, want %v; the screen was\n%s",
+					got,
+					c.sentence,
+					smoke.Readable(smoke.LastLines(screen, 10)),
+				)
 			}
 		})
 	}

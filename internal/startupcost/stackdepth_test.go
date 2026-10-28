@@ -76,8 +76,21 @@ func TestAStartStaysOnASmallStack(t *testing.T) {
 	// the helper never applied, or applied to some goroutine other than the
 	// one the shell runs on, would pass every row below.
 	deep := "f() { [ \"$1\" -gt 0 ] && f $(($1 - 1)); }; f 200; echo ONE"
-	if out, err := startUnderCeiling(t, dir, "zsh", stackCeiling, "-c", deep); err == nil || !strings.Contains(out, "stack overflow") {
-		t.Fatalf("a recursion 200 deep fit under the %d KB ceiling (err %v), so the rows below would check nothing:\n%s", stackCeiling>>10, err, out)
+	if out, err := startUnderCeiling(
+		t,
+		dir,
+		"zsh",
+		stackCeiling,
+		"-c",
+		deep,
+	); err == nil ||
+		!strings.Contains(out, "stack overflow") {
+		t.Fatalf(
+			"a recursion 200 deep fit under the %d KB ceiling (err %v), so the rows below would check nothing:\n%s",
+			stackCeiling>>10,
+			err,
+			out,
+		)
 	}
 	for _, c := range []struct {
 		shell string

@@ -105,7 +105,8 @@ func TestAShellHeldSlotKeepsItsKind(t *testing.T) {
 			t.Errorf("%s=(p q) = %q (status %d), want the script to end at 1", name, out, st)
 		}
 		out, st = runZsh(t, t.TempDir(), `typeset `+name+`=(p q); print reached`)
-		if want := name + ": can't assign array value to non-array special"; !strings.Contains(out, want) || !strings.Contains(out, "typeset:") {
+		if want := name + ": can't assign array value to non-array special"; !strings.Contains(out, want) ||
+			!strings.Contains(out, "typeset:") {
 			t.Errorf("typeset %s=(p q) = %q, want %q", name, out, want)
 		}
 		if strings.Contains(out, "reached") || st != 1 {
@@ -116,7 +117,8 @@ func TestAShellHeldSlotKeepsItsKind(t *testing.T) {
 	// take the literal, which is the ordering interp/privatekindfixed.go
 	// records: an array slot takes `(1 2)`, so only `-i` is left to refuse.
 	out, st := runZsh(t, t.TempDir(), `typeset -i path=(1 2); print reached`)
-	if want := "path: can't change type of a special parameter"; !strings.Contains(out, want) || !strings.Contains(out, "typeset:") {
+	if want := "path: can't change type of a special parameter"; !strings.Contains(out, want) ||
+		!strings.Contains(out, "typeset:") {
 		t.Errorf("typeset -i path=(1 2) = %q, want %q", out, want)
 	}
 	if strings.Contains(out, "reached") || st != 1 {

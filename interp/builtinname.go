@@ -309,7 +309,11 @@ func (r *Runner) nameRules(builtin string) (fatal Answer, takes NameOperands) {
 // answered per builtin as well as per dialect: bash refuses `export a[0]`
 // and takes `unset a[0]`, ksh93 takes both, dash refuses both. Asked only
 // when an operand has a subscript, so nothing else is affected.
-func (r *Runner) builtinNames(builtin string, args []string, explicitVariable bool) (rest []string, status int, ended bool) {
+func (r *Runner) builtinNames(
+	builtin string,
+	args []string,
+	explicitVariable bool,
+) (rest []string, status int, ended bool) {
 	fatal, takes := r.nameRules(builtin)
 	r.landedPastARefusal = false
 	// `unset -v` asks for a variable by name, and gets a name checked even

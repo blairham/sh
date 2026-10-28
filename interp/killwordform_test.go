@@ -171,7 +171,11 @@ func TestAnUnknownOptionIsReportedPerLetterWhereTheVectorSaysSo(t *testing.T) {
 	// Without the flag the word is named once, and the block still follows.
 	plain := dg
 	plain.KillIllegalOptionPerLetter = false
-	if got := said(wordSem(), plain, "kill -NOPE 999999\n"); got != "kill: -NOPE: unknown option\nUsage: kill [-lL] job ...\n" {
+	if got := said(
+		wordSem(),
+		plain,
+		"kill -NOPE 999999\n",
+	); got != "kill: -NOPE: unknown option\nUsage: kill [-lL] job ...\n" {
 		t.Errorf("stderr %q, want the whole word once", got)
 	}
 }

@@ -279,7 +279,13 @@ func (r *Runner) openTraceLineCarryingTheInherited(text string) *openTraceLine {
 
 // traceAssignRest is the part of one assignment's word after its target,
 // with the space that follows every word on this line.
-func (r *Runner) traceAssignRest(a *syntax.Assign, value string, e *expandedAssign, d *Diagnostics, target string) string {
+func (r *Runner) traceAssignRest(
+	a *syntax.Assign,
+	value string,
+	e *expandedAssign,
+	d *Diagnostics,
+	target string,
+) string {
 	return strings.TrimPrefix(r.traceAssign(a, value, e, d), target) + " "
 }
 

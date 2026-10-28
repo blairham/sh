@@ -56,7 +56,11 @@ func runShipped(t *testing.T, src string) (string, int) {
 func TestEveryRouteIntoTheFunctionSearchFindsTheShippedFiles(t *testing.T) {
 	dir := t.TempDir()
 	sourced := filepath.Join(dir, "sourced.zsh")
-	if err := os.WriteFile(sourced, []byte("autoload -Uz is-at-least\nis-at-least 5.0 5.9 && print -r -- \"sourced ok\"\n"), 0o644); err != nil {
+	if err := os.WriteFile(
+		sourced,
+		[]byte("autoload -Uz is-at-least\nis-at-least 5.0 5.9 && print -r -- \"sourced ok\"\n"),
+		0o644,
+	); err != nil {
 		t.Fatal(err)
 	}
 	out, st := runShipped(t, `autoload is-at-least

@@ -379,7 +379,11 @@ func TestAKeyAProducedAssociationDoesNotAnswerRefusesByName(t *testing.T) {
 printf '[%s]' "${partial[nowhere]}"
 printf '[%s]' "after"`)
 	if got, want := out.String(), "[yes]"; got != want {
-		t.Errorf("output = %q, want %q — the refused expansion's command must not run, and neither must the one after it", got, want)
+		t.Errorf(
+			"output = %q, want %q — the refused expansion's command must not run, and neither must the one after it",
+			got,
+			want,
+		)
 	}
 	if got, want := errs.String(), "testsh:2: partial[nowhere]: no answer for that one\n"; got != want {
 		t.Errorf("diagnostic = %q, want %q", got, want)

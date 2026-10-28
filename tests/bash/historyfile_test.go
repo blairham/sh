@@ -73,7 +73,13 @@ func TestTheSizesDefaultWhenTheListIsTurnedOn(t *testing.T) {
 }
 
 func TestHistfilesizeKeepsTheNewestLinesItReads(t *testing.T) {
-	out, _ := historyFileRun(t, "HISTFILE=$F\nHISTFILESIZE=2\nset -o history\nhistory\n", "alpha one", "beta two", "gamma three")
+	out, _ := historyFileRun(
+		t,
+		"HISTFILE=$F\nHISTFILESIZE=2\nset -o history\nhistory\n",
+		"alpha one",
+		"beta two",
+		"gamma three",
+	)
 	if want := "    1  beta two\n    2  gamma three\n    3  history\n"; out != want {
 		t.Errorf("listing %q, want %q", out, want)
 	}

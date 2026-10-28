@@ -61,7 +61,11 @@ var braceClassRows = []struct {
 	control      bool
 }{
 	// The chunk's own row, and the plain cases.
-	{src: `echo X{za-q521}Y`, class: "X1Y X2Y X5Y XaY XbY XcY XdY XeY XfY XgY XhY XiY XjY XkY XlY XmY XnY XoY XpY XqY XzY", plain: "X{za-q521}Y"},
+	{
+		src:   `echo X{za-q521}Y`,
+		class: "X1Y X2Y X5Y XaY XbY XcY XdY XeY XfY XgY XhY XiY XjY XkY XlY XmY XnY XoY XpY XqY XzY",
+		plain: "X{za-q521}Y",
+	},
 	{src: `echo {abc}`, class: "a b c", plain: "{abc}"},
 	// Sorted and deduplicated, and a single character is a class of one.
 	{src: `echo {cba}`, class: "a b c", plain: "{cba}"},

@@ -97,11 +97,18 @@ func TestAHereDocumentThroughAVariableNamedDescriptor(t *testing.T) {
 // that could not tell them apart would pass whether or not the table was ever
 // saved.
 func TestAHereDocumentsDescriptorIsTakenBackWithTheCommand(t *testing.T) {
-	out, st := runHeredocFd(t, "{ read -r l <&3; echo \"in=[$l]\"; } 3<<X\nthree\nfour\nX\nread -r m <&3\necho \"after=$? m=[$m]\"\n")
+	out, st := runHeredocFd(
+		t,
+		"{ read -r l <&3; echo \"in=[$l]\"; } 3<<X\nthree\nfour\nX\nread -r m <&3\necho \"after=$? m=[$m]\"\n",
+	)
 	if !strings.HasPrefix(out, "in=[three]\n") {
 		t.Fatalf("got %q at %d, want the document read inside the command", out, st)
 	}
 	if !strings.Contains(out, "after=1 m=[]\n") {
-		t.Errorf("got %q at %d, want 3 closed again once the command it belonged to had ended — `four` is still in the document, so a leaked descriptor would have handed it over", out, st)
+		t.Errorf(
+			"got %q at %d, want 3 closed again once the command it belonged to had ended — `four` is still in the document, so a leaked descriptor would have handed it over",
+			out,
+			st,
+		)
 	}
 }

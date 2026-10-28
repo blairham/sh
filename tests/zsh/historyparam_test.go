@@ -56,7 +56,11 @@ func TestASearchOverTheHistoryTableTakesTheNewestMatch(t *testing.T) {
 	// match in scan order, so the order decides whether a suggestion is the
 	// command run a minute ago or the one from the top of the list.
 	dir := t.TempDir()
-	out, status := fcScript(t, dir, histSrc(t, dir, `print -r -- "${history[(r)ls*]}"`+"\n"+`print -r -- "${history[(R)ls*]}"`))
+	out, status := fcScript(
+		t,
+		dir,
+		histSrc(t, dir, `print -r -- "${history[(r)ls*]}"`+"\n"+`print -r -- "${history[(R)ls*]}"`),
+	)
 	if status != 0 {
 		t.Fatalf("status %d, output %q", status, out)
 	}

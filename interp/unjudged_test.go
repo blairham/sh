@@ -121,7 +121,13 @@ func TestTheTimedSuspensionEndsWithTheClause(t *testing.T) {
 	if got, _ := judgeRun(t, `time false; printf 'st=%s' "$?"`, unjudged); stripTiming(got) != "st=1" {
 		t.Errorf("the status should be the timed command's, got %q", got)
 	}
-	if got, _ := judgeRun(t, `set -e; time false || printf ran; printf ' after'`, unjudged); stripTiming(got) != "ran after" {
+	if got, _ := judgeRun(
+		t,
+		`set -e; time false || printf ran; printf ' after'`,
+		unjudged,
+	); stripTiming(
+		got,
+	) != "ran after" {
 		t.Errorf("a `||` should still see the failure, got %q", got)
 	}
 }

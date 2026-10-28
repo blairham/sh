@@ -153,7 +153,12 @@ func TestHistoryClearRestartsTheNumbering(t *testing.T) {
 // would delete the first entry there and pass every other row here.
 func TestHistoryDeleteIsOneBasedAtBothEnds(t *testing.T) {
 	t.Parallel()
-	if out, st := runBash(t, t.TempDir(), "history -s a\nhistory -s b\nhistory -d 1\nhistory\n"); out != "    1  b\n" || st != 0 {
+	if out, st := runBash(
+		t,
+		t.TempDir(),
+		"history -s a\nhistory -s b\nhistory -d 1\nhistory\n",
+	); out != "    1  b\n" ||
+		st != 0 {
 		t.Errorf("out = %q status = %d, want the first entry gone at 0", out, st)
 	}
 	for _, offset := range []string{"0", "9"} {
@@ -193,7 +198,12 @@ func TestHistoryRefusesAnUnknownLetterWithTheUsageLineAndTwo(t *testing.T) {
 func TestHistoryFallsBackToHistfileAndNamesItWhenItIsUnset(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
-	if out, st := runBash(t, dir, "HISTFILE=h\nhistory -s z\nhistory -w\nwhile IFS= read -r l; do echo \"$l\"; done < h\n"); out != "z\n" || st != 0 {
+	if out, st := runBash(
+		t,
+		dir,
+		"HISTFILE=h\nhistory -s z\nhistory -w\nwhile IFS= read -r l; do echo \"$l\"; done < h\n",
+	); out != "z\n" ||
+		st != 0 {
 		t.Errorf("out = %q status = %d, want the entry written through HISTFILE", out, st)
 	}
 	out, st := runBash(t, t.TempDir(), "unset HISTFILE\nhistory -s z\nhistory -w\n")

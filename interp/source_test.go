@@ -245,7 +245,16 @@ func TestEndOfInputWithNothingOpenHasItsOwnWording(t *testing.T) {
 		Location: LocationColonLine, Unterminated: "unfinished %[1]s",
 		UnterminatedNoConstruct: "gave out with nothing open",
 	}
-	if out, _ := sourceRun(t, dir, `eval "f()"`, permissive(), both); !strings.Contains(out, "gave out with nothing open") {
+	if out, _ := sourceRun(
+		t,
+		dir,
+		`eval "f()"`,
+		permissive(),
+		both,
+	); !strings.Contains(
+		out,
+		"gave out with nothing open",
+	) {
 		t.Errorf("got %q, want the construct-less wording", out)
 	}
 	if out, _ := sourceRun(t, dir, `eval "if"`, permissive(), both); !strings.Contains(out, "unfinished if") {

@@ -341,11 +341,20 @@ func TestAnExpiredKeyReadDoesNotSwallowTheNextKey(t *testing.T) {
 		select {
 		case sent := <-pressed:
 			if !sent {
-				t.Fatalf("the shell never reported the first read giving up, so no key was ever pressed and this is a stalled run rather than a swallowed key; it had written %q", out.String())
+				t.Fatalf(
+					"the shell never reported the first read giving up, so no key was ever pressed and this is a stalled run rather than a swallowed key; it had written %q",
+					out.String(),
+				)
 			}
-			t.Fatalf("the second read never returned after the key was pressed: the expired read swallowed it; the shell had written %q", out.String())
+			t.Fatalf(
+				"the second read never returned after the key was pressed: the expired read swallowed it; the shell had written %q",
+				out.String(),
+			)
 		default:
-			t.Fatalf("the shell is still somewhere before the key being pressed, so this is a stalled run rather than a swallowed key; it had written %q", out.String())
+			t.Fatalf(
+				"the shell is still somewhere before the key being pressed, so this is a stalled run rather than a swallowed key; it had written %q",
+				out.String(),
+			)
 		}
 	}
 }

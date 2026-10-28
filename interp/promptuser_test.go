@@ -196,7 +196,10 @@ func TestThePromptUserIsNotAskedUntilTheEscapeIsDrawn(t *testing.T) {
 		t.Fatalf("got %q, want %q", out, "reached\n")
 	}
 	if asked != 0 {
-		t.Errorf("the login name was asked for %d times by a script that never drew %%n; want 0 — installing the question must not ask it", asked)
+		t.Errorf(
+			"the login name was asked for %d times by a script that never drew %%n; want 0 — installing the question must not ask it",
+			asked,
+		)
 	}
 }
 

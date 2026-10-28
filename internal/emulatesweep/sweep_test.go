@@ -31,7 +31,11 @@ func TestMain(m *testing.M) {
 		panic(err)
 	}
 	hangingShell = filepath.Join(dir, "hangs")
-	if err := os.WriteFile(hangingShell, []byte("#!/bin/sh\nexec sleep 30\n"), 0o700); err != nil { //nolint:gosec // a fixture that must be executable
+	if err := os.WriteFile(
+		hangingShell,
+		[]byte("#!/bin/sh\nexec sleep 30\n"),
+		0o700,
+	); err != nil { //nolint:gosec // a fixture that must be executable
 		panic(err)
 	}
 	code := m.Run()

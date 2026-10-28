@@ -381,7 +381,15 @@ func TestAReadOperandWithASubscriptIsNotJudgedAsAName(t *testing.T) {
 	}
 	// And the base still has to be a name: `1bad[0]` is a bad name in every
 	// column that has the word, quoted back whole.
-	if out, _ := readRun(t, nil, Diagnostics{}, `printf 'text\n' | { read "1bad[0]"; echo "st=$?"; }`); !strings.Contains(out, "st=1") {
+	if out, _ := readRun(
+		t,
+		nil,
+		Diagnostics{},
+		`printf 'text\n' | { read "1bad[0]"; echo "st=$?"; }`,
+	); !strings.Contains(
+		out,
+		"st=1",
+	) {
 		t.Errorf("said %q, want a subscript on something that is not a name to be refused", out)
 	}
 }

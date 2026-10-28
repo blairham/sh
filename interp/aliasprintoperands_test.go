@@ -138,7 +138,12 @@ func TestEndingTheLookupAndThrowingTheOperandsAwayAreNotOneField(t *testing.T) {
 	if got, _ := aliasRun(t, ends, dg, twoAliases+`alias -p a; echo $?`); got != "0\n" {
 		t.Errorf("the lookup-ending field: %q, want nothing listed at 0", got)
 	}
-	if got, _ := aliasRun(t, aliasPrintIgnores(Yes), dg, twoAliases+`alias -p a; echo $?`); got != "alias a='1'\nalias b='2'\n0\n" {
+	if got, _ := aliasRun(
+		t,
+		aliasPrintIgnores(Yes),
+		dg,
+		twoAliases+`alias -p a; echo $?`,
+	); got != "alias a='1'\nalias b='2'\n0\n" {
 		t.Errorf("the operand-discarding field: %q, want the whole table at 0", got)
 	}
 	// And they part on a definition too: one still defines behind the

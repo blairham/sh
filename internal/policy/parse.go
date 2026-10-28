@@ -176,7 +176,9 @@ func (p *Policy) checkExecGrants() error {
 		}
 		return lineErr(p.lines[i], fmt.Errorf(
 			"`allow exec %s` does not gate the child process: it runs with the shell's own access, and %s. Write `allow exec-unconfined %s` to say so",
-			r.Pattern, p.whatIsRescinded(), r.Pattern,
+			r.Pattern,
+			p.whatIsRescinded(),
+			r.Pattern,
 		))
 	}
 	return nil

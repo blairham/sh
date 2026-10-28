@@ -293,7 +293,11 @@ func (r *Runner) walkThePrefixBeforeTheRedirections(assigns []*syntax.Assign, wa
 // assignments in the three columns that open first, and behind them in the two
 // that do not — see Runner.assignmentsExpandedBeforeTheRedirections.
 // The first result puts them back, and is never nil.
-func (r *Runner) openTheBareRedirections(ctx context.Context, c *syntax.SimpleCmd, argv []string) (func(), bool, error) {
+func (r *Runner) openTheBareRedirections(
+	ctx context.Context,
+	c *syntax.SimpleCmd,
+	argv []string,
+) (func(), bool, error) {
 	if len(c.Redirs) == 0 {
 		return func() {}, false, nil
 	}

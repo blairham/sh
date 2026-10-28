@@ -149,8 +149,12 @@ func main() {
 	send("exit\r")
 	_ = cmd.Wait()
 
-	fmt.Printf("upper row on screen: %d at the first prompt, %d before the recall, %d after three Ups + a Down + a keystroke\n",
-		atPrompt, before, after)
+	fmt.Printf(
+		"upper row on screen: %d at the first prompt, %d before the recall, %d after three Ups + a Down + a keystroke\n",
+		atPrompt,
+		before,
+		after,
+	)
 	// Zero is the answer #2469 landed and the answer real bash gives; a
 	// ladder of upper rows is what the bug looked like.
 	fmt.Printf("the recall interaction added %d copies of the upper row (want 0)\n", after-before)

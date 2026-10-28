@@ -619,16 +619,24 @@ func TestPrintfIntegerOverflowIsTheConversionsRange(t *testing.T) {
 		r.Diagnostics = &diag
 	}
 	out, st := runGrammar(t, `printf '[%d]' 99999999999999999999`, floats, set)
-	if want := "sh: printf: warning: 99999999999999999999: overflow exception\n[9223372036854775807]"; out != want || st != 1 {
+	if want := "sh: printf: warning: 99999999999999999999: overflow exception\n[9223372036854775807]"; out != want ||
+		st != 1 {
 		t.Errorf("got %q status %d, want %q and 1", out, st, want)
 	}
 	// The clamp is to the extreme of the type in both directions.
 	out, st = runGrammar(t, `printf '[%d]' -99999999999999999999`, floats, set)
-	if want := "sh: printf: warning: -99999999999999999999: overflow exception\n[-9223372036854775808]"; out != want || st != 1 {
+	if want := "sh: printf: warning: -99999999999999999999: overflow exception\n[-9223372036854775808]"; out != want ||
+		st != 1 {
 		t.Errorf("got %q status %d, want %q and 1", out, st, want)
 	}
 	// The same operand at a float conversion is a perfectly good number.
-	if out, st := runGrammar(t, `printf '[%f]' 99999999999999999999`, floats, set); out != "[100000000000000000000.000000]" || st != 0 {
+	if out, st := runGrammar(
+		t,
+		`printf '[%f]' 99999999999999999999`,
+		floats,
+		set,
+	); out != "[100000000000000000000.000000]" ||
+		st != 0 {
 		t.Errorf("at %%f: got %q status %d, want the value in silence at 0", out, st)
 	}
 	// An operand that overflowed a *double* is not asked about: the column
@@ -640,7 +648,13 @@ func TestPrintfIntegerOverflowIsTheConversionsRange(t *testing.T) {
 	plain := printfSem()
 	plain.PrintfNumberOperand = PrintfNumberArithmetic
 	plain.ArithValuesAreCarriedInAFloat = Yes
-	if out, st := runGrammar(t, `printf '[%d]' 99999999999999999999`, floats, func(r *Runner) { r.Semantics = &plain }); strings.Contains(out, "overflow") || st != 0 {
+	if out, st := runGrammar(
+		t,
+		`printf '[%d]' 99999999999999999999`,
+		floats,
+		func(r *Runner) { r.Semantics = &plain },
+	); strings.Contains(out, "overflow") ||
+		st != 0 {
 		t.Errorf("without the wording: got %q status %d, want silence at 0", out, st)
 	}
 }

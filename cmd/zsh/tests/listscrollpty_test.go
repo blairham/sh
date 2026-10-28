@@ -127,7 +127,12 @@ func TestALongListingIsPagedUnderListPrompt(t *testing.T) {
 				for r := range g.Rows() {
 					rows = append(rows, g.Text(r))
 				}
-				t.Fatalf("the cursor did not come back to the line over the listing (cursor %d,%d):\n%s", r, c, strings.Join(rows, "\n"))
+				t.Fatalf(
+					"the cursor did not come back to the line over the listing (cursor %d,%d):\n%s",
+					r,
+					c,
+					strings.Join(rows, "\n"),
+				)
 			}
 			time.Sleep(20 * time.Millisecond)
 		}

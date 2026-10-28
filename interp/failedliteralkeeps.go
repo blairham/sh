@@ -41,7 +41,12 @@ type failedLiteral struct {
 //
 // parsed is the elements before the failed one — literalElems trims the one
 // that failed.
-func (r *Runner) keepWhatAFailedLiteralStored(name string, elems []*syntax.ArrayElem, parsed []literalElem, how failedLiteral) {
+func (r *Runner) keepWhatAFailedLiteralStored(
+	name string,
+	elems []*syntax.ArrayElem,
+	parsed []literalElem,
+	how failedLiteral,
+) {
 	if name == "" || r.unspecified || len(elems) == 0 {
 		// The list was refused by an axis no dialect answered, and nothing
 		// about it is evidence.

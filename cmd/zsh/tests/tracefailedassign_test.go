@@ -29,12 +29,24 @@ func TestATracedAssignmentThatFailsEndsItsLine(t *testing.T) {
 		{`set -x; a=1 x=$( echo ${q?b} ) b=2`, "+zsh:1> a=1 x=zsh:1: q: b\n+zsh:1> a=1 x='' b=2 \n"},
 		{`set -x; x=( a $( echo ${q?b} ) )`, "+zsh:1> x=zsh:1: q: b\n+zsh:1> x=( a ) \n"},
 		{`set -x; x=$( y=$( echo ${q?b} ) )`, "+zsh:1> x=+zsh:1> y=zsh:1: q: b\n+zsh:1> x=+zsh:1> y='' \n+zsh:1> x='' \n"},
-		{`set -x; case a in b|$( echo $((1/0)) )) echo m ;; esac`, "+zsh:1> case a (bzsh:1: division by zero\n+zsh:1> case a (b | )\n"},
+		{
+			`set -x; case a in b|$( echo $((1/0)) )) echo m ;; esac`,
+			"+zsh:1> case a (bzsh:1: division by zero\n+zsh:1> case a (b | )\n",
+		},
 		// A `case` arm inside a substitution carries the parent's line in
 		// front of its own, and still writes it in front of the whole line.
-		{`set -x; x=$( case a in $(echo a)) ;; esac )`, "+zsh:1> x=+zsh:1> case a (+zsh:1> echo a\n+zsh:1> x=+zsh:1> case a (a)\n+zsh:1> x='' \n"},
-		{`set -x; x=$( case a in $((1/0))) ;; esac )`, "+zsh:1> x=+zsh:1> case a (zsh:1: division by zero\n)\n+zsh:1> x='' \n"},
-		{`set -x; x=$( case a in b|$( echo $((1/0)) )) ;; esac )`, "+zsh:1> x=+zsh:1> case a (bzsh:1: division by zero\n+zsh:1> x=+zsh:1> case a (b | )\n+zsh:1> x='' \n"},
+		{
+			`set -x; x=$( case a in $(echo a)) ;; esac )`,
+			"+zsh:1> x=+zsh:1> case a (+zsh:1> echo a\n+zsh:1> x=+zsh:1> case a (a)\n+zsh:1> x='' \n",
+		},
+		{
+			`set -x; x=$( case a in $((1/0))) ;; esac )`,
+			"+zsh:1> x=+zsh:1> case a (zsh:1: division by zero\n)\n+zsh:1> x='' \n",
+		},
+		{
+			`set -x; x=$( case a in b|$( echo $((1/0)) )) ;; esac )`,
+			"+zsh:1> x=+zsh:1> case a (bzsh:1: division by zero\n+zsh:1> x=+zsh:1> case a (b | )\n+zsh:1> x='' \n",
+		},
 		// Controls: the prefix line is written after the complaint, and a
 		// child that traces a line writes its copy there, as before.
 		{`set -x; x=$( echo ${q?b} ) true`, "zsh:1: q: b\n+zsh:1> x='' +zsh:1> true\n"},

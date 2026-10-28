@@ -244,9 +244,19 @@ func (c Comparison) Report() string {
 	fmt.Fprintf(&b, "  session/new, once per session         %8s\n", round(c.SessionOpen))
 	fmt.Fprintf(&b, "  a turn in an open session             %8s\n", round(c.TurnPlain))
 	fmt.Fprintf(&b, "  a turn that asks and is allowed       %8s   (a permission round trip)\n", round(c.TurnGated))
-	fmt.Fprintf(&b, "  the same command as a fresh sh -c     %8s   %s\n", round(c.SpawnOurs), ratio(c.SpawnOurs, c.TurnGated))
+	fmt.Fprintf(
+		&b,
+		"  the same command as a fresh sh -c     %8s   %s\n",
+		round(c.SpawnOurs),
+		ratio(c.SpawnOurs, c.TurnGated),
+	)
 	if c.SpawnBash > 0 {
-		fmt.Fprintf(&b, "  the same command as a fresh bash -c   %8s   %s\n", round(c.SpawnBash), ratio(c.SpawnBash, c.TurnGated))
+		fmt.Fprintf(
+			&b,
+			"  the same command as a fresh bash -c   %8s   %s\n",
+			round(c.SpawnBash),
+			ratio(c.SpawnBash, c.TurnGated),
+		)
 	}
 	fmt.Fprintf(&b, "\n  A gated turn is the row to read: it is a command run, watched and\n")
 	fmt.Fprintf(&b, "  approved, and it is still cheaper than the process the same command\n")

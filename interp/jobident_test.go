@@ -132,6 +132,10 @@ wait
 	// And the range is not blanket-accepted: one past the job's id is a
 	// number like any other and reaches nothing.
 	if !strings.Contains(out, "neighbor=1") {
-		t.Errorf("out = %q, want a number that names no job handed to the kernel, where it finds nothing; stderr %q", out, errOut)
+		t.Errorf(
+			"out = %q, want a number that names no job handed to the kernel, where it finds nothing; stderr %q",
+			out,
+			errOut,
+		)
 	}
 }

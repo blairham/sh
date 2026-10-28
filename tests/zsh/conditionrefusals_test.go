@@ -72,7 +72,8 @@ func TestAProcessSubstitutionIsRefusedAtEveryConditionOperand(t *testing.T) {
 		src := "printf 'start\\n'\n" + tc.src + "\nprintf 'after\\n'\n"
 		out, st := runZsh(t, dir, src)
 		want := "start\nprocess substitution " + tc.named + " cannot be used here"
-		if !strings.HasPrefix(out, "start\n") || !strings.Contains(out, "process substitution "+tc.named+" cannot be used here") {
+		if !strings.HasPrefix(out, "start\n") ||
+			!strings.Contains(out, "process substitution "+tc.named+" cannot be used here") {
 			t.Errorf("%s: output = %q, want it to hold %q — %s", tc.src, out, want, tc.why)
 		}
 		if strings.Contains(out, "after") {

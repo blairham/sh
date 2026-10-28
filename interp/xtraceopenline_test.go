@@ -25,7 +25,12 @@ func TestTraceAssignmentListIsWrittenAsItGoes(t *testing.T) {
 	if got, want := traceOf(t, refused, sem, diag), "+ a=1 r=2 sh: r: is read only\n\n"; got != want {
 		t.Errorf("Yes: got %q, want %q", got, want)
 	}
-	if got, want := traceOf(t, `set -x; a=1 b=$(echo x)`, sem, Diagnostics{}), "+ a=1 b=+ echo x\n+ a=1 b=x \n"; got != want {
+	if got, want := traceOf(
+		t,
+		`set -x; a=1 b=$(echo x)`,
+		sem,
+		Diagnostics{},
+	), "+ a=1 b=+ echo x\n+ a=1 b=x \n"; got != want {
 		t.Errorf("Yes, a substitution: got %q, want %q", got, want)
 	}
 

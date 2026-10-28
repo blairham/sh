@@ -1086,7 +1086,11 @@ scan:
 			// grouping rather than a substitution, which the *text* reading
 			// below deliberately does not do: see BareIndexText, and
 			// ProcSubstInSubscriptAsText for the rows.
-			idx := ProcSubstInSubscriptAsText(p.wordFrom(inner, start, Unquoted), true, p.dialect.ProcSubstInSubscriptIsReprinted)
+			idx := ProcSubstInSubscriptAsText(
+				p.wordFrom(inner, start, Unquoted),
+				true,
+				p.dialect.ProcSubstInSubscriptIsReprinted,
+			)
 			var g *SubscriptFlags
 			var rng *SubscriptRange
 			if p.dialect.ArraySubscriptFlags {

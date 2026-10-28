@@ -26,14 +26,22 @@ import (
 // option table directly and the tie was wired to `set` alone (#4163, #4047).
 func TestALocalDashRestoreMovesTheTiedParameter(t *testing.T) {
 	dir := t.TempDir()
-	out, _ := runBash(t, dir, "IGNOREEOF=0\nset -o ignoreeof\nf() { local -; set +o ignoreeof; }\nf\necho \"[$IGNOREEOF]\"\n")
+	out, _ := runBash(
+		t,
+		dir,
+		"IGNOREEOF=0\nset -o ignoreeof\nf() { local -; set +o ignoreeof; }\nf\necho \"[$IGNOREEOF]\"\n",
+	)
 	if strings.TrimSpace(out) != "[10]" {
 		t.Errorf("output %q, want [10]", out)
 	}
 	// And the option itself is back on, which is what the restore was for —
 	// asserted beside the parameter so a tie that fired without the option
 	// moving would fail here rather than read as a pass.
-	out, _ = runBash(t, dir, "set -o ignoreeof\nf() { local -; set +o ignoreeof; shopt -o ignoreeof; }\nf\nshopt -o ignoreeof\n")
+	out, _ = runBash(
+		t,
+		dir,
+		"set -o ignoreeof\nf() { local -; set +o ignoreeof; shopt -o ignoreeof; }\nf\nshopt -o ignoreeof\n",
+	)
 	lines := strings.Fields(strings.TrimSpace(out))
 	if len(lines) != 4 || lines[1] != "off" || lines[3] != "on" {
 		t.Errorf("output %q, want the option off inside the call and on after it", out)

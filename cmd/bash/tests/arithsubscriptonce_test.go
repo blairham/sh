@@ -18,7 +18,14 @@ func TestAReadModifyWriteSubscriptIsEvaluatedOnce(t *testing.T) {
 	var out, errs strings.Builder
 	sh := scratchShell(t)
 	sh.Stdout, sh.Stderr = &out, &errs
-	driver.MainArgs(sh, []string{"bash", "-c", `array=(1); x=0; (( array[++x]++ )); echo $x ${#array[@]} ${array[@]}; a=(5 6 7); i=0; (( a[i++] += 10 )); echo $i ${a[@]}; b=(1 2 3); (( b[-1]++ )); echo ${b[@]}`})
+	driver.MainArgs(
+		sh,
+		[]string{
+			"bash",
+			"-c",
+			`array=(1); x=0; (( array[++x]++ )); echo $x ${#array[@]} ${array[@]}; a=(5 6 7); i=0; (( a[i++] += 10 )); echo $i ${a[@]}; b=(1 2 3); (( b[-1]++ )); echo ${b[@]}`,
+		},
+	)
 	if got, want := out.String(), "1 2 1 1\n1 15 6 7\n1 2 4\n"; got != want || errs.Len() != 0 {
 		t.Errorf("got %q, %q, want %q", got, errs.String(), want)
 	}

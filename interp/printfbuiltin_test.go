@@ -483,7 +483,12 @@ func TestPrintfCharacterPrecisionCanRepeat(t *testing.T) {
 	t.Run("zero and one never ask the axis", func(t *testing.T) {
 		open := printfSem()
 		open.PrintfCharPrecisionRepeats = Unspecified
-		if out, st := run(t, `printf '[%.1c][%.0c][%3c]' abc abc abc`, func(r *Runner) { r.Semantics = &open }); out != "[a][a][  a]" || st != 0 {
+		if out, st := run(
+			t,
+			`printf '[%.1c][%.0c][%3c]' abc abc abc`,
+			func(r *Runner) { r.Semantics = &open },
+		); out != "[a][a][  a]" ||
+			st != 0 {
 			t.Errorf("got %q status %d, want the character alone at 0", out, st)
 		}
 	})
@@ -1498,8 +1503,10 @@ func TestPrintfDropsTheGroupingFlagOnlyBecauseTheSeparatorIsEmpty(t *testing.T) 
 		t.Fatal("LocaleNumericFor has no data for the C locale, which is the one locale it is for")
 	}
 	if numeric.ThousandsSeparator != "" {
-		t.Fatalf("the C locale now groups by %q — printf must group with it rather than dropping the `'` flag; see interp/printfbuiltin.go and #2675",
-			numeric.ThousandsSeparator)
+		t.Fatalf(
+			"the C locale now groups by %q — printf must group with it rather than dropping the `'` flag; see interp/printfbuiltin.go and #2675",
+			numeric.ThousandsSeparator,
+		)
 	}
 	for _, tc := range []struct{ name, src string }{
 		{"the C locale", `printf "[%'d]" 1234567`},
@@ -2422,14 +2429,24 @@ func TestPrintfOutputBase(t *testing.T) {
 	t.Run("the other columns refuse the second dot", func(t *testing.T) {
 		s := printfSem()
 		s.PrintfOutputBase = No
-		if out, st := run(t, `printf '[%..2d]' 5`, func(r *Runner) { r.Semantics = &s }); st == 0 || strings.Contains(out, "101") {
+		if out, st := run(
+			t,
+			`printf '[%..2d]' 5`,
+			func(r *Runner) { r.Semantics = &s },
+		); st == 0 ||
+			strings.Contains(out, "101") {
 			t.Errorf("got %q status %d, want the `.` refused", out, st)
 		}
 	})
 	t.Run("an ordinary precision never asks", func(t *testing.T) {
 		s := printfSem()
 		s.PrintfOutputBase = Unspecified
-		if out, st := run(t, `printf '[%.2d][%5.3x]' 5 255`, func(r *Runner) { r.Semantics = &s }); out != "[05][  0ff]" || st != 0 {
+		if out, st := run(
+			t,
+			`printf '[%.2d][%5.3x]' 5 255`,
+			func(r *Runner) { r.Semantics = &s },
+		); out != "[05][  0ff]" ||
+			st != 0 {
 			t.Errorf("got %q status %d, want [05][  0ff] at 0", out, st)
 		}
 	})

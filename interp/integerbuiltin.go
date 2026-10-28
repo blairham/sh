@@ -440,7 +440,11 @@ func (r *Runner) attachedOptionNumber(word, known string) (letter byte, digits s
 // modeled: a second number-taking letter behind the first, whose answers in
 // ksh93 are not one rule (`-Z3L4` lists `-L 3`, `-i16Z3` is a usage error).
 // See Semantics.AttachedNumberEndsAtTheFirstNonDigit.
-func (r *Runner) attachedNumberBeforeMoreLetters(builtin string, f *declareFlags, word, known string) (string, int, bool) {
+func (r *Runner) attachedNumberBeforeMoreLetters(
+	builtin string,
+	f *declareFlags,
+	word, known string,
+) (string, int, bool) {
 	at := -1
 	for i := 1; i < len(word); i++ {
 		if word[i] >= '0' && word[i] <= '9' {

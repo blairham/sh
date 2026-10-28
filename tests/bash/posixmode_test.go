@@ -185,7 +185,11 @@ func TestPosixModeEndsTheScriptOnABareDot(t *testing.T) {
 	}
 	// Leaving the mode puts the dialect's own answer back, which is the half
 	// a one-way swap gets wrong.
-	if out, st := answersRun(t, "set -o posix\nset +o posix\n.\necho after=$?\n"); !strings.Contains(out, "after=2") || st != 0 {
+	if out, st := answersRun(
+		t,
+		"set -o posix\nset +o posix\n.\necho after=$?\n",
+	); !strings.Contains(out, "after=2") ||
+		st != 0 {
 		t.Errorf("out %q status %d, want leaving the mode to restore the answer", out, st)
 	}
 	// The control: an ordinary failure under the same mode runs on.

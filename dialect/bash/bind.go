@@ -336,7 +336,10 @@ var (
 	// bash lists `^C`, `^Q` and `^Z` there too, which the terminal takes
 	// before any editor sees them.
 	viInsertTypingBindings = sync.OnceValue(func() map[string]string {
-		return withTyping(buildKeymapBindings(map[string]repl.Widget{"\x16": repl.WidgetQuotedInsert}), viInsertTypedKeys+"\x03\x11\x1a")
+		return withTyping(
+			buildKeymapBindings(map[string]repl.Widget{"\x16": repl.WidgetQuotedInsert}),
+			viInsertTypedKeys+"\x03\x11\x1a",
+		)
 	})
 )
 

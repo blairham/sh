@@ -46,7 +46,11 @@ func TestTheSignalRosterIsTheOneTheListingWrites(t *testing.T) {
 	}
 	want := "EXIT " + listing + " ZERR DEBUG"
 	if param != want {
-		t.Errorf("$signals = %q, want %q — EXIT, this shell's own listing, then the two it traps and no kernel sends", param, want)
+		t.Errorf(
+			"$signals = %q, want %q — EXIT, this shell's own listing, then the two it traps and no kernel sends",
+			param,
+			want,
+		)
 	}
 }
 

@@ -144,7 +144,8 @@ func (e *editor) repaint(prompt drawnPrompt, cols int) bool {
 	}
 
 	m := e.moves()
-	if m.asTheScreenIs && resume == 1 && m.left1 != "" && at < len(styled) && len(shown) > 0 && shown[0] >= ' ' && runeWidth(shown[0]) == 1 {
+	if m.asTheScreenIs && resume == 1 && m.left1 != "" && at < len(styled) && len(shown) > 0 && shown[0] >= ' ' &&
+		runeWidth(shown[0]) == 1 {
 		// The first character is written again with the second — the
 		// second *column*: measured, a `z` typed after a tab, whose cells
 		// the tab fills, is written alone. See rewritemotion.go.

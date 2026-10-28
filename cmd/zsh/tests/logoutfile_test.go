@@ -142,7 +142,11 @@ func TestTheRcsOptionsAreAskedBeforeEachStartupFile(t *testing.T) {
 			}
 			sh := scratchShell(t)
 			for _, name := range []string{"zprofile", "zshrc"} {
-				if err := os.WriteFile(filepath.Join(sh.SystemStartupDirectory, name), []byte("echo etc-"+name+"\n"), 0o600); err != nil {
+				if err := os.WriteFile(
+					filepath.Join(sh.SystemStartupDirectory, name),
+					[]byte("echo etc-"+name+"\n"),
+					0o600,
+				); err != nil {
 					t.Fatal(err)
 				}
 			}

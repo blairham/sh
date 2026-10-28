@@ -184,7 +184,14 @@ func TestTheMapfileRosterIsTheDirectoryAndCarriesNoValues(t *testing.T) {
 	if got, want := mapfileIn(t, sub, `echo ${#mapfile}`), "3\n"; got != want {
 		t.Errorf("count = %q, want %q", got, want)
 	}
-	if got := mapfileIn(t, sub, `for k v in "${(@kv)mapfile}"; do printf "<%s>" "$v"; done`); strings.Contains(got, "CONTENTS") {
+	if got := mapfileIn(
+		t,
+		sub,
+		`for k v in "${(@kv)mapfile}"; do printf "<%s>" "$v"; done`,
+	); strings.Contains(
+		got,
+		"CONTENTS",
+	) {
 		t.Errorf("values = %q: the roster read the files, which zsh does not", got)
 	}
 	// And it is the *shell's* directory rather than the process's, so `cd`

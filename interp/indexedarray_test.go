@@ -60,20 +60,28 @@ func TestIndexedArrayAnswersAsTheMapDid(t *testing.T) {
 		pos int
 	}
 	cases := map[string][]op{
-		"append":                     {{pos: 0}, {pos: 1}, {pos: 2}},
-		"a gap, as a[5]=y":           {{pos: 0}, {pos: 5}},
-		"the gap filled back in":     {{pos: 0}, {pos: 3}, {pos: 1}, {pos: 2}},
-		"unset in the middle":        {{pos: 0}, {pos: 1}, {pos: 2}, {del: true, pos: 1}},
-		"unset the last":             {{pos: 0}, {pos: 1}, {pos: 2}, {del: true, pos: 2}},
-		"unset the last over a hole": {{pos: 0}, {pos: 1}, {pos: 2}, {pos: 3}, {del: true, pos: 2}, {del: true, pos: 1}, {del: true, pos: 3}},
-		"unset everything":           {{pos: 0}, {pos: 1}, {del: true, pos: 0}, {del: true, pos: 1}},
-		"unset the first":            {{pos: 0}, {pos: 1}, {pos: 2}, {del: true, pos: 0}},
-		"append after an unset end":  {{pos: 0}, {pos: 1}, {del: true, pos: 1}, {pos: 1}},
-		"a word boundary":            {{pos: 0}, {pos: 63}, {pos: 64}, {del: true, pos: 64}, {pos: 65}},
-		"far past the end":           {{pos: 0}, {pos: 1 << 20}, {pos: 1}},
-		"below zero":                 {{pos: 0}, {pos: -1}, {pos: 1}, {del: true, pos: -1}},
-		"first write far out":        {{pos: 200}, {pos: 0}},
-		"unset what is not there":    {{pos: 0}, {del: true, pos: 7}, {del: true, pos: -2}},
+		"append":                 {{pos: 0}, {pos: 1}, {pos: 2}},
+		"a gap, as a[5]=y":       {{pos: 0}, {pos: 5}},
+		"the gap filled back in": {{pos: 0}, {pos: 3}, {pos: 1}, {pos: 2}},
+		"unset in the middle":    {{pos: 0}, {pos: 1}, {pos: 2}, {del: true, pos: 1}},
+		"unset the last":         {{pos: 0}, {pos: 1}, {pos: 2}, {del: true, pos: 2}},
+		"unset the last over a hole": {
+			{pos: 0},
+			{pos: 1},
+			{pos: 2},
+			{pos: 3},
+			{del: true, pos: 2},
+			{del: true, pos: 1},
+			{del: true, pos: 3},
+		},
+		"unset everything":          {{pos: 0}, {pos: 1}, {del: true, pos: 0}, {del: true, pos: 1}},
+		"unset the first":           {{pos: 0}, {pos: 1}, {pos: 2}, {del: true, pos: 0}},
+		"append after an unset end": {{pos: 0}, {pos: 1}, {del: true, pos: 1}, {pos: 1}},
+		"a word boundary":           {{pos: 0}, {pos: 63}, {pos: 64}, {del: true, pos: 64}, {pos: 65}},
+		"far past the end":          {{pos: 0}, {pos: 1 << 20}, {pos: 1}},
+		"below zero":                {{pos: 0}, {pos: -1}, {pos: 1}, {del: true, pos: -1}},
+		"first write far out":       {{pos: 200}, {pos: 0}},
+		"unset what is not there":   {{pos: 0}, {del: true, pos: 7}, {del: true, pos: -2}},
 	}
 	for name, ops := range cases {
 		t.Run(name, func(t *testing.T) {

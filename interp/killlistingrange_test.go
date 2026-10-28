@@ -74,7 +74,11 @@ func TestTheListingFillsEveryPositionTheKernelTakes(t *testing.T) {
 	empty := Diagnostics{}
 	for _, c := range newTestRunner(t, &Runner{Diagnostics: &empty}).signalListingUpTo(bound) {
 		if c.sig > last {
-			t.Errorf("position %d was written as %q by a dialect that renders nothing for a position it cannot name", c.sig, c.text)
+			t.Errorf(
+				"position %d was written as %q by a dialect that renders nothing for a position it cannot name",
+				c.sig,
+				c.text,
+			)
 		}
 	}
 }

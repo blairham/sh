@@ -38,7 +38,11 @@ import (
 )
 
 func main() {
-	lookup := flag.String("lookup", "/bin/sh", "comma-separated candidate paths for the shell in this image, tried in order")
+	lookup := flag.String(
+		"lookup",
+		"/bin/sh",
+		"comma-separated candidate paths for the shell in this image, tried in order",
+	)
 	idle := flag.Duration("idle", 5*time.Minute, "exit if no case arrives for this long")
 	flag.Parse()
 

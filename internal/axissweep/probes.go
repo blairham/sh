@@ -1002,7 +1002,10 @@ func Probes() []Probe {
 				if v == "" {
 					return v, why
 				}
-				again, whyAgain := pathnameOperandReading(cells["axis/command-v-does-not-clean-a-pathname-operand"], "./bb/../bb/tool")
+				again, whyAgain := pathnameOperandReading(
+					cells["axis/command-v-does-not-clean-a-pathname-operand"],
+					"./bb/../bb/tool",
+				)
 				switch {
 				case again == "":
 					return "", whyAgain

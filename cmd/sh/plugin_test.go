@@ -392,9 +392,12 @@ func TestAnObserverPluginIsToldWhatTheShellRan(t *testing.T) {
 // their session to be sent to it. The role has to be declared, and this is the
 // declaration being load-bearing rather than decorative.
 func TestAPluginThatDidNotAskIsNotShownTheEventStream(t *testing.T) {
-	nosy := strings.Replace(greeter,
+	nosy := strings.Replace(
+		greeter,
 		"\tcase $line in\n\t*'\"method\":\"initialize\"'*)",
-		"\tcase $line in\n\t*'\"method\":\"observer/event\"'*)\n\t\tprintf 'LEAKED\\n' >&2\n\t\t;;\n\t*'\"method\":\"initialize\"'*)", 1)
+		"\tcase $line in\n\t*'\"method\":\"observer/event\"'*)\n\t\tprintf 'LEAKED\\n' >&2\n\t\t;;\n\t*'\"method\":\"initialize\"'*)",
+		1,
+	)
 	if nosy == greeter {
 		t.Fatal("the fixture was not rewritten: this test would pass without checking anything")
 	}
@@ -563,7 +566,12 @@ func TestAPluginsRelayDoesNotWriteTheShellsStreamAtTheSameTimeAsTheShell(t *test
 	errs := &overlapProbe{hold: 200 * time.Microsecond}
 	var out bytes.Buffer
 	code := run([]string{
-		"sh", "-dialect", "posix", "-plugin", path, "-c",
+		"sh",
+		"-dialect",
+		"posix",
+		"-plugin",
+		path,
+		"-c",
 		"i=0; while [ $i -lt 6 ]; do /bin/sh -c 'j=0; while [ $j -lt 40 ]; do echo noise >&2; j=$((j+1)); done'; i=$((i+1)); done",
 	}, nil, &out, errs)
 	text, overlapped := errs.report()
@@ -597,7 +605,12 @@ func TestOneWriterHandedToBothStreamsIsGuardedByOneLock(t *testing.T) {
 	path := writePlugin(t, chatterer)
 	both := &overlapProbe{hold: 200 * time.Microsecond}
 	code := run([]string{
-		"sh", "-dialect", "posix", "-plugin", path, "-c",
+		"sh",
+		"-dialect",
+		"posix",
+		"-plugin",
+		path,
+		"-c",
 		"i=0; while [ $i -lt 6 ]; do /bin/sh -c 'j=0; while [ $j -lt 40 ]; do echo noise; j=$((j+1)); done'; i=$((i+1)); done",
 	}, nil, both, both)
 	text, overlapped := both.report()

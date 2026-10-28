@@ -49,7 +49,10 @@ sleep 0.3 & fg 2>&1; echo "rc=$?"; fg %1 2>&1; echo "rc=$?"; wait`)
 // TestJobsPidsLetterWinsInEitherOrder: `-p` beside `-l` is the ids alone
 // however the two are written.
 func TestJobsPidsLetterWinsInEitherOrder(t *testing.T) {
-	out, _ := runIn(t, `sleep 0.4 & p=$!; for o in -pl -lp "-p -l" "-l -p"; do jobs $o >o.txt; x=$(cat o.txt); [ "$x" = "$p" ] && echo ids || echo "listing: $x"; done; wait`)
+	out, _ := runIn(
+		t,
+		`sleep 0.4 & p=$!; for o in -pl -lp "-p -l" "-l -p"; do jobs $o >o.txt; x=$(cat o.txt); [ "$x" = "$p" ] && echo ids || echo "listing: $x"; done; wait`,
+	)
 	if want := "ids\nids\nids\nids\n"; out != want {
 		t.Errorf("got %q, want %q", out, want)
 	}

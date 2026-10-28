@@ -32,18 +32,46 @@ func TestEveryAliasChangeMovesTheTablesFingerprint(t *testing.T) {
 		do    func()
 		moves []parsecache.AliasKind
 	}{
-		{"a plain alias", func() { r.DefineAlias("ll", "ls -l", AliasAnyKind) }, []parsecache.AliasKind{parsecache.AliasPlain}},
-		{"a redefinition", func() { r.DefineAlias("ll", "ls -la", AliasAnyKind) }, []parsecache.AliasKind{parsecache.AliasPlain}},
-		{"a global alias", func() { r.DefineAlias("G", "| grep", AliasGlobalKind) }, []parsecache.AliasKind{parsecache.AliasPlain, parsecache.AliasGlobal}},
-		{"a suffix alias", func() { r.DefineAlias("txt", "cat", AliasSuffixKind) }, []parsecache.AliasKind{parsecache.AliasSuffix}},
+		{
+			"a plain alias",
+			func() { r.DefineAlias("ll", "ls -l", AliasAnyKind) },
+			[]parsecache.AliasKind{parsecache.AliasPlain},
+		},
+		{
+			"a redefinition",
+			func() { r.DefineAlias("ll", "ls -la", AliasAnyKind) },
+			[]parsecache.AliasKind{parsecache.AliasPlain},
+		},
+		{
+			"a global alias",
+			func() { r.DefineAlias("G", "| grep", AliasGlobalKind) },
+			[]parsecache.AliasKind{parsecache.AliasPlain, parsecache.AliasGlobal},
+		},
+		{
+			"a suffix alias",
+			func() { r.DefineAlias("txt", "cat", AliasSuffixKind) },
+			[]parsecache.AliasKind{parsecache.AliasSuffix},
+		},
 		{"a removal", func() { r.RemoveAlias("ll") }, []parsecache.AliasKind{parsecache.AliasPlain}},
 		// The plain table moves too: its fingerprint holds each entry's kind,
 		// which answers nothing differently there and is cheaper kept than
 		// argued about.
-		{"a global made plain", func() { r.DefineAlias("G", "| grep", AliasAnyKind) }, []parsecache.AliasKind{parsecache.AliasPlain, parsecache.AliasGlobal}},
+		{
+			"a global made plain",
+			func() { r.DefineAlias("G", "| grep", AliasAnyKind) },
+			[]parsecache.AliasKind{parsecache.AliasPlain, parsecache.AliasGlobal},
+		},
 		// The switch is one fact about every table, whatever it holds.
-		{"expansion off", func() { r.SetAliasExpansion(false) }, []parsecache.AliasKind{parsecache.AliasPlain, parsecache.AliasGlobal, parsecache.AliasSuffix}},
-		{"expansion on", func() { r.SetAliasExpansion(true) }, []parsecache.AliasKind{parsecache.AliasPlain, parsecache.AliasGlobal, parsecache.AliasSuffix}},
+		{
+			"expansion off",
+			func() { r.SetAliasExpansion(false) },
+			[]parsecache.AliasKind{parsecache.AliasPlain, parsecache.AliasGlobal, parsecache.AliasSuffix},
+		},
+		{
+			"expansion on",
+			func() { r.SetAliasExpansion(true) },
+			[]parsecache.AliasKind{parsecache.AliasPlain, parsecache.AliasGlobal, parsecache.AliasSuffix},
+		},
 	}
 	for _, s := range steps {
 		before := sums()

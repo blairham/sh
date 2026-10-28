@@ -595,7 +595,15 @@ func TestBothDeclarationNames(t *testing.T) {
 		}
 		var out bytes.Buffer
 		s, d := bash.Semantics(), bash.Diagnostics()
-		r := &interp.Runner{Name: preset.Name, Stdout: &out, Stderr: &out, Semantics: &s, Diagnostics: &d, Dir: dir, Dialect: presetDialect()}
+		r := &interp.Runner{
+			Name:        preset.Name,
+			Stdout:      &out,
+			Stderr:      &out,
+			Semantics:   &s,
+			Diagnostics: &d,
+			Dir:         dir,
+			Dialect:     presetDialect(),
+		}
 		bash.Apply(r)
 		if _, err := r.Run(context.Background(), f); err != nil {
 			t.Fatal(err)
@@ -635,7 +643,14 @@ func TestPipelineStatusName(t *testing.T) {
 		}
 		var out bytes.Buffer
 		s, d := bash.Semantics(), bash.Diagnostics()
-		r := &interp.Runner{Name: preset.Name, Stdout: &out, Stderr: &out, Semantics: &s, Diagnostics: &d, Dialect: presetDialect()}
+		r := &interp.Runner{
+			Name:        preset.Name,
+			Stdout:      &out,
+			Stderr:      &out,
+			Semantics:   &s,
+			Diagnostics: &d,
+			Dialect:     presetDialect(),
+		}
 		bash.Apply(r)
 		if _, err := r.Run(context.Background(), f); err != nil {
 			t.Fatal(err)
@@ -660,7 +675,14 @@ func TestRegexMatchName(t *testing.T) {
 		}
 		var out bytes.Buffer
 		s, d := bash.Semantics(), bash.Diagnostics()
-		r := &interp.Runner{Name: preset.Name, Stdout: &out, Stderr: &out, Semantics: &s, Diagnostics: &d, Dialect: presetDialect()}
+		r := &interp.Runner{
+			Name:        preset.Name,
+			Stdout:      &out,
+			Stderr:      &out,
+			Semantics:   &s,
+			Diagnostics: &d,
+			Dialect:     presetDialect(),
+		}
 		bash.Apply(r)
 		if _, err := r.Run(context.Background(), f); err != nil {
 			t.Fatal(err)
@@ -787,7 +809,14 @@ func TestSetOptionNamesBashHas(t *testing.T) {
 			sem := bash.Semantics()
 			dg := bash.Diagnostics()
 			var out bytes.Buffer
-			r := &interp.Runner{Name: preset.Name, Stdout: &out, Stderr: &out, Semantics: &sem, Diagnostics: &dg, Dialect: presetDialect()}
+			r := &interp.Runner{
+				Name:        preset.Name,
+				Stdout:      &out,
+				Stderr:      &out,
+				Semantics:   &sem,
+				Diagnostics: &dg,
+				Dialect:     presetDialect(),
+			}
 			bash.Apply(r)
 			f, err := syntax.Parse("set +o "+c.name, bash.Dialect())
 			if err != nil {

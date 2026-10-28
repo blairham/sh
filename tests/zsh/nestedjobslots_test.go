@@ -150,7 +150,11 @@ func TestArithmeticReadsTheSpecialParameters(t *testing.T) {
 			t.Errorf("$(( %s )): got %q, want %q", c.expr, out, c.want+"\n")
 		}
 	}
-	out, _ := runZsh(t, t.TempDir(), `(exit 3); repeat "$?" echo x; (exit 2); repeat '?' echo y; (exit 5); repeat 0 echo q; echo s=$?`+"\n")
+	out, _ := runZsh(
+		t,
+		t.TempDir(),
+		`(exit 3); repeat "$?" echo x; (exit 2); repeat '?' echo y; (exit 5); repeat 0 echo q; echo s=$?`+"\n",
+	)
 	if want := "x\nx\nx\ny\ny\ns=0\n"; out != want {
 		t.Errorf("repeat: got %q, want %q", out, want)
 	}

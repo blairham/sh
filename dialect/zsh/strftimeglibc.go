@@ -66,7 +66,11 @@ func glibcStrftime(spec string, flags glibcFlags, t time.Time) string {
 	case 'P':
 		// Always lower case: `%^P` is `am` as well, the one name neither flag
 		// moves.
-		return glibcName(meridiem(t, false), glibcFlags{pad: flags.pad, width: flags.width, widthWrote: flags.widthWrote}, false)
+		return glibcName(
+			meridiem(t, false),
+			glibcFlags{pad: flags.pad, width: flags.width, widthWrote: flags.widthWrote},
+			false,
+		)
 	case 'Z':
 		zone, _ := t.Zone()
 		return glibcName(zone, flags, false)

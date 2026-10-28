@@ -82,7 +82,12 @@ func TestAPrivatePreludeFunctionStillRuns(t *testing.T) {
 // declarations that moves a diagnostic's voice back to a script that
 // redefines a prelude function.
 func TestAScriptsOwnPrivateNameIsItsOwn(t *testing.T) {
-	out, errs, st := preludeListingRun(t, listingPrelude, "__helper() { echo mine; }\ntype __helper\ntypeset -F\n", answered)
+	out, errs, st := preludeListingRun(
+		t,
+		listingPrelude,
+		"__helper() { echo mine; }\ntype __helper\ntypeset -F\n",
+		answered,
+	)
 	if want := "__helper is a function\ndeclare -f __helper\n"; out != want || errs != "" || st != 0 {
 		t.Errorf("stdout %q stderr %q status %d, want %q and a silent 0", out, errs, st, want)
 	}

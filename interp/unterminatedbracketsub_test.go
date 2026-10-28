@@ -127,7 +127,12 @@ func TestAClosedBracketAsksNeitherBracketAxis(t *testing.T) {
 		}
 	}
 	core := CoreSemantics()
-	if out, st := run(t, `case ab in [[:alpha:]]b) echo in;; *) echo out;; esac`, withSem(core)); out != "in\n" || st != 0 {
+	if out, st := run(
+		t,
+		`case ab in [[:alpha:]]b) echo in;; *) echo out;; esac`,
+		withSem(core),
+	); out != "in\n" ||
+		st != 0 {
 		t.Errorf("a closed class in the core: got %q status %d", out, st)
 	}
 	// And the core refuses the shape that does pose the question, naming it.

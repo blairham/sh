@@ -263,7 +263,13 @@ type concurrentStreams struct {
 //
 // It is startCoproc with the pipes lifted out — see coproc.go, which is now
 // the pipe-making half and this file's first caller.
-func (r *Runner) startBeside(ctx context.Context, name string, s concurrentStreams, asAJob bool, run func(context.Context, *Runner) error) *Job {
+func (r *Runner) startBeside(
+	ctx context.Context,
+	name string,
+	s concurrentStreams,
+	asAJob bool,
+	run func(context.Context, *Runner) error,
+) *Job {
 	job := &Job{
 		done:     make(chan struct{}),
 		ready:    make(chan struct{}),

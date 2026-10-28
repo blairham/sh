@@ -24,7 +24,10 @@ func traceOf(t *testing.T, src string, sem Semantics, diag Diagnostics) string {
 		t.Fatalf("parse %q: %v", src, err)
 	}
 	var out, errOut bytes.Buffer
-	r := newTestRunner(t, &Runner{Stdout: &out, Stderr: &errOut, Semantics: &sem, Diagnostics: &diag, Name: "sh", Env: testPATH()})
+	r := newTestRunner(
+		t,
+		&Runner{Stdout: &out, Stderr: &errOut, Semantics: &sem, Diagnostics: &diag, Name: "sh", Env: testPATH()},
+	)
 	if _, err := r.Run(context.Background(), f); err != nil {
 		t.Fatal(err)
 	}
@@ -133,7 +136,12 @@ func TestTraceAssignmentsSeparately(t *testing.T) {
 	if got := traceOf(t, `set -x; a=1 b=2`, sem, Diagnostics{}); got != "+ a=1\n+ b=2\n" {
 		t.Errorf("Yes: got %q", got)
 	}
-	if got := traceOf(t, `set -x; a=$(echo x) b=$(echo y)`, sem, Diagnostics{}); got != "+ echo x\n+ a=x\n+ echo y\n+ b=y\n" {
+	if got := traceOf(
+		t,
+		`set -x; a=$(echo x) b=$(echo y)`,
+		sem,
+		Diagnostics{},
+	); got != "+ echo x\n+ a=x\n+ echo y\n+ b=y\n" {
 		t.Errorf("Yes: order: got %q", got)
 	}
 	sem.TraceAssignmentsSeparately = No
@@ -462,13 +470,29 @@ func TestTraceCaseHeaderIsAThreeWayAnswer(t *testing.T) {
 		t.Errorf("TraceCaseNone: got %q", got)
 	}
 	// The header as written, once.
-	if got := traceOf(t, src, sem, Diagnostics{TraceCaseHeader: TraceCaseSource}); !strings.Contains(got, "+ case $x in\n") {
+	if got := traceOf(
+		t,
+		src,
+		sem,
+		Diagnostics{TraceCaseHeader: TraceCaseSource},
+	); !strings.Contains(
+		got,
+		"+ case $x in\n",
+	) {
 		t.Errorf("TraceCaseSource: got %q", got)
 	}
 	// The expanded subject and the arm's patterns, once per arm tried, and
 	// the patterns are those the match reached: `ab` did not match, so both
 	// are on the line.
-	if got := traceOf(t, src, sem, Diagnostics{TraceCaseHeader: TraceCaseArm}); !strings.Contains(got, "+ case abc (ab | abc)\n") {
+	if got := traceOf(
+		t,
+		src,
+		sem,
+		Diagnostics{TraceCaseHeader: TraceCaseArm},
+	); !strings.Contains(
+		got,
+		"+ case abc (ab | abc)\n",
+	) {
 		t.Errorf("TraceCaseArm: got %q", got)
 	}
 	// One line per arm *tried*, stopping at the match — which is what makes
@@ -496,7 +520,12 @@ func TestTraceSkipsWhatNoShellPrints(t *testing.T) {
 		TraceForHeader:    TraceForSource,
 		TraceArithCommand: TraceArithSpaced,
 	}
-	got := traceOf(t, `set -x; i=0; while [ $i -lt 1 ]; do i=1; done; until [ $i -gt 0 ]; do :; done; if true; then :; fi; ( : ); { :; }`, sem, diag)
+	got := traceOf(
+		t,
+		`set -x; i=0; while [ $i -lt 1 ]; do i=1; done; until [ $i -gt 0 ]; do :; done; if true; then :; fi; ( : ); { :; }`,
+		sem,
+		diag,
+	)
 	for _, word := range []string{"while", "until", "if", "then", "(", "{"} {
 		if strings.Contains(got, "+ "+word) {
 			t.Errorf("traced a header no shell writes (%q): got %q", word, got)
@@ -523,7 +552,15 @@ func TestQuoteSingleOnlyIsTheFourthSpelling(t *testing.T) {
 	}
 	// No `$'…'` anywhere, so a control character is written as the byte it
 	// is, inside plain single quotes.
-	if got := traceOf(t, "set -x; x=\"$(printf 'a\\tb')\"; echo \"$x\"", sem, diag); !strings.Contains(got, "+ echo 'a\tb'\n") {
+	if got := traceOf(
+		t,
+		"set -x; x=\"$(printf 'a\\tb')\"; echo \"$x\"",
+		sem,
+		diag,
+	); !strings.Contains(
+		got,
+		"+ echo 'a\tb'\n",
+	) {
 		t.Errorf("control character: got %q", got)
 	}
 	// And an empty field leaves no mark at all, where the other three write

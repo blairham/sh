@@ -32,7 +32,13 @@ func TestAStandoutCookieTakesAColumn(t *testing.T) {
 			smso: "\x1bj", rmso: "\x1bk",
 		},
 	})
-	_, screen, _ := jobNoticeSessionOn(t, []string{"TERM=cookieterm", "TERMINFO=" + db}, "PROMPT_EOL_MARK='%S>%s'", "zsh", "-i")
+	_, screen, _ := jobNoticeSessionOn(
+		t,
+		[]string{"TERM=cookieterm", "TERMINFO=" + db},
+		"PROMPT_EOL_MARK='%S>%s'",
+		"zsh",
+		"-i",
+	)
 	// The session is 100 columns, so 100 less the mark's 3 less 1.
 	want := "\x1bj>\x1bk" + strings.Repeat(" ", 96) + "\r   \r"
 	deadline := time.Now().Add(jobNoticeBudget)

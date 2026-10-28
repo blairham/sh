@@ -72,8 +72,11 @@ func TestNoDialectIsSlowerThanItsOriginal(t *testing.T) {
 			strings.Join(notGating, ", "))
 	}
 	if len(slower) > 0 {
-		t.Errorf("these dialects are slower than the shell they claim to be on the gating case, which #1403 does not allow before v0.0.0: %s\n%s",
-			strings.Join(slower, ", "), report)
+		t.Errorf(
+			"these dialects are slower than the shell they claim to be on the gating case, which #1403 does not allow before v0.0.0: %s\n%s",
+			strings.Join(slower, ", "),
+			report,
+		)
 	}
 }
 
@@ -110,10 +113,16 @@ func TestTheBareCaseIsMeasuredButDoesNotGate(t *testing.T) {
 
 	gating, reported, unmeasured := startupcost.Failures([]startupcost.Comparison{lost(bare)})
 	if len(gating) != 0 {
-		t.Errorf("a slower bare row failed the release gate: %v — #2813 settled that the bare floor on Linux is the Go runtime's process start, not this repository's to win", gating)
+		t.Errorf(
+			"a slower bare row failed the release gate: %v — #2813 settled that the bare floor on Linux is the Go runtime's process start, not this repository's to win",
+			gating,
+		)
 	}
 	if len(reported) != 1 {
-		t.Errorf("a slower bare row was not reported at all (%v); not gating means it does not stop a release, not that it may go missing", reported)
+		t.Errorf(
+			"a slower bare row was not reported at all (%v); not gating means it does not stop a release, not that it may go missing",
+			reported,
+		)
 	}
 	if len(unmeasured) != 0 {
 		t.Errorf("a measured row was counted as unmeasured: %v", unmeasured)
@@ -121,7 +130,10 @@ func TestTheBareCaseIsMeasuredButDoesNotGate(t *testing.T) {
 
 	gating, reported, _ = startupcost.Failures([]startupcost.Comparison{lost(workload)})
 	if len(gating) != 1 {
-		t.Errorf("a slower workload row did not fail the release gate (%v), so the bar has no teeth left: the workload is interpreter throughput and is the half #1403 still asks us to win", gating)
+		t.Errorf(
+			"a slower workload row did not fail the release gate (%v), so the bar has no teeth left: the workload is interpreter throughput and is the half #1403 still asks us to win",
+			gating,
+		)
 	}
 	if len(reported) != 0 {
 		t.Errorf("a slower workload row was demoted to a mere report: %v", reported)
@@ -157,7 +169,10 @@ func TestAnUnmeasuredBareRowStillFails(t *testing.T) {
 	}
 	gating, reported, unmeasured := startupcost.Failures([]startupcost.Comparison{c})
 	if len(unmeasured) != 1 {
-		t.Errorf("an unmeasurable bare row was not reported as unmeasured (%v); not gating must not swallow a measurement that never happened", unmeasured)
+		t.Errorf(
+			"an unmeasurable bare row was not reported as unmeasured (%v); not gating must not swallow a measurement that never happened",
+			unmeasured,
+		)
 	}
 	if len(gating) != 0 || len(reported) != 0 {
 		t.Errorf("an unmeasurable row was also counted as a timing loss: gating=%v reported=%v", gating, reported)
@@ -202,8 +217,11 @@ func TestTheGateCatchesADialectThatIsSlower(t *testing.T) {
 		t.Fatalf("the deliberately slow subject could not be measured: %v", got[0].Err)
 	}
 	if got[0].Passed() {
-		t.Errorf("a shell reached by a road that burns tens of milliseconds first was reported as faster than the same shell (%.2fx), so the gate cannot catch a slow dialect:\n%s",
-			got[0].Ratio(), startupcost.Report(got))
+		t.Errorf(
+			"a shell reached by a road that burns tens of milliseconds first was reported as faster than the same shell (%.2fx), so the gate cannot catch a slow dialect:\n%s",
+			got[0].Ratio(),
+			startupcost.Report(got),
+		)
 	}
 }
 
@@ -250,7 +268,9 @@ func TestAComparisonThatCouldNotBeMeasuredNeverPasses(t *testing.T) {
 		Err:  errors.New("stopped answering partway through"),
 	}
 	if c.Passed() {
-		t.Error("a comparison carrying an error was reported as a pass on the strength of its times, so a shell that stopped working halfway through would clear the gate")
+		t.Error(
+			"a comparison carrying an error was reported as a pass on the strength of its times, so a shell that stopped working halfway through would clear the gate",
+		)
 	}
 	if !strings.Contains(startupcost.Report([]startupcost.Comparison{c}), "NOT MEASURED") {
 		t.Error("the report does not mark a comparison that carries an error as unmeasured")
@@ -279,12 +299,16 @@ func TestATieIsNotAPass(t *testing.T) {
 		}
 	}
 	if tie(3*time.Millisecond, 3*time.Millisecond).Passed() {
-		t.Error("a dialect exactly level with the shell it claims to be was reported as faster; the requirement is faster, not comparable")
+		t.Error(
+			"a dialect exactly level with the shell it claims to be was reported as faster; the requirement is faster, not comparable",
+		)
 	}
 	// The neighbors, so that this pins the boundary rather than merely
 	// disliking equality: one nanosecond either side has to answer.
 	if !tie(3*time.Millisecond-1, 3*time.Millisecond).Passed() {
-		t.Error("a dialect one nanosecond faster than the original did not pass, so the comparison is not strict but backwards")
+		t.Error(
+			"a dialect one nanosecond faster than the original did not pass, so the comparison is not strict but backwards",
+		)
 	}
 	if tie(3*time.Millisecond+1, 3*time.Millisecond).Passed() {
 		t.Error("a dialect one nanosecond slower than the original passed")
@@ -330,7 +354,9 @@ func TestTheReportSaysWhetherARedRowIsWorkOrLoad(t *testing.T) {
 		startupcost.Timing{Wall: 2 * time.Millisecond, CPU: 2 * time.Millisecond})
 
 	if doesMoreWork.Passed() || waitedBehindTheMachine.Passed() {
-		t.Fatal("both rows are meant to be slower on the wall clock, which is what makes the CPU column the thing that tells them apart")
+		t.Fatal(
+			"both rows are meant to be slower on the wall clock, which is what makes the CPU column the thing that tells them apart",
+		)
 	}
 	if got := doesMoreWork.CPURatio(); got != 2 {
 		t.Errorf("a dialect burning twice the CPU reports a CPU ratio of %.2f, want 2.00", got)
@@ -341,7 +367,11 @@ func TestTheReportSaysWhetherARedRowIsWorkOrLoad(t *testing.T) {
 	report := startupcost.Report([]startupcost.Comparison{doesMoreWork, waitedBehindTheMachine})
 	for _, want := range []string{"2.00x", "0.50x", "ours cpu", "orig cpu"} {
 		if !strings.Contains(report, want) {
-			t.Errorf("the report does not carry %q, so a reader cannot tell a slow dialect from a busy machine:\n%s", want, report)
+			t.Errorf(
+				"the report does not carry %q, so a reader cannot tell a slow dialect from a busy machine:\n%s",
+				want,
+				report,
+			)
 		}
 	}
 }
@@ -364,7 +394,10 @@ func TestAMissingCPUAccountingIsNotTheFastestShellInTheTable(t *testing.T) {
 		Real: startupcost.Result{Best: startupcost.Timing{Wall: 2 * time.Millisecond}, Samples: 4},
 	}
 	if got := c.CPURatio(); got != 0 {
-		t.Errorf("a comparison with no CPU accounting on either side reports a CPU ratio of %.2f, want 0 for `nothing to compare`", got)
+		t.Errorf(
+			"a comparison with no CPU accounting on either side reports a CPU ratio of %.2f, want 0 for `nothing to compare`",
+			got,
+		)
 	}
 }
 
@@ -430,8 +463,12 @@ func TestTheWorkloadAnswerIsThePanelsOwn(t *testing.T) {
 				t.Fatalf("%s refused the gate's workload: %v", p.Name, err)
 			}
 			if got != workloadAnswerFor(t) {
-				t.Errorf("%s answers %q for the gate's workload where the gate expects %q, so the gate is checking against the wrong answer",
-					p.Name, got, workloadAnswerFor(t))
+				t.Errorf(
+					"%s answers %q for the gate's workload where the gate expects %q, so the gate is checking against the wrong answer",
+					p.Name,
+					got,
+					workloadAnswerFor(t),
+				)
 			}
 		})
 		checked++

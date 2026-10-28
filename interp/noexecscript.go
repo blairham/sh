@@ -286,7 +286,12 @@ func (r *Runner) interpreterArgv(ctx context.Context, path string, argv []string
 // startViaNamedInterpreter answers a command word whose start the kernel
 // refused, by running the file with the interpreter its `#!` line named and a
 // PATH search found. It reports whether it answered at all.
-func (r *Runner) startViaNamedInterpreter(ctx context.Context, path string, argv, env []string, err error) (bool, error) {
+func (r *Runner) startViaNamedInterpreter(
+	ctx context.Context,
+	path string,
+	argv, env []string,
+	err error,
+) (bool, error) {
 	next, ok := r.interpreterArgv(ctx, path, argv, err)
 	if !ok {
 		return false, nil
@@ -394,7 +399,13 @@ func (r *Runner) classifyImage(ctx context.Context, path string, err error) ([]b
 //
 // path is the file, and run the spelling it was started by — see
 // Runner.runSpelling — which is what decides the script's `$0`.
-func (r *Runner) imageAsScript(ctx context.Context, action Action, path, run string, argv, env []string, err error) (int, bool) {
+func (r *Runner) imageAsScript(
+	ctx context.Context,
+	action Action,
+	path, run string,
+	argv, env []string,
+	err error,
+) (int, bool) {
 	image, verdict := r.classifyImage(ctx, path, err)
 	switch verdict {
 	case imageNotOurs:
@@ -427,7 +438,13 @@ func (r *Runner) imageAsScript(ctx context.Context, action Action, path, run str
 // The binary half ends the shell too, and by the road every other failed
 // `exec` takes: measured, `exec ./elf64_hdr.bin; echo NOT-REACHED` prints no
 // NOT-REACHED anywhere, at 126 in five columns.
-func (r *Runner) execImageAsScript(ctx context.Context, action Action, path, run string, argv, env []string, err error) (int, bool) {
+func (r *Runner) execImageAsScript(
+	ctx context.Context,
+	action Action,
+	path, run string,
+	argv, env []string,
+	err error,
+) (int, bool) {
 	image, verdict := r.classifyImage(ctx, path, err)
 	switch verdict {
 	case imageNotOurs:

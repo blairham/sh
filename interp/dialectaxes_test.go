@@ -585,7 +585,11 @@ func TestALocalInheritingTheExportAttributeIsAnAxis(t *testing.T) {
 	}
 	// A name nothing exported asks nothing, so an unanswered axis is not
 	// reached and the child is told nothing either way.
-	out, st := axisRun(t, `FOO=bar; f() { local FOO=baz; /usr/bin/env | grep '^FOO=' || echo "(none)"; }; f`, func(*Semantics) {})
+	out, st := axisRun(
+		t,
+		`FOO=bar; f() { local FOO=baz; /usr/bin/env | grep '^FOO=' || echo "(none)"; }; f`,
+		func(*Semantics) {},
+	)
 	if st != 0 || !strings.Contains(out, "(none)") {
 		t.Errorf("got %q status %d, want no question and no entry", out, st)
 	}

@@ -378,7 +378,12 @@ func (w *walk) reached(fd int, comp, requested string) Reached {
 // ENOTDIR here and the caller's loop still has to follow it, and a real
 // failure is the answer it always was. In both cases nothing has been created,
 // which is the only property this function owes its caller.
-func (w *walk) createChecked(comp string, flags int, perm fs.FileMode, ask func(string) error) (fd int, asked bool, err error) {
+func (w *walk) createChecked(
+	comp string,
+	flags int,
+	perm fs.FileMode,
+	ask func(string) error,
+) (fd int, asked bool, err error) {
 	// The file as it already is. O_EXCL comes off with O_CREAT because the
 	// two are one flag — "fail if it exists" is a condition on the creating —
 	// and a probe that kept it would refuse the very case it is probing for.

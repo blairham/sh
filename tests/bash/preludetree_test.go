@@ -36,7 +36,9 @@ func TestPreludeTree(t *testing.T) {
 		t.Fatal(err)
 	}
 	if !reflect.DeepEqual(bash.PreludeTree(), want) {
-		t.Fatal("dialect/bash/preludetree.go is not what the prelude parses to; regenerate it with `go run ./internal/preludegen`")
+		t.Fatal(
+			"dialect/bash/preludetree.go is not what the prelude parses to; regenerate it with `go run ./internal/preludegen`",
+		)
 	}
 	if _, err := asttree.Emit(want, bash.Prelude(), "bash", "preludeTree", "", nil); err != nil {
 		t.Fatalf("the prelude's tree cannot be written as a literal: %v", err)

@@ -24,7 +24,11 @@ zle -N w
 	if ed.limit != 3 {
 		t.Errorf("the editor's limit is %d, want 3", ed.limit)
 	}
-	if got, _ := runZshVars(t, r, `print -r -- "${UNDO_LIMIT_NO-unset}"; UNDO_LIMIT_NO=1+2; print -r -- $UNDO_LIMIT_NO`); got != "unset\n1+2\n" {
+	if got, _ := runZshVars(
+		t,
+		r,
+		`print -r -- "${UNDO_LIMIT_NO-unset}"; UNDO_LIMIT_NO=1+2; print -r -- $UNDO_LIMIT_NO`,
+	); got != "unset\n1+2\n" {
 		t.Errorf("outside a widget: %q, want %q", got, "unset\n1+2\n")
 	}
 }

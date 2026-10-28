@@ -53,7 +53,9 @@ func wordStyleRows(t *testing.T, name string) [][]string {
 // TestMatchWordsByStyleSplitsTheLineAsZshDoes: the seven parts, for every row
 // measured.
 func TestMatchWordsByStyleSplitsTheLineAsZshDoes(t *testing.T) {
-	r, out := zleRunner(t, "fpath=("+shippedFunctionDir(t)+")\n"+wordCharsDefault+`autoload -Uz select-word-style match-words-by-style
+	r, out := zleRunner(
+		t,
+		"fpath=("+shippedFunctionDir(t)+")\n"+wordCharsDefault+`autoload -Uz select-word-style match-words-by-style
 w() {
 	zstyle -d ':zle:*'; select-word-style $S
 	BUFFER=$B; CURSOR=$C
@@ -63,7 +65,8 @@ w() {
 	print -r -- ${(j:|:)${(@qqqq)matched_words}}
 }
 zle -N w
-`)
+`,
+	)
 	for _, row := range wordStyleRows(t, "wordstyle-parts.tsv") {
 		r.SetVar("B", row[0])
 		r.SetVar("C", row[1])

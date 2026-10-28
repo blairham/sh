@@ -191,7 +191,13 @@ type outcome struct {
 // rather than waiting for a person. A timeout, because some will wait anyway.
 // And an environment cut down to what a shell needs to find its tools, so the
 // answer does not depend on what happens to be exported today.
-func runOnce(ctx context.Context, shell UnderTest, script string, args []string, timeout time.Duration) (outcome, bool) {
+func runOnce(
+	ctx context.Context,
+	shell UnderTest,
+	script string,
+	args []string,
+	timeout time.Duration,
+) (outcome, bool) {
 	dir, err := os.MkdirTemp("", "wild")
 	if err != nil {
 		return outcome{}, false

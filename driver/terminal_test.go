@@ -533,7 +533,9 @@ func TestAPromptWaitIsNotAnsweredByOutputHoldingThePromptsText(t *testing.T) {
 	drawn := &screen{prompt: ptyPrompt}
 	drawn.buf.WriteString(rcOutput)
 	if drawn.seekPrompt() {
-		t.Error("the session's own output answered a wait for its prompt, so ^D would be typed at a shell that is not reading")
+		t.Error(
+			"the session's own output answered a wait for its prompt, so ^D would be typed at a shell that is not reading",
+		)
 	}
 
 	// And the prompt, drawn where a shell draws one, does answer it — once.
@@ -571,7 +573,11 @@ func TestAPromptWaitBlocksWhileOnlyTheEchoOfItsTextIsDrawn(t *testing.T) {
 	start := time.Now()
 	drawn.awaitReadyForInput(t)
 	if waited := time.Since(start); waited < late {
-		t.Errorf("the wait returned after %v, answered by the session's own output before the prompt was drawn at %v", waited, late)
+		t.Errorf(
+			"the wait returned after %v, answered by the session's own output before the prompt was drawn at %v",
+			waited,
+			late,
+		)
 	}
 }
 

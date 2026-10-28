@@ -99,7 +99,12 @@ func TestTheAttributeCodesReadTheTerminal(t *testing.T) {
 	// And an attribute that writes nothing restores nothing either:
 	// measured under `TERM=dumb`, `%F{red}%Ba%b` is `\e[31m` and `a`, where
 	// xterm's is `\e[31m\e[1m\e[31ma\e[0m\e[31m`.
-	if out, st := runZsh(t, t.TempDir(), `unset TERM; v='%F{red}%Ba%b'; print -rn -- "${(%%)v}"`); out != "\x1b[31ma" || st != 0 {
+	if out, st := runZsh(
+		t,
+		t.TempDir(),
+		`unset TERM; v='%F{red}%Ba%b'; print -rn -- "${(%%)v}"`,
+	); out != "\x1b[31ma" ||
+		st != 0 {
 		t.Errorf("a restore with nothing written: got %q (status %d), want %q", out, st, "\x1b[31ma")
 	}
 	out, st := runZsh(t, t.TempDir(), xtermLikeTerminal(t)+`zmodload zsh/termcap; print -r -- "${(V)termcap[me]}"`)

@@ -2522,7 +2522,18 @@ func matchGroup(body string, gp, lead int, quant byte, rest string, rp int, s st
 // line above the recursion — so asking again inside it is a repeat of a call
 // that has just failed. It was asked twice before this, for `*`, and the
 // answer was the same both times.
-func matchGroupTimes(body string, gp, lead int, quant byte, b repeatBound, first bool, rest string, rp int, s string, at int, o patternOpts) bool {
+func matchGroupTimes(
+	body string,
+	gp, lead int,
+	quant byte,
+	b repeatBound,
+	first bool,
+	rest string,
+	rp int,
+	s string,
+	at int,
+	o patternOpts,
+) bool {
 	// The body opens one byte past the `(`, and lead is whatever stands in
 	// front of that parenthesis: nought for a bare group, one for a
 	// quantifier, and the width of the braces for a written count. Derived

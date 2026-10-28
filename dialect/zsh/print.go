@@ -481,7 +481,12 @@ func printText(r *interp.Runner, opts printOptions, words []string) (text string
 // whether a terminator follows it; refused says an escape named a character
 // this locale cannot represent, which the caller reports once and which
 // abandons the script. The text before either is still the text.
-func printJoined(r *interp.Runner, opts printOptions, words []string, sep string) (text string, ok, stopped, refused bool) {
+func printJoined(
+	r *interp.Runner,
+	opts printOptions,
+	words []string,
+	sep string,
+) (text string, ok, stopped, refused bool) {
 	var b strings.Builder
 	for i, w := range words {
 		if i > 0 {
@@ -734,7 +739,12 @@ func printNumberOperand(word string) bool {
 
 // printOptionArgument reads the argument of `-f` or `-u`: attached to the
 // letter, or the next word.
-func printOptionArgument(r *interp.Runner, letter byte, attached string, rest []string) (arg string, more []string, ok bool) {
+func printOptionArgument(
+	r *interp.Runner,
+	letter byte,
+	attached string,
+	rest []string,
+) (arg string, more []string, ok bool) {
 	if attached != "" {
 		return attached, rest, true
 	}

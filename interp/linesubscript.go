@@ -250,7 +250,12 @@ func (r *Runner) lineAt(n, count int) int {
 // The walk is searchElements' — one rule for a search over a list of values,
 // whether those are an array's elements or a string's lines — and the three
 // misses above are why the kind of miss is read rather than the fact of one.
-func (r *Runner) lineSearchAt(g *syntax.SubscriptFlags, search byte, lines []string, starts []int) (at, pos int, found bool) {
+func (r *Runner) lineSearchAt(
+	g *syntax.SubscriptFlags,
+	search byte,
+	lines []string,
+	starts []int,
+) (at, pos int, found bool) {
 	base := r.arrayBase()
 	if len(lines) == 0 {
 		return 0, base - 1, false
@@ -293,7 +298,13 @@ func (r *Runner) lineSubscript(e *syntax.ParamExpr, search byte, v string) ([]st
 
 // lineRangeEnd is one end of a range whose group counts lines: where its line
 // begins at the front of the pair, and where that line ends at the back.
-func (r *Runner) lineRangeEnd(g *syntax.SubscriptFlags, end syntax.SubscriptEnd, search byte, v string, first bool) (int, bool) {
+func (r *Runner) lineRangeEnd(
+	g *syntax.SubscriptFlags,
+	end syntax.SubscriptEnd,
+	search byte,
+	v string,
+	first bool,
+) (int, bool) {
 	lines, starts, ends := scalarLines(r.units(v), r.wordSeparator(g))
 	base := r.arrayBase()
 	if search != 0 {

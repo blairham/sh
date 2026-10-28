@@ -209,7 +209,11 @@ func (r *Runner) orName(target, name string) string {
 // The two builtins spell the letter's effect differently — `export -n`
 // removes the attribute, `readonly -n` declines to freeze — so each caller
 // passes what its own letters decided rather than re-reading them here.
-func (r *Runner) nameOperandThroughAReference(builtin, name string, df declareFlags, applies bool) (value string, letters bool) {
+func (r *Runner) nameOperandThroughAReference(
+	builtin, name string,
+	df declareFlags,
+	applies bool,
+) (value string, letters bool) {
 	value = r.referenceValueTarget(name, df)
 	if value == "" {
 		return "", true

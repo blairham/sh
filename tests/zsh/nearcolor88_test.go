@@ -245,11 +245,18 @@ func TestNearcolorFollowsTheTerminalsColorCount(t *testing.T) {
 		{16777216, "\x1b[39m\x1b[49m|0 1 none\n"},
 	} {
 		dir := colorsFixture(t, c.colors)
-		out, _, err := preset.Combined(t, dialecttest.Base{Dir: t.TempDir(), Vars: colorsVars(t, dir)}, `zmodload zsh/nearcolor; print -rn -P '%F{#82c9b0}%K{#123456}'; print -rn '|'`)
+		out, _, err := preset.Combined(
+			t,
+			dialecttest.Base{Dir: t.TempDir(), Vars: colorsVars(t, dir)},
+			`zmodload zsh/nearcolor; print -rn -P '%F{#82c9b0}%K{#123456}'; print -rn '|'`,
+		)
 		if err != nil {
 			t.Fatal(err)
 		}
-		r, buf := zleRunner(t, "zmodload zsh/nearcolor\nw() { region_highlight=('0 1 fg=#82c9b0'); print -r -- $region_highlight; }\nzle -N w")
+		r, buf := zleRunner(
+			t,
+			"zmodload zsh/nearcolor\nw() { region_highlight=('0 1 fg=#82c9b0'); print -r -- $region_highlight; }\nzle -N w",
+		)
 		for k, v := range colorsVars(t, dir) {
 			r.SetVar(k, v)
 		}

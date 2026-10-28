@@ -65,7 +65,10 @@ func TestTheCommandWordEndsAFatalErrorRaisedInsideIt(t *testing.T) {
 // the operand an exit request is answered yes, and the word still catches it.
 func TestTheCommandWordEndsTheErrorOperandThisShellCallsAnExitRequest(t *testing.T) {
 	if got := preset.Semantics().ParamErrorIsAnExitRequest; got != interp.Yes {
-		t.Fatalf("ParamErrorIsAnExitRequest = %v, want yes — this row is about the operand that is not an ordinary error here", got)
+		t.Fatalf(
+			"ParamErrorIsAnExitRequest = %v, want yes — this row is about the operand that is not an ordinary error here",
+			got,
+		)
 	}
 }
 

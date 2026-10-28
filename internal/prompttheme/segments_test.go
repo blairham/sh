@@ -19,7 +19,12 @@ import (
 // segment may use no capability an outside one cannot — and driving them
 // differently in a test is how it would stop being true without anything
 // failing.
-func render(t *testing.T, element string, settings *prompttheme.Store, ctx *prompttheme.Context) (prompttheme.Rendered, bool) {
+func render(
+	t *testing.T,
+	element string,
+	settings *prompttheme.Store,
+	ctx *prompttheme.Context,
+) (prompttheme.Rendered, bool) {
 	t.Helper()
 	segment, ok := prompttheme.CoreSegments()[element]
 	if !ok {

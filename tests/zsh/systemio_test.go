@@ -68,11 +68,15 @@ func systemDeadline(t *testing.T, what string, body func()) {
 // thing worth pinning: a worker reading a substitution has to read to the end.
 func TestSysopenReadsAProcessSubstitutionThroughACloseOnExecDescriptor(t *testing.T) {
 	systemDeadline(t, "sysopen on a process substitution", func() {
-		out, st := runZshWithSystem(t, t.TempDir(), `sysopen -r -o cloexec -u fd <(print -n one; print -n two) || { print -r -- failed; return }
+		out, st := runZshWithSystem(
+			t,
+			t.TempDir(),
+			`sysopen -r -o cloexec -u fd <(print -n one; print -n two) || { print -r -- failed; return }
 print -r -- "open=$? usable=$(( fd > 2 ))"
 buf=
 while sysread -i $fd chunk; do buf=$buf$chunk; done
-print -r -- "read=$? buf=[$buf]"`)
+print -r -- "read=$? buf=[$buf]"`,
+		)
 		want := "open=0 usable=1\nread=0 buf=[onetwo]\n"
 		if out != want || st != 0 {
 			t.Errorf("sysopen on <(…) = %q (status %d), want %q", out, st, want)

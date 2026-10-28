@@ -199,7 +199,13 @@ func (e compdumpEntry) regular() bool { return len(e.sig) > 1 }
 // compdumpWalk lists every scanned directory and stats every `_name` in it,
 // reading first lines too where asked. racy is whether any regular file
 // changed within the racy window of now.
-func compdumpWalk(r *interp.Runner, ctx context.Context, dirs []string, lines bool, now time.Time) (files []compdumpEntry, racy bool) {
+func compdumpWalk(
+	r *interp.Runner,
+	ctx context.Context,
+	dirs []string,
+	lines bool,
+	now time.Time,
+) (files []compdumpEntry, racy bool) {
 	recent := now.Add(-compdumpRacyWindow).UnixNano()
 	for i, dir := range dirs {
 		// `$dir/_*` is what compinit globs, so an empty entry is the root

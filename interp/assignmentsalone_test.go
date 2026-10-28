@@ -190,7 +190,11 @@ func TestTheAssignmentsAloneRoadIsTheOneItWasCheckedAgainst(t *testing.T) {
 		}
 	}
 	if len(loops) != 2 || handOff < 0 {
-		t.Fatalf("found %d loops over the words and the hand-off at %d in simpleCommand, want 2 and one: the guard is looking in the wrong place", len(loops), handOff)
+		t.Fatalf(
+			"found %d loops over the words and the hand-off at %d in simpleCommand, want 2 and one: the guard is looking in the wrong place",
+			len(loops),
+			handOff,
+		)
 	}
 	calls := map[string]bool{}
 	for i, s := range body[:handOff+1] {

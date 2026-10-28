@@ -67,14 +67,26 @@ func TestAParseCacheIsUnobservable(t *testing.T) {
 		lib  string
 		main string
 	}{
-		{"line numbers", "echo top $LINENO\nf() {\n  echo in f $LINENO ${funcfiletrace[1]##*/} ${funcsourcetrace[1]##*/}\n  print -P '%x:%i %N'\n}\nf\necho after $LINENO\n", ". ./lib; f"},
+		{
+			"line numbers",
+			"echo top $LINENO\nf() {\n  echo in f $LINENO ${funcfiletrace[1]##*/} ${funcsourcetrace[1]##*/}\n  print -P '%x:%i %N'\n}\nf\necho after $LINENO\n",
+			". ./lib; f",
+		},
 		{"xtrace", "PS4='+%N:%i> '\nset -x\nx=1\necho $x\nset +x\n", ". ./lib"},
-		{"diagnostics", "echo before\nno-such-command-here\nprint ${unset_one:?is not set}\necho after\n", ". ./lib; echo st=$?"},
+		{
+			"diagnostics",
+			"echo before\nno-such-command-here\nprint ${unset_one:?is not set}\necho after\n",
+			". ./lib; echo st=$?",
+		},
 		{"here-documents", "cat <<EOF\nline $LINENO ${HOME:+home}\nEOF\ncat <<-'X'\n\tkept $LINENO\n\tX\n", ". ./lib"},
 		{"aliases", "alias greet='echo hi:'\ngreet one\nalias -g G='| tr a-z A-Z'\necho lower G\n", ". ./lib"},
 		{"grammar", "print -r -- 'a''b'\nsetopt rcquotes\nprint -r -- 'a''b'\nunsetopt rcquotes\n", ". ./lib"},
 		{"substitutions", "v=$(echo sub $LINENO\necho two)\necho \"$v\"\necho `echo back`\n", ". ./lib"},
-		{"return", "echo one\n[[ -n $stop ]] && return 7\necho two\n", "stop=1; . ./lib; echo st=$?; stop=; . ./lib; echo st=$?"},
+		{
+			"return",
+			"echo one\n[[ -n $stop ]] && return 7\necho two\n",
+			"stop=1; . ./lib; echo st=$?; stop=; . ./lib; echo st=$?",
+		},
 		{"parse failure", "echo ran\nif then\necho never\n", ". ./lib; echo st=$?"},
 		{"twice", "n=$((n+1))\necho read $n\n", ". ./lib; . ./lib"},
 	}

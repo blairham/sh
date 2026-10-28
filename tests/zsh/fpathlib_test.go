@@ -71,7 +71,14 @@ func TestTheSiteDirectoriesComeBeforeTheLibraryAndOnlyWhereTheyExist(t *testing.
 func TestAVersionedLibraryIsTheNewest(t *testing.T) {
 	t.Parallel()
 	usr := t.TempDir()
-	mkdirs(t, usr, "share/zsh/5.9/functions", "share/zsh/5.10/functions", "share/zsh/notaversion/functions", "share/zsh/5.11")
+	mkdirs(
+		t,
+		usr,
+		"share/zsh/5.9/functions",
+		"share/zsh/5.10/functions",
+		"share/zsh/notaversion/functions",
+		"share/zsh/5.11",
+	)
 	got := zsh.InstalledFunctionLibrary("", roots(nil, usr, ""))
 	want := []string{filepath.Join(usr, "share/zsh/5.10/functions")}
 	if !slices.Equal(got, want) {

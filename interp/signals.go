@@ -1249,7 +1249,10 @@ func (r *Runner) runTrapHandlerFrom(ctx context.Context, cond, body string, orig
 // What a non-zero return then does is the caller's: a script is interrupted
 // by one (runTrapHandlerFrom), and a prompt decides its line by one
 // (InterruptAtThePrompt).
-func (r *Runner) runTrapAction(ctx context.Context, cond, body string) (returned bool, handlerStatus int, resumed bool) {
+func (r *Runner) runTrapAction(
+	ctx context.Context,
+	cond, body string,
+) (returned bool, handlerStatus int, resumed bool) {
 	outer := r.status
 	if r.ask(r.sem().SignalHandlerSeesEarlierStatus, "the status a signal handler sees") {
 		r.status = r.statusBefore

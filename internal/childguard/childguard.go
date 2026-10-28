@@ -148,7 +148,12 @@ func (g guarded) Run() int {
 		return code
 	}
 	if len(left) > 0 {
-		fmt.Fprintf(os.Stderr, "\nchildguard: the tests left %d process(es) whose command line names %q:\n", len(left), g.marker)
+		fmt.Fprintf(
+			os.Stderr,
+			"\nchildguard: the tests left %d process(es) whose command line names %q:\n",
+			len(left),
+			g.marker,
+		)
 		for _, p := range left {
 			fmt.Fprintf(os.Stderr, "\t%d (parent %d)\t%s\n", p.PID, p.PPID, p.Command)
 		}

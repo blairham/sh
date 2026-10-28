@@ -162,10 +162,26 @@ func TestADialectCanNameOneErrnoTwoWays(t *testing.T) {
 	// Exactly, not as a prefix: "No such file" is the front of the operating
 	// system's own "No such file or directory", so a Contains check here
 	// passes whether the field's text is used or not.
-	if out, _ := redirRun(t, dir, dg, `cat < nodir/in`); !strings.HasSuffix(strings.TrimSpace(out), "cannot open nodir/in: No such file") {
+	if out, _ := redirRun(
+		t,
+		dir,
+		dg,
+		`cat < nodir/in`,
+	); !strings.HasSuffix(
+		strings.TrimSpace(out),
+		"cannot open nodir/in: No such file",
+	) {
 		t.Errorf("read: said %q, want the field's own open text and nothing more", out)
 	}
-	if out, _ := redirRun(t, dir, dg, `echo x > nodir/out`); !strings.HasSuffix(strings.TrimSpace(out), "cannot create nodir/out: Directory nonexistent") {
+	if out, _ := redirRun(
+		t,
+		dir,
+		dg,
+		`echo x > nodir/out`,
+	); !strings.HasSuffix(
+		strings.TrimSpace(out),
+		"cannot create nodir/out: Directory nonexistent",
+	) {
 		t.Errorf("create: said %q, want the field's own create text and nothing more", out)
 	}
 	// Without either, the operating system's own string, capitalized — which

@@ -72,7 +72,10 @@ var samples = []struct {
 	{name: "comment-runs", src: "# one\n# two\n\n# three\necho a\n"},
 	{name: "comment-hash-literal", src: "echo a#b '#lit' \"x # y\"\n"},
 	{name: "blank-lines", src: "echo a\n\n\n\necho b\n"},
-	{name: "mixed", src: "#!/bin/sh\n# what it does\nset -eu\n\nmain() {\n  local x=1\n  if [ \"$x\" = 1 ]; then\n    echo one # yes\n  fi\n}\n\nmain \"$@\"\n"},
+	{
+		name: "mixed",
+		src:  "#!/bin/sh\n# what it does\nset -eu\n\nmain() {\n  local x=1\n  if [ \"$x\" = 1 ]; then\n    echo one # yes\n  fi\n}\n\nmain \"$@\"\n",
+	},
 	{name: "zsh-repeat", src: "repeat 3; do\n  echo hi\ndone\n", zsh: true},
 	{name: "zsh-anon", src: "() {\n  echo hi\n}\n", zsh: true},
 	{name: "zsh-try", src: "{\n  echo t\n} always {\n  echo a\n}\n", zsh: true},

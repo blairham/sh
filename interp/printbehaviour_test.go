@@ -396,7 +396,11 @@ func (before processState) unchangedBy(t *testing.T) {
 	t.Helper()
 	after := processStateNow(t)
 	if !slices.Equal(before.ignored, after.ignored) {
-		t.Errorf("this case changed the process's ignored signals from %v to %v, which every test after it inherits", before.ignored, after.ignored)
+		t.Errorf(
+			"this case changed the process's ignored signals from %v to %v, which every test after it inherits",
+			before.ignored,
+			after.ignored,
+		)
 	}
 	if before.dir != after.dir {
 		t.Errorf("this case changed the process's working directory from %s to %s", before.dir, after.dir)

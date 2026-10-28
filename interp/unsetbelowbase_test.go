@@ -14,7 +14,13 @@ import (
 // element turns on: the base, which decides which spelling can reach the
 // boundary, and the span policy, which decides whether `unset` removes or
 // blanks and so whether the negative spelling reaches it at all.
-func runUnsetBelowBase(t *testing.T, zeroBased Answer, p UnsetArraySpanPolicy, src string, set ...func(*Semantics)) (string, int) {
+func runUnsetBelowBase(
+	t *testing.T,
+	zeroBased Answer,
+	p UnsetArraySpanPolicy,
+	src string,
+	set ...func(*Semantics),
+) (string, int) {
 	t.Helper()
 	return runGrammar(t, src, nil, func(r *Runner) {
 		sem := *r.Semantics

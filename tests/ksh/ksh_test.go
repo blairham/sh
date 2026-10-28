@@ -321,7 +321,14 @@ func TestApplyRemovesLocal(t *testing.T) {
 		var buf bytes.Buffer
 		sem := ksh.Semantics()
 		diag := ksh.Diagnostics()
-		r := &interp.Runner{Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &diag, Name: "ksh", Dialect: presetDialect()}
+		r := &interp.Runner{
+			Stdout:      &buf,
+			Stderr:      &buf,
+			Semantics:   &sem,
+			Diagnostics: &diag,
+			Name:        "ksh",
+			Dialect:     presetDialect(),
+		}
 		if apply {
 			ksh.Apply(r)
 		}
@@ -350,7 +357,9 @@ func TestApplyRemovesLocal(t *testing.T) {
 // ksh93u+m does, twelve years apart under the same name.
 func TestNoAmpersandRedirect(t *testing.T) {
 	if ksh.Dialect().AmpersandRedirect {
-		t.Error("ksh93u+ 2012 has no &>, and treating it as one operator silently redirects what should have been backgrounded")
+		t.Error(
+			"ksh93u+ 2012 has no &>, and treating it as one operator silently redirects what should have been backgrounded",
+		)
 	}
 	// Nor `&>>`, which is its own flag since #5135: measured 2026-10-01,
 	// `( echo O; echo E >&2 ) &>> out` backgrounds the group and leaves
@@ -554,7 +563,14 @@ func TestKshHasOnlyTheOlderDeclarationName(t *testing.T) {
 		}
 		var out bytes.Buffer
 		s, d := ksh.Semantics(), ksh.Diagnostics()
-		r := &interp.Runner{Name: preset.Name, Stdout: &out, Stderr: &out, Semantics: &s, Diagnostics: &d, Dialect: presetDialect()}
+		r := &interp.Runner{
+			Name:        preset.Name,
+			Stdout:      &out,
+			Stderr:      &out,
+			Semantics:   &s,
+			Diagnostics: &d,
+			Dialect:     presetDialect(),
+		}
 		ksh.Apply(r)
 		if _, err := r.Run(context.Background(), f); err != nil {
 			t.Fatal(err)
@@ -584,7 +600,14 @@ func TestBraceRangeAnswers(t *testing.T) {
 		}
 		var out bytes.Buffer
 		s, d := ksh.Semantics(), ksh.Diagnostics()
-		r := &interp.Runner{Name: preset.Name, Stdout: &out, Stderr: &out, Semantics: &s, Diagnostics: &d, Dialect: presetDialect()}
+		r := &interp.Runner{
+			Name:        preset.Name,
+			Stdout:      &out,
+			Stderr:      &out,
+			Semantics:   &s,
+			Diagnostics: &d,
+			Dialect:     presetDialect(),
+		}
 		ksh.Apply(r)
 		if _, err := r.Run(context.Background(), f); err != nil {
 			t.Fatal(err)
@@ -673,7 +696,13 @@ func TestAParseFailureIsNotPrefixedWithItsOwnLine(t *testing.T) {
 		t.Errorf("got %q, want the wording to still name the line", got)
 	}
 	// A runtime diagnostic in a script keeps its prefix.
-	if runtime := diagTable(ksh.Diagnostics()).ForScript().Report("s.sh", 2, "nosuchcmd: not found\n"); !strings.Contains(runtime, "line 2:") {
+	if runtime := diagTable(
+		ksh.Diagnostics(),
+	).ForScript().
+		Report("s.sh", 2, "nosuchcmd: not found\n"); !strings.Contains(
+		runtime,
+		"line 2:",
+	) {
 		t.Errorf("got %q, want a runtime diagnostic still prefixed", runtime)
 	}
 }

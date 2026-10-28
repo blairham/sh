@@ -177,7 +177,12 @@ zle -N w
 	if printed != want {
 		t.Errorf("printed\n%s\nwant\n%s", printed, want)
 	}
-	if out, st := runZsh(t, t.TempDir(), "zle -K main\n"); out != "zsh:zle:1: can only be called from widget function\n" || st != 1 {
+	if out, st := runZsh(
+		t,
+		t.TempDir(),
+		"zle -K main\n",
+	); out != "zsh:zle:1: can only be called from widget function\n" ||
+		st != 1 {
 		t.Errorf("outside a widget: %q status %d", out, st)
 	}
 }
@@ -187,7 +192,10 @@ zle -N w
 // against zsh 5.9.2: inside a widget `zle -U - abc` pushes `abc`, and `zle`,
 // `zle --` and `zle -` are each status 0; under `zsh -c` each is 1.
 func TestALoneDashEndsZlesOptions(t *testing.T) {
-	r, out := zleRunner(t, "w() { zle -U - abc; print -r -- st=$?; zle; print -r -- $?; zle -; print -r -- $? }\nzle -N w\n")
+	r, out := zleRunner(
+		t,
+		"w() { zle -U - abc; print -r -- st=$?; zle; print -r -- $?; zle -; print -r -- $? }\nzle -N w\n",
+	)
 	ed := &stubEditor{}
 	_, _, printed, _ := runWidgetWatching(t, r, out, "w", repl.Line{}, ed)
 	if printed != "st=0\n0\n0\n" {

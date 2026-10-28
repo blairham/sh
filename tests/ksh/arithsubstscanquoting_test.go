@@ -41,7 +41,12 @@ func TestTheArithSubstScanIsBlindToQuoting(t *testing.T) {
 		}
 	}
 	// And an expression with no quoting in it is arithmetic as ever.
-	if out, st, _ := preset.Combined(t, dialecttest.Base{}, `echo $(( 1 + 2 ))`); strings.TrimSpace(out) != "3" || st != 0 {
+	if out, st, _ := preset.Combined(
+		t,
+		dialecttest.Base{},
+		`echo $(( 1 + 2 ))`,
+	); strings.TrimSpace(out) != "3" ||
+		st != 0 {
 		t.Errorf("an ordinary expression: %q at %d, want 3 at 0", out, st)
 	}
 }

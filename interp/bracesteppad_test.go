@@ -83,7 +83,12 @@ var braceStepPadRows = []struct {
 	// step looks like.
 	{src: `echo {01..10..2}`, padded: "01 03 05 07 09", plain: "01 03 05 07 09", control: true},
 	{src: `echo {01..10..02}`, padded: "01 03 05 07 09", plain: "01 03 05 07 09", control: true},
-	{src: `echo X{004..-4..2}Y`, padded: "X004Y X002Y X000Y X-02Y X-04Y", plain: "X004Y X002Y X000Y X-02Y X-04Y", control: true},
+	{
+		src:     `echo X{004..-4..2}Y`,
+		padded:  "X004Y X002Y X000Y X-02Y X-04Y",
+		plain:   "X004Y X002Y X000Y X-02Y X-04Y",
+		control: true,
+	},
 	// A step written **without** leading zeros never contributes a width in
 	// either reading, however wide it is. This is the row that keeps the
 	// rule to the zeros rather than to the step's length.

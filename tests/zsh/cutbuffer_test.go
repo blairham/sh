@@ -44,7 +44,12 @@ zle -N w
 		repl.WidgetKillWordBefore: {Buffer: "one ", Cursor: 4},
 	}}, kills: map[repl.Widget]string{repl.WidgetKillWordBefore: "two"}}
 	out.Reset()
-	if _, ok := zsh.RunWidget(r, repl.WithActions(context.Background(), ed), "w", repl.Line{Buffer: "one two", Cursor: 7}); !ok {
+	if _, ok := zsh.RunWidget(
+		r,
+		repl.WithActions(context.Background(), ed),
+		"w",
+		repl.Line{Buffer: "one two", Cursor: 7},
+	); !ok {
 		t.Fatal("the widget did not run")
 	}
 	if said := out.String(); said != "[two]\n" {

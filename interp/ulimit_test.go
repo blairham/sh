@@ -19,7 +19,12 @@ import (
 // themselves. The whole reason the hooks exist.
 type limitPair struct{ soft, hard int64 }
 
-func ulimitRun(t *testing.T, held map[Resource]limitPair, tweak func(*Semantics), src string) (string, int, map[Resource]limitPair) {
+func ulimitRun(
+	t *testing.T,
+	held map[Resource]limitPair,
+	tweak func(*Semantics),
+	src string,
+) (string, int, map[Resource]limitPair) {
 	t.Helper()
 	f, err := syntax.Parse(src, syntax.Core())
 	if err != nil {
@@ -122,7 +127,14 @@ func TestUlimitSets(t *testing.T) {
 
 // ulimitRunTable is ulimitRun with a table: the rows a dialect lists, the
 // limits this pretend kernel has, and the order it numbers them in.
-func ulimitRunTable(t *testing.T, held map[Resource]limitPair, dg Diagnostics, has func(Resource) bool, order []Resource, src string) (string, int) {
+func ulimitRunTable(
+	t *testing.T,
+	held map[Resource]limitPair,
+	dg Diagnostics,
+	has func(Resource) bool,
+	order []Resource,
+	src string,
+) (string, int) {
 	t.Helper()
 	f, err := syntax.Parse(src, syntax.Core())
 	if err != nil {
@@ -231,7 +243,15 @@ func TestAFixedRowReadsItsSentenceAndRefusesToBeSet(t *testing.T) {
 		UlimitReadOnly: "ulimit: %[1]s: is read only",
 	}
 	none := func(Resource) bool { return false }
-	if out, st := ulimitRunTable(t, held, dg, none, nil, `ulimit -x`); st != 0 || strings.TrimSpace(out) != "not supported" {
+	if out, st := ulimitRunTable(
+		t,
+		held,
+		dg,
+		none,
+		nil,
+		`ulimit -x`,
+	); st != 0 ||
+		strings.TrimSpace(out) != "not supported" {
 		t.Errorf("reading a fixed row: %q status %d, want its sentence at 0", out, st)
 	}
 	out, st := ulimitRunTable(t, held, dg, none, nil, `ulimit -x 5`)

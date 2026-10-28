@@ -121,7 +121,10 @@ func TestOnlyAModernListCarriesTheCachingHint(t *testing.T) {
 		t.Errorf("a modern tools/list answered cacheScope %v, want %q", modern["cacheScope"], mcp.CacheScopePublic)
 	}
 	if ttl, _ := modern["ttlMs"].(float64); ttl <= 0 {
-		t.Errorf("a modern tools/list answered ttlMs %v, want a positive lifetime: the list is fixed by the binary", modern["ttlMs"])
+		t.Errorf(
+			"a modern tools/list answered ttlMs %v, want a positive lifetime: the list is fixed by the binary",
+			modern["ttlMs"],
+		)
 	}
 	legacy := p.raw(t, mcp.MethodToolsList, map[string]any{})
 	for _, field := range []string{"ttlMs", "cacheScope"} {

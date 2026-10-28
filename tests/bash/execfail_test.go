@@ -105,10 +105,22 @@ func TestASurvivedExecCarriesTheStatusTheExitWouldHave(t *testing.T) {
 	// twice — once as the return value and once onto the runner — and a
 	// mutation that zeroed the second copy broke nothing, which is what said
 	// the copy had no consequence and that no row was reading it.
-	if out, _ := execfailRun(t, `shopt -s execfail; exec nosuchcmd42 || echo or-fired`); !strings.Contains(out, "or-fired") {
+	if out, _ := execfailRun(
+		t,
+		`shopt -s execfail; exec nosuchcmd42 || echo or-fired`,
+	); !strings.Contains(
+		out,
+		"or-fired",
+	) {
 		t.Errorf("the `||` did not fire, so the failure never reached the script: %q", out)
 	}
-	if out, _ := execfailRun(t, `shopt -s execfail; set -e; exec nosuchcmd42; echo REACHED`); strings.Contains(out, "REACHED") {
+	if out, _ := execfailRun(
+		t,
+		`shopt -s execfail; set -e; exec nosuchcmd42; echo REACHED`,
+	); strings.Contains(
+		out,
+		"REACHED",
+	) {
 		t.Errorf("`set -e` should end the script for a survived `exec`: %q", out)
 	}
 }

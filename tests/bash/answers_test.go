@@ -314,7 +314,10 @@ func TestNoTestWordingSpellsItsOwnName(t *testing.T) {
 // exported itself here, so a child sees the local's value — and the caller's
 // value comes back with the caller.
 func TestALocalCarriesTheExportAttribute(t *testing.T) {
-	out, _ := answersRun(t, `export FOO=bar; f() { local FOO=baz; /usr/bin/env | grep '^FOO=' || echo "(none)"; }; f; /usr/bin/env | grep '^FOO='`)
+	out, _ := answersRun(
+		t,
+		`export FOO=bar; f() { local FOO=baz; /usr/bin/env | grep '^FOO=' || echo "(none)"; }; f; /usr/bin/env | grep '^FOO='`,
+	)
 	if !strings.Contains(out, "FOO=baz") || !strings.Contains(out, "FOO=bar") {
 		t.Errorf("got %q, want the local's value inside and the outer value after", out)
 	}

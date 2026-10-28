@@ -81,7 +81,11 @@ func TestTheCaseKeysBelongToTheEmacsKeymapThatHasThem(t *testing.T) {
 // keymap has them on (#6241). Each row reads two lines from one editor, so
 // what the first key put aside is what the second read starts from.
 func TestTheLineKeysOfTheWideEmacsKeymap(t *testing.T) {
-	style := EditorStyle{WideEmacsKeymap: true, UndoRestoresTheCursorToWhereItWas: true, UndoTakesBackOneKeystrokeAtATime: true}
+	style := EditorStyle{
+		WideEmacsKeymap:                   true,
+		UndoRestoresTheCursorToWhereItWas: true,
+		UndoTakesBackOneKeystrokeAtATime:  true,
+	}
 	for _, c := range []struct {
 		name, keys    string
 		first, second string

@@ -39,7 +39,10 @@ import (
 func writerHeldOpen(t *testing.T) (string, *os.File) {
 	t.Helper()
 	if runtime.GOOS != "linux" {
-		t.Skipf("%s does not refuse to exec a file that is open for writing, so there is nothing to hold off here", runtime.GOOS)
+		t.Skipf(
+			"%s does not refuse to exec a file that is open for writing, so there is nothing to hold off here",
+			runtime.GOOS,
+		)
 	}
 	path := filepath.Join(t.TempDir(), "subject")
 	if err := os.WriteFile(path, []byte("#!/bin/sh\nprintf answered\n"), 0o755); err != nil {

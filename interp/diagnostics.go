@@ -12635,7 +12635,13 @@ func (d *Diagnostics) echoLine(name, input string, line int, err error, src stri
 // message contradict the first. bash 5.3 writes `eval: line 6:` twice for a
 // two-line `eval` on line 5 whose second line will not parse; this said `line
 // 6` and then `line 2`.
-func (d *Diagnostics) SourceEcho(naming SourceNaming, shell, source string, line, at int, err error, src string) string {
+func (d *Diagnostics) SourceEcho(
+	naming SourceNaming,
+	shell, source string,
+	line, at int,
+	err error,
+	src string,
+) string {
 	text := d.offendingLine(at, err, src)
 	if text == "" {
 		return ""

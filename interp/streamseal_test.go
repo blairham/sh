@@ -115,8 +115,10 @@ func TestAnAbandonedBodyCannotWriteToTheCallersStreamAfterTheRunReturns(t *testi
 		close(release)
 		<-finished
 		if after := w.String(); after != before {
-			t.Errorf("the stream gained %q after Run returned; a body the shell walked away from is still writing to the caller's writer",
-				strings.TrimPrefix(after, before))
+			t.Errorf(
+				"the stream gained %q after Run returned; a body the shell walked away from is still writing to the caller's writer",
+				strings.TrimPrefix(after, before),
+			)
 		}
 	})
 }
@@ -171,7 +173,9 @@ func TestTheSealDoesNotEatWhatTheShellWroteInTime(t *testing.T) {
 		}
 		// Unsynchronized, on purpose. See above.
 		if got := w.String(); got == "" {
-			t.Error("the caller's stream is empty: the body's diagnostic was written on its goroutine and the run has to hand it over")
+			t.Error(
+				"the caller's stream is empty: the body's diagnostic was written on its goroutine and the run has to hand it over",
+			)
 		}
 	})
 
@@ -213,7 +217,11 @@ func TestTheSealDoesNotEatWhatTheShellWroteInTime(t *testing.T) {
 			return
 		}
 		if got := w.String(); !strings.Contains(got, "again") {
-			t.Errorf("the second run wrote %q, want it to contain %q: a shell asked for more work has its caller's streams back", got, "again")
+			t.Errorf(
+				"the second run wrote %q, want it to contain %q: a shell asked for more work has its caller's streams back",
+				got,
+				"again",
+			)
 		}
 	})
 }

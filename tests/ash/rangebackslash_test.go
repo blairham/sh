@@ -15,7 +15,11 @@ func TestARangeReadsItsBackslashesAsTheWordDoes(t *testing.T) {
 	if got, _ := run(t, `foo=abc; echo ${foo:0:\1}`); got != "a\n" {
 		t.Errorf("unquoted: got %q, want %q", got, "a\n")
 	}
-	if got, _ := run(t, `foo=abc; (echo "${foo:0:\1}"); echo st=$?`); !strings.Contains(got, "arithmetic syntax error") || !strings.HasSuffix(got, "st=2\n") {
+	if got, _ := run(
+		t,
+		`foo=abc; (echo "${foo:0:\1}"); echo st=$?`,
+	); !strings.Contains(got, "arithmetic syntax error") ||
+		!strings.HasSuffix(got, "st=2\n") {
 		t.Errorf("quoted: got %q, want an arithmetic syntax error at 2", got)
 	}
 }

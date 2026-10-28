@@ -62,7 +62,11 @@ func TestTypesetSilentStaysInTheSubshellThatSetIt(t *testing.T) {
 // the point is that it now reports a name something reads.
 func TestTypesetSilentIsStillReportedBothWays(t *testing.T) {
 	dir := t.TempDir()
-	out, st := runZsh(t, dir, `setopt typeset_silent; [[ -o typesetsilent ]] && echo on; unsetopt typeset_silent; [[ -o typesetsilent ]] || echo off`)
+	out, st := runZsh(
+		t,
+		dir,
+		`setopt typeset_silent; [[ -o typesetsilent ]] && echo on; unsetopt typeset_silent; [[ -o typesetsilent ]] || echo off`,
+	)
 	if st != 0 || out != "on\noff\n" {
 		t.Errorf("out = %q, status %d, want %q", out, st, "on\noff\n")
 	}

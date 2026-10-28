@@ -511,7 +511,13 @@ func (r *Runner) resolvePending(v string) string {
 // matched text, a backslash protecting the byte after it, a single-quoted
 // run as text, double quotes dropped, and an unquoted `$` left to expand
 // unless the whole expansion is double-quoted.
-func (r *Runner) spliceReplacement(with, matched string, quoted, expand, live bool, literal func(byte), literals func(string), src *strings.Builder) {
+func (r *Runner) spliceReplacement(
+	with, matched string,
+	quoted, expand, live bool,
+	literal func(byte),
+	literals func(string),
+	src *strings.Builder,
+) {
 	inDouble := false
 	for i := 0; i < len(with); i++ {
 		c := with[i]

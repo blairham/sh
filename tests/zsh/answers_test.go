@@ -374,7 +374,10 @@ func TestNoTestWordingSpellsItsOwnName(t *testing.T) {
 // hand it the local's value. The attribute is the local's to lose — the outer
 // name is exported again the moment the function returns.
 func TestALocalDoesNotCarryTheExportAttribute(t *testing.T) {
-	out, _ := answersRun(t, `export FOO=bar; f() { local FOO=baz; /usr/bin/env | grep '^FOO=' || echo "(none)"; }; f; /usr/bin/env | grep '^FOO='`)
+	out, _ := answersRun(
+		t,
+		`export FOO=bar; f() { local FOO=baz; /usr/bin/env | grep '^FOO=' || echo "(none)"; }; f; /usr/bin/env | grep '^FOO='`,
+	)
 	if strings.Contains(out, "FOO=baz") {
 		t.Errorf("got %q, want the child told nothing under the name", out)
 	}

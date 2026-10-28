@@ -82,7 +82,12 @@ func TestAnExpansionWithNoNameAtAll(t *testing.T) {
 // silent — the parameter reading answers the option letters and the nameless
 // one answers the empty string, both at status 0.
 func TestACharacterThatIsAParameterIsNotAMissingName(t *testing.T) {
-	out, st := runGrammar(t, `set -u; case "${-}" in *u*) echo the-parameter;; *) echo a-missing-name;; esac`, nameless, nil)
+	out, st := runGrammar(
+		t,
+		`set -u; case "${-}" in *u*) echo the-parameter;; *) echo a-missing-name;; esac`,
+		nameless,
+		nil,
+	)
 	if out != "the-parameter\n" || st != 0 {
 		t.Errorf("got %q (status %d), want the option letters at 0", out, st)
 	}

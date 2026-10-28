@@ -224,7 +224,13 @@ func TestAnAsciiValueAsksNothing(t *testing.T) {
 	// Nor does a non-ASCII value under a locale that names no multibyte
 	// encoding: every shell counts its bytes there, so there is nothing to
 	// disagree about.
-	if out, st := runLocale(t, Unspecified, []string{"LC_ALL=C"}, `s=héllo; printf "[%s]" "${#s}"`); out != "[6]" || st != 0 {
+	if out, st := runLocale(
+		t,
+		Unspecified,
+		[]string{"LC_ALL=C"},
+		`s=héllo; printf "[%s]" "${#s}"`,
+	); out != "[6]" ||
+		st != 0 {
 		t.Errorf("in C: got %q (status %d), want %q at 0", out, st, "[6]")
 	}
 }

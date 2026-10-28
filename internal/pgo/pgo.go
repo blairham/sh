@@ -71,7 +71,10 @@ func Programs() []Program {
 	var ps []Program
 	for _, c := range startupcost.Cases() {
 		if c.Gating {
-			ps = append(ps, Program{Name: "gate-" + c.Name, Text: c.Program, Answer: c.Answer, Dialects: everyDialect, Weight: 4})
+			ps = append(
+				ps,
+				Program{Name: "gate-" + c.Name, Text: c.Program, Answer: c.Answer, Dialects: everyDialect, Weight: 4},
+			)
 		}
 	}
 	ps = append(ps, []Program{
@@ -203,7 +206,9 @@ func definitions() string {
 	const n = 150
 	for i := range n {
 		k := strconv.Itoa(i)
-		b.WriteString("fn_" + k + "() {\n\tif [ \"$1\" = x ]; then\n\t\techo \"" + k + "\" | while read -r line; do\n\t\t\tcase $line in\n\t\t\t" + k + ") : ;;\n\t\t\t*) return 1 ;;\n\t\t\tesac\n\t\tdone\n\telse\n\t\tv=${2:-default} w=$(( " + k + " * 2 ))\n\t\tfor e in a b c; do\n\t\t\t[ -n \"$e\" ] && v=$v$e\n\t\tdone\n\tfi\n}\n")
+		b.WriteString(
+			"fn_" + k + "() {\n\tif [ \"$1\" = x ]; then\n\t\techo \"" + k + "\" | while read -r line; do\n\t\t\tcase $line in\n\t\t\t" + k + ") : ;;\n\t\t\t*) return 1 ;;\n\t\t\tesac\n\t\tdone\n\telse\n\t\tv=${2:-default} w=$(( " + k + " * 2 ))\n\t\tfor e in a b c; do\n\t\t\t[ -n \"$e\" ] && v=$v$e\n\t\tdone\n\tfi\n}\n",
+		)
 	}
 	b.WriteString("echo defined " + strconv.Itoa(n) + "\n")
 	return b.String()

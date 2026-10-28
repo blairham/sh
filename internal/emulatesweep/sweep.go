@@ -327,7 +327,10 @@ func Sweep(ctx context.Context, o Options) (*Result, error) {
 		cases = kept
 	}
 	if len(cases) == 0 {
-		return nil, fmt.Errorf("no cases selected (-only %q): a sweep of nothing reports the same zero as a sweep that found nothing", o.Only)
+		return nil, fmt.Errorf(
+			"no cases selected (-only %q): a sweep of nothing reports the same zero as a sweep that found nothing",
+			o.Only,
+		)
 	}
 
 	jobs := o.Jobs
@@ -523,7 +526,15 @@ func (r *Result) Report() string {
 	}
 
 	fmt.Fprintf(&b, "\nmoving with the mode\n")
-	fmt.Fprintf(&b, "  %-10s %4d of %d   %s (%s)\n", r.Reference.Name, r.RefMoves, r.Scored, r.Reference.Path, r.Reference.Version)
+	fmt.Fprintf(
+		&b,
+		"  %-10s %4d of %d   %s (%s)\n",
+		r.Reference.Name,
+		r.RefMoves,
+		r.Scored,
+		r.Reference.Path,
+		r.Reference.Version,
+	)
 	fmt.Fprintf(&b, "  %-10s %4d of %d   %s (%s)\n", r.Ours.Name, r.OurMoves, r.Scored, r.Ours.Path, r.Ours.Version)
 
 	// Printed on every run, empty or not: a snippet quietly dropped from the

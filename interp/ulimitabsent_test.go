@@ -36,7 +36,15 @@ func TestAnAbsentRowIsALimitOnOneKernelAndASentenceOnAnother(t *testing.T) {
 
 	// A kernel that has the limit: an ordinary live row, read and written.
 	held := limits(map[Resource]limitPair{ResourceFileLocks: {77, 77}, ResourceCPUTime: {60, 60}})
-	if out, st := ulimitRunTable(t, held, absentTable(), everything, nil, `ulimit -x`); st != 0 || strings.TrimSpace(out) != "77" {
+	if out, st := ulimitRunTable(
+		t,
+		held,
+		absentTable(),
+		everything,
+		nil,
+		`ulimit -x`,
+	); st != 0 ||
+		strings.TrimSpace(out) != "77" {
 		t.Errorf("-x where the kernel has the limit: %q status %d, want 77 at 0", out, st)
 	}
 	if out, st := ulimitRunTable(t, held, absentTable(), everything, nil, `ulimit -x 100`); st != 0 || out != "" {
@@ -45,14 +53,30 @@ func TestAnAbsentRowIsALimitOnOneKernelAndASentenceOnAnother(t *testing.T) {
 	if got := held[ResourceFileLocks]; got.soft != 100 {
 		t.Errorf("the limit is now %d, want the 100 that was set", got.soft)
 	}
-	if out, st := ulimitRunTable(t, held, absentTable(), everything, nil, `ulimit -a`); st != 0 || out != "cpu time  60\nlocks     100\n" {
+	if out, st := ulimitRunTable(
+		t,
+		held,
+		absentTable(),
+		everything,
+		nil,
+		`ulimit -a`,
+	); st != 0 ||
+		out != "cpu time  60\nlocks     100\n" {
 		t.Errorf("`ulimit -a` where the kernel has the limit: %q status %d", out, st)
 	}
 
 	// And a kernel that does not: the sentence is the whole value, the
 	// letter is still read, and a set is refused as read only.
 	held = limits(map[Resource]limitPair{ResourceCPUTime: {60, 60}})
-	if out, st := ulimitRunTable(t, held, absentTable(), without, nil, `ulimit -x`); st != 0 || strings.TrimSpace(out) != "not supported" {
+	if out, st := ulimitRunTable(
+		t,
+		held,
+		absentTable(),
+		without,
+		nil,
+		`ulimit -x`,
+	); st != 0 ||
+		strings.TrimSpace(out) != "not supported" {
 		t.Errorf("-x where the kernel has no such limit: %q status %d, want the sentence at 0", out, st)
 	}
 	out, st := ulimitRunTable(t, held, absentTable(), without, nil, `ulimit -x 100`)
@@ -64,7 +88,15 @@ func TestAnAbsentRowIsALimitOnOneKernelAndASentenceOnAnother(t *testing.T) {
 	}
 	// The row stays in the table, which is the difference from a plain live
 	// row: that one leaves and takes its letter with it (#2805).
-	if out, st := ulimitRunTable(t, held, absentTable(), without, nil, `ulimit -a`); st != 0 || out != "cpu time  60\nlocks     not supported\n" {
+	if out, st := ulimitRunTable(
+		t,
+		held,
+		absentTable(),
+		without,
+		nil,
+		`ulimit -a`,
+	); st != 0 ||
+		out != "cpu time  60\nlocks     not supported\n" {
 		t.Errorf("`ulimit -a` where the kernel has no such limit: %q status %d, want the row kept", out, st)
 	}
 }

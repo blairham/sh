@@ -15,11 +15,15 @@ import "testing"
 // read exactly like their `PROMPT` siblings and are two parameters each in
 // real zsh. A rule inferred from the four above would have tied all seven.
 func TestThePromptSpellingsAreOneParameter(t *testing.T) {
-	out, st := runZsh(t, t.TempDir(), `for pair in PROMPT:PS1 PROMPT2:PS2 PROMPT3:PS3 PROMPT4:PS4 RPROMPT:RPS1 SPROMPT:SPS1; do
+	out, st := runZsh(
+		t,
+		t.TempDir(),
+		`for pair in PROMPT:PS1 PROMPT2:PS2 PROMPT3:PS3 PROMPT4:PS4 RPROMPT:RPS1 SPROMPT:SPS1; do
   a=${pair%%:*}; b=${pair#*:}
   eval "$a=XX"; eval "print -rn -- \"$pair ${a}->${b}=[\${$b-UNSET}] \""
   eval "$b=YY"; eval "print -r -- \"${b}->${a}=[\${$a-UNSET}]\""
-done`)
+done`,
+	)
 	want := "PROMPT:PS1 PROMPT->PS1=[XX] PS1->PROMPT=[YY]\n" +
 		"PROMPT2:PS2 PROMPT2->PS2=[XX] PS2->PROMPT2=[YY]\n" +
 		"PROMPT3:PS3 PROMPT3->PS3=[XX] PS3->PROMPT3=[YY]\n" +

@@ -151,6 +151,9 @@ func TestTheEmulateOptionIsAppliedBeforeTheInvocationsOwnOptions(t *testing.T) {
 		t.Fatalf("stderr %q, want the trace the invocation asked for", errs.String())
 	}
 	if !strings.HasPrefix(errs.String(), "+") {
-		t.Errorf("stderr %q, want a trace line, which an emulation applied after the options would have stopped", errs.String())
+		t.Errorf(
+			"stderr %q, want a trace line, which an emulation applied after the options would have stopped",
+			errs.String(),
+		)
 	}
 }

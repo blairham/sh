@@ -50,7 +50,13 @@ func abandonPromptField(f PromptField, _ string, _ bool) (string, bool) {
 // was already right on the day the whole script stopped, and a runner that
 // carries on while drawing the wrong thing is the other failure this pair
 // exists to tell apart.
-func renderPrompt(t *testing.T, value string, keepsWhatItDrew bool, sem Semantics, dg Diagnostics) (drawn, diag string, alive bool) {
+func renderPrompt(
+	t *testing.T,
+	value string,
+	keepsWhatItDrew bool,
+	sem Semantics,
+	dg Diagnostics,
+) (drawn, diag string, alive bool) {
 	t.Helper()
 	var buf bytes.Buffer
 	r := newTestRunner(t, &Runner{

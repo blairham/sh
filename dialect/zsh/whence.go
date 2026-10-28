@@ -304,7 +304,12 @@ func whenceSaysMissing(m whenceMode) bool {
 // it — measured, the operands are not reached. A letter this shell has and
 // this one does not is refused with its own wording, so the two cases stay
 // distinguishable.
-func whenceOptions(r *interp.Runner, args []string, offered string, m whenceMode) (names []string, mode whenceMode, code int) {
+func whenceOptions(
+	r *interp.Runner,
+	args []string,
+	offered string,
+	m whenceMode,
+) (names []string, mode whenceMode, code int) {
 	rest := args
 	for len(rest) > 0 && strings.HasPrefix(rest[0], "-") {
 		word := rest[0]

@@ -99,7 +99,11 @@ const (
 // a function file parsed to check it and parsed again inside a definition —
 // each keep their own. An empty file parses without the cache, and so does
 // a text too short to be worth one.
-func (r *Runner) ParseFileText(file, purpose, text string, d syntax.Dialect, aliases ParseAliases) (*syntax.File, error) {
+func (r *Runner) ParseFileText(
+	file, purpose, text string,
+	d syntax.Dialect,
+	aliases ParseAliases,
+) (*syntax.File, error) {
 	if r.ParseCache == nil || file == "" || len(text) < parsecache.MinText ||
 		strings.HasPrefix(file, "/dev/") || strings.HasPrefix(file, "/proc/") || r.parseCacheOff() {
 		p := syntax.NewParser(text, d)

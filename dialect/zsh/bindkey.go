@@ -518,15 +518,21 @@ func KeyBindings(r *interp.Runner, km repl.Keymap) map[string]repl.Binding {
 			// repl.EditorStyle.SendBreakOnControlG and WideEmacsKeymap — and
 			// are listed rather than carried in defaultBindings because viins
 			// shares that table and has none of them.
-			if standard, isDefault := emacsBindings()[seq]; isDefault && standard == widget && keymapBase(r, currentKeymap(r)) == "emacs" {
+			if standard, isDefault := emacsBindings()[seq]; isDefault && standard == widget &&
+				keymapBase(r, currentKeymap(r)) == "emacs" {
 				continue
 			}
 			// And the keys that type themselves in both (#6272).
-			if base := keymapBase(r, currentKeymap(r)); widget == "self-insert" && selfInsertKeys()[seq] && (base == "emacs" || base == "viins") {
+			if base := keymapBase(
+				r,
+				currentKeymap(r),
+			); widget == "self-insert" && selfInsertKeys()[seq] &&
+				(base == "emacs" || base == "viins") {
 				continue
 			}
 			// And viins's, the same way (#6251).
-			if standard, isDefault := viinsBindings()[seq]; isDefault && standard == widget && keymapBase(r, currentKeymap(r)) == "viins" {
+			if standard, isDefault := viinsBindings()[seq]; isDefault && standard == widget &&
+				keymapBase(r, currentKeymap(r)) == "viins" {
 				continue
 			}
 		}

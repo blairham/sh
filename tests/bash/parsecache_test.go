@@ -23,7 +23,11 @@ import (
 func TestAParseCacheIsUnobservable(t *testing.T) {
 	pad := strings.Repeat("# commentary, to make this file one the parse cache keeps\n", 80)
 	cases := []struct{ name, lib, main string }{
-		{"the call stack", "f() {\n  echo \"$LINENO ${BASH_SOURCE[0]##*/} ${BASH_LINENO[0]} ${FUNCNAME[0]}\"\n  caller 0 | sed 's#.*/##'\n}\nf\necho top $LINENO\n", ". ./lib; f"},
+		{
+			"the call stack",
+			"f() {\n  echo \"$LINENO ${BASH_SOURCE[0]##*/} ${BASH_LINENO[0]} ${FUNCNAME[0]}\"\n  caller 0 | sed 's#.*/##'\n}\nf\necho top $LINENO\n",
+			". ./lib; f",
+		},
 		{"xtrace", "PS4='+${BASH_SOURCE##*/}:$LINENO> '\nset -x\nx=1\necho $x\nset +x\n", ". ./lib"},
 		{"extglob", "shopt -s extglob\ncase ab in @(ab|cd)) echo matched;; esac\n", ". ./lib"},
 		{"aliases", "shopt -s expand_aliases\nalias greet='echo hi:'\ngreet one\n", ". ./lib"},

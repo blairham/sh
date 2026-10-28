@@ -99,7 +99,12 @@ func runReadingAFile(t *testing.T, src, text string, answer BackgroundJobInputPo
 
 // runReadingAFileWith is runReadingAFile with a hand on the Runner, for the
 // one question that is about the shell rather than about the axis.
-func runReadingAFileWith(t *testing.T, src, text string, answer BackgroundJobInputPolicy, setup func(*Runner)) (out, errOut string) {
+func runReadingAFileWith(
+	t *testing.T,
+	src, text string,
+	answer BackgroundJobInputPolicy,
+	setup func(*Runner),
+) (out, errOut string) {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "f")
 	if err := os.WriteFile(path, []byte(text), 0o600); err != nil {

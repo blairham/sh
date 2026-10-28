@@ -17,7 +17,16 @@ func bigScript(n int) string {
 	var b strings.Builder
 	b.WriteString("n=0\n")
 	for i := range n {
-		fmt.Fprintf(&b, "a%d=\"value %d\"\nif [ \"$a%d\" = \"value %d\" ]; then n=$((n+1)); fi\n: \"${a%d#value}\" \"${a%d%%[0-9]*}\"\n", i, i, i, i, i, i)
+		fmt.Fprintf(
+			&b,
+			"a%d=\"value %d\"\nif [ \"$a%d\" = \"value %d\" ]; then n=$((n+1)); fi\n: \"${a%d#value}\" \"${a%d%%[0-9]*}\"\n",
+			i,
+			i,
+			i,
+			i,
+			i,
+			i,
+		)
 	}
 	b.WriteString("echo $n\n")
 	return b.String()

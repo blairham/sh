@@ -63,7 +63,13 @@ func TestARefusedInvocationOptionExitsTheDialectsStatus(t *testing.T) {
 				sh := shellWith(letter, name)
 				sh.Stdout, sh.Stderr = &out, &errs
 				if got := driver.MainArgs(sh, c.argv); got != want {
-					t.Errorf("status %d, want this spelling's own %d and not the other's %d (stderr %q)", got, want, other, errs.String())
+					t.Errorf(
+						"status %d, want this spelling's own %d and not the other's %d (stderr %q)",
+						got,
+						want,
+						other,
+						errs.String(),
+					)
 				}
 				if out.String() != "" {
 					t.Errorf("ran %q, want a refused option to stop the shell before anything runs", out.String())

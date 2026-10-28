@@ -35,7 +35,12 @@ func TestTheBuiltinMemoForgetsEveryTableWrite(t *testing.T) {
 		{"Register a new name", func() { r.Register("memoed", own) }, "memoed", true},
 		{"RegisterPreludeCommand", func() { r.RegisterPreludeCommand("prelude-only", own) }, "prelude-only", false},
 		{"a speaker", func() { r.speaker = "sh" }, "prelude-only", true},
-		{"RegisterPreludeCommand with a speaker", func() { r.RegisterPreludeCommand("prelude-too", own) }, "prelude-too", true},
+		{
+			"RegisterPreludeCommand with a speaker",
+			func() { r.RegisterPreludeCommand("prelude-too", own) },
+			"prelude-too",
+			true,
+		},
 		{"SetPromptEngine", func() { r.SetPromptEngine(own) }, promptEngineCommand, true},
 		{"no speaker", func() { r.speaker = "" }, promptEngineCommand, false},
 	}

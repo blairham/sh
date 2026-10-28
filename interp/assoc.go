@@ -1879,7 +1879,11 @@ func (r *Runner) tableLiteralIsStoredAsItIsExpanded(elems []*syntax.ArrayElem) b
 // ends the literal with the pairs before it stored, which is
 // Semantics.FailedSubscriptedLiteralKeepsWhatItStored's reading reached by
 // construction; a refused element ends it the same way.
-func (r *Runner) assignAssocElemsAsTheyExpand(name string, elems []*syntax.ArrayElem, reads, appendTo, refuseBare bool) {
+func (r *Runner) assignAssocElemsAsTheyExpand(
+	name string,
+	elems []*syntax.ArrayElem,
+	reads, appendTo, refuseBare bool,
+) {
 	if !appendTo {
 		r.assignAssocElems(name, nil, false, refuseBare)
 		if r.ctl != controlNone || r.unspecified {

@@ -26,7 +26,11 @@ import (
 )
 
 func main() {
-	base := flag.String("base", "", "commit to compare the corpus against; the merge base with main if it does not resolve")
+	base := flag.String(
+		"base",
+		"",
+		"commit to compare the corpus against; the merge base with main if it does not resolve",
+	)
 	dir := flag.String("C", ".", "repository to check")
 	flag.Parse()
 
@@ -49,7 +53,11 @@ func main() {
 		fmt.Fprintf(os.Stderr, "corpus-guard: case %q was present at %s and is gone\n", id, r.Base[:min(12, len(r.Base))])
 	}
 	for _, id := range r.Duplicate {
-		fmt.Fprintf(os.Stderr, "corpus-guard: case %q is written twice; one would overwrite the other in the golden record\n", id)
+		fmt.Fprintf(
+			os.Stderr,
+			"corpus-guard: case %q is written twice; one would overwrite the other in the golden record\n",
+			id,
+		)
 	}
 	if len(r.Dropped) > 0 {
 		fmt.Fprintf(os.Stderr, "\n%d case(s) lost: %d at the base, %d now. A merge or a rebase resolved\n"+

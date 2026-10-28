@@ -20,7 +20,8 @@ func TestAnArithStoreRefusalLetsTheExpressionGoOn(t *testing.T) {
 	sh.Stdout, sh.Stderr = &out, &errs
 	src := `a=(1); (( a[-10] = 1 )); echo st=$?; (( a[-10] = 0 )); echo st=$?; echo $(( a[-10] = 5 )); (( b = a[-10] = 3 )); echo b=$b`
 	driver.MainArgs(sh, []string{"bash", "-c", src})
-	if got, want := out.String(), "st=0\nst=1\n5\nb=3\n"; got != want || strings.Count(errs.String(), "a[-10]: bad array subscript") != 4 {
+	if got, want := out.String(), "st=0\nst=1\n5\nb=3\n"; got != want ||
+		strings.Count(errs.String(), "a[-10]: bad array subscript") != 4 {
 		t.Errorf("got %q, %q, want %q and four complaints", got, errs.String(), want)
 	}
 }

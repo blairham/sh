@@ -546,7 +546,12 @@ func alternativesInBody(body []syntax.Span) ([][]syntax.Span, bool) {
 // in that state, which is every body with no expansion behind it. A backslash
 // in such a run is data and not an escape, exactly as the comma cut that made
 // it treats one.
-func alternativesInBodyRead(body []syntax.Span, read func(syntax.Span) bool, deep []bool, deepCloses bool) ([][]syntax.Span, bool) {
+func alternativesInBodyRead(
+	body []syntax.Span,
+	read func(syntax.Span) bool,
+	deep []bool,
+	deepCloses bool,
+) ([][]syntax.Span, bool) {
 	var out [][]syntax.Span
 	depth := 0
 	from := cursor{0, 0}

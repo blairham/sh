@@ -102,7 +102,14 @@ func TestUnboundWordingIsTheDialects(t *testing.T) {
 		return func(r *Runner) { r.Semantics, r.Diagnostics = &sem, &diag }
 	}
 	dg := Diagnostics{UnboundVariable: "%[1]s: measured wording"}
-	if got, _ := run(t, `set -u; echo "$NOPE"`, withDialect(permissive(), dg)); !strings.Contains(got, "NOPE: measured wording") {
+	if got, _ := run(
+		t,
+		`set -u; echo "$NOPE"`,
+		withDialect(permissive(), dg),
+	); !strings.Contains(
+		got,
+		"NOPE: measured wording",
+	) {
 		t.Errorf("custom wording: got %q", got)
 	}
 	if got, _ := run(t, `set -u; echo "$NOPE"`, withDialect(permissive(), Diagnostics{})); !strings.Contains(got, "NOPE") {

@@ -259,7 +259,9 @@ func TestDiagnostics(t *testing.T) {
 	// A denied `set -m` is a remark with the option left off: the wording is
 	// fixed whichever spelling asked, and the zero status keeps it from
 	// being a failure at all.
-	if got, want := diagTable(dash.Diagnostics()).MonitorDenied, "set: can't access tty; job control turned off"; got != want {
+	if got, want := diagTable(
+		dash.Diagnostics(),
+	).MonitorDenied, "set: can't access tty; job control turned off"; got != want {
 		t.Errorf("MonitorDenied = %q, want %q", got, want)
 	}
 	if got := diagTable(dash.Diagnostics()).MonitorDeniedStatus; got != 0 {
@@ -269,7 +271,9 @@ func TestDiagnostics(t *testing.T) {
 	// deciding at startup rather than a builtin being refused: measured with
 	// no terminal on any stream, `<name>: 0: can't access tty; job control
 	// turned off` on `-i script.sh`, `-i -c` and `-i -s` alike.
-	if got, want := diagTable(dash.Diagnostics()).NoJobControlAtStartup, "can't access tty; job control turned off"; got != want {
+	if got, want := diagTable(
+		dash.Diagnostics(),
+	).NoJobControlAtStartup, "can't access tty; job control turned off"; got != want {
 		t.Errorf("NoJobControlAtStartup = %q, want %q", got, want)
 	}
 	if !diagTable(dash.Diagnostics()).NoJobControlAtStartupNamesTheScript {
@@ -399,7 +403,14 @@ func TestDashSpellsItsOwnReasons(t *testing.T) {
 			}
 			var errs bytes.Buffer
 			sem, dg := dash.Semantics(), dash.Diagnostics()
-			r := &interp.Runner{Stderr: &errs, Semantics: &sem, Diagnostics: &dg, Name: "dash", Dir: dir, Dialect: presetDialect()}
+			r := &interp.Runner{
+				Stderr:      &errs,
+				Semantics:   &sem,
+				Diagnostics: &dg,
+				Name:        "dash",
+				Dir:         dir,
+				Dialect:     presetDialect(),
+			}
 			if _, err := r.Run(context.Background(), f); err != nil {
 				t.Fatalf("run: %v", err)
 			}
@@ -466,7 +477,9 @@ func TestPrintfAnswers(t *testing.T) {
 	if got, want := dash.Semantics().PrintfNumberOperand, interp.PrintfNumberLeadingNumber; got != want {
 		t.Errorf("PrintfNumberOperand = %v, want %v", got, want)
 	}
-	if got, want := diagTable(dash.Diagnostics()).PrintfIncompleteNumber, "printf: %[1]s: not completely converted"; got != want {
+	if got, want := diagTable(
+		dash.Diagnostics(),
+	).PrintfIncompleteNumber, "printf: %[1]s: not completely converted"; got != want {
 		t.Errorf("PrintfIncompleteNumber = %q, want %q", got, want)
 	}
 	if got, want := diagTable(dash.Diagnostics()).PrintfNumberOutOfRange, "printf: %[1]s: Result too large"; got != want {
@@ -549,7 +562,14 @@ func TestDashHasNeitherDeclarationName(t *testing.T) {
 		}
 		var out bytes.Buffer
 		s, d := dash.Semantics(), dash.Diagnostics()
-		r := &interp.Runner{Name: preset.Name, Stdout: &out, Stderr: &out, Semantics: &s, Diagnostics: &d, Dialect: presetDialect()}
+		r := &interp.Runner{
+			Name:        preset.Name,
+			Stdout:      &out,
+			Stderr:      &out,
+			Semantics:   &s,
+			Diagnostics: &d,
+			Dialect:     presetDialect(),
+		}
 		dash.Apply(r)
 		status, err := r.Run(context.Background(), f)
 		if err != nil {

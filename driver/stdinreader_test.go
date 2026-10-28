@@ -119,7 +119,12 @@ func TestAReaderIsNotATerminal(t *testing.T) {
 	if driver.Interactively(sh, false) {
 		t.Error("a reader that is not a file was taken for a terminal")
 	}
-	out, _, code := runReaderShell(t, strings.NewReader("case $- in *m*) echo monitor;; *) echo none;; esac\n"), "testsh", "-i")
+	out, _, code := runReaderShell(
+		t,
+		strings.NewReader("case $- in *m*) echo monitor;; *) echo none;; esac\n"),
+		"testsh",
+		"-i",
+	)
 	if code != 0 {
 		t.Fatalf("status %d", code)
 	}

@@ -28,7 +28,11 @@ import (
 // prints its brackets.
 func TestAFailedRenderingCostsTheRenderingAndNotTheScript(t *testing.T) {
 	dir := t.TempDir()
-	out, st := runZsh(t, dir, "setopt promptsubst\ns='${$((nofunc()))+}X'\nprint -r -- \"ONE=[${(%%)s}]\"\nprint -r -- \"TWO=still-running\"\n")
+	out, st := runZsh(
+		t,
+		dir,
+		"setopt promptsubst\ns='${$((nofunc()))+}X'\nprint -r -- \"ONE=[${(%%)s}]\"\nprint -r -- \"TWO=still-running\"\n",
+	)
 	const want = "zsh:3: unknown function: nofunc\n" +
 		"ONE=[]\n" +
 		"TWO=still-running\n"
@@ -45,7 +49,11 @@ func TestAFailedRenderingCostsTheRenderingAndNotTheScript(t *testing.T) {
 // the text in front of it rather than nothing at all.
 func TestAGivenUpRenderingIsWorthWhatItDrew(t *testing.T) {
 	dir := t.TempDir()
-	out, st := runZsh(t, dir, `setopt promptsubst; s='PRE-$((nofunc()))-POST'; print -r -- "ONE=[${(%%)s}]"; print -r -- "TWO=still-running"`)
+	out, st := runZsh(
+		t,
+		dir,
+		`setopt promptsubst; s='PRE-$((nofunc()))-POST'; print -r -- "ONE=[${(%%)s}]"; print -r -- "TWO=still-running"`,
+	)
 	const want = "zsh:1: unknown function: nofunc\n" +
 		"ONE=[PRE-]\n" +
 		"TWO=still-running\n"
@@ -87,7 +95,11 @@ func TestTheEscapeTableStillReadsWhatAGivenUpRenderingDrew(t *testing.T) {
 // inside a file `.` read — so the `print` never runs.
 func TestTheErrorOperatorEndsTheShellAtARendering(t *testing.T) {
 	dir := t.TempDir()
-	out, st := runZsh(t, dir, `setopt promptsubst; s='PRE-${NOPEV?gone}-POST'; print -r -- "ONE=[${(%%)s}]"; print -r -- "TWO=still-running"`)
+	out, st := runZsh(
+		t,
+		dir,
+		`setopt promptsubst; s='PRE-${NOPEV?gone}-POST'; print -r -- "ONE=[${(%%)s}]"; print -r -- "TWO=still-running"`,
+	)
 	const want = "zsh:1: NOPEV: gone\n"
 	if out != want {
 		t.Errorf("out = %q, want %q: the operand this shell calls a request to stop is not caught here", out, want)
@@ -104,7 +116,11 @@ func TestTheErrorOperatorEndsTheShellAtARendering(t *testing.T) {
 // and still swallow the `print`.
 func TestABadSubstitutionInARenderingStillLetsTheCommandRun(t *testing.T) {
 	dir := t.TempDir()
-	out, st := runZsh(t, dir, `setopt promptsubst; s='PRE-${x@ZZ}-POST'; print -r -- "ONE=[${(%%)s}]"; print -r -- "TWO=still-running"`)
+	out, st := runZsh(
+		t,
+		dir,
+		`setopt promptsubst; s='PRE-${x@ZZ}-POST'; print -r -- "ONE=[${(%%)s}]"; print -r -- "TWO=still-running"`,
+	)
 	const want = "zsh:1: bad substitution\n" +
 		"ONE=[PRE-]\n" +
 		"TWO=still-running\n"
@@ -122,7 +138,11 @@ func TestABadSubstitutionInARenderingStillLetsTheCommandRun(t *testing.T) {
 // boundary's.
 func TestPrintPIsTheSameBoundary(t *testing.T) {
 	dir := t.TempDir()
-	out, st, errs := runZshSplit(t, dir, `setopt promptsubst; print -P 'PRE-$((nofunc()))-POST'; print -r -- "TWO=still-running"`)
+	out, st, errs := runZshSplit(
+		t,
+		dir,
+		`setopt promptsubst; print -P 'PRE-$((nofunc()))-POST'; print -r -- "TWO=still-running"`,
+	)
 	const want = "PRE-\nTWO=still-running\n"
 	if out != want || st != 0 {
 		t.Errorf("stdout = %q, status %d, want %q at 0", out, st, want)

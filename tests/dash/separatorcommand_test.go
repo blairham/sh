@@ -61,7 +61,10 @@ func TestASeparatorAtTheHeadOfACompoundBodyIsRefused(t *testing.T) {
 			t.Errorf("%q parsed, want a refusal", src)
 			continue
 		}
-		if got := diagTable(dash.Diagnostics()).ForScript().ParseDiagnostic("s.sh", "", err, src); got != "s.sh: 1: Syntax error: \";\" unexpected\n" {
+		if got := diagTable(
+			dash.Diagnostics(),
+		).ForScript().
+			ParseDiagnostic("s.sh", "", err, src); got != "s.sh: 1: Syntax error: \";\" unexpected\n" {
 			t.Errorf("%q:\n got %q\nwant %q", src, got, "s.sh: 1: Syntax error: \";\" unexpected\n")
 		}
 	}

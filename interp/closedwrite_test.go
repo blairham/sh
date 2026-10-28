@@ -210,7 +210,12 @@ func TestExportAndReadonlyWithNoOperandsList(t *testing.T) {
 	sem.ExportListing = DeclareListingCommandWord
 	sem.ReadonlyListing = DeclareListingCommandWord
 	sem.DeclareValueQuoting = ListingQuoteWhenNeededPlain
-	out, _, _ := runClosedWrite(t, `export V=1; readonly R=2; export; echo --; export -p; echo --; readonly; echo --; readonly -p`, sem, diag)
+	out, _, _ := runClosedWrite(
+		t,
+		`export V=1; readonly R=2; export; echo --; export -p; echo --; readonly; echo --; readonly -p`,
+		sem,
+		diag,
+	)
 	parts := strings.Split(out, "--\n")
 	if len(parts) != 4 {
 		t.Fatalf("stdout = %q, want four listings", out)

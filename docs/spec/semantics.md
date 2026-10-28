@@ -25130,9 +25130,64 @@ joins its empty value with the rest: `[  9]` after reading both `*` and
 `@`. bash 5.3 and zsh 5.9.2 leave the table unchanged. The axis is asked
 only when the key is missing from a stored association.
 
-An indexed array read the same way is recorded but not modeled. In ksh93,
-after `: $(( b[5] ))` the array counts one more element, but
-`typeset -p` does not list it. That is a state rather than a value.
+**The indexed "allocated, unset" slot, measured whole and not modeled (#6367, #6536).**
+Two routes leave this state behind in ksh93u+ 2012-08-01, and they leave the
+same state: an arithmetic read of a missing indexed element (`a=(1 2);
+: $(( a[5] ))`) and a valueless subscripted declaration past the first element
+over a name holding a value (`x=s; typeset x[1]`, under `readonly` and
+`export` alike, and `x=(a b); typeset x[3]`). Measured 2026-10-15 and
+2026-10-27 under `env -i PATH=/usr/bin:/bin`, `-c`:
+
+| observation | `a=(1 2); : $(( a[5] ))` | `x=s; typeset x[1]` | `x=(a b); typeset x[3]` |
+| --- | --- | --- | --- |
+| `${#name[@]}` | `3` | `2` | `3` |
+| `"${name[k]-u}"` | empty (set) | empty (set) | — |
+| `"${name[k]+set}"` | **empty (unset)** | **empty (unset)** | — |
+| `[[ -v name[k] ]]` | false | false | — |
+| `${!name[@]}` | `0 1` | `0 1` | `0 1` |
+| `"${name[@]}"`, as words | `1 2` (two) | `s` and `` (**two**) | `a b` (two) |
+| `typeset -p` | `a=([0]=1 [1]=2)` | `typeset -a x=(s )` | `([0]=a [1]=b)` |
+| `name+=(z)` lands at | `[6]`, count `4` | `[2]`, listed `(s  z)` | — |
+| `unset 'name[k]'`, then count | `2` | `1`, listed `(s)` | — |
+| a later `name[k]=v` | a real element | `(s q)`, count `2` | — |
+
+So the slot is counted and holds the append position, `-` calls it set while
+`+` and `-v` call it unset, the key listing never shows it, and whether the
+dense listing and the quoted words show it as an empty element depends on
+whether the array has a hole: `(s )` and `s`+`` for the dense `x[1]`, nothing
+for the sparse `x[3]` or `a[5]`. That is the listing walking slots 0..max in
+one case and the set elements in the other, which is a fact about the
+reference's own two walks and not a value a script can read.
+
+No single-value model matches more rows than it breaks. Creating a real empty
+element fixes the count, the `-` row and the append position, and breaks
+`+`, `-v`, the key listing and `typeset -p`, and in the sparse case it adds a
+word to `"${name[@]}"` — the argument count of every loop over the array. A
+third element state — allocated, unset — is the only faithful model, and it
+touches every reader of the indexed store to reproduce what looks like an
+allocated slot with no value flag rather than a designed behavior. Both
+routes are therefore **recorded here and not modeled**: this shell leaves the
+array as it was, which is also bash 5.3.20's answer for `declare x[1]` over a
+scalar (`declare -a x=([0]="s")`, count 1) and for the arithmetic read, and
+zsh 5.9.2 has neither route (`typeset x[1]` is `no matches found: x[1]`). The
+coordinator's call under the maintainer's delegated pattern, 2026-10-27.
+
+**One more row of the declaration route is recorded with it, because it is
+the same slot read twice.** A valueless subscripted operand's subscript is
+evaluated twice by ksh93's declaration words — `i=0; readonly "c[i++]"`
+leaves `i=2` — and the two readings land on different elements. The first
+decides the shape and the second is what is declared: with `i=0` the first
+reads element `0`, the second element `1`, and **nothing** is listed or
+frozen (`c[1]=z` is taken at 0 afterwards; so is `c=z` over a standing
+`c=`); with `i=1` the first reads `1` and the second `2`, and the result is
+`typeset -r -a c=([0]=)`, frozen, exactly as `readonly "c[1]"` leaves it;
+`readonly "c[++i]"` from `i=0` is the same `([0]=)`; and `readonly
+"c[i+=0]"` — one element both times — is `typeset -r c`, frozen. `typeset`
+and `export` leave nothing for the `i=0` case too. This shell evaluates the
+subscript twice as well (`i=2`) and lists `typeset -r c`, frozen: the first
+reading's shape, declared. Not modeled, for the same reason as the rows
+above — the mismatch is a declared element over a scalar shape, which is the
+slot this note is about.
 
 **`ArithIntegerOperatorRefusesFloat`** — bash unspecified · dash unspecified · ksh93 yes · zsh no
 

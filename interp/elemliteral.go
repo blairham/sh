@@ -260,6 +260,11 @@ func (r *Runner) spliceWordsIntoElement(a *syntax.Assign, subscript func() strin
 	if outcome == spanReported {
 		return
 	}
+	// The splicing dialect is asked the same question at the same point as
+	// the nesting one, and answers no. See interp/frozenliteral.go (#6833).
+	if r.frozenLiteralTaken(a, false, false) {
+		defer r.storeThroughTheFreeze(a.Name)()
+	}
 	if outcome == spanResolved {
 		// A *range* of elements rather than one: the words replace the whole
 		// span, so `a=(1 2 3); a[2,3]=(x y)` is three elements and not four.

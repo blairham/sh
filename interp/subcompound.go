@@ -77,6 +77,24 @@ func (r *Runner) assignSubscriptedCompound(ctx context.Context, a *syntax.Assign
 	if !ok {
 		return
 	}
+	// The empty list over a frozen container, held for this store by the
+	// shell that takes it everywhere but under a table's missing key:
+	// `b=(x y); readonly b; b[1]=()` is `(x ())` there and `a[k]=()` under a
+	// missing key is `a[k]: is read only`. See interp/frozenliteral.go.
+	keyThere := true
+	if at.assoc {
+		_, keyThere = r.assocsAt(a.Name)[at.sub]
+	}
+	if r.frozenLiteralTaken(a, at.assoc, keyThere) {
+		defer r.storeThroughTheFreeze(a.Name)()
+	} else if r.heldFreeze.assign == a {
+		if at.assoc && r.diag().FrozenElementRefusalNamesTheElement {
+			r.heldFreeze.spoken = a.Name + "[" + at.sub + "]"
+		}
+		if r.refuseTheHeldFreeze(a) {
+			return
+		}
+	}
 	space := elementNamespace(a.Name, at.sub)
 	if !r.fillElementCompound(ctx, space, a) {
 		return

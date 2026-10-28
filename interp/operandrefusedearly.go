@@ -159,6 +159,17 @@ func (r *Runner) refuseFrozenOperandValuesEarly(argv []string) bool {
 			// already answers both.
 			return false
 		}
+		if a.assign.Index != nil && r.attrHas(a.assign.Name, attrReadonly) &&
+			r.frozenLiteralWaitsForItsStore() {
+			// An element literal the shell stores through the freeze —
+			// everywhere but under a table's missing key, which only the
+			// store can tell. So the store answers, in that shell. See
+			// interp/frozenliteral.go (#6833).
+			return false
+		}
+		if r.unspecified {
+			return true
+		}
 		if r.attrHas(a.assign.Name, attrReadonly) {
 			frozen = a.assign.Name
 			if a.assign.Index != nil && len(a.assign.Leading) == 0 &&

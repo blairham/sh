@@ -101,6 +101,17 @@ func (r *Runner) refuseAFrozenAssignment(a *syntax.Assign) (frozenOutcome, strin
 		return freezeRefusedIt, name
 	}
 	switch {
+	case (a.Operand && a.IsArray && a.Members == nil || a.Members != nil && len(a.Members) == 0) &&
+		a.Index != nil && r.frozenLiteralWaitsForItsStore():
+		// A declaration's element literal, and the empty list `b[1]=()`
+		// the grammar reads as a body, in the shell that stores the literal
+		// through the freeze everywhere but under a table's missing key —
+		// which only the store can tell, so the refusal waits there. A
+		// compound **body** under the subscript is not a literal and is
+		// refused up front as it always was: `readonly c; typeset
+		// c[1]=(a=1)` is `c: is read only` in that shell. See
+		// interp/frozenliteral.go (#6833).
+		return freezeWaitsForTheStore, name
 	case a.Operand && a.IsArray && a.Index != nil && len(a.Leading) == 0 &&
 		r.diag().FrozenElementRefusalNamesTheElement && r.assocDeclared(name):
 		// A declaration's element literal under a table's key, refused under

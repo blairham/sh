@@ -623,6 +623,9 @@ func Semantics() interp.Semantics {
 	// subscript reaches a reading that takes its quotes off here. See the field.
 	// See interp.Semantics.ArithStoreIntoAFrozenTableIsTaken (#6826).
 	s.ArithStoreIntoAFrozenTableIsTaken = interp.Yes
+	// The splice `b[1]=(p)` over a frozen `b` is `read-only variable: b`.
+	// See interp.Semantics.FrozenContainerTakesAnElementLiteral (#6833).
+	s.FrozenContainerTakesAnElementLiteral = interp.No
 	// A negative exponent is a float answer here, not a refusal: `2**-1`
 	// is 0.5.
 	s.ArithNegativeExponentIsError = interp.No

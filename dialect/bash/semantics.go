@@ -1423,6 +1423,7 @@ func Semantics() interp.Semantics {
 	s.ArithKeyReadCreatesTheElement = interp.No
 	// See interp.Semantics.ArithStoreIntoAFrozenTableIsTaken (#6826).
 	s.ArithStoreIntoAFrozenTableIsTaken = interp.No
+	s.FrozenContainerTakesAnElementLiteral = interp.No
 	// See interp.Semantics.ArithSubscriptDollarSingleIsDecoded (#6773).
 	s.ArithSubscriptDollarSingleIsDecoded = interp.Yes
 	// unanswered FloatLetterChangeRereadsTheRendering: this shell spells

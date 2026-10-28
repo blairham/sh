@@ -29590,6 +29590,68 @@ Pinned by `declare/a-subscripted-operand-to-a-declaration`,
 `declare/an-exported-subscripted-operand` and
 `local/a-subscripted-operand-to-local`.
 
+**`FrozenContainerTakesAnElementLiteral`** — bash no · dash no · ksh93 **yes** · zsh no
+
+Stores an element **literal** — `b[1]=(p)`, a chain's `r[1][2]=(p)`, a
+declaration's `typeset b[1]=(p)`, and the empty list `b[1]=()` — into a
+frozen indexed array and under a frozen table's key, where every scalar
+store to the same element is refused by the freeze. One shape is refused
+in every column that has the construct: a literal written **directly**
+under a key the frozen table does not have.
+
+ksh93 alone. Measured 2026-10-16 and 2026-10-27 on ksh93u+ 2012-08-01,
+`-c`, each followed by `typeset -p`:
+
+| written | ksh93u+ |
+| --- | --- |
+| `b=(x y); readonly b; b[1]=(p)` | st=0, `typeset -r -a b=(x (p) )` |
+| `typeset -a b; readonly b; b[1]=(p)` | st=0, `([1]=(p) )` |
+| `readonly b; b[1]=(p)` | st=0, the same |
+| `b=(x y); readonly b; b[5]=(p)` | st=0, `[5]=(p)` added |
+| `b=(x y); readonly b; b[1]+=(p)` | st=0, `(x (p) )` |
+| `b=(x y); readonly b; b[1]=()` | st=0, `(x ())` |
+| `b=(x y); readonly b; typeset b[1]=(p)` | st=0 — `typeset -a`, `export` and `readonly` alike |
+| `readonly r; r[1][2]=(p)` | st=0, `([1]=([2]=(p) ) )` |
+| `typeset -A a; a[k]=1; readonly a; a[k]=(p)` | st=0, `([k]=(p) )` |
+| `typeset -A a; readonly a; a[k][1]=(p)` | st=0, `([k]=([1]=(p) ) )` |
+| `typeset -A a; readonly a; a[k]=(p)` | `a[k]: is read only` |
+| `typeset -A a; readonly a; a[k]=()` | `a[k]: is read only` |
+| `b=(x y); readonly b; b[1]=p` | `b: is read only` |
+| `b=(x y); readonly b; b[1][2]=z` | `b[1]: is read only` |
+| `b=(x y); readonly b; b=(p)` | `b: is read only` |
+| `readonly c; typeset c[1]=(a=1)` | `c: is read only` — a compound body is not a literal |
+
+The value is expanded first either way: `b[$(echo S >&2; echo 1)]=(p
+$(echo V >&2))` writes S and V and stores, and the refused table row
+writes V and then its sentence. So the freeze is asked at the literal's
+store, which is where this is answered — and that moves a declaration's
+element literal, which the other words refuse ahead of the command, to its
+store in this shell.
+
+A chain ending in a **scalar** is the same hole one level down, and is
+read with it: the store goes through where the chain's root is a table's
+standing key or an element holding an array of its own — `a[k]=1;
+readonly a; a[k][1]=z` is `([k]=(1 z) )` and `r=(x y); r[1]=(p q);
+readonly r; r[1][0]=z` is `(x (z q) )` — and is refused where the root is
+missing or an indexed scalar, which the two chain rows above are.
+
+zsh 5.9.2 reads `b[1]=(p)` as a splice and refuses it over a frozen `b` as
+`read-only variable: b` — one element, a declaration's, and a range alike,
+with the unfrozen control splicing `( p y )` — so the question is reached
+on its store too and answered no. bash 5.3.20 refuses the list as `cannot
+assign list to array member` before any freeze is consulted, and dash and
+BusyBox ash have no arrays, so none of the three reaches it.
+
+This looks like a hole in ksh93's freeze rather than a design, and
+modeling it lets a script write through `readonly` in that dialect. It is
+modeled because the ksh dialect's job is to be ksh93, the shape is
+measured on every route, and the other dialects' answers are measured
+rather than inherited: the coordinator's call under the maintainer's
+delegated pattern, 2026-10-27 (#6833).
+
+Pinned by `tests/ksh/frozenliteral_test.go` and
+`tests/zsh/frozenliteral_test.go`.
+
 **`DeclareListing`** — bash DeclareListingClustered · dash DeclarationListingUnspecified · ksh93 DeclareListingBareAssignments · zsh DeclareListingExportSpelled
 
 Is the shape of what `declare -p` and `typeset -p` write back. Three

@@ -5554,6 +5554,44 @@ type Semantics struct {
 	// where a `return 4` shows 4 (#6836). ksh93u+ (`function f`) shows 3.
 	FunctionExitTrapReadsZeroOnAnExit Answer
 
+	// ExitTrapAfterAGiveUpSeesEarlierStatus shows an EXIT trap that runs
+	// because the shell gave up over an error it reported — a division by
+	// zero, a readonly reassignment, an unset name under `set -u`, a
+	// `${x?word}`, a builtin's usage complaint, a substitution that would
+	// not parse — the `$?` from before the failing command rather than the
+	// error's own status, while the shell, or the caller of a `function`
+	// scope, still gets the error's. Measured 2026-10-27 on ksh93u+
+	// 2012-08-01 by `-c`, a script file and standard input alike, with
+	// `(exit 5)` setting the earlier status (#6873):
+	//
+	//	function f { trap 'echo ft=$?' EXIT; (exit 5); echo $((1/0)); }; f   ft=5, caller 1
+	//	… (exit 7); : ${q?b}                                                   ft=7, caller 1
+	//	… readonly r=1; r=2                                                    ft=0, caller 1
+	//	… set -u; : $nosuch                                                    ft=0, caller 1
+	//	… set -o nosuch                                                        ft=5, caller 2
+	//	… v=`echo hi; for`                                                     ft=5, caller 3
+	//	… . ./nosuchfile                                                       ft=5, caller 1
+	//	… true && echo $((1/0))                                                ft=0
+	//	… if true; then echo $((1/0)); fi                                      ft=0
+	//	trap 'echo st=$?' EXIT; (exit 5); echo $((1/0))   (the shell's own)   st=5, exit 1
+	//	trap 'exit' EXIT; (exit 5); echo $((1/0))                              exit 1
+	//
+	// So it is `$?` as it stood when the failing command began — `true`'s 0
+	// and not the 5 before the list — and a bare `exit` in the shell's own
+	// trap still reports the error's status. An error that reached the
+	// frame through something that completed on its account — a `function`
+	// call that caught it, an `eval`, a `$( … )` — arrives as that
+	// construct's status and is `$?` already: `function g { set -o nosuch;
+	// }` called from f shows f's trap 2, and `g() { (exit 6); echo
+	// $((1/0)); }` shows it 6, because a `()` call is not a scope there.
+	//
+	// ksh93 alone. bash 5.3 and 3.2 show the error's own status (1, and 127
+	// for `${q?b}`) where the error ends the shell at all; dash and BusyBox
+	// ash 1.37.0 show 2; zsh 5.9.2 shows 1 for `${q?b}` and a readonly
+	// reassignment, and its arithmetic error leaves `$?` untouched for the
+	// shell as well as the trap, which is not this.
+	ExitTrapAfterAGiveUpSeesEarlierStatus Answer
+
 	// SignalHandlerSeesEarlierStatus shows a signal handler the status from
 	// before the command that triggered it rather than that command's own.
 	// zsh alone: after `false; kill -INT $$`, zsh's handler reads 1 where
@@ -35214,6 +35252,10 @@ func PosixSemantics() Semantics {
 		// descriptor it is. ksh93 says otherwise itself.
 		InteractiveRewindableStdinIsAScript: No,
 		FunctionExitTrapReadsZeroOnAnExit:   No,
+		// An EXIT trap after a fatal error reads the error's status, as the
+		// shell leaves with it: bash, dash, BusyBox ash and zsh. ksh93 says
+		// otherwise itself.
+		ExitTrapAfterAGiveUpSeesEarlierStatus: No,
 		// A `return` typed at a prompt with nothing to return from ends the
 		// session where it ends a script: ksh93, dash and BusyBox ash. zsh
 		// keeps the session and says so itself.

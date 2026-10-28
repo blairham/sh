@@ -38,7 +38,7 @@ func TestTheDisowningOperatorIsNamedByItsPipeSpelling(t *testing.T) {
 			t.Errorf("%q parsed; this shell refuses it", src)
 			continue
 		}
-		if got := zsh.Diagnostics().ParseFailure(err); got != want {
+		if got := diagTable(zsh.Diagnostics()).ParseFailure(err); got != want {
 			t.Errorf("%q:\n got %q\nwant %q", src, got, want)
 		}
 	}
@@ -73,7 +73,7 @@ func TestAWordSpelledLikeTheOperatorKeepsItsOwnSpelling(t *testing.T) {
 			t.Errorf("%q parsed; this shell refuses it", tc.src)
 			continue
 		}
-		if got := zsh.Diagnostics().ParseFailure(err); got != tc.want {
+		if got := diagTable(zsh.Diagnostics()).ParseFailure(err); got != tc.want {
 			t.Errorf("%q:\n got %q\nwant %q", tc.src, got, tc.want)
 		}
 	}
@@ -101,7 +101,7 @@ func TestTheOtherPairedOperatorsKeepTheirSpelling(t *testing.T) {
 			t.Errorf("%q parsed; this shell refuses it", tc.src)
 			continue
 		}
-		if got := zsh.Diagnostics().ParseFailure(err); got != tc.want {
+		if got := diagTable(zsh.Diagnostics()).ParseFailure(err); got != tc.want {
 			t.Errorf("%q:\n got %q\nwant %q", tc.src, got, tc.want)
 		}
 	}

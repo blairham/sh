@@ -41,7 +41,7 @@ func TestARedirectionBehindAnArithmeticCommandIsRefused(t *testing.T) {
 			t.Errorf("%q parsed, want a refusal", tc.src)
 			continue
 		}
-		got := ksh.Diagnostics().ParseFailure(err)
+		got := diagTable(ksh.Diagnostics()).ParseFailure(err)
 		want := tc.want
 		if len(want) < len("syntax") || want[:6] != "syntax" {
 			want = "syntax error at line 1: " + want

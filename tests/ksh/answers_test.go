@@ -262,16 +262,16 @@ func TestDiagnosticAnswersTheInterpTestsRelyOn(t *testing.T) {
 // after the first, and a script names line 1 like any other — the reason
 // ScriptLocation exists.
 func TestScriptDiagnosticsNameTheScript(t *testing.T) {
-	if got := ksh.Diagnostics().Report("s", 2, "m"); got != "s: line 2: m" {
+	if got := diagTable(ksh.Diagnostics()).Report("s", 2, "m"); got != "s: line 2: m" {
 		t.Errorf("-c: %q, want %q", got, "s: line 2: m")
 	}
-	if got := ksh.Diagnostics().Report("s", 1, "m"); got != "s: m" {
+	if got := diagTable(ksh.Diagnostics()).Report("s", 1, "m"); got != "s: m" {
 		t.Errorf("-c line 1: %q, want %q", got, "s: m")
 	}
-	if got := ksh.Diagnostics().ForScript().Report("s", 1, "m"); got != "s: line 1: m" {
+	if got := diagTable(ksh.Diagnostics()).ForScript().Report("s", 1, "m"); got != "s: line 1: m" {
 		t.Errorf("script line 1: %q, want %q — a script names its first line", got, "s: line 1: m")
 	}
-	if got := ksh.Diagnostics().ForScript().Report("s", 2, "m"); got != "s: line 2: m" {
+	if got := diagTable(ksh.Diagnostics()).ForScript().Report("s", 2, "m"); got != "s: line 2: m" {
 		t.Errorf("script: %q, want %q", got, "s: line 2: m")
 	}
 }

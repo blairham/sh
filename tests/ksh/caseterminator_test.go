@@ -53,7 +53,7 @@ func TestAnArmlessCaseNeedsANewlineHere(t *testing.T) {
 			t.Errorf("%q parsed; this shell refuses it", tc.src)
 			continue
 		}
-		if got := ksh.Diagnostics().ParseFailure(err); got != tc.want {
+		if got := diagTable(ksh.Diagnostics()).ParseFailure(err); got != tc.want {
 			t.Errorf("%q:\n got %q\nwant %q", tc.src, got, tc.want)
 		}
 	}
@@ -129,7 +129,7 @@ func TestAnUnterminatedCaseNamesTheArmsTerminatorHere(t *testing.T) {
 			t.Errorf("%q parsed; this shell refuses it", c.src)
 			continue
 		}
-		if got := ksh.Diagnostics().ParseFailure(err); got != c.want {
+		if got := diagTable(ksh.Diagnostics()).ParseFailure(err); got != c.want {
 			t.Errorf("%q:\n got %q\nwant %q", c.src, got, c.want)
 		}
 	}
@@ -149,7 +149,7 @@ func TestANestedCaseCarriesItsOwnArmTerminatorHere(t *testing.T) {
 			t.Errorf("%q parsed; this shell refuses it", c.src)
 			continue
 		}
-		if got := ksh.Diagnostics().ParseFailure(err); got != c.want {
+		if got := diagTable(ksh.Diagnostics()).ParseFailure(err); got != c.want {
 			t.Errorf("%q:\n got %q\nwant %q", c.src, got, c.want)
 		}
 	}
@@ -173,7 +173,7 @@ func TestABareNegationArmIsTheTerminatorsHere(t *testing.T) {
 			t.Errorf("%q parsed; this shell refuses it", c.src)
 			continue
 		}
-		if got := ksh.Diagnostics().ParseFailure(err); got != c.want {
+		if got := diagTable(ksh.Diagnostics()).ParseFailure(err); got != c.want {
 			t.Errorf("%q:\n got %q\nwant %q", c.src, got, c.want)
 		}
 	}

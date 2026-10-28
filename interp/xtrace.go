@@ -420,23 +420,23 @@ func (r *Runner) traceCommand(words []string) {
 		return
 	}
 	d := r.diag()
-	for _, line := range r.traceOperandsBefore(words, *d) {
+	for _, line := range r.traceOperandsBefore(words, d) {
 		// The column that takes a declaration's operands off the command
 		// line writes them ahead of it, one line each. See
 		// interp/xtracedeclaration.go.
-		r.traceLine(line, *d)
+		r.traceLine(line, d)
 	}
-	for _, line := range r.traceArrayOperandsBefore(*d) {
+	for _, line := range r.traceArrayOperandsBefore(d) {
 		// And an operand whose value is a parenthesized list is a question
 		// of its own, because one column moves it and leaves a scalar where
 		// it was written. See interp/xtracearrayoperand.go.
-		r.traceLine(line, *d)
+		r.traceLine(line, d)
 	}
-	tail := []string{r.tracePrefix() + strings.Join(r.traceCommandWords(words, *d), " ") + "\n"}
-	for _, line := range r.traceOperandsAfter(words, *d) {
+	tail := []string{r.tracePrefix() + strings.Join(r.traceCommandWords(words, d), " ") + "\n"}
+	for _, line := range r.traceOperandsAfter(words, d) {
 		// And the column that leaves them where they were writes them again
 		// behind it, for two utilities and no others.
-		tail = append(tail, r.traceLineText(line, *d))
+		tail = append(tail, r.traceLineText(line, d))
 	}
 	if r.holdCommandTrace(tail) {
 		// A compound-variable operand is performed in front of the command
@@ -452,7 +452,7 @@ func (r *Runner) traceCommand(words []string) {
 // traceCommandWords is one command's words, quoted for a trace. Split out of
 // traceCommand because a prefixed command's line is built elsewhere and has
 // to quote its words the same way — see Runner.tracePrefixAndCommand.
-func (r *Runner) traceCommandWords(words []string, d Diagnostics) []string {
+func (r *Runner) traceCommandWords(words []string, d *Diagnostics) []string {
 	quoted := make([]string, len(words))
 	split := r.traceOperandSplitsBefore(words, d)
 	from := r.declarationOperandsFrom()
@@ -526,7 +526,7 @@ func (r *Runner) traceCommandWords(words []string, d Diagnostics) []string {
 // quotes inside the brackets, `+ m['a b']=v` — so the quoting is gated on the
 // field that says the halves are written apart rather than applied here for
 // everyone.
-func (r *Runner) traceAssignmentOperand(w string, d Diagnostics) (string, bool) {
+func (r *Runner) traceAssignmentOperand(w string, d *Diagnostics) (string, bool) {
 	target, value, ok := strings.Cut(w, "=")
 	if !ok || target == "" {
 		return "", false
@@ -574,7 +574,7 @@ func (r *Runner) traceAssignments(assigns []*syntax.Assign, values []string, pre
 			// not one, and `b=()` is none at all.
 			continue
 		}
-		if lines, ok := r.traceLiteralAsElementWrites(a, prepared[i], *d); ok {
+		if lines, ok := r.traceLiteralAsElementWrites(a, prepared[i], d); ok {
 			// A literal whose elements name where their values go, in the
 			// column that traces it as the writes it performs rather than as
 			// the literal it was written as. Its own lines, so an assignment
@@ -583,12 +583,12 @@ func (r *Runner) traceAssignments(assigns []*syntax.Assign, values []string, pre
 			elementLines = append(elementLines, lines...)
 			continue
 		}
-		words = append(words, r.traceAssign(a, values[i], prepared[i], *d))
+		words = append(words, r.traceAssign(a, values[i], prepared[i], d))
 	}
 	if len(elementLines) > 0 {
 		r.awaitTraceTurn()
 		for _, line := range elementLines {
-			r.traceLine(line, *d)
+			r.traceLine(line, d)
 		}
 		r.releaseTraceTurn()
 	}
@@ -599,7 +599,7 @@ func (r *Runner) traceAssignments(assigns []*syntax.Assign, values []string, pre
 	}
 	r.awaitTraceTurn()
 	defer r.releaseTraceTurn()
-	r.traceLine(strings.Join(words, " "), *d)
+	r.traceLine(strings.Join(words, " "), d)
 }
 
 // traceAssign spells one assignment: the target as the script wrote it, and
@@ -621,7 +621,7 @@ func (r *Runner) traceAssignments(assigns []*syntax.Assign, values []string, pre
 // deliberately not modeled: evaluating the subscript here would evaluate it a
 // second time, with `a[$((i++))]=v` incrementing twice, which is exactly the
 // double run #1915 fixed for a scalar's value. Tracked as #1959.
-func (r *Runner) traceAssign(a *syntax.Assign, value string, e *expandedAssign, d Diagnostics) string {
+func (r *Runner) traceAssign(a *syntax.Assign, value string, e *expandedAssign, d *Diagnostics) string {
 	if e != nil && e.nested != nil {
 		sub := e.subscript
 		if len(e.chain) > 1 {
@@ -728,7 +728,7 @@ func traceAssignTarget(a *syntax.Assign, e *expandedAssign, quote func(string) s
 // needs no expansion of its own — and why the subscript is the value it came
 // to rather than the text, with `a=([$((i++))]=c)` stepping `i` exactly once.
 // See Semantics.TraceSubscriptedArrayLiteralIsElementAssignments.
-func (r *Runner) traceLiteralAsElementWrites(a *syntax.Assign, e *expandedAssign, d Diagnostics) ([]string, bool) {
+func (r *Runner) traceLiteralAsElementWrites(a *syntax.Assign, e *expandedAssign, d *Diagnostics) ([]string, bool) {
 	if !a.IsArray || e == nil || !e.elemsSet || len(e.elems) == 0 {
 		return nil, false
 	}
@@ -783,7 +783,7 @@ func (r *Runner) traceLiteralAsElementWrites(a *syntax.Assign, e *expandedAssign
 // expanding the elements to print them would expand them twice. Tracked as
 // #1959.
 func (r *Runner) traceArrayLiteral(elems []*syntax.ArrayElem, parsed []literalElem, style TraceArrayLiteral,
-	d Diagnostics, l syntax.Layout,
+	d *Diagnostics, l syntax.Layout,
 ) string {
 	var words []string
 	for i, e := range elems {
@@ -1153,14 +1153,14 @@ func tracePatternLiteralsEscaped(pat string) string {
 	return b.String()
 }
 
-func (r *Runner) traceLine(line string, d Diagnostics) {
+func (r *Runner) traceLine(line string, d *Diagnostics) {
 	r.tracef("%s", r.traceLineText(line, d))
 }
 
 // traceLineText is the text traceLine would write, without choosing a moment
 // for it. Split out because a line that is held has to be rendered where it
 // stands and written somewhere else — see interp/compoundoperandorder.go.
-func (r *Runner) traceLineText(line string, d Diagnostics) string {
+func (r *Runner) traceLineText(line string, d *Diagnostics) string {
 	if d.TraceStyle == TraceNameLine {
 		// zsh puts a space after an assignment-only line and nowhere else.
 		// Measured rather than reasoned about; it is decoration, and this
@@ -1862,7 +1862,7 @@ func (r *Runner) tracef(format string, args ...any) {
 // one of those the same way. A backquoted body is written as written there
 // too. The dialects that write a substitution back as written leave the
 // listing's readers nil, so this copies nothing for them (#6679).
-func (r *Runner) traceWordLayout(d Diagnostics) syntax.Layout {
+func (r *Runner) traceWordLayout(d *Diagnostics) syntax.Layout {
 	l := r.wordAsWrittenLayout()
 	if d.TraceArrayLiteralDecodesAnsiCQuoting {
 		l.AnsiCQuotedWordIsItsValue = r.AnsiCValue
@@ -1918,7 +1918,7 @@ func (r *Runner) traceEmptyCommand() {
 // not quoted on this route as it is for a string value. The same element
 // written inside a table literal, `a=([k]=(x y))`, is the same line. This
 // wrote no line at all for the first five (#6684).
-func (r *Runner) traceNestedElementWrite(name, sub string, appended bool, value Element, d Diagnostics) string {
+func (r *Runner) traceNestedElementWrite(name, sub string, appended bool, value Element, d *Diagnostics) string {
 	op := "="
 	if appended {
 		op = "+="

@@ -130,7 +130,7 @@ ro=(x y)`)
 // there could never be reached now that the letter is claimed, and would say
 // the opposite of what the shell does.
 func TestTheArrayLetterIsNoLongerCalledMissingHere(t *testing.T) {
-	if got := ksh.Diagnostics().UnimplementedOptionLetters["set"]; strings.ContainsRune(got, 'A') {
+	if got := diagTable(ksh.Diagnostics()).UnimplementedOptionLetters["set"]; strings.ContainsRune(got, 'A') {
 		t.Errorf("UnimplementedOptionLetters[set] = %q, which still claims -A is "+
 			"missing", got)
 	}

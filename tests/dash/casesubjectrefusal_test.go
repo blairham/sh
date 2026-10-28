@@ -42,7 +42,7 @@ func TestACaseSubjectRefusalNamesTheTokenAndExpectsABareWord(t *testing.T) {
 			t.Errorf("%q parsed, want a refusal", tc.src)
 			continue
 		}
-		got := dash.Diagnostics().ParseDiagnostic("<shell>", "", err, tc.src)
+		got := diagTable(dash.Diagnostics()).ParseDiagnostic("<shell>", "", err, tc.src)
 		if !strings.Contains(got, tc.want) {
 			t.Errorf("%q said %q, want %q", tc.src, got, tc.want)
 		}

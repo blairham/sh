@@ -6163,7 +6163,8 @@ func Diagnostics() interp.Diagnostics {
 		TimeFormatBadDirective: "%[2]s: bad format character in time format",
 		TimeBare:               interp.TimeBareShellUserSys,
 	}
-	return withPromptWordings(d)
+	withPromptWordings(&d)
+	return d
 }
 
 // withPromptWordings fills in what this shell writes about a parse failure at
@@ -6188,7 +6189,7 @@ func Diagnostics() interp.Diagnostics {
 // Each pair is built by one call so the two halves cannot drift: a prompt
 // sentence written out beside its script sentence is a second copy to keep in
 // step, and the rule relating them is exactly one clause.
-func withPromptWordings(d interp.Diagnostics) interp.Diagnostics {
+func withPromptWordings(d *interp.Diagnostics) {
 	d.SyntaxUnexpected, d.PromptSyntaxUnexpected = parseWording(3, "`%[1]s' unexpected")
 	// An arithmetic command in a position the grammar has none for is named
 	// by the `((` that opened it here, where bash and zsh name the expression
@@ -6286,7 +6287,6 @@ func withPromptWordings(d interp.Diagnostics) interp.Diagnostics {
 	// `<<\EOF` are all `<<EOF`, and a descriptor in front of the operator is
 	// not written. See syntax.Dialect.HeredocBodyMustBeInsideTheSubstitution.
 	d.HeredocOutsideSubstitution, d.PromptHeredocOutsideSubstitution = parseWording(2, "`%[1]s' here-document not contained within command substitution")
-	return d
 }
 
 // parseWording is one sentence about a parse failure in both of its shapes:

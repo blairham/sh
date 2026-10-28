@@ -17,7 +17,7 @@ func forHeaderDiagnostic(t *testing.T, src string) string {
 	if err == nil {
 		t.Fatalf("%s: parsed, want a refusal", src)
 	}
-	return ksh.Diagnostics().ParseDiagnostic("ksh", "", err, src)
+	return diagTable(ksh.Diagnostics()).ParseDiagnostic("ksh", "", err, src)
 }
 
 // A C-style `for` header with fewer than two separators is refused, and this

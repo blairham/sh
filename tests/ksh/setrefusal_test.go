@@ -120,7 +120,7 @@ func TestKshKeepsTheSetLettersItHasAndThisShellDoesNot(t *testing.T) {
 	// there is a *third* table beside these two — Runner.hasSetLetter, the
 	// validating pass, where the letter was still unknown after the axis said
 	// yes and the refusal read `set: -r: unknown option`.
-	if got, want := ksh.Diagnostics().UnimplementedOptionLetters["set"], "b"; got != want {
+	if got, want := diagTable(ksh.Diagnostics()).UnimplementedOptionLetters["set"], "b"; got != want {
 		t.Errorf("UnimplementedOptionLetters[set] = %q, want %q", got, want)
 	}
 	for _, l := range "b" {

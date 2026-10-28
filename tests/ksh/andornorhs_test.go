@@ -46,7 +46,7 @@ func TestAnAndOrWithNoCommandNamesWhatItFound(t *testing.T) {
 			t.Errorf("%q parsed, want a refusal", tc.src)
 			continue
 		}
-		if got := ksh.Diagnostics().ParseFailure(err); got != tc.want {
+		if got := diagTable(ksh.Diagnostics()).ParseFailure(err); got != tc.want {
 			t.Errorf("%q:\n got %q\nwant %q", tc.src, got, tc.want)
 		}
 	}

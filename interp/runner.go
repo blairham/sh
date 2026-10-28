@@ -6709,7 +6709,7 @@ func (r *Runner) locationPrefixNamed(construct string) string {
 	// style below, and diag hands back the runner's own vector rather than a
 	// copy of it. Writing through that pointer would move the style for the
 	// rest of the run. See diag, and TestNothingWritesThroughTheDiagnostics.
-	d := *r.diag()
+	d := r.diag().Clone()
 	if d.ShellsExitTrapNamesItsFirstLine && r.runningExitTrap != nil && !r.inSubshell {
 		// The shell's own EXIT trap names its first line. See the field.
 		d.Location = namesEveryLine(d.Location)
@@ -6866,7 +6866,7 @@ func (r *Runner) locationFileOrName() string {
 // script's path — which is the first component. The names after it are the
 // borrowed texts' own, so a chain of two sourced files reads `.[2]` for the
 // middle one in the shell that names the builtin rather than the path.
-func (r *Runner) borrowedStack(d Diagnostics, outer string) (chain, inner string) {
+func (r *Runner) borrowedStack(d *Diagnostics, outer string) (chain, inner string) {
 	var b strings.Builder
 	name := outer
 	for i, t := range r.callStackComponents(d) {
@@ -6904,7 +6904,7 @@ type callStackComponent struct {
 
 // callStackHasAComponent reports whether there is anything for borrowedStack
 // to render.
-func (r *Runner) callStackHasAComponent(d Diagnostics) bool {
+func (r *Runner) callStackHasAComponent(d *Diagnostics) bool {
 	if len(r.borrowed) > 0 {
 		return true
 	}
@@ -6925,7 +6925,7 @@ func (r *Runner) callStackHasAComponent(d Diagnostics) bool {
 // outside the rest, so a keyword frame at index j goes in front of every
 // borrowed text pushed with more than j frames. See
 // Diagnostics.KeywordCallIsACallStackComponent.
-func (r *Runner) callStackComponents(d Diagnostics) []callStackComponent {
+func (r *Runner) callStackComponents(d *Diagnostics) []callStackComponent {
 	var out []callStackComponent
 	next := 0
 	for j, f := range r.frames {
@@ -7014,7 +7014,7 @@ func (r *Runner) borrowedAtLocation() (borrowedText, bool) {
 // The last three are the shell speaking and keep the name; only the first two
 // are a builtin speaking for itself. Taking the wider question would have
 // dropped the name from the redirection row, where dash writes it.
-func (r *Runner) borrowedName(d Diagnostics) string {
+func (r *Runner) borrowedName(d *Diagnostics) string {
 	if !d.BorrowedTextIsNamedAtRunTime {
 		return ""
 	}
@@ -7055,7 +7055,7 @@ func (r *Runner) borrowedName(d Diagnostics) string {
 // The last row is the one that keeps this honest: `./s.sh: line 1: NOPE:
 // parameter not set` with no name, where the frame is a function and the
 // source has returned.
-func (r *Runner) borrowedNameBefore(d Diagnostics) (string, bool) {
+func (r *Runner) borrowedNameBefore(d *Diagnostics) (string, bool) {
 	if !d.BorrowedTextIsNamedAtRunTime {
 		return "", false
 	}

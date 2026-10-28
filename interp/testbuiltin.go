@@ -154,7 +154,7 @@ func (r *Runner) runTestForm(name string, form testForm, args []string) int {
 				// runs on, where the same words inside `[[ ]]` abandon the
 				// input. The complaint is already worded; all that is added
 				// here is the name the builtin was called by.
-				r.diagf("%s\n", Wording(te.format(*r.diag()), te.fallback(), te.operand, name))
+				r.diagf("%s\n", Wording(te.format(r.diag()), te.fallback(), te.operand, name))
 				return 1
 			}
 			if r.unspecified {
@@ -198,7 +198,7 @@ func (r *Runner) runTestForm(name string, form testForm, args []string) int {
 			// was called by rather than a fixed one — including zsh, which
 			// carries it in the location instead of the message and so needs
 			// nothing here.
-			r.diagf("%s\n", Wording(te.format(*r.diag()), te.fallback(), te.operand, name))
+			r.diagf("%s\n", Wording(te.format(r.diag()), te.fallback(), te.operand, name))
 		} else {
 			r.diagf("%s: %v\n", name, err)
 		}
@@ -304,7 +304,7 @@ func (e *testError) fallback() string {
 	return "%[2]s: %[1]s: unary operator expected"
 }
 
-func (e *testError) format(d Diagnostics) string {
+func (e *testError) format(d *Diagnostics) string {
 	switch e.kind {
 	case errOperandExpected:
 		return d.TestOperandExpected
@@ -1848,7 +1848,7 @@ func (r *Runner) testIsSetSubscriptFailed(sentence string) (bool, error) {
 // testIntegerWording is the dialect's refusal of a comparison operand that is
 // not an integer, chosen between its two sentences by where the reading of a
 // number stopped. See Diagnostics.TestIntegerTrailingJunk.
-func (d Diagnostics) testIntegerWording(operand string) string {
+func (d *Diagnostics) testIntegerWording(operand string) string {
 	if d.TestIntegerTrailingJunk != "" && numeralWithTrailingJunk(operand) {
 		return d.TestIntegerTrailingJunk
 	}

@@ -64,7 +64,7 @@ func TestAnEmptyAssignmentSubscriptIsASyntaxError(t *testing.T) {
 			t.Errorf("%q parsed, want a refusal", tc.src)
 			continue
 		}
-		if got := ksh.Diagnostics().ParseFailure(err); got != tc.want {
+		if got := diagTable(ksh.Diagnostics()).ParseFailure(err); got != tc.want {
 			t.Errorf("%q:\n got %q\nwant %q", tc.src, got, tc.want)
 		}
 	}
@@ -82,11 +82,11 @@ func TestTheSentenceAndStatusOfAnEmptyAssignmentSubscript(t *testing.T) {
 	if err == nil {
 		t.Fatalf("%q parsed, want a refusal", src)
 	}
-	got := ksh.Diagnostics().ParseDiagnostic("ksh", "-c", err, src)
+	got := diagTable(ksh.Diagnostics()).ParseDiagnostic("ksh", "-c", err, src)
 	if want := "ksh: syntax error at line 3: `[]' empty subscript\n"; got != want {
 		t.Errorf("got %q, want %q", got, want)
 	}
-	if st := ksh.Diagnostics().StatusForParseError(err); st != 3 {
+	if st := diagTable(ksh.Diagnostics()).StatusForParseError(err); st != 3 {
 		t.Errorf("status %d, want 3", st)
 	}
 }

@@ -41,8 +41,8 @@ func TestAReservedWordKeepsItsReadingBehindAnAssignmentPrefixHere(t *testing.T) 
 			t.Errorf("%q parsed; this shell refuses it", c.src)
 			continue
 		}
-		if want := "parse error near `" + c.named + "'"; zsh.Diagnostics().ParseFailure(err) != want {
-			t.Errorf("%q: got %q, want %q", c.src, zsh.Diagnostics().ParseFailure(err), want)
+		if want := "parse error near `" + c.named + "'"; diagTable(zsh.Diagnostics()).ParseFailure(err) != want {
+			t.Errorf("%q: got %q, want %q", c.src, diagTable(zsh.Diagnostics()).ParseFailure(err), want)
 		}
 	}
 	// The controls: `in` is an ordinary command name where a command begins,

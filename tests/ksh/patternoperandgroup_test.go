@@ -30,12 +30,12 @@ func TestABareGroupOpeningAPatternOperandIsRefused(t *testing.T) {
 			continue
 		}
 		want := "syntax error at line 1: `(' unexpected"
-		if got := ksh.Diagnostics().ParseFailure(err); got != want {
+		if got := diagTable(ksh.Diagnostics()).ParseFailure(err); got != want {
 			t.Errorf("%s:\n got %q\nwant %q", src, got, want)
 		}
 		// And the script goes with it, which is this shell's status for a
 		// parse failure.
-		if got := ksh.Diagnostics().StatusForParseError(err); got != 3 {
+		if got := diagTable(ksh.Diagnostics()).StatusForParseError(err); got != 3 {
 			t.Errorf("%s: status %d, want 3", src, got)
 		}
 	}

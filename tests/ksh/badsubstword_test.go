@@ -16,7 +16,7 @@ import (
 // Measured 2026-09-05 against ksh93 AJM 93u+ in the oracle environment.
 
 func TestBadSubstitutionNamesTheWholeWord(t *testing.T) {
-	if got, want := ksh.Diagnostics().BadSubstitutionNames, interp.NamesTheWholeWord; got != want {
+	if got, want := diagTable(ksh.Diagnostics()).BadSubstitutionNames, interp.NamesTheWholeWord; got != want {
 		t.Errorf("BadSubstitutionNames = %v, want %v", got, want)
 	}
 	for _, c := range []struct{ src, want string }{

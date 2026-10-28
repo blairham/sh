@@ -48,7 +48,7 @@ func TestARefusedIONumberIsNamedByItsOperator(t *testing.T) {
 			continue
 		}
 		want := "syntax error at line 1: `" + tc.want + "' unexpected"
-		if got := ksh.Diagnostics().ParseFailure(err); got != want {
+		if got := diagTable(ksh.Diagnostics()).ParseFailure(err); got != want {
 			t.Errorf("%q:\n got %q\nwant %q", tc.src, got, want)
 		}
 	}

@@ -82,7 +82,7 @@ func TestThisPresetReadsJobSpecsFirstAndStopsAtAMissingOne(t *testing.T) {
 	if got := s.KillKeepsGoingPastAJobSpecThatNamesNoJob; got != interp.No {
 		t.Errorf("KillKeepsGoingPastAJobSpecThatNamesNoJob is %v, want No", got)
 	}
-	if got := ash.Diagnostics().KillNoSuchJobStatus; got != 2 {
+	if got := diagTable(ash.Diagnostics()).KillNoSuchJobStatus; got != 2 {
 		t.Errorf("KillNoSuchJobStatus is %d, want 2", got)
 	}
 }

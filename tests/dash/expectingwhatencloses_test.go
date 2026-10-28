@@ -44,7 +44,7 @@ func TestARefusalExpectsWhatTheEnclosingConstructWanted(t *testing.T) {
 			t.Errorf("%s: parsed, want a refusal", tc.src)
 			continue
 		}
-		got := dash.Diagnostics().ParseFailure(err)
+		got := diagTable(dash.Diagnostics()).ParseFailure(err)
 		if !strings.HasSuffix(got, tc.want) {
 			t.Errorf("%s: %q, want it to end %q", tc.src, got, tc.want)
 		}

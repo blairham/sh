@@ -70,7 +70,7 @@ func TestASubshellKeepsTheParentsJobsUnderTheMonitor(t *testing.T) {
 // The builtin's name is in the location rather than in the sentence, which is
 // this shell's rule for every message, so the wording carries no verb.
 func TestTheSubshellRefusalIsThisShellsWording(t *testing.T) {
-	got := zsh.Diagnostics().JobsNotManipulableInASubshell
+	got := diagTable(zsh.Diagnostics()).JobsNotManipulableInASubshell
 	if got == "" {
 		t.Fatal("JobsNotManipulableInASubshell is empty; this is the one shell that can be in the state")
 	}
@@ -82,7 +82,7 @@ func TestTheSubshellRefusalIsThisShellsWording(t *testing.T) {
 	}
 	// 1 rather than the engine's default by accident: measured at 1 for both
 	// verbs, and left at zero here so the default is what answers.
-	if got := zsh.Diagnostics().JobsNotManipulableInASubshellStatus; got != 0 && got != 1 {
+	if got := diagTable(zsh.Diagnostics()).JobsNotManipulableInASubshellStatus; got != 0 && got != 1 {
 		t.Errorf("JobsNotManipulableInASubshellStatus = %d, want the measured 1", got)
 	}
 	// `fg` and `bg` take the other door and say something else, which is the
@@ -90,7 +90,7 @@ func TestTheSubshellRefusalIsThisShellsWording(t *testing.T) {
 	// monitor off — measured, `( print ${options[monitor]} )` under `-fm` is
 	// `off` where the same read outside is `on` — so they refuse as a shell
 	// with no job control refuses.
-	if got := zsh.Diagnostics().NoJobControl; got != "no job control in this shell." {
+	if got := diagTable(zsh.Diagnostics()).NoJobControl; got != "no job control in this shell." {
 		t.Errorf("NoJobControl = %q, want the wording fg and bg give in a subshell", got)
 	}
 }

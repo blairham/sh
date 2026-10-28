@@ -49,7 +49,7 @@ func TestTheKeywordWithNoNameNamesTheTokenHere(t *testing.T) {
 			t.Errorf("%q parsed, want a refusal", tc.src)
 			continue
 		}
-		if got := ksh.Diagnostics().ParseDiagnostic("<shell>", "", err, tc.src); got != tc.want {
+		if got := diagTable(ksh.Diagnostics()).ParseDiagnostic("<shell>", "", err, tc.src); got != tc.want {
 			t.Errorf("%q said %q, want %q", tc.src, got, tc.want)
 		}
 	}

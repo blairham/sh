@@ -1894,7 +1894,7 @@ func (e *killError) fallback() string {
 	return "kill: usage: kill [-s sigspec | -n signum | -sigspec] pid ... or kill -l [sigspec]"
 }
 
-func (e *killError) format(d Diagnostics) string {
+func (e *killError) format(d *Diagnostics) string {
 	switch e.kind {
 	case killMissingSignalArgument:
 		// The operand is the option itself, which is the only thing that
@@ -1935,7 +1935,7 @@ func (e *killError) format(d Diagnostics) string {
 // status is what this class of failure reports, which is three questions
 // rather than one: a dialect can be strict about arguments and relaxed about
 // options, and one is strict about neither.
-func (e *killError) status(d Diagnostics) int {
+func (e *killError) status(d *Diagnostics) int {
 	switch e.kind {
 	case killUsage:
 		return orDefault(d.KillUsageStatus, 2)
@@ -1968,7 +1968,7 @@ func orDefault(v, fallback int) int {
 // usesTheOptionWording reports whether this failure is written with the
 // unknown-option wording, which two kinds reach: the option complaint itself,
 // and a number-shaped word in the flag form, whose fallback is that wording.
-func usesTheOptionWording(e *killError, d Diagnostics) bool {
+func usesTheOptionWording(e *killError, d *Diagnostics) bool {
 	if e.kind == killIllegalOption {
 		return true
 	}
@@ -1981,7 +1981,7 @@ func usesTheOptionWording(e *killError, d Diagnostics) bool {
 // option` for each, in order and repeats included — its option parser's doing
 // rather than `kill`'s, and measured as such: `kill -NOPE` is four lines there
 // and `kill -Q` is one. The word itself is never printed.
-func (e *killError) lines(d Diagnostics) []string {
+func (e *killError) lines(d *Diagnostics) []string {
 	if e.kind == killNoSuchJob {
 		if line, ok := jobSpecMiss(d, "kill", e.operand); ok {
 			return []string{line}
@@ -2032,10 +2032,10 @@ func (r *Runner) killFailed(err error) int {
 		r.locatedDespiteTheShellAlone = true
 		defer func() { r.locatedDespiteTheShellAlone = false }()
 	}
-	for _, line := range ke.lines(*d) {
+	for _, line := range ke.lines(d) {
 		say("%s\n", line)
 	}
-	if usesTheOptionWording(ke, *d) && d.KillIllegalOptionUsage != "" {
+	if usesTheOptionWording(ke, d) && d.KillIllegalOptionUsage != "" {
 		// Printed once however many complaints came before it, which is what
 		// took it out of the wording: one shell splits a dash-word into its
 		// letters and complains about each, and the block follows the lot.
@@ -2051,5 +2051,5 @@ func (r *Runner) killFailed(err error) int {
 	if (ke.kind == killInvalidSignal || ke.kind == killIllegalOption) && d.KillUnknownSignalHint != "" {
 		r.diagf("%s\n", d.KillUnknownSignalHint)
 	}
-	return ke.status(*d)
+	return ke.status(d)
 }

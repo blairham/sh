@@ -58,7 +58,7 @@ func NewSession(sh Shell) (*Session, int) {
 	// runner reads it for the status one dialect gives a failed expansion,
 	// the fatality another gives a readonly reassignment, and the route
 	// letters in `$-`.
-	r := sh.newRunner(sh.Name, nil, sh.Diagnostics, interp.RouteCommandString)
+	r := sh.newRunner(sh.Name, nil, &sh.Diagnostics, interp.RouteCommandString)
 	// Every input is a command string, so the route's answer is the same for
 	// all of them and is settled here rather than per input.
 	// The option, which is the gate on every nested text a turn evaluates.

@@ -43,7 +43,7 @@ func TestNoSeparatorWhereACommandBelongs(t *testing.T) {
 			continue
 		}
 		const want = "syntax error near unexpected token `;'"
-		if got := bash.Diagnostics().ParseFailure(err); got != want {
+		if got := diagTable(bash.Diagnostics()).ParseFailure(err); got != want {
 			t.Errorf("%q:\n got %q\nwant %q", src, got, want)
 		}
 	}
@@ -64,7 +64,7 @@ func TestASeparatorAtTheHeadOfACompoundBodyIsRefused(t *testing.T) {
 			t.Errorf("%q parsed, want a refusal", src)
 			continue
 		}
-		if got := bash.Diagnostics().ParseFailure(err); got != "syntax error near unexpected token `;'" {
+		if got := diagTable(bash.Diagnostics()).ParseFailure(err); got != "syntax error near unexpected token `;'" {
 			t.Errorf("%q:\n got %q\nwant %q", src, got, "syntax error near unexpected token `;'")
 		}
 	}

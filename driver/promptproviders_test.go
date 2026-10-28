@@ -23,9 +23,9 @@ func TestAPromptProviderReachesTheFrontEnd(t *testing.T) {
 	mine := repl.PromptProviderFunc(func(repl.PromptInfo) string { return "mark " })
 	sh := Shell{Name: "testsh", PromptProviders: []repl.PromptProvider{mine}}.
 		withDefaults([]string{"testsh"})
-	r := sh.newRunner("testsh", nil, sh.Diagnostics, interp.RouteCommandString)
+	r := sh.newRunner("testsh", nil, &sh.Diagnostics, interp.RouteCommandString)
 
-	front := sh.frontEnd(r, "testsh", sh.Diagnostics)
+	front := sh.frontEnd(r, "testsh", &sh.Diagnostics)
 	if len(front.PromptProviders) != 1 {
 		t.Fatalf("the prompt carries %d providers, want 1", len(front.PromptProviders))
 	}
@@ -37,8 +37,8 @@ func TestAPromptProviderReachesTheFrontEnd(t *testing.T) {
 // And a binary that contributes none leaves the prompt as it was.
 func TestAShellWithoutProvidersCarriesNoneToTheFrontEnd(t *testing.T) {
 	sh := Shell{Name: "testsh"}.withDefaults([]string{"testsh"})
-	r := sh.newRunner("testsh", nil, sh.Diagnostics, interp.RouteCommandString)
-	if got := sh.frontEnd(r, "testsh", sh.Diagnostics).PromptProviders; len(got) != 0 {
+	r := sh.newRunner("testsh", nil, &sh.Diagnostics, interp.RouteCommandString)
+	if got := sh.frontEnd(r, "testsh", &sh.Diagnostics).PromptProviders; len(got) != 0 {
 		t.Errorf("the prompt carries %d providers, want none", len(got))
 	}
 }
@@ -51,9 +51,9 @@ func TestAHighlighterReachesTheFrontEnd(t *testing.T) {
 		return []repl.Highlight{{Start: 0, End: 1, Style: "\x1b[31m"}}
 	})
 	sh := Shell{Name: "testsh", Highlighter: mine}.withDefaults([]string{"testsh"})
-	r := sh.newRunner("testsh", nil, sh.Diagnostics, interp.RouteCommandString)
+	r := sh.newRunner("testsh", nil, &sh.Diagnostics, interp.RouteCommandString)
 
-	front := sh.frontEnd(r, "testsh", sh.Diagnostics)
+	front := sh.frontEnd(r, "testsh", &sh.Diagnostics)
 	if front.Highlighter == nil {
 		t.Fatal("the prompt carries no highlighter")
 	}
@@ -65,8 +65,8 @@ func TestAHighlighterReachesTheFrontEnd(t *testing.T) {
 // A binary that asked for none leaves the line plain.
 func TestAShellWithoutAHighlighterCarriesNoneToTheFrontEnd(t *testing.T) {
 	sh := Shell{Name: "testsh"}.withDefaults([]string{"testsh"})
-	r := sh.newRunner("testsh", nil, sh.Diagnostics, interp.RouteCommandString)
-	if got := sh.frontEnd(r, "testsh", sh.Diagnostics).Highlighter; got != nil {
+	r := sh.newRunner("testsh", nil, &sh.Diagnostics, interp.RouteCommandString)
+	if got := sh.frontEnd(r, "testsh", &sh.Diagnostics).Highlighter; got != nil {
 		t.Errorf("the prompt carries a highlighter %#v, want none", got)
 	}
 }
@@ -78,9 +78,9 @@ func TestAShellWithoutAHighlighterCarriesNoneToTheFrontEnd(t *testing.T) {
 // configured.
 func TestTheThemeReachesTheFrontEnd(t *testing.T) {
 	sh := Shell{Name: "testsh"}.withDefaults([]string{"testsh"})
-	r := sh.newRunner("testsh", nil, sh.Diagnostics, interp.RouteCommandString)
+	r := sh.newRunner("testsh", nil, &sh.Diagnostics, interp.RouteCommandString)
 
-	front := sh.frontEnd(r, "testsh", sh.Diagnostics)
+	front := sh.frontEnd(r, "testsh", &sh.Diagnostics)
 	if front.Theme == nil {
 		t.Fatal("no theme reached the front end")
 	}

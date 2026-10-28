@@ -39,7 +39,7 @@ func TestNoSeparatorWhereACommandBelongs(t *testing.T) {
 			t.Errorf("%q parsed, want a refusal", tc.src)
 			continue
 		}
-		dg := dash.Diagnostics().ForScript()
+		dg := diagTable(dash.Diagnostics()).ForScript()
 		if got := dg.ParseDiagnostic("s.sh", "", err, tc.src); got != tc.want {
 			t.Errorf("%q:\n got %q\nwant %q", tc.src, got, tc.want)
 		}
@@ -61,7 +61,7 @@ func TestASeparatorAtTheHeadOfACompoundBodyIsRefused(t *testing.T) {
 			t.Errorf("%q parsed, want a refusal", src)
 			continue
 		}
-		if got := dash.Diagnostics().ForScript().ParseDiagnostic("s.sh", "", err, src); got != "s.sh: 1: Syntax error: \";\" unexpected\n" {
+		if got := diagTable(dash.Diagnostics()).ForScript().ParseDiagnostic("s.sh", "", err, src); got != "s.sh: 1: Syntax error: \";\" unexpected\n" {
 			t.Errorf("%q:\n got %q\nwant %q", src, got, "s.sh: 1: Syntax error: \";\" unexpected\n")
 		}
 	}

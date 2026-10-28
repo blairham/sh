@@ -101,12 +101,12 @@ func (r *Runner) tracePrefixAsItGoes(c *syntax.SimpleCmd, argv []string, walk pr
 				// Held for the route that refuses it, so a substitution in
 				// it runs once.
 				r.recordPrefixTraceValue(a, value)
-				word = r.traceAssign(a, value, r.prefixGlobTraced(a), *d)
+				word = r.traceAssign(a, value, r.prefixGlobTraced(a), d)
 			}
 		} else {
 			one := c.Assigns[i : i+1]
 			r.expandPrefixTraceValuesHolding(one, &held)
-			if words := r.prefixTraceWords(one, *d); len(words) == 1 {
+			if words := r.prefixTraceWords(one, d); len(words) == 1 {
 				word = words[0]
 			}
 		}

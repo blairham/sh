@@ -196,7 +196,7 @@ func TestTheDialectsAnswersReachTheFrontEnd(t *testing.T) {
 	sh.PromptStyle = repl.PromptStyle{Expand: interp.PromptExpandsAlways, Escape: '%'}
 	sh.EditorStyle = repl.EditorStyle{Interrupt: "<int>"}
 	sh.HistoryStyle = repl.HistoryStyle{SearchPrompt: "<search %s>", Ignore: "SOMEVAR"}
-	front := sh.FrontEndForTest(nil, "testsh", interp.Diagnostics{})
+	front := sh.FrontEndForTest(nil, "testsh", &interp.Diagnostics{})
 	if front.Editor.Interrupt != "<int>" {
 		t.Errorf("Interrupt = %q, want it carried across", front.Editor.Interrupt)
 	}

@@ -123,7 +123,7 @@ func (r *Runner) declarationOperandsFrom() int {
 // `f(){ local lv=1; }; f` is `+ local lv=1` and then `local: not found`
 // there — one line, because nothing was declared. Splitting on the list
 // alone wrote an assignment line for a command that does not exist.
-func (r *Runner) traceOperandSplitsBefore(words []string, d Diagnostics) bool {
+func (r *Runner) traceOperandSplitsBefore(words []string, d *Diagnostics) bool {
 	if d.TraceDeclarationOperand != TraceOperandSplitBefore ||
 		len(r.declarationOperands) == 0 {
 		return false
@@ -151,7 +151,7 @@ func traceOperandCommandWord(w string) string {
 
 // traceOperandsBefore is the assignment lines this dialect writes ahead of a
 // declaration utility's own line, in the order the operands were written.
-func (r *Runner) traceOperandsBefore(words []string, d Diagnostics) []string {
+func (r *Runner) traceOperandsBefore(words []string, d *Diagnostics) []string {
 	if !r.traceOperandSplitsBefore(words, d) {
 		return nil
 	}
@@ -189,7 +189,7 @@ func (r *Runner) traceOperandsBefore(words []string, d Diagnostics) []string {
 // written. What the shell is reporting is what `export` is about to be given,
 // which is also why a refused one is still written — `readonly z=1; export
 // z=2` traces `+ export z=2`, `+ z=2` and then the complaint.
-func (r *Runner) traceOperandsAfter(words []string, d Diagnostics) []string {
+func (r *Runner) traceOperandsAfter(words []string, d *Diagnostics) []string {
 	if len(d.TraceRepeatsAScalarOperandAfter) == 0 || len(words) == 0 {
 		return nil
 	}

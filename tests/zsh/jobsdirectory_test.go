@@ -192,7 +192,7 @@ func TestJobsDashDComposesWithTheOtherLetters(t *testing.T) {
 // shell reads as instructions about the process title and this engine does
 // not have.
 func TestOnlyTheDirectoryLetterCameOffTheMissingList(t *testing.T) {
-	if got := zsh.Diagnostics().UnimplementedOptionLetters["jobs"]; got != "zZ" {
+	if got := diagTable(zsh.Diagnostics()).UnimplementedOptionLetters["jobs"]; got != "zZ" {
 		t.Errorf("UnimplementedOptionLetters[jobs] = %q, want the process-title pair alone", got)
 	}
 	if got := zsh.Semantics().JobsOptions; !strings.ContainsRune(got, 'd') {
@@ -200,7 +200,7 @@ func TestOnlyTheDirectoryLetterCameOffTheMissingList(t *testing.T) {
 	}
 	// The wording is the dialect's rather than the engine's fallback, which
 	// is what makes the engine's fallback replaceable at all.
-	if got := zsh.Diagnostics().JobDirectoryLine; got == "" {
+	if got := diagTable(zsh.Diagnostics()).JobDirectoryLine; got == "" {
 		t.Error("JobDirectoryLine is empty; the one shell with the letter spells the line")
 	} else if want := "(pwd : x)"; interp.Wording(got, "", "x") != want {
 		t.Errorf("JobDirectoryLine renders %q, want %q", interp.Wording(got, "", "x"), want)

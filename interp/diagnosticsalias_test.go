@@ -26,7 +26,7 @@ import (
 // the line compiles — `d.Location = LocationNameOnly` was already in the tree
 // when the return type changed, and it went on compiling and stopped meaning
 // what it said. So it is checked rather than agreed. A caller that needs to
-// move an axis takes a copy first: `d := *r.diag()`, which is what
+// move an axis takes a copy first: `d := r.diag().Clone()`, which is what
 // locationPrefixNamed does and why.
 func TestNothingWritesThroughTheDiagnostics(t *testing.T) {
 	names, err := filepath.Glob("*.go")
@@ -49,7 +49,7 @@ func TestNothingWritesThroughTheDiagnostics(t *testing.T) {
 		}
 		read++
 		for _, pos := range writesThroughDiag(f) {
-			t.Errorf("%s: writes through the pointer diag returns; take a copy with *r.diag() first",
+			t.Errorf("%s: writes through the pointer diag returns; take a copy with r.diag().Clone() first",
 				fset.Position(pos))
 		}
 	}
@@ -155,7 +155,7 @@ func f(r *Runner) { r.diag().Location = LocationNameOnly }`)
 func TestTheDiagnosticsGuardAllowsACopy(t *testing.T) {
 	requireViolations(t, 0, `package interp
 func f(r *Runner) {
-	d := *r.diag()
+	d := r.diag().Clone()
 	d.Location = LocationNameOnly
 	_ = d
 }`)
@@ -170,5 +170,164 @@ func requireViolations(t *testing.T, want int, src string) {
 	}
 	if got := len(writesThroughDiag(f)); got != want {
 		t.Errorf("%d violations, want %d", got, want)
+	}
+}
+
+// Nor may a method of Diagnostics write its receiver, with four exceptions.
+//
+// The methods take the table by pointer so that a function calling one on an
+// error path does not hold a 10 KB copy on its frame whether or not that
+// branch runs (#6610). The table a method is called on is therefore the
+// caller's — the runner's own, or the front end's — and a method that moves a
+// style on it moves it for the rest of the run, exactly as a write through
+// diag does above. Three methods are *for* moving the table in place and are
+// called where a route is settled; keepBodyLocation is their helper and runs
+// on the copy a route has just made. Every other method that needs to move a
+// style takes a copy: `n := d.Clone()`, as ForScript does.
+//
+// The check is the same shape as the one above because the hazard is the same
+// shape: the line compiles, and `d.Location = LocationNone` inside a value
+// method meant what it said until the receiver became a pointer.
+func TestADiagnosticsMethodWritesOnlyACopy(t *testing.T) {
+	names, err := filepath.Glob("*.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	methods := 0
+	for _, name := range names {
+		if strings.HasSuffix(name, "_test.go") {
+			continue
+		}
+		src, err := os.ReadFile(name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		fset := token.NewFileSet()
+		f, err := parser.ParseFile(fset, name, src, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		n, writes := receiverWrites(f)
+		methods += n
+		for _, pos := range writes {
+			t.Errorf("%s: a Diagnostics method writes its receiver; take a copy with d.Clone() first", fset.Position(pos))
+		}
+	}
+	// The control: the table has dozens of methods, and a glob that matched
+	// nothing would report a clean package in the same words.
+	if methods < 60 {
+		t.Fatalf("saw %d Diagnostics methods, want the whole table: this test proved nothing", methods)
+	}
+}
+
+// movesTheTableInPlace names the Diagnostics methods whose job is to write
+// the table they are called on.
+var movesTheTableInPlace = map[string]bool{
+	"LocateCommandStringAsAPrompt": true,
+	"LocateScriptAsAPrompt":        true,
+	"keepBodyLocation":             true,
+}
+
+// receiverWrites counts the methods of *Diagnostics in f and reports every
+// assignment in one of them, outside movesTheTableInPlace, whose target is a
+// field of the receiver.
+func receiverWrites(f *ast.File) (methods int, found []token.Pos) {
+	for _, decl := range f.Decls {
+		fn, ok := decl.(*ast.FuncDecl)
+		if !ok || fn.Recv == nil || len(fn.Recv.List) != 1 || fn.Body == nil {
+			continue
+		}
+		star, ok := fn.Recv.List[0].Type.(*ast.StarExpr)
+		if !ok {
+			continue
+		}
+		if id, ok := star.X.(*ast.Ident); !ok || id.Name != "Diagnostics" {
+			continue
+		}
+		methods++
+		if movesTheTableInPlace[fn.Name.Name] || len(fn.Recv.List[0].Names) == 0 {
+			continue
+		}
+		recv := fn.Recv.List[0].Names[0].Name
+		ast.Inspect(fn.Body, func(n ast.Node) bool {
+			var lhs []ast.Expr
+			switch s := n.(type) {
+			case *ast.AssignStmt:
+				lhs = s.Lhs
+			case *ast.IncDecStmt:
+				lhs = []ast.Expr{s.X}
+			default:
+				return true
+			}
+			for _, e := range lhs {
+				sel, ok := e.(*ast.SelectorExpr)
+				if !ok {
+					continue
+				}
+				if id, ok := sel.X.(*ast.Ident); ok && id.Name == recv && !rebound(fn.Body, recv, sel.Pos()) {
+					found = append(found, sel.Pos())
+				}
+			}
+			return true
+		})
+	}
+	return methods, found
+}
+
+// rebound reports whether name was assigned a Clone of itself before pos in
+// body: `d = d.Clone()` makes every later write a write on the copy.
+func rebound(body *ast.BlockStmt, name string, pos token.Pos) bool {
+	found := false
+	ast.Inspect(body, func(n ast.Node) bool {
+		as, ok := n.(*ast.AssignStmt)
+		if !ok || as.Pos() >= pos {
+			return true
+		}
+		for i, l := range as.Lhs {
+			id, ok := l.(*ast.Ident)
+			if !ok || id.Name != name || i >= len(as.Rhs) {
+				continue
+			}
+			if call, ok := as.Rhs[i].(*ast.CallExpr); ok {
+				if sel, ok := call.Fun.(*ast.SelectorExpr); ok && sel.Sel.Name == "Clone" {
+					found = true
+				}
+			}
+		}
+		return true
+	})
+	return found
+}
+
+// The guard's own cases: a write through the receiver fires, a write on a
+// copy does not, and the methods that move the table in place are allowed.
+func TestTheMethodGuardCatchesAReceiverWrite(t *testing.T) {
+	requireReceiverWrites(t, 1, `package interp
+func (d *Diagnostics) f() { d.Location = LocationNone }`)
+}
+
+func TestTheMethodGuardAllowsACopy(t *testing.T) {
+	requireReceiverWrites(t, 0, `package interp
+func (d *Diagnostics) f() string {
+	n := d.Clone()
+	n.Location = LocationNone
+	return n.prefix("", "", false, 1)
+}
+func (d *Diagnostics) g() {
+	d = d.Clone()
+	d.Location = LocationNone
+}
+func (d *Diagnostics) keepBodyLocation() { d.bodyLocation = d.Location }`)
+}
+
+func requireReceiverWrites(t *testing.T, want int, src string) {
+	t.Helper()
+	fset := token.NewFileSet()
+	f, err := parser.ParseFile(fset, "x.go", src, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, got := receiverWrites(f); len(got) != want {
+		t.Errorf("%d receiver writes, want %d", len(got), want)
 	}
 }

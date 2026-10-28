@@ -38,7 +38,7 @@ func TestABraceWordBehindACompoundIsNamedByTheCompoundsKind(t *testing.T) {
 			continue
 		}
 		want := "parse error near `" + tc.want + "'"
-		if got := zsh.Diagnostics().ParseFailure(err); got != want {
+		if got := diagTable(zsh.Diagnostics()).ParseFailure(err); got != want {
 			t.Errorf("%q:\n got %q\nwant %q", tc.src, got, want)
 		}
 	}

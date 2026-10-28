@@ -25,9 +25,9 @@ func TestTheFrontEndCarriesTheDialectsParseFailureStatus(t *testing.T) {
 		Name:        "testsh",
 		Diagnostics: interp.Diagnostics{SyntaxErrorStatus: 5, ForNameStatus: 6},
 	}.withDefaults([]string{"testsh"})
-	r := sh.newRunner("testsh", nil, sh.Diagnostics, interp.RouteCommandString)
+	r := sh.newRunner("testsh", nil, &sh.Diagnostics, interp.RouteCommandString)
 
-	front := sh.frontEnd(r, "testsh", sh.Diagnostics)
+	front := sh.frontEnd(r, "testsh", &sh.Diagnostics)
 	if front.ParseFailureStatus == nil {
 		t.Fatal("the prompt was given no answer for a refused line")
 	}

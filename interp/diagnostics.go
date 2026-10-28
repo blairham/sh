@@ -10895,7 +10895,7 @@ func escapeToken(s string) string {
 // Three shapes, and the shells split three ways over one question: dash names
 // the source after the location, bash and ksh93 before it, and zsh puts it
 // where the shell's own name goes and prints no label.
-func (d Diagnostics) SourceReport(naming SourceNaming, shell, source string, line int, msg string) string {
+func (d *Diagnostics) SourceReport(naming SourceNaming, shell, source string, line int, msg string) string {
 	d = d.forBorrowed()
 	switch naming {
 	case SourceReplacesShell:
@@ -10915,11 +10915,35 @@ func (d Diagnostics) SourceReport(naming SourceNaming, shell, source string, lin
 // off. It is applied wherever borrowed text is located, so a parse failure
 // inside a sourced file and a run-time failure inside the same file cannot
 // disagree about whether the line is written.
-func (d Diagnostics) forBorrowed() Diagnostics {
-	if d.BorrowedLocation != LocationNone {
-		d.Location = d.BorrowedLocation
+func (d *Diagnostics) forBorrowed() *Diagnostics {
+	if d.BorrowedLocation == LocationNone {
+		return d
 	}
-	return d
+	n := d.Clone()
+	n.Location = n.BorrowedLocation
+	return n
+}
+
+// Clone is a copy of the table on the heap, for a route that adjusts one
+// without writing through the one it was handed.
+//
+// The table is about 10 KB, and every method takes it by pointer so that a
+// function calling one on an error path does not reserve room for a copy on
+// its frame whether or not that branch runs: 124 functions in this package
+// held frames of 20 KB or more that way, which is what kept a start's stack
+// one doubling deeper than its depth needed (#6610). A copy, where a route
+// needs one, is made here and nowhere on a frame.
+//
+// Not inlined: inlined into a caller, the copy below goes through a temporary
+// on the caller's frame, which is the 10 KB this exists to keep off it.
+// Measured on darwin/arm64 from the prologues: locationPrefixNamed's frame was
+// 22 KB with this inlined and under 2 KB with it not.
+//
+//go:noinline
+func (d *Diagnostics) Clone() *Diagnostics {
+	n := new(Diagnostics)
+	*n = *d
+	return n
 }
 
 // borrowedPrefix renders the start of a diagnostic for the dialects that name
@@ -10936,7 +10960,7 @@ func (d Diagnostics) forBorrowed() Diagnostics {
 // The caller is expected to have applied [Diagnostics.forBorrowed] already —
 // SourceReport does it for the parse path, and Runner.locationPrefixNamed for the
 // run-time one.
-func (d Diagnostics) borrowedPrefix(shell, source string, line int) string {
+func (d *Diagnostics) borrowedPrefix(shell, source string, line int) string {
 	if shell == "" && !d.NamedByAnEmptyWord {
 		shell = "sh"
 	}
@@ -10960,7 +10984,7 @@ const (
 
 // locationOnly is the location without a name in front of it, for the one
 // shape that has already printed one.
-func (d Diagnostics) locationOnly(line int) string {
+func (d *Diagnostics) locationOnly(line int) string {
 	switch d.Location {
 	case LocationColonLine:
 		return fmt.Sprintf("%d: ", line)
@@ -10982,7 +11006,7 @@ func (d Diagnostics) locationOnly(line int) string {
 // `Pos.Line` directly gets it wrong — which is what the front end did while
 // `eval` and `.` got it right, the two paths disagreeing exactly as one shared
 // front end exists to prevent.
-func (d Diagnostics) ParseFailureLine(err error) int {
+func (d *Diagnostics) ParseFailureLine(err error) int {
 	if n, counted := d.missingFuncBodyLine(err); counted {
 		// A body that never came is numbered from its parentheses in one
 		// dialect rather than from the top of the input, and nought there
@@ -11002,7 +11026,7 @@ func (d Diagnostics) ParseFailureLine(err error) int {
 // — the second is counted from the parentheses. Reading the written one as a
 // position quoted the wrong line, and reading it as "no line" dropped the
 // quote altogether (#3961).
-func (d Diagnostics) parseFailureLineInTheInput(err error) int {
+func (d *Diagnostics) parseFailureLineInTheInput(err error) int {
 	var se *syntax.Error
 	if !errors.As(err, &se) {
 		return 0
@@ -11089,7 +11113,7 @@ func pointOpensAFloatAfterAnOperand(token, expr string) bool {
 // together with everything after it in the range, so `${x:1+:2}` is reported
 // as `1+:2` where the parser was handed `1+`. Every other caller passes what
 // the parser saw.
-func (d Diagnostics) arithParseFailure(se *syntax.Error, expr string) string {
+func (d *Diagnostics) arithParseFailure(se *syntax.Error, expr string) string {
 	if w := d.ArithDoubledPointInTheNumeral; w != "" && doubledPointInTheLeadingNumeral(expr) {
 		// A numeral at the very front of the expression that met a second
 		// point straight after its first. One dialect has a sentence of its
@@ -11239,7 +11263,7 @@ func (d Diagnostics) arithParseFailure(se *syntax.Error, expr string) string {
 
 // arithShownToken is the blamed text as far as the dialect shows it. See
 // ArithBlamedTextShownTo.
-func (d Diagnostics) arithShownToken(token string) string {
+func (d *Diagnostics) arithShownToken(token string) string {
 	if n := d.ArithBlamedTextShownTo; n > 0 && len(token) > n {
 		return token[:n] + "..."
 	}
@@ -11258,7 +11282,7 @@ func (d Diagnostics) arithShownToken(token string) string {
 // a name followed by a `[` that nothing closes. Backing over the name is the
 // whole of the extent change — the reader stops at the bracket, and the column
 // that words this blames from the name.
-func (d Diagnostics) arithUnclosedSubscript(expr string, se *syntax.Error) (string, bool) {
+func (d *Diagnostics) arithUnclosedSubscript(expr string, se *syntax.Error) (string, bool) {
 	if d.ArithUnclosedSubscript == "" {
 		return "", false
 	}
@@ -11370,7 +11394,7 @@ func doubledPointInTheLeadingNumeral(expr string) bool {
 // ranOutOfOperand is the sentence for a value that was wanted and never came,
 // which is one field for most dialects and two for the one that parts an
 // expression that ran out from an operand it found.
-func (d Diagnostics) ranOutOfOperand() string {
+func (d *Diagnostics) ranOutOfOperand() string {
 	if d.ArithExpressionRanOut != "" {
 		return d.ArithExpressionRanOut
 	}
@@ -11385,7 +11409,7 @@ func (d Diagnostics) ranOutOfOperand() string {
 // `$(( 1/0 ))` read `1/0: divide by zero` in a shell that writes
 // ` 1/0 : divide by zero`, and there is no shell in the panel the trimmed
 // form is right for.
-func (d Diagnostics) arithBlamedText(expr string) string {
+func (d *Diagnostics) arithBlamedText(expr string) string {
 	if d.ArithErrorSkipsLeadingSpace {
 		return strings.TrimLeft(expr, " \t")
 	}
@@ -11398,7 +11422,7 @@ func (d Diagnostics) arithBlamedText(expr string) string {
 // The construct's spelling comes from the caller because it is the caller that
 // knows it, and a dialect either names all of them or none: one field and one
 // door, rather than a field per construct that could disagree.
-func (d Diagnostics) arithConstructFailure(construct, msg string) string {
+func (d *Diagnostics) arithConstructFailure(construct, msg string) string {
 	if !d.ArithErrorNamesTheConstruct {
 		return msg
 	}
@@ -11431,7 +11455,7 @@ func readOn(se *syntax.Error, expr string) bool {
 // the line verb of the one dialect that carries the number inside its
 // sentence. Those are the same number and disagreed while only the first
 // asked.
-func (d Diagnostics) newlineLine(se *syntax.Error) (int, bool) {
+func (d *Diagnostics) newlineLine(se *syntax.Error) (int, bool) {
 	if se.Class != syntax.ClassNewline || !d.UnexpectedNewlineIsOnTheNextLine {
 		return 0, false
 	}
@@ -11440,7 +11464,7 @@ func (d Diagnostics) newlineLine(se *syntax.Error) (int, bool) {
 
 // namesTheSourceText reports whether this dialect echoes a refused word back
 // as it was written. See [UnexpectedWordNaming].
-func (d Diagnostics) namesTheSourceText(se *syntax.Error) bool {
+func (d *Diagnostics) namesTheSourceText(se *syntax.Error) bool {
 	switch d.UnexpectedWordNaming {
 	case UnexpectedWordIsSourceText:
 		return true
@@ -11454,7 +11478,7 @@ func (d Diagnostics) namesTheSourceText(se *syntax.Error) bool {
 // sentence shared by two failures: a token in the wrong place anywhere, and
 // an operand a conditional operator could not take in a dialect with no
 // sentence of its own for that.
-func (d Diagnostics) unexpectedToken(se *syntax.Error) string {
+func (d *Diagnostics) unexpectedToken(se *syntax.Error) string {
 	token := se.Token
 	if se.TokenSource != "" && d.namesTheSourceText(se) {
 		// A refused word echoed back as it was written rather than as what
@@ -11543,7 +11567,7 @@ func (d Diagnostics) unexpectedToken(se *syntax.Error) string {
 // from a class the same way it parts a refused token from a refused class:
 // `(expecting "do")` names one word and `(expecting word)` names any. See
 // SyntaxExpectingClass.
-func (d Diagnostics) expectingClause(se *syntax.Error) string {
+func (d *Diagnostics) expectingClause(se *syntax.Error) string {
 	if se.Expected == "" {
 		return ""
 	}
@@ -11563,7 +11587,7 @@ func (d Diagnostics) expectingClause(se *syntax.Error) string {
 // See UnmatchedNearMaxBytes for the measurement. The comparison is `>=` and
 // not `>` because the shell appends its ellipsis at exactly the limit, with
 // nothing removed, and the slice is by byte because the shell's is.
-func (d Diagnostics) nearText(text string) string {
+func (d *Diagnostics) nearText(text string) string {
 	if d.UnmatchedNearMaxBytes > 0 && len(text) >= d.UnmatchedNearMaxBytes {
 		text = text[:d.UnmatchedNearMaxBytes] + "..."
 	}
@@ -11642,7 +11666,7 @@ func escapeControlByte(c byte) string {
 	return string([]byte{c})
 }
 
-func (d Diagnostics) ParseFailure(err error) string {
+func (d *Diagnostics) ParseFailure(err error) string {
 	var se *syntax.Error
 	if !errors.As(err, &se) {
 		return Wording(d.SyntaxError, "%[1]s", parseMessage(err), 0)
@@ -11795,7 +11819,7 @@ func (d Diagnostics) ParseFailure(err error) string {
 // halves of it are that shell's: every other column names the token it
 // stopped on, and the parser records only what the group held. See
 // Diagnostics.ConditionExpected for the table.
-func (d Diagnostics) conditionExpected(se *syntax.Error) (string, bool) {
+func (d *Diagnostics) conditionExpected(se *syntax.Error) (string, bool) {
 	if d.ConditionExpected == "" || len(se.CondWords) < 2 {
 		return "", false
 	}
@@ -11830,7 +11854,7 @@ func isOneLetterConditionWord(s string) bool {
 // Empty is the common answer: of the four, only one remarks on anything at
 // parse time and only about one thing. Silence is expressed by having no
 // wording rather than by the front end knowing which shells are quiet.
-func (d Diagnostics) Remark(r syntax.Remark) string {
+func (d *Diagnostics) Remark(r syntax.Remark) string {
 	switch r.Kind {
 	case syntax.RemarkHeredocAtEOF:
 		if d.HereDocumentAtEOF == "" {
@@ -11882,15 +11906,17 @@ func RemarkOnlyWhenNotRunning(k syntax.RemarkKind) bool {
 // A shell reports the *script's* name rather than its own once it is running
 // one, and ksh93 also changes how it names the line. Both are properties of
 // the invocation rather than of the dialect, which is why this returns a
-// value instead of being another field somebody has to remember to set.
-func (d Diagnostics) ForScript() Diagnostics {
-	if d.ScriptLocation != LocationNone {
-		d.Location = d.ScriptLocation
+// new table instead of being another field somebody has to remember to set.
+// The table handed in is not written; see Clone.
+func (d *Diagnostics) ForScript() *Diagnostics {
+	n := d.Clone()
+	if n.ScriptLocation != LocationNone {
+		n.Location = n.ScriptLocation
 	}
-	if d.ScriptBuiltinLocation != LocationNone {
-		d.BuiltinLocation = d.ScriptBuiltinLocation
+	if n.ScriptBuiltinLocation != LocationNone {
+		n.BuiltinLocation = n.ScriptBuiltinLocation
 	}
-	return d
+	return n
 }
 
 // ForStdin returns the diagnostics a script arriving on standard input
@@ -11899,16 +11925,17 @@ func (d Diagnostics) ForScript() Diagnostics {
 // There is no $0 to name on that route, and two of the four change shape
 // rather than substituting a name: zsh trims its prefixes and ksh93 brackets
 // the line. A property of the invocation, like ForScript.
-func (d Diagnostics) ForStdin() Diagnostics {
-	d.keepBodyLocation()
-	d.locatedForStdin = true
-	if d.StdinLocation != LocationNone {
-		d.Location = d.StdinLocation
+func (d *Diagnostics) ForStdin() *Diagnostics {
+	n := d.Clone()
+	n.keepBodyLocation()
+	n.locatedForStdin = true
+	if n.StdinLocation != LocationNone {
+		n.Location = n.StdinLocation
 	}
-	if d.StdinBuiltinLocation != LocationNone {
-		d.BuiltinLocation = d.StdinBuiltinLocation
+	if n.StdinBuiltinLocation != LocationNone {
+		n.BuiltinLocation = n.StdinBuiltinLocation
 	}
-	return d
+	return n
 }
 
 // keepBodyLocation remembers the two styles a route is about to replace, for
@@ -11950,7 +11977,7 @@ func (d *Diagnostics) LocateCommandStringAsAPrompt() {
 // file's to the prompt's, for an interactive shell's script — see
 // InteractiveScriptIsLocatedAsAPrompt. general is the vector before
 // ForScript, whose answers the prompt's fall back to where it names none.
-func (d *Diagnostics) LocateScriptAsAPrompt(general Diagnostics) {
+func (d *Diagnostics) LocateScriptAsAPrompt(general *Diagnostics) {
 	d.writtenLocation, d.writtenBuiltinLocation, d.writtenLocationKept = d.Location, d.BuiltinLocation, true
 	d.Location, d.BuiltinLocation = general.Location, general.BuiltinLocation
 	if d.PromptLocation != LocationNone {
@@ -11979,39 +12006,40 @@ func (d *Diagnostics) keepBodyLocation() {
 // ksh93 names one past an input's first line (#6581) — and the one that
 // writes the line inside its own sentence needs the sentence replaced, which
 // the Prompt wordings say.
-func (d Diagnostics) ForPrompt() Diagnostics {
-	d.keepBodyLocation()
-	if d.PromptLocation != LocationNone {
-		d.Location = d.PromptLocation
+func (d *Diagnostics) ForPrompt() *Diagnostics {
+	n := d.Clone()
+	n.keepBodyLocation()
+	if n.PromptLocation != LocationNone {
+		n.Location = n.PromptLocation
 	}
-	if d.PromptBuiltinLocation != LocationNone {
-		d.BuiltinLocation = d.PromptBuiltinLocation
+	if n.PromptBuiltinLocation != LocationNone {
+		n.BuiltinLocation = n.PromptBuiltinLocation
 	}
 	for _, w := range []struct {
 		at     *string
 		prompt string
 	}{
-		{&d.SyntaxUnexpected, d.PromptSyntaxUnexpected},
-		{&d.Unterminated, d.PromptUnterminated},
-		{&d.UnterminatedNoConstruct, d.PromptUnterminatedNoConstruct},
-		{&d.UnmatchedQuote, d.PromptUnmatchedQuote},
-		{&d.UnmatchedCmdSubst, d.PromptUnmatchedCmdSubst},
-		{&d.UnmatchedArithSubst, d.PromptUnmatchedArithSubst},
-		{&d.UnmatchedArithCommand, d.PromptUnmatchedArithCommand},
-		{&d.UnmatchedBraceSubst, d.PromptUnmatchedBraceSubst},
-		{&d.UnmatchedBraceSubstAtStop, d.PromptUnmatchedBraceSubstAtStop},
-		{&d.UnmatchedProcSubst, d.PromptUnmatchedProcSubst},
-		{&d.BadSubstitution, d.PromptBadSubstitution},
-		{&d.SyntaxError, d.PromptSyntaxError},
-		{&d.ForArithHeader, d.PromptForArithHeader},
-		{&d.HeredocOutsideSubstitution, d.PromptHeredocOutsideSubstitution},
-		{&d.EmptyAssignSubscript, d.PromptEmptyAssignSubscript},
+		{&n.SyntaxUnexpected, n.PromptSyntaxUnexpected},
+		{&n.Unterminated, n.PromptUnterminated},
+		{&n.UnterminatedNoConstruct, n.PromptUnterminatedNoConstruct},
+		{&n.UnmatchedQuote, n.PromptUnmatchedQuote},
+		{&n.UnmatchedCmdSubst, n.PromptUnmatchedCmdSubst},
+		{&n.UnmatchedArithSubst, n.PromptUnmatchedArithSubst},
+		{&n.UnmatchedArithCommand, n.PromptUnmatchedArithCommand},
+		{&n.UnmatchedBraceSubst, n.PromptUnmatchedBraceSubst},
+		{&n.UnmatchedBraceSubstAtStop, n.PromptUnmatchedBraceSubstAtStop},
+		{&n.UnmatchedProcSubst, n.PromptUnmatchedProcSubst},
+		{&n.BadSubstitution, n.PromptBadSubstitution},
+		{&n.SyntaxError, n.PromptSyntaxError},
+		{&n.ForArithHeader, n.PromptForArithHeader},
+		{&n.HeredocOutsideSubstitution, n.PromptHeredocOutsideSubstitution},
+		{&n.EmptyAssignSubscript, n.PromptEmptyAssignSubscript},
 	} {
 		if w.prompt != "" {
 			*w.at = w.prompt
 		}
 	}
-	return d
+	return n
 }
 
 // ScriptDiagnostic is what a shell prints when the script it was asked to run
@@ -12024,7 +12052,7 @@ func (d Diagnostics) ForPrompt() Diagnostics {
 //
 // shell is what the shell calls itself — its own name, never the script's,
 // which is measured: nothing has been read, so there is no `$0` yet.
-func (d Diagnostics) ScriptDiagnostic(shell, path string, err error) string {
+func (d *Diagnostics) ScriptDiagnostic(shell, path string, err error) string {
 	if errors.Is(err, ErrBinaryScript) && d.ScriptBinaryContent != "" {
 		// Nothing failed to open here, so there is no reason verb to fill:
 		// the file was read and declined. See Diagnostics.ScriptBinaryContent.
@@ -12051,13 +12079,13 @@ func (d Diagnostics) ScriptDiagnostic(shell, path string, err error) string {
 // Rendered here for the reason ScriptDiagnostic is: the words are the
 // dialect's and the front end owns only the fact that the word ran out of
 // vector. See Diagnostics.InvocationMissingOptionArgument.
-func (d Diagnostics) MissingOptionArgument(spelling string) string {
+func (d *Diagnostics) MissingOptionArgument(spelling string) string {
 	return Wording(d.InvocationMissingOptionArgument, "%[1]s requires an argument", spelling)
 }
 
 // MissingOptionArgumentStatus is the status MissingOptionArgument's refusal
 // exits with. See Diagnostics.InvocationMissingOptionArgumentStatus.
-func (d Diagnostics) MissingOptionArgumentStatus() int {
+func (d *Diagnostics) MissingOptionArgumentStatus() int {
 	return orDefault(d.InvocationMissingOptionArgumentStatus, 2)
 }
 
@@ -12070,7 +12098,7 @@ func (d Diagnostics) MissingOptionArgumentStatus() int {
 // shell ever got the file open: a path that is not there and one it may not
 // read both fail at the open, and everything else — a directory, most
 // sharply — fails at what came out of one.
-func (d Diagnostics) ScriptOperandNamesItself(err error) bool {
+func (d *Diagnostics) ScriptOperandNamesItself(err error) bool {
 	if !d.ScriptOperandNamedByItselfOnceOpened {
 		return false
 	}
@@ -12096,7 +12124,7 @@ func (d Diagnostics) ScriptOperandNamesItself(err error) bool {
 //
 // shell is what the shell calls itself, never the word it was invoked by:
 // nothing has been read, so there is no `$0` yet. See ScriptDiagnostic.
-func (d Diagnostics) InvocationOptionDiagnostic(shell, word string) string {
+func (d *Diagnostics) InvocationOptionDiagnostic(shell, word string) string {
 	if d.InvocationBadLongOption == "" {
 		return ""
 	}
@@ -12124,12 +12152,12 @@ func (d Diagnostics) InvocationOptionDiagnostic(shell, word string) string {
 //
 // The version line above it and the trailer under it are the dialect's, on
 // that value; this is the middle. Empty where the dialect writes no block.
-func (d Diagnostics) InvocationHelpBlock(shell string) string {
+func (d *Diagnostics) InvocationHelpBlock(shell string) string {
 	return d.invocationUsageBlock(shell, true)
 }
 
 // InvocationOptionDiagnostic's, for one the front end stopped.
-func (d Diagnostics) invocationUsageBlock(shell string, long bool) string {
+func (d *Diagnostics) invocationUsageBlock(shell string, long bool) string {
 	u := d.InvocationUsage
 	if long && d.InvocationLongOptionUsage != "" {
 		u = d.InvocationLongOptionUsage
@@ -12151,7 +12179,7 @@ func (d Diagnostics) invocationUsageBlock(shell string, long bool) string {
 // shell is what the shell calls itself, which on the script route is the
 // script — measured, dash names the script here and names itself everywhere
 // else, which is the same rule its other invocation diagnostics follow.
-func (d Diagnostics) JobControlDiagnostic(shell string) string {
+func (d *Diagnostics) JobControlDiagnostic(shell string) string {
 	if d.NoJobControlAtStartup == "" {
 		return ""
 	}
@@ -12171,7 +12199,7 @@ func (d Diagnostics) JobControlDiagnostic(shell string) string {
 // two are not one sentence: one column writes both, one writes the second
 // alone, and two write neither, so a dialect has to be able to answer them
 // apart.
-func (d Diagnostics) TerminalProcessGroupDiagnostic(shell string, pgid int) string {
+func (d *Diagnostics) TerminalProcessGroupDiagnostic(shell string, pgid int) string {
 	if d.CannotSetTerminalProcessGroup == "" {
 		return ""
 	}
@@ -12188,7 +12216,7 @@ func (d Diagnostics) TerminalProcessGroupDiagnostic(shell string, pgid int) stri
 // will not open — a missing command's number against an unrunnable one's.
 // zsh gives 127 to both and dash 2 to both, which they say by setting the two
 // fields to one value rather than by this asking a different question of them.
-func (d Diagnostics) ScriptStatus(err error) int {
+func (d *Diagnostics) ScriptStatus(err error) int {
 	if errors.Is(err, fs.ErrNotExist) {
 		if d.ScriptNotFoundStatus != 0 {
 			return d.ScriptNotFoundStatus
@@ -12207,7 +12235,7 @@ func (d Diagnostics) ScriptStatus(err error) int {
 // Three of the four print their name alone; the one that counts lines with a
 // bare number writes the nought it has not left yet, which is what its own
 // location style already spells.
-func (d Diagnostics) invocationPrefix(shell string) string {
+func (d *Diagnostics) invocationPrefix(shell string) string {
 	if shell == "" && !d.NamedByAnEmptyWord {
 		shell = "sh"
 	}
@@ -12222,7 +12250,7 @@ func (d Diagnostics) invocationPrefix(shell string) string {
 // Exported because the first thing a shell reports is usually a syntax error,
 // and that happens before a Runner exists — whoever parsed the script has to
 // render it with the same answers the Runner would have used.
-func (d Diagnostics) Report(name string, line int, msg string) string {
+func (d *Diagnostics) Report(name string, line int, msg string) string {
 	return d.prefix(name, "", false, line) + msg
 }
 
@@ -12231,7 +12259,7 @@ func (d Diagnostics) Report(name string, line int, msg string) string {
 //
 // input is the front end's label for it — "-c", and empty for a script file or
 // for standard input, both of which that dialect leaves unnamed.
-func (d Diagnostics) ReportFrom(name, input string, line int, msg string) string {
+func (d *Diagnostics) ReportFrom(name, input string, line int, msg string) string {
 	if input != "" && d.NamesTheInputInLocation {
 		name += ": " + input
 	}
@@ -12249,7 +12277,7 @@ func (d Diagnostics) ReportFrom(name, input string, line int, msg string) string
 //
 // name is the shell or the script; input is what the front end calls the
 // origin, "-c" or empty; src is the whole script, for the echo.
-func (d Diagnostics) ParseDiagnostic(name, input string, err error, src string) string {
+func (d *Diagnostics) ParseDiagnostic(name, input string, err error, src string) string {
 	return d.ParseDiagnosticAfter(name, input, err, src, 0)
 }
 
@@ -12257,7 +12285,16 @@ func (d Diagnostics) ParseDiagnostic(name, input string, err error, src string) 
 // a program, where reached is the line of the last command that program ran
 // — nought where nothing has. Only the dialect that locates the failure there
 // reads it; see Diagnostics.ParseFailureIsLocatedWhereTheProgramGotTo.
-func (d Diagnostics) ParseDiagnosticAfter(name, input string, err error, src string, reached int) string {
+func (d *Diagnostics) ParseDiagnosticAfter(name, input string, err error, src string, reached int) string {
+	// The table is moved below and is the caller's, so the first move takes
+	// a copy; none of the three is on a path that runs often.
+	own := false
+	locate := func(style LocationStyle) {
+		if !own {
+			d, own = d.Clone(), true
+		}
+		d.Location = style
+	}
 	_, runtime := d.runtimeRefusal(err)
 	at := 0
 	if d.ParseFailureNamesItsOwnLine && !runtime && d.ParseFailureIsLocatedWhereTheProgramGotTo && reached > 1 {
@@ -12274,13 +12311,13 @@ func (d Diagnostics) ParseDiagnosticAfter(name, input string, err error, src str
 		// line at all: `<script>: 1x: invalid variable name` where the real
 		// shell says `<script>: line 1: 1x: invalid variable name`. The flag
 		// was read before anything asked which kind this was (#1076).
-		d.Location = LocationNone
+		locate(LocationNone)
 	}
 	if d.locatesByNameAlone(err) {
 		// One failure this dialect locates by name alone. Not LocationNone,
 		// which is a different answer with the same rendering here and would
 		// take the shell's name away from a dialect that prints one.
-		d.Location = LocationNameOnly
+		locate(LocationNameOnly)
 	}
 	line := d.ParseFailureLine(err)
 	if line == 0 {
@@ -12311,7 +12348,7 @@ func (d Diagnostics) ParseDiagnosticAfter(name, input string, err error, src str
 			// newline after it is `s.sh: parse error near `()'` and then
 			// `s.sh: parse error near `v=$(echo hi; ()'` on zsh 5.9.2,
 			// measured 2026-09-21.
-			d.Location = LocationNameOnly
+			locate(LocationNameOnly)
 		}
 	}
 	located := line
@@ -12342,7 +12379,7 @@ func (d Diagnostics) ParseDiagnosticAfter(name, input string, err error, src str
 // never came is the exception, and it is the exception because it is counted
 // from its parentheses rather than placed in the file: `v=$(echo hi; ()` is
 // `s.sh:1:` twice over. See MissingFuncBodyCountsFromItsParens.
-func (d Diagnostics) bodyRefusalWrittenFirst(name, input string, err error) (string, int, bool) {
+func (d *Diagnostics) bodyRefusalWrittenFirst(name, input string, err error) (string, int, bool) {
 	body, at, quoteAt, ok := d.bodyRefusalToWriteFirst(err)
 	if !ok {
 		return "", 0, false
@@ -12367,7 +12404,7 @@ func (d Diagnostics) bodyRefusalWrittenFirst(name, input string, err error) (str
 // 2026-09-27, `eval 'echo b; v=$(for); echo a'` on zsh 5.9.2 writes
 // “(eval):1: parse error near `)' “ and then the substitution, where this
 // wrote the substitution alone.
-func (d Diagnostics) bodyRefusalToWriteFirst(err error) (body *syntax.Error, at, quoteAt int, ok bool) {
+func (d *Diagnostics) bodyRefusalToWriteFirst(err error) (body *syntax.Error, at, quoteAt int, ok bool) {
 	var se *syntax.Error
 	if !d.UnterminatedSubstitutionWritesItsBodysRefusal || !errors.As(err, &se) {
 		return nil, 0, 0, false
@@ -12402,7 +12439,7 @@ func (d Diagnostics) bodyRefusalToWriteFirst(err error) (body *syntax.Error, at,
 //
 // See UnterminatedSubstitutionIsItsBodysRefusal, which holds the measurement.
 // Two readers — the message and the line — because the dialect moves both.
-func (d Diagnostics) substitutionBodyReplacesTheQuote(err error) (*syntax.Error, string, bool) {
+func (d *Diagnostics) substitutionBodyReplacesTheQuote(err error) (*syntax.Error, string, bool) {
 	var se *syntax.Error
 	if !d.UnterminatedSubstitutionIsItsBodysRefusal || !errors.As(err, &se) {
 		return nil, "", false
@@ -12446,7 +12483,7 @@ func (d Diagnostics) substitutionBodyReplacesTheQuote(err error) (*syntax.Error,
 // with one and with two lines above it — which is what says the second
 // message is not counting from the failure either. See
 // Runner.substFailureLocatedByNameAlone.
-func (d Diagnostics) locatesByNameAlone(err error) bool {
+func (d *Diagnostics) locatesByNameAlone(err error) bool {
 	n, counted := d.missingFuncBodyLine(err)
 	return counted && n == 0
 }
@@ -12457,7 +12494,7 @@ func (d Diagnostics) locatesByNameAlone(err error) bool {
 // Nought with counted true is the failure it locates by the shell's name
 // alone — the parentheses and the refusal on one line — which is what
 // locatesByNameAlone reads. See MissingFuncBodyCountsFromItsParens.
-func (d Diagnostics) missingFuncBodyLine(err error) (int, bool) {
+func (d *Diagnostics) missingFuncBodyLine(err error) (int, bool) {
 	var se *syntax.Error
 	if !d.MissingFuncBodyCountsFromItsParens || !errors.As(err, &se) || !se.FuncBody {
 		return 0, false
@@ -12472,7 +12509,7 @@ func (d Diagnostics) missingFuncBodyLine(err error) (int, bool) {
 // its own rather than a longer wording: bash points it at the `[[` and points
 // the line after it at the token, so a condition opened on line 1 and refused
 // on line 2 names both.
-func (d Diagnostics) condPreamble(name, input string, err error) string {
+func (d *Diagnostics) condPreamble(name, input string, err error) string {
 	var se *syntax.Error
 	if !errors.As(err, &se) || se.Construct != "[[" {
 		return ""
@@ -12567,7 +12604,7 @@ func (d Diagnostics) condPreamble(name, input string, err error) string {
 }
 
 // echoLine is the second line, or empty for none.
-func (d Diagnostics) echoLine(name, input string, line int, err error, src string) string {
+func (d *Diagnostics) echoLine(name, input string, line int, err error, src string) string {
 	text := d.offendingLine(line, err, src)
 	if text == "" {
 		return ""
@@ -12598,7 +12635,7 @@ func (d Diagnostics) echoLine(name, input string, line int, err error, src strin
 // message contradict the first. bash 5.3 writes `eval: line 6:` twice for a
 // two-line `eval` on line 5 whose second line will not parse; this said `line
 // 6` and then `line 2`.
-func (d Diagnostics) SourceEcho(naming SourceNaming, shell, source string, line, at int, err error, src string) string {
+func (d *Diagnostics) SourceEcho(naming SourceNaming, shell, source string, line, at int, err error, src string) string {
 	text := d.offendingLine(at, err, src)
 	if text == "" {
 		return ""
@@ -12624,7 +12661,7 @@ func (d Diagnostics) SourceEcho(naming SourceNaming, shell, source string, line,
 // so it survives where there is no source to index — measured 2026-09-12 on a
 // pseudo-terminal, where bash writes both lines for `for ((i=0))` with no line
 // number in front of either (#2225).
-func (d Diagnostics) offendingLine(line int, err error, src string) string {
+func (d *Diagnostics) offendingLine(line int, err error, src string) string {
 	var se *syntax.Error
 	if !errors.As(err, &se) {
 		return ""
@@ -12676,7 +12713,7 @@ func (d Diagnostics) offendingLine(line int, err error, src string) string {
 // prefix renders the start of a diagnostic for a shell called name at line.
 // prefixWithoutLine is the location with no line in it, which one dialect
 // writes when a message comes from the first line of a function.
-func (d Diagnostics) prefixWithoutLine(name, builtin string) string {
+func (d *Diagnostics) prefixWithoutLine(name, builtin string) string {
 	if name == "" && !d.NamedByAnEmptyWord {
 		name = "sh"
 	}
@@ -12703,7 +12740,7 @@ func (d Diagnostics) prefixWithoutLine(name, builtin string) string {
 // a space after theirs, and `name + ":" + builtin` — which was the whole of
 // this rule while zsh was the only dialect asking — wrote `/s.sh:shift: line
 // 1: ` for the second (#2761).
-func (d Diagnostics) withBuiltinInLocation(name, builtin string, style LocationStyle) string {
+func (d *Diagnostics) withBuiltinInLocation(name, builtin string, style LocationStyle) string {
 	if builtin == "" || !d.NamesBuiltinInLocation {
 		return name
 	}
@@ -12722,7 +12759,7 @@ func (d Diagnostics) withBuiltinInLocation(name, builtin string, style LocationS
 // the answer depends on the line as well as on the dialect. Read by the chain
 // of borrowed texts, where the outermost component follows the shell's own
 // name — see [Diagnostics.BorrowedTextRendersTheCallStack].
-func (d Diagnostics) locationNamesALineAt(line int) bool {
+func (d *Diagnostics) locationNamesALineAt(line int) bool {
 	switch d.Location {
 	case LocationLineWordAfterFirst, LocationBracketLineAfterFirst:
 		return line > 1
@@ -12753,10 +12790,11 @@ func (d Diagnostics) locationNamesALineAt(line int) bool {
 // ask [Diagnostics.locationNamesALineAt] for the same fact; this is the one
 // the innermost asks, because it is located rather than bracketed. See
 // [Diagnostics.BorrowedTextRendersTheCallStack] (#2417).
-func (d Diagnostics) prefixAfterTheFirstFrame(name, builtin string, byBuiltin bool, line int) string {
-	d.Location = namesEveryLine(d.Location)
-	d.BuiltinLocation = namesEveryLine(d.BuiltinLocation)
-	return d.prefix(name, builtin, byBuiltin, line)
+func (d *Diagnostics) prefixAfterTheFirstFrame(name, builtin string, byBuiltin bool, line int) string {
+	n := d.Clone()
+	n.Location = namesEveryLine(n.Location)
+	n.BuiltinLocation = namesEveryLine(n.BuiltinLocation)
+	return n.prefix(name, builtin, byBuiltin, line)
 }
 
 // namesEveryLine is style with its "leave line 1 unwritten" answer taken out,
@@ -12771,7 +12809,7 @@ func namesEveryLine(style LocationStyle) LocationStyle {
 	return style
 }
 
-func (d Diagnostics) prefix(name, builtin string, byBuiltin bool, line int) string {
+func (d *Diagnostics) prefix(name, builtin string, byBuiltin bool, line int) string {
 	if name == "" && !d.NamedByAnEmptyWord {
 		name = "sh"
 	}
@@ -12824,7 +12862,7 @@ func (d Diagnostics) prefix(name, builtin string, byBuiltin bool, line int) stri
 // SyntaxError reports the status a failed parse should carry.
 // StatusForParseError is the status a particular parse failure reports, which
 // is not always the dialect's general one.
-func (d Diagnostics) StatusForParseError(err error) int {
+func (d *Diagnostics) StatusForParseError(err error) int {
 	if st, ok := d.runtimeRefusal(err); ok {
 		return st
 	}
@@ -12835,7 +12873,7 @@ func (d Diagnostics) StatusForParseError(err error) int {
 // at a time, given the status the last command that ran left — which one
 // dialect keeps over some failures. See
 // Diagnostics.ParseFailureKeepsAFailingStatus.
-func (d Diagnostics) StatusForParseErrorAfter(err error, before int) int {
+func (d *Diagnostics) StatusForParseErrorAfter(err error, before int) int {
 	if before == 0 {
 		return d.StatusForParseError(err)
 	}
@@ -12934,7 +12972,7 @@ func unmatchedInTheReader(err error) bool {
 //
 // The dialect having given the failure a status of its own is the signal, so
 // there is one list and not two that could drift.
-func (d Diagnostics) runtimeRefusal(err error) (int, bool) {
+func (d *Diagnostics) runtimeRefusal(err error) (int, bool) {
 	var se *syntax.Error
 	if !errors.As(err, &se) {
 		return 0, false
@@ -12959,7 +12997,7 @@ func (d Diagnostics) runtimeRefusal(err error) (int, bool) {
 	return 0, false
 }
 
-func (d Diagnostics) SyntaxStatus() int {
+func (d *Diagnostics) SyntaxStatus() int {
 	if d.SyntaxErrorStatus == 0 {
 		return 2
 	}
@@ -13005,7 +13043,7 @@ const (
 // StartupParseFailureStatusFor is the status a parse failure in a startup file
 // leaves, given the status before it, whether any of the file ran before it,
 // and whether the shell is interactive.
-func (d Diagnostics) StartupParseFailureStatusFor(err error, before int, ran, interactive bool) int {
+func (d *Diagnostics) StartupParseFailureStatusFor(err error, before int, ran, interactive bool) int {
 	switch d.StartupParseFailureStatus {
 	case StartupParseStatusKept:
 		switch {
@@ -13024,14 +13062,14 @@ func (d Diagnostics) StartupParseFailureStatusFor(err error, before int, ran, in
 
 // sourcedSyntaxStatus is SyntaxStatus for text `.` read from a file, which is
 // the same number in every dialect but zsh.
-func (d Diagnostics) sourcedSyntaxStatus() int {
+func (d *Diagnostics) sourcedSyntaxStatus() int {
 	if d.SourcedSyntaxErrorStatus == 0 {
 		return d.SyntaxStatus()
 	}
 	return d.SourcedSyntaxErrorStatus
 }
 
-func (d Diagnostics) dotNoOperandStatus() int {
+func (d *Diagnostics) dotNoOperandStatus() int {
 	if d.DotNoOperandStatus == 0 {
 		return 2
 	}
@@ -13045,7 +13083,7 @@ func (d Diagnostics) dotNoOperandStatus() int {
 //
 // Everything from the parenthesis on is the unit and the letter, which the
 // refusal does not carry, so the label is what stands before it.
-func (d Diagnostics) ulimitResourceName(res Resource) string {
+func (d *Diagnostics) ulimitResourceName(res Resource) string {
 	for _, row := range d.UlimitListing {
 		if row.Fixed != "" || row.Res != res {
 			continue
@@ -13073,7 +13111,7 @@ func (d Diagnostics) ulimitResourceName(res Resource) string {
 // A missing file cannot decide it — dash writes `No such file` and BusyBox
 // ash writes `no such file`, each its own sentence rather than the errno,
 // so ash reads as a second lowercasing column on that probe alone.
-func (d Diagnostics) reasonText(s string) string {
+func (d *Diagnostics) reasonText(s string) string {
 	if !d.LowercaseReason || s == "" {
 		return s
 	}
@@ -13082,7 +13120,7 @@ func (d Diagnostics) reasonText(s string) string {
 
 // redirectFailureStatus is RedirectFailureStatus with the substrate's own
 // answer for zero.
-func (d Diagnostics) redirectFailureStatus() int {
+func (d *Diagnostics) redirectFailureStatus() int {
 	if d.RedirectFailureStatus == 0 {
 		return 1
 	}
@@ -13105,7 +13143,7 @@ func (r *Runner) redirectFailureStatus() int {
 }
 
 // timeDecimals is TimeDecimals with the substrate's own answer for zero.
-func (d Diagnostics) timeDecimals() int {
+func (d *Diagnostics) timeDecimals() int {
 	if d.TimeDecimals == 0 {
 		return 3
 	}
@@ -13113,14 +13151,14 @@ func (d Diagnostics) timeDecimals() int {
 }
 
 // timesDecimals is TimesDecimals with the substrate's own answer for zero.
-func (d Diagnostics) timesDecimals() int {
+func (d *Diagnostics) timesDecimals() int {
 	if d.TimesDecimals == 0 {
 		return 3
 	}
 	return d.TimesDecimals
 }
 
-func (d Diagnostics) dotCannotOpenStatus() int {
+func (d *Diagnostics) dotCannotOpenStatus() int {
 	if d.DotCannotOpenStatus == 0 {
 		return 1
 	}
@@ -13229,7 +13267,7 @@ func (r *Runner) speaksAsAtAPrompt() bool {
 // So the common path hands back the runner's own vector and copies nothing.
 // The alias that creates is the price: a write through this pointer does not
 // change one message, it changes the shell for the rest of the run. A caller
-// that needs to move an axis takes a copy first — `d := *r.diag()`, which is
+// that needs to move an axis takes a copy first — `d := r.diag().Clone()`, which is
 // what locationPrefixNamed does — and TestNothingWritesThroughTheDiagnostics
 // reads this package's source and fails on anything that does not.
 //
@@ -13244,18 +13282,18 @@ func (r *Runner) diag() *Diagnostics {
 			// a prompt. Copied, for the reason the prompt path below copies;
 			// this is one refusal and not a loop. See
 			// Runner.interactiveSubstRefusal.
-			d := *r.Diagnostics
+			d := r.Diagnostics.Clone()
 			d.Location, d.BuiltinLocation = d.writtenLocation, d.writtenBuiltinLocation
-			return &d
+			return d
 		}
 		if r.stdinTextLocatedAsAScript() {
 			// The script's location, which the route's shape replaced and
 			// keepBodyLocation kept. Made once per vector, for the reason
 			// the prompt's reading below is.
 			if r.stdinScriptDiagnostics == nil || r.stdinScriptDiagnosticsOf != r.Diagnostics {
-				d := *r.Diagnostics
+				d := r.Diagnostics.Clone()
 				d.Location, d.BuiltinLocation = d.bodyLocation, d.bodyBuiltinLocation
-				r.stdinScriptDiagnostics, r.stdinScriptDiagnosticsOf = &d, r.Diagnostics
+				r.stdinScriptDiagnostics, r.stdinScriptDiagnosticsOf = d, r.Diagnostics
 			}
 			return r.stdinScriptDiagnostics
 		}
@@ -13280,9 +13318,9 @@ func (r *Runner) diag() *Diagnostics {
 		// returns; TestNothingWritesThroughTheDiagnostics keeps that true.
 		return &coreDiagnostics
 	}
-	d := CoreDiagnostics()
+	d := &coreDiagnostics
 	if r.Diagnostics != nil {
-		d = *r.Diagnostics
+		d = r.Diagnostics
 	}
 	if located {
 		// A line typed at a prompt is located the prompt's way — see
@@ -13312,9 +13350,9 @@ func (r *Runner) diag() *Diagnostics {
 		// is what makes this a question about the body's origin rather than
 		// about being inside a function at all (#2052).
 		d = d.ForPrompt()
-		r.promptDiagnostics, r.promptDiagnosticsOf = &d, r.Diagnostics
+		r.promptDiagnostics, r.promptDiagnosticsOf = d, r.Diagnostics
 	}
-	return &d
+	return d
 }
 
 // inFunctionReadFromAFile reports whether the body running now was read from

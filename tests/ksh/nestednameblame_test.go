@@ -16,7 +16,7 @@ import (
 // syntax.Error.NestedInTheNamePosition and
 // interp.Diagnostics.NestedNameIsBlamedOnTheBang.
 func TestASecondExpansionInTheNamePositionIsBlamedOnABang(t *testing.T) {
-	if !ksh.Diagnostics().NestedNameIsBlamedOnTheBang {
+	if !diagTable(ksh.Diagnostics()).NestedNameIsBlamedOnTheBang {
 		t.Fatal("NestedNameIsBlamedOnTheBang = false, want true")
 	}
 	want := "syntax error at line 1: `!' unexpected"

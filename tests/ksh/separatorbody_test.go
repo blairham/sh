@@ -55,7 +55,7 @@ func TestABodyMayBeWrittenAsOneSeparatorHere(t *testing.T) {
 			t.Errorf("%q parsed; this shell refuses it", tc.src)
 			continue
 		}
-		if got := ksh.Diagnostics().ParseFailure(err); got != tc.want {
+		if got := diagTable(ksh.Diagnostics()).ParseFailure(err); got != tc.want {
 			t.Errorf("%q:\n got %q\nwant %q", tc.src, got, tc.want)
 		}
 	}

@@ -1207,9 +1207,9 @@ func autoloadBodyRefusedIn(r *interp.Runner, path, name, body string) bool {
 	if err == nil {
 		return false
 	}
-	diag := Diagnostics()
-	if r.Diagnostics != nil {
-		diag = *r.Diagnostics
+	diag := r.Diagnostics
+	if diag == nil {
+		diag = ownDiagnostics()
 	}
 	line := diag.ParseFailureLine(err)
 	if line < 1 {

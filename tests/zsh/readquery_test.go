@@ -133,7 +133,7 @@ print -r -- "st=$? [$REPLY]"
 // are supposed to agree about is exactly what one of them cannot reach.
 func TestReadsTwoLetterTablesDoNotOverlap(t *testing.T) {
 	accepted := zsh.Semantics().ReadOptions
-	missing := zsh.Diagnostics().UnimplementedOptionLetters["read"]
+	missing := diagTable(zsh.Diagnostics()).UnimplementedOptionLetters["read"]
 	if accepted == "" || missing == "" {
 		t.Fatalf("accepted=%q missing=%q, want both tables to have letters in them",
 			accepted, missing)

@@ -63,10 +63,10 @@ func TestKshLeavesTheLineOutOnTheFirstLineOfACommandString(t *testing.T) {
 // TestOnlyKshNamesThePlaceTwoWays keeps the field from spreading: it is one
 // dialect's habit, and the other three name the place one way.
 func TestOnlyKshNamesThePlaceTwoWays(t *testing.T) {
-	if ksh.Diagnostics().BuiltinLocation == 0 {
+	if diagTable(ksh.Diagnostics()).BuiltinLocation == 0 {
 		t.Error("ksh93 should name a builtin's place its own way")
 	}
-	if ksh.Diagnostics().ScriptBuiltinLocation == 0 {
+	if diagTable(ksh.Diagnostics()).ScriptBuiltinLocation == 0 {
 		t.Error("ksh93 should name it its own way in a script too")
 	}
 }

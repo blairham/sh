@@ -2257,7 +2257,7 @@ func (r *Runner) waitReportsNoSuchJob(spec string, code int) {
 	if r.jobSpecMissIsSilent() {
 		return
 	}
-	if line, ok := jobSpecMiss(*r.diag(), "wait", spec); ok && code != jobOnAnEmptySlot {
+	if line, ok := jobSpecMiss(r.diag(), "wait", spec); ok && code != jobOnAnEmptySlot {
 		r.diagf("%s\n", line)
 		return
 	}

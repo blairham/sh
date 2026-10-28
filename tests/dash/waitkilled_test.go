@@ -35,7 +35,7 @@ func TestAWaitSaysASignalEndedTheJobItReaped(t *testing.T) {
 	if got := dash.Semantics().WaitReportsTheSignalThatEndedTheJob; got != interp.Yes {
 		t.Errorf("WaitReportsTheSignalThatEndedTheJob is %v, want Yes", got)
 	}
-	if own := dash.Diagnostics().WaitSignalNotice; own != "" {
+	if own := diagTable(dash.Diagnostics()).WaitSignalNotice; own != "" {
 		t.Errorf("WaitSignalNotice is %q, want none: this column writes the general sentence", own)
 	}
 

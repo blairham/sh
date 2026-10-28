@@ -55,7 +55,7 @@ func TestARefusedIONumberIsNamedAsBashNamesIt(t *testing.T) {
 			t.Errorf("%q parsed, want a refusal", tc.src)
 			continue
 		}
-		if got := bash.Diagnostics().ParseFailure(err); got != tc.want {
+		if got := diagTable(bash.Diagnostics()).ParseFailure(err); got != tc.want {
 			t.Errorf("%q:\n got %q\nwant %q", tc.src, got, tc.want)
 		}
 	}

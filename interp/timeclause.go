@@ -130,7 +130,7 @@ func (r *Runner) timeClause(ctx context.Context, tc *syntax.TimeClause) error {
 		// A dialect that answers a bare `time` with accumulated state
 		// rather than with a run of nothing. The run-of-nothing answer
 		// falls through: it is the ordinary report over an empty interval.
-		r.reportBareTime(*d)
+		r.reportBareTime(d)
 		r.status = 0
 		if tc.Negated {
 			r.status = 1
@@ -199,7 +199,7 @@ func (r *Runner) timeClause(ctx context.Context, tc *syntax.TimeClause) error {
 	} else {
 		user := (selfAfter.user - selfBefore.user) + (childrenAfter.user - childrenBefore.user)
 		sys := (selfAfter.system - selfBefore.system) + (childrenAfter.system - childrenBefore.system)
-		r.reportTime(*d, tc.Posix, elapsed, user, sys, timing)
+		r.reportTime(d, tc.Posix, elapsed, user, sys, timing)
 	}
 	if tc.Negated {
 		// `! time x` negates the timed pipeline's status, exactly as the
@@ -216,7 +216,7 @@ func (r *Runner) timeClause(ctx context.Context, tc *syntax.TimeClause) error {
 
 // reportTime writes the report in the dialect's layout — or in the POSIX one,
 // which `-p` selects identically in both shells that read the flag.
-func (r *Runner) reportTime(d Diagnostics, posix bool, elapsed, user, sys time.Duration, timing *pipelineTiming) {
+func (r *Runner) reportTime(d *Diagnostics, posix bool, elapsed, user, sys time.Duration, timing *pipelineTiming) {
 	var b strings.Builder
 	if format, ok := r.timeFormat(); ok && !posix && d.TimeFormatVerbs == TimeFormatVerbsElapsedWithUnits {
 		// The other vocabulary, and a **line per pipeline element** rather
@@ -289,7 +289,7 @@ func (r *Runner) reportTime(d Diagnostics, posix bool, elapsed, user, sys time.D
 
 // reportBareTime answers a bare `time` for the dialects whose answer is
 // accumulated state rather than a run of nothing.
-func (r *Runner) reportBareTime(d Diagnostics) {
+func (r *Runner) reportBareTime(d *Diagnostics) {
 	self, children, ok := processTimes()
 	if !ok {
 		r.diagf("time: not available on this platform\n")
@@ -321,7 +321,7 @@ func (r *Runner) reportBareTime(d Diagnostics) {
 
 // bareTimeLine is one of a bare `time`'s two lines, through the dialect's
 // format where it has one in the vocabulary that reads `%J`.
-func (r *Runner) bareTimeLine(d Diagnostics, label string, user, sys time.Duration) string {
+func (r *Runner) bareTimeLine(d *Diagnostics, label string, user, sys time.Duration) string {
 	if format, ok := r.timeFormat(); ok && d.TimeFormatVerbs == TimeFormatVerbsElapsedWithUnits {
 		return timeFormatWithUnits(format, label, 0, user, sys) + "\n"
 	}

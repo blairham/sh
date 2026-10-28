@@ -90,7 +90,7 @@ func TestAnOpenEndedPipelineIsRefusedHere(t *testing.T) {
 			t.Errorf("%q parsed; this shell refuses it", tc.src)
 			continue
 		}
-		d := zsh.Diagnostics().ForScript()
+		d := diagTable(zsh.Diagnostics()).ForScript()
 		if got := d.ParseDiagnostic("s.sh", "", err, tc.src); got != tc.want {
 			t.Errorf("%q:\n got %q\nwant %q", tc.src, got, tc.want)
 		}
@@ -119,7 +119,7 @@ func TestADanglingOperatorStillRefusesWhatThisShellRefuses(t *testing.T) {
 			t.Errorf("%q parsed; this shell refuses it", tc.src)
 			continue
 		}
-		d := zsh.Diagnostics().ForScript()
+		d := diagTable(zsh.Diagnostics()).ForScript()
 		if got := d.ParseDiagnostic("s.sh", "", err, tc.src); got != tc.want {
 			t.Errorf("%q:\n got %q\nwant %q", tc.src, got, tc.want)
 		}

@@ -119,7 +119,7 @@ func TestLocalHasNoMatchingLetter(t *testing.T) {
 // is what keeps the two statements from drifting apart: a letter named as
 // unimplemented *and* answered is a shell telling a script both things.
 func TestTheMatchingLetterIsNoLongerCalledMissing(t *testing.T) {
-	missing := zsh.Diagnostics().UnimplementedOptionLetters
+	missing := diagTable(zsh.Diagnostics()).UnimplementedOptionLetters
 	for _, name := range []string{"typeset", "declare", "local"} {
 		if strings.ContainsRune(missing[name], 'm') {
 			t.Errorf("UnimplementedOptionLetters[%s] = %q, which still claims -m is missing",

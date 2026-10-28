@@ -242,7 +242,7 @@ func TestAGlobFlagsRefusalNamesTheTokenAfterThePattern(t *testing.T) {
 			t.Errorf("%s: parsed, want a refusal", tc.src)
 			continue
 		}
-		if got := zsh.Diagnostics().ParseFailure(err); got != tc.want {
+		if got := diagTable(zsh.Diagnostics()).ParseFailure(err); got != tc.want {
 			t.Errorf("%s:\n  said %q\n  want %q", tc.src, got, tc.want)
 		}
 	}

@@ -41,7 +41,7 @@ func TestASeparatorAtTheEndOfAPatternListBlamesTheWordAfterTheParen(t *testing.T
 		if err == nil {
 			t.Fatalf("%q parsed; this shell refuses it", src)
 		}
-		d := dash.Diagnostics().ForScript()
+		d := diagTable(dash.Diagnostics()).ForScript()
 		if got := d.ParseDiagnostic("s.sh", "", err, src); got != dashCaseWant {
 			t.Errorf("%q:\n got %q\nwant %q", src, got, dashCaseWant)
 		}
@@ -107,7 +107,7 @@ func TestTwoOperatorsInOnePatternPositionIsStillRefused(t *testing.T) {
 	if err == nil {
 		t.Fatal("parsed; this shell refuses it")
 	}
-	d := dash.Diagnostics().ForScript()
+	d := diagTable(dash.Diagnostics()).ForScript()
 	if got := d.ParseDiagnostic("s.sh", "", err, src); got != want {
 		t.Errorf("got %q, want %q", got, want)
 	}
@@ -127,7 +127,7 @@ func TestTheDoubledSeparatorIsBlamedWholeAtTheSeparatorPosition(t *testing.T) {
 	if err == nil {
 		t.Fatal("parsed; this shell refuses it")
 	}
-	d := dash.Diagnostics().ForScript()
+	d := diagTable(dash.Diagnostics()).ForScript()
 	if got := d.ParseDiagnostic("s.sh", "", err, src); got != want {
 		t.Errorf("got %q, want %q", got, want)
 	}
@@ -148,7 +148,7 @@ func TestAnOperatorWithNoSeparatorBeforeItIsRefusedByName(t *testing.T) {
 		if err == nil {
 			t.Fatalf("%q parsed; this shell refuses it", tc.src)
 		}
-		d := dash.Diagnostics().ForScript()
+		d := diagTable(dash.Diagnostics()).ForScript()
 		if got := d.ParseDiagnostic("s.sh", "", err, tc.src); got != tc.want {
 			t.Errorf("%q:\n got %q\nwant %q", tc.src, got, tc.want)
 		}

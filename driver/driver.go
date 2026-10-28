@@ -1351,16 +1351,14 @@ const (
 // function that builds it: route built seven, and every start's stack was
 // deeper by all seven whichever one it took (#6491).
 func (sh *Shell) diagnosticsFor(kind diagnosticsKind) *interp.Diagnostics {
-	dg := new(interp.Diagnostics)
 	switch kind {
 	case stdinDiagnostics:
-		*dg = sh.Diagnostics.ForStdin()
+		return sh.Diagnostics.ForStdin()
 	case scriptDiagnostics:
-		*dg = sh.Diagnostics.ForScript()
+		return sh.Diagnostics.ForScript()
 	default:
-		*dg = sh.Diagnostics
+		return sh.Diagnostics.Clone()
 	}
-	return dg
 }
 
 // invocationRoute is which of the three routes the program came by, for the
@@ -1532,11 +1530,11 @@ func refusedInASubstitutionBody(err error, src string) bool {
 // and in `-i s5.sh` alike is `foo: warning: here-document at line 1
 // delimited by end-of-file (wanted `EOF')`, with no file and no line in
 // front, where the same script without `-i` is `s5.sh: line 2: warning: …`.
-func (s *source) remarkDiagnostics(r *interp.Runner) interp.Diagnostics {
+func (s *source) remarkDiagnostics(r *interp.Runner) *interp.Diagnostics {
 	if s.speaksAsAtAPrompt(r) {
 		return s.diag().ForPrompt()
 	}
-	return *s.diag()
+	return s.diag()
 }
 
 func (s *source) remarkName(r *interp.Runner) string {
@@ -2438,9 +2436,9 @@ func (sh *Shell) operands(args []string, inv invocation) (source, error) {
 		in.diag().InteractiveScriptIsLocatedAsAPrompt {
 		// See Diagnostics.InteractiveScriptIsLocatedAsAPrompt, and the
 		// numbering it goes with in runInput.
-		located := *in.diag()
-		located.LocateScriptAsAPrompt(sh.Diagnostics)
-		in.dg = &located
+		located := in.diag().Clone()
+		located.LocateScriptAsAPrompt(&sh.Diagnostics)
+		in.dg = located
 	}
 	// `-s` as written, carried here for the same reason and in the same
 	// place: it survives a route that overrode it, and `sh -s -c cmd` shows
@@ -2873,13 +2871,13 @@ func commandSource(sh *Shell, src string, operands []string) source {
 // about every hook: an interactive shell that could not `exec`, or whose
 // `umask` did nothing, would be a different shell from the one that runs the
 // same lines from a file.
-func (sh *Shell) newRunner(name string, params []string, dg interp.Diagnostics, route interp.Route) *interp.Runner {
+func (sh *Shell) newRunner(name string, params []string, dg *interp.Diagnostics, route interp.Route) *interp.Runner {
 	return sh.newRunnerAs(name, params, dg, route, "")
 }
 
 // newRunnerAs is newRunner for a shell started in an emulation — see
 // interp.Runner.InvocationEmulation.
-func (sh *Shell) newRunnerAs(name string, params []string, dg interp.Diagnostics, route interp.Route, emulation string) *interp.Runner {
+func (sh *Shell) newRunnerAs(name string, params []string, dg *interp.Diagnostics, route interp.Route, emulation string) *interp.Runner {
 	// The runner's own copies of the vector and the semantics, because a
 	// script moves both — `shopt -s extglob` is a field of the one and
 	// `inherit_errexit` of the other — and the Shell they came from is the
@@ -2902,7 +2900,7 @@ func (sh *Shell) newRunnerAs(name string, params []string, dg interp.Diagnostics
 		InputName:   inputLabelFor(route),
 		Dialect:     &dialect,
 		Semantics:   &semantics,
-		Diagnostics: &dg,
+		Diagnostics: dg.Clone(),
 		Name:        name,
 		// argv[0], which is a different fact from Name and is the one the
 		// startup `$_` follows. withDefaults has already preferred the real
@@ -3208,7 +3206,7 @@ func (sh *Shell) runInput(in source) int {
 	// diagnostic calls the shell, which one dialect answers with a fixed name
 	// instead (source.diagName). Folding the two together shortened `$0`
 	// along with the diagnostic, which is a thing no shell in the panel does.
-	src, name, dg := in.src, in.name, *in.diag()
+	src, name, dg := in.src, in.name, in.diag()
 	r := sh.newRunnerAs(name, in.params, dg, in.invocationRoute(), in.invocationEmulation())
 	sh.holdTheScript(r, in)
 	if in.zero != "" {
@@ -3245,7 +3243,7 @@ func (sh *Shell) runInput(in source) int {
 	// runner writes itself only when jobs hold the exit back. See
 	// interp.Runner.LeavingWord and sayLeaving.
 	if in.interactive && in.diag().LeavingIsAlsoSaidOnTheseRoutes.Has(in.programRoute()) {
-		r.LeavingWord = leavingWord(*in.diag(), in.loginShell())
+		r.LeavingWord = leavingWord(in.diag(), in.loginShell())
 	}
 	// And the third invocation fact an option namespace publishes: whether
 	// this shell was told to read none of its startup files. Carried over
@@ -3738,7 +3736,7 @@ func (sh *Shell) promptAfterTheString(r *interp.Runner, in source, status int) i
 	r.ResumeAfterExit()
 	r.SetExitStatus(status)
 	r.AtPrompt = true
-	dg := *in.diag()
+	dg := in.diag()
 	s := sh.frontEndWith(r, in.name, dg, repl.NewTheme(r.GetVar))
 	ctx := sh.context()
 	st, err := s.Run(ctx)
@@ -3818,7 +3816,7 @@ func (sh *Shell) endTheLine(r *interp.Runner, in source, how ending) {
 // Diagnostics.LeavingIsAlsoSaidOnTheseRoutes and Runner.ExitRanOutsideAFile,
 // which carry what was measured for each.
 func (sh *Shell) sayLeaving(r *interp.Runner, in source) {
-	word := leavingWord(*in.diag(), in.loginShell())
+	word := leavingWord(in.diag(), in.loginShell())
 	if !in.interactive || word == "" || r.LeavingWordWithheld() {
 		return
 	}
@@ -3835,7 +3833,7 @@ func (sh *Shell) sayLeaving(r *interp.Runner, in source) {
 // login shell's where the dialect has one. One function for the prompt's
 // route and the command string's, so the two cannot disagree. See
 // Diagnostics.LeavingALoginSession.
-func leavingWord(dg interp.Diagnostics, login bool) string {
+func leavingWord(dg *interp.Diagnostics, login bool) string {
 	if login && dg.LeavingALoginSession != "" {
 		return dg.LeavingALoginSession
 	}
@@ -3845,7 +3843,7 @@ func leavingWord(dg interp.Diagnostics, login bool) string {
 // endOfInputRefused is what a shell says when it refuses ^D at a prompt: the
 // login shell's line where the dialect has one. See
 // Diagnostics.EndOfInputRefusedInALoginSession.
-func endOfInputRefused(dg interp.Diagnostics, login bool) string {
+func endOfInputRefused(dg *interp.Diagnostics, login bool) string {
 	if login && dg.EndOfInputRefusedInALoginSession != "" {
 		return dg.EndOfInputRefusedInALoginSession
 	}
@@ -4435,7 +4433,7 @@ func (sh *Shell) nameTheInvocation(r *interp.Runner) {
 // The count is carried because a parser produces these as it reads, and the
 // loop asks after every line: without it the first remark would be repeated
 // for every line after the one that raised it.
-func (sh *Shell) sayRemarks(dg interp.Diagnostics, name string, rs []syntax.Remark, shown int, running bool) int {
+func (sh *Shell) sayRemarks(dg *interp.Diagnostics, name string, rs []syntax.Remark, shown int, running bool) int {
 	for _, rk := range rs[min(shown, len(rs)):] {
 		if running && interp.RemarkOnlyWhenNotRunning(rk.Kind) {
 			// A remark the shell keeps to itself once it is going to run the

@@ -33,7 +33,7 @@ import (
 // is the *shape* of the word rather than the failure, which `-x9` is what
 // says.
 func TestThisPresetHasAThirdWordingForASignalSpec(t *testing.T) {
-	if got := zsh.Diagnostics().KillInvalidSignalNumber; got == "" {
+	if got := diagTable(zsh.Diagnostics()).KillInvalidSignalNumber; got == "" {
 		t.Error("KillInvalidSignalNumber is empty, want this shell's third wording")
 	}
 	for _, c := range []struct{ src, want string }{

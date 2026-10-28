@@ -26,8 +26,8 @@ func TestTheFrontEndCarriesWhetherAPromptAsksAgain(t *testing.T) {
 			Name:      "testsh",
 			Semantics: interp.Semantics{PromptAsksAgainAfterARefusedToken: answer},
 		}.withDefaults([]string{"testsh"})
-		r := sh.newRunner("testsh", nil, sh.Diagnostics, interp.RouteCommandString)
-		if got := sh.frontEnd(r, "testsh", sh.Diagnostics).AskAgainAfterARefusedToken; got != answer {
+		r := sh.newRunner("testsh", nil, &sh.Diagnostics, interp.RouteCommandString)
+		if got := sh.frontEnd(r, "testsh", &sh.Diagnostics).AskAgainAfterARefusedToken; got != answer {
 			t.Errorf("the prompt was told %v, want %v", got, answer)
 		}
 	}
@@ -44,8 +44,8 @@ func TestTheFrontEndCarriesWhichOptionAHashWaitsOn(t *testing.T) {
 			Name:      "testsh",
 			Semantics: interp.Semantics{PromptCommentsNeedTheOption: answer},
 		}.withDefaults([]string{"testsh"})
-		r := sh.newRunner("testsh", nil, sh.Diagnostics, interp.RouteCommandString)
-		if got := sh.frontEnd(r, "testsh", sh.Diagnostics).CommentsNeedTheOption; got != answer {
+		r := sh.newRunner("testsh", nil, &sh.Diagnostics, interp.RouteCommandString)
+		if got := sh.frontEnd(r, "testsh", &sh.Diagnostics).CommentsNeedTheOption; got != answer {
 			t.Errorf("the prompt was told %q, want %q", got, answer)
 		}
 	}
@@ -66,8 +66,8 @@ func TestTheFrontEndWordsAParseFailureTheWayAPromptDoes(t *testing.T) {
 			SyntaxUnexpected: "wrong: %[1]s",
 		},
 	}.withDefaults([]string{"testsh"})
-	r := sh.newRunner("testsh", nil, sh.Diagnostics, interp.RouteCommandString)
-	front := sh.frontEnd(r, "testsh", sh.Diagnostics)
+	r := sh.newRunner("testsh", nil, &sh.Diagnostics, interp.RouteCommandString)
+	front := sh.frontEnd(r, "testsh", &sh.Diagnostics)
 
 	err := &syntax.Error{Kind: syntax.ErrUnexpected, Token: ";", Pos: syntax.Pos{Line: 2}}
 	if got, want := front.Report(err), "testsh: wrong: ;\n"; got != want {
@@ -90,8 +90,8 @@ func TestTheFrontEndCarriesARemark(t *testing.T) {
 			HereDocumentAtEOF: "warning: here-document at line %[1]d (wanted `%[2]s')",
 		},
 	}.withDefaults([]string{"testsh"})
-	r := sh.newRunner("testsh", nil, sh.Diagnostics, interp.RouteCommandString)
-	front := sh.frontEnd(r, "testsh", sh.Diagnostics)
+	r := sh.newRunner("testsh", nil, &sh.Diagnostics, interp.RouteCommandString)
+	front := sh.frontEnd(r, "testsh", &sh.Diagnostics)
 	if front.Remark == nil {
 		t.Fatal("the prompt was given no way to say what the parser remarked")
 	}
@@ -102,8 +102,8 @@ func TestTheFrontEndCarriesARemark(t *testing.T) {
 	// A dialect that remarks on nothing writes nothing, which is three of
 	// the four.
 	quiet := Shell{Name: "testsh"}.withDefaults([]string{"testsh"})
-	qr := quiet.newRunner("testsh", nil, quiet.Diagnostics, interp.RouteCommandString)
-	if got := quiet.frontEnd(qr, "testsh", quiet.Diagnostics).Remark(rk); got != "" {
+	qr := quiet.newRunner("testsh", nil, &quiet.Diagnostics, interp.RouteCommandString)
+	if got := quiet.frontEnd(qr, "testsh", &quiet.Diagnostics).Remark(rk); got != "" {
 		t.Errorf("a dialect with no remark said %q", got)
 	}
 }

@@ -29,7 +29,7 @@ func refusal(t *testing.T, src string) string {
 	if err == nil {
 		return "parsed"
 	}
-	return ksh.Diagnostics().ParseFailure(err)
+	return diagTable(ksh.Diagnostics()).ParseFailure(err)
 }
 
 // carriedRefusal is the first deferred parse failure in a one-command file,
@@ -62,7 +62,7 @@ func carriedRefusal(f *syntax.File) error {
 // `(` it refused. Measured 2026-09-12 against ksh93u+ 2012-08-01, `env -i`
 // with a scratch HOME, over `-c`. See syntax.Error.FlagGroupWordTail.
 func TestARefusedFlagGroupNamesTheRestOfTheWord(t *testing.T) {
-	if !ksh.Diagnostics().FlagGroupNamesTheWordTail {
+	if !diagTable(ksh.Diagnostics()).FlagGroupNamesTheWordTail {
 		t.Fatal("FlagGroupNamesTheWordTail = false, want true")
 	}
 	for _, c := range []struct{ src, want string }{

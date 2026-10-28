@@ -19,7 +19,7 @@ func condDiagnostic(t *testing.T, src string) string {
 	if err == nil {
 		t.Fatalf("%s: parsed, want a refusal", src)
 	}
-	return bash.Diagnostics().ParseDiagnostic("bash", "-c", err, src)
+	return diagTable(bash.Diagnostics()).ParseDiagnostic("bash", "-c", err, src)
 }
 
 // TestAConditionsRefusalIsThreeLines — bash says three things about a token

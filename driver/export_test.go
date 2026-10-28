@@ -42,7 +42,7 @@ func (sh Shell) SayVerboseForTest(src string, upTo, line, off int, echo bool) (i
 // The assembly is what is being checked and it is not exported: a dialect's
 // answers have to arrive, and the editor they arrive at is only built where
 // there is a terminal.
-func (sh Shell) FrontEndForTest(r *interp.Runner, name string, dg interp.Diagnostics) repl.Shell {
+func (sh Shell) FrontEndForTest(r *interp.Runner, name string, dg *interp.Diagnostics) repl.Shell {
 	return sh.frontEnd(r, name, dg)
 }
 

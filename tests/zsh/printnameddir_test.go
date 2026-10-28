@@ -98,7 +98,7 @@ print -D -f '[%s]\n' /tmp/x`)
 
 // And the letter is accepted rather than named as missing.
 func TestPrintNamedDirectoryLetterIsNotAlsoCalledMissing(t *testing.T) {
-	if got := zsh.Diagnostics().UnimplementedOptionLetters["print"]; strings.ContainsRune(got, 'D') {
+	if got := diagTable(zsh.Diagnostics()).UnimplementedOptionLetters["print"]; strings.ContainsRune(got, 'D') {
 		t.Errorf("UnimplementedOptionLetters[print] = %q, which still claims -D is missing", got)
 	}
 }

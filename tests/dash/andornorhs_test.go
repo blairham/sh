@@ -49,7 +49,7 @@ func TestAnAndOrWithNoCommandNamesWhatItFound(t *testing.T) {
 			t.Errorf("%q parsed, want a refusal", tc.src)
 			continue
 		}
-		d := dash.Diagnostics().ForScript()
+		d := diagTable(dash.Diagnostics()).ForScript()
 		if got := d.ParseDiagnostic("s.sh", "", err, tc.src); got != tc.want {
 			t.Errorf("%q:\n got %q\nwant %q", tc.src, got, tc.want)
 		}

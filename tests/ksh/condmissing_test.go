@@ -28,7 +28,7 @@ func TestACondtionThatNeverBeganAndRanOut(t *testing.T) {
 			if err == nil {
 				t.Fatalf("%s: parsed, want a refusal", src)
 			}
-			got := ksh.Diagnostics().ParseDiagnostic("ksh", "-c", err, src)
+			got := diagTable(ksh.Diagnostics()).ParseDiagnostic("ksh", "-c", err, src)
 			if want := "ksh: syntax error at line 1: `[[' unmatched\n"; got != want {
 				t.Errorf("got %q, want %q", got, want)
 			}

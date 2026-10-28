@@ -41,10 +41,10 @@ import (
 // See interp/heredocbodyrefusallocation.go (#4714).
 func TestARefusedHeredocBodyStandsAfterTheDelimiterHere(t *testing.T) {
 	t.Parallel()
-	if !zsh.Diagnostics().HeredocBodyRefusalIsLocatedAfterTheDelimiter {
+	if !diagTable(zsh.Diagnostics()).HeredocBodyRefusalIsLocatedAfterTheDelimiter {
 		t.Error("the preset does not answer, so the refusal stands in the body")
 	}
-	if got := zsh.Diagnostics().HeredocBodyRefusalSentence; got != "parse error" {
+	if got := diagTable(zsh.Diagnostics()).HeredocBodyRefusalSentence; got != "parse error" {
 		t.Errorf("the sentence is %q, want `parse error`", got)
 	}
 	dir := t.TempDir()

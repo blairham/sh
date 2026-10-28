@@ -19,7 +19,7 @@ func TestARefusedIONumberIsARedirection(t *testing.T) {
 	if err == nil {
 		t.Fatal("parsed, want a refusal")
 	}
-	got := ash.Diagnostics().ParseFailure(err)
+	got := diagTable(ash.Diagnostics()).ParseFailure(err)
 	if want := "syntax error: unexpected redirection (expecting word)"; got != want {
 		t.Errorf("got %q, want %q", got, want)
 	}
@@ -45,7 +45,7 @@ func TestAnIONumberStartingAPatternIsPartOfTheOperator(t *testing.T) {
 			t.Errorf("%q parsed, want a refusal", c.src)
 			continue
 		}
-		if got := ash.Diagnostics().ParseFailure(err); got != c.want {
+		if got := diagTable(ash.Diagnostics()).ParseFailure(err); got != c.want {
 			t.Errorf("%q: got %q, want %q", c.src, got, c.want)
 		}
 	}

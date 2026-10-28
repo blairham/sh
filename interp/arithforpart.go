@@ -76,7 +76,7 @@ func (p ArithForPartTextPolicy) String() string {
 // Taken together rather than one at a time because which end a part loses
 // depends on which part it is, and a helper that took one part and a position
 // would let a caller ask about the third with the first's answer.
-func (d Diagnostics) arithForPartsKept(init, cond, post string) (string, string, string) {
+func (d *Diagnostics) arithForPartsKept(init, cond, post string) (string, string, string) {
 	if d.ArithForPartText != ArithForPartTextLosesOneEnd {
 		return init, cond, post
 	}
@@ -92,7 +92,7 @@ func (d Diagnostics) arithForPartsKept(init, cond, post string) (string, string,
 // trimmed text and zsh writes the trimmed text bare. The dialect that keeps
 // one end has already given up the blanks it gives up, and trimming again
 // would take the other end's as well.
-func (d Diagnostics) arithForPartTraced(expanded string) string {
+func (d *Diagnostics) arithForPartTraced(expanded string) string {
 	if d.ArithForPartText == ArithForPartTextLosesOneEnd {
 		return expanded
 	}

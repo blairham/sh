@@ -16,7 +16,7 @@ import (
 // in the oracle environment.
 
 func TestBadSubstitutionNamesTheQuotingRun(t *testing.T) {
-	if got, want := bash.Diagnostics().BadSubstitutionNames, interp.NamesTheQuotingRun; got != want {
+	if got, want := diagTable(bash.Diagnostics()).BadSubstitutionNames, interp.NamesTheQuotingRun; got != want {
 		t.Errorf("BadSubstitutionNames = %v, want %v", got, want)
 	}
 	for _, c := range []struct{ src, want string }{

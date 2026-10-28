@@ -230,49 +230,49 @@ func TestSemantics(t *testing.T) {
 
 func TestDiagnostics(t *testing.T) {
 	// The four lines `type` prints, each of them this shell's own words.
-	if got, want := dash.Diagnostics().TypeFunction, "%[1]s is a shell function"; got != want {
+	if got, want := diagTable(dash.Diagnostics()).TypeFunction, "%[1]s is a shell function"; got != want {
 		t.Errorf("TypeFunction = %q, want %q", got, want)
 	}
-	if got, want := dash.Diagnostics().TypeNotFound, "%[1]s: not found"; got != want {
+	if got, want := diagTable(dash.Diagnostics()).TypeNotFound, "%[1]s: not found"; got != want {
 		t.Errorf("TypeNotFound = %q, want %q", got, want)
 	}
 	// A missing name gets no shell name in front of it, and a missing
 	// command's status rather than a plain failure.
-	if !dash.Diagnostics().TypeNotFoundUnprefixed {
+	if !diagTable(dash.Diagnostics()).TypeNotFoundUnprefixed {
 		t.Error("TypeNotFoundUnprefixed = false, want the line written bare")
 	}
-	if got, want := dash.Diagnostics().TypeNotFoundStatus, 127; got != want {
+	if got, want := diagTable(dash.Diagnostics()).TypeNotFoundStatus, 127; got != want {
 		t.Errorf("TypeNotFoundStatus = %d, want %d", got, want)
 	}
 	// And it is a report rather than a complaint: `type nope 1>/dev/null`
 	// prints nothing here, where two of the panel still show the line.
-	if !dash.Diagnostics().TypeNotFoundOnStdout {
+	if !diagTable(dash.Diagnostics()).TypeNotFoundOnStdout {
 		t.Error("TypeNotFoundOnStdout = false, want the line on standard output")
 	}
-	if got, want := dash.Diagnostics().SyntaxStatus(), 2; got != want {
+	if got, want := diagTable(dash.Diagnostics()).SyntaxStatus(), 2; got != want {
 		t.Errorf("syntax-error status = %d, want %d", got, want)
 	}
 	// A failed open is reported where the command began, compound or not.
-	if got, want := dash.Diagnostics().RedirectFailureLine, interp.LineOfCommand; got != want {
+	if got, want := diagTable(dash.Diagnostics()).RedirectFailureLine, interp.LineOfCommand; got != want {
 		t.Errorf("RedirectFailureLine = %v, want %v", got, want)
 	}
 	// A denied `set -m` is a remark with the option left off: the wording is
 	// fixed whichever spelling asked, and the zero status keeps it from
 	// being a failure at all.
-	if got, want := dash.Diagnostics().MonitorDenied, "set: can't access tty; job control turned off"; got != want {
+	if got, want := diagTable(dash.Diagnostics()).MonitorDenied, "set: can't access tty; job control turned off"; got != want {
 		t.Errorf("MonitorDenied = %q, want %q", got, want)
 	}
-	if got := dash.Diagnostics().MonitorDeniedStatus; got != 0 {
+	if got := diagTable(dash.Diagnostics()).MonitorDeniedStatus; got != 0 {
 		t.Errorf("MonitorDeniedStatus = %d, want 0 — a remark, not an error", got)
 	}
 	// And the same sentence with nothing in front of it, for the shell
 	// deciding at startup rather than a builtin being refused: measured with
 	// no terminal on any stream, `<name>: 0: can't access tty; job control
 	// turned off` on `-i script.sh`, `-i -c` and `-i -s` alike.
-	if got, want := dash.Diagnostics().NoJobControlAtStartup, "can't access tty; job control turned off"; got != want {
+	if got, want := diagTable(dash.Diagnostics()).NoJobControlAtStartup, "can't access tty; job control turned off"; got != want {
 		t.Errorf("NoJobControlAtStartup = %q, want %q", got, want)
 	}
-	if !dash.Diagnostics().NoJobControlAtStartupNamesTheScript {
+	if !diagTable(dash.Diagnostics()).NoJobControlAtStartupNamesTheScript {
 		t.Error("NoJobControlAtStartupNamesTheScript = false, want true — dash names the script it was handed")
 	}
 }
@@ -299,7 +299,7 @@ func TestUnterminatedNamesWhatWouldHaveClosedIt(t *testing.T) {
 		{"{ echo x", `Syntax error: end of file unexpected (expecting "}")`},
 	} {
 		_, err := syntax.Parse(tc.src, dash.Dialect())
-		if got := dash.Diagnostics().ParseFailure(err); got != tc.want {
+		if got := diagTable(dash.Diagnostics()).ParseFailure(err); got != tc.want {
 			t.Errorf("%q: got %q, want %q", tc.src, got, tc.want)
 		}
 	}
@@ -370,7 +370,7 @@ func TestUnexpectedTokensAreNamedByClass(t *testing.T) {
 		{"echo x > >(cat)", `Syntax error: redirection unexpected`},
 	} {
 		_, err := syntax.Parse(tc.src, dash.Dialect())
-		if got := dash.Diagnostics().ParseFailure(err); got != tc.want {
+		if got := diagTable(dash.Diagnostics()).ParseFailure(err); got != tc.want {
 			t.Errorf("%q: got %q, want %q", tc.src, got, tc.want)
 		}
 	}
@@ -417,7 +417,7 @@ func TestAParenAfterAWordIsAFunctionDefinition(t *testing.T) {
 	for _, src := range []string{"f ( x )", "[[ ( -n x ) ]]"} {
 		_, err := syntax.Parse(src, dash.Dialect())
 		want := `Syntax error: word unexpected (expecting ")")`
-		if got := dash.Diagnostics().ParseFailure(err); got != want {
+		if got := diagTable(dash.Diagnostics()).ParseFailure(err); got != want {
 			t.Errorf("%q: got %q, want %q", src, got, want)
 		}
 	}
@@ -432,7 +432,7 @@ func TestACasePatternMayBeAnOperator(t *testing.T) {
 	}
 	_, err := syntax.Parse("case a in a) echo x;;& esac", dash.Dialect())
 	want := `Syntax error: word unexpected (expecting ")")`
-	if got := dash.Diagnostics().ParseFailure(err); got != want {
+	if got := diagTable(dash.Diagnostics()).ParseFailure(err); got != want {
 		t.Errorf("got %q, want %q", got, want)
 	}
 }
@@ -466,10 +466,10 @@ func TestPrintfAnswers(t *testing.T) {
 	if got, want := dash.Semantics().PrintfNumberOperand, interp.PrintfNumberLeadingNumber; got != want {
 		t.Errorf("PrintfNumberOperand = %v, want %v", got, want)
 	}
-	if got, want := dash.Diagnostics().PrintfIncompleteNumber, "printf: %[1]s: not completely converted"; got != want {
+	if got, want := diagTable(dash.Diagnostics()).PrintfIncompleteNumber, "printf: %[1]s: not completely converted"; got != want {
 		t.Errorf("PrintfIncompleteNumber = %q, want %q", got, want)
 	}
-	if got, want := dash.Diagnostics().PrintfNumberOutOfRange, "printf: %[1]s: Result too large"; got != want {
+	if got, want := diagTable(dash.Diagnostics()).PrintfNumberOutOfRange, "printf: %[1]s: Result too large"; got != want {
 		t.Errorf("PrintfNumberOutOfRange = %q, want %q", got, want)
 	}
 	// C99's three float conversions, answering exactly as bash does on every
@@ -581,7 +581,7 @@ func TestAKilledCommandIsSaidWithNoLocation(t *testing.T) {
 // the same, measured 2026-09-18; the "alone in giving them" this comment used
 // to claim was true only of the shells on this machine's PATH (#2471).
 func TestABackquotedBodyIsNumberedFromOne(t *testing.T) {
-	if !dash.Diagnostics().BackquotedSubstitutionRestartsLines {
+	if !diagTable(dash.Diagnostics()).BackquotedSubstitutionRestartsLines {
 		t.Error("a backquoted body is numbered from one here")
 	}
 }
@@ -679,10 +679,10 @@ func TestDollarDashInteractiveStartupLetters(t *testing.T) {
 // after it, and reports its usage number rather than a plain failure. bash and
 // ksh93 report 1 here and zsh reports 127.
 func TestTheJobSpecThatNamesNothing(t *testing.T) {
-	if got, want := dash.Diagnostics().NoSuchJob, "%[1]s: No such job: %[2]s"; got != want {
+	if got, want := diagTable(dash.Diagnostics()).NoSuchJob, "%[1]s: No such job: %[2]s"; got != want {
 		t.Errorf("NoSuchJob = %q, want %q", got, want)
 	}
-	if got, want := dash.Diagnostics().NoSuchJobStatus, 2; got != want {
+	if got, want := diagTable(dash.Diagnostics()).NoSuchJobStatus, 2; got != want {
 		t.Errorf("NoSuchJobStatus = %d, want %d", got, want)
 	}
 }
@@ -693,7 +693,7 @@ func TestTheJobSpecThatNamesNothing(t *testing.T) {
 // it off, for the identical redirection. Measured 2026-09-10 against dash
 // 0.5.12; see interp/noclobberopen.go for the panel.
 func TestNoclobberFallbackIsAnOpen(t *testing.T) {
-	if !dash.Diagnostics().NoclobberFallbackIsAnOpen {
+	if !diagTable(dash.Diagnostics()).NoclobberFallbackIsAnOpen {
 		t.Error("the noclobber fallback is worded as a create, want an open")
 	}
 }

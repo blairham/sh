@@ -137,7 +137,7 @@ func TestThePairingAnswerIsThisDialects(t *testing.T) {
 	if got := zsh.Semantics().BareElementsInATableLiteralMustPairOff; got != interp.Yes {
 		t.Errorf("BareElementsInATableLiteralMustPairOff = %v, want Yes", got)
 	}
-	if got := zsh.Diagnostics().UnpairedTableLiteralElements; got != oddPairRefusal {
+	if got := diagTable(zsh.Diagnostics()).UnpairedTableLiteralElements; got != oddPairRefusal {
 		t.Errorf("UnpairedTableLiteralElements = %q, want %q", got, oddPairRefusal)
 	}
 }

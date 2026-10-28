@@ -87,7 +87,7 @@ func TestTheDocumentIsStillRemarkedOnWhenTheParenEndsIt(t *testing.T) {
 			if len(rs) != 1 {
 				t.Fatalf("got %d remarks, want 1: %+v", len(rs), rs)
 			}
-			if got := bash.Diagnostics().Remark(rs[0]); got != c.want {
+			if got := diagTable(bash.Diagnostics()).Remark(rs[0]); got != c.want {
 				t.Errorf("said %q, want %q", got, c.want)
 			}
 		})

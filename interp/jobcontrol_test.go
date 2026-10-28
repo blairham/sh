@@ -195,7 +195,13 @@ func jobRunAtAPrompt(t *testing.T, f *fakeJobs, src string, tweak ...func(*Seman
 	return jobRunShaped(t, f, src, true, tweak...)
 }
 
-func jobRunShaped(t *testing.T, f *fakeJobs, src string, atAPrompt bool, tweak ...func(*Semantics)) (string, int, *Runner) {
+func jobRunShaped(
+	t *testing.T,
+	f *fakeJobs,
+	src string,
+	atAPrompt bool,
+	tweak ...func(*Semantics),
+) (string, int, *Runner) {
 	t.Helper()
 	file, err := syntax.Parse(src, syntax.Core())
 	if err != nil {

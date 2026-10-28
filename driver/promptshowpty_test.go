@@ -152,7 +152,12 @@ func TestAScriptHasNoPromptFunction(t *testing.T) {
 
 // endPromptSession ends a session the tests above started, and turns a hang
 // into a failure rather than a stuck run.
-func endPromptSession(t *testing.T, control interface{ WriteString(string) (int, error) }, done <-chan int, drawn *screen) {
+func endPromptSession(
+	t *testing.T,
+	control interface{ WriteString(string) (int, error) },
+	done <-chan int,
+	drawn *screen,
+) {
 	t.Helper()
 	if _, err := control.WriteString("exit\r"); err != nil {
 		t.Fatalf("ending the session: %v", err)

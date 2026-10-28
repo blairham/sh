@@ -390,7 +390,11 @@ func (r *Runner) RefuseBuiltinUsagef(builtin, format string, args ...any) {
 // against ksh93's `builtin`, which reads `-dls` and `-f lib` and refuses
 // everything else with `unknown option` and its usage line, where ours read
 // no options at all and looked `-q` up as a name (#3473).
-func (r *Runner) BuiltinOptions(name string, args []string, known string) (rest []string, letters string, optionArguments map[byte]string, code int) {
+func (r *Runner) BuiltinOptions(
+	name string,
+	args []string,
+	known string,
+) (rest []string, letters string, optionArguments map[byte]string, code int) {
 	rest, letters, optionArguments, _, code = r.builtinOptionsArg(name, args, known)
 	return rest, letters, optionArguments, code
 }
@@ -2258,7 +2262,10 @@ const (
 // runner would make `( set -o autocd )` set the option on the *parent* and
 // leave the subshell without it, which is a wrong report turning into an
 // escaped write (#1855).
-func (r *Runner) SetOptionTable(listed func(r *Runner) []ListedOption, move func(r *Runner, name string, on bool) OptionMove) {
+func (r *Runner) SetOptionTable(
+	listed func(r *Runner) []ListedOption,
+	move func(r *Runner, name string, on bool) OptionMove,
+) {
 	r.optionListing, r.optionMover = listed, move
 }
 
@@ -2305,7 +2312,9 @@ func (r *Runner) SetOptionTable(listed func(r *Runner) []ListedOption, move func
 // namespaces really are two — and a reader wired into the condition's lookup
 // would have made every `shopt` name answer `[[ -o ]]` in a shell that answers
 // none of them (#4149).
-func (r *Runner) SetShellOptionNamespace(move func(r *Runner, name string, on bool) int, listed func(r *Runner, reissuable bool),
+func (r *Runner) SetShellOptionNamespace(
+	move func(r *Runner, name string, on bool) int,
+	listed func(r *Runner, reissuable bool),
 	read func(r *Runner, name string) (on, known bool),
 ) {
 	r.shellOptionMover, r.shellOptionListing, r.shellOptionReader = move, listed, read

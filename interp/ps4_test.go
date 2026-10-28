@@ -123,7 +123,13 @@ func TestTheTracePrefixReadsTheDialectsPromptLanguage(t *testing.T) {
 		Expand:  PromptExpandsAlways,
 		Unknown: DropBoth,
 	}
-	if got, want := tracedWith(t, `PS4='<%n> '; set -x; :`, Diagnostics{}, style, "someone"), "<someone> :\n"; got != want {
+	if got, want := tracedWith(
+		t,
+		`PS4='<%n> '; set -x; :`,
+		Diagnostics{},
+		style,
+		"someone",
+	), "<someone> :\n"; got != want {
 		t.Errorf("traced %q, want %q", got, want)
 	}
 	// A code in no table is the *drawer's* policy rather than a script's
@@ -134,7 +140,13 @@ func TestTheTracePrefixReadsTheDialectsPromptLanguage(t *testing.T) {
 	}
 	// And with no table at all — the substrate's own answer — the value is
 	// drawn as it stands rather than having a language invented for it.
-	if got, want := tracedWith(t, `PS4='<%n> '; set -x; :`, Diagnostics{}, PromptStyle{}, "someone"), "<%n> :\n"; got != want {
+	if got, want := tracedWith(
+		t,
+		`PS4='<%n> '; set -x; :`,
+		Diagnostics{},
+		PromptStyle{},
+		"someone",
+	), "<%n> :\n"; got != want {
 		t.Errorf("with no table traced %q, want %q", got, want)
 	}
 	// A dialect that does not expand draws the parameter's own text, which
@@ -216,7 +228,14 @@ func TestATrapBodyCountsAsIndirectionExceptExits(t *testing.T) {
 			sem.DebugTrapRunsBeforeTheCommand = Yes
 			sem.TrapHasErrCondition = Yes
 			style := PromptStyle{Expand: PromptExpandsAlways}
-			on := tracedSem(t, c.src, sem, Diagnostics{TraceQuoting: QuoteShell, TracePrefixRepeatsAtIndirection: true}, style, "")
+			on := tracedSem(
+				t,
+				c.src,
+				sem,
+				Diagnostics{TraceQuoting: QuoteShell, TracePrefixRepeatsAtIndirection: true},
+				style,
+				"",
+			)
 			if on != c.on {
 				t.Errorf("counting: traced %q, want %q", on, c.on)
 			}

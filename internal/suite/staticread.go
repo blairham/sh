@@ -149,7 +149,9 @@ func preludeShell(name string, dial syntax.Dialect) *interp.Runner {
 // The same switch and deliberately beside it: this package is an instrument
 // and may name every shell, where a binary meant to be liftable may not — see
 // internal/acpboot for that rule and for why it is a rule about binaries.
-func dialectParts(name string) (prelude string, sem interp.Semantics, dg interp.Diagnostics, apply func(*interp.Runner), ok bool) {
+func dialectParts(
+	name string,
+) (prelude string, sem interp.Semantics, dg interp.Diagnostics, apply func(*interp.Runner), ok bool) {
 	switch name {
 	case "bash":
 		return bash.Prelude(), bash.Semantics(), bash.Diagnostics(), bash.Apply, true

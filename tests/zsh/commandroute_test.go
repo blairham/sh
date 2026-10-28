@@ -195,7 +195,12 @@ func TestPosixBuiltinsPutsTheWordBackInThisShellHere(t *testing.T) {
 func TestACommandPrefixedTargetThatExpandsStillOpensHere(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
-	if out, st := runZsh(t, dir, "command /bin/echo RAN < /dev/null\necho \"after st=$?\"\n"); out != "RAN\nafter st=0\n" || st != 0 {
+	if out, st := runZsh(
+		t,
+		dir,
+		"command /bin/echo RAN < /dev/null\necho \"after st=$?\"\n",
+	); out != "RAN\nafter st=0\n" ||
+		st != 0 {
 		t.Errorf("= %q (status %d), want RAN and after st=0", out, st)
 	}
 }

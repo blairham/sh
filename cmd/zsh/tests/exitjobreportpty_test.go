@@ -78,6 +78,9 @@ func TestTheWayOutReportsAFinishedJobNothingReported(t *testing.T) {
 	// And a script file, which reports whether or not it ends in `exit`.
 	screen := monitorExitScript(t, []string{"-f"}, prefix+"/bin/sleep 0.5\nprint -r -- x\n")
 	if i, j := strings.Index(screen, "[1]  + done"), strings.Index(screen, monitorExitEnd); i < 0 || j < i {
-		t.Errorf("a script's end did not report the job ahead of the EXIT trap:\n%s", smoke.Readable(smoke.LastLines(screen, 10)))
+		t.Errorf(
+			"a script's end did not report the job ahead of the EXIT trap:\n%s",
+			smoke.Readable(smoke.LastLines(screen, 10)),
+		)
 	}
 }

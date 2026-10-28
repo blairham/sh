@@ -33,7 +33,13 @@ func TestAHeldExitIsWaivedForTheNextCommandOnly(t *testing.T) {
 	} {
 		t.Run(strings.TrimSpace(c.lines), func(t *testing.T) {
 			scratchHome(t)
-			out, _, _ := prompt(t, "shopt -s checkjobs\nsleep 2 &\nexit\n"+c.lines+"echo STILL-$((40+2))\nkill %1; wait\n", "bash", "--norc", "-i")
+			out, _, _ := prompt(
+				t,
+				"shopt -s checkjobs\nsleep 2 &\nexit\n"+c.lines+"echo STILL-$((40+2))\nkill %1; wait\n",
+				"bash",
+				"--norc",
+				"-i",
+			)
 			if got := strings.Contains(out, "STILL-42"); got != c.stays {
 				t.Errorf("stayed = %v, want %v; stdout %q", got, c.stays, out)
 			}

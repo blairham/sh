@@ -267,7 +267,11 @@ func judge(p Probe, f Field, pr Preset, golden *oracle.Run, consts map[string][]
 		cell, ok := golden.Results[id][pr.Against]
 		if !ok {
 			j.Outcome = NoEvidence
-			j.Why = fmt.Sprintf("the record has no %s column for %s — it was not reachable when the record was made", pr.Against, id)
+			j.Why = fmt.Sprintf(
+				"the record has no %s column for %s — it was not reachable when the record was made",
+				pr.Against,
+				id,
+			)
 			return j, ""
 		}
 		cells[id] = cell

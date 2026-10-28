@@ -757,7 +757,12 @@ type attributeFiltered bool
 // declarePrintForm lists declarations in the given form, walking only the
 // names the filter admits when no operands narrow it — which is how
 // `export -p` lists the exported names alone.
-func (r *Runner) declarePrintForm(names []string, form DeclarationListingForm, dashP bool, keep func(declaration) bool) int {
+func (r *Runner) declarePrintForm(
+	names []string,
+	form DeclarationListingForm,
+	dashP bool,
+	keep func(declaration) bool,
+) int {
 	return r.declarePrintFiltered(names, form, dashP, keep, false)
 }
 

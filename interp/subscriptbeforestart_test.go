@@ -145,7 +145,13 @@ func TestCountingBackFromANameWithNoElementsIsSilent(t *testing.T) {
 	if !strings.Contains(out, "after") || strings.Contains(out, "subscript") {
 		t.Errorf("in range: got %q, want the unassigned slot read silently", out)
 	}
-	if out, st := runBeforeStart(t, SubscriptBeforeStartEndsTheScript, Yes, `a[5]=q; echo "[${a[-7]}]"; echo after`); !strings.Contains(out, "subscript") || st != 1 {
+	if out, st := runBeforeStart(
+		t,
+		SubscriptBeforeStartEndsTheScript,
+		Yes,
+		`a[5]=q; echo "[${a[-7]}]"; echo after`,
+	); !strings.Contains(out, "subscript") ||
+		st != 1 {
 		t.Errorf("one further: got %q (status %d), want the reach refused", out, st)
 	}
 }

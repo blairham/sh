@@ -95,10 +95,22 @@ func TestControlCWithTheEditorOffGivesUpTheLine(t *testing.T) {
 					t.Fatalf("no prompt after %q: %v", tc.after, err)
 				}
 			}
-			if got := interruptAnswer(t, control, screen, "print -r -- st-$?-${pipestatus[*]}", interruptStatusLine); got != tc.want {
+			if got := interruptAnswer(
+				t,
+				control,
+				screen,
+				"print -r -- st-$?-${pipestatus[*]}",
+				interruptStatusLine,
+			); got != tc.want {
 				t.Errorf("after ^C the line after next read %q, want %q; drawn:\n%q", got, tc.want, screen.Text()[from:])
 			}
-			if got := interruptAnswer(t, control, screen, "print -r -- st-$?-${pipestatus[*]}", interruptStatusLine); got != tc.then {
+			if got := interruptAnswer(
+				t,
+				control,
+				screen,
+				"print -r -- st-$?-${pipestatus[*]}",
+				interruptStatusLine,
+			); got != tc.then {
 				t.Errorf("and the line after it read %q, want %q", got, tc.then)
 			}
 		})

@@ -756,7 +756,13 @@ func symlinkArrowFor(m typeMode) func(*Runner, string) string {
 	return func(r *Runner, path string) string { return r.SymlinkArrow(path, m.chain) }
 }
 
-func (r *Runner) describeNameLinking(name string, kind typeKind, skipFuncs bool, notFound string, arrow func(*Runner, string) string) int {
+func (r *Runner) describeNameLinking(
+	name string,
+	kind typeKind,
+	skipFuncs bool,
+	notFound string,
+	arrow func(*Runner, string) string,
+) int {
 	dg := r.diag()
 	// The tables come first, as they do in every shell in the panel and as
 	// the parser does when it reads a line: an alias beats a function of the

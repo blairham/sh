@@ -102,7 +102,13 @@ func TestAnExpansionStandsWhereANameWould(t *testing.T) {
 		sem.SplitParamExpansion = No
 		r.Semantics = &sem
 	}
-	if out, st := runGrammar(t, `a=("one two" three); printf "[%s]" ${${a[@]}}`, nesting, unsplit); out != "[one two][three]" || st != 0 {
+	if out, st := runGrammar(
+		t,
+		`a=("one two" three); printf "[%s]" ${${a[@]}}`,
+		nesting,
+		unsplit,
+	); out != "[one two][three]" ||
+		st != 0 {
 		t.Errorf("got %q (status %d), want %q at 0", out, st, "[one two][three]")
 	}
 }

@@ -542,7 +542,10 @@ func countKindLetters(opts string) int {
 // A bare `+` is replaced by `--` rather than being dropped, which is how the
 // "and ends the option list" half reaches builtinOptions: the `-` words
 // before it are still options and everything after it is an operand.
-func (r *Runner) readAliasPlusWords(args []string, known string) (rest []string, opts string, namesOnly bool, code int) {
+func (r *Runner) readAliasPlusWords(
+	args []string,
+	known string,
+) (rest []string, opts string, namesOnly bool, code int) {
 	if !r.ask(r.sem().AliasPlusPrintsNamesOnly, "`alias +g` printing names without values") {
 		if r.unspecified {
 			return nil, "", false, 2

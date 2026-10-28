@@ -32,7 +32,12 @@ import (
 // File redirections, descriptor duplication, here-strings and here-document
 // bodies are all here; what the shell cannot express is refused rather than
 // ignored.
-func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compound bool, owner redirOwner) ([]io.Closer, error) {
+func (r *Runner) applyRedirs(
+	ctx context.Context,
+	rs []*syntax.Redirect,
+	compound bool,
+	owner redirOwner,
+) ([]io.Closer, error) {
 	r.redirErr = false
 	// Beside redirErr because it is the same flag's number: a failure with a
 	// status of its own is only ever this command's.
@@ -93,7 +98,13 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 // before anything was deferred, so while this was one function every command
 // in the shell paid it on the way past an empty list: about 5% of an
 // arithmetic loop's time, measured in a Linux profile (#6423).
-func (r *Runner) applyRedirList(ctx context.Context, rs []*syntax.Redirect, compound bool, owner redirOwner, holds *redirHolds) ([]io.Closer, error) {
+func (r *Runner) applyRedirList(
+	ctx context.Context,
+	rs []*syntax.Redirect,
+	compound bool,
+	owner redirOwner,
+	holds *redirHolds,
+) ([]io.Closer, error) {
 	// Whose process these redirections are for, saved and put back rather
 	// than cleared, so a command reached from inside a here-document body
 	// cannot leave its own answer behind for the next redirection in this
@@ -809,7 +820,13 @@ func (r *Runner) applyRedirList(ctx context.Context, rs []*syntax.Redirect, comp
 			// See FdMoveDuplicatesThenCloses. A `{name}`'s number is a fresh
 			// one, so the question is never asked of it.
 			destOpen := moveFrom >= 0 && fdVar == "" && r.streamOpen(fd)
-			if err := r.dupFd(fd, name, r.dupTargetText(rd, fd, moveFrom, expanded), rd.Op != syntax.TokLessAmp, opened); err != nil {
+			if err := r.dupFd(
+				fd,
+				name,
+				r.dupTargetText(rd, fd, moveFrom, expanded),
+				rd.Op != syntax.TokLessAmp,
+				opened,
+			); err != nil {
 				// One dialect says first that the descriptor it picked for
 				// the name could not be made a copy of the source — and the
 				// same of a move onto a number that was open. Only for a

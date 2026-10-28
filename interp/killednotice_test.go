@@ -438,7 +438,13 @@ func TestAnInterruptEndsTheShellBySignalRatherThanByExiting(t *testing.T) {
 	}
 }
 
-func interruptRun(t *testing.T, src string, ends Answer, sig syscall.Signal, die func(syscall.Signal) error) (string, int) {
+func interruptRun(
+	t *testing.T,
+	src string,
+	ends Answer,
+	sig syscall.Signal,
+	die func(syscall.Signal) error,
+) (string, int) {
 	t.Helper()
 	var buf strings.Builder
 	sem := PosixSemantics()

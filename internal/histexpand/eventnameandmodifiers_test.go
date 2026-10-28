@@ -233,7 +233,13 @@ func TestTheWordwiseSubstitutionModifier(t *testing.T) {
 func TestAFailedModifierNamesTheWholeChain(t *testing.T) {
 	c := Chars{Event: '!', Quick: '^', Comment: '#', Words: WordsShell}
 	var failed *SubstFailed
-	if err := refused(t, "echo !!:t:gs/x/y/", seeded("echo one/two.one"), c); !errors.As(err, &failed) || failed.Ref != ":t:gs/x/y/" {
+	if err := refused(
+		t,
+		"echo !!:t:gs/x/y/",
+		seeded("echo one/two.one"),
+		c,
+	); !errors.As(err, &failed) ||
+		failed.Ref != ":t:gs/x/y/" {
 		t.Errorf("a failed substitution: %v, want the chain :t:gs/x/y/", err)
 	}
 	// Bare is the spelling one column uses, and for a chain it is the chain:
@@ -246,12 +252,24 @@ func TestAFailedModifierNamesTheWholeChain(t *testing.T) {
 		t.Errorf("an `&` with nothing to repeat: %v, want the chain :q:&", err)
 	}
 	// A word designator is not a modifier and stays out of the chain.
-	if err := refused(t, "echo !!:1:s/x/y/", seeded("echo one two"), c); !errors.As(err, &failed) || failed.Ref != ":s/x/y/" {
+	if err := refused(
+		t,
+		"echo !!:1:s/x/y/",
+		seeded("echo one two"),
+		c,
+	); !errors.As(err, &failed) ||
+		failed.Ref != ":s/x/y/" {
 		t.Errorf("a designator in front of the chain: %v, want :s/x/y/", err)
 	}
 	// A quick substitution keeps both spellings, which is the row that says
 	// Bare is about that form rather than about trimming a prefix.
-	if err := refused(t, "^nosuch^x^", seeded("echo one two"), c); !errors.As(err, &failed) || failed.Ref != ":s^nosuch^x^" || failed.Bare != "^nosuch^x^" {
+	if err := refused(
+		t,
+		"^nosuch^x^",
+		seeded("echo one two"),
+		c,
+	); !errors.As(err, &failed) || failed.Ref != ":s^nosuch^x^" ||
+		failed.Bare != "^nosuch^x^" {
 		t.Errorf("a quick substitution: %v, want :s^nosuch^x^ and ^nosuch^x^", err)
 	}
 }

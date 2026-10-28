@@ -83,7 +83,14 @@ func TestABadSubscriptFromACommandStringKeepsTheFatalStatus(t *testing.T) {
 	if _, st := posixRouteStatus(t, "set -o posix\necho $((1/0))\necho AFTER\n", interp.RouteCommandString); st != 127 {
 		t.Errorf("a bare failure in the mode: status %d, want 127", st)
 	}
-	if out, _ := posixRouteStatus(t, "echo $((1/0))\necho AFTER\n", interp.RouteCommandString); !strings.Contains(out, "AFTER") {
+	if out, _ := posixRouteStatus(
+		t,
+		"echo $((1/0))\necho AFTER\n",
+		interp.RouteCommandString,
+	); !strings.Contains(
+		out,
+		"AFTER",
+	) {
 		t.Errorf("a bare failure without the mode: got %q, want the next line to run", out)
 	}
 }

@@ -78,8 +78,12 @@ func runGatedJobScript(t *testing.T, src string, set func(*Semantics), gate Gate
 			t.Fatalf("run: %v", rerr)
 		}
 	case <-time.After(time.Minute):
-		t.Fatalf("the script never finished, so something in it is waiting for what is not coming; it had written %q (stderr %q):\n%s",
-			o.String(), e.String(), src)
+		t.Fatalf(
+			"the script never finished, so something in it is waiting for what is not coming; it had written %q (stderr %q):\n%s",
+			o.String(),
+			e.String(),
+			src,
+		)
 	}
 	return o.String(), e.String()
 }
@@ -257,7 +261,11 @@ kill -0 "$p" 2>/dev/null; echo "after=$(( $? != 0 ))"
 		return Allow
 	}))
 	if !strings.Contains(out, "byid=0") {
-		t.Errorf("out = %q, want `kill -0 $!` to find the job this shell has not been asked to collect; stderr %q", out, errOut)
+		t.Errorf(
+			"out = %q, want `kill -0 $!` to find the job this shell has not been asked to collect; stderr %q",
+			out,
+			errOut,
+		)
 	}
 	if !strings.Contains(out, "byspec=0") {
 		t.Errorf("out = %q, want `%%1` to answer where `$!` does — one job, one answer; stderr %q", out, errOut)
@@ -322,10 +330,18 @@ kill -0 "$p" 2>/dev/null; echo "after=$(( $? != 0 ))"
 		return Allow
 	}))
 	if !strings.Contains(out, "redirected=0") {
-		t.Errorf("out = %q, want `kill -0 $!` to find a job that is running and blocked in its own redirection; stderr %q", out, errOut)
+		t.Errorf(
+			"out = %q, want `kill -0 $!` to find a job that is running and blocked in its own redirection; stderr %q",
+			out,
+			errOut,
+		)
 	}
 	if !strings.Contains(out, "operand=0") {
-		t.Errorf("out = %q, want the same answer where the job opens the fifo itself — the gate's grammar is not the answer; stderr %q", out, errOut)
+		t.Errorf(
+			"out = %q, want the same answer where the job opens the fifo itself — the gate's grammar is not the answer; stderr %q",
+			out,
+			errOut,
+		)
 	}
 	if !strings.Contains(out, "after=1") {
 		t.Errorf("out = %q, want the answer to stop once `wait` has collected the job; stderr %q", out, errOut)

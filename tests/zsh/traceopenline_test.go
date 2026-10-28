@@ -54,7 +54,10 @@ func TestAnAssignmentListsTraceLineIsWrittenAsItGoes(t *testing.T) {
 // under `-f` (#5485).
 func TestAPrefixTakenBackDrawsNoScopeLint(t *testing.T) {
 	cases := []struct{ src, want string }{
-		{"setopt warncreateglobal; f(){ g=2 print hi; g=3 print -n; g=4 builtin print -n }; f; print ${g-unset}", "hi\nunset\n"},
+		{
+			"setopt warncreateglobal; f(){ g=2 print hi; g=3 print -n; g=4 builtin print -n }; f; print ${g-unset}",
+			"hi\nunset\n",
+		},
 		{"setopt warncreateglobal; f2(){ :; }; f(){ g=2 f2 }; f; print ${g-unset}", "unset\n"},
 		{"f(){ g=5 :; g=6 eval : }; o(){ local g=1; f }; functions -W f; o; print done", "done\n"},
 		// The controls: a prefix that persists, and an ordinary assignment

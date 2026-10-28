@@ -1151,7 +1151,11 @@ func (r *Runner) wordTextGlobMarked(w *syntax.Word) string {
 // wordTextUnsplit is the loop all three share. keepMarks says the glob
 // marks survive it; colonTildes says the word is an assignment's value, where
 // a colon begins a tilde segment of its own.
-func (r *Runner) wordTextUnsplit(w *syntax.Word, mark func(syntax.Span, string) string, keepMarks, colonTildes bool) string {
+func (r *Runner) wordTextUnsplit(
+	w *syntax.Word,
+	mark func(syntax.Span, string) string,
+	keepMarks, colonTildes bool,
+) string {
 	if mark == nil {
 		// A plain scalar's value is its own text here, escaped or not: it
 		// holds nothing to escape, no tilde and no NUL. See plainParamWord.
@@ -7612,7 +7616,13 @@ func splitFields(s, ifs, space string, ifsSet bool, chars func() (string, bool))
 // one field — by the time the escapes are removed, an escaped space and a
 // separating one are the same byte, so only a mask can still tell them
 // apart. A nil mask exempts nothing.
-func splitFieldsLiteral(s string, literal []bool, ifs, space string, ifsSet bool, chars func() (string, bool)) []string {
+func splitFieldsLiteral(
+	s string,
+	literal []bool,
+	ifs, space string,
+	ifsSet bool,
+	chars func() (string, bool),
+) []string {
 	return splitFieldsEdges(s, literal, ifs, space, ifsSet, false, false, chars)
 }
 
@@ -8179,7 +8189,10 @@ func (r *Runner) expandRawSpans(text string) (out, head string, ok bool) {
 // is one string and the question cannot be asked of it. It is called for every
 // part in order, with whether the span it came from was literal, and returns
 // what to write. See expandArithText, the one caller that passes one.
-func (r *Runner) expandRawSpansWith(text string, hook func(literal bool, part string) string) (out, head string, ok bool) {
+func (r *Runner) expandRawSpansWith(
+	text string,
+	hook func(literal bool, part string) string,
+) (out, head string, ok bool) {
 	// Text read the way a double-quoted string is, which one refusal words
 	// differently from the same expansion unquoted. See refusesAListAsAName.
 	defer r.readingQuotedText()()
@@ -8203,7 +8216,11 @@ func (r *Runner) expandRawSpansWith(text string, hook func(literal bool, part st
 // raw is indexed by span so that a caller can answer from the positions it
 // worked the protection out from; nil means nothing is protected, which is
 // every caller but that one.
-func (r *Runner) expandSpansWith(spans []syntax.Span, hook func(literal bool, part string) string, raw func(i int) (string, bool)) (out, head string, ok bool) {
+func (r *Runner) expandSpansWith(
+	spans []syntax.Span,
+	hook func(literal bool, part string) string,
+	raw func(i int) (string, bool),
+) (out, head string, ok bool) {
 	var b, h strings.Builder
 	// Whether an expansion had already failed before this text, which is not
 	// this text's doing — the same comparison expandWord makes, and for the
@@ -8286,7 +8303,10 @@ func (r *Runner) arithSpans(text string) ([]syntax.Span, []*syntax.ParamExpr, bo
 	return r.cachedArithSpans(text)
 }
 
-func (r *Runner) rawSpansRead(text string, read func(string, syntax.Dialect) ([]syntax.Span, error)) ([]syntax.Span, bool) {
+func (r *Runner) rawSpansRead(
+	text string,
+	read func(string, syntax.Dialect) ([]syntax.Span, error),
+) ([]syntax.Span, bool) {
 	spans, err := read(text, r.dialect())
 	if err != nil {
 		r.reportRawTextRefusal(err)

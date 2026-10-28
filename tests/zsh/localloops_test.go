@@ -17,7 +17,10 @@ func TestLocalLoopsStopsALoopControlAtTheFunction(t *testing.T) {
 	cases := []struct{ src, want string }{
 		{"setopt localloops; f(){ break }; for i in 1 2; do print $i; f; done", "1\n" + brk + "2\n" + brk},
 		{"f(){ break }; for i in 1 2; do print $i; f; done", "1\n"},
-		{"setopt localloops; f(){ setopt nolocalloops; break }; for i in 1 2; do print $i; f; done", "1\n" + brk + "2\n" + brk},
+		{
+			"setopt localloops; f(){ setopt nolocalloops; break }; for i in 1 2; do print $i; f; done",
+			"1\n" + brk + "2\n" + brk,
+		},
 		{
 			"setopt localloops; f(){ continue }; for i in 1; do f; print after; done",
 			"zsh:1: `continue' active at end of function scope\n" + brk + "after\n",

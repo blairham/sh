@@ -809,7 +809,12 @@ func Diagnostics() interp.Diagnostics {
 		// `ulimit: pipe size: cannot modify limit: Invalid argument` at 1,
 		// for every operand including the value the row already holds.
 		UlimitListing: []interp.UlimitListingRow{
-			{Prefix: "real-time non-blocking time  (microseconds, -R) ", Letter: 'R', Res: interp.ResourceRealtimeTime, Scale: 1},
+			{
+				Prefix: "real-time non-blocking time  (microseconds, -R) ",
+				Letter: 'R',
+				Res:    interp.ResourceRealtimeTime,
+				Scale:  1,
+			},
 			{Prefix: "core file size              (blocks, -c) ", Letter: 'c', Res: interp.ResourceCore},
 			{Prefix: "data seg size               (kbytes, -d) ", Letter: 'd', Res: interp.ResourceData, Scale: 1024},
 			{Prefix: "scheduling priority                 (-e) ", Letter: 'e', Res: interp.ResourceSchedulingPriority, Scale: 1},

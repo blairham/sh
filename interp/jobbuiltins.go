@@ -977,7 +977,10 @@ func (r *Runner) resume(args []string, name string) (*Job, int) {
 	}
 	first := false
 	if !r.canResume() {
-		first = r.ask(r.sem().JobControlAbsenceIsReportedFirst, "`bg` with no job control refusing before reading its operand")
+		first = r.ask(
+			r.sem().JobControlAbsenceIsReportedFirst,
+			"`bg` with no job control refusing before reading its operand",
+		)
 	}
 	if r.unspecified {
 		return nil, 2

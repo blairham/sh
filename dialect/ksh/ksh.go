@@ -6107,17 +6107,66 @@ func Diagnostics() interp.Diagnostics {
 			{Prefix: "cpu time (seconds)             (-t)  ", Letter: 't', Res: interp.ResourceCPUTime, Scale: 1},
 			{Prefix: "data size (Kibytes)            (-d)  ", Letter: 'd', Res: interp.ResourceData, Scale: 1024},
 			{Prefix: "file size (blocks)             (-f)  ", Letter: 'f', Res: interp.ResourceFileSize},
-			{Prefix: "locks                          (-x)  ", Letter: 'x', Res: interp.ResourceFileLocks, Scale: 1, Absent: "not supported", Name: "locks"},
+			{
+				Prefix: "locks                          (-x)  ",
+				Letter: 'x',
+				Res:    interp.ResourceFileLocks,
+				Scale:  1,
+				Absent: "not supported",
+				Name:   "locks",
+			},
 			{Prefix: "locked address space (Kibytes) (-l)  ", Letter: 'l', Res: interp.ResourceLockedMemory, Scale: 1024},
-			{Prefix: "message queue size (Kibytes)   (-q)  ", Letter: 'q', Res: interp.ResourceMessageQueues, Scale: 1024, Absent: "not supported", Name: "msgqueue"},
-			{Prefix: "nice                           (-e)  ", Letter: 'e', Res: interp.ResourceSchedulingPriority, Scale: 1, Absent: "not supported", Name: "nice"},
+			{
+				Prefix: "message queue size (Kibytes)   (-q)  ",
+				Letter: 'q',
+				Res:    interp.ResourceMessageQueues,
+				Scale:  1024,
+				Absent: "not supported",
+				Name:   "msgqueue",
+			},
+			{
+				Prefix: "nice                           (-e)  ",
+				Letter: 'e',
+				Res:    interp.ResourceSchedulingPriority,
+				Scale:  1,
+				Absent: "not supported",
+				Name:   "nice",
+			},
 			{Prefix: "nofile                         (-n)  ", Letter: 'n', Res: interp.ResourceOpenFiles, Scale: 1},
 			{Prefix: "nproc                          (-u)  ", Letter: 'u', Res: interp.ResourceProcesses, Scale: 1},
-			{Prefix: "pipe buffer size (bytes)       (-p)  ", Letter: 'p', Res: interp.ResourcePipeBuffer, Scale: 1, ReadOnly: true, Name: "pipe"},
+			{
+				Prefix:   "pipe buffer size (bytes)       (-p)  ",
+				Letter:   'p',
+				Res:      interp.ResourcePipeBuffer,
+				Scale:    1,
+				ReadOnly: true,
+				Name:     "pipe",
+			},
 			{Prefix: "max memory size (Kibytes)      (-m)  ", Letter: 'm', Res: interp.ResourceResidentSet, Scale: 1024},
-			{Prefix: "rtprio                         (-r)  ", Letter: 'r', Res: interp.ResourceRealtimePriority, Scale: 1, Absent: "not supported", Name: "rtprio"},
-			{Prefix: "socket buffer size (bytes)     (-b)  ", Letter: 'b', Res: interp.ResourcePipeBuffer, Scale: 1, ReadOnly: true, Name: "sbsize"},
-			{Prefix: "sigpend                        (-i)  ", Letter: 'i', Res: interp.ResourcePendingSignals, Scale: 1, Absent: "undefined", Name: "sigpend"},
+			{
+				Prefix: "rtprio                         (-r)  ",
+				Letter: 'r',
+				Res:    interp.ResourceRealtimePriority,
+				Scale:  1,
+				Absent: "not supported",
+				Name:   "rtprio",
+			},
+			{
+				Prefix:   "socket buffer size (bytes)     (-b)  ",
+				Letter:   'b',
+				Res:      interp.ResourcePipeBuffer,
+				Scale:    1,
+				ReadOnly: true,
+				Name:     "sbsize",
+			},
+			{
+				Prefix: "sigpend                        (-i)  ",
+				Letter: 'i',
+				Res:    interp.ResourcePendingSignals,
+				Scale:  1,
+				Absent: "undefined",
+				Name:   "sigpend",
+			},
 			{Prefix: "stack size (Kibytes)           (-s)  ", Letter: 's', Res: interp.ResourceStack, Scale: 1024},
 			{Prefix: "swap size (Kibytes)            (-w)  ", Letter: 'w', Fixed: "not supported", Name: "swap"},
 			{Prefix: "threads                        (-T)  ", Letter: 'T', Fixed: "not supported", Name: "threads"},
@@ -6313,7 +6362,10 @@ func withPromptWordings(d *interp.Diagnostics) {
 	// and the delimiter with its quoting off — `<<-EOF`, `<<"EOF"` and
 	// `<<\EOF` are all `<<EOF`, and a descriptor in front of the operator is
 	// not written. See syntax.Dialect.HeredocBodyMustBeInsideTheSubstitution.
-	d.HeredocOutsideSubstitution, d.PromptHeredocOutsideSubstitution = parseWording(2, "`%[1]s' here-document not contained within command substitution")
+	d.HeredocOutsideSubstitution, d.PromptHeredocOutsideSubstitution = parseWording(
+		2,
+		"`%[1]s' here-document not contained within command substitution",
+	)
 }
 
 // parseWording is one sentence about a parse failure in both of its shapes:

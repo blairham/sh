@@ -64,7 +64,12 @@ import (
 // it is there for. The create has to be the *exclusive* one or two shells
 // racing for a new name would both believe they made it; only once EEXIST
 // has come back is there a file to ask about, and only then is the type read.
-func (r *Runner) openThroughNoclobber(ctx context.Context, a *Action, path string, flags int) (f *os.File, fellBack bool, err error) {
+func (r *Runner) openThroughNoclobber(
+	ctx context.Context,
+	a *Action,
+	path string,
+	flags int,
+) (f *os.File, fellBack bool, err error) {
 	f, err = r.openGated(ctx, a, path, flags)
 	if flags&os.O_EXCL == 0 || !errors.Is(err, fs.ErrExist) {
 		return f, false, err

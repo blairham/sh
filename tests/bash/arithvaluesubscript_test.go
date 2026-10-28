@@ -82,7 +82,11 @@ func TestAValueInsideASubscriptStillRunsNothing(t *testing.T) {
 			_ = os.Remove(marker)
 			answersRun(t, c.src)
 			if _, err := os.Stat(marker); err == nil {
-				t.Fatalf("%s ran the command carried in a value (%s exists) — this is #3047's arbitrary command execution returning", c.src, marker)
+				t.Fatalf(
+					"%s ran the command carried in a value (%s exists) — this is #3047's arbitrary command execution returning",
+					c.src,
+					marker,
+				)
 			}
 		})
 	}

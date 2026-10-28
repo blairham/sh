@@ -187,7 +187,11 @@ func TestTheNameOutranksTheInvocationsOwnOption(t *testing.T) {
 // invocation's options and after the files.
 func TestTheProfileRunsBeforePosixMode(t *testing.T) {
 	home := t.TempDir()
-	if err := os.WriteFile(filepath.Join(home, ".profile"), []byte("exec 3>/nope/x\necho profile-after\n"), 0o600); err != nil {
+	if err := os.WriteFile(
+		filepath.Join(home, ".profile"),
+		[]byte("exec 3>/nope/x\necho profile-after\n"),
+		0o600,
+	); err != nil {
 		t.Fatal(err)
 	}
 	t.Setenv("HOME", home)

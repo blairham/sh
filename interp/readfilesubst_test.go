@@ -147,6 +147,11 @@ func TestTheFileReadSubstitutionIsAGrammarFlag(t *testing.T) {
 	}
 	off, st := runGrammar(t, src, func(d *syntax.Dialect) { d.ReadFileSubstitution = false }, nil)
 	if st != 0 || off != "[]" {
-		t.Errorf("without the flag: %q status %d, want %q — the redirection still opens the file and still runs nothing", off, st, "[]")
+		t.Errorf(
+			"without the flag: %q status %d, want %q — the redirection still opens the file and still runs nothing",
+			off,
+			st,
+			"[]",
+		)
 	}
 }

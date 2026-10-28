@@ -103,7 +103,10 @@ func TestANestedWidgetCallPutsTheCallersStateBack(t *testing.T) {
 			// script between two keystrokes finds no widget parameters and
 			// may not call a widget.
 			out.Reset()
-			f, err := syntax.Parse(`print -r -- "[${+BUFFER}] [${+WIDGET}] [${+PENDING}] [${+region_highlight}]"; zle other; print -r -- "zle=$?"`, zsh.Dialect())
+			f, err := syntax.Parse(
+				`print -r -- "[${+BUFFER}] [${+WIDGET}] [${+PENDING}] [${+region_highlight}]"; zle other; print -r -- "zle=$?"`,
+				zsh.Dialect(),
+			)
 			if err != nil {
 				t.Fatal(err)
 			}

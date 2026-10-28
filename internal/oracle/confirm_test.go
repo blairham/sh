@@ -77,7 +77,12 @@ func TestAChangeThatDoesNotRepeatKeepsTheCommittedValue(t *testing.T) {
 	prev := runOf("was", "same")
 	got := runOf("unable to create namespace", "same")
 
-	held, dropped, err := got.Confirm(context.Background(), prev, confirmCases(), answering(runOf("was", "same"), new([]string)))
+	held, dropped, err := got.Confirm(
+		context.Background(),
+		prev,
+		confirmCases(),
+		answering(runOf("was", "same"), new([]string)),
+	)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -104,7 +109,12 @@ func TestAChangeThatMovesAgainIsNotConfirmed(t *testing.T) {
 	prev := runOf("was", "same")
 	got := runOf("now", "same")
 
-	held, dropped, err := got.Confirm(context.Background(), prev, confirmCases(), answering(runOf("a third thing", "same"), new([]string)))
+	held, dropped, err := got.Confirm(
+		context.Background(),
+		prev,
+		confirmCases(),
+		answering(runOf("a third thing", "same"), new([]string)),
+	)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -160,7 +170,9 @@ func TestTheReportSaysHowManyCellsChanged(t *testing.T) {
 	}
 
 	held := []CellChange{{CaseID: "pipe/one", Shell: "ksh93", Was: Result{Stdout: "was"}, Now: Result{Stdout: "now"}}}
-	dropped := []CellChange{{CaseID: "pipe/two", Shell: "ksh93", Was: Result{Stdout: "was"}, Now: Result{Stderr: "unable to create namespace"}}}
+	dropped := []CellChange{
+		{CaseID: "pipe/two", Shell: "ksh93", Was: Result{Stdout: "was"}, Now: Result{Stderr: "unable to create namespace"}},
+	}
 	rep := CellChangeReport(held, dropped)
 	for _, want := range []string{"1 cell changed", "pipe/one", "ksh93", "committed value was kept", "pipe/two"} {
 		if !strings.Contains(rep, want) {
@@ -179,7 +191,12 @@ func TestDriftThatDoesNotRepeatIsNotReported(t *testing.T) {
 		t.Fatalf("%d drift(s) before confirming, want 1", len(drifts))
 	}
 
-	held, dropped, err := ConfirmDrift(context.Background(), drifts, confirmCases(), answering(runOf("was", "same"), new([]string)))
+	held, dropped, err := ConfirmDrift(
+		context.Background(),
+		drifts,
+		confirmCases(),
+		answering(runOf("was", "same"), new([]string)),
+	)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -190,7 +207,12 @@ func TestDriftThatDoesNotRepeatIsNotReported(t *testing.T) {
 		t.Errorf("the check edited the run: the cell is now %q", v)
 	}
 
-	held, dropped, err = ConfirmDrift(context.Background(), drifts, confirmCases(), answering(runOf("unable to create namespace", "same"), new([]string)))
+	held, dropped, err = ConfirmDrift(
+		context.Background(),
+		drifts,
+		confirmCases(),
+		answering(runOf("unable to create namespace", "same"), new([]string)),
+	)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -30,7 +30,13 @@ func TestIdenticalShellsAgree(t *testing.T) {
 	dir := t.TempDir()
 	script := write(t, dir, "s", "#!/bin/sh\necho hi\n")
 
-	rep := wild.RunSweep(context.Background(), []string{script}, wild.UnderTest{Path: "/bin/sh"}, "/bin/sh", 10*time.Second)
+	rep := wild.RunSweep(
+		context.Background(),
+		[]string{script},
+		wild.UnderTest{Path: "/bin/sh"},
+		"/bin/sh",
+		10*time.Second,
+	)
 	if rep.Ran != len(wild.Probes) || rep.Agreed != rep.Ran || len(rep.Mismatches) != 0 {
 		t.Errorf("%+v", rep)
 	}
@@ -62,7 +68,13 @@ func TestAScriptThatWaitsIsNotAMismatch(t *testing.T) {
 	script := write(t, dir, "s", "#!/bin/sh\nsleep 30\n")
 
 	start := time.Now()
-	rep := wild.RunSweep(context.Background(), []string{script}, wild.UnderTest{Path: "/bin/sh"}, "/bin/sh", 300*time.Millisecond)
+	rep := wild.RunSweep(
+		context.Background(),
+		[]string{script},
+		wild.UnderTest{Path: "/bin/sh"},
+		"/bin/sh",
+		300*time.Millisecond,
+	)
 	if rep.Timedout != len(wild.Probes) || len(rep.Mismatches) != 0 || rep.Ran != 0 {
 		t.Errorf("%+v", rep)
 	}
@@ -80,7 +92,13 @@ func TestARunIsContained(t *testing.T) {
 	// there — which must be nothing from the run before it.
 	script := write(t, dir, "s", "#!/bin/sh\nls | tr '\\n' ' '\ntouch ran\n")
 
-	rep := wild.RunSweep(context.Background(), []string{script}, wild.UnderTest{Path: "/bin/sh"}, "/bin/sh", 10*time.Second)
+	rep := wild.RunSweep(
+		context.Background(),
+		[]string{script},
+		wild.UnderTest{Path: "/bin/sh"},
+		"/bin/sh",
+		10*time.Second,
+	)
 	if rep.Agreed != rep.Ran {
 		t.Fatalf("%+v", rep)
 	}
@@ -108,7 +126,13 @@ func TestNormalizingDoesNotEatTheScriptsOwnWords(t *testing.T) {
 	// Prints a word that contains the reference shell's base name.
 	script := write(t, dir, "s", "#!/bin/sh\necho 'GNU shbug 1.0'\n")
 
-	rep := wild.RunSweep(context.Background(), []string{script}, wild.UnderTest{Path: "/bin/sh"}, "/bin/sh", 10*time.Second)
+	rep := wild.RunSweep(
+		context.Background(),
+		[]string{script},
+		wild.UnderTest{Path: "/bin/sh"},
+		"/bin/sh",
+		10*time.Second,
+	)
 	if len(rep.Mismatches) != 0 {
 		t.Errorf("a word containing the shell's name was reported as a difference: %+v", rep.Mismatches)
 	}
@@ -162,7 +186,13 @@ func TestAScriptThatIsNotTheSameTwiceIsNotAMismatch(t *testing.T) {
 	// A process id, which is what the real cases carry.
 	script := write(t, dir, "s", "#!/bin/sh\necho \"pid $$\"\n")
 
-	rep := wild.RunSweep(context.Background(), []string{script}, wild.UnderTest{Path: "/bin/sh"}, "/bin/sh", 10*time.Second)
+	rep := wild.RunSweep(
+		context.Background(),
+		[]string{script},
+		wild.UnderTest{Path: "/bin/sh"},
+		"/bin/sh",
+		10*time.Second,
+	)
 	if rep.Unstable != len(wild.Probes) {
 		t.Errorf("unstable = %d, want %d: %+v", rep.Unstable, len(wild.Probes), rep)
 	}
@@ -221,7 +251,13 @@ echo stable
 exit $n
 `)
 
-	rep := wild.RunSweep(context.Background(), []string{script}, wild.UnderTest{Path: "/bin/sh"}, "/bin/sh", 10*time.Second)
+	rep := wild.RunSweep(
+		context.Background(),
+		[]string{script},
+		wild.UnderTest{Path: "/bin/sh"},
+		"/bin/sh",
+		10*time.Second,
+	)
 	if rep.Unstable != len(wild.Probes) {
 		t.Errorf("unstable = %d, want %d: %+v", rep.Unstable, len(wild.Probes), rep)
 	}

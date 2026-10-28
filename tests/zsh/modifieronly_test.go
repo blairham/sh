@@ -23,7 +23,11 @@ var modifierOnlyRows = []struct{ name, src, want string }{
 	{"nocorrect", `: MARK; v=1 nocorrect; print -r -- "_=[$_] v=[$v]"`, "_=[MARK] v=[1]\n"},
 	{"builtin builtin", `: MARK; v=1 builtin builtin; print -r -- "_=[$_] v=[$v]"`, "_=[MARK] v=[1]\n"},
 	{"command drops the line", `: MARK; v=1 command; print -r -- "_=[$_] v=[$v]"`, "_=[MARK] v=[]\n"},
-	{"command and its own options", `: MARK; v=1 noglob command; v=1 command -p; v=1 command --; print -r -- "_=[$_] v=[$v]"`, "_=[MARK] v=[]\n"},
+	{
+		"command and its own options",
+		`: MARK; v=1 noglob command; v=1 command -p; v=1 command --; print -r -- "_=[$_] v=[$v]"`,
+		"_=[MARK] v=[]\n",
+	},
 	{"no prefix", `: MARK; builtin; command; exec; noglob builtin; print -r -- "_=[$_]"`, "_=[MARK]\n"},
 	{
 		"the prefix's status, or none behind command",

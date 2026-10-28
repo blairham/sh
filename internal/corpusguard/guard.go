@@ -199,7 +199,10 @@ func ResolveBase(dir, prefer string) (string, error) {
 			return sha, nil
 		}
 	}
-	return "", fmt.Errorf("no base commit: %q did not resolve and neither origin/main nor main is a merge base of HEAD", prefer)
+	return "", fmt.Errorf(
+		"no base commit: %q did not resolve and neither origin/main nor main is a merge base of HEAD",
+		prefer,
+	)
 }
 
 // Check compares the corpus in dir's working tree against the corpus at base.

@@ -88,8 +88,11 @@ func TestTheMostSpecificPatternWins(t *testing.T) {
 	}
 	// And the fallback: a bare `*` is one component, so it sorts last and is
 	// what a context nothing else claims reads.
-	out, _ := runZsh(t, t.TempDir(),
-		"zstyle '*' v star; zstyle ':a:*' v a\nzstyle -s ':a:b' v out; echo \"[$out]\"\nzstyle -s ':z' v two; echo \"[$two]\"\n")
+	out, _ := runZsh(
+		t,
+		t.TempDir(),
+		"zstyle '*' v star; zstyle ':a:*' v a\nzstyle -s ':a:b' v out; echo \"[$out]\"\nzstyle -s ':z' v two; echo \"[$two]\"\n",
+	)
 	if want := "[a]\n[star]\n"; out != want {
 		t.Errorf("output = %q, want %q", out, want)
 	}

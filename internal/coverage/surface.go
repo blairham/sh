@@ -210,7 +210,9 @@ func NodeTypes() ([]string, error) {
 		}
 	}
 	if len(seen) == 0 {
-		return nil, fmt.Errorf("coverage: no node types found — the `Pos` method is how they are recognized, so this means the source was not read")
+		return nil, fmt.Errorf(
+			"coverage: no node types found — the `Pos` method is how they are recognized, so this means the source was not read",
+		)
 	}
 	out := make([]string, 0, len(seen))
 	for n := range seen {
@@ -395,7 +397,9 @@ func CondOperators() ([]string, error) {
 		}
 	}
 	if len(seen) == 0 {
-		return nil, fmt.Errorf("coverage: no condition operators found in syntax/cond.go — the tables are how they are recognized, so this means the file was not read")
+		return nil, fmt.Errorf(
+			"coverage: no condition operators found in syntax/cond.go — the tables are how they are recognized, so this means the file was not read",
+		)
 	}
 	out := make([]string, 0, len(seen))
 	for s := range seen {

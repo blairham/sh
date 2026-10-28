@@ -13,7 +13,10 @@ import (
 // pinned image: the grant of a clause with no who goes through the mask the
 // command started from, and what a clause clears does not.
 func TestAnOmittedWhoGrantsOnlyWhatTheMaskAllows(t *testing.T) {
-	out, _ := runUmask(t, `umask 022; umask =w; umask; umask 022; umask a=r,+w; umask; umask 022; umask a+w,=r; umask; umask 027; umask =rx; umask`)
+	out, _ := runUmask(
+		t,
+		`umask 022; umask =w; umask; umask 022; umask a=r,+w; umask; umask 022; umask a+w,=r; umask; umask 027; umask =rx; umask`,
+	)
 	if want := "0577\n0133\n0333\n0227\n"; out != want {
 		t.Errorf("got %q, want %q", out, want)
 	}

@@ -266,7 +266,14 @@ func TestTheWalkRefusesWhereTheKernelRefuses(t *testing.T) {
 
 	// A caller's own O_NOFOLLOW means refuse a symbolic link, and the walk must
 	// not quietly follow one on its way to being helpful.
-	if _, err := walkOpen(filepath.Join(dir, "toshut"), os.O_RDONLY|syscall.O_NOFOLLOW, 0, nil); errnoOf(err) != syscall.ELOOP {
+	if _, err := walkOpen(
+		filepath.Join(dir, "toshut"),
+		os.O_RDONLY|syscall.O_NOFOLLOW,
+		0,
+		nil,
+	); errnoOf(
+		err,
+	) != syscall.ELOOP {
 		t.Errorf("the walk answered %v for a link opened O_NOFOLLOW, want ELOOP", err)
 	}
 }

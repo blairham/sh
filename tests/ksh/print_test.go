@@ -45,8 +45,11 @@ func TestPrintExpandsAndJoins(t *testing.T) {
 // redirection opened is reachable by its number, and a number nothing
 // writable holds — or a word that is no number — is the measured refusal.
 func TestPrintUAimsAtADescriptor(t *testing.T) {
-	out, st := runKsh(t, t.TempDir(),
-		`print -u2 err >/dev/null; print -u 2 err2 >/dev/null; exec 3>f3; print -u3 hi; exec 3>&-; read line < f3; print "$line"`)
+	out, st := runKsh(
+		t,
+		t.TempDir(),
+		`print -u2 err >/dev/null; print -u 2 err2 >/dev/null; exec 3>f3; print -u3 hi; exec 3>&-; read line < f3; print "$line"`,
+	)
 	if st != 0 || out != "err\nerr2\nhi\n" {
 		t.Errorf("out %q status %d, want both stderr forms and the exec'd descriptor", out, st)
 	}

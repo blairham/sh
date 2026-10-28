@@ -28,7 +28,13 @@ func prefixFailRun(t *testing.T, src string, fatality PrefixRefusalFatalityPolic
 // redirection — see interp/prefixredirorder.go. A suite that only ever ran
 // under the other answer would leave that walk's stop untested, which is
 // exactly what a mutation battery found.
-func prefixFailRunOrder(t *testing.T, src string, fatality PrefixRefusalFatalityPolicy, abandons Answer, order PrefixRedirectionOrder) (string, int) {
+func prefixFailRunOrder(
+	t *testing.T,
+	src string,
+	fatality PrefixRefusalFatalityPolicy,
+	abandons Answer,
+	order PrefixRedirectionOrder,
+) (string, int) {
 	t.Helper()
 	sem := permissive()
 	sem.PrefixRefusalFatality = fatality

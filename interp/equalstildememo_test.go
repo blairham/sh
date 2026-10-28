@@ -21,6 +21,10 @@ printf '%s\n' a=~
 echo a=~
 `, nil, func(r *Runner) { r.MarkBuiltinWhoseEqualsOpensATildeContext("echo") })
 	if want := "a=~\na=/h\na=~\na=/h\n"; out != want {
-		t.Errorf("got %q, want %q: the builtin in the table opens a tilde context after `=` and the other does not", out, want)
+		t.Errorf(
+			"got %q, want %q: the builtin in the table opens a tilde context after `=` and the other does not",
+			out,
+			want,
+		)
 	}
 }

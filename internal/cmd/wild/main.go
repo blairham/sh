@@ -41,12 +41,18 @@ import (
 
 func main() {
 	var (
-		dirs = flag.String("dirs", strings.Join(wild.DefaultDirs, ","),
-			"comma-separated directories of installed programs to sweep; "+wild.DirsVar+" adds the framework trees a shell sources at startup")
+		dirs = flag.String(
+			"dirs",
+			strings.Join(wild.DefaultDirs, ","),
+			"comma-separated directories of installed programs to sweep; "+wild.DirsVar+" adds the framework trees a shell sources at startup",
+		)
 		which = flag.String("dialect", "bash",
 			"which dialect to grade, and so which shebangs count: bash or zsh")
-		reference = flag.String("reference", "",
-			"shell that decides whether a refused file is really a shell script; defaults to the dialect's own, empty to trust every shebang")
+		reference = flag.String(
+			"reference",
+			"",
+			"shell that decides whether a refused file is really a shell script; defaults to the dialect's own, empty to trust every shebang",
+		)
 		verbose = flag.Bool("v", false, "list every failure's message in full")
 		depth   = flag.Int("depth", wild.DefaultDepth,
 			"how far below each directory to descend; a negative number reads the directories themselves and nothing under them")
@@ -56,8 +62,11 @@ func main() {
 			"also RUN each script that parses, under this binary and the reference, and report where they disagree")
 		runargs = flag.String("runargs", "",
 			"space-separated flags the -run binary needs, before the script")
-		contained = flag.Bool("contained", false,
-			"hand the -run binary a policy allowing it to write only in the directory each run is given, so the sweep tests the boundary rather than the arrangement")
+		contained = flag.Bool(
+			"contained",
+			false,
+			"hand the -run binary a policy allowing it to write only in the directory each run is given, so the sweep tests the boundary rather than the arrangement",
+		)
 		timeout = flag.Duration("timeout", 10*time.Second, "how long one run may take")
 	)
 	flag.Parse()
@@ -140,8 +149,11 @@ const (
 // this machine fails".
 func sweep(name string, scope wild.Scope, dialect syntax.Dialect, reference string, verbose, named bool) wild.Report {
 	if len(scope.Dirs) == 0 {
-		fmt.Printf("%s: not swept — no roots configured. Set %s to the plugin or framework trees a shell sources at startup, separated like PATH.\n",
-			name, wild.DirsVar)
+		fmt.Printf(
+			"%s: not swept — no roots configured. Set %s to the plugin or framework trees a shell sources at startup, separated like PATH.\n",
+			name,
+			wild.DirsVar,
+		)
 		return wild.Report{}
 	}
 	// An absent root is skipped rather than fatal, so one variable serves a
@@ -152,14 +164,25 @@ func sweep(name string, scope wild.Scope, dialect syntax.Dialect, reference stri
 			name, len(absent), len(scope.Dirs), strings.Join(absent, " "))
 	}
 	rep := wild.Sweep(context.Background(), scope, dialect, reference)
-	fmt.Printf("%s: scripts found: %d   parsed: %d   refused by %s too: %d   failures: %d   read here and refused by %s: %d\n",
-		name, rep.Scanned, rep.Parsed, refName(reference), rep.NotShell, len(rep.Failures),
-		refName(reference), len(rep.Lax))
+	fmt.Printf(
+		"%s: scripts found: %d   parsed: %d   refused by %s too: %d   failures: %d   read here and refused by %s: %d\n",
+		name,
+		rep.Scanned,
+		rep.Parsed,
+		refName(reference),
+		rep.NotShell,
+		len(rep.Failures),
+		refName(reference),
+		len(rep.Lax),
+	)
 	// Skipped files are counted and never named: printing a path would
 	// invite the reader to open a file CLEANROOM.md forbids opening.
 	if len(rep.Skipped) > 0 {
-		fmt.Printf("%s: skipped without reading: %s — CLEANROOM.md forbids opening these, so they are counted, never listed\n",
-			name, skipSummary(rep.Skipped))
+		fmt.Printf(
+			"%s: skipped without reading: %s — CLEANROOM.md forbids opening these, so they are counted, never listed\n",
+			name,
+			skipSummary(rep.Skipped),
+		)
 	}
 	report(name, rep, verbose)
 	lax(name, rep, reference, verbose)
@@ -230,7 +253,14 @@ func report(name string, rep wild.Report, verbose bool) {
 //
 // Only the ones that parse: a script this shell cannot read has already been
 // reported, and running it would say the same thing twice.
-func runSweep(ours wild.UnderTest, reference string, scope wild.Scope, parsed wild.Report, timeout time.Duration, verbose bool) {
+func runSweep(
+	ours wild.UnderTest,
+	reference string,
+	scope wild.Scope,
+	parsed wild.Report,
+	timeout time.Duration,
+	verbose bool,
+) {
 	failed := map[string]bool{}
 	for _, f := range parsed.Failures {
 		failed[f.Path] = true

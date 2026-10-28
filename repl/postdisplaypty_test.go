@@ -90,8 +90,13 @@ func TestAPostdisplayIsDrawnAfterTheLine(t *testing.T) {
 	// of what makes it a suggestion rather than text somebody typed.
 	row, col := shown.at()
 	if want := len("[1] echo hi"); col != want {
-		t.Errorf("the cursor is at row %d column %d, want column %d — after the line and not after the suggestion.\nscreen:\n%s",
-			row, col, want, shown.styledText())
+		t.Errorf(
+			"the cursor is at row %d column %d, want column %d — after the line and not after the suggestion.\nscreen:\n%s",
+			row,
+			col,
+			want,
+			shown.styledText(),
+		)
 	}
 }
 

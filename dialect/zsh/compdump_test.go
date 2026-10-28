@@ -67,7 +67,9 @@ func (e compdumpEnv) file() string { return filepath.Join(e.cache, "sh", "compdu
 // does, and returns what compdumpTables prints.
 func (e compdumpEnv) run(t *testing.T, dirs []string, opts string) string {
 	t.Helper()
-	src := "fpath=(" + quoteDirs(append([]string{dialecttest.ShippedFunctionDir(t)}, dirs...)) + ")\nautoload -Uz compinit; compinit -u " + opts + "\n" + compdumpTables
+	src := "fpath=(" + quoteDirs(
+		append([]string{dialecttest.ShippedFunctionDir(t)}, dirs...),
+	) + ")\nautoload -Uz compinit; compinit -u " + opts + "\n" + compdumpTables
 	out, st, err := preset.CombinedWithPrelude(t, dialecttest.Base{
 		Dir: e.home,
 		Vars: map[string]string{
@@ -439,7 +441,9 @@ func TestCompinitMergesTheDumpOverTablesItFound(t *testing.T) {
 	zsh.SetCompdumpForTest(t, 0, "")
 	e := newCompdumpEnv(t)
 	a, b := compdumpFixture(t)
-	src := "fpath=(" + quoteDirs([]string{dialecttest.ShippedFunctionDir(t), a, b}) + ")\nautoload -Uz compinit; compinit -u -D\n" +
+	src := "fpath=(" + quoteDirs(
+		[]string{dialecttest.ShippedFunctionDir(t), a, b},
+	) + ")\nautoload -Uz compinit; compinit -u -D\n" +
 		"compdef _mine alpha svc=mysvc mine; _services[other]=held; _patcomps['pat*']=_mypat\n" +
 		"autoload -Uz compinit; compinit -u %s\n" + compdumpTables
 	run := func(opts string) string {
@@ -568,7 +572,9 @@ func TestCompinitAsksTheGateBeforeItsDump(t *testing.T) {
 			t.Fatal(err)
 		}
 		r.SourcingPrelude(false)
-		src := "fpath=(" + quoteDirs([]string{dialecttest.ShippedFunctionDir(t), a, b}) + ")\nautoload -Uz compinit; compinit -u\nprint -r -- $_comps[gamma]"
+		src := "fpath=(" + quoteDirs(
+			[]string{dialecttest.ShippedFunctionDir(t), a, b},
+		) + ")\nautoload -Uz compinit; compinit -u\nprint -r -- $_comps[gamma]"
 		if st, err := r.Run(context.Background(), preset.Parse(t, src)); err != nil || st != 0 || buf.String() != "_beta\n" {
 			t.Fatalf("deny=%v: status %d, %v\n%s", deny, st, err, buf.String())
 		}

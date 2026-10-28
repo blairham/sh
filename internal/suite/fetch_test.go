@@ -403,7 +403,10 @@ func TestTheBashColumnHasASecondSource(t *testing.T) {
 		}
 		for _, u := range s.sources() {
 			if !strings.HasPrefix(u, "https://") {
-				t.Errorf("source %q is not https; a mirror that can be rewritten in flight is not a second route to the same bytes", u)
+				t.Errorf(
+					"source %q is not https; a mirror that can be rewritten in flight is not a second route to the same bytes",
+					u,
+				)
 			}
 		}
 		return

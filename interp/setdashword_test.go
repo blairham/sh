@@ -59,7 +59,12 @@ func TestABareSetODeclinesADashWord(t *testing.T) {
 
 	out, st := runDashWord(t, src, Yes)
 	if out != "st=0\ne=on\n" || st != 0 {
-		t.Errorf("declining: got %q at %d, want %q — the `-e` is not a name, it is the letter that turns errexit on", out, st, "st=0\ne=on\n")
+		t.Errorf(
+			"declining: got %q at %d, want %q — the `-e` is not a name, it is the letter that turns errexit on",
+			out,
+			st,
+			"st=0\ne=on\n",
+		)
 	}
 
 	out, st = runDashWord(t, src, No)

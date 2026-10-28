@@ -13,7 +13,10 @@ import (
 // is the only complaint and the line goes on. Measured 2026-10-03 in the
 // pinned image. See interp.Semantics.PrefixToAFrozenNameIsCheckedFirst.
 func TestAFrozenPrefixIsRefusedWithTheCommand(t *testing.T) {
-	out, _ := run(t, "readonly x=1\n( x=2 /bin/echo RAN >/nope/f ); echo \"st=$?\"\n( x=2 /bin/true $(echo ARG >&2) ); echo \"st=$?\"\n")
+	out, _ := run(
+		t,
+		"readonly x=1\n( x=2 /bin/echo RAN >/nope/f ); echo \"st=$?\"\n( x=2 /bin/true $(echo ARG >&2) ); echo \"st=$?\"\n",
+	)
 	if !strings.Contains(out, "can't create /nope/f") || strings.Count(out, "is read only") != 1 ||
 		!strings.Contains(out, "st=1\n") || !strings.Contains(out, "ARG\n") || strings.Contains(out, "RAN") {
 		t.Errorf("got %q, want the file complaint alone at 1, then ARG before the one refusal", out)

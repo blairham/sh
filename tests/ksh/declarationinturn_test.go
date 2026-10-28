@@ -113,7 +113,9 @@ func TestARefusedDeclarationOperandKeepsTheOnesBeforeIt(t *testing.T) {
 	out, _ = runKsh(t, t.TempDir(), `set -x
 typeset a["p q"]=1 a[""]=3
 echo after`)
-	if want := "ksh: line 2: p q: arithmetic syntax error\n"; !strings.HasSuffix(out, want) || strings.Contains(out, "after") || strings.Contains(out, "+ a[") {
+	if want := "ksh: line 2: p q: arithmetic syntax error\n"; !strings.HasSuffix(out, want) ||
+		strings.Contains(out, "after") ||
+		strings.Contains(out, "+ a[") {
 		t.Errorf("got %q, want it to end with %q and nothing traced", out, want)
 	}
 }

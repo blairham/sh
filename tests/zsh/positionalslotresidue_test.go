@@ -175,7 +175,12 @@ func TestTheTruncatedDigitCountIsTheShells(t *testing.T) {
 		}
 		tilde := "echo ~" + tc.index + "/x"
 		out, _ := runZshOnPath(t, t.TempDir(), tilde)
-		if prefix := "zsh:1: number truncated after " + itoa(int64(tc.count)) + " digits: " + tc.index + "/x\n"; !strings.HasPrefix(out, prefix) {
+		if prefix := "zsh:1: number truncated after " + itoa(
+			int64(tc.count),
+		) + " digits: " + tc.index + "/x\n"; !strings.HasPrefix(
+			out,
+			prefix,
+		) {
 			t.Errorf("%s = %q, want it to begin %q", tilde, out, prefix)
 		}
 	}

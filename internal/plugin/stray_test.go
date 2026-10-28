@@ -137,10 +137,17 @@ func abandon(t *testing.T, name string, requests ...string) (out string, exited 
 func TestAFixtureAbandonedMidCallStopsAskingAndExits(t *testing.T) {
 	out, exited := abandon(t, "greet", initializeRequest, invokeSinkRequest)
 	if !exited {
-		t.Errorf("still running after %v with its host gone; a plugin at end of input has nothing left to do.\nit wrote %d input requests", abandonBound, strings.Count(out, `"method":"shell/read"`))
+		t.Errorf(
+			"still running after %v with its host gone; a plugin at end of input has nothing left to do.\nit wrote %d input requests",
+			abandonBound,
+			strings.Count(out, `"method":"shell/read"`),
+		)
 	}
 	if n := strings.Count(out, `"method":"shell/read"`); n != 1 {
-		t.Errorf("asked the host for input %d times, want exactly 1: a request nothing answered because the host is gone is not an answer of \"not eof yet\"", n)
+		t.Errorf(
+			"asked the host for input %d times, want exactly 1: a request nothing answered because the host is gone is not an answer of \"not eof yet\"",
+			n,
+		)
 	}
 }
 
@@ -184,7 +191,11 @@ func TestEveryFixtureExitsWhenItsInputEnds(t *testing.T) {
 // a clean run.
 func TestTheGuardLooksForTheNameTheseFixturesAreAt(t *testing.T) {
 	if path := fixture(t, "greet"); !strings.Contains(path, strayMarker) {
-		t.Errorf("the fixtures are at %q and the guard looks for %q; a fixture's own path is what makes it findable", path, strayMarker)
+		t.Errorf(
+			"the fixtures are at %q and the guard looks for %q; a fixture's own path is what makes it findable",
+			path,
+			strayMarker,
+		)
 	}
 }
 
@@ -235,7 +246,10 @@ func TestTheGuardNamesAFixtureThisRunLeftRunning(t *testing.T) {
 			}
 		}
 		if !time.Now().Before(deadline) {
-			t.Fatalf("the guard reported nothing for a fixture this run left running (pid %d); silence and a clean tree are the same report, which is what makes this worth checking", cmd.Process.Pid)
+			t.Fatalf(
+				"the guard reported nothing for a fixture this run left running (pid %d); silence and a clean tree are the same report, which is what makes this worth checking",
+				cmd.Process.Pid,
+			)
 		}
 		time.Sleep(20 * time.Millisecond)
 	}

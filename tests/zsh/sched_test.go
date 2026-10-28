@@ -118,7 +118,8 @@ func TestTheListingIsSortedByTimeAndNumberedFromOne(t *testing.T) {
 	// And the number is space-padded to three columns, which only shows past
 	// nine.
 	out, _ = runSched(t, "for i in 1 2 3 4 5 6 7 8 9 10; do sched +$i t$i; done\nsched\n")
-	if first, tenth := "  1 Mon Sep  7 17:47:40 t1\n", " 10 Mon Sep  7 17:47:49 t10\n"; !contains(out, first) || !contains(out, tenth) {
+	if first, tenth := "  1 Mon Sep  7 17:47:40 t1\n", " 10 Mon Sep  7 17:47:49 t10\n"; !contains(out, first) ||
+		!contains(out, tenth) {
 		t.Errorf("output = %q, want %q and %q in it", out, first, tenth)
 	}
 }
@@ -183,7 +184,10 @@ func TestSchedRefusesEachMistakeItsOwnWay(t *testing.T) {
 // entry as `<epoch>:<options>:<command>`. Measured; the middle field is empty
 // for every spelling this builtin has.
 func TestTheScheduledEventsParameter(t *testing.T) {
-	out, _ := runSched(t, "sched +5 echo hi; sched +3 x y\nprint -rl -- \"${zsh_scheduled_events[@]}\"\necho n=${#zsh_scheduled_events[@]}\n")
+	out, _ := runSched(
+		t,
+		"sched +5 echo hi; sched +3 x y\nprint -rl -- \"${zsh_scheduled_events[@]}\"\necho n=${#zsh_scheduled_events[@]}\n",
+	)
 	want := fmt.Sprintf("%d::x y\n%d::echo hi\nn=2\n",
 		schedNow.Add(3*time.Second).Unix(), schedNow.Add(5*time.Second).Unix())
 	if out != want {

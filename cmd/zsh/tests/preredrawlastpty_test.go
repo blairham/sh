@@ -31,14 +31,19 @@ import (
 // logged `LW=[]` for the first line, the key before for every other, `inner
 // LW=[]`, and a `pre … B=[ei]` after the handler.
 func TestPreRedrawAndHandlerWidgetsReadTheKeyBefore(t *testing.T) {
-	control, screen, home := jobNoticeSessionRC(t, `pre() { print -r -- "pre W=[$WIDGET] B=[$BUFFER] LW=[$LASTWIDGET]" >> $HOME/out }
+	control, screen, home := jobNoticeSessionRC(
+		t,
+		`pre() { print -r -- "pre W=[$WIDGET] B=[$BUFFER] LW=[$LASTWIDGET]" >> $HOME/out }
 zle -N zle-line-pre-redraw pre
 inner() { BUFFER+=i; print -r -- "inner LW=[$LASTWIDGET]" >> $HOME/out }
 zle -N inner
 h() { local l; read -r l <&$1; zle -F $1; print -r -- handler >> $HOME/out; zle inner }
 arm() { exec {fd}< <(sleep 0.3; echo x); zle -F $fd h }
 zle -N arm; bindkey '^Xf' arm
-`, "zsh", "-i")
+`,
+		"zsh",
+		"-i",
+	)
 	log := func() string {
 		data, _ := os.ReadFile(filepath.Join(home, "out"))
 		return string(data)

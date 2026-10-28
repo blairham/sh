@@ -40,7 +40,11 @@ func TestAFailedSubscriptInAnIsSetTestEndsTheLine(t *testing.T) {
 					t.Errorf("%s: got %q at %d, want the complaint and nothing after", src, out, st)
 				}
 			}
-			out, st, err := p.Combined(t, dialecttest.Base{Dir: t.TempDir()}, `a=(x y z); [[ 1 -eq 1 || -v 'a[1/0]' ]]; echo after`)
+			out, st, err := p.Combined(
+				t,
+				dialecttest.Base{Dir: t.TempDir()},
+				`a=(x y z); [[ 1 -eq 1 || -v 'a[1/0]' ]]; echo after`,
+			)
 			if err != nil {
 				t.Fatal(err)
 			}

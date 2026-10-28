@@ -140,7 +140,8 @@ func (r *Runner) elementOrderIsObservable(a *syntax.Assign) bool {
 		// the list, arithmetic and all — see Runner.elementLiteralOrder —
 		// so `a[i++]=(p $i)` is a question where `a[i++]=$i` is not.
 		subTouches = subTouches || !r.assocDeclared(a.Name) && r.subscriptArithTouchesState(a.Index)
-		return subTouches || r.literalTouchesState(a.Elems) && (subExpands || a.IndexText != "" && !isDecimalSubscript(a.IndexText))
+		return subTouches ||
+			r.literalTouchesState(a.Elems) && (subExpands || a.IndexText != "" && !isDecimalSubscript(a.IndexText))
 	}
 	if !subExpands {
 		// A subscript with nothing to expand is only evaluated, and that is

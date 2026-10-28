@@ -33,12 +33,30 @@ import (
 // special-case it. A case about the refusal builds it where the refusal is the
 // subject — see TestTypeSaysSpecialShellBuiltinWhereTheReferenceDoes.
 var presets = map[string]dialecttest.Preset{
-	"bash":  {Name: "bash", Dialect: bash.Dialect, Semantics: bash.Semantics, Diagnostics: bash.Diagnostics, Apply: bash.Apply},
-	"dash":  {Name: "dash", Dialect: dash.Dialect, Semantics: dash.Semantics, Diagnostics: dash.Diagnostics, Apply: dash.Apply},
-	"ksh":   {Name: "ksh", Dialect: ksh.Dialect, Semantics: ksh.Semantics, Diagnostics: ksh.Diagnostics, Apply: ksh.Apply},
-	"zsh":   {Name: "zsh", Dialect: zsh.Dialect, Semantics: zsh.Semantics, Diagnostics: zsh.Diagnostics, Apply: zsh.Apply},
-	"ash":   {Name: "ash", Dialect: ash.Dialect, Semantics: ash.Semantics, Diagnostics: ash.Diagnostics, Apply: ash.Apply},
-	"posix": {Name: "sh", Dialect: syntax.POSIX, Semantics: interp.PosixSemantics, Diagnostics: interp.PosixDiagnostics, Apply: noApply},
+	"bash": {
+		Name:        "bash",
+		Dialect:     bash.Dialect,
+		Semantics:   bash.Semantics,
+		Diagnostics: bash.Diagnostics,
+		Apply:       bash.Apply,
+	},
+	"dash": {
+		Name:        "dash",
+		Dialect:     dash.Dialect,
+		Semantics:   dash.Semantics,
+		Diagnostics: dash.Diagnostics,
+		Apply:       dash.Apply,
+	},
+	"ksh": {Name: "ksh", Dialect: ksh.Dialect, Semantics: ksh.Semantics, Diagnostics: ksh.Diagnostics, Apply: ksh.Apply},
+	"zsh": {Name: "zsh", Dialect: zsh.Dialect, Semantics: zsh.Semantics, Diagnostics: zsh.Diagnostics, Apply: zsh.Apply},
+	"ash": {Name: "ash", Dialect: ash.Dialect, Semantics: ash.Semantics, Diagnostics: ash.Diagnostics, Apply: ash.Apply},
+	"posix": {
+		Name:        "sh",
+		Dialect:     syntax.POSIX,
+		Semantics:   interp.PosixSemantics,
+		Diagnostics: interp.PosixDiagnostics,
+		Apply:       noApply,
+	},
 }
 
 // noApply is the POSIX preset's Apply. It has no builtins of its own — that is

@@ -163,12 +163,21 @@ func TestConstructAllocations(t *testing.T) {
 			byteCount := float64(after.TotalAlloc-before.TotalAlloc) / startupcost.ConstructIterations
 			t.Logf("%.1f objects and %.0f bytes an iteration", objects, byteCount)
 			if objects > bound.objects || byteCount > bound.bytes {
-				t.Errorf("an iteration allocates %.1f objects and %.0f bytes, over the %.1f and %.0f this row was brought down to (#6353)",
-					objects, byteCount, bound.objects, bound.bytes)
+				t.Errorf(
+					"an iteration allocates %.1f objects and %.0f bytes, over the %.1f and %.0f this row was brought down to (#6353)",
+					objects,
+					byteCount,
+					bound.objects,
+					bound.bytes,
+				)
 			}
 		})
 	}
 	if checked != len(constructAllocBounds) {
-		t.Fatalf("checked %d rows of %d bounded: a bound names a row that is not in the table", checked, len(constructAllocBounds))
+		t.Fatalf(
+			"checked %d rows of %d bounded: a bound names a row that is not in the table",
+			checked,
+			len(constructAllocBounds),
+		)
 	}
 }

@@ -36,10 +36,18 @@ func TestCompctlRecordsADefinition(t *testing.T) {
 	if out, st := runZsh(t, dir, `compctl -g "*.go" gofmt`); st != 0 || out != "" {
 		t.Errorf("defining said %q at %d, want silence at 0", out, st)
 	}
-	if out, _ := runZsh(t, dir, `compctl -g "*.go" gofmt; compctl`); out != "gofmt -g '*.go'\nCOMMAND -c -tn\nDEFAULT -f -tn\nFIRST\n" {
+	if out, _ := runZsh(
+		t,
+		dir,
+		`compctl -g "*.go" gofmt; compctl`,
+	); out != "gofmt -g '*.go'\nCOMMAND -c -tn\nDEFAULT -f -tn\nFIRST\n" {
 		t.Errorf("bare listing = %q", out)
 	}
-	if out, _ := runZsh(t, dir, `compctl -g "*.go" gofmt; compctl -L`); out != "compctl -g '*.go' gofmt\ncompctl -C -c -tn\ncompctl -D -f -tn\ncompctl -T\n" {
+	if out, _ := runZsh(
+		t,
+		dir,
+		`compctl -g "*.go" gofmt; compctl -L`,
+	); out != "compctl -g '*.go' gofmt\ncompctl -C -c -tn\ncompctl -D -f -tn\ncompctl -T\n" {
 		t.Errorf("-L listing = %q", out)
 	}
 }

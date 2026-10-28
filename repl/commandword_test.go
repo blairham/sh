@@ -51,7 +51,12 @@ func TestTheCommandWordTheCursorIsIn(t *testing.T) {
 // which-command and run-help put the line aside and run the question in its
 // place, and execute-named-cmd runs a widget by its name.
 func TestTheCommandKeys(t *testing.T) {
-	style := EditorStyle{WideEmacsKeymap: true, PrefixArgument: true, WhichCommandWord: "which-command", RunHelpWord: "run-help"}
+	style := EditorStyle{
+		WideEmacsKeymap:  true,
+		PrefixArgument:   true,
+		WhichCommandWord: "which-command",
+		RunHelpWord:      "run-help",
+	}
 	named := func() map[string]Binding {
 		return map[string]Binding{
 			"up-case-word":    {Widget: WidgetUpCaseWord},

@@ -28,7 +28,11 @@ import (
 // varedEdit runs src with a terminal and an editor that answers one request,
 // and hands back what was printed, the status, and the request the builtin
 // made.
-func varedEdit(t *testing.T, src, answer string, end interp.LineEditEnd) (out string, status int, asked interp.LineEdit) {
+func varedEdit(
+	t *testing.T,
+	src, answer string,
+	end interp.LineEditEnd,
+) (out string, status int, asked interp.LineEdit) {
 	t.Helper()
 	f := preset.Parse(t, src)
 	var buf strings.Builder

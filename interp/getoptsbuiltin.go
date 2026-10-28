@@ -157,7 +157,12 @@ func (r *Runner) getoptsScan(optstring, name string, given []string) int {
 		// Read and not asked: nothing has disagreed yet, and a call whose
 		// name is written never looks at this. See getoptsOptargUnwritten.
 		v, present := r.varsLookup("OPTARG")
-		r.optargBefore = getoptsOptargSnapshot{value: v, present: present, removed: r.attrHas("OPTARG", attrRemoved), taken: true}
+		r.optargBefore = getoptsOptargSnapshot{
+			value:   v,
+			present: present,
+			removed: r.attrHas("OPTARG", attrRemoved),
+			taken:   true,
+		}
 	}
 	// The operands to scan are the ones given, or the shell's own parameters
 	// when none are — which is what every use of it in a script relies on.
@@ -507,7 +512,14 @@ func (r *Runner) getoptsLetterTakes(spec string, c byte) (getoptsArgumentKind, b
 // an option is in the argument as well. Recorded as measured rather than
 // tidied — a shell reading OPTARG as a number stops at the same place the
 // scan did.
-func (r *Runner) getoptsNumericArgument(name string, sign, c byte, silent bool, word string, words []string, ind int) int {
+func (r *Runner) getoptsNumericArgument(
+	name string,
+	sign, c byte,
+	silent bool,
+	word string,
+	words []string,
+	ind int,
+) int {
 	letter := getoptsLetter(sign, c)
 	if rest := word[r.optChar+1:]; rest != "" {
 		n, ok := getoptsNumeral(rest)
@@ -1095,7 +1107,13 @@ func (r *Runner) getoptsEnd(name string, ind int) int {
 // measured 2026-09-16, a frozen OPTARG over `set -- -z` leaves dash 0.5.12 and
 // BusyBox ash 1.37.0 refusing at 2 with OPTIND still 1, so neither had counted
 // past the word when the refusal ended the run.
-func (r *Runner) getoptsBad(name string, sign, c byte, silent bool, why getoptsComplaint, advanceOptind func() bool) int {
+func (r *Runner) getoptsBad(
+	name string,
+	sign, c byte,
+	silent bool,
+	why getoptsComplaint,
+	advanceOptind func() bool,
+) int {
 	letter := getoptsLetter(sign, c)
 	// Every name this path writes is the one a reported fault writes, which
 	// is what one dialect orders OPTARG by. See optOnAnError.

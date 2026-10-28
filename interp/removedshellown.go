@@ -159,7 +159,10 @@ func (r *Runner) unsetKeepsTheAttributes(name string) (keep, exported bool) {
 		// Nothing to keep, so the panel agrees and nothing is asked.
 		return false, false
 	}
-	if !r.ask(r.sem().UnsetKeepsTheShellsOwnAttributes, "whether `unset` keeps the attributes of the shell's own parameter") {
+	if !r.ask(
+		r.sem().UnsetKeepsTheShellsOwnAttributes,
+		"whether `unset` keeps the attributes of the shell's own parameter",
+	) {
 		return false, false
 	}
 	return true, exported
@@ -170,6 +173,10 @@ func (r *Runner) unsetKeepsTheAttributes(name string) (keep, exported bool) {
 func (r *Runner) carriesATypeLetter(name string) bool {
 	_, width := r.fieldWidth[name]
 	_, prec := r.floatPrecision[name]
-	return r.attrHas(name, attrInteger) || r.attrHas(name, attrLower) || r.attrHas(name, attrUpper) || r.attrHas(name, attrUnique) ||
-		r.attrHas(name, attrHidden) || r.attrHas(name, attrTraced) || width || prec
+	return r.attrHas(name, attrInteger) || r.attrHas(name, attrLower) || r.attrHas(name, attrUpper) ||
+		r.attrHas(name, attrUnique) ||
+		r.attrHas(name, attrHidden) ||
+		r.attrHas(name, attrTraced) ||
+		width ||
+		prec
 }

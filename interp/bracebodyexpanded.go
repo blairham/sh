@@ -34,7 +34,11 @@ import (
 // [Semantics.BraceRangeEndpointsExpanded] stands behind and the same measured
 // answer, since the one column that reads a body this way brace-expands an
 // argument and not a target.
-func (r *Runner) alternativesAfterExpansion(w *syntax.Word, open, close cursor, endpoints bool) ([][]syntax.Span, bool, bool) {
+func (r *Runner) alternativesAfterExpansion(
+	w *syntax.Word,
+	open, close cursor,
+	endpoints bool,
+) ([][]syntax.Span, bool, bool) {
 	if !endpoints || r.sem().BraceExpansion != Yes || r.noBraceExpand {
 		return nil, false, false
 	}
@@ -101,7 +105,12 @@ func bodyHoldsAnExpansion(body []syntax.Span) bool {
 
 // braceBodyAlternatives splits a resolved body, or says what the group comes
 // to where it holds no alternative at all.
-func (r *Runner) braceBodyAlternatives(w *syntax.Word, open cursor, resolved []syntax.Span, deep []bool) ([][]syntax.Span, bool, bool) {
+func (r *Runner) braceBodyAlternatives(
+	w *syntax.Word,
+	open cursor,
+	resolved []syntax.Span,
+	deep []bool,
+) ([][]syntax.Span, bool, bool) {
 	// A produced `}` in the body closes what a produced `{` in it opened,
 	// and closes nothing in a group the script wrote — the opener's own
 	// pairing rule, one level down. See alternativesInBodyRead.

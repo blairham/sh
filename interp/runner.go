@@ -6249,7 +6249,12 @@ func (r *Runner) withRedirs(ctx context.Context, rs []*syntax.Redirect, body fun
 }
 
 // withRedirsOwnedBy is withRedirs with the owner named.
-func (r *Runner) withRedirsOwnedBy(ctx context.Context, rs []*syntax.Redirect, owner redirOwner, body func() error) error {
+func (r *Runner) withRedirsOwnedBy(
+	ctx context.Context,
+	rs []*syntax.Redirect,
+	owner redirOwner,
+	body func() error,
+) error {
 	// A redirection is a word, and a word can be `<(cmd)`. So this is the
 	// second road into an expansion that opens a pipe, and it has the same
 	// rule and the same removal as the first — see scopeProcSubs, which is
@@ -6628,7 +6633,8 @@ func (r *Runner) locationNameAndLine(functionCounts bool) (name string, line int
 	// lineNow and not line: a `case` subject is expanded before the line
 	// advances in one dialect, and a complaint it makes carries that line.
 	at := r.lineNow()
-	if d.LocationNamesTheEvalText && d.EvalSourceName != "" && r.locationIsInsideEvalText() && !r.evalTextAtAPrompt(false) {
+	if d.LocationNamesTheEvalText && d.EvalSourceName != "" && r.locationIsInsideEvalText() &&
+		!r.evalTextAtAPrompt(false) {
 		if r.locationNamesInstead != "" {
 			// The override wins over the text's own name too: measured
 			// 2026-10-02 on zsh 5.9.2, `FUNCNEST=0; fn() { true }; fn` on
@@ -7223,7 +7229,9 @@ func (r *Runner) paramErrorInABareAssignment() {
 // there, measured 2026-10-05 on bash 5.3.20 (#6057).
 func (r *Runner) fatalExpansionQuiet() {
 	r.fatalQuiet()
-	if n := r.diag().ExpansionFailureStatusFromCommandString; n != 0 && r.Route == RouteCommandString && !r.inSubshell && r.startupDepth == 0 && !r.Interactive {
+	if n := r.diag().ExpansionFailureStatusFromCommandString; n != 0 && r.Route == RouteCommandString && !r.inSubshell &&
+		r.startupDepth == 0 &&
+		!r.Interactive {
 		r.status = n
 	}
 }
@@ -17042,7 +17050,8 @@ var assignmentsAloneShortcut = true
 // else — `i=$((i + 1))` — which is two of every three commands in a counting
 // loop and the shape assignmentsAloneCommand takes.
 func assignmentsAlone(c *syntax.SimpleCmd) bool {
-	if !assignmentsAloneShortcut || len(c.Args) != 0 || len(c.Redirs) != 0 || len(c.Precommands) != 0 || len(c.Assigns) == 0 {
+	if !assignmentsAloneShortcut || len(c.Args) != 0 || len(c.Redirs) != 0 || len(c.Precommands) != 0 ||
+		len(c.Assigns) == 0 {
 		return false
 	}
 	for _, a := range c.Assigns {

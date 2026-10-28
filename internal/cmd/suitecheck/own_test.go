@@ -214,7 +214,11 @@ func TestTheTierChecksNameTheBuildBehindEveryReference(t *testing.T) {
 		printCross(suite.Cross{
 			Tier: "ext", Shells: []string{"bash", "ksh93"}, Files: 20, Held: 20, Agree: 20,
 			Refs: []suite.Reference{
-				{Name: "bash", Path: "/usr/local/bin/bash", Build: suite.Build{Version: "GNU bash, version 5.3.20(1)-release", Known: true}},
+				{
+					Name:  "bash",
+					Path:  "/usr/local/bin/bash",
+					Build: suite.Build{Version: "GNU bash, version 5.3.20(1)-release", Known: true},
+				},
 			},
 		})
 	})

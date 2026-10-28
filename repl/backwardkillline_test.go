@@ -43,16 +43,23 @@ func TestBackwardKillLineKillsToTheLinesStart(t *testing.T) {
 	for _, c := range cases {
 		var got Line
 		var cut string
-		typedReachingBackStyled(t, EditorStyle{KillToStartOfLineTakesTheWholeLine: true}, nil, nil, func(in Line, ed Actions) (Line, bool) {
-			in.Buffer, in.Cursor, in.Numeric = c.buffer, c.cursor, nil
-			if c.n != unset {
-				n := c.n
-				in.Numeric = &n
-			}
-			got, _ = ed.Perform(WidgetBackwardKillLine, in)
-			cut = ed.CutBuffer()
-			return Line{}, true
-		}, "\a\n")
+		typedReachingBackStyled(
+			t,
+			EditorStyle{KillToStartOfLineTakesTheWholeLine: true},
+			nil,
+			nil,
+			func(in Line, ed Actions) (Line, bool) {
+				in.Buffer, in.Cursor, in.Numeric = c.buffer, c.cursor, nil
+				if c.n != unset {
+					n := c.n
+					in.Numeric = &n
+				}
+				got, _ = ed.Perform(WidgetBackwardKillLine, in)
+				cut = ed.CutBuffer()
+				return Line{}, true
+			},
+			"\a\n",
+		)
 		if got.Buffer != c.want || got.Cursor != c.wantCursor || cut != c.cut {
 			t.Errorf("%q at %d count %d: [%q] at %d cut %q, want [%q] at %d cut %q",
 				c.buffer, c.cursor, c.n, got.Buffer, got.Cursor, cut, c.want, c.wantCursor, c.cut)

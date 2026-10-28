@@ -225,7 +225,11 @@ func TestAReturnIsJudgedInsideTheFrameTheCallIsNot(t *testing.T) {
 	}
 	// And the frame judgment is subject to the same exemption everything
 	// else is: a call whose status is being *tested* fires nothing.
-	if got, _ := run(t, `trap 'echo E' ERR; g() { return 1; }; if g; then echo t; else echo f; fi`, withSem(s)); got != "f\n" {
+	if got, _ := run(
+		t,
+		`trap 'echo E' ERR; g() { return 1; }; if g; then echo t; else echo f; fi`,
+		withSem(s),
+	); got != "f\n" {
 		t.Errorf("a tested call: got %q, want no E", got)
 	}
 	// *Inside* the frame, which is the whole of what this adds and the only
@@ -236,11 +240,19 @@ func TestAReturnIsJudgedInsideTheFrameTheCallIsNot(t *testing.T) {
 	// frame: with the body declaring `local v=in` the action prints `in`
 	// where the caller's is `out`, and `${funcstack[*]}` reads `g`. bash,
 	// which judges the call, prints `out` and an empty stack.
-	if got, _ := run(t, `trap 'echo v=$v' ERR; g() { local v=in; return 1; }; v=out; g; echo done`, withSem(s)); got != "v=in\ndone\n" {
+	if got, _ := run(
+		t,
+		`trap 'echo v=$v' ERR; g() { local v=in; return 1; }; v=out; g; echo done`,
+		withSem(s),
+	); got != "v=in\ndone\n" {
 		t.Errorf("the action should see the frame's locals: got %q, want v=in", got)
 	}
 	// The positional parameters go with them.
-	if got, _ := run(t, `trap 'echo p=$1' ERR; g() { return 1; }; set -- outer; g inner; echo done`, withSem(s)); got != "p=inner\ndone\n" {
+	if got, _ := run(
+		t,
+		`trap 'echo p=$1' ERR; g() { return 1; }; set -- outer; g inner; echo done`,
+		withSem(s),
+	); got != "p=inner\ndone\n" {
 		t.Errorf("the action should see the frame's arguments: got %q, want p=inner", got)
 	}
 	// A `return` is the only control flow this judges. Anything else still
@@ -255,13 +267,21 @@ func TestAReturnIsJudgedInsideTheFrameTheCallIsNot(t *testing.T) {
 	// has to be answered for there to be a break out of the body to judge.
 	brk := s
 	brk.FunctionCallIsALoopControlBoundary = No
-	if got, _ := run(t, `trap 'echo E' ERR; g() { false; break; }; for i in 1; do g; done; echo done`, withSem(brk)); got != "E\ndone\n" {
+	if got, _ := run(
+		t,
+		`trap 'echo E' ERR; g() { false; break; }; for i in 1; do g; done; echo done`,
+		withSem(brk),
+	); got != "E\ndone\n" {
 		t.Errorf("a break out of the body: got %q, want the one E the failure fired", got)
 	}
 	// And a dialect that judges the *call* reads the caller's, which is
 	// what makes the row above a measurement of where rather than of when.
 	s.ErrTrapRefiresForTheCommandItFiredInside = ErrTrapRefiresWhereItWasSetFirst
-	if got, _ := run(t, `trap 'echo v=$v' ERR; g() { local v=in; return 1; }; v=out; g; echo done`, withSem(s)); got != "v=out\ndone\n" {
+	if got, _ := run(
+		t,
+		`trap 'echo v=$v' ERR; g() { local v=in; return 1; }; v=out; g; echo done`,
+		withSem(s),
+	); got != "v=out\ndone\n" {
 		t.Errorf("a dialect that judges the call should see the caller's: got %q, want v=out", got)
 	}
 }

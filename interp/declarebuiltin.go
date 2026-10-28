@@ -3397,7 +3397,12 @@ func (r *Runner) typeLetterTakesTheCompoundLetter(f declareFlags) bool {
 // held scalar wherever it finds one, and ksh93's `typeset` inside a plain
 // function declares nothing local at all, so the two shells with an answer of
 // their own reach the same place by their own route.
-func (r *Runner) declaredCompoundOverAScalar(name string, f declareFlags, p ScalarUnderACompoundPolicy, what string) (string, ScalarUnderACompoundPolicy) {
+func (r *Runner) declaredCompoundOverAScalar(
+	name string,
+	f declareFlags,
+	p ScalarUnderACompoundPolicy,
+	what string,
+) (string, ScalarUnderACompoundPolicy) {
 	if _, ok := r.arraysLookup(name); ok {
 		return "", ScalarUnderACompoundDiscardsIt
 	}

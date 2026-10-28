@@ -79,6 +79,10 @@ func TestAFreshlyWrittenExecutableRuns(t *testing.T) {
 		}
 	}
 	if busy > 0 {
-		t.Errorf("%d of %d freshly written fixtures could not be executed because the kernel still saw a writer on them; the write is not being held off against this process's own forks", busy, rounds)
+		t.Errorf(
+			"%d of %d freshly written fixtures could not be executed because the kernel still saw a writer on them; the write is not being held off against this process's own forks",
+			busy,
+			rounds,
+		)
 	}
 }

@@ -262,7 +262,12 @@ func TestANestedExpansionTakesTheOuterQuoting(t *testing.T) {
 		t.Fatalf("%q: inner is %+v, want one expansion", src, inner)
 	}
 	if got := inner.Spans[0].Value; got != "v-x{y" {
-		t.Errorf("%q: the inner expansion is ${%s}, want ${%s} — a bare `{` in double quotes opens no level", src, got, "v-x{y")
+		t.Errorf(
+			"%q: the inner expansion is ${%s}, want ${%s} — a bare `{` in double quotes opens no level",
+			src,
+			got,
+			"v-x{y",
+		)
 	}
 	arg := inner.Spans[0].Param.Arg
 	if arg == nil || len(arg.Spans) != 1 {

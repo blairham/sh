@@ -34,7 +34,10 @@ func TestATracedPatternMarksItsText(t *testing.T) {
 		{`setopt extendedglob; [[ a == '<'1-2'>' ]]`, "+zsh:1> setopt extendedglob\n" + `+zsh:1> [[ a == \<1-2\> ]]`},
 		{`v='=x'; [[ a == $v ]]`, "+zsh:1> v='=x' \n" + `+zsh:1> [[ a == \=x ]]`},
 		{`v='=x'; [[ a == x$v ]]`, "+zsh:1> v='=x' \n" + `+zsh:1> [[ a == x=x ]]`},
-		{`case 'a b' in 'x y'*|$'\t'|'x>'|'#') ;; a\ b) ;; esac`, "+zsh:1> case a b (x\\ y* | $'\\t' | x\\> | \\#)\n+zsh:1> case a b (a\\ b)"},
+		{
+			`case 'a b' in 'x y'*|$'\t'|'x>'|'#') ;; a\ b) ;; esac`,
+			"+zsh:1> case a b (x\\ y* | $'\\t' | x\\> | \\#)\n+zsh:1> case a b (a\\ b)",
+		},
 	}
 	for _, row := range rows {
 		out, _ := runZsh(t, t.TempDir(), "set -x\n"+row.src+"\n")

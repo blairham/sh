@@ -50,7 +50,15 @@ func (b binSet) Set(v string) error {
 // forbid an agent starting one of those on the maintainer's machine. A scoped
 // run is a handful of container starts instead, and it answers the question a
 // column change actually asks. #3480.
-func runOwn(ctx context.Context, root string, bins binSet, timeout time.Duration, jobs int, only string, columns map[string]bool) int {
+func runOwn(
+	ctx context.Context,
+	root string,
+	bins binSet,
+	timeout time.Duration,
+	jobs int,
+	only string,
+	columns map[string]bool,
+) int {
 	fmt.Printf("our own suite — %s, committed and readable\n", root)
 	fmt.Println("  The reference shell on this machine is the expectation; no expected output")
 	fmt.Println("  is checked in. A .right file of ours would let us record our own bug as")

@@ -50,7 +50,13 @@ func systemLockOpen(path string, reading bool) (*os.File, error) {
 // The error is returned alongside the verdict rather than folded into it,
 // because the caller says two different things about a failure depending on
 // whether it waited: see zsystemLock.
-func systemLockTake(fd int, reading, block bool, wait, interval time.Duration, claim func() bool, waiting func()) (bool, error) {
+func systemLockTake(
+	fd int,
+	reading, block bool,
+	wait, interval time.Duration,
+	claim func() bool,
+	waiting func(),
+) (bool, error) {
 	kind := int16(syscall.F_WRLCK)
 	if reading {
 		kind = syscall.F_RDLCK

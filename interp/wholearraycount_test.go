@@ -13,7 +13,13 @@ import (
 // runWholeArrayCount runs src under `set -u` with the axes an array read needs
 // answered plus the one this suite is about, and a wording with a subject in
 // it so that what a refusal *names* is readable from the output.
-func runWholeArrayCount(t *testing.T, count WholeArrayCountPolicy, abandons Answer, bare bool, src string) (string, int) {
+func runWholeArrayCount(
+	t *testing.T,
+	count WholeArrayCountPolicy,
+	abandons Answer,
+	bare bool,
+	src string,
+) (string, int) {
 	t.Helper()
 	return runGrammar(t, src, nil, func(r *Runner) {
 		sem := *r.Semantics

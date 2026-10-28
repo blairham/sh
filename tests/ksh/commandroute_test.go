@@ -78,7 +78,12 @@ func TestACommandPrefixedHeredocBodyIsThisShellsHere(t *testing.T) {
 func TestACommandPrefixedTargetThatExpandsStillOpensHere(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
-	if out, st := runKsh(t, dir, "command echo RAN < /dev/null\necho \"after st=$?\"\n"); out != "RAN\nafter st=0\n" || st != 0 {
+	if out, st := runKsh(
+		t,
+		dir,
+		"command echo RAN < /dev/null\necho \"after st=$?\"\n",
+	); out != "RAN\nafter st=0\n" ||
+		st != 0 {
 		t.Errorf("= %q (status %d), want RAN and after st=0", out, st)
 	}
 }
@@ -95,7 +100,14 @@ func TestACommandPrefixedTargetThatExpandsStillOpensHere(t *testing.T) {
 func TestTheWriteAndTheFailureAnswerSeparatelyHere(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
-	if out, _ := runKsh(t, dir, "unset u\ncommand : > \"${u:=made}\"\nprintf 'u=%s' \"${u-unset}\"\n"); !strings.HasSuffix(out, "u=made") {
+	if out, _ := runKsh(
+		t,
+		dir,
+		"unset u\ncommand : > \"${u:=made}\"\nprintf 'u=%s' \"${u-unset}\"\n",
+	); !strings.HasSuffix(
+		out,
+		"u=made",
+	) {
 		t.Errorf("the write = %q, want it kept — the builtin is reached here", out)
 	}
 	out, st := runKsh(t, dir, "command : > $(( 1/0 )) ; echo \"SAME st=$?\"\necho NEXT\n")

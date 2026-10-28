@@ -347,7 +347,11 @@ func TestAPackedBlockIsSpreadAcrossTheSharedGrid(t *testing.T) {
 	for _, w := range []string{"aaaaaaaaaaaa", "b", "c", "d", "e", "f", "g", "h", "i", "j"} {
 		a = append(a, Candidate{Word: w, Group: Group{Name: "a"}})
 	}
-	b := []Candidate{{Word: "d1", Group: Group{Name: "b"}}, {Word: "d2", Group: Group{Name: "b"}}, {Word: "d3", Group: Group{Name: "b"}}}
+	b := []Candidate{
+		{Word: "d1", Group: Group{Name: "b"}},
+		{Word: "d2", Group: Group{Name: "b"}},
+		{Word: "d3", Group: Group{Name: "b"}},
+	}
 	got := listingRows(append(a, b...), 100, listLayout{packed: true})
 	want := "aaaaaaaaaaaa" + strings.Repeat(" ", 7) + "b"
 	for _, l := range "cdefghij" {

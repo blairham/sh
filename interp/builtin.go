@@ -4015,7 +4015,12 @@ func biExport(r *Runner, _ context.Context, args []string) (endStatus int) {
 		// reference itself where it is not "", because setVarAs already
 		// resolves one to the element and storing the target's text would make
 		// a parameter literally called `a[1]`.
-		valueTarget, letters := r.nameOperandThroughAReference("export", name, declareFlags{}, !strings.ContainsRune(opts, 'n'))
+		valueTarget, letters := r.nameOperandThroughAReference(
+			"export",
+			name,
+			declareFlags{},
+			!strings.ContainsRune(opts, 'n'),
+		)
 		if r.unspecified {
 			return r.status
 		}
@@ -7170,7 +7175,15 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 //
 // Written once because it was written twice, and a copy is where a fix to one
 // of the four goes missing.
-func (r *Runner) readStoreTheArray(array string, elems []string, own int, echo readEcho, names int, defaulted bool, refused *bool) (int, bool) {
+func (r *Runner) readStoreTheArray(
+	array string,
+	elems []string,
+	own int,
+	echo readEcho,
+	names int,
+	defaulted bool,
+	refused *bool,
+) (int, bool) {
 	switch {
 	case !echo.elements(r, elems):
 		// `read -e`: the elements were written and the array is left as it
@@ -7573,7 +7586,12 @@ func directByteSource(in io.Reader) func() (byte, int) {
 // timer is dropped as soon as the first byte arrives and everything after it
 // is read without one — see Semantics.ReadTimeoutBoundsReadability, which is
 // what decides which of the two this is.
-func (r *Runner) timedByteSource(ctx context.Context, in io.Reader, timeout time.Duration, whole bool) (next func() (byte, int), stop func()) {
+func (r *Runner) timedByteSource(
+	ctx context.Context,
+	in io.Reader,
+	timeout time.Duration,
+	whole bool,
+) (next func() (byte, int), stop func()) {
 	if timeout <= 0 {
 		// No time at all, which is out of time before the first byte. A
 		// timeout that is *written* as zero never reaches here — it is a

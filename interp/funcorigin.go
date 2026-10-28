@@ -85,7 +85,13 @@ type funcOrigin struct {
 // be the same answer — a nameless function's frame reports the file its
 // declaration would have reported had it been given a name.
 func (r *Runner) originHere() funcOrigin {
-	return funcOrigin{file: r.currentFile(), lineBase: r.lineBase, fileOffset: r.definitionFileOffset(), text: r.runText, linesFromZero: r.lineOrigin != 0}
+	return funcOrigin{
+		file:          r.currentFile(),
+		lineBase:      r.lineBase,
+		fileOffset:    r.definitionFileOffset(),
+		text:          r.runText,
+		linesFromZero: r.lineOrigin != 0,
+	}
 }
 
 // definitionFileOffset is the file offset a body defined here is numbered at.

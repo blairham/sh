@@ -56,7 +56,13 @@ func TestViQuotedInsertTakesTheNextKeyAsItIs(t *testing.T) {
 	// Without the field the key does nothing, as it always did, and draws
 	// nothing.
 	out.Reset()
-	if got, err := viQuotedEditor(t, EditorStyle{}, "ab\x16x\r", &out).readLine(drawPrompt("$ ")); err != nil || got != "abx" {
+	if got, err := viQuotedEditor(
+		t,
+		EditorStyle{},
+		"ab\x16x\r",
+		&out,
+	).readLine(drawPrompt("$ ")); err != nil ||
+		got != "abx" {
 		t.Errorf("without the field: got %q, %v", got, err)
 	}
 	if strings.Contains(out.String(), "^") {

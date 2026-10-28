@@ -228,12 +228,24 @@ func Run(ctx context.Context, o Options) (*Result, error) {
 			// was passed a path relative to the module root and the harness
 			// runs each case from a scratch directory, so every row errored
 			// and the report read as if the struct were vacuous.
-			return nil, fmt.Errorf("%s: not one of the %d graded rows agrees with %s — check that -bin %q is an absolute path to a shell built with -tags shaxissweep, because a sweep from here would call every axis unpinned",
-				t.Dialect, len(graded), t.Against, o.Bin)
+			return nil, fmt.Errorf(
+				"%s: not one of the %d graded rows agrees with %s — check that -bin %q is an absolute path to a shell built with -tags shaxissweep, because a sweep from here would call every axis unpinned",
+				t.Dialect,
+				len(graded),
+				t.Against,
+				o.Bin,
+			)
 		}
 		state.pass = append(state.pass, pass)
 		res.Baseline[t.Dialect] = len(pass)
-		o.logf("%s: %d of %d graded rows agree with %s (%s)\n", t.Dialect, len(pass), len(graded), t.Against, time.Since(start).Round(time.Millisecond))
+		o.logf(
+			"%s: %d of %d graded rows agree with %s (%s)\n",
+			t.Dialect,
+			len(pass),
+			len(graded),
+			t.Against,
+			time.Since(start).Round(time.Millisecond),
+		)
 	}
 	state.sensitive = map[string]int{}
 	for id, seen := range answers {
@@ -282,7 +294,15 @@ func (o *Options) column(t Target, ref oracle.Found, spec string) oracle.Found {
 	}
 }
 
-func (o *Options) sweepTarget(ctx context.Context, t Target, ref oracle.Found, fields []Field, res *Result, state *sweepState, which int) error {
+func (o *Options) sweepTarget(
+	ctx context.Context,
+	t Target,
+	ref oracle.Found,
+	fields []Field,
+	res *Result,
+	state *sweepState,
+	which int,
+) error {
 	plain := o.column(t, ref, "")
 	pass := state.pass[which]
 	sem := reflect.ValueOf(t.Semantics)
@@ -353,7 +373,14 @@ func (o *Options) sweepTarget(ctx context.Context, t Target, ref oracle.Found, f
 // A field with no "no answer" constant cannot be asked: a string axis spells
 // absence as the empty string, which is an answer, so those are left unknown
 // rather than guessed at.
-func (o *Options) sweepReach(ctx context.Context, targets []Target, byName map[string]oracle.Found, fields []Field, res *Result, state *sweepState) error {
+func (o *Options) sweepReach(
+	ctx context.Context,
+	targets []Target,
+	byName map[string]oracle.Found,
+	fields []Field,
+	res *Result,
+	state *sweepState,
+) error {
 	unpinned := res.Unpinned()
 	if len(unpinned) == 0 {
 		return nil
@@ -408,7 +435,13 @@ func (o *Options) sweepReach(ctx context.Context, targets []Target, byName map[s
 
 // firstObjection runs rows until one that agreed with the reference stops
 // agreeing, and answers which row and how many it took.
-func (o *Options) firstObjection(ctx context.Context, t Target, ref oracle.Found, spec string, cases []oracle.Case) (string, int) {
+func (o *Options) firstObjection(
+	ctx context.Context,
+	t Target,
+	ref oracle.Found,
+	spec string,
+	cases []oracle.Case,
+) (string, int) {
 	mutated := o.column(t, ref, spec)
 	scanned := 0
 	for start := 0; start < len(cases); start += o.Jobs {
@@ -697,8 +730,13 @@ func (r *Result) Report() string {
 	if len(unpinned) == 0 {
 		b.WriteString("  (none — every axis has a row that fails when it moves)\n")
 	}
-	fmt.Fprintf(&b, "\n%d axis/dialect pairs nothing objected to, %d of them with no\nrecorded reason. The second number is the one to drive down: a pair\nthat stays needs a standing verdict on the axis — `unpinned %s: why` in\nthe field's doc comment — and a pair a row now catches leaves on its own.\n",
-		len(unpinned), untriaged, "<dialect>")
+	fmt.Fprintf(
+		&b,
+		"\n%d axis/dialect pairs nothing objected to, %d of them with no\nrecorded reason. The second number is the one to drive down: a pair\nthat stays needs a standing verdict on the axis — `unpinned %s: why` in\nthe field's doc comment — and a pair a row now catches leaves on its own.\n",
+		len(unpinned),
+		untriaged,
+		"<dialect>",
+	)
 	// Printed on every run, including one whose backlog is empty. A pin
 	// nothing vouches for must never read like a pin — which is the whole of
 	// #2061 — and a list only shown when it is non-empty is a list a reader

@@ -118,7 +118,13 @@ func (p *Parser) setRawTails(spans []Span, stop Pos) {
 // failure this reaches names the word rather than a column, so nothing yet
 // reads one; a reader of the returned spans' positions is reading offsets into
 // the returned text.
-func RereadWordTail(tail string, at Pos, d Dialect, cutUnder BraceQuotePolicy, decode func(string) string) ([]Span, string, error) {
+func RereadWordTail(
+	tail string,
+	at Pos,
+	d Dialect,
+	cutUnder BraceQuotePolicy,
+	decode func(string) string,
+) ([]Span, string, error) {
 	if decode == nil {
 		spans, err := readWordTail(tail, at, d)
 		return spans, tail, err

@@ -179,7 +179,9 @@ func axisRunIn(t *testing.T, dir, src string, set func(*Semantics)) (string, int
 // pair behind would put a mark in every field that reads as data and take the
 // end-of-value backslash out of every field that has one, silently.
 func TestTheTwoValueBackslashMarksAgree(t *testing.T) {
-	if want := string([]byte{ValueBackslashMarkForTest, ValueBackslashMarkForTest}); ValueBackslashRanOutOfValueForTest != want {
+	if want := string(
+		[]byte{ValueBackslashMarkForTest, ValueBackslashMarkForTest},
+	); ValueBackslashRanOutOfValueForTest != want {
 		t.Errorf("the doubled mark is %q, want two of %q", ValueBackslashRanOutOfValueForTest, ValueBackslashMarkForTest)
 	}
 }

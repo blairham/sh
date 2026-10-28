@@ -77,7 +77,11 @@ func TestTheDialectsBuildTheirTablesOnFirstUse(t *testing.T) {
 		// does not name it is a trace this parser could not read — and a
 		// parser that reads nothing would pass every budget below.
 		if _, ok := inits["github.com/blairham/sh/interp"]; !ok {
-			t.Fatalf("%s: no init line for interp in the trace, so the budgets below would check nothing:\n%s", bin, stderr.String())
+			t.Fatalf(
+				"%s: no init line for interp in the trace, so the budgets below would check nothing:\n%s",
+				bin,
+				stderr.String(),
+			)
 		}
 		for pkg, budget := range initBudgets {
 			got, ok := inits[pkg]
@@ -86,8 +90,14 @@ func TestTheDialectsBuildTheirTablesOnFirstUse(t *testing.T) {
 			}
 			checked[pkg] = true
 			if got.bytes > budget {
-				t.Errorf("%s: %s allocates %d bytes (%d allocations) at init, over its budget of %d; a table built in a package-level initializer is paid by every start whether or not anything reads it — build it on first use",
-					bin, pkg, got.bytes, got.allocs, budget)
+				t.Errorf(
+					"%s: %s allocates %d bytes (%d allocations) at init, over its budget of %d; a table built in a package-level initializer is paid by every start whether or not anything reads it — build it on first use",
+					bin,
+					pkg,
+					got.bytes,
+					got.allocs,
+					budget,
+				)
 			}
 		}
 	}

@@ -29,7 +29,9 @@ func TestTrueCommandActuallyRuns(t *testing.T) {
 	// Every machine that can run this suite has a true(1); if the lookup
 	// cannot find it, the lookup is what is broken.
 	if prog == "" {
-		t.Fatal("TrueCommand found no true(1): the cost rows have no program to time, and would report a failed lookup as the cost of running a command")
+		t.Fatal(
+			"TrueCommand found no true(1): the cost rows have no program to time, and would report a failed lookup as the cost of running a command",
+		)
 	}
 	if err := exec.Command(prog).Run(); err != nil {
 		t.Fatalf("%s: the program the cost rows time does not run: %v", prog, err)

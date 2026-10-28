@@ -96,6 +96,9 @@ wait "$COPROC_PID"
 	// answer this wants. End of file would mean the writers had gone and the
 	// read proved nothing; the test holds one itself, so it cannot happen.
 	if n == 0 && rerr == nil {
-		t.Errorf("descriptor %d reported end of file; this test still holds a writer, so the read proved nothing", coprocFeedFd)
+		t.Errorf(
+			"descriptor %d reported end of file; this test still holds a writer, so the read proved nothing",
+			coprocFeedFd,
+		)
 	}
 }

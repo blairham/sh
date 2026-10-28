@@ -66,7 +66,10 @@ func TestTheOptionIsVisibleToTheWholeNamespaceAfterTheInvocation(t *testing.T) {
 	}
 	out.Reset()
 	errs.Reset()
-	code = driver.MainArgs(zshWriting(&out, &errs), []string{"zsh", "-t", "-c", `case $- in *t*) echo has-t ;; *) echo no-t ;; esac`})
+	code = driver.MainArgs(
+		zshWriting(&out, &errs),
+		[]string{"zsh", "-t", "-c", `case $- in *t*) echo has-t ;; *) echo no-t ;; esac`},
+	)
 	if out.String() != "has-t\n" || code != 0 {
 		t.Errorf("$- = %q status %d, want the letter", out.String(), code)
 	}

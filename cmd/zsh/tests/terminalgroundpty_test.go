@@ -129,7 +129,13 @@ func TestAnAcceptedLineTakesThePasteRequestBackFirst(t *testing.T) {
 func TestAssigningEmacsToTERMTurnsTheEditorOff(t *testing.T) {
 	for _, set := range []string{"TERM=emacs", "TERM=emacs true", "f() { local TERM=emacs; }; f"} {
 		t.Run(set, func(t *testing.T) {
-			out, _, _ := prompt(t, "[[ -o zle ]] && echo before-on\n"+set+"\nTERM=xterm\n[[ -o zle ]] || echo after-off\n", "zsh", "-f", "-i")
+			out, _, _ := prompt(
+				t,
+				"[[ -o zle ]] && echo before-on\n"+set+"\nTERM=xterm\n[[ -o zle ]] || echo after-off\n",
+				"zsh",
+				"-f",
+				"-i",
+			)
 			if !strings.Contains(out, "before-on") || !strings.Contains(out, "after-off") {
 				t.Errorf("stdout %q, want the editor on before and off after", out)
 			}

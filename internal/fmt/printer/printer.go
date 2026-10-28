@@ -1210,7 +1210,11 @@ func (p *printer) loop(x *syntax.LoopClause) {
 	if x.Until {
 		kw = "until"
 	}
-	if b := p.shortForm(int(x.Start.Offset), condEnd(x.Cond, int(x.Start.Offset)), bodyStart(x.Body, int(x.Stop.Offset))); b >= 0 {
+	if b := p.shortForm(
+		int(x.Start.Offset),
+		condEnd(x.Cond, int(x.Start.Offset)),
+		bodyStart(x.Body, int(x.Stop.Offset)),
+	); b >= 0 {
 		p.braceClause(int(x.Start.Offset), b, x.Body, int(x.Stop.Offset), oneLine(x.Start, x.Stop))
 		return
 	}
@@ -1247,7 +1251,11 @@ func (p *printer) forHeader(x *syntax.ForClause) {
 }
 
 func (p *printer) forClause(x *syntax.ForClause) {
-	if b := p.shortForm(int(x.Start.Offset), itemsEnd(x.Items, int(x.Start.Offset)), bodyStart(x.Body, int(x.Stop.Offset))); b >= 0 {
+	if b := p.shortForm(
+		int(x.Start.Offset),
+		itemsEnd(x.Items, int(x.Start.Offset)),
+		bodyStart(x.Body, int(x.Stop.Offset)),
+	); b >= 0 {
 		p.braceClause(int(x.Start.Offset), b, x.Body, int(x.Stop.Offset), oneLine(x.Start, x.Stop))
 		return
 	}
@@ -1265,7 +1273,11 @@ func (p *printer) forClause(x *syntax.ForClause) {
 }
 
 func (p *printer) selectClause(x *syntax.SelectClause) {
-	if b := p.shortForm(int(x.Start.Offset), itemsEnd(x.Items, int(x.Start.Offset)), bodyStart(x.Body, int(x.Stop.Offset))); b >= 0 {
+	if b := p.shortForm(
+		int(x.Start.Offset),
+		itemsEnd(x.Items, int(x.Start.Offset)),
+		bodyStart(x.Body, int(x.Stop.Offset)),
+	); b >= 0 {
 		p.braceClause(int(x.Start.Offset), b, x.Body, int(x.Stop.Offset), oneLine(x.Start, x.Stop))
 		return
 	}

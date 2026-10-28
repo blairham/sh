@@ -2131,7 +2131,11 @@ func (s Shell) promptAgainForAnUnterminatedLine(pending *strings.Builder) {
 // expansion, and an event cannot supply that, since what an event carries for
 // an exec is argv after expansion. `echo $HOME` is a block whose command is
 // `echo $HOME`.
-func (s Shell) accept(pending *strings.Builder, remember func(string), line string) ([]*syntax.File, string, error, bool) {
+func (s Shell) accept(
+	pending *strings.Builder,
+	remember func(string),
+	line string,
+) ([]*syntax.File, string, error, bool) {
 	first := s.countLine(pending.Len() == 0)
 	c := s.counted()
 	// The same physical line, into the collector that will make one history
@@ -2937,7 +2941,11 @@ func or(a, b string) string {
 // because writing it in both loops is how the terminal one came to have a
 // copy that nothing exercised — which the note on beforeReading warned about,
 // having already happened once with what goes between lines.
-func (s Shell) take(pending *strings.Builder, remember func(string), line string) ([]*syntax.File, string, error, bool) {
+func (s Shell) take(
+	pending *strings.Builder,
+	remember func(string),
+	line string,
+) ([]*syntax.File, string, error, bool) {
 	blank := strings.TrimSpace(pending.String()+line) == ""
 	stmts, text, perr, ready := s.accept(pending, remember, line)
 	if !ready {

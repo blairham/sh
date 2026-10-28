@@ -193,7 +193,12 @@ func intValues(f Field) ([]Value, error) {
 	}
 	named := consts[f.Type]
 	if len(named) == 0 {
-		return nil, fmt.Errorf("%s: no constants of type %s are declared in %s, so the sweep cannot enumerate its values", f.Path, f.Type, sourceDir())
+		return nil, fmt.Errorf(
+			"%s: no constants of type %s are declared in %s, so the sweep cannot enumerate its values",
+			f.Path,
+			f.Type,
+			sourceDir(),
+		)
 	}
 	return named, nil
 }

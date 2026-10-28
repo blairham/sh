@@ -620,7 +620,13 @@ func strikeUnmatched(values []string, kept []bool) []string {
 // Duplicates are dropped rather than offered twice, which is what a listing
 // with one entry per name needs and what makes a second Tab fill in from a
 // set rather than from a bag.
-func (cs *completionState) offer(subject, candidate string, o compaddOptions, row string, group repl.Group, open, slash bool) {
+func (cs *completionState) offer(
+	subject, candidate string,
+	o compaddOptions,
+	row string,
+	group repl.Group,
+	open, slash bool,
+) {
 	body := cs.iprefix + o.prefix + subject
 	word := cs.c.Escape(body) + o.suffix
 	if o.raw {

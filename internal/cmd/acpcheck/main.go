@@ -47,7 +47,11 @@ func main() {
 		// `--acp` and is never given `-dialect`: it is already the shell it
 		// is. Without this the instrument can only ever reach cmd/sh, which
 		// is the blind spot #2585 is about.
-		dialectBin = flag.Bool("dialect-binary", false, "drive a dialect binary with --acp instead of the multi-call sh with -acp")
+		dialectBin = flag.Bool(
+			"dialect-binary",
+			false,
+			"drive a dialect binary with --acp instead of the multi-call sh with -acp",
+		)
 	)
 	flag.Parse()
 

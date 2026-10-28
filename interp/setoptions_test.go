@@ -805,7 +805,10 @@ func TestARefusedLetterEndsTheScriptWhereTheDialectSaysSo(t *testing.T) {
 			sem.BadSetOptionLetterFatal = c.fatal
 			sem.BadSetOptionNameFatal = opposite(c.fatal)
 			dg := Diagnostics{}
-			r := newTestRunner(t, &Runner{Stdout: &buf, Stderr: &strings.Builder{}, Semantics: &sem, Diagnostics: &dg, Name: "sh"})
+			r := newTestRunner(
+				t,
+				&Runner{Stdout: &buf, Stderr: &strings.Builder{}, Semantics: &sem, Diagnostics: &dg, Name: "sh"},
+			)
 			f, err := syntax.Parse("set -q\necho after\n", syntax.Core())
 			if err != nil {
 				t.Fatal(err)
@@ -832,7 +835,10 @@ func TestSetOptionLettersReportsAStatus(t *testing.T) {
 		// field for them would answer 2 whatever the dialect said — which is
 		// the #483 bug in the shape #2629 could have reintroduced.
 		dg := Diagnostics{SetInvalidOptionLetterStatus: status}
-		return newTestRunner(t, &Runner{Stdout: &strings.Builder{}, Stderr: &strings.Builder{}, Semantics: &sem, Diagnostics: &dg, Name: "sh"})
+		return newTestRunner(
+			t,
+			&Runner{Stdout: &strings.Builder{}, Stderr: &strings.Builder{}, Semantics: &sem, Diagnostics: &dg, Name: "sh"},
+		)
 	}
 	if got := newRunner(0).SetOptionLetters("e", true); got != 0 {
 		t.Errorf("a letter this shell has gave %d, want 0", got)

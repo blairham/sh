@@ -34,7 +34,13 @@ func TestAnUnterminatedLastLineIsPromptedForAgain(t *testing.T) {
 			var ran, said strings.Builder
 			r := newTestRunner(map[string]string{"PS1": "P> ", "PS2": "Q> "})
 			r.Stdout = &ran
-			s := Shell{Runner: r, In: strings.NewReader(c.in), Out: io.Discard, Err: &said, PromptAgainForAnUnterminatedLine: c.answer}
+			s := Shell{
+				Runner:                           r,
+				In:                               strings.NewReader(c.in),
+				Out:                              io.Discard,
+				Err:                              &said,
+				PromptAgainForAnUnterminatedLine: c.answer,
+			}
 			if _, err := s.Run(t.Context()); err != nil {
 				t.Fatal(err)
 			}

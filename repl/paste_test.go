@@ -212,8 +212,11 @@ func TestAPasteIsDrawnWhenItArrives(t *testing.T) {
 				t.Fatalf("the line came back as %q, want %q", got, "echo PASTEDZ")
 			}
 			if !strings.Contains(byTheNextKey, c.want) {
-				t.Errorf("by the time the next key was read the terminal had been sent %q,\nwhich does not contain %q — the paste was not drawn when it arrived",
-					byTheNextKey, c.want)
+				t.Errorf(
+					"by the time the next key was read the terminal had been sent %q,\nwhich does not contain %q — the paste was not drawn when it arrived",
+					byTheNextKey,
+					c.want,
+				)
 			}
 		})
 	}

@@ -75,7 +75,9 @@ func TestAnExplanationRestoresNoColor(t *testing.T) {
 		{"%2Fx%30Fy%f", "\x1b[32mx\x1b[38;5;30my\x1b[39m"},
 	} {
 		t.Run(c.text, func(t *testing.T) {
-			got := drawn(completionCandidatesFor(t, onATerminal(widgetOf("compadd -J g -X '"+c.text+"' -- checkout")), "git che"))
+			got := drawn(
+				completionCandidatesFor(t, onATerminal(widgetOf("compadd -J g -X '"+c.text+"' -- checkout")), "git che"),
+			)
 			if want := "checkout@|" + c.want; got != want {
 				t.Errorf("%s drew %q, want %q", c.text, got, want)
 			}

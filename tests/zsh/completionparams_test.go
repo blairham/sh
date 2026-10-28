@@ -22,9 +22,12 @@ import (
 // unset (#5999). The function ran bare before, with `$WIDGET` empty and the
 // assignment accepted.
 func TestACompletionWidgetFromItsKeyHasTheWidgetParameters(t *testing.T) {
-	r, out := zleRunner(t, `cf() { print -r -- "W=$WIDGET t=${(t)BUFFER} B=$BUFFER C=$CURSOR L=$LBUFFER"; BUFFER=zz; ran=widget }
+	r, out := zleRunner(
+		t,
+		`cf() { print -r -- "W=$WIDGET t=${(t)BUFFER} B=$BUFFER C=$CURSOR L=$LBUFFER"; BUFFER=zz; ran=widget }
 zle -C cw complete-word cf
-`)
+`,
+	)
 	answer := zsh.RunCompletion(r, t.Context(), "cw", repl.Completion{Line: "éx", Point: len("éx"), Start: 0, Word: "éx"})
 	// A function that stopped answers that it stopped, so the editor
 	// completes nothing of its own (#6068).

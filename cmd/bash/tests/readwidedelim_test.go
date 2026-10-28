@@ -19,7 +19,10 @@ func TestReadTakesTheFirstByteOfAWideDelimiter(t *testing.T) {
 	sh := scratchShell(t)
 	sh.Stdout, sh.Stderr = &out, &errs
 	sh.Env = []string{"PATH=/usr/bin:/bin", "HOME=" + t.TempDir(), "LC_ALL=en_US.UTF-8"}
-	driver.MainArgs(sh, []string{"bash", "-c", `printf 'first£second£' | { read -d £ one; read -d £ two; echo "$one"; echo "$two"; }`})
+	driver.MainArgs(
+		sh,
+		[]string{"bash", "-c", `printf 'first£second£' | { read -d £ one; read -d £ two; echo "$one"; echo "$two"; }`},
+	)
 	if got, want := out.String(), "first\n\xa3second\n"; got != want || errs.Len() != 0 {
 		t.Errorf("got %q, %q, want %q", got, errs.String(), want)
 	}

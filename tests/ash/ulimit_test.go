@@ -62,7 +62,14 @@ func ulimitRun(t *testing.T, has func(interp.Resource) bool, src string) (string
 	}
 	var buf bytes.Buffer
 	sem, dg := ash.Semantics(), ash.Diagnostics()
-	r := &interp.Runner{Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &dg, Name: "ash", Dialect: presetDialect()}
+	r := &interp.Runner{
+		Stdout:      &buf,
+		Stderr:      &buf,
+		Semantics:   &sem,
+		Diagnostics: &dg,
+		Name:        "ash",
+		Dialect:     presetDialect(),
+	}
 	r.GetRlimit = func(interp.Resource) (int64, int64, error) { return 2048, 2048, nil }
 	r.SetRlimit = func(interp.Resource, int64, int64) error { return nil }
 	r.HasRlimit = has

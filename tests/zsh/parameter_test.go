@@ -764,7 +764,12 @@ func TestEveryAbsentParameterRefusesByName(t *testing.T) {
 	t.Run("and an unregistered name is not refused", func(t *testing.T) {
 		out, st := runZsh(t, t.TempDir(), `print -r -- "n=${#nosuchparam}"`)
 		if want := "n=0\n"; out != want || st != 0 {
-			t.Errorf("$nosuchparam = %q (status %d), want %q — the refusal is a registration, not the answer for any unknown name", out, st, want)
+			t.Errorf(
+				"$nosuchparam = %q (status %d), want %q — the refusal is a registration, not the answer for any unknown name",
+				out,
+				st,
+				want,
+			)
 		}
 	})
 }
@@ -793,7 +798,12 @@ func TestTheThreeRostersAccountForTheModuleExactlyOnce(t *testing.T) {
 	} {
 		for _, name := range names {
 			if other, dup := seen[name]; dup {
-				t.Errorf("$%s is in both the %s and the %s roster; the later registration would take the earlier one back", name, other, roster)
+				t.Errorf(
+					"$%s is in both the %s and the %s roster; the later registration would take the earlier one back",
+					name,
+					other,
+					roster,
+				)
 				continue
 			}
 			seen[name] = roster
@@ -809,7 +819,11 @@ func TestTheThreeRostersAccountForTheModuleExactlyOnce(t *testing.T) {
 		t.Errorf("$%s is in the %s roster and is not named by zsh/parameter", name, roster)
 	}
 	if got, want := len(moduleParams()), 33; got != want {
-		t.Errorf("zsh/parameter names %d parameters here, want %d — measured against zsh 5.9.2 with `zmodload -lF zsh/parameter`", got, want)
+		t.Errorf(
+			"zsh/parameter names %d parameters here, want %d — measured against zsh 5.9.2 with `zmodload -lF zsh/parameter`",
+			got,
+			want,
+		)
 	}
 }
 

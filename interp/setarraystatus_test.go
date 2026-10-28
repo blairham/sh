@@ -101,7 +101,13 @@ func setArrayStatusRun(t *testing.T, src string, answer Answer, route Route) (st
 	return setArrayStatusRunFatality(t, src, answer, route, Yes)
 }
 
-func setArrayStatusRunFatality(t *testing.T, src string, answer Answer, route Route, fatal Answer) (string, string, int) {
+func setArrayStatusRunFatality(
+	t *testing.T,
+	src string,
+	answer Answer,
+	route Route,
+	fatal Answer,
+) (string, string, int) {
 	t.Helper()
 	f, err := syntax.Parse(src, syntax.Core())
 	if err != nil {

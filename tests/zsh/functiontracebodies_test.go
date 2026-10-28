@@ -86,7 +86,11 @@ func TestAFunctionNameTheLocaleCannotPrintIsDollarQuoted(t *testing.T) {
 		},
 		{"a lone 0xa0 is printable to C", "$'a\\xa0b'() { : }; LC_ALL=C functions -- $'a\\xa0b'\n", "a\xa0b () {\n\t:\n}\n"},
 		{"and not to UTF-8", "$'a\\xa0b'() { : }; LC_ALL=en_US.UTF-8 functions -- $'a\\xa0b'\n", "$'a\\M- b' () {\n\t:\n}\n"},
-		{"U+0085 to UTF-8 is its code point", "$'\\xc2\\x85'() { : }; LC_ALL=en_US.UTF-8 functions -- $'\\xc2\\x85'\n", "$'\\M-\\C-E' () {\n\t:\n}\n"},
+		{
+			"U+0085 to UTF-8 is its code point",
+			"$'\\xc2\\x85'() { : }; LC_ALL=en_US.UTF-8 functions -- $'\\xc2\\x85'\n",
+			"$'\\M-\\C-E' () {\n\t:\n}\n",
+		},
 		{"a quote and a backslash", "$'a\\\\b\\t'() { : }; functions -- $'a\\\\b\\t'\n", "$'a\\\\b\\t' () {\n\t:\n}\n"},
 		{"control: printable names are as before", "'a b'() { : }; functions -- 'a b'\n", "'a b' () {\n\t:\n}\n"},
 	}

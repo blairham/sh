@@ -359,7 +359,8 @@ func (r *Runner) reportBorrowedParseFailure(err error, s sourced, src string) {
 			bare = true
 		}
 	}
-	if s.eval && r.evalTextKeepsItsLocationAtAPrompt() && r.AtPrompt && r.borrowedFiles == 0 && !r.inFunctionReadFromAFile() {
+	if s.eval && r.evalTextKeepsItsLocationAtAPrompt() && r.AtPrompt && r.borrowedFiles == 0 &&
+		!r.inFunctionReadFromAFile() {
 		// The run-time half of that rule and not the parse half: measured
 		// 2026-10-05 on ksh93u+ at a prompt, `eval "echo )"` is `ksh: eval:
 		// syntax error: `)' unexpected`, worded as the prompt words it,
@@ -1616,7 +1617,11 @@ func (r *Runner) DotLooksInCurrentDirectoryFirst() (restore func()) {
 // current-directory fallback as the bare operand — the resolved absolute path
 // appears in none of them, and the shell asking its own source stack gets the
 // same spelling the diagnostics use.
-func (r *Runner) resolveDotPath(name string, currentDirectoryFirst bool, search dotSearch) (display, path string, err error) {
+func (r *Runner) resolveDotPath(
+	name string,
+	currentDirectoryFirst bool,
+	search dotSearch,
+) (display, path string, err error) {
 	if strings.ContainsRune(name, filepath.Separator) {
 		return name, r.atDir(name), nil
 	}

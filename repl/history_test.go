@@ -57,10 +57,18 @@ func TestWhereTheHistoryLives(t *testing.T) {
 	// A size that is not a number leaves the default rather than zero, which
 	// would quietly turn the history off — and zero is the one value that
 	// does, so reading nonsense as zero would be the destructive reading.
-	if h := historyFrom(vars(map[string]string{"HISTSIZE": "lots"}), "/home", ".sh_history"); h.size != defaultHistorySize {
+	if h := historyFrom(
+		vars(map[string]string{"HISTSIZE": "lots"}),
+		"/home",
+		".sh_history",
+	); h.size != defaultHistorySize {
 		t.Errorf("a bad HISTSIZE gave %d, want the default", h.size)
 	}
-	if h := historyFrom(vars(map[string]string{"HISTFILESIZE": "-3"}), "/home", ".sh_history"); h.file != defaultHistorySize {
+	if h := historyFrom(
+		vars(map[string]string{"HISTFILESIZE": "-3"}),
+		"/home",
+		".sh_history",
+	); h.file != defaultHistorySize {
 		t.Errorf("a negative HISTFILESIZE gave %d, want the default", h.file)
 	}
 	if h := historyFrom(vars(map[string]string{"HISTSIZE": "0"}), "/home", ".sh_history"); h.size != 0 {
@@ -106,7 +114,13 @@ func TestHistorySurvivesTheSession(t *testing.T) {
 // list a person can walk is trimmed on the way in rather than read whole.
 func TestHistoryIsTrimmedToItsSize(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "hist")
-	if err := (historyFile{path: path, size: 100, file: 100}).save(t.Context(), nil, []string{"a", "b", "c", "d"}, nil, false); err != nil {
+	if err := (historyFile{path: path, size: 100, file: 100}).save(
+		t.Context(),
+		nil,
+		[]string{"a", "b", "c", "d"},
+		nil,
+		false,
+	); err != nil {
 		t.Fatal(err)
 	}
 	got := historyFile{path: path, size: 2, file: 2}.load(t.Context())
@@ -131,7 +145,13 @@ func TestHistoryTurnedOff(t *testing.T) {
 	// And a history with nowhere to go saves nothing, quietly. An empty
 	// HISTFILE means "keep none", not "fail on the way out" — the error
 	// would arrive as the shell exits, which is the worst moment for one.
-	if err := (historyFile{size: defaultHistorySize, file: defaultHistorySize}).save(t.Context(), nil, []string{"one"}, nil, false); err != nil {
+	if err := (historyFile{size: defaultHistorySize, file: defaultHistorySize}).save(
+		t.Context(),
+		nil,
+		[]string{"one"},
+		nil,
+		false,
+	); err != nil {
 		t.Errorf("saving with no path gave %v, want it quietly skipped", err)
 	}
 }
@@ -165,7 +185,13 @@ func TestHistorySkipsBlankLines(t *testing.T) {
 func TestHistoryKeepsALongLine(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "hist")
 	long := "echo " + strings.Repeat("x", 200000)
-	if err := (historyFile{path: path, size: 10, file: 10}).save(t.Context(), nil, []string{long, "after"}, nil, false); err != nil {
+	if err := (historyFile{path: path, size: 10, file: 10}).save(
+		t.Context(),
+		nil,
+		[]string{long, "after"},
+		nil,
+		false,
+	); err != nil {
 		t.Fatal(err)
 	}
 	got := historyFile{path: path, size: 10, file: 10}.load(t.Context())
@@ -390,7 +416,13 @@ func TestTheSessionTakesItsDefaultFileFromTheDialect(t *testing.T) {
 		r := (&interp.Runner{}).SeedVars(map[string]string{"HOME": home})
 		return Shell{Runner: r, History: style}
 	}
-	if got := shellWith(HistoryStyle{DefaultFile: ".bash_history"}).historyFile().path; got != filepath.Join(home, ".bash_history") {
+	if got := shellWith(
+		HistoryStyle{DefaultFile: ".bash_history"},
+	).historyFile().
+		path; got != filepath.Join(
+		home,
+		".bash_history",
+	) {
 		t.Errorf("the session's file is %q, want the dialect's name under the home", got)
 	}
 	// And a dialect with none records nowhere, which is the half a hardcoded
@@ -440,7 +472,11 @@ func TestADialectsOwnCountDecidesWhetherTheFileIsWritten(t *testing.T) {
 		})
 	}
 	// And a session that names no count is bash's, untouched.
-	if h := (historyFile{file: 7}).savedBy(vars(map[string]string{"SAVEHIST": "0"}), ""); h.file != 7 || h.zeroWritesNothing {
+	if h := (historyFile{file: 7}).savedBy(
+		vars(map[string]string{"SAVEHIST": "0"}),
+		"",
+	); h.file != 7 ||
+		h.zeroWritesNothing {
 		t.Errorf("no count named gave %+v, want the file's own bound", h)
 	}
 }

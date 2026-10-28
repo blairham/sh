@@ -818,7 +818,14 @@ func autoloadResolveNow(r *interp.Runner, ctx context.Context, opts autoloadOpts
 // A file holding a definition with a redirection on it is the case
 // A05execution.ztst asks about: `kr() { … } > kr.log` defines kr, and the
 // call then writes to the file.
-func autoloadKshStyle(r *interp.Runner, ctx context.Context, name string, dirs []string, opts autoloadOpts, stub bool) int {
+func autoloadKshStyle(
+	r *interp.Runner,
+	ctx context.Context,
+	name string,
+	dirs []string,
+	opts autoloadOpts,
+	stub bool,
+) int {
 	path, text, ok := autoloadKshFile(r, name, dirs)
 	if !ok {
 		return autoloadFileNotFound(r, name, stub)
@@ -857,7 +864,13 @@ func autoloadKshStyle(r *interp.Runner, ctx context.Context, name string, dirs [
 // running so that it can define the name, and then the definition it left.
 // Pushed only where the body runs in the stub's own frame, for the reason
 // autoloadRunResolved gives.
-func autoloadKshRun(r *interp.Runner, ctx context.Context, name string, stub bool, inside interp.EvalContext) (bool, error) {
+func autoloadKshRun(
+	r *interp.Runner,
+	ctx context.Context,
+	name string,
+	stub bool,
+	inside interp.EvalContext,
+) (bool, error) {
 	if stub {
 		defer r.EnterEvalContext(inside)()
 		return r.RunFunctionBodyInPlace(ctx, name)

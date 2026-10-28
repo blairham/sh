@@ -52,7 +52,11 @@ import (
 var (
 	procSubRounds  = flag.Int("procsub.rounds", 0, "rounds per worker for the process-substitution loss instrument")
 	procSubWorkers = flag.Int("procsub.workers", 8, "concurrent shells for the process-substitution loss instrument")
-	procSubBound   = flag.Duration("procsub.bound", 15*time.Second, "how long one round may take before it counts as a hang")
+	procSubBound   = flag.Duration(
+		"procsub.bound",
+		15*time.Second,
+		"how long one round may take before it counts as a hang",
+	)
 )
 
 // The two spellings a reader of a `<(cmd)` can be written in, because the

@@ -38,7 +38,12 @@ import (
 
 // ulimitKernel runs a snippet against a ksh runner whose kernel has the limits
 // has() names, each reading the number limits() gives it.
-func ulimitKernel(t *testing.T, has func(interp.Resource) bool, limits map[interp.Resource]int64, src string) (string, int) {
+func ulimitKernel(
+	t *testing.T,
+	has func(interp.Resource) bool,
+	limits map[interp.Resource]int64,
+	src string,
+) (string, int) {
 	t.Helper()
 	f, err := syntax.Parse(src, ksh.Dialect())
 	if err != nil {

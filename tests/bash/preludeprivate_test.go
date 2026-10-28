@@ -68,7 +68,11 @@ func TestThePrivateHelperStillDoesTheWork(t *testing.T) {
 // back to a script that redefines `pushd`.
 func TestAScriptsOwnUnderscoredFunctionIsVisible(t *testing.T) {
 	dir := t.TempDir()
-	out, st := runBashPrelude(t, dir, "__dirs_rotate() { :; }\ntype -t __dirs_rotate\n__helper() { :; }\ntype -t __helper\n")
+	out, st := runBashPrelude(
+		t,
+		dir,
+		"__dirs_rotate() { :; }\ntype -t __dirs_rotate\n__helper() { :; }\ntype -t __helper\n",
+	)
 	if want := "function\nfunction\n"; out != want || st != 0 {
 		t.Errorf("out = %q at %d, want %q at 0", out, st, want)
 	}

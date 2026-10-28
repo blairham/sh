@@ -65,7 +65,10 @@ local -a w; w=(${(f)"$(zle -lL)"}); print ${#${(M)w:#* _main_complete}}`)
 // And with no `_main_complete` anywhere on the search, Tab keeps this shell's
 // own completion: no widget is put on a function that is not there.
 func TestTheShippedCompinitBindsNothingWithoutMainComplete(t *testing.T) {
-	out, _ := runShipped(t, `autoload -Uz compinit; compinit -D -u; local -a w; w=(${(f)"$(zle -lL)"}); print ${#${(M)w:#* _main_complete}}`)
+	out, _ := runShipped(
+		t,
+		`autoload -Uz compinit; compinit -D -u; local -a w; w=(${(f)"$(zle -lL)"}); print ${#${(M)w:#* _main_complete}}`,
+	)
 	if out != "0\n" {
 		t.Errorf("widgets on _main_complete = %q, want none", out)
 	}

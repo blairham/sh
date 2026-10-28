@@ -108,7 +108,9 @@ func ReadingTypes() (map[string]bool, error) {
 		}
 	}
 	if len(out) == 0 {
-		return nil, fmt.Errorf("coverage: syntax.Dialect declares no field of a named type — the struct is how the readings are recognized, so this means the source was not read")
+		return nil, fmt.Errorf(
+			"coverage: syntax.Dialect declares no field of a named type — the struct is how the readings are recognized, so this means the source was not read",
+		)
 	}
 	return out, nil
 }

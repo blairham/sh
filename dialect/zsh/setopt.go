@@ -2559,7 +2559,11 @@ var zshOptions = []zshOption{
 			return r.Semantics.ValuelessDeclarationOfAHeldNameListsIt == interp.No
 		},
 		set: func(r *interp.Runner, on bool) int {
-			setAxis(r, func(s *interp.Semantics) *interp.Answer { return &s.ValuelessDeclarationOfAHeldNameListsIt }, answer(!on))
+			setAxis(
+				r,
+				func(s *interp.Semantics) *interp.Answer { return &s.ValuelessDeclarationOfAHeldNameListsIt },
+				answer(!on),
+			)
 			return 0
 		},
 	},

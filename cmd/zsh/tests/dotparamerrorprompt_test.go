@@ -30,7 +30,11 @@ func TestAParamErrorInDotTextAtAPromptLeaves126(t *testing.T) {
 		home := t.TempDir()
 		t.Setenv("HOME", home)
 		t.Chdir(home)
-		if err := os.WriteFile(filepath.Join(home, "f"), []byte("(exit 3)\necho ${unset?boom}\necho after\n"), 0o600); err != nil {
+		if err := os.WriteFile(
+			filepath.Join(home, "f"),
+			[]byte("(exit 3)\necho ${unset?boom}\necho after\n"),
+			0o600,
+		); err != nil {
 			t.Fatal(err)
 		}
 		out, errs, code := prompt(t, c.typed, c.argv...)

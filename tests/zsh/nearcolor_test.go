@@ -235,11 +235,15 @@ func TestTheNearestPaletteColorIsTheMeasuredOne(t *testing.T) {
 // away from itself. Measured 2026-10-02 on zsh 5.9.2.
 func TestLoadingNearcolorWritesHexAsThePalette(t *testing.T) {
 	dir := colorsFixture(t, 256)
-	out, st, err := preset.Combined(t, dialecttest.Base{Dir: t.TempDir(), Vars: colorsVars(t, dir)}, `print -rn -P '%F{#ff0000}'; print
+	out, st, err := preset.Combined(
+		t,
+		dialecttest.Base{Dir: t.TempDir(), Vars: colorsVars(t, dir)},
+		`print -rn -P '%F{#ff0000}'; print
 zmodload zsh/nearcolor; print -r -- "load=$? [$(zmodload -lF zsh/nearcolor)]"
 print -rn -P '%F{#ff0000}%K{#123456}'; print
 (zmodload -u zsh/nearcolor; print -rn -P '%F{#ff0000}'; print)
-print -rn -P '%F{#ff0000}'; print`)
+print -rn -P '%F{#ff0000}'; print`,
+	)
 	if err != nil {
 		t.Fatal(err)
 	}

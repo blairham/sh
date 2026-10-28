@@ -57,7 +57,8 @@ func TestEvalTextAtTheTopOfACommandStringIsLocatedAtTheShell(t *testing.T) {
 	sh := scratchShell(t)
 	sh.Stdout, sh.Stderr = &out, &errs
 	driver.MainArgs(sh, []string{"./myzsh", "-f", "-c", src})
-	if want := "ft=[(eval):1 ./myzsh:2] fft=[./myzsh:2 ./myzsh:2] fst=[zsh:1 ./myzsh:2]\n"; out.String() != want || errs.String() != "" {
+	if want := "ft=[(eval):1 ./myzsh:2] fft=[./myzsh:2 ./myzsh:2] fst=[zsh:1 ./myzsh:2]\n"; out.String() != want ||
+		errs.String() != "" {
 		t.Errorf("got %q %q, want %q", out.String(), errs.String(), want)
 	}
 }

@@ -17,7 +17,12 @@ import (
 // runCancelable runs src under a context the caller controls, and reports
 // what the run came back with. The whole point of the file: before #1075 none
 // of these returned at all.
-func runCancelable(t *testing.T, ctx context.Context, src string, enable func(*syntax.Dialect)) (out string, status int, err error) {
+func runCancelable(
+	t *testing.T,
+	ctx context.Context,
+	src string,
+	enable func(*syntax.Dialect),
+) (out string, status int, err error) {
 	t.Helper()
 	d := syntax.Core()
 	if enable != nil {

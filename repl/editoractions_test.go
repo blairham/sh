@@ -180,12 +180,18 @@ func TestTheSearchRunsFromInsideAnAction(t *testing.T) {
 			var got Line
 			var ok bool
 			calls := 0
-			line, _ := typedReachingBackStyled(t, EditorStyle{}, func(e *editor) { e.searchInterruptAborts = c.interrupt }, history,
+			line, _ := typedReachingBackStyled(
+				t,
+				EditorStyle{},
+				func(e *editor) { e.searchInterruptAborts = c.interrupt },
+				history,
 				func(in Line, ed Actions) (Line, bool) {
 					calls++
 					got, ok = ed.Perform(WidgetSearchHistoryBackward, in)
 					return got, true
-				}, c.keys)
+				},
+				c.keys,
+			)
 			if !ok {
 				t.Fatal("the editor declined the search from inside an action")
 			}

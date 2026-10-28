@@ -27,9 +27,14 @@ import (
 // so the upper row goes back over the row the print wrote on, the new prompt
 // is drawn, and `$?` after the call is 0.
 func TestResetPromptDrawsThePromptAgain(t *testing.T) {
-	control, screen, home := jobNoticeSessionRC(t, `w() { print -r -- hi; PS1=$'RW2\nrw> '; zle reset-prompt; print -r -- "rc=$?" > $HOME/rc }
+	control, screen, home := jobNoticeSessionRC(
+		t,
+		`w() { print -r -- hi; PS1=$'RW2\nrw> '; zle reset-prompt; print -r -- "rc=$?" > $HOME/rc }
 zle -N w; bindkey '^T' w
-`, "zsh", "-i")
+`,
+		"zsh",
+		"-i",
+	)
 	// One write, `c` after the widget's key included, so all four keys are
 	// read together: a key that arrives while the widget runs reaches a
 	// terminal in its line discipline, which echoes it where the cursor is.

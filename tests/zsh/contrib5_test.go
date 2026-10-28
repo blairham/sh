@@ -16,7 +16,11 @@ func TestCatchThrowZmathfuncZstylePlusAnswerWhatZshAnswers(t *testing.T) {
 	dir := t.TempDir()
 	for _, row := range contribRows(t, "contrib5.tsv") {
 		t.Run(row[0], func(t *testing.T) {
-			out, st := runZshOnPath(t, dir, "fpath=("+shippedFunctionDir(t)+"); autoload -Uz catch throw zmathfunc zstyle+\n"+row[0]+"\n")
+			out, st := runZshOnPath(
+				t,
+				dir,
+				"fpath=("+shippedFunctionDir(t)+"); autoload -Uz catch throw zmathfunc zstyle+\n"+row[0]+"\n",
+			)
 			if got := strings.ReplaceAll(out, "\n", "~"); got != row[1] {
 				t.Errorf("output %q, want %q", got, row[1])
 			}

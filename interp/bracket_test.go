@@ -72,7 +72,12 @@ func TestUnterminatedBracketHasThreeAnswers(t *testing.T) {
 // TestBracketPolicyIsAskedOnlyWhenItApplies keeps ordinary patterns usable in
 // the core, the same way the caret axis does.
 func TestBracketPolicyIsAskedOnlyWhenItApplies(t *testing.T) {
-	if got, st := run(t, `case b in [abc]) echo in;; *) echo out;; esac`, withSem(CoreSemantics())); got != "in\n" || st != 0 {
+	if got, st := run(
+		t,
+		`case b in [abc]) echo in;; *) echo out;; esac`,
+		withSem(CoreSemantics()),
+	); got != "in\n" ||
+		st != 0 {
 		t.Errorf("a closed class needs no answer: %q status %d", got, st)
 	}
 	if got, _ := run(t, `case a in a) echo plain;; esac`, withSem(CoreSemantics())); got != "plain\n" {

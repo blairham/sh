@@ -386,7 +386,11 @@ func (e *editor) viAct(count int, key byte, prompt drawnPrompt) viOutcome {
 
 	// The edits that are their own key rather than an operator and a motion.
 	case 'x':
-		return e.viOperate('d', viMove{from: e.pos, end: min(e.pos+atLeastOne(count), len(e.line)), to: e.pos, ok: true}, prompt)
+		return e.viOperate(
+			'd',
+			viMove{from: e.pos, end: min(e.pos+atLeastOne(count), len(e.line)), to: e.pos, ok: true},
+			prompt,
+		)
 	case 'X':
 		return e.viOperate('d', viMove{from: max(e.pos-atLeastOne(count), 0), end: e.pos, to: e.pos, ok: true}, prompt)
 	case 'D':

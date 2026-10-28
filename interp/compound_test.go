@@ -159,10 +159,16 @@ func TestCaseFallthroughFollowsEachArmsTerminator(t *testing.T) {
 	// ending in the continue-matching terminator goes back to pattern
 	// testing, and a re-matched arm ending in fall-through falls again.
 	// That terminator is grammar the core lacks, hence the named flag.
-	if got, _ := runCaseContinue(t, `case a in a) echo 1;& b) echo 2;;& c) echo 3;; a) echo 4;; esac`); got != "1\n2\n4\n" {
+	if got, _ := runCaseContinue(
+		t,
+		`case a in a) echo 1;& b) echo 2;;& c) echo 3;; a) echo 4;; esac`,
+	); got != "1\n2\n4\n" {
 		t.Errorf("fall-through into continue-matching: got %q, want %q", got, "1\n2\n4\n")
 	}
-	if got, _ := runCaseContinue(t, `case a in a) echo 1;;& a) echo 2;& x) echo 3;; a) echo 4;; esac`); got != "1\n2\n3\n" {
+	if got, _ := runCaseContinue(
+		t,
+		`case a in a) echo 1;;& a) echo 2;& x) echo 3;; a) echo 4;; esac`,
+	); got != "1\n2\n3\n" {
 		t.Errorf("continue-matching into fall-through: got %q, want %q", got, "1\n2\n3\n")
 	}
 }

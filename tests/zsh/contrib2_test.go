@@ -106,7 +106,11 @@ func TestZmvAnswersWhatZshAnswers(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			out, _ := runZshOnPath(t, dir, "fpath=("+shippedFunctionDir(t)+")\nautoload -Uz zmv\n"+row[1]+"\nprint -r -- st=$?\n")
+			out, _ := runZshOnPath(
+				t,
+				dir,
+				"fpath=("+shippedFunctionDir(t)+")\nautoload -Uz zmv\n"+row[1]+"\nprint -r -- st=$?\n",
+			)
 			if got := strings.ReplaceAll(out, "\n", "~"); got != row[2] {
 				t.Errorf("output %q, want %q", got, row[2])
 			}
@@ -127,7 +131,11 @@ func TestZmvAnswersWhatZshAnswers(t *testing.T) {
 func TestZargsAnswersWhatZshAnswers(t *testing.T) {
 	for _, row := range contribRows(t, "zargs.tsv") {
 		t.Run(row[0], func(t *testing.T) {
-			out, _ := runZshOnPath(t, t.TempDir(), "fpath=("+shippedFunctionDir(t)+")\nautoload -Uz zargs\n"+row[0]+"\nprint -r -- st=$?\n")
+			out, _ := runZshOnPath(
+				t,
+				t.TempDir(),
+				"fpath=("+shippedFunctionDir(t)+")\nautoload -Uz zargs\n"+row[0]+"\nprint -r -- st=$?\n",
+			)
 			if got := strings.ReplaceAll(out, "\n", "~"); got != row[1] {
 				t.Errorf("output %q, want %q", got, row[1])
 			}

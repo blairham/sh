@@ -62,7 +62,8 @@ func (r *Runner) reportKilled(sig syscall.Signal, pid int) {
 		return
 	}
 	status := r.status
-	if r.midPipeline && !r.ask(r.sem().ReportsAnyKilledPipelineElement, "a signal ending a pipeline element that is not the last") {
+	if r.midPipeline &&
+		!r.ask(r.sem().ReportsAnyKilledPipelineElement, "a signal ending a pipeline element that is not the last") {
 		// Asked before the question of whether this shell reports at all,
 		// because a shell that says nothing never reaches either — and the
 		// refusal must not become the status here for the same reason it

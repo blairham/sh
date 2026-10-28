@@ -96,7 +96,11 @@ func main() {
 
 func usage() {
 	out := flag.CommandLine.Output()
-	fmt.Fprintf(out, "usage: %s [flags] [file ...]\n\n", name)                        //nolint:errcheck // usage on a closed stderr is not worth a branch
+	fmt.Fprintf(
+		out,
+		"usage: %s [flags] [file ...]\n\n",
+		name,
+	) //nolint:errcheck // usage on a closed stderr is not worth a branch
 	fmt.Fprint(out, "Lay out shell scripts. With no file, reads standard input.\n\n") //nolint:errcheck // as above
 	flag.PrintDefaults()
 }

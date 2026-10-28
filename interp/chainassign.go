@@ -278,7 +278,11 @@ func (r *Runner) chainRootInTable(name, key string) (Element, bool, func(Element
 // base, which is what the trace of the chain writes for it: measured
 // 2026-10-15 on ksh93u+ 2012-08-01, `a=(x y); a[-1][2]=v` traces as
 // `a[1][2]=v`.
-func (r *Runner) chainRootInArray(name string, idx int, subject string) (held Element, there bool, place func(Element), at int, ok bool) {
+func (r *Runner) chainRootInArray(
+	name string,
+	idx int,
+	subject string,
+) (held Element, there bool, place func(Element), at int, ok bool) {
 	// elementsOfName is what promotes a scalar the name is holding — `s=abc;
 	// s[1][2]=v` is `typeset -a s=(abc ([2]=v) )`, with `abc` kept at the
 	// base — and it is the same call the single-subscript store makes, so the

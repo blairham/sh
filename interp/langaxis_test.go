@@ -95,7 +95,13 @@ func langMisuses(f *ast.File) []langMisuse {
 		}
 		if call, ok := n.(*ast.CallExpr); ok {
 			if sel, ok := call.Fun.(*ast.SelectorExpr); ok && isLangCall(sel.X) {
-				found = append(found, langMisuse{sel.Pos(), "calls " + sel.Sel.Name + " on lang, which hands back a dialect the runner has not adjusted; use dialect"})
+				found = append(
+					found,
+					langMisuse{
+						sel.Pos(),
+						"calls " + sel.Sel.Name + " on lang, which hands back a dialect the runner has not adjusted; use dialect",
+					},
+				)
 				// Counted as reached so it is reported once rather than
 				// twice, as a method call and as a loose value.
 				fieldRead[sel.X.Pos()] = true
@@ -105,7 +111,10 @@ func langMisuses(f *ast.File) []langMisuse {
 		if sel, ok := n.(*ast.SelectorExpr); ok && isLangCall(sel.X) {
 			fieldRead[sel.X.Pos()] = true
 			if adjustedAxes[sel.Sel.Name] {
-				found = append(found, langMisuse{sel.Pos(), "reads " + sel.Sel.Name + " off lang, which does not adjust it; use dialect"})
+				found = append(
+					found,
+					langMisuse{sel.Pos(), "reads " + sel.Sel.Name + " off lang, which does not adjust it; use dialect"},
+				)
 			}
 		}
 		var lhs []ast.Expr
@@ -126,7 +135,10 @@ func langMisuses(f *ast.File) []langMisuse {
 	})
 	for pos := range calls {
 		if !fieldRead[pos] {
-			found = append(found, langMisuse{pos, "uses the dialect lang returns rather than reading one axis off it; use dialect"})
+			found = append(
+				found,
+				langMisuse{pos, "uses the dialect lang returns rather than reading one axis off it; use dialect"},
+			)
 		}
 	}
 	return found

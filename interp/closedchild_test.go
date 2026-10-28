@@ -200,7 +200,11 @@ func TestAClosedStderrIsClosedForAReplacementStandIn(t *testing.T) {
 
 // runSplitWithBackgroundInput is runSplit with one axis answered: what a job
 // started with `&` reads for standard input.
-func runSplitWithBackgroundInput(t *testing.T, src string, answer BackgroundJobInputPolicy) (out, errOut string, status int) {
+func runSplitWithBackgroundInput(
+	t *testing.T,
+	src string,
+	answer BackgroundJobInputPolicy,
+) (out, errOut string, status int) {
 	t.Helper()
 	f, err := syntax.Parse(src, syntax.Core())
 	if err != nil {

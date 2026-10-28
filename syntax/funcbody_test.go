@@ -101,7 +101,10 @@ func f(d *FuncDecl) any { _ = FuncDecl{BodyCommand: nil}; return d.BodyCommand }
 			return nil
 		}
 		for _, at := range reads {
-			t.Errorf("%s reads FuncDecl.BodyCommand; read the body through FuncDecl.Body, which decodes a body the parse cache deferred", at)
+			t.Errorf(
+				"%s reads FuncDecl.BodyCommand; read the body through FuncDecl.Body, which decodes a body the parse cache deferred",
+				at,
+			)
 		}
 		return nil
 	})

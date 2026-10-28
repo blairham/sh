@@ -426,7 +426,14 @@ func TestUmask(t *testing.T) {
 		var buf bytes.Buffer
 		sem, dg := zsh.Semantics(), zsh.Diagnostics()
 		held := 0o022
-		r := &interp.Runner{Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &dg, Name: "zsh", Dialect: presetDialect()}
+		r := &interp.Runner{
+			Stdout:      &buf,
+			Stderr:      &buf,
+			Semantics:   &sem,
+			Diagnostics: &dg,
+			Name:        "zsh",
+			Dialect:     presetDialect(),
+		}
 		r.SetUmask = func(mask int) (int, error) { old := held; held = mask; return old, nil }
 		zsh.Apply(r)
 		st, rerr := r.Run(context.Background(), f)
@@ -501,7 +508,14 @@ func TestUlimit(t *testing.T) {
 		}
 		var buf bytes.Buffer
 		sem, dg := zsh.Semantics(), zsh.Diagnostics()
-		r := &interp.Runner{Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &dg, Name: "zsh", Dialect: presetDialect()}
+		r := &interp.Runner{
+			Stdout:      &buf,
+			Stderr:      &buf,
+			Semantics:   &sem,
+			Diagnostics: &dg,
+			Name:        "zsh",
+			Dialect:     presetDialect(),
+		}
 		r.GetRlimit = func(res interp.Resource) (int64, int64, error) { p := held[res]; return p[0], p[1], nil }
 		r.SetRlimit = func(res interp.Resource, soft, hard int64) error { held[res] = [2]int64{soft, hard}; return nil }
 		r.RlimitOrder = order

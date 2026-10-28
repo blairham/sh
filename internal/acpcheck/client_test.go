@@ -74,15 +74,22 @@ func fakeAgent(script string) {
 		}
 		switch m.Method {
 		case "initialize":
-			fmt.Printf(`{"jsonrpc":"2.0","id":%s,"result":{"protocolVersion":1,"agentInfo":{"name":"fake","version":"1"}}}`+"\n", m.ID)
+			fmt.Printf(
+				`{"jsonrpc":"2.0","id":%s,"result":{"protocolVersion":1,"agentInfo":{"name":"fake","version":"1"}}}`+"\n",
+				m.ID,
+			)
 		case "session/new":
 			fmt.Printf(`{"jsonrpc":"2.0","id":%s,"result":{"sessionId":"s1"}}`+"\n", m.ID)
 		case "session/prompt":
 			if script == "asks" {
 				// Announce, ask, and report what the answer was — the
 				// three-message shape a permission costs.
-				fmt.Println(`{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s1","update":{"sessionUpdate":"tool_call","toolCallId":"t1","title":"write /tmp/x","kind":"edit","status":"pending"}}}`)
-				fmt.Println(`{"jsonrpc":"2.0","id":99,"method":"session/request_permission","params":{"sessionId":"s1","toolCall":{"toolCallId":"t1"},"options":[{"optionId":"allow-once","kind":"allow_once"},{"optionId":"reject-once","kind":"reject_once"}]}}`)
+				fmt.Println(
+					`{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s1","update":{"sessionUpdate":"tool_call","toolCallId":"t1","title":"write /tmp/x","kind":"edit","status":"pending"}}}`,
+				)
+				fmt.Println(
+					`{"jsonrpc":"2.0","id":99,"method":"session/request_permission","params":{"sessionId":"s1","toolCall":{"toolCallId":"t1"},"options":[{"optionId":"allow-once","kind":"allow_once"},{"optionId":"reject-once","kind":"reject_once"}]}}`,
+				)
 				// Wait for the client's answer before finishing the turn.
 				for in.Scan() {
 					var a struct {
@@ -93,15 +100,21 @@ func fakeAgent(script string) {
 						} `json:"result"`
 					}
 					if json.Unmarshal(in.Bytes(), &a) == nil && a.Result.Outcome.OptionID != "" {
-						fmt.Printf(`{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s1","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":%q},"_meta":{"sh.blairham.github.com/stream":"stdout"}}}}`+"\n",
-							"answered:"+a.Result.Outcome.OptionID)
+						fmt.Printf(
+							`{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s1","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":%q},"_meta":{"sh.blairham.github.com/stream":"stdout"}}}}`+"\n",
+							"answered:"+a.Result.Outcome.OptionID,
+						)
 						break
 					}
 				}
 			}
 			if script == "streams" {
-				fmt.Println(`{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s1","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"out\n"},"_meta":{"sh.blairham.github.com/stream":"stdout"}}}}`)
-				fmt.Println(`{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s1","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"err\n"},"_meta":{"sh.blairham.github.com/stream":"stderr"}}}}`)
+				fmt.Println(
+					`{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s1","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"out\n"},"_meta":{"sh.blairham.github.com/stream":"stdout"}}}}`,
+				)
+				fmt.Println(
+					`{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s1","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"err\n"},"_meta":{"sh.blairham.github.com/stream":"stderr"}}}}`,
+				)
 			}
 			fmt.Printf(`{"jsonrpc":"2.0","id":%s,"result":{"stopReason":"end_turn"}}`+"\n", m.ID)
 		case "refuse":

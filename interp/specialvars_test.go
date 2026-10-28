@@ -71,13 +71,22 @@ func TestDollarDashReflectsTheLiveOptionState(t *testing.T) {
 	// Each tracked option contributes its letter, and turning one off takes
 	// exactly that letter away. Order within our own letters is fixed;
 	// presence is the contract.
-	out, _ := run(t, `set -a; set -e; set -u; set -C; echo "[$-]"; set +e; echo "[$-]"; set +a; set +u; set +C; echo "[$-]"`, setup)
+	out, _ := run(
+		t,
+		`set -a; set -e; set -u; set -C; echo "[$-]"; set +e; echo "[$-]"; set +a; set +u; set +C; echo "[$-]"`,
+		setup,
+	)
 	if out != "[aeuC]\n[auC]\n[]\n" {
 		t.Errorf("got %q, want the letters to track the options", out)
 	}
 	// xtrace's letter, asserted by presence because the trace itself shares
 	// the buffer.
-	if out, _ := run(t, `set -x; case $- in *x*) echo has-x;; *) echo no-x;; esac`, nil); !strings.Contains(out, "has-x") || strings.Contains(out, "no-x") {
+	if out, _ := run(
+		t,
+		`set -x; case $- in *x*) echo has-x;; *) echo no-x;; esac`,
+		nil,
+	); !strings.Contains(out, "has-x") ||
+		strings.Contains(out, "no-x") {
 		t.Errorf("xtrace check got %q, want has-x", out)
 	}
 	// pipefail earns no letter, which is unanimous across the panel.

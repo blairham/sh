@@ -3669,7 +3669,13 @@ func (r *Runner) elemAtFor(name string, elems []string, n int, length subscriptL
 // elemAtCounted is elemAtFor over a reading of count elements, the one at pos
 // being at(pos): the rule once, for a reading in hand and for one that is
 // indexed in the store without being built.
-func (r *Runner) elemAtCounted(name string, count int, at func(pos int) string, n int, length subscriptLength) (string, bool) {
+func (r *Runner) elemAtCounted(
+	name string,
+	count int,
+	at func(pos int) string,
+	n int,
+	length subscriptLength,
+) (string, bool) {
 	// When the sparse reading compacted a gap out of elems, a position can no
 	// longer be counted there; the store still holds every position. Only a
 	// *stored* array can be behind elems here — a produced one is read before

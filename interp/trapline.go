@@ -67,7 +67,8 @@ func (r *Runner) firedAt() int {
 	if !r.inExitTrap {
 		return r.line
 	}
-	if r.inSubshell && r.ask(r.sem().SubshellExitTrapFiresAtItsOpeningLine, "where a subshell's EXIT trap counts as having fired") {
+	if r.inSubshell &&
+		r.ask(r.sem().SubshellExitTrapFiresAtItsOpeningLine, "where a subshell's EXIT trap counts as having fired") {
 		// A subshell's own EXIT trap, in the dialect that counts it from
 		// the line that opened the subshell when the body ran out, and
 		// from the `exit` or the failing command otherwise. See
@@ -93,7 +94,8 @@ func (r *Runner) firedAt() int {
 	// BusyBox ash names the line the script had got to: see
 	// Semantics.ExitTrapFiresWhereTheScriptStopped. Asked only behind a no,
 	// so a refusal above is not followed by a second one.
-	if r.sem().ExitTrapFiresPastTheEnd == No && r.ask(r.sem().ExitTrapFiresWhereTheScriptStopped, "where the EXIT trap counts as having fired") {
+	if r.sem().ExitTrapFiresPastTheEnd == No &&
+		r.ask(r.sem().ExitTrapFiresWhereTheScriptStopped, "where the EXIT trap counts as having fired") {
 		if r.dotStoppedAt.inner != 0 && r.dotStoppedAt.dot == r.line {
 			// The script stopped on a `.`, so it stopped inside the file.
 			// See Runner.dotStoppedAt.

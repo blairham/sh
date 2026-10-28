@@ -209,7 +209,12 @@ func rollup(cols []Column, list int, ledger []Unreachable) string {
 
 	var b strings.Builder
 	fmt.Fprintf(&b, "  no dialect mentions these at all — %d of %d reachable\n", len(never), union-len(unreachable))
-	fmt.Fprintf(&b, "    (%d in the surface, %d unreachable by construction and listed below)\n\n", union, len(unreachable))
+	fmt.Fprintf(
+		&b,
+		"    (%d in the surface, %d unreachable by construction and listed below)\n\n",
+		union,
+		len(unreachable),
+	)
 	byKind := map[string][]string{}
 	for _, e := range never {
 		byKind[e.Kind] = append(byKind[e.Kind], e.Name)

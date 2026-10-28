@@ -141,7 +141,11 @@ func TestAnInterruptedReferenceWriteIsRunAgain(t *testing.T) {
 		t.Errorf("got %q %q %d, want the clean second run", out, errs, st)
 	}
 	always := filepath.Join(dir, "always")
-	if err := os.WriteFile(always, []byte("#!/bin/sh\necho 'x: write error: Interrupted system call' >&2\nexit 1\n"), 0o700); err != nil {
+	if err := os.WriteFile(
+		always,
+		[]byte("#!/bin/sh\necho 'x: write error: Interrupted system call' >&2\nexit 1\n"),
+		0o700,
+	); err != nil {
 		t.Fatal(err)
 	}
 	if _, errs, st := run(t, always, ":"); !strings.Contains(errs, "Interrupted system call") || st != 1 {

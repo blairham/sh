@@ -47,7 +47,12 @@ func TestAContinuationPartsTheArithmeticCloserAndNotTheOpener(t *testing.T) {
 		t.Errorf("the closer: out = %q, want an empty expansion and a command named `1`", out)
 	}
 
-	if out, _, err := preset.Combined(t, dialecttest.Base{}, "((\\\nx = 5 )); echo \"[$x]\""); err != nil || out != "[5]\n" {
+	if out, _, err := preset.Combined(
+		t,
+		dialecttest.Base{},
+		"((\\\nx = 5 )); echo \"[$x]\"",
+	); err != nil ||
+		out != "[5]\n" {
 		t.Errorf("the arithmetic command: out = %q, err = %v, want %q", out, err, "[5]\n")
 	}
 }

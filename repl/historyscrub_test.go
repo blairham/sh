@@ -76,7 +76,13 @@ func TestACredentialIsNotWrittenToTheHistoryFile(t *testing.T) {
 // than an empty one that says a shell was here and reveals when.
 func TestNothingButCredentialsWritesNoFile(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "hist")
-	if err := (historyFile{path: path, size: 100, file: 100}).save(t.Context(), nil, []string{"export GH_TOKEN=" + fakeToken}, nil, false); err != nil {
+	if err := (historyFile{path: path, size: 100, file: 100}).save(
+		t.Context(),
+		nil,
+		[]string{"export GH_TOKEN=" + fakeToken},
+		nil,
+		false,
+	); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(path); err == nil {
@@ -293,7 +299,11 @@ func TestTheReadingMarkOutlastsTheLineThatIsStillRunning(t *testing.T) {
 
 	waitUntilReading(t, out, control)
 	if waited := time.Since(start); waited < runs {
-		t.Errorf("the shell was reading again after %v, before the line it was running could have finished at %v", waited, runs)
+		t.Errorf(
+			"the shell was reading again after %v, before the line it was running could have finished at %v",
+			waited,
+			runs,
+		)
 	}
 
 	// And the prompt could not have said so: by the time the shell was
@@ -305,7 +315,10 @@ func TestTheReadingMarkOutlastsTheLineThatIsStillRunning(t *testing.T) {
 	// the prompt is waited for once.
 	drawn, _, _ := strings.Cut(out.String(), "\x1b[H\x1b[2J")
 	if n := strings.Count(drawn, "$ "); n < 2 {
-		t.Errorf("the prompt was written %d time(s) before the shell was reading again, so this no longer holds the two marks apart", n)
+		t.Errorf(
+			"the prompt was written %d time(s) before the shell was reading again, so this no longer holds the two marks apart",
+			n,
+		)
 	}
 
 	if _, err := control.WriteString("\x04"); err != nil {

@@ -316,7 +316,10 @@ func TestNoTestWordingSpellsItsOwnName(t *testing.T) {
 // child is told nothing about the shadowed name, and the outer name is
 // exported again once the function returns.
 func TestATypesetLocalDoesNotCarryTheExportAttribute(t *testing.T) {
-	out, _ := answersRun(t, `export FOO=bar; function f { typeset FOO=baz; /usr/bin/env | grep '^FOO=' || echo "(none)"; }; f; /usr/bin/env | grep '^FOO='`)
+	out, _ := answersRun(
+		t,
+		`export FOO=bar; function f { typeset FOO=baz; /usr/bin/env | grep '^FOO=' || echo "(none)"; }; f; /usr/bin/env | grep '^FOO='`,
+	)
 	if strings.Contains(out, "FOO=baz") {
 		t.Errorf("got %q, want the child told nothing under the name", out)
 	}

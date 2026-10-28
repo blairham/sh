@@ -312,7 +312,10 @@ func TestASubscriptSearchWithoutBraces(t *testing.T) {
 // name until `(w)` was carried (#5152); every letter the grammar reads is
 // carried now.
 func TestTheWordLettersLeaveAnArrayAlone(t *testing.T) {
-	out, status := runSub(t, subArray+`printf "[%s]" "${a[(w)beta]}" "${a[(p)beta]}" "${a[(s:,:)beta]}" "${a[(rw)beta]}" "${a[(w)2]}"`)
+	out, status := runSub(
+		t,
+		subArray+`printf "[%s]" "${a[(w)beta]}" "${a[(p)beta]}" "${a[(s:,:)beta]}" "${a[(rw)beta]}" "${a[(w)2]}"`,
+	)
 	if want := "[][][][beta][beta]"; out != want || status != 0 {
 		t.Errorf("= %q (status %d), want %q at 0", out, status, want)
 	}

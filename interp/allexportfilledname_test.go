@@ -79,7 +79,11 @@ func TestAnOperandUnderAllexportAsksNothing(t *testing.T) {
 // And nothing is asked without `set -a`: a loop and `getopts` under
 // CoreSemantics run silently and export nothing.
 func TestAFilledNameWithoutAllexportAsksNothing(t *testing.T) {
-	out, st := run(t, `for f in 1; do :; done; getopts x: o -x6; echo $f $o $OPTARG; env | grep -E '^(f|o|OPTARG|OPTIND)='`, withSem(CoreSemantics()))
+	out, st := run(
+		t,
+		`for f in 1; do :; done; getopts x: o -x6; echo $f $o $OPTARG; env | grep -E '^(f|o|OPTARG|OPTIND)='`,
+		withSem(CoreSemantics()),
+	)
 	if st != 1 || out != "1 x 6\n" {
 		t.Errorf("out=%q st=%d, want the values, nothing exported and no refusal", out, st)
 	}
@@ -90,7 +94,11 @@ func TestAFilledNameWithoutAllexportAsksNothing(t *testing.T) {
 // 2026-10-15, `declare -r p="1"` with no `x`. The builtin refuses before it
 // reaches the operand store, which is what keeps the mark away.
 func TestAFrozenOperandIsNotMarkedByAllexport(t *testing.T) {
-	out, _ := run(t, `readonly p=1; set -a; printf -v p %s 3 2>/dev/null; set +a; env | grep -E '^p='`, withSem(permissive()))
+	out, _ := run(
+		t,
+		`readonly p=1; set -a; printf -v p %s 3 2>/dev/null; set +a; env | grep -E '^p='`,
+		withSem(permissive()),
+	)
 	if out != "" {
 		t.Errorf("out=%q, want the frozen name left unexported", out)
 	}

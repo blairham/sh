@@ -665,7 +665,10 @@ func moduleRoot() (string, error) {
 		}
 		parent := filepath.Dir(dir)
 		if parent == dir {
-			return "", fmt.Errorf("no %s module above the working directory, so the container runner cannot be built", modulePath)
+			return "", fmt.Errorf(
+				"no %s module above the working directory, so the container runner cannot be built",
+				modulePath,
+			)
 		}
 		dir = parent
 	}

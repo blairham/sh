@@ -133,7 +133,14 @@ func main() {
 	}
 }
 
-func run(ctx context.Context, dialect, bin, buildDir string, timeout time.Duration, jobs int, refetch bool, only string) int {
+func run(
+	ctx context.Context,
+	dialect, bin, buildDir string,
+	timeout time.Duration,
+	jobs int,
+	refetch bool,
+	only string,
+) int {
 	s, ok := suite.Find(dialect)
 	if !ok {
 		fmt.Fprintf(os.Stderr, "suitecheck: no column for dialect %q; -panel lists them\n", dialect)

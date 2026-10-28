@@ -83,7 +83,11 @@ func TestTheSecondBodyIsHandedAPlaceholderAlreadyRunning(t *testing.T) {
 		t.Fatalf("both bodies were given group %d; a group is one body's", first.pgid)
 	}
 	if second.pgid != kept {
-		t.Errorf("the second body was given %d, a placeholder started when it asked; want %d, the one kept ahead", second.pgid, kept)
+		t.Errorf(
+			"the second body was given %d, a placeholder started when it asked; want %d, the one kept ahead",
+			second.pgid,
+			kept,
+		)
 	}
 	// And it is still what a placeholder must be: the leader of a group of
 	// its own, alive until its pipe is closed.

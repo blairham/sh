@@ -206,7 +206,10 @@ func TestAReferenceTheListDoesNotHoldDropsTheLine(t *testing.T) {
 // numbering from the file would answer a different line for every diagnostic
 // after the first dropped reference.
 func TestEverythingAfterADroppedLineIsNumberedWithoutIt(t *testing.T) {
-	out, errs, _ := historyRun(t, "set -o history; set -H\necho before\necho !nosuch\necho $LINENO\necho !nosuch2\necho end\n")
+	out, errs, _ := historyRun(
+		t,
+		"set -o history; set -H\necho before\necho !nosuch\necho $LINENO\necho !nosuch2\necho end\n",
+	)
 	if out != "before\n3\nend\n" {
 		t.Errorf("ran %q, want $LINENO reading 3 on the file's line 4", out)
 	}

@@ -180,7 +180,13 @@ func programReadings() []struct {
 	quantified := patternOpts{caret: true, bracket: BracketLiteral, quantified: true}
 	quantifiedChars := quantified
 	quantifiedChars.chars = true
-	counted := patternOpts{caret: true, bracket: BracketLiteral, quantified: true, counted: true, collating: OneCharacterIsACollatingElement}
+	counted := patternOpts{
+		caret:      true,
+		bracket:    BracketLiteral,
+		quantified: true,
+		counted:    true,
+		collating:  OneCharacterIsACollatingElement,
+	}
 	countedOperand := counted
 	countedOperand.operandParens = true
 	countedArm := counted
@@ -324,7 +330,10 @@ func sweepAsSet(o patternOpts, pattern, subject string) (out []matchOutcome, ran
 		for j := len(subject); j >= i; j-- {
 			bad = false
 			ok, m := matchPatternIn(pattern, subject[i:j], subject, i, o)
-			out = append(out, matchOutcome{ok: ok, report: fmt.Sprintf("%v %v %v", m.groups, m.whole, m.wantsAll), bad: bad, asked: asks})
+			out = append(
+				out,
+				matchOutcome{ok: ok, report: fmt.Sprintf("%v %v %v", m.groups, m.whole, m.wantsAll), bad: bad, asked: asks},
+			)
 		}
 	}
 	return out, o.where.prog != nil
@@ -431,7 +440,10 @@ func TestTheProgramAnswersWhatTheWalkAnswers(t *testing.T) {
 				}
 			}
 			if compiledPairs < 50000 {
-				t.Errorf("a program ran for only %d spans, so the comparison above was mostly the walk against itself", compiledPairs)
+				t.Errorf(
+					"a program ran for only %d spans, so the comparison above was mostly the walk against itself",
+					compiledPairs,
+				)
 			}
 		})
 	}

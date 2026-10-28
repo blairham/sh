@@ -132,7 +132,14 @@ func ulimitRun(t *testing.T, has func(interp.Resource) bool, pipe int64, src str
 	}
 	var buf bytes.Buffer
 	sem, diag := bash.Semantics(), bash.Diagnostics()
-	r := &interp.Runner{Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &diag, Name: "bash", Dialect: presetDialect()}
+	r := &interp.Runner{
+		Stdout:      &buf,
+		Stderr:      &buf,
+		Semantics:   &sem,
+		Diagnostics: &diag,
+		Name:        "bash",
+		Dialect:     presetDialect(),
+	}
 	r.GetRlimit = func(res interp.Resource) (int64, int64, error) {
 		switch res {
 		case interp.ResourceFileSize:

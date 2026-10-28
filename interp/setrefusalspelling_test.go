@@ -279,7 +279,11 @@ func TestTheAttachedFormIsALetterAndNotAName(t *testing.T) {
 		r.Semantics, r.Diagnostics = &sem, &dg
 	})
 	if strings.Contains(out, "after") || st != 2 {
-		t.Errorf("got %q at %d, want the letter's fatal 2 and no `after` — an `-o` in the word is not the name's answer", out, st)
+		t.Errorf(
+			"got %q at %d, want the letter's fatal 2 and no `after` — an `-o` in the word is not the name's answer",
+			out,
+			st,
+		)
 	}
 	if !strings.Contains(out, "illegal option -z") {
 		t.Errorf("got %q, want the letter's wording, on the `z` and not on the `-o`", out)

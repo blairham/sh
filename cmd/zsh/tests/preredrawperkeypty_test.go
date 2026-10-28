@@ -29,9 +29,14 @@ import (
 // This shell called it from its redraw, so the pair shared one call and the
 // motion that moved nothing had none: the first and last rows were missing.
 func TestPreRedrawRunsOncePerKey(t *testing.T) {
-	control, screen, home := jobNoticeSessionRC(t, `pre() { print -r -- "pre B=[$BUFFER] C=$CURSOR LW=[$LASTWIDGET]" >> $HOME/out }
+	control, screen, home := jobNoticeSessionRC(
+		t,
+		`pre() { print -r -- "pre B=[$BUFFER] C=$CURSOR LW=[$LASTWIDGET]" >> $HOME/out }
 zle -N zle-line-pre-redraw pre
-`, "zsh", "-i")
+`,
+		"zsh",
+		"-i",
+	)
 	t.Cleanup(func() { _, _ = control.WriteString("\x15") })
 	log := func() string {
 		data, _ := os.ReadFile(filepath.Join(home, "out"))

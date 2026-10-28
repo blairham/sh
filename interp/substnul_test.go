@@ -85,7 +85,11 @@ func TestTheCutKeepsABackslashTheValueHeld(t *testing.T) {
 // any other: measured on ksh93u+, `echo hi > "$(printf 'f\0g')h"` writes the
 // file `f`.
 func TestTheCutReachesARedirectionTarget(t *testing.T) {
-	out, st := substNul(t, NulCutInASubstitution, `: > "$(printf 'o\0g')h"; test -e o && echo cut; : > $(printf 'p\0q'); test -e p && echo cut`)
+	out, st := substNul(
+		t,
+		NulCutInASubstitution,
+		`: > "$(printf 'o\0g')h"; test -e o && echo cut; : > $(printf 'p\0q'); test -e p && echo cut`,
+	)
 	if want := "cut\ncut\n"; out != want || st != 0 {
 		t.Errorf("got %q (status %d), want %q", out, st, want)
 	}

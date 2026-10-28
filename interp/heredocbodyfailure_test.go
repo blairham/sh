@@ -283,7 +283,15 @@ func TestAContainedHeredocFailureTakesTheRedirectionsStatus(t *testing.T) {
 	// here — the accessor would say 1 and no row with a fatal status of 1
 	// could tell them apart.
 	notOne := func(s *Semantics) { s.FatalErrorStatusIsOne = No }
-	if out, _ := heredocFailRun(t, src, heredocFailSemantics{Yes, Yes, No, 0}, notOne); !strings.Contains(out, "after st=2") {
+	if out, _ := heredocFailRun(
+		t,
+		src,
+		heredocFailSemantics{Yes, Yes, No, 0},
+		notOne,
+	); !strings.Contains(
+		out,
+		"after st=2",
+	) {
 		t.Errorf("said %q, want the failure's own status where the dialect measured none", out)
 	}
 }

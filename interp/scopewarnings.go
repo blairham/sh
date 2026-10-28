@@ -253,7 +253,12 @@ func (r *Runner) warnsNestedSetHere() bool {
 // set-in-enclosing-scope sentence for every one (#5485). A prefix that
 // *persists* is an assignment that stays, and is warned about like one: under
 // `posixbuiltins`, `f(){ g=2 :; }` draws `g created globally in function f`.
-func (r *Runner) storePrefixQuietlyIfTakenBack(ctx context.Context, a *syntax.Assign, landsOn string, stores, fresh, takenBack bool) {
+func (r *Runner) storePrefixQuietlyIfTakenBack(
+	ctx context.Context,
+	a *syntax.Assign,
+	landsOn string,
+	stores, fresh, takenBack bool,
+) {
 	if takenBack {
 		outer := r.storingATakenBackPrefix
 		r.storingATakenBackPrefix = true

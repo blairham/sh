@@ -55,7 +55,14 @@ func TestWhetherABadNameLeavesTheValuesAssigned(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			out, status := runValuesPast(t, tc.src, tc.assigns)
 			if !strings.HasSuffix(out, tc.want) || status == 0 {
-				t.Errorf("%s with the axis %v = %q (status %d), want it to end %q and fail", tc.src, tc.assigns, out, status, tc.want)
+				t.Errorf(
+					"%s with the axis %v = %q (status %d), want it to end %q and fail",
+					tc.src,
+					tc.assigns,
+					out,
+					status,
+					tc.want,
+				)
 			}
 		})
 	}

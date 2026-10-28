@@ -485,8 +485,14 @@ func Measure(pairs []Pair, cases []Case, batches, per int) []Comparison {
 					break
 				}
 				if s.kase.Answer != "" && got != s.kase.Answer {
-					*s.err = fmt.Errorf("%s %s answered %q for the %s program where the panel answers %q, so its time would be a measurement of work it did not do",
-						side.who, s.pair.Name, got, s.kase.Name, s.kase.Answer)
+					*s.err = fmt.Errorf(
+						"%s %s answered %q for the %s program where the panel answers %q, so its time would be a measurement of work it did not do",
+						side.who,
+						s.pair.Name,
+						got,
+						s.kase.Name,
+						s.kase.Answer,
+					)
 					break
 				}
 			}

@@ -53,6 +53,9 @@ func TestABodysOwnTextIsNotRunAsCommandsAtATerminal(t *testing.T) {
 	case <-time.After(sessionBudget):
 		// The goroutine is blocked on the terminal; the cleanup that closes
 		// it is what lets it go.
-		t.Fatalf("the script did not finish in %v: the body's own text was run as commands and one of them read the terminal", sessionBudget)
+		t.Fatalf(
+			"the script did not finish in %v: the body's own text was run as commands and one of them read the terminal",
+			sessionBudget,
+		)
 	}
 }

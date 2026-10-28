@@ -44,7 +44,10 @@ func main() {
 	}
 	short := r.Base[:min(12, len(r.Base))]
 	for _, p := range r.Stale {
-		fmt.Printf("suite-guard: %q is in suiteguard.Excused and no longer needs to be — the file is back and no shorter\n", p)
+		fmt.Printf(
+			"suite-guard: %q is in suiteguard.Excused and no longer needs to be — the file is back and no shorter\n",
+			p,
+		)
 	}
 	if r.OK() {
 		fmt.Printf("suite-guard: %d files, none lost or shortened since %s (%d there)\n",

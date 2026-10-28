@@ -1867,7 +1867,11 @@ func (r *Runner) refuseNameref(builtin, wording string) int {
 //
 // It reports the fresh flag the caller should carry on with, because the
 // question "did this line make the cell" is now about the target's cell.
-func (r *Runner) declarationThroughAReferenceShadowsTheTarget(target string, fresh, redeclared bool, shadow func(string) (bool, bool)) (bool, bool) {
+func (r *Runner) declarationThroughAReferenceShadowsTheTarget(
+	target string,
+	fresh, redeclared bool,
+	shadow func(string) (bool, bool),
+) (bool, bool) {
 	if len(r.scopes) == 0 {
 		return fresh, redeclared
 	}

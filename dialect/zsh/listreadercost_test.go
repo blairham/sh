@@ -99,7 +99,11 @@ func TestAnArrayLiteralPaysOnlyForItsElements(t *testing.T) {
 			// The control: an element of the store is forty bytes, so a row
 			// below that is not measuring the literal at all, and would pass
 			// whatever the literal did.
-			t.Errorf("%s: %.0f bytes per element — less than the store's own element, so the row is not measuring the literal", row.prog, got)
+			t.Errorf(
+				"%s: %.0f bytes per element — less than the store's own element, so the row is not measuring the literal",
+				row.prog,
+				got,
+			)
 		}
 	}
 }

@@ -111,7 +111,8 @@ func TestALoginShellSaysLogoutOnItsWayOut(t *testing.T) {
 			lines := strings.Split(strings.TrimSuffix(errs, "\n"), "\n")
 			got := lines[len(lines)-1]
 			if tc.last == "" {
-				if strings.HasSuffix(strings.TrimSuffix(errs, "\n"), "logout") || strings.HasSuffix(strings.TrimSuffix(errs, "\n"), "exit") {
+				if strings.HasSuffix(strings.TrimSuffix(errs, "\n"), "logout") ||
+					strings.HasSuffix(strings.TrimSuffix(errs, "\n"), "exit") {
 					t.Errorf("logout said a word on its way out: error stream %q", errs)
 				}
 			} else if got != tc.last && !strings.HasSuffix(got, "$ "+tc.last) {

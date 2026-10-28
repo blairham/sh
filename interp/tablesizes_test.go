@@ -35,7 +35,12 @@ func TestAReservedTableDoesNotGrow(t *testing.T) {
 		fill(r)
 	})
 	if reserved >= plain {
-		t.Errorf("registering %d names allocated %.0f times into reserved tables and %.0f into empty ones", len(names), reserved, plain)
+		t.Errorf(
+			"registering %d names allocated %.0f times into reserved tables and %.0f into empty ones",
+			len(names),
+			reserved,
+			plain,
+		)
 	}
 	got := emptyRunner().TableSizes()
 	if got != (interp.TableSizes{}) {

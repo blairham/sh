@@ -131,7 +131,10 @@ func TestAnUnnamedSignalDeathRunsNoExitTrap(t *testing.T) {
 	sig := unnamedSignal(t)
 	sem := killSem()
 	if sem.ExitTrapRunsOnSignalDeath != Yes {
-		t.Fatalf("ExitTrapRunsOnSignalDeath is %v, want Yes: this case is about the answer being overridden", sem.ExitTrapRunsOnSignalDeath)
+		t.Fatalf(
+			"ExitTrapRunsOnSignalDeath is %v, want Yes: this case is about the answer being overridden",
+			sem.ExitTrapRunsOnSignalDeath,
+		)
 	}
 	src := "trap 'echo EXITTRAP' EXIT\nkill -" + itoa(int(sig)) + " $$\necho survived\n"
 	out, errs, st := killRun(t, src, sem, Diagnostics{})

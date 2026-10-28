@@ -46,7 +46,10 @@ func TestTheSurfaceIsReadFromTheTree(t *testing.T) {
 	}
 	for _, want := range []string{"File", "Stmt", "SimpleCmd", "ParamExpr", "TestClause", "CaseClause"} {
 		if !slices.Contains(nodes, want) {
-			t.Errorf("node types do not include %s — they are found by the `Pos` method, so a miss here means the source was not read", want)
+			t.Errorf(
+				"node types do not include %s — they are found by the `Pos` method, so a miss here means the source was not read",
+				want,
+			)
 		}
 	}
 	consts, err := coverage.ConstantNames()
@@ -72,7 +75,11 @@ func TestTheSurfaceIsReadFromTheTree(t *testing.T) {
 	}
 	for _, want := range []string{"-f", "-z", "-eq", "=~", "-v", "-prefix"} {
 		if !slices.Contains(conds, want) {
-			t.Errorf("condition operators do not include %q — the tables in syntax/cond.go and that file's own switch are both read, and %q is in one of them", want, want)
+			t.Errorf(
+				"condition operators do not include %q — the tables in syntax/cond.go and that file's own switch are both read, and %q is in one of them",
+				want,
+				want,
+			)
 		}
 	}
 }
@@ -268,7 +275,10 @@ func TestTheRollupForgivesWhatOnlyOneGrammarHas(t *testing.T) {
 	roll := out[strings.Index(out, "no dialect mentions these at all"):]
 	names := rolledUp(t, roll, coverage.KindBuiltin)
 	if slices.Contains(names, "read") {
-		t.Errorf("a builtin one column mentioned is in the roll-up, which is the union of what was asked and not the intersection; it has %v", names)
+		t.Errorf(
+			"a builtin one column mentioned is in the roll-up, which is the union of what was asked and not the intersection; it has %v",
+			names,
+		)
 	}
 	if slices.Contains(names, "echo") {
 		t.Errorf("a builtin the other column mentioned is in the roll-up; it has %v", names)
@@ -339,7 +349,9 @@ func TestAGrammarReadingIsNotAMention(t *testing.T) {
 		t.Fatalf("ReadingTypes: %v", err)
 	}
 	if !readings["BraceQuotePolicy"] {
-		t.Fatal("BraceQuotePolicy is not read as a Dialect field's type — the exclusion below would pass for the wrong reason")
+		t.Fatal(
+			"BraceQuotePolicy is not read as a Dialect field's type — the exclusion below would pass for the wrong reason",
+		)
 	}
 	ops, err := coverage.OperatorTypes()
 	if err != nil {
@@ -415,7 +427,11 @@ func TestTheLedgerIsCheckedAgainstTheColumns(t *testing.T) {
 	surfaceSize := len(col.Surface)
 	ledger := []coverage.Unreachable{
 		{Element: coverage.Element{Kind: coverage.KindBuiltin, Name: "suspend"}, Issue: 1, Measured: "it stops the harness"},
-		{Element: coverage.Element{Kind: coverage.KindBuiltin, Name: "echo"}, Issue: 2, Measured: "claimed, and asked anyway"},
+		{
+			Element:  coverage.Element{Kind: coverage.KindBuiltin, Name: "echo"},
+			Issue:    2,
+			Measured: "claimed, and asked anyway",
+		},
 		{Element: coverage.Element{Kind: coverage.KindBuiltin, Name: "gone"}, Issue: 3, Measured: "no longer a builtin"},
 	}
 	out := coverage.ReportWithLedger([]coverage.Column{col}, 0, nil, ledger)

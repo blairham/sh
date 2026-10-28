@@ -821,7 +821,8 @@ func TestTheViInsertListingHasReadlinesNames(t *testing.T) {
 	if table := bash.KeyBindings(r, repl.KeymapMain); len(table) != 0 {
 		t.Errorf("nothing rebound in vi mode, and the editor is handed %v", table)
 	}
-	if s := bash.EditorStyle(); !s.ReadlineViInsertKeymap || !s.MenuReturnsToTheWord || !s.ViUndoAsReadline || !s.UndoRingsWithNothingToUndo {
+	if s := bash.EditorStyle(); !s.ReadlineViInsertKeymap || !s.MenuReturnsToTheWord || !s.ViUndoAsReadline ||
+		!s.UndoRingsWithNothingToUndo {
 		t.Errorf("bash's EditorStyle: %+v", s)
 	}
 }

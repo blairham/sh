@@ -105,7 +105,12 @@ func TestAnUnterminatedExpansionOperandRunsOnlyFromAString(t *testing.T) {
 		}
 	}
 	// The control: the same operand from a command string runs.
-	if out, st := kshRouteOut(t, "echo ${x:-a\necho after\n", syntax.RouteFromCommandString); out != "a echo after\n" || st != 0 {
+	if out, st := kshRouteOut(
+		t,
+		"echo ${x:-a\necho after\n",
+		syntax.RouteFromCommandString,
+	); out != "a echo after\n" ||
+		st != 0 {
 		t.Errorf("command string: got %q at %d, want the operand to take the rest", out, st)
 	}
 }

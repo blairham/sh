@@ -46,7 +46,14 @@ func TestAJobTableWithNothingFinishedAsksNothing(t *testing.T) {
 // unanswered vector refuses it by name, and each answer does what it says.
 func TestAFinishedJobIsWhereTheAxisIsAsked(t *testing.T) {
 	src := `(exit 4) & /bin/sleep 0.3; wait %%; echo "cur=$?"`
-	if out, _ := finishedLeaves(t, Unspecified, src); !strings.Contains(out, "the shells disagree here and no dialect was chosen") {
+	if out, _ := finishedLeaves(
+		t,
+		Unspecified,
+		src,
+	); !strings.Contains(
+		out,
+		"the shells disagree here and no dialect was chosen",
+	) {
 		t.Errorf("unanswered: %q, want the refusal", out)
 	}
 	if out, _ := finishedLeaves(t, No, src); !strings.HasSuffix(out, "cur=4\n") {

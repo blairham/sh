@@ -106,11 +106,15 @@ func TestTheShippedBashcompinit(t *testing.T) {
 	if err := os.Mkdir(filepath.Join(dir, "da"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	out, _ := runZsh(t, dir, `fpath=(`+shippedFunctionDir(t)+`); autoload -Uz compinit bashcompinit; compinit -D -u; bashcompinit
+	out, _ := runZsh(
+		t,
+		dir,
+		`fpath=(`+shippedFunctionDir(t)+`); autoload -Uz compinit bashcompinit; compinit -D -u; bashcompinit
 compgen -W "alpha beta" -- al; compgen -f -- f; compgen -d -- d; compgen -X nope; print st=$?
 compgen -P pre -W "a b"; compgen -S suf -W "a b"
 complete -F f1 c1; complete -o nospace -W "q r" c2; complete -p; complete -r c1; print $+_comps[c1]
-print -r -- $_comps[c2]`)
+print -r -- $_comps[c2]`,
+	)
 	want := "alpha\nbeta\nda\nfa\nfb\nda\n\nst=0\nprea\npreb\nasuf\nbsuf\n" +
 		"complete -F f1 c1\ncomplete -o nospace -W q\\ r c2\n0\n_bash_complete -o nospace -W q\\ r\n"
 	if out != want {

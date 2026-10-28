@@ -30,7 +30,10 @@ func TestTheParametersTableIsNotBuiltToSayItIsSet(t *testing.T) {
 	}
 	runtime.ReadMemStats(&after)
 	if got := (after.TotalAlloc - before.TotalAlloc) / n; got > 16<<10 {
-		t.Errorf("${+parameters} allocates %d bytes a read with 3,000 parameters; want under 16 KB — the table is being built to answer", got)
+		t.Errorf(
+			"${+parameters} allocates %d bytes a read with 3,000 parameters; want under 16 KB — the table is being built to answer",
+			got,
+		)
 	}
 }
 

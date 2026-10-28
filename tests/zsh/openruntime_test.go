@@ -38,7 +38,11 @@ func TestTheOpenStateFieldDrawsWhatACommandIsInside(t *testing.T) {
 	}
 	// And outside a trace, through `print -P`: the field is the shell's and
 	// not the tracer's.
-	if out, _ := runZsh(t, dir, "if true; then print -P '[%_]'; fi\nrepeat 1 print -P '[%_]'\n"); out != "[then]\n[repeat]\n" {
+	if out, _ := runZsh(
+		t,
+		dir,
+		"if true; then print -P '[%_]'; fi\nrepeat 1 print -P '[%_]'\n",
+	); out != "[then]\n[repeat]\n" {
 		t.Errorf("print -P = %q, want %q", out, "[then]\n[repeat]\n")
 	}
 }

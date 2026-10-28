@@ -269,7 +269,9 @@ func Run(ctx context.Context, cfg Config) Result {
 		// Each row gets its own deadline. A hung agent is a failure of the
 		// row rather than of the run, so the rest still report.
 		rowCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
-		pass, detail := ch.run(&harness{ctx: rowCtx, bin: cfg.Bin, dir: dir, dialect: cfg.Dialect, acpFlag: acpFlagOr(cfg.ACPFlag)})
+		pass, detail := ch.run(
+			&harness{ctx: rowCtx, bin: cfg.Bin, dir: dir, dialect: cfg.Dialect, acpFlag: acpFlagOr(cfg.ACPFlag)},
+		)
 		cancel()
 		res.Rows = append(res.Rows, Row{Name: ch.name, Claim: ch.claim, Pass: pass, Detail: detail, Known: ch.known})
 	}
@@ -674,12 +676,18 @@ func checks() []check {
 			// or hung, is a difference between the routes exactly as much as
 			// a lost job is.
 			if !sameLines(string(piped), session) {
-				return false, fmt.Sprintf("the routes gave the same script different shells: -c said %q, the session said %q", string(piped), session)
+				return false, fmt.Sprintf(
+					"the routes gave the same script different shells: -c said %q, the session said %q",
+					string(piped),
+					session,
+				)
 			}
 			if strings.Contains(string(piped), "probe=0") {
 				return true, "both routes named the job and signaled it"
 			}
-			return true, "this dialect refuses the monitor without a terminal, as the shell it imitates does, and both routes refuse it alike: " + strings.TrimSpace(string(piped))
+			return true, "this dialect refuses the monitor without a terminal, as the shell it imitates does, and both routes refuse it alike: " + strings.TrimSpace(
+				string(piped),
+			)
 		},
 	}, {
 		name:  "exited-session-refuses-the-next-prompt",
@@ -831,7 +839,11 @@ func clientChecks(self string) []check {
 			case len(once.Prompts) != 1 || once.Prompts[0] != want:
 				return false, fmt.Sprintf("with -acp-prompt - the agent got %q, want one turn", once.Prompts)
 			}
-			return true, fmt.Sprintf("the same three lines were %d turns by default and 1 with %sacp-prompt -", len(perLine.Prompts), t.dash())
+			return true, fmt.Sprintf(
+				"the same three lines were %d turns by default and 1 with %sacp-prompt -",
+				len(perLine.Prompts),
+				t.dash(),
+			)
 		},
 	}}
 }

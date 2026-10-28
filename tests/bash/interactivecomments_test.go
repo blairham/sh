@@ -84,7 +84,10 @@ func TestTheCommentOptionIsReadableByName(t *testing.T) {
 // second namespace answer the condition operator would be a widening bash
 // does not have — and one that no test of the prompt would notice.
 func TestTheCommentOptionIsNotASetOName(t *testing.T) {
-	out, _ := answersRun(t, `[[ -o interactive_comments ]]; echo "dashO=$?"; shopt -q interactive_comments; echo "shoptQ=$?"`)
+	out, _ := answersRun(
+		t,
+		`[[ -o interactive_comments ]]; echo "dashO=$?"; shopt -q interactive_comments; echo "shoptQ=$?"`,
+	)
 	if want := "dashO=1\nshoptQ=0\n"; out != want {
 		t.Errorf("got %q, want %q", out, want)
 	}

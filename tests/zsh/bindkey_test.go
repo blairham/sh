@@ -243,7 +243,8 @@ func TestOnlyTheChangesReachTheEditor(t *testing.T) {
 
 	r = bindkeyRunner(t, "bindkey '^G' beginning-of-line\n")
 	got := zsh.KeyBindings(r, repl.KeymapMain)
-	if want := (map[string]repl.Binding{"\a": {Widget: repl.WidgetBeginningOfLine}}); len(got) != 1 || got["\a"] != want["\a"] {
+	if want := (map[string]repl.Binding{"\a": {Widget: repl.WidgetBeginningOfLine}}); len(got) != 1 ||
+		got["\a"] != want["\a"] {
 		t.Errorf("table = %v, want %v", got, want)
 	}
 
@@ -467,7 +468,10 @@ func TestEndOfInputSurvivesARedefinedCompletionWidget(t *testing.T) {
 
 	// The redefinition is real and must still reach the keys it is *bound*
 	// to — this takes the key away from the action, not the action away.
-	r = bindkeyRunner(t, "zle -C delete-char-or-list .delete-char-or-list _main_complete\nbindkey '^G' delete-char-or-list\n")
+	r = bindkeyRunner(
+		t,
+		"zle -C delete-char-or-list .delete-char-or-list _main_complete\nbindkey '^G' delete-char-or-list\n",
+	)
 	if b, present := zsh.KeyBindings(r, repl.KeymapMain)["\a"]; !present || b == (repl.Binding{}) {
 		t.Errorf("^G = %#v, want the redefined completion widget", b)
 	}

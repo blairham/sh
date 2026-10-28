@@ -176,7 +176,8 @@ func TestTheEndOfInputInAHeredocEndsOnlyThatBody(t *testing.T) {
 	// refusal and `exit`.
 	t.Run("a construct the documents are in", func(t *testing.T) {
 		_, said := heredocAtEndSession(t, "if true; then cat <<E1\na\n", true)
-		if !strings.HasPrefix(said, "$ > > [E1 at 1]\n> ") || !strings.HasSuffix(said, "\nexit\n") || strings.Contains(said, "\n$ ") {
+		if !strings.HasPrefix(said, "$ > > [E1 at 1]\n> ") || !strings.HasSuffix(said, "\nexit\n") ||
+			strings.Contains(said, "\n$ ") {
 			t.Errorf("diagnostics %q, want the warning, a prompt, the refusal and the word", said)
 		}
 	})

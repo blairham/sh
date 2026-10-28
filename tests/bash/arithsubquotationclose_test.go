@@ -51,7 +51,10 @@ func TestAnArithmeticExpandedKeyWithAQuoteIsNotRefused(t *testing.T) {
 // Measured in the same run: with `shopt -s assoc_expand_once` the probe above
 // is 5 in bash 5.3.20 with no refusal at all.
 func TestTheOptionWithholdsTheArithmeticSubscriptsRefusal(t *testing.T) {
-	out, st := answersRun(t, `shopt -s assoc_expand_once; declare -A a; k="q'r"; a[$k]=4; let "++a[$k]"; printf "[%s]" "${a[$k]}"`)
+	out, st := answersRun(
+		t,
+		`shopt -s assoc_expand_once; declare -A a; k="q'r"; a[$k]=4; let "++a[$k]"; printf "[%s]" "${a[$k]}"`,
+	)
 	if out != "[5]" || st != 0 {
 		t.Errorf("= %q status %d, want %q at 0", out, st, "[5]")
 	}

@@ -100,7 +100,11 @@ func TestABodyThatTookTheParenLeavesTheOrdinaryUnterminatedConstruct(t *testing.
 		t.Run(c.name, func(t *testing.T) {
 			got, want := refusal(t, c.src), refusal(t, c.control)
 			if got != want {
-				t.Errorf("the complaint differs from the one for a plainly unterminated construct\n  got:  %q\n  want: %q", got, want)
+				t.Errorf(
+					"the complaint differs from the one for a plainly unterminated construct\n  got:  %q\n  want: %q",
+					got,
+					want,
+				)
 			}
 			// And where the parser carries the state a dialect words from,
 			// that has to match too: a shell naming the construct or what
@@ -111,9 +115,17 @@ func TestABodyThatTookTheParenLeavesTheOrdinaryUnterminatedConstruct(t *testing.
 			}
 			if g.Kind != w.Kind || g.Construct != w.Construct ||
 				g.Innermost != w.Innermost || g.Expected != w.Expected {
-				t.Errorf("the state behind the message differs\n  got:  kind=%d construct=%q innermost=%q expected=%q\n  want: kind=%d construct=%q innermost=%q expected=%q",
-					g.Kind, g.Construct, g.Innermost, g.Expected,
-					w.Kind, w.Construct, w.Innermost, w.Expected)
+				t.Errorf(
+					"the state behind the message differs\n  got:  kind=%d construct=%q innermost=%q expected=%q\n  want: kind=%d construct=%q innermost=%q expected=%q",
+					g.Kind,
+					g.Construct,
+					g.Innermost,
+					g.Expected,
+					w.Kind,
+					w.Construct,
+					w.Innermost,
+					w.Expected,
+				)
 			}
 		})
 	}
@@ -309,7 +321,10 @@ func TestADelimiterCarryingTheParenEndsTheBodyEvenWithALaterDelimiter(t *testing
 				remarked = remarked || r.Kind == RemarkHeredocAtEOF && r.Pos.Line == 3
 			}
 			if !remarked {
-				t.Errorf("no remark on line 3; the shell that warns about `EOF)` warns with a later delimiter present too: %v", p.Remarks())
+				t.Errorf(
+					"no remark on line 3; the shell that warns about `EOF)` warns with a later delimiter present too: %v",
+					p.Remarks(),
+				)
 			}
 		})
 	}

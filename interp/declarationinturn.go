@@ -110,7 +110,12 @@ func (r *Runner) declarationOperandsStoredInTurn() bool {
 // walks this way and is nil everywhere else, so a command that is not such
 // a declaration allocates nothing for it. Hands the state back, and reports
 // whether the walk is on and goes on.
-func (r *Runner) reachOperandInTurn(c *syntax.SimpleCmd, w *syntax.Word, argv []string, turn *operandsInTurn) (*operandsInTurn, bool) {
+func (r *Runner) reachOperandInTurn(
+	c *syntax.SimpleCmd,
+	w *syntax.Word,
+	argv []string,
+	turn *operandsInTurn,
+) (*operandsInTurn, bool) {
 	if turn == nil {
 		if !r.declarationOperandsStoredInTurn() || !r.declarationUtilityIsHere(argv) {
 			// Not the column, or `local`: it is in the substrate's list of
@@ -296,7 +301,12 @@ func (r *Runner) traceOperandInTurn(target, value string, d *Diagnostics) {
 // settleLiteralOperandsBefore expands, holds and traces every array-literal
 // operand written in front of the word just expanded, so a scalar operand
 // behind a literal sees it stored. Reports whether the walk goes on.
-func (r *Runner) settleLiteralOperandsBefore(c *syntax.SimpleCmd, w *syntax.Word, argv []string, turn *operandsInTurn) bool {
+func (r *Runner) settleLiteralOperandsBefore(
+	c *syntax.SimpleCmd,
+	w *syntax.Word,
+	argv []string,
+	turn *operandsInTurn,
+) bool {
 	for _, a := range c.Assigns {
 		if !a.Operand || !w.Pos().After(a.Pos()) {
 			continue

@@ -226,7 +226,10 @@ func runHeredoc(t *testing.T, src string) (string, int) {
 // pin is that the nesting works at all, in a shape where getting it wrong
 // would be silent.
 func TestWhoseProcessAHereDocumentIsForIsPerRedirectionList(t *testing.T) {
-	out, _ := runHeredoc(t, "n=1\nm=1\ncat <<A <<B\n$(( n++ ))$(read z <<C\n$(( m++ ))\nC\n)\nA\n$(( n++ ))\nB\nprintf 'n=%s m=%s' \"$n\" \"$m\"")
+	out, _ := runHeredoc(
+		t,
+		"n=1\nm=1\ncat <<A <<B\n$(( n++ ))$(read z <<C\n$(( m++ ))\nC\n)\nA\n$(( n++ ))\nB\nprintf 'n=%s m=%s' \"$n\" \"$m\"",
+	)
 	if !strings.HasSuffix(out, "n=1 m=1") {
 		t.Errorf("out = %q, want it to end in n=1 m=1 — both bodies confined to the program they fed", out)
 	}

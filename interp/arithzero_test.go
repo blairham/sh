@@ -66,7 +66,12 @@ func TestAZeroArithmeticCommandFiresTheErrTrapByTheAxis(t *testing.T) {
 			}
 			s := arithZeroSem(a)
 			s.ErrTrapRunsInsideFunctions = Yes
-			if out, _ := runGrammar(t, "trap 'echo E' ERR; "+tc.body+"; echo done", enableTestAndArith, withSem(s)); out != want {
+			if out, _ := runGrammar(
+				t,
+				"trap 'echo E' ERR; "+tc.body+"; echo done",
+				enableTestAndArith,
+				withSem(s),
+			); out != want {
 				t.Errorf("%s under %v: got %q, want %q", tc.name, a, out, want)
 			}
 		}

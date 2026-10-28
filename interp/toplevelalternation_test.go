@@ -299,7 +299,10 @@ func TestOnlyOneReadingReachesPathnameExpansion(t *testing.T) {
 					t.Fatalf("parse: %v", err)
 				}
 				var out bytes.Buffer
-				run := newTestRunner(t, &Runner{Stdout: &out, Stderr: &out, Dialect: &d, Semantics: &sem, Env: testPATH(), Dir: dir})
+				run := newTestRunner(
+					t,
+					&Runner{Stdout: &out, Stderr: &out, Dialect: &d, Semantics: &sem, Env: testPATH(), Dir: dir},
+				)
 				if _, err := run.Run(context.Background(), f); err != nil {
 					t.Fatalf("%v", err)
 				}

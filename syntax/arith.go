@@ -1666,7 +1666,8 @@ func (a *arithParser) primary() ArithExpr {
 		// echo $(( $k ))` and `[[ $k -eq 7 ]]` are both `operator expected
 		// at `i'`, the `$` having been read as the process id and the name
 		// left over, and `k='$'; echo $(( $k ))` is the process id.
-		if c := a.src[a.off]; c == '?' || c == '$' && (a.expanded || a.off+1 >= len(a.src) || !nameByte(a.src[a.off+1], 0, a.dial.DottedName)) {
+		if c := a.src[a.off]; c == '?' ||
+			c == '$' && (a.expanded || a.off+1 >= len(a.src) || !nameByte(a.src[a.off+1], 0, a.dial.DottedName)) {
 			a.off++
 			return &ArithVar{Name: string(c), Special: true, Start: start, Stop: start}
 		}

@@ -36,7 +36,11 @@ func TestAnAlwaysHalfReadsTheStatusAFailureKept(t *testing.T) {
 		{`f(){ { true; export x=$((1/0)) } always { echo in=$? }; }; f`, "in=0\n", 1},
 		// The loop's 1 is set as the error leaves it, not at the failure.
 		{`(exit 7); for i in 1; do { export x=$((1/0)) } always { echo in=$? }; done`, "in=7\n", 1},
-		{`(exit 7); { for i in 1; do { export x=$((1/0)) } always { echo a=$? }; done } always { echo in=$? }`, "a=7\nin=1\n", 1},
+		{
+			`(exit 7); { for i in 1; do { export x=$((1/0)) } always { echo a=$? }; done } always { echo in=$? }`,
+			"a=7\nin=1\n",
+			1,
+		},
 		{`(exit 7); { while :; do export x=$((1/0)); done } always { echo in=$? }`, "in=1\n", 1},
 		{`(exit 7); { repeat 1 export x=$((1/0)) } always { echo in=$? }`, "in=1\n", 1},
 		{`for i in 1; do { (exit 6); print $((1/0)) } always { echo in=$? }; done`, "in=6\n", 1},

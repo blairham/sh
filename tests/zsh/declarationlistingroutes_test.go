@@ -97,7 +97,8 @@ func TestTopLevelLocalListsAsTypesetDoes(t *testing.T) {
 			out, errs, code := runZshListing(t, tc.src)
 			// The script's own path heads a diagnostic, so the wording is
 			// compared from the builtin's name on.
-			if out != tc.want || !strings.HasSuffix(errs, tc.wantErr) || (errs == "") != (tc.wantErr == "") || code != tc.wantCode {
+			if out != tc.want || !strings.HasSuffix(errs, tc.wantErr) || (errs == "") != (tc.wantErr == "") ||
+				code != tc.wantCode {
 				t.Errorf("wrote %q (stderr %q) at %d, want %q (stderr %q) at %d",
 					out, errs, code, tc.want, tc.wantErr, tc.wantCode)
 			}

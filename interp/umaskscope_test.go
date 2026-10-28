@@ -171,7 +171,10 @@ func TestAShellWithNoHookRefusesAndLeavesTheProcessAlone(t *testing.T) {
 	}
 	var buf bytes.Buffer
 	sem := permissive()
-	r := newTestRunner(t, &Runner{Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &Diagnostics{}, Name: "testsh"})
+	r := newTestRunner(
+		t,
+		&Runner{Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &Diagnostics{}, Name: "testsh"},
+	)
 	if _, rerr := r.Run(context.Background(), f); rerr != nil {
 		t.Fatal(rerr)
 	}

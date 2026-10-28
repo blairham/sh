@@ -36,7 +36,13 @@ func declRunEnv(t *testing.T, src string, set func(*Semantics), dg Diagnostics, 
 // which is the only input the hide-in-scope letter is observable through: a
 // `local` of one half of a script's tie is an ordinary local either way. See
 // interp/tielocal.go.
-func declRunTied(t *testing.T, src string, set func(*Semantics), dg Diagnostics, pairs ...[2]string) (string, string, int) {
+func declRunTied(
+	t *testing.T,
+	src string,
+	set func(*Semantics),
+	dg Diagnostics,
+	pairs ...[2]string,
+) (string, string, int) {
 	t.Helper()
 	return declRunWith(t, src, set, dg, nil, func(r *Runner) {
 		for _, pair := range pairs {
@@ -47,7 +53,14 @@ func declRunTied(t *testing.T, src string, set func(*Semantics), dg Diagnostics,
 
 // declRunWith is what the three above are: a run whose Runner a caller may
 // arrange before the script sees it, the way a dialect arranges one.
-func declRunWith(t *testing.T, src string, set func(*Semantics), dg Diagnostics, env []string, before func(*Runner)) (string, string, int) {
+func declRunWith(
+	t *testing.T,
+	src string,
+	set func(*Semantics),
+	dg Diagnostics,
+	env []string,
+	before func(*Runner),
+) (string, string, int) {
 	t.Helper()
 	f, err := syntax.Parse(src, syntax.Core())
 	if err != nil {

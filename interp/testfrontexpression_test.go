@@ -195,7 +195,11 @@ func TestTheWholeListIsReadWithTheAxisTheOtherWay(t *testing.T) {
 	// two readers happen to agree on is still worth keeping in the table
 	// above, and one more of them agreeing tomorrow is not a regression.
 	if moved < 35 {
-		t.Errorf("%d of %d rows moved with the axis, want at least 35 — the table is not measuring the axis", moved, len(frontRows))
+		t.Errorf(
+			"%d of %d rows moved with the axis, want at least 35 — the table is not measuring the axis",
+			moved,
+			len(frontRows),
+		)
 	}
 }
 

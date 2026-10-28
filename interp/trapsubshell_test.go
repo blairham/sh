@@ -161,7 +161,11 @@ func TestKeptListingCrossesEveryBoundaryOrNone(t *testing.T) {
 		t.Errorf("dropped at the pipeline boundary: got %q", got)
 	}
 	s.PipelineElementKeepsTrapListing = Yes
-	if got, _ := run(t, `trap 'echo x' USR1; (trap) | cat; echo done`, withSem(s)); got != "trap -- 'echo x' USR1\ndone\n" {
+	if got, _ := run(
+		t,
+		`trap 'echo x' USR1; (trap) | cat; echo done`,
+		withSem(s),
+	); got != "trap -- 'echo x' USR1\ndone\n" {
 		t.Errorf("kept across both: got %q", got)
 	}
 	s.SubshellKeepsTrapListing = No

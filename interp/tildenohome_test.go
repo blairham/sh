@@ -91,7 +91,10 @@ func TestATildeWithNoHomeIsTheDialectsAnswer(t *testing.T) {
 			case tc.asked:
 				for _, name := range asked {
 					if name != "" {
-						t.Errorf("asked the database for %q, want the empty name: no user is called the empty string, which is what makes it mean the current one", name)
+						t.Errorf(
+							"asked the database for %q, want the empty name: no user is called the empty string, which is what makes it mean the current one",
+							name,
+						)
 					}
 				}
 			case len(asked) != 0:

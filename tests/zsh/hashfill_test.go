@@ -33,7 +33,8 @@ show
 hash -r; setopt hashexecutablesonly
 print -r -- ${(ko)commands[(I)z*]}
 hash -r; unsetopt hashexecutablesonly; commands[zw]=/bin/ls; show`)
-	if want := "zman=/bin/ls\n--\nzab=D/p2/zab\nzbar=D/p1/zbar\nzbaz=D/p2/zbaz\nzdir=D/p1/zdir\nzfoo=D/p1/zfoo\nzman=/bin/ls\nznoexec=D/p1/znoexec\nzqux=D/p1/zqux\nzz=D/p1/zz\n--\nzsh:hash:11: too many arguments\nfv=1\n--\nzab zbar zbaz zdir zfoo znoexec zqux zz\nzab=D/p2/zab\nzbar=D/p1/zbar\nzbaz=D/p2/zbaz\nzdir=D/p1/zdir\nzfoo=D/p1/zfoo\nznoexec=D/p1/znoexec\nzqux=D/p1/zqux\nzz=D/p1/zz\n--\nzab zbar zbaz zfoo zqux zz\nzab=D/p2/zab\nzbar=D/p1/zbar\nzbaz=D/p2/zbaz\nzdir=D/p1/zdir\nzfoo=D/p1/zfoo\nznoexec=D/p1/znoexec\nzqux=D/p1/zqux\nzw=/bin/ls\nzz=D/p1/zz\n--\n"; out != want || st != 0 {
+	if want := "zman=/bin/ls\n--\nzab=D/p2/zab\nzbar=D/p1/zbar\nzbaz=D/p2/zbaz\nzdir=D/p1/zdir\nzfoo=D/p1/zfoo\nzman=/bin/ls\nznoexec=D/p1/znoexec\nzqux=D/p1/zqux\nzz=D/p1/zz\n--\nzsh:hash:11: too many arguments\nfv=1\n--\nzab zbar zbaz zdir zfoo znoexec zqux zz\nzab=D/p2/zab\nzbar=D/p1/zbar\nzbaz=D/p2/zbaz\nzdir=D/p1/zdir\nzfoo=D/p1/zfoo\nznoexec=D/p1/znoexec\nzqux=D/p1/zqux\nzz=D/p1/zz\n--\nzab zbar zbaz zfoo zqux zz\nzab=D/p2/zab\nzbar=D/p1/zbar\nzbaz=D/p2/zbaz\nzdir=D/p1/zdir\nzfoo=D/p1/zfoo\nznoexec=D/p1/znoexec\nzqux=D/p1/zqux\nzw=/bin/ls\nzz=D/p1/zz\n--\n"; out != want ||
+		st != 0 {
 		t.Errorf("got %q (status %d), want %q", out, st, want)
 	}
 }

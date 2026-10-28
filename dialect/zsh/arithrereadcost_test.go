@@ -27,6 +27,10 @@ func TestEmulateDoesNotMakeArithmeticReadAgain(t *testing.T) {
 	emulated()
 	base, after := testing.AllocsPerRun(200, plain), testing.AllocsPerRun(200, emulated)
 	if after > base+2 {
-		t.Errorf("(( x & 1 )) allocates %v times after a function ran emulate -L zsh, and %v before; it is being read again", after, base)
+		t.Errorf(
+			"(( x & 1 )) allocates %v times after a function ran emulate -L zsh, and %v before; it is being read again",
+			after,
+			base,
+		)
 	}
 }

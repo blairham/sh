@@ -58,7 +58,11 @@ func TestACompoundThatFailedBeforeItsBodyIsStillJudged(t *testing.T) {
 	if out != "" || status == 0 {
 		t.Errorf("got %q at %d, want the script stopped", out, status)
 	}
-	if out, _ := run(t, "exec 2>/dev/null; trap 'echo E' ERR; { echo body; } >/nonexistent/dir/f; echo done", withSem(errSem())); out != "E\ndone\n" {
+	if out, _ := run(
+		t,
+		"exec 2>/dev/null; trap 'echo E' ERR; { echo body; } >/nonexistent/dir/f; echo done",
+		withSem(errSem()),
+	); out != "E\ndone\n" {
 		t.Errorf("ERR: got %q, want one E", out)
 	}
 }

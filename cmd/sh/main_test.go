@@ -325,7 +325,13 @@ func TestACPPromptFlag(t *testing.T) {
 			t.Fatalf("readOwnFlags(%v): %v", tc.args, err)
 		}
 		if own.acpPrompt != tc.want || !own.acpConnect {
-			t.Errorf("readOwnFlags(%v) = prompt %q connect %v, want %q and true", tc.args, own.acpPrompt, own.acpConnect, tc.want)
+			t.Errorf(
+				"readOwnFlags(%v) = prompt %q connect %v, want %q and true",
+				tc.args,
+				own.acpPrompt,
+				own.acpConnect,
+				tc.want,
+			)
 		}
 		if !slices.Equal(rest, []string{"npx", "pkg"}) {
 			t.Errorf("rest = %v, want the agent's command line", rest)

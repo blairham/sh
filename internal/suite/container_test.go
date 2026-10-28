@@ -151,7 +151,9 @@ func TestAContainedColumnSaysWhatItMustReport(t *testing.T) {
 
 func TestBelievableRefusesTheWrongShell(t *testing.T) {
 	s := Suite{Name: "ash", MustReport: "busybox"}
-	if err := s.Believable(Build{Version: "BusyBox v1.37.0 (2026-01-10 15:38:28 UTC) multi-call binary.", Known: true}); err != nil {
+	if err := s.Believable(
+		Build{Version: "BusyBox v1.37.0 (2026-01-10 15:38:28 UTC) multi-call binary.", Known: true},
+	); err != nil {
 		t.Fatalf("BusyBox's own version line was refused: %v", err)
 	}
 	err := s.Believable(Build{Version: "Debian Almquist Shell", Known: true})

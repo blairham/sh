@@ -1186,7 +1186,11 @@ type caseSubstitution struct {
 
 // caseItemMatchedNoting is caseItemMatched, noting the status a substitution
 // in the item's patterns left.
-func (r *Runner) caseItemMatchedNoting(item *syntax.CaseItem, subject string, subst *caseSubstitution) (matched, ok bool) {
+func (r *Runner) caseItemMatchedNoting(
+	item *syntax.CaseItem,
+	subject string,
+	subst *caseSubstitution,
+) (matched, ok bool) {
 	outer := r.substRan
 	r.substRan = false
 	matched, ok = r.caseItemMatched(item, subject)
@@ -1291,7 +1295,12 @@ func (r *Runner) caseItemMatches(item *syntax.CaseItem, subject string) bool {
 //
 // written is the part of the line a complaint made it write, and empty where
 // nothing did — a child writes its own copy and leaves this one open.
-func (r *Runner) patternOfTracedArm(p *syntax.Word, subject string, tried []string, tracing bool) (pat, written string) {
+func (r *Runner) patternOfTracedArm(
+	p *syntax.Word,
+	subject string,
+	tried []string,
+	tracing bool,
+) (pat, written string) {
 	if !tracing {
 		return r.patternOf(p), ""
 	}

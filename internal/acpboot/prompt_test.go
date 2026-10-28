@@ -165,10 +165,24 @@ func TestReadPrompt(t *testing.T) {
 	if _, err := readPrompt(t.Context(), boundary.Boundary{}, empty, nil); err == nil {
 		t.Error("a file of whitespace was accepted as a prompt")
 	}
-	if _, err := readPrompt(t.Context(), boundary.Boundary{}, "-", strings.NewReader("")); err == nil || !strings.Contains(err.Error(), "standard input") {
+	if _, err := readPrompt(
+		t.Context(),
+		boundary.Boundary{},
+		"-",
+		strings.NewReader(""),
+	); err == nil ||
+		!strings.Contains(err.Error(), "standard input") {
 		t.Errorf("an empty standard input: %v, want a refusal naming it", err)
 	}
-	if _, err := readPrompt(t.Context(), boundary.Boundary{}, filepath.Join(dir, "absent"), nil); !errors.Is(err, os.ErrNotExist) {
+	if _, err := readPrompt(
+		t.Context(),
+		boundary.Boundary{},
+		filepath.Join(dir, "absent"),
+		nil,
+	); !errors.Is(
+		err,
+		os.ErrNotExist,
+	) {
 		t.Errorf("a missing file: %v, want not-exist", err)
 	}
 }
@@ -199,7 +213,13 @@ func TestAPromptFileIsReadThroughTheGate(t *testing.T) {
 	}
 	// Standard input is a descriptor, not a path: the same gate is not asked.
 	asked = 0
-	if got, err := readPrompt(t.Context(), deny, "-", strings.NewReader("piped\n")); err != nil || got != "piped" || asked != 0 {
+	if got, err := readPrompt(
+		t.Context(),
+		deny,
+		"-",
+		strings.NewReader("piped\n"),
+	); err != nil || got != "piped" ||
+		asked != 0 {
 		t.Errorf("standard input under a denying gate: %q, %v, asked %d", got, err, asked)
 	}
 }

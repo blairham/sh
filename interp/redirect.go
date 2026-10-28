@@ -1056,11 +1056,41 @@ func (r *Runner) applyRedirList(ctx context.Context, rs []*syntax.Redirect, comp
 					// substitutionANameTakes.
 					fd = r.procSubs[sub].fd
 					r.releaseConsumedSubstitution(sub)
+				} else if bothStreams {
+					// The name's number, held until the standard-error half
+					// below has been accounted for: it is not anybody's until
+					// the file lands on it, and both the save and the join
+					// below pick from the free numbers.
+					fd = r.holdNumber(false)
 				} else {
 					fd = r.nextFreeFd(-1)
 				}
+				if bothStreams {
+					// The standard-error half is a redirection of that
+					// stream reached, exactly as the unnamed `&>`'s is in
+					// saveBothForAnOpen: saved on the next free number where
+					// this list has not decided about the stream, above the
+					// name's number and while the file's own is still held,
+					// and kept for the command — `: {v}&>/dev/null
+					// {w}</dev/null {u}</dev/null` is `12 11 14` in zsh
+					// 5.9.2, the 13 being that save. Where the list has
+					// already reached the stream it is a join instead, taken
+					// once the file's number is given back so that number
+					// is among the three the first join holds: `{v}&>…
+					// {w}&>… {x}<…` is `12 14 17`, `{v}&>… 2>/dev/null
+					// {x}<…` is `12 16`, `2>/dev/null {v}&>… {x}<…` is `13
+					// 16`, and a third `{u}&>` adds `18 19`, one number for
+					// the join and one for the name. Standard output is not
+					// reached: `{v}&>… >/dev/null {x}<…` is `12 14`, a save.
+					// Measured 2026-10-27 (#6756).
+					holds.save(2, false)
+				}
 				if held >= 0 {
 					r.letGoOfNumber(held)
+				}
+				if bothStreams {
+					holds.join(2, false)
+					r.letGoOfNumber(fd)
 				}
 				holds.took(fd)
 			}

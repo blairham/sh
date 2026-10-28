@@ -273,6 +273,18 @@ func (r *Runner) expandPrefixTraceValuesHolding(assigns []*syntax.Assign, held *
 	}
 }
 
+// prefixTraceRecords is the prefix-trace state of one command, taken by a
+// command this shell runs in the middle of it and put back when that one
+// ends. See Runner.simple.
+type prefixTraceRecords struct {
+	assigns []*syntax.Assign
+	values  []string
+	early   []*syntax.Assign
+	joins   []string
+	globs   []prefixGlobMatch
+	speaker prefixValueSpeaker
+}
+
 // recordPrefixTraceValue keeps this entry's expansion for the trace and for
 // the route that applies it, and hands back the value the name comes to.
 //
@@ -389,14 +401,27 @@ func (r *Runner) tracePrefixAndCommand(c *syntax.SimpleCmd, argv []string) {
 		return
 	}
 	line := strings.Join(words, " ") + " "
-	if d.TracePrefixAssignment == TracePrefixOnTheCommandLineRepeatingThePrefix &&
+	// The part of this line already written ahead of a nested command's
+	// trace, where the prefix was written a word at a time. The rest goes
+	// on from there, and the prompt is written again before the command's
+	// words whatever the command is — measured 2026-10-27 on zsh 5.9.2,
+	// `set -x; x=( [ab](e:"print -u2 code":) ) /usr/bin/true` ends `( a b )
+	// +zsh:1> /usr/bin/true`, and `command true` the same way, where the
+	// whole line written at once carries the second prompt only for a
+	// command this shell runs (#6752). See Runner.writeOpenTraceLineAhead.
+	flushed := ""
+	if open := r.openTrace; open != nil && open.owner == r && open.prefixOf == c {
+		flushed = open.flushed
+	}
+	if flushed != "" || d.TracePrefixAssignment == TracePrefixOnTheCommandLineRepeatingThePrefix &&
 		r.tracePrefixRepeatsBeforeTheCommand(argv) {
 		line += r.tracePrefix()
 	}
 	line += strings.Join(r.traceCommandWords(argv, d), " ")
 	r.awaitTraceTurn()
 	defer r.releaseTraceTurn()
-	r.tracef("%s%s\n", r.tracePrefix(), line)
+	defer r.tracingAChildsCommand(argv)()
+	r.tracef("%s\n", strings.TrimPrefix(r.tracePrefix()+line, flushed))
 }
 
 // tracePrefixAfterTheCommand writes the assignment lines ksh93 puts behind

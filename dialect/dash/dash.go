@@ -2069,6 +2069,7 @@ func Semantics() interp.Semantics {
 	// — so no line ever reaches the default name and there is no value for
 	// the axis to decide about.
 	s.BadNameDeclaresTheOperandsAfterIt = interp.No
+	s.BadNameEndsTheDeclaringNotTheAssigning = interp.No
 	s.TypesetTakesASubscript = interp.No
 	// unanswered UnsetElementEmptiesAnUnwrittenArrayInASubshell: no
 	// arrays, so no element for a subshell to remove.

@@ -1395,6 +1395,10 @@ type Runner struct {
 	// `local` name aside for its return. See
 	// Runner.badLocalNameWaitsForTheReturn.
 	badLocalNamePending bool
+	// landedPastARefusal records that the values behind a fatal bad name
+	// were landed at the refusal site, so namesAfterARefusal hands back
+	// nothing behind it. See interp/assignednotdeclared.go.
+	landedPastARefusal bool
 	// fatalStatusSettled says a fatal refusal inside the builtin now running
 	// chose the status the shell ends with, so the builtin's own return must
 	// not be written over it. Cleared where it is read.

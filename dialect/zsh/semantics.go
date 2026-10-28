@@ -3449,6 +3449,10 @@ func Semantics() interp.Semantics {
 	// The same as ksh93 and for the same measurement, `unset` included: a
 	// fatal `unset ":" ok1 ok2` removes ok1 and ok2 before it stops.
 	s.BadNameDeclaresTheOperandsAfterIt = interp.Yes
+	// Declared in full, letters and freeze included: `{ readonly x+=5 z=2 }
+	// always { … }` leaves `z` frozen and `x` untouched. Measured 2026-10-27
+	// on zsh 5.9.2 (#6510).
+	s.BadNameEndsTheDeclaringNotTheAssigning = interp.No
 	s.SubscriptedOperandTakesTheIntegerAttribute = interp.No
 	// And the container letter, refused in the same breath — `typeset -A
 	// m[k]=v` and `typeset -a n[2]=v` alike are `inconsistent type for

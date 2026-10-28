@@ -375,3 +375,102 @@ func TestOnlyAGroupTheSourceWroteIsAGroup(t *testing.T) {
 		})
 	}
 }
+
+// lhsRunSplicing is lhsRun with the subscripted-literal axis answered as the
+// splice, which is the reading the shell with flag groups gives `a[i]=(p q)`.
+func lhsRunSplicing(t *testing.T, src string) (string, int) {
+	t.Helper()
+	return runGrammar(t, src, lhsGrammar, func(r *interp.Runner) {
+		sem := interp.CoreSemantics()
+		sem.ArrayBaseIsZero = interp.No
+		sem.ArrayScalarIsTheWholeArray = interp.Yes
+		sem.SplitParamExpansion = interp.No
+		sem.GlobExpansionResults = interp.No
+		sem.SubscriptedArrayLiteral = interp.SubscriptedArrayLiteralSplices
+		// The two rows below that reach them: a literal's value is built
+		// before its subscript, and a frozen name ends the line.
+		sem.ElementSubscriptIsExpandedBeforeTheValue = interp.No
+		sem.ReadonlyReassignmentFatal = interp.Yes
+		r.Semantics = &sem
+	})
+}
+
+// A flag group on the left of an element **literal** names the element the
+// words replace, exactly as it names the element a scalar replaces. It used
+// to fall through to the arithmetic road, which globbed the group and then
+// read it as an expression (#6905). Measured 2026-10-27 on zsh 5.9.2.
+func TestAFlagGroupOnTheLeftOfAnElementLiteral(t *testing.T) {
+	for _, tc := range []struct{ name, src, want string }{
+		{
+			"a search splices the words over the element it found",
+			`a=(1 2 3); a[(r)2]=(x y); printf "[%s]" "${a[@]}"`,
+			`[1][x][y][3]`,
+		},
+		{
+			"one word replaces one element",
+			`a=(1 2); a[(r)2]=(z); printf "[%s]" "${a[@]}"`,
+			`[1][z]`,
+		},
+		{
+			"append goes in after the element",
+			`a=(1 2 3); a[(r)2]+=(x y); printf "[%s]" "${a[@]}"`,
+			`[1][2][x][y][3]`,
+		},
+		{
+			"a forward miss appends, as the scalar miss does",
+			`a=(1 2 3); a[(i)9]=(x); printf "[%s]" "${a[@]}"`,
+			`[1][2][3][x]`,
+		},
+		{
+			"no words delete the element",
+			`a=(1 2 3); a[(r)2]=(); printf "[%s]" "${a[@]}"`,
+			`[1][3]`,
+		},
+		{
+			"a group with no search letter is an ordinary subscript",
+			`a=(1 2 3); a[(e)2]=(x y); printf "[%s]" "${a[@]}"`,
+			`[1][x][y][3]`,
+		},
+		{
+			"a substitution in the group runs once",
+			`f() { echo F >&2; echo 2; }; a=(1 2 3); a[(r)$(f)]=(x y); printf "[%s]" "${a[@]}"`,
+			`F\n[1][x][y][3]`,
+		},
+		{
+			"the value is built before the subscript, as every element literal here is",
+			`a=(1 2 3); a[(r)2]=(p $(echo VAL >&2)); printf "[%s]" "${a[@]}"`,
+			`VAL\n[1][p][3]`,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, st := lhsRunSplicing(t, tc.src)
+			want := strings.ReplaceAll(tc.want, `\n`, "\n")
+			if strings.TrimSpace(out) != want || st != 0 {
+				t.Errorf("%s\n got %q st=%d\nwant %q st=0", tc.src, out, st, want)
+			}
+		})
+	}
+
+	// The two refusals the splice already makes reach the flagged spelling
+	// too, and neither is the arithmetic road's complaint.
+	for _, tc := range []struct{ name, src, want string }{
+		{
+			"a string is not an array",
+			`s=hello; s[(r)l]=(x y); echo ran-on`,
+			"attempt to assign array value to non-array",
+		},
+		{
+			"a frozen array is refused by the freeze",
+			`a=(1 2 3); readonly a; a[(r)2]=(x); echo ran-on`,
+			"readonly variable",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, st := lhsRunSplicing(t, tc.src)
+			if !strings.Contains(out, tc.want) || strings.Contains(out, "no matches found") ||
+				strings.Contains(out, "math") || st == 0 {
+				t.Errorf("%s\n got %q st=%d\nwant %q and a failing status", tc.src, out, st, tc.want)
+			}
+		})
+	}
+}

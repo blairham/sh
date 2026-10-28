@@ -170,6 +170,10 @@ func (r *Runner) spliceElemLiteral(a *syntax.Assign) {
 		r.spliceElemLiteralOverAFlaggedSpan(a, build)
 		return
 	}
+	if a.IndexFlags != nil {
+		r.spliceElemLiteralAtAFlaggedPlace(a, build)
+		return
+	}
 	r.spliceWordsIntoElement(a, func() string { return r.joinWord(a.Index) }, build)
 }
 

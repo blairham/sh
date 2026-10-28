@@ -105,3 +105,42 @@ func (r *Runner) spliceElemLiteralOverAFlaggedSpan(a *syntax.Assign, build func(
 	elems, _ := r.arrayElemsOfTheName(a.Name)
 	r.spliceElementSpan(a.Name, a.IndexText, elems, from, to, words)
 }
+
+// spliceElemLiteralAtAFlaggedPlace is a literal whose target carries one flag
+// group — `a[(r)q]=(x y)` — where the group names the element the words
+// replace, exactly as it names the element a scalar value replaces in
+// Runner.flaggedAssignPlace.
+//
+// It used to fall through to the arithmetic road, which globbed the group as
+// a word and then read it as an expression: `a=(1 2); a[(r)2]=(z)` was `no
+// matches found: (r)2` and `bad math expression: operator expected at '2'`,
+// where the scalar spelling `a[(r)2]=z` had taken the flag since #1534 (#6905).
+// Measured 2026-10-27 on zsh 5.9.2, `-fc`, after `a=(1 2 3)`:
+//
+//	a[(r)2]=(x y)      1 x y 3      the element the search found, spliced over
+//	a[(r)2]+=(x y)     1 2 x y 3    `+=` goes in after that element
+//	a[(i)9]=(x)        1 2 3 x      a miss appends, as the scalar miss does
+//	a[(R)9]=(x)        `a: assignment to invalid subscript range` — refused
+//	                   by name here, as the scalar spelling's `R` miss is
+//	a[(r)2]=()         1 3          and no words delete the element
+//	a[(e)2]=(x y)      1 x y 3      no search letter: an ordinary subscript
+//	s=hello; s[(r)l]=(x y)          `s: attempt to assign array value to
+//	                                non-array`, the splice's own refusal
+//	a[(r)2]=(p $(echo VAL >&2))     VAL, then `1 p 3`: the value first, as
+//	                                every element literal here builds it
+//	readonly a; a[(r)2]=(x)         `read-only variable: a`
+//	set -x; a[(r)2]=(z)             `+zsh:1> a[(r)2]=( z )`
+//
+// The place is one subscript in the dialect's own numbering, so it is handed
+// to the splice that takes one — the same hand-off the pair's `+=` makes above.
+func (r *Runner) spliceElemLiteralAtAFlaggedPlace(a *syntax.Assign, build func() ([]string, bool)) {
+	if !r.spliceTargetIsAnArray(a) {
+		return
+	}
+	defer r.armAssignSubscript(a).undo()
+	place, ok := r.flaggedAssignPlace(a)
+	if !ok {
+		return
+	}
+	r.spliceWordsIntoElement(a, func() string { return itoa(place.from) }, build)
+}

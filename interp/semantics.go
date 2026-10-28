@@ -10038,7 +10038,7 @@ type Semantics struct {
 	// bash's `local` and zsh's `typeset` answer as their `export` does, and
 	// BusyBox ash as dash. **Read rather than asked**, since the question is
 	// put to every declaration with an operand: a vector that leaves it
-	// unanswered gets the four columns' answer. See
+	// unanswered gets the answer every column but ksh93 gives. See
 	// interp/declarationinturn.go (#6770).
 	DeclarationOperandsAreStoredInTurn Answer
 

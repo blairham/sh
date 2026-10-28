@@ -354,4 +354,8 @@ func (r *Runner) endSubshell(ctx context.Context) {
 	// is a process that exits in every shell of the panel, and the body's
 	// bytes land because the exit closed the write end. See endHeldProcSubs.
 	r.endHeldProcSubs()
+	// And the hold a copy that moved opened on its own directory goes with
+	// it; one it shares with the shell that made it is left alone, as
+	// dropDirectoryHold knows. See holdDirectory.
+	r.dropDirectoryHold()
 }

@@ -221,30 +221,29 @@ func (r *Runner) holdDirectory() *heldDirectory {
 		// from.
 		r.dropDirectoryHold()
 	}
-	if r.inSubshell {
-		// **A copy never opens one of its own.** It inherits the descriptor
-		// its parent had, which is what a fork inherits and is what makes
-		// `mv ../d ../e; (cd .)` work; what it may not do is open a second
-		// one, because a copy is dropped rather than closed and there is no
-		// one place every kind of copy ends. Seven call sites clone a Runner
-		// and five of them reach endSubshell, which is exactly the shape that
-		// leaks a descriptor per command substitution and is caught two years
-		// later. So the answer here is nil, every caller reads that as "ask
-		// the name", and a subshell that has moved is back to what this shell
-		// did before the hold existed — for the one combination of having
-		// moved *and* being renamed out from under afterwards.
-		//
-		// And it is not only the leak. A hold taken at a subshell's `cd` is
-		// what `( cd s; …s removed and made again…; [ -e f ] )` needs to
-		// answer as zsh, bash, ksh93 and dash do (#6560), and it is an open
-		// on every `$(cd dir && …)`: measured 2026-10-15 on Darwin, 2000 of
-		// `x=$(cd /tmp && echo y)` went from 37 ms to 66 ms of CPU with the
-		// hold taken there (paired median 1.73x, 15 of 15 slower), and the
-		// bare open-dup-close-fstat it needs is ~7 µs against a ~19 µs
-		// substitution. That is a hot idiom paying for a corner, so it is
-		// left as filed rather than taken.
-		return nil
-	}
+	// A copy that has moved opens one of its own here, as the shell does —
+	// but only here, at the first ask, and never at its `cd`. The asks are
+	// the things that could change the directory under it or need it: an
+	// external command starting, a relative path going to the system, a
+	// file test, a glob, and a further copy being made (see clone, which
+	// asks on the parent's behalf so the copy inherits a descriptor, as a
+	// fork does). So `( cd s; ( cd .. && rm -rf s && mkdir s && touch s/f );
+	// [ -e f ] )` answers as zsh, bash, ksh93 and dash do — `n`, the glob
+	// matching nothing and an external `ls` listing nothing — because the
+	// inner copy's making took the hold before anything removed `s` (#6560).
+	//
+	// Not at the `cd`, which was measured and left: 2000 of `x=$(cd /tmp &&
+	// echo y)` went from 37 ms to 66 ms of CPU on Darwin with a hold taken
+	// there, a hot idiom paying ~7 µs of open-dup-close-fstat against a ~19
+	// µs substitution for a corner. A copy that only runs builtins and
+	// expands words never asks, and pays nothing. What is left outside the
+	// rule is a directory removed by something this copy did not start — a
+	// sibling element of a pipeline, a process of its own — before anything
+	// in the copy asked, and that is a race in a real shell as well.
+	//
+	// A copy's own hold is closed at endSubshell; a copy that ends elsewhere
+	// leaves it to the cleanup newHeldDirectory registers, which closes the
+	// descriptor when nothing can reach the hold any more.
 	// The open and the move out of the low numbers in one window — see
 	// newHeldDirectory and transientFds.
 	var held *heldDirectory

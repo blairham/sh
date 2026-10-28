@@ -263,7 +263,8 @@ func (r *Runner) literalElems(elems []*syntax.ArrayElem, readsSubscripts, bareIs
 	// And one list for the pathname stage, which runs once every element
 	// is expanded: the positions in out whose fields wait for it. See
 	// interp/pathnamestage.go (#6768).
-	var waiting []int
+	var waiting0 [8]int
+	waiting := waiting0[:0]
 	for _, el := range elems {
 		if r.expansionFailedHere(failedBefore) {
 			// An element that would not expand ends the list where it
@@ -1176,9 +1177,11 @@ func (r *Runner) expandLiteralElement(w *syntax.Word) []string {
 func (r *Runner) matchLiteralElements(out []literalElem, waiting []int) {
 	for _, at := range waiting {
 		el := &out[at]
-		var held []heldGlob
-		var list []string
-		list, held = holdGlob(list, held, el.fields, false, false)
-		el.fields = r.pathnameStage(list, held, nil)
+		// Each element is a run of its own, so the stage's loop is written
+		// out here rather than through a list that would have to be built
+		// for it: a literal is on the path a highlighter rebuilds on every
+		// keystroke, and an allocation per element was measured there
+		// (see dialect/zsh's TestALiteralDoesNotPrintItsElements).
+		el.fields = r.globFieldsUnlessSuppressed(el.fields, r.pathnameStageStopped())
 	}
 }

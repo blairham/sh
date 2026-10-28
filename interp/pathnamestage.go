@@ -79,8 +79,7 @@ func (r *Runner) pathnameStage(list []string, held []heldGlob, arm func([]string
 	for i := range held {
 		g := &held[i]
 		from, to := g.from+delta, g.to+delta
-		stopped := r.expandErr || r.unspecified || r.givingUpAlready() ||
-			r.progGlob.raise != nil || r.progGlob.refused != ""
+		stopped := r.pathnameStageStopped()
 		if g.armed && arm != nil && !stopped {
 			arm(list)
 		}
@@ -97,6 +96,14 @@ func (r *Runner) pathnameStage(list []string, held []heldGlob, arm func([]string
 		delta += len(out) - (to - from)
 	}
 	return list
+}
+
+// pathnameStageStopped reports whether the stage has nothing more to match:
+// an earlier run refused, or a failure has already ended the list. The runs
+// after that point are left as text.
+func (r *Runner) pathnameStageStopped() bool {
+	return r.expandErr || r.unspecified || r.givingUpAlready() ||
+		r.progGlob.raise != nil || r.progGlob.refused != ""
 }
 
 // shiftedBy is where a position in the list as it was built stands once the

@@ -6052,6 +6052,13 @@ func (r *Runner) clone() *Runner {
 	// And this runner's place in the fork tree, before the copy for the same
 	// reason: the copy's node hangs under it. See fdlineage.go.
 	fdNode := r.forkLineage()
+	// And the hold on this runner's directory, taken now where it is not
+	// held already, because a fork inherits the directory itself and not a
+	// name for it — and because the copy may be the thing that removes the
+	// directory this runner is in. For a runner that has not moved since it
+	// last held, which is every `$(…)` and `(…)` of an ordinary script, this
+	// is a comparison and no open. See holdDirectory (#6560).
+	r.holdDirectory()
 	c := *r
 	c.fdNode = fdNode
 	c.inSubshell = true

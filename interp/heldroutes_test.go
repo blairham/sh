@@ -6,6 +6,7 @@ package interp_test
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -83,6 +84,31 @@ func TestEveryRelativeRouteAsksTheDirectoryHeld(t *testing.T) {
 		}
 		if _, err := os.Stat(filepath.Join(d, "g")); err == nil {
 			t.Error("`: > g` wrote into the new directory")
+		}
+	})
+
+	t.Run("a subshell that moved, and a copy of it removed and remade the directory", func(t *testing.T) {
+		// The one route #6532 left: the copy holds nothing at its `cd`, and
+		// takes its hold at the first thing that could remove the directory
+		// — here, the inner copy being made — so the row answers as every
+		// shell in the panel does (#6560). The inner copy does the removing
+		// through this shell's own commands rather than through the test,
+		// which is what makes it a row about the copy and not the fixture.
+		d := filepath.Join(resolvedTempDir(t), "a")
+		if err := os.Mkdir(d, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		r, out := relativeProbeRunner(t, filepath.Dir(d))
+		runPart(t, r, "( cd a; ( cd .. && /bin/rm -rf a && /bin/mkdir a && /usr/bin/touch a/f ); "+
+			"if [ -e f ]; then echo y; else echo n; fi; printf '[%s]' *; echo; /bin/ls | /usr/bin/wc -l )\n")
+		if got, want := out.String(), "n\n[*]\n0\n"; !strings.HasSuffix(strings.ReplaceAll(got, " ", ""), want) {
+			t.Errorf("got %q, want it to end %q: the copy answered from the new directory", got, want)
+		}
+		// And the hold did not outlive the copy: a `cd` of the outer shell's
+		// own afterwards still answers from where it is.
+		runPart(t, r, "cd a; printf '[%s]' *; echo\n")
+		if got, want := out.String(), "[f]\n"; !strings.HasSuffix(got, want) {
+			t.Errorf("after the copy ended, got %q, want it to end %q", got, want)
 		}
 	})
 

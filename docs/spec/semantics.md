@@ -32797,6 +32797,33 @@ value is stored, so `s=5 kf` fires nothing in the column that scopes the
 prefix: the store lands in a cell the call just made and nothing was
 watching it (#3161).
 
+**A cell over a parameter the shell produces keeps the shell's type.**
+Measured 2026-10-27 on ksh93u+ 2012-08-01 under `-c` (#6859):
+
+| program | ksh93u+ |
+| --- | --- |
+| `function f { typeset -p SECONDS; }; SECONDS=5 f` | `typeset -x -F 3 SECONDS=5.000` |
+| `function f { echo ${SECONDS%.*}; }; SECONDS=5 f; echo ${SECONDS%.*}` | `5`, then `0` |
+| `SECONDS=abc f`, `SECONDS=5.5 f` | `0.000`, `5.500` |
+| `function f { typeset -p LINENO; }; LINENO=x f; typeset -p LINENO` | `typeset -x LINENO=1`, then `typeset -i LINENO=1` |
+| `function f { typeset -p RANDOM; echo $RANDOM; }; RANDOM=5 f; echo ${#RANDOM}` | `typeset -x RANDOM=5`, `5`, then a drawn number's digits |
+| `typeset -i v=1; function g { typeset -p v; }; v=2+2 g` (control) | `typeset -x v=2+2` |
+
+So `SECONDS` is a clock counting from the prefix's value for the length of
+the call, listed with the dialect's stated `-F 3`; `LINENO` keeps counting
+the body's own lines and lists with the stated integer letter dropped; and
+`RANDOM`, whose assignment seeds, is a plain exported cell. After the call
+each is the shell's own again — this shell's hidden cell read as an
+assignment after an `unset` and ended the producer for good, so `SECONDS`
+and `RANDOM` were simply gone afterwards. A script's own letters on a plain
+name are dropped from the cell, as the control shows, float and width
+letters included.
+
+Measured and not modeled: `LINENO=7 f` reads 6 in the body under `-c`, and
+from a script file reads the line the call is on, while listing 1; and a
+script's own `typeset -i SECONDS` makes the cell a plain `5`, where its
+`typeset -F 1 SECONDS` leaves the cell at the stated `-F 3`.
+
 ### What a call's prefix's entry *is*
 
 A prefix is an entry the command is shown, and the panel does not agree

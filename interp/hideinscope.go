@@ -731,10 +731,18 @@ func (r *Runner) suspendProducer(sc *scope, name string) {
 	if sc.holds(recProducer, name) {
 		return
 	}
-	own := r.shellOwn[name]
-	if !r.DynamicParameter(name) && !own {
+	if !r.DynamicParameter(name) && !r.shellOwn[name] {
 		return
 	}
+	sc.saveSuspendedProducer(name, r.takeProducerAside(name))
+}
+
+// takeProducerAside takes a name out of the produced tables and hands back
+// what it took, for whoever is going to put it back: a scope's hidden shadow
+// above, or a call's own cell over a produced parameter — see
+// Runner.restoreVar and savedVar.producer.
+func (r *Runner) takeProducerAside(name string) suspendedProducer {
+	own := r.shellOwn[name]
 	p := suspendedProducer{
 		shellOwn:    own,
 		scalar:      r.producersAt(name),
@@ -755,19 +763,25 @@ func (r *Runner) suspendProducer(sc *scope, name string) {
 	delete(r.dynamicArrayWriters, name)
 	delete(r.dynamicAssocWriters, name)
 	delete(r.dynamicDeclarations, name)
-	sc.saveSuspendedProducer(name, p)
+	return p
 }
 
 // resumeProducer puts a suspended name back into every table it came out of.
-//
-// The nil checks are the caller's half of the trap [putBack] records: a
-// function read out of a map that has no such key is a *typed* nil, and
-// registering one is a producer nothing can call.
 func (r *Runner) resumeProducer(sc *scope, name string) {
 	p, ok := sc.suspendedProducerOf(name)
 	if !ok {
 		return
 	}
+	r.putProducerBack(name, p)
+	sc.dropRecord(recProducer, name)
+}
+
+// putProducerBack is the half of resumeProducer that touches the tables.
+//
+// The nil checks are the caller's half of the trap [putBack] records: a
+// function read out of a map that has no such key is a *typed* nil, and
+// registering one is a producer nothing can call.
+func (r *Runner) putProducerBack(name string, p suspendedProducer) {
 	if p.scalar != nil {
 		r.producersPut(name, p.scalar)
 	}
@@ -795,7 +809,6 @@ func (r *Runner) resumeProducer(sc *scope, name string) {
 	if p.shellOwn {
 		r.MarkShellOwnParameter(name)
 	}
-	sc.dropRecord(recProducer, name)
 }
 
 // MarkHideInScope gives a name the hide-in-scope attribute from outside the

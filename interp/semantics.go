@@ -5509,8 +5509,41 @@ type Semantics struct {
 	// so where it fired is never read; BusyBox ash already counts the
 	// shell's own trap where the script stopped. zsh counts a subshell's
 	// from the `exit`'s line, or from the subshell's opening line when it
-	// ran off its end, which is a third answer and #6899's.
+	// ran off its end, which is a third answer and the field below.
 	SubshellExitTrapFiresWhereItStopped Answer
+
+	// SubshellExitTrapFiresAtItsOpeningLine counts a subshell's own EXIT
+	// trap as having fired on the line that opened the subshell when its
+	// body ran off its end — the `(`, a pipeline element's own first line,
+	// or the command holding a `$( … )`, a backquoted substitution or a
+	// `<( … )` — and on the line of the `exit` or of the failing command
+	// when one of those ended it. Measured 2026-10-27 on zsh 5.9.2 under
+	// `-f` over script files, with a three-line body whose second line
+	// fails and whose third writes `$LINENO` (#6899):
+	//
+	//	`(` on line 2, the trap on 2 or 3, body to line 6   line 2, L=2
+	//	`: |` on line 2 and `(` on line 3                   line 3
+	//	`{ … } | cat` with `{` on line 2                    line 2
+	//	`x=$(` on line 2; `echo a \` on 2 and `$(` on 3     line 2
+	//	`cat <(` on line 2; a backquote on line 2           line 2
+	//	`( … ) &`, `( … ) | cat`, `: | ( … )`, nested       the opening `(`
+	//	`exit 0` on line 8, inside an `if` or a `{ }`       line 8
+	//	`f` called on line 11 whose body exits              line 11
+	//	`set -e` and a `false` on line 9                    line 9
+	//	the shell's own trap, six-line script (control)     line 7
+	//
+	// and inside a function the same lines counted from the function, as
+	// every zsh location is. Every subshell shape, forked or not, where the
+	// axis above is about the shapes ksh93 does not fork. A `{ … }` as the
+	// last element of a pipeline runs in the shell itself in zsh, so its
+	// trap is the shell's own and is counted past the end. zsh alone: ksh93
+	// counts the last line the subshell ran, and bash and dash number a
+	// trap body from its own first line, so where it fired is never read.
+	//
+	// Not modeled: an `exit` inside text `eval` runs, or inside a sourced
+	// file, locates the trap in that text or file — `(eval):1:`,
+	// `./inc.sh:1:` — where this names the script.
+	SubshellExitTrapFiresAtItsOpeningLine Answer
 
 	// FunctionExitTrapReadsZeroOnAnExit shows a function-local EXIT trap a
 	// `$?` of 0 when an `exit` is what unwinds the call. The shell still
@@ -20409,6 +20442,13 @@ type Semantics struct {
 	// and only for EXIT, which has no line of its own. zsh says yes: its
 	// EXIT trap reports the line the parser stopped at. ksh93 says no, which
 	// makes an EXIT body read like a small script of its own.
+	//
+	// Past the end is where a script that **ran out** left the shell. One
+	// that `exit`, errexit or `${x?word}` ended is still on that command's
+	// line, and the yes counts the trap from there — measured 2026-10-27 on
+	// zsh 5.9.2, `exit 0` on line 6 of a six-line file locates the trap at
+	// 6 and the script running out at 7 (#6899); Runner.firedAt has the
+	// table, including the fatal errors that leave the shell past the end.
 	ExitTrapFiresPastTheEnd Answer
 
 	// ExitTrapFiresWhereTheScriptStopped counts the EXIT trap as having fired
@@ -35093,8 +35133,9 @@ func PosixSemantics() Semantics {
 		// however the call ends: ksh93. zsh says otherwise itself.
 		FunctionExitTrapSkippedByAGiveUp: No,
 		// A subshell's EXIT trap is counted as the shell's own is. ksh93
-		// says otherwise itself, and zsh's third answer is #6899.
-		SubshellExitTrapFiresWhereItStopped: No,
+		// says otherwise itself, and zsh says its own third answer itself.
+		SubshellExitTrapFiresWhereItStopped:   No,
+		SubshellExitTrapFiresAtItsOpeningLine: No,
 		// Standard input is read at a prompt under `-i` whatever kind of
 		// descriptor it is. ksh93 says otherwise itself.
 		InteractiveRewindableStdinIsAScript: No,

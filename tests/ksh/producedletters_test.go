@@ -25,7 +25,10 @@ func TestAScriptsLettersReachAProducedParameter(t *testing.T) {
 		{`typeset -F 1 SECONDS; echo $SECONDS; typeset -F 3 SECONDS; echo $SECONDS`, "0\\.\\d\n0\\.\\d{3}\n"},
 		{`typeset -F SECONDS; echo ${#SECONDS}`, "12\n"},
 		{`typeset -F 5 SECONDS; a=$SECONDS; b=$SECONDS; typeset -F 2 SECONDS; typeset -p SECONDS`, "typeset -F 2 SECONDS=0\\.\\d{2}\n"},
-		{`typeset -E 2 SECONDS; typeset -p SECONDS; SECONDS=1.23456; echo $SECONDS`, "typeset -E 2 SECONDS=0(\\.001)?\n1.2\n"},
+		// The stated three places are read first, so the listing never has
+		// more than three: a raw clock in `-E 2` would list `0.00042`. How
+		// many milliseconds a slow runner has spent by then is not the row.
+		{`typeset -E 2 SECONDS; typeset -p SECONDS; SECONDS=1.23456; echo $SECONDS`, "typeset -E 2 SECONDS=0(\\.\\d{1,3})?\n1.2\n"},
 		{`typeset +F SECONDS; a=$SECONDS; b=$SECONDS; [ "$a" = "$b" ] && echo frozen; SECONDS=3; echo "[$SECONDS]"`, "frozen\n\\[3\\]\n"},
 		{`typeset -i SECONDS; typeset -p SECONDS; echo "[$SECONDS]"`, "typeset -i SECONDS=0\n\\[0\\]\n"},
 		{`typeset -i16 SECONDS; typeset +i SECONDS; typeset -p SECONDS; SECONDS=5; echo "[$SECONDS]"`, "SECONDS=16#0\n\\[5\\]\n"},

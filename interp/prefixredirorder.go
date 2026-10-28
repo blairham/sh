@@ -223,6 +223,14 @@ func (r *Runner) walkThePrefixBeforeTheRedirections(assigns []*syntax.Assign, wa
 		if !r.prefixEntryHasATraceableValue(a) {
 			continue
 		}
+		// An element write's subscript is read where the entry stands, its
+		// words ahead of the value where the dialect expands them first and
+		// its arithmetic after — traced or not, since the walk is where the
+		// shell that takes it reads it. See interp/prefixsubscriptinturn.go.
+		inTurn, _ := r.readPrefixSubscriptBeforeTheValue(a)
+		if r.prefixWalkFailed(walk) {
+			break
+		}
 		joined := r.recordPrefixTraceValue(a, r.prefixExpansion(a))
 		if r.prefixWalkFailed(walk) {
 			// The value would not expand, and nothing of it is traced: the
@@ -232,6 +240,14 @@ func (r *Runner) walkThePrefixBeforeTheRedirections(assigns []*syntax.Assign, wa
 			// complaint, and ends, in bash 5.3.20; here it wrote `+ b=` and
 			// ran on to `after` (#5546).
 			break
+		}
+		if inTurn {
+			// The walk ahead of the redirections is the persisting prefix's,
+			// so the store it reads for is this shell's.
+			r.placePrefixSubscript(a, true)
+			if r.prefixWalkFailed(walk) {
+				break
+			}
 		}
 		r.holdPrefixEntry(&held, a, joined)
 		if !traceEach {

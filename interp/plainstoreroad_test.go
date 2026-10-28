@@ -32,19 +32,18 @@ var theFullRoad = map[string][]string{
 		"assignValue", "assignWholeArraySubscript", "assocDeclared", "assocsAt", "tracedElementPosition",
 		"clearAttributesAReCreationDrops", "clearTypeAttributes", "compoundAssignedFromAName",
 		"disciplineWrite", "elementValue", "endHiddenWatch", "endProducerUnsetEnded",
-		"expandArithText", "expansionFailedHere", "expansionHasFailed", "failedSubscript", "fatal",
-		"fatalQuiet", "fixedContainerKeepsItsKind", "fixedSlotRefusesABareArrayLiteral",
+		"fatal", "fatalQuiet", "fixedContainerKeepsItsKind", "fixedSlotRefusesABareArrayLiteral",
 		"flaggedAssignPlace", "frozenNameTakesACompoundBody", "frozenScalarRetyped",
-		"globbedElementIsAList", "globbedElementValue", "indexedSubscriptKeepsItsQuoting",
-		"indirectElement", "isCompoundVariable", "isNameref", "joinWord", "markForAllexport",
-		"namerefArrayLiteralTarget", "namerefCompoundBodyStore", "namerefTarget", "readingQuotedText",
+		"globbedElementIsAList", "globbedElementValue",
+		"indirectElement", "isCompoundVariable", "isNameref", "markForAllexport",
+		"namerefArrayLiteralTarget", "namerefCompoundBodyStore", "namerefTarget",
 		"referredToParameter", "refuseNamerefAim", "refuseUnaimedReference",
 		"refusesEmptyAssignSubscript", "resolvedSubscript", "scalarAssignValue",
 		"scalarStoreReplacesACompound", "setArrayElem", "setAssocElem", "setVarAs",
 		"spanIsBelowTheFirstElement", "spanReplacesElements", "spliceCharacterSpan",
 		"spliceElementSpan", "storeGlobbedScalarAssign", "storePlainScalar", "storesAPlainScalar",
-		"subscriptAsWritten", "subscriptFailure", "subscriptSplicesCharacters",
-		"subscriptValueAsWritten", "suppressDiscipline", "tableRefusesAScalarStore",
+		"subscriptAsWritten", "subscriptSplicesCharacters",
+		"suppressDiscipline", "tableRefusesAScalarStore",
 		"unaimedReferenceBase", "watchHiddenKinds", "appendArrayElem", "arrayElemsOfTheName",
 		"diag", "retypingFrozen", "unspecified", "assignmentGaveUp",
 		// The freeze, which a plain store never meets: a frozen name carries
@@ -56,6 +55,10 @@ var theFullRoad = map[string][]string{
 		"armAssignSubscript", "expanded", "valueAheadOfTheSubscript",
 		// A refused element's subscript as written (#6762), on the same road.
 		"writtenIndex",
+		// An indexed element's two readings of its subscript, and the
+		// record of a prefix walk that made them ahead of the store — the
+		// element road, which storesAPlainScalar refuses (#6771).
+		"indexedAssignSubscriptText", "indexedAssignPosition", "subscriptReadAhead", "indexReadAhead",
 		// A dotted name's missing parent — storesAPlainScalar takes only an
 		// identifier, which has no dot in it (#6628).
 		"refuseAStoreWithNoParent",

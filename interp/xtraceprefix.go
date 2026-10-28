@@ -283,6 +283,9 @@ type prefixTraceRecords struct {
 	joins   []string
 	globs   []prefixGlobMatch
 	speaker prefixValueSpeaker
+	// subscripts is what the walk read of each subscripted entry's
+	// subscript. See interp/prefixsubscriptinturn.go.
+	subscripts []*prefixSubscriptRead
 }
 
 // recordPrefixTraceValue keeps this entry's expansion for the trace and for
@@ -333,6 +336,15 @@ func (r *Runner) prefixTraceWords(assigns []*syntax.Assign, d *Diagnostics) []st
 			continue
 		}
 		orig := a
+		e := r.prefixGlobTraced(orig)
+		if sub, ok := r.prefixSubscriptTraced(orig); ok {
+			// The subscript as the walk read it, in the column whose line
+			// waits for that. See interp/prefixsubscriptinturn.go.
+			if e == nil {
+				e = &expandedAssign{assign: orig}
+			}
+			e.subscript, e.subscriptSet = sub, true
+		}
 		if _, isArray := r.prefixArrayLiteral(a); !isArray && a.IsArray && a.Index == nil && len(a.Members) == 0 {
 			// An array literal read as its text is a scalar, and is written
 			// as one: measured 2026-10-15 on bash 5.3.20, `set -x; x=(a
@@ -353,10 +365,10 @@ func (r *Runner) prefixTraceWords(assigns []*syntax.Assign, d *Diagnostics) []st
 			}
 			plain := *a
 			plain.Append = false
-			words = append(words, r.traceAssign(&plain, joined, r.prefixGlobTraced(orig), d))
+			words = append(words, r.traceAssign(&plain, joined, e, d))
 			continue
 		}
-		words = append(words, r.traceAssign(a, value, r.prefixGlobTraced(orig), d))
+		words = append(words, r.traceAssign(a, value, e, d))
 	}
 	return words
 }

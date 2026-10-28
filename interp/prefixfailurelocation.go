@@ -137,6 +137,14 @@ func aPrefixValueCanFail(assigns []*syntax.Assign) bool {
 		if !a.Operand && (wordCanWrite(a.Value) || strings.IndexByte(a.Name, '.') >= 0) {
 			return true
 		}
+		// And a subscript, whose arithmetic can fail whatever its words
+		// are, and which a prefix walk reads in turn beside the value — see
+		// interp/prefixsubscriptinturn.go. Measured 2026-10-28 on ksh93u+,
+		// `b[1/0]=v :` is `S: line 2:` and `b[1/0]=v echo hi` is `S[2]:`,
+		// the two shapes of the table above.
+		if prefixIsSubscripted(a) {
+			return true
+		}
 	}
 	return false
 }

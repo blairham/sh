@@ -2341,6 +2341,11 @@ type Runner struct {
 	// see interp/prefixglob.go. Per-command scratch and not a table, kept
 	// beside the two above and cleared with them, for the same reasons.
 	prefixGlobMatches []prefixGlobMatch
+	// prefixSubscripts is what this command's prefix walk read of each
+	// subscripted entry's subscript, in turn, for the line that writes it and
+	// the store that takes it — see interp/prefixsubscriptinturn.go.
+	// Per-command scratch beside the slices above, for their reasons.
+	prefixSubscripts []*prefixSubscriptRead
 	// prefixHeldNames are the names the running builtin's own assignment
 	// prefix is holding, and prefixKeptNames those of them a declaration
 	// inside it has taken for the shell rather than for the command — see
@@ -9944,12 +9949,14 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 		assigns: r.prefixTraceAssigns, values: r.prefixTraceValues,
 		early: r.prefixTracedEarly, joins: r.prefixTraceJoins,
 		globs: r.prefixGlobMatches, speaker: r.prefixSpeaker,
+		subscripts: r.prefixSubscripts,
 	}
 	defer func() {
 		r.writeHeldPrefixTrace()
 		r.prefixTraceAssigns, r.prefixTraceValues = outerTrace.assigns, outerTrace.values
 		r.prefixTracedEarly = outerTrace.early
 		r.prefixTraceJoins, r.prefixGlobMatches = outerTrace.joins, outerTrace.globs
+		r.prefixSubscripts = outerTrace.subscripts
 		r.prefixSpeaker = outerTrace.speaker
 		// And a child's command run by this command no longer has the open
 		// line in hand. See openTraceLine.keptForAChild.
@@ -10231,31 +10238,72 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 		// a=1` and the complaint, and no `+ b=` (#5546).
 		walk := r.beginPrefixWalk(c.Assigns)
 		kind := r.prefixCommandOf(argv)
+		// The shell the walk expands in, which for a program is the copy its
+		// own route expands in — a side effect in a value or a subscript is
+		// the child's, and reading it here in this shell made `set -x`
+		// change the answer: `i=1; y=$((i++)) /usr/bin/true` left `i` at 2
+		// traced and at 1 untraced, where ksh93u+ leaves it at 1 either way.
+		// What the walk made comes back to this shell below, so the route
+		// reads it and expands nothing twice. See
+		// Runner.prefixExpansionShell.
+		//
+		// Only where that route is the one the command takes: `command
+		// /usr/bin/true` is the `command` builtin's, which expands its
+		// prefix in this shell, and a walk that expanded in a copy made the
+		// trace disagree with it.
+		_, aBuiltinRunsIt := r.lookupBuiltin(argv[0])
+		programsOwn := kind.kind == prefixBeforeExternal && !aBuiltinRunsIt
+		ex := r
+		if programsOwn {
+			if ex = r.prefixExpansionShell(c.Assigns); r.unspecified {
+				return nil
+			}
+		}
+		// Whether the store this walk reads a subscript for is this shell's,
+		// which is what decides whether its warning is owed to it — and
+		// whether the walk reads it at all: a program's prefix is read in
+		// its child, which the program's own route makes, and the `command`
+		// builtin's route makes none and never reads the subscript.
+		storedHere := !r.subscriptedPrefixReachesAChild(kind)
+		readsInTurn := storedHere || programsOwn
 		// Held across the entries, so each value sees the ones in front of
 		// it. See expandPrefixTraceValuesHolding.
 		var held heldPrefix
 		for i := range c.Assigns {
 			one := c.Assigns[i : i+1]
-			if a := one[0]; r.attrHas(a.Name, attrReadonly) && !a.Operand && !r.prefixRefusalApplies(kind) {
+			a := one[0]
+			if r.attrHas(a.Name, attrReadonly) && !a.Operand && !r.prefixRefusalApplies(kind) {
 				// A frozen name the dialect does not refuse here is a
 				// prefix like any other, and is written: measured
 				// 2026-10-02, `readonly r; set -x; a=1 r=2 true` writes
 				// `+ true`, `+ a=1` and `+ r=2` on ksh93u+ (#5546).
-				r.recordPrefixTraceValue(a, r.prefixExpansion(a))
+				ex.recordPrefixTraceValue(a, ex.prefixExpansion(a))
 			}
-			r.expandPrefixTraceValuesHolding(one, &held)
-			if r.prefixWalkFailed(walk) {
+			// An element write's subscript, read in turn and written as it
+			// resolved. See interp/prefixsubscriptinturn.go.
+			inTurn := false
+			if readsInTurn {
+				inTurn, _ = ex.readPrefixSubscriptBeforeTheValue(a)
+			}
+			if !ex.prefixWalkFailed(walk) {
+				ex.expandPrefixTraceValuesHolding(one, &held)
+			}
+			if inTurn && !ex.prefixWalkFailed(walk) {
+				ex.placePrefixSubscript(a, storedHere)
+			}
+			if ex.prefixWalkFailed(walk) {
 				break
 			}
-			if r.dottedPrefixIsNotTaken(one[0], kind) {
+			if r.dottedPrefixIsNotTaken(a, kind) {
 				// Refused once the walk below reaches it, and never written:
 				// `set -x; a.b=1 true` is `+ true` and the refusal. See
 				// interp/dottednoparent.go.
 				break
 			}
-			r.tracePrefixAfterTheCommand(one)
+			ex.tracePrefixAfterTheCommand(one)
 		}
-		held.release(r)
+		held.release(ex)
+		r.takeThePrefixWalkFrom(ex)
 		if r.givesUpForAFailedPrefix(walk, r.prefixCommandOf(argv)) {
 			return nil
 		}
@@ -11184,6 +11232,19 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 		// being appended and `.set` with the whole value. Expanded here
 		// either way, so a substitution in the right-hand side runs once and
 		// runs where the trace wrote it.
+		//
+		// An element write's subscript is read by the child too, in turn —
+		// its words ahead of the value where the dialect expands them first,
+		// its arithmetic after — and a subscript that will not evaluate
+		// costs the command: measured 2026-10-28, `b[1/0]=v /usr/bin/true;
+		// echo after $?` writes the division and `after 1` in ksh93u+ and
+		// zsh 5.9.2, where this route never read the subscript and ran the
+		// program at 0. Taken from the walk where `set -x` read it already.
+		// See interp/prefixsubscriptinturn.go.
+		inTurn, _ := ex.readPrefixSubscriptBeforeTheValue(a)
+		if ex.prefixWalkFailed(walk) {
+			break
+		}
 		part := ex.prefixExpansion(a)
 		value := ex.prefixJoined(a, part)
 		if r.refuseADottedPrefix(a, value, false, false) {
@@ -11216,7 +11277,11 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 			// there is nothing to hand over either. The value has expanded
 			// above because that much is measured: `arr[1]=$(echo side >&2;
 			// echo v) /usr/bin/true` writes `side` in ksh93 and zsh and
-			// leaves the element where it was.
+			// leaves the element where it was. And so is the subscript, in
+			// the child's copy, as the store would read it.
+			if inTurn && !ex.prefixWalkFailed(walk) {
+				ex.placePrefixSubscript(a, false)
+			}
 			continue
 		}
 		// The report waits for the value to have expanded, because the order
@@ -16227,18 +16292,16 @@ func (r *Runner) assign(ctx context.Context, a *syntax.Assign) {
 		// same way, as the identical text inside `$(( ))`. It used to be a
 		// wording of our own that named the array rather than the expression,
 		// and it carried on to the next command.
-		var text string
-		failedBefore := r.expansionHasFailed()
-		if r.indexedSubscriptKeepsItsQuoting(a.IndexText, a.Name) {
-			text = r.expandArithText(a.IndexText, arithTextWritten)
-		} else {
-			endText := r.readingQuotedText()
-			text = r.joinWord(a.Index)
-			endText()
-		}
-		if r.expansionFailedHere(failedBefore) {
-			// See the same stop in subscriptOver (#5608).
-			return
+		//
+		// Read already where a prefix walk read it in turn, and taken from
+		// there rather than expanded again. See
+		// interp/prefixsubscriptinturn.go.
+		text, ahead := r.subscriptReadAhead(a)
+		if !ahead {
+			var expanded bool
+			if text, expanded = r.indexedAssignSubscriptText(a); !expanded {
+				return
+			}
 		}
 		// What a refusal quotes back is the subscript as it was *written*,
 		// which is not the text the arithmetic reads: `i=-9; a[$i]=q` is
@@ -16323,15 +16386,13 @@ func (r *Runner) assign(ctx context.Context, a *syntax.Assign) {
 			r.spliceCharacterSpan(a.Name, from, to, value, false)
 			return
 		}
-		// Told what the source spelled, because that is what decides whether
-		// a comma still in the expanded text separates anything: measured,
-		// `a=(p q r s); i="1,2"; a[$i]=Z` writes the *first* element in the
-		// shell with ranges, where a written `a[2,3]+=(x)` reads the comma
-		// as the operator it is (#2160).
-		idx, err := r.subscriptValueAsWritten(subject, text)
-		if err != nil {
-			r.failedSubscript("%s\n", r.subscriptFailure(text, err))
-			return
+		// The position, evaluated now or taken from the walk that evaluated
+		// it in turn. See Runner.indexedAssignPosition.
+		idx, ok := r.indexReadAhead(a)
+		if !ok {
+			if idx, ok = r.indexedAssignPosition(a, text); !ok {
+				return
+			}
 		}
 		if r.refuseTheHeldFreeze(a) {
 			// A frozen name, refused at the store: after the value, the

@@ -1338,9 +1338,13 @@ func (r *Runner) endSubscriptValue(w *syntax.Word) (int, bool) {
 // the group is not part of the key — the same accessor the read side uses,
 // which is what keeps `m[(e)k]=Z` and `${m[(e)k]}` naming one element.
 func (r *Runner) assignAssocElement(a *syntax.Assign) {
-	key, ok := r.assocAssignKey(a.Name, a.Subscript())
+	// The key a prefix walk read in turn, where one did, rather than its
+	// words expanded a second time. See interp/prefixsubscriptinturn.go.
+	key, ok := r.subscriptReadAhead(a)
 	if !ok {
-		return
+		if key, ok = r.assocAssignKey(a.Name, a.Subscript()); !ok {
+			return
+		}
 	}
 	// A table's subscript resolves to a *key* rather than to a number, and
 	// the column that traces what a subscript came to writes that key:

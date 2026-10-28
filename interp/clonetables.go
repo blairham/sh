@@ -431,6 +431,8 @@ func (c *Runner) ownTables(r *Runner) {
 	// and the same reason — TestACloneOwnsEveryStack is the instrument that
 	// says so, and it fails with this line removed.
 	c.prefixGlobMatches = slices.Clone(r.prefixGlobMatches)
+	// And what its prefix walk read of each subscript, the same reading.
+	c.prefixSubscripts = slices.Clone(r.prefixSubscripts)
 	// The coprocess near ends a shell is to close at the end of its life, and
 	// the one stack here that is **emptied** rather than copied.
 	//

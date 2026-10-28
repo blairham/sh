@@ -240,3 +240,47 @@ func (r *Runner) arithTextTouchesState(t string) bool {
 	}
 	return false
 }
+
+// indexedAssignSubscriptText is an indexed element write's subscript, its
+// words expanded into the expression the arithmetic will read — the first of
+// the store's two readings of it. False where the words would not expand,
+// which has been said (#5608).
+//
+// One function because two callers read it: the store, and the prefix walk
+// that reads a prefix entry's subscript in turn ahead of the store (see
+// interp/prefixsubscriptinturn.go). Two copies of this is how the walk's line
+// and the store's element would come to disagree.
+func (r *Runner) indexedAssignSubscriptText(a *syntax.Assign) (string, bool) {
+	failedBefore := r.expansionHasFailed()
+	var text string
+	if r.indexedSubscriptKeepsItsQuoting(a.IndexText, a.Name) {
+		text = r.expandArithText(a.IndexText, arithTextWritten)
+	} else {
+		endText := r.readingQuotedText()
+		text = r.joinWord(a.Index)
+		endText()
+	}
+	if r.expansionFailedHere(failedBefore) {
+		// See the same stop in subscriptOver (#5608).
+		return "", false
+	}
+	return text, true
+}
+
+// indexedAssignPosition is the second reading: the expression evaluated to a
+// position, after the value. A subscript that will not evaluate is reported
+// in the words the identical text inside `$(( ))` earns, and is false.
+//
+// Told what the source spelled as well as what it came to, because that is
+// what decides whether a comma still in the expanded text separates anything:
+// measured, `a=(p q r s); i="1,2"; a[$i]=Z` writes the *first* element in the
+// shell with ranges, where a written `a[2,3]+=(x)` reads the comma as the
+// operator it is (#2160).
+func (r *Runner) indexedAssignPosition(a *syntax.Assign, text string) (int, bool) {
+	idx, err := r.subscriptValueAsWritten(subscriptSubject(r.writtenIndex(a), text), text)
+	if err != nil {
+		r.failedSubscript("%s\n", r.subscriptFailure(text, err))
+		return 0, false
+	}
+	return idx, true
+}

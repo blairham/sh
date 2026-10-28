@@ -217,6 +217,14 @@ func (r *Runner) prefixStoreFoldsThroughTheLetters(a *syntax.Assign) bool {
 // to the reference, leaving the target holding the binding the prefix was
 // supposed to displace. See interp/namerefprefix.go (#4110).
 func (r *Runner) prefixStore(ctx context.Context, a *syntax.Assign, landsOn string, stores, fresh bool) {
+	// An element write's subscript is read in turn where no walk read it
+	// ahead — its words before the value in the dialect that expands them
+	// first — so the store reads its pieces in the order the trace does. See
+	// interp/prefixsubscriptinturn.go.
+	inTurn, expanded := r.readPrefixSubscriptBeforeTheValue(a)
+	if !expanded {
+		return
+	}
 	value := r.prefixExpansion(a)
 	if !r.assignmentGaveUp() && r.refuseADottedPrefix(a, value, true, stores) {
 		// A dotted name the command will not take. See
@@ -243,12 +251,19 @@ func (r *Runner) prefixStore(ctx context.Context, a *syntax.Assign, landsOn stri
 		// branch of that switch is a shape a subscript can be written in and
 		// a second copy of the dispatch is how the two come to disagree. The
 		// value is handed over already expanded, the way the trace hands one
-		// over, so `a[1]=$(date) cmd` runs its substitution once.
+		// over, so `a[1]=$(date) cmd` runs its substitution once — and so is
+		// the subscript, where the walk read it in turn, so `a[i++]=v cmd`
+		// steps `i` once. See interp/prefixsubscriptinturn.go.
 		if !stores {
 			defer r.suppressDiscipline(a.Name, disciplineSet)()
 			defer r.suppressDiscipline(a.Name, disciplineAppend)()
 		}
-		r.withPreparedValue(ctx, &expandedAssign{assign: a, value: value})
+		if inTurn && !r.placePrefixSubscript(a, true) {
+			return
+		}
+		e := &expandedAssign{assign: a, value: value}
+		r.takePrefixSubscriptRead(e)
+		r.withPreparedValue(ctx, e)
 		return
 	}
 	if elems, ok := r.prefixArrayLiteral(a); ok {

@@ -280,9 +280,12 @@ func (r *Runner) prefixExpansionShell(assigns []*syntax.Assign) *Runner {
 
 // prefixValueMayChangeTheShell is whether expanding a prefix's value could
 // write to the shell: arithmetic, a parameter expansion that assigns or
-// subscripts, or an array literal, whose subscripts are arithmetic.
+// subscripts, or an array literal, whose subscripts are arithmetic — or the
+// entry's own subscript, which is arithmetic or a key's words, and which the
+// child reads too: `i=1; b[i++]=v /usr/bin/true` leaves `i` at 1 in ksh93u+
+// and zsh 5.9.2. See interp/prefixsubscriptinturn.go.
 func prefixValueMayChangeTheShell(a *syntax.Assign) bool {
-	if a.IsArray || len(a.Elems) > 0 {
+	if a.IsArray || len(a.Elems) > 0 || prefixIsSubscripted(a) {
 		return true
 	}
 	if a.Value == nil {

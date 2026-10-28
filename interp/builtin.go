@@ -6895,11 +6895,13 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 	//	read -a 'A[0]' <<< "x y"     bash 5.3.20  `A[0]': not a valid
 	//	                             identifier, 1, no A afterwards
 	//	read -A 'A[0]' <<< "x y"     ksh93u+      0, and A is (x y) — the
-	//	                             subscript dropped
+	//	                             element dropped and the array filled
+	//	                             from its first element, which is
+	//	                             Runner.readArrayIntoAnIndexedElement
 	//
 	// Here the bash spelling answered 0 and made a parameter *called* `A[0]`
 	// holding the words, so `declare -p A` said the array the script meant
-	// was not found. `-A` is untouched and keeps ksh93's answer.
+	// was not found. `-A` keeps the subscript for its store to read.
 	//
 	// Through a reference first, if the name is one, so the judgement is on
 	// what the fill would reach: `declare -n e=XXX[0]; read -a e` is the same
@@ -7184,6 +7186,7 @@ func (r *Runner) readStoreTheArray(
 	defaulted bool,
 	refused *bool,
 ) (int, bool) {
+	gaveUp := 0
 	switch {
 	case !echo.elements(r, elems):
 		// `read -e`: the elements were written and the array is left as it
@@ -7216,6 +7219,19 @@ func (r *Runner) readStoreTheArray(
 	case r.readArrayIntoATableKey(array, elems):
 		// A table's element takes the words as an array of its own. See
 		// Runner.readArrayIntoATableKey (#6685).
+	case r.readArrayIntoAnIndexedElement(array, elems, &gaveUp):
+		// An indexed array's element: the words refill the array from its
+		// first element in one shell and splice over the element in the
+		// other. See Runner.readArrayIntoAnIndexedElement (#6869).
+		if r.ctl == controlExit {
+			// The store's own refusal, reported as the freeze's is.
+			return r.readArrayRefusalStatus(own), true
+		}
+		if gaveUp != 0 {
+			// A subscript the store refused with the line going on, as
+			// `read 'b[1/0]'` is refused: the builtin stops there at 1.
+			return gaveUp, true
+		}
 	default:
 		r.setArrayForgettingARetypedHide(array, elems)
 		if r.ctl == controlExit {

@@ -2281,6 +2281,10 @@ func Semantics() interp.Semantics {
 	// pre-set `reply` untouched. `reply` is zsh's parameter and not one this
 	// shell has ever heard of.
 	s.ReadArrayDefault = interp.ReadArrayDefaultIsAPlainRead
+	// `b=(x y); read -A 'b[1]' <<< 'p q'` is `(p q)`: the element dropped and
+	// the array filled from the first. See
+	// interp.Semantics.ReadArrayIntoAnElementRefillsTheArray (#6869).
+	s.ReadArrayIntoAnElementRefillsTheArray = interp.Yes
 	// A second operand is read on rather than refused here: `read -A a b`
 	// fills `a` and clears `b` at 0, where the other shell with the letter
 	// declines the line. Measured 2026-09-26 on ksh93u+ 2012-08-01 (#4622).

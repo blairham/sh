@@ -2903,6 +2903,61 @@ type Semantics struct {
 	// the other two have no array letter at all.
 	ReadArrayDefault ReadArrayDefaultStyle
 
+	// ReadArrayIntoAnElementRefillsTheArray is `read -A 'b[i]'` over an
+	// **indexed** array: the element `i` is taken out and the words fill the
+	// array from its first element on, over whatever stood there, with the
+	// rest kept. A name holding a string is the one-element array it is
+	// promoted to, so the first word writes over it; a name holding nothing
+	// becomes the words. The other answer lands the words where the element
+	// literal `b[i]=(words)` lands them in that dialect — in the one that
+	// splices, over the element, padded out to it past the end, and refused
+	// over a string and over a table's key.
+	//
+	// Measured 2026-10-16, 2026-10-27 and 2026-10-28, `-c`, each read back
+	// with `typeset -p`:
+	//
+	//	                                        ksh93u+ 2012-08-01   zsh 5.9.2 (1-based)
+	//	b=(x y); read -A 'b[1]' <<< 'p q'       (p q)                ( p q y )
+	//	b=(x y z); read -A 'b[2]' <<< p         (p y)                ( x p z )
+	//	b=(x y z w); read -A 'b[1]' <<< p       ([0]=p [2]=z [3]=w)  ( p y z w )
+	//	b=(x y z w); read -A 'b[7]' <<< p       (p y z w)            ( x y z w '' '' p )
+	//	b=(x y z); read -A 'b[5]' <<< p         (p y z)              ( x y z '' p )
+	//	read -A 'z[1]' <<< 'p q'                (p q)                ( p q )
+	//	read -A 'z[2]' <<< 'p q'                (p q)                ( '' p q )
+	//	z=s; read -A 'z[1]' <<< 'p q'           (p q)                z: attempt to assign
+	//	                                                             array value to non-array
+	//	typeset -A m; m[k]=1; read -A 'm[k]'    ([k]=(p q) ) — nests m: attempt to set slice
+	//	                                                             of associative array
+	//	typeset -a b; b[3]=(o1 o2);
+	//	  read -A 'b[3]' <<< p                  ([3]=(p) )           ( '' '' p o2 )
+	//
+	// The last row is the element holding an array of its own, which takes
+	// the words as that array in the dialect that nests — replaced, where a
+	// table's key is written over in place — and is not this question; zsh
+	// has no such element, and splices. Nor is a table's key, which
+	// SubscriptedArrayLiteral already answers for both, nor the whole-array
+	// spelling, which StoreOperandWholeArraySubscript answers as it does for
+	// `read 'b[@]'`. The subscript is read once and refused as the scalar
+	// store through the same operand refuses it. Asked only where `read -A`
+	// names one element of an indexed array, so a plain `read -A b` never
+	// reaches it (#6869).
+	//
+	// ksh93's reading looks like an accident of how it resolves the name
+	// rather than a design, and is modeled because this shell's answer was a
+	// silent nothing at 0, which matched no shell measured. That call was
+	// Claude's, under the maintainer's standing instruction to keep the lane
+	// moving, and not the maintainer's.
+	//
+	// unpinned bash: its spelling is `-a`, whose name must be plain —
+	// `read -a 'b[1]'` is `not a valid identifier` — so no line of bash
+	// reaches the store; TestReadArrayIntoAnIndexedElementRefills pins the
+	// answer's effect in the two dialects that do.
+	//
+	// unpinned dash: no array letter and no arrays — the same test.
+	//
+	// unpinned ash: the same.
+	ReadArrayIntoAnElementRefillsTheArray Answer
+
 	// ReadArrayTakesOneNameOnly refuses a `read -A` that names a second
 	// operand, where the other shell with the letter reads into the first
 	// and **clears** the rest.
@@ -35416,6 +35471,8 @@ func PosixSemantics() Semantics {
 		ArithStoreIntoAFrozenTableIsTaken: No,
 		// And no literal to store through one.
 		FrozenContainerTakesAnElementLiteral: No,
+		// No array letter, so no element for `read -A` to name.
+		ReadArrayIntoAnElementRefillsTheArray: No,
 		// And no keyed literal to build a pair at a time.
 		TableLiteralStoresEachElementAsItIsExpanded: No,
 		// And a declaration's operands reach the utility expanded together:

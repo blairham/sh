@@ -2573,6 +2573,7 @@ func Semantics() interp.Semantics {
 	s.BadNameDeclaresTheOperandsAfterIt = interp.No
 	s.BadNameEndsTheDeclaringNotTheAssigning = interp.No
 	s.FrozenContainerTakesAnElementLiteral = interp.No
+	s.ReadArrayIntoAnElementRefillsTheArray = interp.No
 	s.InteractiveSelectsEmacs = interp.No
 	// A line the prompt refused is not counted. See
 	// Semantics.PromptRefusedLineIsNotCounted (#6319).

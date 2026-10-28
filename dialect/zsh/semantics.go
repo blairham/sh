@@ -2140,6 +2140,9 @@ func Semantics() interp.Semantics {
 	// `REPLY`, and `reply=scalar; read <<<'plain'` leaves `reply` alone and
 	// puts the line in `REPLY`.
 	s.ReadArrayDefault = interp.ReadArrayDefaultIsTheArrayReply
+	// The words splice over the element as `b[2]=(p q)` does: `( x p q z )`.
+	// See interp.Semantics.ReadArrayIntoAnElementRefillsTheArray (#6869).
+	s.ReadArrayIntoAnElementRefillsTheArray = interp.No
 	// And a *second* operand is a line this shell declines: `read -A a b`
 	// is `only one array argument allowed` at 1 with nothing read, where
 	// the other shell with the letter fills the first name and clears the

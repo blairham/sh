@@ -2886,6 +2886,11 @@ func Semantics() interp.Semantics {
 	// through `-c`, where zsh's does not (#6666).
 	s.FatalErrorOnACommandStringSkipsTheExitTrap = interp.No
 	s.ExitTrapRunsInsideTheExitingCall = interp.No
+	// An EXIT trap running because the shell gave up over an error shows
+	// the `$?` from before the failing command — `function f { trap 'echo
+	// ft=$?' EXIT; (exit 5); echo $((1/0)); }; f` is `ft=5` and the caller
+	// sees 1; the same for the shell's own trap. Measured 2026-10-27 (#6873).
+	s.ExitTrapAfterAGiveUpSeesEarlierStatus = interp.Yes
 	// A subshell's own EXIT trap fires where the subshell stopped (#6720):
 	// the last line it ran, which for a body that ran out is its last
 	// command and never the `(` — `(trap … EXIT` on line 2 with the last

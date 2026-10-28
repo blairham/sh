@@ -26566,6 +26566,43 @@ the call; the shell still leaves with the `exit`'s status. zsh 5.9.2:
 every route and with `TRAPEXIT` alike, where `return 4` shows 4; ksh93u+
 shows 3 (#6836).
 
+**`ExitTrapAfterAGiveUpSeesEarlierStatus`** — bash no · dash no · ksh93 yes · zsh no · ash no
+
+Shows an EXIT trap that runs because the shell gave up over an error it
+reported the `$?` from before the failing command, while the shell — or the
+caller of a `function` scope — still gets the error's status. ksh93u+
+2012-08-01 by `-c`, a script file and standard input alike, `(exit 5)` setting
+the earlier status (#6873):
+
+| program | trap reads | caller / shell |
+| --- | --- | --- |
+| `function f { trap 'echo ft=$?' EXIT; (exit 5); echo $((1/0)); }; f` | `ft=5` | 1 |
+| … `(exit 7); : ${q?b}` | `ft=7` | 1 |
+| … `readonly r=1; r=2`, … `set -u; : $nosuch` | `ft=0` | 1 |
+| … `set -o nosuch`, … `` v=`echo hi; for` ``, … `. ./nosuchfile` | `ft=5` | 2, 3, 1 |
+| … `true && echo $((1/0))`, … `if true; then echo $((1/0)); fi` | `ft=0` | 1 |
+| `trap 'echo st=$?' EXIT; (exit 5); echo $((1/0))` — the shell's own | `st=5` | exit 1 |
+| `trap 'exit' EXIT; (exit 5); echo $((1/0))` | | exit 1 |
+| `function f { trap 'exit' EXIT; (exit 5); echo $((1/0)); }; f; echo after` | | exit 5, nothing after |
+
+So it is `$?` as it stood when the failing command began, and a bare `exit`
+in the shell's own trap reports the error's status. An error that reached the
+frame through something that completed on its account — a `function` call
+that caught it (`ft=2` for `function g { set -o nosuch; }`), an `eval`, a
+`$( … )` — arrives as that construct's status, which is `$?` already; a `()`
+call is not a scope there, so `g() { (exit 6); echo $((1/0)); }` shows 6.
+
+bash 5.3 and 3.2 show the error's own status (1, and 127 for `${q?b}`) where
+the error ends the shell at all; dash and BusyBox ash 1.37.0 (the pinned
+image) show 2; zsh 5.9.2 shows 1 for `${q?b}` and a readonly reassignment,
+and its arithmetic error leaves `$?` untouched for the shell as well as the
+trap, which is a different fact.
+
+The last row is a correction beside the axis: an `exit` written in a scope's
+EXIT trap while a fatal error unwinds the call is a request to stop and ends
+the shell, where this shell let the `function` call catch it as it would have
+caught the error and ran on into `after 1`.
+
 **`ReturnInTheExitTrapNamesTheStatus`** — bash unpinned · dash no · ksh93 yes · zsh yes
 
 Makes a `return` written in an EXIT trap's body the shell's last word,

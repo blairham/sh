@@ -2498,6 +2498,22 @@ func (r *Runner) functionExitTrapSkippedByAGiveUp(ctl control) bool {
 	return r.sem().FunctionExitTrapSkippedByAGiveUp == Yes
 }
 
+// exitTrapAfterAGiveUp reports whether an EXIT trap is running because the
+// shell gave up over an error it reported, as against the script running out,
+// an `exit`, or errexit firing. `${x?word}` counts: it is a stop the script
+// asked for as far as skipping the trap goes, and an error as far as the
+// status the trap reads goes — see Semantics.ExitTrapAfterAGiveUpSeesEarlierStatus.
+func (r *Runner) exitTrapAfterAGiveUp(ctl control) bool {
+	if ctl != controlExit || r.exitRan || r.errexitStopped {
+		return false
+	}
+	switch r.abandon {
+	case abandonError, abandonUsage, abandonSubstParse, abandonParamError:
+		return true
+	}
+	return false
+}
+
 // runFunctionExitTrap runs an EXIT trap at the return of the call that set
 // it, in the two shells that fire one there — zsh by a rule of its own, and
 // ksh93 because a `function name { … }` call has a trap table of its own and
@@ -2550,6 +2566,13 @@ func (r *Runner) runFunctionExitTrap(ctx context.Context, body string) (returned
 	}
 	r.ctl = controlNone
 	returned := r.status
+	if r.exitTrapAfterAGiveUp(ctl) &&
+		r.ask(r.sem().ExitTrapAfterAGiveUpSeesEarlierStatus, "the `$?` an EXIT trap reads after a fatal error") {
+		// Read by the handler alone; the caller still gets the error's
+		// status, put back below. See
+		// Semantics.ExitTrapAfterAGiveUpSeesEarlierStatus (#6873).
+		r.status = r.statusWhenTheCommandBegan
+	}
 	if ctl == controlExit && r.exitRan &&
 		r.sem().FunctionExitTrapReadsZeroOnAnExit == Yes {
 		// Read as 0 by the handler, and only by the handler: the shell still

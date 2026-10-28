@@ -4299,6 +4299,12 @@ type Runner struct {
 	// statusBefore is `$?` as it was before the current statement, which one
 	// dialect shows to a signal handler instead of the current one.
 	statusBefore int
+	// statusWhenTheCommandBegan is `$?` as it stood when the command now
+	// running was dispatched — per command rather than per statement, so
+	// the second command of a `&&` list reads the first's. One dialect
+	// shows it to an EXIT trap that runs because that command's error ended
+	// the shell or the scope — see Semantics.ExitTrapAfterAGiveUpSeesEarlierStatus.
+	statusWhenTheCommandBegan int
 	// inExitTrap says the EXIT trap's body is running, and
 	// exitTrapEntryStatus is the status the shell had when it began. A bare
 	// `exit` in the body reports that rather than the body's own last
@@ -7698,6 +7704,13 @@ func (r *Runner) runExitTrap(ctx context.Context) (exitedInTheBody bool) {
 	// `trap` inside it replaces rather than recurses.
 	r.exitTrap = nil
 	before := r.status
+	if r.exitTrapAfterAGiveUp(r.ctl) &&
+		r.ask(r.sem().ExitTrapAfterAGiveUpSeesEarlierStatus, "the `$?` an EXIT trap reads after a fatal error") {
+		// Shown to the body alone: the shell still leaves with `before`,
+		// and a bare `exit` in the body reports that too. See
+		// Semantics.ExitTrapAfterAGiveUpSeesEarlierStatus.
+		r.status = r.statusWhenTheCommandBegan
+	}
 	// Whether an exit request is what stopped the shell, read before the
 	// flag goes: one dialect locates the trap by it. See
 	// Runner.stoppedByAnExitRequest.
@@ -8656,6 +8669,7 @@ func (r *Runner) commandAt(ctx context.Context, c syntax.Command) error {
 		// package is a library.
 		r.prevLine, r.line = r.line, r.commandLine(c)
 		r.reachedLine = r.line
+		r.statusWhenTheCommandBegan = r.status
 		// A command after a `.` is where the script stopped, if it stops
 		// here, and not the file the `.` read. See Runner.dotStoppedAt.
 		r.dotStoppedAt = dotStop{}

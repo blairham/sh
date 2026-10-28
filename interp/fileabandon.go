@@ -119,6 +119,14 @@ func (r *Runner) stopTheShellForExit() {
 	r.exitRan = true
 	r.exitRanOutsideAFile = r.sourceDepth == 0
 	r.stopTheShell()
+	// And a request, whatever kind of stop was in hand: an `exit` written
+	// in an EXIT trap that runs because a fatal error is unwinding a
+	// `function` scope must end the shell, not be caught at the call as the
+	// error would have been. Measured 2026-10-27 on ksh93u+ 2012-08-01,
+	// `function f { trap "exit" EXIT; (exit 5); echo $((1/0)); }; f; echo
+	// after` ends at 5 with nothing after; this shell carried on into
+	// `after 1` (#6873).
+	r.abandon = abandonRequested
 }
 
 // ExitRanOutsideAFile reports whether the shell stopped because `exit` ran,

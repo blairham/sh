@@ -9971,7 +9971,11 @@ type Semantics struct {
 	//
 	// An indexed array read the same way is left alone here: ksh93 counts an
 	// element after `: $(( b[5] ))` that `typeset -p` does not list, which is
-	// a state rather than a value and is recorded rather than modeled.
+	// a state rather than a value and is recorded rather than modeled. The
+	// same slot is left by a valueless subscripted declaration over a name
+	// holding a value — `x=s; typeset x[1]` — and docs/spec/semantics.md
+	// holds the whole table of what reads it as set and what does not, under
+	// this axis (#6367, #6536).
 	//
 	// Asked only where the key is missing from a stored association, so a
 	// read of a key that is there never raises it, and neither does a

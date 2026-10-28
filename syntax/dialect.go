@@ -3643,6 +3643,51 @@ type Dialect struct {
 	// arithmetic reading up (ArithBracketsMustBalance).
 	ArithUnbalancedBracketIsRefused bool
 
+	// CloseBraceEndsADollarDoubleParen ends a `$((` at the first `}` inside
+	// it that closes no `${` opened there — before the construct is read as
+	// either of the two things the spelling opens, and whether or not a
+	// closer ever comes. What the construct stood for expands to nothing, and
+	// reading resumes behind the brace. ksh93 alone. Measured 2026-10-27 on
+	// ksh93u+ 2012-08-01 at /bin/ksh, each line its own `-c` (#6918):
+	//
+	//	echo $(( exec {v}</dev/null; echo $v ) | cat)   `)' unexpected, 3
+	//	echo $(( echo } ) | cat)                        `)' unexpected, 3
+	//	echo $(( echo }; fi ) | cat)                    `fi' unexpected, 3
+	//	echo $(( } ))                                   `)' unexpected, 3
+	//	echo before; echo $(( } ))                      the refusal alone
+	//	echo $(( echo }                                 an empty line, 0
+	//	echo $(( } fi                                   fi
+	//	x="$(( } ))"; echo "[$x]"                       [ ))]
+	//	echo $(( echo "}" ) | cat); echo after           ) | cat); echo after
+	//	echo $(( echo \} ) | cat)                       }
+	//	echo $(( echo '}' ) | cat)                      }
+	//	echo $(( echo `echo }` ) | cat)                 }
+	//	echo $(( echo $(echo a}) ) | cat)               a}
+	//	echo $(( echo ${v}x ) | cat)                    x
+	//	echo $(( echo ${v}} ) | cat)                    `)' unexpected, 3
+	//	echo $(( echo ${v:-{a}} ) | cat)                `)' unexpected, 3
+	//	echo $(( echo "${v:-{a}}" ) | cat)              {a}
+	//	echo $(( echo ${v:-"}"} ) | cat)                }
+	//	echo $(( echo ${v:-"x"}} ) | cat)               `)' unexpected, 3
+	//	echo $(( echo a #}⏎) | cat)                     `)' unexpected, 3
+	//	echo $(( 1 )) }                                 1 }
+	//
+	// So what is blamed is whatever stands behind the brace once the
+	// construct has gone — a `)` in the issue's rows, `fi` where one was
+	// written — and the two double-quoted rows are the same rule with the
+	// rest of the line read as text. A `}` in a comment counts, the scan
+	// knowing no comments; a `${` opened inside double quotes is stepped
+	// over whole, where an unquoted one closes at its first brace. The one
+	// shape not reproduced: `$(( echo "$(echo a})" ) | cat)` is an empty
+	// line there and `a}` here, the `$( )` inside the quotes being stepped
+	// over whole.
+	//
+	// bash 5.3 and 3.2 read the first row as the command substitution it
+	// spells and print `}`; zsh 5.9.2 refuses it at the brace, which is
+	// CloseBraceAlwaysReserved inside the subshell; dash has no fallback
+	// reading and wants its `))`. None of the three ends the construct.
+	CloseBraceEndsADollarDoubleParen bool
+
 	// QuotedNewlineIsUnmatched refuses a newline written inside quotes — `'…'`,
 	// `"…"`, `$'…'` and a backquoted substitution — as the quote that never
 	// closed, unless a backslash escapes it, and then it is the newline with

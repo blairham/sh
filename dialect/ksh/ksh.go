@@ -613,6 +613,10 @@ func Dialect() syntax.Dialect {
 	// A `))` that arrives with a `[` still open is a syntax error:
 	// `(( a[1 ))` is `)' unexpected.
 	d.ArithUnbalancedBracketIsRefused = true
+	// And a `}` inside a `$((` ends the construct there, with nothing in
+	// it: `$(( exec {v}</dev/null; echo $v ) | cat)` is `)' unexpected, the
+	// `)` being what comes after the brace (#6918).
+	d.CloseBraceEndsADollarDoubleParen = true
 	// An exponent letter with no digit behind it is the numeral's and says
 	// nothing: `$(( 1.e ))` is 1 and `$(( 3e+ ))` is 3.
 	d.ArithEmptyExponentIsConsumed = true

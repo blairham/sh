@@ -23811,6 +23811,53 @@ letter at all, and zsh's `-n` is a flag rather than a count while its
 `-k` reads from the terminal. An answer there would be a claim nothing
 measured.
 
+**`ReadArrayIntoAnElementRefillsTheArray`** — bash no · dash no · ksh93 **yes** · zsh no
+
+`read -A 'b[i]'` over an **indexed** array. ksh93 takes the element `i`
+out and fills the array from its first element on, over whatever stood
+there, keeping the rest; a name holding a string is the one-element array
+it is promoted to, so the first word writes over it, and a name holding
+nothing becomes the words. zsh lands the words where the element literal
+`b[i]=(words)` lands them — a splice over the element, padded out to it
+past the end — and refuses a string and a table's key in the splice's own
+words. This shell stored nothing at all in either dialect, at 0.
+
+Measured 2026-10-16 and 2026-10-27, `-c`, each read back with `typeset -p`
+(zsh's subscripts are 1-based):
+
+| written | ksh93u+ 2012-08-01 | zsh 5.9.2 |
+| --- | --- | --- |
+| `b=(x y); read -A 'b[1]' <<< 'p q'` | `(p q)` | `( p q y )` |
+| `b=(x y z); read -A 'b[2]' <<< p` | `(p y)` | `( x p z )` |
+| `b=(x y z w); read -A 'b[1]' <<< p` | `([0]=p [2]=z [3]=w)` | — |
+| `b=(x y z w); read -A 'b[7]' <<< p` | `(p y z w)` | — |
+| `b=(x y z); read -A 'b[5]' <<< p` | — | `( x y z '' p )` |
+| `read -A 'z[1]' <<< 'p q'` (`z[2]` in zsh) | `(p q)` | `( '' p q )` |
+| `z=s; read -A 'z[1]' <<< 'p q'` | `(p q)` | `z: attempt to assign array value to non-array` |
+| `typeset -A m; m[k]=1; read -A 'm[k]'` | `([k]=(p q) )` — nests | `m: attempt to set slice of associative array` |
+| `typeset -a b; b[3]=(o1 o2); read -A 'b[3]' <<< p` | `([3]=(p) )` | — |
+
+The last row is the element holding an array of its own, which takes the
+words as that array in the dialect that nests — replaced outright, where
+a table's key is written over in place — and is not this question; nor is
+a table's key, which `SubscriptedArrayLiteral` already answers for both.
+zsh's two refusals are reported from inside `read` the way its freeze is:
+the store's sentence with no `read:` in it, ending the script, and under
+`-c` the shell exits 0 as it does for the frozen name. Asked only where
+`read -A` names an indexed array's element holding a string or nothing,
+so a plain `read -A b` never reaches it. bash's spelling is `-a`, whose
+name must be plain, and dash and ash have no array letter, so none of the
+three reaches it.
+
+The indexed reading looks like an accident of how ksh93 resolves the
+name rather than a design, and it is modeled because the alternative was
+a silent nothing at 0 in both dialects, each of which has a measured
+answer: the coordinator's call under the maintainer's delegated pattern,
+2026-10-27 (#6869).
+
+Pinned by `tests/ksh/readarrayelement_test.go` and
+`tests/zsh/readarrayelement_test.go`.
+
 **`ReadPromptOperand`** — bash ReadOperandIsAllName · dash ReadOperandIsAllName · ksh93 ReadPromptNeedsANameBeforeIt · zsh ReadPromptAloneNamesTheDefault
 
 Says whether `read`'s first operand may carry a prompt after a `?`, and

@@ -122,9 +122,9 @@ func (r *Runner) readCountedWhole(array string, names []string, text string, sta
 //	a[k]=(o1 o2); read -A 'a[k]' <<< x        [k]=(x o2) — written over in
 //	                                          place, the rest kept
 //
-// An indexed array's element is not this, and is left to the whole-array
-// store: ksh93's answer there takes the element out and fills the array
-// from its first element on, which is not modeled.
+// An indexed array's element is not this — see readArrayIntoAnIndexedElement,
+// where ksh93's answer takes the element out and fills the array from its
+// first element on, and zsh's splices (#6869).
 func (r *Runner) readArrayIntoATableKey(array string, elems []string) bool {
 	if r.sem().SubscriptedArrayLiteral != SubscriptedArrayLiteralNests {
 		return false

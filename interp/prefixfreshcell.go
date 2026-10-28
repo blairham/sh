@@ -169,6 +169,19 @@ func (r *Runner) freshenedPrefixEntry(name string) *savedVar {
 	return nil
 }
 
+// underACallsProducedCell reports whether a live call's prefix holds the name
+// as a cell over a produced parameter. See savedVar.producedCell.
+func (r *Runner) underACallsProducedCell(name string) bool {
+	for f := len(r.callPrefixes) - 1; f >= 0; f-- {
+		for _, u := range r.callPrefixes[f].undo {
+			if u.name == name {
+				return u.producedCell
+			}
+		}
+	}
+	return false
+}
+
 // persistingPrefixResetsATypedName makes the name a persisting prefix is
 // about to store into a plain scalar, where the dialect does that to a name
 // carrying a numeric or a width letter. See

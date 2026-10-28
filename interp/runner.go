@@ -10313,22 +10313,51 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 				}
 			}
 			if scoped {
-				// The cell is the call's own, so it starts from **nothing**
-				// and not from what the shell holds — which is the whole of
-				// why `s+=5` in front of one shows the body `5` and not
-				// `base5`. Emptied after the name has been saved, so the
-				// take-back below puts the shell's own back.
-				r.hideVar(held)
-				// And with none of the letters the shell's name carries,
-				// the case letter included: measured 2026-10-16 on ksh93u+,
-				// `typeset -i v=1; function g { typeset -p v; }; v=2+2 g` is
-				// `typeset -x v=2+2` and the same over `typeset -u v=x` is
-				// `typeset -x v=abc` (#6750). Not one of the shell's own,
-				// whose type is the shell's: `function f { typeset -p
-				// SECONDS; }; SECONDS=5 f` is `typeset -x -F 3 SECONDS=5.000`
-				// there, and `OPTIND=x` reads 0 in the body.
-				if !r.shellKeepsTheType(held) {
+				switch {
+				case r.DynamicParameter(held) && r.dynamicWriters[held] != nil:
+					// A produced parameter whose assignment *does*
+					// something is shown to the body as a plain cell, and
+					// the generator comes back with the take-back: measured
+					// 2026-10-27 on ksh93u+, `function f { typeset -p
+					// RANDOM; echo $RANDOM; }; RANDOM=5 f; echo ${#RANDOM}`
+					// is `typeset -x RANDOM=5`, `5` and then a drawn number,
+					// where a hidden name's store ended the producer for
+					// good and left the shell with no RANDOM at all (#6859).
+					p := r.takeProducerAside(held)
+					undo[len(undo)-1].producer = &p
+					r.hideVar(held)
 					r.emptyPrefixEntry(held)
+				case r.DynamicParameter(held):
+					undo[len(undo)-1].producedCell = true
+					// One of the shell's own, whose type is the shell's: the
+					// prefix is an assignment to the parameter for the length
+					// of the call, which the save above already carries, and
+					// the producer goes on answering through it. Measured
+					// the same day: `function f { typeset -p SECONDS; };
+					// SECONDS=5 f` is `typeset -x -F 3 SECONDS=5.000`, the
+					// body's `$SECONDS` ticks on from 5, `SECONDS=abc f` is
+					// `0.000`, and `typeset -p SECONDS` after the call is
+					// the shell's own clock again. Not hidden, because a
+					// hidden name's store reads as an assignment after an
+					// `unset` and ends the producer (#6859).
+				default:
+					// The cell is the call's own, so it starts from
+					// **nothing** and not from what the shell holds — which
+					// is the whole of why `s+=5` in front of one shows the
+					// body `5` and not `base5`. Emptied after the name has
+					// been saved, so the take-back below puts the shell's
+					// own back.
+					r.hideVar(held)
+					// And with none of the letters the shell's name carries,
+					// the case letter included: measured 2026-10-16 on
+					// ksh93u+, `typeset -i v=1; function g { typeset -p v;
+					// }; v=2+2 g` is `typeset -x v=2+2` and the same over
+					// `typeset -u v=x` is `typeset -x v=abc` (#6750). Not
+					// one of the shell's own, whose type is the shell's:
+					// `OPTIND=x` reads 0 in the body.
+					if !r.shellKeepsTheType(held) {
+						r.emptyPrefixEntry(held)
+					}
 				}
 			} else if r.sem().AssignmentPrefixPersistsAfterAFunction == Yes {
 				// A prefix to a function that persists, which is a POSIX-form
@@ -13285,6 +13314,20 @@ type savedVar struct {
 	// Semantics.AssignmentPrefixMakesAFreshCell and
 	// Runner.prefixEntryTakesTheDisplacedShapeBack.
 	freshened bool
+	// producer is what a call's own cell over a produced parameter took out
+	// of the produced tables, to go back when the cell does: `RANDOM=5 f`
+	// shows a `function` body a plain exported 5 and the shell its generator
+	// again afterwards. Nil for every other name. See the scoped branch of
+	// Runner.runFunctionPrefix and Runner.takeProducerAside.
+	producer *suspendedProducer
+	// producedCell says the prefix this saved is a call's own cell over a
+	// parameter the dialect produces and the producer is still answering
+	// through: `SECONDS=5 f`. The listing writes such a cell with the
+	// dialect's stated float letter and without its integer one — measured
+	// 2026-10-27 on ksh93u+, `typeset -x -F 3 SECONDS=5.000` beside
+	// `typeset -x LINENO=1` from the shell's own `typeset -i LINENO=1`
+	// (#6859). See Runner.underACallsProducedCell.
+	producedCell bool
 }
 
 // saveVar takes the whole of a name's state, for a prefix that will give it
@@ -13425,6 +13468,10 @@ func (r *Runner) restoreVar(u savedVar) {
 		r.attrClear(u.name, attrReadonly)
 	}
 	r.restoreAttributes(u.name, u.attrs)
+	if u.producer != nil {
+		// Before the assignment record, which is the producer's to read.
+		r.putProducerBack(u.name, *u.producer)
+	}
 	if u.assignedSpoken {
 		if r.assigned == nil {
 			r.assigned = map[string]string{}

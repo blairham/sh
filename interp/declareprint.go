@@ -326,6 +326,12 @@ func (r *Runner) declarationOf(name string) (declaration, bool) {
 		if pd.Float {
 			d.precision = pd.Places
 		}
+		if r.underACallsProducedCell(name) {
+			// A call's own cell over the parameter keeps the stated float
+			// letter and not the stated integer one. See
+			// savedVar.producedCell.
+			d.integer, d.base = false, 0
+		}
 		if r.producedFloatRetyped(name, pd) {
 			// The script made the produced float an integer, and it lists
 			// as one. See Runner.producedThroughItsAttributes.

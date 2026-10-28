@@ -4,6 +4,7 @@
 package interp
 
 import (
+	"slices"
 	"strings"
 
 	"github.com/blairham/sh/syntax"
@@ -68,16 +69,39 @@ func (r *Runner) appendOperand(operand string) (name string, appends bool) {
 // operandSplitsAfterTheSubscript asks the axis only of an operand where the
 // answer moves the split: a name, a subscript holding an `=`, and an `=`
 // after it.
+//
+// An operand the **source** closed is split after its subscript in every
+// column, and the axis is not asked: the parser saw where the key ended
+// before anything was expanded, and the column that cuts text at its first
+// `=` cuts only text — `typeset m[e=f]=y` is the key `e=f` in zsh 5.9.2 where
+// `typeset 'm[e=f]=y'` is `not an identifier: m[e` (#6896). The word's shape
+// is gone from the string the builtin holds, so it is carried from the word
+// by Runner.sourceClosedSubscriptOperands.
 func (r *Runner) operandSplitsAfterTheSubscript(operand string) bool {
 	first, _, _ := strings.Cut(operand, "=")
 	if !strings.Contains(first, "[") {
 		return false
 	}
-	if before, _, ok := cutOperandAfterTheSubscript(operand); !ok || before == first {
+	before, _, ok := cutOperandAfterTheSubscript(operand)
+	if !ok || before == first {
 		return false
+	}
+	if slices.Contains(r.sourceClosedSubscriptOperands, strings.TrimSuffix(before, "+")) {
+		return true
 	}
 	return r.ask(r.sem().DeclarationOperandSplitsAfterTheSubscript,
 		"a declaration operand's `=` looked for after its subscript")
+}
+
+// cutDeclarationOperand is strings.Cut at the `=` that ends a declaration
+// operand's name, with the `+` of an append left on the name: the raw halves
+// declarationOperandSplit reads, for a caller that spells the operand rather
+// than performs it.
+func (r *Runner) cutDeclarationOperand(operand string) (before, after string, found bool) {
+	if r.operandSplitsAfterTheSubscript(operand) {
+		return cutOperandAfterTheSubscript(operand)
+	}
+	return strings.Cut(operand, "=")
 }
 
 func declarationOperandSplit(operand string, afterTheSubscript bool) (name, value string, hasValue, appends bool) {

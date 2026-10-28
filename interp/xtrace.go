@@ -527,7 +527,9 @@ func (r *Runner) traceCommandWords(words []string, d *Diagnostics) []string {
 // field that says the halves are written apart rather than applied here for
 // everyone.
 func (r *Runner) traceAssignmentOperand(w string, d *Diagnostics) (string, bool) {
-	target, value, ok := strings.Cut(w, "=")
+	// The split the utility makes, so a key holding `=` stays on the target:
+	// `typeset m[e=f]=y` is `typeset 'm[e=f]'=y` in zsh 5.9.2 (#6896).
+	target, value, ok := r.cutDeclarationOperand(w)
 	if !ok || target == "" {
 		return "", false
 	}

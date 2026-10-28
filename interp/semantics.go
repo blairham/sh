@@ -2719,8 +2719,10 @@ type Semantics struct {
 	//
 	// So bash and ksh93 split the text however it arrived, and zsh splits a
 	// *written* assignment at its subscript and anything else at the first
-	// `=`. The operand reaches the builtin as text, so the written case is not
-	// told apart here and zsh keeps the first-`=` reading (#6781).
+	// `=`. The written case is not this field's: an operand whose subscript
+	// the source closed is split after it in every column, carried from the
+	// word by Runner.sourceClosedSubscriptOperands (#6896), and the field
+	// answers for the text that arrived quoted or expanded (#6781).
 	DeclarationOperandSplitsAfterTheSubscript Answer
 
 	// ExportOrReadonlyTakesAReferenceToAnElement decides what those two

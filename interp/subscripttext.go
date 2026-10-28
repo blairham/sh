@@ -489,10 +489,15 @@ func recordASourceClosedSubscript(at []string, w *syntax.Word, argv []string) []
 	if len(argv) == 0 || !wordSubscriptIsSourceClosed(w) {
 		return at
 	}
-	// Through declarationOperand rather than a cut of its own, so that the
-	// text recorded is the text the reader is handed: an **appending**
+	// Through declarationOperandSplit rather than a cut of its own, so that
+	// the text recorded is the text the reader is handed: an **appending**
 	// operand's name has the `+` taken off, and a list keyed on the other
 	// spelling would miss `declare m['foo[bar']+=v` entirely.
-	name, _, _, _ := declarationOperand(argv[len(argv)-1])
+	//
+	// Cut **after the subscript**, because the source closed it there: the
+	// `]` the parser read is followed by the operator, so an `=` in front of
+	// it is the key's. Cut at the first `=`, `m[e=f]=y` was recorded as
+	// `m[e`, a name no reader ever asks about (#6896).
+	name, _, _, _ := declarationOperandSplit(argv[len(argv)-1], true)
 	return append(at, name)
 }

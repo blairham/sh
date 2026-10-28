@@ -94,30 +94,6 @@ func (r *Runner) expandedArrayOperand(a *syntax.Assign) *expandedAssign {
 	return nil
 }
 
-// traceArrayOperandsBefore is the assignment lines this dialect writes ahead of
-// a declaration utility's own line for its array-literal operands.
-//
-// Behind the scalar operands' lines, which is the order the one column that
-// writes both writes them in: `typeset x=1 a=(1 2)` is `+ x=1`, `+ a=( 1 2 )`
-// and then `+ typeset x a` on ksh93u+, measured. That is the order the script
-// wrote them in as well, and the reverse spelling is not modeled — the bare
-// name of an array operand is appended to argv rather than standing where it
-// was written, so there is no position here to sort the two lists by.
-func (r *Runner) traceArrayOperandsBefore(d *Diagnostics) []string {
-	if d.TraceDeclarationArrayOperand != TraceOperandSplitBefore {
-		return nil
-	}
-	var lines []string
-	for _, op := range r.arrayOperands {
-		if op.traced {
-			continue
-		}
-		l, _ := r.traceArrayOperandLines(op, d)
-		lines = append(lines, l...)
-	}
-	return lines
-}
-
 // traceArrayOperandLines is what one array-literal operand writes: the element
 // assignments it performs in the column that spells it that way, and one
 // assignment line everywhere else.

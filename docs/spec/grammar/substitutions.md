@@ -132,6 +132,34 @@ the brackets written in the source count. A `]` that arrives in a value,
 as in the third row, is not a closer the reader could have seen, and
 neither is a bracket inside quotes.
 
+**A `}` inside a `$((`.** ksh93 ends the construct at the first `}`
+inside it that closes no `${` opened there — before it has decided
+which of the two constructs the spelling opens, and whether or not a
+closer ever comes. What the construct stood for expands to nothing, and
+reading resumes behind the brace, so what is refused is the first token
+the rest of the line cannot take. Measured 2026-10-27 on ksh93u+
+2012-08-01 (`Dialect.CloseBraceEndsADollarDoubleParen`, #6918):
+
+| snippet | ksh93 | bash 5.3 |
+| --- | --- | --- |
+| `echo $(( exec {v}</dev/null; echo $v ) \| cat)` | `` `)' unexpected ``, 3 | `13` |
+| `echo $(( echo }; fi ) \| cat)` | `` `fi' unexpected ``, 3 | `` `fi' `` refused, 2 |
+| `echo $(( } ))` | `` `)' unexpected ``, 3 | an arithmetic error, 1 |
+| `echo $(( echo }` | an empty line, 0 | unexpected EOF, 2 |
+| `x="$(( } ))"; echo "[$x]"` | `[ ))]` | an arithmetic error, 1 |
+| `echo $(( echo "}" ) \| cat); echo after` | ` ) \| cat); echo after` | `}` then `after` |
+| `echo $(( echo \} ) \| cat)`, `'}'`, `` `echo }` ``, `$(echo a})` | the brace printed | the same |
+| `echo $(( echo ${v}x ) \| cat)` / `${v}}` | `x` / `` `)' unexpected `` | `x` / `}` |
+| `echo $(( echo ${v:-{a}} ) \| cat)` / `"${v:-{a}}"` | `` `)' unexpected `` / `{a}` | `{a}` / `{a}` |
+
+A backslash, apostrophes, backquotes and a `$( )` shield what they hold;
+an unquoted `${` opens a level its first `}` closes, a bare `{` counting
+for nothing; inside double quotes a `${…}` is stepped over whole. The
+scan knows no comments, so a `}` in one ends the construct too. bash
+reads each row as the construct it spells; zsh refuses the first at the
+brace, which is its own `CloseBraceAlwaysReserved` inside the subshell;
+dash has no fallback reading.
+
 ## Backticks
 
     `echo hi`               →  hi

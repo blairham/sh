@@ -3716,7 +3716,7 @@ func (l *Lexer) scanDelimiterSubstitution(q Quoting) Span {
 	case l.peek() == '`':
 		l.scanBackticks(q)
 	case l.peekAt(1) == '(' && l.peekAt(2) == '(':
-		l.scanParens(l.doubleParenKind(0), q)
+		l.scanDoubleParen(0, q)
 	case l.peekAt(1) == '[':
 		l.scanBracket(q)
 	case l.peekAt(1) == '(':
@@ -3806,7 +3806,7 @@ func (l *Lexer) substitutionSpans(flush func()) ([]Span, bool) {
 		// readings are told apart. Decided here because by the time the
 		// parser sees tokens the choice has been made.
 		flush()
-		return []Span{l.scanParens(l.doubleParenKind(skip), Unquoted)}, true
+		return []Span{l.scanDoubleParen(skip, Unquoted)}, true
 
 	case c == '$' && l.peekAt(1+skip) == '[' && l.dialect.DollarBracketArith:
 		// The older spelling of the case above. Where the flag is off this
@@ -4059,7 +4059,7 @@ func (l *Lexer) heredocSpans() []Span {
 		// blob of input, not a list of fields.
 		case l.opensDoubleParen(skip):
 			flush()
-			out = append(out, l.scanParens(l.doubleParenKind(skip), DoubleQuoted))
+			out = append(out, l.scanDoubleParen(skip, DoubleQuoted))
 			litPos = l.pos()
 		case c == '$' && l.peekAt(1+skip) == '[' && l.dialect.DollarBracketArith:
 			flush()
@@ -4246,7 +4246,7 @@ func (l *Lexer) scanDoubleEscaping(open Pos, closing bool, escapes escapeSet) []
 		// result is split afterwards, which is the only thing it changes.
 		case l.opensDoubleParen(skip):
 			flush()
-			out = append(out, l.scanParens(l.doubleParenKind(skip), DoubleQuoted))
+			out = append(out, l.scanDoubleParen(skip, DoubleQuoted))
 			litPos = l.pos()
 		case c == '$' && l.peekAt(1+skip) == '[' && l.dialect.DollarBracketArith:
 			flush()
@@ -4524,14 +4524,168 @@ func (l *Lexer) doubleParenKind(skip int) SpanKind {
 	if !l.dialect.ArithSubstFallsBackToCommandSubst {
 		return ArithSubst
 	}
-	// The expression begins behind `$`, the pair the `$` reached across, `(`,
-	// the pair *that* reached across, and `(`.
-	from := l.off + 3 + skip + l.arithOpenerContinuationAt(l.off+2+skip)
-	if doubleParenIsArith(l.src, from, l.dialect.ContinuationPartsTheArithmeticCloser,
+	if doubleParenIsArith(l.src, l.doubleParenExprStart(skip), l.dialect.ContinuationPartsTheArithmeticCloser,
 		l.dialect.ArithSubstScanIgnoresQuoting, l.dialect.ArithBracketsMustBalance) {
 		return ArithSubst
 	}
 	return CommandSubst
+}
+
+// doubleParenExprStart is where the text of the `$((` at the cursor begins:
+// behind `$`, the pair the `$` reached across, `(`, the pair *that* reached
+// across, and `(`. skip is the first of those widths, which the dispatcher
+// that routed here has already worked out.
+func (l *Lexer) doubleParenExprStart(skip int) int {
+	return l.off + 3 + skip + l.arithOpenerContinuationAt(l.off+2+skip)
+}
+
+// scanDoubleParen reads the construct a `$((` opens, whichever of the two it
+// turns out to be — and, in one dialect, however little of it there is.
+//
+// ksh93 ends a `$((` at a `}` inside it that closes no `${` opened there,
+// before the construct is read as either arithmetic or a command substitution
+// and whether or not a closer ever comes. What the construct stood for expands
+// to nothing, and reading resumes behind the brace, so the rest of the text is
+// the rest of the word and the line: `echo $(( echo } ) | cat)` is `)'
+// unexpected, `echo $(( echo }; fi ) | cat)` is `fi' unexpected, `echo $(( echo
+// }` prints an empty line and `x="$(( } ))"` leaves x holding ` ))`. See
+// [Dialect.CloseBraceEndsADollarDoubleParen], which has the rows.
+//
+// The span is a command substitution holding nothing, because that is the one
+// thing in the tree that runs nothing and expands to nothing — a field removed
+// where it is unquoted and an empty string where it is not, which is what those
+// rows need. The printer writes it back as `$()`.
+func (l *Lexer) scanDoubleParen(skip int, q Quoting) Span {
+	if l.dialect.CloseBraceEndsADollarDoubleParen {
+		from := l.doubleParenExprStart(skip)
+		closer, _, _ := doubleParenCloser(l.src, from,
+			l.dialect.ContinuationPartsTheArithmeticCloser, l.dialect.ArithSubstScanIgnoresQuoting)
+		if j := strayCloseBraceIn(l.src, from, closer); j >= 0 {
+			open := l.pos()
+			for l.off <= j {
+				l.advance()
+			}
+			return Span{Kind: CommandSubst, Quoting: q, Pos: open}
+		}
+	}
+	return l.scanParens(l.doubleParenKind(skip), q)
+}
+
+// strayCloseBraceIn is the offset of the first `}` in src[from:to] that closes
+// nothing opened there, or -1. It is the scan ksh93 makes over a `$((` before
+// deciding what the construct is — see [Dialect.CloseBraceEndsADollarDoubleParen],
+// whose rows every clause here was measured from.
+//
+// A backslash, apostrophes, backquotes and a `$( )` each shield what they hold.
+// An unquoted `${` opens a level that the next `}` closes, and nothing else
+// counts: a bare `{` is text, so `${v:-{a}}` leaves its last brace stray. Inside
+// double quotes a `${…}` is stepped over whole, braces paired, and a brace
+// outside one is stray unless an unquoted `${` stands open around the quotes.
+func strayCloseBraceIn(src string, from, to int) int {
+	depth := 0 // unquoted `${` still open
+	for i := from; i < to; i++ {
+		switch src[i] {
+		case '\\':
+			i++
+		case '\'', '`':
+			if j := skipQuotedFrom(src, i); j > i {
+				i = j
+			}
+		case '"':
+			end, stray := strayCloseBraceInQuotes(src, i+1, to, depth > 0)
+			if stray >= 0 {
+				return stray
+			}
+			i = end
+		case '$':
+			if i+1 < to && src[i+1] == '{' {
+				depth++
+				i++
+			} else if i+1 < to && src[i+1] == '(' {
+				i = skipParensFrom(src, i+1, to)
+			}
+		case '}':
+			if depth == 0 {
+				return i
+			}
+			depth--
+		}
+	}
+	return -1
+}
+
+// strayCloseBraceInQuotes is the double-quoted half of strayCloseBraceIn: from
+// i, the byte behind an opening `"`, it returns the offset of the closing quote
+// (or to, where none comes before it) and the offset of a stray `}` met on the
+// way, or -1. shielded says an unquoted `${` is open around the quotes, in
+// which case no brace in them is stray.
+func strayCloseBraceInQuotes(src string, i, to int, shielded bool) (end, stray int) {
+	for ; i < to; i++ {
+		switch src[i] {
+		case '\\':
+			i++
+		case '"':
+			return i, -1
+		case '$':
+			if i+1 < to && src[i+1] == '{' {
+				i = skipBracesFrom(src, i+1, to)
+			} else if i+1 < to && src[i+1] == '(' {
+				i = skipParensFrom(src, i+1, to)
+			}
+		case '}':
+			if !shielded {
+				return i, i
+			}
+		}
+	}
+	return to, -1
+}
+
+// skipParensFrom is the offset of the `)` matching the `(` at i, counting
+// nothing inside quotes or behind a backslash, or to where none comes first.
+func skipParensFrom(src string, i, to int) int {
+	depth := 0
+	for ; i < to; i++ {
+		switch src[i] {
+		case '\\':
+			i++
+		case '\'', '"', '`':
+			if j := skipQuotedFrom(src, i); j > i {
+				i = j
+			}
+		case '(':
+			depth++
+		case ')':
+			depth--
+			if depth == 0 {
+				return i
+			}
+		}
+	}
+	return to
+}
+
+// skipBracesFrom is skipParensFrom for the `{` at i and its `}`.
+func skipBracesFrom(src string, i, to int) int {
+	depth := 0
+	for ; i < to; i++ {
+		switch src[i] {
+		case '\\':
+			i++
+		case '\'', '"', '`':
+			if j := skipQuotedFrom(src, i); j > i {
+				i = j
+			}
+		case '{':
+			depth++
+		case '}':
+			depth--
+			if depth == 0 {
+				return i
+			}
+		}
+	}
+	return to
 }
 
 // continuationWidthAt is how many bytes of line continuation stand at i in
@@ -4590,7 +4744,21 @@ func (l *Lexer) takeArithOpenerContinuation() {
 // written inside quotes — see [Dialect.ArithSubstScanIgnoresQuoting], which is
 // the same-shaped question the `((` scan asks one construct over.
 func doubleParenIsArith(src string, from int, partsCloser, ignoresQuoting, bracketsBalance bool) bool {
-	depth, brackets := 1, 0
+	closer, next, brackets := doubleParenCloser(src, from, partsCloser, ignoresQuoting)
+	if closer == len(src) {
+		return true
+	}
+	return next < len(src) && src[next] == ')' && (!bracketsBalance || brackets == 0)
+}
+
+// doubleParenCloser finds the `)` that brings a `$((`'s count back to zero,
+// counting from from. It returns that `)`'s offset — len(src) where the input
+// runs out first — the offset the arithmetic reading needs a second `)` at,
+// and how many `[` the text had left open there. One scan, read by
+// doubleParenIsArith for the decision and by scanDoubleParen for how far the
+// construct reaches.
+func doubleParenCloser(src string, from int, partsCloser, ignoresQuoting bool) (closer, next, brackets int) {
+	depth := 1
 	for i := from; i < len(src); i++ {
 		switch src[i] {
 		case '[':
@@ -4611,15 +4779,15 @@ func doubleParenIsArith(src string, from int, partsCloser, ignoresQuoting, brack
 		case ')':
 			depth--
 			if depth == 0 {
-				j := i + 1
+				next = i + 1
 				if !partsCloser {
-					j += continuationWidthAt(src, j)
+					next += continuationWidthAt(src, next)
 				}
-				return j < len(src) && src[j] == ')' && (!bracketsBalance || brackets == 0)
+				return i, next, brackets
 			}
 		}
 	}
-	return true
+	return len(src), len(src), brackets
 }
 
 // skipQuotedFrom returns the offset of the byte closing the quote that opens

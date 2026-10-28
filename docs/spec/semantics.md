@@ -23822,41 +23822,65 @@ nothing becomes the words. zsh lands the words where the element literal
 past the end — and refuses a string and a table's key in the splice's own
 words. This shell stored nothing at all in either dialect, at 0.
 
-Measured 2026-10-16 and 2026-10-27, `-c`, each read back with `typeset -p`
-(zsh's subscripts are 1-based):
+Measured 2026-10-16, 2026-10-27 and 2026-10-28, `-c`, each read back with
+`typeset -p` (zsh's subscripts are 1-based):
 
 | written | ksh93u+ 2012-08-01 | zsh 5.9.2 |
 | --- | --- | --- |
 | `b=(x y); read -A 'b[1]' <<< 'p q'` | `(p q)` | `( p q y )` |
 | `b=(x y z); read -A 'b[2]' <<< p` | `(p y)` | `( x p z )` |
-| `b=(x y z w); read -A 'b[1]' <<< p` | `([0]=p [2]=z [3]=w)` | — |
-| `b=(x y z w); read -A 'b[7]' <<< p` | `(p y z w)` | — |
-| `b=(x y z); read -A 'b[5]' <<< p` | — | `( x y z '' p )` |
-| `read -A 'z[1]' <<< 'p q'` (`z[2]` in zsh) | `(p q)` | `( '' p q )` |
+| `b=(x y z w); read -A 'b[1]' <<< p` | `([0]=p [2]=z [3]=w)` | `( p y z w )` |
+| `b=(x y z w); read -A 'b[7]' <<< p` | `(p y z w)` | `( x y z w '' '' p )` |
+| `b=(x y z); read -A 'b[5]' <<< p` | `(p y z)` | `( x y z '' p )` |
+| `read -A 'z[1]' <<< 'p q'` | `(p q)` | `( p q )` |
+| `read -A 'z[2]' <<< 'p q'` | `(p q)` | `( '' p q )` |
 | `z=s; read -A 'z[1]' <<< 'p q'` | `(p q)` | `z: attempt to assign array value to non-array` |
 | `typeset -A m; m[k]=1; read -A 'm[k]'` | `([k]=(p q) )` — nests | `m: attempt to set slice of associative array` |
-| `typeset -a b; b[3]=(o1 o2); read -A 'b[3]' <<< p` | `([3]=(p) )` | — |
+| `typeset -a b; b[3]=(o1 o2); read -A 'b[3]' <<< p` | `([3]=(p) )` | `( '' '' p o2 )` |
 
 The last row is the element holding an array of its own, which takes the
 words as that array in the dialect that nests — replaced outright, where
-a table's key is written over in place — and is not this question; nor is
-a table's key, which `SubscriptedArrayLiteral` already answers for both.
-zsh's two refusals are reported from inside `read` the way its freeze is:
-the store's sentence with no `read:` in it, ending the script, and under
-`-c` the shell exits 0 as it does for the frozen name. Asked only where
-`read -A` names an indexed array's element holding a string or nothing,
-so a plain `read -A b` never reaches it. bash's spelling is `-a`, whose
-name must be plain, and dash and ash have no array letter, so none of the
-three reaches it.
+a table's key is written over in place — and is not this question; zsh
+has no such element and splices. Nor is a table's key, which
+`SubscriptedArrayLiteral` already answers for both, nor the whole-array
+spelling, which `StoreOperandWholeArraySubscript` answers as it does for
+`read 'b[@]'`.
+
+The subscript is read **once** — `i=1; read -A 'b[i++]'` leaves `i` at 2
+in both — and is refused exactly as the scalar store through the same
+operand refuses it. Measured 2026-10-28, `-c`, after `b=(x y z)`:
+
+| written | ksh93u+ 2012-08-01 | zsh 5.9.2 |
+| --- | --- | --- |
+| `read -A 'b[1/0]' <<< p` | `read: 1/0: divide by zero`, 1, `b` kept, the next line runs | `division by zero`, the script ends |
+| `read -A 'b[@]' <<< 'p q'` | `read: @: arithmetic syntax error`, 1, `b` kept | `( p q )` |
+| `read -A 'b[-9]' <<< p` | `read: b: subscript out of range`, 1, `b` kept | `( p x y z )` |
+| `read -A 'b[0]' <<< p` | `(p y z)` | `b: assignment to invalid subscript range`, the script ends |
+| `read -A 'b[]' <<< p` | `(p y z)` — element 0 | `not an identifier: b[]`, the script ends |
+| `read -A 'b[2,3]' <<< 'p q'` | `(p q z)` — the comma is arithmetic | `( x p q )`, as `b[2,3]=(p q)` |
+
+zsh's refusals are reported from inside `read` the way its freeze is: the
+store's sentence with no `read:` in it, ending the script, and under `-c`
+the shell exits 0 as it does for the frozen name. In zsh the splice is the
+element literal's own code, reached with the words in hand, so every
+subscript the literal reads is read the same way here. Asked only where
+`read -A` names one element of an indexed array, so a plain `read -A b`
+never reaches it. bash's spelling is `-a`, whose name must be plain, and
+dash and ash have no array letter, so none of the three reaches it.
 
 The indexed reading looks like an accident of how ksh93 resolves the
-name rather than a design, and it is modeled because the alternative was
-a silent nothing at 0 in both dialects, each of which has a measured
-answer: the coordinator's call under the maintainer's delegated pattern,
-2026-10-27 (#6869).
+name rather than a design. It is modeled because the alternative was a
+silent nothing at 0 in both dialects, which matched no shell measured.
+**That decision was Claude's**, taken under the maintainer's standing
+instruction to keep the lane moving, and not the maintainer's; reverting
+the change restores the refusal (#6869).
 
-Pinned by `tests/ksh/readarrayelement_test.go` and
-`tests/zsh/readarrayelement_test.go`.
+Not covered: a name reached through a reference — `typeset -n r=b; read -A
+'r[1]'` and `typeset -n r='b[1]'; read -A r` both refill `b` in ksh93 and
+store nothing here, as before this change.
+
+Pinned by `tests/ksh/readarrayelement_test.go`,
+`tests/zsh/readarrayelement_test.go` and `interp/readarrayelement_test.go`.
 
 **`ReadPromptOperand`** — bash ReadOperandIsAllName · dash ReadOperandIsAllName · ksh93 ReadPromptNeedsANameBeforeIt · zsh ReadPromptAloneNamesTheDefault
 

@@ -7186,6 +7186,7 @@ func (r *Runner) readStoreTheArray(
 	defaulted bool,
 	refused *bool,
 ) (int, bool) {
+	gaveUp := 0
 	switch {
 	case !echo.elements(r, elems):
 		// `read -e`: the elements were written and the array is left as it
@@ -7218,13 +7219,18 @@ func (r *Runner) readStoreTheArray(
 	case r.readArrayIntoATableKey(array, elems):
 		// A table's element takes the words as an array of its own. See
 		// Runner.readArrayIntoATableKey (#6685).
-	case r.readArrayIntoAnIndexedElement(array, elems):
+	case r.readArrayIntoAnIndexedElement(array, elems, &gaveUp):
 		// An indexed array's element: the words refill the array from its
 		// first element in one shell and splice over the element in the
 		// other. See Runner.readArrayIntoAnIndexedElement (#6869).
 		if r.ctl == controlExit {
-			// The splice's own refusal, reported as the freeze's is.
+			// The store's own refusal, reported as the freeze's is.
 			return r.readArrayRefusalStatus(own), true
+		}
+		if gaveUp != 0 {
+			// A subscript the store refused with the line going on, as
+			// `read 'b[1/0]'` is refused: the builtin stops there at 1.
+			return gaveUp, true
 		}
 	default:
 		r.setArrayForgettingARetypedHide(array, elems)

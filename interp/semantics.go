@@ -10039,6 +10039,54 @@ type Semantics struct {
 	// only where an expression stores into a frozen table (#6826).
 	ArithStoreIntoAFrozenTableIsTaken Answer
 
+	// FrozenContainerTakesAnElementLiteral stores an element **literal** —
+	// `b[1]=(p)`, a chain's `r[1][2]=(p)`, and a declaration's `typeset
+	// b[1]=(p)` — into a frozen indexed array, and under a frozen table's
+	// key, where every scalar store to the same element is refused by the
+	// freeze. One shape is refused in every column that has the construct:
+	// a literal written **directly** under a key the frozen table does not
+	// have, `typeset -A a; readonly a; a[k]=(p)`.
+	//
+	// ksh93 alone. Measured 2026-10-16 and 2026-10-27 on ksh93u+ 2012-08-01,
+	// `-c`, each followed by `typeset -p`:
+	//
+	//	b=(x y); readonly b; b[1]=(p)               st=0, `(x (p) )`
+	//	typeset -a b; readonly b; b[1]=(p)          st=0, `([1]=(p) )`
+	//	readonly b; b[1]=(p)                        st=0, the same
+	//	b=(x y); readonly b; b[5]=(p)               st=0, `[5]=(p)` added
+	//	b=(x y); readonly b; b[1]+=(p)              st=0, `(x (p) )`
+	//	b=(x y); readonly b; typeset b[1]=(p)       st=0 — `typeset -a`,
+	//	                                            `export`, `readonly` alike
+	//	readonly r; r[1][2]=(p)                     st=0, `([1]=([2]=(p) ) )`
+	//	typeset -A a; a[k]=1; readonly a; a[k]=(p)  st=0, `([k]=(p) )`
+	//	typeset -A a; readonly a; a[k][1]=(p)       st=0, `([k]=([1]=(p) ) )`
+	//	typeset -A a; readonly a; a[k]=(p)          `a[k]: is read only`
+	//	b=(x y); readonly b; b[1]=p                 `b: is read only`
+	//	b=(x y); readonly b; b[1][2]=z              `b[1]: is read only`
+	//	b=(x y); readonly b; b=(p)                  `b: is read only`
+	//
+	// The value is expanded first either way: `b[$(echo S >&2; echo
+	// 1)]=(p $(echo V >&2))` writes S and V and stores, and the refused
+	// table row writes V and then its sentence. So the freeze is asked at
+	// the literal's store, which is where this is answered.
+	//
+	// zsh 5.9.2 reads `b[1]=(p)` as a splice and refuses it over a frozen
+	// `b` as `read-only variable: b` — measured the same day with the
+	// unfrozen control splicing `( p y )` — so the question is reached on
+	// its store too and answered no. Asked only where an element literal
+	// has reached its store with a freeze held against it (#6833).
+	//
+	// unpinned bash: `b[1]=(p)` is `cannot assign list to array member`
+	// before any freeze is consulted, so no line of bash reaches the store;
+	// TestAFrozenContainerAndAnElementLiteral pins the answer's effect in
+	// the two dialects that reach it.
+	//
+	// unpinned dash: no arrays, so no literal and no element — the same
+	// test.
+	//
+	// unpinned ash: the same.
+	FrozenContainerTakesAnElementLiteral Answer
+
 	// TableLiteralStoresEachElementAsItIsExpanded builds a keyed literal
 	// over a table a pair at a time: the table is emptied, then each element
 	// is expanded and stored before the next is expanded, so a later element
@@ -35308,6 +35356,8 @@ func PosixSemantics() Semantics {
 		ArithKeyReadCreatesTheElement: No,
 		// Nor any to freeze, so no expression writes into a frozen one.
 		ArithStoreIntoAFrozenTableIsTaken: No,
+		// And no literal to store through one.
+		FrozenContainerTakesAnElementLiteral: No,
 		// And no keyed literal to build a pair at a time.
 		TableLiteralStoresEachElementAsItIsExpanded: No,
 		// XCU gives printf's format the XSI escape set and nothing else —

@@ -145,7 +145,19 @@ func (r *Runner) assignChainedElementWith(a *syntax.Assign, build func() (Elemen
 		spoken := a.Name + "[" + root + "]"
 		if r.heldFreeze.assign == a {
 			r.heldFreeze.spoken = spoken
-			if r.refuseTheHeldFreeze(a) {
+			// A chain ending in a literal is stored through the freeze in
+			// one shell, a table's missing key included: `readonly a;
+			// a[k][1]=(p)` is `([k]=([1]=(p) ) )` there. A chain ending in
+			// a **scalar** is stored through it where its root is a table's
+			// standing key or an element holding an array of its own —
+			// `a[k]=1; readonly a; a[k][1]=z` is `([k]=(1 z) )` and `r[1]=(p
+			// q); readonly r; r[1][0]=z` is `(x (z q) )` — and refused where
+			// the root is missing or an indexed scalar. See
+			// interp/frozenliteral.go (#6833).
+			through := build != nil || there && (table || held.Nested != nil)
+			if through && r.frozenLiteralTaken(a, false, false) {
+				defer r.storeThroughTheFreeze(a.Name)()
+			} else if r.refuseTheHeldFreeze(a) {
 				return
 			}
 		} else if r.refuseReadonlySpokenAs(a.Name, spoken, assignedAlone) {

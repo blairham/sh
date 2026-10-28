@@ -75,7 +75,13 @@ func (r *Runner) nestElemLiteral(a *syntax.Assign) {
 		if !keyed {
 			return
 		}
-		if r.heldFreeze.assign == a && r.diag().FrozenElementRefusalNamesTheElement {
+		// A frozen table takes the literal under a key it holds, in one
+		// shell, and refuses it under one it does not. See
+		// interp/frozenliteral.go (#6833).
+		_, keyThere := r.assocsAt(a.Name)[key]
+		if r.frozenLiteralTaken(a, true, keyThere) {
+			// Lifted, and the store below goes ahead.
+		} else if r.heldFreeze.assign == a && r.diag().FrozenElementRefusalNamesTheElement {
 			// Refused under the key it came to: `k='p q'; a[$k]=(p)` over a
 			// frozen table is `a[p q]: is read only`. See
 			// Diagnostics.FrozenElementRefusalNamesTheElement (#6774).
@@ -103,6 +109,11 @@ func (r *Runner) nestElemLiteral(a *syntax.Assign) {
 	if err != nil {
 		r.fatal("%s\n", r.subscriptFailure(text, err))
 		return
+	}
+	// A frozen indexed array takes the literal at any element, in one
+	// shell. See interp/frozenliteral.go (#6833).
+	if r.frozenLiteralTaken(a, false, false) {
+		defer r.storeThroughTheFreeze(a.Name)()
 	}
 	v, built := value()
 	if !built {

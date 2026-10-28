@@ -1110,6 +1110,11 @@ func Semantics() interp.Semantics {
 	s.ArithKeyReadCreatesTheElement = interp.Yes
 	// See interp.Semantics.ArithStoreIntoAFrozenTableIsTaken (#6826).
 	s.ArithStoreIntoAFrozenTableIsTaken = interp.No
+	// An element literal is stored through the freeze — `b=(x y); readonly
+	// b; b[1]=(p)` is `(x (p) )` at 0 — everywhere but directly under a
+	// table's missing key. See
+	// interp.Semantics.FrozenContainerTakesAnElementLiteral (#6833).
+	s.FrozenContainerTakesAnElementLiteral = interp.Yes
 	// See interp.Semantics.ArithSubscriptDollarSingleIsDecoded (#6773).
 	s.ArithSubscriptDollarSingleIsDecoded = interp.No
 	// A negative exponent is a float answer here, not a refusal: `2**-1`

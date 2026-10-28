@@ -2070,6 +2070,7 @@ func Semantics() interp.Semantics {
 	// the axis to decide about.
 	s.BadNameDeclaresTheOperandsAfterIt = interp.No
 	s.BadNameEndsTheDeclaringNotTheAssigning = interp.No
+	s.FrozenContainerTakesAnElementLiteral = interp.No
 	s.TypesetTakesASubscript = interp.No
 	// unanswered UnsetElementEmptiesAnUnwrittenArrayInASubshell: no
 	// arrays, so no element for a subshell to remove.

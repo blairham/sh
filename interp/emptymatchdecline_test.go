@@ -7,9 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/blairham/sh/syntax"
-
 	. "github.com/blairham/sh/interp"
+	"github.com/blairham/sh/syntax"
 )
 
 // alternationGrammar is the pattern grammar plus the alternation these rows

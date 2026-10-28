@@ -13,9 +13,8 @@ import (
 	"sync"
 
 	"github.com/blairham/sh/driver"
-	"github.com/blairham/sh/interp"
-
 	"github.com/blairham/sh/internal/jsonrpc"
+	"github.com/blairham/sh/interp"
 )
 
 // The shell as an ACP Agent: an editor launches it, sends it shell to run,

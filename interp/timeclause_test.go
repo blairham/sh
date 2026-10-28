@@ -10,10 +10,8 @@ import (
 	"regexp"
 	"testing"
 
-	. "github.com/blairham/sh/interp"
-
 	"github.com/blairham/sh/internal/testenv"
-
+	. "github.com/blairham/sh/interp"
 	"github.com/blairham/sh/syntax"
 )
 

@@ -7,9 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/blairham/sh/syntax"
-
 	. "github.com/blairham/sh/interp"
+	"github.com/blairham/sh/syntax"
 )
 
 // An operand C's reader takes whole is the core's, with no dialect consulted.

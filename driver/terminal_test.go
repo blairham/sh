@@ -14,10 +14,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/blairham/sh/interp"
-
 	"github.com/blairham/sh/driver"
 	"github.com/blairham/sh/internal/pty"
+	"github.com/blairham/sh/interp"
 	"github.com/blairham/sh/repl"
 )
 

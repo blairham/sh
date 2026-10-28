@@ -4,9 +4,8 @@
 package tests_test
 
 import (
-	"github.com/blairham/sh/driver"
-
 	binshell "github.com/blairham/sh/cmd/zsh/internal/shell"
+	"github.com/blairham/sh/driver"
 )
 
 // shell is the binary's own Shell, built as cmd/zsh's main builds it.

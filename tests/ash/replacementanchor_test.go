@@ -6,9 +6,8 @@ package ash_test
 import (
 	"testing"
 
-	"github.com/blairham/sh/interp"
-
 	"github.com/blairham/sh/dialect/ash"
+	"github.com/blairham/sh/interp"
 )
 
 // `${v/#pat/rep}` and `${v/%pat/rep}` have no anchors here (#3272).

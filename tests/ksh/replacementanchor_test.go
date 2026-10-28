@@ -6,9 +6,8 @@ package ksh_test
 import (
 	"testing"
 
-	"github.com/blairham/sh/interp"
-
 	"github.com/blairham/sh/dialect/ksh"
+	"github.com/blairham/sh/interp"
 )
 
 // The column that declines an anchor behind an **empty** pattern, and

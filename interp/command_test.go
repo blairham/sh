@@ -8,9 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	. "github.com/blairham/sh/interp"
-
 	"github.com/blairham/sh/internal/testenv"
+	. "github.com/blairham/sh/interp"
 )
 
 // `command -v` says what would run without running it.

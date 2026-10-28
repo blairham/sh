@@ -7,9 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/blairham/sh/syntax"
-
 	. "github.com/blairham/sh/interp"
+	"github.com/blairham/sh/syntax"
 )
 
 // An unanchored span replacement whose *pattern* is empty, which the panel

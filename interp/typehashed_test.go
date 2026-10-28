@@ -8,9 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	. "github.com/blairham/sh/interp"
-
 	"github.com/blairham/sh/internal/testenv"
+	. "github.com/blairham/sh/interp"
 )
 
 // A third wording for an external, once the name is in the command hash — see

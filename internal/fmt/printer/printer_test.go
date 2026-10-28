@@ -9,10 +9,9 @@ import (
 
 	"github.com/blairham/sh/dialect/bash"
 	"github.com/blairham/sh/dialect/zsh"
-	"github.com/blairham/sh/syntax"
-
 	"github.com/blairham/sh/internal/fmt/comments"
 	"github.com/blairham/sh/internal/fmt/printer"
+	"github.com/blairham/sh/syntax"
 )
 
 // Every sample is held to the three promises of docs/design.md: the output

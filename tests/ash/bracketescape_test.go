@@ -6,9 +6,8 @@ package ash_test
 import (
 	"testing"
 
-	"github.com/blairham/sh/interp"
-
 	"github.com/blairham/sh/dialect/ash"
+	"github.com/blairham/sh/interp"
 )
 
 // A backslash inside a bracket expression, which is a member here and an

@@ -14,10 +14,9 @@ import (
 	"time"
 
 	"github.com/blairham/sh/internal/boundary"
+	"github.com/blairham/sh/internal/event"
 	"github.com/blairham/sh/internal/secret"
 	"github.com/blairham/sh/interp"
-
-	"github.com/blairham/sh/internal/event"
 )
 
 func at(sec int64) time.Time { return time.Unix(sec, 0).UTC() }

@@ -14,10 +14,9 @@ import (
 	"sync"
 
 	"github.com/blairham/sh/internal/boundary"
-	"github.com/blairham/sh/interp"
-
 	"github.com/blairham/sh/internal/jsonrpc"
 	"github.com/blairham/sh/internal/termhost"
+	"github.com/blairham/sh/interp"
 )
 
 // The shell as an ACP Client: it launches a coding agent and *is* the

@@ -21,11 +21,10 @@ import (
 	"github.com/blairham/sh/dialect/dash"
 	"github.com/blairham/sh/dialect/ksh"
 	"github.com/blairham/sh/dialect/zsh"
-	"github.com/blairham/sh/syntax"
-
 	"github.com/blairham/sh/internal/fmt/comments"
 	"github.com/blairham/sh/internal/fmt/printer"
 	"github.com/blairham/sh/internal/wild"
+	"github.com/blairham/sh/syntax"
 )
 
 var (

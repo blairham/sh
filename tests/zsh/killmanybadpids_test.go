@@ -8,9 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/blairham/sh/interp"
-
 	"github.com/blairham/sh/dialect/zsh"
+	"github.com/blairham/sh/interp"
 )
 
 // `kill a b c` reports every operand and reports how many failed (#4648).

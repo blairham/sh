@@ -15,9 +15,8 @@ import (
 	"time"
 
 	"github.com/blairham/sh/internal/childguard"
-	"github.com/blairham/sh/syntax"
-
 	. "github.com/blairham/sh/interp"
+	"github.com/blairham/sh/syntax"
 )
 
 // A word that expands to a path something else can open, rather than to text.

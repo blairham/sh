@@ -16,10 +16,9 @@ import (
 	"time"
 
 	"github.com/blairham/sh/driver"
-	"github.com/blairham/sh/interp"
-
 	"github.com/blairham/sh/internal/jsonrpc"
 	"github.com/blairham/sh/internal/mcp"
+	"github.com/blairham/sh/interp"
 )
 
 // The tests drive the server the way a client does — JSON-RPC over a real

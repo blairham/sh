@@ -12,9 +12,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/blairham/sh/syntax"
-
 	. "github.com/blairham/sh/interp"
+	"github.com/blairham/sh/syntax"
 )
 
 // A substitution's pipe outlives the command that named it while one of this

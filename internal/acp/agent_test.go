@@ -17,9 +17,8 @@ import (
 
 	"github.com/blairham/sh/driver"
 	"github.com/blairham/sh/internal/acp"
-	"github.com/blairham/sh/interp"
-
 	"github.com/blairham/sh/internal/jsonrpc"
+	"github.com/blairham/sh/interp"
 )
 
 // A client, for testing an agent against. It records what it was told and

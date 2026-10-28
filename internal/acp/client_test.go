@@ -18,9 +18,8 @@ import (
 	"github.com/blairham/sh/driver"
 	"github.com/blairham/sh/internal/acp"
 	"github.com/blairham/sh/internal/boundary"
-	"github.com/blairham/sh/interp"
-
 	"github.com/blairham/sh/internal/jsonrpc"
+	"github.com/blairham/sh/interp"
 )
 
 // loopback runs this shell's client against this shell's agent, which is worth

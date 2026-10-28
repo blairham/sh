@@ -9,9 +9,8 @@ import (
 	"strings"
 	"testing"
 
-	. "github.com/blairham/sh/interp"
-
 	"github.com/blairham/sh/internal/testenv"
+	. "github.com/blairham/sh/interp"
 )
 
 // The command hash — what PATH resolved a name to, kept so the next run does

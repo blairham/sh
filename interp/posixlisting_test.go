@@ -9,9 +9,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/blairham/sh/syntax"
-
 	. "github.com/blairham/sh/interp"
+	"github.com/blairham/sh/syntax"
 )
 
 // POSIX mode moves three of the four listing axes and leaves the fourth

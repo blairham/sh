@@ -18,9 +18,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/blairham/sh/syntax"
-
 	"github.com/blairham/sh/internal/opened"
+	"github.com/blairham/sh/syntax"
 )
 
 // Builtin is a command the shell runs itself rather than executing.

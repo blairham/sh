@@ -44,9 +44,8 @@ import (
 	"syscall"
 	"unicode/utf8"
 
-	"github.com/blairham/sh/interp"
-
 	"github.com/blairham/sh/internal/boundary"
+	"github.com/blairham/sh/interp"
 )
 
 // The three ways a terminal method fails that a front end has to word in its

@@ -9,9 +9,8 @@ import (
 	"strings"
 	"testing"
 
-	. "github.com/blairham/sh/interp"
-
 	"github.com/blairham/sh/internal/testenv"
+	. "github.com/blairham/sh/interp"
 )
 
 // Which failed candidate a PATH search names once it has found nothing it

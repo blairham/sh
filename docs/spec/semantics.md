@@ -23877,7 +23877,7 @@ the change restores the refusal (#6869).
 
 Not covered: a name reached through a reference — `typeset -n r=b; read -A
 'r[1]'` and `typeset -n r='b[1]'; read -A r` both refill `b` in ksh93 and
-store nothing here, as before this change.
+store nothing here, as before this change (#6993).
 
 Pinned by `tests/ksh/readarrayelement_test.go`,
 `tests/zsh/readarrayelement_test.go` and `interp/readarrayelement_test.go`.

@@ -5077,6 +5077,20 @@ type Runner struct {
 	// Semantics.SubshellExitTrapFiresWhereItStopped. Set where the subshell
 	// is made, and cleared by clone so it reaches no further.
 	subshellUnforked bool
+	// subshellOpenLine is the line the shell was on when it made this
+	// subshell: the `(`, the command holding a substitution, or a pipeline
+	// element's own first line. Set by clone, so every subshell has one,
+	// and a pipeline element's is moved to the element itself. It is where
+	// one dialect counts a subshell's EXIT trap as having fired when the
+	// body ran off its end — see Semantics.SubshellExitTrapFiresAtItsOpeningLine.
+	subshellOpenLine int
+	// stoppedByAnExitRequest says an `exit`, errexit firing or a `${x?word}`
+	// is what ended this shell, as against the script running out or an
+	// error the shell gave up over. Read off the control flag by runExitTrap
+	// as the trap is about to run, because the body clears the flag and a
+	// substitution's shell ends through Finish rather than endSubshell. One
+	// dialect locates the EXIT trap by it — see Runner.firedAt.
+	stoppedByAnExitRequest bool
 
 	// forkedForABackgroundJob marks the shell a background job runs in, so
 	// that a `( … )` standing as that job's body does not take the view above
@@ -6031,6 +6045,9 @@ func (r *Runner) clone() *Runner {
 	c := *r
 	c.fdNode = fdNode
 	c.inSubshell = true
+	// Where the parent was when it made the copy, for the dialect that
+	// counts a subshell's EXIT trap from there. See Runner.subshellOpenLine.
+	c.subshellOpenLine, c.stoppedByAnExitRequest = r.line, false
 	// A copy is running its own commands and not the parent's assignment,
 	// whatever the parent was doing when it made the copy: `x=$(echo
 	// ${q?b})` fails a command's word. See Runner.paramErrorInABareAssignment.
@@ -7681,6 +7698,11 @@ func (r *Runner) runExitTrap(ctx context.Context) (exitedInTheBody bool) {
 	// `trap` inside it replaces rather than recurses.
 	r.exitTrap = nil
 	before := r.status
+	// Whether an exit request is what stopped the shell, read before the
+	// flag goes: one dialect locates the trap by it. See
+	// Runner.stoppedByAnExitRequest.
+	r.stoppedByAnExitRequest = r.ctl == controlExit &&
+		(r.abandon == abandonRequested || r.abandon == abandonParamError)
 	r.ctl = controlNone
 	// And the same treatment for a pending substitution stop, for the same
 	// reason: the handler is more of the script and runs to its end, and the

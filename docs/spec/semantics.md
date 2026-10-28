@@ -26493,7 +26493,7 @@ A FIFO, a socket and a terminal behave as the pipe does. So it is the
 shell) on the descriptor that can be rewound. bash, zsh, dash and BusyBox
 ash prompt on both.
 
-**`SubshellExitTrapFiresWhereItStopped`** — bash — · dash — · ksh93 yes · zsh no (#6899)
+**`SubshellExitTrapFiresWhereItStopped`** — bash — · dash — · ksh93 yes · zsh no
 
 Counts a subshell's own EXIT trap as having fired on the last line the
 subshell ran (its last command, or its `exit`) rather than where the shell's
@@ -26508,6 +26508,47 @@ own trap is counted from. ksh93u+ 2012-08-01, script files (#6720):
 
 The forked shapes count from 1, as the shell's own trap does: a pipeline
 element before the last and a background job are the contexts ksh93 forks.
+
+**`SubshellExitTrapFiresAtItsOpeningLine`** — bash — · dash — · ksh93 no · zsh yes
+
+Counts a subshell's own EXIT trap as having fired on the line that opened the
+subshell when its body ran off its end, and on the line of the `exit` or the
+failing command when one ended it. zsh 5.9.2 under `-f`, script files, a
+three-line body whose second line fails and whose third writes `$LINENO`
+(#6899):
+
+| file | zsh |
+| --- | --- |
+| `(` on line 2, the trap on 2 or 3, body to line 6 | `:2:`, `L=2` |
+| `: \|` on line 2 and `(` on line 3 | `:3:` |
+| `{ … } \| cat` with `{` on line 2; `( … ) &`; `: \| ( … )`; nested `( )` | the opening line |
+| `x=$(` on line 2; `echo a \` on 2 and `$(` on 3; `cat <(`; a backquote | the command's line, 2 |
+| `exit 0` on line 8, bare, inside an `if` or inside a `{ }` | `:8:`, `L=8` |
+| `f` called on line 11, whose body exits | `:11:` |
+| `set -e` and a `false` on line 9 | `:9:` |
+| the shell's own trap, six-line script (control) | `:7:` |
+
+Inside a function the same lines are counted from the function, as every zsh
+location is. Every subshell shape, forked or not, where `SubshellExitTrapFires-
+WhereItStopped` is about the shapes ksh93 does not fork; a `{ … }` as a
+pipeline's last element runs in the shell itself in zsh, so its trap is the
+shell's own. ksh93 counts the last line the subshell ran — `(trap …` on line 2
+with the last command on line 7 is counted from 7, where zsh counts from 2 —
+and bash and dash number a trap body from its own first line, so neither reads
+where it fired.
+
+The `exit` half holds for the shell's own trap too, and is folded into
+`ExitTrapFiresPastTheEnd`'s yes: `exit 0` on line 6 of a six-line file,
+`false; exit`, `set -e; false` on line 7 and `: ${x?word}` on line 6 each
+locate the trap at that command's line, and an `exit` inside a function at the
+call's line; a readonly reassignment, a division by zero and an unset name
+under `set -u` leave the shell past the end, at 7, as the script running out
+does.
+
+Measured and not modeled: an `exit` inside text `eval` runs or inside a
+sourced file locates the trap in that text or file — `(eval):1:`,
+`./inc.sh:1:` with `$LINENO` 1 — where this shell names the script and the
+`eval`'s or `.`'s line.
 
 **A function-local EXIT trap runs in the caller's frame.** Unanimous between
 the two columns that have one, so a correction and not an axis:

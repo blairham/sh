@@ -1034,6 +1034,11 @@ func Semantics() interp.Semantics {
 	// here, and this is the one that describes what zsh did.
 	s.TrapBodyRunsWhatParsed = interp.No
 	s.ExitTrapFiresPastTheEnd = interp.Yes
+	// A subshell's own is counted from the line that opened it when the
+	// body ran out, and from the `exit` or the failing command otherwise:
+	// measured 2026-10-27, `(` on line 2 with a body to line 6 locates the
+	// trap at 2, and an `exit 0` on line 8 at 8 (#6899).
+	s.SubshellExitTrapFiresAtItsOpeningLine = interp.Yes
 	// unanswered ExitTrapFiresWhereTheScriptStopped: asked only where the
 	// axis above says no, and it says yes here.
 	// A `kill -CHLD` naming the shell runs nothing: the condition is a child

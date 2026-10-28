@@ -52,10 +52,30 @@ func (t TrapBodyLineStyle) String() string {
 // no such line, and the two dialects that ask answer differently: ksh93
 // counts it as the first line, which makes its body read like a script of
 // its own, and zsh counts it as the line after the script's last, which is
-// where the shell has got to once the script is done.
+// where the shell has got to once the script is done — when the script ran
+// out. An `exit`, errexit firing or a `${x?word}` ending the shell leaves it
+// on that command's line, and zsh counts the trap from there: measured
+// 2026-10-27 on zsh 5.9.2 under `-f`, a three-line body failing on its
+// second line over a six-line script file is located at 6 for `exit 0` on
+// line 6, at 6 for `false; exit` with the `exit` there, at 7 for `set -e`
+// and a `false` on 7, at 6 for `: ${x?word}` on 6, at the call's line for
+// an `exit` inside a function, and the same by `-c`; where a readonly
+// reassignment, a division by zero or an unset name under `set -u` ending
+// the script leave it at 7, past the end, as the script running out does
+// (#6899).
 func (r *Runner) firedAt() int {
 	if !r.inExitTrap {
 		return r.line
+	}
+	if r.inSubshell && r.ask(r.sem().SubshellExitTrapFiresAtItsOpeningLine, "where a subshell's EXIT trap counts as having fired") {
+		// A subshell's own EXIT trap, in the dialect that counts it from
+		// the line that opened the subshell when the body ran out, and
+		// from the `exit` or the failing command otherwise. See
+		// Semantics.SubshellExitTrapFiresAtItsOpeningLine.
+		if r.stoppedByAnExitRequest {
+			return r.line
+		}
+		return r.subshellOpenLine
 	}
 	if r.subshellUnforked && r.sem().SubshellExitTrapFiresWhereItStopped == Yes {
 		// A subshell's own EXIT trap, in the dialect that counts it from the
@@ -64,6 +84,10 @@ func (r *Runner) firedAt() int {
 		return r.line
 	}
 	if r.ask(r.sem().ExitTrapFiresPastTheEnd, "where the EXIT trap counts as having fired") {
+		if r.stoppedByAnExitRequest {
+			// The shell did not run out; the request left it on a line.
+			return r.line
+		}
 		return r.programEnd
 	}
 	// BusyBox ash names the line the script had got to: see

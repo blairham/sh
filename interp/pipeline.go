@@ -688,6 +688,11 @@ func (r *Runner) runPipeline(ctx context.Context, p *syntax.Pipeline, timing *pi
 				return
 			}
 			start := time.Now()
+			// An element opens on its own line and not the pipeline's:
+			// measured 2026-10-27 on zsh 5.9.2, `: |` on line 2 over `(` on
+			// line 3 counts the element's EXIT trap from 3 (#6899). See
+			// Runner.subshellOpenLine.
+			subs[i].subshellOpenLine = subs[i].commandLine(cmd)
 			errs[i] = subs[i].command(ctx, cmd)
 			if i == n-1 && subs[i].subshellElementJudgesItself(cmd) {
 				// One column judges a subshell written as the last element

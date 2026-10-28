@@ -5048,6 +5048,11 @@ type Runner struct {
 	// main script, and not in either of those — so the copy must know it is
 	// a copy.
 	inSubshell bool
+	// copyMoved marks a copy that has done a `cd` of its own, or a copy of
+	// one. It is the only kind of copy that opens a hold on its directory:
+	// one that has not moved is where its shell is, and answers as its shell
+	// does. See holdDirectory (#6560).
+	copyMoved bool
 	// subshellDepth is how many of those boundaries are between this runner
 	// and the shell that was started, which is a *count* where inSubshell is
 	// a flag. A dialect has a parameter for it — see [Runner.SubshellDepth],
@@ -6068,10 +6073,13 @@ func (r *Runner) clone() *Runner {
 	// And the hold on this runner's directory, taken now where it is not
 	// held already, because a fork inherits the directory itself and not a
 	// name for it — and because the copy may be the thing that removes the
-	// directory this runner is in. For a runner that has not moved since it
-	// last held, which is every `$(…)` and `(…)` of an ordinary script, this
-	// is a comparison and no open. See holdDirectory (#6560).
-	r.holdDirectory()
+	// directory this runner is in. Only a copy that has moved asks: the
+	// shell took its hold at its own `cd`, and a copy that has not moved is
+	// where the shell is, so every `$(…)` and `(…)` of an ordinary script
+	// opens nothing here. See holdDirectory (#6560).
+	if r.copyMoved {
+		r.holdDirectory()
+	}
 	c := *r
 	c.fdNode = fdNode
 	c.inSubshell = true

@@ -8,6 +8,7 @@ package interp_test
 import (
 	"os"
 	"path/filepath"
+	"runtime/debug"
 	"strings"
 	"testing"
 	"time"
@@ -195,15 +196,19 @@ func TestABackgroundJobKeepsTheReadingEndOfASubstitutionOpen(t *testing.T) {
 // What each half detects was checked by breaking the fix in two directions.
 // A count that never reaches zero is caught by the bound, as a named failure
 // at 30 seconds rather than a package timeout. A descriptor left open is
-// caught here — 56 against a baseline of 6 over 25 rounds — but only when it
-// is a *raw* one: a leaked `*os.File` is closed by the finalizer the runtime
-// puts on it, so an equivalent leak spelled `os.Open` passes this. That is
-// worth knowing rather than worth working around; the descriptors this
-// package holds a substitution's ends in are `*os.File`, so the count here is
-// evidence about the syscall-level end of it and the bound is what covers the
-// rest.
+// caught here — 56 against a baseline of 6 over 25 rounds.
+//
+// The collector is off while this counts, so a leaked `*os.File` is counted
+// too rather than closed behind the count's back by the cleanup the runtime
+// runs on it. With it on, that was a hole with a real resident: after #6977
+// every clone opened a hold on its shell's directory that only a cleanup
+// released, and this passed on both platforms on that pull request and then
+// failed on main — 139 open against 89 — the one time a collection came
+// late. With it off, the same tree fails here 56 against 6, every run.
 func TestSubstitutionsWithBackgroundJobsLeaveNoDescriptorsBehind(t *testing.T) {
 	const rounds = 25
+
+	defer debug.SetGCPercent(debug.SetGCPercent(-1))
 
 	before, err := openDescriptors()
 	if err != nil {

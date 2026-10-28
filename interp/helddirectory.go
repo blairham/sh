@@ -221,6 +221,17 @@ func (r *Runner) holdDirectory() *heldDirectory {
 		// from.
 		r.dropDirectoryHold()
 	}
+	if r.inSubshell && !r.copyMoved {
+		// A copy that has not moved is where its shell is, and answers as its
+		// shell does: through the hold it inherited, which the comparison
+		// above returned, or by the name where its shell held nothing.
+		// Opening one here put a descriptor on every `(…)`, `$(…)` and `<(…)`
+		// of a shell that held none, and a copy's hold is shared the moment
+		// it is copied again, so nothing closed it but the collector — which
+		// TestSubstitutionsWithBackgroundJobsLeaveNoDescriptorsBehind does
+		// not wait for.
+		return nil
+	}
 	// A copy that has moved opens one of its own here, as the shell does —
 	// but only here, at the first ask, and never at its `cd`. The asks are
 	// the things that could change the directory under it or need it: an

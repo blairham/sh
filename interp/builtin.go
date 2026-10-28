@@ -5850,13 +5850,17 @@ func biCd(r *Runner, ctx context.Context, args []string) int {
 		// difference.
 		r.dropDirectoryHold()
 	}
-	if !r.inSubshell {
+	if r.inSubshell {
 		// A copy's hold waits for the first thing that needs it rather than
 		// being taken here, which is what keeps `$(cd dir && echo y)` free
-		// of an open: see holdDirectory, which has the measurement. The case
+		// of an open: see holdDirectory, which has the measurement. What the
+		// `cd` records is that the copy is somewhere its shell is not, which
+		// is the one thing that lets a copy open a hold at all. The case
 		// above — a rename from a subshell with nothing in between — is
 		// covered for a copy too, since making the inner copy is itself an
 		// ask.
+		r.copyMoved = true
+	} else {
 		r.holdDirectory()
 	}
 	r.setVar("OLDPWD", old)

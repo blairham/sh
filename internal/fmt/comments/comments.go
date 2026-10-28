@@ -13,9 +13,8 @@ package comments
 import (
 	"sort"
 
-	"github.com/blairham/sh/syntax"
-
 	"github.com/blairham/sh/internal/fmt/walk"
+	"github.com/blairham/sh/syntax"
 )
 
 // Comment is one recovered comment.

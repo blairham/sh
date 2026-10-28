@@ -6,9 +6,8 @@ package zsh_test
 import (
 	"testing"
 
-	"github.com/blairham/sh/interp"
-
 	"github.com/blairham/sh/dialect/zsh"
+	"github.com/blairham/sh/interp"
 )
 
 // A `#` or a `%` after the **global** `//` is an anchor here and is the

@@ -6,9 +6,8 @@ package bash_test
 import (
 	"testing"
 
-	"github.com/blairham/sh/interp"
-
 	"github.com/blairham/sh/dialect/bash"
+	"github.com/blairham/sh/interp"
 )
 
 // bash writes the `X` at either end: `v=abcabc` gives `Xabcabc` for

@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/blairham/sh/driver"
-
 	"github.com/blairham/sh/internal/boundary"
 	"github.com/blairham/sh/internal/event"
 	"github.com/blairham/sh/internal/jsonrpc"

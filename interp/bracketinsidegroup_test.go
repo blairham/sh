@@ -6,9 +6,8 @@ package interp_test
 import (
 	"testing"
 
-	"github.com/blairham/sh/syntax"
-
 	. "github.com/blairham/sh/interp"
+	"github.com/blairham/sh/syntax"
 )
 
 // A bracket expression inside a group (#3075).

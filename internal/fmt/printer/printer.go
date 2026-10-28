@@ -16,10 +16,9 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/blairham/sh/syntax"
-
 	"github.com/blairham/sh/internal/fmt/comments"
 	"github.com/blairham/sh/internal/fmt/walk"
+	"github.com/blairham/sh/syntax"
 )
 
 // Format lays out f, which must be src's tree, with cs recovered from the

@@ -6,9 +6,8 @@ package zsh_test
 import (
 	"testing"
 
-	"github.com/blairham/sh/interp"
-
 	"github.com/blairham/sh/dialect/zsh"
+	"github.com/blairham/sh/interp"
 )
 
 // The backslash protects the character behind it **and** joins the set,

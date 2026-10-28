@@ -6,9 +6,8 @@ package ash_test
 import (
 	"testing"
 
-	"github.com/blairham/sh/interp"
-
 	"github.com/blairham/sh/dialect/ash"
+	"github.com/blairham/sh/interp"
 )
 
 // A substring of `$@` or `$*` counts characters of the parameters joined

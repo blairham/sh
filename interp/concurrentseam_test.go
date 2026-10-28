@@ -11,7 +11,6 @@ import (
 	"time"
 
 	. "github.com/blairham/sh/interp"
-
 	"github.com/blairham/sh/syntax"
 )
 

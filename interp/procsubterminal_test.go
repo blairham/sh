@@ -11,9 +11,8 @@ import (
 	"syscall"
 	"testing"
 
-	"github.com/blairham/sh/syntax"
-
 	. "github.com/blairham/sh/interp"
+	"github.com/blairham/sh/syntax"
 )
 
 // A process substitution's body must not hand the terminal to its child.

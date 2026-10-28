@@ -6,9 +6,8 @@ package zsh_test
 import (
 	"testing"
 
-	"github.com/blairham/sh/interp"
-
 	"github.com/blairham/sh/dialect/zsh"
+	"github.com/blairham/sh/interp"
 )
 
 // zsh answers bash's way here rather than ksh93's: `v=abcabc` gives

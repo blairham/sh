@@ -6,9 +6,8 @@ package dash_test
 import (
 	"testing"
 
-	"github.com/blairham/sh/interp"
-
 	"github.com/blairham/sh/dialect/dash"
+	"github.com/blairham/sh/interp"
 )
 
 // dash has no span replacement at all, so neither axis behind it is dash's to

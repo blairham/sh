@@ -7,9 +7,8 @@ import (
 	"testing"
 
 	"github.com/blairham/sh/internal/acp"
-	"github.com/blairham/sh/interp"
-
 	"github.com/blairham/sh/internal/jsonrpc"
+	"github.com/blairham/sh/interp"
 )
 
 // #786 measured that two of the three published adapters run their commands in

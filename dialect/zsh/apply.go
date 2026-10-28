@@ -11,7 +11,6 @@ import (
 
 	"github.com/blairham/sh/dialect/zsh/modules/files"
 	"github.com/blairham/sh/dialect/zsh/modules/mathfunc"
-
 	"github.com/blairham/sh/interp"
 )
 

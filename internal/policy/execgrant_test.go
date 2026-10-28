@@ -8,9 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/blairham/sh/interp"
-
 	"github.com/blairham/sh/internal/policy"
+	"github.com/blairham/sh/interp"
 )
 
 // TestAllowExecIsRefusedBecauseItRescindsTheFile is #4409, written as the

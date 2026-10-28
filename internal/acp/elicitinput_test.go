@@ -15,7 +15,6 @@ import (
 
 	"github.com/blairham/sh/driver"
 	"github.com/blairham/sh/internal/acp"
-
 	"github.com/blairham/sh/internal/jsonrpc"
 )
 

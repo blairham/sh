@@ -8,7 +8,6 @@ import (
 	"testing"
 
 	"github.com/blairham/sh/driver"
-
 	"github.com/blairham/sh/internal/testenv"
 )
 

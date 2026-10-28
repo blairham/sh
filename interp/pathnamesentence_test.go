@@ -7,9 +7,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	. "github.com/blairham/sh/interp"
-
 	"github.com/blairham/sh/internal/testenv"
+	. "github.com/blairham/sh/interp"
 )
 
 // An operand written with a slash in it was never searched for, so a dialect

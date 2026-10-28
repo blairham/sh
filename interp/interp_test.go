@@ -15,7 +15,6 @@ import (
 	"github.com/blairham/sh/internal/childguard"
 	"github.com/blairham/sh/internal/treeguard"
 	. "github.com/blairham/sh/interp"
-
 	"github.com/blairham/sh/syntax"
 )
 

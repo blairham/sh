@@ -14,9 +14,8 @@ import (
 
 	"github.com/blairham/sh/internal/acp"
 	"github.com/blairham/sh/internal/boundary"
-	"github.com/blairham/sh/interp"
-
 	"github.com/blairham/sh/internal/jsonrpc"
+	"github.com/blairham/sh/interp"
 )
 
 // withTerminals wires a client that serves terminal/* to a stand-in agent, and

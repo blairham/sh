@@ -990,7 +990,18 @@ func (r *Runner) assignThroughFlags(e *syntax.ParamExpr, indirect *indirectTarge
 		// is two lines where a joined word would be one.
 		return elems, true, true
 	}
-	v := r.joinWord(e.Arg)
+	// The word as a **value**, which is what the route without a flag group
+	// stores: not split, and not matched against the filesystem. joinWord
+	// matched it, so `${(P)n::=(a)}` stored and substituted the files the
+	// pattern found — `q` for `q*`, `number expected` for `(a)`, a miss for
+	// `zz*` — where zsh 5.9.2 keeps the characters under every group and
+	// every assigning operator, and under `(U)` and `(j:,:)` alike. The
+	// `-` and `+` words are the control and stay command-line words:
+	// `${(U)v:-(a)}` is `no matches found: (A)` in both. What is read back
+	// as a pattern afterwards is GlobExpansionResults's and the group's
+	// tilde's to say, as for every result: `${(P)~n::=q*}` is `q`. Measured
+	// 2026-10-27 (#6966); see tests/zsh/flaggedassignliteral_test.go.
+	v := r.substitutedWordText(e.Arg)
 	switch {
 	case indirect != nil:
 		// `(P)` moved the name one step along, and the assignment moves with

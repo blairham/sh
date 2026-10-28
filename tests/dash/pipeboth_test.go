@@ -42,7 +42,7 @@ func TestNoPipeBothStreams(t *testing.T) {
 			continue
 		}
 		const want = `Syntax error: "&" unexpected`
-		if got := dash.Diagnostics().ParseFailure(err); got != want {
+		if got := diagTable(dash.Diagnostics()).ParseFailure(err); got != want {
 			t.Errorf("%q:\n got %q\nwant %q", src, got, want)
 		}
 	}
@@ -61,7 +61,7 @@ func TestABarBeforeAnyCommandNamesTheBar(t *testing.T) {
 		t.Fatal("`|& cat` parsed, want a refusal")
 	}
 	const want = `Syntax error: "|" unexpected`
-	if got := dash.Diagnostics().ParseFailure(err); got != want {
+	if got := diagTable(dash.Diagnostics()).ParseFailure(err); got != want {
 		t.Errorf("got %q, want %q", got, want)
 	}
 }
@@ -99,7 +99,7 @@ func TestABarWithNoCommandNamesWhatItFound(t *testing.T) {
 			t.Errorf("%q parsed, want a refusal", tc.src)
 			continue
 		}
-		if got := dash.Diagnostics().ParseFailure(err); got != tc.want {
+		if got := diagTable(dash.Diagnostics()).ParseFailure(err); got != tc.want {
 			t.Errorf("%q:\n got %q\nwant %q", tc.src, got, tc.want)
 		}
 	}

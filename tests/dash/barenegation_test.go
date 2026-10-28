@@ -37,7 +37,7 @@ func TestABareNegationIsRefusedHere(t *testing.T) {
 			t.Errorf("%q parsed, want a syntax error", tc.src)
 			continue
 		}
-		if got := dash.Diagnostics().ParseFailure(err); got != tc.want {
+		if got := diagTable(dash.Diagnostics()).ParseFailure(err); got != tc.want {
 			t.Errorf("%q:\n got %q\nwant %q", tc.src, got, tc.want)
 		}
 	}

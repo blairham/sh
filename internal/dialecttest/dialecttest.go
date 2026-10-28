@@ -195,7 +195,8 @@ func (p Preset) Parse(t testing.TB, src string) *syntax.File {
 // exists at all: the near-identical local runner is how an omission spreads.
 func (p Preset) RunLinesOn(t testing.TB, r *interp.Runner, src string) int {
 	t.Helper()
-	d := p.Diagnostics().ForScript()
+	own := p.Diagnostics()
+	d := own.ForScript()
 	name := r.Name
 	if name == "" {
 		name = p.Name

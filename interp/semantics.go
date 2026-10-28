@@ -10343,7 +10343,7 @@ type Semantics struct {
 	// the expression could not be evaluated: 2 where this is Yes, 1 where it
 	// is No.
 	//
-	// The sentence is not the question — that is Diagnostics, and the two
+	// The sentence is not the question — that is *Diagnostics, and the two
 	// shells measured here already word it their own way. What differs is
 	// what the construct leaves for the next line to read. Measured
 	// 2026-09-10, `(( 1+ )); echo $?`:

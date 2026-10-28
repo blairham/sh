@@ -19,7 +19,7 @@ func forHeaderDiagnostic(t *testing.T, src string) string {
 	if err == nil {
 		t.Fatalf("%s: parsed, want a refusal", src)
 	}
-	return bash.Diagnostics().ParseDiagnostic("bash", "-c", err, src)
+	return diagTable(bash.Diagnostics()).ParseDiagnostic("bash", "-c", err, src)
 }
 
 // What this shell says about a C-style `for` header whose separator count is
@@ -72,7 +72,7 @@ func TestARefusedForHeaderStopsTheWholeScript(t *testing.T) {
 	if got := forHeaderDiagnostic(t, src); got != want {
 		t.Errorf("\n got %q\nwant %q", got, want)
 	}
-	if st := bash.Diagnostics().SyntaxErrorStatus; st != 2 {
+	if st := diagTable(bash.Diagnostics()).SyntaxErrorStatus; st != 2 {
 		t.Errorf("syntax-error status %d, want 2", st)
 	}
 }

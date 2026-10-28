@@ -32,15 +32,15 @@ func TestAParseFailureAtAPromptNamesNoLine(t *testing.T) {
 			t.Errorf("%q parsed, want a refusal", tc.src)
 			continue
 		}
-		if got := bash.Diagnostics().ForPrompt().ParseDiagnostic("bash", "", err, ""); got != tc.prompt {
+		if got := diagTable(bash.Diagnostics()).ForPrompt().ParseDiagnostic("bash", "", err, ""); got != tc.prompt {
 			t.Errorf("%q at a prompt:\n got %q\nwant %q", tc.src, got, tc.prompt)
 		}
 	}
 	// The script route still names the line, which is what says the prompt
 	// answer is the route's and not a wording that lost it.
 	_, err := syntax.Parse("if; then\n", bash.Dialect())
-	if got := bash.Diagnostics().ForScript().ParseDiagnostic("s.sh", "", err, "if; then\n"); got == "" ||
-		got == bash.Diagnostics().ForPrompt().ParseDiagnostic("s.sh", "", err, "") {
+	if got := diagTable(bash.Diagnostics()).ForScript().ParseDiagnostic("s.sh", "", err, "if; then\n"); got == "" ||
+		got == diagTable(bash.Diagnostics()).ForPrompt().ParseDiagnostic("s.sh", "", err, "") {
 		t.Errorf("a script says %q, which is the prompt's answer", got)
 	}
 }

@@ -37,14 +37,16 @@ import (
 // past stackCeiling; a start that needs more dies with the runtime's "stack
 // overflow" rather than passing. Measured on darwin/arm64 by lowering the
 // ceiling a power of two at a time until a row failed, since a stack only
-// grows by doubling: every row below needs 128 KB today and fails at 64 KB,
-// and before #6491 every one of them needed 512 KB. The ceiling is one
-// doubling above today's, so that another architecture's frames or the race
-// detector's do not fail it, and one below what copying the Shell from frame
-// to frame cost. It does not catch one more copy on one frame; the frames
-// that hold one today, on paths every start takes, are the ones that call a
-// Diagnostics method, since those take the 10 KB table by value.
-const stackCeiling = 256 << 10
+// grows by doubling: every row below needs 32 KB today and fails at 16 KB;
+// before #6610 every one needed 128 KB, and before #6491 512 KB. The ceiling
+// is one doubling above today's, so that another architecture's frames or the
+// race detector's do not fail it, and two below what the Diagnostics table's
+// value-receiver methods cost. Those held a 10 KB copy of the table on the
+// frame of every function that called one, on an error path or not — 153
+// frames of 20 KB or more in interp and driver — and a start's deepest path
+// ran through several of them. The methods take the table by pointer now, and
+// TestADiagnosticsMethodWritesOnlyACopy in interp keeps them from writing it.
+const stackCeiling = 64 << 10
 
 // stackHelperShell names the shell a re-executed copy of this binary starts,
 // and stackHelperCeiling the ceiling it starts it under.

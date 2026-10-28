@@ -126,9 +126,9 @@ func (r *Runner) expandThePrefixUpToTheFrozenName(assigns []*syntax.Assign, refu
 			// true` is `+ a=1`, the refusal, `+ true` in bash 5.3.20 (#5546).
 			// The walk behind this one does not write it again.
 			d := r.diag()
-			for _, w := range r.prefixTraceWords([]*syntax.Assign{a}, *d) {
+			for _, w := range r.prefixTraceWords([]*syntax.Assign{a}, d) {
 				r.awaitTraceTurn()
-				r.traceLine(w, *d)
+				r.traceLine(w, d)
 				r.releaseTraceTurn()
 			}
 			r.prefixTracedEarly = append(r.prefixTracedEarly, a)

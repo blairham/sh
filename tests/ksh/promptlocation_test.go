@@ -37,12 +37,12 @@ func TestAParseFailureAtAPromptNamesNoLine(t *testing.T) {
 			t.Errorf("%q parsed, want a refusal", tc.src)
 			continue
 		}
-		if got := ksh.Diagnostics().ForPrompt().ParseFailure(err); got != tc.prompt {
+		if got := diagTable(ksh.Diagnostics()).ForPrompt().ParseFailure(err); got != tc.prompt {
 			t.Errorf("%q at a prompt:\n got %q\nwant %q", tc.src, got, tc.prompt)
 		}
 		// And the script sentence is the same one with the line in it, which
 		// is the rule the pair is built from.
-		script := ksh.Diagnostics().ParseFailure(err)
+		script := diagTable(ksh.Diagnostics()).ParseFailure(err)
 		if script == tc.prompt {
 			t.Errorf("%q: the script sentence is the prompt's, so no line is named anywhere", tc.src)
 		}
@@ -55,7 +55,7 @@ func TestAParseFailureAtAPromptNamesNoLine(t *testing.T) {
 // three lines was measured — every earlier row had been a one-line input, and
 // line 1 is where the two readings agree.
 func TestAPromptLocationNamesALinePastTheFirst(t *testing.T) {
-	d := ksh.Diagnostics().ForPrompt()
+	d := diagTable(ksh.Diagnostics()).ForPrompt()
 	for _, c := range []struct {
 		line int
 		want string

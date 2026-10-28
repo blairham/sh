@@ -279,7 +279,7 @@ func TestTheScalarOverATableAnswerIsThisDialects(t *testing.T) {
 	if got := zsh.Semantics().ScalarStoredOverATableIsRefused; got != interp.No {
 		t.Errorf("ScalarStoredOverATableIsRefused = %v, want No", got)
 	}
-	if got, want := zsh.Diagnostics().ScalarStoredOverATable,
+	if got, want := diagTable(zsh.Diagnostics()).ScalarStoredOverATable,
 		"%s: attempt to set associative array to scalar"; got != want {
 		t.Errorf("ScalarStoredOverATable = %q, want %q", got, want)
 	}

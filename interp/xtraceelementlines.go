@@ -37,7 +37,7 @@ func (r *Runner) elementLinesFollowTheirStores(a *syntax.Assign, e *expandedAssi
 		// a second time here.
 		return false
 	}
-	lines, ok := r.traceLiteralAsElementWrites(a, e, *r.diag())
+	lines, ok := r.traceLiteralAsElementWrites(a, e, r.diag())
 	if !ok {
 		return false
 	}
@@ -74,7 +74,7 @@ func (r *Runner) traceUnstoredElementLines(e *expandedAssign) {
 func (r *Runner) writeHeldElementLine(e *expandedAssign) {
 	d := r.diag()
 	r.awaitTraceTurn()
-	r.traceLine(e.elementLines[e.elementLinesWritten], *d)
+	r.traceLine(e.elementLines[e.elementLinesWritten], d)
 	r.releaseTraceTurn()
 	e.elementLinesWritten++
 }

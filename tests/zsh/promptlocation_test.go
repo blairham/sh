@@ -21,11 +21,11 @@ func TestAParseFailureAtAPromptNamesNoLine(t *testing.T) {
 	if err == nil {
 		t.Fatal("the input parsed, want a refusal")
 	}
-	if got, want := zsh.Diagnostics().ForPrompt().ParseDiagnostic("zsh", "", err, ""), "zsh: parse error near `\\n'\n"; got != want {
+	if got, want := diagTable(zsh.Diagnostics()).ForPrompt().ParseDiagnostic("zsh", "", err, ""), "zsh: parse error near `\\n'\n"; got != want {
 		t.Errorf("at a prompt:\n got %q\nwant %q", got, want)
 	}
 	// The general answer still carries the line, tightly joined.
-	if got, want := zsh.Diagnostics().ParseDiagnostic("zsh", "", err, ""), "zsh:3: parse error near `\\n'\n"; got != want {
+	if got, want := diagTable(zsh.Diagnostics()).ParseDiagnostic("zsh", "", err, ""), "zsh:3: parse error near `\\n'\n"; got != want {
 		t.Errorf("elsewhere:\n got %q\nwant %q", got, want)
 	}
 }

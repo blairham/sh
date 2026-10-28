@@ -135,7 +135,7 @@ func TestBashRefusesAnInvocationOptionWithItsOwnUsageBlock(t *testing.T) {
 // this shell does not have either: `notify` is not in AddSetOptions, so there
 // is nothing for the letter to route to and the refusal is the whole answer.
 func TestBashKeepsTheSetLettersItHasAndThisShellDoesNot(t *testing.T) {
-	if got, want := bash.Diagnostics().UnimplementedOptionLetters["set"], "b"; got != want {
+	if got, want := diagTable(bash.Diagnostics()).UnimplementedOptionLetters["set"], "b"; got != want {
 		t.Errorf("UnimplementedOptionLetters[set] = %q, want %q", got, want)
 	}
 	for _, l := range "b" {

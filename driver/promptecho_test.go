@@ -26,8 +26,8 @@ func TestTheFrontEndCarriesWhetherAPromptEchoesTheLine(t *testing.T) {
 			Name:      "testsh",
 			Semantics: interp.Semantics{PromptEchoesTheLineWhereThereIsNoTerminal: answer},
 		}.withDefaults([]string{"testsh"})
-		r := sh.newRunner("testsh", nil, sh.Diagnostics, interp.RouteCommandString)
-		if got := sh.frontEnd(r, "testsh", sh.Diagnostics).EchoTheLineWithoutATerminal; got != answer {
+		r := sh.newRunner("testsh", nil, &sh.Diagnostics, interp.RouteCommandString)
+		if got := sh.frontEnd(r, "testsh", &sh.Diagnostics).EchoTheLineWithoutATerminal; got != answer {
 			t.Errorf("the prompt was told %v, want %v", got, answer)
 		}
 	}
@@ -43,8 +43,8 @@ func TestTheFrontEndCarriesTheWordForLeavingASession(t *testing.T) {
 			Name:        "testsh",
 			Diagnostics: interp.Diagnostics{LeavingAPromptSession: answer},
 		}.withDefaults([]string{"testsh"})
-		r := sh.newRunner("testsh", nil, sh.Diagnostics, interp.RouteCommandString)
-		if got := sh.frontEnd(r, "testsh", sh.Diagnostics).Leaving; got != answer {
+		r := sh.newRunner("testsh", nil, &sh.Diagnostics, interp.RouteCommandString)
+		if got := sh.frontEnd(r, "testsh", &sh.Diagnostics).Leaving; got != answer {
 			t.Errorf("the prompt was told %q, want %q", got, answer)
 		}
 	}
@@ -59,8 +59,8 @@ func TestTheFrontEndCarriesWhetherTheEndOfInputInAConstructEndsTheSession(t *tes
 			Name:      "testsh",
 			Semantics: interp.Semantics{EndOfInputInAConstructEndsTheSession: answer},
 		}.withDefaults([]string{"testsh"})
-		r := sh.newRunner("testsh", nil, sh.Diagnostics, interp.RouteCommandString)
-		if got := sh.frontEnd(r, "testsh", sh.Diagnostics).EndOfInputInAConstructEndsTheSession; got != answer {
+		r := sh.newRunner("testsh", nil, &sh.Diagnostics, interp.RouteCommandString)
+		if got := sh.frontEnd(r, "testsh", &sh.Diagnostics).EndOfInputInAConstructEndsTheSession; got != answer {
 			t.Errorf("the prompt was told %v, want %v", got, answer)
 		}
 	}
@@ -74,8 +74,8 @@ func TestTheFrontEndCarriesWhetherTheEndOfInputEndsAContinuedHeredocLine(t *test
 			Name:      "testsh",
 			Semantics: interp.Semantics{EndOfInputEndsAContinuedHeredocLine: answer},
 		}.withDefaults([]string{"testsh"})
-		r := sh.newRunner("testsh", nil, sh.Diagnostics, interp.RouteCommandString)
-		if got := sh.frontEnd(r, "testsh", sh.Diagnostics).EndOfInputEndsAContinuedHeredocLine; got != answer {
+		r := sh.newRunner("testsh", nil, &sh.Diagnostics, interp.RouteCommandString)
+		if got := sh.frontEnd(r, "testsh", &sh.Diagnostics).EndOfInputEndsAContinuedHeredocLine; got != answer {
 			t.Errorf("the prompt was told %v, want %v", got, answer)
 		}
 	}
@@ -89,8 +89,8 @@ func TestTheFrontEndCarriesWhetherTheEndOfInputEndsOneHeredocBody(t *testing.T) 
 			Name:      "testsh",
 			Semantics: interp.Semantics{EndOfInputEndsOneHeredocBody: answer},
 		}.withDefaults([]string{"testsh"})
-		r := sh.newRunner("testsh", nil, sh.Diagnostics, interp.RouteCommandString)
-		if got := sh.frontEnd(r, "testsh", sh.Diagnostics).EndOfInputEndsOneHeredocBody; got != answer {
+		r := sh.newRunner("testsh", nil, &sh.Diagnostics, interp.RouteCommandString)
+		if got := sh.frontEnd(r, "testsh", &sh.Diagnostics).EndOfInputEndsOneHeredocBody; got != answer {
 			t.Errorf("the prompt was told %v, want %v", got, answer)
 		}
 	}

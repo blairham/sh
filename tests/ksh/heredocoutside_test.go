@@ -19,7 +19,7 @@ func refuseAsKsh(t *testing.T, src string) string {
 	if err == nil {
 		t.Fatalf("%q parsed, want a refusal", src)
 	}
-	return ksh.Diagnostics().ParseDiagnostic("ksh", "-c", err, src)
+	return diagTable(ksh.Diagnostics()).ParseDiagnostic("ksh", "-c", err, src)
 }
 
 // A here-document opened inside a one-line `$( )` is refused while the line is

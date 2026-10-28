@@ -37,13 +37,13 @@ import (
 // (#4715).
 func TestARefusedHeredocBodysSentenceNamesItsLocationHere(t *testing.T) {
 	t.Parallel()
-	if !ksh.Diagnostics().HeredocBodyRefusalNamesTheLineItIsLocatedAt {
+	if !diagTable(ksh.Diagnostics()).HeredocBodyRefusalNamesTheLineItIsLocatedAt {
 		t.Error("the preset does not answer, so the sentence counts from the body")
 	}
 	// And the sentence carries a line at all, which is what makes the
 	// question this dialect's: the other four put the line in the location
 	// and have nothing here to disagree with it.
-	if !ksh.Diagnostics().ParseFailureNamesItsOwnLine {
+	if !diagTable(ksh.Diagnostics()).ParseFailureNamesItsOwnLine {
 		t.Error("the wording does not name its own line, so there is no second number")
 	}
 	dir := t.TempDir()

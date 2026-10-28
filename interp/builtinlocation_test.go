@@ -98,7 +98,7 @@ func TestAScriptCanNameThePlaceDifferentlyAgain(t *testing.T) {
 		t.Errorf("as invoked = %q, want no line named", out)
 	}
 
-	script := dg.ForScript()
+	script := *dg.ForScript()
 	after := prefixRun(t, dir, "cd /no/such/dir-xyz", script)
 	if !strings.HasPrefix(after, "testsh[1]: ") {
 		t.Errorf("as a script = %q, want line 1 bracketed", after)

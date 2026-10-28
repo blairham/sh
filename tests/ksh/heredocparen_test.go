@@ -62,7 +62,7 @@ func TestTheDocumentThatRanOutIsNotRemarkedOn(t *testing.T) {
 	if len(rs) != 1 {
 		t.Fatalf("got %d remarks, want the one the parser records: %+v", len(rs), rs)
 	}
-	if got := ksh.Diagnostics().Remark(rs[0]); got != "" {
+	if got := diagTable(ksh.Diagnostics()).Remark(rs[0]); got != "" {
 		t.Errorf("said %q, where this shell says nothing", got)
 	}
 }

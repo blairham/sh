@@ -39,8 +39,13 @@ func InteractiveArgs(sh Shell, argv []string) int { return sh.interactive(argv, 
 // built, the EXIT trap at the end. A session that cannot be started is at
 // least a session that says why.
 func (sh *Shell) interactive(argv []string, in source) (status int) {
-	defaulted := sh.withDefaults(argv)
-	sh = &defaulted
+	// A copy of its own, on the heap: the Shell is 17 KB, and one held on
+	// this frame — the bottom of every interactive session's stack — is
+	// paid in stack pages at every start (#6610).
+	defaulted := new(Shell)
+	*defaulted = *sh
+	defaulted.setDefaults(argv)
+	sh = defaulted
 	if sh.guard().Do(func() { status = sh.session(argv, in) }) {
 		return panicguard.Status
 	}
@@ -50,7 +55,7 @@ func (sh *Shell) interactive(argv []string, in source) (status int) {
 // session is interactive once the defaults are filled in and a guard is
 // around it.
 func (sh *Shell) session(argv []string, in source) int {
-	dg := sh.Diagnostics
+	dg := &sh.Diagnostics
 	name := sh.Name
 	params, opts := in.params, in.opts
 	// The three facts the startup files are chosen by, stated here because
@@ -505,7 +510,7 @@ func (sh *Shell) stdinFile() *os.File {
 // terminal, so no test could reach the fields being carried across, and a
 // dialect's answer dropped on the floor here looks exactly like a dialect
 // that did not answer.
-func (sh *Shell) frontEnd(r *interp.Runner, name string, dg interp.Diagnostics) repl.Shell {
+func (sh *Shell) frontEnd(r *interp.Runner, name string, dg *interp.Diagnostics) repl.Shell {
 	return sh.frontEndWith(r, name, dg, repl.NewTheme(r.GetVar))
 }
 
@@ -514,7 +519,7 @@ func (sh *Shell) frontEnd(r *interp.Runner, name string, dg interp.Diagnostics) 
 // function is defined only where there is an engine behind it, and a startup
 // file may call it. Everything else builds a theme here and never touches it
 // again, which is what a session that configures no prompt costs.
-func (sh *Shell) frontEndWith(r *interp.Runner, name string, dg interp.Diagnostics, theme *repl.Theme) repl.Shell {
+func (sh *Shell) frontEndWith(r *interp.Runner, name string, dg *interp.Diagnostics, theme *repl.Theme) repl.Shell {
 	return repl.Shell{
 		Runner:  r,
 		Dialect: sh.Dialect,

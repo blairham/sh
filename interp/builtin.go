@@ -2113,7 +2113,7 @@ const (
 )
 
 // status is what a refusal of this spelling reports in this dialect.
-func (sp setRefusalSpelling) status(d Diagnostics) int {
+func (sp setRefusalSpelling) status(d *Diagnostics) int {
 	if sp == refusedOptionLetter {
 		return orDefault(d.SetInvalidOptionLetterStatus, 2)
 	}
@@ -2160,7 +2160,7 @@ func (r *Runner) setRefusalStatus(sp setRefusalSpelling, why string) bool {
 			return false
 		}
 	}
-	status := sp.status(*r.diag())
+	status := sp.status(r.diag())
 	r.setOptionStatus = status
 	if r.reportsEveryBadSetOption() || r.setAppliesPastARefusal() {
 		if !r.setRefusalOwed {
@@ -2242,7 +2242,7 @@ func (r *Runner) finishSetRefusals() int {
 		r.sayBuiltinUsage(block)
 	}
 	sp := r.setRefusalSpelling
-	status := sp.status(*r.diag())
+	status := sp.status(r.diag())
 	// Only where the shell ends on the status it was left: a script file or
 	// standard input turns that 0 into a failure as it leaves. See
 	// Runner.fatalExitTurnsZeroToFailure.

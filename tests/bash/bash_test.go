@@ -236,28 +236,28 @@ func TestSemantics(t *testing.T) {
 
 func TestDiagnostics(t *testing.T) {
 	// The four lines `type` prints, each of them this shell's own words.
-	if got, want := bash.Diagnostics().TypeKeyword, "%[1]s is a shell keyword"; got != want {
+	if got, want := diagTable(bash.Diagnostics()).TypeKeyword, "%[1]s is a shell keyword"; got != want {
 		t.Errorf("TypeKeyword = %q, want %q", got, want)
 	}
-	if got, want := bash.Diagnostics().TypeFunction, "%[1]s is a function"; got != want {
+	if got, want := diagTable(bash.Diagnostics()).TypeFunction, "%[1]s is a function"; got != want {
 		t.Errorf("TypeFunction = %q, want %q", got, want)
 	}
-	if got, want := bash.Diagnostics().TypeNotFound, "type: %[1]s: not found"; got != want {
+	if got, want := diagTable(bash.Diagnostics()).TypeNotFound, "type: %[1]s: not found"; got != want {
 		t.Errorf("TypeNotFound = %q, want %q", got, want)
 	}
 	// A complaint rather than a report, so it goes to standard error and
 	// `type nope 2>/dev/null` says nothing at all. Half the panel disagrees.
-	if bash.Diagnostics().TypeNotFoundOnStdout {
+	if diagTable(bash.Diagnostics()).TypeNotFoundOnStdout {
 		t.Error("TypeNotFoundOnStdout = true, want the line on standard error")
 	}
-	if got, want := bash.Diagnostics().SyntaxStatus(), 2; got != want {
+	if got, want := diagTable(bash.Diagnostics()).SyntaxStatus(), 2; got != want {
 		t.Errorf("syntax-error status = %d, want %d", got, want)
 	}
 	// A compound command's failed open is reported at the redirect's own
 	// line here: a `while` loop opening on line 2 with `done < missing` on
 	// line 5 says 5. A *simple* command is the command's line in every
 	// dialect, so this answers only about the compound case.
-	if got, want := bash.Diagnostics().RedirectFailureLine, interp.LineOfRedirect; got != want {
+	if got, want := diagTable(bash.Diagnostics()).RedirectFailureLine, interp.LineOfRedirect; got != want {
 		t.Errorf("RedirectFailureLine = %v, want %v", got, want)
 	}
 }
@@ -303,7 +303,7 @@ func TestUnterminatedNamesTheConstructAndItsLine(t *testing.T) {
 		{"{ echo x", "syntax error: unexpected end of file from `{' command on line 1"},
 	} {
 		_, err := syntax.Parse(tc.src, bash.Dialect())
-		if got := bash.Diagnostics().ParseFailure(err); got != tc.want {
+		if got := diagTable(bash.Diagnostics()).ParseFailure(err); got != tc.want {
 			t.Errorf("%q: got %q, want %q", tc.src, got, tc.want)
 		}
 	}
@@ -317,7 +317,7 @@ func TestUnterminatedWithNothingOpenSaysSoAndStopsThere(t *testing.T) {
 	for _, src := range []string{"f()", "function f"} {
 		_, err := syntax.Parse(src, bash.Dialect())
 		want := "syntax error: unexpected end of file"
-		if got := bash.Diagnostics().ParseFailure(err); got != want {
+		if got := diagTable(bash.Diagnostics()).ParseFailure(err); got != want {
 			t.Errorf("%q: got %q, want %q", src, got, want)
 		}
 	}
@@ -335,12 +335,12 @@ func TestAFunctionBodyThatIsNotCompoundIsAnUnexpectedToken(t *testing.T) {
 		{"f() ;", "syntax error near unexpected token `;'"},
 	} {
 		_, err := syntax.Parse(tc.src, bash.Dialect())
-		if got := bash.Diagnostics().ParseFailure(err); got != tc.want {
+		if got := diagTable(bash.Diagnostics()).ParseFailure(err); got != tc.want {
 			t.Errorf("%q: got %q, want %q", tc.src, got, tc.want)
 		}
 		// And the whole report, which is the part that was missing: the
 		// message, then the source line quoted back.
-		full := bash.Diagnostics().ParseDiagnostic("bash", "-c", err, tc.src)
+		full := diagTable(bash.Diagnostics()).ParseDiagnostic("bash", "-c", err, tc.src)
 		if n := strings.Count(full, "\n"); n != 2 {
 			t.Errorf("%q: report = %q, want two lines", tc.src, full)
 		}
@@ -404,7 +404,7 @@ func TestUnexpectedTokensAreNamedPlainly(t *testing.T) {
 		{"for i in a b; echo $i; done", "syntax error near unexpected token `echo'"},
 	} {
 		_, err := syntax.Parse(tc.src, bash.Dialect())
-		if got := bash.Diagnostics().ParseFailure(err); got != tc.want {
+		if got := diagTable(bash.Diagnostics()).ParseFailure(err); got != tc.want {
 			t.Errorf("%q: got %q, want %q", tc.src, got, tc.want)
 		}
 	}
@@ -415,7 +415,7 @@ func TestUnexpectedTokensAreNamedPlainly(t *testing.T) {
 func TestAParenAfterAWordIsAFunctionDefinition(t *testing.T) {
 	_, err := syntax.Parse("f ( x )", bash.Dialect())
 	want := "syntax error near unexpected token `x'"
-	if got := bash.Diagnostics().ParseFailure(err); got != want {
+	if got := diagTable(bash.Diagnostics()).ParseFailure(err); got != want {
 		t.Errorf("got %q, want %q", got, want)
 	}
 }
@@ -441,19 +441,19 @@ func TestPrintfAnswers(t *testing.T) {
 		// of conversion: `printf '%f' 1e400` and `printf '%f' 1e-320`
 		// are the same sentence in bash 5.3.15, which is what says it is
 		// reporting `ERANGE` and not a reading of the operand (#2727).
-		{"PrintfNumberOutOfRange", bash.Diagnostics().PrintfNumberOutOfRange, "printf: %[1]s: Result too large"},
+		{"PrintfNumberOutOfRange", diagTable(bash.Diagnostics()).PrintfNumberOutOfRange, "printf: %[1]s: Result too large"},
 		// And no second sentence for a partial read: `printf '%d' 1.5`
 		// and `printf '%d' abc` are both `invalid number` here, where
 		// dash has two.
-		{"PrintfIncompleteNumber", bash.Diagnostics().PrintfIncompleteNumber, ""},
+		{"PrintfIncompleteNumber", diagTable(bash.Diagnostics()).PrintfIncompleteNumber, ""},
 		// It has two others all the same, and they are chosen by the
 		// operand's *spelling* rather than by what failed to read:
 		// `printf '%d' 0x10zz` is `invalid hex number` and
 		// `printf '%d' 08` is `invalid octal number`, both beside the
 		// value and the status the general sentence carries (#2764).
 		// Measured 2026-09-14 on bash 5.3.15.
-		{"PrintfBadHexNumber", bash.Diagnostics().PrintfBadHexNumber, "printf: %[1]s: invalid hex number"},
-		{"PrintfBadOctalNumber", bash.Diagnostics().PrintfBadOctalNumber, "printf: %[1]s: invalid octal number"},
+		{"PrintfBadHexNumber", diagTable(bash.Diagnostics()).PrintfBadHexNumber, "printf: %[1]s: invalid hex number"},
+		{"PrintfBadOctalNumber", diagTable(bash.Diagnostics()).PrintfBadOctalNumber, "printf: %[1]s: invalid octal number"},
 		// C99's three float conversions, with C's own default precision
 		// for `%a`: `printf '%a' 0.1` is `0x1.999999999999ap-4` here and
 		// twelve digits in ksh93 (#2726).
@@ -616,7 +616,7 @@ func TestSelectMenuLayout(t *testing.T) {
 	if got, want := bash.Semantics().SelectLayout, interp.SelectMenuVerticalThenColumns; got != want {
 		t.Errorf("SelectLayout = %v, want %v", got, want)
 	}
-	if got, want := bash.Diagnostics().SelectPrompt, "#? "; got != want {
+	if got, want := diagTable(bash.Diagnostics()).SelectPrompt, "#? "; got != want {
 		t.Errorf("SelectPrompt = %q, want %q", got, want)
 	}
 }
@@ -683,7 +683,7 @@ func TestAParseFailureNamesItsOriginAndEchoesTheLine(t *testing.T) {
 		t.Error("bash repeats the offending source line after the message")
 	}
 	// A script names itself instead, so the origin is not named twice.
-	if bash.Diagnostics().ForScript().NamesTheInputInLocation != d.NamesTheInputInLocation {
+	if diagTable(bash.Diagnostics()).ForScript().NamesTheInputInLocation != d.NamesTheInputInLocation {
 		t.Error("the script form should answer this the same way; the front end supplies no origin for a file")
 	}
 }
@@ -693,7 +693,7 @@ func TestAParseFailureNamesItsOriginAndEchoesTheLine(t *testing.T) {
 // a script that would not parse — and carries none of a parse failure's
 // decoration. We find it while parsing, which is why it has to be said.
 func TestAMalformedExpressionIsAFailedCommand(t *testing.T) {
-	if got, want := bash.Diagnostics().ArithFailureStatus, 1; got != want {
+	if got, want := diagTable(bash.Diagnostics()).ArithFailureStatus, 1; got != want {
 		t.Errorf("ArithFailureStatus = %d, want %d", got, want)
 	}
 	// And it really is a failed command now: the file reads, the command
@@ -744,7 +744,7 @@ func TestAKilledCommandIsSaidBackInFull(t *testing.T) {
 // A substitution's body is numbered from the file, whichever way it is
 // written.
 func TestASubstitutionsBodyIsNumberedFromTheFile(t *testing.T) {
-	if bash.Diagnostics().BackquotedSubstitutionRestartsLines {
+	if diagTable(bash.Diagnostics()).BackquotedSubstitutionRestartsLines {
 		t.Error("backquotes are numbered from the file here, like $( )")
 	}
 }
@@ -807,7 +807,7 @@ func TestSetOptionNamesBashHas(t *testing.T) {
 // The one signal this shell writes bare, with neither the location nor the
 // process id. Reproduced because the dialect is 5.3; 3.2 writes the prefix.
 func TestTerminateIsWrittenBare(t *testing.T) {
-	if got, want := bash.Diagnostics().KilledCommandNoticeBareForTerminate, "%-27[1]s%[2]s"; got != want {
+	if got, want := diagTable(bash.Diagnostics()).KilledCommandNoticeBareForTerminate, "%-27[1]s%[2]s"; got != want {
 		t.Errorf("KilledCommandNoticeBareForTerminate = %q, want %q", got, want)
 	}
 }
@@ -815,7 +815,7 @@ func TestTerminateIsWrittenBare(t *testing.T) {
 // The status this shell answers a failed expansion with when the program came
 // from an argument rather than from a file.
 func TestAFailedExpansionFromACommandString(t *testing.T) {
-	if got, want := bash.Diagnostics().ExpansionFailureStatusFromCommandString, 127; got != want {
+	if got, want := diagTable(bash.Diagnostics()).ExpansionFailureStatusFromCommandString, 127; got != want {
 		t.Errorf("ExpansionFailureStatusFromCommandString = %d, want %d", got, want)
 	}
 }
@@ -835,7 +835,7 @@ func TestDeclareReportsARefusedName(t *testing.T) {
 // writes only the second; this dialect models 5.3, as it does everywhere else.
 func TestItNamesTheProcessGroupItCouldNotSet(t *testing.T) {
 	want := "cannot set terminal process group (%[1]d): Inappropriate ioctl for device"
-	if got := bash.Diagnostics().CannotSetTerminalProcessGroup; got != want {
+	if got := diagTable(bash.Diagnostics()).CannotSetTerminalProcessGroup; got != want {
 		t.Errorf("CannotSetTerminalProcessGroup = %q, want %q", got, want)
 	}
 }
@@ -945,10 +945,10 @@ func TestDollarDashInteractiveStartupLetters(t *testing.T) {
 // not write it at all — it is one version's extra line and not bash's
 // wording. See interp.Diagnostics.NoJobControlAtStartup.
 func TestTheStartupRemarkAboutJobControl(t *testing.T) {
-	if got, want := bash.Diagnostics().NoJobControlAtStartup, "no job control in this shell"; got != want {
+	if got, want := diagTable(bash.Diagnostics()).NoJobControlAtStartup, "no job control in this shell"; got != want {
 		t.Errorf("NoJobControlAtStartup = %q, want %q", got, want)
 	}
-	if bash.Diagnostics().NoJobControlAtStartupNamesTheScript {
+	if diagTable(bash.Diagnostics()).NoJobControlAtStartupNamesTheScript {
 		t.Error("NoJobControlAtStartupNamesTheScript = true, want false — bash names itself, not the script")
 	}
 }
@@ -957,10 +957,10 @@ func TestTheStartupRemarkAboutJobControl(t *testing.T) {
 // defaults were written from. Measured, `jobs %9` says `jobs: %9: no such job`
 // and reports 1 in all three members.
 func TestTheJobSpecThatNamesNothing(t *testing.T) {
-	if got := bash.Diagnostics().NoSuchJob; got != "" {
+	if got := diagTable(bash.Diagnostics()).NoSuchJob; got != "" {
 		t.Errorf("NoSuchJob = %q, want empty — the shared wording", got)
 	}
-	if got := bash.Diagnostics().NoSuchJobStatus; got != 0 {
+	if got := diagTable(bash.Diagnostics()).NoSuchJobStatus; got != 0 {
 		t.Errorf("NoSuchJobStatus = %d, want 0 — the shared 1", got)
 	}
 }
@@ -999,7 +999,7 @@ func TestFgAndBgSayThereIsNoJobControl(t *testing.T) {
 	if got := bash.Semantics().MonitorAloneResumesAJob; got != interp.Yes {
 		t.Errorf("MonitorAloneResumesAJob = %v, want Yes", got)
 	}
-	if got, want := bash.Diagnostics().NoJobControl, "%[1]s: no job control"; got != want {
+	if got, want := diagTable(bash.Diagnostics()).NoJobControl, "%[1]s: no job control"; got != want {
 		t.Errorf("NoJobControl = %q, want %q", got, want)
 	}
 }

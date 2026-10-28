@@ -31,7 +31,7 @@ func TestALoopNamedByAnExpansionIsRefusedInThisShellsWords(t *testing.T) {
 	if err == nil {
 		t.Fatal("parsed; every shell in the panel refuses this")
 	}
-	d := zsh.Diagnostics().ForScript()
+	d := diagTable(zsh.Diagnostics()).ForScript()
 	if got := d.ParseDiagnostic("s.sh", "", err, src); got != want {
 		t.Errorf("\n got %q\nwant %q", got, want)
 	}
@@ -55,7 +55,7 @@ func TestTheNameIsNamedAsWritten(t *testing.T) {
 		if err == nil {
 			t.Fatalf("%q parsed; this shell refuses it", src)
 		}
-		if got := zsh.Diagnostics().ParseFailure(err); got != tc.want {
+		if got := diagTable(zsh.Diagnostics()).ParseFailure(err); got != tc.want {
 			t.Errorf("%q:\n got %q\nwant %q", src, got, tc.want)
 		}
 	}

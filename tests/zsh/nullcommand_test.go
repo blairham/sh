@@ -34,7 +34,7 @@ func TestTheNullCommandAxesNameTheParameters(t *testing.T) {
 	if got, want := s.ReadNullCommandVariable, "READNULLCMD"; got != want {
 		t.Errorf("ReadNullCommandVariable = %q, want %q", got, want)
 	}
-	if got, want := zsh.Diagnostics().RedirectionWithNoCommand,
+	if got, want := diagTable(zsh.Diagnostics()).RedirectionWithNoCommand,
 		"redirection with no command"; got != want {
 		t.Errorf("RedirectionWithNoCommand = %q, want %q", got, want)
 	}

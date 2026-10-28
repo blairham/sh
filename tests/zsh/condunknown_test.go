@@ -294,7 +294,7 @@ func TestWhatAnInfixConditionNameIsNot(t *testing.T) {
 			if err == nil {
 				t.Fatalf("%s parsed cleanly, want a refusal", tc.src)
 			}
-			if got := zsh.Diagnostics().ParseFailure(err); got != tc.want {
+			if got := diagTable(zsh.Diagnostics()).ParseFailure(err); got != tc.want {
 				t.Errorf("got %q, want %q", got, tc.want)
 			}
 		})

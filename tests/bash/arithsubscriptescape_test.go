@@ -88,7 +88,7 @@ func TestAValuesBytesInAWrittenSubscriptAreQuotedBackEscaped(t *testing.T) {
 // The escaping is a diagnostic choice and this dialect is the one that makes
 // it, so the value is pinned rather than inherited.
 func TestTheEscapedArithmeticValueIsThisDialectsChoice(t *testing.T) {
-	if got := bash.Diagnostics().ArithValueShownEscaped; !got {
+	if got := diagTable(bash.Diagnostics()).ArithValueShownEscaped; !got {
 		t.Errorf("ArithValueShownEscaped = %v, want true", got)
 	}
 }

@@ -22,7 +22,7 @@ import (
 // on Linux, and `ulimit -N -1` prints `unlimited` on both, which is a read
 // past the end of the table rather than an answer (#3667).
 func TestTheNumberedUlimitOptionIsThisShellsOwn(t *testing.T) {
-	got := zsh.Diagnostics().UlimitNumberedOption
+	got := diagTable(zsh.Diagnostics()).UlimitNumberedOption
 	if got.Letter != 'N' {
 		t.Errorf("letter is %q, want N", got.Letter)
 	}
@@ -39,7 +39,7 @@ func TestTheNumberedUlimitOptionIsThisShellsOwn(t *testing.T) {
 	// made it unreachable: `ulimit -a` prints it and `ulimit -N 15` is the
 	// only way to read it.
 	var found bool
-	for _, row := range zsh.Diagnostics().UlimitListing {
+	for _, row := range diagTable(zsh.Diagnostics()).UlimitListing {
 		if row.Letter == 0 {
 			found = true
 			if row.Res == 0 {
@@ -52,8 +52,8 @@ func TestTheNumberedUlimitOptionIsThisShellsOwn(t *testing.T) {
 	}
 	// And no other dialect grows one by inheritance: the zero value is no
 	// option at all, which is what the other four columns have.
-	if zsh.Diagnostics().UlimitBadOptionStatus != 1 {
+	if diagTable(zsh.Diagnostics()).UlimitBadOptionStatus != 1 {
 		t.Errorf("the refusals ride on the builtin's own status, which is %d",
-			zsh.Diagnostics().UlimitBadOptionStatus)
+			diagTable(zsh.Diagnostics()).UlimitBadOptionStatus)
 	}
 }

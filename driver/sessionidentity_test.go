@@ -27,8 +27,8 @@ func TestThePromptAndTheRunnerShareTheSession(t *testing.T) {
 	if sh.Session == "" {
 		t.Fatal("withDefaults left the run with no identity")
 	}
-	r := sh.newRunner("testsh", nil, sh.Diagnostics, interp.RouteCommandString)
-	front := sh.frontEnd(r, "testsh", sh.Diagnostics)
+	r := sh.newRunner("testsh", nil, &sh.Diagnostics, interp.RouteCommandString)
+	front := sh.frontEnd(r, "testsh", &sh.Diagnostics)
 	if r.Session != sh.Session {
 		t.Errorf("the runner has session %q, want the shell's %q", r.Session, sh.Session)
 	}

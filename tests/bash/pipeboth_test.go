@@ -127,7 +127,7 @@ func TestABarBeforeAnyCommandNamesTheWholeOperator(t *testing.T) {
 		t.Fatal("`|& cat` parsed, want a refusal")
 	}
 	const want = "syntax error near unexpected token `|&'"
-	if got := bash.Diagnostics().ParseFailure(err); got != want {
+	if got := diagTable(bash.Diagnostics()).ParseFailure(err); got != want {
 		t.Errorf("got %q, want %q", got, want)
 	}
 }

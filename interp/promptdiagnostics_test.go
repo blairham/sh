@@ -20,7 +20,7 @@ func TestThePromptsDiagnosticsAreMadeOnce(t *testing.T) {
 		t.Fatal("the runner is not located at a prompt, so this measures nothing")
 	}
 	got := r.diag()
-	if want := first.ForPrompt(); !reflect.DeepEqual(*got, want) {
+	if want := first.ForPrompt(); !reflect.DeepEqual(got, want) {
 		t.Error("the prompt's diagnostics are not ForPrompt's")
 	}
 	if again := r.diag(); again != got {

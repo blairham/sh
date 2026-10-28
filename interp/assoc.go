@@ -1326,7 +1326,7 @@ func (r *Runner) emptyKeyElementSpelled(e literalElem) string {
 	if !e.operand {
 		return e.writtenText()
 	}
-	d := *r.diag()
+	d := r.diag()
 	op := "="
 	if e.appendValue {
 		op = "+="
@@ -1897,14 +1897,14 @@ func (r *Runner) traceAnElementAsItIsStored(name string, parsed []literalElem) {
 		return
 	}
 	lines, ok := r.traceLiteralAsElementWrites(&syntax.Assign{Name: name, IsArray: true},
-		&expandedAssign{elems: parsed, elemsSet: true}, *r.diag())
+		&expandedAssign{elems: parsed, elemsSet: true}, r.diag())
 	if !ok {
 		return
 	}
 	d := r.diag()
 	for _, line := range lines {
 		r.awaitTraceTurn()
-		r.traceLine(line, *d)
+		r.traceLine(line, d)
 		r.releaseTraceTurn()
 	}
 }

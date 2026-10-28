@@ -18,7 +18,7 @@ func kshParseRefusal(t *testing.T, src string) string {
 	if err == nil {
 		t.Fatalf("%q parsed; this shell refuses it", src)
 	}
-	return ksh.Diagnostics().ParseFailure(err)
+	return diagTable(ksh.Diagnostics()).ParseFailure(err)
 }
 
 // An arm's terminator with a separator in front of it is named until the end

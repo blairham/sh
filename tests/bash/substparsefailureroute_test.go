@@ -30,12 +30,12 @@ import (
 // the whole grid and for what each control rules out (#4697).
 func TestARefusedSubstitutionBodyCosts127FromACommandStringHere(t *testing.T) {
 	t.Parallel()
-	if got := bash.Diagnostics().SubstitutionParseFailureStatusFromCommandString; got != 127 {
+	if got := diagTable(bash.Diagnostics()).SubstitutionParseFailureStatusFromCommandString; got != 127 {
 		t.Errorf("= %d, want 127", got)
 	}
 	// And the number is not the syntax status wearing another hat: the two
 	// are different here, which is what makes the row worth a field.
-	if got := bash.Diagnostics().SyntaxStatus(); got == 127 {
+	if got := diagTable(bash.Diagnostics()).SyntaxStatus(); got == 127 {
 		t.Errorf("the syntax status is %d, so the route's answer cannot be told from it", got)
 	}
 }

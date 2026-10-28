@@ -209,7 +209,7 @@ func TestEvalAndDotAxes(t *testing.T) {
 	}
 	// 127 for a file it cannot open, where bash says 1 — the most divergent
 	// answer in the panel, and it survives rather than ending the script.
-	if got := zsh.Diagnostics().DotCannotOpenStatus; got != 127 {
+	if got := diagTable(zsh.Diagnostics()).DotCannotOpenStatus; got != 127 {
 		t.Errorf("DotCannotOpenStatus = %d, want 127", got)
 	}
 }

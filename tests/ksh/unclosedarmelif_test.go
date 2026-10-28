@@ -19,7 +19,7 @@ func kshRefusal(t *testing.T, d syntax.Dialect, src string) string {
 	if err == nil {
 		t.Fatalf("%q parsed, want a refusal", src)
 	}
-	return ksh.Diagnostics().ParseFailure(err)
+	return diagTable(ksh.Diagnostics()).ParseFailure(err)
 }
 
 // A `case` arm whose command list the input ran out in is numbered at the

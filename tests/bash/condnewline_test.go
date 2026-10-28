@@ -37,7 +37,7 @@ func TestATermsFirstWordWillNotEndItsLineHere(t *testing.T) {
 			t.Errorf("%q parsed; this shell refuses it", src)
 			continue
 		}
-		got := bash.Diagnostics().ForScript().ParseDiagnostic("s.sh", "", err, src)
+		got := diagTable(bash.Diagnostics()).ForScript().ParseDiagnostic("s.sh", "", err, src)
 		if want := "unexpected token `newline', conditional binary operator expected"; !strings.Contains(got, want) {
 			t.Errorf("%q:\n got %q\nwant it to carry %q", src, got, want)
 		}

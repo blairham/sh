@@ -31,7 +31,7 @@ func TestALoopNamedByAnExpansionIsRefusedInThisShellsWords(t *testing.T) {
 	if err == nil {
 		t.Fatal("parsed; every shell in the panel refuses this")
 	}
-	d := dash.Diagnostics().ForScript()
+	d := diagTable(dash.Diagnostics()).ForScript()
 	if got := d.ParseDiagnostic("s.sh", "", err, src); got != want {
 		t.Errorf("\n got %q\nwant %q", got, want)
 	}
@@ -52,7 +52,7 @@ func TestThisShellNamesNoWord(t *testing.T) {
 		if err == nil {
 			t.Fatalf("%q parsed; this shell refuses it", src)
 		}
-		if got := dash.Diagnostics().ParseFailure(err); got != want {
+		if got := diagTable(dash.Diagnostics()).ParseFailure(err); got != want {
 			t.Errorf("%q:\n got %q\nwant %q", src, got, want)
 		}
 	}

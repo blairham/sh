@@ -27,7 +27,7 @@ import (
 // pass on a laptop and fail on a runner.
 func TestTheBinaryAnswersForAUserDatabase(t *testing.T) {
 	sh := Shell{Name: "testsh"}.withDefaults([]string{"testsh"})
-	r := sh.newRunner("testsh", nil, sh.Diagnostics, interp.RouteCommandString)
+	r := sh.newRunner("testsh", nil, &sh.Diagnostics, interp.RouteCommandString)
 	if r.UserHomeDir == nil {
 		t.Fatal("the runner has no user-database hook, so `~user` is left as written")
 	}
@@ -53,7 +53,7 @@ func TestTheBinaryAnswersForAUserDatabase(t *testing.T) {
 // and a test that named one would pass on a laptop and fail on a runner.
 func TestTheBinaryAnswersForTheCurrentUser(t *testing.T) {
 	sh := Shell{Name: "testsh"}.withDefaults([]string{"testsh"})
-	r := sh.newRunner("testsh", nil, sh.Diagnostics, interp.RouteCommandString)
+	r := sh.newRunner("testsh", nil, &sh.Diagnostics, interp.RouteCommandString)
 	dir, ok := r.UserHomeDir("")
 	if !ok {
 		t.Fatal("the empty name answered nothing, so a bare `~` with no HOME stays written")

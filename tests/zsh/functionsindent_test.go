@@ -76,7 +76,7 @@ func TestFunctionsIndentLetterIsNotAlsoCalledMissing(t *testing.T) {
 	if !strings.ContainsRune(zsh.Semantics().FunctionsOptions, 'x') {
 		t.Error("FunctionsOptions does not spell -x")
 	}
-	if got := zsh.Diagnostics().UnimplementedOptionLetters["functions"]; strings.ContainsRune(got, 'x') {
+	if got := diagTable(zsh.Diagnostics()).UnimplementedOptionLetters["functions"]; strings.ContainsRune(got, 'x') {
 		t.Errorf("UnimplementedOptionLetters[functions] = %q, which still claims -x is missing", got)
 	}
 }

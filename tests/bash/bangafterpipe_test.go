@@ -22,7 +22,7 @@ func TestABangAfterABarIsRefusedInThisDialectsWords(t *testing.T) {
 		if err == nil {
 			t.Fatalf("%q parsed, want a refusal", tc.src)
 		}
-		if got := bash.Diagnostics().ParseDiagnostic("bash", "-c", err, tc.src); got != tc.want {
+		if got := diagTable(bash.Diagnostics()).ParseDiagnostic("bash", "-c", err, tc.src); got != tc.want {
 			t.Errorf("%q: got %q, want %q", tc.src, got, tc.want)
 		}
 	}

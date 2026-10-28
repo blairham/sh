@@ -100,7 +100,7 @@ func (r *Runner) expandedArrayOperand(a *syntax.Assign) *expandedAssign {
 // wrote them in as well, and the reverse spelling is not modeled — the bare
 // name of an array operand is appended to argv rather than standing where it
 // was written, so there is no position here to sort the two lists by.
-func (r *Runner) traceArrayOperandsBefore(d Diagnostics) []string {
+func (r *Runner) traceArrayOperandsBefore(d *Diagnostics) []string {
 	if d.TraceDeclarationArrayOperand != TraceOperandSplitBefore {
 		return nil
 	}
@@ -123,7 +123,7 @@ func (r *Runner) traceArrayOperandsBefore(d Diagnostics) []string {
 // declarations of their own and trace themselves as they are performed, which
 // is after the utility has run where ksh93 writes them in front of it; that row
 // is a second ordering and is not this one.
-func (r *Runner) traceArrayOperandLines(op arrayOperand, d Diagnostics) []string {
+func (r *Runner) traceArrayOperandLines(op arrayOperand, d *Diagnostics) []string {
 	a := op.assign
 	if a.Members != nil {
 		return nil
@@ -146,7 +146,7 @@ func (r *Runner) traceArrayOperandLines(op arrayOperand, d Diagnostics) []string
 
 // traceArrayOperandAssignment is the operand written as the assignment it
 // performs: the target as the script spelled it, and the expanded list.
-func (r *Runner) traceArrayOperandAssignment(a *syntax.Assign, e *expandedAssign, d Diagnostics) string {
+func (r *Runner) traceArrayOperandAssignment(a *syntax.Assign, e *expandedAssign, d *Diagnostics) string {
 	var b strings.Builder
 	b.WriteString(a.Name)
 	if a.Append {
@@ -166,7 +166,7 @@ func (r *Runner) traceArrayOperandAssignment(a *syntax.Assign, e *expandedAssign
 // ksh93, so the subscript is the text it expanded to and never the number it
 // would evaluate to; `k=kk; typeset -A m=([$k]=v)` is `['kk']` and `m[kk]` in
 // the same two, which is what says it expanded at all.
-func (r *Runner) traceArrayOperandLiteral(elems []*syntax.ArrayElem, parsed []literalElem, d Diagnostics) string {
+func (r *Runner) traceArrayOperandLiteral(elems []*syntax.ArrayElem, parsed []literalElem, d *Diagnostics) string {
 	var words []string
 	for i, e := range elems {
 		if e.Word == nil {
@@ -206,7 +206,7 @@ func (r *Runner) traceArrayOperandLiteral(elems []*syntax.ArrayElem, parsed []li
 // for the `$'…'` its TraceQuoting uses for the same byte in an argument. An
 // embedded quote is still `'it'\”s'` and a lone one still `\'`, so what the
 // field moves is whether the rule fires and not which rule it is.
-func (r *Runner) traceArrayOperandElement(s string, d Diagnostics) string {
+func (r *Runner) traceArrayOperandElement(s string, d *Diagnostics) string {
 	if !d.TraceArrayOperandQuotesEveryElement {
 		return r.traceQuote(s, d.TraceQuoting, d.TraceMetacharacters)
 	}
@@ -234,7 +234,7 @@ func (r *Runner) traceArrayOperandElement(s string, d Diagnostics) string {
 // operand too — there the leftover word is the operand cut at its `=`, `+` and
 // all, which is what Runner.traceOperandCommandWord does for `typeset x+=q`
 // — where bash's leftover is the name the parser handed the utility.
-func (r *Runner) traceArrayOperandWord(i int, d Diagnostics) (string, bool) {
+func (r *Runner) traceArrayOperandWord(i int, d *Diagnostics) (string, bool) {
 	for _, op := range r.arrayOperands {
 		if op.at != i {
 			continue

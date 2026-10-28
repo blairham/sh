@@ -201,7 +201,7 @@ func zptyStart(r *interp.Runner, ctx context.Context, opts zptyOpts, rest []stri
 		// the bare shell's. What is not reproduced is the location — zsh
 		// sites it at a source of its own called `(zpty)` and this shell has
 		// no second source to site it in, so the line is the caller's own.
-		r.DiagnoseAsf("(zpty)", "%s\n", Diagnostics().ParseFailure(err))
+		r.DiagnoseAsf("(zpty)", "%s\n", ownDiagnostics().ParseFailure(err))
 		return 1
 	}
 	control, terminal, err := pty.Open()

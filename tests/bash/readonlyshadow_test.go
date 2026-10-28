@@ -22,7 +22,7 @@ func TestADeclarationWillNotShadowAFrozenNameHere(t *testing.T) {
 	if got := bash.Semantics().DeclarationMayShadowAReadonly; got != interp.No {
 		t.Errorf("DeclarationMayShadowAReadonly = %v, want No", got)
 	}
-	if !bash.Diagnostics().ReadonlyRefusalNamesBuiltin["local"] {
+	if !diagTable(bash.Diagnostics()).ReadonlyRefusalNamesBuiltin["local"] {
 		t.Error("ReadonlyRefusalNamesBuiltin has no `local` entry, so the refusal " +
 			"cannot name the word the script wrote")
 	}

@@ -1148,7 +1148,7 @@ func (r *Runner) reportJobLookup(spec string, code int, name string) int {
 	if r.jobSpecMissIsSilent() {
 		return orDefault(d.NoSuchJobStatus, 1)
 	}
-	if line, ok := jobSpecMiss(*d, name, spec); ok && code != jobOnAnEmptySlot {
+	if line, ok := jobSpecMiss(d, name, spec); ok && code != jobOnAnEmptySlot {
 		r.diagf("%s\n", line)
 		return orDefault(d.NoSuchJobStatus, 1)
 	}

@@ -88,7 +88,7 @@ func TestZshKeepsTheSetLettersItHasAndThisShellDoesNot(t *testing.T) {
 	// already had, so they are entries in setLetterOptions rather than
 	// refusals. An empty entry is what says so; a stale string here would be
 	// a claim the shell contradicts on every one of them.
-	if got := zsh.Diagnostics().UnimplementedOptionLetters["set"]; got != "" {
+	if got := diagTable(zsh.Diagnostics()).UnimplementedOptionLetters["set"]; got != "" {
 		t.Errorf("UnimplementedOptionLetters[set] = %q, want no letters left", got)
 	}
 	// The five zsh refuses itself get zsh's own words.

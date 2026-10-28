@@ -100,12 +100,14 @@ func TestNamingAWordLeavesAnOperatorAlone(t *testing.T) {
 	if err == nil {
 		t.Fatal("parsed cleanly, want a refusal")
 	}
-	first := naming(UnexpectedWordIsWhatItComesTo).ParseFailure(err)
+	firstTable := naming(UnexpectedWordIsWhatItComesTo)
+	first := firstTable.ParseFailure(err)
 	for _, v := range []UnexpectedWordNaming{
 		UnexpectedWordIsSourceText,
 		UnexpectedWordIsSourceTextWhenItExpands,
 	} {
-		if got := naming(v).ParseFailure(err); got != first {
+		table := naming(v)
+		if got := table.ParseFailure(err); got != first {
 			t.Errorf("value %d: = %q, want %q — an operator has one spelling", v, got, first)
 		}
 	}

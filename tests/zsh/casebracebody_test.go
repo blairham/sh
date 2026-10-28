@@ -62,7 +62,7 @@ func TestEsacIsStillReservedAfterTheBraceHere(t *testing.T) {
 	if err == nil {
 		t.Fatalf("%q parsed; the `esac` closes the case here", src)
 	}
-	if got, want := zsh.Diagnostics().ParseFailure(err), "parse error near `)'"; got != want {
+	if got, want := diagTable(zsh.Diagnostics()).ParseFailure(err), "parse error near `)'"; got != want {
 		t.Errorf("got %q, want %q", got, want)
 	}
 	// A parenthesized pattern is the way to write it, and it needs no flag.

@@ -8,6 +8,15 @@ import (
 )
 
 // Diagnostics is how zsh reports failure.
+// ownDiagnostics is this dialect's table for a builtin that has no runner's to
+// read, on the heap: the table is about 10 KB and its methods take it by
+// pointer, so a copy made on a frame would be a copy on every call of the
+// function holding it (#6610).
+func ownDiagnostics() *interp.Diagnostics {
+	d := Diagnostics()
+	return &d
+}
+
 func Diagnostics() interp.Diagnostics {
 	return interp.Diagnostics{
 		// What it says instead of leaving under `setopt ignoreeof`, measured

@@ -25,8 +25,8 @@ func TestTheFrontEndCarriesWhetherTheEditorReadsKeysWithoutATerminal(t *testing.
 			Name:      "testsh",
 			Semantics: interp.Semantics{EditorReadsKeysWhereThereIsNoTerminal: answer},
 		}.withDefaults([]string{"testsh"})
-		r := sh.newRunner("testsh", nil, sh.Diagnostics, interp.RouteCommandString)
-		if got := sh.frontEnd(r, "testsh", sh.Diagnostics).EditorWithoutATerminal; got != answer {
+		r := sh.newRunner("testsh", nil, &sh.Diagnostics, interp.RouteCommandString)
+		if got := sh.frontEnd(r, "testsh", &sh.Diagnostics).EditorWithoutATerminal; got != answer {
 			t.Errorf("the prompt was told %v, want %v", got, answer)
 		}
 	}

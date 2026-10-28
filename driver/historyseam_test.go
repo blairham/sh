@@ -39,9 +39,9 @@ func TestAHistoryToolReachesTheSession(t *testing.T) {
 		HistoryRecorders: []repl.HistoryRecorder{recorder},
 		HistorySources:   []repl.HistorySource{source},
 	}.withDefaults([]string{"testsh"})
-	r := sh.newRunner("testsh", nil, sh.Diagnostics, interp.RouteCommandString)
+	r := sh.newRunner("testsh", nil, &sh.Diagnostics, interp.RouteCommandString)
 
-	front := sh.frontEnd(r, "testsh", sh.Diagnostics)
+	front := sh.frontEnd(r, "testsh", &sh.Diagnostics)
 	if len(front.HistoryRecorders) != 1 {
 		t.Fatalf("the session carries %d recorders, want 1", len(front.HistoryRecorders))
 	}
@@ -62,8 +62,8 @@ func TestAHistoryToolReachesTheSession(t *testing.T) {
 // And a binary that attaches none leaves the session's history to the file.
 func TestAShellWithoutAHistoryToolCarriesNoneToTheSession(t *testing.T) {
 	sh := Shell{Name: "testsh"}.withDefaults([]string{"testsh"})
-	r := sh.newRunner("testsh", nil, sh.Diagnostics, interp.RouteCommandString)
-	front := sh.frontEnd(r, "testsh", sh.Diagnostics)
+	r := sh.newRunner("testsh", nil, &sh.Diagnostics, interp.RouteCommandString)
+	front := sh.frontEnd(r, "testsh", &sh.Diagnostics)
 	if n := len(front.HistoryRecorders); n != 0 {
 		t.Errorf("the session carries %d recorders, want none", n)
 	}

@@ -356,38 +356,38 @@ func TestSemantics(t *testing.T) {
 
 func TestDiagnostics(t *testing.T) {
 	// The four lines `type` prints, each of them this shell's own words.
-	if got, want := zsh.Diagnostics().TypeKeyword, "%[1]s is a reserved word"; got != want {
+	if got, want := diagTable(zsh.Diagnostics()).TypeKeyword, "%[1]s is a reserved word"; got != want {
 		t.Errorf("TypeKeyword = %q, want %q", got, want)
 	}
 	// Two of them for a function: the clause naming where it came from, and
 	// the clause-less form for the one route with no origin (#1706).
-	if got, want := zsh.Diagnostics().TypeFunctionFrom, "%[1]s is a shell function from %[2]s"; got != want {
+	if got, want := diagTable(zsh.Diagnostics()).TypeFunctionFrom, "%[1]s is a shell function from %[2]s"; got != want {
 		t.Errorf("TypeFunctionFrom = %q, want %q", got, want)
 	}
-	if got, want := zsh.Diagnostics().TypeFunction, "%[1]s is a shell function"; got != want {
+	if got, want := diagTable(zsh.Diagnostics()).TypeFunction, "%[1]s is a shell function"; got != want {
 		t.Errorf("TypeFunction = %q, want %q", got, want)
 	}
-	if !zsh.Diagnostics().TypeNotFoundUnprefixed {
+	if !diagTable(zsh.Diagnostics()).TypeNotFoundUnprefixed {
 		t.Error("TypeNotFoundUnprefixed = false, want the line written bare")
 	}
 	// And on standard output, the other half of treating it as an answer:
 	// `type nope 1>/dev/null` prints nothing here.
-	if !zsh.Diagnostics().TypeNotFoundOnStdout {
+	if !diagTable(zsh.Diagnostics()).TypeNotFoundOnStdout {
 		t.Error("TypeNotFoundOnStdout = false, want the line on standard output")
 	}
-	if got, want := zsh.Diagnostics().SyntaxStatus(), 1; got != want {
+	if got, want := diagTable(zsh.Diagnostics()).SyntaxStatus(), 1; got != want {
 		t.Errorf("syntax-error status = %d, want %d", got, want)
 	}
 	// The same answer dash gives: where the command began.
-	if got, want := zsh.Diagnostics().RedirectFailureLine, interp.LineOfCommand; got != want {
+	if got, want := diagTable(zsh.Diagnostics()).RedirectFailureLine, interp.LineOfCommand; got != want {
 		t.Errorf("RedirectFailureLine = %v, want %v", got, want)
 	}
 	// A denied `set -m` echoes the spelling that asked and fails at 1 —
 	// fatally, but that is BadSetOptionNameFatal's answer, not this one's.
-	if got, want := zsh.Diagnostics().MonitorDenied, "can't change option: %[1]s"; got != want {
+	if got, want := diagTable(zsh.Diagnostics()).MonitorDenied, "can't change option: %[1]s"; got != want {
 		t.Errorf("MonitorDenied = %q, want %q", got, want)
 	}
-	if got, want := zsh.Diagnostics().MonitorDeniedStatus, 1; got != want {
+	if got, want := diagTable(zsh.Diagnostics()).MonitorDeniedStatus, 1; got != want {
 		t.Errorf("MonitorDeniedStatus = %d, want %d", got, want)
 	}
 }
@@ -485,7 +485,7 @@ func TestUnterminatedNamesTheLastTokenRead(t *testing.T) {
 		{"case a in a) echo hi", "parse error near `hi'"},
 	} {
 		_, err := syntax.Parse(tc.src, zsh.Dialect())
-		if got := zsh.Diagnostics().ParseFailure(err); got != tc.want {
+		if got := diagTable(zsh.Diagnostics()).ParseFailure(err); got != tc.want {
 			t.Errorf("%q: got %q, want %q", tc.src, got, tc.want)
 		}
 	}
@@ -614,7 +614,7 @@ func TestWhoIsSpeakingInAConditionSplitsByWhenItFailed(t *testing.T) {
 // unexpected-token family: `;;&` is not zsh's, so it stops at the `&`.
 func TestAPatternThatIsNotOneNamesTheToken(t *testing.T) {
 	_, err := syntax.Parse("case a in a) echo x;;& esac", zsh.Dialect())
-	if got, want := zsh.Diagnostics().ParseFailure(err), "parse error near `&'"; got != want {
+	if got, want := diagTable(zsh.Diagnostics()).ParseFailure(err), "parse error near `&'"; got != want {
 		t.Errorf("got %q, want %q", got, want)
 	}
 }
@@ -632,7 +632,7 @@ func TestEveryTargetIsWritten(t *testing.T) {
 // controlling terminal — where the other three report the open's own reason.
 // Measured 2026-09-10 against zsh 5.9.2; see interp/noclobberopen.go.
 func TestNoclobberRefusalCoversAFailedOpen(t *testing.T) {
-	if !zsh.Diagnostics().NoclobberRefusalCoversAFailedOpen {
+	if !diagTable(zsh.Diagnostics()).NoclobberRefusalCoversAFailedOpen {
 		t.Error("a failed open under noclobber is reported as the open's reason, want the option's refusal")
 	}
 }
@@ -722,7 +722,7 @@ func TestSelectMenuLayout(t *testing.T) {
 	if got, want := zsh.Semantics().SelectLayout, interp.SelectMenuColumns; got != want {
 		t.Errorf("SelectLayout = %v, want %v", got, want)
 	}
-	if got, want := zsh.Diagnostics().SelectPrompt, "?# "; got != want {
+	if got, want := diagTable(zsh.Diagnostics()).SelectPrompt, "?# "; got != want {
 		t.Errorf("SelectPrompt = %q, want %q", got, want)
 	}
 }
@@ -833,7 +833,7 @@ func TestPatternGroups(t *testing.T) {
 // script is read a line at a time in all four, so this is about the command
 // string alone.
 func TestACommandStringIsReadWhole(t *testing.T) {
-	if !zsh.Diagnostics().CommandStringParsedWhole {
+	if !diagTable(zsh.Diagnostics()).CommandStringParsedWhole {
 		t.Error("zsh reads a command string whole")
 	}
 }
@@ -845,7 +845,7 @@ func TestACommandStringIsReadWhole(t *testing.T) {
 // route: the same program in a file stops this shell too, which is why the
 // answer cannot live with the parse status.
 func TestAProgramOnStandardInputSurvivesAParseFailure(t *testing.T) {
-	if !zsh.Diagnostics().StdinProgramSurvivesAParseFailure {
+	if !diagTable(zsh.Diagnostics()).StdinProgramSurvivesAParseFailure {
 		t.Error("zsh reads on past a parse failure on standard input")
 	}
 }
@@ -892,7 +892,7 @@ func TestTheRefusalOfANonBuiltinNamesNoBuiltin(t *testing.T) {
 // This shell says nothing at all about a signal that ended a command, so it
 // has no wording for one.
 func TestAKilledCommandIsNotSaidAtAll(t *testing.T) {
-	if got := zsh.Diagnostics().KilledCommandNotice; got != "" {
+	if got := diagTable(zsh.Diagnostics()).KilledCommandNotice; got != "" {
 		t.Errorf("KilledCommandNotice = %q, want nothing — this shell stays quiet", got)
 	}
 }
@@ -900,7 +900,7 @@ func TestAKilledCommandIsNotSaidAtAll(t *testing.T) {
 // A substitution's body is numbered from the file, whichever way it is
 // written.
 func TestASubstitutionsBodyIsNumberedFromTheFile(t *testing.T) {
-	if zsh.Diagnostics().BackquotedSubstitutionRestartsLines {
+	if diagTable(zsh.Diagnostics()).BackquotedSubstitutionRestartsLines {
 		t.Error("backquotes are numbered from the file here, like $( )")
 	}
 }
@@ -908,7 +908,7 @@ func TestASubstitutionsBodyIsNumberedFromTheFile(t *testing.T) {
 // This shell names the function a message came from rather than the file,
 // and counts the line within it.
 func TestDiagnosticsNameTheFunction(t *testing.T) {
-	if !zsh.Diagnostics().LocationNamesTheFunction {
+	if !diagTable(zsh.Diagnostics()).LocationNamesTheFunction {
 		t.Error("a message from inside a function is named for the function here")
 	}
 }
@@ -990,7 +990,7 @@ func TestZshReadsTheProfileWithAScriptToRun(t *testing.T) {
 // invocation and inside a script alike, which is why one value answers both
 // spellings (#483).
 func TestZshRefusesASetOptionAtOne(t *testing.T) {
-	if got := zsh.Diagnostics().SetInvalidOptionNameStatus; got != 1 {
+	if got := diagTable(zsh.Diagnostics()).SetInvalidOptionNameStatus; got != 1 {
 		t.Errorf("SetInvalidOptionNameStatus = %d, want 1", got)
 	}
 	if got := (interp.Diagnostics{}).SetInvalidOptionNameStatus; got != 0 {
@@ -1020,7 +1020,7 @@ func TestAFunctionBodyThatNeverBeganIsLocatedByNameAlone(t *testing.T) {
 			t.Errorf("%q: parsed, want a syntax error", tc.src)
 			continue
 		}
-		if got := zsh.Diagnostics().ParseDiagnostic("zsh", "-c", err, tc.src); got != tc.want {
+		if got := diagTable(zsh.Diagnostics()).ParseDiagnostic("zsh", "-c", err, tc.src); got != tc.want {
 			t.Errorf("%q: got %q, want %q", tc.src, got, tc.want)
 		}
 	}
@@ -1042,7 +1042,7 @@ func TestDollarDashInteractiveStartupLetters(t *testing.T) {
 // on `-i script.sh`, `-i -c` and `-i -s`: `$-` loses its `m` and nothing is
 // written to either stream.
 func TestNothingIsSaidAboutJobControlAtStartup(t *testing.T) {
-	if got := zsh.Diagnostics().NoJobControlAtStartup; got != "" {
+	if got := diagTable(zsh.Diagnostics()).NoJobControlAtStartup; got != "" {
 		t.Errorf("NoJobControlAtStartup = %q, want empty — this shell says nothing", got)
 	}
 }
@@ -1054,10 +1054,10 @@ func TestNothingIsSaidAboutJobControlAtStartup(t *testing.T) {
 // which is what this shell takes a job that is not there to be, and the same
 // number its own `wait` gives for the same question.
 func TestTheJobSpecThatNamesNothing(t *testing.T) {
-	if got := zsh.Diagnostics().NoSuchJob; got != "" {
+	if got := diagTable(zsh.Diagnostics()).NoSuchJob; got != "" {
 		t.Errorf("NoSuchJob = %q, want empty — the shared wording", got)
 	}
-	if got, want := zsh.Diagnostics().NoSuchJobStatus, 127; got != want {
+	if got, want := diagTable(zsh.Diagnostics()).NoSuchJobStatus, 127; got != want {
 		t.Errorf("NoSuchJobStatus = %d, want %d", got, want)
 	}
 }

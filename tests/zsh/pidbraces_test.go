@@ -56,7 +56,7 @@ func TestAnUnmatchedPidBraceGetsThisDialectsSentence(t *testing.T) {
 	if err == nil {
 		t.Fatal("parsed; this shell refuses an unmatched run")
 	}
-	d := zsh.Diagnostics().ForScript()
+	d := diagTable(zsh.Diagnostics()).ForScript()
 	if got := d.ParseDiagnostic("s.sh", "", err, src); got != want {
 		t.Errorf("got %q, want %q", got, want)
 	}
@@ -69,7 +69,7 @@ func TestAnUnmatchedPidBraceGetsThisDialectsSentence(t *testing.T) {
 // borrows its wording from, so a row that passed because every refusal here
 // says the same thing would be visible.
 func TestTheUnmatchedRunAndTheUnmatchedExpansionAgree(t *testing.T) {
-	d := zsh.Diagnostics().ForScript()
+	d := diagTable(zsh.Diagnostics()).ForScript()
 	const other = "echo ${a\necho two\n"
 	_, err := syntax.Parse(other, zsh.Dialect())
 	if err == nil {

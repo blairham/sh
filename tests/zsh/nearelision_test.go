@@ -63,7 +63,7 @@ func TestAQuotedWordIsCutToTwentyBytesAndMarked(t *testing.T) {
 			t.Errorf("%s: %q parsed, want a refusal", tc.why, tc.src)
 			continue
 		}
-		if got := zsh.Diagnostics().ParseFailure(err); got != tc.want {
+		if got := diagTable(zsh.Diagnostics()).ParseFailure(err); got != tc.want {
 			t.Errorf("%s: %q:\n got %q\nwant %q", tc.why, tc.src, got, tc.want)
 		}
 	}
@@ -115,7 +115,7 @@ func TestTheTwentyByteCutIsByBytesAndSplitsACharacter(t *testing.T) {
 			t.Errorf("%s: %q parsed, want a refusal", tc.why, tc.src)
 			continue
 		}
-		if got := zsh.Diagnostics().ParseFailure(err); got != tc.want {
+		if got := diagTable(zsh.Diagnostics()).ParseFailure(err); got != tc.want {
 			t.Errorf("%s: %q:\n got %q\nwant %q", tc.why, tc.src, got, tc.want)
 		}
 	}
@@ -129,7 +129,7 @@ func TestTheSplitCharacterRowsAreDeliberatelyInvalidUTF8(t *testing.T) {
 	if err == nil {
 		t.Fatalf("%q parsed, want a refusal", src)
 	}
-	got := zsh.Diagnostics().ParseFailure(err)
+	got := diagTable(zsh.Diagnostics()).ParseFailure(err)
 	if utf8.ValidString(got) {
 		t.Errorf("%q rendered %q, which is valid UTF-8 — the real shell's is not, "+
 			"so the cut has been rounded to a character boundary", src, got)

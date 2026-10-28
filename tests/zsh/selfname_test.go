@@ -40,7 +40,7 @@ import (
 // path and reads what it wrote, which is what an embedder does and what this
 // file does.
 func TestZshNamesItselfWhateverItWasInvokedAs(t *testing.T) {
-	if got := zsh.Diagnostics().SelfName; got != "zsh" {
+	if got := diagTable(zsh.Diagnostics()).SelfName; got != "zsh" {
 		t.Fatalf("SelfName = %q, want zsh", got)
 	}
 

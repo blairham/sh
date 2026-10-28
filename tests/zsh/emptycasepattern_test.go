@@ -66,7 +66,7 @@ func TestAPatternListWithNoSeparatorIsRefusedHereToo(t *testing.T) {
 	if err == nil {
 		t.Fatal("parsed; this shell refuses it")
 	}
-	d := zsh.Diagnostics().ForScript()
+	d := diagTable(zsh.Diagnostics()).ForScript()
 	if got := d.ParseDiagnostic("s.sh", "", err, src); got != want {
 		t.Errorf("got %q, want %q", got, want)
 	}

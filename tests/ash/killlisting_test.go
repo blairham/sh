@@ -31,13 +31,13 @@ import (
 // other. What is asserted is the vector's pick; the bytes are checked against
 // the applet in the container, above.
 func TestTheListingIsNumberedOnePerLine(t *testing.T) {
-	if got := ash.Diagnostics().KillListing; got != interp.KillListingNumberedPerLine {
+	if got := diagTable(ash.Diagnostics()).KillListing; got != interp.KillListingNumberedPerLine {
 		t.Errorf("KillListing is %v, want KillListingNumberedPerLine", got)
 	}
 	// And the unnamed positions are left out rather than written as numbers,
 	// which is the empty value of the field beside it: `31) SYS` is followed
 	// by `35) RTMIN` with nothing between.
-	if got := ash.Diagnostics().KillListingUnnamedPosition; got != "" {
+	if got := diagTable(ash.Diagnostics()).KillListingUnnamedPosition; got != "" {
 		t.Errorf("KillListingUnnamedPosition is %q, want it empty", got)
 	}
 }
@@ -66,7 +66,7 @@ func TestTheAppletReadsTwoSpellingsTheTableDoesNotName(t *testing.T) {
 	if got := ash.Semantics().SignalNamesTheShellSpellsItsOwnWay; got != "IO=POLL" {
 		t.Errorf("SignalNamesTheShellSpellsItsOwnWay is %q, want IO=POLL", got)
 	}
-	if ash.Diagnostics().SignalListingWritesTheAlias {
+	if diagTable(ash.Diagnostics()).SignalListingWritesTheAlias {
 		t.Error("SignalListingWritesTheAlias is on, which would write `6) IOT`")
 	}
 }

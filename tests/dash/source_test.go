@@ -150,7 +150,7 @@ func TestExecAxes(t *testing.T) {
 	}
 
 	// dash hands a directory to execve rather than checking first.
-	if dash.Diagnostics().DirectoryReason == "" {
+	if diagTable(dash.Diagnostics()).DirectoryReason == "" {
 		t.Error("dash reports execve's own error for a directory")
 	}
 }

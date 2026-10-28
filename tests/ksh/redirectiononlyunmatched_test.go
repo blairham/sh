@@ -51,7 +51,7 @@ func TestARedirectionOnlyCommandNamesTheTokenAfterIt(t *testing.T) {
 			continue
 		}
 		want := "`" + c.want + "' unmatched"
-		got := ksh.Diagnostics().ParseFailure(err)
+		got := diagTable(ksh.Diagnostics()).ParseFailure(err)
 		if len(got) < len(want) || got[len(got)-len(want):] != want {
 			t.Errorf("%q: got %q, want it to end %q", c.src, got, want)
 		}
@@ -64,7 +64,7 @@ func TestARedirectionOnlyCommandIsNamedOnlyWhereTheDialectSaysSo(t *testing.T) {
 	d := ksh.Dialect()
 	d.RedirectionOnlyCommandNamesTheTokenAfterIt = false
 	_, err := syntax.Parse("if {v}<x\necho ok", d)
-	got := ksh.Diagnostics().ParseFailure(err)
+	got := diagTable(ksh.Diagnostics()).ParseFailure(err)
 	if want := "syntax error at line 2: `if' unmatched"; got != want {
 		t.Errorf("got %q, want %q", got, want)
 	}

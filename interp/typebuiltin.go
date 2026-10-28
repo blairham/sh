@@ -439,10 +439,10 @@ func (r *Runner) typeBarePath(name string, kind bool) int {
 // and the two writing the sentence separately is how they came to disagree
 // about the origin — one of them naming a file and the other a constant.
 func (r *Runner) FunctionSentence(name string) string {
-	return r.typeFunctionLine(*r.diag(), name)
+	return r.typeFunctionLine(r.diag(), name)
 }
 
-func (r *Runner) typeFunctionLine(dg Diagnostics, name string) string {
+func (r *Runner) typeFunctionLine(dg *Diagnostics, name string) string {
 	if _, undefined := r.undefinedFunction(name); undefined && dg.TypeUndefinedFunction != "" {
 		if r.undefinedFunctionFiles != nil && dg.TypeUndefinedFunctionFrom != "" {
 			if file, known := r.undefinedFunctionFiles(name); known {
@@ -553,7 +553,7 @@ func (r *Runner) typeAll(name string, m typeMode) int {
 			if r.unspecified {
 				return 2
 			}
-			r.printf("%s\n", r.typeFunctionLine(*dg, name))
+			r.printf("%s\n", r.typeFunctionLine(dg, name))
 			if shows {
 				r.printf("%s", r.listedFunctionLine(name, fn))
 			}
@@ -811,7 +811,7 @@ func (r *Runner) describeNameLinking(name string, kind typeKind, skipFuncs bool,
 		if r.unspecified {
 			return 2
 		}
-		r.printf("%s\n", r.typeFunctionLine(*dg, name))
+		r.printf("%s\n", r.typeFunctionLine(dg, name))
 		if shows {
 			// The function itself, laid out rather than quoted: the tree is
 			// what this shell has, and the spelling it was written with is

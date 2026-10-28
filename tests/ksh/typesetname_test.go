@@ -49,7 +49,7 @@ func TestADeclarationTakesASubscript(t *testing.T) {
 	if got := ksh.Semantics().TypesetTakesASubscript; got != interp.Yes {
 		t.Errorf("TypesetTakesASubscript = %v, want Yes", got)
 	}
-	if got := ksh.Diagnostics().BuiltinBadName["typeset"]; got != "%[1]s: %[2]s: invalid variable name" {
+	if got := diagTable(ksh.Diagnostics()).BuiltinBadName["typeset"]; got != "%[1]s: %[2]s: invalid variable name" {
 		t.Errorf(`BuiltinBadName["typeset"] = %q`, got)
 	}
 }

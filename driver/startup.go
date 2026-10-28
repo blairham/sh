@@ -515,7 +515,7 @@ func (sh *Shell) sourceText(r *interp.Runner, in source, path, text string) int 
 // the input's, which put the entire file into bash's diagnostic where its
 // name belonged (#5869).
 func (sh *Shell) startupParseFailure(r *interp.Runner, in source, path, text string, err error, ran bool) int {
-	dg := sh.Diagnostics
+	dg := &sh.Diagnostics
 	name := path
 	if dg.StartupParseFailureNamesTheShell {
 		name = in.diagName()

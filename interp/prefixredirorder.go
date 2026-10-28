@@ -255,9 +255,9 @@ func (r *Runner) walkThePrefixBeforeTheRedirections(assigns []*syntax.Assign, wa
 			wrote = true
 			continue
 		}
-		for _, w := range r.prefixTraceWords([]*syntax.Assign{a}, *d) {
+		for _, w := range r.prefixTraceWords([]*syntax.Assign{a}, d) {
 			r.awaitTraceTurn()
-			r.traceLine(w, *d)
+			r.traceLine(w, d)
 			r.releaseTraceTurn()
 			wrote = true
 		}

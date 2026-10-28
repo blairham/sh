@@ -13,7 +13,7 @@ import "strings"
 // that has the wordings has them on all four — `kill`, `disown`, `jobs` and
 // `wait` measured alike — and a builtin left on its old sentence is the
 // second helper this tree keeps finding (#5140).
-func jobSpecMiss(d Diagnostics, builtin, spec string) (string, bool) {
+func jobSpecMiss(d *Diagnostics, builtin, spec string) (string, bool) {
 	body, ok := strings.CutPrefix(spec, "%")
 	if !ok {
 		return "", false

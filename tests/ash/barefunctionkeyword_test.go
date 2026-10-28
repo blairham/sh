@@ -58,11 +58,11 @@ func TestTheKeywordWithNoNameNamesTheTokenHere(t *testing.T) {
 			t.Errorf("%q parsed, want a refusal", tc.src)
 			continue
 		}
-		got := ash.Diagnostics().ParseDiagnostic("<shell>", "", err, tc.src)
+		got := diagTable(ash.Diagnostics()).ParseDiagnostic("<shell>", "", err, tc.src)
 		if !strings.Contains(got, tc.token) {
 			t.Errorf("%q said %q, want the token named as %q", tc.src, got, tc.token)
 		}
-		if line := ash.Diagnostics().ParseFailureLine(err); line != tc.line {
+		if line := diagTable(ash.Diagnostics()).ParseFailureLine(err); line != tc.line {
 			t.Errorf("%q is on line %d, want %d", tc.src, line, tc.line)
 		}
 	}

@@ -23,7 +23,7 @@ func TestADeclarationWillNotShadowAFrozenNameHere(t *testing.T) {
 	if got := dash.Semantics().DeclarationMayShadowAReadonly; got != interp.No {
 		t.Errorf("DeclarationMayShadowAReadonly = %v, want No", got)
 	}
-	if !dash.Diagnostics().ReadonlyRefusalNamesBuiltin["local"] {
+	if !diagTable(dash.Diagnostics()).ReadonlyRefusalNamesBuiltin["local"] {
 		t.Error("ReadonlyRefusalNamesBuiltin has no `local` entry, so the refusal " +
 			"loses the builtin's name — this shell names all three of the " +
 			"declarations it has")

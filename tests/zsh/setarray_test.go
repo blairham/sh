@@ -82,7 +82,7 @@ typeset -p a`)
 // whole array table being written, and rather than a refusal this shell does
 // not make being invented for it.
 func TestSetArrayWithNoNameNamesTheListingAsMissingHere(t *testing.T) {
-	if got := zsh.Diagnostics().SetArrayNeedsAName; got != "" {
+	if got := diagTable(zsh.Diagnostics()).SetArrayNeedsAName; got != "" {
 		t.Errorf("SetArrayNeedsAName = %q, want empty — this shell answers a "+
 			"missing name with a listing rather than a complaint", got)
 	}
@@ -102,7 +102,7 @@ func TestSetArrayWithNoNameNamesTheListingAsMissingHere(t *testing.T) {
 //	unset 1x          <script>:unset:1: 1x: invalid parameter name
 //	set -A ro q       <script>:N: read-only variable: ro
 func TestSetArrayRefusalsDoNotNameTheBuiltinHere(t *testing.T) {
-	if !zsh.Diagnostics().BadNameRefusalHidesTheBuiltin["set"] {
+	if !diagTable(zsh.Diagnostics()).BadNameRefusalHidesTheBuiltin["set"] {
 		t.Error("BadNameRefusalHidesTheBuiltin has no `set` entry")
 	}
 	out, st := runZsh(t, t.TempDir(), `set -A 1v q`)
@@ -160,7 +160,7 @@ echo "n=${#precmd_functions[@]} [${precmd_functions[@]}]"`)
 
 // `-A` has left the refused-letter list, and it must not be on both.
 func TestTheArrayLetterIsNoLongerCalledMissingHere(t *testing.T) {
-	if got := zsh.Diagnostics().UnimplementedOptionLetters["set"]; strings.ContainsRune(got, 'A') {
+	if got := diagTable(zsh.Diagnostics()).UnimplementedOptionLetters["set"]; strings.ContainsRune(got, 'A') {
 		t.Errorf("UnimplementedOptionLetters[set] = %q, which still claims -A is "+
 			"missing", got)
 	}

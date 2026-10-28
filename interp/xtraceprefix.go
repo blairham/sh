@@ -313,7 +313,7 @@ func (r *Runner) prefixTraceJoin(a *syntax.Assign) (string, bool) {
 }
 
 // prefixTraceWords renders the assignments that have a value, in order.
-func (r *Runner) prefixTraceWords(assigns []*syntax.Assign, d Diagnostics) []string {
+func (r *Runner) prefixTraceWords(assigns []*syntax.Assign, d *Diagnostics) []string {
 	words := make([]string, 0, len(assigns))
 	for _, a := range assigns {
 		value, ok := r.prefixTraceValue(a)
@@ -366,7 +366,7 @@ func (r *Runner) tracePrefixAndCommand(c *syntax.SimpleCmd, argv []string) {
 		// it gets this far; see Semantics.PrefixToAFrozenNameIsCheckedFirst.
 		return
 	}
-	words := r.prefixTraceWords(c.Assigns, *d)
+	words := r.prefixTraceWords(c.Assigns, d)
 	if len(words) == 0 {
 		// Every assignment was refused or is one this shell does not write a
 		// line for. The command is traced as it would be with no prefix at
@@ -382,7 +382,7 @@ func (r *Runner) tracePrefixAndCommand(c *syntax.SimpleCmd, argv []string) {
 		// Runner.tracePrefixFollowsTheCommand.
 		r.awaitTraceTurn()
 		for _, w := range words {
-			r.traceLine(w, *d)
+			r.traceLine(w, d)
 		}
 		r.releaseTraceTurn()
 		r.traceCommand(argv)
@@ -393,7 +393,7 @@ func (r *Runner) tracePrefixAndCommand(c *syntax.SimpleCmd, argv []string) {
 		r.tracePrefixRepeatsBeforeTheCommand(argv) {
 		line += r.tracePrefix()
 	}
-	line += strings.Join(r.traceCommandWords(argv, *d), " ")
+	line += strings.Join(r.traceCommandWords(argv, d), " ")
 	r.awaitTraceTurn()
 	defer r.releaseTraceTurn()
 	r.tracef("%s%s\n", r.tracePrefix(), line)
@@ -403,14 +403,14 @@ func (r *Runner) tracePrefixAndCommand(c *syntax.SimpleCmd, argv []string) {
 // the command it already traced.
 func (r *Runner) tracePrefixAfterTheCommand(assigns []*syntax.Assign) {
 	d := r.diag()
-	words := r.prefixTraceWords(assigns, *d)
+	words := r.prefixTraceWords(assigns, d)
 	if len(words) == 0 {
 		return
 	}
 	r.awaitTraceTurn()
 	defer r.releaseTraceTurn()
 	for _, w := range words {
-		r.traceLine(w, *d)
+		r.traceLine(w, d)
 	}
 }
 

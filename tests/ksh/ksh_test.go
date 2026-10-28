@@ -242,24 +242,24 @@ func TestSemantics(t *testing.T) {
 
 func TestDiagnostics(t *testing.T) {
 	// The four lines `type` prints, each of them this shell's own words.
-	if got, want := ksh.Diagnostics().TypeKeyword, "%[1]s is a keyword"; got != want {
+	if got, want := diagTable(ksh.Diagnostics()).TypeKeyword, "%[1]s is a keyword"; got != want {
 		t.Errorf("TypeKeyword = %q, want %q", got, want)
 	}
-	if got, want := ksh.Diagnostics().TypeExternal, "%[1]s is a tracked alias for %[2]s"; got != want {
+	if got, want := diagTable(ksh.Diagnostics()).TypeExternal, "%[1]s is a tracked alias for %[2]s"; got != want {
 		t.Errorf("TypeExternal = %q, want %q", got, want)
 	}
 	// A name it could not account for is a complaint, so it goes to standard
 	// error the way the rest of `whence`'s messages do. Half the panel
 	// reports it on standard output instead.
-	if ksh.Diagnostics().TypeNotFoundOnStdout {
+	if diagTable(ksh.Diagnostics()).TypeNotFoundOnStdout {
 		t.Error("TypeNotFoundOnStdout = true, want the line on standard error")
 	}
 	// `type` is `whence -v` here, and a refused option says so — the
 	// complaint and the usage line under it both name `whence`.
-	if got, want := ksh.Diagnostics().BuiltinComplaintName["type"], "whence"; got != want {
+	if got, want := diagTable(ksh.Diagnostics()).BuiltinComplaintName["type"], "whence"; got != want {
 		t.Errorf("BuiltinComplaintName[type] = %q, want %q", got, want)
 	}
-	if got, want := ksh.Diagnostics().BuiltinUsage["type"], "Usage: whence [-afpqv] name  ..."; got != want {
+	if got, want := diagTable(ksh.Diagnostics()).BuiltinUsage["type"], "Usage: whence [-afpqv] name  ..."; got != want {
 		t.Errorf("BuiltinUsage[type] = %q, want %q", got, want)
 	}
 	// An ended job is listed as `Done`, and `Done(N)` where it ended with a
@@ -270,26 +270,26 @@ func TestDiagnostics(t *testing.T) {
 	// writes. Measured 2026-09-18: `set -m; sh -c 'exit 7' &` then `jobs`
 	// is `[1] + Done(7)`. The blind spot is
 	// Semantics.EndedJobIsListedAsRunningWithoutTheMonitor now.
-	if got, want := ksh.Diagnostics().JobDone, " Done"; got != want {
+	if got, want := diagTable(ksh.Diagnostics()).JobDone, " Done"; got != want {
 		t.Errorf("JobDone = %q, want %q", got, want)
 	}
 	// So there is no second word for the shell to announce: the notice and
 	// the listing are the same word once the job has actually been reaped.
-	if got, want := ksh.Diagnostics().JobDoneNotice, ""; got != want {
+	if got, want := diagTable(ksh.Diagnostics()).JobDoneNotice, ""; got != want {
 		t.Errorf("JobDoneNotice = %q, want %q", got, want)
 	}
 	// The separator ksh puts between the job number and the pid is a tab.
-	if got, want := ksh.Diagnostics().JobStarted, "[%[1]d]\t%[2]d"; got != want {
+	if got, want := diagTable(ksh.Diagnostics()).JobStarted, "[%[1]d]\t%[2]d"; got != want {
 		t.Errorf("JobStarted = %q, want %q", got, want)
 	}
-	if got, want := ksh.Diagnostics().SyntaxStatus(), 3; got != want {
+	if got, want := diagTable(ksh.Diagnostics()).SyntaxStatus(), 3; got != want {
 		t.Errorf("syntax-error status = %d, want %d", got, want)
 	}
 	// A compound command's failed open is reported at the line *before* the
 	// redirect's: the same loop bash reports at 5 is 4 here, and a compound
 	// written entirely on line 2 is line 1 — which this dialect prints as no
 	// line at all.
-	if got, want := ksh.Diagnostics().RedirectFailureLine, interp.LineBeforeRedirect; got != want {
+	if got, want := diagTable(ksh.Diagnostics()).RedirectFailureLine, interp.LineBeforeRedirect; got != want {
 		t.Errorf("RedirectFailureLine = %v, want %v", got, want)
 	}
 }
@@ -376,7 +376,7 @@ func TestUnterminatedNamesTheInnermostUnclosedKeyword(t *testing.T) {
 		{"if true; then\necho x", "syntax error at line 2: `then' unmatched"},
 	} {
 		_, err := syntax.Parse(tc.src, ksh.Dialect())
-		if got := ksh.Diagnostics().ParseFailure(err); got != tc.want {
+		if got := diagTable(ksh.Diagnostics()).ParseFailure(err); got != tc.want {
 			t.Errorf("%q: got %q, want %q", tc.src, got, tc.want)
 		}
 	}
@@ -428,7 +428,7 @@ func TestUnexpectedTokensCarryTheLine(t *testing.T) {
 		{"echo x\necho )", "syntax error at line 2: `)' unexpected"},
 	} {
 		_, err := syntax.Parse(tc.src, ksh.Dialect())
-		if got := ksh.Diagnostics().ParseFailure(err); got != tc.want {
+		if got := diagTable(ksh.Diagnostics()).ParseFailure(err); got != tc.want {
 			t.Errorf("%q: got %q, want %q", tc.src, got, tc.want)
 		}
 	}
@@ -440,7 +440,7 @@ func TestKshHasItsOwnNamesForThings(t *testing.T) {
 	// `times` is a reserved word, so a word after it does not parse at all.
 	if _, err := syntax.Parse("times foo", ksh.Dialect()); err == nil {
 		t.Error("`times foo` should not parse where times is reserved")
-	} else if got, want := ksh.Diagnostics().ParseFailure(err),
+	} else if got, want := diagTable(ksh.Diagnostics()).ParseFailure(err),
 		"syntax error at line 1: `foo' unexpected"; got != want {
 		t.Errorf("got %q, want %q", got, want)
 	}
@@ -453,7 +453,7 @@ func TestKshHasItsOwnNamesForThings(t *testing.T) {
 	// An operator ksh93 cannot read is a syntax error naming the character,
 	// not a bad substitution.
 	_, err := syntax.Parse("echo ${x^^}", ksh.Dialect())
-	if got, want := ksh.Diagnostics().ParseFailure(err),
+	if got, want := diagTable(ksh.Diagnostics()).ParseFailure(err),
 		"syntax error at line 1: `^' unexpected"; got != want {
 		t.Errorf("${x^^}: got %q, want %q", got, want)
 	}
@@ -605,7 +605,7 @@ func TestSelectMenuLayout(t *testing.T) {
 	}
 	// The same prompt as bash, and printed only when the input is a terminal
 	// — which is why a ksh93 script's transcript has the menu and no prompt.
-	if got, want := ksh.Diagnostics().SelectPrompt, "#? "; got != want {
+	if got, want := diagTable(ksh.Diagnostics()).SelectPrompt, "#? "; got != want {
 		t.Errorf("SelectPrompt = %q, want %q", got, want)
 	}
 }
@@ -665,7 +665,7 @@ func TestAParseFailureIsNotPrefixedWithItsOwnLine(t *testing.T) {
 	if err == nil {
 		t.Fatal("want a parse failure")
 	}
-	got := ksh.Diagnostics().ForScript().ParseDiagnostic("s.sh", "", err, "echo one\n{ fi; }\n")
+	got := diagTable(ksh.Diagnostics()).ForScript().ParseDiagnostic("s.sh", "", err, "echo one\n{ fi; }\n")
 	if strings.Contains(got, "line 2: syntax error") {
 		t.Errorf("got %q, want the line named once", got)
 	}
@@ -673,7 +673,7 @@ func TestAParseFailureIsNotPrefixedWithItsOwnLine(t *testing.T) {
 		t.Errorf("got %q, want the wording to still name the line", got)
 	}
 	// A runtime diagnostic in a script keeps its prefix.
-	if runtime := ksh.Diagnostics().ForScript().Report("s.sh", 2, "nosuchcmd: not found\n"); !strings.Contains(runtime, "line 2:") {
+	if runtime := diagTable(ksh.Diagnostics()).ForScript().Report("s.sh", 2, "nosuchcmd: not found\n"); !strings.Contains(runtime, "line 2:") {
 		t.Errorf("got %q, want a runtime diagnostic still prefixed", runtime)
 	}
 }
@@ -706,7 +706,7 @@ func TestAKilledCommandIsSaidInThisShellsOwnWords(t *testing.T) {
 // A substitution's body is numbered from the file, whichever way it is
 // written.
 func TestASubstitutionsBodyIsNumberedFromTheFile(t *testing.T) {
-	if ksh.Diagnostics().BackquotedSubstitutionRestartsLines {
+	if diagTable(ksh.Diagnostics()).BackquotedSubstitutionRestartsLines {
 		t.Error("backquotes are numbered from the file here, like $( )")
 	}
 }
@@ -801,7 +801,7 @@ func TestARedirectionInAnUncompoundedBodyIsRefused(t *testing.T) {
 			t.Errorf("%q: parsed, want a syntax error", tc.src)
 			continue
 		}
-		if got := ksh.Diagnostics().ParseFailure(err); got != tc.want {
+		if got := diagTable(ksh.Diagnostics()).ParseFailure(err); got != tc.want {
 			t.Errorf("%q: got %q, want %q", tc.src, got, tc.want)
 		}
 	}
@@ -852,7 +852,7 @@ func TestDollarDashInteractiveStartupLetters(t *testing.T) {
 // is No here — so there is never a moment where it wanted one and could not
 // have it, and measured with every stream redirected it writes nothing at all.
 func TestNothingIsSaidAboutJobControlAtStartup(t *testing.T) {
-	if got := ksh.Diagnostics().NoJobControlAtStartup; got != "" {
+	if got := diagTable(ksh.Diagnostics()).NoJobControlAtStartup; got != "" {
 		t.Errorf("NoJobControlAtStartup = %q, want empty — this shell says nothing", got)
 	}
 }
@@ -862,10 +862,10 @@ func TestNothingIsSaidAboutJobControlAtStartup(t *testing.T) {
 //
 // The status is the shared 1, so there is no field for it.
 func TestTheJobSpecThatNamesNothing(t *testing.T) {
-	if got, want := ksh.Diagnostics().NoSuchJob, "%[1]s: no such job"; got != want {
+	if got, want := diagTable(ksh.Diagnostics()).NoSuchJob, "%[1]s: no such job"; got != want {
 		t.Errorf("NoSuchJob = %q, want %q", got, want)
 	}
-	if got := ksh.Diagnostics().NoSuchJobStatus; got != 0 {
+	if got := diagTable(ksh.Diagnostics()).NoSuchJobStatus; got != 0 {
 		t.Errorf("NoSuchJobStatus = %d, want 0 — the shared 1", got)
 	}
 }
@@ -1015,10 +1015,10 @@ func TestFgAndBgRefuseBeforeTheOperandAndSayNothing(t *testing.T) {
 	if got := ksh.Semantics().MonitorAloneResumesAJob; got != interp.No {
 		t.Errorf("MonitorAloneResumesAJob = %v, want No", got)
 	}
-	if got := ksh.Diagnostics().NoJobControl; got != "" {
+	if got := diagTable(ksh.Diagnostics()).NoJobControl; got != "" {
 		t.Errorf("NoJobControl = %q, want empty — this shell refuses without a word", got)
 	}
-	if got := ksh.Diagnostics().JobNotUnderJobControl; got != "" {
+	if got := diagTable(ksh.Diagnostics()).JobNotUnderJobControl; got != "" {
 		t.Errorf("JobNotUnderJobControl = %q, want empty — this shell never reads the operand", got)
 	}
 }

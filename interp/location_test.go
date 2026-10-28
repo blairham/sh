@@ -41,7 +41,7 @@ func TestLocationStylesAreMeasured(t *testing.T) {
 		t.Errorf("after-first on line 1: %q, want %q", got, "mysh: boom")
 	}
 	// An empty name still produces something usable.
-	if got := (Diagnostics{}).Report("", 1, "boom"); got != "sh: boom" {
+	if got := (&Diagnostics{}).Report("", 1, "boom"); got != "sh: boom" {
 		t.Errorf("empty name: %q", got)
 	}
 }

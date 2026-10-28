@@ -87,7 +87,8 @@ func splitRunWithText(t *testing.T, p dialecttest.Preset, src string) (out, errs
 		// Rendered by a runner as the front end's is, because what a byte
 		// past ASCII is depends on the locale and the table has none (#6786).
 		// The rows were measured under LC_ALL=C, so that is the runner's.
-		d := p.Diagnostics().ForScript()
+		own := p.Diagnostics()
+		d := own.ForScript()
 		first, _, _ := strings.Cut(src, "\n")
 		out, _, _ = p.Combined(t, dialecttest.Base{}, first+"\n")
 		r := p.Runner(dialecttest.Base{Vars: map[string]string{"LC_ALL": "C"}})

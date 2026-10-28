@@ -70,7 +70,7 @@ func TestDashRefusesAnInvocationOptionAtLineNought(t *testing.T) {
 // `-s` was another until #3411, and `-b`, `-E`, `-I` and `-V` until they were
 // declared as the letters of notify, emacs, ignoreeof and vi.
 func TestDashKeepsTheSetLettersItHasAndThisShellDoesNot(t *testing.T) {
-	if got, want := dash.Diagnostics().UnimplementedOptionLetters["set"], "i"; got != want {
+	if got, want := diagTable(dash.Diagnostics()).UnimplementedOptionLetters["set"], "i"; got != want {
 		t.Errorf("UnimplementedOptionLetters[set] = %q, want %q", got, want)
 	}
 	for _, l := range "i" {

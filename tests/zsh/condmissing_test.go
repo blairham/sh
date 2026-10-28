@@ -34,7 +34,7 @@ func TestAMissingConditionNamesTheTokenItStoppedOn(t *testing.T) {
 			if err == nil {
 				t.Fatalf("%s: parsed, want a refusal", tc.src)
 			}
-			got := zsh.Diagnostics().ParseDiagnostic("zsh", "-c", err, tc.src)
+			got := diagTable(zsh.Diagnostics()).ParseDiagnostic("zsh", "-c", err, tc.src)
 			if got != tc.want {
 				t.Errorf("got %q, want %q", got, tc.want)
 			}
@@ -57,7 +57,7 @@ func TestACondtionThatNeverBeganAndRanOut(t *testing.T) {
 			if err == nil {
 				t.Fatalf("%s: parsed, want a refusal", tc.src)
 			}
-			got := zsh.Diagnostics().ParseDiagnostic("zsh", "-c", err, tc.src)
+			got := diagTable(zsh.Diagnostics()).ParseDiagnostic("zsh", "-c", err, tc.src)
 			if got != tc.want {
 				t.Errorf("got %q, want %q", got, tc.want)
 			}

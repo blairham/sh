@@ -122,7 +122,7 @@ func TestTheSecondSeparatorAndTheBarsAreRefusedHere(t *testing.T) {
 		if src == "echo one |\n; cat\n" {
 			want = "syntax error at line 2: `;' unexpected"
 		}
-		if got := ksh.Diagnostics().ParseFailure(err); got != want {
+		if got := diagTable(ksh.Diagnostics()).ParseFailure(err); got != want {
 			t.Errorf("%q:\n got %q\nwant %q", src, got, want)
 		}
 	}

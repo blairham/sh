@@ -142,7 +142,7 @@ func (r *Runner) assignAllAsItGoes(ctx context.Context, assigns []*syntax.Assign
 		// the subscript is read. See Runner.openTraceTakesTheLiteral (#6764).
 		literalLater := a.IsArray && a.Index != nil && !e.tracesAfterTheStore
 		if !e.tracesAfterTheStore && !literalLater {
-			line.pending += r.traceAssignRest(a, value, e, *d, target)
+			line.pending += r.traceAssignRest(a, value, e, d, target)
 		}
 		if literalLater {
 			r.openTraceLiteral = a
@@ -150,7 +150,7 @@ func (r *Runner) assignAllAsItGoes(ctx context.Context, assigns []*syntax.Assign
 		r.withPreparedValue(ctx, e)
 		r.openTraceLiteral = nil
 		if e.tracesAfterTheStore {
-			line.pending += r.traceAssignRest(a, value, e, *d, target)
+			line.pending += r.traceAssignRest(a, value, e, d, target)
 		}
 		if r.ctl != controlNone {
 			// A refused store ends the list here, and the line gets its
@@ -224,7 +224,7 @@ func (r *Runner) openTraceLineCarryingTheInherited(text string) *openTraceLine {
 
 // traceAssignRest is the part of one assignment's word after its target,
 // with the space that follows every word on this line.
-func (r *Runner) traceAssignRest(a *syntax.Assign, value string, e *expandedAssign, d Diagnostics, target string) string {
+func (r *Runner) traceAssignRest(a *syntax.Assign, value string, e *expandedAssign, d *Diagnostics, target string) string {
 	return strings.TrimPrefix(r.traceAssign(a, value, e, d), target) + " "
 }
 

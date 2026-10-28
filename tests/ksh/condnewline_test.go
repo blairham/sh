@@ -50,7 +50,7 @@ func TestATermsFirstWordWillNotEndItsLineHere(t *testing.T) {
 			t.Errorf("%q parsed; this shell refuses it", c.src)
 			continue
 		}
-		if got := ksh.Diagnostics().ForScript().ParseFailure(err); got != c.want {
+		if got := diagTable(ksh.Diagnostics()).ForScript().ParseFailure(err); got != c.want {
 			t.Errorf("%q:\n got %q\nwant %q", c.src, got, c.want)
 		}
 	}
@@ -70,7 +70,7 @@ func TestAFinishedTermAndAMissingNewlineAreUnmovedHere(t *testing.T) {
 	if err == nil {
 		t.Fatal("`[[ ]]` with no final newline parsed, want a refusal")
 	}
-	if got, want := ksh.Diagnostics().ForScript().ParseFailure(err),
+	if got, want := diagTable(ksh.Diagnostics()).ForScript().ParseFailure(err),
 		"syntax error at line 1: `[[' unmatched"; got != want {
 		t.Errorf("no final newline:\n got %q\nwant %q", got, want)
 	}

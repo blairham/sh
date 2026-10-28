@@ -69,7 +69,7 @@ func TestAConditionalOperandIsNamedTheOperatorsWay(t *testing.T) {
 			t.Errorf("%s: parsed, want a syntax error", tc.src)
 			continue
 		}
-		out := bash.Diagnostics().ParseDiagnostic("bash", "-c", err, tc.src)
+		out := diagTable(bash.Diagnostics()).ParseDiagnostic("bash", "-c", err, tc.src)
 		for _, w := range tc.want {
 			if !strings.Contains(out, w) {
 				t.Errorf("%s: said %q, want a line ending %q", tc.src, out, w)

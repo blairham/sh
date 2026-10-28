@@ -104,7 +104,7 @@ func TestTheTwoHalvesOfTheFatalRuleDisagree(t *testing.T) {
 // generic fatal status for ksh93 is 1, and this failure reports 2. Taking the
 // status from the fatal path rather than from the field was wrong by one.
 func TestNoOperandIsFatalWithItsOwnStatus(t *testing.T) {
-	if got := ksh.Diagnostics().DotNoOperandStatus; got != 2 {
+	if got := diagTable(ksh.Diagnostics()).DotNoOperandStatus; got != 2 {
 		t.Fatalf("DotNoOperandStatus = %d, want 2", got)
 	}
 	out, st := runKsh(t, t.TempDir(), `. ; echo NOT-REACHED`)

@@ -26,7 +26,7 @@ func TestAnArithmeticExpansionClosesOnlyAtTwoParens(t *testing.T) {
 			t.Errorf("%s: parsed, want a refusal", tc.src)
 			continue
 		}
-		if got := dash.Diagnostics().ParseFailure(err); got != tc.want {
+		if got := diagTable(dash.Diagnostics()).ParseFailure(err); got != tc.want {
 			t.Errorf("%s: %q, want %q", tc.src, got, tc.want)
 		}
 	}

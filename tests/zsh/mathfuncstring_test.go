@@ -120,7 +120,7 @@ func TestMathFunctionStringLetterIsNotAlsoCalledMissing(t *testing.T) {
 	if !strings.ContainsRune(zsh.Semantics().FunctionsOptions, 's') {
 		t.Error("FunctionsOptions does not spell -s")
 	}
-	if got := zsh.Diagnostics().UnimplementedOptionLetters["functions"]; strings.ContainsRune(got, 's') {
+	if got := diagTable(zsh.Diagnostics()).UnimplementedOptionLetters["functions"]; strings.ContainsRune(got, 's') {
 		t.Errorf("UnimplementedOptionLetters[functions] = %q, which still claims -s is missing", got)
 	}
 }

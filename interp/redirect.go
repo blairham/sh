@@ -1998,7 +1998,7 @@ func (r *Runner) heredocText(rd *syntax.Redirect) string {
 // A shell says "No such file"; os.OpenFile says "open b: no such file or
 // directory", which repeats the name the caller is about to print and reads
 // like a Go program rather than a shell.
-func (d Diagnostics) openReason(err error, creating bool) string {
+func (d *Diagnostics) openReason(err error, creating bool) string {
 	var pe *os.PathError
 	if errors.As(err, &pe) {
 		err = pe.Err

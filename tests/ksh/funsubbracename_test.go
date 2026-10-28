@@ -59,7 +59,7 @@ func TestABraceNameOpensNoLevelInACurrentShellBody(t *testing.T) {
 			t.Errorf("%q parsed, want `{' unmatched", src)
 			continue
 		}
-		if got, want := ksh.Diagnostics().ParseFailure(err), "syntax error at line 1: `{' unmatched"; got != want {
+		if got, want := diagTable(ksh.Diagnostics()).ParseFailure(err), "syntax error at line 1: `{' unmatched"; got != want {
 			t.Errorf("%q:\n got %q\nwant %q", src, got, want)
 		}
 	}
@@ -74,7 +74,7 @@ func TestABraceNameOpensNoLevelInACurrentShellBody(t *testing.T) {
 			t.Errorf("%q parsed, want `}' unexpected", src)
 			continue
 		}
-		if got, want := ksh.Diagnostics().ParseFailure(err), "syntax error at line 1: `}' unexpected"; got != want {
+		if got, want := diagTable(ksh.Diagnostics()).ParseFailure(err), "syntax error at line 1: `}' unexpected"; got != want {
 			t.Errorf("%q:\n got %q\nwant %q", src, got, want)
 		}
 	}

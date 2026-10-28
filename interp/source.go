@@ -162,7 +162,7 @@ type borrowedLines struct {
 }
 
 // sourceName is what a diagnostic calls this text.
-func (s sourced) sourceName(d Diagnostics) string {
+func (s sourced) sourceName(d *Diagnostics) string {
 	switch {
 	case s.named != "":
 		// A variable's name beats both, because neither of the others is
@@ -179,7 +179,7 @@ func (s sourced) sourceName(d Diagnostics) string {
 }
 
 // naming is where this kind of borrowed text puts its name.
-func (s sourced) naming(d Diagnostics) SourceNaming {
+func (s sourced) naming(d *Diagnostics) SourceNaming {
 	if s.eval {
 		return d.EvalNaming
 	}
@@ -349,12 +349,12 @@ func (r *Runner) reportBorrowedParseFailure(err error, s sourced, src string) {
 	// with no line (#6056).
 	d, lead, bare := r.diag(), "", false
 	if r.speaksAsAtAPrompt() {
-		raw := *r.Diagnostics
+		raw := r.Diagnostics
 		switch {
 		case !s.eval:
-			d, lead = &raw, r.name()+": "
+			d, lead = raw, r.name()+": "
 		case r.sourceDepth > 0 || r.Route == RouteScriptFile:
-			d = &raw
+			d = raw
 		default:
 			bare = true
 		}
@@ -365,8 +365,7 @@ func (r *Runner) reportBorrowedParseFailure(err error, s sourced, src string) {
 		// syntax error: `)' unexpected`, worded as the prompt words it,
 		// where `ksh -c` writes `at line 1`. See
 		// Diagnostics.EvalTextAtAPromptKeepsItsLocation.
-		pd := r.Diagnostics.ForPrompt()
-		d = &pd
+		d = r.Diagnostics.ForPrompt()
 	}
 	line, own := r.line, d.ParseFailureLine(err)
 	if own > 0 {
@@ -392,11 +391,11 @@ func (r *Runner) reportBorrowedParseFailure(err error, s sourced, src string) {
 		// The parse half of the run-time rule, written by the same
 		// borrowed prefix: `sh: eval: syntax error: …` with no line. See
 		// Diagnostics.EvalTextNamesNoLineWhenInteractive.
-		cp := *d
+		cp := d.Clone()
 		cp.BorrowedLocation = LocationNameOnly
-		d = &cp
+		d = cp
 	}
-	source := s.sourceName(*d)
+	source := s.sourceName(d)
 	if s.callersPlace || (s.eval && !r.EvalTextHasALocationOfItsOwn()) {
 		// Text that is not a place of its own is refused under the caller's
 		// name — the script, the sourced file, the function or the shell —
@@ -425,7 +424,7 @@ func (r *Runner) reportBorrowedParseFailure(err error, s sourced, src string) {
 		// Diagnostics.BorrowedTextRendersTheCallStack — the run-time half is
 		// Runner.locationPrefixNamed, and the two render one rule from the two
 		// places a diagnostic about borrowed text is written.
-		chain, innermost := r.borrowedStack(*d, r.locationFileOrName())
+		chain, innermost := r.borrowedStack(d, r.locationFileOrName())
 		r.parseErrf("%s%s: %s\n", chain, innermost, d.ParseFailure(err))
 	} else {
 		if body, at, _, ok := d.bodyRefusalToWriteFirst(err); ok {
@@ -439,10 +438,10 @@ func (r *Runner) reportBorrowedParseFailure(err error, s sourced, src string) {
 			if bodyLine < 0 {
 				bodyLine = line
 			}
-			r.parseErrf("%s%s\n", lead, d.SourceReport(s.naming(*d), r.name(), source,
+			r.parseErrf("%s%s\n", lead, d.SourceReport(s.naming(d), r.name(), source,
 				bodyLine+r.lineBase+r.lineOrigin, d.ParseFailure(body)))
 		}
-		r.parseErrf("%s%s\n", lead, d.SourceReport(s.naming(*d), r.name(), source,
+		r.parseErrf("%s%s\n", lead, d.SourceReport(s.naming(d), r.name(), source,
 			line, d.ParseFailure(err)))
 	}
 	// And the offending line quoted back, for the dialect that writes
@@ -454,7 +453,7 @@ func (r *Runner) reportBorrowedParseFailure(err error, s sourced, src string) {
 		// the quote. The same number for both is right only where the text
 		// numbers itself from one, and wrong in exactly the dialects the line
 		// above shifts (#3194).
-		if echo := d.SourceEcho(s.naming(*d), r.name(), source, line, own, err, src); echo != "" {
+		if echo := d.SourceEcho(s.naming(d), r.name(), source, line, own, err, src); echo != "" {
 			r.errf("%s%s", lead, echo)
 		}
 	}
@@ -494,7 +493,7 @@ func (r *Runner) reportBorrowedParseFailure(err error, s sourced, src string) {
 // stay unreachable from here, measured: neither is written for `eval`'d text
 // by ksh93 either.
 func (r *Runner) reportBorrowedRemarks(rs []syntax.Remark, shown int, s sourced) int {
-	d := *r.diag()
+	d := r.diag()
 	shift := int32(r.lineBase + r.lineOrigin)
 	for _, rk := range rs[min(shown, len(rs)):] {
 		if RemarkOnlyWhenNotRunning(rk.Kind) {
@@ -510,6 +509,7 @@ func (r *Runner) reportBorrowedRemarks(rs []syntax.Remark, shown int, s sourced)
 		}
 		loc := d
 		if d.RemarkNamesItsOwnLine {
+			loc = d.Clone()
 			// The wording says where it was, so the location says only who
 			// — the split the front end makes for the same remark. Kept to
 			// match that rule rather than because anything reaches it: the

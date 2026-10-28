@@ -2295,7 +2295,11 @@ type Runner struct {
 	// for the length of one such expansion. Both are per-command scratch and
 	// both are cleared when the command is over. See
 	// interp/prefixfailurelocation.go.
-	prefixSpeaker      prefixValueSpeaker
+	prefixSpeaker prefixValueSpeaker
+	// traceLineForAChild says the trace line being written is a command's
+	// that runs in a child, so an open line written ahead of it stays
+	// pending. See openTraceLine.keptForAChild.
+	traceLineForAChild bool
 	prefixValueSpeaker prefixValueSpeaker
 	// prefixTraceAssigns and prefixTraceValues hold this command's
 	// assignment-prefix values, for the one command being traced. `set -x`
@@ -2631,6 +2635,10 @@ type Runner struct {
 	// globMissed records that a pattern matched nothing, so the no-match
 	// axis can report it once the whole field is known.
 	globMissed bool
+	// globCodeStatusBefore is `$?` as the pattern whose qualifier code is
+	// running began, which decides the files that code never reaches once an
+	// earlier file's code has asked to leave. See runGlobCode.
+	globCodeStatusBefore int
 	// keepRedirs records that this command's redirections outlive it, which
 	// is `exec > log` and nothing else. The dispatcher clears it after acting
 	// on it, so it cannot leak into the next command.
@@ -9924,12 +9932,30 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 	// stopped the shell, and then the prefix's trace state is dropped — in
 	// that order, which was two defers' order and is one deferred call now.
 	// See interp/xtraceprefixasitgoes.go.
+	//
+	// **Put back, not dropped.** A command run by this shell in the middle
+	// of another command's expansion — code in a glob qualifier — ends here
+	// too, and dropping the records took the outer command's with them: its
+	// prefix entries expanded before the code were traced as nothing and
+	// expanded a second time by the route that stores them, so `set -x;
+	// y=$(print -u2 sub) x=( [ab](e:"…":) ) print in` ran the substitution
+	// twice. Measured 2026-10-27 on zsh 5.9.2, once (#6752).
+	outerTrace := prefixTraceRecords{
+		assigns: r.prefixTraceAssigns, values: r.prefixTraceValues,
+		early: r.prefixTracedEarly, joins: r.prefixTraceJoins,
+		globs: r.prefixGlobMatches, speaker: r.prefixSpeaker,
+	}
 	defer func() {
 		r.writeHeldPrefixTrace()
-		r.prefixTraceAssigns, r.prefixTraceValues = nil, nil
-		r.prefixTracedEarly = nil
-		r.prefixTraceJoins, r.prefixGlobMatches = nil, nil
-		r.prefixSpeaker = prefixValueSpeakerNone
+		r.prefixTraceAssigns, r.prefixTraceValues = outerTrace.assigns, outerTrace.values
+		r.prefixTracedEarly = outerTrace.early
+		r.prefixTraceJoins, r.prefixGlobMatches = outerTrace.joins, outerTrace.globs
+		r.prefixSpeaker = outerTrace.speaker
+		// And a child's command run by this command no longer has the open
+		// line in hand. See openTraceLine.keptForAChild.
+		if line := r.openTrace; line != nil && line.owner == r {
+			line.keptForAChild = false
+		}
 	}()
 	asItGoes := tracesPrefix && !prefixFollows && r.tracesPrefixAsItGoes()
 	// Whether the prefix traced after the redirections failed to expand,
@@ -16864,6 +16890,19 @@ func (r *Runner) storeTheAssignmentsAlone(ctx context.Context, c *syntax.SimpleC
 	r.inABareAssignment = true
 	r.assignAll(ctx, c.Assigns)
 	r.inABareAssignment = bareBefore
+	if r.ctl == controlReturn && r.substRan {
+		// A `return` raised by glob qualifier code in one of the values
+		// takes effect once the list is done, and the function leaves at
+		// the **list's** status rather than the operand's: 0, or the last
+		// substitution's. Measured 2026-10-27 on zsh 5.9.2 in a function,
+		// `x=( [ab](e:"return 3":) ) y=$(print side >&2)` leaves 0 with no
+		// `side`, `y=$(exit 7) x=( [ab](e:"return 3":N) )` leaves 7, and
+		// `y=1` beside either leaves 0 — where this left 3 (#6752). The
+		// status that stood as the code began is the last substitution's,
+		// since one after the pattern never runs. See
+		// Runner.globCodeStatusBefore.
+		r.status = r.globCodeStatusBefore
+	}
 	if r.ctl == controlExit || r.ctl == controlAbandon {
 		// A readonly reassignment is fatal in three of the four shells
 		// and abandons the statement in the fourth. Zeroing the status

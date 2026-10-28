@@ -2212,6 +2212,53 @@ first: `f() { x=( [ab](e:'return 3':) ); }; f` leaves one element in `x`,
 and `x=( … ) print in` writes `in`. A `break` or `continue` in a `${ …; }`
 body does the same in bash 5.3 and ksh93u+ (see `Runner.failedHeading`).
 
+**Which later files pass is decided by `$?` as the pattern's code began,
+and a `return` from a command of assignments alone leaves the list's own
+status.** Measured 2026-10-27 on zsh 5.9.2 under `-fc` in the same
+directory, inside a function `f` and with `after $? $#x` printed after the
+call (#6752):
+
+    x=( [ab](e:"return 3":) ) y=$(print side >&2)   after 0 1, no `side`
+    y=$(print side >&2) x=( [ab](e:"return 3":) )   side, then after 0 1
+    y=$(exit 7) x=( [ab](e:"return 3":N) )          after 7 0
+    x=( [ab](e:"return 3":N) ) y=$(exit 7)          after 0 1
+    (exit 5); x=( [ab](e:"return 3":N) )            after 0 0
+    (exit 5); y=$(true) x=( [ab](e:"return 3":N) )  after 0 1
+    x=( [ab](e:"false; return 3":) ) y=1            after 0 1
+    (exit 5); x=( [ab](e:"return 0":) )             after 0 1
+    (exit 5); x=( [ab](e:"return 3":) )             f: no matches found: …
+    (exit 5); print X [ab](e:"return 3":N)          X
+    print X [ab](e:"return 3":N)                    X b
+    (exit 5); for j in 1; do x=( [ab](e:"break":N) ); done   $#x is 1
+    (exit 5); print X *(e:'[[ $REPLY = big ]] || return 3':N)
+                                                    X big: the first file's
+                                                    code left 0, and the
+                                                    rest are still dropped
+
+So the file whose code returned is kept by its own status, the files after
+it by the status that stood before the pattern — not before that file —
+and the function's status is 0 or the last substitution's, never the
+operand's.
+
+The rows that name a file are in this directory's order on macOS, `big c9
+a c10 lnk d b`, since the code runs in the order the directory lists. On
+Linux, in the suite's pinned image on a tmpfs listing `lnk d b c10 a big
+c9`, zsh 5.9.2 runs the code on `b` before `a`, and the two rows read `X a`
+and `X` (measured 2026-10-28); this shell answers the same there.
+
+**Under `set -x`, code in a qualifier writes the assignment's line as far
+as it has got ahead of its own**, and the line goes on from there: `set -x;
+x=( [ab](e:"print -u2 code":) )` is `+zsh:1> x=+zsh:1> print -u2 code`,
+`code`, `+zsh:1> print -u2 code`, `code`, `( a b ) `; with `print in`
+behind it the last line is `( a b ) +zsh:1> print in`, and with
+`/usr/bin/true` it is `( a b ) +zsh:1> /usr/bin/true` — the prompt
+repeated before the command once part of the line has gone out. A command
+the code runs in a child (`/usr/bin/true`, a name that is not found, a
+subshell, a pipeline's forked element) writes the text and leaves it for the
+next: `x=( [ab](e:"/usr/bin/true; true":) )` is `+zsh:1> x=+zsh:1>
+/usr/bin/true`, `+zsh:1> x=+zsh:1> true`, then `+zsh:1> /usr/bin/true`,
+`+zsh:1> true`, `( a b ) `. See `Runner.writeOpenTraceLineAhead`.
+
 **The code sorts by the shell's `numericglobsort`, not by the pattern's
 `n`.** `*(ne:'print -r -- c*':)` writes `c10 c9` from the code with the
 option off; `[[ -o numericglobsort ]]` there is off, and a `setopt

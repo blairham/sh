@@ -1071,6 +1071,9 @@ func (r *Runner) glob(field string) ([]string, bool) {
 	// being a list at all: measured, `setopt no_glob; echo MY ( x )` prints
 	// those five characters rather than naming a file attribute.
 	whole := field
+	// What `$?` held as this pattern began, for the code a qualifier runs:
+	// it decides the files that code never reaches. See runGlobCode.
+	r.globCodeStatusBefore = r.status
 	field, quals, hasQuals, qok := r.fieldQualifiers(field)
 	if !qok {
 		return nil, false

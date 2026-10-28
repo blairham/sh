@@ -65,6 +65,61 @@ type openTraceLine struct {
 	// written. Writing this one writes that text, so it is emptied there.
 	// See Runner.openTraceLineCarryingTheInherited.
 	carries *openTraceLine
+	// flushed is the part of the line already written, ahead of a trace
+	// line a command run by this shell wrote in the middle of the list —
+	// code in a glob qualifier. The rest of the line goes on from there.
+	// See Runner.writeOpenTraceLineAhead.
+	flushed string
+	// keptForAChild says the pending text was last written ahead of a
+	// child's command and is still this shell's to write: a diagnostic that
+	// child writes does not write it again.
+	keptForAChild bool
+	// prefixOf is the command whose assignment prefix this line is, where
+	// it is one; a bare list's line names none.
+	prefixOf *syntax.SimpleCmd
+}
+
+// writeOpenTraceLineAhead is the text of the open line to write ahead of a
+// trace line this shell is about to write for a command, and whether there
+// is any: a command run in the middle of an assignment list — code in a glob
+// qualifier — writes the list's line as far as it has got ahead of its own,
+// and the list goes on from there. A command that runs in a **child** writes
+// it too and leaves it pending, as a substitution's copy does, so the next
+// command written by this shell writes it again. Measured 2026-10-27 on zsh
+// 5.9.2 under -fc, in a directory where `[ab]` matches `a` and `b` (#6752):
+//
+//	set -x; x=( [ab](e:"print -u2 code":) )
+//	    +zsh:1> x=+zsh:1> print -u2 code   code   +zsh:1> print -u2 code
+//	    code   ( a b )
+//	set -x; x=( [ab](e:"print -u2 code":) ) print in
+//	    … ( a b ) +zsh:1> print in   — the prefix line goes on the same way
+//	set -x; x=( [ab](e:"/usr/bin/true":) )
+//	    +zsh:1> x=+zsh:1> /usr/bin/true   twice, then +zsh:1> x=( a b )
+//	set -x; x=( [ab](e:"/usr/bin/true; true":) )
+//	    +zsh:1> x=+zsh:1> /usr/bin/true   +zsh:1> x=+zsh:1> true
+//	    +zsh:1> /usr/bin/true   +zsh:1> true   ( a b )
+//	set -x; x=( [ab](e:"true | true":) )
+//	    the same shape: the forked element keeps the text, the last takes it
+//	set -x; x=( [ab](e:"nosuchcmd_zz; true":N) )
+//	    +zsh:1> x=+zsh:1> nosuchcmd_zz, the complaint, then as the row above
+//
+// So a child's trace and a child's complaint are written against the line
+// without taking it, and a command of this shell takes it.
+func (r *Runner) writeOpenTraceLineAhead() (string, bool) {
+	line := r.openTrace
+	if line == nil || line.owner != r || line.pending == "" {
+		return "", false
+	}
+	text := line.pending
+	if r.traceLineForAChild {
+		line.keptForAChild = true
+		return text, true
+	}
+	line.pending, line.flushed, line.keptForAChild = "", line.flushed+text, false
+	if line.carries != nil {
+		line.carries.pending = ""
+	}
+	return text, true
 }
 
 // assignListIsWrittenAsItGoes reports whether this list's one trace line is
@@ -240,7 +295,7 @@ func (r *Runner) traceAssignRest(a *syntax.Assign, value string, e *expandedAssi
 // echo ${q?b} ) true` writes only the complaint (#6623).
 func (r *Runner) flushOpenTraceLine() {
 	line := r.openTrace
-	if line == nil || line.owner != r || line.pending == "" || line.unflushed {
+	if line == nil || line.owner != r || line.pending == "" || line.unflushed || line.keptForAChild {
 		return
 	}
 	text := line.pending

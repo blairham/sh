@@ -77,21 +77,30 @@ const (
 func (r *Runner) runGlobCode(code, word string, use globCodeUse) (globCodeRun, bool) {
 	if r.ctl != controlNone {
 		// An earlier file's code asked to leave a function or a loop. The
-		// code does not run again and every file after that one passes —
-		// measured 2026-10-15 on zsh 5.9.2, `f() { print X *(e:'return
-		// 4':); echo inf; }; f` writes every name but the first file's and no
-		// `inf`, and `break` in a loop keeps them all and leaves the loop
-		// after the command has run.
-		return globCodeRun{kept: true}, true
+		// code does not run again, and every file after that one is kept
+		// **where the status that stood as the pattern's code began was
+		// 0**, and dropped where it was not — measured 2026-10-15 on zsh
+		// 5.9.2, `f() { print X *(e:'return 4':); echo inf; }; f` writes
+		// every name but the first file's and no `inf`, and `break` in a
+		// loop keeps them all; and 2026-10-27, `(exit 5)` in front of the
+		// same `print` writes `X` alone, as it does under `break` and
+		// `continue` and for a `return` raised on a later file whose own
+		// earlier files' code left 0. It is the status before the pattern
+		// and not before the file: `(exit 5); print X *(e:'[[ $REPLY = big
+		// ]] || return 3':N)` keeps `big` alone, though its code left 0
+		// (#6752).
+		return globCodeRun{kept: r.globCodeStatusBefore == 0}, true
 	}
 	// The pattern being expanded around this has state of its own on the
 	// runner, and a pattern inside the code would read it as its own: the
 	// walk's order, its `n`, the unit a `cshnullglob` line is counting,
 	// whether it missed, and the refusal a program's word holds.
 	unsorted, numeric, unit, missed := r.globUnsorted, r.globNumeric, r.globUnit, r.globMissed
+	before := r.globCodeStatusBefore
 	r.globUnsorted, r.globNumeric, r.globUnit, r.globMissed = false, globNumericUnsaid, nil, false
 	defer func() {
 		r.globUnsorted, r.globNumeric, r.globUnit, r.globMissed = unsorted, numeric, unit, missed
+		r.globCodeStatusBefore = before
 	}()
 
 	// And the line the shell is on, which the code's own statements move:

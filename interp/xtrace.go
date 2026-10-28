@@ -452,9 +452,18 @@ func (r *Runner) traceCommand(words []string) {
 		// interp/compoundoperandorder.go.
 		return
 	}
+	defer r.tracingAChildsCommand(words)()
 	for _, line := range tail {
 		r.tracef("%s", line)
 	}
+}
+
+// tracingAChildsCommand marks the trace line about to be written as a
+// command's that runs in a child, for the open line written ahead of it, and
+// answers with what clears the mark. See Runner.writeOpenTraceLineAhead.
+func (r *Runner) tracingAChildsCommand(words []string) func() {
+	r.traceLineForAChild = !r.commandRunsInThisShell(words)
+	return func() { r.traceLineForAChild = false }
 }
 
 // traceCommandWords is one command's words, quoted for a trace. Split out of
@@ -1840,6 +1849,11 @@ func (r *Runner) tracef(format string, args ...any) {
 		// Runner.prefixLineForAChild.
 		format = "%s" + format
 		args = append([]any{inherited}, args...)
+	} else if ahead, ok := r.writeOpenTraceLineAhead(); ok {
+		// And this shell's own open line, ahead of a line a command run in
+		// the middle of it writes. See Runner.writeOpenTraceLineAhead.
+		format = "%s" + format
+		args = append([]any{ahead}, args...)
 	}
 	if r.traceTo != nil {
 		_, _ = fmt.Fprintf(r.traceTo, format, args...)

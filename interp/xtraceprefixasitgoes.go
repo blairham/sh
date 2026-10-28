@@ -71,7 +71,7 @@ func (r *Runner) tracePrefixAsItGoes(c *syntax.SimpleCmd, argv []string, walk pr
 		}
 		return prefix + strings.Join(done, " ") + " "
 	}
-	line := &openTraceLine{owner: r, unflushed: true}
+	line := &openTraceLine{owner: r, unflushed: true, prefixOf: c}
 	outer := r.openTrace
 	r.openTrace = line
 	defer func() { r.openTrace = outer }()
@@ -91,8 +91,11 @@ func (r *Runner) tracePrefixAsItGoes(c *syntax.SimpleCmd, argv []string, walk pr
 			continue
 		}
 		target := traceAssignTarget(a, nil, nil, r.wordAsWrittenLayout())
-		// What a substitution in the value inherits. See prefixLineForAChild.
-		line.pending = so() + target
+		// What a substitution in the value inherits, and what a command
+		// run in the middle of the prefix writes ahead of its own line —
+		// less whatever of it has gone out already. See
+		// prefixLineForAChild and Runner.writeOpenTraceLineAhead.
+		line.pending = strings.TrimPrefix(so()+target, line.flushed)
 		frozen := r.attrHas(a.Name, attrReadonly)
 		var word string
 		if frozen {
@@ -128,7 +131,7 @@ func (r *Runner) tracePrefixAsItGoes(c *syntax.SimpleCmd, argv []string, walk pr
 		r.tracePrefixAndCommand(c, argv)
 		return
 	}
-	text := prefix + strings.Join(done, " ")
+	text := strings.TrimPrefix(prefix+strings.Join(done, " "), line.flushed)
 	if !r.prefixWalkFailed(walk) {
 		// A refused store writes its word and the space after it.
 		text += " "

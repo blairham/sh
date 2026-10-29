@@ -99,9 +99,11 @@ import "github.com/blairham/sh/syntax"
 // nothing here expands a value twice. Called again for each operand, and an
 // entry already expanded is neither expanded nor held a second time.
 //
+// argv is the command's words so far, which name the utility.
+//
 // Reports whether the command may carry on — an unanswered axis is refused
 // like any other.
-func (r *Runner) prefixBeforeADeclarationsOperand(assigns []*syntax.Assign, held *heldPrefix) bool {
+func (r *Runner) prefixBeforeADeclarationsOperand(assigns []*syntax.Assign, argv []string, held *heldPrefix) bool {
 	if !aPrefixIsWritten(assigns) {
 		return true
 	}
@@ -111,12 +113,19 @@ func (r *Runner) prefixBeforeADeclarationsOperand(assigns []*syntax.Assign, held
 		// all: r.unspecified separates them and is what the caller stops on.
 		return !r.unspecified
 	}
+	// Where the prefix is a local of the running function, it is held in the
+	// local, so what the operands see is the body's own cell. See
+	// interp/prefixdeclarationlocal.go.
+	local, answered := r.prefixLocalDeclaration(assigns, argv)
+	if !answered {
+		return false
+	}
 	// The same walk the trace makes, and deliberately the same one: it skips
 	// a frozen name and a refused subscripted word, so a prefix this shell
 	// never evaluates is not evaluated here either, and it records each value
 	// where the store and the trace both read it back from. The holding form,
 	// because what it holds must outlive this call: the operand has not
 	// expanded yet.
-	r.expandPrefixTraceValuesHolding(assigns, held)
+	r.expandPrefixTraceValuesHolding(assigns, held, local)
 	return true
 }

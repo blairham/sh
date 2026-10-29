@@ -373,6 +373,12 @@ func Semantics() interp.Semantics {
 	s.CommandKeepsASpecialBuiltinsPrefix = interp.No
 	s.AssignmentPrefixPersistsAfterAFunction = interp.No
 	s.PrefixToAFunctionIsExported = interp.Yes
+	// And a prefix in front of `local`, which persists because `local` is
+	// special here, is an ordinary assignment, as in dash. Measured
+	// 2026-10-29 in the digest-pinned image: `g() { echo "g v=$v"; }; f() {
+	// v=new local y=1; echo "in v=$v"; g; }; v=old; f; echo "out v=$v"` is
+	// `new` all three times (#7002).
+	s.PrefixToALocalDeclarationIsALocal = interp.No
 	// unanswered NoclobberProtectsAnFdVariable: the same reason as the axis
 	// below it — there is no `{name}` redirection here for `set -C` to
 	// protect the name of.

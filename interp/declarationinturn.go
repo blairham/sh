@@ -59,10 +59,10 @@ import (
 //
 // When the walk stops — a frozen name, a value that would not expand — what
 // was held stays, because that column has stored it: at the top level that is
-// the measured answer. Inside a function the shell is on its way out either
-// way, and a held value becomes a global where the reference's was a local the
-// exit took with it; an EXIT trap is the one thing that can tell, and it is not
-// modeled.
+// the measured answer. Inside a `function`-form body the reference's operands
+// were locals, and the call ends there and takes them with it, while the shell
+// carries on. Here they are held in the global cell and stay, which the line
+// after the call can see as well as an EXIT trap (#7011).
 //
 // See Semantics.DeclarationOperandsAreStoredInTurn (#6770).
 
@@ -157,9 +157,12 @@ func (t *operandsInTurn) wasTraced(a *syntax.Assign) bool {
 // ahead of the first operand, so the prefix is among what it had stored when
 // the walk ended: measured 2026-10-29 on ksh93u+ from `-c` and a script file,
 // `trap 'echo "v=$v x=$x"' EXIT; readonly r=0; v=old; v=new typeset x=$v
-// r=2` writes `v=new x=new`, and `v=new typeset x=$v y=${q?boom}` the same.
-// The caveat at the top of this file about a walk inside a function holds for
-// the prefix as it does for the operands (#6999).
+// r=2` writes `v=new x=new`, and `v=new typeset x=$v y=${q?boom}` the same
+// (#6999). Inside a `function`-form body the prefix was held in the body's own
+// local, so what is kept goes with the call: `function f { v=new typeset
+// y=${q?boom}; }; v=old; f` leaves `old`, as ksh93u+ does. See
+// interp/prefixdeclarationlocal.go (#7002). The operands are still held in the
+// global cell, which is the caveat at the top of this file (#7011).
 func (t *operandsInTurn) release(r *Runner, prefix *heldPrefix) {
 	if t != nil {
 		if t.stopped {

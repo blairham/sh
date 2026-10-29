@@ -108,7 +108,7 @@ func (r *Runner) tracePrefixAsItGoes(c *syntax.SimpleCmd, argv []string, walk pr
 			}
 		} else {
 			one := c.Assigns[i : i+1]
-			r.expandPrefixTraceValuesHolding(one, &held)
+			r.expandPrefixTraceValuesHolding(one, &held, "")
 			if words := r.prefixTraceWords(one, d); len(words) == 1 {
 				word = words[0]
 			}

@@ -1320,6 +1320,78 @@ type Semantics struct {
 	// asked.
 	PrefixToAKeywordFunctionIsScopedToTheCall Answer
 
+	// PrefixToALocalDeclarationIsALocal makes an assignment prefix the shell
+	// keeps, written in front of a declaration that is declaring locals of
+	// the running function, a local of that function too. It is a fresh cell
+	// that the function's return takes away. No makes it an ordinary
+	// assignment to wherever the name already reaches.
+	//
+	// The prefix sits *inside* the body here, in front of the declaration.
+	// PrefixToAKeywordFunctionIsScopedToTheCall is about a prefix in front of
+	// the call, and is not this question.
+	//
+	// Measured 2026-10-29 from `-c` and from a script file under `env -i
+	// PATH=/usr/bin:/bin`. ksh93u+ 2012-08-01 keeps a prefix in front of
+	// `typeset`, which is a special builtin there, and in a `function`-form
+	// body that prefix is the body's local. With `function g { echo "g
+	// v=$v"; }`:
+	//
+	//	function f { v=new typeset y=1; echo "in v=$v"; g; }; v=old; f; echo "out v=$v"
+	//	                                             in v=new, g v=old, out v=old
+	//	function f { v=new typeset y=1; }; f; echo "${v-unset}"        unset
+	//	function f { v+=x typeset y=1; echo "$v"; }; v=old; f          x
+	//	function f { v=${v}x typeset y=1; echo "$v"; }; v=old; f       oldx
+	//	export v=old; function f { v=new typeset y=1; /usr/bin/printenv v; }; f
+	//	                                             nothing: the cell is not exported
+	//	function f { typeset v=mine; v=new typeset y=1; }; v=old; f   the body's v is new
+	//
+	// The append and the `${v}x` rows give the order. The value is expanded
+	// first, against the name the body could already see, and the cell is
+	// made fresh before the value is joined and stored. The prefix is also a
+	// local in front of `command typeset`, `typeset -p y`, a bare `typeset`
+	// and `integer`, and in a POSIX-form function called from a
+	// `function`-form one: the cell belongs to the keyword call there, as
+	// `typeset`'s own locals do. The controls, all ksh93u+:
+	//
+	//	function f { v=new readonly y=1; }; v=old; f; echo "$v"       new
+	//	function f { v=new export y=1; }; v=old; f; echo "$v"         new
+	//	function f { v=new alias q=w; }; v=old; f; echo "$v"          new
+	//	f() { v=new typeset y=1; }; v=old; f; echo "$v"               new
+	//
+	// The three columns that keep a prefix in front of `local`, where `local`
+	// is special, make it an ordinary assignment. Those are dash 0.5.12,
+	// BusyBox ash 1.37.0 in the pinned image, and zsh 5.9.2 under
+	// `posixbuiltins`:
+	//
+	//	g() { echo "g v=$v"; }; f() { v=new local y=1; echo "in v=$v"; g; }; v=old; f; echo "out v=$v"
+	//	                                             in v=new, g v=new, out v=new
+	//	f() { local v=mine; v=new local y=1; }; v=old; f; echo "$v"    old
+	//
+	// zsh answers the same for `typeset` under that option. bash 5.3.20 and
+	// 3.2.57 keep no prefix in front of `declare`, `local` or `typeset`, with
+	// `set -o posix` or without it, so the question is never put to them.
+	//
+	// Asked only where a prefix the shell keeps stands in front of a
+	// declaration that is declaring locals of the running function, which is
+	// where the columns part. See interp/prefixdeclarationlocal.go (#7002).
+	//
+	// unpinned bash: never asked, for the reason above. Its answer is POSIX's
+	// own. TestNoPrefixIsKeptInFrontOfADeclarationInAFunction holds the
+	// rows that say the prefix is not kept.
+	//
+	// unpinned zsh: this shell does not keep the prefix under `posixbuiltins`
+	// yet, so the answer is never reached (#7009).
+	//
+	// unpinned ksh: no corpus row puts a prefix in front of `typeset` inside a
+	// function. Pinned by TestAPrefixToTypesetInAFunctionIsItsLocal.
+	//
+	// unpinned dash: no corpus row puts a prefix in front of `local`. Pinned by
+	// TestAPrefixToLocalIsAnOrdinaryAssignment.
+	//
+	// unpinned ash: the same reach. Pinned by
+	// TestAPrefixToLocalIsAnOrdinaryAssignment.
+	PrefixToALocalDeclarationIsALocal Answer
+
 	// PrefixArrayLiteralIsAnArray reads an array literal written as an
 	// assignment prefix — `x=(a b) cmd` — as the array it spells, for the
 	// length of the command. No reads it as a **scalar**: the elements are
@@ -35364,6 +35436,10 @@ func PosixSemantics() Semantics {
 		// A persisting prefix writes through the name's letters, as any
 		// assignment does. See the field.
 		PersistingPrefixMakesATypedNameAPlainScalar: No,
+		// And a prefix that persists is an ordinary assignment wherever it
+		// stands, in front of a declaration too. The one column that makes it
+		// the function's local says so itself. See the field.
+		PrefixToALocalDeclarationIsALocal: No,
 		// And it has an option word begin with a `-`, so a `+` word is an
 		// operand. zsh is the one column that reads it as an option and says
 		// so itself.
@@ -37081,6 +37157,10 @@ func CoreSemantics() Semantics {
 		// A persisting prefix writes through the name's letters, as any
 		// assignment does. See the field.
 		PersistingPrefixMakesATypedNameAPlainScalar: No,
+		// And a prefix that persists is an ordinary assignment wherever it
+		// stands, in front of a declaration too. The one column that makes it
+		// the function's local says so itself. See the field.
+		PrefixToALocalDeclarationIsALocal: No,
 		// An option word begins with a `-`, which is the standard's wording
 		// and six of the seven columns. Answered rather than refused for the
 		// reason the answer above is: a `+` word reaching `getopts` is an

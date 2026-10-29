@@ -4029,6 +4029,11 @@ func Semantics() interp.Semantics {
 	// 2026-10-03; see the two axes.
 	s.ReadIsAbandonedByATrappedSignal = interp.Yes
 	s.ReadAbandonedReportsTheSignal = interp.Yes
+	// Except a read of its standard input from a descriptor open for reading
+	// alone, which reads on once a byte of its line is in: `cmd | read`, a
+	// pipe, a fifo opened `<`. Measured 2026-10-29 on ksh93u+; see
+	// interp.Semantics.ReadAbandonedWhen.
+	s.ReadAbandonedWhen = interp.ReadAbandonedOnlyAtTheStartOfALine
 	// And this is the column where the monitor is *not* enough: `set -m` is
 	// granted in a script with no terminal, and `fg` still answers 1 without
 	// a word — on a pseudo-terminal too, which is what says the missing

@@ -1913,6 +1913,10 @@ func Semantics() interp.Semantics {
 	// A trapped signal gives up a waiting `read` at 1. See
 	// interp.Semantics.ReadIsAbandonedByATrappedSignal, measured 2026-10-03.
 	s.ReadIsAbandonedByATrappedSignal = interp.Yes
+	// But only by a signal that lands while it waits: one that comes while
+	// input is there to be read leaves a line still arriving to be finished.
+	// Measured 2026-10-29; see interp.Semantics.ReadAbandonedWhen.
+	s.ReadAbandonedWhen = interp.ReadAbandonedOnlyDuringAWait
 	s.CommandRejectsUnknownOption = interp.Yes
 	// Whether `command -v` answers for every name it was given, and what
 	// decides the status when it found some of them. See

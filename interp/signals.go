@@ -1004,6 +1004,23 @@ func (r *Runner) takePending() []string {
 // short by a trapped USR1 is what the panel is unanimous about and what the
 // paragraph above this is measured from.
 func (r *Runner) pendingTrap() (syscall.Signal, bool) {
+	return r.pendingTrapFrom(0)
+}
+
+// pendingTrapFrom is pendingTrap over the arrivals from mark on, mark being
+// what arrivalMark answered: the ones that came after it and not the ones
+// that were already there.
+//
+// One `read` needs the difference. In the dialects whose read is given up
+// only by a signal that arrives while it waits, a signal that came while
+// bytes were there to be read is still waiting when the next wait begins, and
+// it is not the one that may end that wait (#7027). See
+// ReadAbandonedOnlyDuringAWait.
+//
+// Nothing takes from the list while a builtin is waiting on it — handlers run
+// between commands, on the goroutine that is doing the waiting — so the
+// arrivals a mark counted are still the front of the list when it is read.
+func (r *Runner) pendingTrapFrom(mark int) (syscall.Signal, bool) {
 	s := r.signals
 	if s == nil {
 		return 0, false
@@ -1011,7 +1028,7 @@ func (r *Runner) pendingTrap() (syscall.Signal, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.drainForwarded()
-	for _, name := range s.pending {
+	for _, name := range s.pending[min(mark, len(s.pending)):] {
 		if name == "CHLD" {
 			continue
 		}
@@ -1020,6 +1037,20 @@ func (r *Runner) pendingTrap() (syscall.Signal, bool) {
 		}
 	}
 	return 0, false
+}
+
+// arrivalMark is how many arrivals the shell is holding now, for a wait that
+// has to tell the ones that come during it from the ones before it. See
+// pendingTrapFrom.
+func (r *Runner) arrivalMark() int {
+	s := r.signals
+	if s == nil {
+		return 0
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.drainForwarded()
+	return len(s.pending)
 }
 
 // awaitOrTrap blocks until done is closed, or until a trapped signal arrives,
@@ -1041,6 +1072,22 @@ func (r *Runner) pendingTrap() (syscall.Signal, bool) {
 // (#2227). nil is the common case and needs no guard — a receive on a nil
 // channel is never ready, so a caller with no second way out cannot take one.
 func (r *Runner) awaitOrTrap(done, giveUp <-chan struct{}) (sig syscall.Signal, trapped, gaveUp bool) {
+	return r.awaitOrArrival(done, giveUp, r.pendingTrap)
+}
+
+// awaitOrArrival is awaitOrTrap with the question of which arrival ends the
+// wait handed in: arrived is asked each time something may have come, and the
+// wait ends on the signal it names.
+//
+// awaitOrTrap asks pendingTrap, so that any trapped signal waiting ends it. A
+// `read` asks its own question, because the dialects disagree about which
+// arrivals give one up — see Semantics.ReadAbandonedWhen — and a second copy
+// of this loop beside the first is how the seams below would come to be
+// handled in one of them only.
+func (r *Runner) awaitOrArrival(
+	done, giveUp <-chan struct{},
+	arrived func() (syscall.Signal, bool),
+) (sig syscall.Signal, trapped, gaveUp bool) {
 	s := r.signals
 	if s == nil || r.inSubshell {
 		for {
@@ -1060,7 +1107,7 @@ func (r *Runner) awaitOrTrap(done, giveUp <-chan struct{}) (sig syscall.Signal, 
 		}
 	}
 	for {
-		if sig, ok := r.pendingTrap(); ok {
+		if sig, ok := arrived(); ok {
 			return sig, true, false
 		}
 		select {
@@ -1071,7 +1118,7 @@ func (r *Runner) awaitOrTrap(done, giveUp <-chan struct{}) (sig syscall.Signal, 
 			// moment later, so both are ready by the time anything looks —
 			// and every shell in the panel reports the signal rather than the
 			// job, which is only reproducible if the arrival wins outright.
-			if sig, ok := r.pendingTrap(); ok {
+			if sig, ok := arrived(); ok {
 				return sig, true, false
 			}
 			return 0, false, false

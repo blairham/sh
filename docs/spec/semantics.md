@@ -34267,7 +34267,8 @@ Measured 2026-10-29 against dash 0.5.12, ksh93u+ 2012-08-01 and BusyBox ash
       ash         T  st=1 l=[]     next [cd]
 
 The same holds over a pipe on standard input, except that ksh93 there does not
-give a read up once part of its line is in (#7027).
+give a read up once part of its line is in — which is a matter of how the
+descriptor was opened, not of pipe against fifo; see the next section.
 
 **What arrives after the read was given up is the next reader's, whole, in
 all three.** What arrived before it is the first read's: dash and ksh93 keep it
@@ -34285,9 +34286,155 @@ there, never reads one, and the signal ends the wait, so nothing is in flight
 when the read is given up. A stream that is not a descriptor is still read on
 a goroutine and still pays the cost.
 
-A signal already waiting when the next byte is asked for gives the read up
-there, whether or not the byte is in; that is the reading this shell has
-always had, and ksh93's on a fifo. dash and ash instead finish a line whose
-input is still arriving and give up only a wait that a signal interrupts
-(#7027). With the stream waited on rather than read, the give-up partway no
-longer costs the byte it used to.
+With the stream waited on rather than read, a give-up partway through a line
+no longer costs the byte it used to.
+
+#### When a read is given up
+
+`Semantics.ReadAbandonedWhen` (#7027). The three columns that give a read up
+agree about a read waiting on nothing and disagree about one whose input is
+arriving. Measured 2026-10-29 from `-c` against dash 0.5.12, BusyBox ash
+1.37.0 in the pinned alpine image and ksh93u+ 2012-08-01, each with an INT trap
+`echo T` and a fifo on descriptor 3. `exec 3<>p` opens it both ways; `exec
+4<>p 3<p` hands the read a descriptor open for reading alone, a writer held on
+4 so the open does not wait. Varying one thing at a time:
+
+**A line still arriving.** A job writes two 64 KiB blocks of `a` — the second
+cannot be written until the read has taken the first, so the read is under
+way — sends INT with bytes waiting, writes two blocks more, pauses 0.2 s, and
+ends the line; a second read takes `tail`:
+
+| | `3<>p` | `3<p` |
+| --- | --- | --- |
+| dash | `T`, `st=0 len=262144 next=4` | the same |
+| ash | `T`, `st=0 len=262144 next=4` | the same |
+| ksh93 | `T`, `st=258 len=131072 next=131072` | `T`, `st=0 len=262144 next=4` |
+
+Five runs each in dash and ksh93, five in ash, all identical. ksh93 gives up
+having taken what was written before the signal, in 64 KiB blocks; this shell
+stops at the next byte, so where the line splits between the two reads differs
+and no byte is lost either way. `read -r -u3 l` from the read-only descriptor
+is ksh93's `st=258` as well.
+
+The dash and ash rows are deterministic here only because the writer keeps the
+stream full; what they measure is whether the reader happened to be waiting
+when the signal landed (see the readings below). Under load this shell's own
+reader can drain the stream first — one run in twenty with eighteen CPU hogs
+and the race detector — and then gives the read up, as dash would. So the
+tests pin dash and ash with the next shape instead, which has no race in it.
+
+**A signal already waiting as the read begins.** `$(kill -INT $$)` in the
+read's own redirection — `read -r l <&3 2>"$(kill -INT $$)/dev/null"` — runs
+after the shell has run the handlers waiting at the top of the command and
+before the builtin starts, so the signal is there as the read begins. `ab` is
+in, and `cd` and `end` come half a second later:
+
+| | `3<p` | `3<>p` | `3<p`, nothing in |
+| --- | --- | --- | --- |
+| dash, ash | `T`, `st=0 l=[abcd]`, next `end` | the same | `T`, `st=0 l=[cd]`, next `end` |
+| ksh93 | `T`, `st=0 l=[abcd]`, next `end` | `T`, `st=258 l=[]`, next `abcd` | `T`, `st=0 l=[cd]`, next `end` |
+
+ksh93 answers the first column with `read -r -u3 l`, `read -r -n 4 l` and
+`read -r -t 5 l` too. A trap body that prints `$l` says when the handler ran:
+`l=[cd]` in dash and ash, after the read; `l=[old]` in ksh93, as the read
+began (#7031). On a descriptor open both ways ksh93 gives the read up before it
+has taken a byte, and `ab` is the next read's.
+
+**A second signal.** The same, with nothing written after INT and a USR1
+(`trap "echo U" USR1`) three seconds later, once the read is waiting (half a
+second answers the same in all three):
+
+| | `3<>p` | `3<p` |
+| --- | --- | --- |
+| dash | `T U`, `st=1 len=131072 next=0` | the same |
+| ksh93 | `T U`, `st=258 len=131072 next=0` | `T U`, `st=0 len=131072 next=4` |
+
+ash answers `st=1 len=0`, which is #7028 rather than this.
+
+**Part of a line, then a wait the signal lands in.** `ab` waiting, INT 0.3 s
+in, `cd` and `end` half a second after:
+
+| | `read -r l <&3`, `3<p` | the same, `3<>p` | `read -r -u3 l`, `3<p` | `read -r -n 4 l <&3` |
+| --- | --- | --- | --- | --- |
+| dash | `T`, `st=1 l=[ab]`, next `cd` | the same | no `-u` | no `-n` |
+| ksh93 | `T`, `st=0 l=[abcd]`, next `end` | `T`, `st=258 l=[ab]`, next `cd` | `T`, `st=258 l=[ab]`, next `cd` | `T`, `st=0 l=[ab]`, next `cd` |
+
+With nothing in, `read -r -u3 l` is `T`, `st=258 l=[]` in ksh93 — a signal that
+lands during the wait gives a `-u` read up whether or not it has begun.
+
+ash gives all of these up at 1 with `l` empty (#7028). A pipe is a descriptor
+open for reading alone: `{ printf ab; …; echo cd; } | read -r l` in ksh93 is
+`st=0 l=[abcd]`, from `-c` and in the current shell alike, and a fifo opened
+`<` answers as the pipe does — on descriptor 0 or 3, opened by the harness or
+by `exec`. That is the split #7027 was filed as pipe against fifo: the fifo had
+been opened `<>`.
+
+**A newline starts the next line.** `a\` and a newline waiting, the rest
+after the signal: ksh93 gives up `st=258 l=[a]` from a read-only descriptor,
+and dash `st=1 l=[a]`. Leading blanks or a lone backslash do not: `"  "` then
+`cd` is `st=0 l=[cd]`. With `-d :`, `a` and a newline waiting is given up and
+`a` then a newline then `b` is not.
+
+**`-t`.** `read -r -t 5 l <&3` with nothing in: ksh93 `T`, `st=258 l=[]`, and
+ash `T`, `st=1 l=[]`, the line written after going to the next read; with `ab`
+in, ksh93 reads on from a read-only descriptor (`st=0 l=[abcd]`) and gives up
+from `3<>p` (`st=258 l=[ab]`). A deadline that runs out while ksh93 reads on is
+an ordinary timeout: `-t 0.5` over `ab`, INT at 0.3 and `cd` at 0.8 is `st=1
+l=[]`. This shell did not give a timed read up at all and read the late line.
+
+So the readings, each one a constant of `ReadAbandonmentReading`:
+
+- **dash and BusyBox ash — `ReadAbandonedOnlyDuringAWait`.** A trapped signal
+  gives the read up only if it lands while the read is waiting for input. One
+  that lands while bytes are there, or that was already waiting as the read
+  began, does not, nor does it give up a wait that begins after it; a second
+  that lands in that wait does. The handler runs
+  once the builtin returns, either way. Whether a line still arriving is
+  finished is therefore a matter of whether the reader was waiting at that
+  instant: a writer that keeps the stream full makes it deterministic (every
+  row above), and one that lets it run dry now and then does not — dash on a
+  pipe fed by `head | tr` gave a 20 MB line up partway in three runs of four,
+  and on a fifo held full finished it in all four.
+- **ksh93 — `ReadAbandonedOnlyAtTheStartOfALine`.** A read of the builtin's
+  standard input, from a descriptor open for reading alone, reading to a
+  delimiter, is given up only by a signal that lands while it waits for the
+  first byte of a line: once a byte is in, it reads to the line's end, `-t`'s
+  deadline still bounding it, and no signal gives it up. A `-u`, `-p`, `-n` or
+  `-N` read is given up at the next byte by a signal that arrives during it;
+  neither kind by one already waiting as it began. A read from a descriptor
+  open both ways is given up at the next byte by any signal waiting.
+- `ReadAbandonedAtTheNextByte` is that last reading alone, and the one this
+  shell had for all three columns before #7027. No column holds it whole.
+
+It is asked only once a trapped signal has arrived during a read; until then
+every reading waits for a byte and reads it alike. Which arrivals came *during*
+a wait, or during the read, is told from a mark taken as the wait or the read
+begins — the pending list only grows while a builtin waits — and whether a
+descriptor is open for writing is `fcntl(F_GETFL)`, asked the first time it
+matters. bash 5.3, bash 3.2 and zsh
+read on through a trapped signal and never ask it.
+
+**Not modeled**, all ksh93's, measured the same day — #7030 for the first four,
+#7031 for the fifth:
+
+- An *inherited* standard input open both ways (`ksh -c … <>p`) reads on as a
+  read-only one does — and so does a descriptor duplicated from it — where
+  this shell gives it up. Opened by the script (`exec 0<>p`) it is given up.
+- `read -u4` on a descriptor made by `exec 4<&3` from a read-only fifo reads on;
+  `read -u3` on the original is given up, as here.
+- `read -N 4` over `ab` is given up at 1 with nothing assigned and leaves `ab`
+  in the stream (`next [abcd]`); this shell answers 258 and the next read has
+  `cd`.
+- `read -n 4` on a pipe with nothing in is given up at 258, and every later
+  read of that pipe answers 0 with an empty line; here the next read has the
+  line written after.
+- The handler of a read that goes on runs **at the arrival** in ksh93, as it
+  does in bash and zsh: with `W` written to the terminal between the signal
+  and the end of the line, the order is `T W`, and a signal already waiting
+  has its handler run as the read begins. Here the handler runs once the read
+  is over (`W T`), in all four.
+
+And zsh, which reads on through a trapped signal, gives up a *timed* read
+waiting for its first byte: `read -r -t 5 l` with nothing in is `T`, `st=1
+l=[]`, and with `ab` in it reads on (`st=0 l=[abcd]`). That is a question of
+its own, since zsh answers no to the one above (#7032).

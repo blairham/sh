@@ -34437,7 +34437,65 @@ read on through a trapped signal and never ask it.
   has its handler run as the read begins. Here the handler runs once the read
   is over (`W T`), in all four.
 
-And zsh, which reads on through a trapped signal, gives up a *timed* read
-waiting for its first byte: `read -r -t 5 l` with nothing in is `T`, `st=1
-l=[]`, and with `ab` in it reads on (`st=0 l=[abcd]`). That is a question of
-its own, since zsh answers no to the one above (#7032).
+#### When a signal ends a timed read's wait
+
+`Semantics.ReadTimeoutWaitEndedByATrappedSignal` (#7032). zsh reads on through
+a trapped signal, as bash does, but a *timed* read that is still waiting for
+its first byte is ended by one. It ends as its deadline would have ended it:
+the status is the timeout's and no name is touched. Nothing has been read, so
+the line written afterwards is the next read's. This is a question of its own,
+because zsh answers no to the one above.
+
+Measured 2026-10-29 from `-c` and from a script file against zsh 5.9.2, bash
+5.3.20, bash 3.2.57, ksh93u+ 2012-08-01 and BusyBox ash 1.37.0 in the pinned
+alpine image. The setup is an INT trap `echo T`, a fifo on descriptor 3 opened
+for reading alone (`exec 4<>p 3<p`), `l=old`, INT at 0.3 s, and `late` written
+0.5 s after it. The read is `read -r -t 5 l <&3`, followed by `read -r m <&3`:
+
+| | nothing in before INT | `ab` in before it, `cd` after |
+| --- | --- | --- |
+| zsh | `T`, `st=1 l=[old]`, next `late` | `T`, `st=0 l=[abcd]` |
+| bash 5.3, bash 3.2 | `T`, `st=0 l=[late]`, next `end` | `T`, `st=0 l=[abcd]` |
+| ksh93 | `T`, `st=258 l=[]`, next `late` | the readings above |
+| ash | `T`, `st=1 l=[old]`, next `late` | the readings above |
+
+zsh's read comes back at the signal and not at the deadline. With nothing ever
+written and `-t 3`, it returns inside the second. The rule held in each of these
+variations:
+
+- `-t` as an integer and as a fraction;
+- the stream as `-u 3`, a fifo on standard input, a pipe into the current
+  shell, an inherited standard input that is a pipe, `-p` from a coprocess, and
+  a fifo opened both ways;
+- `-d`, `-A`, `-k`, `-k 3` and `-q` (whose status is its timeout's, 2);
+- the signal as INT, USR1, TERM, HUP, ALRM or QUIT, trapped by `trap` or by a
+  `TRAP` function, and two signals at once.
+
+What does not end it:
+
+- a byte that arrived during the read before the signal: the read finishes the
+  line with no deadline (`ReadTimeoutBoundsReadability`);
+- a signal handled before the read began, raised from the read's own
+  redirection: `T`, `st=0 l=[cd]`;
+- a `read` without `-t`;
+- an ignored signal;
+- a CHLD trap;
+- `-t 0`, which has no wait to end.
+
+So zsh's `-t` can be interrupted in the wait it bounds and only there. bash's
+`-t` bounds the whole read, and a signal ends none of it.
+
+The question is asked only where a trapped signal lands while a `read -t` with
+a nonzero deadline, on a descriptor, waits for its first byte. Which arrivals
+came during that wait is told from a mark taken as it begins, as above. An
+ordinary timed read asks nothing. ksh93 and ash never reach it, because
+`ReadIsAbandonedByATrappedSignal` gives their reads up first. dash has no
+`-t`. A timed read of a stream that is not a descriptor keeps its reader
+goroutine, and nothing ends that wait.
+
+**Not modeled**, both found the same day:
+
+- An expired `read -t -k` or `-q` leaves its name untouched in zsh, and here it
+  assigns the empty string or `n` (#7038).
+- Two handlers waiting together run in an order bash 5.3 fixes by signal
+  number and zsh does not hold stable; here they run in arrival order (#7039).

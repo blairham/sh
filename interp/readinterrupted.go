@@ -101,6 +101,12 @@ type readWatch struct {
 	// as reading, worked out the first time it matters: 0 not yet, 1 yes, -1
 	// no. Only ReadAbandonedOnlyAtTheStartOfALine asks.
 	bothWays int8
+	// firstWaitOnly is the watch of a `read -t` in a dialect whose reads go
+	// on through a trapped signal. It watches the wait for the first byte and
+	// no other, asks Semantics.ReadTimeoutWaitEndedByATrappedSignal rather
+	// than Semantics.ReadAbandonedWhen, and ends the read as its deadline
+	// would. ends is that answer, and asked says it has been asked.
+	firstWaitOnly, ends bool
 }
 
 // readWatchFor is the watch for a read of in, and false where nothing can give
@@ -117,6 +123,24 @@ func (r *Runner) readWatchFor(in io.Reader, byNumber, counted bool) (*readWatch,
 		}
 	}
 	return &readWatch{r: r, in: in, byNumber: byNumber, counted: counted, began: r.arrivalMark()}, true
+}
+
+// timedReadWatchFor is the watch for a `read -t` of in, nil where nothing can
+// end that read early: readWatchFor's, in a dialect a trapped signal gives any
+// read up in, and otherwise one that watches only the wait for the first byte.
+// See Semantics.ReadTimeoutWaitEndedByATrappedSignal.
+//
+// The second is made wherever a signal is trapped, and asks nothing until one
+// lands in that wait — so a timed read whose byte arrives in time, which is
+// every timed read of an ordinary script, puts no question at all.
+func (r *Runner) timedReadWatchFor(in io.Reader, byNumber, counted bool) *readWatch {
+	if w, ok := r.readWatchFor(in, byNumber, counted); ok {
+		return w
+	}
+	if r.sem().ReadIsAbandonedByATrappedSignal == Yes || !r.anySignalTrapped() {
+		return nil
+	}
+	return &readWatch{r: r, in: in, firstWaitOnly: true}
 }
 
 // readingNow is the dialect's answer, asked the first time it is needed. An
@@ -180,6 +204,10 @@ func (w *readWatch) trapWaiting() (syscall.Signal, bool) {
 // that is already there to be read. Only a reading that does not wait for a
 // wait to be interrupted does.
 func (w *readWatch) givesUpWithAByteThere() (syscall.Signal, bool) {
+	if w.firstWaitOnly {
+		// A byte there is a wait that never began.
+		return 0, false
+	}
 	sig, ok := w.trapWaiting()
 	if !ok {
 		return 0, false
@@ -202,6 +230,9 @@ func (w *readWatch) givesUpWithAByteThere() (syscall.Signal, bool) {
 // gives a read up only during one — it is still on the pending list, and it
 // runs once the read is over — so that reading looks only past the mark.
 func (w *readWatch) arrivedDuring(mark int) func() (syscall.Signal, bool) {
+	if w.firstWaitOnly {
+		return w.endsTheFirstWait(mark)
+	}
 	return func() (syscall.Signal, bool) {
 		sig, ok := w.r.pendingTrap()
 		if !ok {
@@ -219,10 +250,40 @@ func (w *readWatch) arrivedDuring(mark int) func() (syscall.Signal, bool) {
 	}
 }
 
+// endsTheFirstWait is arrivedDuring for the watch that watches a timed read's
+// wait for its first byte and no other: only a trapped signal that lands
+// during that wait is looked at, and the dialect is asked about it then. A
+// signal handled before the read began is not one — measured, zsh reads on
+// over it — and nor is one already waiting, which pendingTrapFrom leaves out.
+//
+// An unanswered axis is refused there, and the read ends so that the builtin
+// can report the refusal.
+func (w *readWatch) endsTheFirstWait(mark int) func() (syscall.Signal, bool) {
+	return func() (syscall.Signal, bool) {
+		sig, ok := w.r.pendingTrapFrom(mark)
+		if !ok {
+			return 0, false
+		}
+		if !w.asked {
+			w.asked = true
+			w.ends = w.r.ask(w.r.sem().ReadTimeoutWaitEndedByATrappedSignal,
+				"a trapped signal ending a `read -t` still waiting for its first byte")
+		}
+		return sig, w.ends || w.r.unspecified
+	}
+}
+
 // gaveUp records that sig gave the read up and ends it as at the end of the
 // input: nothing more is read, and the handler runs once the builtin has
 // returned, like any other trap between commands.
+//
+// The watch of a timed read's first wait ends it as the deadline would
+// instead, which is what that reading is — the status is the timeout's and no
+// name is touched — and leaves the read's status nothing of the signal's.
 func (w *readWatch) gaveUp(sig syscall.Signal) int {
+	if w.firstWaitOnly {
+		return evTimeout
+	}
 	w.r.readAbandonedBy = sig
 	return evEOF
 }

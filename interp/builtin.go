@@ -6767,8 +6767,9 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 		// the reader goroutine.
 		//
 		// A trapped signal still gives it up, in the dialects that give one
-		// up (#7027).
-		watch, _ := r.readWatchFor(in, byNumber, count >= 0)
+		// up (#7027), and in the others may still end its wait for the first
+		// byte as the deadline would (#7032).
+		watch := r.timedReadWatchFor(in, byNumber, count >= 0)
 		if polled, can := polledTimedSource(ctx, in, timeout, whole, watch); can {
 			next = polled
 			break

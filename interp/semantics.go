@@ -18754,6 +18754,67 @@ type Semantics struct {
 	//
 	// unpinned zsh: never asked, for the same reason.
 	ReadAbandonedWhen ReadAbandonmentReading
+	// ReadTimeoutWaitEndedByATrappedSignal ends a `read -t` that is still
+	// waiting for its first byte when a trapped signal lands, as its deadline
+	// would have: the status is the timeout's and no name is touched. Nothing
+	// is read, so what arrives later is the next reader's. Asked in the
+	// dialects whose reads go on through a trapped signal
+	// (ReadIsAbandonedByATrappedSignal is no), where it is the one wait a
+	// signal can still end.
+	//
+	// Measured 2026-10-29 from -c and from a script file against zsh 5.9.2,
+	// bash 5.3.20, bash 3.2.57, ksh93u+ 2012-08-01 and BusyBox ash 1.37.0 in
+	// the pinned alpine image. An INT trap `echo T`, a fifo on descriptor 3
+	// opened for reading alone (`exec 4<>p 3<p`), `l=old`, INT at 0.3 s and
+	// `late` written 0.5 s after it; `read -r -t 5 l <&3`, then `read -r m
+	// <&3`:
+	//
+	//	                     nothing in before INT       `ab` in before it, `cd` after
+	//	zsh                  T, st=1 l=[old] next=late   T, st=0 l=[abcd]
+	//	bash 5.3, bash 3.2   T, st=0 l=[late]            T, st=0 l=[abcd]
+	//	ksh93                T, st=258 l=[]              (ReadAbandonedWhen)
+	//	ash                  T, st=1 l=[old]             (ReadAbandonedWhen)
+	//
+	// zsh's read comes back at the signal, not at the deadline: with nothing
+	// ever written and `-t 3` it returns inside the second. Its rule held
+	// for `-t` written as an integer or a fraction; for `-u 3`, a fifo on
+	// standard input, a pipe into the current shell, an inherited standard
+	// input that is a pipe, and `-p` from a coprocess; for `-d`, `-A`, `-k`,
+	// `-k 3` and `-q` (whose status is its timeout's, 2); for INT, USR1,
+	// TERM, HUP, ALRM, QUIT and a `TRAPUSR1` function; and for two signals
+	// together. It did not move for a byte that arrived during the read
+	// before the signal, which the read then finishes without a deadline
+	// (ReadTimeoutBoundsReadability), nor for a signal handled before the
+	// read began. A `read` without `-t` reads on, an ignored signal is not an
+	// arrival, a CHLD trap never ends the wait, and `-t 0` has no wait to
+	// end.
+	//
+	// So zsh's `-t` is interruptible in the wait it bounds and only there;
+	// once a byte is in, it is the untimed read, which no signal gives up.
+	// bash's `-t` bounds the whole read and a signal ends none of it.
+	//
+	// Asked only where a trapped signal lands while a `read -t` with a
+	// nonzero deadline, on a descriptor that is not a regular file, waits
+	// for its first byte. An ordinary timed read — the byte arrives in time,
+	// or no signal is trapped — asks nothing. Not reached where
+	// ReadIsAbandonedByATrappedSignal is yes, which gives that read up
+	// itself, and not on a stream that is not a descriptor, whose timed read
+	// keeps a reader goroutine (timedByteSource) that nothing interrupts.
+	//
+	// unpinned bash: no corpus row times a signal against a timed read. Pinned
+	// by TestATimedReadWaitingForItsFirstByteIsEndedWhereTheShellsDo.
+	//
+	// unpinned zsh: the same reach. Pinned by
+	// TestATrappedSignalEndsATimedReadStillWaitingForItsFirstByte.
+	//
+	// unpinned ksh: never asked. ksh93 gives every read up for a trapped
+	// signal (ReadIsAbandonedByATrappedSignal is yes), and its answer is
+	// POSIX's.
+	//
+	// unpinned ash: never asked, for the same reason.
+	//
+	// unpinned dash: never asked. dash has no `read -t`.
+	ReadTimeoutWaitEndedByATrappedSignal Answer
 	// DisownRemovesTheJob makes `disown` take the job out of the table, so
 	// a later `jobs` no longer lists it: bash and zsh. ksh93's disown only
 	// shields the job from the HUP an exiting shell would send, and its
@@ -36757,6 +36818,13 @@ func PosixSemantics() Semantics {
 		// leaves the read unspecified, and two of the three columns that give
 		// one up answer this. See the field.
 		ReadAbandonedWhen: ReadAbandonedOnlyDuringAWait,
+		// And a `read -t` still waiting for its first byte reads on through
+		// one as well, as every other read of this vector does. The standard
+		// has no `-t`; this is answered so that a dialect built on it that
+		// adds the letter reads alike with and without it. Of the three
+		// columns with the letter whose reads go on through a trapped signal,
+		// bash 5.3 and 3.2 answer this and zsh does not. See the field.
+		ReadTimeoutWaitEndedByATrappedSignal: No,
 		// And a named one, and a listing marks the table as it stood. See
 		// the fields.
 		WaitLeavesTheJobForTheListing:     No,

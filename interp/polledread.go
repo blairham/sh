@@ -136,6 +136,14 @@ func timeNow() time.Time { return time.Now() }
 // this shell waited the signal out and read it (#7027). The readings of
 // Semantics.ReadAbandonedWhen hold here as they do without `-t`: ksh93 reads
 // on through a line it has begun and is then stopped by the deadline.
+//
+// **In a dialect whose reads go on through a trapped signal, the watch covers
+// the first wait and no other**, and a signal landing in it ends the read as
+// the deadline would, where the dialect says so. That is zsh's `-t`: measured
+// 2026-10-29, the same read with nothing in is `T st=1 l=[old]` and the line
+// written after it the next read's, while a byte in before the signal is read
+// on to the end of its line (#7032). See
+// Semantics.ReadTimeoutWaitEndedByATrappedSignal.
 func pollingDeadlineSource(
 	ctx context.Context,
 	in io.Reader,
@@ -145,8 +153,9 @@ func pollingDeadlineSource(
 	watch *readWatch,
 ) func() (byte, int) {
 	first := true
+	watched := func() bool { return watch != nil && (first || !watch.firstWaitOnly) }
 	wait := func(until time.Time) int {
-		if watch != nil {
+		if watched() {
 			return watch.awaitByte(ctx, fd, until)
 		}
 		ready, can := awaitReadable(ctx, fd, until)
@@ -167,7 +176,7 @@ func pollingDeadlineSource(
 			if ev := wait(deadline); ev != evByte {
 				return ev
 			}
-		case watch != nil:
+		case watched():
 			// The rest of a read whose deadline bounded only its first
 			// byte, which a trapped signal can still give up.
 			if ev := wait(time.Time{}); ev != evByte {

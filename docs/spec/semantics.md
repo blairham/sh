@@ -11482,17 +11482,66 @@ the line to its end however long that takes and reports 0. Measured with a
 byte dripping every 0.1 s under `-t 0.25`, zsh returned 0 with the whole
 six-byte line after 0.6 s where bash returned 142 with the first three
 characters; with a stream that stalls mid-line for three seconds and never
-closes, zsh waited all three and succeeded. Ours is a whole-read deadline
-in every dialect, so the zsh preset answers this axis "leave the name
-alone" — right for every timeout it can actually reach, since a zsh timeout
-only happens with nothing to assign — and is still wrong about *when* it
-times out. Not modeled here; it is its own question and its own measurement.
+closes, zsh waited all three and succeeded. The zsh preset answers this axis
+"leave the name alone" — right for every timeout it can actually reach, since
+a zsh timeout only happens with nothing to assign — and *when* it times out
+is the separate axis `ReadTimeoutBoundsReadability` (#644).
 
 There is no corpus row for any of this. Every probe above needs a stream
 that is slow on purpose, and a case whose answer depends on which of two
 timers wins is the kind of *sometimes* `oracle.md` says a record cannot
-hold. It is pinned by Go tests instead, against a reader that hands over a
-fixed prefix and then blocks — the same situation with no clock in it.
+hold. It is pinned by Go tests instead, against a pipe that holds a fixed
+prefix before the read begins and is given the rest only once the read has
+returned — the same situation with no clock in it.
+
+### What an expired `read -t` leaves in the stream
+
+Measured 2026-10-29 against bash 5.3.20, bash 3.2.57, ksh93u+ 2012-08-01,
+zsh 5.9.2 and BusyBox ash 1.37.0 in the pinned alpine image; dash has no
+`-t`. Each shell reads a pipe twice, the second time without a deadline, so
+the second read says what the first one left behind:
+
+    v=old; read -t 0.01 -r v; echo "st=$? [$v]"; read -r w; echo "next st=$? [$w]"
+
+    `a` waiting before the read, `bc` written after it returned:
+      bash 5.3             st=142 [a]    next st=0 [bc]
+      bash 3.2, ksh93, ash st=1 [old]    next st=0 [bc]
+      zsh                  st=0 [abc]    next st=1 []
+
+    nothing until the read has returned, then `xy`:
+      bash 5.3             st=142 []     next st=0 [xy]
+      the other four       st=1 [old]    next st=0 [xy]
+
+(bash 3.2 takes only a whole number of seconds; its rows are from `-t 1`
+with the waits stretched to match.)
+
+**A byte that had arrived is taken, and one that arrives late is the next
+reader's — in every shell.** What the timed read does with a byte that was
+there is the two axes above: bash keeps it, bash 3.2, ksh93 and ash read it
+and drop it, zsh reads on to the end of the line. None leaves it in the
+stream, and none takes a byte that arrives after the deadline. This shell
+read on a goroutine and left that read parked when the deadline passed, so
+it took the next byte to arrive and threw it away — `next [c]` and `next
+[y]` in every dialect — and under load it could also take the byte that was
+already there and drop it, which is how #7021 was found. A timed read of a
+descriptor now asks the descriptor whether a byte is there before reading
+one, so nothing is ever in flight. A stream that is not a descriptor can
+only be read on a goroutine and still pays the cost; the coprocess route is
+one of those today (#7025).
+
+**A byte already there is taken however short the deadline.** A deadline
+bounds a wait, and a byte in the stream makes nobody wait. bash takes `abc`
+from a pipe that already holds it at every deadline down to 100 µs, ten runs
+of ten, and only at 1 µs — below its own overhead — does it come back empty,
+on some runs and not others. This shell takes the first byte on its first
+look whatever is left of the deadline, which is bash's answer at every
+deadline larger than bash's own overhead and is the same answer every time.
+
+**A deadline over the whole read stops it while bytes are still coming.**
+262144 bytes with no newline and no pause, under `-t 0.01`: bash 142 with
+5574 of them, ksh93 and ash 1 with the name untouched, zsh 1 with all of
+them. So after the first byte, a whole-read deadline that has passed ends the
+read without another look, however much is waiting.
 
 ## A write that failed is not a command that worked
 
@@ -34178,4 +34227,5 @@ dash and ash give the read up as at the end of input and run the handler once
 the builtin has returned; the field answers yes there. The abandoning
 statuses of bash's POSIX mode and of ksh93 are not modeled: those columns
 answer no and keep reading. A byte that arrives after an abandoned read was
-given up is lost, the cost `read -t` already carries over a pipe.
+given up is lost, which no shell in the panel does — dash hands it to the
+next read (#7024). `read -t` paid the same cost over a pipe until #7021.

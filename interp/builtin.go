@@ -6662,7 +6662,6 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 	// second for a keystroke and reports 1 when none comes. A source -u or -p
 	// already named is left alone: it may not be a terminal, and `read -k 2
 	// -u 3 v` on a file reads two bytes of the file.
-	keyTerminal := (*os.File)(nil)
 	if readsKeys {
 		explicit := io.Reader(nil)
 		if _, named := optArg['u']; named || coprocSource >= 0 {
@@ -6674,13 +6673,6 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 			return r.readNoTerminal()
 		}
 		in = src
-		if explicit == nil {
-			// The terminal, as a file. Kept so the timed read below can wait
-			// for readability instead of parking a read on it — see
-			// pollingKeySource, and why that distinction is load-bearing here
-			// and nowhere else.
-			keyTerminal, _ = src.(*os.File)
-		}
 	}
 
 	// `-z` does not read the shell's input at all: it takes one entry off the
@@ -6760,12 +6752,13 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 		if _, regular := rewindableFile(in); regular {
 			break
 		}
-		// `read -k` on the terminal waits for the bytes rather than parking a
-		// read on them, because the stream it would park on is the line
-		// editor's own input and an abandoned read there swallows the next
-		// key somebody presses. Every other read keeps the shared machinery,
-		// whose cost is confined to the pipe it was used on.
-		if polled, can := keyTimedSource(keyTerminal, timeout, whole); can {
+		// A descriptor — standard input, a pipe, a `-u` number, the terminal
+		// `read -k` holds — is asked whether a byte is there before one is
+		// read, so no read is left in flight when the deadline passes to
+		// take a byte the next reader was owed (#7021). See
+		// pollingDeadlineSource. Only a stream that is not a descriptor keeps
+		// the reader goroutine.
+		if polled, can := polledTimedSource(ctx, in, timeout, whole); can {
 			next = polled
 			break
 		}
@@ -7589,14 +7582,23 @@ func directByteSource(in io.Reader) func() (byte, int) {
 	}
 }
 
-// timedByteSource reads the stream a byte at a time until the deadline. The
-// reads happen on their own goroutine — an io.Reader cannot be told to stop
-// waiting — and each is made only when asked for, so a satisfied read never
-// reads ahead into input a later `read` should get. A read still in flight
-// when the deadline passes is abandoned; if its byte ever arrives it is
-// lost, which is the cost of a timeout over a plain pipe and is confined to
-// the stream the timeout was used on. stop releases the goroutine and must
-// be called once the segment is read.
+// timedByteSource reads the stream a byte at a time until the deadline, for a
+// stream that is not a descriptor — an embedder's reader, a buffer — and so
+// cannot be asked whether a byte is there without reading it. A descriptor
+// takes pollingDeadlineSource instead, which never leaves a read in flight.
+//
+// The reads happen on their own goroutine — an io.Reader cannot be told to
+// stop waiting — and each is made only when asked for, so a satisfied read
+// never reads ahead into input a later `read` should get. A read still in
+// flight when the deadline passes is abandoned; if its byte ever arrives it
+// is lost, which is the cost of a deadline over a reader that cannot be asked
+// and is confined to the stream the timeout was used on. stop releases the
+// goroutine and must be called once the segment is read.
+//
+// **A byte already taken off the stream is never dropped for the deadline.**
+// Where the deadline and an answer are both waiting, the answer is taken —
+// see awaitAnswer — and once the deadline has passed no further read is
+// asked for, since nothing would be waiting for its byte.
 //
 // bounded says the deadline covers the *whole* read. Where it does not, the
 // timer is dropped as soon as the first byte arrives and everything after it
@@ -7616,30 +7618,32 @@ func (r *Runner) timedByteSource(
 		return func() (byte, int) { return 0, evTimeout }, func() {}
 	}
 	tctx, cancel := context.WithTimeout(ctx, timeout)
-	type event struct {
-		b   byte
-		eof bool
-	}
 	req := make(chan struct{})
 	// Buffered by one, so a byte or an end-of-file arriving after the
 	// deadline parks in the channel instead of parking the goroutine: the
 	// sender loops back to a closed req and exits.
-	resp := make(chan event, 1)
+	resp := make(chan timedAnswer, 1)
 	go func() {
 		var ch [1]byte
 		for range req {
 			n, err := in.Read(ch[:])
 			if n == 0 || err != nil {
-				resp <- event{eof: true}
+				resp <- timedAnswer{eof: true}
 				return
 			}
-			resp <- event{b: ch[0]}
+			resp <- timedAnswer{b: ch[0]}
 		}
 	}()
-	done, arrived := false, false
+	done, arrived, expired := false, false, false
 	next = func() (byte, int) {
 		if done {
 			return 0, evEOF
+		}
+		if expired {
+			// The deadline passed as the last byte was taken. Asking for
+			// another would park a read that nothing waits for.
+			done = true
+			return 0, evTimeout
 		}
 		req <- struct{}{}
 		if arrived && !whole {
@@ -7655,24 +7659,62 @@ func (r *Runner) timedByteSource(
 			}
 			return ev.b, evByte
 		}
-		select {
-		case ev := <-resp:
-			if ev.eof {
-				done = true
-				return 0, evEOF
-			}
-			arrived = true
-			return ev.b, evByte
-		case <-tctx.Done():
+		ev, answered, late := awaitAnswer(resp, tctx.Done())
+		if !answered {
 			done = true
 			return 0, evTimeout
 		}
+		if ev.eof {
+			done = true
+			return 0, evEOF
+		}
+		arrived = true
+		// A whole-read deadline that has passed ends the read after this
+		// byte. One that bounds only readability has been met by it.
+		expired = late && whole
+		return ev.b, evByte
 	}
 	stop = func() {
 		cancel()
 		close(req)
 	}
 	return next, stop
+}
+
+// timedAnswer is what timedByteSource's reader goroutine hands back: a byte,
+// or the end of the stream.
+type timedAnswer struct {
+	b   byte
+	eof bool
+}
+
+// awaitAnswer waits for the reader goroutine's answer or the deadline, and
+// reports whether an answer came and whether the deadline has passed.
+//
+// **Where both are ready, the answer is taken.** A select with both cases
+// ready picks one at random, so a byte the goroutine had already taken off
+// the stream lost to the deadline half the time and was dropped — read, so
+// no later reader could have it, and discarded, so this one did not either.
+// Measured on a loaded machine (#7021): of 42 runs in 4000 where a 1 ms
+// deadline over a byte that was already there came back empty, 37 had the
+// byte in hand when the deadline was seen, 16 of them before it passed.
+func awaitAnswer(resp <-chan timedAnswer, deadline <-chan struct{}) (ev timedAnswer, answered, expired bool) {
+	select {
+	case ev = <-resp:
+		select {
+		case <-deadline:
+			expired = true
+		default:
+		}
+		return ev, true, expired
+	case <-deadline:
+	}
+	select {
+	case ev = <-resp:
+		return ev, true, true
+	default:
+		return ev, false, true
+	}
 }
 
 // readUnits counts what `read -n` and `read -N` limit: the locale's

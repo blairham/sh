@@ -80,6 +80,10 @@ func (r *Runner) tracePrefixAsItGoes(c *syntax.SimpleCmd, argv []string, walk pr
 	// ones in front of it. See expandPrefixTraceValuesHolding.
 	var held heldPrefix
 	defer held.release(r)
+	// And an element write's subscript is read where its entry stands, so the
+	// element is held for the entries behind it. See
+	// interp/prefixsubscriptinturn.go.
+	subscripts := r.prefixSubscriptsReadHere(c.Assigns, argv)
 	for i, a := range c.Assigns {
 		if a.Operand {
 			continue
@@ -108,7 +112,7 @@ func (r *Runner) tracePrefixAsItGoes(c *syntax.SimpleCmd, argv []string, walk pr
 			}
 		} else {
 			one := c.Assigns[i : i+1]
-			r.expandPrefixTraceValuesHolding(one, &held, "")
+			r.expandPrefixTraceValuesHolding(one, &held, "", subscripts)
 			if words := r.prefixTraceWords(one, d); len(words) == 1 {
 				word = words[0]
 			}

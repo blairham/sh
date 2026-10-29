@@ -126,6 +126,6 @@ func (r *Runner) prefixBeforeADeclarationsOperand(assigns []*syntax.Assign, argv
 	// where the store and the trace both read it back from. The holding form,
 	// because what it holds must outlive this call: the operand has not
 	// expanded yet.
-	r.expandPrefixTraceValuesHolding(assigns, held, local)
+	r.expandPrefixTraceValuesHolding(assigns, held, local, r.prefixSubscriptsReadHere(assigns, argv))
 	return true
 }

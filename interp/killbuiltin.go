@@ -34,11 +34,13 @@ import (
 // one. That is not a flaky test, it is a shell that can lose a trapped
 // signal, and the corpus was right to keep noticing.
 //
-// A builtin closes it because kill(2) delivers an unblocked signal before it
-// returns. The shell does not have to be told what it has just done, so the
-// arrival is recorded at the point of sending — see selfSignaled — and the
-// runtime's later copy is discarded. The signal is still sent for real, so
-// nothing else that was watching for it misses out.
+// A builtin closes it because the shell does not have to be told what it has
+// just done: the arrival is recorded at the point of sending — see
+// selfSignaled — and nothing is sent. Not for a trapped signal, an ignored
+// one, or one whose default action does nothing, because the process holds
+// every other Runner an embedder made and kill(2) would reach all of them
+// (#7040). See sendSignal for the four answers and which one hands the
+// process to the driver.
 //
 // Four things are deliberately left out, and none of them worked before
 // either — /bin/kill could not do them, so nothing that worked has stopped:
@@ -954,11 +956,13 @@ func (r *Runner) continueAStoppedJobSpec(j *Job, fromJob bool, sig syscall.Signa
 // process rather than to end it, to be caught, or to be ignored.
 //
 // Four of them, and the same four on every platform this builds for. They are
-// the exclusion continueAStoppedJobSpec needs and nothing else reads them, so
-// the list is here rather than as a column on signalEntry: `Fatal` already
-// answers a different question about the same table — whether the default
-// action *ends* the process — and a second boolean beside it would be a field
-// three of its four callers would have to remember not to use.
+// the exclusion continueAStoppedJobSpec needs, the stop a job is then owed a
+// note for, and the one default action sendSignal hands to the process's
+// owner rather than answering itself. The list is here rather than as a
+// column on signalEntry: `Fatal` already answers a different question about
+// the same table — whether the default action *ends* the process — and a
+// second boolean beside it would be a field most of its callers would have to
+// remember not to use.
 func signalStops(sig syscall.Signal) bool {
 	switch sig {
 	case syscall.SIGSTOP, syscall.SIGTSTP, syscall.SIGTTIN, syscall.SIGTTOU:
@@ -1116,11 +1120,47 @@ func (r *Runner) signalGroupPid(pgid int, sig syscall.Signal) error {
 // the race, and nothing needs to — the script is over either way, so it stops
 // here and lets the death arrive whenever it arrives.
 //
-// The split that decision produces is also where the gate goes. Two of the
-// three cases never reach the kernel, so nothing leaves this process and there
-// is nothing for a policy to refuse; the two that do call it go through
-// killProcess, which asks first. Drawing the boundary at the system call
-// rather than at the builtin is what keeps those two facts one fact.
+// # Nothing aimed at this shell alone reaches the kernel
+//
+// Four answers, and none of them is kill(2). A trap runs the handler; a fatal
+// signal nobody handles stops the script and leaves the death to
+// Runner.DieBySignal; a signal whose default stops the process is handed to
+// Runner.StopThisProcess; and everything else — an ignored signal, and a
+// signal whose default action does nothing to a process that is running —
+// does nothing at all, because that is the whole of what it does to the shell.
+//
+// The last answer used to be kill(2) at our own pid, on the reasoning that it
+// was harmless: an ignored signal is ignored. It is ignored by *this* shell.
+// The process is shared by every Runner an embedder made, and os/signal hands
+// an arrival to every one of them that subscribed, so `trap ” USR1; kill
+// -USR1 $$` ran another Runner's USR1 handler for a signal nobody sent it — in
+// a test binary that runs Runners in parallel, three times in four (#7040).
+// Measured 2026-10-29 in a process group of its own, bash 5.3.20, bash
+// 3.2.57, ksh93u+ 2012-08-01, zsh 5.9.2 and dash; `alive=0` is every column
+// unless the row says otherwise:
+//
+//	trap '' USR1; kill -USR1 $$; echo alive=$?    alive=0
+//	trap '' TERM; kill $$ (and INT, HUP, 30)      alive=0
+//	trap '' TSTP; kill -TSTP $$                   alive=0, never stopped
+//	trap '' USR1; (kill -USR1 $$; echo in)        in=0 out=0; ksh93 crashes
+//	kill -WINCH / -CHLD / -URG / -CONT / -IO $$   alive=0
+//	kill -INFO $$                                 alive=0; ksh93 has no INFO
+//	kill -TSTP / -TTIN / -TTOU / -STOP $$         stops; alive=0 once continued
+//	  …in an orphaned process group               TSTP, TTIN, TTOU: alive=0,
+//	                                              never stopped; STOP stops
+//
+// The ksh93 crash is the reference's own — a forked subshell dying of SIGTRAP
+// at 261, every time — and not a reading anything here models.
+//
+// The stopping rows are why a stop is a hook and not a no-op or a SIGSTOP. A
+// stop is the process's to take, exactly as a death is, so a library takes
+// none; and the kernel discards TSTP, TTIN and TTOU for an orphaned group,
+// which only a raise of the very signal the script named can reproduce.
+//
+// That leaves the gate with nothing to say about a signal aimed here, and the
+// boundary drawn where it belongs: every call that does reach the kernel goes
+// through killProcess, which asks first, and every one of them is aimed at
+// another process.
 func (r *Runner) sendSignal(pid int, name string, sig syscall.Signal) error {
 	// Signal 0 is the existence probe and delivers nothing, and anything
 	// aimed elsewhere is somebody else's process. A negative pid, and 0
@@ -1167,15 +1207,24 @@ func (r *Runner) sendSignal(pid int, name string, sig syscall.Signal) error {
 		// that traps KILL defensively would have survived `kill -9` here and
 		// nowhere else.
 		//
-		// The ignore is stepped over too, and that half is about this being a
-		// library. `trap '' KILL` leaves an entry with an empty body, which
-		// is not a handler and so falls to the bottom of the switch — where a
-		// real kill(2) is made at our own pid, and an embedder's process dies
-		// on a line of script. An untrapped KILL has never taken that route:
-		// it goes through signalDeath, which stops the script and leaves the
-		// dying to Runner.DieBySignal. An ignore that cannot be honored must
-		// land in the same place.
+		// The ignore is stepped over too. `trap '' KILL` leaves an entry with
+		// an empty body, which is not a handler, and taking it for one would
+		// let a script that ignores KILL survive `kill -9` here and nowhere
+		// else. An ignore that cannot be honored lands where no trap at all
+		// lands: KILL on signalDeath, which stops the script and leaves the
+		// dying to Runner.DieBySignal, and STOP on the stop below.
 		trapped = false
+	}
+	if name == "" && !signalInPlatformRange(int(sig)) {
+		// Not a signal at all: a number with no name and past the kernel's
+		// last, which two columns send anyway — see
+		// KillSendsASignalNumberItCannotName — and whose answer is the
+		// kernel's refusal, EINVAL, printed as each column prints it. The
+		// call is made because the refusal is the answer, and it reaches
+		// nobody, which is the property everything below is about. (On a
+		// platform nobody measured the bound is 0, and an unnamed number
+		// there takes this road as it always did.)
+		return r.killProcess(pid, sig)
 	}
 	switch {
 	case trapped && body != "":
@@ -1192,6 +1241,12 @@ func (r *Runner) sendSignal(pid int, name string, sig syscall.Signal) error {
 		if r.selfAimedSignalIsTheCondition(key) {
 			r.selfSignaled(key)
 		}
+	case trapped:
+		// An ignore: `trap '' NAME` leaves an entry with an empty body, and
+		// the whole of what the signal then does to the shell is nothing —
+		// for a fatal signal and a stopping one alike, measured above. So
+		// nothing is sent. This was kill(2) at our own pid until #7040, and
+		// the process it reached held every other Runner an embedder made.
 	case !trapped && fatalSignal(name, sig) && r.untrappedSignalIgnored(name):
 		// The shell has taken this signal's default action away from the
 		// kernel and put nothing in its place, so the raise is not merely
@@ -1249,11 +1304,25 @@ func (r *Runner) sendSignal(pid int, name string, sig syscall.Signal) error {
 			return nil
 		}
 		r.signalDeath(name, sig)
+	case signalStops(sig):
+		// The default action stops the process, and a stop is the process's
+		// to take for the reason a death is: a line of script in a Runner
+		// embedded somewhere else would otherwise suspend the host until
+		// somebody found it. So it goes to the hook `suspend` already uses —
+		// nil in a library, where the script carries on as it does in every
+		// column once something continues it, and filled in by driver with a
+		// raise of this very signal, which keeps every rule the kernel has
+		// about it: TSTP, TTIN and TTOU are discarded for an orphaned group,
+		// and a disposition the front end holds answers for the process.
+		if r.StopThisProcess == nil {
+			return nil
+		}
+		return r.StopThisProcess(sig)
 	default:
-		// An ignored signal, and the ones whose default action suspends or
-		// resumes rather than ends. Those really do want the kernel: nothing
-		// this package does could stop a process or start it again.
-		return r.killProcess(pid, sig)
+		// A signal whose default action does nothing to a process that is
+		// running: WINCH, CHLD, URG, CONT, and INFO and IO where this kernel
+		// discards them. Nothing happens to the shell, so nothing is sent,
+		// for the reason an ignore sends nothing above.
 	}
 	return nil
 }

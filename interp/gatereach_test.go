@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"syscall"
@@ -236,8 +237,10 @@ func TestTheBoundarySeesTheFilesBehindReentry(t *testing.T) {
 // `kill` is a builtin, and making it one is what moved this out of the
 // boundary: an external kill was an exec and the gate saw it. The routes
 // differ enough to be worth naming individually — a pid, a job spec that means
-// a process group, the probe that delivers nothing, and a signal aimed at this
-// process that the kernel still has to carry out.
+// a process group, and the probe that delivers nothing. There used to be a
+// fourth, `kill -CONT $$`, as a signal aimed at this process that only the
+// kernel could carry out; nothing aimed at this process alone reaches the
+// kernel now, and that row is the next test's (#7040).
 func TestTheGateSeesEverySignalThatLeaves(t *testing.T) {
 	pid, _ := aLiveProcess(t)
 
@@ -254,12 +257,6 @@ func TestTheGateSeesEverySignalThatLeaves(t *testing.T) {
 		}},
 		{"a probe aimed at this shell", "kill -0 $$", func(a Action, _ int) bool {
 			return a.PID == os.Getpid() && a.Signal == 0
-		}},
-		{"a signal this shell can only ask the kernel for", "kill -CONT $$", func(a Action, _ int) bool {
-			// Continuing is one of the two things the shell cannot do for
-			// itself out of its trap table, so it makes the call — and a call
-			// is an action that leaves.
-			return a.PID == os.Getpid() && a.Signal == syscall.SIGCONT
 		}},
 		{"a job spec under the monitor", "set -m\n/bin/sleep 30 &\nkill -TERM %1", func(a Action, jobPID int) bool {
 			// Negative, because a job under the monitor is a process group
@@ -345,43 +342,149 @@ func TestTheGateSeesEverySignalThatLeaves(t *testing.T) {
 // and the dying is the driver's, through a hook a library leaves nil. Gating
 // it would mean a policy could refuse a shell the right to stop running its
 // own script, which is not a boundary anything crosses.
+//
+// The gate is the instrument here because it sees every kill(2) this package
+// makes, and so it is the one place where "nothing left the process" can be
+// read rather than inferred. The rows past the first are #7040's: an ignored
+// signal, one whose default does nothing to a running process, and one whose
+// default stops it all reached the kernel at our own pid, which is to say
+// every other Runner in the process. The gate refuses, so that on a tree
+// where one of them still leaves, nothing is really sent and the test binary
+// is not the thing that stops.
+//
+// The last row is the control: the same harness, with a probe that does
+// reach the kernel, has to see the gate asked — otherwise every other row
+// would pass on a gate that was never wired to anything.
 func TestTheGateIsNotAskedAboutASignalThatNeverLeaves(t *testing.T) {
-	var mu sync.Mutex
-	var seen []Action
-	var out strings.Builder
-	sem := PosixSemantics()
-	r := newTestRunner(t, &Runner{
-		Semantics: &sem,
-		Stdout:    &out, Stderr: &strings.Builder{},
-		Gate: GateFunc(func(_ context.Context, a Action) Decision {
+	usr1 := itoa(int(syscall.SIGUSR1))
+	for _, tc := range []struct {
+		name, src, want string
+		status          int
+		asked           bool
+	}{
+		{name: "an untrapped fatal signal", src: "kill -TERM $$\necho after", status: 128 + int(syscall.SIGTERM)},
+		{name: "an ignored signal", src: "trap '' USR1\nkill -USR1 $$\necho \"st=$?\"", want: "st=0\n"},
+		{name: "an ignored signal by number", src: "trap '' USR1\nkill -" + usr1 + " $$\necho \"st=$?\"", want: "st=0\n"},
+		{name: "an ignored default signal", src: "trap '' TERM\nkill $$\necho \"st=$?\"", want: "st=0\n"},
+		{name: "an ignored signal twice", src: "trap '' USR1\nkill -s USR1 $$ $$\necho \"st=$?\"", want: "st=0\n"},
+		{
+			name: "an ignored signal from a subshell",
+			src:  "trap '' USR1\n(kill -USR1 $$; echo \"in=$?\")\necho \"out=$?\"",
+			want: "in=0\nout=0\n",
+		},
+		{name: "an ignored stop", src: "trap '' TSTP\nkill -TSTP $$\necho \"st=$?\"", want: "st=0\n"},
+		{name: "a signal whose default is to discard it", src: "kill -WINCH $$\necho \"st=$?\"", want: "st=0\n"},
+		{name: "a child status nobody has", src: "kill -CHLD $$\necho \"st=$?\"", want: "st=0\n"},
+		{name: "urgent data", src: "kill -URG $$\necho \"st=$?\"", want: "st=0\n"},
+		{name: "a continue to a running shell", src: "kill -CONT $$\necho \"st=$?\"", want: "st=0\n"},
+		{name: "a keyboard stop, with no hook", src: "kill -TSTP $$\necho \"st=$?\"", want: "st=0\n"},
+		{name: "a terminal-read stop, with no hook", src: "kill -TTIN $$\necho \"st=$?\"", want: "st=0\n"},
+		{name: "a terminal-write stop, with no hook", src: "kill -TTOU $$\necho \"st=$?\"", want: "st=0\n"},
+		{name: "a stop nobody can refuse, with no hook", src: "kill -STOP $$\necho \"st=$?\"", want: "st=0\n"},
+		// The control. Refused by the gate, so `kill` reports it.
+		{name: "the probe, which does leave", src: "kill -0 $$ 2>/dev/null\necho \"st=$?\"", want: "st=1\n", asked: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var mu sync.Mutex
+			var seen []Action
+			var out strings.Builder
+			sem := PosixSemantics()
+			r := newTestRunner(t, &Runner{
+				Semantics: &sem,
+				Stdout:    &out, Stderr: &out,
+				Gate: GateFunc(func(_ context.Context, a Action) Decision {
+					mu.Lock()
+					defer mu.Unlock()
+					if a.Kind != ActionSignal {
+						return Allow
+					}
+					seen = append(seen, a)
+					return Deny
+				}),
+			})
+			f, err := syntax.Parse(tc.src, syntax.Core())
+			if err != nil {
+				t.Fatal(err)
+			}
+			status, err := r.Run(context.Background(), f)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if status != tc.status {
+				t.Errorf("status = %d, want %d", status, tc.status)
+			}
+			if out.String() != tc.want {
+				t.Errorf("out = %q, want %q", out.String(), tc.want)
+			}
 			mu.Lock()
 			defer mu.Unlock()
-			if a.Kind == ActionSignal {
-				seen = append(seen, a)
+			if tc.asked && len(seen) == 0 {
+				t.Errorf("the gate was never asked about %q — the instrument is not wired to anything", tc.src)
 			}
-			return Allow
-		}),
-	})
-	f, err := syntax.Parse("kill -TERM $$\necho after", syntax.Core())
-	if err != nil {
-		t.Fatal(err)
+			if !tc.asked && len(seen) != 0 {
+				t.Errorf("the gate was asked about %v, want nothing: no signal left this process", seen)
+			}
+		})
 	}
-	status, err := r.Run(context.Background(), f)
-	if err != nil {
-		t.Fatal(err)
-	}
-	// The shell stopped where a shell killed by TERM stops, which is the
-	// evidence that this went down the path that does not call the kernel.
-	if status != 128+int(syscall.SIGTERM) {
-		t.Errorf("status = %d, want the status of a shell killed by the signal it sent itself", status)
-	}
-	if out.String() != "" {
-		t.Errorf("out = %q, want nothing after the shell killed itself", out.String())
-	}
-	mu.Lock()
-	defer mu.Unlock()
-	if len(seen) != 0 {
-		t.Errorf("the gate was asked about %v, want nothing: no signal left this process", seen)
+}
+
+// A stop aimed at this shell is the process's to take, so it goes to the hook
+// `suspend` uses, with the signal the script named — and only a stop does.
+//
+// The signal is the half worth asserting. A hook handed SIGSTOP for `kill
+// -TSTP $$` would stop a shell in an orphaned process group that every
+// reference leaves running, because the kernel discards the keyboard's three
+// stops there and never discards SIGSTOP (#7040).
+func TestAStopAimedAtThisShellGoesToTheHook(t *testing.T) {
+	for _, tc := range []struct {
+		src  string
+		want []syscall.Signal
+	}{
+		{"kill -TSTP $$", []syscall.Signal{syscall.SIGTSTP}},
+		{"kill -s TTIN $$", []syscall.Signal{syscall.SIGTTIN}},
+		{"kill -TTOU $$", []syscall.Signal{syscall.SIGTTOU}},
+		{"kill -STOP $$", []syscall.Signal{syscall.SIGSTOP}},
+		{"kill -TSTP $$ $$", []syscall.Signal{syscall.SIGTSTP, syscall.SIGTSTP}},
+		{"(kill -TSTP $$)", []syscall.Signal{syscall.SIGTSTP}},
+		// An ignore is nothing, a trap is the handler, and neither is a stop.
+		{"trap '' TSTP; kill -TSTP $$", nil},
+		{"trap ':' TSTP; kill -TSTP $$", nil},
+		// And a signal that does not stop anything never reaches the hook.
+		{"kill -CONT $$", nil},
+		{"kill -WINCH $$", nil},
+	} {
+		t.Run(tc.src, func(t *testing.T) {
+			var got []syscall.Signal
+			var out strings.Builder
+			sem := PosixSemantics()
+			r := newTestRunner(t, &Runner{
+				Semantics: &sem,
+				Stdout:    &out, Stderr: &out,
+				StopThisProcess: func(sig syscall.Signal) error {
+					got = append(got, sig)
+					return nil
+				},
+				Gate: GateFunc(func(_ context.Context, a Action) Decision {
+					if a.Kind == ActionSignal {
+						return Deny
+					}
+					return Allow
+				}),
+			})
+			f, err := syntax.Parse(tc.src+"\necho \"st=$?\"", syntax.Core())
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := r.Run(context.Background(), f); err != nil {
+				t.Fatal(err)
+			}
+			if !slices.Equal(got, tc.want) {
+				t.Errorf("the hook was handed %v, want %v", got, tc.want)
+			}
+			if want := "st=0\n"; out.String() != want {
+				t.Errorf("out = %q, want %q", out.String(), want)
+			}
+		})
 	}
 }
 

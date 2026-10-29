@@ -2174,6 +2174,42 @@ the script, runs the EXIT trap where the dialect says it should, and
 hands the death to `driver` — the same split `exec` uses, and for the
 same reason.
 
+Everything else a script can aim at the shell alone is one of two
+things, and neither needs the kernel either (#7040). An *ignored*
+signal, and one whose default action does nothing to a running process,
+do nothing to the shell — so nothing is sent, because the process a
+send would reach holds every other Runner an embedder made, and
+`os/signal` hands an arrival to each of them that subscribed. Sending it
+anyway is how `trap '' USR1; kill -USR1 $$` in one Runner ran another
+Runner's USR1 handler. A signal whose default *stops* the process is the
+process's to take, exactly as a death is: the core hands it to
+`Runner.StopThisProcess`, the hook `suspend` already used, and `driver`
+raises that very signal at itself. Measured 2026-10-29, each in a
+process group of its own, against bash 5.3.20, bash 3.2.57, ksh93u+
+2012-08-01, zsh 5.9.2 and dash:
+
+    trap '' USR1; kill -USR1 $$; echo alive=$?    alive=0 in all five
+    trap '' TERM; kill $$  (and INT, HUP, 30)     alive=0 in all five
+    trap '' TSTP; kill -TSTP $$                   alive=0, never stopped
+    trap '' USR1; (kill -USR1 $$; echo in=$?)     in=0 out=0; ksh93 crashes
+                                                  in the subshell, SIGTRAP
+    kill -WINCH / -CHLD / -URG / -CONT / -IO $$   alive=0 in all five
+    kill -INFO $$                                 alive=0; ksh93 has no INFO
+    kill -TSTP / -TTIN / -TTOU / -STOP $$         stopped; alive=0 once
+                                                  continued, in all five
+      ...in an orphaned process group             TSTP, TTIN, TTOU never
+                                                  stop; STOP does
+
+The last row is why the hook is handed the signal rather than always
+raising SIGSTOP, as `suspend` does: the kernel discards the keyboard's
+three stops for an orphaned group, so a SIGSTOP in their place would
+hang a script all five references run to the end. A group kill —
+`kill -USR1 0`, `kill -- -$$` — is not aimed at the shell alone. It
+reaches the shell's children, which every reference's do receive, so it
+goes to the kernel like any other send to another process, through the
+gate — and the shell's own copy then comes back through `os/signal`,
+which runs a trapped handler a command late (#7043).
+
 The lesson is about the instrument: a corpus records what a shell does,
 and it cannot record a *sometimes*. Anything measured has to be
 deterministic first, or the measurement is of the machine rather than of

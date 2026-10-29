@@ -146,12 +146,13 @@ func (r *Runner) signalThisBody(name string, sig syscall.Signal) error {
 		r.signalDeath(name, sig)
 	default:
 		// An ignored signal, and the ones whose default action suspends or
-		// resumes rather than ends. sendSignal hands those to the kernel
-		// because the process really can be stopped; a forked body cannot,
-		// since it is a goroutine, and the only process this pid names is a
-		// placeholder that is not running the script. Stopping *that* would
-		// suspend nothing the script can see and would take the group's
-		// leader away from a body still using it, so nothing is sent.
+		// resumes rather than ends. sendSignal hands a stop to
+		// Runner.StopThisProcess because the process really can be stopped;
+		// a forked body cannot, since it is a goroutine, and the only process
+		// this pid names is a placeholder that is not running the script.
+		// Stopping *that* would suspend nothing the script can see and would
+		// take the group's leader away from a body still using it, so
+		// nothing is sent — as for the rest of this case at the top level.
 	}
 	return nil
 }

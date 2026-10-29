@@ -17,9 +17,10 @@ import "syscall"
 //
 // The gate sits at the system call rather than at the builtin, which is what
 // draws the line in the right place. A signal a script aims at this shell
-// alone never gets here at all — sendSignal answers it out of the trap table
-// or stops the script — because nothing that stays inside one process is an
-// action that leaves it.
+// alone never gets here at all — sendSignal answers it out of the trap table,
+// stops the script, does nothing for an ignore, or hands a stop to the
+// process's owner — because nothing that stays inside one process is an
+// action that leaves it (#7040).
 
 // killProcess is syscall.Kill through the gate.
 //

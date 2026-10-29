@@ -449,9 +449,22 @@ type Runner struct {
 	// interp/foregroundinterrupt.go.
 	HoldInterrupts func()
 
-	// StopThisProcess stops this process the way `suspend` does: it does not
-	// return until something sends SIGCONT. Nil — the default — means this
-	// shell is not the process and cannot stop it, and the builtin refuses.
+	// StopThisProcess stops this process with sig, one of SIGSTOP, SIGTSTP,
+	// SIGTTIN and SIGTTOU: it does not return until something sends
+	// SIGCONT. Nil — the default — means this shell is not the process and
+	// cannot stop it: `suspend` refuses, and `kill -TSTP $$` carries on as
+	// though continued at once.
+	//
+	// Two callers, and the signal is theirs to choose. `suspend` asks for
+	// SIGSTOP, because the keyboard's SIGTSTP can be caught or ignored and is
+	// discarded outright for an orphaned process group — the shape a shell
+	// run from a script or a harness has — and a `suspend` that came back 0
+	// without stopping would be wrong in the direction that matters. `kill`
+	// aimed at the shell asks for the signal the script named, because there
+	// the kernel's own answer is the one every reference gives: measured
+	// 2026-10-29, `kill -TSTP $$` in an orphaned group carries on in bash,
+	// ksh93, zsh and dash, where `kill -STOP $$` stops (#7040). So a hook
+	// raises what it is handed and decides nothing.
 	//
 	// Opt-in for the reason ReplaceProcess and DieBySignal are, and the
 	// stakes are the same read a third time. A Runner is embedded in other
@@ -463,10 +476,12 @@ type Runner struct {
 	// the caller's own code, where the system call is visible.
 	//
 	// It returns only on failure, and returning nil means the process was
-	// stopped and has since been continued: `suspend` is 0 in a real shell
-	// after a SIGCONT rather than at the moment of the stop, so a hook that
-	// came back immediately would report a success the process never had.
-	StopThisProcess func() error
+	// stopped and has since been continued — or that the kernel declined to
+	// stop it for one of its own reasons, which is the reference's answer
+	// too: `suspend` is 0 in a real shell after a SIGCONT rather than at the
+	// moment of the stop, so a hook that came back immediately would report a
+	// success the process never had.
+	StopThisProcess func(sig syscall.Signal) error
 
 	// WaitForCommand, when set, waits for a command this shell started and
 	// reports how it ended — including that it *stopped* rather than

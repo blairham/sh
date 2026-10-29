@@ -653,9 +653,7 @@ func (r *Runner) dialect() syntax.Dialect {
 		// dialect rather than kept beside it, so the one parser this
 		// runner builds nested input with is told once.
 		d.ArithPrecedence = r.arithPrecedence
-		if r.arithPrecedence != r.nativeArithPrecedence() {
-			r.arithReadInAnotherOrder = true
-		}
+		r.noteTheArithReadingOrder()
 	}
 	// Where a character ends, which the grammar has to know before it can say
 	// which bytes are metacharacters and cannot work out for itself: the
@@ -705,6 +703,16 @@ func (r *Runner) boundReaders() *boundMethods {
 		}
 	}
 	return &r.bound
+}
+
+// noteTheArithReadingOrder records that a parse is being made while the
+// arithmetic order stands away from the dialect's own. See
+// Runner.arithReadInAnotherOrder; a parse answered from arithTreeCache builds
+// no dialect, and records it here all the same.
+func (r *Runner) noteTheArithReadingOrder() {
+	if r.arithPrecedenceMoved && r.arithPrecedence != r.nativeArithPrecedence() {
+		r.arithReadInAnotherOrder = true
+	}
 }
 
 // ArithPrecedence is the order the binary arithmetic operators bind in for

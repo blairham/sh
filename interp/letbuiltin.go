@@ -293,9 +293,8 @@ func (r *Runner) valueBeforeAnIllegalByte(perr error, text string) (int, bool) {
 		// `let '@'`, and is 1.
 		return 0, true
 	}
-	p := syntax.NewParser("", r.dialect())
-	tree := p.ParseArithFor(text[:before], syntax.Pos{})
-	if p.Err() != nil || tree == nil {
+	tree, err := r.readArithText(text[:before], arithReadAsWritten)
+	if err != nil || tree == nil {
 		return 0, true
 	}
 	v, err := r.evalArith(tree)

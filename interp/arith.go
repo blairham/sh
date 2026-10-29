@@ -844,13 +844,12 @@ func (r *Runner) arithSubscriptIndex(x *syntax.ArithIndex) (arithNum, error) {
 	}
 	stopped := before != marked
 	marked = before
-	p := syntax.NewParser("", r.dialect())
 	// The subscript's own read rather than the expression's: a double
 	// quotation between an index's brackets comes off wherever the brackets
 	// came from, which is not true of the expression around them. See
 	// syntax.Parser.ParseArithSubscript.
-	tree := p.ParseArithSubscript(marked, syntax.Pos{})
-	err := unmarkArithFailure(p.Err())
+	tree, perr := r.readArithText(marked, arithReadSubscript)
+	err := unmarkArithFailure(perr)
 	if err == nil && tree == nil {
 		// Brackets holding only space, which is the shape `a[$w]` takes once
 		// a `$w` holding spaces has gone in. There is no expression in them
@@ -2694,7 +2693,6 @@ func (r *Runner) arithNumOfStored(value string) (arithNum, error) {
 func (r *Runner) arithValueAsExpression(value string) (arithNum, error) {
 	r.arithValuesReread++
 	text := strings.TrimSpace(value)
-	p := syntax.NewParser("", r.dialect())
 	// A stored value has been through its expansions already, so a `$` in it
 	// is a character of the result — which is what the doc above says and
 	// what the reader that waits for expansions could not be told. It
@@ -2702,8 +2700,8 @@ func (r *Runner) arithValueAsExpression(value string) (arithNum, error) {
 	// $(( f ))` is 5 in bash 5.3.20, bash 3.2.57, zsh 5.9.2 and ksh93u+, and
 	// was a silent 0 here because a nil tree with no complaint evaluates to
 	// nothing at all (#3303).
-	tree := p.ParseArithExpanded(value, syntax.Pos{})
-	err := unmarkArithFailure(p.Err())
+	tree, perr := r.readArithText(value, arithReadExpanded)
+	err := unmarkArithFailure(perr)
 	if err == nil && tree == nil {
 		// No tree and no complaint means the text holds an expansion, which
 		// the parser leaves for its caller to substitute first. A stored
@@ -3811,9 +3809,8 @@ func (r *Runner) arithTree(tree syntax.ArithExpr, text string) (syntax.ArithExpr
 // evaluator's job; it is not a second round of expansion, and that is the
 // whole of the distinction this function draws.
 func (r *Runner) arithTreeRead(text string) (syntax.ArithExpr, error) {
-	p := syntax.NewParser("", r.dialect())
-	out := p.ParseArithExpanded(text, syntax.Pos{})
-	if err := p.Err(); err != nil {
+	out, err := r.readArithText(text, arithReadExpanded)
+	if err != nil {
 		// Worded about the text a script wrote: the marks are this
 		// implementation's bookkeeping and a refusal carrying one prints a
 		// stray NUL into a log. See stripArithValueMarks.
@@ -3842,7 +3839,6 @@ func (r *Runner) arithTreeOver(
 		// has not been made on the text this hands back to be shown.
 		expanded = r.writtenArithTextShown(text, origin)
 	}
-	p := syntax.NewParser("", r.dialect())
 	// Read as the *result* it now is. A `$` still standing after the
 	// expansion came out of a value, and begins no operand: measured
 	// 2026-09-16 from a script file, `x=2; e='1+$x'; $(( $e ))` is `$x :
@@ -3852,7 +3848,7 @@ func (r *Runner) arithTreeOver(
 	// left no tree and no complaint either, which evaluated to a silent
 	// **0** — the worst of the three answers, and the one this shell gave
 	// (#3303).
-	out := p.ParseArithExpanded(expanded, syntax.Pos{})
+	out, perr := r.readArithText(expanded, arithReadExpanded)
 	// The marks go no further than the reader they were put on for. Every
 	// caller of this uses the text it gets back to *show* something — a
 	// trace, a refusal, the value a reader stopped at — and a dialect
@@ -3861,7 +3857,7 @@ func (r *Runner) arithTreeOver(
 	// NUL either side of a value's quote into `arithmetic expression:
 	// expecting EOF`. See stripArithValueMarks.
 	shown := r.shownArithText(expanded)
-	if err := p.Err(); err != nil {
+	if err := perr; err != nil {
 		return nil, shown, r.shownArithFailure(err)
 	}
 	return out, shown, nil

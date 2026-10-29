@@ -517,6 +517,10 @@ func (r *Runner) trapSignal(name string, sig syscall.Signal, body *string) {
 	s := r.sigs()
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	// Whether this line finds anything arranged, which for a shell that keeps
+	// its dispositions to itself is whether it holds a subscription to give
+	// up. Read before the table write below, which answers it the other way.
+	_, had := s.traps[name]
 	// The table first, because every condition `trap` takes gets an entry:
 	// the entry is what a listing prints and what `trap -` takes away, and
 	// it is the whole of what KILL and STOP ever get.
@@ -540,7 +544,7 @@ func (r *Runner) trapSignal(name string, sig syscall.Signal, body *string) {
 		// one restoreDispositions has to put back (#2919).
 		return
 	}
-	// Each of the three calls below changes a disposition that belongs to the
+	// Each of the calls below changes a disposition that belongs to the
 	// *process*, so the shell borrows it rather than owning it. Noted before
 	// the change, and only the first time, so what goes back is the state
 	// this shell was handed and not the state some earlier line of the same
@@ -548,13 +552,28 @@ func (r *Runner) trapSignal(name string, sig syscall.Signal, body *string) {
 	// nothing to say about: what it records is what the *process* was doing.
 	// See restoreDispositions.
 	s.borrow(sig)
-	switch {
-	case body == nil:
-		signal.Reset(sig)
+	if body != nil && *body != "" {
+		// **URG is this runtime's own**, and a trap for it runs on signals
+		// nothing sent. os/signal forwards the preemption signal the Go
+		// runtime uses to interrupt a goroutine, so `trap 'x' URG` fires
+		// repeatedly while a script is running — see
+		// interp/urgisthisruntimes.go, which is the measurement and the three
+		// closed routes out of it (#5109). Nothing here can tell that arrival
+		// from a real one, so the subscription is made for URG as for any
+		// other signal and the defect is recorded rather than papered over.
+		signal.Notify(s.ch, sig)
+		return
+	}
+	if r.SetSignalDisposition == nil {
+		s.keepToItself(sig, body != nil, had)
+		return
+	}
+	if body == nil {
+		r.SetSignalDisposition(sig, false)
 		s.dropOwnIgnore(sig)
 		// And where the shell goes on ignoring the signal untrapped after
-		// the reset, the process goes on handling it: signal.Reset hands it
-		// back to the runtime's default, which ends the process, and the
+		// the reset, the process goes on handling it: the front end's reset
+		// hands it back to the runtime's default, which ends the process, and the
 		// front end's own subscription went with it. A drain keeps the
 		// arrival harmless and still gives a child the default. Measured
 		// 2026-10-16: `trap - TERM`, then a TERM from another process, leaves
@@ -565,19 +584,94 @@ func (r *Runner) trapSignal(name string, sig syscall.Signal, body *string) {
 			func(a Answer, _ string) (bool, bool) { return a == Yes, a != Yes && a != No }, r.sem()) {
 			signal.Notify(dispositionSink, sig)
 		}
-	case *body == "":
-		signal.Ignore(sig)
-	default:
-		// **URG is this runtime's own**, and a trap for it runs on signals
-		// nothing sent. os/signal forwards the preemption signal the Go
-		// runtime uses to interrupt a goroutine, so `trap 'x' URG` fires
-		// repeatedly while a script is running — see
-		// interp/urgisthisruntimes.go, which is the measurement and the three
-		// closed routes out of it (#5109). Nothing here can tell that arrival
-		// from a real one, so the subscription is made for URG as for any
-		// other signal and the defect is recorded rather than papered over.
-		signal.Notify(s.ch, sig)
+		return
 	}
+	r.SetSignalDisposition(sig, true)
+}
+
+// keepToItself is a top-level `trap "" SIG` or `trap - SIG` in a shell that
+// may not touch the process's dispositions, which is every Runner whose
+// SetSignalDisposition is nil: what it changes is this shell's own
+// subscription, and nobody else's.
+//
+// An ignore *subscribes*. The arrival lands on this shell's channel and is
+// dropped where every arrival whose entry is empty already is — runPendingTraps
+// and pendingTrapFrom run nothing for one and end no wait on one — and while
+// the shell holds it the process does not die of the signal, as with a
+// handler. What it does not do is call signal.Ignore, which is the process's
+// one answer for the signal and takes every subscription the process has for
+// it away: the embedder's own, and every other Runner's. Measured 2026-10-29
+// with two Runners in one test binary and a SIGUSR1 sent from another
+// process, the listener that trapped first heard nothing and the one that
+// trapped second heard it, so whether a handler worked depended on an order
+// no script can see (#7044).
+//
+// A reset gives up this shell's own subscription for the one signal, which
+// signal.Reset would have done for everybody's.
+//
+// # What a library cannot have
+//
+// A command such a shell starts does not inherit the ignore. exec resets a
+// handled signal to its default and keeps only SIG_IGN, and SIG_IGN is the
+// process's, with no form that belongs to one subscriber. Setting it only for
+// the length of a fork does not help: signal.Ignore takes the subscriptions
+// away whenever it is called, and an ignore installed beside the runtime's
+// back does not reach the child either, since the runtime puts every signal
+// it is handling back to the default between the fork and the exec. So the
+// inheritance real shells give is the front end's to give, through
+// SetSignalDisposition, where the process is the shell's — the same split as
+// SetUmask and ReplaceProcess.
+func (s *signalState) keepToItself(sig syscall.Signal, ignore, had bool) {
+	if ignore {
+		signal.Notify(s.ch, sig)
+		return
+	}
+	if had {
+		s.release()
+	}
+}
+
+// release takes this shell's subscription off every signal its table no
+// longer names, and leaves every other subscription in the process alone.
+//
+// os/signal has no way to take one signal off one channel: Stop takes the
+// channel off all of them, and Reset takes the signal off every channel. So
+// the channel is stopped and subscribed again to what the table still holds.
+// A bridge holds those signals across the gap, because a signal left without
+// a subscriber goes back to its default action, and for TERM that ends the
+// process. An arrival in the gap reaches the bridge rather than this shell
+// and is lost, and the gap is the two calls between Stop and Notify; nothing
+// the bridge caught is passed on, since most of it reached this shell's
+// channel as well and a handler run twice is not a better answer.
+//
+// Called with the lock held.
+func (s *signalState) release() {
+	named := s.named()
+	keep := make([]os.Signal, 0, len(named))
+	for _, sig := range named {
+		keep = append(keep, sig)
+	}
+	if len(keep) == 0 {
+		signal.Stop(s.ch)
+		return
+	}
+	bridge := make(chan os.Signal, 1)
+	signal.Notify(bridge, keep...)
+	signal.Stop(s.ch)
+	signal.Notify(s.ch, keep...)
+	signal.Stop(bridge)
+}
+
+// named is every catchable signal the table holds an entry for, handled or
+// ignored, with the lock held.
+func (s *signalState) named() []syscall.Signal {
+	var sigs []syscall.Signal
+	for name := range s.traps {
+		if sig := trapConditionSignal(name); sig != 0 && catchableSignal(sig) {
+			sigs = append(sigs, sig)
+		}
+	}
+	return sigs
 }
 
 // dropOwnIgnore takes back an ignore this shell installed, so that `trap -`
@@ -1445,9 +1539,16 @@ func (r *Runner) restoreDispositions() {
 		}
 		if wasIgnored {
 			signal.Ignore(sig)
-		} else {
-			signal.Notify(dispositionSink, sig)
+			continue
 		}
+		if r.SetSignalDisposition == nil {
+			// An ignore this shell did not install, because a shell that may
+			// not touch the process installs none — see keepToItself. It is
+			// whoever set it's to take off, and taking it off here would be
+			// this shell reaching into the process after all.
+			continue
+		}
+		signal.Notify(dispositionSink, sig)
 	}
 	clear(s.borrowed)
 }

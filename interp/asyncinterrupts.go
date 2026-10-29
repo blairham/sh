@@ -52,6 +52,18 @@ func (r *Runner) startWithAsyncDispositions(start func() error) error {
 	return err
 }
 
+// trappedSignals is every signal this shell's table names, for a caller that
+// wants resubscribeTrapped to look at all of them.
+func (r *Runner) trappedSignals() []syscall.Signal {
+	s := r.signals
+	if s == nil {
+		return nil
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.named()
+}
+
 // resubscribeTrapped puts back this shell's own subscription for each of
 // sigs that a trap holds an action for.
 func (r *Runner) resubscribeTrapped(sigs ...syscall.Signal) {

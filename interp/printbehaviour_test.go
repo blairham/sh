@@ -239,6 +239,13 @@ func (g *guardedBuffer) String() string {
 // returns what it printed and reported.
 func runUnderBash(t *testing.T, src string) (string, int) {
 	t.Helper()
+	return runUnderBashWith(t, src, nil)
+}
+
+// runUnderBashWith is runUnderBash with the Runner handed to setup before it
+// runs, for a test about a field the harness leaves alone.
+func runUnderBashWith(t *testing.T, src string, setup func(*interp.Runner)) (string, int) {
+	t.Helper()
 	f, err := syntax.Parse(src, corpusGrammar())
 	if err != nil {
 		t.Fatalf("parse %q: %v", src, err)
@@ -258,6 +265,9 @@ func runUnderBash(t *testing.T, src string) (string, int) {
 		// below, which is meant for what the *snippet* prints.
 		Name: "sh", Dir: dir, Env: append(testPATH(), "TMPDIR="+t.TempDir()),
 	})
+	if setup != nil {
+		setup(r)
+	}
 	status, rerr := r.Run(context.Background(), f)
 	text := maskTimings(strings.ReplaceAll(out.String(), dir, "<dir>"))
 	if rerr != nil {

@@ -441,6 +441,25 @@ type Runner struct {
 	// process has. See interp/asyncinterrupts.go.
 	StartIgnoringInterrupts func(start func() error) error
 
+	// SetSignalDisposition is the process's half of a top-level `trap`: with
+	// ignore true it makes this process ignore sig, for `trap '' SIG`, and
+	// with ignore false it hands sig back to the process's default, for
+	// `trap - SIG`. Nil — the default — means this Runner may not touch the
+	// process's dispositions: an ignore is kept in its own trap table and an
+	// arrival it hears is dropped there, a reset takes away only its own
+	// subscription, and a command it starts begins with the dispositions the
+	// process has. See interp/signals.go.
+	//
+	// Opt-in for the reason SetUmask is, and it is the same trade. An ignore
+	// is the one disposition exec carries into a child — `nohup` is nothing
+	// else — so a shell that is the process sets it on the process, and what
+	// it starts inherits it. But a disposition is the process's one answer
+	// for the signal: os/signal's Ignore and Reset take every subscription the
+	// process has for it away, so a Runner embedded in another program that
+	// set one would deafen that program's own handlers and every other
+	// Runner's, in an order nothing a script does can see (#7044).
+	SetSignalDisposition func(sig syscall.Signal, ignore bool)
+
 	// HoldInterrupts arranges for an untrapped SIGINT from outside to be
 	// asked about — see InterruptHeld — rather than ending the process
 	// outright, for the dialect that holds one while a foreground program

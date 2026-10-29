@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"strconv"
+	"strings"
 	"syscall"
 	"testing"
 
@@ -171,5 +172,92 @@ func TestAShebangLessScriptsIgnoreLeavesTheCallersHandler(t *testing.T) {
 	s.wait(t)
 	if got, want := s.out.String(), "inner\ncaught\ndone\n"; got != want {
 		t.Errorf("wrote %q, want %q — the script's ignore took the caller's handler with it", got, want)
+	}
+}
+
+// And the other half of handing a shebang-less script the hook: the commands
+// the script starts inherit what it ignores, which is the reason it is handed
+// over at all. Measured 2026-10-29, a shebang-less script ignoring INT and
+// then starting a child that raises it at itself: the child survives in bash
+// 5.3, bash 3.2, ksh93, zsh and dash. The control is the same script with no
+// ignore, which is what says the probe can report a death.
+func TestAShebangLessScriptsIgnoreReachesItsCommands(t *testing.T) {
+	if _, err := os.Stat("/bin/sh"); err != nil {
+		t.Skipf("no /bin/sh to raise a signal at itself: %v", err)
+	}
+	restoreDispositionsAfter(t, []string{"USR1"})
+	// Computed, so that a notice quoting the child's command line cannot be
+	// mistaken for the child having survived.
+	const probe = "/bin/sh -c 'kill -USR1 $$; echo alive-$((6*7))'\n"
+	for _, tc := range []struct {
+		name, prep string
+		survives   bool
+	}{
+		{"nothing arranged", "", false},
+		{"ignored", "trap '' USR1\n", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			script := t.TempDir() + "/script"
+			if err := os.WriteFile(script, []byte(tc.prep+probe+"echo ran\n"), 0o700); err != nil {
+				t.Fatal(err)
+			}
+			out, _ := runOwningTheProcess(t, script+"\n")
+			if !strings.Contains(out, "ran") {
+				t.Fatalf("the script never ran to its end: %q", out)
+			}
+			if got := strings.Contains(out, "alive-42"); got != tc.survives {
+				t.Errorf("the script's child survived = %v, want %v (wrote %q)", got, tc.survives, out)
+			}
+		})
+	}
+}
+
+// A reset gives up the one subscription it names, and the Runner goes on
+// hearing everything else it trapped.
+//
+// os/signal cannot take one signal off one channel, so a reset in a Runner
+// that keeps to itself stops its channel and subscribes it again to what the
+// table still holds. This is the row that says the second half happens.
+func TestAResetKeepsTheRunnersOtherHandlers(t *testing.T) {
+	kill := externalKill(t)
+	restoreDispositionsAfter(t, []string{"USR1", "USR2"})
+	s := startSteppedWith(t, "trap 'echo heard; kill $! 2>/dev/null' USR1\n"+
+		"trap 'echo two' USR2\n"+
+		"trap - USR2\n"+
+		"/bin/sleep 5 &\n"+
+		"step ready\n"+
+		"wait $!\n"+
+		"echo done\n", reportsAKilledJob)
+	s.reach(t, "ready")
+	if out, err := exec.Command(kill, "-USR1", strconv.Itoa(os.Getpid())).CombinedOutput(); err != nil {
+		t.Fatalf("%s -USR1: %v: %s", kill, err, out)
+	}
+	s.release()
+	s.wait(t)
+	if got, want := s.out.String(), "heard\ndone\n"; got != want {
+		t.Errorf("wrote %q, want %q — resetting USR2 took the USR1 handler with it", got, want)
+	}
+}
+
+// A Runner that may not touch the process does not take off an ignore it
+// finds there either.
+//
+// Its end puts back what its own subscriptions took over, and an ignore that
+// appeared while it ran is not one of those: something else in the program
+// set it, and taking it off would be the Runner reaching into the process
+// after all — the embedder's `nohup` undone by a script it happened to run.
+func TestARunnerLeavesAloneAnIgnoreItDidNotSet(t *testing.T) {
+	restoreDispositionsAfter(t, []string{"USR2"})
+	if signal.Ignored(syscall.SIGUSR2) {
+		t.Fatal("this test needs SIGUSR2 not ignored to start with")
+	}
+	s := startStepped(t, "trap 'echo two' USR2\nstep ready\necho finished\n")
+	s.reach(t, "ready")
+	// The program the Runner is embedded in, deciding something of its own.
+	signal.Ignore(syscall.SIGUSR2)
+	s.release()
+	s.wait(t)
+	if !signal.Ignored(syscall.SIGUSR2) {
+		t.Error("a Runner that never ignored SIGUSR2 took away an ignore the program set while it ran")
 	}
 }

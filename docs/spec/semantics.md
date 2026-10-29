@@ -3243,6 +3243,19 @@ runtime lets an inherited ignore stand and `Stop` puts it back — and
 `signal.Ignored` answers **false** while it does, so a probe that asks Go
 reports success on the two signals it failed.
 
+**And the disposition is the process's, which a library cannot assume it
+owns.** `signal.Ignore` and `signal.Reset` take every subscription the
+process has for the signal away, so two Runners in one program fought over
+it: measured with two Runners in one test binary and a SIGUSR1 from another
+process, the one that trapped first heard nothing and the one that trapped
+second heard it (#7044). A Runner therefore sets a disposition only where the
+front end hands it `SetSignalDisposition`, which every binary does. One
+embedded elsewhere keeps its ignore in its own table and drops what it hears,
+and its reset gives up only its own subscription. What it cannot give is the
+inheritance: exec keeps only `SIG_IGN`, and the Go runtime puts every signal
+it is handling back to the default between the fork and the exec, so a child
+of such a Runner starts with the dispositions the process has.
+
 ## A subshell that kills the shell, and where the process went
 
     (kill -TERM $$; echo inner); echo outer

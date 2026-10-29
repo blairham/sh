@@ -3137,6 +3137,10 @@ func (sh *Shell) newRunnerAs(
 		// And the fork's half of an asynchronous list's dispositions, which
 		// only the process's owner may set. See fatalsignal.go.
 		r.StartIgnoringInterrupts = startIgnoringInterrupts
+		// And the process's half of a top-level `trap`: an ignore set on the
+		// process, which is the only kind a child inherits. See
+		// signaldisposition.go.
+		r.SetSignalDisposition = setSignalDisposition
 	}
 	// The part of composing a shell that is not a field, applied here and
 	// *remembered*, because interp has one shell of its own to build: the

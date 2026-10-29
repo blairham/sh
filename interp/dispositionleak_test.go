@@ -9,6 +9,8 @@ import (
 	"strings"
 	"syscall"
 	"testing"
+
+	"github.com/blairham/sh/interp"
 )
 
 // The leak in #2446, in the shape it was found in.
@@ -25,7 +27,20 @@ import (
 // signal.Ignored, because a child is what the leak reaches: a disposition of
 // *ignored* survives exec, which is the whole of what `nohup` does, so the
 // tests that failed were failing in processes they had started.
+//
+// Every test here is about a shell that owns its process's dispositions — the
+// shape the binaries have — and runs its scripts through runOwningTheProcess.
+// A Runner with no SetSignalDisposition sets no SIG_IGN at all, so it can
+// neither leak one nor hand one to a child; trapignoreperrunner_test.go is
+// that shell's half (#7044).
 var signalProbe = childRaising("INT")
+
+// runOwningTheProcess is runUnderBash for a shell handed the process's
+// dispositions, the way the front end hands them to a binary.
+func runOwningTheProcess(t *testing.T, src string) (string, int) {
+	t.Helper()
+	return runUnderBashWith(t, src, func(r *interp.Runner) { r.SetSignalDisposition = ownsItsDispositions })
+}
 
 // childRaising is that probe for one signal, so the two shapes of this
 // question — an ignore a script installed and an ignore it was born with —
@@ -57,7 +72,7 @@ func TestAnIgnoreOneScriptSetDoesNotReachTheNextOnesChildren(t *testing.T) {
 
 	// The first snippet: an ignore at the top level, which is the *process's*
 	// disposition because that is what a shell at the top level is.
-	runUnderBash(t, "trap '' INT\n")
+	runOwningTheProcess(t, "trap '' INT\n")
 
 	// The second: the same probe, which must still answer the same way.
 	if !probeDies(t) {
@@ -78,7 +93,7 @@ func TestAShellPutsBackAnIgnoreItWasHandedRatherThanADefault(t *testing.T) {
 		t.Fatal("this test needs SIGUSR2 ignored to start with")
 	}
 
-	runUnderBash(t, "trap 'echo x' USR2\ntrap - USR2\n")
+	runOwningTheProcess(t, "trap 'echo x' USR2\ntrap - USR2\n")
 
 	if !signal.Ignored(syscall.SIGUSR2) {
 		t.Error("a shell that was handed an ignored SIGUSR2 gave back a defaulted one")
@@ -109,7 +124,7 @@ func TestAResetGivesBackAnIgnoreBeforeTheNextChildInheritsIt(t *testing.T) {
 		t.Fatalf("the probe cannot tell the two states apart: it reported a surviving child with SIGINT at its default")
 	}
 
-	out, _ := runUnderBash(t, "trap '' INT\ntrap - INT\n"+signalProbe)
+	out, _ := runOwningTheProcess(t, "trap '' INT\ntrap - INT\n"+signalProbe)
 	if strings.Contains(out, "survived") {
 		t.Errorf("a child started after `trap - INT` inherited the ignore `trap '' INT` installed: %q", out)
 	}
@@ -117,7 +132,7 @@ func TestAResetGivesBackAnIgnoreBeforeTheNextChildInheritsIt(t *testing.T) {
 	// The control, and the half that says this is a reset rather than a
 	// shell that has stopped ignoring anything at all. Unanimous in the
 	// panel: with no reset, the child is the ignore's to inherit.
-	out, _ = runUnderBash(t, "trap '' INT\n"+signalProbe)
+	out, _ = runOwningTheProcess(t, "trap '' INT\n"+signalProbe)
 	if !strings.Contains(out, "survived") {
 		t.Errorf("a child started under `trap '' INT` was not handed the ignore: %q", out)
 	}
@@ -152,7 +167,7 @@ func TestAResetLeavesAloneAnIgnoreTheShellWasBornWith(t *testing.T) {
 	signal.Ignore(syscall.SIGUSR2)
 	t.Cleanup(func() { signal.Notify(dispositionDrain, syscall.SIGUSR2) })
 
-	out, _ := runUnderBash(t, "trap - USR2\n"+probe)
+	out, _ := runOwningTheProcess(t, "trap - USR2\n"+probe)
 	if !strings.Contains(out, "survived") {
 		t.Errorf("`trap - USR2` took away an ignore the shell was handed, and its child lost it too: %q", out)
 	}

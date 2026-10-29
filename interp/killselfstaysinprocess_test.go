@@ -27,16 +27,16 @@ import (
 // is how a row of #7032's tests that ignored USR1 ran two other rows' USR1
 // handlers, three times in four, with nothing in either of them sending one.
 //
-// The order is the whole of the arrangement, and it is the order those
-// parallel rows happened to fall into when they failed. The sender ignores
-// first and the listener traps second, because `trap ” SIG` is signal.Ignore,
-// and signal.Ignore takes *every* subscription in the process away with it
-// (#7044): a listener that subscribed first would be deaf to the leak, and
-// every row would pass on a tree that still has it. Each Runner then waits on
-// a builtin the test controls, so the sequence is the test's and not the
-// scheduler's, and the two finish in the reverse of the order they started —
-// each one puts back the disposition it found, and the listener found the
-// sender's ignore.
+// The order is the one those parallel rows happened to fall into when they
+// failed: the sender ignores first and the listener traps second. It was the
+// whole of the arrangement while `trap ” SIG` was signal.Ignore, which took
+// *every* subscription in the process away with it, so a listener that
+// subscribed first would have been deaf to the leak and every row would have
+// passed on a tree that still had it. A Runner no front end has handed the
+// process's dispositions keeps an ignore to itself now (#7044), and
+// TestOneRunnersIgnoreLeavesAnotherRunnersHandlerAlone holds both orders.
+// Each Runner waits on a builtin the test controls, so the sequence is the
+// test's and not the scheduler's.
 //
 // The last row is the control, and the reason the others mean anything: the
 // same sequence with the signal sent by a process that is *not* this one
@@ -181,6 +181,13 @@ type stepped struct {
 
 func startStepped(t *testing.T, src string) *stepped {
 	t.Helper()
+	return startSteppedWith(t, src, nil)
+}
+
+// startSteppedWith is startStepped with the Runner handed to setup before it
+// starts, for a test about a field the helper leaves alone.
+func startSteppedWith(t *testing.T, src string, setup func(*Runner)) *stepped {
+	t.Helper()
 	f, err := syntax.Parse(src, syntax.Core())
 	if err != nil {
 		t.Fatalf("parse %q: %v", src, err)
@@ -188,6 +195,9 @@ func startStepped(t *testing.T, src string) *stepped {
 	s := &stepped{at: make(chan string), proceed: make(chan struct{}), done: make(chan error, 1)}
 	sem := testSemantics()
 	r := newTestRunner(t, &Runner{Stdout: &s.out, Stderr: &s.out, Semantics: &sem, Env: testPATH()})
+	if setup != nil {
+		setup(r)
+	}
 	r.Register("step", func(_ *Runner, ctx context.Context, args []string) int {
 		select {
 		case s.at <- strings.Join(args, " "):

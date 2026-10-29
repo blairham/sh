@@ -226,6 +226,14 @@ then ran for a signal nobody sent them (#7040). **No answer to a signal aimed
 at this shell alone is kill(2)**; a group kill is aimed at its children too,
 and is not one of them.
 
+`trap ''` is the same split from the receiving side. An ignore set on the
+process is the only kind a child inherits, and setting one takes every other
+subscription the program has for the signal away — one Runner's ignore left
+another deaf to a signal it had trapped, depending on which line ran first
+(#7044). So `Runner.SetSignalDisposition` — nil in a library, filled in by
+`driver` — is what sets or resets a disposition; a library Runner keeps its
+ignore in its own table, and its children do not inherit it.
+
 The corollary caught a real bug: **where a real shell relies on process
 boundaries, we have to reconstruct the boundary by hand.** Our subshells are
 cloned Runners in one process, so `exec` inside one must not call execve —

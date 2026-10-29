@@ -43,33 +43,62 @@ import (
 // openRuntime pushes one construct onto what a command is running inside,
 // and answers the pop.
 //
-// A fresh slice every time, so a copy of the Runner that shares the backing
-// array — a pipeline element, a substitution — never has its view written by
-// the shell it was copied from.
-func (r *Runner) openRuntime(key string) func() {
-	saved := r.openRun
-	r.openRun = append(slices.Clip(saved), key)
-	return func() { r.openRun = saved }
+// Pushed in place and truncated on the way out, the way substLevelsOut is —
+// see substLevelUndo. Every `if`, loop, `&&`, `||` and pipeline element
+// opens one, and a fresh slice and a closure for each was two allocations a
+// construct (#6423). The stack is only ever pushed and popped in this order,
+// so the slots past its length belong to nobody; a copy of the Runner takes
+// an array of its own (see ownTables), and a pipeline element or a
+// substitution that is itself a construct starts from openRunWith's.
+func (r *Runner) openRuntime(key string) openRuntimeUndo {
+	undo := openRuntimeUndo{r: r, depth: len(r.openRun)}
+	r.openRun = append(r.openRun, key)
+	return undo
+}
+
+// openRuntimeUndo is openRuntime's pop.
+type openRuntimeUndo struct {
+	r     *Runner
+	depth int
+}
+
+func (u openRuntimeUndo) undo() {
+	if s := u.r.openRun; u.depth <= len(s) {
+		u.r.openRun = s[:u.depth]
+	}
 }
 
 // replaceOpenRuntime puts a clause in place of the construct it belongs to —
-// `then` for `if` — which is how the field draws one.
+// `then` for `if` — which is how the field draws one. In place, because the
+// slot is the construct's own: see openRuntime.
 func (r *Runner) replaceOpenRuntime(key string) {
 	if n := len(r.openRun); n > 0 {
-		out := slices.Clone(r.openRun)
-		out[n-1] = key
-		r.openRun = out
+		r.openRun[n-1] = key
 	}
 }
 
 // openRuntimeFresh is a function call: the body is drawn as inside nothing,
 // whatever the call was made from, and the braces of the body itself are not
 // a group of the script's. Answers the restore.
-func (r *Runner) openRuntimeFresh(body syntax.Command) func() {
-	saved, savedBody := r.openRun, r.openRunBody
-	r.openRun, r.openRunBody = nil, body
-	return func() { r.openRun, r.openRunBody = saved, savedBody }
+//
+// The body's view starts past the caller's slots rather than at nil, so what
+// the body pushes goes on the same array instead of a new one per call; the
+// caller's slots are below the view, where the body cannot reach them.
+func (r *Runner) openRuntimeFresh(body syntax.Command) openRuntimeFreshUndo {
+	undo := openRuntimeFreshUndo{r: r, saved: r.openRun, savedBody: r.openRunBody}
+	n := len(r.openRun)
+	r.openRun, r.openRunBody = r.openRun[n:n], body
+	return undo
 }
+
+// openRuntimeFreshUndo is openRuntimeFresh's restore.
+type openRuntimeFreshUndo struct {
+	r         *Runner
+	saved     []string
+	savedBody syntax.Command
+}
+
+func (u openRuntimeFreshUndo) undo() { u.r.openRun, u.r.openRunBody = u.saved, u.savedBody }
 
 // openRuntimeText is the field's text while a command runs.
 func (r *Runner) openRuntimeText(words map[string]OpenWord) string {

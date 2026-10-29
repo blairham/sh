@@ -286,7 +286,7 @@ func (r *Runner) ifClause(ctx context.Context, c *syntax.IfClause) error {
 		// error ended the script at 0 where ksh93 ends it at 1, so the shell
 		// stopped and then said it had succeeded.
 		// What the field draws for each part — see openruntime.go.
-		defer r.openRuntime("if")()
+		defer r.openRuntime("if").undo()
 		// Whichever branch runs is the shell's last, where the `if` is. See
 		// unforkedtail.go.
 		tail := r.isTail(c)
@@ -724,7 +724,7 @@ func (r *Runner) forArithClause(ctx context.Context, c *syntax.ForArithClause) e
 		}
 		defer r.enteringLoop()()
 		// After the initializer, which the field draws outside the loop.
-		defer r.openRuntime("for")()
+		defer r.openRuntime("for").undo()
 		for {
 			r.debugPassOf(ctx, c, ArithCond)
 			// The condition is the one of the three parts a refusal ends the
@@ -801,7 +801,7 @@ func (r *Runner) forArithPart(tree syntax.ArithExpr, text string, at syntax.Pos)
 	// the text's own first. See Runner.inArithCommandText (#3810).
 	putBackLine := r.inArithCommandText(at)
 	resolved, expanded, perr := r.arithTreeOver(tree, text, arithTextWritten)
-	putBackLine()
+	putBackLine.undo()
 	if r.failedHeading() {
 		// The expansion inside the part failed. Its diagnostic is written and
 		// what is left of the text is not an expression, so parsing on would
@@ -1019,7 +1019,7 @@ func (r *Runner) caseClause(ctx context.Context, c *syntax.CaseClause) error {
 		r.substRan = outerSubst
 		restore()
 		failed := r.failedHeading()
-		keep()
+		keep.undo()
 		if failed {
 			// Before any arm is tested, because a subject that failed is
 			// empty and empty *matches*: the `""` arm fired and the shell
@@ -1219,8 +1219,7 @@ func (r *Runner) caseItemMatched(item *syntax.CaseItem, subject string) (matched
 	// stops setting control flow would otherwise turn a stale flag into a
 	// refused pattern.
 	r.beginHeading()
-	keep := r.failedExpansionStatusIs(failedExpansionLeavesZero)
-	defer keep()
+	defer r.failedExpansionStatusIs(failedExpansionLeavesZero).undo()
 	matched = r.caseItemMatches(item, subject)
 	// A pattern the dialect rejects outright, or one whose failure was fatal
 	// on its own, stops the arms here rather than being reported once per
@@ -1908,12 +1907,12 @@ func (r *Runner) callFuncInPlace(ctx context.Context, fn *syntax.FuncDecl, name 
 			// inside one that holds one. See Runner.whileACommandRuns.
 			r.callsNestASlot = false
 			defer func() { r.callsNestASlot = true }()
-			if release := r.holdACommandsJobSlot(true); release != nil {
-				defer release()
+			if hold, ok := r.holdACommandsJobSlot(true); ok {
+				defer hold.release()
 			}
 		default:
-			if release := r.holdACommandsJobSlot(false); release != nil {
-				defer release()
+			if hold, ok := r.holdACommandsJobSlot(false); ok {
+				defer hold.release()
 			}
 		}
 	}
@@ -2306,7 +2305,7 @@ func (r *Runner) callFuncInPlace(ctx context.Context, fn *syntax.FuncDecl, name 
 		defer func() { r.bodyHoldsNoSlot = outerBody }()
 	}
 	err := r.command(ctx, fn.Body())
-	restoreOpen()
+	restoreOpen.undo()
 	r.readersLine = outerReader
 	r.constructLine = outerConstruct
 	// Whatever arrived while the body's *last* command ran, handled before

@@ -129,6 +129,7 @@ func (r *Runner) prefixChildForTheStores(assigns []*syntax.Assign) *Runner {
 	child := *r
 	child.dialectMoves = nil
 	child.bodyTexts = nil
+	child.pipeCounts = nil
 	child.ownTables(r)
 	return &child
 }

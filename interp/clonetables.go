@@ -121,6 +121,8 @@ func (c *Runner) ownTables(r *Runner) {
 	// Pushed in place and truncated on the way out — see substLevelUndo — so
 	// a subshell that shared the array would write into the parent's slots.
 	c.substLevelsOut = slices.Clone(r.substLevelsOut)
+	// And the open constructs, for the same reason. See openRuntime.
+	c.openRun = slices.Clone(r.openRun)
 	c.leavingContexts = slices.Clone(r.leavingContexts)
 	c.scopeFixed = maps.Clone(r.scopeFixed)
 	c.kindFixed = maps.Clone(r.kindFixed)

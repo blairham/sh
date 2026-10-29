@@ -185,11 +185,79 @@ func isTestOrArithmetic(c syntax.Command) bool {
 
 // countsForPipelineStatus reports whether this command writes the record.
 //
+// A compound is answered from Runner.pipeCounts where it can be: see
+// countsKeptForACompound. Everything else is read on the spot, because it is
+// read from the command alone.
+func (r *Runner) countsForPipelineStatus(c syntax.Command) bool {
+	switch c.(type) {
+	case *syntax.SimpleCmd, *syntax.TestClause, *syntax.ArithCmdClause, *syntax.FuncDecl:
+		return r.countsForPipelineStatusRead(c)
+	}
+	return r.countsKeptForACompound(c)
+}
+
+// countsKeptForACompound is countsForPipelineStatusRead for a compound,
+// kept per command for as long as the answers it was read under hold.
+//
+// In the dialect that reads a compound's body for the answer
+// (CompoundPipelineStatusFromTheBody), a compound counts when anything in its
+// body counts, and every compound the shell runs asked that again of its
+// whole body each time it finished — a fact about the text and three answers
+// of the vector, and the same every time. F-Sy-H's highlighter runs an `if`
+// whose branches span six hundred lines, made mostly of `[[ … ]]`, `(( … ))`
+// and bare assignments, none of which count there, so every word of every
+// keystroke walked all of it again (#6423).
+//
+// Kept only where reading it says nothing: the body-reading policy, and the
+// three axes it consults each answered Yes or No. An unanswered axis is
+// refused out loud by Runner.ask every time it is reached, so a compound read
+// under one is read every time, exactly as before. The table is this
+// runner's and starts again when the answers move, when it is full, and in a
+// copy of the runner — see clone.
+func (r *Runner) countsKeptForACompound(c syntax.Command) bool {
+	s := r.sem()
+	if s.CompoundPipelineStatusRecord != CompoundPipelineStatusFromTheBody ||
+		!answered(s.AssignmentUpdatesPipelineStatus) || !answered(s.ArrayAssignmentUpdatesPipelineStatus) ||
+		!answered(s.TestAndArithmeticUpdatePipelineStatus) {
+		return r.countsForPipelineStatusRead(c)
+	}
+	under := pipeCountsAnswers{
+		assignment:      s.AssignmentUpdatesPipelineStatus,
+		arrayAssignment: s.ArrayAssignmentUpdatesPipelineStatus,
+		testAndArith:    s.TestAndArithmeticUpdatePipelineStatus,
+	}
+	if r.pipeCounts == nil || r.pipeCountsUnder != under || len(r.pipeCounts) >= pipeCountsKept {
+		r.pipeCounts = make(map[syntax.Command]bool, 64)
+		r.pipeCountsUnder = under
+	}
+	if counts, ok := r.pipeCounts[c]; ok {
+		return counts
+	}
+	counts := r.countsForPipelineStatusRead(c)
+	r.pipeCounts[c] = counts
+	return counts
+}
+
+// answered reports whether an axis holds an answer rather than Unspecified.
+func answered(a Answer) bool { return a == Yes || a == No }
+
+// pipeCountsAnswers is the three axes a compound's answer was read under.
+type pipeCountsAnswers struct {
+	assignment, arrayAssignment, testAndArith Answer
+}
+
+// pipeCountsKept bounds Runner.pipeCounts. A program's compounds are a few
+// hundred; text read again at run time — `eval` in a loop — is new commands
+// every time, and would grow the table forever.
+const pipeCountsKept = 4096
+
+// countsForPipelineStatusRead is countsForPipelineStatus read from the command.
+//
 // Everything not named here does, in every shell that keeps a record at all,
 // so nothing is asked about it. The three that are named are the three zsh
 // runs without making a job; a redirection on any of them makes one, which is
 // why each checks for that before it asks anything.
-func (r *Runner) countsForPipelineStatus(c syntax.Command) bool {
+func (r *Runner) countsForPipelineStatusRead(c syntax.Command) bool {
 	switch x := c.(type) {
 	case *syntax.SimpleCmd:
 		if len(x.Args) > 0 || len(x.Assigns) == 0 || len(x.Redirs) > 0 {
@@ -226,11 +294,24 @@ func (r *Runner) countsForPipelineStatus(c syntax.Command) bool {
 	case *syntax.NamespaceClause:
 		return r.compoundCounts(x.Redirs, x.List)
 	case *syntax.IfClause:
-		lists := [][]*syntax.Stmt{x.Cond, x.Then, x.Else}
-		for _, e := range x.Elifs {
-			lists = append(lists, e.Cond, e.Then)
+		// The branches are read where they stand rather than gathered into a
+		// list first, which was an allocation for every `if` with an `elif`.
+		if decided, counts := r.compoundDecidedWithoutTheBody(); decided {
+			return counts
 		}
-		return r.compoundCounts(x.Redirs, lists...)
+		if len(x.Redirs) > 0 {
+			return true
+		}
+		if r.listCountsForPipelineStatus(x.Cond) || r.listCountsForPipelineStatus(x.Then) ||
+			r.listCountsForPipelineStatus(x.Else) {
+			return true
+		}
+		for _, e := range x.Elifs {
+			if r.listCountsForPipelineStatus(e.Cond) || r.listCountsForPipelineStatus(e.Then) {
+				return true
+			}
+		}
+		return false
 	case *syntax.LoopClause:
 		return r.compoundCounts(x.Redirs, x.Cond, x.Body)
 	case *syntax.ForClause:
@@ -240,11 +321,19 @@ func (r *Runner) countsForPipelineStatus(c syntax.Command) bool {
 	case *syntax.RepeatClause:
 		return r.compoundCounts(x.Redirs, x.Body)
 	case *syntax.CaseClause:
-		lists := make([][]*syntax.Stmt, 0, len(x.Items))
-		for _, it := range x.Items {
-			lists = append(lists, it.Body)
+		// The arms where they stand, for the `if`'s reason above.
+		if decided, counts := r.compoundDecidedWithoutTheBody(); decided {
+			return counts
 		}
-		return r.compoundCounts(x.Redirs, lists...)
+		if len(x.Redirs) > 0 {
+			return true
+		}
+		for _, it := range x.Items {
+			if r.listCountsForPipelineStatus(it.Body) {
+				return true
+			}
+		}
+		return false
 	case *syntax.TryClause:
 		return r.compoundCounts(x.Redirs, x.Try, x.Always)
 	case *syntax.AnonFunc:

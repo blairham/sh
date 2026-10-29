@@ -18647,9 +18647,14 @@ type Semantics struct {
 	//	bash 5.3.20 as sh                 T, st=130 l=[]
 	//	ksh93u+                           T, st=258 l=[]
 	//
-	// So four answers, and the two abandoning statuses of bash's POSIX mode
-	// and of ksh93 are not modeled: those columns answer no here and keep
-	// reading, which is the row recorded for them.
+	// So four answers. ksh93 answers yes, and ReadAbandonedReportsTheSignal
+	// carries its status; the abandoning status of bash's POSIX mode is not
+	// modeled, and that column answers no and keeps reading.
+	//
+	// What arrives after the read was given up is the next read's, whole, in
+	// every column that gives it up: `late` written after the signal is
+	// `next [late]` to a second read in dash, ksh93 and ash. Measured
+	// 2026-10-29 (#7024); see Runner.pollingTrapSource.
 	ReadIsAbandonedByATrappedSignal Answer
 	// ReadAbandonedReportsTheSignal has a `read` given up for a trapped
 	// signal answer 256 plus the signal's number, rather than the 1 an end

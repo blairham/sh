@@ -13,9 +13,9 @@ import (
 
 // polledTimedSource is the byte source of a `read -t` on a stream that is a
 // descriptor — standard input, a pipe, a `-u` number, the terminal `read -k`
-// holds — and false where the stream is not one that can be polled. Those
-// keep timedByteSource, whose reader goroutine is the only way to put a
-// deadline on an io.Reader.
+// holds, a coprocess's output — and false where the stream is not one that can
+// be polled. Those keep timedByteSource, whose reader goroutine is the only way
+// to put a deadline on an io.Reader.
 func polledTimedSource(
 	ctx context.Context,
 	in io.Reader,
@@ -25,15 +25,52 @@ func polledTimedSource(
 	if timeout <= 0 {
 		return nil, false
 	}
+	fd, can := pollableDescriptor(in)
+	if !can {
+		return nil, false
+	}
+	return pollingDeadlineSource(ctx, in, fd, timeNow().Add(timeout), bounded), true
+}
+
+// pollableDescriptor is the descriptor under in, where in is one and can be
+// asked whether a byte is there.
+//
+// can is false where the question cannot be put to this descriptor at all, and
+// the caller then falls back to a reader goroutine: a `read -t` that reported a
+// timeout it never waited for, or a `read` a trapped signal could no longer
+// give up, would be worse than one that loses a byte.
+func pollableDescriptor(in io.Reader) (fd int, can bool) {
 	f, ok := in.(interface{ Fd() uintptr })
 	if !ok {
-		return nil, false
+		return 0, false
 	}
-	fd := int(f.Fd())
+	fd = int(f.Fd())
 	if fd < 0 {
-		return nil, false
+		return 0, false
 	}
-	return pollingDeadlineSource(ctx, in, fd, timeNow().Add(timeout), bounded)
+	if _, asked := fdset.ReadableWithin(fd, 0); !asked {
+		return 0, false
+	}
+	return fd, true
+}
+
+// polledSource reads in a byte at a time, and reads each byte only once wait
+// has said it is there.
+//
+// wait answers evByte when a read would find something without waiting — a
+// byte, or the end of the stream — and otherwise the event that ends the read
+// instead. Nothing is asked of the stream until then, so whatever ends a read
+// early leaves no read of it in flight to take a byte somebody else is owed.
+// Two waits use it: a deadline's (pollingDeadlineSource) and a trapped
+// signal's (Runner.pollingTrapSource).
+func polledSource(in io.Reader, wait func() int) func() (byte, int) {
+	read := directByteSource(in)
+	return func() (byte, int) {
+		if ev := wait(); ev != evByte {
+			return 0, ev
+		}
+		return read()
+	}
 }
 
 // timeNow is time.Now, named so the deadline has one source.
@@ -85,42 +122,30 @@ func timeNow() time.Time { return time.Now() }
 // stream rather than a deadline, and pollingByteSource answers it — one
 // dialect keeps taking whatever is waiting there, which is exactly what a
 // deadline that has passed must not do.
-//
-// asked is false where the question cannot be put to this descriptor at all,
-// and the caller then falls back to the goroutine: a `read -t` that reported a
-// timeout it never waited for would be worse than one that loses a byte.
 func pollingDeadlineSource(
 	ctx context.Context,
 	in io.Reader,
 	fd int,
 	deadline time.Time,
 	bounded bool,
-) (next func() (byte, int), asked bool) {
-	if _, can := fdset.ReadableWithin(fd, 0); !can {
-		return nil, false
-	}
-	var ch [1]byte
+) func() (byte, int) {
 	first := true
-	return func() (byte, int) {
+	return polledSource(in, func() int {
 		if first || bounded {
 			if !first && !timeNow().Before(deadline) {
-				return 0, evTimeout
+				return evTimeout
 			}
 			ready, can := awaitReadable(ctx, fd, deadline)
 			if !can {
-				return 0, evEOF
+				return evEOF
 			}
 			if !ready {
-				return 0, evTimeout
+				return evTimeout
 			}
 		}
 		first = false
-		n, err := in.Read(ch[:])
-		if n == 0 || err != nil {
-			return 0, evEOF
-		}
-		return ch[0], evByte
-	}, true
+		return evByte
+	})
 }
 
 // canceledReadNoticedWithin is how long a timed read waiting on a descriptor
@@ -128,24 +153,27 @@ func pollingDeadlineSource(
 const canceledReadNoticedWithin = 50 * time.Millisecond
 
 // awaitReadable waits until fd has something to read, the deadline passes, or
-// ctx ends, and looks at least once whichever comes first.
+// ctx ends, and looks at least once whichever comes first. A zero deadline is
+// none, and only ctx ends that wait short of a byte.
 //
 // The wait is cut into slices where ctx can end, because the goroutine this
 // source replaces gave up the moment its context did, and an embedder that
 // cancels a running line — termhost's Kill does exactly that — expects a timed
 // read inside it to stop rather than to run out its deadline. A context that
-// can never end is waited on in one call.
+// can never end is waited on in one call where there is a deadline, and in
+// the same slices where there is none.
 func awaitReadable(ctx context.Context, fd int, deadline time.Time) (ready, can bool) {
+	endless := deadline.IsZero()
 	for {
 		left := time.Until(deadline)
-		if ctx.Done() != nil && left > canceledReadNoticedWithin {
+		if endless || (ctx.Done() != nil && left > canceledReadNoticedWithin) {
 			left = canceledReadNoticedWithin
 		}
 		ready, can = fdset.ReadableWithin(fd, left)
 		if ready || !can {
 			return ready, can
 		}
-		if ctx.Err() != nil || !timeNow().Before(deadline) {
+		if ctx.Err() != nil || (!endless && !timeNow().Before(deadline)) {
 			return false, true
 		}
 	}

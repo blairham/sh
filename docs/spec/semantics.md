@@ -11526,8 +11526,26 @@ it took the next byte to arrive and threw it away — `next [c]` and `next
 already there and drop it, which is how #7021 was found. A timed read of a
 descriptor now asks the descriptor whether a byte is there before reading
 one, so nothing is ever in flight. A stream that is not a descriptor can
-only be read on a goroutine and still pays the cost; the coprocess route is
-one of those today (#7025).
+only be read on a goroutine and still pays the cost.
+
+A coprocess's output is a descriptor too, and was read as if it were not:
+`read -p` reads through a wrapper that notices the end of the coprocess's
+output, and the wrapper hid the descriptor under it. Measured 2026-10-29
+against ksh93u+ and zsh 5.9.2, with the coprocess writing `xy` only once the
+script tells it to through a fifo:
+
+    ksh: { read x <p; echo xy; } |& v=old; read -t 0.01 -r -p v; echo "st=$? [$v]"
+         echo go >p; read -r -p w; echo "next [$w]"
+
+    -t 0.01, nothing until it returned   both  st=1 [old]   next [xy]
+    -t 0, nothing waiting                both  st=1 [old]   next [xy]
+    -t 0, `ab` waiting, `c` after        ksh93 st=1 [old]   next [c]
+
+This shell answered `next [y]` to the first — the goroutine's abandoned read
+again — and never finished the other two: `read -t 0 -p` was told input was
+waiting, read, and blocked on a coprocess that was waiting for it (#7025). The
+wrapper hands the descriptor through now, so a timed `read -p` polls and `read
+-t 0 -p` asks the pipe, as every other descriptor does.
 
 **A byte already there is taken however short the deadline.** A deadline
 bounds a wait, and a byte in the stream makes nobody wait. bash takes `abc`
@@ -34224,8 +34242,52 @@ that uses the name rather than every command it starts.
 | ksh93u+ | `T`, `st=258 l=[]` |
 
 dash and ash give the read up as at the end of input and run the handler once
-the builtin has returned; the field answers yes there. The abandoning
-statuses of bash's POSIX mode and of ksh93 are not modeled: those columns
-answer no and keep reading. A byte that arrives after an abandoned read was
-given up is lost, which no shell in the panel does — dash hands it to the
-next read (#7024). `read -t` paid the same cost over a pipe until #7021.
+the builtin has returned; the field answers yes there. ksh93 gives it up too,
+and answers the signal rather than 1 — `ReadAbandonedReportsTheSignal` (#5816).
+The abandoning status of bash's POSIX mode is not modeled: that column answers
+no and keeps reading.
+
+#### What a read given up leaves in the stream
+
+Measured 2026-10-29 against dash 0.5.12, ksh93u+ 2012-08-01 and BusyBox ash
+1.37.0 in the pinned alpine image, with a second read after the first, from
+`-c` and from a script file alike:
+
+    exec 3<>"$1"; trap "echo T" INT
+    (sleep 0.3; kill -INT $$; sleep 0.5; echo late >"$1") &
+    read -r l <&3; echo "st=$? l=[$l]"; read -r m <&3; echo "next [$m]"
+
+    nothing in before the signal, `late` after:
+      dash, ash   T  st=1 l=[]     next [late]
+      ksh93       T  st=258 l=[]   next [late]
+
+    `ab` in before the signal, `cd` after:
+      dash        T  st=1 l=[ab]   next [cd]
+      ksh93       T  st=258 l=[ab] next [cd]
+      ash         T  st=1 l=[]     next [cd]
+
+The same holds over a pipe on standard input, except that ksh93 there does not
+give a read up once part of its line is in (#7027).
+
+**What arrives after the read was given up is the next reader's, whole, in
+all three.** What arrived before it is the first read's: dash and ksh93 keep it
+in the name, ash drops it — ash assigns a field as its separator arrives, so a
+read given up mid-field touches no name (#7028). None of them leaves it in the
+stream.
+
+This shell read on a goroutine so that a signal could end the wait, and that
+read stayed parked on the stream after the builtin had returned — so it took
+the next byte to arrive and threw it away: `next [ate]` and `next [d]`, in all
+three dialects and on a coprocess's output as well (#7024). A descriptor is now
+waited on rather than read until its byte is there, which is the wait an
+expired `read -t` already used (#7021): a goroutine asks whether a byte is
+there, never reads one, and the signal ends the wait, so nothing is in flight
+when the read is given up. A stream that is not a descriptor is still read on
+a goroutine and still pays the cost.
+
+A signal already waiting when the next byte is asked for gives the read up
+there, whether or not the byte is in; that is the reading this shell has
+always had, and ksh93's on a fifo. dash and ash instead finish a line whose
+input is still arriving and give up only a wait that a signal interrupts
+(#7027). With the stream waited on rather than read, the give-up partway no
+longer costs the byte it used to.

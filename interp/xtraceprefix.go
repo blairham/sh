@@ -273,21 +273,6 @@ func (r *Runner) expandPrefixTraceValuesHolding(assigns []*syntax.Assign, held *
 	}
 }
 
-// prefixTraceRecords is the prefix-trace state of one command, taken by a
-// command this shell runs in the middle of it and put back when that one
-// ends. See Runner.simple.
-type prefixTraceRecords struct {
-	assigns []*syntax.Assign
-	values  []string
-	early   []*syntax.Assign
-	joins   []string
-	globs   []prefixGlobMatch
-	speaker prefixValueSpeaker
-	// subscripts is what the walk read of each subscripted entry's
-	// subscript. See interp/prefixsubscriptinturn.go.
-	subscripts []*prefixSubscriptRead
-}
-
 // recordPrefixTraceValue keeps this entry's expansion for the trace and for
 // the route that applies it, and hands back the value the name comes to.
 //

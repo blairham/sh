@@ -63,6 +63,23 @@ zle -N history-incremental-search-backward w
 			t.Fatalf("typing %q: %v", keys, err)
 		}
 	}
+	// wrapperSaw is the line the wrapper wrote, once the whole of it is there.
+	// The file being there is not enough: the redirection creates it before
+	// print writes to it, so a look between the two finds a file that exists
+	// and holds nothing (#6997). The newline is the last thing print writes.
+	wrapperSaw := func(after string) string {
+		t.Helper()
+		for deadline := time.Now().Add(jobNoticeBudget); ; time.Sleep(10 * time.Millisecond) {
+			got, there := file("after")
+			if there && strings.HasSuffix(got, "\n") {
+				return got
+			}
+			if time.Now().After(deadline) {
+				t.Fatalf("after %s the wrapper wrote no whole line (file there %v, holding %q):\n%s",
+					after, there, got, grid(screen))
+			}
+		}
+	}
 
 	// The history the search is asked about: the line it should find, then a
 	// newer one it should pass over. The first leaves a file behind, which is
@@ -77,10 +94,11 @@ zle -N history-incremental-search-backward w
 	// The search, drawn: zsh's shape keeps the prompt and the line, and puts
 	// the search on the row under them.
 	send("\x12ranA")
+	searched := -1
 	await("the search row under the line holding the match", func() bool {
 		g := grid(screen)
-		p := promptRow(g)
-		return p >= 0 && g.Text(p) == jobNoticeMark+found && g.Text(p+1) == "bck-i-search: ranA_"
+		searched = promptRow(g)
+		return searched >= 0 && g.Text(searched) == jobNoticeMark+found && g.Text(searched+1) == "bck-i-search: ranA_"
 	})
 	if _, ok := file("after"); ok {
 		t.Fatal("the wrapper's code after the call ran before the search ended")
@@ -90,12 +108,19 @@ zle -N history-incremental-search-backward w
 	// match in the line, and then the line itself runs.
 	send("\r")
 	await("the found line to run", func() bool { _, ok := file("ranA"); return ok })
-	if got, _ := file("after"); got != "rc=0 B="+found+"\n" {
-		t.Errorf("after the search the wrapper saw %q, want %q", got, "rc=0 B="+found+"\n")
+	if got, want := wrapperSaw("Return"), "rc=0 B="+found+"\n"; got != want {
+		t.Errorf("after the search the wrapper saw %q, want %q", got, want)
 	}
-	if err := screen.Await(jobNoticeMark, jobNoticeBudget); err != nil {
-		t.Fatalf("no prompt after the found line ran: %v", err)
-	}
+	// And the next prompt, empty and below the search, read off the grid. Not
+	// screen.Await on the mark: the search redrew the prompt on every key, so
+	// one is already waiting past Await's cursor and it returns at once. Keys
+	// sent then can reach the terminal before the editor has taken it back,
+	// and the terminal's own line discipline eats the ^R as a reprint.
+	await("an empty prompt under the line that ran", func() bool {
+		g := grid(screen)
+		p := promptRow(g)
+		return p > searched && g.Text(p) == strings.TrimSpace(jobNoticeMark)
+	})
 
 	// Abandoned, by either key: the line goes back to what was typed and
 	// stays on the line, and the call answers 3.
@@ -108,8 +133,7 @@ zle -N history-incremental-search-backward w
 			return p >= 0 && g.Text(p) == jobNoticeMark+found && g.Text(p+1) == "bck-i-search: ranA_"
 		})
 		send(abandon.key)
-		await("the wrapper to finish after "+abandon.name, func() bool { _, ok := file("after"); return ok })
-		if got, want := func() string { s, _ := file("after"); return s }(), "rc=3 B=abc\n"; got != want {
+		if got, want := wrapperSaw(abandon.name), "rc=3 B=abc\n"; got != want {
 			t.Errorf("after %s the wrapper saw %q, want %q", abandon.name, got, want)
 		}
 		await("the typed line back, with no search row, after "+abandon.name, func() bool {

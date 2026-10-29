@@ -9114,7 +9114,12 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 	// back at the end of the command as the backstop; the walk releases it
 	// once every operand is expanded. See interp/declarationinturn.go.
 	var turn *operandsInTurn
-	defer func() { turn.release(r) }()
+	// The assignment prefix's values, held under their names while a
+	// declaration's operands expand in the columns that work through the
+	// prefix first, and put back beneath what the walk held. See
+	// interp/prefixoperandorder.go.
+	var prefixHeld heldPrefix
+	defer func() { turn.release(r, &prefixHeld) }()
 	// How much of argv had been built when each of the command's words was
 	// reached, which is what puts an array-literal operand back at the index
 	// it was written at. See interp/operandwrittenorder.go.
@@ -9238,7 +9243,7 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 				// declaration's operand at all, and an ordinary command's
 				// argument is expanded before its prefix everywhere. See
 				// interp/prefixoperandorder.go.
-				if !r.prefixBeforeADeclarationsOperand(c.Assigns) {
+				if !r.prefixBeforeADeclarationsOperand(c.Assigns, &prefixHeld) {
 					break
 				}
 				// Stored and traced as it is reached, in the column that
@@ -9303,7 +9308,7 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 			}
 			// The appending spelling of the same operand, so the same
 			// ordering question with the same answer.
-			if !r.prefixBeforeADeclarationsOperand(c.Assigns) {
+			if !r.prefixBeforeADeclarationsOperand(c.Assigns, &prefixHeld) {
 				break
 			}
 			var on bool
@@ -9766,7 +9771,7 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 		// parentheses can hold and it answers the same way in every column.
 		// Asked only where there is an operand, so a command with none asks
 		// nothing. See interp/prefixoperandorder.go.
-		if !r.prefixBeforeADeclarationsOperand(c.Assigns) {
+		if !r.prefixBeforeADeclarationsOperand(c.Assigns, &prefixHeld) {
 			r.status = 2
 			return nil
 		}
@@ -9780,8 +9785,9 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 	}
 	expandedAll := r.expandArrayOperands(tableLetterAmongTheOptions(argv), indexedLetterAmongTheOptions(argv))
 	// Every operand is expanded, so what the walk held for the ones behind
-	// it goes back before the utility stores them for real.
-	turn.release(r)
+	// it goes back before the utility stores them for real, and the prefix
+	// beneath it before the route stores that.
+	turn.release(r, &prefixHeld)
 	keepForArrays.undo()
 	if !expandedAll {
 		// The failure has been reported and has ended what it ends. See

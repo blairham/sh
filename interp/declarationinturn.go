@@ -148,11 +148,27 @@ func (t *operandsInTurn) wasTraced(a *syntax.Assign) bool {
 	return t != nil && t.traced[a]
 }
 
-// release puts back what the walk held, where there was a walk.
-func (t *operandsInTurn) release(r *Runner) {
+// release puts back what the walk held, where there was a walk, and then what
+// the assignment prefix held beneath it while the operands expanded — see
+// interp/prefixoperandorder.go. In that order, because an operand over a
+// prefix's own name saved the prefix's value as the one to put back.
+//
+// A walk that stopped keeps both. The column with the walk stores the prefix
+// ahead of the first operand, so the prefix is among what it had stored when
+// the walk ended: measured 2026-10-29 on ksh93u+ from `-c` and a script file,
+// `trap 'echo "v=$v x=$x"' EXIT; readonly r=0; v=old; v=new typeset x=$v
+// r=2` writes `v=new x=new`, and `v=new typeset x=$v y=${q?boom}` the same.
+// The caveat at the top of this file about a walk inside a function holds for
+// the prefix as it does for the operands (#6999).
+func (t *operandsInTurn) release(r *Runner, prefix *heldPrefix) {
 	if t != nil {
+		if t.stopped {
+			prefix.undo = nil
+			return
+		}
 		t.held.release(r)
 	}
+	prefix.release(r)
 }
 
 // declarationWouldShadow reports whether the utility is about to give this

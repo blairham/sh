@@ -53,6 +53,38 @@ import "github.com/blairham/sh/syntax"
 // And two prefix entries stay in written order on either side of the split:
 // `P1=$(…) P2=$(…) export s=$(…)` is `OP P1 P2` in bash and dash and
 // `P1 P2 OP` in ksh93 and zsh (#3814).
+//
+// **And the operand sees what the prefix came to.** Working through the
+// prefix first is not only an order of side effects: the two columns that do
+// it have each value under its name by the time the operand expands. Measured
+// 2026-10-29 from `-c` and from a script file under `env -i
+// PATH=/usr/bin:/bin`, against ksh93u+ 2012-08-01, zsh 5.9.2, GNU bash 5.3.20,
+// bash 3.2.57 and dash 0.5.12:
+//
+//	                                             ksh93u+, zsh   both bash, dash
+//	v=old; v=new export y=$v                     y=new          y=old
+//	unset v; v=new export y=$v                   y=new          y=
+//
+//	                                             ksh93u+, zsh   both bash
+//	v=old; a=1 v=new b=2 typeset y=$v$a$b        y=new12        y=old
+//	v=old; v=new typeset y=$v z=$v               y=new z=new    y=old z=old
+//	v=old; v=new typeset -a a=($v)               a=new          a=old
+//	v=old; v=new typeset y=$(echo "$v")          y=new          y=old
+//	f() { v=new typeset y=$v; …; }; v=old; f     y=new          y=old
+//
+// So no column expands the prefix first and keeps it out of the operand's
+// sight, and the question is the one this axis already asks rather than a
+// second axis beside it: the columns that answer No have not expanded the
+// prefix when the operand expands, so there is nothing for it to see. What
+// the operand sees is held the way interp/prefixsees.go holds an entry for
+// the entries behind it, and put back before the route stores the prefix for
+// real, so the route's own scope and persistence are unchanged: zsh still
+// gives `v` back as `old` afterwards and ksh93 still keeps `new`. An operand
+// over the prefix's own name stands over it — `v=new typeset v=x y=$v` is
+// `y=x` in ksh93u+, which stores its operands in turn, and `y=new` in zsh
+// 5.9.2, which does not. A command substitution sees the held value too, and
+// a child sees it where the name was already exported: `export v=old; v=new
+// typeset y=$(/usr/bin/printenv v)` is `y=new` in zsh 5.9.2 (#6999).
 
 // prefixBeforeADeclarationsOperand works through this command's assignment
 // prefix ahead of the operand, in the two columns that do it that way.
@@ -61,13 +93,15 @@ import "github.com/blairham/sh/syntax"
 // to be about, which is what keeps `x=1 cmd` and a bare `export s=1` from
 // asking anything at all.
 //
-// The values are put aside rather than applied: the store still runs where it
-// always ran, and reads them back through Runner.prefixExpansion, so nothing
-// here expands a value twice. What moves is when the substitution in it runs.
+// Each value is held under its name in held, for the operands to see, and is
+// not applied: the store still runs where it always ran, once the caller has
+// put held back, and reads the values back through Runner.prefixExpansion, so
+// nothing here expands a value twice. Called again for each operand, and an
+// entry already expanded is neither expanded nor held a second time.
 //
 // Reports whether the command may carry on — an unanswered axis is refused
 // like any other.
-func (r *Runner) prefixBeforeADeclarationsOperand(assigns []*syntax.Assign) bool {
+func (r *Runner) prefixBeforeADeclarationsOperand(assigns []*syntax.Assign, held *heldPrefix) bool {
 	if !aPrefixIsWritten(assigns) {
 		return true
 	}
@@ -80,7 +114,9 @@ func (r *Runner) prefixBeforeADeclarationsOperand(assigns []*syntax.Assign) bool
 	// The same walk the trace makes, and deliberately the same one: it skips
 	// a frozen name and a refused subscripted word, so a prefix this shell
 	// never evaluates is not evaluated here either, and it records each value
-	// where the store and the trace both read it back from.
-	r.expandPrefixTraceValues(assigns)
+	// where the store and the trace both read it back from. The holding form,
+	// because what it holds must outlive this call: the operand has not
+	// expanded yet.
+	r.expandPrefixTraceValuesHolding(assigns, held)
 	return true
 }

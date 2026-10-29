@@ -753,6 +753,21 @@ func (c *coprocReader) Read(p []byte) (int, error) {
 	return n, err
 }
 
+// Fd is the descriptor under the wrapper, so that what a `read -p` asks of
+// its stream before reading it — whether a byte is there now, whether one
+// will be there before the deadline — is put to the coprocess's pipe. The
+// wrapper hid it, so `read -t 0 -p` was told input was waiting when none was
+// and blocked, and a timed `read -p` fell back to a reader goroutine whose
+// abandoned read took the next byte the coprocess wrote (#7025). A stream
+// with no descriptor under it answers -1, which every caller reads as "not
+// one that can be asked".
+func (c *coprocReader) Fd() uintptr {
+	if f, ok := c.Reader.(interface{ Fd() uintptr }); ok {
+		return f.Fd()
+	}
+	return ^uintptr(0)
+}
+
 // coprocNoticedByAWrite delivers the reaping notice where this shell is about
 // to *write* into the ends a coprocess published under a name.
 //

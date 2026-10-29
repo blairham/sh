@@ -10,17 +10,18 @@ import (
 )
 
 // TestATrappedSignalGivesUpAWaitingRead: the handler runs, the read returns 1
-// with nothing assigned, and the line written afterwards is not read.
-// Measured 2026-10-03 in the pinned image. See
+// with nothing assigned, and the line written afterwards is not read by it —
+// it is the next read's, whole. Measured 2026-10-03 in the pinned image, and
+// the next read 2026-10-29 (#7024). See
 // interp.Semantics.ReadIsAbandonedByATrappedSignal.
 func TestATrappedSignalGivesUpAWaitingRead(t *testing.T) {
 	out, _, err := preset.Combined(t, dialecttest.Base{
 		Name: "ash", Env: []string{"PATH=/usr/bin:/bin"}, Dir: t.TempDir(),
-	}, `mkfifo p; exec 3<>p; trap "echo T" INT; (sleep 0.3; kill -INT $$; sleep 0.5; echo late >p) & read -r l <&3; echo "st=$? l=[$l]"; wait`)
+	}, `mkfifo p; exec 3<>p; trap "echo T" INT; (sleep 0.3; kill -INT $$; sleep 0.5; echo late >p) & read -r l <&3; echo "st=$? l=[$l]"; read -r m <&3; echo "next [$m]"; wait`)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if want := "T\nst=1 l=[]\n"; out != want {
+	if want := "T\nst=1 l=[]\nnext [late]\n"; out != want {
 		t.Errorf("got %q, want %q", out, want)
 	}
 }

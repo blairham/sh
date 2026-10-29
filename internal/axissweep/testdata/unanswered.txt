@@ -258,7 +258,6 @@ ash   ReadArrayDefault
 ash   ReadArrayTakesOneNameOnly
 ash   ReadEchoLettersWriteTheValues
 ash   ReadExactCountKeepsPartial
-ash   ReadPartialCountSucceeds
 ash   ReadTypedValueFailureIsAnAssignmentFailure
 ash   TypedValueFailureGivesUpTheLine
 ash   ReadonlyAttributeCanBeRemoved

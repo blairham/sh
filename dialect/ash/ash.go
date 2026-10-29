@@ -2648,6 +2648,15 @@ func Semantics() interp.Semantics {
 	s.ReadCountJudgesTheNamesAfterTheFirst = interp.Yes
 	// See interp.Semantics.ReadCountFillsTheFirstNameWhole (#6776).
 	s.ReadCountFillsTheFirstNameWhole = interp.No
+	// A count the input ends short of is a failure that keeps what arrived:
+	// `printf ab | { read -n 3 v; echo "st=$? [$v]"; }` is `st=1 [ab]`, and
+	// so is every spelling around it — with -r, -t 1, -d x, into a bare
+	// REPLY, from -c and from a script file. Two names split what arrived
+	// (`a b` under -n 5 is `st=1 [a][b]`) and a trailing backslash is
+	// dropped without -r and kept with it (`[a]`, `[a\]`), both at 1.
+	// bash 5.3 and 3.2 answer each row identically and ksh93 calls them all
+	// 0. Measured 2026-10-29 in the pinned image, BusyBox v1.37.0 (#7033).
+	s.ReadPartialCountSucceeds = interp.No
 
 	// `set -e` stops for a failure only pipefail saw: `set -eo pipefail;
 	// false | true; echo reached` reaches nothing and the shell ends at 1,

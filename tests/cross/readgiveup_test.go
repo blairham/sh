@@ -44,7 +44,7 @@ const (
 	bothWays    = `exec 3<>p`
 	readingOnly = `exec 4<>p 3<p`
 	moreBlocks  = `printf %s "$c"; printf %s "$c"; sleep 0.2;`
-	thenUSR1    = `sleep 0.5; kill -USR1 $$; sleep 0.3;`
+	thenUSR1    = `sleep 3; kill -USR1 $$; sleep 0.3;`
 )
 
 func TestATrappedSignalGivesUpAReadWhereTheShellsDo(t *testing.T) {
@@ -74,7 +74,11 @@ func TestATrappedSignalGivesUpAReadWhereTheShellsDo(t *testing.T) {
 		{"arriving both ways", "ksh", aLineStillArriving(bothWays, moreBlocks), "", 262144},
 		// The same, with no more bytes after INT and a USR1 once the read is
 		// waiting: the second signal lands in a wait and gives the read up in
-		// dash, and ksh93 reading a line it has begun reads on.
+		// dash, and ksh93 reading a line it has begun reads on. Three seconds
+		// rather than the half second the real shells need, because a Linux
+		// pipe holds 64 KiB and this shell under the race detector took 0.8 s
+		// to drain it: a USR1 landing with bytes still there is, rightly, not
+		// a give-up.
 		{"second signal both ways", "dash", aLineStillArriving(bothWays, thenUSR1), "T\nU\nst=1 len=131072 next=0\n", 0},
 		{
 			"second signal reading only", "dash", aLineStillArriving(readingOnly, thenUSR1),

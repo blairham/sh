@@ -34316,7 +34316,8 @@ stops at the next byte, so where the line splits between the two reads differs
 and no byte is lost either way.
 
 **A second signal.** The same, with nothing written after INT and a USR1
-(`trap "echo U" USR1`) half a second later, once the read is waiting:
+(`trap "echo U" USR1`) three seconds later, once the read is waiting (half a
+second answers the same in all three):
 
 | | `3<>p` | `3<p` |
 | --- | --- | --- |

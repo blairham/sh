@@ -16,11 +16,9 @@ package driver_test
 // and 12, which is where bash's own `exec {v}>f` allocates from, and every
 // assertion in that file would still pass. This one would not.
 //
-// 99 off Linux: the hold costs only its fcntl calls here. Linux's is 56 — see
-// lowfds_linux.go.
-const nameableCeiling = 99
+// 56 off Linux as on it (#6491): see lowfds_unixother.go.
+const nameableCeiling = 56
 
 // replacementProbes are the numbers the replacement test parks on: every
-// single digit, the first number bash's `{v}` allocates, a number past the
-// Linux ceiling, and the ceiling.
-var replacementProbes = []int{3, 4, 5, 6, 7, 8, 9, 10, 63, 99}
+// single digit, the first number bash's `{v}` allocates, and the ceiling.
+var replacementProbes = []int{3, 4, 5, 6, 7, 8, 9, 10, 56}

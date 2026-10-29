@@ -83,11 +83,10 @@ import (
 // program that imports driver, embedders included. #731 recorded that option 2
 // "does not help an embedder"; done here rather than in a main it does.
 
-// lowDescriptorCeiling is the highest number the runtime is kept off, and it
-// is a per-platform constant: 99 everywhere but Linux, where it is 56. See
-// lowfds_linux.go and lowfds_unixother.go for each number's reasons.
-//
-// 99 is where a hand-written descriptor number stops, measured three ways:
+// lowDescriptorCeiling is the highest number the runtime is kept off. It is
+// 56 on every platform, for a different reason on each: see lowfds_linux.go
+// and lowfds_unixother.go. It was 99, and 99 is where a hand-written
+// descriptor number stops, measured three ways:
 //
 //   - The panel can only *name* single digits. `exec 20>/dev/null` is a
 //     redirection in bash alone; dash, ksh93 and zsh all read the number as a
@@ -101,15 +100,13 @@ import (
 //     allocated number cannot collide with the runtime by construction —
 //     the kernel hands out a number precisely because nothing holds it.
 //
-// Linux gives up 57 to 99 of that headroom, because there the hold itself is
-// what costs: holding past 63 grows the descriptor table, and a multithreaded
-// process waits for the kernel to do that (#6396). 56 keeps every number the
-// panel can name and every number `{v}` allocates.
-//
-// The cost is otherwise the hold itself, which is one fcntl per free number
-// and is paid once: measured at 50µs on darwin against a 3ms shell startup. A
-// ceiling of 255 would cost twice that and buy nothing any measurement here
-// can see.
+// Both platforms give up 57 to 99 of that headroom. On Linux the hold itself
+// is what costs: holding past 63 grows the descriptor table, and a
+// multithreaded process waits for the kernel to do that (#6396). On darwin it
+// is one fcntl per free number, about 0.46M instructions at 99, and the
+// ceiling follows Linux's so a script meets one contract (#6491). 56 keeps
+// every number the panel can name and every number `{v}` allocates. A ceiling
+// of 255 would cost more and buy nothing any measurement here can see.
 //
 // What is left over is written down rather than claimed away: a bash script
 // that names one of the runtime's numbers by hand — just above the ceiling —

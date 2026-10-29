@@ -267,24 +267,24 @@ the script leaves the low numbers briefly free, so the poller lands on
 numbers, both chosen by accident, colliding by construction.
 
 So the shell takes those numbers first. Before anything else runs,
-`driver` holds every descriptor from 3 to a ceiling — 99 on macOS, 56
-on Linux — makes the runtime open everything it opens lazily — the
-poller, and on macOS the signal pipe — and hands the range straight
-back. The runtime ends up just above the ceiling, where nothing a
-script names by accident reaches it, and the hold is over before
-`main`: measured at 50µs on macOS, an order of magnitude below the
-run-to-run spread of the startup measurement in
-[design/startup.md](design/startup.md).
+`driver` holds every descriptor from 3 to a ceiling of 56, makes the
+runtime open everything it opens lazily — the poller, and on macOS the
+signal pipe — and hands the range straight back. The runtime ends up
+just above the ceiling, where nothing a script names by accident
+reaches it, and the hold is over before `main`.
 
-Linux's ceiling is lower because there the hold was not 50µs. The
-kernel starts a process with a 64-entry descriptor table, and growing
-it while the table is shared between threads — every Go process's is
-— waits for an RCU grace period. Holding to 99 took descriptor 64 at
-every start: 8–13 ms of wall time in that one call, and 0.3 ms of CPU
-from the runtime's idle threads waking through it. With the ceiling at
-56 the hold and the runtime's two descriptors end at 60, and a start
-went from 2.31 to 1.95 ms of CPU and from 12.0 to 1.7 ms of wall
-(#6396).
+The ceiling was 99, and Linux lowered it first because there the hold
+was not merely its fcntl calls. The kernel starts a process with a
+64-entry descriptor table, and growing it while the table is shared
+between threads — every Go process's is — waits for an RCU grace period.
+Holding to 99 took descriptor 64 at every start: 8–13 ms of wall time in
+that one call, and 0.3 ms of CPU from the runtime's idle threads waking
+through it. With the ceiling at 56 the hold and the runtime's two
+descriptors end at 60, and a start went from 2.31 to 1.95 ms of CPU and
+from 12.0 to 1.7 ms of wall (#6396). macOS followed so that a script
+meets one ceiling everywhere (#6491): there the hold is only its fcntl
+calls, about 0.46M instructions at 99, and 56 takes 0.30M of them —
+about 0.03 ms of a 3.4 ms zsh start.
 
 The window between placing a descriptor and the `execve` is still
 there. It cannot be closed — `execve` on a multithreaded process kills
@@ -292,11 +292,11 @@ the other threads inside the call, and until it has they are running
 against a table that has already changed. What is fixed is that there
 is no longer anything in the window to hit.
 
-**The limit, recorded rather than claimed away.** The ceiling is 99
-because that is where a hand-written descriptor number stops, and 56 on
-Linux because that is as high as it goes without growing the table;
-both keep every number the panel can name and every number `{v}`
-allocates. Only bash
+**The limit, recorded rather than claimed away.** 99 is where a
+hand-written descriptor number stops, and the ceiling is 56 because that
+is as high as it goes on Linux without growing the table; it keeps
+every number the panel can name and every number `{v}` allocates. Only
+bash
 can *name* a descriptor above 9 at all — dash, ksh93 and zsh read `exec
 20>f` as a command called `20` — the automatic form `exec {v}>f`
 allocates a number the kernel has just said is free and so cannot

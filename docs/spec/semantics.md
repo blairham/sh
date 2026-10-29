@@ -5740,9 +5740,10 @@ descriptors are the script's to hand out and hands that slice to
 of its own — the poller's epoll and eventfd on Linux, a kqueue and a signal
 pipe on macOS — and writing a script's file over one of them is a fatal
 error in the runtime rather than a reportable one. The binary keeps them
-just above a ceiling it holds at startup: 56 on Linux and 99 elsewhere
-(Linux's is lower because holding past 63 grows the kernel's descriptor
-table, which waits out a grace period at every start; #6396). In the
+just above a ceiling it holds at startup: 56 on every platform (Linux's
+was lowered from 99 because holding past 63 grows the kernel's descriptor
+table, which waits out a grace period at every start, #6396, and macOS
+followed so the ceiling is one number, #6491). In the
 golang:1.26.9 image they are 59 and 60. Only bash can name a number that
 high, and every other number above the ceiling is placed as usual.
 

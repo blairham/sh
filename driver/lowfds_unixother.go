@@ -5,11 +5,19 @@
 
 package driver
 
-// lowDescriptorCeiling is 99 wherever the hold does not cost more than its
-// fcntl calls: see lowfds_unix.go for why 99, and lowfds_linux.go for the one
-// platform where it does.
+// lowDescriptorCeiling is 56 off Linux too, so that a script meets the same
+// ceiling on every platform this shell ships for. Linux lowered it for a cost
+// darwin does not have (see lowfds_linux.go); darwin follows for the contract,
+// at the maintainer's decision of 2026-10-28 (#6491).
 //
-// The grace period that makes Linux's table growth expensive is Linux's, and
-// nothing measured on darwin shows the hold costing more than its fcntl
-// calls, so it keeps every number bash can name up to 99.
-const lowDescriptorCeiling = 99
+// The hold here costs only its fcntl calls, and less than #6491 estimated.
+// Measured on macOS arm64, a zsh script file holding one `print`, instructions
+// retired (median of 15): 38.80M at 99, 38.50M at 56 and 38.34M at 9, so the
+// whole hold is about 0.46M and this ceiling takes 0.30M of it. Child CPU,
+// paired over 301 interleaved runs: 3.385 to 3.361 ms, faster in 180 of 301.
+//
+// What it costs a script is what it costs on Linux: the runtime's descriptors
+// now sit on 57 to 59 rather than 100 to 102, and those three numbers are the
+// unplaceable ones. Every number the panel can name and every number `{v}`
+// allocates is still below 56.
+const lowDescriptorCeiling = 56

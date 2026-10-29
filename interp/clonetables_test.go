@@ -183,6 +183,17 @@ func seedStacks(r *Runner) {
 		callPrefixFrame{names: []string{"seed"}, undo: []savedVar{{name: "seed"}}})
 }
 
+// runnerFields is every field of a Runner a clone could share, including the
+// ones a struct embedded in it promotes. The two tests below walked the
+// Runner's own fields, so the records interp/commandrecords.go gathers into an
+// embedded struct would have dropped out of both guarantees the moment they
+// moved — measured: with the clone of prefixTraceAssigns deleted, the stack
+// test still passed. The embedded struct itself is a struct and not a table
+// or a stack, so the kind checks below pass over it and read what it holds.
+func runnerFields() []reflect.StructField {
+	return reflect.VisibleFields(reflect.TypeFor[Runner]())
+}
+
 // TestACloneOwnsEveryStack is TestACloneOwnsEveryTable for the slices, and it
 // exists because that test could not see them: it considers a field only when
 // its kind is exactly reflect.Map, so `scopes []*scope` was skipped outright
@@ -199,12 +210,11 @@ func TestACloneOwnsEveryStack(t *testing.T) {
 	seedStacks(parent)
 
 	pv := reflect.ValueOf(parent).Elem()
-	for i := range pv.NumField() {
-		f := pv.Type().Field(i)
+	for _, f := range runnerFields() {
 		if f.Type.Kind() != reflect.Slice {
 			continue
 		}
-		fv := pv.Field(i)
+		fv := pv.FieldByIndex(f.Index)
 		if fv.IsNil() {
 			t.Errorf("%s is a slice on Runner that seedStacks does not fill in.\n"+
 				"Seed it with spare capacity, then decide: ownTables must copy it, or "+
@@ -224,12 +234,11 @@ func TestACloneOwnsEveryStack(t *testing.T) {
 
 	child := parent.clone()
 	cv := reflect.ValueOf(child).Elem()
-	for i := range pv.NumField() {
-		f := pv.Type().Field(i)
+	for _, f := range runnerFields() {
 		if f.Type.Kind() != reflect.Slice {
 			continue
 		}
-		pp, cp := pv.Field(i).UnsafePointer(), cv.Field(i).UnsafePointer()
+		pp, cp := pv.FieldByIndex(f.Index).UnsafePointer(), cv.FieldByIndex(f.Index).UnsafePointer()
 		shared := pp != nil && pp == cp
 		reason, allowed := sharedStacks[f.Name]
 		switch {
@@ -613,12 +622,11 @@ func TestACloneOwnsEveryTable(t *testing.T) {
 	seedTables(parent)
 
 	pv := reflect.ValueOf(parent).Elem()
-	for i := range pv.NumField() {
-		f := pv.Type().Field(i)
+	for _, f := range runnerFields() {
 		if f.Type.Kind() != reflect.Map {
 			continue
 		}
-		if pv.Field(i).IsNil() {
+		if pv.FieldByIndex(f.Index).IsNil() {
 			t.Errorf("%s is a map on Runner that seedTables does not fill in.\n"+
 				"Seed it, then decide: ownTables must copy it, or sharedTables must say why "+
 				"a subshell may share it. An unseeded table cannot be checked at all, "+
@@ -631,12 +639,11 @@ func TestACloneOwnsEveryTable(t *testing.T) {
 
 	child := parent.clone()
 	cv := reflect.ValueOf(child).Elem()
-	for i := range pv.NumField() {
-		f := pv.Type().Field(i)
+	for _, f := range runnerFields() {
 		if f.Type.Kind() != reflect.Map {
 			continue
 		}
-		pp, cp := pv.Field(i).UnsafePointer(), cv.Field(i).UnsafePointer()
+		pp, cp := pv.FieldByIndex(f.Index).UnsafePointer(), cv.FieldByIndex(f.Index).UnsafePointer()
 		shared := pp != nil && pp == cp
 		reason, allowed := sharedTables[f.Name]
 		switch {

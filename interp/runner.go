@@ -2288,70 +2288,20 @@ type Runner struct {
 	// *language's* rather than the store's still names it in one column —
 	// see Runner.badSubscriptToADeclaration.
 	declarationSpeaker string
-	// prefixCheckedFirst records that this command's assignment prefix has
-	// already been checked for a frozen name, ahead of its values and its
-	// redirections — the order Semantics.PrefixToAFrozenNameIsCheckedFirst
-	// answers. Set for one command and cleared when it is over, so the
-	// dispatch routes skip the value of a frozen name and the ordinary check
-	// does not report the same names a second time.
-	prefixCheckedFirst bool
-	// prefixSpeaker is who a value in the running command's assignment
-	// prefix is located as if it will not expand, decided once per command
-	// from the command itself — and prefixValueSpeaker is that answer armed
-	// for the length of one such expansion. Both are per-command scratch and
-	// both are cleared when the command is over. See
-	// interp/prefixfailurelocation.go.
-	prefixSpeaker prefixValueSpeaker
+	// commandRecords is what the running simple command keeps about itself:
+	// its prefix values and what its walks read, keyed by its own nodes.
+	// Embedded so the fields read as the Runner's, and one struct so that
+	// Runner.simple sets the whole of it aside as a command starts and puts
+	// it back as it ends. See interp/commandrecords.go (#6989).
+	commandRecords
 	// traceLineForAChild says the trace line being written is a command's
 	// that runs in a child, so an open line written ahead of it stays
 	// pending. See openTraceLine.keptForAChild.
 	traceLineForAChild bool
+	// prefixValueSpeaker is the running command's prefixSpeaker armed for
+	// the length of one prefix value's expansion. See
+	// interp/prefixfailurelocation.go.
 	prefixValueSpeaker prefixValueSpeaker
-	// prefixTraceAssigns and prefixTraceValues hold this command's
-	// assignment-prefix values, for the one command being traced. `set -x`
-	// has to write the value it is about to hand over and the route that
-	// applies it has to hand over the same one, and the expansion may run a
-	// command substitution — so it happens once and both read it. Empty for
-	// every command not under `set -x`, which is what keeps this from moving
-	// the expansion of an untraced prefix. See
-	// Runner.expandPrefixTraceValues.
-	//
-	// Two parallel slices rather than a map keyed by the assignment, which
-	// is what this was: a prefix is one, two or three assignments, so the
-	// scan is shorter than hashing a pointer — and a map here is a *table*
-	// on the Runner, which every clone then has to own or be excused from
-	// sharing. TestACloneOwnsEveryTable says so, and it is right to: a
-	// per-command scratch value is not a table and should not have to
-	// pretend to be one.
-	prefixTraceAssigns []*syntax.Assign
-	prefixTraceValues  []string
-	// prefixTracedEarly are the prefix entries already written by the
-	// frozen-name walk, ahead of its refusal. See
-	// Runner.expandThePrefixUpToTheFrozenName. A slice, on the terms
-	// prefixTraceAssigns gives.
-	prefixTracedEarly []*syntax.Assign
-	// prefixTraceJoins is the third, and it holds what an **appending**
-	// entry came to: the name's value at the moment this entry expanded,
-	// with the expansion behind it. Recorded rather than derived again,
-	// because the ordered walk in interp/prefixredirorder.go writes an
-	// entry's own trace line *after* it has held that joined value under the
-	// name — so asking Runner.prefixJoined a second time reads the join back
-	// and appends the word to it twice: `v=14; v+=5 :` traced `+ v=1455`
-	// where the one column that writes an append as its joined value writes
-	// `+ v=145` (#4431). A plain assignment's entry holds its own value, so
-	// the slice is the same length as the two above and is read by index
-	// with them.
-	prefixTraceJoins []string
-	// prefixGlobMatches holds what this command's assignment prefixes
-	// matched, for the one shell that reads a prefix's value as a pattern —
-	// see interp/prefixglob.go. Per-command scratch and not a table, kept
-	// beside the two above and cleared with them, for the same reasons.
-	prefixGlobMatches []prefixGlobMatch
-	// prefixSubscripts is what this command's prefix walk read of each
-	// subscripted entry's subscript, in turn, for the line that writes it and
-	// the store that takes it — see interp/prefixsubscriptinturn.go.
-	// Per-command scratch beside the slices above, for their reasons.
-	prefixSubscripts []*prefixSubscriptRead
 	// prefixHeldNames are the names the running builtin's own assignment
 	// prefix is holding, and prefixKeptNames those of them a declaration
 	// inside it has taken for the shell rather than for the command — see
@@ -3145,9 +3095,6 @@ type Runner struct {
 	// arithStoringAnElement says the keyed store in flight is an arithmetic
 	// expression's. See Runner.refuseAFrozenTableStore.
 	arithStoringAnElement bool
-	// openTraceLiteral is the element literal whose words the open trace line
-	// is waiting for. See Runner.openTraceTakesTheLiteral.
-	openTraceLiteral *syntax.Assign
 	// prefixTraceStoppedForNoParent says the prefix walk met an entry whose
 	// store a missing parent will refuse, so the command's line is not
 	// written. See Runner.walkThePrefixBeforeTheRedirections.
@@ -9025,6 +8972,13 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 	savedArrayOperands := r.arrayOperands
 	savedRejoined := r.operandWasRejoined
 	savedTracedInTurn, savedOwed := r.operandsTracedInTurn, r.emptyKeyWarningsOwed
+	// And what this command records about itself, which is set aside and
+	// not only saved: a command run in the middle of this one — a function
+	// this one calls, which may be this very node again — starts with none
+	// of this one's records, and this one gets them back when it ends. See
+	// interp/commandrecords.go (#6989).
+	outerRecords := r.commandRecords
+	r.commandRecords = commandRecords{}
 	defer func() {
 		r.dashPrecommand = savedDash
 		r.declarationOperands = savedOperands
@@ -9033,6 +8987,7 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 		r.arrayOperands = savedArrayOperands
 		r.operandWasRejoined = savedRejoined
 		r.operandsTracedInTurn, r.emptyKeyWarningsOwed = savedTracedInTurn, savedOwed
+		r.commandRecords = outerRecords
 	}()
 	if assignmentsAlone(c) {
 		return r.assignmentsAloneCommand(ctx, c, fired)
@@ -9873,9 +9828,9 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 	// A frozen name in the prefix, in the dialect that checks it before
 	// anything else this command does. Ahead of the redirections because
 	// that is exactly what the order is about: the same shell reports the
-	// name and then the file where the others report the file alone. Cleared
-	// when the command is over so the flag never outlives it.
-	defer func() { r.prefixCheckedFirst = false }()
+	// name and then the file where the others report the file alone. The flag
+	// is one of this command's records, so Runner.simple puts back the outer
+	// command's when this one is over.
 	// And a subscripted name in the prefix, in the dialect that refuses one.
 	// Here for the reason the frozen-name check is here: bash reports it
 	// before it expands a value, before it writes a trace line and before it
@@ -9950,30 +9905,16 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 		return nil
 	}
 	// A prefix's trace line that stopped short is written if the command
-	// stopped the shell, and then the prefix's trace state is dropped — in
-	// that order, which was two defers' order and is one deferred call now.
-	// See interp/xtraceprefixasitgoes.go.
+	// stopped the shell. See interp/xtraceprefixasitgoes.go.
 	//
-	// **Put back, not dropped.** A command run by this shell in the middle
-	// of another command's expansion — code in a glob qualifier — ends here
-	// too, and dropping the records took the outer command's with them: its
-	// prefix entries expanded before the code were traced as nothing and
-	// expanded a second time by the route that stores them, so `set -x;
-	// y=$(print -u2 sub) x=( [ab](e:"…":) ) print in` ran the substitution
-	// twice. Measured 2026-10-27 on zsh 5.9.2, once (#6752).
-	outerTrace := prefixTraceRecords{
-		assigns: r.prefixTraceAssigns, values: r.prefixTraceValues,
-		early: r.prefixTracedEarly, joins: r.prefixTraceJoins,
-		globs: r.prefixGlobMatches, speaker: r.prefixSpeaker,
-		subscripts: r.prefixSubscripts,
-	}
+	// The prefix's records are not this call's to put back: Runner.simple set
+	// them aside before anything of this command was recorded, and puts the
+	// outer command's back after this has run. Taking them here, partway
+	// through, kept the records the early walks had already made as the
+	// "outer" ones, and a command run in the middle of this one found this
+	// one's under the same node. See interp/commandrecords.go (#6989).
 	defer func() {
 		r.writeHeldPrefixTrace()
-		r.prefixTraceAssigns, r.prefixTraceValues = outerTrace.assigns, outerTrace.values
-		r.prefixTracedEarly = outerTrace.early
-		r.prefixTraceJoins, r.prefixGlobMatches = outerTrace.joins, outerTrace.globs
-		r.prefixSubscripts = outerTrace.subscripts
-		r.prefixSpeaker = outerTrace.speaker
 		// And a child's command run by this command no longer has the open
 		// line in hand. See openTraceLine.keptForAChild.
 		if line := r.openTrace; line != nil && line.owner == r {

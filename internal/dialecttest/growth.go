@@ -47,9 +47,9 @@ const (
 // What it cannot see is a walk that allocates nothing: a scan of the store for
 // its end, which is how the map before #6099 found where an append lands. That
 // cost is the store's own, and interp's TestAppendingToAnIndexedArrayIsLinear
-// times it there, with the collector held off and a ratio wide enough to stand
-// a busy runner. Put back the map and every read and count row here fails;
-// the append row is the one left to that test.
+// times it there, in batches of appends short enough that a busy runner cannot
+// tell a short array from a long one (#7020). Put back the map and every read
+// and count row here fails; the append row is the one left to that test.
 //
 // The test must not be parallel: the figure is the process's, so an
 // allocation by a test running alongside lands in it. Taking the least sample

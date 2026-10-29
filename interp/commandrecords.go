@@ -23,7 +23,7 @@ import "github.com/blairham/sh/syntax"
 //	this engine, all four under `set -x`               the same, lines too
 //
 // bash and ksh record on every run, in the ordered walk they make ahead of the
-// redirections; zsh and dash record only for the trace.
+// redirections; zsh and dash record a call's prefix only for the trace.
 //
 // The records were put back when a command ended, which is what keeps an outer
 // command's across a command run in the middle of it (#6752). They were never

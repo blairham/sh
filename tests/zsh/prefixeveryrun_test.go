@@ -21,7 +21,7 @@ const twoFunctionsOneCallSite = `g() { echo "g v=$v"; }; h() { echo "h v=$v"; d=
 // A command's assignment prefix is expanded again in every run of the command,
 // however many runs of it are under way at once. Measured 2026-10-29 against
 // zsh 5.9.2 under `env -i PATH=/usr/bin:/bin` with `-c`. This dialect records a
-// prefix's values only for the trace, so the untraced rows were right already
+// call's prefix values only for the trace, so the untraced rows were right already
 // and pin that; under `set -x` a function calling itself through `v=$n f` wrote
 // and stored the outer run's value in every frame (#6989). The regular-builtin
 // row is untraced because its line leaves out `builtin` for a reason of its own

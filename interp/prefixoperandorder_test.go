@@ -115,6 +115,50 @@ func prefixOperandFieldsEqual(a, b []string) bool {
 	return true
 }
 
+// And the operand reads what the prefix came to, on the side of the axis that
+// works through the prefix first: the value is under its name while the
+// operand expands, and every operand of the command sees it. On the other
+// side the prefix has not expanded yet, so the operand reads the name as the
+// command found it (#6999).
+func TestADeclarationsOperandSeesThePrefixItWasExpandedBehind(t *testing.T) {
+	t.Parallel()
+	for _, row := range []struct {
+		name, src string
+		want      map[Answer]string
+	}{
+		{"a scalar operand", "v=old; v=new export y=$v\necho \"[$y]\"\n", map[Answer]string{Yes: "[new]\n", No: "[old]\n"}},
+		{"every operand", "v=old; v=new export y=$v z=$v\necho \"[$y $z]\"\n", map[Answer]string{
+			Yes: "[new new]\n", No: "[old old]\n",
+		}},
+		{"an unset name", "unset v; v=new export y=$v\necho \"[$y]\"\n", map[Answer]string{Yes: "[new]\n", No: "[]\n"}},
+		{"a substitution in the operand", "v=old; v=new export y=$(echo \"$v\")\necho \"[$y]\"\n", map[Answer]string{
+			Yes: "[new]\n", No: "[old]\n",
+		}},
+	} {
+		for _, answer := range []Answer{Yes, No} {
+			sem := testSemantics()
+			sem.PrefixExpandedBeforeADeclarationsOperand = answer
+			out, errs := builtinPrefixRun(t, row.src, sem)
+			if out != row.want[answer] {
+				t.Errorf("%s, %v: out = %q (stderr %q), want %q", row.name, answer, out, errs, row.want[answer])
+			}
+		}
+	}
+}
+
+// The control: an ordinary command's argument never sees the prefix, on
+// either side of the axis, because the axis is not asked for it.
+func TestAnOrdinaryArgumentDoesNotSeeThePrefixOnEitherSide(t *testing.T) {
+	t.Parallel()
+	for _, answer := range []Answer{Yes, No} {
+		sem := testSemantics()
+		sem.PrefixExpandedBeforeADeclarationsOperand = answer
+		if out, errs := builtinPrefixRun(t, "v=old; v=new echo \"[$v]\"\n", sem); out != "[old]\n" {
+			t.Errorf("%v: out = %q (stderr %q), want the name as the command found it", answer, out, errs)
+		}
+	}
+}
+
 // And a dialect that has not chosen refuses by name rather than picking one.
 func TestThePrefixOperandOrderIsRefusedWhereTheDialectHasNotChosen(t *testing.T) {
 	t.Parallel()

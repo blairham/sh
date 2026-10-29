@@ -88,11 +88,12 @@ func (e *enteringReader) Read(p []byte) (int, error) {
 // one is, and fails if none ever is: a test that never reached its case has
 // not tested it.
 func TestNothingMoreIsReadOnceTheDeadlineHasPassed(t *testing.T) {
+	r := newTestRunner(t, &Runner{})
 	for range 1000 {
 		rd := &enteringReader{entered: make(chan int, 4), release: make(chan struct{})}
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel()
-		next, stop := (&Runner{}).timedByteSource(ctx, rd, time.Hour, true)
+		next, stop := r.timedByteSource(ctx, rd, time.Hour, true)
 		if _, ev := next(); ev != evByte {
 			stop()
 			close(rd.release)

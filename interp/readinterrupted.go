@@ -44,18 +44,21 @@ const (
 	// lets it run dry now and then does not, and dash on a pipe fed by `tr`
 	// gave a 20 MB line up partway in three runs of four.
 	ReadAbandonedOnlyDuringAWait
-	// ReadAbandonedOnlyAtTheStartOfALine gives the read up only while it is
-	// waiting for the first byte of a line — at its start, or just after a
-	// newline it has read, which is where a continued line or a `-d` record
-	// with a newline in it starts another. Once a byte of the line is in,
-	// the read goes on to the line's end, the deadline of a `-t` still
-	// bounding it, and no signal gives it up. ksh93.
+	// ReadAbandonedOnlyAtTheStartOfALine gives a read of the builtin's
+	// standard input, from a descriptor open for reading alone, that reads
+	// to a delimiter, up only for a signal that lands while it waits for the
+	// first byte of a line — at its start, or just after a newline it has
+	// read, which is where a continued line or a `-d` record with a newline
+	// in it starts another. Once a byte of the line is in, the read goes on
+	// to the line's end, the deadline of a `-t` still bounding it, and no
+	// signal gives it up. ksh93.
 	//
-	// Only on a read of the builtin's standard input, from a descriptor open
-	// for reading alone, that reads to a delimiter. A read given its stream
-	// by `-u` or `-p`, one from a descriptor open for writing as well — `exec
-	// 3<>fifo` — and one that counts with `-n` or `-N` are given up as
-	// ReadAbandonedAtTheNextByte gives them up.
+	// A read given its stream by `-u` or `-p`, or one that counts with `-n`
+	// or `-N`, is given up at the next byte by a signal that arrives during
+	// it. Neither kind is given up by a signal already waiting when it
+	// began: the read goes on. A read from a descriptor open for writing as
+	// well — `exec 3<>fifo` — is given up as ReadAbandonedAtTheNextByte
+	// gives one up, a signal already waiting included.
 	ReadAbandonedOnlyAtTheStartOfALine
 )
 
@@ -91,9 +94,13 @@ type readWatch struct {
 	// inLine is true once a byte of the current line has been read, and
 	// false again after a newline.
 	inLine bool
-	// covered is whether ReadAbandonedOnlyAtTheStartOfALine reaches this
-	// read, worked out the first time it matters: 0 not yet, 1 yes, -1 no.
-	covered int8
+	// began is arrivalMark as the read began: the arrivals before it are not
+	// the read's, in the readings that tell the two apart.
+	began int
+	// bothWays is whether the stream is a descriptor open for writing as well
+	// as reading, worked out the first time it matters: 0 not yet, 1 yes, -1
+	// no. Only ReadAbandonedOnlyAtTheStartOfALine asks.
+	bothWays int8
 }
 
 // readWatchFor is the watch for a read of in, and false where nothing can give
@@ -109,7 +116,7 @@ func (r *Runner) readWatchFor(in io.Reader, byNumber, counted bool) (*readWatch,
 			return nil, false
 		}
 	}
-	return &readWatch{r: r, in: in, byNumber: byNumber, counted: counted}, true
+	return &readWatch{r: r, in: in, byNumber: byNumber, counted: counted, began: r.arrivalMark()}, true
 }
 
 // readingNow is the dialect's answer, asked the first time it is needed. An
@@ -127,19 +134,35 @@ func (w *readWatch) readingNow() ReadAbandonmentReading {
 	return w.reading
 }
 
-// keepsTheLine reports that the read has a line under way that no signal now
-// gives up, which is ReadAbandonedOnlyAtTheStartOfALine's case.
-func (w *readWatch) keepsTheLine() bool {
-	if !w.inLine || w.byNumber || w.counted {
-		return false
-	}
-	if w.covered == 0 {
-		w.covered = 1
+// openBothWays reports that the stream is a descriptor open for writing as
+// well as reading, asked of the kernel once.
+func (w *readWatch) openBothWays() bool {
+	if w.bothWays == 0 {
+		w.bothWays = -1
 		if f, ok := w.in.(interface{ Fd() uintptr }); ok && descriptorOpenForWriting(int(f.Fd())) {
-			w.covered = -1
+			w.bothWays = 1
 		}
 	}
-	return w.covered > 0
+	return w.bothWays > 0
+}
+
+// startOfALine is ReadAbandonedOnlyAtTheStartOfALine's answer for a signal
+// that has arrived, mark being where the arrivals that count start: the
+// current wait's for a line read, and nil where no byte is being waited for.
+// handled is false where the reading falls back to the next byte.
+func (w *readWatch) startOfALine(mark *int) (sig syscall.Signal, gives, handled bool) {
+	if w.openBothWays() {
+		return 0, false, false
+	}
+	if w.byNumber || w.counted {
+		sig, gives = w.r.pendingTrapFrom(w.began)
+		return sig, gives, true
+	}
+	if mark == nil || w.inLine {
+		return 0, false, true
+	}
+	sig, gives = w.r.pendingTrapFrom(*mark)
+	return sig, gives, true
 }
 
 // trapWaiting is a trapped signal that has arrived and not yet been handled,
@@ -165,8 +188,8 @@ func (w *readWatch) givesUpWithAByteThere() (syscall.Signal, bool) {
 	case ReadAbandonedOnlyDuringAWait:
 		return 0, false
 	case ReadAbandonedOnlyAtTheStartOfALine:
-		if w.keepsTheLine() {
-			return 0, false
+		if sig, gives, handled := w.startOfALine(nil); handled {
+			return sig, gives
 		}
 	}
 	return sig, true
@@ -188,8 +211,8 @@ func (w *readWatch) arrivedDuring(mark int) func() (syscall.Signal, bool) {
 		case ReadAbandonedOnlyDuringAWait:
 			return w.r.pendingTrapFrom(mark)
 		case ReadAbandonedOnlyAtTheStartOfALine:
-			if w.keepsTheLine() {
-				return 0, false
+			if sig, gives, handled := w.startOfALine(&mark); handled {
+				return sig, gives
 			}
 		}
 		return sig, true

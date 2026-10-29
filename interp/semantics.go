@@ -18696,15 +18696,26 @@ type Semantics struct {
 	//	ksh93                T, st=0 l=[abcd]      T, st=258 l=[ab]  T, st=258 l=[ab]
 	//
 	// and in every give-up the next read has `cd`, whole. ash's empty `l` is
-	// #7028, not this axis. So dash and ash finish a line still arriving and
-	// give up a wait the signal lands in; a signal that came while bytes were
-	// there does not give up a wait that begins after it, and a second one
-	// that lands in that wait does. ksh93 gives a read on its standard input
-	// from a read-only descriptor up only while the read waits for the first
-	// byte of a line — a newline it has read starts another, so a continued
-	// line is given up after its `\`-newline — and every other read at the
-	// next byte. `-t` reads follow the same readings: `read -r -t 5 l <&3`
-	// with nothing in is `T, st=258 l=[]` in ksh93 and `T, st=1 l=[]` in ash.
+	// #7028, not this axis. A signal already waiting as the read begins —
+	// raised by `$(kill -INT $$)` in the read's own redirection, `ab` there
+	// and `cd` half a second later — gives up none of them: `T, st=0
+	// l=[abcd]` in all three, with `-u`, `-n` and `-t` as well in ksh93, and
+	// with nothing in yet `T, st=0 l=[cd]`. ksh93 on a descriptor open both
+	// ways is the exception, `T, st=258 l=[]` with `ab` left for the next
+	// read.
+	//
+	// So dash and ash give a read up only when the signal lands while it
+	// waits: one that came while bytes were there, or before the read began,
+	// does not give up a wait that begins after it, and a second one that
+	// lands in that wait does. ksh93 gives a read on its standard input from
+	// a read-only descriptor, reading to a delimiter, up only when the signal
+	// lands while it waits for the first byte of a line — a newline it has
+	// read starts another, so a continued line is given up after its
+	// `\`-newline. A `-u` or counted read is given up at the next byte by a
+	// signal that arrives during it (`-u3` over a line still arriving is
+	// `st=258`); one from a descriptor open both ways by any signal waiting.
+	// `-t` reads follow the same readings: `read -r -t 5 l <&3` with nothing
+	// in is `T, st=258 l=[]` in ksh93 and `T, st=1 l=[]` in ash.
 	//
 	// The ksh93 pipe-or-fifo split #7027 was filed under is this rule: a pipe
 	// is open for reading alone, and the fifo it was measured against had

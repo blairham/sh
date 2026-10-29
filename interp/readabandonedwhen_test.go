@@ -21,6 +21,9 @@ func unansweredWhen() Semantics {
 	// rather than the question of what its deadline bounds.
 	s.ReadOptions = "rt:u:"
 	s.ReadTimeoutBoundsReadability = No
+	// And what a command substitution makes of the writer job beside it,
+	// which is not the question either.
+	s.SubshellJobTable = SubshellJobsKept
 	return s
 }
 
@@ -76,33 +79,47 @@ func TestWhenASignalGivesUpAReadIsAskedWhereOneArrives(t *testing.T) {
 	}
 }
 
-// TestEachReadingGivesUpAReadWhereItSays runs the readings on the core vector
-// over one stream — a line under way on a fifo, then a signal while the read
-// waits for the rest — and over a fifo opened both ways, which is the one
-// thing ReadAbandonedOnlyAtTheStartOfALine looks at.
+// TestEachReadingGivesUpAReadWhereItSays runs the readings on this package's
+// vector over two shapes, each on a fifo opened for reading alone and on one
+// opened both ways — the one thing ReadAbandonedOnlyAtTheStartOfALine asks of
+// the descriptor. A line under way and then a signal while the read waits for
+// the rest; and a signal already waiting as the read begins, raised by a
+// command substitution in the read's own redirection, with nothing in yet.
 func TestEachReadingGivesUpAReadWhereItSays(t *testing.T) {
-	src := func(open string) string {
+	during := func(open string) string {
 		return `mkfifo p; ` + open + `; trap 'echo T' USR1; printf ab >p; ` +
 			`(sleep 0.2; kill -USR1 $$; sleep 0.3; printf 'cd\nend\n' >p) & ` +
 			`read -r l <&3; echo "st=$? l=[$l]"; read -r m <&3; echo "next [$m]"; wait`
 	}
-	const gaveUp, readOn = "T\nst=1 l=[ab]\nnext [cd]\n", "T\nst=0 l=[abcd]\nnext [end]\n"
+	before := func(open string) string {
+		return `mkfifo p; ` + open + `; trap 'echo T' USR1; (sleep 0.3; printf 'cd\nend\n' >p) & ` +
+			`read -r l <&3 2>"$(kill -USR1 $$)/dev/null"; echo "st=$? l=[$l]"; read -r m <&3; echo "next [$m]"; wait`
+	}
+	const (
+		gaveUp, readOn           = "T\nst=1 l=[ab]\nnext [cd]\n", "T\nst=0 l=[abcd]\nnext [end]\n"
+		gaveUpAtOnce, readOnLate = "T\nst=1 l=[]\nnext [cd]\n", "T\nst=0 l=[cd]\nnext [end]\n"
+	)
 	for _, tc := range []struct {
-		reading               ReadAbandonmentReading
-		readingOnly, bothWays string
+		reading                ReadAbandonmentReading
+		duringOnly, duringBoth string
+		beforeOnly, beforeBoth string
 	}{
-		{ReadAbandonedAtTheNextByte, gaveUp, gaveUp},
-		{ReadAbandonedOnlyDuringAWait, gaveUp, gaveUp},
-		{ReadAbandonedOnlyAtTheStartOfALine, readOn, gaveUp},
+		{ReadAbandonedAtTheNextByte, gaveUp, gaveUp, gaveUpAtOnce, gaveUpAtOnce},
+		{ReadAbandonedOnlyDuringAWait, gaveUp, gaveUp, readOnLate, readOnLate},
+		{ReadAbandonedOnlyAtTheStartOfALine, readOn, gaveUp, readOnLate, gaveUpAtOnce},
 	} {
 		t.Run(tc.reading.String(), func(t *testing.T) {
 			sem := unansweredWhen()
 			sem.ReadAbandonedWhen = tc.reading
-			if out, _ := run(t, src(`exec 4<>p 3<p`), withSem(sem)); out != tc.readingOnly {
-				t.Errorf("reading only: got %q, want %q", out, tc.readingOnly)
-			}
-			if out, _ := run(t, src(`exec 3<>p`), withSem(sem)); out != tc.bothWays {
-				t.Errorf("both ways: got %q, want %q", out, tc.bothWays)
+			for _, c := range []struct{ name, src, want string }{
+				{"during, reading only", during(`exec 4<>p 3<p`), tc.duringOnly},
+				{"during, both ways", during(`exec 3<>p`), tc.duringBoth},
+				{"before, reading only", before(`exec 4<>p 3<p`), tc.beforeOnly},
+				{"before, both ways", before(`exec 3<>p`), tc.beforeBoth},
+			} {
+				if out, _ := run(t, c.src, withSem(sem)); out != c.want {
+					t.Errorf("%s: got %q, want %q", c.name, out, c.want)
+				}
 			}
 		})
 	}

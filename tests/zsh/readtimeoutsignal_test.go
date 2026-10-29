@@ -34,8 +34,10 @@ import (
 // The rows run in parallel with each other and with nothing else in the
 // package. Each signal is aimed at its own shell, which takes it without the
 // kernel, but a test elsewhere that raises a real one would reach every
-// Runner here with that signal trapped. An ignored signal is the one such
-// route this test met (#7040), and is why no row here ignores one.
+// Runner here with that signal trapped. An ignored signal was such a route
+// until #7040 — the "ignored" row, run beside the two that trap USR1, gave one
+// of them a second `T` three runs in four — and it is back in the table now
+// that an ignore aimed at the shell sends nothing.
 func TestATrappedSignalEndsATimedReadStillWaitingForItsFirstByte(t *testing.T) {
 	const (
 		ended  = "T\nst=1 l=[old]\nnext [late]\n"
@@ -69,6 +71,11 @@ func TestATrappedSignalEndsATimedReadStillWaitingForItsFirstByte(t *testing.T) {
 		{"-k 3", late(readingOnly, trapINT, "INT", `read -t 10 -k 3 -u 3 l`, status, fromFd), "T\nst=1\nnext [late]\n"},
 		{"-q", late(readingOnly, trapINT, "INT", `read -t 10 -q -u 3 l`, status, fromFd), "T\nst=2\nnext [late]\n"},
 		{"USR1", late(readingOnly, `trap "echo T" USR1`, "USR1", `read -r -t 10 l <&3`, named, fromFd), ended},
+		// An ignored signal ends nothing, so the read takes the late line.
+		{
+			"ignored", late(readingOnly, `trap '' USR1`, "USR1", `read -r -t 10 l <&3`, named, fromFd),
+			"st=0 l=[late]\nnext [end]\n",
+		},
 		{
 			"a trap function",
 			late(readingOnly, `TRAPUSR1() { echo T; }`, "USR1", `read -r -t 10 l <&3`, named, fromFd), ended,

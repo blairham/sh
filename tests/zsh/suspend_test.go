@@ -6,6 +6,7 @@ package zsh_test
 import (
 	"context"
 	"strings"
+	"syscall"
 	"testing"
 
 	"github.com/blairham/sh/internal/dialecttest"
@@ -101,14 +102,19 @@ func TestSuspendAsksOnlyWhetherThisIsALoginShell(t *testing.T) {
 func TestSuspendCallsTheHookWithNoMonitorAtAll(t *testing.T) {
 	var out strings.Builder
 	r := preset.Runner(dialecttest.Base{Dir: t.TempDir(), Stdout: &out, Stderr: &out})
-	calls := 0
-	r.StopThisProcess = func() error { calls++; return nil }
+	calls, sent := 0, syscall.Signal(0)
+	r.StopThisProcess = func(sig syscall.Signal) error { calls++; sent = sig; return nil }
 	f := preset.Parse(t, `suspend; echo "st=$?"`)
 	if _, err := r.Run(context.Background(), f); err != nil {
 		t.Fatalf("run: %v", err)
 	}
 	if calls != 1 {
 		t.Errorf("the hook was called %d times, want once", calls)
+	}
+	// SIGSTOP and never the keyboard's SIGTSTP, which an orphaned process
+	// group discards: see interp.Runner.StopThisProcess.
+	if sent != syscall.SIGSTOP {
+		t.Errorf("the hook was handed %v, want SIGSTOP", sent)
 	}
 	if got, want := out.String(), "st=0\n"; got != want {
 		t.Errorf("output %q, want %q", got, want)
@@ -122,7 +128,7 @@ func TestALoginShellNeverReachesTheStop(t *testing.T) {
 		Dir: t.TempDir(), Stdout: &out, Stderr: &out, LoginShell: true,
 	})
 	calls := 0
-	r.StopThisProcess = func() error { calls++; return nil }
+	r.StopThisProcess = func(syscall.Signal) error { calls++; return nil }
 	f := preset.Parse(t, `suspend; echo "st=$?"`)
 	if _, err := r.Run(context.Background(), f); err != nil {
 		t.Fatalf("run: %v", err)

@@ -217,7 +217,14 @@ and the answer came back on a goroutine, which made a trapped signal's
 delivery a matter of scheduling and lost it outright under load. An untrapped
 *fatal* signal is the same split as `exec`: the core stops the script and
 `Runner.DieBySignal` — nil in a library, filled in by `driver` — ends the
-process.
+process. A *stopping* one is the same split again through
+`Runner.StopThisProcess`, which `driver` fills with a raise of the very signal
+named. And an ignored signal, or one whose default does nothing to a running
+process, sends nothing at all: it used to go to the kernel as harmless, and
+the process it reached held every other Runner in the program, whose traps
+then ran for a signal nobody sent them (#7040). **No answer to a signal aimed
+at this shell alone is kill(2)**; a group kill is aimed at its children too,
+and is not one of them.
 
 The corollary caught a real bug: **where a real shell relies on process
 boundaries, we have to reconstruct the boundary by hand.** Our subshells are

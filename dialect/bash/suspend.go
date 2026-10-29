@@ -6,6 +6,7 @@ package bash
 import (
 	"context"
 	"fmt"
+	"syscall"
 
 	"github.com/blairham/sh/interp"
 )
@@ -127,7 +128,8 @@ func suspendBuiltin(r *interp.Runner, _ context.Context, args []string) int {
 		r.Diagnosef("suspend: this shell was not given a way to stop this process\n")
 		return 1
 	}
-	if err := r.StopThisProcess(); err != nil {
+	// SIGSTOP, which nothing can decline: see interp.Runner.StopThisProcess.
+	if err := r.StopThisProcess(syscall.SIGSTOP); err != nil {
 		r.Diagnosef("suspend: %v\n", err)
 		return 1
 	}

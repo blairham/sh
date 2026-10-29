@@ -142,6 +142,13 @@ func (r *Runner) spliceCharacterSpan(name string, from, to int, value string, jo
 	if r.numericSlice(name, value, join) {
 		return
 	}
+	r.setVar(name, r.characterSpanSpliced(name, from, to, value, join))
+}
+
+// characterSpanSpliced is the string spliceCharacterSpan stores, worked out
+// without storing it — which is what a prefix entry's hold needs, since the
+// store is still to come. See Runner.holdPrefixElement.
+func (r *Runner) characterSpanSpliced(name string, from, to int, value string, join bool) string {
 	v, _ := r.getVar(name)
 	chars := r.units(v)
 	first, tail, within := r.spanOver(len(chars), from, to)
@@ -151,19 +158,15 @@ func (r *Runner) spliceCharacterSpan(name string, from, to int, value string, jo
 		// start. See the rows above.
 		start := min(first, len(chars))
 		after := min(max(spanEndIndex(len(chars), to, r.arrayBase())+1, 0), len(chars))
-		r.setVar(name, strings.Join(chars[:start], "")+value+strings.Join(chars[after:], ""))
-		return
+		return strings.Join(chars[:start], "") + value + strings.Join(chars[after:], "")
 	}
 	if !within {
 		// The span begins past the last character. Nothing comes out and
 		// nothing is padded — see above.
-		r.setVar(name, v+value)
-		return
+		return v + value
 	}
-	if join {
-		value = strings.Join(chars[first:tail], "") + value
-	}
-	r.setVar(name, strings.Join(chars[:first], "")+value+strings.Join(chars[tail:], ""))
+	return strings.Join(chars[:first], "") + strings.Join(chars[first:tail], "") + value +
+		strings.Join(chars[tail:], "")
 }
 
 // numericSlice is what a subscript does to a name carrying an arithmetic

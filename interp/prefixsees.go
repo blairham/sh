@@ -107,8 +107,18 @@ func (h *heldPrefix) holdTable(r *Runner, name string, table AssocArray) {
 // routes carry for a literal showed `y` nothing (#6547).
 //
 // A literal whose elements name their own places, or nest, is held as the
-// array or table it places — see holdPlacedLiteral.
+// array or table it places — see holdPlacedLiteral. A subscripted entry is
+// held as the element it writes, where the walk has read its subscript — see
+// Runner.holdPrefixElement.
 func (r *Runner) holdPrefixEntry(h *heldPrefix, a *syntax.Assign, joined string) {
+	if prefixIsSubscripted(a) {
+		// The element is placed from the entry's own expansion, which an
+		// append joins to the element rather than to the name's scalar.
+		if part, ok := r.prefixTraceValue(a); ok {
+			r.holdPrefixElement(h, a, part)
+		}
+		return
+	}
 	name, ok := r.prefixHoldableName(a)
 	if !ok {
 		return

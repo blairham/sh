@@ -206,7 +206,10 @@ func (r *Runner) tracePrefixRepeatsBeforeTheCommand(argv []string) bool {
 // Only when the command is being traced. Without that guard this would move
 // every prefixed command's expansion earlier, past the redirections, for the
 // overwhelming majority of runs that have no `set -x` on at all.
-func (r *Runner) expandPrefixTraceValues(assigns []*syntax.Assign) {
+//
+// argv is the command, which says whose store an element write's subscript is
+// read for — see Runner.prefixSubscriptsReadHere.
+func (r *Runner) expandPrefixTraceValues(assigns []*syntax.Assign, argv []string) {
 	// What this pass has expanded so far, visible to the entries behind it
 	// and put back before the route below stores any of them for real. Same
 	// rule and same helper as the ordered walk — see interp/prefixsees.go —
@@ -216,7 +219,7 @@ func (r *Runner) expandPrefixTraceValues(assigns []*syntax.Assign) {
 	// routes expand as they store.
 	var held heldPrefix
 	defer held.release(r)
-	r.expandPrefixTraceValuesHolding(assigns, &held, "")
+	r.expandPrefixTraceValuesHolding(assigns, &held, "", r.prefixSubscriptsReadHere(assigns, argv))
 }
 
 // expandPrefixTraceValuesHolding is expandPrefixTraceValues for a caller that
@@ -229,7 +232,19 @@ func (r *Runner) expandPrefixTraceValues(assigns []*syntax.Assign) {
 //
 // local is the declaration the prefix becomes a local under, or "" — see
 // Runner.prefixLocalDeclaration.
-func (r *Runner) expandPrefixTraceValuesHolding(assigns []*syntax.Assign, held *heldPrefix, local string) {
+//
+// subscripts is whether an element write's subscript is read in turn, and for
+// whose store: its words ahead of the value where the dialect expands them
+// first, its arithmetic after, so the element can be held for the entries
+// behind it and the store takes what was read rather than reading it again.
+// A subscript that will not read ends the walk, which has said so. See
+// interp/prefixsubscriptinturn.go.
+func (r *Runner) expandPrefixTraceValuesHolding(
+	assigns []*syntax.Assign,
+	held *heldPrefix,
+	local string,
+	subscripts prefixSubscriptTurn,
+) {
 	for _, a := range assigns {
 		if a.Operand {
 			continue
@@ -268,6 +283,17 @@ func (r *Runner) expandPrefixTraceValuesHolding(assigns []*syntax.Assign, held *
 			// and on `set -x; w=1 a[2]=z f`, where `w=1` is still written.
 			continue
 		}
+		// An element write's subscript, its words ahead of the value where
+		// the dialect reads them first and its arithmetic once the value is
+		// in, so the element is held below. See
+		// interp/prefixsubscriptinturn.go.
+		inTurn, expanded := false, true
+		if subscripts != subscriptsLeftToTheStore {
+			inTurn, expanded = r.readPrefixSubscriptBeforeTheValue(a)
+		}
+		if !expanded {
+			return
+		}
 		// The value first and the two slices afterwards, in that order: the
 		// lookup reads them as a pair, and an assignment recorded before its
 		// value would be found with nothing beside it. A local's cell is made
@@ -276,6 +302,9 @@ func (r *Runner) expandPrefixTraceValuesHolding(assigns []*syntax.Assign, held *
 		value := r.prefixExpansion(a)
 		r.prefixEntryBecomesLocal(a, local)
 		joined := r.recordPrefixTraceValue(a, value)
+		if inTurn && !r.assignmentGaveUp() && !r.placePrefixSubscript(a, subscripts == subscriptsForThisShell) {
+			return
+		}
 		r.holdPrefixEntry(held, a, joined)
 	}
 }

@@ -9993,7 +9993,7 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 			if asItGoes {
 				r.tracePrefixAsItGoes(c, argv, lateWalk)
 			} else {
-				r.expandPrefixTraceValues(c.Assigns)
+				r.expandPrefixTraceValues(c.Assigns, argv)
 				if !r.assignmentGaveUp() {
 					r.tracePrefixAndCommand(c, argv)
 				}
@@ -10023,7 +10023,7 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 		// write no line at all, which is the branch above (#5547). After the
 		// frozen-name check, so the column that refuses a prefix before it
 		// evaluates anything still evaluates nothing.
-		r.expandPrefixTraceValues(c.Assigns)
+		r.expandPrefixTraceValues(c.Assigns, argv)
 		if !r.assignmentGaveUp() {
 			// A value that would not expand gives the command up, and the
 			// one line dash and BusyBox ash write for a prefixed command is
@@ -10235,8 +10235,13 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 		// whether the walk reads it at all: a program's prefix is read in
 		// its child, which the program's own route makes, and the `command`
 		// builtin's route makes none and never reads the subscript.
-		storedHere := !r.subscriptedPrefixReachesAChild(kind)
-		readsInTurn := storedHere || programsOwn
+		subscripts := subscriptsLeftToTheStore
+		switch {
+		case !r.subscriptedPrefixReachesAChild(kind):
+			subscripts = subscriptsForThisShell
+		case programsOwn:
+			subscripts = subscriptsForTheChild
+		}
 		// Held across the entries, so each value sees the ones in front of
 		// it. See expandPrefixTraceValuesHolding.
 		var held heldPrefix
@@ -10250,17 +10255,11 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 				// `+ true`, `+ a=1` and `+ r=2` on ksh93u+ (#5546).
 				ex.recordPrefixTraceValue(a, ex.prefixExpansion(a))
 			}
-			// An element write's subscript, read in turn and written as it
-			// resolved. See interp/prefixsubscriptinturn.go.
-			inTurn := false
-			if readsInTurn {
-				inTurn, _ = ex.readPrefixSubscriptBeforeTheValue(a)
-			}
+			// An element write's subscript is read in turn by the walk,
+			// written as it resolved, and its element held for the entries
+			// behind it. See interp/prefixsubscriptinturn.go.
 			if !ex.prefixWalkFailed(walk) {
-				ex.expandPrefixTraceValuesHolding(one, &held, "")
-			}
-			if inTurn && !ex.prefixWalkFailed(walk) {
-				ex.placePrefixSubscript(a, storedHere)
+				ex.expandPrefixTraceValuesHolding(one, &held, "", subscripts)
 			}
 			if ex.prefixWalkFailed(walk) {
 				break
@@ -11263,8 +11262,10 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 			// echo v) /usr/bin/true` writes `side` in ksh93 and zsh and
 			// leaves the element where it was. And so is the subscript, in
 			// the child's copy, as the store would read it.
-			if inTurn && !ex.prefixWalkFailed(walk) {
-				ex.placePrefixSubscript(a, false)
+			if inTurn && !ex.prefixWalkFailed(walk) && ex.placePrefixSubscript(a, false) {
+				// And held as the element it writes, which the entries
+				// behind it read in the child (#6985).
+				ex.holdPrefixElement(&held, a, part)
 			}
 			continue
 		}

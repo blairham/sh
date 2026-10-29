@@ -4,6 +4,7 @@
 package interp
 
 import (
+	"maps"
 	"strings"
 
 	"github.com/blairham/sh/syntax"
@@ -85,9 +86,44 @@ import (
 // once, and the warning the store makes under the empty key is owed to the
 // walk's and swallowed (Runner.emptyKeyWarningsOwed).
 //
-// The **element** is not stored by the walk, only read: an entry behind it
-// still reads the element the shell held, where ksh93 shows it the new one.
-// That is the store's half of "in turn" and is a question of its own.
+// The **element** is not stored by the walk, but it is held: an entry behind
+// it reads the element the entry wrote, in both shells that store one. This
+// engine held a scalar entry for the entries behind it and nothing for a
+// subscripted one, so they read the element the shell held (#6985), and so did
+// a declaration's operand (#7012). Measured 2026-10-29 on ksh93u+ 2012-08-01
+// (`/bin/ksh`) and zsh 5.9.2, script files and `-c` alike under `env -i
+// PATH=/usr/bin:/bin`, with `f() { echo "f y=$y"; }; typeset -A a; b=(x y z)`:
+//
+//	                                          ksh93u+       zsh 5.9.2
+//	a[k]=1 y=${a[k]} f                        f y=1         f y=1
+//	b[1]=Q y=${b[1]} f                        f y=Q         f y=Q
+//	b[1]=Q y="${b[@]}" f                      f y=x Q z     f y=Q y z
+//	n[1]=Q y="${n[@]}" f   (n unset)          f y=Q         f y=Q
+//	b[5]=Q y=${#b[@]} f                       f y=4         f y=5
+//	b[1]+=Q y=${b[1]} f                       f y=yQ        f y=xQ
+//	s=str; s[1]=Q y="${s[*]}" f               f y=str Q     f y=Qtr
+//	b[1]=Q y=${b[1]} eval 'echo "$y"'         Q             Q
+//	i=1; b[i++]=Q y=$i:${b[1]} f              f y=2:Q       f y=2:Q
+//	a[k]=2 y=${a[k]} /usr/bin/printenv y      2             2
+//	c=(p q r); c[1]=B typeset y=${c[1]}       y=B           y=B
+//	function g { c=(p q r); c[1]=B typeset y=${c[1]}; echo "$y"; }; g
+//	                                          B             B
+//
+// with `i` stepped once, and the same under `set -x`. The function and
+// builtin routes in zsh already agreed, since they store each entry as they
+// walk it; the rest read the element the shell held, and the operand walk read
+// a subscript's words after its value, where ksh93 reads them first. bash
+// refuses the word (bash 3.2 takes it and shows `f y=y`) and dash has no
+// arrays, so neither reaches this.
+//
+// The walk holds the element where it has read the whole subscript, so the
+// place is the one the store will take — see Runner.holdPrefixElement — and
+// the store still makes the write for real, so where the element persists and
+// where it is given back is the route's answer, as it was. Three shapes are
+// still left to the store, and the entries behind them read the old element:
+// a name reference and a numeric name (#7016), and a program's prefix under
+// zsh's `set -x`, whose walk expands in this shell rather than the child
+// (#7015).
 
 // prefixSubscriptRead is one subscripted prefix entry's subscript, as the
 // walk read it.
@@ -103,6 +139,41 @@ type prefixSubscriptRead struct {
 	// subscript is fully read — evaluated, or a key.
 	idx    int
 	placed bool
+}
+
+// prefixSubscriptTurn is whether a walk over a command's prefix reads each
+// element write's subscript in turn, and for whose store.
+type prefixSubscriptTurn uint8
+
+const (
+	// subscriptsLeftToTheStore reads none, and the route's store reads its
+	// own: a walk in this shell over a prefix a child stores, where reading
+	// one would step an `i++` in the shell that must not see it.
+	subscriptsLeftToTheStore prefixSubscriptTurn = iota
+	// subscriptsForThisShell reads them for a store this shell makes.
+	subscriptsForThisShell
+	// subscriptsForTheChild reads them in the copy of this shell a
+	// program's prefix expands in, for the store its child makes. See
+	// Runner.prefixExpansionShell.
+	subscriptsForTheChild
+)
+
+// prefixSubscriptsReadHere is how a walk made in this shell reads the
+// subscripts of the prefix in front of argv: for this shell's store where the
+// command is one this shell stores the prefix for, and not at all where a
+// child makes the store. Asks nothing where no entry is subscripted, which is
+// nearly every prefixed command.
+func (r *Runner) prefixSubscriptsReadHere(assigns []*syntax.Assign, argv []string) prefixSubscriptTurn {
+	for _, a := range assigns {
+		if a.Operand || !prefixIsSubscripted(a) {
+			continue
+		}
+		if len(argv) == 0 || r.subscriptedPrefixReachesAChild(r.prefixCommandOf(argv)) {
+			return subscriptsLeftToTheStore
+		}
+		return subscriptsForThisShell
+	}
+	return subscriptsLeftToTheStore
 }
 
 // readsPrefixSubscriptInTurn reports whether this prefix entry is an element
@@ -244,6 +315,86 @@ func (r *Runner) prefixSubscriptTraced(a *syntax.Assign) (string, bool) {
 		return s.text, true
 	}
 	return itoa(r.tracedElementPosition(a.Name, s.idx)), true
+}
+
+// holdPrefixElement holds what a subscripted entry writes for the entries
+// behind it: the array or table under the name, copied, with part — the
+// entry's own expansion, before an append joins it — placed where the walk
+// read the subscript to point. The element is written the way the store
+// writes it: an append joins the element's own value, a string reaches the
+// first element of a nested one (stringWritten), and a string the dialect's
+// subscript names a character of is spliced (holdPrefixSplice).
+//
+// Only where the walk has read the whole subscript, so nothing is evaluated a
+// second time and the place is the one the store takes. A subscript left to
+// the store holds nothing, which is what every entry held before. And only
+// the plain write: a name whose letters fold the value (#7016), a produced
+// array or table, a nested keyed element, and a place the array does not have
+// are left to the store, which owns the fold, the producer's hook and the
+// refusal — and to which a hold that guessed at any of them would be a second
+// answer.
+func (r *Runner) holdPrefixElement(h *heldPrefix, a *syntax.Assign, part string) {
+	s := r.prefixSubscriptReadFor(a)
+	if s == nil || !s.placed || r.foldsElements(a.Name) {
+		return
+	}
+	if s.keyed {
+		if _, produced := r.dynamicAssocWriters[a.Name]; produced {
+			return
+		}
+		table := r.assocsAt(a.Name)
+		was := table[s.text]
+		if was.Nested != nil {
+			return
+		}
+		if a.Append {
+			part = was.scalar() + part
+		}
+		held := make(AssocArray, len(table)+1)
+		maps.Copy(held, table)
+		held[s.text] = Scalar(part)
+		h.holdTable(r, a.Name, held)
+		return
+	}
+	if _, stored := r.arraysLookup(a.Name); !stored {
+		// A produced array and the pipeline record are the producer's, and a
+		// subscript counting back over a string being promoted is a question
+		// the store asks.
+		if r.arrayDeclared(a.Name) {
+			return
+		}
+		if r.subscriptSplicesCharacters(a.Name) {
+			r.holdPrefixSplice(h, a, s.idx, part)
+			return
+		}
+		if s.idx < 0 {
+			return
+		}
+	}
+	arr := r.elementsOfName(a.Name, s.idx).clone()
+	pos, within := r.elemPos(arr, s.idx)
+	if !within {
+		return
+	}
+	was := arr.Get(pos)
+	if a.Append {
+		part = was.scalar() + part
+	}
+	arr.Set(pos, stringWritten(was, part))
+	h.holdPlaced(r, a.Name, arr)
+}
+
+// holdPrefixSplice is holdPrefixElement for a string the dialect's subscript
+// names a character of: the string the store will splice, held as a scalar.
+// Measured 2026-10-29 on zsh 5.9.2, `s=str; s[1]=Q typeset z=$s` is `z=Qtr`
+// and so is a program's `y` behind `s[1]=Q y=$s`. A numeric name, whose
+// subscript is ignored, and a character before the first, which is refused,
+// are left to the store.
+func (r *Runner) holdPrefixSplice(h *heldPrefix, a *syntax.Assign, idx int, part string) {
+	if _, numeric := r.floatPrecision[a.Name]; numeric || r.spanIsBelowTheFirstElement(idx, idx) {
+		return
+	}
+	h.hold(r, a.Name, r.characterSpanSpliced(a.Name, idx, idx, part, a.Append))
 }
 
 // takePrefixSubscriptRead hands the route's store what the walk read, so the

@@ -62,9 +62,6 @@ var sharedStacks = map[string]string{
 	"carriedHeredocs": "the running file's own list, replaced wholesale by RunPart and never appended to — a subshell reads the same file's list, which is what it should see",
 	"substEnds":       "the running file's list of ends of input, kept beside carriedHeredocs and shared for the same reason",
 	"flagWordBare":    "a handoff from flaggedWords to expandFlagged within one expansion, assigned whole and cleared by the reader, never appended to",
-	"openRun": "never appended to in place: openRuntime and openRunWith clip before " +
-		"they append, so a subshell sharing the array reads its parent's view and writes " +
-		"one of its own",
 	"dialectCompgenAfter": "where each dialect action sits in `compgen -A`'s order, " +
 		"appended to by SetCompgenAction at setup and never again — the order is the " +
 		"dialect's declaration, on the same terms as optionLists",

@@ -273,6 +273,7 @@ func (r *Runner) prefixExpansionShell(assigns []*syntax.Assign) *Runner {
 	child := *r
 	child.dialectMoves = nil
 	child.bodyTexts = nil
+	child.pipeCounts = nil
 	child.ownTables(r)
 	child.prefixExpandedInTheChild = true
 	return &child

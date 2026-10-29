@@ -17,7 +17,7 @@ var emptyJobSlot = &Job{}
 
 // holdACommandsJobSlot gives the command about to run the job number it holds
 // while it runs, in the dialect where a command holds one, and answers what
-// lets it go — or nothing, where there is nothing to hold or a command is
+// lets it go — or false, where there is nothing to hold or a command is
 // holding it already. See Semantics.ACommandHoldsAJobSlot.
 //
 // Read rather than asked: every compound command passes through here, and a
@@ -41,13 +41,13 @@ var emptyJobSlot = &Job{}
 //
 // and inside a `( … )`, which is a job of its own there, `( eval 'J' )` and
 // `( if true; then J; fi )` are [3] where `( { J } )` is [2] (#5321).
-func (r *Runner) holdACommandsJobSlot(nests bool) func() {
+func (r *Runner) holdACommandsJobSlot(nests bool) (jobSlotHold, bool) {
 	if r.sem().ACommandHoldsAJobSlot != Yes || r.commandSlotHeld && !nests && r.pendingPipeJob == nil {
 		// Unless this is the last element of a pipeline the shell runs
 		// itself, which is a job of its own and takes a number whatever is
 		// holding one: `{ true | { jobs } }` lists the pipeline as [2]. See
 		// Runner.pipelineJob.
-		return nil
+		return jobSlotHold{}, false
 	}
 	outerHeld, outerSlot, outerSerial := r.commandSlotHeld, r.commandSlot, r.commandSerial
 	if outerSlot != 0 {
@@ -69,51 +69,66 @@ func (r *Runner) holdACommandsJobSlot(nests bool) func() {
 		r.pendingPipeJob = nil
 		r.placePipelineJob(pj)
 	}
-	return func() {
-		// A job that ended while this command ran left the table while it
-		// ran, in the shell being modeled, and so left its marker to the
-		// slot — before the slot goes. See Runner.forget.
-		r.dropFinishedJobsWhereAnswered()
-		if r.marksByNumber && r.markCurrent != 0 && r.markCurrent == r.commandSlot &&
-			(r.jobByNumber(r.markPrevious) != nil || r.markPrevious != 0 && r.markPrevious == outerSlot) {
-			// Or where `%-` is the command this one runs inside, which then
-			// takes the `+` while the `-` stays on the number let go of.
-			// Measured 2026-10-02 on zsh 5.9.2 (#5349): after `f() { eval
-			// "$1" }; f 'sleep 0 & wait'`, `{ eval 'jobs %-' }` and `if :;
-			// then if :; then jobs %-; fi; fi` are `%-: no such job` — the
-			// `-` names the second number, held again — where `{ jobs %- }`
-			// holds only the first and is `no previous job`.
-			// The `+` was on the command, and goes where `%-` was — where
-			// `%-` is a job. The `-` is left where it is, even on the
-			// number the command is letting go of: measured, `sleep 1 & {
-			// sleep 1 & }; jobs %-` is `%-: no such job` in zsh 5.9.2.
-			//
-			// And a `-` that is no job — nothing, or another command's
-			// number — leaves the `+` where it was, on a number nobody
-			// holds now. Measured 2026-10-02: after `f() { sleep 0 & wait
-			// }; f`, `g() { wait %%; wait %- }; g` is `%%: no such job` and
-			// then `no previous job`, where `sleep 1 & f` puts the `+` back
-			// on job 1. See Runner.forgetANumberNobodyHolds for where it is
-			// read again.
-			//
-			// The `-` is then chosen again from the jobs and, for a command
-			// inside another, the numbers still held.
-			fromOuter := r.jobByNumber(r.markPrevious) == nil
-			r.markCurrent = r.markPrevious
-			r.markPrevious = r.highestJobBut(r.markCurrent, outerSlot != 0)
-			if fromOuter {
-				// The `-` this leaves is on the number being let go of,
-				// and reads as one only while a command holds it again.
-				// See findJobQuietly.
-				r.lapsedPrevious = r.markPrevious
-			}
+	return jobSlotHold{r: r, outerHeld: outerHeld, outerSlot: outerSlot, outerSerial: outerSerial}, true
+}
+
+// jobSlotHold is what holdACommandsJobSlot took, for release to give back. A
+// value with a method rather than a closure, for substLevelUndo's reason:
+// every brace group, `if`, loop and function body a command runs holds one,
+// and the closure was an allocation each time (#6423).
+type jobSlotHold struct {
+	r           *Runner
+	outerHeld   bool
+	outerSlot   int
+	outerSerial uint64
+}
+
+// release gives back the slot the hold took.
+func (h jobSlotHold) release() {
+	r, outerHeld, outerSlot, outerSerial := h.r, h.outerHeld, h.outerSlot, h.outerSerial
+	// A job that ended while this command ran left the table while it
+	// ran, in the shell being modeled, and so left its marker to the
+	// slot — before the slot goes. See Runner.forget.
+	r.dropFinishedJobsWhereAnswered()
+	if r.marksByNumber && r.markCurrent != 0 && r.markCurrent == r.commandSlot &&
+		(r.jobByNumber(r.markPrevious) != nil || r.markPrevious != 0 && r.markPrevious == outerSlot) {
+		// Or where `%-` is the command this one runs inside, which then
+		// takes the `+` while the `-` stays on the number let go of.
+		// Measured 2026-10-02 on zsh 5.9.2 (#5349): after `f() { eval
+		// "$1" }; f 'sleep 0 & wait'`, `{ eval 'jobs %-' }` and `if :;
+		// then if :; then jobs %-; fi; fi` are `%-: no such job` — the
+		// `-` names the second number, held again — where `{ jobs %- }`
+		// holds only the first and is `no previous job`.
+		// The `+` was on the command, and goes where `%-` was — where
+		// `%-` is a job. The `-` is left where it is, even on the
+		// number the command is letting go of: measured, `sleep 1 & {
+		// sleep 1 & }; jobs %-` is `%-: no such job` in zsh 5.9.2.
+		//
+		// And a `-` that is no job — nothing, or another command's
+		// number — leaves the `+` where it was, on a number nobody
+		// holds now. Measured 2026-10-02: after `f() { sleep 0 & wait
+		// }; f`, `g() { wait %%; wait %- }; g` is `%%: no such job` and
+		// then `no previous job`, where `sleep 1 & f` puts the `+` back
+		// on job 1. See Runner.forgetANumberNobodyHolds for where it is
+		// read again.
+		//
+		// The `-` is then chosen again from the jobs and, for a command
+		// inside another, the numbers still held.
+		fromOuter := r.jobByNumber(r.markPrevious) == nil
+		r.markCurrent = r.markPrevious
+		r.markPrevious = r.highestJobBut(r.markCurrent, outerSlot != 0)
+		if fromOuter {
+			// The `-` this leaves is on the number being let go of,
+			// and reads as one only while a command holds it again.
+			// See findJobQuietly.
+			r.lapsedPrevious = r.markPrevious
 		}
-		r.commandSlotHeld, r.commandSlot, r.commandSerial = outerHeld, outerSlot, outerSerial
-		if outerSlot != 0 {
-			r.outerSlots = r.outerSlots[:len(r.outerSlots)-1]
-		}
-		r.settleMarks()
 	}
+	r.commandSlotHeld, r.commandSlot, r.commandSerial = outerHeld, outerSlot, outerSerial
+	if outerSlot != 0 {
+		r.outerSlots = r.outerSlots[:len(r.outerSlots)-1]
+	}
+	r.settleMarks()
 }
 
 // BetweenCommands runs what the shell does between commands on its own

@@ -1789,6 +1789,12 @@ type Runner struct {
 	// pointer. Not shared with a clone — see dialectmove.go.
 	dialectMoves map[dialectMoveKey]*syntax.Dialect
 
+	// pipeCounts is whether each compound this runner has finished writes
+	// the pipeline-status record, read under pipeCountsUnder. Not shared with
+	// a clone, for dialectMoves' reason. See countsKeptForACompound.
+	pipeCounts      map[syntax.Command]bool
+	pipeCountsUnder pipeCountsAnswers
+
 	// killedBy is the signal this shell sent itself and had no handler for,
 	// with the number kept beside it so the death does not have to look the
 	// name up again.
@@ -6108,6 +6114,8 @@ func (r *Runner) clone() *Runner {
 	c.dialectMoves = nil
 	// And the printed bodies, for the same reason. See bodytext.go.
 	c.bodyTexts = nil
+	// And the compounds' pipeline-status answers. See countsKeptForACompound.
+	c.pipeCounts = nil
 	// A clone is a fork until the one construct that knows otherwise says so,
 	// and nothing a fork runs is the shell's last. See unforkedtail.go.
 	c.tailCmd, c.tailPipe, c.unforkedSelf, c.slotOneIsTheBody = nil, nil, false, false
@@ -7790,8 +7798,8 @@ func (r *Runner) runExitTrap(ctx context.Context) (exitedInTheBody bool) {
 	//
 	// where text held nothing on either and a function held on both.
 	if r.exitRan {
-		if release := r.holdACommandsJobSlot(true); release != nil {
-			defer release()
+		if hold, ok := r.holdACommandsJobSlot(true); ok {
+			defer hold.release()
 		}
 		r.runTrapBody(ctx, "EXIT", body)
 	} else {
@@ -8434,7 +8442,7 @@ func (r *Runner) expr(ctx context.Context, e syntax.Expr) error {
 		}
 		pop := r.openRuntime(key)
 		err = r.expr(ctx, x.Y)
-		pop()
+		pop.undo()
 		if err != nil {
 			return err
 		}
@@ -8445,8 +8453,8 @@ func (r *Runner) expr(ctx context.Context, e syntax.Expr) error {
 	case *syntax.Pipeline:
 		return r.pipeline(ctx, x)
 	case *syntax.TimeClause:
-		if release := r.holdACommandsJobSlot(true); release != nil {
-			defer release()
+		if hold, ok := r.holdACommandsJobSlot(true); ok {
+			defer hold.release()
 		}
 		return r.timeClause(ctx, x)
 	}
@@ -8827,8 +8835,8 @@ func (r *Runner) commandAt(ctx context.Context, c syntax.Command) error {
 // A function of its own for the reason Runner.command gives.
 func (r *Runner) dispatchHoldingAJobSlot(ctx context.Context, c syntax.Command, fired bool) error {
 	_, brace := c.(*syntax.Group)
-	if release := r.holdACommandsJobSlot(!brace); release != nil {
-		defer release()
+	if hold, ok := r.holdACommandsJobSlot(!brace); ok {
+		defer hold.release()
 	}
 	return r.dispatch(ctx, c, fired)
 }
@@ -8905,7 +8913,7 @@ func (r *Runner) dispatch(ctx context.Context, c syntax.Command, fired bool) err
 // it open — see Runner.openRuntime — and closes it on the way out. A function
 // of its own for the reason Runner.command gives.
 func (r *Runner) underRuntime(ctx context.Context, key string, c syntax.Command) error {
-	defer r.openRuntime(key)()
+	defer r.openRuntime(key).undo()
 	switch x := c.(type) {
 	case *syntax.Group:
 		r.openRunBody = nil
@@ -9811,7 +9819,7 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 	// A declaration's array operands are its words too, read after the rest:
 	// `local x=(~nosuch)` leaves `$?` alone where a failure there does. See
 	// Runner.failedExpansionStatus.
-	keepForArrays := func() {}
+	var keepForArrays failedExpansionUndo
 	if len(r.arrayOperands) > 0 {
 		keepForArrays = r.failedExpansionStatusIs(failedExpansionKeepsTheStatus)
 	}
@@ -9819,7 +9827,7 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 	// Every operand is expanded, so what the walk held for the ones behind
 	// it goes back before the utility stores them for real.
 	turn.release(r)
-	keepForArrays()
+	keepForArrays.undo()
 	if !expandedAll {
 		// The failure has been reported and has ended what it ends. See
 		// Runner.expandArrayOperands.
@@ -16758,15 +16766,30 @@ func (r *Runner) failureSetsItsStatus() func() {
 }
 
 // failedExpansionStatusIs sets what a failed expansion leaves in `$?` until
-// the returned function runs, where the dialect says a failure there sets no
+// the returned undo runs, where the dialect says a failure there sets no
 // status of its own.
-func (r *Runner) failedExpansionStatusIs(st failedExpansionStatus) func() {
+func (r *Runner) failedExpansionStatusIs(st failedExpansionStatus) failedExpansionUndo {
 	if r.sem().FailedExpansionInADeclarationOrCaseSetsNoStatus != Yes {
-		return func() {}
+		return failedExpansionUndo{}
 	}
-	saved := r.failedExpansionStatus
+	undo := failedExpansionUndo{r: r, saved: r.failedExpansionStatus}
 	r.failedExpansionStatus = st
-	return func() { r.failedExpansionStatus = saved }
+	return undo
+}
+
+// failedExpansionUndo is failedExpansionStatusIs's undo, and the zero value
+// undoes nothing. A value with a method rather than a closure, for
+// substLevelUndo's reason: every `case` subject and every arm's patterns set
+// one, and the closure was an allocation each time (#6423).
+type failedExpansionUndo struct {
+	r     *Runner
+	saved failedExpansionStatus
+}
+
+func (u failedExpansionUndo) undo() {
+	if u.r != nil {
+		u.r.failedExpansionStatus = u.saved
+	}
 }
 
 // loadsAnUndefinedFunctionFirst reads the body of a function the shell is

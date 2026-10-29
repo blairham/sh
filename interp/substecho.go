@@ -592,11 +592,22 @@ func (r *Runner) inArithText(span syntax.Span) substLevelUndo {
 //
 // The construct's own position, which is the line its text begins on: a `((`
 // and the expression after it are never separated by a newline.
-func (r *Runner) inArithCommandText(at syntax.Pos) func() {
-	saved := r.substFragmentLine
+func (r *Runner) inArithCommandText(at syntax.Pos) fragmentLineUndo {
+	undo := fragmentLineUndo{r: r, fragment: r.substFragmentLine}
 	r.substFragmentLine += int(at.Line) - 1
-	return func() { r.substFragmentLine = saved }
+	return undo
 }
+
+// fragmentLineUndo puts back the fragment line inArithCommandText moved. A
+// value with a method rather than a closure, for substLevelUndo's reason:
+// every `(( … ))` and every part of a `for (( ; ; ))` header opens one, and
+// the closure was an allocation per evaluation (#6423).
+type fragmentLineUndo struct {
+	r        *Runner
+	fragment int
+}
+
+func (u fragmentLineUndo) undo() { u.r.substFragmentLine = u.fragment }
 
 // substLevelEcho is what the open levels write, one line each, innermost
 // outward — or the empty string where none of them has anything to say.

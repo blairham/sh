@@ -3586,7 +3586,7 @@ func (r *Runner) arithCmd(ctx context.Context, c *syntax.ArithCmdClause) error {
 		putBackLine := r.inArithCommandText(c.Pos())
 		failedBefore := r.expansionHasFailed()
 		tree, text, perr := r.arithTreeOver(c.Parsed, c.Expr, arithTextWritten)
-		putBackLine()
+		putBackLine.undo()
 		// Traced from the expanded text and after the expansion, which is
 		// where the shells put it: `(( $(echo 1) ))` traces the substitution
 		// first and then `((  1  ))`. Before the parse, so an expression that

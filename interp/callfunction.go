@@ -151,7 +151,7 @@ func (r *Runner) RunFunctionBodyInPlace(ctx context.Context, name string) (bool,
 			r.frames[n-1].FuncLine, r.frames[n-1].FuncAbsLine = saved.FuncLine, saved.FuncAbsLine
 		}()
 	}
-	defer r.openRuntimeFresh(fn.Body())()
+	defer r.openRuntimeFresh(fn.Body()).undo()
 	return true, r.command(ctx, fn.Body())
 }
 

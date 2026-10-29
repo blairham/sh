@@ -851,7 +851,7 @@ func (r *Runner) runPipeline(ctx context.Context, p *syntax.Pipeline, timing *pi
 				defer r.handTailToPutNothingBack(p.Cmds[i], nil)()
 			}
 			errs[i] = r.command(ctx, p.Cmds[i])
-			popOpen()
+			popOpen.undo()
 			hereBodyRan = r.stmtSerial != serialBefore
 			if timing != nil {
 				timing.elems[i].wall = time.Since(start)

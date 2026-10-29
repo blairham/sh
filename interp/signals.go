@@ -1233,8 +1233,8 @@ func (r *Runner) runTrapHandlerFrom(ctx context.Context, cond, body string, orig
 	// inside f. A function trap's call then takes nothing more, a command
 	// holding one already. See Runner.whileACommandRuns for `chpwd`, the
 	// other caller of this kind.
-	if release := r.holdACommandsJobSlot(true); release != nil {
-		defer release()
+	if hold, ok := r.holdACommandsJobSlot(true); ok {
+		defer hold.release()
 	}
 	returned, handlerStatus, resumed := r.runTrapAction(ctx, cond, body)
 	if resumed && fname != "" && returned && handlerStatus != 0 {

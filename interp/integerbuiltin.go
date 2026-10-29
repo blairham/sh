@@ -7,8 +7,6 @@ import (
 	"context"
 	"strconv"
 	"strings"
-
-	"github.com/blairham/sh/syntax"
 )
 
 // `integer`, which is the declaration builtin under a second name with the
@@ -663,9 +661,8 @@ func (r *Runner) radixInsideExpression(text string) (base int, padded bool) {
 	if text == "" || plainNumeral(text) {
 		return 0, false
 	}
-	p := syntax.NewParser("", r.dialect())
-	e := p.ParseArithFor(text, syntax.Pos{})
-	if p.Err() != nil {
+	e, err := r.readArithText(text, arithReadAsWritten)
+	if err != nil {
 		// Text that will not parse is not this function's to report: the
 		// evaluation that follows parses it again and says so, in the
 		// wording and with the status the dialect gives an assignment.

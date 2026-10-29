@@ -5628,9 +5628,8 @@ func (r *Runner) integerNumber(text string) (int, bool) {
 		return n, true
 	}
 	text = written
-	p := syntax.NewParser("", r.dialect())
-	e := p.ParseArithFor(text, syntax.Pos{})
-	if err := p.Err(); err != nil {
+	e, err := r.readArithText(text, arithReadAsWritten)
+	if err != nil {
 		r.typedValueFatalf("%s", r.diag().ParseFailure(err))
 		return 0, false
 	}
@@ -5903,9 +5902,8 @@ func (r *Runner) floatValue(text string) (float64, bool) {
 	if text == "" {
 		return 0, true
 	}
-	p := syntax.NewParser("", r.dialect())
-	e := p.ParseArithFor(text, syntax.Pos{})
-	if err := p.Err(); err != nil {
+	e, err := r.readArithText(text, arithReadAsWritten)
+	if err != nil {
 		r.typedValueFatalf("%s", r.diag().ParseFailure(err))
 		return 0, false
 	}

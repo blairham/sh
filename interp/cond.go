@@ -1084,20 +1084,19 @@ func (r *Runner) conditionOperand(text string) (value int, failure string) {
 		r.lastArith = intNum(v)
 		return v, ""
 	}
-	p := syntax.NewParser("", r.dialect())
 	// An operand arrives already expanded — the doc above measures that with
 	// `x=7; v='$x'`, which no column reads as 7 — so it is read as the
 	// result it is. Reading it as a program left a `$` with no tree and no
 	// complaint, which evaluated to a silent 0 where bash writes `$x:
 	// arithmetic syntax error: operand expected` (#3303).
-	tree := p.ParseArithExpanded(text, syntax.Pos{})
+	tree, perr := r.readArithText(text, arithReadExpanded)
 	// The text a complaint quotes back is the one a script would recognize,
 	// which is this one without the marks: they are this implementation's
 	// bookkeeping, and a refusal carrying one prints a stray NUL into the
 	// log. The *reading* is done from the marked text, which is the whole
 	// point of having it. See syntax.ArithValueMark.
 	shown := stripArithValueMarks(text)
-	if perr := p.Err(); perr != nil {
+	if perr != nil {
 		return 0, r.diag().ParseFailure(unmarkArithFailure(perr))
 	}
 	v, err := r.evalArith(tree)

@@ -442,9 +442,7 @@ func (r *Runner) printfArithValue(parsed, written string) (arithNum, error, bool
 		// and says nothing about: `printf '%d' ' '` is `[0]` at 0 in both.
 		return intNum(0), nil, false
 	}
-	p := syntax.NewParser("", r.dialect())
-	tree := p.ParseArithFor(text, syntax.Pos{})
-	err := p.Err()
+	tree, err := r.readArithText(text, arithReadAsWritten)
 	if err == nil && tree == nil {
 		// No tree and no complaint is text holding an expansion the parser
 		// leaves for its caller. An operand has already been expanded once

@@ -5,13 +5,14 @@ package interp
 
 import (
 	"maps"
+	"math"
 	"math/rand/v2"
 	"runtime"
-	"runtime/debug"
 	"slices"
 	"strconv"
 	"testing"
 	"time"
+	"unsafe"
 )
 
 // arrayModel is what the store promised while it was a map, and what every
@@ -198,44 +199,149 @@ func appendN(n int) Array {
 	return a
 }
 
-// Appending is O(1) amortized, so appending N elements is O(N): twice the
-// elements may cost about twice the time, and not four times, which is what
-// the map cost when each append searched it for its end (#6099).
-//
-// A ratio of two sizes rather than a number, so the machine's speed and load
-// cancel; the best of several runs, so one descheduled run does not decide
-// it. Four times the elements rather than twice: linear is a ratio near 4 and
-// quadratic one near 16, and the bound at 10 sits between them with room a busy
-// runner cannot close — at twice the elements linear is 2 and quadratic 4, and
-// cache and allocator noise alone took the macOS runner past 3 (#6175).
-//
-// **With the collector held off while a run is timed.** The larger run builds
-// twice the live heap, and a collection during it scans all of it, so on a
-// loaded runner the collector's share alone pushed the ratio past 3 — 3.42,
-// 3.39 and 5.26 on the macOS runner in one afternoon, each passing on rerun
-// (#6175). What the test is about is the appends, so they are what is timed.
+// Appending N elements is O(N) (#6099), which is two promises: an append does
+// the same work whatever the array's length, and the store grows by a factor,
+// so what it copies as it grows comes to a constant per element. The map before
+// #6099 broke the first, since every append searched it for its end; a store
+// that copied itself on every append, or grew by a fixed step, would break the
+// second. Each half is checked by the instrument that can see it.
 func TestAppendingToAnIndexedArrayIsLinear(t *testing.T) {
-	if testing.Short() {
-		t.Skip("times two runs")
+	t.Run("an append costs the same at any length", checkAnAppendCostsTheSameAtAnyLength)
+	t.Run("the store grows by a factor", checkTheStoreGrowsByAFactor)
+}
+
+// The timed half's sizes and bound. appendBound sits between about 1, an append
+// that does a fixed amount of work, and the 200 and more an append that walks
+// the array comes to at appendLong.
+const (
+	appendShort          = 16
+	appendLong           = 1 << 14
+	appendBatch          = 64
+	appendSamples        = 32
+	appendControlSamples = 8
+	appendBound          = 8
+)
+
+// What an append costs on an array of appendShort elements and on one of
+// appendLong: the least of appendSamples batches of appendBatch appends to each,
+// the two sizes taking turns, with each store given room for a batch beforehand
+// so that no timed batch grows it. An append that does a fixed amount of work
+// takes as long on either; one that walks the array, the way the map's search
+// for its end did, takes over 200 times as long on the longer.
+//
+// This used to time the whole build instead, 100,000 appends against 400,000,
+// the best of five, under a bound of 10 on the ratio, and the macOS runner failed
+// it at 10.8 and 12.8 with nothing wrong (#6175, #7020). Four things close the
+// routes by which load reached that ratio:
+//
+//   - A batch is microseconds, far shorter than a scheduler's time slice. On a
+//     contended machine a 5 ms run is often cut by one and a 1 ms run rarely,
+//     so it was the larger run that paid. Here both sizes are timed over equally
+//     short batches, equally likely to be interrupted.
+//   - The two sizes take turns, so a stretch of load (another package's tests
+//     starting, a clock slowing down) lands on both. Timed one size after the
+//     other, it landed on whichever was being timed.
+//   - A batch writes only memory the untimed batch has already written, so no
+//     page is touched for the first time while the clock runs. The old runs
+//     built their stores from nothing, and the larger built four times as much.
+//   - The least batch is kept on each side, and load only ever adds time. To
+//     fail, every batch on the longer array has to be slowed past the bound
+//     while one batch on the shorter is not.
+//
+// Measured on an 18-core M-series Mac with 36 busy loops running and the test
+// held to the efficiency cores (GOMAXPROCS=2, taskpolicy -b), the two taking
+// turns 50 runs at a time: the old form failed 21 of 200, at ratios from 10.2 to
+// 215, and this one none of 200, its highest ratio 1.2 and its control's lowest
+// 239. Without taskpolicy neither failed in 200.
+//
+// **The control is an append that walks the array first**, the shape #6099
+// removed, and the check fails unless the measurement sees it grow: one that
+// cannot tell a walk from no walk passes everything. What the measurement cannot
+// see is the cost of growing the store, which no timed batch pays. That is the
+// other half, and it is counted in bytes.
+func checkAnAppendCostsTheSameAtAnyLength(t *testing.T) {
+	filled := func(n int) Array {
+		return ArrayOf(slices.Repeat([]Element{Scalar("x")}, n)...)
 	}
-	defer debug.SetGCPercent(debug.SetGCPercent(-1))
-	const n = 100_000
-	best := func(n int) time.Duration {
-		b := time.Duration(1<<63 - 1)
-		for range 5 {
-			runtime.GC()
-			start := time.Now()
-			if a := appendN(n); a.Len() != n {
-				t.Fatalf("appended %d, have %d", n, a.Len())
-			}
-			b = min(b, time.Since(start))
+	short, long := filled(appendShort), filled(appendLong)
+	// batch times appendBatch appends to a by add, then deletes them from the
+	// end, so that a is its old length again with the room they took kept.
+	batch := func(a Array, add func(Array)) time.Duration {
+		n := a.Len()
+		start := time.Now()
+		for range appendBatch {
+			add(a)
 		}
-		return b
+		took := time.Since(start)
+		for i := n + appendBatch - 1; i >= n; i-- {
+			a.Delete(i)
+		}
+		if a.Len() != n || a.pastTheEnd() != n {
+			t.Fatalf("after a batch on %d elements: %d held, past the end %d", n, a.Len(), a.pastTheEnd())
+		}
+		return took
 	}
-	small, large := best(n), best(4*n)
-	if ratio := float64(large) / float64(small); ratio > 10 {
-		t.Fatalf("appending %d took %v and %d took %v: ratio %.2f, want about 4 (linear)",
-			n, small, 4*n, large, ratio)
+	// least is the least of samples batches on each array, the two taking turns.
+	least := func(samples int, add func(Array)) (onShort, onLong time.Duration, ratio float64) {
+		onShort, onLong = math.MaxInt64, math.MaxInt64
+		for range samples {
+			onShort = min(onShort, batch(short, add))
+			onLong = min(onLong, batch(long, add))
+		}
+		return onShort, onLong, float64(onLong) / float64(max(onShort, 1))
+	}
+	appendOne := func(a Array) { a.Set(a.pastTheEnd(), Scalar("x")) }
+	walkThenAppend := func(a Array) {
+		end := 0
+		for k := range a.All() {
+			end = max(end, k+1)
+		}
+		a.Set(end, Scalar("x"))
+	}
+	batch(short, appendOne) // untimed: the room for a batch
+	batch(long, appendOne)
+	runtime.GC()
+	s, l, ratio := least(appendControlSamples, walkThenAppend)
+	t.Logf("control, walking first: %v on %d elements, %v on %d, ratio %.2f", s, appendShort, l, appendLong, ratio)
+	if ratio <= appendBound {
+		t.Fatalf("the control, %d appends that each walk the array first, took %v on %d elements and %v on %d: "+
+			"ratio %.2f, so the measurement cannot see a walk", appendBatch, s, appendShort, l, appendLong, ratio)
+	}
+	s, l, ratio = least(appendSamples, appendOne)
+	t.Logf("%d appends: %v on %d elements, %v on %d, ratio %.2f", appendBatch, s, appendShort, l, appendLong, ratio)
+	if ratio > appendBound {
+		t.Fatalf("%d appends took %v on an array of %d elements and %v on one of %d: ratio %.2f, "+
+			"want about 1 (an append does not walk the array)", appendBatch, s, appendShort, l, appendLong, ratio)
+	}
+}
+
+// What the store allocates while 4096 elements are appended to an empty array,
+// counted in elements: a store that grows by a factor allocates a few elements'
+// worth for each one appended, however long the array gets (Go's growth makes
+// it under six), where one that copied itself on every append allocates half
+// the array's length for each, 2048 here, and one that grew by a fixed step of
+// s allocates 2048/s. Bytes rather than time, because the figure is the same on
+// every run on every machine and there is nothing in it for a busy runner to
+// move. The least of three is kept because another goroutine's allocation can
+// add to the figure and nothing can take from it.
+func checkTheStoreGrowsByAFactor(t *testing.T) {
+	const n, bound = 4096, 16
+	least := uint64(math.MaxUint64)
+	var before, after runtime.MemStats
+	for range 3 {
+		runtime.ReadMemStats(&before)
+		a := appendN(n)
+		runtime.ReadMemStats(&after)
+		if a.Len() != n {
+			t.Fatalf("appended %d, have %d", n, a.Len())
+		}
+		least = min(least, after.TotalAlloc-before.TotalAlloc)
+	}
+	perElement := float64(least) / n / float64(unsafe.Sizeof(Element{}))
+	t.Logf("appending %d allocated %d bytes, %.2f elements' worth per element", n, least, perElement)
+	if perElement > bound {
+		t.Fatalf("appending %d elements allocated %d bytes, %.1f elements' worth for each one appended: "+
+			"want a few at most (the store grows by a factor)", n, least, perElement)
 	}
 }
 

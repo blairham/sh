@@ -2156,6 +2156,13 @@ func Semantics() interp.Semantics {
 	s.ReadArrayTakesOneNameOnly = interp.Yes
 	s.ReadTimeoutKeepsWhatArrived = interp.No
 	s.ReadTimeoutBoundsReadability = interp.Yes
+	// And that wait, and only that one, is ended by a trapped signal as the
+	// deadline would end it: `read -r -t 5 l` on a fifo with nothing in,
+	// INT trapped and sent 0.3 s in, is `T`, 1, `l` untouched and the line
+	// written after it the next read's, where a `read` without `-t` reads
+	// on through the same signal. Measured 2026-10-29 (#7032); see
+	// interp.Semantics.ReadTimeoutWaitEndedByATrappedSignal.
+	s.ReadTimeoutWaitEndedByATrappedSignal = interp.Yes
 	s.ArithLeadingZeroIsOctal = interp.No
 	// Nothing makes a leading zero octal here, so `let` and `(( ))` read one
 	// alike and the axis that parts them elsewhere has nothing to change.

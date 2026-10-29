@@ -76,6 +76,13 @@ func TestNoAnsweredAxisRefusesAtRunTime(t *testing.T) {
 			"ReadCountJudgesTheNamesAfterTheFirst",
 		},
 		{
+			"a count the input ends short of",
+			`printf ab | { read -n 3 v; echo "st=$? [$v]"; }`,
+			"ReadPartialCountSucceeds — asked only where some but fewer than " +
+				"N characters arrive, so a full count or an empty input " +
+				"reaches no question and cannot stand in for this (#7033)",
+		},
+		{
 			"which of echo -e -E decides",
 			`echo -e -E 'm\tn'`,
 			"EchoLastEscapeFlagWins",

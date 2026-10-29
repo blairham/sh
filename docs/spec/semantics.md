@@ -11340,6 +11340,9 @@ The letters themselves diverge before the behaviors do:
   why `read -n 3 v` leaves v empty there.
 - **Ends short of the count.** `printf 'ab' | read -n 3 v` is st=1 in bash
   and st=0 in ksh93, both keeping `ab` — `ReadPartialCountSucceeds`.
+  BusyBox ash 1.37.0 answers as bash does, row for row: st=1 keeping `ab`
+  under `-r`, `-t 1` and `-d x` alike, and `a b` under `-n 5` into two
+  names is `[a][b]` at 1 (oracle run, 2026-10-29, #7033).
   The same input under `-N 5` reports 1 in both, bash keeping `ab` and
   ksh93 assigning nothing — `ReadExactCountKeepsPartial`. Wholly empty
   input is st=1 with nothing assigned everywhere.

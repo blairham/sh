@@ -216,7 +216,7 @@ func (r *Runner) expandPrefixTraceValues(assigns []*syntax.Assign) {
 	// routes expand as they store.
 	var held heldPrefix
 	defer held.release(r)
-	r.expandPrefixTraceValuesHolding(assigns, &held)
+	r.expandPrefixTraceValuesHolding(assigns, &held, "")
 }
 
 // expandPrefixTraceValuesHolding is expandPrefixTraceValues for a caller that
@@ -226,7 +226,10 @@ func (r *Runner) expandPrefixTraceValues(assigns []*syntax.Assign) {
 // Measured 2026-10-15 from `-c` under `env -i PATH=/usr/bin:/bin`, `set -x;
 // x=1 y=$x true` writes `y=1` in ksh93u+ and zsh 5.9.2, where this shell
 // wrote `y=”` and handed the command an empty `y` (#6547).
-func (r *Runner) expandPrefixTraceValuesHolding(assigns []*syntax.Assign, held *heldPrefix) {
+//
+// local is the declaration the prefix becomes a local under, or "" — see
+// Runner.prefixLocalDeclaration.
+func (r *Runner) expandPrefixTraceValuesHolding(assigns []*syntax.Assign, held *heldPrefix, local string) {
 	for _, a := range assigns {
 		if a.Operand {
 			continue
@@ -267,8 +270,12 @@ func (r *Runner) expandPrefixTraceValuesHolding(assigns []*syntax.Assign, held *
 		}
 		// The value first and the two slices afterwards, in that order: the
 		// lookup reads them as a pair, and an assignment recorded before its
-		// value would be found with nothing beside it.
-		joined := r.recordPrefixTraceValue(a, r.prefixExpansion(a))
+		// value would be found with nothing beside it. A local's cell is made
+		// between the two, after the value and before the join. See
+		// interp/prefixdeclarationlocal.go.
+		value := r.prefixExpansion(a)
+		r.prefixEntryBecomesLocal(a, local)
+		joined := r.recordPrefixTraceValue(a, value)
 		r.holdPrefixEntry(held, a, joined)
 	}
 }

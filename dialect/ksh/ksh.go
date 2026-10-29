@@ -1856,6 +1856,13 @@ func Semantics() interp.Semantics {
 	// 5. The same split this shell makes for a `typeset` inside the body,
 	// read from the prefix's side (#3161).
 	s.PrefixToAKeywordFunctionIsScopedToTheCall = interp.Yes
+	// And a prefix in front of `typeset` inside such a body, which persists
+	// because `typeset` is special here, is the body's own local: measured
+	// 2026-10-29, `function g { echo "g v=$v"; }; function f { v=new typeset
+	// y=1; echo "in v=$v"; g; }; v=old; f; echo "out v=$v"` is `in v=new`,
+	// `g v=old`, `out v=old`. In front of `readonly` or `export` it stays an
+	// ordinary assignment, and so does a POSIX-form body's (#7002).
+	s.PrefixToALocalDeclarationIsALocal = interp.Yes
 	// An array literal written as a prefix is the array: measured 2026-10-15
 	// on ksh93u+, `f(){ typeset -p x; }; x=(a b) f` lists `typeset -a
 	// x=(a b)` and `x=(a b) printenv x` finds no `x` (#6547).

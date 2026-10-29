@@ -180,8 +180,16 @@ func aPrefixIsWritten(assigns []*syntax.Assign) bool {
 // lines in the wrong order again. Measured on bash 5.3.20, `set -x; w=1
 // a[1]=v q=1 f`: `+ w=1`, the identifier complaint, `+ q=1`, `+ f`.
 //
+// local is the declaration the prefix becomes a local under, or "" — see
+// Runner.prefixLocalDeclaration.
+//
 // Reports whether it wrote those lines, so the caller writes the command alone.
-func (r *Runner) walkThePrefixBeforeTheRedirections(assigns []*syntax.Assign, walk prefixWalk, traceEach bool) bool {
+func (r *Runner) walkThePrefixBeforeTheRedirections(
+	assigns []*syntax.Assign,
+	walk prefixWalk,
+	traceEach bool,
+	local string,
+) bool {
 	// Whether a subscripted word in this prefix is refused at all, settled
 	// once for the command the way the pass it replaces settled it. A `false`
 	// here is a prefix with no subscripted word in it as often as it is a
@@ -231,7 +239,11 @@ func (r *Runner) walkThePrefixBeforeTheRedirections(assigns []*syntax.Assign, wa
 		if r.prefixWalkFailed(walk) {
 			break
 		}
-		joined := r.recordPrefixTraceValue(a, r.prefixExpansion(a))
+		value := r.prefixExpansion(a)
+		// A local's cell is made after the value and before the join. See
+		// interp/prefixdeclarationlocal.go.
+		r.prefixEntryBecomesLocal(a, local)
+		joined := r.recordPrefixTraceValue(a, value)
 		if r.prefixWalkFailed(walk) {
 			// The value would not expand, and nothing of it is traced: the
 			// trace line expands PS4, which would take the failure off the

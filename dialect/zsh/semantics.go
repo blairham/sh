@@ -1553,6 +1553,12 @@ func Semantics() interp.Semantics {
 	// The same answer as bash, measured the same day on 5.9.2: `s+=5 kf` in
 	// front of a `function`-form function shows the body `base5` (#3161).
 	s.PrefixToAKeywordFunctionIsScopedToTheCall = interp.No
+	// Under `posixbuiltins` a prefix in front of `local` or `typeset` persists,
+	// and it is an ordinary assignment rather than the function's local:
+	// measured 2026-10-29 on 5.9.2, `g() { echo "g v=$v"; }; f() { v=new
+	// local y=1; g; echo "in v=$v"; }; v=old; f; echo "out v=$v"` is `new` all
+	// three times. This shell does not keep that prefix yet (#7009).
+	s.PrefixToALocalDeclarationIsALocal = interp.No
 	// An array literal written as a prefix is the array: measured 2026-10-15
 	// on 5.9.2, `f(){ typeset -p x; }; x=(a b) f` lists `typeset -g -a x=( a
 	// b )` and `x=(a b) printenv x` finds no `x` (#6547).

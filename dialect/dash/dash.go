@@ -261,6 +261,12 @@ func Semantics() interp.Semantics {
 	s.CommandKeepsASpecialBuiltinsPrefix = interp.No
 	s.AssignmentPrefixPersistsAfterAFunction = interp.No
 	s.PrefixToAFunctionIsExported = interp.Yes
+	// A prefix in front of `local`, which persists because `local` is special
+	// here, is an ordinary assignment and not a local of the function:
+	// measured 2026-10-29, `g() { echo "g v=$v"; }; f() { v=new local y=1;
+	// echo "in v=$v"; g; }; v=old; f; echo "out v=$v"` is `new` all three
+	// times (#7002).
+	s.PrefixToALocalDeclarationIsALocal = interp.No
 	// unanswered AssignmentPrefixMakesAFreshCell: the question is what a
 	// prefix does to the *kind* and the *letters* of the name it displaces,
 	// and this shell has neither — no arrays, no `typeset`, and so no binding

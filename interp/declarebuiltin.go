@@ -6850,11 +6850,7 @@ func (r *Runner) declarationShadowRefused(name string) bool {
 // The result reports whether this call is what took the scope's copy — see
 // shadow, and declareEmpty, which is the one caller that needs to know.
 func (r *Runner) shadowTypeset(name string) (fresh, redeclared bool) {
-	if len(r.scopes) == 0 {
-		return false, true
-	}
-	if !r.scopes[len(r.scopes)-1].keyword &&
-		r.ask(r.sem().TypesetLocalNeedsKeywordFunction, "`typeset` needing a keyword-defined function to declare a local") {
+	if !r.typesetDeclaresALocalHere() {
 		// No binding is made, so whatever the name holds it is holding
 		// already — the same answer the no-scope case gives and for the same
 		// reason.
@@ -6865,6 +6861,20 @@ func (r *Runner) shadowTypeset(name string) (fresh, redeclared bool) {
 		return r.shadowOptindAsTheCursor()
 	}
 	return r.shadow(name)
+}
+
+// typesetDeclaresALocalHere reports whether `typeset` running now declares a
+// local, which is shadowTypeset's question asked on its own: there is a scope,
+// and the dialect does not keep that scope for `function`-form bodies, or this
+// one is one. An assignment prefix in front of the declaration asks it too, so
+// that it lands where the declaration's own locals land — see
+// interp/prefixdeclarationlocal.go.
+func (r *Runner) typesetDeclaresALocalHere() bool {
+	if len(r.scopes) == 0 {
+		return false
+	}
+	return r.scopes[len(r.scopes)-1].keyword ||
+		!r.ask(r.sem().TypesetLocalNeedsKeywordFunction, "`typeset` needing a keyword-defined function to declare a local")
 }
 
 // shadow saves a name in the innermost scope so the function's exit puts it

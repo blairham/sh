@@ -9243,7 +9243,7 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 				// declaration's operand at all, and an ordinary command's
 				// argument is expanded before its prefix everywhere. See
 				// interp/prefixoperandorder.go.
-				if !r.prefixBeforeADeclarationsOperand(c.Assigns, &prefixHeld) {
+				if !r.prefixBeforeADeclarationsOperand(c.Assigns, argv, &prefixHeld) {
 					break
 				}
 				// Stored and traced as it is reached, in the column that
@@ -9308,7 +9308,7 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 			}
 			// The appending spelling of the same operand, so the same
 			// ordering question with the same answer.
-			if !r.prefixBeforeADeclarationsOperand(c.Assigns, &prefixHeld) {
+			if !r.prefixBeforeADeclarationsOperand(c.Assigns, argv, &prefixHeld) {
 				break
 			}
 			var on bool
@@ -9771,7 +9771,7 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 		// parentheses can hold and it answers the same way in every column.
 		// Asked only where there is an operand, so a command with none asks
 		// nothing. See interp/prefixoperandorder.go.
-		if !r.prefixBeforeADeclarationsOperand(c.Assigns, &prefixHeld) {
+		if !r.prefixBeforeADeclarationsOperand(c.Assigns, argv, &prefixHeld) {
 			r.status = 2
 			return nil
 		}
@@ -9950,8 +9950,16 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 		// interp/prefixredirorder.go. After the frozen-name check above, so
 		// the column that refuses a prefix before it evaluates anything still
 		// evaluates nothing.
+		//
+		// Where the prefix is a local of the running function, the walk makes
+		// its cell, between each value and its join. See
+		// interp/prefixdeclarationlocal.go.
+		local, answered := r.prefixLocalDeclaration(c.Assigns, argv)
+		if !answered {
+			return nil
+		}
 		tracedHere = r.walkThePrefixBeforeTheRedirections(c.Assigns, walk,
-			tracesPrefix && !prefixFollows && r.tracesEachPrefixEntryOnItsOwnLine())
+			tracesPrefix && !prefixFollows && r.tracesEachPrefixEntryOnItsOwnLine(), local)
 		if r.unspecified {
 			return nil
 		}
@@ -10249,7 +10257,7 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 				inTurn, _ = ex.readPrefixSubscriptBeforeTheValue(a)
 			}
 			if !ex.prefixWalkFailed(walk) {
-				ex.expandPrefixTraceValuesHolding(one, &held)
+				ex.expandPrefixTraceValuesHolding(one, &held, "")
 			}
 			if inTurn && !ex.prefixWalkFailed(walk) {
 				ex.placePrefixSubscript(a, storedHere)
@@ -10684,6 +10692,13 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 		}
 		var undo []savedVar
 		var held []string
+		// The declaration this prefix becomes a local under, where it is one,
+		// so the store below lands in the running function's own cell. See
+		// interp/prefixdeclarationlocal.go.
+		local, answered := r.prefixLocalDeclaration(c.Assigns, argv)
+		if !answered {
+			return nil
+		}
 		// The marker was taken above the frozen names' values rather than
 		// here, so a value of theirs that would not expand is this walk's
 		// failure and gives the command up.
@@ -10727,6 +10742,12 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 				_ = r.prefixExpansion(a)
 				continue
 			}
+			// Where the entry is a local of the running function, the value
+			// and then the cell, ahead of everything below that reads or
+			// resets the name: a reference the shell holds is not followed
+			// into a cell the body makes fresh, and a typed outer name is not
+			// the one reset. See interp/prefixdeclarationlocal.go.
+			r.prefixEntryBecomesLocalAfterItsValue(a, local)
 			// The name this prefix's entry is made on, which a reference
 			// moves off the word the script wrote — the same rule the
 			// function route above follows, and the same reason. See

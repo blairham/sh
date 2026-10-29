@@ -18654,7 +18654,11 @@ type Semantics struct {
 	// What arrives after the read was given up is the next read's, whole, in
 	// every column that gives it up: `late` written after the signal is
 	// `next [late]` to a second read in dash, ksh93 and ash. Measured
-	// 2026-10-29 (#7024); see Runner.pollingTrapSource.
+	// 2026-10-29 (#7024); see readWatch.awaitByte.
+	//
+	// *When* it is given up is the next axis, ReadAbandonedWhen: the three
+	// columns that give a read up disagree about a signal that lands while
+	// input is still arriving.
 	ReadIsAbandonedByATrappedSignal Answer
 	// ReadAbandonedReportsTheSignal has a `read` given up for a trapped
 	// signal answer 256 plus the signal's number, rather than the 1 an end
@@ -18666,6 +18670,79 @@ type Semantics struct {
 	// name is emptied, `read -r a b` included; dash and BusyBox ash answer
 	// 1 (corpus row read/interrupted-by-a-trapped-signal).
 	ReadAbandonedReportsTheSignal Answer
+	// ReadAbandonedWhen is *when* a trapped signal gives up a `read`, in the
+	// dialects ReadIsAbandonedByATrappedSignal says give one up: the three
+	// that do agree about a read waiting on nothing, and disagree about one
+	// whose input is arriving. See the constants.
+	//
+	// Measured 2026-10-29 from -c against dash 0.5.12, BusyBox ash 1.37.0 in
+	// the pinned alpine image and ksh93u+ 2012-08-01, an INT trap `echo T`,
+	// the stream a fifo on descriptor 3. A line still arriving: a job writes
+	// two 64 KiB blocks of `a` — the second blocks until the read has taken
+	// the first — then sends INT, then two blocks more, a pause, a newline
+	// and `tail`. `exec 3<>p` opens the fifo both ways; `exec 4<>p 3<p` hands
+	// the read a descriptor open for reading alone:
+	//
+	//	                     3<>p                            3<p
+	//	dash, ash            T, st=0 len=262144 next=4       the same
+	//	ksh93                T, st=258 len=131072 next=131072  T, st=0 len=262144 next=4
+	//
+	// Part of a line in, then a wait that the signal lands in, `cd` written
+	// after it (`ab` waiting, INT at 0.3 s, `cd` and `end` 0.5 s later):
+	//
+	//	                     read -r l <&3, 3<p    3<>p             read -r -u3 l, 3<p
+	//	dash                 T, st=1 l=[ab]        the same         (no -u)
+	//	ash                  T, st=1 l=[]          the same         the same
+	//	ksh93                T, st=0 l=[abcd]      T, st=258 l=[ab]  T, st=258 l=[ab]
+	//
+	// and in every give-up the next read has `cd`, whole. ash's empty `l` is
+	// #7028, not this axis. So dash and ash finish a line still arriving and
+	// give up a wait the signal lands in; a signal that came while bytes were
+	// there does not give up a wait that begins after it, and a second one
+	// that lands in that wait does. ksh93 gives a read on its standard input
+	// from a read-only descriptor up only while the read waits for the first
+	// byte of a line — a newline it has read starts another, so a continued
+	// line is given up after its `\`-newline — and every other read at the
+	// next byte. `-t` reads follow the same readings: `read -r -t 5 l <&3`
+	// with nothing in is `T, st=258 l=[]` in ksh93 and `T, st=1 l=[]` in ash.
+	//
+	// The ksh93 pipe-or-fifo split #7027 was filed under is this rule: a pipe
+	// is open for reading alone, and the fifo it was measured against had
+	// been opened `<>`. A fifo opened `<` reads on as the pipe does.
+	//
+	// Asked only once a trapped signal has arrived during a read: until then
+	// every reading waits for a byte and reads it alike, so an ordinary read,
+	// with a trap set or without one, asks nothing. Not reached at all where
+	// ReadIsAbandonedByATrappedSignal is no.
+	//
+	// What is not modeled, all ksh93's: an inherited standard input open both
+	// ways reads on where this gives it up, and so does a `-u` descriptor made
+	// by `exec 4<&3`; `read -N` given up keeps nothing and leaves what it had
+	// read in the stream; and the handler of a read that goes on runs at the
+	// arrival, as bash's and zsh's do, where here it runs after the read
+	// (#7030, #7031). See docs/spec/semantics.md.
+	//
+	// unexhibited ReadAbandonedAtTheNextByte: no column answers it whole. It is
+	// the reading this shell had for all three, and ksh93's for the reads its
+	// own reading does not cover — which ReadAbandonedOnlyAtTheStartOfALine
+	// carries rather than a column holding it.
+	//
+	// unpinned dash: no corpus row can time a signal against a stream still
+	// arriving — the one row, read/interrupted-by-a-trapped-signal, waits on
+	// nothing, where every reading gives the read up. Pinned by
+	// TestATrappedSignalGivesUpAReadWhereTheShellsDo.
+	//
+	// unpinned ash: the same reach. Pinned by
+	// TestATrappedSignalGivesUpAReadWhereTheShellsDo.
+	//
+	// unpinned ksh: the same reach. Pinned by
+	// TestATrappedSignalGivesUpAReadWhereTheShellsDo.
+	//
+	// unpinned bash: never asked. bash keeps reading through a trapped signal
+	// (ReadIsAbandonedByATrappedSignal is no), and its answer is POSIX's.
+	//
+	// unpinned zsh: never asked, for the same reason.
+	ReadAbandonedWhen ReadAbandonmentReading
 	// DisownRemovesTheJob makes `disown` take the job out of the table, so
 	// a later `jobs` no longer lists it: bash and zsh. ksh93's disown only
 	// shields the job from the HUP an exiting shell would send, and its
@@ -36665,6 +36742,10 @@ func PosixSemantics() Semantics {
 		AReapLeavesFinishedJobsUnmarked: No,
 		// And where it is given up, it answers 1. See the field.
 		ReadAbandonedReportsTheSignal: No,
+		// And only by a signal that arrives while it waits: the standard
+		// leaves the read unspecified, and two of the three columns that give
+		// one up answer this. See the field.
+		ReadAbandonedWhen: ReadAbandonedOnlyDuringAWait,
 		// And a named one, and a listing marks the table as it stood. See
 		// the fields.
 		WaitLeavesTheJobForTheListing:     No,
@@ -37091,6 +37172,10 @@ func CoreSemantics() Semantics {
 		AReapLeavesFinishedJobsUnmarked: No,
 		// And where it is given up, it answers 1. See the field.
 		ReadAbandonedReportsTheSignal: No,
+		// And only by a signal that arrives while it waits: the standard
+		// leaves the read unspecified, and two of the three columns that give
+		// one up answer this. See the field.
+		ReadAbandonedWhen: ReadAbandonedOnlyDuringAWait,
 		// And a named one, and a listing marks the table as it stood. See
 		// the fields.
 		WaitLeavesTheJobForTheListing:     No,

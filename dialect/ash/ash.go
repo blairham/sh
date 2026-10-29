@@ -2346,6 +2346,10 @@ func Semantics() interp.Semantics {
 	// A trapped signal gives up a waiting `read` at 1. See
 	// interp.Semantics.ReadIsAbandonedByATrappedSignal, measured 2026-10-03.
 	s.ReadIsAbandonedByATrappedSignal = interp.Yes
+	// But only by a signal that lands while it waits, `read -t` included.
+	// Measured 2026-10-29 in the pinned image; see
+	// interp.Semantics.ReadAbandonedWhen.
+	s.ReadAbandonedWhen = interp.ReadAbandonedOnlyDuringAWait
 
 	// ---- control flow and redirection ----
 

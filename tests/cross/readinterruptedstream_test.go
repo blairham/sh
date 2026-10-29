@@ -32,10 +32,11 @@ import (
 //
 // The second row is dash's alone because the other two answer it for reasons
 // that are not this one: BusyBox ash leaves `l` unassigned where dash keeps
-// `ab`, and ksh93 on a pipe does not give the read up once part of the line
-// is in (`st=0 l=[abcd]`), where on a fifo it does and keeps `ab`. What a
-// read given up leaves in the stream is the first row's question, and all
-// three answer it alike.
+// `ab` (#7028), and ksh93 does not give a read of a descriptor open for
+// reading alone up once part of the line is in (`st=0 l=[abcd]`) — a pipe is
+// one, and a fifo opened `<>` is not (#7027; TestATrappedSignalGivesUpAReadWhereTheShellsDo).
+// What a read given up leaves in the stream is the first row's question, and
+// all three answer it alike.
 //
 // The rest of the input is written once the shell has printed the handler's
 // line, which it does only after the read has returned — so nothing about the

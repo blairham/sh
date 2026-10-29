@@ -16,11 +16,16 @@ import (
 // holds, a coprocess's output — and false where the stream is not one that can
 // be polled. Those keep timedByteSource, whose reader goroutine is the only way
 // to put a deadline on an io.Reader.
+//
+// watch is the read's watch for a trapped signal, nil where nothing can give
+// it up: a deadline does not stop a signal giving a read up, in the dialects
+// that give one up (#7027). See readWatch.
 func polledTimedSource(
 	ctx context.Context,
 	in io.Reader,
 	timeout time.Duration,
 	bounded bool,
+	watch *readWatch,
 ) (next func() (byte, int), can bool) {
 	if timeout <= 0 {
 		return nil, false
@@ -29,7 +34,7 @@ func polledTimedSource(
 	if !can {
 		return nil, false
 	}
-	return pollingDeadlineSource(ctx, in, fd, timeNow().Add(timeout), bounded), true
+	return pollingDeadlineSource(ctx, in, fd, timeNow().Add(timeout), bounded, watch), true
 }
 
 // pollableDescriptor is the descriptor under in, where in is one and can be
@@ -62,7 +67,8 @@ func pollableDescriptor(in io.Reader) (fd int, can bool) {
 // instead. Nothing is asked of the stream until then, so whatever ends a read
 // early leaves no read of it in flight to take a byte somebody else is owed.
 // Two waits use it: a deadline's (pollingDeadlineSource) and a trapped
-// signal's (Runner.pollingTrapSource).
+// signal's (readWatch.awaitByte), and a timed read in a dialect a trapped
+// signal gives a read up in has both at once.
 func polledSource(in io.Reader, wait func() int) func() (byte, int) {
 	read := directByteSource(in)
 	return func() (byte, int) {
@@ -122,30 +128,59 @@ func timeNow() time.Time { return time.Now() }
 // stream rather than a deadline, and pollingByteSource answers it — one
 // dialect keeps taking whatever is waiting there, which is exactly what a
 // deadline that has passed must not do.
+//
+// **A watch makes each wait a trapped signal's to end as well**, which is
+// what a timed read is in ksh93 and BusyBox ash: measured 2026-10-29, `read
+// -r -t 5 l` on a fifo with nothing in, INT at 0.3 s, is `T st=258 l=[]` and
+// `T st=1 l=[]` there, and the line written after is the next read's, where
+// this shell waited the signal out and read it (#7027). The readings of
+// Semantics.ReadAbandonedWhen hold here as they do without `-t`: ksh93 reads
+// on through a line it has begun and is then stopped by the deadline.
 func pollingDeadlineSource(
 	ctx context.Context,
 	in io.Reader,
 	fd int,
 	deadline time.Time,
 	bounded bool,
+	watch *readWatch,
 ) func() (byte, int) {
 	first := true
-	return polledSource(in, func() int {
-		if first || bounded {
+	wait := func(until time.Time) int {
+		if watch != nil {
+			return watch.awaitByte(ctx, fd, until)
+		}
+		ready, can := awaitReadable(ctx, fd, until)
+		if !can {
+			return evEOF
+		}
+		if !ready {
+			return evTimeout
+		}
+		return evByte
+	}
+	read := polledSource(in, func() int {
+		switch {
+		case first || bounded:
 			if !first && !timeNow().Before(deadline) {
 				return evTimeout
 			}
-			ready, can := awaitReadable(ctx, fd, deadline)
-			if !can {
-				return evEOF
+			if ev := wait(deadline); ev != evByte {
+				return ev
 			}
-			if !ready {
-				return evTimeout
+		case watch != nil:
+			// The rest of a read whose deadline bounded only its first
+			// byte, which a trapped signal can still give up.
+			if ev := wait(time.Time{}); ev != evByte {
+				return ev
 			}
 		}
 		first = false
 		return evByte
 	})
+	if watch != nil {
+		return watch.track(read)
+	}
+	return read
 }
 
 // canceledReadNoticedWithin is how long a timed read waiting on a descriptor

@@ -489,6 +489,15 @@ func (r *Runner) runWithoutFunctions(ctx context.Context, args []string, default
 		// bash words it identically with and without the wrapper.
 		st := r.callBuiltin(ctx, args[0], fn, args[1:])
 		r.takeSpecialBuiltinFailure()
+		if !outerCommand || !r.pendingFileError() {
+			// A store refusal this word declined to take is carried to the
+			// `command` that named this one directly — `command command
+			// readonly x=5` declines twice — and let go anywhere else, so a
+			// boundary that catches it further out leaves no mark behind for
+			// a later failure to be misread by. See
+			// Runner.frozenOperandOutlivesTheWord.
+			r.frozenOperandOutlivesTheWord = false
+		}
 		r.throughCommandWord = outerCommand
 		r.inBuiltin = outer
 		r.reportExitValue(st)
@@ -570,6 +579,16 @@ func (r *Runner) runWithoutFunctions(ctx context.Context, args []string, default
 // somewhere under this `command` whatever the flag says.
 func (r *Runner) takeSpecialBuiltinFailure() {
 	if !r.pendingFileError() {
+		return
+	}
+	if r.frozenOperandOutlivesTheWord &&
+		r.ask(r.sem().FrozenOperandRefusalOutlivesTheCommandWord,
+			"a declaration's value refused by a freeze staying fatal through `command`") {
+		// Not the builtin's failure but its store's, which is the
+		// assignment's and is not the word's to take: `function f {
+		// command readonly x=5; echo in; }` ends `f` in ksh93 exactly as a
+		// bare `x=5` would, where `command readonly 1y` in the same place
+		// reports and carries on (#6962).
 		return
 	}
 	// The narrow half first, so a dialect answering the axis no still gets

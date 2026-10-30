@@ -31901,6 +31901,54 @@ Recorded as `cmd/command-bounds-a-fatal-error-raised-inside`,
 `cmd/posixbuiltins-does-not-bound-a-fatal-error-raised-inside` and
 `cmd/command-does-not-bound-a-request-to-stop` (#2755).
 
+**`FrozenOperandRefusalOutlivesTheCommandWord`** — bash no · dash no ·
+ksh93 **yes** · zsh no
+
+Keeps a declaration's **value** refused by a freeze fatal through a
+`command` in front of the declaration. A declaration can draw two refusals
+and ksh93 parts them by kind: the **name** is the builtin's to judge, so
+`command readonly 1y` reports and carries on like any special builtin
+failure, while the **store** is the assignment's, so it ends what a bare
+`x=5` would end.
+
+Measured 2026-10-30 on ksh93u+ 2012-08-01 under `env -i PATH=/usr/bin:/bin`,
+`-c`, with `readonly x=0` in front and `echo "st=$? after"` behind:
+
+| inside the call | ksh93u+ |
+| --- | --- |
+| `function f { command readonly x=5; echo in; }; f` | `f: line 1: x: is read only`, `st=1 after` — no `in` |
+| `function f { command export x=5; echo in; }; f` | the same |
+| `function f { command readonly x+=5; echo in; }; f` | the same |
+| `function f { command readonly z=1 x=5; echo in; }; f` | the same, with `z=1` landed |
+| `function f { command command readonly x=5; echo in; }; f` | the same |
+| `function f { command readonly x=5 \|\| echo or; echo in; }; f` | the same, and no `or` |
+| `function f { command readonly 1y; echo in; }; f` | `readonly: 1y: invalid variable name`, `in`, `st=0 after` |
+| `command typeset +r x` (top level) | `typeset: x: is read only`, `st=1 after` — a letter is the builtin's too |
+
+At the top level and in a POSIX-style function the value is refused before
+the builtin runs, so `command` is never around the store and the script
+ends there in this column with or without the axis. It is the
+`function`-form call, where `readonly` and `export` land the value on the
+caller's name from inside the builtin, that puts the store under the word.
+
+The other columns soften it, measured the same day over the same rows:
+dash 0.5.12 prints `in` and `st=0 after` from a function and `st=2 after`
+at the top level; zsh 5.9.2 under `posixbuiltins` — the one route on which
+its `command` reaches a builtin — prints `in` and carries on; bash 5.3.20,
+bash under argv[0] `sh` and bash 3.2.57 never call the refusal fatal
+behind the word. BusyBox ash was recorded at `after`, 2, when #6962 was
+filed. POSIX's answer is theirs: `command` takes away the special
+builtin's power to end the shell, and the operand is that builtin's.
+
+Asked only where the refusal is fatal, of a value a declaration stores,
+while the builtin `command` named is the one storing — never of a store
+reached through a statement the builtin ran, since `Runner.stmt` has
+already cleared the word by then. A refusal the word declined is carried
+to a `command` that named this one directly and let go at the first that
+did not, so a function boundary that catches it leaves nothing behind:
+`function g { command readonly x=5; }; g || command set -Z` still softens
+the `set` at 2 (#6962).
+
 **`BadOptionToSpecialBuiltinFatalInPosixMode`** — bash yes · dash yes ·
 ksh93 yes · zsh **no**
 

@@ -1487,6 +1487,13 @@ func Semantics() interp.Semantics {
 	// shell — the three expansion producers cannot, because its `eval` is
 	// already a boundary for those (FatalErrorEndsBorrowedTextOnly).
 	s.FatalErrorEndsAtTheCommandWord = interp.Yes
+	// Except for a declaration's value refused by a freeze, which is the
+	// assignment's refusal and not the builtin's: `readonly x=0; function f
+	// { command readonly x=5; echo in; }; f` ends `f` with no `in`, while
+	// `command readonly 1y` in the same body reports and carries on
+	// (#6962). See
+	// interp.Semantics.FrozenOperandRefusalOutlivesTheCommandWord.
+	s.FrozenOperandRefusalOutlivesTheCommandWord = interp.Yes
 	s.GetoptsRejectsUnknownOption = interp.Yes
 	s.ShiftCountIsArithmetic = interp.Yes
 	s.TrapBodyRunsWhatParsed = interp.No

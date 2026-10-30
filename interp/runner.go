@@ -4014,6 +4014,18 @@ type Runner struct {
 	// nothing that builtin goes on to run. See takeSpecialBuiltinFailure for
 	// the measurement that draws the line there.
 	throughCommandWord bool
+	// frozenOperandOutlivesTheWord marks the fatal error unwinding as a
+	// declaration's **value** refused by a freeze, raised by the builtin
+	// `command` named while it was storing — the one refusal of a
+	// declaration that is the assignment's rather than the builtin's, so the
+	// word may not reach it. See
+	// Semantics.FrozenOperandRefusalOutlivesTheCommandWord.
+	//
+	// Set at the refusal only while throughCommandWord is, so nothing but
+	// the builtin's own store can raise it; read by takeSpecialBuiltinFailure
+	// and let go in runWithoutFunctions at the first `command` that did not
+	// name the one inside it directly. It cannot outlive the error it marks.
+	frozenOperandOutlivesTheWord bool
 	// defaultPathSearch is `command -p`: the lookup walks the standard
 	// utility path rather than this shell's PATH, so a script that cannot
 	// trust PATH can still reach a standard utility. Set around the lookup
@@ -14614,6 +14626,13 @@ func (r *Runner) refuseWithTheReadonlySentence(name string, form assignForm, fat
 func (r *Runner) refuseWithASentence(name string, form assignForm, fatal Answer, sentence string) bool {
 	if r.ask(fatal, "a readonly reassignment being fatal") {
 		r.reportFreezeRefusal(name, form, true, sentence)
+		if form == assignedByDeclaration && r.throughCommandWord && r.pendingFileError() {
+			// A declaration's value refused under the builtin `command`
+			// named, which one dialect keeps fatal through the word. Only
+			// marked here; asked where the word would take it. See
+			// Runner.frozenOperandOutlivesTheWord.
+			r.frozenOperandOutlivesTheWord = true
+		}
 		return true
 	}
 	r.reportFreezeRefusal(name, form, false, sentence)

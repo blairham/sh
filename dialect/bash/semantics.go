@@ -797,6 +797,11 @@ func Semantics() interp.Semantics {
 	// "${NOPE}"'` — each ends the subshell at 1 with the word and without it,
 	// under this shell's own name and under `sh` alike. Both builds agree.
 	s.FatalErrorEndsAtTheCommandWord = interp.No
+	// A declaration's value refused by a freeze is never fatal behind the
+	// word, by either name or build — `f() { command readonly x=5; echo in;
+	// }` prints `in` under `sh` as well (#6962). See
+	// interp.Semantics.FrozenOperandRefusalOutlivesTheCommandWord.
+	s.FrozenOperandRefusalOutlivesTheCommandWord = interp.No
 	s.GetoptsRejectsUnknownOption = interp.Yes
 	s.ShiftCountIsArithmetic = interp.No
 	s.TrapBodyRunsWhatParsed = interp.Yes

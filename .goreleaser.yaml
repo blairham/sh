@@ -337,8 +337,10 @@ release:
   # so from v0.0.1 on this header sits above a real one. It stays because a
   # changelog says what moved and never what the thing is: this says what it is,
   # what it scored, and what is missing, in that order. Keep it version-agnostic
-  # so a tag needs no edit here; the table and the case count are the exceptions,
-  # and `make conformance-dialects` is what refreshes them.
+  # so a tag needs no edit here; the table and the case count are the exceptions.
+  # They are the README's table, copied with its date: when that one is
+  # re-measured, this one moves in the same change, or the release page goes on
+  # quoting a figure the README has already retired.
   header: |
     A shell parser, interpreter and formatter in Go. One core — the common
     denominator of real shells — with `bash`, `zsh`, `ksh`, `dash` and `ash`
@@ -361,20 +363,22 @@ release:
 
     ### Where it stands
 
-    Each dialect graded against the real shell it models, over 4488 cases —
-    `make conformance-dialects`:
+    Each dialect graded against the real shell it models, on macOS against the
+    golden record `make oracle` writes, 2026-10-04, 4488 cases each:
 
     | binary | against | exact | behavioral |
     | --- | --- | --- | --- |
-    | `bash` | bash 5.3.20 | 98% | **100%** |
-    | `zsh` | zsh 5.9.2 | 98% | 99% |
-    | `dash` | dash | 98% | **100%** |
-    | `ksh` | ksh93 AJM 93u+ | 96% | 99% |
-    | `ash` | BusyBox 1.37 ash | 93% | 99% |
+    | `bash` | bash 5.3.20 | 99.8% | 99.8% |
+    | `zsh` | zsh 5.9.2 | 99.8% | 99.8% |
+    | `dash` | dash | 99.9% | 99.96% |
+    | `ksh` | ksh93 AJM 93u+ | 99.1% | 99.5% |
+    | `ash` | BusyBox 1.37 ash | 99.5% | 99.6% |
 
     *Exact* is byte-identical stdout, stderr and status; *behavioral* allows a
-    diagnostic to be worded differently when the status and output agree. The
-    distance between the two columns is almost entirely message wording.
+    diagnostic to be worded differently when the status and standard output
+    agree. Every case still short of exact is listed per dialect in
+    `internal/oracle/testdata/conformance/` with a written reason, and CI
+    fails a change that adds to a list.
 
     ### What is not there yet
 

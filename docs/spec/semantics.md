@@ -3165,6 +3165,18 @@ outside: every column answers as it does for `kill -SIG $$`. INT is held while
 a program runs in bash and ksh93 (`InterruptWaitsForTheProgram`), so a `sleep`
 the INT did not reach finishes and the shell exits 0 there, trap and all.
 
+**zsh, dash and ash wait for the program too, and then die of the INT anyway**
+(#7059). Measured 2026-10-30, `<shell> -c '/bin/sleep 1.5; echo after'` with
+SIGINT sent to the shell's pid alone 0.4 s in: all three are killed by INT at
+1.5 s, not at 0.4 s, and the same holds for a function, a pipeline and a
+`$( … )`. A `( /bin/sleep 1.5; echo in )` runs to its end and writes `in` first,
+since the child that stands for it was never sent the signal. In a `read`, a
+`wait` or a busy loop nothing is waited for and they die at 0.4 s. This shell
+died at 0.4 s everywhere and left the `sleep` running. A `<(…)` body holds
+nothing in any column: `read x < <(P)`, P sending SIGINT to `$$`, dies at once
+in bash 5.3, bash 3.2, ksh93 and zsh, where this shell's bash dialect held it
+for P.
+
 Four things about *how* are measured and kept:
 
 - **At once.** Every reference ran the trap while its `sleep` was still

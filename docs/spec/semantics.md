@@ -2068,6 +2068,28 @@ is the operand-assignment route rather than the literal's shape, and it is the
 same gap for a scalar operand in ksh93, which writes `+ x=1` before
 `+ typeset x`.
 
+**A command behind a precommand modifier.** zsh writes the command its
+precommand scan left, not the words that were written. Measured 2026-10-30 on
+zsh 5.9.2 under `-f -c` and `env -i PATH=/usr/bin:/bin`:
+
+    builtin true; command -p true; exec true     +zsh:1> true, each
+    command command true                         +zsh:1> command true
+    exec -a zz /bin/echo hi                      +zsh:1> zz hi
+    exec -l /bin/echo hi; - /bin/echo hi         +zsh:1> -/bin/echo hi
+    exec -a zz echo hi                           +zsh:1> echo hi
+    command -v true                              +zsh:1> command -v true
+    x=1 exec /usr/bin/true                       +zsh:1> x=1 /usr/bin/true
+    x=1 exec true                                +zsh:1> x=1 +zsh:1> true
+
+`builtin` and `exec` are read through, `command` stops the scan at the next
+word, and a program is written under the name it is started with, which a
+builtin or a function does not take. `command -v` is a lookup and keeps its
+words. The second prompt a prefixed line carries is asked of the command the
+scan left rather than of the modifier. The other columns have no modifier
+class and write the words. The field is
+`Diagnostics.TraceLeavesOutPrecommandModifiers`, and interp/xtraceprecommand.go
+carries the panel (#6967).
+
 **The structure is not what this document said it was.** It said "every
 simple command to stderr, expanded, before it runs, and compound commands
 not traced", and the second half is false: every shell that has `[[ … ]]`

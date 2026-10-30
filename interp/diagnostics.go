@@ -10394,6 +10394,12 @@ type Diagnostics struct {
 	// than as `v+=5`. bash alone, and only in the prefix position — the same
 	// shell keeps the operator for a bare `w+=2`. See interp/xtraceprefix.go.
 	TracePrefixAppendIsTheJoinedValue bool
+	// TraceLeavesOutPrecommandModifiers writes a command behind a precommand
+	// modifier as the command the scan left: `builtin true` traces `true`,
+	// `command -p true` traces `true`, and a program is written under the
+	// name it is started with. zsh alone, the one dialect with the modifier
+	// class. See interp/xtraceprecommand.go.
+	TraceLeavesOutPrecommandModifiers bool
 	// TraceAssignmentNamesTheReferencedVariable writes an assignment through
 	// a name reference under the variable the store lands in: `typeset -n
 	// m=x; m=1` traces `+ x=1`, and `n[k]=1` through `n` aimed at a table

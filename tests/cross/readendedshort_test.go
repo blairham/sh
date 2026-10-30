@@ -35,6 +35,11 @@ func TestAReadThatEndsShortKeepsWhatTheShellsKeep(t *testing.T) {
 		return `mkfifo p; exec 3<>p; ` + setup + vars + `printf '` + first + `' >p; ` +
 			`read -t 0.3 ` + read[len("read "):] + ` <&3; s=$?; echo LATE >p; ` + show
 	}
+	// left is what the script prints of the names once the read is over, at
+	// status st.
+	left := func(st, a, b, c, l string) string {
+		return "st=" + st + " a=[" + a + "] b=[" + b + "] c=[" + c + "] l=[" + l + "] R=[R]\n"
+	}
 	type row struct{ name, dialect, src, want string }
 	var rows []row
 	for _, end := range []struct {
@@ -43,34 +48,35 @@ func TestAReadThatEndsShortKeepsWhatTheShellsKeep(t *testing.T) {
 		tag  string
 	}{{"expired", expired, ""}, {"given up", signaled, "T\n"}} {
 		ash := func(name, setup, first, read, want string) {
-			rows = append(rows, row{end.name + ", " + name, "ash", end.src(setup, first, read), end.tag + want + "next [LATE]\n"})
+			rows = append(rows, row{end.name + ", " + name, "ash", end.src(setup, first, read), end.tag + want})
 		}
-		ash("x y into two", "", "x y", "read -r a b", "st=1 a=[x] b=[B] c=[C] l=[old] R=[R]\n")
-		ash("x y_ into three", "", "x y ", "read -r a b c", "st=1 a=[x] b=[y] c=[C] l=[old] R=[R]\n")
-		ash("x y z_ into two", "", "x y z ", "read -r a b", "st=1 a=[x] b=[B] c=[C] l=[old] R=[R]\n")
-		ash("x y into one", "", "x y", "read -r l", "st=1 a=[A] b=[B] c=[C] l=[old] R=[R]\n")
-		ash("nothing into one", "", "", "read -r l", "st=1 a=[A] b=[B] c=[C] l=[old] R=[R]\n")
-		ash("an escaped blank", "", `x\\ y z `, "read a b c", "st=1 a=[x y] b=[z] c=[C] l=[old] R=[R]\n")
-		ash("an escaped blank last", "", `x\\ `, "read a b", "st=1 a=[A] b=[B] c=[C] l=[old] R=[R]\n")
-		ash("an empty field", "IFS=:; ", ":y", "read -r a b c", "st=1 a=[] b=[B] c=[C] l=[old] R=[R]\n")
-		ash("two separators", "IFS=:; ", "x::", "read -r a b c", "st=1 a=[x] b=[] c=[C] l=[old] R=[R]\n")
-		ash("into REPLY", "", "x y ", "read -r", "st=1 a=[A] b=[B] c=[C] l=[old] R=[R]\n")
+		ash("x y into two", "", "x y", "read -r a b", left("1", "x", "B", "C", "old"))
+		ash("x y_ into three", "", "x y ", "read -r a b c", left("1", "x", "y", "C", "old"))
+		ash("x y z_ into two", "", "x y z ", "read -r a b", left("1", "x", "B", "C", "old"))
+		ash("x y into one", "", "x y", "read -r l", left("1", "A", "B", "C", "old"))
+		ash("nothing into one", "", "", "read -r l", left("1", "A", "B", "C", "old"))
+		ash("an escaped blank", "", `x\\ y z `, "read a b c", left("1", "x y", "z", "C", "old"))
+		ash("an escaped blank last", "", `x\\ `, "read a b", left("1", "A", "B", "C", "old"))
+		ash("an empty field", "IFS=:; ", ":y", "read -r a b c", left("1", "", "B", "C", "old"))
+		ash("two separators", "IFS=:; ", "x::", "read -r a b c", left("1", "x", "", "C", "old"))
+		ash("into REPLY", "", "x y ", "read -r", left("1", "A", "B", "C", "old"))
 	}
 	rows = append(rows,
-		row{"given up", "dash", signaled("", "x y ", "read -r a b c"), "T\nst=1 a=[x] b=[y] c=[] l=[old] R=[R]\nnext [LATE]\n"},
-		row{"given up, one name", "dash", signaled("", "x y", "read -r l"), "T\nst=1 a=[A] b=[B] c=[C] l=[x y] R=[R]\nnext [LATE]\n"},
-		row{"given up, nothing", "dash", signaled("", "", "read -r l"), "T\nst=1 a=[A] b=[B] c=[C] l=[] R=[R]\nnext [LATE]\n"},
-		row{"given up", "ksh", signaled("", "x y ", "read -r a b c"), "T\nst=258 a=[x] b=[y] c=[] l=[old] R=[R]\nnext [LATE]\n"},
-		row{"given up, one name", "ksh", signaled("", "x y", "read -r l"), "T\nst=258 a=[A] b=[B] c=[C] l=[x y] R=[R]\nnext [LATE]\n"},
-		row{"expired", "ksh", expired("", "x y ", "read -r a b c"), "st=1 a=[A] b=[B] c=[C] l=[old] R=[R]\nnext [LATE]\n"},
-		row{"expired", "bash", expired("", "x y ", "read -r a b c"), "st=142 a=[x] b=[y] c=[] l=[old] R=[R]\nnext [LATE]\n"},
-		row{"expired, two", "bash", expired("", "x y z ", "read -r a b"), "st=142 a=[x] b=[y z] c=[C] l=[old] R=[R]\nnext [LATE]\n"},
+		row{"given up", "dash", signaled("", "x y ", "read -r a b c"), "T\n" + left("1", "x", "y", "", "old")},
+		row{"given up, one name", "dash", signaled("", "x y", "read -r l"), "T\n" + left("1", "A", "B", "C", "x y")},
+		row{"given up, nothing", "dash", signaled("", "", "read -r l"), "T\n" + left("1", "A", "B", "C", "")},
+		row{"given up", "ksh", signaled("", "x y ", "read -r a b c"), "T\n" + left("258", "x", "y", "", "old")},
+		row{"given up, one name", "ksh", signaled("", "x y", "read -r l"), "T\n" + left("258", "A", "B", "C", "x y")},
+		row{"expired", "ksh", expired("", "x y ", "read -r a b c"), left("1", "A", "B", "C", "old")},
+		row{"expired", "bash", expired("", "x y ", "read -r a b c"), left("142", "x", "y", "", "old")},
+		row{"expired, two", "bash", expired("", "x y z ", "read -r a b"), left("142", "x", "y z", "C", "old")},
 	)
 	for _, r := range rows {
 		t.Run(r.dialect+"/"+r.name, func(t *testing.T) {
 			t.Parallel()
-			if got := runReleasingFifos(t, presets[r.dialect], r.src); got != r.want {
-				t.Errorf("got %q, want %q", got, r.want)
+			want := r.want + "next [LATE]\n"
+			if got := runReleasingFifos(t, presets[r.dialect], r.src); got != want {
+				t.Errorf("got %q, want %q", got, want)
 			}
 		})
 	}

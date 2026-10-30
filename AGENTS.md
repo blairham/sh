@@ -232,7 +232,11 @@ subscription the program has for the signal away — one Runner's ignore left
 another deaf to a signal it had trapped, depending on which line ran first
 (#7044). So `Runner.SetSignalDisposition` — nil in a library, filled in by
 `driver` — is what sets or resets a disposition; a library Runner keeps its
-ignore in its own table, and its children do not inherit it.
+ignore in its own table, and its children do not inherit it. What a child of a
+subshell, a job or a shebang-less script is owed goes onto the process only
+for the length of its start, through `Runner.StartWithDispositions`, and the
+subscriptions that window takes away are put back from `internal/sigbook`
+(#7049, #7051).
 
 The corollary caught a real bug: **where a real shell relies on process
 boundaries, we have to reconstruct the boundary by hand.** Our subshells are

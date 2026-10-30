@@ -433,13 +433,29 @@ type Runner struct {
 	// ctype is what LocaleCharset last settled. See ctypeInForce.
 	ctype ctypeState
 
-	// StartIgnoringInterrupts runs start — a process start — with SIGINT and
-	// SIGQUIT ignored for its length, so the child it starts inherits the
-	// ignore, and puts the process's own handling back afterwards. Nil — the
-	// default — means this Runner may not touch the process's dispositions,
-	// and a child of an asynchronous list then starts with the signals the
-	// process has. See interp/asyncinterrupts.go.
-	StartIgnoringInterrupts func(start func() error) error
+	// StartWithDispositions runs start — a process start, or the replacement
+	// of this process by `exec` — with every signal in ignore ignored and
+	// every signal in reset back at its default for its length, so that what
+	// start makes inherits them, and puts the process's own handling back
+	// afterwards. Nil — the default — means this Runner may not touch the
+	// process's dispositions, and a command it starts begins with the
+	// signals the process has. See interp/childdispositions.go.
+	//
+	// It is how a shell with no fork of its own gives a child what a fork
+	// would have: a subshell's `trap ''`, an asynchronous list's INT and
+	// QUIT, and the default back for a signal the shell ignores and a
+	// subshell does not. Only an ignore crosses exec, and an ignore is the
+	// process's, so the window is as short as the start.
+	//
+	// The hook may decline a signal it cannot hand over, and leave it as it
+	// is. Whatever it ignores, signal.Ignore takes every subscription the
+	// process had for it away; interp puts back its own Runners' and this
+	// module's other subscribers' once the hook returns, and the hook puts
+	// back anything of its own. HUP and INT need a subscriber afterwards:
+	// a signal the runtime finds ignored when it starts is one it leaves
+	// ignored when the last subscription goes, and after the window that is
+	// these two.
+	StartWithDispositions func(ignore, reset []syscall.Signal, start func() error) error
 
 	// SetSignalDisposition is the process's half of a top-level `trap`: with
 	// ignore true it makes this process ignore sig, for `trap '' SIG`, and
@@ -5008,7 +5024,7 @@ type Runner struct {
 	inheritedIgnored map[string]bool
 	// asyncIgnoresInterrupts says this runner is an asynchronous list of a
 	// shell without job control, whose children start with SIGINT and
-	// SIGQUIT ignored. See interp/asyncinterrupts.go.
+	// SIGQUIT ignored. See interp/childdispositions.go.
 	asyncIgnoresInterrupts bool
 	// cshNullGlob is one dialect's `cshnullglob`, and globUnit the word list
 	// it is judged over. See interp/cshnullglob.go.

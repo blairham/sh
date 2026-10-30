@@ -558,6 +558,11 @@ func (r *Runner) runImageAsScript(ctx context.Context, name, path string, argv, 
 		TakeInterrupt:  r.TakeInterrupt,
 		GetRlimit:      r.GetRlimit,
 		ProcessAnchor:  r.ProcessAnchor,
+		// And what a command the script starts inherits of its signal
+		// dispositions, put on the process for the length of each start. It
+		// is the whole of what the script's `trap ''` owes the commands it
+		// runs, and it is owed only to them. See childdispositions.go.
+		StartWithDispositions: r.StartWithDispositions,
 		// And deliberately **not** the hooks that change *this* process.
 		//
 		// A real shell gives the script a process of its own, so nothing it
@@ -576,8 +581,19 @@ func (r *Runner) runImageAsScript(ctx context.Context, name, path string, argv, 
 		//	SetRlimit       a limit the script lowered would stay lowered for
 		//	                the shell afterwards, and a lowered hard limit
 		//	                cannot be raised again by anybody.
+		//	SetSignalDisposition
+		//	                a `trap ''` in the script would be the process's
+		//	                for as long as the script ran, so a signal that
+		//	                arrived meanwhile was dropped before the caller's
+		//	                trap could hear it — measured 2026-10-30, a USR1
+		//	                from another process during a script that ignores
+		//	                it runs the caller's handler in bash 5.3, bash 3.2,
+		//	                ksh93, zsh and dash, and ran nothing here (#7051).
+		//	                The script keeps its dispositions to itself, and
+		//	                its commands inherit them through
+		//	                StartWithDispositions above, a start at a time.
 		//
-		// `umask` is the fourth of that shape and is an exception: it
+		// `umask` is the fifth of that shape and is an exception: it
 		// has to be able to reach the process, because the files the script
 		// creates really are created by it — a child it spawns inherits the
 		// mask at the fork, and without the hook a `umask 077` in such a
@@ -585,13 +601,6 @@ func (r *Runner) runImageAsScript(ctx context.Context, name, path string, argv, 
 		// free — keeping that mask off the caller — is the mask being the
 		// Runner's own rather than the process's. See umaskscope.go.
 		SetUmask: r.SetUmask,
-		// The dispositions are a second exception, for the mask's reason: a
-		// command the script starts inherits an ignore at the fork, and
-		// without the hook a `trap '' INT` in such a script would reach none
-		// of its commands. What it costs is the caller's subscriptions, which
-		// the process-wide call takes away and which are put back once the
-		// script is done — see below.
-		SetSignalDisposition: r.SetSignalDisposition,
 	}
 	// The mask itself, handed over rather than read back off the process:
 	// ensureUmask has already emptied the process's, so a fresh shell asking
@@ -633,16 +642,6 @@ func (r *Runner) runImageAsScript(ctx context.Context, name, path string, argv, 
 		return child.diag().StatusForParseError(perr)
 	}
 	status, runErr := child.Run(ctx, f)
-	// The script's shell is a second Runner in this process, and where it
-	// owns the process's dispositions its `trap '' SIG` and `trap - SIG` took
-	// away every subscription the process had for SIG, this shell's own
-	// handler among them. Its end put the disposition back and not the
-	// subscription, so a trap set here before the script ran heard nothing
-	// afterwards — measured 2026-10-29, `trap 'echo caught' USR1`, a
-	// shebang-less script ignoring USR1, then a USR1 from another process:
-	// `caught` in bash 5.3, bash 3.2, ksh93, zsh and dash, and nothing here
-	// (#7044). A real script is a process of its own and reaches none of this.
-	r.resubscribeTrapped(r.trappedSignals()...)
 	if runErr != nil && !errors.Is(runErr, fs.ErrClosed) {
 		// A run the context stopped, or a construct this shell has not got.
 		// The status the child reached is still the answer; the error has

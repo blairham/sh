@@ -3134,9 +3134,11 @@ func (sh *Shell) newRunnerAs(
 		// for the throwing class it answers with a goroutine dump where every
 		// shell in the panel prints nothing. See fatalsignal.go.
 		watchFatalSignals(r)
-		// And the fork's half of an asynchronous list's dispositions, which
-		// only the process's owner may set. See fatalsignal.go.
-		r.StartIgnoringInterrupts = startIgnoringInterrupts
+		// And the fork's half of what a command inherits of its signal
+		// dispositions — a subshell's ignores, an asynchronous list's INT and
+		// QUIT — which only the process's owner may set. See
+		// childdispositions.go.
+		r.StartWithDispositions = startWithDispositions
 		// And the process's half of a top-level `trap`: an ignore set on the
 		// process, which is the only kind a child inherits. See
 		// signaldisposition.go.

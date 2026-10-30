@@ -12,6 +12,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"syscall"
+
+	"github.com/blairham/sh/internal/sigbook"
 )
 
 // Signal traps.
@@ -566,7 +568,10 @@ func (r *Runner) trapSignal(name string, sig syscall.Signal, body *string) {
 		// closed routes out of it (#5109). Nothing here can tell that arrival
 		// from a real one, so the subscription is made for URG as for any
 		// other signal and the defect is recorded rather than papered over.
-		signal.Notify(s.ch, sig)
+		//
+		// Through the book, so that a window that has to ignore the signal
+		// for a moment can hand this subscription back. See sigbook.
+		sigbook.Notify(s.ch, sig)
 		return
 	}
 	if r.SetSignalDisposition == nil {
@@ -575,6 +580,9 @@ func (r *Runner) trapSignal(name string, sig syscall.Signal, body *string) {
 	}
 	if body == nil {
 		r.SetSignalDisposition(sig, false)
+		// The reset took this shell's own subscription with everybody's,
+		// and the shell does not want it back.
+		sigbook.Forget(s.ch, sig)
 		s.dropOwnIgnore(sig)
 		// And where the shell goes on ignoring the signal untrapped after
 		// the reset, the process goes on handling it: the front end's reset
@@ -587,11 +595,14 @@ func (r *Runner) trapSignal(name string, sig syscall.Signal, body *string) {
 		// the lock is held and the kill path asks the same axis anyway.
 		if bornIgnoring(name, r.Interactive, func() bool { return true },
 			func(a Answer, _ string) (bool, bool) { return a == Yes, a != Yes && a != No }, r.sem()) {
-			signal.Notify(dispositionSink, sig)
+			sigbook.Notify(dispositionSink, sig)
 		}
 		return
 	}
 	r.SetSignalDisposition(sig, true)
+	// Ignored on the process, which a subscription of this shell's own
+	// would undo if a window handed it back.
+	sigbook.Forget(s.ch, sig)
 }
 
 // keepToItself is a top-level `trap "" SIG` or `trap - SIG` in a shell that
@@ -628,7 +639,7 @@ func (r *Runner) trapSignal(name string, sig syscall.Signal, body *string) {
 // SetUmask and ReplaceProcess.
 func (s *signalState) keepToItself(sig syscall.Signal, ignore, had bool) {
 	if ignore {
-		signal.Notify(s.ch, sig)
+		sigbook.Notify(s.ch, sig)
 		return
 	}
 	if had {
@@ -657,13 +668,13 @@ func (s *signalState) release() {
 		keep = append(keep, sig)
 	}
 	if len(keep) == 0 {
-		signal.Stop(s.ch)
+		sigbook.Stop(s.ch)
 		return
 	}
 	bridge := make(chan os.Signal, 1)
 	signal.Notify(bridge, keep...)
-	signal.Stop(s.ch)
-	signal.Notify(s.ch, keep...)
+	sigbook.Stop(s.ch)
+	sigbook.Notify(s.ch, keep...)
 	signal.Stop(bridge)
 }
 
@@ -740,7 +751,7 @@ func (s *signalState) dropOwnIgnore(sig syscall.Signal) {
 	if !signal.Ignored(sig) {
 		return
 	}
-	signal.Notify(dispositionSink, sig)
+	sigbook.Notify(dispositionSink, sig)
 }
 
 // borrow records the disposition a signal had before this shell changed it.
@@ -1464,7 +1475,7 @@ func (r *Runner) stopSignals() {
 	// selecting on it, so it is allocated once and never replaced. Stopping
 	// it is what releases the handlers, and an unsubscribed channel simply
 	// never fires again.
-	signal.Stop(s.ch)
+	sigbook.Stop(s.ch)
 }
 
 // stopSignalsAndRestore is the pair of things a shell that has finished owes
@@ -1573,7 +1584,7 @@ func (r *Runner) restoreDispositions() {
 			// this shell reaching into the process after all.
 			continue
 		}
-		signal.Notify(dispositionSink, sig)
+		sigbook.Notify(dispositionSink, sig)
 	}
 	clear(s.borrowed)
 }

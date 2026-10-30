@@ -41,6 +41,10 @@ const dyingExitTrapRuns = "SH_TEST_DYING_EXIT_TRAP_RUNS"
 // shell runs as it ends, beside its EXIT trap.
 const dyingExitHook = "SH_TEST_DYING_EXIT_HOOK"
 
+// dyingTailExec has the shell half become the last command of its string
+// rather than fork it, as bash 5.3 does with a lone simple command there.
+const dyingTailExec = "SH_TEST_DYING_TAIL_EXEC"
+
 // deathDeadline is how long a shell that has been asked to die is given
 // before this test gives up on it and says so.
 //
@@ -123,6 +127,9 @@ func dieRunningAsAShell() {
 		// reads through one asks.
 		sh.Semantics.SignalDeathStatusIsTwoFiftySix = interp.No
 		sh.Semantics.LastPipelineElementInCurrentShell = interp.No
+	}
+	if os.Getenv(dyingTailExec) != "" {
+		sh.Semantics.TailExec = interp.TailExecPlainTopLevel
 	}
 	args := []string{"testsh", "-c", src}
 	if os.Getenv(dyingInteractive) != "" {

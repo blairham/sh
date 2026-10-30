@@ -36,10 +36,18 @@ import (
 var signalProbe = childRaising("INT")
 
 // runOwningTheProcess is runUnderBash for a shell handed the process's
-// dispositions, the way the front end hands them to a binary.
+// dispositions, the way the front end hands them to a binary: both the
+// top-level `trap` and what a command it starts inherits.
 func runOwningTheProcess(t *testing.T, src string) (string, int) {
 	t.Helper()
-	return runUnderBashWith(t, src, func(r *interp.Runner) { r.SetSignalDisposition = ownsItsDispositions })
+	return runUnderBashWith(t, src, ownsTheProcess)
+}
+
+// ownsTheProcess hands a Runner the two hooks the front end gives a shell that
+// is its own process.
+func ownsTheProcess(r *interp.Runner) {
+	r.SetSignalDisposition = ownsItsDispositions
+	r.StartWithDispositions = startsWithItsDispositions
 }
 
 // childRaising is that probe for one signal, so the two shapes of this

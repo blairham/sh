@@ -240,7 +240,14 @@ func (r *Runner) becomeTheProgram(ctx context.Context, path, run string, argv, e
 	releaseMask := r.holdMaskForFork()
 	name, env := r.namedByTheEnvironment(argv[0], env)
 	args := append([]string{r.dashed(name)}, argv[1:]...)
-	err := r.ReplaceProcess(dir, run, args, r.lowerShellLevelIn(env), r.replacementFiles())
+	env = r.lowerShellLevelIn(env)
+	files := r.replacementFiles()
+	// With the ignores the script set put back on for the replacement, which
+	// the end above has just handed back to the process. See
+	// childdispositions.go (#7050).
+	err := r.startWithDispositions(func() error {
+		return r.ReplaceProcess(dir, run, args, env, files)
+	})
 	releaseMask()
 	return err == nil
 }

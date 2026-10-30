@@ -222,7 +222,15 @@ func (r *Runner) replaceSelfWith(ctx context.Context, argv []string, flags execF
 		for _, fd := range r.unplaceableIn(files) {
 			r.diagf("%v\n", r.errBadFd(fd, "", fd))
 		}
-		err := r.ReplaceProcess(dir, run, r.execArgv(argv, flags, name), env, files)
+		args := r.execArgv(argv, flags, name)
+		// And the dispositions the script set, which cleanUpAtEnd has just
+		// handed back to the process: an execve keeps an ignore, and `trap ''
+		// INT; exec cmd` is how a script hands one to the program that takes
+		// its place. Put on for the replacement as for a fork, and taken off
+		// again only on the way back. See childdispositions.go (#7050).
+		err := r.startWithDispositions(func() error {
+			return r.ReplaceProcess(dir, run, args, env, files)
+		})
 		releaseMask()
 		// Only reached if the replacement failed, which is the one case where
 		// there is still a shell to report it.

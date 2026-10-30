@@ -7063,6 +7063,42 @@ type Dialect struct {
 	// CLOSE})` is the reference's own suite asking exactly that (#5011).
 	CloseBraceEndsAWord bool
 
+	// CloseBraceStartingAWordIsReservedInACommandSubstitution makes a `}`
+	// that begins a word inside a `$( )` body the reserved word, wherever the
+	// word stands, unless a brace group is open around it in that body.
+	//
+	// ksh93 alone. Outside a `$( )` a `}` is reserved only where a command
+	// may begin, in every column. Inside one, ksh93 reads a `}` at the start
+	// of any word as a group's closer, and with no group open there it is
+	// `}' unexpected`. Measured 2026-10-30 on ksh93u+ 2012-08-01 (`/bin/ksh
+	// -c`, standard input on the null device), each refused at status 3 with
+	// ``syntax error at line 1: `}' unexpected``:
+	//
+	//	echo $(echo })        echo $(echo a })      echo $(echo }a)
+	//	echo $(echo a >})     echo $(case } in …)   echo $(for i in }; …)
+	//	echo $( [[ } == } ]] && echo y )            echo $( a=( } ) )
+	//	echo $( ( echo } ) )  echo $( if :; then echo }; fi )
+	//	echo $( { echo a; }; echo } )               echo "$(echo })"
+	//
+	// A brace group open in the body takes the reading away, a function's
+	// body included, and a subshell or a compound command does not give it
+	// back: `$( { echo }; } )`, `$( { echo }a; } )`, `$( f() { echo }; }; f
+	// )` and `$( { ( echo } ); } )` print the brace. The `}` has to begin the
+	// word and be unquoted: `$(echo a})`, `$(echo x=})`, `$(echo \})`,
+	// `$(echo "}")` and `$(echo ''})` all print it. And it is the `$( )`
+	// spelling alone: `` `echo }` `` and `<(echo })` print the brace too.
+	//
+	// **The body is read when the substitution runs**, so this is asked of
+	// that read and not of the line the substitution stands in: `false &&
+	// echo $(echo }); echo survived` prints `survived` there and here. That
+	// is also what places the refusal: at the top level it ends the shell at
+	// 3, inside a `function` it ends the call at 3, and in a substitution
+	// inside a substitution it is the inner one's own failure — `echo
+	// $(echo $(echo }))` prints the refusal and an empty line at status 0.
+	// Those are the answers a body refused for any other reason already
+	// gets, so they need nothing of their own.
+	CloseBraceStartingAWordIsReservedInACommandSubstitution bool
+
 	// OpenBraceNeedsNoBlank makes a bare `{` where a command may begin the
 	// reserved word on its own, however the text runs on after it.
 	//

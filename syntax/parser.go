@@ -607,6 +607,39 @@ func (p *Parser) SetDialect(d Dialect) {
 // not been tokenized yet.
 func (p *Parser) InsideProgramParentheses() { p.lex.inProgramParens = true }
 
+// ReadAsACommandSubstitutionRuns tells this parser that the text it is about
+// to read is a `$( )` body being read as the substitution runs, rather than as
+// part of the line the substitution stands in.
+//
+// One dialect reads a `}` that begins a word there as the reserved word, and
+// it does so on this read alone: the refusal comes when the substitution
+// runs, so `false && echo $(echo })` says nothing. The scan that finds the
+// closing parenthesis with the line therefore never asks, and every read that
+// stands for the running one does. See
+// [Dialect.CloseBraceStartingAWordIsReservedInACommandSubstitution].
+//
+// Like the two above, a fact about the text handed in by the only place that
+// knows it. The first token has already been read when a caller can say so,
+// and it stands where a command begins, where a `}` is reserved anyway.
+func (p *Parser) ReadAsACommandSubstitutionRuns() {
+	p.lex.closeBraceReserved = p.dialect.CloseBraceStartingAWordIsReservedInACommandSubstitution
+}
+
+// closeBraceReservedEverywhere reports whether a `}` word is the reserved word
+// wherever it stands rather than only where a command may begin: always in
+// the dialect of [Dialect.CloseBraceAlwaysReserved], and in a `$( )` body with
+// no brace group open in the one of
+// [Dialect.CloseBraceStartingAWordIsReservedInACommandSubstitution].
+func (p *Parser) closeBraceReservedEverywhere() bool {
+	return p.dialect.CloseBraceAlwaysReserved || p.closeBraceReservedInTheBody()
+}
+
+// closeBraceReservedInTheBody is the second half of the question above on its
+// own: a `$( )` body read as it runs, with no brace group open in it.
+func (p *Parser) closeBraceReservedInTheBody() bool {
+	return p.lex.closeBraceReserved && p.lex.braceGroups == 0
+}
+
 // InsideASubstitution tells this parser that the text it is about to read is a
 // substitution's body — the inside of a `$( )` or of a pair of backquotes,
 // already cut out of the script it came from — so that the end of this input
@@ -3381,6 +3414,14 @@ func (p *Parser) word() *Word {
 // the tree goes through here, so no path can produce one with an unparsed
 // ${ } in it.
 func (p *Parser) newWord(spans []Span, start, stop Pos) *Word {
+	if p.closeBraceReservedInTheBody() && start == p.tok.Pos && p.atWord("}") {
+		// The reserved word where a word was wanted — a redirection's
+		// target, a `case` subject or pattern, a `for` list, a `[[ ]]`
+		// operand. An argument never reaches here, because the brace ends the
+		// command it stands in. See
+		// Dialect.CloseBraceStartingAWordIsReservedInACommandSubstitution.
+		p.failUnexpected("")
+	}
 	out := make([]Span, len(spans))
 	copy(out, spans)
 	for i := range out {
@@ -4528,7 +4569,7 @@ func (p *Parser) parseSimple() Command {
 				p.failUnexpected("")
 				return c
 			}
-			if p.dialect.CloseBraceAlwaysReserved && p.atWord("}") {
+			if p.closeBraceReservedEverywhere() && p.atWord("}") {
 				// Reserved even here, so it ends the command rather than
 				// becoming an argument to it.
 				return c
@@ -7080,8 +7121,14 @@ func (p *Parser) parseGroupOpenedBy(word string) Command {
 func (p *Parser) parseGroupNamed(word, named string) Command {
 	c := &Group{Start: p.tok.Pos}
 	defer p.opensNamed(word, named)()
+	// Counted around the body's tokens and not the braces': the first word
+	// of the body is read by the next line, and the word after the closing
+	// brace by the last one, which the count has to be back down for. See
+	// Lexer.braceGroups.
+	p.lex.braceGroups++
 	p.next()
 	c.List = p.parseBody()
+	p.lex.braceGroups--
 	if !p.atWord("}") {
 		if p.at(TokEOF) {
 			p.ranOut()

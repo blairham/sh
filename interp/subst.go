@@ -834,6 +834,12 @@ func (r *Runner) substParseErrorAtItsCloser(span syntax.Span, src string, err er
 		return err
 	}
 	p := r.ParseWithAliases(src+")", r.bodyDialect(span))
+	if span.Kind == syntax.CommandSubst {
+		// The same read as the one that refused, so a brace it reserved is
+		// reserved here too and the closer is not what gets named. See
+		// syntax.Parser.ReadAsACommandSubstitutionRuns.
+		p.ReadAsACommandSubstitutionRuns()
+	}
 	p.Parse()
 	if closed := p.Err(); closed != nil {
 		// A word that ended the body's read is refused at the same place
@@ -1163,6 +1169,10 @@ func (r *Runner) readSubstBody(span syntax.Span) (*syntax.File, int, int, bool) 
 		// does not take the route. See
 		// syntax.Dialect.HeredocLastLineIsADelimiterPrefix.
 		p.InsideProgramParentheses()
+		// And it is the read made as the substitution runs, which is the one
+		// read a dialect refuses a `}` beginning a word on. See
+		// syntax.Dialect.CloseBraceStartingAWordIsReservedInACommandSubstitution.
+		p.ReadAsACommandSubstitutionRuns()
 	}
 	// Where the body's *text* sits in the script, so that what is refused in
 	// it is refused where a reader can find it. The span's own line is the

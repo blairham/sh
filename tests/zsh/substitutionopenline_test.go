@@ -141,6 +141,7 @@ func TestAChildWritesTheTextItWasHandedOnItsOwn(t *testing.T) {
 		{"a loop that runs nothing", `set -x; x=$( for i in; do :; done )`, "+zsh:1> x=+zsh:1> x='' \n"},
 		{"an if that writes nothing", `set -x; x=$( if ! { }; then :; fi )`, "+zsh:1> x=+zsh:1> x='' \n"},
 		{"a subshell that writes nothing", `set -x; x=$( ( f() { :; } ) )`, "+zsh:1> x=+zsh:1> x='' \n"},
+		{"a timed group that writes nothing", `set -x; x=$( time { f() { :; } } )`, "+zsh:1> x=+zsh:1> x='' \n"},
 		{
 			"a quiet substitution in a group",
 			`set -x; x=$( { : $(f() { :; }); } )`,

@@ -1967,6 +1967,35 @@ var zshOptions = []zshOption{
 				roster = ""
 			}
 			setAxis(r, func(s *interp.Semantics) *string { return &s.BuiltinsKeepingAnAssignmentPrefix }, roster)
+			// And the declaration family becomes special. With the option
+			// on, zsh treats `typeset`, `declare`, `integer`, `float` and
+			// `local` the way it treats POSIX's own special builtins:
+			// a prefix in front of one persists, and a redirection on one
+			// that cannot be made ends the script. Measured 2026-10-30 on
+			// zsh 5.9.2:
+			//
+			//	                                  default   posixbuiltins
+			//	v=old; v=new typeset y=1          v=old     v=new
+			//	typeset y=1 >/nope/x; echo after  after     ends, 1
+			//	(eval 'typeset y=1 >/nope/x'; echo alive)
+			//	                                  alive     ends the subshell
+			//	v=new builtin typeset y=1         v=old     v=new
+			//
+			// with `print` as the control, which carries on and drops its
+			// prefix either way. Every builtin name was swept for the
+			// redirection under the option, and these five are the only
+			// ones beyond POSIX's list and the precommand words that end
+			// the script. The emulation does not decide it:
+			// `emulate sh; unsetopt posixbuiltins` drops the prefix and
+			// carries on, and `emulate csh; setopt posixbuiltins` keeps it
+			// and ends. Inside a function the kept prefix is an ordinary
+			// assignment and not the function's local, which is
+			// Semantics.PrefixToALocalDeclarationIsALocal (#7009).
+			special := ""
+			if on {
+				special = posixSpecialDeclarations
+			}
+			setAxis(r, func(s *interp.Semantics) *string { return &s.SpecialBuiltinsBeyondPosix }, special)
 			// And a sixth, read **backwards**: with the option on, a
 			// `[[ -o name ]]` whose name this shell does not have is the
 			// plain silent false the other columns give rather than this

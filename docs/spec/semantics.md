@@ -3353,6 +3353,39 @@ inheritance: exec keeps only `SIG_IGN`, and the Go runtime puts every signal
 it is handling back to the default between the fork and the exec, so a child
 of such a Runner starts with the dispositions the process has.
 
+**A child inherits what the shell that started it arranged, not what the
+process holds.** A real subshell is a process, so its `trap ''` is what its
+children inherit and its parent never sees. Measured 2026-10-30 with a child
+that raises the signal at itself, unanimous in bash 5.3, bash 3.2, ksh93, zsh
+and dash:
+
+    (trap '' INT; <child raising INT>)                 child survives
+    trap '' USR1; (trap - USR1; <child raising USR1>)  child killed
+    trap '' USR1; (trap : USR1; <child raising USR1>)  child killed
+    (<child raising USR1>) & trap '' USR1; wait        child killed
+    trap '' INT; exec <child raising INT>              replacement survives
+
+A subshell here is a clone and a job a goroutine, so all five came out the
+other way (#7049, #7050). The process is the only thing a child can inherit
+from, so what a child is owed goes onto the process for the length of its
+start — the ignores in the table of the shell that starts it, and the default
+for a signal the shell at the top ignores and that table does not — through
+`StartWithDispositions`, the same window an asynchronous list's INT and QUIT
+already had. A shebang-less script is a second Runner, and it uses the window
+too rather than owning the process: owning it made the script's ignore the
+process's for as long as the script ran, so a signal that arrived meanwhile
+never reached the caller's trap (#7051).
+
+The window costs what every `signal.Ignore` costs, every subscription the
+process has for the signal, and `internal/sigbook` is the book of who in this
+module asked for what so that the window can give them all back.
+
+One column parts from the table above, and it is not modeled yet: zsh 5.9.2
+does not hand a subshell's *inherited* ignore on to the subshell's own
+commands. `trap '' USR1; (<child raising USR1>)` has the child killed there
+and surviving in the other four, for INT and TERM as well and inside `$( … )`
+and a background job (#7088).
+
 ## A subshell that kills the shell, and where the process went
 
     (kill -TERM $$; echo inner); echo outer

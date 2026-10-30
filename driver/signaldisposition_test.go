@@ -67,3 +67,32 @@ func TestAShellThatIsItsProcessHandsAnIgnoreToItsChildren(t *testing.T) {
 		})
 	}
 }
+
+// And the command the shell becomes at the end of its string, which is the
+// same road as `exec` taken without being asked: the shell hands back what it
+// borrowed and then is replaced, so the ignore was gone just before the
+// execve. Measured 2026-10-30, `trap "" INT; /bin/sh -c 'kill -INT $$; echo
+// survived'` prints `survived` in bash 5.3, bash 3.2, ksh93, zsh and dash, and
+// this shell's binaries were killed (#7050).
+func TestAShellThatBecomesItsLastCommandHandsItTheIgnore(t *testing.T) {
+	dieRunningAsAShell()
+	t.Setenv(dyingTailExec, "1")
+	const probe = `/bin/sh -c '/bin/sh -c "kill -USR1 \$\$; echo alive-\$((6*7))"; echo probed-$((2*3))'`
+	for _, tc := range []struct {
+		name, src string
+		survives  bool
+	}{
+		{"nothing arranged", probe, false},
+		{"ignored", "trap '' USR1; " + probe, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, out := waitStatusOfAShell(t, "^TestAShellThatBecomesItsLastCommandHandsItTheIgnore$", tc.src)
+			if !strings.Contains(out, "probed-6") {
+				t.Fatalf("%s: the probe never finished, so it answered nothing: %q", tc.src, out)
+			}
+			if got := strings.Contains(out, "alive-42"); got != tc.survives {
+				t.Errorf("%s: the grandchild survived = %v, want %v (wrote %q)", tc.src, got, tc.survives, out)
+			}
+		})
+	}
+}

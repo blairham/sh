@@ -81,10 +81,15 @@ func (r *Runner) expandArrayOperands(tableLetterAhead, indexedLetter bool) bool 
 			// See interp/declarationinturn.go.
 			continue
 		}
-		if a.Members != nil || len(a.Elems) == 0 {
+		if a.Members != nil {
 			// A compound body writes the member assignments it performs and
-			// has no element list of its own, and an empty literal has
-			// nothing to expand.
+			// has no element list of its own.
+			continue
+		}
+		if len(a.Elems) == 0 {
+			// An empty literal has nothing to expand, and its line is still
+			// written here, where a populated one's is.
+			r.traceArrayOperandAsItIsExpanded(op, tableLetterAhead)
 			continue
 		}
 		e := &expandedAssign{assign: a, elemsAreOperands: true}
@@ -121,8 +126,43 @@ func (r *Runner) expandArrayOperands(tableLetterAhead, indexedLetter bool) bool 
 		}
 		e.elems, e.elemsSet = parsed, true
 		op.expanded = e
+		r.traceArrayOperandAsItIsExpanded(op, tableLetterAhead)
 	}
 	return true
+}
+
+// traceArrayOperandAsItIsExpanded writes an array-literal operand's lines as
+// soon as its elements are expanded, in the dialects that take the operand off
+// the command line, and marks it written so the command's own line does not
+// write it again.
+//
+// Written here rather than with the command's line because that is where the
+// shells write it: ahead of the prefix's lines in the column that reaches the
+// operand first, and ahead of a later operand's failure. Measured 2026-10-30
+// against GNU bash 5.3.20, script files under `env -i PATH=/usr/bin:/bin`
+// (#7006):
+//
+//	set -x; v=new typeset -a a=(1)            `+ a=('1')`, `+ v=new`, `+ typeset -a a`
+//	set -x; v=old; v=new typeset -a a=($v)    … `+ a=('old')`, `+ v=new`, …
+//	set -x; v=1 w=2 declare -A m=([k]=v)      `+ m=(['k']='v')`, `+ v=1`, `+ w=2`, …
+//	set -x; v=$(echo P >&2) typeset -a a=($(echo O >&2))
+//	        the substitution `O`, `+ a=()`, then `P`, `+ v=`, the command
+//	set -x; typeset -a a=(1) b=($((1/0)))     `+ a=('1')`, then the division
+//
+// ksh93u+ writes the literal's line at the same point, which there stands
+// behind the prefix's, since that column works through the prefix first (see
+// interp/prefixoperandorder.go): `set -x; v=$(echo P >&2) typeset -a
+// a=($(echo O >&2))` is `P`, `+ v=”`, `O`, `+ a=( )`, `+ typeset -a a`.
+func (r *Runner) traceArrayOperandAsItIsExpanded(op *arrayOperand, tableLetterAhead bool) {
+	if op.traced || !r.tracing() {
+		return
+	}
+	d := r.diag()
+	if d.TraceDeclarationArrayOperand != TraceOperandSplitBefore {
+		return
+	}
+	op.traced = true
+	r.writeArrayOperandLines(*op, tableLetterAhead, d)
 }
 
 // indexedLetterAmongTheOptions reports whether a declaration utility's option

@@ -58,8 +58,8 @@ func TestADeclarationsOperandSeesItsPrefix(t *testing.T) {
 
 // The prefix's line comes before the literal operand's, and the literal is
 // written with what the prefix came to. Measured the same day and the same
-// way. A scalar operand's line is not pinned here: it is written in front of
-// the prefix's, which is a separate defect (#7001).
+// way. A scalar operand's line is pinned beside the prefix's in
+// TestADeclarationsPrefixIsTracedAheadOfItsOperands (#7001).
 func TestADeclarationsTracedLiteralSeesItsPrefix(t *testing.T) {
 	out, st := runKsh(t, t.TempDir(), `set -x; v=old; v=new typeset -a a=($v)`)
 	if want := "+ v=old\n+ v=new\n+ a=( new )\n+ typeset -a a\n"; st != 0 || out != want {

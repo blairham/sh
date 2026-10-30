@@ -3,7 +3,11 @@
 
 package interp
 
-import "github.com/blairham/sh/syntax"
+import (
+	"slices"
+
+	"github.com/blairham/sh/syntax"
+)
 
 // When a command's assignment prefix is worked through against when a
 // **declaration utility's operand** is expanded.
@@ -127,5 +131,58 @@ func (r *Runner) prefixBeforeADeclarationsOperand(assigns []*syntax.Assign, argv
 	// because what it holds must outlive this call: the operand has not
 	// expanded yet.
 	r.expandPrefixTraceValuesHolding(assigns, held, local, r.prefixSubscriptsReadHere(assigns, argv))
+	r.writeThePrefixAheadOfTheOperand(assigns, argv)
 	return true
+}
+
+// writeThePrefixAheadOfTheOperand writes the prefix's lines where the walk
+// above has just expanded it, ahead of the operand, in the column that writes
+// one line per entry in front of the command.
+//
+// That column traces an operand as it stores it (see
+// interp/declarationinturn.go), so the prefix's lines, written by the route
+// that stores the prefix, used to land behind the operands'. ksh93 writes them
+// where it works through the prefix. Measured 2026-10-30 against ksh93u+
+// 2012-08-01 (`/bin/ksh`), script files under `env -i PATH=/usr/bin:/bin`
+// (#7001):
+//
+//	set -x; v=new typeset y=1                  `+ v=new`, `+ y=1`, `+ typeset y`
+//	set -x; v=new w=2 export y=1 z=2           `+ v=new`, `+ w=2`, `+ y=1`, `+ z=2`, …
+//	set -x; v=1 typeset y=$(echo s >&2)        `+ v=1`, then the substitution's lines
+//	set -x; v=1 typeset -a a=($(echo s >&2))   the same, for a literal operand
+//	readonly r=1; set -x; v=1 r=2 typeset -a a=(1)
+//	                                           `+ v=1`, then the refusal
+//
+// So the lines are the walk's and not the operand's: the substitution in a
+// literal operand, which no walk stores in turn, is written behind them too.
+//
+// Each entry is marked as written, so the route behind does not write it a
+// second time — the same list the frozen-name walk keeps, and read the same
+// way. The writing stops at a frozen entry, which is refused and never
+// written, and at an entry with no parent, whose refusal the route behind
+// writes in place of every line after it.
+func (r *Runner) writeThePrefixAheadOfTheOperand(assigns []*syntax.Assign, argv []string) {
+	if !r.tracesEachPrefixEntryOnItsOwnLine() || !r.tracesItsPrefix(assigns, argv) ||
+		r.tracePrefixFollowsTheCommand(argv) {
+		return
+	}
+	d := r.diag()
+	for _, a := range assigns {
+		if a.Operand || slices.Contains(r.prefixTracedEarly, a) {
+			continue
+		}
+		if r.attrHas(a.Name, attrReadonly) ||
+			d.NoParent != "" && r.dottedNameHasNoParent(a.Name) {
+			return
+		}
+		if _, ok := r.prefixTraceValue(a); !ok {
+			continue
+		}
+		for _, w := range r.prefixTraceWords([]*syntax.Assign{a}, d) {
+			r.awaitTraceTurn()
+			r.traceLine(w, d)
+			r.releaseTraceTurn()
+		}
+		r.prefixTracedEarly = append(r.prefixTracedEarly, a)
+	}
 }

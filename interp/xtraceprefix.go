@@ -4,6 +4,7 @@
 package interp
 
 import (
+	"slices"
 	"strings"
 
 	"github.com/blairham/sh/syntax"
@@ -353,7 +354,11 @@ func (r *Runner) prefixTraceWords(assigns []*syntax.Assign, d *Diagnostics) []st
 	words := make([]string, 0, len(assigns))
 	for _, a := range assigns {
 		value, ok := r.prefixTraceValue(a)
-		if !ok {
+		if !ok || slices.Contains(r.prefixTracedEarly, a) {
+			// Nothing expanded for it, or its line is written already, ahead
+			// of a refusal or of a declaration's operand. See
+			// Runner.expandThePrefixUpToTheFrozenName and
+			// Runner.writeThePrefixAheadOfTheOperand.
 			continue
 		}
 		orig := a

@@ -2124,6 +2124,7 @@ func Semantics() interp.Semantics {
 	// 2, so the store that walks the brackets is never reached either.
 	//
 	// unanswered EmptySubscriptInAnIndexedLiteralIsBad: no array literal.
+	// unanswered RefusedPlacementKeepsWhatTheLiteralPlaced: no array literal.
 	//
 	// unanswered OutOfRangeElementToAnOutputOperand: no arrays, so no subscript
 	// lands out of range.

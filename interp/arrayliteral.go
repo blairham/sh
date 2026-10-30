@@ -128,6 +128,7 @@ func (r *Runner) literalElemPos(name string, a Array, e literalElem, value strin
 		// A declaration's status as well as the line's: `declare -a
 		// q=([-5]=x)` leaves 1 in bash 5.3.20, where this left 0.
 		r.assignFailed = true
+		r.literalPlacementRefused = true
 		r.failedSubscript("%s\n", Wording(wording,
 			"%[1]s[%[2]s]: bad array subscript", name, e.sub, value))
 		return 0, false
@@ -593,6 +594,13 @@ func (r *Runner) literalShapeReadsSubscripts(elems []*syntax.ArrayElem) bool {
 //	unset u; u+=( [1+]=x )                     declare -a u=()
 //	y=(a b); y+=( [1+]=bad )                   declare -a y=([0]="a" [1]="b")
 //
+// A subscript that evaluates and comes to no place the array has — a position
+// before the first, or nothing where that is refused — is refused where it
+// would go and streams the same way: `b=(7); b=(1 [-5]=x 3)` is `([0]="1")`
+// and `a=([$(true)]=x)` is `declare -a a=()` (#6852). Both are asked of the
+// dialect once the refusal is made, because one column places all or nothing
+// — see Semantics.RefusedPlacementKeepsWhatTheLiteralPlaced.
+//
 // The `x=` row is what says it is a stream and not simply a clear: the
 // element before the refusal survives. And one more row says the clear does
 // **not** come before the words are expanded, which is what keeps the
@@ -660,6 +668,14 @@ func (r *Runner) assignArrayLiteral(name string, elems []*syntax.ArrayElem, appe
 		switch old, ok := r.arrayToAppendTo(name); {
 		case ok:
 			a = old
+			if r.sem().RefusedPlacementKeepsWhatTheLiteralPlaced != Yes && placesBySubscript(parsed) {
+				// The placement goes into the stored array, so a refusal
+				// partway would leave the elements before it in place — in
+				// the column where a refused literal places nothing. A copy
+				// only where an element names its place, since that is the
+				// only element that can be refused there.
+				a = old.clone()
+			}
 			// After the highest subscript rather than after the count:
 			// appending to `a[0]=x a[5]=y` puts the next element at 6, which
 			// is where the end is.
@@ -668,18 +684,45 @@ func (r *Runner) assignArrayLiteral(name string, elems []*syntax.ArrayElem, appe
 			a, next = r.appendedOverAScalar(name)
 		}
 	}
+	outerRefused := r.literalPlacementRefused
+	r.literalPlacementRefused = false
 	built, ok := r.literalInto(name, a, next, parsed, true)
-	if !ok && !r.badSubscript {
-		return
+	refused := r.badSubscript || r.literalPlacementRefused
+	r.literalPlacementRefused = outerRefused
+	if !ok {
+		if !refused {
+			return
+		}
+		if !r.ask(r.sem().RefusedPlacementKeepsWhatTheLiteralPlaced,
+			"an array literal whose element was refused keeping what it had placed") {
+			// Nothing placed, and the name an array all the same: one that
+			// held one keeps it and any other is left an empty one.
+			if _, isArray := r.arrayToAppendTo(name); !isArray && !r.unspecified {
+				r.storeArray(name, NewArray(0))
+			}
+			return
+		}
 	}
 	// A refused *subscript* stores what was placed before it, which is the
-	// one of failedHeading's three causes that streams. See the note at the
-	// head of this function.
+	// one of failedHeading's three causes that streams — in the columns that
+	// stream, which is a question asked only once a placement has been
+	// refused. See the note at the head of this function.
 	if !appendTo && nestingRetypesTheLiteral(parsed) {
 		r.storeRetypedNestedLiteral(name, built)
 		return
 	}
 	r.storeArray(name, built)
+}
+
+// placesBySubscript reports whether any of a literal's elements names the
+// place it goes.
+func placesBySubscript(parsed []literalElem) bool {
+	for _, e := range parsed {
+		if e.subscripted {
+			return true
+		}
+	}
+	return false
 }
 
 // literalLen is how many positions the bare elements of a literal fill, which

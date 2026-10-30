@@ -259,6 +259,7 @@ ash   ReadArrayTakesOneNameOnly
 ash   ReadEchoLettersWriteTheValues
 ash   ReadExactCountKeepsPartial
 ash   ReadTypedValueFailureIsAnAssignmentFailure
+ash   RefusedPlacementKeepsWhatTheLiteralPlaced
 ash   TypedValueFailureGivesUpTheLine
 ash   ReadonlyAttributeCanBeRemoved
 ash   ReadonlyElement
@@ -678,6 +679,7 @@ dash  ReadPartialCountSucceeds
 dash  ReadTimeoutBoundsReadability
 dash  ReadTimeoutKeepsWhatArrived
 dash  ReadTypedValueFailureIsAnAssignmentFailure
+dash  RefusedPlacementKeepsWhatTheLiteralPlaced
 dash  TypedValueFailureGivesUpTheLine
 dash  ReadZeroTimeout
 dash  ReadonlyAttributeCanBeRemoved

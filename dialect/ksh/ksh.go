@@ -3905,6 +3905,11 @@ func Semantics() interp.Semantics {
 	// A literal's own reading of the same empty subscript, measured 2026-10-16
 	// (#6738): see interp.Semantics.EmptySubscriptInAnIndexedLiteralIsBad.
 	s.EmptySubscriptInAnIndexedLiteralIsBad = interp.No
+	// A literal whose element was refused where it would go keeps what it had
+	// placed in front of it: measured 2026-10-30 on ksh93u+, `b=(7); typeset
+	// -a b=([0]=z [-5]=x [2]=q)` is `subscript out of range` and leaves `(z)`
+	// (#6852). See interp.Semantics.RefusedPlacementKeepsWhatTheLiteralPlaced.
+	s.RefusedPlacementKeepsWhatTheLiteralPlaced = interp.Yes
 	// The comma is the operator here too, and there are no ranges for the
 	// question to be about (#2160).
 	s.SubscriptExpressionStopsAtASeparator = interp.No

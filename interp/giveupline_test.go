@@ -38,6 +38,9 @@ func giveUpLineSemantics(r *Runner) {
 	// The status a give-up leaves, so `next=1` is a number this test may
 	// assert rather than the core's refusal.
 	sem.FatalErrorStatusIsOne = Yes
+	// And what a refused literal keeps, which the literal's row reaches once
+	// its subscript is refused and which nothing here is about.
+	sem.RefusedPlacementKeepsWhatTheLiteralPlaced = Yes
 	r.Semantics = &sem
 }
 

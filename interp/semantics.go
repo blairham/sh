@@ -34088,6 +34088,52 @@ type Semantics struct {
 	// dash and BusyBox ash have no array literal.
 	EmptySubscriptInAnIndexedLiteralIsBad Answer
 
+	// RefusedPlacementKeepsWhatTheLiteralPlaced stores what an indexed array
+	// literal had placed before one of its elements was **refused where it
+	// would go** — a subscript that would not evaluate, a position before the
+	// first, a subscript that expanded to nothing where that is refused — and
+	// starts the name over first where the literal is not an append. No places
+	// nothing: a name already holding an array keeps it, and any other is left
+	// an empty array.
+	//
+	// Measured 2026-10-30 from a script file under `env -i
+	// PATH=/usr/bin:/bin`, each row after `b=(7)` and read back by an exit
+	// trap:
+	//
+	//	row                                bash 5.3.20  ksh93u+  zsh 5.9.2
+	//	b=(1 [-5]=x 3)                     ([0]="1")    text     ( 7 )
+	//	b=(1 [$(true)]=x 3)                ([0]="1")    text     ( 7 )
+	//	b=(1 [1+]=x 3)                     ([0]="1")    text     ( 7 )
+	//	typeset -a b=(1 2 [-5]=x 3)        [0] and [1]  text     ( 7 )
+	//	typeset -a b=([0]=z [-5]=x [2]=q)  ([0]="z")    (z)      ( 7 )
+	//	typeset -a b=([0]=z [1+]=x [2]=q)  ([0]="z")    (z)      ( 7 )
+	//
+	// where `text` is the element kept as the words `[-5]=x`, and `[0]` and
+	// `[1]` are the `1` and `2` in front of the refusal. An append is the same
+	// question: `b+=(1 [-5]=x 3)` is `([0]="7" [1]="1")` in bash and `( 7 )`
+	// in zsh.
+	//
+	// What zsh's nothing leaves depends on what the name was, and only there:
+	// after `unset b`, `b=s`, `typeset -i b=3` or `b=s; b+=(…)`, the same
+	// refusal leaves `typeset -a b=(  )` — an empty array with no other
+	// attribute — where a literal that failed to *expand* leaves an unset
+	// name unset. bash's stream over an unset name places nothing too, and
+	// `b=([$(true)]=x)` there is `declare -a b=()`.
+	//
+	// So the two columns that place a literal's subscripts one at a time keep
+	// the ones in front of the refusal, and zsh places all or nothing whatever
+	// refused it. ksh93 reads a mixed literal's `[…]=` as text, so it reaches
+	// the question only through a literal whose first element names its
+	// subscript under the indexed letter. bash 3.2.57 skips the refused
+	// element and places the rest — `([0]="1" [1]="3")` for the first row —
+	// which no dialect here claims.
+	//
+	// Asked only once a placement has been refused, so no literal that places
+	// asks anything. An element that failed to **expand** is
+	// FailedSubscriptedLiteralKeepsWhatItStored's, not this. dash and BusyBox
+	// ash have no array literal (#6852).
+	RefusedPlacementKeepsWhatTheLiteralPlaced Answer
+
 	// EmptySubscriptTextIsAMathError refuses a subscript whose text is
 	// *empty or blank once it has been expanded* — `${a[$w]}` with an empty
 	// `$w`, and `${a[ ]}` beside it — where an expression reads it.

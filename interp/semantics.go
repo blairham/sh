@@ -6432,6 +6432,91 @@ type Semantics struct {
 	// script did earlier.
 	QuitResetRestoresTheDefault Answer
 
+	// InteractiveIgnoresResourceLimitSignals makes an interactive shell do
+	// nothing at all with an untrapped SIGXCPU or SIGXFSZ, as every shell in
+	// the panel does with TERM and QUIT there.
+	//
+	// only-ksh: measured 2026-10-30, `kill -XCPU $$; echo after $?` under
+	// `-i -c` with standard input a pipe, and the same signal from another
+	// process during a `read`, an external `sleep` and a busy loop, there and
+	// in an interactive session at a pseudo-terminal: ksh93u+ carries on in
+	// every case, and bash 5.3.20, bash 3.2.57, zsh 5.9.2, dash and BusyBox
+	// ash 1.37.0 die of it (#7058). Without `-i` ksh93 dies of both too.
+	//
+	// It is TERM's ignore and not a different one, which two measurements
+	// say: `trap - XCPU` does not take it away there, as `trap - TERM` does
+	// not (QuitResetRestoresTheDefault), and inside `( … )`, which ksh93 runs
+	// in its own process, the signal ends the parentheses as TERM does —
+	// `(kill -XCPU $$; echo inner); echo st=$?` writes `st=280` and XFSZ
+	// `st=281` (SubshellRunsOnAfterSignalingTheShell).
+	//
+	// unpinned bash: no corpus row is interactive; pinned by
+	// TestAnInteractiveShellIgnoresAResourceLimitSignal.
+	//
+	// unpinned ksh: the same reach, pinned by
+	// TestAnInteractiveShellIgnoresAResourceLimitSignal.
+	//
+	// unpinned zsh: the same reach, pinned by
+	// TestAnInteractiveShellIgnoresAResourceLimitSignal.
+	//
+	// unpinned dash: the same reach, pinned by
+	// TestAnInteractiveShellIgnoresAResourceLimitSignal.
+	//
+	// unpinned ash: the same reach, pinned by
+	// TestAnInteractiveShellIgnoresAResourceLimitSignal.
+	InteractiveIgnoresResourceLimitSignals Answer
+
+	// InteractiveAlarm is what an untrapped SIGALRM does to an interactive
+	// shell, and the panel gives three answers rather than two. See
+	// InteractiveAlarmAnswer for them.
+	//
+	// Measured 2026-10-30, `kill -ALRM $$; echo after $?` under `-i -c` with
+	// standard input a pipe, the same signal from another process during a
+	// `read`, an external `sleep` and a busy loop, and both again in an
+	// interactive session at a pseudo-terminal (#7058):
+	//
+	//	bash 5.3.20, bash 3.2.57, dash, ash   killed by ALRM
+	//	ksh93u+                               carries on: `after 0`
+	//	zsh 5.9.2                             `zsh:1: timeout`, exit 14
+	//
+	// Without `-i` all six die of it, so the noun is the shell being
+	// interactive. Two shells that have a TMOUT of their own keep a handler
+	// for the signal at a prompt, and with no TMOUT set one handler does
+	// nothing and the other ends the session.
+	//
+	// ksh93's carries into `( … )`, which is what makes it a handler rather
+	// than TERM's ignore: `(kill -ALRM $$; echo inner); echo st=$?` writes
+	// `inner` and `st=0`, where TERM ends the parentheses at 271. And
+	// `trap - ALRM` does not take it away.
+	//
+	// zsh's says `timeout` located as any of its diagnostics is — `zsh:1:`
+	// on the first line of `-c`, `f:` inside a function, `(eval):1:` inside
+	// `eval`, `zsh:` at a prompt — and exits at 14, the signal's number,
+	// the way `exit` does: the EXIT trap runs and reads 14, an `exit 3`
+	// inside it leaves 3, and zshexit runs. `trap - ALRM`, after a handler
+	// or an ignore or neither, hands the signal back to its default action,
+	// and the shell then dies of it.
+	//
+	// Read rather than asked, as InterruptWaitsForTheProgram is: a signal
+	// arriving is not the place to refuse a script, and the unanswered value
+	// is the default action, which is what this package did before.
+	//
+	// unpinned bash: no corpus row is interactive; pinned by
+	// TestAnInteractiveShellAnswersAnAlarmItsOwnWay.
+	//
+	// unpinned ksh: the same reach, pinned by
+	// TestAnInteractiveShellAnswersAnAlarmItsOwnWay.
+	//
+	// unpinned zsh: the same reach, pinned by
+	// TestAnInteractiveShellAnswersAnAlarmItsOwnWay.
+	//
+	// unpinned dash: the same reach, pinned by
+	// TestAnInteractiveShellAnswersAnAlarmItsOwnWay.
+	//
+	// unpinned ash: the same reach, pinned by
+	// TestAnInteractiveShellAnswersAnAlarmItsOwnWay.
+	InteractiveAlarm InteractiveAlarmAnswer
+
 	// SubshellRunsOnAfterSignalingTheShell lets the rest of a subshell's
 	// body run after something inside it has sent the whole shell a fatal
 	// signal — `(kill -TERM $$; echo inner)`. True in bash, dash and zsh;

@@ -2764,6 +2764,14 @@ func Semantics() interp.Semantics {
 	// memory of what the script did — and `trap '' QUIT` afterwards brings
 	// the ignore back.
 	s.QuitResetRestoresTheDefault = interp.Yes
+	// Interactive, an untrapped ALRM is a timeout: `zsh:1: timeout`, located
+	// as any diagnostic is, and an exit at 14 that runs the EXIT trap and
+	// zshexit, until `trap - ALRM` hands it back to its default action.
+	// XCPU and XFSZ end it by the signal. Measured 2026-10-30 under `-i -c`
+	// and at a pseudo-terminal, from the script and from another process
+	// (#7058). See interp.Semantics.InteractiveAlarm.
+	s.InteractiveIgnoresResourceLimitSignals = interp.No
+	s.InteractiveAlarm = interp.InteractiveAlarmTimesOut
 	// This shell alone: an untrapped SIGHUP ends the shell with 1 and runs
 	// the EXIT trap, rather than killing it with 128 plus the number. The
 	// EXIT trap is why it is not simply a different number — the line above

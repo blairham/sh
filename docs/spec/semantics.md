@@ -3294,6 +3294,42 @@ signal sent by the shell itself and by `sh -c 'kill -TERM $PPID'` (#6718):
                                              subshell is what the signal
                                              ends: 271, no `inner`
 
+**Two interactive shells answer ALRM their own way, and one of them XCPU
+and XFSZ as well** (#7058). Measured 2026-10-30, `-i -c` with standard input
+a pipe and in an interactive session at a pseudo-terminal, the signal sent by
+the shell itself and by `/bin/kill` from another process during a `read`, a
+`sleep` and a busy loop. References: GNU bash 5.3.20, `/bin/bash` 3.2.57,
+`/bin/ksh` 93u+, zsh 5.9.2, `/bin/dash`, BusyBox ash 1.37.0 in the pinned
+alpine image:
+
+    kill -ALRM $$; echo after $?          bash, bash 3.2, dash, ash: killed
+                                          ksh93: after 0
+                                          zsh: `zsh:1: timeout`, exit 14
+    the same without -i                    killed — all six
+    kill -XCPU $$ (and XFSZ)               ksh93: after 0; the rest killed
+    (kill -ALRM $$; echo inner); echo $?  ksh93: inner, 0 — its handler
+                                          carries into the parentheses
+    (kill -XCPU $$; echo inner); echo $?  ksh93: 280 (XFSZ 281), as TERM
+    trap 'echo T' ALRM; kill -ALRM $$     ksh93: no `T`; the trap never runs
+    trap - ALRM; kill -ALRM $$            ksh93: after 0; zsh: killed
+    trap 'echo "bye $?"' EXIT; kill -ALRM $$   zsh: `timeout`, `bye 14`, 14
+    f() { kill -ALRM $$; }; f              zsh: `f: timeout`
+    from outside, at the prompt            zsh: `zsh: timeout`, 14
+
+Both are shells that time a prompt out with TMOUT and keep a handler for the
+signal while interactive. With no TMOUT set, ksh93's does nothing and zsh's
+ends the session as an exit at the signal's number. That makes
+`Semantics.InteractiveAlarm` three answers rather than two, and ksh93's XCPU
+and XFSZ ignore is `Semantics.InteractiveIgnoresResourceLimitSignals`, which
+behaves exactly as TERM's does. From outside, zsh's timeout is answered by
+the front end, which writes `<name>: timeout` and exits. That is zsh at a
+prompt. It runs no EXIT trap and writes no line number, which zsh does under
+`-i -c` while a command runs.
+
+zsh also exits 13, silently, on an untrapped PIPE under `-i -c` with standard
+input a pipe, and ignores it at a pseudo-terminal. That is not modeled, and
+a PIPE from outside is not seen at all on darwin (#7046). Filed as #7109.
+
 POSIX makes both readings defensible: `trap -` restores the disposition
 the shell *inherited*, and the two sides disagree about what that was for
 a signal they were born ignoring. One reads it as SIG_DFL and the other

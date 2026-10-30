@@ -2291,6 +2291,12 @@ func Semantics() interp.Semantics {
 	// QUIT; kill -QUIT $$; echo after` prints after and exits 0, with or
 	// without a handler having been installed and removed first.
 	s.QuitResetRestoresTheDefault = interp.No
+	// Interactive, an untrapped XCPU, XFSZ or ALRM ends it as it ends a
+	// shell that is not, in 5.3.20 and 3.2.57 alike: measured 2026-10-30 under `-i -c` and from another
+	// process during a `read`, a `sleep` and a busy loop (#7058). See
+	// interp.Semantics.InteractiveAlarm.
+	s.InteractiveIgnoresResourceLimitSignals = interp.No
+	s.InteractiveAlarm = interp.InteractiveAlarmKills
 	s.HangupIsAnOrderlyExit = interp.No
 	s.ExitInTrapReportsEarlierStatus = interp.Yes
 	// A subshell's own EXIT trap runs however the subshell ended. Measured

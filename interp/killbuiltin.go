@@ -1260,7 +1260,11 @@ func (r *Runner) sendSignal(pid int, name string, sig syscall.Signal) error {
 		// st=$?'` writes `st=271` and nothing else, and QUIT is `st=259`;
 		// the other columns write `inner` and `st=0` (#6718). See
 		// Semantics.SubshellRunsOnAfterSignalingTheShell.
-		if r.inSubshell && !r.ask(r.sem().SubshellRunsOnAfterSignalingTheShell,
+		//
+		// An interactive ALRM is not one of those: what drops it there is a
+		// handler of the shell's own, which the parentheses keep, and they
+		// run on. See Semantics.InteractiveAlarm.
+		if r.inSubshell && name != "ALRM" && !r.ask(r.sem().SubshellRunsOnAfterSignalingTheShell,
 			"whether a subshell runs on after signaling the shell") {
 			r.status = 128 + int(sig)
 			if r.sem().SignalDeathStatusIsTwoFiftySix == Yes {
@@ -1385,6 +1389,20 @@ func bornIgnoring(name string, interactive bool, restored func() bool,
 ) bool {
 	switch {
 	case name == "TERM" && interactive, name == "QUIT" && interactive:
+	case (name == "XCPU" || name == "XFSZ") && interactive:
+		// One shell's interactive ignore reaches these two as well. See
+		// Semantics.InteractiveIgnoresResourceLimitSignals.
+		yes, refused := answer(sem.InteractiveIgnoresResourceLimitSignals,
+			"whether an interactive shell ignores an untrapped XCPU or XFSZ")
+		if !yes || refused {
+			return false
+		}
+	case name == "ALRM" && interactive:
+		// And one keeps a handler for ALRM that does nothing. Read rather
+		// than asked — see Semantics.InteractiveAlarm.
+		if sem.InteractiveAlarm != InteractiveAlarmIsIgnored {
+			return false
+		}
 	case name == "QUIT":
 		yes, refused := answer(sem.QuitIgnoredWhenNotInteractive,
 			"whether an untrapped QUIT ends a shell that is not interactive")
@@ -1486,6 +1504,12 @@ func fatalSignal(name string, sig syscall.Signal) bool {
 // which is why the answer is read here rather than at either of them.
 func (r *Runner) signalDeath(name string, sig syscall.Signal) {
 	r.stoppedBySignal = true
+	if name == "ALRM" && r.alarmTimesOut() {
+		// Not a death either, in the one shell whose interactive handler
+		// ends the session on it. See Semantics.InteractiveAlarm.
+		r.alarmTimeout(sig)
+		return
+	}
 	if name == "HUP" && r.ask(r.sem().HangupIsAnOrderlyExit,
 		"whether an untrapped HUP exits the shell rather than killing it") {
 		r.status = hangupExitStatus

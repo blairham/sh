@@ -169,6 +169,10 @@ type signalState struct {
 	// outside is a fatal signal from another process that a front end
 	// handed the shell to die of. See outsidedeath.go.
 	outside outsideDeath
+	// alarmKept says the shell keeps SIGALRM to a handler of its own that a
+	// trap does not replace, so an ALRM arrival runs no trap and gives up no
+	// wait. Set where an ALRM trap is set. See Semantics.InteractiveAlarm.
+	alarmKept bool
 }
 
 // sigs returns the shared state, creating it on first use.
@@ -275,8 +279,14 @@ func (s *signalState) drainForwarded() {
 // that adds: see signalState.queued, which it keeps true while anything is
 // there.
 func (s *signalState) queue(names ...string) {
-	s.pending = append(s.pending, names...)
-	s.queued.Store(true)
+	for _, name := range names {
+		if name == "ALRM" && s.alarmKept {
+			// The shell's own handler has it. See signalState.alarmKept.
+			continue
+		}
+		s.pending = append(s.pending, name)
+		s.queued.Store(true)
+	}
 }
 
 // settleQueued clears signalState.queued once both of what it stands for are
@@ -528,6 +538,15 @@ func (r *Runner) trapSignal(name string, sig syscall.Signal, body *string) {
 	// its dispositions to itself is whether it holds a subscription to give
 	// up. Read before the table write below, which answers it the other way.
 	_, had := s.traps[name]
+	if name == "ALRM" {
+		// An interactive shell may keep ALRM to a handler of its own, which
+		// the trap then never replaces: measured 2026-10-30 under `-i -c`,
+		// `trap 'echo T' ALRM; kill -ALRM $$; echo after` writes only
+		// `after` in ksh93u+ and `T` first everywhere else, and one from
+		// another process neither runs the trap nor gives up a `read -t`
+		// there (#7058). See Semantics.InteractiveAlarm.
+		s.alarmKept = r.Interactive && r.sem().InteractiveAlarm == InteractiveAlarmIsIgnored
+	}
 	// The table first, because every condition `trap` takes gets an entry:
 	// the entry is what a listing prints and what `trap -` takes away, and
 	// it is the whole of what KILL and STOP ever get.

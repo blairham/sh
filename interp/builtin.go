@@ -6864,8 +6864,11 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 			// And what it keeps, which is what arrived in two of the three
 			// columns that give a read up and only its complete fields in
 			// the third. Asked ahead of the counts below, which are about an
-			// input that ended rather than a read that was given up.
-			if array == "" && !exact {
+			// input that ended rather than a read that was given up, and only
+			// in a dialect that gives a read up for a trapped signal: one
+			// that does not gives a read up only for a death from outside,
+			// which the shell is about to die of. See outsidedeath.go.
+			if array == "" && !exact && r.sem().ReadIsAbandonedByATrappedSignal == Yes {
 				if r.ask(r.sem().ReadEndedShortKeepsOnlyCompleteFields,
 					"a `read` that ends short keeping only the fields whose separator arrived") {
 					complete = r.readCompleteFields(text, lits)

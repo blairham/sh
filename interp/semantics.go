@@ -3137,9 +3137,12 @@ type Semantics struct {
 	// At the deadline bash 5.3.20 assigns what arrived the same way, at
 	// 142, and ksh93u+ touches nothing (ReadTimeoutKeepsWhatArrived).
 	//
-	// Asked at every give-up of a read into names, and at a deadline only
-	// where the dialect keeps nothing there (ReadTimeoutKeepsWhatArrived is
-	// no) and a field ahead of the last name is complete. Everywhere else
+	// Asked at every give-up of a read into names in a dialect that gives
+	// reads up for a trapped signal — not at one given up for a death from
+	// outside in a dialect that does not, which the shell is about to die of
+	// — and at a deadline only where the dialect keeps nothing there
+	// (ReadTimeoutKeepsWhatArrived is no) and a field ahead of the last name
+	// is complete. Everywhere else
 	// at a deadline the two readings leave the same names. Not asked of
 	// `-a`, `-A` or `-N`, which no shell with this reading has.
 	//

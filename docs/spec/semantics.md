@@ -34633,9 +34633,11 @@ not written behind a backslash, so the splitting is the one the names are
 filled by. A run of IFS whitespace is one separator, and with IFS set and empty
 nothing is.
 
-The axis is asked at every give-up of a read into names, and at a deadline only
-where the dialect keeps nothing there and a field ahead of the last name is
-complete, since everywhere else keeping the complete fields and keeping nothing
+The axis is asked at every give-up of a read into names in a dialect that gives
+reads up for a trapped signal (a read given up only for a death from outside,
+in a dialect that does not, is the shell about to die and is not asked), and at
+a deadline only where the dialect keeps nothing there and a field ahead of the
+last name is complete, since everywhere else keeping the complete fields and keeping nothing
 leave the same names. Not asked of `-a`, `-A` or `-N`, which no shell with this
 reading has. Pinned by `TestAReadThatEndsShortKeepsWhatTheShellsKeep` and, for
 the axis itself, `TestEachAnswerToAReadThatEndsShort`.

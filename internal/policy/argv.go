@@ -17,9 +17,10 @@ import (
 //	deny exec-argv /**/git  -- worktree remove
 //	deny exec-argv /**/go   -- tool golangci-lint
 //
-// Proposed, not ratified: the issue is labeled needs-decision and the
-// grammar is the maintainer's call. What follows is the argument for this
-// shape, written so it can be argued with.
+// The maintainer approved this shape as proposed on 2026-10-29 (#6938): the
+// selector word, the ` -- ` delimiter, deny only, literal words, and an
+// ordered subsequence. What follows is the argument for it, kept so that a
+// later change to any of those has the reasons in front of it.
 //
 // # The delimiter, and why it is a new selector rather than a longer `exec`
 //
@@ -115,11 +116,18 @@ func splitArgvRule(rest string) (program string, words []string, err error) {
 		// One spelling per meaning: a rule about the program and no words is
 		// `deny exec`, and two ways to write it is two lines a reviewer has
 		// to recognize as the same rule.
-		return "", nil, fmt.Errorf("exec-argv needs at least one argument word after `--`; to refuse %s whatever its arguments, write `deny exec %s`", program, program)
+		return "", nil, fmt.Errorf(
+			"exec-argv needs at least one argument word after `--`; to refuse %s whatever its arguments, write `deny exec %s`",
+			program,
+			program,
+		)
 	}
 	for _, w := range words {
 		if strings.ContainsAny(w, `*?[\`) {
-			return "", nil, fmt.Errorf("argument word %q: argument words are literal, and a glob character in one would be a rule that never fires", w)
+			return "", nil, fmt.Errorf(
+				"argument word %q: argument words are literal, and a glob character in one would be a rule that never fires",
+				w,
+			)
 		}
 	}
 	return program, words, nil

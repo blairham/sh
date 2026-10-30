@@ -1532,15 +1532,22 @@ documented hole quietly becoming an unmeasured one. It does not fail the sweep,
 it is counted, and it is printed in a ledger of its own naming the section of
 the design doc that accounts for it.
 
-**It is the one row whose denied policy is opened, and that is the part to
+**It is one of two rows whose denied policy is opened, and that is the part to
 watch.** The ordinary denied set grants no exec at all, so without a grant the
 child never starts and the row would grade `contained` — for the wrong reason
 entirely, the exec having been refused rather than the deny having held.
 `Route.Grant` is that opening and is deliberately narrow: only a route that
-cites a reason may carry one, and it may only grant the exec slot, both enforced
-by tests rather than by comment. The falsifier is one command — the same script
-under the denied policy without the grant is `exec: refused` — and it is what
-says the field is load-bearing rather than a way out.
+cites a reason may carry one, or one that cuts a `Route.Carve` back out of it,
+and it may only grant the exec slot, all enforced by tests rather than by
+comment. The falsifier is one command — the same script under the denied policy
+without the grant is `exec: refused` — and it is what says the field is
+load-bearing rather than a way out.
+
+The other is `exec/argv-carve`, which grades `deny exec-argv` (#6938): a
+program the policy grants, with one subcommand carved back out. A carve may only
+be a `deny exec-argv` about the program its own grant names, so the route closes
+exactly what it opened. Its falsifier is the grant without the carve, which
+reads `ESCAPED` on every dialect, as does matching the words as a prefix.
 
 **The ledger is empty, and emptying it is the worked example of what it is
 for.** Three features landed against it over #2260, #2271 and #2283 —

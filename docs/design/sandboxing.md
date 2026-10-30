@@ -1681,9 +1681,11 @@ exec` was. The policy file now says so.
 
 ### Refusing a subcommand: `exec-argv`
 
-**Proposed in #6938 and awaiting the maintainer's decision** — the issue
-is labeled `needs-decision`, and everything in this section is the
-proposal's argument rather than a ruling.
+**Decided in #6938.** The maintainer approved this syntax as proposed on
+2026-10-29: the selector word, the ` -- ` delimiter, deny only, literal
+words, and an ordered subsequence rather than a prefix. The argument for
+each is kept below, so that a later change to any of them starts from
+the reasons.
 
 An `exec` rule matches the program the shell resolved and nothing else,
 so `deny exec` can refuse `make` and cannot refuse `make check` while
@@ -1776,7 +1778,10 @@ rather than as a vector, `eval`, a function, `command`, a subshell, a
 command substitution — each inner command is asked about with the vector
 the shell built for it. `cd x && git stash` is refused at the `git`.
 `cmd/sh`'s `TestAnArgvRuleReachesEveryExecTheShellInterprets` runs those
-routes under every dialect.
+routes under every dialect, and `make sandbox` grades the carve-out as
+`exec/argv-carve` through each dialect binary's own `--policy` as well:
+the program granted, one subcommand denied, and the same script without
+the deny escaping.
 
 ## What is deliberately not here
 
@@ -1804,8 +1809,8 @@ routes under every dialect.
 
 ## Open, and flagged for the maintainer
 
-Three decisions here are defensible defaults chosen in the absence of an
-answer, and all three are cheap to reverse:
+Two decisions here are defensible defaults chosen in the absence of an
+answer, and both are cheap to reverse:
 
 1. **`default allow <selector>` is supported at all.** The uniform
    posture is argued above and the per-kind override is documented as
@@ -1817,7 +1822,3 @@ answer, and all three are cheap to reverse:
    verbose. The grouping was chosen because the ungrouped form makes
    `[ -f x ]` fail under a policy that plainly meant to allow it, which
    is the mistake people actually make.
-3. **`exec-argv`, its syntax and its match (#6938).** Proposed above and
-   not ratified: the selector word, the ` -- ` delimiter, deny-only,
-   literal words, and an ordered subsequence rather than a prefix are
-   each a choice the maintainer has not made.

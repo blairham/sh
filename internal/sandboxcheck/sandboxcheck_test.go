@@ -10,6 +10,8 @@ import (
 	"slices"
 	"strings"
 	"testing"
+
+	gatepolicy "github.com/blairham/sh/internal/policy"
 )
 
 // The instrument's own machinery, which is the half `make sandbox` cannot
@@ -261,7 +263,7 @@ func TestTheRelativeNameFollowsTheShape(t *testing.T) {
 
 func readPolicy(t *testing.T, f Fixture, mode Mode, grant ...string) string {
 	t.Helper()
-	at, err := policy(f, mode, grant)
+	at, err := policy(f, mode, grant, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -281,7 +283,7 @@ func TestThePolicyIsNotInsideTheWorkspaceItGoverns(t *testing.T) {
 	dir := t.TempDir()
 	f := Fixture{Root: dir, Ws: filepath.Join(dir, "ws")}
 	for _, mode := range []Mode{Denied, Allowed} {
-		at, err := policy(f, mode, nil)
+		at, err := policy(f, mode, nil, nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -296,7 +298,7 @@ func TestThePolicyIsNotInsideTheWorkspaceItGoverns(t *testing.T) {
 // happened to refuse would grade inert and hide a real escape.
 func TestTheUngatedRunHasNoPolicyAtAll(t *testing.T) {
 	t.Parallel()
-	at, err := policy(Fixture{Root: t.TempDir()}, Ungated, nil)
+	at, err := policy(Fixture{Root: t.TempDir()}, Ungated, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -495,17 +497,19 @@ func TestOnlyRoutesThatMeanToEscapeCarryACitation(t *testing.T) {
 
 // Grant opens the denied policy, which is the one thing in this package that
 // every verdict turns on. Two limits, both narrow on purpose: only a route
-// that is admitting an escape may use it, and it may only grant the exec
-// slot — so the path rules a route aims past are never what it loosened.
-func TestOnlyADocumentedRouteMayOpenTheDeniedPolicy(t *testing.T) {
+// that is admitting an escape, or cutting a carve back out of what it opened,
+// may use it, and it may only grant the exec slot — so the path rules a route
+// aims past are never what it loosened.
+func TestOnlyADocumentedOrCarvedRouteMayOpenTheDeniedPolicy(t *testing.T) {
 	t.Parallel()
 	for _, rt := range Routes() {
 		if len(rt.Grant) == 0 {
 			continue
 		}
-		if rt.Cites == "" {
+		if rt.Cites == "" && len(rt.Carve) == 0 {
 			t.Errorf(
-				"route %s opens the denied policy with %v but does not cite a reason: a grant that is not admitting a documented hole is an instrument grading itself",
+				"route %s opens the denied policy with %v but neither cites a reason nor carves anything back out: "+
+					"a grant that is not admitting a documented hole or closing what it opened is an instrument grading itself",
 				rt.Name,
 				rt.Grant,
 			)
@@ -517,6 +521,97 @@ func TestOnlyADocumentedRouteMayOpenTheDeniedPolicy(t *testing.T) {
 					rt.Name,
 					rule,
 				)
+			}
+		}
+	}
+}
+
+// Carve is the second reason a route may open the denied policy, and it is
+// held as narrowly as the first: every rule in it is a `deny exec-argv` about a
+// program the route's own Grant names and its script runs, with words the
+// script passes. So what the route opened is exactly what it closes again, and
+// the carve is a rule that can fire on this route rather than one that never
+// does. A carve with no grant would grade contained on an exec refused for want
+// of an allow, which is the false calm this package is shaped around.
+func TestACarveClosesExactlyWhatItsRouteOpened(t *testing.T) {
+	t.Parallel()
+	carved := 0
+	for _, rt := range Routes() {
+		if len(rt.Carve) == 0 {
+			continue
+		}
+		carved++
+		granted := map[string]bool{}
+		for _, rule := range rt.Grant {
+			granted[strings.TrimPrefix(rule, "allow exec-unconfined ")] = true
+		}
+		argv := strings.Fields(rt.Script)
+		for _, rule := range rt.Carve {
+			body, ok := strings.CutPrefix(rule, "deny exec-argv ")
+			if !ok {
+				t.Errorf("route %s carves %q; a carve is a `deny exec-argv` and nothing else", rt.Name, rule)
+				continue
+			}
+			prog, words, ok := strings.Cut(body, " -- ")
+			if !ok || strings.TrimSpace(words) == "" {
+				t.Errorf("route %s carves %q, which names no argument words", rt.Name, rule)
+				continue
+			}
+			if !granted[prog] {
+				t.Errorf("route %s carves %s out of a grant it does not carry (%v)", rt.Name, prog, rt.Grant)
+			}
+			if !slices.Contains(argv, prog) {
+				t.Errorf("route %s carves %s but its script %q never runs it", rt.Name, prog, rt.Script)
+			}
+			for _, w := range strings.Fields(words) {
+				if !slices.Contains(argv, w) {
+					t.Errorf("route %s carves the word %q but its script %q never passes it", rt.Name, w, rt.Script)
+				}
+			}
+		}
+	}
+	if carved == 0 {
+		t.Fatal("no route carries a carve, so `deny exec-argv` is graded by nothing in the sweep")
+	}
+}
+
+// The carve reaches the policy its route runs under, under both shapes, and
+// that policy is one the shell will read. A policy the shell refused would
+// stop it before the script ran and the row would read contained — the false
+// calm again, from a typo. The permitting run carries no carve, or the row
+// would read overblocked.
+func TestTheCarveOnARouteReachesAPolicyTheShellTakes(t *testing.T) {
+	t.Parallel()
+	for _, rt := range Routes() {
+		if len(rt.Carve) == 0 {
+			continue
+		}
+		for _, shape := range Shapes {
+			f, err := newFixture(t.TempDir(), 1, shape)
+			if err != nil {
+				t.Fatal(err)
+			}
+			denied, err := policy(f, Denied, rt.Grant, rt.Carve)
+			if err != nil {
+				t.Fatal(err)
+			}
+			b, err := os.ReadFile(denied)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, rule := range append(slices.Clone(rt.Grant), rt.Carve...) {
+				if !strings.Contains(string(b), rule+"\n") {
+					t.Errorf("%s %s: the denied policy %q does not carry %q", rt.Name, shape, b, rule)
+				}
+			}
+			if _, err := gatepolicy.ParseFile(denied); err != nil {
+				t.Errorf("%s %s: the denied policy does not parse: %v", rt.Name, shape, err)
+			}
+			allowed := readPolicy(t, f, Allowed)
+			for _, rule := range rt.Carve {
+				if strings.Contains(allowed, rule) {
+					t.Errorf("%s %s: the permitting policy carries the carve %q", rt.Name, shape, rule)
+				}
 			}
 		}
 	}
@@ -567,7 +662,7 @@ func TestTheGrantOnARouteReachesThePolicyThatRouteIsRunUnder(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	at, err := policy(f, Denied, documented.Grant)
+	at, err := policy(f, Denied, documented.Grant, documented.Carve)
 	if err != nil {
 		t.Fatal(err)
 	}

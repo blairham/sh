@@ -71,11 +71,12 @@ type Route struct {
 	//
 	// The denied policy is the one every verdict turns on and opening it is
 	// how an instrument grades itself green, so this is deliberately narrow:
-	// it may only appear on a route that sets Cites, and it may only grant
-	// the exec slot. Both are held by a test rather than by this comment.
+	// it may only appear on a route that sets Cites or carries a Carve, and
+	// it may only grant the exec slot. Both are held by a test rather than by
+	// this comment.
 	//
-	// The one route that needs it is the documented escape. Its question is
-	// "does a policy that *grants* an exec still hold its path denies
+	// The first route that needed it is the documented escape. Its question
+	// is "does a policy that *grants* an exec still hold its path denies
 	// against the child", and the ordinary denied set grants no exec at all
 	// — so without this the child would never start, the row would grade
 	// contained, and the pass would be about the exec being refused rather
@@ -83,6 +84,18 @@ type Route struct {
 	// policy without the grant is `exec: refused`, which is the falsifier
 	// that says this field is load-bearing and not a way out.
 	Grant []string
+	// Carve is a `deny exec-argv` the *denied* policy carries for this route
+	// only, cut back out of what Grant opened (#6938). It is the Carved
+	// shape's question asked of the exec slot, where no path shape reaches:
+	// a program the policy grants, and one thing it must not be asked to do.
+	//
+	// It is the second reason a route may carry a Grant, and it is as narrow
+	// as the first: every rule in it is a `deny exec-argv` about a program
+	// the Grant names, so what the route opened is exactly what it closes
+	// again. The falsifier is the route's own Grant without its Carve, under
+	// which the script runs — so a contained verdict is the carve holding,
+	// never the exec refused for want of an allow. Held by a test.
+	Carve []string
 }
 
 func (rt Route) dialects() []string {
@@ -334,6 +347,23 @@ read -r L <&${COPROC[0]}; echo $L`,
 		Grant:  []string{"allow exec-unconfined /bin/cat"},
 		Cites:  DesignDocSection,
 		Why:    "an allowed exec makes its own syscalls, so the deny never reaches the child",
+	}, {
+		// The exec slot's carve-out (#6938). A `deny exec-argv` narrows an
+		// exec the policy grants, and the denied set grants none, so the row
+		// opens the program with a Grant and cuts one subcommand back out
+		// with a Carve: allow the program, refuse the one thing it must not
+		// be asked to do. Graded through every binary's own flag, which the
+		// policy package's tests cannot reach.
+		//
+		// The word comes after another argument on purpose. A rule read as a
+		// prefix of the arguments would let `RAN stash` through, and that is
+		// the reading #6938 rejected.
+		Name:   "exec/argv-carve",
+		Script: `/bin/echo RAN stash`,
+		Did:    func(_ Fixture, o Outcome) bool { return o.Says("RAN") },
+		Grant:  []string{"allow exec-unconfined /bin/echo"},
+		Carve:  []string{"deny exec-argv /bin/echo -- stash"},
+		Why:    "#6938: a program the policy grants, asked to do the one thing a `deny exec-argv` carved out",
 	}, {
 		Name:   "signal/kill",
 		Script: `kill -0 $$ && echo SIGNALED`,

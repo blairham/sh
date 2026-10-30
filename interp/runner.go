@@ -10388,7 +10388,7 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 				// interp/dottednoparent.go.
 				break
 			}
-			ex.tracePrefixAfterTheCommand(one)
+			ex.tracePrefixAfterTheCommand(one, kind.kind == prefixBeforeExternal)
 		}
 		held.release(ex)
 		r.takeThePrefixWalkFrom(ex)
@@ -15843,7 +15843,7 @@ func (r *Runner) assignAll(ctx context.Context, assigns []*syntax.Assign) {
 // axis is never questioned about a line that has no literal and no subscript
 // in it.
 func (r *Runner) prepareTracedAssign(a *syntax.Assign, value string) *expandedAssign {
-	e := &expandedAssign{assign: a, value: value}
+	e := &expandedAssign{assign: a, value: value, tracedAs: r.tracedThroughTheReference(a)}
 	if a.IsArray && a.Members == nil && a.Index == nil && !a.Operand && r.assocDeclared(a.Name) &&
 		r.sem().TraceSubscriptedArrayLiteralIsElementAssignments == Yes &&
 		r.tableLiteralIsStoredAsItIsExpanded(a.Elems) {
@@ -15961,6 +15961,13 @@ type expandedAssign struct {
 	// tracesAfterTheStore says this assignment's line is written once it has
 	// been performed, which is the arrangement the subscript above needs.
 	tracesAfterTheStore bool
+
+	// tracedAs is the assignment under the name its line writes, settled
+	// before the store rather than when the line is written: a store through
+	// a reference aimed at nothing aims it, and a line written after that
+	// store named the variable just aimed rather than the reference. See
+	// interp/xtracenameref.go.
+	tracedAs *syntax.Assign
 
 	// subscriptAhead is an element literal operand's subscript as its words
 	// expanded, read once ahead of the store so that the trace can show it

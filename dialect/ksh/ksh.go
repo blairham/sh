@@ -5220,6 +5220,9 @@ func Diagnostics() interp.Diagnostics {
 		// of a special builtin or a function, where it comes first. See
 		// interp/xtraceprefix.go for the nine rows that says.
 		TracePrefixAssignment: interp.TracePrefixOwnLineAfter,
+		// An assignment through a name reference is written under the
+		// variable it lands in. See interp/xtracenameref.go (#6991).
+		TraceAssignmentNamesTheReferencedVariable: true,
 		// The same quoting inside a condition as outside it, which is where
 		// this shell parts from bash: `[[ "a b" == "a b" ]]` traces
 		// `[[ 'a b' == 'a b' ]]` here and `[[ a b == a b ]]` there.

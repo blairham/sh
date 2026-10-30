@@ -10394,6 +10394,13 @@ type Diagnostics struct {
 	// than as `v+=5`. bash alone, and only in the prefix position — the same
 	// shell keeps the operator for a bare `w+=2`. See interp/xtraceprefix.go.
 	TracePrefixAppendIsTheJoinedValue bool
+	// TraceAssignmentNamesTheReferencedVariable writes an assignment through
+	// a name reference under the variable the store lands in: `typeset -n
+	// m=x; m=1` traces `+ x=1`, and `n[k]=1` through `n` aimed at a table
+	// `a` traces `+ a[k]=1`. ksh93 alone; bash writes the word as the
+	// script spelled it, and zsh 5.9.2 has no references. See
+	// interp/xtracenameref.go.
+	TraceAssignmentNamesTheReferencedVariable bool
 	// TracePrefixRepeatsAtIndirection repeats the trace prefix's first
 	// character once per level of indirection — an `eval`, a sourced file, a
 	// command substitution or a trap body the traced command is inside.

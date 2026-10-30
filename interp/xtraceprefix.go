@@ -394,6 +394,14 @@ func (r *Runner) prefixTraceJoin(a *syntax.Assign) (string, bool) {
 
 // prefixTraceWords renders the assignments that have a value, in order.
 func (r *Runner) prefixTraceWords(assigns []*syntax.Assign, d *Diagnostics) []string {
+	return r.prefixTraceWordsReaching(assigns, d, true)
+}
+
+// prefixTraceWordsReaching is prefixTraceWords, and says whether a store
+// through a name reference reaches the reference's variable here or is a cell
+// of the command's own, which no reference reaches. See
+// interp/xtracenameref.go.
+func (r *Runner) prefixTraceWordsReaching(assigns []*syntax.Assign, d *Diagnostics, throughReferences bool) []string {
 	words := make([]string, 0, len(assigns))
 	for _, a := range assigns {
 		value, ok := r.prefixTraceValue(a)
@@ -405,6 +413,9 @@ func (r *Runner) prefixTraceWords(assigns []*syntax.Assign, d *Diagnostics) []st
 			continue
 		}
 		orig := a
+		if throughReferences {
+			a = r.tracedThroughTheReference(a)
+		}
 		e := r.prefixGlobTraced(orig)
 		if sub, ok := r.prefixSubscriptTraced(orig); ok {
 			// The subscript as the walk read it, in the column whose line
@@ -506,10 +517,13 @@ func (r *Runner) tracePrefixAndCommand(c *syntax.SimpleCmd, argv []string) {
 }
 
 // tracePrefixAfterTheCommand writes the assignment lines ksh93 puts behind
-// the command it already traced.
-func (r *Runner) tracePrefixAfterTheCommand(assigns []*syntax.Assign) {
+// the command it already traced. throughReferences says a store through a
+// name reference reaches the reference's variable, which is so for a program
+// and not for a regular builtin or a `function`-form call, whose prefix is a
+// cell of its own. See interp/xtracenameref.go.
+func (r *Runner) tracePrefixAfterTheCommand(assigns []*syntax.Assign, throughReferences bool) {
 	d := r.diag()
-	words := r.prefixTraceWords(assigns, d)
+	words := r.prefixTraceWordsReaching(assigns, d, throughReferences)
 	if len(words) == 0 {
 		return
 	}

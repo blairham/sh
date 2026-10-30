@@ -577,6 +577,11 @@ func (r *Runner) traceAssignments(assigns []*syntax.Assign, values []string, pre
 	words := make([]string, 0, len(assigns))
 	var elementLines []string
 	for i, a := range assigns {
+		// Under the variable it lands in, where the dialect writes it so, as
+		// the reference stood before the store. See interp/xtracenameref.go.
+		if p := prepared[i]; p != nil && p.tracedAs != nil {
+			a = p.tracedAs
+		}
 		if p := prepared[i]; p != nil && p.tracesAfterTheStore && a.Index != nil && !p.subscriptSet {
 			// The line waits for the store to resolve its subscript, and
 			// nothing resolved one: the assignment was refused. That column

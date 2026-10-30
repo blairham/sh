@@ -670,6 +670,20 @@ type Lexer struct {
 	// [Lexer.delimiterClosesParens].
 	inProgramParens bool
 
+	// closeBraceReserved says this lexer reads a `$( )` body as the
+	// substitution runs, in the dialect where a `}` beginning any word there
+	// is the reserved word, and braceGroups counts the brace groups the
+	// parser has open in that body. A `}` at the start of a word is a word of
+	// its own while none is. See
+	// [Dialect.CloseBraceStartingAWordIsReservedInACommandSubstitution].
+	//
+	// The count is the lexer's rather than the parser's because the lexer is
+	// what has to read it, and because the parser's backtracking copies the
+	// lexer whole: a group read on a path that is thrown away takes its count
+	// with it.
+	closeBraceReserved bool
+	braceGroups        int
+
 	// heredocOutside is the refusal the last [Lexer.parseToClose] or
 	// [Lexer.parseToCloseBrace] found waiting, and nil when it found none: a
 	// here-document the substitution's own text opened and never fed, which
@@ -3069,6 +3083,15 @@ func (l *Lexer) openBraceIsAWordOfItsOwn() bool {
 	return l.dialect.OpenBraceNeedsNoBlank && l.peek() == '{' && l.atCommandWord()
 }
 
+// closeBraceBeginsAReservedWord reports whether the `}` at the cursor, where a
+// word begins, is the reserved word by itself — so `}a` in a `$( )` body is the
+// brace and then `a`, and the brace is what the parser refuses. Only while no
+// brace group is open in the body. See
+// [Dialect.CloseBraceStartingAWordIsReservedInACommandSubstitution].
+func (l *Lexer) closeBraceBeginsAReservedWord() bool {
+	return l.closeBraceReserved && l.braceGroups == 0 && !l.eof() && l.peek() == '}'
+}
+
 // closeBraceIsAWordOfItsOwn reports whether the `}` at the cursor ends the
 // word being read, leaving the brace to be read as the reserved word it is.
 //
@@ -3368,7 +3391,7 @@ func (l *Lexer) scanWord(start Pos) Token {
 	// [Dialect.ProcessSubstitutionIsAWordOfItsOwn].
 	ownWord := false
 
-	if l.openBraceIsAWordOfItsOwn() {
+	if l.openBraceIsAWordOfItsOwn() || l.closeBraceBeginsAReservedWord() {
 		lit.take(l)
 		flush()
 		return Token{

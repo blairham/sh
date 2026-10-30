@@ -501,6 +501,12 @@ func Dialect() syntax.Dialect {
 	// here and hands `echo` a literal brace there. See
 	// syntax.Dialect.BraceProgramBodyEnd for the seven rows (#2724).
 	d.BraceProgramBodyEnd = syntax.BraceProgramBodyEndsAtATokenStart
+	// And inside a `$( )` body a `}` that begins any word is a group's
+	// closer, so with no group open it is `}' unexpected`: `echo $(echo })`
+	// is refused where `echo }` and `` `echo }` `` print the brace. See
+	// syntax.Dialect.CloseBraceStartingAWordIsReservedInACommandSubstitution
+	// (#6960).
+	d.CloseBraceStartingAWordIsReservedInACommandSubstitution = true
 	// `${(list)}`, whose body is the parenthesized subshell and whose `}` has
 	// to sit directly behind the matching `)`. Not the form above with a `(`
 	// for an opener: `${(echo a); echo b;}` is refused while reading here and

@@ -187,7 +187,12 @@ func (r *Runner) traceArrayOperandAsItIsExpanded(op *arrayOperand, tableLetterAh
 // the refusal ahead of the command, which words it under the element where
 // the column does — see Runner.refuseFrozenOperandValuesEarly — so it walks
 // none of them there, as before.
-func (r *Runner) walkTheLiteralOperandsLeft(ctx context.Context, c *syntax.SimpleCmd, argv []string, turn **operandsInTurn) (walked, goesOn bool) {
+func (r *Runner) walkTheLiteralOperandsLeft(
+	ctx context.Context,
+	c *syntax.SimpleCmd,
+	argv []string,
+	turn **operandsInTurn,
+) (walked, goesOn bool) {
 	if len(r.arrayOperands) == 0 || r.sem().DeclarationArrayOperandsAreStoredInTurn != Yes {
 		// Every command passes through here, and one with no literal operand
 		// has nothing to walk and asks nothing. Nor does the column that

@@ -475,7 +475,12 @@ func (r *Runner) settleLiteralOperandsBefore(
 // keepWhatAFailedLiteralOperandStored is Runner.keepWhatAFailedLiteralStored
 // for a declaration's operand, with the container letter read off the
 // utility's words.
-func (r *Runner) keepWhatAFailedLiteralOperandStored(a *syntax.Assign, argv []string, parsed []literalElem, tableAhead bool) {
+func (r *Runner) keepWhatAFailedLiteralOperandStored(
+	a *syntax.Assign,
+	argv []string,
+	parsed []literalElem,
+	tableAhead bool,
+) {
 	how := failedLiteral{appendTo: a.Append, operand: true}
 	switch {
 	case tableAhead:
@@ -492,7 +497,12 @@ func (r *Runner) keepWhatAFailedLiteralOperandStored(a *syntax.Assign, argv []st
 // reference writes them: `set -x; declare -a q=([$(true)]=x)` is the
 // substitution's line, the literal's own, and then the refusal (#6852).
 // Reports whether the walk goes on.
-func (r *Runner) settleALiteralOperand(ctx context.Context, a *syntax.Assign, argv []string, turn *operandsInTurn) bool {
+func (r *Runner) settleALiteralOperand(
+	ctx context.Context,
+	a *syntax.Assign,
+	argv []string,
+	turn *operandsInTurn,
+) bool {
 	indexed, table := declarationLettersAhead(argv)
 	placed := true
 	if r.inFunc == "" {

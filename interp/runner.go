@@ -9856,7 +9856,8 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 	if len(r.arrayOperands) > 0 {
 		keepForArrays = r.failedExpansionStatusIs(failedExpansionKeepsTheStatus)
 	}
-	expandedAll := r.expandArrayOperands(ctx, c, argv, &turn, tableLetterAmongTheOptions(argv), indexedLetterAmongTheOptions(argv))
+	expandedAll := r.expandArrayOperands(ctx, c, argv, &turn,
+		tableLetterAmongTheOptions(argv), indexedLetterAmongTheOptions(argv))
 	// Every operand is expanded, so what the walk held for the ones behind
 	// it goes back before the utility stores them for real, and the prefix
 	// beneath it before the route stores that.

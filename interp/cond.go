@@ -337,7 +337,9 @@ func (r *Runner) evalCondUnary(x *syntax.CondUnary) (bool, error) {
 	// Nothing inside `[[ ]]` is split or globbed, so a word yields exactly
 	// one operand however it was written — which is why `[[ -z $u ]]` needs
 	// no quoting where the `[` builtin does.
+	held := r.holdConditionLine("")
 	s := r.condOperandText(x.X)
+	held()
 	if r.condOperandDidNotExpand() {
 		return false, errCondOperandFailed
 	}
@@ -485,7 +487,12 @@ func (r *Runner) evalCondBinary(x *syntax.CondBinary) (bool, error) {
 	if err := r.condProcSubAllowed(x.Y, rightIsInput); err != nil {
 		return false, err
 	}
+	// The line as far as it has got, held while each operand expands, for a
+	// substitution in one to write ahead of its own. See
+	// Runner.holdConditionLine.
+	held := r.holdConditionLine("")
 	leftMarked := r.condOperand(x.X)
+	held()
 	if r.condOperandDidNotExpand() {
 		return false, errCondOperandFailed
 	}
@@ -516,7 +523,15 @@ func (r *Runner) evalCondBinary(x *syntax.CondBinary) (bool, error) {
 		// The control that says the escaping still happens where it should
 		// is the row a quote is *about*: `[[ axb =~ "a.b" ]]` is 1 and
 		// `[[ a.b =~ "a.b" ]]` is 0, in bash and here alike.
+		if spelled := r.diag().TraceRegexMatch; spelled != "" && r.condTrace != nil {
+			// The column that writes the operands as the script spelled them
+			// holds the whole primary that way. Measured 2026-10-30 on zsh
+			// 5.9.2, `set -x; [[ a =~ $(echo a) ]]` is `+zsh:1> [[ a
+			// -regex-match $(echo a)+zsh:1> echo a` (#6711).
+			held = r.holdConditionLine(" " + r.wordAsWritten(x.X) + " " + spelled + " " + r.wordAsWritten(x.Y))
+		}
 		text, literal, digitClass, traced := r.condRegexOperand(x.Y)
+		held()
 		if r.condOperandDidNotExpand() {
 			return false, errCondOperandFailed
 		}
@@ -550,7 +565,13 @@ func (r *Runner) evalCondBinary(x *syntax.CondBinary) (bool, error) {
 	if pattern {
 		// Unquoted, the right operand is a pattern; quoted, a literal. Only
 		// the spans still know which, which is why the tree keeps a word.
+		reached := ""
+		if r.condTrace != nil {
+			reached = " " + r.traceCondOperand(left) + " " + x.Op + " "
+		}
+		held = r.holdConditionLine(reached)
 		pat := r.patternOf(x.Y)
+		held()
 		// A pattern that did not expand is a failed operand like any other,
 		// and ends what the dialect says a failed expansion ends: bash stops
 		// a `-c` script at `[[ x == ${~p} ]]` with `bad substitution` at 1,
@@ -558,6 +579,17 @@ func (r *Runner) evalCondBinary(x *syntax.CondBinary) (bool, error) {
 		// comparison and carry on.
 		if r.condOperandDidNotExpand() {
 			return false, errCondOperandFailed
+		}
+		// What the line holds, and in one column a second expansion for the
+		// match. See Semantics.TracedConditionPatternIsExpandedTwice.
+		tracedPat := pat
+		if r.condTrace != nil && r.sem().TracedConditionPatternIsExpandedTwice == Yes {
+			held = r.holdConditionLine(reached + r.tracePattern(tracedPat))
+			pat = r.patternOf(x.Y)
+			held()
+			if r.condOperandDidNotExpand() {
+				return false, errCondOperandFailed
+			}
 		}
 		// The trace prints the pattern the matcher is about to be handed,
 		// backslashes and all, rather than a quoted value — which is what two
@@ -572,9 +604,9 @@ func (r *Runner) evalCondBinary(x *syntax.CondBinary) (bool, error) {
 			// Not tracing: quoting both operands for a line nobody prints
 			// was most of what a long comparison cost (#6363).
 		} else if r.diag().TraceConditionAsKsh93 {
-			r.traceConditionPrimary(r.traceCondOperand(left), ksh93TraceOperator(x.Op), r.ksh93TracePattern(x.Y, pat))
+			r.traceConditionPrimary(r.traceCondOperand(left), ksh93TraceOperator(x.Op), r.ksh93TracePattern(x.Y, tracedPat))
 		} else {
-			r.traceConditionPrimary(r.traceCondOperand(left), x.Op, r.tracePattern(pat))
+			r.traceConditionPrimary(r.traceCondOperand(left), x.Op, r.tracePattern(tracedPat))
 		}
 		got := r.matchPatternR(pat, left, patternInACondition)
 		if x.Op == "!=" {
@@ -588,7 +620,9 @@ func (r *Runner) evalCondBinary(x *syntax.CondBinary) (bool, error) {
 	// both operands and is written before the test is answered, which is
 	// where every shell that has the construct puts it — and because the
 	// expansion must happen exactly once however many readers it has.
+	held = r.holdConditionLine("")
 	rightMarked := r.condOperand(x.Y)
+	held()
 	if r.condOperandDidNotExpand() {
 		return false, errCondOperandFailed
 	}

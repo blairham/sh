@@ -77,6 +77,34 @@ type openTraceLine struct {
 	// prefixOf is the command whose assignment prefix this line is, where
 	// it is one; a bare list's line names none.
 	prefixOf *syntax.SimpleCmd
+	// lead is the part of a parent's line a child was handed and this line
+	// starts with, where nothing has written it yet. It is written out ahead
+	// of a copy of this line, so the copy starts without it; a complaint
+	// writes it ahead of itself where this line is not written; and
+	// otherwise this line's own text is written behind it. Measured
+	// 2026-10-30 on zsh 5.9.2 under -f -c (#6711):
+	//
+	//	x=$( a=1 true )               `+zsh:1> x=+zsh:1> a=1 +zsh:1> true`
+	//	x=$( a=$(echo s >&2) true )   `+zsh:1> x=+zsh:1> a=+zsh:1> echo s`, `s`,
+	//	                              then `+zsh:1> a='' +zsh:1> true`
+	//	x=$( a=$(f() { :; }) true )   `+zsh:1> x=+zsh:1> a='' +zsh:1> true`
+	//	x=$( a=1 b=${q?b} true )      `+zsh:1> x=`, then the complaint, and the
+	//	                              prefix's line is gone with the child
+	//
+	// where the prefix's line was opened without it, and the next line the
+	// child wrote took it instead. The third row is a substitution that
+	// writes nothing: the text goes out all the same, so it is not the
+	// copy's to write. See Runner.writeHandedTextBeforeACopy.
+	lead string
+	// writtenBeforeACopy says the text a child was handed is written out
+	// before a copy is made from this line, so the copy starts without it.
+	// A child's line says so while the child is in a group or a `try`. See
+	// Runner.writeHandedTextBeforeACopy.
+	writtenBeforeACopy bool
+	// front is a prefix line's text ahead of the entry being expanded, and
+	// entry is that entry's word once its value is in, ahead of its
+	// subscript. See Runner.prefixEntryValueIsIn.
+	front, entry string
 }
 
 // writeOpenTraceLineAhead is the text of the open line to write ahead of a
@@ -115,7 +143,8 @@ func (r *Runner) writeOpenTraceLineAhead() (string, bool) {
 		line.keptForAChild = true
 		return text, true
 	}
-	line.pending, line.flushed, line.keptForAChild = "", line.flushed+text, false
+	line.pending, line.flushed, line.keptForAChild = "", line.flushed+strings.TrimPrefix(text, line.lead), false
+	line.lead = ""
 	if line.carries != nil {
 		line.carries.pending = ""
 	}
@@ -301,6 +330,21 @@ func (r *Runner) traceAssignRest(
 // echo ${q?b} ) true` writes only the complaint (#6623).
 func (r *Runner) flushOpenTraceLine() {
 	line := r.openTrace
+	if line != nil && line.owner == r && line.unflushed && line.lead != "" {
+		// A prefix's line is written after its complaint, if at all, and
+		// what it was handed is written ahead of the complaint all the same:
+		// measured 2026-10-30 on zsh 5.9.2, `set -x; x=$( a=1 b=$((1/0))
+		// true )` writes `+zsh:1> x=`, the complaint, and then `+zsh:1> a=1
+		// b=` (#6711).
+		lead := line.lead
+		line.pending, line.lead = strings.TrimPrefix(line.pending, lead), ""
+		// Written alone: the line itself is not, so it must not be the
+		// open line a trace line is written behind.
+		r.openTrace = nil
+		r.tracef("%s", lead)
+		r.openTrace = line
+		return
+	}
 	if line == nil || line.owner != r || line.pending == "" || line.unflushed || line.keptForAChild {
 		return
 	}
@@ -334,4 +378,117 @@ func (r *Runner) openTraceTakesTheLiteral(a *syntax.Assign, words []string) {
 		quoted[i] = r.traceQuote(w, d.TraceQuoting, d.TraceMetacharacters)
 	}
 	r.openTrace.pending += wrapArrayLiteral(strings.Join(quoted, " "), d.TraceArrayLiteral) + " "
+}
+
+// The text a child was handed, written out where the child gets to certain
+// places rather than carried on its next line.
+//
+// A substitution's child holds the part of its parent's line nothing has
+// written yet, and writes it ahead of its first trace line (see
+// Runner.prefixLineForAChild). Before that line, three things write it out on
+// its own. Measured 2026-10-30 on zsh 5.9.2 under `-f -c`, both streams on one
+// pipe (#6711), where `f() { :; }` is a body that writes nothing:
+//
+//	x=$( for i in; do :; done )        `+zsh:1> x=`, then `+zsh:1> x='' `
+//	x=$( { f() { :; } } )              `+zsh:1> x='' ` alone
+//	x=$( { echo hi } 2>/dev/null )     `+zsh:1> x=` ahead of the redirection,
+//	                                   and `+zsh:1> echo hi` into the file
+//	x=$( { } 3>/dev/null )             `+zsh:1> x=`, then the parent's line
+//	x=$( { : $(f() { :; }); } )        `+zsh:1> x=+zsh:1> :`
+//	x=$( : $(echo a); : )              `+zsh:1> x=+zsh:1> echo a`, then
+//	                                   `+zsh:1> x=+zsh:1> : a`
+//	x=$( { f() { :; } }; : $(echo a); : )   the same two lines
+//
+// So entering a loop, an `if`, a subshell, `repeat` or `time` writes it, and
+// so does opening a redirection, before the redirection is made; and in a
+// group or a `try` a substitution in a command's words writes it before it
+// starts, where at the top of the body the substitution's copy carries it and
+// so does the command's own line. A group that writes nothing drops it, and so
+// does a function definition unless it carries a redirection: `x=$( f() { :; }
+// 2>/dev/null )` writes `+zsh:1> x=`. A `case`, a `[[ … ]]` and an assignment list
+// write a line of their own that carries it, in a group as well. See
+// writeHandedTextOnEntry and handedTextWrittenBeforeACopy.
+
+// writeHandedText writes the text this child was handed and nothing has
+// written, now, on its own.
+func (r *Runner) writeHandedText() {
+	text := r.takeHandedText()
+	if text == "" {
+		return
+	}
+	r.awaitTraceTurn()
+	defer r.releaseTraceTurn()
+	// Written alone: no open line goes out with it.
+	line := r.openTrace
+	r.openTrace = nil
+	r.tracef("%s", text)
+	r.openTrace = line
+}
+
+// takeHandedText takes the text this child was handed out of whichever line
+// holds it: a prefix's line it leads, a line of this child's that carries it,
+// or the child's copy of its parent's line.
+func (r *Runner) takeHandedText() string {
+	line := r.openTrace
+	if line == nil || line.owner != r {
+		return ""
+	}
+	if line.lead != "" {
+		text := line.lead
+		line.pending, line.lead = strings.TrimPrefix(line.pending, text), ""
+		return text
+	}
+	in := line
+	if line.carries != nil {
+		in = line.carries
+	}
+	if !in.inherited || in.pending == "" {
+		return ""
+	}
+	text := in.pending
+	if line != in {
+		line.pending, line.carries = strings.TrimPrefix(line.pending, text), nil
+	}
+	in.pending = ""
+	return text
+}
+
+// writeHandedTextBeforeACopy writes the handed text out ahead of a copy of
+// line, where the copy is not to carry it: a prefix's line always, and the
+// child's own copy of its parent's line while the child is in a group or a
+// `try`. See openTraceLine.lead and the measurements above writeHandedText.
+func (r *Runner) writeHandedTextBeforeACopy(line *openTraceLine) {
+	if line.lead != "" || line.inherited && line.writtenBeforeACopy {
+		r.writeHandedText()
+	}
+}
+
+// writeHandedTextOnEntry writes the text a child was handed on entering c,
+// for a loop, an `if`, a subshell, `repeat` and a definition carrying a
+// redirection. See the measurements above writeHandedText.
+func (r *Runner) writeHandedTextOnEntry(c syntax.Command) {
+	switch c.(type) {
+	case *syntax.IfClause, *syntax.LoopClause, *syntax.ForClause, *syntax.ForArithClause,
+		*syntax.SelectClause, *syntax.RepeatClause, *syntax.Subshell:
+		r.writeHandedText()
+	case *syntax.FuncDecl:
+		// A definition carrying a redirection writes it as one being opened
+		// does, though nothing is opened until the function is called.
+		if len(syntax.Redirections(c)) > 0 {
+			r.writeHandedText()
+		}
+	}
+}
+
+// handedTextWrittenBeforeACopy has a substitution in a command's words write
+// the text a child was handed before it starts, while a group or a `try`
+// runs, and hands back what ends that. See the measurements above
+// writeHandedText.
+func (r *Runner) handedTextWrittenBeforeACopy() func() {
+	line := r.openTrace
+	if line == nil || !line.inherited || line.owner != r || line.pending == "" || line.writtenBeforeACopy {
+		return func() {}
+	}
+	line.writtenBeforeACopy = true
+	return func() { line.writtenBeforeACopy = false }
 }

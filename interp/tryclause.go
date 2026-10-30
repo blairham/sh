@@ -41,6 +41,10 @@ import (
 
 // tryClause runs `{ … } always { … }`.
 func (r *Runner) tryClause(ctx context.Context, c *syntax.TryClause) error {
+	if r.openTrace != nil {
+		// As a group does. See Runner.handedTextWrittenBeforeACopy.
+		defer r.handedTextWrittenBeforeACopy()()
+	}
 	// The redirections are the construct's and reach both halves, which is
 	// measured: `{ echo t; } always { echo a; } > /dev/null` prints nothing
 	// at all, and a redirection written between the halves instead is a

@@ -71,7 +71,10 @@ func (r *Runner) tracePrefixAsItGoes(c *syntax.SimpleCmd, argv []string, walk pr
 		}
 		return prefix + strings.Join(done, " ") + " "
 	}
-	line := &openTraceLine{owner: r, unflushed: true, prefixOf: c}
+	// The part of the parent's line a substitution's child was handed, which
+	// this line starts with: the first line the child opens takes it, as an
+	// assignment list's does. See openTraceLine.lead (#6711).
+	line := &openTraceLine{owner: r, unflushed: true, prefixOf: c, lead: r.takeInheritedTraceLine()}
 	outer := r.openTrace
 	r.openTrace = line
 	defer func() { r.openTrace = outer }()
@@ -100,7 +103,8 @@ func (r *Runner) tracePrefixAsItGoes(c *syntax.SimpleCmd, argv []string, walk pr
 		// run in the middle of the prefix writes ahead of its own line —
 		// less whatever of it has gone out already. See
 		// prefixLineForAChild and Runner.writeOpenTraceLineAhead.
-		line.pending = strings.TrimPrefix(so()+target, line.flushed)
+		line.pending = line.lead + strings.TrimPrefix(so()+target, line.flushed)
+		line.front, line.entry = so(), ""
 		frozen := r.attrHas(a.Name, attrReadonly)
 		var word string
 		if frozen {
@@ -119,6 +123,11 @@ func (r *Runner) tracePrefixAsItGoes(c *syntax.SimpleCmd, argv []string, walk pr
 			}
 		}
 		if r.prefixWalkFailed(walk) {
+			// Where the value was in and the subscript failed, the line got
+			// as far as the whole entry. See Runner.prefixEntryValueIsIn.
+			if line.entry != "" {
+				target = line.entry + " "
+			}
 			done = append(done, target)
 			stopped = true
 			break
@@ -136,7 +145,7 @@ func (r *Runner) tracePrefixAsItGoes(c *syntax.SimpleCmd, argv []string, walk pr
 		r.tracePrefixAndCommand(c, argv)
 		return
 	}
-	text := strings.TrimPrefix(prefix+strings.Join(done, " "), line.flushed)
+	text := line.lead + strings.TrimPrefix(prefix+strings.Join(done, " "), line.flushed)
 	if !r.prefixWalkFailed(walk) {
 		// A refused store writes its word and the space after it.
 		text += " "
@@ -152,10 +161,43 @@ func (r *Runner) writeHeldPrefixTrace() {
 	if held.text == "" || r.ctl != controlExit {
 		return
 	}
+	if r.inSubshell && r.abandon == abandonParamError {
+		// A child the `${x?word}` stopped goes without writing it: measured
+		// 2026-10-30 on zsh 5.9.2, `set -x; x=$( a=1 b=${q?b} true )` and
+		// `( a=1 b=${q?b} true )` write the complaint and no `a=1 b=`,
+		// where the same prefix in the shell itself is written at its end,
+		// and a child a division stopped writes it as well (#6711).
+		return
+	}
 	outer := r.traceTo
 	r.traceTo = held.to
 	r.tracef("%s", held.text)
 	r.traceTo = outer
+}
+
+// prefixEntryValueIsIn puts a subscripted entry's whole word on its prefix's
+// open line once the value is in, ahead of the reading of its subscript. A
+// substitution in the subscript copies the line with the value on it, and a
+// subscript that fails leaves the line there. Measured 2026-10-30 on zsh 5.9.2
+// under `-f -c`, with `f() { :; }; b=(x y z)` (#6711):
+//
+//	set -x; b[$(echo s >&2; echo 1)]=v f
+//	                       `+zsh:1> b[$(echo s >&2; echo 1)]=v +zsh:1> echo s`
+//	set -x; b[1/0]=v f     the complaint, then `+zsh:1> b[1/0]=v `
+//	set -x; b[${q?e}]=v f  the complaint, then `+zsh:1> b[${q?e}]=v `
+//
+// where the line held only `b[…]=`, as it does while the value expands.
+func (r *Runner) prefixEntryValueIsIn(a *syntax.Assign) {
+	line := r.openTrace
+	if line == nil || line.owner != r || line.prefixOf == nil || line.front == "" {
+		return
+	}
+	words := r.prefixTraceWords([]*syntax.Assign{a}, r.diag())
+	if len(words) != 1 {
+		return
+	}
+	line.entry = words[0]
+	line.pending = line.lead + strings.TrimPrefix(line.front+line.entry+" ", line.flushed)
 }
 
 // prefixLineForAChild is the copy of an unfinished trace line a substitution
@@ -165,6 +207,12 @@ func (r *Runner) writeHeldPrefixTrace() {
 func (r *Runner) prefixLineForAChild() *openTraceLine {
 	line := r.openTrace
 	if line == nil || line.owner != r || line.pending == "" {
+		return nil
+	}
+	// Less the text this shell was handed, where that goes out first. See
+	// Runner.writeHandedTextBeforeACopy.
+	r.writeHandedTextBeforeACopy(line)
+	if line.pending == "" {
 		return nil
 	}
 	return &openTraceLine{pending: line.pending, inherited: true, unflushed: line.unflushed}

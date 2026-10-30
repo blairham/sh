@@ -8501,6 +8501,10 @@ func (r *Runner) expr(ctx context.Context, e syntax.Expr) error {
 		if hold, ok := r.holdACommandsJobSlot(true); ok {
 			defer hold.release()
 		}
+		if r.openTrace != nil {
+			// As a loop does. See Runner.writeHandedTextOnEntry.
+			r.writeHandedText()
+		}
 		return r.timeClause(ctx, x)
 	}
 	return r.unsupported(fmt.Sprintf("%T", e))
@@ -8897,6 +8901,11 @@ func (r *Runner) dispatchHoldingAJobSlot(ctx context.Context, c syntax.Command, 
 
 // dispatch runs a command once Runner.command has recorded it.
 func (r *Runner) dispatch(ctx context.Context, c syntax.Command, fired bool) error {
+	if r.openTrace != nil {
+		// A loop, an `if` and a subshell write the text a substitution's
+		// child was handed. See Runner.writeHandedTextOnEntry.
+		r.writeHandedTextOnEntry(c)
+	}
 	switch x := c.(type) {
 	case *syntax.SimpleCmd:
 		// A simple command is the one kind that can *run* the failure it

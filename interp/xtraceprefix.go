@@ -346,6 +346,9 @@ func (r *Runner) expandPrefixTraceValuesHolding(
 		value := r.prefixExpansion(a)
 		r.prefixEntryBecomesLocal(a, local)
 		joined := r.recordPrefixTraceValue(a, value)
+		if inTurn && !r.assignmentGaveUp() {
+			r.prefixEntryValueIsIn(a)
+		}
 		if inTurn && !r.assignmentGaveUp() && !r.placePrefixSubscript(a, subscripts == subscriptsForThisShell) {
 			return
 		}
@@ -501,9 +504,12 @@ func (r *Runner) tracePrefixAndCommand(c *syntax.SimpleCmd, argv []string) {
 	// +zsh:1> /usr/bin/true`, and `command true` the same way, where the
 	// whole line written at once carries the second prompt only for a
 	// command this shell runs (#6752). See Runner.writeOpenTraceLineAhead.
-	flushed := ""
+	flushed, lead := "", ""
 	if open := r.openTrace; open != nil && open.owner == r && open.prefixOf == c {
-		flushed = open.flushed
+		// And what the line was handed and nothing has written, ahead of
+		// it. See openTraceLine.lead.
+		flushed, lead = open.flushed, open.lead
+		open.lead = ""
 	}
 	if flushed != "" || d.TracePrefixAssignment == TracePrefixOnTheCommandLineRepeatingThePrefix &&
 		r.tracePrefixRepeatsBeforeTheCommand(argv) {
@@ -513,7 +519,7 @@ func (r *Runner) tracePrefixAndCommand(c *syntax.SimpleCmd, argv []string) {
 	r.awaitTraceTurn()
 	defer r.releaseTraceTurn()
 	defer r.tracingAChildsCommand(argv)()
-	r.tracef("%s\n", strings.TrimPrefix(r.tracePrefix()+line, flushed))
+	r.tracef("%s\n", lead+strings.TrimPrefix(r.tracePrefix()+line, flushed))
 }
 
 // tracePrefixAfterTheCommand writes the assignment lines ksh93 puts behind

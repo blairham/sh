@@ -111,6 +111,10 @@ func (r *Runner) runList(ctx context.Context, list []*syntax.Stmt) error {
 func (r *Runner) group(ctx context.Context, c *syntax.Group) error {
 	// A brace group runs in *this* shell, so its assignments escape. That is
 	// the whole difference between it and a subshell.
+	if r.openTrace != nil {
+		// See Runner.handedTextWrittenBeforeACopy.
+		defer r.handedTextWrittenBeforeACopy()()
+	}
 	if r.isTail(c) {
 		// Run straight through, so its last command is the shell's last. See
 		// unforkedtail.go.

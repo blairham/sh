@@ -120,6 +120,12 @@ func (r *Runner) applyRedirList(
 	outerOwn := r.redirOwner
 	r.redirOwner = owner
 	defer func() { r.redirOwner = outerOwn }()
+	if len(rs) > 0 && r.openTrace != nil {
+		// Opening a redirection writes the text a child was handed, before
+		// the redirection is made and before a word of it expands. See
+		// Runner.writeHandedText.
+		r.writeHandedText()
+	}
 	var closers []io.Closer
 	// What this command has already aimed each stream at, so a second
 	// redirection of the same one can be combined with the first where the

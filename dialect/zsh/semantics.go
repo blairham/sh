@@ -659,6 +659,10 @@ func Semantics() interp.Semantics {
 	// -x; a=1 r=2` is `+zsh:1> a=1 r=2 zsh:1: read-only variable: r` and then
 	// the line's own newline. Measured 2026-10-02 (#5485).
 	s.TraceAssignmentListIsWrittenAsItGoes = interp.Yes
+	// And a traced `[[ … ]]` pattern is expanded once for the line and again
+	// for the match. See interp.Semantics.TracedConditionPatternIsExpandedTwice
+	// (#6711).
+	s.TracedConditionPatternIsExpandedTwice = interp.Yes
 	// One line for a subscripted literal as much as for a plain one:
 	// measured 2026-09-17, `typeset -A m; set -x; m=([k]=v [j]=w)` is a
 	// single `m=( … )` line in zsh 5.9.2, with the shell's own separator

@@ -943,6 +943,10 @@ type condTrace struct {
 	// primary they negate under both readings — `[[ ! -z a ]]` is one line in
 	// every column — so they wait for it rather than standing as parts.
 	pending []string
+	// written is the front of the line a complaint wrote while it was held
+	// open, so the line written at the end goes on from there. See
+	// Runner.holdConditionLine.
+	written string
 }
 
 // beginConditionTrace starts tracing one `[[ … ]]` and returns the function
@@ -960,10 +964,13 @@ func (r *Runner) beginConditionTrace() func() {
 	t := &condTrace{whole: r.diag().TraceCondition == TraceCondWhole}
 	r.condTrace = t
 	return func() {
-		r.condTrace = prev
+		// Written while this condition is still the one being traced, so the
+		// line can go on from where a complaint left it. See
+		// Runner.holdConditionLine.
 		if t.whole && len(t.parts) > 0 {
 			r.traceConditionLine(strings.Join(t.parts, " "))
 		}
+		r.condTrace = prev
 	}
 }
 
@@ -1006,11 +1013,67 @@ func (r *Runner) traceConditionOp(op string) {
 	}
 }
 
-// traceConditionLine writes one `[[ … ]]` line.
+// traceConditionLine writes one `[[ … ]]` line, or the rest of it where a
+// complaint wrote its front. See Runner.holdConditionLine.
 func (r *Runner) traceConditionLine(text string) {
 	r.awaitTraceTurn()
 	defer r.releaseTraceTurn()
-	r.tracef("%s[[ %s ]]\n", r.tracePrefix(), text)
+	line := r.tracePrefix() + "[[ " + text + " ]]"
+	if t := r.condTrace; t != nil && t.written != "" {
+		line = strings.TrimPrefix(line, t.written)
+		t.written = ""
+	}
+	r.tracef("%s\n", line)
+}
+
+// holdConditionLine holds the `[[ … ]]` line open as far as the evaluation
+// has got, while an operand expands, and hands back what closes it. more is
+// the part of the primary already reached.
+//
+// This is the dialect whose trace stream is buffered, so a substitution in an
+// operand runs in a child holding a copy of the line so far, and writes that
+// copy ahead of its own line; and a complaint writes it ahead of itself. The
+// whole line is written once the condition is done, as before. Measured
+// 2026-10-30 on zsh 5.9.2 under `-f -c` (#6711):
+//
+//	[[ -n $(echo a) ]]            `+zsh:1> [[+zsh:1> echo a`, then `+zsh:1> [[ -n a ]]`
+//	[[ -n a && -n $(echo b) ]]    `+zsh:1> [[ -n a &&+zsh:1> echo b`, then the line
+//	[[ a == $(echo a) ]]          `+zsh:1> [[ a == +zsh:1> echo a`,
+//	                              `+zsh:1> [[ a == a+zsh:1> echo a`, the line
+//	[[ ! a == $(echo a) ]]        the same, from `[[ ! a == `
+//	x=$( [[ a == $(echo a) ]] )   the same, each behind `+zsh:1> x=`
+//	[[ -n ${q?b} ]]               `+zsh:1> [[` and then the complaint
+//
+// So an operand that is a value is held behind what came before its primary,
+// and a pattern behind its own left operand and operator; the second row of a
+// pattern is Semantics.TracedConditionPatternIsExpandedTwice. A child's handed
+// text is carried as a `case` arm's line carries it — see
+// Runner.openTraceLineCarryingTheInherited.
+//
+// Read on the same answer as the assignment list's line written as it goes,
+// Semantics.TraceAssignmentListIsWrittenAsItGoes, which is the buffered stream
+// both of them are about.
+func (r *Runner) holdConditionLine(more string) func() {
+	t := r.condTrace
+	if t == nil || !t.whole || r.sem().TraceAssignmentListIsWrittenAsItGoes != Yes {
+		return func() {}
+	}
+	text := r.tracePrefix() + "[["
+	if len(t.parts)+len(t.pending) > 0 {
+		text += " " + strings.Join(append(append([]string(nil), t.parts...), t.pending...), " ")
+	}
+	text += more
+	line := r.openTraceLineCarryingTheInherited(text)
+	outer := r.openTrace
+	r.openTrace = line
+	return func() {
+		if line.pending == "" && t.written == "" {
+			// A complaint wrote the line so far, and the line goes on from
+			// there.
+			t.written = text
+		}
+		r.openTrace = outer
+	}
 }
 
 // traceCondOperand renders a condition operand that is a value rather than a

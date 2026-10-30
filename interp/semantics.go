@@ -1423,8 +1423,9 @@ type Semantics struct {
 	// own. TestNoPrefixIsKeptInFrontOfADeclarationInAFunction holds the
 	// rows that say the prefix is not kept.
 	//
-	// unpinned zsh: this shell does not keep the prefix under `posixbuiltins`
-	// yet, so the answer is never reached (#7009).
+	// unpinned zsh: no corpus row runs under `posixbuiltins`, the only state
+	// that keeps the prefix. Pinned by
+	// TestPosixBuiltinsKeepsAPrefixInFrontOfADeclaration (#7009).
 	//
 	// unpinned ksh: no corpus row puts a prefix in front of `typeset` inside a
 	// function. Pinned by TestAPrefixToTypesetInAFunctionIsItsLocal.
@@ -32271,6 +32272,7 @@ type Semantics struct {
 	//	that binary as `sh`    source
 	//	bash 3.2.57            — (it draws no line at all)
 	//	zsh 5.9.2              — (it draws no line at all)
+	//	  under posixbuiltins  typeset, declare, integer, float, local
 	//	ksh93u+ 2012-08-01     alias, unalias, typeset, newgrp
 	//	dash 0.5.12 / dash-16  local
 	//	BusyBox ash 1.37.0     source, local
@@ -32307,6 +32309,15 @@ type Semantics struct {
 	// answers AssignmentPrefixPersistsOnSpecialBuiltin no and drops `V=1 :`
 	// and `V=1 shift 0`, which are POSIX's own, so whatever holds `alias`
 	// there is not specialness. Filed separately rather than read as one.
+	//
+	// zsh's `posixbuiltins` *does* draw the line, and it draws it wider than
+	// POSIX: the declaration family joins the fourteen, so the option moves
+	// this roster along with the axes that give it consequences. Measured
+	// 2026-10-30 on zsh 5.9.2 by sweeping every builtin name for
+	// `NAME >/nope/x; echo after` with the option on — POSIX's list, the
+	// precommand words and those five end the script, and nothing else does —
+	// and by `v=new typeset y=1` keeping `new` with it on and not without
+	// (#7009). See the option's entry in dialect/zsh/setopt.go.
 	SpecialBuiltinsBeyondPosix string
 
 	// BuiltinsKeepingAnAssignmentPrefix is the names, space separated, that

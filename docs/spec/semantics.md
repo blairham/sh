@@ -28562,7 +28562,8 @@ name. dash, ksh93 and BusyBox ash are in the mode under every name and already
 answer yes.
 
 **`SpecialBuiltinsBeyondPosix`** — bash — · dash `local` · ksh93 `alias
-unalias typeset` · zsh — · ash `local` · POSIX preset —
+unalias typeset` · zsh — (under `posixbuiltins`, `typeset declare integer
+float local`) · ash `local` · POSIX preset —
 
 The names a dialect marks **special** beyond POSIX's own fourteen, space
 separated. Empty is POSIX's list alone, which is what the substrate holds:
@@ -28609,6 +28610,28 @@ different field.
 zsh's `V=1 alias` keeping the value is **not** this list: that shell drops
 `V=1 :` and `V=1 shift 0`, which are POSIX's own, so whatever holds `alias`
 there is not specialness.
+
+zsh's `posixbuiltins` option is where that shell **does** draw the line, and
+it draws it wider than the standard: the declaration family is special under
+it. Measured 2026-10-30 on zsh 5.9.2, `-f -c` under `env -i
+PATH=/usr/bin:/bin`, with `print` as the control:
+
+                                       default   posixbuiltins
+    v=old; v=new typeset y=1; echo $v  old       new
+    typeset y=1 >/nope/x; echo after   after     ends at 1
+    (eval 'typeset y=1 >/nope/x'; echo alive)
+                                       alive     ends the subshell
+    v=old; v=new builtin typeset y=1   old       new
+
+`declare`, `integer`, `float` and `local` answer the same in every row, and
+`local` does so outside a function too, where zsh accepts it. A sweep of every
+builtin name for `NAME >/nope/x; echo after` with the option on ends the script
+on POSIX's list, the precommand words and these five, and on nothing else. The
+option is the key and not the emulation: `emulate sh; unsetopt posixbuiltins`
+drops the prefix and carries on, and `emulate csh; setopt posixbuiltins` keeps
+it and ends. Inside a function the kept prefix is an ordinary assignment and
+not the function's local — `g() { echo $v; }; f() { v=new local y=1; g; }`
+shows `g` the new value, and it is still there after `f` returns (#7009).
 
 **`TypePrintsFunctionBody`** — bash yes · dash no · ksh93 no · zsh no
 

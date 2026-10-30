@@ -52,7 +52,13 @@ jobs:
       # which needs the shell panel this runner does not have and grades
       # against a record made on another machine -- see AGENTS.md for why that
       # is report-only in CI. A release must not fail on it.
-      test-command: make test
+      #
+      # With the 30m package timeout ci.yml's race leg has had since #6730, and
+      # for the same reason: `interp` under -race took 524s here at v0.0.36 and
+      # passed 600s at v0.0.37, with no test hung. It lives in this file rather
+      # than in the Makefile because a dispatch re-run of a failed tag takes
+      # this file from the dispatching ref and the Makefile from the tag.
+      test-command: make test TESTFLAGS='-p 4 -timeout 30m'
     secrets:
       HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
       MACOS_SIGN_P12: ${{ secrets.MACOS_SIGN_P12 }}

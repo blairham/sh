@@ -459,6 +459,9 @@ func (r *Runner) execEnds(err error, status int) int {
 	}
 	if !r.ask(axis, what) {
 		r.exitTrap = nil
+		// And the one a function call is holding, which is not standing
+		// here to be dropped: see Runner.heldExitTrapIsLost.
+		r.execDroppedTheExitTrap = true
 	}
 	r.status = status
 	r.stopTheShell()

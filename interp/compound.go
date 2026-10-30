@@ -2371,6 +2371,14 @@ func (r *Runner) callFuncInPlace(ctx context.Context, fn *syntax.FuncDecl, name 
 		}()
 		return r.runFunctionExitTrap(ctx, body)
 	}
+	// Whether the trap this call is holding goes back at all. A stop that
+	// ends the shell from inside the call leaves it where it was set aside,
+	// so the shell ends without it; only the call's own trap still fires on
+	// the way out. See Runner.heldExitTrapIsLost, and
+	// Semantics.StopInsideACallLosesTheHeldExitTrap for the panel (#6952,
+	// #7007).
+	held := heldExitTrap{outerTrap, outerDepth, outerLocal, outerTrapFn, outerTrapDecl}
+	losing := enteredHoldingTheTrap && (outerTrap != nil || outerTrapFn != "") && r.heldExitTrapIsLost()
 	if tableTaken {
 		// The call had a table of its own, so anything standing under EXIT
 		// now is this call's: it fires here, and the caller's comes back
@@ -2390,9 +2398,25 @@ func (r *Runner) callFuncInPlace(ctx context.Context, fn *syntax.FuncDecl, name 
 		// separates them.
 		if r.ask(r.exitTrapLocal, "an EXIT trap set in a function firing when it returns") {
 			body := *r.exitTrap
-			r.exitTrap, r.trapDepth, r.exitTrapLocal = outerTrap, outerDepth, outerLocal
-			exitTrapReturned = fireInTheCaller(body)
-			r.restoreTheExitTrapFunction(outerTrapFn, outerTrapDecl)
+			if losing {
+				// The call's own fires and nothing comes back under it:
+				// measured, `f() { trap 'echo FT' EXIT; false; }` under
+				// `set -e` writes FT and not the caller's T.
+				r.exitTrap, r.trapDepth, r.exitTrapLocal = nil, 0, Unspecified
+				exitTrapReturned = fireInTheCaller(body)
+				r.restoreTheExitTrapFunction("", nil)
+				r.loseTheHeldExitTrap(held)
+			} else {
+				r.exitTrap, r.trapDepth, r.exitTrapLocal = outerTrap, outerDepth, outerLocal
+				exitTrapReturned = fireInTheCaller(body)
+				r.restoreTheExitTrapFunction(outerTrapFn, outerTrapDecl)
+			}
+		} else if losing {
+			// It does not fire here, and the held trap does not come back
+			// over it either, so the body's stands and fires at the end:
+			// measured, `f() { setopt posixtraps; trap 'echo F' EXIT;
+			// false; }` under `set -e` writes F where T was set at the top.
+			r.loseTheHeldExitTrap(held)
 		} else if enteredHoldingTheTrap && outerTrap != nil {
 			// It does not fire, and the call was nonetheless entered with
 			// the scoping on — so the trap it inherited was held for it and
@@ -2418,8 +2442,12 @@ func (r *Runner) callFuncInPlace(ctx context.Context, fn *syntax.FuncDecl, name 
 	} else if enteredHoldingTheTrap && r.exitTrap == nil && (outerTrap != nil || outerTrapFn != "") {
 		// The body set nothing, or took away what it had: the handler set
 		// aside at the entry comes back. See the entry.
-		r.exitTrap, r.trapDepth, r.exitTrapLocal = outerTrap, outerDepth, outerLocal
-		r.restoreTheExitTrapFunction(outerTrapFn, outerTrapDecl)
+		if losing {
+			r.loseTheHeldExitTrap(held)
+		} else {
+			r.exitTrap, r.trapDepth, r.exitTrapLocal = outerTrap, outerDepth, outerLocal
+			r.restoreTheExitTrapFunction(outerTrapFn, outerTrapDecl)
+		}
 	}
 	r.Params, r.inFunc, r.funcLine = saved, savedIn, savedLine
 	r.paramsReplacedBySet = savedReplaced

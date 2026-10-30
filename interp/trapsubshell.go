@@ -92,6 +92,9 @@ func (c *Runner) inheritTraps(r *Runner) {
 		}
 	}
 	c.exitTrap = nil
+	// And none a call gave up on: that was the parent's, and a subshell
+	// that put it back would be running its parent's handler.
+	c.lostExitTrap, c.execDroppedTheExitTrap = nil, false
 	// A handler spelled as a function goes with the trap it stood for: the
 	// conditions a subshell starts with back at their defaults are EXIT and
 	// the signals, so a `TRAPEXIT` or a `TRAPUSR1` no longer names a handler

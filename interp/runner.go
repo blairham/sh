@@ -4735,6 +4735,15 @@ type Runner struct {
 	// at the *return* fixed at the other one's value, so it is the state when
 	// the `trap` command ran that decides and nothing else.
 	exitTrapLocal Answer
+	// lostExitTrap is the EXIT trap a function call held and did not put
+	// back, because a stop that ends the shell from inside the call is what
+	// left it — nil when there is none. It is never run: it goes back only
+	// where something catches the stop after all. See heldexittrap.go.
+	lostExitTrap *heldExitTrap
+	// execDroppedTheExitTrap says an `exec` that could not run has dropped
+	// the EXIT trap on its way out, which reaches a trap a call is holding
+	// as well as the one standing. See Runner.heldExitTrapIsLost.
+	execDroppedTheExitTrap bool
 
 	// errTrap, debugTrap and returnTrap are the pseudo-conditions: not
 	// signals, so nothing about them touches os/signal, and not EXIT, so

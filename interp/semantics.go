@@ -5836,6 +5836,47 @@ type Semantics struct {
 	// trap set at the top level behaves the same everywhere.
 	ExitTrapIsFunctionLocal Answer
 
+	// StopInsideACallLosesTheHeldExitTrap leaves the EXIT trap a function
+	// call set aside at its entry — which the shell that scopes EXIT to a
+	// function does with the caller's, and puts back at the return — off
+	// for good when the call is left by `set -e` or `${x?word}` firing
+	// inside it. The call's own trap still fires as it is left; the one it
+	// held is never put back, so it never runs. Measured 2026-10-30 on zsh
+	// 5.9.2 under `-f`, script files, `-c` and standard input alike (#6952,
+	// #7007):
+	//
+	//	trap 'echo T' EXIT; set -e; f() { false; }; f          nothing, 1
+	//	… f() { g; }; g() { false; }, an `eval false` inside   nothing, 1
+	//	… `TRAPEXIT() { echo T }` in place of the `trap`       nothing, 1
+	//	… f() { : ${q?boom}; }; f                              f: q: boom, 1
+	//	… f() { trap 'echo FT' EXIT; false; }; f               FT, 1
+	//	… f() { setopt posixtraps; trap 'echo F' EXIT; false } F, 1
+	//	set -e; ( trap 'echo ST' EXIT; f() { false; }; f )     nothing
+	//	trap 'echo T' EXIT; set -e; false (control)            T, 1
+	//	… : ${q?boom} at the top level (control)               the complaint, T
+	//	… f() { echo $((1/0)); }; f, readonly, `set -u`        the complaint, T
+	//	… f() { exit 4; }; f (control)                         T, 4
+	//	setopt posixtraps, then any row above                  T
+	//
+	// So it is the trap the call *held* that goes — with `posixtraps` set
+	// there is nothing held and the trap runs — and only for the stops that
+	// end the shell where they stand. An error the shell reported unwinds
+	// through the call and gets it back, and `exit` runs it. A stop that is
+	// caught gets it back too: at a prompt, `${q?b}` in a function gives up
+	// the line and `trap` still lists the handler afterwards, where errexit
+	// in the same place ends the session with nothing. An `exec` that could
+	// not run loses it as well, but that is the trap being dropped
+	// (ExecFailureRunsExitTrap) reaching the held one, and not this axis —
+	// see Runner.heldExitTrapIsLost.
+	//
+	// zsh alone. bash, dash and BusyBox ash hold nothing, and ksh93's
+	// `function` scope takes the caller's table rather than holding the one
+	// trap — measured the same day, `function f { false; }` under `set -e`
+	// and `function f { exec /nonexistent/x; }` both run the caller's T.
+	// Read as `== Yes`: nothing holds a trap anywhere else, so nothing else
+	// can be asked.
+	StopInsideACallLosesTheHeldExitTrap Answer
+
 	// FatalErrorUnderErrexitSkipsTheExitTrap runs no EXIT trap when the shell
 	// ends over an error it reported *and* `set -e` is on. zsh alone, and the
 	// discriminator is the pair rather than either half — see
@@ -35523,6 +35564,9 @@ func PosixSemantics() Semantics {
 		BraceExpansion:          No,
 		BracketCaretNegates:     No,
 		ExitTrapIsFunctionLocal: No,
+		// With no trap scoped to a function there is none for a call to hold,
+		// so nothing to lose. See StopInsideACallLosesTheHeldExitTrap.
+		StopInsideACallLosesTheHeldExitTrap: No,
 		// And the EXIT trap runs whatever ended the shell: nothing in XCU 2.14
 		// makes a reported error skip it, and four of the five columns agree.
 		// See FatalErrorUnderErrexitSkipsTheExitTrap.

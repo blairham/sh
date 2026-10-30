@@ -1922,6 +1922,10 @@ func Semantics() interp.Semantics {
 	// `typeset a=($(echo OP >&2))` — a utility this shell does not keep a
 	// prefix for, so the split above is not what decides it (#3814).
 	s.PrefixExpandedBeforeADeclarationsOperand = interp.Yes
+	// And a failure that ends the shell leaves the entries already assigned:
+	// measured 2026-10-30, `trap 'echo $v' EXIT; v=old; v=new w=${q?boom} :`
+	// writes `new` (#7004).
+	s.PrefixEntriesStayWhenAFailureEndsTheShell = interp.Yes
 	// Off at every builtin but `export`, which exports its own prefix as it
 	// is assigned and leaves it exported: measured 2026-10-30, `v=old;
 	// v=new export y=1; printenv v` is `new`, and `v=new w=$(printenv v)

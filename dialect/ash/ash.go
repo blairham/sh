@@ -474,6 +474,11 @@ func Semantics() interp.Semantics {
 	// `PRE=$(echo PRE >&2) export s=$(echo OP >&2)` writes `OP` and then
 	// `PRE` (#3814).
 	s.PrefixExpandedBeforeADeclarationsOperand = interp.No
+	// And a failure that ends the shell leaves the entries already assigned,
+	// in front of a program too: measured 2026-10-30 in the pinned image,
+	// `trap 'echo $v' EXIT; v=old; v=new w=${q?boom} sh -c :` writes `new`
+	// (#7004).
+	s.PrefixEntriesStayWhenAFailureEndsTheShell = interp.Yes
 	s.PrefixExportAtABuiltin = interp.PrefixExportAtABuiltinUnchanged
 	s.DeclarationPromotesThePrefixEntry = interp.No
 	// unanswered SubscriptedAssignmentPrefix, SubscriptedPrefixIsTakenBack:

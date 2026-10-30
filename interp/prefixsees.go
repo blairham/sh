@@ -233,8 +233,14 @@ func (r *Runner) holdPlacedLiteral(h *heldPrefix, a *syntax.Assign, name string,
 	h.holdPlaced(r, name, built)
 }
 
-// release puts every held cell back, most recent first.
+// release puts every held cell back, most recent first — unless a failure in
+// the command is ending the shell where the dialect leaves a prefix's entries
+// as they were assigned. See interp/prefixentriesstay.go.
 func (h *heldPrefix) release(r *Runner) {
+	if h.route.set && len(h.undo) > 0 && r.prefixEntriesStay(h.route.kind) {
+		h.undo = nil
+		return
+	}
 	r.restoreVars(h.undo)
 	h.undo = nil
 }

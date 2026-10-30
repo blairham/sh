@@ -1205,6 +1205,50 @@ type Semantics struct {
 	// that control (#3814).
 	PrefixExpandedBeforeADeclarationsOperand Answer
 
+	// PrefixEntriesStayWhenAFailureEndsTheShell leaves the assignment prefix
+	// entries a command had already assigned where they are, when a failure
+	// in the command — an entry that will not expand, or a declaration's
+	// operand — ends the shell, rather than putting them back on the way
+	// out. Only an EXIT trap can see it. Measured 2026-10-30 from `-c`, after
+	// `trap 'echo "trap v=$v"' EXIT; v=old;`, with `f() { :; }`:
+	//
+	//	                                  bash 5.3  ksh93u+  zsh 5.9.2  dash, ash
+	//	v=new w=${q?boom} :               old       new      new        new
+	//	v=new w=${q?boom} f               old       new      new        new
+	//	v=new w=${q?boom} true            old       old      new        new
+	//	v=new w=${q?boom} /usr/bin/true   old       old      old        new
+	//	v=new w=${q?boom} typeset x=1     old       new      new        —
+	//	v=new typeset x=$v y=${q?boom}    old       new      new        —
+	//	readonly r=0; v=new r=1 w=1 :     old       new      —          new
+	//
+	// The last row is a refusal rather than a failed value, and it is the same
+	// answer where the refusal ends the shell: zsh refuses there before it
+	// assigns anything, and bash carries on past it.
+	//
+	// The rows the three part on are the ones where the failure does **not**
+	// end the shell: ksh93u+ carries on past a failed prefix in front of a
+	// regular builtin or a program, and zsh past one in front of a program —
+	// see Runner.prefixFailureIsThisCommandsAlone — and there the entries are
+	// put back like any prefix's. So it is the shell's ending that leaves
+	// them, and not the command: bash 5.3, under `-o posix` too, puts them
+	// back before it ends, and the other four do not. An interactive zsh
+	// that carries on past the failure puts them back as well (`v=old`
+	// afterwards), which is why the question is about the end of the shell
+	// and not about the failure.
+	//
+	// Read rather than asked, on a path that has already written one
+	// complaint: an unanswered vector puts the entries back, which is what
+	// this shell did before the question was put (#7004).
+	//
+	// unpinned bash: only an EXIT trap can see it, and the corpus has no row
+	// with a trap in front of a failed prefix;
+	// TestAFailedPrefixLeavesTheEntriesAheadOfIt pins it.
+	// unpinned ksh: the same, and the same test.
+	// unpinned zsh: the same, and the same test.
+	// unpinned dash: the same, and the same test.
+	// unpinned ash: the same, and the same test.
+	PrefixEntriesStayWhenAFailureEndsTheShell Answer
+
 	// AssignmentPrefixPersistsAfterAFunction keeps `v=9 f` set once `f` has
 	// returned, instead of giving the name back what it held before the call.
 	//

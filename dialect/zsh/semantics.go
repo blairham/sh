@@ -1604,6 +1604,10 @@ func Semantics() interp.Semantics {
 	// the operand. Measured 2026-09-19, `PRE=$(echo PRE >&2) export s=$(echo
 	// OP >&2)` writes `PRE` and then `OP` (#3814).
 	s.PrefixExpandedBeforeADeclarationsOperand = interp.Yes
+	// And a failure that ends the shell leaves the entries already assigned:
+	// measured 2026-10-30, `trap 'echo $v' EXIT; v=old; v=new w=${q?boom} true`
+	// writes `new` (#7004).
+	s.PrefixEntriesStayWhenAFailureEndsTheShell = interp.Yes
 	s.PrefixExportAtABuiltin = interp.PrefixExportAtABuiltinUnchanged
 	// And a listing with no operand sees the prefix's entry as an ordinary
 	// one: its value is written and the attribute tables say the rest, so

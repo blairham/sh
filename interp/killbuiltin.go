@@ -1427,6 +1427,26 @@ func (r *Runner) IgnoresUntrapped() func(sig syscall.Signal) bool {
 	}
 }
 
+// UntrappedHangupExit hands a front end the question signalDeath asks of a
+// HUP the script sent itself, for one that arrives from another process: does
+// this shell, with no trap for it, end the way `exit` ends it rather than by
+// the signal, and with which status? The shape is IgnoresUntrapped's and for
+// the same reason — it is asked from a goroutine of the front end's own.
+//
+// Read and not asked, as IgnoresUntrapped's axes are: an unanswered axis reads
+// as no, which leaves the shell to die of the signal as the runtime's default
+// already had it do.
+//
+// Only the status: the EXIT trap that runs on the self-signaled route does not
+// run here, because the front end ends the process from its own goroutine
+// rather than waiting for the script to reach a command boundary.
+func (r *Runner) UntrappedHangupExit() func() (status int, exits bool) {
+	sem := r.sem()
+	return func() (int, bool) {
+		return hangupExitStatus, sem.HangupIsAnOrderlyExit == Yes
+	}
+}
+
 // fatalSignal reports whether a signal with no handler ends the process.
 //
 // Asked of the number as well as the name, because the two come apart exactly

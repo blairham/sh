@@ -30,12 +30,12 @@ import (
 func startWithDispositions(ignore, reset []syscall.Signal, start func() error) error {
 	var ignored, defaulted []os.Signal
 	for _, sig := range ignore {
-		if handedOver(sig) && !signal.Ignored(sig) {
+		if passedToAChild(sig) && !signal.Ignored(sig) {
 			ignored = append(ignored, sig)
 		}
 	}
 	for _, sig := range reset {
-		if handedOver(sig) && signal.Ignored(sig) && !fatalWatch.bornIgnoring[sig] {
+		if passedToAChild(sig) && signal.Ignored(sig) && !fatalWatch.bornIgnoring[sig] {
 			defaulted = append(defaulted, sig)
 		}
 	}
@@ -73,9 +73,10 @@ func handBack(sig syscall.Signal) {
 	signal.Stop(c)
 }
 
-// handedOver reports whether a window may put sig on the process at all. Each
-// signal it leaves out keeps whatever the process has, and a child inherits
-// that, which is what every command inherited before there was a window.
+// passedToAChild reports whether a window may put sig on the process at all.
+// Each signal it leaves out keeps whatever the process has, and a child
+// inherits that, which is what every command inherited before there was a
+// window.
 //
 //   - TSTP, TTIN, TTOU and CONT are the runtime's to leave alone until a
 //     program asks for them, and once one has, the runtime keeps a handler
@@ -91,7 +92,7 @@ func handBack(sig syscall.Signal) {
 //
 // KILL and STOP never arrive here: interp asks only for signals a handler
 // can be set for.
-func handedOver(sig syscall.Signal) bool {
+func passedToAChild(sig syscall.Signal) bool {
 	switch sig {
 	case syscall.SIGKILL, syscall.SIGSTOP,
 		syscall.SIGTSTP, syscall.SIGTTIN, syscall.SIGTTOU, syscall.SIGCONT,

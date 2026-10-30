@@ -43,6 +43,10 @@ type programGlob struct {
 	listOpen, globbing bool
 	held               string
 	raise              func()
+	// heldUnder is the rule a failed expansion was under when the refusal
+	// was held, which raise is performed under. See
+	// Runner.failedExpansionStatus.
+	heldUnder failedExpansionStatus
 }
 
 // armProgramGlob says the pathname stage about to run is for a word behind
@@ -138,7 +142,7 @@ func (r *Runner) holdPathnameRefusal(msg string, raise func()) bool {
 		return false
 	}
 	if g.raise == nil && g.refused == "" {
-		g.held, g.raise = msg, raise
+		g.held, g.raise, g.heldUnder = msg, raise, r.failedExpansionStatus
 	}
 	return true
 }
@@ -158,12 +162,19 @@ func (r *Runner) openWordList() func() {
 // its own.
 func (r *Runner) raiseHeldRefusal() {
 	g := &r.progGlob
-	raise := g.raise
+	raise, under := g.raise, g.heldUnder
 	g.listOpen, g.held, g.raise = false, "", nil
 	if raise == nil || r.expansionHasFailed() {
 		return
 	}
+	// Under the rule of the word it was held in, which is not the list's
+	// once the words' own rules are put down: a command's words are read
+	// under one each, and the stage after them under the command's. See
+	// heldGlob.declared.
+	outer := r.failedExpansionStatus
+	r.failedExpansionStatus = under
 	raise()
+	r.failedExpansionStatus = outer
 }
 
 // globbingAListWord marks the pathname stage of a list's word as running,

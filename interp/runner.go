@@ -9301,8 +9301,12 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 			// From the first assignment on: measured, `local $((1/0))` and
 			// `local -a $((1/0))` leave 1, and `local x=1 $((1/0))` leaves 0.
 			r.failedExpansionStatus = wordsRule
+			// An array-literal operand counts as one, though it is not
+			// among the words: `typeset -a a=(1) *nomatch*` leaves 3 behind
+			// `(exit 3);` too (#7005).
 			if i > 0 && len(argv) > 0 && (declaredYet ||
-				(assignShaped || appendShaped) && r.declarationCommand(c, argv)) {
+				(assignShaped || appendShaped || anArrayOperandIsWrittenBefore(c.Assigns, w)) &&
+					r.declarationCommand(c, argv)) {
 				declaredYet = true
 				r.failedExpansionStatus = failedExpansionKeepsTheStatus
 			}
@@ -9543,6 +9547,12 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 		// the program's, which is what armed carries. See
 		// interp/pathnamestage.go (#6768).
 		argv, waiting = holdGlob(argv, waiting, fields, noglob, !scanning && len(argv) > modifierWords)
+		// Behind a declaration's first assignment operand, a refusal of the
+		// stage leaves `$?` as any other failure there does. Measured
+		// 2026-10-30 on zsh 5.9.2 with `(exit 3);` in front: `typeset y=1
+		// *nomatch*`, `typeset y=1 z *(Z)` and `typeset y=1 a[` exit 3,
+		// `typeset *nomatch* y=1` and `typeset y *nomatch*` exit 1 (#7005).
+		waiting[len(waiting)-1].declared = keepsTheStatus && declaredYet
 		if appendOperand && len(argv) == operandStart+1 {
 			// One field, so there is a single position to record. A word that
 			// split has none, and nothing in the panel splits one. Whether

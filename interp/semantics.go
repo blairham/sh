@@ -2103,6 +2103,16 @@ type Semantics struct {
 	// The `false;` in front could not tell "sets 1" from "keeps a 1", and
 	// the rows above that say `print $((1/0))`, `builtin local` and `\local`
 	// set 1 are the second: see FailedExpansionInACommandKeepsAFailingStatus.
+	//
+	// A pattern the pathname stage refuses is one of a declaration's words
+	// only behind its first assignment operand. Measured 2026-10-30 on zsh
+	// 5.9.2 after `(exit 3);`: `typeset y=1 *nomatch*`, `export y=1 *(Z)`,
+	// `typeset y=1 a[` and `typeset -a a=(1) *nomatch*` exit 3, and with
+	// nothing in front 0 from a command string and 1 from a file, while
+	// `typeset *nomatch* y=1` and `typeset y *nomatch*` exit 1. The stage runs
+	// after every word is expanded, so the rule travels with the word to it
+	// (heldGlob.declared) and with a held refusal to where it is raised
+	// (#7005).
 	FailedExpansionInADeclarationOrCaseSetsNoStatus Answer
 
 	// FailedExpansionInACommandKeepsAFailingStatus leaves `$?` alone when an
@@ -42177,7 +42187,17 @@ func (r *Runner) fatalPattern(pattern string, status int) {
 	msg := Wording(r.diag().BadPattern, "bad pattern: %s", escapeControlBytes(pattern))
 	raise := func() {
 		r.diagf("%s\n", msg)
-		r.status = status
+		if r.failedExpansionStatus == failedExpansionKeepsTheStatus {
+			// A declaration's words, where a refused pattern leaves `$?`
+			// as an unmatched one does. Measured 2026-10-30 on zsh 5.9.2,
+			// `(exit 3); typeset y=1 a[` and `(exit 3); typeset -a x=(a[)`
+			// exit 3, and `typeset y=1 a[` alone exits 0 from a command
+			// string and 1 from a file (#7005). See
+			// Semantics.FailedExpansionInADeclarationOrCaseSetsNoStatus.
+			r.setFatalStatus()
+		} else {
+			r.status = status
+		}
 		r.ctl, r.abandon, r.errexitStopped = controlExit, abandonError, false
 	}
 	if r.holdPathnameRefusal(msg, raise) {

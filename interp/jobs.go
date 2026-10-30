@@ -577,6 +577,45 @@ func (r *Runner) SettleBeforeAWait() {
 	r.settleWaitingJobPart()
 }
 
+// settleBackgroundJobBeforeAJobWait settles a background job's pid when the
+// job's body is about to wait for a job of its own that has not ended.
+//
+// The seventh trigger, and the one nested jobs reach. Measured 2026-10-30,
+// `( sleep 30 & wait ) & echo next` printed nothing here and printed `next` at
+// once in GNU bash 5.3.20, which forks before the body runs a thing. The same
+// went for a brace group, a function, `wait $!`, `wait %1`, `wait -n`, a
+// `wait` inside a substitution inside the job, and a job that is the first
+// element of a backgrounded pipeline. The way it was found was a stress script
+// that started its load as `( yes > /dev/null & echo $! >> pids; wait ) &` in
+// a loop, which started one hog and then sat there for ten hours (#7061).
+//
+// None of the six triggers above could see it, because the process the body
+// starts belongs to a *different* job. A `&` inside the body is a job of its
+// own, with its own pid to settle and no part in the job around it, so the
+// `sleep` settled the inner job and left the outer one where it was. The body
+// then waited for the inner job, and that wait is the same shape as a read on
+// a stream with nothing on it: a wait on something outside the body that
+// nothing in the body can end. So the outer job's pid is as settled as it is
+// going to get, and the answer is that it has none of its own.
+//
+// Only where the wait will really block, which is the same rule the open and
+// the read follow: a job that has already ended answers the wait at once, and
+// the body goes on to whatever it runs next, which may still start the process
+// `$!` would rather name.
+func (r *Runner) settleBackgroundJobBeforeAJobWait(ends ...<-chan struct{}) {
+	if r.bg == nil && r.part == nil {
+		return
+	}
+	for _, end := range ends {
+		select {
+		case <-end:
+			return
+		default:
+		}
+	}
+	r.settleWaitingJobPart()
+}
+
 // settleWaitingJobPart is what the three triggers above do once they have
 // decided the job is about to wait on something outside the shell: the job's
 // pid settles at zero where this shell is the one that names it, and either
@@ -1452,6 +1491,9 @@ func (r *Runner) waitFor(j *Job) (status int, sig syscall.Signal, interrupted, s
 		// ordinary shape: a script stops a job and then waits for it.
 		return 0, 0, false, true
 	}
+	// A background body about to wait on a job of its own. See
+	// Runner.settleBackgroundJobBeforeAJobWait (#7061).
+	r.settleBackgroundJobBeforeAJobWait(j.waitChannel())
 	sig, hit, gaveUp := r.awaitOrTrap(j.waitChannel(), giveUp)
 	if hit {
 		return 0, sig, true, false
@@ -2062,6 +2104,14 @@ func (r *Runner) waitNext(args []string, opts waitOpts) int {
 		r.storeWaitedPID(opts, nil)
 		return 127
 	}
+	// The same seventh trigger as a plain wait, asked over every job this one
+	// could return from: it blocks only while none of them has ended. See
+	// Runner.settleBackgroundJobBeforeAJobWait.
+	ends := make([]<-chan struct{}, len(jobs))
+	for i, j := range jobs {
+		ends[i] = j.done
+	}
+	r.settleBackgroundJobBeforeAJobWait(ends...)
 	first := make(chan *Job, len(jobs))
 	for _, j := range jobs {
 		go func(j *Job) {

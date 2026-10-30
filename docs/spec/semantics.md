@@ -16301,6 +16301,33 @@ on the rarer shape — a hang has no status to check and no diagnostic to
 read, and a job reported as having no process of its own is the answer
 this shell already gives for every background builtin.
 
+**And a seventh, filed as #7061** (the sixth is `SettleBeforeAWait`, which
+a dialect's own waiting builtins call). A job whose body starts a job of
+its own and then waits for it reached none of the others: `( sleep 30 &
+wait ) & echo next` printed nothing here, and `next` at once in GNU bash
+5.3.20, zsh 5.9.2, ksh93u+ and dash, measured 2026-10-30, each run as
+`-c '<row>; sleep 0.3; echo done'` in a process group of its own and
+killed after 3 s. The brace group, a function, `wait $!`, `wait %1`,
+`wait -n`, a `( … )` or `$( … )` inside the job, and a job that is the
+first element of `( … ) | cat &` all hung the same way, and so did the
+shape it was found in — `( yes > /dev/null & echo $! >> pids; wait ) &`
+in a loop, which started one process and then sat there for ten hours.
+`( sleep 30 & ) &` and `( wait ) &` did not, which is what says the
+subject is the wait for a job the body started.
+
+None of the earlier triggers sees it because the process the body starts
+is a *different* job's: a `&` inside the body has its own process id to
+settle and no part in the job around it. So the `sleep` settled the inner
+job, the body waited for it, and the outer job's id never settled.
+
+So: **a background job is settled without a process id when its body is
+about to wait for a job of its own that has not ended.** That wait is on
+something outside the body that nothing in the body can end, which is the
+same reasoning as the blocking read. Only where the wait will really
+block: a wait for a job that has already ended answers at once, and a
+bare `wait` with no jobs waits for nothing, so `{ wait; sleep 0.1; } &
+echo $!` still names the sleep's process.
+
 **What a `&` job reads for standard input** is an axis, and it splits the
 panel three ways rather than two (`BackgroundJobInput`, #1287). The probe
 reads one descriptor twice, so the answers come out in opposite orders

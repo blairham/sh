@@ -145,7 +145,7 @@ func (r *Runner) tracesItsPrefix(assigns []*syntax.Assign, argv []string) bool {
 //	A=1 :               	`+ A=1` then `+ :`        	special builtin
 //	A=1 eval :          	`+ A=1` then `+ eval :`   	special builtin
 //	A=1 export Z=3      	`+ A=1` then the export   	special builtin
-//	A=1 g               	`+ A=1` then `+ g`        	a function
+//	A=1 g               	`+ A=1` then `+ g`        	a POSIX-form function
 //
 // Measured 2026-09-16, ksh93u+ 2012-08-01, script file under `env -i`. The
 // two that come first are exactly the two positions where a prefix in this
@@ -155,10 +155,29 @@ func (r *Runner) tracesItsPrefix(assigns []*syntax.Assign, argv []string) bool {
 // bare assignment would be written, and writing the *environment* of a
 // command that is about to get one after the command it belongs to.
 //
-// Asked on the command's kind rather than on those two axes, because the
-// kinds are what was measured: a dialect that answered the axes differently
-// from ksh93 would otherwise inherit a trace order nobody has measured for it.
-func (r *Runner) tracePrefixFollowsTheCommand(argv []string) bool {
+// **So it is where the prefix lands that decides, and the first word alone
+// does not say it.** Two readings of the word were wrong. Measured 2026-10-30
+// the same way:
+//
+//	A=1 command :            `+ A=1` then `+ command :`   kept (#3448)
+//	A=1 command eval :       `+ A=1`, the command, `+ :`
+//	A=1 command typeset y=2  `+ A=1`, `+ y=2`, the command
+//	A=1 command echo b       the command then `+ A=1`     the control
+//	function kf { :; }
+//	A=1 kf                   `+ kf` then `+ A=1`          the call's own
+//	b[i++]=Q kf              `+ kf` then `+ b[1]=Q`
+//	b[1/0]=v kf              `+ kf` then the division
+//
+// `command` is not special itself, so reading the word wrote a prefix that the
+// shell keeps behind the command (#6984). And every function wrote its prefix
+// first, where a `function`-form call makes the prefix a cell of the call's
+// own, the way a regular builtin's is the command's environment, and writes it
+// after (#6983). That call's prefix is expanded after the redirections too —
+// see Runner.prefixExpandedBeforeTheRedirections. So the two questions here
+// are Semantics.CommandKeepsASpecialBuiltinsPrefix and
+// Semantics.PrefixToAKeywordFunctionIsScopedToTheCall, asked of the kinds that
+// were measured, and a dialect with another column's shape asks neither.
+func (r *Runner) tracePrefixFollowsTheCommand(assigns []*syntax.Assign, argv []string) bool {
 	if r.diag().TracePrefixAssignment != TracePrefixOwnLineAfter || len(argv) == 0 {
 		return false
 	}
@@ -166,9 +185,32 @@ func (r *Runner) tracePrefixFollowsTheCommand(argv []string) bool {
 		return false
 	}
 	if _, ok := r.funcs[argv[0]]; ok {
-		return false
+		return r.prefixIsTheCallsOwn(assigns, argv)
+	}
+	if p := r.prefixCommandOf(argv); p.kind == prefixBeforeSpecialBuiltin {
+		return !r.prefixPersistsAtThisBuiltin(argv[0], p)
 	}
 	return true
+}
+
+// prefixIsTheCallsOwn reports whether argv calls a `function`-form function
+// whose prefix is a cell of the call's own rather than a store this shell
+// keeps — see Semantics.PrefixToAKeywordFunctionIsScopedToTheCall — which is
+// traced behind the call and expanded once the redirections are open.
+//
+// **Not where the function is traced.** A function marked with `typeset -ft`
+// has its prefix worked through ahead of the call and again inside it:
+// measured 2026-10-30 on ksh93u+, `function g { echo in; }; typeset -ft g;
+// set -x; x=$(echo s >&2) g` runs the substitution and writes `+ x=”` on both
+// sides of `+ g`, and runs it twice without `set -x` too. The front half is
+// the persisting shape and is what this engine does; the second pass is not
+// modeled (#7092).
+func (r *Runner) prefixIsTheCallsOwn(assigns []*syntax.Assign, argv []string) bool {
+	fn, ok := r.funcs[argv[0]]
+	if !ok || r.tracesFunction(argv[0], fn.Keyword) {
+		return false
+	}
+	return r.prefixScopedToTheCall(fn, assigns)
 }
 
 // tracePrefixRepeatsBeforeTheCommand is zsh's second trace prefix: whether

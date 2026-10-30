@@ -9895,7 +9895,7 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 	}
 
 	tracesPrefix := r.tracesItsPrefix(c.Assigns, argv)
-	prefixFollows := tracesPrefix && r.tracePrefixFollowsTheCommand(argv)
+	prefixFollows := tracesPrefix && r.tracePrefixFollowsTheCommand(c.Assigns, argv)
 	// In the dialect whose line waits for the redirections, the line — and
 	// a prefix expanded only for it — is written once they are open, where
 	// the trace went before they were. See
